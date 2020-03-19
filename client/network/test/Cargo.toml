@@ -10,21 +10,21 @@ homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
-sc-network = { version = "0.8.0-alpha.2", path = "../" }
+sc-network = { version = "0.8.0-alpha.4", path = "../" }
 log = "0.4.8"
 parking_lot = "0.10.0"
 futures = "0.3.1"
 futures-timer = "3.0.1"
 rand = "0.7.2"
 libp2p = { version = "0.16.2", default-features = false, features = ["libp2p-websocket"] }
-sp-consensus = { version = "0.8.0-alpha.2", path = "../../../primitives/consensus/common" }
-sc-client = { version = "0.8.0-alpha.2", path = "../../" }
-sc-client-api = { version = "2.0.0-alpha.2", path = "../../api" }
-sp-blockchain = { version = "2.0.0-alpha.2", path = "../../../primitives/blockchain" }
-sp-runtime = { version = "2.0.0-alpha.2", path = "../../../primitives/runtime" }
-sp-core = { version = "2.0.0-alpha.2", path = "../../../primitives/core" }
-sc-block-builder = { version = "0.8.0-alpha.2", path = "../../block-builder" }
-sp-consensus-babe = { version = "0.8.0-alpha.2", path = "../../../primitives/consensus/babe" }
+sp-consensus = { version = "0.8.0-alpha.4", path = "../../../primitives/consensus/common" }
+sc-client = { version = "0.8.0-alpha.4", path = "../../" }
+sc-client-api = { version = "2.0.0-alpha.4", path = "../../api" }
+sp-blockchain = { version = "2.0.0-alpha.4", path = "../../../primitives/blockchain" }
+sp-runtime = { version = "2.0.0-alpha.4", path = "../../../primitives/runtime" }
+sp-core = { version = "2.0.0-alpha.4", path = "../../../primitives/core" }
+sc-block-builder = { version = "0.8.0-alpha.4", path = "../../block-builder" }
+sp-consensus-babe = { version = "0.8.0-alpha.4", path = "../../../primitives/consensus/babe" }
 env_logger = "0.7.0"
 substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../../test-utils/runtime/client" }
 substrate-test-runtime = { version = "2.0.0-dev", path = "../../../test-utils/runtime" }

@@ -207,6 +207,11 @@ impl<D> Peer<D> {
 		self.network.num_connected_peers()
 	}
 
+	/// Returns the number of processed blocks.
+	pub fn num_processed_blocks(&self) -> usize {
+		self.network.num_processed_blocks()
+	}
+
 	/// Returns true if we have no peer.
 	pub fn is_offline(&self) -> bool {
 		self.num_peers() == 0

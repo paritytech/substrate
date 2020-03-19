@@ -74,7 +74,7 @@ impl frame_system::Trait for Test {
 	type Version = ();
 	type ModuleToIndex = ();
 	type AccountData = pallet_balances::AccountData<u64>;
-	type MigrateAccount = (); type OnNewAccount = ();
+	type OnNewAccount = ();
 	type OnKilledAccount = ();
 }
 parameter_types! {
@@ -229,9 +229,9 @@ fn preimage_deposit_should_be_required_and_returned() {
 		// fee of 100 is too much.
 		PREIMAGE_BYTE_DEPOSIT.with(|v| *v.borrow_mut() = 100);
 		assert_noop!(
-				Democracy::note_preimage(Origin::signed(6), vec![0; 500]),
-				BalancesError::<Test, _>::InsufficientBalance,
-			);
+			Democracy::note_preimage(Origin::signed(6), vec![0; 500]),
+			BalancesError::<Test, _>::InsufficientBalance,
+		);
 		// fee of 1 is reasonable.
 		PREIMAGE_BYTE_DEPOSIT.with(|v| *v.borrow_mut() = 1);
 		let r = Democracy::inject_referendum(
@@ -264,9 +264,9 @@ fn preimage_deposit_should_be_reapable_earlier_by_owner() {
 
 		next_block();
 		assert_noop!(
-				Democracy::reap_preimage(Origin::signed(6), set_balance_proposal_hash(2)),
-				Error::<Test>::Early
-			);
+			Democracy::reap_preimage(Origin::signed(6), set_balance_proposal_hash(2)),
+			Error::<Test>::Early
+		);
 		next_block();
 		assert_ok!(Democracy::reap_preimage(Origin::signed(6), set_balance_proposal_hash(2)));
 
@@ -280,9 +280,9 @@ fn preimage_deposit_should_be_reapable() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_noop!(
-				Democracy::reap_preimage(Origin::signed(5), set_balance_proposal_hash(2)),
-				Error::<Test>::PreimageMissing
-			);
+			Democracy::reap_preimage(Origin::signed(5), set_balance_proposal_hash(2)),
+			Error::<Test>::PreimageMissing
+		);
 
 		PREIMAGE_BYTE_DEPOSIT.with(|v| *v.borrow_mut() = 1);
 		assert_ok!(Democracy::note_preimage(Origin::signed(6), set_balance_proposal(2)));
@@ -292,9 +292,9 @@ fn preimage_deposit_should_be_reapable() {
 		next_block();
 		next_block();
 		assert_noop!(
-				Democracy::reap_preimage(Origin::signed(5), set_balance_proposal_hash(2)),
-				Error::<Test>::Early
-			);
+			Democracy::reap_preimage(Origin::signed(5), set_balance_proposal_hash(2)),
+			Error::<Test>::Early
+		);
 
 		next_block();
 		assert_ok!(Democracy::reap_preimage(Origin::signed(5), set_balance_proposal_hash(2)));
@@ -319,9 +319,9 @@ fn noting_imminent_preimage_for_free_should_work() {
 		assert_ok!(Democracy::vote(Origin::signed(1), r, AYE));
 
 		assert_noop!(
-				Democracy::note_imminent_preimage(Origin::signed(7), set_balance_proposal(2)),
-				Error::<Test>::NotImminent
-			);
+			Democracy::note_imminent_preimage(Origin::signed(7), set_balance_proposal(2)),
+			Error::<Test>::NotImminent
+		);
 
 		next_block();
 
@@ -353,9 +353,9 @@ fn external_and_public_interleaving_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(0);
 		assert_ok!(Democracy::external_propose(
-				Origin::signed(2),
-				set_balance_proposal_hash_and_note(1),
-			));
+			Origin::signed(2),
+			set_balance_proposal_hash_and_note(1),
+		));
 		assert_ok!(propose_set_balance_and_note(6, 2, 2));
 
 		fast_forward_to(2);
@@ -422,9 +422,9 @@ fn external_and_public_interleaving_works() {
 		);
 		// replenish both
 		assert_ok!(Democracy::external_propose(
-				Origin::signed(2),
-				set_balance_proposal_hash_and_note(7),
-			));
+			Origin::signed(2),
+			set_balance_proposal_hash_and_note(7),
+		));
 		assert_ok!(propose_set_balance_and_note(6, 4, 2));
 
 		fast_forward_to(10);
@@ -495,9 +495,9 @@ fn veto_external_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(0);
 		assert_ok!(Democracy::external_propose(
-				Origin::signed(2),
-				set_balance_proposal_hash_and_note(2),
-			));
+			Origin::signed(2),
+			set_balance_proposal_hash_and_note(2),
+		));
 		assert!(<NextExternal<Test>>::exists());
 
 		let h = set_balance_proposal_hash_and_note(2);
@@ -520,16 +520,16 @@ fn veto_external_works() {
 		fast_forward_to(2);
 		// works; as we're out of the cooloff period.
 		assert_ok!(Democracy::external_propose(
-				Origin::signed(2),
-				set_balance_proposal_hash_and_note(2),
-			));
+			Origin::signed(2),
+			set_balance_proposal_hash_and_note(2),
+		));
 		assert!(<NextExternal<Test>>::exists());
 
 		// 3 can't veto the same thing twice.
 		assert_noop!(
-				Democracy::veto_external(Origin::signed(3), h.clone()),
-				Error::<Test>::AlreadyVetoed
-			);
+			Democracy::veto_external(Origin::signed(3), h.clone()),
+			Error::<Test>::AlreadyVetoed
+		);
 
 		// 4 vetoes.
 		assert_ok!(Democracy::veto_external(Origin::signed(4), h.clone()));
@@ -555,16 +555,16 @@ fn external_referendum_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(0);
 		assert_noop!(
-				Democracy::external_propose(
-					Origin::signed(1),
-					set_balance_proposal_hash(2),
+			Democracy::external_propose(
+				Origin::signed(1),
+				set_balance_proposal_hash(2),
 				),
 				BadOrigin,
 			);
 		assert_ok!(Democracy::external_propose(
-				Origin::signed(2),
-				set_balance_proposal_hash_and_note(2),
-			));
+			Origin::signed(2),
+			set_balance_proposal_hash_and_note(2),
+		));
 		assert_noop!(Democracy::external_propose(
 				Origin::signed(2),
 				set_balance_proposal_hash(1),
@@ -587,9 +587,9 @@ fn external_majority_referendum_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(0);
 		assert_noop!(
-				Democracy::external_propose_majority(
-					Origin::signed(1),
-					set_balance_proposal_hash(2)
+			Democracy::external_propose_majority(
+				Origin::signed(1),
+				set_balance_proposal_hash(2)
 				),
 				BadOrigin,
 			);
@@ -615,9 +615,9 @@ fn external_default_referendum_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(0);
 		assert_noop!(
-				Democracy::external_propose_default(
-					Origin::signed(3),
-					set_balance_proposal_hash(2)
+			Democracy::external_propose_default(
+				Origin::signed(3),
+				set_balance_proposal_hash(2)
 				),
 				BadOrigin,
 			);
@@ -645,9 +645,9 @@ fn fast_track_referendum_works() {
 		let h = set_balance_proposal_hash_and_note(2);
 		assert_noop!(Democracy::fast_track(Origin::signed(5), h, 3, 2), Error::<Test>::ProposalMissing);
 		assert_ok!(Democracy::external_propose_majority(
-				Origin::signed(3),
-				set_balance_proposal_hash_and_note(2)
-			));
+			Origin::signed(3),
+			set_balance_proposal_hash_and_note(2)
+		));
 		assert_noop!(Democracy::fast_track(Origin::signed(1), h, 3, 2), BadOrigin);
 		assert_ok!(Democracy::fast_track(Origin::signed(5), h, 0, 0));
 		assert_eq!(
@@ -668,13 +668,13 @@ fn fast_track_referendum_fails_when_no_simple_majority() {
 		System::set_block_number(0);
 		let h = set_balance_proposal_hash_and_note(2);
 		assert_ok!(Democracy::external_propose(
-				Origin::signed(2),
-				set_balance_proposal_hash_and_note(2)
-			));
+			Origin::signed(2),
+			set_balance_proposal_hash_and_note(2)
+		));
 		assert_noop!(
-				Democracy::fast_track(Origin::signed(5), h, 3, 2),
-				Error::<Test>::NotSimpleMajority
-			);
+			Democracy::fast_track(Origin::signed(5), h, 3, 2),
+			Error::<Test>::NotSimpleMajority
+		);
 	});
 }
 
