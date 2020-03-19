@@ -400,14 +400,25 @@ decl_module! {
 				.or_else(ensure_root)?;
 
 			let mut proposal = Proposals::<T>::get(proposal_id).ok_or(Error::<T>::InvalidProposalIndex)?;
-			proposal.approved = true;
 			let amount_approved = Self::amount_approved();
 			let new_amount = amount_approved.checked_add(&proposal.value).ok_or(Error::<T>::Overflow)?;
+
+			proposal.approved = true;
 			AmountApproved::<T>::put(new_amount);
 			Proposals::<T>::insert(proposal_id, proposal);
 		}
 
 		/// Payout an approved proposal, returning the deposit taken for making the proposal.
+		///
+		/// # <weight>
+		/// - O(1)
+		/// - One storage read.
+		/// - One storage removal.
+		/// - One storage mutation.
+		/// - One currency transfer.
+		/// - One currency unreserve.
+		/// - One event.
+		/// # </weight>
 		fn payout_proposal(origin, proposal_id: ProposalIndex) {
 			ensure_signed(origin)?;
 			let proposal = Proposals::<T>::get(proposal_id).ok_or(Error::<T>::InvalidProposalIndex)?;
