@@ -23,21 +23,37 @@ use super::*;
 use frame_system::RawOrigin;
 use frame_benchmarking::benchmarks;
 use sp_core::offchain::{OpaquePeerId, OpaqueMultiaddr};
-use sp_runtime::traits::Zero;
+use sp_runtime::traits::{ValidateUnsigned, Zero};
+
+use crate::Module as ImOnline;
 
 const MAX_KEYS: u32 = 1000;
 
-pub fn create_heartbeat<T: Trait>() -> crate::Heartbeat<T::BlockNumber> {
+pub fn create_heartbeat<T: Trait>(k: u32) ->
+	Result<(crate::Heartbeat<T::BlockNumber>, <T::AuthorityId as RuntimeAppPublic>::Signature), &'static str>
+{
+	let mut keys = Vec::new();
+	for _ in 0 .. k {
+		keys.push(T::AuthorityId::generate_pair(None));
+	}
+	Keys::<T>::put(keys);
+
 	let network_state = OpaqueNetworkState {
 		peer_id: OpaquePeerId::default(),
 		external_addresses: vec![OpaqueMultiaddr::new(vec![]); 10],
 	};
-	Heartbeat {
+	let input_heartbeat = Heartbeat {
 		block_number: T::BlockNumber::zero(),
 		network_state,
 		session_index: 0,
-		authority_index: 0,
-	}
+		authority_index: k-1,
+	};
+
+	let encoded_heartbeat = input_heartbeat.encode();
+	let authority_id = T::AuthorityId::generate_pair(None);
+	let signature = authority_id.sign(&encoded_heartbeat).ok_or("couldn't make signature")?;
+
+	Ok((input_heartbeat, signature))
 }
 
 benchmarks! {
@@ -45,18 +61,16 @@ benchmarks! {
 
 	heartbeat {
 		let k in 1 .. MAX_KEYS;
-
-		let mut keys = Vec::new();
-		for i in 0 .. k {
-			keys.push(T::AuthorityId::default());
-		}
-		Keys::<T>::put(keys);
-
-		let input_heartbeat = create_heartbeat::<T>();
-		let authority_id = T::AuthorityId::generate_pair(None);
-		let signature = authority_id.sign(&[]).ok_or("couldn't make signature")?;
-
+		let (input_heartbeat, signature) = create_heartbeat::<T>(k)?;
 	}: _(RawOrigin::None, input_heartbeat, signature)
+
+	validate_unsigned {
+		let k in 1 .. MAX_KEYS;
+		let (input_heartbeat, signature) = create_heartbeat::<T>(k)?;
+		let call = Call::heartbeat(input_heartbeat, signature);
+	}: {
+		ImOnline::<T>::validate_unsigned(&call)?;
+	}
 }
 
 #[cfg(test)]
@@ -84,6 +98,23 @@ mod tests {
 			assert_ok!(closure_to_benchmark());
 
 			assert_eq!(ReceivedHeartbeats::iter_prefix(0).count(), 1);
+		});
+	}
+
+	#[test]
+	fn test_validate_unsigned_benchmark() {
+		new_test_ext().execute_with(|| {
+			let k = 10;
+
+			let selected_benchmark = SelectedBenchmark::validate_unsigned;
+			let c = vec![(frame_benchmarking::BenchmarkParameter::k, k)];
+			let closure_to_benchmark =
+				<SelectedBenchmark as frame_benchmarking::BenchmarkingSetup<Runtime>>::instance(
+					&selected_benchmark,
+					&c
+				).unwrap();
+
+			assert_ok!(closure_to_benchmark());
 		});
 	}
 }
