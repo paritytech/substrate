@@ -722,7 +722,15 @@ impl<Block: BlockT> Inner<Block> {
 					last_commit: None,
 				}),
 				Some(ref mut v) => if v.set_id == set_id {
-					return None
+					if self.authorities != authorities {
+						debug!(target: "afg",
+							"Gossip validator noted set {:?} twice with different authorities. \
+							Was the authority set hard forked?",
+							set_id,
+						);
+						self.authorities = authorities;
+					}
+					return None;
 				} else {
 					v
 				},
@@ -788,6 +796,7 @@ impl<Block: BlockT> Inner<Block> {
 
 		// ensure authority is part of the set.
 		if !self.authorities.contains(&full.message.id) {
+			debug!(target: "afg", "Message from unknown voter: {}", full.message.id);
 			telemetry!(CONSENSUS_DEBUG; "afg.bad_msg_signature"; "signature" => ?full.message.id);
 			return Action::Discard(cost::UNKNOWN_VOTER);
 		}
