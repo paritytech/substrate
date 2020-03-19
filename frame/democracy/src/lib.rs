@@ -51,9 +51,10 @@
 //! account or an external origin) suggests that the system adopt.
 //! - **Referendum:** A proposal that is in the process of being voted on for
 //!   either acceptance or rejection as a change to the system.
-//! - **Proxy:** An account that votes on behalf of a separate "Stash" account
+//! - **Proxy:** An account that has full voting power on behalf of a separate "Stash" account
 //!   that holds the funds.
-//! - **Delegation:** The act of granting your voting power to the decisions of another account.
+//! - **Delegation:** The act of granting your voting power to the decisions of another account for
+//!   up to a certain conviction.
 //!
 //! ### Adaptive Quorum Biasing
 //!
@@ -99,6 +100,8 @@
 //! - `reap_preimage` - Removes the preimage for an expired proposal. Will only
 //!   work under the condition that it's the same account that noted it and
 //!   after the voting period, OR it's a different account after the enactment period.
+//! - `unvote` - Cancel a previous vote, this must be done by the voter before the vote ends.
+//! - `reap_vote` - Cancel some account's expired votes.
 //! - `unlock` - Unlocks tokens that have an expired lock.
 //!
 //! #### Cancellation Origin
@@ -172,7 +175,7 @@ mod vote;
 mod conviction;
 mod types;
 pub use vote_threshold::{Approved, VoteThreshold};
-pub use vote::Vote;
+pub use vote::{Vote, AccountVote};
 pub use conviction::Conviction;
 pub use types::{ReferendumInfo, ReferendumStatus, ProxyState, Tally};
 
@@ -227,13 +230,23 @@ pub trait Trait: frame_system::Trait + Sized {
 	/// a negative-turnout-bias (default-carries) referendum.
 	type ExternalDefaultOrigin: EnsureOrigin<Self::Origin>;
 
-	/// Origin from which the next referendum proposed by the external majority may be immediately
-	/// tabled to vote asynchronously in a similar manner to the emergency origin. It remains a
-	/// majority-carries vote.
+	/// Origin from which the next majority-carries (or more permissive) referendum may be tabled to
+	/// vote according to the `FastTrackVotingPeriod` asynchronously in a similar manner to the
+	/// emergency origin. It retains its threshold method.
 	type FastTrackOrigin: EnsureOrigin<Self::Origin>;
 
-	/// Minimum voting period allowed for an fast-track/emergency referendum.
-	type EmergencyVotingPeriod: Get<Self::BlockNumber>;
+	/// Origin from which the next majority-carries (or more permissive) referendum may be tabled to
+	/// vote immediately and asynchronously in a similar manner to the emergency origin. It retains
+	/// its threshold method.
+	type InstantOrigin: EnsureOrigin<Self::Origin>;
+
+	/// Indicator for whether an emergency origin is even allowed to happen. Some chains may want
+	/// to set this permanently to `false`, others may want to condition it on things such as
+	/// an upgrade having happened recently.
+	type InstantAllowed: Get<bool>;
+
+	/// Minimum voting period allowed for a fast-track referendum.
+	type FastTrackVotingPeriod: Get<Self::BlockNumber>;
 
 	/// Origin from which any referendum may be cancelled in an emergency.
 	type CancellationOrigin: EnsureOrigin<Self::Origin>;
@@ -253,52 +266,46 @@ pub trait Trait: frame_system::Trait + Sized {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Democracy {
+		// TODO: Refactor public proposal queue into its own pallet.
 		/// The number of (public) proposals that have been made so far.
 		pub PublicPropCount get(fn public_prop_count) build(|_| 0 as PropIndex) : PropIndex;
 		/// The public proposals. Unsorted. The second item is the proposal's hash.
 		pub PublicProps get(fn public_props): Vec<(PropIndex, T::Hash, T::AccountId)>;
-		/// Map of hashes to the proposal preimage, along with who registered it and their deposit.
-		/// The block number is the block at which it was deposited.
-		pub Preimages:
-			map hasher(identity) T::Hash
-			=> Option<(Vec<u8>, T::AccountId, BalanceOf<T>, T::BlockNumber)>;
 		/// Those who have locked a deposit.
 		pub DepositOf get(fn deposit_of):
 			map hasher(twox_64_concat) PropIndex => Option<(BalanceOf<T>, Vec<T::AccountId>)>;
+
+		/// Map of hashes to the proposal preimage, along with who registered it and their deposit.
+		/// The block number is the block at which it was deposited.
+		// TODO: Refactor Preimages into its own pallet.
+		pub Preimages:
+			map hasher(identity) T::Hash
+			=> Option<(Vec<u8>, T::AccountId, BalanceOf<T>, T::BlockNumber)>;
 
 		/// The next free referendum index, aka the number of referenda started so far.
 		pub ReferendumCount get(fn referendum_count) build(|_| 0 as ReferendumIndex): ReferendumIndex;
 		/// The lowest referendum index representing an unbaked referendum. Equal to
 		/// `ReferendumCount` if there isn't a unbaked referendum.
 		pub LowestUnbaked get(fn lowest_unbaked) build(|_| 0 as ReferendumIndex): ReferendumIndex;
+
 		/// Information concerning any given referendum.
 		pub ReferendumInfoOf get(fn referendum_info):
 			map hasher(twox_64_concat) ReferendumIndex
 			=> Option<ReferendumInfo<T::BlockNumber, T::Hash, BalanceOf<T>>>;
+
+		// TODO: Refactor DispatchQueue into its own module.
 		/// Queue of successful referenda to be dispatched. Stored ordered by block number.
 		pub DispatchQueue get(fn dispatch_queue): Vec<(T::BlockNumber, T::Hash, ReferendumIndex)>;
 
-		/// Get the voters for the current proposal.
-		/// DEPRECATED
-		pub VotersFor get(fn voters_for):
-			map hasher(twox_64_concat) ReferendumIndex => Vec<T::AccountId>;
-
-		/// Get the vote in a given referendum of a particular voter. The result is meaningful only
-		/// if `voters_for` includes the voter when called with the referendum (you'll get the
-		/// default `Vote` value otherwise). If you don't want to check `voters_for`, then you can
-		/// also check for simple existence with `VoteOf::contains_key` first.
-		/// DEPRECATED
-		pub VoteOf get(fn vote_of): map hasher(twox_64_concat) (ReferendumIndex, T::AccountId) => Vote;
-
 		/// All votes for a particular voter. We store the balance for the number of votes that we
 		/// have recorded.
-		pub VotesOf: map hasher(twox_64_concat) T::AccountId => Vec<(ReferendumIndex, Vote, BalanceOf<T>)>;
+		pub VotesOf: map hasher(twox_64_concat) T::AccountId => Vec<(ReferendumIndex, AccountVote<BalanceOf<T>>)>;
 
 		/// Who is able to vote for whom. Value is the fund-holding account, key is the
 		/// vote-transaction-sending account.
 		pub Proxy get(fn proxy): map hasher(twox_64_concat) T::AccountId => Option<ProxyState<T::AccountId>>;
 
-		/// Get the account (and lock periods) to which another account is delegating vote.
+		/// Get the account (and conviction) to which another account is delegating vote.
 		pub Delegations get(fn delegations):
 			map hasher(twox_64_concat) T::AccountId => (T::AccountId, Conviction);
 
@@ -436,6 +443,8 @@ decl_error! {
 		Overflow,
 		/// An unexpected integer underflow occurred.
 		Underflow,
+		/// Too high a balance was provided that the account cannot afford.
+		TooMuch,
 	}
 }
 
@@ -444,9 +453,6 @@ impl<T: Trait> MigrateAccount<T::AccountId> for Module<T> {
 		Proxy::<T>::migrate_key_from_blake(a);
 		Locks::<T>::migrate_key_from_blake(a);
 		Delegations::<T>::migrate_key_from_blake(a);
-		for i in LowestUnbaked::get()..ReferendumCount::get() {
-			VoteOf::<T>::migrate_key_from_blake((i, a));
-		}
 	}
 }
 
@@ -456,7 +462,6 @@ mod migration {
 		Blacklist::<T>::remove_all();
 		Cancellations::<T>::remove_all();
 		for i in LowestUnbaked::get()..ReferendumCount::get() {
-			VotersFor::<T>::migrate_key_from_blake(i);
 			ReferendumInfoOf::<T>::migrate_key_from_blake(i);
 		}
 		for (p, h, _) in PublicProps::<T>::get().into_iter() {
@@ -491,7 +496,7 @@ decl_module! {
 		const MinimumDeposit: BalanceOf<T> = T::MinimumDeposit::get();
 
 		/// Minimum voting period allowed for an emergency referendum.
-		const EmergencyVotingPeriod: T::BlockNumber = T::EmergencyVotingPeriod::get();
+		const FastTrackVotingPeriod: T::BlockNumber = T::FastTrackVotingPeriod::get();
 
 		/// Period in blocks where an external proposal may not be re-submitted after being vetoed.
 		const CooloffPeriod: T::BlockNumber = T::CooloffPeriod::get();
@@ -562,6 +567,7 @@ decl_module! {
 		///
 		/// - `ref_index`: The index of the referendum to vote for.
 		/// - `vote`: The vote configuration.
+		/// - `balance`: The amount of balance to
 		///
 		/// # <weight>
 		/// - `O(1)`.
@@ -570,10 +576,10 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedNormal(200_000)]
 		fn vote(origin,
 			#[compact] ref_index: ReferendumIndex,
-			vote: Vote
+			vote: AccountVote<BalanceOf<T>>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			Self::do_vote(&who, ref_index, vote)
+			Self::try_vote(&who, ref_index, vote)
 		}
 
 		/// Vote in a referendum on behalf of a stash. If `vote.is_aye()`, the vote is to enact
@@ -591,11 +597,11 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedNormal(200_000)]
 		fn proxy_vote(origin,
 			#[compact] ref_index: ReferendumIndex,
-			vote: Vote
+			vote: AccountVote<BalanceOf<T>>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let voter = Self::proxy(who).and_then(|a| a.as_active()).ok_or(Error::<T>::NotProxy)?;
-			Self::do_vote(&voter, ref_index, vote)
+			Self::try_vote(&voter, ref_index, vote)
 		}
 
 		/// Schedule an emergency cancellation of a referendum. Cannot happen twice to the same
@@ -692,7 +698,7 @@ decl_module! {
 		///
 		/// - `proposal_hash`: The hash of the current external proposal.
 		/// - `voting_period`: The period that is allowed for voting on this proposal. Increased to
-		///   `EmergencyVotingPeriod` if too low.
+		///   `FastTrackVotingPeriod` if too low.
 		/// - `delay`: The number of block after voting has ended in approval and this should be
 		///   enacted. This doesn't have a minimum amount.
 		///
@@ -709,8 +715,24 @@ decl_module! {
 			voting_period: T::BlockNumber,
 			delay: T::BlockNumber
 		) {
-			T::FastTrackOrigin::ensure_origin(origin)?;
-			let (e_proposal_hash, threshold) = <NextExternal<T>>::get().ok_or(Error::<T>::ProposalMissing)?;
+			// Rather complicated bit of code to ensure that either:
+			// - `voting_period` is at least `FastTrackVotingPeriod` and `origin` is `FastTrackOrigin`; or
+			// - `InstantAllowed` is `true` and `origin` is `InstantOrigin`.
+			if let Some(ensure_instant) = if voting_period < T::FastTrackVotingPeriod::get() {
+				Some(origin)
+			} else {
+				if let Err(origin) = T::FastTrackOrigin::try_origin(origin) {
+					Some(origin)
+				} else {
+					None
+				}
+			} {
+				ensure!(T::InstantAllowed::get(), Error::<T>::TooEarly);
+				T::InstantOrigin::ensure_origin(ensure_instant)?;
+			}
+
+			let (e_proposal_hash, threshold) = <NextExternal<T>>::get()
+				.ok_or(Error::<T>::ProposalMissing)?;
 			ensure!(
 				threshold != VoteThreshold::SuperMajorityApprove,
 				Error::<T>::NotSimpleMajority,
@@ -720,7 +742,7 @@ decl_module! {
 			<NextExternal<T>>::kill();
 			let now = <frame_system::Module<T>>::block_number();
 			// We don't consider it an error if `vote_period` is too low, like `emergency_propose`.
-			let period = voting_period.max(T::EmergencyVotingPeriod::get());
+			let period = voting_period.max(T::FastTrackVotingPeriod::get());
 			Self::inject_referendum(now + period, proposal_hash, threshold, delay);
 		}
 
@@ -1058,6 +1080,30 @@ decl_module! {
 			Self::update_lock(&target);
 		}
 
+		/// Become a proxy.
+		///
+		/// This must be called prior to a later `activate_proxy`.
+		///
+		/// Origin must be a Signed.
+		///
+		/// - `target`: The account whose votes will later be proxied.
+		///
+		/// `close_proxy` must be called before the account can be destroyed.
+		///
+		/// # <weight>
+		/// - One extra DB entry.
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(100_000)]
+		fn open_proxy(origin, target: T::AccountId) {
+			let who = ensure_signed(origin)?;
+			Proxy::<T>::mutate(&who, |a| {
+				if a.is_none() {
+					system::Module::<T>::inc_ref(&who);
+				}
+				*a = Some(ProxyState::Open(target));
+			});
+		}
+
 		/// Remove a vote for a referendum that has not yet ended, or one that has expired, either
 		/// because the voter lost the referendum or because the conviction period is over or
 		/// because it was cancelled.
@@ -1091,30 +1137,6 @@ decl_module! {
 		fn reap_vote(origin, target: T::AccountId, index: ReferendumIndex) -> DispatchResult {
 			ensure_signed(origin)?;
 			Self::cancel_vote(&target, index, UnvoteScope::OnlyExpired)
-		}
-
-		/// Become a proxy.
-		///
-		/// This must be called prior to a later `activate_proxy`.
-		///
-		/// Origin must be a Signed.
-		///
-		/// - `target`: The account whose votes will later be proxied.
-		///
-		/// `close_proxy` must be called before the account can be destroyed.
-		///
-		/// # <weight>
-		/// - One extra DB entry.
-		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(100_000)]
-		fn open_proxy(origin, target: T::AccountId) {
-			let who = ensure_signed(origin)?;
-			Proxy::<T>::mutate(&who, |a| {
-				if a.is_none() {
-					system::Module::<T>::inc_ref(&who);
-				}
-				*a = Some(ProxyState::Open(target));
-			});
 		}
 	}
 }
@@ -1204,21 +1226,20 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Actually enact a vote, if legit.
-	fn do_vote(who: &T::AccountId, ref_index: ReferendumIndex, vote: Vote) -> DispatchResult {
+	fn try_vote(who: &T::AccountId, ref_index: ReferendumIndex, vote: AccountVote<BalanceOf<T>>) -> DispatchResult {
 		let mut status = Self::referendum_status(ref_index)?;
-		let balance = T::Currency::free_balance(who);
+		ensure!(vote.balance() <= T::Currency::free_balance(who), Error::<T>::TooMuch);
 		VotesOf::<T>::try_mutate(who, |votes| -> DispatchResult {
 			match votes.binary_search_by_key(&ref_index, |i| i.0) {
 				Ok(i) => {
 					// Shouldn't be possible to fail, but we handle it gracefully.
-					status.tally.remove(votes[i].1, votes[i].2).ok_or(Error::<T>::Underflow)?;
+					status.tally.remove(votes[i].1).ok_or(Error::<T>::Underflow)?;
 					votes[i].1 = vote;
-					votes[i].2 = balance;
 				}
-				Err(i) => votes.insert(i, (ref_index, vote, balance)),
+				Err(i) => votes.insert(i, (ref_index, vote)),
 			}
 			// Shouldn't be possible to fail, but we handle it gracefully.
-			status.tally.add(vote, balance).ok_or(Error::<T>::Overflow)?;
+			status.tally.add(vote).ok_or(Error::<T>::Overflow)?;
 			Ok(())
 		})?;
 		// Extend the lock to `balance` (rather than setting it) since we don't know what other
@@ -1226,7 +1247,7 @@ impl<T: Trait> Module<T> {
 		T::Currency::extend_lock(
 			DEMOCRACY_ID,
 			who,
-			balance,
+			vote.balance(),
 			WithdrawReason::Transfer.into()
 		);
 		ReferendumInfoOf::<T>::insert(ref_index, ReferendumInfo::Ongoing(status));
@@ -1247,16 +1268,15 @@ impl<T: Trait> Module<T> {
 				Some(ReferendumInfo::Ongoing(mut status)) => {
 					ensure!(matches!(scope, UnvoteScope::Any), Error::<T>::NoPermission);
 					// Shouldn't be possible to fail, but we handle it gracefully.
-					status.tally.remove(votes[i].1, votes[i].2).ok_or(Error::<T>::Underflow)?;
+					status.tally.remove(votes[i].1).ok_or(Error::<T>::Underflow)?;
 					ReferendumInfoOf::<T>::insert(ref_index, ReferendumInfo::Ongoing(status));
 				}
-				Some(ReferendumInfo::Finished{end, approved}) => if votes[i].1.aye == approved {
-					// winning side: can only be removed after the lock period ends.
-					let lock_periods = votes[i].1.conviction.lock_periods();
-					let unlock_at = end + T::EnactmentPeriod::get() * lock_periods.into();
-					let now = system::Module::<T>::block_number();
-					ensure!(now >= unlock_at, Error::<T>::TooEarly);
-				},
+				Some(ReferendumInfo::Finished{end, approved}) =>
+					if let Some(lock_periods) = votes[i].1.lock_periods(approved) {
+						let unlock_at = end + T::EnactmentPeriod::get() * lock_periods.into();
+						let now = system::Module::<T>::block_number();
+						ensure!(now >= unlock_at, Error::<T>::TooEarly);
+					},
 				None => {}  // Referendum was cancelled.
 			}
 			votes.remove(i);
@@ -1268,7 +1288,9 @@ impl<T: Trait> Module<T> {
 	/// Rejig the locks on an account. They will never get more stringent but may be reduced from
 	/// what they are currently.
 	fn update_lock(who: &T::AccountId) {
-		let max = VotesOf::<T>::get(who).into_iter().map(|i| i.2).fold(BalanceOf::<T>::zero(), |a, i| a.max(i));
+		let max = VotesOf::<T>::get(who).into_iter()
+			.map(|i| i.1.balance())
+			.fold(BalanceOf::<T>::zero(), |a, i| a.max(i));
 		if max.is_zero() {
 			T::Currency::remove_lock(DEMOCRACY_ID, who);
 		} else {

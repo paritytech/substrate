@@ -90,7 +90,7 @@ impl pallet_balances::Trait for Test {
 parameter_types! {
 		pub const LaunchPeriod: u64 = 2;
 		pub const VotingPeriod: u64 = 2;
-		pub const EmergencyVotingPeriod: u64 = 1;
+		pub const FastTrackVotingPeriod: u64 = 1;
 		pub const MinimumDeposit: u64 = 1;
 		pub const EnactmentPeriod: u64 = 2;
 		pub const CooloffPeriod: u64 = 2;
@@ -122,7 +122,7 @@ impl super::Trait for Test {
 	type EnactmentPeriod = EnactmentPeriod;
 	type LaunchPeriod = LaunchPeriod;
 	type VotingPeriod = VotingPeriod;
-	type EmergencyVotingPeriod = EmergencyVotingPeriod;
+	type FastTrackVotingPeriod = FastTrackVotingPeriod;
 	type MinimumDeposit = MinimumDeposit;
 	type ExternalOrigin = EnsureSignedBy<Two, u64>;
 	type ExternalMajorityOrigin = EnsureSignedBy<Three, u64>;

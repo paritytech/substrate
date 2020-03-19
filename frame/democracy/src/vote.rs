@@ -18,7 +18,7 @@
 
 use sp_std::{result::Result, convert::TryFrom};
 use codec::{Encode, EncodeLike, Decode, Output, Input};
-use sp_runtime::RuntimeDebug;
+use sp_runtime::{RuntimeDebug, traits::Saturating};
 use crate::conviction::Conviction;
 
 /// A number of lock periods, plus a vote, one way or the other.
@@ -44,5 +44,36 @@ impl Decode for Vote {
 			conviction: Conviction::try_from(b & 0b0111_1111)
 				.map_err(|_| codec::Error::from("Invalid conviction"))?,
 		})
+	}
+}
+
+/// A vote for a referendum of a particular account.
+#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, RuntimeDebug)]
+pub enum AccountVote<Balance> {
+	/// A standard vote, one-way (approve or reject) with a given amount of conviction.
+	Standard { vote: Vote, balance: Balance },
+	/// A split vote with balances given for both ways, and with no conviction, useful for
+	/// parachains when voting.
+	Split { aye: Balance, nay: Balance },
+}
+
+impl<Balance: Saturating> AccountVote<Balance> {
+	/// Returns `Some` of the lock periods that the account is locked for, assuming that the
+	/// referendum passed iff `approved` is `true`.
+	pub fn lock_periods(self, approved: bool) -> Option<u32> {
+		// winning side: can only be removed after the lock period ends.
+		match self {
+			AccountVote::Standard { vote, .. } if vote.aye == approved =>
+				Some(vote.conviction.lock_periods()),
+			_ => None,
+		}
+	}
+
+	/// The total balance involved in this vote.
+	pub fn balance(self) -> Balance {
+		match self {
+			AccountVote::Standard { balance, .. } => balance,
+			AccountVote::Split { aye, nay } => aye.saturating_add(nay),
+		}
 	}
 }

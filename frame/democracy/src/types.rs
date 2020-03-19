@@ -19,7 +19,7 @@
 use codec::{Encode, Decode};
 use sp_runtime::RuntimeDebug;
 use sp_runtime::traits::{Zero, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv};
-use crate::{Vote, VoteThreshold};
+use crate::{Vote, VoteThreshold, AccountVote, Conviction};
 
 /// Info regarding an ongoing referendum.
 #[derive(Encode, Decode, Default, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -50,30 +50,50 @@ impl<
 	/// Increment some amount of votes.
 	pub fn add(
 		&mut self,
-		vote: Vote,
-		balance: Balance,
+		vote: AccountVote<Balance>,
 	) -> Option<()> {
-		let (votes, turnout) = vote.conviction.votes(balance);
-		self.turnout = self.turnout.checked_add(&turnout)?;
-		match vote.aye {
-			true => self.ayes = self.ayes.checked_add(&votes)?,
-			false => self.nays = self.nays.checked_add(&votes)?,
-		};
+		match vote {
+			AccountVote::Standard { vote, balance } => {
+				let (votes, turnout) = vote.conviction.votes(balance);
+				self.turnout = self.turnout.checked_add(&turnout)?;
+				match vote.aye {
+					true => self.ayes = self.ayes.checked_add(&votes)?,
+					false => self.nays = self.nays.checked_add(&votes)?,
+				}
+			}
+			AccountVote::Split { aye, nay } => {
+				let (aye_votes, aye_turnout) = Conviction::None.votes(aye);
+				let (nay_votes, nay_turnout) = Conviction::None.votes(nay);
+				self.turnout = self.turnout.checked_add(&aye_turnout)?.checked_add(&nay_turnout)?;
+				self.ayes = self.ayes.checked_add(&aye_votes)?;
+				self.nays = self.nays.checked_add(&nay_votes)?;
+			}
+		}
 		Some(())
 	}
 
 	/// Decrement some amount of votes.
 	pub fn remove(
 		&mut self,
-		vote: Vote,
-		balance: Balance,
+		vote: AccountVote<Balance>,
 	) -> Option<()> {
-		let (votes, turnout) = vote.conviction.votes(balance);
-		self.turnout = self.turnout.checked_sub(&turnout)?;
-		match vote.aye {
-			true => self.ayes = self.ayes.checked_sub(&votes)?,
-			false => self.nays = self.nays.checked_sub(&votes)?,
-		};
+		match vote {
+			AccountVote::Standard { vote, balance } => {
+				let (votes, turnout) = vote.conviction.votes(balance);
+				self.turnout = self.turnout.checked_sub(&turnout)?;
+				match vote.aye {
+					true => self.ayes = self.ayes.checked_sub(&votes)?,
+					false => self.nays = self.nays.checked_sub(&votes)?,
+				}
+			}
+			AccountVote::Split { aye, nay } => {
+				let (aye_votes, aye_turnout) = Conviction::None.votes(aye);
+				let (nay_votes, nay_turnout) = Conviction::None.votes(nay);
+				self.turnout = self.turnout.checked_sub(&aye_turnout)?.checked_sub(&nay_turnout)?;
+				self.ayes = self.ayes.checked_sub(&aye_votes)?;
+				self.nays = self.nays.checked_sub(&nay_votes)?;
+			}
+		}
 		Some(())
 	}
 }
