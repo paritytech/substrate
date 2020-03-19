@@ -168,7 +168,6 @@ use frame_support::{
 	}
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
-use frame_support::traits::MigrateAccount;
 
 mod vote_threshold;
 mod vote;
@@ -267,6 +266,7 @@ pub trait Trait: frame_system::Trait + Sized {
 decl_storage! {
 	trait Store for Module<T: Trait> as Democracy {
 		// TODO: Refactor public proposal queue into its own pallet.
+		// https://github.com/paritytech/substrate/issues/5322
 		/// The number of (public) proposals that have been made so far.
 		pub PublicPropCount get(fn public_prop_count) build(|_| 0 as PropIndex) : PropIndex;
 		/// The public proposals. Unsorted. The second item is the proposal's hash.
@@ -278,6 +278,7 @@ decl_storage! {
 		/// Map of hashes to the proposal preimage, along with who registered it and their deposit.
 		/// The block number is the block at which it was deposited.
 		// TODO: Refactor Preimages into its own pallet.
+		// https://github.com/paritytech/substrate/issues/5322
 		pub Preimages:
 			map hasher(identity) T::Hash
 			=> Option<(Vec<u8>, T::AccountId, BalanceOf<T>, T::BlockNumber)>;
@@ -294,6 +295,7 @@ decl_storage! {
 			=> Option<ReferendumInfo<T::BlockNumber, T::Hash, BalanceOf<T>>>;
 
 		// TODO: Refactor DispatchQueue into its own pallet.
+		// https://github.com/paritytech/substrate/issues/5322
 		/// Queue of successful referenda to be dispatched. Stored ordered by block number.
 		pub DispatchQueue get(fn dispatch_queue): Vec<(T::BlockNumber, T::Hash, ReferendumIndex)>;
 
@@ -304,6 +306,7 @@ decl_storage! {
 		/// Who is able to vote for whom. Value is the fund-holding account, key is the
 		/// vote-transaction-sending account.
 		// TODO: Refactor proxy into its own pallet.
+		// https://github.com/paritytech/substrate/issues/5322
 		pub Proxy get(fn proxy): map hasher(twox_64_concat) T::AccountId => Option<ProxyState<T::AccountId>>;
 
 		/// Accounts for which there are locks in action which may be removed at some point in the
@@ -313,6 +316,7 @@ decl_storage! {
 		/// True if the last referendum tabled was submitted externally. False if it was a public
 		/// proposal.
 		// TODO: There should be any number of tabling origins, not just public and "external" (council).
+		// https://github.com/paritytech/substrate/issues/5322
 		pub LastTabledWasExternal: bool;
 
 		/// The referendum to be tabled whenever it would be valid to table an external proposal.
