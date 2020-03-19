@@ -53,8 +53,7 @@ use sp_core::{
 use sp_version::RuntimeVersion;
 use sp_runtime::{generic::BlockId, traits::{Block as BlockT, HashFor}};
 
-use super::{StateBackend, ChildStateBackend, error::{FutureResult, Error}, client_err,
-	child_resolution_error};
+use super::{StateBackend, ChildStateBackend, error::{FutureResult, Error}, client_err};
 
 /// Storage data map of storage keys => (optional) storage value.
 type StorageMap = HashMap<StorageKey, Option<StorageData>>;
@@ -239,55 +238,6 @@ impl<Block, F, Client> StateBackend<Block, Client> for LightState<Block, F, Clie
 			.and_then(|maybe_storage|
 				result(Ok(maybe_storage.map(|storage| HashFor::<Block>::hash(&storage.0))))
 			)
-		)
-	}
-
-	fn child_storage_keys(
-		&self,
-		_block: Option<Block::Hash>,
-		_child_storage_key: StorageKey,
-		_child_info: StorageKey,
-		_child_type: u32,
-		_prefix: StorageKey,
-	) -> FutureResult<Vec<StorageKey>> {
-		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
-	}
-
-	fn child_storage(
-		&self,
-		block: Option<Block::Hash>,
-		child_storage_key: StorageKey,
-		_child_info: StorageKey,
-		child_type: u32,
-		key: StorageKey,
-	) -> FutureResult<Option<StorageData>> {
-		if child_type != 1 {
-			return Box::new(result(Err(child_resolution_error())));
-		}
-		ChildStateBackend::storage(
-			self,
-			block,
-			child_storage_key,
-			key,
-		)
-	}
-
-	fn child_storage_hash(
-		&self,
-		block: Option<Block::Hash>,
-		child_storage_key: StorageKey,
-		_child_info: StorageKey,
-		child_type: u32,
-		key: StorageKey,
-	) -> FutureResult<Option<Block::Hash>> {
-		if child_type != 1 {
-			return Box::new(result(Err(child_resolution_error())));
-		}
-		ChildStateBackend::storage_hash(
-			self,
-			block,
-			child_storage_key,
-			key,
 		)
 	}
 

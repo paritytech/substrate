@@ -39,8 +39,7 @@ use sp_runtime::{
 
 use sp_api::{Metadata, ProvideRuntimeApi, CallApiAt};
 
-use super::{StateBackend, ChildStateBackend, error::{FutureResult, Error, Result},
-	client_err, child_resolution_error};
+use super::{StateBackend, ChildStateBackend, error::{FutureResult, Error, Result}, client_err};
 use std::marker::PhantomData;
 use sc_client_api::{CallExecutor, StorageProvider, ExecutorProvider};
 
@@ -305,63 +304,6 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 			self.block_or_best(block)
 				.and_then(|block| self.client.storage_hash(&BlockId::Hash(block), &key))
 				.map_err(client_err)))
-	}
-
-	fn child_storage_keys(
-		&self,
-		block: Option<Block::Hash>,
-		child_storage_key: StorageKey,
-		_child_info: StorageKey,
-		child_type: u32,
-		prefix: StorageKey,
-	) -> FutureResult<Vec<StorageKey>> {
-		if child_type != 1 {
-			return Box::new(result(Err(child_resolution_error())));
-		}
-		ChildStateBackend::storage_keys(
-			self,
-			block,
-			child_storage_key,
-			prefix,
-		)
-	}
-
-	fn child_storage(
-		&self,
-		block: Option<Block::Hash>,
-		child_storage_key: StorageKey,
-		_child_info: StorageKey,
-		child_type: u32,
-		key: StorageKey,
-	) -> FutureResult<Option<StorageData>> {
-		if child_type != 1 {
-			return Box::new(result(Err(child_resolution_error())));
-		}
-		ChildStateBackend::storage(
-			self,
-			block,
-			child_storage_key,
-			key,
-		)
-	}
-
-	fn child_storage_hash(
-		&self,
-		block: Option<Block::Hash>,
-		child_storage_key: StorageKey,
-		_child_info: StorageKey,
-		child_type: u32,
-		key: StorageKey,
-	) -> FutureResult<Option<Block::Hash>> {
-		if child_type != 1 {
-			return Box::new(result(Err(child_resolution_error())));
-		}
-		ChildStateBackend::storage_hash(
-			self,
-			block,
-			child_storage_key,
-			key,
-		)
 	}
 
 	fn metadata(&self, block: Option<Block::Hash>) -> FutureResult<Bytes> {
