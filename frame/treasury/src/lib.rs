@@ -92,7 +92,7 @@ use serde::{Serialize, Deserialize};
 use sp_std::prelude::*;
 use frame_support::{decl_module, decl_storage, decl_event, ensure, print, decl_error, Parameter};
 use frame_support::traits::{
-	Currency, ExistenceRequirement, Get, Imbalance, OnUnbalanced, ExistenceRequirement::AllowDeath,
+	Currency, Get, Imbalance, OnUnbalanced, ExistenceRequirement::KeepAlive,
 	ReservableCurrency, WithdrawReason
 };
 use sp_runtime::{Permill, ModuleId, Percent, RuntimeDebug, traits::{
@@ -152,8 +152,8 @@ pub trait Trait: frame_system::Trait {
 	/// Minimum amount of funds that should be placed in a deposit for making a proposal.
 	type ProposalBondMinimum: Get<BalanceOf<Self>>;
 
-	/// Period between successive spends.
-	type SpendPeriod: Get<Self::BlockNumber>;
+	/// Period between successive burns.
+	type BurnPeriod: Get<Self::BlockNumber>;
 
 	/// Percentage of spare funds (if any) that are burnt per spend period.
 	type Burn: Get<Permill>;
@@ -174,6 +174,8 @@ pub struct Proposal<AccountId, Balance> {
 	beneficiary: AccountId,
 	/// The amount held on deposit (reserved) for making this proposal.
 	bond: Balance,
+	/// The approval status of the proposal.
+	approved: bool,
 }
 
 /// An open tipping "motion". Retains all details of a tip including information on the finder
@@ -209,9 +211,6 @@ decl_storage! {
 			map hasher(twox_64_concat) ProposalIndex
 			=> Option<Proposal<T::AccountId, BalanceOf<T>>>;
 
-		/// Proposal indices that have been approved but not yet awarded.
-		Approvals get(fn approvals): Vec<ProposalIndex>;
-
 		/// Tips that are not yet completed. Keyed by the hash of `(reason, who)` from the value.
 		/// This has the insecure enumerable hash function since the key itself is already
 		/// guaranteed to be a secure hash.
@@ -243,16 +242,12 @@ decl_event!(
 	{
 		/// New proposal.
 		Proposed(ProposalIndex),
-		/// We have ended a spend period and will now allocate funds.
-		Spending(Balance),
 		/// Some funds have been allocated.
 		Awarded(ProposalIndex, Balance, AccountId),
 		/// A proposal was rejected; funds were slashed.
 		Rejected(ProposalIndex, Balance),
 		/// Some of our funds have been burnt.
 		Burnt(Balance),
-		/// Spending has finished; this is the amount that rolls over until next spend.
-		Rollover(Balance),
 		/// Some funds have been deposited.
 		Deposit(Balance),
 		/// A new tip suggestion has been opened.
@@ -285,6 +280,8 @@ decl_error! {
 		StillOpen,
 		/// The tip cannot be claimed/closed because it's still in the countdown period.
 		Premature,
+		/// The proposal has not been approved.
+		NotApproved,
 	}
 }
 
@@ -312,7 +309,7 @@ decl_module! {
 		const ProposalBondMinimum: BalanceOf<T> = T::ProposalBondMinimum::get();
 
 		/// Period between successive spends.
-		const SpendPeriod: T::BlockNumber = T::SpendPeriod::get();
+		const BurnPeriod: T::BlockNumber = T::BurnPeriod::get();
 
 		/// Percentage of spare funds (if any) that are burnt per spend period.
 		const Burn: Permill = T::Burn::get();
@@ -357,7 +354,7 @@ decl_module! {
 
 			let c = Self::proposal_count();
 			ProposalCount::put(c + 1);
-			<Proposals<T>>::insert(c, Proposal { proposer, value, beneficiary, bond });
+			<Proposals<T>>::insert(c, Proposal { proposer, value, beneficiary, bond, approved: false });
 
 			Self::deposit_event(RawEvent::Proposed(c));
 		}
@@ -397,8 +394,23 @@ decl_module! {
 				.map(|_| ())
 				.or_else(ensure_root)?;
 
-			ensure!(<Proposals<T>>::contains_key(proposal_id), Error::<T>::InvalidProposalIndex);
-			Approvals::mutate(|v| v.push(proposal_id));
+			let mut proposal = Proposals::<T>::get(proposal_id).ok_or(Error::<T>::InvalidProposalIndex)?;
+			proposal.approved = true;
+			Proposals::<T>::insert(proposal_id, proposal);
+		}
+
+		/// Payout an approved proposal
+		fn payout_proposal(origin, proposal_id: ProposalIndex) {
+			ensure_signed(origin)?;
+			let proposal = Proposals::<T>::get(proposal_id).ok_or(Error::<T>::InvalidProposalIndex)?;
+			ensure!(proposal.approved, Error::<T>::NotApproved);
+			// Try to transfer funds from the pot, making sure to keep alive.
+			T::Currency::transfer(&Self::account_id(), &proposal.beneficiary, proposal.value, KeepAlive)?;
+			// return the proposal deposit and clean up.
+			let _ = T::Currency::unreserve(&proposal.proposer, proposal.bond);
+			<Proposals<T>>::remove(proposal_id);
+
+			Self::deposit_event(RawEvent::Awarded(proposal_id, proposal.value, proposal.beneficiary));
 		}
 
 		/// Report something `reason` that deserves a tip and claim any eventual the finder's fee.
@@ -567,10 +579,10 @@ decl_module! {
 			Self::payout_tip(tip);
 		}
 
-		fn on_finalize(n: T::BlockNumber) {
+		fn on_initialize(n: T::BlockNumber) {
 			// Check to see if we should spend some funds!
-			if (n % T::SpendPeriod::get()).is_zero() {
-				Self::spend_funds();
+			if (n % T::BurnPeriod::get()).is_zero() {
+				Self::burn_funds();
 			}
 		}
 	}
@@ -645,7 +657,7 @@ impl<T: Trait> Module<T> {
 		Self::retain_active_tips(&mut tips);
 		tips.sort_by_key(|i| i.1);
 		let treasury = Self::account_id();
-		let max_payout = T::Currency::free_balance(&treasury);
+		let max_payout = Self::pot();
 		let mut payout = tips[tips.len() / 2].1.min(max_payout);
 		if let Some((finder, deposit)) = tip.finder {
 			let _ = T::Currency::unreserve(&finder, deposit);
@@ -655,53 +667,23 @@ impl<T: Trait> Module<T> {
 				payout -= finders_fee;
 				// this should go through given we checked it's at most the free balance, but still
 				// we only make a best-effort.
-				let _ = T::Currency::transfer(&treasury, &finder, finders_fee, AllowDeath);
+				let _ = T::Currency::transfer(&treasury, &finder, finders_fee, KeepAlive);
 			}
 		}
 		// same as above: best-effort only.
-		let _ = T::Currency::transfer(&treasury, &tip.who, payout, AllowDeath);
+		let _ = T::Currency::transfer(&treasury, &tip.who, payout, KeepAlive);
 	}
 
-	// Spend some money!
-	fn spend_funds() {
+	// Periodically burn funds
+	fn burn_funds() {
 		let mut budget_remaining = Self::pot();
-		Self::deposit_event(RawEvent::Spending(budget_remaining));
 
-		let mut missed_any = false;
 		let mut imbalance = <PositiveImbalanceOf<T>>::zero();
-		Approvals::mutate(|v| {
-			v.retain(|&index| {
-				// Should always be true, but shouldn't panic if false or we're screwed.
-				if let Some(p) = Self::proposals(index) {
-					if p.value <= budget_remaining {
-						budget_remaining -= p.value;
-						<Proposals<T>>::remove(index);
-
-						// return their deposit.
-						let _ = T::Currency::unreserve(&p.proposer, p.bond);
-
-						// provide the allocation.
-						imbalance.subsume(T::Currency::deposit_creating(&p.beneficiary, p.value));
-
-						Self::deposit_event(RawEvent::Awarded(index, p.value, p.beneficiary));
-						false
-					} else {
-						missed_any = true;
-						true
-					}
-				} else {
-					false
-				}
-			});
-		});
-
-		if !missed_any {
-			// burn some proportion of the remaining budget if we run a surplus.
-			let burn = (T::Burn::get() * budget_remaining).min(budget_remaining);
-			budget_remaining -= burn;
-			imbalance.subsume(T::Currency::burn(burn));
-			Self::deposit_event(RawEvent::Burnt(burn))
-		}
+		// burn some proportion of the remaining budget if we run a surplus.
+		let burn = (T::Burn::get() * budget_remaining).min(budget_remaining);
+		budget_remaining -= burn;
+		imbalance.subsume(T::Currency::burn(burn));
+		Self::deposit_event(RawEvent::Burnt(burn));
 
 		// Must never be an error, but better to be safe.
 		// proof: budget_remaining is account free balance minus ED;
@@ -711,14 +693,12 @@ impl<T: Trait> Module<T> {
 			&Self::account_id(),
 			imbalance,
 			WithdrawReason::Transfer.into(),
-			ExistenceRequirement::KeepAlive
+			KeepAlive
 		) {
 			print("Inconsistent state - couldn't settle imbalance for funds spent by treasury");
 			// Nothing else to do here.
 			drop(problem);
 		}
-
-		Self::deposit_event(RawEvent::Rollover(budget_remaining));
 	}
 
 	/// Return the amount of money in the pot.
