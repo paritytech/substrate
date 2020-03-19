@@ -148,33 +148,40 @@ impl<B: BlockT> Future for GossipEngine<B> {
 	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		let this = &mut *self;
 
-		while let Poll::Ready(Some(event)) = this.network_event_stream.poll_next_unpin(cx) {
-			match event {
-				Event::NotificationStreamOpened { remote, engine_id: msg_engine_id, roles } => {
-					if msg_engine_id != this.engine_id {
-						continue;
+		loop {
+			match this.network_event_stream.poll_next_unpin(cx) {
+				Poll::Ready(Some(event)) => match event {
+					Event::NotificationStreamOpened { remote, engine_id: msg_engine_id, roles } => {
+						if msg_engine_id != this.engine_id {
+							continue;
+						}
+						this.state_machine.new_peer(&mut *this.network, remote, roles);
 					}
-					this.state_machine.new_peer(&mut *this.network, remote, roles);
+					Event::NotificationStreamClosed { remote, engine_id: msg_engine_id } => {
+						if msg_engine_id != this.engine_id {
+							continue;
+						}
+						this.state_machine.peer_disconnected(&mut *this.network, remote);
+					},
+					Event::NotificationsReceived { remote, messages } => {
+						let engine_id = this.engine_id.clone();
+						this.state_machine.on_incoming(
+							&mut *this.network,
+							remote,
+							messages.into_iter()
+								.filter_map(|(engine, data)| if engine == engine_id {
+									Some(ConsensusMessage {
+										engine_id: engine, data: data.to_vec(),
+									})
+								} else { None })
+								.collect()
+						);
+					},
+					Event::Dht(_) => {}
 				}
-				Event::NotificationStreamClosed { remote, engine_id: msg_engine_id } => {
-					if msg_engine_id != this.engine_id {
-						continue;
-					}
-					this.state_machine.peer_disconnected(&mut *this.network, remote);
-				},
-				Event::NotificationsReceived { remote, messages } => {
-					let engine_id = this.engine_id.clone();
-					this.state_machine.on_incoming(
-						&mut *this.network,
-						remote,
-						messages.into_iter()
-							.filter_map(|(engine, data)| if engine == engine_id {
-								Some(ConsensusMessage { engine_id: engine, data: data.to_vec() })
-							} else { None })
-							.collect()
-					);
-				},
-				Event::Dht(_) => {}
+				// The network event stream closed. Do the same for [`GossipValidator`].
+				Poll::Ready(None) => return Poll::Ready(()),
+				Poll::Pending => break,
 			}
 		}
 
@@ -184,5 +191,79 @@ impl<B: BlockT> Future for GossipEngine<B> {
 		}
 
 		Poll::Pending
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::{ValidationResult, ValidatorContext};
+	use substrate_test_runtime_client::runtime::Block;
+
+	struct TestNetwork {}
+
+	impl<B: BlockT> Network<B> for Arc<TestNetwork> {
+		fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
+			let (_tx, rx) = futures::channel::mpsc::channel(0);
+
+			// Return rx and drop tx. Thus the given channel will yield `Poll::Ready(None)` on first
+			// poll.
+			Box::pin(rx)
+		}
+
+		fn report_peer(&self, _: PeerId, _: ReputationChange) {
+			unimplemented!();
+		}
+
+		fn disconnect_peer(&self, _: PeerId) {
+			unimplemented!();
+		}
+
+		fn write_notification(&self, _: PeerId, _: ConsensusEngineId, _: Vec<u8>) {
+			unimplemented!();
+		}
+
+		fn register_notifications_protocol(&self, _: ConsensusEngineId, _: Cow<'static, [u8]>) {}
+
+		fn announce(&self, _: B::Hash, _: Vec<u8>) {
+			unimplemented!();
+		}
+	}
+
+	struct TestValidator {}
+
+	impl<B: BlockT> Validator<B> for TestValidator {
+		fn validate(
+			&self,
+			_: &mut dyn ValidatorContext<B>,
+			_: &PeerId,
+			_: &[u8]
+		) -> ValidationResult<B::Hash> {
+			unimplemented!();
+		}
+	}
+
+	/// Regression test for the case where the `GossipEngine.network_event_stream` closes. One
+	/// should not ignore a `Poll::Ready(None)` as `poll_next_unpin` will panic on subsequent calls.
+	///
+	/// See https://github.com/paritytech/substrate/issues/5000 for details.
+	#[test]
+	fn returns_when_network_event_stream_closes() {
+		let mut gossip_engine = GossipEngine::<Block>::new(
+			Arc::new(TestNetwork{}),
+			[1, 2, 3, 4],
+			"my_protocol".as_bytes(),
+			Arc::new(TestValidator{}),
+		);
+
+		futures::executor::block_on(futures::future::poll_fn(move |ctx| {
+			if let Poll::Pending = gossip_engine.poll_unpin(ctx) {
+				panic!(
+					"Expected gossip engine to finish on first poll, given that \
+					 `GossipEngine.network_event_stream` closes right away."
+				)
+			}
+			Poll::Ready(())
+		}))
 	}
 }

@@ -1,6 +1,6 @@
 [package]
 name = "sp-api"
-version = "2.0.0-alpha.3"
+version = "2.0.0-alpha.4"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
@@ -10,12 +10,12 @@ description = "Substrate runtime api primitives"
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false }
-sp-api-proc-macro = { version = "2.0.0-alpha.2", path = "proc-macro" }
-sp-core = { version = "2.0.0-alpha.2", default-features = false, path = "../core" }
-sp-std = { version = "2.0.0-alpha.2", default-features = false, path = "../std" }
-sp-runtime = { version = "2.0.0-alpha.2", default-features = false, path = "../runtime" }
-sp-version = { version = "2.0.0-alpha.2", default-features = false, path = "../version" }
-sp-state-machine = { version = "0.8.0-alpha.2", optional = true, path = "../../primitives/state-machine" }
+sp-api-proc-macro = { version = "2.0.0-alpha.4", path = "proc-macro" }
+sp-core = { version = "2.0.0-alpha.4", default-features = false, path = "../core" }
+sp-std = { version = "2.0.0-alpha.4", default-features = false, path = "../std" }
+sp-runtime = { version = "2.0.0-alpha.4", default-features = false, path = "../runtime" }
+sp-version = { version = "2.0.0-alpha.4", default-features = false, path = "../version" }
+sp-state-machine = { version = "0.8.0-alpha.4", optional = true, path = "../../primitives/state-machine" }
 hash-db = { version = "0.15.2", optional = true }
 
 [dev-dependencies]
