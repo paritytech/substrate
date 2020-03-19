@@ -23,6 +23,7 @@ use crate::error;
 use crate::SubstrateCLI;
 use crate::params::SharedParams;
 use crate::params::NodeKeyParams;
+use crate::{substrate_cli_params, CliConfiguration};
 
 /// The `build-spec` command used to build a specification.
 #[derive(Debug, StructOpt, Clone)]
@@ -78,4 +79,8 @@ impl BuildSpecCmd {
 
 		Ok(())
 	}
+}
+
+#[substrate_cli_params(shared_params = shared_params, node_key_params = node_key_params)]
+impl CliConfiguration for BuildSpecCmd {
 }

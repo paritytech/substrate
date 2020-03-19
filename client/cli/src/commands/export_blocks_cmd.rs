@@ -25,9 +25,9 @@ use sc_service::{
 	config::DatabaseConfig, Roles, PruningMode,
 };
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
-
 use crate::error;
 use crate::params::{SharedParams, BlockNumber, PruningParams};
+use crate::{substrate_cli_params, CliConfiguration};
 
 /// The `export-blocks` command used to export blocks.
 #[derive(Debug, StructOpt, Clone)]
@@ -94,3 +94,6 @@ impl ExportBlocksCmd {
 		builder(config)?.export_blocks(file, from.into(), to, json).await.map_err(|e| e.into())
 	}
 }
+
+#[substrate_cli_params(shared_params = shared_params, pruning_params = pruning_params)]
+impl CliConfiguration for ExportBlocksCmd {}

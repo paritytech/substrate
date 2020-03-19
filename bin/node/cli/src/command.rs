@@ -14,12 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::path::PathBuf;
-use sc_cli::{spec_factory, SubstrateCLI, Result, CliConfiguration};
+use sc_cli::{spec_factory, SubstrateCLI, Result, CliConfiguration, substrate_cli_params};
 use sc_service::{
 	Configuration, RuntimeGenesis, ChainSpecExtension,
-	config::{DatabaseConfig, ExecutionStrategies, WasmExecutionMethod},
-	PruningMode, Roles, TracingReceiver,
 };
 use node_transaction_factory::RuntimeAdapter;
 use crate::{Cli, service, Subcommand, factory_impl::FactoryState, ChainSpec, chain_spec::{GenesisConfig, Extensions}, FactoryCmd};
@@ -80,63 +77,8 @@ pub fn run() -> Result<()>
 	}
 }
 
+#[substrate_cli_params(shared_params = shared_params, import_params = import_params)]
 impl CliConfiguration for FactoryCmd {
-	fn is_dev(&self) -> bool {
-		self.shared_params.dev
-	}
-
-	fn get_base_path(&self) -> Result<Option<&PathBuf>> {
-		Ok(self.shared_params.base_path.as_ref())
-	}
-
-	fn get_database_config(&self, base_path: &PathBuf, cache_size: Option<usize>) -> Result<DatabaseConfig>
-	{
-		Ok(self.shared_params.get_database_config(base_path, cache_size))
-	}
-
-	fn get_chain_spec<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<sc_service::ChainSpec<G, E>>
-	where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-	{
-		self.shared_params.get_chain_spec::<C, G, E>()
-	}
-
-	fn init<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<()>
-	where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-	{
-		self.shared_params.init::<C, G, E>()
-	}
-
-	fn get_pruning(&self, is_dev: bool, roles: Roles) -> Result<PruningMode> {
-		self.import_params.get_pruning(roles, is_dev)
-	}
-
-	fn get_tracing_receiver(&self) -> Result<TracingReceiver> {
-		Ok(self.import_params.tracing_receiver.clone().into())
-	}
-
-	fn get_tracing_targets(&self) -> Result<Option<String>> {
-		Ok(self.import_params.tracing_targets.clone().into())
-	}
-
-	fn get_state_cache_size(&self) -> Result<usize> {
-		Ok(self.import_params.state_cache_size)
-	}
-
-	fn get_wasm_method(&self) -> Result<WasmExecutionMethod> {
-		Ok(self.import_params.get_wasm_method())
-	}
-
-	fn get_execution_strategies(&self, is_dev: bool) -> Result<ExecutionStrategies> {
-		self.import_params.get_execution_strategies(is_dev)
-	}
-
-	fn get_database_cache_size(&self) -> Result<Option<usize>> {
-		Ok(self.import_params.database_cache_size)
-	}
 }
 
 impl FactoryCmd {

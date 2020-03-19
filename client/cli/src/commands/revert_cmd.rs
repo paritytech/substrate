@@ -23,6 +23,7 @@ use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 
 use crate::error;
 use crate::params::{BlockNumber, SharedParams, PruningParams};
+use crate::{substrate_cli_params, CliConfiguration};
 
 /// The `revert` command used revert the chain to a previous state.
 #[derive(Debug, StructOpt, Clone)]
@@ -62,3 +63,6 @@ impl RevertCmd {
 		Ok(())
 	}
 }
+
+#[substrate_cli_params(shared_params = shared_params, pruning_params = pruning_params)]
+impl CliConfiguration for RevertCmd {}

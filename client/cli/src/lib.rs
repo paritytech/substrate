@@ -20,6 +20,8 @@
 #![warn(unused_extern_crates)]
 #![allow(unused_imports)] // TO REMOVE
 
+extern crate self as sc_cli;
+
 mod params;
 mod arg_enums;
 mod error;

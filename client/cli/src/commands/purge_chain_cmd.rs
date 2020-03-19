@@ -24,6 +24,7 @@ use sc_service::{
 };
 use crate::error;
 use crate::params::SharedParams;
+use crate::{substrate_cli_params, CliConfiguration};
 
 /// The `purge-chain` command used to remove the whole chain.
 #[derive(Debug, StructOpt, Clone)]
@@ -85,3 +86,6 @@ impl PurgeChainCmd {
 		}
 	}
 }
+
+#[substrate_cli_params(shared_params = shared_params)]
+impl CliConfiguration for PurgeChainCmd {}

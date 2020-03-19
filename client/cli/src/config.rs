@@ -48,7 +48,7 @@ pub trait CliConfiguration: Sized {
 		false
 	}
 
-	fn get_roles(&self) -> Result<Roles> {
+	fn get_roles(&self, _is_dev: bool) -> Result<Roles> {
 		Ok(Roles::FULL)
 	}
 
@@ -201,7 +201,7 @@ pub trait CliConfiguration: Sized {
 		// TODO: this parameter is really optional, shouldn't we leave it to None?
 		let database_cache_size = Some(self.get_database_cache_size()?.unwrap_or(1024));
 		let node_key = self.get_node_key(&net_config_dir)?;
-		let roles = self.get_roles()?; // TODO: it it role or roles?
+		let roles = self.get_roles(is_dev)?;
 
 		Ok(Configuration {
 			impl_name: C::get_impl_name(),

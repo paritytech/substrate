@@ -26,6 +26,7 @@ use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use crate::error;
 use crate::params::SharedParams;
 use crate::params::ImportParams;
+use crate::{substrate_cli_params, CliConfiguration};
 
 /// The `import-blocks` command used to import blocks.
 #[derive(Debug, StructOpt, Clone)]
@@ -82,3 +83,6 @@ impl ImportBlocksCmd {
 		builder(config)?.import_blocks(file, false).await.map_err(|e| e.into())
 	}
 }
+
+#[substrate_cli_params(shared_params = shared_params, import_params = import_params)]
+impl CliConfiguration for ImportBlocksCmd {}

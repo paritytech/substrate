@@ -16,19 +16,15 @@
 
 //! Command ran by the CLI
 
-use std::{
-	str::FromStr,
-	path::PathBuf,
-};
+use std::str::FromStr;
 
 use crate::cli::{InspectCmd, InspectSubCmd};
 use crate::Inspector;
 use sc_service::{
 	Configuration, NativeExecutionDispatch, RuntimeGenesis, ChainSpecExtension,
-	config::{DatabaseConfig, ExecutionStrategies, WasmExecutionMethod}, ChainSpec, new_full_client,
-	PruningMode, Roles, TracingReceiver,
+	new_full_client,
 };
-use sc_cli::{SubstrateCLI, Result, CliConfiguration};
+use sc_cli::{Result, CliConfiguration, substrate_cli_params};
 use sp_runtime::traits::Block;
 
 impl InspectCmd {
@@ -66,61 +62,6 @@ impl InspectCmd {
 	}
 }
 
+#[substrate_cli_params(shared_params = shared_params, import_params = import_params)]
 impl CliConfiguration for InspectCmd {
-	fn is_dev(&self) -> bool {
-		self.shared_params.dev
-	}
-
-	fn get_base_path(&self) -> Result<Option<&PathBuf>> {
-		Ok(self.shared_params.base_path.as_ref())
-	}
-
-	fn get_database_config(&self, base_path: &PathBuf, cache_size: Option<usize>) -> Result<DatabaseConfig>
-	{
-		Ok(self.shared_params.get_database_config(base_path, cache_size))
-	}
-
-	fn get_chain_spec<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<ChainSpec<G, E>>
-	where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-	{
-		self.shared_params.get_chain_spec::<C, G, E>()
-	}
-
-	fn init<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<()>
-	where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-	{
-		self.shared_params.init::<C, G, E>()
-	}
-
-	fn get_pruning(&self, is_dev: bool, roles: Roles) -> Result<PruningMode> {
-		self.import_params.get_pruning(roles, is_dev)
-	}
-
-	fn get_tracing_receiver(&self) -> Result<TracingReceiver> {
-		Ok(self.import_params.tracing_receiver.clone().into())
-	}
-
-	fn get_tracing_targets(&self) -> Result<Option<String>> {
-		Ok(self.import_params.tracing_targets.clone().into())
-	}
-
-	fn get_state_cache_size(&self) -> Result<usize> {
-		Ok(self.import_params.state_cache_size)
-	}
-
-	fn get_wasm_method(&self) -> Result<WasmExecutionMethod> {
-		Ok(self.import_params.get_wasm_method())
-	}
-
-	fn get_execution_strategies(&self, is_dev: bool) -> Result<ExecutionStrategies> {
-		self.import_params.get_execution_strategies(is_dev)
-	}
-
-	fn get_database_cache_size(&self) -> Result<Option<usize>> {
-		Ok(self.import_params.database_cache_size)
-	}
 }

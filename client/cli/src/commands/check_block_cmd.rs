@@ -26,6 +26,7 @@ use sp_runtime::generic::BlockId;
 use crate::error;
 use crate::params::SharedParams;
 use crate::params::ImportParams;
+use crate::{substrate_cli_params, CliConfiguration};
 
 /// The `check-block` command used to validate blocks.
 #[derive(Debug, StructOpt, Clone)]
@@ -80,4 +81,8 @@ impl CheckBlockCmd {
 
 		Ok(())
 	}
+}
+
+#[substrate_cli_params(shared_params = shared_params, import_params = import_params)]
+impl CliConfiguration for CheckBlockCmd {
 }

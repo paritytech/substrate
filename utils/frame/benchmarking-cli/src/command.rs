@@ -17,11 +17,10 @@
 use std::path::PathBuf;
 use sp_runtime::{BuildStorage, traits::{Block as BlockT, Header as HeaderT, NumberFor}};
 use sc_client::StateMachine;
-use sc_cli::{ExecutionStrategy, SubstrateCLI, CliConfiguration, Result};
+use sc_cli::{ExecutionStrategy, CliConfiguration, Result, substrate_cli_params, SubstrateCLI};
 use sc_client_db::BenchmarkingState;
 use sc_service::{
-	Configuration, NativeExecutionDispatch, RuntimeGenesis, ChainSpecExtension,
-	config::DatabaseConfig, ChainSpec,
+	Configuration, NativeExecutionDispatch, RuntimeGenesis, ChainSpecExtension, ChainSpec,
 };
 use sc_executor::NativeExecutor;
 use std::fmt::Debug;
@@ -34,7 +33,7 @@ impl BenchmarkCmd {
 	pub fn run<G, E, BB, ExecDispatch>(
 		self,
 		config: Configuration<G, E>,
-	) -> sc_cli::Result<()>
+	) -> Result<()>
 	where
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
@@ -100,33 +99,21 @@ impl BenchmarkCmd {
 	}
 }
 
+#[substrate_cli_params(shared_params = shared_params)]
 impl CliConfiguration for BenchmarkCmd {
-	fn is_dev(&self) -> bool {
-		self.shared_params.dev
-	}
-
-	fn get_base_path(&self) -> Result<Option<&PathBuf>> {
-		Ok(self.shared_params.base_path.as_ref())
-	}
-
-	fn get_database_config(&self, base_path: &PathBuf, cache_size: Option<usize>) -> Result<DatabaseConfig>
-	{
-		Ok(self.shared_params.get_database_config(base_path, cache_size))
-	}
-
 	fn get_chain_spec<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<ChainSpec<G, E>>
 	where
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
 	{
-		self.shared_params.get_chain_spec::<C, G, E>()
-	}
+		let chain_key = match self.shared_params.chain {
+			Some(ref chain) => chain.clone(),
+			None => "dev".into(),
+		};
 
-	fn init<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<()>
-	where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-	{
-		self.shared_params.init::<C, G, E>()
+		Ok(match C::spec_factory(&chain_key)? {
+			Some(spec) => spec,
+			None => ChainSpec::from_json_file(PathBuf::from(chain_key))?
+		})
 	}
 }

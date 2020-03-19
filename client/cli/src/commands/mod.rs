@@ -107,117 +107,77 @@ impl Subcommand {
 	}
 }
 
+macro_rules! match_and_call {
+	(fn $method:ident ( &self $(, $arg:ident : $ty:ty)* ) $(-> $result:ty)?) => {
+		fn $method (&self, $($arg : $ty),*) $(-> $result)? {
+			match self {
+				Subcommand::BuildSpec(cmd) => cmd.$method($($arg),*),
+				Subcommand::ExportBlocks(cmd) => cmd.$method($($arg),*),
+				Subcommand::ImportBlocks(cmd) => cmd.$method($($arg),*),
+				Subcommand::CheckBlock(cmd) => cmd.$method($($arg),*),
+				Subcommand::Revert(cmd) => cmd.$method($($arg),*),
+				Subcommand::PurgeChain(cmd) => cmd.$method($($arg),*),
+			}
+		}
+	};
+
+	(fn $method:ident <C: SubstrateCLI<G, E>, G, E> ( &self $(, $arg:ident : $ty:ty)* ) $(-> $result:ty)?
+	where
+		G: RuntimeGenesis,
+		E: ChainSpecExtension,
+	) => {
+		fn $method <C: SubstrateCLI<G, E>, G, E> (&self, $($arg : $ty),*) $(-> $result)?
+		where
+			G: RuntimeGenesis,
+			E: ChainSpecExtension,
+		{
+			match self {
+				Subcommand::BuildSpec(cmd) => cmd.$method::<C, G, E>($($arg),*),
+				Subcommand::ExportBlocks(cmd) => cmd.$method::<C, G, E>($($arg),*),
+				Subcommand::ImportBlocks(cmd) => cmd.$method::<C, G, E>($($arg),*),
+				Subcommand::CheckBlock(cmd) => cmd.$method::<C, G, E>($($arg),*),
+				Subcommand::Revert(cmd) => cmd.$method::<C, G, E>($($arg),*),
+				Subcommand::PurgeChain(cmd) => cmd.$method::<C, G, E>($($arg),*),
+			}
+		}
+	};
+}
+
 impl CliConfiguration for Subcommand
 {
-	fn get_base_path(&self) -> Result<Option<&PathBuf>> {
-		Ok(self.get_shared_params().base_path.as_ref())
+	match_and_call! { fn get_base_path(&self) -> Result<Option<&PathBuf>> }
+
+	match_and_call! { fn is_dev(&self) -> bool }
+
+	match_and_call! { fn get_database_config(&self, base_path: &PathBuf, cache_size: Option<usize>) -> Result<DatabaseConfig> }
+
+	match_and_call! {
+		fn get_chain_spec<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<ChainSpec<G, E>>
+		where
+			G: RuntimeGenesis,
+			E: ChainSpecExtension,
 	}
 
-	fn is_dev(&self) -> bool {
-		self.get_shared_params().dev
+	match_and_call! {
+		fn init<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<()>
+		where
+			G: RuntimeGenesis,
+			E: ChainSpecExtension,
 	}
 
-	fn get_database_config(&self, base_path: &PathBuf, cache_size: Option<usize>) -> Result<DatabaseConfig> {
-		Ok(self.get_shared_params().get_database_config(base_path, cache_size))
-	}
+	match_and_call! { fn get_pruning(&self, is_dev: bool, roles: Roles) -> Result<PruningMode> }
 
-	fn get_chain_spec<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<ChainSpec<G, E>>
-	where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-	{
-		self.get_shared_params().get_chain_spec::<C, G, E>()
-	}
+	match_and_call! { fn get_tracing_receiver(&self) -> Result<TracingReceiver> }
 
-	fn init<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<()>
-	where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-	{
-		self.get_shared_params().init::<C, G, E>()
-	}
+	match_and_call! { fn get_tracing_targets(&self) -> Result<Option<String>> }
 
-	fn get_pruning(&self, is_dev: bool, roles: Roles) -> Result<PruningMode> {
-		match self {
-			Subcommand::BuildSpec(_) => Ok(Default::default()),
-			Subcommand::ExportBlocks(cmd) => cmd.pruning_params.get_pruning(roles, is_dev),
-			Subcommand::ImportBlocks(cmd) => cmd.import_params.get_pruning(roles, is_dev),
-			Subcommand::CheckBlock(cmd) => cmd.import_params.get_pruning(roles, is_dev),
-			Subcommand::Revert(cmd) => cmd.pruning_params.get_pruning(roles, is_dev),
-			Subcommand::PurgeChain(_) => Ok(Default::default()),
-		}
-	}
+	match_and_call! { fn get_state_cache_size(&self) -> Result<usize> }
 
-	fn get_tracing_receiver(&self) -> Result<TracingReceiver> {
-		Ok(match self {
-			Subcommand::BuildSpec(_) => Default::default(),
-			Subcommand::ExportBlocks(_) => Default::default(),
-			Subcommand::ImportBlocks(cmd) => cmd.import_params.tracing_receiver.clone().into(),
-			Subcommand::CheckBlock(cmd) => cmd.import_params.tracing_receiver.clone().into(),
-			Subcommand::Revert(_) => Default::default(),
-			Subcommand::PurgeChain(_) => Default::default(),
-		})
-	}
+	match_and_call! { fn get_wasm_method(&self) -> Result<WasmExecutionMethod> }
 
-	fn get_tracing_targets(&self) -> Result<Option<String>> {
-		Ok(match self {
-			Subcommand::BuildSpec(_) => Default::default(),
-			Subcommand::ExportBlocks(_) => Default::default(),
-			Subcommand::ImportBlocks(cmd) => cmd.import_params.tracing_targets.clone().into(),
-			Subcommand::CheckBlock(cmd) => cmd.import_params.tracing_targets.clone().into(),
-			Subcommand::Revert(_) => Default::default(),
-			Subcommand::PurgeChain(_) => Default::default(),
-		})
-	}
+	match_and_call! { fn get_execution_strategies(&self, is_dev: bool) -> Result<ExecutionStrategies> }
 
-	fn get_state_cache_size(&self) -> Result<usize> {
-		Ok(match self {
-			Subcommand::BuildSpec(_) => Default::default(),
-			Subcommand::ExportBlocks(_) => Default::default(),
-			Subcommand::ImportBlocks(cmd) => cmd.import_params.state_cache_size,
-			Subcommand::CheckBlock(cmd) => cmd.import_params.state_cache_size,
-			Subcommand::Revert(_) => Default::default(),
-			Subcommand::PurgeChain(_) => Default::default(),
-		})
-	}
+	match_and_call! { fn get_database_cache_size(&self) -> Result<Option<usize>> }
 
-	fn get_wasm_method(&self) -> Result<WasmExecutionMethod> {
-		Ok(match self {
-			Subcommand::BuildSpec(_) => WasmExecutionMethod::Interpreted,
-			Subcommand::ExportBlocks(_) => WasmExecutionMethod::Interpreted,
-			Subcommand::ImportBlocks(cmd) => cmd.import_params.get_wasm_method(),
-			Subcommand::CheckBlock(cmd) => cmd.import_params.get_wasm_method(),
-			Subcommand::Revert(_) => WasmExecutionMethod::Interpreted,
-			Subcommand::PurgeChain(_) => WasmExecutionMethod::Interpreted,
-		})
-	}
-
-	fn get_execution_strategies(&self, is_dev: bool) -> Result<ExecutionStrategies> {
-		match self {
-			Subcommand::BuildSpec(_) => Ok(Default::default()),
-			Subcommand::ExportBlocks(_) => Ok(Default::default()),
-			Subcommand::ImportBlocks(cmd) => cmd.import_params.get_execution_strategies(is_dev),
-			Subcommand::CheckBlock(cmd) => cmd.import_params.get_execution_strategies(is_dev),
-			Subcommand::Revert(_) => Ok(Default::default()),
-			Subcommand::PurgeChain(_) => Ok(Default::default()),
-		}
-	}
-
-	fn get_database_cache_size(&self) -> Result<Option<usize>> {
-		Ok(match self {
-			Subcommand::BuildSpec(_) => Default::default(),
-			Subcommand::ExportBlocks(_) => Default::default(),
-			Subcommand::ImportBlocks(cmd) => cmd.import_params.database_cache_size,
-			Subcommand::CheckBlock(cmd) => cmd.import_params.database_cache_size,
-			Subcommand::Revert(_) => Default::default(),
-			Subcommand::PurgeChain(_) => Default::default(),
-		})
-	}
-
-	fn get_node_key(&self, net_config_dir: &PathBuf) -> Result<NodeKeyConfig> {
-		match self {
-			Subcommand::BuildSpec(cmd) => cmd.node_key_params.get_node_key(net_config_dir),
-			_ => Ok(Default::default()),
-		}
-	}
+	match_and_call! { fn get_node_key(&self, net_config_dir: &PathBuf) -> Result<NodeKeyConfig> }
 }
