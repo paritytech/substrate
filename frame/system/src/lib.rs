@@ -464,9 +464,15 @@ decl_module! {
 			storage::unhashed::put_raw(well_known_keys::HEAP_PAGES, &pages.encode());
 		}
 
-		/// Set the new runtime code.
+		/// Determine whether or not it is possible to update the code.
+		///
+		/// This function has no side effects and is idempotent, but is fairly
+		/// heavy. It is automatically called by `set_code`; in most cases,
+		/// a direct call to `set_code` is preferable. It is useful to call
+		/// `can_set_code` when it is desirable to perform the appropriate
+		/// runtime checks without actually changing the code yet.
 		#[weight = SimpleDispatchInfo::FixedOperational(200_000)]
-		pub fn set_code(origin, code: Vec<u8>) {
+		pub fn can_set_code(origin, code: Vec<u8>) {
 			ensure_root(origin)?;
 
 			let current_version = T::Version::get();
@@ -487,6 +493,12 @@ decl_module! {
 					Err(Error::<T>::SpecOrImplVersionNeedToIncrease)?
 				}
 			}
+		}
+
+		/// Set the new runtime code.
+		#[weight = SimpleDispatchInfo::FixedOperational(200_000)]
+		pub fn set_code(origin, code: Vec<u8>) {
+			Self::can_set_code(origin, code.clone())?;
 
 			storage::unhashed::put_raw(well_known_keys::CODE, &code);
 			RuntimeUpgraded::put(true);
