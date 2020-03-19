@@ -321,11 +321,7 @@ macro_rules! benchmark_backend {
 		#[allow(non_camel_case_types)]
 		struct $name;
 		#[allow(unused_variables)]
-		impl<T: Trait> $crate::BenchmarkingSetup<T> for $name
-		where T::Origin: From<$crate::SystemOrigin<T::AccountId>>
-			+ From<$crate::CollectiveOrigin<T::AccountId, $crate::Instance1>>
-			+ From<$crate::CollectiveOrigin<T::AccountId, $crate::Instance2>>
-		{
+		impl<T: Trait> $crate::BenchmarkingSetup<T> for $name {
 			fn components(&self) -> Vec<($crate::BenchmarkParameter, u32, u32)> {
 				vec! [
 					$(
@@ -382,11 +378,7 @@ macro_rules! selected_benchmark {
 		}
 
 		// Allow us to select a benchmark from the list of available benchmarks.
-		impl<T: Trait> $crate::BenchmarkingSetup<T> for SelectedBenchmark 
-		where T::Origin: From<$crate::SystemOrigin<T::AccountId>>
-			+ From<$crate::CollectiveOrigin<T::AccountId, $crate::Instance1>>
-			+ From<$crate::CollectiveOrigin<T::AccountId, $crate::Instance2>>
-		{
+		impl<T: Trait> $crate::BenchmarkingSetup<T> for SelectedBenchmark {
 			fn components(&self) -> Vec<($crate::BenchmarkParameter, u32, u32)> {
 				match self {
 					$( Self::$bench => <$bench as $crate::BenchmarkingSetup<T>>::components(&$bench), )*
@@ -409,11 +401,7 @@ macro_rules! impl_benchmark {
 	(
 		$( $name:ident ),*
 	) => {
-		impl<T: Trait> $crate::Benchmarking<$crate::BenchmarkResults> for Module<T>
-			where T::Origin: From<$crate::SystemOrigin<T::AccountId>>
-				+ From<$crate::CollectiveOrigin<T::AccountId, $crate::Instance1>>
-				+ From<$crate::CollectiveOrigin<T::AccountId, $crate::Instance2>>
-		{
+		impl<T: Trait> $crate::Benchmarking<$crate::BenchmarkResults> for Module<T> {
 			fn run_benchmark(
 				extrinsic: Vec<u8>,
 				lowest_range_values: Vec<u32>,

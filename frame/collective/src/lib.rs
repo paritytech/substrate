@@ -456,6 +456,10 @@ impl<
 			r => Err(O::from(r)),
 		})
 	}
+
+	fn successful_origin() -> O {
+		unimplemented!()
+	}
 }
 
 pub struct EnsureMembers<N: U32, AccountId, I=DefaultInstance>(sp_std::marker::PhantomData<(N, AccountId, I)>);
@@ -471,6 +475,10 @@ impl<
 			RawOrigin::Members(n, m) if n >= N::VALUE => Ok((n, m)),
 			r => Err(O::from(r)),
 		})
+	}
+
+	fn successful_origin() -> O {
+		O::from(RawOrigin::Members(0u32, 0u32))
 	}
 }
 
@@ -491,6 +499,10 @@ impl<
 			r => Err(O::from(r)),
 		})
 	}
+
+	fn successful_origin() -> O {
+		O::from(RawOrigin::Members(1u32, 0u32))
+	}
 }
 
 pub struct EnsureProportionAtLeast<N: U32, D: U32, AccountId, I=DefaultInstance>(
@@ -509,6 +521,10 @@ impl<
 			RawOrigin::Members(n, m) if n * D::VALUE >= N::VALUE * m => Ok(()),
 			r => Err(O::from(r)),
 		})
+	}
+
+	fn successful_origin() -> O {
+		O::from(RawOrigin::Members(0u32, 0u32))
 	}
 }
 

@@ -1146,6 +1146,10 @@ impl<T: Trait> EnsureOrigin<T::Origin> for EnsureFounder<T> {
 			(r, _) => Err(T::Origin::from(r)),
 		})
 	}
+
+	fn successful_origin() -> T::Origin {
+		T::Origin::from(system::RawOrigin::Signed(Default::default()))
+	}
 }
 
 /// Pick an item at pseudo-random from the slice, given the `rng`. `None` iff the slice is empty.

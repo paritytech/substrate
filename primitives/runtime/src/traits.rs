@@ -156,6 +156,9 @@ pub trait EnsureOrigin<OuterOrigin> {
 	}
 	/// Perform the origin check.
 	fn try_origin(o: OuterOrigin) -> result::Result<Self::Success, OuterOrigin>;
+
+	/// Returns an outer origin capable of passing `try_origin` check.
+	fn successful_origin() -> OuterOrigin;
 }
 
 /// An error that indicates that a lookup failed.

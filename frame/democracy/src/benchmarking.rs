@@ -21,8 +21,7 @@ use super::*;
 use frame_benchmarking::{benchmarks, account};
 use frame_support::traits::{Currency, Get};
 use frame_system::{RawOrigin, Module as System, self};
-use pallet_collective::{RawOrigin as CollectiveOrigin, Instance1, Instance2};
-use sp_runtime::traits::Bounded;
+use sp_runtime::traits::{Bounded, EnsureOrigin};
 
 use crate::Module as Democracy;
 
@@ -151,7 +150,7 @@ benchmarks! {
 
 		add_referendums::<T>(1)?;
 
-		let origin = CollectiveOrigin::<T::AccountId, Instance1>::Members(0u32, 0u32).into();
+		let origin = T::CancellationOrigin::successful_origin();
 		let referendum_index = 0u32;
 		let call = Call::<T>::emergency_cancel(referendum_index.into());
 	}: {
@@ -161,7 +160,7 @@ benchmarks! {
 	external_propose {
 		let u in ...;
 
-		let origin = CollectiveOrigin::<T::AccountId, Instance1>::Members(0u32, 0u32).into();
+		let origin = T::ExternalOrigin::successful_origin();
 		let proposal_hash = Default::default();
 		let call = Call::<T>::external_propose(proposal_hash);
 
@@ -172,7 +171,7 @@ benchmarks! {
 	external_propose_majority {
 		let u in ...;
 
-		let origin = CollectiveOrigin::<T::AccountId, Instance1>::Members(0u32, 0u32).into();
+		let origin = T::ExternalMajorityOrigin::successful_origin();
 		let proposal_hash = Default::default();
 		let call = Call::<T>::external_propose_majority(proposal_hash);
 
@@ -183,7 +182,7 @@ benchmarks! {
 	external_propose_default {
 		let u in ...;
 
-		let origin = CollectiveOrigin::<T::AccountId, Instance1>::Members(0u32, 0u32).into();
+		let origin = T::ExternalDefaultOrigin::successful_origin();
 		let proposal_hash = Default::default();
 		let call = Call::<T>::external_propose_default(proposal_hash);
 
@@ -194,10 +193,10 @@ benchmarks! {
 	fast_track {
 		let u in ...;
 
-		let origin = CollectiveOrigin::<T::AccountId, Instance2>::Members(0u32, 0u32).into();
+		let origin = T::ExternalDefaultOrigin::successful_origin();
 		let proposal_hash: T::Hash = Default::default();
 
-		let origin_propose = CollectiveOrigin::<T::AccountId, Instance1>::Members(0u32, 0u32).into();
+		let origin_propose = T::FastTrackOrigin::successful_origin();
 		Democracy::<T>::external_propose_default(origin_propose, proposal_hash.clone())?;
 
 		let voting_period = 0;
@@ -213,11 +212,11 @@ benchmarks! {
 
 		let proposal_hash: T::Hash = Default::default();
 
-		let origin_propose = CollectiveOrigin::<T::AccountId, Instance1>::Members(0u32, 0u32).into();
+		let origin_propose = T::ExternalDefaultOrigin::successful_origin();
 		Democracy::<T>::external_propose_default(origin_propose, proposal_hash.clone())?;
 
 		let call = Call::<T>::veto_external(proposal_hash);
-		let origin = CollectiveOrigin::<T::AccountId, Instance2>::Member(Default::default()).into();
+		let origin = T::VetoOrigin::successful_origin();
 
 	}: {
 		let _ = call.dispatch(origin)?;

@@ -607,6 +607,10 @@ impl<
 			r => Err(O::from(r)),
 		})
 	}
+
+	fn successful_origin() -> O {
+		O::from(RawOrigin::Root)
+	}
 }
 
 pub struct EnsureSigned<AccountId>(sp_std::marker::PhantomData<AccountId>);
@@ -620,6 +624,10 @@ impl<
 			RawOrigin::Signed(who) => Ok(who),
 			r => Err(O::from(r)),
 		})
+	}
+
+	fn successful_origin() -> O {
+		unimplemented!()
 	}
 }
 
@@ -636,6 +644,10 @@ impl<
 			r => Err(O::from(r)),
 		})
 	}
+
+	fn successful_origin() -> O {
+		unimplemented!()
+	}
 }
 
 pub struct EnsureNone<AccountId>(sp_std::marker::PhantomData<AccountId>);
@@ -650,6 +662,10 @@ impl<
 			r => Err(O::from(r)),
 		})
 	}
+
+	fn successful_origin() -> O {
+		O::from(RawOrigin::None)
+	}
 }
 
 pub struct EnsureNever<T>(sp_std::marker::PhantomData<T>);
@@ -657,6 +673,10 @@ impl<O, T> EnsureOrigin<O> for EnsureNever<T> {
 	type Success = T;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		Err(o)
+	}
+
+	fn successful_origin() -> O {
+		unimplemented!()
 	}
 }
 
