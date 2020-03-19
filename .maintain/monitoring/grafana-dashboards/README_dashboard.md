@@ -5,7 +5,7 @@
 This json is intended to be copy/pasted this way:
 
 1. Create a new Dashboard in your grafana
-2. Go the configuration ( gear at top right bar )
+2. Go to configuration ( gear at top right bar )
 3. Go to JSON Model ( last option of left menu )
 4. Overwrite the content of the current JSON Model with this json
 
@@ -25,9 +25,15 @@ suitable for using this grafana dashboard
         hostname: 'kusama-public-4'
 ```
 
-Notice that job name follows this rule: polkadot__[hostname]
-Notice the 2 needed labels **network** and **hostname**
+- Notice that job name follows this rule: polkadot__[hostname]
+- Notice the 2 needed labels **network** and **hostname**
 
 ### Grafana variables setup
 
+This Dashboard uses 2 grafana variables. They will allow you to monitor in the same panel diferent networks and nodes.
 
+Variable definitions:
+
+$network
+
+$hostname
