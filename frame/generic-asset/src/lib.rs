@@ -1125,6 +1125,7 @@ impl<T: Subtrait> frame_system::Trait for ElevatedTrait<T> {
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
+	type RootDispatcher = ();
 }
 impl<T: Subtrait> Trait for ElevatedTrait<T> {
 	type Balance = T::Balance;

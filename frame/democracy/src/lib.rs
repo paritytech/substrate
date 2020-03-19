@@ -165,7 +165,10 @@
 
 use sp_std::prelude::*;
 use sp_runtime::{
-	DispatchResult, DispatchError, traits::{Zero, EnsureOrigin, Hash, Dispatchable, Saturating},
+	DispatchResult, DispatchError, traits::{
+		Zero, EnsureOrigin, Hash, Dispatchable, Dispatcher, Saturating
+	},
+
 };
 use codec::{Ref, Decode};
 use frame_support::{
@@ -270,6 +273,9 @@ pub trait Trait: frame_system::Trait + Sized {
 
 	/// Handler for the unbalanced reduction when slashing a preimage deposit.
 	type Slash: OnUnbalanced<NegativeImbalanceOf<Self>>;
+
+	/// The means of dispatching the proposals.
+	type Dispatcher: Dispatcher<Self::Proposal, Self::Origin>;
 }
 
 decl_storage! {
@@ -1539,7 +1545,11 @@ impl<T: Trait> Module<T> {
 				let _ = T::Currency::unreserve(&who, amount);
 				Self::deposit_event(RawEvent::PreimageUsed(proposal_hash, who, amount));
 
-				let ok = proposal.dispatch(frame_system::RawOrigin::Root.into()).is_ok();
+				let ok = T::Dispatcher::dispatch(
+					proposal,
+					frame_system::RawOrigin::Root.into()
+				)
+				.is_ok();
 				Self::deposit_event(RawEvent::Executed(index, ok));
 
 				Ok(())

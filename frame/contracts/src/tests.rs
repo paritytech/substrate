@@ -118,6 +118,7 @@ impl frame_system::Trait for Test {
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = Contracts;
+	type RootDispatcher = ();
 }
 impl pallet_balances::Trait for Test {
 	type Balance = u64;
@@ -174,6 +175,7 @@ impl Trait for Test {
 	type MaxDepth = MaxDepth;
 	type MaxValueSize = MaxValueSize;
 	type BlockGasLimit = BlockGasLimit;
+	type Dispatcher = sp_runtime::SimpleDispatcher;
 }
 
 type Balances = pallet_balances::Module<Test>;

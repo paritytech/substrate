@@ -113,7 +113,9 @@ use sp_std::{prelude::*, marker::PhantomData, fmt::Debug};
 use codec::{Codec, Encode, Decode};
 use sp_io::hashing::blake2_256;
 use sp_runtime::{
-	traits::{Hash, StaticLookup, Zero, MaybeSerializeDeserialize, Member, SignedExtension},
+	traits::{
+		Hash, StaticLookup, Zero, MaybeSerializeDeserialize, Member, SignedExtension, Dispatcher,
+	},
 	transaction_validity::{
 		ValidTransaction, InvalidTransaction, TransactionValidity, TransactionValidityError,
 	},
@@ -365,6 +367,9 @@ pub trait Trait: frame_system::Trait {
 
 	/// trie id generator
 	type TrieIdGenerator: TrieIdGenerator<Self::AccountId>;
+
+	/// The means of dispatching the calls to the runtime.
+	type Dispatcher: Dispatcher<<Self as Trait>::Call, Self::Origin>;
 
 	/// Handler for the unbalanced reduction when making a gas payment.
 	type GasPayment: OnUnbalanced<NegativeImbalanceOf<Self>>;
@@ -763,7 +768,7 @@ impl<T: Trait> Module<T> {
 					origin: who,
 					call,
 				} => {
-					let result = call.dispatch(RawOrigin::Signed(who.clone()).into());
+					let result = T::Dispatcher::dispatch(call, RawOrigin::Signed(who.clone()).into()).result;
 					Self::deposit_event(RawEvent::Dispatched(who, result.is_ok()));
 				}
 				RestoreTo {

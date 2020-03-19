@@ -434,6 +434,7 @@ mod tests {
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type RootDispatcher = ();
 	}
 
 	parameter_types! {

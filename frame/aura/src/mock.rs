@@ -64,6 +64,7 @@ impl frame_system::Trait for Test {
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
+	type RootDispatcher = ();
 }
 
 impl pallet_timestamp::Trait for Test {

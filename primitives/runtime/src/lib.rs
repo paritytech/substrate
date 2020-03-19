@@ -434,6 +434,22 @@ impl traits::Printable for DispatchError {
 	}
 }
 
+/// This type describes the result of a module function call which is called through
+/// a dispatcher. A dispatcher can return data even when the dispatch failed.
+pub struct DispatcherResult<Data> {
+	/// Additional data that is added by the dispatcher.
+	pub data: Data,
+	/// The dispatch result from the actual `Dispatchable::dispatch`.
+	pub result: DispatchResult,
+}
+
+impl<Data> DispatcherResult<Data> {
+	/// Convenience function to avoid drilling down to the result for this common operation.
+	pub fn is_ok(&self) -> bool {
+		self.result.is_ok()
+	}
+}
+
 /// This type specifies the outcome of dispatching a call to a module.
 ///
 /// In case of failure an error specific to the module is returned.
@@ -683,6 +699,27 @@ impl traits::Extrinsic for OpaqueExtrinsic {
 /// Print something that implements `Printable` from the runtime.
 pub fn print(print: impl traits::Printable) {
 	print.print();
+}
+
+/// A simple dispatcher that dispatches a `Dispatchable` and nothing else.
+pub struct SimpleDispatcher;
+
+impl<D, O> traits::RootDispatcher<D, O> for SimpleDispatcher where
+	D: traits::Dispatchable<Origin = O>
+{
+	type Data = ();
+
+	fn dispatch(
+		dispatchable: D,
+		origin: O,
+		token: traits::Unconstructable<traits::DispatcherToken>
+	) -> DispatcherResult<Self::Data>
+	{
+		DispatcherResult {
+			data: (),
+			result: Self::raw_dispatch(dispatchable, origin, token), 
+		}
+	}
 }
 
 #[cfg(test)]

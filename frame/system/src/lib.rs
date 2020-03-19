@@ -108,6 +108,7 @@ use sp_runtime::{
 		self, CheckEqual, AtLeast32Bit, Zero, SignedExtension, Lookup, LookupError,
 		SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, BadOrigin, SaturatedConversion,
 		MaybeSerialize, MaybeSerializeDeserialize, MaybeMallocSizeOf, StaticLookup, One, Bounded,
+		Dispatchable, RootDispatcher,
 	},
 };
 
@@ -221,6 +222,14 @@ pub trait Trait: 'static + Eq + Clone {
 	///
 	/// All resources should be cleaned up associated with the given account.
 	type OnKilledAccount: OnKilledAccount<Self::AccountId>;
+
+	/// The central instance that dispatches all calls.
+	///
+	/// For `Dispatchable` calls it is usually the responsiblity of the frame_system
+	/// module to function as the root `RootDispatcher`. In order to customize the
+	/// dispatch process for a specific module the `Dispatcher` trait can be implemented
+	/// and supplied to to the respective `Trait`.
+	type RootDispatcher: RootDispatcher<Self::Call, Self::Origin>;
 }
 
 pub type DigestOf<T> = generic::Digest<<T as Trait>::Hash>;
@@ -1044,6 +1053,23 @@ impl<T: Trait> Module<T> {
 	}
 }
 
+impl<T: Trait> sp_runtime::traits::RootDispatcher<T::Call, T::Origin> for Module<T> where
+	T::Call: Dispatchable<Origin = T::Origin>,
+{
+	type Data = ();
+
+	fn dispatch(
+		dispatchable: T::Call,
+		origin: <T::Call as Dispatchable>::Origin,
+		token: sp_runtime::traits::Unconstructable<sp_runtime::traits::DispatcherToken>,
+	) -> sp_runtime::DispatcherResult<Self::Data> {
+		sp_runtime::DispatcherResult {
+			data: (),
+			result: Self::raw_dispatch(dispatchable, origin, token),
+		}
+	}
+}
+
 /// Event handler which calls on_created_account when it happens.
 pub struct CallOnCreatedAccount<T>(PhantomData<T>);
 impl<T: Trait> Happened<T::AccountId> for CallOnCreatedAccount<T> {
@@ -1577,6 +1603,7 @@ mod tests {
 		type AccountData = u32;
 		type OnNewAccount = ();
 		type OnKilledAccount = RecordKilled;
+		type RootDispatcher = ();
 	}
 
 	impl From<Event<Test>> for u16 {

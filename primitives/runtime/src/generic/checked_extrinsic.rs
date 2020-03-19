@@ -17,10 +17,8 @@
 //! Generic implementation of an extrinsic that has passed the verification
 //! stage.
 
-use crate::traits::{
-	self, Member, MaybeDisplay, SignedExtension, Dispatchable,
-};
 use crate::traits::ValidateUnsigned;
+use crate::traits::{self, Dispatchable, Dispatcher, MaybeDisplay, Member, SignedExtension};
 use crate::transaction_validity::TransactionValidity;
 
 /// Definition of something that the external world might want to say; its
@@ -62,21 +60,44 @@ where
 		}
 	}
 
-	fn apply<U: ValidateUnsigned<Call=Self::Call>>(
+	fn apply<V, D>(
 		self,
 		info: Self::DispatchInfo,
 		len: usize,
-	) -> crate::ApplyExtrinsicResult {
-		let (maybe_who, pre) = if let Some((id, extra)) = self.signed {
-			let pre = Extra::pre_dispatch(extra, &id, &self.function, info.clone(), len)?;
-			(Some(id), pre)
-		} else {
-			let pre = Extra::pre_dispatch_unsigned(&self.function, info.clone(), len)?;
-			U::pre_dispatch(&self.function)?;
-			(None, pre)
-		};
-		let res = self.function.dispatch(Origin::from(maybe_who));
-		Extra::post_dispatch(pre, info.clone(), len);
-		Ok(res.map_err(Into::into))
+	) -> crate::ApplyExtrinsicResult where
+		V: ValidateUnsigned<Call = Call>,
+		D: Dispatcher<Call, Origin>,
+	{
+		apply::<V, D, _, _, _, _, _>(self.function, self.signed, info, len)
 	}
+}
+
+/// Apply a call together with its signature (if any).
+///
+/// This function is exposed in order for test code to make use of it. Production
+/// code may use the `Applyable` implementation of `CheckedExtrinsic`.
+pub fn apply<V, D, Info, Call, Extra, Origin, AccountId>(
+	call: Call,
+	signature: Option<(AccountId, Extra)>,
+	info: Info,
+	len: usize,
+) -> crate::ApplyExtrinsicResult where
+	Origin: From<Option<AccountId>>,
+	Call: Member + Dispatchable<Origin = Origin>,
+	AccountId: Member + MaybeDisplay,
+	Info: Clone,
+	Extra: SignedExtension<AccountId = AccountId, Call = Call, DispatchInfo = Info>,
+	V: ValidateUnsigned<Call = Call>,
+	D: Dispatcher<Call, Origin>,
+{
+	let (maybe_who, pre) = if let Some((who, extra)) = signature {
+		let pre = Extra::pre_dispatch(extra, &who, &call, info.clone(), len)?;
+		(Some(who), pre)
+	} else {
+		let pre = Extra::pre_dispatch_unsigned(&call, info.clone(), len)?;
+		(None, pre)
+	};
+	let result = D::dispatch(call, maybe_who.into());
+	Extra::post_dispatch(pre, info.clone(), len);
+	Ok(result.result.into())
 }

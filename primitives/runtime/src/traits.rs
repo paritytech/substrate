@@ -31,6 +31,7 @@ use crate::transaction_validity::{
 	ValidTransaction, TransactionValidity, TransactionValidityError, UnknownTransaction,
 };
 use crate::generic::{Digest, DigestItem};
+use crate::DispatcherResult;
 pub use sp_arithmetic::traits::{
 	AtLeast32Bit, UniqueSaturatedInto, UniqueSaturatedFrom, Saturating, SaturatedConversion,
 	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,
@@ -902,11 +903,193 @@ pub trait Applyable: Sized + Send + Sync {
 
 	/// Executes all necessary logic needed prior to dispatch and deconstructs into function call,
 	/// index and sender.
-	fn apply<V: ValidateUnsigned<Call=Self::Call>>(
+	fn apply<V, D>(
 		self,
 		info: Self::DispatchInfo,
 		len: usize,
-	) -> crate::ApplyExtrinsicResult;
+	) -> crate::ApplyExtrinsicResult where
+		Self::Call: Dispatchable,
+		V: ValidateUnsigned<Call = Self::Call>,
+		D: Dispatcher<Self::Call, <Self::Call as Dispatchable>::Origin>;
+}
+
+/// Marker trait that marks types as something that can be used as a token.
+pub trait UnconstructableToken {}
+
+/// Token used by `Dispatcher` and `RootDispatcher`.
+pub struct DispatcherToken;
+
+/// Token used by `Dispatchable`.
+pub struct DispatchableToken;
+
+impl UnconstructableToken for DispatcherToken {}
+impl UnconstructableToken for DispatchableToken {}
+
+
+/// A type that is unconstructable by anyone but the runtime::traits Module.
+///
+/// Its purpose is to prevent calling certain functions from outside of this module.
+pub struct Unconstructable<T: UnconstructableToken> {
+	_unconstructable: PhantomData<T>,
+}
+
+impl<T: UnconstructableToken> Unconstructable<T> {
+	fn new() -> Self {
+		Self {
+			_unconstructable: PhantomData,
+		}
+	}
+}
+
+impl<T: UnconstructableToken> Clone for Unconstructable<T> {
+	fn clone(&self) -> Self {
+		Self::new()
+	}
+}
+
+impl<T: UnconstructableToken> Copy for Unconstructable<T> {}
+
+/// A type that is responsible for customizing dispatching of a `Dispatchable`.
+///
+/// In order to provide a custom dispatcher this type should be implemented and then
+/// and then used by calling `dispatch` with a `Dispatchable`.
+pub trait Dispatcher<D, O> {
+	/// In any runtime there is only one `RootDispatcher` that is usually implemented
+	/// by some central type. It must be specified here in order for the default
+	/// implementation of `dispatch` to delegate the dispatch to it.
+	type RootDispatcher: RootDispatcher<D, O>;
+
+	/// The type of a value that can be used to pass information from `pre_dispatch`
+	/// to `post_dispatch`.
+	type Pre;
+
+	/// The type of a value that is returned from `post_dispatch` and passed through
+	/// by `dispatch` to the caller. It can be used to return information to the caller
+	/// in addition to the `DispatchResult`.
+	type Post;
+
+	/// This is called before a dispatch and can be used to do bookkeeping or even filter
+	/// dispatches. By returning an `Err` for the `result` the dispatch is skipped and
+	/// and `post_dispatch` is passed `None` as `dispatch_data`. The `data` return value
+	/// is passed through as `pre` to `post_dispatch`. The `token` prevents this function
+	/// from being called by anyone else than the default `dispatch` implementation.
+	/// Implementers of this function can and should ignore it.
+	fn pre_dispatch(
+		dispatchable: &D,
+		origin: &O,
+		token: Unconstructable<DispatcherToken>,
+	) -> DispatcherResult<Self::Pre>;
+
+	/// Called after a call was dispatched or skipped. It is passed the result of the
+	/// dispatch and the return `data ` of `pre_dispatch`. The token serves the same
+	/// purpose as for `pre_dispatch`.
+	fn post_dispatch(
+		pre: Self::Pre,
+		dispatch_data: Option<<Self::RootDispatcher as RootDispatcher<D,O>>::Data>,
+		dispatch_result: &crate::DispatchResult,
+		token: Unconstructable<DispatcherToken>,
+	) -> Self::Post;
+
+	/// Dispatches a `Dispatchable`. It takes care of calling the pre and post dispatch
+	/// hooks and delegates to the `RootDipatcher` for the actual dispatch.
+	/// It should not be overriden and neither it can be as a custom implementation
+	/// cannot construct the required tokens to call the hooks.
+	fn dispatch(dispatchable: D, origin: O) -> DispatcherResult<Self::Post> {
+		let token = Unconstructable::new();
+		let pre = Self::pre_dispatch(&dispatchable, &origin, token);
+		let result = match pre.result {
+			Ok(_) => {
+				let result = <Self::RootDispatcher as RootDispatcher<D, O>>::dispatch(
+					dispatchable,
+					origin,
+					token,
+				);
+				(Some(result.data), result.result)
+			},
+			Err(err) => (None, Err(err)),
+		};
+		DispatcherResult {
+			data: Self::post_dispatch(pre.data, result.0, &result.1, token),
+			result: result.1,
+		}
+	}
+}
+
+/// The type that does the actual dispatch of a `Dispatchable`.
+///
+/// There is usually only one `RootDispatcher` implementation per runtime. It is the only
+/// type that will call `Dispatchable::dispatch`. Customizing the global dispatch logic
+/// is done by implementing `RootDispatcher`. Customizing the dispatch logic
+/// for only one specific part of the runtime is done by implementing `Dispatcher`.
+pub trait RootDispatcher<D, O> {
+	/// Additional information that can be returned from `dispatch`.
+	type Data;
+
+	/// Helper function that allows implementers of this trait to call
+	/// `Dispatchable::dispatch` from their `dispatch` implementation.
+	/// There is usually no need to override this function.
+	fn raw_dispatch(
+		dispatchable: D,
+		origin: O,
+		_: Unconstructable<DispatcherToken>,
+	) -> crate::DispatchResult
+	where
+		D: Dispatchable<Origin = O>,
+	{
+		dispatchable.dispatch(origin)
+	}
+
+	/// Implement your custom dispatch logic here.
+	///
+	/// Use `Self::raw_dspatch` in order to do the actual dispatch as direct call
+	/// of `Dispatchable::dispatch` is prevent by a token. This function should be called
+	/// through a `Dispatcher::Dispatch`. Direct call is prevented by the use of a
+	/// `DispatcherToken`. There is a blanket impl that implements `Dispatcher` for
+	/// every `RootDispatcher`. Therefore calling this function is just a matter
+	/// of selecting the correct `dispatch` function by not passing the token.
+	fn dispatch(
+		dispatchable: D,
+		origin: O,
+		token: Unconstructable<DispatcherToken>
+	) -> DispatcherResult<Self::Data>;
+}
+
+impl<D, O> RootDispatcher<D, O> for () {
+	type Data = ();
+
+	fn dispatch(_: D, _: O, _: Unconstructable<DispatcherToken>) -> DispatcherResult<Self::Data> {
+		panic!("Using the dummy dispatcher for actual dispatch is a programming error.")
+	}
+}
+
+impl<D, O, T> Dispatcher<D, O> for T where
+	T: RootDispatcher<D, O>,
+{
+	type RootDispatcher = T;
+	type Pre = ();
+	type Post = T::Data;
+
+	fn pre_dispatch(
+		_: &D,
+		_: &O,
+		_: Unconstructable<DispatcherToken>
+	) -> DispatcherResult<Self::Pre> {
+		DispatcherResult {
+			data: (),
+			result: Ok(()),
+		}
+	}
+
+	fn post_dispatch(
+		_: Self::Pre,
+		data: Option<T::Data>,
+		_: &crate::DispatchResult,
+		_: Unconstructable<DispatcherToken>
+	) -> Self::Post {
+		data.expect(
+			"This `Dispatcher` impl does not filter any dispatches in `pre_dispatch`.
+			 This means `data` is always `Some`. qed.")
+	}
 }
 
 /// A marker trait for something that knows the type of the runtime block.

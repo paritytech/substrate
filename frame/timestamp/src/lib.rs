@@ -280,6 +280,7 @@ mod tests {
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type RootDispatcher = ();
 	}
 	parameter_types! {
 		pub const MinimumPeriod: u64 = 5;

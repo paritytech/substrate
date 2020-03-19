@@ -121,7 +121,11 @@ where
 		GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>: Dispatchable,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
-	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
+	UnsignedValidator: ValidateUnsigned<Call = CallOf<Block::Extrinsic, Context>>,
+	System::RootDispatcher: traits::RootDispatcher<
+		CallOf<Block::Extrinsic, Context>,
+		OriginOf<Block::Extrinsic, Context>
+	>,
 {
 	fn execute_block(block: Block) {
 		Executive::<System, Block, Context, UnsignedValidator, AllModules>::execute_block(block);
@@ -147,7 +151,11 @@ where
 		GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>: Dispatchable,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
-	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
+	UnsignedValidator: ValidateUnsigned<Call = CallOf<Block::Extrinsic, Context>>,
+	System::RootDispatcher: traits::RootDispatcher<
+		CallOf<Block::Extrinsic, Context>,
+		OriginOf<Block::Extrinsic, Context>
+	>,
 {
 	/// Start the execution of a particular block.
 	pub fn initialize_block(header: &System::Header) {
@@ -312,7 +320,10 @@ where
 
 		// Decode parameters and dispatch
 		let dispatch_info = xt.get_dispatch_info();
-		let r = Applyable::apply::<UnsignedValidator>(xt, dispatch_info, encoded_len)?;
+		let r = Applyable::apply::<UnsignedValidator, System::RootDispatcher>(xt,
+			dispatch_info,
+			encoded_len
+		)?;
 
 		<frame_system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32, dispatch_info);
 
@@ -485,6 +496,7 @@ mod tests {
 		type AccountData = pallet_balances::AccountData<u64>;
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type RootDispatcher = System;
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;

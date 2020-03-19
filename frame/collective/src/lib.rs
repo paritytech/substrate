@@ -39,7 +39,7 @@
 use sp_std::{prelude::*, result};
 use sp_core::u32_trait::Value as U32;
 use sp_runtime::RuntimeDebug;
-use sp_runtime::traits::{Hash, EnsureOrigin};
+use sp_runtime::traits::{Hash, EnsureOrigin, Dispatcher};
 use frame_support::weights::SimpleDispatchInfo;
 use frame_support::{
 	dispatch::{Dispatchable, Parameter}, codec::{Encode, Decode},
@@ -69,6 +69,9 @@ pub trait Trait<I=DefaultInstance>: frame_system::Trait {
 
 	/// The time-out for council motions.
 	type MotionDuration: Get<Self::BlockNumber>;
+
+    /// The means of dispatching the calls to the runtime.
+	type Dispatcher: Dispatcher<<Self as Trait<I>>::Proposal, <Self as Trait<I>>::Origin>;
 }
 
 /// Origin for the collective module.
@@ -203,7 +206,7 @@ decl_module! {
 			ensure!(Self::is_member(&who), Error::<T, I>::NotMember);
 
 			let proposal_hash = T::Hashing::hash_of(&proposal);
-			let ok = proposal.dispatch(RawOrigin::Member(who).into()).is_ok();
+			let ok = T::Dispatcher::dispatch(*proposal, RawOrigin::Member(who).into()).is_ok();
 			Self::deposit_event(RawEvent::MemberExecuted(proposal_hash, ok));
 		}
 
@@ -222,7 +225,7 @@ decl_module! {
 
 			if threshold < 2 {
 				let seats = Self::members().len() as MemberCount;
-				let ok = proposal.dispatch(RawOrigin::Members(1, seats).into()).is_ok();
+				let ok = T::Dispatcher::dispatch(*proposal, RawOrigin::Members(1, seats).into()).is_ok();
 				Self::deposit_event(RawEvent::Executed(proposal_hash, ok));
 			} else {
 				let index = Self::proposal_count();
@@ -360,7 +363,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 			// execute motion, assuming it exists.
 			if let Some(p) = ProposalOf::<T, I>::take(&proposal) {
 				let origin = RawOrigin::Members(voting.threshold, seats).into();
-				let ok = p.dispatch(origin).is_ok();
+				let ok = T::Dispatcher::dispatch(p, origin).is_ok();
 				Self::deposit_event(RawEvent::Executed(proposal, ok));
 			}
 		} else {
@@ -537,18 +540,21 @@ mod tests {
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type RootDispatcher = ();
 	}
 	impl Trait<Instance1> for Test {
 		type Origin = Origin;
 		type Proposal = Call;
 		type Event = Event;
 		type MotionDuration = MotionDuration;
+		type Dispatcher = sp_runtime::SimpleDispatcher;
 	}
 	impl Trait for Test {
 		type Origin = Origin;
 		type Proposal = Call;
 		type Event = Event;
 		type MotionDuration = MotionDuration;
+		type Dispatcher = sp_runtime::SimpleDispatcher;
 	}
 
 	pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;

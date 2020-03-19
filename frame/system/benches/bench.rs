@@ -79,6 +79,7 @@ impl system::Trait for Runtime {
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
+	type RootDispatcher = ();
 }
 
 impl module::Trait for Runtime {

@@ -86,7 +86,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::prelude::*;
-use sp_runtime::{traits::{StaticLookup, Dispatchable}, DispatchError};
+use sp_runtime::{traits::{StaticLookup, Dispatchable, Dispatcher}, DispatchError};
 
 use frame_support::{
 	Parameter, decl_module, decl_event, decl_storage, decl_error, ensure,
@@ -100,6 +100,9 @@ pub trait Trait: frame_system::Trait {
 
 	/// A sudo-able call.
 	type Call: Parameter + Dispatchable<Origin=Self::Origin> + GetDispatchInfo;
+
+	/// The means of dispatching the calls.
+	type Dispatcher: Dispatcher<<Self as Trait>::Call, Self::Origin>;
 }
 
 decl_module! {
@@ -129,7 +132,7 @@ decl_module! {
 			let sender = ensure_signed(origin)?;
 			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
 
-			let res = match call.dispatch(frame_system::RawOrigin::Root.into()) {
+			let res = match T::Dispatcher::dispatch(*call, frame_system::RawOrigin::Root.into()).result {
 				Ok(_) => true,
 				Err(e) => {
 					let e: DispatchError = e.into();
@@ -187,7 +190,7 @@ decl_module! {
 
 			let who = T::Lookup::lookup(who)?;
 
-			let res = match call.dispatch(frame_system::RawOrigin::Signed(who).into()) {
+			let res = match T::Dispatcher::dispatch(*call, frame_system::RawOrigin::Signed(who).into()).result {
 				Ok(_) => true,
 				Err(e) => {
 					let e: DispatchError = e.into();

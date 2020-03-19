@@ -167,6 +167,8 @@ impl system::Trait for Runtime {
 	type OnKilledAccount = ();
 	/// The data to be stored in an account.
 	type AccountData = balances::AccountData<Balance>;
+	// This is the central place where all calls are dispatched from.
+	type RootDispatcher = system::Module<Self>;
 }
 
 impl aura::Trait for Runtime {
@@ -219,6 +221,7 @@ impl transaction_payment::Trait for Runtime {
 impl sudo::Trait for Runtime {
 	type Event = Event;
 	type Call = Call;
+	type Dispatcher = <Self as system::Trait>::RootDispatcher;
 }
 
 /// Used for the module template in `./template.rs`

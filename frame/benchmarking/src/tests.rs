@@ -73,6 +73,7 @@ impl frame_system::Trait for Test {
 	type AccountData = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
+	type RootDispatcher = ();
 }
 
 impl Trait for Test {

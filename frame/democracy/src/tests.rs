@@ -87,6 +87,7 @@ impl frame_system::Trait for Test {
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
+	type RootDispatcher = ();
 }
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
@@ -152,6 +153,7 @@ impl super::Trait for Test {
 	type Slash = ();
 	type InstantOrigin = EnsureSignedBy<Six, u64>;
 	type InstantAllowed = InstantAllowed;
+	type Dispatcher = sp_runtime::SimpleDispatcher;
 }
 
 fn new_test_ext() -> sp_io::TestExternalities {

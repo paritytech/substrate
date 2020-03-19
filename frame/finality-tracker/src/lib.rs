@@ -264,6 +264,7 @@ mod tests {
 		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type RootDispatcher = ();
 	}
 	parameter_types! {
 		pub const WindowSize: u64 = 11;

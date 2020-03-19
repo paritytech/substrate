@@ -387,6 +387,7 @@ mod tests {
 		type AccountData = pallet_balances::AccountData<u64>;
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
+		type RootDispatcher = ();
 	}
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;

@@ -35,6 +35,7 @@ pub use self::block::{Block, SignedBlock, BlockId};
 pub use self::digest::{
 	Digest, DigestItem, DigestItemRef, OpaqueDigestItemId, ChangesTrieSignal,
 };
+pub use checked_extrinsic::apply as apply_checked;
 
 use crate::codec::Encode;
 use sp_std::prelude::*;

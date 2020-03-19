@@ -21,9 +21,8 @@ use std::{fmt::Debug, ops::Deref, fmt, cell::RefCell};
 use crate::codec::{Codec, Encode, Decode};
 use crate::traits::{
 	self, Checkable, Applyable, BlakeTwo256, OpaqueKeys,
-	SignedExtension, Dispatchable,
+	SignedExtension, Dispatchable, Dispatcher, Member, ValidateUnsigned,
 };
-use crate::traits::ValidateUnsigned;
 use crate::{generic, KeyTypeId, ApplyExtrinsicResult};
 pub use sp_core::{H256, sr25519};
 use sp_core::{crypto::{CryptoType, Dummy, key_types, Public}, U256};
@@ -346,8 +345,8 @@ impl<Call: Codec + Sync + Send, Extra> traits::Extrinsic for TestXt<Call, Extra>
 }
 
 impl<Origin, Call, Extra, Info> Applyable for TestXt<Call, Extra> where
-	Call: 'static + Sized + Send + Sync + Clone + Eq + Codec + Debug + Dispatchable<Origin=Origin>,
-	Extra: SignedExtension<AccountId=u64, Call=Call, DispatchInfo=Info>,
+	Call: Member + Dispatchable<Origin = Origin>,
+	Extra: SignedExtension<AccountId = u64, Call = Call, DispatchInfo = Info>,
 	Origin: From<Option<u64>>,
 	Info: Clone,
 {
@@ -365,19 +364,11 @@ impl<Origin, Call, Extra, Info> Applyable for TestXt<Call, Extra> where
 
 	/// Executes all necessary logic needed prior to dispatch and deconstructs into function call,
 	/// index and sender.
-	fn apply<U: ValidateUnsigned<Call=Self::Call>>(
+	fn apply<U: ValidateUnsigned<Call = Self::Call>, D: Dispatcher<Call, Origin>>(
 		self,
 		info: Self::DispatchInfo,
 		len: usize,
 	) -> ApplyExtrinsicResult {
-		let maybe_who = if let Some((who, extra)) = self.signature {
-			Extra::pre_dispatch(extra, &who, &self.call, info, len)?;
-			Some(who)
-		} else {
-			Extra::pre_dispatch_unsigned(&self.call, info, len)?;
-			None
-		};
-
-		Ok(self.call.dispatch(maybe_who.into()).map_err(Into::into))
+		generic::apply_checked::<U, D, _, _, _, _, _>(self.call, self.signature, info, len)
 	}
 }

@@ -81,6 +81,7 @@ impl frame_system::Trait for Test {
 	type AccountData = pallet_balances::AccountData<u128>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
+	type RootDispatcher = ();
 }
 
 parameter_types! {
@@ -110,6 +111,7 @@ impl Trait for Test {
 	type FriendDepositFactor = FriendDepositFactor;
 	type MaxFriends = MaxFriends;
 	type RecoveryDeposit = RecoveryDeposit;
+	type Dispatcher = sp_runtime::SimpleDispatcher;
 }
 
 pub type Recovery = Module<Test>;

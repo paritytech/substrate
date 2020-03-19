@@ -152,7 +152,7 @@
 
 use sp_std::prelude::*;
 use sp_runtime::{
-	traits::{Dispatchable, SaturatedConversion, CheckedAdd, CheckedMul},
+	traits::{Dispatchable, Dispatcher, SaturatedConversion, CheckedAdd, CheckedMul},
 	DispatchResult
 };
 use codec::{Encode, Decode};
@@ -205,6 +205,9 @@ pub trait Trait: frame_system::Trait {
 	/// `sizeof(BlockNumber, Balance + T * AccountId)` bytes. Where T is a configurable
 	/// threshold.
 	type RecoveryDeposit: Get<BalanceOf<Self>>;
+
+	/// The means of dispatching the calls.
+	type Dispatcher: Dispatcher<<Self as Trait>::Call, Self::Origin>;
 }
 
 /// An active recovery process.
@@ -347,7 +350,7 @@ decl_module! {
 			// Check `who` is allowed to make a call on behalf of `account`
 			let target = Self::proxy(&who).ok_or(Error::<T>::NotAllowed)?;
 			ensure!(&target == &account, Error::<T>::NotAllowed);
-			call.dispatch(frame_system::RawOrigin::Signed(account).into())
+			T::Dispatcher::dispatch(*call, frame_system::RawOrigin::Signed(account).into()).result
 		}
 
 		/// Allow ROOT to bypass the recovery process and set an a rescuer account
