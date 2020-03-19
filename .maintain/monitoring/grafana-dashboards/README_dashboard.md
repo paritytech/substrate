@@ -34,7 +34,7 @@ suitable for using this grafana dashboard
 
 This Dashboard uses 2 grafana variables. They will allow you to monitor in the same panel diferent networks and nodes.
 
-![](images/grafana__variables.png)
+![](images/grafana_variables.png)
 
 #### Variable definitions:
 
