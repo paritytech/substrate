@@ -22,7 +22,7 @@ hash-db = { version = "0.15.2" }
 hex-literal = { version = "0.2.1" }
 sp-inherents = { version = "2.0.0-alpha.4", path = "../primitives/inherents" }
 sp-keyring = { version = "2.0.0-alpha.4", path = "../primitives/keyring" }
-kvdb = "0.4.0"
+kvdb = "0.5.0"
 log = { version = "0.4.8" }
 parking_lot = "0.10.0"
 sp-core = { version = "2.0.0-alpha.4", path = "../primitives/core" }
@@ -41,5 +41,5 @@ tracing = "0.1.10"
 env_logger = "0.7.0"
 tempfile = "3.1.0"
 substrate-test-runtime-client = { version = "2.0.0-dev", path = "../test-utils/runtime/client" }
-kvdb-memorydb = "0.4.0"
+kvdb-memorydb = "0.5.0"
 sp-panic-handler = { version = "2.0.0-alpha.4", path = "../primitives/panic-handler" }
