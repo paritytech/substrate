@@ -14,7 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Usage statistics for subtrate.
+//! Usage statistics for Subtrate.
+//! Structure used for storing the state backend statistics:
+//! Number or reads, writes, cache reads, memory usage.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 mod usage_info;
