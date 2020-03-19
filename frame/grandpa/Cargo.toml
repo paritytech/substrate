@@ -39,4 +39,3 @@ std = [
 	"pallet-session/std",
 	"pallet-finality-tracker/std",
 ]
-migrate-authorities = []

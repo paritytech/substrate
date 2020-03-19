@@ -14,7 +14,7 @@ tokio = "0.1.22"
 futures01 = { package = "futures", version = "0.1.29" }
 log = "0.4.8"
 env_logger = "0.7.0"
-fdlimit = "0.1.1"
+fdlimit = "0.1.4"
 futures = { version = "0.3.1", features = ["compat"] }
 sc-service = { version = "0.8.0-alpha.4", default-features = false, path = "../../service" }
 sc-network = { version = "0.8.0-alpha.4", path = "../../network" }
