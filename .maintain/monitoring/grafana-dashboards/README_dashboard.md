@@ -1,5 +1,7 @@
 ## Substrate Dashboard
 
+![](images/grafana_dashboard.png)
+
 ### Usage
 
 This json is intended to be copy/pasted this way:
@@ -32,8 +34,15 @@ suitable for using this grafana dashboard
 
 This Dashboard uses 2 grafana variables. They will allow you to monitor in the same panel diferent networks and nodes.
 
+![](images/grafana__variables.png)
+
 Variable definitions:
 
 $network
 
+![](images/grafana_variables_network.png)                                                                                                                                            
+
 $hostname
+
+![](images/grafana_variables_hostname.png)                                                                                                                                            
+
