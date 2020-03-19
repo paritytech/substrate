@@ -18,8 +18,8 @@
 
 use codec::{Encode, Decode};
 use sp_runtime::RuntimeDebug;
-use sp_runtime::traits::{Zero, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv, AppendZerosInput};
-use crate::{Vote, VoteThreshold, Tally};
+use sp_runtime::traits::{Zero, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv};
+use crate::{Vote, VoteThreshold};
 
 /// Info regarding an ongoing referendum.
 #[derive(Encode, Decode, Default, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -48,7 +48,7 @@ impl<
 	}
 
 	/// Increment some amount of votes.
-	pub fn try_add(
+	pub fn add(
 		&mut self,
 		vote: Vote,
 		balance: Balance,
@@ -63,7 +63,7 @@ impl<
 	}
 
 	/// Decrement some amount of votes.
-	pub fn try_remove(
+	pub fn remove(
 		&mut self,
 		vote: Vote,
 		balance: Balance,
@@ -116,7 +116,7 @@ pub enum ReferendumInfo<BlockNumber, Hash, Balance> {
 	Finished{approved: bool, end: BlockNumber},
 }
 
-impl<BlockNumber, Hash, Balance> ReferendumInfo<BlockNumber, Hash, Balance> {
+impl<BlockNumber, Hash, Balance: Default> ReferendumInfo<BlockNumber, Hash, Balance> {
 	/// Create a new instance.
 	pub fn new(
 		end: BlockNumber,
