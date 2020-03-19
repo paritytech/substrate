@@ -69,7 +69,7 @@ pub(super) fn generate_key<C: Crypto>(desired: &str) -> Result<KeyPair<C>, &'sta
 		return Err("Pattern must not be empty");
 	}
 
-	println!("Generating key containing pattern '{}'", desired);
+	eprintln!("Generating key containing pattern '{}'", desired);
 
 	let top = 45 + (desired.len() * 48);
 	let mut best = 0;
@@ -94,14 +94,14 @@ pub(super) fn generate_key<C: Crypto>(desired: &str) -> Result<KeyPair<C>, &'sta
 				score: score,
 			};
 			if best >= top {
-				println!("best: {} == top: {}", best, top);
+				eprintln!("best: {} == top: {}", best, top);
 				return Ok(keypair);
 			}
 		}
 		done += 1;
 
 		if done % good_waypoint(done) == 0 {
-			println!("{} keys searched; best is {}/{} complete", done, best, top);
+			eprintln!("{} keys searched; best is {}/{} complete", done, best, top);
 		}
 	}
 }

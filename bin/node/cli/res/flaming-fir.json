@@ -23,7 +23,9 @@
     "tokenSymbol": "FIR"
   },
   "forkBlocks": null,
-  "badBlocks": null,
+  "badBlocks": [
+	  "0xf3b02820f81988282e1da41fd479ef2aa00d63d622863639ea15d48ab6533fdc"
+  ],
   "consensusEngine": null,
   "genesis": {
     "raw": {
