@@ -274,9 +274,7 @@ impl Externalities for BasicExternalities {
 		Ok(None)
 	}
 
-	fn wipe(&mut self) {
-		unimplemented!()
-	}
+	fn wipe(&mut self) {}
 
 	fn bench_usage_info(&self) -> UsageInfo {
 		UsageInfo::empty()
