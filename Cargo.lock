@@ -3166,18 +3166,6 @@ checksum = "71d96e3f3c0b6325d8ccd83c33b28acb183edcb6c67938ba104ec546854b0882"
 
 [[package]]
 name = "merlin"
-version = "1.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b0942b357c1b4d0dc43ba724674ec89c3218e6ca2b3e8269e7cb53bcecd2f6e"
-dependencies = [
- "byteorder 1.3.4",
- "keccak",
- "rand_core 0.4.2",
- "zeroize",
-]
-
-[[package]]
-name = "merlin"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c6feca46f4fa3443a01769d768727f10c10a20fdb65e52dc16a81f0c8269bb78"
@@ -5902,7 +5890,7 @@ dependencies = [
  "futures 0.3.4",
  "futures-timer 3.0.2",
  "log 0.4.8",
- "merlin 1.3.0",
+ "merlin",
  "num-bigint",
  "num-rational",
  "num-traits",
@@ -6634,7 +6622,7 @@ dependencies = [
  "arrayvec 0.5.1",
  "curve25519-dalek",
  "getrandom",
- "merlin 2.0.0",
+ "merlin",
  "rand 0.7.3",
  "rand_core 0.5.1",
  "sha2",
