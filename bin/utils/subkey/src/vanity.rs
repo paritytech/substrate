@@ -65,11 +65,7 @@ fn calculate_score(_desired: &str, key: &str) -> usize {
 /// Validate whether the char is allowed to be used in base58.
 /// num 0, lower l, upper I and O are not allowed.
 fn validate_base58(c :char) -> bool {
-	if !c.is_alphanumeric() || "0lIO".contains(c) {
-		false
-	} else {
-		true
-	}
+	c.is_alphanumeric() && !"0lIO".contains(c)
 }
 
 pub(super) fn generate_key<C: Crypto>(desired: &str) -> Result<KeyPair<C>, &'static str> where
