@@ -1389,6 +1389,11 @@ impl<Block: BlockT> GossipValidator<Block> {
 
 		(action, broadcast_topics, peer_reply)
 	}
+
+	#[cfg(test)]
+	fn inner(&self) -> &parking_lot::RwLock<Inner<Block>> {
+		&self.inner
+	}
 }
 
 impl<Block: BlockT> sc_network_gossip::Validator<Block> for GossipValidator<Block> {
@@ -2563,5 +2568,20 @@ mod tests {
 			crate::communication::global_topic::<Block>(1),
 			&commit(0, 1, 2),
 		));
+	}
+
+	#[test]
+	fn allow_noting_different_authorities_for_same_set() {
+		let (val, _) = GossipValidator::<Block>::new(config(), voter_set_state(), None);
+
+		let a1 = vec![AuthorityId::default()];
+		val.note_set(SetId(1), a1.clone(), |_, _| {});
+
+		assert_eq!(val.inner().read().authorities, a1);
+
+		let a2 = vec![AuthorityId::default(), AuthorityId::default()];
+		val.note_set(SetId(1), a2.clone(), |_, _| {});
+
+		assert_eq!(val.inner().read().authorities, a2);
 	}
 }
