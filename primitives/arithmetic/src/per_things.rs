@@ -63,6 +63,8 @@ pub trait PerThing: Sized + Saturating + Copy {
 
 	/// Saturating reciprocal multiplication. Compute `x / self`, saturating at the numeric 
 	/// bounds instead of overflowing.
+	///
+	/// If `truncate` is true, round down. Otherwise round to the nearest value of N.
 	fn saturating_reciprocal_mul<N>(self, x: N, truncate: bool) -> N
 	where N: Clone + From<Self::Inner> + UniqueSaturatedFrom<Self::Upper> + UniqueSaturatedInto<Self::Inner> + ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N> + ops::Rem<N, Output=N> + Saturating {
 		let maximum: N = Self::ACCURACY.into();
@@ -113,7 +115,7 @@ pub trait PerThing: Sized + Saturating + Copy {
 	where N: Clone + Ord + From<Self::Inner> + TryInto<Self::Inner> + ops::Div<N, Output=N>;
 }
 
-/// Helper function to calculate a remainder used in `PerThing multiplications.
+/// Helper function to calculate a remainder used in `PerThing` multiplications.
 fn rem_helper<N, Inner, Upper>(x: N, part: Inner, acc: Inner, reciprocal: bool, truncate: bool) -> Upper 
 where 
 	N: Clone + From<Inner> + UniqueSaturatedInto<Inner> + ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N> + ops::Rem<N, Output=N>,
@@ -277,7 +279,10 @@ macro_rules! implement_per_thing {
 						} else {
 							// x^2 always fits in Self::Upper if x fits in Self::Inner.
 							// Verified by a test.
-							s = Self::from_rational_approximation(<$name as PerThing>::Upper::from(s.deconstruct()) * p, q * q);
+							s = Self::from_rational_approximation(
+								<$name as PerThing>::Upper::from(s.deconstruct()) * p, 
+								q * q,
+							);
 						}
 					}
 					s
