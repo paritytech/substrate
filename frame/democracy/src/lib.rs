@@ -175,7 +175,7 @@ mod vote;
 mod conviction;
 mod types;
 pub use vote_threshold::{Approved, VoteThreshold};
-pub use vote::{Vote, AccountVote};
+pub use vote::{Vote, AccountVote, Voting};
 pub use conviction::Conviction;
 pub use types::{ReferendumInfo, ReferendumStatus, ProxyState, Tally};
 
@@ -293,21 +293,18 @@ decl_storage! {
 			map hasher(twox_64_concat) ReferendumIndex
 			=> Option<ReferendumInfo<T::BlockNumber, T::Hash, BalanceOf<T>>>;
 
-		// TODO: Refactor DispatchQueue into its own module.
+		// TODO: Refactor DispatchQueue into its own pallet.
 		/// Queue of successful referenda to be dispatched. Stored ordered by block number.
 		pub DispatchQueue get(fn dispatch_queue): Vec<(T::BlockNumber, T::Hash, ReferendumIndex)>;
 
 		/// All votes for a particular voter. We store the balance for the number of votes that we
-		/// have recorded.
-		pub VotesOf: map hasher(twox_64_concat) T::AccountId => Vec<(ReferendumIndex, AccountVote<BalanceOf<T>>)>;
+		/// have recorded. The second item is the total amount of delegations, that will be added.
+		pub VotingOf: map hasher(twox_64_concat) T::AccountId => Voting<BalanceOf<T>, T::AccountId, T::BlockNumber>;
 
 		/// Who is able to vote for whom. Value is the fund-holding account, key is the
 		/// vote-transaction-sending account.
+		// TODO: Refactor proxy into its own pallet.
 		pub Proxy get(fn proxy): map hasher(twox_64_concat) T::AccountId => Option<ProxyState<T::AccountId>>;
-
-		/// Get the account (and conviction) to which another account is delegating vote.
-		pub Delegations get(fn delegations):
-			map hasher(twox_64_concat) T::AccountId => (T::AccountId, Conviction);
 
 		/// Accounts for which there are locks in action which may be removed at some point in the
 		/// future. The value is the block number at which the lock expires and may be removed.
@@ -315,6 +312,7 @@ decl_storage! {
 
 		/// True if the last referendum tabled was submitted externally. False if it was a public
 		/// proposal.
+		// TODO: There should be any number of tabling origins, not just public and "external" (council).
 		pub LastTabledWasExternal: bool;
 
 		/// The referendum to be tabled whenever it would be valid to table an external proposal.
@@ -445,6 +443,8 @@ decl_error! {
 		Underflow,
 		/// Too high a balance was provided that the account cannot afford.
 		TooMuch,
+		/// The operation cannot succeed until all current voting is cleeared.
+		AlreadyVoting,
 	}
 }
 
@@ -895,47 +895,39 @@ decl_module! {
 			})?;
 		}
 
-		/// Delegate vote.
+		/// Delegate the voting power (with some given conviction) of the sending account.
 		///
-		/// Currency is locked indefinitely for as long as it's delegated.
+		/// The balance delegated is locked for as long as it's delegated, and thereafter for the
+		/// time appropriate for the conviction's lock period.
 		///
-		/// The dispatch origin of this call must be _Signed_.
+		/// The dispatch origin of this call must be _Signed_, and the signing account must either:
+		///   - be delegating already; or
+		///   - have no voting activity (if there is, then it will need to be removed/consolidated
+		///     through `reap_vote` or `unvote`).
 		///
-		/// - `to`: The account to make a delegate of the sender.
-		/// - `conviction`: The conviction that will be attached to the delegated
-		///   votes. When the account is undelegated, the funds will be locked for the corresponding
-		///   number of lock periods.
+		/// - `to`: The account whose voting the `target` account's voting power will follow.
+		/// - `conviction`: The conviction that will be attached to the delegated votes. When the
+		///   account is undelegated, the funds will be locked for the corresponding period.
+		/// - `balance`: The amount of the account's balance to be used in delegating. This must
+		///   not be more than the account's current balance.
 		///
 		/// Emits `Delegated`.
 		///
 		/// # <weight>
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
-		pub fn delegate(origin, to: T::AccountId, conviction: Conviction) {
+		pub fn delegate(origin, to: T::AccountId, conviction: Conviction, balance: BalanceOf<T>) {
 			let who = ensure_signed(origin)?;
-			Delegations::<T>::try_mutate_exists(&who, |d| -> DispatchResult {
-				ensure!(d.is_none(), Error::<T>::AlreadyDelegating);
-				*d = Some((to.clone(), conviction));
-				Ok(())
-			})?;
-			// Currency is locked indefinitely as long as it's delegated.
-			T::Currency::extend_lock(
-				DEMOCRACY_ID,
-				&who,
-				Bounded::max_value(),
-				WithdrawReason::Transfer.into()
-			);
-			Locks::<T>::remove(&who);
-			Self::deposit_event(RawEvent::Delegated(who, to));
+			Self::try_delegate(who, to, conviction, balance)
 		}
 
-		/// Undelegate vote.
+		/// Undelegate the voting power of the sending account.
 		///
-		/// Must be sent from an account that has called delegate previously.
-		/// The tokens will be reduced from an indefinite lock to the maximum
-		/// possible according to the conviction of the prior delegation.
+		/// Tokens may be unlocked following once an amount of time consistent with the lock period
+		/// of the conviction with which the delegation was issued.
 		///
-		/// The dispatch origin of this call must be _Signed_.
+		/// The dispatch origin of this call must be _Signed_ and the signing account must be
+		/// currently delegating.
 		///
 		/// Emits `Undelegated`.
 		///
@@ -945,19 +937,7 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		fn undelegate(origin) {
 			let who = ensure_signed(origin)?;
-			ensure!(<Delegations<T>>::contains_key(&who), Error::<T>::NotDelegated);
-			let (_, conviction) = <Delegations<T>>::take(&who);
-			// Indefinite lock is reduced to the maximum voting lock that could be possible.
-			let now = <frame_system::Module<T>>::block_number();
-			let locked_until = now + T::EnactmentPeriod::get() * conviction.lock_periods().into();
-			Locks::<T>::insert(&who, locked_until);
-			T::Currency::set_lock(
-				DEMOCRACY_ID,
-				&who,
-				Bounded::max_value(),
-				WithdrawReason::Transfer.into(),
-			);
-			Self::deposit_event(RawEvent::Undelegated(who));
+			Self::try_undelegate(who)
 		}
 
 		/// Clears all public proposals.
@@ -1118,7 +1098,7 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn unvote(origin, index: ReferendumIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			Self::cancel_vote(&who, index, UnvoteScope::Any)
+			Self::try_unvote(&who, index, UnvoteScope::Any)
 		}
 
 		/// Remove a vote for a referendum that has expired, either because it was cancelled,
@@ -1136,7 +1116,61 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn reap_vote(origin, target: T::AccountId, index: ReferendumIndex) -> DispatchResult {
 			ensure_signed(origin)?;
-			Self::cancel_vote(&target, index, UnvoteScope::OnlyExpired)
+			Self::try_unvote(&target, index, UnvoteScope::OnlyExpired)
+		}
+
+		/// Delegate the voting power (with some given conviction) of a proxied account.
+		///
+		/// The balance delegated is locked for as long as it's delegated, and thereafter for the
+		/// time appropriate for the conviction's lock period.
+		///
+		/// The dispatch origin of this call must be _Signed_, and the signing account must have
+		/// been set as the proxy account for `target`.
+		///
+		/// - `target`: The account whole voting power shall be delegated and whose balance locked.
+		///   This account must either:
+		///   - be delegating already; or
+		///   - have no voting activity (if there is, then it will need to be removed/consolidated
+		///     through `reap_vote` or `unvote`).
+		/// - `to`: The account whose voting the `target` account's voting power will follow.
+		/// - `conviction`: The conviction that will be attached to the delegated votes. When the
+		///   account is undelegated, the funds will be locked for the corresponding period.
+		/// - `balance`: The amount of the account's balance to be used in delegating. This must
+		///   not be more than the account's current balance.
+		///
+		/// Emits `Delegated`.
+		///
+		/// # <weight>
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
+		pub fn proxy_delegate(origin,
+			to: T::AccountId,
+			conviction: Conviction,
+			balance: BalanceOf<T>,
+		) {
+			let who = ensure_signed(origin)?;
+			let target = Self::proxy(who).and_then(|a| a.as_active()).ok_or(Error::<T>::NotProxy)?;
+			Self::try_delegate(target, to, conviction, balance)
+		}
+
+		/// Undelegate the voting power of a proxied account.
+		///
+		/// Tokens may be unlocked following once an amount of time consistent with the lock period
+		/// of the conviction with which the delegation was issued.
+		///
+		/// The dispatch origin of this call must be _Signed_ and the signing account must be a
+		/// proxy for some other account which is currently delegating.
+		///
+		/// Emits `Undelegated`.
+		///
+		/// # <weight>
+		/// - O(1).
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
+		fn proxy_undelegate(origin) {
+			let who = ensure_signed(origin)?;
+			let target = Self::proxy(who).and_then(|a| a.as_active()).ok_or(Error::<T>::NotProxy)?;
+			Self::try_undelegate(target)
 		}
 	}
 }
@@ -1229,18 +1263,28 @@ impl<T: Trait> Module<T> {
 	fn try_vote(who: &T::AccountId, ref_index: ReferendumIndex, vote: AccountVote<BalanceOf<T>>) -> DispatchResult {
 		let mut status = Self::referendum_status(ref_index)?;
 		ensure!(vote.balance() <= T::Currency::free_balance(who), Error::<T>::TooMuch);
-		VotesOf::<T>::try_mutate(who, |votes| -> DispatchResult {
-			match votes.binary_search_by_key(&ref_index, |i| i.0) {
-				Ok(i) => {
-					// Shouldn't be possible to fail, but we handle it gracefully.
-					status.tally.remove(votes[i].1).ok_or(Error::<T>::Underflow)?;
-					votes[i].1 = vote;
+		VotingOf::<T>::try_mutate(who, |voting| -> DispatchResult {
+			if let Voting::Direct { ref mut votes, delegations, .. } = voting {
+				match voting.binary_search_by_key(&ref_index, |i| i.0) {
+					Ok(i) => {
+						// Shouldn't be possible to fail, but we handle it gracefully.
+						status.tally.remove(votes[i].1).ok_or(Error::<T>::Underflow)?;
+						if let Some(approve) = votes[i].1.as_standard() {
+							status.tally.reduce(approve, delegations, Zero::zero());
+						}
+						votes[i].1 = vote;
+					}
+					Err(i) => votes.insert(i, (ref_index, vote)),
 				}
-				Err(i) => votes.insert(i, (ref_index, vote)),
+				// Shouldn't be possible to fail, but we handle it gracefully.
+				status.tally.add(vote).ok_or(Error::<T>::Overflow)?;
+				if let Some(approve) = vote.as_standard() {
+					status.tally.increase(approve, delegations, Zero::zero());
+				}
+				Ok(())
+			} else {
+				Err(Error::<T>::AlreadyDelegating)
 			}
-			// Shouldn't be possible to fail, but we handle it gracefully.
-			status.tally.add(vote).ok_or(Error::<T>::Overflow)?;
-			Ok(())
 		})?;
 		// Extend the lock to `balance` (rather than setting it) since we don't know what other
 		// votes are in place.
@@ -1260,41 +1304,153 @@ impl<T: Trait> Module<T> {
 	/// - The referendum has finished and the voter's lock period is up.
 	///
 	/// This will generally be combined with a call to `unlock`.
-	fn cancel_vote(who: &T::AccountId, ref_index: ReferendumIndex, scope: UnvoteScope) -> DispatchResult {
+	fn try_unvote(who: &T::AccountId, ref_index: ReferendumIndex, scope: UnvoteScope) -> DispatchResult {
 		let info = ReferendumInfoOf::<T>::get(ref_index);
-		VotesOf::<T>::try_mutate(who, |votes| -> DispatchResult {
-			let i = votes.binary_search_by_key(&ref_index, |i| i.0).map_err(|_| Error::<T>::NotVoter)?;
-			match info {
-				Some(ReferendumInfo::Ongoing(mut status)) => {
-					ensure!(matches!(scope, UnvoteScope::Any), Error::<T>::NoPermission);
-					// Shouldn't be possible to fail, but we handle it gracefully.
-					status.tally.remove(votes[i].1).ok_or(Error::<T>::Underflow)?;
-					ReferendumInfoOf::<T>::insert(ref_index, ReferendumInfo::Ongoing(status));
+		VotesOf::<T>::try_mutate(who, |voting| -> DispatchResult {
+			if let Voting::Direct { ref mut votes, delegations, ref mut prior } = voting {
+				let i = votes.binary_search_by_key(&ref_index, |i| i.0).map_err(|_| Error::<T>::NotVoter)?;
+				match info {
+					Some(ReferendumInfo::Ongoing(mut status)) => {
+						ensure!(matches!(scope, UnvoteScope::Any), Error::<T>::NoPermission);
+						// Shouldn't be possible to fail, but we handle it gracefully.
+						status.tally.remove(votes[i].1).ok_or(Error::<T>::Underflow)?;
+						if let Some(approve) = votes[i].1.as_standard() {
+							status.tally.reduce(approve, delegations, Zero::zero());
+						}
+						ReferendumInfoOf::<T>::insert(ref_index, ReferendumInfo::Ongoing(status));
+					}
+					Some(ReferendumInfo::Finished{end, approved}) =>
+						if let Some((lock_periods, balance)) = votes[i].1.locked_if(approved) {
+							let unlock_at = end + T::EnactmentPeriod::get() * lock_periods.into();
+							let now = system::Module::<T>::block_number();
+							if now < unlock_at {
+								prior.accumulate(unlock_at, balance)
+							}
+						},
+					None => {}  // Referendum was cancelled.
 				}
-				Some(ReferendumInfo::Finished{end, approved}) =>
-					if let Some(lock_periods) = votes[i].1.lock_periods(approved) {
-						let unlock_at = end + T::EnactmentPeriod::get() * lock_periods.into();
-						let now = system::Module::<T>::block_number();
-						ensure!(now >= unlock_at, Error::<T>::TooEarly);
-					},
-				None => {}  // Referendum was cancelled.
+				votes.remove(i);
 			}
-			votes.remove(i);
 			Ok(())
 		})?;
 		Ok(())
 	}
 
-	/// Rejig the locks on an account. They will never get more stringent but may be reduced from
-	/// what they are currently.
+	fn increase_upstream_delegation(who: &T::AccountId, amount: BalanceOf<T>) {
+		VotingOf::<T>::mutate(who, |voting| match voting {
+			Voting::Delegating { balance, target, conviction, delegations, prior } =>
+				// We don't support second level delegating, so we don't need to do anything more.
+				*delegations = delegations.saturating_add(amount),
+			Voting::Direct { votes, delegations, prior } => {
+				*delegations = delegations.saturating_add(amount);
+				for &(ref_index, account_vote) in votes.iter() {
+					if let AccountVote::Standard { vote, .. } = account_vote {
+						ReferendumInfoOf::<T>::mutate(ref_index, |maybe_info|
+							if let Some(ReferendumInfo::Ongoing(ref mut status)) = maybe_info {
+								status.tally.increase(vote.aye, amount, Zero::zero());
+							}
+						);
+					}
+				}
+			}
+		})
+	}
+
+	fn reduce_upstream_delegation(who: &T::AccountId, amount: BalanceOf<T>) {
+		VotingOf::<T>::mutate(who, |voting| match voting {
+			Voting::Delegating { balance, target, conviction, delegations, prior } =>
+			// We don't support second level delegating, so we don't need to do anything more.
+				*delegations = delegations.saturating_sub(amount),
+			Voting::Direct { votes, delegations, prior } => {
+				*delegations = delegations.saturating_sub(amount);
+				for &(ref_index, account_vote) in votes.iter() {
+					if let AccountVote::Standard { vote, .. } = account_vote {
+						ReferendumInfoOf::<T>::mutate(ref_index, |maybe_info|
+							if let Some(ReferendumInfo::Ongoing(ref mut status)) = maybe_info {
+								status.tally.reduce(vote.aye, amount, Zero::zero());
+							}
+						);
+					}
+				}
+			}
+		})
+	}
+
+	/// Attempt to delegate `balance` times `conviction` of voting power from `who` to `target`.
+	fn try_delegate(
+		who: T::AccountId,
+		target: T::AccountId,
+		conviction: Conviction,
+		balance: BalanceOf<T>,
+	) -> DispatchResult {
+		ensure!(vote.balance() <= T::Currency::free_balance(who), Error::<T>::TooMuch);
+		VotingOf::<T>::try_mutate(&who, |voting| -> DispatchResult {
+			let mut old = Voting::Delegating {
+				balance,
+				target: target.clone(),
+				conviction,
+				.. Default::default()
+			};
+			sp_std::mem::swap(&mut old, voting);
+			match old {
+				Voting::Delegating { balance, target, conviction, delegations, prior } => {
+					// remove any delegation votes to our current target.
+					Self::reduce_upstream_delegation(&target, delegations);
+					voting.delegations = delegations;
+					voting.prior = prior;
+				}
+				Voting::Direct { votes, delegations, prior } => {
+					// here we just ensure that we're currently idling with no votes recorded.
+					ensure!(votes.is_empty(), Error::<T>::AlreadyVoting);
+					voting.delegations = delegations;
+					voting.prior = prior;
+				}
+			}
+			Self::increase_upstream_delegation(&target, delegations);
+			Self::deposit_event(Event::<T>::Delegated(who, target));
+		})
+	}
+
+	/// Attempt to end the current delegation.
+	fn try_undelegate(who: T::AccountId) -> DispatchResult {
+		VotingOf::<T>::try_mutate(&who, |voting| -> DispatchResult {
+			let mut old = Voting::default();
+			sp_std::mem::swap(&mut old, voting);
+			match old {
+				Voting::Delegating {
+					balance,
+					target,
+					conviction,
+					delegations,
+					mut prior,
+				} => {
+					// remove any delegation votes to our current target.
+					Self::reduce_upstream_delegation(&target, delegations);
+					let now = system::Module::<T>::block_number();
+					let lock_periods = conviction.lock_periods().into();
+					prior.accumulate(now + T::EnactmentPeriod::get() * lock_periods, balance);
+					voting.delegations = delegations;
+					voting.prior = prior;
+				}
+				Voting::Direct { .. } => {
+					return Err(Error::<T>::AlreadyVoting.into())
+				}
+			}
+			Self::deposit_event(Event::<T>::Undelegated(who));
+		})
+	}
+
+	/// Rejig the lock on an account. It will never get more stringent (since that would indicate
+	/// a security hole) but may be reduced from what they are currently.
 	fn update_lock(who: &T::AccountId) {
-		let max = VotesOf::<T>::get(who).into_iter()
-			.map(|i| i.1.balance())
-			.fold(BalanceOf::<T>::zero(), |a, i| a.max(i));
-		if max.is_zero() {
+		let lock_needed = VotingOf::<T>::mutate(who, |voting| {
+			voting.rejig(system::Module::<T>::block_number());
+			voting.locked_balance()
+		});
+		if lock_needed.is_zero() {
 			T::Currency::remove_lock(DEMOCRACY_ID, who);
 		} else {
-			T::Currency::set_lock(DEMOCRACY_ID, who, max, WithdrawReason::Transfer.into());
+			T::Currency::set_lock(DEMOCRACY_ID, who, lock_needed, WithdrawReason::Transfer.into());
 		}
 	}
 

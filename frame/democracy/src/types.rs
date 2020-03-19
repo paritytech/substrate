@@ -18,7 +18,7 @@
 
 use codec::{Encode, Decode};
 use sp_runtime::RuntimeDebug;
-use sp_runtime::traits::{Zero, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv};
+use sp_runtime::traits::{Zero, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv, Saturating};
 use crate::{Vote, VoteThreshold, AccountVote, Conviction};
 
 /// Info regarding an ongoing referendum.
@@ -33,8 +33,10 @@ pub struct Tally<Balance> {
 }
 
 impl<
-	Balance: From<u8> + Zero + Copy + CheckedAdd + CheckedSub + CheckedMul + CheckedDiv + Bounded
+	Balance: From<u8> + Zero + Copy + CheckedAdd + CheckedSub + CheckedMul + CheckedDiv + Bounded +
+		Saturating
 > Tally<Balance> {
+	/// Create a new tally.
 	pub fn new(
 		vote: Vote,
 		balance: Balance,
@@ -47,7 +49,7 @@ impl<
 		}
 	}
 
-	/// Increment some amount of votes.
+	/// Add an account's vote into the tally.
 	pub fn add(
 		&mut self,
 		vote: AccountVote<Balance>,
@@ -72,7 +74,7 @@ impl<
 		Some(())
 	}
 
-	/// Decrement some amount of votes.
+	/// Remove an account's vote from the tally.
 	pub fn remove(
 		&mut self,
 		vote: AccountVote<Balance>,
@@ -93,6 +95,26 @@ impl<
 				self.ayes = self.ayes.checked_sub(&aye_votes)?;
 				self.nays = self.nays.checked_sub(&nay_votes)?;
 			}
+		}
+		Some(())
+	}
+
+	/// Increment some amount of votes.
+	pub fn increase(&mut self, approve: bool, votes: Balance, capital: Balance) -> Option<()> {
+		self.turnout = self.turnout.saturating_add(&capital)?;
+		match approve {
+			true => self.ayes = self.ayes.saturating_add(&votes)?,
+			false => self.nays = self.nays.saturating_add(&votes)?,
+		}
+		Some(())
+	}
+
+	/// Decrement some amount of votes.
+	pub fn reduce(&mut self, approve: bool, votes: Balance, capital: Balance) -> Option<()> {
+		self.turnout = self.turnout.saturating_sub(&capital)?;
+		match approve {
+			true => self.ayes = self.ayes.saturating_sub(&votes)?,
+			false => self.nays = self.nays.saturating_sub(&votes)?,
 		}
 		Some(())
 	}

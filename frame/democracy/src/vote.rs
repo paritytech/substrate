@@ -18,8 +18,9 @@
 
 use sp_std::{result::Result, convert::TryFrom};
 use codec::{Encode, EncodeLike, Decode, Output, Input};
-use sp_runtime::{RuntimeDebug, traits::Saturating};
-use crate::conviction::Conviction;
+use sp_runtime::{RuntimeDebug, traits::{Saturating, Zero}};
+use crate::{Conviction, ReferendumIndex};
+use crate::vote::Voting::Delegating;
 
 /// A number of lock periods, plus a vote, one way or the other.
 #[derive(Copy, Clone, Eq, PartialEq, Default, RuntimeDebug)]
@@ -60,11 +61,11 @@ pub enum AccountVote<Balance> {
 impl<Balance: Saturating> AccountVote<Balance> {
 	/// Returns `Some` of the lock periods that the account is locked for, assuming that the
 	/// referendum passed iff `approved` is `true`.
-	pub fn lock_periods(self, approved: bool) -> Option<u32> {
+	pub fn locked_if(self, approved: bool) -> Option<(u32, Balance)> {
 		// winning side: can only be removed after the lock period ends.
 		match self {
 			AccountVote::Standard { vote, .. } if vote.aye == approved =>
-				Some(vote.conviction.lock_periods()),
+				Some((vote.conviction.lock_periods(), vote.balance)),
 			_ => None,
 		}
 	}
@@ -74,6 +75,93 @@ impl<Balance: Saturating> AccountVote<Balance> {
 		match self {
 			AccountVote::Standard { balance, .. } => balance,
 			AccountVote::Split { aye, nay } => aye.saturating_add(nay),
+		}
+	}
+
+	/// Returns `Some` with whether the vote is an aye vote if it is standard, otherwise `None` if
+	/// it is split.
+	pub fn as_standard(self) -> Option<bool> {
+		match self {
+			AccountVote::Standard { vote, .. } => Some(vote.aye),
+			_ => None,
+		}
+	}
+}
+
+/// A "prior" lock, i.e. a lock for some now-forgotten reason.
+#[derive(Encode, Decode, Default, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, RuntimeDebug)]
+pub struct PriorLock<BlockNumber, Balance>(BlockNumber, Balance);
+
+impl<BlockNumber: Ord + Copy, Balance: Ord + Copy> PriorLock<BlockNumber, Balance> {
+	/// Accumulates an additional lock.
+	pub fn accumulate(&mut self, until: BlockNumber, amount: Balance) {
+		self.0 = self.0.max(until);
+		self.1 = self.1.max(amount);
+	}
+
+	pub fn locked(&self) -> Balance {
+		self.1
+	}
+
+	pub fn rejig(&mut self, now: BlockNumber) {
+		if now >= self.0 {
+			self = Default::default();
+		}
+	}
+}
+
+/// An indicator for what an account is doing; it can either be delegating or voting.
+#[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug)]
+pub enum Voting<Balance, AccountId, BlockNumber> {
+	/// The account is voting directly. `delegations` is the total amount of post-conviction voting
+	/// weight that it controls from those that have delegated to it.
+	Direct {
+		/// The current votes of the account.
+		votes: Vec<(ReferendumIndex, AccountVote<Balance>)>,
+		/// The total amount of delegations that this account has received.
+		delegations: Balance,
+		/// Any pre-existing locks from past voting/delegating activity.
+		prior: PriorLock<BlockNumber, Balance>,
+	},
+	/// The account is delegating `balance` of its balance to a `target` account with `conviction`.
+	Delegating {
+		balance: Balance,
+		target: AccountId,
+		conviction: Conviction,
+		/// The total amount of delegations that this account has received.
+		delegations: Balance,
+		/// Any pre-existing locks from past voting/delegating activity.
+		prior: PriorLock<BlockNumber, Balance>,
+	},
+}
+
+impl<Balance: Zero, AccountId, BlockNumber> Default for Voting<Balance, AccountId, BlockNumber> {
+	fn default() -> Self {
+		Voting::Direct {
+			votes: Vec::new(),
+			delegations: Zero::zero(),
+			prior: None,
+		}
+	}
+}
+
+impl<Balance: Saturating + Zero + Copy, AccountId, BlockNumber: Copy> Voting<Balance, AccountId, BlockNumber> {
+	pub fn rejig(&mut self, now: BlockNumber) {
+		match self {
+			Voting::Direct { prior, .. } => prior,
+			Voting::Delegating { prior, .. } => prior,
+		}.rejig(now);
+	}
+
+	/// The amount of this account's balance that much currently be locked due to voting.
+	pub fn locked_balance(&self) -> Balance {
+		match self {
+			Voting::Direct { votes, prior, .. } => {
+				votes.iter()
+					.map(|i| i.1.balance())
+					.fold(prior.locked.map_or_else(Zero::zero, |u| u.0), |a, i| a.max(i))
+			}
+			Voting::Delegating { balance, .. } => balance,
 		}
 	}
 }
