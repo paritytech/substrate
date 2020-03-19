@@ -381,11 +381,14 @@ fn pot_underflow_should_not_payout() {
 		assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0));
 
 		assert_noop!(Treasury::payout_proposal(Origin::signed(1337), 0), BalancesError::<Test, _>::InsufficientBalance);
+		<Treasury as OnInitialize<u64>>::on_initialize(2);
+		assert_eq!(Treasury::pot(), 100); // Pot hasn't changed
 
 		let _ = Balances::deposit_into_existing(&Treasury::account_id(), 100).unwrap();
 		assert_ok!(Treasury::payout_proposal(Origin::signed(1337), 0));
+		<Treasury as OnInitialize<u64>>::on_initialize(4);
 		assert_eq!(Balances::free_balance(3), 150); // Fund has been spent
-		assert_eq!(Treasury::pot(), 50); // Pot has finally changed
+		assert_eq!(Treasury::pot(), 25); // Pot has finally changed
 	});
 }
 
@@ -410,8 +413,8 @@ fn treasury_account_doesnt_get_deleted() {
 
 		assert_noop!(Treasury::payout_proposal(Origin::signed(1337), 0), BalancesError::<Test, _>::KeepAlive);
 		assert_ok!(Treasury::payout_proposal(Origin::signed(1337), 1));
-
 		<Treasury as OnInitialize<u64>>::on_initialize(4);
+
 		assert_eq!(Treasury::pot(), 0); // Pot is emptied
 		assert_eq!(Balances::free_balance(Treasury::account_id()), 1); // but the account is still there
 	});
@@ -439,6 +442,7 @@ fn inexistent_account_works() {
 
 		assert_noop!(Treasury::payout_proposal(Origin::signed(1337), 0), BalancesError::<Test, _>::InsufficientBalance);
 		assert_noop!(Treasury::payout_proposal(Origin::signed(1337), 1), BalancesError::<Test, _>::InsufficientBalance);
+		<Treasury as OnInitialize<u64>>::on_initialize(2);
 
 		assert_eq!(Treasury::pot(), 0); // Pot hasn't changed
 		assert_eq!(Balances::free_balance(3), 0); // Balance of `3` hasn't changed
@@ -449,6 +453,7 @@ fn inexistent_account_works() {
 
 		assert_ok!(Treasury::payout_proposal(Origin::signed(1337), 0));
 		assert_noop!(Treasury::payout_proposal(Origin::signed(1337), 1), BalancesError::<Test, _>::KeepAlive);
+		<Treasury as OnInitialize<u64>>::on_initialize(4);
 
 		assert_eq!(Treasury::pot(), 0); // Pot has changed
 		assert_eq!(Balances::free_balance(3), 99); // Balance of `3` has changed
