@@ -16,7 +16,7 @@
   "gnetId": null,
   "graphTooltip": 0,
   "id": 24,
-  "iteration": 1584461546653,
+  "iteration": 1584471071021,
   "links": [
     {
       "icon": "external link",
@@ -238,7 +238,7 @@
         "current": false,
         "max": false,
         "min": false,
-        "show": false,
+        "show": true,
         "total": false,
         "values": false
       },
@@ -262,7 +262,7 @@
         {
           "expr": "scalar(polkadot_block_height_number{status=\"best\",hostname=\"[[hostname]]\",job=\"polkadot_[[hostname]]\",network=\"[[network]]\"})-scalar(polkadot_block_height_number{status=\"finalized\",hostname=\"[[hostname]]\",job=\"polkadot_[[hostname]]\",network=\"[[network]]\"})",
           "intervalFactor": 2,
-          "legendFormat": "",
+          "legendFormat": "[[hostname]]",
           "refId": "A"
         }
       ],
@@ -1572,8 +1572,9 @@
       {
         "allValue": null,
         "current": {
-          "text": "kusama-public-4",
-          "value": "kusama-public-4"
+          "tags": [],
+          "text": "kusama-validator-2",
+          "value": "kusama-validator-2"
         },
         "datasource": "DS_PROMETHEUS",
         "definition": "label_values(hostname)",
@@ -1617,5 +1618,5 @@
   "timezone": "",
   "title": "Substrate Dashboard",
   "uid": "ColmenaLabs",
-  "version": 10
+  "version": 11
 }
