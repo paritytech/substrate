@@ -75,7 +75,7 @@ cp .cargo/config target/debug/wbuild/.cargo/config
 # package, others are updated along the way.
 cargo update
 
-# Check whether Polkadot pr or master branch builds with this Substrate commit.
-time cargo check
+# Test Polkadot pr or master branch with this Substrate commit.
+time cargo test --all --release --verbose
 
 
