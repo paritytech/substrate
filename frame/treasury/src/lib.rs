@@ -702,9 +702,9 @@ impl<T: Trait> Module<T> {
 
 		// Only burn funds if we are in excess of approved funds.
 		if pot <= amount_approved { return }
-
 		let mut budget_remaining = pot - amount_approved;
 		let mut imbalance = <PositiveImbalanceOf<T>>::zero();
+
 		// burn some proportion of the remaining budget if we run a surplus.
 		let burn = (T::Burn::get() * budget_remaining).min(budget_remaining);
 		budget_remaining -= burn;
