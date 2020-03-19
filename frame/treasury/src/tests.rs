@@ -64,7 +64,7 @@ impl Contains<u64> for TenToFourteen {
 parameter_types! {
 	pub const ProposalBond: Permill = Permill::from_percent(5);
 	pub const ProposalBondMinimum: u64 = 1;
-	pub const SpendPeriod: u64 = 2;
+	pub const BurnPeriod: u64 = 2;
 	pub const Burn: Permill = Permill::from_percent(50);
 	pub const TipCountdown: u64 = 1;
 	pub const TipFindersFee: Percent = Percent::from_percent(20);
@@ -84,7 +84,7 @@ impl Trait for Test {
 	type ProposalRejection = ();
 	type ProposalBond = ProposalBond;
 	type ProposalBondMinimum = ProposalBondMinimum;
-	type BurnPeriod = SpendPeriod;
+	type BurnPeriod = BurnPeriod;
 	type Burn = Burn;
 }
 type System = frame_system::Module<Test>;
