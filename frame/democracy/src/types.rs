@@ -119,20 +119,6 @@ impl<
 		Some(())
 	}
 }
-/*
-/// Info regarding an ongoing referendum.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct OldReferendumInfo<BlockNumber, Hash, Balance> {
-	/// When voting on this referendum will end.
-	pub (crate) end: BlockNumber,
-	/// The hash of the proposal being voted on.
-	pub (crate) proposal_hash: Hash,
-	/// The thresholding mechanism to determine whether it passed.
-	pub (crate) threshold: VoteThreshold,
-	/// The delay (in blocks) to wait after a successful referendum before deploying.
-	pub (crate) delay: BlockNumber,
-}
-*/
 
 /// Info regarding an ongoing referendum.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -187,4 +173,13 @@ impl<AccountId> ProxyState<AccountId> {
 			ProxyState::Open(_) => None,
 		}
 	}
+}
+
+/// Whether an `unvote` operation is able to make actions that are not strictly always in the
+/// interest of an account.
+pub enum UnvoteScope {
+	/// Permitted to do everything.
+	Any,
+	/// Permitted to do only the changes that do not need the owner's permission.
+	OnlyExpired,
 }

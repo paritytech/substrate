@@ -78,21 +78,33 @@
 //! These calls can be made from any externally held account capable of creating
 //! a signed extrinsic.
 //!
-//! - `propose` - Submits a sensitive action, represented as a hash.
-//!	  Requires a deposit.
-//! - `second` - Signals agreement with a proposal, moves it higher on the
-//!   proposal queue, and requires a matching deposit to the original.
-//! - `vote` - Votes in a referendum, either the vote is "Aye" to enact the
-//!   proposal or "Nay" to keep the status quo.
-//! - `proxy_vote` - Votes in a referendum on behalf of a stash account.
+//! Basic actions:
+//! - `propose` - Submits a sensitive action, represented as a hash. Requires a deposit.
+//! - `second` - Signals agreement with a proposal, moves it higher on the proposal queue, and
+//!   requires a matching deposit to the original.
+//! - `vote` - Votes in a referendum, either the vote is "Aye" to enact the proposal or "Nay" to
+//!   keep the status quo.
+//! - `unvote` - Cancel a previous vote, this must be done by the voter before the vote ends.
+//! - `delegate` - Delegates the voting power (tokens * conviction) to another account.
+//! - `undelegate` - Stops the delegation of voting power to another account.
+//!
+//! Administration actions that can be done to any account:
+//! - `reap_vote` - Remove some account's expired votes.
+//! - `unlock` - Redetermine the account's balance lock, potentially making tokens available.
+//! 
+//! Proxy administration:
 //! - `activate_proxy` - Activates a proxy that is already open to the sender.
 //! - `close_proxy` - Clears the proxy status, called by the proxy.
-//! - `deactivate_proxy` - Deactivates a proxy back to the open status, called by
-//!   the stash.
+//! - `deactivate_proxy` - Deactivates a proxy back to the open status, called by the stash.
 //! - `open_proxy` - Opens a proxy account on behalf of the sender.
-//! - `delegate` - Delegates the voting power (tokens * conviction) to another
-//!   account.
-//! - `undelegate` - Stops the delegation of voting power to another account.
+//!
+//! Proxy actions:
+//! - `proxy_vote` - Votes in a referendum on behalf of a stash account.
+//! - `proxy_unvote` - Cancel a previous vote, done on behalf of the voter by a proxy.
+//! - `proxy_delegate` - Delegate voting power, done on behalf of the voter by a proxy.
+//! - `proxy_undelegate` - Stop delegating voting power, done on behalf of the voter by a proxy.
+//!
+//! Preimage actions:
 //! - `note_preimage` - Registers the preimage for an upcoming proposal, requires
 //!   a deposit that is returned once the proposal is enacted.
 //! - `note_imminent_preimage` - Registers the preimage for an upcoming proposal.
@@ -100,9 +112,6 @@
 //! - `reap_preimage` - Removes the preimage for an expired proposal. Will only
 //!   work under the condition that it's the same account that noted it and
 //!   after the voting period, OR it's a different account after the enactment period.
-//! - `unvote` - Cancel a previous vote, this must be done by the voter before the vote ends.
-//! - `reap_vote` - Cancel some account's expired votes.
-//! - `unlock` - Unlocks tokens that have an expired lock.
 //!
 //! #### Cancellation Origin
 //!
@@ -176,7 +185,7 @@ mod types;
 pub use vote_threshold::{Approved, VoteThreshold};
 pub use vote::{Vote, AccountVote, Voting};
 pub use conviction::Conviction;
-pub use types::{ReferendumInfo, ReferendumStatus, ProxyState, Tally};
+pub use types::{ReferendumInfo, ReferendumStatus, ProxyState, Tally, UnvoteScope};
 
 #[cfg(test)]
 mod tests;
@@ -485,6 +494,10 @@ decl_module! {
 		const PreimageByteDeposit: BalanceOf<T> = T::PreimageByteDeposit::get();
 
 		fn deposit_event() = default;
+
+		fn on_runtime_upgrade() {
+			Self::migrate();
+		}
 
 		/// Propose a sensitive action to be taken.
 		///
@@ -1178,14 +1191,26 @@ decl_module! {
 	}
 }
 
-// TODO: migrate referenda to new format.
-
-enum UnvoteScope {
-	Any,
-	OnlyExpired,
-}
-
 impl<T: Trait> Module<T> {
+	fn migrate() {
+		use frame_support::{Twox64Concat, migration::{StorageKeyIterator, remove_storage_prefix}};
+		remove_storage_prefix(b"Democracy", b"VotesOf", &[]);
+		remove_storage_prefix(b"Democracy", b"VotersFor", &[]);
+		remove_storage_prefix(b"Democracy", b"Delegations", &[]);
+		for (who, (end, proposal_hash, threshold, delay))
+			in StorageKeyIterator::<
+				ReferendumIndex,
+				(T::BlockNumber, T::Hash, VoteThreshold, T::BlockNumber),
+				Twox64Concat,
+			>::new(b"Democracy", b"ReferendumInfoOf").drain()
+		{
+			let status = ReferendumStatus {
+				end, proposal_hash, threshold, delay, tally: Tally::default()
+			};
+			ReferendumInfoOf::<T>::insert(who, ReferendumInfo::Ongoing(status))
+		}
+	}
+
 	// exposed immutables.
 
 	/// Get the amount locked in support of `proposal`; `None` if proposal isn't a valid proposal
