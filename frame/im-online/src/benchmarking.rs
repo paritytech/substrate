@@ -44,7 +44,7 @@ benchmarks! {
 	_{ }
 
 	heartbeat {
-		let k in 0 .. MAX_KEYS;
+		let k in 1 .. MAX_KEYS;
 
 		let mut keys = Vec::new();
 		for i in 0 .. k {
