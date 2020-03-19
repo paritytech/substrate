@@ -9,7 +9,7 @@ This json is intended to be copy/pasted this way:
 1. Create a new Dashboard in your grafana
 2. Go to configuration ( gear at top right bar )
 3. Go to JSON Model ( last option of left menu )
-4. Overwrite the content of the current JSON Model with this json
+4. Overwrite the content of the current JSON Model with [THIS json](substrate-dashboard.json)
 
 ### Prometheus job template
 
@@ -36,7 +36,7 @@ This Dashboard uses 2 grafana variables. They will allow you to monitor in the s
 
 ![](images/grafana__variables.png)
 
-Variable definitions:
+#### Variable definitions:
 
 $network
 
