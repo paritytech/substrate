@@ -101,20 +101,20 @@ impl<
 
 	/// Increment some amount of votes.
 	pub fn increase(&mut self, approve: bool, votes: Balance, capital: Balance) -> Option<()> {
-		self.turnout = self.turnout.saturating_add(&capital)?;
+		self.turnout = self.turnout.saturating_add(capital);
 		match approve {
-			true => self.ayes = self.ayes.saturating_add(&votes)?,
-			false => self.nays = self.nays.saturating_add(&votes)?,
+			true => self.ayes = self.ayes.saturating_add(votes),
+			false => self.nays = self.nays.saturating_add(votes),
 		}
 		Some(())
 	}
 
 	/// Decrement some amount of votes.
 	pub fn reduce(&mut self, approve: bool, votes: Balance, capital: Balance) -> Option<()> {
-		self.turnout = self.turnout.saturating_sub(&capital)?;
+		self.turnout = self.turnout.saturating_sub(capital);
 		match approve {
-			true => self.ayes = self.ayes.saturating_sub(&votes)?,
-			false => self.nays = self.nays.saturating_sub(&votes)?,
+			true => self.ayes = self.ayes.saturating_sub(votes),
+			false => self.nays = self.nays.saturating_sub(votes),
 		}
 		Some(())
 	}
