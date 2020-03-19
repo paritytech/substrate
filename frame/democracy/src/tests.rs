@@ -37,25 +37,25 @@ const BIG_AYE: Vote = Vote{ aye: true, conviction: Conviction::Locked1x };
 const BIG_NAY: Vote = Vote{ aye: false, conviction: Conviction::Locked1x };
 
 impl_outer_origin! {
-		pub enum Origin for Test  where system = frame_system {}
-	}
+	pub enum Origin for Test  where system = frame_system {}
+}
 
 impl_outer_dispatch! {
-		pub enum Call for Test where origin: Origin {
-			pallet_balances::Balances,
-			democracy::Democracy,
-		}
+	pub enum Call for Test where origin: Origin {
+		pallet_balances::Balances,
+		democracy::Democracy,
 	}
+}
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Test;
 parameter_types! {
-		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: Weight = 1024;
-		pub const MaximumBlockLength: u32 = 2 * 1024;
-		pub const AvailableBlockRatio: Perbill = Perbill::one();
-	}
+	pub const BlockHashCount: u64 = 250;
+	pub const MaximumBlockWeight: Weight = 1024;
+	pub const MaximumBlockLength: u32 = 2 * 1024;
+	pub const AvailableBlockRatio: Perbill = Perbill::one();
+}
 impl frame_system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
@@ -78,8 +78,8 @@ impl frame_system::Trait for Test {
 	type OnKilledAccount = ();
 }
 parameter_types! {
-		pub const ExistentialDeposit: u64 = 1;
-	}
+	pub const ExistentialDeposit: u64 = 1;
+}
 impl pallet_balances::Trait for Test {
 	type Balance = u64;
 	type Event = ();
@@ -88,20 +88,20 @@ impl pallet_balances::Trait for Test {
 	type AccountStore = System;
 }
 parameter_types! {
-		pub const LaunchPeriod: u64 = 2;
-		pub const VotingPeriod: u64 = 2;
-		pub const FastTrackVotingPeriod: u64 = 1;
-		pub const MinimumDeposit: u64 = 1;
-		pub const EnactmentPeriod: u64 = 2;
-		pub const CooloffPeriod: u64 = 2;
-	}
+	pub const LaunchPeriod: u64 = 2;
+	pub const VotingPeriod: u64 = 2;
+	pub const FastTrackVotingPeriod: u64 = 1;
+	pub const MinimumDeposit: u64 = 1;
+	pub const EnactmentPeriod: u64 = 2;
+	pub const CooloffPeriod: u64 = 2;
+}
 ord_parameter_types! {
-		pub const One: u64 = 1;
-		pub const Two: u64 = 2;
-		pub const Three: u64 = 3;
-		pub const Four: u64 = 4;
-		pub const Five: u64 = 5;
-	}
+	pub const One: u64 = 1;
+	pub const Two: u64 = 2;
+	pub const Three: u64 = 3;
+	pub const Four: u64 = 4;
+	pub const Five: u64 = 5;
+}
 pub struct OneToFive;
 impl Contains<u64> for OneToFive {
 	fn sorted_members() -> Vec<u64> {
@@ -109,8 +109,8 @@ impl Contains<u64> for OneToFive {
 	}
 }
 thread_local! {
-		static PREIMAGE_BYTE_DEPOSIT: RefCell<u64> = RefCell::new(0);
-	}
+	static PREIMAGE_BYTE_DEPOSIT: RefCell<u64> = RefCell::new(0);
+}
 pub struct PreimageByteDeposit;
 impl Get<u64> for PreimageByteDeposit {
 	fn get() -> u64 { PREIMAGE_BYTE_DEPOSIT.with(|v| *v.borrow()) }
@@ -506,16 +506,16 @@ fn veto_external_works() {
 		assert!(!<NextExternal<Test>>::exists());
 		// fails - same proposal can't be resubmitted.
 		assert_noop!(Democracy::external_propose(
-				Origin::signed(2),
-				set_balance_proposal_hash(2),
-			), Error::<Test>::ProposalBlacklisted);
+			Origin::signed(2),
+			set_balance_proposal_hash(2),
+		), Error::<Test>::ProposalBlacklisted);
 
 		fast_forward_to(1);
 		// fails as we're still in cooloff period.
 		assert_noop!(Democracy::external_propose(
-				Origin::signed(2),
-				set_balance_proposal_hash(2),
-			), Error::<Test>::ProposalBlacklisted);
+			Origin::signed(2),
+			set_balance_proposal_hash(2),
+		), Error::<Test>::ProposalBlacklisted);
 
 		fast_forward_to(2);
 		// works; as we're out of the cooloff period.
@@ -539,14 +539,14 @@ fn veto_external_works() {
 		fast_forward_to(3);
 		// same proposal fails as we're still in cooloff
 		assert_noop!(Democracy::external_propose(
-				Origin::signed(2),
-				set_balance_proposal_hash(2),
-			), Error::<Test>::ProposalBlacklisted);
+			Origin::signed(2),
+			set_balance_proposal_hash(2),
+		), Error::<Test>::ProposalBlacklisted);
 		// different proposal works fine.
 		assert_ok!(Democracy::external_propose(
-				Origin::signed(2),
-				set_balance_proposal_hash_and_note(3),
-			));
+			Origin::signed(2),
+			set_balance_proposal_hash_and_note(3),
+		));
 	});
 }
 
@@ -558,17 +558,17 @@ fn external_referendum_works() {
 			Democracy::external_propose(
 				Origin::signed(1),
 				set_balance_proposal_hash(2),
-				),
-				BadOrigin,
-			);
+			),
+			BadOrigin,
+		);
 		assert_ok!(Democracy::external_propose(
 			Origin::signed(2),
 			set_balance_proposal_hash_and_note(2),
 		));
 		assert_noop!(Democracy::external_propose(
-				Origin::signed(2),
-				set_balance_proposal_hash(1),
-			), Error::<Test>::DuplicateProposal);
+			Origin::signed(2),
+			set_balance_proposal_hash(1),
+		), Error::<Test>::DuplicateProposal);
 		fast_forward_to(2);
 		assert_eq!(
 			Democracy::referendum_info(0),
@@ -590,13 +590,13 @@ fn external_majority_referendum_works() {
 			Democracy::external_propose_majority(
 				Origin::signed(1),
 				set_balance_proposal_hash(2)
-				),
-				BadOrigin,
-			);
+			),
+			BadOrigin,
+		);
 		assert_ok!(Democracy::external_propose_majority(
-				Origin::signed(3),
-				set_balance_proposal_hash_and_note(2)
-			));
+			Origin::signed(3),
+			set_balance_proposal_hash_and_note(2)
+		));
 		fast_forward_to(2);
 		assert_eq!(
 			Democracy::referendum_info(0),
@@ -618,13 +618,13 @@ fn external_default_referendum_works() {
 			Democracy::external_propose_default(
 				Origin::signed(3),
 				set_balance_proposal_hash(2)
-				),
-				BadOrigin,
-			);
+			),
+			BadOrigin,
+		);
 		assert_ok!(Democracy::external_propose_default(
-				Origin::signed(1),
-				set_balance_proposal_hash_and_note(2)
-			));
+			Origin::signed(1),
+			set_balance_proposal_hash_and_note(2)
+		));
 		fast_forward_to(2);
 		assert_eq!(
 			Democracy::referendum_info(0),
@@ -1253,25 +1253,25 @@ fn lock_voting_should_work() {
 			0
 		);
 		assert_ok!(Democracy::vote(Origin::signed(1), r, Vote {
-				aye: false,
-				conviction: Conviction::Locked5x
-			}));
+			aye: false,
+			conviction: Conviction::Locked5x
+		}));
 		assert_ok!(Democracy::vote(Origin::signed(2), r, Vote {
-				aye: true,
-				conviction: Conviction::Locked4x
-			}));
+			aye: true,
+			conviction: Conviction::Locked4x
+		}));
 		assert_ok!(Democracy::vote(Origin::signed(3), r, Vote {
-				aye: true,
-				conviction: Conviction::Locked3x
-			}));
+			aye: true,
+			conviction: Conviction::Locked3x
+		}));
 		assert_ok!(Democracy::vote(Origin::signed(4), r, Vote {
-				aye: true,
-				conviction: Conviction::Locked2x
-			}));
+			aye: true,
+			conviction: Conviction::Locked2x
+		}));
 		assert_ok!(Democracy::vote(Origin::signed(5), r, Vote {
-				aye: false,
-				conviction: Conviction::Locked1x
-			}));
+			aye: false,
+			conviction: Conviction::Locked1x
+		}));
 
 		assert_eq!(Democracy::tally(r), (250, 100, 150));
 
@@ -1333,9 +1333,9 @@ fn no_locks_without_conviction_should_work() {
 			0,
 		);
 		assert_ok!(Democracy::vote(Origin::signed(1), r, Vote {
-				aye: true,
-				conviction: Conviction::None,
-			}));
+			aye: true,
+			conviction: Conviction::None,
+		}));
 
 		fast_forward_to(2);
 
@@ -1355,22 +1355,22 @@ fn lock_voting_should_work_with_delegation() {
 			0
 		);
 		assert_ok!(Democracy::vote(Origin::signed(1), r, Vote {
-				aye: false,
-				conviction: Conviction::Locked5x
-			}));
+			aye: false,
+			conviction: Conviction::Locked5x
+		}));
 		assert_ok!(Democracy::vote(Origin::signed(2), r, Vote {
-				aye: true,
-				conviction: Conviction::Locked4x
-			}));
+			aye: true,
+			conviction: Conviction::Locked4x
+		}));
 		assert_ok!(Democracy::vote(Origin::signed(3), r, Vote {
-				aye: true,
-				conviction: Conviction::Locked3x
-			}));
+			aye: true,
+			conviction: Conviction::Locked3x
+		}));
 		assert_ok!(Democracy::delegate(Origin::signed(4), 2, Conviction::Locked2x));
 		assert_ok!(Democracy::vote(Origin::signed(5), r, Vote {
-				aye: false,
-				conviction: Conviction::Locked1x
-			}));
+			aye: false,
+			conviction: Conviction::Locked1x
+		}));
 
 		assert_eq!(Democracy::tally(r), (250, 100, 150));
 
