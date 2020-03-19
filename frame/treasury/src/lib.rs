@@ -211,6 +211,9 @@ decl_storage! {
 			map hasher(twox_64_concat) ProposalIndex
 			=> Option<Proposal<T::AccountId, BalanceOf<T>>>;
 
+		/// Amount of funds currently approved to spend.
+		AmountApproved get(fn amount_approved): BalanceOf<T>;
+
 		/// Tips that are not yet completed. Keyed by the hash of `(reason, who)` from the value.
 		/// This has the insecure enumerable hash function since the key itself is already
 		/// guaranteed to be a secure hash.
@@ -396,6 +399,7 @@ decl_module! {
 
 			let mut proposal = Proposals::<T>::get(proposal_id).ok_or(Error::<T>::InvalidProposalIndex)?;
 			proposal.approved = true;
+			AmountApproved::<T>::mutate(|amount| *amount += proposal.value);
 			Proposals::<T>::insert(proposal_id, proposal);
 		}
 
@@ -409,6 +413,7 @@ decl_module! {
 			// return the proposal deposit and clean up.
 			let _ = T::Currency::unreserve(&proposal.proposer, proposal.bond);
 			<Proposals<T>>::remove(proposal_id);
+			AmountApproved::<T>::mutate(|amount| *amount -= proposal.value);
 
 			Self::deposit_event(RawEvent::Awarded(proposal_id, proposal.value, proposal.beneficiary));
 		}
@@ -676,8 +681,13 @@ impl<T: Trait> Module<T> {
 
 	// Periodically burn funds
 	fn burn_funds() {
-		let mut budget_remaining = Self::pot();
+		let pot = Self::pot();
+		let amount_approved = Self::amount_approved();
 
+		// Only burn funds if we are in excess of approved funds.
+		if pot <= amount_approved { return }
+
+		let mut budget_remaining = pot - amount_approved;
 		let mut imbalance = <PositiveImbalanceOf<T>>::zero();
 		// burn some proportion of the remaining budget if we run a surplus.
 		let burn = (T::Burn::get() * budget_remaining).min(budget_remaining);
