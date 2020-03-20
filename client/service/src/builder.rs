@@ -1015,7 +1015,6 @@ ServiceBuilder<
 				)
 					.const_label("name", config.impl_name)
 					.const_label("version", config.impl_version)
-					.const_label("commit", config.impl_commit),
 			)?, &registry)?.set(1);
 			register(Gauge::<U64>::new(
 				"node_roles", "The roles the node is running as",
