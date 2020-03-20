@@ -484,20 +484,7 @@ decl_module! {
 		/// Set the new runtime code.
 		#[weight = SimpleDispatchInfo::FixedOperational(200_000)]
 		pub fn set_code(origin, code: Vec<u8>) {
-			ensure_root(origin)?;
-
-			let current_version = T::Version::get();
-			let new_version = sp_io::misc::runtime_version(&code)
-				.and_then(|v| RuntimeVersion::decode(&mut &v[..]).ok())
-				.ok_or_else(|| Error::<T>::FailedToExtractRuntimeVersion)?;
-
-			if new_version.spec_name != current_version.spec_name {
-				Err(Error::<T>::InvalidSpecName)?
-			}
-
-			if new_version.spec_version <= current_version.spec_version {
-				Err(Error::<T>::SpecVersionNeedsToIncrease)?
-			}
+			Self::can_set_code(origin, &code)?;
 
 			storage::unhashed::put_raw(well_known_keys::CODE, &code);
 			Self::deposit_event(RawEvent::CodeUpdated);
@@ -1008,6 +995,32 @@ impl<T: Trait> Module<T> {
 			}
 			Module::<T>::on_killed_account(who.clone());
 		}
+	}
+
+	/// Determine whether or not it is possible to update the code.
+	///
+	/// This function has no side effects and is idempotent, but is fairly
+	/// heavy. It is automatically called by `set_code`; in most cases,
+	/// a direct call to `set_code` is preferable. It is useful to call
+	/// `can_set_code` when it is desirable to perform the appropriate
+	/// runtime checks without actually changing the code yet.
+	pub fn can_set_code(origin: T::Origin, code: &[u8]) -> Result<(), sp_runtime::DispatchError> {
+		ensure_root(origin)?;
+
+		let current_version = T::Version::get();
+		let new_version = sp_io::misc::runtime_version(&code)
+			.and_then(|v| RuntimeVersion::decode(&mut &v[..]).ok())
+			.ok_or_else(|| Error::<T>::FailedToExtractRuntimeVersion)?;
+
+		if new_version.spec_name != current_version.spec_name {
+			Err(Error::<T>::InvalidSpecName)?
+		}
+
+		if new_version.spec_version <= current_version.spec_version {
+			Err(Error::<T>::SpecVersionNeedsToIncrease)?
+		}
+
+		Ok(())
 	}
 }
 
