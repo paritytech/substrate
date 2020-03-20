@@ -2846,7 +2846,7 @@ fn crypto_hashes() {
 			vec![],
 		));
 		// Perform the call.
-		let input = b"\x00_DEAD_BEEF";
+		let input = b"\x01_DEAD_BEEF";
 		let result = <Module<Test>>::bare_call(
 			ALICE,
 			BOB,
