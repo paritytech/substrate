@@ -345,7 +345,7 @@ mod tests {
 	use sp_runtime::{
 		Perbill,
 		testing::Header,
-		traits::{BlakeTwo256, IdentityLookup, Identity, OnInitialize},
+		traits::{BlakeTwo256, IdentityLookup, Identity, OnRuntimeUpgrade},
 	};
 	use sp_storage::Storage;
 
@@ -484,7 +484,7 @@ mod tests {
 		];
 		s.top = data.into_iter().collect();
 		sp_io::TestExternalities::new(s).execute_with(|| {
-			Balances::on_initialize(1);
+			Balances::on_runtime_upgrade();
 			assert_eq!(Balances::free_balance(6), 60);
 			assert_eq!(Balances::usable_balance(&6), 30);
 			System::set_block_number(2);
