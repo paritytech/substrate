@@ -16,9 +16,9 @@
 
 use sp_std::prelude::*;
 use sp_std::borrow::Borrow;
-use codec::{Ref, FullCodec, FullEncode, Decode, Encode, EncodeLike, EncodeAppend};
+use codec::{Ref, FullCodec, Decode, Encode, EncodeLike, EncodeAppend};
 use crate::{storage::{self, unhashed}, traits::Len};
-use crate::hash::{StorageHasher, Twox128, ReversibleStorageHasher};
+use crate::hash::{StorageHasher, Twox128, StorageHasherInfo};
 
 /// Generator for `StorageDoubleMap` used by `decl_storage`.
 ///
@@ -40,15 +40,15 @@ use crate::hash::{StorageHasher, Twox128, ReversibleStorageHasher};
 /// If the key2s are not trusted (e.g. can be set by a user), a cryptographic `hasher` such as
 /// `blake2_256` must be used for Hasher2. Otherwise, other items in storage with the same first
 /// key can be compromised.
-pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
+pub trait StorageDoubleMap<K1: FullCodec, K2: FullCodec, V: FullCodec> {
 	/// The type that get/take returns.
 	type Query;
 
 	/// Hasher for the first key.
-	type Hasher1: StorageHasher;
+	type Hasher1: StorageHasher + StorageHasherInfo<K1>;
 
 	/// Hasher for the second key.
-	type Hasher2: StorageHasher;
+	type Hasher2: StorageHasher + StorageHasherInfo<K2>;
 
 	/// Module prefix. Used for generating final key.
 	fn module_prefix() -> &'static [u8];
@@ -124,12 +124,14 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 }
 
 impl<K1, K2, V, G> storage::StorageDoubleMap<K1, K2, V> for G where
-	K1: FullEncode,
-	K2: FullEncode,
+	K1: FullCodec,
+	K2: FullCodec,
 	V: FullCodec,
 	G: StorageDoubleMap<K1, K2, V>,
 {
 	type Query = G::Query;
+	type Hasher1 = G::Hasher1;
+	type Hasher2 = G::Hasher2;
 
 	fn hashed_key_for<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Vec<u8> where
 		KArg1: EncodeLike<K1>,
@@ -208,14 +210,19 @@ impl<K1, K2, V, G> storage::StorageDoubleMap<K1, K2, V> for G where
 		unhashed::kill_prefix(Self::storage_double_map_final_key1(k1).as_ref())
 	}
 
-	fn iter_prefix<KArg1>(k1: KArg1) -> storage::PrefixIterator<V> where
+	fn remove_all() {
+		sp_io::storage::clear_prefix(&Self::prefix_hash())
+	}
+
+	fn iter_prefix_value<KArg1>(k1: KArg1) -> storage::PrefixIterator<V> where
 		KArg1: ?Sized + EncodeLike<K1>
 	{
 		let prefix = Self::storage_double_map_final_key1(k1);
-		storage::PrefixIterator::<V> {
+		storage::PrefixIterator {
 			prefix: prefix.clone(),
 			previous_key: prefix,
-			phantom_data: Default::default(),
+			drain: false,
+			closure: |_raw_key, mut raw_value| V::decode(&mut raw_value),
 		}
 	}
 
@@ -332,80 +339,90 @@ impl<K1, K2, V, G> storage::StorageDoubleMap<K1, K2, V> for G where
 			value
 		})
 	}
-}
 
-/// Utility to iterate through items in a storage map.
-pub struct MapIterator<K, V, Hasher> {
-	prefix: Vec<u8>,
-	previous_key: Vec<u8>,
-	drain: bool,
-	_phantom: ::sp_std::marker::PhantomData<(K, V, Hasher)>,
-}
-
-impl<
-	K: Decode + Sized,
-	V: Decode + Sized,
-	Hasher: ReversibleStorageHasher
-> Iterator for MapIterator<K, V, Hasher> {
-	type Item = (K, V);
-
-	fn next(&mut self) -> Option<(K, V)> {
-		loop {
-			let maybe_next = sp_io::storage::next_key(&self.previous_key)
-				.filter(|n| n.starts_with(&self.prefix));
-			break match maybe_next {
-				Some(next) => {
-					self.previous_key = next;
-					match unhashed::get::<V>(&self.previous_key) {
-						Some(value) => {
-							if self.drain {
-								unhashed::kill(&self.previous_key)
-							}
-							let mut key_material = Hasher::reverse(&self.previous_key[self.prefix.len()..]);
-							match K::decode(&mut key_material) {
-								Ok(key) => Some((key, value)),
-								Err(_) => continue,
-							}
-						}
-						None => continue,
-					}
-				}
-				None => None,
-			}
-		}
-	}
-}
-
-impl<
-	K1: FullCodec,
-	K2: FullCodec,
-	V: FullCodec,
-	G: StorageDoubleMap<K1, K2, V>,
-> storage::IterableStorageDoubleMap<K1, K2, V> for G where
-	G::Hasher1: ReversibleStorageHasher,
-	G::Hasher2: ReversibleStorageHasher
-{
-	type Iterator = MapIterator<K2, V, G::Hasher2>;
-
-	/// Enumerate all elements in the map.
-	fn iter(k1: impl EncodeLike<K1>) -> Self::Iterator {
+	fn iter_prefix_key2_value(k1: impl EncodeLike<K1>) -> storage::PrefixIterator<(K2, V)> where
+		Self::Hasher2: StorageHasherInfo<K2, Info=K2>,
+	{
 		let prefix = G::storage_double_map_final_key1(k1);
-		Self::Iterator {
+		storage::PrefixIterator {
 			prefix: prefix.clone(),
 			previous_key: prefix,
 			drain: false,
-			_phantom: Default::default(),
+			closure: |raw_key, raw_value| {
+				from_raw_to_key_info_value::<_, _, _, G>(raw_key, raw_value)
+					.map(|(_k1, k2, v)| (k2, v))
+			}
 		}
 	}
 
-	/// Enumerate all elements in the map.
-	fn drain(k1: impl EncodeLike<K1>) -> Self::Iterator {
+	fn drain_prefix_key2_value(k1: impl EncodeLike<K1>) -> storage::PrefixIterator<(K2, V)> where
+		Self::Hasher2: StorageHasherInfo<K2, Info=K2>,
+	{
 		let prefix = G::storage_double_map_final_key1(k1);
-		Self::Iterator {
+		storage::PrefixIterator {
 			prefix: prefix.clone(),
 			previous_key: prefix,
 			drain: true,
-			_phantom: Default::default(),
+			closure: |raw_key, raw_value| {
+				from_raw_to_key_info_value::<_, _, _, G>(raw_key, raw_value)
+					.map(|(_k1, k2, v)| (k2, v))
+			}
+		}
+	}
+
+	fn iter_key1_value() -> storage::PrefixIterator<(K1, V)> where
+		Self::Hasher1: StorageHasherInfo<K1, Info=K1>,
+	{
+		let prefix = G::prefix_hash();
+		storage::PrefixIterator {
+			prefix: prefix.clone(),
+			previous_key: prefix,
+			drain: false,
+			closure: |raw_key, raw_value| {
+				from_raw_to_key_info_value::<_, _, _, G>(raw_key, raw_value)
+					.map(|(k1, _k2, v)| (k1, v))
+			}
+		}
+	}
+
+	fn iter_key2_value() -> storage::PrefixIterator<(K2, V)> where
+		Self::Hasher2: StorageHasherInfo<K2, Info=K2>,
+	{
+		let prefix = G::prefix_hash();
+		storage::PrefixIterator {
+			prefix: prefix.clone(),
+			previous_key: prefix,
+			drain: false,
+			closure: |raw_key, raw_value| {
+				from_raw_to_key_info_value::<_, _, _, G>(raw_key, raw_value)
+					.map(|(_k1, k2, v)| (k2, v))
+			}
+		}
+	}
+
+	fn iter_key1_key2_value() -> storage::PrefixIterator<(K1, K2, V)> where
+		Self::Hasher1: StorageHasherInfo<K1, Info=K1>,
+		Self::Hasher2: StorageHasherInfo<K2, Info=K2>,
+	{
+		let prefix = G::prefix_hash();
+		storage::PrefixIterator {
+			prefix: prefix.clone(),
+			previous_key: prefix,
+			drain: false,
+			closure: |raw_key, raw_value| {
+				from_raw_to_key_info_value::<_, _, _, G>(raw_key, raw_value)
+					.map(|(k1, k2, v)| (k1, k2, v))
+			}
+		}
+	}
+
+	fn iter_value() -> storage::PrefixIterator<V> {
+		let prefix = G::prefix_hash();
+		storage::PrefixIterator {
+			prefix: prefix.clone(),
+			previous_key: prefix,
+			drain: false,
+			closure: |_raw_key, mut raw_value| V::decode(&mut raw_value),
 		}
 	}
 
@@ -422,13 +439,50 @@ impl<
 							Some(new) => unhashed::put::<V>(&previous_key, &new),
 							None => unhashed::kill(&previous_key),
 						},
-						None => continue,
+						None => {
+							crate::debug::error!(
+								"next_key returned a key which failed to decode at {:?}",
+								previous_key
+							);
+							continue
+						}
 					}
 				}
 				None => return,
 			}
 		}
 	}
+}
+
+fn from_raw_to_key_info_value<K1, K2, V, G>(
+	raw_key: &[u8],
+	mut raw_value: &[u8]
+) ->
+	Result<
+		(
+			<G::Hasher1 as StorageHasherInfo<K1>>::Info,
+			<G::Hasher2 as StorageHasherInfo<K2>>::Info,
+			V,
+		),
+		codec::Error,
+	>
+where
+	K1: FullCodec,
+	K2: FullCodec,
+	V: FullCodec,
+	G: StorageDoubleMap<K1, K2, V>,
+{
+	let prefix_hash = G::prefix_hash();
+	if raw_key.len() < prefix_hash.len() {
+		return Err("Input length is too small".into())
+	}
+
+	let mut decode_key_input = &raw_key[prefix_hash.len()..];
+	let key1 = G::Hasher1::decode_hash_and_then_info(&mut decode_key_input)?;
+	let key2 = G::Hasher2::decode_hash_and_then_info(&mut decode_key_input)?;
+	let value = V::decode(&mut raw_value)?;
+
+	Ok((key1, key2, value))
 }
 
 #[cfg(test)]
@@ -456,8 +510,8 @@ mod test {
 			MyStorage::insert(2, 5, 9);
 			MyStorage::insert(2, 6, 10);
 
-			assert_eq!(MyStorage::iter_prefix(1).collect::<Vec<_>>(), vec![7, 8]);
-			assert_eq!(MyStorage::iter_prefix(2).collect::<Vec<_>>(), vec![10, 9]);
+			assert_eq!(MyStorage::iter_prefix_value(1).collect::<Vec<_>>(), vec![7, 8]);
+			assert_eq!(MyStorage::iter_prefix_value(2).collect::<Vec<_>>(), vec![10, 9]);
 		});
 	}
 }

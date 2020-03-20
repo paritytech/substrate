@@ -67,7 +67,6 @@ use proc_macro::TokenStream;
 /// * Map: `Foo: map hasher($hash) type => type`: Implements the
 ///   [`StorageMap`](../frame_support/storage/trait.StorageMap.html) trait using the
 ///   [`StorageMap generator`](../frame_support/storage/generator/trait.StorageMap.html).
-///   And [`StoragePrefixedMap`](../frame_support/storage/trait.StoragePrefixedMap.html).
 ///
 ///   `$hash` representing a choice of hashing algorithms available in the
 ///   [`Hashable`](../frame_support/trait.Hashable.html) trait. You will generally want to use one
@@ -106,7 +105,6 @@ use proc_macro::TokenStream;
 /// * Double map: `Foo: double_map hasher($hash1) u32, hasher($hash2) u32 => u32`: Implements the
 ///   [`StorageDoubleMap`](../frame_support/storage/trait.StorageDoubleMap.html) trait using the
 ///   [`StorageDoubleMap generator`](../frame_support/storage/generator/trait.StorageDoubleMap.html).
-///   And [`StoragePrefixedMap`](../frame_support/storage/trait.StoragePrefixedMap.html).
 ///
 ///   `$hash1` and `$hash2` representing choices of hashing algorithms available in the
 ///   [`Hashable`](../frame_support/trait.Hashable.html) trait. They must be chosen with care, see

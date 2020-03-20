@@ -36,7 +36,7 @@ pub use value::StorageValue;
 mod tests {
 	use sp_io::TestExternalities;
 	use codec::Encode;
-	use crate::storage::{unhashed, generator::StorageValue, IterableStorageMap};
+	use crate::storage::{unhashed, generator::StorageValue};
 
 	struct Runtime {}
 	pub trait Trait {
@@ -89,15 +89,15 @@ mod tests {
 			}
 
 			assert_eq!(
-				NumberMap::iter().collect::<Vec<_>>(),
+				NumberMap::iter_key_value().collect::<Vec<_>>(),
 				(0..100).map(|x| (x as u32, x as u64)).collect::<Vec<_>>(),
 			);
 
 			// do translation.
-			NumberMap::translate(|k: u32, v: u64| if k % 2 == 0 { Some((k as u64) << 32 | v) } else { None });
+			NumberMap::translate_key_value(|k: u32, v: u64| if k % 2 == 0 { Some((k as u64) << 32 | v) } else { None });
 
 			assert_eq!(
-				NumberMap::iter().collect::<Vec<_>>(),
+				NumberMap::iter_key_value().collect::<Vec<_>>(),
 				(0..50u32).map(|x| x * 2).map(|x| (x, (x as u64) << 32 | x as u64)).collect::<Vec<_>>(),
 			);
 		})
