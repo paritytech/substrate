@@ -298,7 +298,6 @@ use sp_staking::{
 };
 #[cfg(feature = "std")]
 use sp_runtime::{Serialize, Deserialize};
-<<<<<<< HEAD
 use frame_system::{
 	self as system, ensure_signed, ensure_root, ensure_none,
 	offchain::SubmitUnsignedTransaction,
@@ -307,11 +306,6 @@ use sp_phragmen::{
 	ExtendedBalance, Assignment, PhragmenScore, PhragmenResult, build_support_map, evaluate_support,
 	elect, generate_compact_solution_type, is_score_better, VotingLimit, SupportMap,
 };
-=======
-use frame_system::{self as system, ensure_signed, ensure_root};
-
-use sp_phragmen::ExtendedBalance;
->>>>>>> 653c89f6bb4e069bdf2af8be97b7c6b01bc62921
 
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 const STAKING_ID: LockIdentifier = *b"staking ";
