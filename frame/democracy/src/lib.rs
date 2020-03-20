@@ -170,7 +170,6 @@ use frame_system::{self as system, ensure_signed, ensure_root};
 
 mod vote_threshold;
 pub use vote_threshold::{Approved, VoteThreshold};
-use frame_support::traits::MigrateAccount;
 
 const DEMOCRACY_ID: LockIdentifier = *b"democrac";
 
@@ -584,40 +583,9 @@ decl_error! {
 	}
 }
 
-impl<T: Trait> MigrateAccount<T::AccountId> for Module<T> {
-	fn migrate_account(a: &T::AccountId) {
-		Proxy::<T>::migrate_key_from_blake(a);
-		Locks::<T>::migrate_key_from_blake(a);
-		Delegations::<T>::migrate_key_from_blake(a);
-		for i in LowestUnbaked::get()..ReferendumCount::get() {
-			VoteOf::<T>::migrate_key_from_blake((i, a));
-		}
-	}
-}
-
-mod migration {
-	use super::*;
-	pub fn migrate<T: Trait>() {
-		Blacklist::<T>::remove_all();
-		Cancellations::<T>::remove_all();
-		for i in LowestUnbaked::get()..ReferendumCount::get() {
-			VotersFor::<T>::migrate_key_from_blake(i);
-			ReferendumInfoOf::<T>::migrate_key_from_blake(i);
-		}
-		for (p, h, _) in PublicProps::<T>::get().into_iter() {
-			DepositOf::<T>::migrate_key_from_blake(p);
-			Preimages::<T>::migrate_key_from_blake(h);
-		}
-	}
-}
-
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
-
-		fn on_runtime_upgrade() {
-			migration::migrate::<T>();
-		}
 
 		/// The minimum period of locking and the period between a proposal being approved and enacted.
 		///
@@ -1639,7 +1607,7 @@ mod tests {
 		type Version = ();
 		type ModuleToIndex = ();
 		type AccountData = pallet_balances::AccountData<u64>;
-		type MigrateAccount = (); type OnNewAccount = ();
+		type OnNewAccount = ();
 		type OnKilledAccount = ();
 	}
 	parameter_types! {

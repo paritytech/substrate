@@ -116,7 +116,7 @@ use frame_support::{
 	decl_module, decl_event, decl_storage, decl_error, storage, Parameter, ensure, debug,
 	traits::{
 		Contains, Get, ModuleToIndex, OnNewAccount, OnKilledAccount, IsDeadAccount, Happened,
-		StoredMap, MigrateAccount,
+		StoredMap,
 	},
 	weights::{Weight, DispatchInfo, DispatchClass, SimpleDispatchInfo, FunctionOf},
 };
@@ -126,7 +126,6 @@ use codec::{Encode, Decode, FullCodec, EncodeLike};
 use sp_io::TestExternalities;
 
 pub mod offchain;
-mod migration;
 
 /// Compute the trie root of a list of extrinsics.
 pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output {
@@ -222,9 +221,6 @@ pub trait Trait: 'static + Eq + Clone {
 	///
 	/// All resources should be cleaned up associated with the given account.
 	type OnKilledAccount: OnKilledAccount<Self::AccountId>;
-
-	/// Migrate an account.
-	type MigrateAccount: MigrateAccount<Self::AccountId>;
 }
 
 pub type DigestOf<T> = generic::Digest<<T as Trait>::Hash>;
@@ -460,15 +456,6 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
-		fn on_runtime_upgrade() {
-			migration::migrate::<T>();
-
-			// Remove the old `RuntimeUpgraded` storage entry.
-			let mut runtime_upgraded_key = sp_io::hashing::twox_128(b"System").to_vec();
-			runtime_upgraded_key.extend(&sp_io::hashing::twox_128(b"RuntimeUpgraded"));
-			sp_io::storage::clear(&runtime_upgraded_key);
-		}
-
 		/// A dispatch that will fill the block weight up to the given ratio.
 		// TODO: This should only be available for testing, rather than in general usage, but
 		// that's not possible at present (since it's within the decl_module macro).
@@ -497,20 +484,7 @@ decl_module! {
 		/// Set the new runtime code.
 		#[weight = SimpleDispatchInfo::FixedOperational(200_000)]
 		pub fn set_code(origin, code: Vec<u8>) {
-			ensure_root(origin)?;
-
-			let current_version = T::Version::get();
-			let new_version = sp_io::misc::runtime_version(&code)
-				.and_then(|v| RuntimeVersion::decode(&mut &v[..]).ok())
-				.ok_or_else(|| Error::<T>::FailedToExtractRuntimeVersion)?;
-
-			if new_version.spec_name != current_version.spec_name {
-				Err(Error::<T>::InvalidSpecName)?
-			}
-
-			if new_version.spec_version <= current_version.spec_version {
-				Err(Error::<T>::SpecVersionNeedsToIncrease)?
-			}
+			Self::can_set_code(origin, &code)?;
 
 			storage::unhashed::put_raw(well_known_keys::CODE, &code);
 			Self::deposit_event(RawEvent::CodeUpdated);
@@ -576,21 +550,6 @@ decl_module! {
 			ensure!(account.refcount == 0, Error::<T>::NonZeroRefCount);
 			ensure!(account.data == T::AccountData::default(), Error::<T>::NonDefaultComposite);
 			Account::<T>::remove(who);
-		}
-
-		#[weight = FunctionOf(
-			|(accounts,): (&Vec<T::AccountId>,)| accounts.len() as u32 * 10_000,
-			DispatchClass::Normal,
-			true,
-		)]
-		fn migrate_accounts(origin, accounts: Vec<T::AccountId>) {
-			let _ = ensure_signed(origin)?;
-			for a in &accounts {
-				if Account::<T>::migrate_key_from_blake(a).is_some() {
-					// Inform other modules about the account.
-					T::MigrateAccount::migrate_account(a);
-				}
-			}
 		}
 	}
 }
@@ -1036,6 +995,32 @@ impl<T: Trait> Module<T> {
 			}
 			Module::<T>::on_killed_account(who.clone());
 		}
+	}
+
+	/// Determine whether or not it is possible to update the code.
+	///
+	/// This function has no side effects and is idempotent, but is fairly
+	/// heavy. It is automatically called by `set_code`; in most cases,
+	/// a direct call to `set_code` is preferable. It is useful to call
+	/// `can_set_code` when it is desirable to perform the appropriate
+	/// runtime checks without actually changing the code yet.
+	pub fn can_set_code(origin: T::Origin, code: &[u8]) -> Result<(), sp_runtime::DispatchError> {
+		ensure_root(origin)?;
+
+		let current_version = T::Version::get();
+		let new_version = sp_io::misc::runtime_version(&code)
+			.and_then(|v| RuntimeVersion::decode(&mut &v[..]).ok())
+			.ok_or_else(|| Error::<T>::FailedToExtractRuntimeVersion)?;
+
+		if new_version.spec_name != current_version.spec_name {
+			Err(Error::<T>::InvalidSpecName)?
+		}
+
+		if new_version.spec_version <= current_version.spec_version {
+			Err(Error::<T>::SpecVersionNeedsToIncrease)?
+		}
+
+		Ok(())
 	}
 }
 
@@ -1570,7 +1555,7 @@ mod tests {
 		type Version = Version;
 		type ModuleToIndex = ();
 		type AccountData = u32;
-		type MigrateAccount = (); type OnNewAccount = ();
+		type OnNewAccount = ();
 		type OnKilledAccount = RecordKilled;
 	}
 
