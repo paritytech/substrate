@@ -76,6 +76,6 @@ fn single_proposal_should_work_with_proxy() {
 		assert_ok!(Democracy::activate_proxy(Origin::signed(1), 10));
 		assert_ok!(Democracy::proxy_vote(Origin::signed(10), r, aye(1)));
 
-		assert_eq!(tally(r), Tally { ayes: 1, nays: 0, turnout: 1 });
+		assert_eq!(tally(r), Tally { ayes: 1, nays: 0, turnout: 10 });
 	});
 }

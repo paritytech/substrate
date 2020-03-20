@@ -94,16 +94,13 @@ impl Conviction {
 	pub fn votes<
 		B: From<u8> + Zero + Copy + CheckedMul + CheckedDiv + Bounded
 	>(self, balance: B) -> (B, B) {
-		match self {
-			Conviction::None => {
-				let r = balance.checked_div(&10u8.into()).unwrap_or_else(Zero::zero);
-				(r, r)
-			}
-			x => (
-				balance.checked_mul(&u8::from(x).into()).unwrap_or_else(B::max_value),
-				balance,
-			)
-		}
+		(
+			match self {
+				Conviction::None => balance.checked_div(&10u8.into()).unwrap_or_else(Zero::zero),
+				x => balance.checked_mul(&u8::from(x).into()).unwrap_or_else(B::max_value),
+			},
+			balance
+		)
 	}
 }
 
@@ -111,7 +108,6 @@ impl Bounded for Conviction {
 	fn min_value() -> Self {
 		Conviction::None
 	}
-
 	fn max_value() -> Self {
 		Conviction::Locked6x
 	}

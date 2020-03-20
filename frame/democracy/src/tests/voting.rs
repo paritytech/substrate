@@ -39,7 +39,7 @@ fn single_proposal_should_work() {
 				proposal_hash: set_balance_proposal_hash_and_note(2),
 				threshold: VoteThreshold::SuperMajorityApprove,
 				delay: 2,
-				tally: Tally { ayes: 1, nays: 0, turnout: 1 },
+				tally: Tally { ayes: 1, nays: 0, turnout: 10 },
 			})
 		);
 
