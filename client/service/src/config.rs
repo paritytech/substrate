@@ -135,51 +135,7 @@ pub enum DatabaseConfig {
 	Custom(Arc<dyn KeyValueDB>),
 }
 
-// TODO: I don't think we can define a default at all. Is this useful only for testing?
-/*
-impl<G, E> Default for Configuration<G, E> {
-	/// Create a default config
-	fn default() -> Self {
-		Configuration {
-			impl_name: "parity-substrate",
-			impl_version: "0.0.0",
-			impl_commit: "",
-			chain_spec: None,
-			config_dir: None,
-			name: Default::default(),
-			roles: Roles::FULL,
-			task_executor: None,
-			transaction_pool: Default::default(),
-			network: Default::default(),
-			keystore: KeystoreConfig::None,
-			database: None,
-			state_cache_size: Default::default(),
-			state_cache_child_ratio: Default::default(),
-			pruning: PruningMode::default(),
-			wasm_method: WasmExecutionMethod::Interpreted,
-			execution_strategies: Default::default(),
-			rpc_http: None,
-			rpc_ws: None,
-			rpc_ws_max_connections: None,
-			rpc_cors: Some(vec![]),
-			prometheus_port: None,
-			telemetry_endpoints: None,
-			telemetry_external_transport: None,
-			default_heap_pages: None,
-			offchain_worker: Default::default(),
-			sentry_mode: false,
-			force_authoring: false,
-			disable_grandpa: false,
-			dev_key_seed: None,
-			tracing_targets: Default::default(),
-			tracing_receiver: Default::default(),
-		}
-	}
-}
-*/
-
 impl<G, E> Configuration<G, E> {
-	// TODO: move to sc_cli?
 	/// Returns a string displaying the node role, special casing the sentry mode
 	/// (returning `SENTRY`), since the node technically has an `AUTHORITY` role but
 	/// doesn't participate.
