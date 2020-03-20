@@ -365,8 +365,8 @@ macro_rules! ss58_address_format {
 
 		impl Ss58AddressFormat {
 			/// names of all address formats
-			pub fn all_names() -> Vec<&'static str> {
-				vec![
+			pub fn all_names() -> [&'static str; 0 $(+ { let _ = $number; 1})*] {
+				[
 					$($name),*,
 				]
 			}
@@ -405,13 +405,13 @@ macro_rules! ss58_address_format {
 		}
 
 		impl<'a> TryFrom<&'a str> for Ss58AddressFormat {
-			type Error = String;
+			type Error = &'static str;
 
-			fn try_from(x: &'a str) -> Result<Ss58AddressFormat, String> {
+			fn try_from(x: &'a str) -> Result<Ss58AddressFormat, &'static str> {
 				match x {
 					$($name => Ok(Ss58AddressFormat::$identifier)),*,
 					a => a.parse::<u8>().map(Ss58AddressFormat::Custom)
-						.map_err(|e| format!("failed to parse network value as u8 {:?}", e)),
+						.map_err(|_| "failed to parse network value as u8"),
 				}
 			}
 		}
