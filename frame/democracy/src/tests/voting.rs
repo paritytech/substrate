@@ -21,11 +21,34 @@ use super::*;
 #[test]
 fn overvoting_should_fail() {
 	new_test_ext().execute_with(|| {
-		System::set_block_number(0);
-		assert_ok!(propose_set_balance_and_note(1, 2, 1));
-		fast_forward_to(2);
-		let r = 0;
+		let r = begin_referendum();
 		assert_noop!(Democracy::vote(Origin::signed(1), r, aye(2)), Error::<Test>::InsufficientFunds);
+	});
+}
+
+#[test]
+fn split_voting_should_work() {
+	new_test_ext().execute_with(|| {
+		let r = begin_referendum();
+		let v = AccountVote::Split { aye: 40, nay: 20 };
+		assert_noop!(Democracy::vote(Origin::signed(5), r, v), Error::<Test>::InsufficientFunds);
+		let v = AccountVote::Split { aye: 30, nay: 20 };
+		assert_ok!(Democracy::vote(Origin::signed(5), r, v));
+
+		assert_eq!(tally(r), Tally { ayes: 3, nays: 2, turnout: 50 });
+	});
+}
+
+#[test]
+fn split_vote_cancellation_should_work() {
+	new_test_ext().execute_with(|| {
+		let r = begin_referendum();
+		let v = AccountVote::Split { aye: 30, nay: 20 };
+		assert_ok!(Democracy::vote(Origin::signed(5), r, v));
+		assert_ok!(Democracy::remove_vote(Origin::signed(5), r));
+		assert_eq!(tally(r), Tally { ayes: 0, nays: 0, turnout: 0 });
+		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
+		assert_eq!(Balances::locks(5), vec![]);
 	});
 }
 
@@ -34,12 +57,11 @@ fn single_proposal_should_work() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(0);
 		assert_ok!(propose_set_balance_and_note(1, 2, 1));
-		assert!(Democracy::referendum_info(0).is_none());
+		let r = 0;
+		assert!(Democracy::referendum_info(r).is_none());
 
 		// start of 2 => next referendum scheduled.
 		fast_forward_to(2);
-
-		let r = 0;
 		assert_ok!(Democracy::vote(Origin::signed(1), r, aye(1)));
 
 		assert_eq!(Democracy::referendum_count(), 1);

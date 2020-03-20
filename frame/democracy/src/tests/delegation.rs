@@ -140,11 +140,7 @@ fn single_proposal_should_work_with_undelegation() {
 fn single_proposal_should_work_with_delegation_and_vote() {
 	// If transactor voted, delegated vote is overwritten.
 	new_test_ext().execute_with(|| {
-		System::set_block_number(0);
-		assert_ok!(propose_set_balance_and_note(1, 2, 1));
-		fast_forward_to(2);
-		let r = 0;
-
+		let r = begin_referendum();
 		// Delegate, undelegate and vote.
 		assert_ok!(Democracy::vote(Origin::signed(1), r, aye(1)));
 		assert_ok!(Democracy::delegate(Origin::signed(2), 1, Conviction::None, 20));
@@ -160,15 +156,23 @@ fn single_proposal_should_work_with_delegation_and_vote() {
 fn conviction_should_be_honored_in_delegation() {
 	// If transactor voted, delegated vote is overwritten.
 	new_test_ext().execute_with(|| {
-		System::set_block_number(0);
-		assert_ok!(propose_set_balance_and_note(1, 2, 1));
-		fast_forward_to(2);
-		let r = 0;
-
+		let r = begin_referendum();
 		// Delegate, undelegate and vote.
 		assert_ok!(Democracy::delegate(Origin::signed(2), 1, Conviction::Locked6x, 20));
 		assert_ok!(Democracy::vote(Origin::signed(1), r, aye(1)));
 		// Delegated vote is huge.
 		assert_eq!(tally(r), Tally { ayes: 121, nays: 0, turnout: 30 });
+	});
+}
+
+#[test]
+fn split_vote_delegation_should_be_ignored() {
+	// If transactor voted, delegated vote is overwritten.
+	new_test_ext().execute_with(|| {
+		let r = begin_referendum();
+		assert_ok!(Democracy::delegate(Origin::signed(2), 1, Conviction::Locked6x, 20));
+		assert_ok!(Democracy::vote(Origin::signed(1), r, AccountVote::Split { aye: 10, nay: 0 }));
+		// Delegated vote is huge.
+		assert_eq!(tally(r), Tally { ayes: 1, nays: 0, turnout: 10 });
 	});
 }

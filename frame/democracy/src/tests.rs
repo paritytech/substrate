@@ -222,6 +222,13 @@ fn fast_forward_to(n: u64) {
 	}
 }
 
+fn begin_referendum() -> ReferendumIndex {
+	System::set_block_number(0);
+	assert_ok!(propose_set_balance_and_note(1, 2, 1));
+	fast_forward_to(2);
+	0
+}
+
 fn aye(who: u64) -> AccountVote<u64> {
 	AccountVote::Standard { vote: AYE, balance: Balances::free_balance(&who) }
 }
