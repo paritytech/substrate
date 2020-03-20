@@ -2846,16 +2846,39 @@ fn crypto_hashes() {
 			vec![],
 		));
 		// Perform the call.
-		let input = b"\x01_DEAD_BEEF";
-		let result = <Module<Test>>::bare_call(
-			ALICE,
-			BOB,
-			0,
-			100_000,
-			input.to_vec(),
-		).unwrap();
-		assert_eq!(result.status, 0);
-		let expected = sp_io::hashing::blake2_256(input[1..].as_ref());
-		assert_eq!(&result.data, &expected)
+		let input = b"_DEAD_BEEF";
+		use sp_io::hashing::*;
+		// Wraps a hash function into a more dynamic form usable for testing.
+		macro_rules! dyn_hash_fn {
+			($name:ident) => {
+				Box::new(|input| $name(input).as_ref().to_vec().into_boxed_slice())
+			};
+		}
+		// All hash functions and their associated output byte lengths.
+		let test_cases: &[(Box<dyn Fn(&[u8]) -> Box<[u8]>>, usize)] = &[
+			(dyn_hash_fn!(sha2_256), 32),
+			(dyn_hash_fn!(keccak_256), 32),
+			(dyn_hash_fn!(blake2_256), 32),
+			(dyn_hash_fn!(blake2_128), 16),
+			(dyn_hash_fn!(twox_256), 32),
+			(dyn_hash_fn!(twox_128), 16),
+			(dyn_hash_fn!(twox_64), 8),
+		];
+		// Test the given hash functions for the input: "_DEAD_BEEF"
+		for (n, (hash_fn, expected_size)) in test_cases.iter().enumerate() {
+			// We offset data in the contract tables by 1.
+			let mut params = vec![(n + 1) as u8];
+			params.extend_from_slice(input);
+			let result = <Module<Test>>::bare_call(
+				ALICE,
+				BOB,
+				0,
+				100_000,
+				params,
+			).unwrap();
+			assert_eq!(result.status, 0);
+			let expected = hash_fn(input.as_ref());
+			assert_eq!(&result.data[..*expected_size], &*expected);
+		}
 	})
 }
