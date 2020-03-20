@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use sc_cli::{spec_factory, SubstrateCLI, Result, CliConfiguration, substrate_cli_params};
+use sc_cli::{spec_factory, SubstrateCLI, Result};
 use sc_service::{
 	Configuration, RuntimeGenesis, ChainSpecExtension,
 };
@@ -75,10 +75,6 @@ pub fn run() -> Result<()>
 			)
 		},
 	}
-}
-
-#[substrate_cli_params(shared_params = shared_params, import_params = import_params)]
-impl CliConfiguration for FactoryCmd {
 }
 
 impl FactoryCmd {

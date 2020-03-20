@@ -41,6 +41,7 @@ use sc_client_api::execution_extensions::ExecutionStrategies;
 use crate::Result;
 use crate::SubstrateCLI;
 use crate::CliConfiguration;
+use crate::SubstrateCLISubcommands;
 use crate::params::SharedParams;
 pub use crate::commands::runcmd::RunCmd;
 pub use crate::commands::build_spec_cmd::BuildSpecCmd;
@@ -55,7 +56,7 @@ pub use crate::commands::purge_chain_cmd::PurgeChainCmd;
 /// The core commands are split into multiple subcommands and `Run` is the default subcommand. From
 /// the CLI user perspective, it is not visible that `Run` is a subcommand. So, all parameters of
 /// `Run` are exported as main executable parameters.
-#[derive(Debug, Clone, StructOpt)]
+#[derive(Debug, Clone, StructOpt, SubstrateCLISubcommands)]
 pub enum Subcommand {
 	/// Build a spec.json file, outputing to stdout.
 	BuildSpec(BuildSpecCmd),
@@ -105,79 +106,4 @@ impl Subcommand {
 	{
 		self.get_shared_params().init::<C, G, E>()
 	}
-}
-
-macro_rules! match_and_call {
-	(fn $method:ident ( &self $(, $arg:ident : $ty:ty)* ) $(-> $result:ty)?) => {
-		fn $method (&self, $($arg : $ty),*) $(-> $result)? {
-			match self {
-				Subcommand::BuildSpec(cmd) => cmd.$method($($arg),*),
-				Subcommand::ExportBlocks(cmd) => cmd.$method($($arg),*),
-				Subcommand::ImportBlocks(cmd) => cmd.$method($($arg),*),
-				Subcommand::CheckBlock(cmd) => cmd.$method($($arg),*),
-				Subcommand::Revert(cmd) => cmd.$method($($arg),*),
-				Subcommand::PurgeChain(cmd) => cmd.$method($($arg),*),
-			}
-		}
-	};
-
-	(fn $method:ident <C: SubstrateCLI<G, E>, G, E> ( &self $(, $arg:ident : $ty:ty)* ) $(-> $result:ty)?
-	where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-	) => {
-		fn $method <C: SubstrateCLI<G, E>, G, E> (&self, $($arg : $ty),*) $(-> $result)?
-		where
-			G: RuntimeGenesis,
-			E: ChainSpecExtension,
-		{
-			match self {
-				Subcommand::BuildSpec(cmd) => cmd.$method::<C, G, E>($($arg),*),
-				Subcommand::ExportBlocks(cmd) => cmd.$method::<C, G, E>($($arg),*),
-				Subcommand::ImportBlocks(cmd) => cmd.$method::<C, G, E>($($arg),*),
-				Subcommand::CheckBlock(cmd) => cmd.$method::<C, G, E>($($arg),*),
-				Subcommand::Revert(cmd) => cmd.$method::<C, G, E>($($arg),*),
-				Subcommand::PurgeChain(cmd) => cmd.$method::<C, G, E>($($arg),*),
-			}
-		}
-	};
-}
-
-impl CliConfiguration for Subcommand
-{
-	match_and_call! { fn get_base_path(&self) -> Result<Option<&PathBuf>> }
-
-	match_and_call! { fn is_dev(&self) -> bool }
-
-	match_and_call! { fn get_database_config(&self, base_path: &PathBuf, cache_size: Option<usize>) -> Result<DatabaseConfig> }
-
-	match_and_call! {
-		fn get_chain_spec<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<ChainSpec<G, E>>
-		where
-			G: RuntimeGenesis,
-			E: ChainSpecExtension,
-	}
-
-	match_and_call! {
-		fn init<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<()>
-		where
-			G: RuntimeGenesis,
-			E: ChainSpecExtension,
-	}
-
-	match_and_call! { fn get_pruning(&self, is_dev: bool, roles: Roles) -> Result<PruningMode> }
-
-	match_and_call! { fn get_tracing_receiver(&self) -> Result<TracingReceiver> }
-
-	match_and_call! { fn get_tracing_targets(&self) -> Result<Option<String>> }
-
-	match_and_call! { fn get_state_cache_size(&self) -> Result<usize> }
-
-	match_and_call! { fn get_wasm_method(&self) -> Result<WasmExecutionMethod> }
-
-	match_and_call! { fn get_execution_strategies(&self, is_dev: bool) -> Result<ExecutionStrategies> }
-
-	match_and_call! { fn get_database_cache_size(&self) -> Result<Option<usize>> }
-
-	match_and_call! { fn get_node_key(&self, net_config_dir: &PathBuf) -> Result<NodeKeyConfig> }
 }

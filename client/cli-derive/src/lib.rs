@@ -2,6 +2,7 @@ extern crate proc_macro;
 
 mod spec_factory;
 mod substrate_cli_params;
+mod substrate_cli_subcommands;
 
 use proc_macro_error::{proc_macro_error};
 
@@ -21,4 +22,12 @@ pub fn substrate_cli_params(
 	i: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
 	substrate_cli_params::substrate_cli_params(a, i).into()
+}
+
+#[proc_macro_derive(SubstrateCLISubcommands)]
+#[proc_macro_error]
+pub fn substrate_cli_subcommands(
+	i: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+	substrate_cli_subcommands::substrate_cli_subcommands(i).into()
 }

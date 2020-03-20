@@ -18,14 +18,14 @@
 
 pub use sc_client::ExecutionStrategies;
 pub use sc_client_db::{kvdb::KeyValueDB, PruningMode};
-pub use sc_network::config::{ExtTransport, NetworkConfiguration, Roles};
+pub use sc_network::config::{ExtTransport, NetworkConfiguration, Roles, NodeKeyConfig};
 pub use sc_executor::WasmExecutionMethod;
 
 use std::{future::Future, path::{PathBuf, Path}, pin::Pin, net::SocketAddr, sync::Arc};
 pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
 use sc_chain_spec::{ChainSpec, NoExtension};
 use sp_core::crypto::Protected;
-use sc_telemetry::TelemetryEndpoints;
+pub use sc_telemetry::TelemetryEndpoints;
 
 /// Service configuration.
 pub struct Configuration<G, E = NoExtension> {

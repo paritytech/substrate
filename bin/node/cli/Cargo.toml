@@ -124,6 +124,12 @@ package = "sc-cli"
 path = "../../../client/cli"
 optional = true
 
+[build-dependencies.sc-service]
+version = "0.8.0-alpha.2"
+package = "sc-service"
+path = "../../../client/service"
+optional = true
+
 [build-dependencies.vergen]
 version = "3.0.4"
 optional = true
