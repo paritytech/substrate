@@ -243,7 +243,7 @@ pub trait CliConfiguration: Sized {
 		let net_config_dir = config_dir.join(DEFAULT_NETWORK_CONFIG_PATH);
 		let client_id = C::client_id();
 		// TODO: this parameter is really optional, shouldn't we leave it to None?
-		let database_cache_size = Some(self.get_database_cache_size()?.unwrap_or(1024));
+		let database_cache_size = Some(self.get_database_cache_size()?.unwrap_or(32));
 		let node_key = self.get_node_key(&net_config_dir)?;
 		let roles = self.get_roles(is_dev)?;
 
