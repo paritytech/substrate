@@ -22,6 +22,8 @@ sp-staking = { version = "2.0.0-alpha.4", default-features = false, path = "../.
 frame-support = { version = "2.0.0-alpha.4", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0-alpha.4", default-features = false, path = "../system" }
 
+frame-benchmarking = { version = "2.0.0-alpha.4", default-features = false, path = "../benchmarking", optional = true }
+
 [features]
 default = ["std", "pallet-session/historical"]
 std = [
@@ -38,3 +40,4 @@ std = [
 	"frame-support/std",
 	"frame-system/std",
 ]
+runtime-benchmarks = ["frame-benchmarking"]
