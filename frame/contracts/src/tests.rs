@@ -2797,7 +2797,7 @@ const CODE_CRYPTO_HASHES: &str = r#"
 	;; |     5 |      TWOX |       128 |
 	;; |     6 |      TWOX |        64 |
 	;; ---------------------------------
-	(func (export "call")
+	(func (export "call") (result i32)
 		(local $chosen_hash_fn i32)
 		(local $input_ptr i32)
 		(local $input_len i32)
@@ -2824,6 +2824,7 @@ const CODE_CRYPTO_HASHES: &str = r#"
 			(local.get $output_ptr) ;; Linear memory location of the output buffer.
 			(local.get $output_len) ;; Number of output buffer bytes.
 		)
+		(i32.const 0)
 	)
 )
 "#;
