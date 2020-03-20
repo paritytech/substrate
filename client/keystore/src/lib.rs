@@ -302,11 +302,11 @@ impl BareCryptoStore for Store {
 		&self,
 		id: KeyTypeId,
 		keys: Vec<CryptoTypePublicPair>
-	) -> std::result::Result<HashSet<CryptoTypePublicPair>, TraitError> {
-		let keys = keys.into_iter().collect::<HashSet<_>>();
-		let all_keys = self.keys(id)?;
-
-		Ok(keys.intersection(&all_keys).cloned().collect())
+	) -> std::result::Result<Vec<CryptoTypePublicPair>, TraitError> {
+		let all_keys = self.keys(id)?.into_iter().collect::<HashSet<_>>();
+		Ok(keys.into_iter()
+		   .filter(|key| all_keys.contains(key))
+		   .collect::<Vec<_>>())
 	}
 
 	fn sign_with(
@@ -390,7 +390,7 @@ impl BareCryptoStore for Store {
 mod tests {
 	use super::*;
 	use tempfile::TempDir;
-	use sp_core::{testing::{SR25519}, crypto::{Ss58Codec}};
+	use sp_core::{testing::SR25519, crypto::Ss58Codec};
 
 	#[test]
 	fn basic_store() {

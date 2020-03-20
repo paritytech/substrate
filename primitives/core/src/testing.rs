@@ -145,11 +145,11 @@ impl crate::traits::BareCryptoStore for KeyStore {
 		&self,
 		id: KeyTypeId,
 		keys: Vec<CryptoTypePublicPair>
-	) -> std::result::Result<HashSet<CryptoTypePublicPair>, BareCryptoStoreError> {
-		let keys = keys.into_iter().collect::<HashSet<_>>();
-		let all_keys = self.keys(id)?;
+	) -> std::result::Result<Vec<CryptoTypePublicPair>, BareCryptoStoreError> {
+		let provided_keys = keys.into_iter().collect::<HashSet<_>>();
+		let all_keys = self.keys(id)?.into_iter().collect::<HashSet<_>>();
 
-		Ok(keys.intersection(&all_keys).cloned().collect())
+		Ok(provided_keys.intersection(&all_keys).cloned().collect())
 	}
 
 	fn sign_with(

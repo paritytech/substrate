@@ -23,7 +23,6 @@ use crate::{
 
 use std::{
 	borrow::Cow,
-	collections::HashSet,
 	fmt::{Debug, Display},
 	panic::UnwindSafe,
 	sync::Arc,
@@ -87,11 +86,11 @@ pub trait BareCryptoStore: Send + Sync {
 	///
 	/// Provided a list of (CryptoTypeId,[u8]) pairs, this would return
 	/// a filtered set of public keys which are supported by the keystore.
-	fn supported_keys(&self, id: KeyTypeId, keys: Vec<CryptoTypePublicPair>) -> Result<HashSet<CryptoTypePublicPair>, BareCryptoStoreError>;
+	fn supported_keys(&self, id: KeyTypeId, keys: Vec<CryptoTypePublicPair>) -> Result<Vec<CryptoTypePublicPair>, BareCryptoStoreError>;
 	/// List all supported keys
 	///
 	/// Returns a set of public keys the signer supports.
-	fn keys(&self, id: KeyTypeId) -> Result<HashSet<CryptoTypePublicPair>, BareCryptoStoreError> {
+	fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, BareCryptoStoreError> {
 		let ed25519_existing_keys = self
     		.ed25519_public_keys(id)
 			.into_iter()
@@ -103,8 +102,8 @@ pub trait BareCryptoStore: Send + Sync {
 			.map(Into::into);
 
 		Ok(ed25519_existing_keys
-			.chain(sr25519_existing_keys)
-			.collect::<HashSet<_>>())
+		   .chain(sr25519_existing_keys)
+		   .collect::<Vec<_>>())
 	}
 
 	/// Checks if the private keys for the given public key and key type combinations exist.
