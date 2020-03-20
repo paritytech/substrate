@@ -20,13 +20,23 @@
 #![cfg(test)]
 
 use sp_runtime_interface::*;
+
 use sp_runtime_interface_test_wasm::{WASM_BINARY, test_api::HostFunctions};
+use sp_runtime_interface_test_wasm_deprecated::{
+	WASM_BINARY as WASM_BINARY_DEPRECATED,
+	test_api::HostFunctions as HostFunctionsDeprecated
+};
+use sp_runtime_interface_test_wasm_newest::{
+	WASM_BINARY as WASM_BINARY_NEWEST,
+	test_api::HostFunctions as HostFunctionsNewest
+};
+
 use sp_wasm_interface::HostFunctions as HostFunctionsT;
 use sc_executor::CallInWasm;
 
 type TestExternalities = sp_state_machine::TestExternalities<sp_runtime::traits::BlakeTwo256, u64>;
 
-fn call_wasm_method<HF: HostFunctionsT>(method: &str) -> TestExternalities {
+fn call_wasm_method<HF: HostFunctionsT>(binary: &[u8], method: &str) -> TestExternalities {
 	let mut ext = TestExternalities::default();
 	let mut ext_ext = ext.ext();
 	let mut host_functions = HF::host_functions();
@@ -40,7 +50,7 @@ fn call_wasm_method<HF: HostFunctionsT>(method: &str) -> TestExternalities {
 		8,
 	);
 	executor.call_in_wasm(
-		&WASM_BINARY[..],
+		binary,
 		None,
 		method,
 		&[],
@@ -52,17 +62,17 @@ fn call_wasm_method<HF: HostFunctionsT>(method: &str) -> TestExternalities {
 
 #[test]
 fn test_return_data() {
-	call_wasm_method::<HostFunctions>("test_return_data");
+	call_wasm_method::<HostFunctions>(&WASM_BINARY[..], "test_return_data");
 }
 
 #[test]
 fn test_return_option_data() {
-	call_wasm_method::<HostFunctions>("test_return_option_data");
+	call_wasm_method::<HostFunctions>(&WASM_BINARY[..], "test_return_option_data");
 }
 
 #[test]
 fn test_set_storage() {
-	let mut ext = call_wasm_method::<HostFunctions>("test_set_storage");
+	let mut ext = call_wasm_method::<HostFunctions>(&WASM_BINARY[..], "test_set_storage");
 
 	let expected = "world";
 	assert_eq!(expected.as_bytes(), &ext.ext().storage("hello".as_bytes()).unwrap()[..]);
@@ -70,22 +80,22 @@ fn test_set_storage() {
 
 #[test]
 fn test_return_value_into_mutable_reference() {
-	call_wasm_method::<HostFunctions>("test_return_value_into_mutable_reference");
+	call_wasm_method::<HostFunctions>(&WASM_BINARY[..], "test_return_value_into_mutable_reference");
 }
 
 #[test]
 fn test_get_and_return_array() {
-	call_wasm_method::<HostFunctions>("test_get_and_return_array");
+	call_wasm_method::<HostFunctions>(&WASM_BINARY[..], "test_get_and_return_array");
 }
 
 #[test]
 fn test_array_as_mutable_reference() {
-	call_wasm_method::<HostFunctions>("test_array_as_mutable_reference");
+	call_wasm_method::<HostFunctions>(&WASM_BINARY[..], "test_array_as_mutable_reference");
 }
 
 #[test]
 fn test_return_input_public_key() {
-	call_wasm_method::<HostFunctions>("test_return_input_public_key");
+	call_wasm_method::<HostFunctions>(&WASM_BINARY[..], "test_return_input_public_key");
 }
 
 #[test]
@@ -93,7 +103,7 @@ fn test_return_input_public_key() {
 	expected = "Instantiation: Export ext_test_api_return_input_version_1 not found"
 )]
 fn host_function_not_found() {
-	call_wasm_method::<()>("test_return_data");
+	call_wasm_method::<()>(&WASM_BINARY[..], "test_return_data");
 }
 
 #[test]
@@ -104,30 +114,56 @@ fn host_function_not_found() {
 		\\\"Invalid utf8 data provided\\\")) }\""
 )]
 fn test_invalid_utf8_data_should_return_an_error() {
-	call_wasm_method::<HostFunctions>("test_invalid_utf8_data_should_return_an_error");
+	call_wasm_method::<HostFunctions>(&WASM_BINARY[..], "test_invalid_utf8_data_should_return_an_error");
 }
 
 #[test]
 fn test_overwrite_native_function_implementation() {
-	call_wasm_method::<HostFunctions>("test_overwrite_native_function_implementation");
+	call_wasm_method::<HostFunctions>(&WASM_BINARY[..], "test_overwrite_native_function_implementation");
 }
 
 #[test]
 fn test_u128_i128_as_parameter_and_return_value() {
-	call_wasm_method::<HostFunctions>("test_u128_i128_as_parameter_and_return_value");
+	call_wasm_method::<HostFunctions>(&WASM_BINARY[..], "test_u128_i128_as_parameter_and_return_value");
 }
 
 #[test]
 fn test_vec_return_value_memory_is_freed() {
-	call_wasm_method::<HostFunctions>("test_vec_return_value_memory_is_freed");
+	call_wasm_method::<HostFunctions>(&WASM_BINARY[..], "test_vec_return_value_memory_is_freed");
 }
 
 #[test]
 fn test_encoded_return_value_memory_is_freed() {
-	call_wasm_method::<HostFunctions>("test_encoded_return_value_memory_is_freed");
+	call_wasm_method::<HostFunctions>(&WASM_BINARY[..], "test_encoded_return_value_memory_is_freed");
 }
 
 #[test]
 fn test_array_return_value_memory_is_freed() {
-	call_wasm_method::<HostFunctions>("test_array_return_value_memory_is_freed");
+	call_wasm_method::<HostFunctions>(&WASM_BINARY[..], "test_array_return_value_memory_is_freed");
+}
+
+#[test]
+fn test_transform_deprecated_and_new() {
+	call_wasm_method::<HostFunctionsDeprecated>(
+		&WASM_BINARY_DEPRECATED[..],
+		"test_input_transform",
+	);
+	call_wasm_method::<HostFunctionsNewest>(
+		&WASM_BINARY_NEWEST[..],
+		"test_input_transform",
+	);
+}
+
+#[test]
+fn test_transform_deprecated_wasm_with_newest_host_functions() {
+
+	for f in HostFunctionsNewest::host_functions() {
+		println!("{:?}", f.name())
+	}
+	// we call to the old wasm binary with a new host functions
+	// old versions of host functions should be called and test should be ok!
+	call_wasm_method::<HostFunctionsNewest>(
+		&WASM_BINARY_DEPRECATED[..],
+		"test_input_transform",
+	);
 }
