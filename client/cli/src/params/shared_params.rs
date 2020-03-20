@@ -31,8 +31,6 @@ const DEFAULT_DB_CONFIG_PATH : &'static str = "db";
 #[derive(Debug, StructOpt, Clone)]
 pub struct SharedParams {
 	/// Specify the chain specification (one of dev, local, or staging).
-	///
-	/// Can also be any chainspec within the client, e.g. kusama or westend.
 	#[structopt(long = "chain", value_name = "CHAIN_SPEC")]
 	pub chain: Option<String>,
 
