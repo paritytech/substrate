@@ -66,6 +66,20 @@ impl KeyStore {
 
 #[cfg(feature = "std")]
 impl crate::traits::BareCryptoStore for KeyStore {
+	fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, BareCryptoStoreError> {
+		self.keys
+			.get(&id)
+			.map(|map| {
+				Ok(map.keys().map(|k| vec![
+					CryptoTypePublicPair(sr25519::CRYPTO_ID, k.clone()),
+					CryptoTypePublicPair(ed25519::CRYPTO_ID, k.clone())
+				])
+				.flatten()
+				.collect())
+			})
+			.unwrap()
+	}
+
 	fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public> {
 		self.keys.get(&id)
 			.map(|keys|

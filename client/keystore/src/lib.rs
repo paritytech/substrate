@@ -242,16 +242,36 @@ impl Store {
 		self.key_pair_by_type::<Pair::Generic>(IsWrappedBy::from_ref(public), Pair::ID).map(Into::into)
 	}
 
-	/// Get public keys of all stored keys that match the given key type.
-	pub fn public_keys_by_type<TPublic: Public>(&self, key_type: KeyTypeId) -> Result<Vec<TPublic>> {
-		let mut public_keys: Vec<TPublic> = self.additional.keys()
-			.filter_map(|(ty, public)| {
-				if *ty == key_type {
-					Some(TPublic::from_slice(public))
-				} else {
-					None
-				}
+	/// Get public keys of all stored keys that match the key type.
+	///
+	/// This will just use the type of the public key (a list of which to be returned) in order
+	/// to determine the key type. Unless you use a specialized application-type public key, then
+	/// this only give you keys registered under generic cryptography, and will not return keys
+	/// registered under the application type.
+	pub fn public_keys<Public: AppPublic>(&self) -> Result<Vec<Public>> {
+		self.raw_public_keys(Public::ID)
+			.map(|v| {
+				v.into_iter()
+				 .map(|k| Public::from_slice(k.as_slice()))
+				 .collect()
 			})
+	}
+
+	/// Returns the file path for the given public key and key type.
+	fn key_file_path(&self, public: &[u8], key_type: KeyTypeId) -> Option<PathBuf> {
+		let mut buf = self.path.as_ref()?.clone();
+		let key_type = hex::encode(key_type.0);
+		let key = hex::encode(public);
+		buf.push(key_type + key.as_str());
+		Some(buf)
+	}
+
+	/// Returns a list of raw public keys filtered by `KeyTypeId`
+	fn raw_public_keys(&self, id: KeyTypeId) -> Result<Vec<Vec<u8>>> {
+		let mut public_keys: Vec<Vec<u8>> = self.additional.keys()
+			.into_iter()
+    		.filter(|k| k.0 == id)
+    		.map(|k| k.1.clone())
 			.collect();
 
 		if let Some(path) = &self.path {
@@ -263,8 +283,13 @@ impl Store {
 				if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
 					match hex::decode(name) {
 						Ok(ref hex) if hex.len() > 4 => {
-							if &hex[0..4] != &key_type.0 { continue }
-							let public = TPublic::from_slice(&hex[4..]);
+							let mut key_type: [u8; 4] = Default::default();
+							key_type.copy_from_slice(&hex[0..4]);
+							let key_type = KeyTypeId(key_type);
+							if key_type != id {
+								continue;
+							}
+							let public = hex[4..].to_vec();
 							public_keys.push(public);
 						}
 						_ => continue,
@@ -275,29 +300,23 @@ impl Store {
 
 		Ok(public_keys)
 	}
-
-	/// Get public keys of all stored keys that match the key type.
-	///
-	/// This will just use the type of the public key (a list of which to be returned) in order
-	/// to determine the key type. Unless you use a specialized application-type public key, then
-	/// this only give you keys registered under generic cryptography, and will not return keys
-	/// registered under the application type.
-	pub fn public_keys<Public: AppPublic>(&self) -> Result<Vec<Public>> {
-		self.public_keys_by_type::<Public::Generic>(Public::ID)
-			.map(|v| v.into_iter().map(Into::into).collect())
-	}
-
-	/// Returns the file path for the given public key and key type.
-	fn key_file_path(&self, public: &[u8], key_type: KeyTypeId) -> Option<PathBuf> {
-		let mut buf = self.path.as_ref()?.clone();
-		let key_type = hex::encode(key_type.0);
-		let key = hex::encode(public);
-		buf.push(key_type + key.as_str());
-		Some(buf)
-	}
 }
 
 impl BareCryptoStore for Store {
+	fn keys(
+		&self,
+		id: KeyTypeId
+	) -> std::result::Result<Vec<CryptoTypePublicPair>, TraitError> {
+		let raw_keys = self.raw_public_keys(id)?;
+		Ok(raw_keys.into_iter()
+		   .map(|k| vec![
+			   CryptoTypePublicPair(sr25519::CRYPTO_ID, k.clone()),
+			   CryptoTypePublicPair(ed25519::CRYPTO_ID, k.clone())
+		   ])
+		   .flatten()
+		   .collect())
+	}
+
 	fn supported_keys(
 		&self,
 		id: KeyTypeId,
@@ -337,8 +356,13 @@ impl BareCryptoStore for Store {
 	}
 
 	fn sr25519_public_keys(&self, key_type: KeyTypeId) -> Vec<sr25519::Public> {
-		self.public_keys_by_type::<sr25519::Public>(key_type)
-			.unwrap_or_default()
+		self.raw_public_keys(key_type)
+			.map(|v| {
+				v.into_iter()
+				 .map(|k| sr25519::Public::from_slice(k.as_slice()))
+				 .collect()
+			})
+    		.unwrap_or_default()
 	}
 
 	fn sr25519_generate_new(
@@ -355,7 +379,13 @@ impl BareCryptoStore for Store {
 	}
 
 	fn ed25519_public_keys(&self, key_type: KeyTypeId) -> Vec<ed25519::Public> {
-		self.public_keys_by_type::<ed25519::Public>(key_type).unwrap_or_default()
+		self.raw_public_keys(key_type)
+			.map(|v| {
+				v.into_iter()
+				 .map(|k| ed25519::Public::from_slice(k.as_slice()))
+				 .collect()
+			})
+    		.unwrap_or_default()
 	}
 
 	fn ed25519_generate_new(
@@ -504,7 +534,7 @@ mod tests {
 		fs::write(file_name, "test").expect("Invalid file is written");
 
 		assert!(
-			store.read().public_keys_by_type::<sr25519::AppPublic>(SR25519).unwrap().is_empty(),
+			store.read().sr25519_public_keys(SR25519).is_empty(),
 		);
 	}
 }
