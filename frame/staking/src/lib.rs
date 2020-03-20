@@ -276,7 +276,7 @@ use frame_support::{
 	dispatch::{IsSubType, DispatchResult},
 	traits::{
 		Currency, LockIdentifier, LockableCurrency, WithdrawReasons, OnUnbalanced, Imbalance, Get,
-		Time, EstimateNextNewSession, MigrateAccount,
+		Time, EstimateNextNewSession,
 	}
 };
 use pallet_session::historical;
