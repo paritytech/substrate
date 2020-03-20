@@ -100,7 +100,7 @@ pub struct NetworkConfigurationParams {
 }
 
 impl NetworkConfigurationParams {
-	/// Fill the given `NetworkConfiguration` by looking at the cli parameters.
+	/// Fill the given `NetworkConfiguration` by looking at the cli-utils parameters.
 	pub fn update_config(
 		&self,
 		mut config: &mut Configuration,

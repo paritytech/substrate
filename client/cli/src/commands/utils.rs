@@ -16,41 +16,26 @@
 
 //! subcommand utilities
 use std::{io::Read, path::PathBuf};
-use sp_core::{Pair, crypto::{Ss58Codec, Ss58AddressFormat}, hexdisplay::HexDisplay};
-use sp_runtime::{generic::{UncheckedExtrinsic, SignedPayload}, traits::IdentifyAccount, MultiSigner};
+use sp_core::{
+	Pair, hexdisplay::HexDisplay,
+	crypto::{Ss58Codec, Ss58AddressFormat, AccountId32},
+};
+use sp_runtime::{
+	traits::IdentifyAccount, MultiSigner,
+	generic::{UncheckedExtrinsic, SignedPayload},
+};
+use crate::{
+	SharedParams, arg_enums::{OutputType},
+	error::{self, Error},
+};
 use parity_scale_codec::Encode;
 use serde_json::json;
-use sp_runtime::traits::{
-	SignedExtension, StaticLookup,
-};
-use crate::{error::{self, Error}, SharedParams, arg_enums::{OutputType}};
-use sp_core::crypto::AccountId32;
+use cli_utils::{RuntimeAdapter, IndexFor};
 
 /// Public key type for Runtime
 pub type PublicFor<P> = <P as sp_core::Pair>::Public;
 /// Seed type for Runtime
 pub type SeedFor<P> = <P as sp_core::Pair>::Seed;
-/// AccountIndex type for Runtime
-pub type IndexFor<R> = <<R as RuntimeAdapter>::Runtime as frame_system::Trait>::Index;
-/// Balance type
-pub type BalanceFor<R> = <<R as RuntimeAdapter>::Runtime as pallet_balances::Trait>::Balance;
-/// Call type for Runtime
-pub type CallFor<R> = <<R as RuntimeAdapter>::Runtime as frame_system::Trait>::Call;
-/// Address type for runtime.
-pub type AddressFor<R> = <<<R as RuntimeAdapter>::Runtime as frame_system::Trait>::Lookup as StaticLookup>::Source;
-/// Hash for runtime.
-pub type HashFor<R> = <<R as RuntimeAdapter>::Runtime as frame_system::Trait>::Hash;
-
-/// Runtime adapter for signing utilities
-pub trait RuntimeAdapter: Sized {
-	/// runtime
-	type Runtime: frame_system::Trait + pallet_balances::Trait;
-	/// extras
-	type Extra: SignedExtension;
-
-	/// build extras for inclusion in extrinsics
-	fn build_extra(index: IndexFor<Self>) -> Self::Extra;
-}
 
 /// helper method to fetch password from `SharedParams` or read from stdin
 pub fn get_password(params: &SharedParams) -> error::Result<String> {

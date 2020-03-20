@@ -23,10 +23,7 @@ use std::io::Read;
 use crate::commands::inspect::InspectCmd;
 use crate::Error;
 
-pub struct Adapter;
-
-impl RuntimeAdapter for Adapter {
-	type Runtime = Runtime;
+impl RuntimeAdapter for Runtime {
 	type Extra = (
 		frame_system::CheckVersion<Runtime>,
 		frame_system::CheckGenesis<Runtime>,
@@ -117,13 +114,13 @@ fn transfer() {
 	]);
 
 	new_test_ext().execute_with(|| {
-		assert!(matches!(transfer.run::<Adapter>(), Ok(())));
+		assert!(matches!(transfer.run::<Runtime>(), Ok(())));
 		let transfer = TransferCmd::from_iter(&["transfer",
 			"--from", words,
 			"--to", "0xa2bc899a8a3b16a284a8cefcbc2dc48a687cd674e89b434fbbdb06f400979744",
 			"--amount", "5000",
 			"--index", "1",
 		]);
-		assert!(matches!(transfer.run::<Adapter>(), Err(Error::Input(_))))
+		assert!(matches!(transfer.run::<Runtime>(), Err(Error::Input(_))))
 	});
 }

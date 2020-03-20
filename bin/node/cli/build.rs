@@ -15,8 +15,8 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 fn main() {
-	#[cfg(feature = "cli")]
-	cli::main();
+	// #[cfg(feature = "cli")]
+	// cli::main();
 }
 
 #[cfg(feature = "cli")]

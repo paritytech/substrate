@@ -119,22 +119,3 @@ where
 		},
 	}
 }
-
-struct Adapter;
-
-impl sc_cli::RuntimeAdapter for Adapter {
-	type Runtime = Runtime;
-	type Extra = SignedExtra;
-
-	fn build_extra(index: Index) -> Self::Extra {
-		(
-			frame_system::CheckVersion::new(),
-			frame_system::CheckGenesis::new(),
-			frame_system::CheckEra::from(Era::Immortal),
-			frame_system::CheckNonce::from(index),
-			frame_system::CheckWeight::new(),
-			pallet_transaction_payment::ChargeTransactionPayment::from(0),
-			pallet_contracts::CheckBlockGasLimit::default(),
-		)
-	}
-}

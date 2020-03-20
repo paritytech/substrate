@@ -16,16 +16,19 @@
 
 //! Implementation of the `transfer` subcommand
 
-use crate::{error, IndexFor, BalanceFor, create_extrinsic_for, get_password, AddressFor, VersionInfo, with_crypto_scheme, pair_from_suri, decode_hex};
-use super::{SharedParams, RuntimeAdapter};
+use crate::{
+	error, create_extrinsic_for, get_password,
+	with_crypto_scheme, pair_from_suri, decode_hex, VersionInfo,
+};
+use super::SharedParams;
 use structopt::StructOpt;
-use pallet_balances::Call as BalancesCall;
 use std::{str::FromStr, fmt::Display};
 use parity_scale_codec::Encode;
 use sc_service::{Configuration, ChainSpec};
 use sp_runtime::MultiSigner;
 use std::convert::TryFrom;
 use sp_core::crypto::Ss58Codec;
+use cli_utils::{RuntimeAdapter, AddressFor, IndexFor, BalanceFor, BalancesCall};
 
 /// The `transfer` command
 #[derive(Debug, StructOpt, Clone)]
@@ -115,7 +118,7 @@ fn print_ext<Pair, RA>(
 		Pair::Public: Into<MultiSigner>,
 		Pair::Signature: Encode,
 		RA: RuntimeAdapter,
-		BalancesCall<RA::Runtime>: Encode,
+		BalancesCall<RA>: Encode,
 {
 	let signer = pair_from_suri::<Pair>(uri, pass);
 	let call = BalancesCall::transfer(to, amount);

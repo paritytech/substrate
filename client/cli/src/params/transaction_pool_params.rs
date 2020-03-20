@@ -30,7 +30,7 @@ pub struct TransactionPoolParams {
 }
 
 impl TransactionPoolParams {
-	/// Fill the given `PoolConfiguration` by looking at the cli parameters.
+	/// Fill the given `PoolConfiguration` by looking at the cli-utils parameters.
 	pub fn update_config(
 		&self,
 		config: &mut Configuration,

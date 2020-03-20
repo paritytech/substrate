@@ -63,6 +63,7 @@ pub use crate::commands::vanity::VanityCmd;
 pub use crate::commands::verify::VerifyCmd;
 use std::convert::TryFrom;
 use sp_core::crypto::Ss58Codec;
+use cli_utils::{RuntimeAdapter, AddressFor, IndexFor, BalanceFor, CallFor};
 
 
 /// default sub directory to store network config

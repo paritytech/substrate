@@ -68,6 +68,7 @@ use impls::{CurrencyToVoteHandler, Author, LinearWeightToFee, TargetedFeeAdjustm
 /// Constant values used within the runtime.
 pub mod constants;
 use constants::{time::*, currency::*};
+use sp_runtime::generic::Era;
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
@@ -885,6 +886,22 @@ impl_runtime_apis! {
 
 			result.map_err(|e| e.into())
 		}
+	}
+}
+
+impl cli_utils::RuntimeAdapter for Runtime {
+	type Extra = SignedExtra;
+
+	fn build_extra(index: Index) -> Self::Extra {
+		(
+			frame_system::CheckVersion::new(),
+			frame_system::CheckGenesis::new(),
+			frame_system::CheckEra::from(Era::Immortal),
+			frame_system::CheckNonce::from(index),
+			frame_system::CheckWeight::new(),
+			pallet_transaction_payment::ChargeTransactionPayment::from(0),
+			pallet_contracts::CheckBlockGasLimit::default(),
+		)
 	}
 }
 

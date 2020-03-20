@@ -16,8 +16,8 @@
 
 //! Implementation of the `insert` subcommand
 
-use crate::{error, HashFor, VersionInfo, with_crypto_scheme, pair_from_suri};
-use super::{SharedParams, get_password, read_uri, RuntimeAdapter};
+use crate::{error, VersionInfo, with_crypto_scheme, pair_from_suri};
+use super::{SharedParams, get_password, read_uri};
 use structopt::StructOpt;
 use sp_core::{crypto::KeyTypeId, Bytes};
 use std::convert::TryFrom;
@@ -27,6 +27,7 @@ use sc_rpc::author::AuthorClient;
 use jsonrpc_core_client::transports::http;
 use serde::{de::DeserializeOwned, Serialize};
 use sc_service::{Configuration, ChainSpec};
+use cli_utils::{HashFor, RuntimeAdapter};
 
 /// The `insert` command
 #[derive(Debug, StructOpt, Clone)]
@@ -56,8 +57,9 @@ pub struct InsertCmd {
 
 impl InsertCmd {
 	/// Run the command
-	pub fn run<RA: RuntimeAdapter>(self) -> error::Result<()>
+	pub fn run<RA>(self) -> error::Result<()>
 		where
+			RA: RuntimeAdapter,
 			HashFor<RA>: DeserializeOwned + Serialize + Send + Sync,
 	{
 		let suri = read_uri(self.suri)?;

@@ -16,7 +16,8 @@
 
 use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
 use sc_cli::VersionInfo;
-use crate::{chain_spec, service, cli::{Cli, Adapter}};
+use node_template_runtime::Runtime;
+use crate::{chain_spec, service, cli::Cli};
 
 /// Parse and run command line arguments
 pub fn run(version: VersionInfo) -> sc_cli::Result<()> {
@@ -28,7 +29,7 @@ pub fn run(version: VersionInfo) -> sc_cli::Result<()> {
 		Some(subcommand) => {
 			subcommand.init(&version)?;
 			subcommand.update_config(&mut config, chain_spec::load_spec, &version)?;
-			subcommand.run::<Adapter, _, _, _>(
+			subcommand.run::<Runtime, _, _, _>(
 				config,
 				|config: _| Ok(new_full_start!(config).0),
 			)

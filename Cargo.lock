@@ -626,6 +626,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cli-utils"
+version = "2.0.0-alpha.3"
+dependencies = [
+ "frame-system",
+ "pallet-balances",
+ "sp-runtime",
+]
+
+[[package]]
 name = "cloudabi"
 version = "0.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3934,6 +3943,7 @@ dependencies = [
 name = "node-runtime"
 version = "2.0.0-alpha.3"
 dependencies = [
+ "cli-utils",
  "frame-benchmarking",
  "frame-executive",
  "frame-support",
@@ -3996,6 +4006,7 @@ dependencies = [
 name = "node-template"
 version = "2.0.0-alpha.3"
 dependencies = [
+ "cli-utils",
  "frame-system",
  "futures 0.3.4",
  "log 0.4.8",
@@ -4027,6 +4038,7 @@ dependencies = [
 name = "node-template-runtime"
 version = "2.0.0-alpha.3"
 dependencies = [
+ "cli-utils",
  "frame-executive",
  "frame-support",
  "frame-system",
@@ -6147,10 +6159,10 @@ dependencies = [
  "atty",
  "chrono",
  "clap",
+ "cli-utils",
  "derive_more",
  "env_logger 0.7.1",
  "fdlimit",
- "frame-system",
  "futures 0.1.29",
  "futures 0.3.4",
  "hex",
@@ -6161,7 +6173,6 @@ dependencies = [
  "libp2p 0.15.0",
  "log 0.4.8",
  "names",
- "pallet-balances",
  "parity-scale-codec",
  "parity-util-mem",
  "rand 0.7.3",
