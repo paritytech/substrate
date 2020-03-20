@@ -32,6 +32,38 @@ pub struct Tally<Balance> {
 	pub (crate) turnout: Balance,
 }
 
+/// Amount of votes and capital placed in delegation for an account.
+#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct Delegations<Balance> {
+	/// The number of votes (this is post-conviction).
+	pub (crate) votes: Balance,
+	/// The amount of raw capital, used for the turnout.
+	pub (crate) capital: Balance,
+}
+
+impl<Balance: Saturating> Saturating for Delegations<Balance> {
+	fn saturating_add(self, o: Self) -> Self {
+		Self {
+			votes: self.votes.saturating_add(o.votes),
+			capital: self.capital.saturating_add(o.capital),
+		}
+	}
+
+	fn saturating_sub(self, o: Self) -> Self {
+		Self {
+			votes: self.votes.saturating_sub(o.votes),
+			capital: self.capital.saturating_sub(o.capital),
+		}
+	}
+
+	fn saturating_mul(self, o: Self) -> Self {
+		Self {
+			votes: self.votes.saturating_mul(o.votes),
+			capital: self.capital.saturating_mul(o.capital),
+		}
+	}
+}
+
 impl<
 	Balance: From<u8> + Zero + Copy + CheckedAdd + CheckedSub + CheckedMul + CheckedDiv + Bounded +
 		Saturating
@@ -41,11 +73,11 @@ impl<
 		vote: Vote,
 		balance: Balance,
 	) -> Self {
-		let (votes, turnout) = vote.conviction.votes(balance);
+		let Delegations { votes, capital } = vote.conviction.votes(balance);
 		Self {
 			ayes: if vote.aye { votes } else { Zero::zero() },
 			nays: if vote.aye { Zero::zero() } else { votes },
-			turnout,
+			turnout: capital,
 		}
 	}
 
@@ -56,19 +88,19 @@ impl<
 	) -> Option<()> {
 		match vote {
 			AccountVote::Standard { vote, balance } => {
-				let (votes, turnout) = vote.conviction.votes(balance);
-				self.turnout = self.turnout.checked_add(&turnout)?;
+				let Delegations { votes, capital } = vote.conviction.votes(balance);
+				self.turnout = self.turnout.checked_add(&capital)?;
 				match vote.aye {
 					true => self.ayes = self.ayes.checked_add(&votes)?,
 					false => self.nays = self.nays.checked_add(&votes)?,
 				}
 			}
 			AccountVote::Split { aye, nay } => {
-				let (aye_votes, aye_turnout) = Conviction::None.votes(aye);
-				let (nay_votes, nay_turnout) = Conviction::None.votes(nay);
-				self.turnout = self.turnout.checked_add(&aye_turnout)?.checked_add(&nay_turnout)?;
-				self.ayes = self.ayes.checked_add(&aye_votes)?;
-				self.nays = self.nays.checked_add(&nay_votes)?;
+				let aye = Conviction::None.votes(aye);
+				let nay = Conviction::None.votes(nay);
+				self.turnout = self.turnout.checked_add(&aye.capital)?.checked_add(&nay.capital)?;
+				self.ayes = self.ayes.checked_add(&aye.votes)?;
+				self.nays = self.nays.checked_add(&nay.votes)?;
 			}
 		}
 		Some(())
@@ -81,40 +113,40 @@ impl<
 	) -> Option<()> {
 		match vote {
 			AccountVote::Standard { vote, balance } => {
-				let (votes, turnout) = vote.conviction.votes(balance);
-				self.turnout = self.turnout.checked_sub(&turnout)?;
+				let Delegations { votes, capital } = vote.conviction.votes(balance);
+				self.turnout = self.turnout.checked_sub(&capital)?;
 				match vote.aye {
 					true => self.ayes = self.ayes.checked_sub(&votes)?,
 					false => self.nays = self.nays.checked_sub(&votes)?,
 				}
 			}
 			AccountVote::Split { aye, nay } => {
-				let (aye_votes, aye_turnout) = Conviction::None.votes(aye);
-				let (nay_votes, nay_turnout) = Conviction::None.votes(nay);
-				self.turnout = self.turnout.checked_sub(&aye_turnout)?.checked_sub(&nay_turnout)?;
-				self.ayes = self.ayes.checked_sub(&aye_votes)?;
-				self.nays = self.nays.checked_sub(&nay_votes)?;
+				let aye = Conviction::None.votes(aye);
+				let nay = Conviction::None.votes(nay);
+				self.turnout = self.turnout.checked_sub(&aye.capital)?.checked_sub(&nay.capital)?;
+				self.ayes = self.ayes.checked_sub(&aye.votes)?;
+				self.nays = self.nays.checked_sub(&nay.votes)?;
 			}
 		}
 		Some(())
 	}
 
 	/// Increment some amount of votes.
-	pub fn increase(&mut self, approve: bool, votes: Balance, capital: Balance) -> Option<()> {
-		self.turnout = self.turnout.saturating_add(capital);
+	pub fn increase(&mut self, approve: bool, delegations: Delegations<Balance>) -> Option<()> {
+		self.turnout = self.turnout.saturating_add(delegations.capital);
 		match approve {
-			true => self.ayes = self.ayes.saturating_add(votes),
-			false => self.nays = self.nays.saturating_add(votes),
+			true => self.ayes = self.ayes.saturating_add(delegations.votes),
+			false => self.nays = self.nays.saturating_add(delegations.votes),
 		}
 		Some(())
 	}
 
 	/// Decrement some amount of votes.
-	pub fn reduce(&mut self, approve: bool, votes: Balance, capital: Balance) -> Option<()> {
-		self.turnout = self.turnout.saturating_sub(capital);
+	pub fn reduce(&mut self, approve: bool, delegations: Delegations<Balance>) -> Option<()> {
+		self.turnout = self.turnout.saturating_sub(delegations.capital);
 		match approve {
-			true => self.ayes = self.ayes.saturating_sub(votes),
-			false => self.nays = self.nays.saturating_sub(votes),
+			true => self.ayes = self.ayes.saturating_sub(delegations.votes),
+			false => self.nays = self.nays.saturating_sub(delegations.votes),
 		}
 		Some(())
 	}

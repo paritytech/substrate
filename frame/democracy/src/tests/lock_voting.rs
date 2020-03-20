@@ -153,7 +153,7 @@ fn lock_voting_should_work_with_delegation() {
 		assert_ok!(Democracy::delegate(Origin::signed(4), 2, Conviction::Locked2x, 40));
 		assert_ok!(Democracy::vote(Origin::signed(5), r, nay(1, 50)));
 
-		assert_eq!(tally(r), Tally { ayes: 250, nays: 100, turnout: 110 });
+		assert_eq!(tally(r), Tally { ayes: 250, nays: 100, turnout: 150 });
 
 		next_block();
 		next_block();

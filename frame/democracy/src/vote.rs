@@ -19,7 +19,7 @@
 use sp_std::{result::Result, convert::TryFrom};
 use codec::{Encode, EncodeLike, Decode, Output, Input};
 use sp_runtime::{RuntimeDebug, traits::{Saturating, Zero}};
-use crate::{Conviction, ReferendumIndex};
+use crate::{Conviction, ReferendumIndex, Delegations};
 
 /// A number of lock periods, plus a vote, one way or the other.
 #[derive(Copy, Clone, Eq, PartialEq, Default, RuntimeDebug)]
@@ -119,7 +119,7 @@ pub enum Voting<Balance, AccountId, BlockNumber> {
 		/// The current votes of the account.
 		votes: Vec<(ReferendumIndex, AccountVote<Balance>)>,
 		/// The total amount of delegations that this account has received.
-		delegations: Balance,
+		delegations: Delegations<Balance>,
 		/// Any pre-existing locks from past voting/delegating activity.
 		prior: PriorLock<BlockNumber, Balance>,
 	},
@@ -129,18 +129,18 @@ pub enum Voting<Balance, AccountId, BlockNumber> {
 		target: AccountId,
 		conviction: Conviction,
 		/// The total amount of delegations that this account has received.
-		delegations: Balance,
+		delegations: Delegations<Balance>,
 		/// Any pre-existing locks from past voting/delegating activity.
 		prior: PriorLock<BlockNumber, Balance>,
 	},
 }
 
-impl<Balance: Zero, AccountId, BlockNumber: Zero> Default for Voting<Balance, AccountId, BlockNumber> {
+impl<Balance: Default, AccountId, BlockNumber: Zero> Default for Voting<Balance, AccountId, BlockNumber> {
 	fn default() -> Self {
 		Voting::Direct {
 			votes: Vec::new(),
-			delegations: Zero::zero(),
-			prior: PriorLock(Zero::zero(), Zero::zero()),
+			delegations: Default::default(),
+			prior: PriorLock(Zero::zero(), Default::default()),
 		}
 	}
 }
@@ -167,7 +167,10 @@ impl<
 		}
 	}
 
-	pub fn set_common(&mut self, delegations: Balance, prior: PriorLock<BlockNumber, Balance>) {
+	pub fn set_common(&mut self,
+		delegations: Delegations<Balance>,
+		prior: PriorLock<BlockNumber, Balance>
+	) {
 		let (d, p) = match self {
 			Voting::Direct { ref mut delegations, ref mut prior, .. } => (delegations, prior),
 			Voting::Delegating { ref mut delegations, ref mut prior, .. } => (delegations, prior),

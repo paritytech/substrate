@@ -19,6 +19,7 @@
 use sp_std::{result::Result, convert::TryFrom};
 use sp_runtime::{RuntimeDebug, traits::{Zero, Bounded, CheckedMul, CheckedDiv}};
 use codec::{Encode, Decode};
+use crate::types::Delegations;
 
 /// A value denoting the strength of conviction of a vote.
 #[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, RuntimeDebug)]
@@ -93,14 +94,12 @@ impl Conviction {
 	/// The votes of a voter of the given `balance` with our conviction.
 	pub fn votes<
 		B: From<u8> + Zero + Copy + CheckedMul + CheckedDiv + Bounded
-	>(self, balance: B) -> (B, B) {
-		(
-			match self {
-				Conviction::None => balance.checked_div(&10u8.into()).unwrap_or_else(Zero::zero),
-				x => balance.checked_mul(&u8::from(x).into()).unwrap_or_else(B::max_value),
-			},
-			balance
-		)
+	>(self, capital: B) -> Delegations<B> {
+		let votes = match self {
+			Conviction::None => capital.checked_div(&10u8.into()).unwrap_or_else(Zero::zero),
+			x => capital.checked_mul(&u8::from(x).into()).unwrap_or_else(B::max_value),
+		};
+		Delegations { votes, capital }
 	}
 }
 

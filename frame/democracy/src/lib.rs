@@ -185,7 +185,7 @@ mod types;
 pub use vote_threshold::{Approved, VoteThreshold};
 pub use vote::{Vote, AccountVote, Voting};
 pub use conviction::Conviction;
-pub use types::{ReferendumInfo, ReferendumStatus, ProxyState, Tally, UnvoteScope};
+pub use types::{ReferendumInfo, ReferendumStatus, ProxyState, Tally, UnvoteScope, Delegations};
 
 #[cfg(test)]
 mod tests;
@@ -1319,7 +1319,7 @@ impl<T: Trait> Module<T> {
 						// Shouldn't be possible to fail, but we handle it gracefully.
 						status.tally.remove(votes[i].1).ok_or(Error::<T>::Underflow)?;
 						if let Some(approve) = votes[i].1.as_standard() {
-							status.tally.reduce(approve, *delegations, Zero::zero());
+							status.tally.reduce(approve, *delegations);
 						}
 						votes[i].1 = vote;
 					}
@@ -1328,7 +1328,7 @@ impl<T: Trait> Module<T> {
 				// Shouldn't be possible to fail, but we handle it gracefully.
 				status.tally.add(vote).ok_or(Error::<T>::Overflow)?;
 				if let Some(approve) = vote.as_standard() {
-					status.tally.increase(approve, *delegations, Zero::zero());
+					status.tally.increase(approve, *delegations);
 				}
 				Ok(())
 			} else {
@@ -1364,7 +1364,7 @@ impl<T: Trait> Module<T> {
 						// Shouldn't be possible to fail, but we handle it gracefully.
 						status.tally.remove(votes[i].1).ok_or(Error::<T>::Underflow)?;
 						if let Some(approve) = votes[i].1.as_standard() {
-							status.tally.reduce(approve, *delegations, Zero::zero());
+							status.tally.reduce(approve, *delegations);
 						}
 						ReferendumInfoOf::<T>::insert(ref_index, ReferendumInfo::Ongoing(status));
 					}
@@ -1386,7 +1386,7 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	fn increase_upstream_delegation(who: &T::AccountId, amount: BalanceOf<T>) {
+	fn increase_upstream_delegation(who: &T::AccountId, amount: Delegations<BalanceOf<T>>) {
 		VotingOf::<T>::mutate(who, |voting| match voting {
 			Voting::Delegating { delegations, .. } =>
 				// We don't support second level delegating, so we don't need to do anything more.
@@ -1397,7 +1397,7 @@ impl<T: Trait> Module<T> {
 					if let AccountVote::Standard { vote, .. } = account_vote {
 						ReferendumInfoOf::<T>::mutate(ref_index, |maybe_info|
 							if let Some(ReferendumInfo::Ongoing(ref mut status)) = maybe_info {
-								status.tally.increase(vote.aye, amount, Zero::zero());
+								status.tally.increase(vote.aye, amount);
 							}
 						);
 					}
@@ -1406,7 +1406,7 @@ impl<T: Trait> Module<T> {
 		})
 	}
 
-	fn reduce_upstream_delegation(who: &T::AccountId, amount: BalanceOf<T>) {
+	fn reduce_upstream_delegation(who: &T::AccountId, amount: Delegations<BalanceOf<T>>) {
 		VotingOf::<T>::mutate(who, |voting| match voting {
 			Voting::Delegating { delegations, .. } =>
 			// We don't support second level delegating, so we don't need to do anything more.
@@ -1417,7 +1417,7 @@ impl<T: Trait> Module<T> {
 					if let AccountVote::Standard { vote, .. } = account_vote {
 						ReferendumInfoOf::<T>::mutate(ref_index, |maybe_info|
 							if let Some(ReferendumInfo::Ongoing(ref mut status)) = maybe_info {
-								status.tally.reduce(vote.aye, amount, Zero::zero());
+								status.tally.reduce(vote.aye, amount);
 							}
 						);
 					}
@@ -1447,7 +1447,7 @@ impl<T: Trait> Module<T> {
 			match old {
 				Voting::Delegating { balance, target, conviction, delegations, prior, .. } => {
 					// remove any delegation votes to our current target.
-					Self::reduce_upstream_delegation(&target, conviction.votes(balance).0);
+					Self::reduce_upstream_delegation(&target, conviction.votes(balance));
 					voting.set_common(delegations, prior);
 				}
 				Voting::Direct { votes, delegations, prior } => {
@@ -1456,7 +1456,7 @@ impl<T: Trait> Module<T> {
 					voting.set_common(delegations, prior);
 				}
 			}
-			Self::increase_upstream_delegation(&target, conviction.votes(balance).0);
+			Self::increase_upstream_delegation(&target, conviction.votes(balance));
 			// Extend the lock to `balance` (rather than setting it) since we don't know what other
 			// votes are in place.
 			T::Currency::extend_lock(
@@ -1485,7 +1485,7 @@ impl<T: Trait> Module<T> {
 					mut prior,
 				} => {
 					// remove any delegation votes to our current target.
-					Self::reduce_upstream_delegation(&target, conviction.votes(balance).0);
+					Self::reduce_upstream_delegation(&target, conviction.votes(balance));
 					let now = system::Module::<T>::block_number();
 					let lock_periods = conviction.lock_periods().into();
 					prior.accumulate(now + T::EnactmentPeriod::get() * lock_periods, balance);
