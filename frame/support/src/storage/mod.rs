@@ -73,6 +73,10 @@ pub trait StorageValue<T: FullCodec> {
 	/// Store a value under this key into the provided storage instance.
 	fn put<Arg: EncodeLike<T>>(val: Arg);
 
+	/// Store a value under this key into the provided storage instance; this uses the query
+	/// type rather than the underlying value.
+	fn set(val: Self::Query);
+
 	/// Mutate the value
 	fn mutate<R, F: FnOnce(&mut Self::Query) -> R>(f: F) -> R;
 

@@ -300,7 +300,7 @@ pub type EraIndex = u32;
 pub type RewardPoint = u32;
 
 /// Information regarding the active era (era in used in session).
-#[derive(Encode, Decode, Debug)]
+#[derive(Encode, Decode, RuntimeDebug)]
 pub struct ActiveEraInfo<Moment> {
 	/// Index of era.
 	index: EraIndex,
@@ -314,7 +314,7 @@ pub struct ActiveEraInfo<Moment> {
 /// Reward points of an era. Used to split era total payout between validators.
 ///
 /// This points will be used to reward validators and their respective nominators.
-#[derive(PartialEq, Encode, Decode, Default, Debug)]
+#[derive(PartialEq, Encode, Decode, Default, RuntimeDebug)]
 pub struct EraRewardPoints<AccountId: Ord> {
 	/// Total number of points. Equals the sum of reward points for each validator.
 	total: RewardPoint,

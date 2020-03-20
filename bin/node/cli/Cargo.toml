@@ -151,3 +151,4 @@ wasmtime = [
 	"sc-cli/wasmtime",
 	"sc-service/wasmtime",
 ]
+runtime-benchmarks = [ "node-runtime/runtime-benchmarks" ]
