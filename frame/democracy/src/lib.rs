@@ -159,7 +159,7 @@ use sp_runtime::{
 };
 use codec::{Ref, Encode, Decode, Input, Output};
 use frame_support::{
-	decl_module, decl_storage, decl_event, decl_error, ensure, Parameter,
+	decl_module, decl_storage, decl_event, decl_error, ensure, Parameter, IterableStorageMap,
 	weights::SimpleDispatchInfo,
 	traits::{
 		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier, Get,
@@ -420,11 +420,11 @@ decl_storage! {
 		/// Map of hashes to the proposal preimage, along with who registered it and their deposit.
 		/// The block number is the block at which it was deposited.
 		pub Preimages:
-			map hasher(blake2_256) T::Hash
+			map hasher(identity) T::Hash
 			=> Option<(Vec<u8>, T::AccountId, BalanceOf<T>, T::BlockNumber)>;
 		/// Those who have locked a deposit.
 		pub DepositOf get(fn deposit_of):
-			map hasher(blake2_256) PropIndex => Option<(BalanceOf<T>, Vec<T::AccountId>)>;
+			map hasher(twox_64_concat) PropIndex => Option<(BalanceOf<T>, Vec<T::AccountId>)>;
 
 		/// The next free referendum index, aka the number of referenda started so far.
 		pub ReferendumCount get(fn referendum_count) build(|_| 0 as ReferendumIndex): ReferendumIndex;
@@ -433,32 +433,32 @@ decl_storage! {
 		pub LowestUnbaked get(fn lowest_unbaked) build(|_| 0 as ReferendumIndex): ReferendumIndex;
 		/// Information concerning any given referendum.
 		pub ReferendumInfoOf get(fn referendum_info):
-			map hasher(blake2_256) ReferendumIndex
+			map hasher(twox_64_concat) ReferendumIndex
 			=> Option<ReferendumInfo<T::BlockNumber, T::Hash>>;
 		/// Queue of successful referenda to be dispatched. Stored ordered by block number.
 		pub DispatchQueue get(fn dispatch_queue): Vec<(T::BlockNumber, T::Hash, ReferendumIndex)>;
 
 		/// Get the voters for the current proposal.
 		pub VotersFor get(fn voters_for):
-			map hasher(blake2_256) ReferendumIndex => Vec<T::AccountId>;
+			map hasher(twox_64_concat) ReferendumIndex => Vec<T::AccountId>;
 
 		/// Get the vote in a given referendum of a particular voter. The result is meaningful only
 		/// if `voters_for` includes the voter when called with the referendum (you'll get the
 		/// default `Vote` value otherwise). If you don't want to check `voters_for`, then you can
 		/// also check for simple existence with `VoteOf::contains_key` first.
-		pub VoteOf get(fn vote_of): map hasher(blake2_256) (ReferendumIndex, T::AccountId) => Vote;
+		pub VoteOf get(fn vote_of): map hasher(twox_64_concat) (ReferendumIndex, T::AccountId) => Vote;
 
 		/// Who is able to vote for whom. Value is the fund-holding account, key is the
 		/// vote-transaction-sending account.
-		pub Proxy get(fn proxy): map hasher(blake2_256) T::AccountId => Option<ProxyState<T::AccountId>>;
+		pub Proxy get(fn proxy): map hasher(twox_64_concat) T::AccountId => Option<ProxyState<T::AccountId>>;
 
 		/// Get the account (and lock periods) to which another account is delegating vote.
 		pub Delegations get(fn delegations):
-			linked_map hasher(blake2_256) T::AccountId => (T::AccountId, Conviction);
+			map hasher(twox_64_concat) T::AccountId => (T::AccountId, Conviction);
 
 		/// Accounts for which there are locks in action which may be removed at some point in the
 		/// future. The value is the block number at which the lock expires and may be removed.
-		pub Locks get(locks): map hasher(blake2_256) T::AccountId => Option<T::BlockNumber>;
+		pub Locks get(locks): map hasher(twox_64_concat) T::AccountId => Option<T::BlockNumber>;
 
 		/// True if the last referendum tabled was submitted externally. False if it was a public
 		/// proposal.
@@ -473,10 +473,10 @@ decl_storage! {
 		/// A record of who vetoed what. Maps proposal hash to a possible existent block number
 		/// (until when it may not be resubmitted) and who vetoed it.
 		pub Blacklist get(fn blacklist):
-			map hasher(blake2_256) T::Hash => Option<(T::BlockNumber, Vec<T::AccountId>)>;
+			map hasher(identity) T::Hash => Option<(T::BlockNumber, Vec<T::AccountId>)>;
 
 		/// Record of all proposals that have been subject to emergency cancellation.
-		pub Cancellations: map hasher(blake2_256) T::Hash => bool;
+		pub Cancellations: map hasher(identity) T::Hash => bool;
 	}
 }
 
@@ -586,6 +586,7 @@ decl_error! {
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
+
 		/// The minimum period of locking and the period between a proposal being approved and enacted.
 		///
 		/// It should generally be a little more than the unstake period to ensure that
@@ -1290,7 +1291,7 @@ impl<T: Trait> Module<T> {
 		recursion_limit: u32,
 	) -> (BalanceOf<T>, BalanceOf<T>) {
 		if recursion_limit == 0 { return (Zero::zero(), Zero::zero()); }
-		<Delegations<T>>::enumerate()
+		<Delegations<T>>::iter()
 			.filter(|(delegator, (delegate, _))|
 				*delegate == to && !<VoteOf<T>>::contains_key(&(ref_index, delegator.clone()))
 			).fold(
@@ -1473,19 +1474,22 @@ impl<T: Trait> Module<T> {
 		let (approve, against, capital) = Self::tally(index);
 		let total_issuance = T::Currency::total_issuance();
 		let approved = info.threshold.approved(approve, against, capital, total_issuance);
+		let enactment_period = T::EnactmentPeriod::get();
 
 		// Logic defined in https://www.slideshare.net/gavofyork/governance-in-polkadot-poc3
 		// Essentially, we extend the lock-period of the coins behind the winning votes to be the
 		// vote strength times the public delay period from now.
-		for (a, Vote { conviction, .. }) in Self::voters_for(index).into_iter()
+		for (a, lock_periods) in Self::voters_for(index).into_iter()
 			.map(|a| (a.clone(), Self::vote_of((index, a))))
 			// ^^^ defensive only: all items come from `voters`; for an item to be in `voters`
 			// there must be a vote registered; qed
 			.filter(|&(_, vote)| vote.aye == approved)  // Just the winning coins
+			.map(|(a, vote)| (a, vote.conviction.lock_periods()))
+			.filter(|&(_, lock_periods)| !lock_periods.is_zero()) // Just the lock votes
 		{
 			// now plus: the base lock period multiplied by the number of periods this voter
 			// offered to lock should they win...
-			let locked_until = now + T::EnactmentPeriod::get() * conviction.lock_periods().into();
+			let locked_until = now + enactment_period * lock_periods.into();
 			Locks::<T>::insert(&a, locked_until);
 			// ...extend their bondage until at least then.
 			T::Currency::extend_lock(
@@ -1494,7 +1498,6 @@ impl<T: Trait> Module<T> {
 				Bounded::max_value(),
 				WithdrawReason::Transfer.into()
 			);
-
 		}
 
 		Self::clear_referendum(index);
@@ -1555,12 +1558,11 @@ mod tests {
 	};
 	use sp_core::H256;
 	use sp_runtime::{
-		traits::{BlakeTwo256, IdentityLookup, Bounded, BadOrigin, OnRuntimeUpgrade},
+		traits::{BlakeTwo256, IdentityLookup, Bounded, BadOrigin},
 		testing::Header, Perbill,
 	};
 	use pallet_balances::{BalanceLock, Error as BalancesError};
 	use frame_system::EnsureSignedBy;
-	use sp_storage::Storage;
 
 	const AYE: Vote = Vote{ aye: true, conviction: Conviction::None };
 	const NAY: Vote = Vote{ aye: false, conviction: Conviction::None };
@@ -2850,6 +2852,28 @@ mod tests {
 			fast_forward_to(18);
 			assert_ok!(Democracy::unlock(Origin::signed(1), 2));
 			assert_noop!(Democracy::unlock(Origin::signed(1), 2), Error::<Test>::NotLocked);
+		});
+	}
+
+	#[test]
+	fn no_locks_without_conviction_should_work() {
+		new_test_ext().execute_with(|| {
+			System::set_block_number(0);
+			let r = Democracy::inject_referendum(
+				2,
+				set_balance_proposal_hash_and_note(2),
+				VoteThreshold::SuperMajorityApprove,
+				0,
+			);
+			assert_ok!(Democracy::vote(Origin::signed(1), r, Vote {
+				aye: true,
+				conviction: Conviction::None,
+			}));
+
+			fast_forward_to(2);
+
+			assert_eq!(Balances::free_balance(42), 2);
+			assert_eq!(Balances::locks(1), vec![]);
 		});
 	}
 

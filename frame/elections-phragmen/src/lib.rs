@@ -84,12 +84,11 @@
 
 use sp_std::prelude::*;
 use sp_runtime::{
-	print, DispatchResult, DispatchError, Perbill,
-	traits::{Zero, StaticLookup, Convert},
+	print, DispatchResult, DispatchError, Perbill, traits::{Zero, StaticLookup, Convert},
 };
 use frame_support::{
 	decl_storage, decl_event, ensure, decl_module, decl_error, weights::SimpleDispatchInfo,
-	traits::{
+	storage::{StorageMap, IterableStorageMap}, traits::{
 		Currency, Get, LockableCurrency, LockIdentifier, ReservableCurrency, WithdrawReasons,
 		ChangeMembers, OnUnbalanced, WithdrawReason, Contains, BalanceStatus
 	}
@@ -160,9 +159,9 @@ decl_storage! {
 		pub ElectionRounds get(fn election_rounds): u32 = Zero::zero();
 
 		/// Votes of a particular voter, with the round index of the votes.
-		pub VotesOf get(fn votes_of): linked_map hasher(blake2_256) T::AccountId => Vec<T::AccountId>;
+		pub VotesOf get(fn votes_of): map hasher(twox_64_concat) T::AccountId => Vec<T::AccountId>;
 		/// Locked stake of a voter.
-		pub StakeOf get(fn stake_of): map hasher(blake2_256) T::AccountId => BalanceOf<T>;
+		pub StakeOf get(fn stake_of): map hasher(twox_64_concat) T::AccountId => BalanceOf<T>;
 
 		/// The present candidate list. Sorted based on account-id. A current member or a runner can
 		/// never enter this vector and is always implicitly assumed to be a candidate.
@@ -637,7 +636,7 @@ impl<T: Trait> Module<T> {
 		// previous runners_up are also always candidates for the next round.
 		candidates.append(&mut Self::runners_up_ids());
 
-		let voters_and_votes = <VotesOf<T>>::enumerate()
+		let voters_and_votes = VotesOf::<T>::iter()
 			.map(|(v, i)| (v, i))
 			.collect::<Vec<(T::AccountId, Vec<T::AccountId>)>>();
 		let maybe_phragmen_result = sp_phragmen::elect::<_, _, _, T::CurrencyToVote, Perbill>(
@@ -1001,7 +1000,7 @@ mod tests {
 	}
 
 	fn all_voters() -> Vec<u64> {
-		<VotesOf<Test>>::enumerate().map(|(v, _)| v).collect::<Vec<u64>>()
+		<VotesOf<Test>>::iter().map(|(v, _)| v).collect::<Vec<u64>>()
 	}
 
 	fn balances(who: &u64) -> (u64, u64) {

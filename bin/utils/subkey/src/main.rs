@@ -135,7 +135,6 @@ trait Crypto: Sized {
 					);
 				},
 			}
-
 		} else if let Ok((public_key, v)) =
 		<Self::Pair as Pair>::Public::from_string_with_version(uri)
 		{
@@ -167,7 +166,7 @@ trait Crypto: Sized {
 				},
 			}
 		} else {
-			println!("Invalid phrase/URI given");
+			eprintln!("Invalid phrase/URI given");
 		}
 	}
 }

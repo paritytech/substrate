@@ -2088,13 +2088,107 @@ fn deploy_works_without_gas_price() {
 	});
 }
 
+const CODE_DRAIN: &str = r#"
+(module
+	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
+	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
+	(import "env" "ext_balance" (func $ext_balance))
+	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func $assert (param i32)
+		(block $ok
+			(br_if $ok
+				(get_local 0)
+			)
+			(unreachable)
+		)
+	)
+
+	(func (export "deploy"))
+
+	(func (export "call")
+		;; Send entire remaining balance to the 0 address.
+		(call $ext_balance)
+
+		;; Balance should be encoded as a u64.
+		(call $assert
+			(i32.eq
+				(call $ext_scratch_size)
+				(i32.const 8)
+			)
+		)
+
+		;; Read balance into memory.
+		(call $ext_scratch_read
+			(i32.const 8)	;; Pointer to write balance to
+			(i32.const 0)	;; Offset into scratch buffer
+			(i32.const 8)	;; Length of encoded balance
+		)
+
+		;; Self-destruct by sending full balance to the 0 address.
+		(call $assert
+			(i32.eq
+				(call $ext_call
+					(i32.const 0)	;; Pointer to destination address
+					(i32.const 8)	;; Length of destination address
+					(i64.const 0)	;; How much gas to devote for the execution. 0 = all.
+					(i32.const 8)	;; Pointer to the buffer with value to transfer
+					(i32.const 8)	;; Length of the buffer with value to transfer
+					(i32.const 0)	;; Pointer to input data buffer address
+					(i32.const 0)	;; Length of input data buffer
+				)
+				(i32.const 0)
+			)
+		)
+	)
+)
+"#;
+
+#[test]
+fn cannot_self_destruct_through_draning() {
+	let (wasm, code_hash) = compile_module::<Test>(CODE_DRAIN).unwrap();
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		Balances::deposit_creating(&ALICE, 1_000_000);
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
+
+		// Instantiate the BOB contract.
+		assert_ok!(Contracts::instantiate(
+			Origin::signed(ALICE),
+			100_000,
+			100_000,
+			code_hash.into(),
+			vec![],
+		));
+
+		// Check that the BOB contract has been instantiated.
+		assert_matches!(
+			ContractInfoOf::<Test>::get(BOB),
+			Some(ContractInfo::Alive(_))
+		);
+
+		// Call BOB with no input data, forcing it to run until out-of-balance
+		// and eventually trapping because below existential deposit.
+		assert_err!(
+			Contracts::call(
+				Origin::signed(ALICE),
+				BOB,
+				0,
+				100_000,
+				vec![],
+			),
+			"contract trapped during execution"
+		);
+	});
+}
+
 const CODE_SELF_DESTRUCT: &str = r#"
 (module
 	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
 	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
 	(import "env" "ext_address" (func $ext_address))
-	(import "env" "ext_balance" (func $ext_balance))
 	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
+	(import "env" "ext_terminate" (func $ext_terminate (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(func $assert (param i32)
@@ -2148,80 +2242,20 @@ const CODE_SELF_DESTRUCT: &str = r#"
 					)
 				)
 			)
-		)
-
-		;; Send entire remaining balance to the 0 address.
-		(call $ext_balance)
-
-		;; Balance should be encoded as a u64.
-		(call $assert
-			(i32.eq
-				(call $ext_scratch_size)
-				(i32.const 8)
-			)
-		)
-
-		;; Read balance into memory.
-		(call $ext_scratch_read
-			(i32.const 8)	;; Pointer to write balance to
-			(i32.const 0)	;; Offset into scratch buffer
-			(i32.const 8)	;; Length of encoded balance
-		)
-
-		;; Self-destruct by sending full balance to the 0 address.
-		(call $assert
-			(i32.eq
-				(call $ext_call
-					(i32.const 0)	;; Pointer to destination address
-					(i32.const 8)	;; Length of destination address
-					(i64.const 0)	;; How much gas to devote for the execution. 0 = all.
-					(i32.const 8)	;; Pointer to the buffer with value to transfer
-					(i32.const 8)	;; Length of the buffer with value to transfer
-					(i32.const 0)	;; Pointer to input data buffer address
-					(i32.const 0)	;; Length of input data buffer
+			(else
+				;; Try to terminate and give balance to django.
+				(call $ext_terminate
+					(i32.const 32)	;; Pointer to beneficiary address
+					(i32.const 8)	;; Length of beneficiary address
 				)
-				(i32.const 0)
+				(unreachable) ;; ext_terminate never returns
 			)
 		)
 	)
+	;; Address of django
+	(data (i32.const 32) "\04\00\00\00\00\00\00\00")
 )
 "#;
-
-#[test]
-fn self_destruct_by_draining_balance() {
-	let (wasm, code_hash) = compile_module::<Test>(CODE_SELF_DESTRUCT).unwrap();
-	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
-
-		// Instantiate the BOB contract.
-		assert_ok!(Contracts::instantiate(
-			Origin::signed(ALICE),
-			100_000,
-			100_000,
-			code_hash.into(),
-			vec![],
-		));
-
-		// Check that the BOB contract has been instantiated.
-		assert_matches!(
-			ContractInfoOf::<Test>::get(BOB),
-			Some(ContractInfo::Alive(_))
-		);
-
-		// Call BOB with no input data, forcing it to self-destruct.
-		assert_ok!(Contracts::call(
-			Origin::signed(ALICE),
-			BOB,
-			0,
-			100_000,
-			vec![],
-		));
-
-		// Check that BOB is now dead.
-		assert!(ContractInfoOf::<Test>::get(BOB).is_none());
-	});
-}
 
 #[test]
 fn cannot_self_destruct_while_live() {
@@ -2263,6 +2297,48 @@ fn cannot_self_destruct_while_live() {
 			ContractInfoOf::<Test>::get(BOB),
 			Some(ContractInfo::Alive(_))
 		);
+	});
+}
+
+#[test]
+fn self_destruct_works() {
+	let (wasm, code_hash) = compile_module::<Test>(CODE_SELF_DESTRUCT).unwrap();
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		Balances::deposit_creating(&ALICE, 1_000_000);
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
+
+		// Instantiate the BOB contract.
+		assert_ok!(Contracts::instantiate(
+			Origin::signed(ALICE),
+			100_000,
+			100_000,
+			code_hash.into(),
+			vec![],
+		));
+
+		// Check that the BOB contract has been instantiated.
+		assert_matches!(
+			ContractInfoOf::<Test>::get(BOB),
+			Some(ContractInfo::Alive(_))
+		);
+
+		// Call BOB without input data which triggers termination.
+		assert_matches!(
+			Contracts::call(
+				Origin::signed(ALICE),
+				BOB,
+				0,
+				100_000,
+				vec![],
+			),
+			Ok(())
+		);
+
+		// Check that account is gone
+		assert!(ContractInfoOf::<Test>::get(BOB).is_none());
+
+		// check that the beneficiary (django) got remaining balance
+		assert_eq!(Balances::free_balance(DJANGO), 100_000);
 	});
 }
 
@@ -2524,8 +2600,8 @@ fn cannot_self_destruct_in_constructor() {
 		Balances::deposit_creating(&ALICE, 1_000_000);
 		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
 
-		// Fail to instantiate the BOB contract since its final balance is below existential
-		// deposit.
+		// Fail to instantiate the BOB because the call that is issued in the deploy
+		// function exhausts all balances which puts it below the existential deposit.
 		assert_err!(
 			Contracts::instantiate(
 				Origin::signed(ALICE),
@@ -2534,7 +2610,7 @@ fn cannot_self_destruct_in_constructor() {
 				code_hash.into(),
 				vec![],
 			),
-			"insufficient remaining balance"
+			"contract trapped during execution"
 		);
 	});
 }
