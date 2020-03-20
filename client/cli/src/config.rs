@@ -23,10 +23,9 @@ use names::{Generator, Name};
 use sc_service::config::{
 	Configuration, DatabaseConfig, ExecutionStrategies, ExtTransport, KeystoreConfig,
 	NetworkConfiguration, PruningMode, Roles, TransactionPoolOptions, WasmExecutionMethod,
+	NodeKeyConfig, TelemetryEndpoints,
 };
 use sc_service::{ChainSpec, ChainSpecExtension, RuntimeGenesis};
-use sc_network::config::NodeKeyConfig;
-use sc_telemetry::TelemetryEndpoints;
 use std::future::Future;
 use std::net::SocketAddr;
 use std::path::PathBuf;

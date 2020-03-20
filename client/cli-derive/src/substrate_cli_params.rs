@@ -173,7 +173,7 @@ pub(crate) fn substrate_cli_params(
 		if missing("get_keystore_config") {
 			i.items.push(ImplItem::Verbatim(quote! {
 				fn get_node_key(&self, net_config_dir: &::std::path::PathBuf)
-				-> ::sc_cli::Result<::sc_network::config::NodeKeyConfig> {
+				-> ::sc_cli::Result<::sc_service::config::NodeKeyConfig> {
 					self.#ident.get_node_key(net_config_dir)
 				}
 			}));
@@ -190,7 +190,7 @@ pub(crate) fn substrate_cli_params(
 					base_path: &::std::path::PathBuf,
 					client_id: &str,
 					node_name: &str,
-					node_key: ::sc_network::config::NodeKeyConfig,
+					node_key: ::sc_service::config::NodeKeyConfig,
 				) -> ::sc_cli::Result<::sc_service::config::NetworkConfiguration>
 				where
 					G: ::sc_service::RuntimeGenesis,
