@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog].
 
 ## Unreleased
 
+## 2.0.0-alpha.4 -> 2.0.0-alpha.5
+
+Runtime
+-------
+
+* Adds new event phase `Initialization` (#5302)
+
 ## 2.0.0-alpha.3 -> 2.0.0-alpha.4
 
 Runtime
