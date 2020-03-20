@@ -193,6 +193,7 @@ macro_rules! new_full {
 				sentry_nodes,
 				service.keystore(),
 				dht_event_stream,
+				service.prometheus_registry(),
 			);
 
 			service.spawn_task("authority-discovery", authority_discovery);

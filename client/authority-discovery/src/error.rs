@@ -46,4 +46,6 @@ pub enum Error {
 	EncodingDecodingScale(codec::Error),
 	/// Failed to parse a libp2p multi address.
 	ParsingMultiaddress(libp2p::core::multiaddr::Error),
+	/// Failed to register Prometheus metric.
+	Prometheus(prometheus_endpoint::PrometheusError),
 }
