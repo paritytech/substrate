@@ -227,9 +227,9 @@ test-frame-examples-compile-to-wasm:
       - $DEPLOY_TAG
   script:
     - cd frame/example-offchain-worker/
-    - cargo build --target=wasm32-unknown-unknown --no-default-features
+    - cargo +nightly build --target=wasm32-unknown-unknown --no-default-features
     - cd ../example
-    - cargo build --target=wasm32-unknown-unknown --no-default-features
+    - cargo +nightly build --target=wasm32-unknown-unknown --no-default-features
     - sccache -s
 
 test-wasmtime:
