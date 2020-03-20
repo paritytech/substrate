@@ -230,8 +230,8 @@ impl<B, C, E, I, P, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for AuraW
 		authorities(self.client.as_ref(), &BlockId::Hash(header.hash()))
 	}
 
-	fn authorities_len(&self, epoch_data: &Self::EpochData) -> usize {
-		epoch_data.len()
+	fn authorities_len(&self, epoch_data: &Self::EpochData) -> Option<usize> {
+		Some(epoch_data.len())
 	}
 
 	fn claim_slot(
@@ -833,6 +833,7 @@ mod tests {
 	use sc_client::BlockchainEvents;
 	use sp_consensus_aura::sr25519::AuthorityPair;
 	use std::task::Poll;
+	use sc_block_builder::BlockBuilderProvider;
 
 	type Error = sp_blockchain::Error;
 

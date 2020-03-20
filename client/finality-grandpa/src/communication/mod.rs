@@ -30,6 +30,7 @@
 use futures::{prelude::*, channel::mpsc};
 use log::{debug, trace};
 use parking_lot::Mutex;
+use prometheus_endpoint::Registry;
 use std::{pin::Pin, sync::Arc, task::{Context, Poll}};
 
 use finality_grandpa::Message::{Prevote, Precommit, PrimaryPropose};
@@ -142,7 +143,7 @@ pub(crate) fn global_topic<B: BlockT>(set_id: SetIdNumber) -> B::Hash {
 /// Bridge between the underlying network service, gossiping consensus messages and Grandpa
 pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>> {
 	service: N,
-	gossip_engine: GossipEngine<B>,
+	gossip_engine: Arc<Mutex<GossipEngine<B>>>,
 	validator: Arc<GossipValidator<B>>,
 
 	/// Sender side of the neighbor packet channel.
@@ -178,19 +179,21 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		service: N,
 		config: crate::Config,
 		set_state: crate::environment::SharedVoterSetState<B>,
+		prometheus_registry: Option<&Registry>,
 	) -> Self {
 		let (validator, report_stream) = GossipValidator::new(
 			config,
 			set_state.clone(),
+			prometheus_registry,
 		);
 
 		let validator = Arc::new(validator);
-		let gossip_engine = GossipEngine::new(
+		let gossip_engine = Arc::new(Mutex::new(GossipEngine::new(
 			service.clone(),
 			GRANDPA_ENGINE_ID,
 			GRANDPA_PROTOCOL_NAME,
 			validator.clone()
-		);
+		)));
 
 		{
 			// register all previous votes with the gossip service so that they're
@@ -214,7 +217,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 						}
 					);
 
-					gossip_engine.register_gossip_message(
+					gossip_engine.lock().register_gossip_message(
 						topic,
 						message.encode(),
 					);
@@ -293,7 +296,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		});
 
 		let topic = round_topic::<B>(round.0, set_id.0);
-		let incoming = self.gossip_engine.messages_for(topic)
+		let incoming = self.gossip_engine.lock().messages_for(topic)
 			.filter_map(move |notification| {
 				let decoded = GossipMessage::<B>::decode(&mut &notification.message[..]);
 
@@ -422,11 +425,11 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 impl<B: BlockT, N: Network<B>> Future for NetworkBridge<B, N> {
 	type Output = Result<(), Error>;
 
-	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		loop {
 			match self.neighbor_packet_worker.lock().poll_next_unpin(cx) {
 				Poll::Ready(Some((to, packet))) => {
-					self.gossip_engine.send_message(to, packet.encode());
+					self.gossip_engine.lock().send_message(to, packet.encode());
 				},
 				Poll::Ready(None) => return Poll::Ready(
 					Err(Error::Network("Neighbor packet worker stream closed.".into()))
@@ -438,7 +441,7 @@ impl<B: BlockT, N: Network<B>> Future for NetworkBridge<B, N> {
 		loop {
 			match self.gossip_validator_report_stream.lock().poll_next_unpin(cx) {
 				Poll::Ready(Some(PeerReport { who, cost_benefit })) => {
-					self.gossip_engine.report(who, cost_benefit);
+					self.gossip_engine.lock().report(who, cost_benefit);
 				},
 				Poll::Ready(None) => return Poll::Ready(
 					Err(Error::Network("Gossip validator report stream closed.".into()))
@@ -447,9 +450,10 @@ impl<B: BlockT, N: Network<B>> Future for NetworkBridge<B, N> {
 			}
 		}
 
-		match self.gossip_engine.poll_unpin(cx) {
-			// The gossip engine future finished. We should do the same.
-			Poll::Ready(()) => return Poll::Ready(Ok(())),
+		match self.gossip_engine.lock().poll_unpin(cx) {
+			Poll::Ready(()) => return Poll::Ready(
+				Err(Error::Network("Gossip engine future finished.".into()))
+			),
 			Poll::Pending => {},
 		}
 
@@ -458,7 +462,7 @@ impl<B: BlockT, N: Network<B>> Future for NetworkBridge<B, N> {
 }
 
 fn incoming_global<B: BlockT>(
-	mut gossip_engine: GossipEngine<B>,
+	gossip_engine: Arc<Mutex<GossipEngine<B>>>,
 	topic: B::Hash,
 	voters: Arc<VoterSet<AuthorityId>>,
 	gossip_validator: Arc<GossipValidator<B>>,
@@ -467,16 +471,16 @@ fn incoming_global<B: BlockT>(
 	let process_commit = move |
 		msg: FullCommitMessage<B>,
 		mut notification: sc_network_gossip::TopicNotification,
-		gossip_engine: &mut GossipEngine<B>,
+		gossip_engine: &Arc<Mutex<GossipEngine<B>>>,
 		gossip_validator: &Arc<GossipValidator<B>>,
 		voters: &VoterSet<AuthorityId>,
 	| {
-		let precommits_signed_by: Vec<String> =
-			msg.message.auth_data.iter().map(move |(_, a)| {
-				format!("{}", a)
-			}).collect();
-
 		if voters.len() <= TELEMETRY_VOTERS_LIMIT {
+			let precommits_signed_by: Vec<String> =
+				msg.message.auth_data.iter().map(move |(_, a)| {
+					format!("{}", a)
+				}).collect();
+
 			telemetry!(CONSENSUS_INFO; "afg.received_commit";
 				"contains_precommits_signed_by" => ?precommits_signed_by,
 				"target_number" => ?msg.message.target_number.clone(),
@@ -491,13 +495,14 @@ fn incoming_global<B: BlockT>(
 			msg.set_id,
 		) {
 			if let Some(who) = notification.sender {
-				gossip_engine.report(who, cost);
+				gossip_engine.lock().report(who, cost);
 			}
 
 			return None;
 		}
 
-		let round = msg.round.0;
+		let round = msg.round;
+		let set_id = msg.set_id;
 		let commit = msg.message;
 		let finalized_number = commit.target_number;
 		let gossip_validator = gossip_validator.clone();
@@ -509,29 +514,31 @@ fn incoming_global<B: BlockT>(
 				// any discrepancy between the actual ghost and the claimed
 				// finalized number.
 				gossip_validator.note_commit_finalized(
+					round,
+					set_id,
 					finalized_number,
 					|to, neighbor| neighbor_sender.send(to, neighbor),
 				);
 
-				gossip_engine.gossip_message(topic, notification.message.clone(), false);
+				gossip_engine.lock().gossip_message(topic, notification.message.clone(), false);
 			}
 			voter::CommitProcessingOutcome::Bad(_) => {
 				// report peer and do not gossip.
 				if let Some(who) = notification.sender.take() {
-					gossip_engine.report(who, cost::INVALID_COMMIT);
+					gossip_engine.lock().report(who, cost::INVALID_COMMIT);
 				}
 			}
 		};
 
 		let cb = voter::Callback::Work(Box::new(cb));
 
-		Some(voter::CommunicationIn::Commit(round, commit, cb))
+		Some(voter::CommunicationIn::Commit(round.0, commit, cb))
 	};
 
 	let process_catch_up = move |
 		msg: FullCatchUpMessage<B>,
 		mut notification: sc_network_gossip::TopicNotification,
-		gossip_engine: &mut GossipEngine<B>,
+		gossip_engine: &Arc<Mutex<GossipEngine<B>>>,
 		gossip_validator: &Arc<GossipValidator<B>>,
 		voters: &VoterSet<AuthorityId>,
 	| {
@@ -544,7 +551,7 @@ fn incoming_global<B: BlockT>(
 			msg.set_id,
 		) {
 			if let Some(who) = notification.sender {
-				gossip_engine.report(who, cost);
+				gossip_engine.lock().report(who, cost);
 			}
 
 			return None;
@@ -554,7 +561,7 @@ fn incoming_global<B: BlockT>(
 			if let voter::CatchUpProcessingOutcome::Bad(_) = outcome {
 				// report peer
 				if let Some(who) = notification.sender.take() {
-					gossip_engine.report(who, cost::INVALID_CATCH_UP);
+					gossip_engine.lock().report(who, cost::INVALID_CATCH_UP);
 				}
 			}
 
@@ -566,7 +573,7 @@ fn incoming_global<B: BlockT>(
 		Some(voter::CommunicationIn::CatchUp(msg.message, cb))
 	};
 
-	gossip_engine.messages_for(topic)
+	gossip_engine.clone().lock().messages_for(topic)
 		.filter_map(|notification| {
 			// this could be optimized by decoding piecewise.
 			let decoded = GossipMessage::<B>::decode(&mut &notification.message[..]);
@@ -578,9 +585,9 @@ fn incoming_global<B: BlockT>(
 		.filter_map(move |(notification, msg)| {
 			future::ready(match msg {
 				GossipMessage::Commit(msg) =>
-					process_commit(msg, notification, &mut gossip_engine, &gossip_validator, &*voters),
+					process_commit(msg, notification, &gossip_engine, &gossip_validator, &*voters),
 				GossipMessage::CatchUp(msg) =>
-					process_catch_up(msg, notification, &mut gossip_engine, &gossip_validator, &*voters),
+					process_catch_up(msg, notification, &gossip_engine, &gossip_validator, &*voters),
 				_ => {
 					debug!(target: "afg", "Skipping unknown message type");
 					None
@@ -688,7 +695,7 @@ pub(crate) struct OutgoingMessages<Block: BlockT> {
 	set_id: SetIdNumber,
 	locals: Option<(AuthorityPair, AuthorityId)>,
 	sender: mpsc::Sender<SignedMessage<Block>>,
-	network: GossipEngine<Block>,
+	network: Arc<Mutex<GossipEngine<Block>>>,
 	has_voted: HasVoted<Block>,
 }
 
@@ -754,11 +761,11 @@ impl<Block: BlockT> Sink<Message<Block>> for OutgoingMessages<Block>
 			);
 
 			// announce the block we voted on to our peers.
-			self.network.announce(target_hash, Vec::new());
+			self.network.lock().announce(target_hash, Vec::new());
 
 			// propagate the message to peers
 			let topic = round_topic::<Block>(self.round, self.set_id);
-			self.network.gossip_message(topic, message.encode(), false);
+			self.network.lock().gossip_message(topic, message.encode(), false);
 
 			// forward the message to the inner sender.
 			return self.sender.start_send(signed).map_err(|e| {
@@ -959,7 +966,7 @@ fn check_catch_up<Block: BlockT>(
 
 /// An output sink for commit messages.
 struct CommitsOut<Block: BlockT> {
-	network: GossipEngine<Block>,
+	network: Arc<Mutex<GossipEngine<Block>>>,
 	set_id: SetId,
 	is_voter: bool,
 	gossip_validator: Arc<GossipValidator<Block>>,
@@ -969,7 +976,7 @@ struct CommitsOut<Block: BlockT> {
 impl<Block: BlockT> CommitsOut<Block> {
 	/// Create a new commit output stream.
 	pub(crate) fn new(
-		network: GossipEngine<Block>,
+		network: Arc<Mutex<GossipEngine<Block>>>,
 		set_id: SetIdNumber,
 		is_voter: bool,
 		gossip_validator: Arc<GossipValidator<Block>>,
@@ -1015,7 +1022,7 @@ impl<Block: BlockT> Sink<(RoundNumber, Commit<Block>)> for CommitsOut<Block> {
 		};
 
 		let message = GossipMessage::Commit(FullCommitMessage::<Block> {
-			round: round,
+			round,
 			set_id: self.set_id,
 			message: compact_commit,
 		});
@@ -1025,10 +1032,12 @@ impl<Block: BlockT> Sink<(RoundNumber, Commit<Block>)> for CommitsOut<Block> {
 		// the gossip validator needs to be made aware of the best commit-height we know of
 		// before gossiping
 		self.gossip_validator.note_commit_finalized(
+			round,
+			self.set_id,
 			commit.target_number,
 			|to, neighbor| self.neighbor_sender.send(to, neighbor),
 		);
-		self.network.gossip_message(topic, message.encode(), false);
+		self.network.lock().gossip_message(topic, message.encode(), false);
 
 		Ok(())
 	}

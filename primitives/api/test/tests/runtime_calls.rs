@@ -164,6 +164,12 @@ fn record_proof_works() {
 	let block_id = BlockId::Number(client.chain_info().best_number);
 	let storage_root = longest_chain.best_chain().unwrap().state_root().clone();
 
+	let runtime_code = sp_core::traits::RuntimeCode {
+		code_fetcher: &sp_core::traits::WrappedRuntimeCode(client.code_at(&block_id).unwrap().into()),
+		hash: vec![1],
+		heap_pages: None,
+	};
+
 	let transaction = Transfer {
 		amount: 1000,
 		nonce: 0,
@@ -185,12 +191,18 @@ fn record_proof_works() {
 
 	// Use the proof backend to execute `execute_block`.
 	let mut overlay = Default::default();
-	let executor = NativeExecutor::<LocalExecutor>::new(WasmExecutionMethod::Interpreted, None);
+	let executor = NativeExecutor::<LocalExecutor>::new(
+		WasmExecutionMethod::Interpreted,
+		None,
+		8,
+	);
 	execution_proof_check_on_trie_backend::<_, u64, _>(
 		&backend,
 		&mut overlay,
 		&executor,
+		sp_core::tasks::executor(),
 		"Core_execute_block",
 		&block.encode(),
+		&runtime_code,
 	).expect("Executes block while using the proof backend");
 }
