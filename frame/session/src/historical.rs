@@ -67,25 +67,7 @@ decl_storage! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn on_initialize(_n: T::BlockNumber) {
-			CachedObsolete::<T>::remove_all();
-		}
-		fn on_runtime_upgrade() {
-			migration::migrate::<T>();
-		}
-	}
-}
-
-mod migration {
-	use super::*;
-	pub fn migrate<T: Trait>() {
-		if let Some((begin, end)) = StoredRange::get() {
-			for i in begin..end {
-				HistoricalSessions::<T>::migrate_key_from_blake(i);
-			}
-		}
-	}
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 }
 
 impl<T: Trait> Module<T> {

@@ -140,7 +140,6 @@ impl frame_system::Trait for Runtime {
 	type Version = Version;
 	type ModuleToIndex = ModuleToIndex;
 	type AccountData = pallet_balances::AccountData<Balance>;
-	type MigrateAccount = (Balances, Identity, Democracy, Elections, ImOnline, Recovery, Session, Society, Staking, Vesting);
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 }
@@ -859,6 +858,13 @@ impl_runtime_apis! {
 
 			let result = match module.as_slice() {
 				b"pallet-balances" | b"balances" => Balances::run_benchmark(
+					extrinsic,
+					lowest_range_values,
+					highest_range_values,
+					steps,
+					repeat,
+				),
+				b"pallet-im-online" | b"im-online" => ImOnline::run_benchmark(
 					extrinsic,
 					lowest_range_values,
 					highest_range_values,

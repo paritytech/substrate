@@ -246,6 +246,8 @@ decl_event!(
 	{
 		/// New proposal.
 		Proposed(ProposalIndex),
+		/// A proposal was approved for an amount.
+		Approved(ProposalIndex, Balance),
 		/// Some funds have been allocated.
 		Awarded(ProposalIndex, Balance, AccountId),
 		/// A proposal was rejected; funds were slashed.
@@ -291,22 +293,8 @@ decl_error! {
 	}
 }
 
-mod migration {
-	use super::*;
-	pub fn migrate<T: Trait>() {
-		for i in 0..ProposalCount::get() {
-			Proposals::<T>::migrate_key_from_blake(i);
-		}
-		Reasons::<T>::remove_all();
-	}
-}
-
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn on_runtime_upgrade() {
-			migration::migrate::<T>();
-		}
-
 		/// Fraction of a proposal's value that should be bonded in order to place the proposal.
 		/// An accepted proposal gets these back. A rejected proposal does not.
 		const ProposalBond: Permill = T::ProposalBond::get();
@@ -406,6 +394,8 @@ decl_module! {
 			proposal.approved = true;
 			AmountApproved::<T>::put(new_amount);
 			Proposals::<T>::insert(proposal_id, proposal);
+
+			Self::deposit_event(Event::<T>::Approved(proposal_id, amount_approved));
 		}
 
 		/// Payout an approved proposal, returning the deposit taken for making the proposal.

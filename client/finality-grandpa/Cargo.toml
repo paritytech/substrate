@@ -37,11 +37,11 @@ sp-finality-tracker = { version = "2.0.0-alpha.4", path = "../../primitives/fina
 sp-finality-grandpa = { version = "2.0.0-alpha.4", path = "../../primitives/finality-grandpa" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.8.0-alpha.4"}
 sc-block-builder = { version = "0.8.0-alpha.4", path = "../block-builder" }
-finality-grandpa = { version = "0.11.1", features = ["derive-codec"] }
+finality-grandpa = { version = "0.11.2", features = ["derive-codec"] }
 pin-project = "0.4.6"
 
 [dev-dependencies]
-finality-grandpa = { version = "0.11.1", features = ["derive-codec", "test-helpers"] }
+finality-grandpa = { version = "0.11.2", features = ["derive-codec", "test-helpers"] }
 sc-network = { version = "0.8.0-alpha.4", path = "../network" }
 sc-network-test = { version = "0.8.0-dev", path = "../network/test" }
 sp-keyring = { version = "2.0.0-alpha.4", path = "../../primitives/keyring" }
