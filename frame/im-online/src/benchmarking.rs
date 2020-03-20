@@ -34,7 +34,7 @@ pub fn create_heartbeat<T: Trait>(k: u32, e: u32) ->
 	Result<(crate::Heartbeat<T::BlockNumber>, <T::AuthorityId as RuntimeAppPublic>::Signature), &'static str>
 {
 	let mut keys = Vec::new();
-	for _ in 0 .. k {
+	for _ in 0..k {
 		keys.push(T::AuthorityId::generate_pair(None));
 	}
 	Keys::<T>::put(keys.clone());
