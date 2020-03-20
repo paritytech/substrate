@@ -1189,7 +1189,7 @@ fn compute_hash_on_scratch_buffer<E, F, R>(
 where
 	E: Ext,
 	F: FnOnce(&[u8]) -> R,
-	R: AsRef<[u8]> + 'static,
+	R: AsRef<[u8]>,
 {
 	// Copy the input buffer directly into the scratch buffer to avoid
 	// heap allocations.
