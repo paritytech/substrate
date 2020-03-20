@@ -564,7 +564,6 @@ decl_module! {
 		///
 		/// - `ref_index`: The index of the referendum to vote for.
 		/// - `vote`: The vote configuration.
-		/// - `balance`: The amount of balance to
 		///
 		/// # <weight>
 		/// - `O(1)`.
@@ -715,7 +714,7 @@ decl_module! {
 			// Rather complicated bit of code to ensure that either:
 			// - `voting_period` is at least `FastTrackVotingPeriod` and `origin` is `FastTrackOrigin`; or
 			// - `InstantAllowed` is `true` and `origin` is `InstantOrigin`.
-			if let Some(ensure_instant) = if voting_period < T::FastTrackVotingPeriod::get() {
+			let maybe_ensure_instant = if voting_period < T::FastTrackVotingPeriod::get() {
 				Some(origin)
 			} else {
 				if let Err(origin) = T::FastTrackOrigin::try_origin(origin) {
@@ -723,7 +722,8 @@ decl_module! {
 				} else {
 					None
 				}
-			} {
+			};
+			if let Some(ensure_instant) = maybe_ensure_instant {
 				T::InstantOrigin::ensure_origin(ensure_instant)?;
 				ensure!(T::InstantAllowed::get(), Error::<T>::InstantNotAllowed);
 			}
