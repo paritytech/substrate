@@ -463,6 +463,8 @@ decl_error! {
 		VotesExist,
 		/// The instant referendum origin is currently disallowed.
 		InstantNotAllowed,
+		/// Delegation to oneself makes no sense.
+		Nonsense,
 	}
 }
 
@@ -1097,7 +1099,8 @@ decl_module! {
 		/// *overlocking* (where the two locks are combined into a single lock that is the maximum
 		/// of both the amount locked and the time is it locked for).
 		///
-		/// The dispatch origin of this call must be _Signed_. and the
+		/// The dispatch origin of this call must be _Signed_, and the signer must have a vote
+		/// registered for referendum `index`.
 		///
 		/// - `index`: The index of referendum of the vote to be removed.
 		///
@@ -1105,13 +1108,17 @@ decl_module! {
 		/// - `O(R + log R)` where R is the number of referenda that `target` has voted on.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
-		fn unvote(origin, index: ReferendumIndex) -> DispatchResult {
+		fn remove_vote(origin, index: ReferendumIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			Self::try_unvote(&who, index, UnvoteScope::Any)
+			Self::try_remove_vote(&who, index, UnvoteScope::Any)
 		}
 
-		/// Remove a vote for a referendum that has expired, either because it was cancelled,
-		/// because the voter lost the referendum or because the conviction period is over.
+		/// Remove a vote for a referendum.
+		///
+		/// If the `target` is equal to the signer, then this function is exactly equivalent to
+		/// `remove_vote`. If not equal to the signer, then the vote must have expired,
+		/// either because the referendum was cancelled, because the voter lost the referendum or
+		/// because the conviction period is over.
 		///
 		/// The dispatch origin of this call must be _Signed_.
 		///
@@ -1123,9 +1130,10 @@ decl_module! {
 		/// - `O(R + log R)` where R is the number of referenda that `target` has voted on.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
-		fn reap_vote(origin, target: T::AccountId, index: ReferendumIndex) -> DispatchResult {
-			ensure_signed(origin)?;
-			Self::try_unvote(&target, index, UnvoteScope::OnlyExpired)
+		fn remove_other_vote(origin, target: T::AccountId, index: ReferendumIndex) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let scope = if target == who { UnvoteScope::Any } else { UnvoteScope::OnlyExpired };
+			Self::try_remove_vote(&target, index, scope)
 		}
 
 		/// Delegate the voting power (with some given conviction) of a proxied account.
@@ -1182,11 +1190,24 @@ decl_module! {
 			Self::try_undelegate(target)?;
 		}
 
+		/// Remove a proxied vote for a referendum.
+		///
+		/// Exactly equivalent to `remove_vote` except that it operates on the account that the
+		/// sender is a proxy for.
+		///
+		/// The dispatch origin of this call must be _Signed_ and the signing account must be a
+		/// proxy for some other account which has a registered vote for the referendum of `index`.
+		///
+		/// - `index`: The index of referendum of the vote to be removed.
+		///
+		/// # <weight>
+		/// - `O(R + log R)` where R is the number of referenda that `target` has voted on.
+		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
-		fn proxy_unvote(origin, index: ReferendumIndex) -> DispatchResult {
+		fn proxy_remove_vote(origin, index: ReferendumIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let target = Self::proxy(who).and_then(|a| a.as_active()).ok_or(Error::<T>::NotProxy)?;
-			Self::try_unvote(&target, index, UnvoteScope::Any)
+			Self::try_remove_vote(&target, index, UnvoteScope::Any)
 		}
 	}
 }
@@ -1332,7 +1353,7 @@ impl<T: Trait> Module<T> {
 	/// - The referendum has finished and the voter's lock period is up.
 	///
 	/// This will generally be combined with a call to `unlock`.
-	fn try_unvote(who: &T::AccountId, ref_index: ReferendumIndex, scope: UnvoteScope) -> DispatchResult {
+	fn try_remove_vote(who: &T::AccountId, ref_index: ReferendumIndex, scope: UnvoteScope) -> DispatchResult {
 		let info = ReferendumInfoOf::<T>::get(ref_index);
 		VotingOf::<T>::try_mutate(who, |voting| -> DispatchResult {
 			if let Voting::Direct { ref mut votes, delegations, ref mut prior } = voting {
@@ -1412,6 +1433,7 @@ impl<T: Trait> Module<T> {
 		conviction: Conviction,
 		balance: BalanceOf<T>,
 	) -> DispatchResult {
+		ensure!(who != target, Error::<T>::Nonsense);
 		ensure!(balance <= T::Currency::free_balance(&who), Error::<T>::TooMuch);
 		VotingOf::<T>::try_mutate(&who, |voting| -> DispatchResult {
 			let mut old = Voting::Delegating {
