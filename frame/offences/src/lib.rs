@@ -107,6 +107,9 @@ decl_module! {
 				<DeferredOffences<T>>::take()
 					.iter()
 					.for_each(|(o, p, s)| {
+						// OPTIMIZATION: this function mutates once per loop; we could manage all
+						// the writes in-memory and mutate only once. Overlay cache should alleviate
+						// the main bottleneck though.
 						if !Self::report_or_store_offence(o, p, *s) {
 							debug::native::error!(
 								target: "pallet-offences",
