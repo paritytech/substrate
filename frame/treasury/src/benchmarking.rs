@@ -19,8 +19,9 @@
 use super::*;
 
 use frame_system::RawOrigin;
+use frame_support::IterableStorageMap;
 use frame_benchmarking::{benchmarks, account};
-use sp_runtime::traits::OnFinalize;
+use sp_runtime::traits::OnInitialize;
 
 use crate::Module as Treasury;
 
@@ -94,7 +95,8 @@ fn create_approved_proposals<T: Trait>(n: u32) -> Result<(), &'static str> {
 		let proposal_id = ProposalCount::get() - 1;
 		Treasury::<T>::approve_proposal(RawOrigin::Root.into(), proposal_id)?;
 	}
-	ensure!(Approvals::get().len() == n as usize, "Not all approved");
+	ensure!(Proposals::<T>::iter().count() == n as usize, "Not all created");
+	ensure!(Proposals::<T>::iter().all(|(_, p)| p.approved == true), "Not all approved");
 	Ok(())
 }
 
@@ -130,6 +132,16 @@ benchmarks! {
 		)?;
 		let proposal_id = ProposalCount::get() - 1;
 	}: _(RawOrigin::Root, proposal_id)
+
+	payout_proposal {
+		let p in 1 .. 100;
+		let caller = account("caller", 1337, SEED);
+		let pot_account = Treasury::<T>::account_id();
+		let value = T::Currency::minimum_balance().saturating_mul(1_000_000_000.into());
+		let _ = T::Currency::make_free_balance_be(&pot_account, value);
+		create_approved_proposals::<T>(p)?;
+		let proposal_id = ProposalCount::get() - 1;
+	}: _(RawOrigin::Signed(caller), proposal_id)
 
 	report_awesome {
 		let r in 0 .. MAX_BYTES;
@@ -199,13 +211,13 @@ benchmarks! {
 		let caller = account("caller", t, SEED);
 	}: _(RawOrigin::Signed(caller), hash)
 
-	on_finalize {
+	on_initialize {
 		let p in 0 .. 100;
 		let pot_account = Treasury::<T>::account_id();
 		let value = T::Currency::minimum_balance().saturating_mul(1_000_000_000.into());
 		let _ = T::Currency::make_free_balance_be(&pot_account, value);
 		create_approved_proposals::<T>(p)?;
 	}: {
-		Treasury::<T>::on_finalize(T::BlockNumber::zero());
+		Treasury::<T>::on_initialize(T::BlockNumber::zero());
 	}
 }

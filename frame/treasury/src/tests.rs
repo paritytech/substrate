@@ -60,6 +60,9 @@ impl Contains<u64> for TenToFourteen {
 	fn sorted_members() -> Vec<u64> {
 		vec![10, 11, 12, 13, 14]
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn add(_: &u64) { unimplemented!() }
 }
 parameter_types! {
 	pub const ProposalBond: Permill = Permill::from_percent(5);
