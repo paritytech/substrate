@@ -69,31 +69,29 @@ pub trait PerThing: Sized + Saturating + Copy {
 	where N: Clone + From<Self::Inner> + UniqueSaturatedFrom<Self::Upper> + UniqueSaturatedInto<Self::Inner> + ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N> + ops::Rem<N, Output=N> + Saturating {
 		let maximum: N = Self::ACCURACY.into();
 		let part: N = self.deconstruct().into();
-		let rem_multiplied_divided: N = rem_helper::<N, Self::Inner, Self::Upper>(
+		let c = rational_mul_correction::<N, Self>(
 			x.clone(), 
-			self.deconstruct(), 
 			Self::ACCURACY, 
-			true, 
+			self.deconstruct(), 
 			truncate,
-		).saturated_into::<Self::Inner>().into();
-		(x / part).saturating_mul(maximum).saturating_add(rem_multiplied_divided)
+		);
+		(x / part).saturating_mul(maximum).saturating_add(c)
 	}
 
 	/// Overflow-prune multiplication. Accurately multiply a value by `self` without overflowing.
 	///
 	/// If `truncate` is true, round down. Otherwise round to the nearest value of N.
-	fn overflow_prune_mul<N>(self, x: N, truncate: bool,) -> N 
+	fn overflow_prune_mul<N>(self, x: N, truncate: bool) -> N 
 	where N: Clone + From<Self::Inner> + UniqueSaturatedInto<Self::Inner> + ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N> + ops::Rem<N, Output=N> {
 		let maximum: N = Self::ACCURACY.into();
 		let part: N = self.deconstruct().into();
-		let rem_multiplied_divided: N = rem_helper::<N, Self::Inner, Self::Upper>(
+		let c = rational_mul_correction::<N, Self>(
 			x.clone(), 
 			self.deconstruct(), 
 			Self::ACCURACY, 
-			false, 
 			truncate,
-		).saturated_into::<Self::Inner>().into();
-		(x / maximum) * part + rem_multiplied_divided
+		);
+		(x / maximum) * part + c
 	}
 
 	/// Consume self and return the number of parts per thing. 
@@ -115,35 +113,32 @@ pub trait PerThing: Sized + Saturating + Copy {
 	where N: Clone + Ord + From<Self::Inner> + TryInto<Self::Inner> + ops::Div<N, Output=N>;
 }
 
-/// Helper function to calculate a remainder used in `PerThing` multiplications.
-fn rem_helper<N, Inner, Upper>(x: N, part: Inner, acc: Inner, reciprocal: bool, truncate: bool) -> Upper 
+/// Compute the error due to integer division in the expression `x / denom * numer`.
+///
+/// Take the remainder of `x / denom` and multiply by  `numer / denom`. The result can be added
+/// to `x / denom * numer` for an accurate result.
+fn rational_mul_correction<N, P>(x: N, numer: P::Inner, denom: P::Inner, truncate: bool) -> N
 where 
-	N: Clone + From<Inner> + UniqueSaturatedInto<Inner> + ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N> + ops::Rem<N, Output=N>,
-	Inner: BaseArithmetic + Copy,
-	Upper: BaseArithmetic + Copy + From<Inner> + TryInto<Inner>,
+	N: From<P::Inner> + UniqueSaturatedInto<P::Inner> + ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N> + ops::Rem<N, Output=N>,
+	P: PerThing,
 {
-	let (numer_upper, denom_n, denom_upper): (Upper, N, Upper) = if reciprocal {
-		(acc.into(), part.into(), part.into())
-	} else {
-		(part.into(), acc.into(), acc.into())
-	};
-	let rem = x.clone().rem(denom_n);
-	// `rem_sized` is inferior to $max, thus it fits into $type. This is assured by
-	// a test.
-	let rem_sized = rem.saturated_into::<Inner>();
-	// `self` and `rem_sized` are inferior to $max, thus the product is less than
-	// $max^2 and fits into $upper_type. This is assured by a test.
-	let rem_multiplied_upper = Upper::from(rem_sized) * numer_upper;
-	// `rem_multiplied_upper` is less than $max^2 therefore divided by $max it fits
-	// in $type. remember that $type always fits $max.
-	let mut rem_multiplied_divided_sized = rem_multiplied_upper / denom_upper;
-	// fix a tiny rounding error
-	if !truncate && rem_multiplied_upper % denom_upper > denom_upper / 2.into() {
-		rem_multiplied_divided_sized = rem_multiplied_divided_sized + 1.into();
+	let numer_upper = P::Upper::from(numer);
+	let denom_n = N::from(denom);
+	let denom_upper = P::Upper::from(denom);
+	let rem = x.rem(denom_n);
+	// `rem` is less than `denom`, which fits in `P::Inner`.
+	let rem_inner = rem.saturated_into::<P::Inner>();
+	// `P::Upper` always fits `P::Inner::max_value().pow(2)`, thus it fits `rem * numer`.
+	let rem_mul_upper = P::Upper::from(rem_inner) * numer_upper;
+	// `rem` is less than `denom`, so `rem * numer / denom` is less than `numer`, which fits in
+	// `P::Inner`.
+	let mut rem_mul_div_inner = (rem_mul_upper / denom_upper).saturated_into::<P::Inner>();
+	// Check if the fractional part of the result is closer to 1 than 0. 
+	if !truncate && rem_mul_upper % denom_upper > denom_upper / 2.into() {
+		// `rem * numer / denom` is less than `numer`, so this will not overflow.
+		rem_mul_div_inner = rem_mul_div_inner + 1.into();
 	}
-	// `rem_multiplied_divided_sized` is inferior to b, thus it can be converted
-	// back to N type
-	rem_multiplied_divided_sized
+	rem_mul_div_inner.into()
 }
 
 macro_rules! implement_per_thing {
