@@ -96,7 +96,7 @@ fn create_approved_proposals<T: Trait>(n: u32) -> Result<(), &'static str> {
 		Treasury::<T>::approve_proposal(RawOrigin::Root.into(), proposal_id)?;
 	}
 	ensure!(Proposals::<T>::iter().count() == n as usize, "Not all created");
-	ensure!(Proposals::<T>::iter().all(|(_, p)| p.approved == true), "Not all approved");
+	ensure!(Proposals::<T>::iter().all(|(_, p)| p.approved), "Not all approved");
 	Ok(())
 }
 
