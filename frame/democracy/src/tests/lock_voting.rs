@@ -161,3 +161,204 @@ fn lock_voting_should_work_with_delegation() {
 		assert_eq!(Balances::free_balance(42), 2);
 	});
 }
+
+fn setup_three_referenda() -> (u32, u32, u32) {
+	System::set_block_number(0);
+	let r1 = Democracy::inject_referendum(
+		2,
+		set_balance_proposal_hash_and_note(2),
+		VoteThreshold::SimpleMajority,
+		0
+	);
+	assert_ok!(Democracy::vote(Origin::signed(5), r1, aye(4, 10)));
+
+	let r2 = Democracy::inject_referendum(
+		2,
+		set_balance_proposal_hash_and_note(2),
+		VoteThreshold::SimpleMajority,
+		0
+	);
+	assert_ok!(Democracy::vote(Origin::signed(5), r2, aye(3, 20)));
+
+	let r3 = Democracy::inject_referendum(
+		2,
+		set_balance_proposal_hash_and_note(2),
+		VoteThreshold::SimpleMajority,
+		0
+	);
+	assert_ok!(Democracy::vote(Origin::signed(5), r3, aye(2, 50)));
+
+	fast_forward_to(2);
+
+	(r1, r2, r3)
+}
+
+#[test]
+fn prior_lockvotes_should_be_enforced() {
+	new_test_ext().execute_with(|| {
+		let r = setup_three_referenda();
+		// r.0 locked 10 until #18.
+		// r.1 locked 20 until #10.
+		// r.2 locked 50 until #6.
+
+		fast_forward_to(5);
+		assert_noop!(Democracy::remove_other_vote(Origin::signed(1), 5, r.2), Error::<Test>::NoPermission);
+		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
+		assert_eq!(Balances::locks(5), vec![the_lock(50)]);
+		fast_forward_to(6);
+		assert_ok!(Democracy::remove_other_vote(Origin::signed(1), 5, r.2));
+		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
+		assert_eq!(Balances::locks(5), vec![the_lock(20)]);
+		fast_forward_to(9);
+		assert_noop!(Democracy::remove_other_vote(Origin::signed(1), 5, r.1), Error::<Test>::NoPermission);
+		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
+		assert_eq!(Balances::locks(5), vec![the_lock(20)]);
+		fast_forward_to(10);
+		assert_ok!(Democracy::remove_other_vote(Origin::signed(1), 5, r.1));
+		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
+		assert_eq!(Balances::locks(5), vec![the_lock(10)]);
+		fast_forward_to(17);
+		assert_noop!(Democracy::remove_other_vote(Origin::signed(1), 5, r.0), Error::<Test>::NoPermission);
+		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
+		assert_eq!(Balances::locks(5), vec![the_lock(10)]);
+		fast_forward_to(18);
+		assert_ok!(Democracy::remove_other_vote(Origin::signed(1), 5, r.0));
+		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
+		assert_eq!(Balances::locks(5), vec![]);
+	});
+}
+
+#[test]
+fn single_consolidation_of_lockvotes_should_work_as_before() {
+	new_test_ext().execute_with(|| {
+		let r = setup_three_referenda();
+		// r.0 locked 10 until #18.
+		// r.1 locked 20 until #10.
+		// r.2 locked 50 until #6.
+
+		fast_forward_to(5);
+		assert_ok!(Democracy::remove_vote(Origin::signed(5), r.2));
+		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
+		assert_eq!(Balances::locks(5), vec![the_lock(50)]);
+		fast_forward_to(6);
+		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
+		assert_eq!(Balances::locks(5), vec![the_lock(20)]);
+
+		fast_forward_to(9);
+		assert_ok!(Democracy::remove_vote(Origin::signed(5), r.1));
+		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
+		assert_eq!(Balances::locks(5), vec![the_lock(20)]);
+		fast_forward_to(10);
+		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
+		assert_eq!(Balances::locks(5), vec![the_lock(10)]);
+
+		fast_forward_to(17);
+		assert_ok!(Democracy::remove_vote(Origin::signed(5), r.0));
+		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
+		assert_eq!(Balances::locks(5), vec![the_lock(10)]);
+		fast_forward_to(18);
+		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
+		assert_eq!(Balances::locks(5), vec![]);
+	});
+}
+
+#[test]
+fn multi_consolidation_of_lockvotes_should_be_conservative() {
+	new_test_ext().execute_with(|| {
+		let r = setup_three_referenda();
+		// r.0 locked 10 until #18.
+		// r.1 locked 20 until #10.
+		// r.2 locked 50 until #6.
+
+		assert_ok!(Democracy::remove_vote(Origin::signed(5), r.2));
+		assert_ok!(Democracy::remove_vote(Origin::signed(5), r.1));
+		assert_ok!(Democracy::remove_vote(Origin::signed(5), r.0));
+
+		fast_forward_to(6);
+		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
+		assert!(Balances::locks(5)[0].amount >= 20);
+
+		fast_forward_to(10);
+		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
+		assert!(Balances::locks(5)[0].amount >= 10);
+
+		fast_forward_to(18);
+		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
+		assert_eq!(Balances::locks(5), vec![]);
+	});
+}
+
+#[test]
+fn locks_should_persist_from_voting_to_delegation() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(0);
+		let r = Democracy::inject_referendum(
+			2,
+			set_balance_proposal_hash_and_note(2),
+			VoteThreshold::SimpleMajority,
+			0
+		);
+		assert_ok!(Democracy::vote(Origin::signed(5), r, aye(4, 10)));
+		fast_forward_to(2);
+		assert_ok!(Democracy::remove_vote(Origin::signed(5), r));
+		// locked 10 until #18.
+
+		assert_ok!(Democracy::delegate(Origin::signed(5), 1, Conviction::Locked3x, 20));
+		// locked 20.
+		assert!(Balances::locks(5)[0].amount == 20);
+
+		assert_ok!(Democracy::undelegate(Origin::signed(5)));
+		// locked 20 until #10
+
+		fast_forward_to(9);
+		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
+		assert!(Balances::locks(5)[0].amount == 20);
+
+		fast_forward_to(10);
+		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
+		assert!(Balances::locks(5)[0].amount >= 10);
+
+		fast_forward_to(17);
+		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
+		assert!(Balances::locks(5)[0].amount >= 10);
+
+		fast_forward_to(18);
+		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
+		assert_eq!(Balances::locks(5), vec![]);
+	});
+}
+
+#[test]
+fn locks_should_persist_from_delegation_to_voting() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(0);
+		assert_ok!(Democracy::delegate(Origin::signed(5), 1, Conviction::Locked5x, 5));
+		assert_ok!(Democracy::undelegate(Origin::signed(5)));
+		// locked 5 until #32
+
+		let r = setup_three_referenda();
+		// r.0 locked 10 until #18.
+		// r.1 locked 20 until #10.
+		// r.2 locked 50 until #6.
+
+		assert_ok!(Democracy::remove_vote(Origin::signed(5), r.2));
+		assert_ok!(Democracy::remove_vote(Origin::signed(5), r.1));
+		assert_ok!(Democracy::remove_vote(Origin::signed(5), r.0));
+
+		fast_forward_to(6);
+		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
+		assert!(Balances::locks(5)[0].amount >= 20);
+
+		fast_forward_to(10);
+		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
+		assert!(Balances::locks(5)[0].amount >= 10);
+
+		fast_forward_to(18);
+		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
+		assert!(Balances::locks(5)[0].amount >= 5);
+
+		fast_forward_to(32);
+		assert_ok!(Democracy::unlock(Origin::signed(5), 5));
+		assert_eq!(Balances::locks(5), vec![]);
+	});
+}

@@ -1133,7 +1133,8 @@ decl_module! {
 		fn remove_other_vote(origin, target: T::AccountId, index: ReferendumIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let scope = if target == who { UnvoteScope::Any } else { UnvoteScope::OnlyExpired };
-			Self::try_remove_vote(&target, index, scope)
+			Self::try_remove_vote(&target, index, scope)?;
+			Ok(())
 		}
 
 		/// Delegate the voting power (with some given conviction) of a proxied account.
