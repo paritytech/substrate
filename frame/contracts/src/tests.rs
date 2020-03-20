@@ -2806,7 +2806,7 @@ const CODE_CRYPTO_HASHES: &str = r#"
 		(local.set $input_ptr (i32.const 10))
 		(call $ext_scratch_read (local.get $input_ptr) (i32.const 0) (call $ext_scratch_size))
 		(local.set $chosen_hash_fn (i32.load8_u (local.get $input_ptr)))
-		(if (i32.ge_u (local.get $chosen_hash_fn) (i32.const 7))
+		(if (i32.gt_u (local.get $chosen_hash_fn) (i32.const 7))
 			;; We check that the chosen hash fn  identifier is within bounds: [0,7]
 			(unreachable)
 		)
