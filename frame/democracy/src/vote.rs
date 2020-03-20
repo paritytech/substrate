@@ -16,7 +16,7 @@
 
 //! The vote datatype.
 
-use sp_std::{result::Result, convert::TryFrom};
+use sp_std::{prelude::*, result::Result, convert::TryFrom};
 use codec::{Encode, EncodeLike, Decode, Output, Input};
 use sp_runtime::{RuntimeDebug, traits::{Saturating, Zero}};
 use crate::{Conviction, ReferendumIndex, Delegations};
