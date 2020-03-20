@@ -76,7 +76,7 @@ pub struct OverlayedValue {
 pub struct OverlayedChangeSet {
 	/// Top level storage changes.
 	pub top: BTreeMap<StorageKey, OverlayedValue>,
-	/// Child storage changes.
+	/// Child storage changes. The map key is the child storage key without the common prefix.
 	pub children_default: HashMap<StorageKey, (BTreeMap<StorageKey, OverlayedValue>, ChildInfo)>,
 }
 

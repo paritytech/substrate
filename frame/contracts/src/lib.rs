@@ -225,13 +225,13 @@ pub struct RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
 
 impl<CodeHash, Balance, BlockNumber> RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
 	/// Associated child trie unique id is built from the hash part of the trie id.
-	pub fn child_trie_unique_id(&self) -> ChildInfo {
-		trie_unique_id(&self.trie_id[..])
+	pub fn child_trie_info(&self) -> ChildInfo {
+		child_trie_info(&self.trie_id[..])
 	}
 }
 
 /// Associated child trie unique id is built from the hash part of the trie id.
-pub(crate) fn trie_unique_id(trie_id: &[u8]) -> ChildInfo {
+pub(crate) fn child_trie_info(trie_id: &[u8]) -> ChildInfo {
 	ChildInfo::new_default(trie_id)
 }
 
@@ -804,11 +804,11 @@ impl<T: Trait> Module<T> {
 		let key_values_taken = delta.iter()
 			.filter_map(|key| {
 				child::get_raw(
-					&origin_contract.child_trie_unique_id(),
+					&origin_contract.child_trie_info(),
 					&blake2_256(key),
 				).map(|value| {
 					child::kill(
-						&origin_contract.child_trie_unique_id(),
+						&origin_contract.child_trie_info(),
 						&blake2_256(key),
 					);
 
@@ -821,7 +821,7 @@ impl<T: Trait> Module<T> {
 			// This operation is cheap enough because last_write (delta not included)
 			// is not this block as it has been checked earlier.
 			&child::root(
-				&origin_contract.child_trie_unique_id(),
+				&origin_contract.child_trie_info(),
 			)[..],
 			code_hash,
 		);
@@ -829,7 +829,7 @@ impl<T: Trait> Module<T> {
 		if tombstone != dest_tombstone {
 			for (key, value) in key_values_taken {
 				child::put_raw(
-					&origin_contract.child_trie_unique_id(),
+					&origin_contract.child_trie_info(),
 					&blake2_256(key),
 					&value,
 				);
@@ -933,7 +933,7 @@ decl_storage! {
 impl<T: Trait> OnKilledAccount<T::AccountId> for Module<T> {
 	fn on_killed_account(who: &T::AccountId) {
 		if let Some(ContractInfo::Alive(info)) = <ContractInfoOf<T>>::take(who) {
-			child::kill_storage(&info.child_trie_unique_id());
+			child::kill_storage(&info.child_trie_info());
 		}
 	}
 }
