@@ -28,8 +28,9 @@ use sp_runtime::traits::{ValidateUnsigned, Zero};
 use crate::Module as ImOnline;
 
 const MAX_KEYS: u32 = 1000;
+const MAX_EXTERNAL_ADDRESSES: u32 = 100;
 
-pub fn create_heartbeat<T: Trait>(k: u32) ->
+pub fn create_heartbeat<T: Trait>(k: u32, e: u32) ->
 	Result<(crate::Heartbeat<T::BlockNumber>, <T::AuthorityId as RuntimeAppPublic>::Signature), &'static str>
 {
 	let mut keys = Vec::new();
@@ -40,7 +41,7 @@ pub fn create_heartbeat<T: Trait>(k: u32) ->
 
 	let network_state = OpaqueNetworkState {
 		peer_id: OpaquePeerId::default(),
-		external_addresses: vec![OpaqueMultiaddr::new(vec![]); 10],
+		external_addresses: vec![OpaqueMultiaddr::new(vec![0; 32]); e as usize],
 	};
 	let input_heartbeat = Heartbeat {
 		block_number: T::BlockNumber::zero(),
@@ -61,12 +62,14 @@ benchmarks! {
 
 	heartbeat {
 		let k in 1 .. MAX_KEYS;
-		let (input_heartbeat, signature) = create_heartbeat::<T>(k)?;
+		let e in 1 .. MAX_EXTERNAL_ADDRESSES;
+		let (input_heartbeat, signature) = create_heartbeat::<T>(k, e)?;
 	}: _(RawOrigin::None, input_heartbeat, signature)
 
 	validate_unsigned {
 		let k in 1 .. MAX_KEYS;
-		let (input_heartbeat, signature) = create_heartbeat::<T>(k)?;
+		let e in 1 .. MAX_EXTERNAL_ADDRESSES;
+		let (input_heartbeat, signature) = create_heartbeat::<T>(k, e)?;
 		let call = Call::heartbeat(input_heartbeat, signature);
 	}: {
 		ImOnline::<T>::validate_unsigned(&call)?;
