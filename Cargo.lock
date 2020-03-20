@@ -3571,8 +3571,6 @@ dependencies = [
  "sp-runtime",
  "sp-transaction-pool",
  "structopt",
- "substrate-build-script-utils",
- "vergen",
 ]
 
 [[package]]
@@ -4821,6 +4819,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
 
 [[package]]
+name = "platforms"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "feb3b2b1033b8a60b4da6ee470325f887758c95d5320f52f9ce0df055a55940e"
+
+[[package]]
 name = "plotters"
 version = "0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5648,8 +5652,10 @@ dependencies = [
  "log 0.4.8",
  "names",
  "parity-util-mem",
+ "platforms",
  "regex",
  "rpassword",
+ "sc-cli-derive",
  "sc-client-api",
  "sc-informant",
  "sc-network",
@@ -5664,10 +5670,30 @@ dependencies = [
  "sp-runtime",
  "sp-state-machine",
  "structopt",
+ "substrate-build-script-utils",
  "substrate-prometheus-endpoint",
  "tempfile",
  "time",
  "tokio 0.2.12",
+ "vergen",
+]
+
+[[package]]
+name = "sc-cli-derive"
+version = "0.8.0-alpha.2"
+dependencies = [
+ "heck",
+ "platforms",
+ "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "sc-cli",
+ "sc-service",
+ "serde",
+ "sp-runtime",
+ "sp-storage",
+ "syn",
+ "trybuild",
 ]
 
 [[package]]
@@ -6400,7 +6426,6 @@ dependencies = [
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "sysinfo",
- "target_info",
  "tracing",
  "wasm-timer",
 ]
@@ -7839,12 +7864,6 @@ name = "target-lexicon"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab0e7238dcc7b40a7be719a25365910f6807bd864f4cce6b2e6b873658e2b19d"
-
-[[package]]
-name = "target_info"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c63f48baada5c52e65a29eef93ab4f8982681b67f9e8d29c7b05abcfec2b9ffe"
 
 [[package]]
 name = "tempfile"
