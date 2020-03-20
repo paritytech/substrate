@@ -338,7 +338,7 @@ mod tests {
 	use sp_io::TestExternalities;
 	use substrate_test_runtime_client::{AccountKeyring, Sr25519Keyring};
 	use crate::{Header, Transfer, WASM_BINARY};
-	use sp_core::{NeverNativeValue, map, traits::CodeExecutor};
+	use sp_core::{NeverNativeValue, map, traits::{CodeExecutor, RuntimeCode}};
 	use sc_executor::{NativeExecutor, WasmExecutionMethod, native_executor_instance};
 	use sp_io::hashing::twox_128;
 
@@ -401,8 +401,11 @@ mod tests {
 	fn block_import_works_wasm() {
 		block_import_works(|b, ext| {
 			let mut ext = ext.ext();
+			let runtime_code = RuntimeCode::from_externalities(&ext)
+				.expect("Code is part of the externalities");
 			executor().call::<_, NeverNativeValue, fn() -> _>(
 				&mut ext,
+				&runtime_code,
 				"Core_execute_block",
 				&b.encode(),
 				false,
@@ -494,8 +497,11 @@ mod tests {
 	fn block_import_with_transaction_works_wasm() {
 		block_import_with_transaction_works(|b, ext| {
 			let mut ext = ext.ext();
+			let runtime_code = RuntimeCode::from_externalities(&ext)
+				.expect("Code is part of the externalities");
 			executor().call::<_, NeverNativeValue, fn() -> _>(
 				&mut ext,
+				&runtime_code,
 				"Core_execute_block",
 				&b.encode(),
 				false,

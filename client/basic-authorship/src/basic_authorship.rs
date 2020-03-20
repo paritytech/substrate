@@ -231,7 +231,8 @@ impl<A, B, Block, C> ProposerInner<B, Block, C, A>
 					debug!("[{:?}] Pushed to the block.", pending_tx_hash);
 				}
 				Err(sp_blockchain::Error::ApplyExtrinsicFailed(sp_blockchain::ApplyExtrinsicFailed::Validity(e)))
-						if e.exhausted_resources() => {
+					if e.exhausted_resources() =>
+				{
 					if is_first {
 						debug!("[{:?}] Invalid transaction: FullBlock on empty block", pending_tx_hash);
 						unqueue_invalid.push(pending_tx_hash);

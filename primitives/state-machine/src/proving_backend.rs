@@ -18,19 +18,19 @@
 
 use std::sync::Arc;
 use parking_lot::RwLock;
-use codec::{Decode, Encode, Codec};
+use codec::{Decode, Codec};
 use log::debug;
 use hash_db::{Hasher, HashDB, EMPTY_PREFIX, Prefix};
 use sp_trie::{
 	MemoryDB, default_child_trie_root, read_trie_value_with, read_child_trie_value_with,
-	record_all_keys
+	record_all_keys, StorageProof,
 };
 pub use sp_trie::Recorder;
 pub use sp_trie::trie_types::{Layout, TrieError};
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
 use crate::{Error, ExecutionError, Backend};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use crate::DBValue;
 use sp_core::storage::ChildInfo;
 
@@ -38,82 +38,6 @@ use sp_core::storage::ChildInfo;
 pub struct ProvingBackendRecorder<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
 	pub(crate) backend: &'a TrieBackendEssence<S, H>,
 	pub(crate) proof_recorder: &'a mut Recorder<H::Out>,
-}
-
-/// A proof that some set of key-value pairs are included in the storage trie. The proof contains
-/// the storage values so that the partial storage backend can be reconstructed by a verifier that
-/// does not already have access to the key-value pairs.
-///
-/// The proof consists of the set of serialized nodes in the storage trie accessed when looking up
-/// the keys covered by the proof. Verifying the proof requires constructing the partial trie from
-/// the serialized nodes and performing the key lookups.
-#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
-pub struct StorageProof {
-	trie_nodes: Vec<Vec<u8>>,
-}
-
-impl StorageProof {
-	/// Constructs a storage proof from a subset of encoded trie nodes in a storage backend.
-	pub fn new(trie_nodes: Vec<Vec<u8>>) -> Self {
-		StorageProof { trie_nodes }
-	}
-
-	/// Returns a new empty proof.
-	///
-	/// An empty proof is capable of only proving trivial statements (ie. that an empty set of
-	/// key-value pairs exist in storage).
-	pub fn empty() -> Self {
-		StorageProof {
-			trie_nodes: Vec::new(),
-		}
-	}
-
-	/// Returns whether this is an empty proof.
-	pub fn is_empty(&self) -> bool {
-		self.trie_nodes.is_empty()
-	}
-
-	/// Create an iterator over trie nodes constructed from the proof. The nodes are not guaranteed
-	/// to be traversed in any particular order.
-	pub fn iter_nodes(self) -> StorageProofNodeIterator {
-		StorageProofNodeIterator::new(self)
-	}
-}
-
-/// An iterator over trie nodes constructed from a storage proof. The nodes are not guaranteed to
-/// be traversed in any particular order.
-pub struct StorageProofNodeIterator {
-	inner: <Vec<Vec<u8>> as IntoIterator>::IntoIter,
-}
-
-impl StorageProofNodeIterator {
-	fn new(proof: StorageProof) -> Self {
-		StorageProofNodeIterator {
-			inner: proof.trie_nodes.into_iter(),
-		}
-	}
-}
-
-impl Iterator for StorageProofNodeIterator {
-	type Item = Vec<u8>;
-
-	fn next(&mut self) -> Option<Self::Item> {
-		self.inner.next()
-	}
-}
-
-/// Merges multiple storage proofs covering potentially different sets of keys into one proof
-/// covering all keys. The merged proof output may be smaller than the aggregate size of the input
-/// proofs due to deduplication of trie nodes.
-pub fn merge_storage_proofs<I>(proofs: I) -> StorageProof
-	where I: IntoIterator<Item=StorageProof>
-{
-	let trie_nodes = proofs.into_iter()
-		.flat_map(|proof| proof.iter_nodes())
-		.collect::<HashSet<_>>()
-		.into_iter()
-		.collect();
-	StorageProof { trie_nodes }
 }
 
 impl<'a, S, H> ProvingBackendRecorder<'a, S, H>
@@ -222,7 +146,7 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 		let root = essence.root().clone();
 		let recorder = ProofRecorderBackend {
 			backend: essence.backend_storage(),
-			proof_recorder: proof_recorder,
+			proof_recorder,
 		};
 		ProvingBackend(TrieBackend::new(recorder, root))
 	}
@@ -370,27 +294,13 @@ where
 	H: Hasher,
 	H::Out: Codec,
 {
-	let db = create_proof_check_backend_storage(proof);
+	let db = proof.into_memory_db();
 
 	if db.contains(&root, EMPTY_PREFIX) {
 		Ok(TrieBackend::new(db, root))
 	} else {
 		Err(Box::new(ExecutionError::InvalidProof))
 	}
-}
-
-/// Create in-memory storage of proof check backend.
-pub fn create_proof_check_backend_storage<H>(
-	proof: StorageProof,
-) -> MemoryDB<H>
-where
-	H: Hasher,
-{
-	let mut db = MemoryDB::default();
-	for item in proof.iter_nodes() {
-		db.insert(EMPTY_PREFIX, &item);
-	}
-	db
 }
 
 #[cfg(test)]
