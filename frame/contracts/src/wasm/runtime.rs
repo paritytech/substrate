@@ -1029,7 +1029,11 @@ define_env!(Env, <E: Ext>,
 	//
 	// # Note
 	//
-	// The `input` and `output` buffer may overlap.
+	// - The `input` and `output` buffer may overlap.
+	// - The output buffer is expected to hold at least 32 bytes (256 bits).
+	// - It is the callers responsibility to provide an output buffer that
+	//   is large enough to hold the expected amount of bytes returned by the
+	//   chosen hash function.
 	//
 	// # Parameters
 	//
@@ -1049,7 +1053,11 @@ define_env!(Env, <E: Ext>,
 	//
 	// # Note
 	//
-	// The `input` and `output` buffer may overlap.
+	// - The `input` and `output` buffer may overlap.
+	// - The output buffer is expected to hold at least 32 bytes (256 bits).
+	// - It is the callers responsibility to provide an output buffer that
+	//   is large enough to hold the expected amount of bytes returned by the
+	//   chosen hash function.
 	//
 	// # Parameters
 	//
@@ -1069,7 +1077,11 @@ define_env!(Env, <E: Ext>,
 	//
 	// # Note
 	//
-	// The `input` and `output` buffer may overlap.
+	// - The `input` and `output` buffer may overlap.
+	// - The output buffer is expected to hold at least 32 bytes (256 bits).
+	// - It is the callers responsibility to provide an output buffer that
+	//   is large enough to hold the expected amount of bytes returned by the
+	//   chosen hash function.
 	//
 	// # Parameters
 	//
@@ -1089,7 +1101,11 @@ define_env!(Env, <E: Ext>,
 	//
 	// # Note
 	//
-	// The `input` and `output` buffer may overlap.
+	// - The `input` and `output` buffer may overlap.
+	// - The output buffer is expected to hold at least 16 bytes (128 bits).
+	// - It is the callers responsibility to provide an output buffer that
+	//   is large enough to hold the expected amount of bytes returned by the
+	//   chosen hash function.
 	//
 	// # Parameters
 	//
@@ -1109,7 +1125,11 @@ define_env!(Env, <E: Ext>,
 	//
 	// # Note
 	//
-	// The `input` and `output` buffer may overlap.
+	// - The `input` and `output` buffer may overlap.
+	// - The output buffer is expected to hold at least 32 bytes (256 bits).
+	// - It is the callers responsibility to provide an output buffer that
+	//   is large enough to hold the expected amount of bytes returned by the
+	//   chosen hash function.
 	//
 	// # Parameters
 	//
@@ -1129,7 +1149,11 @@ define_env!(Env, <E: Ext>,
 	//
 	// # Note
 	//
-	// The `input` and `output` buffer may overlap.
+	// - The `input` and `output` buffer may overlap.
+	// - The output buffer is expected to hold at least 16 bytes (128 bits).
+	// - It is the callers responsibility to provide an output buffer that
+	//   is large enough to hold the expected amount of bytes returned by the
+	//   chosen hash function.
 	//
 	// # Parameters
 	//
@@ -1149,7 +1173,11 @@ define_env!(Env, <E: Ext>,
 	//
 	// # Note
 	//
-	// The `input` and `output` buffer may overlap.
+	// - The `input` and `output` buffer may overlap.
+	// - The output buffer is expected to hold at least 8 bytes (64 bits).
+	// - It is the callers responsibility to provide an output buffer that
+	//   is large enough to hold the expected amount of bytes returned by the
+	//   chosen hash function.
 	//
 	// # Parameters
 	//
@@ -1168,6 +1196,10 @@ define_env!(Env, <E: Ext>,
 ///
 /// Reads from the sandboxed input buffer into the scratch buffer.
 /// Returns the result directly to the output buffer of the sandboxed memory.
+///
+/// It is the callers responsibility to provide an output buffer that
+/// is large enough to hold the expected amount of bytes returned by the
+/// chosen hash function.
 ///
 /// # Note
 ///
