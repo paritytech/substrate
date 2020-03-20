@@ -16,14 +16,12 @@
 
 use sc_cli::VersionInfo;
 use sc_service::{Roles as ServiceRoles};
-use node_transaction_factory::RuntimeAdapter;
+use node_transaction_factory::RuntimeAdapter as _;
 use crate::{
 	Cli, service, ChainSpec, load_spec, Subcommand,
 	factory_impl::FactoryState,
 };
-use sp_runtime::generic::Era;
-use node_primitives::Index;
-use node_runtime::{Runtime, SignedExtra};
+use node_runtime::Runtime;
 
 /// Parse command line arguments into service configuration.
 pub fn run<I, T>(args: I, version: VersionInfo) -> sc_cli::Result<()>
@@ -112,7 +110,7 @@ where
 		Some(Subcommand::Base(subcommand)) => {
 			subcommand.init(&version)?;
 			subcommand.update_config(&mut config, load_spec, &version)?;
-			subcommand.run::<Adapter, _, _, _>(
+			subcommand.run::<Runtime, _, _, _>(
 				config,
 				|config: sc_service::Configuration| Ok(new_full_start!(config).0),
 			)

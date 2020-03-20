@@ -28,7 +28,7 @@ use sc_service::{Configuration, ChainSpec};
 use sp_runtime::MultiSigner;
 use std::convert::TryFrom;
 use sp_core::crypto::Ss58Codec;
-use cli_utils::{RuntimeAdapter, AddressFor, IndexFor, BalanceFor, BalancesCall};
+use cli_utils::{RuntimeAdapter, AddressFor, IndexFor, BalanceFor, BalancesCall, AccountIdFor};
 
 /// The `transfer` command
 #[derive(Debug, StructOpt, Clone)]
@@ -64,17 +64,18 @@ impl TransferCmd {
 	pub fn run<RA>(self) -> error::Result<()>
 		where
 			RA: RuntimeAdapter,
-			AddressFor<RA>: for<'a> TryFrom<&'a [u8], Error = ()> + Ss58Codec,
+			AccountIdFor<RA>: for<'a> TryFrom<&'a [u8], Error = ()> + Ss58Codec,
+			AddressFor<RA>: From<AccountIdFor<RA>>,
 			<IndexFor<RA> as FromStr>::Err: Display,
 			<BalanceFor<RA> as FromStr>::Err: Display,
 	{
 		let password = get_password(&self.shared_params)?;
 		let nonce = IndexFor::<RA>::from_str(&self.index).map_err(|e| format!("{}", e))?;
 		let to = if let Ok(data_vec) = decode_hex(&self.to) {
-			AddressFor::<RA>::try_from(&data_vec)
+			AccountIdFor::<RA>::try_from(&data_vec)
 				.expect("Invalid hex length for account ID; should be 32 bytes")
 		} else {
-			AddressFor::<RA>::from_ss58check(&self.to).ok()
+			AccountIdFor::<RA>::from_ss58check(&self.to).ok()
 				.expect("Invalid SS58-check address given for account ID.")
 		};
 		let amount = BalanceFor::<RA>::from_str(&self.amount).map_err(|e| format!("{}", e))?;
@@ -84,7 +85,7 @@ impl TransferCmd {
 			print_ext<RA>(
 				&self.from,
 				&password,
-				to,
+				to.into(),
 				nonce,
 				amount
 			)

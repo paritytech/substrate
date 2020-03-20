@@ -15,6 +15,8 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Utilities for cli.
+#![cfg_attr(not(feature = "std"), no_std)]
+
 use sp_runtime::traits::{StaticLookup, SignedExtension};
 pub use pallet_balances::Call as BalancesCall;
 
@@ -28,6 +30,8 @@ pub type CallFor<R> = <R as frame_system::Trait>::Call;
 pub type AddressFor<R> = <<R as frame_system::Trait>::Lookup as StaticLookup>::Source;
 /// Hash for runtime.
 pub type HashFor<R> = <R as frame_system::Trait>::Hash;
+/// AccountId type for runtime.
+pub type AccountIdFor<R> = <R as frame_system::Trait>::AccountId;
 
 /// Runtime adapter for signing utilities
 pub trait RuntimeAdapter: frame_system::Trait + pallet_balances::Trait {

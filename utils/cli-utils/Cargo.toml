@@ -10,9 +10,9 @@ description = "CLI utils"
 documentation = "https://docs.rs/cli-utils"
 
 [dependencies]
-frame-system = { version = "2.0.0-alpha.3", default-features = false, path = "../../frame/system" }
-pallet-balances = { version = "2.0.0-alpha.3", default-features = false, path = "../../frame/balances" }
-sp-runtime = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/runtime" }
+frame-system = { version = "2.0.0-alpha.4", default-features = false, path = "../../frame/system" }
+pallet-balances = { version = "2.0.0-alpha.4", default-features = false, path = "../../frame/balances" }
+sp-runtime = { version = "2.0.0-alpha.4", default-features = false, path = "../../primitives/runtime" }
 
 [features]
 default = ["std"]
