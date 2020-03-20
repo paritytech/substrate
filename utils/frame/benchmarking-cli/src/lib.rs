@@ -111,7 +111,7 @@ impl BenchmarkCmd {
 			2, // The runtime instances cache size.
 		);
 
-		let mut extensions: Extensions = Default::default();
+		let mut extensions = Extensions::default();
 		extensions.register(KeystoreExt(KeyStore::new()));
 
 		let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
