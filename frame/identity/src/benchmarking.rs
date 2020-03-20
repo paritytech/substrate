@@ -21,7 +21,7 @@ use super::*;
 use frame_system::RawOrigin;
 use sp_io::hashing::blake2_256;
 use frame_benchmarking::benchmarks;
-use sp_runtime::traits::{Bounded, Dispatchable};
+use sp_runtime::traits::Bounded;
 
 use crate::Module as Identity;
 

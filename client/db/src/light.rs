@@ -317,7 +317,7 @@ impl<Block: BlockT> LightStorage<Block> {
 			// if the header includes changes trie root, let's build a changes tries roots CHT
 			if header.digest().log(DigestItem::as_changes_trie_root).is_some() {
 				let mut current_num = new_cht_start;
-				let cht_range = ::std::iter::from_fn(|| {
+				let cht_range = std::iter::from_fn(|| {
 					let old_current_num = current_num;
 					current_num = current_num + One::one();
 					Some(old_current_num)
@@ -572,15 +572,16 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 
 	#[cfg(not(target_os = "unknown"))]
 	fn usage_info(&self) -> Option<UsageInfo> {
-		use sc_client_api::{MemoryInfo, IoInfo};
+		use sc_client_api::{MemoryInfo, IoInfo, MemorySize};
 
-		let database_cache = parity_util_mem::malloc_size(&*self.db);
+		let database_cache = MemorySize::from_bytes(parity_util_mem::malloc_size(&*self.db));
 		let io_stats = self.io_stats.take_or_else(|| self.db.io_stats(kvdb::IoStatsKind::SincePrevious));
 
 		Some(UsageInfo {
 			memory: MemoryInfo {
 				database_cache,
-				state_cache: 0,
+				state_cache: Default::default(),
+				state_db: Default::default(),
 			},
 			io: IoInfo {
 				transactions: io_stats.transactions,

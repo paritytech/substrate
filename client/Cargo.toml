@@ -11,7 +11,7 @@ description = "Substrate Client and associated logic."
 [dependencies]
 sc-block-builder = { version = "0.8.0-alpha.2", path = "block-builder" }
 sc-client-api = { version = "2.0.0-alpha.2", path = "api" }
-codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.2.0", features = ["derive"] }
 sp-consensus = { version = "0.8.0-alpha.2", path = "../primitives/consensus/common" }
 derive_more = { version = "0.99.2" }
 sc-executor = { version = "0.8.0-alpha.2", path = "executor" }

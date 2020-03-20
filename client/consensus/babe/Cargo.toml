@@ -11,7 +11,7 @@ documentation = "https://docs.rs/sc-consensus-babe"
 
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "1.0.0", features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.2.0", features = ["derive"] }
 sp-consensus-babe = { version = "0.8.0-alpha.2", path = "../../../primitives/consensus/babe" }
 sp-core = { version = "2.0.0-alpha.2", path = "../../../primitives/core" }
 sp-application-crypto = { version = "2.0.0-alpha.2", path = "../../../primitives/application-crypto" }
