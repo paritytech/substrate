@@ -19,6 +19,7 @@
 use codec::{Encode, Decode};
 use sp_std::vec::Vec;
 use sp_io::hashing::blake2_256;
+use sp_runtime::RuntimeString;
 
 /// An alphabet of possible parameters to use for benchmarking.
 #[derive(codec::Encode, codec::Decode, Clone, Copy, PartialEq, Debug)]
@@ -42,7 +43,7 @@ sp_api::decl_runtime_apis! {
 			extrinsic: Vec<u8>,
 			steps: Vec<u32>,
 			repeat: u32,
-		) -> Option<Vec<BenchmarkResults>>;
+		) -> Result<Vec<BenchmarkResults>, RuntimeString>;
 	}
 }
 
