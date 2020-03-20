@@ -30,6 +30,7 @@ use substrate_test_client::sp_consensus::BlockOrigin;
 use substrate_test_runtime::{self, Transfer};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, HasherFor};
+use sc_block_builder::BlockBuilderProvider;
 
 /// helper to test the `leaves` implementation for various backends
 pub fn test_leaves_for_backend<B: 'static>(backend: Arc<B>) where

@@ -1,6 +1,6 @@
 [package]
 name = "sc-consensus-aura"
-version = "0.8.0-alpha.2"
+version = "0.8.0-alpha.3"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Aura consensus algorithm for substrate"
 edition = "2018"

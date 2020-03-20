@@ -1,6 +1,6 @@
 [package]
 name = "sp-authority-discovery"
-version = "2.0.0-alpha.2"
+version = "2.0.0-alpha.3"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Authority discovery primitives"
 edition = "2018"

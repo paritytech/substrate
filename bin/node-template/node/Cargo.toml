@@ -1,6 +1,6 @@
 [package]
 name = "node-template"
-version = "2.0.0-alpha.2"
+version = "2.0.0-alpha.3"
 authors = ["Anonymous"]
 description = "Substrate Node template"
 edition = "2018"

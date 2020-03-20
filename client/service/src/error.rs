@@ -53,8 +53,8 @@ impl<'a> From<&'a str> for Error {
 	}
 }
 
-impl From<prometheus_exporter::PrometheusError> for Error {
-	fn from(e: prometheus_exporter::PrometheusError) -> Self {
+impl From<substrate_prometheus_endpoint::PrometheusError> for Error {
+	fn from(e: substrate_prometheus_endpoint::PrometheusError) -> Self {
 		Error::Other(format!("Prometheus error: {}", e))
 	}
 }

@@ -63,6 +63,27 @@ impl<Block: BlockT, StateBackend: backend::StateBackend<HasherFor<Block>>> Built
 	}
 }
 
+/// Block builder provider
+pub trait BlockBuilderProvider<B, Block, RA>
+	where
+		Block: BlockT,
+		B: backend::Backend<Block>,
+		Self: Sized,
+		RA: ProvideRuntimeApi<Block>,
+{
+	/// Create a new block, built on top of `parent`.
+	///
+	/// When proof recording is enabled, all accessed trie nodes are saved.
+	/// These recorded trie nodes can be used by a third party to proof the
+	/// output of this block builder without having access to the full storage.
+	fn new_block_at<R: Into<RecordProof>>(
+		&self,
+		parent: &BlockId<Block>,
+		inherent_digests: DigestFor<Block>,
+		record_proof: R,
+	) -> sp_blockchain::Result<BlockBuilder<Block, RA, B>>;
+}
+
 /// Utility for building new (valid) blocks from a stream of extrinsics.
 pub struct BlockBuilder<'a, Block: BlockT, A: ProvideRuntimeApi<Block>, B> {
 	extrinsics: Vec<Block::Extrinsic>,

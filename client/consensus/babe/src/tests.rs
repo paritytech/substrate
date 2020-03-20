@@ -23,7 +23,7 @@ use super::*;
 use authorship::claim_slot;
 
 use sp_consensus_babe::{AuthorityPair, SlotNumber};
-use sc_block_builder::BlockBuilder;
+use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
 use sp_consensus::{
 	NoNetwork as DummyOracle, Proposal, RecordProof,
 	import_queue::{BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport},

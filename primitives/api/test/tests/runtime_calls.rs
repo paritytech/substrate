@@ -28,6 +28,7 @@ use sp_state_machine::{
 
 use sp_consensus::SelectChain;
 use codec::Encode;
+use sc_block_builder::BlockBuilderProvider;
 
 fn calling_function_with_strat(strat: ExecutionStrategy) {
 	let client = TestClientBuilder::new().set_execution_strategy(strat).build();
