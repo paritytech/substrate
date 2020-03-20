@@ -19,6 +19,17 @@
 use super::*;
 
 #[test]
+fn overvoting_should_fail() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(0);
+		assert_ok!(propose_set_balance_and_note(1, 2, 1));
+		fast_forward_to(2);
+		let r = 0;
+		assert_noop!(Democracy::vote(Origin::signed(1), r, aye(2)), Error::<Test>::InsufficientFunds);
+	});
+}
+
+#[test]
 fn single_proposal_should_work() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(0);
