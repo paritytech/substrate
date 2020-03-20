@@ -469,8 +469,8 @@ resulting hash directly back into the sandboxed Wasm contract output buffer.
 
 Execution of the function consists of the following steps:
 
-1. Load data stored in the input buffer into the scratch buffer.
-2. Compute the cryptographic hash `H` on the scratch buffer.
+1. Load data stored in the input buffer into an intermediate buffer.
+2. Compute the cryptographic hash `H` on the intermediate buffer.
 3. Copy back the bytes of `H` into the contract side output buffer.
 
 **complexity**: Complexity is proportional to the size of the input buffer in bytes
