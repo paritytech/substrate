@@ -2813,7 +2813,7 @@ const CODE_CRYPTO_HASHES: &str = r#"
 		(local.set $input_ptr (i32.add (local.get $input_ptr) (i32.const 1)))
 		(local.set $input_len (i32.sub (call $ext_scratch_size) (i32.const 1)))
 		(local.set $output_ptr (i32.const 100))
-		(local.set $output_len (i32.const 0))
+		(local.set $output_len (i32.load8_u (local.get $chosen_hash_fn)))
 		(call_indirect (type $hash_fn_sig)
 			(local.get $input_ptr)
 			(local.get $input_len)
