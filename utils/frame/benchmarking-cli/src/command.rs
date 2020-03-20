@@ -59,7 +59,14 @@ impl BenchmarkCmd {
 			&mut changes,
 			&executor,
 			"Benchmark_dispatch_benchmark",
-			&(&self.pallet, &self.extrinsic, self.steps.clone(), self.repeat).encode(),
+			&(
+				&self.pallet,
+				&self.extrinsic,
+				self.lowest_range_values.clone(),
+				self.highest_range_values.clone(),
+				self.steps.clone(),
+				self.repeat,
+			).encode(),
 			Default::default(),
 		)
 		.execute(strategy.into())
@@ -72,9 +79,11 @@ impl BenchmarkCmd {
 			Ok(results) => {
 				// Print benchmark metadata
 				println!(
-					"Pallet: {:?}, Extrinsic: {:?}, Steps: {:?}, Repeat: {:?}",
+					"Pallet: {:?}, Extrinsic: {:?}, Lowest values: {:?}, Highest values: {:?}, Steps: {:?}, Repeat: {:?}",
 					self.pallet,
 					self.extrinsic,
+					self.lowest_range_values,
+					self.highest_range_values,
 					self.steps,
 					self.repeat,
 				);

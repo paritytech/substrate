@@ -34,6 +34,14 @@ pub struct BenchmarkCmd {
 	#[structopt(short, long, use_delimiter = true)]
 	pub steps: Vec<u32>,
 
+	/// Indicates lowest values for each of the component ranges.
+	#[structopt(long, use_delimiter = true)]
+	pub lowest_range_values: Vec<u32>,
+
+	/// Indicates highest values for each of the component ranges.
+	#[structopt(long, use_delimiter = true)]
+	pub highest_range_values: Vec<u32>,
+
 	/// Select how many repetitions of this benchmark should run.
 	#[structopt(short, long, default_value = "1")]
 	pub repeat: u32,
