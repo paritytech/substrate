@@ -48,6 +48,9 @@ use frame_support::{
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+
 /// Simple index type for proposal counting.
 pub type ProposalIndex = u32;
 

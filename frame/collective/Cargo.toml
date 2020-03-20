@@ -15,8 +15,10 @@ sp-core = { version = "2.0.0-alpha.4", default-features = false, path = "../../p
 sp-std = { version = "2.0.0-alpha.4", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "2.0.0-alpha.4", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "2.0.0-alpha.4", default-features = false, path = "../../primitives/runtime" }
+frame-benchmarking = { version = "2.0.0-alpha.4", default-features = false, path = "../benchmarking", optional = true }
 frame-support = { version = "2.0.0-alpha.4", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0-alpha.4", default-features = false, path = "../system" }
+pallet-democracy = { version = "2.0.0-alpha.4", default-features = false, path = "../democracy" }
 
 [dev-dependencies]
 hex-literal = "0.2.1"
@@ -30,7 +32,10 @@ std = [
 	"sp-std/std",
 	"serde",
 	"sp-io/std",
+	"frame-benchmarking/std",
 	"frame-support/std",
 	"sp-runtime/std",
 	"frame-system/std",
+	"pallet-democracy/std",
 ]
+runtime-benchmarks = ["frame-benchmarking"]

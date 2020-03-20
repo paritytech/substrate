@@ -855,6 +855,8 @@ impl_runtime_apis! {
 			// we need these two lines below.
 			use pallet_session_benchmarking::Module as SessionBench;
 			impl pallet_session_benchmarking::Trait for Runtime {}
+			// use pallet_council_benchmarking::Module as CollectiveBench;
+			// impl pallet_council_benchmarking::Trait for Runtime {}
 
 			let result = match module.as_slice() {
 				b"pallet-balances" | b"balances" => Balances::run_benchmark(
@@ -899,6 +901,13 @@ impl_runtime_apis! {
 					steps,
 					repeat,
 				),
+				// b"pallet-collective" | b"collective" => CollectiveBench::run_benchmark(
+				// 	extrinsic,
+				// 	lowest_range_values,
+				// 	highest_range_values,
+				// 	steps,
+				// 	repeat,
+				// ),
 				_ => Err("Benchmark not found for this pallet."),
 			};
 

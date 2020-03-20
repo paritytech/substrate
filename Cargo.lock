@@ -3977,10 +3977,12 @@ dependencies = [
 name = "pallet-collective"
 version = "2.0.0-alpha.4"
 dependencies = [
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "hex-literal",
  "pallet-balances",
+ "pallet-democracy",
  "parity-scale-codec",
  "serde",
  "sp-core",
