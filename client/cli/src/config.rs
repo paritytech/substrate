@@ -22,8 +22,8 @@ use app_dirs::{AppDataType, AppInfo};
 use names::{Generator, Name};
 use sc_service::config::{
 	Configuration, DatabaseConfig, ExecutionStrategies, ExtTransport, KeystoreConfig,
-	NetworkConfiguration, PruningMode, Roles, TransactionPoolOptions, WasmExecutionMethod,
-	NodeKeyConfig, TelemetryEndpoints,
+	NetworkConfiguration, NodeKeyConfig, PruningMode, Roles, TelemetryEndpoints,
+	TransactionPoolOptions, WasmExecutionMethod,
 };
 use sc_service::{ChainSpec, ChainSpecExtension, RuntimeGenesis};
 use std::future::Future;
@@ -36,7 +36,7 @@ use std::sync::Arc;
 pub(crate) const NODE_NAME_MAX_LENGTH: usize = 32;
 
 /// default sub directory to store network config
-pub(crate) const DEFAULT_NETWORK_CONFIG_PATH : &'static str = "network";
+pub(crate) const DEFAULT_NETWORK_CONFIG_PATH: &'static str = "network";
 
 pub trait CliConfiguration: Sized {
 	fn get_base_path(&self) -> Result<Option<&PathBuf>>;
@@ -66,16 +66,27 @@ pub trait CliConfiguration: Sized {
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
 	{
-		Ok(NetworkConfiguration::new(node_name, client_id, node_key, net_config_dir))
+		Ok(NetworkConfiguration::new(
+			node_name,
+			client_id,
+			node_key,
+			net_config_dir,
+		))
 	}
 
 	fn get_keystore_config(&self, _base_path: &PathBuf) -> Result<KeystoreConfig> {
 		Ok(KeystoreConfig::InMemory)
 	}
 
-	fn get_database_cache_size(&self) -> Result<Option<usize>> { Ok(Default::default()) }
+	fn get_database_cache_size(&self) -> Result<Option<usize>> {
+		Ok(Default::default())
+	}
 
-	fn get_database_config(&self, base_path: &PathBuf, cache_size: Option<usize>) -> Result<DatabaseConfig>;
+	fn get_database_config(
+		&self,
+		base_path: &PathBuf,
+		cache_size: Option<usize>,
+	) -> Result<DatabaseConfig>;
 
 	fn get_state_cache_size(&self) -> Result<usize> {
 		Ok(Default::default())
@@ -192,7 +203,11 @@ pub trait CliConfiguration: Sized {
 			},
 		)
 		.expect("app directories exist on all supported platforms; qed");
-		let config_dir = self.get_base_path()?.unwrap_or(&default_config_dir).join("chains").join(chain_spec.id());
+		let config_dir = self
+			.get_base_path()?
+			.unwrap_or(&default_config_dir)
+			.join("chains")
+			.join(chain_spec.id());
 		let net_config_dir = config_dir.join(DEFAULT_NETWORK_CONFIG_PATH);
 		let client_id = C::client_id();
 		// TODO: this parameter is really optional, shouldn't we leave it to None?

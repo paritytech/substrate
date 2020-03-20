@@ -22,36 +22,39 @@
 
 extern crate self as sc_cli;
 
-mod params;
 mod arg_enums;
-mod error;
-mod runtime;
 mod commands;
 mod config;
+mod error;
+mod params;
+mod runtime;
 
-use std::sync::Arc;
+pub use arg_enums::*;
+pub use commands::*;
+pub use config::*;
+pub use error::*;
+use lazy_static::lazy_static;
+use log::info;
+pub use params::*;
+use regex::Regex;
+pub use runtime::*;
+pub use sc_cli_derive::*;
+use sc_service::{
+	AbstractService, ChainSpec, ChainSpecExtension, Configuration, NoExtension, RuntimeGenesis,
+	ServiceBuilderCommand,
+};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
+use std::fmt::Debug;
 use std::future::Future;
 use std::io::Write;
 use std::path::PathBuf;
 use std::pin::Pin;
-use std::fmt::Debug;
-use regex::Regex;
-use structopt::{StructOpt, clap::{self, AppSettings}};
+use std::sync::Arc;
 pub use structopt;
-pub use params::*;
-pub use commands::*;
-pub use arg_enums::*;
-pub use error::*;
-pub use config::*;
-pub use runtime::*;
-use log::info;
-use lazy_static::lazy_static;
-pub use sc_cli_derive::*;
-use sc_service::{
-	ChainSpec, Configuration, RuntimeGenesis, ChainSpecExtension, AbstractService,
-	ServiceBuilderCommand, NoExtension,
+use structopt::{
+	clap::{self, AppSettings},
+	StructOpt,
 };
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 
 /// Substrate client CLI
 pub trait SubstrateCLI<G, E = NoExtension>: Sized
@@ -204,15 +207,20 @@ pub fn init_logger(pattern: &str) {
 	builder.format(move |buf, record| {
 		let now = time::now();
 		let timestamp =
-			time::strftime("%Y-%m-%d %H:%M:%S", &now)
-				.expect("Error formatting log timestamp");
+			time::strftime("%Y-%m-%d %H:%M:%S", &now).expect("Error formatting log timestamp");
 
 		let mut output = if log::max_level() <= log::LevelFilter::Info {
-			format!("{} {}", Colour::Black.bold().paint(timestamp), record.args())
+			format!(
+				"{} {}",
+				Colour::Black.bold().paint(timestamp),
+				record.args()
+			)
 		} else {
 			let name = ::std::thread::current()
 				.name()
-				.map_or_else(Default::default, |x| format!("{}", Colour::Blue.bold().paint(x)));
+				.map_or_else(Default::default, |x| {
+					format!("{}", Colour::Blue.bold().paint(x))
+				});
 			let millis = (now.tm_nsec as f32 / 1000000.0).round() as usize;
 			let timestamp = format!("{}.{:03}", timestamp, millis);
 			format!(
@@ -250,7 +258,7 @@ fn kill_color(s: &str) -> String {
 }
 
 pub fn generate_cargo_keys() {
-	use vergen::{ConstantsFlags, generate_cargo_keys};
+	use vergen::{generate_cargo_keys, ConstantsFlags};
 
 	generate_cargo_keys(ConstantsFlags::SHA_SHORT).expect("Failed to generate metadata files");
 }

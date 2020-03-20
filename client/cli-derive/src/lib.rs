@@ -3,7 +3,7 @@ extern crate proc_macro;
 mod spec_factory;
 mod substrate_cli_params;
 
-use proc_macro_error::{proc_macro_error};
+use proc_macro_error::proc_macro_error;
 
 #[proc_macro_attribute]
 #[proc_macro_error]

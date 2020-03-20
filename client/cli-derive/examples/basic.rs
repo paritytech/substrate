@@ -1,6 +1,6 @@
 #![allow(unused_variables, dead_code)]
 
-use sc_cli::{SharedParams, CliConfiguration, ImportParams, KeystoreParams};
+use sc_cli::{CliConfiguration, ImportParams, KeystoreParams, SharedParams};
 use sc_cli_derive::{spec_factory, substrate_cli_params};
 use serde::{Deserialize, Serialize};
 use sp_runtime::BuildStorage;
@@ -27,7 +27,6 @@ fn spec_factory(id: &str) -> Result<Option<sc_service::ChainSpec<MyGenesisConfig
 }
 
 #[substrate_cli_params(shared_params = shared, import_params = import, keystore_params = keystore)]
-impl CliConfiguration for MyCli {
-}
+impl CliConfiguration for MyCli {}
 
 fn main() {}

@@ -14,16 +14,17 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::substrate_cli_params;
-use crate::error::{Result, Error};
+use crate::error::{Error, Result};
 use crate::params::ImportParams;
 use crate::params::KeystoreParams;
 use crate::params::NetworkConfigurationParams;
 use crate::params::SharedParams;
 use crate::params::TransactionPoolParams;
+use crate::substrate_cli_params;
 use crate::{CliConfiguration, SubstrateCLI};
 use regex::Regex;
 use sc_client_api::execution_extensions::ExecutionStrategies;
+use sc_network::config::NodeKeyConfig;
 use sc_service::{
 	config::{
 		DatabaseConfig, KeystoreConfig, NetworkConfiguration, TransactionPoolOptions,
@@ -32,7 +33,6 @@ use sc_service::{
 	AbstractService, ChainSpec, ChainSpecExtension, Configuration, PruningMode, Roles,
 	RuntimeGenesis,
 };
-use sc_network::config::NodeKeyConfig;
 use sc_telemetry::TelemetryEndpoints;
 use sc_tracing::TracingReceiver;
 use std::fs;
@@ -365,7 +365,8 @@ impl CliConfiguration for RunCmd {
 	}
 
 	fn get_rpc_cors(&self, is_dev: bool) -> Result<Option<Vec<String>>> {
-		Ok(self.rpc_cors
+		Ok(self
+			.rpc_cors
 			.clone()
 			.unwrap_or_else(|| {
 				if is_dev {
@@ -479,7 +480,9 @@ fn interface_str(
 }
 
 /// Default to verbosity level 0, if none is provided.
-fn parse_telemetry_endpoints(s: &str) -> std::result::Result<(String, u8), Box<dyn std::error::Error>> {
+fn parse_telemetry_endpoints(
+	s: &str,
+) -> std::result::Result<(String, u8), Box<dyn std::error::Error>> {
 	let pos = s.find(' ');
 	match pos {
 		None => Ok((s.to_owned(), 0)),

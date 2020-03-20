@@ -14,20 +14,20 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::io;
-use std::fs;
-use std::path::PathBuf;
-use std::fmt::Debug;
+use crate::error;
+use crate::params::{BlockNumber, PruningParams, SharedParams};
+use crate::{substrate_cli_params, CliConfiguration};
 use log::info;
-use structopt::StructOpt;
 use sc_service::{
-	Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand, ChainSpec,
-	config::DatabaseConfig, Roles, PruningMode,
+	config::DatabaseConfig, ChainSpec, ChainSpecExtension, Configuration, PruningMode, Roles,
+	RuntimeGenesis, ServiceBuilderCommand,
 };
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
-use crate::error;
-use crate::params::{SharedParams, BlockNumber, PruningParams};
-use crate::{substrate_cli_params, CliConfiguration};
+use std::fmt::Debug;
+use std::fs;
+use std::io;
+use std::path::PathBuf;
+use structopt::StructOpt;
 
 /// The `export-blocks` command used to export blocks.
 #[derive(Debug, StructOpt, Clone)]
@@ -91,7 +91,10 @@ impl ExportBlocksCmd {
 			None => Box::new(io::stdout()),
 		};
 
-		builder(config)?.export_blocks(file, from.into(), to, json).await.map_err(|e| e.into())
+		builder(config)?
+			.export_blocks(file, from.into(), to, json)
+			.await
+			.map_err(|e| e.into())
 	}
 }
 

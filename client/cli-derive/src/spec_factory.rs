@@ -1,7 +1,7 @@
-use proc_macro2::{Span};
+use proc_macro2::Span;
 use proc_macro_error::{abort, abort_call_site};
 use quote::{quote, ToTokens};
-use std::collections::{HashMap};
+use std::collections::HashMap;
 use syn;
 use syn::parse::Parser;
 use syn::{punctuated::Punctuated, spanned::Spanned, token::Comma, *};
@@ -36,14 +36,20 @@ pub(crate) fn spec_factory(
 	let impl_name = attrs.get("impl_name").unwrap_or(&pkg_name);
 	let default_impl_version = get_version().to_token_stream();
 	let impl_version = attrs.get("impl_version").unwrap_or(&default_impl_version);
-	let support_url = attrs.get("support_url")
+	let support_url = attrs
+		.get("support_url")
 		.unwrap_or_else(|| abort_call_site!("missing attribute: support_url"));
 	let executable_name = attrs.get("executable_name").unwrap_or(&pkg_name);
-	let default_author = std::env::var("CARGO_PKG_AUTHORS").unwrap_or_default().to_token_stream();
+	let default_author = std::env::var("CARGO_PKG_AUTHORS")
+		.unwrap_or_default()
+		.to_token_stream();
 	let author = attrs.get("author").unwrap_or(&default_author);
-	let default_description = std::env::var("CARGO_PKG_DESCRIPTION").unwrap_or_default().to_token_stream();
+	let default_description = std::env::var("CARGO_PKG_DESCRIPTION")
+		.unwrap_or_default()
+		.to_token_stream();
 	let description = attrs.get("description").unwrap_or(&default_description);
-	let copyright_start_year = attrs.get("copyright_start_year")
+	let copyright_start_year = attrs
+		.get("copyright_start_year")
 		.unwrap_or_else(|| abort_call_site!("missing attribute: copyright_start_year"));
 
 	let s: ItemFn = match syn::parse(i) {
@@ -151,11 +157,7 @@ fn get_type_arguments<'a>(
 fn get_platform() -> String {
 	use platforms::*;
 
-	let env_dash = if TARGET_ENV.is_some() {
-		"-"
-	} else {
-		""
-	};
+	let env_dash = if TARGET_ENV.is_some() { "-" } else { "" };
 
 	format!(
 		"{}-{}{}{}",

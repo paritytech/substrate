@@ -14,15 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::fmt::Debug;
-use structopt::StructOpt;
 use sc_service::{
-	Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand, ChainSpec, Roles,
+	ChainSpec, ChainSpecExtension, Configuration, Roles, RuntimeGenesis, ServiceBuilderCommand,
 };
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
+use std::fmt::Debug;
+use structopt::StructOpt;
 
 use crate::error;
-use crate::params::{BlockNumber, SharedParams, PruningParams};
+use crate::params::{BlockNumber, PruningParams, SharedParams};
 use crate::{substrate_cli_params, CliConfiguration};
 
 /// The `revert` command used revert the chain to a previous state.
@@ -43,11 +43,7 @@ pub struct RevertCmd {
 
 impl RevertCmd {
 	/// Run the revert command
-	pub fn run<G, E, B, BC, BB>(
-		self,
-		config: Configuration<G, E>,
-		builder: B,
-	) -> error::Result<()>
+	pub fn run<G, E, B, BC, BB>(self, config: Configuration<G, E>, builder: B) -> error::Result<()>
 	where
 		B: FnOnce(Configuration<G, E>) -> Result<BC, sc_service::error::Error>,
 		G: RuntimeGenesis,

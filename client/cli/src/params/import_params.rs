@@ -14,16 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use structopt::StructOpt;
-use sc_service::{Configuration, RuntimeGenesis, config::DatabaseConfig, Roles, PruningMode};
-use sc_client_api::execution_extensions::ExecutionStrategies;
-use crate::error;
 use crate::arg_enums::{
-	WasmExecutionMethod, TracingReceiver, ExecutionStrategy, DEFAULT_EXECUTION_BLOCK_CONSTRUCTION,
+	ExecutionStrategy, TracingReceiver, WasmExecutionMethod, DEFAULT_EXECUTION_BLOCK_CONSTRUCTION,
 	DEFAULT_EXECUTION_IMPORT_BLOCK, DEFAULT_EXECUTION_OFFCHAIN_WORKER, DEFAULT_EXECUTION_OTHER,
-	DEFAULT_EXECUTION_SYNCING
+	DEFAULT_EXECUTION_SYNCING,
 };
+use crate::error;
 use crate::params::PruningParams;
+use sc_client_api::execution_extensions::ExecutionStrategies;
+use sc_service::{config::DatabaseConfig, Configuration, PruningMode, Roles, RuntimeGenesis};
+use structopt::StructOpt;
 
 /// Parameters for block import.
 #[derive(Debug, StructOpt, Clone)]

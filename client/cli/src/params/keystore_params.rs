@@ -14,14 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use crate::error::Result;
+use sc_service::config::KeystoreConfig;
 use std::fs;
 use std::path::PathBuf;
 use structopt::StructOpt;
-use sc_service::config::KeystoreConfig;
-use crate::error::Result;
 
 /// default sub directory for the key store
-const DEFAULT_KEYSTORE_CONFIG_PATH : &'static str = "keystore";
+const DEFAULT_KEYSTORE_CONFIG_PATH: &'static str = "keystore";
 
 /// Parameters of the keystore
 #[derive(Debug, StructOpt, Clone)]
@@ -51,7 +51,7 @@ pub struct KeystoreParams {
 		parse(from_os_str),
 		conflicts_with_all = &[ "password-interactive", "password" ]
 	)]
-	pub password_filename: Option<PathBuf>
+	pub password_filename: Option<PathBuf>,
 }
 
 impl KeystoreParams {
@@ -64,21 +64,23 @@ impl KeystoreParams {
 			#[cfg(target_os = "unknown")]
 			None
 		} else if let Some(ref file) = self.password_filename {
-			Some(fs::read_to_string(file).map_err(|e| format!("{}", e))?.into())
+			Some(
+				fs::read_to_string(file)
+					.map_err(|e| format!("{}", e))?
+					.into(),
+			)
 		} else if let Some(ref password) = self.password {
 			Some(password.clone().into())
 		} else {
 			None
 		};
 
-		let path = self.keystore_path.clone().unwrap_or(
-			base_path.join(DEFAULT_KEYSTORE_CONFIG_PATH)
-		);
+		let path = self
+			.keystore_path
+			.clone()
+			.unwrap_or(base_path.join(DEFAULT_KEYSTORE_CONFIG_PATH));
 
-		Ok(KeystoreConfig::Path {
-			path,
-			password,
-		})
+		Ok(KeystoreConfig::Path { path, password })
 	}
 }
 

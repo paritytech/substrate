@@ -14,9 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use structopt::StructOpt;
-use sc_service::{Configuration, config::TransactionPoolOptions};
 use crate::error;
+use sc_service::{config::TransactionPoolOptions, Configuration};
+use structopt::StructOpt;
 
 /// Parameters used to create the pool configuration.
 #[derive(Debug, StructOpt, Clone)]
@@ -31,9 +31,7 @@ pub struct TransactionPoolParams {
 
 impl TransactionPoolParams {
 	/// Fill the given `PoolConfiguration` by looking at the cli parameters.
-	pub fn get_transaction_pool(
-		&self,
-	) -> error::Result<TransactionPoolOptions> {
+	pub fn get_transaction_pool(&self) -> error::Result<TransactionPoolOptions> {
 		let mut opts = TransactionPoolOptions::default();
 
 		// ready queue

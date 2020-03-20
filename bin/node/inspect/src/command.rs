@@ -20,19 +20,16 @@ use std::str::FromStr;
 
 use crate::cli::{InspectCmd, InspectSubCmd};
 use crate::Inspector;
+use sc_cli::{substrate_cli_params, CliConfiguration, Result};
 use sc_service::{
-	Configuration, NativeExecutionDispatch, RuntimeGenesis, ChainSpecExtension,
-	new_full_client,
+	new_full_client, ChainSpecExtension, Configuration, NativeExecutionDispatch, RuntimeGenesis,
 };
-use sc_cli::{Result, CliConfiguration, substrate_cli_params};
 use sp_runtime::traits::Block;
 
 impl InspectCmd {
 	/// Run the inspect command, passing the inspector.
-	pub fn run<B, RA, EX, G, E>(
-		self,
-		config: Configuration<G, E>,
-	) -> Result<()> where
+	pub fn run<B, RA, EX, G, E>(self, config: Configuration<G, E>) -> Result<()>
+	where
 		B: Block,
 		B::Hash: FromStr,
 		RA: Send + Sync + 'static,
@@ -46,22 +43,19 @@ impl InspectCmd {
 		match self.command {
 			InspectSubCmd::Block { input } => {
 				let input = input.parse()?;
-				let res = inspect.block(input)
-					.map_err(|e| format!("{}", e))?;
+				let res = inspect.block(input).map_err(|e| format!("{}", e))?;
 				println!("{}", res);
 				Ok(())
-			},
+			}
 			InspectSubCmd::Extrinsic { input } => {
 				let input = input.parse()?;
-				let res = inspect.extrinsic(input)
-					.map_err(|e| format!("{}", e))?;
+				let res = inspect.extrinsic(input).map_err(|e| format!("{}", e))?;
 				println!("{}", res);
 				Ok(())
-			},
+			}
 		}
 	}
 }
 
 #[substrate_cli_params(shared_params = shared_params, import_params = import_params)]
-impl CliConfiguration for InspectCmd {
-}
+impl CliConfiguration for InspectCmd {}

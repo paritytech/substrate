@@ -14,17 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::fmt::Debug;
-use std::io::{Write, self};
-use std::fs;
-use structopt::StructOpt;
-use sc_service::{
-	Configuration, ChainSpecExtension, RuntimeGenesis, ChainSpec,
-	config::{DatabaseConfig},
-};
 use crate::error;
 use crate::params::SharedParams;
 use crate::{substrate_cli_params, CliConfiguration};
+use sc_service::{
+	config::DatabaseConfig, ChainSpec, ChainSpecExtension, Configuration, RuntimeGenesis,
+};
+use std::fmt::Debug;
+use std::fs;
+use std::io::{self, Write};
+use structopt::StructOpt;
 
 /// The `purge-chain` command used to remove the whole chain.
 #[derive(Debug, StructOpt, Clone)]
@@ -40,10 +39,7 @@ pub struct PurgeChainCmd {
 
 impl PurgeChainCmd {
 	/// Run the purge command
-	pub fn run<G, E>(
-		self,
-		config: Configuration<G, E>,
-	) -> error::Result<()>
+	pub fn run<G, E>(self, config: Configuration<G, E>) -> error::Result<()>
 	where
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
@@ -65,11 +61,11 @@ impl PurgeChainCmd {
 			let input = input.trim();
 
 			match input.chars().nth(0) {
-				Some('y') | Some('Y') => {},
+				Some('y') | Some('Y') => {}
 				_ => {
 					println!("Aborted");
 					return Ok(());
-				},
+				}
 			}
 		}
 
@@ -77,12 +73,12 @@ impl PurgeChainCmd {
 			Ok(_) => {
 				println!("{:?} removed.", &db_path);
 				Ok(())
-			},
+			}
 			Err(ref err) if err.kind() == io::ErrorKind::NotFound => {
 				eprintln!("{:?} did not exist.", &db_path);
 				Ok(())
-			},
-			Err(err) => Result::Err(err.into())
+			}
+			Err(err) => Result::Err(err.into()),
 		}
 	}
 }

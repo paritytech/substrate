@@ -14,15 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use structopt::StructOpt;
 use log::info;
 use sc_network::config::build_multiaddr;
-use sc_service::{Configuration, ChainSpecExtension, RuntimeGenesis, ChainSpec};
+use sc_service::{ChainSpec, ChainSpecExtension, Configuration, RuntimeGenesis};
+use structopt::StructOpt;
 
 use crate::error;
-use crate::SubstrateCLI;
-use crate::params::SharedParams;
 use crate::params::NodeKeyParams;
+use crate::params::SharedParams;
+use crate::SubstrateCLI;
 use crate::{substrate_cli_params, CliConfiguration};
 
 /// The `build-spec` command used to build a specification.
@@ -50,10 +50,7 @@ pub struct BuildSpecCmd {
 
 impl BuildSpecCmd {
 	/// Run the build-spec command
-	pub fn run<G, E>(
-		&self,
-		config: Configuration<G, E>,
-	) -> error::Result<()>
+	pub fn run<G, E>(&self, config: Configuration<G, E>) -> error::Result<()>
 	where
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
@@ -65,11 +62,7 @@ impl BuildSpecCmd {
 		if spec.boot_nodes().is_empty() && !self.disable_default_bootnode {
 			let keys = config.network.node_key.into_keypair()?;
 			let peer_id = keys.public().into_peer_id();
-			let addr = build_multiaddr![
-				Ip4([127, 0, 0, 1]),
-				Tcp(30333u16),
-				P2p(peer_id)
-			];
+			let addr = build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(30333u16), P2p(peer_id)];
 			spec.add_boot_node(addr)
 		}
 
@@ -82,5 +75,4 @@ impl BuildSpecCmd {
 }
 
 #[substrate_cli_params(shared_params = shared_params, node_key_params = node_key_params)]
-impl CliConfiguration for BuildSpecCmd {
-}
+impl CliConfiguration for BuildSpecCmd {}

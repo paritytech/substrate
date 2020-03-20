@@ -14,18 +14,18 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use sc_service::{
+	config::DatabaseConfig, ChainSpec, ChainSpecExtension, Configuration, RuntimeGenesis,
+};
 use std::path::PathBuf;
 use structopt::StructOpt;
-use sc_service::{
-	Configuration, ChainSpecExtension, RuntimeGenesis, config::DatabaseConfig, ChainSpec,
-};
 
-use crate::SubstrateCLI;
 use crate::error::Result;
 use crate::init_logger;
+use crate::SubstrateCLI;
 
 /// default sub directory to store database
-const DEFAULT_DB_CONFIG_PATH : &'static str = "db";
+const DEFAULT_DB_CONFIG_PATH: &'static str = "db";
 
 /// Shared parameters used by all `CoreParams`.
 #[derive(Debug, StructOpt, Clone)]
@@ -39,7 +39,12 @@ pub struct SharedParams {
 	pub dev: bool,
 
 	/// Specify custom base path.
-	#[structopt(long = "base-path", short = "d", value_name = "PATH", parse(from_os_str))]
+	#[structopt(
+		long = "base-path",
+		short = "d",
+		value_name = "PATH",
+		parse(from_os_str)
+	)]
 	pub base_path: Option<PathBuf>,
 
 	/// Sets a custom logging filter.
@@ -55,12 +60,18 @@ impl SharedParams {
 	{
 		let chain_key = match self.chain {
 			Some(ref chain) => chain.clone(),
-			None => if self.dev { "dev".into() } else { "".into() }
+			None => {
+				if self.dev {
+					"dev".into()
+				} else {
+					"".into()
+				}
+			}
 		};
 
 		Ok(match C::spec_factory(&chain_key)? {
 			Some(spec) => spec,
-			None => ChainSpec::from_json_file(PathBuf::from(chain_key))?
+			None => ChainSpec::from_json_file(PathBuf::from(chain_key))?,
 		})
 	}
 
@@ -86,8 +97,11 @@ impl SharedParams {
 		Ok(())
 	}
 
-	pub fn get_database_config(&self, base_path: &PathBuf, cache_size: Option<usize>) -> DatabaseConfig
-	{
+	pub fn get_database_config(
+		&self,
+		base_path: &PathBuf,
+		cache_size: Option<usize>,
+	) -> DatabaseConfig {
 		DatabaseConfig::Path {
 			path: base_path.join(DEFAULT_DB_CONFIG_PATH),
 			cache_size,

@@ -14,41 +14,41 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-mod runcmd;
-mod export_blocks_cmd;
 mod build_spec_cmd;
-mod import_blocks_cmd;
 mod check_block_cmd;
-mod revert_cmd;
+mod export_blocks_cmd;
+mod import_blocks_cmd;
 mod purge_chain_cmd;
+mod revert_cmd;
+mod runcmd;
 
-use std::fmt::Debug;
-use std::path::PathBuf;
-use structopt::StructOpt;
-use core::future::Future;
-use core::pin::Pin;
-use std::sync::Arc;
-use app_dirs::{AppInfo, AppDataType};
-use sc_service::{
-	Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand, ChainSpec,
-	config::KeystoreConfig, config::DatabaseConfig, config::NetworkConfiguration, Roles,
-	PruningMode, config::WasmExecutionMethod,
-};
-use sc_network::config::NodeKeyConfig;
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
-use sc_tracing::TracingReceiver;
-use sc_client_api::execution_extensions::ExecutionStrategies;
-use crate::Result;
-use crate::SubstrateCLI;
-use crate::CliConfiguration;
-use crate::params::SharedParams;
-pub use crate::commands::runcmd::RunCmd;
 pub use crate::commands::build_spec_cmd::BuildSpecCmd;
+pub use crate::commands::check_block_cmd::CheckBlockCmd;
 pub use crate::commands::export_blocks_cmd::ExportBlocksCmd;
 pub use crate::commands::import_blocks_cmd::ImportBlocksCmd;
-pub use crate::commands::check_block_cmd::CheckBlockCmd;
-pub use crate::commands::revert_cmd::RevertCmd;
 pub use crate::commands::purge_chain_cmd::PurgeChainCmd;
+pub use crate::commands::revert_cmd::RevertCmd;
+pub use crate::commands::runcmd::RunCmd;
+use crate::params::SharedParams;
+use crate::CliConfiguration;
+use crate::Result;
+use crate::SubstrateCLI;
+use app_dirs::{AppDataType, AppInfo};
+use core::future::Future;
+use core::pin::Pin;
+use sc_client_api::execution_extensions::ExecutionStrategies;
+use sc_network::config::NodeKeyConfig;
+use sc_service::{
+	config::DatabaseConfig, config::KeystoreConfig, config::NetworkConfiguration,
+	config::WasmExecutionMethod, ChainSpec, ChainSpecExtension, Configuration, PruningMode, Roles,
+	RuntimeGenesis, ServiceBuilderCommand,
+};
+use sc_tracing::TracingReceiver;
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
+use std::fmt::Debug;
+use std::path::PathBuf;
+use std::sync::Arc;
+use structopt::StructOpt;
 
 /// All core commands that are provided by default.
 ///
@@ -143,8 +143,7 @@ macro_rules! match_and_call {
 	};
 }
 
-impl CliConfiguration for Subcommand
-{
+impl CliConfiguration for Subcommand {
 	match_and_call! { fn get_base_path(&self) -> Result<Option<&PathBuf>> }
 
 	match_and_call! { fn get_is_dev(&self) -> Result<bool> }

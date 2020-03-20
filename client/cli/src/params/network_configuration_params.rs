@@ -14,15 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::path::PathBuf;
-use std::iter;
-use std::net::Ipv4Addr;
-use structopt::StructOpt;
 use sc_network::{
-	config::{NonReservedPeerMode, TransportConfig, NetworkConfiguration, NodeKeyConfig},
+	config::{NetworkConfiguration, NodeKeyConfig, NonReservedPeerMode, TransportConfig},
 	multiaddr::Protocol,
 };
-use sc_service::{Configuration, RuntimeGenesis, ChainSpec};
+use sc_service::{ChainSpec, Configuration, RuntimeGenesis};
+use std::iter;
+use std::net::Ipv4Addr;
+use std::path::PathBuf;
+use structopt::StructOpt;
 
 use crate::error;
 use crate::params::node_key_params::NodeKeyParams;

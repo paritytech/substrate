@@ -16,7 +16,7 @@ pub(crate) fn substrate_cli_params(
 	};
 
 	let mut attrs = attrs
-    	.iter()
+		.iter()
 		.map(|x| {
 			(
 				match &*x.left {
@@ -32,13 +32,28 @@ pub(crate) fn substrate_cli_params(
 
 	let shared_params = attrs.remove("shared_params");
 	let import_params = attrs.remove("import_params");
-	let pruning_params = attrs.remove("pruning_params").or_else(|| import_params.as_ref().map(|x| quote!(#x.pruning_params).into()));
+	let pruning_params = attrs.remove("pruning_params").or_else(|| {
+		import_params
+			.as_ref()
+			.map(|x| quote!(#x.pruning_params).into())
+	});
 	let keystore_params = attrs.remove("keystore_params");
 	let network_params = attrs.remove("network_params");
-	let node_key_params = attrs.remove("node_key_params").or_else(|| network_params.as_ref().map(|x| quote!(#x.node_key_params).into()));
+	let node_key_params = attrs.remove("node_key_params").or_else(|| {
+		network_params
+			.as_ref()
+			.map(|x| quote!(#x.node_key_params).into())
+	});
 
 	if !attrs.is_empty() {
-		abort_call_site!("unknown macro parameters: {}", attrs.keys().map(|x| x.as_str()).collect::<Vec<_>>().join(", "));
+		abort_call_site!(
+			"unknown macro parameters: {}",
+			attrs
+				.keys()
+				.map(|x| x.as_str())
+				.collect::<Vec<_>>()
+				.join(", ")
+		);
 	}
 
 	let mut i: ItemImpl = match syn::parse(i) {
@@ -46,11 +61,14 @@ pub(crate) fn substrate_cli_params(
 		_ => abort_call_site!("this macro only works on an impl"),
 	};
 
-	let existing_methods = i.items.iter().filter_map(|x| match x {
-		ImplItem::Method(x) => Some(x.sig.ident.to_string()),
-		_ => None,
-	})
-    	.collect::<HashSet<_>>();
+	let existing_methods = i
+		.items
+		.iter()
+		.filter_map(|x| match x {
+			ImplItem::Method(x) => Some(x.sig.ident.to_string()),
+			_ => None,
+		})
+		.collect::<HashSet<_>>();
 	let missing = |method| !existing_methods.contains(method);
 
 	if let Some(ident) = shared_params {

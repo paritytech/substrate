@@ -14,18 +14,18 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use sc_service::{
+	ChainSpec, ChainSpecExtension, Configuration, Roles, RuntimeGenesis, ServiceBuilderCommand,
+};
+use sp_runtime::generic::BlockId;
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::fmt::Debug;
 use std::str::FromStr;
 use structopt::StructOpt;
-use sc_service::{
-	Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand, Roles, ChainSpec,
-};
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
-use sp_runtime::generic::BlockId;
 
 use crate::error;
-use crate::params::SharedParams;
 use crate::params::ImportParams;
+use crate::params::SharedParams;
 use crate::{substrate_cli_params, CliConfiguration};
 
 /// The `check-block` command used to validate blocks.
@@ -66,13 +66,21 @@ impl CheckBlockCmd {
 		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
 		<BB as BlockT>::Hash: std::str::FromStr,
 	{
-		let input = if self.input.starts_with("0x") { &self.input[2..] } else { &self.input[..] };
+		let input = if self.input.starts_with("0x") {
+			&self.input[2..]
+		} else {
+			&self.input[..]
+		};
 		let block_id = match FromStr::from_str(input) {
 			Ok(hash) => BlockId::hash(hash),
 			Err(_) => match self.input.parse::<u32>() {
 				Ok(n) => BlockId::number((n as u32).into()),
-				Err(_) => return Err(error::Error::Input("Invalid hash or number specified".into())),
-			}
+				Err(_) => {
+					return Err(error::Error::Input(
+						"Invalid hash or number specified".into(),
+					))
+				}
+			},
 		};
 
 		let start = std::time::Instant::now();
@@ -84,5 +92,4 @@ impl CheckBlockCmd {
 }
 
 #[substrate_cli_params(shared_params = shared_params, import_params = import_params)]
-impl CliConfiguration for CheckBlockCmd {
-}
+impl CliConfiguration for CheckBlockCmd {}

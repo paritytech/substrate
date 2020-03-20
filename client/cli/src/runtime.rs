@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::Result;
 use crate::CliConfiguration;
+use crate::Result;
 use crate::SubstrateCLI;
 use crate::{RunCmd, Subcommand};
 use chrono::prelude::*;
@@ -88,10 +88,7 @@ pub fn build_runtime() -> std::result::Result<tokio::runtime::Runtime, std::io::
 		.build()
 }
 
-fn run_until_exit<FUT, ERR>(
-	mut tokio_runtime: tokio::runtime::Runtime,
-	future: FUT,
-) -> Result<()>
+fn run_until_exit<FUT, ERR>(mut tokio_runtime: tokio::runtime::Runtime, future: FUT) -> Result<()>
 where
 	FUT: Future<Output = std::result::Result<(), ERR>> + future::Future,
 	ERR: 'static + std::error::Error,
@@ -177,13 +174,13 @@ where
 			Subcommand::BuildSpec(cmd) => cmd.run(self.config),
 			Subcommand::ExportBlocks(cmd) => {
 				run_until_exit(self.tokio_runtime, cmd.run(self.config, builder))
-			},
+			}
 			Subcommand::ImportBlocks(cmd) => {
 				run_until_exit(self.tokio_runtime, cmd.run(self.config, builder))
-			},
+			}
 			Subcommand::CheckBlock(cmd) => {
 				run_until_exit(self.tokio_runtime, cmd.run(self.config, builder))
-			},
+			}
 			Subcommand::Revert(cmd) => cmd.run(self.config, builder),
 			Subcommand::PurgeChain(cmd) => cmd.run(self.config),
 		}

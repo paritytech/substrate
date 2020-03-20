@@ -14,19 +14,19 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::fmt::Debug;
-use std::io::{Read, Seek, self};
-use std::fs;
-use std::path::PathBuf;
-use structopt::StructOpt;
+use crate::error;
+use crate::params::ImportParams;
+use crate::params::SharedParams;
+use crate::{substrate_cli_params, CliConfiguration};
 use sc_service::{
-	Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand, ChainSpec, Roles,
+	ChainSpec, ChainSpecExtension, Configuration, Roles, RuntimeGenesis, ServiceBuilderCommand,
 };
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
-use crate::error;
-use crate::params::SharedParams;
-use crate::params::ImportParams;
-use crate::{substrate_cli_params, CliConfiguration};
+use std::fmt::Debug;
+use std::fs;
+use std::io::{self, Read, Seek};
+use std::path::PathBuf;
+use structopt::StructOpt;
 
 /// The `import-blocks` command used to import blocks.
 #[derive(Debug, StructOpt, Clone)]
@@ -77,10 +77,13 @@ impl ImportBlocksCmd {
 				let mut buffer = Vec::new();
 				io::stdin().read_to_end(&mut buffer)?;
 				Box::new(io::Cursor::new(buffer))
-			},
+			}
 		};
 
-		builder(config)?.import_blocks(file, false).await.map_err(|e| e.into())
+		builder(config)?
+			.import_blocks(file, false)
+			.await
+			.map_err(|e| e.into())
 	}
 }
 

@@ -14,26 +14,26 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::path::PathBuf;
-use sp_runtime::{BuildStorage, traits::{Block as BlockT, Header as HeaderT, NumberFor}};
-use sc_client::StateMachine;
-use sc_cli::{ExecutionStrategy, CliConfiguration, Result, substrate_cli_params, SubstrateCLI};
-use sc_client_db::BenchmarkingState;
-use sc_service::{
-	Configuration, NativeExecutionDispatch, RuntimeGenesis, ChainSpecExtension, ChainSpec,
-};
-use sc_executor::NativeExecutor;
-use std::fmt::Debug;
-use codec::{Encode, Decode};
-use frame_benchmarking::BenchmarkResults;
 use crate::BenchmarkCmd;
+use codec::{Decode, Encode};
+use frame_benchmarking::BenchmarkResults;
+use sc_cli::{substrate_cli_params, CliConfiguration, ExecutionStrategy, Result, SubstrateCLI};
+use sc_client::StateMachine;
+use sc_client_db::BenchmarkingState;
+use sc_executor::NativeExecutor;
+use sc_service::{
+	ChainSpec, ChainSpecExtension, Configuration, NativeExecutionDispatch, RuntimeGenesis,
+};
+use sp_runtime::{
+	traits::{Block as BlockT, Header as HeaderT, NumberFor},
+	BuildStorage,
+};
+use std::fmt::Debug;
+use std::path::PathBuf;
 
 impl BenchmarkCmd {
 	/// Runs the command and benchmarks the chain.
-	pub fn run<G, E, BB, ExecDispatch>(
-		self,
-		config: Configuration<G, E>,
-	) -> Result<()>
+	pub fn run<G, E, BB, ExecDispatch>(self, config: Configuration<G, E>) -> Result<()>
 	where
 		G: RuntimeGenesis,
 		E: ChainSpecExtension,
@@ -60,26 +60,32 @@ impl BenchmarkCmd {
 			&mut changes,
 			&executor,
 			"Benchmark_dispatch_benchmark",
-			&(&self.pallet, &self.extrinsic, self.steps.clone(), self.repeat).encode(),
+			&(
+				&self.pallet,
+				&self.extrinsic,
+				self.steps.clone(),
+				self.repeat,
+			)
+				.encode(),
 			Default::default(),
 		)
 		.execute(strategy.into())
 		.map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;
-		let results = <Option<Vec<BenchmarkResults>> as Decode>::decode(&mut &result[..])
-			.unwrap_or(None);
+		let results =
+			<Option<Vec<BenchmarkResults>> as Decode>::decode(&mut &result[..]).unwrap_or(None);
 
 		if let Some(results) = results {
 			// Print benchmark metadata
 			println!(
 				"Pallet: {:?}, Extrinsic: {:?}, Steps: {:?}, Repeat: {:?}",
-				self.pallet,
-				self.extrinsic,
-				self.steps,
-				self.repeat,
+				self.pallet, self.extrinsic, self.steps, self.repeat,
 			);
 
 			// Print the table header
-			results[0].0.iter().for_each(|param| print!("{:?},", param.0));
+			results[0]
+				.0
+				.iter()
+				.for_each(|param| print!("{:?},", param.0));
 
 			print!("extrinsic_time,storage_root_time\n");
 			// Print the values
@@ -113,7 +119,7 @@ impl CliConfiguration for BenchmarkCmd {
 
 		Ok(match C::spec_factory(&chain_key)? {
 			Some(spec) => spec,
-			None => ChainSpec::from_json_file(PathBuf::from(chain_key))?
+			None => ChainSpec::from_json_file(PathBuf::from(chain_key))?,
 		})
 	}
 }

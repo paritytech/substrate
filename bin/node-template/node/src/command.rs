@@ -14,18 +14,18 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use sc_cli::{SubstrateCLI, spec_factory};
-use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
-use crate::service;
 use crate::chain_spec::Alternative;
 use crate::cli::Cli;
+use crate::service;
 use node_template_runtime::GenesisConfig;
+use sc_cli::{spec_factory, SubstrateCLI};
 use sc_service::ChainSpec;
+use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
 
 #[spec_factory(
 	impl_name = "Substrate Node",
 	support_url = "support.anonymous.an",
-	copyright_start_year = 2017,
+	copyright_start_year = 2017
 )]
 fn spec_factory(id: &str) -> Result<Option<ChainSpec<GenesisConfig>>, String> {
 	Ok(match Alternative::from(id) {
@@ -41,17 +41,11 @@ pub fn run() -> sc_cli::Result<()> {
 	match opt.subcommand {
 		Some(subcommand) => {
 			let runtime = Cli::create_runtime(&subcommand)?;
-			runtime.run_subcommand(
-				subcommand,
-				|config: _| Ok(new_full_start!(config).0),
-			)
-		},
+			runtime.run_subcommand(subcommand, |config| Ok(new_full_start!(config).0))
+		}
 		None => {
 			let runtime = Cli::create_runtime(&opt.run)?;
-			runtime.run_node(
-				service::new_light,
-				service::new_full,
-			)
-		},
+			runtime.run_node(service::new_light, service::new_full)
+		}
 	}
 }

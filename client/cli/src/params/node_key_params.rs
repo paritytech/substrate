@@ -14,14 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use sc_network::config::NodeKeyConfig;
+use sc_service::{Configuration, RuntimeGenesis};
+use sp_core::H256;
 use std::{path::PathBuf, str::FromStr};
 use structopt::StructOpt;
-use sc_service::{Configuration, RuntimeGenesis};
-use sc_network::config::NodeKeyConfig;
-use sp_core::H256;
 
-use crate::error;
 use crate::arg_enums::NodeKeyType;
+use crate::error;
 
 /// The file name of the node's Ed25519 secret key inside the chain-specific
 /// network config directory, if neither `--node-key` nor `--node-key-file`
@@ -93,17 +93,15 @@ pub struct NodeKeyParams {
 impl NodeKeyParams {
 	/// Create a `NodeKeyConfig` from the given `NodeKeyParams` in the context
 	/// of an optional network config storage directory.
-	pub fn get_node_key(
-		&self,
-		net_config_dir: &PathBuf,
-	) -> error::Result<NodeKeyConfig>
-	{
+	pub fn get_node_key(&self, net_config_dir: &PathBuf) -> error::Result<NodeKeyConfig> {
 		Ok(match self.node_key_type {
 			NodeKeyType::Ed25519 => {
 				let secret = if let Some(node_key) = self.node_key.as_ref() {
 					parse_ed25519_secret(node_key)?
 				} else {
-					let path = self.node_key_file.clone()
+					let path = self
+						.node_key_file
+						.clone()
 						.unwrap_or_else(|| net_config_dir.join(NODE_KEY_ED25519_FILE));
 
 					sc_network::config::Secret::File(path)
@@ -122,16 +120,19 @@ fn invalid_node_key(e: impl std::fmt::Display) -> error::Error {
 
 /// Parse a Ed25519 secret key from a hex string into a `sc_network::Secret`.
 fn parse_ed25519_secret(hex: &str) -> error::Result<sc_network::config::Ed25519Secret> {
-	H256::from_str(&hex).map_err(invalid_node_key).and_then(|bytes|
-		sc_network::config::identity::ed25519::SecretKey::from_bytes(bytes)
-			.map(sc_network::config::Secret::Input)
-			.map_err(invalid_node_key))
+	H256::from_str(&hex)
+		.map_err(invalid_node_key)
+		.and_then(|bytes| {
+			sc_network::config::identity::ed25519::SecretKey::from_bytes(bytes)
+				.map(sc_network::config::Secret::Input)
+				.map_err(invalid_node_key)
+		})
 }
 
 #[cfg(test)]
 mod tests {
-	use sc_network::config::identity::ed25519;
 	use super::*;
+	use sc_network::config::identity::ed25519;
 
 	#[test]
 	fn test_node_key_config_input() {
@@ -139,18 +140,20 @@ mod tests {
 			NodeKeyType::variants().iter().try_for_each(|t| {
 				let node_key_type = NodeKeyType::from_str(t).unwrap();
 				let sk = match node_key_type {
-					NodeKeyType::Ed25519 => ed25519::SecretKey::generate().as_ref().to_vec()
+					NodeKeyType::Ed25519 => ed25519::SecretKey::generate().as_ref().to_vec(),
 				};
 				let params = NodeKeyParams {
 					node_key_type,
 					node_key: Some(format!("{:x}", H256::from_slice(sk.as_ref()))),
-					node_key_file: None
+					node_key_file: None,
 				};
 				params.get_node_key(net_config_dir).and_then(|c| match c {
 					NodeKeyConfig::Ed25519(sc_network::config::Secret::Input(ref ski))
-						if node_key_type == NodeKeyType::Ed25519 &&
-							&sk[..] == ski.as_ref() => Ok(()),
-					_ => Err(error::Error::Input("Unexpected node key config".into()))
+						if node_key_type == NodeKeyType::Ed25519 && &sk[..] == ski.as_ref() =>
+					{
+						Ok(())
+					}
+					_ => Err(error::Error::Input("Unexpected node key config".into())),
 				})
 			})
 		}
@@ -168,12 +171,15 @@ mod tests {
 				let params = NodeKeyParams {
 					node_key_type,
 					node_key: None,
-					node_key_file: Some(file.clone())
+					node_key_file: Some(file.clone()),
 				};
 				params.get_node_key(net_config_dir).and_then(|c| match c {
 					NodeKeyConfig::Ed25519(sc_network::config::Secret::File(ref f))
-						if node_key_type == NodeKeyType::Ed25519 && f == &file => Ok(()),
-					_ => Err(error::Error::Input("Unexpected node key config".into()))
+						if node_key_type == NodeKeyType::Ed25519 && f == &file =>
+					{
+						Ok(())
+					}
+					_ => Err(error::Error::Input("Unexpected node key config".into())),
 				})
 			})
 		}
@@ -185,14 +191,14 @@ mod tests {
 	fn test_node_key_config_default() {
 		fn with_def_params<F>(f: F) -> error::Result<()>
 		where
-			F: Fn(NodeKeyParams) -> error::Result<()>
+			F: Fn(NodeKeyParams) -> error::Result<()>,
 		{
 			NodeKeyType::variants().iter().try_for_each(|t| {
 				let node_key_type = NodeKeyType::from_str(t).unwrap();
 				f(NodeKeyParams {
 					node_key_type,
 					node_key: None,
-					node_key_file: None
+					node_key_file: None,
 				})
 			})
 		}
@@ -201,13 +207,17 @@ mod tests {
 			with_def_params(|params| {
 				let dir = PathBuf::from(net_config_dir.clone());
 				let typ = params.node_key_type;
-				params.get_node_key(net_config_dir)
+				params
+					.get_node_key(net_config_dir)
 					.and_then(move |c| match c {
 						NodeKeyConfig::Ed25519(sc_network::config::Secret::File(ref f))
-							if typ == NodeKeyType::Ed25519 &&
-								f == &dir.join(NODE_KEY_ED25519_FILE) => Ok(()),
-						_ => Err(error::Error::Input("Unexpected node key config".into()))
-				})
+							if typ == NodeKeyType::Ed25519
+								&& f == &dir.join(NODE_KEY_ED25519_FILE) =>
+						{
+							Ok(())
+						}
+						_ => Err(error::Error::Input("Unexpected node key config".into())),
+					})
 			})
 		}
 
