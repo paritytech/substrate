@@ -17,7 +17,7 @@
 use codec::{Encode, Decode};
 use frame_support::Hashable;
 use sp_state_machine::TestExternalities as CoreTestExternalities;
-use sp_core::{NeverNativeValue, NativeOrEncoded, traits::CodeExecutor};
+use sp_core::{NeverNativeValue, NativeOrEncoded, traits::{CodeExecutor, RuntimeCode}};
 use sp_runtime::{ApplyExtrinsicResult, traits::{Header as HeaderT, BlakeTwo256}};
 use sc_executor::{NativeExecutor, WasmExecutionMethod};
 use sc_executor::error::Result;
@@ -29,6 +29,7 @@ use node_runtime::{
 };
 use node_primitives::{Hash, BlockNumber};
 use node_testing::keyring::*;
+use sp_externalities::Externalities;
 
 /// The wasm runtime code.
 ///
@@ -71,8 +72,18 @@ pub fn executor_call<
 	native_call: Option<NC>,
 ) -> (Result<NativeOrEncoded<R>>, bool) {
 	let mut t = t.ext();
+
+	let code = t.storage(sp_core::storage::well_known_keys::CODE).unwrap();
+	let heap_pages = t.storage(sp_core::storage::well_known_keys::HEAP_PAGES);
+	let runtime_code = RuntimeCode {
+		code_fetcher: &sp_core::traits::WrappedRuntimeCode(code.as_slice().into()),
+		hash: sp_core::blake2_256(&code).to_vec(),
+		heap_pages: heap_pages.and_then(|hp| Decode::decode(&mut &hp[..]).ok()),
+	};
+
 	executor().call::<R, NC>(
 		&mut t,
+		&runtime_code,
 		method,
 		data,
 		use_native,

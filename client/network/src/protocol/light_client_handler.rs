@@ -254,13 +254,12 @@ where
 	B: Block,
 {
 	/// Construct a new light client handler.
-	pub fn new
-		( cfg: Config
-		, chain: Arc<dyn Client<B>>
-		, checker: Arc<dyn fetcher::FetchChecker<B>>
-		, peerset: sc_peerset::PeersetHandle
-		) -> Self
-	{
+	pub fn new(
+		cfg: Config,
+		chain: Arc<dyn Client<B>>,
+		checker: Arc<dyn fetcher::FetchChecker<B>>,
+		peerset: sc_peerset::PeersetHandle,
+	) -> Self {
 		LightClientHandler {
 			config: cfg,
 			chain,
@@ -425,7 +424,8 @@ where
 		log::trace!("remote call request from {} ({} at {:?})",
 			peer,
 			request.method,
-			request.block);
+			request.block,
+		);
 
 		let block = Decode::decode(&mut request.block.as_ref())?;
 
@@ -436,7 +436,8 @@ where
 					peer,
 					request.method,
 					request.block,
-					e);
+					e,
+				);
 				StorageProof::empty()
 			}
 		};

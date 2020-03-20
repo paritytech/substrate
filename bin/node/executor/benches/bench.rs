@@ -25,8 +25,8 @@ use node_runtime::constants::currency::*;
 use node_testing::keyring::*;
 use sp_core::{NativeOrEncoded, NeverNativeValue};
 use sp_core::storage::well_known_keys;
-use sp_core::traits::CodeExecutor;
-use	frame_support::Hashable;
+use sp_core::traits::{CodeExecutor, RuntimeCode};
+use frame_support::Hashable;
 use sp_state_machine::TestExternalities as CoreTestExternalities;
 use sc_executor::{NativeExecutor, RuntimeInfo, WasmExecutionMethod, Externalities};
 use sp_runtime::traits::BlakeTwo256;
@@ -90,9 +90,16 @@ fn construct_block<E: Externalities>(
 		digest: Default::default(),
 	};
 
+	let runtime_code = RuntimeCode {
+		code_fetcher: &sp_core::traits::WrappedRuntimeCode(COMPACT_CODE.into()),
+		hash: vec![1, 2, 3],
+		heap_pages: None,
+	};
+
 	// execute the block to get the real header.
 	executor.call::<NeverNativeValue, fn() -> _>(
 		ext,
+		&runtime_code,
 		"Core_initialize_block",
 		&header.encode(),
 		true,
@@ -102,6 +109,7 @@ fn construct_block<E: Externalities>(
 	for i in extrinsics.iter() {
 		executor.call::<NeverNativeValue, fn() -> _>(
 			ext,
+			&runtime_code,
 			"BlockBuilder_apply_extrinsic",
 			&i.encode(),
 			true,
@@ -111,6 +119,7 @@ fn construct_block<E: Externalities>(
 
 	let header = match executor.call::<NeverNativeValue, fn() -> _>(
 		ext,
+		&runtime_code,
 		"BlockBuilder_finalize_block",
 		&[0u8;0],
 		true,
@@ -162,11 +171,16 @@ fn bench_execute_block(c: &mut Criterion) {
 				ExecutionMethod::Wasm(wasm_method) => (false, *wasm_method),
 			};
 			let executor = NativeExecutor::new(wasm_method, None);
+			let runtime_code = RuntimeCode {
+				code_fetcher: &sp_core::traits::WrappedRuntimeCode(COMPACT_CODE.into()),
+				hash: vec![1, 2, 3],
+				heap_pages: None,
+			};
 
 			// Get the runtime version to initialize the runtimes cache.
 			{
 				let mut test_ext = new_test_ext(&genesis_config);
-				executor.runtime_version(&mut test_ext.ext()).unwrap();
+				executor.runtime_version(&mut test_ext.ext(), &runtime_code).unwrap();
 			}
 
 			let blocks = test_blocks(&genesis_config, &executor);
@@ -177,6 +191,7 @@ fn bench_execute_block(c: &mut Criterion) {
 					for block in blocks.iter() {
 						executor.call::<NeverNativeValue, fn() -> _>(
 							&mut test_ext.ext(),
+							&runtime_code,
 							"Core_execute_block",
 							&block.0,
 							use_native,
