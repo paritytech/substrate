@@ -36,7 +36,7 @@ pub fn create_heartbeat<T: Trait>(k: u32) ->
 	for _ in 0 .. k {
 		keys.push(T::AuthorityId::generate_pair(None));
 	}
-	Keys::<T>::put(keys);
+	Keys::<T>::put(keys.clone());
 
 	let network_state = OpaqueNetworkState {
 		peer_id: OpaquePeerId::default(),
@@ -50,7 +50,7 @@ pub fn create_heartbeat<T: Trait>(k: u32) ->
 	};
 
 	let encoded_heartbeat = input_heartbeat.encode();
-	let authority_id = T::AuthorityId::generate_pair(None);
+	let authority_id = keys.get((k-1) as usize).ok_or("out of range")?;
 	let signature = authority_id.sign(&encoded_heartbeat).ok_or("couldn't make signature")?;
 
 	Ok((input_heartbeat, signature))
