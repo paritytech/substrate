@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use sc_service::{
-	config::DatabaseConfig, ChainSpec, ChainSpecExtension, Configuration, RuntimeGenesis,
+	config::DatabaseConfig, ChainSpec, ChainSpecExtension, RuntimeGenesis,
 };
 use std::path::PathBuf;
 use structopt::StructOpt;
@@ -53,6 +53,7 @@ pub struct SharedParams {
 }
 
 impl SharedParams {
+	/// Get the chain spec for the parameters provided
 	pub fn get_chain_spec<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<ChainSpec<G, E>>
 	where
 		G: RuntimeGenesis,
@@ -97,6 +98,7 @@ impl SharedParams {
 		Ok(())
 	}
 
+	/// Get the database configuration object for the parameters provided
 	pub fn get_database_config(
 		&self,
 		base_path: &PathBuf,

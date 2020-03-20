@@ -16,9 +16,8 @@
 
 //! Substrate CLI library.
 
-#![allow(missing_docs)]
+#![warn(missing_docs)]
 #![warn(unused_extern_crates)]
-#![allow(unused_imports)] // TO REMOVE
 
 extern crate self as sc_cli;
 
@@ -39,15 +38,9 @@ pub use params::*;
 use regex::Regex;
 pub use runtime::*;
 pub use sc_cli_derive::*;
-use sc_service::{
-	AbstractService, ChainSpec, ChainSpecExtension, Configuration, NoExtension, RuntimeGenesis,
-	ServiceBuilderCommand,
-};
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
-use std::fmt::Debug;
+use sc_service::{ChainSpec, ChainSpecExtension, Configuration, NoExtension, RuntimeGenesis};
 use std::future::Future;
 use std::io::Write;
-use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
 pub use structopt;
@@ -165,10 +158,12 @@ where
 		Ok(<Self as StructOpt>::from_clap(&matches))
 	}
 
+	/// Returns the client ID: `{impl_name}/v{impl_version}`
 	fn client_id() -> String {
 		format!("{}/v{}", Self::get_impl_name(), Self::get_impl_version())
 	}
 
+	/// Only create a Configuration for the command provided in argument
 	fn create_configuration<T: CliConfiguration>(
 		command: &T,
 		task_executor: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>,
@@ -176,6 +171,8 @@ where
 		command.create_configuration::<Self, G, E>(task_executor)
 	}
 
+	/// Create a runtime for the command provided in argument. This will create a Configuration and
+	/// a tokio runtime
 	fn create_runtime<T: CliConfiguration>(command: &T) -> error::Result<Runtime<Self, G, E>> {
 		command.init::<Self, G, E>()?;
 		Runtime::<Self, G, E>::new(command)
@@ -257,12 +254,17 @@ fn kill_color(s: &str) -> String {
 	RE.replace_all(s, "").to_string()
 }
 
+/// Generate the `cargo:` key output
 pub fn generate_cargo_keys() {
 	use vergen::{generate_cargo_keys, ConstantsFlags};
 
 	generate_cargo_keys(ConstantsFlags::SHA_SHORT).expect("Failed to generate metadata files");
 }
 
+/// Make sure the calling `build.rs` script is rerun when `.git/HEAD` changed.
+///
+/// The file is searched from the `CARGO_MANIFEST_DIR` upwards. If the file can not be found,
+/// a warning is generated.
 pub fn rerun_if_git_head_changed() {
 	build_script_utils::rerun_if_git_head_changed();
 }

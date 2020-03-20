@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use sc_service::{
-	ChainSpec, ChainSpecExtension, Configuration, Roles, RuntimeGenesis, ServiceBuilderCommand,
+	ChainSpecExtension, Configuration, RuntimeGenesis, ServiceBuilderCommand,
 };
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::fmt::Debug;

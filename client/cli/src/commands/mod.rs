@@ -33,21 +33,15 @@ use crate::params::SharedParams;
 use crate::CliConfiguration;
 use crate::Result;
 use crate::SubstrateCLI;
-use app_dirs::{AppDataType, AppInfo};
-use core::future::Future;
-use core::pin::Pin;
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_network::config::NodeKeyConfig;
 use sc_service::{
-	config::DatabaseConfig, config::KeystoreConfig, config::NetworkConfiguration,
-	config::WasmExecutionMethod, ChainSpec, ChainSpecExtension, Configuration, PruningMode, Roles,
-	RuntimeGenesis, ServiceBuilderCommand,
+	config::DatabaseConfig, config::WasmExecutionMethod, ChainSpec, ChainSpecExtension, PruningMode,
+	Roles, RuntimeGenesis,
 };
 use sc_tracing::TracingReceiver;
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::fmt::Debug;
 use std::path::PathBuf;
-use std::sync::Arc;
 use structopt::StructOpt;
 
 /// All core commands that are provided by default.

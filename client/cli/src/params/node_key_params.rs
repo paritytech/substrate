@@ -15,7 +15,6 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use sc_network::config::NodeKeyConfig;
-use sc_service::{Configuration, RuntimeGenesis};
 use sp_core::H256;
 use std::{path::PathBuf, str::FromStr};
 use structopt::StructOpt;

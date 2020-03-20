@@ -18,7 +18,7 @@ use sc_network::{
 	config::{NetworkConfiguration, NodeKeyConfig, NonReservedPeerMode, TransportConfig},
 	multiaddr::Protocol,
 };
-use sc_service::{ChainSpec, Configuration, RuntimeGenesis};
+use sc_service::{ChainSpec, RuntimeGenesis};
 use std::iter;
 use std::net::Ipv4Addr;
 use std::path::PathBuf;
@@ -88,7 +88,11 @@ pub struct NetworkConfigurationParams {
 	///
 	/// This allows downlading announced blocks from multiple peers. Decrease to save
 	/// traffic and risk increased latency.
-	#[structopt(long = "max-parallel-downloads", value_name = "COUNT", default_value = "5")]
+	#[structopt(
+		long = "max-parallel-downloads",
+		value_name = "COUNT",
+		default_value = "5"
+	)]
 	pub max_parallel_downloads: u32,
 
 	#[allow(missing_docs)]
@@ -115,14 +119,15 @@ impl NetworkConfigurationParams {
 		G: RuntimeGenesis,
 	{
 		let port = self.port.unwrap_or(30333);
-		let mut listen_addresses = vec![
-			iter::once(Protocol::Ip4(Ipv4Addr::new(0, 0, 0, 0)))
-				.chain(iter::once(Protocol::Tcp(port)))
-				.collect()
-		];
+		let mut listen_addresses = vec![iter::once(Protocol::Ip4(Ipv4Addr::new(0, 0, 0, 0)))
+			.chain(iter::once(Protocol::Tcp(port)))
+			.collect()];
 
 		for addr in self.listen_addr.iter() {
-			let addr = addr.parse().ok().ok_or(error::Error::InvalidListenMultiaddress)?;
+			let addr = addr
+				.parse()
+				.ok()
+				.ok_or(error::Error::InvalidListenMultiaddress)?;
 			listen_addresses.push(addr);
 		}
 

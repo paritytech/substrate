@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use sc_service::{Configuration, PruningMode, RuntimeGenesis};
+use sc_service::PruningMode;
 use structopt::StructOpt;
 
 use crate::error;
@@ -32,6 +32,7 @@ pub struct PruningParams {
 }
 
 impl PruningParams {
+	/// The the prunning value from the parameters
 	pub fn get_pruning(
 		&self,
 		roles: sc_service::Roles,

@@ -17,7 +17,7 @@
 use crate::CliConfiguration;
 use crate::Result;
 use crate::SubstrateCLI;
-use crate::{RunCmd, Subcommand};
+use crate::Subcommand;
 use chrono::prelude::*;
 use futures::pin_mut;
 use futures::select;
@@ -101,6 +101,7 @@ where
 	Ok(())
 }
 
+/// A Substrate CLI runtime that can be used to run a node or a command
 pub struct Runtime<C: SubstrateCLI<G, E>, G, E>
 where
 	G: RuntimeGenesis,
@@ -116,7 +117,8 @@ where
 	G: RuntimeGenesis,
 	E: ChainSpecExtension,
 {
-	pub fn new<T: CliConfiguration>(cli_config: &T) -> Result<Runtime<C, G, E>> {
+	/// Create a new runtime with the command provided in argument
+	pub fn new<T: CliConfiguration>(command: &T) -> Result<Runtime<C, G, E>> {
 		let tokio_runtime = build_runtime()?;
 
 		let task_executor = {
@@ -127,7 +129,7 @@ where
 		};
 
 		Ok(Runtime {
-			config: cli_config.create_configuration::<C, G, E>(task_executor)?,
+			config: command.create_configuration::<C, G, E>(task_executor)?,
 			tokio_runtime,
 			phantom: PhantomData,
 		})

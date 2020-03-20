@@ -22,7 +22,7 @@ use crate::arg_enums::{
 use crate::error;
 use crate::params::PruningParams;
 use sc_client_api::execution_extensions::ExecutionStrategies;
-use sc_service::{config::DatabaseConfig, Configuration, PruningMode, Roles, RuntimeGenesis};
+use sc_service::{PruningMode, Roles};
 use structopt::StructOpt;
 
 /// Parameters for block import.
@@ -78,10 +78,12 @@ pub struct ImportParams {
 }
 
 impl ImportParams {
+	/// Get the WASM execution method from the parameters
 	pub fn get_wasm_method(&self) -> sc_service::config::WasmExecutionMethod {
 		self.wasm_method.into()
 	}
 
+	/// Get execution strategies for the parameters
 	pub fn get_execution_strategies(
 		&self,
 		is_dev: bool,
@@ -107,6 +109,7 @@ impl ImportParams {
 		})
 	}
 
+	/// Get the pruning mode from the parameters
 	pub fn get_pruning(&self, roles: Roles, unsafe_pruning: bool) -> error::Result<PruningMode> {
 		self.pruning_params.get_pruning(roles, unsafe_pruning)
 	}

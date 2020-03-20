@@ -21,26 +21,11 @@ use crate::params::NetworkConfigurationParams;
 use crate::params::SharedParams;
 use crate::params::TransactionPoolParams;
 use crate::substrate_cli_params;
-use crate::{CliConfiguration, SubstrateCLI};
+use crate::CliConfiguration;
 use regex::Regex;
-use sc_client_api::execution_extensions::ExecutionStrategies;
-use sc_network::config::NodeKeyConfig;
-use sc_service::{
-	config::{
-		DatabaseConfig, KeystoreConfig, NetworkConfiguration, TransactionPoolOptions,
-		WasmExecutionMethod,
-	},
-	AbstractService, ChainSpec, ChainSpecExtension, Configuration, PruningMode, Roles,
-	RuntimeGenesis,
-};
+use sc_service::{config::TransactionPoolOptions, ChainSpec, Roles};
 use sc_telemetry::TelemetryEndpoints;
-use sc_tracing::TracingReceiver;
-use std::fs;
-use std::future::Future;
 use std::net::SocketAddr;
-use std::path::PathBuf;
-use std::pin::Pin;
-use std::sync::Arc;
 use structopt::{clap::arg_enum, StructOpt};
 
 arg_enum! {
@@ -242,6 +227,7 @@ pub struct RunCmd {
 	#[structopt(long = "force-authoring")]
 	pub force_authoring: bool,
 
+	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub keystore_params: KeystoreParams,
 }

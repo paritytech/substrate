@@ -38,21 +38,27 @@ pub(crate) const NODE_NAME_MAX_LENGTH: usize = 32;
 /// default sub directory to store network config
 pub(crate) const DEFAULT_NETWORK_CONFIG_PATH: &'static str = "network";
 
+/// A trait that allows converting an object to a Configuration
 pub trait CliConfiguration: Sized {
+	/// Get the base path of the configuration (if any)
 	fn get_base_path(&self) -> Result<Option<&PathBuf>>;
 
+	/// Returns `true` if the node is for development or not
 	fn get_is_dev(&self) -> Result<bool> {
 		Ok(false)
 	}
 
+	/// Get the roles
 	fn get_roles(&self, _is_dev: bool) -> Result<Roles> {
 		Ok(Roles::FULL)
 	}
 
+	/// Get the transaction pool options
 	fn get_transaction_pool(&self) -> Result<TransactionPoolOptions> {
 		Ok(Default::default())
 	}
 
+	/// Get the network configuration
 	fn get_network_config<G, E>(
 		&self,
 		_chain_spec: &ChainSpec<G, E>,
@@ -74,69 +80,85 @@ pub trait CliConfiguration: Sized {
 		))
 	}
 
+	/// Get the keystore configuration
 	fn get_keystore_config(&self, _base_path: &PathBuf) -> Result<KeystoreConfig> {
 		Ok(KeystoreConfig::InMemory)
 	}
 
+	/// Get the database cache size (None for default)
 	fn get_database_cache_size(&self) -> Result<Option<usize>> {
 		Ok(Default::default())
 	}
 
+	/// Get the database configuration
 	fn get_database_config(
 		&self,
 		base_path: &PathBuf,
 		cache_size: Option<usize>,
 	) -> Result<DatabaseConfig>;
 
+	/// Get the state cache size
 	fn get_state_cache_size(&self) -> Result<usize> {
 		Ok(Default::default())
 	}
 
+	/// Get the state cache child ratio (if any)
 	fn get_state_cache_child_ratio(&self) -> Result<Option<usize>> {
 		Ok(Default::default())
 	}
 
+	/// Get the pruning mode
 	fn get_pruning(&self, _is_dev: bool, _roles: Roles) -> Result<PruningMode> {
 		Ok(Default::default())
 	}
 
+	/// Get the chain spec
 	fn get_chain_spec<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<ChainSpec<G, E>>
 	where
 		G: RuntimeGenesis,
 		E: ChainSpecExtension;
 
+	/// Get the name of the node
 	fn get_node_name(&self) -> Result<String> {
 		Ok(generate_node_name())
 	}
 
+	/// Get the WASM execution method
 	fn get_wasm_method(&self) -> Result<WasmExecutionMethod> {
 		Ok(Default::default())
 	}
 
+	/// Get the execution strategies
 	fn get_execution_strategies(&self, _is_dev: bool) -> Result<ExecutionStrategies> {
 		Ok(Default::default())
 	}
 
+	/// Get the RPC HTTP address (`None` if disabled)
 	fn get_rpc_http(&self) -> Result<Option<SocketAddr>> {
 		Ok(Default::default())
 	}
 
+	/// Get the RPC websocket address (`None` if disabled)
 	fn get_rpc_ws(&self) -> Result<Option<SocketAddr>> {
 		Ok(Default::default())
 	}
 
+	/// Get the RPC websockets maximum connections (`None` if unlimited)
 	fn get_rpc_ws_max_connections(&self) -> Result<Option<usize>> {
 		Ok(Default::default())
 	}
 
+	/// Get the RPC cors (`None` if disabled)
 	fn get_rpc_cors(&self, _is_dev: bool) -> Result<Option<Vec<String>>> {
 		Ok(Some(Vec::new()))
 	}
 
+	/// Get the prometheus port (`None` if disabled)
 	fn get_prometheus_port(&self) -> Result<Option<SocketAddr>> {
 		Ok(Default::default())
 	}
 
+	/// Get the telemetry endpoints (if any)
 	fn get_telemetry_endpoints<G, E>(
 		&self,
 		chain_spec: &ChainSpec<G, E>,
@@ -144,47 +166,57 @@ pub trait CliConfiguration: Sized {
 		Ok(chain_spec.telemetry_endpoints().clone())
 	}
 
+	/// Get the telemetry external transport
 	fn get_telemetry_external_transport(&self) -> Result<Option<ExtTransport>> {
 		Ok(Default::default())
 	}
 
+	/// Get the default value for heap pages
 	fn get_default_heap_pages(&self) -> Result<Option<u64>> {
 		Ok(Default::default())
 	}
 
+	/// Returns `Ok(true)` if offchain worker should be used
 	fn get_offchain_worker(&self, _roles: Roles) -> Result<bool> {
 		Ok(Default::default())
 	}
 
-	/// set sentry mode (i.e. act as an authority but **never** actively participate)
+	/// Get sentry mode (i.e. act as an authority but **never** actively participate)
 	fn get_sentry_mode(&self) -> Result<bool> {
 		Ok(Default::default())
 	}
 
+	/// Returns `Ok(true)` if authoring should be forced
 	fn get_force_authoring(&self) -> Result<bool> {
 		Ok(Default::default())
 	}
 
+	/// Returns `Ok(true)` if grandpa should be disabled
 	fn get_disable_grandpa(&self) -> Result<bool> {
 		Ok(Default::default())
 	}
 
+	/// Get the development key seed from the current object
 	fn get_dev_key_seed(&self, _is_dev: bool) -> Result<Option<String>> {
 		Ok(Default::default())
 	}
 
+	/// Get the tracing targets from the current object (if any)
 	fn get_tracing_targets(&self) -> Result<Option<String>> {
 		Ok(Default::default())
 	}
 
+	/// Get the TracingReceiver value from the current object
 	fn get_tracing_receiver(&self) -> Result<sc_tracing::TracingReceiver> {
 		Ok(Default::default())
 	}
 
+	/// Get the node key from the current object
 	fn get_node_key(&self, _net_config_dir: &PathBuf) -> Result<NodeKeyConfig> {
 		Ok(Default::default())
 	}
 
+	/// Create a Configuration object from the current object
 	fn create_configuration<C: SubstrateCLI<G, E>, G, E>(
 		&self,
 		task_executor: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>,

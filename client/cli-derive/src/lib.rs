@@ -16,8 +16,6 @@
 
 //! Configuration trait for a CLI based on substrate
 
-extern crate proc_macro;
-
 mod spec_factory;
 mod substrate_cli_params;
 

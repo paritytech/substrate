@@ -14,16 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use log::info;
-use sc_network::config::build_multiaddr;
-use sc_service::{ChainSpec, ChainSpecExtension, Configuration, RuntimeGenesis};
-use structopt::StructOpt;
-
 use crate::error;
 use crate::params::NodeKeyParams;
 use crate::params::SharedParams;
-use crate::SubstrateCLI;
 use crate::{substrate_cli_params, CliConfiguration};
+use log::info;
+use sc_network::config::build_multiaddr;
+use sc_service::{ChainSpecExtension, Configuration, RuntimeGenesis};
+use structopt::StructOpt;
 
 /// The `build-spec` command used to build a specification.
 #[derive(Debug, StructOpt, Clone)]

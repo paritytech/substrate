@@ -18,7 +18,7 @@ use crate::error;
 use crate::params::SharedParams;
 use crate::{substrate_cli_params, CliConfiguration};
 use sc_service::{
-	config::DatabaseConfig, ChainSpec, ChainSpecExtension, Configuration, RuntimeGenesis,
+	config::DatabaseConfig, ChainSpecExtension, Configuration, RuntimeGenesis,
 };
 use std::fmt::Debug;
 use std::fs;

@@ -19,7 +19,7 @@ use crate::params::ImportParams;
 use crate::params::SharedParams;
 use crate::{substrate_cli_params, CliConfiguration};
 use sc_service::{
-	ChainSpec, ChainSpecExtension, Configuration, Roles, RuntimeGenesis, ServiceBuilderCommand,
+	ChainSpecExtension, Configuration, RuntimeGenesis, ServiceBuilderCommand,
 };
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::fmt::Debug;

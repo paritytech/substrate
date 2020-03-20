@@ -19,8 +19,8 @@ use crate::params::{BlockNumber, PruningParams, SharedParams};
 use crate::{substrate_cli_params, CliConfiguration};
 use log::info;
 use sc_service::{
-	config::DatabaseConfig, ChainSpec, ChainSpecExtension, Configuration, PruningMode, Roles,
-	RuntimeGenesis, ServiceBuilderCommand,
+	config::DatabaseConfig, ChainSpecExtension, Configuration, RuntimeGenesis,
+	ServiceBuilderCommand,
 };
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::fmt::Debug;

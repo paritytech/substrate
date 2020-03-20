@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::error;
-use sc_service::{config::TransactionPoolOptions, Configuration};
+use sc_service::config::TransactionPoolOptions;
 use structopt::StructOpt;
 
 /// Parameters used to create the pool configuration.
