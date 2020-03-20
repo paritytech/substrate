@@ -26,6 +26,7 @@ pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
 use sc_chain_spec::{ChainSpec, NoExtension};
 use sp_core::crypto::Protected;
 pub use sc_telemetry::TelemetryEndpoints;
+use prometheus_endpoint::Registry;
 
 /// Service configuration.
 pub struct Configuration<G, E = NoExtension> {
@@ -65,8 +66,8 @@ pub struct Configuration<G, E = NoExtension> {
 	pub rpc_ws_max_connections: Option<usize>,
 	/// CORS settings for HTTP & WS servers. `None` if all origins are allowed.
 	pub rpc_cors: Option<Vec<String>>,
-	/// Prometheus endpoint Port. `None` if disabled.
-	pub prometheus_port: Option<SocketAddr>,
+	/// Prometheus endpoint configuration. `None` if disabled.
+	pub prometheus_config: Option<PrometheusConfig>,
 	/// Telemetry service URL. `None` if disabled.
 	pub telemetry_endpoints: Option<TelemetryEndpoints>,
 	/// External WASM transport for the telemetry. If `Some`, when connection to a telemetry
@@ -133,6 +134,28 @@ pub enum DatabaseConfig {
 
 	/// A custom implementation of an already-open database.
 	Custom(Arc<dyn KeyValueDB>),
+}
+
+/// Configuration of the Prometheus endpoint.
+#[derive(Clone)]
+pub struct PrometheusConfig {
+	/// Port to use.
+	pub port: SocketAddr,
+	/// A metrics registry to use. Useful for setting the metric prefix.
+	pub registry: Registry,
+}
+
+impl PrometheusConfig {
+	/// Create a new config using the default registry.
+	///
+	/// The default registry prefixes metrics with `substrate`.
+	pub fn new_with_default_registry(port: SocketAddr) -> Self {
+		Self {
+			port,
+			registry: Registry::new_custom(Some("substrate".into()), None)
+				.expect("this can only fail if the prefix is empty")
+		}
+	}
 }
 
 impl<G, E> Configuration<G, E> {

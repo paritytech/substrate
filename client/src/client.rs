@@ -78,6 +78,7 @@ pub use sc_client_api::{
 	CallExecutor,
 };
 use sp_blockchain::Error;
+use prometheus_endpoint::Registry;
 
 use crate::{
 	call_executor::LocalCallExecutor,
@@ -171,6 +172,7 @@ pub fn new_in_mem<E, Block, S, RA>(
 	executor: E,
 	genesis_storage: &S,
 	keystore: Option<sp_core::traits::BareCryptoStorePtr>,
+	prometheus_registry: Option<Registry>,
 ) -> sp_blockchain::Result<Client<
 	in_mem::Backend<Block>,
 	LocalCallExecutor<in_mem::Backend<Block>, E>,
@@ -181,7 +183,7 @@ pub fn new_in_mem<E, Block, S, RA>(
 	S: BuildStorage,
 	Block: BlockT,
 {
-	new_with_backend(Arc::new(in_mem::Backend::new()), executor, genesis_storage, keystore)
+	new_with_backend(Arc::new(in_mem::Backend::new()), executor, genesis_storage, keystore, prometheus_registry)
 }
 
 /// Create a client with the explicitly provided backend.
@@ -191,6 +193,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 	executor: E,
 	build_genesis_storage: &S,
 	keystore: Option<sp_core::traits::BareCryptoStorePtr>,
+	prometheus_registry: Option<Registry>,
 ) -> sp_blockchain::Result<Client<B, LocalCallExecutor<B, E>, Block, RA>>
 	where
 		E: CodeExecutor + RuntimeInfo,
@@ -207,6 +210,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 		Default::default(),
 		Default::default(),
 		extensions,
+		prometheus_registry,
 	)
 }
 
@@ -286,6 +290,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		fork_blocks: ForkBlocks<Block>,
 		bad_blocks: BadBlocks<Block>,
 		execution_extensions: ExecutionExtensions<Block>,
+		_prometheus_registry: Option<Registry>,
 	) -> sp_blockchain::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
 			let genesis_storage = build_genesis_storage.build_storage()?;

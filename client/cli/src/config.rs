@@ -22,7 +22,7 @@ use app_dirs::{AppDataType, AppInfo};
 use names::{Generator, Name};
 use sc_service::config::{
 	Configuration, DatabaseConfig, ExecutionStrategies, ExtTransport, KeystoreConfig,
-	NetworkConfiguration, NodeKeyConfig, PruningMode, Roles, TelemetryEndpoints,
+	NetworkConfiguration, NodeKeyConfig, PrometheusConfig, PruningMode, Roles, TelemetryEndpoints,
 	TransactionPoolOptions, WasmExecutionMethod,
 };
 use sc_service::{ChainSpec, ChainSpecExtension, RuntimeGenesis};
@@ -153,8 +153,8 @@ pub trait CliConfiguration: Sized {
 		Ok(Some(Vec::new()))
 	}
 
-	/// Get the prometheus port (`None` if disabled)
-	fn get_prometheus_port(&self) -> Result<Option<SocketAddr>> {
+	/// Get the prometheus configuration (`None` if disabled)
+	fn get_prometheus_config(&self) -> Result<Option<PrometheusConfig>> {
 		Ok(Default::default())
 	}
 
@@ -272,7 +272,7 @@ pub trait CliConfiguration: Sized {
 			rpc_ws: self.get_rpc_ws()?,
 			rpc_ws_max_connections: self.get_rpc_ws_max_connections()?,
 			rpc_cors: self.get_rpc_cors(is_dev)?,
-			prometheus_port: self.get_prometheus_port()?,
+			prometheus_config: self.get_prometheus_config()?,
 			telemetry_endpoints: self.get_telemetry_endpoints(&chain_spec)?,
 			telemetry_external_transport: self.get_telemetry_external_transport()?,
 			default_heap_pages: self.get_default_heap_pages()?,

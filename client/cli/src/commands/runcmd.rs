@@ -23,7 +23,10 @@ use crate::params::TransactionPoolParams;
 use crate::substrate_cli_params;
 use crate::CliConfiguration;
 use regex::Regex;
-use sc_service::{config::TransactionPoolOptions, ChainSpec, Roles};
+use sc_service::{
+	config::{PrometheusConfig, TransactionPoolOptions},
+	ChainSpec, Roles,
+};
 use sc_telemetry::TelemetryEndpoints;
 use std::net::SocketAddr;
 use structopt::{clap::arg_enum, StructOpt};
@@ -325,7 +328,7 @@ impl CliConfiguration for RunCmd {
 		Ok(self.shared_params.dev || self.force_authoring)
 	}
 
-	fn get_prometheus_port(&self) -> Result<Option<SocketAddr>> {
+	fn get_prometheus_config(&self) -> Result<Option<PrometheusConfig>> {
 		if self.no_prometheus {
 			Ok(None)
 		} else {
@@ -335,10 +338,12 @@ impl CliConfiguration for RunCmd {
 				"127.0.0.1"
 			};
 
-			Ok(Some(parse_address(
-				&format!("{}:{}", prometheus_interface, 9615),
-				self.prometheus_port,
-			)?))
+			Ok(Some(PrometheusConfig::new_with_default_registry(
+				parse_address(
+					&format!("{}:{}", prometheus_interface, 9615),
+					self.prometheus_port,
+				)?,
+			)))
 		}
 	}
 

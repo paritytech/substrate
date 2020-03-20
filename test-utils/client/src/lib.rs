@@ -210,7 +210,8 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 			ExecutionExtensions::new(
 				self.execution_strategies,
 				self.keystore.clone(),
-			)
+			),
+			None,
 		).expect("Creates new client");
 
 		let longest_chain = sc_client::LongestChain::new(self.backend);
