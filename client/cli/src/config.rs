@@ -216,6 +216,11 @@ pub trait CliConfiguration: Sized {
 		Ok(Default::default())
 	}
 
+	/// Get maximum runtime instances
+	fn get_max_runtime_instances(&self) -> Result<Option<usize>> {
+		Ok(Default::default())
+	}
+
 	/// Create a Configuration object from the current object
 	fn create_configuration<C: SubstrateCLI<G, E>, G, E>(
 		&self,
@@ -246,6 +251,7 @@ pub trait CliConfiguration: Sized {
 		let database_cache_size = Some(self.get_database_cache_size()?.unwrap_or(128));
 		let node_key = self.get_node_key(&net_config_dir)?;
 		let roles = self.get_roles(is_dev)?;
+		let max_runtime_instances = self.get_max_runtime_instances()?.unwrap_or(8);
 
 		Ok(Configuration {
 			impl_name: C::get_impl_name(),
@@ -284,6 +290,7 @@ pub trait CliConfiguration: Sized {
 			tracing_targets: self.get_tracing_targets()?,
 			tracing_receiver: self.get_tracing_receiver()?,
 			chain_spec,
+			max_runtime_instances,
 		})
 	}
 

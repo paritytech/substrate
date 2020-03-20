@@ -232,6 +232,12 @@ pub struct RunCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub keystore_params: KeystoreParams,
+
+	/// The size of the instances cache for each runtime.
+	///
+	/// The default value is 8 and the values higher than 256 are ignored.
+	#[structopt(long)]
+	pub max_runtime_instances: Option<usize>,
 }
 
 impl RunCmd {
@@ -406,6 +412,10 @@ impl CliConfiguration for RunCmd {
 
 	fn get_transaction_pool(&self) -> Result<TransactionPoolOptions> {
 		self.pool_config.get_transaction_pool()
+	}
+
+	fn get_max_runtime_instances(&self) -> Result<Option<usize>> {
+		Ok(self.max_runtime_instances.map(|x| x.min(256)))
 	}
 }
 
