@@ -91,7 +91,7 @@
 //! Administration actions that can be done to any account:
 //! - `reap_vote` - Remove some account's expired votes.
 //! - `unlock` - Redetermine the account's balance lock, potentially making tokens available.
-//! 
+//!
 //! Proxy administration:
 //! - `activate_proxy` - Activates a proxy that is already open to the sender.
 //! - `close_proxy` - Clears the proxy status, called by the proxy.
@@ -461,6 +461,8 @@ decl_error! {
 		/// The account currently has votes attached to it and the operation cannot succeed until
 		/// these are removed, either through `unvote` or `reap_vote`.
 		VotesExist,
+		/// The instant referendum origin is currently disallowed.
+		InstantNotAllowed,
 	}
 }
 
@@ -706,7 +708,7 @@ decl_module! {
 		fn fast_track(origin,
 			proposal_hash: T::Hash,
 			voting_period: T::BlockNumber,
-			delay: T::BlockNumber
+			delay: T::BlockNumber,
 		) {
 			// Rather complicated bit of code to ensure that either:
 			// - `voting_period` is at least `FastTrackVotingPeriod` and `origin` is `FastTrackOrigin`; or
@@ -720,8 +722,8 @@ decl_module! {
 					None
 				}
 			} {
-				ensure!(T::InstantAllowed::get(), Error::<T>::TooEarly);
 				T::InstantOrigin::ensure_origin(ensure_instant)?;
+				ensure!(T::InstantAllowed::get(), Error::<T>::InstantNotAllowed);
 			}
 
 			let (e_proposal_hash, threshold) = <NextExternal<T>>::get()
@@ -734,9 +736,7 @@ decl_module! {
 
 			<NextExternal<T>>::kill();
 			let now = <frame_system::Module<T>>::block_number();
-			// We don't consider it an error if `vote_period` is too low, like `emergency_propose`.
-			let period = voting_period.max(T::FastTrackVotingPeriod::get());
-			Self::inject_referendum(now + period, proposal_hash, threshold, delay);
+			Self::inject_referendum(now + voting_period, proposal_hash, threshold, delay);
 		}
 
 		/// Veto and blacklist the external proposal hash.
@@ -1423,9 +1423,9 @@ impl<T: Trait> Module<T> {
 			};
 			sp_std::mem::swap(&mut old, voting);
 			match old {
-				Voting::Delegating { delegations, prior, .. } => {
+				Voting::Delegating { balance, target, conviction, delegations, prior, .. } => {
 					// remove any delegation votes to our current target.
-					Self::reduce_upstream_delegation(&target, delegations);
+					Self::reduce_upstream_delegation(&target, conviction.votes(balance).0);
 					voting.set_common(delegations, prior);
 				}
 				Voting::Direct { votes, delegations, prior } => {
@@ -1463,7 +1463,7 @@ impl<T: Trait> Module<T> {
 					mut prior,
 				} => {
 					// remove any delegation votes to our current target.
-					Self::reduce_upstream_delegation(&target, delegations);
+					Self::reduce_upstream_delegation(&target, conviction.votes(balance).0);
 					let now = system::Module::<T>::block_number();
 					let lock_periods = conviction.lock_periods().into();
 					prior.accumulate(now + T::EnactmentPeriod::get() * lock_periods, balance);
