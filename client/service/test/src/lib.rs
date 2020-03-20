@@ -132,7 +132,7 @@ where F: Send + 'static, L: Send +'static, U: Clone + Send + 'static
 fn node_config<G, E: Clone> (
 	index: usize,
 	spec: &ChainSpec<G, E>,
-	role: Roles,
+	roles: Roles,
 	task_executor: Arc<dyn Fn(Pin<Box<dyn futures::Future<Output = ()> + Send>>) + Send + Sync>,
 	key_seed: Option<String>,
 	base_port: u16,
@@ -165,7 +165,7 @@ fn node_config<G, E: Clone> (
 	Configuration {
 		impl_name: "network-test-impl",
 		impl_version: "0.1",
-		roles: role,
+		roles,
 		task_executor,
 		transaction_pool: Default::default(),
 		network: network_config,

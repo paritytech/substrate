@@ -34,7 +34,7 @@ pub struct PruningParams {
 impl PruningParams {
 	pub fn get_pruning(
 		&self,
-		role: sc_service::Roles,
+		roles: sc_service::Roles,
 		unsafe_pruning: bool,
 	) -> error::Result<PruningMode> {
 		// by default we disable pruning if the node is an authority (i.e.
@@ -43,10 +43,10 @@ impl PruningParams {
 		// unless `unsafe_pruning` is set.
 		Ok(match &self.pruning {
 			Some(ref s) if s == "archive" => PruningMode::ArchiveAll,
-			None if role == sc_service::Roles::AUTHORITY => PruningMode::ArchiveAll,
+			None if roles == sc_service::Roles::AUTHORITY => PruningMode::ArchiveAll,
 			None => PruningMode::default(),
 			Some(s) => {
-				if role == sc_service::Roles::AUTHORITY && !unsafe_pruning {
+				if roles == sc_service::Roles::AUTHORITY && !unsafe_pruning {
 					return Err(error::Error::Input(
 						"Validators should run with state pruning disabled (i.e. archive). \
 						You can ignore this check with `--unsafe-pruning`.".to_string()

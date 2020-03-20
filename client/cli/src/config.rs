@@ -39,7 +39,6 @@ pub(crate) const NODE_NAME_MAX_LENGTH: usize = 32;
 /// default sub directory to store network config
 pub(crate) const DEFAULT_NETWORK_CONFIG_PATH : &'static str = "network";
 
-// TODO: all getters should probably return a Result no matter what
 pub trait CliConfiguration: Sized {
 	fn get_base_path(&self) -> Result<Option<&PathBuf>>;
 

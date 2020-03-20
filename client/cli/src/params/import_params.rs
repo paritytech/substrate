@@ -107,8 +107,8 @@ impl ImportParams {
 		})
 	}
 
-	pub fn get_pruning(&self, role: Roles, unsafe_pruning: bool) -> error::Result<PruningMode> {
-		self.pruning_params.get_pruning(role, unsafe_pruning)
+	pub fn get_pruning(&self, roles: Roles, unsafe_pruning: bool) -> error::Result<PruningMode> {
+		self.pruning_params.get_pruning(roles, unsafe_pruning)
 	}
 }
 
