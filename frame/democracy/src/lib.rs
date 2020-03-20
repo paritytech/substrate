@@ -455,7 +455,7 @@ decl_error! {
 		/// An unexpected integer underflow occurred.
 		Underflow,
 		/// Too high a balance was provided that the account cannot afford.
-		TooMuch,
+		InsufficientFunds,
 		/// The account is not currently delegating.
 		NotDelegating,
 		/// The account currently has votes attached to it and the operation cannot succeed until
@@ -1311,7 +1311,7 @@ impl<T: Trait> Module<T> {
 	/// Actually enact a vote, if legit.
 	fn try_vote(who: &T::AccountId, ref_index: ReferendumIndex, vote: AccountVote<BalanceOf<T>>) -> DispatchResult {
 		let mut status = Self::referendum_status(ref_index)?;
-		ensure!(vote.balance() <= T::Currency::free_balance(who), Error::<T>::TooMuch);
+		ensure!(vote.balance() <= T::Currency::free_balance(who), Error::<T>::InsufficientFunds);
 		VotingOf::<T>::try_mutate(who, |voting| -> DispatchResult {
 			if let Voting::Direct { ref mut votes, delegations, .. } = voting {
 				match votes.binary_search_by_key(&ref_index, |i| i.0) {
@@ -1434,7 +1434,7 @@ impl<T: Trait> Module<T> {
 		balance: BalanceOf<T>,
 	) -> DispatchResult {
 		ensure!(who != target, Error::<T>::Nonsense);
-		ensure!(balance <= T::Currency::free_balance(&who), Error::<T>::TooMuch);
+		ensure!(balance <= T::Currency::free_balance(&who), Error::<T>::InsufficientFunds);
 		VotingOf::<T>::try_mutate(&who, |voting| -> DispatchResult {
 			let mut old = Voting::Delegating {
 				balance,
