@@ -1029,8 +1029,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// # Note
 	//
-	// - The current contents of the scratch buffer are overwritten.
-	// - The `input` and `output` buffer may overlap.
+	// The `input` and `output` buffer may overlap.
 	//
 	// # Parameters
 	//
@@ -1050,8 +1049,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// # Note
 	//
-	// - The current contents of the scratch buffer are overwritten.
-	// - The `input` and `output` buffer may overlap.
+	// The `input` and `output` buffer may overlap.
 	//
 	// # Parameters
 	//
@@ -1071,8 +1069,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// # Note
 	//
-	// - The current contents of the scratch buffer are overwritten.
-	// - The `input` and `output` buffer may overlap.
+	// The `input` and `output` buffer may overlap.
 	//
 	// # Parameters
 	//
@@ -1092,8 +1089,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// # Note
 	//
-	// - The current contents of the scratch buffer are overwritten.
-	// - The `input` and `output` buffer may overlap.
+	// The `input` and `output` buffer may overlap.
 	//
 	// # Parameters
 	//
@@ -1113,8 +1109,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// # Note
 	//
-	// - The current contents of the scratch buffer are overwritten.
-	// - The `input` and `output` buffer may overlap.
+	// The `input` and `output` buffer may overlap.
 	//
 	// # Parameters
 	//
@@ -1134,8 +1129,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// # Note
 	//
-	// - The current contents of the scratch buffer are overwritten.
-	// - The `input` and `output` buffer may overlap.
+	// The `input` and `output` buffer may overlap.
 	//
 	// # Parameters
 	//
@@ -1155,8 +1149,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// # Note
 	//
-	// - The current contents of the scratch buffer are overwritten.
-	// - The `input` and `output` buffer may overlap.
+	// The `input` and `output` buffer may overlap.
 	//
 	// # Parameters
 	//
@@ -1174,7 +1167,7 @@ define_env!(Env, <E: Ext>,
 /// Computes the given hash function on the scratch buffer.
 ///
 /// Reads from the sandboxed input buffer into the scratch buffer.
-/// Returns the result directly to the sandboxed output buffer.
+/// Returns the result directly to the output buffer of the sandboxed memory.
 ///
 /// # Note
 ///
@@ -1193,9 +1186,9 @@ where
 {
 	// Copy the input buffer directly into the scratch buffer to avoid
 	// heap allocations.
-	read_sandbox_memory_into_scratch(ctx, input_ptr, input_len)?;
+	let input = read_sandbox_memory(ctx, input_ptr, input_len)?;
 	// Compute the hash on the scratch buffer using the given hash function.
-	let hash = hash_fn(&ctx.scratch_buf);
+	let hash = hash_fn(&input);
 	// Write the resulting hash back into the sandboxed output buffer.
 	write_sandbox_memory(
 		ctx.schedule,
