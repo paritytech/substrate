@@ -87,10 +87,10 @@ pub trait BareCryptoStore: Send + Sync {
 	/// Provided a list of (CryptoTypeId,[u8]) pairs, this would return
 	/// a filtered set of public keys which are supported by the keystore.
 	fn supported_keys(&self, id: KeyTypeId, keys: Vec<CryptoTypePublicPair>) -> Result<Vec<CryptoTypePublicPair>, BareCryptoStoreError>;
-	/// List all supported keys
+	/// Iterate over keys
 	///
-	/// Returns a set of public keys the signer supports.
-	fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, BareCryptoStoreError> {
+	/// Returns an iterator over public keys filtered by ID
+	fn iter_keys(&self, id: KeyTypeId) -> impl IntoIterator<Item = CryptoTypePublicPair> {
 		let ed25519_existing_keys = self
     		.ed25519_public_keys(id)
 			.into_iter()
@@ -101,9 +101,15 @@ pub trait BareCryptoStore: Send + Sync {
 			.into_iter()
 			.map(Into::into);
 
-		Ok(ed25519_existing_keys
+		ed25519_existing_keys
 		   .chain(sr25519_existing_keys)
-		   .collect::<Vec<_>>())
+		   .into_iter()
+	}
+	/// List all supported keys
+	///
+	/// Returns a set of public keys the signer supports.
+	fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, BareCryptoStoreError> {
+		Ok(self.iter_keys(id).collect::<Vec<_>>())
 	}
 
 	/// Checks if the private keys for the given public key and key type combinations exist.
