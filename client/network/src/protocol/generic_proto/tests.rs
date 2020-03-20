@@ -26,7 +26,7 @@ use libp2p::{PeerId, Multiaddr, Transport};
 use rand::seq::SliceRandom;
 use std::{error, io, task::Context, task::Poll, time::Duration};
 use std::collections::HashSet;
-use crate::message::{generic::BlockResponse, Message};
+use crate::protocol::message::{generic::BlockResponse, Message};
 use crate::protocol::generic_proto::{GenericProto, GenericProtoOut};
 use sp_test_primitives::Block;
 

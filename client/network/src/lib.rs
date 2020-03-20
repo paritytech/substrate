@@ -183,13 +183,6 @@ pub use libp2p::{Multiaddr, PeerId};
 #[doc(inline)]
 pub use libp2p::multiaddr;
 
-// Note: these re-exports shouldn't be part of the public API of the crate and will be removed in
-// the future.
-#[doc(hidden)]
-pub use protocol::message;
-#[doc(hidden)]
-pub use protocol::message::Status as StatusMessage;
-
 pub use sc_peerset::ReputationChange;
 
 /// Extension trait for `NetworkBehaviour` that also accepts discovering nodes.

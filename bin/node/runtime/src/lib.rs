@@ -864,6 +864,13 @@ impl_runtime_apis! {
 					steps,
 					repeat,
 				),
+				b"pallet-im-online" | b"im-online" => ImOnline::run_benchmark(
+					extrinsic,
+					lowest_range_values,
+					highest_range_values,
+					steps,
+					repeat,
+				),
 				b"pallet-identity" | b"identity" => Identity::run_benchmark(
 					extrinsic,
 					lowest_range_values,
@@ -886,6 +893,13 @@ impl_runtime_apis! {
 					repeat,
 				),
 				b"pallet-timestamp" | b"timestamp" => Timestamp::run_benchmark(
+					extrinsic,
+					lowest_range_values,
+					highest_range_values,
+					steps,
+					repeat,
+				),
+				b"pallet-treasury" | b"treasury" => Treasury::run_benchmark(
 					extrinsic,
 					lowest_range_values,
 					highest_range_values,
