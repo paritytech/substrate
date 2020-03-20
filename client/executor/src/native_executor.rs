@@ -20,7 +20,7 @@ use crate::{
 };
 use sp_version::{NativeVersion, RuntimeVersion};
 use codec::{Decode, Encode};
-use sp_core::{NativeOrEncoded, traits::{CodeExecutor, Externalities, RuntimeCode}};
+use sp_core::{NativeOrEncoded, traits::{CodeExecutor, Externalities}};
 use log::trace;
 use std::{result, cell::RefCell, panic::{UnwindSafe, AssertUnwindSafe}, sync::Arc};
 use sp_wasm_interface::{HostFunctions, Function};
@@ -130,7 +130,6 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 	fn with_runtime<E, R>(
 		&self,
 		ext: &mut E,
-		runtime_code: &RuntimeCode,
 		f: impl for<'a> FnOnce(
 			AssertUnwindSafe<&'a mut (dyn WasmRuntime + 'static)>,
 			&'a RuntimeVersion,
@@ -139,9 +138,8 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 	) -> Result<R> where E: Externalities {
 		RUNTIMES_CACHE.with(|cache| {
 			let mut cache = cache.borrow_mut();
-			let (runtime, version) = cache.fetch_runtime(
+			let (runtime, version, code_hash) = cache.fetch_runtime(
 				ext,
-				runtime_code,
 				self.fallback_method,
 				self.default_heap_pages,
 				&*self.host_functions,
@@ -153,7 +151,7 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 			match f(runtime, version, ext) {
 				Ok(res) => res,
 				Err(e) => {
-					cache.invalidate_runtime(self.fallback_method, runtime_code.hash.clone());
+					cache.invalidate_runtime(self.fallback_method, code_hash);
 					Err(e)
 				}
 			}
@@ -181,9 +179,8 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 	fn runtime_version<E: Externalities>(
 		&self,
 		ext: &mut E,
-		runtime_code: &RuntimeCode,
 	) -> Result<RuntimeVersion> {
-		self.with_runtime(ext, runtime_code, |_runtime, version, _ext| Ok(Ok(version.clone())))
+		self.with_runtime(ext, |_runtime, version, _ext| Ok(Ok(version.clone())))
 	}
 }
 
@@ -198,14 +195,13 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 	>(
 		&self,
 		ext: &mut E,
-		runtime_code: &RuntimeCode,
 		method: &str,
 		data: &[u8],
 		use_native: bool,
 		native_call: Option<NC>,
-	) -> (Result<NativeOrEncoded<R>>, bool) {
+	) -> (Result<NativeOrEncoded<R>>, bool){
 		let mut used_native = false;
-		let result = self.with_runtime(ext, runtime_code, |mut runtime, onchain_version, mut ext| {
+		let result = self.with_runtime(ext, |mut runtime, onchain_version, mut ext| {
 			match (
 				use_native,
 				onchain_version.can_call_with(&self.native_version.runtime_version),
