@@ -36,9 +36,8 @@ pub enum VoteThreshold {
 }
 
 pub trait Approved<Balance> {
-	/// Given `approve` votes for and `against` votes against from a total electorate size of
-	/// `electorate` (`electorate - (approve + against)` are abstainers), then returns true if the
-	/// overall outcome is in favor of approval.
+	/// Given a `tally` of votes and a total size of `electorate`, this returns `true` if the
+	/// overall outcome is in favor of approval according to `self`'s threshold method.
 	fn approved(&self, tally: Tally<Balance>, electorate: Balance) -> bool;
 }
 
@@ -75,8 +74,6 @@ impl<
 		+ Mul<Balance, Output = Balance> + Div<Balance, Output = Balance>
 		+ Rem<Balance, Output = Balance> + Copy,
 > Approved<Balance> for VoteThreshold {
-	/// Given a `tally` of votes and a total size of `electorate`, this returns `true` if the
-	/// overall outcome is in favor of approval according to `self`'s threshold method.
 	fn approved(&self, tally: Tally<Balance>, electorate: Balance) -> bool {
 		let sqrt_voters = tally.turnout.integer_sqrt();
 		let sqrt_electorate = electorate.integer_sqrt();
