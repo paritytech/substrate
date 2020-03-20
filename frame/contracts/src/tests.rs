@@ -2753,12 +2753,25 @@ const CODE_CRYPTO_HASHES: &str = r#"
 
 	(import "env" "memory" (memory 1 1))
 
+	(type $hash_fn_sig (func (param i32 i32 i32)))
+	(table 8 funcref)
+	(elem (i32.const 1)
+		$ext_hash_sha2_256
+		$ext_hash_keccak_256
+		$ext_hash_blake2_256
+		$ext_hash_blake2_128
+		$ext_hash_twox_256
+		$ext_hash_twox_128
+		$ext_hash_twox_64
+	)
+	(data (i32.const 1) "20202010201008") ;; Output sizes of the hashes in order in hex.
+
 	;; Not in use by the tests besides instantiating the contract.
 	(func (export "deploy"))
 
 	;; Called by the tests.
 	;;
-	;; The `deploy` function expects data in a certain format in the scratch
+	;; The `call` function expects data in a certain format in the scratch
 	;; buffer.
 	;;
 	;; 1. The first byte encodes an identifier for the crypto hash function
@@ -2785,84 +2798,32 @@ const CODE_CRYPTO_HASHES: &str = r#"
 	;; |     6 |      TWOX |        64 |
 	;; ---------------------------------
 	(func (export "call")
-		(local i32) ;; 0: Stores the number of bytes of the output buffer.
-		(local i32) ;; 1: Stores the pointer into the linear memory of the input buffer.
-		(local i32) ;; 2: Stores the pointer into the linear memory of the output buffer.
-		(local i32) ;; 3: local.get(1) + 1 -> position of actual input data.
-		(local i32) ;; 4: Stores the number of bytes of the input buffer.
-		(local.set 1 (i32.const 8)) ;; Linear memory position to put the parameters.
-		(local.set 2 (i32.const 100)) ;; Linear memory position to put the result.
-		(local.set 3 (i32.add ;; Linear memory position where the input data starts.
-			(local.get 1) (i32.const 1)
-		))
-		(local.set 4 (i32.sub (call $ext_scratch_size) (i32.const 1)))
-		;; Calculate the chosen hash function on the given input data.
-		(block ;; 0 -> SHA2 256-bit
-			(block ;; 1 -> KECCAK 256-bit
-				(block ;; 2 -> BLAKE2 256-bit
-					(block ;; 3 -> BLAKE2 128-bit
-						(block ;; 4 -> TWOX 256-bit
-							(block ;; 5 -> TWOX 128-bit
-								(block ;; 6 -> TWOX 64-bit
-									(block ;; default -> trap!
-										;; (br_table 8 7 6 5 4 3 2 1 (i32.load8_u (local.get 1)) (i32.const 0))
-										(br_table 8 7 6 5 4 3 2 1 (i32.load8_u (local.get 1)) (i32.load8_u (local.get 0)))
-										unreachable ;; Trap if no valid hash function could be identified.
-									)
-									(local.set 0 (i32.const 8)) ;; 64-bits output buffer size.
-									(call $ext_hash_twox_64
-										(local.get 3) ;; Input data from scratch buffer.
-										(local.get 4) ;; The length of the input buffer.
-										(local.get 2) ;; Write back into the result linear memory position.
-									)
-								)
-								(local.set 0 (i32.const 16)) ;; 128-bits output buffer size.
-								(call $ext_hash_twox_128
-									(local.get 3) ;; Input data from scratch buffer.
-									(local.get 4) ;; The length of the input buffer.
-									(local.get 2) ;; Write back into the result linear memory position.
-								)
-							)
-							(local.set 0 (i32.const 32)) ;; 256-bits output buffer size.
-							(call $ext_hash_twox_256
-								(local.get 3) ;; Input data from scratch buffer.
-								(local.get 4) ;; The length of the input buffer.
-								(local.get 2) ;; Write back into the result linear memory position.
-							)
-						)
-						(local.set 0 (i32.const 16)) ;; 128-bits output buffer size.
-						(call $ext_hash_blake2_128
-							(local.get 3) ;; Input data from scratch buffer.
-							(local.get 4) ;; The length of the input buffer.
-							(local.get 2) ;; Write back into the result linear memory position.
-						)
-					)
-					(local.set 0 (i32.const 32)) ;; 256-bits output buffer size.
-					(call $ext_hash_blake2_256
-						(local.get 3) ;; Input data from scratch buffer.
-						(local.get 4) ;; The length of the input buffer.
-						(local.get 2) ;; Write back into the result linear memory position.
-					)
-				)
-				(local.set 0 (i32.const 32)) ;; 256-bits output buffer size.
-				(call $ext_hash_keccak_256
-					(local.get 3) ;; Input data from scratch buffer.
-					(local.get 4) ;; The length of the input buffer.
-					(local.get 2) ;; Write back into the result linear memory position.
-				)
-			)
-			(local.set 0 (i32.const 32)) ;; 256-bits output buffer size.
-			(call $ext_hash_sha2_256
-				(local.get 3) ;; Input data from scratch buffer.
-				(local.get 4) ;; The length of the input buffer.
-				(local.get 2) ;; Write back into the result linear memory position.
-			)
+		(local $chosen_hash_fn i32)
+		(local $input_ptr i32)
+		(local $input_len i32)
+		(local $output_ptr i32)
+		(local $output_len i32)
+		(local.set $input_ptr (i32.const 10))
+		(call $ext_scratch_read (local.get $input_ptr) (i32.const 0) (call $ext_scratch_size))
+		(local.set $chosen_hash_fn (i32.load8_u (local.get $input_ptr)))
+		(if (i32.ge_u (local.get $chosen_hash_fn) (i32.const 7))
+			;; We check that the chosen hash fn  identifier is within bounds: [0,7]
+			(unreachable)
 		)
-		;; Write back results of the hash function into the scratch buffer.
-		;; The test driver then asserts that the values are correct.
+		(local.set $input_ptr (i32.add (local.get $input_ptr) (i32.const 1)))
+		(local.set $input_len (i32.sub (call $ext_scratch_size) (i32.const 1)))
+		(local.set $output_ptr (i32.const 100))
+		(local.set $output_len (i32.const 0))
+		(call_indirect (type $hash_fn_sig)
+			(local.get $input_ptr)
+			(local.get $input_len)
+			(local.get $output_ptr)
+			(local.get $chosen_hash_fn) ;; Which crypto hash function to execute.
+			;; (i32.const 1) ;; Which crypto hash function to execute.
+		)
 		(call $ext_scratch_write
-			(local.get 2) ;; Linear memory location of the output buffer.
-			(local.get 0) ;; Number of output buffer bytes.
+			(local.get $output_ptr) ;; Linear memory location of the output buffer.
+			(local.get $output_len) ;; Number of output buffer bytes.
 		)
 	)
 )
@@ -2885,7 +2846,7 @@ fn crypto_hashes() {
 			vec![],
 		));
 		// Perform the call.
-		let input = b"0_DEAD_BEEF";
+		let input = b"\x00_DEAD_BEEF";
 		let result = <Module<Test>>::bare_call(
 			ALICE,
 			BOB,
