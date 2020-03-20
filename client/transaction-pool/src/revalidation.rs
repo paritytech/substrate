@@ -151,7 +151,6 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 				} else {
 					for xt in &to_queue {
 						extrinsics.remove(xt);
-						self.members.remove(xt);
 					}
 				}
 				left -= to_queue.len();
@@ -161,6 +160,10 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 			if block_drained {
 			  self.block_ordered.remove(&first_block);
 			}
+		}
+
+		for hash in queued_exts.iter() {
+			self.members.remove(hash);
 		}
 
 		queued_exts

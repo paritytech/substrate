@@ -273,7 +273,7 @@ impl<B: BlockT> LightDispatch<B> where
 				info!("Invalid remote {} response from peer {}", rtype, peer);
 				network.report_peer(&peer, ReputationChange::new_fatal("Invalid remote response"));
 				network.disconnect_peer(&peer);
-				self.remove_peer(peer);
+				self.remove_peer(&peer);
 				return;
 			},
 		};
@@ -285,7 +285,7 @@ impl<B: BlockT> LightDispatch<B> where
 				info!("Failed to check remote {} response from peer {}: {}", rtype, peer, error);
 				network.report_peer(&peer, ReputationChange::new_fatal("Failed remote response check"));
 				network.disconnect_peer(&peer);
-				self.remove_peer(peer);
+				self.remove_peer(&peer);
 
 				if retry_count > 0 {
 					(retry_count - 1, Some(retry_request_data))
@@ -299,7 +299,7 @@ impl<B: BlockT> LightDispatch<B> where
 				info!("Unexpected response to remote {} from peer", rtype);
 				network.report_peer(&peer, ReputationChange::new_fatal("Unexpected remote response"));
 				network.disconnect_peer(&peer);
-				self.remove_peer(peer);
+				self.remove_peer(&peer);
 
 				(retry_count, Some(retry_request_data))
 			},
@@ -337,7 +337,7 @@ impl<B: BlockT> LightDispatch<B> where
 	}
 
 	/// Call this when we disconnect from a node.
-	pub fn on_disconnect(&mut self, network: impl LightDispatchNetwork<B>, peer: PeerId) {
+	pub fn on_disconnect(&mut self, network: impl LightDispatchNetwork<B>, peer: &PeerId) {
 		self.remove_peer(peer);
 		self.dispatch(network);
 	}
@@ -523,15 +523,15 @@ impl<B: BlockT> LightDispatch<B> where
 	/// Removes a peer from the list of known peers.
 	///
 	/// Puts back the active request that this node was performing into `pending_requests`.
-	fn remove_peer(&mut self, peer: PeerId) {
-		self.best_blocks.remove(&peer);
+	fn remove_peer(&mut self, peer: &PeerId) {
+		self.best_blocks.remove(peer);
 
-		if let Some(request) = self.active_peers.remove(&peer) {
+		if let Some(request) = self.active_peers.remove(peer) {
 			self.pending_requests.push_front(request);
 			return;
 		}
 
-		if let Some(idle_index) = self.idle_peers.iter().position(|i| *i == peer) {
+		if let Some(idle_index) = self.idle_peers.iter().position(|i| i == peer) {
 			self.idle_peers.swap_remove_back(idle_index);
 		}
 	}
@@ -860,7 +860,7 @@ pub mod tests {
 		assert_eq!(1, total_peers(&light_dispatch));
 		assert!(!light_dispatch.best_blocks.is_empty());
 
-		light_dispatch.on_disconnect(&mut network_interface, peer0);
+		light_dispatch.on_disconnect(&mut network_interface, &peer0);
 		assert_eq!(0, total_peers(&light_dispatch));
 		assert!(light_dispatch.best_blocks.is_empty());
 	}

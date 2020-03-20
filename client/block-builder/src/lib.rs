@@ -145,43 +145,15 @@ where
 	///
 	/// This will ensure the extrinsic can be validly executed (by executing it).
 	pub fn push(&mut self, xt: <Block as BlockT>::Extrinsic) -> Result<(), ApiErrorFor<A, Block>> {
-		self.push_internal(xt, false)
-	}
-
-	/// Push onto the block's list of extrinsics.
-	///
-	/// This will treat incoming extrinsic `xt` as trusted and skip signature check (for signed transactions).
-	pub fn push_trusted(&mut self, xt: <Block as BlockT>::Extrinsic) -> Result<(), ApiErrorFor<A, Block>> {
-		self.push_internal(xt, true)
-	}
-
-	fn push_internal(&mut self, xt: <Block as BlockT>::Extrinsic, skip_signature: bool) -> Result<(), ApiErrorFor<A, Block>> {
 		let block_id = &self.block_id;
 		let extrinsics = &mut self.extrinsics;
 
-		let use_trusted = skip_signature && self
-			.api
-			.has_api_with::<dyn BlockBuilderApi<Block, Error = ApiErrorFor<A, Block>>, _>(
-				block_id,
-				|version| version >= 5,
-			)?;
-
 		self.api.map_api_result(|api| {
-			let apply_result = if use_trusted {
-				api.apply_trusted_extrinsic_with_context(
-					block_id,
-					ExecutionContext::BlockConstruction,
-					xt.clone(),
-				)?
-			} else  {
-				api.apply_extrinsic_with_context(
-					block_id,
-					ExecutionContext::BlockConstruction,
-					xt.clone(),
-				)?
-			};
-
-			match apply_result {
+			match api.apply_extrinsic_with_context(
+				block_id,
+				ExecutionContext::BlockConstruction,
+				xt.clone(),
+			)? {
 				Ok(_) => {
 					extrinsics.push(xt);
 					Ok(())
@@ -224,17 +196,11 @@ where
 			&state,
 			changes_trie_state.as_ref(),
 			parent_hash,
-		);
-
-		// We need to destroy the state, before we check if `storage_changes` is `Ok(_)`
-		{
-			let _lock = self.backend.get_import_lock().read();
-			self.backend.destroy_state(state)?;
-		}
+		)?;
 
 		Ok(BuiltBlock {
 			block: <Block as BlockT>::new(header, self.extrinsics),
-			storage_changes: storage_changes?,
+			storage_changes,
 			proof,
 		})
 	}
