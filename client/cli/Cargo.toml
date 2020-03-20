@@ -62,6 +62,7 @@ rpassword = "4.0.1"
 tempfile = "3.1.0"
 substrate-test-runtime = { version = "2.0.0-dev", features = ["indices-lookup"], path = "../../test-utils/runtime" }
 sp-application-crypto = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/application-crypto" }
+frame-system = { version = "2.0.0-aplha.4", path = "../../frame/system" }
 
 [features]
 wasmtime = [
