@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Balances pallet benchmarking.
+//! I'm Online pallet benchmarking.
 
 #![cfg(feature = "runtime-benchmarks")]
 
