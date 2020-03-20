@@ -147,7 +147,7 @@ impl CliConfiguration for Subcommand
 {
 	match_and_call! { fn get_base_path(&self) -> Result<Option<&PathBuf>> }
 
-	match_and_call! { fn is_dev(&self) -> bool }
+	match_and_call! { fn get_is_dev(&self) -> Result<bool> }
 
 	match_and_call! { fn get_database_config(&self, base_path: &PathBuf, cache_size: Option<usize>) -> Result<DatabaseConfig> }
 

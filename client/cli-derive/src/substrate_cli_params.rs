@@ -61,10 +61,10 @@ pub(crate) fn substrate_cli_params(
 				}
 			}));
 		}
-		if missing("is_dev") {
+		if missing("get_is_dev") {
 			i.items.push(ImplItem::Verbatim(quote! {
-				fn is_dev(&self) -> bool {
-					self.#ident.dev
+				fn get_is_dev(&self) -> ::sc_cli::Result<bool> {
+					Ok(self.#ident.dev)
 				}
 			}));
 		}

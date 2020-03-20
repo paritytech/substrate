@@ -69,6 +69,7 @@ pub fn run() -> Result<()>
 		},
 		Some(Subcommand::Base(subcommand)) => {
 			let runtime = Cli::create_runtime(&subcommand)?;
+
 			runtime.run_subcommand(
 				subcommand,
 				|config| Ok(new_full_start!(config).0),

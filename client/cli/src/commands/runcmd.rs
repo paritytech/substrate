@@ -275,7 +275,6 @@ impl RunCmd {
 
 #[substrate_cli_params(shared_params = shared_params, import_params = import_params, network_params = network_config, keystore_params = keystore_params)]
 impl CliConfiguration for RunCmd {
-
 	fn get_node_name(&self) -> Result<String> {
 		let name: String = match (self.name.as_ref(), self.get_keyring()) {
 			(Some(name), _) => name.to_string(),
