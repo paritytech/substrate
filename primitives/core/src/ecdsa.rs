@@ -39,6 +39,7 @@ use serde::{de, Serializer, Serialize, Deserializer, Deserialize};
 use crate::crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive};
 #[cfg(feature = "full_crypto")]
 use secp256k1::{PublicKey, SecretKey};
+use rustc_hex::{ToHex, FromHex};
 
 /// A secret seed (which is bytewise essentially equivalent to a SecretKey).
 ///
@@ -221,14 +222,14 @@ impl sp_std::convert::TryFrom<&[u8]> for Signature {
 #[cfg(feature = "std")]
 impl Serialize for Signature {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
-		serializer.serialize_str(&hex::encode(self))
+		serializer.serialize_str(&self.0.to_hex::<String>())
 	}
 }
 
 #[cfg(feature = "std")]
 impl<'de> Deserialize<'de> for Signature {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
-		let signature_hex = hex::decode(&String::deserialize(deserializer)?)
+		let signature_hex = String::deserialize(deserializer)?.from_hex::<Vec<u8>>()
 			.map_err(|e| de::Error::custom(format!("{:?}", e)))?;
 		Ok(Signature::try_from(signature_hex.as_ref())
 			.map_err(|e| de::Error::custom(format!("{:?}", e)))?)

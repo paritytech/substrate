@@ -32,6 +32,7 @@ use codec::{Encode, Decode};
 use regex::Regex;
 #[cfg(feature = "std")]
 use base58::{FromBase58, ToBase58};
+use rustc_hex::FromHex;
 
 use zeroize::Zeroize;
 #[doc(hidden)]
@@ -493,7 +494,7 @@ impl<T: Sized + AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 			.map(|r| r.as_str())
 			.unwrap_or(DEV_ADDRESS);
 		let addr = if s.starts_with("0x") {
-			let d = hex::decode(&s[2..]).map_err(|_| PublicError::InvalidFormat)?;
+			let d: Vec<u8> = s[2..].from_hex().map_err(|_| PublicError::InvalidFormat)?;
 			let mut r = Self::default();
 			if d.len() == r.as_ref().len() {
 				r.as_mut().copy_from_slice(&d);
@@ -831,8 +832,8 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 		let password = password_override.or_else(|| cap.name("password").map(|m| m.as_str()));
 
 		let (root, seed) = if phrase.starts_with("0x") {
-			hex::decode(&phrase[2..]).ok()
-				.and_then(|seed_vec| {
+			phrase[2..].from_hex().ok()
+				.and_then(|seed_vec: Vec<u8>| {
 					let mut seed = Self::Seed::default();
 					if seed.as_ref().len() == seed_vec.len() {
 						seed.as_mut().copy_from_slice(&seed_vec);

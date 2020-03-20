@@ -24,6 +24,7 @@ use sp_core::{
 };
 use sp_application_crypto::{AppKey, AppPublic, AppPair, ed25519, sr25519};
 use parking_lot::RwLock;
+use rustc_hex::{FromHex, ToHex};
 
 /// Keystore pointer
 pub type KeyStorePtr = Arc<RwLock<Store>>;
@@ -239,7 +240,7 @@ impl Store {
 
 				// skip directories and non-unicode file names (hex is unicode)
 				if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-					match hex::decode(name) {
+					match name.from_hex::<Vec<u8>>() {
 						Ok(ref hex) if hex.len() > 4 => {
 							if &hex[0..4] != &key_type.0 { continue }
 							let public = TPublic::from_slice(&hex[4..]);
@@ -268,8 +269,8 @@ impl Store {
 	/// Returns the file path for the given public key and key type.
 	fn key_file_path(&self, public: &[u8], key_type: KeyTypeId) -> Option<PathBuf> {
 		let mut buf = self.path.as_ref()?.clone();
-		let key_type = hex::encode(key_type.0);
-		let key = hex::encode(public);
+		let key_type = key_type.0.to_hex::<String>();
+		let key = public.to_hex::<String>();
 		buf.push(key_type + key.as_str());
 		Some(buf)
 	}
@@ -447,7 +448,7 @@ mod tests {
 		let temp_dir = TempDir::new().unwrap();
 		let store = Store::open(temp_dir.path(), None).unwrap();
 
-		let file_name = temp_dir.path().join(hex::encode(&SR25519.0[..2]));
+		let file_name = temp_dir.path().join(SR25519.0[..2].to_hex::<String>());
 		fs::write(file_name, "test").expect("Invalid file is written");
 
 		assert!(

@@ -26,6 +26,7 @@ use itertools::Itertools;
 use libp2p::identity::{ed25519 as libp2p_ed25519, PublicKey};
 use node_primitives::{Balance, Hash, Index, AccountId, Signature};
 use node_runtime::{BalancesCall, Call, Runtime, SignedPayload, UncheckedExtrinsic, VERSION};
+use rustc_hex::{FromHex, ToHex};
 use serde_json::json;
 use sp_core::{
 	crypto::{set_default_ss58_version, Ss58AddressFormat, Ss58Codec},
@@ -473,9 +474,9 @@ where
 			let genesis_hash = read_genesis_hash(matches)?;
 
 			let call = matches.value_of("call").expect("call is required; qed");
-			let function: Call = hex::decode(&call)
+			let function: Call = call.from_hex()
 				.ok()
-				.and_then(|x| Decode::decode(&mut &x[..]).ok())
+				.and_then(|x: Vec<u8>| Decode::decode(&mut &x[..]).ok())
 				.unwrap();
 
 			let extrinsic = create_extrinsic::<C>(function, index, signer, genesis_hash);
@@ -541,7 +542,10 @@ where
 }
 
 fn decode_hex<T: AsRef<[u8]>>(message: T) -> Result<Vec<u8>, Error> {
-	hex::decode(message).map_err(|e| Error::Formatted(format!("Invalid hex ({})", e)))
+	std::str::from_utf8(message.as_ref())
+		.ok()
+		.and_then(|m| m.from_hex().ok())
+		.ok_or_else(|| Error::Formatted(format!("Invalid hex ({:?})", message.as_ref())))
 }
 
 fn read_message_from_stdin(should_decode: bool) -> Result<Vec<u8>, Error> {
@@ -611,7 +615,7 @@ where
 	} else {
 		uri
 	};
-	if let Ok(pubkey_vec) = hex::decode(uri) {
+	if let Ok(pubkey_vec) = uri.from_hex::<Vec<u8>>() {
 		<C as Crypto>::Public::from_slice(pubkey_vec.as_slice())
 	} else {
 		<C as Crypto>::Public::from_string(uri)
@@ -627,7 +631,7 @@ fn read_account_id(matched_uri: Option<&str>) -> AccountId {
 	} else {
 		uri
 	};
-	if let Ok(data_vec) = hex::decode(uri) {
+	if let Ok(data_vec) = uri.from_hex::<Vec<u8>>() {
 		AccountId::try_from(data_vec.as_slice())
 			.expect("Invalid hex length for account ID; should be 32 bytes")
 	} else {
@@ -648,7 +652,7 @@ fn read_pair<C: Crypto>(
 }
 
 fn format_signature<C: Crypto>(signature: &SignatureOf<C>) -> String {
-	format!("{}", hex::encode(signature))
+	format!("{}", signature.as_ref().to_hex::<String>())
 }
 
 fn format_seed<C: Crypto>(seed: SeedOf<C>) -> String {
@@ -711,7 +715,7 @@ fn create_extrinsic<C: Crypto>(
 }
 
 fn print_extrinsic(extrinsic: UncheckedExtrinsic) {
-	println!("0x{}", hex::encode(&extrinsic.encode()));
+	println!("0x{}", extrinsic.encode().to_hex::<String>());
 }
 
 fn print_usage(matches: &ArgMatches) {
@@ -771,14 +775,14 @@ mod tests {
 	fn should_work() {
 		let s = "0123456789012345678901234567890123456789012345678901234567890123";
 
-		let d1: Hash = hex::decode(s)
+		let d1: Hash = s.from_hex()
 			.ok()
-			.and_then(|x| Decode::decode(&mut &x[..]).ok())
+			.and_then(|x: Vec<u8>| Decode::decode(&mut &x[..]).ok())
 			.unwrap();
 
 		let d2: Hash = {
 			let mut gh: [u8; 32] = Default::default();
-			gh.copy_from_slice(hex::decode(s).unwrap().as_ref());
+			gh.copy_from_slice(s.from_hex::<Vec<u8>>().unwrap().as_ref());
 			Hash::from(gh)
 		};
 
