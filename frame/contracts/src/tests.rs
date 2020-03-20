@@ -2736,3 +2736,167 @@ fn get_runtime_storage() {
 		));
 	});
 }
+
+const CODE_CRYPTO_HASHES: &str = r#"
+(module
+	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
+	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
+	(import "env" "ext_scratch_write" (func $ext_scratch_write (param i32 i32)))
+
+	(import "env" "ext_hash_sha2_256" (func $ext_hash_sha2_256 (param i32 i32 i32)))
+	(import "env" "ext_hash_keccak_256" (func $ext_hash_keccak_256 (param i32 i32 i32)))
+	(import "env" "ext_hash_blake2_256" (func $ext_hash_blake2_256 (param i32 i32 i32)))
+	(import "env" "ext_hash_blake2_128" (func $ext_hash_blake2_128 (param i32 i32 i32)))
+	(import "env" "ext_hash_twox_256" (func $ext_hash_twox_256 (param i32 i32 i32)))
+	(import "env" "ext_hash_twox_128" (func $ext_hash_twox_128 (param i32 i32 i32)))
+	(import "env" "ext_hash_twox_64" (func $ext_hash_twox_64 (param i32 i32 i32)))
+
+	(import "env" "memory" (memory 1 1))
+
+	;; Not in use by the tests besides instantiating the contract.
+	(func (export "deploy"))
+
+	;; Called by the tests.
+	;;
+	;; The `deploy` function expects data in a certain format in the scratch
+	;; buffer.
+	;;
+	;; 1. The first byte encodes an identifier for the crypto hash function
+	;;    under test. (*)
+	;; 2. The rest encodes the input data that is directly fed into the
+	;;    crypto hash function chosen in 1.
+	;;
+	;; The `deploy` function then computes the chosen crypto hash function
+	;; given the input and puts the result back into the scratch buffer.
+	;; After contract execution the test driver then asserts that the returned
+	;; values are equal to the expected bytes for the input and chosen hash
+	;; function.
+	;;
+	;; (*) The possible value for the crypto hash identifiers can be found below:
+	;;
+	;; | value | Algorithm | Bit Width |
+	;; |-------|-----------|-----------|
+	;; |     0 |      SHA2 |       256 |
+	;; |     1 |    KECCAK |       256 |
+	;; |     2 |    BLAKE2 |       256 |
+	;; |     3 |    BLAKE2 |       128 |
+	;; |     4 |      TWOX |       256 |
+	;; |     5 |      TWOX |       128 |
+	;; |     6 |      TWOX |        64 |
+	;; ---------------------------------
+	(func (export "call")
+		(local i32) ;; 0: Stores the number of bytes of the output buffer.
+		(local i32) ;; 1: Stores the pointer into the linear memory of the input buffer.
+		(local i32) ;; 2: Stores the pointer into the linear memory of the output buffer.
+		(local i32) ;; 3: local.get(1) + 1 -> position of actual input data.
+		(local i32) ;; 4: Stores the number of bytes of the input buffer.
+		(local.set 1 (i32.const 8)) ;; Linear memory position to put the parameters.
+		(local.set 2 (i32.const 100)) ;; Linear memory position to put the result.
+		(local.set 3 (i32.add ;; Linear memory position where the input data starts.
+			(local.get 1) (i32.const 1)
+		))
+		(local.set 4 (i32.sub (call $ext_scratch_size) (i32.const 1)))
+		;; Calculate the chosen hash function on the given input data.
+		(block ;; 0 -> SHA2 256-bit
+			(block ;; 1 -> KECCAK 256-bit
+				(block ;; 2 -> BLAKE2 256-bit
+					(block ;; 3 -> BLAKE2 128-bit
+						(block ;; 4 -> TWOX 256-bit
+							(block ;; 5 -> TWOX 128-bit
+								(block ;; 6 -> TWOX 64-bit
+									(block ;; default -> trap!
+										;; (br_table 8 7 6 5 4 3 2 1 (i32.load8_u (local.get 1)) (i32.const 0))
+										(br_table 8 7 6 5 4 3 2 1 (i32.load8_u (local.get 1)) (i32.load8_u (local.get 0)))
+										unreachable ;; Trap if no valid hash function could be identified.
+									)
+									(local.set 0 (i32.const 8)) ;; 64-bits output buffer size.
+									(call $ext_hash_twox_64
+										(local.get 3) ;; Input data from scratch buffer.
+										(local.get 4) ;; The length of the input buffer.
+										(local.get 2) ;; Write back into the result linear memory position.
+									)
+								)
+								(local.set 0 (i32.const 16)) ;; 128-bits output buffer size.
+								(call $ext_hash_twox_128
+									(local.get 3) ;; Input data from scratch buffer.
+									(local.get 4) ;; The length of the input buffer.
+									(local.get 2) ;; Write back into the result linear memory position.
+								)
+							)
+							(local.set 0 (i32.const 32)) ;; 256-bits output buffer size.
+							(call $ext_hash_twox_256
+								(local.get 3) ;; Input data from scratch buffer.
+								(local.get 4) ;; The length of the input buffer.
+								(local.get 2) ;; Write back into the result linear memory position.
+							)
+						)
+						(local.set 0 (i32.const 16)) ;; 128-bits output buffer size.
+						(call $ext_hash_blake2_128
+							(local.get 3) ;; Input data from scratch buffer.
+							(local.get 4) ;; The length of the input buffer.
+							(local.get 2) ;; Write back into the result linear memory position.
+						)
+					)
+					(local.set 0 (i32.const 32)) ;; 256-bits output buffer size.
+					(call $ext_hash_blake2_256
+						(local.get 3) ;; Input data from scratch buffer.
+						(local.get 4) ;; The length of the input buffer.
+						(local.get 2) ;; Write back into the result linear memory position.
+					)
+				)
+				(local.set 0 (i32.const 32)) ;; 256-bits output buffer size.
+				(call $ext_hash_keccak_256
+					(local.get 3) ;; Input data from scratch buffer.
+					(local.get 4) ;; The length of the input buffer.
+					(local.get 2) ;; Write back into the result linear memory position.
+				)
+			)
+			(local.set 0 (i32.const 32)) ;; 256-bits output buffer size.
+			(call $ext_hash_sha2_256
+				(local.get 3) ;; Input data from scratch buffer.
+				(local.get 4) ;; The length of the input buffer.
+				(local.get 2) ;; Write back into the result linear memory position.
+			)
+		)
+		;; Write back results of the hash function into the scratch buffer.
+		;; The test driver then asserts that the values are correct.
+		(call $ext_scratch_write
+			(local.get 2) ;; Linear memory location of the output buffer.
+			(local.get 0) ;; Number of output buffer bytes.
+		)
+	)
+)
+"#;
+
+#[test]
+fn crypto_hashes() {
+	let wasm_input = std::fs::read_to_string("src/hash_functions.wat")
+		.expect("couldn't open hash functions `.wat` test Wasm file");
+	let (wasm, code_hash) = compile_module::<Test>(&wasm_input).unwrap();
+
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		Balances::deposit_creating(&ALICE, 1_000_000);
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
+
+		// Instantiate the CRYPTO_HASHES contract.
+		assert_ok!(Contracts::instantiate(
+			Origin::signed(ALICE),
+			100_000,
+			100_000,
+			code_hash.into(),
+			vec![],
+		));
+		// Perform the call.
+		let input = b"0_DEAD_BEEF";
+		let result = <Module<Test>>::bare_call(
+			ALICE,
+			BOB,
+			0,
+			100_000,
+			input.to_vec(),
+		).unwrap();
+		assert_eq!(result.status, 0);
+		let expected = sp_io::hashing::blake2_256(input[1..].as_ref());
+		assert_eq!(&result.data, &expected)
+	})
+}
