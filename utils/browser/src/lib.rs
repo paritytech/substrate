@@ -28,25 +28,23 @@ use futures::{prelude::*, channel::{oneshot, mpsc}, future::{poll_fn, ok}, compa
 use std::task::Poll;
 use std::pin::Pin;
 use sc_chain_spec::Extension;
+use libp2p_wasm_ext::{ExtTransport, ffi};
 
-pub use libp2p::wasm_ext::{ExtTransport, ffi::Transport};
 pub use console_error_panic_hook::set_once as set_console_error_panic_hook;
 pub use console_log::init_with_level as init_console_log;
 
-/// Create a service configuration from a chain spec and the websocket transport.
+/// Create a service configuration from a chain spec.
 ///
 /// This configuration contains good defaults for a browser light client.
-pub async fn browser_configuration<G, E>(
-	transport: Transport,
-	chain_spec: ChainSpec<G, E>,
-) -> Result<Configuration<G, E>, Box<dyn std::error::Error>>
+pub async fn browser_configuration<G, E>(chain_spec: ChainSpec<G, E>)
+	-> Result<Configuration<G, E>, Box<dyn std::error::Error>>
 where
 	G: RuntimeGenesis,
 	E: Extension,
 {
 	let name = chain_spec.name().to_string();
 
-	let transport = ExtTransport::new(transport);
+	let transport = ExtTransport::new(ffi::websocket_transport());
 	let mut network = NetworkConfiguration::new(
 		format!("{} (Browser)", name),
 		"unknown",
@@ -83,7 +81,7 @@ where
 		impl_name: "parity-substrate",
 		impl_version: "0.0.0",
 		offchain_worker: Default::default(),
-		prometheus_port: Default::default(),
+		prometheus_config: Default::default(),
 		pruning: Default::default(),
 		rpc_cors: Default::default(),
 		rpc_http: Default::default(),
