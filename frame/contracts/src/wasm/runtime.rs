@@ -1044,7 +1044,7 @@ define_env!(Env, <E: Ext>,
 	//                 data is placed. The function will write the result
 	//                 directly into this buffer.
 	ext_hash_sha2_256(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
-		compute_hash_on_scratch_buffer(ctx, sha2_256, input_ptr, input_len, output_ptr)
+		compute_hash_on_intermediate_buffer(ctx, sha2_256, input_ptr, input_len, output_ptr)
 	},
 
 	// Computes the KECCAK 256-bit hash on the given input buffer.
@@ -1068,7 +1068,7 @@ define_env!(Env, <E: Ext>,
 	//                 data is placed. The function will write the result
 	//                 directly into this buffer.
 	ext_hash_keccak_256(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
-		compute_hash_on_scratch_buffer(ctx, keccak_256, input_ptr, input_len, output_ptr)
+		compute_hash_on_intermediate_buffer(ctx, keccak_256, input_ptr, input_len, output_ptr)
 	},
 
 	// Computes the BLAKE2 256-bit hash on the given input buffer.
@@ -1092,7 +1092,7 @@ define_env!(Env, <E: Ext>,
 	//                 data is placed. The function will write the result
 	//                 directly into this buffer.
 	ext_hash_blake2_256(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
-		compute_hash_on_scratch_buffer(ctx, blake2_256, input_ptr, input_len, output_ptr)
+		compute_hash_on_intermediate_buffer(ctx, blake2_256, input_ptr, input_len, output_ptr)
 	},
 
 	// Computes the BLAKE2 128-bit hash on the given input buffer.
@@ -1116,7 +1116,7 @@ define_env!(Env, <E: Ext>,
 	//                 data is placed. The function will write the result
 	//                 directly into this buffer.
 	ext_hash_blake2_128(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
-		compute_hash_on_scratch_buffer(ctx, blake2_128, input_ptr, input_len, output_ptr)
+		compute_hash_on_intermediate_buffer(ctx, blake2_128, input_ptr, input_len, output_ptr)
 	},
 
 	// Computes the TWOX 256-bit hash on the given input buffer.
@@ -1140,7 +1140,7 @@ define_env!(Env, <E: Ext>,
 	//                 data is placed. The function will write the result
 	//                 directly into this buffer.
 	ext_hash_twox_256(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
-		compute_hash_on_scratch_buffer(ctx, twox_256, input_ptr, input_len, output_ptr)
+		compute_hash_on_intermediate_buffer(ctx, twox_256, input_ptr, input_len, output_ptr)
 	},
 
 	// Computes the TWOX 128-bit hash on the given input buffer.
@@ -1164,7 +1164,7 @@ define_env!(Env, <E: Ext>,
 	//                 data is placed. The function will write the result
 	//                 directly into this buffer.
 	ext_hash_twox_128(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
-		compute_hash_on_scratch_buffer(ctx, twox_128, input_ptr, input_len, output_ptr)
+		compute_hash_on_intermediate_buffer(ctx, twox_128, input_ptr, input_len, output_ptr)
 	},
 
 	// Computes the TWOX 64-bit hash on the given input buffer.
@@ -1188,13 +1188,13 @@ define_env!(Env, <E: Ext>,
 	//                 data is placed. The function will write the result
 	//                 directly into this buffer.
 	ext_hash_twox_64(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
-		compute_hash_on_scratch_buffer(ctx, twox_64, input_ptr, input_len, output_ptr)
+		compute_hash_on_intermediate_buffer(ctx, twox_64, input_ptr, input_len, output_ptr)
 	},
 );
 
 /// Computes the given hash function on the scratch buffer.
 ///
-/// Reads from the sandboxed input buffer into the scratch buffer.
+/// Reads from the sandboxed input buffer into an intermediate buffer.
 /// Returns the result directly to the output buffer of the sandboxed memory.
 ///
 /// It is the callers responsibility to provide an output buffer that
@@ -1204,7 +1204,7 @@ define_env!(Env, <E: Ext>,
 /// # Note
 ///
 /// The `input` and `output` buffers may overlap.
-fn compute_hash_on_scratch_buffer<E, F, R>(
+fn compute_hash_on_intermediate_buffer<E, F, R>(
 	ctx: &mut Runtime<E>,
 	hash_fn: F,
 	input_ptr: u32,
