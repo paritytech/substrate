@@ -42,6 +42,7 @@ sp-trie = { version = "2.0.0-alpha.4", default-features = false, path = "../../p
 sp-transaction-pool = { version = "2.0.0-alpha.4", default-features = false, path = "../../primitives/transaction-pool" }
 trie-db = { version = "0.20.0", default-features = false }
 parity-util-mem = { version = "0.6.0", default-features = false, features = ["primitive-types"] }
+cli-utils = { version = "2.0.0-alpha.3", default-features = false, path = "../../utils/cli-utils" }
 
 [dev-dependencies]
 sc-block-builder = { version = "0.8.0-alpha.4", path = "../../client/block-builder" }

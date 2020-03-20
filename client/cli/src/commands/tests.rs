@@ -16,38 +16,13 @@
 
 use super::*;
 use substrate_test_runtime::Runtime;
-
-use sp_runtime::generic::Era;
 use tempfile::Builder;
 use std::io::Read;
 use crate::commands::inspect::InspectCmd;
 use crate::Error;
 
-impl RuntimeAdapter for Runtime {
-	type Extra = (
-		frame_system::CheckVersion<Runtime>,
-		frame_system::CheckGenesis<Runtime>,
-		frame_system::CheckEra<Runtime>,
-		frame_system::CheckNonce<Runtime>,
-		frame_system::CheckWeight<Runtime>,
-	);
-
-	fn build_extra(index: IndexFor<Self>) -> Self::Extra {
-		(
-			frame_system::CheckVersion::new(),
-			frame_system::CheckGenesis::new(),
-			frame_system::CheckEra::from(Era::Immortal),
-			frame_system::CheckNonce::from(index),
-			frame_system::CheckWeight::new(),
-		)
-	}
-}
-
 fn new_test_ext() -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
-	pallet_balances::GenesisConfig::<Runtime>{
-		balances: vec![],
-	}.assimilate_storage(&mut t).unwrap();
+	let t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 	sp_io::TestExternalities::new(t)
 }
 

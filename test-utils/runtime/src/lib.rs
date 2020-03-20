@@ -50,9 +50,12 @@ use frame_support::{impl_outer_origin, impl_outer_event, parameter_types, weight
 use sp_inherents::{CheckInherentsResult, InherentData};
 use cfg_if::cfg_if;
 use sp_core::storage::ChildType;
+use sp_runtime::generic::Era;
+use cli_utils::IndexFor;
 
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
 pub use sp_consensus_babe::{AuthorityId, SlotNumber};
+
 pub type AuraId = sp_consensus_aura::sr25519::AuthorityId;
 
 // Include the WASM binary
@@ -346,6 +349,26 @@ pub struct Runtime;
 
 impl GetNodeBlockType for Runtime {
 	type NodeBlock = Block;
+}
+
+impl cli_utils::RuntimeAdapter for Runtime {
+	type Extra = (
+		frame_system::CheckVersion<Runtime>,
+		frame_system::CheckGenesis<Runtime>,
+		frame_system::CheckEra<Runtime>,
+		frame_system::CheckNonce<Runtime>,
+		frame_system::CheckWeight<Runtime>,
+	);
+
+	fn build_extra(index: IndexFor<Self>) -> Self::Extra {
+		(
+			frame_system::CheckVersion::new(),
+			frame_system::CheckGenesis::new(),
+			frame_system::CheckEra::from(Era::Immortal),
+			frame_system::CheckNonce::from(index),
+			frame_system::CheckWeight::new(),
+		)
+	}
 }
 
 impl GetRuntimeBlockType for Runtime {
