@@ -159,7 +159,7 @@ fn node_config<G, E: Clone> (
 		enable_mdns: false,
 		allow_private_ipv4: true,
 		wasm_external_transport: None,
-		use_yamux_flow_control: true,		// TODO: is this needed for the test?
+		use_yamux_flow_control: true,
 	};
 
 	Configuration {
