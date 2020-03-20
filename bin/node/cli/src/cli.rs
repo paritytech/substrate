@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use sc_cli::{SharedParams, ImportParams, RunCmd, SubstrateCLISubcommands, substrate_cli_params, CliConfiguration};
+use sc_cli::{SharedParams, ImportParams, RunCmd};
 use structopt::StructOpt;
 
 /// An overarching CLI command definition.
@@ -29,7 +29,7 @@ pub struct Cli {
 }
 
 /// Possible subcommands of the main binary.
-#[derive(Clone, Debug, StructOpt, SubstrateCLISubcommands)]
+#[derive(Clone, Debug, StructOpt)]
 pub enum Subcommand {
 	/// A set of base subcommands handled by `sc_cli`.
 	#[structopt(flatten)]
@@ -76,8 +76,4 @@ pub struct FactoryCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub import_params: ImportParams,
-}
-
-#[substrate_cli_params(shared_params = shared_params, import_params = import_params)]
-impl CliConfiguration for FactoryCmd {
 }
