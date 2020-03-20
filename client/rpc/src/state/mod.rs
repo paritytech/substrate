@@ -28,7 +28,7 @@ use rpc::{Result as RpcResult, futures::{Future, future::result}};
 
 use sc_rpc_api::Subscriptions;
 use sc_client::{light::{blockchain::RemoteBlockchain, fetcher::Fetcher}};
-use sp_core::{Bytes, storage::{StorageKey, StorageData, StorageChangeSet}};
+use sp_core::{Bytes, storage::{StorageKey, PrefixedStorageKey, StorageData, StorageChangeSet}};
 use sp_version::RuntimeVersion;
 use sp_runtime::traits::Block as BlockT;
 
@@ -320,7 +320,7 @@ pub trait ChildStateBackend<Block: BlockT, Client>: Send + Sync + 'static
 	fn storage_keys(
 		&self,
 		block: Option<Block::Hash>,
-		storage_key: StorageKey,
+		storage_key: PrefixedStorageKey,
 		prefix: StorageKey,
 	) -> FutureResult<Vec<StorageKey>>;
 
@@ -328,7 +328,7 @@ pub trait ChildStateBackend<Block: BlockT, Client>: Send + Sync + 'static
 	fn storage(
 		&self,
 		block: Option<Block::Hash>,
-		storage_key: StorageKey,
+		storage_key: PrefixedStorageKey,
 		key: StorageKey,
 	) -> FutureResult<Option<StorageData>>;
 
@@ -336,7 +336,7 @@ pub trait ChildStateBackend<Block: BlockT, Client>: Send + Sync + 'static
 	fn storage_hash(
 		&self,
 		block: Option<Block::Hash>,
-		storage_key: StorageKey,
+		storage_key: PrefixedStorageKey,
 		key: StorageKey,
 	) -> FutureResult<Option<Block::Hash>>;
 
@@ -344,7 +344,7 @@ pub trait ChildStateBackend<Block: BlockT, Client>: Send + Sync + 'static
 	fn storage_size(
 		&self,
 		block: Option<Block::Hash>,
-		storage_key: StorageKey,
+		storage_key: PrefixedStorageKey,
 		key: StorageKey,
 	) -> FutureResult<Option<u64>> {
 		Box::new(self.storage(block, storage_key, key)
@@ -366,7 +366,7 @@ impl<Block, Client> ChildStateApi<Block::Hash> for ChildState<Block, Client>
 
 	fn storage(
 		&self,
-		storage_key: StorageKey,
+		storage_key: PrefixedStorageKey,
 		key: StorageKey,
 		block: Option<Block::Hash>
 	) -> FutureResult<Option<StorageData>> {
@@ -375,7 +375,7 @@ impl<Block, Client> ChildStateApi<Block::Hash> for ChildState<Block, Client>
 
 	fn storage_keys(
 		&self,
-		storage_key: StorageKey,
+		storage_key: PrefixedStorageKey,
 		key_prefix: StorageKey,
 		block: Option<Block::Hash>
 	) -> FutureResult<Vec<StorageKey>> {
@@ -384,7 +384,7 @@ impl<Block, Client> ChildStateApi<Block::Hash> for ChildState<Block, Client>
 
 	fn storage_hash(
 		&self,
-		storage_key: StorageKey,
+		storage_key: PrefixedStorageKey,
 		key: StorageKey,
 		block: Option<Block::Hash>
 	) -> FutureResult<Option<Block::Hash>> {
@@ -393,7 +393,7 @@ impl<Block, Client> ChildStateApi<Block::Hash> for ChildState<Block, Client>
 
 	fn storage_size(
 		&self,
-		storage_key: StorageKey,
+		storage_key: PrefixedStorageKey,
 		key: StorageKey,
 		block: Option<Block::Hash>
 	) -> FutureResult<Option<u64>> {

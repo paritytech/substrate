@@ -187,9 +187,9 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 			let prefixed_storage_key = child_info.prefixed_storage_key();
 			txs.consolidate(child_txs);
 			if empty {
-				child_roots.push((prefixed_storage_key, None));
+				child_roots.push((prefixed_storage_key.key(), None));
 			} else {
-				child_roots.push((prefixed_storage_key, Some(child_root.encode())));
+				child_roots.push((prefixed_storage_key.key(), Some(child_root.encode())));
 			}
 		}
 		let (root, parent_txs) = self.storage_root(

@@ -35,6 +35,7 @@ use libp2p::PeerId;
 use crate::config::Roles;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use sc_peerset::ReputationChange;
+use sp_core::storage::PrefixedStorageKey;
 
 /// Remote request timeout.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
@@ -69,7 +70,7 @@ pub trait LightDispatchNetwork<B: BlockT> {
 		who: &PeerId,
 		id: RequestId,
 		block: <B as BlockT>::Hash,
-		storage_key: Vec<u8>,
+		storage_key: PrefixedStorageKey,
 		keys: Vec<Vec<u8>>,
 	);
 
@@ -92,7 +93,7 @@ pub trait LightDispatchNetwork<B: BlockT> {
 		last: <B as BlockT>::Hash,
 		min: <B as BlockT>::Hash,
 		max: <B as BlockT>::Hash,
-		storage_key: Option<Vec<u8>>,
+		storage_key: Option<PrefixedStorageKey>,
 		key: Vec<u8>,
 	);
 
@@ -678,6 +679,7 @@ pub mod tests {
 	use std::sync::Arc;
 	use std::time::Instant;
 	use futures::channel::oneshot;
+	use sp_core::storage::PrefixedStorageKey;
 	use sp_runtime::traits::{Block as BlockT, NumberFor, Header as HeaderT};
 	use sp_blockchain::{Error as ClientError, Result as ClientResult};
 	use sc_client_api::{FetchChecker, RemoteHeaderRequest,
@@ -821,11 +823,11 @@ pub mod tests {
 		}
 		fn send_header_request(&mut self, _: &PeerId, _: RequestId, _: <<B as BlockT>::Header as HeaderT>::Number) {}
 		fn send_read_request(&mut self, _: &PeerId, _: RequestId, _: <B as BlockT>::Hash, _: Vec<Vec<u8>>) {}
-		fn send_read_child_request(&mut self, _: &PeerId, _: RequestId, _: <B as BlockT>::Hash, _: Vec<u8>,
+		fn send_read_child_request(&mut self, _: &PeerId, _: RequestId, _: <B as BlockT>::Hash, _: PrefixedStorageKey,
 			_: Vec<Vec<u8>>) {}
 		fn send_call_request(&mut self, _: &PeerId, _: RequestId, _: <B as BlockT>::Hash, _: String, _: Vec<u8>) {}
 		fn send_changes_request(&mut self, _: &PeerId, _: RequestId, _: <B as BlockT>::Hash, _: <B as BlockT>::Hash,
-			_: <B as BlockT>::Hash, _: <B as BlockT>::Hash, _: Option<Vec<u8>>, _: Vec<u8>) {}
+			_: <B as BlockT>::Hash, _: <B as BlockT>::Hash, _: Option<PrefixedStorageKey>, _: Vec<u8>) {}
 		fn send_body_request(&mut self, _: &PeerId, _: RequestId, _: BlockAttributes, _: FromBlock<<B as BlockT>::Hash,
 			<<B as BlockT>::Header as HeaderT>::Number>, _: Option<B::Hash>, _: Direction, _: Option<u32>) {}
 	}
@@ -1043,12 +1045,13 @@ pub mod tests {
 		let peer0 = PeerId::random();
 		light_dispatch.on_connect(&mut network_interface, peer0.clone(), Roles::FULL, 1000);
 
+		let child_info = sp_core::storage::ChildInfo::new_default(&b":child_storage:default:sub"[..]);
 		let (tx, response) = oneshot::channel();
 		light_dispatch.add_request(&mut network_interface, RequestData::RemoteReadChild(
 			RemoteReadChildRequest {
 				header: dummy_header(),
 				block: Default::default(),
-				storage_key: b":child_storage:default:sub".to_vec(),
+				storage_key: child_info.prefixed_storage_key(),
 				keys: vec![b":key".to_vec()],
 				retry_count: None,
 			}, tx));

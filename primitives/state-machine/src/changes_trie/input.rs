@@ -21,6 +21,7 @@ use crate::{
 	StorageKey, StorageValue,
 	changes_trie::BlockNumber
 };
+use sp_core::storage::PrefixedStorageKey;
 
 /// Key of { changed key => set of extrinsic indices } mapping.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -49,7 +50,7 @@ pub struct ChildIndex<Number: BlockNumber> {
 	/// Block at which this key has been inserted in the trie.
 	pub block: Number,
 	/// Storage key this node is responsible for.
-	pub storage_key: StorageKey,
+	pub storage_key: PrefixedStorageKey,
 }
 
 /// Value of { changed key => block/digest block numbers } mapping.
@@ -176,10 +177,17 @@ impl<Number: BlockNumber> Decode for InputKey<Number> {
 				block: Decode::decode(input)?,
 				key: Decode::decode(input)?,
 			})),
-			3 => Ok(InputKey::ChildIndex(ChildIndex {
-				block: Decode::decode(input)?,
-				storage_key: Decode::decode(input)?,
-			})),
+			3 => {
+				let block = Decode::decode(input)?;
+				if let Some(storage_key) = PrefixedStorageKey::new(Decode::decode(input)?) {
+					Ok(InputKey::ChildIndex(ChildIndex {
+						block,
+						storage_key,
+					}))
+				} else {
+					Err("Invalid prefixed key in change trie".into())
+				}
+			},
 			_ => Err("Invalid input key variant".into()),
 		}
 	}

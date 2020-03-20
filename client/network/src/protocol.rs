@@ -23,7 +23,7 @@ use libp2p::{Multiaddr, PeerId};
 use libp2p::core::{ConnectedPoint, nodes::listeners::ListenerId};
 use libp2p::swarm::{ProtocolsHandler, IntoProtocolsHandler};
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
-use sp_core::storage::{StorageKey, ChildInfo, ChildType};
+use sp_core::storage::{StorageKey, PrefixedStorageKey, ChildInfo, ChildType};
 use sp_consensus::{
 	BlockOrigin,
 	block_validation::BlockAnnounceValidator,
@@ -312,14 +312,14 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a> {
 		who: &PeerId,
 		id: RequestId,
 		block: <B as BlockT>::Hash,
-		storage_key: Vec<u8>,
+		storage_key: PrefixedStorageKey,
 		keys: Vec<Vec<u8>>,
 	) {
 		let message: Message<B> = message::generic::Message::RemoteReadChildRequest(
 			message::RemoteReadChildRequest {
 				id,
 				block,
-				storage_key,
+				storage_key: storage_key.key(),
 				keys,
 			});
 
@@ -352,7 +352,7 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a> {
 		last: <B as BlockT>::Hash,
 		min: <B as BlockT>::Hash,
 		max: <B as BlockT>::Hash,
-		storage_key: Option<Vec<u8>>,
+		storage_key: Option<PrefixedStorageKey>,
 		key: Vec<u8>,
 	) {
 		let message: Message<B> = message::generic::Message::RemoteChangesRequest(message::RemoteChangesRequest {
@@ -361,7 +361,7 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a> {
 			last,
 			min,
 			max,
-			storage_key,
+			storage_key: storage_key.map(|p| p.key()),
 			key,
 		});
 
@@ -1608,7 +1608,8 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 		trace!(target: "sync", "Remote read child request {} from {} ({} {} at {})",
 			request.id, who, request.storage_key.to_hex::<String>(), keys_str(), request.block);
-		let child_info = match ChildType::from_prefixed_key(&request.storage_key) {
+		let prefixed_key = PrefixedStorageKey::new_ref(&request.storage_key);
+		let child_info = match prefixed_key.and_then(|key| ChildType::from_prefixed_key(key)) {
 			Some((ChildType::ParentKeyId, storage_key)) => Ok(ChildInfo::new_default(storage_key)),
 			None => Err("Invalid child storage key".into()),
 		};
@@ -1708,23 +1709,32 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			request.first,
 			request.last
 		);
-		let storage_key = request.storage_key.map(|sk| StorageKey(sk));
 		let key = StorageKey(request.key);
-		let proof = match self.context_data.chain.key_changes_proof(
-			request.first,
-			request.last,
-			request.min,
-			request.max,
-			storage_key.as_ref(),
+		let prefixed_key = if let Some(storage_key) = request.storage_key.as_ref() {
+			if let Some(storage_key) = PrefixedStorageKey::new_ref(storage_key) {
+				Ok(Some(storage_key))
+			} else {
+				Err("Invalid prefixed storage key".into())
+			}
+		} else {
+			Ok(None)
+		};
+		let (first, last, min, max) = (request.first, request.last, request.min, request.max);
+		let proof = match prefixed_key.and_then(|p_key| self.context_data.chain.key_changes_proof(
+			first,
+			last,
+			min,
+			max,
+			p_key,
 			&key,
-		) {
+		)) {
 			Ok(proof) => proof,
 			Err(error) => {
 				trace!(target: "sync", "Remote changes proof request {} from {} for key {} ({}..{}) failed with: {}",
 					request.id,
 					who,
-					if let Some(sk) = storage_key {
-						format!("{} : {}", sk.0.to_hex::<String>(), key.0.to_hex::<String>())
+					if let Some(sk) = request.storage_key.as_ref() {
+						format!("{} : {}", sk.to_hex::<String>(), key.0.to_hex::<String>())
 					} else {
 						key.0.to_hex::<String>()
 					},

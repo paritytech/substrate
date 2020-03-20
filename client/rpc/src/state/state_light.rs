@@ -48,7 +48,8 @@ use sc_client::{
 	},
 };
 use sp_core::{
-	Bytes, OpaqueMetadata, storage::{StorageKey, StorageData, StorageChangeSet},
+	Bytes, OpaqueMetadata,
+	storage::{StorageKey, PrefixedStorageKey, StorageData, StorageChangeSet},
 };
 use sp_version::RuntimeVersion;
 use sp_runtime::{generic::BlockId, traits::{Block as BlockT, HashFor}};
@@ -458,7 +459,7 @@ impl<Block, F, Client> ChildStateBackend<Block, Client> for LightState<Block, F,
 	fn storage_keys(
 		&self,
 		_block: Option<Block::Hash>,
-		_storage_key: StorageKey,
+		_storage_key: PrefixedStorageKey,
 		_prefix: StorageKey,
 	) -> FutureResult<Vec<StorageKey>> {
 		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
@@ -467,7 +468,7 @@ impl<Block, F, Client> ChildStateBackend<Block, Client> for LightState<Block, F,
 	fn storage(
 		&self,
 		block: Option<Block::Hash>,
-		storage_key: StorageKey,
+		storage_key: PrefixedStorageKey,
 		key: StorageKey,
 	) -> FutureResult<Option<StorageData>> {
 		let block = self.block_or_best(block);
@@ -477,7 +478,7 @@ impl<Block, F, Client> ChildStateBackend<Block, Client> for LightState<Block, F,
 				Ok(header) => Either::Left(fetcher.remote_read_child(RemoteReadChildRequest {
 					block,
 					header,
-					storage_key: storage_key.0,
+					storage_key,
 					keys: vec![key.0.clone()],
 					retry_count: Default::default(),
 				}).then(move |result| ready(result
@@ -497,7 +498,7 @@ impl<Block, F, Client> ChildStateBackend<Block, Client> for LightState<Block, F,
 	fn storage_hash(
 		&self,
 		block: Option<Block::Hash>,
-		storage_key: StorageKey,
+		storage_key: PrefixedStorageKey,
 		key: StorageKey,
 	) -> FutureResult<Option<Block::Hash>> {
 		Box::new(ChildStateBackend::storage(self, block, storage_key, key)

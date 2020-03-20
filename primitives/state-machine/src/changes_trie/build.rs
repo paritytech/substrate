@@ -32,7 +32,7 @@ use crate::{
 		input::{InputKey, InputPair, DigestIndex, ExtrinsicIndex, ChildIndex},
 	},
 };
-use sp_core::storage::{ChildInfo, ChildType};
+use sp_core::storage::{ChildInfo, ChildType, PrefixedStorageKey};
 
 /// Prepare input pairs for building a changes trie of given block.
 ///
@@ -280,7 +280,7 @@ fn prepare_digest_input<'a, H, Number>(
 				return Ok((map, child_map));
 			}
 
-			let mut children_roots = BTreeMap::<StorageKey, _>::new();
+			let mut children_roots = BTreeMap::<PrefixedStorageKey, _>::new();
 			{
 				let trie_storage = TrieBackendEssence::<_, H>::new(
 					crate::changes_trie::TrieBackendStorageAdapter(storage),
@@ -774,7 +774,7 @@ mod test {
 			],
 		);
 		assert_eq!(
-			child_changes_tries_nodes.get(&ChildIndex { block: 16u64, storage_key: child_trie_key2.to_vec() }).unwrap(),
+			child_changes_tries_nodes.get(&ChildIndex { block: 16u64, storage_key: child_trie_key2.clone() }).unwrap(),
 			&vec![
 				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 16u64, key: vec![100] }, vec![0, 2]),
 

@@ -55,7 +55,7 @@ use rustc_hex::ToHex;
 use sc_client::light::fetcher;
 use sc_client_api::StorageProof;
 use sc_peerset::ReputationChange;
-use sp_core::storage::{ChildInfo, ChildType, StorageKey};
+use sp_core::storage::{ChildInfo, ChildType, StorageKey, PrefixedStorageKey};
 use sp_blockchain::{Error as ClientError};
 use sp_runtime::{
 	traits::{Block, Header, NumberFor, Zero},
@@ -510,7 +510,8 @@ where
 
 		let block = Decode::decode(&mut request.block.as_ref())?;
 
-		let child_info = match ChildType::from_prefixed_key(&request.storage_key) {
+		let prefixed_key = PrefixedStorageKey::new_ref(&request.storage_key);
+		let child_info = match prefixed_key.and_then(|key| ChildType::from_prefixed_key(key)) {
 			Some((ChildType::ParentKeyId, storage_key)) => Ok(ChildInfo::new_default(storage_key)),
 			None => Err("Invalid child storage key".into()),
 		};
@@ -588,20 +589,25 @@ where
 		let min = Decode::decode(&mut request.min.as_ref())?;
 		let max = Decode::decode(&mut request.max.as_ref())?;
 		let key = StorageKey(request.key.clone());
-		let storage_key =
-			if request.storage_key.is_empty() {
-				None
+		let storage_key = if request.storage_key.is_empty() {
+			Ok(None)
+		} else {
+			if let Some(storage_key) = PrefixedStorageKey::new_ref(&request.storage_key) {
+				Ok(Some(storage_key))
 			} else {
-				Some(StorageKey(request.storage_key.clone()))
-			};
+				Err("Invalid prefix for storage key.".into())
+			}
+		};
 
-		let proof = match self.chain.key_changes_proof(first, last, min, max, storage_key.as_ref(), &key) {
+		let proof = match storage_key.and_then(|storage_key| {
+			self.chain.key_changes_proof(first, last, min, max, storage_key, &key)
+		}) {
 			Ok(proof) => proof,
 			Err(error) => {
 				log::trace!("remote changes proof request from {} for key {} ({:?}..{:?}) failed with: {}",
 					peer,
-					if let Some(sk) = storage_key {
-						format!("{} : {}", sk.0.to_hex::<String>(), key.0.to_hex::<String>())
+					if !request.storage_key.is_empty() {
+						format!("{} : {}", request.storage_key.to_hex::<String>(), key.0.to_hex::<String>())
 					} else {
 						key.0.to_hex::<String>()
 					},
@@ -918,7 +924,7 @@ fn serialize_request<B: Block>(request: &Request<B>) -> api::v1::light::Request 
 		Request::ReadChild { request, .. } => {
 			let r = api::v1::light::RemoteReadChildRequest {
 				block: request.block.encode(),
-				storage_key: request.storage_key.clone(),
+				storage_key: request.storage_key.clone().key(),
 				keys: request.keys.clone(),
 			};
 			api::v1::light::request::Request::RemoteReadChildRequest(r)
@@ -937,7 +943,7 @@ fn serialize_request<B: Block>(request: &Request<B>) -> api::v1::light::Request 
 				last: request.last_block.1.encode(),
 				min: request.tries_roots.1.encode(),
 				max: request.max_block.1.encode(),
-				storage_key: request.storage_key.clone().unwrap_or_default(),
+				storage_key: request.storage_key.clone().map(|s| s.key()).unwrap_or_default(),
 				key: request.key.clone(),
 			};
 			api::v1::light::request::Request::RemoteChangesRequest(r)
@@ -1562,10 +1568,11 @@ mod tests {
 	#[test]
 	fn receives_remote_read_child_response() {
 		let mut chan = oneshot::channel();
+		let child_info = ChildInfo::new_default(&b":child_storage:default:sub"[..]);
 		let request = fetcher::RemoteReadChildRequest {
 			header: dummy_header(),
 			block: Default::default(),
-			storage_key: b":child_storage:default:sub".to_vec(),
+			storage_key: child_info.prefixed_storage_key(),
 			keys: vec![b":key".to_vec()],
 			retry_count: None,
 		};
@@ -1662,10 +1669,11 @@ mod tests {
 	#[test]
 	fn send_receive_read_child() {
 		let chan = oneshot::channel();
+		let child_info = ChildInfo::new_default(&b":child_storage:default:sub"[..]);
 		let request = fetcher::RemoteReadChildRequest {
 			header: dummy_header(),
 			block: Default::default(),
-			storage_key: b":child_storage:default:sub".to_vec(),
+			storage_key: child_info.prefixed_storage_key(),
 			keys: vec![b":key".to_vec()],
 			retry_count: None,
 		};

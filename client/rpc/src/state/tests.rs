@@ -32,7 +32,11 @@ use substrate_test_runtime_client::{
 };
 
 const STORAGE_KEY: &[u8] = b"child";
-const PREFIXED_STORAGE_KEY: &[u8] = b":child_storage:default:child";
+
+fn prefixed_storage_key() -> PrefixedStorageKey {
+	let child_info = ChildInfo::new_default(&b":child_storage:default:child"[..]);
+	child_info.prefixed_storage_key()
+}
 
 #[test]
 fn should_return_storage() {
@@ -49,7 +53,6 @@ fn should_return_storage() {
 	let genesis_hash = client.genesis_hash();
 	let (client, child) = new_full(Arc::new(client), Subscriptions::new(Arc::new(core.executor())));
 	let key = StorageKey(KEY.to_vec());
-	let storage_key = StorageKey(PREFIXED_STORAGE_KEY.to_vec());
 
 	assert_eq!(
 		client.storage(key.clone(), Some(genesis_hash).into()).wait()
@@ -67,7 +70,7 @@ fn should_return_storage() {
 	);
 	assert_eq!(
 		core.block_on(
-			child.storage(storage_key, key, Some(genesis_hash).into())
+			child.storage(prefixed_storage_key(), key, Some(genesis_hash).into())
 				.map(|x| x.map(|x| x.0.len()))
 		).unwrap().unwrap() as usize,
 		CHILD_VALUE.len(),
@@ -84,7 +87,7 @@ fn should_return_child_storage() {
 		.build());
 	let genesis_hash = client.genesis_hash();
 	let (_client, child) = new_full(client, Subscriptions::new(Arc::new(core.executor())));
-	let child_key = StorageKey(PREFIXED_STORAGE_KEY.to_vec());
+	let child_key = prefixed_storage_key();
 	let key = StorageKey(b"key".to_vec());
 
 

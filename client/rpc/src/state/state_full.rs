@@ -30,7 +30,7 @@ use sp_blockchain::{Result as ClientResult, Error as ClientError, HeaderMetadata
 use sc_client::BlockchainEvents;
 use sp_core::{
 	Bytes, storage::{well_known_keys, StorageKey, StorageData, StorageChangeSet,
-	ChildInfo, ChildType},
+	ChildInfo, ChildType, PrefixedStorageKey},
 };
 use sp_version::RuntimeVersion;
 use sp_runtime::{
@@ -471,13 +471,13 @@ impl<BE, Block, Client> ChildStateBackend<Block, Client> for FullState<BE, Block
 	fn storage_keys(
 		&self,
 		block: Option<Block::Hash>,
-		storage_key: StorageKey,
+		storage_key: PrefixedStorageKey,
 		prefix: StorageKey,
 	) -> FutureResult<Vec<StorageKey>> {
 		Box::new(result(
 			self.block_or_best(block)
 				.and_then(|block| {
-					let child_info = match ChildType::from_prefixed_key(&storage_key.0[..]) {
+					let child_info = match ChildType::from_prefixed_key(&storage_key) {
 						Some((ChildType::ParentKeyId, storage_key)) => ChildInfo::new_default(storage_key),
 						None => return Err("Invalid child storage key".into()),
 					};
@@ -493,13 +493,13 @@ impl<BE, Block, Client> ChildStateBackend<Block, Client> for FullState<BE, Block
 	fn storage(
 		&self,
 		block: Option<Block::Hash>,
-		storage_key: StorageKey,
+		storage_key: PrefixedStorageKey,
 		key: StorageKey,
 	) -> FutureResult<Option<StorageData>> {
 		Box::new(result(
 			self.block_or_best(block)
 				.and_then(|block| {
-					let child_info = match ChildType::from_prefixed_key(&storage_key.0[..]) {
+					let child_info = match ChildType::from_prefixed_key(&storage_key) {
 						Some((ChildType::ParentKeyId, storage_key)) => ChildInfo::new_default(storage_key),
 						None => return Err("Invalid child storage key".into()),
 					};
@@ -515,13 +515,13 @@ impl<BE, Block, Client> ChildStateBackend<Block, Client> for FullState<BE, Block
 	fn storage_hash(
 		&self,
 		block: Option<Block::Hash>,
-		storage_key: StorageKey,
+		storage_key: PrefixedStorageKey,
 		key: StorageKey,
 	) -> FutureResult<Option<Block::Hash>> {
 		Box::new(result(
 			self.block_or_best(block)
 				.and_then(|block| {
-					let child_info = match ChildType::from_prefixed_key(&storage_key.0[..]) {
+					let child_info = match ChildType::from_prefixed_key(&storage_key) {
 						Some((ChildType::ParentKeyId, storage_key)) => ChildInfo::new_default(storage_key),
 						None => return Err("Invalid child storage key".into()),
 					};
