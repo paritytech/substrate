@@ -167,7 +167,7 @@ use frame_support::{
 		Currency, OnKilledAccount, OnUnbalanced, TryDrop, StoredMap,
 		WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 		Imbalance, SignedImbalance, ReservableCurrency, Get, ExistenceRequirement::KeepAlive,
-		ExistenceRequirement::AllowDeath, IsDeadAccount, BalanceStatus as Status, MigrateAccount,
+		ExistenceRequirement::AllowDeath, IsDeadAccount, BalanceStatus as Status,
 	}
 };
 use sp_runtime::{
@@ -531,12 +531,6 @@ decl_module! {
 	}
 }
 
-impl<T: Trait<I>, I: Instance> MigrateAccount<T::AccountId> for Module<T, I> {
-	fn migrate_account(account: &T::AccountId) {
-		Locks::<T, I>::migrate_key_from_blake(account);
-	}
-}
-
 impl<T: Trait<I>, I: Instance> Module<T, I> {
 	// PRIVATE MUTABLES
 
@@ -856,7 +850,7 @@ impl<T: Subtrait<I>, I: Instance> frame_system::Trait for ElevatedTrait<T, I> {
 	type AvailableBlockRatio = T::AvailableBlockRatio;
 	type Version = T::Version;
 	type ModuleToIndex = T::ModuleToIndex;
-	type MigrateAccount = (); type OnNewAccount = T::OnNewAccount;
+	type OnNewAccount = T::OnNewAccount;
 	type OnKilledAccount = T::OnKilledAccount;
 	type AccountData = T::AccountData;
 }

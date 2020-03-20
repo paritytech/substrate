@@ -29,13 +29,6 @@ use sp_runtime::{
 use crate::dispatch::Parameter;
 use crate::storage::StorageMap;
 
-/// Migrate a given account.
-#[impl_trait_for_tuples::impl_for_tuples(30)]
-pub trait MigrateAccount<A> {
-	/// Migrate the `account`.
-	fn migrate_account(account: &A);
-}
-
 /// An abstraction of a value stored within storage, but possibly as part of a larger composite
 /// item.
 pub trait StoredMap<K, T> {

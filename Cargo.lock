@@ -1449,6 +1449,7 @@ dependencies = [
  "sc-executor",
  "sc-service",
  "sp-core",
+ "sp-externalities",
  "sp-runtime",
  "sp-state-machine",
  "structopt",
@@ -4225,6 +4226,7 @@ dependencies = [
 name = "pallet-im-online"
 version = "2.0.0-alpha.4"
 dependencies = [
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "pallet-authorship",
