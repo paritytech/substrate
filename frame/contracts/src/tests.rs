@@ -2870,9 +2870,7 @@ const CODE_CRYPTO_HASHES: &str = r#"
 
 #[test]
 fn crypto_hashes() {
-	let wasm_input = std::fs::read_to_string("src/hash_functions.wat")
-		.expect("couldn't open hash functions `.wat` test Wasm file");
-	let (wasm, code_hash) = compile_module::<Test>(&wasm_input).unwrap();
+	let (wasm, code_hash) = compile_module::<Test>(&CODE_CRYPTO_HASHES).unwrap();
 
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		Balances::deposit_creating(&ALICE, 1_000_000);
