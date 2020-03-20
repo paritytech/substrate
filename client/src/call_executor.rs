@@ -17,7 +17,7 @@
 use std::{sync::Arc, panic::UnwindSafe, result, cell::RefCell};
 use codec::{Encode, Decode};
 use sp_runtime::{
-	generic::BlockId, traits::{Block as BlockT, HasherFor, NumberFor},
+	generic::BlockId, traits::{Block as BlockT, HashFor, NumberFor},
 };
 use sp_state_machine::{
 	self, OverlayedChanges, Ext, ExecutionManager, StateMachine, ExecutionStrategy,
@@ -211,9 +211,9 @@ where
 		version.map_err(|e| sp_blockchain::Error::VersionInvalid(format!("{:?}", e)).into())
 	}
 
-	fn prove_at_trie_state<S: sp_state_machine::TrieBackendStorage<HasherFor<Block>>>(
+	fn prove_at_trie_state<S: sp_state_machine::TrieBackendStorage<HashFor<Block>>>(
 		&self,
-		trie_state: &sp_state_machine::TrieBackend<S, HasherFor<Block>>,
+		trie_state: &sp_state_machine::TrieBackend<S, HashFor<Block>>,
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8]

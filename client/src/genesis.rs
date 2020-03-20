@@ -53,7 +53,7 @@ mod tests {
 		runtime::{Hash, Transfer, Block, BlockNumber, Header, Digest},
 		AccountKeyring, Sr25519Keyring,
 	};
-	use sp_core::Blake2Hasher;
+	use sp_runtime::traits::BlakeTwo256;
 	use hex_literal::*;
 
 	native_executor_instance!(
@@ -67,7 +67,7 @@ mod tests {
 	}
 
 	fn construct_block(
-		backend: &InMemoryBackend<Blake2Hasher>,
+		backend: &InMemoryBackend<BlakeTwo256>,
 		number: BlockNumber,
 		parent_hash: Hash,
 		state_root: Hash,
@@ -78,7 +78,7 @@ mod tests {
 		let transactions = txs.into_iter().map(|tx| tx.into_signed_tx()).collect::<Vec<_>>();
 
 		let iter = transactions.iter().map(Encode::encode);
-		let extrinsics_root = Layout::<Blake2Hasher>::ordered_trie_root(iter).into();
+		let extrinsics_root = Layout::<BlakeTwo256>::ordered_trie_root(iter).into();
 
 		let mut header = Header {
 			parent_hash,
@@ -137,7 +137,7 @@ mod tests {
 		(vec![].and(&Block { header, extrinsics: transactions }), hash)
 	}
 
-	fn block1(genesis_hash: Hash, backend: &InMemoryBackend<Blake2Hasher>) -> (Vec<u8>, Hash) {
+	fn block1(genesis_hash: Hash, backend: &InMemoryBackend<BlakeTwo256>) -> (Vec<u8>, Hash) {
 		construct_block(
 			backend,
 			1,

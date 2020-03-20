@@ -28,7 +28,7 @@ use sc_client_api::backend::PrunableStateChangesTrieStorage;
 use sp_blockchain::{well_known_cache_keys, Cache as BlockchainCache};
 use sp_core::{ChangesTrieConfiguration, ChangesTrieConfigurationRange, convert_hash};
 use sp_runtime::traits::{
-	Block as BlockT, Header as HeaderT, HasherFor, NumberFor, One, Zero, CheckedSub,
+	Block as BlockT, Header as HeaderT, HashFor, NumberFor, One, Zero, CheckedSub,
 };
 use sp_runtime::generic::{BlockId, DigestItem, ChangesTrieSignal};
 use sp_state_machine::{DBValue, ChangesTrieBuildCache, ChangesTrieCacheAction};
@@ -150,7 +150,7 @@ impl<Block: BlockT> DbChangesTrieStorage<Block> {
 	pub fn commit(
 		&self,
 		tx: &mut DBTransaction,
-		mut changes_trie: MemoryDB<HasherFor<Block>>,
+		mut changes_trie: MemoryDB<HashFor<Block>>,
 		parent_block: ComplexBlockId<Block>,
 		block: ComplexBlockId<Block>,
 		new_header: &Block::Header,
@@ -377,7 +377,7 @@ impl<Block: BlockT> DbChangesTrieStorage<Block> {
 }
 
 impl<Block: BlockT> PrunableStateChangesTrieStorage<Block> for DbChangesTrieStorage<Block> {
-	fn storage(&self) -> &dyn sp_state_machine::ChangesTrieStorage<HasherFor<Block>, NumberFor<Block>> {
+	fn storage(&self) -> &dyn sp_state_machine::ChangesTrieStorage<HashFor<Block>, NumberFor<Block>> {
 		self
 	}
 
@@ -396,7 +396,7 @@ impl<Block: BlockT> PrunableStateChangesTrieStorage<Block> for DbChangesTrieStor
 	}
 }
 
-impl<Block: BlockT> sp_state_machine::ChangesTrieRootsStorage<HasherFor<Block>, NumberFor<Block>>
+impl<Block: BlockT> sp_state_machine::ChangesTrieRootsStorage<HashFor<Block>, NumberFor<Block>>
 	for DbChangesTrieStorage<Block>
 {
 	fn build_anchor(
@@ -469,12 +469,12 @@ impl<Block: BlockT> sp_state_machine::ChangesTrieRootsStorage<HasherFor<Block>, 
 	}
 }
 
-impl<Block> sp_state_machine::ChangesTrieStorage<HasherFor<Block>, NumberFor<Block>>
+impl<Block> sp_state_machine::ChangesTrieStorage<HashFor<Block>, NumberFor<Block>>
 	for DbChangesTrieStorage<Block>
 where
 	Block: BlockT,
 {
-	fn as_roots_storage(&self) -> &dyn sp_state_machine::ChangesTrieRootsStorage<HasherFor<Block>, NumberFor<Block>> {
+	fn as_roots_storage(&self) -> &dyn sp_state_machine::ChangesTrieRootsStorage<HashFor<Block>, NumberFor<Block>> {
 		self
 	}
 

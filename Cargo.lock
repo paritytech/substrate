@@ -6071,6 +6071,7 @@ dependencies = [
  "sp-externalities",
  "sp-io",
  "sp-panic-handler",
+ "sp-runtime",
  "sp-runtime-interface",
  "sp-serializer",
  "sp-state-machine",
@@ -7298,6 +7299,7 @@ dependencies = [
 name = "sp-runtime"
 version = "2.0.0-alpha.3"
 dependencies = [
+ "hash256-std-hasher",
  "impl-trait-for-tuples",
  "log 0.4.8",
  "parity-scale-codec",
@@ -7349,8 +7351,8 @@ name = "sp-runtime-interface-test"
 version = "2.0.0-dev"
 dependencies = [
  "sc-executor",
- "sp-core",
  "sp-io",
+ "sp-runtime",
  "sp-runtime-interface",
  "sp-runtime-interface-test-wasm",
  "sp-state-machine",
@@ -7422,6 +7424,7 @@ dependencies = [
  "sp-core",
  "sp-externalities",
  "sp-panic-handler",
+ "sp-runtime",
  "sp-trie",
  "trie-db",
  "trie-root",
@@ -7489,6 +7492,7 @@ dependencies = [
  "memory-db",
  "parity-scale-codec",
  "sp-core",
+ "sp-runtime",
  "sp-std",
  "trie-bench",
  "trie-db",
@@ -7840,6 +7844,7 @@ dependencies = [
  "build-helper",
  "cargo_metadata",
  "fs2",
+ "itertools",
  "tempfile",
  "toml",
  "walkdir",
