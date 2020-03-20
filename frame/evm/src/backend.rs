@@ -140,6 +140,10 @@ impl<'vicinity, T: Trait> ApplyBackend for Backend<'vicinity, T> {
 		I: IntoIterator<Item=(H256, H256)>,
 		L: IntoIterator<Item=evm::backend::Log>,
 	{
+		#[cfg(feature = "storage_tracing")] {
+			let mut affected_storage: Vec<(H160,H256)> = vec![];
+		}
+
 		for apply in values {
 			match apply {
 				Apply::Modify {
@@ -156,6 +160,9 @@ impl<'vicinity, T: Trait> ApplyBackend for Backend<'vicinity, T> {
 
 					if reset_storage {
 						AccountStorages::remove_prefix(address);
+						#[cfg(feature = "storage_tracing")] {
+							Module::<T>::deposit_event(Event::StorageReset(StorageReset(address)))
+						}
 					}
 
 					for (index, value) in storage {
@@ -163,6 +170,10 @@ impl<'vicinity, T: Trait> ApplyBackend for Backend<'vicinity, T> {
 							AccountStorages::remove(address, index);
 						} else {
 							AccountStorages::insert(address, index, value);
+						}
+
+						#[cfg(feature = "storage_tracing")] {
+							affected_storage.push((address, index));
 						}
 					}
 
@@ -176,6 +187,39 @@ impl<'vicinity, T: Trait> ApplyBackend for Backend<'vicinity, T> {
 			}
 		}
 
+		#[cfg(feature = "storage_tracing")] {
+			if affected_storage.len() > 0 {
+				affected_storage.sort();
+
+				let mut curr_addr = None;
+				let mut curr_batch: Vec<H256> = vec![];
+				let mut batches: Vec<(H160, Vec<H256>)> = vec![];
+
+				for (addr, idx) in affected_storage.into_iter() {
+					if curr_addr == Some(addr) {
+						curr_batch.push(idx);
+					} else {
+						if let Some(curr_addr) = curr_addr {
+							batches.push((curr_addr, curr_batch));
+						}
+						curr_addr = Some(addr);
+						curr_batch = vec![idx];
+					}
+				}
+
+				if curr_batch.len() > 0 {
+					batches.push((curr_addr.unwrap(), curr_batch));
+				}
+
+				for (address, indices) in batches.into_iter() {
+					Module::<T>::deposit_event(Event::StorageWritten(StorageWritten {
+						address,
+						indices,
+					}));
+				}
+			}
+		}
+
 		for log in logs {
 			Module::<T>::deposit_event(Event::Log(Log {
 				address: log.address,
@@ -184,4 +228,20 @@ impl<'vicinity, T: Trait> ApplyBackend for Backend<'vicinity, T> {
 			}));
 		}
 	}
+}
+
+#[derive(Clone, Eq, PartialEq, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+pub struct StorageWritten {
+	/// Source address of the contract affected.
+	pub address: H160,
+	/// Indices affected.
+	pub indices: Vec<H256>,
+}
+
+#[derive(Clone, Eq, PartialEq, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+pub struct StorageReset {
+	/// Source address of the contract affected.
+	pub address: H160,
 }

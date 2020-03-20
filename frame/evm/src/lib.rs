@@ -145,6 +145,11 @@ decl_event! {
 		Log(Log),
 		/// A contract has been created at given address.
 		Created(H160),
+
+		/// A batch of all indices written during last call (see "storage_tracing" feature)
+		StorageWritten(backend::StorageWritten),
+		/// An indicator that the storage was reset during last call (see "storage tracing" feature)
+		StorageReset(backend::StorageReset),
 	}
 }
 
