@@ -2819,7 +2819,6 @@ const CODE_CRYPTO_HASHES: &str = r#"
 			(local.get $input_len)
 			(local.get $output_ptr)
 			(local.get $chosen_hash_fn) ;; Which crypto hash function to execute.
-			;; (i32.const 1) ;; Which crypto hash function to execute.
 		)
 		(call $ext_scratch_write
 			(local.get $output_ptr) ;; Linear memory location of the output buffer.
