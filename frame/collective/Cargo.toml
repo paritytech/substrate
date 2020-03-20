@@ -18,7 +18,6 @@ sp-runtime = { version = "2.0.0-alpha.4", default-features = false, path = "../.
 frame-benchmarking = { version = "2.0.0-alpha.4", default-features = false, path = "../benchmarking", optional = true }
 frame-support = { version = "2.0.0-alpha.4", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0-alpha.4", default-features = false, path = "../system" }
-pallet-democracy = { version = "2.0.0-alpha.4", default-features = false, path = "../democracy" }
 
 [dev-dependencies]
 hex-literal = "0.2.1"
@@ -36,6 +35,5 @@ std = [
 	"frame-support/std",
 	"sp-runtime/std",
 	"frame-system/std",
-	"pallet-democracy/std",
 ]
 runtime-benchmarks = ["frame-benchmarking"]

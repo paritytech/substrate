@@ -20,7 +20,6 @@ use super::*;
 
 use frame_system::{RawOrigin as SystemOrigin, Call as SystemCall};
 use frame_benchmarking::{benchmarks, account};
-use pallet_democracy::Call as DemocracyCall;
 
 use crate::Module as Collective;
 use frame_system::Module as System;
@@ -53,7 +52,7 @@ benchmarks! {
 		let u in ...;
 
 		let caller = account("caller", u, SEED);
-		let proposal = DemocracyCall::<T>::remark(Default::default());
+		let proposal = SystemCall::remark(Default::default());
 
 	}: _(SystemOrigin::Signed(caller), Box::new(proposal.into()))
 }
