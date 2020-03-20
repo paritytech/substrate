@@ -113,7 +113,6 @@ use frame_support::traits::{
 };
 use frame_support::dispatch::{self, DispatchResult, DispatchError};
 use frame_system::{self as system, ensure_signed};
-use frame_support::traits::MigrateAccount;
 
 #[cfg(test)]
 mod mock;
@@ -531,18 +530,6 @@ decl_module! {
 		fn on_initialize(n: T::BlockNumber) {
 			if T::ShouldEndSession::should_end_session(n) {
 				Self::rotate_session();
-			}
-		}
-	}
-}
-
-impl<T: Trait> MigrateAccount<T::AccountId> for Module<T> {
-	fn migrate_account(a: &T::AccountId) {
-		if let Some(v) = T::ValidatorIdOf::convert(a.clone()) {
-			if let Some(keys) = NextKeys::<T>::migrate_key_from_blake(v) {
-				for id in T::Keys::key_ids() {
-					KeyOwner::<T>::migrate_key_from_blake((*id, keys.get_raw(*id)));
-				}
 			}
 		}
 	}

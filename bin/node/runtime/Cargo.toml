@@ -60,8 +60,8 @@ pallet-randomness-collective-flip = { version = "2.0.0-alpha.4", default-feature
 pallet-recovery = { version = "2.0.0-alpha.4", default-features = false, path = "../../../frame/recovery" }
 pallet-session = { version = "2.0.0-alpha.4", features = ["historical"], path = "../../../frame/session", default-features = false }
 pallet-session-benchmarking = { version = "2.0.0-alpha.4", path = "../../../frame/session/benchmarking", default-features = false, optional = true }
-pallet-staking = { version = "2.0.0-alpha.4", features = ["migrate"], path = "../../../frame/staking", default-features = false }
-pallet-staking-reward-curve = { version = "2.0.0-alpha.4",  path = "../../../frame/staking/reward-curve" }
+pallet-staking = { version = "2.0.0-alpha.4", default-features = false, path = "../../../frame/staking" }
+pallet-staking-reward-curve = { version = "2.0.0-alpha.4", default-features = false, path = "../../../frame/staking/reward-curve" }
 pallet-sudo = { version = "2.0.0-alpha.4", default-features = false, path = "../../../frame/sudo" }
 pallet-society = { version = "2.0.0-alpha.4", default-features = false, path = "../../../frame/society" }
 pallet-timestamp = { version = "2.0.0-alpha.4", default-features = false, path = "../../../frame/timestamp" }
@@ -135,10 +135,8 @@ std = [
 ]
 runtime-benchmarks = [
 	"frame-benchmarking",
-	"pallet-balances/runtime-benchmarks",
-	"pallet-identity/runtime-benchmarks",
-	"pallet-session-benchmarking",
 	"pallet-timestamp/runtime-benchmarks",
+	"pallet-identity/runtime-benchmarks",
+	"pallet-balances/runtime-benchmarks",
 	"pallet-vesting/runtime-benchmarks",
-	"pallet-staking/runtime-benchmarks",
 ]

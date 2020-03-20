@@ -12,7 +12,7 @@ repository = "https://github.com/paritytech/substrate/"
 sp-application-crypto = { version = "2.0.0-alpha.4", default-features = false, path = "../../application-crypto" }
 codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false }
 sp-std = { version = "2.0.0-alpha.4", default-features = false, path = "../../std" }
-schnorrkel = { version = "0.8.5", features = ["preaudit_deprecated"], optional = true }
+schnorrkel = { version = "0.9", features = ["preaudit_deprecated"], optional = true }
 sp-api = { version = "2.0.0-alpha.4", default-features = false, path = "../../api" }
 sp-consensus = { version = "0.8.0-alpha.4", optional = true, path = "../common" }
 sp-inherents = { version = "2.0.0-alpha.4", default-features = false, path = "../../inherents" }

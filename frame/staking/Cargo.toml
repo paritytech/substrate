@@ -45,7 +45,6 @@ parking_lot = "0.10.0"
 env_logger = "0.7.1"
 
 [features]
-migrate = []
 testing-utils = [
 	"std",
 	"pallet-indices/std",
