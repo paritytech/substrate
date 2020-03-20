@@ -108,6 +108,11 @@ pub enum DigestItem<Hash> {
 	/// native code.
 	ChangesTrieSignal(ChangesTrieSignal),
 
+	/// Blockchain history digest item that contains the merkle mountain range root
+	/// at given block. It is created for providing super light client a commitment
+	/// of all the previous blocks.
+	MerkleMountainRangeRoot(Hash),
+
 	/// Some other thing. Unsupported and experimental.
 	Other(Vec<u8>),
 }
@@ -173,6 +178,10 @@ pub enum DigestItemRef<'a, Hash: 'a> {
 	/// Digest item that contains signal from changes tries manager to the
 	/// native code.
 	ChangesTrieSignal(&'a ChangesTrieSignal),
+
+	/// Reference to `DigestItem::MerkleMountainRangeRoot`.
+	MerkleMountainRangeRoot(&'a Hash),
+
 	/// Any 'non-system' digest item, opaque to the native code.
 	Other(&'a Vec<u8>),
 }
@@ -190,6 +199,7 @@ pub enum DigestItemType {
 	Seal = 5,
 	PreRuntime = 6,
 	ChangesTrieSignal = 7,
+	MerkleMountainRangeRoot = 18,
 }
 
 /// Type of a digest item that contains raw data; this also names the consensus engine ID where
@@ -215,6 +225,7 @@ impl<Hash> DigestItem<Hash> {
 			DigestItem::Consensus(ref v, ref s) => DigestItemRef::Consensus(v, s),
 			DigestItem::Seal(ref v, ref s) => DigestItemRef::Seal(v, s),
 			DigestItem::ChangesTrieSignal(ref s) => DigestItemRef::ChangesTrieSignal(s),
+			DigestItem::MerkleMountainRangeRoot(ref v) => DigestItemRef::MerkleMountainRangeRoot(v),
 			DigestItem::Other(ref v) => DigestItemRef::Other(v),
 		}
 	}
@@ -242,6 +253,11 @@ impl<Hash> DigestItem<Hash> {
 	/// Returns `Some` if the entry is the `ChangesTrieSignal` entry.
 	pub fn as_changes_trie_signal(&self) -> Option<&ChangesTrieSignal> {
 		self.dref().as_changes_trie_signal()
+	}
+
+	/// Returns `Some` if the entry is the `MerkleMountainRangeRoot` entry.
+	pub fn as_merkle_mountain_range_root(&self) -> Option<&Hash> {
+		self.dref().as_merkle_mountain_range_root()
 	}
 
 	/// Returns Some if `self` is a `DigestItem::Other`.
@@ -295,6 +311,9 @@ impl<Hash: Decode> Decode for DigestItem<Hash> {
 			DigestItemType::ChangesTrieSignal => Ok(DigestItem::ChangesTrieSignal(
 				Decode::decode(input)?,
 			)),
+			DigestItemType::MerkleMountainRangeRoot => Ok(DigestItem::MerkleMountainRangeRoot(
+				Decode::decode(input)?,
+			)),
 			DigestItemType::Other => Ok(DigestItem::Other(
 				Decode::decode(input)?,
 			)),
@@ -339,6 +358,14 @@ impl<'a, Hash> DigestItemRef<'a, Hash> {
 	pub fn as_changes_trie_signal(&self) -> Option<&'a ChangesTrieSignal> {
 		match *self {
 			DigestItemRef::ChangesTrieSignal(ref changes_trie_signal) => Some(changes_trie_signal),
+			_ => None,
+		}
+	}
+
+	/// Cast this digest item into `MerkleMountainRangeRoot`.
+	pub fn as_merkle_mountain_range_root(&self) -> Option<&'a Hash> {
+		match *self {
+			DigestItemRef::MerkleMountainRangeRoot(ref merkle_mountain_range_root) => Some(merkle_mountain_range_root),
 			_ => None,
 		}
 	}
@@ -396,6 +423,10 @@ impl<'a, Hash: Encode> Encode for DigestItemRef<'a, Hash> {
 				DigestItemType::ChangesTrieSignal.encode_to(&mut v);
 				changes_trie_signal.encode_to(&mut v);
 			},
+			DigestItemRef::MerkleMountainRangeRoot(merkle_mountain_range_root) => {
+				DigestItemType::MerkleMountainRangeRoot.encode_to(&mut v);
+				merkle_mountain_range_root.encode_to(&mut v);
+			},
 			DigestItemRef::Other(val) => {
 				DigestItemType::Other.encode_to(&mut v);
 				val.encode_to(&mut v);
@@ -427,13 +458,14 @@ mod tests {
 			logs: vec![
 				DigestItem::ChangesTrieRoot(4),
 				DigestItem::Other(vec![1, 2, 3]),
-				DigestItem::Seal(*b"test", vec![1, 2, 3])
+				DigestItem::Seal(*b"test", vec![1, 2, 3]),
+				DigestItem::MerkleMountainRangeRoot(5),
 			],
 		};
 
 		assert_eq!(
 			::serde_json::to_string(&digest).unwrap(),
-			r#"{"logs":["0x0204000000","0x000c010203","0x05746573740c010203"]}"#
+			r#"{"logs":["0x0204000000","0x000c010203","0x05746573740c010203","0x1205000000"]}"#
 		);
 	}
 }

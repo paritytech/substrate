@@ -58,3 +58,25 @@ fn non_system_digest_item_encoding() {
 	let decoded: DigestItem<H256> = Decode::decode(&mut &encoded[..]).unwrap();
 	assert_eq!(item, decoded);
 }
+
+#[test]
+fn non_system_mmr_digest_item_encoding() {
+	let item = DigestItem::MerkleMountainRangeRoot::<H256>(H256::default());
+	let encoded = item.encode();
+	assert_eq!(encoded, vec![
+		// type = DigestItemType::MerkleMountainRangeRoot
+		18,
+		// trie root
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+		0, 0, 0, 0,
+	]);
+
+	let decoded: DigestItem<H256> = Decode::decode(&mut &encoded[..]).unwrap();
+	assert_eq!(item, decoded);
+}
