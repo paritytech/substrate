@@ -382,7 +382,7 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 				let block_number = match api.block_id_to_number(&id) {
 					Ok(Some(number)) => number,
 					_ => {
-						log::trace!(target: "txqueue", "Skipping chain event - no number for that block {:?}", id);
+						log::trace!(target: "txpool", "Skipping chain event - no number for that block {:?}", id);
 						return Box::pin(ready(()));
 					}
 				};
