@@ -451,8 +451,9 @@ impl<B: BlockT, N: Network<B>> Future for NetworkBridge<B, N> {
 		}
 
 		match self.gossip_engine.lock().poll_unpin(cx) {
-			// The gossip engine future finished. We should do the same.
-			Poll::Ready(()) => return Poll::Ready(Ok(())),
+			Poll::Ready(()) => return Poll::Ready(
+				Err(Error::Network("Gossip engine future finished.".into()))
+			),
 			Poll::Pending => {},
 		}
 

@@ -40,7 +40,7 @@ sc-client = { version = "0.8.0-alpha.4", optional = true, path = "../../client" 
 sp-trie = { version = "2.0.0-alpha.4", default-features = false, path = "../../primitives/trie" }
 sp-transaction-pool = { version = "2.0.0-alpha.4", default-features = false, path = "../../primitives/transaction-pool" }
 trie-db = { version = "0.20.0", default-features = false }
-parity-util-mem = { version = "0.5.2", default-features = false, features = ["primitive-types"] }
+parity-util-mem = { version = "0.6.0", default-features = false, features = ["primitive-types"] }
 
 [dev-dependencies]
 sc-block-builder = { version = "0.8.0-alpha.4", path = "../../client/block-builder" }

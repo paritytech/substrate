@@ -24,7 +24,7 @@ sp-transaction-pool = { version = "2.0.0-alpha.4", path = "../../primitives/tran
 sc-client-api = { version = "2.0.0-alpha.4", path = "../api" }
 sp-blockchain = { version = "2.0.0-alpha.4", path = "../../primitives/blockchain" }
 futures-timer = "2.0"
-parity-util-mem = { version = "0.5.2", default-features = false, features = ["primitive-types"] }
+parity-util-mem = { version = "0.6.0", default-features = false, features = ["primitive-types"] }
 
 [dev-dependencies]
 sp-keyring = { version = "2.0.0-alpha.4", path = "../../primitives/keyring" }

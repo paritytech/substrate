@@ -19,3 +19,6 @@ lru = "0.4.3"
 sc-network = { version = "0.8.0-alpha.4", path = "../network" }
 sp-runtime = { version = "2.0.0-alpha.4", path = "../../primitives/runtime" }
 wasm-timer = "0.2"
+
+[dev-dependencies]
+substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../test-utils/runtime/client" }
