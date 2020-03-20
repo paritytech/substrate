@@ -130,8 +130,8 @@ where
 	let rem_inner = rem.saturated_into::<P::Inner>();
 	// `P::Upper` always fits `P::Inner::max_value().pow(2)`, thus it fits `rem * numer`.
 	let rem_mul_upper = P::Upper::from(rem_inner) * numer_upper;
-	// `rem` is less than `denom`, so `rem * numer / denom` is less than `numer`, which fits in
-	// `P::Inner`.
+	// `rem` is less than `denom`, so if `numer` is an integer then `rem * numer / denom` is less
+	// than `numer`, which fits in `P::Inner`.
 	let mut rem_mul_div_inner = (rem_mul_upper / denom_upper).saturated_into::<P::Inner>();
 	// Check if the fractional part of the result is closer to 1 than 0. 
 	if !truncate && rem_mul_upper % denom_upper > denom_upper / 2.into() {
@@ -689,6 +689,77 @@ macro_rules! implement_per_thing {
 					($max as $upper_type).pow(2) / 2,
 				);
 			}
+
+            #[test]
+            fn rational_mul_correction_works() {
+                assert_eq!(
+                    super::rational_mul_correction::<$type, $name>(
+                        <$type>::max_value(), 
+                        <$type>::max_value(), 
+                        <$type>::max_value(), 
+                        false,
+                    ),
+                    0,
+                );
+                assert_eq!(
+                    super::rational_mul_correction::<$type, $name>(
+                        <$type>::max_value() - 1, 
+                        <$type>::max_value(), 
+                        <$type>::max_value(), 
+                        false,
+                    ),
+                    <$type>::max_value() - 1,
+                );
+                assert_eq!(
+                    super::rational_mul_correction::<$upper_type, $name>(
+                        ((<$type>::max_value() - 1) as $upper_type).pow(2), 
+                        <$type>::max_value(), 
+                        <$type>::max_value(), 
+                        false,
+                    ),
+                    1,
+                );
+                // ((max^2 - 1) % max) * max / max == max - 1
+                assert_eq!(
+                    super::rational_mul_correction::<$upper_type, $name>(
+                        (<$type>::max_value() as $upper_type).pow(2) - 1, 
+                        <$type>::max_value(), 
+                        <$type>::max_value(), 
+                        false,
+                    ),
+                    (<$type>::max_value() - 1).into(),
+                );
+                // (max % 2) * max / 2 == max / 2
+                assert_eq!(
+                    super::rational_mul_correction::<$upper_type, $name>(
+                        (<$type>::max_value() as $upper_type).pow(2), 
+                        <$type>::max_value(), 
+                        2 as $type,
+                        false,
+                    ),
+                    <$type>::max_value() as $upper_type / 2,
+                );
+                // ((max^2 - 1) % max) * 2 / max == 2 (rounded up)
+                assert_eq!(
+                    super::rational_mul_correction::<$upper_type, $name>(
+                        (<$type>::max_value() as $upper_type).pow(2) - 1, 
+                        2 as $type,
+                        <$type>::max_value(), 
+                        false,
+                    ),
+                    2,
+                );
+                // ((max^2 - 1) % max) * 2 / max == 1 (truncated)
+                assert_eq!(
+                    super::rational_mul_correction::<$upper_type, $name>(
+                        (<$type>::max_value() as $upper_type).pow(2) - 1, 
+                        2 as $type,
+                        <$type>::max_value(), 
+                        true,
+                    ),
+                    1,
+                );
+            }
 		}
 	};
 }
