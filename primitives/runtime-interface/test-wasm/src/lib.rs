@@ -21,7 +21,7 @@
 use sp_runtime_interface::runtime_interface;
 
 #[cfg(not(feature = "std"))]
-use sp_std::{vec, vec::Vec, mem, convert::TryFrom};
+use sp_std::{prelude::*, mem, convert::TryFrom};
 
 use sp_core::{sr25519::Public, wasm_export_functions};
 
@@ -102,6 +102,15 @@ pub trait TestApi {
 	/// Gets an `i128` and returns this value
 	fn get_and_return_i128(val: i128) -> i128 {
 		val
+	}
+
+	fn verify_input(&self, data: u32) -> bool {
+        data == 42 || data == 50
+    }
+
+    #[version(2)]
+    fn verify_input(&self, data: u32) -> bool {
+        data == 42
 	}
 }
 
@@ -231,4 +240,14 @@ wasm_export_functions! {
 		}
 		assert_eq!(0, len);
 	}
+
+	fn test_verification_of_input_new() {
+		// we fix new api to accept only 42 as a proper input
+		// as opposed to sp-runtime-interface-test-wasm-deprecated::test_api::verify_input
+		// which accepted 42 and 50.
+        assert!(test_api::verify_input(42));
+
+		assert!(!test_api::verify_input(50));
+		assert!(!test_api::verify_input(102));
+    }
 }

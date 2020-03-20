@@ -148,7 +148,7 @@ pub use sp_std;
 /// ```
 ///
 ///
-/// The given example will generate roughly the following code for native:
+/// The given example will generate roughly the following code for native (modulo versionning):
 ///
 /// ```
 /// // The name of the trait is converted to snake case and used as mod name.

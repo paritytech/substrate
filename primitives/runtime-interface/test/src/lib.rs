@@ -24,11 +24,7 @@ use sp_runtime_interface::*;
 use sp_runtime_interface_test_wasm::{WASM_BINARY, test_api::HostFunctions};
 use sp_runtime_interface_test_wasm_deprecated::{
 	WASM_BINARY as WASM_BINARY_DEPRECATED,
-	test_api::HostFunctions as HostFunctionsDeprecated
-};
-use sp_runtime_interface_test_wasm_newest::{
-	WASM_BINARY as WASM_BINARY_NEWEST,
-	test_api::HostFunctions as HostFunctionsNewest
+	test_api::HostFunctions as HostFunctionsDeprecated,
 };
 
 use sp_wasm_interface::HostFunctions as HostFunctionsT;
@@ -143,27 +139,23 @@ fn test_array_return_value_memory_is_freed() {
 }
 
 #[test]
-fn test_transform_deprecated_and_new() {
+fn test_verification_of_input() {
 	call_wasm_method::<HostFunctionsDeprecated>(
 		&WASM_BINARY_DEPRECATED[..],
-		"test_input_transform",
+		"test_verification_of_input_old",
 	);
-	call_wasm_method::<HostFunctionsNewest>(
-		&WASM_BINARY_NEWEST[..],
-		"test_input_transform",
+	call_wasm_method::<HostFunctions>(
+		&WASM_BINARY[..],
+		"test_verification_of_input_new",
 	);
 }
 
 #[test]
-fn test_transform_deprecated_wasm_with_newest_host_functions() {
-
-	for f in HostFunctionsNewest::host_functions() {
-		println!("{:?}", f.name())
-	}
+fn test_verification_of_input_deprecated_wasm_with_newest_host_functions() {
 	// we call to the old wasm binary with a new host functions
 	// old versions of host functions should be called and test should be ok!
-	call_wasm_method::<HostFunctionsNewest>(
+	call_wasm_method::<HostFunctions>(
 		&WASM_BINARY_DEPRECATED[..],
-		"test_input_transform",
+		"test_verification_of_input_old",
 	);
 }

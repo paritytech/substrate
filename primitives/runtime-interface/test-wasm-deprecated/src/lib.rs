@@ -25,14 +25,6 @@ use sp_runtime_interface::runtime_interface;
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
-#[runtime_interface]
-pub trait TestApi {
-	/// Returns the input transformed
-	fn transform(number: u64) -> u64 {
-		number * 2
-	}
-}
-
 /// This function is not used, but we require it for the compiler to include `sp-io`.
 /// `sp-io` is required for its panic and oom handler.
 #[no_mangle]
@@ -40,10 +32,21 @@ pub fn import_sp_io() {
 	sp_io::misc::print_utf8(&[]);
 }
 
-wasm_export_functions! {
-	fn test_input_transform() {
-		let res = test_api::transform(5);
+#[runtime_interface]
+pub trait TestApi {
+    fn verify_input(&self, data: u32) -> bool {
+        data == 42 || data == 50
+    }
+}
 
-		assert_eq!(10, res);
-	}
+wasm_export_functions! {
+	fn test_verification_of_input_old() {
+		// old api allows 42 and 50, which is incorrect (42 is a true answer only)
+		// but it is how old runtime works!
+        assert!(test_api::verify_input(42));
+        assert!(test_api::verify_input(50));
+
+		assert!(!test_api::verify_input(142));
+		assert!(!test_api::verify_input(0));
+    }
 }
