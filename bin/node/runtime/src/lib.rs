@@ -899,6 +899,13 @@ impl_runtime_apis! {
 					steps,
 					repeat,
 				),
+				b"pallet-treasury" | b"treasury" => Treasury::run_benchmark(
+					extrinsic,
+					lowest_range_values,
+					highest_range_values,
+					steps,
+					repeat,
+				),
 				b"pallet-vesting" | b"vesting" => Vesting::run_benchmark(
 					extrinsic,
 					lowest_range_values,
