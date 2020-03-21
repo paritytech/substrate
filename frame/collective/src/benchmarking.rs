@@ -19,10 +19,10 @@
 use super::*;
 
 use frame_system::{RawOrigin as SystemOrigin, Call as SystemCall};
-use frame_benchmarking::{benchmarks_instance, account, Benchmarking, BenchmarkResults};
+use frame_benchmarking::{benchmarks_instance, account};
 
-use crate::Module as Collective;
 use frame_system::Module as System;
+use crate::Module as Collective;
 
 const SEED: u32 = 0;
 
@@ -81,4 +81,82 @@ benchmarks_instance! {
 		let member_count = 3;
 
 	}: propose(SystemOrigin::Signed(caller), member_count, Box::new(proposal.into()))
+
+	vote {
+		let u in ...;
+
+		let caller1: T::AccountId = account("caller1", u, SEED);
+		let caller2: T::AccountId = account("caller2", u, SEED);
+
+		let proposal: Box<T::Proposal> = Box::new(SystemCall::<T>::remark(Default::default()).into());
+		let proposal_hash = T::Hashing::hash_of(&proposal);
+
+		Collective::<T, _>::set_members(SystemOrigin::Root.into(), vec![caller1.clone(), caller2.clone()], None)?;
+
+		let member_count = 3;
+		Collective::<T, _>::propose(SystemOrigin::Signed(caller1.clone()).into(), member_count, proposal)?;
+
+		let index = 0;
+		let approve = true;
+
+	}: _(SystemOrigin::Signed(caller2), proposal_hash, index, approve)
+
+	vote_not_approve {
+		let u in ...;
+
+		let caller1: T::AccountId = account("caller1", u, SEED);
+		let caller2: T::AccountId = account("caller2", u, SEED);
+
+		let proposal: Box<T::Proposal> = Box::new(SystemCall::<T>::remark(Default::default()).into());
+		let proposal_hash = T::Hashing::hash_of(&proposal);
+
+		Collective::<T, _>::set_members(SystemOrigin::Root.into(), vec![caller1.clone(), caller2.clone()], None)?;
+
+		let member_count = 3;
+		Collective::<T, _>::propose(SystemOrigin::Signed(caller1.clone()).into(), member_count, proposal)?;
+
+		let index = 0;
+		let approve = false;
+
+	}: vote(SystemOrigin::Signed(caller2), proposal_hash, index, approve)
+
+	vote_approved {
+		let u in ...;
+
+		let caller1: T::AccountId = account("caller1", u, SEED);
+		let caller2: T::AccountId = account("caller2", u, SEED);
+		
+		let proposal: Box<T::Proposal> = Box::new(SystemCall::<T>::remark(Default::default()).into());
+		let proposal_hash = T::Hashing::hash_of(&proposal);
+
+		Collective::<T, _>::set_members(SystemOrigin::Root.into(), vec![caller1.clone(), caller2.clone()], None)?;
+
+		let member_count = 2;
+		Collective::<T, _>::propose(SystemOrigin::Signed(caller1.clone()).into(), member_count, proposal)?;
+
+		let index = 0;
+		let approve = true;
+
+	}: vote(SystemOrigin::Signed(caller2), proposal_hash, index, approve)
+
+	close {
+		let u in ...;
+
+		let caller1: T::AccountId = account("caller1", u, SEED);
+		let caller2: T::AccountId = account("caller2", u, SEED);
+		
+		let proposal: Box<T::Proposal> = Box::new(SystemCall::<T>::remark(Default::default()).into());
+		let proposal_hash = T::Hashing::hash_of(&proposal);
+
+		Collective::<T, _>::set_members(SystemOrigin::Root.into(), vec![caller1.clone(), caller2.clone()], None)?;
+		let member_count = 2;
+		Collective::<T, _>::propose(SystemOrigin::Signed(caller1.clone()).into(), member_count, proposal)?;
+
+		let index = 0;
+		let approve = true;
+
+		let vote_end = T::MotionDuration::get() + 1u32.into();
+		System::<T>::set_block_number(vote_end);
+
+	}: _(SystemOrigin::Signed(caller2), proposal_hash, index)
 }
