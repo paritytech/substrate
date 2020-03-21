@@ -57,4 +57,28 @@ benchmarks_instance! {
 		Collective::<T, _>::set_members(SystemOrigin::Root.into(), vec![caller.clone()], None)?;
 
 	}: _(SystemOrigin::Signed(caller), Box::new(proposal.into()))
+
+	propose {
+		let u in ...;
+
+		let caller: T::AccountId = account("caller", u, SEED);
+		let proposal = SystemCall::<T>::remark(Default::default());
+
+		Collective::<T, _>::set_members(SystemOrigin::Root.into(), vec![caller.clone()], None)?;
+
+		let member_count = 0;
+
+	}: _(SystemOrigin::Signed(caller), member_count, Box::new(proposal.into()))
+
+	propose_else_branch {
+		let u in ...;
+
+		let caller: T::AccountId = account("caller", u, SEED);
+		let proposal = SystemCall::<T>::remark(Default::default());
+
+		Collective::<T, _>::set_members(SystemOrigin::Root.into(), vec![caller.clone()], None)?;
+
+		let member_count = 3;
+
+	}: propose(SystemOrigin::Signed(caller), member_count, Box::new(proposal.into()))
 }
