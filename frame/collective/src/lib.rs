@@ -60,12 +60,12 @@ pub type ProposalIndex = u32;
 /// vote exactly once, therefore also the number of votes for any given motion.
 pub type MemberCount = u32;
 
-pub trait Trait<I=DefaultInstance>: frame_system::Trait {
+pub trait Trait<I: Instance=DefaultInstance>: frame_system::Trait {
 	/// The outer origin type.
 	type Origin: From<RawOrigin<Self::AccountId, I>>;
 
 	/// The outer call dispatch type.
-	type Proposal: Parameter + Dispatchable<Origin=<Self as Trait<I>>::Origin> + From<frame_system::Call<Self>>;
+	type Proposal: Parameter + Dispatchable<Origin=<Self as Trait<I>>::Origin> + From<Call<Self, I>>;
 
 	/// The outer event type.
 	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Trait>::Event>;

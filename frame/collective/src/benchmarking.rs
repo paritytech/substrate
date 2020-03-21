@@ -18,7 +18,7 @@
 
 use super::*;
 
-use frame_system::{RawOrigin as SystemOrigin, Call as SystemCall};
+use frame_system::RawOrigin as SystemOrigin;
 use frame_benchmarking::{benchmarks_instance, account};
 
 use frame_system::Module as System;
@@ -52,17 +52,17 @@ benchmarks_instance! {
 		let u in ...;
 
 		let caller: T::AccountId = account("caller", u, SEED);
-		let proposal = SystemCall::<T>::remark(Default::default());
+		let proposal: T::Proposal = Call::<T, I>::close(Default::default(), Default::default()).into();
 
 		Collective::<T, _>::set_members(SystemOrigin::Root.into(), vec![caller.clone()], None)?;
 
-	}: _(SystemOrigin::Signed(caller), Box::new(proposal.into()))
+	}: _(SystemOrigin::Signed(caller), Box::new(proposal))
 
 	propose {
 		let u in ...;
 
 		let caller: T::AccountId = account("caller", u, SEED);
-		let proposal = SystemCall::<T>::remark(Default::default());
+		let proposal: T::Proposal = Call::<T, I>::close(Default::default(), Default::default()).into();
 
 		Collective::<T, _>::set_members(SystemOrigin::Root.into(), vec![caller.clone()], None)?;
 
@@ -74,7 +74,7 @@ benchmarks_instance! {
 		let u in ...;
 
 		let caller: T::AccountId = account("caller", u, SEED);
-		let proposal = SystemCall::<T>::remark(Default::default());
+		let proposal: T::Proposal = Call::<T, I>::close(Default::default(), Default::default()).into();
 
 		Collective::<T, _>::set_members(SystemOrigin::Root.into(), vec![caller.clone()], None)?;
 
@@ -88,7 +88,7 @@ benchmarks_instance! {
 		let caller1: T::AccountId = account("caller1", u, SEED);
 		let caller2: T::AccountId = account("caller2", u, SEED);
 
-		let proposal: Box<T::Proposal> = Box::new(SystemCall::<T>::remark(Default::default()).into());
+		let proposal: Box<T::Proposal> = Box::new(Call::<T, I>::close(Default::default(), Default::default()).into());
 		let proposal_hash = T::Hashing::hash_of(&proposal);
 
 		Collective::<T, _>::set_members(SystemOrigin::Root.into(), vec![caller1.clone(), caller2.clone()], None)?;
@@ -107,7 +107,7 @@ benchmarks_instance! {
 		let caller1: T::AccountId = account("caller1", u, SEED);
 		let caller2: T::AccountId = account("caller2", u, SEED);
 
-		let proposal: Box<T::Proposal> = Box::new(SystemCall::<T>::remark(Default::default()).into());
+		let proposal: Box<T::Proposal> = Box::new(Call::<T, I>::close(Default::default(), Default::default()).into());
 		let proposal_hash = T::Hashing::hash_of(&proposal);
 
 		Collective::<T, _>::set_members(SystemOrigin::Root.into(), vec![caller1.clone(), caller2.clone()], None)?;
@@ -126,7 +126,7 @@ benchmarks_instance! {
 		let caller1: T::AccountId = account("caller1", u, SEED);
 		let caller2: T::AccountId = account("caller2", u, SEED);
 		
-		let proposal: Box<T::Proposal> = Box::new(SystemCall::<T>::remark(Default::default()).into());
+		let proposal: Box<T::Proposal> = Box::new(Call::<T, I>::close(Default::default(), Default::default()).into());
 		let proposal_hash = T::Hashing::hash_of(&proposal);
 
 		Collective::<T, _>::set_members(SystemOrigin::Root.into(), vec![caller1.clone(), caller2.clone()], None)?;
@@ -145,7 +145,7 @@ benchmarks_instance! {
 		let caller1: T::AccountId = account("caller1", u, SEED);
 		let caller2: T::AccountId = account("caller2", u, SEED);
 		
-		let proposal: Box<T::Proposal> = Box::new(SystemCall::<T>::remark(Default::default()).into());
+		let proposal: Box<T::Proposal> = Box::new(Call::<T, I>::close(Default::default(), Default::default()).into());
 		let proposal_hash = T::Hashing::hash_of(&proposal);
 
 		Collective::<T, _>::set_members(SystemOrigin::Root.into(), vec![caller1.clone(), caller2.clone()], None)?;
