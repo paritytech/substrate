@@ -631,6 +631,7 @@ mod compatibility_test {
 		));
 		let message = b"Verifying that I am the owner of 5G9hQLdsKQswNPgB499DeA5PkFBbgkLPJWkkS6FAM6xGQ8xD. Hash: 221455a3\n";
 		assert!(Pair::verify_deprecated(&signature, &message[..], &public));
+		assert!(!Pair::verify(&signature, &message[..], &public));
 	}
 }
 
@@ -802,6 +803,7 @@ mod test {
 			"28a854d54903e056f89581c691c1f7d2ff39f8f896c9e9c22475e60902cc2b3547199e0e91fa32902028f2ca2355e8cdd16cfe19ba5e8b658c94aa80f3b81a00"
 		));
 		assert!(Pair::verify_deprecated(&js_signature, b"SUBSTRATE", &public));
+		assert!(!Pair::verify(&js_signature, b"SUBSTRATE", &public));
 	}
 
 	#[test]
