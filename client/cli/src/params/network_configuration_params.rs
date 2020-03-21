@@ -83,9 +83,9 @@ pub struct NetworkConfigurationParams {
 	#[structopt(long = "no-mdns")]
 	pub no_mdns: bool,
 
-	/// Maximum number of peers to ask the same blocks in parallel.
+	/// Maximum number of peers from which to ask for the same blocks in parallel.
 	///
-	/// This allows downlading announced blocks from multiple peers. Decrease to save
+	/// This allows downloading announced blocks from multiple peers. Decrease to save
 	/// traffic and risk increased latency.
 	#[structopt(long = "max-parallel-downloads", value_name = "COUNT", default_value = "5")]
 	pub max_parallel_downloads: u32,

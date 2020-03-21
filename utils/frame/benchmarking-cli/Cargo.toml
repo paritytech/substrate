@@ -16,6 +16,7 @@ sc-cli = { version = "0.8.0-alpha.4", path = "../../../client/cli" }
 sc-client = { version = "0.8.0-alpha.4", path = "../../../client" }
 sc-client-db = { version = "0.8.0-alpha.4", path = "../../../client/db" }
 sc-executor = { version = "0.8.0-alpha.4", path = "../../../client/executor" }
+sp-externalities = { version = "0.8.0-alpha.4", path = "../../../primitives/externalities" }
 sp-runtime = { version = "2.0.0-alpha.4", path = "../../../primitives/runtime" }
 sp-state-machine = { version = "0.8.0-alpha.4", path = "../../../primitives/state-machine" }
 structopt = "0.3.8"

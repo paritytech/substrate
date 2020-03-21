@@ -23,7 +23,12 @@ use sc_service::{Configuration, ChainSpec};
 use sc_executor::{NativeExecutor, NativeExecutionDispatch};
 use codec::{Encode, Decode};
 use frame_benchmarking::BenchmarkResults;
-use sp_core::tasks;
+use sp_core::{
+	tasks,
+	traits::KeystoreExt,
+	testing::KeyStore,
+};
+use sp_externalities::Extensions;
 
 /// The `benchmark` command used to benchmark FRAME Pallets.
 #[derive(Debug, structopt::StructOpt, Clone)]
@@ -106,6 +111,9 @@ impl BenchmarkCmd {
 			2, // The runtime instances cache size.
 		);
 
+		let mut extensions = Extensions::default();
+		extensions.register(KeystoreExt(KeyStore::new()));
+
 		let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
 			&state,
 			None,
@@ -120,7 +128,7 @@ impl BenchmarkCmd {
 				self.steps.clone(),
 				self.repeat,
 			).encode(),
-			Default::default(),
+			extensions,
 			&sp_state_machine::backend::BackendRuntimeCode::new(&state).runtime_code()?,
 			tasks::executor(),
 		)
