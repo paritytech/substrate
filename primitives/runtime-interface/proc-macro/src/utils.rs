@@ -225,10 +225,8 @@ fn parse_version_attribute(version: &Attribute) -> Result<u32> {
 	);
 
 	match meta {
-		Meta::List(list) => {
-			if list.nested.len() != 1 {
-				err
-			} else if let Some(NestedMeta::Lit(Lit::Int(i))) = list.nested.first() {
+		Meta::List(list) if list.nested.len() == 1 => {
+			if let Some(NestedMeta::Lit(Lit::Int(i))) = list.nested.first() {
 				i.base10_parse()
 			} else {
 				err
