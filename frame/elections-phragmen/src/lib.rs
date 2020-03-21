@@ -159,8 +159,7 @@ decl_storage! {
 		pub ElectionRounds get(fn election_rounds): u32 = Zero::zero();
 
 		/// Votes and locked stake of a particular voter.
-		pub Voting get:
-			map hasher(twox_64_concat) T::AccountId => (BalanceOf<T>, Vec<T::AccountId>);
+		pub Voting: map hasher(twox_64_concat) T::AccountId => (BalanceOf<T>, Vec<T::AccountId>);
 
 		/// The present candidate list. Sorted based on account-id. A current member or runner-up
 		/// can never enter this vector and is always implicitly assumed to be a candidate.
@@ -202,17 +201,17 @@ decl_error! {
 	}
 }
 
-mod migrations {
+mod migration {
 	use super::*;
 	use frame_support::{migration::{StorageKeyIterator, take_storage_item}, Twox64Concat};
-	fn migrate<T: Trait>() {
+	pub fn migrate<T: Trait>() {
 		for (who, votes) in StorageKeyIterator
 			::<T::AccountId, Vec<T::AccountId>, Twox64Concat>
 			::new(b"PhragmenElection", b"VotesOf")
 			.drain()
 		{
-			if let Some(stake) = take_storage_item::<T::AccountId, BalanceOf<T>, Twox64Concat>(b"PhragmenElection", b"VotesOf", &who) {
-				Voting::<T>::put(who, (stake, votes));
+			if let Some(stake) = take_storage_item::<_, BalanceOf<T>, Twox64Concat>(b"PhragmenElection", b"VotesOf", &who) {
+				Voting::<T>::insert(who, (stake, votes));
 			}
 		}
 	}
@@ -223,6 +222,10 @@ decl_module! {
 		type Error = Error<T>;
 
 		fn deposit_event() = default;
+
+		fn on_runtime_upgrade() {
+			migration::migrate::<T>();
+		}
 
 		const CandidacyBond: BalanceOf<T> = T::CandidacyBond::get();
 		const VotingBond: BalanceOf<T> = T::VotingBond::get();
@@ -537,7 +540,7 @@ impl<T: Trait> Module<T> {
 	///
 	/// State: O(1).
 	fn is_voter(who: &T::AccountId) -> bool {
-		<StakeOf<T>>::contains_key(who)
+		Voting::<T>::contains_key(who)
 	}
 
 	/// Check if `who` is currently an active member.
@@ -614,7 +617,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// The locked stake of a voter.
-	fn votes_of(who: &T::AccountId) -> BalanceOf<T> {
+	fn votes_of(who: &T::AccountId) -> Vec<T::AccountId> {
 		Voting::<T>::get(who).1
 	}
 
@@ -1261,13 +1264,13 @@ mod tests {
 
 			assert_eq!(balances(&2), (18, 2));
 			assert_eq!(has_lock(&2), 20);
-			assert_eq!(Elections::stake_of(2), 20);
+			assert_eq!(Elections::locked_stake_of(&2), 20);
 
 			// can update; different stake; different lock and reserve.
 			assert_ok!(Elections::vote(Origin::signed(2), vec![5, 4], 15));
 			assert_eq!(balances(&2), (18, 2));
 			assert_eq!(has_lock(&2), 15);
-			assert_eq!(Elections::stake_of(2), 15);
+			assert_eq!(Elections::locked_stake_of(&2), 15);
 		});
 	}
 
@@ -1382,7 +1385,7 @@ mod tests {
 
 			assert_ok!(Elections::vote(Origin::signed(2), vec![4, 5], 30));
 			// you can lie but won't get away with it.
-			assert_eq!(Elections::stake_of(2), 20);
+			assert_eq!(Elections::locked_stake_of(&2), 20);
 			assert_eq!(has_lock(&2), 20);
 		});
 	}
@@ -1396,16 +1399,16 @@ mod tests {
 			assert_ok!(Elections::vote(Origin::signed(3), vec![5], 30));
 
 			assert_eq_uvec!(all_voters(), vec![2, 3]);
-			assert_eq!(Elections::stake_of(2), 20);
-			assert_eq!(Elections::stake_of(3), 30);
-			assert_eq!(Elections::votes_of(2), vec![5]);
-			assert_eq!(Elections::votes_of(3), vec![5]);
+			assert_eq!(Elections::locked_stake_of(&2), 20);
+			assert_eq!(Elections::locked_stake_of(&3), 30);
+			assert_eq!(Elections::votes_of(&2), vec![5]);
+			assert_eq!(Elections::votes_of(&3), vec![5]);
 
 			assert_ok!(Elections::remove_voter(Origin::signed(2)));
 
 			assert_eq_uvec!(all_voters(), vec![3]);
-			assert_eq!(Elections::votes_of(2), vec![]);
-			assert_eq!(Elections::stake_of(2), 0);
+			assert_eq!(Elections::votes_of(&2), vec![]);
+			assert_eq!(Elections::locked_stake_of(&2), 0);
 
 			assert_eq!(balances(&2), (20, 0));
 			assert_eq!(Balances::locks(&2).len(), 0);
@@ -1576,9 +1579,9 @@ mod tests {
 
 			assert_eq_uvec!(all_voters(), vec![2, 3, 4]);
 
-			assert_eq!(Elections::votes_of(2), vec![5]);
-			assert_eq!(Elections::votes_of(3), vec![3]);
-			assert_eq!(Elections::votes_of(4), vec![4]);
+			assert_eq!(Elections::votes_of(&2), vec![5]);
+			assert_eq!(Elections::votes_of(&3), vec![3]);
+			assert_eq!(Elections::votes_of(&4), vec![4]);
 
 			assert_eq!(Elections::candidates(), vec![3, 4, 5]);
 			assert_eq!(<Candidates<Test>>::decode_len().unwrap(), 3);

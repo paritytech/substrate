@@ -190,7 +190,7 @@ pub fn remove_storage_prefix(module: &[u8], item: &[u8], hash: &[u8]) {
 pub fn take_storage_item<K: Encode + Sized, T: Decode + Sized, H: StorageHasher>(
 	module: &[u8],
 	item: &[u8],
-	key: EncodeLike<K>,
+	key: K,
 ) -> Option<T> {
-	take_storage_value(module, item, &item_key.using_encoded(H::hash))
+	take_storage_value(module, item, key.using_encoded(H::hash).as_ref())
 }
