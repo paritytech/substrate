@@ -20,7 +20,7 @@ use std::collections::{HashMap, HashSet, hash_map::Entry};
 use std::sync::Arc;
 use std::iter;
 use std::time;
-use log::{trace, debug};
+use log::trace;
 use futures::channel::mpsc;
 use lru::LruCache;
 use libp2p::PeerId;
@@ -399,7 +399,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 				if let Some(ref mut peer) = self.peers.get_mut(&who) {
 					peer.known_messages.insert(message_hash);
 					if let Entry::Occupied(mut entry) = self.live_message_sinks.entry((engine_id, topic)) {
-						debug!(target: "gossip", "Pushing consensus message to sinks for {}.", topic);
+						trace!(target: "gossip", "Pushing consensus message to sinks for {}.", topic);
 						entry.get_mut().retain(|sink| {
 							if let Err(e) = sink.unbounded_send(TopicNotification {
 								message: message.clone(),
