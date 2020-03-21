@@ -3982,7 +3982,6 @@ dependencies = [
  "frame-system",
  "hex-literal",
  "pallet-balances",
- "pallet-democracy",
  "parity-scale-codec",
  "serde",
  "sp-core",

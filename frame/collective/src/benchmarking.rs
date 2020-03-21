@@ -19,14 +19,14 @@
 use super::*;
 
 use frame_system::{RawOrigin as SystemOrigin, Call as SystemCall};
-use frame_benchmarking::{benchmarks, account};
+use frame_benchmarking::{benchmarks_instance, account, Benchmarking, BenchmarkResults};
 
 use crate::Module as Collective;
 use frame_system::Module as System;
 
 const SEED: u32 = 0;
 
-benchmarks! {
+benchmarks_instance! {
 	_{
 		// User account seed
 		let u in 1 .. 1000 => ();
@@ -51,8 +51,10 @@ benchmarks! {
 	execute {
 		let u in ...;
 
-		let caller = account("caller", u, SEED);
-		let proposal = SystemCall::remark(Default::default());
+		let caller: T::AccountId = account("caller", u, SEED);
+		let proposal = SystemCall::<T>::remark(Default::default());
+
+		Collective::<T, _>::set_members(SystemOrigin::Root.into(), vec![caller.clone()], None)?;
 
 	}: _(SystemOrigin::Signed(caller), Box::new(proposal.into()))
 }

@@ -489,3 +489,370 @@ macro_rules! impl_benchmark {
 		}
 	}
 }
+
+
+
+
+////////////////////////////////
+// Benchmark macro for instances
+// TODO: simplify/merge with above.
+////////////////////////////////
+
+
+
+#[macro_export]
+macro_rules! benchmarks_instance {
+	(
+		_ {
+			$(
+				let $common:ident in $common_from:tt .. $common_to:expr => $common_instancer:expr;
+			)*
+		}
+		$( $rest:tt )*
+	) => {
+		$crate::benchmarks_iter_instance!({
+			$( { $common , $common_from , $common_to , $common_instancer } )*
+		} ( ) $( $rest )* );
+	}
+}
+
+#[macro_export]
+#[allow(missing_docs)]
+macro_rules! benchmarks_iter_instance {
+	// mutation arm:
+	(
+		{ $( $common:tt )* }
+		( $( $names:ident )* )
+		$name:ident { $( $code:tt )* }: _ ( $origin:expr $( , $arg:expr )* )
+		$( $rest:tt )*
+	) => {
+		$crate::benchmarks_iter_instance! {
+			{ $( $common )* } ( $( $names )* ) $name { $( $code )* }: $name ( $origin $( , $arg )* ) $( $rest )*
+		}
+	};
+	// mutation arm:
+	(
+		{ $( $common:tt )* }
+		( $( $names:ident )* )
+		$name:ident { $( $code:tt )* }: $dispatch:ident ( $origin:expr $( , $arg:expr )* )
+		$( $rest:tt )*
+	) => {
+		$crate::benchmarks_iter_instance! {
+			{ $( $common )* } ( $( $names )* ) $name { $( $code )* }: { 
+				<Call<T, I> as $crate::Dispatchable>::dispatch(Call::<T, I>::$dispatch($($arg),*), $origin.into())?;
+			} $( $rest )*
+		}
+	};
+	// iteration arm:
+	(
+		{ $( $common:tt )* }
+		( $( $names:ident )* )
+		$name:ident { $( $code:tt )* }: $eval:block
+		$( $rest:tt )*
+	) => {
+		$crate::benchmark_backend_instance! {
+			$name { $( $common )* } { } { $eval } { $( $code )* }
+		}
+		$crate::benchmarks_iter_instance!( { $( $common )* } ( $( $names )* $name ) $( $rest )* );
+	};
+	// iteration-exit arm
+	( { $( $common:tt )* } ( $( $names:ident )* ) ) => {
+		$crate::selected_benchmark_instance!( $( $names ),* );
+		$crate::impl_benchmark_instance!( $( $names ),* );
+	}
+}
+
+#[macro_export]
+#[allow(missing_docs)]
+macro_rules! benchmark_backend_instance {
+	// parsing arms
+	($name:ident {
+		$( $common:tt )*
+	} {
+		$( PRE { $( $pre_parsed:tt )* } )*
+	} { $eval:block } {
+			let $pre_id:tt : $pre_ty:ty = $pre_ex:expr;
+			$( $rest:tt )*
+	} ) => {
+		$crate::benchmark_backend_instance! {
+			$name { $( $common )* } {
+				$( PRE { $( $pre_parsed )* } )*
+				PRE { $pre_id , $pre_ty , $pre_ex }
+			} { $eval } { $( $rest )* }
+		}
+	};
+	($name:ident {
+		$( $common:tt )*
+	} {
+		$( $parsed:tt )*
+	} { $eval:block } {
+		let $param:ident in ( $param_from:expr ) .. $param_to:expr => $param_instancer:expr;
+		$( $rest:tt )*
+	}) => {
+		$crate::benchmark_backend_instance! {
+			$name { $( $common )* } {
+				$( $parsed )*
+				PARAM { $param , $param_from , $param_to , $param_instancer }
+			} { $eval } { $( $rest )* }
+		}
+	};
+	// mutation arm to look after defaulting to a common param
+	($name:ident {
+		$( { $common:ident , $common_from:tt , $common_to:expr , $common_instancer:expr } )*
+	} {
+		$( $parsed:tt )*
+	} { $eval:block } {
+		let $param:ident in ...;
+		$( $rest:tt )*
+	}) => {
+		$crate::benchmark_backend_instance! {
+			$name {
+				$( { $common , $common_from , $common_to , $common_instancer } )*
+			} {
+				$( $parsed )*
+			} { $eval } {
+				let $param
+					in ({ $( let $common = $common_from; )* $param })
+					.. ({ $( let $common = $common_to; )* $param })
+					=> ({ $( let $common = || -> Result<(), &'static str> { $common_instancer ; Ok(()) }; )* $param()? });
+				$( $rest )*
+			}
+		}
+	};
+	// mutation arm to look after defaulting only the range to common param
+	($name:ident {
+		$( { $common:ident , $common_from:tt , $common_to:expr , $common_instancer:expr } )*
+	} {
+		$( $parsed:tt )*
+	} { $eval:block } {
+		let $param:ident in _ .. _ => $param_instancer:expr ;
+		$( $rest:tt )*
+	}) => {
+		$crate::benchmark_backend_instance! {
+			$name {
+				$( { $common , $common_from , $common_to , $common_instancer } )*
+			} {
+				$( $parsed )*
+			} { $eval } {
+				let $param
+					in ({ $( let $common = $common_from; )* $param })
+					.. ({ $( let $common = $common_to; )* $param })
+					=> $param_instancer ;
+				$( $rest )*
+			}
+		}
+	};
+	// mutation arm to look after a single tt for param_from.
+	($name:ident {
+		$( $common:tt )*
+	} {
+		$( $parsed:tt )*
+	} { $eval:block } {
+		let $param:ident in $param_from:tt .. $param_to:expr => $param_instancer:expr ;
+		$( $rest:tt )*
+	}) => {
+		$crate::benchmark_backend_instance! {
+			$name { $( $common )* } { $( $parsed )* } { $eval } {
+				let $param in ( $param_from ) .. $param_to => $param_instancer;
+				$( $rest )*
+			}
+		}
+	};
+	// mutation arm to look after the default tail of `=> ()`
+	($name:ident {
+		$( $common:tt )*
+	} {
+		$( $parsed:tt )*
+	} { $eval:block } {
+		let $param:ident in $param_from:tt .. $param_to:expr;
+		$( $rest:tt )*
+	}) => {
+		$crate::benchmark_backend_instance! {
+			$name { $( $common )* } { $( $parsed )* } { $eval } {
+				let $param in $param_from .. $param_to => ();
+				$( $rest )*
+			}
+		}
+	};
+	// mutation arm to look after `let _ =`
+	($name:ident {
+		$( $common:tt )*
+	} {
+		$( $parsed:tt )*
+	} { $eval:block } {
+		let $pre_id:tt = $pre_ex:expr;
+		$( $rest:tt )*
+	}) => {
+		$crate::benchmark_backend_instance! {
+			$name { $( $common )* } { $( $parsed )* } { $eval } {
+				let $pre_id : _ = $pre_ex;
+				$( $rest )*
+			}
+		}
+	};
+	// actioning arm
+	($name:ident {
+		$( { $common:ident , $common_from:tt , $common_to:expr , $common_instancer:expr } )*
+	} {
+		$( PRE { $pre_id:tt , $pre_ty:ty , $pre_ex:expr } )*
+		$( PARAM { $param:ident , $param_from:expr , $param_to:expr , $param_instancer:expr } )*
+	} { $eval:block } { $( $post:tt )* } ) => {
+		#[allow(non_camel_case_types)]
+		struct $name;
+		#[allow(unused_variables)]
+		impl<T: Trait<I>, I: Instance> $crate::BenchmarkingSetupInstance<T, I> for $name {
+			fn components(&self) -> Vec<($crate::BenchmarkParameter, u32, u32)> {
+				vec! [
+					$(
+						($crate::BenchmarkParameter::$param, $param_from, $param_to)
+					),*
+				]
+			}
+
+			fn instance(&self, components: &[($crate::BenchmarkParameter, u32)])
+				-> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>
+			{
+				$(
+					let $common = $common_from;
+				)*
+				$(
+					// Prepare instance
+					let $param = components.iter().find(|&c| c.0 == $crate::BenchmarkParameter::$param).unwrap().1;
+				)*
+				$(
+					let $pre_id : $pre_ty = $pre_ex;
+				)*
+				$( $param_instancer ; )*
+				$( $post )*
+
+				Ok(Box::new(move || -> Result<(), &'static str> { $eval; Ok(()) }))
+			}
+		}
+	}
+}
+
+#[macro_export]
+macro_rules! selected_benchmark_instance {
+	(
+		$( $bench:ident ),*
+	) => {
+		// The list of available benchmarks for this pallet.
+		#[allow(non_camel_case_types)]
+		enum SelectedBenchmark {
+			$( $bench, )*
+		}
+
+		// Allow us to select a benchmark from the list of available benchmarks.
+		impl<T: Trait<I>, I: Instance> $crate::BenchmarkingSetupInstance<T, I> for SelectedBenchmark {
+			fn components(&self) -> Vec<($crate::BenchmarkParameter, u32, u32)> {
+				match self {
+					$( Self::$bench => <$bench as $crate::BenchmarkingSetupInstance<T, I>>::components(&$bench), )*
+				}
+			}
+
+			fn instance(&self, components: &[($crate::BenchmarkParameter, u32)])
+				-> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>
+			{
+				match self {
+					$( Self::$bench => <$bench as $crate::BenchmarkingSetupInstance<T, I>>::instance(&$bench, components), )*
+				}
+			}
+		}
+	};
+}
+
+#[macro_export]
+macro_rules! impl_benchmark_instance {
+	(
+		$( $name:ident ),*
+	) => {
+		impl<T: Trait<I>, I: Instance> $crate::Benchmarking<$crate::BenchmarkResults> for Module<T, I> {
+			fn run_benchmark(
+				extrinsic: Vec<u8>,
+				lowest_range_values: Vec<u32>,
+				highest_range_values: Vec<u32>,
+				steps: Vec<u32>,
+				repeat: u32,
+			) -> Result<Vec<$crate::BenchmarkResults>, &'static str> {
+				// Map the input to the selected benchmark.
+				let extrinsic = sp_std::str::from_utf8(extrinsic.as_slice())
+					.map_err(|_| "`extrinsic` is not a valid utf8 string!")?;
+				let selected_benchmark = match extrinsic {
+					$( stringify!($name) => SelectedBenchmark::$name, )*
+					_ => return Err("Could not find extrinsic."),
+				};
+
+				// Warm up the DB
+				$crate::benchmarking::commit_db();
+				$crate::benchmarking::wipe_db();
+
+				let components = <SelectedBenchmark as $crate::BenchmarkingSetupInstance<T, I>>::components(&selected_benchmark);
+				let mut results: Vec<$crate::BenchmarkResults> = Vec::new();
+
+				// Default number of steps for a component.
+				let mut prev_steps = 10;
+
+				// Select the component we will be benchmarking. Each component will be benchmarked.
+				for (idx, (name, low, high)) in components.iter().enumerate() {
+					// Get the number of steps for this component.
+					let steps = steps.get(idx).cloned().unwrap_or(prev_steps);
+					prev_steps = steps;
+
+					let lowest = lowest_range_values.get(idx).cloned().unwrap_or(*low);
+					let highest = highest_range_values.get(idx).cloned().unwrap_or(*high);
+
+					let diff = highest - lowest;
+
+					// Create up to `STEPS` steps for that component between high and low.
+					let step_size = (diff / steps).max(1);
+					let num_of_steps = diff / step_size + 1;
+
+					for s in 0..num_of_steps {
+						// This is the value we will be testing for component `name`
+						let component_value = lowest + step_size * s;
+
+						// Select the max value for all the other components.
+						let c: Vec<($crate::BenchmarkParameter, u32)> = components.iter()
+							.enumerate()
+							.map(|(idx, (n, _, h))|
+								if n == name {
+									(*n, component_value)
+								} else {
+									(*n, *highest_range_values.get(idx).unwrap_or(h))
+								}
+							)
+							.collect();
+
+						// Run the benchmark `repeat` times.
+						for _ in 0..repeat {
+							// Set up the externalities environment for the setup we want to benchmark.
+							let closure_to_benchmark = <SelectedBenchmark as $crate::BenchmarkingSetupInstance<T, I>>::instance(&selected_benchmark, &c)?;
+
+							// Commit the externalities to the database, flushing the DB cache.
+							// This will enable worst case scenario for reading from the database.
+							$crate::benchmarking::commit_db();
+
+							// Time the extrinsic logic.
+							let start_extrinsic = $crate::benchmarking::current_time();
+							closure_to_benchmark()?;
+							let finish_extrinsic = $crate::benchmarking::current_time();
+							let elapsed_extrinsic = finish_extrinsic - start_extrinsic;
+
+							// Time the storage root recalculation.
+							let start_storage_root = $crate::benchmarking::current_time();
+							$crate::storage_root();
+							let finish_storage_root = $crate::benchmarking::current_time();
+							let elapsed_storage_root = finish_storage_root - start_storage_root;
+
+							results.push((c.clone(), elapsed_extrinsic, elapsed_storage_root));
+
+							// Wipe the DB back to the genesis state.
+							$crate::benchmarking::wipe_db();
+						}
+					}
+				}
+				return Ok(results);
+			}
+		}
+	}
+}
