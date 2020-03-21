@@ -30,7 +30,7 @@
 
 use crate::utils::{
 	generate_crate_access, create_exchangeable_host_function_ident, get_function_arguments,
-	get_function_argument_names, get_runtime_interface, create_host_shim_function_ident,
+	get_function_argument_names, get_runtime_interface, create_function_ident_with_version,
 };
 
 use syn::{
@@ -75,9 +75,11 @@ fn function_for_method(
 	latest_version: u32,
 	is_wasm_only: bool,
 ) -> Result<TokenStream> {
-	let std_impl =
-		if !is_wasm_only { function_std_latest_impl(method, latest_version)? }
-		else { quote!() };
+	let std_impl = if !is_wasm_only {
+		function_std_latest_impl(method, latest_version)?
+	} else {
+		quote!()
+	};
 
 	let no_std_impl = function_no_std_impl(method)?;
 
@@ -111,6 +113,9 @@ fn function_no_std_impl(method: &TraitItemMethod) -> Result<TokenStream> {
 	)
 }
 
+/// Generate call to latest function version for `cfg((feature = "std")`
+///
+/// This should generate simple `fn func(..) { func_version_<latest_version>(..) }`.
 fn function_std_latest_impl(
 	method: &TraitItemMethod,
 	latest_version: u32,
@@ -120,7 +125,7 @@ fn function_std_latest_impl(
 	let arg_names = get_function_argument_names(&method.sig).collect::<Vec<_>>();
 	let return_value = &method.sig.output;
 	let attrs = method.attrs.iter().filter(|a| !a.path.is_ident("version"));
-	let latest_function_name = create_host_shim_function_ident(&method.sig.ident, latest_version);
+	let latest_function_name = create_function_ident_with_version(&method.sig.ident, latest_version);
 
 	Ok(quote_spanned! { method.span() =>
 		#[cfg(feature = "std")]
@@ -140,7 +145,7 @@ fn function_std_impl(
 	version: u32,
 	is_wasm_only: bool,
 ) -> Result<TokenStream> {
-	let function_name = create_host_shim_function_ident(&method.sig.ident, version);
+	let function_name = create_function_ident_with_version(&method.sig.ident, version);
 
 	let crate_ = generate_crate_access();
 	let args = get_function_arguments(&method.sig).map(FnArg::Typed).chain(
@@ -181,7 +186,7 @@ fn generate_call_to_trait(
 	is_wasm_only: bool,
 ) -> TokenStream {
 	let crate_ = generate_crate_access();
-	let method_name = create_host_shim_function_ident(&method.sig.ident, version);
+	let method_name = create_function_ident_with_version(&method.sig.ident, version);
 	let expect_msg = format!(
 		"`{}` called outside of an Externalities-provided environment.",
 		method_name,

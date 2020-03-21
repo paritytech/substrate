@@ -21,7 +21,7 @@ use crate::utils::{
 	generate_crate_access,
 	get_function_argument_types_without_ref,
 	get_runtime_interface,
-	create_host_shim_function_ident,
+	create_function_ident_with_version,
 };
 
 use syn::{
@@ -78,7 +78,7 @@ impl ToEssentialTraitDef {
 
 	fn process(&mut self, method: &TraitItemMethod, version: u32) {
 		let mut folded = self.fold_trait_item_method(method.clone());
-		folded.sig.ident = create_host_shim_function_ident(&folded.sig.ident, version);
+		folded.sig.ident = create_function_ident_with_version(&folded.sig.ident, version);
 		self.methods.push(folded);
 	}
 
@@ -161,7 +161,7 @@ fn impl_trait_for_externalities(trait_def: &ItemTrait, is_wasm_only: bool) -> Re
 	let methods = interface.all_versions().map(|(version, method)| {
 		let mut cloned = method.clone();
 		cloned.attrs.retain(|a| !a.path.is_ident("version"));
-		cloned.sig.ident = create_host_shim_function_ident(&cloned.sig.ident, version);
+		cloned.sig.ident = create_function_ident_with_version(&cloned.sig.ident, version);
 		cloned
 	});
 

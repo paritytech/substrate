@@ -53,7 +53,7 @@ impl<'a> RuntimeInterfaceItem<'a> {
 		(
 			self.latest_version,
 			self.versions.get(&self.latest_version)
-				.expect("If latest_version has a value, the key with this value is in the versions")
+				.expect("If latest_version has a value, the key with this value is in the versions; qed")
 		)
 	}
 }
@@ -121,7 +121,7 @@ pub fn create_host_function_ident(name: &Ident, version: u32, trait_name: &Ident
 }
 
 /// Create the host function identifier for the given function name.
-pub fn create_host_shim_function_ident(name: &Ident, version: u32) -> Ident {
+pub fn create_function_ident_with_version(name: &Ident, version: u32) -> Ident {
 	Ident::new(
 		&format!(
 			"{}_version_{}",
@@ -215,6 +215,9 @@ fn get_trait_methods<'a>(trait_def: &'a ItemTrait) -> impl Iterator<Item = &'a T
 		})
 }
 
+/// Parse version attribute.
+///
+/// Returns error if it is in incorrent format. Correct format is only `#[version(X)]`.
 fn parse_version_attribute(version: &Attribute) -> Result<u32> {
 	let meta = version.parse_meta()?;
 
@@ -238,17 +241,14 @@ fn parse_version_attribute(version: &Attribute) -> Result<u32> {
 	}
 }
 
+/// Return item version (`#[version(X)]`) attribute, if present.
 fn get_item_version(item: &TraitItemMethod) -> Result<Option<u32>> {
-	match item.attrs.iter().find(|attr| attr.path.is_ident("version"))
+	item.attrs.iter().find(|attr| attr.path.is_ident("version"))
 		.map(|attr| parse_version_attribute(attr))
-	{
-		Some(Err(e)) => Err(e),
-		Some(Ok(v)) => Ok(Some(v)),
-		None => Ok(None),
-	}
+		.transpose()
 }
 
-/// Returns all runtime intrface members, with versions.
+/// Returns all runtime interface members, with versions.
 pub fn get_runtime_interface<'a>(trait_def: &'a ItemTrait)
 	-> Result<RuntimeInterface<'a>>
 {

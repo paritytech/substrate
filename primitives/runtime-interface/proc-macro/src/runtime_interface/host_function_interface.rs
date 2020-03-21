@@ -25,7 +25,7 @@ use crate::utils::{
 	get_function_argument_types_without_ref, get_function_argument_types_ref_and_mut,
 	get_function_argument_names_and_types_without_ref, get_function_arguments,
 	get_function_argument_types, create_exchangeable_host_function_ident, get_runtime_interface,
-	create_host_shim_function_ident,
+	create_function_ident_with_version,
 };
 
 use syn::{
@@ -323,7 +323,7 @@ fn generate_ffi_to_host_value<'a>(
 
 /// Generate the code to call the host function and the ident that stores the result.
 fn generate_host_function_call(sig: &Signature, version: u32, is_wasm_only: bool) -> TokenStream {
-	let host_function_name = create_host_shim_function_ident(&sig.ident, version);
+	let host_function_name = create_function_ident_with_version(&sig.ident, version);
 	let result_var_name = generate_host_function_result_var_name(&sig.ident);
 	let ref_and_mut = get_function_argument_types_ref_and_mut(sig).map(|ram|
 		ram.map(|(vr, vm)| quote!(#vr #vm))

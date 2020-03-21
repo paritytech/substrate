@@ -105,12 +105,12 @@ pub trait TestApi {
 	}
 
 	fn verify_input(&self, data: u32) -> bool {
-        data == 42 || data == 50
-    }
+		data == 42 || data == 50
+	}
 
-    #[version(2)]
-    fn verify_input(&self, data: u32) -> bool {
-        data == 42
+	#[version(2)]
+	fn verify_input(&self, data: u32) -> bool {
+		data == 42
 	}
 }
 
@@ -245,9 +245,9 @@ wasm_export_functions! {
 		// we fix new api to accept only 42 as a proper input
 		// as opposed to sp-runtime-interface-test-wasm-deprecated::test_api::verify_input
 		// which accepted 42 and 50.
-        assert!(test_api::verify_input(42));
+		assert!(test_api::verify_input(42));
 
 		assert!(!test_api::verify_input(50));
 		assert!(!test_api::verify_input(102));
-    }
+	}
 }

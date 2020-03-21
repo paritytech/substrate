@@ -34,19 +34,19 @@ pub fn import_sp_io() {
 
 #[runtime_interface]
 pub trait TestApi {
-    fn verify_input(&self, data: u32) -> bool {
-        data == 42 || data == 50
-    }
+	fn verify_input(&self, data: u32) -> bool {
+		data == 42 || data == 50
+	}
 }
 
 wasm_export_functions! {
 	fn test_verification_of_input_old() {
 		// old api allows 42 and 50, which is incorrect (42 is a true answer only)
 		// but it is how old runtime works!
-        assert!(test_api::verify_input(42));
-        assert!(test_api::verify_input(50));
+		assert!(test_api::verify_input(42));
+		assert!(test_api::verify_input(50));
 
 		assert!(!test_api::verify_input(142));
 		assert!(!test_api::verify_input(0));
-    }
+	}
 }
