@@ -398,7 +398,7 @@ decl_module! {
 			Self::deposit_event(Event::<T>::Approved(proposal_id, amount_approved));
 		}
 
-		/// Payout an approved proposal, returning the deposit taken for making the proposal.
+		/// Pay out an approved proposal, returning the deposit taken for making the proposal.
 		///
 		/// # <weight>
 		/// - O(1)
