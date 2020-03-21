@@ -289,7 +289,7 @@ pub enum DeferredAction<T: Trait> {
 }
 
 pub struct ExecutionContext<'a, T: Trait + 'a, V, L> {
-	pub parent: Option<&'a ExecutionContext<'a, T, V, L>>,
+	pub caller: Option<&'a ExecutionContext<'a, T, V, L>>,
 	pub self_account: T::AccountId,
 	pub self_trie_id: Option<TrieId>,
 	pub overlay: OverlayAccountDb<'a, T>,
@@ -314,7 +314,7 @@ where
 	/// account (not a contract).
 	pub fn top_level(origin: T::AccountId, cfg: &'a Config<T>, vm: &'a V, loader: &'a L) -> Self {
 		ExecutionContext {
-			parent: None,
+			caller: None,
 			self_trie_id: None,
 			self_account: origin,
 			overlay: OverlayAccountDb::<T>::new(&DirectAccountDb),
@@ -332,7 +332,7 @@ where
 		-> ExecutionContext<'b, T, V, L>
 	{
 		ExecutionContext {
-			parent: Some(self),
+			caller: Some(self),
 			self_trie_id: trie_id,
 			self_account: dest,
 			overlay: OverlayAccountDb::new(&self.overlay),
@@ -535,8 +535,8 @@ where
 	) -> Result<(), DispatchError> {
 		let self_id = self.self_account.clone();
 		let value = self.overlay.get_balance(&self_id);
-		if let Some(parent) = self.parent {
-			if parent.is_live(&self_id) {
+		if let Some(caller) = self.caller {
+			if caller.is_live(&self_id) {
 				return Err(DispatchError::Other(
 					"Cannot terminate a contract that is present on the call stack",
 				));
@@ -592,7 +592,7 @@ where
 	/// stack, meaning it is in the middle of an execution.
 	fn is_live(&self, account: &T::AccountId) -> bool {
 		&self.self_account == account ||
-			self.parent.map_or(false, |parent| parent.is_live(account))
+			self.caller.map_or(false, |caller| caller.is_live(account))
 	}
 }
 
