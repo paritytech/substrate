@@ -158,11 +158,9 @@ decl_storage! {
 		/// The total number of vote rounds that have happened, excluding the upcoming one.
 		pub ElectionRounds get(fn election_rounds): u32 = Zero::zero();
 
-		// TODO: combine the next two.
-		/// Votes of a particular voter.
-		pub VotesOf get(fn votes_of): map hasher(twox_64_concat) T::AccountId => Vec<T::AccountId>;
-		/// Locked stake of a voter.
-		pub StakeOf get(fn stake_of): map hasher(twox_64_concat) T::AccountId => BalanceOf<T>;
+		/// Votes and locked stake of a particular voter.
+		pub Voting get:
+			map hasher(twox_64_concat) T::AccountId => (BalanceOf<T>, Vec<T::AccountId>);
 
 		/// The present candidate list. Sorted based on account-id. A current member or runner-up
 		/// can never enter this vector and is always implicitly assumed to be a candidate.
@@ -201,6 +199,22 @@ decl_error! {
 		InvalidOrigin,
 		/// Not a member.
 		NotMember,
+	}
+}
+
+mod migrations {
+	use super::*;
+	use frame_support::{migration::{StorageKeyIterator, take_storage_item}, Twox64Concat};
+	fn migrate<T: Trait>() {
+		for (who, votes) in StorageKeyIterator
+			::<T::AccountId, Vec<T::AccountId>, Twox64Concat>
+			::new(b"PhragmenElection", b"VotesOf")
+			.drain()
+		{
+			if let Some(stake) = take_storage_item::<T::AccountId, BalanceOf<T>, Twox64Concat>(b"PhragmenElection", b"VotesOf", &who) {
+				Voting::<T>::put(who, (stake, votes));
+			}
+		}
 	}
 }
 
@@ -266,8 +280,7 @@ decl_module! {
 				WithdrawReasons::except(WithdrawReason::TransactionPayment),
 			);
 
-			<StakeOf<T>>::insert(&who, locked_balance);
-			<VotesOf<T>>::insert(&who, &votes);
+			Voting::<T>::insert(&who, (locked_balance, votes));
 		}
 
 		/// Remove `origin` as a voter. This removes the lock and returns the bond.
@@ -587,8 +600,7 @@ impl<T: Trait> Module<T> {
 	/// lock. Optionally, it would also return the reserved voting bond if indicated by `unreserve`.
 	fn do_remove_voter(who: &T::AccountId, unreserve: bool) {
 		// remove storage and lock.
-		<VotesOf<T>>::remove(who);
-		<StakeOf<T>>::remove(who);
+		Voting::<T>::remove(who);
 		T::Currency::remove_lock(MODULE_ID, who);
 
 		if unreserve {
@@ -598,7 +610,12 @@ impl<T: Trait> Module<T> {
 
 	/// The locked stake of a voter.
 	fn locked_stake_of(who: &T::AccountId) -> BalanceOf<T> {
-		Self::stake_of(who)
+		Voting::<T>::get(who).0
+	}
+
+	/// The locked stake of a voter.
+	fn votes_of(who: &T::AccountId) -> BalanceOf<T> {
+		Voting::<T>::get(who).1
 	}
 
 	/// Check there's nothing to do this block.
@@ -638,8 +655,8 @@ impl<T: Trait> Module<T> {
 		// previous runners_up are also always candidates for the next round.
 		candidates.append(&mut Self::runners_up_ids());
 
-		let voters_and_votes = VotesOf::<T>::iter()
-			.map(|(voter, targets)| { let s = StakeOf::<T>::get(&voter); (voter, s, targets) })
+		let voters_and_votes = Voting::<T>::iter()
+			.map(|(voter, (stake, targets))| { (voter, stake, targets) })
 			.collect::<Vec<_>>();
 		let maybe_phragmen_result = sp_phragmen::elect::<_, _, T::CurrencyToVote, Perbill>(
 			num_to_elect,
@@ -1025,7 +1042,7 @@ mod tests {
 	}
 
 	fn all_voters() -> Vec<u64> {
-		<VotesOf<Test>>::iter().map(|(v, _)| v).collect::<Vec<u64>>()
+		Voting::<Test>::iter().map(|(v, _)| v).collect::<Vec<u64>>()
 	}
 
 	fn balances(who: &u64) -> (u64, u64) {
