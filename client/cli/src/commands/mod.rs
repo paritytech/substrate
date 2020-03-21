@@ -50,7 +50,7 @@ const DEFAULT_NETWORK_CONFIG_PATH : &'static str = "network";
 /// `Run` are exported as main executable parameters.
 #[derive(Debug, Clone, StructOpt)]
 pub enum Subcommand {
-	/// Build a spec.json file, outputing to stdout.
+	/// Build a spec.json file, outputs to stdout.
 	BuildSpec(build_spec_cmd::BuildSpecCmd),
 
 	/// Export blocks to a file.
@@ -70,7 +70,7 @@ pub enum Subcommand {
 }
 
 impl Subcommand {
-	/// Get the shared parameters of a `CoreParams` command
+	/// Get the shared parameters of a `CoreParams` command.
 	pub fn get_shared_params(&self) -> &SharedParams {
 		use Subcommand::*;
 
@@ -84,7 +84,7 @@ impl Subcommand {
 		}
 	}
 
-	/// Run any `CoreParams` command
+	/// Run any `CoreParams` command.
 	pub fn run<B, BC, BB>(
 		self,
 		config: Configuration,
@@ -107,7 +107,7 @@ impl Subcommand {
 		}
 	}
 
-	/// Update and prepare a `Configuration` with command line parameters
+	/// Update and prepare a `Configuration` with command line parameters.
 	pub fn update_config<F>(
 		&self,
 		mut config: &mut Configuration,
