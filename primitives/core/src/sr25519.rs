@@ -435,20 +435,6 @@ fn derive_hard_junction(secret: &SecretKey, cc: &[u8; CHAIN_CODE_LENGTH]) -> Min
 #[cfg(feature = "full_crypto")]
 type Seed = [u8; MINI_SECRET_KEY_LENGTH];
 
-/// Schnorrkel signatures format.
-#[cfg(feature = "full_crypto")]
-pub enum Format {
-	/// Format 0.1.1.
-	V1,
-	/// Modern format.
-	V2,
-}
-
-#[cfg(feature = "full_crypto")]
-impl Default for Format {
-	fn default() -> Self { Format::V2 }
-}
-
 #[cfg(feature = "full_crypto")]
 impl TraitPair for Pair {
 	type Public = Public;
@@ -544,23 +530,24 @@ impl TraitPair for Pair {
 	}
 
 	fn verify<M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: &Self::Public) -> bool {
-		Self::verify_format(Format::V2, sig, message, pubkey)
+		Self::verify_weak(&sig.0[..], message, pubkey)
 	}
 
-	/// Verify a signature on a message. Returns true if the signature is good.
 	fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(sig: &[u8], message: M, pubkey: P) -> bool {
-		// Match both schnorrkel 0.1.1 and 0.8.0+ signatures, supporting both wallets
-		// that have not been upgraded and those that have. To swap to 0.8.0 only,
-		// create `schnorrkel::Signature` and pass that into `verify_simple`
-		match PublicKey::from_bytes(pubkey.as_ref()) {
-			Ok(pk) => pk.verify_simple_preaudit_deprecated(
-				SIGNING_CTX, message.as_ref(), &sig,
-			).is_ok(),
-			Err(_) => false,
-		}
+		let signature = match schnorrkel::Signature::from_bytes(sig) {
+			Ok(signature) => signature,
+			Err(_) => return false,
+		};
+
+		let pub_key = match PublicKey::from_bytes(pubkey.as_ref()) {
+			Ok(pub_key) => pub_key,
+			Err(_) => return false,
+		};
+
+		pub_key.verify_simple(SIGNING_CTX, message.as_ref(), &signature).is_ok()
+
 	}
 
-	/// Return a vec filled with raw data.
 	fn to_raw_vec(&self) -> Vec<u8> {
 		self.0.secret.to_bytes().to_vec()
 	}
@@ -581,24 +568,16 @@ impl Pair {
 	}
 
 	/// Verify a signature on a message. Returns true if the signature is good.
-	pub fn verify_format<M: AsRef<[u8]>>(format: Format, sig: &Signature, message: M, pubkey: &Public) -> bool {
-		match format {
-			Format::V1 => {
-				Self::verify_weak(&sig.0[..], message, pubkey)
-			},
-			Format::V2 => {
-				let signature = match schnorrkel::Signature::from_bytes(&sig.0[..]) {
-					Ok(signature) => signature,
-					Err(_) => return false,
-				};
-
-				let pub_key = match PublicKey::from_bytes(pubkey.as_ref()) {
-					Ok(pub_key) => pub_key,
-					Err(_) => return false,
-				};
-
-				pub_key.verify_simple(SIGNING_CTX, message.as_ref(), &signature).is_ok()
-			}
+	/// Supports old 0.1.1 deprecated signatures and should be used only for backward
+	/// compatibility.
+	pub fn verify_deprecated<M: AsRef<[u8]>>(sig: &Signature, message: M, pubkey: &Public) -> bool {
+		// Match both schnorrkel 0.1.1 and 0.8.0+ signatures, supporting both wallets
+		// that have not been upgraded and those that have.
+		match PublicKey::from_bytes(pubkey.as_ref()) {
+			Ok(pk) => pk.verify_simple_preaudit_deprecated(
+				SIGNING_CTX, message.as_ref(), &sig.0[..],
+			).is_ok(),
+			Err(_) => false,
 		}
 	}
 }
@@ -651,7 +630,7 @@ mod compatibility_test {
 			"5a9755f069939f45d96aaf125cf5ce7ba1db998686f87f2fb3cbdea922078741a73891ba265f70c31436e18a9acd14d189d73c12317ab6c313285cd938453202"
 		));
 		let message = b"Verifying that I am the owner of 5G9hQLdsKQswNPgB499DeA5PkFBbgkLPJWkkS6FAM6xGQ8xD. Hash: 221455a3\n";
-		assert!(Pair::verify_format(Format::V1, &signature, &message[..], &public));
+		assert!(Pair::verify_deprecated(&signature, &message[..], &public));
 	}
 }
 
@@ -822,7 +801,7 @@ mod test {
 		let js_signature = Signature::from_raw(hex!(
 			"28a854d54903e056f89581c691c1f7d2ff39f8f896c9e9c22475e60902cc2b3547199e0e91fa32902028f2ca2355e8cdd16cfe19ba5e8b658c94aa80f3b81a00"
 		));
-		assert!(Pair::verify_format(Format::V1, &js_signature, b"SUBSTRATE", &public));
+		assert!(Pair::verify_deprecated(&js_signature, b"SUBSTRATE", &public));
 	}
 
 	#[test]
