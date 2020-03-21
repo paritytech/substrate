@@ -140,7 +140,7 @@ fn test_array_return_value_memory_is_freed() {
 
 #[test]
 fn test_verification_of_input() {
-	/// sanity check
+	// sanity check
 	call_wasm_method::<HostFunctionsDeprecated>(
 		&WASM_BINARY_DEPRECATED[..],
 		"test_verification_of_input_old",

@@ -26,7 +26,7 @@ use syn::{
 use proc_macro_crate::crate_name;
 
 use std::env;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, btree_map::Entry};
 
 use quote::quote;
 
@@ -258,14 +258,28 @@ pub fn get_runtime_interface<'a>(trait_def: &'a ItemTrait)
 		let name = item.sig.ident.clone();
 		let version = get_item_version(item)?.unwrap_or(1);
 
-		result
-			.entry(name.clone())
-			// TODO: duplciate versions!?
-			.and_modify(|interface_item| {
+		let entry = result.entry(name.clone());
+		match entry {
+			Entry::Vacant(entry) => { entry.insert(RuntimeInterfaceItem::new(version, item)); },
+			Entry::Occupied(mut entry) => {
+				if let Some(existing_item) = entry.get().versions.get(&version) {
+					let mut err = Error::new(
+						item.span(),
+						"Duplicated version attribute",
+					);
+					err.combine(Error::new(
+						existing_item.span(),
+						"Previous version with the same number defined here",
+					));
+
+					return Err(err);
+				}
+
+				let interface_item = entry.get_mut();
 				if interface_item.latest_version < version { interface_item.latest_version = version; }
 				interface_item.versions.insert(version, item);
-			})
-			.or_insert_with(|| RuntimeInterfaceItem::new(version, item));
+			}
+		}
 	}
 
 	Ok(RuntimeInterface { items: result })
