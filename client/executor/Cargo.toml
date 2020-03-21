@@ -21,12 +21,12 @@ sp-panic-handler = { version = "2.0.0-alpha.4", path = "../../primitives/panic-h
 wasmi = "0.6.2"
 parity-wasm = "0.41.0"
 lazy_static = "1.4.0"
-sp-wasm-interface = { version = "2.0.0-alpha.2", path = "../../primitives/wasm-interface" }
+sp-wasm-interface = { version = "2.0.0-alpha.4", path = "../../primitives/wasm-interface" }
 sp-runtime-interface = { version = "2.0.0-alpha.4", path = "../../primitives/runtime-interface" }
 sp-externalities = { version = "0.8.0-alpha.4", path = "../../primitives/externalities" }
 sc-executor-common = { version = "0.8.0-alpha.4", path = "common" }
-sc-executor-wasmi = { version = "0.8.0-alpha.2", path = "wasmi" }
-sc-executor-wasmtime = { version = "0.8.0-alpha.2", path = "wasmtime", optional = true }
+sc-executor-wasmi = { version = "0.8.0-alpha.4", path = "wasmi" }
+sc-executor-wasmtime = { version = "0.8.0-alpha.4", path = "wasmtime", optional = true }
 parking_lot = "0.10.0"
 log = "0.4.8"
 libsecp256k1 = "0.3.4"

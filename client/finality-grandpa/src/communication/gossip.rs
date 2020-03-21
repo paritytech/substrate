@@ -722,7 +722,15 @@ impl<Block: BlockT> Inner<Block> {
 					last_commit: None,
 				}),
 				Some(ref mut v) => if v.set_id == set_id {
-					return None
+					if self.authorities != authorities {
+						debug!(target: "afg",
+							"Gossip validator noted set {:?} twice with different authorities. \
+							Was the authority set hard forked?",
+							set_id,
+						);
+						self.authorities = authorities;
+					}
+					return None;
 				} else {
 					v
 				},
@@ -788,6 +796,7 @@ impl<Block: BlockT> Inner<Block> {
 
 		// ensure authority is part of the set.
 		if !self.authorities.contains(&full.message.id) {
+			debug!(target: "afg", "Message from unknown voter: {}", full.message.id);
 			telemetry!(CONSENSUS_DEBUG; "afg.bad_msg_signature"; "signature" => ?full.message.id);
 			return Action::Discard(cost::UNKNOWN_VOTER);
 		}
@@ -1379,6 +1388,11 @@ impl<Block: BlockT> GossipValidator<Block> {
 		}
 
 		(action, broadcast_topics, peer_reply)
+	}
+
+	#[cfg(test)]
+	fn inner(&self) -> &parking_lot::RwLock<Inner<Block>> {
+		&self.inner
 	}
 }
 
@@ -2554,5 +2568,20 @@ mod tests {
 			crate::communication::global_topic::<Block>(1),
 			&commit(0, 1, 2),
 		));
+	}
+
+	#[test]
+	fn allow_noting_different_authorities_for_same_set() {
+		let (val, _) = GossipValidator::<Block>::new(config(), voter_set_state(), None);
+
+		let a1 = vec![AuthorityId::default()];
+		val.note_set(SetId(1), a1.clone(), |_, _| {});
+
+		assert_eq!(val.inner().read().authorities, a1);
+
+		let a2 = vec![AuthorityId::default(), AuthorityId::default()];
+		val.note_set(SetId(1), a2.clone(), |_, _| {});
+
+		assert_eq!(val.inner().read().authorities, a2);
 	}
 }

@@ -69,6 +69,7 @@
 
 mod mock;
 mod tests;
+mod benchmarking;
 
 use sp_application_crypto::RuntimeAppPublic;
 use codec::{Encode, Decode};
@@ -95,7 +96,6 @@ use frame_support::{
 };
 use frame_system::{self as system, ensure_none};
 use frame_system::offchain::SubmitUnsignedTransaction;
-use frame_support::traits::MigrateAccount;
 
 pub mod sr25519 {
 	mod app_sr25519 {
@@ -303,37 +303,11 @@ decl_error! {
 	}
 }
 
-mod migration {
-	use super::*;
-	use frame_support::Blake2_256;
-	pub fn migrate<T: Trait>() {
-		let current_index = <pallet_session::Module<T>>::current_index();
-		let key_count = Keys::<T>::get().len() as AuthIndex;
-		for i in 0..key_count {
-			ReceivedHeartbeats::migrate_keys::<Blake2_256, Blake2_256, _, _>(current_index, i);
-		}
-	}
-}
-
-impl<T: Trait> MigrateAccount<T::AccountId> for Module<T> {
-	fn migrate_account(a: &T::AccountId) {
-		use frame_support::Blake2_256;
-		let current_index = <pallet_session::Module<T>>::current_index();
-		if let Ok(v) = a.using_encoded(|mut d| T::ValidatorId::decode(&mut d)) {
-			AuthoredBlocks::<T>::migrate_keys::<Blake2_256, Blake2_256, _, _>(current_index, v);
-		}
-	}
-}
-
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
 		fn deposit_event() = default;
-
-		fn on_runtime_upgrade() {
-			migration::migrate::<T>();
-		}
 
 		fn heartbeat(
 			origin,

@@ -38,7 +38,7 @@ pub struct NodeKeyParams {
 	/// `--node-key-type` as follows:
 	///
 	///   `ed25519`:
-	///   The value is parsed as a hex-encoded Ed25519 32 bytes secret key,
+	///   The value is parsed as a hex-encoded Ed25519 32 byte secret key,
 	///   i.e. 64 hex characters.
 	///
 	/// The value of this option takes precedence over `--node-key-file`.
@@ -82,7 +82,7 @@ pub struct NodeKeyParams {
 	/// as follows:
 	///
 	///   `ed25519`:
-	///   The file must contain an unencoded 32 bytes Ed25519 secret key.
+	///   The file must contain an unencoded 32 byte Ed25519 secret key.
 	///
 	/// If the file does not exist, it is created with a newly generated secret key of
 	/// the chosen type.
