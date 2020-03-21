@@ -158,13 +158,14 @@ decl_storage! {
 		/// The total number of vote rounds that have happened, excluding the upcoming one.
 		pub ElectionRounds get(fn election_rounds): u32 = Zero::zero();
 
-		/// Votes of a particular voter, with the round index of the votes.
+		// TODO: combine the next two.
+		/// Votes of a particular voter.
 		pub VotesOf get(fn votes_of): map hasher(twox_64_concat) T::AccountId => Vec<T::AccountId>;
 		/// Locked stake of a voter.
 		pub StakeOf get(fn stake_of): map hasher(twox_64_concat) T::AccountId => BalanceOf<T>;
 
-		/// The present candidate list. Sorted based on account-id. A current member or a runner can
-		/// never enter this vector and is always implicitly assumed to be a candidate.
+		/// The present candidate list. Sorted based on account-id. A current member or runner-up
+		/// can never enter this vector and is always implicitly assumed to be a candidate.
 		pub Candidates get(fn candidates): Vec<T::AccountId>;
 	}
 }
@@ -264,8 +265,9 @@ decl_module! {
 				locked_balance,
 				WithdrawReasons::except(WithdrawReason::TransactionPayment),
 			);
+
 			<StakeOf<T>>::insert(&who, locked_balance);
-			<VotesOf<T>>::insert(&who, votes);
+			<VotesOf<T>>::insert(&who, &votes);
 		}
 
 		/// Remove `origin` as a voter. This removes the lock and returns the bond.
@@ -627,7 +629,7 @@ impl<T: Trait> Module<T> {
 		let num_to_elect = desired_runners_up + desired_seats;
 
 		let mut candidates = Self::candidates();
-		// candidates who explicitly called `submit_candidacy`. Only these folks are at the risk of
+		// candidates who explicitly called `submit_candidacy`. Only these folks are at risk of
 		// losing their bond.
 		let exposed_candidates = candidates.clone();
 		// current members are always a candidate for the next round as well.
@@ -637,14 +639,13 @@ impl<T: Trait> Module<T> {
 		candidates.append(&mut Self::runners_up_ids());
 
 		let voters_and_votes = VotesOf::<T>::iter()
-			.map(|(v, i)| (v, i))
-			.collect::<Vec<(T::AccountId, Vec<T::AccountId>)>>();
-		let maybe_phragmen_result = sp_phragmen::elect::<_, _, _, T::CurrencyToVote, Perbill>(
+			.map(|(voter, targets)| { let s = StakeOf::<T>::get(&voter); (voter, s, targets) })
+			.collect::<Vec<_>>();
+		let maybe_phragmen_result = sp_phragmen::elect::<_, _, T::CurrencyToVote, Perbill>(
 			num_to_elect,
 			0,
 			candidates,
-			voters_and_votes,
-			Self::locked_stake_of,
+			voters_and_votes.clone(),
 		);
 
 		if let Some(phragmen_result) = maybe_phragmen_result {
@@ -689,11 +690,23 @@ impl<T: Trait> Module<T> {
 			// split new set into winners and runners up.
 			let split_point = desired_seats.min(new_set_with_stake.len());
 			let mut new_members = (&new_set_with_stake[..split_point]).to_vec();
-			let most_popular = new_members.first().map(|x| x.0.clone());
 
 			// save the runners up as-is. They are sorted based on desirability.
 			// sort and save the members.
 			new_members.sort_by(|i, j| i.0.cmp(&j.0));
+
+			let mut prime_votes: Vec<_> = new_members.iter().map(|c| (&c.0, BalanceOf::<T>::zero())).collect();
+			for (_, stake, targets) in voters_and_votes.into_iter() {
+				for (votes, who) in targets.iter()
+					.enumerate()
+					.map(|(votes, who)| ((MAXIMUM_VOTE - votes) as u32, who))
+				{
+					if let Ok(i) = prime_votes.binary_search_by_key(&who, |k| k.0) {
+						prime_votes[i].1 += stake * votes.into();
+					}
+				}
+			}
+			let prime = prime_votes.into_iter().max_by_key(|x| x.1).map(|x| x.0.clone());
 
 			// new_members_ids is sorted by account id.
 			let new_members_ids = new_members
@@ -722,7 +735,7 @@ impl<T: Trait> Module<T> {
 				&outgoing.clone(),
 				&new_members_ids,
 			);
-			T::ChangeMembers::set_prime(most_popular);
+			T::ChangeMembers::set_prime(prime);
 
 			// outgoing candidates lose their bond.
 			let mut to_burn_bond = outgoing.to_vec();
@@ -1290,6 +1303,31 @@ mod tests {
 
 			assert_ok!(Elections::vote(Origin::signed(3), vec![4, 5], 10));
 			assert_eq!(PRIME.with(|p| *p.borrow()), Some(4));
+		});
+	}
+
+	#[test]
+	fn prime_votes_for_exiting_members_are_removed() {
+		ExtBuilder::default().build().execute_with(|| {
+			assert_ok!(Elections::submit_candidacy(Origin::signed(3)));
+			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
+			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
+
+			assert_ok!(Elections::vote(Origin::signed(1), vec![4, 3], 10));
+			assert_ok!(Elections::vote(Origin::signed(2), vec![4], 20));
+			assert_ok!(Elections::vote(Origin::signed(3), vec![3], 30));
+			assert_ok!(Elections::vote(Origin::signed(4), vec![4], 40));
+			assert_ok!(Elections::vote(Origin::signed(5), vec![5], 50));
+
+			assert_ok!(Elections::renounce_candidacy(Origin::signed(4)));
+
+			System::set_block_number(5);
+			assert_ok!(Elections::end_block(System::block_number()));
+
+			assert_eq!(Elections::members_ids(), vec![3, 5]);
+			assert_eq!(Elections::candidates(), vec![]);
+
+			assert_eq!(PRIME.with(|p| *p.borrow()), Some(5));
 		});
 	}
 
