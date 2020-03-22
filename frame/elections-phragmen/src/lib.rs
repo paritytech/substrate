@@ -210,7 +210,7 @@ mod migration {
 			::new(b"PhragmenElection", b"VotesOf")
 			.drain()
 		{
-			if let Some(stake) = take_storage_item::<_, BalanceOf<T>, Twox64Concat>(b"PhragmenElection", b"VotesOf", &who) {
+			if let Some(stake) = take_storage_item::<_, BalanceOf<T>, Twox64Concat>(b"PhragmenElection", b"StakeOf", &who) {
 				Voting::<T>::insert(who, (stake, votes));
 			}
 		}
