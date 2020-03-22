@@ -163,10 +163,24 @@ pub trait Trait: frame_system::Trait {
 /// An index of a proposal. Just a `u32`.
 pub type ProposalIndex = u32;
 
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub enum ProposalStatus<BlockNumber> {
+	/// Proposal is pending approval.
+	Pending,
+	/// Proposal is approved for a one time payout.
+	Approved(BlockNumber),
+	/// Proposal is approved for a reoccurring payout.
+	/// First `BlockNumber` is the next payout block.
+	/// Second `BlockNumber` is the period between payouts.
+	/// `u32` represents the number of payouts left.
+	Reoccurring(BlockNumber, BlockNumber, u32),
+}
+
 /// A spending proposal.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct Proposal<AccountId, Balance> {
+pub struct Proposal<AccountId, Balance, BlockNumber> {
 	/// The account proposing it.
 	proposer: AccountId,
 	/// The (total) amount that should be paid if the proposal is accepted.
@@ -176,7 +190,7 @@ pub struct Proposal<AccountId, Balance> {
 	/// The amount held on deposit (reserved) for making this proposal.
 	bond: Balance,
 	/// The approval status of the proposal.
-	approved: bool,
+	status: ProposalStatus<BlockNumber>,
 }
 
 /// An open tipping "motion". Retains all details of a tip including information on the finder
@@ -210,7 +224,7 @@ decl_storage! {
 		/// Proposals that have been made.
 		Proposals get(fn proposals):
 			map hasher(twox_64_concat) ProposalIndex
-			=> Option<Proposal<T::AccountId, BalanceOf<T>>>;
+			=> Option<Proposal<T::AccountId, BalanceOf<T>, T::BlockNumber>>;
 
 		/// Amount of funds currently approved to spend.
 		AmountApproved get(fn amount_approved): BalanceOf<T>;
@@ -348,7 +362,7 @@ decl_module! {
 
 			let c = Self::proposal_count();
 			ProposalCount::put(c + 1);
-			<Proposals<T>>::insert(c, Proposal { proposer, value, beneficiary, bond, approved: false });
+			<Proposals<T>>::insert(c, Proposal { proposer, value, beneficiary, bond, status: ProposalStatus::Pending });
 
 			Self::deposit_event(RawEvent::Proposed(c));
 		}
@@ -391,7 +405,15 @@ decl_module! {
 			let amount_approved = Self::amount_approved();
 			let new_amount = amount_approved.checked_add(&proposal.value).ok_or(Error::<T>::Overflow)?;
 
-			proposal.approved = true;
+			let current_block = frame_system::Module::<T>::block_number();
+			let burn_period = T::BurnPeriod::get();
+			proposal.status = if burn_period.is_zero() {
+				ProposalStatus::Approved(current_block)
+			} else {
+				// This gets the next closest burn period block.
+				let unblock_block = (current_block - (current_block % burn_period)) + burn_period;
+				ProposalStatus::Approved(unblock_block)
+			};
 			AmountApproved::<T>::put(new_amount);
 			Proposals::<T>::insert(proposal_id, proposal);
 
@@ -413,14 +435,21 @@ decl_module! {
 		fn payout_proposal(origin, proposal_id: ProposalIndex) {
 			ensure_signed(origin)?;
 			let proposal = Proposals::<T>::get(proposal_id).ok_or(Error::<T>::InvalidProposalIndex)?;
-			ensure!(proposal.approved, Error::<T>::NotApproved);
-			// Try to transfer funds from the pot, making sure to keep alive.
-			T::Currency::transfer(&Self::account_id(), &proposal.beneficiary, proposal.value, KeepAlive)?;
-			// return the proposal deposit and clean up.
-			let _ = T::Currency::unreserve(&proposal.proposer, proposal.bond);
-			<Proposals<T>>::remove(proposal_id);
-			// Not much we can do if underflow here.
-			AmountApproved::<T>::mutate(|amount| *amount = amount.saturating_sub(proposal.value));
+
+			match proposal.status {
+				ProposalStatus::Approved(unlock_block) => {
+					ensure!(unlock_block <= frame_system::Module::<T>::block_number(), Error::<T>::Premature);
+					// Try to transfer funds from the pot, making sure to keep alive.
+					T::Currency::transfer(&Self::account_id(), &proposal.beneficiary, proposal.value, KeepAlive)?;
+					// return the proposal deposit and clean up.
+					let _ = T::Currency::unreserve(&proposal.proposer, proposal.bond);
+					<Proposals<T>>::remove(proposal_id);
+					// Not much we can do if underflow here.
+					AmountApproved::<T>::mutate(|amount| *amount = amount.saturating_sub(proposal.value));
+				},
+				_ => Err(Error::<T>::NotApproved)?,
+			}
+
 
 			Self::deposit_event(RawEvent::Awarded(proposal_id, proposal.value, proposal.beneficiary));
 		}

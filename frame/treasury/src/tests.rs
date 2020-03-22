@@ -96,6 +96,14 @@ type Treasury = Module<Test>;
 
 use pallet_balances::Error as BalancesError;
 
+/// Run until a particular block.
+pub fn run_to_block(n: u64) {
+	while System::block_number() < n {
+		System::set_block_number(System::block_number() + 1);
+		Treasury::on_initialize(System::block_number());
+	}
+}
+
 fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	pallet_balances::GenesisConfig::<Test>{
@@ -292,7 +300,7 @@ fn accepted_spend_proposal_ignored_outside_spend_period() {
 		assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 		assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0));
 
-		<Treasury as OnInitialize<u64>>::on_initialize(1);
+		run_to_block(1);
 		assert_eq!(Balances::free_balance(3), 0);
 		assert_eq!(Treasury::pot(), 100);
 	});
@@ -305,7 +313,7 @@ fn unused_pot_should_diminish() {
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
 		assert_eq!(Balances::total_issuance(), init_total_issuance + 100);
 
-		<Treasury as OnInitialize<u64>>::on_initialize(2);
+		run_to_block(2);
 		assert_eq!(Treasury::pot(), 50);
 		assert_eq!(Balances::total_issuance(), init_total_issuance + 50);
 	});
@@ -368,6 +376,9 @@ fn payout_accepted_spend_proposal() {
 		assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 		assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0));
 
+		assert_noop!(Treasury::payout_proposal(Origin::signed(1337), 0), Error::<Test>::Premature);
+		run_to_block(2);
+
 		assert_ok!(Treasury::payout_proposal(Origin::signed(1337), 0));
 		assert_eq!(Balances::free_balance(3), 100);
 		assert_eq!(Treasury::pot(), 0);
@@ -383,13 +394,13 @@ fn pot_underflow_should_not_payout() {
 		assert_ok!(Treasury::propose_spend(Origin::signed(0), 150, 3));
 		assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0));
 
+		run_to_block(2);
 		assert_noop!(Treasury::payout_proposal(Origin::signed(1337), 0), BalancesError::<Test, _>::InsufficientBalance);
-		<Treasury as OnInitialize<u64>>::on_initialize(2);
 		assert_eq!(Treasury::pot(), 100); // Pot hasn't changed
 
 		let _ = Balances::deposit_into_existing(&Treasury::account_id(), 100).unwrap();
+		run_to_block(4);
 		assert_ok!(Treasury::payout_proposal(Origin::signed(1337), 0));
-		<Treasury as OnInitialize<u64>>::on_initialize(4);
 		assert_eq!(Balances::free_balance(3), 150); // Fund has been spent
 		assert_eq!(Treasury::pot(), 25); // Pot has finally changed
 	});
@@ -407,16 +418,16 @@ fn treasury_account_doesnt_get_deleted() {
 		assert_ok!(Treasury::propose_spend(Origin::signed(0), treasury_balance, 3));
 		assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0));
 
+		run_to_block(2);
 		assert_noop!(Treasury::payout_proposal(Origin::signed(1337), 0), BalancesError::<Test, _>::KeepAlive);
-		<Treasury as OnInitialize<u64>>::on_initialize(2);
 		assert_eq!(Treasury::pot(), 100); // Pot hasn't changed
 
 		assert_ok!(Treasury::propose_spend(Origin::signed(0), Treasury::pot(), 3));
 		assert_ok!(Treasury::approve_proposal(Origin::ROOT, 1));
 
+		run_to_block(4);
 		assert_noop!(Treasury::payout_proposal(Origin::signed(1337), 0), BalancesError::<Test, _>::KeepAlive);
 		assert_ok!(Treasury::payout_proposal(Origin::signed(1337), 1));
-		<Treasury as OnInitialize<u64>>::on_initialize(4);
 
 		assert_eq!(Treasury::pot(), 0); // Pot is emptied
 		assert_eq!(Balances::free_balance(Treasury::account_id()), 1); // but the account is still there
@@ -443,9 +454,9 @@ fn inexistent_account_works() {
 		assert_ok!(Treasury::propose_spend(Origin::signed(0), 1, 3));
 		assert_ok!(Treasury::approve_proposal(Origin::ROOT, 1));
 
+		run_to_block(2);
 		assert_noop!(Treasury::payout_proposal(Origin::signed(1337), 0), BalancesError::<Test, _>::InsufficientBalance);
 		assert_noop!(Treasury::payout_proposal(Origin::signed(1337), 1), BalancesError::<Test, _>::InsufficientBalance);
-		<Treasury as OnInitialize<u64>>::on_initialize(2);
 
 		assert_eq!(Treasury::pot(), 0); // Pot hasn't changed
 		assert_eq!(Balances::free_balance(3), 0); // Balance of `3` hasn't changed
@@ -454,9 +465,9 @@ fn inexistent_account_works() {
 		assert_eq!(Treasury::pot(), 99); // Pot now contains funds
 		assert_eq!(Balances::free_balance(Treasury::account_id()), 100); // Account does exist
 
+		run_to_block(4);
 		assert_ok!(Treasury::payout_proposal(Origin::signed(1337), 0));
 		assert_noop!(Treasury::payout_proposal(Origin::signed(1337), 1), BalancesError::<Test, _>::KeepAlive);
-		<Treasury as OnInitialize<u64>>::on_initialize(4);
 
 		assert_eq!(Treasury::pot(), 0); // Pot has changed
 		assert_eq!(Balances::free_balance(3), 99); // Balance of `3` has changed
