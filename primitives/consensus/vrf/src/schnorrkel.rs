@@ -114,7 +114,7 @@ impl From<VRFOutput> for RawVRFOutput {
 }
 
 /// Raw VRF proof.
-#[derive(Clone, Copy, Eq, PartialEq, RuntimeDebug, Encode, Decode)]
+#[derive(Clone, Copy, Encode, Decode)]
 pub struct RawVRFProof(pub [u8; VRF_PROOF_LENGTH]);
 
 impl Deref for RawVRFProof {
