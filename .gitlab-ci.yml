@@ -136,6 +136,12 @@ cargo-audit:
     - cargo audit
   allow_failure:                   true
 
+cargo-deny:
+  stage:                           test
+  <<:                              *docker-env
+  script:
+    - cargo deny check -c .maintain/deny.toml
+  allow_failure:                   true
 
 cargo-check-benches:
   stage:                           test
