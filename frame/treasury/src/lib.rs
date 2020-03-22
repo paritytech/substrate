@@ -174,7 +174,7 @@ pub enum ProposalStatus<BlockNumber> {
 	/// First `BlockNumber` is the next payout block.
 	/// Second `BlockNumber` is the period between payouts.
 	/// `u32` represents the number of payouts left.
-	Reoccurring(BlockNumber, BlockNumber, u32),
+	Recurring(BlockNumber, BlockNumber, u32),
 }
 
 /// A spending proposal.
