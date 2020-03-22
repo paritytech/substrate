@@ -28,10 +28,7 @@ use frame_support::{
 	assert_ok, impl_outer_origin, parameter_types, StorageValue, StorageMap,
 	StorageDoubleMap, IterableStorageMap, traits::{Currency, Get, FindAuthor}, weights::Weight,
 };
-use crate::{
-	EraIndex, GenesisConfig, Module, Trait, StakerStatus, ValidatorPrefs, RewardDestination,
-	Nominators, inflation, SessionInterface, Exposure, ErasStakers, ErasRewardPoints
-};
+use crate::*;
 
 /// The AccountId alias in this test module.
 pub type AccountId = u64;
@@ -197,7 +194,6 @@ parameter_types! {
 	pub const SessionsPerEra: SessionIndex = 3;
 	pub const BondingDuration: EraIndex = 3;
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &I_NPOS;
-	pub const MaxNominatorRewardedPerValidator: u32 = 64;
 }
 impl Trait for Test {
 	type Currency = pallet_balances::Module<Self>;
@@ -213,7 +209,6 @@ impl Trait for Test {
 	type BondingDuration = BondingDuration;
 	type SessionInterface = Self;
 	type RewardCurve = RewardCurve;
-	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 }
 
 pub struct ExtBuilder {
@@ -425,20 +420,18 @@ pub fn assert_ledger_consistent(stash: AccountId) {
 	assert_eq!(real_total, ledger.total);
 }
 
-pub fn bond_validator(acc: u64, val: u64) {
-	// a = controller
-	// a + 1 = stash
-	let _ = Balances::make_free_balance_be(&(acc + 1), val);
-	assert_ok!(Staking::bond(Origin::signed(acc + 1), acc, val, RewardDestination::Controller));
-	assert_ok!(Staking::validate(Origin::signed(acc), ValidatorPrefs::default()));
+pub fn bond_validator(controller: u64, stash: u64, val: u64) {
+	let _ = Balances::make_free_balance_be(&stash, val);
+	let _ = Balances::make_free_balance_be(&controller, val);
+	assert_ok!(Staking::bond(Origin::signed(stash), controller, val, RewardDestination::Controller));
+	assert_ok!(Staking::validate(Origin::signed(controller), ValidatorPrefs::default()));
 }
 
-pub fn bond_nominator(acc: u64, val: u64, target: Vec<u64>) {
-	// a = controller
-	// a + 1 = stash
-	let _ = Balances::make_free_balance_be(&(acc + 1), val);
-	assert_ok!(Staking::bond(Origin::signed(acc + 1), acc, val, RewardDestination::Controller));
-	assert_ok!(Staking::nominate(Origin::signed(acc), target));
+pub fn bond_nominator(controller: u64, stash: u64, val: u64, target: Vec<u64>) {
+	let _ = Balances::make_free_balance_be(&stash, val);
+	let _ = Balances::make_free_balance_be(&controller, val);
+	assert_ok!(Staking::bond(Origin::signed(stash), controller, val, RewardDestination::Controller));
+	assert_ok!(Staking::nominate(Origin::signed(controller), target));
 }
 
 pub fn advance_session() {
@@ -520,6 +513,17 @@ pub fn make_all_reward_payment(era: EraIndex) {
 
 	// reward validators
 	for validator_controller in validators_with_reward.iter().filter_map(Staking::bonded) {
-		assert_ok!(Staking::payout_stakers(Origin::signed(1337), validator_controller, era, 64));
+		let ledger = <Ledger<Test>>::get(&validator_controller).unwrap();
+		let exposure = <ErasStakers<Test>>::get(&era, &ledger.stash);
+		let num_of_nominators = exposure.others.len() as u16;
+		let validator_prefs = Staking::eras_validator_prefs(&era, &ledger.stash);
+
+		assert_ok!(Staking::payout_stakers(
+			Origin::signed(1337),
+			validator_controller,
+			era,
+			validator_prefs.max_nominator_payouts,
+			num_of_nominators
+		));
 	}
 }

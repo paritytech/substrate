@@ -1736,11 +1736,11 @@ fn phragmen_should_not_overflow_validators() {
 		let _ = Staking::chill(Origin::signed(10));
 		let _ = Staking::chill(Origin::signed(20));
 
-		bond_validator(2, u64::max_value());
-		bond_validator(4, u64::max_value());
+		bond_validator(2, 3, u64::max_value());
+		bond_validator(4, 5, u64::max_value());
 
-		bond_nominator(6, u64::max_value() / 2, vec![3, 5]);
-		bond_nominator(8, u64::max_value() / 2, vec![3, 5]);
+		bond_nominator(6, 7, u64::max_value() / 2, vec![3, 5]);
+		bond_nominator(8, 9, u64::max_value() / 2, vec![3, 5]);
 
 		start_era(1);
 
@@ -1759,11 +1759,11 @@ fn phragmen_should_not_overflow_nominators() {
 		let _ = Staking::chill(Origin::signed(10));
 		let _ = Staking::chill(Origin::signed(20));
 
-		bond_validator(2, u64::max_value() / 2);
-		bond_validator(4, u64::max_value() / 2);
+		bond_validator(2, 3, u64::max_value() / 2);
+		bond_validator(4, 5, u64::max_value() / 2);
 
-		bond_nominator(6, u64::max_value(), vec![3, 5]);
-		bond_nominator(8, u64::max_value(), vec![3, 5]);
+		bond_nominator(6, 7, u64::max_value(), vec![3, 5]);
+		bond_nominator(8, 9, u64::max_value(), vec![3, 5]);
 
 		start_era(1);
 
@@ -1778,11 +1778,11 @@ fn phragmen_should_not_overflow_nominators() {
 #[test]
 fn phragmen_should_not_overflow_ultimate() {
 	ExtBuilder::default().nominate(false).build().execute_with(|| {
-		bond_validator(2, u64::max_value());
-		bond_validator(4, u64::max_value());
+		bond_validator(2, 3, u64::max_value());
+		bond_validator(4, 5, u64::max_value());
 
-		bond_nominator(6, u64::max_value(), vec![3, 5]);
-		bond_nominator(8, u64::max_value(), vec![3, 5]);
+		bond_nominator(6, 7, u64::max_value(), vec![3, 5]);
+		bond_nominator(8, 9, u64::max_value(), vec![3, 5]);
 
 		start_era(1);
 
@@ -1816,7 +1816,7 @@ fn reward_validator_slashing_validator_doesnt_overflow() {
 		ErasRewardPoints::<Test>::insert(0, reward);
 		ErasStakers::<Test>::insert(0, 11, &exposure);
 		ErasValidatorReward::<Test>::insert(0, stake);
-		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 10, 0, 64));
+		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 10, 0, 64, 64));
 		assert_eq!(Balances::total_balance(&11), stake * 2);
 
 		// Set staker
@@ -2833,19 +2833,19 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 		// Last kept is 1:
 		assert!(current_era - Staking::history_depth() == 1);
 		assert_noop!(
-			Staking::payout_stakers(Origin::signed(1337), 10, 0, 64),
+			Staking::payout_stakers(Origin::signed(1337), 10, 0, 64, 64),
 			// Fail: Era out of history
 			Error::<Test>::InvalidEraToReward
 		);
-		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 10, 1, 64));
-		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 10, 2, 64));
+		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 10, 1, 64, 64));
+		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 10, 2, 64, 64));
 		assert_noop!(
-			Staking::payout_stakers(Origin::signed(1337), 10, 2, 64),
+			Staking::payout_stakers(Origin::signed(1337), 10, 2, 64, 64),
 			// Fail: Double claim
 			Error::<Test>::InvalidEraToReward
 		);
 		assert_noop!(
-			Staking::payout_stakers(Origin::signed(1337), 10, active_era, 64),
+			Staking::payout_stakers(Origin::signed(1337), 10, active_era, 64, 64),
 			// Fail: Era not finished yet
 			Error::<Test>::InvalidEraToReward
 		);
@@ -2959,7 +2959,7 @@ fn test_max_nominator_rewarded_per_validator_and_cant_steal_someone_else_reward(
 	//   then the nominator can't claim its reward
 	// * A nominator can't claim another nominator reward
 	ExtBuilder::default().build().execute_with(|| {
-		for i in 0..=<Test as Trait>::MaxNominatorRewardedPerValidator::get() {
+		for i in 0..=64 {
 			let stash = 10_000 + i as u64;
 			let controller = 20_000 + i as u64;
 			let balance = 10_000 + i as u64;
@@ -2985,7 +2985,7 @@ fn test_max_nominator_rewarded_per_validator_and_cant_steal_someone_else_reward(
 		mock::make_all_reward_payment(1);
 
 		// Assert only nominators from 1 to Max are rewarded
-		for i in 0..=<Test as Trait>::MaxNominatorRewardedPerValidator::get() {
+		for i in 0..=64 {
 			let stash = 10_000 + i as u64;
 			let balance = 10_000 + i as u64;
 			if stash == 10_000 {
@@ -3013,5 +3013,197 @@ fn set_history_depth_works() {
 		Staking::set_history_depth(Origin::ROOT, 8).unwrap();
 		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 4));
 		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 5));
+	});
+}
+
+#[test]
+fn test_max_nominators_payout_with_extras() {
+	// Here we will test validator can set `max_nominators_payout` and it works.
+	// We also test that `payout_extra_nominators` works.
+	ExtBuilder::default().stakers(false).build().execute_with(|| {
+		let balance = 1000;
+		// Create three validators:
+		bond_validator(10, 11, balance); // Default(64)
+
+		bond_validator(12, 13, balance); // Greedy (0)
+		let prefs = ValidatorPrefs {
+			commission: Default::default(),
+			max_nominator_payouts: 0,
+		};
+		assert_ok!(Staking::validate(Origin::signed(12), prefs));
+
+		bond_validator(14, 15, balance); // Generous (1000)
+		let prefs = ValidatorPrefs {
+			commission: Default::default(),
+			max_nominator_payouts: 1000,
+		};
+		assert_ok!(Staking::validate(Origin::signed(14), prefs));
+
+		assert_ok!(Staking::set_validator_count(Origin::ROOT, 3));
+
+		// Create nominators, targeting stash of validators
+		for i in 0..100 {
+			bond_nominator(100 + i, 1000 + i, balance + i, vec![11]);
+		}
+		for i in 0..100 {
+			bond_nominator(200 + i, 2000 + i, balance + i, vec![13]);
+		}
+		for i in 0..100 {
+			bond_nominator(300 + i, 3000 + i, balance + i, vec![15]);
+		}
+
+		start_era(1);
+		Staking::reward_by_ids(vec![(11, 1), (13, 1), (15, 1)]);
+		// Compute total payout now for whole duration as other parameter won't change
+		let total_payout_0 = current_total_payout_for_duration(3 * 1000);
+		assert!(total_payout_0 > 100); // Test is meaningful if reward something
+		start_era(2);
+		make_all_reward_payment(1);
+
+		// Top 64 nominators of validator 11 automatically paid out, including the validator
+		// Validator payout goes to controller.
+		assert!(Balances::free_balance(&10) > balance);
+		for i in 36..100 {
+			assert!(Balances::free_balance(&(100 + i)) > balance + i);
+		}
+		// The bottom 36 do not
+		for i in 0..36 {
+			assert_eq!(Balances::free_balance(&(100 + i)), balance + i);
+		}
+
+		// Only validator 13 gets paid out in greedy situation
+		assert!(Balances::free_balance(&12) > balance);
+		for i in 0..100 {
+			assert_eq!(Balances::free_balance(&(200 + i)), balance + i);
+		}
+
+		// Everyone is paid out with validator 15
+		assert!(Balances::free_balance(&14) > balance);
+		for i in 0..100 {
+			assert!(Balances::free_balance(&(300 + i)) > balance + i);
+		}
+
+		// Now lets get those extra nominators paid
+		let validator_exposure = <ErasStakers<Test>>::get(&1, &11);
+		for i in 0..36 {
+			let pos = validator_exposure.others.iter().position(|n| n.who == 1000 + i).unwrap() as u16;
+			assert_ok!(Staking::payout_extra_nominator(Origin::signed(100 + i), 1, vec![(11, pos, 100)]));
+			// Now they are paid
+			assert!(Balances::free_balance(&(100 + i)) > balance + i);
+		}
+		// Can't use this for a double payout
+		for i in 36..100 {
+			let pos = validator_exposure.others.iter().position(|n| n.who == 1000 + i).unwrap() as u16;
+			let balance_before = Balances::free_balance(&(100 + i));
+			// This will be okay, but nothing should happen
+			assert_ok!(Staking::payout_extra_nominator(Origin::signed(100 + i), 1, vec![(11, pos, 100)]));
+			assert_eq!(Balances::free_balance(&(100 + i)), balance_before)
+		}
+
+		let validator_exposure = <ErasStakers<Test>>::get(&1, &13);
+		// Payout all the nominators for the greedy validator
+		for i in 0..100 {
+			let pos = validator_exposure.others.iter().position(|n| n.who == 2000 + i).unwrap() as u16;
+			assert_ok!(Staking::payout_extra_nominator(Origin::signed(200 + i), 1, vec![(13, pos, 100)]));
+			// Now they are paid
+			assert!(Balances::free_balance(&(200 + i)) > balance + i);
+		}
+
+		let validator_exposure = <ErasStakers<Test>>::get(&1, &15);
+		// Can't use this for a double payout when validator is generous
+		for i in 0..100 {
+			let pos = validator_exposure.others.iter().position(|n| n.who == 3000 + i).unwrap() as u16;
+			let balance_before = Balances::free_balance(&(300 + i));
+			// This will be okay, but nothing should happen
+			assert_ok!(Staking::payout_extra_nominator(Origin::signed(300 + i), 1, vec![(15, pos, 100)]));
+			assert_eq!(Balances::free_balance(&(300 + i)), balance_before)
+		}
+	});
+}
+
+
+#[test]
+fn max_payout_handles_basic_errors() {
+	// Here we will test payouts handle all errors.
+	ExtBuilder::default().stakers(false).build().execute_with(|| {
+		// Same setup as the test above
+		let balance = 1000;
+		bond_validator(10, 11, balance); // Default(64)
+
+		// Create nominators, targeting stash
+		for i in 0..100 {
+			bond_nominator(100 + i, 1000 + i, balance + i, vec![11]);
+		}
+
+		start_era(1);
+		Staking::reward_by_ids(vec![(11, 1)]);
+		// Compute total payout now for whole duration as other parameter won't change
+		let total_payout_0 = current_total_payout_for_duration(3 * 1000);
+		assert!(total_payout_0 > 100); // Test is meaningful if reward something
+		start_era(2);
+
+		// Now lets mess up the inputs
+		// Cannot payout lower than `max_nominator_payouts`
+		assert_noop!(Staking::payout_stakers(Origin::signed(1337), 10, 1, 100, 63), Error::<Test>::InvalidInput);
+		// Cannot payout with wrong number of nominators
+		assert_noop!(Staking::payout_stakers(Origin::signed(1337), 10, 1, 99, 64), Error::<Test>::InvalidInput);
+		// Wrong Era
+		assert_noop!(Staking::payout_stakers(Origin::signed(1337), 10, 2, 100, 64), Error::<Test>::InvalidEraToReward);
+		// Wrong Staker
+		assert_noop!(Staking::payout_stakers(Origin::signed(1337), 11, 1, 100, 64), Error::<Test>::NotController);
+
+		// Going over the limits works though
+		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 10, 1, 200, 200));
+		// Top 64 nominators of validator 11 automatically paid out, including the validator
+		// Validator payout goes to controller.
+		assert!(Balances::free_balance(&10) > balance);
+		for i in 36..100 {
+			assert!(Balances::free_balance(&(100 + i)) > balance + i);
+		}
+		// The bottom 36 do not
+		for i in 0..36 {
+			assert_eq!(Balances::free_balance(&(100 + i)), balance + i);
+		}
+
+		// Extra nominator payout must be exact, they only get once chance
+		let validator_exposure = <ErasStakers<Test>>::get(&1, &11);
+		let i = 0;
+		let pos = validator_exposure.others.iter().position(|n| n.who == 1000 + i).unwrap() as u16;
+		// position must be exact
+		let balance_before = Balances::free_balance(&(100 + i));
+		assert_ok!(Staking::payout_extra_nominator(Origin::signed(100 + i), 1, vec![(11, pos + 1, 100)]));
+		assert!(Balances::free_balance(&(100 + i)) == balance_before);
+		// can't try again
+		assert_noop!(Staking::payout_extra_nominator(Origin::signed(100 + i), 1, vec![(11, pos, 100)]), Error::<Test>::InvalidEraToReward);
+
+		let i = 1;
+		let pos = validator_exposure.others.iter().position(|n| n.who == 1000 + i).unwrap() as u16;
+		// num of nominators must be exact
+		let balance_before = Balances::free_balance(&(100 + i));
+		assert_ok!(Staking::payout_extra_nominator(Origin::signed(100 + i), 1, vec![(11, pos, 99)]));
+		assert!(Balances::free_balance(&(100 + i)) == balance_before);
+		// can't try again
+		assert_noop!(Staking::payout_extra_nominator(Origin::signed(100 + i), 1, vec![(11, pos, 100)]), Error::<Test>::InvalidEraToReward);
+
+		let i = 2;
+		let pos = validator_exposure.others.iter().position(|n| n.who == 1000 + i).unwrap() as u16;
+		// num of nominators can be more
+		let balance_before = Balances::free_balance(&(100 + i));
+		assert_ok!(Staking::payout_extra_nominator(Origin::signed(100 + i), 1, vec![(11, pos, 101)]));
+		assert!(Balances::free_balance(&(100 + i)) > balance_before);
+
+		let i = 3;
+		let pos = validator_exposure.others.iter().position(|n| n.who == 1000 + i).unwrap() as u16;
+		// validator must have a payout for you
+		let balance_before = Balances::free_balance(&(100 + i));
+		assert_ok!(Staking::payout_extra_nominator(Origin::signed(100 + i), 1, vec![(10, pos, 100)]));
+		assert!(Balances::free_balance(&(100 + i)) == balance_before);
+		// can't try again
+		assert_noop!(Staking::payout_extra_nominator(Origin::signed(100 + i), 1, vec![(11, pos, 100)]), Error::<Test>::InvalidEraToReward);
+
+		let i = 4;
+		let pos = validator_exposure.others.iter().position(|n| n.who == 1000 + i).unwrap() as u16;
+		// cannot payout from too many validators
+		assert_noop!(Staking::payout_extra_nominator(Origin::signed(100 + i), 1, vec![(11, pos, 100); MAX_NOMINATIONS + 1]), Error::<Test>::InvalidNumberOfNominations);
 	});
 }
