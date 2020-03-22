@@ -42,7 +42,7 @@ pub const VRF_OUTPUT_LENGTH: usize = 32;
 pub const RANDOMNESS_LENGTH: usize = VRF_OUTPUT_LENGTH;
 
 /// Raw VRF output.
-#[derive(Clone, Eq, PartialEq, RuntimeDebug, Encode, Decode)]
+#[derive(Clone, Copy, Eq, PartialEq, RuntimeDebug, Encode, Decode)]
 pub struct RawVRFOutput(pub [u8; VRF_OUTPUT_LENGTH]);
 
 impl Deref for RawVRFOutput {
@@ -114,7 +114,7 @@ impl From<VRFOutput> for RawVRFOutput {
 }
 
 /// Raw VRF proof.
-#[derive(Clone, Encode, Decode)]
+#[derive(Clone, Copy, Eq, PartialEq, RuntimeDebug, Encode, Decode)]
 pub struct RawVRFProof(pub [u8; VRF_PROOF_LENGTH]);
 
 impl Deref for RawVRFProof {

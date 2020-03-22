@@ -376,7 +376,7 @@ impl<T: Trait> Module<T> {
 		let mut segment = <UnderConstruction>::get(&segment_idx);
 		if segment.len() < UNDER_CONSTRUCTION_SEGMENT_LENGTH {
 			// push onto current segment: not full.
-			segment.push(vrf_output.clone());
+			segment.push(*vrf_output);
 			<UnderConstruction>::insert(&segment_idx, &segment);
 		} else {
 			// move onto the next segment and update the index.
