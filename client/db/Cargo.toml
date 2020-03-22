@@ -12,12 +12,12 @@ description = "Client backend that uses RocksDB database as storage."
 parking_lot = "0.10.0"
 log = "0.4.8"
 rand = "0.7"
-kvdb = "0.4.0"
-kvdb-rocksdb = { version = "0.6", optional = true }
-kvdb-memorydb = "0.4.0"
+kvdb = "0.5.0"
+kvdb-rocksdb = { version = "0.7", optional = true }
+kvdb-memorydb = "0.5.0"
 linked-hash-map = "0.5.2"
 hash-db = "0.15.2"
-parity-util-mem = { version = "0.5.2", default-features = false, features = ["std"] }
+parity-util-mem = { version = "0.6.0", default-features = false, features = ["std"] }
 codec = { package = "parity-scale-codec", version = "1.2.0", features = ["derive"] }
 
 sc-client-api = { version = "2.0.0-alpha.4", path = "../api" }
@@ -37,7 +37,7 @@ sp-keyring = { version = "2.0.0-alpha.4", path = "../../primitives/keyring" }
 substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../test-utils/runtime/client" }
 env_logger = "0.7.0"
 quickcheck = "0.9"
-kvdb-rocksdb = "0.6"
+kvdb-rocksdb = "0.7"
 tempfile = "3"
 
 [features]

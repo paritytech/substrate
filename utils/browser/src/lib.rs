@@ -38,7 +38,7 @@ pub async fn browser_configuration<G, E>(chain_spec: GenericChainSpec<G, E>)
 	-> Result<Configuration, Box<dyn std::error::Error>>
 where
 	G: RuntimeGenesis + 'static,
-	E: Extension + 'static,
+	E: Extension + 'static + Send,
 {
 	let name = chain_spec.name().to_string();
 
