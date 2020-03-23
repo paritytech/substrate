@@ -1587,7 +1587,10 @@ macro_rules! decl_module {
 		{
 			type Trait = $trait_instance;
 			type Origin = $origin_type;
-			fn dispatch(self, _origin: Self::Origin) -> $crate::sp_runtime::DispatchResult {
+			fn dispatch(self,
+				_origin: Self::Origin,
+				_token: $crate::sp_runtime::traits::Unconstructable<$crate::sp_runtime::traits::DispatchableToken>
+			) -> $crate::sp_runtime::DispatchResult {
 				match self {
 					$(
 						$call_type::$fn_name( $( $param_name ),* ) => {
@@ -1614,9 +1617,10 @@ macro_rules! decl_module {
 			#[doc(hidden)]
 			pub fn dispatch<D: $crate::dispatch::Dispatchable<Trait = $trait_instance>>(
 				d: D,
-				origin: D::Origin
+				origin: D::Origin,
+				token: $crate::sp_runtime::traits::Unconstructable<$crate::sp_runtime::traits::DispatchableToken>
 			) -> $crate::sp_runtime::DispatchResult {
-				d.dispatch(origin)
+				d.dispatch(origin, token)
 			}
 		}
 		$crate::__dispatch_impl_metadata! {
@@ -1716,12 +1720,14 @@ macro_rules! impl_outer_dispatch {
 			fn dispatch(
 				self,
 				origin: $origin,
+				token: $crate::sp_runtime::traits::Unconstructable<$crate::sp_runtime::traits::DispatchableToken>,
 			) -> $crate::sp_runtime::DispatchResult {
 				$crate::impl_outer_dispatch! {
 					@DISPATCH_MATCH
 					self
 					$call_type
 					origin
+					token
 					{}
 					0;
 					$( $camelcase ),*
@@ -1751,6 +1757,7 @@ macro_rules! impl_outer_dispatch {
 		$self:ident
 		$call_type:ident
 		$origin:ident
+		$token:ident
 		{ $( $generated:tt )* }
 		$index:expr;
 		$name:ident
@@ -1761,9 +1768,10 @@ macro_rules! impl_outer_dispatch {
 			$self
 			$call_type
 			$origin
+			$token
 			{
 				$( $generated )*
-				$call_type::$name(call) => call.dispatch($origin),
+				$call_type::$name(call) => call.dispatch($origin, $token),
 			}
 			$index + 1;
 			$( $rest ),*
@@ -1773,6 +1781,7 @@ macro_rules! impl_outer_dispatch {
 		$self:ident
 		$call_type:ident
 		$origin:ident
+		$token:ident
 		{ $( $generated:tt )* }
 		$index:expr;
 	) => {

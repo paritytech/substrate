@@ -682,7 +682,10 @@ pub trait Dispatchable {
 	/// ...
 	type Trait;
 	/// Actually dispatch this call and result the result of it.
-	fn dispatch(self, origin: Self::Origin) -> crate::DispatchResult;
+	fn dispatch(self,
+		origin: Self::Origin,
+		token: Unconstructable<DispatchableToken>
+	) -> crate::DispatchResult;
 }
 
 /// Means by which a transaction may be extended. This type embodies both the data and the logic
@@ -1036,7 +1039,7 @@ pub trait RootDispatcher<D, O> {
 	where
 		D: Dispatchable<Origin = O>,
 	{
-		dispatchable.dispatch(origin)
+		dispatchable.dispatch(origin, Unconstructable::new())
 	}
 
 	/// Implement your custom dispatch logic here.

@@ -327,9 +327,9 @@ mod tests {
 					&Default::default(),
 					Default::default(),
 				);
-				assert_ok!(FinalityTracker::dispatch(
-					Call::final_hint(i-1),
+				assert_ok!(FinalityTracker::final_hint(
 					Origin::NONE,
+					i - 1,
 				));
 				FinalityTracker::on_finalize(i);
 				let hdr = System::finalize();

@@ -297,7 +297,7 @@ mod tests {
 		let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		TestExternalities::new(t).execute_with(|| {
 			Timestamp::set_timestamp(42);
-			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::NONE));
+			assert_ok!(Timestamp::set(Origin::NONE, 69));
 			assert_eq!(Timestamp::now(), 69);
 		});
 	}
@@ -308,8 +308,8 @@ mod tests {
 		let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		TestExternalities::new(t).execute_with(|| {
 			Timestamp::set_timestamp(42);
-			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::NONE));
-			let _ = Timestamp::dispatch(Call::set(70), Origin::NONE);
+			assert_ok!(Timestamp::set(Origin::NONE, 69));
+			let _ = Timestamp::set(Origin::NONE, 70);
 		});
 	}
 
@@ -319,7 +319,7 @@ mod tests {
 		let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		TestExternalities::new(t).execute_with(|| {
 			Timestamp::set_timestamp(42);
-			let _ = Timestamp::dispatch(Call::set(46), Origin::NONE);
+			let _ = Timestamp::set(Origin::NONE, 46);
 		});
 	}
 }
