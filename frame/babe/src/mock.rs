@@ -27,6 +27,7 @@ use frame_system::InitKind;
 use frame_support::{impl_outer_origin, parameter_types, StorageValue, weights::Weight};
 use sp_io;
 use sp_core::H256;
+use sp_consensus_vrf::schnorrkel::{RawVRFOutput, RawVRFProof};
 
 impl_outer_origin!{
 	pub enum Origin for Test  where system = frame_system {}
@@ -129,11 +130,11 @@ pub fn progress_to_block(n: u64) {
 	}
 }
 
-pub fn make_pre_digest(
+fn make_pre_digest(
 	authority_index: sp_consensus_babe::AuthorityIndex,
 	slot_number: sp_consensus_babe::SlotNumber,
-	vrf_output: [u8; sp_consensus_babe::VRF_OUTPUT_LENGTH],
-	vrf_proof: [u8; sp_consensus_babe::VRF_PROOF_LENGTH],
+	vrf_output: RawVRFOutput,
+	vrf_proof: RawVRFProof,
 ) -> Digest {
 	let digest_data = sp_consensus_babe::digests::RawPreDigest::Primary {
 		authority_index,

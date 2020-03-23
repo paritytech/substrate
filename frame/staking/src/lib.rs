@@ -2511,14 +2511,14 @@ impl<T: Trait> Module<T> {
 	///
 	/// No storage item is updated.
 	fn do_phragmen<Accuracy: PerThing>() -> Option<PhragmenResult<T::AccountId, Accuracy>> {
-		let mut all_nominators: Vec<(T::AccountId, Vec<T::AccountId>)> = Vec::new();
-		let all_validators = <Validators<T>>::iter().map(|(who, _pref)| {
+		let mut all_nominators: Vec<(T::AccountId, BalanceOf<T>, Vec<T::AccountId>)> = Vec::new();
+		let mut all_validators = Vec::new();
+		for (validator, preference) in <Validators<T>>::iter() {
 			// append self vote
-			let self_vote = (who.clone(), vec![who.clone()]);
+			let self_vote = (validator.clone(), Self::slashable_balance_of(&validator), vec![validator.clone()]);
 			all_nominators.push(self_vote);
-
-			who
-		}).collect::<Vec<T::AccountId>>();
+			all_validators.push(validator);
+		}
 
 		let nominator_votes = <Nominators<T>>::iter().map(|(nominator, nominations)| {
 			let Nominations { submitted_in, mut targets, suppressed: _ } = nominations;
@@ -2534,14 +2534,16 @@ impl<T: Trait> Module<T> {
 
 			(nominator, targets)
 		});
-		all_nominators.extend(nominator_votes);
+		all_nominators.extend(nominator_votes.map(|(n, ns)| {
+			let s = Self::slashable_balance_of(&n);
+			(n, s, ns)
+		}));
 
-		elect::<_, _, _, T::CurrencyToVote, Accuracy>(
+		elect::<_, _, T::CurrencyToVote, Accuracy>(
 			Self::validator_count() as usize,
 			Self::minimum_validator_count().max(1) as usize,
 			all_validators,
 			all_nominators,
-			Self::slashable_balance_of,
 		)
 	}
 
