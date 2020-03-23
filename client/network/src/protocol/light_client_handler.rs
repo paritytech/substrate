@@ -51,7 +51,6 @@ use libp2p::{
 };
 use nohash_hasher::IntMap;
 use prost::Message;
-use rustc_hex::ToHex;
 use sc_client::light::fetcher;
 use sc_client_api::StorageProof;
 use sc_peerset::ReputationChange;
@@ -504,7 +503,7 @@ where
 
 		log::trace!("remote read child request from {} ({} {} at {:?})",
 			peer,
-			request.storage_key.to_hex::<String>(),
+			hex::encode(&request.storage_key),
 			fmt_keys(request.keys.first(), request.keys.last()),
 			request.block);
 
@@ -522,7 +521,7 @@ where
 					Err(error) => {
 						log::trace!("remote read child request from {} ({} {} at {:?}) failed with: {}",
 							peer,
-							request.storage_key.to_hex::<String>(),
+							hex::encode(&request.storage_key),
 							fmt_keys(request.keys.first(), request.keys.last()),
 							request.block,
 							error);
@@ -532,7 +531,7 @@ where
 			} else {
 				log::trace!("remote read child request from {} ({} {} at {:?}) failed with: {}",
 					peer,
-					request.storage_key.to_hex::<String>(),
+					hex::encode(&request.storage_key),
 					fmt_keys(request.keys.first(), request.keys.last()),
 					request.block,
 					"invalid child info and type"
@@ -585,9 +584,9 @@ where
 		log::trace!("remote changes proof request from {} for key {} ({:?}..{:?})",
 			peer,
 			if !request.storage_key.is_empty() {
-				format!("{} : {}", request.storage_key.to_hex::<String>(), request.key.to_hex::<String>())
+				format!("{} : {}", hex::encode(&request.storage_key), hex::encode(&request.key))
 			} else {
-				request.key.to_hex::<String>()
+				hex::encode(&request.key)
 			},
 			request.first,
 			request.last);
@@ -610,9 +609,9 @@ where
 				log::trace!("remote changes proof request from {} for key {} ({:?}..{:?}) failed with: {}",
 					peer,
 					if let Some(sk) = storage_key {
-						format!("{} : {}", sk.0.to_hex::<String>(), key.0.to_hex::<String>())
+						format!("{} : {}", hex::encode(&sk.0), hex::encode(&key.0))
 					} else {
-						key.0.to_hex::<String>()
+						hex::encode(&key.0)
 					},
 					request.first,
 					request.last,
@@ -1089,9 +1088,9 @@ where
 fn fmt_keys(first: Option<&Vec<u8>>, last: Option<&Vec<u8>>) -> String {
 	if let (Some(first), Some(last)) = (first, last) {
 		if first == last {
-			first.to_hex::<String>()
+			hex::encode(&first)
 		} else {
-			format!("{}..{}", first.to_hex::<String>(), last.to_hex::<String>())
+			format!("{}..{}", hex::encode(&first), hex::encode(&last))
 		}
 	} else {
 		String::from("n/a")

@@ -42,7 +42,6 @@ use prometheus_endpoint::{Registry, Gauge, GaugeVec, PrometheusError, Opts, regi
 use sync::{ChainSync, SyncState};
 use crate::service::{TransactionPool, ExHashT};
 use crate::config::{BoxFinalityProofRequestBuilder, Roles};
-use rustc_hex::ToHex;
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
@@ -1553,11 +1552,11 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		}
 
 		let keys_str = || match request.keys.len() {
-			1 => request.keys[0].to_hex::<String>(),
+			1 => hex::encode(&request.keys[0]),
 			_ => format!(
 				"{}..{}",
-				request.keys[0].to_hex::<String>(),
-				request.keys[request.keys.len() - 1].to_hex::<String>(),
+				hex::encode(&request.keys[0]),
+				hex::encode(&request.keys[request.keys.len() - 1]),
 			),
 		};
 
@@ -1601,16 +1600,16 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		}
 
 		let keys_str = || match request.keys.len() {
-			1 => request.keys[0].to_hex::<String>(),
+			1 => hex::encode(&request.keys[0]),
 			_ => format!(
 				"{}..{}",
-				request.keys[0].to_hex::<String>(),
-				request.keys[request.keys.len() - 1].to_hex::<String>(),
+				hex::encode(&request.keys[0]),
+				hex::encode(&request.keys[request.keys.len() - 1]),
 			),
 		};
 
 		trace!(target: "sync", "Remote read child request {} from {} ({} {} at {})",
-			request.id, who, request.storage_key.to_hex::<String>(), keys_str(), request.block);
+			request.id, who, hex::encode(&request.storage_key), keys_str(), request.block);
 		let proof = if let Some(child_info) = ChildInfo::resolve_child_info(request.child_type, &request.child_info[..]) {
 			match self.context_data.chain.read_child_proof(
 				&BlockId::Hash(request.block),
@@ -1623,7 +1622,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 					trace!(target: "sync", "Remote read child request {} from {} ({} {} at {}) failed with: {}",
 						request.id,
 						who,
-						request.storage_key.to_hex::<String>(),
+						hex::encode(&request.storage_key),
 						keys_str(),
 						request.block,
 						error
@@ -1635,7 +1634,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			trace!(target: "sync", "Remote read child request {} from {} ({} {} at {}) failed with: {}",
 				request.id,
 				who,
-				request.storage_key.to_hex::<String>(),
+				hex::encode(&request.storage_key),
 				keys_str(),
 				request.block,
 				"invalid child info and type",
@@ -1714,9 +1713,9 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			request.id,
 			who,
 			if let Some(sk) = request.storage_key.as_ref() {
-				format!("{} : {}", sk.to_hex::<String>(), request.key.to_hex::<String>())
+				format!("{} : {}", hex::encode(&sk), hex::encode(&request.key))
 			} else {
-				request.key.to_hex::<String>()
+				hex::encode(&request.key)
 			},
 			request.first,
 			request.last
@@ -1737,9 +1736,9 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 					request.id,
 					who,
 					if let Some(sk) = storage_key {
-						format!("{} : {}", sk.0.to_hex::<String>(), key.0.to_hex::<String>())
+						format!("{} : {}", hex::encode(&sk.0), hex::encode(&key.0))
 					} else {
-						key.0.to_hex::<String>()
+						hex::encode(&key.0)
 					},
 					request.first,
 					request.last,
