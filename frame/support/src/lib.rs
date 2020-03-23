@@ -72,7 +72,7 @@ pub use self::hash::{
 };
 pub use self::storage::{
 	StorageValue, StorageMap, StorageDoubleMap, StoragePrefixedMap, IterableStorageMap,
-	IterableStorageDoubleMap,
+	IterableStorageDoubleMap, migration
 };
 pub use self::dispatch::{Parameter, Callable, IsSubType};
 pub use sp_runtime::{self, ConsensusEngineId, print, traits::Printable};

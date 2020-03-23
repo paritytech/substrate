@@ -9,7 +9,6 @@ homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 documentation = "https://docs.rs/sc-consensus-babe"
 
-
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.2.0", features = ["derive"] }
 sp-consensus-babe = { version = "0.8.0-alpha.4", path = "../../../primitives/consensus/babe" }
@@ -32,6 +31,7 @@ sp-api = { version = "2.0.0-alpha.4", path = "../../../primitives/api" }
 sp-block-builder = { version = "2.0.0-alpha.4", path = "../../../primitives/block-builder" }
 sp-blockchain = { version = "2.0.0-alpha.4", path = "../../../primitives/blockchain" }
 sp-consensus = { version = "0.8.0-alpha.4", path = "../../../primitives/consensus/common" }
+sp-consensus-vrf = { version = "0.8.0-alpha.4", path = "../../../primitives/consensus/vrf" }
 sc-consensus-uncles = { version = "0.8.0-alpha.4", path = "../uncles" }
 sc-consensus-slots = { version = "0.8.0-alpha.4", path = "../slots" }
 sp-runtime = { version = "2.0.0-alpha.4", path = "../../../primitives/runtime" }
@@ -40,9 +40,9 @@ futures = "0.3.1"
 futures-timer = "3.0.1"
 parking_lot = "0.10.0"
 log = "0.4.8"
-schnorrkel = { version = "0.8.5", features = ["preaudit_deprecated"] }
+schnorrkel = { version = "0.9.1", features = ["preaudit_deprecated"] }
 rand = "0.7.2"
-merlin = "1.2.1"
+merlin = "2.0"
 pdqselect = "0.1.0"
 derive_more = "0.99.2"
 
