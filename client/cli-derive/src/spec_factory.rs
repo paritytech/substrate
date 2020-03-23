@@ -32,7 +32,7 @@ pub(crate) fn spec_factory(
 		Err(err) => abort!(err.span(), "could not parse attributes: {}", err),
 	};
 
-	let attrs = attrs
+	let mut attrs = attrs
 		.iter()
 		.map(|x| {
 			(
@@ -47,27 +47,44 @@ pub(crate) fn spec_factory(
 		})
 		.collect::<HashMap<_, _>>();
 
-	let default_cli = quote! { Cli };
-	let cli = attrs.get("cli").unwrap_or(&default_cli);
+	let cli = attrs.remove("cli").unwrap_or_else(|| quote! { Cli });
 	let pkg_name = std::env::var("CARGO_PKG_NAME").unwrap().to_token_stream();
-	let impl_name = attrs.get("impl_name").unwrap_or(&pkg_name);
-	let default_impl_version = get_version().to_token_stream();
-	let impl_version = attrs.get("impl_version").unwrap_or(&default_impl_version);
+	let impl_name = attrs
+		.remove("impl_name")
+		.unwrap_or_else(|| pkg_name.clone());
+	let impl_version = attrs
+		.remove("impl_version")
+		.unwrap_or_else(|| get_version().to_token_stream());
 	let support_url = attrs
-		.get("support_url")
+		.remove("support_url")
 		.unwrap_or_else(|| abort_call_site!("missing attribute: support_url"));
-	let executable_name = attrs.get("executable_name").unwrap_or(&pkg_name);
-	let default_author = std::env::var("CARGO_PKG_AUTHORS")
-		.unwrap_or_default()
-		.to_token_stream();
-	let author = attrs.get("author").unwrap_or(&default_author);
-	let default_description = std::env::var("CARGO_PKG_DESCRIPTION")
-		.unwrap_or_default()
-		.to_token_stream();
-	let description = attrs.get("description").unwrap_or(&default_description);
+	let executable_name = attrs
+		.remove("executable_name")
+		.unwrap_or_else(|| pkg_name.clone());
+	let author = attrs.remove("author").unwrap_or_else(|| {
+		std::env::var("CARGO_PKG_AUTHORS")
+			.unwrap_or_default()
+			.to_token_stream()
+	});
+	let description = attrs.remove("description").unwrap_or_else(|| {
+		std::env::var("CARGO_PKG_DESCRIPTION")
+			.unwrap_or_default()
+			.to_token_stream()
+	});
 	let copyright_start_year = attrs
-		.get("copyright_start_year")
+		.remove("copyright_start_year")
 		.unwrap_or_else(|| abort_call_site!("missing attribute: copyright_start_year"));
+
+	if !attrs.is_empty() {
+		abort_call_site!(
+			"unknown macro parameters: {}",
+			attrs
+				.keys()
+				.map(|x| x.as_str())
+				.collect::<Vec<_>>()
+				.join(", ")
+		);
+	}
 
 	let s: ItemFn = match syn::parse(i) {
 		Ok(x) => x,

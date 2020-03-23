@@ -9,7 +9,12 @@ struct MyCli {
 	keystore: KeystoreParams,
 }
 
-#[spec_factory(cli = MyCli, support_url = "http://example.org", copyright_start_year = 2020)]
+#[spec_factory(
+	cli = MyCli,
+	support_url = "http://example.org",
+	copyright_start_year = 2020,
+	impl_version = "0.1.0",
+)]
 fn spec_factory(id: &str) -> Result<Box<dyn sc_service::ChainSpec>, String> {
 	Err("not implemented".into())
 }
