@@ -283,22 +283,8 @@ decl_error! {
 	}
 }
 
-mod migration {
-	use super::*;
-	pub fn migrate<T: Trait>() {
-		for i in 0..ProposalCount::get() {
-			Proposals::<T>::migrate_key_from_blake(i);
-		}
-		Reasons::<T>::remove_all();
-	}
-}
-
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn on_runtime_upgrade() {
-			migration::migrate::<T>();
-		}
-
 		/// Fraction of a proposal's value that should be bonded in order to place the proposal.
 		/// An accepted proposal gets these back. A rejected proposal does not.
 		const ProposalBond: Permill = T::ProposalBond::get();
@@ -776,7 +762,7 @@ mod tests {
 		type Version = ();
 		type ModuleToIndex = ();
 		type AccountData = pallet_balances::AccountData<u64>;
-		type MigrateAccount = (); type OnNewAccount = ();
+		type OnNewAccount = ();
 		type OnKilledAccount = ();
 	}
 	parameter_types! {

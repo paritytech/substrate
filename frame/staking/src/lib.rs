@@ -286,7 +286,6 @@ use sp_runtime::{Serialize, Deserialize};
 use frame_system::{self as system, ensure_signed, ensure_root};
 
 use sp_phragmen::ExtendedBalance;
-use frame_support::traits::MigrateAccount;
 
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 pub const MAX_NOMINATIONS: usize = 16;
@@ -956,10 +955,6 @@ decl_module! {
 
 		fn deposit_event() = default;
 
-		fn on_runtime_upgrade() {
-			migrate::<T>();
-		}
-
 		fn on_finalize() {
 			// Set the start of the first era.
 			if let Some(mut active_era) = Self::active_era() {
@@ -1476,30 +1471,6 @@ decl_module! {
 			ensure!(T::Currency::total_balance(&stash).is_zero(), Error::<T>::FundedTarget);
 			Self::kill_stash(&stash)?;
 			T::Currency::remove_lock(STAKING_ID, &stash);
-		}
-	}
-}
-
-impl<T: Trait> MigrateAccount<T::AccountId> for Module<T> {
-	fn migrate_account(a: &T::AccountId) {
-		if let Some(controller) = Bonded::<T>::migrate_key_from_blake(a) {
-			Ledger::<T>::migrate_key_from_blake(controller);
-			Payee::<T>::migrate_key_from_blake(a);
-			Validators::<T>::migrate_key_from_blake(a);
-			Nominators::<T>::migrate_key_from_blake(a);
-			SlashingSpans::<T>::migrate_key_from_blake(a);
-		}
-	}
-}
-
-fn migrate<T: Trait>() {
-	if let Some(current_era) = CurrentEra::get() {
-		let history_depth = HistoryDepth::get();
-		for era in current_era.saturating_sub(history_depth)..=current_era {
-			ErasStartSessionIndex::migrate_key_from_blake(era);
-			ErasValidatorReward::<T>::migrate_key_from_blake(era);
-			ErasRewardPoints::<T>::migrate_key_from_blake(era);
-			ErasTotalStake::<T>::migrate_key_from_blake(era);
 		}
 	}
 }

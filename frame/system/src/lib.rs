@@ -116,7 +116,7 @@ use frame_support::{
 	decl_module, decl_event, decl_storage, decl_error, storage, Parameter, ensure, debug,
 	traits::{
 		Contains, Get, ModuleToIndex, OnNewAccount, OnKilledAccount, IsDeadAccount, Happened,
-		StoredMap, MigrateAccount,
+		StoredMap,
 	},
 	weights::{Weight, DispatchInfo, DispatchClass, SimpleDispatchInfo, FunctionOf},
 };
@@ -126,7 +126,6 @@ use codec::{Encode, Decode, FullCodec, EncodeLike};
 use sp_io::TestExternalities;
 
 pub mod offchain;
-mod migration;
 
 /// Compute the trie root of a list of extrinsics.
 pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output {
@@ -222,9 +221,6 @@ pub trait Trait: 'static + Eq + Clone {
 	///
 	/// All resources should be cleaned up associated with the given account.
 	type OnKilledAccount: OnKilledAccount<Self::AccountId>;
-
-	/// Migrate an account.
-	type MigrateAccount: MigrateAccount<Self::AccountId>;
 }
 
 pub type DigestOf<T> = generic::Digest<<T as Trait>::Hash>;
@@ -460,15 +456,6 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
-		fn on_runtime_upgrade() {
-			migration::migrate::<T>();
-
-			// Remove the old `RuntimeUpgraded` storage entry.
-			let mut runtime_upgraded_key = sp_io::hashing::twox_128(b"System").to_vec();
-			runtime_upgraded_key.extend(&sp_io::hashing::twox_128(b"RuntimeUpgraded"));
-			sp_io::storage::clear(&runtime_upgraded_key);
-		}
-
 		/// A dispatch that will fill the block weight up to the given ratio.
 		// TODO: This should only be available for testing, rather than in general usage, but
 		// that's not possible at present (since it's within the decl_module macro).
@@ -576,21 +563,6 @@ decl_module! {
 			ensure!(account.refcount == 0, Error::<T>::NonZeroRefCount);
 			ensure!(account.data == T::AccountData::default(), Error::<T>::NonDefaultComposite);
 			Account::<T>::remove(who);
-		}
-
-		#[weight = FunctionOf(
-			|(accounts,): (&Vec<T::AccountId>,)| accounts.len() as u32 * 10_000,
-			DispatchClass::Normal,
-			true,
-		)]
-		fn migrate_accounts(origin, accounts: Vec<T::AccountId>) {
-			let _ = ensure_signed(origin)?;
-			for a in &accounts {
-				if Account::<T>::migrate_key_from_blake(a).is_some() {
-					// Inform other modules about the account.
-					T::MigrateAccount::migrate_account(a);
-				}
-			}
 		}
 	}
 }
@@ -1570,7 +1542,7 @@ mod tests {
 		type Version = Version;
 		type ModuleToIndex = ();
 		type AccountData = u32;
-		type MigrateAccount = (); type OnNewAccount = ();
+		type OnNewAccount = ();
 		type OnKilledAccount = RecordKilled;
 	}
 
