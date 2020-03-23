@@ -281,7 +281,7 @@ impl<D> Peer<D> {
 				Default::default()
 			};
 			self.block_import.import_block(import_block, cache).expect("block_import failed");
-			self.network.on_block_imported(header, Vec::new(), true);
+			self.network.on_block_imported(header, true);
 			at = hash;
 		}
 
@@ -785,7 +785,6 @@ pub trait TestNetFactory: Sized {
 				while let Poll::Ready(Some(notification)) = peer.imported_blocks_stream.as_mut().poll_next(cx) {
 					peer.network.on_block_imported(
 						notification.header,
-						Vec::new(),
 						true,
 					);
 				}
