@@ -32,12 +32,13 @@ use quote::quote;
 
 use inflector::Inflector;
 
-pub struct RuntimeInterfaceItem<'a> {
+/// Runtime interface function with all associated versions of this function.
+pub struct RuntimeInterfaceFunction<'a> {
 	latest_version: u32,
 	versions: BTreeMap<u32, &'a TraitItemMethod>,
 }
 
-impl<'a> RuntimeInterfaceItem<'a> {
+impl<'a> RuntimeInterfaceFunction<'a> {
 	fn new(version: u32, trait_item: &'a TraitItemMethod) -> Self {
 		Self {
 			latest_version: version,
@@ -59,7 +60,7 @@ impl<'a> RuntimeInterfaceItem<'a> {
 }
 
 pub struct RuntimeInterface<'a> {
-	items: BTreeMap<syn::Ident, RuntimeInterfaceItem<'a>>,
+	items: BTreeMap<syn::Ident, RuntimeInterfaceFunction<'a>>,
 }
 
 impl<'a> RuntimeInterface<'a> {
@@ -252,7 +253,7 @@ fn get_item_version(item: &TraitItemMethod) -> Result<Option<u32>> {
 pub fn get_runtime_interface<'a>(trait_def: &'a ItemTrait)
 	-> Result<RuntimeInterface<'a>>
 {
-	let mut result: BTreeMap<syn::Ident, RuntimeInterfaceItem<'a>> = BTreeMap::new();
+	let mut result: BTreeMap<syn::Ident, RuntimeInterfaceFunction<'a>> = BTreeMap::new();
 
 	for item in get_trait_methods(trait_def) {
 		let name = item.sig.ident.clone();
@@ -260,7 +261,7 @@ pub fn get_runtime_interface<'a>(trait_def: &'a ItemTrait)
 
 		let entry = result.entry(name.clone());
 		match entry {
-			Entry::Vacant(entry) => { entry.insert(RuntimeInterfaceItem::new(version, item)); },
+			Entry::Vacant(entry) => { entry.insert(RuntimeInterfaceFunction::new(version, item)); },
 			Entry::Occupied(mut entry) => {
 				if let Some(existing_item) = entry.get().versions.get(&version) {
 					let mut err = Error::new(
