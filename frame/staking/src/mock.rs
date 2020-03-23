@@ -520,7 +520,7 @@ pub fn make_all_reward_payment(era: EraIndex) {
 
 		assert_ok!(Staking::payout_stakers(
 			Origin::signed(1337),
-			validator_controller,
+			ledger.stash,
 			era,
 			validator_prefs.max_nominator_payouts,
 			num_of_nominators

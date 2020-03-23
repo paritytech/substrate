@@ -1352,7 +1352,7 @@ decl_module! {
 			<Self as Store>::UnappliedSlashes::insert(&era, &unapplied);
 		}
 
-				/// Make one nominator's payout for one era.
+		/// Make one nominator's payout for one era.
 		///
 		/// - `who` is the controller account of the nominator to pay out.
 		/// - `era` may not be lower than one following the most recently paid era. If it is higher,
@@ -1403,13 +1403,13 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		fn payout_stakers(origin,
-			validator: T::AccountId,
+			validator_stash: T::AccountId,
 			era: EraIndex,
 			num_of_nominators: u16,
 			max_nominator_payouts: u16,
 		) -> DispatchResult {
 			let _ = ensure_signed(origin)?;
-			Self::do_payout_stakers(validator, era, num_of_nominators, max_nominator_payouts)
+			Self::do_payout_stakers(validator_stash, era, num_of_nominators, max_nominator_payouts)
 		}
 
 		/// Rebond a portion of the stash scheduled to be unlocked.
@@ -1511,7 +1511,7 @@ impl<T: Trait> Module<T> {
 		// We cannot fail in this loop, so we simply continue if any of the input is invalid
 		for (validator, nominator_index, num_of_nominators) in validators.into_iter() {
 			// User input error, we can skip.
-			if nominator_index > num_of_nominators {
+			if nominator_index >= num_of_nominators {
 				continue;
 			}
 
@@ -1560,7 +1560,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn do_payout_stakers(
-		validator: T::AccountId,
+		validator_stash: T::AccountId,
 		era: EraIndex,
 		max_nominator_payouts: u16,
 		num_of_nominators: u16,
@@ -1576,7 +1576,8 @@ impl<T: Trait> Module<T> {
 		let era_payout = <ErasValidatorReward<T>>::get(&era)
 			.ok_or_else(|| Error::<T>::InvalidEraToReward)?;
 
-		let mut ledger = <Ledger<T>>::get(&validator).ok_or_else(|| Error::<T>::NotController)?;
+		let controller = Self::bonded(&validator_stash).ok_or(Error::<T>::NotStash)?;
+		let mut ledger = <Ledger<T>>::get(&controller).ok_or_else(|| Error::<T>::NotController)?;
 
 		let validator_prefs = Self::eras_validator_prefs(&era, &ledger.stash);
 		ensure!(max_nominator_payouts >= validator_prefs.max_nominator_payouts, Error::<T>::InvalidInput);
@@ -1594,7 +1595,7 @@ impl<T: Trait> Module<T> {
 
 		/* Input data seems good, no errors allowed after this point */
 
-		<Ledger<T>>::insert(&validator, &ledger);
+		<Ledger<T>>::insert(&controller, &ledger);
 
 		// Get Era reward points. It has TOTAL and INDIVIDUAL
 		// Find the fraction of the era reward that belongs to the validator
@@ -1635,7 +1636,7 @@ impl<T: Trait> Module<T> {
 			&ledger.stash,
 			validator_staking_payout + validator_commission_payout
 		) {
-			Self::deposit_event(RawEvent::Reward(validator, imbalance.peek()));
+			Self::deposit_event(RawEvent::Reward(ledger.stash, imbalance.peek()));
 		}
 
 		// Lets now calculate how this is split to the nominators.

@@ -1816,7 +1816,7 @@ fn reward_validator_slashing_validator_doesnt_overflow() {
 		ErasRewardPoints::<Test>::insert(0, reward);
 		ErasStakers::<Test>::insert(0, 11, &exposure);
 		ErasValidatorReward::<Test>::insert(0, stake);
-		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 10, 0, 64, 64));
+		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 0, 64, 64));
 		assert_eq!(Balances::total_balance(&11), stake * 2);
 
 		// Set staker
@@ -2833,19 +2833,19 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 		// Last kept is 1:
 		assert!(current_era - Staking::history_depth() == 1);
 		assert_noop!(
-			Staking::payout_stakers(Origin::signed(1337), 10, 0, 64, 64),
+			Staking::payout_stakers(Origin::signed(1337), 11, 0, 64, 64),
 			// Fail: Era out of history
 			Error::<Test>::InvalidEraToReward
 		);
-		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 10, 1, 64, 64));
-		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 10, 2, 64, 64));
+		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 1, 64, 64));
+		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 2, 64, 64));
 		assert_noop!(
-			Staking::payout_stakers(Origin::signed(1337), 10, 2, 64, 64),
+			Staking::payout_stakers(Origin::signed(1337), 11, 2, 64, 64),
 			// Fail: Double claim
 			Error::<Test>::InvalidEraToReward
 		);
 		assert_noop!(
-			Staking::payout_stakers(Origin::signed(1337), 10, active_era, 64, 64),
+			Staking::payout_stakers(Origin::signed(1337), 11, active_era, 64, 64),
 			// Fail: Era not finished yet
 			Error::<Test>::InvalidEraToReward
 		);
@@ -3144,16 +3144,16 @@ fn max_payout_handles_basic_errors() {
 
 		// Now lets mess up the inputs
 		// Cannot payout lower than `max_nominator_payouts`
-		assert_noop!(Staking::payout_stakers(Origin::signed(1337), 10, 1, 100, 63), Error::<Test>::InvalidInput);
+		assert_noop!(Staking::payout_stakers(Origin::signed(1337), 11, 1, 100, 63), Error::<Test>::InvalidInput);
 		// Cannot payout with wrong number of nominators
-		assert_noop!(Staking::payout_stakers(Origin::signed(1337), 10, 1, 99, 64), Error::<Test>::InvalidInput);
+		assert_noop!(Staking::payout_stakers(Origin::signed(1337), 11, 1, 99, 64), Error::<Test>::InvalidInput);
 		// Wrong Era
-		assert_noop!(Staking::payout_stakers(Origin::signed(1337), 10, 2, 100, 64), Error::<Test>::InvalidEraToReward);
+		assert_noop!(Staking::payout_stakers(Origin::signed(1337), 11, 2, 100, 64), Error::<Test>::InvalidEraToReward);
 		// Wrong Staker
-		assert_noop!(Staking::payout_stakers(Origin::signed(1337), 11, 1, 100, 64), Error::<Test>::NotController);
+		assert_noop!(Staking::payout_stakers(Origin::signed(1337), 10, 1, 100, 64), Error::<Test>::NotStash);
 
 		// Going over the limits works though
-		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 10, 1, 200, 200));
+		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 1, 200, 200));
 		// Top 64 nominators of validator 11 automatically paid out, including the validator
 		// Validator payout goes to controller.
 		assert!(Balances::free_balance(&10) > balance);

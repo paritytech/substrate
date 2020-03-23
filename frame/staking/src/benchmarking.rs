@@ -433,11 +433,11 @@ mod tests {
 			let current_era = CurrentEra::get().unwrap();
 			let controller = validator;
 			let ledger = Staking::ledger(&controller).unwrap();
-			let stash = &ledger.stash;
+			let stash = ledger.stash;
 
-			let original_free_balance = Balances::free_balance(stash);
-			assert_ok!(Staking::payout_stakers(Origin::signed(1337), controller, current_era, 64, 10));
-			let new_free_balance = Balances::free_balance(stash);
+			let original_free_balance = Balances::free_balance(&stash);
+			assert_ok!(Staking::payout_stakers(Origin::signed(1337), stash, current_era, 64, 10));
+			let new_free_balance = Balances::free_balance(&stash);
 
 			assert!(original_free_balance < new_free_balance);
 		});
