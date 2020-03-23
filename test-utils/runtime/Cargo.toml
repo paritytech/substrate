@@ -20,7 +20,7 @@ frame-executive = { version = "2.0.0-alpha.4", default-features = false, path = 
 sp-inherents = { version = "2.0.0-alpha.4", default-features = false, path = "../../primitives/inherents" }
 sp-keyring = { version = "2.0.0-alpha.4", optional = true, path = "../../primitives/keyring" }
 log = { version = "0.4.8", optional = true }
-memory-db = { version = "0.19.0", default-features = false }
+memory-db = { version = "0.20.0", default-features = false }
 sp-offchain = { path = "../../primitives/offchain", default-features = false, version = "2.0.0-alpha.4"}
 sp-core = { version = "2.0.0-alpha.4", default-features = false, path = "../../primitives/core" }
 sp-std = { version = "2.0.0-alpha.4", default-features = false, path = "../../primitives/std" }

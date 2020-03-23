@@ -454,3 +454,28 @@ function performs a DB read.
 This function serializes the current block's number into the scratch buffer.
 
 **complexity**: Assuming that the block number is of constant size, this function has constant complexity.
+
+## Built-in hashing functions
+
+This paragraph concerns the following supported built-in hash functions:
+
+- `SHA2` with 256-bit width
+- `KECCAK` with 256-bit width
+- `BLAKE2` with 128-bit and 256-bit widths
+- `TWOX` with 64-bit, 128-bit and 256-bit widths
+
+These functions compute a cryptographic hash on the given inputs and copy the
+resulting hash directly back into the sandboxed Wasm contract output buffer.
+
+Execution of the function consists of the following steps:
+
+1. Load data stored in the input buffer into an intermediate buffer.
+2. Compute the cryptographic hash `H` on the intermediate buffer.
+3. Copy back the bytes of `H` into the contract side output buffer.
+
+**complexity**: Complexity is proportional to the size of the input buffer in bytes
+as well as to the size of the output buffer in bytes. Also different cryptographic
+algorithms have different inherent complexity so users must expect the above
+mentioned crypto hashes to have varying gas costs.
+The complexity of each cryptographic hash function highly depends on the underlying
+implementation.
