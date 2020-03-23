@@ -162,8 +162,7 @@ pub fn prepare_submission<T: Trait>(
 	assignments: Vec<Assignment<T::AccountId, OffchainAccuracy>>,
 	winners: Vec<(T::AccountId, ExtendedBalance)>,
 	do_reduce: bool,
-) -> Result<(Vec<ValidatorIndex>, CompactAssignments, PhragmenScore), OffchainElectionError>
-where
+) -> Result<(Vec<ValidatorIndex>, CompactAssignments, PhragmenScore), OffchainElectionError> where
 	ExtendedBalance: From<<OffchainAccuracy as PerThing>::Inner>,
 {
 	// make sure that the snapshot is available.
