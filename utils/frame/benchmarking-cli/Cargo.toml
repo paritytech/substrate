@@ -24,6 +24,4 @@ codec = { version = "1.2.0", package = "parity-scale-codec" }
 
 [features]
 default = ["rocksdb"]
-# The RocksDB feature activates the RocksDB database backend. If it is not activated, and you pass
-# a path to a database, an error will be produced at runtime.
 rocksdb = ["sc-client-db/kvdb-rocksdb"]
