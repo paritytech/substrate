@@ -1434,24 +1434,11 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		}
 	}
 
-	/// Call this when a block has been imported in the import queue and we should announce it on
-	/// the network.
-	pub fn on_block_imported(&mut self, header: &B::Header, data: Vec<u8>, is_best: bool, also_announce: bool) {
+	/// Call this when a block has been imported in the import queue
+	pub fn on_block_imported(&mut self, header: &B::Header, is_best: bool) {
 		if is_best {
 			self.sync.update_chain_info(header);
 		}
-
-		if !also_announce {
-			return;
-		}
-
-		// blocks are not announced by light clients
-		if self.config.roles.is_light() {
-			return;
-		}
-
-		// send out block announcements
-		self.send_announcement(header, data, is_best, false);
 	}
 
 	/// Call this when a block has been finalized. The sync layer may have some additional
