@@ -139,26 +139,26 @@ fn test_array_return_value_memory_is_freed() {
 }
 
 #[test]
-fn test_verification_of_input() {
+fn test_versionning_works() {
 	// sanity check
 	call_wasm_method::<HostFunctionsDeprecated>(
 		&WASM_BINARY_DEPRECATED[..],
-		"test_verification_of_input_old",
+		"test_versionning_works",
 	);
 
 	// verification of 42 works
 	call_wasm_method::<HostFunctions>(
 		&WASM_BINARY[..],
-		"test_verification_of_input_new",
+		"test_versionning_works",
 	);
 }
 
 #[test]
-fn test_verification_of_input_deprecated_wasm_with_newest_host_functions() {
+fn test_deprecated_version_with_new_host_works() {
 	// we call to the old wasm binary with a new host functions
 	// old versions of host functions should be called and test should be ok!
 	call_wasm_method::<HostFunctions>(
 		&WASM_BINARY_DEPRECATED[..],
-		"test_verification_of_input_old",
+		"test_versionning_works",
 	);
 }

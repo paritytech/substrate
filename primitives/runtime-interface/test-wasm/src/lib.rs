@@ -104,12 +104,12 @@ pub trait TestApi {
 		val
 	}
 
-	fn verify_input(&self, data: u32) -> bool {
+	fn test_versionning(&self, data: u32) -> bool {
 		data == 42 || data == 50
 	}
 
 	#[version(2)]
-	fn verify_input(&self, data: u32) -> bool {
+	fn test_versionning(&self, data: u32) -> bool {
 		data == 42
 	}
 }
@@ -241,13 +241,13 @@ wasm_export_functions! {
 		assert_eq!(0, len);
 	}
 
-	fn test_verification_of_input_new() {
+	fn test_versionning_works() {
 		// we fix new api to accept only 42 as a proper input
 		// as opposed to sp-runtime-interface-test-wasm-deprecated::test_api::verify_input
 		// which accepted 42 and 50.
-		assert!(test_api::verify_input(42));
+		assert!(test_api::test_versionning(42));
 
-		assert!(!test_api::verify_input(50));
-		assert!(!test_api::verify_input(102));
+		assert!(!test_api::test_versionning(50));
+		assert!(!test_api::test_versionning(102));
 	}
 }
