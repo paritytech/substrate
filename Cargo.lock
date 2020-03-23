@@ -3406,10 +3406,8 @@ dependencies = [
  "sp-transaction-pool",
  "structopt",
  "substrate-browser-utils",
- "substrate-build-script-utils",
  "tempfile",
  "tracing",
- "vergen",
  "wasm-bindgen",
  "wasm-bindgen-futures",
 ]
@@ -5731,9 +5729,6 @@ dependencies = [
  "quote",
  "sc-cli",
  "sc-service",
- "serde",
- "sp-runtime",
- "sp-storage",
  "syn",
  "trybuild",
 ]
