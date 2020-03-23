@@ -523,7 +523,6 @@ impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for R
 impl<C> frame_system::offchain::SendTransactionTypes<C> for Runtime where
 	Call: From<C>,
 {
-
 	type OverarchingCall = Call;
 	type Extrinsic = UncheckedExtrinsic;
 }

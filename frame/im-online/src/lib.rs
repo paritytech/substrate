@@ -92,7 +92,7 @@ use sp_staking::{
 };
 use frame_support::{
 	decl_module, decl_event, decl_storage, Parameter, debug, decl_error,
-	traits::{Get, MigrateAccount},
+	traits::Get,
 };
 use frame_system::{self as system, ensure_none};
 use frame_system::offchain::{
