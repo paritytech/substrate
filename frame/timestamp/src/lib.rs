@@ -157,6 +157,7 @@ decl_module! {
 			<T::OnTimestampSet as OnTimestampSet<_>>::on_timestamp_set(now);
 		}
 
+		#[weight = SimpleDispatchInfo::default()]
 		fn on_finalize() {
 			assert!(<Self as Store>::DidUpdate::take(), "Timestamp must be updated once in the block");
 		}

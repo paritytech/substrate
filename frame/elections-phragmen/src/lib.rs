@@ -443,6 +443,7 @@ decl_module! {
 		}
 
 		/// What to do at the end of each block. Checks if an election needs to happen or not.
+		#[weight = SimpleDispatchInfo::default()]
 		fn on_initialize(n: T::BlockNumber) {
 			if let Err(e) = Self::end_block(n) {
 				print("Guru meditation");

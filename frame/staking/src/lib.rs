@@ -955,6 +955,7 @@ decl_module! {
 
 		fn deposit_event() = default;
 
+		#[weight = SimpleDispatchInfo::default()]
 		fn on_finalize() {
 			// Set the start of the first era.
 			if let Some(mut active_era) = Self::active_era() {
@@ -1467,6 +1468,7 @@ decl_module! {
 		/// This can be called from any origin.
 		///
 		/// - `stash`: The stash account to reap. Its balance must be zero.
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn reap_stash(_origin, stash: T::AccountId) {
 			ensure!(T::Currency::total_balance(&stash).is_zero(), Error::<T>::FundedTarget);
 			Self::kill_stash(&stash)?;

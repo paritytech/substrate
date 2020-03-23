@@ -184,11 +184,13 @@ decl_module! {
 		fn deposit_event() = default;
 
 		/// Report some misbehavior.
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn report_misbehavior(origin, _report: Vec<u8>) {
 			ensure_signed(origin)?;
 			// FIXME: https://github.com/paritytech/substrate/issues/1112
 		}
 
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn on_finalize(block_number: T::BlockNumber) {
 			// check for scheduled pending authority set changes
 			if let Some(pending_change) = <PendingChange<T>>::get() {

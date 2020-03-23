@@ -23,7 +23,11 @@
 pub use pallet_timestamp;
 
 use sp_std::{result, prelude::*};
-use frame_support::{decl_storage, decl_module, traits::{FindAuthor, Get, Randomness as RandomnessT}};
+use frame_support::{
+	decl_storage, decl_module,
+	traits::{FindAuthor, Get, Randomness as RandomnessT},
+	weights::SimpleDispatchInfo,
+};
 use sp_timestamp::OnTimestampSet;
 use sp_runtime::{generic::DigestItem, ConsensusEngineId, Perbill, PerThing};
 use sp_runtime::traits::{IsMember, SaturatedConversion, Saturating, Hash};
@@ -173,11 +177,13 @@ decl_module! {
 		const ExpectedBlockTime: T::Moment = T::ExpectedBlockTime::get();
 
 		/// Initialization
+		#[weight = SimpleDispatchInfo::default()]
 		fn on_initialize(now: T::BlockNumber) {
 			Self::do_initialize(now);
 		}
 
 		/// Block finalization
+		#[weight = SimpleDispatchInfo::default()]
 		fn on_finalize() {
 			// at the end of the block, we can safely include the new VRF output
 			// from this block into the under-construction randomness. If we've determined

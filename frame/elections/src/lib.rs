@@ -698,6 +698,7 @@ decl_module! {
 			<TermDuration<T>>::put(count);
 		}
 
+		#[weight = SimpleDispatchInfo::default()]
 		fn on_initialize(n: T::BlockNumber) {
 			if let Err(e) = Self::end_block(n) {
 				print("Guru meditation");

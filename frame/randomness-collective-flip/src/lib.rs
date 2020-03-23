@@ -69,6 +69,7 @@ fn block_number_to_index<T: Trait>(block_number: T::BlockNumber) -> usize {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn on_initialize(block_number: T::BlockNumber) {
 			let parent_hash = <frame_system::Module<T>>::parent_hash();
 

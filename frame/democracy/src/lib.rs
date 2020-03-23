@@ -499,6 +499,7 @@ decl_module! {
 
 		fn deposit_event() = default;
 
+		#[weight = SimpleDispatchInfo::default()]
 		fn on_runtime_upgrade() {
 			Self::migrate();
 		}
@@ -813,6 +814,7 @@ decl_module! {
 			<DispatchQueue<T>>::put(items);
 		}
 
+		#[weight = SimpleDispatchInfo::default()]
 		fn on_initialize(n: T::BlockNumber) {
 			if let Err(e) = Self::begin_block(n) {
 				sp_runtime::print(e);

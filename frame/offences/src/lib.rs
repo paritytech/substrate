@@ -86,6 +86,7 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event() = default;
 
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn on_runtime_upgrade() {
 			Reports::<T>::remove_all();
 			ConcurrentReportsIndex::<T>::remove_all();

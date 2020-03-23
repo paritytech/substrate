@@ -1028,6 +1028,7 @@ decl_module! {
 			Self::deposit_event(RawEvent::NewMaxMembers(max));
 		}
 
+		#[weight = SimpleDispatchInfo::default()]
 		fn on_initialize(n: T::BlockNumber) {
 			let mut members = vec![];
 

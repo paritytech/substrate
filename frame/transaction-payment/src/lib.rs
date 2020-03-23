@@ -90,6 +90,7 @@ decl_module! {
 		/// The fee to be paid for making a transaction; the per-byte portion.
 		const TransactionByteFee: BalanceOf<T> = T::TransactionByteFee::get();
 
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn on_finalize() {
 			NextFeeMultiplier::mutate(|fm| {
 				*fm = T::FeeMultiplierUpdate::convert(*fm)

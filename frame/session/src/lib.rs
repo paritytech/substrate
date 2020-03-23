@@ -495,6 +495,7 @@ decl_module! {
 
 		/// Called when a block is initialized. Will rotate session if it is the last
 		/// block of the current session.
+		#[weight = SimpleDispatchInfo::default()]
 		fn on_initialize(n: T::BlockNumber) {
 			if T::ShouldEndSession::should_end_session(n) {
 				Self::rotate_session();

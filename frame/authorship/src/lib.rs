@@ -185,6 +185,7 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
+		#[weight = SimpleDispatchInfo::default()]
 		fn on_initialize(now: T::BlockNumber) {
 			let uncle_generations = T::UncleGenerations::get();
 			// prune uncles that are older than the allowed number of generations.
@@ -198,6 +199,7 @@ decl_module! {
 			T::EventHandler::note_author(Self::author());
 		}
 
+		#[weight = SimpleDispatchInfo::default()]
 		fn on_finalize() {
 			// ensure we never go to trie with these values.
 			<Self as Store>::Author::kill();

@@ -245,6 +245,7 @@ decl_module! {
 
 		/// Every `Period` blocks the `Members` set is refreshed from the
 		/// highest scoring members in the pool.
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn on_initialize(n: T::BlockNumber) {
 			if n % T::Period::get() == Zero::zero() {
 				let pool = <Pool<T, I>>::get();
@@ -263,6 +264,7 @@ decl_module! {
 		///
 		/// The `index` parameter of this function must be set to
 		/// the index of the transactor in the `Pool`.
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		pub fn submit_candidacy(origin) {
 			let who = ensure_signed(origin)?;
 			ensure!(!<CandidateExists<T, I>>::contains_key(&who), Error::<T, I>::AlreadyInPool);
@@ -292,6 +294,7 @@ decl_module! {
 		///
 		/// The `index` parameter of this function must be set to
 		/// the index of the transactor in the `Pool`.
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		pub fn withdraw_candidacy(
 			origin,
 			index: u32
@@ -311,6 +314,7 @@ decl_module! {
 		///
 		/// The `index` parameter of this function must be set to
 		/// the index of `dest` in the `Pool`.
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		pub fn kick(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -335,6 +339,7 @@ decl_module! {
 		///
 		/// The `index` parameter of this function must be set to
 		/// the index of the `dest` in the `Pool`.
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		pub fn score(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -375,6 +380,7 @@ decl_module! {
 		/// (this happens each `Period`).
 		///
 		/// May only be called from root.
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		pub fn change_member_count(origin, count: u32) {
 			ensure_root(origin)?;
 			<MemberCount<I>>::put(&count);

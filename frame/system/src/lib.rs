@@ -68,13 +68,14 @@
 //! ### Example - Get extrinsic count and parent hash for the current block
 //!
 //! ```
-//! use frame_support::{decl_module, dispatch};
+//! use frame_support::{decl_module, dispatch, weights::SimpleDispatchInfo};
 //! use frame_system::{self as system, ensure_signed};
 //!
 //! pub trait Trait: system::Trait {}
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//! 		#[weight = SimpleDispatchInfo::default()]
 //! 		pub fn system_module_example(origin) -> dispatch::DispatchResult {
 //! 			let _sender = ensure_signed(origin)?;
 //! 			let _extrinsic_count = <system::Module<T>>::extrinsic_count();
