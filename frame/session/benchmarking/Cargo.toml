@@ -1,0 +1,28 @@
+[package]
+name = "pallet-session-benchmarking"
+version = "2.0.0-alpha.4"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+license = "GPL-3.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+description = "FRAME sessions pallet benchmarking"
+
+[dependencies]
+sp-std = { version = "2.0.0-alpha.4", default-features = false, path = "../../../primitives/std" }
+sp-runtime = { version = "2.0.0-alpha.4", default-features = false, path = "../../../primitives/runtime" }
+frame-system = { version = "2.0.0-alpha.4", default-features = false, path = "../../system" }
+frame-benchmarking = { version = "2.0.0-alpha.4", default-features = false, path = "../../benchmarking" }
+pallet-staking = { version = "2.0.0-alpha.4", default-features = false, features = ["runtime-benchmarks"], path = "../../staking" }
+pallet-session = { version = "2.0.0-alpha.4", default-features = false, path = "../../session" }
+
+[features]
+default = ["std"]
+std = [
+	"sp-std/std",
+	"sp-runtime/std",
+	"frame-system/std",
+	"frame-benchmarking/std",
+	"pallet-staking/std",
+	"pallet-session/std",
+]

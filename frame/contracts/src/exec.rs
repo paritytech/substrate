@@ -120,6 +120,21 @@ pub trait Ext {
 		input_data: Vec<u8>,
 	) -> Result<(AccountIdOf<Self::T>, ExecReturnValue), ExecError>;
 
+	/// Transfer some amount of funds into the specified account.
+	fn transfer(
+		&mut self,
+		to: &AccountIdOf<Self::T>,
+		value: BalanceOf<Self::T>,
+		gas_meter: &mut GasMeter<Self::T>,
+	) -> Result<(), DispatchError>;
+
+	/// Transfer all funds to `beneficiary` and delete the contract.
+	fn terminate(
+		&mut self,
+		beneficiary: &AccountIdOf<Self::T>,
+		gas_meter: &mut GasMeter<Self::T>,
+	) -> Result<(), DispatchError>;
+
 	/// Call (possibly transferring some amount of funds) into the specified account.
 	fn call(
 		&mut self,
@@ -274,7 +289,7 @@ pub enum DeferredAction<T: Trait> {
 }
 
 pub struct ExecutionContext<'a, T: Trait + 'a, V, L> {
-	pub parent: Option<&'a ExecutionContext<'a, T, V, L>>,
+	pub caller: Option<&'a ExecutionContext<'a, T, V, L>>,
 	pub self_account: T::AccountId,
 	pub self_trie_id: Option<TrieId>,
 	pub overlay: OverlayAccountDb<'a, T>,
@@ -299,7 +314,7 @@ where
 	/// account (not a contract).
 	pub fn top_level(origin: T::AccountId, cfg: &'a Config<T>, vm: &'a V, loader: &'a L) -> Self {
 		ExecutionContext {
-			parent: None,
+			caller: None,
 			self_trie_id: None,
 			self_account: origin,
 			overlay: OverlayAccountDb::<T>::new(&DirectAccountDb),
@@ -317,7 +332,7 @@ where
 		-> ExecutionContext<'b, T, V, L>
 	{
 		ExecutionContext {
-			parent: Some(self),
+			caller: Some(self),
 			self_trie_id: trie_id,
 			self_account: dest,
 			overlay: OverlayAccountDb::new(&self.overlay),
@@ -329,6 +344,23 @@ where
 			timestamp: self.timestamp.clone(),
 			block_number: self.block_number.clone(),
 		}
+	}
+
+	/// Transfer balance to `dest` without calling any contract code.
+	pub fn transfer(
+		&mut self,
+		dest: T::AccountId,
+		value: BalanceOf<T>,
+		gas_meter: &mut GasMeter<T>
+	) -> Result<(), DispatchError> {
+		transfer(
+			gas_meter,
+			TransferCause::Call,
+			&self.self_account.clone(),
+			&dest,
+			value,
+			self,
+		)
 	}
 
 	/// Make a call to the specified address, optionally transferring some funds.
@@ -402,20 +434,6 @@ where
 							input_data,
 							gas_meter,
 						)?;
-
-					// Destroy contract if insufficient remaining balance.
-					if nested.overlay.get_balance(&dest) < nested.config.existential_deposit {
-						let parent = nested.parent
-							.expect("a nested execution context must have a parent; qed");
-						if parent.is_live(&dest) {
-							return Err(ExecError {
-								reason: "contract cannot be destroyed during recursive execution".into(),
-								buffer: output.data,
-							});
-						}
-
-						nested.overlay.destroy_contract(&dest);
-					}
 
 					Ok(output)
 				}
@@ -510,9 +528,37 @@ where
 		Ok((dest, output))
 	}
 
-	fn new_call_context<'b>(&'b mut self, caller: T::AccountId, value: BalanceOf<T>)
-		-> CallContext<'b, 'a, T, V, L>
-	{
+	pub fn terminate(
+		&mut self,
+		beneficiary: &T::AccountId,
+		gas_meter: &mut GasMeter<T>,
+	) -> Result<(), DispatchError> {
+		let self_id = self.self_account.clone();
+		let value = self.overlay.get_balance(&self_id);
+		if let Some(caller) = self.caller {
+			if caller.is_live(&self_id) {
+				return Err(DispatchError::Other(
+					"Cannot terminate a contract that is present on the call stack",
+				));
+			}
+		}
+		transfer(
+			gas_meter,
+			TransferCause::Terminate,
+			&self_id,
+			beneficiary,
+			value,
+			self,
+		)?;
+		self.overlay.destroy_contract(&self_id);
+		Ok(())
+	}
+
+	fn new_call_context<'b>(
+		&'b mut self,
+		caller: T::AccountId,
+		value: BalanceOf<T>,
+	) -> CallContext<'b, 'a, T, V, L> {
 		let timestamp = self.timestamp.clone();
 		let block_number = self.block_number.clone();
 		CallContext {
@@ -546,7 +592,7 @@ where
 	/// stack, meaning it is in the middle of an execution.
 	fn is_live(&self, account: &T::AccountId) -> bool {
 		&self.self_account == account ||
-			self.parent.map_or(false, |parent| parent.is_live(account))
+			self.caller.map_or(false, |caller| caller.is_live(account))
 	}
 }
 
@@ -581,6 +627,7 @@ impl<T: Trait> Token<T> for TransferFeeToken<BalanceOf<T>> {
 enum TransferCause {
 	Call,
 	Instantiate,
+	Terminate,
 }
 
 /// Transfer some funds from `transactor` to `dest`.
@@ -617,7 +664,7 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 			Instantiate => ContractInstantiate,
 
 			// Otherwise the fee is to transfer to an account.
-			Call => TransferFeeKind::Transfer,
+			Call | Terminate => TransferFeeKind::Transfer,
 		};
 		TransferFeeToken {
 			kind,
@@ -639,11 +686,19 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 	if to_balance.is_zero() && value < ctx.config.existential_deposit {
 		Err("value too low to create account")?
 	}
+
+	// Only ext_terminate is allowed to bring the sender below the existential deposit
+	let required_balance = match cause {
+		Terminate => 0.into(),
+		_ => ctx.config.existential_deposit
+	};
+
 	T::Currency::ensure_can_withdraw(
 		transactor,
 		value,
 		WithdrawReason::Transfer.into(),
-		new_from_balance,
+		new_from_balance.checked_sub(&required_balance)
+			.ok_or("brings sender below existential deposit")?,
 	)?;
 
 	let new_to_balance = match to_balance.checked_add(&value) {
@@ -704,6 +759,23 @@ where
 		input_data: Vec<u8>,
 	) -> Result<(AccountIdOf<T>, ExecReturnValue), ExecError> {
 		self.ctx.instantiate(endowment, gas_meter, code_hash, input_data)
+	}
+
+	fn transfer(
+		&mut self,
+		to: &T::AccountId,
+		value: BalanceOf<T>,
+		gas_meter: &mut GasMeter<T>,
+	) -> Result<(), DispatchError> {
+		self.ctx.transfer(to.clone(), value, gas_meter)
+	}
+
+	fn terminate(
+		&mut self,
+		beneficiary: &AccountIdOf<Self::T>,
+		gas_meter: &mut GasMeter<Self::T>,
+	) -> Result<(), DispatchError> {
+		self.ctx.terminate(beneficiary, gas_meter)
 	}
 
 	fn call(
@@ -1287,7 +1359,7 @@ mod tests {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
 
-			ctx.overlay.set_balance(&ALICE, 1);
+			ctx.overlay.set_balance(&ALICE, 100);
 
 			let result = ctx.instantiate(
 				1,
@@ -1557,6 +1629,7 @@ mod tests {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
 			ctx.overlay.set_balance(&ALICE, 1000);
+			ctx.overlay.set_balance(&BOB, 100);
 			ctx.overlay.instantiate_contract(&BOB, instantiator_ch).unwrap();
 
 			assert_matches!(
@@ -1616,6 +1689,7 @@ mod tests {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
 			ctx.overlay.set_balance(&ALICE, 1000);
+			ctx.overlay.set_balance(&BOB, 100);
 			ctx.overlay.instantiate_contract(&BOB, instantiator_ch).unwrap();
 
 			assert_matches!(
@@ -1635,6 +1709,45 @@ mod tests {
 	}
 
 	#[test]
+	fn termination_from_instantiate_fails() {
+		let vm = MockVm::new();
+
+		let mut loader = MockLoader::empty();
+
+		let terminate_ch = loader.insert(|mut ctx| {
+			ctx.ext.terminate(&ALICE, &mut ctx.gas_meter).unwrap();
+			exec_success()
+		});
+
+		ExtBuilder::default()
+			.existential_deposit(15)
+			.build()
+			.execute_with(|| {
+				let cfg = Config::preload();
+				let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
+				ctx.overlay.set_balance(&ALICE, 1000);
+
+				assert_matches!(
+					ctx.instantiate(
+						100,
+						&mut GasMeter::<Test>::with_limit(10000, 1),
+						&terminate_ch,
+						vec![],
+					),
+					Err(ExecError {
+						reason: DispatchError::Other("insufficient remaining balance"),
+						buffer
+					}) if buffer == Vec::<u8>::new()
+				);
+
+				assert_eq!(
+					&ctx.events(),
+					&[]
+				);
+			});
+	}
+
+	#[test]
 	fn rent_allowance() {
 		let vm = MockVm::new();
 		let mut loader = MockLoader::empty();
@@ -1649,7 +1762,7 @@ mod tests {
 			let cfg = Config::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
 
-			ctx.overlay.set_balance(&ALICE, 1);
+			ctx.overlay.set_balance(&ALICE, 100);
 
 			let result = ctx.instantiate(
 				1,

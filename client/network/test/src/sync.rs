@@ -657,3 +657,40 @@ fn full_sync_requires_block_body() {
 	net.block_until_idle();
 	assert_eq!(net.peer(1).client.info().best_number, 0);
 }
+
+#[test]
+fn imports_stale_once() {
+	let _ = ::env_logger::try_init();
+
+	fn import_with_announce(net: &mut TestNet, hash: H256) {
+		// Announce twice
+		net.peer(0).announce_block(hash, Vec::new());
+		net.peer(0).announce_block(hash, Vec::new());
+
+		block_on(futures::future::poll_fn::<(), _>(|cx| {
+			net.poll(cx);
+			if net.peer(1).client().header(&BlockId::Hash(hash)).unwrap().is_some() {
+				Poll::Ready(())
+			} else {
+				Poll::Pending
+			}
+		}));
+	}
+
+	// given the network with 2 full nodes
+	let mut net = TestNet::new(2);
+
+	// let them connect to each other
+	net.block_until_sync();
+
+	// check that NEW block is imported from announce message
+	let new_hash = net.peer(0).push_blocks(1, false);
+	import_with_announce(&mut net, new_hash);
+	assert_eq!(net.peer(1).num_processed_blocks(), 1);
+
+	// check that KNOWN STALE block is imported from announce message
+	let known_stale_hash = net.peer(0).push_blocks_at(BlockId::Number(0), 1, true);
+	import_with_announce(&mut net, known_stale_hash);
+	assert_eq!(net.peer(1).num_processed_blocks(), 2);
+}
+
