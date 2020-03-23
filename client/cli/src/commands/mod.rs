@@ -110,7 +110,6 @@ macro_rules! match_and_call {
 		}
 	};
 
-/*
 	(fn $method:ident <C: SubstrateCLI> ( &self $(, $arg:ident : $ty:ty)* ) $(-> $result:ty)?) => {
 		fn $method <C: SubstrateCLI> (&self, $($arg : $ty),*) $(-> $result)? {
 			match self {
@@ -123,7 +122,6 @@ macro_rules! match_and_call {
 			}
 		}
 	};
-*/
 }
 
 impl CliConfiguration for Subcommand {
@@ -133,27 +131,9 @@ impl CliConfiguration for Subcommand {
 
 	match_and_call! { fn get_database_config(&self, base_path: &PathBuf, cache_size: Option<usize>) -> Result<DatabaseConfig> }
 
-	fn get_chain_spec<C: SubstrateCLI>(&self) -> Result<Box<dyn ChainSpec>> {
-		match self {
-			Subcommand::BuildSpec(cmd) => cmd.get_chain_spec::<C>(),
-			Subcommand::ExportBlocks(cmd) => cmd.get_chain_spec::<C>(),
-			Subcommand::ImportBlocks(cmd) => cmd.get_chain_spec::<C>(),
-			Subcommand::CheckBlock(cmd) => cmd.get_chain_spec::<C>(),
-			Subcommand::Revert(cmd) => cmd.get_chain_spec::<C>(),
-			Subcommand::PurgeChain(cmd) => cmd.get_chain_spec::<C>(),
-		}
-	}
+	match_and_call! { fn get_chain_spec<C: SubstrateCLI>(&self) -> Result<Box<dyn ChainSpec>> }
 
-	fn init<C: SubstrateCLI>(&self) -> Result<()> {
-		match self {
-			Subcommand::BuildSpec(cmd) => cmd.init::<C>(),
-			Subcommand::ExportBlocks(cmd) => cmd.init::<C>(),
-			Subcommand::ImportBlocks(cmd) => cmd.init::<C>(),
-			Subcommand::CheckBlock(cmd) => cmd.init::<C>(),
-			Subcommand::Revert(cmd) => cmd.init::<C>(),
-			Subcommand::PurgeChain(cmd) => cmd.init::<C>(),
-		}
-	}
+	match_and_call! { fn init<C: SubstrateCLI>(&self) -> Result<()> }
 
 	match_and_call! { fn get_pruning(&self, is_dev: bool, roles: Roles) -> Result<PruningMode> }
 
