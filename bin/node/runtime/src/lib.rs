@@ -35,7 +35,7 @@ use sp_runtime::{
 	impl_opaque_keys, generic, create_runtime_str,
 };
 use sp_runtime::curve::PiecewiseLinear;
-use sp_runtime::transaction_validity::TransactionValidity;
+use sp_runtime::transaction_validity::{TransactionValidity, TransactionSource};
 use sp_runtime::traits::{
 	self, BlakeTwo256, Block as BlockT, StaticLookup, SaturatedConversion,
 	ConvertInto, OpaqueKeys,
@@ -735,7 +735,10 @@ impl_runtime_apis! {
 	}
 
 	impl sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block> for Runtime {
-		fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
+		fn validate_transaction(
+			tx: <Block as BlockT>::Extrinsic,
+			source: TransactionSource,
+		) -> TransactionValidity {
 			Executive::validate_transaction(tx)
 		}
 	}
