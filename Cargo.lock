@@ -9273,17 +9273,16 @@ checksum = "d089681aa106a86fade1b0128fb5daf07d5867a509ab036d99988dec80429a57"
 
 [[package]]
 name = "yamux"
-version = "0.4.4"
+version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f03098897b734bd943ab23f6aa9f98aafd72a88516deedd66f9d564c57bf2f19"
+checksum = "84300bb493cc878f3638b981c62b4632ec1a5c52daaa3036651e8c106d3b55ea"
 dependencies = [
- "bytes 0.5.4",
  "futures 0.3.4",
  "log 0.4.8",
  "nohash-hasher",
  "parking_lot 0.10.0",
  "rand 0.7.3",
- "thiserror",
+ "static_assertions",
 ]
 
 [[package]]
