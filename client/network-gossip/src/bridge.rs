@@ -17,7 +17,6 @@
 use crate::{Network, Validator};
 use crate::state_machine::{ConsensusGossip, TopicNotification, PERIODIC_MAINTENANCE_INTERVAL};
 
-use sc_network::message::generic::ConsensusMessage;
 use sc_network::{Event, ReputationChange};
 
 use futures::{prelude::*, channel::mpsc};
@@ -77,12 +76,7 @@ impl<B: BlockT> GossipEngine<B> {
 		topic: B::Hash,
 		message: Vec<u8>,
 	) {
-		let message = ConsensusMessage {
-			engine_id: self.engine_id,
-			data: message,
-		};
-
-		self.state_machine.register_message(topic, message);
+		self.state_machine.register_message(topic, self.engine_id, message);
 	}
 
 	/// Broadcast all messages with given topic.
@@ -114,22 +108,14 @@ impl<B: BlockT> GossipEngine<B> {
 		message: Vec<u8>,
 		force: bool,
 	) {
-		let message = ConsensusMessage {
-			engine_id: self.engine_id,
-			data: message,
-		};
-
-		self.state_machine.multicast(&mut *self.network, topic, message, force)
+		self.state_machine.multicast(&mut *self.network, topic, self.engine_id, message, force)
 	}
 
 	/// Send addressed message to the given peers. The message is not kept or multicast
 	/// later on.
 	pub fn send_message(&mut self, who: Vec<sc_network::PeerId>, data: Vec<u8>) {
 		for who in &who {
-			self.state_machine.send_message(&mut *self.network, who, ConsensusMessage {
-				engine_id: self.engine_id,
-				data: data.clone(),
-			});
+			self.state_machine.send_message(&mut *self.network, who, self.engine_id, data.clone());
 		}
 	}
 
@@ -170,9 +156,7 @@ impl<B: BlockT> Future for GossipEngine<B> {
 							remote,
 							messages.into_iter()
 								.filter_map(|(engine, data)| if engine == engine_id {
-									Some(ConsensusMessage {
-										engine_id: engine, data: data.to_vec(),
-									})
+									Some((engine, data.to_vec()))
 								} else { None })
 								.collect()
 						);

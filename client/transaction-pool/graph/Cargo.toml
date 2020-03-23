@@ -19,7 +19,7 @@ sp-blockchain = { version = "2.0.0-alpha.4", path = "../../../primitives/blockch
 sp-core = { version = "2.0.0-alpha.4", path = "../../../primitives/core" }
 sp-runtime = { version = "2.0.0-alpha.4", path = "../../../primitives/runtime" }
 sp-transaction-pool = { version = "2.0.0-alpha.4", path = "../../../primitives/transaction-pool" }
-parity-util-mem = { version = "0.5.2", default-features = false, features = ["primitive-types"] }
+parity-util-mem = { version = "0.6.0", default-features = false, features = ["primitive-types"] }
 linked-hash-map = "0.5.2"
 
 [dev-dependencies]

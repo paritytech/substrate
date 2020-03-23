@@ -33,7 +33,7 @@ hyper-rustls = "0.20"
 
 [dev-dependencies]
 env_logger = "0.7.0"
-fdlimit = "0.1"
+fdlimit = "0.1.4"
 sc-client-db = { version = "0.8.0-alpha.4", default-features = true, path = "../db/" }
 sc-transaction-pool = { version = "2.0.0-alpha.4", path = "../../client/transaction-pool" }
 sp-transaction-pool = { version = "2.0.0-alpha.4", path = "../../primitives/transaction-pool" }
