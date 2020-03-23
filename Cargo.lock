@@ -7442,11 +7442,23 @@ dependencies = [
  "sp-runtime",
  "sp-runtime-interface",
  "sp-runtime-interface-test-wasm",
+ "sp-runtime-interface-test-wasm-deprecated",
  "sp-state-machine",
 ]
 
 [[package]]
 name = "sp-runtime-interface-test-wasm"
+version = "2.0.0-dev"
+dependencies = [
+ "sp-core",
+ "sp-io",
+ "sp-runtime-interface",
+ "sp-std",
+ "substrate-wasm-builder-runner",
+]
+
+[[package]]
+name = "sp-runtime-interface-test-wasm-deprecated"
 version = "2.0.0-dev"
 dependencies = [
  "sp-core",
