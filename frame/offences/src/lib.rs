@@ -42,6 +42,13 @@ type OpaqueTimeSlot = Vec<u8>;
 /// A type alias for a report identifier.
 type ReportIdOf<T> = <T as frame_system::Trait>::Hash;
 
+/// Type of data stored as a deferred offence
+type DeferredOffenceOf<T> = (
+	Vec<OffenceDetails<<T as frame_system::Trait>::AccountId, <T as Trait>::IdentificationTuple>>,
+	Vec<Perbill>,
+	SessionIndex,
+);
+
 /// Offences trait
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
@@ -61,11 +68,7 @@ decl_storage! {
 
 		/// Deferred reports that have been rejected by the offence handler and need to be submitted
 		/// at a later time.
-		DeferredOffences get(deferred_reports): Vec<(
-			Vec<OffenceDetails<T::AccountId, T::IdentificationTuple>>,
-			Vec<Perbill>,
-			SessionIndex,
-		)>;
+		DeferredOffences get(deferred_offences): Vec<DeferredOffenceOf<T>>;
 
 		/// A vector of reports of the same kind that happened at the same time slot.
 		ConcurrentReportsIndex:
@@ -104,20 +107,19 @@ decl_module! {
 		fn on_initialize(now: T::BlockNumber) {
 			// only decode storage if we can actually submit anything again.
 			if T::OnOffenceHandler::can_report() {
-				<DeferredOffences<T>>::take()
-					.iter()
-					.for_each(|(o, p, s)| {
-						// OPTIMIZATION: this function mutates once per loop; we could manage all
-						// the writes in-memory and mutate only once. Overlay cache should alleviate
-						// the main bottleneck though.
-						if !Self::report_or_store_offence(o, p, *s) {
+				<DeferredOffences<T>>::mutate(|deferred| {
+					// keep those that fail to be reported again. An error log is emitted here; this
+					// should not happen if staking's `can_report` is implemented properly.
+					deferred.retain(|(o, p, s)| {
+						T::OnOffenceHandler::on_offence(&o, &p, *s).map_err(|_| {
 							debug::native::error!(
 								target: "pallet-offences",
 								"re-submitting a deferred slash returned Err at {}. This should not happen with pallet-staking",
 								now,
 							);
-						}
-					});
+						}).is_err()
+					})
+				})
 			}
 		}
 	}

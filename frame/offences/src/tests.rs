@@ -165,7 +165,7 @@ fn doesnt_deposit_event_for_dups() {
 			System::events(),
 			vec![EventRecord {
 				phase: Phase::Initialization,
-				event: TestEvent::offences(crate::Event::Offence(KIND, time_slot.encode()), true),
+				event: TestEvent::offences(crate::Event::Offence(KIND, time_slot.encode(), true)),
 				topics: vec![],
 			}]
 		);
@@ -225,12 +225,12 @@ fn should_queue_and_resubmit_rejected_offence() {
 			offenders: vec![5],
 		};
 		Offences::report_offence(vec![], offence).unwrap();
-		assert_eq!(Offences::deferred_reports().len(), 1);
+		assert_eq!(Offences::deferred_offences().len(), 1);
 		// event also indicates unapplied.
 		assert_eq!(
 			System::events(),
 			vec![EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: TestEvent::offences(crate::Event::Offence(KIND, 42u128.encode(), false)),
 				topics: vec![],
 			}]
@@ -246,7 +246,7 @@ fn should_queue_and_resubmit_rejected_offence() {
 			offenders: vec![5],
 		};
 		Offences::report_offence(vec![], offence).unwrap();
-		assert_eq!(Offences::deferred_reports().len(), 2);
+		assert_eq!(Offences::deferred_offences().len(), 2);
 
 		set_can_report(true);
 
@@ -257,9 +257,9 @@ fn should_queue_and_resubmit_rejected_offence() {
 			offenders: vec![5],
 		};
 		Offences::report_offence(vec![], offence).unwrap();
-		assert_eq!(Offences::deferred_reports().len(), 2);
+		assert_eq!(Offences::deferred_offences().len(), 2);
 
 		Offences::on_initialize(3);
-		assert_eq!(Offences::deferred_reports().len(), 0);
+		assert_eq!(Offences::deferred_offences().len(), 0);
 	})
 }

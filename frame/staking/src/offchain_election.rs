@@ -31,6 +31,7 @@ use sp_runtime::PerThing;
 use sp_runtime::{RuntimeAppPublic, RuntimeDebug};
 use sp_std::{convert::TryInto, prelude::*};
 
+/// Error types related to the offchain election machinery.
 #[derive(RuntimeDebug)]
 pub enum OffchainElectionError {
 	/// No signing key has been found on the current node that maps to a validators. This node
@@ -55,7 +56,7 @@ impl From<sp_phragmen::Error> for OffchainElectionError {
 	}
 }
 
-/// The type of signature data encoded with the unsigned submission
+/// The type of signature data encoded with the unsigned submission.
 pub(crate) type SignaturePayload<'a> = (
 	&'a [ValidatorIndex],
 	&'a CompactAssignments,
@@ -63,9 +64,18 @@ pub(crate) type SignaturePayload<'a> = (
 	&'a u32,
 );
 
+/// Storage key used to store the persistent offchain worker status.
 pub(crate) const OFFCHAIN_HEAD_DB: &[u8] = b"parity/staking-election/";
-const OFFCHAIN_REPEAT: u32 = 5;
+/// The repeat threshold of the offchain worker. This means we won't run the offchain worker twice
+/// within a window of 5 blocks.
+pub(crate) const OFFCHAIN_REPEAT: u32 = 5;
 
+/// Checks if an execution of the offchain worker is permitted at the given block number, or not.
+///
+/// This essentially makes sure that we don't run on previous blocks in case of a re-org, and we
+/// don't run twice within a window of length [`OFFCHAIN_REPEAT`].
+///
+/// Returns `Ok(())` if offchain worker should happen, `Err(reason)` otherwise.
 pub(crate) fn set_check_offchain_execution_status<T: Trait>(
 	now: T::BlockNumber,
 ) -> Result<(), &'static str> {
