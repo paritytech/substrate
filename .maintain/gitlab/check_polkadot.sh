@@ -60,7 +60,7 @@ then
     boldprint "no companion pr declared - building polkadot:master"
   fi
 else
-  boldprint "this is not a pull request - building polkadot master"
+  boldprint "this is not a pull request - building polkadot:master"
 fi
 
 # Make sure we override the crates in native and wasm build
@@ -77,5 +77,4 @@ cargo update
 
 # Test Polkadot pr or master branch with this Substrate commit.
 time cargo test --all --release --verbose
-
 
