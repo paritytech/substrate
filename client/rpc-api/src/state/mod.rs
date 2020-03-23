@@ -31,7 +31,10 @@ pub use self::gen_client::Client as StateClient;
 
 /// Substrate state API
 #[rpc]
-pub trait StateApi<Hash> {
+pub trait StateApi<Hash>
+	where
+		Hash: Copy,
+{
 	/// RPC Metadata
 	type Metadata;
 
@@ -135,6 +138,16 @@ pub trait StateApi<Hash> {
 		block: Hash,
 		hash: Option<Hash>
 	) -> FutureResult<Vec<StorageChangeSet<Hash>>>;
+
+	/// Query storage entries (by key) starting at block hash given as the second parameter.
+	#[rpc(name = "state_queryStorageAt")]
+	fn query_storage_at(
+		&self,
+		keys: Vec<StorageKey>,
+		at: Hash,
+	) -> FutureResult<Vec<StorageChangeSet<Hash>>> {
+		self.query_storage(keys, at, Some(at))
+	}
 
 	/// New runtime version subscription
 	#[pubsub(

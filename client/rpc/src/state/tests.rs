@@ -294,6 +294,28 @@ fn should_query_storage() {
 
 		assert_eq!(result.wait().unwrap(), expected);
 
+		// single block range
+		let result = api.query_storage_at(
+			keys.clone(),
+			block1_hash,
+		);
+
+		assert_eq!(
+			result.wait().unwrap(),
+			vec![
+				StorageChangeSet {
+					block: block1_hash,
+					changes: vec![
+						(StorageKey(vec![1_u8]), None),
+						(StorageKey(vec![2_u8]), Some(StorageData(vec![2_u8]))),
+						(StorageKey(vec![3_u8]), Some(StorageData(vec![3_u8]))),
+						(StorageKey(vec![4_u8]), None),
+						(StorageKey(vec![5_u8]), Some(StorageData(vec![0_u8]))),
+					]
+				}
+			]
+		);
+
 		// Inverted range.
 		let result = api.query_storage(
 			keys.clone(),
@@ -306,7 +328,7 @@ fn should_query_storage() {
 			Err(Error::InvalidBlockRange {
 				from: format!("1 ({:?})", block1_hash),
 				to: format!("0 ({:?})", genesis_hash),
-				details: "from number >= to number".to_owned(),
+				details: "from number > to number".to_owned(),
 			}).map_err(|e| e.to_string())
 		);
 
