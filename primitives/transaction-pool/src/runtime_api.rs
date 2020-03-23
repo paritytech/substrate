@@ -35,8 +35,8 @@ sp_api::decl_runtime_apis! {
 		/// Note that this call may be performed by the pool multiple times and transactions
 		/// might be verified in any possible order.
 		fn validate_transaction(
-			tx: <Block as BlockT>::Extrinsic,
 			source: TransactionSource,
+			tx: <Block as BlockT>::Extrinsic,
 		) -> TransactionValidity;
 	}
 }

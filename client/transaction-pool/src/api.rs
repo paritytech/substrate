@@ -29,10 +29,10 @@ use sc_client_api::{
 };
 use sp_runtime::{
 	generic::BlockId, traits::{self, Block as BlockT, BlockIdTo, Header as HeaderT, Hash as HashT},
-	transaction_validity::TransactionValidity,
+	transaction_validity::{TransactionValidity, TransactionSource},
 };
 use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
-use sp_api::ProvideRuntimeApi;
+use sp_api::{ProvideRuntimeApi, ApiExt};
 
 use crate::error::{self, Error};
 
@@ -88,8 +88,20 @@ impl<Client, Block> sc_transaction_graph::ChainApi for FullChainApi<Client, Bloc
 		let at = at.clone();
 
 		self.pool.spawn_ok(futures_diagnose::diagnose("validate-transaction", async move {
-			let res = client.runtime_api().validate_transaction(&at, uxt)
-				.map_err(|e| Error::RuntimeApi(format!("{:?}", e)));
+			let runtime_api = client.runtime_api();
+			let has_v2 = runtime_api
+				.has_api_with::<dyn TaggedTransactionQueue<Self::Block, Error=()>, _>(
+					&at, |v| v >= 2,
+				)
+				.unwrap_or_default();
+			let res = if has_v2 {
+				// TODO [ToDr] source
+				runtime_api.validate_transaction(&at, TransactionSource::External, uxt)
+			} else {
+				#[allow(deprecated)] // old validate_transaction
+				runtime_api.validate_transaction_before_version_2(&at, uxt)
+			};
+			let res = res.map_err(|e| Error::RuntimeApi(format!("{:?}", e)));
 			if let Err(e) = tx.send(res) {
 				log::warn!("Unable to send a validate transaction result: {:?}", e);
 			}
