@@ -566,7 +566,7 @@ impl Pair {
 		(Pair(kp), mini_key.to_bytes())
 	}
 
-	/// Verify a signature on a message. Returns true if the signature is good.
+	/// Verify a signature on a message. Returns `true` if the signature is good.
 	/// Supports old 0.1.1 deprecated signatures and should be used only for backward
 	/// compatibility.
 	pub fn verify_deprecated<M: AsRef<[u8]>>(sig: &Signature, message: M, pubkey: &Public) -> bool {
