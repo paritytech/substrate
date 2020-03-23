@@ -185,3 +185,12 @@ pub fn remove_storage_prefix(module: &[u8], item: &[u8], hash: &[u8]) {
 	key[32..].copy_from_slice(hash);
 	frame_support::storage::unhashed::kill_prefix(&key)
 }
+
+/// Get a particular value in storage by the `module`, the map's `item` name and the key `hash`.
+pub fn take_storage_item<K: Encode + Sized, T: Decode + Sized, H: StorageHasher>(
+	module: &[u8],
+	item: &[u8],
+	key: K,
+) -> Option<T> {
+	take_storage_value(module, item, key.using_encoded(H::hash).as_ref())
+}

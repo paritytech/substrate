@@ -353,8 +353,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 
 	/// Handle an incoming message for topic by who via protocol. Discard message if topic already
 	/// known, the message is old, its source peers isn't a registered peer or the connection to
-	/// them is broken. Return `Some(topic, message)` if it was added to the internal queue, `None`
-	/// in all other cases.
+	/// them is broken.
 	pub fn on_incoming(
 		&mut self,
 		network: &mut dyn Network<B>,
@@ -421,7 +420,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 					network.report_peer(who.clone(), rep::UNREGISTERED_TOPIC);
 				}
 			} else {
-				trace!(target:"gossip", "Handled valid one hop message from peer {}", who);
+				trace!(target:"gossip", "Discard message from peer {}", who);
 			}
 		}
 	}
