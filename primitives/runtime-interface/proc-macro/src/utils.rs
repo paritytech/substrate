@@ -253,14 +253,13 @@ fn get_item_version(item: &TraitItemMethod) -> Result<Option<u32>> {
 pub fn get_runtime_interface<'a>(trait_def: &'a ItemTrait)
 	-> Result<RuntimeInterface<'a>>
 {
-	let mut result: BTreeMap<syn::Ident, RuntimeInterfaceFunction<'a>> = BTreeMap::new();
+	let mut functions: BTreeMap<syn::Ident, RuntimeInterfaceFunction<'a>> = BTreeMap::new();
 
 	for item in get_trait_methods(trait_def) {
 		let name = item.sig.ident.clone();
 		let version = get_item_version(item)?.unwrap_or(1);
 
-		let entry = result.entry(name.clone());
-		match entry {
+		match functions.entry(name.clone()) {
 			Entry::Vacant(entry) => { entry.insert(RuntimeInterfaceFunction::new(version, item)); },
 			Entry::Occupied(mut entry) => {
 				if let Some(existing_item) = entry.get().versions.get(&version) {
@@ -283,5 +282,18 @@ pub fn get_runtime_interface<'a>(trait_def: &'a ItemTrait)
 		}
 	}
 
-	Ok(RuntimeInterface { items: result })
+	for function in functions.values() {
+		let mut next_expected = 1;
+		for (version, item) in function.versions.iter() {
+			if next_expected != *version {
+				return Err(Error::new(
+					item.span(),
+					format!("Unexpected version attribute: missing version '{}' for this function", next_expected),
+				));
+			}
+			next_expected += 1;
+		}
+	}
+
+	Ok(RuntimeInterface { items: functions })
 }
