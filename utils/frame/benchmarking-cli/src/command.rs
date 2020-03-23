@@ -25,6 +25,7 @@ use sc_service::{ChainSpec, Configuration, NativeExecutionDispatch};
 use sp_runtime::{
 	traits::{Block as BlockT, Header as HeaderT, NumberFor},
 };
+use sp_core::tasks;
 use std::fmt::Debug;
 
 impl BenchmarkCmd {
@@ -65,6 +66,7 @@ impl BenchmarkCmd {
 			).encode(),
 			Default::default(),
 			&sp_state_machine::backend::BackendRuntimeCode::new(&state).runtime_code()?,
+			tasks::executor(),
 		)
 		.execute(strategy.into())
 		.map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;
