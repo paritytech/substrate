@@ -5,6 +5,8 @@ authors = ["Parity Technologies <admin@parity.io>"]
 description = "Primitives for VRF based consensus"
 edition = "2018"
 license = "GPL-3.0"
+repository = "https://github.com/paritytech/substrate/"
+homepage = "https://substrate.dev"
 
 [dependencies]
 codec = { version = "1.0.0", package = "parity-scale-codec", default-features = false }
