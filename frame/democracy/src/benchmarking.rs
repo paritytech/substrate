@@ -105,6 +105,7 @@ benchmarks! {
 			vote_threshold,
 			0.into(),
 		);
+		let ref_index = 0u32;
 
 		// Vote.
 		let v = Vote {
@@ -112,7 +113,12 @@ benchmarks! {
 			conviction: Conviction::Locked1x,
 		};
 
-	}: _(RawOrigin::Signed(caller), 0u32.into(), v)
+		let account_vote = AccountVote::Standard {
+			vote: v,
+			balance: 1u32.into(),
+		};
+
+	}: _(RawOrigin::Signed(caller), ref_index.into(), account_vote)
 
 	proxy_vote {
 		// The execution time doesn't seems to change depending on inputs.
@@ -137,13 +143,19 @@ benchmarks! {
 			vote_threshold,
 			0.into(),
 		);
+		let ref_index = 0u32;
 
 		let v = Vote {
 			aye: true,
 			conviction: Conviction::Locked1x,
 		};
 
-	}: _(RawOrigin::Signed(proxy), 0u32.into(), v)
+		let account_vote = AccountVote::Standard {
+			vote: v,
+			balance: 1u32.into(),
+		};
+
+	}: _(RawOrigin::Signed(proxy), ref_index.into(), account_vote)
 
 	emergency_cancel {
 		let u in ...;
@@ -287,8 +299,9 @@ benchmarks! {
 		let caller: T::AccountId = account("caller", u, SEED);
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		let d: T::AccountId = account("delegate", u, SEED);
+		let balance = 1u32;
 
-	}: _(RawOrigin::Signed(caller), d.into(), Conviction::Locked1x)
+	}: _(RawOrigin::Signed(caller), d.into(), Conviction::Locked1x, balance.into())
 
 	undelegate {
 		let u in ...;
@@ -299,7 +312,8 @@ benchmarks! {
 		for i in 0 .. u {
 			let d: T::AccountId = account("delegator", u + i + 1, SEED);
 			let conviction = Conviction::Locked1x;
-			Democracy::<T>::delegate(RawOrigin::Signed(d.clone()).into(), caller.clone().into(), conviction)?;
+			let balance = 1u32;
+			Democracy::<T>::delegate(RawOrigin::Signed(d.clone()).into(), caller.clone().into(), conviction, balance.into())?;
 		}
 
 		let d: T::AccountId = account("delegator", u + 1, SEED);
