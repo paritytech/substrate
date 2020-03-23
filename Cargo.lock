@@ -1429,7 +1429,6 @@ version = "2.0.0-alpha.4"
 dependencies = [
  "frame-support",
  "frame-system",
- "node-primitives",
  "parity-scale-codec",
  "sp-api",
  "sp-io",

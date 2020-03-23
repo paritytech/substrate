@@ -1144,8 +1144,10 @@ impl<T: Trait> EnsureOrigin<T::Origin> for EnsureFounder<T> {
 		})
 	}
 
+	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> T::Origin {
-		T::Origin::from(system::RawOrigin::Signed(Default::default()))
+		let founder = Founder::<T>::get().expect("society founder should exist");
+		T::Origin::from(system::RawOrigin::Signed(founder))
 	}
 }
 

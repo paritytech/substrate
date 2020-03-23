@@ -47,8 +47,7 @@ pub trait Trait {
 	type Event;
 	type BlockNumber;
 	type AccountId: 'static + Default + Decode;
-	type Origin: From<frame_system::RawOrigin<Self::AccountId>>
-		+ Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>;
+	type Origin: From<frame_system::RawOrigin<Self::AccountId>> + Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>;
 }
 
 #[derive(Clone, Eq, PartialEq)]

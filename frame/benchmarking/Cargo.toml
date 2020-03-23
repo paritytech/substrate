@@ -17,7 +17,6 @@ sp-std = { version = "2.0.0-alpha.4", path = "../../primitives/std", default-fea
 sp-io = { path = "../../primitives/io", default-features = false, version = "2.0.0-alpha.4"}
 frame-support = { version = "2.0.0-alpha.4", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0-alpha.4", default-features = false, path = "../system" }
-node-primitives = { version = "2.0.0-alpha.4", default-features = false, path = "../../bin/node/primitives" }
 
 [features]
 default = [ "std" ]
@@ -29,5 +28,4 @@ std = [
 	"sp-std/std",
 	"frame-support/std",
 	"frame-system/std",
-	"node-primitives/std",
 ]

@@ -442,6 +442,7 @@ impl<
 		})
 	}
 
+	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> O {
 		O::from(RawOrigin::Member(Default::default()))
 	}
@@ -462,6 +463,7 @@ impl<
 		})
 	}
 
+	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> O {
 		O::from(RawOrigin::Members(N::VALUE, N::VALUE))
 	}
@@ -485,6 +487,7 @@ impl<
 		})
 	}
 
+	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> O {
 		O::from(RawOrigin::Members(1u32, 0u32))
 	}
@@ -508,6 +511,7 @@ impl<
 		})
 	}
 
+	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> O {
 		O::from(RawOrigin::Members(0u32, 0u32))
 	}
