@@ -21,7 +21,7 @@ use sc_network::config::TransportConfig;
 use sc_service::{
 	AbstractService, RpcSession, Roles, Configuration,
 	config::{DatabaseConfig, KeystoreConfig, NetworkConfiguration},
-	ChainSpec, RuntimeGenesis
+	ChainSpec, GenericChainSpec, RuntimeGenesis
 };
 use wasm_bindgen::prelude::*;
 use futures::{prelude::*, channel::{oneshot, mpsc}, future::{poll_fn, ok}, compat::*};
@@ -36,11 +36,11 @@ pub use console_log::init_with_level as init_console_log;
 /// Create a service configuration from a chain spec.
 ///
 /// This configuration contains good defaults for a browser light client.
-pub async fn browser_configuration<G, E>(chain_spec: ChainSpec<G, E>)
-	-> Result<Configuration<G, E>, Box<dyn std::error::Error>>
+pub async fn browser_configuration<G, E>(chain_spec: GenericChainSpec<G, E>)
+	-> Result<Configuration, Box<dyn std::error::Error>>
 where
-	G: RuntimeGenesis,
-	E: Extension,
+	G: RuntimeGenesis + 'static,
+	E: Extension + 'static,
 {
 	let name = chain_spec.name().to_string();
 
@@ -62,7 +62,7 @@ where
 	let config = Configuration {
 		network,
 		telemetry_endpoints: chain_spec.telemetry_endpoints().clone(),
-		chain_spec,
+		chain_spec: Box::new(chain_spec),
 		task_executor: Arc::new(move |fut| wasm_bindgen_futures::spawn_local(fut)),
 		telemetry_external_transport: Some(transport),
 		roles: Roles::LIGHT,
@@ -94,6 +94,7 @@ where
 		tracing_targets: Default::default(),
 		transaction_pool: Default::default(),
 		wasm_method: Default::default(),
+		max_runtime_instances: 8,
 	};
 
 	Ok(config)

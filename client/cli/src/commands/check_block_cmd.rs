@@ -14,19 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use sc_service::{
-	ChainSpecExtension, Configuration, RuntimeGenesis, ServiceBuilderCommand,
-};
+use crate::error;
+use crate::params::ImportParams;
+use crate::params::SharedParams;
+use crate::{substrate_cli_params, CliConfiguration};
+use sc_service::{Configuration, ServiceBuilderCommand};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::fmt::Debug;
 use std::str::FromStr;
 use structopt::StructOpt;
-
-use crate::error;
-use crate::params::ImportParams;
-use crate::params::SharedParams;
-use crate::{substrate_cli_params, CliConfiguration};
 
 /// The `check-block` command used to validate blocks.
 #[derive(Debug, StructOpt, Clone)]
@@ -52,15 +49,13 @@ pub struct CheckBlockCmd {
 
 impl CheckBlockCmd {
 	/// Run the check-block command
-	pub async fn run<G, E, B, BC, BB>(
+	pub async fn run<B, BC, BB>(
 		self,
-		config: Configuration<G, E>,
+		config: Configuration,
 		builder: B,
 	) -> error::Result<()>
 	where
-		B: FnOnce(Configuration<G, E>) -> Result<BC, sc_service::error::Error>,
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
+		B: FnOnce(Configuration) -> Result<BC, sc_service::error::Error>,
 		BC: ServiceBuilderCommand<Block = BB> + Unpin,
 		BB: sp_runtime::traits::Block + Debug,
 		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,

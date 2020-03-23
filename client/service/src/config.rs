@@ -23,13 +23,13 @@ pub use sc_executor::WasmExecutionMethod;
 
 use std::{future::Future, path::{PathBuf, Path}, pin::Pin, net::SocketAddr, sync::Arc};
 pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
-use sc_chain_spec::{ChainSpec, NoExtension};
+use sc_chain_spec::ChainSpec;
 use sp_core::crypto::Protected;
 pub use sc_telemetry::TelemetryEndpoints;
 use prometheus_endpoint::Registry;
 
 /// Service configuration.
-pub struct Configuration<G, E = NoExtension> {
+pub struct Configuration {
 	/// Implementation name
 	pub impl_name: &'static str,
 	/// Implementation version
@@ -53,7 +53,7 @@ pub struct Configuration<G, E = NoExtension> {
 	/// Pruning settings.
 	pub pruning: PruningMode,
 	/// Chain configuration.
-	pub chain_spec: ChainSpec<G, E>,
+	pub chain_spec: Box<dyn ChainSpec>,
 	/// Wasm execution method.
 	pub wasm_method: WasmExecutionMethod,
 	/// Execution strategies.
@@ -162,7 +162,7 @@ impl PrometheusConfig {
 	}
 }
 
-impl<G, E> Configuration<G, E> {
+impl Configuration {
 	/// Returns a string displaying the node role, special casing the sentry mode
 	/// (returning `SENTRY`), since the node technically has an `AUTHORITY` role but
 	/// doesn't participate.

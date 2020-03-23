@@ -14,9 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use sc_service::{
-	ChainSpecExtension, Configuration, RuntimeGenesis, ServiceBuilderCommand,
-};
+use sc_service::{Configuration, ServiceBuilderCommand};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::fmt::Debug;
 use structopt::StructOpt;
@@ -43,11 +41,9 @@ pub struct RevertCmd {
 
 impl RevertCmd {
 	/// Run the revert command
-	pub fn run<G, E, B, BC, BB>(self, config: Configuration<G, E>, builder: B) -> error::Result<()>
+	pub fn run<B, BC, BB>(self, config: Configuration, builder: B) -> error::Result<()>
 	where
-		B: FnOnce(Configuration<G, E>) -> Result<BC, sc_service::error::Error>,
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
+		B: FnOnce(Configuration) -> Result<BC, sc_service::error::Error>,
 		BC: ServiceBuilderCommand<Block = BB> + Unpin,
 		BB: sp_runtime::traits::Block + Debug,
 		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,

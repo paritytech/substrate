@@ -24,8 +24,7 @@ use crate::substrate_cli_params;
 use crate::CliConfiguration;
 use regex::Regex;
 use sc_service::{
-	config::{PrometheusConfig, TransactionPoolOptions},
-	ChainSpec, Roles,
+	config::{PrometheusConfig, TransactionPoolOptions}, ChainSpec, Roles,
 };
 use sc_telemetry::TelemetryEndpoints;
 use std::net::SocketAddr;
@@ -296,9 +295,9 @@ impl CliConfiguration for RunCmd {
 		}))
 	}
 
-	fn get_telemetry_endpoints<G, E>(
+	fn get_telemetry_endpoints(
 		&self,
-		chain_spec: &ChainSpec<G, E>,
+		chain_spec: &Box<dyn ChainSpec>,
 	) -> Result<Option<TelemetryEndpoints>> {
 		Ok(if self.no_telemetry {
 			None
@@ -538,7 +537,7 @@ fn parse_cors(s: &str) -> std::result::Result<Cors, Box<dyn std::error::Error>> 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sc_service::config::DatabaseConfig;
+	use sc_service::{GenericChainSpec, config::DatabaseConfig};
 
 	#[test]
 	fn tests_node_name_good() {

@@ -23,10 +23,7 @@ use futures::pin_mut;
 use futures::select;
 use futures::{future, future::FutureExt, Future};
 use log::info;
-use sc_service::{
-	AbstractService, ChainSpecExtension, Configuration, Roles, RuntimeGenesis,
-	ServiceBuilderCommand,
-};
+use sc_service::{AbstractService, Configuration, Roles, ServiceBuilderCommand};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -102,23 +99,15 @@ where
 }
 
 /// A Substrate CLI runtime that can be used to run a node or a command
-pub struct Runtime<C: SubstrateCLI<G, E>, G, E>
-where
-	G: RuntimeGenesis,
-	E: ChainSpecExtension,
-{
-	config: Configuration<G, E>,
+pub struct Runtime<C: SubstrateCLI> {
+	config: Configuration,
 	tokio_runtime: tokio::runtime::Runtime,
 	phantom: PhantomData<C>,
 }
 
-impl<C: SubstrateCLI<G, E>, G, E> Runtime<C, G, E>
-where
-	G: RuntimeGenesis,
-	E: ChainSpecExtension,
-{
+impl<C: SubstrateCLI> Runtime<C> {
 	/// Create a new runtime with the command provided in argument
-	pub fn new<T: CliConfiguration>(command: &T) -> Result<Runtime<C, G, E>> {
+	pub fn new<T: CliConfiguration>(command: &T) -> Result<Runtime<C>> {
 		let tokio_runtime = build_runtime()?;
 
 		let task_executor = {
@@ -129,7 +118,7 @@ where
 		};
 
 		Ok(Runtime {
-			config: command.create_configuration::<C, G, E>(task_executor)?,
+			config: command.create_configuration::<C>(task_executor)?,
 			tokio_runtime,
 			phantom: PhantomData,
 		})
@@ -139,8 +128,8 @@ where
 	/// the signal SIGTERM or SIGINT
 	pub fn run_node<FNL, FNF, SL, SF>(self, new_light: FNL, new_full: FNF) -> Result<()>
 	where
-		FNL: FnOnce(Configuration<G, E>) -> sc_service::error::Result<SL>,
-		FNF: FnOnce(Configuration<G, E>) -> sc_service::error::Result<SF>,
+		FNL: FnOnce(Configuration) -> sc_service::error::Result<SL>,
+		FNF: FnOnce(Configuration) -> sc_service::error::Result<SF>,
 		SL: AbstractService + Unpin,
 		SF: AbstractService + Unpin,
 	{
@@ -166,7 +155,7 @@ where
 	/// SIGTERM or SIGINT
 	pub fn run_subcommand<B, BC, BB>(self, subcommand: Subcommand, builder: B) -> Result<()>
 	where
-		B: FnOnce(Configuration<G, E>) -> sc_service::error::Result<BC>,
+		B: FnOnce(Configuration) -> sc_service::error::Result<BC>,
 		BC: ServiceBuilderCommand<Block = BB> + Unpin,
 		BB: sp_runtime::traits::Block + Debug,
 		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: Debug,
@@ -190,7 +179,7 @@ where
 
 	fn run_service_until_exit<T, F>(mut self, service_builder: F) -> Result<()>
 	where
-		F: FnOnce(Configuration<G, E>) -> std::result::Result<T, sc_service::error::Error>,
+		F: FnOnce(Configuration) -> std::result::Result<T, sc_service::error::Error>,
 		T: AbstractService + Unpin,
 	{
 		let service = service_builder(self.config)?;
@@ -215,13 +204,13 @@ where
 	}
 
 	/// A helper function that runs a command with the configuration of this node
-	pub fn sync_run(self, runner: impl FnOnce(Configuration<G, E>) -> Result<()>) -> Result<()> {
+	pub fn sync_run(self, runner: impl FnOnce(Configuration) -> Result<()>) -> Result<()> {
 		runner(self.config)
 	}
 
 	/// A helper function that runs a future with tokio and stops if the process receives
 	/// the signal SIGTERM or SIGINT
-	pub fn async_run<FUT>(self, runner: impl FnOnce(Configuration<G, E>) -> FUT) -> Result<()>
+	pub fn async_run<FUT>(self, runner: impl FnOnce(Configuration) -> FUT) -> Result<()>
 	where
 		FUT: Future<Output = Result<()>> + future::Future,
 	{

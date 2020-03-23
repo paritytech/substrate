@@ -14,18 +14,17 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use crate::error;
+use crate::params::node_key_params::NodeKeyParams;
 use sc_network::{
 	config::{NetworkConfiguration, NodeKeyConfig, NonReservedPeerMode, TransportConfig},
 	multiaddr::Protocol,
 };
-use sc_service::{ChainSpec, RuntimeGenesis};
+use sc_service::ChainSpec;
 use std::iter;
 use std::net::Ipv4Addr;
 use std::path::PathBuf;
 use structopt::StructOpt;
-
-use crate::error;
-use crate::params::node_key_params::NodeKeyParams;
 
 /// Parameters used to create the network configuration.
 #[derive(Debug, StructOpt, Clone)]
@@ -106,17 +105,15 @@ pub struct NetworkConfigurationParams {
 
 impl NetworkConfigurationParams {
 	/// Fill the given `NetworkConfiguration` by looking at the cli parameters.
-	pub fn get_network_config<G, E>(
+	pub fn get_network_config(
 		&self,
-		chain_spec: &ChainSpec<G, E>,
+		chain_spec: &Box<dyn ChainSpec>,
 		client_id: &str,
 		is_dev: bool,
 		net_config_path: &PathBuf,
 		node_name: &str,
 		node_key: NodeKeyConfig,
 	) -> error::Result<NetworkConfiguration>
-	where
-		G: RuntimeGenesis,
 	{
 		let port = self.port.unwrap_or(30333);
 		let mut listen_addresses = vec![iter::once(Protocol::Ip4(Ipv4Addr::new(0, 0, 0, 0)))

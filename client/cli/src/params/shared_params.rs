@@ -14,9 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use sc_service::{
-	config::DatabaseConfig, ChainSpec, ChainSpecExtension, RuntimeGenesis,
-};
+use sc_service::{config::DatabaseConfig, ChainSpec};
 use std::path::PathBuf;
 use structopt::StructOpt;
 
@@ -54,11 +52,7 @@ pub struct SharedParams {
 
 impl SharedParams {
 	/// Get the chain spec for the parameters provided
-	pub fn get_chain_spec<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<ChainSpec<G, E>>
-	where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-	{
+	pub fn get_chain_spec<C: SubstrateCLI>(&self) -> Result<Box<dyn ChainSpec>> {
 		let chain_key = match self.chain {
 			Some(ref chain) => chain.clone(),
 			None => {
@@ -70,10 +64,7 @@ impl SharedParams {
 			}
 		};
 
-		Ok(match C::spec_factory(&chain_key)? {
-			Some(spec) => spec,
-			None => ChainSpec::from_json_file(PathBuf::from(chain_key))?,
-		})
+		Ok(C::spec_factory(&chain_key)?)
 	}
 
 	/// Initialize substrate. This must be done only once.
@@ -83,11 +74,7 @@ impl SharedParams {
 	/// 1. Set the panic handler
 	/// 2. Raise the FD limit
 	/// 3. Initialize the logger
-	pub fn init<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<()>
-	where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-	{
+	pub fn init<C: SubstrateCLI>(&self) -> Result<()> {
 		let logger_pattern = self.log.as_ref().map(|v| v.as_ref()).unwrap_or("");
 
 		sp_panic_handler::set(C::get_support_url(), C::get_impl_version());

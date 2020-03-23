@@ -19,6 +19,3 @@ platforms = "0.2"
 trybuild = "1.0"
 sc-service = { version = "0.8.0-alpha.2", default-features = false, path = "../service" }
 sc-cli = { version = "0.8.0-alpha.2", default-features = false, path = "../cli" }
-sp-runtime = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/runtime" }
-sp-storage = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/storage" }
-serde = { version = "1.0.101", features = ["derive"] }

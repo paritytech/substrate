@@ -20,7 +20,7 @@ use crate::params::SharedParams;
 use crate::{substrate_cli_params, CliConfiguration};
 use log::info;
 use sc_network::config::build_multiaddr;
-use sc_service::{ChainSpecExtension, Configuration, RuntimeGenesis};
+use sc_service::Configuration;
 use structopt::StructOpt;
 
 /// The `build-spec` command used to build a specification.
@@ -48,13 +48,9 @@ pub struct BuildSpecCmd {
 
 impl BuildSpecCmd {
 	/// Run the build-spec command
-	pub fn run<G, E>(&self, config: Configuration<G, E>) -> error::Result<()>
-	where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-	{
+	pub fn run(&self, config: Configuration) -> error::Result<()> {
 		info!("Building chain spec");
-		let mut spec = config.chain_spec.clone();
+		let mut spec = config.chain_spec;
 		let raw_output = self.raw;
 
 		if spec.boot_nodes().is_empty() && !self.disable_default_bootnode {
@@ -64,7 +60,7 @@ impl BuildSpecCmd {
 			spec.add_boot_node(addr)
 		}
 
-		let json = sc_service::chain_ops::build_spec(spec, raw_output)?;
+		let json = sc_service::chain_ops::build_spec(&*spec, raw_output)?;
 
 		print!("{}", json);
 

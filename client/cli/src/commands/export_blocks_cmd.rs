@@ -19,8 +19,7 @@ use crate::params::{BlockNumber, PruningParams, SharedParams};
 use crate::{substrate_cli_params, CliConfiguration};
 use log::info;
 use sc_service::{
-	config::DatabaseConfig, ChainSpecExtension, Configuration, RuntimeGenesis,
-	ServiceBuilderCommand,
+	config::DatabaseConfig, Configuration, ServiceBuilderCommand,
 };
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::fmt::Debug;
@@ -63,15 +62,13 @@ pub struct ExportBlocksCmd {
 
 impl ExportBlocksCmd {
 	/// Run the export-blocks command
-	pub async fn run<G, E, B, BC, BB>(
+	pub async fn run<B, BC, BB>(
 		self,
-		config: Configuration<G, E>,
+		config: Configuration,
 		builder: B,
 	) -> error::Result<()>
 	where
-		B: FnOnce(Configuration<G, E>) -> Result<BC, sc_service::error::Error>,
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
+		B: FnOnce(Configuration) -> Result<BC, sc_service::error::Error>,
 		BC: ServiceBuilderCommand<Block = BB> + Unpin,
 		BB: sp_runtime::traits::Block + Debug,
 		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,

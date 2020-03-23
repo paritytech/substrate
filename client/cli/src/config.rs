@@ -25,7 +25,7 @@ use sc_service::config::{
 	NetworkConfiguration, NodeKeyConfig, PrometheusConfig, PruningMode, Roles, TelemetryEndpoints,
 	TransactionPoolOptions, WasmExecutionMethod,
 };
-use sc_service::{ChainSpec, ChainSpecExtension, RuntimeGenesis};
+use sc_service::ChainSpec;
 use std::future::Future;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -59,19 +59,15 @@ pub trait CliConfiguration: Sized {
 	}
 
 	/// Get the network configuration
-	fn get_network_config<G, E>(
+	fn get_network_config(
 		&self,
-		_chain_spec: &ChainSpec<G, E>,
+		_chain_spec: &Box<dyn ChainSpec>,
 		_is_dev: bool,
 		net_config_dir: &PathBuf,
 		client_id: &str,
 		node_name: &str,
 		node_key: NodeKeyConfig,
-	) -> Result<NetworkConfiguration>
-	where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-	{
+	) -> Result<NetworkConfiguration> {
 		Ok(NetworkConfiguration::new(
 			node_name,
 			client_id,
@@ -113,10 +109,7 @@ pub trait CliConfiguration: Sized {
 	}
 
 	/// Get the chain spec
-	fn get_chain_spec<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<ChainSpec<G, E>>
-	where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension;
+	fn get_chain_spec<C: SubstrateCLI>(&self) -> Result<Box<dyn ChainSpec>>;
 
 	/// Get the name of the node
 	fn get_node_name(&self) -> Result<String> {
@@ -159,9 +152,9 @@ pub trait CliConfiguration: Sized {
 	}
 
 	/// Get the telemetry endpoints (if any)
-	fn get_telemetry_endpoints<G, E>(
+	fn get_telemetry_endpoints(
 		&self,
-		chain_spec: &ChainSpec<G, E>,
+		chain_spec: &Box<dyn ChainSpec>,
 	) -> Result<Option<TelemetryEndpoints>> {
 		Ok(chain_spec.telemetry_endpoints().clone())
 	}
@@ -222,15 +215,11 @@ pub trait CliConfiguration: Sized {
 	}
 
 	/// Create a Configuration object from the current object
-	fn create_configuration<C: SubstrateCLI<G, E>, G, E>(
+	fn create_configuration<C: SubstrateCLI>(
 		&self,
 		task_executor: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>,
-	) -> Result<Configuration<G, E>>
-	where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-	{
-		let chain_spec = self.get_chain_spec::<C, G, E>()?;
+	) -> Result<Configuration> {
+		let chain_spec = self.get_chain_spec::<C>()?;
 		let is_dev = self.get_is_dev()?;
 		let default_config_dir = app_dirs::get_app_root(
 			AppDataType::UserData,
@@ -301,10 +290,7 @@ pub trait CliConfiguration: Sized {
 	/// 1. Set the panic handler
 	/// 2. Raise the FD limit
 	/// 3. Initialize the logger
-	fn init<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<()>
-	where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension;
+	fn init<C: SubstrateCLI>(&self) -> Result<()>;
 }
 
 /// Generate a valid random name for the node

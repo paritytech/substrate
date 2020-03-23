@@ -14,12 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::chain_spec::Alternative;
+use crate::chain_spec::{Alternative, ChainSpec};
 use crate::cli::Cli;
 use crate::service;
-use node_template_runtime::GenesisConfig;
 use sc_cli::{spec_factory, SubstrateCLI};
-use sc_service::ChainSpec;
 use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
 
 #[spec_factory(
@@ -27,10 +25,10 @@ use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
 	support_url = "support.anonymous.an",
 	copyright_start_year = 2017
 )]
-fn spec_factory(id: &str) -> Result<Option<ChainSpec<GenesisConfig>>, String> {
+fn spec_factory(id: &str) -> Result<Box<dyn sc_service::ChainSpec>, String> {
 	Ok(match Alternative::from(id) {
-		Some(spec) => Some(spec.load()?),
-		None => None,
+		Some(spec) => Box::new(spec.load()?),
+		None => Box::new(ChainSpec::from_json_file(std::path::PathBuf::from(id))?),
 	})
 }
 

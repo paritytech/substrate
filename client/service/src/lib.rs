@@ -60,7 +60,8 @@ pub use self::builder::{
 };
 pub use config::{Configuration, Roles, PruningMode};
 pub use sc_chain_spec::{
-	ChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension, NoExtension,
+	ChainSpec, GenericChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension,
+	NoExtension,
 };
 pub use sp_transaction_pool::{TransactionPool, InPoolTransaction, error::IntoPoolError};
 pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
@@ -490,8 +491,8 @@ mod waiting {
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(not(target_os = "unknown"))]
-fn start_rpc_servers<G, E, H: FnMut() -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>>(
-	config: &Configuration<G, E>,
+fn start_rpc_servers<H: FnMut() -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>>(
+	config: &Configuration,
 	mut gen_handler: H
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
 	fn maybe_start_server<T, F>(address: Option<SocketAddr>, mut start: F) -> Result<Option<T>, io::Error>
@@ -531,8 +532,8 @@ fn start_rpc_servers<G, E, H: FnMut() -> sc_rpc_server::RpcHandler<sc_rpc::Metad
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(target_os = "unknown")]
-fn start_rpc_servers<G, E, H: FnMut() -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>>(
-	_: &Configuration<G, E>,
+fn start_rpc_servers<H: FnMut() -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>>(
+	_: &Configuration,
 	_: H
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
 	Ok(Box::new(()))

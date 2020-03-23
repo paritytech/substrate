@@ -21,21 +21,16 @@ use sc_cli::{substrate_cli_params, CliConfiguration, ExecutionStrategy, Result, 
 use sc_client::StateMachine;
 use sc_client_db::BenchmarkingState;
 use sc_executor::NativeExecutor;
-use sc_service::{
-	ChainSpec, ChainSpecExtension, Configuration, NativeExecutionDispatch, RuntimeGenesis,
-};
+use sc_service::{ChainSpec, Configuration, NativeExecutionDispatch};
 use sp_runtime::{
-	traits::{Block as BlockT, Header as HeaderT, NumberFor}, BuildStorage,
+	traits::{Block as BlockT, Header as HeaderT, NumberFor},
 };
 use std::fmt::Debug;
-use std::path::PathBuf;
 
 impl BenchmarkCmd {
 	/// Runs the command and benchmarks the chain.
-	pub fn run<G, E, BB, ExecDispatch>(self, config: Configuration<G, E>) -> Result<()>
+	pub fn run<BB, ExecDispatch>(self, config: Configuration) -> Result<()>
 	where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
 		BB: BlockT + Debug,
 		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
 		<BB as BlockT>::Hash: std::str::FromStr,
@@ -113,19 +108,12 @@ impl BenchmarkCmd {
 
 #[substrate_cli_params(shared_params = shared_params)]
 impl CliConfiguration for BenchmarkCmd {
-	fn get_chain_spec<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<ChainSpec<G, E>>
-	where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-	{
+	fn get_chain_spec<C: SubstrateCLI>(&self) -> Result<Box<dyn ChainSpec>> {
 		let chain_key = match self.shared_params.chain {
 			Some(ref chain) => chain.clone(),
 			None => "dev".into(),
 		};
 
-		Ok(match C::spec_factory(&chain_key)? {
-			Some(spec) => spec,
-			None => ChainSpec::from_json_file(PathBuf::from(chain_key))?,
-		})
+		Ok(C::spec_factory(&chain_key)?)
 	}
 }

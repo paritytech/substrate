@@ -15,14 +15,14 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{
-	chain_spec::{Extensions, GenesisConfig},
 	factory_impl::FactoryState,
 	service, ChainSpec, Cli, FactoryCmd, Subcommand,
 };
 use node_transaction_factory::RuntimeAdapter;
 use sc_cli::{spec_factory, substrate_cli_params, CliConfiguration, Result, SubstrateCLI};
-use sc_service::{ChainSpecExtension, Configuration, RuntimeGenesis};
+use sc_service::Configuration;
 
+//TODO: 3 different types with the same name: ChainSpec
 #[spec_factory(
 	impl_name = "Substrate Node",
 	support_url = "https://github.com/paritytech/substrate/issues/new",
@@ -31,10 +31,10 @@ use sc_service::{ChainSpecExtension, Configuration, RuntimeGenesis};
 )]
 fn spec_factory(
 	id: &str,
-) -> std::result::Result<Option<sc_service::ChainSpec<GenesisConfig, Extensions>>, String> {
+) -> std::result::Result<Box<dyn sc_service::ChainSpec>, String> {
 	Ok(match ChainSpec::from(id) {
-		Some(spec) => Some(spec.load()?),
-		None => None,
+		Some(spec) => Box::new(spec.load()?),
+		None => Box::new(crate::chain_spec::ChainSpec::from_json_file(std::path::PathBuf::from(id))?),
 	})
 }
 
@@ -53,13 +53,13 @@ pub fn run() -> Result<()> {
 
 			let runtime = Cli::create_runtime(&cmd)?;
 
-			runtime.sync_run(|config| cmd.run::<Block, RuntimeApi, Executor, _, _>(config))
+			runtime.sync_run(|config| cmd.run::<Block, RuntimeApi, Executor>(config))
 		}
 		Some(Subcommand::Benchmark(cmd)) => {
 			let runtime = Cli::create_runtime(&cmd)?;
 
 			runtime.sync_run(|config| {
-				cmd.run::<_, _, node_runtime::Block, node_executor::Executor>(config)
+				cmd.run::<node_runtime::Block, node_executor::Executor>(config)
 			})
 		}
 		Some(Subcommand::Factory(cmd)) => {
@@ -79,11 +79,7 @@ pub fn run() -> Result<()> {
 impl CliConfiguration for FactoryCmd {}
 
 impl FactoryCmd {
-	fn run<G, E>(&self, config: Configuration<G, E>) -> Result<()>
-	where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-	{
+	fn run(&self, config: Configuration) -> Result<()> {
 		match ChainSpec::from(config.chain_spec.id()) {
 			Some(ref c) if c == &ChainSpec::Development || c == &ChainSpec::LocalTestnet => {}
 			_ => return Err("Factory is only supported for development and local testnet.".into()),

@@ -38,7 +38,7 @@ pub use params::*;
 use regex::Regex;
 pub use runtime::*;
 pub use sc_cli_derive::*;
-use sc_service::{ChainSpec, ChainSpecExtension, Configuration, NoExtension, RuntimeGenesis};
+use sc_service::{ChainSpec, Configuration};
 use std::future::Future;
 use std::io::Write;
 use std::pin::Pin;
@@ -50,10 +50,7 @@ use structopt::{
 };
 
 /// Substrate client CLI
-pub trait SubstrateCLI<G, E = NoExtension>: Sized
-where
-	G: RuntimeGenesis,
-	E: ChainSpecExtension,
+pub trait SubstrateCLI: Sized
 {
 	/// Implementation name.
 	fn get_impl_name() -> &'static str;
@@ -70,7 +67,7 @@ where
 	/// Copyright starting year (x-current year)
 	fn get_copyright_start_year() -> i32;
 	/// Chain spec factory
-	fn spec_factory(id: &str) -> std::result::Result<Option<ChainSpec<G, E>>, String>;
+	fn spec_factory(id: &str) -> std::result::Result<Box<dyn ChainSpec>, String>;
 
 	/// Helper function used to parse the command line arguments. This is the equivalent of
 	/// `structopt`'s `from_iter()` except that it takes a `VersionInfo` argument to provide the name of
@@ -167,15 +164,15 @@ where
 	fn create_configuration<T: CliConfiguration>(
 		command: &T,
 		task_executor: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>,
-	) -> error::Result<Configuration<G, E>> {
-		command.create_configuration::<Self, G, E>(task_executor)
+	) -> error::Result<Configuration> {
+		command.create_configuration::<Self>(task_executor)
 	}
 
 	/// Create a runtime for the command provided in argument. This will create a Configuration and
 	/// a tokio runtime
-	fn create_runtime<T: CliConfiguration>(command: &T) -> error::Result<Runtime<Self, G, E>> {
-		command.init::<Self, G, E>()?;
-		Runtime::<Self, G, E>::new(command)
+	fn create_runtime<T: CliConfiguration>(command: &T) -> error::Result<Runtime<Self>> {
+		command.init::<Self>()?;
+		Runtime::<Self>::new(command)
 	}
 }
 

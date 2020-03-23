@@ -17,9 +17,7 @@
 use crate::error;
 use crate::params::SharedParams;
 use crate::{substrate_cli_params, CliConfiguration};
-use sc_service::{
-	config::DatabaseConfig, ChainSpecExtension, Configuration, RuntimeGenesis,
-};
+use sc_service::{config::DatabaseConfig, Configuration};
 use std::fmt::Debug;
 use std::fs;
 use std::io::{self, Write};
@@ -39,10 +37,7 @@ pub struct PurgeChainCmd {
 
 impl PurgeChainCmd {
 	/// Run the purge command
-	pub fn run<G, E>(self, config: Configuration<G, E>) -> error::Result<()>
-	where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
+	pub fn run(self, config: Configuration) -> error::Result<()>
 	{
 		let db_path = match &config.database {
 			DatabaseConfig::Path { path, .. } => path,

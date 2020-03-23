@@ -16,13 +16,12 @@
 
 //! Configuration trait for a CLI based on substrate
 
-use proc_macro2::Span;
 use proc_macro_error::{abort, abort_call_site};
 use quote::{quote, ToTokens};
 use std::collections::HashMap;
 use syn;
 use syn::parse::Parser;
-use syn::{punctuated::Punctuated, spanned::Spanned, token::Comma, *};
+use syn::{punctuated::Punctuated, spanned::Spanned, *};
 
 pub(crate) fn spec_factory(
 	a: proc_macro::TokenStream,
@@ -75,63 +74,8 @@ pub(crate) fn spec_factory(
 		_ => abort_call_site!("this macro only works on a function"),
 	};
 
-	let output = match &s.sig.output {
-		ReturnType::Default => abort_call_site!("no return type"),
-		ReturnType::Type(_, b) => b,
-	};
-
-	let output_ok = match get_type_arguments(output, "Result") {
-		Ok(x) => x
-			.iter()
-			.filter_map(|x| match x {
-				GenericArgument::Type(ty) => Some(ty),
-				_ => None,
-			})
-			.next()
-			.unwrap(),
-		Err(span) => abort!(
-			span,
-			"expected: Result<Option<sc_service::ChainSpec<_, _>>, String>"
-		),
-	};
-
-	let output_option = match get_type_arguments(output_ok, "Option") {
-		Ok(x) => x
-			.iter()
-			.filter_map(|x| match x {
-				GenericArgument::Type(ty) => Some(ty),
-				_ => None,
-			})
-			.next()
-			.unwrap(),
-		Err(span) => abort!(span, "expected: Option<sc_service::ChainSpec<_, _>>"),
-	};
-
-	let output_chain_spec = match get_type_arguments(output_option, "ChainSpec") {
-		Ok(x) => x,
-		Err(span) => abort!(span, "expected: sc_service::ChainSpec<_, _>"),
-	};
-
-	let type_args = output_chain_spec
-		.iter()
-		.filter_map(|x| match x {
-			GenericArgument::Type(Type::Path(ty_path)) => Some(ty_path),
-			_ => None,
-		})
-		.collect::<Vec<_>>();
-
-	if type_args.is_empty() {
-		abort!(
-			output_chain_spec.span(),
-			"could not find the G type argument of sc_service::ChainSpec"
-		);
-	}
-
-	let runtime_genesis = type_args[0];
-	let extension = type_args.get(1);
-
 	quote! {
-		impl ::sc_cli::SubstrateCLI<#runtime_genesis, #extension> for #cli {
+		impl ::sc_cli::SubstrateCLI for #cli {
 			#s
 
 			fn get_impl_name() -> &'static str { #impl_name }
@@ -142,33 +86,6 @@ pub(crate) fn spec_factory(
 			fn get_description() -> &'static str { #description }
 			fn get_copyright_start_year() -> i32 { #copyright_start_year }
 		}
-	}
-}
-
-fn get_type_arguments<'a>(
-	ty: &'a Type,
-	equal: &str,
-) -> std::result::Result<&'a Punctuated<GenericArgument, Comma>, Span> {
-	match ty {
-		Type::Path(TypePath {
-			qself: None,
-			path: Path {
-				leading_colon: None,
-				segments,
-			},
-		}) => {
-			let last_segment = segments.iter().last();
-
-			match last_segment {
-				Some(PathSegment {
-					ident,
-					arguments:
-						PathArguments::AngleBracketed(AngleBracketedGenericArguments { args, .. }),
-				}) if ident == equal => Ok(args),
-				_ => Err(ty.span()),
-			}
-		}
-		_ => Err(ty.span()),
 	}
 }
 

@@ -106,12 +106,8 @@ pub(crate) fn substrate_cli_params(
 		}
 		if missing("get_chain_spec") {
 			i.items.push(ImplItem::Verbatim(quote! {
-				fn get_chain_spec<C: ::sc_cli::SubstrateCLI<G, E>, G, E>(&self) -> ::sc_cli::Result<::sc_service::ChainSpec<G, E>>
-				where
-					G: ::sc_service::RuntimeGenesis,
-					E: ::sc_service::ChainSpecExtension,
-				{
-					self.#ident.get_chain_spec::<C, G, E>()
+				fn get_chain_spec<C: ::sc_cli::SubstrateCLI>(&self) -> ::sc_cli::Result<Box<dyn ::sc_service::ChainSpec>> {
+					self.#ident.get_chain_spec::<C>()
 				}
 			}));
 		}
@@ -128,12 +124,8 @@ pub(crate) fn substrate_cli_params(
 		}
 		if missing("init") {
 			i.items.push(ImplItem::Verbatim(quote! {
-				fn init<C: ::sc_cli::SubstrateCLI<G, E>, G, E>(&self) -> ::sc_cli::Result<()>
-				where
-					G: ::sc_service::RuntimeGenesis,
-					E: ::sc_service::ChainSpecExtension,
-				{
-					self.#ident.init::<C, G, E>()
+				fn init<C: ::sc_cli::SubstrateCLI>(&self) -> ::sc_cli::Result<()> {
+					self.#ident.init::<C>()
 				}
 			}));
 		}
@@ -219,19 +211,15 @@ pub(crate) fn substrate_cli_params(
 	if let Some(ident) = network_params {
 		if missing("get_network_config") {
 			i.items.push(ImplItem::Verbatim(quote! {
-				fn get_network_config<G, E>(
+				fn get_network_config(
 					&self,
-					chain_spec: &::sc_service::ChainSpec<G, E>,
+					chain_spec: &Box<dyn ::sc_service::ChainSpec>,
 					is_dev: bool,
 					base_path: &::std::path::PathBuf,
 					client_id: &str,
 					node_name: &str,
 					node_key: ::sc_service::config::NodeKeyConfig,
-				) -> ::sc_cli::Result<::sc_service::config::NetworkConfiguration>
-				where
-					G: ::sc_service::RuntimeGenesis,
-					E: ::sc_service::ChainSpecExtension,
-				{
+				) -> ::sc_cli::Result<::sc_service::config::NetworkConfiguration> {
 					self.#ident
 						.get_network_config(chain_spec, client_id, is_dev, base_path, node_name, node_key)
 				}

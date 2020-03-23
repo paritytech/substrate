@@ -21,23 +21,19 @@ use std::str::FromStr;
 use crate::cli::{InspectCmd, InspectSubCmd};
 use crate::Inspector;
 use sc_cli::{substrate_cli_params, CliConfiguration, Result};
-use sc_service::{
-	new_full_client, ChainSpecExtension, Configuration, NativeExecutionDispatch, RuntimeGenesis,
-};
+use sc_service::{new_full_client, Configuration, NativeExecutionDispatch};
 use sp_runtime::traits::Block;
 
 impl InspectCmd {
 	/// Run the inspect command, passing the inspector.
-	pub fn run<B, RA, EX, G, E>(self, config: Configuration<G, E>) -> Result<()>
+	pub fn run<B, RA, EX>(self, config: Configuration) -> Result<()>
 	where
 		B: Block,
 		B::Hash: FromStr,
 		RA: Send + Sync + 'static,
 		EX: NativeExecutionDispatch + 'static,
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
 	{
-		let client = new_full_client::<B, RA, EX, _, _>(&config)?;
+		let client = new_full_client::<B, RA, EX>(&config)?;
 		let inspect = Inspector::<B>::new(client);
 
 		match self.command {

@@ -18,9 +18,7 @@ use crate::error;
 use crate::params::ImportParams;
 use crate::params::SharedParams;
 use crate::{substrate_cli_params, CliConfiguration};
-use sc_service::{
-	ChainSpecExtension, Configuration, RuntimeGenesis, ServiceBuilderCommand,
-};
+use sc_service::{Configuration, ServiceBuilderCommand};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::fmt::Debug;
 use std::fs;
@@ -57,15 +55,13 @@ impl<T: Read + Seek> ReadPlusSeek for T {}
 
 impl ImportBlocksCmd {
 	/// Run the import-blocks command
-	pub async fn run<G, E, B, BC, BB>(
+	pub async fn run<B, BC, BB>(
 		self,
-		config: Configuration<G, E>,
+		config: Configuration,
 		builder: B,
 	) -> error::Result<()>
 	where
-		B: FnOnce(Configuration<G, E>) -> Result<BC, sc_service::error::Error>,
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
+		B: FnOnce(Configuration) -> Result<BC, sc_service::error::Error>,
 		BC: ServiceBuilderCommand<Block = BB> + Unpin,
 		BB: sp_runtime::traits::Block + Debug,
 		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,

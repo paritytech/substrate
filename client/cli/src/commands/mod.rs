@@ -36,8 +36,7 @@ use crate::SubstrateCLI;
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_network::config::NodeKeyConfig;
 use sc_service::{
-	config::DatabaseConfig, config::WasmExecutionMethod, ChainSpec, ChainSpecExtension, PruningMode,
-	Roles, RuntimeGenesis,
+	config::DatabaseConfig, config::WasmExecutionMethod, ChainSpec, PruningMode, Roles,
 };
 use sc_tracing::TracingReceiver;
 use std::fmt::Debug;
@@ -92,12 +91,8 @@ impl Subcommand {
 	/// 1. Set the panic handler
 	/// 2. Raise the FD limit
 	/// 3. Initialize the logger
-	pub fn init<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<()>
-	where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-	{
-		self.get_shared_params().init::<C, G, E>()
+	pub fn init<C: SubstrateCLI>(&self) -> Result<()> {
+		self.get_shared_params().init::<C>()
 	}
 }
 
@@ -115,26 +110,20 @@ macro_rules! match_and_call {
 		}
 	};
 
-	(fn $method:ident <C: SubstrateCLI<G, E>, G, E> ( &self $(, $arg:ident : $ty:ty)* ) $(-> $result:ty)?
-	where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-	) => {
-		fn $method <C: SubstrateCLI<G, E>, G, E> (&self, $($arg : $ty),*) $(-> $result)?
-		where
-			G: RuntimeGenesis,
-			E: ChainSpecExtension,
-		{
+/*
+	(fn $method:ident <C: SubstrateCLI> ( &self $(, $arg:ident : $ty:ty)* ) $(-> $result:ty)?) => {
+		fn $method <C: SubstrateCLI> (&self, $($arg : $ty),*) $(-> $result)? {
 			match self {
-				Subcommand::BuildSpec(cmd) => cmd.$method::<C, G, E>($($arg),*),
-				Subcommand::ExportBlocks(cmd) => cmd.$method::<C, G, E>($($arg),*),
-				Subcommand::ImportBlocks(cmd) => cmd.$method::<C, G, E>($($arg),*),
-				Subcommand::CheckBlock(cmd) => cmd.$method::<C, G, E>($($arg),*),
-				Subcommand::Revert(cmd) => cmd.$method::<C, G, E>($($arg),*),
-				Subcommand::PurgeChain(cmd) => cmd.$method::<C, G, E>($($arg),*),
+				Subcommand::BuildSpec(cmd) => cmd.$method::<C>($($arg),*),
+				Subcommand::ExportBlocks(cmd) => cmd.$method::<C>($($arg),*),
+				Subcommand::ImportBlocks(cmd) => cmd.$method::<C>($($arg),*),
+				Subcommand::CheckBlock(cmd) => cmd.$method::<C>($($arg),*),
+				Subcommand::Revert(cmd) => cmd.$method::<C>($($arg),*),
+				Subcommand::PurgeChain(cmd) => cmd.$method::<C>($($arg),*),
 			}
 		}
 	};
+*/
 }
 
 impl CliConfiguration for Subcommand {
@@ -144,18 +133,26 @@ impl CliConfiguration for Subcommand {
 
 	match_and_call! { fn get_database_config(&self, base_path: &PathBuf, cache_size: Option<usize>) -> Result<DatabaseConfig> }
 
-	match_and_call! {
-		fn get_chain_spec<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<ChainSpec<G, E>>
-		where
-			G: RuntimeGenesis,
-			E: ChainSpecExtension,
+	fn get_chain_spec<C: SubstrateCLI>(&self) -> Result<Box<dyn ChainSpec>> {
+		match self {
+			Subcommand::BuildSpec(cmd) => cmd.get_chain_spec::<C>(),
+			Subcommand::ExportBlocks(cmd) => cmd.get_chain_spec::<C>(),
+			Subcommand::ImportBlocks(cmd) => cmd.get_chain_spec::<C>(),
+			Subcommand::CheckBlock(cmd) => cmd.get_chain_spec::<C>(),
+			Subcommand::Revert(cmd) => cmd.get_chain_spec::<C>(),
+			Subcommand::PurgeChain(cmd) => cmd.get_chain_spec::<C>(),
+		}
 	}
 
-	match_and_call! {
-		fn init<C: SubstrateCLI<G, E>, G, E>(&self) -> Result<()>
-		where
-			G: RuntimeGenesis,
-			E: ChainSpecExtension,
+	fn init<C: SubstrateCLI>(&self) -> Result<()> {
+		match self {
+			Subcommand::BuildSpec(cmd) => cmd.init::<C>(),
+			Subcommand::ExportBlocks(cmd) => cmd.init::<C>(),
+			Subcommand::ImportBlocks(cmd) => cmd.init::<C>(),
+			Subcommand::CheckBlock(cmd) => cmd.init::<C>(),
+			Subcommand::Revert(cmd) => cmd.init::<C>(),
+			Subcommand::PurgeChain(cmd) => cmd.init::<C>(),
+		}
 	}
 
 	match_and_call! { fn get_pruning(&self, is_dev: bool, roles: Roles) -> Result<PruningMode> }
