@@ -56,6 +56,7 @@ use sc_client_api::{
 	execution_extensions::{ExecutionExtensions, ExecutionStrategies},
 };
 use sp_core::{Pair, Public, sr25519};
+use sc_block_builder::BlockBuilderProvider;
 
 /// Keyring full of accounts for benching.
 ///
