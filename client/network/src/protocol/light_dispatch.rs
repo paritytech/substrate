@@ -689,7 +689,7 @@ pub mod tests {
 		ChangesProof, RemoteCallRequest, RemoteReadRequest,
 		RemoteReadChildRequest, RemoteChangesRequest, RemoteBodyRequest};
 	use crate::config::Roles;
-	use crate::message::{self, BlockAttributes, Direction, FromBlock, RequestId};
+	use crate::protocol::message::{self, BlockAttributes, Direction, FromBlock, RequestId};
 	use libp2p::PeerId;
 	use super::{REQUEST_TIMEOUT, LightDispatch, LightDispatchNetwork, RequestData, StorageProof};
 	use sp_test_primitives::{Block, Header};

@@ -80,6 +80,12 @@ pub trait BlockBuilderProvider<B, Block, RA>
 		inherent_digests: DigestFor<Block>,
 		record_proof: R,
 	) -> sp_blockchain::Result<BlockBuilder<Block, RA, B>>;
+
+	/// Create a new block, built on the head of the chain.
+	fn new_block(
+		&self,
+		inherent_digests: DigestFor<Block>,
+	) -> sp_blockchain::Result<BlockBuilder<Block, RA, B>>;
 }
 
 /// Utility for building new (valid) blocks from a stream of extrinsics.

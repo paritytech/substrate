@@ -20,7 +20,7 @@ use std::sync::Arc;
 use rpc::futures::future::result;
 
 use sc_rpc_api::Subscriptions;
-use sc_client_api::{BlockchainEvents, BlockBody};
+use sc_client_api::{BlockchainEvents, BlockBackend};
 use sp_runtime::{generic::{BlockId, SignedBlock}, traits::{Block as BlockT}};
 
 use super::{ChainBackend, client_err, error::FutureResult};
@@ -50,7 +50,7 @@ impl<Block: BlockT, Client> FullChain<Block, Client> {
 
 impl<Block, Client> ChainBackend<Client, Block> for FullChain<Block, Client> where
 	Block: BlockT + 'static,
-	Client: BlockBody<Block> + HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
+	Client: BlockBackend<Block> + HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 {
 	fn client(&self) -> &Arc<Client> {
 		&self.client

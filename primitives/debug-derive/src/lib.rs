@@ -31,8 +31,6 @@
 //!	assert_eq!(format!("{:?}", MyStruct), "MyStruct");
 //! ```
 
-extern crate proc_macro;
-
 mod impls;
 
 use proc_macro::TokenStream;

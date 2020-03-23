@@ -21,7 +21,7 @@ use structopt::StructOpt;
 use sc_network::{
 	config::{NonReservedPeerMode, TransportConfig}, multiaddr::Protocol,
 };
-use sc_service::{Configuration, RuntimeGenesis};
+use sc_service::Configuration;
 
 use crate::error;
 use crate::params::node_key_params::NodeKeyParams;
@@ -83,9 +83,9 @@ pub struct NetworkConfigurationParams {
 	#[structopt(long = "no-mdns")]
 	pub no_mdns: bool,
 
-	/// Maximum number of peers to ask the same blocks in parallel.
+	/// Maximum number of peers from which to ask for the same blocks in parallel.
 	///
-	/// This allows downlading announced blocks from multiple peers. Decrease to save
+	/// This allows downloading announced blocks from multiple peers. Decrease to save
 	/// traffic and risk increased latency.
 	#[structopt(long = "max-parallel-downloads", value_name = "COUNT", default_value = "5")]
 	pub max_parallel_downloads: u32,
@@ -101,16 +101,13 @@ pub struct NetworkConfigurationParams {
 
 impl NetworkConfigurationParams {
 	/// Fill the given `NetworkConfiguration` by looking at the cli parameters.
-	pub fn update_config<G, E>(
+	pub fn update_config(
 		&self,
-		mut config: &mut Configuration<G, E>,
+		mut config: &mut Configuration,
 		config_path: PathBuf,
 		client_id: String,
 		is_dev: bool,
-	) -> error::Result<()>
-	where
-		G: RuntimeGenesis,
-	{
+	) -> error::Result<()> {
 		config.network.boot_nodes.extend(self.bootnodes.clone());
 		config.network.config_path = Some(config_path.clone());
 		config.network.net_config_path = Some(config_path.clone());

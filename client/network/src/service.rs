@@ -50,6 +50,7 @@ use crate::protocol::{self, Protocol, PeerInfo};
 use crate::protocol::{event::Event, light_dispatch::{AlwaysBadChecker, RequestData}};
 use crate::protocol::sync::SyncState;
 
+
 /// Minimum Requirements for a Hash within Networking
 pub trait ExHashT: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static {}
 
@@ -372,6 +373,11 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 	/// Number of blocks in the import queue.
 	pub fn num_queued_blocks(&self) -> u32 {
 		self.network_service.user_protocol().num_queued_blocks()
+	}
+
+	/// Returns the number of processed blocks.
+	pub fn num_processed_blocks(&self) -> usize {
+		self.network_service.user_protocol().num_processed_blocks()
 	}
 
 	/// Number of active sync requests.

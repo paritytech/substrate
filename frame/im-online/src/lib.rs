@@ -69,6 +69,7 @@
 
 mod mock;
 mod tests;
+mod benchmarking;
 
 use sp_application_crypto::RuntimeAppPublic;
 use codec::{Encode, Decode};
@@ -274,16 +275,17 @@ decl_storage! {
 		/// The current set of keys that may issue a heartbeat.
 		Keys get(fn keys): Vec<T::AuthorityId>;
 
-		/// For each session index, we keep a mapping of `AuthIndex`
-		/// to `offchain::OpaqueNetworkState`.
+		/// For each session index, we keep a mapping of `AuthIndex` to
+		/// `offchain::OpaqueNetworkState`.
 		ReceivedHeartbeats get(fn received_heartbeats):
-			double_map hasher(blake2_256) SessionIndex, hasher(blake2_256) AuthIndex
+			double_map hasher(twox_64_concat) SessionIndex, hasher(twox_64_concat) AuthIndex
 			=> Option<Vec<u8>>;
 
 		/// For each session index, we keep a mapping of `T::ValidatorId` to the
 		/// number of blocks authored by the given authority.
 		AuthoredBlocks get(fn authored_blocks):
-			double_map hasher(blake2_256) SessionIndex, hasher(blake2_256) T::ValidatorId => u32;
+			double_map hasher(twox_64_concat) SessionIndex, hasher(twox_64_concat) T::ValidatorId
+			=> u32;
 	}
 	add_extra_genesis {
 		config(keys): Vec<T::AuthorityId>;

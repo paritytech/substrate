@@ -1293,6 +1293,16 @@ impl Printable for &str {
 	}
 }
 
+impl Printable for bool {
+	fn print(&self) {
+		if *self {
+			"true".print()
+		} else {
+			"false".print()
+		}
+	}
+}
+
 #[impl_for_tuples(1, 12)]
 impl Printable for Tuple {
 	fn print(&self) {

@@ -276,6 +276,29 @@ impl NetworkStateInfo for TestNetwork {
 }
 
 #[test]
+fn new_registers_metrics() {
+	let (_dht_event_tx, dht_event_rx) = channel(1000);
+	let network: Arc<TestNetwork> = Arc::new(Default::default());
+	let key_store = KeyStore::new();
+	let test_api = Arc::new(TestApi {
+		authorities: vec![],
+	});
+
+	let registry = prometheus_endpoint::Registry::new();
+
+	AuthorityDiscovery::new(
+		test_api,
+		network.clone(),
+		vec![],
+		key_store,
+		dht_event_rx.boxed(),
+		Some(registry.clone()),
+	);
+
+	assert!(registry.gather().len() > 0);
+}
+
+#[test]
 fn publish_ext_addresses_puts_record_on_dht() {
 	let (_dht_event_tx, dht_event_rx) = channel(1000);
 	let network: Arc<TestNetwork> = Arc::new(Default::default());
@@ -294,6 +317,7 @@ fn publish_ext_addresses_puts_record_on_dht() {
 		vec![],
 		key_store,
 		dht_event_rx.boxed(),
+		None,
 	);
 
 	authority_discovery.publish_ext_addresses().unwrap();
@@ -324,6 +348,7 @@ fn request_addresses_of_others_triggers_dht_get_query() {
 		vec![],
 		key_store,
 		dht_event_rx.boxed(),
+		None,
 	);
 
 	authority_discovery.request_addresses_of_others().unwrap();
@@ -351,6 +376,7 @@ fn handle_dht_events_with_value_found_should_call_set_priority_group() {
 		vec![],
 		key_store,
 		dht_event_rx.boxed(),
+		None,
 	);
 
 	// Create sample dht event.
