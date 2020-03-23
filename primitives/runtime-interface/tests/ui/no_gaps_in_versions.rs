@@ -12,8 +12,6 @@ trait Test {
 	fn test() { }
 	#[version(3)]
 	fn test() { }
-
-
 }
 
 fn main() {}
