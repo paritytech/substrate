@@ -9,9 +9,9 @@ homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
-sp-runtime-interface = { version = "2.0.0-alpha.2", path = "../" }
-sc-executor = { version = "0.8.0-alpha.2", path = "../../../client/executor" }
+sp-runtime-interface = { version = "2.0.0-alpha.4", path = "../" }
+sc-executor = { version = "0.8.0-alpha.4", path = "../../../client/executor" }
 sp-runtime-interface-test-wasm = { version = "2.0.0-dev", path = "../test-wasm" }
-sp-state-machine = { version = "0.8.0-alpha.2", path = "../../../primitives/state-machine" }
-sp-runtime = { version = "2.0.0-alpha.2", path = "../../runtime" }
-sp-io = { version = "2.0.0-alpha.2", path = "../../io" }
+sp-state-machine = { version = "0.8.0-alpha.4", path = "../../../primitives/state-machine" }
+sp-runtime = { version = "2.0.0-alpha.4", path = "../../runtime" }
+sp-io = { version = "2.0.0-alpha.4", path = "../../io" }

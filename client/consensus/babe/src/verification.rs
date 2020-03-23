@@ -15,11 +15,11 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Verification for BABE headers.
-use schnorrkel::vrf::{VRFOutput, VRFProof};
 use sp_runtime::{traits::Header, traits::DigestItemFor};
 use sp_core::{Pair, Public};
 use sp_consensus_babe::{AuthoritySignature, SlotNumber, AuthorityIndex, AuthorityPair, AuthorityId};
 use sp_consensus_babe::digests::{PreDigest, CompatibleDigestItem};
+use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
 use sc_consensus_slots::CheckedHeader;
 use log::{debug, trace};
 use super::{find_pre_digest, babe_err, Epoch, BlockT, Error};
