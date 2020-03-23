@@ -20,6 +20,7 @@ use super::*;
 use mock::*;
 use sp_runtime::traits::OnFinalize;
 use pallet_session::ShouldEndSession;
+use sp_consensus_vrf::schnorrkel::{RawVRFOutput, RawVRFProof};
 
 const EMPTY_RANDOMNESS: [u8; 32] = [
 	74, 25, 49, 128, 53, 97, 244, 49,

@@ -111,7 +111,7 @@ pub fn new_test_ext(authorities: Vec<DummyValidatorId>) -> sp_io::TestExternalit
 }
 
 pub fn go_to_block(n: u64, s: u64) {
-	let pre_digest = make_pre_digest(0, s, [1; 32], [0xff; 64]);
+	let pre_digest = make_pre_digest(0, s, RawVRFOutput([1; 32]), RawVRFProof([0xff; 64]));
 	System::initialize(&n, &Default::default(), &Default::default(), &pre_digest, InitKind::Full);
 	System::set_block_number(n);
 	if s > 1 {
@@ -130,7 +130,7 @@ pub fn progress_to_block(n: u64) {
 	}
 }
 
-fn make_pre_digest(
+pub fn make_pre_digest(
 	authority_index: sp_consensus_babe::AuthorityIndex,
 	slot_number: sp_consensus_babe::SlotNumber,
 	vrf_output: RawVRFOutput,
