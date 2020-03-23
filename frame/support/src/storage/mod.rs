@@ -233,6 +233,15 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 
 	/// Enumerate all elements in the map in no particular order. If you alter the map while doing
 	/// this, you'll get undefined results.
+	#[deprecated(note = "please use `iter_value` instead")]
+	fn iter() -> PrefixIterator<(K, V)> where
+		Self::Hasher: StorageHasherInfo<K, Info=K>
+	{
+		Self::iter_key_value()
+	}
+
+	/// Enumerate all elements in the map in no particular order. If you alter the map while doing
+	/// this, you'll get undefined results.
 	fn iter_value() -> PrefixIterator<V>;
 
 	/// Translate the values of all elements by a function `f`, in the map in no particular order.
@@ -395,6 +404,12 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 	/// you'll get undefined results.
 	fn drain_prefix_key2_value(k1: impl EncodeLike<K1>) -> PrefixIterator<(K2, V)> where
 		Self::Hasher2: StorageHasherInfo<K2, Info=K2>;
+
+	/// Iter over all value associated to the first key.
+	#[deprecated(note = "please use `iter_prefix_value` instead")]
+	fn iter_prefix<KArg1>(k1: KArg1) -> PrefixIterator<V> where KArg1: ?Sized + EncodeLike<K1> {
+		Self::iter_prefix_value(k1)
+	}
 
 	/// Iter over all value associated to the first key.
 	fn iter_prefix_value<KArg1>(k1: KArg1) -> PrefixIterator<V> where

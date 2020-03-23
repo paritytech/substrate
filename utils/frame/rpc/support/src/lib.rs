@@ -22,7 +22,7 @@
 use core::marker::PhantomData;
 use futures::compat::Future01CompatExt;
 use jsonrpc_client_transports::RpcError;
-use codec::{DecodeAll, FullCodec, FullEncode};
+use codec::{DecodeAll, FullCodec};
 use serde::{de::DeserializeOwned, Serialize};
 use frame_support::storage::generator::{
 	StorageDoubleMap, StorageMap, StorageValue
@@ -104,7 +104,7 @@ impl<V: FullCodec> StorageQuery<V> {
 	}
 
 	/// Create a storage query for a value in a StorageMap.
-	pub fn map<St: StorageMap<K, V>, K: FullEncode>(key: K) -> Self {
+	pub fn map<St: StorageMap<K, V>, K: FullCodec>(key: K) -> Self {
 		Self {
 			key: StorageKey(St::storage_map_final_key(key)),
 			_spook: PhantomData,
@@ -112,7 +112,7 @@ impl<V: FullCodec> StorageQuery<V> {
 	}
 
 	/// Create a storage query for a value in a StorageDoubleMap.
-	pub fn double_map<St: StorageDoubleMap<K1, K2, V>, K1: FullEncode, K2: FullEncode>(
+	pub fn double_map<St: StorageDoubleMap<K1, K2, V>, K1: FullCodec, K2: FullCodec>(
 		key1: K1,
 		key2: K2,
 	) -> Self {
