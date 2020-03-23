@@ -16,7 +16,7 @@
 
 //! A slashing implementation for NPoS systems.
 //!
-//! For the purposes of the economic model, it is easiest to think of each validator of a nominator
+//! For the purposes of the economic model, it is easiest to think of each validator as a nominator
 //! which nominates only its own identity.
 //!
 //! The act of nomination signals intent to unify economic identity with the validator - to take
