@@ -17,7 +17,6 @@
 // tag::description[]
 //! Cryptographic utilities.
 // end::description[]
-use crate::hexdisplay::HexDisplay;
 
 use sp_std::hash::Hash;
 use sp_std::vec::Vec;
@@ -34,7 +33,8 @@ use codec::{Encode, Decode};
 use regex::Regex;
 #[cfg(feature = "std")]
 use base58::{FromBase58, ToBase58};
-
+#[cfg(feature = "std")]
+use crate::hexdisplay::HexDisplay;
 use zeroize::Zeroize;
 #[doc(hidden)]
 pub use sp_std::ops::Deref;
