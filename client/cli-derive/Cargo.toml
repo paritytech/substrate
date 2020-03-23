@@ -1,6 +1,6 @@
 [package]
 name = "sc-cli-derive"
-version = "0.8.0-alpha.2"
+version = "0.8.0-alpha.4"
 authors = ["Cecile Tonglet <cecile@parity.io>"]
 edition = "2018"
 
@@ -17,5 +17,5 @@ platforms = "0.2"
 
 [dev-dependencies]
 trybuild = "1.0"
-sc-service = { version = "0.8.0-alpha.2", default-features = false, path = "../service" }
-sc-cli = { version = "0.8.0-alpha.2", default-features = false, path = "../cli" }
+sc-service = { version = "0.8.0-alpha.4", default-features = false, path = "../service" }
+sc-cli = { version = "0.8.0-alpha.4", default-features = false, path = "../cli" }

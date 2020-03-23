@@ -1,6 +1,6 @@
 [package]
 name = "node-transaction-factory"
-version = "0.8.0-alpha.3"
+version = "0.8.0-alpha.4"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
@@ -8,16 +8,16 @@ homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
-sp-block-builder = { version = "2.0.0-alpha.2", path = "../../../primitives/block-builder" }
-sc-cli = { version = "0.8.0-alpha.2", path = "../../../client/cli" }
-sc-client-api = { version = "2.0.0-alpha.2", path = "../../../client/api" }
-sc-block-builder = { version = "0.8.0-alpha.2", path = "../../../client/block-builder" }
-sc-client = { version = "0.8.0-alpha.2", path = "../../../client" }
+sp-block-builder = { version = "2.0.0-alpha.4", path = "../../../primitives/block-builder" }
+sc-cli = { version = "0.8.0-alpha.4", path = "../../../client/cli" }
+sc-client-api = { version = "2.0.0-alpha.4", path = "../../../client/api" }
+sc-block-builder = { version = "0.8.0-alpha.4", path = "../../../client/block-builder" }
+sc-client = { version = "0.8.0-alpha.4", path = "../../../client" }
 codec = { package = "parity-scale-codec", version = "1.2.0", features = ["derive"] }
-sp-consensus = { version = "0.8.0-alpha.2", path = "../../../primitives/consensus/common" }
+sp-consensus = { version = "0.8.0-alpha.4", path = "../../../primitives/consensus/common" }
 log = "0.4.8"
-sp-core = { version = "2.0.0-alpha.2", path = "../../../primitives/core" }
-sp-api = { version = "2.0.0-alpha.2", path = "../../../primitives/api" }
-sp-runtime = { version = "2.0.0-alpha.2", path = "../../../primitives/runtime" }
-sc-service = { version = "0.8.0-alpha.2", default-features = false, path = "../../../client/service" }
-sp-blockchain = { version = "2.0.0-alpha.2", path = "../../../primitives/blockchain" }
+sp-core = { version = "2.0.0-alpha.4", path = "../../../primitives/core" }
+sp-api = { version = "2.0.0-alpha.4", path = "../../../primitives/api" }
+sp-runtime = { version = "2.0.0-alpha.4", path = "../../../primitives/runtime" }
+sc-service = { version = "0.8.0-alpha.4", default-features = false, path = "../../../client/service" }
+sp-blockchain = { version = "2.0.0-alpha.4", path = "../../../primitives/blockchain" }
