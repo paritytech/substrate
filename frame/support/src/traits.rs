@@ -171,6 +171,13 @@ pub trait Contains<T: Ord> {
 
 	/// Get the number of items in the set.
 	fn count() -> usize { Self::sorted_members().len() }
+
+	/// Add an item that would satisfy `contains`. It does not make sure any other
+	/// state is correctly maintained or generated.
+	///
+	/// **Should be used for benchmarking only!!!**
+	#[cfg(feature = "runtime-benchmarks")]
+	fn add(t: &T);
 }
 
 /// Determiner to say whether a given account is unused.
