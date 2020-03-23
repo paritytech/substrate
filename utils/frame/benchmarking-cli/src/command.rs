@@ -16,7 +16,7 @@
 
 use crate::BenchmarkCmd;
 use codec::{Decode, Encode};
-use frame_benchmarking::BenchmarkResults;
+use frame_benchmarking::{Analysis, BenchmarkResults};
 use sc_cli::{substrate_cli_params, CliConfiguration, ExecutionStrategy, Result, SubstrateCLI};
 use sc_client::StateMachine;
 use sc_client_db::BenchmarkingState;
@@ -102,6 +102,17 @@ impl BenchmarkCmd {
 					// Print extrinsic time and storage root time
 					print!("{:?},{:?}\n", result.1, result.2);
 				});
+
+				print!("\n");
+
+				// Conduct analysis.
+				if let Some(analysis) = Analysis::median_slopes(&results) {
+					println!("Median Slopes Analysis\n========\n{}", analysis);
+				}
+
+				if let Some(analysis) = Analysis::min_squares_iqr(&results) {
+					println!("Min Squares Analysis\n========\n{}", analysis);
+				}
 
 				eprintln!("Done.");
 			}
