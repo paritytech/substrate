@@ -431,7 +431,7 @@ where
 pub struct EnsureMember<AccountId, I=DefaultInstance>(sp_std::marker::PhantomData<(AccountId, I)>);
 impl<
 	O: Into<Result<RawOrigin<AccountId, I>, O>> + From<RawOrigin<AccountId, I>>,
-	AccountId,
+	AccountId: Default,
 	I,
 > EnsureOrigin<O> for EnsureMember<AccountId, I> {
 	type Success = AccountId;
@@ -443,7 +443,7 @@ impl<
 	}
 
 	fn successful_origin() -> O {
-		unimplemented!()
+		O::from(RawOrigin::Member(Default::default()))
 	}
 }
 
@@ -463,7 +463,7 @@ impl<
 	}
 
 	fn successful_origin() -> O {
-		O::from(RawOrigin::Members(0u32, 0u32))
+		O::from(RawOrigin::Members(N::VALUE, N::VALUE))
 	}
 }
 

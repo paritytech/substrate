@@ -202,18 +202,17 @@ benchmarks! {
 	fast_track {
 		let u in ...;
 
-		let origin = T::ExternalDefaultOrigin::successful_origin();
+		let origin_propose = T::ExternalDefaultOrigin::successful_origin();
 		let proposal_hash: T::Hash = Default::default();
-
-		let origin_propose = T::FastTrackOrigin::successful_origin();
 		Democracy::<T>::external_propose_default(origin_propose, proposal_hash.clone())?;
 
-		let voting_period = 0;
+		let origin_fast_track = T::FastTrackOrigin::successful_origin();
+		let voting_period = T::FastTrackVotingPeriod::get();
 		let delay = 0;
 		let call = Call::<T>::fast_track(proposal_hash, voting_period.into(), delay.into());
 
 	}: {
-		let _ = call.dispatch(origin)?;
+		let _ = call.dispatch(origin_fast_track)?;
 	}
 
 	veto_external {
@@ -306,20 +305,17 @@ benchmarks! {
 		let caller: T::AccountId = account("caller", u, SEED);
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
-		for i in 0 .. u {
-			let d: T::AccountId = account("delegator", u + i + 1, SEED);
-			let conviction = Conviction::Locked1x;
-			let balance = 1u32;
-			Democracy::<T>::delegate(RawOrigin::Signed(d.clone()).into(), caller.clone().into(), conviction, balance.into())?;
-		}
+		let delegator: T::AccountId = account("delegator", u + 1, SEED);
+		T::Currency::make_free_balance_be(&delegator, BalanceOf::<T>::max_value());
 
-		let d: T::AccountId = account("delegator", u + 1, SEED);
+		let conviction = Conviction::Locked1x;
+		let balance = 1u32;
+		Democracy::<T>::delegate(RawOrigin::Signed(delegator.clone()).into(), caller.clone().into(), conviction, balance.into())?;
 
-	}: _(RawOrigin::Signed(d))
+	}: _(RawOrigin::Signed(delegator))
 
 	clear_public_proposals {
 		let u in ...;
-		// TODO: maybe add some proposals to kill.
 	}: _(RawOrigin::Root)
 
 	note_preimage {
@@ -367,7 +363,7 @@ benchmarks! {
 		Democracy::<T>::note_preimage(RawOrigin::Signed(caller.clone()).into(), encoded_proposal.clone())?;
 
 		// We need to set this otherwise we get `Early` error.
-		let block_number = T::VotingPeriod::get();
+		let block_number = T::VotingPeriod::get() + T::EnactmentPeriod::get() + 1u32.into();
 		System::<T>::set_block_number(block_number.into());
 
 		let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
