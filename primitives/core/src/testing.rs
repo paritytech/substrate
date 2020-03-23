@@ -25,7 +25,7 @@ use crate::{
 };
 #[cfg(feature = "std")]
 use std::collections::HashSet;
-
+use codec::Encode;
 /// Key type for generic Ed25519 key.
 pub const ED25519: KeyTypeId = KeyTypeId(*b"ed25");
 /// Key type for generic Sr 25519 key.
@@ -77,7 +77,7 @@ impl crate::traits::BareCryptoStore for KeyStore {
 						v
 					}))
 			})
-			.unwrap()
+			.unwrap_or(Ok(vec![]))
 	}
 
 	fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public> {
@@ -158,7 +158,7 @@ impl crate::traits::BareCryptoStore for KeyStore {
 	fn supported_keys(
 		&self,
 		id: KeyTypeId,
-		keys: Vec<CryptoTypePublicPair>
+		keys: Vec<CryptoTypePublicPair>,
 	) -> std::result::Result<Vec<CryptoTypePublicPair>, BareCryptoStoreError> {
 		let provided_keys = keys.into_iter().collect::<HashSet<_>>();
 		let all_keys = self.keys(id)?.into_iter().collect::<HashSet<_>>();
@@ -170,22 +170,20 @@ impl crate::traits::BareCryptoStore for KeyStore {
 		&self,
 		id: KeyTypeId,
 		key: &CryptoTypePublicPair,
-		msg: &[u8]
+		msg: &[u8],
 	) -> Result<Vec<u8>, BareCryptoStoreError> {
 		match key.0 {
 			ed25519::CRYPTO_ID => {
 				let key_pair: ed25519::Pair = self
 					.ed25519_key_pair(id, &ed25519::Public::from_slice(key.1.as_slice()))
-					.map(Into::into)
 					.ok_or(BareCryptoStoreError::PairNotFound("ed25519".to_owned()))?;
-				return Ok(<[u8; 64]>::from(key_pair.sign(msg)).to_vec());
+				return Ok(key_pair.sign(msg).encode());
 			}
 			sr25519::CRYPTO_ID => {
 				let key_pair: sr25519::Pair = self
 					.sr25519_key_pair(id, &sr25519::Public::from_slice(key.1.as_slice()))
-					.map(Into::into)
 					.ok_or(BareCryptoStoreError::PairNotFound("sr25519".to_owned()))?;
-				return Ok(<[u8; 64]>::from(key_pair.sign(msg)).to_vec());
+				return Ok(key_pair.sign(msg).encode());
 			}
 			_ => Err(BareCryptoStoreError::KeyNotSupported(id))
 		}

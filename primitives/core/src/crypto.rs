@@ -17,7 +17,7 @@
 // tag::description[]
 //! Cryptographic utilities.
 // end::description[]
-use rustc_hex::ToHex;
+use crate::hexdisplay::HexDisplay;
 
 use sp_std::hash::Hash;
 use sp_std::vec::Vec;
@@ -962,7 +962,7 @@ impl sp_std::fmt::Display for CryptoTypePublicPair {
 				format!("{:#?}", self.0)
 			}
 		};
-		write!(f, "{}-{}", id, self.1.to_hex::<String>())
+		write!(f, "{}-{}", id, HexDisplay::from(&self.1))
 	}
 }
 

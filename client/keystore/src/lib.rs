@@ -17,11 +17,11 @@
 //! Keystore (and session key management) for ed25519 based chains like Polkadot.
 
 #![warn(missing_docs)]
-
 use std::{collections::{HashMap, HashSet}, path::PathBuf, fs::{self, File}, io::{self, Write}, sync::Arc};
 use sp_core::{
 	crypto::{IsWrappedBy, CryptoTypePublicPair, KeyTypeId, Pair as PairT, Protected, Public},
-	traits::{BareCryptoStore, BareCryptoStoreError as TraitError}
+	traits::{BareCryptoStore, BareCryptoStoreError as TraitError},
+	Encode,
 };
 use sp_application_crypto::{AppKey, AppPublic, AppPair, ed25519, sr25519};
 use parking_lot::RwLock;
@@ -334,17 +334,15 @@ impl BareCryptoStore for Store {
 				let pub_key = ed25519::Public::from_slice(key.1.as_slice());
 				let key_pair: ed25519::Pair = self
 					.key_pair_by_type::<ed25519::Pair>(&pub_key, id)
-					.map(Into::into)
 					.map_err(|e| TraitError::from(e))?;
-				Ok(<[u8; 64]>::from(key_pair.sign(msg)).to_vec())
+				Ok(key_pair.sign(msg).encode())
 			}
 			sr25519::CRYPTO_ID => {
 				let pub_key = sr25519::Public::from_slice(key.1.as_slice());
 				let key_pair: sr25519::Pair = self
 					.key_pair_by_type::<sr25519::Pair>(&pub_key, id)
-					.map(Into::into)
 					.map_err(|e| TraitError::from(e))?;
-				Ok(<[u8; 64]>::from(key_pair.sign(msg)).to_vec())
+				Ok(key_pair.sign(msg).encode())
 			}
 			_ => Err(TraitError::KeyNotSupported(id))
 		}
