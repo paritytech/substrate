@@ -32,7 +32,7 @@ mod mock;
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
 enum Mode {
-	/// Initial submission. This will be rather cheap
+	/// Initial submission. This will be rather cheap.
 	InitialSubmission,
 	/// A better submission that will replace the previous ones. This is the most expensive.
 	StrongerSubmission,
