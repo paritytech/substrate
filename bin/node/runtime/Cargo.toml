@@ -150,5 +150,4 @@ runtime-benchmarks = [
 	"pallet-society/runtime-benchmarks",
 	"pallet-im-online/runtime-benchmarks",
 	"pallet-democracy/runtime-benchmarks",
-	"pallet-democracy/runtime-benchmarks",
 ]
