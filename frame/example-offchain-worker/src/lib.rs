@@ -45,13 +45,8 @@ use frame_system::{
 	ensure_signed,
 	ensure_none,
 	offchain::{
-		AppCrypto,
-		CreateSignedTransaction,
-		SendUnsignedTransaction,
-		SendRawUnsignedTransaction,
-		SignedPayload,
-		SigningTypes,
-		Signer,
+		AppCrypto, CreateSignedTransaction, SendUnsignedTransaction,
+		SendRawUnsignedTransaction, SignedPayload, SigningTypes, Signer,
 	}
 };
 use frame_support::{
@@ -120,7 +115,7 @@ pub trait Trait: CreateSignedTransaction<Call<Self>> {
 pub struct PricePayload<Public, BlockNumber> {
 	block_number: BlockNumber,
 	price: u32,
-	public: Public
+	public: Public,
 }
 
 impl<T: SigningTypes> SignedPayload<T> for PricePayload<T::Public, T::BlockNumber> {
@@ -213,7 +208,7 @@ decl_module! {
 		pub fn submit_price_unsigned_with_signed_payload(
 			origin,
 			price_payload: PricePayload<T::Public, T::BlockNumber>,
-			_signature: T::Signature
+			_signature: T::Signature,
 		) -> DispatchResult
 		{
 			// This ensures that the function can only be called via unsigned transaction.
@@ -421,7 +416,7 @@ impl<T: Trait> Module<T> {
 		//
 		// Method 1: Unsigned transaction / Unsigned payload
 		let _result_raw: Result<(), String> = Signer::<T, T::AuthorityId>::send_raw_unsigned_transaction(call)
-    		.map_err(|()| "Unable to submit unsigned transaction.".into());
+			.map_err(|()| "Unable to submit unsigned transaction.".into());
 
 		// Method 2: Unsigned transction / signed payload
 		let _result_signed_payload = Signer::<T, T::AuthorityId>::all_accounts().send_unsigned_transaction(
@@ -437,9 +432,6 @@ impl<T: Trait> Module<T> {
 
 
 		Ok(())
-		// T::SubmitUnsignedTransaction::submit_unsigned(call)
-		// 	.map_err(|()| "Unable to submit unsigned transaction.".into())
-
 	}
 
 	/// Fetch current price and return the result in cents.
@@ -539,7 +531,7 @@ impl<T: Trait> Module<T> {
 
 	fn validate_transaction_parameters(
 		block_number: &T::BlockNumber,
-		new_price: &u32
+		new_price: &u32,
 	) -> TransactionValidity {
 		// Now let's check if the transaction has any chance to succeed.
 		let next_unsigned_at = <NextUnsignedAt<T>>::get();
@@ -562,7 +554,7 @@ impl<T: Trait> Module<T> {
 			.unwrap_or(0);
 
 		Ok(ValidTransaction {
-			// We set base priority to 2**20 to make sure it's included before any other
+			// We set base priority to 2**20 and hope it's included before any other
 			// transactions in the pool. Next we tweak the priority depending on how much
 			// it differs from the current average. (the more it differs the more priority it
 			// has).
@@ -576,7 +568,7 @@ impl<T: Trait> Module<T> {
 			// get to the transaction pool and will end up in the block.
 			// We can still have multiple transactions compete for the same "spot",
 			// and the one with higher priority will replace other one in the pool.
-			provides: vec![codec::Encode::encode(&(KEY_TYPE.0, next_unsigned_at))],
+			provides: vec![Encode::encode(&(KEY_TYPE.0, next_unsigned_at))],
 			// The transaction is only valid for next 5 blocks. After that it's
 			// going to be revalidated by the pool.
 			longevity: 5,

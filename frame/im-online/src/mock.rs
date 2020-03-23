@@ -44,12 +44,12 @@ thread_local! {
 	pub static VALIDATORS: RefCell<Option<Vec<UintAuthorityId>>> = RefCell::new(Some(vec![
 		UintAuthorityId(1),
 		UintAuthorityId(2),
-		UintAuthorityId(3)
+		UintAuthorityId(3),
 	]));
 }
 
-pub struct ImOnlineAuthId;
-impl frame_system::offchain::AppCrypto<PublicWrapper, Signature> for ImOnlineAuthId {
+pub struct ImOnlineAuthorityId;
+impl frame_system::offchain::AppCrypto<PublicWrapper, Signature> for ImOnlineAuthorityId {
 	type RuntimeAppPublic = sr25519::AuthorityId;
 	type GenericSignature = Signature;
 	type GenericPublic = Public;
@@ -197,7 +197,7 @@ impl pallet_authorship::Trait for Runtime {
 
 impl Trait for Runtime {
 	type AuthorityId = UintAuthorityId;
-	type OffchainAuthorityId = ImOnlineAuthId;
+	type OffchainAuthorityId = ImOnlineAuthorityId;
 	type Event = ();
 	type ReportUnresponsiveness = OffenceHandler;
 	type SessionDuration = Period;
@@ -206,7 +206,6 @@ impl Trait for Runtime {
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime where
 	Call: From<LocalCall>,
 {
-
 	type OverarchingCall = Call;
 	type Extrinsic = Extrinsic;
 }

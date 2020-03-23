@@ -524,9 +524,8 @@ impl<C> frame_system::offchain::SendTransactionTypes<C> for Runtime where
 	type OverarchingCall = Call;
 	type Extrinsic = UncheckedExtrinsic;
 }
-
-pub struct ImOnlineAuthId;
-impl frame_system::offchain::AppCrypto<<Signature as traits::Verify>::Signer, Signature> for ImOnlineAuthId {
+pub struct ImOnlineAuthorityId;
+impl frame_system::offchain::AppCrypto<<Signature as traits::Verify>::Signer, Signature> for ImOnlineAuthorityId {
 	// TODO [ToDr] Get rid of this trait and instead
 	// have `RuntimeAppPublic` be able to give you `GenericSignature/GenericPublic`
 	// or see the proposal at `system/src/offchain.rs`.
@@ -540,7 +539,7 @@ impl frame_system::offchain::AppCrypto<<Signature as traits::Verify>::Signer, Si
 
 impl pallet_im_online::Trait for Runtime {
 	type AuthorityId = ImOnlineId;
-	type OffchainAuthorityId = ImOnlineAuthId;
+	type OffchainAuthorityId = ImOnlineAuthorityId;
 	type Event = Event;
 	type SessionDuration = SessionDuration;
 	type ReportUnresponsiveness = Offences;

@@ -534,8 +534,6 @@ impl<T: Trait> Module<T> {
 		// All `ImOnline` public (+private) keys currently in the local keystore.
 		let mut local_keys = T::AuthorityId::all();
 
-
-
 		local_keys.sort();
 
 		authorities.into_iter()

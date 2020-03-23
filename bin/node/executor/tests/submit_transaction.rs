@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use node_runtime::{
-	Executive, Indices, Runtime, UncheckedExtrinsic, ImOnlineAuthId
+	Executive, Indices, Runtime, UncheckedExtrinsic, ImOnlineAuthorityId,
 };
 use sp_application_crypto::AppKey;
 use sp_core::testing::KeyStore;
@@ -51,7 +51,7 @@ fn should_submit_unsigned_transaction() {
 		};
 
 		let call = pallet_im_online::Call::heartbeat(heartbeat_data, signature);
-		Signer::<Runtime, ImOnlineAuthId>::send_raw_unsigned_transaction(call)
+		Signer::<Runtime, ImOnlineAuthorityId>::send_raw_unsigned_transaction(call)
 			.unwrap();
 
 		assert_eq!(state.read().transactions.len(), 1)
@@ -73,7 +73,7 @@ fn should_submit_signed_transaction() {
 	t.register_extension(KeystoreExt(keystore));
 
 	t.execute_with(|| {
-		let results = Signer::<Runtime, ImOnlineAuthId>::all_accounts()
+		let results = Signer::<Runtime, ImOnlineAuthorityId>::all_accounts()
 			.send_signed_transaction(|_| {
 				pallet_balances::Call::transfer(Default::default(), Default::default())
 			});
@@ -96,7 +96,7 @@ fn should_submit_signed_twice_from_the_same_account() {
 	t.register_extension(KeystoreExt(keystore));
 
 	t.execute_with(|| {
-		let results = Signer::<Runtime, ImOnlineAuthId>::all_accounts()
+		let results = Signer::<Runtime, ImOnlineAuthorityId>::all_accounts()
 			.send_signed_transaction(|_| {
 				pallet_balances::Call::transfer(Default::default(), Default::default())
 			});
@@ -107,7 +107,7 @@ fn should_submit_signed_twice_from_the_same_account() {
 		assert_eq!(state.read().transactions.len(), 1);
 
 		// submit another one from the same account. The nonce should be incremented.
-		let results = Signer::<Runtime, ImOnlineAuthId>::all_accounts()
+		let results = Signer::<Runtime, ImOnlineAuthorityId>::all_accounts()
 			.send_signed_transaction(|_| {
 				pallet_balances::Call::transfer(Default::default(), Default::default())
 			});
@@ -148,7 +148,7 @@ fn submitted_transaction_should_be_valid() {
 	t.register_extension(KeystoreExt(keystore));
 
 	t.execute_with(|| {
-		let results = Signer::<Runtime, ImOnlineAuthId>::all_accounts()
+		let results = Signer::<Runtime, ImOnlineAuthorityId>::all_accounts()
 			.send_signed_transaction(|_| {
 				pallet_balances::Call::transfer(Default::default(), Default::default())
 			});

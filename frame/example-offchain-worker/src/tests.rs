@@ -32,11 +32,8 @@ use sp_runtime::{
 	Perbill, RuntimeAppPublic,
 	testing::{Header, TestXt},
 	traits::{
-		BlakeTwo256,
-		IdentityLookup,
-		Extrinsic as ExtrinsicT,
-		IdentifyAccount,
-		Verify
+		BlakeTwo256, IdentityLookup, Extrinsic as ExtrinsicT,
+		IdentifyAccount, Verify
 	},
 };
 
@@ -88,7 +85,6 @@ impl frame_system::offchain::SigningTypes for Test {
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Test where
 	Call<Test>: From<LocalCall>,
 {
-
 	type OverarchingCall = Call<Test>;
 	type Extrinsic = Extrinsic;
 }

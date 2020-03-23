@@ -69,7 +69,7 @@ fn should_report_offline_validators() {
 			UintAuthorityId(3),
 			UintAuthorityId(4),
 			UintAuthorityId(5),
-			UintAuthorityId(6)
+			UintAuthorityId(6),
 		];
 		VALIDATORS.with(|l| *l.borrow_mut() = Some(validators.clone()));
 		Session::rotate_session();
@@ -152,7 +152,7 @@ fn should_mark_online_validator_when_heartbeat_is_received() {
 			UintAuthorityId(3),
 			UintAuthorityId(4),
 			UintAuthorityId(5),
-			UintAuthorityId(6)
+			UintAuthorityId(6),
 		];
 		VALIDATORS.with(|l| *l.borrow_mut() = Some(validators.clone()));
 		assert_eq!(Session::validators(), Vec::<UintAuthorityId>::new());
@@ -163,7 +163,7 @@ fn should_mark_online_validator_when_heartbeat_is_received() {
 		assert_eq!(Session::validators(), vec![
 			UintAuthorityId(1),
 			UintAuthorityId(2),
-			UintAuthorityId(3)
+			UintAuthorityId(3),
 		]);
 
 		assert!(!ImOnline::is_online(0));
@@ -199,7 +199,7 @@ fn late_heartbeat_should_fail() {
 			UintAuthorityId(3),
 			UintAuthorityId(4),
 			UintAuthorityId(5),
-			UintAuthorityId(6)
+			UintAuthorityId(6),
 		];
 		VALIDATORS.with(|l| *l.borrow_mut() = Some(validators.clone()));
 		assert_eq!(Session::validators(), Vec::<UintAuthorityId>::new());
@@ -210,7 +210,7 @@ fn late_heartbeat_should_fail() {
 		assert_eq!(Session::validators(), vec![
 			UintAuthorityId(1),
 			UintAuthorityId(2),
-			UintAuthorityId(3)
+			UintAuthorityId(3),
 		]);
 
 		// when
@@ -243,7 +243,7 @@ fn should_generate_heartbeats() {
 			UintAuthorityId(3),
 			UintAuthorityId(4),
 			UintAuthorityId(5),
-			UintAuthorityId(6)
+			UintAuthorityId(6),
 		];
 		VALIDATORS.with(|l| *l.borrow_mut() = Some(validators.clone()));
 		Session::rotate_session();
@@ -292,7 +292,7 @@ fn should_cleanup_received_heartbeats_on_session_end() {
 		assert_eq!(Session::validators(), vec![
 			UintAuthorityId(1),
 			UintAuthorityId(2),
-			UintAuthorityId(3)
+			UintAuthorityId(3),
 		]);
 
 		// send an heartbeat from authority id 0 at session 2
@@ -323,7 +323,7 @@ fn should_mark_online_validator_when_block_is_authored() {
 			UintAuthorityId(3),
 			UintAuthorityId(4),
 			UintAuthorityId(5),
-			UintAuthorityId(6)
+			UintAuthorityId(6),
 		];
 		VALIDATORS.with(|l| *l.borrow_mut() = Some(validators.clone()));
 		assert_eq!(Session::validators(), Vec::<UintAuthorityId>::new());
@@ -334,7 +334,7 @@ fn should_mark_online_validator_when_block_is_authored() {
 		assert_eq!(Session::validators(), vec![
 			UintAuthorityId(1),
 			UintAuthorityId(2),
-			UintAuthorityId(3)
+			UintAuthorityId(3),
 		]);
 
 		for i in 0..3 {
@@ -371,7 +371,7 @@ fn should_not_send_a_report_if_already_online() {
 			UintAuthorityId(3),
 			UintAuthorityId(4),
 			UintAuthorityId(5),
-			UintAuthorityId(6)
+			UintAuthorityId(6),
 		];
 		VALIDATORS.with(|l| *l.borrow_mut() = Some(validators.clone()));
 		assert_eq!(Session::validators(), Vec::<UintAuthorityId>::new());
@@ -381,7 +381,7 @@ fn should_not_send_a_report_if_already_online() {
 		assert_eq!(Session::validators(), vec![
 			UintAuthorityId(1),
 			UintAuthorityId(2),
-			UintAuthorityId(3)
+			UintAuthorityId(3),
 		]);
 		ImOnline::note_author(UintAuthorityId(2));
 		ImOnline::note_uncle(UintAuthorityId(3), 0);
