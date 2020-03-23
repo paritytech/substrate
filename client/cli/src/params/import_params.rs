@@ -62,11 +62,11 @@ pub struct ImportParams {
 	#[structopt(long = "state-cache-size", value_name = "Bytes", default_value = "67108864")]
 	pub state_cache_size: usize,
 
-	/// Comma separated list of targets for tracing
+	/// Comma separated list of targets for tracing.
 	#[structopt(long = "tracing-targets", value_name = "TARGETS")]
 	pub tracing_targets: Option<String>,
 
-	/// Receiver to process tracing messages
+	/// Receiver to process tracing messages.
 	#[structopt(
 		long = "tracing-receiver",
 		value_name = "RECEIVER",

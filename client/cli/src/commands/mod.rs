@@ -50,7 +50,7 @@ use structopt::StructOpt;
 /// `Run` are exported as main executable parameters.
 #[derive(Debug, Clone, StructOpt)]
 pub enum Subcommand {
-	/// Build a spec.json file, outputing to stdout.
+	/// Build a spec.json file, outputs to stdout.
 	BuildSpec(BuildSpecCmd),
 
 	/// Export blocks to a file.
@@ -70,7 +70,7 @@ pub enum Subcommand {
 }
 
 impl Subcommand {
-	/// Get the shared parameters of a `CoreParams` command
+	/// Get the shared parameters of a `CoreParams` command.
 	pub fn get_shared_params(&self) -> &SharedParams {
 		use Subcommand::*;
 
