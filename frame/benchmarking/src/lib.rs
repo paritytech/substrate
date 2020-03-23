@@ -24,8 +24,6 @@ pub use utils::*;
 #[doc(hidden)]
 pub use sp_io::storage::root as storage_root;
 pub use sp_runtime::traits::Dispatchable;
-pub use frame_system::RawOrigin as SystemOrigin;
-pub use pallet_collective::{RawOrigin as CollectiveOrigin, Instance1, Instance2};
 
 /// Construct pallet benchmarks for weighing dispatchables.
 ///
