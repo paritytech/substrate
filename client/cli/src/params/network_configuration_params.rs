@@ -105,7 +105,7 @@ pub struct NetworkConfigurationParams {
 
 impl NetworkConfigurationParams {
 	/// Fill the given `NetworkConfiguration` by looking at the cli parameters.
-	pub fn get_network_config(
+	pub fn network_config(
 		&self,
 		chain_spec: &Box<dyn ChainSpec>,
 		client_id: &str,

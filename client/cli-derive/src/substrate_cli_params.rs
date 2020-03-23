@@ -90,35 +90,35 @@ pub(crate) fn substrate_cli_params(
 	let missing = |method| !existing_methods.contains(method);
 
 	if let Some(ident) = shared_params {
-		if missing("get_base_path") {
+		if missing("base_path") {
 			i.items.push(ImplItem::Verbatim(quote! {
-				fn get_base_path(&self) -> ::sc_cli::Result<::std::option::Option<&::std::path::PathBuf>> {
+				fn base_path(&self) -> ::sc_cli::Result<::std::option::Option<&::std::path::PathBuf>> {
 					Ok(self.#ident.base_path.as_ref())
 				}
 			}));
 		}
-		if missing("get_is_dev") {
+		if missing("is_dev") {
 			i.items.push(ImplItem::Verbatim(quote! {
-				fn get_is_dev(&self) -> ::sc_cli::Result<bool> {
+				fn is_dev(&self) -> ::sc_cli::Result<bool> {
 					Ok(self.#ident.dev)
 				}
 			}));
 		}
-		if missing("get_chain_spec") {
+		if missing("chain_spec") {
 			i.items.push(ImplItem::Verbatim(quote! {
-				fn get_chain_spec<C: ::sc_cli::SubstrateCLI>(&self) -> ::sc_cli::Result<Box<dyn ::sc_service::ChainSpec>> {
-					self.#ident.get_chain_spec::<C>()
+				fn chain_spec<C: ::sc_cli::SubstrateCLI>(&self) -> ::sc_cli::Result<Box<dyn ::sc_service::ChainSpec>> {
+					self.#ident.chain_spec::<C>()
 				}
 			}));
 		}
-		if missing("get_database_config") {
+		if missing("database_config") {
 			i.items.push(ImplItem::Verbatim(quote! {
-				fn get_database_config(
+				fn database_config(
 					&self,
 					base_path: &::std::path::PathBuf,
 					cache_size: ::std::option::Option<usize>,
 				) -> ::sc_cli::Result<::sc_service::config::DatabaseConfig> {
-					Ok(self.#ident.get_database_config(base_path, cache_size))
+					Ok(self.#ident.database_config(base_path, cache_size))
 				}
 			}));
 		}
@@ -132,44 +132,44 @@ pub(crate) fn substrate_cli_params(
 	}
 
 	if let Some(ident) = import_params {
-		if missing("get_tracing_receiver") {
+		if missing("tracing_receiver") {
 			i.items.push(ImplItem::Verbatim(quote! {
-				fn get_tracing_receiver(&self) -> ::sc_cli::Result<::sc_service::TracingReceiver> {
+				fn tracing_receiver(&self) -> ::sc_cli::Result<::sc_service::TracingReceiver> {
 					Ok(self.#ident.tracing_receiver.clone().into())
 				}
 			}));
 		}
-		if missing("get_tracing_targets") {
+		if missing("tracing_targets") {
 			i.items.push(ImplItem::Verbatim(quote! {
-				fn get_tracing_targets(&self) -> ::sc_cli::Result<::std::option::Option<::std::string::String>> {
+				fn tracing_targets(&self) -> ::sc_cli::Result<::std::option::Option<::std::string::String>> {
 					Ok(self.#ident.tracing_targets.clone().into())
 				}
 			}));
 		}
-		if missing("get_state_cache_size") {
+		if missing("state_cache_size") {
 			i.items.push(ImplItem::Verbatim(quote! {
-				fn get_state_cache_size(&self) -> ::sc_cli::Result<usize> {
+				fn state_cache_size(&self) -> ::sc_cli::Result<usize> {
 					Ok(self.#ident.state_cache_size)
 				}
 			}));
 		}
-		if missing("get_wasm_method") {
+		if missing("wasm_method") {
 			i.items.push(ImplItem::Verbatim(quote! {
-				fn get_wasm_method(&self) -> ::sc_cli::Result<::sc_service::config::WasmExecutionMethod> {
-					Ok(self.#ident.get_wasm_method())
+				fn wasm_method(&self) -> ::sc_cli::Result<::sc_service::config::WasmExecutionMethod> {
+					Ok(self.#ident.wasm_method())
 				}
 			}));
 		}
-		if missing("get_execution_strategies") {
+		if missing("execution_strategies") {
 			i.items.push(ImplItem::Verbatim(quote! {
-				fn get_execution_strategies(&self, is_dev: bool) -> ::sc_cli::Result<::sc_service::config::ExecutionStrategies> {
-					self.#ident.get_execution_strategies(is_dev)
+				fn execution_strategies(&self, is_dev: bool) -> ::sc_cli::Result<::sc_service::config::ExecutionStrategies> {
+					self.#ident.execution_strategies(is_dev)
 				}
 			}));
 		}
-		if missing("get_database_cache_size") {
+		if missing("database_cache_size") {
 			i.items.push(ImplItem::Verbatim(quote! {
-				fn get_database_cache_size(&self) -> ::sc_cli::Result<::std::option::Option<usize>> {
+				fn database_cache_size(&self) -> ::sc_cli::Result<::std::option::Option<usize>> {
 					Ok(self.#ident.database_cache_size)
 				}
 			}));
@@ -177,41 +177,41 @@ pub(crate) fn substrate_cli_params(
 	}
 
 	if let Some(ident) = pruning_params {
-		if missing("get_pruning") {
+		if missing("pruning") {
 			i.items.push(ImplItem::Verbatim(quote! {
-				fn get_pruning(&self, is_dev: bool, roles: ::sc_service::Roles) -> ::sc_cli::Result<::sc_service::PruningMode> {
-					self.#ident.get_pruning(roles, is_dev)
+				fn pruning(&self, is_dev: bool, roles: ::sc_service::Roles) -> ::sc_cli::Result<::sc_service::PruningMode> {
+					self.#ident.pruning(roles, is_dev)
 				}
 			}));
 		}
 	}
 
 	if let Some(ident) = keystore_params {
-		if missing("get_keystore_config") {
+		if missing("keystore_config") {
 			i.items.push(ImplItem::Verbatim(quote! {
-				fn get_keystore_config(&self, base_path: &::std::path::PathBuf)
+				fn keystore_config(&self, base_path: &::std::path::PathBuf)
 				-> ::sc_cli::Result<::sc_service::config::KeystoreConfig> {
-					self.#ident.get_keystore_config(base_path)
+					self.#ident.keystore_config(base_path)
 				}
 			}));
 		}
 	}
 
 	if let Some(ident) = node_key_params {
-		if missing("get_keystore_config") {
+		if missing("keystore_config") {
 			i.items.push(ImplItem::Verbatim(quote! {
-				fn get_node_key(&self, net_config_dir: &::std::path::PathBuf)
+				fn node_key(&self, net_config_dir: &::std::path::PathBuf)
 				-> ::sc_cli::Result<::sc_service::config::NodeKeyConfig> {
-					self.#ident.get_node_key(net_config_dir)
+					self.#ident.node_key(net_config_dir)
 				}
 			}));
 		}
 	}
 
 	if let Some(ident) = network_params {
-		if missing("get_network_config") {
+		if missing("network_config") {
 			i.items.push(ImplItem::Verbatim(quote! {
-				fn get_network_config(
+				fn network_config(
 					&self,
 					chain_spec: &Box<dyn ::sc_service::ChainSpec>,
 					is_dev: bool,
@@ -221,7 +221,7 @@ pub(crate) fn substrate_cli_params(
 					node_key: ::sc_service::config::NodeKeyConfig,
 				) -> ::sc_cli::Result<::sc_service::config::NetworkConfiguration> {
 					self.#ident
-						.get_network_config(chain_spec, client_id, is_dev, base_path, node_name, node_key)
+						.network_config(chain_spec, client_id, is_dev, base_path, node_name, node_key)
 				}
 			}));
 		}

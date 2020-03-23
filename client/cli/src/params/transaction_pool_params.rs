@@ -31,7 +31,7 @@ pub struct TransactionPoolParams {
 
 impl TransactionPoolParams {
 	/// Fill the given `PoolConfiguration` by looking at the cli parameters.
-	pub fn get_transaction_pool(&self) -> error::Result<TransactionPoolOptions> {
+	pub fn transaction_pool(&self) -> error::Result<TransactionPoolOptions> {
 		let mut opts = TransactionPoolOptions::default();
 
 		// ready queue

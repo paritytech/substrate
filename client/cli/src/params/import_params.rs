@@ -79,12 +79,12 @@ pub struct ImportParams {
 
 impl ImportParams {
 	/// Get the WASM execution method from the parameters
-	pub fn get_wasm_method(&self) -> sc_service::config::WasmExecutionMethod {
+	pub fn wasm_method(&self) -> sc_service::config::WasmExecutionMethod {
 		self.wasm_method.into()
 	}
 
 	/// Get execution strategies for the parameters
-	pub fn get_execution_strategies(
+	pub fn execution_strategies(
 		&self,
 		is_dev: bool,
 	) -> error::Result<ExecutionStrategies>
@@ -110,8 +110,8 @@ impl ImportParams {
 	}
 
 	/// Get the pruning mode from the parameters
-	pub fn get_pruning(&self, roles: Roles, unsafe_pruning: bool) -> error::Result<PruningMode> {
-		self.pruning_params.get_pruning(roles, unsafe_pruning)
+	pub fn pruning(&self, roles: Roles, unsafe_pruning: bool) -> error::Result<PruningMode> {
+		self.pruning_params.pruning(roles, unsafe_pruning)
 	}
 }
 

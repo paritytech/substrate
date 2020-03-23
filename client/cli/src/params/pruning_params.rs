@@ -33,7 +33,7 @@ pub struct PruningParams {
 
 impl PruningParams {
 	/// Get the pruning value from the parameters
-	pub fn get_pruning(
+	pub fn pruning(
 		&self,
 		roles: sc_service::Roles,
 		unsafe_pruning: bool,

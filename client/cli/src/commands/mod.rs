@@ -125,29 +125,29 @@ macro_rules! match_and_call {
 }
 
 impl CliConfiguration for Subcommand {
-	match_and_call! { fn get_base_path(&self) -> Result<Option<&PathBuf>> }
+	match_and_call! { fn base_path(&self) -> Result<Option<&PathBuf>> }
 
-	match_and_call! { fn get_is_dev(&self) -> Result<bool> }
+	match_and_call! { fn is_dev(&self) -> Result<bool> }
 
-	match_and_call! { fn get_database_config(&self, base_path: &PathBuf, cache_size: Option<usize>) -> Result<DatabaseConfig> }
+	match_and_call! { fn database_config(&self, base_path: &PathBuf, cache_size: Option<usize>) -> Result<DatabaseConfig> }
 
-	match_and_call! { fn get_chain_spec<C: SubstrateCLI>(&self) -> Result<Box<dyn ChainSpec>> }
+	match_and_call! { fn chain_spec<C: SubstrateCLI>(&self) -> Result<Box<dyn ChainSpec>> }
 
 	match_and_call! { fn init<C: SubstrateCLI>(&self) -> Result<()> }
 
-	match_and_call! { fn get_pruning(&self, is_dev: bool, roles: Roles) -> Result<PruningMode> }
+	match_and_call! { fn pruning(&self, is_dev: bool, roles: Roles) -> Result<PruningMode> }
 
-	match_and_call! { fn get_tracing_receiver(&self) -> Result<TracingReceiver> }
+	match_and_call! { fn tracing_receiver(&self) -> Result<TracingReceiver> }
 
-	match_and_call! { fn get_tracing_targets(&self) -> Result<Option<String>> }
+	match_and_call! { fn tracing_targets(&self) -> Result<Option<String>> }
 
-	match_and_call! { fn get_state_cache_size(&self) -> Result<usize> }
+	match_and_call! { fn state_cache_size(&self) -> Result<usize> }
 
-	match_and_call! { fn get_wasm_method(&self) -> Result<WasmExecutionMethod> }
+	match_and_call! { fn wasm_method(&self) -> Result<WasmExecutionMethod> }
 
-	match_and_call! { fn get_execution_strategies(&self, is_dev: bool) -> Result<ExecutionStrategies> }
+	match_and_call! { fn execution_strategies(&self, is_dev: bool) -> Result<ExecutionStrategies> }
 
-	match_and_call! { fn get_database_cache_size(&self) -> Result<Option<usize>> }
+	match_and_call! { fn database_cache_size(&self) -> Result<Option<usize>> }
 
-	match_and_call! { fn get_node_key(&self, net_config_dir: &PathBuf) -> Result<NodeKeyConfig> }
+	match_and_call! { fn node_key(&self, net_config_dir: &PathBuf) -> Result<NodeKeyConfig> }
 }

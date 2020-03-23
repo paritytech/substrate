@@ -92,7 +92,7 @@ pub struct NodeKeyParams {
 impl NodeKeyParams {
 	/// Create a `NodeKeyConfig` from the given `NodeKeyParams` in the context
 	/// of an optional network config storage directory.
-	pub fn get_node_key(&self, net_config_dir: &PathBuf) -> error::Result<NodeKeyConfig> {
+	pub fn node_key(&self, net_config_dir: &PathBuf) -> error::Result<NodeKeyConfig> {
 		Ok(match self.node_key_type {
 			NodeKeyType::Ed25519 => {
 				let secret = if let Some(node_key) = self.node_key.as_ref() {
@@ -146,7 +146,7 @@ mod tests {
 					node_key: Some(format!("{:x}", H256::from_slice(sk.as_ref()))),
 					node_key_file: None,
 				};
-				params.get_node_key(net_config_dir).and_then(|c| match c {
+				params.node_key(net_config_dir).and_then(|c| match c {
 					NodeKeyConfig::Ed25519(sc_network::config::Secret::Input(ref ski))
 						if node_key_type == NodeKeyType::Ed25519 && &sk[..] == ski.as_ref() =>
 					{
@@ -172,7 +172,7 @@ mod tests {
 					node_key: None,
 					node_key_file: Some(file.clone()),
 				};
-				params.get_node_key(net_config_dir).and_then(|c| match c {
+				params.node_key(net_config_dir).and_then(|c| match c {
 					NodeKeyConfig::Ed25519(sc_network::config::Secret::File(ref f))
 						if node_key_type == NodeKeyType::Ed25519 && f == &file =>
 					{
@@ -207,7 +207,7 @@ mod tests {
 				let dir = PathBuf::from(net_config_dir.clone());
 				let typ = params.node_key_type;
 				params
-					.get_node_key(net_config_dir)
+					.node_key(net_config_dir)
 					.and_then(move |c| match c {
 						NodeKeyConfig::Ed25519(sc_network::config::Secret::File(ref f))
 							if typ == NodeKeyType::Ed25519

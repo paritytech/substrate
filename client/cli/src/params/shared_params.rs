@@ -55,7 +55,7 @@ pub struct SharedParams {
 
 impl SharedParams {
 	/// Get the chain spec for the parameters provided
-	pub fn get_chain_spec<C: SubstrateCLI>(&self) -> Result<Box<dyn ChainSpec>> {
+	pub fn chain_spec<C: SubstrateCLI>(&self) -> Result<Box<dyn ChainSpec>> {
 		let chain_key = match self.chain {
 			Some(ref chain) => chain.clone(),
 			None => {
@@ -89,7 +89,7 @@ impl SharedParams {
 	}
 
 	/// Get the database configuration object for the parameters provided
-	pub fn get_database_config(
+	pub fn database_config(
 		&self,
 		base_path: &PathBuf,
 		cache_size: Option<usize>,

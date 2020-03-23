@@ -56,7 +56,7 @@ pub struct KeystoreParams {
 
 impl KeystoreParams {
 	/// Get the keystore configuration for the parameters
-	pub fn get_keystore_config(&self, base_path: &PathBuf) -> Result<KeystoreConfig> {
+	pub fn keystore_config(&self, base_path: &PathBuf) -> Result<KeystoreConfig> {
 		let password = if self.password_interactive {
 			#[cfg(not(target_os = "unknown"))]
 			{

@@ -268,7 +268,7 @@ impl RunCmd {
 
 #[substrate_cli_params(shared_params = shared_params, import_params = import_params, network_params = network_config, keystore_params = keystore_params)]
 impl CliConfiguration for RunCmd {
-	fn get_node_name(&self) -> Result<String> {
+	fn node_name(&self) -> Result<String> {
 		let name: String = match (self.name.as_ref(), self.get_keyring()) {
 			(Some(name), _) => name.to_string(),
 			(_, Some(keyring)) => keyring.to_string(),
@@ -285,7 +285,7 @@ impl CliConfiguration for RunCmd {
 		Ok(name)
 	}
 
-	fn get_dev_key_seed(&self, is_dev: bool) -> Result<Option<String>> {
+	fn dev_key_seed(&self, is_dev: bool) -> Result<Option<String>> {
 		Ok(self.get_keyring().map(|a| format!("//{}", a)).or_else(|| {
 			if is_dev && !self.light {
 				Some("//Alice".into())
@@ -295,7 +295,7 @@ impl CliConfiguration for RunCmd {
 		}))
 	}
 
-	fn get_telemetry_endpoints(
+	fn telemetry_endpoints(
 		&self,
 		chain_spec: &Box<dyn ChainSpec>,
 	) -> Result<Option<TelemetryEndpoints>> {
@@ -308,11 +308,11 @@ impl CliConfiguration for RunCmd {
 		})
 	}
 
-	fn get_sentry_mode(&self) -> Result<bool> {
+	fn sentry_mode(&self) -> Result<bool> {
 		Ok(self.sentry)
 	}
 
-	fn get_roles(&self, is_dev: bool) -> Result<Roles> {
+	fn roles(&self, is_dev: bool) -> Result<Roles> {
 		let keyring = self.get_keyring();
 		let is_light = self.light;
 		let is_authority =
@@ -327,12 +327,12 @@ impl CliConfiguration for RunCmd {
 		})
 	}
 
-	fn get_force_authoring(&self) -> Result<bool> {
+	fn force_authoring(&self) -> Result<bool> {
 		// Imply forced authoring on --dev
 		Ok(self.shared_params.dev || self.force_authoring)
 	}
 
-	fn get_prometheus_config(&self) -> Result<Option<PrometheusConfig>> {
+	fn prometheus_config(&self) -> Result<Option<PrometheusConfig>> {
 		if self.no_prometheus {
 			Ok(None)
 		} else {
@@ -351,15 +351,15 @@ impl CliConfiguration for RunCmd {
 		}
 	}
 
-	fn get_disable_grandpa(&self) -> Result<bool> {
+	fn disable_grandpa(&self) -> Result<bool> {
 		Ok(self.no_grandpa)
 	}
 
-	fn get_rpc_ws_max_connections(&self) -> Result<Option<usize>> {
+	fn rpc_ws_max_connections(&self) -> Result<Option<usize>> {
 		Ok(self.ws_max_connections)
 	}
 
-	fn get_rpc_cors(&self, is_dev: bool) -> Result<Option<Vec<String>>> {
+	fn rpc_cors(&self, is_dev: bool) -> Result<Option<Vec<String>>> {
 		Ok(self
 			.rpc_cors
 			.clone()
@@ -380,7 +380,7 @@ impl CliConfiguration for RunCmd {
 			.into())
 	}
 
-	fn get_rpc_http(&self) -> Result<Option<SocketAddr>> {
+	fn rpc_http(&self) -> Result<Option<SocketAddr>> {
 		let rpc_interface: &str =
 			interface_str(self.rpc_external, self.unsafe_rpc_external, self.validator)?;
 
@@ -390,7 +390,7 @@ impl CliConfiguration for RunCmd {
 		)?))
 	}
 
-	fn get_rpc_ws(&self) -> Result<Option<SocketAddr>> {
+	fn rpc_ws(&self) -> Result<Option<SocketAddr>> {
 		let ws_interface: &str =
 			interface_str(self.ws_external, self.unsafe_ws_external, self.validator)?;
 
@@ -400,7 +400,7 @@ impl CliConfiguration for RunCmd {
 		)?))
 	}
 
-	fn get_offchain_worker(&self, roles: Roles) -> Result<bool> {
+	fn offchain_worker(&self, roles: Roles) -> Result<bool> {
 		Ok(match (&self.offchain_worker, roles) {
 			(OffchainWorkerEnabled::WhenValidating, Roles::AUTHORITY) => true,
 			(OffchainWorkerEnabled::Always, _) => true,
@@ -409,11 +409,11 @@ impl CliConfiguration for RunCmd {
 		})
 	}
 
-	fn get_transaction_pool(&self) -> Result<TransactionPoolOptions> {
-		self.pool_config.get_transaction_pool()
+	fn transaction_pool(&self) -> Result<TransactionPoolOptions> {
+		self.pool_config.transaction_pool()
 	}
 
-	fn get_max_runtime_instances(&self) -> Result<Option<usize>> {
+	fn max_runtime_instances(&self) -> Result<Option<usize>> {
 		Ok(self.max_runtime_instances.map(|x| x.min(256)))
 	}
 }
