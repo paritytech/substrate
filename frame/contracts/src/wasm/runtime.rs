@@ -26,6 +26,15 @@ use frame_system;
 use sp_std::{prelude::*, mem, convert::TryInto};
 use codec::{Decode, Encode};
 use sp_runtime::traits::{Bounded, SaturatedConversion};
+use sp_io::hashing::{
+	keccak_256,
+	blake2_256,
+	blake2_128,
+	twox_256,
+	twox_128,
+	twox_64,
+	sha2_256,
+};
 
 /// The value returned from ext_call and ext_instantiate contract external functions if the call or
 /// instantiation traps. This value is chosen as if the execution does not trap, the return value
@@ -1013,7 +1022,216 @@ define_env!(Env, <E: Ext>,
 			}
 		}
 	},
+
+	// Computes the SHA2 256-bit hash on the given input buffer.
+	//
+	// Returns the result directly into the given output buffer.
+	//
+	// # Note
+	//
+	// - The `input` and `output` buffer may overlap.
+	// - The output buffer is expected to hold at least 32 bytes (256 bits).
+	// - It is the callers responsibility to provide an output buffer that
+	//   is large enough to hold the expected amount of bytes returned by the
+	//   chosen hash function.
+	//
+	// # Parameters
+	//
+	// - `input_ptr`: the pointer into the linear memory where the input
+	//                data is placed.
+	// - `input_len`: the length of the input data in bytes.
+	// - `output_ptr`: the pointer into the linear memory where the output
+	//                 data is placed. The function will write the result
+	//                 directly into this buffer.
+	ext_hash_sha2_256(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
+		compute_hash_on_intermediate_buffer(ctx, sha2_256, input_ptr, input_len, output_ptr)
+	},
+
+	// Computes the KECCAK 256-bit hash on the given input buffer.
+	//
+	// Returns the result directly into the given output buffer.
+	//
+	// # Note
+	//
+	// - The `input` and `output` buffer may overlap.
+	// - The output buffer is expected to hold at least 32 bytes (256 bits).
+	// - It is the callers responsibility to provide an output buffer that
+	//   is large enough to hold the expected amount of bytes returned by the
+	//   chosen hash function.
+	//
+	// # Parameters
+	//
+	// - `input_ptr`: the pointer into the linear memory where the input
+	//                data is placed.
+	// - `input_len`: the length of the input data in bytes.
+	// - `output_ptr`: the pointer into the linear memory where the output
+	//                 data is placed. The function will write the result
+	//                 directly into this buffer.
+	ext_hash_keccak_256(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
+		compute_hash_on_intermediate_buffer(ctx, keccak_256, input_ptr, input_len, output_ptr)
+	},
+
+	// Computes the BLAKE2 256-bit hash on the given input buffer.
+	//
+	// Returns the result directly into the given output buffer.
+	//
+	// # Note
+	//
+	// - The `input` and `output` buffer may overlap.
+	// - The output buffer is expected to hold at least 32 bytes (256 bits).
+	// - It is the callers responsibility to provide an output buffer that
+	//   is large enough to hold the expected amount of bytes returned by the
+	//   chosen hash function.
+	//
+	// # Parameters
+	//
+	// - `input_ptr`: the pointer into the linear memory where the input
+	//                data is placed.
+	// - `input_len`: the length of the input data in bytes.
+	// - `output_ptr`: the pointer into the linear memory where the output
+	//                 data is placed. The function will write the result
+	//                 directly into this buffer.
+	ext_hash_blake2_256(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
+		compute_hash_on_intermediate_buffer(ctx, blake2_256, input_ptr, input_len, output_ptr)
+	},
+
+	// Computes the BLAKE2 128-bit hash on the given input buffer.
+	//
+	// Returns the result directly into the given output buffer.
+	//
+	// # Note
+	//
+	// - The `input` and `output` buffer may overlap.
+	// - The output buffer is expected to hold at least 16 bytes (128 bits).
+	// - It is the callers responsibility to provide an output buffer that
+	//   is large enough to hold the expected amount of bytes returned by the
+	//   chosen hash function.
+	//
+	// # Parameters
+	//
+	// - `input_ptr`: the pointer into the linear memory where the input
+	//                data is placed.
+	// - `input_len`: the length of the input data in bytes.
+	// - `output_ptr`: the pointer into the linear memory where the output
+	//                 data is placed. The function will write the result
+	//                 directly into this buffer.
+	ext_hash_blake2_128(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
+		compute_hash_on_intermediate_buffer(ctx, blake2_128, input_ptr, input_len, output_ptr)
+	},
+
+	// Computes the TWOX 256-bit hash on the given input buffer.
+	//
+	// Returns the result directly into the given output buffer.
+	//
+	// # Note
+	//
+	// - The `input` and `output` buffer may overlap.
+	// - The output buffer is expected to hold at least 32 bytes (256 bits).
+	// - It is the callers responsibility to provide an output buffer that
+	//   is large enough to hold the expected amount of bytes returned by the
+	//   chosen hash function.
+	//
+	// # Parameters
+	//
+	// - `input_ptr`: the pointer into the linear memory where the input
+	//                data is placed.
+	// - `input_len`: the length of the input data in bytes.
+	// - `output_ptr`: the pointer into the linear memory where the output
+	//                 data is placed. The function will write the result
+	//                 directly into this buffer.
+	ext_hash_twox_256(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
+		compute_hash_on_intermediate_buffer(ctx, twox_256, input_ptr, input_len, output_ptr)
+	},
+
+	// Computes the TWOX 128-bit hash on the given input buffer.
+	//
+	// Returns the result directly into the given output buffer.
+	//
+	// # Note
+	//
+	// - The `input` and `output` buffer may overlap.
+	// - The output buffer is expected to hold at least 16 bytes (128 bits).
+	// - It is the callers responsibility to provide an output buffer that
+	//   is large enough to hold the expected amount of bytes returned by the
+	//   chosen hash function.
+	//
+	// # Parameters
+	//
+	// - `input_ptr`: the pointer into the linear memory where the input
+	//                data is placed.
+	// - `input_len`: the length of the input data in bytes.
+	// - `output_ptr`: the pointer into the linear memory where the output
+	//                 data is placed. The function will write the result
+	//                 directly into this buffer.
+	ext_hash_twox_128(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
+		compute_hash_on_intermediate_buffer(ctx, twox_128, input_ptr, input_len, output_ptr)
+	},
+
+	// Computes the TWOX 64-bit hash on the given input buffer.
+	//
+	// Returns the result directly into the given output buffer.
+	//
+	// # Note
+	//
+	// - The `input` and `output` buffer may overlap.
+	// - The output buffer is expected to hold at least 8 bytes (64 bits).
+	// - It is the callers responsibility to provide an output buffer that
+	//   is large enough to hold the expected amount of bytes returned by the
+	//   chosen hash function.
+	//
+	// # Parameters
+	//
+	// - `input_ptr`: the pointer into the linear memory where the input
+	//                data is placed.
+	// - `input_len`: the length of the input data in bytes.
+	// - `output_ptr`: the pointer into the linear memory where the output
+	//                 data is placed. The function will write the result
+	//                 directly into this buffer.
+	ext_hash_twox_64(ctx, input_ptr: u32, input_len: u32, output_ptr: u32) => {
+		compute_hash_on_intermediate_buffer(ctx, twox_64, input_ptr, input_len, output_ptr)
+	},
 );
+
+/// Computes the given hash function on the scratch buffer.
+///
+/// Reads from the sandboxed input buffer into an intermediate buffer.
+/// Returns the result directly to the output buffer of the sandboxed memory.
+///
+/// It is the callers responsibility to provide an output buffer that
+/// is large enough to hold the expected amount of bytes returned by the
+/// chosen hash function.
+///
+/// # Note
+///
+/// The `input` and `output` buffers may overlap.
+fn compute_hash_on_intermediate_buffer<E, F, R>(
+	ctx: &mut Runtime<E>,
+	hash_fn: F,
+	input_ptr: u32,
+	input_len: u32,
+	output_ptr: u32,
+) -> Result<(), sp_sandbox::HostError>
+where
+	E: Ext,
+	F: FnOnce(&[u8]) -> R,
+	R: AsRef<[u8]>,
+{
+	// Copy the input buffer directly into the scratch buffer to avoid
+	// heap allocations.
+	let input = read_sandbox_memory(ctx, input_ptr, input_len)?;
+	// Compute the hash on the scratch buffer using the given hash function.
+	let hash = hash_fn(&input);
+	// Write the resulting hash back into the sandboxed output buffer.
+	write_sandbox_memory(
+		ctx.schedule,
+		&mut ctx.special_trap,
+		ctx.gas_meter,
+		&ctx.memory,
+		output_ptr,
+		hash.as_ref(),
+	)?;
+	Ok(())
+}
 
 /// Finds duplicates in a given vector.
 ///

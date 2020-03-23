@@ -47,13 +47,14 @@ use frame_support::{
 	weights::SimpleDispatchInfo,
 };
 use frame_system::{self as system, ensure_signed, ensure_none, offchain};
-use serde_json as json;
 use sp_core::crypto::KeyTypeId;
 use sp_runtime::{
 	offchain::{http, Duration, storage::StorageValueRef},
 	traits::Zero,
 	transaction_validity::{InvalidTransaction, ValidTransaction, TransactionValidity},
 };
+use sp_std::{vec, vec::Vec};
+use lite_json::json::JsonValue;
 
 #[cfg(test)]
 mod tests;
@@ -320,7 +321,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// A helper function to fetch the price and send signed transaction.
-	fn fetch_price_and_send_signed() -> Result<(), String> {
+	fn fetch_price_and_send_signed() -> Result<(), &'static str> {
 		use system::offchain::SubmitSignedTransaction;
 		// Firstly we check if there are any accounts in the local keystore that are capable of
 		// signing the transaction.
@@ -334,7 +335,7 @@ impl<T: Trait> Module<T> {
 
 		// Make an external HTTP request to fetch the current price.
 		// Note this call will block until response is received.
-		let price = Self::fetch_price().map_err(|e| format!("{:?}", e))?;
+		let price = Self::fetch_price().map_err(|_| "Failed to fetch price")?;
 
 		// Received price is wrapped into a call to `submit_price` public function of this pallet.
 		// This means that the transaction, when executed, will simply call that function passing
@@ -357,20 +358,18 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// A helper function to fetch the price and send unsigned transaction.
-	fn fetch_price_and_send_unsigned(block_number: T::BlockNumber) -> Result<(), String> {
+	fn fetch_price_and_send_unsigned(block_number: T::BlockNumber) -> Result<(), &'static str> {
 		use system::offchain::SubmitUnsignedTransaction;
 		// Make sure we don't fetch the price if unsigned transaction is going to be rejected
 		// anyway.
 		let next_unsigned_at = <NextUnsignedAt<T>>::get();
 		if next_unsigned_at > block_number {
-			return Err(
-				format!("Too early to send unsigned transaction. Next at: {:?}", next_unsigned_at)
-			)?
+			return Err("Too early to send unsigned transaction")
 		}
 
 		// Make an external HTTP request to fetch the current price.
 		// Note this call will block until response is received.
-		let price = Self::fetch_price().map_err(|e| format!("{:?}", e))?;
+		let price = Self::fetch_price().map_err(|_| "Failed to fetch price")?;
 
 		// Received price is wrapped into a call to `submit_price_unsigned` public function of this
 		// pallet. This means that the transaction, when executed, will simply call that function
@@ -428,21 +427,17 @@ impl<T: Trait> Module<T> {
 		// Note that the return object allows you to read the body in chunks as well
 		// with a way to control the deadline.
 		let body = response.body().collect::<Vec<u8>>();
-		// Next we parse the response using `serde_json`. Even though it's possible to use
-		// `serde_derive` and deserialize to a struct it's not recommended due to blob size
-		// overhead introduced by such code. Deserializing to `json::Value` is much more
-		// lightweight and should be preferred, especially if we only care about a small number
-		// of properties from the response.
-		let val: Result<json::Value, _> = json::from_slice(&body);
-		// Let's parse the price as float value. Note that you should avoid using floats in the
-		// runtime, it's fine to do that in the offchain worker, but we do convert it to an integer
-		// before submitting on-chain.
-		let price = val.ok().and_then(|v| v.get("USD").and_then(|v| v.as_f64()));
-		let price = match price {
-			Some(pricef) => Ok((pricef * 100.) as u32),
+
+		// Create a str slice from the body.
+		let body_str = sp_std::str::from_utf8(&body).map_err(|_| {
+			debug::warn!("No UTF8 body");
+			http::Error::Unknown
+		})?;
+
+		let price = match Self::parse_price(body_str) {
+			Some(price) => Ok(price),
 			None => {
-				let s = core::str::from_utf8(&body);
-				debug::warn!("Unable to extract price from the response: {:?}", s);
+				debug::warn!("Unable to extract price from the response: {:?}", body_str);
 				Err(http::Error::Unknown)
 			}
 		}?;
@@ -450,6 +445,28 @@ impl<T: Trait> Module<T> {
 		debug::warn!("Got price: {} cents", price);
 
 		Ok(price)
+	}
+
+	/// Parse the price from the given JSON string using `lite-json`.
+	///
+	/// Returns `None` when parsing failed or `Some(price in cents)` when parsing is successful.
+	fn parse_price(price_str: &str) -> Option<u32> {
+		let val = lite_json::parse_json(price_str);
+		let price = val.ok().and_then(|v| match v {
+			JsonValue::Object(obj) => {
+				let mut chars = "USD".chars();
+				obj.into_iter()
+					.find(|(k, _)| k.iter().all(|k| Some(*k) == chars.next()))
+					.and_then(|v| match v.1 {
+						JsonValue::Number(number) => Some(number),
+						_ => None,
+					})
+			},
+			_ => None
+		})?;
+
+		let exp = price.fraction_length.checked_sub(2).unwrap_or(0);
+		Some(price.integer as u32 * 100 + (price.fraction / 10_u64.pow(exp)) as u32)
 	}
 
 	/// Add new price to the list.

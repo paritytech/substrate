@@ -22,7 +22,8 @@ pallet-timestamp = { version = "2.0.0-alpha.4", default-features = false, path =
 sp-timestamp = { version = "2.0.0-alpha.4", default-features = false, path = "../../primitives/timestamp" }
 pallet-session = { version = "2.0.0-alpha.4", default-features = false, path = "../session" }
 sp-consensus-babe = { version = "0.8.0-alpha.4", default-features = false, path = "../../primitives/consensus/babe" }
-sp-io ={ path = "../../primitives/io", default-features = false , version = "2.0.0-alpha.4"}
+sp-consensus-vrf = { version = "0.8.0-alpha.4", default-features = false, path = "../../primitives/consensus/vrf" }
+sp-io = { path = "../../primitives/io", default-features = false , version = "2.0.0-alpha.4"}
 
 [dev-dependencies]
 lazy_static = "1.4.0"
@@ -45,6 +46,7 @@ std = [
 	"sp-timestamp/std",
 	"sp-inherents/std",
 	"sp-consensus-babe/std",
+	"sp-consensus-vrf/std",
 	"pallet-session/std",
 	"sp-io/std",
 ]

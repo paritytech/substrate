@@ -17,7 +17,7 @@ sp-core = { version = "2.0.0-alpha.4", default-features = false, path = "../../p
 sp-io = { version = "2.0.0-alpha.4", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "2.0.0-alpha.4", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "2.0.0-alpha.4", default-features = false, path = "../../primitives/std" }
-serde_json = { version = "1.0.46", default-features = false, features = ["alloc"] }
+lite-json = { version = "0.1", default-features = false }
 
 [features]
 default = ["std"]
@@ -26,6 +26,7 @@ std = [
 	"frame-support/std",
 	"frame-system/std",
 	"serde",
+	"lite-json/std",
 	"sp-core/std",
 	"sp-io/std",
 	"sp-runtime/std",
