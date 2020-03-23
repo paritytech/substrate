@@ -9,6 +9,7 @@ repository = "https://github.com/paritytech/substrate/"
 description = "Macro for benchmarking a FRAME runtime."
 
 [dependencies]
+linregress = "0.1"
 codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false }
 sp-api = { version = "2.0.0-alpha.4", path = "../../primitives/api", default-features = false }
 sp-runtime-interface = { version = "2.0.0-alpha.4", path = "../../primitives/runtime-interface", default-features = false }
