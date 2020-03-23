@@ -39,7 +39,8 @@ use sp_consensus_babe::{
 	inherents::{INHERENT_IDENTIFIER, BabeInherentData},
 	digests::{NextEpochDescriptor, RawPreDigest},
 };
-pub use sp_consensus_babe::{AuthorityId, VRF_OUTPUT_LENGTH, PUBLIC_KEY_LENGTH};
+use sp_consensus_vrf::schnorrkel;
+pub use sp_consensus_babe::{AuthorityId, VRF_OUTPUT_LENGTH, RANDOMNESS_LENGTH, PUBLIC_KEY_LENGTH};
 
 #[cfg(all(feature = "std", test))]
 mod tests;
@@ -96,12 +97,9 @@ impl EpochChangeTrigger for SameAuthoritiesForever {
 	}
 }
 
-/// The length of the BABE randomness
-pub const RANDOMNESS_LENGTH: usize = 32;
-
 const UNDER_CONSTRUCTION_SEGMENT_LENGTH: usize = 256;
 
-type MaybeVrf = Option<[u8; 32 /* VRF_OUTPUT_LENGTH */]>;
+type MaybeVrf = Option<schnorrkel::RawVRFOutput>;
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Babe {
@@ -131,10 +129,10 @@ decl_storage! {
 		// NOTE: the following fields don't use the constants to define the
 		// array size because the metadata API currently doesn't resolve the
 		// variable to its underlying value.
-		pub Randomness get(fn randomness): [u8; 32 /* RANDOMNESS_LENGTH */];
+		pub Randomness get(fn randomness): schnorrkel::Randomness;
 
 		/// Next epoch randomness.
-		NextRandomness: [u8; 32 /* RANDOMNESS_LENGTH */];
+		NextRandomness: schnorrkel::Randomness;
 
 		/// Randomness under construction.
 		///
@@ -146,7 +144,7 @@ decl_storage! {
 		/// We reset all segments and return to `0` at the beginning of every
 		/// epoch.
 		SegmentIndex build(|_| 0): u32;
-		UnderConstruction: map hasher(twox_64_concat) u32 => Vec<[u8; 32 /* VRF_OUTPUT_LENGTH */]>;
+		UnderConstruction: map hasher(twox_64_concat) u32 => Vec<schnorrkel::RawVRFOutput>;
 
 		/// Temporary value (cleared at block finalization) which is `Some`
 		/// if per-block initialization has already been called for current block.
@@ -210,7 +208,7 @@ impl<T: Trait> FindAuthor<u32> for Module<T> {
 	{
 		for (id, mut data) in digests.into_iter() {
 			if id == BABE_ENGINE_ID {
-				let pre_digest = RawPreDigest::decode(&mut data).ok()?;
+				let pre_digest: RawPreDigest = RawPreDigest::decode(&mut data).ok()?;
 				return Some(match pre_digest {
 					RawPreDigest::Primary { authority_index, .. } =>
 						authority_index,
@@ -373,7 +371,7 @@ impl<T: Trait> Module<T> {
 		<frame_system::Module<T>>::deposit_log(log.into())
 	}
 
-	fn deposit_vrf_output(vrf_output: &[u8; VRF_OUTPUT_LENGTH]) {
+	fn deposit_vrf_output(vrf_output: &schnorrkel::RawVRFOutput) {
 		let segment_idx = <SegmentIndex>::get();
 		let mut segment = <UnderConstruction>::get(&segment_idx);
 		if segment.len() < UNDER_CONSTRUCTION_SEGMENT_LENGTH {
@@ -383,7 +381,7 @@ impl<T: Trait> Module<T> {
 		} else {
 			// move onto the next segment and update the index.
 			let segment_idx = segment_idx + 1;
-			<UnderConstruction>::insert(&segment_idx, &vec![*vrf_output]);
+			<UnderConstruction>::insert(&segment_idx, &vec![vrf_output.clone()]);
 			<SegmentIndex>::put(&segment_idx);
 		}
 	}
@@ -396,7 +394,7 @@ impl<T: Trait> Module<T> {
 			return;
 		}
 
-		let maybe_pre_digest = <frame_system::Module<T>>::digest()
+		let maybe_pre_digest: Option<RawPreDigest> = <frame_system::Module<T>>::digest()
 			.logs
 			.iter()
 			.filter_map(|s| s.as_pre_runtime())
@@ -446,7 +444,7 @@ impl<T: Trait> Module<T> {
 
 	/// Call this function exactly once when an epoch changes, to update the
 	/// randomness. Returns the new randomness.
-	fn randomness_change_epoch(next_epoch_index: u64) -> [u8; RANDOMNESS_LENGTH] {
+	fn randomness_change_epoch(next_epoch_index: u64) -> schnorrkel::Randomness {
 		let this_randomness = NextRandomness::get();
 		let segment_idx: u32 = <SegmentIndex>::mutate(|s| sp_std::mem::replace(s, 0));
 
@@ -513,11 +511,11 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 //
 // an optional size hint as to how many VRF outputs there were may be provided.
 fn compute_randomness(
-	last_epoch_randomness: [u8; RANDOMNESS_LENGTH],
+	last_epoch_randomness: schnorrkel::Randomness,
 	epoch_index: u64,
-	rho: impl Iterator<Item=[u8; VRF_OUTPUT_LENGTH]>,
+	rho: impl Iterator<Item=schnorrkel::RawVRFOutput>,
 	rho_size_hint: Option<usize>,
-) -> [u8; RANDOMNESS_LENGTH] {
+) -> schnorrkel::Randomness {
 	let mut s = Vec::with_capacity(40 + rho_size_hint.unwrap_or(0) * VRF_OUTPUT_LENGTH);
 	s.extend_from_slice(&last_epoch_randomness);
 	s.extend_from_slice(&epoch_index.to_le_bytes());

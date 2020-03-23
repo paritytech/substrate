@@ -118,6 +118,7 @@ members = [
 	"primitives/consensus/babe",
 	"primitives/consensus/common",
 	"primitives/consensus/pow",
+	"primitives/consensus/vrf",
 	"primitives/core",
 	"primitives/debug-derive",
 	"primitives/storage",
