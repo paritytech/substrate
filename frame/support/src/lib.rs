@@ -70,7 +70,7 @@ pub use self::hash::{
 	Twox256, Twox128, Blake2_256, Blake2_128, Identity, Twox64Concat, Blake2_128Concat, Hashable,
 	StorageHasher
 };
-pub use self::storage::{StorageValue, StorageMap, StorageDoubleMap};
+pub use self::storage::{StorageValue, StorageMap, StorageDoubleMap, migration};
 pub use self::dispatch::{Parameter, Callable, IsSubType};
 pub use sp_runtime::{self, ConsensusEngineId, print, traits::Printable};
 

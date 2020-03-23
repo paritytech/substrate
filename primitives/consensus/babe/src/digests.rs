@@ -18,92 +18,35 @@
 
 #[cfg(feature = "std")]
 use super::{BABE_ENGINE_ID, AuthoritySignature};
-#[cfg(not(feature = "std"))]
-use super::{VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH};
 use super::{AuthorityId, AuthorityIndex, SlotNumber, BabeAuthorityWeight};
 #[cfg(feature = "std")]
 use sp_runtime::{DigestItem, generic::OpaqueDigestItemId};
 #[cfg(feature = "std")]
-use std::fmt::Debug;
+use std::{fmt::Debug, convert::{TryFrom, TryInto}};
 use codec::{Decode, Encode};
 #[cfg(feature = "std")]
-use codec::{Codec, Input, Error};
-#[cfg(feature = "std")]
-use schnorrkel::{
-	SignatureError, errors::MultiSignatureStage,
-	vrf::{VRFProof, VRFOutput, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH}
-};
+use codec::Codec;
 use sp_std::vec::Vec;
-
+use sp_consensus_vrf::schnorrkel::{self, Randomness};
+#[cfg(feature = "std")]
+use sp_consensus_vrf::schnorrkel::SignatureError;
 
 /// A BABE pre-runtime digest. This contains all data required to validate a
 /// block and for the BABE runtime module. Slots can be assigned to a primary
 /// (VRF based) and to a secondary (slot number based).
-#[cfg(feature = "std")]
-#[derive(Clone, Debug)]
-pub enum PreDigest {
-	/// A primary VRF-based slot assignment.
-	Primary {
-		/// VRF output
-		vrf_output: VRFOutput,
-		/// VRF proof
-		vrf_proof: VRFProof,
-		/// Authority index
-		authority_index: super::AuthorityIndex,
-		/// Slot number
-		slot_number: SlotNumber,
-	},
-	/// A secondary deterministic slot assignment.
-	Secondary {
-		/// Authority index
-		authority_index: super::AuthorityIndex,
-		/// Slot number
-		slot_number: SlotNumber,
-	},
-}
-
-#[cfg(feature = "std")]
-impl PreDigest {
-	/// Returns the slot number of the pre digest.
-	pub fn authority_index(&self) -> AuthorityIndex {
-		match self {
-			PreDigest::Primary { authority_index, .. } => *authority_index,
-			PreDigest::Secondary { authority_index, .. } => *authority_index,
-		}
-	}
-
-	/// Returns the slot number of the pre digest.
-	pub fn slot_number(&self) -> SlotNumber {
-		match self {
-			PreDigest::Primary { slot_number, .. } => *slot_number,
-			PreDigest::Secondary { slot_number, .. } => *slot_number,
-		}
-	}
-
-	/// Returns the weight _added_ by this digest, not the cumulative weight
-	/// of the chain.
-	pub fn added_weight(&self) -> crate::BabeBlockWeight {
-		match self {
-			PreDigest::Primary { .. } => 1,
-			PreDigest::Secondary { .. } => 0,
-		}
-	}
-}
-
-/// A raw version of `BabePreDigest`, usable on `no_std`.
-#[derive(Copy, Clone, Encode, Decode)]
-pub enum RawPreDigest {
+#[derive(Clone, Debug, Encode, Decode)]
+pub enum RawPreDigest<VRFOutput=schnorrkel::RawVRFOutput, VRFProof=schnorrkel::RawVRFProof> {
 	/// A primary VRF-based slot assignment.
 	#[codec(index = "1")]
 	Primary {
 		/// Authority index
-		authority_index: AuthorityIndex,
+		authority_index: super::AuthorityIndex,
 		/// Slot number
 		slot_number: SlotNumber,
 		/// VRF output
-		vrf_output: [u8; VRF_OUTPUT_LENGTH],
+		vrf_output: VRFOutput,
 		/// VRF proof
-		vrf_proof: [u8; VRF_PROOF_LENGTH],
+		vrf_proof: VRFProof,
 	},
 	/// A secondary deterministic slot assignment.
 	#[codec(index = "2")]
@@ -114,13 +57,25 @@ pub enum RawPreDigest {
 		/// are assigned based on slot number and epoch randomness. But including
 		/// it makes things easier for higher-level users of the chain data to
 		/// be aware of the author of a secondary-slot block.
-		authority_index: AuthorityIndex,
+		authority_index: super::AuthorityIndex,
 		/// Slot number
 		slot_number: SlotNumber,
 	},
 }
 
-impl RawPreDigest {
+#[cfg(feature = "std")]
+/// A BABE pre-runtime digest for std.
+pub type PreDigest = RawPreDigest<schnorrkel::VRFOutput, schnorrkel::VRFProof>;
+
+impl<VRFOutput, VRFProof> RawPreDigest<VRFOutput, VRFProof> {
+	/// Returns the slot number of the pre digest.
+	pub fn authority_index(&self) -> AuthorityIndex {
+		match self {
+			RawPreDigest::Primary { authority_index, .. } => *authority_index,
+			RawPreDigest::Secondary { authority_index, .. } => *authority_index,
+		}
+	}
+
 	/// Returns the slot number of the pre digest.
 	pub fn slot_number(&self) -> SlotNumber {
 		match self {
@@ -128,65 +83,36 @@ impl RawPreDigest {
 			RawPreDigest::Secondary { slot_number, .. } => *slot_number,
 		}
 	}
-}
 
-#[cfg(feature = "std")]
-impl Encode for PreDigest {
-	fn encode(&self) -> Vec<u8> {
-		let raw = match self {
-			PreDigest::Primary {
-				vrf_output,
-				vrf_proof,
-				authority_index,
-				slot_number,
-			} => {
-				RawPreDigest::Primary {
-					vrf_output: *vrf_output.as_bytes(),
-					vrf_proof: vrf_proof.to_bytes(),
-					authority_index: *authority_index,
-					slot_number: *slot_number,
-				}
-			},
-			PreDigest::Secondary {
-				authority_index,
-				slot_number,
-			} => {
-				RawPreDigest::Secondary {
-					authority_index: *authority_index,
-					slot_number: *slot_number,
-				}
-			},
-		};
-
-		codec::Encode::encode(&raw)
+	/// Returns the weight _added_ by this digest, not the cumulative weight
+	/// of the chain.
+	pub fn added_weight(&self) -> crate::BabeBlockWeight {
+		match self {
+			RawPreDigest::Primary { .. } => 1,
+			RawPreDigest::Secondary { .. } => 0,
+		}
 	}
 }
 
 #[cfg(feature = "std")]
-impl codec::EncodeLike for PreDigest {}
+impl TryFrom<RawPreDigest> for PreDigest {
+	type Error = SignatureError;
 
-#[cfg(feature = "std")]
-impl Decode for PreDigest {
-	fn decode<R: Input>(i: &mut R) -> Result<Self, Error> {
-		let pre_digest = match Decode::decode(i)? {
-			RawPreDigest::Primary { vrf_output, vrf_proof, authority_index, slot_number } => {
-				// Verify (at compile time) that the sizes in babe_primitives are correct
-				let _: [u8; super::VRF_OUTPUT_LENGTH] = vrf_output;
-				let _: [u8; super::VRF_PROOF_LENGTH] = vrf_proof;
-
-				PreDigest::Primary {
-					vrf_proof: VRFProof::from_bytes(&vrf_proof).map_err(convert_error)?,
-					vrf_output: VRFOutput::from_bytes(&vrf_output).map_err(convert_error)?,
+	fn try_from(raw: RawPreDigest) -> Result<PreDigest, SignatureError> {
+		Ok(match raw {
+			RawPreDigest::Primary { authority_index, slot_number, vrf_output, vrf_proof } =>
+				RawPreDigest::Primary {
+					authority_index,
+					slot_number,
+					vrf_output: vrf_output.try_into()?,
+					vrf_proof: vrf_proof.try_into()?,
+				},
+			RawPreDigest::Secondary { authority_index, slot_number } =>
+				RawPreDigest::Secondary {
 					authority_index,
 					slot_number,
 				}
-			},
-			RawPreDigest::Secondary { authority_index, slot_number } => {
-				PreDigest::Secondary { authority_index, slot_number }
-			},
-		};
-
-		Ok(pre_digest)
+		})
 	}
 }
 
@@ -198,7 +124,7 @@ pub struct NextEpochDescriptor {
 	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 
 	/// The value of randomness to use for the slot-assignment.
-	pub randomness: [u8; VRF_OUTPUT_LENGTH],
+	pub randomness: Randomness,
 }
 
 /// A digest item which is usable with BABE consensus.
@@ -246,36 +172,5 @@ impl<Hash> CompatibleDigestItem for DigestItem<Hash> where
 				super::ConsensusLog::NextEpochData(n) => Some(n),
 				_ => None,
 			})
-	}
-}
-
-#[cfg(feature = "std")]
-fn convert_error(e: SignatureError) -> codec::Error {
-	use SignatureError::*;
-	use MultiSignatureStage::*;
-	match e {
-		EquationFalse => "Signature error: `EquationFalse`".into(),
-		PointDecompressionError => "Signature error: `PointDecompressionError`".into(),
-		ScalarFormatError => "Signature error: `ScalarFormatError`".into(),
-		NotMarkedSchnorrkel => "Signature error: `NotMarkedSchnorrkel`".into(),
-		BytesLengthError { .. } => "Signature error: `BytesLengthError`".into(),
-		MuSigAbsent { musig_stage: Commitment } =>
-			"Signature error: `MuSigAbsent` at stage `Commitment`".into(),
-		MuSigAbsent { musig_stage: Reveal } =>
-			"Signature error: `MuSigAbsent` at stage `Reveal`".into(),
-		MuSigAbsent { musig_stage: Cosignature } =>
-			"Signature error: `MuSigAbsent` at stage `Commitment`".into(),
-		MuSigInconsistent { musig_stage: Commitment, duplicate: true } =>
-			"Signature error: `MuSigInconsistent` at stage `Commitment` on duplicate".into(),
-		MuSigInconsistent { musig_stage: Commitment, duplicate: false } =>
-			"Signature error: `MuSigInconsistent` at stage `Commitment` on not duplicate".into(),
-		MuSigInconsistent { musig_stage: Reveal, duplicate: true } =>
-			"Signature error: `MuSigInconsistent` at stage `Reveal` on duplicate".into(),
-		MuSigInconsistent { musig_stage: Reveal, duplicate: false } =>
-			"Signature error: `MuSigInconsistent` at stage `Reveal` on not duplicate".into(),
-		MuSigInconsistent { musig_stage: Cosignature, duplicate: true } =>
-			"Signature error: `MuSigInconsistent` at stage `Cosignature` on duplicate".into(),
-		MuSigInconsistent { musig_stage: Cosignature, duplicate: false } =>
-			"Signature error: `MuSigInconsistent` at stage `Cosignature` on not duplicate".into(),
 	}
 }
