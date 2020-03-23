@@ -16,7 +16,7 @@
 
 //! Hash utilities.
 
-use codec::{Codec, Decode};
+use codec::Codec;
 use sp_std::prelude::Vec;
 use sp_io::hashing::{blake2_128, blake2_256, twox_64, twox_128, twox_256};
 
@@ -64,18 +64,9 @@ pub trait ReversibleStorageHasher: StorageHasher {
 	fn reverse(x: &[u8]) -> &[u8];
 }
 
-/// Trait to retrieve some info from hash of type `Key` encoded.
-pub trait StorageHasherInfo<Key> {
-	/// Some info contained in the hash of type `Key` encoded.
-	type Info;
-
-	/// Decode the hash and then decode the info from the decoded hash.
-	///
-	/// # WARNING
-	///
-	/// Even if info is (), input must be modified to have read the entire encoded hash.
-	fn decode_hash_and_then_info<I: codec::Input>(input: &mut I)
-		-> Result<Self::Info, codec::Error>;
+/// Hasher with a fixed length.
+pub trait FixedLengthHasher: StorageHasher {
+	const LENGTH: u32;
 }
 
 /// Store the key directly.
@@ -89,14 +80,6 @@ impl StorageHasher for Identity {
 impl ReversibleStorageHasher for Identity {
 	fn reverse(x: &[u8]) -> &[u8] {
 		x
-	}
-}
-impl<Key: Decode> StorageHasherInfo<Key> for Identity {
-	type Info = Key;
-	fn decode_hash_and_then_info<I: codec::Input>(input: &mut I)
-		-> Result<Self::Info, codec::Error>
-	{
-		Key::decode(input)
 	}
 }
 
@@ -114,16 +97,11 @@ impl StorageHasher for Twox64Concat {
 }
 impl ReversibleStorageHasher for Twox64Concat {
 	fn reverse(x: &[u8]) -> &[u8] {
+		if x.len() < 8 {
+			crate::debug::error!("Invalid reverse: hash length too short");
+			return &[]
+		}
 		&x[8..]
-	}
-}
-impl<Key: Decode> StorageHasherInfo<Key> for Twox64Concat {
-	type Info = Key;
-	fn decode_hash_and_then_info<I: codec::Input>(input: &mut I)
-		-> Result<Self::Info, codec::Error>
-	{
-		input.read(&mut [0u8; 8])?;
-		Key::decode(input)
 	}
 }
 
@@ -141,16 +119,11 @@ impl StorageHasher for Blake2_128Concat {
 }
 impl ReversibleStorageHasher for Blake2_128Concat {
 	fn reverse(x: &[u8]) -> &[u8] {
+		if x.len() < 16 {
+			crate::debug::error!("Invalid reverse: hash length too short");
+			return &[]
+		}
 		&x[16..]
-	}
-}
-impl<Key: Decode> StorageHasherInfo<Key> for Blake2_128Concat {
-	type Info = Key;
-	fn decode_hash_and_then_info<I: codec::Input>(input: &mut I)
-		-> Result<Self::Info, codec::Error>
-	{
-		input.read(&mut [0u8; 16])?;
-		Key::decode(input)
 	}
 }
 
@@ -162,14 +135,9 @@ impl StorageHasher for Blake2_128 {
 		blake2_128(x)
 	}
 }
-impl<Key> StorageHasherInfo<Key> for Blake2_128 {
-	type Info = ();
-	fn decode_hash_and_then_info<I: codec::Input>(input: &mut I)
-		-> Result<Self::Info, codec::Error>
-	{
-		input.read(&mut [0u8; 16])?;
-		Ok(())
-	}
+
+impl FixedLengthHasher for Blake2_128 {
+	const LENGTH: u32 = 16;
 }
 
 /// Hash storage keys with blake2 256
@@ -180,14 +148,9 @@ impl StorageHasher for Blake2_256 {
 		blake2_256(x)
 	}
 }
-impl<Key> StorageHasherInfo<Key> for Blake2_256 {
-	type Info = ();
-	fn decode_hash_and_then_info<I: codec::Input>(input: &mut I)
-		-> Result<Self::Info, codec::Error>
-	{
-		input.read(&mut [0u8; 32])?;
-		Ok(())
-	}
+
+impl FixedLengthHasher for Blake2_256 {
+	const LENGTH: u32 = 32;
 }
 
 /// Hash storage keys with twox 128
@@ -198,14 +161,9 @@ impl StorageHasher for Twox128 {
 		twox_128(x)
 	}
 }
-impl<Key> StorageHasherInfo<Key> for Twox128 {
-	type Info = ();
-	fn decode_hash_and_then_info<I: codec::Input>(input: &mut I)
-		-> Result<Self::Info, codec::Error>
-	{
-		input.read(&mut [0u8; 16])?;
-		Ok(())
-	}
+
+impl FixedLengthHasher for Twox128 {
+	const LENGTH: u32 = 16;
 }
 
 /// Hash storage keys with twox 256
@@ -216,20 +174,14 @@ impl StorageHasher for Twox256 {
 		twox_256(x)
 	}
 }
-impl<Key> StorageHasherInfo<Key> for Twox256 {
-	type Info = ();
-	fn decode_hash_and_then_info<I: codec::Input>(input: &mut I)
-		-> Result<Self::Info, codec::Error>
-	{
-		input.read(&mut [0u8; 32])?;
-		Ok(())
-	}
+
+impl FixedLengthHasher for Twox256 {
+	const LENGTH: u32 = 32;
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use codec::Encode;
 
 	#[test]
 	fn test_twox_64_concat() {
@@ -241,39 +193,5 @@ mod tests {
 	fn test_blake2_128_concat() {
 		let r = Blake2_128Concat::hash(b"foo");
 		assert_eq!(r.split_at(16), (&blake2_128(b"foo")[..], &b"foo"[..]))
-	}
-
-	#[test]
-	fn test_storage_hasher_info() {
-		type KeyType = [u8; 15];
-		let key: KeyType = [3u8; 15];
-
-		let mut r = &Identity::hash(&(&key).encode()[..])[..];
-		assert_eq!(<Identity as StorageHasherInfo<KeyType>>::decode_hash_and_then_info(&mut r), Ok(key));
-		assert_eq!(r.len(), 0); // Assert input has indeed decoded the hash.
-
-		let mut r = &Twox64Concat::hash(&(&key).encode()[..])[..];
-		assert_eq!(<Twox64Concat as StorageHasherInfo<KeyType>>::decode_hash_and_then_info(&mut r), Ok(key));
-		assert_eq!(r.len(), 0); // Assert input has indeed decoded the hash.
-
-		let mut r = &Twox128::hash(&(&key).encode()[..])[..];
-		assert_eq!(<Twox128 as StorageHasherInfo<KeyType>>::decode_hash_and_then_info(&mut r), Ok(()));
-		assert_eq!(r.len(), 0); // Assert input has indeed decoded the hash.
-
-		let mut r = &Twox256::hash(&(&key).encode()[..])[..];
-		assert_eq!(<Twox256 as StorageHasherInfo<KeyType>>::decode_hash_and_then_info(&mut r), Ok(()));
-		assert_eq!(r.len(), 0); // Assert input has indeed decoded the hash.
-
-		let mut r = &Blake2_128Concat::hash(&(&key).encode()[..])[..];
-		assert_eq!(<Blake2_128Concat as StorageHasherInfo<KeyType>>::decode_hash_and_then_info(&mut r), Ok(key));
-		assert_eq!(r.len(), 0); // Assert input has indeed decoded the hash.
-
-		let mut r = &Blake2_128::hash(&(&key).encode()[..])[..];
-		assert_eq!(<Blake2_128 as StorageHasherInfo<KeyType>>::decode_hash_and_then_info(&mut r), Ok(()));
-		assert_eq!(r.len(), 0); // Assert input has indeed decoded the hash.
-
-		let mut r = &Blake2_256::hash(&(&key).encode()[..])[..];
-		assert_eq!(<Blake2_256 as StorageHasherInfo<KeyType>>::decode_hash_and_then_info(&mut r), Ok(()));
-		assert_eq!(r.len(), 0); // Assert input has indeed decoded the hash.
 	}
 }

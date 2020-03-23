@@ -18,7 +18,7 @@
 
 use sp_std::prelude::*;
 use codec::{FullCodec, FullEncode, Encode, EncodeAppend, EncodeLike, Decode};
-use crate::{traits::Len, hash::{StorageHasher, StorageHasherInfo}};
+use crate::{traits::Len, hash::{StorageHasher, ReversibleStorageHasher, FixedLengthHasher}};
 
 pub mod unhashed;
 pub mod hashed;
@@ -223,20 +223,16 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 
 	/// Enumerate all elements in the map in no particular order. If you alter the map while doing
 	/// this, you'll get undefined results.
-	fn iter_key_value() -> PrefixIterator<(K, V)> where
-		Self::Hasher: StorageHasherInfo<K, Info=K>;
+	fn iter_key_value() -> PrefixIterator<(K, V)> where Self::Hasher: ReversibleStorageHasher;
 
 	/// Remove all elements from the map and iterate through them in no particular order. If you
 	/// add elements to the map while doing this, you'll get undefined results.
-	fn drain_key_value() -> PrefixIterator<(K, V)> where
-		Self::Hasher: StorageHasherInfo<K, Info=K>;
+	fn drain_key_value() -> PrefixIterator<(K, V)> where Self::Hasher: ReversibleStorageHasher;
 
 	/// Enumerate all elements in the map in no particular order. If you alter the map while doing
 	/// this, you'll get undefined results.
 	#[deprecated(note = "please use `iter_value` instead")]
-	fn iter() -> PrefixIterator<(K, V)> where
-		Self::Hasher: StorageHasherInfo<K, Info=K>
-	{
+	fn iter() -> PrefixIterator<(K, V)> where Self::Hasher: ReversibleStorageHasher {
 		Self::iter_key_value()
 	}
 
@@ -247,7 +243,7 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	/// Translate the values of all elements by a function `f`, in the map in no particular order.
 	/// By returning `None` from `f` for an element, you'll remove it from the map.
 	fn translate_key_value<O: Decode, F: Fn(K, O) -> Option<V>>(f: F) where
-		Self::Hasher: StorageHasherInfo<K, Info=K>;
+		Self::Hasher: ReversibleStorageHasher;
 
 	/// Translate the values from some previous `OldValue` to the current type.
 	///
@@ -397,13 +393,13 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 	/// remove values whose first key is `k1` to the map while doing this, you'll get undefined
 	/// results.
 	fn iter_prefix_key2_value(k1: impl EncodeLike<K1>) -> PrefixIterator<(K2, V)> where
-		Self::Hasher2: StorageHasherInfo<K2, Info=K2>;
+		Self::Hasher2: ReversibleStorageHasher;
 
 	/// Remove all elements from the map with first key `k1` and iterate through them in no
 	/// particular order. If you add elements with first key `k1` to the map while doing this,
 	/// you'll get undefined results.
 	fn drain_prefix_key2_value(k1: impl EncodeLike<K1>) -> PrefixIterator<(K2, V)> where
-		Self::Hasher2: StorageHasherInfo<K2, Info=K2>;
+		Self::Hasher2: ReversibleStorageHasher;
 
 	/// Iter over all value associated to the first key.
 	#[deprecated(note = "please use `iter_prefix_value` instead")]
@@ -417,16 +413,17 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 
 	/// Iter over all value and decode the first key.
 	fn iter_key1_value() -> PrefixIterator<(K1, V)> where
-		Self::Hasher1: StorageHasherInfo<K1, Info=K1>;
+		Self::Hasher1: ReversibleStorageHasher;
 
 	/// Iter over all value and decode the second key.
 	fn iter_key2_value() -> PrefixIterator<(K2, V)> where
-		Self::Hasher2: StorageHasherInfo<K2, Info=K2>;
+		Self::Hasher1: FixedLengthHasher,
+		Self::Hasher2: ReversibleStorageHasher;
 
 	/// Iter over all value and decode the first key and the second key.
 	fn iter_key1_key2_value() -> PrefixIterator<(K1, K2, V)> where
-		Self::Hasher1: StorageHasherInfo<K1, Info=K1>,
-		Self::Hasher2: StorageHasherInfo<K2, Info=K2>;
+		Self::Hasher1: ReversibleStorageHasher,
+		Self::Hasher2: ReversibleStorageHasher;
 
 	/// Iter over all value.
 	fn iter_value() -> PrefixIterator<V>;
@@ -438,7 +435,8 @@ pub struct PrefixIterator<T> {
 	previous_key: Vec<u8>,
 	/// If true then value are removed while iterating
 	drain: bool,
-	/// Function that take `(raw_key, raw_value)` and decode `T`
+	/// Function that take `(raw_key_without_prefix, raw_value)` and decode `T`.
+	/// `raw_key_without_prefix` is the raw storage key without the prefix iterated on.
 	closure: fn(&[u8], &[u8]) -> Result<T, codec::Error>,
 }
 
@@ -457,7 +455,8 @@ impl<T> Iterator for PrefixIterator<T> {
 							if self.drain {
 								unhashed::kill(&self.previous_key)
 							}
-							match (self.closure)(&self.previous_key[..], &raw_value[..]) {
+							let raw_key_without_prefix = &self.previous_key[self.prefix.len()..];
+							match (self.closure)(raw_key_without_prefix, &raw_value[..]) {
 								Ok(t) => Some(t),
 								Err(e) => {
 									crate::debug::error!(

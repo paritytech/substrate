@@ -646,6 +646,7 @@ mod test_iterators {
 
 			DoubleMapInfoInfo: double_map hasher(blake2_128_concat) u16, hasher(blake2_128_concat) u32 => u64;
 			DoubleMapOpaqueInfo: double_map hasher(opaque_blake2_128) u16, hasher(blake2_128_concat) u32 => u64;
+			DoubleMapInfoOpaque: double_map hasher(blake2_128_concat) u16, hasher(opaque_blake2_128) u32 => u64;
 		}
 	}
 
@@ -716,11 +717,6 @@ mod test_iterators {
 
 			assert_eq!(
 				DoubleMapInfoInfo::iter_key1_value().collect::<Vec<_>>(),
-				vec![(3, 3), (0, 0), (2, 2), (1, 1)],
-			);
-
-			assert_eq!(
-				DoubleMapInfoInfo::iter_key2_value().collect::<Vec<_>>(),
 				vec![(3, 3), (0, 0), (2, 2), (1, 1)],
 			);
 
@@ -808,6 +804,53 @@ mod test_iterators {
 
 			assert_eq!(
 				DoubleMapOpaqueInfo::iter_prefix_value(k1).collect::<Vec<_>>(),
+				vec![0, 2, 1, 3],
+			);
+		})
+	}
+
+	#[test]
+	fn double_map_info_opaque_iteration() {
+		sp_io::TestExternalities::default().execute_with(|| {
+			// All map iterator
+			let prefix = DoubleMapInfoOpaque::prefix_hash();
+
+			unhashed::put(&key_before_prefix(prefix.clone()), &1u64);
+			unhashed::put(&key_after_prefix(prefix.clone()), &1u64);
+			// Put an invalid storage value inside the map.
+			unhashed::put(&key_in_prefix(prefix), &1u8);
+
+			for i in 0..4 {
+				DoubleMapInfoOpaque::insert(i as u16, i as u32, i as u64);
+			}
+
+			assert_eq!(
+				DoubleMapInfoOpaque::iter_key1_value().collect::<Vec<_>>(),
+				vec![(3, 3), (0, 0), (2, 2), (1, 1)],
+			);
+
+			assert_eq!(
+				DoubleMapInfoOpaque::iter_value().collect::<Vec<_>>(),
+				vec![3, 0, 2, 1],
+			);
+
+			DoubleMapInfoOpaque::remove_all();
+
+			// Prefix iterator
+			let k1 = 3 << 8;
+			let prefix = DoubleMapInfoOpaque::storage_double_map_final_key1(k1);
+
+			unhashed::put(&key_before_prefix(prefix.clone()), &1u64);
+			unhashed::put(&key_after_prefix(prefix.clone()), &1u64);
+			// Put an invalid storage value inside the map.
+			unhashed::put(&key_in_prefix(prefix), &1u8);
+
+			for i in 0..4 {
+				DoubleMapInfoOpaque::insert(k1, i as u32, i as u64);
+			}
+
+			assert_eq!(
+				DoubleMapInfoOpaque::iter_prefix_value(k1).collect::<Vec<_>>(),
 				vec![0, 2, 1, 3],
 			);
 		})

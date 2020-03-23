@@ -19,7 +19,7 @@ use sp_std::prelude::*;
 use sp_std::borrow::Borrow;
 use codec::{FullCodec, Decode, Encode, EncodeLike, Ref, EncodeAppend};
 use crate::{storage::{self, unhashed}, traits::Len};
-use crate::hash::{StorageHasher, Twox128, StorageHasherInfo};
+use crate::hash::{StorageHasher, Twox128, ReversibleStorageHasher};
 
 /// Generator for `StorageMap` used by `decl_storage`.
 ///
@@ -37,7 +37,7 @@ pub trait StorageMap<K: FullCodec, V: FullCodec> {
 	type Query;
 
 	/// Hasher. Used for generating final key.
-	type Hasher: StorageHasher + StorageHasherInfo<K>;
+	type Hasher: StorageHasher;
 
 	/// Module prefix. Used for generating final key.
 	fn module_prefix() -> &'static [u8];
@@ -269,26 +269,26 @@ impl<K: FullCodec, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V> 
 	}
 
 	fn iter_key_value() -> storage::PrefixIterator<(K, V)> where
-		Self::Hasher: StorageHasherInfo<K, Info=K>
+		Self::Hasher: ReversibleStorageHasher
 	{
 		let prefix = G::prefix_hash();
 		storage::PrefixIterator {
 			prefix: prefix.clone(),
 			previous_key: prefix,
 			drain: false,
-			closure: |raw_key, raw_value| from_raw_to_key_info_value::<_, _, G>(raw_key, raw_value),
+			closure: from_hashed_key_to_key_value::<_, _, G>,
 		}
 	}
 
 	fn drain_key_value() -> storage::PrefixIterator<(K, V)> where
-		Self::Hasher: StorageHasherInfo<K, Info=K>
+		Self::Hasher: ReversibleStorageHasher
 	{
 		let prefix = G::prefix_hash();
 		storage::PrefixIterator {
 			prefix: prefix.clone(),
 			previous_key: prefix,
 			drain: true,
-			closure: |raw_key, raw_value| from_raw_to_key_info_value::<_, _, G>(raw_key, raw_value),
+			closure: from_hashed_key_to_key_value::<_, _, G>,
 		}
 	}
 
@@ -303,7 +303,7 @@ impl<K: FullCodec, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V> 
 	}
 
 	fn translate_key_value<O: Decode, F: Fn(K, O) -> Option<V>>(f: F) where
-		Self::Hasher: StorageHasherInfo<K, Info=K>
+		Self::Hasher: ReversibleStorageHasher
 	{
 		let prefix = G::prefix_hash();
 		let mut previous_key = prefix.clone();
@@ -325,7 +325,8 @@ impl<K: FullCodec, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V> 
 					// Slice in bound because already check by `starts_with`
 					let mut hashed_key = &previous_key[prefix.len()..];
 
-					let key = match G::Hasher::decode_hash_and_then_info(&mut hashed_key) {
+					let mut key_material = G::Hasher::reverse(&mut hashed_key);
+					let key = match K::decode(&mut key_material) {
 						Ok(key) => key,
 						Err(e) => {
 							crate::debug::error!(
@@ -378,21 +379,17 @@ impl<K: FullCodec, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V> 
 	}
 }
 
-fn from_raw_to_key_info_value<K, V, G>(
-	raw_key: &[u8],
+fn from_hashed_key_to_key_value<K, V, G>(
+	hashed_key: &[u8],
 	mut raw_value: &[u8]
-) -> Result<(<G::Hasher as StorageHasherInfo<K>>::Info, V), codec::Error> where
+) -> Result<(K, V), codec::Error> where
 	K: FullCodec,
 	V: FullCodec,
 	G: StorageMap<K, V>,
+	G::Hasher: ReversibleStorageHasher,
 {
-	let prefix_hash = G::prefix_hash();
-	if raw_key.len() < prefix_hash.len() {
-		return Err("Input length is too small".into())
-	}
-
-	let mut decode_key_input = &raw_key[prefix_hash.len()..];
-	let key = G::Hasher::decode_hash_and_then_info(&mut decode_key_input)?;
+	let mut key_material = G::Hasher::reverse(hashed_key);
+	let key = K::decode(&mut key_material)?;
 	let value = V::decode(&mut raw_value)?;
 
 	Ok((key, value))
