@@ -251,7 +251,7 @@ mod tests {
 	use self::module::Module;
 
 	decl_storage! {
-		trait Store for Module<T: Trait> as Example {
+		trait Store for Module<T: Trait> as Test {
 			pub Data get(fn data) build(|_| vec![(15u32, 42u64)]):
 				linked_map hasher(twox_64_concat) u32 => u64;
 			pub OptionLinkedMap: linked_map hasher(blake2_256) u32 => Option<u32>;
@@ -488,7 +488,7 @@ mod tests {
 	}
 
 	const EXPECTED_METADATA: StorageMetadata = StorageMetadata {
-		prefix: DecodeDifferent::Encode("Example"),
+		prefix: DecodeDifferent::Encode("Test"),
 		entries: DecodeDifferent::Encode(
 			&[
 				StorageEntryMetadata {

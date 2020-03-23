@@ -591,6 +591,7 @@ pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR>(
 		network,
 		config.clone(),
 		persistent_data.set_state.clone(),
+		prometheus_registry.as_ref(),
 	);
 
 	register_finality_tracker_inherent_data_provider(client.clone(), &inherent_data_providers)?;

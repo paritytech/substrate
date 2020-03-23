@@ -26,6 +26,8 @@ use frame_support::traits::Get;
 use frame_system::{ensure_none, Trait as SystemTrait};
 use sp_finality_tracker::{INHERENT_IDENTIFIER, FinalizedInherentData};
 
+mod migration;
+
 pub const DEFAULT_WINDOW_SIZE: u32 = 101;
 pub const DEFAULT_REPORT_LATENCY: u32 = 1000;
 
@@ -40,7 +42,7 @@ pub trait Trait: SystemTrait {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Timestamp {
+	trait Store for Module<T: Trait> as FinalityTracker {
 		/// Recent hints.
 		RecentHints get(fn recent_hints) build(|_| vec![T::BlockNumber::zero()]): Vec<T::BlockNumber>;
 		/// Ordered recent hints.
@@ -88,6 +90,10 @@ decl_module! {
 
 		fn on_finalize() {
 			Self::update_hint(<Self as Store>::Update::take())
+		}
+
+		fn on_runtime_upgrade() {
+			migration::on_runtime_upgrade::<T>()
 		}
 	}
 }
