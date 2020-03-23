@@ -261,7 +261,10 @@ use sp_runtime::{Percent, ModuleId, RuntimeDebug,
 };
 use frame_support::{decl_error, decl_module, decl_storage, decl_event, ensure, dispatch::DispatchResult};
 use frame_support::weights::SimpleDispatchInfo;
-use frame_support::traits::{Currency, ReservableCurrency, Randomness, Get, ChangeMembers, BalanceStatus, ExistenceRequirement::AllowDeath, MigrateAccount};
+use frame_support::traits::{
+	Currency, ReservableCurrency, Randomness, Get, ChangeMembers, BalanceStatus,
+	ExistenceRequirement::AllowDeath
+};
 use frame_system::{self as system, ensure_signed, ensure_root};
 
 type BalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
@@ -1127,12 +1130,6 @@ decl_event! {
 		NewMaxMembers(u32),
 		/// Society is unfounded.
 		Unfounded(AccountId),
-	}
-}
-
-impl<T: Trait> MigrateAccount<T::AccountId> for Module<T> {
-	fn migrate_account(a: &T::AccountId) {
-		Payouts::<T>::migrate_key_from_blake(a);
 	}
 }
 

@@ -556,6 +556,11 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		self.sync.status().queued_blocks
 	}
 
+	/// Number of processed blocks.
+	pub fn num_processed_blocks(&self) -> usize {
+		self.sync.num_processed_blocks()
+	}
+
 	/// Number of active sync requests.
 	pub fn num_sync_requests(&self) -> usize {
 		self.sync.num_sync_requests()

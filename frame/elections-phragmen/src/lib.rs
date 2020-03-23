@@ -95,7 +95,6 @@ use frame_support::{
 };
 use sp_phragmen::ExtendedBalance;
 use frame_system::{self as system, ensure_signed, ensure_root};
-use frame_support::traits::MigrateAccount;
 
 const MODULE_ID: LockIdentifier = *b"phrelect";
 
@@ -474,14 +473,6 @@ decl_event!(
 	}
 );
 
-impl<T: Trait> MigrateAccount<T::AccountId> for Module<T> {
-	fn migrate_account(a: &T::AccountId) {
-		if StakeOf::<T>::migrate_key_from_blake(a).is_some() {
-			VotesOf::<T>::migrate_key_from_blake(a);
-		}
-	}
-}
-
 impl<T: Trait> Module<T> {
 	/// Attempts to remove a member `who`. If a runner up exists, it is used as the replacement.
 	/// Otherwise, `Ok(false)` is returned to signal the caller.
@@ -784,6 +775,18 @@ impl<T: Trait> Contains<T::AccountId> for Module<T> {
 		Self::is_member(who)
 	}
 	fn sorted_members() -> Vec<T::AccountId> { Self::members_ids() }
+
+	// A special function to populate members in this pallet for passing Origin
+	// checks in runtime benchmarking.
+	#[cfg(feature = "runtime-benchmarks")]
+	fn add(who: &T::AccountId) {
+		Members::<T>::mutate(|members| {
+			match members.binary_search_by(|(a, _b)| a.cmp(who)) {
+				Ok(_) => (),
+				Err(pos) => members.insert(pos, (who.clone(), BalanceOf::<T>::default())),
+			}
+		})
+	}
 }
 
 #[cfg(test)]
@@ -825,7 +828,7 @@ mod tests {
 		type Version = ();
 		type ModuleToIndex = ();
 		type AccountData = pallet_balances::AccountData<u64>;
-		type MigrateAccount = (); type OnNewAccount = ();
+		type OnNewAccount = ();
 		type OnKilledAccount = ();
 	}
 
