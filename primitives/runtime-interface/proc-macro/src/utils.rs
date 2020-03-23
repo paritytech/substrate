@@ -59,6 +59,7 @@ impl<'a> RuntimeInterfaceFunction<'a> {
 	}
 }
 
+/// All functions of a runtime interface grouped by the function names.
 pub struct RuntimeInterface<'a> {
 	items: BTreeMap<syn::Ident, RuntimeInterfaceFunction<'a>>,
 }
