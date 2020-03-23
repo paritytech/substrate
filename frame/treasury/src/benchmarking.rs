@@ -20,7 +20,7 @@ use super::*;
 
 use frame_system::RawOrigin;
 use frame_benchmarking::{benchmarks, account};
-use sp_runtime::traits::OnFinalize;
+use sp_runtime::traits::OnInitialize;
 
 use crate::Module as Treasury;
 
@@ -82,7 +82,7 @@ fn create_tips<T: Trait>(t: u32, hash: T::Hash, value: BalanceOf<T>) -> Result<(
 	Ok(())
 }
 
-// Create proposals that are approved for use in `on_finalize`.
+// Create proposals that are approved for use in `on_initialize`.
 fn create_approved_proposals<T: Trait>(n: u32) -> Result<(), &'static str> {
 	for i in 0 .. n {
 		let (caller, value, lookup) = setup_proposal::<T>(i);
@@ -199,13 +199,13 @@ benchmarks! {
 		let caller = account("caller", t, SEED);
 	}: _(RawOrigin::Signed(caller), hash)
 
-	on_finalize {
+	on_initialize {
 		let p in 0 .. 100;
 		let pot_account = Treasury::<T>::account_id();
 		let value = T::Currency::minimum_balance().saturating_mul(1_000_000_000.into());
 		let _ = T::Currency::make_free_balance_be(&pot_account, value);
 		create_approved_proposals::<T>(p)?;
 	}: {
-		Treasury::<T>::on_finalize(T::BlockNumber::zero());
+		Treasury::<T>::on_initialize(T::BlockNumber::zero());
 	}
 }

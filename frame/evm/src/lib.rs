@@ -35,7 +35,7 @@ use sp_runtime::{
 	DispatchResult, traits::{UniqueSaturatedInto, AccountIdConversion, SaturatedConversion},
 };
 use sha3::{Digest, Keccak256};
-use evm::{ExitReason, ExitSucceed, ExitError};
+use evm::{ExitReason, ExitSucceed, ExitError, Config};
 use evm::executor::StackExecutor;
 use evm::backend::ApplyBackend;
 
@@ -116,6 +116,8 @@ impl Precompiles for () {
 	}
 }
 
+static ISTANBUL_CONFIG: Config = Config::istanbul();
+
 /// EVM module trait
 pub trait Trait: frame_system::Trait + pallet_timestamp::Trait {
 	/// Calculator for current gas price.
@@ -128,6 +130,11 @@ pub trait Trait: frame_system::Trait + pallet_timestamp::Trait {
 	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
 	/// Precompiles associated with this EVM engine.
 	type Precompiles: Precompiles;
+
+	/// EVM config used in the module.
+	fn config() -> &'static Config {
+		&ISTANBUL_CONFIG
+	}
 }
 
 decl_storage! {
@@ -381,7 +388,7 @@ impl<T: Trait> Module<T> {
 		let mut executor = StackExecutor::new_with_precompile(
 			&backend,
 			gas_limit as usize,
-			&backend::GASOMETER_CONFIG,
+			T::config(),
 			T::Precompiles::execute,
 		);
 
