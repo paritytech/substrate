@@ -35,12 +35,14 @@ fn make_pre_digest(
 	vrf_output: RawVRFOutput,
 	vrf_proof: RawVRFProof,
 ) -> Digest {
-	let digest_data = sp_consensus_babe::digests::RawPreDigest::Primary {
-		authority_index,
-		slot_number,
-		vrf_output,
-		vrf_proof,
-	};
+	let digest_data = sp_consensus_babe::digests::RawPreDigest::Primary(
+		sp_consensus_babe::digests::RawPrimaryPreDigest {
+			authority_index,
+			slot_number,
+			vrf_output,
+			vrf_proof,
+		}
+	);
 	let log = DigestItem::PreRuntime(sp_consensus_babe::BABE_ENGINE_ID, digest_data.encode());
 	Digest { logs: vec![log] }
 }
