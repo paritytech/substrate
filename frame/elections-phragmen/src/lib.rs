@@ -158,13 +158,11 @@ decl_storage! {
 		/// The total number of vote rounds that have happened, excluding the upcoming one.
 		pub ElectionRounds get(fn election_rounds): u32 = Zero::zero();
 
-		/// Votes of a particular voter, with the round index of the votes.
-		pub VotesOf get(fn votes_of): map hasher(twox_64_concat) T::AccountId => Vec<T::AccountId>;
-		/// Locked stake of a voter.
-		pub StakeOf get(fn stake_of): map hasher(twox_64_concat) T::AccountId => BalanceOf<T>;
+		/// Votes and locked stake of a particular voter.
+		pub Voting: map hasher(twox_64_concat) T::AccountId => (BalanceOf<T>, Vec<T::AccountId>);
 
-		/// The present candidate list. Sorted based on account-id. A current member or a runner can
-		/// never enter this vector and is always implicitly assumed to be a candidate.
+		/// The present candidate list. Sorted based on account-id. A current member or runner-up
+		/// can never enter this vector and is always implicitly assumed to be a candidate.
 		pub Candidates get(fn candidates): Vec<T::AccountId>;
 	}
 }
@@ -203,11 +201,31 @@ decl_error! {
 	}
 }
 
+mod migration {
+	use super::*;
+	use frame_support::{migration::{StorageKeyIterator, take_storage_item}, Twox64Concat};
+	pub fn migrate<T: Trait>() {
+		for (who, votes) in StorageKeyIterator
+			::<T::AccountId, Vec<T::AccountId>, Twox64Concat>
+			::new(b"PhragmenElection", b"VotesOf")
+			.drain()
+		{
+			if let Some(stake) = take_storage_item::<_, BalanceOf<T>, Twox64Concat>(b"PhragmenElection", b"StakeOf", &who) {
+				Voting::<T>::insert(who, (stake, votes));
+			}
+		}
+	}
+}
+
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
 		fn deposit_event() = default;
+
+		fn on_runtime_upgrade() {
+			migration::migrate::<T>();
+		}
 
 		const CandidacyBond: BalanceOf<T> = T::CandidacyBond::get();
 		const VotingBond: BalanceOf<T> = T::VotingBond::get();
@@ -264,8 +282,8 @@ decl_module! {
 				locked_balance,
 				WithdrawReasons::except(WithdrawReason::TransactionPayment),
 			);
-			<StakeOf<T>>::insert(&who, locked_balance);
-			<VotesOf<T>>::insert(&who, votes);
+
+			Voting::<T>::insert(&who, (locked_balance, votes));
 		}
 
 		/// Remove `origin` as a voter. This removes the lock and returns the bond.
@@ -522,7 +540,7 @@ impl<T: Trait> Module<T> {
 	///
 	/// State: O(1).
 	fn is_voter(who: &T::AccountId) -> bool {
-		<StakeOf<T>>::contains_key(who)
+		Voting::<T>::contains_key(who)
 	}
 
 	/// Check if `who` is currently an active member.
@@ -585,8 +603,7 @@ impl<T: Trait> Module<T> {
 	/// lock. Optionally, it would also return the reserved voting bond if indicated by `unreserve`.
 	fn do_remove_voter(who: &T::AccountId, unreserve: bool) {
 		// remove storage and lock.
-		<VotesOf<T>>::remove(who);
-		<StakeOf<T>>::remove(who);
+		Voting::<T>::remove(who);
 		T::Currency::remove_lock(MODULE_ID, who);
 
 		if unreserve {
@@ -596,7 +613,12 @@ impl<T: Trait> Module<T> {
 
 	/// The locked stake of a voter.
 	fn locked_stake_of(who: &T::AccountId) -> BalanceOf<T> {
-		Self::stake_of(who)
+		Voting::<T>::get(who).0
+	}
+
+	/// The locked stake of a voter.
+	fn votes_of(who: &T::AccountId) -> Vec<T::AccountId> {
+		Voting::<T>::get(who).1
 	}
 
 	/// Check there's nothing to do this block.
@@ -627,7 +649,7 @@ impl<T: Trait> Module<T> {
 		let num_to_elect = desired_runners_up + desired_seats;
 
 		let mut candidates = Self::candidates();
-		// candidates who explicitly called `submit_candidacy`. Only these folks are at the risk of
+		// candidates who explicitly called `submit_candidacy`. Only these folks are at risk of
 		// losing their bond.
 		let exposed_candidates = candidates.clone();
 		// current members are always a candidate for the next round as well.
@@ -636,15 +658,14 @@ impl<T: Trait> Module<T> {
 		// previous runners_up are also always candidates for the next round.
 		candidates.append(&mut Self::runners_up_ids());
 
-		let voters_and_votes = VotesOf::<T>::iter()
-			.map(|(v, i)| (v, i))
-			.collect::<Vec<(T::AccountId, Vec<T::AccountId>)>>();
-		let maybe_phragmen_result = sp_phragmen::elect::<_, _, _, T::CurrencyToVote, Perbill>(
+		let voters_and_votes = Voting::<T>::iter()
+			.map(|(voter, (stake, targets))| { (voter, stake, targets) })
+			.collect::<Vec<_>>();
+		let maybe_phragmen_result = sp_phragmen::elect::<_, _, T::CurrencyToVote, Perbill>(
 			num_to_elect,
 			0,
 			candidates,
-			voters_and_votes,
-			Self::locked_stake_of,
+			voters_and_votes.clone(),
 		);
 
 		if let Some(phragmen_result) = maybe_phragmen_result {
@@ -689,11 +710,23 @@ impl<T: Trait> Module<T> {
 			// split new set into winners and runners up.
 			let split_point = desired_seats.min(new_set_with_stake.len());
 			let mut new_members = (&new_set_with_stake[..split_point]).to_vec();
-			let most_popular = new_members.first().map(|x| x.0.clone());
 
 			// save the runners up as-is. They are sorted based on desirability.
 			// sort and save the members.
 			new_members.sort_by(|i, j| i.0.cmp(&j.0));
+
+			let mut prime_votes: Vec<_> = new_members.iter().map(|c| (&c.0, BalanceOf::<T>::zero())).collect();
+			for (_, stake, targets) in voters_and_votes.into_iter() {
+				for (votes, who) in targets.iter()
+					.enumerate()
+					.map(|(votes, who)| ((MAXIMUM_VOTE - votes) as u32, who))
+				{
+					if let Ok(i) = prime_votes.binary_search_by_key(&who, |k| k.0) {
+						prime_votes[i].1 += stake * votes.into();
+					}
+				}
+			}
+			let prime = prime_votes.into_iter().max_by_key(|x| x.1).map(|x| x.0.clone());
 
 			// new_members_ids is sorted by account id.
 			let new_members_ids = new_members
@@ -722,7 +755,7 @@ impl<T: Trait> Module<T> {
 				&outgoing.clone(),
 				&new_members_ids,
 			);
-			T::ChangeMembers::set_prime(most_popular);
+			T::ChangeMembers::set_prime(prime);
 
 			// outgoing candidates lose their bond.
 			let mut to_burn_bond = outgoing.to_vec();
@@ -1012,7 +1045,7 @@ mod tests {
 	}
 
 	fn all_voters() -> Vec<u64> {
-		<VotesOf<Test>>::iter().map(|(v, _)| v).collect::<Vec<u64>>()
+		Voting::<Test>::iter().map(|(v, _)| v).collect::<Vec<u64>>()
 	}
 
 	fn balances(who: &u64) -> (u64, u64) {
@@ -1231,13 +1264,13 @@ mod tests {
 
 			assert_eq!(balances(&2), (18, 2));
 			assert_eq!(has_lock(&2), 20);
-			assert_eq!(Elections::stake_of(2), 20);
+			assert_eq!(Elections::locked_stake_of(&2), 20);
 
 			// can update; different stake; different lock and reserve.
 			assert_ok!(Elections::vote(Origin::signed(2), vec![5, 4], 15));
 			assert_eq!(balances(&2), (18, 2));
 			assert_eq!(has_lock(&2), 15);
-			assert_eq!(Elections::stake_of(2), 15);
+			assert_eq!(Elections::locked_stake_of(&2), 15);
 		});
 	}
 
@@ -1294,6 +1327,31 @@ mod tests {
 	}
 
 	#[test]
+	fn prime_votes_for_exiting_members_are_removed() {
+		ExtBuilder::default().build().execute_with(|| {
+			assert_ok!(Elections::submit_candidacy(Origin::signed(3)));
+			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
+			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
+
+			assert_ok!(Elections::vote(Origin::signed(1), vec![4, 3], 10));
+			assert_ok!(Elections::vote(Origin::signed(2), vec![4], 20));
+			assert_ok!(Elections::vote(Origin::signed(3), vec![3], 30));
+			assert_ok!(Elections::vote(Origin::signed(4), vec![4], 40));
+			assert_ok!(Elections::vote(Origin::signed(5), vec![5], 50));
+
+			assert_ok!(Elections::renounce_candidacy(Origin::signed(4)));
+
+			System::set_block_number(5);
+			assert_ok!(Elections::end_block(System::block_number()));
+
+			assert_eq!(Elections::members_ids(), vec![3, 5]);
+			assert_eq!(Elections::candidates(), vec![]);
+
+			assert_eq!(PRIME.with(|p| *p.borrow()), Some(5));
+		});
+	}
+
+	#[test]
 	fn cannot_vote_for_more_than_candidates() {
 		ExtBuilder::default().build().execute_with(|| {
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
@@ -1327,7 +1385,7 @@ mod tests {
 
 			assert_ok!(Elections::vote(Origin::signed(2), vec![4, 5], 30));
 			// you can lie but won't get away with it.
-			assert_eq!(Elections::stake_of(2), 20);
+			assert_eq!(Elections::locked_stake_of(&2), 20);
 			assert_eq!(has_lock(&2), 20);
 		});
 	}
@@ -1341,16 +1399,16 @@ mod tests {
 			assert_ok!(Elections::vote(Origin::signed(3), vec![5], 30));
 
 			assert_eq_uvec!(all_voters(), vec![2, 3]);
-			assert_eq!(Elections::stake_of(2), 20);
-			assert_eq!(Elections::stake_of(3), 30);
-			assert_eq!(Elections::votes_of(2), vec![5]);
-			assert_eq!(Elections::votes_of(3), vec![5]);
+			assert_eq!(Elections::locked_stake_of(&2), 20);
+			assert_eq!(Elections::locked_stake_of(&3), 30);
+			assert_eq!(Elections::votes_of(&2), vec![5]);
+			assert_eq!(Elections::votes_of(&3), vec![5]);
 
 			assert_ok!(Elections::remove_voter(Origin::signed(2)));
 
 			assert_eq_uvec!(all_voters(), vec![3]);
-			assert_eq!(Elections::votes_of(2), vec![]);
-			assert_eq!(Elections::stake_of(2), 0);
+			assert_eq!(Elections::votes_of(&2), vec![]);
+			assert_eq!(Elections::locked_stake_of(&2), 0);
 
 			assert_eq!(balances(&2), (20, 0));
 			assert_eq!(Balances::locks(&2).len(), 0);
@@ -1521,9 +1579,9 @@ mod tests {
 
 			assert_eq_uvec!(all_voters(), vec![2, 3, 4]);
 
-			assert_eq!(Elections::votes_of(2), vec![5]);
-			assert_eq!(Elections::votes_of(3), vec![3]);
-			assert_eq!(Elections::votes_of(4), vec![4]);
+			assert_eq!(Elections::votes_of(&2), vec![5]);
+			assert_eq!(Elections::votes_of(&3), vec![3]);
+			assert_eq!(Elections::votes_of(&4), vec![4]);
 
 			assert_eq!(Elections::candidates(), vec![3, 4, 5]);
 			assert_eq!(<Candidates<Test>>::decode_len().unwrap(), 3);
