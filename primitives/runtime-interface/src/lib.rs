@@ -129,10 +129,21 @@ pub use sp_std;
 ///     /// A function that can be called from native/wasm.
 ///     ///
 ///     /// The implementation given to this function is only compiled on native.
-///     fn call_some_complex_code(data: &[u8]) -> Vec<u8> {
+///     fn call(data: &[u8]) -> Vec<u8> {
 ///         // Here you could call some rather complex code that only compiles on native or
 ///         // is way faster in native than executing it in wasm.
 ///         Vec::new()
+///     }
+///     /// Call function, but different version.
+///     ///
+///     /// For new runtimes, only function with latest version is reachable.
+///     /// But old version (above) is still accessible for old runtimes.
+///     /// Default version is 1.
+///     #[version(2)]
+///     fn call(data: &[u8]) -> Vec<u8> {
+///         // Here you could call some rather complex code that only compiles on native or
+///         // is way faster in native than executing it in wasm.
+///         [17].to_vec()
 ///     }
 ///
 ///     /// A function can take a `&self` or `&mut self` argument to get access to the
@@ -157,13 +168,15 @@ pub use sp_std;
 /// // on the visibility of the trait declaration.
 /// mod interface {
 ///     trait Interface {
-///         fn call_some_complex_code(data: &[u8]) -> Vec<u8>;
-///         fn set_or_clear(&mut self, optional: Option<Vec<u8>>);
+///         fn call_version_1(data: &[u8]) -> Vec<u8>;
+///         fn call_version_2(data: &[u8]) -> Vec<u8>;
+///         fn set_or_clear_version_1(&mut self, optional: Option<Vec<u8>>);
 ///     }
 ///
 ///     impl Interface for &mut dyn sp_externalities::Externalities {
-///         fn call_some_complex_code(data: &[u8]) -> Vec<u8> { Vec::new() }
-///         fn set_or_clear(&mut self, optional: Option<Vec<u8>>) {
+///         fn call_version_1(data: &[u8]) -> Vec<u8> { Vec::new() }
+///         fn call_version_2(data: &[u8]) -> Vec<u8> { [17].to_vec() }
+///         fn set_or_clear_version_1(&mut self, optional: Option<Vec<u8>>) {
 ///             match optional {
 ///                 Some(value) => self.set_storage([1, 2, 3, 4].to_vec(), value),
 ///                 None => self.clear_storage(&[1, 2, 3, 4]),
@@ -171,12 +184,25 @@ pub use sp_std;
 ///         }
 ///     }
 ///
-///     pub fn call_some_complex_code(data: &[u8]) -> Vec<u8> {
-///         <&mut dyn sp_externalities::Externalities as Interface>::call_some_complex_code(data)
+///     pub fn call(data: &[u8]) -> Vec<u8> {
+///         // only latest version is exposed
+///         call_version_2(data)
+///     }
+///
+///     fn call_version_1(data: &[u8]) -> Vec<u8> {
+///         <&mut dyn sp_externalities::Externalities as Interface>::call_version_1(data)
+///     }
+///
+///     fn call_version_2(data: &[u8]) -> Vec<u8> {
+///         <&mut dyn sp_externalities::Externalities as Interface>::call_version_2(data)
 ///     }
 ///
 ///     pub fn set_or_clear(optional: Option<Vec<u8>>) {
-///         sp_externalities::with_externalities(|mut ext| Interface::set_or_clear(&mut ext, optional))
+///         set_or_clear_version_1(optional)
+///     }
+///
+///     fn set_or_clear_version_1(optional: Option<Vec<u8>>) {
+///         sp_externalities::with_externalities(|mut ext| Interface::set_or_clear_version_1(&mut ext, optional))
 ///             .expect("`set_or_clear` called outside of an Externalities-provided environment.")
 ///     }
 ///
@@ -205,7 +231,7 @@ pub use sp_std;
 ///             /// `<ARGUMENT_TYPE as RIType>::FFIType`.
 ///             ///
 ///             /// `data` holds the pointer and the length to the `[u8]` slice.
-///             pub fn ext_Interface_call_some_complex_code_version_1(data: u64) -> u64;
+///             pub fn ext_Interface_call_version_1(data: u64) -> u64;
 ///             /// `optional` holds the pointer and the length of the encoded value.
 ///             pub fn ext_Interface_set_or_clear_version_1(optional: u64);
 ///         }
@@ -213,18 +239,18 @@ pub use sp_std;
 ///
 ///     /// The type is actually `ExchangeableFunction` (from `sp-runtime-interface`).
 ///     ///
-///     /// This can be used to replace the implementation of the `call_some_complex_code` function.
+///     /// This can be used to replace the implementation of the `call` function.
 ///     /// Instead of calling into the host, the callee will automatically call the other
 ///     /// implementation.
 ///     ///
 ///     /// To replace the implementation:
 ///     ///
-///     /// `host_call_some_complex_code.replace_implementation(some_other_impl)`
-///     pub static host_call_some_complex_code: () = ();
+///     /// `host_call.replace_implementation(some_other_impl)`
+///     pub static host_call: () = ();
 ///     pub static host_set_or_clear: () = ();
 ///
-///     pub fn call_some_complex_code(data: &[u8]) -> Vec<u8> {
-///         // This is the actual call: `host_call_some_complex_code.get()(data)`
+///     pub fn call(data: &[u8]) -> Vec<u8> {
+///         // This is the actual call: `host_call.get()(data)`
 ///         //
 ///         // But that does not work for several reasons in this example, so we just return an
 ///         // empty vector.

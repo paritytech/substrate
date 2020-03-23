@@ -106,10 +106,10 @@ decl_storage! {
 		pub Proposals get(fn proposals): Vec<T::Hash>;
 		/// Actual proposal for a given hash, if it's current.
 		pub ProposalOf get(fn proposal_of):
-			map hasher(blake2_256) T::Hash => Option<<T as Trait<I>>::Proposal>;
+			map hasher(identity) T::Hash => Option<<T as Trait<I>>::Proposal>;
 		/// Votes on a given proposal, if it is ongoing.
 		pub Voting get(fn voting):
-			map hasher(blake2_256) T::Hash => Option<Votes<T::AccountId, T::BlockNumber>>;
+			map hasher(identity) T::Hash => Option<Votes<T::AccountId, T::BlockNumber>>;
 		/// Proposals so far.
 		pub ProposalCount get(fn proposal_count): u32;
 		/// The current members of the collective. This is stored sorted (just by value).
@@ -619,7 +619,7 @@ mod tests {
 			System::set_block_number(4);
 			assert_ok!(Collective::close(Origin::signed(4), hash.clone(), 0));
 
-			let record = |event| EventRecord { phase: Phase::Finalization, event, topics: vec![] };
+			let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
 			assert_eq!(System::events(), vec![
 				record(Event::collective_Instance1(RawEvent::Proposed(1, 0, hash.clone(), 3))),
 				record(Event::collective_Instance1(RawEvent::Voted(2, hash.clone(), true, 2, 0))),
@@ -643,7 +643,7 @@ mod tests {
 			System::set_block_number(4);
 			assert_ok!(Collective::close(Origin::signed(4), hash.clone(), 0));
 
-			let record = |event| EventRecord { phase: Phase::Finalization, event, topics: vec![] };
+			let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
 			assert_eq!(System::events(), vec![
 				record(Event::collective_Instance1(RawEvent::Proposed(1, 0, hash.clone(), 3))),
 				record(Event::collective_Instance1(RawEvent::Voted(2, hash.clone(), true, 2, 0))),
@@ -667,7 +667,7 @@ mod tests {
 			System::set_block_number(4);
 			assert_ok!(Collective::close(Origin::signed(4), hash.clone(), 0));
 
-			let record = |event| EventRecord { phase: Phase::Finalization, event, topics: vec![] };
+			let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
 			assert_eq!(System::events(), vec![
 				record(Event::collective_Instance1(RawEvent::Proposed(1, 0, hash.clone(), 3))),
 				record(Event::collective_Instance1(RawEvent::Voted(2, hash.clone(), true, 2, 0))),
@@ -765,7 +765,7 @@ mod tests {
 
 			assert_eq!(System::events(), vec![
 				EventRecord {
-					phase: Phase::Finalization,
+					phase: Phase::Initialization,
 					event: Event::collective_Instance1(RawEvent::Proposed(
 						1,
 						0,
@@ -846,7 +846,7 @@ mod tests {
 
 			assert_eq!(System::events(), vec![
 				EventRecord {
-					phase: Phase::Finalization,
+					phase: Phase::Initialization,
 					event: Event::collective_Instance1(RawEvent::Proposed(
 						1,
 						0,
@@ -856,7 +856,7 @@ mod tests {
 					topics: vec![],
 				},
 				EventRecord {
-					phase: Phase::Finalization,
+					phase: Phase::Initialization,
 					event: Event::collective_Instance1(RawEvent::Voted(
 						1,
 						hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"].into(),
@@ -895,7 +895,7 @@ mod tests {
 
 			assert_eq!(System::events(), vec![
 				EventRecord {
-					phase: Phase::Finalization,
+					phase: Phase::Initialization,
 					event: Event::collective_Instance1(
 						RawEvent::Proposed(
 							1,
@@ -906,7 +906,7 @@ mod tests {
 					topics: vec![],
 				},
 				EventRecord {
-					phase: Phase::Finalization,
+					phase: Phase::Initialization,
 					event: Event::collective_Instance1(RawEvent::Voted(
 						2,
 						hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"].into(),
@@ -917,7 +917,7 @@ mod tests {
 					topics: vec![],
 				},
 				EventRecord {
-					phase: Phase::Finalization,
+					phase: Phase::Initialization,
 					event: Event::collective_Instance1(RawEvent::Disapproved(
 						hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"].into(),
 					)),
@@ -938,7 +938,7 @@ mod tests {
 
 			assert_eq!(System::events(), vec![
 				EventRecord {
-					phase: Phase::Finalization,
+					phase: Phase::Initialization,
 					event: Event::collective_Instance1(RawEvent::Proposed(
 						1,
 						0,
@@ -948,7 +948,7 @@ mod tests {
 					topics: vec![],
 				},
 				EventRecord {
-					phase: Phase::Finalization,
+					phase: Phase::Initialization,
 					event: Event::collective_Instance1(RawEvent::Voted(
 						2,
 						hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"].into(),
@@ -959,14 +959,14 @@ mod tests {
 					topics: vec![],
 				},
 				EventRecord {
-					phase: Phase::Finalization,
+					phase: Phase::Initialization,
 					event: Event::collective_Instance1(RawEvent::Approved(
 						hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"].into(),
 					)),
 					topics: vec![],
 				},
 				EventRecord {
-					phase: Phase::Finalization,
+					phase: Phase::Initialization,
 					event: Event::collective_Instance1(RawEvent::Executed(
 						hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"].into(),
 						false,

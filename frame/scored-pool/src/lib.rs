@@ -165,7 +165,7 @@ decl_storage! {
 		/// check if a candidate is already in the pool, without having to
 		/// iterate over the entire pool (the `Pool` is not sorted by
 		/// `T::AccountId`, but by `T::Score` instead).
-		CandidateExists get(fn candidate_exists): map hasher(blake2_256) T::AccountId => bool;
+		CandidateExists get(fn candidate_exists): map hasher(twox_64_concat) T::AccountId => bool;
 
 		/// The current membership, stored as an ordered Vec.
 		Members get(fn members): Vec<T::AccountId>;

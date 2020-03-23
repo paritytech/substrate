@@ -200,15 +200,19 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin,
 								Err(err) => return Poll::Ready(Some(Err(err))),
 							}
 						},
-						Poll::Pending =>
-							*this.handshake = NotificationsInSubstreamHandshake::PendingSend(msg),
+						Poll::Pending => {
+							*this.handshake = NotificationsInSubstreamHandshake::PendingSend(msg);
+							return Poll::Pending
+						}
 					},
 				NotificationsInSubstreamHandshake::Close =>
 					match Sink::poll_close(this.socket.as_mut(), cx)? {
 						Poll::Ready(()) =>
 							*this.handshake = NotificationsInSubstreamHandshake::Sent,
-						Poll::Pending =>
-							*this.handshake = NotificationsInSubstreamHandshake::Close,
+						Poll::Pending => {
+							*this.handshake = NotificationsInSubstreamHandshake::Close;
+							return Poll::Pending
+						}
 					},
 			}
 		}

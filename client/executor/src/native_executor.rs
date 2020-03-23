@@ -16,11 +16,11 @@
 
 use crate::{
 	RuntimeInfo, error::{Error, Result},
-	wasm_runtime::{RuntimeCache, WasmExecutionMethod, CodeSource},
+	wasm_runtime::{RuntimeCache, WasmExecutionMethod},
 };
 use sp_version::{NativeVersion, RuntimeVersion};
 use codec::{Decode, Encode};
-use sp_core::{NativeOrEncoded, traits::{CodeExecutor, Externalities}};
+use sp_core::{NativeOrEncoded, traits::{CodeExecutor, Externalities, RuntimeCode}};
 use log::trace;
 use std::{result, panic::{UnwindSafe, AssertUnwindSafe}, sync::Arc};
 use sp_wasm_interface::{HostFunctions, Function};
@@ -85,6 +85,8 @@ pub struct WasmExecutor {
 	cache: Arc<RuntimeCache>,
 	/// Allow missing function imports.
 	allow_missing_func_imports: bool,
+	/// The size of the instances cache.
+	max_runtime_instances: usize,
 }
 
 impl WasmExecutor {
@@ -101,17 +103,19 @@ impl WasmExecutor {
 		default_heap_pages: Option<u64>,
 		host_functions: Vec<&'static dyn Function>,
 		allow_missing_func_imports: bool,
+		max_runtime_instances: usize,
 	) -> Self {
 		WasmExecutor {
 			method,
 			default_heap_pages: default_heap_pages.unwrap_or(DEFAULT_HEAP_PAGES),
 			host_functions: Arc::new(host_functions),
-			cache: Arc::new(RuntimeCache::new()),
+			cache: Arc::new(RuntimeCache::new(max_runtime_instances)),
 			allow_missing_func_imports,
+			max_runtime_instances,
 		}
 	}
 
-	/// Execute the given closure `f` with the latest runtime (based on the `CODE` key in `ext`).
+	/// Execute the given closure `f` with the latest runtime (based on `runtime_code`).
 	///
 	/// The closure `f` is expected to return `Err(_)` when there happened a `panic!` in native code
 	/// while executing the runtime in Wasm. If a `panic!` occurred, the runtime is invalidated to
@@ -124,9 +128,9 @@ impl WasmExecutor {
 	/// runtime is invalidated on any `panic!` to prevent a poisoned state. `ext` is already
 	/// implicitly handled as unwind safe, as we store it in a global variable while executing the
 	/// native runtime.
-	fn with_instance<'c, R, F>(
+	fn with_instance<R, F>(
 		&self,
-		code: CodeSource<'c>,
+		runtime_code: &RuntimeCode,
 		ext: &mut dyn Externalities,
 		f: F,
 	) -> Result<R>
@@ -137,7 +141,7 @@ impl WasmExecutor {
 		) -> Result<Result<R>>,
 	{
 		match self.cache.with_instance(
-			code,
+			runtime_code,
 			ext,
 			self.method,
 			self.default_heap_pages,
@@ -158,17 +162,48 @@ impl WasmExecutor {
 impl sp_core::traits::CallInWasm for WasmExecutor {
 	fn call_in_wasm(
 		&self,
-		wasm_blob: &[u8],
+		wasm_code: &[u8],
+		code_hash: Option<Vec<u8>>,
 		method: &str,
 		call_data: &[u8],
 		ext: &mut dyn Externalities,
 	) -> std::result::Result<Vec<u8>, String> {
-		self.with_instance(CodeSource::Custom(wasm_blob), ext, |instance, _, mut ext| {
+		if let Some(hash) = code_hash {
+			let code = RuntimeCode {
+				code_fetcher: &sp_core::traits::WrappedRuntimeCode(wasm_code.into()),
+				hash,
+				heap_pages: None,
+			};
+
+			self.with_instance(&code, ext, |instance, _, mut ext| {
+				with_externalities_safe(
+					&mut **ext,
+					move || instance.call(method, call_data),
+				)
+			}).map_err(|e| e.to_string())
+		} else {
+			let module = crate::wasm_runtime::create_wasm_runtime_with_code(
+				self.method,
+				self.default_heap_pages,
+				&wasm_code,
+				self.host_functions.to_vec(),
+				self.allow_missing_func_imports,
+			)
+				.map_err(|e| format!("Failed to create module: {:?}", e))?;
+
+			let instance = module.new_instance()
+				.map_err(|e| format!("Failed to create instance: {:?}", e))?;
+
+			let instance = AssertUnwindSafe(instance);
+			let mut ext = AssertUnwindSafe(ext);
+
 			with_externalities_safe(
 				&mut **ext,
 				move || instance.call(method, call_data),
 			)
-		}).map_err(|e| e.to_string())
+			.and_then(|r| r)
+			.map_err(|e| e.to_string())
+		}
 	}
 }
 
@@ -192,7 +227,11 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 	///
 	/// `default_heap_pages` - Number of 64KB pages to allocate for Wasm execution.
 	/// 	Defaults to `DEFAULT_HEAP_PAGES` if `None` is provided.
-	pub fn new(fallback_method: WasmExecutionMethod, default_heap_pages: Option<u64>) -> Self {
+	pub fn new(
+		fallback_method: WasmExecutionMethod,
+		default_heap_pages: Option<u64>,
+		max_runtime_instances: usize,
+	) -> Self {
 		let mut host_functions = sp_io::SubstrateHostFunctions::host_functions();
 
 		// Add the custom host functions provided by the user.
@@ -202,6 +241,7 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 			default_heap_pages,
 			host_functions,
 			false,
+			max_runtime_instances,
 		);
 
 		NativeExecutor {
@@ -220,8 +260,11 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 	fn runtime_version(
 		&self,
 		ext: &mut dyn Externalities,
+		runtime_code: &RuntimeCode,
 	) -> Result<RuntimeVersion> {
-		self.wasm.with_instance(CodeSource::Externalities, ext,
+		self.wasm.with_instance(
+			runtime_code,
+			ext,
 			|_instance, version, _ext|
 				Ok(version.cloned().ok_or_else(|| Error::ApiError("Unknown version".into())))
 		)
@@ -237,6 +280,7 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 	>(
 		&self,
 		ext: &mut dyn Externalities,
+		runtime_code: &RuntimeCode,
 		method: &str,
 		data: &[u8],
 		use_native: bool,
@@ -244,7 +288,7 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeExecutor<D> {
 	) -> (Result<NativeOrEncoded<R>>, bool) {
 		let mut used_native = false;
 		let result = self.wasm.with_instance(
-			CodeSource::Externalities,
+			runtime_code,
 			ext,
 			|instance, onchain_version, mut ext| {
 				let onchain_version = onchain_version.ok_or_else(
@@ -324,11 +368,12 @@ impl<D: NativeExecutionDispatch> sp_core::traits::CallInWasm for NativeExecutor<
 	fn call_in_wasm(
 		&self,
 		wasm_blob: &[u8],
+		code_hash: Option<Vec<u8>>,
 		method: &str,
 		call_data: &[u8],
 		ext: &mut dyn Externalities,
 	) -> std::result::Result<Vec<u8>, String> {
-		sp_core::traits::CallInWasm::call_in_wasm(&self.wasm, wasm_blob, method, call_data, ext)
+		self.wasm.call_in_wasm(wasm_blob, code_hash, method, call_data, ext)
 	}
 }
 
@@ -427,7 +472,11 @@ mod tests {
 
 	#[test]
 	fn native_executor_registers_custom_interface() {
-		let executor = NativeExecutor::<MyExecutor>::new(WasmExecutionMethod::Interpreted, None);
+		let executor = NativeExecutor::<MyExecutor>::new(
+			WasmExecutionMethod::Interpreted,
+			None,
+			8,
+		);
 		my_interface::HostFunctions::host_functions().iter().for_each(|function| {
 			assert_eq!(
 				executor.wasm.host_functions.iter().filter(|f| f == &function).count(),

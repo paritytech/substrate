@@ -179,6 +179,7 @@ pub(crate) fn make_test_network() -> (
 		net.clone(),
 		config(),
 		voter_set_state(),
+		None,
 	);
 
 	(
@@ -292,11 +293,31 @@ fn good_commit_leads_to_relay() {
 					});
 
 					// Add a random peer which will be the recipient of this message
+					let receiver_id = sc_network::PeerId::random();
 					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
-						remote: sc_network::PeerId::random(),
+						remote: receiver_id.clone(),
 						engine_id: GRANDPA_ENGINE_ID,
 						roles: Roles::FULL,
 					});
+
+					// Announce its local set has being on the current set id through a neighbor
+					// packet, otherwise it won't be eligible to receive the commit
+					let _ = {
+						let update = gossip::VersionedNeighborPacket::V1(
+							gossip::NeighborPacket {
+								round: Round(round),
+								set_id: SetId(set_id),
+								commit_finalized_height: 1,
+							}
+						);
+
+						let msg = gossip::GossipMessage::<Block>::Neighbor(update);
+
+						sender.unbounded_send(NetworkEvent::NotificationsReceived {
+							remote: receiver_id,
+							messages: vec![(GRANDPA_ENGINE_ID, msg.encode().into())],
+						})
+					};
 
 					true
 				}
@@ -336,7 +357,7 @@ fn good_commit_leads_to_relay() {
 
 #[test]
 fn bad_commit_leads_to_report() {
-	env_logger::init();
+	let _ = env_logger::try_init();
 	let private = [Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let public = make_ids(&private[..]);
 	let voter_set = Arc::new(public.iter().cloned().collect::<VoterSet<AuthorityId>>());
@@ -462,7 +483,7 @@ fn peer_with_higher_view_leads_to_catch_up_request() {
 		.map(move |tester| {
 			// register a peer with authority role.
 			tester.gossip_validator.new_peer(&mut NoopContext, &id, sc_network::config::Roles::AUTHORITY);
-			((tester, id))
+			(tester, id)
 		})
 		.then(move |(tester, id)| {
 			// send neighbor message at round 10 and height 50

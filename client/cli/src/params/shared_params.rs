@@ -18,8 +18,7 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 use app_dirs::{AppInfo, AppDataType};
 use sc_service::{
-	Configuration, ChainSpecExtension, RuntimeGenesis,
-	config::DatabaseConfig, ChainSpec,
+	Configuration, config::DatabaseConfig, ChainSpec,
 };
 
 use crate::VersionInfo;
@@ -31,7 +30,7 @@ const DEFAULT_DB_CONFIG_PATH : &'static str = "db";
 /// Shared parameters used by all `CoreParams`.
 #[derive(Debug, StructOpt, Clone)]
 pub struct SharedParams {
-	/// Specify the chain specification (one of dev, local or staging).
+	/// Specify the chain specification (one of dev, local, or staging).
 	#[structopt(long = "chain", value_name = "CHAIN_SPEC")]
 	pub chain: Option<String>,
 
@@ -43,32 +42,29 @@ pub struct SharedParams {
 	#[structopt(long = "base-path", short = "d", value_name = "PATH", parse(from_os_str))]
 	pub base_path: Option<PathBuf>,
 
-	/// Sets a custom logging filter.
+	/// Sets a custom logging filter. Syntax is <target>=<level>, e.g. -lsync=debug.
+	///
+	/// Log levels (least to most verbose) are error, warn, info, debug, and trace.
+	/// By default, all targets log `info`. The global log level can be set with -l<level>.
 	#[structopt(short = "l", long = "log", value_name = "LOG_PATTERN")]
 	pub log: Option<String>,
 }
 
 impl SharedParams {
 	/// Load spec to `Configuration` from `SharedParams` and spec factory.
-	pub fn update_config<'a, G, E, F>(
+	pub fn update_config<'a, F>(
 		&self,
-		mut config: &'a mut Configuration<G, E>,
+		mut config: &'a mut Configuration,
 		spec_factory: F,
 		version: &VersionInfo,
-	) -> error::Result<&'a ChainSpec<G, E>> where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-		F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
+	) -> error::Result<&'a dyn ChainSpec> where
+		F: FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
 	{
 		let chain_key = match self.chain {
 			Some(ref chain) => chain.clone(),
 			None => if self.dev { "dev".into() } else { "".into() }
 		};
-		let spec = match spec_factory(&chain_key)? {
-			Some(spec) => spec,
-			None => ChainSpec::from_json_file(PathBuf::from(chain_key))?
-		};
-
+		let spec = spec_factory(&chain_key)?;
 		config.network.boot_nodes = spec.boot_nodes().to_vec();
 		config.telemetry_endpoints = spec.telemetry_endpoints().clone();
 
@@ -87,7 +83,7 @@ impl SharedParams {
 			});
 		}
 
-		Ok(config.chain_spec.as_ref().unwrap())
+		Ok(config.expect_chain_spec())
 	}
 
 	/// Initialize substrate. This must be done only once.

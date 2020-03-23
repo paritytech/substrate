@@ -38,7 +38,7 @@ variables:
   DOCKER_OS:                       "debian:stretch"
   ARCH:                            "x86_64"
   # FIXME set to release
-  CARGO_UNLEASH_INSTALL_PARAMS:    "--version 1.0.0-alpha.8"
+  CARGO_UNLEASH_INSTALL_PARAMS:    "--version 1.0.0-alpha.10"
   CARGO_UNLEASH_PKG_DEF:           "--skip node node-* pallet-template pallet-example pallet-example-* subkey chain-spec-builder"
 
 
@@ -214,6 +214,24 @@ test-frame-staking:
     - WASM_BUILD_NO_COLOR=1 time cargo test --release --verbose --no-default-features --features std
     - sccache -s
 
+test-frame-examples-compile-to-wasm:
+  stage:                           test
+  <<:                              *docker-env
+  variables:
+    # Enable debug assertions since we are running optimized builds for testing
+    # but still want to have debug assertions.
+    RUSTFLAGS: -Cdebug-assertions=y
+    RUST_BACKTRACE: 1
+  except:
+    variables:
+      - $DEPLOY_TAG
+  script:
+    - cd frame/example-offchain-worker/
+    - cargo +nightly build --target=wasm32-unknown-unknown --no-default-features
+    - cd ../example
+    - cargo +nightly build --target=wasm32-unknown-unknown --no-default-features
+    - sccache -s
+
 test-wasmtime:
   stage:                           test
   <<:                              *docker-env
@@ -365,8 +383,9 @@ check_warnings:
       - $DEPLOY_TAG
   variables:
     GIT_STRATEGY:                  none
-  dependencies:
-    - test-linux-stable
+  needs:
+    - job:                         test-linux-stable
+      artifacts:                   true
   script:
     - if [ -s ${CI_COMMIT_SHORT_SHA}_warnings.log ]; then
         cat ${CI_COMMIT_SHORT_SHA}_warnings.log;
@@ -374,7 +393,6 @@ check_warnings:
       else
         echo "___No warnings___";
       fi
-  allow_failure:                   true
 
 # Nightly check whether Polkadot 'master' branch builds.
 check_polkadot:
@@ -578,7 +596,7 @@ publish-to-crates-io:
   <<:                              *docker-env
   only:
     - tags
-    - /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
+    - /^ci-release-.*$/
   script:
     - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
     - cargo unleash em-dragons --no-check ${CARGO_UNLEASH_PKG_DEF}

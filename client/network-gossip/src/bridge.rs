@@ -17,23 +17,16 @@
 use crate::{Network, Validator};
 use crate::state_machine::{ConsensusGossip, TopicNotification, PERIODIC_MAINTENANCE_INTERVAL};
 
-use sc_network::message::generic::ConsensusMessage;
 use sc_network::{Event, ReputationChange};
 
 use futures::{prelude::*, channel::mpsc};
 use libp2p::PeerId;
-use parking_lot::Mutex;
 use sp_runtime::{traits::Block as BlockT, ConsensusEngineId};
 use std::{borrow::Cow, pin::Pin, sync::Arc, task::{Context, Poll}};
 
 /// Wraps around an implementation of the `Network` crate and provides gossiping capabilities on
 /// top of it.
 pub struct GossipEngine<B: BlockT> {
-	inner: Arc<Mutex<GossipEngineInner<B>>>,
-	engine_id: ConsensusEngineId,
-}
-
-struct GossipEngineInner<B: BlockT> {
 	state_machine: ConsensusGossip<B>,
 	network: Box<dyn Network<B> + Send>,
 	periodic_maintenance_interval: futures_timer::Delay,
@@ -41,7 +34,7 @@ struct GossipEngineInner<B: BlockT> {
 	engine_id: ConsensusEngineId,
 }
 
-impl<B: BlockT> Unpin for GossipEngineInner<B> {}
+impl<B: BlockT> Unpin for GossipEngine<B> {}
 
 impl<B: BlockT> GossipEngine<B> {
 	/// Create a new instance.
@@ -60,24 +53,17 @@ impl<B: BlockT> GossipEngine<B> {
 		network.register_notifications_protocol(engine_id, protocol_name.into());
 		state_machine.register_validator(&mut network, engine_id, validator);
 
-		let inner = Arc::new(Mutex::new(GossipEngineInner {
+		GossipEngine {
 			state_machine,
 			network: Box::new(network),
 			periodic_maintenance_interval: futures_timer::Delay::new(PERIODIC_MAINTENANCE_INTERVAL),
 			network_event_stream,
 			engine_id,
-		}));
-
-		let gossip_engine = GossipEngine {
-			inner: inner.clone(),
-			engine_id,
-		};
-
-		gossip_engine
+		}
 	}
 
 	pub fn report(&self, who: PeerId, reputation: ReputationChange) {
-		self.inner.lock().network.report_peer(who, reputation);
+		self.network.report_peer(who, reputation);
 	}
 
 	/// Registers a message without propagating it to any peers. The message
@@ -86,72 +72,50 @@ impl<B: BlockT> GossipEngine<B> {
 	/// message is already expired it should be dropped on the next garbage
 	/// collection.
 	pub fn register_gossip_message(
-		&self,
+		&mut self,
 		topic: B::Hash,
 		message: Vec<u8>,
 	) {
-		let message = ConsensusMessage {
-			engine_id: self.engine_id,
-			data: message,
-		};
-
-		self.inner.lock().state_machine.register_message(topic, message);
+		self.state_machine.register_message(topic, self.engine_id, message);
 	}
 
 	/// Broadcast all messages with given topic.
-	pub fn broadcast_topic(&self, topic: B::Hash, force: bool) {
-		let mut inner = self.inner.lock();
-		let inner = &mut *inner;
-		inner.state_machine.broadcast_topic(&mut *inner.network, topic, force);
+	pub fn broadcast_topic(&mut self, topic: B::Hash, force: bool) {
+		self.state_machine.broadcast_topic(&mut *self.network, topic, force);
 	}
 
 	/// Get data of valid, incoming messages for a topic (but might have expired meanwhile).
-	pub fn messages_for(&self, topic: B::Hash)
+	pub fn messages_for(&mut self, topic: B::Hash)
 		-> mpsc::UnboundedReceiver<TopicNotification>
 	{
-		self.inner.lock().state_machine.messages_for(self.engine_id, topic)
+		self.state_machine.messages_for(self.engine_id, topic)
 	}
 
 	/// Send all messages with given topic to a peer.
 	pub fn send_topic(
-		&self,
+		&mut self,
 		who: &PeerId,
 		topic: B::Hash,
 		force: bool
 	) {
-		let mut inner = self.inner.lock();
-		let inner = &mut *inner;
-		inner.state_machine.send_topic(&mut *inner.network, who, topic, self.engine_id, force)
+		self.state_machine.send_topic(&mut *self.network, who, topic, self.engine_id, force)
 	}
 
 	/// Multicast a message to all peers.
 	pub fn gossip_message(
-		&self,
+		&mut self,
 		topic: B::Hash,
 		message: Vec<u8>,
 		force: bool,
 	) {
-		let message = ConsensusMessage {
-			engine_id: self.engine_id,
-			data: message,
-		};
-
-		let mut inner = self.inner.lock();
-		let inner = &mut *inner;
-		inner.state_machine.multicast(&mut *inner.network, topic, message, force)
+		self.state_machine.multicast(&mut *self.network, topic, self.engine_id, message, force)
 	}
 
 	/// Send addressed message to the given peers. The message is not kept or multicast
 	/// later on.
-	pub fn send_message(&self, who: Vec<sc_network::PeerId>, data: Vec<u8>) {
-		let mut inner = self.inner.lock();
-		let inner = &mut *inner;
-
+	pub fn send_message(&mut self, who: Vec<sc_network::PeerId>, data: Vec<u8>) {
 		for who in &who {
-			inner.state_machine.send_message(&mut *inner.network, who, ConsensusMessage {
-				engine_id: self.engine_id,
-				data: data.clone(),
-			});
+			self.state_machine.send_message(&mut *self.network, who, self.engine_id, data.clone());
 		}
 	}
 
@@ -160,51 +124,48 @@ impl<B: BlockT> GossipEngine<B> {
 	/// Note: this method isn't strictly related to gossiping and should eventually be moved
 	/// somewhere else.
 	pub fn announce(&self, block: B::Hash, associated_data: Vec<u8>) {
-		self.inner.lock().network.announce(block, associated_data);
+		self.network.announce(block, associated_data);
 	}
 }
 
 impl<B: BlockT> Future for GossipEngine<B> {
 	type Output = ();
 
-	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		self.inner.lock().poll_unpin(cx)
-	}
-}
-
-impl<B: BlockT> Future for GossipEngineInner<B> {
-	type Output = ();
-
 	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		let this = &mut *self;
 
-		while let Poll::Ready(Some(event)) = this.network_event_stream.poll_next_unpin(cx) {
-			match event {
-				Event::NotificationStreamOpened { remote, engine_id: msg_engine_id, roles } => {
-					if msg_engine_id != this.engine_id {
-						continue;
+		loop {
+			match this.network_event_stream.poll_next_unpin(cx) {
+				Poll::Ready(Some(event)) => match event {
+					Event::NotificationStreamOpened { remote, engine_id: msg_engine_id, roles } => {
+						if msg_engine_id != this.engine_id {
+							continue;
+						}
+						this.state_machine.new_peer(&mut *this.network, remote, roles);
 					}
-					this.state_machine.new_peer(&mut *this.network, remote, roles);
+					Event::NotificationStreamClosed { remote, engine_id: msg_engine_id } => {
+						if msg_engine_id != this.engine_id {
+							continue;
+						}
+						this.state_machine.peer_disconnected(&mut *this.network, remote);
+					},
+					Event::NotificationsReceived { remote, messages } => {
+						let engine_id = this.engine_id.clone();
+						this.state_machine.on_incoming(
+							&mut *this.network,
+							remote,
+							messages.into_iter()
+								.filter_map(|(engine, data)| if engine == engine_id {
+									Some((engine, data.to_vec()))
+								} else { None })
+								.collect()
+						);
+					},
+					Event::Dht(_) => {}
 				}
-				Event::NotificationStreamClosed { remote, engine_id: msg_engine_id } => {
-					if msg_engine_id != this.engine_id {
-						continue;
-					}
-					this.state_machine.peer_disconnected(&mut *this.network, remote);
-				},
-				Event::NotificationsReceived { remote, messages } => {
-					let engine_id = this.engine_id.clone();
-					this.state_machine.on_incoming(
-						&mut *this.network,
-						remote,
-						messages.into_iter()
-							.filter_map(|(engine, data)| if engine == engine_id {
-								Some(ConsensusMessage { engine_id: engine, data: data.to_vec() })
-							} else { None })
-							.collect()
-					);
-				},
-				Event::Dht(_) => {}
+				// The network event stream closed. Do the same for [`GossipValidator`].
+				Poll::Ready(None) => return Poll::Ready(()),
+				Poll::Pending => break,
 			}
 		}
 
@@ -217,11 +178,76 @@ impl<B: BlockT> Future for GossipEngineInner<B> {
 	}
 }
 
-impl<B: BlockT> Clone for GossipEngine<B> {
-	fn clone(&self) -> Self {
-		GossipEngine {
-			inner: self.inner.clone(),
-			engine_id: self.engine_id.clone(),
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::{ValidationResult, ValidatorContext};
+	use substrate_test_runtime_client::runtime::Block;
+
+	struct TestNetwork {}
+
+	impl<B: BlockT> Network<B> for Arc<TestNetwork> {
+		fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
+			let (_tx, rx) = futures::channel::mpsc::channel(0);
+
+			// Return rx and drop tx. Thus the given channel will yield `Poll::Ready(None)` on first
+			// poll.
+			Box::pin(rx)
 		}
+
+		fn report_peer(&self, _: PeerId, _: ReputationChange) {
+			unimplemented!();
+		}
+
+		fn disconnect_peer(&self, _: PeerId) {
+			unimplemented!();
+		}
+
+		fn write_notification(&self, _: PeerId, _: ConsensusEngineId, _: Vec<u8>) {
+			unimplemented!();
+		}
+
+		fn register_notifications_protocol(&self, _: ConsensusEngineId, _: Cow<'static, [u8]>) {}
+
+		fn announce(&self, _: B::Hash, _: Vec<u8>) {
+			unimplemented!();
+		}
+	}
+
+	struct TestValidator {}
+
+	impl<B: BlockT> Validator<B> for TestValidator {
+		fn validate(
+			&self,
+			_: &mut dyn ValidatorContext<B>,
+			_: &PeerId,
+			_: &[u8]
+		) -> ValidationResult<B::Hash> {
+			unimplemented!();
+		}
+	}
+
+	/// Regression test for the case where the `GossipEngine.network_event_stream` closes. One
+	/// should not ignore a `Poll::Ready(None)` as `poll_next_unpin` will panic on subsequent calls.
+	///
+	/// See https://github.com/paritytech/substrate/issues/5000 for details.
+	#[test]
+	fn returns_when_network_event_stream_closes() {
+		let mut gossip_engine = GossipEngine::<Block>::new(
+			Arc::new(TestNetwork{}),
+			[1, 2, 3, 4],
+			"my_protocol".as_bytes(),
+			Arc::new(TestValidator{}),
+		);
+
+		futures::executor::block_on(futures::future::poll_fn(move |ctx| {
+			if let Poll::Pending = gossip_engine.poll_unpin(ctx) {
+				panic!(
+					"Expected gossip engine to finish on first poll, given that \
+					 `GossipEngine.network_event_stream` closes right away."
+				)
+			}
+			Poll::Ready(())
+		}))
 	}
 }
