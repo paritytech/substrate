@@ -21,11 +21,12 @@ use sc_cli::{substrate_cli_params, CliConfiguration, ExecutionStrategy, Result, 
 use sc_client::StateMachine;
 use sc_client_db::BenchmarkingState;
 use sc_executor::NativeExecutor;
+use sp_externalities::Extensions;
 use sc_service::{ChainSpec, Configuration, NativeExecutionDispatch};
 use sp_runtime::{
 	traits::{Block as BlockT, Header as HeaderT, NumberFor},
 };
-use sp_core::tasks;
+use sp_core::{tasks, testing::KeyStore, traits::KeystoreExt};
 use std::fmt::Debug;
 
 impl BenchmarkCmd {
@@ -50,6 +51,9 @@ impl BenchmarkCmd {
 			2, // The runtime instances cache size.
 		);
 
+		let mut extensions = Extensions::default();
+		extensions.register(KeystoreExt(KeyStore::new()));
+
 		let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
 			&state,
 			None,
@@ -64,7 +68,7 @@ impl BenchmarkCmd {
 				self.steps.clone(),
 				self.repeat,
 			).encode(),
-			Default::default(),
+			extensions,
 			&sp_state_machine::backend::BackendRuntimeCode::new(&state).runtime_code()?,
 			tasks::executor(),
 		)
