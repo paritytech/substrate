@@ -104,7 +104,8 @@ fn get_platform() -> String {
 }
 
 fn get_version() -> String {
-	let impl_commit = std::env::var("VERGEN_SHA_SHORT").unwrap_or_default();
+	let impl_commit = std::env::var("VERGEN_SHA_SHORT")
+		.expect("missing env variable VERGEN_SHA_SHORT. You might want to add a build.rs script that runs sc_cli::generate_cargo_keys()");
 	let commit_dash = if impl_commit.is_empty() { "" } else { "-" };
 
 	format!(
