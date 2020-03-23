@@ -34,8 +34,9 @@ pub fn import_sp_io() {
 
 #[runtime_interface]
 pub trait TestApi {
-	fn test_versionning(&self, data: u32) -> bool {
-		data == 42 || data == 50
+	fn test_versionning(&self, _data: u32) -> bool {
+		// should not be called
+		unimplemented!()
 	}
 }
 

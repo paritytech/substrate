@@ -22,10 +22,7 @@
 use sp_runtime_interface::*;
 
 use sp_runtime_interface_test_wasm::{WASM_BINARY, test_api::HostFunctions};
-use sp_runtime_interface_test_wasm_deprecated::{
-	WASM_BINARY as WASM_BINARY_DEPRECATED,
-	test_api::HostFunctions as HostFunctionsDeprecated,
-};
+use sp_runtime_interface_test_wasm_deprecated::WASM_BINARY as WASM_BINARY_DEPRECATED;
 
 use sp_wasm_interface::HostFunctions as HostFunctionsT;
 use sc_executor::CallInWasm;
@@ -139,22 +136,13 @@ fn test_array_return_value_memory_is_freed() {
 }
 
 #[test]
-fn test_versionning_works() {
-	// sanity check
-	call_wasm_method::<HostFunctionsDeprecated>(
-		&WASM_BINARY_DEPRECATED[..],
-		"test_versionning_works",
-	);
-
-	// verification of 42 works
+fn test_versionining_with_new_host_works() {
+	// We call to the new wasm binary with new host function.
 	call_wasm_method::<HostFunctions>(
 		&WASM_BINARY[..],
 		"test_versionning_works",
 	);
-}
 
-#[test]
-fn test_deprecated_version_with_new_host_works() {
 	// we call to the old wasm binary with a new host functions
 	// old versions of host functions should be called and test should be ok!
 	call_wasm_method::<HostFunctions>(
