@@ -611,7 +611,7 @@ decl_module! {
 		/// -`ref_index`: The index of the referendum to cancel.
 		///
 		/// # <weight>
-		/// - Depends on size of storage vec `VotersFor` for this referendum.
+		/// - `O(1)`.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(500_000)]
 		fn emergency_cancel(origin, ref_index: ReferendumIndex) {
