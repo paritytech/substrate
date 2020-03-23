@@ -1123,7 +1123,7 @@ impl<T: Subtrait> frame_system::Trait for ElevatedTrait<T> {
 	type Version = T::Version;
 	type ModuleToIndex = ();
 	type AccountData = ();
-	type MigrateAccount = (); type OnNewAccount = ();
+	type OnNewAccount = ();
 	type OnKilledAccount = ();
 }
 impl<T: Subtrait> Trait for ElevatedTrait<T> {
