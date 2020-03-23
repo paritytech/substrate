@@ -316,7 +316,7 @@ benchmarks! {
 	// 	let current_era = CurrentEra::get().unwrap();
 	// }: _(RawOrigin::Signed(validator), current_era)
 
-	// payout_nominator {
+	// payout_extra_nominator {
 	// 	let v in 0 .. MAX_NOMINATIONS as u32;
 	// 	let (nominator, validators) = create_nominator_with_validators::<T>(v)?;
 	// 	let current_era = CurrentEra::get().unwrap();
@@ -435,34 +435,34 @@ mod tests {
 			let ledger = Staking::ledger(&controller).unwrap();
 			let stash = &ledger.stash;
 
-			// let original_free_balance = Balances::free_balance(stash);
-			// assert_ok!(Staking::payout_validator(Origin::signed(controller), current_era));
-			// let new_free_balance = Balances::free_balance(stash);
+			let original_free_balance = Balances::free_balance(stash);
+			assert_ok!(Staking::payout_stakers(Origin::signed(1337), controller, current_era, 64, 10));
+			let new_free_balance = Balances::free_balance(stash);
 
-			// assert!(original_free_balance < new_free_balance);
+			assert!(original_free_balance < new_free_balance);
 		});
 	}
 
-	#[test]
-	fn create_nominator_with_validators_works() {
-		ExtBuilder::default().stakers(false).build().execute_with(|| {
-			let v = 5;
+	// #[test]
+	// fn create_nominator_with_validators_works() {
+	// 	ExtBuilder::default().stakers(false).build().execute_with(|| {
+	// 		let v = 5;
 
-			let (nominator, validators) = create_nominator_with_validators::<Test>(v).unwrap();
+	// 		let (nominator, validators) = create_nominator_with_validators::<Test>(v).unwrap();
 
-			let current_era = CurrentEra::get().unwrap();
-			let controller = nominator;
-			let ledger = Staking::ledger(&controller).unwrap();
-			let stash = &ledger.stash;
+	// 		let current_era = CurrentEra::get().unwrap();
+	// 		let controller = nominator;
+	// 		let ledger = Staking::ledger(&controller).unwrap();
+	// 		let stash = &ledger.stash;
 
-			//let find_nominator = validators.into_iter().map(|x| (x, 0)).collect();
+	// 		let find_nominator = validators.into_iter().map(|x| (x, 0)).collect();
 
-			// let original_free_balance = Balances::free_balance(stash);
-			// assert_ok!(Staking::payout_nominator(Origin::signed(controller), current_era, find_nominator));
-			// let new_free_balance = Balances::free_balance(stash);
+	// 		let original_free_balance = Balances::free_balance(stash);
+	// 		assert_ok!(Staking::payout_stakers(Origin::signed(1337), controller, current_era, 64, 10));
+	// 		let new_free_balance = Balances::free_balance(stash);
 
-			// assert!(original_free_balance < new_free_balance);
-		});
-	}
+	// 		assert!(original_free_balance < new_free_balance);
+	// 	});
+	// }
 
 }
