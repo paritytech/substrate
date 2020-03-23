@@ -23,7 +23,10 @@ use libp2p::{Multiaddr, PeerId};
 use libp2p::core::{ConnectedPoint, nodes::listeners::ListenerId};
 use libp2p::swarm::{ProtocolsHandler, IntoProtocolsHandler};
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
-use sp_core::storage::{StorageKey, ChildInfo};
+use sp_core::{
+	storage::{StorageKey, ChildInfo},
+	hexdisplay::HexDisplay
+};
 use sp_consensus::{
 	BlockOrigin,
 	block_validation::BlockAnnounceValidator,
@@ -1552,11 +1555,11 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		}
 
 		let keys_str = || match request.keys.len() {
-			1 => hex::encode(&request.keys[0]),
+			1 => HexDisplay::from(&request.keys[0]).to_string(),
 			_ => format!(
 				"{}..{}",
-				hex::encode(&request.keys[0]),
-				hex::encode(&request.keys[request.keys.len() - 1]),
+				HexDisplay::from(&request.keys[0]),
+				HexDisplay::from(&request.keys[request.keys.len() - 1]),
 			),
 		};
 
@@ -1600,16 +1603,16 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		}
 
 		let keys_str = || match request.keys.len() {
-			1 => hex::encode(&request.keys[0]),
+			1 => HexDisplay::from(&request.keys[0]).to_string(),
 			_ => format!(
 				"{}..{}",
-				hex::encode(&request.keys[0]),
-				hex::encode(&request.keys[request.keys.len() - 1]),
+				HexDisplay::from(&request.keys[0]),
+				HexDisplay::from(&request.keys[request.keys.len() - 1]),
 			),
 		};
 
 		trace!(target: "sync", "Remote read child request {} from {} ({} {} at {})",
-			request.id, who, hex::encode(&request.storage_key), keys_str(), request.block);
+			request.id, who, HexDisplay::from(&request.storage_key), keys_str(), request.block);
 		let proof = if let Some(child_info) = ChildInfo::resolve_child_info(request.child_type, &request.child_info[..]) {
 			match self.context_data.chain.read_child_proof(
 				&BlockId::Hash(request.block),
@@ -1622,7 +1625,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 					trace!(target: "sync", "Remote read child request {} from {} ({} {} at {}) failed with: {}",
 						request.id,
 						who,
-						hex::encode(&request.storage_key),
+						HexDisplay::from(&request.storage_key),
 						keys_str(),
 						request.block,
 						error
@@ -1634,7 +1637,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			trace!(target: "sync", "Remote read child request {} from {} ({} {} at {}) failed with: {}",
 				request.id,
 				who,
-				hex::encode(&request.storage_key),
+				HexDisplay::from(&request.storage_key),
 				keys_str(),
 				request.block,
 				"invalid child info and type",
@@ -1713,9 +1716,9 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			request.id,
 			who,
 			if let Some(sk) = request.storage_key.as_ref() {
-				format!("{} : {}", hex::encode(&sk), hex::encode(&request.key))
+				format!("{} : {}", HexDisplay::from(sk), HexDisplay::from(&request.key))
 			} else {
-				hex::encode(&request.key)
+				HexDisplay::from(&request.key).to_string()
 			},
 			request.first,
 			request.last
@@ -1736,9 +1739,9 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 					request.id,
 					who,
 					if let Some(sk) = storage_key {
-						format!("{} : {}", hex::encode(&sk.0), hex::encode(&key.0))
+						format!("{} : {}", HexDisplay::from(&sk.0), HexDisplay::from(&key.0))
 					} else {
-						hex::encode(&key.0)
+						HexDisplay::from(&key.0).to_string()
 					},
 					request.first,
 					request.last,

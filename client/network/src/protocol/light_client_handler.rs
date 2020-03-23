@@ -54,7 +54,10 @@ use prost::Message;
 use sc_client::light::fetcher;
 use sc_client_api::StorageProof;
 use sc_peerset::ReputationChange;
-use sp_core::storage::{ChildInfo, StorageKey};
+use sp_core::{
+	storage::{ChildInfo, StorageKey},
+	hexdisplay::HexDisplay,
+};
 use sp_blockchain::{Error as ClientError};
 use sp_runtime::{
 	traits::{Block, Header, NumberFor, Zero},
@@ -503,7 +506,7 @@ where
 
 		log::trace!("remote read child request from {} ({} {} at {:?})",
 			peer,
-			hex::encode(&request.storage_key),
+			HexDisplay::from(&request.storage_key),
 			fmt_keys(request.keys.first(), request.keys.last()),
 			request.block);
 
@@ -521,7 +524,7 @@ where
 					Err(error) => {
 						log::trace!("remote read child request from {} ({} {} at {:?}) failed with: {}",
 							peer,
-							hex::encode(&request.storage_key),
+							HexDisplay::from(&request.storage_key),
 							fmt_keys(request.keys.first(), request.keys.last()),
 							request.block,
 							error);
@@ -531,7 +534,7 @@ where
 			} else {
 				log::trace!("remote read child request from {} ({} {} at {:?}) failed with: {}",
 					peer,
-					hex::encode(&request.storage_key),
+					HexDisplay::from(&request.storage_key),
 					fmt_keys(request.keys.first(), request.keys.last()),
 					request.block,
 					"invalid child info and type"
@@ -584,9 +587,9 @@ where
 		log::trace!("remote changes proof request from {} for key {} ({:?}..{:?})",
 			peer,
 			if !request.storage_key.is_empty() {
-				format!("{} : {}", hex::encode(&request.storage_key), hex::encode(&request.key))
+				format!("{} : {}", HexDisplay::from(&request.storage_key), HexDisplay::from(&request.key))
 			} else {
-				hex::encode(&request.key)
+				HexDisplay::from(&request.key).to_string()
 			},
 			request.first,
 			request.last);
@@ -609,9 +612,9 @@ where
 				log::trace!("remote changes proof request from {} for key {} ({:?}..{:?}) failed with: {}",
 					peer,
 					if let Some(sk) = storage_key {
-						format!("{} : {}", hex::encode(&sk.0), hex::encode(&key.0))
+						format!("{} : {}", HexDisplay::from(&sk.0), HexDisplay::from(&key.0))
 					} else {
-						hex::encode(&key.0)
+						HexDisplay::from(&key.0).to_string()
 					},
 					request.first,
 					request.last,
@@ -1088,9 +1091,9 @@ where
 fn fmt_keys(first: Option<&Vec<u8>>, last: Option<&Vec<u8>>) -> String {
 	if let (Some(first), Some(last)) = (first, last) {
 		if first == last {
-			hex::encode(&first)
+			HexDisplay::from(first).to_string()
 		} else {
-			format!("{}..{}", hex::encode(&first), hex::encode(&last))
+			format!("{}..{}", HexDisplay::from(first), HexDisplay::from(last))
 		}
 	} else {
 		String::from("n/a")
