@@ -33,6 +33,7 @@ use sp_runtime::transaction_validity::{
 	TransactionTag as Tag,
 	TransactionLongevity as Longevity,
 	TransactionPriority as Priority,
+	TransactionSource as Source,
 };
 use sp_transaction_pool::{error, PoolStatus, InPoolTransaction};
 
@@ -102,6 +103,8 @@ pub struct Transaction<Hash, Extrinsic> {
 	pub provides: Vec<Tag>,
 	/// Should that transaction be propagated.
 	pub propagate: bool,
+	/// Origin of that transaction.
+	pub source: Source,
 }
 
 impl<Hash, Extrinsic> AsRef<Extrinsic> for Transaction<Hash, Extrinsic> {
@@ -155,6 +158,7 @@ impl<Hash: Clone, Extrinsic: Clone> Transaction<Hash, Extrinsic> {
 			bytes: self.bytes.clone(),
 			hash: self.hash.clone(),
 			priority: self.priority.clone(),
+			source: self.source,
 			valid_till: self.valid_till.clone(),
 			requires: self.requires.clone(),
 			provides: self.provides.clone(),

@@ -78,7 +78,7 @@ async fn batch_revalidate<Api: ChainApi>(
 			None => continue,
 		};
 
-		match api.validate_transaction(&BlockId::Number(at), ext.data.clone()).await {
+		match api.validate_transaction(&BlockId::Number(at), ext.source, ext.data.clone()).await {
 			Ok(Err(TransactionValidityError::Invalid(err))) => {
 				log::debug!(target: "txpool", "[{:?}]: Revalidation: invalid {:?}", ext_hash, err);
 				invalid_hashes.push(ext_hash);
@@ -94,6 +94,7 @@ async fn batch_revalidate<Api: ChainApi>(
 					ValidatedTransaction::valid_at(
 						at.saturated_into::<u64>(),
 						ext_hash,
+						ext.source,
 						ext.data.clone(),
 						api.hash_and_length(&ext.data).1,
 						validity,

@@ -81,6 +81,7 @@ impl<Client, Block> sc_transaction_graph::ChainApi for FullChainApi<Client, Bloc
 	fn validate_transaction(
 		&self,
 		at: &BlockId<Self::Block>,
+		source: TransactionSource,
 		uxt: sc_transaction_graph::ExtrinsicFor<Self>,
 	) -> Self::ValidationFuture {
 		let (tx, rx) = oneshot::channel();
@@ -95,8 +96,7 @@ impl<Client, Block> sc_transaction_graph::ChainApi for FullChainApi<Client, Bloc
 				)
 				.unwrap_or_default();
 			let res = if has_v2 {
-				// TODO [ToDr] source
-				runtime_api.validate_transaction(&at, TransactionSource::External, uxt)
+				runtime_api.validate_transaction(&at, source, uxt)
 			} else {
 				#[allow(deprecated)] // old validate_transaction
 				runtime_api.validate_transaction_before_version_2(&at, uxt)
@@ -172,6 +172,7 @@ impl<Client, F, Block> sc_transaction_graph::ChainApi for LightChainApi<Client, 
 	fn validate_transaction(
 		&self,
 		at: &BlockId<Self::Block>,
+		source: TransactionSource,
 		uxt: sc_transaction_graph::ExtrinsicFor<Self>,
 	) -> Self::ValidationFuture {
 		let header_hash = self.client.expect_block_hash_from_id(at);
@@ -186,7 +187,7 @@ impl<Client, F, Block> sc_transaction_graph::ChainApi for LightChainApi<Client, 
 			block,
 			header,
 			method: "TaggedTransactionQueue_validate_transaction".into(),
-			call_data: uxt.encode(),
+			call_data: (source, uxt).encode(),
 			retry_count: None,
 		});
 		let remote_validation_request = remote_validation_request.then(move |result| {

@@ -621,7 +621,8 @@ where
 		match Decode::decode(&mut &encoded[..]) {
 			Ok(uxt) => {
 				let best_block_id = BlockId::hash(self.client.info().best_hash);
-				let import_future = self.pool.submit_one(&best_block_id, uxt);
+				let source = sp_transaction_pool::TransactionSource::External;
+				let import_future = self.pool.submit_one(&best_block_id, source, uxt);
 				let import_future = import_future
 					.map(move |import_result| {
 						match import_result {
