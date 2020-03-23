@@ -82,6 +82,7 @@ macro_rules! impl_outer_validate_unsigned {
 			}
 
 			fn validate_unsigned(
+				#[allow(unused_variables)]
 				source: $crate::unsigned::TransactionSource,
 				call: &Self::Call,
 			) -> $crate::unsigned::TransactionValidity {
