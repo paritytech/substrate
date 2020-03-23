@@ -270,8 +270,7 @@ impl Store {
 	fn raw_public_keys(&self, id: KeyTypeId) -> Result<Vec<Vec<u8>>> {
 		let mut public_keys: Vec<Vec<u8>> = self.additional.keys()
 			.into_iter()
-    		.filter(|k| k.0 == id)
-    		.map(|k| k.1.clone())
+    		.filter_map(|k| if k.0 == id { Some(k.1.clone()) } else { None })
 			.collect();
 
 		if let Some(path) = &self.path {
@@ -283,10 +282,7 @@ impl Store {
 				if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
 					match hex::decode(name) {
 						Ok(ref hex) if hex.len() > 4 => {
-							let mut key_type: [u8; 4] = Default::default();
-							key_type.copy_from_slice(&hex[0..4]);
-							let key_type = KeyTypeId(key_type);
-							if key_type != id {
+							if &hex[0..4] != &id.0 {
 								continue;
 							}
 							let public = hex[4..].to_vec();
@@ -309,12 +305,11 @@ impl BareCryptoStore for Store {
 	) -> std::result::Result<Vec<CryptoTypePublicPair>, TraitError> {
 		let raw_keys = self.raw_public_keys(id)?;
 		Ok(raw_keys.into_iter()
-		   .map(|k| vec![
-			   CryptoTypePublicPair(sr25519::CRYPTO_ID, k.clone()),
-			   CryptoTypePublicPair(ed25519::CRYPTO_ID, k.clone())
-		   ])
-		   .flatten()
-		   .collect())
+			.fold(Vec::new(), |mut v, k| {
+				v.push(CryptoTypePublicPair(sr25519::CRYPTO_ID, k.clone()));
+				v.push(CryptoTypePublicPair(ed25519::CRYPTO_ID, k.clone()));
+				v
+			}))
 	}
 
 	fn supported_keys(

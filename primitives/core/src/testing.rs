@@ -70,12 +70,12 @@ impl crate::traits::BareCryptoStore for KeyStore {
 		self.keys
 			.get(&id)
 			.map(|map| {
-				Ok(map.keys().map(|k| vec![
-					CryptoTypePublicPair(sr25519::CRYPTO_ID, k.clone()),
-					CryptoTypePublicPair(ed25519::CRYPTO_ID, k.clone())
-				])
-				.flatten()
-				.collect())
+				Ok(map.keys()
+					.fold(Vec::new(), |mut v, k| {
+						v.push(CryptoTypePublicPair(sr25519::CRYPTO_ID, k.clone()));
+						v.push(CryptoTypePublicPair(ed25519::CRYPTO_ID, k.clone()));
+						v
+					}))
 			})
 			.unwrap()
 	}
