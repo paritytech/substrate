@@ -30,16 +30,16 @@ use std::net::SocketAddr;
 mod networking;
 
 #[cfg(target_os = "unknown")]
-pub use unknown_os::init_prometheus;
+pub use unknown_os::{init_prometheus, register_process_metrics};
 #[cfg(not(target_os = "unknown"))]
-pub use known_os::init_prometheus;
+pub use known_os::{init_prometheus, register_process_metrics};
 
 pub fn register<T: Clone + Collector + 'static>(metric: T, registry: &Registry) -> Result<T, PrometheusError> {
 	registry.register(Box::new(metric.clone()))?;
 	Ok(metric)
 }
 
-// On WASM `init_prometheus` becomes a no-op.
+// On WASM Prometheus related operations become no-ops.
 #[cfg(target_os = "unknown")]
 mod unknown_os {
 	use super::*;
@@ -47,6 +47,10 @@ mod unknown_os {
 	pub enum Error {}
 
 	pub async fn init_prometheus(_: SocketAddr, _registry: Registry) -> Result<(), Error> {
+		Ok(())
+	}
+
+	pub fn register_process_metrics(registry: &Registry) -> Result<(), PrometheusError>{
 		Ok(())
 	}
 }
@@ -140,5 +144,9 @@ mod known_os {
 		let result = server.await.map_err(Into::into);
 
 		result
+	}
+
+	pub fn register_process_metrics(registry: &Registry) -> Result<(), PrometheusError>{
+		registry.register(Box::new(prometheus::process_collector::ProcessCollector::for_self()))
 	}
 }

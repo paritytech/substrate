@@ -53,13 +53,13 @@ use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_transaction_pool::{MaintainedTransactionPool, ChainEvent};
 use sp_blockchain;
-use prometheus_endpoint::{register, Gauge, U64, F64, Registry, PrometheusError, Opts, GaugeVec};
+use prometheus_endpoint::{
+	register, register_process_metrics, Gauge, U64, F64, Registry, PrometheusError, Opts, GaugeVec,
+};
 
 struct ServiceMetrics {
 	block_height_number: GaugeVec<U64>,
 	ready_transactions_number: Gauge<U64>,
-	memory_usage_bytes: Gauge<U64>,
-	cpu_usage_percentage: Gauge<F64>,
 	network_per_sec_bytes: GaugeVec<U64>,
 	database_cache: Gauge<U64>,
 	state_cache: Gauge<U64>,
@@ -75,12 +75,6 @@ impl ServiceMetrics {
 			)?, registry)?,
 			ready_transactions_number: register(Gauge::new(
 				"ready_transactions_number", "Number of transactions in the ready queue",
-			)?, registry)?,
-			memory_usage_bytes: register(Gauge::new(
-				"memory_usage_bytes", "Node memory usage",
-			)?, registry)?,
-			cpu_usage_percentage: register(Gauge::new(
-				"cpu_usage_percentage", "Node CPU usage",
 			)?, registry)?,
 			network_per_sec_bytes: register(GaugeVec::new(
 				Opts::new("network_per_sec_bytes", "Networking bytes per second"),
@@ -1007,6 +1001,9 @@ ServiceBuilder<
 				"node_roles", "The roles the node is running as",
 			)?, &registry)?.set(u64::from(config.roles.bits()));
 
+			// Register process metrics.
+			register_process_metrics(&registry)?;
+
 			let metrics = ServiceMetrics::register(&registry)?;
 
 			spawn_handle.spawn(
@@ -1074,8 +1071,6 @@ ServiceBuilder<
 					.unwrap_or(0),
 			);
 			if let Some(metrics) = metrics.as_ref() {
-				metrics.memory_usage_bytes.set(memory);
-				metrics.cpu_usage_percentage.set(f64::from(cpu_usage));
 				metrics.ready_transactions_number.set(txpool_status.ready as u64);
 
 				metrics.network_per_sec_bytes.with_label_values(&["download"]).set(net_status.average_download_per_sec);
