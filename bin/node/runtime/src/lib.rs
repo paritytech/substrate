@@ -959,14 +959,17 @@ mod tests {
 		let check_for_block = |b| {
 			let block_hooks_weight =
 				<AllModules as WeighBlock<BlockNumber>>::on_initialize(b) +
-				<AllModules as WeighBlock<BlockNumber>>::on_finalize(b);
+				<AllModules as WeighBlock<BlockNumber>>::on_finalize(b) +
+				<AllModules as WeighBlock<BlockNumber>>::on_runtime_upgrade();
 
+			// This assertion can be removed altogether if weights become more complicated. The
+			// rest should stay though as they contain important warnings.
 			assert_eq!(
 				block_hooks_weight,
-				0,
+				250000,
 				"This test might fail simply because the value being compared to has increased to a \
 				module declaring a new weight for a hook or call. In this case update the test and \
-				happily move on.",
+				happily move on. No big deal.",
 			);
 
 			// Invariant. Always must be like this to have a sane chain.

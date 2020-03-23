@@ -223,6 +223,7 @@ decl_module! {
 
 		fn deposit_event() = default;
 
+		#[weight = SimpleDispatchInfo::default()]
 		fn on_runtime_upgrade() {
 			migration::migrate::<T>();
 		}
