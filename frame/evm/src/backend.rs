@@ -7,7 +7,6 @@ use sp_core::{U256, H256, H160};
 use sp_runtime::traits::UniqueSaturatedInto;
 use frame_support::storage::{StorageMap, StorageDoubleMap};
 use sha3::{Keccak256, Digest};
-use evm::Config;
 use evm::backend::{Backend as BackendT, ApplyBackend, Apply};
 use crate::{Trait, Accounts, AccountStorages, AccountCodes, Module, Event};
 
@@ -42,10 +41,6 @@ pub struct Vicinity {
 	/// Origin of the transaction.
 	pub origin: H160,
 }
-
-/// Gasometer config used for executor. Currently this is hard-coded to
-/// Istanbul hard fork.
-pub static GASOMETER_CONFIG: Config = Config::istanbul();
 
 /// Substrate backend for EVM.
 pub struct Backend<'vicinity, T> {

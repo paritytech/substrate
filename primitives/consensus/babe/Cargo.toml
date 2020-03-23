@@ -12,9 +12,9 @@ repository = "https://github.com/paritytech/substrate/"
 sp-application-crypto = { version = "2.0.0-alpha.4", default-features = false, path = "../../application-crypto" }
 codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false }
 sp-std = { version = "2.0.0-alpha.4", default-features = false, path = "../../std" }
-schnorrkel = { version = "0.9.1", features = ["preaudit_deprecated"], optional = true }
 sp-api = { version = "2.0.0-alpha.4", default-features = false, path = "../../api" }
 sp-consensus = { version = "0.8.0-alpha.4", optional = true, path = "../common" }
+sp-consensus-vrf = { version = "0.8.0-alpha.4", path = "../vrf", default-features = false }
 sp-inherents = { version = "2.0.0-alpha.4", default-features = false, path = "../../inherents" }
 sp-runtime = { version = "2.0.0-alpha.4", default-features = false, path = "../../runtime" }
 sp-timestamp = { version = "2.0.0-alpha.4", default-features = false, path = "../../timestamp" }
@@ -25,9 +25,9 @@ std = [
 	"sp-application-crypto/std",
 	"codec/std",
 	"sp-std/std",
-	"schnorrkel",
 	"sp-api/std",
 	"sp-consensus",
+	"sp-consensus-vrf/std",
 	"sp-inherents/std",
 	"sp-runtime/std",
 	"sp-timestamp/std",
