@@ -66,7 +66,6 @@ benchmarks! {
 	}
 
 	propose {
-		// The execution time doesn't seems to change depending on the number of proposals.
 		let p in ...;
 
 		let caller: T::AccountId = account("caller", 0, SEED);
@@ -77,7 +76,6 @@ benchmarks! {
 	}: _(RawOrigin::Signed(caller), proposal_hash, value.into())
 
 	second {
-		// The execution time doesn't seems to change depending on the number of proposals.
 		let p in ...;
 
 		let caller: T::AccountId = account("caller", 0, SEED);
@@ -87,7 +85,6 @@ benchmarks! {
 	}: _(RawOrigin::Signed(caller), (p - 1).into())
 
 	vote {
-		// The execution time doesn't seems to change depending on inputs.
 		let u in ...;
 
 		let caller: T::AccountId = account("caller", u, SEED);
