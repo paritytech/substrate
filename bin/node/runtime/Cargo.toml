@@ -59,6 +59,7 @@ pallet-offences = { version = "2.0.0-alpha.2", default-features = false, path = 
 pallet-randomness-collective-flip = { version = "2.0.0-alpha.2", default-features = false, path = "../../../frame/randomness-collective-flip" }
 pallet-recovery = { version = "2.0.0-alpha.2", default-features = false, path = "../../../frame/recovery" }
 pallet-session = { version = "2.0.0-alpha.2", features = ["historical"], path = "../../../frame/session", default-features = false }
+pallet-session-benchmarking = { version = "2.0.0-alpha.2", path = "../../../frame/session/benchmarking", default-features = false, optional = true }
 pallet-staking = { version = "2.0.0-alpha.2", features = ["migrate"], path = "../../../frame/staking", default-features = false }
 pallet-staking-reward-curve = { version = "2.0.0-alpha.2",  path = "../../../frame/staking/reward-curve" }
 pallet-sudo = { version = "2.0.0-alpha.2", default-features = false, path = "../../../frame/sudo" }
@@ -134,8 +135,10 @@ std = [
 ]
 runtime-benchmarks = [
 	"frame-benchmarking",
-	"pallet-timestamp/runtime-benchmarks",
-	"pallet-identity/runtime-benchmarks",
 	"pallet-balances/runtime-benchmarks",
+	"pallet-identity/runtime-benchmarks",
+	"pallet-session-benchmarking",
+	"pallet-timestamp/runtime-benchmarks",
 	"pallet-vesting/runtime-benchmarks",
+	"pallet-staking/runtime-benchmarks",
 ]

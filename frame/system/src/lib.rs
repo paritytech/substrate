@@ -116,7 +116,7 @@ use frame_support::{
 	decl_module, decl_event, decl_storage, decl_error, storage, Parameter, ensure, debug,
 	traits::{
 		Contains, Get, ModuleToIndex, OnNewAccount, OnKilledAccount, IsDeadAccount, Happened,
-		StoredMap
+		StoredMap, MigrateAccount,
 	},
 	weights::{Weight, DispatchInfo, DispatchClass, SimpleDispatchInfo, FunctionOf},
 };
@@ -126,6 +126,7 @@ use codec::{Encode, Decode, FullCodec, EncodeLike};
 use sp_io::TestExternalities;
 
 pub mod offchain;
+mod migration;
 
 /// Compute the trie root of a list of extrinsics.
 pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output {
@@ -221,6 +222,9 @@ pub trait Trait: 'static + Eq + Clone {
 	///
 	/// All resources should be cleaned up associated with the given account.
 	type OnKilledAccount: OnKilledAccount<Self::AccountId>;
+
+	/// Migrate an account.
+	type MigrateAccount: MigrateAccount<Self::AccountId>;
 }
 
 pub type DigestOf<T> = generic::Digest<<T as Trait>::Hash>;
@@ -337,10 +341,8 @@ impl From<sp_version::RuntimeVersion> for LastRuntimeUpgradeInfo {
 decl_storage! {
 	trait Store for Module<T: Trait> as System {
 		/// The full account information for a particular account ID.
-		// TODO: should be hasher(twox64_concat) - will need staged migration
-		// https://github.com/paritytech/substrate/issues/4917
 		pub Account get(fn account):
-			map hasher(blake2_256) T::AccountId => AccountInfo<T::Index, T::AccountData>;
+			map hasher(blake2_128_concat) T::AccountId => AccountInfo<T::Index, T::AccountData>;
 
 		/// Total extrinsics count for the current block.
 		ExtrinsicCount: Option<u32>;
@@ -352,10 +354,8 @@ decl_storage! {
 		AllExtrinsicsLen: Option<u32>;
 
 		/// Map of block numbers to block hashes.
-		// TODO: should be hasher(twox64_concat) - will need one-off migration
-		// https://github.com/paritytech/substrate/issues/4917
 		pub BlockHash get(fn block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]):
-			map hasher(blake2_256) T::BlockNumber => T::Hash;
+			map hasher(twox_64_concat) T::BlockNumber => T::Hash;
 
 		/// Extrinsics data for the current block (maps an extrinsic's index to its data).
 		ExtrinsicData get(fn extrinsic_data): map hasher(twox_64_concat) u32 => Vec<u8>;
@@ -393,7 +393,7 @@ decl_storage! {
 		/// The value has the type `(T::BlockNumber, EventIndex)` because if we used only just
 		/// the `EventIndex` then in case if the topic has the same contents on the next block
 		/// no notification will be triggered thus the event might be lost.
-		EventTopics get(fn event_topics): map hasher(blake2_256) T::Hash => Vec<(T::BlockNumber, EventIndex)>;
+		EventTopics get(fn event_topics): map hasher(blake2_128_concat) T::Hash => Vec<(T::BlockNumber, EventIndex)>;
 
 		/// Stores the `spec_version` and `spec_name` of when the last runtime upgrade happened.
 		pub LastRuntimeUpgrade build(|_| Some(LastRuntimeUpgradeInfo::from(T::Version::get()))): Option<LastRuntimeUpgradeInfo>;
@@ -452,13 +452,22 @@ decl_error! {
 		/// Suicide called when the account has non-default composite data.
 		NonDefaultComposite,
 		/// There is a non-zero reference count preventing the account from being purged.
-		NonZeroRefCount
+		NonZeroRefCount,
 	}
 }
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
+
+		fn on_runtime_upgrade() {
+			migration::migrate::<T>();
+
+			// Remove the old `RuntimeUpgraded` storage entry.
+			let mut runtime_upgraded_key = sp_io::hashing::twox_128(b"System").to_vec();
+			runtime_upgraded_key.extend(&sp_io::hashing::twox_128(b"RuntimeUpgraded"));
+			sp_io::storage::clear(&runtime_upgraded_key);
+		}
 
 		/// A dispatch that will fill the block weight up to the given ratio.
 		// TODO: This should only be available for testing, rather than in general usage, but
@@ -569,11 +578,19 @@ decl_module! {
 			Account::<T>::remove(who);
 		}
 
-		fn on_runtime_upgrade() {
-			// Remove the old `RuntimeUpgraded` storage entry.
-			let mut runtime_upgraded_key = sp_io::hashing::twox_128(b"System").to_vec();
-			runtime_upgraded_key.extend(&sp_io::hashing::twox_128(b"RuntimeUpgraded"));
-			sp_io::storage::clear(&runtime_upgraded_key);
+		#[weight = FunctionOf(
+			|(accounts,): (&Vec<T::AccountId>,)| accounts.len() as u32 * 10_000,
+			DispatchClass::Normal,
+			true,
+		)]
+		fn migrate_accounts(origin, accounts: Vec<T::AccountId>) {
+			let _ = ensure_signed(origin)?;
+			for a in &accounts {
+				if Account::<T>::migrate_key_from_blake(a).is_some() {
+					// Inform other modules about the account.
+					T::MigrateAccount::migrate_account(a);
+				}
+			}
 		}
 	}
 }
@@ -1553,7 +1570,7 @@ mod tests {
 		type Version = Version;
 		type ModuleToIndex = ();
 		type AccountData = u32;
-		type OnNewAccount = ();
+		type MigrateAccount = (); type OnNewAccount = ();
 		type OnKilledAccount = RecordKilled;
 	}
 
