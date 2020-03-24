@@ -4062,6 +4062,7 @@ dependencies = [
 name = "pallet-collective"
 version = "2.0.0-alpha.5"
 dependencies = [
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "hex-literal",
