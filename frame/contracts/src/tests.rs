@@ -1720,6 +1720,6 @@ fn crypto_hashes() {
 }
 
 fn load_wasm(file_name: &str) -> String {
-	let path = ["src/tests/", file_name].concat();
+	let path = ["tests/", file_name].concat();
 	std::fs::read_to_string(&path).expect(&format!("Unable to read {} file", path))
 }
