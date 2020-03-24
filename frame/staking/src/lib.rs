@@ -1810,11 +1810,11 @@ impl<T: Trait> Module<T> {
 	///
 	/// Assumes storage is coherent with the declaration.
 	fn select_validators(current_era: EraIndex) -> Option<Vec<T::AccountId>> {
-		let mut all_nominators: Vec<(T::AccountId, Vec<T::AccountId>)> = Vec::new();
+		let mut all_nominators: Vec<(T::AccountId, BalanceOf<T>, Vec<T::AccountId>)> = Vec::new();
 		let mut all_validators_and_prefs = BTreeMap::new();
 		let mut all_validators = Vec::new();
 		for (validator, preference) in <Validators<T>>::iter() {
-			let self_vote = (validator.clone(), vec![validator.clone()]);
+			let self_vote = (validator.clone(), Self::slashable_balance_of(&validator), vec![validator.clone()]);
 			all_nominators.push(self_vote);
 			all_validators_and_prefs.insert(validator.clone(), preference);
 			all_validators.push(validator);
@@ -1834,14 +1834,16 @@ impl<T: Trait> Module<T> {
 
 			(nominator, targets)
 		});
-		all_nominators.extend(nominator_votes);
+		all_nominators.extend(nominator_votes.map(|(n, ns)| {
+			let s = Self::slashable_balance_of(&n);
+			(n, s, ns)
+		}));
 
-		let maybe_phragmen_result = sp_phragmen::elect::<_, _, _, T::CurrencyToVote, Perbill>(
+		let maybe_phragmen_result = sp_phragmen::elect::<_, _, T::CurrencyToVote, Perbill>(
 			Self::validator_count() as usize,
 			Self::minimum_validator_count().max(1) as usize,
 			all_validators,
 			all_nominators,
-			Self::slashable_balance_of,
 		);
 
 		if let Some(phragmen_result) = maybe_phragmen_result {

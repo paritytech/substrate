@@ -82,7 +82,7 @@ pub struct RunCmd {
 	)]
 	pub sentry: bool,
 
-	/// Disable GRANDPA voter when running in validator mode, otherwise disables the GRANDPA observer.
+	/// Disable GRANDPA voter when running in validator mode, otherwise disable the GRANDPA observer.
 	#[structopt(long = "no-grandpa")]
 	pub no_grandpa: bool,
 
@@ -92,7 +92,7 @@ pub struct RunCmd {
 
 	/// Listen to all RPC interfaces.
 	///
-	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use a RPC proxy
+	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use an RPC proxy
 	/// server to filter out dangerous methods. More details: https://github.com/paritytech/substrate/wiki/Public-RPC.
 	/// Use `--unsafe-rpc-external` to suppress the warning if you understand the risks.
 	#[structopt(long = "rpc-external")]
@@ -106,7 +106,7 @@ pub struct RunCmd {
 
 	/// Listen to all Websocket interfaces.
 	///
-	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use a RPC proxy
+	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use an RPC proxy
 	/// server to filter out dangerous methods. More details: https://github.com/paritytech/substrate/wiki/Public-RPC.
 	/// Use `--unsafe-ws-external` to suppress the warning if you understand the risks.
 	#[structopt(long = "ws-external")]
@@ -169,7 +169,7 @@ pub struct RunCmd {
 
 	/// The URL of the telemetry server to connect to.
 	///
-	/// This flag can be passed multiple times as a mean to specify multiple
+	/// This flag can be passed multiple times as a means to specify multiple
 	/// telemetry endpoints. Verbosity levels range from 0-9, with 0 denoting
 	/// the least verbosity. If no verbosity level is specified the default is
 	/// 0.
@@ -275,7 +275,7 @@ pub struct RunCmd {
 }
 
 impl RunCmd {
-	/// Get the `Sr25519Keyring` matching one of the flag
+	/// Get the `Sr25519Keyring` matching one of the flag.
 	pub fn get_keyring(&self) -> Option<sp_keyring::Sr25519Keyring> {
 		use sp_keyring::Sr25519Keyring::*;
 
@@ -290,7 +290,7 @@ impl RunCmd {
 		else { None }
 	}
 
-	/// Update and prepare a `Configuration` with command line parameters of `RunCmd` and `VersionInfo`
+	/// Update and prepare a `Configuration` with command line parameters of `RunCmd` and `VersionInfo`.
 	pub fn update_config<F>(
 		&self,
 		mut config: &mut Configuration,
@@ -444,7 +444,7 @@ impl RunCmd {
 		Ok(())
 	}
 
-	/// Run the command that runs the node
+	/// Run the command that runs the node.
 	pub fn run<FNL, FNF, SL, SF>(
 		self,
 		config: Configuration,
@@ -489,7 +489,7 @@ impl RunCmd {
 	}
 }
 
-/// Check whether a node name is considered as valid
+/// Check whether a node name is considered as valid.
 pub fn is_node_name_valid(_name: &str) -> Result<(), &str> {
 	let name = _name.to_string();
 	if name.chars().count() >= NODE_NAME_MAX_LENGTH {
@@ -586,7 +586,7 @@ fn parse_telemetry_endpoints(s: &str) -> Result<(String, u8), Box<dyn std::error
 /// handling of `structopt`.
 #[derive(Clone, Debug)]
 pub enum Cors {
-	/// All hosts allowed
+	/// All hosts allowed.
 	All,
 	/// Only hosts on the list are allowed.
 	List(Vec<String>),
@@ -601,7 +601,7 @@ impl From<Cors> for Option<Vec<String>> {
 	}
 }
 
-/// Parse cors origins
+/// Parse cors origins.
 fn parse_cors(s: &str) -> Result<Cors, Box<dyn std::error::Error>> {
 	let mut is_all = false;
 	let mut origins = Vec::new();
