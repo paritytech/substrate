@@ -23,7 +23,10 @@
 pub use pallet_timestamp;
 
 use sp_std::{result, prelude::*};
-use frame_support::{decl_storage, decl_module, traits::{FindAuthor, Get, Randomness as RandomnessT}};
+use frame_support::{
+	decl_storage, decl_module, traits::{FindAuthor, Get, Randomness as RandomnessT},
+	weights::{Weight, SimpleDispatchInfo, WeighData},
+};
 use sp_timestamp::OnTimestampSet;
 use sp_runtime::{generic::DigestItem, ConsensusEngineId, Perbill, PerThing};
 use sp_runtime::traits::{IsMember, SaturatedConversion, Saturating, Hash};
@@ -171,8 +174,10 @@ decl_module! {
 		const ExpectedBlockTime: T::Moment = T::ExpectedBlockTime::get();
 
 		/// Initialization
-		fn on_initialize(now: T::BlockNumber) {
+		fn on_initialize(now: T::BlockNumber) -> Weight {
 			Self::do_initialize(now);
+
+			SimpleDispatchInfo::default().weigh_data(())
 		}
 
 		/// Block finalization

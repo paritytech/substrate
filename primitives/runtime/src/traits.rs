@@ -329,51 +329,6 @@ impl<T:
 	sp_std::ops::BitAnd<Self, Output = Self>
 > SimpleBitOps for T {}
 
-/// The block finalization trait. Implementing this lets you express what should happen
-/// for your module when the block is ending.
-#[impl_for_tuples(30)]
-pub trait OnFinalize<BlockNumber> {
-	/// The block is being finalized. Implement to have something happen.
-	fn on_finalize(_n: BlockNumber) {}
-}
-
-/// The block initialization trait. Implementing this lets you express what should happen
-/// for your module when the block is beginning (right before the first extrinsic is executed).
-#[impl_for_tuples(30)]
-pub trait OnInitialize<BlockNumber> {
-	/// The block is being initialized. Implement to have something happen.
-	fn on_initialize(_n: BlockNumber) {}
-}
-
-/// The runtime upgrade trait. Implementing this lets you express what should happen
-/// when the runtime upgrades, and changes may need to occur to your module.
-#[impl_for_tuples(30)]
-pub trait OnRuntimeUpgrade {
-	/// Perform a module upgrade.
-	fn on_runtime_upgrade() {}
-}
-
-/// Off-chain computation trait.
-///
-/// Implementing this trait on a module allows you to perform long-running tasks
-/// that make (by default) validators generate transactions that feed results
-/// of those long-running computations back on chain.
-///
-/// NOTE: This function runs off-chain, so it can access the block state,
-/// but cannot preform any alterations. More specifically alterations are
-/// not forbidden, but they are not persisted in any way after the worker
-/// has finished.
-#[impl_for_tuples(30)]
-pub trait OffchainWorker<BlockNumber> {
-	/// This function is being called after every block import (when fully synced).
-	///
-	/// Implement this and use any of the `Offchain` `sp_io` set of APIs
-	/// to perform off-chain computations, calls and submit transactions
-	/// with results to trigger any on-chain changes.
-	/// Any state alterations are lost and are not persisted.
-	fn offchain_worker(_n: BlockNumber) {}
-}
-
 /// Abstraction around hashing
 // Stupid bug in the Rust compiler believes derived
 // traits must be fulfilled by all type parameters.
