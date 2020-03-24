@@ -49,7 +49,7 @@ use codec::{Encode, Decode};
 use sp_runtime::{RuntimeDebug, traits::One};
 use frame_support::{
 	dispatch::{Dispatchable, Parameter}, decl_module, decl_storage, decl_event, traits::Get,
-	weights::{DispatchClass, Weight, FunctionOf, GetDispatchInfo},
+	weights::{GetDispatchInfo, Weight},
 };
 //use frame_benchmarking::{benchmarks, account};
 use frame_system::{self as system};
@@ -125,26 +125,11 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
 		fn deposit_event() = default;
 
-		#[weight = FunctionOf(|_| -> u32 {
-			let now = system::Module::<T>::block_number();
-			let limit = T::MaximumWeight::get();
-			let mut queued = Agenda::<T>::get(now).into_iter()
-				.map(|i| (i.priority, i.call.get_dispatch_info().weight))
-				.collect::<Vec<_>>();
-			queued.sort_by_key(|i| i.0);
-			queued.into_iter()
-				.scan(0, |a, i| {
-					*a += i.1;
-					if i.0 <= HARD_DEADLINE || *a <= limit { Some(*a) } else { None }
-				})
-				.last()
-				.unwrap_or(0)
-				+ 10_000
-		}, || DispatchClass::Normal, true)]
-		fn on_initialize(now: T::BlockNumber) {
+		fn on_initialize(now: T::BlockNumber) -> Weight {
 			let limit = T::MaximumWeight::get();
 			let mut queued = Agenda::<T>::take(now);
 			queued.sort_by_key(|i| i.priority);
+			let mut result = 0;
 			let unused_items = queued.into_iter()
 				.scan(0, |cumulative_weight, i| {
 					*cumulative_weight += i.call.get_dispatch_info().weight;
@@ -165,6 +150,7 @@ decl_module! {
 								Agenda::<T>::append_or_insert(now + period, &[i][..]);
 							}
 						}
+						result = cumulative_weight;
 						None
 					} else {
 						Some(i)
@@ -175,6 +161,7 @@ decl_module! {
 			if !unused_items.is_empty() {
 				Agenda::<T>::append_or_insert(next, &unused_items[..]);
 			}
+			result
 		}
 	}
 }
@@ -244,7 +231,8 @@ mod tests {
 	use super::*;
 
 	use frame_support::{
-		impl_outer_event, impl_outer_origin, impl_outer_dispatch, parameter_types
+		impl_outer_event, impl_outer_origin, impl_outer_dispatch, parameter_types,
+		traits::{OnInitialize, OnFinalize}, weights::{DispatchClass, FunctionOf}
 	};
 	use sp_core::H256;
 	// The testing primitives are very useful for avoiding having to work with signatures
@@ -252,7 +240,7 @@ mod tests {
 	use sp_runtime::{
 		Perbill,
 		testing::Header,
-		traits::{BlakeTwo256, OnInitialize, OnFinalize, IdentityLookup},
+		traits::{BlakeTwo256, IdentityLookup},
 	};
 	use crate as scheduler;
 
@@ -478,5 +466,21 @@ mod tests {
 			run_to_block(5);
 			assert_eq!(logger::log(), vec![2600u32, 69u32, 42u32]);
 		});
+	}
+
+	#[test]
+	fn initialize_weight_is_correct() {
+		Scheduler::schedule(1, 255, Call::Logger(logger::Call::log(3, 1000)));
+		Scheduler::schedule(1, 128, Call::Logger(logger::Call::log(42, 5000)));
+		Scheduler::schedule(1, 127, Call::Logger(logger::Call::log(69, 5000)));
+		Scheduler::schedule(1, 126, Call::Logger(logger::Call::log(2600, 6000)));
+		let weight = Scheduler::on_initialize(1);
+		assert_eq!(weight, 6000);
+		let weight = Scheduler::on_initialize(2);
+		assert_eq!(weight, 10000);
+		let weight = Scheduler::on_initialize(3);
+		assert_eq!(weight, 1000);
+		let weight = Scheduler::on_initialize(4);
+		assert_eq!(weight, 0);
 	}
 }
