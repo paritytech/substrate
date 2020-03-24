@@ -16,7 +16,6 @@ sp-runtime = { version = "2.0.0-alpha.4", path = "../../../primitives/runtime" }
 rand = "0.7.2"
 clap = "2.33.0"
 tiny-bip39 = "0.7"
-rustc-hex = "2.0.1"
 substrate-bip39 = "0.4.1"
 hex = "0.4.0"
 hex-literal = "0.2.1"
