@@ -313,9 +313,9 @@ where
 
 #[cfg(test)]
 mod tests {
-
 	use super::*;
 	use sc_transaction_graph::Pool;
+	use sp_transaction_pool::TransactionSource;
 	use substrate_test_runtime_transaction_pool::{TestApi, uxt};
 	use futures::executor::block_on;
 	use substrate_test_runtime_client::{
@@ -335,7 +335,9 @@ mod tests {
 		let queue = Arc::new(RevalidationQueue::new(api.clone(), pool.clone()));
 
 		let uxt = uxt(Alice, 0);
-		let uxt_hash = block_on(pool.submit_one(&BlockId::number(0), uxt.clone())).expect("Should be valid");
+		let uxt_hash = block_on(
+			pool.submit_one(&BlockId::number(0), TransactionSource::External, uxt.clone())
+		).expect("Should be valid");
 
 		block_on(queue.revalidate_later(0, vec![uxt_hash]));
 

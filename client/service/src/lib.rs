@@ -671,6 +671,7 @@ mod tests {
 			Default::default(),
 			Arc::new(FullChainApi::new(client.clone())),
 		).0);
+		let source = sp_runtime::transaction_validity::TransactionSource::External;
 		let best = longest_chain.best_chain().unwrap();
 		let transaction = Transfer {
 			amount: 5,
@@ -678,8 +679,12 @@ mod tests {
 			from: AccountKeyring::Alice.into(),
 			to: Default::default(),
 		}.into_signed_tx();
-		block_on(pool.submit_one(&BlockId::hash(best.hash()), transaction.clone())).unwrap();
-		block_on(pool.submit_one(&BlockId::hash(best.hash()), Extrinsic::IncludeData(vec![1]))).unwrap();
+		block_on(pool.submit_one(
+			&BlockId::hash(best.hash()), source, transaction.clone()),
+		).unwrap();
+		block_on(pool.submit_one(
+			&BlockId::hash(best.hash()), source, Extrinsic::IncludeData(vec![1])),
+		).unwrap();
 		assert_eq!(pool.status().ready, 2);
 
 		// when
