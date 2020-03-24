@@ -55,11 +55,11 @@ pub struct SharedParams {
 
 impl SharedParams {
 	/// Get the chain spec for the parameters provided
-	pub fn chain_spec<C: SubstrateCLI>(&self) -> Result<Box<dyn ChainSpec>> {
+	pub fn chain_spec<C: SubstrateCLI>(&self, is_dev: bool) -> Result<Box<dyn ChainSpec>> {
 		let chain_key = match self.chain {
 			Some(ref chain) => chain.clone(),
 			None => {
-				if self.dev {
+				if is_dev {
 					"dev".into()
 				} else {
 					"".into()

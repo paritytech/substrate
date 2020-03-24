@@ -103,7 +103,7 @@ impl CliConfiguration for Subcommand {
 
 	match_and_call! { fn database_config(&self, base_path: &PathBuf, cache_size: Option<usize>) -> Result<DatabaseConfig> }
 
-	match_and_call! { fn chain_spec<C: SubstrateCLI>(&self) -> Result<Box<dyn ChainSpec>> }
+	match_and_call! { fn chain_spec<C: SubstrateCLI>(&self, is_dev: bool) -> Result<Box<dyn ChainSpec>> }
 
 	match_and_call! { fn init<C: SubstrateCLI>(&self) -> Result<()> }
 

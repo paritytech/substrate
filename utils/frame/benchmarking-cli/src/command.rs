@@ -125,7 +125,7 @@ impl BenchmarkCmd {
 
 #[substrate_cli_params(shared_params = shared_params)]
 impl CliConfiguration for BenchmarkCmd {
-	fn chain_spec<C: SubstrateCLI>(&self) -> Result<Box<dyn ChainSpec>> {
+	fn chain_spec<C: SubstrateCLI>(&self, _is_dev: bool) -> Result<Box<dyn ChainSpec>> {
 		let chain_key = match self.shared_params.chain {
 			Some(ref chain) => chain.clone(),
 			None => "dev".into(),

@@ -109,7 +109,7 @@ pub trait CliConfiguration: Sized {
 	}
 
 	/// Get the chain spec
-	fn chain_spec<C: SubstrateCLI>(&self) -> Result<Box<dyn ChainSpec>>;
+	fn chain_spec<C: SubstrateCLI>(&self, is_dev: bool) -> Result<Box<dyn ChainSpec>>;
 
 	/// Get the name of the node
 	fn node_name(&self) -> Result<String> {
@@ -219,8 +219,8 @@ pub trait CliConfiguration: Sized {
 		&self,
 		task_executor: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>,
 	) -> Result<Configuration> {
-		let chain_spec = self.chain_spec::<C>()?;
 		let is_dev = self.is_dev()?;
+		let chain_spec = self.chain_spec::<C>(is_dev)?;
 		let default_config_dir = app_dirs::get_app_root(
 			AppDataType::UserData,
 			&AppInfo {

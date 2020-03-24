@@ -104,8 +104,8 @@ pub(crate) fn substrate_cli_params(
 		}
 		if missing("chain_spec") {
 			i.items.push(ImplItem::Verbatim(quote! {
-				fn chain_spec<C: ::sc_cli::SubstrateCLI>(&self) -> ::sc_cli::Result<Box<dyn ::sc_service::ChainSpec>> {
-					self.#ident.chain_spec::<C>()
+				fn chain_spec<C: ::sc_cli::SubstrateCLI>(&self, is_dev: bool) -> ::sc_cli::Result<Box<dyn ::sc_service::ChainSpec>> {
+					self.#ident.chain_spec::<C>(is_dev)
 				}
 			}));
 		}
