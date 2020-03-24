@@ -248,6 +248,22 @@ test-wasmtime:
     - WASM_BUILD_NO_COLOR=1 time cargo test --release --verbose --features wasmtime
     - sccache -s
 
+test-runtime-benchmarks:
+  stage:                           test
+  <<:                              *docker-env
+  variables:
+    # Enable debug assertions since we are running optimized builds for testing
+    # but still want to have debug assertions.
+    RUSTFLAGS: -Cdebug-assertions=y
+    RUST_BACKTRACE: 1
+  except:
+    variables:
+      - $DEPLOY_TAG
+  script:
+    - cd bin/node/cli
+    - BUILD_DUMMY_WASM_BINARY=1 time cargo check --verbose --features runtime-benchmarks
+    - sccache -s
+
 test-linux-stable-int:
   <<:                              *test-linux
   except:
