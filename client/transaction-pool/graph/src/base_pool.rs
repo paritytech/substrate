@@ -1079,7 +1079,7 @@ mod tests {
 				source: Source::External,
 			}),
 			"Transaction { \
-hash: 4, priority: 1000, valid_till: 64, bytes: 1, propagate: true, source: External, \
+hash: 4, priority: 1000, valid_till: 64, bytes: 1, propagate: true, source: TransactionSource::External, \
 requires: [03,02], provides: [04], data: [4]}".to_owned()
 		);
 	}
