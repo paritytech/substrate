@@ -64,10 +64,10 @@ else
 fi
 
 # Make sure we override the crates in native and wasm build
+# patching the git path as described in the link below did not test correctly
+# https://doc.rust-lang.org/cargo/reference/overriding-dependencies.html
 mkdir .cargo
-# echo "paths = [ \"$SUBSTRATE_PATH\" ]" > .cargo/config
-# see https://doc.rust-lang.org/cargo/reference/overriding-dependencies.html
-echo "[patch.\"https://github.com/paritytech/substrate\"]\nsubstrate = { path = \"$SUBSTRATE_PATH\" }" > .cargo/config
+echo "paths = [ \"$SUBSTRATE_PATH\" ]" > .cargo/config
 
 mkdir -p target/debug/wbuild/.cargo
 cp .cargo/config target/debug/wbuild/.cargo/config
