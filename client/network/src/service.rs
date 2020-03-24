@@ -171,12 +171,14 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		let mut known_addresses = Vec::new();
 		let mut bootnodes = Vec::new();
 		let mut reserved_nodes = Vec::new();
+		let mut boot_node_ids = HashSet::new();
 
 		// Process the bootnodes.
 		for bootnode in params.network_config.boot_nodes.iter() {
 			match parse_str_addr(bootnode) {
 				Ok((peer_id, addr)) => {
 					bootnodes.push(peer_id.clone());
+					boot_node_ids.insert(peer_id.clone());
 					known_addresses.push((peer_id, addr));
 				},
 				Err(_) => warn!(target: "sub-libp2p", "Not a valid bootnode address: {}", bootnode),
@@ -331,7 +333,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			metrics: match params.metrics_registry {
 				Some(registry) => Some(Metrics::register(&registry)?),
 				None => None
-			}
+			},
+			boot_node_ids,
 		})
 	}
 
@@ -772,6 +775,8 @@ pub struct NetworkWorker<B: BlockT + 'static, H: ExHashT> {
 	event_streams: Vec<mpsc::UnboundedSender<Event>>,
 	/// Prometheus network metrics.
 	metrics: Option<Metrics>,
+	/// The `PeerId`'s of all boot nodes.
+	boot_node_ids: HashSet<PeerId>,
 }
 
 struct Metrics {
@@ -991,8 +996,29 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					trace!(target: "sub-libp2p", "Libp2p => NewListenAddr({})", addr),
 				Poll::Ready(SwarmEvent::ExpiredListenAddr(addr)) =>
 					trace!(target: "sub-libp2p", "Libp2p => ExpiredListenAddr({})", addr),
-				Poll::Ready(SwarmEvent::UnreachableAddr { peer_id, address, error }) =>
-					trace!(target: "sub-libp2p", "Libp2p => Failed to reach {:?} through {:?}: {}", peer_id, address, error),
+				Poll::Ready(SwarmEvent::UnreachableAddr { peer_id, address, error }) => {
+					let error = error.to_string();
+
+					trace!(
+						target: "sub-libp2p", "Libp2p => Failed to reach {:?} through {:?}: {}",
+						peer_id,
+						address,
+						error,
+					);
+
+					if let Some(peer_id) = peer_id {
+						if this.boot_node_ids.contains(&peer_id)
+							&& error.contains("Peer ID mismatch")
+						{
+							error!(
+								"Connecting to bootnode with peer id `{}` and address `{}` failed \
+								because it returned a different peer id!",
+								peer_id,
+								address,
+							);
+						}
+					}
+				},
 				Poll::Ready(SwarmEvent::StartConnect(peer_id)) =>
 					trace!(target: "sub-libp2p", "Libp2p => StartConnect({:?})", peer_id),
 			};
