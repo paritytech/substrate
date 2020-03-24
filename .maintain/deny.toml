@@ -70,7 +70,6 @@ unlicensed = "deny"
 # See https://spdx.org/licenses/ for list of possible licenses
 # [possible values: any SPDX 3.7 short identifier (+ optional exception)].
 allow = [
-    "GPL-3.0"
     #"MIT",
     #"Apache-2.0",
     #"Apache-2.0 WITH LLVM-exception",
@@ -82,7 +81,7 @@ deny = [
     #"Nokia",
 ]
 # Lint level for licenses considered copyleft
-copyleft = "deny"
+copyleft = "allow"
 # Blanket approval or denial for OSI-approved or FSF Free/Libre licenses
 # * both - The license will be approved if it is both OSI-approved *AND* FSF
 # * either - The license will be approved if it is either OSI-approved *OR* FSF
@@ -111,27 +110,31 @@ exceptions = [
 # Some crates don't have (easily) machine readable licensing information,
 # adding a clarification entry for it allows you to manually specify the
 # licensing information
-#[[licenses.clarify]]
+[[licenses.clarify]]
 # The name of the crate the clarification applies to
-#name = "ring"
+name = "ring"
 # THe optional version constraint for the crate
 #version = "*"
 # The SPDX expression for the license requirements of the crate
-#expression = "MIT AND ISC AND OpenSSL"
+expression = "OpenSSL"
 # One or more files in the crate's source used as the "source of truth" for
 # the license expression. If the contents match, the clarification will be used
 # when running the license check, otherwise the clarification will be ignored
 # and the crate will be checked normally, which may produce warnings or errors
 # depending on the rest of your configuration
-#license-files = [
+license-files = [
     # Each entry is a crate relative path, and the (opaque) hash of its contents
-    #{ path = "LICENSE", hash = 0xbd0eed23 }
-#]
+    { path = "LICENSE", hash = 0xbd0eed23 }
+]
+[[licenses.clarify]]
+name = "webpki"
+expression = "ISC"
+license-files = [{ path = "LICENSE", hash = 0x001c7e6c }]
 
 [licenses.private]
 # If true, ignores workspace crates that aren't published, or are only
 # published to private registries
-ignore = true
+ignore = false
 # One or more private registries that you might publish crates to, if a crate
 # is only published to private registries, and ignore is true, the crate will
 # not have its license(s) checked
@@ -144,7 +147,7 @@ registries = [
 # https://embarkstudios.github.io/cargo-deny/checks/bans/cfg.html
 [bans]
 # Lint level for when multiple versions of the same crate are detected
-multiple-versions = "deny"
+multiple-versions = "warn"
 # The graph highlighting used when creating dotgraphs for crates
 # with multiple versions
 # * lowest-version - The path to the lowest versioned duplicate is highlighted
@@ -157,9 +160,9 @@ allow = [
 ]
 # List of crates to deny
 deny = [
+    { name = "parity-util-mem", version = "<0.6" }
     # Each entry the name of a crate and a version range. If version is
     # not specified, all versions will be matched.
-    #{ name = "ansi_term", version = "=0.11.0" },
 ]
 # Certain crates/versions that will be skipped when doing duplicate detection.
 skip = [
@@ -179,15 +182,12 @@ skip-tree = [
 [sources]
 # Lint level for what to happen when a crate from a crate registry that is not
 # in the allow list is encountered
-unknown-registry = "warn"
+unknown-registry = "deny"
 # Lint level for what to happen when a crate from a git repository that is not
 # in the allow list is encountered
 unknown-git = "warn"
 # List of URLs for allowed crate registries. Defaults to the crates.io index
 # if not specified. If it is specified but empty, no registries are allowed.
-allow-registry = [
-    "https://github.com/rust-lang/crates.io-index",
-    "https://github.com/paritytech/substrate"
-]
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 # List of URLs for allowed Git repositories
 allow-git = []
