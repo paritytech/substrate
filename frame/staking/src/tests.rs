@@ -2746,22 +2746,18 @@ fn remove_multi_deferred() {
 
 mod offchain_phragmen {
 	use crate::*;
-	use frame_support::{assert_noop, assert_ok, debug};
+	use frame_support::{assert_noop, assert_ok};
 	use mock::*;
 	use parking_lot::RwLock;
 	use sp_core::offchain::{
 		testing::{PoolState, TestOffchainExt, TestTransactionPoolExt},
 		OffchainExt, TransactionPoolExt,
 	};
-	use sp_core::testing::KeyStore;
-	use sp_core::traits::KeystoreExt;
 	use sp_io::TestExternalities;
 	use sp_phragmen::StakedAssignment;
 	use sp_runtime::traits::OffchainWorker;
 	use std::sync::Arc;
 	use substrate_test_utils::assert_eq_uvec;
-
-	type DummyT = dummy_sr25519::AuthorityId;
 
 	fn percent(x: u16) -> OffchainAccuracy {
 		OffchainAccuracy::from_percent(x)
@@ -2792,27 +2788,10 @@ mod offchain_phragmen {
 	fn offchainify(ext: &mut TestExternalities) -> Arc<RwLock<PoolState>> {
 		let (offchain, _state) = TestOffchainExt::new();
 		let (pool, state) = TestTransactionPoolExt::new();
-		let keystore = KeyStore::new();
 
-		let account = LOCAL_KEY_ACCOUNT.with(|v| *v.borrow());
-		let key = dummy_sr25519::dummy_key_for(account);
-		let _ = keystore
-			.write()
-			.insert_unknown(
-				<DummyT as sp_application_crypto::AppKey>::ID,
-				&format!("{}/staking{}", mock::PHRASE, account),
-				key.as_ref(),
-			)
-			.unwrap();
-		debug::native::debug!(
-			target: "staking",
-			"generated key for account {}: {:?}",
-			account,
-			key,
-		);
 		ext.register_extension(OffchainExt::new(offchain));
 		ext.register_extension(TransactionPoolExt::new(pool));
-		ext.register_extension(KeystoreExt(keystore));
+
 		state
 	}
 
@@ -3170,16 +3149,14 @@ mod offchain_phragmen {
 				mock::Call::Staking(inner) => inner,
 			};
 
-			// pass this call to ValidateUnsigned
-			let signing_key = dummy_sr25519::dummy_key_for(11);
 			assert_eq!(
 				<Staking as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(&inner),
 				TransactionValidity::Ok(ValidTransaction {
 					priority: 1125, // the proposed slot stake.
 					requires: vec![],
-					provides: vec![(Staking::current_era(), signing_key).encode()],
+					provides: vec![Staking::current_era().encode()],
 					longevity: 3,
-					propagate: true,
+					propagate: false,
 				})
 			)
 		})
@@ -3220,27 +3197,6 @@ mod offchain_phragmen {
 				<Staking as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(&inner),
 				TransactionValidity::Err(InvalidTransaction::Custom(1u8).into()),
 			)
-		})
-	}
-
-	#[test]
-	fn offchain_wont_run_without_signing_key() {
-		let mut ext = ExtBuilder::default()
-			.offchain_phragmen_ext()
-			.validator_count(2)
-			.local_key_account(5)
-			.build();
-		let state = offchainify(&mut ext);
-		ext.execute_with(|| {
-			run_to_block(12);
-
-			// local key 5 is not there.
-			assert_eq_uvec!(Session::validators(), vec![11, 21]);
-
-			assert_eq!(state.read().transactions.len(), 0);
-			Staking::offchain_worker(12);
-			assert_eq!(state.read().transactions.len(), 0);
-			// Error in phragmen offchain worker call: OffchainElectionError::NoSigningKey
 		})
 	}
 
@@ -3649,23 +3605,6 @@ mod offchain_phragmen {
 					Error::<Test>::PhragmenBogusScore,
 				);
 			})
-	}
-
-	#[test]
-	fn session_keys_are_set() {
-		let mut ext = ExtBuilder::default()
-			.offchain_phragmen_ext()
-			.validator_count(4)
-			.build();
-		let _ = offchainify(&mut ext);
-		ext.execute_with(|| {
-			assert_eq_uvec!(
-				Staking::keys(),
-				<Validators<Test>>::iter()
-					.map(|(acc, _)| dummy_sr25519::dummy_key_for(acc))
-					.collect::<Vec<DummyT>>()
-			);
-		})
 	}
 
 	#[test]

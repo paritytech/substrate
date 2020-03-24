@@ -20,8 +20,7 @@ use std::{collections::{HashSet, HashMap}, cell::RefCell};
 use sp_runtime::Perbill;
 use sp_runtime::curve::PiecewiseLinear;
 use sp_runtime::traits::{
-	IdentityLookup, Convert, OnInitialize, OnFinalize, SaturatedConversion,
-	Extrinsic as ExtrinsicT, Zero
+	IdentityLookup, Convert, OnInitialize, OnFinalize, SaturatedConversion, Zero,
 };
 use sp_runtime::testing::{Header, TestXt, UintAuthorityId};
 use sp_staking::{SessionIndex, offence::{OffenceDetails, OnOffenceHandler}};
@@ -32,7 +31,7 @@ use frame_support::{
 	traits::{Currency, Get, FindAuthor},
 	weights::Weight,
 };
-use frame_system::offchain::{CreateTransaction, Signer, TransactionSubmitter};
+use frame_system::offchain::TransactionSubmitter;
 use sp_io;
 use sp_phragmen::{
 	build_support_map, evaluate_support, reduce, ExtendedBalance, StakedAssignment, PhragmenScore,
@@ -48,8 +47,6 @@ pub(crate) type AccountId = u64;
 pub(crate) type AccountIndex = u64;
 pub(crate) type BlockNumber = u64;
 pub(crate) type Balance = u64;
-
-pub const PHRASE: &str = "news slush supreme milk chapter athlete soap sausage put clutch what kitten";
 
 /// Simple structure that exposes how u64 currency can be represented as... u64.
 pub struct CurrencyToVoteHandler;
@@ -71,7 +68,6 @@ thread_local! {
 	static SLASH_DEFER_DURATION: RefCell<EraIndex> = RefCell::new(0);
 	static ELECTION_LOOKAHEAD: RefCell<BlockNumber> = RefCell::new(0);
 	static PERIOD: RefCell<BlockNumber> = RefCell::new(1);
-	pub(crate) static LOCAL_KEY_ACCOUNT: RefCell<AccountId> = RefCell::new(10);
 }
 
 /// Another session handler struct to test on_disabled.
@@ -231,26 +227,16 @@ parameter_types! {
 	pub const UncleGenerations: u64 = 0;
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(25);
 }
-
-/// We prefer using the dummy key defined in `mock::dummy_sr25519`, not `crate::sr25519`, since the
-/// dummy one gives us some nice helpers and a fake `IdentifyAccount`.
-pub struct TestStakingKeys;
-impl sp_runtime::BoundToRuntimeAppPublic for TestStakingKeys {
-	type Public = dummy_sr25519::AuthorityId;
-}
-
 sp_runtime::impl_opaque_keys! {
 	pub struct SessionKeys {
-		pub staking: TestStakingKeys,
 		pub other: OtherSessionHandler,
 	}
 }
-
 impl pallet_session::Trait for Test {
 	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Test, Staking>;
 	type Keys = SessionKeys;
 	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
-	type SessionHandler = (Staking, OtherSessionHandler,);
+	type SessionHandler = (OtherSessionHandler,);
 	type Event = MetaEvent;
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = crate::StashOf<Test>;
@@ -310,59 +296,11 @@ impl Trait for Test {
 	type ElectionLookahead = ElectionLookahead;
 	type Call = Call;
 	type SubmitTransaction = SubmitTransaction;
-	type KeyType = dummy_sr25519::AuthorityId;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 }
 
-pub(crate) mod dummy_sr25519 {
-	use super::{LOCAL_KEY_ACCOUNT, AccountId};
-
-	mod app_sr25519 {
-		use sp_application_crypto::{app_crypto, KeyTypeId, sr25519};
-		app_crypto!(sr25519, KeyTypeId(*b"vali"));
-	}
-
-	pub type AuthoritySignature = app_sr25519::Signature;
-	pub type AuthorityId = app_sr25519::Public;
-
-	impl sp_runtime::traits::IdentifyAccount for AuthorityId {
-		type AccountId = u64;
-		fn into_account(self) -> Self::AccountId {
-			LOCAL_KEY_ACCOUNT.with(|v| *v.borrow())
-		}
-	}
-
-	pub fn dummy_key_for(x: AccountId) -> AuthorityId {
-		use sp_core::Pair;
-		let mut raw_key = [0u8; 32];
-		raw_key[0] = x as u8;
-		let generic_key = sp_core::sr25519::Pair::from_string(
-			&format!("{}/staking{}", super::PHRASE, x),
-			None,
-		).unwrap().public();
-		generic_key.into()
-	}
-}
-
-impl CreateTransaction<Test, Extrinsic> for Test {
-	type Signature = dummy_sr25519::AuthoritySignature;
-	type Public = dummy_sr25519::AuthorityId;
-	fn create_transaction<F: Signer<Self::Public, Self::Signature>>(
-		call: Call,
-		_public: Self::Public,
-		account: AccountId,
-		_index: AccountIndex,
-	) -> Option<(
-		<Extrinsic as ExtrinsicT>::Call,
-		<Extrinsic as ExtrinsicT>::SignaturePayload,
-	)> {
-		let extra = ();
-		Some((call, (account, extra)))
-	}
-}
-
 pub type Extrinsic = TestXt<Call, ()>;
-type SubmitTransaction = TransactionSubmitter<dummy_sr25519::AuthorityId, Test, Extrinsic>;
+type SubmitTransaction = TransactionSubmitter<(), Test, Extrinsic>;
 
 pub struct ExtBuilder {
 	session_length: BlockNumber,
@@ -378,7 +316,6 @@ pub struct ExtBuilder {
 	num_validators: Option<u32>,
 	invulnerables: Vec<AccountId>,
 	has_stakers: bool,
-	local_key_account: AccountId,
 }
 
 impl Default for ExtBuilder {
@@ -397,7 +334,6 @@ impl Default for ExtBuilder {
 			num_validators: None,
 			invulnerables: vec![],
 			has_stakers: true,
-			local_key_account: 10,
 		}
 	}
 }
@@ -455,15 +391,10 @@ impl ExtBuilder {
 		self.has_stakers = has;
 		self
 	}
-	pub fn local_key_account(mut self, key: AccountId) -> Self {
-		self.local_key_account = key;
-		self
-	}
 	pub fn offchain_phragmen_ext(self) -> Self {
 		self.session_per_era(4)
 			.session_length(5)
 			.election_lookahead(3)
-			.local_key_account(11)
 	}
 	pub fn set_associated_constants(&self) {
 		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = self.existential_deposit);
@@ -471,7 +402,6 @@ impl ExtBuilder {
 		SESSION_PER_ERA.with(|v| *v.borrow_mut() = self.session_per_era);
 		ELECTION_LOOKAHEAD.with(|v| *v.borrow_mut() = self.election_lookahead);
 		PERIOD.with(|v| *v.borrow_mut() = self.session_length);
-		LOCAL_KEY_ACCOUNT.with(|v| *v.borrow_mut() = self.local_key_account);
 	}
 	pub fn build(self) -> sp_io::TestExternalities {
 		let _ = env_logger::try_init();
@@ -545,10 +475,7 @@ impl ExtBuilder {
 			keys: validators.iter().map(|x| (
 				*x,
 				*x,
-				SessionKeys {
-					staking: dummy_sr25519::dummy_key_for(*x),
-					other: UintAuthorityId(*x),
-				}
+				SessionKeys { other: UintAuthorityId(*x) }
 			)).collect(),
 		}.assimilate_storage(&mut storage);
 

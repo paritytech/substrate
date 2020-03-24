@@ -271,7 +271,7 @@ use sp_std::{
 };
 use codec::{HasCompact, Encode, Decode};
 use frame_support::{
-	decl_module, decl_event, decl_storage, ensure, decl_error, debug, Parameter, IterableStorageMap,
+	decl_module, decl_event, decl_storage, ensure, decl_error, debug, IterableStorageMap,
 	weights::SimpleDispatchInfo,
 	dispatch::{IsSubType, DispatchResult},
 	traits::{
@@ -281,15 +281,14 @@ use frame_support::{
 };
 use pallet_session::historical;
 use sp_runtime::{
-	Perbill, PerU16, PerThing, RuntimeDebug, RuntimeAppPublic,
+	Perbill, PerU16, PerThing, RuntimeDebug,
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, StaticLookup, CheckedSub, Saturating, SaturatedConversion, AtLeast32Bit,
-		EnsureOrigin, Member, SignedExtension,
+		EnsureOrigin, SignedExtension,
 	},
 	transaction_validity::{
 		TransactionValidityError, TransactionValidity, ValidTransaction, InvalidTransaction,
-		UnknownTransaction,
 	},
 };
 use sp_staking::{
@@ -366,25 +365,6 @@ type PositiveImbalanceOf<T> =
 type NegativeImbalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 type MomentOf<T> = <<T as Trait>::Time as Time>::Moment;
-
-/// Staking's key type used for submitting unsigned solutions.
-pub mod sr25519 {
-	mod app_sr25519 {
-		use sp_application_crypto::{app_crypto, key_types::STAKING, sr25519};
-		app_crypto!(sr25519, STAKING);
-	}
-
-	sp_application_crypto::with_pair! {
-		/// A staking keypair using sr25519 as its crypto.
-		pub type AuthorityPair = app_sr25519::Pair;
-	}
-
-	/// Staking signature using sr25519 as its crypto.
-	pub type AuthoritySignature = app_sr25519::Signature;
-
-	/// Staking identifier using sr25519 as its crypto.
-	pub type AuthorityId = app_sr25519::Public;
-}
 
 /// Reward points of an era. Used to split era total payout between validators.
 ///
@@ -793,9 +773,6 @@ pub trait Trait: frame_system::Trait {
 	/// A transaction submitter.
 	type SubmitTransaction: SubmitUnsignedTransaction<Self, <Self as Trait>::Call>;
 
-	/// Key type used to sign and verify transaction.
-	type KeyType: RuntimeAppPublic + Member + Parameter + Default;
-
 	/// The maximum number of nominator rewarded for each validator.
 	///
 	/// For each validator only the `$MaxNominatorRewardedPerValidator` biggest stakers can claim
@@ -997,9 +974,6 @@ decl_storage! {
 		/// Snapshot of nominators at the beginning of the current election window. This should only
 		/// have a value when [`EraElectionStatus`] == `ElectionStatus::Open(_)`.
 		pub SnapshotNominators get(fn snapshot_nominators): Option<Vec<T::AccountId>>;
-
-		/// The current set of staking keys.
-		pub Keys get(fn keys): Vec<T::KeyType>;
 
 		/// The next validator set. At the end of an era, if this is available (potentially from the
 		/// result of an offchain worker), it is immediately used. Otherwise, the on-chain election
@@ -1831,19 +1805,16 @@ decl_module! {
 			)?
 		}
 
-		/// Unsigned version of `submit_election_solution`. A signature and claimed validator index
-		/// must be provided. For the call to be validated, the signature must contain the signed
-		/// payload of the first three elements, and match the public key at the claimed validator
-		/// index (using the staking key).
+		/// Unsigned version of `submit_election_solution`.
+		///
+		/// Note that this must pass the [`ValidateUnsigned`] check which only allows transactions
+		/// from the local node to be included.
 		#[weight = SimpleDispatchInfo::FixedNormal(100_000_000)]
 		pub fn submit_election_solution_unsigned(
 			origin,
 			winners: Vec<ValidatorIndex>,
 			compact_assignments: CompactAssignments,
 			score: PhragmenScore,
-			// already used and checked in ValidateUnsigned.
-			_validator_index: u32,
-			_signature: <T::KeyType as RuntimeAppPublic>::Signature,
 		) {
 			ensure_none(origin)?;
 			Self::check_and_replace_solution(
@@ -2513,7 +2484,7 @@ impl<T: Trait> Module<T> {
 	fn do_phragmen<Accuracy: PerThing>() -> Option<PhragmenResult<T::AccountId, Accuracy>> {
 		let mut all_nominators: Vec<(T::AccountId, BalanceOf<T>, Vec<T::AccountId>)> = Vec::new();
 		let mut all_validators = Vec::new();
-		for (validator, preference) in <Validators<T>>::iter() {
+		for (validator, _) in <Validators<T>>::iter() {
 			// append self vote
 			let self_vote = (validator.clone(), Self::slashable_balance_of(&validator), vec![validator.clone()]);
 			all_nominators.push(self_vote);
@@ -2878,33 +2849,6 @@ impl<T, Reporter, Offender, R, O> ReportOffence<Reporter, Offender, O>
 	}
 }
 
-impl<T: Trait> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
-	type Public = T::KeyType;
-}
-
-impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
-	type Key = T::KeyType;
-
-	fn on_genesis_session<'a, I: 'a>(validators: I)
-		where I: Iterator<Item=(&'a T::AccountId, T::KeyType)>
-	{
-		assert!(Self::keys().is_empty(), "Keys are already initialized!");
-		<Keys<T>>::put(validators.map(|x| x.1).collect::<Vec<_>>());
-	}
-
-	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I, _queued_validators: I)
-		where I: Iterator<Item=(&'a T::AccountId, T::KeyType)>
-	{
-		// Update they keys
-		<Keys<T>>::put(validators.map(|x| x.1).collect::<Vec<_>>());
-	}
-
-	fn on_before_session_ending() {}
-
-	fn on_disabled(_i: usize) {}
-}
-
-
 /// Disallows any transactions that change the election result to be submitted after the election
 /// window is open.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
@@ -2980,15 +2924,16 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 	type Call = Call<T>;
 	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
 		if let Call::submit_election_solution_unsigned(
-			winners,
-			compact,
+			_,
+			_,
 			score,
-			validator_index,
-			signature,
 		) = call {
-			use offchain_election::SignaturePayload;
+			use offchain_election::DEFAULT_LONGEVITY;
 
-			// discard early solution
+			// discard solution not coming from the local OCW.
+			// TODO: ...
+
+			// discard early solution.
 			if Self::era_election_status().is_closed() {
 				debug::native::debug!(
 					target: "staking",
@@ -2997,7 +2942,7 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 				return InvalidTransaction::Future.into();
 			}
 
-			// discard weak solution
+			// discard weak solution.
 			if let Some(queued_score) = Self::queued_score() {
 				if !is_score_better(queued_score, *score) {
 					debug::native::debug!(
@@ -3008,41 +2953,23 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 				}
 			}
 
-			// check signature
-			let payload: SignaturePayload = (
-				winners,
-				compact,
-				score,
-				validator_index,
-			);
-
-			let all_keys = Self::keys();
-			let validator_key = all_keys.get(*validator_index as usize)
-				// validator index is incorrect -- no key corresponds to it.
-				.ok_or(TransactionValidityError::Unknown(UnknownTransaction::CannotLookup.into()))?;
-
-			let signature_valid = payload.using_encoded(|encoded_payload| {
-				validator_key.verify(&encoded_payload, &signature)
-			});
-
-			if !signature_valid {
-				return InvalidTransaction::BadProof.into();
-			}
-
 			Ok(ValidTransaction {
 				// The higher the score[0], the better a solution is.
 				priority: score[0].saturated_into(),
+				// no requires.
 				requires: vec![],
-				// a duplicate solution from the same validator within an era cannot be accepted
-				// at the transaction pool layer.
-				provides: vec![(Self::current_era(), validator_key).encode()],
+				// Defensive only. A single solution can exist in the pool per era. Each validator
+				// will run OCW at most once per era, hence there should never exist more than one
+				// transaction anyhow.
+				provides: vec![Self::current_era().encode()],
 				// Note: this can be more accurate in the future. We do something like
 				// `era_end_block - current_block` but that is not needed now as we eagerly run
 				// offchain workers now and the above should be same as `T::ElectionLookahead`
 				// without the need to query more storage in the validation phase. If we randomize
 				// offchain worker, then we might re-consider this.
-				longevity: TryInto::<u64>::try_into(T::ElectionLookahead::get()).unwrap_or(150_u64),
-				propagate: true,
+				longevity: TryInto::<u64>::try_into(T::ElectionLookahead::get()).unwrap_or(DEFAULT_LONGEVITY),
+				// We don't propagate this. This can never the validated at a remote node.
+				propagate: false,
 			})
 		} else {
 			InvalidTransaction::Call.into()

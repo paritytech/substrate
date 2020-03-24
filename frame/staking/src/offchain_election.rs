@@ -19,8 +19,6 @@
 use crate::{
 	Call, CompactAssignments, Module, NominatorIndex, OffchainAccuracy, Trait, ValidatorIndex,
 };
-use codec::Encode;
-use frame_support::debug;
 use frame_system::offchain::SubmitUnsignedTransaction;
 use sp_phragmen::{
 	build_support_map, evaluate_support, reduce, Assignment, ExtendedBalance, PhragmenResult,
@@ -28,20 +26,17 @@ use sp_phragmen::{
 };
 use sp_runtime::offchain::storage::StorageValueRef;
 use sp_runtime::PerThing;
-use sp_runtime::{RuntimeAppPublic, RuntimeDebug};
+use sp_runtime::RuntimeDebug;
 use sp_std::{convert::TryInto, prelude::*};
 
 /// Error types related to the offchain election machinery.
 #[derive(RuntimeDebug)]
 pub enum OffchainElectionError {
-	/// No signing key has been found on the current node that maps to a validators. This node
-	/// should not run the offchain election code.
-	NoSigningKey,
-	/// Signing operation failed.
-	SigningFailed,
 	/// Phragmen election returned None. This means less candidate that minimum number of needed
 	/// validators were present. The chain is in trouble and not much that we can do about it.
 	ElectionFailed,
+	/// Submission to the transaction pool failed.
+	PoolSubmissionFailed,
 	/// The snapshot data is not available.
 	SnapshotUnavailable,
 	/// Error from phragmen crate. This usually relates to compact operation.
@@ -56,19 +51,13 @@ impl From<sp_phragmen::Error> for OffchainElectionError {
 	}
 }
 
-/// The type of signature data encoded with the unsigned submission.
-pub(crate) type SignaturePayload<'a> = (
-	&'a [ValidatorIndex],
-	&'a CompactAssignments,
-	&'a PhragmenScore,
-	&'a u32,
-);
-
 /// Storage key used to store the persistent offchain worker status.
 pub(crate) const OFFCHAIN_HEAD_DB: &[u8] = b"parity/staking-election/";
 /// The repeat threshold of the offchain worker. This means we won't run the offchain worker twice
 /// within a window of 5 blocks.
 pub(crate) const OFFCHAIN_REPEAT: u32 = 5;
+/// Default number of blocks for which the unsigned transaction should stay in the pool
+pub(crate) const DEFAULT_LONGEVITY: u64 = 25;
 
 /// Checks if an execution of the offchain worker is permitted at the given block number, or not.
 ///
@@ -112,57 +101,27 @@ pub(crate) fn set_check_offchain_execution_status<T: Trait>(
 
 /// The internal logic of the offchain worker of this module. This runs the phragmen election,
 /// compacts and reduces the solution, computes the score and submits it back to the chain as an
-/// unsigned transaction.
+/// unsigned transaction, without any signature.
 pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElectionError> {
-	let keys = <Module<T>>::keys();
-	let local_keys = T::KeyType::all();
+	// compute raw solution. Note that we use `OffchainAccuracy`.
+	let PhragmenResult {
+		winners,
+		assignments,
+	} = <Module<T>>::do_phragmen::<OffchainAccuracy>()
+		.ok_or(OffchainElectionError::ElectionFailed)?;
 
-	// For each local key is in the stored authority keys, try and submit. Breaks out after first
-	// successful submission.
-	for (index, ref pubkey) in local_keys.into_iter().filter_map(|key| {
-		keys.iter()
-			.enumerate()
-			.find(|(_, val_key)| **val_key == key)
-	}) {
-		// compute raw solution. Note that we use `OffchainAccuracy`.
-		let PhragmenResult {
-			winners,
-			assignments,
-		} = <Module<T>>::do_phragmen::<OffchainAccuracy>()
-			.ok_or(OffchainElectionError::ElectionFailed)?;
+	// process and prepare it for submission.
+	let (winners, compact, score) = prepare_submission::<T>(assignments, winners, true)?;
 
-		// process and prepare it for submission.
-		let (winners, compact, score) = prepare_submission::<T>(assignments, winners, true)?;
+	// send it.
+	let call: <T as Trait>::Call = Call::submit_election_solution_unsigned(
+		winners,
+		compact,
+		score,
+	).into();
 
-		// sign it.
-		let signature_payload: SignaturePayload = (&winners, &compact, &score, &(index as u32));
-		let signature = pubkey
-			.sign(&signature_payload.encode())
-			.ok_or(OffchainElectionError::SigningFailed)?;
-
-		// send it.
-		let call: <T as Trait>::Call = Call::submit_election_solution_unsigned(
-			winners,
-			compact,
-			score,
-			index as u32,
-			signature,
-		).into();
-
-		if T::SubmitTransaction::submit_unsigned(call).map_err(|_| {
-			debug::native::warn!(
-				target: "staking",
-				"failed to submit offchain solution with key {:?}",
-				pubkey,
-			);
-		}).is_ok() {
-			// return and break out after the first successful submission
-			return Ok(());
-		}
-	}
-
-	// no key left and no submission.
-	Err(OffchainElectionError::NoSigningKey)
+	T::SubmitTransaction::submit_unsigned(call)
+		.map_err(|_| OffchainElectionError::PoolSubmissionFailed)
 }
 
 /// Takes a phragmen result and spits out some data that can be submitted to the chain.

@@ -59,7 +59,7 @@ pub use pallet_timestamp::Call as TimestampCall;
 pub use pallet_balances::Call as BalancesCall;
 pub use pallet_contracts::Gas;
 pub use frame_support::StorageValue;
-pub use pallet_staking::{StakerStatus, LockStakingStatus, sr25519::AuthorityId as StakingId};
+pub use pallet_staking::{StakerStatus, LockStakingStatus};
 
 /// Implementations of some helper traits passed into runtime modules as associated types.
 pub mod impls;
@@ -286,7 +286,6 @@ impl_opaque_keys! {
 		pub babe: Babe,
 		pub im_online: ImOnline,
 		pub authority_discovery: AuthorityDiscovery,
-		pub staking: Staking,
 	}
 }
 
@@ -349,8 +348,7 @@ impl pallet_staking::Trait for Runtime {
 	type NextNewSession = Session;
 	type ElectionLookahead = ElectionLookahead;
 	type Call = Call;
-	type SubmitTransaction = TransactionSubmitterOf<Self::KeyType>;
-	type KeyType = StakingId;
+	type SubmitTransaction = TransactionSubmitterOf<()>;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 }
 
