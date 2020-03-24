@@ -966,7 +966,7 @@ mod tests {
 			// rest should stay though as they contain important warnings.
 			assert_eq!(
 				block_hooks_weight,
-				250000,
+				260000,
 				"This test might fail simply because the value being compared to has increased to a \
 				module declaring a new weight for a hook or call. In this case update the test and \
 				happily move on. No big deal.",
