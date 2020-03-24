@@ -62,8 +62,9 @@ pub use sp_consensus_babe::{
 	BabeApi, ConsensusLog, BABE_ENGINE_ID, SlotNumber, BabeConfiguration,
 	AuthorityId, AuthorityPair, AuthoritySignature,
 	BabeAuthorityWeight, VRF_OUTPUT_LENGTH,
-	digests::{PreDigest, PrimaryPreDigest, SecondaryPreDigest,
-			  CompatibleDigestItem, NextEpochDescriptor},
+	digests::{
+		CompatibleDigestItem, NextEpochDescriptor, PreDigest, PrimaryPreDigest, SecondaryPreDigest,
+	},
 };
 pub use sp_consensus::SyncOracle;
 use std::{
