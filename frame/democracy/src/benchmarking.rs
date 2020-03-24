@@ -60,7 +60,7 @@ fn add_referendum<T: Trait>() -> Result<ReferendumIndex, &'static str> {
 }
 
 fn account_vote<T: Trait>() -> AccountVote<BalanceOf<T>> {
-	let v = Vote {
+	let vote = Vote {
 		aye: true,
 		conviction: Conviction::Locked1x,
 	};
