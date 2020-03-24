@@ -17,8 +17,9 @@
 //! Consensus extension module tests for BABE consensus.
 
 use super::*;
+use frame_support::traits::OnFinalize;
 use mock::{new_test_ext, Babe, System};
-use sp_runtime::{traits::OnFinalize, testing::{Digest, DigestItem}};
+use sp_runtime::testing::{Digest, DigestItem};
 use sp_consensus_vrf::schnorrkel::{RawVRFOutput, RawVRFProof};
 use pallet_session::ShouldEndSession;
 
