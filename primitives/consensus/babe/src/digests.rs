@@ -46,7 +46,7 @@ pub struct RawPrimaryPreDigest<VRFOutput=schnorrkel::RawVRFOutput, VRFProof=schn
 }
 
 #[cfg(feature = "std")]
-/// BABE primary pre-digest for std.
+/// BABE primary slot assignment pre-digest for std environment.
 pub type PrimaryPreDigest = RawPrimaryPreDigest<schnorrkel::VRFOutput, schnorrkel::VRFProof>;
 
 #[cfg(feature = "std")]
