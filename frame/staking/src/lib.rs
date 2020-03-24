@@ -254,6 +254,8 @@ mod mock;
 #[cfg(test)]
 mod tests;
 mod slashing;
+#[cfg(any(feature = "runtime-benchmarks", test))]
+pub mod benchmarking;
 
 pub mod inflation;
 
@@ -284,10 +286,9 @@ use sp_runtime::{Serialize, Deserialize};
 use frame_system::{self as system, ensure_signed, ensure_root};
 
 use sp_phragmen::ExtendedBalance;
-use frame_support::traits::MigrateAccount;
 
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
-const MAX_NOMINATIONS: usize = 16;
+pub const MAX_NOMINATIONS: usize = 16;
 const MAX_UNLOCKING_CHUNKS: usize = 32;
 const STAKING_ID: LockIdentifier = *b"staking ";
 
@@ -954,10 +955,6 @@ decl_module! {
 
 		fn deposit_event() = default;
 
-		fn on_runtime_upgrade() {
-			migrate::<T>();
-		}
-
 		fn on_finalize() {
 			// Set the start of the first era.
 			if let Some(mut active_era) = Self::active_era() {
@@ -1281,14 +1278,14 @@ decl_module! {
 			}
 		}
 
+		// ----- Root calls.
+
 		/// The ideal number of validators.
 		#[weight = SimpleDispatchInfo::FixedNormal(5_000)]
 		fn set_validator_count(origin, #[compact] new: u32) {
 			ensure_root(origin)?;
 			ValidatorCount::put(new);
 		}
-
-		// ----- Root calls.
 
 		/// Force there to be no new eras indefinitely.
 		///
@@ -1357,7 +1354,7 @@ decl_module! {
 				.or_else(ensure_root)?;
 
 			ensure!(!slash_indices.is_empty(), Error::<T>::EmptyTargets);
-			ensure!(Self::is_sorted_and_unique(&slash_indices), Error::<T>::NotSortedAndUnique);
+			ensure!(is_sorted_and_unique(&slash_indices), Error::<T>::NotSortedAndUnique);
 
 			let mut unapplied = <Self as Store>::UnappliedSlashes::get(&era);
 			let last_item = slash_indices[slash_indices.len() - 1];
@@ -1478,41 +1475,12 @@ decl_module! {
 	}
 }
 
-impl<T: Trait> MigrateAccount<T::AccountId> for Module<T> {
-	fn migrate_account(a: &T::AccountId) {
-		if let Some(controller) = Bonded::<T>::migrate_key_from_blake(a) {
-			Ledger::<T>::migrate_key_from_blake(controller);
-			Payee::<T>::migrate_key_from_blake(a);
-			Validators::<T>::migrate_key_from_blake(a);
-			Nominators::<T>::migrate_key_from_blake(a);
-			SlashingSpans::<T>::migrate_key_from_blake(a);
-		}
-	}
-}
-
-fn migrate<T: Trait>() {
-	if let Some(current_era) = CurrentEra::get() {
-		let history_depth = HistoryDepth::get();
-		for era in current_era.saturating_sub(history_depth)..=current_era {
-			ErasStartSessionIndex::migrate_key_from_blake(era);
-			ErasValidatorReward::<T>::migrate_key_from_blake(era);
-			ErasRewardPoints::<T>::migrate_key_from_blake(era);
-			ErasTotalStake::<T>::migrate_key_from_blake(era);
-		}
-	}
-}
-
 impl<T: Trait> Module<T> {
 	// PUBLIC IMMUTABLES
 
 	/// The total balance that can be slashed from a stash account as of right now.
 	pub fn slashable_balance_of(stash: &T::AccountId) -> BalanceOf<T> {
 		Self::bonded(stash).and_then(Self::ledger).map(|l| l.active).unwrap_or_default()
-	}
-
-	/// Check that list is sorted and has no duplicates.
-	fn is_sorted_and_unique(list: &Vec<u32>) -> bool {
-		list.windows(2).all(|w| w[0] < w[1])
 	}
 
 	// MUTABLES (DANGEROUS)
@@ -1842,11 +1810,11 @@ impl<T: Trait> Module<T> {
 	///
 	/// Assumes storage is coherent with the declaration.
 	fn select_validators(current_era: EraIndex) -> Option<Vec<T::AccountId>> {
-		let mut all_nominators: Vec<(T::AccountId, Vec<T::AccountId>)> = Vec::new();
+		let mut all_nominators: Vec<(T::AccountId, BalanceOf<T>, Vec<T::AccountId>)> = Vec::new();
 		let mut all_validators_and_prefs = BTreeMap::new();
 		let mut all_validators = Vec::new();
 		for (validator, preference) in <Validators<T>>::iter() {
-			let self_vote = (validator.clone(), vec![validator.clone()]);
+			let self_vote = (validator.clone(), Self::slashable_balance_of(&validator), vec![validator.clone()]);
 			all_nominators.push(self_vote);
 			all_validators_and_prefs.insert(validator.clone(), preference);
 			all_validators.push(validator);
@@ -1866,14 +1834,16 @@ impl<T: Trait> Module<T> {
 
 			(nominator, targets)
 		});
-		all_nominators.extend(nominator_votes);
+		all_nominators.extend(nominator_votes.map(|(n, ns)| {
+			let s = Self::slashable_balance_of(&n);
+			(n, s, ns)
+		}));
 
-		let maybe_phragmen_result = sp_phragmen::elect::<_, _, _, T::CurrencyToVote, Perbill>(
+		let maybe_phragmen_result = sp_phragmen::elect::<_, _, T::CurrencyToVote, Perbill>(
 			Self::validator_count() as usize,
 			Self::minimum_validator_count().max(1) as usize,
 			all_validators,
 			all_nominators,
-			Self::slashable_balance_of,
 		);
 
 		if let Some(phragmen_result) = maybe_phragmen_result {
@@ -2219,4 +2189,9 @@ impl<T, Reporter, Offender, R, O> ReportOffence<Reporter, Offender, O>
 			Ok(())
 		}
 	}
+}
+
+/// Check that list is sorted and has no duplicates.
+fn is_sorted_and_unique(list: &[u32]) -> bool {
+	list.windows(2).all(|w| w[0] < w[1])
 }
