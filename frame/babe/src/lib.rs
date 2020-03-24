@@ -209,12 +209,7 @@ impl<T: Trait> FindAuthor<u32> for Module<T> {
 		for (id, mut data) in digests.into_iter() {
 			if id == BABE_ENGINE_ID {
 				let pre_digest: RawPreDigest = RawPreDigest::decode(&mut data).ok()?;
-				return Some(match pre_digest {
-					RawPreDigest::Primary { authority_index, .. } =>
-						authority_index,
-					RawPreDigest::Secondary { authority_index, .. } =>
-						authority_index,
-				});
+				return Some(pre_digest.authority_index())
 			}
 		}
 
@@ -426,11 +421,11 @@ impl<T: Trait> Module<T> {
 
 			CurrentSlot::put(digest.slot_number());
 
-			if let RawPreDigest::Primary { vrf_output, .. } = digest {
+			if let RawPreDigest::Primary(primary) = digest {
 				// place the VRF output into the `Initialized` storage item
 				// and it'll be put onto the under-construction randomness
 				// later, once we've decided which epoch this block is in.
-				Some(vrf_output)
+				Some(primary.vrf_output)
 			} else {
 				None
 			}

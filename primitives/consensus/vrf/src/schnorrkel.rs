@@ -17,6 +17,7 @@
 //! Schnorrkel-based VRF.
 
 use codec::{Encode, Decode};
+#[cfg(feature = "std")]
 use sp_core::U512;
 use sp_runtime::RuntimeDebug;
 use sp_std::ops::{Deref, DerefMut};
