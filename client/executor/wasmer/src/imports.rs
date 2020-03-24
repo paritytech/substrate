@@ -112,74 +112,6 @@ fn resolve_memory_import(import: &ImportEntry, heap_pages: u32) -> Memory {
 	Memory::new(descriptor).unwrap()
 }
 
-unsafe extern "C" fn stub(ctx: *const OpaqueCallContext, raw_args: *const u64) -> u64 {
-	let ctx = ctx as *const CallCtx;
-	let (host_func, state_holder) = match *ctx {
-		CallCtx::Missing => {
-			dbg!();
-			return 0;
-		},
-		CallCtx::Resolved {
-			ref host_func,
-			ref name,
-			ref state_holder,
-		} => {
-			dbg!(name);
-			(host_func, state_holder)
-		},
-	};
-
-	let num_params = host_func.signature().args.len();
-	let mut args = Vec::with_capacity(num_params);
-
-	host_func
-		.signature()
-		.args
-		.iter()
-		.enumerate()
-		.for_each(|(idx, arg_ty)| {
-			// Ignore the implicit context argument.
-			let idx = idx + 1;
-			let arg_val = match arg_ty {
-				ValueType::I32 => Value::I32(*raw_args.add(idx) as u32 as i32),
-				ValueType::I64 => Value::I64(*raw_args.add(idx) as u64 as i64),
-				ValueType::F32 => Value::F32((*raw_args.add(idx) as f32).to_bits()),
-				ValueType::F64 => Value::F64((*raw_args.add(idx) as f64).to_bits()),
-			};
-			args.push(arg_val);
-		});
-	dbg!(std::slice::from_raw_parts(raw_args as *const u8, (num_params + 1) * 8));
-	let args = dbg!(args);
-
-	let unwind_result = state_holder.with_context(|host_ctx| {
-		let mut host_ctx = host_ctx.unwrap();
-		std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-			host_func.execute(&mut host_ctx, &mut args.into_iter())
-		}))
-	});
-
-	// TODO: How to Trap?
-	let execution_result = match unwind_result {
-		Ok(execution_result) => execution_result,
-		Err(_err) => return 0,
-	};
-
-	match execution_result {
-		Ok(Some(ret_val)) => {
-			let raw_args = raw_args as *mut u64;
-			match ret_val {
-				Value::I32(v) => raw_args.write(v as u32 as u64),
-				Value::I64(v) => raw_args.write(v as u64),
-				Value::F32(v) => raw_args.write(v as u64),
-				Value::F64(v) => raw_args.write(v),
-			}
-			1
-		}
-		Ok(None) => 1,
-		Err(_msg) => 0,
-	}
-}
-
 fn resolve_func_import(
 	types: &[Type],
 	import: &ImportEntry,
@@ -232,11 +164,30 @@ fn resolve_func_import(
 	DynamicFunc::new(
 		Arc::new(FuncSig::new(params, returns)),
 		move |ctx, args| -> Vec<wasmer_runtime_core::types::Value> {
-			let ctx = call_ctx_ptr as *const CallCtx;
-			panic!()
+			dbg!();
+			vec![]
 		},
 	)
 	.to_export()
+}
+
+fn from_wasmer_val(val: wasmer_runtime_core::types::Value) -> Value {
+	match val {
+		wasmer_runtime_core::types::Value::I32(v) => Value::I32(v),
+		wasmer_runtime_core::types::Value::I64(v) => Value::I64(v),
+		wasmer_runtime_core::types::Value::F32(v) => Value::F32(f32::to_bits(v)),
+		wasmer_runtime_core::types::Value::F64(v) => Value::F64(f64::to_bits(v)),
+		_ => panic!(),
+	}
+}
+
+fn into_wasmer_val(val: Value) -> wasmer_runtime_core::types::Value {
+	match val {
+		Value::I32(v) => wasmer_runtime_core::types::Value::I32(v),
+		Value::I64(v) => wasmer_runtime_core::types::Value::I64(v),
+		Value::F32(v) => wasmer_runtime_core::types::Value::F32(f32::from_bits(v)),
+		Value::F64(v) => wasmer_runtime_core::types::Value::F64(f64::from_bits(v)),
+	}
 }
 
 fn into_wasmer_ty(value_ty: parity_wasm::elements::ValueType) -> wasmer_runtime_core::types::Type {
@@ -245,5 +196,17 @@ fn into_wasmer_ty(value_ty: parity_wasm::elements::ValueType) -> wasmer_runtime_
 		parity_wasm::elements::ValueType::I64 => wasmer_runtime_core::types::Type::I64,
 		parity_wasm::elements::ValueType::F32 => wasmer_runtime_core::types::Type::F32,
 		parity_wasm::elements::ValueType::F64 => wasmer_runtime_core::types::Type::F64,
+	}
+}
+
+/// Attempt to convert a opaque panic payload to a string.
+fn stringify_panic_payload(payload: Box<dyn std::any::Any + Send + 'static>) -> String {
+	match payload.downcast::<&'static str>() {
+		Ok(msg) => msg.to_string(),
+		Err(payload) => match payload.downcast::<String>() {
+			Ok(msg) => *msg,
+			// At least we tried...
+			Err(_) => "Box<Any>".to_string(),
+		},
 	}
 }
