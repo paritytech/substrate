@@ -32,7 +32,7 @@ use sp_consensus_vrf::schnorrkel::{self, Randomness};
 #[cfg(feature = "std")]
 use sp_consensus_vrf::schnorrkel::SignatureError;
 
-/// Raw BABE primary pre-digest.
+/// Raw BABE primary slot assignment pre-digest.
 #[derive(Clone, RuntimeDebug, Encode, Decode)]
 pub struct RawPrimaryPreDigest<VRFOutput=schnorrkel::RawVRFOutput, VRFProof=schnorrkel::RawVRFProof> {
 	/// Authority index
