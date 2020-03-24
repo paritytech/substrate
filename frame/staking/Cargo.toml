@@ -50,4 +50,7 @@ std = [
 	"frame-system/std",
 	"pallet-authorship/std",
 ]
-runtime-benchmarks = ["rand_chacha", "frame-benchmarking"]
+runtime-benchmarks = [
+	"rand_chacha",
+	"frame-benchmarking",
+]
