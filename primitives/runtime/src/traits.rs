@@ -329,30 +329,7 @@ impl<T:
 	sp_std::ops::BitAnd<Self, Output = Self>
 > SimpleBitOps for T {}
 
-/// The block finalization trait. Implementing this lets you express what should happen
-/// for your module when the block is ending.
-#[impl_for_tuples(30)]
-pub trait OnFinalize<BlockNumber> {
-	/// The block is being finalized. Implement to have something happen.
-	fn on_finalize(_n: BlockNumber) {}
-}
-
-/// The block initialization trait. Implementing this lets you express what should happen
-/// for your module when the block is beginning (right before the first extrinsic is executed).
-#[impl_for_tuples(30)]
-pub trait OnInitialize<BlockNumber> {
-	/// The block is being initialized. Implement to have something happen.
-	fn on_initialize(_n: BlockNumber) {}
-}
-
-/// The runtime upgrade trait. Implementing this lets you express what should happen
-/// when the runtime upgrades, and changes may need to occur to your module.
-#[impl_for_tuples(30)]
-pub trait OnRuntimeUpgrade {
-	/// Perform a module upgrade.
-	fn on_runtime_upgrade() {}
-}
-
+// TODO TODO: maybe move offchain worker as well
 /// Off-chain computation trait.
 ///
 /// Implementing this trait on a module allows you to perform long-running tasks

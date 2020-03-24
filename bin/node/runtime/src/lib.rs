@@ -929,6 +929,7 @@ impl_runtime_apis! {
 mod tests {
 	use super::*;
 	use frame_system::offchain::{SignAndSubmitTransaction, SubmitSignedTransaction};
+	use frame_support::traits::OnInitialize;
 
 	#[test]
 	fn validate_transaction_submitter_bounds() {
@@ -954,12 +955,9 @@ mod tests {
 	}
 
 	#[test]
-	fn block_hooks_weight_should_not_exceed_limits() {
-		use frame_support::weights::WeighBlock;
+	fn empty_block_weight_should_not_exceed_limits() {
 		let check_for_block = |b| {
-			let block_hooks_weight =
-				<AllModules as WeighBlock<BlockNumber>>::on_initialize(b) +
-				<AllModules as WeighBlock<BlockNumber>>::on_finalize(b);
+			let block_hooks_weight = AllModules::on_initialize(b);
 
 			assert_eq!(
 				block_hooks_weight,

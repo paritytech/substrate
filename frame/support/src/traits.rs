@@ -28,6 +28,7 @@ use sp_runtime::{
 };
 use crate::dispatch::Parameter;
 use crate::storage::StorageMap;
+use impl_trait_for_tuples::impl_for_tuples;
 
 /// An abstraction of a value stored within storage, but possibly as part of a larger composite
 /// item.
@@ -193,14 +194,14 @@ impl<AccountId> IsDeadAccount<AccountId> for () {
 }
 
 /// Handler for when a new account has been created.
-#[impl_trait_for_tuples::impl_for_tuples(30)]
+#[impl_for_tuples(30)]
 pub trait OnNewAccount<AccountId> {
 	/// A new account `who` has been registered.
 	fn on_new_account(who: &AccountId);
 }
 
 /// The account with the given id was reaped.
-#[impl_trait_for_tuples::impl_for_tuples(30)]
+#[impl_for_tuples(30)]
 pub trait OnKilledAccount<AccountId> {
 	/// The account with the given id was reaped.
 	fn on_killed_account(who: &AccountId);
@@ -1042,3 +1043,44 @@ pub trait GetCallMetadata {
 	/// Return a [`CallMetadata`], containing function and pallet name of the Call.
 	fn get_call_metadata(&self) -> CallMetadata;
 }
+
+/// The block finalization trait. Implementing this lets you express what should happen
+/// for your module when the block is ending.
+#[impl_for_tuples(30)]
+pub trait OnFinalize<BlockNumber> {
+	/// The block is being finalized. Implement to have something happen.
+	fn on_finalize(_n: BlockNumber) {}
+}
+
+/// The block initialization trait. Implementing this lets you express what should happen
+/// for your module when the block is beginning (right before the first extrinsic is executed).
+pub trait OnInitialize<BlockNumber> {
+	/// The block is being initialized. Implement to have something happen.
+	fn on_initialize(_n: BlockNumber) -> crate::weights::Weight { 0 }
+}
+
+#[impl_for_tuples(30)]
+impl<BlockNumber: Clone> OnInitialize<BlockNumber> for Tuple {
+	fn on_initialize(_n: BlockNumber) -> crate::weights::Weight {
+		let mut weight = 0;
+		for_tuples!( #( weight.saturating_add(Tuple::on_initialize(_n.clone())); )* );
+		weight
+	}
+}
+
+/// The runtime upgrade trait. Implementing this lets you express what should happen
+/// when the runtime upgrades, and changes may need to occur to your module.
+pub trait OnRuntimeUpgrade {
+	/// Perform a module upgrade.
+	fn on_runtime_upgrade() -> crate::weights::Weight { 0 }
+}
+
+#[impl_for_tuples(30)]
+impl OnRuntimeUpgrade for Tuple {
+	fn on_runtime_upgrade() -> crate::weights::Weight {
+		let mut weight = 0;
+		for_tuples!( #( weight.saturating_add(Tuple::on_runtime_upgrade()); )* );
+		weight
+	}
+}
+
