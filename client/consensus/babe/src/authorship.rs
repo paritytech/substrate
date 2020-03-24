@@ -22,6 +22,7 @@ use sp_consensus_babe::{
 	SlotNumber, AuthorityPair, BabeConfiguration
 };
 use sp_consensus_babe::digests::PreDigest;
+use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
 use sp_core::{U256, blake2_256};
 use codec::Encode;
 use schnorrkel::vrf::VRFInOut;
@@ -201,8 +202,8 @@ fn claim_primary_slot(
 			.map(|s| {
 				PreDigest::Primary {
 					slot_number,
-					vrf_output: s.0.to_output(),
-					vrf_proof: s.1,
+					vrf_output: VRFOutput(s.0.to_output()),
+					vrf_proof: VRFProof(s.1),
 					authority_index: authority_index as u32,
 				}
 			});

@@ -35,7 +35,7 @@ use sp_std::prelude::*;
 use codec::{Encode, Decode};
 use frame_support::{
 	decl_storage, decl_module,
-	traits::{Currency, Get, OnUnbalanced, ExistenceRequirement, WithdrawReason},
+	traits::{Currency, Get, OnUnbalanced, ExistenceRequirement, WithdrawReason, Imbalance},
 	weights::{Weight, DispatchInfo, GetDispatchInfo},
 };
 use sp_runtime::{
@@ -58,7 +58,9 @@ pub trait Trait: frame_system::Trait {
 	/// The currency type in which fees will be paid.
 	type Currency: Currency<Self::AccountId> + Send + Sync;
 
-	/// Handler for the unbalanced reduction when taking transaction fees.
+	/// Handler for the unbalanced reduction when taking transaction fees. This is either one or
+	/// two separate imbalances, the first is the transaction fee paid, the second is the tip paid,
+	/// if any.
 	type OnTransactionPayment: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
 	/// The fee to be paid for making a transaction; the base.
@@ -75,7 +77,7 @@ pub trait Trait: frame_system::Trait {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Balances {
+	trait Store for Module<T: Trait> as TransactionPayment {
 		pub NextFeeMultiplier get(fn next_fee_multiplier): Multiplier = Multiplier::from_parts(0);
 	}
 }
@@ -234,7 +236,9 @@ impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T>
 				Ok(imbalance) => imbalance,
 				Err(_) => return InvalidTransaction::Payment.into(),
 			};
-			T::OnTransactionPayment::on_unbalanced(imbalance);
+			let imbalances = imbalance.split(tip);
+			T::OnTransactionPayment::on_unbalanceds(Some(imbalances.0).into_iter()
+				.chain(Some(imbalances.1)));
 		}
 
 		let mut r = ValidTransaction::default();
@@ -258,7 +262,7 @@ mod tests {
 	use sp_core::H256;
 	use sp_runtime::{
 		testing::{Header, TestXt},
-		traits::{BlakeTwo256, Extrinsic, IdentityLookup},
+		traits::{BlakeTwo256, IdentityLookup},
 		Perbill,
 	};
 	use std::cell::RefCell;
@@ -535,7 +539,7 @@ mod tests {
 		let call = Call::Balances(BalancesCall::transfer(2, 69));
 		let origin = 111111;
 		let extra = ();
-		let xt = TestXt::new(call, Some((origin, extra))).unwrap();
+		let xt = TestXt::new(call, Some((origin, extra)));
 		let info  = xt.get_dispatch_info();
 		let ext = xt.encode();
 		let len = ext.len() as u32;

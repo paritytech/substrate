@@ -47,7 +47,7 @@ use std::io;
 use std::collections::HashMap;
 
 use sc_client_api::{
-	ForkBlocks, UsageInfo, MemoryInfo, BadBlocks, IoInfo, MemorySize,
+	ForkBlocks, UsageInfo, MemoryInfo, BadBlocks, IoInfo, MemorySize, CloneableSpawn,
 	execution_extensions::ExecutionExtensions,
 	backend::{NewBlockState, PrunableStateChangesTrieStorage},
 };
@@ -80,7 +80,7 @@ use crate::changes_tries_storage::{DbChangesTrieStorage, DbChangesTrieStorageTra
 use sc_client::leaves::{LeafSet, FinalizationDisplaced};
 use sc_state_db::StateDb;
 use sp_blockchain::{CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache};
-use crate::storage_cache::{CachingState, SharedCache, new_shared_cache};
+use crate::storage_cache::{CachingState, SyncingCachingState, SharedCache, new_shared_cache};
 use crate::stats::StateUsageStats;
 use log::{trace, debug, warn};
 pub use sc_state_db::PruningMode;
@@ -293,13 +293,14 @@ pub enum DatabaseSettingsSrc {
 }
 
 /// Create an instance of db-backed client.
-pub fn new_client<E, S, Block, RA>(
+pub fn new_client<E, Block, RA>(
 	settings: DatabaseSettings,
 	executor: E,
-	genesis_storage: &S,
+	genesis_storage: &dyn BuildStorage,
 	fork_blocks: ForkBlocks<Block>,
 	bad_blocks: BadBlocks<Block>,
 	execution_extensions: ExecutionExtensions<Block>,
+	spawn_handle: Box<dyn CloneableSpawn>,
 	prometheus_registry: Option<Registry>,
 ) -> Result<(
 		sc_client::Client<
@@ -315,10 +316,9 @@ pub fn new_client<E, S, Block, RA>(
 	where
 		Block: BlockT,
 		E: CodeExecutor + RuntimeInfo,
-		S: BuildStorage,
 {
 	let backend = Arc::new(Backend::new(settings, CANONICALIZATION_DELAY)?);
-	let executor = sc_client::LocalCallExecutor::new(backend.clone(), executor);
+	let executor = sc_client::LocalCallExecutor::new(backend.clone(), executor, spawn_handle);
 	Ok((
 		sc_client::Client::new(
 			backend.clone(),
@@ -531,7 +531,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for BlockchainDb<Block> {
 
 /// Database transaction
 pub struct BlockImportOperation<Block: BlockT> {
-	old_state: CachingState<RefTrackingState<Block>, Block>,
+	old_state: SyncingCachingState<RefTrackingState<Block>, Block>,
 	db_updates: PrefixedMemoryDB<HashFor<Block>>,
 	storage_updates: StorageCollection,
 	child_storage_updates: ChildStorageCollection,
@@ -557,7 +557,7 @@ impl<Block: BlockT> BlockImportOperation<Block> {
 }
 
 impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for BlockImportOperation<Block> {
-	type State = CachingState<RefTrackingState<Block>, Block>;
+	type State = SyncingCachingState<RefTrackingState<Block>, Block>;
 
 	fn state(&self) -> ClientResult<Option<&Self::State>> {
 		Ok(Some(&self.old_state))
@@ -763,10 +763,10 @@ pub struct Backend<Block: BlockT> {
 	blockchain: BlockchainDb<Block>,
 	canonicalization_delay: u64,
 	shared_cache: SharedCache<Block>,
-	import_lock: RwLock<()>,
+	import_lock: Arc<RwLock<()>>,
 	is_archive: bool,
 	io_stats: FrozenForDuration<(kvdb::IoStats, StateUsageInfo)>,
-	state_usage: StateUsageStats,
+	state_usage: Arc<StateUsageStats>,
 }
 
 impl<Block: BlockT> Backend<Block> {
@@ -838,7 +838,7 @@ impl<Block: BlockT> Backend<Block> {
 			import_lock: Default::default(),
 			is_archive: is_archive_pruning,
 			io_stats: FrozenForDuration::new(std::time::Duration::from_secs(1)),
-			state_usage: StateUsageStats::new(),
+			state_usage: Arc::new(StateUsageStats::new()),
 		})
 	}
 
@@ -1154,8 +1154,14 @@ impl<Block: BlockT> Backend<Block> {
 				}
 				self.state_usage.tally_writes(ops, bytes);
 				let number_u64 = number.saturated_into::<u64>();
-				let commit = self.storage.state_db.insert_block(&hash, number_u64, &pending_block.header.parent_hash(), changeset)
-					.map_err(|e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from(format!("State database error: {:?}", e)))?;
+				let commit = self.storage.state_db.insert_block(
+					&hash,
+					number_u64,
+					&pending_block.header.parent_hash(),
+					changeset,
+				).map_err(|e: sc_state_db::Error<io::Error>|
+					sp_blockchain::Error::from(format!("State database error: {:?}", e))
+				)?;
 				apply_state_commit(&mut transaction, commit);
 
 				// Check if need to finalize. Genesis is always finalized instantly.
@@ -1183,7 +1189,8 @@ impl<Block: BlockT> Backend<Block> {
 				changes_trie_cache_ops,
 			)?);
 			self.state_usage.merge_sm(operation.old_state.usage_info());
-			let cache = operation.old_state.release(); // release state reference so that it can be finalized
+			// release state reference so that it can be finalized
+			let cache = operation.old_state.into_cache_changes();
 
 			if finalized {
 				// TODO: ensure best chain contains this block.
@@ -1211,9 +1218,20 @@ impl<Block: BlockT> Backend<Block> {
 				displaced_leaf
 			};
 
-			let mut children = children::read_children(&*self.storage.db, columns::META, meta_keys::CHILDREN_PREFIX, parent_hash)?;
+			let mut children = children::read_children(
+				&*self.storage.db,
+				columns::META,
+				meta_keys::CHILDREN_PREFIX,
+				parent_hash,
+			)?;
 			children.push(hash);
-			children::write_children(&mut transaction, columns::META, meta_keys::CHILDREN_PREFIX, parent_hash, children);
+			children::write_children(
+				&mut transaction,
+				columns::META,
+				meta_keys::CHILDREN_PREFIX,
+				parent_hash,
+				children,
+			);
 
 			meta_updates.push((hash, number, pending_block.leaf_state.is_best(), finalized));
 
@@ -1223,7 +1241,7 @@ impl<Block: BlockT> Backend<Block> {
 		};
 
 		let cache_update = if let Some(set_head) = operation.set_head {
-			if let Some(header) = ::sc_client::blockchain::HeaderBackend::header(&self.blockchain, set_head)? {
+			if let Some(header) = sc_client::blockchain::HeaderBackend::header(&self.blockchain, set_head)? {
 				let number = header.number();
 				let hash = header.hash();
 
@@ -1292,7 +1310,6 @@ impl<Block: BlockT> Backend<Block> {
 
 		Ok(())
 	}
-
 
 	// write stuff to a transaction after a new block is finalized.
 	// this canonicalizes finalized blocks. Fails if called with a block which
@@ -1381,11 +1398,13 @@ impl<Block> sc_client_api::backend::AuxStore for Backend<Block> where Block: Blo
 impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	type BlockImportOperation = BlockImportOperation<Block>;
 	type Blockchain = BlockchainDb<Block>;
-	type State = CachingState<RefTrackingState<Block>, Block>;
+	type State = SyncingCachingState<RefTrackingState<Block>, Block>;
 	type OffchainStorage = offchain::LocalStorage;
 
 	fn begin_operation(&self) -> ClientResult<Self::BlockImportOperation> {
-		let old_state = self.state_at(BlockId::Hash(Default::default()))?;
+		let mut old_state = self.state_at(BlockId::Hash(Default::default()))?;
+		old_state.disable_syncing();
+
 		Ok(BlockImportOperation {
 			pending_block: None,
 			old_state,
@@ -1408,13 +1427,13 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		block: BlockId<Block>,
 	) -> ClientResult<()> {
 		operation.old_state = self.state_at(block)?;
+		operation.old_state.disable_syncing();
+
 		operation.commit_state = true;
 		Ok(())
 	}
 
-	fn commit_operation(&self, operation: Self::BlockImportOperation)
-		-> ClientResult<()>
-	{
+	fn commit_operation(&self, operation: Self::BlockImportOperation) -> ClientResult<()> {
 		let usage = operation.old_state.usage_info();
 		self.state_usage.merge_sm(usage);
 
@@ -1600,7 +1619,17 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 				let root = genesis_storage.0.clone();
 				let db_state = DbState::<Block>::new(Arc::new(genesis_storage), root);
 				let state = RefTrackingState::new(db_state, self.storage.clone(), None);
-				return Ok(CachingState::new(state, self.shared_cache.clone(), None));
+				let caching_state = CachingState::new(
+					state,
+					self.shared_cache.clone(),
+					None,
+				);
+				return Ok(SyncingCachingState::new(
+					caching_state,
+					self.state_usage.clone(),
+					self.blockchain.meta.clone(),
+					self.import_lock.clone(),
+				));
 			},
 			_ => {}
 		}
@@ -1623,7 +1652,17 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 						self.storage.clone(),
 						Some(hash.clone()),
 					);
-					Ok(CachingState::new(state, self.shared_cache.clone(), Some(hash)))
+					let caching_state = CachingState::new(
+						state,
+						self.shared_cache.clone(),
+						Some(hash),
+					);
+					Ok(SyncingCachingState::new(
+						caching_state,
+						self.state_usage.clone(),
+						self.blockchain.meta.clone(),
+						self.import_lock.clone(),
+					))
 				} else {
 					Err(
 						sp_blockchain::Error::UnknownBlock(
@@ -1658,17 +1697,8 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		}
 	}
 
-	fn destroy_state(&self, state: Self::State) -> ClientResult<()> {
-		self.state_usage.merge_sm(state.usage_info());
-		if let Some(hash) = state.cache.parent_hash.clone() {
-			let is_best = self.blockchain.meta.read().best_hash == hash;
-			state.release().sync_cache(&[], &[], vec![], vec![], None, None, is_best);
-		}
-		Ok(())
-	}
-
 	fn get_import_lock(&self) -> &RwLock<()> {
-		&self.import_lock
+		&*self.import_lock
 	}
 
 }
@@ -1868,6 +1898,7 @@ pub(crate) mod tests {
 			op.update_db_storage(overlay).unwrap();
 			header.state_root = root.into();
 
+			op.update_storage(storage, Vec::new()).unwrap();
 			op.set_block_data(
 				header,
 				Some(vec![]),

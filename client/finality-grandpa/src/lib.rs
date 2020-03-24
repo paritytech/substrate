@@ -57,11 +57,11 @@ use futures::StreamExt;
 use log::{debug, info};
 use futures::channel::mpsc;
 use sc_client_api::{
+	backend::{AuxStore, Backend},
 	LockImportRun, BlockchainEvents, CallExecutor,
-	backend::{AuxStore, Backend}, ExecutionStrategy, Finalizer, TransactionFor,
+	ExecutionStrategy, Finalizer, TransactionFor, ExecutorProvider,
 };
 use sp_blockchain::{HeaderBackend, Error as ClientError, HeaderMetadata};
-use sc_client::Client;
 use parity_scale_codec::{Decode, Encode};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{NumberFor, Block as BlockT, DigestFor, Zero};
@@ -96,7 +96,7 @@ mod observer;
 mod until_imported;
 mod voting_rule;
 
-pub use finality_proof::FinalityProofProvider;
+pub use finality_proof::{FinalityProofProvider, StorageAndProofProvider};
 pub use justification::GrandpaJustification;
 pub use light_import::light_block_import;
 pub use voting_rule::{
@@ -266,7 +266,7 @@ impl<Block: BlockT, Client> BlockStatus<Block> for Arc<Client> where
 pub trait ClientForGrandpa<Block, BE>:
 	LockImportRun<Block, BE> + Finalizer<Block, BE> + AuxStore
 	+ HeaderMetadata<Block, Error = sp_blockchain::Error> + HeaderBackend<Block>
-	+ BlockchainEvents<Block> + ProvideRuntimeApi<Block>
+	+ BlockchainEvents<Block> + ProvideRuntimeApi<Block> + ExecutorProvider<Block>
 	+ BlockImport<Block, Transaction = TransactionFor<BE, Block>, Error = sp_consensus::Error>
 	where
 		BE: Backend<Block>,
@@ -279,7 +279,7 @@ impl<Block, BE, T> ClientForGrandpa<Block, BE> for T
 		Block: BlockT,
 		T: LockImportRun<Block, BE> + Finalizer<Block, BE> + AuxStore
 			+ HeaderMetadata<Block, Error = sp_blockchain::Error> + HeaderBackend<Block>
-			+ BlockchainEvents<Block> + ProvideRuntimeApi<Block>
+			+ BlockchainEvents<Block> + ProvideRuntimeApi<Block> + ExecutorProvider<Block>
 			+ BlockImport<Block, Transaction = TransactionFor<BE, Block>, Error = sp_consensus::Error>,
 {}
 
@@ -387,11 +387,8 @@ pub trait GenesisAuthoritySetProvider<Block: BlockT> {
 	fn get(&self) -> Result<AuthorityList, ClientError>;
 }
 
-impl<B, E, Block: BlockT, RA> GenesisAuthoritySetProvider<Block> for Client<B, E, Block, RA>
-	where
-		B: Backend<Block> + Send + Sync + 'static,
-		E: CallExecutor<Block> + Send + Sync,
-		RA: Send + Sync,
+impl<Block: BlockT, E> GenesisAuthoritySetProvider<Block> for Arc<dyn ExecutorProvider<Block, Executor = E>>
+	where E: CallExecutor<Block>,
 {
 	fn get(&self) -> Result<AuthorityList, ClientError> {
 		// This implementation uses the Grandpa runtime API instead of reading directly from the
@@ -420,10 +417,43 @@ pub fn block_import<BE, Block: BlockT, Client, SC>(
 	client: Arc<Client>,
 	genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
 	select_chain: SC,
-) -> Result<(
+) -> Result<
+	(
 		GrandpaBlockImport<BE, Block, Client, SC>,
 		LinkHalf<Block, Client, SC>,
-	), ClientError>
+	),
+	ClientError,
+>
+where
+	SC: SelectChain<Block>,
+	BE: Backend<Block> + 'static,
+	Client: ClientForGrandpa<Block, BE> + 'static,
+{
+	block_import_with_authority_set_hard_forks(
+		client,
+		genesis_authorities_provider,
+		select_chain,
+		Default::default(),
+	)
+}
+
+/// Make block importer and link half necessary to tie the background voter to
+/// it. A vector of authority set hard forks can be passed, any authority set
+/// change signaled at the given block (either already signalled or in a further
+/// block when importing it) will be replaced by a standard change with the
+/// given static authorities.
+pub fn block_import_with_authority_set_hard_forks<BE, Block: BlockT, Client, SC>(
+	client: Arc<Client>,
+	genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
+	select_chain: SC,
+	authority_set_hard_forks: Vec<(SetId, (Block::Hash, NumberFor<Block>), AuthorityList)>,
+) -> Result<
+	(
+		GrandpaBlockImport<BE, Block, Client, SC>,
+		LinkHalf<Block, Client, SC>,
+	),
+	ClientError,
+>
 where
 	SC: SelectChain<Block>,
 	BE: Backend<Block> + 'static,
@@ -447,6 +477,24 @@ where
 
 	let (voter_commands_tx, voter_commands_rx) = mpsc::unbounded();
 
+	// create pending change objects with 0 delay and enacted on finality
+	// (i.e. standard changes) for each authority set hard fork.
+	let authority_set_hard_forks = authority_set_hard_forks
+		.into_iter()
+		.map(|(set_id, (hash, number), authorities)| {
+			(
+				set_id,
+				authorities::PendingChange {
+					next_authorities: authorities,
+					delay: Zero::zero(),
+					canon_hash: hash,
+					canon_height: number,
+					delay_kind: authorities::DelayKind::Finalized,
+				},
+			)
+		})
+		.collect();
+
 	Ok((
 		GrandpaBlockImport::new(
 			client.clone(),
@@ -454,6 +502,7 @@ where
 			persistent_data.authority_set.clone(),
 			voter_commands_tx,
 			persistent_data.consensus_changes.clone(),
+			authority_set_hard_forks,
 		),
 		LinkHalf {
 			client,
@@ -594,6 +643,7 @@ pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR>(
 		network,
 		config.clone(),
 		persistent_data.set_state.clone(),
+		prometheus_registry.as_ref(),
 	);
 
 	register_finality_tracker_inherent_data_provider(client.clone(), &inherent_data_providers)?;

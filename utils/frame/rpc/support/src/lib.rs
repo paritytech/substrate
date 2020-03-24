@@ -25,7 +25,7 @@ use jsonrpc_client_transports::RpcError;
 use codec::{DecodeAll, FullCodec, FullEncode};
 use serde::{de::DeserializeOwned, Serialize};
 use frame_support::storage::generator::{
-	StorageDoubleMap, StorageLinkedMap, StorageMap, StorageValue
+	StorageDoubleMap, StorageMap, StorageValue
 };
 use sp_storage::{StorageData, StorageKey};
 use sc_rpc_api::state::StateClient;
@@ -63,9 +63,9 @@ use sc_rpc_api::state::StateClient;
 /// decl_storage! {
 ///     trait Store for Module<T: Trait> as TestRuntime {
 ///         pub LastActionId: u64;
-///         pub Voxels: map hasher(blake2_256) Loc => Block;
-///         pub Actions: linked_map hasher(blake2_256) u64 => Loc;
-///         pub Prefab: double_map hasher(blake2_256) u128, hasher(blake2_256) (i8, i8, i8) => Block;
+///         pub Voxels: map hasher(blake2_128_concat) Loc => Block;
+///         pub Actions: map hasher(blake2_128_concat) u64 => Loc;
+///         pub Prefab: double_map hasher(blake2_128_concat) u128, hasher(blake2_128_concat) (i8, i8, i8) => Block;
 ///     }
 /// }
 ///
@@ -79,7 +79,7 @@ use sc_rpc_api::state::StateClient;
 /// let q = StorageQuery::map::<Voxels, _>((0, 0, 0));
 /// let _: Option<Block> = q.get(&cl, None).await?;
 ///
-/// let q = StorageQuery::linked_map::<Actions, _>(12);
+/// let q = StorageQuery::map::<Actions, _>(12);
 /// let _: Option<Loc> = q.get(&cl, None).await?;
 ///
 /// let q = StorageQuery::double_map::<Prefab, _, _>(3, (0, 0, 0));
@@ -107,14 +107,6 @@ impl<V: FullCodec> StorageQuery<V> {
 	pub fn map<St: StorageMap<K, V>, K: FullEncode>(key: K) -> Self {
 		Self {
 			key: StorageKey(St::storage_map_final_key(key)),
-			_spook: PhantomData,
-		}
-	}
-
-	/// Create a storage query for a value in a StorageLinkedMap.
-	pub fn linked_map<St: StorageLinkedMap<K, V>, K: FullCodec>(key: K) -> Self {
-		Self {
-			key: StorageKey(St::storage_linked_map_final_key(key)),
 			_spook: PhantomData,
 		}
 	}

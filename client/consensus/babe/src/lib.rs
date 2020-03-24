@@ -78,7 +78,7 @@ use sp_runtime::{
 	generic::{BlockId, OpaqueDigestItemId}, Justification,
 	traits::{Block as BlockT, Header, DigestItemFor, Zero},
 };
-use sp_api::ProvideRuntimeApi;
+use sp_api::{ProvideRuntimeApi, NumberFor};
 use sc_keystore::KeyStorePtr;
 use parking_lot::Mutex;
 use sp_core::Pair;
@@ -104,7 +104,7 @@ use sc_consensus_slots::{
 	SlotWorker, SlotInfo, SlotCompatible, StorageChanges, CheckedHeader, check_equivocation,
 };
 use sc_consensus_epochs::{
-	descendent_query, ViableEpoch, SharedEpochChanges, EpochChangesFor, Epoch as EpochT
+	descendent_query, SharedEpochChanges, EpochChangesFor, Epoch as EpochT, ViableEpochDescriptor,
 };
 use sp_blockchain::{
 	Result as ClientResult, Error as ClientError,
@@ -231,9 +231,9 @@ macro_rules! babe_info {
 
 
 /// Intermediate value passed to block importer.
-pub struct BabeIntermediate {
-	/// The epoch data, if available.
-	pub epoch: ViableEpoch<Epoch>,
+pub struct BabeIntermediate<B: BlockT> {
+	/// The epoch descriptor.
+	pub epoch_descriptor: ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
 }
 
 /// Intermediate key for Babe engine.
@@ -402,7 +402,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 	SO: SyncOracle + Send + Clone,
 	Error: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
 {
-	type EpochData = ViableEpoch<Epoch>;
+	type EpochData = ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>;
 	type Claim = (PreDigest, AuthorityPair);
 	type SyncOracle = SO;
 	type CreateProposer = Pin<Box<
@@ -424,31 +424,35 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 		parent: &B::Header,
 		slot_number: u64,
 	) -> Result<Self::EpochData, ConsensusError> {
-		self.epoch_changes.lock().epoch_for_child_of(
+		self.epoch_changes.lock().epoch_descriptor_for_child_of(
 			descendent_query(&*self.client),
 			&parent.hash(),
 			parent.number().clone(),
 			slot_number,
-			|slot| self.config.genesis_epoch(slot)
 		)
 			.map_err(|e| ConsensusError::ChainLookup(format!("{:?}", e)))?
 			.ok_or(sp_consensus::Error::InvalidAuthoritiesSet)
 	}
 
-	fn authorities_len(&self, epoch_data: &Self::EpochData) -> usize {
-		epoch_data.as_ref().authorities.len()
+	fn authorities_len(&self, epoch_descriptor: &Self::EpochData) -> Option<usize> {
+		self.epoch_changes.lock()
+			.viable_epoch(&epoch_descriptor, |slot| self.config.genesis_epoch(slot))
+			.map(|epoch| epoch.as_ref().authorities.len())
 	}
 
 	fn claim_slot(
 		&self,
 		_parent_header: &B::Header,
 		slot_number: SlotNumber,
-		epoch_data: &ViableEpoch<Epoch>,
+		epoch_descriptor: &ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
 	) -> Option<Self::Claim> {
 		debug!(target: "babe", "Attempting to claim slot {}", slot_number);
 		let s = authorship::claim_slot(
 			slot_number,
-			epoch_data.as_ref(),
+			self.epoch_changes.lock().viable_epoch(
+				&epoch_descriptor,
+				|slot| self.config.genesis_epoch(slot)
+			)?.as_ref(),
 			&*self.config,
 			&self.keystore,
 		);
@@ -478,7 +482,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 		Self::Claim,
 		Self::EpochData,
 	) -> sp_consensus::BlockImportParams<B, I::Transaction> + Send> {
-		Box::new(|header, header_hash, body, storage_changes, (_, pair), epoch| {
+		Box::new(|header, header_hash, body, storage_changes, (_, pair), epoch_descriptor| {
 			// sign the pre-sealed hash of the block and then
 			// add it to a digest item.
 			let signature = pair.sign(header_hash.as_ref());
@@ -490,7 +494,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 			import_block.storage_changes = Some(storage_changes);
 			import_block.intermediates.insert(
 				Cow::from(INTERMEDIATE_KEY),
-				Box::new(BabeIntermediate { epoch }) as Box<dyn Any>,
+				Box::new(BabeIntermediate::<B> { epoch_descriptor }) as Box<dyn Any>,
 			);
 
 			import_block
@@ -729,18 +733,19 @@ impl<Block, Client> Verifier<Block> for BabeVerifier<Block, Client> where
 			.map_err(Error::<Block>::FetchParentHeader)?;
 
 		let pre_digest = find_pre_digest::<Block>(&header)?;
-		let epoch = {
-			let epoch_changes = self.epoch_changes.lock();
-			epoch_changes.epoch_for_child_of(
-				descendent_query(&*self.client),
-				&parent_hash,
-				parent_header_metadata.number,
-				pre_digest.slot_number(),
-				|slot| self.config.genesis_epoch(slot),
-			)
-				.map_err(|e| Error::<Block>::ForkTree(Box::new(e)))?
-				.ok_or_else(|| Error::<Block>::FetchEpoch(parent_hash))?
-		};
+		let epoch_changes = self.epoch_changes.lock();
+		let epoch_descriptor = epoch_changes.epoch_descriptor_for_child_of(
+			descendent_query(&*self.client),
+			&parent_hash,
+			parent_header_metadata.number,
+			pre_digest.slot_number(),
+		)
+			.map_err(|e| Error::<Block>::ForkTree(Box::new(e)))?
+			.ok_or_else(|| Error::<Block>::FetchEpoch(parent_hash))?;
+		let viable_epoch = epoch_changes.viable_epoch(
+			&epoch_descriptor,
+			|slot| self.config.genesis_epoch(slot)
+		).ok_or_else(|| Error::<Block>::FetchEpoch(parent_hash))?;
 
 		// We add one to the current slot to allow for some small drift.
 		// FIXME #1019 in the future, alter this queue to allow deferring of headers
@@ -748,7 +753,7 @@ impl<Block, Client> Verifier<Block> for BabeVerifier<Block, Client> where
 			header: header.clone(),
 			pre_digest: Some(pre_digest.clone()),
 			slot_now: slot_now + 1,
-			epoch: epoch.as_ref(),
+			epoch: viable_epoch.as_ref(),
 			config: &self.config,
 		};
 
@@ -808,7 +813,7 @@ impl<Block, Client> Verifier<Block> for BabeVerifier<Block, Client> where
 				import_block.justification = justification;
 				import_block.intermediates.insert(
 					Cow::from(INTERMEDIATE_KEY),
-					Box::new(BabeIntermediate { epoch }) as Box<dyn Any>,
+					Box::new(BabeIntermediate::<Block> { epoch_descriptor }) as Box<dyn Any>,
 				);
 				import_block.post_hash = Some(hash);
 
@@ -946,7 +951,7 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 		// if this is the first block in its chain for that epoch.
 		//
 		// also provides the total weight of the chain, including the imported block.
-		let (epoch, first_in_epoch, parent_weight) = {
+		let (epoch_descriptor, first_in_epoch, parent_weight) = {
 			let parent_weight = if *parent_header.number() == Zero::zero() {
 				0
 			} else {
@@ -957,13 +962,13 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 					))?
 			};
 
-			let intermediate = block.take_intermediate::<BabeIntermediate>(
+			let intermediate = block.take_intermediate::<BabeIntermediate<Block>>(
 				INTERMEDIATE_KEY
 			)?;
 
-			let epoch = intermediate.epoch;
-			let first_in_epoch = parent_slot < epoch.as_ref().start_slot;
-			(epoch, first_in_epoch, parent_weight)
+			let epoch_descriptor = intermediate.epoch_descriptor;
+			let first_in_epoch = parent_slot < epoch_descriptor.start_slot();
+			(epoch_descriptor, first_in_epoch, parent_weight)
 		};
 
 		let total_weight = parent_weight + pre_digest.added_weight();
@@ -994,12 +999,23 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 		let info = self.client.info();
 
 		if let Some(next_epoch_descriptor) = next_epoch_digest {
-			let next_epoch = epoch.increment(next_epoch_descriptor);
-
 			old_epoch_changes = Some(epoch_changes.clone());
 
+			let viable_epoch = epoch_changes.viable_epoch(
+				&epoch_descriptor,
+				|slot| self.config.genesis_epoch(slot),
+			).ok_or_else(|| {
+				ConsensusError::ClientImport(Error::<Block>::FetchEpoch(parent_hash).into())
+			})?;
+
 			babe_info!("New epoch {} launching at block {} (block slot {} >= start slot {}).",
-				epoch.as_ref().epoch_index, hash, slot_number, epoch.as_ref().start_slot);
+					   viable_epoch.as_ref().epoch_index,
+					   hash,
+					   slot_number,
+					   viable_epoch.as_ref().start_slot);
+
+			let next_epoch = viable_epoch.increment(next_epoch_descriptor);
+
 			babe_info!("Next epoch starts at slot {}", next_epoch.as_ref().start_slot);
 
 			// prune the tree of epochs not part of the finalized chain or
@@ -1227,7 +1243,8 @@ pub mod test_helpers {
 			HeaderMetadata<B, Error = ClientError>,
 		C::Api: BabeApi<B>,
 	{
-		let epoch = link.epoch_changes.lock().epoch_for_child_of(
+		let epoch_changes = link.epoch_changes.lock();
+		let epoch = epoch_changes.epoch_data_for_child_of(
 			descendent_query(client),
 			&parent.hash(),
 			parent.number().clone(),
@@ -1237,7 +1254,7 @@ pub mod test_helpers {
 
 		authorship::claim_slot(
 			slot_number,
-			epoch.as_ref(),
+			&epoch,
 			&link.config,
 			keystore,
 		).map(|(digest, _)| digest)

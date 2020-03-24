@@ -59,7 +59,9 @@ pub use self::builder::{
 	TFullCallExecutor, TLightCallExecutor,
 };
 pub use config::{Configuration, Roles, PruningMode};
-pub use sc_chain_spec::{ChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension};
+pub use sc_chain_spec::{
+	ChainSpec, GenericChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension
+};
 pub use sp_transaction_pool::{TransactionPool, InPoolTransaction, error::IntoPoolError};
 pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
 pub use sc_client::FinalityNotifications;
@@ -487,8 +489,8 @@ mod waiting {
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(not(target_os = "unknown"))]
-fn start_rpc_servers<G, E, H: FnMut() -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>>(
-	config: &Configuration<G, E>,
+fn start_rpc_servers<H: FnMut() -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>>(
+	config: &Configuration,
 	mut gen_handler: H
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
 	fn maybe_start_server<T, F>(address: Option<SocketAddr>, mut start: F) -> Result<Option<T>, io::Error>
@@ -528,8 +530,8 @@ fn start_rpc_servers<G, E, H: FnMut() -> sc_rpc_server::RpcHandler<sc_rpc::Metad
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(target_os = "unknown")]
-fn start_rpc_servers<G, E, H: FnMut() -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>>(
-	_: &Configuration<G, E>,
+fn start_rpc_servers<H: FnMut() -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>>(
+	_: &Configuration,
 	_: H
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
 	Ok(Box::new(()))
@@ -656,7 +658,6 @@ mod tests {
 	use futures::executor::block_on;
 	use sp_consensus::SelectChain;
 	use sp_runtime::traits::BlindCheckable;
-	use sp_runtime::generic::CheckSignature;
 	use substrate_test_runtime_client::{prelude::*, runtime::{Extrinsic, Transfer}};
 	use sc_transaction_pool::{BasicPool, FullChainApi};
 
@@ -685,7 +686,7 @@ mod tests {
 
 		// then
 		assert_eq!(transactions.len(), 1);
-		assert!(transactions[0].1.clone().check(CheckSignature::Yes).is_ok());
+		assert!(transactions[0].1.clone().check().is_ok());
 		// this should not panic
 		let _ = transactions[0].1.transfer();
 	}

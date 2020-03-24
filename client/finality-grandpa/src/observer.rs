@@ -178,6 +178,7 @@ where
 		network,
 		config.clone(),
 		persistent_data.set_state.clone(),
+		None,
 	);
 
 	let observer_work = ObserverWork::new(
@@ -328,7 +329,7 @@ impl<B, BE, C, N> Future for ObserverWork<B, BE, C, N>
 where
 	B: BlockT,
 	BE: Backend<B> + Unpin + 'static,
-	C: crate::ClientForGrandpa<B, BE>+ 'static,
+	C: crate::ClientForGrandpa<B, BE> + 'static,
 	N: NetworkT<B>,
 	NumberFor<B>: BlockNumberOps,
 {
@@ -424,20 +425,15 @@ mod tests {
 		tester.trigger_gossip_validator_reputation_change(&peer_id);
 
 		executor::block_on(async move {
+			// Poll the observer once and have it forward the reputation change from the gossip
+			// validator to the test network.
+			assert!(observer.now_or_never().is_none());
+
 			// Ignore initial event stream request by gossip engine.
 			match tester.events.next().now_or_never() {
 				Some(Some(Event::EventStream(_))) => {},
 				_ => panic!("expected event stream request"),
 			};
-
-			assert!(
-				tester.events.next().now_or_never().is_none(),
-				"expect no further network events",
-			);
-
-			// Poll the observer once and have it forward the reputation change from the gossip
-			// validator to the test network.
-			assert!(observer.now_or_never().is_none());
 
 			assert_matches!(tester.events.next().now_or_never(), Some(Some(Event::Report(_, _))));
 		});

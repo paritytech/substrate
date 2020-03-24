@@ -70,9 +70,11 @@ mod changes_trie;
 #[cfg(feature = "std")]
 pub mod traits;
 pub mod testing;
+#[cfg(feature = "std")]
+pub mod tasks;
 
 pub use self::hash::{H160, H256, H512, convert_hash};
-pub use self::uint::U256;
+pub use self::uint::{U256, U512};
 pub use changes_trie::{ChangesTrieConfiguration, ChangesTrieConfigurationRange};
 #[cfg(feature = "full_crypto")]
 pub use crypto::{DeriveJunction, Pair, Public};

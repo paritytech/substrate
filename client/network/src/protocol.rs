@@ -23,7 +23,10 @@ use libp2p::{Multiaddr, PeerId};
 use libp2p::core::{ConnectedPoint, nodes::listeners::ListenerId};
 use libp2p::swarm::{ProtocolsHandler, IntoProtocolsHandler};
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
-use sp_core::storage::{StorageKey, ChildInfo};
+use sp_core::{
+	storage::{StorageKey, ChildInfo},
+	hexdisplay::HexDisplay
+};
 use sp_consensus::{
 	BlockOrigin,
 	block_validation::BlockAnnounceValidator,
@@ -38,10 +41,10 @@ use sp_arithmetic::traits::SaturatedConversion;
 use message::{BlockAnnounce, BlockAttributes, Direction, FromBlock, Message, RequestId};
 use message::generic::Message as GenericMessage;
 use light_dispatch::{LightDispatch, LightDispatchNetwork, RequestData};
+use prometheus_endpoint::{Registry, Gauge, GaugeVec, PrometheusError, Opts, register, U64};
 use sync::{ChainSync, SyncState};
 use crate::service::{TransactionPool, ExHashT};
 use crate::config::{BoxFinalityProofRequestBuilder, Roles};
-use rustc_hex::ToHex;
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
@@ -135,6 +138,63 @@ mod rep {
 	pub const BAD_RESPONSE: Rep = Rep::new(-(1 << 12), "Incomplete response");
 }
 
+struct Metrics {
+	handshaking_peers: Gauge<U64>,
+	obsolete_requests: Gauge<U64>,
+	peers: Gauge<U64>,
+	queued_blocks: Gauge<U64>,
+	fork_targets: Gauge<U64>,
+	finality_proofs: GaugeVec<U64>,
+	justifications: GaugeVec<U64>,
+}
+
+impl Metrics {
+	fn register(r: &Registry) -> Result<Self, PrometheusError> {
+		Ok(Metrics {
+			handshaking_peers: {
+				let g = Gauge::new("sync_handshaking_peers", "Number of newly connected peers")?;
+				register(g, r)?
+			},
+			obsolete_requests: {
+				let g = Gauge::new("sync_obsolete_requests", "Number of obsolete requests")?;
+				register(g, r)?
+			},
+			peers: {
+				let g = Gauge::new("sync_peers", "Number of peers we sync with")?;
+				register(g, r)?
+			},
+			queued_blocks: {
+				let g = Gauge::new("sync_queued_blocks", "Number of blocks in import queue")?;
+				register(g, r)?
+			},
+			fork_targets: {
+				let g = Gauge::new("sync_fork_targets", "Number of fork sync targets")?;
+				register(g, r)?
+			},
+			justifications: {
+				let g = GaugeVec::new(
+					Opts::new(
+						"sync_extra_justifications",
+						"Number of extra justifications requests"
+					),
+					&["status"],
+				)?;
+				register(g, r)?
+			},
+			finality_proofs: {
+				let g = GaugeVec::new(
+					Opts::new(
+						"sync_extra_finality_proofs",
+						"Number of extra finality proof requests",
+					),
+					&["status"],
+				)?;
+				register(g, r)?
+			},
+		})
+	}
+}
+
 // Lock must always be taken in order declared here.
 pub struct Protocol<B: BlockT, H: ExHashT> {
 	/// Interval at which we call `tick`.
@@ -163,6 +223,8 @@ pub struct Protocol<B: BlockT, H: ExHashT> {
 	protocol_name_by_engine: HashMap<ConsensusEngineId, Cow<'static, [u8]>>,
 	/// For each protocol name, the legacy gossiping engine ID.
 	protocol_engine_by_name: HashMap<Cow<'static, [u8]>, ConsensusEngineId>,
+	/// Prometheus metrics.
+	metrics: Option<Metrics>,
 }
 
 #[derive(Default)]
@@ -371,7 +433,8 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		finality_proof_request_builder: Option<BoxFinalityProofRequestBuilder<B>>,
 		protocol_id: ProtocolId,
 		peerset_config: sc_peerset::PeersetConfig,
-		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>
+		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
+		metrics_registry: Option<&Registry>
 	) -> error::Result<(Protocol<B, H>, sc_peerset::PeersetHandle)> {
 		let info = chain.info();
 		let sync = ChainSync::new(
@@ -416,6 +479,11 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			behaviour,
 			protocol_name_by_engine: HashMap::new(),
 			protocol_engine_by_name: HashMap::new(),
+			metrics: if let Some(r) = metrics_registry {
+				Some(Metrics::register(r)?)
+			} else {
+				None
+			}
 		};
 
 		Ok((protocol, peerset_handle))
@@ -429,6 +497,16 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	/// Returns true if we have a channel open with this node.
 	pub fn is_open(&self, peer_id: &PeerId) -> bool {
 		self.behaviour.is_open(peer_id)
+	}
+
+	/// Returns the list of all the peers that the peerset currently requests us to be connected to.
+	pub fn requested_peers(&self) -> impl Iterator<Item = &PeerId> {
+		self.behaviour.requested_peers()
+	}
+
+	/// Returns the number of discovered nodes that we keep in memory.
+	pub fn num_discovered_peers(&self) -> usize {
+		self.behaviour.num_discovered_peers()
 	}
 
 	/// Disconnects the given peer if we are connected to it.
@@ -478,6 +556,11 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	/// Number of blocks in the import queue.
 	pub fn num_queued_blocks(&self) -> u32 {
 		self.sync.status().queued_blocks
+	}
+
+	/// Number of processed blocks.
+	pub fn num_processed_blocks(&self) -> usize {
+		self.sync.num_processed_blocks()
 	}
 
 	/// Number of active sync requests.
@@ -661,7 +744,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	}
 
 	/// Called by peer when it is disconnecting
-	pub fn on_peer_disconnected(&mut self, peer: PeerId) {
+	pub fn on_peer_disconnected(&mut self, peer: PeerId) -> CustomMessageOutcome<B> {
 		if self.important_peers.contains(&peer) {
 			warn!(target: "sync", "Reserved peer {} disconnected", peer);
 		} else {
@@ -678,7 +761,15 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			self.light_dispatch.on_disconnect(LightDispatchIn {
 				behaviour: &mut self.behaviour,
 				peerset: self.peerset_handle.clone(),
-			}, peer);
+			}, &peer);
+
+			// Notify all the notification protocols as closed.
+			CustomMessageOutcome::NotificationStreamClosed {
+				remote: peer,
+				protocols: self.protocol_name_by_engine.keys().cloned().collect(),
+			}
+		} else {
+			CustomMessageOutcome::None
 		}
 	}
 
@@ -731,7 +822,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		let get_justification = request
 			.fields
 			.contains(message::BlockAttributes::JUSTIFICATION);
-		while let Some(header) = self.context_data.chain.header(&id).unwrap_or(None) {
+		while let Some(header) = self.context_data.chain.header(id).unwrap_or(None) {
 			if blocks.len() >= max {
 				break;
 			}
@@ -749,7 +840,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				body: if get_body {
 					self.context_data
 						.chain
-						.body(&BlockId::Hash(hash))
+						.block_body(&BlockId::Hash(hash))
 						.unwrap_or(None)
 				} else {
 					None
@@ -859,6 +950,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			behaviour: &mut self.behaviour,
 			peerset: self.peerset_handle.clone(),
 		});
+		self.report_metrics()
 	}
 
 	fn maintain_peers(&mut self) {
@@ -1173,7 +1265,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	/// In chain-based consensus, we often need to make sure non-best forks are
 	/// at least temporarily synced.
 	pub fn announce_block(&mut self, hash: B::Hash, data: Vec<u8>) {
-		let header = match self.context_data.chain.header(&BlockId::Hash(hash)) {
+		let header = match self.context_data.chain.header(BlockId::Hash(hash)) {
 			Ok(Some(header)) => header,
 			Ok(None) => {
 				warn!("Trying to announce unknown block: {}", hash);
@@ -1341,7 +1433,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			request.block
 		);
 		let proof = match self.context_data.chain.execution_proof(
-			&request.block,
+			&BlockId::Hash(request.block),
 			&request.method,
 			&request.data,
 		) {
@@ -1463,17 +1555,20 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		}
 
 		let keys_str = || match request.keys.len() {
-			1 => request.keys[0].to_hex::<String>(),
+			1 => HexDisplay::from(&request.keys[0]).to_string(),
 			_ => format!(
 				"{}..{}",
-				request.keys[0].to_hex::<String>(),
-				request.keys[request.keys.len() - 1].to_hex::<String>(),
+				HexDisplay::from(&request.keys[0]),
+				HexDisplay::from(&request.keys[request.keys.len() - 1]),
 			),
 		};
 
 		trace!(target: "sync", "Remote read request {} from {} ({} at {})",
 			request.id, who, keys_str(), request.block);
-		let proof = match self.context_data.chain.read_proof(&request.block, &request.keys) {
+		let proof = match self.context_data.chain.read_proof(
+			&BlockId::Hash(request.block),
+			&mut request.keys.iter().map(AsRef::as_ref)
+		) {
 			Ok(proof) => proof,
 			Err(error) => {
 				trace!(target: "sync", "Remote read request {} from {} ({} at {}) failed with: {}",
@@ -1508,29 +1603,29 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		}
 
 		let keys_str = || match request.keys.len() {
-			1 => request.keys[0].to_hex::<String>(),
+			1 => HexDisplay::from(&request.keys[0]).to_string(),
 			_ => format!(
 				"{}..{}",
-				request.keys[0].to_hex::<String>(),
-				request.keys[request.keys.len() - 1].to_hex::<String>(),
+				HexDisplay::from(&request.keys[0]),
+				HexDisplay::from(&request.keys[request.keys.len() - 1]),
 			),
 		};
 
 		trace!(target: "sync", "Remote read child request {} from {} ({} {} at {})",
-			request.id, who, request.storage_key.to_hex::<String>(), keys_str(), request.block);
+			request.id, who, HexDisplay::from(&request.storage_key), keys_str(), request.block);
 		let proof = if let Some(child_info) = ChildInfo::resolve_child_info(request.child_type, &request.child_info[..]) {
 			match self.context_data.chain.read_child_proof(
-				&request.block,
+				&BlockId::Hash(request.block),
 				&request.storage_key,
 				child_info,
-				&request.keys,
+				&mut request.keys.iter().map(AsRef::as_ref),
 			) {
 				Ok(proof) => proof,
 				Err(error) => {
 					trace!(target: "sync", "Remote read child request {} from {} ({} {} at {}) failed with: {}",
 						request.id,
 						who,
-						request.storage_key.to_hex::<String>(),
+						HexDisplay::from(&request.storage_key),
 						keys_str(),
 						request.block,
 						error
@@ -1542,7 +1637,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			trace!(target: "sync", "Remote read child request {} from {} ({} {} at {}) failed with: {}",
 				request.id,
 				who,
-				request.storage_key.to_hex::<String>(),
+				HexDisplay::from(&request.storage_key),
 				keys_str(),
 				request.block,
 				"invalid child info and type",
@@ -1578,7 +1673,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	) {
 		trace!(target: "sync", "Remote header proof request {} from {} ({})",
 			request.id, who, request.block);
-		let (header, proof) = match self.context_data.chain.header_proof(request.block) {
+		let (header, proof) = match self.context_data.chain.header_proof(&BlockId::Number(request.block)) {
 			Ok((header, proof)) => (Some(header), proof),
 			Err(error) => {
 				trace!(target: "sync", "Remote header proof request {} from {} ({}) failed with: {}",
@@ -1621,9 +1716,9 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			request.id,
 			who,
 			if let Some(sk) = request.storage_key.as_ref() {
-				format!("{} : {}", sk.to_hex::<String>(), request.key.to_hex::<String>())
+				format!("{} : {}", HexDisplay::from(sk), HexDisplay::from(&request.key))
 			} else {
-				request.key.to_hex::<String>()
+				HexDisplay::from(&request.key).to_string()
 			},
 			request.first,
 			request.last
@@ -1644,9 +1739,9 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 					request.id,
 					who,
 					if let Some(sk) = storage_key {
-						format!("{} : {}", sk.0.to_hex::<String>(), key.0.to_hex::<String>())
+						format!("{} : {}", HexDisplay::from(&sk.0), HexDisplay::from(&key.0))
 					} else {
-						key.0.to_hex::<String>()
+						HexDisplay::from(&key.0).to_string()
 					},
 					request.first,
 					request.last,
@@ -1763,6 +1858,48 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			);
 		}
 		out
+	}
+
+	fn report_metrics(&self) {
+		use std::convert::TryInto;
+
+		if let Some(metrics) = &self.metrics {
+			let mut obsolete_requests: u64 = 0;
+			for peer in self.context_data.peers.values() {
+				let n = peer.obsolete_requests.len().try_into().unwrap_or(std::u64::MAX);
+				obsolete_requests = obsolete_requests.saturating_add(n);
+			}
+			metrics.obsolete_requests.set(obsolete_requests);
+
+			let n = self.handshaking_peers.len().try_into().unwrap_or(std::u64::MAX);
+			metrics.handshaking_peers.set(n);
+
+			let n = self.context_data.peers.len().try_into().unwrap_or(std::u64::MAX);
+			metrics.peers.set(n);
+
+			let m = self.sync.metrics();
+
+			metrics.fork_targets.set(m.fork_targets.into());
+			metrics.queued_blocks.set(m.queued_blocks.into());
+
+			metrics.justifications.with_label_values(&["pending"])
+				.set(m.justifications.pending_requests.into());
+			metrics.justifications.with_label_values(&["active"])
+				.set(m.justifications.active_requests.into());
+			metrics.justifications.with_label_values(&["failed"])
+				.set(m.justifications.failed_requests.into());
+			metrics.justifications.with_label_values(&["importing"])
+				.set(m.justifications.importing_requests.into());
+
+			metrics.finality_proofs.with_label_values(&["pending"])
+				.set(m.finality_proofs.pending_requests.into());
+			metrics.finality_proofs.with_label_values(&["active"])
+				.set(m.finality_proofs.active_requests.into());
+			metrics.finality_proofs.with_label_values(&["failed"])
+				.set(m.finality_proofs.failed_requests.into());
+			metrics.finality_proofs.with_label_values(&["importing"])
+				.set(m.finality_proofs.importing_requests.into());
+		}
 	}
 }
 
@@ -1907,12 +2044,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 				CustomMessageOutcome::None
 			}
 			GenericProtoOut::CustomProtocolClosed { peer_id, .. } => {
-				self.on_peer_disconnected(peer_id.clone());
-				// Notify all the notification protocols as closed.
-				CustomMessageOutcome::NotificationStreamClosed {
-					remote: peer_id,
-					protocols: self.protocol_name_by_engine.keys().cloned().collect(),
-				}
+				self.on_peer_disconnected(peer_id.clone())
 			},
 			GenericProtoOut::CustomMessage { peer_id, message } =>
 				self.on_custom_message(peer_id, message),
@@ -1981,5 +2113,52 @@ impl<B: BlockT, H: ExHashT> DiscoveryNetBehaviour for Protocol<B, H> {
 impl<B: BlockT, H: ExHashT> Drop for Protocol<B, H> {
 	fn drop(&mut self) {
 		debug!(target: "sync", "Network stats:\n{}", self.format_stats());
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use crate::PeerId;
+	use crate::protocol::light_dispatch::AlwaysBadChecker;
+	use crate::config::{EmptyTransactionPool, Roles};
+	use super::{CustomMessageOutcome, Protocol, ProtocolConfig};
+
+	use sp_consensus::block_validation::DefaultBlockAnnounceValidator;
+	use std::sync::Arc;
+	use substrate_test_runtime_client::{TestClientBuilder, TestClientBuilderExt};
+	use substrate_test_runtime_client::runtime::{Block, Hash};
+
+	#[test]
+	fn no_handshake_no_notif_closed() {
+		let client = Arc::new(TestClientBuilder::with_default_backend().build_with_longest_chain().0);
+
+		let (mut protocol, _) = Protocol::<Block, Hash>::new(
+			ProtocolConfig {
+				roles: Roles::FULL,
+				max_parallel_downloads: 10,
+			},
+			client.clone(),
+			Arc::new(AlwaysBadChecker),
+			Arc::new(EmptyTransactionPool),
+			None,
+			None,
+			From::from(&b"test"[..]),
+			sc_peerset::PeersetConfig {
+				in_peers: 10,
+				out_peers: 10,
+				bootnodes: Vec::new(),
+				reserved_only: false,
+				reserved_nodes: Vec::new(),
+			},
+			Box::new(DefaultBlockAnnounceValidator::new(client.clone())),
+			None
+		).unwrap();
+
+		let dummy_peer_id = PeerId::random();
+		let _ = protocol.on_peer_connected(dummy_peer_id.clone());
+		match protocol.on_peer_disconnected(dummy_peer_id) {
+			CustomMessageOutcome::None => {},
+			_ => panic!()
+		};
 	}
 }
