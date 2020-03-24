@@ -185,6 +185,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			}
 		}
 
+		let boot_node_ids = Arc::new(boot_node_ids);
+
 		// Check for duplicate bootnodes.
 		known_addresses.iter()
 			.try_for_each(|(peer_id, addr)|
@@ -245,7 +247,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			params.protocol_id.clone(),
 			peerset_config,
 			params.block_announce_validator,
-			params.metrics_registry.as_ref()
+			params.metrics_registry.as_ref(),
+			boot_node_ids.clone(),
 		)?;
 
 		// Build the swarm.
@@ -776,7 +779,7 @@ pub struct NetworkWorker<B: BlockT + 'static, H: ExHashT> {
 	/// Prometheus network metrics.
 	metrics: Option<Metrics>,
 	/// The `PeerId`'s of all boot nodes.
-	boot_node_ids: HashSet<PeerId>,
+	boot_node_ids: Arc<HashSet<PeerId>>,
 }
 
 struct Metrics {
