@@ -374,7 +374,7 @@ fn account_removal_removes_storage() {
 
 #[test]
 fn instantiate_and_call_and_deposit_event() {
-	let (wasm, code_hash) = compile_module::<Test>(include_str!("tests/return_from_start_fn.wat"))
+	let (wasm, code_hash) = compile_module::<Test>(&load_wasm("return_from_start_fn.wat"))
 		.unwrap();
 
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
@@ -448,7 +448,7 @@ fn dispatch_call() {
 	let encoded = Encode::encode(&Call::Balances(pallet_balances::Call::transfer(CHARLIE, 50)));
 	assert_eq!(&encoded[..], &hex!("00000300000000000000C8")[..]);
 
-	let (wasm, code_hash) = compile_module::<Test>(include_str!("tests/dispatch_call.wat"))
+	let (wasm, code_hash) = compile_module::<Test>(&load_wasm("dispatch_call.wat"))
 		.unwrap();
 
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
@@ -569,7 +569,7 @@ fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
 	let encoded = Encode::encode(&Call::Balances(pallet_balances::Call::transfer(CHARLIE, 50)));
 	assert_eq!(&encoded[..], &hex!("00000300000000000000C8")[..]);
 
-	let (wasm, code_hash) = compile_module::<Test>(include_str!("tests/dispatch_call_then_trap.wat"))
+	let (wasm, code_hash) = compile_module::<Test>(&load_wasm("dispatch_call_then_trap.wat"))
 		.unwrap();
 
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
@@ -662,7 +662,7 @@ fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
 
 #[test]
 fn run_out_of_gas() {
-	let (wasm, code_hash) = compile_module::<Test>(include_str!("tests/run_out_of_gas.wat"))
+	let (wasm, code_hash) = compile_module::<Test>(&load_wasm("run_out_of_gas.wat"))
 		.unwrap();
 
 	ExtBuilder::default()
@@ -713,7 +713,7 @@ fn test_set_rent_code_and_hash() {
 	let encoded = Encode::encode(&Call::Balances(pallet_balances::Call::transfer(CHARLIE, 50)));
 	assert_eq!(&encoded[..], &hex!("00000300000000000000C8")[..]);
 
-	let (wasm, code_hash) = compile_module::<Test>(include_str!("tests/set_rent.wat")).unwrap();
+	let (wasm, code_hash) = compile_module::<Test>(&load_wasm("set_rent.wat")).unwrap();
 
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		Balances::deposit_creating(&ALICE, 1_000_000);
@@ -743,7 +743,7 @@ fn test_set_rent_code_and_hash() {
 
 #[test]
 fn storage_size() {
-	let (wasm, code_hash) = compile_module::<Test>(include_str!("tests/set_rent.wat")).unwrap();
+	let (wasm, code_hash) = compile_module::<Test>(&load_wasm("set_rent.wat")).unwrap();
 
 	// Storage size
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
@@ -781,7 +781,7 @@ fn initialize_block(number: u64) {
 
 #[test]
 fn deduct_blocks() {
-	let (wasm, code_hash) = compile_module::<Test>(include_str!("tests/set_rent.wat")).unwrap();
+	let (wasm, code_hash) = compile_module::<Test>(&load_wasm("set_rent.wat")).unwrap();
 
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		// Create
@@ -875,7 +875,7 @@ fn claim_surcharge_malus() {
 /// Claim surcharge with the given trigger_call at the given blocks.
 /// If `removes` is true then assert that the contract is a tombstone.
 fn claim_surcharge(blocks: u64, trigger_call: impl Fn() -> bool, removes: bool) {
-	let (wasm, code_hash) = compile_module::<Test>(include_str!("tests/set_rent.wat")).unwrap();
+	let (wasm, code_hash) = compile_module::<Test>(&load_wasm("set_rent.wat")).unwrap();
 
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		// Create
@@ -907,7 +907,7 @@ fn claim_surcharge(blocks: u64, trigger_call: impl Fn() -> bool, removes: bool) 
 /// * if allowance is exceeded
 /// * if balance is reached and balance < subsistence threshold
 fn removals(trigger_call: impl Fn() -> bool) {
-	let (wasm, code_hash) = compile_module::<Test>(include_str!("tests/set_rent.wat")).unwrap();
+	let (wasm, code_hash) = compile_module::<Test>(&load_wasm("set_rent.wat")).unwrap();
 
 	// Balance reached and superior to subsistence threshold
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
@@ -1022,7 +1022,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 
 #[test]
 fn call_removed_contract() {
-	let (wasm, code_hash) = compile_module::<Test>(include_str!("tests/set_rent.wat")).unwrap();
+	let (wasm, code_hash) = compile_module::<Test>(&load_wasm("set_rent.wat")).unwrap();
 
 	// Balance reached and superior to subsistence threshold
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
@@ -1067,7 +1067,7 @@ fn call_removed_contract() {
 #[test]
 fn default_rent_allowance_on_instantiate() {
 	let (wasm, code_hash) = compile_module::<Test>(
-		include_str!("tests/check_default_rent_allowance.wat")).unwrap();
+		&load_wasm("check_default_rent_allowance.wat")).unwrap();
 
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		// Create
@@ -1119,9 +1119,9 @@ fn restoration_success() {
 
 fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage: bool) {
 	let (set_rent_wasm, set_rent_code_hash) =
-		compile_module::<Test>(include_str!("tests/set_rent.wat")).unwrap();
+		compile_module::<Test>(&load_wasm("set_rent.wat")).unwrap();
 	let (restoration_wasm, restoration_code_hash) =
-		compile_module::<Test>(include_str!("tests/restoration.wat")).unwrap();
+		compile_module::<Test>(&load_wasm("restoration.wat")).unwrap();
 
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		Balances::deposit_creating(&ALICE, 1_000_000);
@@ -1335,7 +1335,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 
 #[test]
 fn storage_max_value_limit() {
-	let (wasm, code_hash) = compile_module::<Test>(include_str!("tests/storage_size.wat"))
+	let (wasm, code_hash) = compile_module::<Test>(&load_wasm("storage_size.wat"))
 		.unwrap();
 
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
@@ -1380,9 +1380,9 @@ fn storage_max_value_limit() {
 #[test]
 fn deploy_and_call_other_contract() {
 	let (callee_wasm, callee_code_hash) =
-		compile_module::<Test>(include_str!("tests/return_with_data.wat")).unwrap();
+		compile_module::<Test>(&load_wasm("return_with_data.wat")).unwrap();
 	let (caller_wasm, caller_code_hash) =
-		compile_module::<Test>(include_str!("tests/caller_contract.wat")).unwrap();
+		compile_module::<Test>(&load_wasm("caller_contract.wat")).unwrap();
 
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		// Create
@@ -1412,7 +1412,7 @@ fn deploy_and_call_other_contract() {
 
 #[test]
 fn deploy_works_without_gas_price() {
-	let (wasm, code_hash) = compile_module::<Test>(include_str!("tests/get_runtime_storage.wat"))
+	let (wasm, code_hash) = compile_module::<Test>(&load_wasm("get_runtime_storage.wat"))
 		.unwrap();
 	ExtBuilder::default().existential_deposit(50).gas_price(0).build().execute_with(|| {
 		Balances::deposit_creating(&ALICE, 1_000_000);
@@ -1429,7 +1429,7 @@ fn deploy_works_without_gas_price() {
 
 #[test]
 fn cannot_self_destruct_through_draning() {
-	let (wasm, code_hash) = compile_module::<Test>(include_str!("tests/drain.wat")).unwrap();
+	let (wasm, code_hash) = compile_module::<Test>(&load_wasm("drain.wat")).unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		Balances::deposit_creating(&ALICE, 1_000_000);
 		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
@@ -1466,7 +1466,7 @@ fn cannot_self_destruct_through_draning() {
 
 #[test]
 fn cannot_self_destruct_while_live() {
-	let (wasm, code_hash) = compile_module::<Test>(include_str!("tests/self_destruct.wat"))
+	let (wasm, code_hash) = compile_module::<Test>(&load_wasm("self_destruct.wat"))
 		.unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		Balances::deposit_creating(&ALICE, 1_000_000);
@@ -1510,7 +1510,7 @@ fn cannot_self_destruct_while_live() {
 
 #[test]
 fn self_destruct_works() {
-	let (wasm, code_hash) = compile_module::<Test>(include_str!("tests/self_destruct.wat"))
+	let (wasm, code_hash) = compile_module::<Test>(&load_wasm("self_destruct.wat"))
 		.unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		Balances::deposit_creating(&ALICE, 1_000_000);
@@ -1556,9 +1556,9 @@ fn self_destruct_works() {
 #[test]
 fn destroy_contract_and_transfer_funds() {
 	let (callee_wasm, callee_code_hash) =
-		compile_module::<Test>(include_str!("tests/self_destruct.wat")).unwrap();
+		compile_module::<Test>(&load_wasm("self_destruct.wat")).unwrap();
 	let (caller_wasm, caller_code_hash) =
-		compile_module::<Test>(include_str!("tests/destroy_and_transfer.wat")).unwrap();
+		compile_module::<Test>(&load_wasm("destroy_and_transfer.wat")).unwrap();
 
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		// Create
@@ -1599,7 +1599,7 @@ fn destroy_contract_and_transfer_funds() {
 #[test]
 fn cannot_self_destruct_in_constructor() {
 	let (wasm, code_hash) =
-		compile_module::<Test>(include_str!("tests/self_destructing_constructor.wat")).unwrap();
+		compile_module::<Test>(&load_wasm("self_destructing_constructor.wat")).unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		Balances::deposit_creating(&ALICE, 1_000_000);
 		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
@@ -1637,7 +1637,7 @@ fn check_block_gas_limit_works() {
 
 #[test]
 fn get_runtime_storage() {
-	let (wasm, code_hash) = compile_module::<Test>(include_str!("tests/get_runtime_storage.wat"))
+	let (wasm, code_hash) = compile_module::<Test>(&load_wasm("get_runtime_storage.wat"))
 		.unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		Balances::deposit_creating(&ALICE, 1_000_000);
@@ -1667,7 +1667,7 @@ fn get_runtime_storage() {
 
 #[test]
 fn crypto_hashes() {
-	let (wasm, code_hash) = compile_module::<Test>(include_str!("tests/crypto_hashes.rs")).unwrap();
+	let (wasm, code_hash) = compile_module::<Test>(&load_wasm("crypto_hashes.wat")).unwrap();
 
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		Balances::deposit_creating(&ALICE, 1_000_000);
@@ -1717,4 +1717,9 @@ fn crypto_hashes() {
 			assert_eq!(&result.data[..*expected_size], &*expected);
 		}
 	})
+}
+
+fn load_wasm(file_name: &str) -> String {
+	let path = ["src/tests/", file_name].concat();
+	std::fs::read_to_string(&path).expect(&format!("Unable to read {} file", path))
 }
