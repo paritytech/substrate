@@ -554,7 +554,7 @@ decl_module! {
 		}
 
 		#[weight = SimpleDispatchInfo::default()]
-		fn on_finalize(n: T::BlockNumber) {
+		fn on_initialize(n: T::BlockNumber) {
 			// Check to see if we should spend some funds!
 			if (n % T::SpendPeriod::get()).is_zero() {
 				Self::spend_funds();
