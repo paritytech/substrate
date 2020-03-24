@@ -161,7 +161,7 @@ impl Into<TransactionValidity> for UnknownTransaction {
 	}
 }
 
-/// The origin of the transaction.
+/// The source of the transaction.
 ///
 /// Depending on the source we might apply different validation schemes.
 /// For instance we can disallow specific kinds of transactions if they were not produced
@@ -178,8 +178,8 @@ pub enum TransactionSource {
 
 	/// Transaction is coming from a local source.
 	///
-	/// This means that the transaction was produced either internally by the node
-	/// (for instance an Off-Chain Worker, or an Off-Chain Call) opposed
+	/// This means that the transaction was produced internally by the node
+	/// (for instance an Off-Chain Worker, or an Off-Chain Call), as opposed
 	/// to being received over the network.
 	Local,
 

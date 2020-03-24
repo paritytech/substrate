@@ -121,7 +121,7 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 		#validate_unsigned
 	);
 
-	return Ok(res.into())
+	Ok(res.into())
 }
 
 fn decl_validate_unsigned<'a>(

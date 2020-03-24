@@ -103,7 +103,7 @@ pub struct Transaction<Hash, Extrinsic> {
 	pub provides: Vec<Tag>,
 	/// Should that transaction be propagated.
 	pub propagate: bool,
-	/// Origin of that transaction.
+	/// Source of that transaction.
 	pub source: Source,
 }
 
