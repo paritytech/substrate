@@ -16,11 +16,9 @@
 
 //! Configuration trait for a CLI based on substrate
 
-use proc_macro;
 use proc_macro_error::{abort, abort_call_site};
 use quote::{quote, ToTokens};
 use std::collections::{HashMap, HashSet};
-use syn;
 use syn::parse::Parser;
 use syn::{punctuated::Punctuated, spanned::Spanned, *};
 

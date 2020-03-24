@@ -29,7 +29,6 @@ pub use crate::commands::import_blocks_cmd::ImportBlocksCmd;
 pub use crate::commands::purge_chain_cmd::PurgeChainCmd;
 pub use crate::commands::revert_cmd::RevertCmd;
 pub use crate::commands::runcmd::RunCmd;
-use crate::params::SharedParams;
 use crate::CliConfiguration;
 use crate::Result;
 use crate::SubstrateCLI;
@@ -67,33 +66,6 @@ pub enum Subcommand {
 
 	/// Remove the whole chain data.
 	PurgeChain(PurgeChainCmd),
-}
-
-impl Subcommand {
-	/// Get the shared parameters of a `CoreParams` command.
-	pub fn get_shared_params(&self) -> &SharedParams {
-		use Subcommand::*;
-
-		match self {
-			BuildSpec(params) => &params.shared_params,
-			ExportBlocks(params) => &params.shared_params,
-			ImportBlocks(params) => &params.shared_params,
-			CheckBlock(params) => &params.shared_params,
-			Revert(params) => &params.shared_params,
-			PurgeChain(params) => &params.shared_params,
-		}
-	}
-
-	/// Initialize substrate. This must be done only once.
-	///
-	/// This method:
-	///
-	/// 1. Set the panic handler
-	/// 2. Raise the FD limit
-	/// 3. Initialize the logger
-	pub fn init<C: SubstrateCLI>(&self) -> Result<()> {
-		self.get_shared_params().init::<C>()
-	}
 }
 
 macro_rules! match_and_call {
