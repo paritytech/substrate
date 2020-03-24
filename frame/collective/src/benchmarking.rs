@@ -28,23 +28,37 @@ const SEED: u32 = 0;
 
 benchmarks_instance! {
 	_{
-		// User account seed
+		// User account seed.
 		let u in 1 .. 1000 => ();
+		// Old members.
+		let n in 1 .. 1000 => ();
+		// New members.
 		let m in 1 .. 1000 => ();
 	}
 
 	set_members {
 		let m in ...;
+		let n in ...;
 
-		// Construct `new_members`. It should influence timing since it will sort this vector.
+		// Construct `new_members`.
+		// It should influence timing since it will sort this vector.
 		let mut new_members = vec![];
 		for i in 0 .. m {
-			let user = account("user", i, SEED);
-			new_members.push(user);
+			let member = account("member", i, SEED);
+			new_members.push(member);
 		}
 
-		// Construct `prime`. It shouldn't influence timing.
+		// Set old members. 
+		// We compute the difference of old and new members, so it should influence timing.
+		let mut old_members = vec![];
+		for i in 0 .. n {
+			let old_member = account("old member", i, SEED);
+			old_members.push(old_member);
+		}
+
 		let prime = Some(account("prime", 0, SEED));
+
+		Collective::<T, _>::set_members(SystemOrigin::Root.into(), old_members, prime.clone())?;
 
 	}: _(SystemOrigin::Root, new_members, prime)
 
