@@ -23,7 +23,10 @@ use libp2p::{Multiaddr, PeerId};
 use libp2p::core::{ConnectedPoint, nodes::listeners::ListenerId};
 use libp2p::swarm::{ProtocolsHandler, IntoProtocolsHandler};
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
-use sp_core::storage::{StorageKey, ChildInfo};
+use sp_core::{
+	storage::{StorageKey, ChildInfo},
+	hexdisplay::HexDisplay
+};
 use sp_consensus::{
 	BlockOrigin,
 	block_validation::BlockAnnounceValidator,
@@ -42,7 +45,6 @@ use prometheus_endpoint::{Registry, Gauge, GaugeVec, PrometheusError, Opts, regi
 use sync::{ChainSync, SyncState};
 use crate::service::{TransactionPool, ExHashT};
 use crate::config::{BoxFinalityProofRequestBuilder, Roles};
-use rustc_hex::ToHex;
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
@@ -1553,11 +1555,11 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		}
 
 		let keys_str = || match request.keys.len() {
-			1 => request.keys[0].to_hex::<String>(),
+			1 => HexDisplay::from(&request.keys[0]).to_string(),
 			_ => format!(
 				"{}..{}",
-				request.keys[0].to_hex::<String>(),
-				request.keys[request.keys.len() - 1].to_hex::<String>(),
+				HexDisplay::from(&request.keys[0]),
+				HexDisplay::from(&request.keys[request.keys.len() - 1]),
 			),
 		};
 
@@ -1601,16 +1603,16 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		}
 
 		let keys_str = || match request.keys.len() {
-			1 => request.keys[0].to_hex::<String>(),
+			1 => HexDisplay::from(&request.keys[0]).to_string(),
 			_ => format!(
 				"{}..{}",
-				request.keys[0].to_hex::<String>(),
-				request.keys[request.keys.len() - 1].to_hex::<String>(),
+				HexDisplay::from(&request.keys[0]),
+				HexDisplay::from(&request.keys[request.keys.len() - 1]),
 			),
 		};
 
 		trace!(target: "sync", "Remote read child request {} from {} ({} {} at {})",
-			request.id, who, request.storage_key.to_hex::<String>(), keys_str(), request.block);
+			request.id, who, HexDisplay::from(&request.storage_key), keys_str(), request.block);
 		let proof = if let Some(child_info) = ChildInfo::resolve_child_info(request.child_type, &request.child_info[..]) {
 			match self.context_data.chain.read_child_proof(
 				&BlockId::Hash(request.block),
@@ -1623,7 +1625,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 					trace!(target: "sync", "Remote read child request {} from {} ({} {} at {}) failed with: {}",
 						request.id,
 						who,
-						request.storage_key.to_hex::<String>(),
+						HexDisplay::from(&request.storage_key),
 						keys_str(),
 						request.block,
 						error
@@ -1635,7 +1637,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			trace!(target: "sync", "Remote read child request {} from {} ({} {} at {}) failed with: {}",
 				request.id,
 				who,
-				request.storage_key.to_hex::<String>(),
+				HexDisplay::from(&request.storage_key),
 				keys_str(),
 				request.block,
 				"invalid child info and type",
@@ -1714,9 +1716,9 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			request.id,
 			who,
 			if let Some(sk) = request.storage_key.as_ref() {
-				format!("{} : {}", sk.to_hex::<String>(), request.key.to_hex::<String>())
+				format!("{} : {}", HexDisplay::from(sk), HexDisplay::from(&request.key))
 			} else {
-				request.key.to_hex::<String>()
+				HexDisplay::from(&request.key).to_string()
 			},
 			request.first,
 			request.last
@@ -1737,9 +1739,9 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 					request.id,
 					who,
 					if let Some(sk) = storage_key {
-						format!("{} : {}", sk.0.to_hex::<String>(), key.0.to_hex::<String>())
+						format!("{} : {}", HexDisplay::from(&sk.0), HexDisplay::from(&key.0))
 					} else {
-						key.0.to_hex::<String>()
+						HexDisplay::from(&key.0).to_string()
 					},
 					request.first,
 					request.last,
