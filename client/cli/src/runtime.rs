@@ -216,4 +216,14 @@ impl<C: SubstrateCLI> Runtime<C> {
 	{
 		run_until_exit(self.tokio_runtime, runner(self.config))
 	}
+
+	/// Get an immutable reference to the node Configuration
+	pub fn config(&self) -> &Configuration {
+		&self.config
+	}
+
+	/// Get a mutable reference to the node Configuration
+	pub fn config_mut(&mut self) -> &Configuration {
+		&mut self.config
+	}
 }
