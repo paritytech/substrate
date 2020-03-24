@@ -101,6 +101,15 @@ pub trait BenchmarkingSetup<T> {
 	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>;
 }
 
+/// The required setup for creating a benchmark.
+pub trait BenchmarkingSetupInstance<T, I> {
+	/// Return the components and their ranges which should be tested in this benchmark.
+	fn components(&self) -> Vec<(BenchmarkParameter, u32, u32)>;
+
+	/// Set up the storage, and prepare a closure to test in a single run of the benchmark.
+	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>;
+}
+
 /// Grab an account, seeded by a name and index.
 pub fn account<AccountId: Decode + Default>(name: &'static str, index: u32, seed: u32) -> AccountId {
 	let entropy = (name, index, seed).using_encoded(blake2_256);

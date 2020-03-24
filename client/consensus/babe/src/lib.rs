@@ -62,7 +62,9 @@ pub use sp_consensus_babe::{
 	BabeApi, ConsensusLog, BABE_ENGINE_ID, SlotNumber, BabeConfiguration,
 	AuthorityId, AuthorityPair, AuthoritySignature,
 	BabeAuthorityWeight, VRF_OUTPUT_LENGTH,
-	digests::{PreDigest, CompatibleDigestItem, NextEpochDescriptor},
+	digests::{
+		CompatibleDigestItem, NextEpochDescriptor, PreDigest, PrimaryPreDigest, SecondaryPreDigest,
+	},
 };
 pub use sp_consensus::SyncOracle;
 use std::{
@@ -580,10 +582,10 @@ fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, Error<B>>
 	// genesis block doesn't contain a pre digest so let's generate a
 	// dummy one to not break any invariants in the rest of the code
 	if header.number().is_zero() {
-		return Ok(PreDigest::Secondary {
+		return Ok(PreDigest::Secondary(SecondaryPreDigest {
 			slot_number: 0,
 			authority_index: 0,
-		});
+		}));
 	}
 
 	let mut pre_digest: Option<_> = None;

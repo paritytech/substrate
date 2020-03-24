@@ -1,6 +1,6 @@
 [package]
 name = "chain-spec-builder"
-version = "2.0.0-alpha.4"
+version = "2.0.0-alpha.5"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 build = "build.rs"
@@ -10,8 +10,8 @@ repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
 ansi_term = "0.12.1"
-sc-keystore = { version = "2.0.0-alpha.4", path = "../../../client/keystore" }
-node-cli = { version = "2.0.0-alpha.4", path = "../../node/cli" }
-sp-core = { version = "2.0.0-alpha.4", path = "../../../primitives/core" }
+sc-keystore = { version = "2.0.0-alpha.5", path = "../../../client/keystore" }
+node-cli = { version = "2.0.0-alpha.5", path = "../../node/cli" }
+sp-core = { version = "2.0.0-alpha.5", path = "../../../primitives/core" }
 rand = "0.7.2"
 structopt = "0.3.8"

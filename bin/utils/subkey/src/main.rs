@@ -648,7 +648,7 @@ fn read_pair<C: Crypto>(
 }
 
 fn format_signature<C: Crypto>(signature: &SignatureOf<C>) -> String {
-	format!("{}", hex::encode(signature))
+	format!("{}", HexDisplay::from(&signature.as_ref()))
 }
 
 fn format_seed<C: Crypto>(seed: SeedOf<C>) -> String {
@@ -711,7 +711,7 @@ fn create_extrinsic<C: Crypto>(
 }
 
 fn print_extrinsic(extrinsic: UncheckedExtrinsic) {
-	println!("0x{}", hex::encode(&extrinsic.encode()));
+	println!("0x{}", HexDisplay::from(&extrinsic.encode()));
 }
 
 fn print_usage(matches: &ArgMatches) {

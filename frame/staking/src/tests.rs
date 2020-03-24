@@ -18,11 +18,11 @@
 
 use super::*;
 use mock::*;
-use sp_runtime::{assert_eq_error_rate, traits::{OnInitialize, BadOrigin}};
+use sp_runtime::{assert_eq_error_rate, traits::BadOrigin};
 use sp_staking::offence::OffenceDetails;
 use frame_support::{
 	assert_ok, assert_noop,
-	traits::{Currency, ReservableCurrency},
+	traits::{Currency, ReservableCurrency, OnInitialize},
 	StorageMap,
 };
 use pallet_balances::Error as BalancesError;
