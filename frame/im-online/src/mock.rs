@@ -41,10 +41,10 @@ impl_outer_dispatch! {
 }
 
 thread_local! {
-	pub static VALIDATORS: RefCell<Option<Vec<UintAuthorityId>>> = RefCell::new(Some(vec![
-		UintAuthorityId(1),
-		UintAuthorityId(2),
-		UintAuthorityId(3),
+	pub static VALIDATORS: RefCell<Option<Vec<u64>>> = RefCell::new(Some(vec![
+		1,
+		2,
+		3,
 	]));
 }
 
@@ -56,16 +56,16 @@ impl frame_system::offchain::AppCrypto<PublicWrapper, Signature> for ImOnlineAut
 }
 
 pub struct TestSessionManager;
-impl pallet_session::SessionManager<UintAuthorityId> for TestSessionManager {
-	fn new_session(_new_index: SessionIndex) -> Option<Vec<UintAuthorityId>> {
+impl pallet_session::SessionManager<u64> for TestSessionManager {
+	fn new_session(_new_index: SessionIndex) -> Option<Vec<u64>> {
 		VALIDATORS.with(|l| l.borrow_mut().take())
 	}
 	fn end_session(_: SessionIndex) {}
 	fn start_session(_: SessionIndex) {}
 }
 
-impl pallet_session::historical::SessionManager<UintAuthorityId, UintAuthorityId> for TestSessionManager {
-	fn new_session(_new_index: SessionIndex) -> Option<Vec<(UintAuthorityId, UintAuthorityId)>> {
+impl pallet_session::historical::SessionManager<u64, u64> for TestSessionManager {
+	fn new_session(_new_index: SessionIndex) -> Option<Vec<(u64, u64)>> {
 		VALIDATORS.with(|l| l
 			.borrow_mut()
 			.take()
@@ -80,17 +80,17 @@ impl pallet_session::historical::SessionManager<UintAuthorityId, UintAuthorityId
 
 /// An extrinsic type used for tests.
 pub type Extrinsic = TestXt<Call, ()>;
-type IdentificationTuple = (UintAuthorityId, UintAuthorityId);
+type IdentificationTuple = (u64, u64);
 type Offence = crate::UnresponsivenessOffence<IdentificationTuple>;
 
 thread_local! {
-	pub static OFFENCES: RefCell<Vec<(Vec<UintAuthorityId>, Offence)>> = RefCell::new(vec![]);
+	pub static OFFENCES: RefCell<Vec<(Vec<u64>, Offence)>> = RefCell::new(vec![]);
 }
 
 /// A mock offence report handler.
 pub struct OffenceHandler;
-impl ReportOffence<UintAuthorityId, IdentificationTuple, Offence> for OffenceHandler {
-	fn report_offence(reporters: Vec<UintAuthorityId>, offence: Offence) -> Result<(), OffenceError> {
+impl ReportOffence<u64, IdentificationTuple, Offence> for OffenceHandler {
+	fn report_offence(reporters: Vec<u64>, offence: Offence) -> Result<(), OffenceError> {
 		OFFENCES.with(|l| l.borrow_mut().push((reporters, offence)));
 		Ok(())
 	}
@@ -105,12 +105,12 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 pub struct PublicWrapper(Public);
 
 impl IdentifyAccount for PublicWrapper {
-	type AccountId = UintAuthorityId;
+	type AccountId = u64;
 	fn into_account(self) -> Self::AccountId {
 		let bytes = self.0.to_vec();
 		let mut truncated = [0u8; 8];
 		truncated.copy_from_slice(bytes.as_slice());
-		UintAuthorityId(u64::from_be_bytes(truncated))
+		u64::from_be_bytes(truncated)
 	}
 }
 
@@ -144,7 +144,7 @@ impl frame_system::Trait for Runtime {
 	type Call = Call;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
-	type AccountId = UintAuthorityId;
+	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = ();
@@ -172,7 +172,7 @@ impl pallet_session::Trait for Runtime {
 	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
 	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Runtime, TestSessionManager>;
 	type SessionHandler = (ImOnline, );
-	type ValidatorId = UintAuthorityId;
+	type ValidatorId = u64;
 	type ValidatorIdOf = ConvertInto;
 	type Keys = UintAuthorityId;
 	type Event = ();
@@ -180,7 +180,7 @@ impl pallet_session::Trait for Runtime {
 }
 
 impl pallet_session::historical::Trait for Runtime {
-	type FullIdentification = UintAuthorityId;
+	type FullIdentification = u64;
 	type FullIdentificationOf = ConvertInto;
 }
 
@@ -221,7 +221,7 @@ impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for R
 	fn create_transaction<C: frame_system::offchain::AppCrypto<Self::Public, Self::Signature>>(
 		call: Call,
 		_public: PublicWrapper,
-		_account: UintAuthorityId,
+		_account: u64,
 		nonce: u64,
 	) -> Option<(Call, <Extrinsic as ExtrinsicT>::SignaturePayload)> {
 		Some((call, (nonce, ())))
