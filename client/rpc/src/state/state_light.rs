@@ -39,7 +39,7 @@ use rpc::{
 };
 
 use sc_rpc_api::Subscriptions;
-use sp_blockchain::{Error as ClientError, HeaderBackend};
+use sp_blockchain::{Error as ClientError, HeaderBackend, Info};
 use sc_client::{
 	BlockchainEvents,
 	light::{
@@ -507,6 +507,10 @@ impl<Block, F, Client> StateBackend<Block, Client> for LightState<Block, F, Clie
 		id: SubscriptionId,
 	) -> RpcResult<bool> {
 		Ok(self.subscriptions.cancel(id))
+	}
+
+	fn info(&self) -> Info<Block> {
+		self.client.info()
 	}
 }
 

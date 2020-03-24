@@ -38,7 +38,7 @@ use self::error::{Error, FutureResult};
 
 pub use sc_rpc_api::state::*;
 use sc_client_api::{ExecutorProvider, StorageProvider, BlockchainEvents, Backend};
-use sp_blockchain::{HeaderMetadata, HeaderBackend};
+use sp_blockchain::{HeaderMetadata, HeaderBackend, Info};
 
 const STORAGE_KEYS_PAGED_MAX_COUNT: u32 = 1000;
 
@@ -191,6 +191,9 @@ pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 		_meta: Option<crate::metadata::Metadata>,
 		id: SubscriptionId,
 	) -> RpcResult<bool>;
+
+	/// Retrieve blockchain info
+	fn info(&self) -> Info<Block>;
 }
 
 /// Create new state API that works on full node.
@@ -355,6 +358,15 @@ impl<Block, Client> StateApi<Block::Hash> for State<Block, Client>
 		to: Option<Block::Hash>
 	) -> FutureResult<Vec<StorageChangeSet<Block::Hash>>> {
 		self.backend.query_storage(from, to, keys)
+	}
+
+	fn query_storage_at(
+		&self,
+		keys: Vec<StorageKey>,
+		at: Option<Block::Hash>
+	) -> FutureResult<Vec<StorageChangeSet<Block::Hash>>> {
+		let at = at.unwrap_or_else(|| self.backend.info().best_hash);
+		self.query_storage(keys,at, Some(at))
 	}
 
 	fn subscribe_storage(

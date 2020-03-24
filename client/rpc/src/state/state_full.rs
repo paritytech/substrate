@@ -21,20 +21,19 @@ use std::sync::Arc;
 use std::ops::Range;
 use futures::{future, StreamExt as _, TryStreamExt as _};
 use log::warn;
-use num_traits::ops::checked::CheckedSub;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use rpc::{Result as RpcResult, futures::{stream, Future, Sink, Stream, future::result}};
 
 use sc_rpc_api::Subscriptions;
 use sc_client_api::backend::Backend;
-use sp_blockchain::{Result as ClientResult, Error as ClientError, HeaderMetadata, CachedHeaderMetadata, HeaderBackend};
+use sp_blockchain::{Result as ClientResult, Error as ClientError, HeaderMetadata, CachedHeaderMetadata, HeaderBackend, Info};
 use sc_client::BlockchainEvents;
 use sp_core::{
 	Bytes, storage::{well_known_keys, StorageKey, StorageData, StorageChangeSet, ChildInfo},
 };
 use sp_version::RuntimeVersion;
 use sp_runtime::{
-	generic::BlockId, traits::{Block as BlockT, NumberFor, SaturatedConversion},
+	generic::BlockId, traits::{Block as BlockT, NumberFor, SaturatedConversion, CheckedSub},
 };
 
 use sp_api::{Metadata, ProvideRuntimeApi, CallApiAt};
@@ -519,6 +518,10 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 		id: SubscriptionId,
 	) -> RpcResult<bool> {
 		Ok(self.subscriptions.cancel(id))
+	}
+
+	fn info(&self) -> Info<Block> {
+		self.client.info()
 	}
 }
 
