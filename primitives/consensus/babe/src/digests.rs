@@ -63,7 +63,7 @@ impl TryFrom<RawPrimaryPreDigest> for PrimaryPreDigest {
 	}
 }
 
-/// BABE secondary pre-digest.
+/// BABE secondary slot assignment pre-digest.
 #[derive(Clone, RuntimeDebug, Encode, Decode)]
 pub struct SecondaryPreDigest {
 	/// Authority index
