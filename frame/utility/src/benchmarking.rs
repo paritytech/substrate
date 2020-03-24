@@ -1,4 +1,4 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
+// Copyright 2019-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,23 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Timestamp pallet benchmarking.
+// Benchmarks for Utility Pallet
 
-#![cfg(feature = "runtime-benchmarks")]
-
-use super::*;
-use sp_std::prelude::*;
-use frame_system::RawOrigin;
-use frame_benchmarking::benchmarks;
-
-const MAX_TIME: u32 = 100;
-
-benchmarks! {
-	_ {
-		let n in 1 .. MAX_TIME => ();
-	}
-
-	set {
-		let n in ...;
-	}: _(RawOrigin::None, n.into())
-}
+#![cfg(features = "runtime-benchmarks")]
