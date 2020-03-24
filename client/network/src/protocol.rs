@@ -2164,7 +2164,8 @@ mod tests {
 				reserved_nodes: Vec::new(),
 			},
 			Box::new(DefaultBlockAnnounceValidator::new(client.clone())),
-			None
+			None,
+			Default::default(),
 		).unwrap();
 
 		let dummy_peer_id = PeerId::random();
