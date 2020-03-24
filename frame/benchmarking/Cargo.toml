@@ -1,6 +1,6 @@
 [package]
 name = "frame-benchmarking"
-version = "2.0.0-alpha.4"
+version = "2.0.0-alpha.5"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
@@ -11,13 +11,13 @@ description = "Macro for benchmarking a FRAME runtime."
 [dependencies]
 linregress = "0.1"
 codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false }
-sp-api = { version = "2.0.0-alpha.4", path = "../../primitives/api", default-features = false }
-sp-runtime-interface = { version = "2.0.0-alpha.4", path = "../../primitives/runtime-interface", default-features = false }
-sp-runtime = { version = "2.0.0-alpha.4", path = "../../primitives/runtime", default-features = false }
-sp-std = { version = "2.0.0-alpha.4", path = "../../primitives/std", default-features = false }
-sp-io = { path = "../../primitives/io", default-features = false, version = "2.0.0-alpha.4"}
-frame-support = { version = "2.0.0-alpha.4", default-features = false, path = "../support" }
-frame-system = { version = "2.0.0-alpha.4", default-features = false, path = "../system" }
+sp-api = { version = "2.0.0-alpha.5", path = "../../primitives/api", default-features = false }
+sp-runtime-interface = { version = "2.0.0-alpha.5", path = "../../primitives/runtime-interface", default-features = false }
+sp-runtime = { version = "2.0.0-alpha.5", path = "../../primitives/runtime", default-features = false }
+sp-std = { version = "2.0.0-alpha.5", path = "../../primitives/std", default-features = false }
+sp-io = { path = "../../primitives/io", default-features = false, version = "2.0.0-alpha.5"}
+frame-support = { version = "2.0.0-alpha.5", default-features = false, path = "../support" }
+frame-system = { version = "2.0.0-alpha.5", default-features = false, path = "../system" }
 
 [features]
 default = [ "std" ]
