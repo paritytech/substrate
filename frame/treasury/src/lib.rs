@@ -92,7 +92,7 @@ use serde::{Serialize, Deserialize};
 use sp_std::prelude::*;
 use frame_support::{decl_module, decl_storage, decl_event, ensure, print, decl_error, Parameter};
 use frame_support::traits::{
-	Currency, ExistenceRequirement, Get, Imbalance, OnUnbalanced, ExistenceRequirement::AllowDeath,
+	Currency, Get, Imbalance, OnUnbalanced, ExistenceRequirement::KeepAlive,
 	ReservableCurrency, WithdrawReason
 };
 use sp_runtime::{Permill, ModuleId, Percent, RuntimeDebug, traits::{
@@ -553,7 +553,7 @@ decl_module! {
 			Self::payout_tip(tip);
 		}
 
-		fn on_finalize(n: T::BlockNumber) {
+		fn on_initialize(n: T::BlockNumber) {
 			// Check to see if we should spend some funds!
 			if (n % T::SpendPeriod::get()).is_zero() {
 				Self::spend_funds();
@@ -631,7 +631,7 @@ impl<T: Trait> Module<T> {
 		Self::retain_active_tips(&mut tips);
 		tips.sort_by_key(|i| i.1);
 		let treasury = Self::account_id();
-		let max_payout = T::Currency::free_balance(&treasury);
+		let max_payout = Self::pot();
 		let mut payout = tips[tips.len() / 2].1.min(max_payout);
 		if let Some((finder, deposit)) = tip.finder {
 			let _ = T::Currency::unreserve(&finder, deposit);
@@ -641,11 +641,11 @@ impl<T: Trait> Module<T> {
 				payout -= finders_fee;
 				// this should go through given we checked it's at most the free balance, but still
 				// we only make a best-effort.
-				let _ = T::Currency::transfer(&treasury, &finder, finders_fee, AllowDeath);
+				let _ = T::Currency::transfer(&treasury, &finder, finders_fee, KeepAlive);
 			}
 		}
 		// same as above: best-effort only.
-		let _ = T::Currency::transfer(&treasury, &tip.who, payout, AllowDeath);
+		let _ = T::Currency::transfer(&treasury, &tip.who, payout, KeepAlive);
 	}
 
 	// Spend some money!
@@ -697,7 +697,7 @@ impl<T: Trait> Module<T> {
 			&Self::account_id(),
 			imbalance,
 			WithdrawReason::Transfer.into(),
-			ExistenceRequirement::KeepAlive
+			KeepAlive
 		) {
 			print("Inconsistent state - couldn't settle imbalance for funds spent by treasury");
 			// Nothing else to do here.

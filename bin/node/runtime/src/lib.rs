@@ -68,7 +68,6 @@ use impls::{CurrencyToVoteHandler, Author, LinearWeightToFee, TargetedFeeAdjustm
 /// Constant values used within the runtime.
 pub mod constants;
 use constants::{time::*, currency::*};
-use frame_system::Trait;
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
@@ -83,8 +82,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to 0. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 239,
-	impl_version: 0,
+	spec_version: 240,
+	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 };
 

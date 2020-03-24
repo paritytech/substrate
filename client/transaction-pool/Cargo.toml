@@ -1,6 +1,6 @@
 [package]
 name = "sc-transaction-pool"
-version = "2.0.0-alpha.4"
+version = "2.0.0-alpha.5"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
@@ -16,17 +16,17 @@ futures-diagnose = "1.0"
 log = "0.4.8"
 parking_lot = "0.10.0"
 wasm-timer = "0.2"
-sp-core = { version = "2.0.0-alpha.4", path = "../../primitives/core" }
-sp-api = { version = "2.0.0-alpha.4", path = "../../primitives/api" }
-sp-runtime = { version = "2.0.0-alpha.4", path = "../../primitives/runtime" }
-sc-transaction-graph = { version = "2.0.0-alpha.4", path = "./graph" }
-sp-transaction-pool = { version = "2.0.0-alpha.4", path = "../../primitives/transaction-pool" }
-sc-client-api = { version = "2.0.0-alpha.4", path = "../api" }
-sp-blockchain = { version = "2.0.0-alpha.4", path = "../../primitives/blockchain" }
+sp-core = { version = "2.0.0-alpha.5", path = "../../primitives/core" }
+sp-api = { version = "2.0.0-alpha.5", path = "../../primitives/api" }
+sp-runtime = { version = "2.0.0-alpha.5", path = "../../primitives/runtime" }
+sc-transaction-graph = { version = "2.0.0-alpha.5", path = "./graph" }
+sp-transaction-pool = { version = "2.0.0-alpha.5", path = "../../primitives/transaction-pool" }
+sc-client-api = { version = "2.0.0-alpha.5", path = "../api" }
+sp-blockchain = { version = "2.0.0-alpha.5", path = "../../primitives/blockchain" }
 futures-timer = "2.0"
 parity-util-mem = { version = "0.6.0", default-features = false, features = ["primitive-types"] }
 
 [dev-dependencies]
-sp-keyring = { version = "2.0.0-alpha.4", path = "../../primitives/keyring" }
+sp-keyring = { version = "2.0.0-alpha.5", path = "../../primitives/keyring" }
 substrate-test-runtime-transaction-pool = { version = "2.0.0-dev", path = "../../test-utils/runtime/transaction-pool" }
 substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../test-utils/runtime/client" }

@@ -80,12 +80,12 @@ fn phragmen_poc_works() {
 		(30, vec![2, 3]),
 	];
 
-	let PhragmenResult { winners, assignments } = elect::<_, _, _, TestCurrencyToVote, Output>(
+	let stake_of = create_stake_of(&[(10, 10), (20, 20), (30, 30)]);
+	let PhragmenResult { winners, assignments } = elect::<_, _, TestCurrencyToVote, Output>(
 		2,
 		2,
 		candidates,
-		voters,
-		create_stake_of(&[(10, 10), (20, 20), (30, 30)]),
+		voters.iter().map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone())).collect::<Vec<_>>(),
 	).unwrap();
 
 	assert_eq_uvec!(winners, vec![(2, 40), (3, 50)]);
@@ -149,12 +149,11 @@ fn phragmen_accuracy_on_large_scale_only_validators() {
 		(5, (u64::max_value() - 2).into()),
 	]);
 
-	let PhragmenResult { winners, assignments } = elect::<_, _, _, TestCurrencyToVote, Output>(
+	let PhragmenResult { winners, assignments } = elect::<_, _, TestCurrencyToVote, Output>(
 		2,
 		2,
 		candidates.clone(),
-		auto_generate_self_voters(&candidates),
-		stake_of,
+		auto_generate_self_voters(&candidates).iter().map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone())).collect::<Vec<_>>(),
 	).unwrap();
 
 	assert_eq_uvec!(winners, vec![(1, 18446744073709551614u128), (5, 18446744073709551613u128)]);
@@ -180,12 +179,11 @@ fn phragmen_accuracy_on_large_scale_validators_and_nominators() {
 		(14, u64::max_value().into()),
 	]);
 
-	let PhragmenResult { winners, assignments } = elect::<_, _, _, TestCurrencyToVote, Output>(
+	let PhragmenResult { winners, assignments } = elect::<_, _, TestCurrencyToVote, Output>(
 		2,
 		2,
 		candidates,
-		voters,
-		stake_of,
+		voters.iter().map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone())).collect::<Vec<_>>(),
 	).unwrap();
 
 	assert_eq_uvec!(winners, vec![(2, 36893488147419103226u128), (1, 36893488147419103219u128)]);
@@ -212,12 +210,11 @@ fn phragmen_accuracy_on_small_scale_self_vote() {
 		(30, 1),
 	]);
 
-	let PhragmenResult { winners, assignments: _ } = elect::<_, _, _, TestCurrencyToVote, Output>(
+	let PhragmenResult { winners, assignments: _ } = elect::<_, _, TestCurrencyToVote, Output>(
 		3,
 		3,
 		candidates,
-		voters,
-		stake_of,
+		voters.iter().map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone())).collect::<Vec<_>>(),
 	).unwrap();
 
 	assert_eq_uvec!(winners, vec![(20, 2), (10, 1), (30, 1)]);
@@ -243,12 +240,11 @@ fn phragmen_accuracy_on_small_scale_no_self_vote() {
 		(3, 1),
 	]);
 
-	let PhragmenResult { winners, assignments: _ } = elect::<_, _, _, TestCurrencyToVote, Output>(
+	let PhragmenResult { winners, assignments: _ } = elect::<_, _, TestCurrencyToVote, Output>(
 		3,
 		3,
 		candidates,
-		voters,
-		stake_of,
+		voters.iter().map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone())).collect::<Vec<_>>(),
 	).unwrap();
 
 	assert_eq_uvec!(winners, vec![(20, 2), (10, 1), (30, 1)]);
@@ -277,12 +273,11 @@ fn phragmen_large_scale_test() {
 		(50, 990000000000000000),
 	]);
 
-	let PhragmenResult { winners, assignments } = elect::<_, _, _, TestCurrencyToVote, Output>(
+	let PhragmenResult { winners, assignments } = elect::<_, _, TestCurrencyToVote, Output>(
 		2,
 		2,
 		candidates,
-		voters,
-		stake_of,
+		voters.iter().map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone())).collect::<Vec<_>>(),
 	).unwrap();
 
 	assert_eq_uvec!(winners, vec![(24, 1490000000000200000u128), (22, 1490000000000100000u128)]);
@@ -304,12 +299,11 @@ fn phragmen_large_scale_test_2() {
 		(50, nom_budget.into()),
 	]);
 
-	let PhragmenResult { winners, assignments } = elect::<_, _, _, TestCurrencyToVote, Output>(
+	let PhragmenResult { winners, assignments } = elect::<_, _, TestCurrencyToVote, Output>(
 		2,
 		2,
 		candidates,
-		voters,
-		stake_of,
+		voters.iter().map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone())).collect::<Vec<_>>(),
 	).unwrap();
 
 	assert_eq_uvec!(winners, vec![(2, 1000000000004000000u128), (4, 1000000000004000000u128)]);
@@ -369,12 +363,11 @@ fn elect_has_no_entry_barrier() {
 		(2, 10),
 	]);
 
-	let PhragmenResult { winners, assignments: _ } = elect::<_, _, _, TestCurrencyToVote, Output>(
+	let PhragmenResult { winners, assignments: _ } = elect::<_, _, TestCurrencyToVote, Output>(
 		3,
 		3,
 		candidates,
-		voters,
-		stake_of,
+		voters.iter().map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone())).collect::<Vec<_>>(),
 	).unwrap();
 
 	// 30 is elected with stake 0. The caller is responsible for stripping this.
@@ -397,12 +390,11 @@ fn minimum_to_elect_is_respected() {
 		(2, 10),
 	]);
 
-	let maybe_result = elect::<_, _, _, TestCurrencyToVote, Output>(
+	let maybe_result = elect::<_, _, TestCurrencyToVote, Output>(
 		10,
 		10,
 		candidates,
-		voters,
-		stake_of,
+		voters.iter().map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone())).collect::<Vec<_>>(),
 	);
 
 	assert!(maybe_result.is_none());
@@ -424,12 +416,11 @@ fn self_votes_should_be_kept() {
 		(1, 8),
 	]);
 
-	let result = elect::<_, _, _, TestCurrencyToVote, Output>(
+	let result = elect::<_, _, TestCurrencyToVote, Output>(
 		2,
 		2,
 		candidates,
-		voters,
-		&stake_of,
+		voters.iter().map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone())).collect::<Vec<_>>(),
 	).unwrap();
 
 	assert_eq!(result.winners, vec![(20, 28), (10, 18)]);
