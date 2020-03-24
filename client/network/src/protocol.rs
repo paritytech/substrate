@@ -223,6 +223,8 @@ pub struct Protocol<B: BlockT, H: ExHashT> {
 	protocol_engine_by_name: HashMap<Cow<'static, [u8]>, ConsensusEngineId>,
 	/// Prometheus metrics.
 	metrics: Option<Metrics>,
+	/// The `PeerId`'s of all boot nodes.
+	boot_node_ids: Arc<HashSet<PeerId>>,
 }
 
 #[derive(Default)]
@@ -432,7 +434,8 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		protocol_id: ProtocolId,
 		peerset_config: sc_peerset::PeersetConfig,
 		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
-		metrics_registry: Option<&Registry>
+		metrics_registry: Option<&Registry>,
+		boot_node_ids: Arc<HashSet<PeerId>>,
 	) -> error::Result<(Protocol<B, H>, sc_peerset::PeersetHandle)> {
 		let info = chain.info();
 		let sync = ChainSync::new(
@@ -481,7 +484,8 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				Some(Metrics::register(r)?)
 			} else {
 				None
-			}
+			},
+			boot_node_ids,
 		};
 
 		Ok((protocol, peerset_handle))
@@ -1012,6 +1016,17 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				);
 				self.peerset_handle.report_peer(who.clone(), rep::GENESIS_MISMATCH);
 				self.behaviour.disconnect_peer(&who);
+
+				if self.boot_node_ids.contains(&who) {
+					error!(
+						target: "sync",
+						"Bootnode with peer id `{}` is on a different chain (our genesis: {} theirs: {})",
+						who,
+						self.genesis_hash,
+						status.genesis_hash,
+					);
+				}
+
 				return CustomMessageOutcome::None;
 			}
 			if status.version < MIN_VERSION && CURRENT_VERSION < status.min_supported_version {
