@@ -76,7 +76,7 @@ sc-authority-discovery = { version = "0.8.0-alpha.4",  path = "../../../client/a
 pallet-indices = { version = "2.0.0-alpha.4", path = "../../../frame/indices" }
 pallet-timestamp = { version = "2.0.0-alpha.4", default-features = false, path = "../../../frame/timestamp" }
 pallet-contracts = { version = "2.0.0-alpha.4", path = "../../../frame/contracts" }
-frame-system = { version = "2.0.0-alpha.4", path = "../../../frame/system" }
+frame-system = { version = "2.0.0-alpha.4", default-features = false, path = "../../../frame/system" }
 pallet-balances = { version = "2.0.0-alpha.4", path = "../../../frame/balances" }
 pallet-transaction-payment = { version = "2.0.0-alpha.4", path = "../../../frame/transaction-payment" }
 frame-support = { version = "2.0.0-alpha.4", default-features = false, path = "../../../frame/support" }

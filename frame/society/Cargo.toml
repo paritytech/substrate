@@ -11,7 +11,7 @@ description = "FRAME society pallet"
 [dependencies]
 serde = { version = "1.0.101", optional = true }
 codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false, features = ["derive"] }
-sp-io ={ path = "../../primitives/io", default-features = false , version = "2.0.0-alpha.4"}
+sp-io ={ path = "../../primitives/io", default-features = false, version = "2.0.0-alpha.4" }
 sp-runtime = { version = "2.0.0-alpha.4", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "2.0.0-alpha.4", default-features = false, path = "../../primitives/std" }
 frame-support = { version = "2.0.0-alpha.4", default-features = false, path = "../support" }
@@ -34,4 +34,7 @@ std = [
 	"frame-support/std",
 	"frame-system/std",
 ]
-runtime-benchmarks = ["frame-support/runtime-benchmarks", "sp-runtime/runtime-benchmarks"]
+runtime-benchmarks = [
+	"sp-runtime/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+]

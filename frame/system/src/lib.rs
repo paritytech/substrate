@@ -620,7 +620,7 @@ impl<
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> O {
 		let caller: AccountId = Default::default();
-		Who::add(&caller);
+		// Who::add(&caller);
 		O::from(RawOrigin::Signed(caller))
 	}
 }
