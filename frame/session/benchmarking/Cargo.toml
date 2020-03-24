@@ -1,6 +1,6 @@
 [package]
 name = "pallet-session-benchmarking"
-version = "2.0.0-alpha.4"
+version = "2.0.0-alpha.5"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
@@ -9,12 +9,12 @@ repository = "https://github.com/paritytech/substrate/"
 description = "FRAME sessions pallet benchmarking"
 
 [dependencies]
-sp-std = { version = "2.0.0-alpha.4", default-features = false, path = "../../../primitives/std" }
-sp-runtime = { version = "2.0.0-alpha.4", default-features = false, path = "../../../primitives/runtime" }
-frame-system = { version = "2.0.0-alpha.4", default-features = false, path = "../../system" }
-frame-benchmarking = { version = "2.0.0-alpha.4", default-features = false, path = "../../benchmarking" }
-pallet-staking = { version = "2.0.0-alpha.4", default-features = false, features = ["runtime-benchmarks"], path = "../../staking" }
-pallet-session = { version = "2.0.0-alpha.4", default-features = false, path = "../../session" }
+sp-std = { version = "2.0.0-alpha.5", default-features = false, path = "../../../primitives/std" }
+sp-runtime = { version = "2.0.0-alpha.5", default-features = false, path = "../../../primitives/runtime" }
+frame-system = { version = "2.0.0-alpha.5", default-features = false, path = "../../system" }
+frame-benchmarking = { version = "2.0.0-alpha.5", default-features = false, path = "../../benchmarking" }
+pallet-staking = { version = "2.0.0-alpha.5", default-features = false, features = ["runtime-benchmarks"], path = "../../staking" }
+pallet-session = { version = "2.0.0-alpha.5", default-features = false, path = "../../session" }
 
 [features]
 default = ["std"]
