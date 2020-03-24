@@ -16,10 +16,10 @@ log = "0.4.8"
 env_logger = "0.7.0"
 fdlimit = "0.1.4"
 futures = { version = "0.3.1", features = ["compat"] }
-sc-service = { version = "0.8.0-alpha.4", default-features = false, path = "../../service" }
-sc-network = { version = "0.8.0-alpha.4", path = "../../network" }
-sp-consensus = { version = "0.8.0-alpha.4", path = "../../../primitives/consensus/common" }
-sc-client = { version = "0.8.0-alpha.4", path = "../../" }
-sp-runtime = { version = "2.0.0-alpha.4", path = "../../../primitives/runtime" }
-sp-core = { version = "2.0.0-alpha.4", path = "../../../primitives/core" }
-sp-transaction-pool = { version = "2.0.0-alpha.4", path = "../../../primitives/transaction-pool" }
+sc-service = { version = "0.8.0-alpha.5", default-features = false, path = "../../service" }
+sc-network = { version = "0.8.0-alpha.5", path = "../../network" }
+sp-consensus = { version = "0.8.0-alpha.5", path = "../../../primitives/consensus/common" }
+sc-client = { version = "0.8.0-alpha.5", path = "../../" }
+sp-runtime = { version = "2.0.0-alpha.5", path = "../../../primitives/runtime" }
+sp-core = { version = "2.0.0-alpha.5", path = "../../../primitives/core" }
+sp-transaction-pool = { version = "2.0.0-alpha.5", path = "../../../primitives/transaction-pool" }
