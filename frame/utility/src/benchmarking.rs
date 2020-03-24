@@ -16,4 +16,33 @@
 
 // Benchmarks for Utility Pallet
 
-#![cfg(features = "runtime-benchmarks")]
+#![cfg(feature = "runtime-benchmarks")]
+
+use super::*;
+use sp_std::prelude::*;
+use frame_system::RawOrigin;
+use frame_benchmarking::{benchmarks, account};
+
+const SEED: u32 = 0;
+
+benchmarks! {
+	_ { }
+
+	batch {
+		let c in 0 .. 1000;
+		let mut calls: Vec<<T as Trait>::Call> = Vec::new();
+		for i in 0 .. c {
+			let call = frame_system::Call::remark(vec![]).into();
+			calls.push(call);
+		}
+
+		let caller = account("caller", 0, SEED);
+
+	}: _(RawOrigin::Signed(caller), calls)
+
+	as_sub {
+		let u in 0 .. 1000;
+		let caller = account("caller", u, SEED);
+		let call = Box::new(frame_system::Call::remark(vec![]).into());
+	}: _(RawOrigin::Signed(caller), u as u16, call)
+}

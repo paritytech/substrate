@@ -145,4 +145,5 @@ runtime-benchmarks = [
 	"pallet-session-benchmarking",
 	"pallet-staking/runtime-benchmarks",
 	"pallet-im-online/runtime-benchmarks",
+	"pallet-utility/runtime-benchmarks",
 ]
