@@ -375,22 +375,22 @@ macro_rules! decl_module {
 	};
 	// compile_error on_finalize, given weight deprecated.
 	(@normalize
-	 $(#[$attr:meta])*
-	 pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?>
-	 for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
-	 { $( $other_where_bounds:tt )* }
-	 { $( $deposit_event:tt )* }
-	 { $( $on_initialize:tt )* }
-	 { $( $on_runtime_upgrade:tt )* }
-	 {}
-	 { $( $offchain:tt )* }
-	 { $( $constants:tt )* }
-	 { $( $error_type:tt )* }
-	 [ $( $dispatchables:tt )* ]
-	 $(#[doc = $doc_attr:tt])*
-	 #[weight = $weight:expr]
-	 fn on_finalize( $( $param_name:ident : $param:ty ),* $(,)? ) { $( $impl:tt )* }
-	 $($rest:tt)*
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?>
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $other_where_bounds:tt )* }
+		{ $( $deposit_event:tt )* }
+		{ $( $on_initialize:tt )* }
+		{ $( $on_runtime_upgrade:tt )* }
+		{}
+		{ $( $offchain:tt )* }
+		{ $( $constants:tt )* }
+		{ $( $error_type:tt )* }
+		[ $( $dispatchables:tt )* ]
+		$(#[doc = $doc_attr:tt])*
+		#[weight = $weight:expr]
+		fn on_finalize( $( $param_name:ident : $param:ty ),* $(,)? ) { $( $impl:tt )* }
+		$($rest:tt)*
 	) => {
 		compile_error!(
 			"`on_finalize` can't be given weight attribute anymore, weight must be returned by \
