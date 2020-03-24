@@ -397,6 +397,30 @@ macro_rules! decl_module {
 			`on_initialize` or `on_runtime_upgrade` instead"
 		);
 	};
+	// compile_error on_runtime_upgrade, without Weight deprecated
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<
+			$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?
+		>
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $other_where_bounds:tt )* }
+		{ $( $deposit_event:tt )* }
+		{ $( $on_initialize:tt )* }
+		{}
+		{ $( $on_finalize:tt )* }
+		{ $( $offchain:tt )* }
+		{ $( $constants:tt )* }
+		{ $( $error_type:tt )* }
+		[ $( $dispatchables:tt )* ]
+		$(#[doc = $doc_attr:tt])*
+		fn on_runtime_upgrade( $( $param_name:ident : $param:ty ),* $(,)? ) { $( $impl:tt )* }
+		$($rest:tt)*
+	) => {
+		compile_error!(
+			"`on_runtime_upgrade` must return Weight, signature has changed."
+		);
+	};
 	// compile_error on_runtime_upgrade, with Weight deprecated
 	(@normalize
 		$(#[$attr:meta])*
@@ -421,30 +445,6 @@ macro_rules! decl_module {
 		compile_error!(
 			"`on_runtime_upgrade` can't be given weight attribute anymore, weight must be returned \
 			by the function directly."
-		);
-	};
-	// compile_error on_runtime_upgrade, without Weight deprecated
-	(@normalize
-		$(#[$attr:meta])*
-		pub struct $mod_type:ident<
-			$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?
-		>
-		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
-		{ $( $other_where_bounds:tt )* }
-		{ $( $deposit_event:tt )* }
-		{ $( $on_initialize:tt )* }
-		{}
-		{ $( $on_finalize:tt )* }
-		{ $( $offchain:tt )* }
-		{ $( $constants:tt )* }
-		{ $( $error_type:tt )* }
-		[ $( $dispatchables:tt )* ]
-		$(#[doc = $doc_attr:tt])*
-		fn on_runtime_upgrade( $( $param_name:ident : $param:ty ),* $(,)? ) { $( $impl:tt )* }
-		$($rest:tt)*
-	) => {
-		compile_error!(
-			"`on_runtime_upgrade` must return Weight, signature has changed."
 		);
 	};
 	// Add on_runtime_upgrade
@@ -485,6 +485,56 @@ macro_rules! decl_module {
 			$($rest)*
 		);
 	};
+	// compile_error on_initialize, without weight deprecated
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<
+			$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?
+		>
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $other_where_bounds:tt )* }
+		{ $( $deposit_event:tt )* }
+		{}
+		{ $( $on_runtime_upgrade:tt )* }
+		{ $( $on_finalize:tt )* }
+		{ $( $offchain:tt )* }
+		{ $( $constants:tt )* }
+		{ $( $error_type:tt )* }
+		[ $( $dispatchables:tt )* ]
+		$(#[doc = $doc_attr:tt])*
+		fn on_initialize( $( $param_name:ident : $param:ty ),* $(,)? ) { $( $impl:tt )* }
+		$($rest:tt)*
+	) => {
+		compile_error!(
+			"`on_initialize` must return Weight, signature has changed."
+		);
+	};
+	// compile_error on_initialize, with weight deprecated
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<
+			$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?
+		>
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $other_where_bounds:tt )* }
+		{ $( $deposit_event:tt )* }
+		{}
+		{ $( $on_runtime_upgrade:tt )* }
+		{ $( $on_finalize:tt )* }
+		{ $( $offchain:tt )* }
+		{ $( $constants:tt )* }
+		{ $( $error_type:tt )* }
+		[ $( $dispatchables:tt )* ]
+		$(#[doc = $doc_attr:tt])*
+		#[weight = $weight:expr]
+		fn on_initialize( $( $param_name:ident : $param:ty ),* $(,)? ) { $( $impl:tt )* }
+		$($rest:tt)*
+	) => {
+		compile_error!(
+			"`on_initialize` can't be given weight attribute anymore, weight must be returned \
+			by the function directly."
+		);
+	};
 	// Add on_initialize
 	(@normalize
 		$(#[$attr:meta])*
@@ -521,56 +571,6 @@ macro_rules! decl_module {
 			{ $( $error_type )* }
 			[ $( $dispatchables )* ]
 			$($rest)*
-		);
-	};
-	// compile_error on_initialize, with weight deprecated
-	(@normalize
-		$(#[$attr:meta])*
-		pub struct $mod_type:ident<
-			$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?
-		>
-		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
-		{ $( $other_where_bounds:tt )* }
-		{ $( $deposit_event:tt )* }
-		{}
-		{ $( $on_runtime_upgrade:tt )* }
-		{ $( $on_finalize:tt )* }
-		{ $( $offchain:tt )* }
-		{ $( $constants:tt )* }
-		{ $( $error_type:tt )* }
-		[ $( $dispatchables:tt )* ]
-		$(#[doc = $doc_attr:tt])*
-		#[weight = $weight:expr]
-		fn on_initialize( $( $param_name:ident : $param:ty ),* $(,)? ) { $( $impl:tt )* }
-		$($rest:tt)*
-	) => {
-		compile_error!(
-			"`on_initialize` can't be given weight attribute anymore, weight must be returned \
-			by the function directly."
-		);
-	};
-	// compile_error on_initialize, without weight deprecated
-	(@normalize
-		$(#[$attr:meta])*
-		pub struct $mod_type:ident<
-			$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?
-		>
-		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
-		{ $( $other_where_bounds:tt )* }
-		{ $( $deposit_event:tt )* }
-		{}
-		{ $( $on_runtime_upgrade:tt )* }
-		{ $( $on_finalize:tt )* }
-		{ $( $offchain:tt )* }
-		{ $( $constants:tt )* }
-		{ $( $error_type:tt )* }
-		[ $( $dispatchables:tt )* ]
-		$(#[doc = $doc_attr:tt])*
-		fn on_initialize( $( $param_name:ident : $param:ty ),* $(,)? ) { $( $impl:tt )* }
-		$($rest:tt)*
-	) => {
-		compile_error!(
-			"`on_initialize` must return Weight, signature has changed."
 		);
 	};
 	(@normalize
