@@ -203,13 +203,13 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// Function signature must be `fn on_runtime_upgrade() -> frame_support::weights::Weight`.
 ///
 /// * `on_initialize`: Executes at the beginning of a block. Using this function will
-/// implement the [`OnInitialize`](../sp_runtime/traits/trait.OnInitialize.html) trait.
+/// implement the [`OnInitialize`](./trait.OnInitialize.html) trait.
 /// Function signature can be either:
 ///   * `fn on_initialize(n: BlockNumber) -> frame_support::weights::Weight` or
 ///   * `fn on_initialize() -> frame_support::weights::Weight`
 ///
 /// * `on_finalize`: Executes at the end of a block. Using this function will
-/// implement the [`OnFinalize`](../sp_runtime/traits/trait.OnFinalize.html) trait.
+/// implement the [`OnFinalize`](./traits/trait.OnFinalize.html) trait.
 /// Function signature can be either:
 ///   * `fn on_finalize(n: BlockNumber) -> frame_support::weights::Weight` or
 ///   * `fn on_finalize() -> frame_support::weights::Weight`
