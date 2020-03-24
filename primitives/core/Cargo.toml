@@ -12,7 +12,6 @@ documentation = "https://docs.rs/sp-core"
 [dependencies]
 sp-std = { version = "2.0.0-alpha.4", default-features = false, path = "../std" }
 codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false, features = ["derive"] }
-rustc-hex = { version = "2.0.1", default-features = false }
 log = { version = "0.4.8", default-features = false }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
 byteorder = { version = "1.3.2", default-features = false }
@@ -81,7 +80,6 @@ std = [
 	"hash-db/std",
 	"sp-std/std",
 	"serde",
-	"rustc-hex/std",
 	"twox-hash/std",
 	"blake2-rfc/std",
 	"ed25519-dalek/std",
