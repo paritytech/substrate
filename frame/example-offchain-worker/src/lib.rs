@@ -112,6 +112,8 @@ pub trait Trait: CreateSignedTransaction<Call<Self>> {
 	type UnsignedInterval: Get<Self::BlockNumber>;
 }
 
+/// Payload used by this example crate to hold price
+/// data required to submit a transaction.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct PricePayload<Public, BlockNumber> {
 	block_number: BlockNumber,
