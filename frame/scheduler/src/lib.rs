@@ -44,42 +44,30 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::marker::PhantomData;
-use frame_support::{
-	dispatch::DispatchResult, decl_module, decl_storage, decl_event,
-	weights::{
-		SimpleDispatchInfo, DispatchInfo, DispatchClass, ClassifyDispatch, WeighData, Weight,
-		PaysFee
-	},
-};
 use sp_std::prelude::*;
-use frame_benchmarking::{benchmarks, account};
-use frame_system::{self as system, ensure_signed, ensure_root, RawOrigin};
 use codec::{Encode, Decode};
-use sp_runtime::{
-	traits::{SignedExtension, Bounded, SaturatedConversion},
-	transaction_validity::{
-		ValidTransaction, TransactionValidityError, InvalidTransaction, TransactionValidity,
-	},
+use sp_runtime::{RuntimeDebug, traits::One};
+use frame_support::{
+	dispatch::{Dispatchable, Parameter}, decl_module, decl_storage, decl_event, traits::Get,
+	weights::{DispatchClass, Weight, FunctionOf, GetDispatchInfo},
 };
-
-/// A type alias for the balance type from this pallet's point of view.
-type BalanceOf<T> = <T as pallet_balances::Trait>::Balance;
+//use frame_benchmarking::{benchmarks, account};
+use frame_system::{self as system};
 
 /// Our pallet's configuration trait. All our types and constants go in here. If the
 /// pallet is dependent on specific other pallets, then their configuration traits
 /// should be added to our implied traits list.
 ///
-/// `frame_system::Trait` should always be included in our implied traits.
-pub trait Trait: pallet_balances::Trait {
+/// `system::Trait` should always be included in our implied traits.
+pub trait Trait: system::Trait {
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
 	/// The aggregated origin which the dispatch will take.
-	type Origin: From<frame_system::RawOrigin<T::AccountId>>;
+	type Origin: From<system::RawOrigin<Self::AccountId>>;
 
 	/// The aggregated call type.
-	type Call: Parameter + Dispatchable<Origin=Self::Origin>;
+	type Call: Parameter + Dispatchable<Origin=<Self as Trait>::Origin> + GetDispatchInfo;
 
 	/// The maximum weight that may be scheduled per block for any dispatchables of less priority
 	/// than 255.
@@ -103,7 +91,7 @@ pub const LOWEST_PRORITY: Priority = 255;
 
 /// Information regarding an item to be executed in the future.
 #[derive(Clone, RuntimeDebug, Encode, Decode)]
-pub struct Scheduled<Call, Origin> {
+pub struct Scheduled<Call> {
 	/// This task's priority.
 	priority: Priority,
 	/// The call to be dispatched.
@@ -119,43 +107,44 @@ decl_storage! {
 
 		/// Items to be executed, indexed by the block number that they should be executed on.
 		/// This is ordered by `priority`.
-		Agenda: map hasher(twox_64_concat) T::BlockNumber
-			=> Vec<Scheduled<<T as Trait>::Call, <T as Trait>::Origin>>;
+		Agenda: map hasher(twox_64_concat) T::BlockNumber => Vec<Scheduled<<T as Trait>::Call>>;
 
 		/// The next free periodic index.
-		NextPeriodicIndex: PeriodicIndex;
+		LastPeriodicIndex: PeriodicIndex;
 	}
 }
 
 decl_event!(
-	pub enum Event<T> where B = <T as pallet_balances::Trait>::Balance {
-		Scheduled(T::BlockNumber),
+	pub enum Event<T> where <T as system::Trait>::BlockNumber {
+		Scheduled(BlockNumber),
 	}
 );
 
 decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what its working on.
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
 		fn deposit_event() = default;
 
-		#[weight = FunctionOf(|| {
-			let now = frame_system::Module::<T>::block_number();
+		#[weight = FunctionOf(|_| -> u32 {
+			let now = system::Module::<T>::block_number();
 			let limit = T::MaximumWeight::get();
 			let mut queued = Agenda::<T>::get(now).into_iter()
 				.map(|i| (i.priority, i.call.get_dispatch_info().weight))
 				.collect::<Vec<_>>();
-			queued.sort();
-			queued
+			queued.sort_by_key(|i| i.0);
+			queued.into_iter()
 				.scan(0, |a, i| {
 					*a += i.1;
-					if i.0 <= HARD_DEADLINE || *a <= limit { Some(a) } else { None }
+					if i.0 <= HARD_DEADLINE || *a <= limit { Some(*a) } else { None }
 				})
 				.last()
+				.unwrap_or(0)
+				+ 10_000
 		}, || DispatchClass::Normal, true)]
-		fn on_initialize(_n: T::BlockNumber) {
+		fn on_initialize(now: T::BlockNumber) {
 			let limit = T::MaximumWeight::get();
 			let mut queued = Agenda::<T>::take(now);
-			queued.sort();
+			queued.sort_by_key(|i| i.priority);
 			let unused_items = queued.into_iter()
 				.scan(0, |cumulative_weight, i| {
 					*cumulative_weight += i.call.get_dispatch_info().weight;
@@ -164,27 +153,27 @@ decl_module! {
 				.filter_map(|(cumulative_weight, i)| {
 					if i.priority <= HARD_DEADLINE || cumulative_weight <= limit {
 						let maybe_reschedule = i.maybe_periodic.map(|p| (p, i.clone()));
-						let _ = i.call.dispatch(frame_system::RawOrigin::ROOT.into());
+						let _ = i.call.dispatch(system::RawOrigin::Root.into());
 						if let Some((periodic_index, i)) = maybe_reschedule {
 							// Register the next instance of this task
-							if let Some((period, count)) = Periodic::get(periodic_index) {
+							if let Some((period, count)) = Periodic::<T>::get(periodic_index) {
 								if count > 1 {
-									count -= 1;
-									Periodic::insert(periodic_index, (period, count));
+									Periodic::<T>::insert(periodic_index, (period, count - 1));
 								} else {
-									Periodic::remove(periodic_index);
+									Periodic::<T>::remove(periodic_index);
 								}
-								Agenda::<T>::append(now + period, i);
+								Agenda::<T>::append_or_insert(now + period, &[i][..]);
 							}
 						}
 						None
 					} else {
 						Some(i)
 					}
-				});
+				})
 				.collect::<Vec<_>>();
-			if !queued_items.is_empty() {
-				Agenda::<T>::append_or_put(next, queued_items.into_iter());
+			let next = now + One::one();
+			if !unused_items.is_empty() {
+				Agenda::<T>::append_or_insert(next, &unused_items[..]);
 			}
 		}
 	}
@@ -192,26 +181,61 @@ decl_module! {
 
 /// A type that can be used as a scheduler.
 pub trait Schedule<BlockNumber, Call> {
-	fn schedule(when: BlockNumber, call: Call);
-	fn schedule_periodic(when: BlockNumber, period: BlockNumber, count: u32, call: Call);
+	/// Schedule a one-off dispatch to happen at the beginning of some block in the future.
+	fn schedule(when: BlockNumber, priority: Priority, call: Call);
+
+	/// Schedule a dispatch to happen periodically into the future for come number of times.
+	///
+	/// An index is returned so that it can be cancelled at some point in the future.
+	fn schedule_periodic(
+		when: BlockNumber,
+		period: BlockNumber,
+		count: u32,
+		priority: Priority,
+		call: Call,
+	) -> PeriodicIndex;
+
+	/// Cancel a periodic dispatch. If called during its dispatch, it will not be dispatched
+	/// any further. If called between dispatches, the next dispatch will happen as scheduled but
+	/// then it will cease.
+	fn cancel_periodic(index: PeriodicIndex) -> Result<(), ()>;
 }
 
-impl<T: Trait> Scheduler<T::Call> for Module<T> {
-	fn schedule(when: BlockNumber, priority: Priority, call: Call) {
-		Agenda::<T>::append(when, Scheduled { priority, call, maybe_periodic: None });
+impl<T: Trait> Schedule<T::BlockNumber, <T as Trait>::Call> for Module<T> {
+	fn schedule(when: T::BlockNumber, priority: Priority, call: <T as Trait>::Call) {
+		let s = Scheduled { priority, call, maybe_periodic: None };
+		Agenda::<T>::append_or_insert(when, &[s][..]);
 	}
 
 	fn schedule_periodic(
-		when: BlockNumber,
-		priority: Priority,
-		period: BlockNumber,
+		when: T::BlockNumber,
+		period: T::BlockNumber,
 		count: u32,
-		call: Call
+		priority: Priority,
+		call: <T as Trait>::Call,
 	) -> PeriodicIndex {
-		let index = NextPeriodicIndex::mutate(|i| { let r = *1; *i += 1; *r });
-		Periodic::<T>::insert(index, (period, count));
-		Agenda::<T>::append(when, Scheduled { priority, call, maybe_periodic: Some(index) });
-		index
+		match count {
+			0 => 0,
+			1 => {
+				Self::schedule(when, priority, call);
+				0
+			}
+			count => {
+				let index = LastPeriodicIndex::mutate(|i| { *i += 1; *i });
+				Periodic::<T>::insert(index, (period, count - 1));
+				let s = Scheduled { priority, call, maybe_periodic: Some(index) };
+				Agenda::<T>::append_or_insert(when, &[s][..]);
+				index
+			}
+		}
+	}
+
+	fn cancel_periodic(index: PeriodicIndex) -> Result<(), ()> {
+		if index == 0 {
+			Err(())
+		} else {
+			Periodic::<T>::take(index).map(|_| ()).ok_or(())
+		}
 	}
 }
 
@@ -219,7 +243,9 @@ impl<T: Trait> Scheduler<T::Call> for Module<T> {
 mod tests {
 	use super::*;
 
-	use frame_support::{assert_ok, impl_outer_origin, parameter_types, weights::GetDispatchInfo};
+	use frame_support::{
+		impl_outer_event, impl_outer_origin, impl_outer_dispatch, parameter_types
+	};
 	use sp_core::H256;
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
@@ -228,11 +254,70 @@ mod tests {
 		testing::Header,
 		traits::{BlakeTwo256, OnInitialize, OnFinalize, IdentityLookup},
 	};
+	use crate as scheduler;
 
-	impl_outer_origin! {
-		pub enum Origin for Test  where system = frame_system {}
+	mod logger {
+		use super::*;
+		use std::cell::RefCell;
+		use frame_system::ensure_root;
+
+		thread_local! {
+			static LOG: RefCell<Vec<u32>> = RefCell::new(Vec::new());
+		}
+		pub fn log() -> Vec<u32> {
+			LOG.with(|log| log.borrow().clone())
+		}
+		pub trait Trait: system::Trait {
+			type Event: From<Event> + Into<<Self as system::Trait>::Event>;
+		}
+		decl_storage! {
+			trait Store for Module<T: Trait> as Logger {
+			}
+		}
+		decl_event! {
+			pub enum Event {
+				Logged(u32, Weight),
+			}
+		}
+		decl_module! {
+			// Simple declaration of the `Module` type. Lets the macro know what its working on.
+			pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
+				fn deposit_event() = default;
+
+				#[weight = FunctionOf(
+					|args: (&u32, &Weight)| *args.1,
+					|_: (&u32, &Weight)| DispatchClass::Normal,
+					true
+				)]
+				fn log(origin, i: u32, weight: Weight) {
+					ensure_root(origin)?;
+					Self::deposit_event(Event::Logged(i, weight));
+					LOG.with(|log| {
+						log.borrow_mut().push(i);
+					})
+				}
+			}
+		}
 	}
 
+	impl_outer_origin! {
+		pub enum Origin for Test where system = frame_system {}
+	}
+
+	impl_outer_dispatch! {
+		pub enum Call for Test where origin: Origin {
+			system::System,
+			logger::Logger,
+		}
+	}
+
+	impl_outer_event! {
+		pub enum Event for Test {
+			system<T>,
+			logger,
+			scheduler<T>,
+		}
+	}
 	// For testing the pallet, we construct most of a mock runtime. This means
 	// first constructing a configuration type (`Test`) which `impl`s each of the
 	// configuration traits of pallets we want to use.
@@ -244,12 +329,12 @@ mod tests {
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
-	impl frame_system::Trait for Test {
+	impl system::Trait for Test {
 		type Origin = Origin;
+		type Call = ();
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
-		type Call = ();
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
@@ -261,101 +346,137 @@ mod tests {
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
 		type ModuleToIndex = ();
-		type AccountData = pallet_balances::AccountData<u64>;
+		type AccountData = ();
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
 	}
-	parameter_types! {
-		pub const ExistentialDeposit: u64 = 1;
-	}
-	impl pallet_balances::Trait for Test {
-		type Balance = u64;
-		type DustRemoval = ();
+	impl logger::Trait for Test {
 		type Event = ();
-		type ExistentialDeposit = ExistentialDeposit;
-		type AccountStore = System;
+	}
+	parameter_types! {
+		pub const MaximumWeight: Weight = 10_000;
 	}
 	impl Trait for Test {
 		type Event = ();
+		type Origin = Origin;
+		type Call = Call;
+		type MaximumWeight = MaximumWeight;
 	}
-	type System = frame_system::Module<Test>;
+	type System = system::Module<Test>;
+	type Logger = logger::Module<Test>;
 	type Scheduler = Module<Test>;
 
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
 	fn new_test_ext() -> sp_io::TestExternalities {
-		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		// We use default for brevity, but you can configure as desired if needed.
-		pallet_balances::GenesisConfig::<Test>::default().assimilate_storage(&mut t).unwrap();
-		GenesisConfig::<Test>{
-			dummy: 42,
-			// we configure the map with (key, value) pairs.
-			bar: vec![(1, 2), (2, 3)],
-			foo: 24,
-		}.assimilate_storage(&mut t).unwrap();
+		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		t.into()
 	}
 
+	fn run_to_block(n: u64) {
+		while System::block_number() < n {
+			Scheduler::on_finalize(System::block_number());
+			System::set_block_number(System::block_number() + 1);
+			Scheduler::on_initialize(System::block_number());
+		}
+	}
+
 	#[test]
-	fn it_works_for_optional_value() {
+	fn basic_scheduling_works() {
 		new_test_ext().execute_with(|| {
-			// Check that GenesisBuilder works properly.
-			assert_eq!(Scheduler::dummy(), Some(42));
-
-			// Check that accumulate works when we have Some value in Dummy already.
-			assert_ok!(Scheduler::accumulate_dummy(Origin::signed(1), 27));
-			assert_eq!(Scheduler::dummy(), Some(69));
-
-			// Check that finalizing the block removes Dummy from storage.
-			<Scheduler as OnFinalize<u64>>::on_finalize(1);
-			assert_eq!(Scheduler::dummy(), None);
-
-			// Check that accumulate works when we Dummy has None in it.
-			<Scheduler as OnInitialize<u64>>::on_initialize(2);
-			assert_ok!(Scheduler::accumulate_dummy(Origin::signed(1), 42));
-			assert_eq!(Scheduler::dummy(), Some(42));
+			Scheduler::schedule(4, 127, Call::Logger(logger::Call::log(42, 1000)));
+			run_to_block(3);
+			assert!(logger::log().is_empty());
+			run_to_block(4);
+			assert_eq!(logger::log(), vec![42u32]);
+			run_to_block(100);
+			assert_eq!(logger::log(), vec![42u32]);
 		});
 	}
 
 	#[test]
-	fn it_works_for_default_value() {
+	fn periodic_scheduling_works() {
 		new_test_ext().execute_with(|| {
-			assert_eq!(Scheduler::foo(), 24);
-			assert_ok!(Scheduler::accumulate_foo(Origin::signed(1), 1));
-			assert_eq!(Scheduler::foo(), 25);
+			// at #4, every 3 blocks, 3 times.
+			Scheduler::schedule_periodic(4, 3, 3, 127, Call::Logger(logger::Call::log(42, 1000)));
+			run_to_block(3);
+			assert!(logger::log().is_empty());
+			run_to_block(4);
+			assert_eq!(logger::log(), vec![42u32]);
+			run_to_block(6);
+			assert_eq!(logger::log(), vec![42u32]);
+			run_to_block(7);
+			assert_eq!(logger::log(), vec![42u32, 42u32]);
+			run_to_block(9);
+			assert_eq!(logger::log(), vec![42u32, 42u32]);
+			run_to_block(10);
+			assert_eq!(logger::log(), vec![42u32, 42u32, 42u32]);
+			run_to_block(100);
+			assert_eq!(logger::log(), vec![42u32, 42u32, 42u32]);
 		});
 	}
 
 	#[test]
-	fn signed_ext_watch_dummy_works() {
+	fn cancel_period_scheduling_works() {
 		new_test_ext().execute_with(|| {
-			let call = <Call<Test>>::set_dummy(10);
-			let info = DispatchInfo::default();
-
-			assert_eq!(
-				WatchDummy::<Test>(PhantomData).validate(&1, &call, info, 150)
-					.unwrap()
-					.priority,
-				Bounded::max_value(),
-			);
-			assert_eq!(
-				WatchDummy::<Test>(PhantomData).validate(&1, &call, info, 250),
-				InvalidTransaction::ExhaustsResources.into(),
-			);
-		})
+			// at #4, every 3 blocks, 3 times.
+			let i = Scheduler::schedule_periodic(4, 3, 3, 127, Call::Logger(logger::Call::log(42, 1000)));
+			run_to_block(3);
+			assert!(logger::log().is_empty());
+			run_to_block(4);
+			assert_eq!(logger::log(), vec![42u32]);
+			run_to_block(6);
+			assert_eq!(logger::log(), vec![42u32]);
+			Scheduler::cancel_periodic(i).unwrap();
+			run_to_block(7);
+			assert_eq!(logger::log(), vec![42u32, 42u32]);
+			run_to_block(100);
+			assert_eq!(logger::log(), vec![42u32, 42u32]);
+		});
 	}
 
 	#[test]
-	fn weights_work() {
-		// must have a default weight.
-		let default_call = <Call<Test>>::accumulate_dummy(10);
-		let info = default_call.get_dispatch_info();
-		// aka. `let info = <Call<Test> as GetDispatchInfo>::get_dispatch_info(&default_call);`
-		assert_eq!(info.weight, 10_000);
+	fn scheduler_respects_weight_limits() {
+		new_test_ext().execute_with(|| {
+			Scheduler::schedule(4, 127, Call::Logger(logger::Call::log(42, 6000)));
+			Scheduler::schedule(4, 127, Call::Logger(logger::Call::log(69, 6000)));
+			run_to_block(4);
+			assert_eq!(logger::log(), vec![42u32]);
+			run_to_block(5);
+			assert_eq!(logger::log(), vec![42u32, 69u32]);
+		});
+	}
 
-		// must have a custom weight of `100 * arg = 2000`
-		let custom_call = <Call<Test>>::set_dummy(20);
-		let info = custom_call.get_dispatch_info();
-		assert_eq!(info.weight, 2000);
+	#[test]
+	fn scheduler_respects_hard_deadlines_more() {
+		new_test_ext().execute_with(|| {
+			Scheduler::schedule(4, 0, Call::Logger(logger::Call::log(42, 6000)));
+			Scheduler::schedule(4, 0, Call::Logger(logger::Call::log(69, 6000)));
+			run_to_block(4);
+			assert_eq!(logger::log(), vec![42u32, 69u32]);
+		});
+	}
+
+	#[test]
+	fn scheduler_respects_priority_ordering() {
+		new_test_ext().execute_with(|| {
+			Scheduler::schedule(4, 1, Call::Logger(logger::Call::log(42, 6000)));
+			Scheduler::schedule(4, 0, Call::Logger(logger::Call::log(69, 6000)));
+			run_to_block(4);
+			assert_eq!(logger::log(), vec![69u32, 42u32]);
+		});
+	}
+
+	#[test]
+	fn scheduler_respects_priority_ordering_with_soft_deadlines() {
+		new_test_ext().execute_with(|| {
+			Scheduler::schedule(4, 255, Call::Logger(logger::Call::log(42, 5000)));
+			Scheduler::schedule(4, 127, Call::Logger(logger::Call::log(69, 5000)));
+			Scheduler::schedule(4, 126, Call::Logger(logger::Call::log(2600, 6000)));
+			run_to_block(4);
+			assert_eq!(logger::log(), vec![2600u32]);
+			run_to_block(5);
+			assert_eq!(logger::log(), vec![2600u32, 69u32, 42u32]);
+		});
 	}
 }
