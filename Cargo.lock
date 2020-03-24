@@ -6650,10 +6650,12 @@ dependencies = [
 name = "sc-transaction-pool"
 version = "2.0.0-alpha.5"
 dependencies = [
+ "assert_matches",
  "derive_more",
  "futures 0.3.4",
  "futures-diagnose",
  "futures-timer 2.0.2",
+ "hex",
  "log 0.4.8",
  "parity-scale-codec",
  "parity-util-mem",
