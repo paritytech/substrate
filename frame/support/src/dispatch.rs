@@ -216,7 +216,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 ///
 /// * `offchain_worker`: Executes at the beginning of a block and produces extrinsics for a future block
 /// upon completion. Using this function will implement the
-/// [`OffchainWorker`](../sp_runtime/traits/trait.OffchainWorker.html) trait.
+/// [`OffchainWorker`](./traits/trait.OffchainWorker.html) trait.
 #[macro_export]
 macro_rules! decl_module {
 	// Entry point #1.
@@ -1118,7 +1118,7 @@ macro_rules! decl_module {
 		fn offchain_worker() { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::sp_runtime::traits::OffchainWorker<$trait_instance::BlockNumber>
+			$crate::traits::OffchainWorker<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn offchain_worker(_block_number_not_used: $trait_instance::BlockNumber) { $( $impl )* }
@@ -1131,7 +1131,7 @@ macro_rules! decl_module {
 		fn offchain_worker($param:ident : $param_ty:ty) { $( $impl:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::sp_runtime::traits::OffchainWorker<$trait_instance::BlockNumber>
+			$crate::traits::OffchainWorker<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn offchain_worker($param: $param_ty) { $( $impl )* }
@@ -1143,7 +1143,7 @@ macro_rules! decl_module {
 		{ $( $other_where_bounds:tt )* }
 	) => {
 		impl<$trait_instance: $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::sp_runtime::traits::OffchainWorker<$trait_instance::BlockNumber>
+			$crate::traits::OffchainWorker<$trait_instance::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{}
 	};

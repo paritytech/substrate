@@ -77,13 +77,13 @@
 use sp_std::{prelude::*, marker::PhantomData};
 use frame_support::{
 	storage::StorageValue, weights::{GetDispatchInfo, DispatchInfo},
-	traits::{OnInitialize, OnFinalize, OnRuntimeUpgrade},
+	traits::{OnInitialize, OnFinalize, OnRuntimeUpgrade, OffchainWorker},
 };
 use sp_runtime::{
 	generic::Digest, ApplyExtrinsicResult,
 	traits::{
 		self, Header, Zero, One, Checkable, Applyable, CheckEqual, ValidateUnsigned, NumberFor,
-		Block as BlockT, OffchainWorker, Dispatchable, Saturating,
+		Block as BlockT, Dispatchable, Saturating,
 	},
 	transaction_validity::TransactionValidity,
 };
