@@ -373,7 +373,7 @@ macro_rules! decl_module {
 			$($rest)*
 		);
 	};
-	// compile_error on_finalize, given weight deprecated.
+	// compile_error on_finalize, given weight removed syntax.
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?>
@@ -397,7 +397,7 @@ macro_rules! decl_module {
 			`on_initialize` or `on_runtime_upgrade` instead"
 		);
 	};
-	// compile_error on_runtime_upgrade, without Weight deprecated
+	// compile_error on_runtime_upgrade, without a given weight removed syntax.
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<
@@ -421,7 +421,7 @@ macro_rules! decl_module {
 			"`on_runtime_upgrade` must return Weight, signature has changed."
 		);
 	};
-	// compile_error on_runtime_upgrade, with Weight deprecated
+	// compile_error on_runtime_upgrade, given weight removed syntax.
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<
@@ -485,7 +485,7 @@ macro_rules! decl_module {
 			$($rest)*
 		);
 	};
-	// compile_error on_initialize, without weight deprecated
+	// compile_error on_initialize, without a given weight removed syntax.
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<
@@ -509,7 +509,7 @@ macro_rules! decl_module {
 			"`on_initialize` must return Weight, signature has changed."
 		);
 	};
-	// compile_error on_initialize, with weight deprecated
+	// compile_error on_initialize, with given weight removed syntax.
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<
