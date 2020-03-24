@@ -916,6 +916,13 @@ impl_runtime_apis! {
 					steps,
 					repeat,
 				),
+				b"pallet-collective" | b"collective" => Council::run_benchmark(
+					extrinsic,
+					lowest_range_values,
+					highest_range_values,
+					steps,
+					repeat,
+				),
 				_ => Err("Benchmark not found for this pallet."),
 			};
 
