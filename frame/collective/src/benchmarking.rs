@@ -34,6 +34,8 @@ benchmarks_instance! {
 		let n in 1 .. 1000 => ();
 		// New members.
 		let m in 1 .. 1000 => ();
+		// Existing proposals.
+		let p in 1 .. 100 => ();
 	}
 
 	set_members {
@@ -86,6 +88,7 @@ benchmarks_instance! {
 
 	propose_else_branch {
 		let u in ...;
+		let p in ...;
 
 		let caller: T::AccountId = account("caller", u, SEED);
 		let proposal: T::Proposal = Call::<T, I>::close(Default::default(), Default::default()).into();
@@ -93,6 +96,12 @@ benchmarks_instance! {
 		Collective::<T, _>::set_members(SystemOrigin::Root.into(), vec![caller.clone()], None)?;
 
 		let member_count = 3;
+
+		// Add previous proposals.
+		for i in 0 .. p {
+			let proposal: T::Proposal = Call::<T, I>::close(Default::default(), (i + 1).into()).into();
+			Collective::<T, _>::propose(SystemOrigin::Signed(caller.clone()).into(), member_count.clone(), Box::new(proposal.into()))?;
+		}
 
 	}: propose(SystemOrigin::Signed(caller), member_count, Box::new(proposal.into()))
 
