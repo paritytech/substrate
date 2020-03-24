@@ -66,7 +66,7 @@ fn account_vote<T: Trait>() -> AccountVote<BalanceOf<T>> {
 	};
 
 	AccountVote::Standard {
-		vote: v,
+		vote,
 		balance: 1u32.into(),
 	}
 }
