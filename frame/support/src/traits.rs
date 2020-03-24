@@ -1056,6 +1056,8 @@ pub trait OnFinalize<BlockNumber> {
 /// for your module when the block is beginning (right before the first extrinsic is executed).
 pub trait OnInitialize<BlockNumber> {
 	/// The block is being initialized. Implement to have something happen.
+	///
+	/// Return the non-negotiable weight consumed in the block.
 	fn on_initialize(_n: BlockNumber) -> crate::weights::Weight { 0 }
 }
 
@@ -1063,7 +1065,7 @@ pub trait OnInitialize<BlockNumber> {
 impl<BlockNumber: Clone> OnInitialize<BlockNumber> for Tuple {
 	fn on_initialize(_n: BlockNumber) -> crate::weights::Weight {
 		let mut weight = 0;
-		for_tuples!( #( weight.saturating_add(Tuple::on_initialize(_n.clone())); )* );
+		for_tuples!( #( weight = weight.saturating_add(Tuple::on_initialize(_n.clone())); )* );
 		weight
 	}
 }
@@ -1072,6 +1074,8 @@ impl<BlockNumber: Clone> OnInitialize<BlockNumber> for Tuple {
 /// when the runtime upgrades, and changes may need to occur to your module.
 pub trait OnRuntimeUpgrade {
 	/// Perform a module upgrade.
+	///
+	/// Return the non-negotiable weight consumed for runtime upgrade.
 	fn on_runtime_upgrade() -> crate::weights::Weight { 0 }
 }
 
@@ -1079,7 +1083,7 @@ pub trait OnRuntimeUpgrade {
 impl OnRuntimeUpgrade for Tuple {
 	fn on_runtime_upgrade() -> crate::weights::Weight {
 		let mut weight = 0;
-		for_tuples!( #( weight.saturating_add(Tuple::on_runtime_upgrade()); )* );
+		for_tuples!( #( weight = weight.saturating_add(Tuple::on_runtime_upgrade()); )* );
 		weight
 	}
 }
@@ -1105,3 +1109,25 @@ pub trait OffchainWorker<BlockNumber> {
 	fn offchain_worker(_n: BlockNumber) {}
 }
 
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn on_initialize_and_on_runtime_upgrade_weight_merge_works() {
+		struct Test;
+		impl OnInitialize<u8> for Test {
+			fn on_initialize(_n: u8) -> crate::weights::Weight {
+				10
+			}
+		}
+		impl OnRuntimeUpgrade for Test {
+			fn on_runtime_upgrade() -> crate::weights::Weight {
+				20
+			}
+		}
+
+		assert_eq!(<(Test, Test)>::on_initialize(0), 20);
+		assert_eq!(<(Test, Test)>::on_runtime_upgrade(), 40);
+	}
+}
