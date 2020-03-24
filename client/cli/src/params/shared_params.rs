@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use sc_service::{config::DatabaseConfig, ChainSpec};
+use sc_service::config::DatabaseConfig;
 use std::path::PathBuf;
 use structopt::StructOpt;
 
@@ -55,8 +55,8 @@ pub struct SharedParams {
 
 impl SharedParams {
 	/// Get the chain spec for the parameters provided
-	pub fn chain_spec<C: SubstrateCLI>(&self, is_dev: bool) -> Result<Box<dyn ChainSpec>> {
-		let chain_key = match self.chain {
+	pub fn chain_id(&self, is_dev: bool) -> Result<String> {
+		Ok(match self.chain {
 			Some(ref chain) => chain.clone(),
 			None => {
 				if is_dev {
@@ -65,9 +65,7 @@ impl SharedParams {
 					"".into()
 				}
 			}
-		};
-
-		Ok(C::spec_factory(&chain_key)?)
+		})
 	}
 
 	/// Initialize substrate. This must be done only once.

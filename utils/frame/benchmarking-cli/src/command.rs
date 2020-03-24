@@ -17,12 +17,12 @@
 use crate::BenchmarkCmd;
 use codec::{Decode, Encode};
 use frame_benchmarking::{Analysis, BenchmarkResults};
-use sc_cli::{substrate_cli_params, CliConfiguration, ExecutionStrategy, Result, SubstrateCLI};
+use sc_cli::{substrate_cli_params, CliConfiguration, ExecutionStrategy, Result};
 use sc_client::StateMachine;
 use sc_client_db::BenchmarkingState;
 use sc_executor::NativeExecutor;
 use sp_externalities::Extensions;
-use sc_service::{ChainSpec, Configuration, NativeExecutionDispatch};
+use sc_service::{Configuration, NativeExecutionDispatch};
 use sp_runtime::{
 	traits::{Block as BlockT, Header as HeaderT, NumberFor},
 };
@@ -125,12 +125,10 @@ impl BenchmarkCmd {
 
 #[substrate_cli_params(shared_params = shared_params)]
 impl CliConfiguration for BenchmarkCmd {
-	fn chain_spec<C: SubstrateCLI>(&self, _is_dev: bool) -> Result<Box<dyn ChainSpec>> {
-		let chain_key = match self.shared_params.chain {
+	fn chain_id(&self, _is_dev: bool) -> Result<String> {
+		Ok(match self.shared_params.chain {
 			Some(ref chain) => chain.clone(),
 			None => "dev".into(),
-		};
-
-		Ok(C::spec_factory(&chain_key)?)
+		})
 	}
 }

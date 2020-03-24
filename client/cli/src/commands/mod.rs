@@ -35,7 +35,7 @@ use crate::SubstrateCLI;
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_network::config::NodeKeyConfig;
 use sc_service::{
-	config::DatabaseConfig, config::WasmExecutionMethod, ChainSpec, PruningMode, Roles,
+	config::DatabaseConfig, config::WasmExecutionMethod, PruningMode, Roles,
 };
 use sc_tracing::TracingReceiver;
 use std::fmt::Debug;
@@ -103,7 +103,7 @@ impl CliConfiguration for Subcommand {
 
 	match_and_call! { fn database_config(&self, base_path: &PathBuf, cache_size: Option<usize>) -> Result<DatabaseConfig> }
 
-	match_and_call! { fn chain_spec<C: SubstrateCLI>(&self, is_dev: bool) -> Result<Box<dyn ChainSpec>> }
+	match_and_call! { fn chain_id(&self, is_dev: bool) -> Result<String> }
 
 	match_and_call! { fn init<C: SubstrateCLI>(&self) -> Result<()> }
 
