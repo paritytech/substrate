@@ -691,7 +691,7 @@ enum Releases {
 
 impl Default for Releases {
 	fn default() -> Self {
-		Releases::V2_0_0
+		Releases::V3_0_0
 	}
 }
 
@@ -968,27 +968,10 @@ decl_module! {
 		}
 
 		fn on_runtime_upgrade() -> Weight {
-			if StorageVersion::get() == Releases::V2_0_0 {
-				// Note: OldActiveEraInfo first field was EraIndex so it is correct to decode it.
-				let res = <Module<T> as Store>::ActiveEra::translate::<EraIndex, _>(|active_era_index| {
-					active_era_index.map(|active_era_index| {
-						let now_as_millis_u64 = T::UnixTime::now().as_millis().saturated_into::<u64>();
-						ActiveEraInfo {
-							index: active_era_index,
-							start: Some(now_as_millis_u64),
-						}
-					})
-				});
-				if let Err(()) = res {
-					frame_support::debug::error!("Encountered error in migration of Staking::ActiveEra");
-				}
-			} else {
-				frame_support::debug::error!("Staking storage version not supported");
-			}
-
+			// For Kusama the type hasn't actually changed as Moment was u64 and was the number of
+			// millisecond since unix epoch.
 			StorageVersion::put(Releases::V3_0_0);
-
-			SimpleDispatchInfo::default().weigh_data(())
+			0
 		}
 
 		/// Take the origin account as a stash and lock up `value` of its balance. `controller` will

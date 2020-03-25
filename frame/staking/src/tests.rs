@@ -3038,19 +3038,3 @@ fn set_history_depth_works() {
 		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 5));
 	});
 }
-
-#[test]
-fn test_on_runtime_upgrade() {
-	ExtBuilder::default().build().execute_with(|| {
-		Timestamp::set_timestamp(200);
-
-		migration::put_storage_value(b"Staking", b"ActiveEra", &[], (10 as EraIndex, u128::max_value()));
-		migration::put_storage_value(b"Staking", b"StorageVersion", &[], Releases::V2_0_0);
-
-		Staking::on_runtime_upgrade();
-
-		assert_eq!(Staking::active_era().unwrap().index, 10);
-		assert_eq!(Staking::active_era().unwrap().start, Some(200));
-		assert_eq!(<Staking as Store>::StorageVersion::get(), Releases::V3_0_0);
-	})
-}
