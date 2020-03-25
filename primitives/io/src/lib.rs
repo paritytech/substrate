@@ -476,7 +476,7 @@ pub trait Crypto {
 		}
 	}
 
-	/// Verify signatures batch.
+	/// Batch-verify signatures.
 	///
 	/// Verify all signatures which were previously pushed in batch.
 	/// Use `batch_push_ed25519`/`batch_push_sr25519` to push collection of signatures
