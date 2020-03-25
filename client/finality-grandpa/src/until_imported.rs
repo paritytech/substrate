@@ -451,7 +451,7 @@ impl<Block: BlockT> BlockUntilImported<Block> for BlockGlobalMessage<Block> {
 			Ok(inner) => Mutex::into_inner(inner),
 			// There are still other strong references to this `Arc`, thus the message is blocked on
 			// other blocks to be imported.
-			Err(_self) => None,
+			Err(_) => None,
 		}
 	}
 }
