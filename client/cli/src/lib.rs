@@ -50,7 +50,7 @@ use structopt::{
 };
 
 /// Substrate client CLI
-pub trait SubstrateCLI: Sized
+pub trait SubstrateCli: Sized
 {
 	/// Implementation name.
 	fn impl_name() -> &'static str;
@@ -161,7 +161,7 @@ pub trait SubstrateCLI: Sized
 	}
 
 	/// Only create a Configuration for the command provided in argument
-	fn create_configuration<C: SubstrateCLI, T: CliConfiguration>(
+	fn create_configuration<C: SubstrateCli, T: CliConfiguration>(
 		cli: &C,
 		command: &T,
 		task_executor: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>,

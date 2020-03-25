@@ -17,7 +17,7 @@
 use crate::chain_spec;
 use crate::cli::Cli;
 use crate::service;
-use sc_cli::{substrate_cli_configuration, SubstrateCLI};
+use sc_cli::{substrate_cli_configuration, SubstrateCli};
 use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
 
 #[substrate_cli_configuration(
@@ -25,7 +25,7 @@ use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
 	support_url = "support.anonymous.an",
 	copyright_start_year = 2017
 )]
-impl SubstrateCLI for Cli {
+impl SubstrateCli for Cli {
 	fn load_spec(&self, id: &str) -> Result<Box<dyn sc_service::ChainSpec>, String> {
 		Ok(match id {
 			"dev" => Box::new(chain_spec::development_config()),

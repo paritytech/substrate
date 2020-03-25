@@ -17,7 +17,7 @@
 use crate::{chain_spec, factory_impl::FactoryState, service, Cli, FactoryCmd, Subcommand};
 use node_transaction_factory::RuntimeAdapter;
 use sc_cli::{
-	substrate_cli_configuration, substrate_cli_params, CliConfiguration, Result, SubstrateCLI,
+	substrate_cli_configuration, substrate_cli_params, CliConfiguration, Result, SubstrateCli,
 };
 use sc_service::Configuration;
 
@@ -27,7 +27,7 @@ use sc_service::Configuration;
 	copyright_start_year = 2017,
 	executable_name = "substrate"
 )]
-impl SubstrateCLI for Cli {
+impl SubstrateCli for Cli {
 	fn load_spec(&self, id: &str) -> std::result::Result<Box<dyn sc_service::ChainSpec>, String> {
 		Ok(match id {
 			"dev" => Box::new(chain_spec::development_config()),

@@ -1,6 +1,6 @@
 #![allow(unused_variables, dead_code)]
 
-use sc_cli::{CliConfiguration, ImportParams, KeystoreParams, SharedParams, SubstrateCLI};
+use sc_cli::{CliConfiguration, ImportParams, KeystoreParams, SharedParams, SubstrateCli};
 use sc_cli_derive::{load_spec, substrate_cli_params};
 
 struct MyCli {
@@ -14,7 +14,7 @@ struct MyCli {
 	copyright_start_year = 2020,
 	impl_version = "0.1.0",
 )]
-impl SubstrateCLI for MyCli {
+impl SubstrateCli for MyCli {
 	fn load_spec(&self, id: &str) -> Result<Box<dyn sc_service::ChainSpec>, String> {
 		Err("not implemented".into())
 	}

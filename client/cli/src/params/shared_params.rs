@@ -20,7 +20,7 @@ use structopt::StructOpt;
 
 use crate::error::Result;
 use crate::init_logger;
-use crate::SubstrateCLI;
+use crate::SubstrateCli;
 
 /// default sub directory to store database
 const DEFAULT_DB_CONFIG_PATH: &'static str = "db";
@@ -75,7 +75,7 @@ impl SharedParams {
 	/// 1. Set the panic handler
 	/// 2. Raise the FD limit
 	/// 3. Initialize the logger
-	pub fn init<C: SubstrateCLI>(&self) -> Result<()> {
+	pub fn init<C: SubstrateCli>(&self) -> Result<()> {
 		let logger_pattern = self.log.as_ref().map(|v| v.as_ref()).unwrap_or("");
 
 		sp_panic_handler::set(C::support_url(), C::impl_version());

@@ -17,7 +17,7 @@
 //! Configuration trait for a CLI based on substrate
 
 use crate::error::Result;
-use crate::SubstrateCLI;
+use crate::SubstrateCli;
 use app_dirs::{AppDataType, AppInfo};
 use names::{Generator, Name};
 use sc_service::config::{
@@ -215,7 +215,7 @@ pub trait CliConfiguration: Sized {
 	}
 
 	/// Create a Configuration object from the current object
-	fn create_configuration<C: SubstrateCLI>(
+	fn create_configuration<C: SubstrateCli>(
 		&self,
 		cli: &C,
 		task_executor: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>,
@@ -292,7 +292,7 @@ pub trait CliConfiguration: Sized {
 	/// 1. Set the panic handler
 	/// 2. Raise the FD limit
 	/// 3. Initialize the logger
-	fn init<C: SubstrateCLI>(&self) -> Result<()>;
+	fn init<C: SubstrateCli>(&self) -> Result<()>;
 }
 
 /// Generate a valid random name for the node

@@ -122,7 +122,7 @@ pub(crate) fn substrate_cli_params(
 		}
 		if missing("init") {
 			i.items.push(ImplItem::Verbatim(quote! {
-				fn init<C: ::sc_cli::SubstrateCLI>(&self) -> ::sc_cli::Result<()> {
+				fn init<C: ::sc_cli::SubstrateCli>(&self) -> ::sc_cli::Result<()> {
 					self.#ident.init::<C>()
 				}
 			}));

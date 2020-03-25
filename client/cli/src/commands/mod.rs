@@ -206,7 +206,7 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
-			fn init<C: ::sc_cli::SubstrateCLI>(&self) -> ::sc_cli::Result<()> {
+			fn init<C: ::sc_cli::SubstrateCli>(&self) -> ::sc_cli::Result<()> {
 				match self {
 					$($enum::$variant(cmd) => cmd.init::<C>()),*
 				}

@@ -16,7 +16,7 @@
 
 use crate::CliConfiguration;
 use crate::Result;
-use crate::SubstrateCLI;
+use crate::SubstrateCli;
 use crate::Subcommand;
 use chrono::prelude::*;
 use futures::pin_mut;
@@ -99,13 +99,13 @@ where
 }
 
 /// A Substrate CLI runtime that can be used to run a node or a command
-pub struct Runtime<C: SubstrateCLI> {
+pub struct Runtime<C: SubstrateCli> {
 	config: Configuration,
 	tokio_runtime: tokio::runtime::Runtime,
 	phantom: PhantomData<C>,
 }
 
-impl<C: SubstrateCLI> Runtime<C>
+impl<C: SubstrateCli> Runtime<C>
 {
 	/// Create a new runtime with the command provided in argument
 	pub fn new<T: CliConfiguration>(cli: &C, command: &T) -> Result<Runtime<C>> {
