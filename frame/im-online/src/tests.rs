@@ -190,7 +190,7 @@ fn late_heartbeat_should_fail() {
 
 #[test]
 fn should_generate_heartbeats() {
-	use sp_runtime::traits::OffchainWorker;
+	use frame_support::traits::OffchainWorker;
 
 	let mut ext = new_test_ext();
 	let (offchain, _state) = TestOffchainExt::new();
