@@ -19,14 +19,14 @@
 use std::{collections::{HashSet, HashMap}, cell::RefCell};
 use sp_runtime::{Perbill, KeyTypeId};
 use sp_runtime::curve::PiecewiseLinear;
-use sp_runtime::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize, OnFinalize, SaturatedConversion};
+use sp_runtime::traits::{IdentityLookup, Convert, OpaqueKeys, SaturatedConversion};
 use sp_runtime::testing::{Header, UintAuthorityId};
 use sp_staking::{SessionIndex, offence::{OffenceDetails, OnOffenceHandler}};
 use sp_core::{H256, crypto::key_types};
 use sp_io;
 use frame_support::{
 	assert_ok, impl_outer_origin, parameter_types, StorageValue, StorageMap, StorageDoubleMap,
-	traits::{Currency, Get, FindAuthor}, weights::Weight,
+	traits::{Currency, Get, FindAuthor, OnFinalize, OnInitialize}, weights::Weight,
 };
 use crate::{
 	EraIndex, GenesisConfig, Module, Trait, StakerStatus, ValidatorPrefs, RewardDestination,
@@ -378,7 +378,7 @@ pub type Timestamp = pallet_timestamp::Module<Test>;
 pub type Staking = Module<Test>;
 
 pub fn check_exposure_all(era: EraIndex) {
-	ErasStakers::<Test>::iter_prefix(era).for_each(check_exposure)
+	ErasStakers::<Test>::iter_prefix_values(era).for_each(check_exposure)
 }
 
 pub fn check_nominator_all(era: EraIndex) {
@@ -399,7 +399,7 @@ pub fn check_exposure(expo: Exposure<AccountId, Balance>) {
 pub fn check_nominator_exposure(era: EraIndex, stash: AccountId) {
 	assert_is_stash(stash);
 	let mut sum = 0;
-	ErasStakers::<Test>::iter_prefix(era)
+	ErasStakers::<Test>::iter_prefix_values(era)
 		.for_each(|exposure| {
 			exposure.others.iter()
 				.filter(|i| i.who == stash)

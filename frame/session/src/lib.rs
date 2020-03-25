@@ -102,12 +102,14 @@
 use sp_std::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
 use codec::Decode;
 use sp_runtime::{KeyTypeId, Perbill, RuntimeAppPublic, BoundToRuntimeAppPublic};
-use frame_support::weights::SimpleDispatchInfo;
 use sp_runtime::traits::{Convert, Zero, Member, OpaqueKeys};
 use sp_staking::SessionIndex;
-use frame_support::{ensure, decl_module, decl_event, decl_storage, decl_error, ConsensusEngineId};
-use frame_support::{traits::{Get, FindAuthor, ValidatorRegistration}, Parameter};
-use frame_support::dispatch::{self, DispatchResult, DispatchError};
+use frame_support::{
+	ensure, decl_module, decl_event, decl_storage, decl_error, ConsensusEngineId, Parameter,
+	weights::{Weight, SimpleDispatchInfo, WeighData},
+	traits::{Get, FindAuthor, ValidatorRegistration},
+	dispatch::{self, DispatchResult, DispatchError},
+};
 use frame_system::{self as system, ensure_signed};
 
 #[cfg(test)]
@@ -495,10 +497,12 @@ decl_module! {
 
 		/// Called when a block is initialized. Will rotate session if it is the last
 		/// block of the current session.
-		fn on_initialize(n: T::BlockNumber) {
+		fn on_initialize(n: T::BlockNumber) -> Weight {
 			if T::ShouldEndSession::should_end_session(n) {
 				Self::rotate_session();
 			}
+
+			SimpleDispatchInfo::default().weigh_data(())
 		}
 	}
 }

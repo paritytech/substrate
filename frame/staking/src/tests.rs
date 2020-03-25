@@ -18,11 +18,11 @@
 
 use super::*;
 use mock::*;
-use sp_runtime::{assert_eq_error_rate, traits::{OnInitialize, BadOrigin}};
+use sp_runtime::{assert_eq_error_rate, traits::BadOrigin};
 use sp_staking::offence::OffenceDetails;
 use frame_support::{
 	assert_ok, assert_noop,
-	traits::{Currency, ReservableCurrency},
+	traits::{Currency, ReservableCurrency, OnInitialize},
 	StorageMap,
 };
 use pallet_balances::Error as BalancesError;
@@ -345,7 +345,7 @@ fn less_than_needed_candidates_works() {
 			// But the exposure is updated in a simple way. No external votes exists.
 			// This is purely self-vote.
 			assert!(
-				ErasStakers::<Test>::iter_prefix(Staking::active_era().unwrap().index)
+				ErasStakers::<Test>::iter_prefix_values(Staking::active_era().unwrap().index)
 					.all(|exposure| exposure.others.is_empty())
 			);
 			check_exposure_all(Staking::active_era().unwrap().index);

@@ -468,7 +468,16 @@ pub trait Crypto {
 
 	/// Verify an `sr25519` signature.
 	///
+	/// Returns `true` when the verification in successful regardless of
+	/// signature version.
+	fn sr25519_verify(sig: &sr25519::Signature, msg: &[u8], pubkey: &sr25519::Public) -> bool {
+		sr25519::Pair::verify_deprecated(sig, msg, pubkey)
+	}
+
+	/// Verify an `sr25519` signature.
+	///
 	/// Returns `true` when the verification in successful.
+	#[version(2)]
 	fn sr25519_verify(sig: &sr25519::Signature, msg: &[u8], pubkey: &sr25519::Public) -> bool {
 		sr25519::Pair::verify(sig, msg, pubkey)
 	}

@@ -27,7 +27,7 @@ use frame_support::traits::{FindAuthor, VerifySeal, Get};
 use codec::{Encode, Decode};
 use frame_system::ensure_none;
 use sp_runtime::traits::{Header as HeaderT, One, Zero};
-use frame_support::weights::SimpleDispatchInfo;
+use frame_support::weights::{Weight, SimpleDispatchInfo, WeighData};
 use sp_inherents::{InherentIdentifier, ProvideInherent, InherentData};
 use sp_authorship::{INHERENT_IDENTIFIER, UnclesInherentData, InherentError};
 
@@ -185,7 +185,7 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
-		fn on_initialize(now: T::BlockNumber) {
+		fn on_initialize(now: T::BlockNumber) -> Weight {
 			let uncle_generations = T::UncleGenerations::get();
 			// prune uncles that are older than the allowed number of generations.
 			if uncle_generations <= now {
@@ -196,6 +196,8 @@ decl_module! {
 			<Self as Store>::DidSetUncles::put(false);
 
 			T::EventHandler::note_author(Self::author());
+
+			SimpleDispatchInfo::default().weigh_data(())
 		}
 
 		fn on_finalize() {
