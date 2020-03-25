@@ -380,7 +380,7 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 
 	/// Translate the values of all elements by a function `f`, in the map in no particular order.
 	/// By returning `None` from `f` for an element, you'll remove it from the map.
-	fn translate<O: Decode, F: Fn(O) -> Option<V>>(f: F);
+	fn translate_values<O: Decode, F: Fn(O) -> Option<V>>(f: F);
 
 	/// Enumerate all elements in the map with first key `k1` in no particular order. If you add or
 	/// remove values whose first key is `k1` to the map while doing this, you'll get undefined

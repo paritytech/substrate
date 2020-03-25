@@ -395,7 +395,7 @@ impl<K1, K2, V, G> storage::StorageDoubleMap<K1, K2, V> for G where
 		}
 	}
 
-	fn translate<O: Decode, F: Fn(O) -> Option<V>>(f: F) {
+	fn translate_values<O: Decode, F: Fn(O) -> Option<V>>(f: F) {
 		let prefix = G::prefix_hash();
 		let mut previous_key = prefix.clone();
 		loop {
