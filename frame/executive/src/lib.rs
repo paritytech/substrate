@@ -66,10 +66,7 @@
 //! # impl ValidateUnsigned for Runtime {
 //! # 	type Call = ();
 //! #
-//! # 	fn validate_unsigned(
-//! #		_source: TransactionSource,
-//! #		_call: &Self::Call,
-//! #	) -> TransactionValidity {
+//! # 	fn validate_unsigned(_source: TransactionSource, _call: &Self::Call) -> TransactionValidity {
 //! # 		UnknownTransaction::NoUnsignedValidator.into()
 //! # 	}
 //! # }
