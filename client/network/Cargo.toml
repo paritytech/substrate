@@ -35,7 +35,7 @@ nohash-hasher = "0.2.0"
 parking_lot = "0.10.0"
 prost = "0.6.1"
 rand = "0.7.2"
-rustc-hex = "2.0.1"
+hex = "0.4.0"
 sc-block-builder = { version = "0.8.0-alpha.4", path = "../block-builder" }
 sc-client = { version = "0.8.0-alpha.4", path = "../" }
 sc-client-api = { version = "2.0.0-alpha.4", path = "../api" }

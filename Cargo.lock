@@ -3596,7 +3596,6 @@ dependencies = [
  "pallet-utility",
  "pallet-vesting",
  "parity-scale-codec",
- "rustc-hex",
  "serde",
  "sp-api",
  "sp-authority-discovery",
@@ -6312,6 +6311,7 @@ dependencies = [
  "futures 0.3.4",
  "futures-timer 3.0.2",
  "futures_codec",
+ "hex",
  "libp2p",
  "linked-hash-map",
  "linked_hash_set",
@@ -6325,7 +6325,6 @@ dependencies = [
  "prost-build",
  "quickcheck",
  "rand 0.7.3",
- "rustc-hex",
  "sc-block-builder",
  "sc-client",
  "sc-client-api",
@@ -6451,7 +6450,6 @@ dependencies = [
  "log 0.4.8",
  "parity-scale-codec",
  "parking_lot 0.10.0",
- "rustc-hex",
  "sc-block-builder",
  "sc-client",
  "sc-client-api",
@@ -7269,7 +7267,6 @@ dependencies = [
  "primitive-types",
  "rand 0.7.3",
  "regex",
- "rustc-hex",
  "schnorrkel",
  "serde",
  "serde_json",
@@ -7462,11 +7459,23 @@ dependencies = [
  "sp-runtime",
  "sp-runtime-interface",
  "sp-runtime-interface-test-wasm",
+ "sp-runtime-interface-test-wasm-deprecated",
  "sp-state-machine",
 ]
 
 [[package]]
 name = "sp-runtime-interface-test-wasm"
+version = "2.0.0-dev"
+dependencies = [
+ "sp-core",
+ "sp-io",
+ "sp-runtime-interface",
+ "sp-std",
+ "substrate-wasm-builder-runner",
+]
+
+[[package]]
+name = "sp-runtime-interface-test-wasm-deprecated"
 version = "2.0.0-dev"
 dependencies = [
  "sp-core",
@@ -7754,7 +7763,6 @@ dependencies = [
  "parity-scale-codec",
  "rand 0.7.3",
  "rpassword",
- "rustc-hex",
  "sc-rpc",
  "serde_json",
  "sp-core",
@@ -9287,17 +9295,16 @@ checksum = "d089681aa106a86fade1b0128fb5daf07d5867a509ab036d99988dec80429a57"
 
 [[package]]
 name = "yamux"
-version = "0.4.4"
+version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f03098897b734bd943ab23f6aa9f98aafd72a88516deedd66f9d564c57bf2f19"
+checksum = "84300bb493cc878f3638b981c62b4632ec1a5c52daaa3036651e8c106d3b55ea"
 dependencies = [
- "bytes 0.5.4",
  "futures 0.3.4",
  "log 0.4.8",
  "nohash-hasher",
  "parking_lot 0.10.0",
  "rand 0.7.3",
- "thiserror",
+ "static_assertions",
 ]
 
 [[package]]
