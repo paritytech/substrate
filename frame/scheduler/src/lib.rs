@@ -18,7 +18,7 @@
 //!
 //! \# Scheduler
 //!
-//! - \[`<INSERT_CUSTOM_PALLET_NAME>::Trait`](./trait.Trait.html)
+//! - \[`scheduler::Trait`](./trait.Trait.html)
 //! - \[`Call`](./enum.Call.html)
 //! - \[`Module`](./struct.Module.html)
 //!
