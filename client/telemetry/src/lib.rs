@@ -102,7 +102,9 @@ pub struct TelemetryEndpoints(
 );
 
 /// Custom deserializer for TelemetryEndpoints, used to convert urls or multiaddr to multiaddr.
-fn url_or_multiaddr_deser<'de, D>(deserializer: D) -> Result<Vec<(Multiaddr, u8)>, D::Error> where D: Deserializer<'de> {
+fn url_or_multiaddr_deser<'de, D>(deserializer: D) -> Result<Vec<(Multiaddr, u8)>, D::Error>
+	where D: Deserializer<'de>
+{
 	Vec::<(String, u8)>::deserialize(deserializer)?
 		.iter()
 		.map(|e| Ok((url_to_multiaddr(&e.0)

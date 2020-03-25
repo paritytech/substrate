@@ -160,7 +160,7 @@ pub fn staging_testnet_config() -> ChainSpec {
 		staging_testnet_config_genesis,
 		boot_nodes,
 		Some(TelemetryEndpoints::new(vec![(STAGING_TELEMETRY_URL.to_string(), 0)])
-			.expect("Staging telemetry url should be valid")),
+			.expect("Staging telemetry url is valid; qed")),
 		None,
 		None,
 		Default::default(),
