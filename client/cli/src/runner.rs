@@ -99,16 +99,16 @@ where
 }
 
 /// A Substrate CLI runtime that can be used to run a node or a command
-pub struct Runtime<C: SubstrateCli> {
+pub struct Runner<C: SubstrateCli> {
 	config: Configuration,
 	tokio_runtime: tokio::runtime::Runtime,
 	phantom: PhantomData<C>,
 }
 
-impl<C: SubstrateCli> Runtime<C>
+impl<C: SubstrateCli> Runner<C>
 {
 	/// Create a new runtime with the command provided in argument
-	pub fn new<T: CliConfiguration>(cli: &C, command: &T) -> Result<Runtime<C>> {
+	pub fn new<T: CliConfiguration>(cli: &C, command: &T) -> Result<Runner<C>> {
 		let tokio_runtime = build_runtime()?;
 
 		let task_executor = {
@@ -118,7 +118,7 @@ impl<C: SubstrateCli> Runtime<C>
 			})
 		};
 
-		Ok(Runtime {
+		Ok(Runner {
 			config: command.create_configuration(cli, task_executor)?,
 			tokio_runtime,
 			phantom: PhantomData,

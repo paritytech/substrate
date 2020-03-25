@@ -26,7 +26,7 @@ mod commands;
 mod config;
 mod error;
 mod params;
-mod runtime;
+mod runner;
 
 pub use arg_enums::*;
 pub use commands::*;
@@ -36,7 +36,7 @@ use lazy_static::lazy_static;
 use log::info;
 pub use params::*;
 use regex::Regex;
-pub use runtime::*;
+pub use runner::*;
 pub use sc_cli_derive::*;
 use sc_service::{ChainSpec, Configuration};
 use std::future::Future;
@@ -172,10 +172,10 @@ pub trait SubstrateCli: Sized
 
 	/// Create a runtime for the command provided in argument. This will create a Configuration and
 	/// a tokio runtime
-	fn create_runtime<T: CliConfiguration>(&self, command: &T) -> error::Result<Runtime<Self>>
+	fn create_runtime<T: CliConfiguration>(&self, command: &T) -> error::Result<Runner<Self>>
 	{
 		command.init::<Self>()?;
-		Runtime::new(self, command)
+		Runner::new(self, command)
 	}
 }
 
