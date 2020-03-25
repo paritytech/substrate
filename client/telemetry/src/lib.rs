@@ -335,7 +335,7 @@ mod telemetry_endpoints_tests {
 	}
 
 	#[test]
-	fn valid_and_invalid_endpointsj() {
+	fn valid_and_invalid_endpoints() {
 		let endp = vec![("/ip4/80.123.90.4/tcp/5432".into(), 3), ("/ip4/no:!?;rlkqre;;::::///tcp/5432".into(), 4)];
 		let telem = TelemetryEndpoints::new(endp);
 		assert!(telem.is_err());
