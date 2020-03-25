@@ -34,10 +34,8 @@ pub use crate::sp_runtime::transaction_validity::{
 /// # 	impl frame_support::unsigned::ValidateUnsigned for Module {
 /// # 		type Call = Call;
 /// #
-/// # 		fn validate_unsigned(
-/// #			_source: frame_support::transaction_validity::TransactionSource,
-/// #			_call: &Self::Call,
-/// #		) -> frame_support::unsigned::TransactionValidity {
+/// # 		fn validate_unsigned(_source: frame_support::unsigned::TransactionSource, _call: &Self::Call)
+/// 			-> frame_support::unsigned::TransactionValidity {
 /// # 			unimplemented!();
 /// # 		}
 /// # 	}
