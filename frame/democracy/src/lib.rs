@@ -573,7 +573,8 @@ decl_module! {
 		/// - `vote`: The vote configuration.
 		///
 		/// # <weight>
-		/// - `O(1)`.
+		/// - `O(R)`.
+		/// - R is the number of referendums the voter has voted on.
 		/// - One DB change, one DB entry.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(200_000)]
@@ -761,6 +762,7 @@ decl_module! {
 		/// - One DB clear.
 		/// - Performs a binary search on `existing_vetoers` which should not
 		///   be very large.
+		/// - O(log v), v is number of `existing_vetoers`
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(200_000)]
 		fn veto_external(origin, proposal_hash: T::Hash) {

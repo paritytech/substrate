@@ -56,8 +56,8 @@ fn add_referendum<T: Trait>(n: u32) -> Result<ReferendumIndex, &'static str> {
 		vote_threshold,
 		0.into(),
 	);
-
-	Ok(n.into())
+	let referendum_index: ReferendumIndex = ReferendumCount::get() - 1;
+	Ok(referendum_index)
 }
 
 fn account_vote<T: Trait>() -> AccountVote<BalanceOf<T>> {
@@ -92,27 +92,27 @@ benchmarks! {
 	propose {
 		let p in ...;
 
-		let caller = funded_account::<T>("caller", 0);
-		let proposal_hash: T::Hash = Default::default();
-		let value = T::MinimumDeposit::get();
-
+		// Add p proposals
 		for i in 0..p {
 			add_proposal::<T>(i)?;
 		}
 
+		let caller = funded_account::<T>("caller", 0);
+		let proposal_hash: T::Hash = T::Hashing::hash_of(&p);
+		let value = T::MinimumDeposit::get();
 	}: _(RawOrigin::Signed(caller), proposal_hash, value.into())
 
 	second {
 		let s in 0 .. 100;
 
-		let caller = funded_account::<T>("caller", 0);
-		let proposal_hash = add_proposal::<T>(s)?;
-
+		// Create s existing "seconds"
 		for i in 0..s {
 			let seconder = funded_account::<T>("seconder", i);
 			Democracy::<T>::second(RawOrigin::Signed(seconder).into(), 0)?;
 		}
 
+		let caller = funded_account::<T>("caller", 0);
+		let proposal_hash = add_proposal::<T>(s)?;
 	}: _(RawOrigin::Signed(caller), 0)
 
 	vote {
@@ -151,7 +151,7 @@ benchmarks! {
 
 		let referendum_index = add_referendum::<T>(u)?;
 		let origin = T::CancellationOrigin::successful_origin();
-		let call = Call::<T>::emergency_cancel(referendum_index.into());
+		let call = Call::<T>::emergency_cancel(referendum_index);
 	}: {
 		let _ = call.dispatch(origin)?;
 	}
@@ -160,9 +160,8 @@ benchmarks! {
 		let u in ...;
 
 		let origin = T::ExternalOrigin::successful_origin();
-		let proposal_hash = Default::default();
+		let proposal_hash = T::Hashing::hash_of(&u);
 		let call = Call::<T>::external_propose(proposal_hash);
-
 	}: {
 		let _ = call.dispatch(origin)?;
 	}
@@ -171,7 +170,7 @@ benchmarks! {
 		let u in ...;
 
 		let origin = T::ExternalMajorityOrigin::successful_origin();
-		let proposal_hash = Default::default();
+		let proposal_hash = T::Hashing::hash_of(&u);
 		let call = Call::<T>::external_propose_majority(proposal_hash);
 
 	}: {
@@ -182,7 +181,7 @@ benchmarks! {
 		let u in ...;
 
 		let origin = T::ExternalDefaultOrigin::successful_origin();
-		let proposal_hash = Default::default();
+		let proposal_hash = T::Hashing::hash_of(&u);
 		let call = Call::<T>::external_propose_default(proposal_hash);
 
 	}: {
@@ -193,7 +192,7 @@ benchmarks! {
 		let u in ...;
 
 		let origin_propose = T::ExternalDefaultOrigin::successful_origin();
-		let proposal_hash: T::Hash = Default::default();
+		let proposal_hash: T::Hash = T::Hashing::hash_of(&u);
 		Democracy::<T>::external_propose_default(origin_propose, proposal_hash.clone())?;
 
 		let origin_fast_track = T::FastTrackOrigin::successful_origin();
@@ -206,16 +205,22 @@ benchmarks! {
 	}
 
 	veto_external {
-		let u in ...;
+		// Existing veto-ers
+		let v in 0 .. 100;
 
-		let proposal_hash: T::Hash = Default::default();
+		let proposal_hash: T::Hash = T::Hashing::hash_of(&u);
 
 		let origin_propose = T::ExternalDefaultOrigin::successful_origin();
 		Democracy::<T>::external_propose_default(origin_propose, proposal_hash.clone())?;
 
+		let mut vetoers: Vec<T::AccountId> = Vec::new();
+		for i in 0..v {
+			vetoers.push(account("vetoer", i, SEED));
+		}
+		Blacklist::<T>::insert(proposal_hash, (T::BlockNumber::zero(), vetoers));
+
 		let call = Call::<T>::veto_external(proposal_hash);
 		let origin = T::VetoOrigin::successful_origin();
-
 	}: {
 		let _ = call.dispatch(origin)?;
 	}
@@ -224,7 +229,6 @@ benchmarks! {
 		let u in ...;
 
 		let referendum_index = add_referendum::<T>(u)?;
-
 	}: _(RawOrigin::Root, referendum_index)
 
 	cancel_queued {
@@ -232,7 +236,7 @@ benchmarks! {
 
 		let referendum_index = add_referendum::<T>(u)?;
 		let block_number: T::BlockNumber = 0.into();
-		let hash: T::Hash = Default::default();
+		let hash: T::Hash = T::Hashing::hash_of(&u);
 		<DispatchQueue<T>>::put(vec![(block_number, hash, referendum_index.clone())]);
 
 	}: _(RawOrigin::Root, referendum_index)
