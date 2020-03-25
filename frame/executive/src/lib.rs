@@ -75,16 +75,18 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::{prelude::*, marker::PhantomData};
-use frame_support::{storage::StorageValue, weights::{GetDispatchInfo, WeighBlock, DispatchInfo}};
+use frame_support::{
+	storage::StorageValue, weights::{GetDispatchInfo, DispatchInfo},
+	traits::{OnInitialize, OnFinalize, OnRuntimeUpgrade, OffchainWorker},
+};
 use sp_runtime::{
 	generic::Digest, ApplyExtrinsicResult,
 	traits::{
-		self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize, OnInitialize,
-		NumberFor, Block as BlockT, OffchainWorker, Dispatchable, Saturating, OnRuntimeUpgrade,
+		self, Header, Zero, One, Checkable, Applyable, CheckEqual, ValidateUnsigned, NumberFor,
+		Block as BlockT, Dispatchable, Saturating,
 	},
 	transaction_validity::TransactionValidity,
 };
-use sp_runtime::traits::ValidateUnsigned;
 use codec::{Codec, Encode};
 use frame_system::{extrinsics_root, DigestOf};
 
@@ -111,8 +113,7 @@ impl<
 		OnRuntimeUpgrade +
 		OnInitialize<System::BlockNumber> +
 		OnFinalize<System::BlockNumber> +
-		OffchainWorker<System::BlockNumber> +
-		WeighBlock<System::BlockNumber>,
+		OffchainWorker<System::BlockNumber>,
 > ExecuteBlock<Block> for Executive<System, Block, Context, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
@@ -137,8 +138,7 @@ impl<
 		OnRuntimeUpgrade +
 		OnInitialize<System::BlockNumber> +
 		OnFinalize<System::BlockNumber> +
-		OffchainWorker<System::BlockNumber> +
-		WeighBlock<System::BlockNumber>,
+		OffchainWorker<System::BlockNumber>,
 > Executive<System, Block, Context, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
@@ -179,10 +179,8 @@ where
 		if Self::runtime_upgraded() {
 			// System is not part of `AllModules`, so we need to call this manually.
 			<frame_system::Module::<System> as OnRuntimeUpgrade>::on_runtime_upgrade();
-			<AllModules as OnRuntimeUpgrade>::on_runtime_upgrade();
-			<frame_system::Module<System>>::register_extra_weight_unchecked(
-				<AllModules as WeighBlock<System::BlockNumber>>::on_runtime_upgrade()
-			);
+			let weight = <AllModules as OnRuntimeUpgrade>::on_runtime_upgrade();
+			<frame_system::Module<System>>::register_extra_weight_unchecked(weight);
 		}
 		<frame_system::Module<System>>::initialize(
 			block_number,
@@ -192,13 +190,8 @@ where
 			frame_system::InitKind::Full,
 		);
 		<frame_system::Module<System> as OnInitialize<System::BlockNumber>>::on_initialize(*block_number);
-		<AllModules as OnInitialize<System::BlockNumber>>::on_initialize(*block_number);
-		<frame_system::Module<System>>::register_extra_weight_unchecked(
-			<AllModules as WeighBlock<System::BlockNumber>>::on_initialize(*block_number)
-		);
-		<frame_system::Module<System>>::register_extra_weight_unchecked(
-			<AllModules as WeighBlock<System::BlockNumber>>::on_finalize(*block_number)
-		);
+		let weight = <AllModules as OnInitialize<System::BlockNumber>>::on_initialize(*block_number);
+		<frame_system::Module<System>>::register_extra_weight_unchecked(weight);
 
 		frame_system::Module::<System>::note_finished_initialize();
 	}
@@ -400,7 +393,7 @@ mod tests {
 	use hex_literal::hex;
 
 	mod custom {
-		use frame_support::weights::SimpleDispatchInfo;
+		use frame_support::weights::{SimpleDispatchInfo, Weight};
 
 		pub trait Trait: frame_system::Trait {}
 
@@ -422,11 +415,11 @@ mod tests {
 
 				// module hooks.
 				// one with block number arg and one without
-				#[weight = SimpleDispatchInfo::FixedNormal(25)]
-				fn on_initialize(n: T::BlockNumber) {
+				fn on_initialize(n: T::BlockNumber) -> Weight {
 					println!("on_initialize({})", n);
+					175
 				}
-				#[weight = SimpleDispatchInfo::FixedNormal(150)]
+
 				fn on_finalize() {
 					println!("on_finalize(?)");
 				}

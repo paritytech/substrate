@@ -1,6 +1,6 @@
 [package]
 name = "sp-arithmetic"
-version = "2.0.0-alpha.4"
+version = "2.0.0-alpha.5"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
@@ -14,9 +14,9 @@ documentation = "https://docs.rs/sp-arithmetic"
 codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false, features = ["derive"] }
 integer-sqrt = "0.1.2"
 num-traits = { version = "0.2.8", default-features = false }
-sp-std = { version = "2.0.0-alpha.4", default-features = false, path = "../std" }
+sp-std = { version = "2.0.0-alpha.5", default-features = false, path = "../std" }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
-sp-debug-derive = { version = "2.0.0-alpha.4", default-features = false, path = "../../primitives/debug-derive" }
+sp-debug-derive = { version = "2.0.0-alpha.5", default-features = false, path = "../../primitives/debug-derive" }
 
 [dev-dependencies]
 primitive-types = "0.7.0"

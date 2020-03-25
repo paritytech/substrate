@@ -22,7 +22,7 @@ use sc_client_db::BenchmarkingState;
 use sc_service::{Configuration, ChainSpec};
 use sc_executor::{NativeExecutor, NativeExecutionDispatch};
 use codec::{Encode, Decode};
-use frame_benchmarking::BenchmarkResults;
+use frame_benchmarking::{BenchmarkResults, Analysis};
 use sp_core::{
 	tasks,
 	traits::KeystoreExt,
@@ -162,6 +162,17 @@ impl BenchmarkCmd {
 					// Print extrinsic time and storage root time
 					print!("{:?},{:?}\n", result.1, result.2);
 				});
+
+				print!("\n");
+
+				// Conduct analysis.
+				if let Some(analysis) = Analysis::median_slopes(&results) {
+					println!("Median Slopes Analysis\n========\n{}", analysis);
+				}
+
+				if let Some(analysis) = Analysis::min_squares_iqr(&results) {
+					println!("Min Squares Analysis\n========\n{}", analysis);
+				}
 
 				eprintln!("Done.");
 			}

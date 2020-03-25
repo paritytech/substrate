@@ -68,7 +68,6 @@ use impls::{CurrencyToVoteHandler, Author, LinearWeightToFee, TargetedFeeAdjustm
 /// Constant values used within the runtime.
 pub mod constants;
 use constants::{time::*, currency::*};
-use frame_system::Trait;
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
@@ -83,8 +82,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to 0. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 239,
-	impl_version: 0,
+	spec_version: 240,
+	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -917,6 +916,13 @@ impl_runtime_apis! {
 					steps,
 					repeat,
 				),
+				b"pallet-collective" | b"collective" => Council::run_benchmark(
+					extrinsic,
+					lowest_range_values,
+					highest_range_values,
+					steps,
+					repeat,
+				),
 				_ => Err("Benchmark not found for this pallet."),
 			};
 
@@ -929,6 +935,7 @@ impl_runtime_apis! {
 mod tests {
 	use super::*;
 	use frame_system::offchain::{SignAndSubmitTransaction, SubmitSignedTransaction};
+	use frame_support::traits::OnInitialize;
 
 	#[test]
 	fn validate_transaction_submitter_bounds() {
@@ -951,37 +958,5 @@ mod tests {
 
 		is_submit_signed_transaction::<SubmitTransaction>();
 		is_sign_and_submit_transaction::<SubmitTransaction>();
-	}
-
-	#[test]
-	fn block_hooks_weight_should_not_exceed_limits() {
-		use frame_support::weights::WeighBlock;
-		let check_for_block = |b| {
-			let block_hooks_weight =
-				<AllModules as WeighBlock<BlockNumber>>::on_initialize(b) +
-				<AllModules as WeighBlock<BlockNumber>>::on_finalize(b);
-
-			assert_eq!(
-				block_hooks_weight,
-				0,
-				"This test might fail simply because the value being compared to has increased to a \
-				module declaring a new weight for a hook or call. In this case update the test and \
-				happily move on.",
-			);
-
-			// Invariant. Always must be like this to have a sane chain.
-			assert!(block_hooks_weight < MaximumBlockWeight::get());
-
-			// Warning.
-			if block_hooks_weight > MaximumBlockWeight::get() / 2 {
-				println!(
-					"block hooks weight is consuming more than a block's capacity. You probably want \
-					to re-think this. This test will fail now."
-				);
-				assert!(false);
-			}
-		};
-
-		let _ = (0..100_000).for_each(check_for_block);
 	}
 }
