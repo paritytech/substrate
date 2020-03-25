@@ -358,7 +358,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// A helper function to fetch the price and send signed transaction.
-	fn fetch_price_and_send_signed() -> Result<(), String> {
+	fn fetch_price_and_send_signed() -> Result<(), &'static str> {
 		use frame_system::offchain::SendSignedTransaction;
 		// Make an external HTTP request to fetch the current price.
 		// Note this call will block until response is received.
@@ -388,7 +388,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// A helper function to fetch the price and send unsigned transaction.
-	fn fetch_price_and_send_unsigned(block_number: T::BlockNumber) -> Result<(), String> {
+	fn fetch_price_and_send_unsigned(block_number: T::BlockNumber) -> Result<(), &'static str> {
 		// Make sure we don't fetch the price if unsigned transaction is going to be rejected
 		// anyway.
 		let next_unsigned_at = <NextUnsignedAt<T>>::get();
@@ -416,8 +416,8 @@ impl<T: Trait> Module<T> {
 		// attack vectors. See validation logic docs for more details.
 		//
 		// Method 1: Unsigned transaction / Unsigned payload
-		let _result_raw: Result<(), String> = Signer::<T, T::AuthorityId>::send_raw_unsigned_transaction(call)
-			.map_err(|()| "Unable to submit unsigned transaction.".into());
+		let _result_raw: Result<(), &'static str> = Signer::<T, T::AuthorityId>::send_raw_unsigned_transaction(call)
+			.map_err(|()| "Unable to submit unsigned transaction.");
 
 		// Method 2: Unsigned transction / signed payload
 		let _result_signed_payload = Signer::<T, T::AuthorityId>::all_accounts().send_unsigned_transaction(
