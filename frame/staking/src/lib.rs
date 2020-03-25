@@ -687,7 +687,6 @@ enum Releases {
 	V1_0_0Ancient,
 	V2_0_0,
 	V3_0_0,
-	V4_0_0,
 }
 
 impl Default for Releases {
@@ -852,8 +851,8 @@ decl_storage! {
 
 		/// Storage version of the pallet.
 		///
-		/// This is set to v4.0.0 for new networks.
-		StorageVersion build(|_: &GenesisConfig<T>| Releases::V4_0_0): Releases;
+		/// This is set to v3.0.0 for new networks.
+		StorageVersion build(|_: &GenesisConfig<T>| Releases::V3_0_0): Releases;
 	}
 	add_extra_genesis {
 		config(stakers):
@@ -969,7 +968,7 @@ decl_module! {
 		}
 
 		fn on_runtime_upgrade() -> Weight {
-			if StorageVersion::get() == Releases::V3_0_0 {
+			if StorageVersion::get() == Releases::V2_0_0 {
 				// Note: OldActiveEraInfo first field was EraIndex so it is correct to decode it.
 				let res = <Module<T> as Store>::ActiveEra::translate::<EraIndex, _>(|active_era_index| {
 					active_era_index.map(|active_era_index| {
@@ -987,7 +986,7 @@ decl_module! {
 				frame_support::debug::error!("Staking storage version not supported");
 			}
 
-			StorageVersion::put(Releases::V4_0_0);
+			StorageVersion::put(Releases::V3_0_0);
 
 			SimpleDispatchInfo::default().weigh_data(())
 		}
