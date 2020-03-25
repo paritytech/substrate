@@ -142,6 +142,7 @@ members = [
 	"primitives/api/proc-macro",
 	"primitives/api/test",
 	"primitives/arithmetic",
+	"primitives/arithmetic/fuzzer",
 	"primitives/io",
 	"primitives/runtime",
 	"primitives/sandbox",
