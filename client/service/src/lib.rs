@@ -621,7 +621,8 @@ where
 		match Decode::decode(&mut &encoded[..]) {
 			Ok(uxt) => {
 				let best_block_id = BlockId::hash(self.client.info().best_hash);
-				let import_future = self.pool.submit_one(&best_block_id, uxt);
+				let source = sp_transaction_pool::TransactionSource::External;
+				let import_future = self.pool.submit_one(&best_block_id, source, uxt);
 				let import_future = import_future
 					.map(move |import_result| {
 						match import_result {
@@ -674,6 +675,7 @@ mod tests {
 			Default::default(),
 			Arc::new(FullChainApi::new(client.clone())),
 		).0);
+		let source = sp_runtime::transaction_validity::TransactionSource::External;
 		let best = longest_chain.best_chain().unwrap();
 		let transaction = Transfer {
 			amount: 5,
@@ -681,8 +683,12 @@ mod tests {
 			from: AccountKeyring::Alice.into(),
 			to: Default::default(),
 		}.into_signed_tx();
-		block_on(pool.submit_one(&BlockId::hash(best.hash()), transaction.clone())).unwrap();
-		block_on(pool.submit_one(&BlockId::hash(best.hash()), Extrinsic::IncludeData(vec![1]))).unwrap();
+		block_on(pool.submit_one(
+			&BlockId::hash(best.hash()), source, transaction.clone()),
+		).unwrap();
+		block_on(pool.submit_one(
+			&BlockId::hash(best.hash()), source, Extrinsic::IncludeData(vec![1])),
+		).unwrap();
 		assert_eq!(pool.status().ready, 2);
 
 		// when
