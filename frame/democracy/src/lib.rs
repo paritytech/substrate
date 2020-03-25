@@ -519,7 +519,8 @@ decl_module! {
 		/// Emits `Proposed`.
 		///
 		/// # <weight>
-		/// - `O(1)`.
+		/// - `O(P)`
+		/// - P is the number proposals in the `PublicProps` vec.
 		/// - Two DB changes, one DB entry.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(5_000_000)]
@@ -549,7 +550,8 @@ decl_module! {
 		/// - `proposal`: The index of the proposal to second.
 		///
 		/// # <weight>
-		/// - `O(1)`.
+		/// - `O(S)`.
+		/// - S is the number of seconds a proposal already has.
 		/// - One DB entry.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(5_000_000)]
