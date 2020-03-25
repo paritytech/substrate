@@ -651,9 +651,8 @@ where
 		self.pool.ready_transaction(hash)
 			.and_then(
 				// Only propagable transactions should be resolved for network service.
-				|tx| if tx.is_propagable() { Some(tx) } else { None }
+				|tx| if tx.is_propagable() { Some(tx.data.clone()) } else { None }
 			)
-			.map(|tx| tx.data().clone())
 	}
 }
 
