@@ -267,7 +267,7 @@ use frame_support::{
 		Currency, LockIdentifier, LockableCurrency, WithdrawReasons, OnUnbalanced, Imbalance, Get,
 		UnixTime
 	},
-	weights::{SimpleDispatchInfo, Weight, WeighData},
+	weights::{SimpleDispatchInfo, Weight},
 };
 use pallet_session::historical::SessionManager;
 use sp_runtime::{
