@@ -40,6 +40,7 @@ template = { version = "2.0.0-alpha.5", default-features = false, path = "../pal
 wasm-builder-runner = { version = "1.0.5", package = "substrate-wasm-builder-runner", path = "../../../utils/wasm-builder-runner" }
 
 [features]
+no-babe = []
 default = ["std"]
 std = [
 	"aura/std",

@@ -3157,6 +3157,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "manual-seal-node"
+version = "2.0.0-alpha.5"
+dependencies = [
+ "futures 0.3.4",
+ "log 0.4.8",
+ "node-template-runtime",
+ "sc-basic-authorship",
+ "sc-cli",
+ "sc-client",
+ "sc-client-api",
+ "sc-consensus-manual-seal",
+ "sc-executor",
+ "sc-network",
+ "sc-service",
+ "sc-transaction-pool",
+ "sp-consensus",
+ "sp-core",
+ "sp-inherents",
+ "sp-runtime",
+ "sp-timestamp",
+ "sp-transaction-pool",
+ "structopt",
+ "substrate-build-script-utils",
+ "vergen",
+]
+
+[[package]]
 name = "matches"
 version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"

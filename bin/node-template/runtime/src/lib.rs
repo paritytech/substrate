@@ -82,6 +82,7 @@ pub mod opaque {
 	/// Opaque block identifier type.
 	pub type BlockId = generic::BlockId<Block>;
 
+	#[cfg(not(feature = "no-babe"))]
 	impl_opaque_keys! {
 		pub struct SessionKeys {
 			pub aura: Aura,
@@ -169,10 +170,12 @@ impl system::Trait for Runtime {
 	type AccountData = balances::AccountData<Balance>;
 }
 
+#[cfg(not(feature = "no-babe"))]
 impl aura::Trait for Runtime {
 	type AuthorityId = AuraId;
 }
 
+#[cfg(not(feature = "no-babe"))]
 impl grandpa::Trait for Runtime {
 	type Event = Event;
 }
@@ -184,7 +187,10 @@ parameter_types! {
 impl timestamp::Trait for Runtime {
 	/// A timestamp: milliseconds since the unix epoch.
 	type Moment = u64;
+	#[cfg(not(feature = "no-babe"))]
 	type OnTimestampSet = Aura;
+	#[cfg(feature = "no-babe")]
+	type OnTimestampSet = ();
 	type MinimumPeriod = MinimumPeriod;
 }
 
@@ -226,6 +232,7 @@ impl template::Trait for Runtime {
 	type Event = Event;
 }
 
+#[cfg(not(feature = "no-babe"))]
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -237,6 +244,24 @@ construct_runtime!(
 		Timestamp: timestamp::{Module, Call, Storage, Inherent},
 		Aura: aura::{Module, Config<T>, Inherent(Timestamp)},
 		Grandpa: grandpa::{Module, Call, Storage, Config, Event},
+		Balances: balances::{Module, Call, Storage, Config<T>, Event<T>},
+		TransactionPayment: transaction_payment::{Module, Storage},
+		Sudo: sudo::{Module, Call, Config<T>, Storage, Event<T>},
+		// Used for the module template in `./template.rs`
+		TemplateModule: template::{Module, Call, Storage, Event<T>},
+	}
+);
+
+#[cfg(feature = "no-babe")]
+construct_runtime!(
+	pub enum Runtime where
+		Block = Block,
+		NodeBlock = opaque::Block,
+		UncheckedExtrinsic = UncheckedExtrinsic
+	{
+		System: system::{Module, Call, Config, Storage, Event<T>},
+		RandomnessCollectiveFlip: randomness_collective_flip::{Module, Call, Storage},
+		Timestamp: timestamp::{Module, Call, Storage, Inherent},
 		Balances: balances::{Module, Call, Storage, Config<T>, Event<T>},
 		TransactionPayment: transaction_payment::{Module, Storage},
 		Sudo: sudo::{Module, Call, Config<T>, Storage, Event<T>},
@@ -271,6 +296,7 @@ pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Call, SignedExt
 /// Executive: handles dispatch to the various modules.
 pub type Executive = frame_executive::Executive<Runtime, Block, system::ChainContext<Runtime>, Runtime, AllModules>;
 
+#[cfg(not(feature = "no-babe"))]
 impl_runtime_apis! {
 	impl sp_api::Core<Block> for Runtime {
 		fn version() -> RuntimeVersion {
@@ -354,6 +380,66 @@ impl_runtime_apis! {
 	impl fg_primitives::GrandpaApi<Block> for Runtime {
 		fn grandpa_authorities() -> GrandpaAuthorityList {
 			Grandpa::grandpa_authorities()
+		}
+	}
+}
+
+#[cfg(feature = "no-babe")]
+impl_runtime_apis! {
+	impl sp_api::Core<Block> for Runtime {
+		fn version() -> RuntimeVersion {
+			VERSION
+		}
+
+		fn execute_block(block: Block) {
+			Executive::execute_block(block)
+		}
+
+		fn initialize_block(header: &<Block as BlockT>::Header) {
+			Executive::initialize_block(header)
+		}
+	}
+
+	impl sp_api::Metadata<Block> for Runtime {
+		fn metadata() -> OpaqueMetadata {
+			Runtime::metadata().into()
+		}
+	}
+
+	impl sp_block_builder::BlockBuilder<Block> for Runtime {
+		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult {
+			Executive::apply_extrinsic(extrinsic)
+		}
+
+		fn finalize_block() -> <Block as BlockT>::Header {
+			Executive::finalize_block()
+		}
+
+		fn inherent_extrinsics(data: sp_inherents::InherentData) -> Vec<<Block as BlockT>::Extrinsic> {
+			data.create_extrinsics()
+		}
+
+		fn check_inherents(
+			block: Block,
+			data: sp_inherents::InherentData,
+		) -> sp_inherents::CheckInherentsResult {
+			data.check_extrinsics(&block)
+		}
+
+		fn random_seed() -> <Block as BlockT>::Hash {
+			RandomnessCollectiveFlip::random_seed()
+		}
+	}
+
+	impl sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block> for Runtime {
+		fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
+			Executive::validate_transaction(tx)
+		}
+	}
+
+	impl sp_offchain::OffchainWorkerApi<Block> for Runtime {
+		fn offchain_worker(header: &<Block as BlockT>::Header) {
+			Executive::offchain_worker(header)
 		}
 	}
 }

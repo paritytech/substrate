@@ -29,7 +29,7 @@ use std::marker::PhantomData;
 /// params for block finalization.
 pub struct FinalizeBlockParams<B: BlockT, F, CB> {
 	/// hash of the block
-	pub hash: <B as BlockT>::Hash,
+	pub hash: B::Hash,
 	/// sender to report errors/success to the rpc.
 	pub sender: rpc::Sender<()>,
 	/// finalization justification
