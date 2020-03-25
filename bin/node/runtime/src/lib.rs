@@ -82,8 +82,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to 0. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 237,
-	impl_version: 0,
+	spec_version: 240,
+	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -302,7 +302,8 @@ impl pallet_staking::Trait for Runtime {
 parameter_types! {
 	pub const LaunchPeriod: BlockNumber = 28 * 24 * 60 * MINUTES;
 	pub const VotingPeriod: BlockNumber = 28 * 24 * 60 * MINUTES;
-	pub const EmergencyVotingPeriod: BlockNumber = 3 * 24 * 60 * MINUTES;
+	pub const FastTrackVotingPeriod: BlockNumber = 3 * 24 * 60 * MINUTES;
+	pub const InstantAllowed: bool = true;
 	pub const MinimumDeposit: Balance = 100 * DOLLARS;
 	pub const EnactmentPeriod: BlockNumber = 30 * 24 * 60 * MINUTES;
 	pub const CooloffPeriod: BlockNumber = 28 * 24 * 60 * MINUTES;
@@ -328,7 +329,9 @@ impl pallet_democracy::Trait for Runtime {
 	/// Two thirds of the technical committee can have an ExternalMajority/ExternalDefault vote
 	/// be tabled immediately and with a shorter voting/enactment period.
 	type FastTrackOrigin = pallet_collective::EnsureProportionAtLeast<_2, _3, AccountId, TechnicalCollective>;
-	type EmergencyVotingPeriod = EmergencyVotingPeriod;
+	type InstantOrigin = pallet_collective::EnsureProportionAtLeast<_1, _1, AccountId, TechnicalCollective>;
+	type InstantAllowed = InstantAllowed;
+	type FastTrackVotingPeriod = FastTrackVotingPeriod;
 	// To cancel a proposal which has been passed, 2/3 of the council must agree to it.
 	type CancellationOrigin = pallet_collective::EnsureProportionAtLeast<_2, _3, AccountId, CouncilCollective>;
 	// Any single technical committee member may veto a coming council proposal, however they can
@@ -850,9 +853,21 @@ impl_runtime_apis! {
 			repeat: u32,
 		) -> Result<Vec<frame_benchmarking::BenchmarkResults>, sp_runtime::RuntimeString> {
 			use frame_benchmarking::Benchmarking;
+			// Trying to add benchmarks directly to the Session Pallet caused cyclic dependency issues.
+			// To get around that, we separated the Session benchmarks into its own crate, which is why
+			// we need these two lines below.
+			use pallet_session_benchmarking::Module as SessionBench;
+			impl pallet_session_benchmarking::Trait for Runtime {}
 
 			let result = match module.as_slice() {
 				b"pallet-balances" | b"balances" => Balances::run_benchmark(
+					extrinsic,
+					lowest_range_values,
+					highest_range_values,
+					steps,
+					repeat,
+				),
+				b"pallet-im-online" | b"im-online" => ImOnline::run_benchmark(
 					extrinsic,
 					lowest_range_values,
 					highest_range_values,
@@ -866,6 +881,20 @@ impl_runtime_apis! {
 					steps,
 					repeat,
 				),
+				b"pallet-session" | b"session" => SessionBench::<Runtime>::run_benchmark(
+					extrinsic,
+					lowest_range_values,
+					highest_range_values,
+					steps,
+					repeat,
+				),
+				b"pallet-staking" | b"staking" => Staking::run_benchmark(
+					extrinsic,
+					lowest_range_values,
+					highest_range_values,
+					steps,
+					repeat,
+				),
 				b"pallet-timestamp" | b"timestamp" => Timestamp::run_benchmark(
 					extrinsic,
 					lowest_range_values,
@@ -873,7 +902,21 @@ impl_runtime_apis! {
 					steps,
 					repeat,
 				),
+				b"pallet-treasury" | b"treasury" => Treasury::run_benchmark(
+					extrinsic,
+					lowest_range_values,
+					highest_range_values,
+					steps,
+					repeat,
+				),
 				b"pallet-vesting" | b"vesting" => Vesting::run_benchmark(
+					extrinsic,
+					lowest_range_values,
+					highest_range_values,
+					steps,
+					repeat,
+				),
+				b"pallet-collective" | b"collective" => Council::run_benchmark(
 					extrinsic,
 					lowest_range_values,
 					highest_range_values,
@@ -892,6 +935,7 @@ impl_runtime_apis! {
 mod tests {
 	use super::*;
 	use frame_system::offchain::{SignAndSubmitTransaction, SubmitSignedTransaction};
+	use frame_support::traits::OnInitialize;
 
 	#[test]
 	fn validate_transaction_submitter_bounds() {
@@ -914,37 +958,5 @@ mod tests {
 
 		is_submit_signed_transaction::<SubmitTransaction>();
 		is_sign_and_submit_transaction::<SubmitTransaction>();
-	}
-
-	#[test]
-	fn block_hooks_weight_should_not_exceed_limits() {
-		use frame_support::weights::WeighBlock;
-		let check_for_block = |b| {
-			let block_hooks_weight =
-				<AllModules as WeighBlock<BlockNumber>>::on_initialize(b) +
-				<AllModules as WeighBlock<BlockNumber>>::on_finalize(b);
-
-			assert_eq!(
-				block_hooks_weight,
-				0,
-				"This test might fail simply because the value being compared to has increased to a \
-				module declaring a new weight for a hook or call. In this case update the test and \
-				happily move on.",
-			);
-
-			// Invariant. Always must be like this to have a sane chain.
-			assert!(block_hooks_weight < MaximumBlockWeight::get());
-
-			// Warning.
-			if block_hooks_weight > MaximumBlockWeight::get() / 2 {
-				println!(
-					"block hooks weight is consuming more than a block's capacity. You probably want \
-					to re-think this. This test will fail now."
-				);
-				assert!(false);
-			}
-		};
-
-		let _ = (0..100_000).for_each(check_for_block);
 	}
 }

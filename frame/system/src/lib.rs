@@ -116,7 +116,7 @@ use frame_support::{
 	decl_module, decl_event, decl_storage, decl_error, storage, Parameter, ensure, debug,
 	traits::{
 		Contains, Get, ModuleToIndex, OnNewAccount, OnKilledAccount, IsDeadAccount, Happened,
-		StoredMap
+		StoredMap,
 	},
 	weights::{Weight, DispatchInfo, DispatchClass, SimpleDispatchInfo, FunctionOf},
 };
@@ -235,8 +235,16 @@ pub type KeyValue = (Vec<u8>, Vec<u8>);
 pub enum Phase {
 	/// Applying an extrinsic.
 	ApplyExtrinsic(u32),
-	/// The end.
+	/// Finalizing the block.
 	Finalization,
+	/// Initializing the block.
+	Initialization,
+}
+
+impl Default for Phase {
+	fn default() -> Self {
+		Self::Initialization
+	}
 }
 
 /// Record of an event happening.
@@ -337,10 +345,8 @@ impl From<sp_version::RuntimeVersion> for LastRuntimeUpgradeInfo {
 decl_storage! {
 	trait Store for Module<T: Trait> as System {
 		/// The full account information for a particular account ID.
-		// TODO: should be hasher(twox64_concat) - will need staged migration
-		// https://github.com/paritytech/substrate/issues/4917
 		pub Account get(fn account):
-			map hasher(blake2_256) T::AccountId => AccountInfo<T::Index, T::AccountData>;
+			map hasher(blake2_128_concat) T::AccountId => AccountInfo<T::Index, T::AccountData>;
 
 		/// Total extrinsics count for the current block.
 		ExtrinsicCount: Option<u32>;
@@ -352,10 +358,8 @@ decl_storage! {
 		AllExtrinsicsLen: Option<u32>;
 
 		/// Map of block numbers to block hashes.
-		// TODO: should be hasher(twox64_concat) - will need one-off migration
-		// https://github.com/paritytech/substrate/issues/4917
 		pub BlockHash get(fn block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]):
-			map hasher(blake2_256) T::BlockNumber => T::Hash;
+			map hasher(twox_64_concat) T::BlockNumber => T::Hash;
 
 		/// Extrinsics data for the current block (maps an extrinsic's index to its data).
 		ExtrinsicData get(fn extrinsic_data): map hasher(twox_64_concat) u32 => Vec<u8>;
@@ -393,10 +397,13 @@ decl_storage! {
 		/// The value has the type `(T::BlockNumber, EventIndex)` because if we used only just
 		/// the `EventIndex` then in case if the topic has the same contents on the next block
 		/// no notification will be triggered thus the event might be lost.
-		EventTopics get(fn event_topics): map hasher(blake2_256) T::Hash => Vec<(T::BlockNumber, EventIndex)>;
+		EventTopics get(fn event_topics): map hasher(blake2_128_concat) T::Hash => Vec<(T::BlockNumber, EventIndex)>;
 
 		/// Stores the `spec_version` and `spec_name` of when the last runtime upgrade happened.
 		pub LastRuntimeUpgrade build(|_| Some(LastRuntimeUpgradeInfo::from(T::Version::get()))): Option<LastRuntimeUpgradeInfo>;
+
+		/// The execution phase of the block.
+		ExecutionPhase: Option<Phase>;
 	}
 	add_extra_genesis {
 		config(changes_trie_config): Option<ChangesTrieConfiguration>;
@@ -452,7 +459,7 @@ decl_error! {
 		/// Suicide called when the account has non-default composite data.
 		NonDefaultComposite,
 		/// There is a non-zero reference count preventing the account from being purged.
-		NonZeroRefCount
+		NonZeroRefCount,
 	}
 }
 
@@ -488,20 +495,7 @@ decl_module! {
 		/// Set the new runtime code.
 		#[weight = SimpleDispatchInfo::FixedOperational(200_000)]
 		pub fn set_code(origin, code: Vec<u8>) {
-			ensure_root(origin)?;
-
-			let current_version = T::Version::get();
-			let new_version = sp_io::misc::runtime_version(&code)
-				.and_then(|v| RuntimeVersion::decode(&mut &v[..]).ok())
-				.ok_or_else(|| Error::<T>::FailedToExtractRuntimeVersion)?;
-
-			if new_version.spec_name != current_version.spec_name {
-				Err(Error::<T>::InvalidSpecName)?
-			}
-
-			if new_version.spec_version <= current_version.spec_version {
-				Err(Error::<T>::SpecVersionNeedsToIncrease)?
-			}
+			Self::can_set_code(origin, &code)?;
 
 			storage::unhashed::put_raw(well_known_keys::CODE, &code);
 			Self::deposit_event(RawEvent::CodeUpdated);
@@ -567,13 +561,6 @@ decl_module! {
 			ensure!(account.refcount == 0, Error::<T>::NonZeroRefCount);
 			ensure!(account.data == T::AccountData::default(), Error::<T>::NonDefaultComposite);
 			Account::<T>::remove(who);
-		}
-
-		fn on_runtime_upgrade() {
-			// Remove the old `RuntimeUpgraded` storage entry.
-			let mut runtime_upgraded_key = sp_io::hashing::twox_128(b"System").to_vec();
-			runtime_upgraded_key.extend(&sp_io::hashing::twox_128(b"RuntimeUpgraded"));
-			sp_io::storage::clear(&runtime_upgraded_key);
 		}
 	}
 }
@@ -734,8 +721,7 @@ impl<T: Trait> Module<T> {
 	/// This will update storage entries that correspond to the specified topics.
 	/// It is expected that light-clients could subscribe to this topics.
 	pub fn deposit_event_indexed(topics: &[T::Hash], event: T::Event) {
-		let extrinsic_index = Self::extrinsic_index();
-		let phase = extrinsic_index.map_or(Phase::Finalization, |c| Phase::ApplyExtrinsic(c));
+		let phase = ExecutionPhase::get().unwrap_or_default();
 		let event = EventRecord {
 			phase,
 			event,
@@ -827,6 +813,7 @@ impl<T: Trait> Module<T> {
 		kind: InitKind,
 	) {
 		// populate environment
+		ExecutionPhase::put(Phase::Initialization);
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
 		<Number<T>>::put(number);
 		<Digest<T>>::put(digest);
@@ -843,6 +830,7 @@ impl<T: Trait> Module<T> {
 
 	/// Remove temporary "environment" entries in storage.
 	pub fn finalize() -> T::Header {
+		ExecutionPhase::kill();
 		ExtrinsicCount::kill();
 		AllExtrinsicsWeight::kill();
 		AllExtrinsicsLen::kill();
@@ -973,6 +961,7 @@ impl<T: Trait> Module<T> {
 		let next_extrinsic_index = Self::extrinsic_index().unwrap_or_default() + 1u32;
 
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &next_extrinsic_index);
+		ExecutionPhase::put(Phase::ApplyExtrinsic(next_extrinsic_index));
 	}
 
 	/// To be called immediately after `note_applied_extrinsic` of the last extrinsic of the block
@@ -981,6 +970,13 @@ impl<T: Trait> Module<T> {
 		let extrinsic_index: u32 = storage::unhashed::take(well_known_keys::EXTRINSIC_INDEX)
 			.unwrap_or_default();
 		ExtrinsicCount::put(extrinsic_index);
+		ExecutionPhase::put(Phase::Finalization);
+	}
+
+	/// To be called immediately after finishing the initialization of the block
+	/// (e.g., called `on_initialize` for all modules).
+	pub fn note_finished_initialize() {
+		ExecutionPhase::put(Phase::ApplyExtrinsic(0))
 	}
 
 	/// Remove all extrinsic data and save the extrinsics trie root.
@@ -1019,6 +1015,32 @@ impl<T: Trait> Module<T> {
 			}
 			Module::<T>::on_killed_account(who.clone());
 		}
+	}
+
+	/// Determine whether or not it is possible to update the code.
+	///
+	/// This function has no side effects and is idempotent, but is fairly
+	/// heavy. It is automatically called by `set_code`; in most cases,
+	/// a direct call to `set_code` is preferable. It is useful to call
+	/// `can_set_code` when it is desirable to perform the appropriate
+	/// runtime checks without actually changing the code yet.
+	pub fn can_set_code(origin: T::Origin, code: &[u8]) -> Result<(), sp_runtime::DispatchError> {
+		ensure_root(origin)?;
+
+		let current_version = T::Version::get();
+		let new_version = sp_io::misc::runtime_version(&code)
+			.and_then(|v| RuntimeVersion::decode(&mut &v[..]).ok())
+			.ok_or_else(|| Error::<T>::FailedToExtractRuntimeVersion)?;
+
+		if new_version.spec_name != current_version.spec_name {
+			Err(Error::<T>::InvalidSpecName)?
+		}
+
+		if new_version.spec_version <= current_version.spec_version {
+			Err(Error::<T>::SpecVersionNeedsToIncrease)?
+		}
+
+		Ok(())
 	}
 }
 
@@ -1643,6 +1665,8 @@ mod tests {
 				&Default::default(),
 				InitKind::Full,
 			);
+			System::deposit_event(32u16);
+			System::note_finished_initialize();
 			System::deposit_event(42u16);
 			System::note_applied_extrinsic(&Ok(()), 0, Default::default());
 			System::note_applied_extrinsic(&Err(DispatchError::BadOrigin), 0, Default::default());
@@ -1652,6 +1676,7 @@ mod tests {
 			assert_eq!(
 				System::events(),
 				vec![
+					EventRecord { phase: Phase::Initialization, event: 32u16, topics: vec![] },
 					EventRecord { phase: Phase::ApplyExtrinsic(0), event: 42u16, topics: vec![] },
 					EventRecord { phase: Phase::ApplyExtrinsic(0), event: 100u16, topics: vec![] },
 					EventRecord { phase: Phase::ApplyExtrinsic(1), event: 101u16, topics: vec![] },
@@ -1995,7 +2020,7 @@ mod tests {
 
 			assert_eq!(
 				System::events(),
-				vec![EventRecord { phase: Phase::ApplyExtrinsic(0), event: 102u16, topics: vec![] }],
+				vec![EventRecord { phase: Phase::Initialization, event: 102u16, topics: vec![] }],
 			);
 		});
 	}

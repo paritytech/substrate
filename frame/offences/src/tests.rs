@@ -129,7 +129,7 @@ fn should_deposit_event() {
 		assert_eq!(
 			System::events(),
 			vec![EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: TestEvent::offences(crate::Event::Offence(KIND, time_slot.encode())),
 				topics: vec![],
 			}]
@@ -164,7 +164,7 @@ fn doesnt_deposit_event_for_dups() {
 		assert_eq!(
 			System::events(),
 			vec![EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: TestEvent::offences(crate::Event::Offence(KIND, time_slot.encode())),
 				topics: vec![],
 			}]
