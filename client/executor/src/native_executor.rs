@@ -456,13 +456,6 @@ mod tests {
 	use super::*;
 	use sp_runtime_interface::runtime_interface;
 
-	#[runtime_interface]
-	trait MyInterface {
-		fn say_hello_world(data: &str) {
-			println!("Hello world from: {}", data);
-		}
-	}
-
 	native_executor_instance!(
 		pub MyExecutor,
 		substrate_test_runtime::api::dispatch,
