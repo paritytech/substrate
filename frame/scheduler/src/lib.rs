@@ -76,7 +76,7 @@ pub trait Trait: system::Trait {
 
 /// Just a simple index for naming period tasks.
 pub type PeriodicIndex = u32;
-/// Priority with which a call is scheduled. It's just a linear amount with higher values meaning
+/// Priority with which a call is scheduled. It's just a linear amount with lowest values meaning
 /// higher priority.
 pub type Priority = u8;
 
