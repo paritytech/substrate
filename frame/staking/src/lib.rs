@@ -956,7 +956,6 @@ decl_module! {
 
 		fn deposit_event() = default;
 
-		#[weight = SimpleDispatchInfo::default()]
 		fn on_finalize() {
 			// Set the start of the first era.
 			if let Some(mut active_era) = Self::active_era() {

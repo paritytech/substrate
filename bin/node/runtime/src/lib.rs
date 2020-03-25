@@ -68,7 +68,6 @@ use impls::{CurrencyToVoteHandler, Author, LinearWeightToFee, TargetedFeeAdjustm
 /// Constant values used within the runtime.
 pub mod constants;
 use constants::{time::*, currency::*};
-use frame_system::Trait;
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
@@ -917,6 +916,13 @@ impl_runtime_apis! {
 					steps,
 					repeat,
 				),
+				b"pallet-collective" | b"collective" => Council::run_benchmark(
+					extrinsic,
+					lowest_range_values,
+					highest_range_values,
+					steps,
+					repeat,
+				),
 				_ => Err("Benchmark not found for this pallet."),
 			};
 
@@ -929,6 +935,7 @@ impl_runtime_apis! {
 mod tests {
 	use super::*;
 	use frame_system::offchain::{SignAndSubmitTransaction, SubmitSignedTransaction};
+	use frame_support::traits::OnInitialize;
 
 	#[test]
 	fn validate_transaction_submitter_bounds() {
@@ -954,6 +961,7 @@ mod tests {
 	}
 
 	#[test]
+	#[ignore]
 	fn block_hooks_weight_should_not_exceed_limits() {
 		use frame_support::weights::WeighBlock;
 		let check_for_block = |b| {

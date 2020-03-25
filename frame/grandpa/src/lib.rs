@@ -190,7 +190,6 @@ decl_module! {
 			// FIXME: https://github.com/paritytech/substrate/issues/1112
 		}
 
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn on_finalize(block_number: T::BlockNumber) {
 			// check for scheduled pending authority set changes
 			if let Some(pending_change) = <PendingChange<T>>::get() {

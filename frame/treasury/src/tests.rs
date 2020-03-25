@@ -1,12 +1,14 @@
 use super::*;
 
-use frame_support::{assert_noop, assert_ok, impl_outer_origin, parameter_types, weights::Weight};
-use frame_support::traits::Contains;
+use frame_support::{
+	assert_noop, assert_ok, impl_outer_origin, parameter_types, weights::Weight,
+	traits::{Contains, OnInitialize}
+};
 use sp_core::H256;
 use sp_runtime::{
 	Perbill,
 	testing::Header,
-	traits::{BlakeTwo256, OnInitialize, IdentityLookup, BadOrigin},
+	traits::{BlakeTwo256, IdentityLookup, BadOrigin},
 };
 
 impl_outer_origin! {

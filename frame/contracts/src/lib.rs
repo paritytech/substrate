@@ -668,7 +668,6 @@ decl_module! {
 			}
 		}
 
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn on_finalize() {
 			GasSpent::kill();
 		}

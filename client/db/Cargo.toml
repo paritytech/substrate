@@ -1,6 +1,6 @@
 [package]
 name = "sc-client-db"
-version = "0.8.0-alpha.4"
+version = "0.8.0-alpha.5"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
@@ -20,20 +20,20 @@ hash-db = "0.15.2"
 parity-util-mem = { version = "0.6.0", default-features = false, features = ["std"] }
 codec = { package = "parity-scale-codec", version = "1.2.0", features = ["derive"] }
 
-sc-client-api = { version = "2.0.0-alpha.4", path = "../api" }
-sp-core = { version = "2.0.0-alpha.4", path = "../../primitives/core" }
-sp-runtime = { version = "2.0.0-alpha.4", path = "../../primitives/runtime" }
-sc-client = { version = "0.8.0-alpha.4", path = "../" }
-sp-state-machine = { version = "0.8.0-alpha.4", path = "../../primitives/state-machine" }
-sc-executor = { version = "0.8.0-alpha.4", path = "../executor" }
-sc-state-db = { version = "0.8.0-alpha.4", path = "../state-db" }
-sp-trie = { version = "2.0.0-alpha.4", path = "../../primitives/trie" }
-sp-consensus = { version = "0.8.0-alpha.4", path = "../../primitives/consensus/common" }
-sp-blockchain = { version = "2.0.0-alpha.4", path = "../../primitives/blockchain" }
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.8.0-alpha.4", path = "../../utils/prometheus" }
+sc-client-api = { version = "2.0.0-alpha.5", path = "../api" }
+sp-core = { version = "2.0.0-alpha.5", path = "../../primitives/core" }
+sp-runtime = { version = "2.0.0-alpha.5", path = "../../primitives/runtime" }
+sc-client = { version = "0.8.0-alpha.5", path = "../" }
+sp-state-machine = { version = "0.8.0-alpha.5", path = "../../primitives/state-machine" }
+sc-executor = { version = "0.8.0-alpha.5", path = "../executor" }
+sc-state-db = { version = "0.8.0-alpha.5", path = "../state-db" }
+sp-trie = { version = "2.0.0-alpha.5", path = "../../primitives/trie" }
+sp-consensus = { version = "0.8.0-alpha.5", path = "../../primitives/consensus/common" }
+sp-blockchain = { version = "2.0.0-alpha.5", path = "../../primitives/blockchain" }
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.8.0-alpha.5", path = "../../utils/prometheus" }
 
 [dev-dependencies]
-sp-keyring = { version = "2.0.0-alpha.4", path = "../../primitives/keyring" }
+sp-keyring = { version = "2.0.0-alpha.5", path = "../../primitives/keyring" }
 substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../test-utils/runtime/client" }
 env_logger = "0.7.0"
 quickcheck = "0.9"
