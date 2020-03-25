@@ -470,17 +470,19 @@ mod tests {
 
 	#[test]
 	fn initialize_weight_is_correct() {
-		Scheduler::schedule(1, 255, Call::Logger(logger::Call::log(3, 1000)));
-		Scheduler::schedule(1, 128, Call::Logger(logger::Call::log(42, 5000)));
-		Scheduler::schedule(1, 127, Call::Logger(logger::Call::log(69, 5000)));
-		Scheduler::schedule(1, 126, Call::Logger(logger::Call::log(2600, 6000)));
-		let weight = Scheduler::on_initialize(1);
-		assert_eq!(weight, 6000);
-		let weight = Scheduler::on_initialize(2);
-		assert_eq!(weight, 10000);
-		let weight = Scheduler::on_initialize(3);
-		assert_eq!(weight, 1000);
-		let weight = Scheduler::on_initialize(4);
-		assert_eq!(weight, 0);
+		new_test_ext().execute_with(|| {
+			Scheduler::schedule(1, 255, Call::Logger(logger::Call::log(3, 1000)));
+			Scheduler::schedule(1, 128, Call::Logger(logger::Call::log(42, 5000)));
+			Scheduler::schedule(1, 127, Call::Logger(logger::Call::log(69, 5000)));
+			Scheduler::schedule(1, 126, Call::Logger(logger::Call::log(2600, 6000)));
+			let weight = Scheduler::on_initialize(1);
+			assert_eq!(weight, 6000);
+			let weight = Scheduler::on_initialize(2);
+			assert_eq!(weight, 10000);
+			let weight = Scheduler::on_initialize(3);
+			assert_eq!(weight, 1000);
+			let weight = Scheduler::on_initialize(4);
+			assert_eq!(weight, 0);
+		});
 	}
 }
