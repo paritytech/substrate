@@ -20,15 +20,22 @@
 
 # Wasm execution and the wasm side of Substrate Runtime Interface
 /client/executor/ @pepyakin
-/primitives/io/ @pepyakin
+/primitives/io/ @pepyakin @NikVolf
+
+# Crypto, execution extensions, etc.
+/primitives/core/ @NikVolf
+
+# Block production
+/primitives/authorship/ @NikVolf
+/client/basic-authorship/ @NikVolf
 
 # Sandboxing capability of Substrate Runtime
 /primitives/sr-sandbox/ @pepyakin
 /primitives/core/src/sandbox.rs @pepyakin
 
 # Transaction pool
-/client/transaction-pool/ @tomusdrw
-/primitives/transaction-pool/ @tomusdrw
+/client/transaction-pool/ @tomusdrw @NikVolf
+/primitives/transaction-pool/ @tomusdrw @NikVolf
 
 # Offchain
 /client/offchain/ @tomusdrw

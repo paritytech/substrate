@@ -44,6 +44,7 @@ fn setup<T: Trait>(b: u32) -> T::AccountId {
 		let starting_block = 0;
 
 		let caller = account("caller", 0, SEED);
+		System::<T>::set_block_number(0.into());
 
 		// Add schedule to avoid `NotVesting` error.
 		let _ = Vesting::<T>::add_vesting_schedule(
@@ -63,32 +64,44 @@ fn setup<T: Trait>(b: u32) -> T::AccountId {
 
 benchmarks! {
 	_ {
-		// Current block. It allows to hit different paths of `update_lock`.
-		// It doesn't seems to influence the timings which branch is taken.
-		let b in 0 .. 1 => ();
 		// Number of previous locks.
 		// It doesn't seems to influence the timings for lower values.
 		let l in 0 .. MAX_LOCKS => add_locks::<T>(l);
 	}
 
-	vest {
-		let b in ...;
+	vest_locked {
 		let l in ...;
 
-		let caller = setup::<T>(b);
+		let caller = setup::<T>(0u32);
 
-	}: _(RawOrigin::Signed(caller))
+	}: vest(RawOrigin::Signed(caller))
 
-	vest_other {
-		let b in ...;
+	vest_not_locked {
 		let l in ...;
 
-		let other: T::AccountId = setup::<T>(b);
+		let caller = setup::<T>(1u32);
+
+	}: vest(RawOrigin::Signed(caller))
+
+	vest_other_locked {
+		let l in ...;
+
+		let other: T::AccountId = setup::<T>(0u32);
 		let other_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(other.clone());
 
 		let caller = account("caller", 0, SEED);
 
-	}: _(RawOrigin::Signed(caller), other_lookup)
+	}: vest_other(RawOrigin::Signed(caller), other_lookup)
+
+	vest_other_not_locked {
+		let l in ...;
+
+		let other: T::AccountId = setup::<T>(1u32);
+		let other_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(other.clone());
+
+		let caller = account("caller", 0, SEED);
+
+	}: vest_other(RawOrigin::Signed(caller), other_lookup)
 
 	vested_transfer {
 		let u in 0 .. 1000;

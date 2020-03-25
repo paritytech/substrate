@@ -256,7 +256,10 @@
 use sp_std::marker::PhantomData;
 use frame_support::{
 	dispatch::DispatchResult, decl_module, decl_storage, decl_event,
-	weights::{SimpleDispatchInfo, DispatchInfo, DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee},
+	weights::{
+		SimpleDispatchInfo, DispatchInfo, DispatchClass, ClassifyDispatch, WeighData, Weight,
+		PaysFee,
+	},
 };
 use sp_std::prelude::*;
 use frame_benchmarking::{benchmarks, account};
@@ -326,6 +329,10 @@ decl_storage! {
 	// A macro for the Storage trait, and its implementation, for this pallet.
 	// This allows for type-safe usage of the Substrate storage database, so you can
 	// keep things around between blocks.
+	//
+	// It is important to update your storage name so that your pallet's
+	// storage items are isolated from other pallets.
+	// ---------------------------------vvvvvvv
 	trait Store for Module<T: Trait> as Example {
 		// Any storage declarations of the form:
 		//   `pub? Name get(fn getter_name)? [config()|config(myname)] [build(|_| {...})] : <type> (= <new_default_value>)?;`
@@ -341,7 +348,7 @@ decl_storage! {
 		//   - `Foo::put(1); Foo::get()` returns `1`;
 		//   - `Foo::kill(); Foo::get()` returns `0` (u32::default()).
 		// e.g. Foo: u32;
-		// e.g. pub Bar get(fn bar): map hasher(blake2_256) T::AccountId => Vec<(T::Balance, u64)>;
+		// e.g. pub Bar get(fn bar): map hasher(blake2_128_concat) T::AccountId => Vec<(T::Balance, u64)>;
 		//
 		// For basic value items, you'll get a type which implements
 		// `frame_support::StorageValue`. For map items, you'll get a type which
@@ -353,7 +360,7 @@ decl_storage! {
 		Dummy get(fn dummy) config(): Option<T::Balance>;
 
 		// A map that has enumerable entries.
-		Bar get(fn bar) config(): linked_map hasher(blake2_256) T::AccountId => T::Balance;
+		Bar get(fn bar) config(): map hasher(blake2_128_concat) T::AccountId => T::Balance;
 
 		// this one uses the default, we'll demonstrate the usage of 'mutate' API.
 		Foo get(fn foo) config(): T::Balance;
@@ -512,14 +519,14 @@ decl_module! {
 		// This function could also very well have a weight annotation, similar to any other. The
 		// only difference being that if it is not annotated, the default is
 		// `SimpleDispatchInfo::zero()`, which resolves into no weight.
-		#[weight = SimpleDispatchInfo::FixedNormal(1000)]
-		fn on_initialize(_n: T::BlockNumber) {
+		fn on_initialize(_n: T::BlockNumber) -> Weight {
 			// Anything that needs to be done at the start of the block.
 			// We don't do anything here.
+
+			SimpleDispatchInfo::default().weigh_data(())
 		}
 
 		// The signature could also look like: `fn on_finalize()`
-		#[weight = SimpleDispatchInfo::FixedNormal(2000)]
 		fn on_finalize(_n: T::BlockNumber) {
 			// Anything that needs to be done at the end of the block.
 			// We just kill our dummy storage item.
@@ -684,14 +691,17 @@ benchmarks!{
 mod tests {
 	use super::*;
 
-	use frame_support::{assert_ok, impl_outer_origin, parameter_types, weights::GetDispatchInfo};
+	use frame_support::{
+		assert_ok, impl_outer_origin, parameter_types, weights::GetDispatchInfo,
+		traits::{OnInitialize, OnFinalize}
+	};
 	use sp_core::H256;
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 	use sp_runtime::{
 		Perbill,
 		testing::Header,
-		traits::{BlakeTwo256, OnInitialize, OnFinalize, IdentityLookup},
+		traits::{BlakeTwo256, IdentityLookup},
 	};
 
 	impl_outer_origin! {

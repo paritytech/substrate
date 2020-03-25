@@ -91,6 +91,7 @@ use sp_finality_grandpa::AuthorityId;
 use sc_telemetry::{telemetry, CONSENSUS_DEBUG};
 use log::{trace, debug};
 use futures::channel::mpsc;
+use prometheus_endpoint::{CounterVec, Opts, PrometheusError, register, Registry, U64};
 use rand::seq::SliceRandom;
 
 use crate::{environment, CatchUp, CompactCommit, SignedMessage};
@@ -721,7 +722,15 @@ impl<Block: BlockT> Inner<Block> {
 					last_commit: None,
 				}),
 				Some(ref mut v) => if v.set_id == set_id {
-					return None
+					if self.authorities != authorities {
+						debug!(target: "afg",
+							"Gossip validator noted set {:?} twice with different authorities. \
+							Was the authority set hard forked?",
+							set_id,
+						);
+						self.authorities = authorities;
+					}
+					return None;
 				} else {
 					v
 				},
@@ -787,6 +796,7 @@ impl<Block: BlockT> Inner<Block> {
 
 		// ensure authority is part of the set.
 		if !self.authorities.contains(&full.message.id) {
+			debug!(target: "afg", "Message from unknown voter: {}", full.message.id);
 			telemetry!(CONSENSUS_DEBUG; "afg.bad_msg_signature"; "signature" => ?full.message.id);
 			return Action::Discard(cost::UNKNOWN_VOTER);
 		}
@@ -1197,11 +1207,34 @@ impl<Block: BlockT> Inner<Block> {
 	}
 }
 
+// Prometheus metrics for [`GossipValidator`].
+pub(crate) struct Metrics {
+	messages_validated: CounterVec<U64>,
+}
+
+impl Metrics {
+	pub(crate) fn register(registry: &prometheus_endpoint::Registry) -> Result<Self, PrometheusError> {
+		Ok(Self {
+			messages_validated: register(
+				CounterVec::new(
+					Opts::new(
+						"finality_grandpa_communication_gossip_validator_messages",
+						"Number of messages validated by the finality grandpa gossip validator."
+					),
+					&["message", "action"]
+				)?,
+				registry,
+			)?,
+		})
+	}
+}
+
 /// A validator for GRANDPA gossip messages.
 pub(super) struct GossipValidator<Block: BlockT> {
 	inner: parking_lot::RwLock<Inner<Block>>,
 	set_state: environment::SharedVoterSetState<Block>,
 	report_sender: mpsc::UnboundedSender<PeerReport>,
+	metrics: Option<Metrics>,
 }
 
 impl<Block: BlockT> GossipValidator<Block> {
@@ -1211,12 +1244,23 @@ impl<Block: BlockT> GossipValidator<Block> {
 	pub(super) fn new(
 		config: crate::Config,
 		set_state: environment::SharedVoterSetState<Block>,
+		prometheus_registry: Option<&Registry>,
 	) -> (GossipValidator<Block>, mpsc::UnboundedReceiver<PeerReport>)	{
+		let metrics = match prometheus_registry.map(Metrics::register) {
+			Some(Ok(metrics)) => Some(metrics),
+			Some(Err(e)) => {
+				debug!(target: "afg", "Failed to register metrics: {:?}", e);
+				None
+			},
+			None => None,
+		};
+
 		let (tx, rx) = mpsc::unbounded();
 		let val = GossipValidator {
 			inner: parking_lot::RwLock::new(Inner::new(config)),
 			set_state,
 			report_sender: tx,
+			metrics: metrics,
 		};
 
 		(val, rx)
@@ -1279,12 +1323,21 @@ impl<Block: BlockT> GossipValidator<Block> {
 		let mut broadcast_topics = Vec::new();
 		let mut peer_reply = None;
 
+		// Message name for Prometheus metric recording.
+		let message_name;
+
 		let action = {
 			match GossipMessage::<Block>::decode(&mut data) {
-				Ok(GossipMessage::Vote(ref message))
-					=> self.inner.write().validate_round_message(who, message),
-				Ok(GossipMessage::Commit(ref message)) => self.inner.write().validate_commit_message(who, message),
+				Ok(GossipMessage::Vote(ref message)) => {
+					message_name = Some("vote");
+					self.inner.write().validate_round_message(who, message)
+				},
+				Ok(GossipMessage::Commit(ref message)) => {
+					message_name = Some("commit");
+					self.inner.write().validate_commit_message(who, message)
+				},
 				Ok(GossipMessage::Neighbor(update)) => {
+					message_name = Some("neighbor");
 					let (topics, action, catch_up, report) = self.inner.write().import_neighbor_message(
 						who,
 						update.into_neighbor_packet(),
@@ -1298,9 +1351,12 @@ impl<Block: BlockT> GossipValidator<Block> {
 					peer_reply = catch_up;
 					action
 				}
-				Ok(GossipMessage::CatchUp(ref message))
-					=> self.inner.write().validate_catch_up_message(who, message),
+				Ok(GossipMessage::CatchUp(ref message)) => {
+					message_name = Some("catch_up");
+					self.inner.write().validate_catch_up_message(who, message)
+				},
 				Ok(GossipMessage::CatchUpRequest(request)) => {
+					message_name = Some("catch_up_request");
 					let (reply, action) = self.inner.write().handle_catch_up_request(
 						who,
 						request,
@@ -1311,6 +1367,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 					action
 				}
 				Err(e) => {
+					message_name = None;
 					debug!(target: "afg", "Error decoding message: {}", e.what());
 					telemetry!(CONSENSUS_DEBUG; "afg.err_decoding_msg"; "" => "");
 
@@ -1320,7 +1377,22 @@ impl<Block: BlockT> GossipValidator<Block> {
 			}
 		};
 
+		// Prometheus metric recording.
+		if let (Some(metrics), Some(message_name)) = (&self.metrics, message_name) {
+			let action_name = match action {
+				Action::Keep(_, _) => "keep",
+				Action::ProcessAndDiscard(_, _) => "process_and_discard",
+				Action::Discard(_) => "discard",
+			};
+			metrics.messages_validated.with_label_values(&[message_name, action_name]).inc();
+		}
+
 		(action, broadcast_topics, peer_reply)
+	}
+
+	#[cfg(test)]
+	fn inner(&self) -> &parking_lot::RwLock<Inner<Block>> {
+		&self.inner
 	}
 }
 
@@ -1679,6 +1751,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			voter_set_state(),
+			None,
 		);
 
 		let set_id = 1;
@@ -1714,6 +1787,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			voter_set_state(),
+			None,
 		);
 		let set_id = 1;
 		let auth = AuthorityId::from_slice(&[1u8; 32]);
@@ -1758,6 +1832,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			voter_set_state(),
+			None,
 		);
 
 		let set_id = 1;
@@ -1826,6 +1901,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			set_state.clone(),
+			None,
 		);
 
 		let set_id = 1;
@@ -1880,6 +1956,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			set_state.clone(),
+			None,
 		);
 
 		// the validator starts at set id 2
@@ -1959,6 +2036,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			voter_set_state(),
+			None,
 		);
 
 		// the validator starts at set id 1.
@@ -2032,6 +2110,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config,
 			voter_set_state(),
+			None,
 		);
 
 		// the validator starts at set id 1.
@@ -2065,6 +2144,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			voter_set_state(),
+			None,
 		);
 
 		// the validator starts at set id 1.
@@ -2124,6 +2204,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config,
 			voter_set_state(),
+			None,
 		);
 
 		// the validator starts at set id 1.
@@ -2162,6 +2243,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			voter_set_state(),
+			None,
 		);
 
 		// the validator starts at set id 1.
@@ -2194,6 +2276,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config,
 			voter_set_state(),
+			None,
 		);
 
 		// the validator start at set id 0
@@ -2271,6 +2354,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config(),
 			voter_set_state(),
+			None,
 		);
 
 		// the validator start at set id 0
@@ -2310,6 +2394,7 @@ mod tests {
 		let (val, _) = GossipValidator::<Block>::new(
 			config,
 			voter_set_state(),
+			None,
 		);
 
 		// the validator start at set id 0
@@ -2358,7 +2443,7 @@ mod tests {
 
 	#[test]
 	fn only_gossip_commits_to_peers_on_same_set() {
-		let (val, _) = GossipValidator::<Block>::new(config(), voter_set_state());
+		let (val, _) = GossipValidator::<Block>::new(config(), voter_set_state(), None);
 
 		// the validator start at set id 1
 		val.note_set(SetId(1), Vec::new(), |_, _| {});
@@ -2436,7 +2521,7 @@ mod tests {
 
 	#[test]
 	fn expire_commits_from_older_rounds() {
-		let (val, _) = GossipValidator::<Block>::new(config(), voter_set_state());
+		let (val, _) = GossipValidator::<Block>::new(config(), voter_set_state(), None);
 
 		let commit = |round, set_id, target_number| {
 			let commit = finality_grandpa::CompactCommit {
@@ -2483,5 +2568,20 @@ mod tests {
 			crate::communication::global_topic::<Block>(1),
 			&commit(0, 1, 2),
 		));
+	}
+
+	#[test]
+	fn allow_noting_different_authorities_for_same_set() {
+		let (val, _) = GossipValidator::<Block>::new(config(), voter_set_state(), None);
+
+		let a1 = vec![AuthorityId::default()];
+		val.note_set(SetId(1), a1.clone(), |_, _| {});
+
+		assert_eq!(val.inner().read().authorities, a1);
+
+		let a2 = vec![AuthorityId::default(), AuthorityId::default()];
+		val.note_set(SetId(1), a2.clone(), |_, _| {});
+
+		assert_eq!(val.inner().read().authorities, a2);
 	}
 }

@@ -31,7 +31,9 @@ use futures::{
 use sp_runtime::{
 	generic::BlockId,
 	traits::{self, SaturatedConversion},
-	transaction_validity::{TransactionValidity, TransactionTag as Tag, TransactionValidityError},
+	transaction_validity::{
+		TransactionValidity, TransactionTag as Tag, TransactionValidityError, TransactionSource,
+	},
 };
 use sp_transaction_pool::error;
 use wasm_timer::Instant;
@@ -76,6 +78,7 @@ pub trait ChainApi: Send + Sync {
 	fn validate_transaction(
 		&self,
 		at: &BlockId<Self::Block>,
+		source: TransactionSource,
 		uxt: ExtrinsicFor<Self>,
 	) -> Self::ValidationFuture;
 
@@ -144,12 +147,17 @@ impl<B: ChainApi> Pool<B> {
 	}
 
 	/// Imports a bunch of unverified extrinsics to the pool
-	pub async fn submit_at<T>(&self, at: &BlockId<B::Block>, xts: T, force: bool)
-		-> Result<Vec<Result<ExHash<B>, B::Error>>, B::Error>
-	where
-		T: IntoIterator<Item=ExtrinsicFor<B>>
+	pub async fn submit_at<T>(
+		&self,
+		at: &BlockId<B::Block>,
+		source: TransactionSource,
+		xts: T,
+		force: bool,
+	) -> Result<Vec<Result<ExHash<B>, B::Error>>, B::Error> where
+		T: IntoIterator<Item=ExtrinsicFor<B>>,
 	{
 		let validated_pool = self.validated_pool.clone();
+		let xts = xts.into_iter().map(|xt| (source, xt));
 		self.verify(at, xts, force)
 			.map(move |validated_transactions| validated_transactions
 				.map(|validated_transactions| validated_pool.submit(validated_transactions
@@ -162,9 +170,10 @@ impl<B: ChainApi> Pool<B> {
 	pub async fn submit_one(
 		&self,
 		at: &BlockId<B::Block>,
+		source: TransactionSource,
 		xt: ExtrinsicFor<B>,
 	) -> Result<ExHash<B>, B::Error> {
-		self.submit_at(at, std::iter::once(xt), false)
+		self.submit_at(at, source, std::iter::once(xt), false)
 			.map(|import_result| import_result.and_then(|mut import_result| import_result
 				.pop()
 				.expect("One extrinsic passed; one result returned; qed")
@@ -176,10 +185,13 @@ impl<B: ChainApi> Pool<B> {
 	pub async fn submit_and_watch(
 		&self,
 		at: &BlockId<B::Block>,
+		source: TransactionSource,
 		xt: ExtrinsicFor<B>,
 	) -> Result<Watcher<ExHash<B>, BlockHash<B>>, B::Error> {
 		let block_number = self.resolve_block_number(at)?;
-		let (_, tx) = self.verify_one(at, block_number, xt, false).await;
+		let (_, tx) = self.verify_one(
+			at, block_number, source, xt, false
+		).await;
 		self.validated_pool.submit_and_watch(tx)
 	}
 
@@ -249,7 +261,7 @@ impl<B: ChainApi> Pool<B> {
 				// to get validity info and tags that the extrinsic provides.
 				None => {
 					let validity = self.validated_pool.api()
-						.validate_transaction(parent, extrinsic.clone())
+						.validate_transaction(parent, TransactionSource::InBlock, extrinsic.clone())
 						.await;
 
 					if let Ok(Ok(validity)) = validity {
@@ -303,8 +315,12 @@ impl<B: ChainApi> Pool<B> {
 
 		// Try to re-validate pruned transactions since some of them might be still valid.
 		// note that `known_imported_hashes` will be rejected here due to temporary ban.
-		let pruned_hashes = prune_status.pruned.iter().map(|tx| tx.hash.clone()).collect::<Vec<_>>();
-		let pruned_transactions = prune_status.pruned.into_iter().map(|tx| tx.data.clone());
+		let pruned_hashes = prune_status.pruned
+			.iter()
+			.map(|tx| tx.hash.clone()).collect::<Vec<_>>();
+		let pruned_transactions = prune_status.pruned
+			.into_iter()
+			.map(|tx| (tx.source, tx.data.clone()));
 
 		let reverified_transactions = self.verify(at, pruned_transactions, false).await?;
 
@@ -335,7 +351,7 @@ impl<B: ChainApi> Pool<B> {
 	async fn verify(
 		&self,
 		at: &BlockId<B::Block>,
-		xts: impl IntoIterator<Item=ExtrinsicFor<B>>,
+		xts: impl IntoIterator<Item=(TransactionSource, ExtrinsicFor<B>)>,
 		force: bool,
 	) -> Result<HashMap<ExHash<B>, ValidatedTransactionFor<B>>, B::Error> {
 		// we need a block number to compute tx validity
@@ -345,7 +361,7 @@ impl<B: ChainApi> Pool<B> {
 		for (hash, validated_tx) in
 			futures::future::join_all(
 				xts.into_iter()
-					.map(|xt| self.verify_one(at, block_number, xt, force))
+					.map(|(source, xt)| self.verify_one(at, block_number, source, xt, force))
 			)
 			.await
 		{
@@ -360,6 +376,7 @@ impl<B: ChainApi> Pool<B> {
 		&self,
 		block_id: &BlockId<B::Block>,
 		block_number: NumberFor<B>,
+		source: TransactionSource,
 		xt: ExtrinsicFor<B>,
 		force: bool,
 	) -> (ExHash<B>, ValidatedTransactionFor<B>) {
@@ -371,7 +388,11 @@ impl<B: ChainApi> Pool<B> {
 			)
 		}
 
-		let validation_result = self.validated_pool.api().validate_transaction(block_id, xt.clone()).await;
+		let validation_result = self.validated_pool.api().validate_transaction(
+			block_id,
+			source,
+			xt.clone(),
+		).await;
 
 		let status = match validation_result {
 			Ok(status) => status,
@@ -386,6 +407,7 @@ impl<B: ChainApi> Pool<B> {
 					ValidatedTransaction::valid_at(
 						block_number.saturated_into::<u64>(),
 						hash.clone(),
+						source,
 						xt,
 						bytes,
 						validity,
@@ -422,7 +444,7 @@ mod tests {
 	use futures::executor::block_on;
 	use super::*;
 	use sp_transaction_pool::TransactionStatus;
-	use sp_runtime::transaction_validity::{ValidTransaction, InvalidTransaction};
+	use sp_runtime::transaction_validity::{ValidTransaction, InvalidTransaction, TransactionSource};
 	use codec::Encode;
 	use substrate_test_runtime::{Block, Extrinsic, Transfer, H256, AccountId};
 	use assert_matches::assert_matches;
@@ -430,6 +452,7 @@ mod tests {
 	use crate::base_pool::Limit;
 
 	const INVALID_NONCE: u64 = 254;
+	const SOURCE: TransactionSource = TransactionSource::External;
 
 	#[derive(Clone, Debug, Default)]
 	struct TestApi {
@@ -450,6 +473,7 @@ mod tests {
 		fn validate_transaction(
 			&self,
 			at: &BlockId<Self::Block>,
+			_source: TransactionSource,
 			uxt: ExtrinsicFor<Self>,
 		) -> Self::ValidationFuture {
 			let hash = self.hash_and_length(&uxt).0;
@@ -541,7 +565,7 @@ mod tests {
 		let pool = pool();
 
 		// when
-		let hash = block_on(pool.submit_one(&BlockId::Number(0), uxt(Transfer {
+		let hash = block_on(pool.submit_one(&BlockId::Number(0), SOURCE, uxt(Transfer {
 			from: AccountId::from_h256(H256::from_low_u64_be(1)),
 			to: AccountId::from_h256(H256::from_low_u64_be(2)),
 			amount: 5,
@@ -565,7 +589,7 @@ mod tests {
 
 		// when
 		pool.validated_pool.rotator().ban(&Instant::now(), vec![pool.hash_of(&uxt)]);
-		let res = block_on(pool.submit_one(&BlockId::Number(0), uxt));
+		let res = block_on(pool.submit_one(&BlockId::Number(0), SOURCE, uxt));
 		assert_eq!(pool.validated_pool().status().ready, 0);
 		assert_eq!(pool.validated_pool().status().future, 0);
 
@@ -581,20 +605,20 @@ mod tests {
 			let stream = pool.validated_pool().import_notification_stream();
 
 			// when
-			let _hash = block_on(pool.submit_one(&BlockId::Number(0), uxt(Transfer {
+			let _hash = block_on(pool.submit_one(&BlockId::Number(0), SOURCE, uxt(Transfer {
 				from: AccountId::from_h256(H256::from_low_u64_be(1)),
 				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
 				nonce: 0,
 			}))).unwrap();
-			let _hash = block_on(pool.submit_one(&BlockId::Number(0), uxt(Transfer {
+			let _hash = block_on(pool.submit_one(&BlockId::Number(0), SOURCE, uxt(Transfer {
 				from: AccountId::from_h256(H256::from_low_u64_be(1)),
 				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
 				nonce: 1,
 			}))).unwrap();
 			// future doesn't count
-			let _hash = block_on(pool.submit_one(&BlockId::Number(0), uxt(Transfer {
+			let _hash = block_on(pool.submit_one(&BlockId::Number(0), SOURCE, uxt(Transfer {
 				from: AccountId::from_h256(H256::from_low_u64_be(1)),
 				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
@@ -617,19 +641,19 @@ mod tests {
 	fn should_clear_stale_transactions() {
 		// given
 		let pool = pool();
-		let hash1 = block_on(pool.submit_one(&BlockId::Number(0), uxt(Transfer {
+		let hash1 = block_on(pool.submit_one(&BlockId::Number(0), SOURCE, uxt(Transfer {
 			from: AccountId::from_h256(H256::from_low_u64_be(1)),
 			to: AccountId::from_h256(H256::from_low_u64_be(2)),
 			amount: 5,
 			nonce: 0,
 		}))).unwrap();
-		let hash2 = block_on(pool.submit_one(&BlockId::Number(0), uxt(Transfer {
+		let hash2 = block_on(pool.submit_one(&BlockId::Number(0), SOURCE, uxt(Transfer {
 			from: AccountId::from_h256(H256::from_low_u64_be(1)),
 			to: AccountId::from_h256(H256::from_low_u64_be(2)),
 			amount: 5,
 			nonce: 1,
 		}))).unwrap();
-		let hash3 = block_on(pool.submit_one(&BlockId::Number(0), uxt(Transfer {
+		let hash3 = block_on(pool.submit_one(&BlockId::Number(0), SOURCE, uxt(Transfer {
 			from: AccountId::from_h256(H256::from_low_u64_be(1)),
 			to: AccountId::from_h256(H256::from_low_u64_be(2)),
 			amount: 5,
@@ -653,7 +677,7 @@ mod tests {
 	fn should_ban_mined_transactions() {
 		// given
 		let pool = pool();
-		let hash1 = block_on(pool.submit_one(&BlockId::Number(0), uxt(Transfer {
+		let hash1 = block_on(pool.submit_one(&BlockId::Number(0), SOURCE, uxt(Transfer {
 			from: AccountId::from_h256(H256::from_low_u64_be(1)),
 			to: AccountId::from_h256(H256::from_low_u64_be(2)),
 			amount: 5,
@@ -680,7 +704,7 @@ mod tests {
 			..Default::default()
 		}, TestApi::default().into());
 
-		let hash1 = block_on(pool.submit_one(&BlockId::Number(0), uxt(Transfer {
+		let hash1 = block_on(pool.submit_one(&BlockId::Number(0), SOURCE, uxt(Transfer {
 			from: AccountId::from_h256(H256::from_low_u64_be(1)),
 			to: AccountId::from_h256(H256::from_low_u64_be(2)),
 			amount: 5,
@@ -689,7 +713,7 @@ mod tests {
 		assert_eq!(pool.validated_pool().status().future, 1);
 
 		// when
-		let hash2 = block_on(pool.submit_one(&BlockId::Number(0), uxt(Transfer {
+		let hash2 = block_on(pool.submit_one(&BlockId::Number(0), SOURCE, uxt(Transfer {
 			from: AccountId::from_h256(H256::from_low_u64_be(2)),
 			to: AccountId::from_h256(H256::from_low_u64_be(2)),
 			amount: 5,
@@ -716,7 +740,7 @@ mod tests {
 		}, TestApi::default().into());
 
 		// when
-		block_on(pool.submit_one(&BlockId::Number(0), uxt(Transfer {
+		block_on(pool.submit_one(&BlockId::Number(0), SOURCE, uxt(Transfer {
 			from: AccountId::from_h256(H256::from_low_u64_be(1)),
 			to: AccountId::from_h256(H256::from_low_u64_be(2)),
 			amount: 5,
@@ -734,7 +758,7 @@ mod tests {
 		let pool = pool();
 
 		// when
-		let err = block_on(pool.submit_one(&BlockId::Number(0), uxt(Transfer {
+		let err = block_on(pool.submit_one(&BlockId::Number(0), SOURCE, uxt(Transfer {
 			from: AccountId::from_h256(H256::from_low_u64_be(1)),
 			to: AccountId::from_h256(H256::from_low_u64_be(2)),
 			amount: 5,
@@ -754,7 +778,7 @@ mod tests {
 		fn should_trigger_ready_and_finalized() {
 			// given
 			let pool = pool();
-			let watcher = block_on(pool.submit_and_watch(&BlockId::Number(0), uxt(Transfer {
+			let watcher = block_on(pool.submit_and_watch(&BlockId::Number(0), SOURCE, uxt(Transfer {
 				from: AccountId::from_h256(H256::from_low_u64_be(1)),
 				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
@@ -778,7 +802,7 @@ mod tests {
 		fn should_trigger_ready_and_finalized_when_pruning_via_hash() {
 			// given
 			let pool = pool();
-			let watcher = block_on(pool.submit_and_watch(&BlockId::Number(0), uxt(Transfer {
+			let watcher = block_on(pool.submit_and_watch(&BlockId::Number(0), SOURCE, uxt(Transfer {
 				from: AccountId::from_h256(H256::from_low_u64_be(1)),
 				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
@@ -802,7 +826,7 @@ mod tests {
 		fn should_trigger_future_and_ready_after_promoted() {
 			// given
 			let pool = pool();
-			let watcher = block_on(pool.submit_and_watch(&BlockId::Number(0), uxt(Transfer {
+			let watcher = block_on(pool.submit_and_watch(&BlockId::Number(0), SOURCE, uxt(Transfer {
 				from: AccountId::from_h256(H256::from_low_u64_be(1)),
 				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
@@ -812,7 +836,7 @@ mod tests {
 			assert_eq!(pool.validated_pool().status().future, 1);
 
 			// when
-			block_on(pool.submit_one(&BlockId::Number(0), uxt(Transfer {
+			block_on(pool.submit_one(&BlockId::Number(0), SOURCE, uxt(Transfer {
 				from: AccountId::from_h256(H256::from_low_u64_be(1)),
 				to: AccountId::from_h256(H256::from_low_u64_be(2)),
 				amount: 5,
@@ -836,7 +860,7 @@ mod tests {
 				amount: 5,
 				nonce: 0,
 			});
-			let watcher = block_on(pool.submit_and_watch(&BlockId::Number(0), uxt)).unwrap();
+			let watcher = block_on(pool.submit_and_watch(&BlockId::Number(0), SOURCE, uxt)).unwrap();
 			assert_eq!(pool.validated_pool().status().ready, 1);
 
 			// when
@@ -860,7 +884,7 @@ mod tests {
 				amount: 5,
 				nonce: 0,
 			});
-			let watcher = block_on(pool.submit_and_watch(&BlockId::Number(0), uxt)).unwrap();
+			let watcher = block_on(pool.submit_and_watch(&BlockId::Number(0), SOURCE, uxt)).unwrap();
 			assert_eq!(pool.validated_pool().status().ready, 1);
 
 			// when
@@ -895,7 +919,7 @@ mod tests {
 				amount: 5,
 				nonce: 0,
 			});
-			let watcher = block_on(pool.submit_and_watch(&BlockId::Number(0), xt)).unwrap();
+			let watcher = block_on(pool.submit_and_watch(&BlockId::Number(0), SOURCE, xt)).unwrap();
 			assert_eq!(pool.validated_pool().status().ready, 1);
 
 			// when
@@ -905,7 +929,7 @@ mod tests {
 				amount: 4,
 				nonce: 1,
 			});
-			block_on(pool.submit_one(&BlockId::Number(1), xt)).unwrap();
+			block_on(pool.submit_one(&BlockId::Number(1), SOURCE, xt)).unwrap();
 			assert_eq!(pool.validated_pool().status().ready, 1);
 
 			// then
@@ -934,7 +958,7 @@ mod tests {
 			// This transaction should go to future, since we use `nonce: 1`
 			let pool2 = pool.clone();
 			std::thread::spawn(move || {
-				block_on(pool2.submit_one(&BlockId::Number(0), xt)).unwrap();
+				block_on(pool2.submit_one(&BlockId::Number(0), SOURCE, xt)).unwrap();
 				ready.send(()).unwrap();
 			});
 
@@ -948,7 +972,7 @@ mod tests {
 			});
 			// The tag the above transaction provides (TestApi is using just nonce as u8)
 			let provides = vec![0_u8];
-			block_on(pool.submit_one(&BlockId::Number(0), xt)).unwrap();
+			block_on(pool.submit_one(&BlockId::Number(0), SOURCE, xt)).unwrap();
 			assert_eq!(pool.validated_pool().status().ready, 1);
 
 			// Now block import happens before the second transaction is able to finish verification.

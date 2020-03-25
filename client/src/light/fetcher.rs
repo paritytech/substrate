@@ -30,7 +30,7 @@ use sp_runtime::traits::{
 use sp_state_machine::{
 	ChangesTrieRootsStorage, ChangesTrieAnchorBlockId, ChangesTrieConfigurationRange,
 	InMemoryChangesTrieStorage, TrieBackend, read_proof_check, key_changes_proof_check_with_db,
-	read_child_proof_check,
+	read_child_proof_check, CloneableSpawn,
 };
 pub use sp_state_machine::StorageProof;
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
@@ -50,14 +50,15 @@ use crate::light::call_executor::check_execution_proof;
 pub struct LightDataChecker<E, H, B: BlockT, S: BlockchainStorage<B>> {
 	blockchain: Arc<Blockchain<S>>,
 	executor: E,
+	spawn_handle: Box<dyn CloneableSpawn>,
 	_hasher: PhantomData<(B, H)>,
 }
 
 impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 	/// Create new light data checker.
-	pub fn new(blockchain: Arc<Blockchain<S>>, executor: E) -> Self {
+	pub fn new(blockchain: Arc<Blockchain<S>>, executor: E, spawn_handle: Box<dyn CloneableSpawn>) -> Self {
 		Self {
-			blockchain, executor, _hasher: PhantomData
+			blockchain, executor, spawn_handle, _hasher: PhantomData
 		}
 	}
 
@@ -254,7 +255,12 @@ impl<E, Block, H, S> FetchChecker<Block> for LightDataChecker<E, H, Block, S>
 		request: &RemoteCallRequest<Block::Header>,
 		remote_proof: StorageProof,
 	) -> ClientResult<Vec<u8>> {
-		check_execution_proof::<_, _, H>(&self.executor, request, remote_proof)
+		check_execution_proof::<_, _, H>(
+			&self.executor,
+			self.spawn_handle.clone(),
+			request,
+			remote_proof,
+		)
 	}
 
 	fn check_changes_proof(
@@ -338,7 +344,8 @@ pub mod tests {
 	use sc_client_api::backend::NewBlockState;
 	use substrate_test_runtime_client::{
 		blockchain::HeaderBackend, AccountKeyring, ClientBlockImportExt,
-		runtime::{self, Hash, Block, Header, Extrinsic}
+		runtime::{self, Hash, Block, Header, Extrinsic},
+		tasks_executor,
 	};
 	use sp_consensus::BlockOrigin;
 
@@ -395,7 +402,8 @@ pub mod tests {
 		).unwrap();
 		let local_checker = LightDataChecker::new(
 			Arc::new(DummyBlockchain::new(DummyStorage::new())),
-			local_executor()
+			local_executor(),
+			tasks_executor(),
 		);
 		(local_checker, remote_block_header, remote_read_proof, heap_pages)
 	}
@@ -444,6 +452,7 @@ pub mod tests {
 		let local_checker = LightDataChecker::new(
 			Arc::new(DummyBlockchain::new(DummyStorage::new())),
 			local_executor(),
+			tasks_executor(),
 		);
 		(local_checker, remote_block_header, remote_read_proof, child_value)
 	}
@@ -474,6 +483,7 @@ pub mod tests {
 		let local_checker = LightDataChecker::new(
 			Arc::new(DummyBlockchain::new(DummyStorage::new())),
 			local_executor(),
+			tasks_executor(),
 		);
 		(local_checker, local_cht_root, remote_block_header, remote_header_proof)
 	}
@@ -559,6 +569,7 @@ pub mod tests {
 		let local_checker = TestChecker::new(
 			Arc::new(DummyBlockchain::new(DummyStorage::new())),
 			local_executor(),
+			tasks_executor(),
 		);
 		let local_checker = &local_checker as &dyn FetchChecker<Block>;
 		let max = remote_client.chain_info().best_number;
@@ -633,6 +644,7 @@ pub mod tests {
 		let local_checker = TestChecker::new(
 			Arc::new(DummyBlockchain::new(local_storage)),
 			local_executor(),
+			tasks_executor(),
 		);
 
 		// check proof on local client
@@ -667,6 +679,7 @@ pub mod tests {
 		let local_checker = TestChecker::new(
 			Arc::new(DummyBlockchain::new(DummyStorage::new())),
 			local_executor(),
+			tasks_executor(),
 		);
 		let local_checker = &local_checker as &dyn FetchChecker<Block>;
 		let max = remote_client.chain_info().best_number;
@@ -754,6 +767,7 @@ pub mod tests {
 		let local_checker = TestChecker::new(
 			Arc::new(DummyBlockchain::new(DummyStorage::new())),
 			local_executor(),
+			tasks_executor(),
 		);
 		assert!(local_checker.check_changes_tries_proof(4, &remote_proof.roots,
 			remote_proof.roots_proof.clone()).is_err());
@@ -764,6 +778,7 @@ pub mod tests {
 		let local_checker = TestChecker::new(
 			Arc::new(DummyBlockchain::new(local_storage)),
 			local_executor(),
+			tasks_executor(),
 		);
 		let result = local_checker.check_changes_tries_proof(
 			4, &remote_proof.roots, StorageProof::empty()
@@ -781,6 +796,7 @@ pub mod tests {
 		let local_checker = TestChecker::new(
 			Arc::new(DummyBlockchain::new(DummyStorage::new())),
 			local_executor(),
+			tasks_executor(),
 		);
 
 		let body_request = RemoteBodyRequest {
@@ -804,6 +820,7 @@ pub mod tests {
 		let local_checker = TestChecker::new(
 			Arc::new(DummyBlockchain::new(DummyStorage::new())),
 			local_executor(),
+			tasks_executor(),
 		);
 
 		let body_request = RemoteBodyRequest {

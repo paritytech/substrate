@@ -17,8 +17,10 @@
 //! Consensus extension module tests for BABE consensus.
 
 use super::*;
+use frame_support::traits::OnFinalize;
 use mock::{new_test_ext, Babe, System};
-use sp_runtime::{traits::OnFinalize, testing::{Digest, DigestItem}};
+use sp_runtime::testing::{Digest, DigestItem};
+use sp_consensus_vrf::schnorrkel::{RawVRFOutput, RawVRFProof};
 use pallet_session::ShouldEndSession;
 
 const EMPTY_RANDOMNESS: [u8; 32] = [
@@ -31,15 +33,17 @@ const EMPTY_RANDOMNESS: [u8; 32] = [
 fn make_pre_digest(
 	authority_index: sp_consensus_babe::AuthorityIndex,
 	slot_number: sp_consensus_babe::SlotNumber,
-	vrf_output: [u8; sp_consensus_babe::VRF_OUTPUT_LENGTH],
-	vrf_proof: [u8; sp_consensus_babe::VRF_PROOF_LENGTH],
+	vrf_output: RawVRFOutput,
+	vrf_proof: RawVRFProof,
 ) -> Digest {
-	let digest_data = sp_consensus_babe::digests::RawPreDigest::Primary {
-		authority_index,
-		slot_number,
-		vrf_output,
-		vrf_proof,
-	};
+	let digest_data = sp_consensus_babe::digests::RawPreDigest::Primary(
+		sp_consensus_babe::digests::RawPrimaryPreDigest {
+			authority_index,
+			slot_number,
+			vrf_output,
+			vrf_proof,
+		}
+	);
 	let log = DigestItem::PreRuntime(sp_consensus_babe::BABE_ENGINE_ID, digest_data.encode());
 	Digest { logs: vec![log] }
 }
@@ -70,12 +74,12 @@ fn check_module() {
 fn first_block_epoch_zero_start() {
 	new_test_ext(vec![0, 1, 2, 3]).execute_with(|| {
 		let genesis_slot = 100;
-		let first_vrf = [1; 32];
+		let first_vrf = RawVRFOutput([1; 32]);
 		let pre_digest = make_pre_digest(
 			0,
 			genesis_slot,
-			first_vrf,
-			[0xff; 64],
+			first_vrf.clone(),
+			RawVRFProof([0xff; 64]),
 		);
 
 		assert_eq!(Babe::genesis_slot(), 0);

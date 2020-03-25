@@ -17,7 +17,6 @@
 //! Macros for declaring and implementing runtime apis.
 
 #![recursion_limit = "512"]
-extern crate proc_macro;
 
 use proc_macro::TokenStream;
 

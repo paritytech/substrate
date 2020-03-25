@@ -263,6 +263,7 @@ fn new_full_parts<TBl, TRtApi, TExecDisp>(
 			fork_blocks,
 			bad_blocks,
 			extensions,
+			Box::new(tasks_builder.spawn_handle()),
 			config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 		)?
 	};
@@ -366,6 +367,7 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 			sc_client::light::new_fetch_checker::<_, TBl, _>(
 				light_blockchain.clone(),
 				executor.clone(),
+				Box::new(tasks_builder.spawn_handle()),
 			),
 		);
 		let fetcher = Arc::new(sc_network::config::OnDemand::new(fetch_checker));
@@ -375,6 +377,7 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 			backend.clone(),
 			config.expect_chain_spec().as_storage_builder(),
 			executor,
+			Box::new(tasks_builder.spawn_handle()),
 			config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 		)?);
 
