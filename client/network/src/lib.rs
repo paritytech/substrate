@@ -117,7 +117,7 @@
 //!
 //! - **`/substrate/<protocol-id>/<version>`** (where `<protocol-id>` must be replaced with the
 //! protocol ID of the targeted chain, and `<version>` is a number between 2 and 6). For each
-//! connection we optionally maintain alive a substream for all Substrate-based communications.
+//! connection we optionally keep an additional substream for all Substrate-based communications alive.
 //! This protocol is considered legacy, and is progressively being replaced with alternatives.
 //! This is designated as "The legacy Substrate substream" in this documentation. See below for
 //! more details.
@@ -167,7 +167,7 @@
 //!
 //! A so-called request-response protocol is defined as follow:
 //!
-//! - When a substream is open, the opening side sends a message whose content is
+//! - When a substream is opened, the opening side sends a message whose content is
 //! protocol-specific. The message must be prefixed with an
 //! [LEB128-encoded number](https://en.wikipedia.org/wiki/LEB128) indicating its length. After the
 //! message has been sent, the writing side is closed.
@@ -180,13 +180,13 @@
 //!
 //! A so-called notifications protocol is defined as follow:
 //!
-//! - When a substream is open, the opening side sends a handshake message whose content is
+//! - When a substream is opened, the opening side sends a handshake message whose content is
 //! protocol-specific. The handshake message must be prefixed with an
 //! [LEB128-encoded number](https://en.wikipedia.org/wiki/LEB128) indicating its length. The
 //! handshake message can be of length 0, in which case the sender has to send a single `0`.
 //! - The receiver then either immediately closes the substream, or answers with its own
 //! LEB128-prefixed protocol-specific handshake response. The message can be of length 0, in which
-//! case the a single `0` has to be sent back. The receiver is then encouraged to close its sending
+//! case a single `0` has to be sent back. The receiver is then encouraged to close its sending
 //! side.
 //! - Once the handshake has completed, the notifications protocol is unidirectional. Only the
 //! node which initiated the substream can push notifications. If the remote wants to send
