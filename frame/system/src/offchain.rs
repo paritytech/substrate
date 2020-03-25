@@ -23,10 +23,24 @@ use sp_runtime::app_crypto::RuntimeAppPublic;
 use sp_runtime::traits::{Extrinsic as ExtrinsicT, IdentifyAccount, One};
 use frame_support::{debug, storage::StorageMap};
 
-
+/// Marker enum used to flag using all supported keys to sign a payload.
 pub enum ForAll {}
+/// Marker enum used to flag using any of the supported keys to sign a payload.
 pub enum ForAny {}
 
+/// Provides an implementation for signing transaction payloads
+///
+/// Keys used for signing are defined when instantiating the signer object.
+/// Signing can be done using:
+///
+/// - All supported keys in the keystore
+/// - Any of the supported keys in the keystore
+/// - A list of provided keys
+///
+/// The signer is then able to:
+/// - Submit a raw unsigned transaction
+/// - Submit a unsigned transaction with a signed payload
+/// - Submit a signed transaction
 pub struct Signer<T: SigningTypes, C: AppCrypto<T::Public, T::Signature>, X = ForAny> {
 	accounts: Option<Vec<T::Public>>,
 	_phantom: sp_std::marker::PhantomData<(X, C)>,
@@ -247,8 +261,7 @@ impl<
 	}
 }
 
-/// traits
-
+/// Account information used for signing payloads
 pub struct Account<T: SigningTypes> {
 	pub index: usize,
 	pub id: T::AccountId,
@@ -274,6 +287,10 @@ impl<T: SigningTypes> Clone for Account<T> where
 	}
 }
 
+/// App specific crypto trait that provides sign/verify
+/// abilities to offchain workers. Implementations of this
+/// trait should specify the app-specific public/signature
+/// types.
 pub trait AppCrypto<Public, Signature> {
 	type RuntimeAppPublic: RuntimeAppPublic;
 	// TODO [ToDr] The conversions are messy, clean them up.
@@ -332,6 +349,8 @@ pub trait AppCrypto<Public, Signature> {
 
 }
 
+/// A wrapper around the types which are used for signing transactions.
+/// This trait should be implemented on the runtime.
 pub trait SigningTypes: crate::Trait {
 	//type AccountId;
 	// TODO [ToDr] Could this be just `T::Signature as traits::Verify>::Signer`?
@@ -347,11 +366,15 @@ pub trait SigningTypes: crate::Trait {
 		+ codec::Codec;
 }
 
+/// A wrapper around the transaction and call types
 pub trait SendTransactionTypes<LocalCall>: SigningTypes {
 	type Extrinsic: ExtrinsicT<Call=Self::OverarchingCall> + codec::Encode;
 	type OverarchingCall: From<LocalCall>;
 }
 
+/// Create signed transaction
+///
+/// Should be implemented by the runtime to sign transaction data
 pub trait CreateSignedTransaction<LocalCall>: SendTransactionTypes<LocalCall> {
 	/// Attempt to create signed extrinsic data that encodes call from given account.
 	///
@@ -367,6 +390,7 @@ pub trait CreateSignedTransaction<LocalCall>: SendTransactionTypes<LocalCall> {
 	) -> Option<(Self::OverarchingCall, <Self::Extrinsic as ExtrinsicT>::SignaturePayload)>;
 }
 
+/// Sign message payload
 pub trait SignMessage<T: SigningTypes> {
 	type Result;
 
@@ -378,6 +402,7 @@ pub trait SignMessage<T: SigningTypes> {
 		;
 }
 
+/// Submit a signed transaction onchain
 pub trait SendSignedTransaction<
 	T: SigningTypes + CreateSignedTransaction<LocalCall>,
 	C: AppCrypto<T::Public, T::Signature>,
@@ -422,6 +447,7 @@ pub trait SendSignedTransaction<
 	}
 }
 
+/// Submit an unsigned transaction onchain with a signed payload
 pub trait SendUnsignedTransaction<
 	T: SigningTypes + SendTransactionTypes<LocalCall>,
 	LocalCall,
@@ -446,10 +472,13 @@ pub trait SendUnsignedTransaction<
 	}
 }
 
+/// Submit a raw unsigned transaction onchain
 pub trait SendRawUnsignedTransaction<T: SendTransactionTypes<C>, C> {
 	fn send_raw_unsigned_transaction(call: C) -> Result<(), ()>;
 }
 
+/// Utility trait to be implemented on payloads
+/// that should be signed and submitted onchain.
 pub trait SignedPayload<T: SigningTypes>: Encode {
 	fn public(&self) -> T::Public;
 
