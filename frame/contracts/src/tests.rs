@@ -2747,9 +2747,6 @@ const CODE_CRYPTO_HASHES: &str = r#"
 	(import "env" "ext_hash_keccak_256" (func $ext_hash_keccak_256 (param i32 i32 i32)))
 	(import "env" "ext_hash_blake2_256" (func $ext_hash_blake2_256 (param i32 i32 i32)))
 	(import "env" "ext_hash_blake2_128" (func $ext_hash_blake2_128 (param i32 i32 i32)))
-	(import "env" "ext_hash_twox_256" (func $ext_hash_twox_256 (param i32 i32 i32)))
-	(import "env" "ext_hash_twox_128" (func $ext_hash_twox_128 (param i32 i32 i32)))
-	(import "env" "ext_hash_twox_64" (func $ext_hash_twox_64 (param i32 i32 i32)))
 
 	(import "env" "memory" (memory 1 1))
 
@@ -2760,9 +2757,6 @@ const CODE_CRYPTO_HASHES: &str = r#"
 		$ext_hash_keccak_256
 		$ext_hash_blake2_256
 		$ext_hash_blake2_128
-		$ext_hash_twox_256
-		$ext_hash_twox_128
-		$ext_hash_twox_64
 	)
 	(data (i32.const 1) "20202010201008") ;; Output sizes of the hashes in order in hex.
 
@@ -2793,9 +2787,6 @@ const CODE_CRYPTO_HASHES: &str = r#"
 	;; |     1 |    KECCAK |       256 |
 	;; |     2 |    BLAKE2 |       256 |
 	;; |     3 |    BLAKE2 |       128 |
-	;; |     4 |      TWOX |       256 |
-	;; |     5 |      TWOX |       128 |
-	;; |     6 |      TWOX |        64 |
 	;; ---------------------------------
 	(func (export "call") (result i32)
 		(local $chosen_hash_fn i32)
@@ -2860,9 +2851,6 @@ fn crypto_hashes() {
 			(dyn_hash_fn!(keccak_256), 32),
 			(dyn_hash_fn!(blake2_256), 32),
 			(dyn_hash_fn!(blake2_128), 16),
-			(dyn_hash_fn!(twox_256), 32),
-			(dyn_hash_fn!(twox_128), 16),
-			(dyn_hash_fn!(twox_64), 8),
 		];
 		// Test the given hash functions for the input: "_DEAD_BEEF"
 		for (n, (hash_fn, expected_size)) in test_cases.iter().enumerate() {

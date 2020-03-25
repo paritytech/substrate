@@ -18,14 +18,16 @@
 
 use super::*;
 
-use frame_support::{impl_outer_origin, parameter_types, ord_parameter_types};
+use frame_support::{
+	impl_outer_origin, parameter_types, ord_parameter_types, traits::{OnInitialize, OnFinalize}
+};
 use sp_core::H256;
 // The testing primitives are very useful for avoiding having to work with signatures
 // or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 use sp_runtime::{
 	Perbill,
 	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup, OnInitialize, OnFinalize},
+	traits::{BlakeTwo256, IdentityLookup},
 };
 use frame_system::EnsureSignedBy;
 
