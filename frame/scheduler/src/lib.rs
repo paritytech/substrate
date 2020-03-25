@@ -80,7 +80,7 @@ pub type PeriodicIndex = u32;
 /// higher priority.
 pub type Priority = u8;
 
-/// The highest priority. We invest the value so that normal sorting will place the highest
+/// The highest priority. We invert the value so that normal sorting will place the highest
 /// priority at the beginning of the list.
 pub const HIGHEST_PRORITY: Priority = 0;
 /// Anything of this value or lower will definitely be scheduled on the block that the ask for, even
