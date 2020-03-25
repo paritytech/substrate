@@ -3042,7 +3042,7 @@ fn set_history_depth_works() {
 #[test]
 fn assert_migration_is_noop() {
 	let kusama_active_era = "4a0200000190e2721171010000";
-	let era = ActiveEraInfo::decode(&mut &hex::decode(kusama_era_start).unwrap()[..]).unwrap();
+	let era = ActiveEraInfo::decode(&mut &hex::decode(kusama_active_era).unwrap()[..]).unwrap();
 	assert_eq!(era.index, 586);
 	assert_eq!(era.start, Some(1585135674000));
 }
