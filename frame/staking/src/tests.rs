@@ -21,9 +21,8 @@ use mock::*;
 use sp_runtime::{assert_eq_error_rate, traits::BadOrigin};
 use sp_staking::offence::OffenceDetails;
 use frame_support::{
-	assert_ok, assert_noop,
-	traits::{Currency, ReservableCurrency, OnInitialize},
-	StorageMap,
+	assert_ok, assert_noop, StorageMap, storage::migration,
+	traits::{Currency, ReservableCurrency, OnInitialize, OnRuntimeUpgrade},
 };
 use pallet_balances::Error as BalancesError;
 use substrate_test_utils::assert_eq_uvec;
@@ -3038,4 +3037,20 @@ fn set_history_depth_works() {
 		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 4));
 		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 5));
 	});
+}
+
+#[test]
+fn test_on_runtime_upgrade() {
+	ExtBuilder::default().build().execute_with(|| {
+		Timestamp::set_timestamp(200);
+
+		migration::put_storage_value(b"Staking", b"ActiveEra", &[], (10 as EraIndex, u128::max_value()));
+		migration::put_storage_value(b"Staking", b"StorageVersion", &[], Releases::V3_0_0);
+
+		Staking::on_runtime_upgrade();
+
+		assert_eq!(Staking::active_era().unwrap().index, 10);
+		assert_eq!(Staking::active_era().unwrap().start, Some(200));
+		assert_eq!(<Staking as Store>::StorageVersion::get(), Releases::V4_0_0);
+	})
 }
