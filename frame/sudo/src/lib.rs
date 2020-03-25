@@ -58,6 +58,7 @@
 //!
 //! decl_module! {
 //!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//! 		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 //!         pub fn privileged_function(origin) -> dispatch::DispatchResult {
 //!             ensure_root(origin)?;
 //!
