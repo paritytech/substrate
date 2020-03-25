@@ -76,18 +76,17 @@
 
 use sp_std::{prelude::*, marker::PhantomData};
 use frame_support::{
-	storage::StorageValue,
-	weights::{GetDispatchInfo, WeighBlock, DispatchInfo}
+	storage::StorageValue, weights::{GetDispatchInfo, DispatchInfo},
+	traits::{OnInitialize, OnFinalize, OnRuntimeUpgrade, OffchainWorker},
 };
 use sp_runtime::{
 	generic::Digest, ApplyExtrinsicResult,
 	traits::{
-		self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize, OnInitialize,
-		NumberFor, Block as BlockT, OffchainWorker, Dispatchable, Saturating, OnRuntimeUpgrade,
+		self, Header, Zero, One, Checkable, Applyable, CheckEqual, ValidateUnsigned, NumberFor,
+		Block as BlockT, Dispatchable, Saturating,
 	},
 	transaction_validity::TransactionValidity,
 };
-use sp_runtime::traits::ValidateUnsigned;
 use codec::{Codec, Encode};
 use frame_system::{extrinsics_root, DigestOf};
 
@@ -114,8 +113,7 @@ impl<
 		OnRuntimeUpgrade +
 		OnInitialize<System::BlockNumber> +
 		OnFinalize<System::BlockNumber> +
-		OffchainWorker<System::BlockNumber> +
-		WeighBlock<System::BlockNumber>,
+		OffchainWorker<System::BlockNumber>,
 > ExecuteBlock<Block> for Executive<System, Block, Context, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
@@ -140,8 +138,7 @@ impl<
 		OnRuntimeUpgrade +
 		OnInitialize<System::BlockNumber> +
 		OnFinalize<System::BlockNumber> +
-		OffchainWorker<System::BlockNumber> +
-		WeighBlock<System::BlockNumber>,
+		OffchainWorker<System::BlockNumber>,
 > Executive<System, Block, Context, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
@@ -179,11 +176,11 @@ where
 		extrinsics_root: &System::Hash,
 		digest: &Digest<System::Hash>,
 	) {
-		if frame_system::RuntimeUpgraded::take() {
-			<AllModules as OnRuntimeUpgrade>::on_runtime_upgrade();
-			<frame_system::Module<System>>::register_extra_weight_unchecked(
-				<AllModules as WeighBlock<System::BlockNumber>>::on_runtime_upgrade()
-			);
+		if Self::runtime_upgraded() {
+			// System is not part of `AllModules`, so we need to call this manually.
+			<frame_system::Module::<System> as OnRuntimeUpgrade>::on_runtime_upgrade();
+			let weight = <AllModules as OnRuntimeUpgrade>::on_runtime_upgrade();
+			<frame_system::Module<System>>::register_extra_weight_unchecked(weight);
 		}
 		<frame_system::Module<System>>::initialize(
 			block_number,
@@ -192,13 +189,26 @@ where
 			digest,
 			frame_system::InitKind::Full,
 		);
-		<AllModules as OnInitialize<System::BlockNumber>>::on_initialize(*block_number);
-		<frame_system::Module<System>>::register_extra_weight_unchecked(
-			<AllModules as WeighBlock<System::BlockNumber>>::on_initialize(*block_number)
-		);
-		<frame_system::Module<System>>::register_extra_weight_unchecked(
-			<AllModules as WeighBlock<System::BlockNumber>>::on_finalize(*block_number)
-		);
+		<frame_system::Module<System> as OnInitialize<System::BlockNumber>>::on_initialize(*block_number);
+		let weight = <AllModules as OnInitialize<System::BlockNumber>>::on_initialize(*block_number);
+		<frame_system::Module<System>>::register_extra_weight_unchecked(weight);
+
+		frame_system::Module::<System>::note_finished_initialize();
+	}
+
+	/// Returns if the runtime was upgraded since the last time this function was called.
+	fn runtime_upgraded() -> bool {
+		let last = frame_system::LastRuntimeUpgrade::get();
+		let current = <System::Version as frame_support::traits::Get<_>>::get();
+
+		if last.map(|v| v.was_upgraded(&current)).unwrap_or(true) {
+			frame_system::LastRuntimeUpgrade::put(
+				frame_system::LastRuntimeUpgradeInfo::from(current),
+			);
+			true
+		} else {
+			false
+		}
 	}
 
 	fn initial_checks(block: &Block) {
@@ -235,11 +245,11 @@ where
 
 	/// Execute given extrinsics and take care of post-extrinsics book-keeping.
 	fn execute_extrinsics_with_book_keeping(extrinsics: Vec<Block::Extrinsic>, block_number: NumberFor<Block>) {
-
 		extrinsics.into_iter().for_each(Self::apply_extrinsic_no_note);
 
 		// post-extrinsics book-keeping
 		<frame_system::Module<System>>::note_finished_extrinsics();
+		<frame_system::Module<System> as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
 		<AllModules as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
 	}
 
@@ -247,7 +257,9 @@ where
 	/// except state-root.
 	pub fn finalize_block() -> System::Header {
 		<frame_system::Module<System>>::note_finished_extrinsics();
-		<AllModules as OnFinalize<System::BlockNumber>>::on_finalize(<frame_system::Module<System>>::block_number());
+		let block_number = <frame_system::Module<System>>::block_number();
+		<frame_system::Module<System> as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
+		<AllModules as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
 
 		// set up extrinsics
 		<frame_system::Module<System>>::derive_extrinsics();
@@ -376,12 +388,12 @@ mod tests {
 		weights::Weight,
 		traits::{Currency, LockIdentifier, LockableCurrency, WithdrawReasons, WithdrawReason},
 	};
-	use frame_system::{self as system, Call as SystemCall, ChainContext};
+	use frame_system::{self as system, Call as SystemCall, ChainContext, LastRuntimeUpgradeInfo};
 	use pallet_balances::Call as BalancesCall;
 	use hex_literal::hex;
 
 	mod custom {
-		use frame_support::weights::SimpleDispatchInfo;
+		use frame_support::weights::{SimpleDispatchInfo, Weight};
 
 		pub trait Trait: frame_system::Trait {}
 
@@ -403,11 +415,11 @@ mod tests {
 
 				// module hooks.
 				// one with block number arg and one without
-				#[weight = SimpleDispatchInfo::FixedNormal(25)]
-				fn on_initialize(n: T::BlockNumber) {
+				fn on_initialize(n: T::BlockNumber) -> Weight {
 					println!("on_initialize({})", n);
+					175
 				}
-				#[weight = SimpleDispatchInfo::FixedNormal(150)]
+
 				fn on_finalize() {
 					println!("on_finalize(?)");
 				}
@@ -461,7 +473,7 @@ mod tests {
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
-		type Version = ();
+		type Version = RuntimeVersion;
 		type ModuleToIndex = ();
 		type AccountData = pallet_balances::AccountData<u64>;
 		type OnNewAccount = ();
@@ -505,6 +517,18 @@ mod tests {
 				_ => UnknownTransaction::NoUnsignedValidator.into(),
 			}
 		}
+	}
+
+	pub struct RuntimeVersion;
+	impl frame_support::traits::Get<sp_version::RuntimeVersion> for RuntimeVersion {
+		fn get() -> sp_version::RuntimeVersion {
+			RUNTIME_VERSION.with(|v| v.borrow().clone())
+		}
+	}
+
+	thread_local! {
+		pub static RUNTIME_VERSION: std::cell::RefCell<sp_version::RuntimeVersion> =
+			Default::default();
 	}
 
 	type SignedExtra = (
@@ -569,7 +593,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("8a22606e925c39bb0c8e8f6f5871c0aceab88a2fcff6b2d92660af8f6daff0b1").into(),
+					state_root: hex!("489ae9b57a19bb4733a264dc64bbcae9b140a904657a681ed3bb5fbbe8cf412b").into(),
 					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![], },
 				},
@@ -758,5 +782,77 @@ mod tests {
 			// now only accounts for the custom module.
 			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_weight(), 150 + 25);
 		})
+	}
+
+	#[test]
+	fn runtime_upgraded_should_work() {
+		new_test_ext(1).execute_with(|| {
+			RUNTIME_VERSION.with(|v| *v.borrow_mut() = Default::default());
+			// It should be added at genesis
+			assert!(frame_system::LastRuntimeUpgrade::exists());
+			assert!(!Executive::runtime_upgraded());
+
+			RUNTIME_VERSION.with(|v| *v.borrow_mut() = sp_version::RuntimeVersion {
+				spec_version: 1,
+				..Default::default()
+			});
+			assert!(Executive::runtime_upgraded());
+			assert_eq!(
+				Some(LastRuntimeUpgradeInfo { spec_version: 1.into(), spec_name: "".into() }),
+				frame_system::LastRuntimeUpgrade::get(),
+			);
+
+			RUNTIME_VERSION.with(|v| *v.borrow_mut() = sp_version::RuntimeVersion {
+				spec_version: 1,
+				spec_name: "test".into(),
+				..Default::default()
+			});
+			assert!(Executive::runtime_upgraded());
+			assert_eq!(
+				Some(LastRuntimeUpgradeInfo { spec_version: 1.into(), spec_name: "test".into() }),
+				frame_system::LastRuntimeUpgrade::get(),
+			);
+
+			RUNTIME_VERSION.with(|v| *v.borrow_mut() = sp_version::RuntimeVersion {
+				spec_version: 1,
+				spec_name: "test".into(),
+				impl_version: 2,
+				..Default::default()
+			});
+			assert!(!Executive::runtime_upgraded());
+
+			frame_system::LastRuntimeUpgrade::take();
+			assert!(Executive::runtime_upgraded());
+			assert_eq!(
+				Some(LastRuntimeUpgradeInfo { spec_version: 1.into(), spec_name: "test".into() }),
+				frame_system::LastRuntimeUpgrade::get(),
+			);
+		})
+	}
+
+	#[test]
+	fn last_runtime_upgrade_was_upgraded_works() {
+		let test_data = vec![
+			(0, "", 1, "", true),
+			(1, "", 1, "", false),
+			(1, "", 1, "test", true),
+			(1, "", 0, "", false),
+			(1, "", 0, "test", true),
+		];
+
+		for (spec_version, spec_name, c_spec_version, c_spec_name, result) in test_data {
+			let current = sp_version::RuntimeVersion {
+				spec_version: c_spec_version,
+				spec_name: c_spec_name.into(),
+				..Default::default()
+			};
+
+			let last = LastRuntimeUpgradeInfo {
+				spec_version: spec_version.into(),
+				spec_name: spec_name.into(),
+			};
+
+			assert_eq!(result, last.was_upgraded(&current));
+		}
 	}
 }

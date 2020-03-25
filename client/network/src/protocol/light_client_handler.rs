@@ -51,13 +51,18 @@ use libp2p::{
 };
 use nohash_hasher::IntMap;
 use prost::Message;
-use rustc_hex::ToHex;
 use sc_client::light::fetcher;
 use sc_client_api::StorageProof;
 use sc_peerset::ReputationChange;
-use sp_core::storage::{ChildInfo, StorageKey};
+use sp_core::{
+	storage::{ChildInfo, StorageKey},
+	hexdisplay::HexDisplay,
+};
 use sp_blockchain::{Error as ClientError};
-use sp_runtime::traits::{Block, Header, NumberFor, Zero};
+use sp_runtime::{
+	traits::{Block, Header, NumberFor, Zero},
+	generic::BlockId,
+};
 use std::{
 	collections::{BTreeMap, VecDeque, HashMap},
 	iter,
@@ -254,13 +259,12 @@ where
 	B: Block,
 {
 	/// Construct a new light client handler.
-	pub fn new
-		( cfg: Config
-		, chain: Arc<dyn Client<B>>
-		, checker: Arc<dyn fetcher::FetchChecker<B>>
-		, peerset: sc_peerset::PeersetHandle
-		) -> Self
-	{
+	pub fn new(
+		cfg: Config,
+		chain: Arc<dyn Client<B>>,
+		checker: Arc<dyn fetcher::FetchChecker<B>>,
+		peerset: sc_peerset::PeersetHandle,
+	) -> Self {
 		LightClientHandler {
 			config: cfg,
 			chain,
@@ -425,18 +429,20 @@ where
 		log::trace!("remote call request from {} ({} at {:?})",
 			peer,
 			request.method,
-			request.block);
+			request.block,
+		);
 
 		let block = Decode::decode(&mut request.block.as_ref())?;
 
-		let proof = match self.chain.execution_proof(&block, &request.method, &request.data) {
+		let proof = match self.chain.execution_proof(&BlockId::Hash(block), &request.method, &request.data) {
 			Ok((_, proof)) => proof,
 			Err(e) => {
 				log::trace!("remote call request from {} ({} at {:?}) failed with: {}",
 					peer,
 					request.method,
 					request.block,
-					e);
+					e,
+				);
 				StorageProof::empty()
 			}
 		};
@@ -467,7 +473,7 @@ where
 
 		let block = Decode::decode(&mut request.block.as_ref())?;
 
-		let proof = match self.chain.read_proof(&block, &mut request.keys.iter().map(AsRef::as_ref)) {
+		let proof = match self.chain.read_proof(&BlockId::Hash(block), &mut request.keys.iter().map(AsRef::as_ref)) {
 			Ok(proof) => proof,
 			Err(error) => {
 				log::trace!("remote read request from {} ({} at {:?}) failed with: {}",
@@ -500,7 +506,7 @@ where
 
 		log::trace!("remote read child request from {} ({} {} at {:?})",
 			peer,
-			request.storage_key.to_hex::<String>(),
+			HexDisplay::from(&request.storage_key),
 			fmt_keys(request.keys.first(), request.keys.last()),
 			request.block);
 
@@ -509,7 +515,7 @@ where
 		let proof =
 			if let Some(info) = ChildInfo::resolve_child_info(request.child_type, &request.child_info[..]) {
 				match self.chain.read_child_proof(
-					&block,
+					&BlockId::Hash(block),
 					&request.storage_key,
 					info,
 					&mut request.keys.iter().map(AsRef::as_ref)
@@ -518,7 +524,7 @@ where
 					Err(error) => {
 						log::trace!("remote read child request from {} ({} {} at {:?}) failed with: {}",
 							peer,
-							request.storage_key.to_hex::<String>(),
+							HexDisplay::from(&request.storage_key),
 							fmt_keys(request.keys.first(), request.keys.last()),
 							request.block,
 							error);
@@ -528,7 +534,7 @@ where
 			} else {
 				log::trace!("remote read child request from {} ({} {} at {:?}) failed with: {}",
 					peer,
-					request.storage_key.to_hex::<String>(),
+					HexDisplay::from(&request.storage_key),
 					fmt_keys(request.keys.first(), request.keys.last()),
 					request.block,
 					"invalid child info and type"
@@ -553,8 +559,7 @@ where
 		log::trace!("remote header proof request from {} ({:?})", peer, request.block);
 
 		let block = Decode::decode(&mut request.block.as_ref())?;
-
-		let (header, proof) = match self.chain.header_proof(block) {
+		let (header, proof) = match self.chain.header_proof(&BlockId::Number(block)) {
 			Ok((header, proof)) => (header.encode(), proof),
 			Err(error) => {
 				log::trace!("remote header proof request from {} ({:?}) failed with: {}",
@@ -582,9 +587,9 @@ where
 		log::trace!("remote changes proof request from {} for key {} ({:?}..{:?})",
 			peer,
 			if !request.storage_key.is_empty() {
-				format!("{} : {}", request.storage_key.to_hex::<String>(), request.key.to_hex::<String>())
+				format!("{} : {}", HexDisplay::from(&request.storage_key), HexDisplay::from(&request.key))
 			} else {
-				request.key.to_hex::<String>()
+				HexDisplay::from(&request.key).to_string()
 			},
 			request.first,
 			request.last);
@@ -607,9 +612,9 @@ where
 				log::trace!("remote changes proof request from {} for key {} ({:?}..{:?}) failed with: {}",
 					peer,
 					if let Some(sk) = storage_key {
-						format!("{} : {}", sk.0.to_hex::<String>(), key.0.to_hex::<String>())
+						format!("{} : {}", HexDisplay::from(&sk.0), HexDisplay::from(&key.0))
 					} else {
-						key.0.to_hex::<String>()
+						HexDisplay::from(&key.0).to_string()
 					},
 					request.first,
 					request.last,
@@ -1086,9 +1091,9 @@ where
 fn fmt_keys(first: Option<&Vec<u8>>, last: Option<&Vec<u8>>) -> String {
 	if let (Some(first), Some(last)) = (first, last) {
 		if first == last {
-			first.to_hex::<String>()
+			HexDisplay::from(first).to_string()
 		} else {
-			format!("{}..{}", first.to_hex::<String>(), last.to_hex::<String>())
+			format!("{}..{}", HexDisplay::from(first), HexDisplay::from(last))
 		}
 	} else {
 		String::from("n/a")

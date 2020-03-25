@@ -96,6 +96,7 @@ use sp_std::{
 use frame_support::{
 	decl_module, decl_storage, decl_event, ensure, decl_error,
 	traits::{ChangeMembers, InitializeMembers, Currency, Get, ReservableCurrency},
+	weights::{Weight, SimpleDispatchInfo, WeighData},
 };
 use frame_system::{self as system, ensure_root, ensure_signed};
 use sp_runtime::{
@@ -165,7 +166,7 @@ decl_storage! {
 		/// check if a candidate is already in the pool, without having to
 		/// iterate over the entire pool (the `Pool` is not sorted by
 		/// `T::AccountId`, but by `T::Score` instead).
-		CandidateExists get(fn candidate_exists): map hasher(blake2_256) T::AccountId => bool;
+		CandidateExists get(fn candidate_exists): map hasher(twox_64_concat) T::AccountId => bool;
 
 		/// The current membership, stored as an ordered Vec.
 		Members get(fn members): Vec<T::AccountId>;
@@ -245,11 +246,12 @@ decl_module! {
 
 		/// Every `Period` blocks the `Members` set is refreshed from the
 		/// highest scoring members in the pool.
-		fn on_initialize(n: T::BlockNumber) {
+		fn on_initialize(n: T::BlockNumber) -> Weight {
 			if n % T::Period::get() == Zero::zero() {
 				let pool = <Pool<T, I>>::get();
 				<Module<T, I>>::refresh_members(pool, ChangeReceiver::MembershipChanged);
 			}
+			SimpleDispatchInfo::default().weigh_data(())
 		}
 
 		/// Add `origin` to the pool of candidates.

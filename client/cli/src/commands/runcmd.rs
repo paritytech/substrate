@@ -23,7 +23,7 @@ use names::{Generator, Name};
 use regex::Regex;
 use chrono::prelude::*;
 use sc_service::{
-	AbstractService, Configuration, ChainSpecExtension, RuntimeGenesis, ChainSpec, Roles,
+	AbstractService, Configuration, ChainSpec, Roles,
 	config::{KeystoreConfig, PrometheusConfig},
 };
 use sc_telemetry::TelemetryEndpoints;
@@ -82,7 +82,7 @@ pub struct RunCmd {
 	)]
 	pub sentry: bool,
 
-	/// Disable GRANDPA voter when running in validator mode, otherwise disables the GRANDPA observer.
+	/// Disable GRANDPA voter when running in validator mode, otherwise disable the GRANDPA observer.
 	#[structopt(long = "no-grandpa")]
 	pub no_grandpa: bool,
 
@@ -92,7 +92,7 @@ pub struct RunCmd {
 
 	/// Listen to all RPC interfaces.
 	///
-	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use a RPC proxy
+	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use an RPC proxy
 	/// server to filter out dangerous methods. More details: https://github.com/paritytech/substrate/wiki/Public-RPC.
 	/// Use `--unsafe-rpc-external` to suppress the warning if you understand the risks.
 	#[structopt(long = "rpc-external")]
@@ -106,7 +106,7 @@ pub struct RunCmd {
 
 	/// Listen to all Websocket interfaces.
 	///
-	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use a RPC proxy
+	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use an RPC proxy
 	/// server to filter out dangerous methods. More details: https://github.com/paritytech/substrate/wiki/Public-RPC.
 	/// Use `--unsafe-ws-external` to suppress the warning if you understand the risks.
 	#[structopt(long = "ws-external")]
@@ -169,7 +169,7 @@ pub struct RunCmd {
 
 	/// The URL of the telemetry server to connect to.
 	///
-	/// This flag can be passed multiple times as a mean to specify multiple
+	/// This flag can be passed multiple times as a means to specify multiple
 	/// telemetry endpoints. Verbosity levels range from 0-9, with 0 denoting
 	/// the least verbosity. If no verbosity level is specified the default is
 	/// 0.
@@ -265,11 +265,17 @@ pub struct RunCmd {
 		parse(from_os_str),
 		conflicts_with_all = &[ "password-interactive", "password" ]
 	)]
-	pub password_filename: Option<PathBuf>
+	pub password_filename: Option<PathBuf>,
+
+	/// The size of the instances cache for each runtime.
+	///
+	/// The default value is 8 and the values higher than 256 are ignored.
+	#[structopt(long = "max-runtime-instances", default_value = "8")]
+	pub max_runtime_instances: usize,
 }
 
 impl RunCmd {
-	/// Get the `Sr25519Keyring` matching one of the flag
+	/// Get the `Sr25519Keyring` matching one of the flag.
 	pub fn get_keyring(&self) -> Option<sp_keyring::Sr25519Keyring> {
 		use sp_keyring::Sr25519Keyring::*;
 
@@ -284,17 +290,15 @@ impl RunCmd {
 		else { None }
 	}
 
-	/// Update and prepare a `Configuration` with command line parameters of `RunCmd` and `VersionInfo`
-	pub fn update_config<G, E, F>(
+	/// Update and prepare a `Configuration` with command line parameters of `RunCmd` and `VersionInfo`.
+	pub fn update_config<F>(
 		&self,
-		mut config: &mut Configuration<G, E>,
+		mut config: &mut Configuration,
 		spec_factory: F,
 		version: &VersionInfo,
 	) -> error::Result<()>
 	where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-		F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
+		F: FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
 	{
 		self.shared_params.update_config(&mut config, spec_factory, version)?;
 
@@ -435,22 +439,22 @@ impl RunCmd {
 		// Imply forced authoring on --dev
 		config.force_authoring = self.shared_params.dev || self.force_authoring;
 
+		config.max_runtime_instances = self.max_runtime_instances.min(256);
+
 		Ok(())
 	}
 
-	/// Run the command that runs the node
-	pub fn run<G, E, FNL, FNF, SL, SF>(
+	/// Run the command that runs the node.
+	pub fn run<FNL, FNF, SL, SF>(
 		self,
-		config: Configuration<G, E>,
+		config: Configuration,
 		new_light: FNL,
 		new_full: FNF,
 		version: &VersionInfo,
 	) -> error::Result<()>
 	where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-		FNL: FnOnce(Configuration<G, E>) -> Result<SL, sc_service::error::Error>,
-		FNF: FnOnce(Configuration<G, E>) -> Result<SF, sc_service::error::Error>,
+		FNL: FnOnce(Configuration) -> Result<SL, sc_service::error::Error>,
+		FNF: FnOnce(Configuration) -> Result<SF, sc_service::error::Error>,
 		SL: AbstractService + Unpin,
 		SF: AbstractService + Unpin,
 	{
@@ -485,7 +489,7 @@ impl RunCmd {
 	}
 }
 
-/// Check whether a node name is considered as valid
+/// Check whether a node name is considered as valid.
 pub fn is_node_name_valid(_name: &str) -> Result<(), &str> {
 	let name = _name.to_string();
 	if name.chars().count() >= NODE_NAME_MAX_LENGTH {
@@ -582,7 +586,7 @@ fn parse_telemetry_endpoints(s: &str) -> Result<(String, u8), Box<dyn std::error
 /// handling of `structopt`.
 #[derive(Clone, Debug)]
 pub enum Cors {
-	/// All hosts allowed
+	/// All hosts allowed.
 	All,
 	/// Only hosts on the list are allowed.
 	List(Vec<String>),
@@ -597,7 +601,7 @@ impl From<Cors> for Option<Vec<String>> {
 	}
 }
 
-/// Parse cors origins
+/// Parse cors origins.
 fn parse_cors(s: &str) -> Result<Cors, Box<dyn std::error::Error>> {
 	let mut is_all = false;
 	let mut origins = Vec::new();
@@ -617,7 +621,7 @@ fn parse_cors(s: &str) -> Result<Cors, Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sc_service::config::DatabaseConfig;
+	use sc_service::{GenericChainSpec, config::DatabaseConfig};
 
 	const TEST_VERSION_INFO: &'static VersionInfo = &VersionInfo {
 		name: "node-test",
@@ -647,7 +651,7 @@ mod tests {
 
 	#[test]
 	fn keystore_path_is_generated_correctly() {
-		let chain_spec = ChainSpec::from_genesis(
+		let chain_spec = GenericChainSpec::from_genesis(
 			"test",
 			"test-id",
 			|| (),
@@ -665,9 +669,9 @@ mod tests {
 
 			let mut config = Configuration::default();
 			config.config_dir = Some(PathBuf::from("/test/path"));
-			config.chain_spec = Some(chain_spec.clone());
+			config.chain_spec = Some(Box::new(chain_spec.clone()));
 			let chain_spec = chain_spec.clone();
-			cli.update_config(&mut config, move |_| Ok(Some(chain_spec)), TEST_VERSION_INFO).unwrap();
+			cli.update_config(&mut config, move |_| Ok(Box::new(chain_spec)), TEST_VERSION_INFO).unwrap();
 
 			let expected_path = match keystore_path {
 				Some(path) => PathBuf::from(path),
@@ -680,7 +684,7 @@ mod tests {
 
 	#[test]
 	fn ensure_load_spec_provide_defaults() {
-		let chain_spec = ChainSpec::from_genesis(
+		let chain_spec = GenericChainSpec::from_genesis(
 			"test",
 			"test-id",
 			|| (),
@@ -695,7 +699,7 @@ mod tests {
 		let cli = RunCmd::from_iter(args);
 
 		let mut config = Configuration::from_version(TEST_VERSION_INFO);
-		cli.update_config(&mut config, |_| Ok(Some(chain_spec)), TEST_VERSION_INFO).unwrap();
+		cli.update_config(&mut config, |_| Ok(Box::new(chain_spec)), TEST_VERSION_INFO).unwrap();
 
 		assert!(config.chain_spec.is_some());
 		assert!(!config.network.boot_nodes.is_empty());
@@ -704,7 +708,7 @@ mod tests {
 
 	#[test]
 	fn ensure_update_config_for_running_node_provides_defaults() {
-		let chain_spec = ChainSpec::from_genesis(
+		let chain_spec = GenericChainSpec::from_genesis(
 			"test",
 			"test-id",
 			|| (),
@@ -720,7 +724,7 @@ mod tests {
 
 		let mut config = Configuration::from_version(TEST_VERSION_INFO);
 		cli.init(&TEST_VERSION_INFO).unwrap();
-		cli.update_config(&mut config, |_| Ok(Some(chain_spec)), TEST_VERSION_INFO).unwrap();
+		cli.update_config(&mut config, |_| Ok(Box::new(chain_spec)), TEST_VERSION_INFO).unwrap();
 
 		assert!(config.config_dir.is_some());
 		assert!(config.database.is_some());

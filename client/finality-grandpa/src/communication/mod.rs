@@ -30,6 +30,7 @@
 use futures::{prelude::*, channel::mpsc};
 use log::{debug, trace};
 use parking_lot::Mutex;
+use prometheus_endpoint::Registry;
 use std::{pin::Pin, sync::Arc, task::{Context, Poll}};
 
 use finality_grandpa::Message::{Prevote, Precommit, PrimaryPropose};
@@ -178,10 +179,12 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		service: N,
 		config: crate::Config,
 		set_state: crate::environment::SharedVoterSetState<B>,
+		prometheus_registry: Option<&Registry>,
 	) -> Self {
 		let (validator, report_stream) = GossipValidator::new(
 			config,
 			set_state.clone(),
+			prometheus_registry,
 		);
 
 		let validator = Arc::new(validator);
@@ -448,8 +451,9 @@ impl<B: BlockT, N: Network<B>> Future for NetworkBridge<B, N> {
 		}
 
 		match self.gossip_engine.lock().poll_unpin(cx) {
-			// The gossip engine future finished. We should do the same.
-			Poll::Ready(()) => return Poll::Ready(Ok(())),
+			Poll::Ready(()) => return Poll::Ready(
+				Err(Error::Network("Gossip engine future finished.".into()))
+			),
 			Poll::Pending => {},
 		}
 
@@ -471,12 +475,12 @@ fn incoming_global<B: BlockT>(
 		gossip_validator: &Arc<GossipValidator<B>>,
 		voters: &VoterSet<AuthorityId>,
 	| {
-		let precommits_signed_by: Vec<String> =
-			msg.message.auth_data.iter().map(move |(_, a)| {
-				format!("{}", a)
-			}).collect();
-
 		if voters.len() <= TELEMETRY_VOTERS_LIMIT {
+			let precommits_signed_by: Vec<String> =
+				msg.message.auth_data.iter().map(move |(_, a)| {
+					format!("{}", a)
+				}).collect();
+
 			telemetry!(CONSENSUS_INFO; "afg.received_commit";
 				"contains_precommits_signed_by" => ?precommits_signed_by,
 				"target_number" => ?msg.message.target_number.clone(),
@@ -497,7 +501,8 @@ fn incoming_global<B: BlockT>(
 			return None;
 		}
 
-		let round = msg.round.0;
+		let round = msg.round;
+		let set_id = msg.set_id;
 		let commit = msg.message;
 		let finalized_number = commit.target_number;
 		let gossip_validator = gossip_validator.clone();
@@ -509,6 +514,8 @@ fn incoming_global<B: BlockT>(
 				// any discrepancy between the actual ghost and the claimed
 				// finalized number.
 				gossip_validator.note_commit_finalized(
+					round,
+					set_id,
 					finalized_number,
 					|to, neighbor| neighbor_sender.send(to, neighbor),
 				);
@@ -525,7 +532,7 @@ fn incoming_global<B: BlockT>(
 
 		let cb = voter::Callback::Work(Box::new(cb));
 
-		Some(voter::CommunicationIn::Commit(round, commit, cb))
+		Some(voter::CommunicationIn::Commit(round.0, commit, cb))
 	};
 
 	let process_catch_up = move |
@@ -1015,7 +1022,7 @@ impl<Block: BlockT> Sink<(RoundNumber, Commit<Block>)> for CommitsOut<Block> {
 		};
 
 		let message = GossipMessage::Commit(FullCommitMessage::<Block> {
-			round: round,
+			round,
 			set_id: self.set_id,
 			message: compact_commit,
 		});
@@ -1025,6 +1032,8 @@ impl<Block: BlockT> Sink<(RoundNumber, Commit<Block>)> for CommitsOut<Block> {
 		// the gossip validator needs to be made aware of the best commit-height we know of
 		// before gossiping
 		self.gossip_validator.note_commit_finalized(
+			round,
+			self.set_id,
 			commit.target_number,
 			|to, neighbor| self.neighbor_sender.send(to, neighbor),
 		);

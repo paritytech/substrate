@@ -23,7 +23,10 @@ use libp2p::{Multiaddr, PeerId};
 use libp2p::core::{ConnectedPoint, nodes::listeners::ListenerId};
 use libp2p::swarm::{ProtocolsHandler, IntoProtocolsHandler};
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
-use sp_core::storage::{StorageKey, ChildInfo};
+use sp_core::{
+	storage::{StorageKey, ChildInfo},
+	hexdisplay::HexDisplay
+};
 use sp_consensus::{
 	BlockOrigin,
 	block_validation::BlockAnnounceValidator,
@@ -38,11 +41,10 @@ use sp_arithmetic::traits::SaturatedConversion;
 use message::{BlockAnnounce, BlockAttributes, Direction, FromBlock, Message, RequestId};
 use message::generic::Message as GenericMessage;
 use light_dispatch::{LightDispatch, LightDispatchNetwork, RequestData};
-use prometheus_endpoint::{Registry, Gauge, register, PrometheusError, U64};
+use prometheus_endpoint::{Registry, Gauge, GaugeVec, PrometheusError, Opts, register, U64};
 use sync::{ChainSync, SyncState};
 use crate::service::{TransactionPool, ExHashT};
 use crate::config::{BoxFinalityProofRequestBuilder, Roles};
-use rustc_hex::ToHex;
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
@@ -142,92 +144,50 @@ struct Metrics {
 	peers: Gauge<U64>,
 	queued_blocks: Gauge<U64>,
 	fork_targets: Gauge<U64>,
-	finality_proofs_pending: Gauge<U64>,
-	finality_proofs_active: Gauge<U64>,
-	finality_proofs_failed: Gauge<U64>,
-	finality_proofs_importing: Gauge<U64>,
-	justifications_pending: Gauge<U64>,
-	justifications_active: Gauge<U64>,
-	justifications_failed: Gauge<U64>,
-	justifications_importing: Gauge<U64>
+	finality_proofs: GaugeVec<U64>,
+	justifications: GaugeVec<U64>,
 }
 
 impl Metrics {
 	fn register(r: &Registry) -> Result<Self, PrometheusError> {
 		Ok(Metrics {
 			handshaking_peers: {
-				let g = Gauge::new("sync_handshaking_peers", "number of newly connected peers")?;
+				let g = Gauge::new("sync_handshaking_peers", "Number of newly connected peers")?;
 				register(g, r)?
 			},
 			obsolete_requests: {
-				let g = Gauge::new("sync_obsolete_requests", "total number of obsolete requests")?;
+				let g = Gauge::new("sync_obsolete_requests", "Number of obsolete requests")?;
 				register(g, r)?
 			},
 			peers: {
-				let g = Gauge::new("sync_peers", "number of peers we sync with")?;
+				let g = Gauge::new("sync_peers", "Number of peers we sync with")?;
 				register(g, r)?
 			},
 			queued_blocks: {
-				let g = Gauge::new("sync_queued_blocks", "number of blocks in import queue")?;
+				let g = Gauge::new("sync_queued_blocks", "Number of blocks in import queue")?;
 				register(g, r)?
 			},
 			fork_targets: {
-				let g = Gauge::new("sync_fork_targets", "fork sync targets")?;
+				let g = Gauge::new("sync_fork_targets", "Number of fork sync targets")?;
 				register(g, r)?
 			},
-			justifications_pending: {
-				let g = Gauge::new(
-					"sync_extra_justifications_pending",
-					"number of pending extra justifications requests"
+			justifications: {
+				let g = GaugeVec::new(
+					Opts::new(
+						"sync_extra_justifications",
+						"Number of extra justifications requests"
+					),
+					&["status"],
 				)?;
 				register(g, r)?
 			},
-			justifications_active: {
-				let g = Gauge::new(
-					"sync_extra_justifications_active",
-					"number of active extra justifications requests"
-				)?;
-				register(g, r)?
-			},
-			justifications_failed: {
-				let g = Gauge::new(
-					"sync_extra_justifications_failed",
-					"number of failed extra justifications requests"
-				)?;
-				register(g, r)?
-			},
-			justifications_importing: {
-				let g = Gauge::new(
-					"sync_extra_justifications_importing",
-					"number of importing extra justifications requests"
-				)?;
-				register(g, r)?
-			},
-			finality_proofs_pending: {
-				let g = Gauge::new(
-					"sync_extra_finality_proofs_pending",
-					"number of pending extra finality proof requests"
-				)?;
-				register(g, r)?
-			},
-			finality_proofs_active: {
-				let g = Gauge::new(
-					"sync_extra_finality_proofs_active",
-					"number of active extra finality proof requests"
-				)?;
-				register(g, r)?
-			},
-			finality_proofs_failed: {
-				let g = Gauge::new(
-					"sync_extra_finality_proofs_failed",
-					"number of failed extra finality proof requests"
-				)?;
-				register(g, r)?
-			},
-			finality_proofs_importing: {
-				let g = Gauge::new(
-					"sync_extra_finality_proofs_importing",
-					"number of importing extra finality proof requests"
+			finality_proofs: {
+				let g = GaugeVec::new(
+					Opts::new(
+						"sync_extra_finality_proofs",
+						"Number of extra finality proof requests",
+					),
+					&["status"],
 				)?;
 				register(g, r)?
 			},
@@ -265,6 +225,8 @@ pub struct Protocol<B: BlockT, H: ExHashT> {
 	protocol_engine_by_name: HashMap<Cow<'static, [u8]>, ConsensusEngineId>,
 	/// Prometheus metrics.
 	metrics: Option<Metrics>,
+	/// The `PeerId`'s of all boot nodes.
+	boot_node_ids: Arc<HashSet<PeerId>>,
 }
 
 #[derive(Default)]
@@ -474,7 +436,8 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		protocol_id: ProtocolId,
 		peerset_config: sc_peerset::PeersetConfig,
 		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
-		metrics_registry: Option<&Registry>
+		metrics_registry: Option<&Registry>,
+		boot_node_ids: Arc<HashSet<PeerId>>,
 	) -> error::Result<(Protocol<B, H>, sc_peerset::PeersetHandle)> {
 		let info = chain.info();
 		let sync = ChainSync::new(
@@ -523,7 +486,8 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				Some(Metrics::register(r)?)
 			} else {
 				None
-			}
+			},
+			boot_node_ids,
 		};
 
 		Ok((protocol, peerset_handle))
@@ -596,6 +560,11 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	/// Number of blocks in the import queue.
 	pub fn num_queued_blocks(&self) -> u32 {
 		self.sync.status().queued_blocks
+	}
+
+	/// Number of processed blocks.
+	pub fn num_processed_blocks(&self) -> usize {
+		self.sync.num_processed_blocks()
 	}
 
 	/// Number of active sync requests.
@@ -857,7 +826,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		let get_justification = request
 			.fields
 			.contains(message::BlockAttributes::JUSTIFICATION);
-		while let Some(header) = self.context_data.chain.header(&id).unwrap_or(None) {
+		while let Some(header) = self.context_data.chain.header(id).unwrap_or(None) {
 			if blocks.len() >= max {
 				break;
 			}
@@ -875,7 +844,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				body: if get_body {
 					self.context_data
 						.chain
-						.body(&BlockId::Hash(hash))
+						.block_body(&BlockId::Hash(hash))
 						.unwrap_or(None)
 				} else {
 					None
@@ -1049,6 +1018,17 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				);
 				self.peerset_handle.report_peer(who.clone(), rep::GENESIS_MISMATCH);
 				self.behaviour.disconnect_peer(&who);
+
+				if self.boot_node_ids.contains(&who) {
+					error!(
+						target: "sync",
+						"Bootnode with peer id `{}` is on a different chain (our genesis: {} theirs: {})",
+						who,
+						self.genesis_hash,
+						status.genesis_hash,
+					);
+				}
+
 				return CustomMessageOutcome::None;
 			}
 			if status.version < MIN_VERSION && CURRENT_VERSION < status.min_supported_version {
@@ -1300,7 +1280,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	/// In chain-based consensus, we often need to make sure non-best forks are
 	/// at least temporarily synced.
 	pub fn announce_block(&mut self, hash: B::Hash, data: Vec<u8>) {
-		let header = match self.context_data.chain.header(&BlockId::Hash(hash)) {
+		let header = match self.context_data.chain.header(BlockId::Hash(hash)) {
 			Ok(Some(header)) => header,
 			Ok(None) => {
 				warn!("Trying to announce unknown block: {}", hash);
@@ -1468,7 +1448,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			request.block
 		);
 		let proof = match self.context_data.chain.execution_proof(
-			&request.block,
+			&BlockId::Hash(request.block),
 			&request.method,
 			&request.data,
 		) {
@@ -1590,18 +1570,18 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		}
 
 		let keys_str = || match request.keys.len() {
-			1 => request.keys[0].to_hex::<String>(),
+			1 => HexDisplay::from(&request.keys[0]).to_string(),
 			_ => format!(
 				"{}..{}",
-				request.keys[0].to_hex::<String>(),
-				request.keys[request.keys.len() - 1].to_hex::<String>(),
+				HexDisplay::from(&request.keys[0]),
+				HexDisplay::from(&request.keys[request.keys.len() - 1]),
 			),
 		};
 
 		trace!(target: "sync", "Remote read request {} from {} ({} at {})",
 			request.id, who, keys_str(), request.block);
 		let proof = match self.context_data.chain.read_proof(
-			&request.block,
+			&BlockId::Hash(request.block),
 			&mut request.keys.iter().map(AsRef::as_ref)
 		) {
 			Ok(proof) => proof,
@@ -1638,19 +1618,19 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		}
 
 		let keys_str = || match request.keys.len() {
-			1 => request.keys[0].to_hex::<String>(),
+			1 => HexDisplay::from(&request.keys[0]).to_string(),
 			_ => format!(
 				"{}..{}",
-				request.keys[0].to_hex::<String>(),
-				request.keys[request.keys.len() - 1].to_hex::<String>(),
+				HexDisplay::from(&request.keys[0]),
+				HexDisplay::from(&request.keys[request.keys.len() - 1]),
 			),
 		};
 
 		trace!(target: "sync", "Remote read child request {} from {} ({} {} at {})",
-			request.id, who, request.storage_key.to_hex::<String>(), keys_str(), request.block);
+			request.id, who, HexDisplay::from(&request.storage_key), keys_str(), request.block);
 		let proof = if let Some(child_info) = ChildInfo::resolve_child_info(request.child_type, &request.child_info[..]) {
 			match self.context_data.chain.read_child_proof(
-				&request.block,
+				&BlockId::Hash(request.block),
 				&request.storage_key,
 				child_info,
 				&mut request.keys.iter().map(AsRef::as_ref),
@@ -1660,7 +1640,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 					trace!(target: "sync", "Remote read child request {} from {} ({} {} at {}) failed with: {}",
 						request.id,
 						who,
-						request.storage_key.to_hex::<String>(),
+						HexDisplay::from(&request.storage_key),
 						keys_str(),
 						request.block,
 						error
@@ -1672,7 +1652,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			trace!(target: "sync", "Remote read child request {} from {} ({} {} at {}) failed with: {}",
 				request.id,
 				who,
-				request.storage_key.to_hex::<String>(),
+				HexDisplay::from(&request.storage_key),
 				keys_str(),
 				request.block,
 				"invalid child info and type",
@@ -1708,7 +1688,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	) {
 		trace!(target: "sync", "Remote header proof request {} from {} ({})",
 			request.id, who, request.block);
-		let (header, proof) = match self.context_data.chain.header_proof(request.block) {
+		let (header, proof) = match self.context_data.chain.header_proof(&BlockId::Number(request.block)) {
 			Ok((header, proof)) => (Some(header), proof),
 			Err(error) => {
 				trace!(target: "sync", "Remote header proof request {} from {} ({}) failed with: {}",
@@ -1751,9 +1731,9 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			request.id,
 			who,
 			if let Some(sk) = request.storage_key.as_ref() {
-				format!("{} : {}", sk.to_hex::<String>(), request.key.to_hex::<String>())
+				format!("{} : {}", HexDisplay::from(sk), HexDisplay::from(&request.key))
 			} else {
-				request.key.to_hex::<String>()
+				HexDisplay::from(&request.key).to_string()
 			},
 			request.first,
 			request.last
@@ -1774,9 +1754,9 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 					request.id,
 					who,
 					if let Some(sk) = storage_key {
-						format!("{} : {}", sk.0.to_hex::<String>(), key.0.to_hex::<String>())
+						format!("{} : {}", HexDisplay::from(&sk.0), HexDisplay::from(&key.0))
 					} else {
-						key.0.to_hex::<String>()
+						HexDisplay::from(&key.0).to_string()
 					},
 					request.first,
 					request.last,
@@ -1917,15 +1897,23 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			metrics.fork_targets.set(m.fork_targets.into());
 			metrics.queued_blocks.set(m.queued_blocks.into());
 
-			metrics.justifications_pending.set(m.justifications.pending_requests.into());
-			metrics.justifications_active.set(m.justifications.active_requests.into());
-			metrics.justifications_failed.set(m.justifications.failed_requests.into());
-			metrics.justifications_importing.set(m.justifications.importing_requests.into());
+			metrics.justifications.with_label_values(&["pending"])
+				.set(m.justifications.pending_requests.into());
+			metrics.justifications.with_label_values(&["active"])
+				.set(m.justifications.active_requests.into());
+			metrics.justifications.with_label_values(&["failed"])
+				.set(m.justifications.failed_requests.into());
+			metrics.justifications.with_label_values(&["importing"])
+				.set(m.justifications.importing_requests.into());
 
-			metrics.finality_proofs_pending.set(m.finality_proofs.pending_requests.into());
-			metrics.finality_proofs_active.set(m.finality_proofs.active_requests.into());
-			metrics.finality_proofs_failed.set(m.finality_proofs.failed_requests.into());
-			metrics.finality_proofs_importing.set(m.finality_proofs.importing_requests.into());
+			metrics.finality_proofs.with_label_values(&["pending"])
+				.set(m.finality_proofs.pending_requests.into());
+			metrics.finality_proofs.with_label_values(&["active"])
+				.set(m.finality_proofs.active_requests.into());
+			metrics.finality_proofs.with_label_values(&["failed"])
+				.set(m.finality_proofs.failed_requests.into());
+			metrics.finality_proofs.with_label_values(&["importing"])
+				.set(m.finality_proofs.importing_requests.into());
 		}
 	}
 }
@@ -2178,7 +2166,8 @@ mod tests {
 				reserved_nodes: Vec::new(),
 			},
 			Box::new(DefaultBlockAnnounceValidator::new(client.clone())),
-			None
+			None,
+			Default::default(),
 		).unwrap();
 
 		let dummy_peer_id = PeerId::random();

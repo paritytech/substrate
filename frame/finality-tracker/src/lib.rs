@@ -40,7 +40,7 @@ pub trait Trait: SystemTrait {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Timestamp {
+	trait Store for Module<T: Trait> as FinalityTracker {
 		/// Recent hints.
 		RecentHints get(fn recent_hints) build(|_| vec![T::BlockNumber::zero()]): Vec<T::BlockNumber>;
 		/// Ordered recent hints.
@@ -207,9 +207,11 @@ mod tests {
 	use sp_core::H256;
 	use sp_runtime::{
 		testing::Header, Perbill,
-		traits::{BlakeTwo256, IdentityLookup, OnFinalize, Header as HeaderT},
+		traits::{BlakeTwo256, IdentityLookup, Header as HeaderT},
 	};
-	use frame_support::{assert_ok, impl_outer_origin, parameter_types, weights::Weight};
+	use frame_support::{
+		assert_ok, impl_outer_origin, parameter_types, weights::Weight, traits::OnFinalize
+	};
 	use frame_system as system;
 	use std::cell::RefCell;
 

@@ -20,14 +20,16 @@ use futures::executor::block_on;
 use txpool::{self, Pool};
 use sp_runtime::{
 	generic::BlockId,
-	transaction_validity::ValidTransaction,
+	transaction_validity::{ValidTransaction, InvalidTransaction},
 };
 use substrate_test_runtime_client::{
-	runtime::{Block, Hash, Index, Header, Extrinsic},
+	runtime::{Block, Hash, Index, Header, Extrinsic, Transfer},
 	AccountKeyring::*,
 };
 use substrate_test_runtime_transaction_pool::{TestApi, uxt};
 use crate::revalidation::BACKGROUND_REVALIDATION_INTERVAL;
+use futures::task::Poll;
+use codec::Encode;
 
 fn pool() -> Pool<TestApi> {
 	Pool::new(Default::default(), TestApi::with_alice_nonce(209).into())
@@ -600,5 +602,89 @@ fn fork_aware_finalization() {
 		assert_eq!(stream.next(), Some(TransactionStatus::Finalized(e1.clone())));
 		assert_eq!(stream.next(), None);
 	}
+}
 
+#[test]
+fn ready_set_should_not_resolve_before_block_update() {
+	let (pool, _guard) = maintained_pool();
+	let xt1 = uxt(Alice, 209);
+	block_on(pool.submit_one(&BlockId::number(1), xt1.clone())).expect("1. Imported");
+
+	assert!(pool.ready_at(1).now_or_never().is_none());
+}
+
+#[test]
+fn ready_set_should_resolve_after_block_update() {
+	let (pool, _guard) = maintained_pool();
+	pool.api.push_block(1, vec![]);
+
+	let xt1 = uxt(Alice, 209);
+
+	block_on(pool.submit_one(&BlockId::number(1), xt1.clone())).expect("1. Imported");
+	block_on(pool.maintain(block_event(1)));
+
+	assert!(pool.ready_at(1).now_or_never().is_some());
+}
+
+#[test]
+fn ready_set_should_eventually_resolve_when_block_update_arrives() {
+	let (pool, _guard) = maintained_pool();
+	pool.api.push_block(1, vec![]);
+
+	let xt1 = uxt(Alice, 209);
+
+	block_on(pool.submit_one(&BlockId::number(1), xt1.clone())).expect("1. Imported");
+
+	let noop_waker = futures::task::noop_waker();
+	let mut context = futures::task::Context::from_waker(&noop_waker);
+
+	let mut ready_set_future = pool.ready_at(1);
+	if let Poll::Ready(_) = ready_set_future.poll_unpin(&mut context) {
+		panic!("Ready set should not be ready before block update!");
+	}
+
+	block_on(pool.maintain(block_event(1)));
+
+	match ready_set_future.poll_unpin(&mut context)  {
+		Poll::Pending => {
+			panic!("Ready set should become ready after block update!");
+		},
+		Poll::Ready(iterator) => {
+			let data = iterator.collect::<Vec<_>>();
+			assert_eq!(data.len(), 1);
+		}
+	}
+}
+
+#[test]
+fn should_not_accept_old_signatures() {
+	use std::convert::TryFrom;
+
+	let client = Arc::new(substrate_test_runtime_client::new());
+	let pool = Arc::new(
+		BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client))).0
+	);
+
+	let transfer = Transfer {
+		from: Alice.into(),
+		to: Bob.into(),
+		nonce: 0,
+		amount: 1,
+	};
+	let _bytes: sp_core::sr25519::Signature = transfer.using_encoded(|e| Alice.sign(e)).into();
+
+	// generated with schnorrkel 0.1.1 from `_bytes`
+	let old_singature = sp_core::sr25519::Signature::try_from(&hex::decode(
+		"c427eb672e8c441c86d31f1a81b22b43102058e9ce237cabe9897ea5099ffd426cd1c6a1f4f2869c3df57901d36bedcb295657adb3a4355add86ed234eb83108"
+	).expect("hex invalid")[..]).expect("signature construction failed");
+
+	let xt = Extrinsic::Transfer { transfer, signature: old_singature, exhaust_resources_when_not_first: false };
+
+	assert_matches::assert_matches!(
+		block_on(pool.submit_one(&BlockId::number(0), xt.clone())),
+		Err(error::Error::Pool(
+			sp_transaction_pool::error::Error::InvalidTransaction(InvalidTransaction::BadProof)
+		)),
+		"Should be invalid transactiono with bad proof",
+	);
 }

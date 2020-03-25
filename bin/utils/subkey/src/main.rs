@@ -81,7 +81,7 @@ trait Crypto: Sized {
 	{
 		if let Ok((pair, seed)) = Self::Pair::from_phrase(uri, password) {
 			let public_key = Self::public_from_pair(&pair);
-			
+
 			match output {
 				OutputType::Json => {
 					let json = json!({
@@ -135,7 +135,6 @@ trait Crypto: Sized {
 					);
 				},
 			}
-			
 		} else if let Ok((public_key, v)) =
 			<Self::Pair as Pair>::Public::from_string_with_version(uri)
 		{
@@ -167,7 +166,7 @@ trait Crypto: Sized {
 				},
 			}
 		} else {
-			println!("Invalid phrase/URI given");
+			eprintln!("Invalid phrase/URI given");
 		}
 	}
 }
@@ -649,7 +648,7 @@ fn read_pair<C: Crypto>(
 }
 
 fn format_signature<C: Crypto>(signature: &SignatureOf<C>) -> String {
-	format!("{}", hex::encode(signature))
+	format!("{}", HexDisplay::from(&signature.as_ref()))
 }
 
 fn format_seed<C: Crypto>(seed: SeedOf<C>) -> String {
@@ -712,7 +711,7 @@ fn create_extrinsic<C: Crypto>(
 }
 
 fn print_extrinsic(extrinsic: UncheckedExtrinsic) {
-	println!("0x{}", hex::encode(&extrinsic.encode()));
+	println!("0x{}", HexDisplay::from(&extrinsic.encode()));
 }
 
 fn print_usage(matches: &ArgMatches) {
