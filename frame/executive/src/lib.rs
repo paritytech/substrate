@@ -60,7 +60,7 @@
 //! # pub type AllModules = u64;
 //! # pub enum Runtime {};
 //! # use sp_runtime::transaction_validity::{
-//! #		TransactionValidity, UnknownTransaction, TransactionSource,
+//! 		TransactionValidity, UnknownTransaction, TransactionSource,
 //! # };
 //! # use sp_runtime::traits::ValidateUnsigned;
 //! # impl ValidateUnsigned for Runtime {
