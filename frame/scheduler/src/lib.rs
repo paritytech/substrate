@@ -83,7 +83,7 @@ pub type Priority = u8;
 /// The highest priority. We invert the value so that normal sorting will place the highest
 /// priority at the beginning of the list.
 pub const HIGHEST_PRORITY: Priority = 0;
-/// Anything of this value or lower will definitely be scheduled on the block that the ask for, even
+/// Anything of this value or lower will definitely be scheduled on the block that they ask for, even
 /// if it breaches the `MaximumWeight` limitation.
 pub const HARD_DEADLINE: Priority = 63;
 /// The lowest priority. Most stuff should be around here.
