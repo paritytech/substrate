@@ -29,17 +29,7 @@ pub use crate::commands::import_blocks_cmd::ImportBlocksCmd;
 pub use crate::commands::purge_chain_cmd::PurgeChainCmd;
 pub use crate::commands::revert_cmd::RevertCmd;
 pub use crate::commands::runcmd::RunCmd;
-use crate::CliConfiguration;
-use crate::Result;
-use crate::SubstrateCLI;
-use sc_client_api::execution_extensions::ExecutionStrategies;
-use sc_network::config::NodeKeyConfig;
-use sc_service::{
-	config::DatabaseConfig, config::WasmExecutionMethod, PruningMode, Roles,
-};
-use sc_tracing::TracingReceiver;
 use std::fmt::Debug;
-use std::path::PathBuf;
 use structopt::StructOpt;
 
 /// All core commands that are provided by default.
@@ -68,58 +58,291 @@ pub enum Subcommand {
 	PurgeChain(PurgeChainCmd),
 }
 
-macro_rules! match_and_call {
-	(fn $method:ident ( &self $(, $arg:ident : $ty:ty)* ) $(-> $result:ty)?) => {
-		fn $method (&self, $($arg : $ty),*) $(-> $result)? {
-			match self {
-				Subcommand::BuildSpec(cmd) => cmd.$method($($arg),*),
-				Subcommand::ExportBlocks(cmd) => cmd.$method($($arg),*),
-				Subcommand::ImportBlocks(cmd) => cmd.$method($($arg),*),
-				Subcommand::CheckBlock(cmd) => cmd.$method($($arg),*),
-				Subcommand::Revert(cmd) => cmd.$method($($arg),*),
-				Subcommand::PurgeChain(cmd) => cmd.$method($($arg),*),
+/// Macro to that impl CliConfiguration on an enum of subcommand automatically
+///
+/// # Example
+///
+/// ```
+/// # #[macro_use] extern crate sc_cli;
+///
+/// # struct EmptyVariant {}
+///
+///	# impl sc_cli::CliConfiguration for EmptyVariant {
+///	#     fn base_path(&self) -> sc_cli::Result<Option<&std::path::PathBuf>> { unimplemented!() }
+///	#     fn database_config(&self, _: &std::path::PathBuf, _: Option<usize>) -> sc_cli::Result<sc_service::config::DatabaseConfig> { unimplemented!() }
+///	#     fn chain_id(&self, _: bool) -> sc_cli::Result<String> { Ok("test-chain-id".to_string()) }
+///	#     fn init<C>(&self) -> sc_cli::Result<()> { unimplemented!() }
+///	# }
+///
+/// # fn main() {
+/// enum Subcommand {
+///	    Variant1(EmptyVariant),
+///	    Variant2(EmptyVariant),
+///	}
+///
+/// substrate_cli_subcommands!(
+///     Subcommand => Variant1, Variant2
+/// );
+///
+/// # use sc_cli::CliConfiguration;
+/// # assert_eq!(Subcommand::Variant1(EmptyVariant {}).chain_id(false).unwrap(), "test-chain-id");
+///
+/// # }
+/// ```
+///
+/// This which will expand to:
+///
+/// ```ignore
+/// impl CliConfiguration for Subcommand {
+///	    fn base_path(&self) -> Result<Option<PathBuf>> {
+///	        match self {
+///	            Subcommand::Variant1(cmd) => cmd.base_path(),
+///	            Subcommand::Variant2(cmd) => cmd.base_path(),
+///	        }
+///	    }
+///
+///	    fn is_dev(&self) -> Result<bool> {
+///	        match self {
+///	            Subcommand::Variant1(cmd) => cmd.is_dev(),
+///	            Subcommand::Variant2(cmd) => cmd.is_dev(),
+///	        }
+///	    }
+///
+///     // ...
+/// }
+/// ```
+#[macro_export]
+macro_rules! substrate_cli_subcommands {
+	($enum:ident => $($variant:ident),*) => {
+		impl ::sc_cli::CliConfiguration for $enum {
+			fn base_path(&self) -> ::sc_cli::Result<::std::option::Option<&::std::path::PathBuf>> {
+				match self {
+					$($enum::$variant(cmd) => cmd.base_path()),*
+				}
+			}
+
+			fn is_dev(&self) -> ::sc_cli::Result<bool> {
+				match self {
+					$($enum::$variant(cmd) => cmd.is_dev()),*
+				}
+			}
+
+			fn roles(&self, is_dev: bool) -> ::sc_cli::Result<::sc_service::Roles> {
+				match self {
+					$($enum::$variant(cmd) => cmd.roles(is_dev)),*
+				}
+			}
+
+			fn transaction_pool(&self)
+			-> ::sc_cli::Result<::sc_service::config::TransactionPoolOptions> {
+				match self {
+					$($enum::$variant(cmd) => cmd.transaction_pool()),*
+				}
+			}
+
+			fn network_config(
+				&self,
+				chain_spec: &::std::boxed::Box<dyn ::sc_service::ChainSpec>,
+				is_dev: bool,
+				net_config_dir: &::std::path::PathBuf,
+				client_id: &str,
+				node_name: &str,
+				node_key: ::sc_service::config::NodeKeyConfig,
+			) -> ::sc_cli::Result<::sc_service::config::NetworkConfiguration> {
+				match self {
+					$(
+						$enum::$variant(cmd) => cmd.network_config(
+							chain_spec, is_dev, net_config_dir, client_id, node_name, node_key
+						)
+					),*
+				}
+			}
+
+			fn keystore_config(&self, base_path: &::std::path::PathBuf)
+			-> ::sc_cli::Result<::sc_service::config::KeystoreConfig> {
+				match self {
+					$($enum::$variant(cmd) => cmd.keystore_config(base_path)),*
+				}
+			}
+
+			fn database_cache_size(&self) -> ::sc_cli::Result<::std::option::Option<usize>> {
+				match self {
+					$($enum::$variant(cmd) => cmd.database_cache_size()),*
+				}
+			}
+
+			fn database_config(
+				&self,
+				base_path: &::std::path::PathBuf,
+				cache_size: ::std::option::Option<usize>,
+			) -> ::sc_cli::Result<::sc_service::config::DatabaseConfig> {
+				match self {
+					$($enum::$variant(cmd) => cmd.database_config(base_path, cache_size)),*
+				}
+			}
+
+			fn state_cache_size(&self) -> ::sc_cli::Result<usize> {
+				match self {
+					$($enum::$variant(cmd) => cmd.state_cache_size()),*
+				}
+			}
+
+			fn state_cache_child_ratio(&self) -> ::sc_cli::Result<::std::option::Option<usize>> {
+				match self {
+					$($enum::$variant(cmd) => cmd.state_cache_child_ratio()),*
+				}
+			}
+
+			fn pruning(&self, is_dev: bool, roles: ::sc_service::Roles)
+			-> ::sc_cli::Result<::sc_service::config::PruningMode> {
+				match self {
+					$($enum::$variant(cmd) => cmd.pruning(is_dev, roles)),*
+				}
+			}
+
+			fn chain_id(&self, is_dev: bool) -> ::sc_cli::Result<String> {
+				match self {
+					$($enum::$variant(cmd) => cmd.chain_id(is_dev)),*
+				}
+			}
+
+			fn init<C: ::sc_cli::SubstrateCLI>(&self) -> ::sc_cli::Result<()> {
+				match self {
+					$($enum::$variant(cmd) => cmd.init::<C>()),*
+				}
+			}
+
+			fn node_name(&self) -> ::sc_cli::Result<String> {
+				match self {
+					$($enum::$variant(cmd) => cmd.node_name()),*
+				}
+			}
+
+			fn wasm_method(&self) -> ::sc_cli::Result<::sc_service::config::WasmExecutionMethod> {
+				match self {
+					$($enum::$variant(cmd) => cmd.wasm_method()),*
+				}
+			}
+
+			fn execution_strategies(&self, is_dev: bool)
+			-> ::sc_cli::Result<::sc_service::config::ExecutionStrategies> {
+				match self {
+					$($enum::$variant(cmd) => cmd.execution_strategies(is_dev)),*
+				}
+			}
+
+			fn rpc_http(&self) -> ::sc_cli::Result<::std::option::Option<::std::net::SocketAddr>> {
+				match self {
+					$($enum::$variant(cmd) => cmd.rpc_http()),*
+				}
+			}
+
+			fn rpc_ws(&self) -> ::sc_cli::Result<::std::option::Option<::std::net::SocketAddr>> {
+				match self {
+					$($enum::$variant(cmd) => cmd.rpc_ws()),*
+				}
+			}
+
+			fn rpc_ws_max_connections(&self) -> ::sc_cli::Result<::std::option::Option<usize>> {
+				match self {
+					$($enum::$variant(cmd) => cmd.rpc_ws_max_connections()),*
+				}
+			}
+
+			fn rpc_cors(&self, is_dev: bool)
+			-> ::sc_cli::Result<::std::option::Option<::std::vec::Vec<String>>> {
+				match self {
+					$($enum::$variant(cmd) => cmd.rpc_cors(is_dev)),*
+				}
+			}
+
+			fn prometheus_config(&self)
+			-> ::sc_cli::Result<::std::option::Option<::sc_service::config::PrometheusConfig>> {
+				match self {
+					$($enum::$variant(cmd) => cmd.prometheus_config()),*
+				}
+			}
+
+			fn telemetry_endpoints(
+				&self,
+				chain_spec: &Box<dyn ::sc_service::ChainSpec>,
+			) -> ::sc_cli::Result<::std::option::Option<::sc_service::config::TelemetryEndpoints>> {
+				match self {
+					$($enum::$variant(cmd) => cmd.telemetry_endpoints(chain_spec)),*
+				}
+			}
+
+			fn telemetry_external_transport(&self)
+			-> ::sc_cli::Result<::std::option::Option<::sc_service::config::ExtTransport>> {
+				match self {
+					$($enum::$variant(cmd) => cmd.telemetry_external_transport()),*
+				}
+			}
+
+			fn default_heap_pages(&self) -> ::sc_cli::Result<::std::option::Option<u64>> {
+				match self {
+					$($enum::$variant(cmd) => cmd.default_heap_pages()),*
+				}
+			}
+
+			fn offchain_worker(&self, roles: ::sc_service::Roles) -> ::sc_cli::Result<bool> {
+				match self {
+					$($enum::$variant(cmd) => cmd.offchain_worker(roles)),*
+				}
+			}
+
+			fn sentry_mode(&self) -> ::sc_cli::Result<bool> {
+				match self {
+					$($enum::$variant(cmd) => cmd.sentry_mode()),*
+				}
+			}
+
+			fn force_authoring(&self) -> ::sc_cli::Result<bool> {
+				match self {
+					$($enum::$variant(cmd) => cmd.force_authoring()),*
+				}
+			}
+
+			fn disable_grandpa(&self) -> ::sc_cli::Result<bool> {
+				match self {
+					$($enum::$variant(cmd) => cmd.disable_grandpa()),*
+				}
+			}
+
+			fn dev_key_seed(&self, is_dev: bool) -> ::sc_cli::Result<::std::option::Option<String>> {
+				match self {
+					$($enum::$variant(cmd) => cmd.dev_key_seed(is_dev)),*
+				}
+			}
+
+			fn tracing_targets(&self) -> ::sc_cli::Result<::std::option::Option<String>> {
+				match self {
+					$($enum::$variant(cmd) => cmd.tracing_targets()),*
+				}
+			}
+
+			fn tracing_receiver(&self) -> ::sc_cli::Result<::sc_service::TracingReceiver> {
+				match self {
+					$($enum::$variant(cmd) => cmd.tracing_receiver()),*
+				}
+			}
+
+			fn node_key(&self, net_config_dir: &::std::path::PathBuf)
+			-> ::sc_cli::Result<::sc_service::config::NodeKeyConfig> {
+				match self {
+					$($enum::$variant(cmd) => cmd.node_key(net_config_dir)),*
+				}
+			}
+
+			fn max_runtime_instances(&self) -> ::sc_cli::Result<::std::option::Option<usize>> {
+				match self {
+					$($enum::$variant(cmd) => cmd.max_runtime_instances()),*
+				}
 			}
 		}
-	};
-
-	(fn $method:ident <C: SubstrateCLI> ( &self $(, $arg:ident : $ty:ty)* ) $(-> $result:ty)?) => {
-		fn $method <C: SubstrateCLI> (&self, $($arg : $ty),*) $(-> $result)? {
-			match self {
-				Subcommand::BuildSpec(cmd) => cmd.$method::<C>($($arg),*),
-				Subcommand::ExportBlocks(cmd) => cmd.$method::<C>($($arg),*),
-				Subcommand::ImportBlocks(cmd) => cmd.$method::<C>($($arg),*),
-				Subcommand::CheckBlock(cmd) => cmd.$method::<C>($($arg),*),
-				Subcommand::Revert(cmd) => cmd.$method::<C>($($arg),*),
-				Subcommand::PurgeChain(cmd) => cmd.$method::<C>($($arg),*),
-			}
-		}
-	};
+	}
 }
 
-impl CliConfiguration for Subcommand {
-	match_and_call! { fn base_path(&self) -> Result<Option<&PathBuf>> }
-
-	match_and_call! { fn is_dev(&self) -> Result<bool> }
-
-	match_and_call! { fn database_config(&self, base_path: &PathBuf, cache_size: Option<usize>) -> Result<DatabaseConfig> }
-
-	match_and_call! { fn chain_id(&self, is_dev: bool) -> Result<String> }
-
-	match_and_call! { fn init<C: SubstrateCLI>(&self) -> Result<()> }
-
-	match_and_call! { fn pruning(&self, is_dev: bool, roles: Roles) -> Result<PruningMode> }
-
-	match_and_call! { fn tracing_receiver(&self) -> Result<TracingReceiver> }
-
-	match_and_call! { fn tracing_targets(&self) -> Result<Option<String>> }
-
-	match_and_call! { fn state_cache_size(&self) -> Result<usize> }
-
-	match_and_call! { fn wasm_method(&self) -> Result<WasmExecutionMethod> }
-
-	match_and_call! { fn execution_strategies(&self, is_dev: bool) -> Result<ExecutionStrategies> }
-
-	match_and_call! { fn database_cache_size(&self) -> Result<Option<usize>> }
-
-	match_and_call! { fn node_key(&self, net_config_dir: &PathBuf) -> Result<NodeKeyConfig> }
-}
+substrate_cli_subcommands!(
+	Subcommand => BuildSpec, ExportBlocks, ImportBlocks, CheckBlock, Revert, PurgeChain
+);

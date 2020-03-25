@@ -542,7 +542,6 @@ fn parse_cors(s: &str) -> std::result::Result<Cors, Box<dyn std::error::Error>> 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sc_service::{GenericChainSpec, config::DatabaseConfig};
 
 	#[test]
 	fn tests_node_name_good() {
