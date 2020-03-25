@@ -268,7 +268,7 @@ impl<K: FullCodec, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V> 
 		})
 	}
 
-	fn iter_key_value() -> storage::PrefixIterator<(K, V)> where
+	fn iter() -> storage::PrefixIterator<(K, V)> where
 		Self::Hasher: ReversibleStorageHasher
 	{
 		let prefix = G::prefix_hash();
@@ -280,7 +280,7 @@ impl<K: FullCodec, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V> 
 		}
 	}
 
-	fn drain_key_value() -> storage::PrefixIterator<(K, V)> where
+	fn drain() -> storage::PrefixIterator<(K, V)> where
 		Self::Hasher: ReversibleStorageHasher
 	{
 		let prefix = G::prefix_hash();
@@ -292,7 +292,7 @@ impl<K: FullCodec, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V> 
 		}
 	}
 
-	fn iter_value() -> storage::PrefixIterator<V> {
+	fn iter_values() -> storage::PrefixIterator<V> {
 		let prefix = Self::prefix_hash();
 		storage::PrefixIterator {
 			prefix: prefix.to_vec(),
@@ -302,7 +302,7 @@ impl<K: FullCodec, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V> 
 		}
 	}
 
-	fn translate_key_value<O: Decode, F: Fn(K, O) -> Option<V>>(f: F) where
+	fn translate<O: Decode, F: Fn(K, O) -> Option<V>>(f: F) where
 		Self::Hasher: ReversibleStorageHasher
 	{
 		let prefix = G::prefix_hash();
@@ -347,7 +347,7 @@ impl<K: FullCodec, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V> 
 		}
 	}
 
-	fn translate_value<OldV, TranslateV>(translate_val: TranslateV) -> Result<(), u32>
+	fn translate_values<OldV, TranslateV>(translate_val: TranslateV) -> Result<(), u32>
 		where OldV: Decode, TranslateV: Fn(OldV) -> V
 	{
 		let prefix = Self::prefix_hash();

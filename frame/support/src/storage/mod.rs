@@ -18,7 +18,7 @@
 
 use sp_std::prelude::*;
 use codec::{FullCodec, FullEncode, Encode, EncodeAppend, EncodeLike, Decode};
-use crate::{traits::Len, hash::{StorageHasher, ReversibleStorageHasher, FixedLengthHasher}};
+use crate::{traits::Len, hash::{StorageHasher, ReversibleStorageHasher}};
 
 pub mod unhashed;
 pub mod hashed;
@@ -223,26 +223,19 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 
 	/// Enumerate all elements in the map in no particular order. If you alter the map while doing
 	/// this, you'll get undefined results.
-	fn iter_key_value() -> PrefixIterator<(K, V)> where Self::Hasher: ReversibleStorageHasher;
+	fn iter() -> PrefixIterator<(K, V)> where Self::Hasher: ReversibleStorageHasher;
 
 	/// Remove all elements from the map and iterate through them in no particular order. If you
 	/// add elements to the map while doing this, you'll get undefined results.
-	fn drain_key_value() -> PrefixIterator<(K, V)> where Self::Hasher: ReversibleStorageHasher;
+	fn drain() -> PrefixIterator<(K, V)> where Self::Hasher: ReversibleStorageHasher;
 
 	/// Enumerate all elements in the map in no particular order. If you alter the map while doing
 	/// this, you'll get undefined results.
-	#[deprecated(note = "please use `iter_value` instead")]
-	fn iter() -> PrefixIterator<(K, V)> where Self::Hasher: ReversibleStorageHasher {
-		Self::iter_key_value()
-	}
-
-	/// Enumerate all elements in the map in no particular order. If you alter the map while doing
-	/// this, you'll get undefined results.
-	fn iter_value() -> PrefixIterator<V>;
+	fn iter_values() -> PrefixIterator<V>;
 
 	/// Translate the values of all elements by a function `f`, in the map in no particular order.
 	/// By returning `None` from `f` for an element, you'll remove it from the map.
-	fn translate_key_value<O: Decode, F: Fn(K, O) -> Option<V>>(f: F) where
+	fn translate<O: Decode, F: Fn(K, O) -> Option<V>>(f: F) where
 		Self::Hasher: ReversibleStorageHasher;
 
 	/// Translate the values from some previous `OldValue` to the current type.
@@ -263,7 +256,7 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	/// This would typically be called inside the module implementation of on_runtime_upgrade, while
 	/// ensuring **no usage of this storage are made before the call to `on_runtime_upgrade`**. (More
 	/// precisely prior initialized modules doesn't make use of this storage).
-	fn translate_value<OldV, TranslateV>(translate_val: TranslateV) -> Result<(), u32>
+	fn translate_values<OldV, TranslateV>(translate_val: TranslateV) -> Result<(), u32>
 		where OldV: Decode, TranslateV: Fn(OldV) -> V;
 }
 
@@ -392,41 +385,26 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 	/// Enumerate all elements in the map with first key `k1` in no particular order. If you add or
 	/// remove values whose first key is `k1` to the map while doing this, you'll get undefined
 	/// results.
-	fn iter_prefix_key2_value(k1: impl EncodeLike<K1>) -> PrefixIterator<(K2, V)> where
+	fn iter_prefix(k1: impl EncodeLike<K1>) -> PrefixIterator<(K2, V)> where
 		Self::Hasher2: ReversibleStorageHasher;
 
 	/// Remove all elements from the map with first key `k1` and iterate through them in no
 	/// particular order. If you add elements with first key `k1` to the map while doing this,
 	/// you'll get undefined results.
-	fn drain_prefix_key2_value(k1: impl EncodeLike<K1>) -> PrefixIterator<(K2, V)> where
+	fn drain_prefix(k1: impl EncodeLike<K1>) -> PrefixIterator<(K2, V)> where
 		Self::Hasher2: ReversibleStorageHasher;
 
 	/// Iter over all value associated to the first key.
-	#[deprecated(note = "please use `iter_prefix_value` instead")]
-	fn iter_prefix<KArg1>(k1: KArg1) -> PrefixIterator<V> where KArg1: ?Sized + EncodeLike<K1> {
-		Self::iter_prefix_value(k1)
-	}
-
-	/// Iter over all value associated to the first key.
-	fn iter_prefix_value<KArg1>(k1: KArg1) -> PrefixIterator<V> where
+	fn iter_prefix_values<KArg1>(k1: KArg1) -> PrefixIterator<V> where
 		KArg1: ?Sized + EncodeLike<K1>;
 
-	/// Iter over all value and decode the first key.
-	fn iter_key1_value() -> PrefixIterator<(K1, V)> where
-		Self::Hasher1: ReversibleStorageHasher;
-
-	/// Iter over all value and decode the second key.
-	fn iter_key2_value() -> PrefixIterator<(K2, V)> where
-		Self::Hasher1: FixedLengthHasher,
-		Self::Hasher2: ReversibleStorageHasher;
-
 	/// Iter over all value and decode the first key and the second key.
-	fn iter_key1_key2_value() -> PrefixIterator<(K1, K2, V)> where
+	fn iter() -> PrefixIterator<(K1, K2, V)> where
 		Self::Hasher1: ReversibleStorageHasher,
 		Self::Hasher2: ReversibleStorageHasher;
 
 	/// Iter over all value.
-	fn iter_value() -> PrefixIterator<V>;
+	fn iter_values() -> PrefixIterator<V>;
 }
 
 /// Iterate over a prefix and decode raw_key and raw_value into `T`.

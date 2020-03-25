@@ -89,15 +89,15 @@ mod tests {
 			}
 
 			assert_eq!(
-				NumberMap::iter_key_value().collect::<Vec<_>>(),
+				NumberMap::iter().collect::<Vec<_>>(),
 				(0..100).map(|x| (x as u32, x as u64)).collect::<Vec<_>>(),
 			);
 
 			// do translation.
-			NumberMap::translate_key_value(|k: u32, v: u64| if k % 2 == 0 { Some((k as u64) << 32 | v) } else { None });
+			NumberMap::translate(|k: u32, v: u64| if k % 2 == 0 { Some((k as u64) << 32 | v) } else { None });
 
 			assert_eq!(
-				NumberMap::iter_key_value().collect::<Vec<_>>(),
+				NumberMap::iter().collect::<Vec<_>>(),
 				(0..50u32).map(|x| x * 2).map(|x| (x, (x as u64) << 32 | x as u64)).collect::<Vec<_>>(),
 			);
 		})

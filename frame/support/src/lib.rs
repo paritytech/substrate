@@ -310,7 +310,7 @@ mod tests {
 			OptionLinkedMap::insert(2, 2);
 			OptionLinkedMap::insert(3, 3);
 
-			let collect = || OptionLinkedMap::iter_key_value().collect::<Vec<_>>().sorted();
+			let collect = || OptionLinkedMap::iter().collect::<Vec<_>>().sorted();
 			assert_eq!(collect(), vec![(0, 0), (1, 1), (2, 2), (3, 3)]);
 
 			// Two existing
@@ -390,43 +390,43 @@ mod tests {
 	#[test]
 	fn map_iteration_should_work() {
 		new_test_ext().execute_with(|| {
-			assert_eq!(Map::iter_key_value().collect::<Vec<_>>().sorted(), vec![(15, 42)]);
+			assert_eq!(Map::iter().collect::<Vec<_>>().sorted(), vec![(15, 42)]);
 			// insert / remove
 			let key = 17u32;
 			Map::insert(key, 4u64);
-			assert_eq!(Map::iter_key_value().collect::<Vec<_>>().sorted(), vec![(15, 42), (key, 4)]);
+			assert_eq!(Map::iter().collect::<Vec<_>>().sorted(), vec![(15, 42), (key, 4)]);
 			assert_eq!(Map::take(&15), 42u64);
 			assert_eq!(Map::take(&key), 4u64);
-			assert_eq!(Map::iter_key_value().collect::<Vec<_>>().sorted(), vec![]);
+			assert_eq!(Map::iter().collect::<Vec<_>>().sorted(), vec![]);
 
 			// Add couple of more elements
 			Map::insert(key, 42u64);
-			assert_eq!(Map::iter_key_value().collect::<Vec<_>>().sorted(), vec![(key, 42)]);
+			assert_eq!(Map::iter().collect::<Vec<_>>().sorted(), vec![(key, 42)]);
 			Map::insert(key + 1, 43u64);
-			assert_eq!(Map::iter_key_value().collect::<Vec<_>>().sorted(), vec![(key, 42), (key + 1, 43)]);
+			assert_eq!(Map::iter().collect::<Vec<_>>().sorted(), vec![(key, 42), (key + 1, 43)]);
 
 			// mutate
 			let key = key + 2;
 			Map::mutate(&key, |val| {
 				*val = 15;
 			});
-			assert_eq!(Map::iter_key_value().collect::<Vec<_>>().sorted(), vec![(key - 2, 42), (key - 1, 43), (key, 15)]);
+			assert_eq!(Map::iter().collect::<Vec<_>>().sorted(), vec![(key - 2, 42), (key - 1, 43), (key, 15)]);
 			Map::mutate(&key, |val| {
 				*val = 17;
 			});
-			assert_eq!(Map::iter_key_value().collect::<Vec<_>>().sorted(), vec![(key - 2, 42), (key - 1, 43), (key, 17)]);
+			assert_eq!(Map::iter().collect::<Vec<_>>().sorted(), vec![(key - 2, 42), (key - 1, 43), (key, 17)]);
 
 			// remove first
 			Map::remove(&key);
-			assert_eq!(Map::iter_key_value().collect::<Vec<_>>().sorted(), vec![(key - 2, 42), (key - 1, 43)]);
+			assert_eq!(Map::iter().collect::<Vec<_>>().sorted(), vec![(key - 2, 42), (key - 1, 43)]);
 
 			// remove last from the list
 			Map::remove(&(key - 2));
-			assert_eq!(Map::iter_key_value().collect::<Vec<_>>().sorted(), vec![(key - 1, 43)]);
+			assert_eq!(Map::iter().collect::<Vec<_>>().sorted(), vec![(key - 1, 43)]);
 
 			// remove the last element
 			Map::remove(&(key - 1));
-			assert_eq!(Map::iter_key_value().collect::<Vec<_>>().sorted(), vec![]);
+			assert_eq!(Map::iter().collect::<Vec<_>>().sorted(), vec![]);
 		});
 	}
 

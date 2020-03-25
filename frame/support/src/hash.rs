@@ -64,11 +64,6 @@ pub trait ReversibleStorageHasher: StorageHasher {
 	fn reverse(x: &[u8]) -> &[u8];
 }
 
-/// Hasher with a fixed length.
-pub trait FixedLengthHasher: StorageHasher {
-	const LENGTH: u32;
-}
-
 /// Store the key directly.
 pub struct Identity;
 impl StorageHasher for Identity {
@@ -136,10 +131,6 @@ impl StorageHasher for Blake2_128 {
 	}
 }
 
-impl FixedLengthHasher for Blake2_128 {
-	const LENGTH: u32 = 16;
-}
-
 /// Hash storage keys with blake2 256
 pub struct Blake2_256;
 impl StorageHasher for Blake2_256 {
@@ -147,10 +138,6 @@ impl StorageHasher for Blake2_256 {
 	fn hash(x: &[u8]) -> [u8; 32] {
 		blake2_256(x)
 	}
-}
-
-impl FixedLengthHasher for Blake2_256 {
-	const LENGTH: u32 = 32;
 }
 
 /// Hash storage keys with twox 128
@@ -162,10 +149,6 @@ impl StorageHasher for Twox128 {
 	}
 }
 
-impl FixedLengthHasher for Twox128 {
-	const LENGTH: u32 = 16;
-}
-
 /// Hash storage keys with twox 256
 pub struct Twox256;
 impl StorageHasher for Twox256 {
@@ -173,10 +156,6 @@ impl StorageHasher for Twox256 {
 	fn hash(x: &[u8]) -> [u8; 32] {
 		twox_256(x)
 	}
-}
-
-impl FixedLengthHasher for Twox256 {
-	const LENGTH: u32 = 32;
 }
 
 #[cfg(test)]
