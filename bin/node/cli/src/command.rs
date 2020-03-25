@@ -14,29 +14,29 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::{
-	factory_impl::FactoryState,
-	service, ChainSpec, Cli, FactoryCmd, Subcommand,
-};
+use crate::{chain_spec, factory_impl::FactoryState, service, Cli, FactoryCmd, Subcommand};
 use node_transaction_factory::RuntimeAdapter;
-use sc_cli::{spec_factory, substrate_cli_params, CliConfiguration, Result, SubstrateCLI};
+use sc_cli::{
+	substrate_cli_configuration, substrate_cli_params, CliConfiguration, Result, SubstrateCLI,
+};
 use sc_service::Configuration;
 
-//TODO: 3 different types with the same name: ChainSpec
-#[spec_factory(
+#[substrate_cli_configuration(
 	impl_name = "Substrate Node",
 	support_url = "https://github.com/paritytech/substrate/issues/new",
 	copyright_start_year = 2017,
 	executable_name = "substrate"
 )]
 impl SubstrateCLI for Cli {
-	fn spec_factory(
-		&self,
-		id: &str,
-	) -> std::result::Result<Box<dyn sc_service::ChainSpec>, String> {
-		Ok(match ChainSpec::from(id) {
-			Some(spec) => Box::new(spec.load()?),
-			None => Box::new(crate::chain_spec::ChainSpec::from_json_file(std::path::PathBuf::from(id))?),
+	fn load_spec(&self, id: &str) -> std::result::Result<Box<dyn sc_service::ChainSpec>, String> {
+		Ok(match id {
+			"dev" => Box::new(chain_spec::development_config()),
+			"local" => Box::new(chain_spec::local_testnet_config()),
+			"" | "fir" | "flaming-fir" => Box::new(chain_spec::flaming_fir_config()?),
+			"staging" => Box::new(chain_spec::staging_testnet_config()),
+			path => Box::new(chain_spec::ChainSpec::from_json_file(
+				std::path::PathBuf::from(path),
+			)?),
 		})
 	}
 }
@@ -61,9 +61,8 @@ pub fn run() -> Result<()> {
 		Some(Subcommand::Benchmark(cmd)) => {
 			let runtime = cli.create_runtime(cmd)?;
 
-			runtime.sync_run(|config| {
-				cmd.run::<node_runtime::Block, node_executor::Executor>(config)
-			})
+			runtime
+				.sync_run(|config| cmd.run::<node_runtime::Block, node_executor::Executor>(config))
 		}
 		Some(Subcommand::Factory(cmd)) => {
 			let runtime = cli.create_runtime(cmd)?;
@@ -83,8 +82,8 @@ impl CliConfiguration for FactoryCmd {}
 
 impl FactoryCmd {
 	fn run(&self, config: Configuration) -> Result<()> {
-		match ChainSpec::from(config.chain_spec.id()) {
-			Some(ref c) if c == &ChainSpec::Development || c == &ChainSpec::LocalTestnet => {}
+		match config.chain_spec.id() {
+			"dev" | "local" => {}
 			_ => return Err("Factory is only supported for development and local testnet.".into()),
 		}
 

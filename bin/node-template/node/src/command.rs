@@ -17,16 +17,16 @@
 use crate::chain_spec::{Alternative, ChainSpec};
 use crate::cli::Cli;
 use crate::service;
-use sc_cli::{spec_factory, SubstrateCLI};
+use sc_cli::{substrate_cli_configuration, SubstrateCLI};
 use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
 
-#[spec_factory(
+#[substrate_cli_configuration(
 	impl_name = "Substrate Node",
 	support_url = "support.anonymous.an",
 	copyright_start_year = 2017
 )]
 impl SubstrateCLI for Cli {
-	fn spec_factory(&self, id: &str) -> Result<Box<dyn sc_service::ChainSpec>, String> {
+	fn load_spec(&self, id: &str) -> Result<Box<dyn sc_service::ChainSpec>, String> {
 		let dev = self.run.shared_params.dev;
 		if dev {
 			panic!("boo!");

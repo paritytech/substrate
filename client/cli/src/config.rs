@@ -222,7 +222,7 @@ pub trait CliConfiguration: Sized {
 	) -> Result<Configuration> {
 		let is_dev = self.is_dev()?;
 		let chain_id = self.chain_id(is_dev)?;
-		let chain_spec = cli.spec_factory(chain_id.as_str())?;
+		let chain_spec = cli.load_spec(chain_id.as_str())?;
 		let default_config_dir = app_dirs::get_app_root(
 			AppDataType::UserData,
 			&AppInfo {

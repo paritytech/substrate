@@ -16,18 +16,18 @@
 
 //! Configuration trait for a CLI based on substrate
 
-mod spec_factory;
+mod substrate_cli_configuration;
 mod substrate_cli_params;
 
 use proc_macro_error::proc_macro_error;
 
 #[proc_macro_attribute]
 #[proc_macro_error]
-pub fn spec_factory(
+pub fn substrate_cli_configuration(
 	a: proc_macro::TokenStream,
 	i: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-	spec_factory::spec_factory(a, i).into()
+	substrate_cli_configuration::substrate_cli_configuration(a, i).into()
 }
 
 #[proc_macro_attribute]

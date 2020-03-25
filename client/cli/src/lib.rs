@@ -67,7 +67,7 @@ pub trait SubstrateCLI: Sized
 	/// Copyright starting year (x-current year)
 	fn copyright_start_year() -> i32;
 	/// Chain spec factory
-	fn spec_factory(&self, id: &str) -> std::result::Result<Box<dyn ChainSpec>, String>;
+	fn load_spec(&self, id: &str) -> std::result::Result<Box<dyn ChainSpec>, String>;
 
 	/// Helper function used to parse the command line arguments. This is the equivalent of
 	/// `structopt`'s `from_iter()` except that it takes a `VersionInfo` argument to provide the name of
