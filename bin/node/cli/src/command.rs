@@ -29,46 +29,49 @@ use sc_service::Configuration;
 	copyright_start_year = 2017,
 	executable_name = "substrate"
 )]
-fn spec_factory(
-	id: &str,
-) -> std::result::Result<Box<dyn sc_service::ChainSpec>, String> {
-	Ok(match ChainSpec::from(id) {
-		Some(spec) => Box::new(spec.load()?),
-		None => Box::new(crate::chain_spec::ChainSpec::from_json_file(std::path::PathBuf::from(id))?),
-	})
+impl SubstrateCLI for Cli {
+	fn spec_factory(
+		&self,
+		id: &str,
+	) -> std::result::Result<Box<dyn sc_service::ChainSpec>, String> {
+		Ok(match ChainSpec::from(id) {
+			Some(spec) => Box::new(spec.load()?),
+			None => Box::new(crate::chain_spec::ChainSpec::from_json_file(std::path::PathBuf::from(id))?),
+		})
+	}
 }
 
 /// Parse command line arguments into service configuration.
 pub fn run() -> Result<()> {
-	let opt = Cli::from_args();
+	let cli = Cli::from_args();
 
-	match opt.subcommand {
+	match &cli.subcommand {
 		None => {
-			let runtime = Cli::create_runtime(&opt.run)?;
+			let runtime = cli.create_runtime(&cli.run)?;
 			runtime.run_node(service::new_light, service::new_full)
 		}
 		Some(Subcommand::Inspect(cmd)) => {
 			use node_executor::*;
 			use node_runtime::*;
 
-			let runtime = Cli::create_runtime(&cmd)?;
+			let runtime = cli.create_runtime(cmd)?;
 
 			runtime.sync_run(|config| cmd.run::<Block, RuntimeApi, Executor>(config))
 		}
 		Some(Subcommand::Benchmark(cmd)) => {
-			let runtime = Cli::create_runtime(&cmd)?;
+			let runtime = cli.create_runtime(cmd)?;
 
 			runtime.sync_run(|config| {
 				cmd.run::<node_runtime::Block, node_executor::Executor>(config)
 			})
 		}
 		Some(Subcommand::Factory(cmd)) => {
-			let runtime = Cli::create_runtime(&cmd)?;
+			let runtime = cli.create_runtime(cmd)?;
 
 			runtime.sync_run(|config| cmd.run(config))
 		}
 		Some(Subcommand::Base(subcommand)) => {
-			let runtime = Cli::create_runtime(&subcommand)?;
+			let runtime = cli.create_runtime(subcommand)?;
 
 			runtime.run_subcommand(subcommand, |config| Ok(new_full_start!(config).0))
 		}

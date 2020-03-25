@@ -26,7 +26,7 @@ use sp_runtime::traits::Block;
 
 impl InspectCmd {
 	/// Run the inspect command, passing the inspector.
-	pub fn run<B, RA, EX>(self, config: Configuration) -> Result<()>
+	pub fn run<B, RA, EX>(&self, config: Configuration) -> Result<()>
 	where
 		B: Block,
 		B::Hash: FromStr,
@@ -36,7 +36,7 @@ impl InspectCmd {
 		let client = new_full_client::<B, RA, EX>(&config)?;
 		let inspect = Inspector::<B>::new(client);
 
-		match self.command {
+		match &self.command {
 			InspectSubCmd::Block { input } => {
 				let input = input.parse()?;
 				let res = inspect.block(input).map_err(|e| format!("{}", e))?;

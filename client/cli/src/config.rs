@@ -217,16 +217,17 @@ pub trait CliConfiguration: Sized {
 	/// Create a Configuration object from the current object
 	fn create_configuration<C: SubstrateCLI>(
 		&self,
+		cli: &C,
 		task_executor: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>,
 	) -> Result<Configuration> {
 		let is_dev = self.is_dev()?;
 		let chain_id = self.chain_id(is_dev)?;
-		let chain_spec = C::spec_factory(chain_id.as_str())?;
+		let chain_spec = cli.spec_factory(chain_id.as_str())?;
 		let default_config_dir = app_dirs::get_app_root(
 			AppDataType::UserData,
 			&AppInfo {
-				name: C::get_executable_name(),
-				author: C::get_author(),
+				name: C::executable_name(),
+				author: C::author(),
 			},
 		)
 		.expect("app directories exist on all supported platforms; qed");
@@ -244,8 +245,8 @@ pub trait CliConfiguration: Sized {
 		let max_runtime_instances = self.max_runtime_instances()?.unwrap_or(8);
 
 		Ok(Configuration {
-			impl_name: C::get_impl_name(),
-			impl_version: C::get_impl_version(),
+			impl_name: C::impl_name(),
+			impl_version: C::impl_version(),
 			roles,
 			task_executor,
 			transaction_pool: self.transaction_pool()?,

@@ -105,9 +105,10 @@ pub struct Runtime<C: SubstrateCLI> {
 	phantom: PhantomData<C>,
 }
 
-impl<C: SubstrateCLI> Runtime<C> {
+impl<C: SubstrateCLI> Runtime<C>
+{
 	/// Create a new runtime with the command provided in argument
-	pub fn new<T: CliConfiguration>(command: &T) -> Result<Runtime<C>> {
+	pub fn new<T: CliConfiguration>(cli: &C, command: &T) -> Result<Runtime<C>> {
 		let tokio_runtime = build_runtime()?;
 
 		let task_executor = {
@@ -118,7 +119,7 @@ impl<C: SubstrateCLI> Runtime<C> {
 		};
 
 		Ok(Runtime {
-			config: command.create_configuration::<C>(task_executor)?,
+			config: command.create_configuration(cli, task_executor)?,
 			tokio_runtime,
 			phantom: PhantomData,
 		})
@@ -133,12 +134,12 @@ impl<C: SubstrateCLI> Runtime<C> {
 		SL: AbstractService + Unpin,
 		SF: AbstractService + Unpin,
 	{
-		info!("{}", C::get_impl_name());
-		info!("  version {}", C::get_impl_version());
+		info!("{}", C::impl_name());
+		info!("  version {}", C::impl_version());
 		info!(
 			"  by {}, {}-{}",
-			C::get_author(),
-			C::get_copyright_start_year(),
+			C::author(),
+			C::copyright_start_year(),
 			Local::today().year()
 		);
 		info!("Chain specification: {}", self.config.chain_spec.name());
@@ -153,7 +154,7 @@ impl<C: SubstrateCLI> Runtime<C> {
 
 	/// A helper function that runs a future with tokio and stops if the process receives the signal
 	/// SIGTERM or SIGINT
-	pub fn run_subcommand<B, BC, BB>(self, subcommand: Subcommand, builder: B) -> Result<()>
+	pub fn run_subcommand<B, BC, BB>(self, subcommand: &Subcommand, builder: B) -> Result<()>
 	where
 		B: FnOnce(Configuration) -> sc_service::error::Result<BC>,
 		BC: ServiceBuilderCommand<Block = BB> + Unpin,

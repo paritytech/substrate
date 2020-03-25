@@ -41,7 +41,7 @@ pub struct RevertCmd {
 
 impl RevertCmd {
 	/// Run the revert command
-	pub fn run<B, BC, BB>(self, config: Configuration, builder: B) -> error::Result<()>
+	pub fn run<B, BC, BB>(&self, config: Configuration, builder: B) -> error::Result<()>
 	where
 		B: FnOnce(Configuration) -> Result<BC, sc_service::error::Error>,
 		BC: ServiceBuilderCommand<Block = BB> + Unpin,

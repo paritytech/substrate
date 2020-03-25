@@ -25,24 +25,30 @@ use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
 	support_url = "support.anonymous.an",
 	copyright_start_year = 2017
 )]
-fn spec_factory(id: &str) -> Result<Box<dyn sc_service::ChainSpec>, String> {
-	Ok(match Alternative::from(id) {
-		Some(spec) => Box::new(spec.load()?),
-		None => Box::new(ChainSpec::from_json_file(std::path::PathBuf::from(id))?),
-	})
+impl SubstrateCLI for Cli {
+	fn spec_factory(&self, id: &str) -> Result<Box<dyn sc_service::ChainSpec>, String> {
+		let dev = self.run.shared_params.dev;
+		if dev {
+			panic!("boo!");
+		}
+		Ok(match Alternative::from(id) {
+			Some(spec) => Box::new(spec.load()?),
+			None => Box::new(ChainSpec::from_json_file(std::path::PathBuf::from(id))?),
+		})
+	}
 }
 
 /// Parse and run command line arguments
 pub fn run() -> sc_cli::Result<()> {
-	let opt = Cli::from_args();
+	let cli = Cli::from_args();
 
-	match opt.subcommand {
+	match &cli.subcommand {
 		Some(subcommand) => {
-			let runtime = Cli::create_runtime(&subcommand)?;
+			let runtime = cli.create_runtime(subcommand)?;
 			runtime.run_subcommand(subcommand, |config| Ok(new_full_start!(config).0))
 		}
 		None => {
-			let runtime = Cli::create_runtime(&opt.run)?;
+			let runtime = cli.create_runtime(&cli.run)?;
 			runtime.run_node(service::new_light, service::new_full)
 		}
 	}

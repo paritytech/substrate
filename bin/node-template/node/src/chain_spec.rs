@@ -42,7 +42,7 @@ pub fn get_account_id_from_seed<TPublic: Public>(seed: &str) -> AccountId where
 }
 
 /// Helper function to generate an authority key for Aura
-pub fn get_authority_keys_from_seed(s: &str) -> (AuraId, GrandpaId) {
+pub fn authority_keys_from_seed(s: &str) -> (AuraId, GrandpaId) {
 	(
 		get_from_seed::<AuraId>(s),
 		get_from_seed::<GrandpaId>(s),
@@ -58,7 +58,7 @@ impl Alternative {
 				"dev",
 				|| testnet_genesis(
 					vec![
-						get_authority_keys_from_seed("Alice"),
+						authority_keys_from_seed("Alice"),
 					],
 					get_account_id_from_seed::<sr25519::Public>("Alice"),
 					vec![
@@ -80,8 +80,8 @@ impl Alternative {
 				"local_testnet",
 				|| testnet_genesis(
 					vec![
-						get_authority_keys_from_seed("Alice"),
-						get_authority_keys_from_seed("Bob"),
+						authority_keys_from_seed("Alice"),
+						authority_keys_from_seed("Bob"),
 					],
 					get_account_id_from_seed::<sr25519::Public>("Alice"),
 					vec![

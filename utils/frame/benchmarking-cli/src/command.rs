@@ -31,7 +31,7 @@ use std::fmt::Debug;
 
 impl BenchmarkCmd {
 	/// Runs the command and benchmarks the chain.
-	pub fn run<BB, ExecDispatch>(self, config: Configuration) -> Result<()>
+	pub fn run<BB, ExecDispatch>(&self, config: Configuration) -> Result<()>
 	where
 		BB: BlockT + Debug,
 		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,

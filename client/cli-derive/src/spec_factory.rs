@@ -18,8 +18,7 @@
 
 use proc_macro_error::{abort, abort_call_site};
 use quote::{quote, ToTokens};
-use std::collections::HashMap;
-use syn;
+use std::collections::{HashMap, HashSet};
 use syn::parse::Parser;
 use syn::{punctuated::Punctuated, spanned::Spanned, *};
 
@@ -47,7 +46,6 @@ pub(crate) fn spec_factory(
 		})
 		.collect::<HashMap<_, _>>();
 
-	let cli = attrs.remove("cli").unwrap_or_else(|| quote! { Cli });
 	let pkg_name = std::env::var("CARGO_PKG_NAME").unwrap().to_token_stream();
 	let impl_name = attrs
 		.remove("impl_name")
@@ -86,24 +84,64 @@ pub(crate) fn spec_factory(
 		);
 	}
 
-	let s: ItemFn = match syn::parse(i) {
+	let mut i: ItemImpl = match syn::parse(i) {
 		Ok(x) => x,
 		_ => abort_call_site!("this macro only works on a function"),
 	};
 
-	quote! {
-		impl ::sc_cli::SubstrateCLI for #cli {
-			#s
+	let existing_methods = i
+		.items
+		.iter()
+		.filter_map(|x| match x {
+			ImplItem::Method(x) => Some(x.sig.ident.to_string()),
+			_ => None,
+		})
+		.collect::<HashSet<_>>();
+	let missing = |method| !existing_methods.contains(method);
 
-			fn get_impl_name() -> &'static str { #impl_name }
-			fn get_impl_version() -> &'static str { #impl_version }
-			fn get_support_url() -> &'static str { #support_url }
-			fn get_executable_name() -> &'static str { #executable_name }
-			fn get_author() -> &'static str { #author }
-			fn get_description() -> &'static str { #description }
-			fn get_copyright_start_year() -> i32 { #copyright_start_year }
-		}
+	if missing("impl_name") {
+		i.items.push(ImplItem::Verbatim(quote! {
+			fn impl_name() -> &'static str { #impl_name }
+		}));
 	}
+
+	if missing("impl_version") {
+		i.items.push(ImplItem::Verbatim(quote! {
+			fn impl_version() -> &'static str { #impl_version }
+		}));
+	}
+
+	if missing("support_url") {
+		i.items.push(ImplItem::Verbatim(quote! {
+			fn support_url() -> &'static str { #support_url }
+		}));
+	}
+
+	if missing("executable_name") {
+		i.items.push(ImplItem::Verbatim(quote! {
+			fn executable_name() -> &'static str { #executable_name }
+		}));
+	}
+
+	if missing("author") {
+		i.items.push(ImplItem::Verbatim(quote! {
+			fn author() -> &'static str { #author }
+		}));
+	}
+
+	if missing("description") {
+		i.items.push(ImplItem::Verbatim(quote! {
+			fn description() -> &'static str { #description }
+		}));
+	}
+
+	if missing("copyright_start_year") {
+		i.items.push(ImplItem::Verbatim(quote! {
+			fn copyright_start_year() -> i32 { #copyright_start_year }
+		}));
+	}
+
+	quote!(#i)
 }
 
 fn get_platform() -> String {

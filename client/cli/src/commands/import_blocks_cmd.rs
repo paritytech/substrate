@@ -56,7 +56,7 @@ impl<T: Read + Seek> ReadPlusSeek for T {}
 impl ImportBlocksCmd {
 	/// Run the import-blocks command
 	pub async fn run<B, BC, BB>(
-		self,
+		&self,
 		config: Configuration,
 		builder: B,
 	) -> error::Result<()>

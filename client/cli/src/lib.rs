@@ -53,21 +53,21 @@ use structopt::{
 pub trait SubstrateCLI: Sized
 {
 	/// Implementation name.
-	fn get_impl_name() -> &'static str;
+	fn impl_name() -> &'static str;
 	/// Implementation version.
-	fn get_impl_version() -> &'static str;
+	fn impl_version() -> &'static str;
 	/// Executable file name.
-	fn get_executable_name() -> &'static str;
+	fn executable_name() -> &'static str;
 	/// Executable file description.
-	fn get_description() -> &'static str;
+	fn description() -> &'static str;
 	/// Executable file author.
-	fn get_author() -> &'static str;
+	fn author() -> &'static str;
 	/// Support URL.
-	fn get_support_url() -> &'static str;
+	fn support_url() -> &'static str;
 	/// Copyright starting year (x-current year)
-	fn get_copyright_start_year() -> i32;
+	fn copyright_start_year() -> i32;
 	/// Chain spec factory
-	fn spec_factory(id: &str) -> std::result::Result<Box<dyn ChainSpec>, String>;
+	fn spec_factory(&self, id: &str) -> std::result::Result<Box<dyn ChainSpec>, String>;
 
 	/// Helper function used to parse the command line arguments. This is the equivalent of
 	/// `structopt`'s `from_iter()` except that it takes a `VersionInfo` argument to provide the name of
@@ -102,13 +102,13 @@ pub trait SubstrateCLI: Sized
 	{
 		let app = <Self as StructOpt>::clap();
 
-		let mut full_version = Self::get_impl_version().to_string();
+		let mut full_version = Self::impl_version().to_string();
 		full_version.push_str("\n");
 
 		let app = app
-			.name(Self::get_executable_name())
-			.author(Self::get_author())
-			.about(Self::get_description())
+			.name(Self::executable_name())
+			.author(Self::author())
+			.about(Self::description())
 			.version(full_version.as_str())
 			.settings(&[
 				AppSettings::GlobalVersion,
@@ -141,13 +141,13 @@ pub trait SubstrateCLI: Sized
 	{
 		let app = <Self as StructOpt>::clap();
 
-		let mut full_version = Self::get_impl_version().to_string();
+		let mut full_version = Self::impl_version().to_string();
 		full_version.push_str("\n");
 
 		let app = app
-			.name(Self::get_executable_name())
-			.author(Self::get_author())
-			.about(Self::get_description())
+			.name(Self::executable_name())
+			.author(Self::author())
+			.about(Self::description())
 			.version(full_version.as_str());
 
 		let matches = app.get_matches_from_safe(iter)?;
@@ -157,22 +157,25 @@ pub trait SubstrateCLI: Sized
 
 	/// Returns the client ID: `{impl_name}/v{impl_version}`
 	fn client_id() -> String {
-		format!("{}/v{}", Self::get_impl_name(), Self::get_impl_version())
+		format!("{}/v{}", Self::impl_name(), Self::impl_version())
 	}
 
 	/// Only create a Configuration for the command provided in argument
-	fn create_configuration<T: CliConfiguration>(
+	fn create_configuration<C: SubstrateCLI, T: CliConfiguration>(
+		cli: &C,
 		command: &T,
 		task_executor: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>,
-	) -> error::Result<Configuration> {
-		command.create_configuration::<Self>(task_executor)
+	) -> error::Result<Configuration>
+	{
+		command.create_configuration(cli, task_executor)
 	}
 
 	/// Create a runtime for the command provided in argument. This will create a Configuration and
 	/// a tokio runtime
-	fn create_runtime<T: CliConfiguration>(command: &T) -> error::Result<Runtime<Self>> {
+	fn create_runtime<T: CliConfiguration>(&self, command: &T) -> error::Result<Runtime<Self>>
+	{
 		command.init::<Self>()?;
-		Runtime::<Self>::new(command)
+		Runtime::new(self, command)
 	}
 }
 

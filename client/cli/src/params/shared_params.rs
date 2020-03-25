@@ -78,7 +78,7 @@ impl SharedParams {
 	pub fn init<C: SubstrateCLI>(&self) -> Result<()> {
 		let logger_pattern = self.log.as_ref().map(|v| v.as_ref()).unwrap_or("");
 
-		sp_panic_handler::set(C::get_support_url(), C::get_impl_version());
+		sp_panic_handler::set(C::support_url(), C::impl_version());
 
 		fdlimit::raise_fd_limit();
 		init_logger(logger_pattern);

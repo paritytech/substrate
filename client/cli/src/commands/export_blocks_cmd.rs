@@ -63,7 +63,7 @@ pub struct ExportBlocksCmd {
 impl ExportBlocksCmd {
 	/// Run the export-blocks command
 	pub async fn run<B, BC, BB>(
-		self,
+		&self,
 		config: Configuration,
 		builder: B,
 	) -> error::Result<()>
