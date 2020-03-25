@@ -86,7 +86,7 @@ pub(crate) fn spec_factory(
 
 	let mut i: ItemImpl = match syn::parse(i) {
 		Ok(x) => x,
-		_ => abort_call_site!("this macro only works on a function"),
+		_ => abort_call_site!("this macro only works on an impl"),
 	};
 
 	let existing_methods = i
