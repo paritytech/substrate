@@ -1,18 +1,16 @@
 [package]
 name = "sp-arithmetic-fuzzer"
-version = "2.0.0"
+version = "2.0.0-alpha.5"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
 
 [dependencies]
-sp-arithmetic = { version = "2.0.0", path = ".." }
+sp-arithmetic = { version = "2.0.0-alpha.5", path = ".." }
 honggfuzz = "0.5"
 primitive-types = "0.7.0"
 num-bigint = "0.2"
 num-traits = "0.2"
-
-[workspace]
 
 [[bin]]
 name = "biguint"
