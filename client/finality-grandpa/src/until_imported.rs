@@ -445,13 +445,10 @@ impl<Block: BlockT> BlockUntilImported<Block> for BlockGlobalMessage<Block> {
 		}
 
 		match Arc::try_unwrap(self.inner) {
-			// This is the last reference, thus this was the last outstanding block to be awaited.
-			Ok(inner) => match Mutex::into_inner(inner) {
-				msg @ Some(_) => msg,
-				// A past call to `wait_completed` deemed this message as faulty due to a block
-				// number mismatch.
-				None => None,
-			},
+			// This is the last reference and thus the last outstanding block to be awaited. `inner`
+			// is either `Some(_)` or `None`. The latter implies that a previous `wait_completed`
+			// call witnessed a block number mismatch (see above).
+			Ok(inner) => Mutex::into_inner(inner),
 			// There are still other strong references to this `Arc`, thus the message is blocked on
 			// other blocks to be imported.
 			Err(_self) => None,
