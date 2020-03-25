@@ -867,7 +867,6 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Syncin
 
 	fn usage_info(&self) -> sp_state_machine::UsageInfo {
 		self.caching_state().usage_info()
-	
 	}
 }
 

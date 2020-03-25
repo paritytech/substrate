@@ -1700,7 +1700,6 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	fn get_import_lock(&self) -> &RwLock<()> {
 		&*self.import_lock
 	}
-
 }
 
 impl<Block: BlockT> sc_client_api::backend::LocalBackend<Block> for Backend<Block> {}
