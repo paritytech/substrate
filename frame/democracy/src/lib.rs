@@ -811,6 +811,7 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - One DB change.
+		/// - O(d) where d is the items in the dispatch queue.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn cancel_queued(origin, which: ReferendumIndex) {
@@ -1000,7 +1001,7 @@ decl_module! {
 		/// Emits `PreimageNoted`.
 		///
 		/// # <weight>
-		/// - Dependent on the size of `encoded_proposal`.
+		/// - Dependent on the size of `encoded_proposal` and length of dispatch queue.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(100_000)]
 		fn note_imminent_preimage(origin, encoded_proposal: Vec<u8>) {
