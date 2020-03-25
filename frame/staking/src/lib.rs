@@ -272,7 +272,7 @@ use sp_std::{
 use codec::{HasCompact, Encode, Decode};
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error, debug, IterableStorageMap,
-	weights::SimpleDispatchInfo,
+	weights::{SimpleDispatchInfo, Weight},
 	dispatch::{IsSubType, DispatchResult},
 	traits::{
 		Currency, LockIdentifier, LockableCurrency, WithdrawReasons, OnUnbalanced, Imbalance, Get,
@@ -289,6 +289,7 @@ use sp_runtime::{
 	},
 	transaction_validity::{
 		TransactionValidityError, TransactionValidity, ValidTransaction, InvalidTransaction,
+		TransactionSource,
 	},
 };
 use sp_staking::{
@@ -1132,7 +1133,7 @@ decl_module! {
 		/// `T::ElectionLookahead` is remaining until the next new session schedule. The offchain
 		/// worker, if applicable, will execute at the end of the current block, and solutions may
 		/// be submitted.
-		fn on_initialize(now: T::BlockNumber) {
+		fn on_initialize(now: T::BlockNumber) -> Weight {
 			if
 				// if we don't have any ongoing offchain compute.
 				Self::era_election_status().is_closed() &&
@@ -1170,6 +1171,9 @@ decl_module! {
 					);
 				}
 			}
+
+			// weight
+			50_000
 		}
 
 		/// Check if the current block number is the one at which the election window has been set
@@ -2922,7 +2926,7 @@ impl<T: Trait + Send + Sync> SignedExtension for LockStakingStatus<T> {
 #[allow(deprecated)]
 impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 	type Call = Call<T>;
-	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
+	fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 		if let Call::submit_election_solution_unsigned(
 			_,
 			_,
@@ -2931,7 +2935,16 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 			use offchain_election::DEFAULT_LONGEVITY;
 
 			// discard solution not coming from the local OCW.
-			// TODO: ...
+			match source {
+				TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ }
+				_ => {
+					debug::native::debug!(
+						target: "staking",
+						"rejecting unsigned transaction because it is not local/in-block."
+					);
+					return InvalidTransaction::Call.into();
+				}
+			}
 
 			// discard early solution.
 			if Self::era_election_status().is_closed() {

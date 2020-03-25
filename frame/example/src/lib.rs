@@ -256,7 +256,10 @@
 use sp_std::marker::PhantomData;
 use frame_support::{
 	dispatch::DispatchResult, decl_module, decl_storage, decl_event,
-	weights::{SimpleDispatchInfo, DispatchInfo, DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee},
+	weights::{
+		SimpleDispatchInfo, DispatchInfo, DispatchClass, ClassifyDispatch, WeighData, Weight,
+		PaysFee,
+	},
 };
 use sp_std::prelude::*;
 use frame_benchmarking::{benchmarks, account};
@@ -516,14 +519,14 @@ decl_module! {
 		// This function could also very well have a weight annotation, similar to any other. The
 		// only difference being that if it is not annotated, the default is
 		// `SimpleDispatchInfo::zero()`, which resolves into no weight.
-		#[weight = SimpleDispatchInfo::FixedNormal(1000)]
-		fn on_initialize(_n: T::BlockNumber) {
+		fn on_initialize(_n: T::BlockNumber) -> Weight {
 			// Anything that needs to be done at the start of the block.
 			// We don't do anything here.
+
+			SimpleDispatchInfo::default().weigh_data(())
 		}
 
 		// The signature could also look like: `fn on_finalize()`
-		#[weight = SimpleDispatchInfo::FixedNormal(2000)]
 		fn on_finalize(_n: T::BlockNumber) {
 			// Anything that needs to be done at the end of the block.
 			// We just kill our dummy storage item.
@@ -688,14 +691,17 @@ benchmarks!{
 mod tests {
 	use super::*;
 
-	use frame_support::{assert_ok, impl_outer_origin, parameter_types, weights::GetDispatchInfo};
+	use frame_support::{
+		assert_ok, impl_outer_origin, parameter_types, weights::GetDispatchInfo,
+		traits::{OnInitialize, OnFinalize}
+	};
 	use sp_core::H256;
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 	use sp_runtime::{
 		Perbill,
 		testing::Header,
-		traits::{BlakeTwo256, OnInitialize, OnFinalize, IdentityLookup},
+		traits::{BlakeTwo256, IdentityLookup},
 	};
 
 	impl_outer_origin! {

@@ -19,13 +19,12 @@
 use super::*;
 use mock::*;
 use sp_runtime::{
-	assert_eq_error_rate,
-	traits::{OnInitialize, BadOrigin},
+	assert_eq_error_rate, traits::BadOrigin,
 };
 use sp_staking::offence::OffenceDetails;
 use frame_support::{
 	assert_ok, assert_noop,
-	traits::{Currency, ReservableCurrency},
+	traits::{Currency, ReservableCurrency, OnInitialize},
 	StorageMap,
 };
 use pallet_balances::Error as BalancesError;
@@ -2747,6 +2746,7 @@ fn remove_multi_deferred() {
 mod offchain_phragmen {
 	use crate::*;
 	use frame_support::{assert_noop, assert_ok};
+	use sp_runtime::transaction_validity::TransactionSource;
 	use mock::*;
 	use parking_lot::RwLock;
 	use sp_core::offchain::{
@@ -2755,7 +2755,7 @@ mod offchain_phragmen {
 	};
 	use sp_io::TestExternalities;
 	use sp_phragmen::StakedAssignment;
-	use sp_runtime::traits::OffchainWorker;
+	use frame_support::traits::OffchainWorker;
 	use std::sync::Arc;
 	use substrate_test_utils::assert_eq_uvec;
 
@@ -3150,7 +3150,10 @@ mod offchain_phragmen {
 			};
 
 			assert_eq!(
-				<Staking as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(&inner),
+				<Staking as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
+					TransactionSource::Local,
+					&inner,
+				),
 				TransactionValidity::Ok(ValidTransaction {
 					priority: 1125, // the proposed slot stake.
 					requires: vec![],
@@ -3194,7 +3197,10 @@ mod offchain_phragmen {
 
 			// pass this call to ValidateUnsigned
 			assert_eq!(
-				<Staking as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(&inner),
+				<Staking as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
+					TransactionSource::Local,
+					&inner,
+				),
 				TransactionValidity::Err(InvalidTransaction::Custom(1u8).into()),
 			)
 		})

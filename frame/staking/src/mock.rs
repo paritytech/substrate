@@ -19,16 +19,14 @@
 use std::{collections::{HashSet, HashMap}, cell::RefCell};
 use sp_runtime::Perbill;
 use sp_runtime::curve::PiecewiseLinear;
-use sp_runtime::traits::{
-	IdentityLookup, Convert, OnInitialize, OnFinalize, SaturatedConversion, Zero,
-};
-use sp_runtime::testing::{Header, TestXt, UintAuthorityId};
+use sp_runtime::traits::{IdentityLookup, Convert, SaturatedConversion, Zero};
+use sp_runtime::testing::{Header, UintAuthorityId, TestXt};
 use sp_staking::{SessionIndex, offence::{OffenceDetails, OnOffenceHandler}};
 use sp_core::H256;
 use frame_support::{
 	assert_ok, impl_outer_origin, parameter_types, impl_outer_dispatch, impl_outer_event,
 	StorageValue, StorageMap, StorageDoubleMap, IterableStorageMap,
-	traits::{Currency, Get, FindAuthor},
+	traits::{Currency, Get, FindAuthor, OnFinalize, OnInitialize},
 	weights::Weight,
 };
 use frame_system::offchain::TransactionSubmitter;

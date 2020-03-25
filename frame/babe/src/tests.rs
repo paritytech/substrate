@@ -18,7 +18,7 @@
 
 use super::*;
 use mock::*;
-use sp_runtime::traits::OnFinalize;
+use frame_support::traits::OnFinalize;
 use pallet_session::ShouldEndSession;
 use sp_consensus_vrf::schnorrkel::{RawVRFOutput, RawVRFProof};
 

@@ -21,10 +21,14 @@ use super::{Trait, Module, GenesisConfig, CurrentSlot};
 use sp_runtime::{
 	Perbill, impl_opaque_keys,
 	testing::{Header, UintAuthorityId, Digest, DigestItem},
-	traits::{IdentityLookup, OnInitialize},
+	traits::IdentityLookup,
 };
 use frame_system::InitKind;
-use frame_support::{impl_outer_origin, parameter_types, StorageValue, weights::Weight};
+use frame_support::{
+	impl_outer_origin, parameter_types, StorageValue,
+	traits::OnInitialize,
+	weights::Weight,
+};
 use sp_io;
 use sp_core::H256;
 use sp_consensus_vrf::schnorrkel::{RawVRFOutput, RawVRFProof};
@@ -136,12 +140,14 @@ pub fn make_pre_digest(
 	vrf_output: RawVRFOutput,
 	vrf_proof: RawVRFProof,
 ) -> Digest {
-	let digest_data = sp_consensus_babe::digests::RawPreDigest::Primary {
-		authority_index,
-		slot_number,
-		vrf_output,
-		vrf_proof,
-	};
+	let digest_data = sp_consensus_babe::digests::RawPreDigest::Primary(
+		sp_consensus_babe::digests::RawPrimaryPreDigest {
+			authority_index,
+			slot_number,
+			vrf_output,
+			vrf_proof,
+		}
+	);
 	let log = DigestItem::PreRuntime(sp_consensus_babe::BABE_ENGINE_ID, digest_data.encode());
 	Digest { logs: vec![log] }
 }
