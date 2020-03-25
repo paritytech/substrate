@@ -28,6 +28,21 @@ use crate::Module as Utility;
 
 const SEED: u32 = 0;
 
+fn setup_multi<T: Trait>(s: u32, z: u32) -> Result<(Vec<T::AccountId>, Box<<T as Trait>::Call>), &'static str>{
+	let mut signatories: Vec<T::AccountId> = Vec::new();
+	for i in 0 .. s {
+		let signatory = account("signatory", i, SEED);
+		// Give them some balance for a possible deposit
+		let deposit = T::MultisigDepositBase::get() + T::MultisigDepositFactor::get() * s.into();
+		let balance = T::Currency::minimum_balance().saturating_mul(100.into()) + deposit;
+		T::Currency::make_free_balance_be(&signatory, balance);
+		signatories.push(signatory);
+	}
+	signatories.sort();
+	let call: Box<<T as Trait>::Call> = Box::new(frame_system::Call::remark(vec![0; z as usize]).into());
+	return Ok((signatories, call))
+}
+
 benchmarks! {
 	_ { }
 
@@ -52,18 +67,8 @@ benchmarks! {
 		let s in 2 .. T::MaxSignatories::get() as u32;
 		// Transaction Length
 		let z in 0 .. 10_000;
-		let mut signatories: Vec<T::AccountId> = Vec::new();
-		for i in 0 .. s {
-			let signatory = account("signatory", i, SEED);
-			signatories.push(signatory);
-		}
-		signatories.sort();
-		let caller = signatories.pop().expect("signatories has len 2 or more");
-		// Caller needs to place a deposit
-		let deposit = T::MultisigDepositBase::get() + T::MultisigDepositFactor::get() * s.into();
-		let balance = T::Currency::minimum_balance().saturating_mul(100.into()) + deposit;
-		T::Currency::make_free_balance_be(&caller, balance);
-		let call = Box::new(frame_system::Call::remark(vec![0; z as usize]).into());
+		let (mut signatories, call) = setup_multi::<T>(s, z)?;
+		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
 	}: as_multi(RawOrigin::Signed(caller), s as u16, signatories, None, call)
 
 	as_multi_approve {
@@ -71,19 +76,9 @@ benchmarks! {
 		let s in 2 .. T::MaxSignatories::get() as u32;
 		// Transaction Length
 		let z in 0 .. 10_000;
-		let mut signatories: Vec<T::AccountId> = Vec::new();
-		for i in 0 .. s {
-			let signatory = account("signatory", i, SEED);
-			signatories.push(signatory);
-		}
-		signatories.sort();
+		let (mut signatories, call) = setup_multi::<T>(s, z)?;
 		let mut signatories2 = signatories.clone();
 		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
-		// Caller needs to place a deposit
-		let deposit = T::MultisigDepositBase::get() + T::MultisigDepositFactor::get() * s.into();
-		let balance = T::Currency::minimum_balance().saturating_mul(100.into()) + deposit;
-		T::Currency::make_free_balance_be(&caller, balance);
-		let call: Box<<T as Trait>::Call> = Box::new(frame_system::Call::remark(vec![0; z as usize]).into());
 		// before the call, get the timepoint
 		let timepoint = Utility::<T>::timepoint();
 		// Create the multi
@@ -96,19 +91,9 @@ benchmarks! {
 		let s in 2 .. T::MaxSignatories::get() as u32;
 		// Transaction Length
 		let z in 0 .. 10_000;
-		let mut signatories: Vec<T::AccountId> = Vec::new();
-		for i in 0 .. s {
-			let signatory = account("signatory", i, SEED);
-			signatories.push(signatory);
-		}
-		signatories.sort();
+		let (mut signatories, call) = setup_multi::<T>(s, z)?;
 		let mut signatories2 = signatories.clone();
 		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
-		// Caller needs to place a deposit
-		let deposit = T::MultisigDepositBase::get() + T::MultisigDepositFactor::get() * s.into();
-		let balance = T::Currency::minimum_balance().saturating_mul(100.into()) + deposit;
-		T::Currency::make_free_balance_be(&caller, balance);
-		let call: Box<<T as Trait>::Call> = Box::new(frame_system::Call::remark(vec![0; z as usize]).into());
 		// before the call, get the timepoint
 		let timepoint = Utility::<T>::timepoint();
 		// Create the multi
@@ -122,4 +107,43 @@ benchmarks! {
 		let caller2 = signatories2.remove(0);
 	}: as_multi(RawOrigin::Signed(caller2), s as u16, signatories2, Some(timepoint), call)
 
+	approve_as_multi_create {
+		// Signatories, need at least 2 people
+		let s in 2 .. T::MaxSignatories::get() as u32;
+		// Transaction Length
+		let z in 0 .. 10_000;
+		let (mut signatories, call) = setup_multi::<T>(s, z)?;
+		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
+		let call_hash = call.using_encoded(blake2_256);
+		// Create the multi
+	}: approve_as_multi(RawOrigin::Signed(caller), s as u16, signatories, None, call_hash)
+
+	approve_as_multi_approve {
+		// Signatories, need at least 2 people
+		let s in 2 .. T::MaxSignatories::get() as u32;
+		// Transaction Length
+		let z in 0 .. 10_000;
+		let (mut signatories, call) = setup_multi::<T>(s, z)?;
+		let mut signatories2 = signatories.clone();
+		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
+		let call_hash = call.using_encoded(blake2_256);
+		// before the call, get the timepoint
+		let timepoint = Utility::<T>::timepoint();
+		// Create the multi
+		Utility::<T>::as_multi(RawOrigin::Signed(caller).into(), s as u16, signatories, None, call.clone())?;
+		let caller2 = signatories2.remove(0);
+	}: approve_as_multi(RawOrigin::Signed(caller2), s as u16, signatories2, Some(timepoint), call_hash)
+
+	cancel_as_multi {
+		// Signatories, need at least 2 people
+		let s in 2 .. T::MaxSignatories::get() as u32;
+		// Transaction Length
+		let z in 0 .. 10_000;
+		let (mut signatories, call) = setup_multi::<T>(s, z)?;
+		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
+		let call_hash = call.using_encoded(blake2_256);
+		let timepoint = Utility::<T>::timepoint();
+		// Create the multi
+		Utility::<T>::as_multi(RawOrigin::Signed(caller.clone()).into(), s as u16, signatories.clone(), None, call.clone())?;
+	}: _(RawOrigin::Signed(caller), s as u16, signatories, timepoint, call_hash)
 }
