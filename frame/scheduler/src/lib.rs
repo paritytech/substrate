@@ -51,7 +51,6 @@ use frame_support::{
 	dispatch::{Dispatchable, Parameter}, decl_module, decl_storage, decl_event, traits::Get,
 	weights::{GetDispatchInfo, Weight},
 };
-//use frame_benchmarking::{benchmarks, account};
 use frame_system::{self as system};
 
 /// Our pallet's configuration trait. All our types and constants go in here. If the
