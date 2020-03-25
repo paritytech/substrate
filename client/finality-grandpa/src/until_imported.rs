@@ -47,7 +47,7 @@ use sp_finality_grandpa::AuthorityId;
 
 const LOG_PENDING_INTERVAL: Duration = Duration::from_secs(15);
 
-/// Something that needs to be withhold until specific blocks are available.
+/// Something that needs to be withheld until specific blocks are available.
 ///
 /// For example a GRANDPA commit message which is not of any use without the corresponding block
 /// that it commits on.
@@ -55,10 +55,7 @@ pub(crate) trait BlockUntilImported<Block: BlockT>: Sized {
 	/// The type that is blocked on.
 	type Blocked;
 
-	/// new incoming item. For all internal items,
-	/// check if they require to be waited for.
-	/// if so, call the `Wait` closure.
-	/// if they are ready, call the `Ready` closure.
+	/// Check if a new incoming item needs awaiting until a block(s) is imported.
 	fn needs_waiting<S: BlockStatusT<Block>>(
 		input: Self::Blocked,
 		status_check: &S,
@@ -70,7 +67,7 @@ pub(crate) trait BlockUntilImported<Block: BlockT>: Sized {
 }
 
 /// Describes whether a given [`BlockUntilImported`] (a) should be discarded, (b) is waiting for
-/// specific blocks to be imported or (c) is ready to used.
+/// specific blocks to be imported or (c) is ready to be used.
 ///
 /// A reason for discarding a [`BlockUntilImported`] would be if a referenced block is perceived
 /// under a different number than specified in the message.
@@ -418,7 +415,7 @@ impl<Block: BlockT> BlockUntilImported<Block> for BlockGlobalMessage<Block> {
 		let locked_global = Arc::new((AtomicUsize::new(unknown_hashes.len()), Mutex::new(Some(input))));
 
 		let items_to_await = unknown_hashes.into_iter().map(|(hash, target_number)| {
-			(hash, target_number, BlockGlobalMessage {inner: locked_global.clone(), target_number})
+			(hash, target_number, BlockGlobalMessage { inner: locked_global.clone(), target_number })
 		}).collect();
 
 		// schedule waits for all unknown messages.
