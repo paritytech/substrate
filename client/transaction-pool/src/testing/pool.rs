@@ -704,7 +704,7 @@ fn should_not_accept_old_signatures() {
 	let xt = Extrinsic::Transfer { transfer, signature: old_singature, exhaust_resources_when_not_first: false };
 
 	assert_matches::assert_matches!(
-		block_on(pool.submit_one(&BlockId::number(0), xt.clone())),
+		block_on(pool.submit_one(&BlockId::number(0), SOURCE, xt.clone())),
 		Err(error::Error::Pool(
 			sp_transaction_pool::error::Error::InvalidTransaction(InvalidTransaction::BadProof)
 		)),
