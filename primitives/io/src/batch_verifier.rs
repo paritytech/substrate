@@ -36,6 +36,12 @@ struct Sr25519BatchItem {
 	message: Vec<u8>,
 }
 
+/// Batch verifier.
+///
+/// Used to parallel-verify signatures for runtime host. Provide task executor and
+/// just push (`push_ed25519`, `push_sr25519`) as many signature as you need. At the end,
+/// call `verify_and_clear to get a result. After that, batch verifier is ready for the
+/// next batching job.
 pub struct BatchVerifier {
 	scheduler: Box<dyn CloneableSpawn>,
 	sr25519_items: Vec<Sr25519BatchItem>,
@@ -69,6 +75,7 @@ impl BatchVerifier {
 		}.boxed())).expect("Scheduler should not fail");
 	}
 
+	/// Push ed25519 signature to verify.
 	pub fn push_ed25519(
 		&mut self,
 		signature: ed25519::Signature,
@@ -96,6 +103,7 @@ impl BatchVerifier {
 		});
 	}
 
+	/// Push sr25519 signature to verify.
 	pub fn push_sr25519(
 		&mut self,
 		signature: sr25519::Signature,
@@ -109,6 +117,8 @@ impl BatchVerifier {
 		}
 	}
 
+	/// Verify all previously pushed signatures since last call and return
+	/// aggregated result.
 	pub fn verify_and_clear(&mut self) -> bool {
 		if self.sr25519_items.len() > 0 {
 			self.spawn_sr25519_verification()
