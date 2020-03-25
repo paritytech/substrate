@@ -46,9 +46,10 @@
 
 use sp_std::prelude::*;
 use codec::{Encode, Decode};
-use sp_runtime::{RuntimeDebug, traits::One};
+use sp_runtime::{RuntimeDebug, traits::{Zero, One}};
 use frame_support::{
-	dispatch::{Dispatchable, Parameter}, decl_module, decl_storage, decl_event, traits::Get,
+	dispatch::{Dispatchable, DispatchResult, Parameter}, decl_module, decl_storage, decl_event,
+	traits::{Get, schedule},
 	weights::{GetDispatchInfo, Weight},
 };
 //use frame_benchmarking::{benchmarks, account};
@@ -76,47 +77,37 @@ pub trait Trait: system::Trait {
 
 /// Just a simple index for naming period tasks.
 pub type PeriodicIndex = u32;
-/// Priority with which a call is scheduled. It's just a linear amount with lowest values meaning
-/// higher priority.
-pub type Priority = u8;
-
-/// The highest priority. We invert the value so that normal sorting will place the highest
-/// priority at the beginning of the list.
-pub const HIGHEST_PRORITY: Priority = 0;
-/// Anything of this value or lower will definitely be scheduled on the block that they ask for, even
-/// if it breaches the `MaximumWeight` limitation.
-pub const HARD_DEADLINE: Priority = 63;
-/// The lowest priority. Most stuff should be around here.
-pub const LOWEST_PRORITY: Priority = 255;
+/// The location of a scheduled task that can be used to remove it.
+pub type TaskAddress<BlockNumber> = (BlockNumber, u32);
 
 /// Information regarding an item to be executed in the future.
 #[derive(Clone, RuntimeDebug, Encode, Decode)]
-pub struct Scheduled<Call> {
+pub struct Scheduled<Call, BlockNumber> {
+	/// The unique identity for this task, if there is one.
+	maybe_id: Option<Vec<u8>>,
 	/// This task's priority.
-	priority: Priority,
+	priority: schedule::Priority,
 	/// The call to be dispatched.
 	call: Call,
 	/// If the call is periodic, then this points to the information concerning that.
-	maybe_periodic: Option<PeriodicIndex>,
+	maybe_periodic: Option<schedule::Period<BlockNumber>>,
 }
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Scheduler {
-		/// Any period items.
-		Periodic: map hasher(twox_64_concat) PeriodicIndex => Option<(T::BlockNumber, u32)>;
-
 		/// Items to be executed, indexed by the block number that they should be executed on.
-		/// This is ordered by `priority`.
-		Agenda: map hasher(twox_64_concat) T::BlockNumber => Vec<Scheduled<<T as Trait>::Call>>;
+		Agenda: map hasher(twox_64_concat) T::BlockNumber
+			=> Vec<Option<Scheduled<<T as Trait>::Call, T::BlockNumber>>>;
 
-		/// The next free periodic index.
-		LastPeriodicIndex: PeriodicIndex;
+		/// Lookup from identity to the block number and index of the task.
+		Lookup: map hasher(twox_64_concat) Vec<u8> => Option<TaskAddress<T::BlockNumber>>;
 	}
 }
 
 decl_event!(
 	pub enum Event<T> where <T as system::Trait>::BlockNumber {
 		Scheduled(BlockNumber),
+		Dispatched(TaskAddress<BlockNumber>, Option<Vec<u8>>, DispatchResult),
 	}
 );
 
@@ -127,38 +118,48 @@ decl_module! {
 
 		fn on_initialize(now: T::BlockNumber) -> Weight {
 			let limit = T::MaximumWeight::get();
-			let mut queued = Agenda::<T>::take(now);
-			queued.sort_by_key(|i| i.priority);
+			let mut queued = Agenda::<T>::take(now).into_iter()
+				.enumerate()
+				.filter_map(|(index, s)| s.map(|inner| (index as u32, inner)))
+				.collect::<Vec<_>>();
+			queued.sort_by_key(|(_, s)| s.priority);
 			let mut result = 0;
 			let unused_items = queued.into_iter()
-				.scan(0, |cumulative_weight, i| {
-					*cumulative_weight += i.call.get_dispatch_info().weight;
-					Some((*cumulative_weight, i))
+				.scan(0, |cumulative_weight, (index, s)| {
+					*cumulative_weight += s.call.get_dispatch_info().weight;
+					Some((index, *cumulative_weight, s))
 				})
-				.filter_map(|(cumulative_weight, i)| {
-					if i.priority <= HARD_DEADLINE || cumulative_weight <= limit {
-						let maybe_reschedule = i.maybe_periodic.map(|p| (p, i.clone()));
-						let _ = i.call.dispatch(system::RawOrigin::Root.into());
-						if let Some((periodic_index, i)) = maybe_reschedule {
-							// Register the next instance of this task
-							if let Some((period, count)) = Periodic::<T>::get(periodic_index) {
-								if count > 1 {
-									Periodic::<T>::insert(periodic_index, (period, count - 1));
-								} else {
-									Periodic::<T>::remove(periodic_index);
-								}
-								Agenda::<T>::append_or_insert(now + period, &[i][..]);
+				.filter_map(|(index, cumulative_weight, mut s)| {
+					if s.priority <= schedule::HARD_DEADLINE || cumulative_weight <= limit {
+						let r = s.call.clone().dispatch(system::RawOrigin::Root.into());
+						let maybe_id = s.maybe_id.clone();
+						if let &Some((period, count)) = &s.maybe_periodic {
+							if count > 1 {
+								s.maybe_periodic = Some((period, count - 1));
+							} else {
+								s.maybe_periodic = None;
+							}
+							let next = now + period;
+							if let Some(ref id) = s.maybe_id {
+								let next_index = Agenda::<T>::decode_len(now + period).unwrap_or(0) as u32;
+								Lookup::<T>::insert(id, (next, next_index));
+							}
+							Agenda::<T>::append_or_insert(next, &[Some(s)][..]);
+						} else {
+							if let Some(ref id) = s.maybe_id {
+								Lookup::<T>::remove(id);
 							}
 						}
+						Self::deposit_event(RawEvent::Dispatched((now, index), maybe_id, r));
 						result = cumulative_weight;
 						None
 					} else {
-						Some(i)
+						Some(Some(s))
 					}
 				})
 				.collect::<Vec<_>>();
-			let next = now + One::one();
 			if !unused_items.is_empty() {
+				let next = now + One::one();
 				Agenda::<T>::append_or_insert(next, &unused_items[..]);
 			}
 			result
@@ -166,62 +167,74 @@ decl_module! {
 	}
 }
 
-/// A type that can be used as a scheduler.
-pub trait Schedule<BlockNumber, Call> {
-	/// Schedule a one-off dispatch to happen at the beginning of some block in the future.
-	fn schedule(when: BlockNumber, priority: Priority, call: Call);
+impl<T: Trait> schedule::Anon<T::BlockNumber, <T as Trait>::Call> for Module<T> {
+	type Address = TaskAddress<T::BlockNumber>;
 
-	/// Schedule a dispatch to happen periodically into the future for come number of times.
-	///
-	/// An index is returned so that it can be cancelled at some point in the future.
-	fn schedule_periodic(
-		when: BlockNumber,
-		period: BlockNumber,
-		count: u32,
-		priority: Priority,
-		call: Call,
-	) -> PeriodicIndex;
-
-	/// Cancel a periodic dispatch. If called during its dispatch, it will not be dispatched
-	/// any further. If called between dispatches, the next dispatch will happen as scheduled but
-	/// then it will cease.
-	fn cancel_periodic(index: PeriodicIndex) -> Result<(), ()>;
-}
-
-impl<T: Trait> Schedule<T::BlockNumber, <T as Trait>::Call> for Module<T> {
-	fn schedule(when: T::BlockNumber, priority: Priority, call: <T as Trait>::Call) {
-		let s = Scheduled { priority, call, maybe_periodic: None };
+	fn schedule(
+		when: T::BlockNumber,
+		maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
+		priority: schedule::Priority,
+		call: <T as Trait>::Call
+	) -> Self::Address {
+		// sanitize maybe_periodic
+		let maybe_periodic = maybe_periodic
+			.filter(|p| p.1 > 1 && !p.0.is_zero())
+			// Remove one from the number of repetitions since we will schedule one now.
+			.map(|(p, c)| (p, c - 1));
+		let s = Some(Scheduled { maybe_id: None, priority, call, maybe_periodic });
 		Agenda::<T>::append_or_insert(when, &[s][..]);
+		(when, Agenda::<T>::decode_len(when).unwrap_or(1) as u32 - 1)
 	}
 
-	fn schedule_periodic(
-		when: T::BlockNumber,
-		period: T::BlockNumber,
-		count: u32,
-		priority: Priority,
-		call: <T as Trait>::Call,
-	) -> PeriodicIndex {
-		match count {
-			0 => 0,
-			1 => {
-				Self::schedule(when, priority, call);
-				0
+	fn cancel((when, index): Self::Address) -> Result<(), ()> {
+		if let Some(s) = Agenda::<T>::mutate(when, |agenda| agenda.get_mut(index as usize).and_then(Option::take)) {
+			if let Some(id) = s.maybe_id {
+				Lookup::<T>::remove(id)
 			}
-			count => {
-				let index = LastPeriodicIndex::mutate(|i| { *i += 1; *i });
-				Periodic::<T>::insert(index, (period, count - 1));
-				let s = Scheduled { priority, call, maybe_periodic: Some(index) };
-				Agenda::<T>::append_or_insert(when, &[s][..]);
-				index
-			}
+			Ok(())
+		} else {
+			Err(())
 		}
 	}
+}
 
-	fn cancel_periodic(index: PeriodicIndex) -> Result<(), ()> {
-		if index == 0 {
-			Err(())
+impl<T: Trait, Id: Encode> schedule::Named<Id, T::BlockNumber, <T as Trait>::Call> for Module<T> {
+	type Address = TaskAddress<T::BlockNumber>;
+
+	fn schedule_named(
+		id: Id,
+		when: T::BlockNumber,
+		maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
+		priority: schedule::Priority,
+		call: <T as Trait>::Call,
+	) -> Result<Self::Address, ()> {
+		// determine id and ensure it is unique
+		let id = id.encode();
+		if Lookup::<T>::contains_key(&id) {
+			return Err(())
+		}
+
+		// sanitize maybe_periodic
+		let maybe_periodic = maybe_periodic
+			.filter(|p| p.1 > 1 && !p.0.is_zero())
+			// Remove one from the number of repetitions since we will schedule one now.
+			.map(|(p, c)| (p, c - 1));
+
+		let s = Scheduled { maybe_id: Some(id.clone()), priority, call, maybe_periodic };
+		Agenda::<T>::append_or_insert(when, &[Some(s)][..]);
+		let index = Agenda::<T>::decode_len(when).unwrap_or(1) as u32 - 1;
+		let address = (when, index);
+		Lookup::<T>::insert(&id, &address);
+		Ok(address)
+	}
+
+	fn cancel_named(id: Id) -> Result<(), ()> {
+		if let Some((when, index)) = id.using_encoded(|d| Lookup::<T>::take(d)) {
+			let i = index as usize;
+			Agenda::<T>::mutate(when, |agenda| if let Some(s) = agenda.get_mut(i) { *s = None });
+			Ok(())
 		} else {
-			Periodic::<T>::take(index).map(|_| ()).ok_or(())
+			Err(())
 		}
 	}
 }
@@ -231,8 +244,9 @@ mod tests {
 	use super::*;
 
 	use frame_support::{
-		impl_outer_event, impl_outer_origin, impl_outer_dispatch, parameter_types,
-		traits::{OnInitialize, OnFinalize}, weights::{DispatchClass, FunctionOf}
+		impl_outer_event, impl_outer_origin, impl_outer_dispatch, parameter_types, assert_ok,
+		traits::{OnInitialize, OnFinalize, schedule::{Anon, Named}},
+		weights::{DispatchClass, FunctionOf}
 	};
 	use sp_core::H256;
 	// The testing primitives are very useful for avoiding having to work with signatures
@@ -372,7 +386,7 @@ mod tests {
 	#[test]
 	fn basic_scheduling_works() {
 		new_test_ext().execute_with(|| {
-			Scheduler::schedule(4, 127, Call::Logger(logger::Call::log(42, 1000)));
+			Scheduler::schedule(4, None, 127, Call::Logger(logger::Call::log(42, 1000)));
 			run_to_block(3);
 			assert!(logger::log().is_empty());
 			run_to_block(4);
@@ -386,7 +400,7 @@ mod tests {
 	fn periodic_scheduling_works() {
 		new_test_ext().execute_with(|| {
 			// at #4, every 3 blocks, 3 times.
-			Scheduler::schedule_periodic(4, 3, 3, 127, Call::Logger(logger::Call::log(42, 1000)));
+			Scheduler::schedule(4, Some((3, 3)), 127, Call::Logger(logger::Call::log(42, 1000)));
 			run_to_block(3);
 			assert!(logger::log().is_empty());
 			run_to_block(4);
@@ -405,29 +419,45 @@ mod tests {
 	}
 
 	#[test]
-	fn cancel_period_scheduling_works() {
+	fn cancel_named_scheduling_works_with_normal_cancel() {
 		new_test_ext().execute_with(|| {
 			// at #4, every 3 blocks, 3 times.
-			let i = Scheduler::schedule_periodic(4, 3, 3, 127, Call::Logger(logger::Call::log(42, 1000)));
+			Scheduler::schedule_named(1u32, 4, None, 127, Call::Logger(logger::Call::log(69, 1000))).unwrap();
+			let i = Scheduler::schedule(4, None, 127, Call::Logger(logger::Call::log(42, 1000)));
+			run_to_block(3);
+			assert!(logger::log().is_empty());
+			assert_ok!(Scheduler::cancel_named(1u32));
+			assert_ok!(Scheduler::cancel(i));
+			run_to_block(100);
+			assert!(logger::log().is_empty());
+		});
+	}
+
+	#[test]
+	fn cancel_named_periodic_scheduling_works() {
+		new_test_ext().execute_with(|| {
+			// at #4, every 3 blocks, 3 times.
+			Scheduler::schedule_named(1u32, 4, Some((3, 3)), 127, Call::Logger(logger::Call::log(42, 1000))).unwrap();
+			// same id results in error.
+			assert!(Scheduler::schedule_named(1u32, 4, None, 127, Call::Logger(logger::Call::log(69, 1000))).is_err());
+			// different id is ok.
+			Scheduler::schedule_named(2u32, 8, None, 127, Call::Logger(logger::Call::log(69, 1000))).unwrap();
 			run_to_block(3);
 			assert!(logger::log().is_empty());
 			run_to_block(4);
 			assert_eq!(logger::log(), vec![42u32]);
 			run_to_block(6);
-			assert_eq!(logger::log(), vec![42u32]);
-			Scheduler::cancel_periodic(i).unwrap();
-			run_to_block(7);
-			assert_eq!(logger::log(), vec![42u32, 42u32]);
+			assert_ok!(Scheduler::cancel_named(1u32));
 			run_to_block(100);
-			assert_eq!(logger::log(), vec![42u32, 42u32]);
+			assert_eq!(logger::log(), vec![42u32, 69u32]);
 		});
 	}
 
 	#[test]
 	fn scheduler_respects_weight_limits() {
 		new_test_ext().execute_with(|| {
-			Scheduler::schedule(4, 127, Call::Logger(logger::Call::log(42, 6000)));
-			Scheduler::schedule(4, 127, Call::Logger(logger::Call::log(69, 6000)));
+			Scheduler::schedule(4, None, 127, Call::Logger(logger::Call::log(42, 6000)));
+			Scheduler::schedule(4, None, 127, Call::Logger(logger::Call::log(69, 6000)));
 			run_to_block(4);
 			assert_eq!(logger::log(), vec![42u32]);
 			run_to_block(5);
@@ -438,8 +468,8 @@ mod tests {
 	#[test]
 	fn scheduler_respects_hard_deadlines_more() {
 		new_test_ext().execute_with(|| {
-			Scheduler::schedule(4, 0, Call::Logger(logger::Call::log(42, 6000)));
-			Scheduler::schedule(4, 0, Call::Logger(logger::Call::log(69, 6000)));
+			Scheduler::schedule(4, None, 0, Call::Logger(logger::Call::log(42, 6000)));
+			Scheduler::schedule(4, None, 0, Call::Logger(logger::Call::log(69, 6000)));
 			run_to_block(4);
 			assert_eq!(logger::log(), vec![42u32, 69u32]);
 		});
@@ -448,8 +478,8 @@ mod tests {
 	#[test]
 	fn scheduler_respects_priority_ordering() {
 		new_test_ext().execute_with(|| {
-			Scheduler::schedule(4, 1, Call::Logger(logger::Call::log(42, 6000)));
-			Scheduler::schedule(4, 0, Call::Logger(logger::Call::log(69, 6000)));
+			Scheduler::schedule(4, None, 1, Call::Logger(logger::Call::log(42, 6000)));
+			Scheduler::schedule(4, None, 0, Call::Logger(logger::Call::log(69, 6000)));
 			run_to_block(4);
 			assert_eq!(logger::log(), vec![69u32, 42u32]);
 		});
@@ -458,9 +488,9 @@ mod tests {
 	#[test]
 	fn scheduler_respects_priority_ordering_with_soft_deadlines() {
 		new_test_ext().execute_with(|| {
-			Scheduler::schedule(4, 255, Call::Logger(logger::Call::log(42, 5000)));
-			Scheduler::schedule(4, 127, Call::Logger(logger::Call::log(69, 5000)));
-			Scheduler::schedule(4, 126, Call::Logger(logger::Call::log(2600, 6000)));
+			Scheduler::schedule(4, None, 255, Call::Logger(logger::Call::log(42, 5000)));
+			Scheduler::schedule(4, None, 127, Call::Logger(logger::Call::log(69, 5000)));
+			Scheduler::schedule(4, None, 126, Call::Logger(logger::Call::log(2600, 6000)));
 			run_to_block(4);
 			assert_eq!(logger::log(), vec![2600u32]);
 			run_to_block(5);
@@ -471,10 +501,10 @@ mod tests {
 	#[test]
 	fn initialize_weight_is_correct() {
 		new_test_ext().execute_with(|| {
-			Scheduler::schedule(1, 255, Call::Logger(logger::Call::log(3, 1000)));
-			Scheduler::schedule(1, 128, Call::Logger(logger::Call::log(42, 5000)));
-			Scheduler::schedule(1, 127, Call::Logger(logger::Call::log(69, 5000)));
-			Scheduler::schedule(1, 126, Call::Logger(logger::Call::log(2600, 6000)));
+			Scheduler::schedule(1, None, 255, Call::Logger(logger::Call::log(3, 1000)));
+			Scheduler::schedule(1, None, 128, Call::Logger(logger::Call::log(42, 5000)));
+			Scheduler::schedule(1, None, 127, Call::Logger(logger::Call::log(69, 5000)));
+			Scheduler::schedule(1, None, 126, Call::Logger(logger::Call::log(2600, 6000)));
 			let weight = Scheduler::on_initialize(1);
 			assert_eq!(weight, 6000);
 			let weight = Scheduler::on_initialize(2);

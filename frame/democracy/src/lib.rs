@@ -173,7 +173,7 @@ use frame_support::{
 	weights::{SimpleDispatchInfo, Weight, WeighData},
 	traits::{
 		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier, Get,
-		OnUnbalanced, BalanceStatus
+		OnUnbalanced, BalanceStatus, schedule
 	}
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
@@ -270,6 +270,9 @@ pub trait Trait: frame_system::Trait + Sized {
 
 	/// Handler for the unbalanced reduction when slashing a preimage deposit.
 	type Slash: OnUnbalanced<NegativeImbalanceOf<Self>>;
+
+	/// The Scheduler.
+	type Scheduler: schedule::Named<Self::BlockNumber, Self::Call>;
 }
 
 decl_storage! {
@@ -1628,6 +1631,7 @@ impl<T: Trait> Module<T> {
 				let _ = Self::enact_proposal(status.proposal_hash, index);
 			} else {
 				let item = (now + status.delay, status.proposal_hash, index);
+
 				<DispatchQueue<T>>::mutate(|queue| {
 					let pos = queue.binary_search_by_key(&item.0, |x| x.0).unwrap_or_else(|e| e);
 					queue.insert(pos, item);
