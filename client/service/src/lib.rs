@@ -648,7 +648,12 @@ where
 	}
 
 	fn transaction(&self, hash: &H) -> Option<B::Extrinsic> {
-		self.pool.ready_transaction(hash).map(|tx| tx.data().clone())
+		self.pool.ready_transaction(hash)
+			.and_then(
+				// Only propagable transactions should be resolved for network service.
+				|tx| if tx.is_propagable() { Some(tx) } else { None }
+			)
+			.map(|tx| tx.data().clone())
 	}
 }
 
