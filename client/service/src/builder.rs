@@ -1129,7 +1129,7 @@ ServiceBuilder<
 			let system_info = sc_rpc::system::SystemInfo {
 				chain_name: chain_spec.name().into(),
 				impl_name: config.impl_name.into(),
-				impl_version: config.impl_version.into(), // TODO: this is now using full version instead of just version. Is it correct?
+				impl_version: config.impl_version.into(),
 				properties: chain_spec.properties().clone(),
 			};
 

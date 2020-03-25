@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog].
 
 ## Unreleased
 
+### Changed
+* `sc_rpc::system::SystemInfo.impl_version` now returns the full version instead of the short version
+
 ## 2.0.0-alpha.3 -> 2.0.0-alpha.4
 
 Runtime
