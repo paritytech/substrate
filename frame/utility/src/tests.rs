@@ -41,6 +41,7 @@ impl_outer_event! {
 }
 impl_outer_dispatch! {
 	pub enum Call for Test where origin: Origin {
+		frame_system::System,
 		pallet_balances::Balances,
 		utility::Utility,
 	}
