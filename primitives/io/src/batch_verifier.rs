@@ -20,6 +20,8 @@ use sp_core::{ed25519, sr25519, crypto::Pair, traits::CloneableSpawn};
 use std::sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering}};
 use futures::{future::FutureExt, task::FutureObj};
 
+const SR25519_BATCH_SIZE: usize = 64;
+
 #[derive(Debug, Clone)]
 struct Ed25519BatchItem {
 	signature: ed25519::Signature,
@@ -51,6 +53,22 @@ impl BatchVerifier {
 		}
 	}
 
+	fn spawn_verification_task(&self, f: impl FnOnce() -> bool + Send + 'static) {
+		// there is already invalid transaction encountered
+		if self.invalid.load(AtomicOrdering::Relaxed) { return; }
+
+		let invalid_clone = self.invalid.clone();
+		let left_clone = self.left.clone();
+		self.left.fetch_add(1, AtomicOrdering::SeqCst);
+
+		self.scheduler.spawn_obj(FutureObj::new(async move {
+			if !f() {
+				invalid_clone.store(true, AtomicOrdering::Relaxed);
+			}
+			left_clone.fetch_sub(1, AtomicOrdering::SeqCst);
+		}.boxed())).expect("Scheduler should not fail");
+	}
+
 	pub fn push_ed25519(
 		&mut self,
 		signature: ed25519::Signature,
@@ -59,16 +77,23 @@ impl BatchVerifier {
 	) {
 		if self.invalid.load(AtomicOrdering::Relaxed) { return; } // there is already invalid transaction encountered
 
-		let invalid_clone = self.invalid.clone();
-		let left_clone = self.left.clone();
-		self.left.fetch_add(1, AtomicOrdering::SeqCst);
+		self.spawn_verification_task(move || ed25519::Pair::verify(&signature, &message, &pub_key));
+	}
 
-		self.scheduler.spawn_obj(FutureObj::new(async move {
-			if !ed25519::Pair::verify(&signature, &message, &pub_key) {
-				invalid_clone.store(true, AtomicOrdering::Relaxed);
-			}
-			left_clone.fetch_sub(1, AtomicOrdering::SeqCst);
-		}.boxed())).expect("Scheduler should be ready");
+	fn spawn_sr25519_verification(&mut self) {
+		if self.sr25519_items.len() == 0 {
+			return;
+		}
+
+		let sr25519_batch = std::mem::replace(&mut self.sr25519_items, vec![]);
+
+		self.spawn_verification_task(move || {
+			let messages = sr25519_batch.iter().map(|item| &item.message[..]).collect();
+			let signatures = sr25519_batch.iter().map(|item| &item.signature).collect();
+			let pub_keys = sr25519_batch.iter().map(|item| &item.pub_key).collect();
+
+			sr25519::verify_batch(messages, signatures, pub_keys)
+		});
 	}
 
 	pub fn push_sr25519(
@@ -78,9 +103,17 @@ impl BatchVerifier {
 		message: Vec<u8>,
 	) {
 		self.sr25519_items.push(Sr25519BatchItem { signature, pub_key, message });
+
+		if self.sr25519_items.len() >= SR25519_BATCH_SIZE {
+			self.spawn_sr25519_verification();
+		}
 	}
 
 	pub fn verify_and_clear(&mut self) -> bool {
+		if self.sr25519_items.len() > 0 {
+			self.spawn_sr25519_verification()
+		}
+
 		while self.left.load(AtomicOrdering::SeqCst) != 0 {
 			std::thread::park_timeout(std::time::Duration::from_micros(50));
 		}
@@ -90,17 +123,8 @@ impl BatchVerifier {
 			return false;
 		}
 
+		debug_assert_eq!(self.sr25519_items.len(), 0);
 
-		let sr25519_batch_result = {
-			let messages = self.sr25519_items.iter().map(|item| &item.message[..]).collect();
-			let signatures = self.sr25519_items.iter().map(|item| &item.signature).collect();
-			let pub_keys = self.sr25519_items.iter().map(|item| &item.pub_key).collect();
-
-			sr25519::verify_batch(messages, signatures, pub_keys)
-		};
-
-		self.sr25519_items.clear();
-
-		sr25519_batch_result
+		true
 	}
 }
