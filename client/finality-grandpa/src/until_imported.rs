@@ -307,6 +307,10 @@ pub(crate) type UntilVoteTargetImported<Block, BlockStatus, BlockSyncRequester, 
 ///
 /// This is used for compact commits and catch up messages which have already
 /// been checked for structural soundness (e.g. valid signatures).
+///
+/// We use the `Arc`'s reference count to implicitly count the number of outstanding blocks that we
+/// are waiting on for the same message (i.e. other `BlockGlobalMessage` instances with the same
+/// `inner`).
 pub(crate) struct BlockGlobalMessage<Block: BlockT> {
 	inner: Arc<Mutex<Option<CommunicationIn<Block>>>>,
 	target_number: NumberFor<Block>,
