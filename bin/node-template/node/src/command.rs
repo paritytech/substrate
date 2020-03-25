@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::chain_spec::{Alternative, ChainSpec};
+use crate::chain_spec;
 use crate::cli::Cli;
 use crate::service;
 use sc_cli::{substrate_cli_configuration, SubstrateCLI};
@@ -27,13 +27,10 @@ use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
 )]
 impl SubstrateCLI for Cli {
 	fn load_spec(&self, id: &str) -> Result<Box<dyn sc_service::ChainSpec>, String> {
-		let dev = self.run.shared_params.dev;
-		if dev {
-			panic!("boo!");
-		}
-		Ok(match Alternative::from(id) {
-			Some(spec) => Box::new(spec.load()?),
-			None => Box::new(ChainSpec::from_json_file(std::path::PathBuf::from(id))?),
+		Ok(match id {
+			"dev" => Box::new(chain_spec::development_config()),
+			"" | "local" => Box::new(chain_spec::local_testnet_config()),
+			path => Box::new(chain_spec::ChainSpec::from_json_file(std::path::PathBuf::from(path))?),
 		})
 	}
 }
