@@ -28,6 +28,7 @@ use crate::Module as Democracy;
 const SEED: u32 = 0;
 const MAX_USERS: u32 = 1000;
 const MAX_REFERENDUMS: u32 = 100;
+const MAX_PROPOSALS: u32 = 100;
 
 fn funded_account<T: Trait>(name: &'static str, index: u32) -> T::AccountId {
 	let caller: T::AccountId = account(name, index, SEED);
@@ -83,26 +84,36 @@ fn open_activate_proxy<T: Trait>(u: u32) -> Result<T::AccountId, &'static str> {
 
 benchmarks! {
 	_ {
-		let u in 1 .. MAX_USERS => ();
+		let p in 1 .. MAX_PROPOSALS => ();
 		let r in 1 .. MAX_REFERENDUMS => ();
+		let u in 1 .. MAX_USERS => ();
 	}
 
 	propose {
-		let u in ...;
+		let p in ...;
 
 		let caller = funded_account::<T>("caller", 0);
 		let proposal_hash: T::Hash = Default::default();
 		let value = T::MinimumDeposit::get();
 
+		for i in 0..p {
+			add_proposal::<T>(i)?;
+		}
+
 	}: _(RawOrigin::Signed(caller), proposal_hash, value.into())
 
 	second {
-		let u in ...;
+		let s in 0 .. 100;
 
 		let caller = funded_account::<T>("caller", 0);
-		let proposal_hash = add_proposal::<T>(u)?;
+		let proposal_hash = add_proposal::<T>(s)?;
 
-	}: _(RawOrigin::Signed(caller), (u - 1).into())
+		for i in 0..s {
+			let seconder = funded_account::<T>("seconder", i);
+			Democracy::<T>::second(RawOrigin::Signed(seconder).into(), 0)?;
+		}
+
+	}: _(RawOrigin::Signed(caller), 0)
 
 	vote {
 		let r in ...;
@@ -313,7 +324,7 @@ benchmarks! {
 
 		let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
 		let block_number: T::BlockNumber = 0.into();
-		let referendum_index: ReferendumIndex = 0u32.into(); 
+		let referendum_index: ReferendumIndex = 0u32.into();
 		<DispatchQueue<T>>::put(vec![(block_number, proposal_hash, referendum_index)]);
 
 	}: _(RawOrigin::Signed(caller), encoded_proposal)
@@ -368,7 +379,7 @@ benchmarks! {
 		}
 
 		let referendum_index = r - 1;
-	
+
 	}: _(RawOrigin::Signed(caller), referendum_index)
 
 	remove_other_vote {
@@ -424,7 +435,7 @@ benchmarks! {
 		let referendum_index = add_referendum::<T>(u)?;
 		let account_vote = account_vote::<T>();
 		let proxy = open_activate_proxy::<T>(u)?;
-	
+
 		Democracy::<T>::proxy_vote(RawOrigin::Signed(proxy.clone()).into(), referendum_index, account_vote)?;
 
 	}: _(RawOrigin::Signed(proxy), referendum_index)
