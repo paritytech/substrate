@@ -52,7 +52,6 @@ use frame_support::{
 	traits::{Get, schedule},
 	weights::{GetDispatchInfo, Weight},
 };
-//use frame_benchmarking::{benchmarks, account};
 use frame_system::{self as system};
 
 /// Our pallet's configuration trait. All our types and constants go in here. If the
