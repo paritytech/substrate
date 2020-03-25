@@ -1,6 +1,6 @@
 [package]
 name = "pallet-indices"
-version = "2.0.0-alpha.4"
+version = "2.0.0-alpha.5"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
@@ -11,16 +11,16 @@ description = "FRAME indices management pallet"
 [dependencies]
 serde = { version = "1.0.101", optional = true }
 codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false, features = ["derive"] }
-sp-keyring = { version = "2.0.0-alpha.4", optional = true, path = "../../primitives/keyring" }
-sp-std = { version = "2.0.0-alpha.4", default-features = false, path = "../../primitives/std" }
-sp-io = { version = "2.0.0-alpha.4", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "2.0.0-alpha.4", default-features = false, path = "../../primitives/runtime" }
-sp-core = { version = "2.0.0-alpha.4", default-features = false, path = "../../primitives/core" }
-frame-support = { version = "2.0.0-alpha.4", default-features = false, path = "../support" }
-frame-system = { version = "2.0.0-alpha.4", default-features = false, path = "../system" }
+sp-keyring = { version = "2.0.0-alpha.5", optional = true, path = "../../primitives/keyring" }
+sp-std = { version = "2.0.0-alpha.5", default-features = false, path = "../../primitives/std" }
+sp-io = { version = "2.0.0-alpha.5", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "2.0.0-alpha.5", default-features = false, path = "../../primitives/runtime" }
+sp-core = { version = "2.0.0-alpha.5", default-features = false, path = "../../primitives/core" }
+frame-support = { version = "2.0.0-alpha.5", default-features = false, path = "../support" }
+frame-system = { version = "2.0.0-alpha.5", default-features = false, path = "../system" }
 
 [dev-dependencies]
-pallet-balances = { version = "2.0.0-alpha.4", path = "../balances" }
+pallet-balances = { version = "2.0.0-alpha.5", path = "../balances" }
 
 [features]
 default = ["std"]
