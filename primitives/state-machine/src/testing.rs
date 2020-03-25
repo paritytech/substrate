@@ -93,12 +93,15 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 		storage.top.insert(HEAP_PAGES.to_vec(), 8u64.encode());
 		storage.top.insert(CODE.to_vec(), code.to_vec());
 
+		let mut extensions = Extensions::default();
+		extensions.register(sp_core::traits::TaskExecutorExt(sp_core::tasks::executor()));
+
 		TestExternalities {
 			overlay,
 			changes_trie_config,
+			extensions,
 			changes_trie_storage: ChangesTrieInMemoryStorage::new(),
 			backend: storage.into(),
-			extensions: Default::default(),
 			storage_transaction_cache: Default::default(),
 		}
 	}
