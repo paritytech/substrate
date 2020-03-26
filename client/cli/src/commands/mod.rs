@@ -58,7 +58,7 @@ pub enum Subcommand {
 	PurgeChain(PurgeChainCmd),
 }
 
-/// Macro to that impl CliConfiguration on an enum of subcommand automatically
+/// Macro that helps implement CliConfiguration on an enum of subcommand automatically
 ///
 /// # Example
 ///
