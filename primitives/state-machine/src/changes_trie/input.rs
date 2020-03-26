@@ -177,17 +177,10 @@ impl<Number: BlockNumber> Decode for InputKey<Number> {
 				block: Decode::decode(input)?,
 				key: Decode::decode(input)?,
 			})),
-			3 => {
-				let block = Decode::decode(input)?;
-				if let Some(storage_key) = PrefixedStorageKey::new(Decode::decode(input)?) {
-					Ok(InputKey::ChildIndex(ChildIndex {
-						block,
-						storage_key,
-					}))
-				} else {
-					Err("Invalid prefixed key in change trie".into())
-				}
-			},
+			3 => Ok(InputKey::ChildIndex(ChildIndex {
+				block: Decode::decode(input)?,
+				storage_key: PrefixedStorageKey::new(Decode::decode(input)?),
+			})),
 			_ => Err("Invalid input key variant".into()),
 		}
 	}

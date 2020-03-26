@@ -323,7 +323,7 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a> {
 			message::RemoteReadChildRequest {
 				id,
 				block,
-				storage_key: storage_key.key(),
+				storage_key: storage_key.into_inner(),
 				keys,
 			});
 
@@ -365,7 +365,7 @@ impl<'a, B: BlockT> LightDispatchNetwork<B> for LightDispatchIn<'a> {
 			last,
 			min,
 			max,
-			storage_key: storage_key.map(|p| p.key()),
+			storage_key: storage_key.map(|p| p.into_inner()),
 			key,
 		});
 
@@ -1626,7 +1626,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		trace!(target: "sync", "Remote read child request {} from {} ({} {} at {})",
 			request.id, who, HexDisplay::from(&request.storage_key), keys_str(), request.block);
 		let prefixed_key = PrefixedStorageKey::new_ref(&request.storage_key);
-		let child_info = match prefixed_key.and_then(|key| ChildType::from_prefixed_key(key)) {
+		let child_info = match ChildType::from_prefixed_key(prefixed_key) {
 			Some((ChildType::ParentKeyId, storage_key)) => Ok(ChildInfo::new_default(storage_key)),
 			None => Err("Invalid child storage key".into()),
 		};
@@ -1727,24 +1727,17 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			request.last
 		);
 		let key = StorageKey(request.key);
-		let prefixed_key = if let Some(storage_key) = request.storage_key.as_ref() {
-			if let Some(storage_key) = PrefixedStorageKey::new_ref(storage_key) {
-				Ok(Some(storage_key))
-			} else {
-				Err("Invalid prefixed storage key".into())
-			}
-		} else {
-			Ok(None)
-		};
+		let prefixed_key =  request.storage_key.as_ref()
+			.map(|storage_key| PrefixedStorageKey::new_ref(storage_key));
 		let (first, last, min, max) = (request.first, request.last, request.min, request.max);
-		let proof = match prefixed_key.and_then(|p_key| self.context_data.chain.key_changes_proof(
+		let proof = match self.context_data.chain.key_changes_proof(
 			first,
 			last,
 			min,
 			max,
-			p_key,
+			prefixed_key,
 			&key,
-		)) {
+		) {
 			Ok(proof) => proof,
 			Err(error) => {
 				trace!(target: "sync", "Remote changes proof request {} from {} for key {} ({}..{}) failed with: {}",

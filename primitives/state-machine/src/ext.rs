@@ -458,9 +458,9 @@ where
 				// A better design would be to manage 'child_storage_transaction' in a
 				// similar way as 'storage_transaction' but for each child trie.
 				if is_empty {
-					self.overlay.set_storage(prefixed_storage_key.key(), None);
+					self.overlay.set_storage(prefixed_storage_key.into_inner(), None);
 				} else {
-					self.overlay.set_storage(prefixed_storage_key.key(), Some(root.clone()));
+					self.overlay.set_storage(prefixed_storage_key.into_inner(), Some(root.clone()));
 				}
 
 				trace!(target: "state-trace", "{:04x}: ChildRoot({}) {}",

@@ -513,7 +513,7 @@ where
 		let block = Decode::decode(&mut request.block.as_ref())?;
 
 		let prefixed_key = PrefixedStorageKey::new_ref(&request.storage_key);
-		let child_info = match prefixed_key.and_then(|key| ChildType::from_prefixed_key(key)) {
+		let child_info = match ChildType::from_prefixed_key(prefixed_key) {
 			Some((ChildType::ParentKeyId, storage_key)) => Ok(ChildInfo::new_default(storage_key)),
 			None => Err("Invalid child storage key".into()),
 		};
@@ -592,18 +592,12 @@ where
 		let max = Decode::decode(&mut request.max.as_ref())?;
 		let key = StorageKey(request.key.clone());
 		let storage_key = if request.storage_key.is_empty() {
-			Ok(None)
+			None
 		} else {
-			if let Some(storage_key) = PrefixedStorageKey::new_ref(&request.storage_key) {
-				Ok(Some(storage_key))
-			} else {
-				Err("Invalid prefix for storage key.".into())
-			}
+			Some(PrefixedStorageKey::new_ref(&request.storage_key))
 		};
 
-		let proof = match storage_key.and_then(|storage_key| {
-			self.chain.key_changes_proof(first, last, min, max, storage_key, &key)
-		}) {
+		let proof = match self.chain.key_changes_proof(first, last, min, max, storage_key, &key) {
 			Ok(proof) => proof,
 			Err(error) => {
 				log::trace!("remote changes proof request from {} for key {} ({:?}..{:?}) failed with: {}",
@@ -922,7 +916,7 @@ fn serialize_request<B: Block>(request: &Request<B>) -> api::v1::light::Request 
 		Request::ReadChild { request, .. } => {
 			let r = api::v1::light::RemoteReadChildRequest {
 				block: request.block.encode(),
-				storage_key: request.storage_key.clone().key(),
+				storage_key: request.storage_key.clone().into_inner(),
 				keys: request.keys.clone(),
 			};
 			api::v1::light::request::Request::RemoteReadChildRequest(r)
@@ -941,7 +935,8 @@ fn serialize_request<B: Block>(request: &Request<B>) -> api::v1::light::Request 
 				last: request.last_block.1.encode(),
 				min: request.tries_roots.1.encode(),
 				max: request.max_block.1.encode(),
-				storage_key: request.storage_key.clone().map(|s| s.key()).unwrap_or_default(),
+				storage_key: request.storage_key.clone().map(|s| s.into_inner())
+					.unwrap_or_default(),
 				key: request.key.clone(),
 			};
 			api::v1::light::request::Request::RemoteChangesRequest(r)

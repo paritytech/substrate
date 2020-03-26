@@ -331,7 +331,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 			if let Some(child_info) = child_info.as_ref() {
 				let prefix_storage_key = child_info.prefixed_storage_key();
 				let ch = insert_into_memory_db::<H, _>(&mut mdb, map.clone().into_iter())?;
-				new_child_roots.push((prefix_storage_key.key(), ch.as_ref().into()));
+				new_child_roots.push((prefix_storage_key.into_inner(), ch.as_ref().into()));
 			} else {
 				root_map = Some(map);
 			}

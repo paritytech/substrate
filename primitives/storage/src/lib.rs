@@ -61,36 +61,20 @@ impl DerefMut for PrefixedStorageKey {
 impl PrefixedStorageKey {
 	/// Create a prefixed storage key from its byte array
 	/// representation.
-	/// Returns `None` on unknown prefix.
-	pub fn new(inner: Vec<u8>) -> Option<Self> {
-		let result = PrefixedStorageKey(inner);
-		// currently only support for child trie key
-		// note that this function should not be use in a runtime
-		// as it will change its behavior with future child types.
-		if ChildType::from_prefixed_key(&result).is_some() {
-			Some(result)
-		} else {
-			None
-		}
+	pub fn new(inner: Vec<u8>) -> Self {
+		PrefixedStorageKey(inner)
 	}
 
-	pub fn new_ref(inner: &Vec<u8>) -> Option<&Self> {
-		let result = PrefixedStorageKey::ref_cast(inner);
-		// currently only support for child trie key
-		// note that this function should not be use in a runtime
-		// as it will change its behavior with future child types.
-		if ChildType::from_prefixed_key(&result).is_some() {
-			Some(result)
-		} else {
-			None
-		}
+	/// Create a prefixed storage key reference.
+	pub fn new_ref(inner: &Vec<u8>) -> &Self {
+		PrefixedStorageKey::ref_cast(inner)
 	}
 
 	/// Get inner key, this should
 	/// only be needed when writing
 	/// into parent trie to avoid an
 	/// allocation.
-	pub fn key(self) -> Vec<u8> {
+	pub fn into_inner(self) -> Vec<u8> {
 		self.0
 	}
 }

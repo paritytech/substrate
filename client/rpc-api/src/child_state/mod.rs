@@ -23,6 +23,9 @@ use crate::state::error::FutureResult;
 pub use self::gen_client::Client as ChildStateClient;
 
 /// Substrate child state API
+///
+/// Note that all `PrefixedStorageKey` are desierialized
+/// from json and not guaranted valid.
 #[rpc]
 pub trait ChildStateApi<Hash> {
 	/// RPC Metadata
