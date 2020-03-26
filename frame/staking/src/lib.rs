@@ -1037,7 +1037,7 @@ decl_storage! {
 
 decl_event!(
 	pub enum Event<T> where Balance = BalanceOf<T>, <T as frame_system::Trait>::AccountId {
-		/// The staker has been rewarded by this amount. `AccountId` is the controller account.
+		/// The staker has been rewarded by this amount. `AccountId` is the stash account.
 		Reward(AccountId, Balance),
 		/// One validator (and its nominators) has been slashed by the given amount.
 		Slash(AccountId, Balance),
