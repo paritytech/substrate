@@ -30,6 +30,7 @@ use substrate_test_runtime_client::{
 	sp_consensus::BlockOrigin,
 	runtime,
 };
+use sp_runtime::generic::BlockId;
 
 const CHILD_INFO: ChildInfo<'static> = ChildInfo::new_default(b"unique_id");
 
@@ -212,7 +213,7 @@ fn should_send_initial_storage_changes_and_notifications() {
 
 #[test]
 fn should_query_storage() {
-	fn run_tests(mut client: Arc<TestClient>) {
+	fn run_tests(mut client: Arc<TestClient>, has_changes_trie_config: bool) {
 		let core = tokio::runtime::Runtime::new().unwrap();
 		let api = new_full(client.clone(), Subscriptions::new(Arc::new(core.executor())));
 
@@ -236,6 +237,13 @@ fn should_query_storage() {
 		let block1_hash = add_block(0);
 		let block2_hash = add_block(1);
 		let genesis_hash = client.genesis_hash();
+
+		if has_changes_trie_config {
+			assert_eq!(
+				client.max_key_changes_range(1, BlockId::Hash(block1_hash)).unwrap(),
+				Some((0, BlockId::Hash(block1_hash))),
+			);
+		}
 
 		let mut expected = vec![
 			StorageChangeSet {
@@ -306,7 +314,7 @@ fn should_query_storage() {
 			Err(Error::InvalidBlockRange {
 				from: format!("1 ({:?})", block1_hash),
 				to: format!("0 ({:?})", genesis_hash),
-				details: "from number >= to number".to_owned(),
+				details: "from number > to number".to_owned(),
 			}).map_err(|e| e.to_string())
 		);
 
@@ -376,12 +384,39 @@ fn should_query_storage() {
 				details: format!("UnknownBlock: header not found in db: {}", random_hash1),
 			}).map_err(|e| e.to_string()),
 		);
+
+		// single block range
+		let result = api.query_storage_at(
+			keys.clone(),
+			Some(block1_hash),
+		);
+
+		assert_eq!(
+			result.wait().unwrap(),
+			vec![
+				StorageChangeSet {
+					block: block1_hash,
+					changes: vec![
+						(StorageKey(vec![1_u8]), None),
+						(StorageKey(vec![2_u8]), Some(StorageData(vec![2_u8]))),
+						(StorageKey(vec![3_u8]), Some(StorageData(vec![3_u8]))),
+						(StorageKey(vec![4_u8]), None),
+						(StorageKey(vec![5_u8]), Some(StorageData(vec![0_u8]))),
+					]
+				}
+			]
+		);
 	}
 
-	run_tests(Arc::new(substrate_test_runtime_client::new()));
-	run_tests(Arc::new(TestClientBuilder::new()
-		.changes_trie_config(Some(ChangesTrieConfiguration::new(4, 2)))
-		.build()));
+	run_tests(Arc::new(substrate_test_runtime_client::new()), false);
+	run_tests(
+		Arc::new(
+			TestClientBuilder::new()
+				.changes_trie_config(Some(ChangesTrieConfiguration::new(4, 2)))
+				.build(),
+		),
+		true,
+	);
 }
 
 #[test]
