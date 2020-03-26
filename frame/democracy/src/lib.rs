@@ -1250,8 +1250,8 @@ decl_module! {
 			Self::try_remove_vote(&target, index, UnvoteScope::Any)
 		}
 
-		/// Enact a proposal from a referendum.
-		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
+		/// Enact a proposal from a referendum. For now we just make the weight be the maximum.
+		#[weight = SimpleDispatchInfo::MaxNormal]
 		fn enact_proposal(origin, proposal_hash: T::Hash, index: ReferendumIndex) -> DispatchResult {
 			ensure_root(origin)?;
 			Self::do_enact_proposal(proposal_hash, index)
