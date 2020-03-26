@@ -89,7 +89,7 @@ pub trait SubstrateCli: Sized
 	/// `structopt`'s `from_iter()` except that it takes a `VersionInfo` argument to provide the name of
 	/// the application, author, "about" and version. It will also set `AppSettings::GlobalVersion`.
 	///
-	/// To allow running the node without subcommand, tt also sets a few more settings:
+	/// To allow running the node without subcommand, it also sets a few more settings:
 	/// `AppSettings::ArgsNegateSubcommands` and `AppSettings::SubcommandsNegateReqs`.
 	///
 	/// Gets the struct from any iterator such as a `Vec` of your making.
@@ -123,7 +123,7 @@ pub trait SubstrateCli: Sized
 	/// `structopt`'s `from_iter()` except that it takes a `VersionInfo` argument to provide the name of
 	/// the application, author, "about" and version. It will also set `AppSettings::GlobalVersion`.
 	///
-	/// To allow running the node without subcommand, tt also sets a few more settings:
+	/// To allow running the node without subcommand, it also sets a few more settings:
 	/// `AppSettings::ArgsNegateSubcommands` and `AppSettings::SubcommandsNegateReqs`.
 	///
 	/// Gets the struct from any iterator such as a `Vec` of your making.
