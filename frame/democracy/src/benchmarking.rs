@@ -228,6 +228,7 @@ benchmarks! {
 	}: _(RawOrigin::Root, referendum_index)
 
 	cancel_queued {
+		let referendum_index = add_referendum::<T>(d)?;
 	}: _(RawOrigin::Root, referendum_index)
 
 	open_proxy {
