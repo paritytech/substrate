@@ -17,8 +17,8 @@
 //! This is part of the Substrate runtime.
 
 use sp_core::{ed25519, sr25519, crypto::Pair, traits::CloneableSpawn};
-use std::sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering}};
-use futures::{future::FutureExt, task::FutureObj};
+use std::sync::{Arc, atomic::{AtomicBool, Ordering as AtomicOrdering}};
+use futures::{future::FutureExt, task::FutureObj, channel::oneshot};
 
 const SR25519_BATCH_SIZE: usize = 64;
 
@@ -46,7 +46,7 @@ pub struct BatchVerifier {
 	scheduler: Box<dyn CloneableSpawn>,
 	sr25519_items: Vec<Sr25519BatchItem>,
 	invalid: Arc<AtomicBool>,
-	left: Arc<AtomicUsize>,
+	pending_tasks: Vec<oneshot::Receiver<()>>,
 }
 
 impl BatchVerifier {
@@ -55,23 +55,27 @@ impl BatchVerifier {
 			scheduler,
 			sr25519_items: Default::default(),
 			invalid: Arc::new(false.into()),
-			left: Arc::new(0.into()),
+			pending_tasks: vec![],
 		}
 	}
 
-	fn spawn_verification_task(&self, f: impl FnOnce() -> bool + Send + 'static) {
+	fn spawn_verification_task(&mut self, f: impl FnOnce() -> bool + Send + 'static) {
 		// there is already invalid transaction encountered
 		if self.invalid.load(AtomicOrdering::Relaxed) { return; }
 
 		let invalid_clone = self.invalid.clone();
-		let left_clone = self.left.clone();
-		self.left.fetch_add(1, AtomicOrdering::SeqCst);
+		let (sender, receiver) = oneshot::channel();
+		self.pending_tasks.push(receiver);
 
 		self.scheduler.spawn_obj(FutureObj::new(async move {
 			if !f() {
 				invalid_clone.store(true, AtomicOrdering::Relaxed);
 			}
-			left_clone.fetch_sub(1, AtomicOrdering::SeqCst);
+			if let Err(_) = sender.send(()) {
+				// sanity
+				log::warn!("Verification halted while result was pendign");
+				invalid_clone.store(true, AtomicOrdering::Relaxed);
+			}
 		}.boxed())).expect("Scheduler should not fail");
 	}
 
@@ -124,9 +128,9 @@ impl BatchVerifier {
 			self.spawn_sr25519_verification()
 		}
 
-		while self.left.load(AtomicOrdering::SeqCst) != 0 {
-			std::thread::park_timeout(std::time::Duration::from_micros(50));
-		}
+		futures::executor::block_on(
+			futures::future::join_all(self.pending_tasks.drain(..))
+		);
 
 		if self.invalid.load(AtomicOrdering::Relaxed) {
 			self.invalid.store(false, AtomicOrdering::Relaxed);
