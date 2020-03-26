@@ -95,7 +95,7 @@ pub struct Scheduled<Call, BlockNumber> {
 decl_storage! {
 	trait Store for Module<T: Trait> as Scheduler {
 		/// Items to be executed, indexed by the block number that they should be executed on.
-		Agenda: map hasher(twox_64_concat) T::BlockNumber
+		pub Agenda: map hasher(twox_64_concat) T::BlockNumber
 			=> Vec<Option<Scheduled<<T as Trait>::Call, T::BlockNumber>>>;
 
 		/// Lookup from identity to the block number and index of the task.
@@ -129,7 +129,7 @@ decl_module! {
 					Some((index, *cumulative_weight, s))
 				})
 				.filter_map(|(index, cumulative_weight, mut s)| {
-					if s.priority <= schedule::HARD_DEADLINE || cumulative_weight <= limit {
+					if s.priority <= schedule::HARD_DEADLINE || cumulative_weight <= limit || index == 0 {
 						let r = s.call.clone().dispatch(system::RawOrigin::Root.into());
 						let maybe_id = s.maybe_id.clone();
 						if let &Some((period, count)) = &s.maybe_periodic {
@@ -197,11 +197,11 @@ impl<T: Trait> schedule::Anon<T::BlockNumber, <T as Trait>::Call> for Module<T> 
 	}
 }
 
-impl<T: Trait, Id: Encode> schedule::Named<Id, T::BlockNumber, <T as Trait>::Call> for Module<T> {
+impl<T: Trait> schedule::Named<T::BlockNumber, <T as Trait>::Call> for Module<T> {
 	type Address = TaskAddress<T::BlockNumber>;
 
 	fn schedule_named(
-		id: Id,
+		id: impl Encode,
 		when: T::BlockNumber,
 		maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
 		priority: schedule::Priority,
@@ -227,7 +227,7 @@ impl<T: Trait, Id: Encode> schedule::Named<Id, T::BlockNumber, <T as Trait>::Cal
 		Ok(address)
 	}
 
-	fn cancel_named(id: Id) -> Result<(), ()> {
+	fn cancel_named(id: impl Encode) -> Result<(), ()> {
 		if let Some((when, index)) = id.using_encoded(|d| Lookup::<T>::take(d)) {
 			let i = index as usize;
 			Agenda::<T>::mutate(when, |agenda| if let Some(s) = agenda.get_mut(i) { *s = None });

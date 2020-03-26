@@ -1161,7 +1161,7 @@ pub mod schedule {
 	}
 
 	/// A type that can be used as a scheduler.
-	pub trait Named<Id: Encode, BlockNumber, Call> {
+	pub trait Named<BlockNumber, Call> {
 		/// An address which can be used for removing a scheduled task.
 		type Address: Codec + Clone + Eq + EncodeLike + sp_std::fmt::Debug;
 
@@ -1169,7 +1169,7 @@ pub mod schedule {
 		///
 		/// - `id`: The identity of the task. This must be unique and will return an error if not.
 		fn schedule_named(
-			id: Id,
+			id: impl Encode,
 			when: BlockNumber,
 			maybe_periodic: Option<Period<BlockNumber>>,
 			priority: Priority,
@@ -1183,7 +1183,7 @@ pub mod schedule {
 		///
 		/// NOTE: This guaranteed to work only *before* the point that it is due to be executed.
 		/// If it ends up being delayed beyond the point of execution, then it cannot be cancelled.
-		fn cancel_named(id: Id) -> Result<(), ()>;
+		fn cancel_named(id: impl Encode) -> Result<(), ()>;
 	}
 }
 
