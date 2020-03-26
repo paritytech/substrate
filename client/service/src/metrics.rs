@@ -13,6 +13,7 @@ struct PrometheusMetrics {
 	ready_transactions_number: Gauge<U64>,
 	memory_usage_bytes: Gauge<U64>,
 	netstat: GaugeVec<U64>,
+	load_avg: GaugeVec<F64>,
 	cpu_usage_percentage: Gauge<F64>,
 	network_per_sec_bytes: GaugeVec<U64>,
 	database_cache: Gauge<U64>,
@@ -67,6 +68,10 @@ impl PrometheusMetrics {
 			)?, registry)?,
 			netstat: register(GaugeVec::new(
 				Opts::new("netstat_tcp", "Current TCP connections "),
+				&["status"]
+			)?, registry)?,
+			load_avg: register(GaugeVec::new(
+				Opts::new("load_avg", "System load average"),
 				&["status"]
 			)?, registry)?,
 		})
@@ -204,6 +209,11 @@ impl MetricsService {
 			metrics.cpu_usage_percentage.set(cpu_usage as f64);
 			metrics.memory_usage_bytes.set(memory);
 			metrics.ready_transactions_number.set(txpool_status.ready as u64);
+
+			let load = self.system.get_load_average();
+			metrics.load_avg.with_label_values(&["1min"]).set(load.one);
+			metrics.load_avg.with_label_values(&["5min"]).set(load.five);
+			metrics.load_avg.with_label_values(&["15min"]).set(load.fifteen);
 
 			metrics.network_per_sec_bytes.with_label_values(&["download"]).set(net_status.average_download_per_sec);
 			metrics.network_per_sec_bytes.with_label_values(&["upload"]).set(net_status.average_upload_per_sec);
