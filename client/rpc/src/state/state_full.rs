@@ -123,7 +123,7 @@ impl<BE, Block: BlockT, Client> FullState<BE, Block, Client>
 			.map_err(client_err)?;
 		let filtered_range_begin = changes_trie_range
 			.and_then(|(begin, _)| {
-				// avoids weird corner case where begin < from_number
+				// avoids a corner case where begin < from_number (happens when querying genesis)
 				begin.checked_sub(&from_number).map(|x| x.saturated_into::<usize>())
 			});
 		let (unfiltered_range, filtered_range) = split_range(hashes.len(), filtered_range_begin);
