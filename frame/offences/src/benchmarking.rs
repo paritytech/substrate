@@ -64,8 +64,13 @@ benchmarks! {
 		}
 
 		let offenders = offenders.iter()
-			.map(|id | (id, <T as pallet_session::Trait>::ValidatorIdOf::convert(id.clone()).expect("validator exist for this id")))
-			.map(|(id, validator_id)| <T as pallet_session::historical::Trait>::FullIdentificationOf::convert(validator_id.clone()).map(|full_id| (validator_id, full_id)).expect("full identification exist for this validator"))
+			.map(|id |
+				(id, <T as pallet_session::Trait>::ValidatorIdOf::convert(id.clone())
+				.expect("failed to get validator id from account id")))
+			.map(|(id, validator_id)|
+				<T as pallet_session::historical::Trait>::FullIdentificationOf::convert(validator_id.clone())
+				.map(|full_id| (validator_id, full_id))
+				.expect("failed to convert validator id to full identification"))
 			.collect::<Vec<pallet_session::historical::IdentificationTuple<T>>>();
 
 
