@@ -173,7 +173,7 @@ pub struct RunCmd {
 	/// This flag can be passed multiple times as a means to specify multiple
 	/// telemetry endpoints. Verbosity levels range from 0-9, with 0 denoting
 	/// the least verbosity.
-	/// Expected format is 'URL VERBOSITY', e.g. `--telemetry-url 'wss://foo/bar 0'`
+	/// Expected format is 'URL VERBOSITY', e.g. `--telemetry-url 'wss://foo/bar 0'`.
 	#[structopt(long = "telemetry-url", value_name = "URL VERBOSITY", parse(try_from_str = parse_telemetry_endpoints))]
 	pub telemetry_endpoints: Vec<(String, u8)>,
 
@@ -570,7 +570,6 @@ fn interface_str(
 enum TelemetryParsingError {
 	MissingVerbosity,
 	VerbosityParsingError(std::num::ParseIntError),
-	UrlParsingError(std::convert::Infallible),
 }
 
 impl std::error::Error for TelemetryParsingError {}
@@ -580,7 +579,6 @@ impl fmt::Display for TelemetryParsingError {
 		match &*self {
 			TelemetryParsingError::MissingVerbosity => write!(f, "Verbosity level missing"),
 			TelemetryParsingError::VerbosityParsingError(e) => write!(f, "{}", e),
-			TelemetryParsingError::UrlParsingError(e) => write!(f, "{}", e),
 		}
 	}
 }
@@ -590,8 +588,8 @@ fn parse_telemetry_endpoints(s: &str) -> Result<(String, u8), TelemetryParsingEr
 	match pos {
 		None => Err(TelemetryParsingError::MissingVerbosity),
 		Some(pos_) => {
+			let url = s[..pos_].to_string();
 			let verbosity = s[pos_ + 1..].parse().map_err(TelemetryParsingError::VerbosityParsingError)?;
-			let url = s[..pos_].parse().map_err(TelemetryParsingError::UrlParsingError)?;
 			Ok((url, verbosity))
 		}
 	}
