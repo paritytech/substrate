@@ -4,7 +4,7 @@ use node_template_runtime::{
 	SudoConfig, SystemConfig, WASM_BINARY, Signature
 };
 use sp_consensus_aura::sr25519::{AuthorityId as AuraId};
-use grandpa_primitives::{AuthorityId as GrandpaId};
+use sp_finality_grandpa::{AuthorityId as GrandpaId};
 use sc_service;
 use sp_runtime::traits::{Verify, IdentifyAccount};
 

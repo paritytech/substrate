@@ -10,7 +10,7 @@ use sp_inherents::InherentDataProviders;
 use sc_executor::native_executor_instance;
 pub use sc_executor::NativeExecutor;
 use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
-use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider, StorageAndProofProvider};
+use sc_finality_grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider, StorageAndProofProvider};
 
 // Our native executor instance.
 native_executor_instance!(
@@ -44,7 +44,7 @@ macro_rules! new_full_start {
 					.ok_or_else(|| sc_service::Error::SelectChainRequired)?;
 
 				let (grandpa_block_import, grandpa_link) =
-					grandpa::block_import(client.clone(), &(client.clone() as Arc<_>), select_chain)?;
+					sc_finality_grandpa::block_import(client.clone(), &(client.clone() as Arc<_>), select_chain)?;
 
 				let aura_block_import = sc_consensus_aura::AuraBlockImport::<_, _, _, AuraPair>::new(
 					grandpa_block_import.clone(), client.clone(),
@@ -135,7 +135,7 @@ pub fn new_full(config: Configuration)
 		None
 	};
 
-	let grandpa_config = grandpa::Config {
+	let grandpa_config = sc_finality_grandpa::Config {
 		// FIXME #1578 make this available through chainspec
 		gossip_duration: Duration::from_millis(333),
 		justification_period: 512,
@@ -153,13 +153,13 @@ pub fn new_full(config: Configuration)
 		// and vote data availability than the observer. The observer has not
 		// been tested extensively yet and having most nodes in a network run it
 		// could lead to finality stalls.
-		let grandpa_config = grandpa::GrandpaParams {
+		let grandpa_config = sc_finality_grandpa::GrandpaParams {
 			config: grandpa_config,
 			link: grandpa_link,
 			network: service.network(),
 			inherent_data_providers: inherent_data_providers.clone(),
 			telemetry_on_connect: Some(service.telemetry_on_connect_stream()),
-			voting_rule: grandpa::VotingRulesBuilder::default().build(),
+			voting_rule: sc_finality_grandpa::VotingRulesBuilder::default().build(),
 			prometheus_registry: service.prometheus_registry()
 		};
 
@@ -167,10 +167,10 @@ pub fn new_full(config: Configuration)
 		// if it fails we take down the service with it.
 		service.spawn_essential_task(
 			"grandpa-voter",
-			grandpa::run_grandpa_voter(grandpa_config)?
+			sc_finality_grandpa::run_grandpa_voter(grandpa_config)?
 		);
 	} else {
-		grandpa::setup_disabled_grandpa(
+		sc_finality_grandpa::setup_disabled_grandpa(
 			service.client(),
 			&inherent_data_providers,
 			service.network(),
@@ -204,7 +204,7 @@ pub fn new_light(config: Configuration)
 			let fetch_checker = fetcher
 				.map(|fetcher| fetcher.checker().clone())
 				.ok_or_else(|| "Trying to start light import queue without active fetch checker")?;
-			let grandpa_block_import = grandpa::light_block_import(
+			let grandpa_block_import = sc_finality_grandpa::light_block_import(
 				client.clone(),
 				backend,
 				&(client.clone() as Arc<_>),
