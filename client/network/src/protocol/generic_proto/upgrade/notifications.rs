@@ -164,7 +164,7 @@ where TSubstream: AsyncRead + AsyncWrite,
 {
 	/// Sends the handshake in order to inform the remote that we accept the substream.
 	pub fn send_handshake(&mut self, message: impl Into<Vec<u8>>) {
-		if matches!(self.handshake, NotificationsInSubstreamHandshake::NotSent) {
+		if !matches!(self.handshake, NotificationsInSubstreamHandshake::NotSent) {
 			error!(target: "sub-libp2p", "Tried to send handshake twice");
 			return;
 		}
