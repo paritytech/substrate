@@ -3585,6 +3585,7 @@ dependencies = [
  "pallet-offences",
  "pallet-randomness-collective-flip",
  "pallet-recovery",
+ "pallet-scheduler",
  "pallet-session",
  "pallet-session-benchmarking",
  "pallet-society",

@@ -162,6 +162,17 @@ impl pallet_utility::Trait for Runtime {
 }
 
 parameter_types! {
+	pub const MaximumWeight: Weight = 2_000_000;
+}
+
+impl pallet_scheduler::Trait for Runtime {
+	type Event = Event;
+	type Call = Call;
+	type Origin = Origin;
+	type MaximumWeight = MaximumWeight;
+}
+
+parameter_types! {
 	pub const EpochDuration: u64 = EPOCH_DURATION_IN_SLOTS;
 	pub const ExpectedBlockTime: Moment = MILLISECS_PER_BLOCK;
 }
@@ -340,6 +351,7 @@ impl pallet_democracy::Trait for Runtime {
 	type CooloffPeriod = CooloffPeriod;
 	type PreimageByteDeposit = PreimageByteDeposit;
 	type Slash = Treasury;
+	type Scheduler = Scheduler;
 }
 
 parameter_types! {
