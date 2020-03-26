@@ -858,6 +858,12 @@ pub trait Time {
 	fn now() -> Self::Moment;
 }
 
+/// Trait to deal with unix time.
+pub trait UnixTime {
+	/// Return duration since `SystemTime::UNIX_EPOCH`.
+	fn now() -> core::time::Duration;
+}
+
 impl WithdrawReasons {
 	/// Choose all variants except for `one`.
 	///

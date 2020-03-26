@@ -21,9 +21,8 @@ use mock::*;
 use sp_runtime::{assert_eq_error_rate, traits::BadOrigin};
 use sp_staking::offence::OffenceDetails;
 use frame_support::{
-	assert_ok, assert_noop,
+	assert_ok, assert_noop, StorageMap,
 	traits::{Currency, ReservableCurrency, OnInitialize},
-	StorageMap,
 };
 use pallet_balances::Error as BalancesError;
 use substrate_test_utils::assert_eq_uvec;
@@ -3016,7 +3015,6 @@ fn set_history_depth_works() {
 	});
 }
 
-
 #[test]
 fn test_payout_validator() {
 	// Here we will test validator can set `max_nominators_payout` and it works.
@@ -3141,4 +3139,12 @@ fn payout_validator_handles_basic_errors() {
 		assert_noop!(Staking::payout_validator(Origin::signed(1337), 11, 15), Error::<Test>::AlreadyClaimed);
 		assert_noop!(Staking::payout_validator(Origin::signed(1337), 11, 98), Error::<Test>::AlreadyClaimed);
 	});
+}
+
+#[test]
+fn assert_migration_is_noop() {
+	let kusama_active_era = "4a0200000190e2721171010000";
+	let era = ActiveEraInfo::decode(&mut &hex::decode(kusama_active_era).unwrap()[..]).unwrap();
+	assert_eq!(era.index, 586);
+	assert_eq!(era.start, Some(1585135674000));
 }

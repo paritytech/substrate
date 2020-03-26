@@ -1108,10 +1108,12 @@ impl<B: BlockT> ChainSync<B> {
 		}
 		// If the announced block is the best they have and is not ahead of us, our common number
 		// is either one further ahead or it's the one they just announced, if we know about it.
-		if is_best && self.best_queued_number >= number {
-			if known {
+		if is_best {
+			if known && self.best_queued_number >= number {
 				peer.common_number = number
-			} else if header.parent_hash() == &self.best_queued_hash || known_parent {
+			} else if header.parent_hash() == &self.best_queued_hash
+				|| known_parent && self.best_queued_number >= number
+			{
 				peer.common_number = number - One::one();
 			}
 		}
@@ -1320,12 +1322,16 @@ fn peer_block_request<B: BlockT>(
 	finalized: NumberFor<B>,
 	best_num: NumberFor<B>,
 ) -> Option<(Range<NumberFor<B>>, BlockRequest<B>)> {
-	if peer.common_number < finalized {
-		return None;
-	}
 	if best_num >= peer.best_number {
 		// Will be downloaded as alternative fork instead.
 		return None;
+	}
+	if peer.common_number < finalized {
+		trace!(
+			target: "sync",
+			"Requesting pre-finalized chain from {:?}, common={}, finalized={}, peer best={}, our best={}",
+			id, finalized, peer.common_number, peer.best_number, best_num,
+		);
 	}
 	if let Some(range) = blocks.needed_blocks(
 		id.clone(),
