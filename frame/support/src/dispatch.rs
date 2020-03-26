@@ -57,12 +57,14 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # #[macro_use]
 /// # extern crate frame_support;
 /// # use frame_support::dispatch;
+/// # use frame_support::weights::SimpleDispatchInfo;
 /// # use frame_system::{self as system, Trait, ensure_signed};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 ///
 /// 		// Private functions are dispatchable, but not available to other
 /// 		// FRAME pallets.
+/// 		#[weight = SimpleDispatchInfo::default()]
 /// 		fn my_function(origin, var: u64) -> dispatch::DispatchResult {
 ///				// Your implementation
 ///				Ok(())
@@ -70,6 +72,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 ///
 ///			// Public functions are both dispatchable and available to other
 /// 		// FRAME pallets.
+/// 		#[weight = SimpleDispatchInfo::default()]
 ///			pub fn my_public_function(origin) -> dispatch::DispatchResult {
 /// 			// Your implementation
 ///				Ok(())
@@ -97,15 +100,17 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # #[macro_use]
 /// # extern crate frame_support;
 /// # use frame_support::dispatch;
+/// # use frame_support::weights::SimpleDispatchInfo;
 /// # use frame_system::{self as system, Trait, ensure_signed};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-///
+/// 		#[weight = SimpleDispatchInfo::default()]
 /// 		fn my_long_function(origin) -> dispatch::DispatchResult {
 ///				// Your implementation
 /// 			Ok(())
 /// 		}
 ///
+/// 		#[weight = SimpleDispatchInfo::default()]
 /// 		fn my_short_function(origin) {
 ///				// Your implementation
 /// 		}
@@ -122,9 +127,11 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # #[macro_use]
 /// # extern crate frame_support;
 /// # use frame_support::dispatch;
+/// # use frame_support::weights::SimpleDispatchInfo;
 /// # use frame_system::{self as system, Trait, ensure_signed, ensure_root};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+/// 		#[weight = SimpleDispatchInfo::default()]
 ///			fn my_privileged_function(origin) -> dispatch::DispatchResult {
 /// 			ensure_root(origin)?;
 ///				// Your implementation
@@ -807,27 +814,10 @@ macro_rules! decl_module {
 		) $( -> $result:ty )* { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
-		$crate::decl_module!(@normalize
-			$(#[$attr])*
-			pub struct $mod_type<
-				$trait_instance: $trait_name$(<I>, $instance: $instantiable $(= $module_default_instance)?)?
-			>
-			for enum $call_type where origin: $origin_type, system = $system
-			{ $( $other_where_bounds )* }
-			{ $( $deposit_event )* }
-			{ $( $on_initialize )* }
-			{ $( $on_runtime_upgrade )* }
-			{ $( $on_finalize )* }
-			{ $( $offchain )* }
-			{ $( $constants )* }
-			{ $( $error_type )* }
-			[ $( $dispatchables )* ]
-			$(#[doc = $doc_attr])*
-			#[weight = $crate::dispatch::SimpleDispatchInfo::default()]
-			$fn_vis fn $fn_name(
-				$from $(, $(#[$codec_attr])* $param_name : $param )*
-			) $( -> $result )* { $( $impl )* }
-			$($rest)*
+		compile_error!(concat!(
+			"Missing weight for ", stringify!($ident),
+			". Every dispatchable must have a #[weight] attribute."
+			)
 		);
 	};
 	// Ignore any ident which is not `origin` with type `T::Origin`.
@@ -1444,9 +1434,9 @@ macro_rules! decl_module {
 								&$weight,
 								($( $param_name, )*)
 							);
-							$crate::dispatch::DispatchInfo { 
-								weight, 
-								class, 
+							$crate::dispatch::DispatchInfo {
+								weight,
+								class,
 								pays_fee,
 							}
 						},
@@ -2063,21 +2053,31 @@ mod tests {
 	decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin, T::AccountId: From<u32> {
 			/// Hi, this is a comment.
+			#[weight = SimpleDispatchInfo::default()]
 			fn aux_0(_origin) -> DispatchResult { unreachable!() }
+
+			#[weight = SimpleDispatchInfo::default()]
 			fn aux_1(_origin, #[compact] _data: u32,) -> DispatchResult { unreachable!() }
+
+			#[weight = SimpleDispatchInfo::default()]
 			fn aux_2(_origin, _data: i32, _data2: String) -> DispatchResult { unreachable!() }
+
 			#[weight = SimpleDispatchInfo::FixedNormal(3)]
 			fn aux_3(_origin) -> DispatchResult { unreachable!() }
+
+			#[weight = SimpleDispatchInfo::default()]
 			fn aux_4(_origin, _data: i32) -> DispatchResult { unreachable!() }
+
+			#[weight = SimpleDispatchInfo::default()]
 			fn aux_5(_origin, _data: i32, #[compact] _data2: u32,) -> DispatchResult { unreachable!() }
+
+			#[weight = SimpleDispatchInfo::FixedOperational(5)]
+			fn operational(_origin) { unreachable!() }
 
 			fn on_initialize(n: T::BlockNumber,) -> Weight { if n.into() == 42 { panic!("on_initialize") } 7 }
 			fn on_finalize(n: T::BlockNumber,) { if n.into() == 42 { panic!("on_finalize") } }
 			fn on_runtime_upgrade() -> Weight { 10 }
 			fn offchain_worker() {}
-
-			#[weight = SimpleDispatchInfo::FixedOperational(5)]
-			fn operational(_origin,) { unreachable!() }
 		}
 	}
 
