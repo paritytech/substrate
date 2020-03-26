@@ -54,5 +54,4 @@ std = [
 runtime-benchmarks = [
 	"rand_chacha",
 	"frame-benchmarking",
-	"frame-system/runtime-benchmarks",
 ]
