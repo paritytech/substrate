@@ -670,6 +670,7 @@ construct_runtime!(
 		Society: pallet_society::{Module, Call, Storage, Event<T>, Config<T>},
 		Recovery: pallet_recovery::{Module, Call, Storage, Event<T>},
 		Vesting: pallet_vesting::{Module, Call, Storage, Event<T>, Config<T>},
+		Scheduler: pallet_scheduler::{Module, Call, Storage, Event<T>},
 	}
 );
 
