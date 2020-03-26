@@ -30,7 +30,7 @@ use sp_runtime::{
 };
 use frame_support::{
 	decl_storage, decl_event, ensure, decl_module, decl_error,
-	weights::SimpleDispatchInfo,
+	weights::{Weight, SimpleDispatchInfo, WeighData},
 	traits::{
 		Currency, ExistenceRequirement, Get, LockableCurrency, LockIdentifier, BalanceStatus,
 		OnUnbalanced, ReservableCurrency, WithdrawReason, WithdrawReasons, ChangeMembers
@@ -698,11 +698,12 @@ decl_module! {
 			<TermDuration<T>>::put(count);
 		}
 
-		fn on_initialize(n: T::BlockNumber) {
+		fn on_initialize(n: T::BlockNumber) -> Weight {
 			if let Err(e) = Self::end_block(n) {
 				print("Guru meditation");
 				print(e);
 			}
+			SimpleDispatchInfo::default().weigh_data(())
 		}
 	}
 }

@@ -32,7 +32,7 @@ use parking_lot::{Mutex, RwLock};
 use sp_runtime::{
 	generic::BlockId,
 	traits::{self, SaturatedConversion},
-	transaction_validity::{TransactionTag as Tag, ValidTransaction},
+	transaction_validity::{TransactionTag as Tag, ValidTransaction, TransactionSource},
 };
 use sp_transaction_pool::{error, PoolStatus};
 use wasm_timer::Instant;
@@ -58,6 +58,7 @@ impl<Hash, Ex, Error> ValidatedTransaction<Hash, Ex, Error> {
 	pub fn valid_at(
 		at: u64,
 		hash: Hash,
+		source: TransactionSource,
 		data: Ex,
 		bytes: usize,
 		validity: ValidTransaction,
@@ -66,6 +67,7 @@ impl<Hash, Ex, Error> ValidatedTransaction<Hash, Ex, Error> {
 			data,
 			bytes,
 			hash,
+			source,
 			priority: validity.priority,
 			requires: validity.requires,
 			provides: validity.provides,

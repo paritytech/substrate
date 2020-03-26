@@ -87,8 +87,9 @@ use sp_runtime::{
 	print, DispatchResult, DispatchError, Perbill, traits::{Zero, StaticLookup, Convert},
 };
 use frame_support::{
-	decl_storage, decl_event, ensure, decl_module, decl_error, weights::SimpleDispatchInfo,
-	storage::{StorageMap, IterableStorageMap}, traits::{
+	decl_storage, decl_event, ensure, decl_module, decl_error,
+	weights::{SimpleDispatchInfo, Weight, WeighData}, storage::{StorageMap, IterableStorageMap},
+	traits::{
 		Currency, Get, LockableCurrency, LockIdentifier, ReservableCurrency, WithdrawReasons,
 		ChangeMembers, OnUnbalanced, WithdrawReason, Contains, BalanceStatus
 	}
@@ -223,8 +224,10 @@ decl_module! {
 
 		fn deposit_event() = default;
 
-		fn on_runtime_upgrade() {
+		fn on_runtime_upgrade() -> Weight {
 			migration::migrate::<T>();
+
+			SimpleDispatchInfo::default().weigh_data(())
 		}
 
 		const CandidacyBond: BalanceOf<T> = T::CandidacyBond::get();
@@ -461,11 +464,13 @@ decl_module! {
 		}
 
 		/// What to do at the end of each block. Checks if an election needs to happen or not.
-		fn on_initialize(n: T::BlockNumber) {
+		fn on_initialize(n: T::BlockNumber) -> Weight {
 			if let Err(e) = Self::end_block(n) {
 				print("Guru meditation");
 				print(e);
 			}
+
+			SimpleDispatchInfo::default().weigh_data(())
 		}
 	}
 }
