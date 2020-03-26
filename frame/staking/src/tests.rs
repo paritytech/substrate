@@ -21,9 +21,8 @@ use mock::*;
 use sp_runtime::{assert_eq_error_rate, traits::BadOrigin};
 use sp_staking::offence::OffenceDetails;
 use frame_support::{
-	assert_ok, assert_noop,
+	assert_ok, assert_noop, StorageMap,
 	traits::{Currency, ReservableCurrency, OnInitialize},
-	StorageMap,
 };
 use pallet_balances::Error as BalancesError;
 use substrate_test_utils::assert_eq_uvec;
@@ -3038,4 +3037,12 @@ fn set_history_depth_works() {
 		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 4));
 		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 5));
 	});
+}
+
+#[test]
+fn assert_migration_is_noop() {
+	let kusama_active_era = "4a0200000190e2721171010000";
+	let era = ActiveEraInfo::decode(&mut &hex::decode(kusama_active_era).unwrap()[..]).unwrap();
+	assert_eq!(era.index, 586);
+	assert_eq!(era.start, Some(1585135674000));
 }

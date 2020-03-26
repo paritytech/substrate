@@ -95,15 +95,17 @@ mod benchmarking;
 
 use sp_std::{result, cmp};
 use sp_inherents::{ProvideInherent, InherentData, InherentIdentifier};
-use frame_support::{Parameter, decl_storage, decl_module};
-use frame_support::traits::{Time, Get};
+use frame_support::{
+	Parameter, decl_storage, decl_module, debug,
+	traits::{Time, UnixTime, Get},
+	weights::SimpleDispatchInfo,
+};
 use sp_runtime::{
 	RuntimeString,
 	traits::{
 		AtLeast32Bit, Zero, SaturatedConversion, Scale
 	}
 };
-use frame_support::weights::SimpleDispatchInfo;
 use frame_system::ensure_none;
 use sp_timestamp::{
 	InherentError, INHERENT_IDENTIFIER, InherentType,
@@ -236,6 +238,25 @@ impl<T: Trait> Time for Module<T> {
 	/// Before the first set of now with inherent the value returned is zero.
 	fn now() -> Self::Moment {
 		Self::now()
+	}
+}
+
+/// Before the timestamp inherent is applied, it returns the time of previous block.
+///
+/// On genesis the time returned is not valid.
+impl<T: Trait> UnixTime for Module<T> {
+	fn now() -> core::time::Duration {
+		// now is duration since unix epoch in millisecond as documented in
+		// `sp_timestamp::InherentDataProvider`.
+		let now = Self::now();
+		sp_std::if_std! { 
+			if now == T::Moment::zero() {
+				debug::error!(
+					"`pallet_timestamp::UnixTime::now` is called at genesis, invalid value returned: 0"
+				);
+			}
+		}
+		core::time::Duration::from_millis(now.saturated_into::<u64>())
 	}
 }
 
