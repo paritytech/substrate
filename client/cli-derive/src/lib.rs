@@ -78,7 +78,11 @@ pub fn substrate_cli(
 ///     keystore: sc_cli::KeystoreParams,
 /// }
 ///
-/// #[substrate_cli_params(shared_params = shared, import_params = import, keystore_params = keystore)]
+/// #[substrate_cli_params(
+///     shared_params = shared,
+///     import_params = import,
+///     keystore_params = keystore,
+/// )]
 /// impl sc_cli::CliConfiguration for MyCommand {
 ///     fn is_dev(&self) -> sc_cli::Result<bool> {
 ///         // override: this function will be used preferably over the value in SharedParams
@@ -97,7 +101,7 @@ pub fn substrate_cli_params(
 
 /// A procedural macro that helps implement CliConfiguration on an object. If the object wraps
 /// another object that implement CliConfiguration, use this macro to automatically create all the
-/// function that will call their parent function in the wrapped object. Every function defined in
+/// functions that will call their parent function in the wrapped object. Every function defined in
 /// this impl will have precedence over the function that is in the wrapped object.
 ///
 /// # Example

@@ -5818,7 +5818,6 @@ dependencies = [
 name = "sc-cli-derive"
 version = "0.8.0-alpha.5"
 dependencies = [
- "heck",
  "platforms",
  "proc-macro-error",
  "proc-macro2",
@@ -5826,7 +5825,6 @@ dependencies = [
  "sc-cli",
  "sc-service",
  "syn",
- "trybuild",
 ]
 
 [[package]]

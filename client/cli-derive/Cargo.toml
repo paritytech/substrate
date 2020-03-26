@@ -12,14 +12,12 @@ repository = "https://github.com/paritytech/substrate/"
 proc-macro = true
 
 [dependencies]
-syn = { version = "1", default-features = false, features = ["derive", "parsing", "proc-macro"] }
+syn = { version = "1", default-features = false, features = ["parsing", "proc-macro"] }
 quote = "1"
 proc-macro2 = "1"
-heck = "0.3.0"
 proc-macro-error = "0.4.7"
 platforms = "0.2"
 
 [dev-dependencies]
-trybuild = "1.0"
 sc-service = { version = "0.8.0-alpha.5", default-features = false, path = "../service" }
 sc-cli = { version = "0.8.0-alpha.5", default-features = false, path = "../cli" }
