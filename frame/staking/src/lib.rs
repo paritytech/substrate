@@ -2480,10 +2480,10 @@ impl<T: Trait> Module<T> {
 	///
 	/// No storage item is updated.
 	fn do_phragmen_with_post_processing<Accuracy: PerThing>(compute: ElectionCompute)
-	-> Option<ElectionResult<T::AccountId, BalanceOf<T>>>
-		where
-			Accuracy: sp_std::ops::Mul<ExtendedBalance, Output=ExtendedBalance>,
-			ExtendedBalance: From<<Accuracy as PerThing>::Inner>,
+		-> Option<ElectionResult<T::AccountId, BalanceOf<T>>>
+	where
+		Accuracy: sp_std::ops::Mul<ExtendedBalance, Output=ExtendedBalance>,
+		ExtendedBalance: From<<Accuracy as PerThing>::Inner>,
 	{
 		if let Some(phragmen_result) = Self::do_phragmen::<Accuracy>() {
 			let elected_stashes = phragmen_result.winners.iter()
