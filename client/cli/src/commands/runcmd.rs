@@ -24,7 +24,8 @@ use crate::substrate_cli_params;
 use crate::CliConfiguration;
 use regex::Regex;
 use sc_service::{
-	config::{PrometheusConfig, TransactionPoolOptions}, ChainSpec, Roles,
+	config::{PrometheusConfig, TransactionPoolOptions},
+	ChainSpec, Roles,
 };
 use sc_telemetry::TelemetryEndpoints;
 use std::net::SocketAddr;
@@ -313,7 +314,10 @@ impl CliConfiguration for RunCmd {
 		Ok(if self.no_telemetry {
 			None
 		} else if !self.telemetry_endpoints.is_empty() {
-			Some(TelemetryEndpoints::new(self.telemetry_endpoints.clone()))
+			Some(
+				TelemetryEndpoints::new(self.telemetry_endpoints.clone())
+					.map_err(|e| e.to_string())?,
+			)
 		} else {
 			chain_spec.telemetry_endpoints().clone()
 		})
