@@ -50,7 +50,10 @@ then
   boldprint "this is pull request no ${CI_COMMIT_REF_NAME}"
   # get the last reference to a pr in polkadot
   comppr="$(curl -H "${github_header}" -s ${github_api_substrate_pull_url}/${CI_COMMIT_REF_NAME} \
-    | sed -n -r 's;^[[:space:]]+"body":[[:space:]]+".*polkadot companion: paritytech/polkadot#([0-9]+).*"[^"]+$;\1;p;$!d')"
+    | sed -n -r \
+      -e 's;^[[:space:]]+"body":[[:space:]]+".*polkadot companion: paritytech/polkadot#([0-9]+).*"[^"]+$;\1;p' \
+      -e 's;^[[:space:]]+"body":[[:space:]]+".*polkadot companion: https://github.com/paritytech/polkadot/pull/([0-9]+).*"[^"]+$;\1;p' \
+    | tail -n 1)"
   if [ "${comppr}" ]
   then
     boldprint "companion pr specified: #${comppr}"
