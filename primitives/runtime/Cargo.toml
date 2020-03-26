@@ -32,6 +32,7 @@ rand = "0.7.2"
 
 [features]
 bench = []
+runtime-benchmarks = []
 default = ["std"]
 std = [
 	"sp-application-crypto/std",

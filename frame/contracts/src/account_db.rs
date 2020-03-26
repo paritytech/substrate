@@ -146,16 +146,8 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 		let mut total_imbalance = SignedImbalance::zero();
 		for (address, changed) in s.into_iter() {
 			if let Some(balance) = changed.balance() {
-				let existed  = !T::Currency::total_balance(&address).is_zero();
 				let imbalance = T::Currency::make_free_balance_be(&address, balance);
-				let exists  = !T::Currency::total_balance(&address).is_zero();
 				total_imbalance = total_imbalance.merge(imbalance);
-				if existed && !exists {
-					// Account killed. This will ultimately lead to calling `OnKilledAccount` callback
-					// which will make removal of CodeHashOf and AccountStorage for this account.
-					// In order to avoid writing over the deleted properties we `continue` here.
-					continue;
-				}
 			}
 
 			if changed.code_hash().is_some()
