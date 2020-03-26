@@ -201,8 +201,8 @@ parameter_types! {
 	pub const MaxNominatorRewardedPerValidator: u32 = 64;
 }
 impl Trait for Test {
-	type Currency = pallet_balances::Module<Self>;
-	type Time = pallet_timestamp::Module<Self>;
+	type Currency = Balances;
+	type UnixTime = Timestamp;
 	type CurrencyToVote = CurrencyToVoteHandler;
 	type RewardRemainder = ();
 	type Event = ();

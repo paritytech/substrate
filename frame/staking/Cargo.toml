@@ -33,6 +33,7 @@ pallet-staking-reward-curve = { version = "2.0.0-alpha.5",  path = "../staking/r
 substrate-test-utils = { version = "2.0.0-alpha.5", path = "../../test-utils" }
 frame-benchmarking = { version = "2.0.0-alpha.5", path = "../benchmarking" }
 rand_chacha = { version = "0.2" }
+hex = "0.4"
 
 [features]
 default = ["std"]

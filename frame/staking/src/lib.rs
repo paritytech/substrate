@@ -262,11 +262,12 @@ pub mod inflation;
 use sp_std::{prelude::*, result, collections::btree_map::BTreeMap};
 use codec::{HasCompact, Encode, Decode};
 use frame_support::{
-	decl_module, decl_event, decl_storage, ensure, decl_error, weights::SimpleDispatchInfo,
+	decl_module, decl_event, decl_storage, ensure, decl_error,
 	dispatch::DispatchResult, storage::IterableStorageMap, traits::{
 		Currency, LockIdentifier, LockableCurrency, WithdrawReasons, OnUnbalanced, Imbalance, Get,
-		Time
-	}
+		UnixTime
+	},
+	weights::{SimpleDispatchInfo, Weight},
 };
 use pallet_session::historical::SessionManager;
 use sp_runtime::{
@@ -300,14 +301,14 @@ pub type RewardPoint = u32;
 
 /// Information regarding the active era (era in used in session).
 #[derive(Encode, Decode, RuntimeDebug)]
-pub struct ActiveEraInfo<Moment> {
+pub struct ActiveEraInfo {
 	/// Index of era.
 	index: EraIndex,
-	/// Moment of start
+	/// Moment of start expresed as millisecond from `$UNIX_EPOCH`.
 	///
 	/// Start can be none if start hasn't been set for the era yet,
 	/// Start is set on the first on_finalize of the era to guarantee usage of `Time`.
-	start: Option<Moment>,
+	start: Option<u64>,
 }
 
 /// Reward points of an era. Used to split era total payout between validators.
@@ -564,7 +565,6 @@ type PositiveImbalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::PositiveImbalance;
 type NegativeImbalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
-type MomentOf<T> = <<T as Trait>::Time as Time>::Moment;
 
 /// Means for interacting with a specialized version of the `session` trait.
 ///
@@ -613,7 +613,7 @@ pub trait Trait: frame_system::Trait {
 	///
 	/// It is guaranteed to start being called from the first `on_finalize`. Thus value at genesis
 	/// is not used.
-	type Time: Time;
+	type UnixTime: UnixTime;
 
 	/// Convert a balance into a number used for election calculation.
 	/// This must fit into a `u64` but is allowed to be sensibly lossy.
@@ -686,11 +686,12 @@ impl Default for Forcing {
 enum Releases {
 	V1_0_0Ancient,
 	V2_0_0,
+	V3_0_0,
 }
 
 impl Default for Releases {
 	fn default() -> Self {
-		Releases::V2_0_0
+		Releases::V3_0_0
 	}
 }
 
@@ -746,7 +747,7 @@ decl_storage! {
 		///
 		/// The active era is the era currently rewarded.
 		/// Validator set of this era must be equal to `SessionInterface::validators`.
-		pub ActiveEra get(fn active_era): Option<ActiveEraInfo<MomentOf<T>>>;
+		pub ActiveEra get(fn active_era): Option<ActiveEraInfo>;
 
 		/// The session index at which the era start for the last `HISTORY_DEPTH` eras
 		pub ErasStartSessionIndex get(fn eras_start_session_index):
@@ -850,8 +851,8 @@ decl_storage! {
 
 		/// Storage version of the pallet.
 		///
-		/// This is set to v2.0.0 for new networks.
-		StorageVersion build(|_: &GenesisConfig<T>| Releases::V2_0_0): Releases;
+		/// This is set to v3.0.0 for new networks.
+		StorageVersion build(|_: &GenesisConfig<T>| Releases::V3_0_0): Releases;
 	}
 	add_extra_genesis {
 		config(stakers):
@@ -959,10 +960,18 @@ decl_module! {
 			// Set the start of the first era.
 			if let Some(mut active_era) = Self::active_era() {
 				if active_era.start.is_none() {
-					active_era.start = Some(T::Time::now());
-					<ActiveEra<T>>::put(active_era);
+					let now_as_millis_u64 = T::UnixTime::now().as_millis().saturated_into::<u64>();
+					active_era.start = Some(now_as_millis_u64);
+					ActiveEra::put(active_era);
 				}
 			}
+		}
+
+		fn on_runtime_upgrade() -> Weight {
+			// For Kusama the type hasn't actually changed as Moment was u64 and was the number of
+			// millisecond since unix epoch.
+			StorageVersion::put(Releases::V3_0_0);
+			0
 		}
 
 		/// Take the origin account as a stash and lock up `value` of its balance. `controller` will
@@ -1696,7 +1705,7 @@ impl<T: Trait> Module<T> {
 	/// * reset `active_era.start`,
 	/// * update `BondedEras` and apply slashes.
 	fn start_era(start_session: SessionIndex) {
-		let active_era = <ActiveEra<T>>::mutate(|active_era| {
+		let active_era = ActiveEra::mutate(|active_era| {
 			let new_index = active_era.as_ref().map(|info| info.index + 1).unwrap_or(0);
 			*active_era = Some(ActiveEraInfo {
 				index: new_index,
@@ -1734,12 +1743,12 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Compute payout for era.
-	fn end_era(active_era: ActiveEraInfo<MomentOf<T>>, _session_index: SessionIndex) {
+	fn end_era(active_era: ActiveEraInfo, _session_index: SessionIndex) {
 		// Note: active_era_start can be None if end era is called during genesis config.
 		if let Some(active_era_start) = active_era.start {
-			let now = T::Time::now();
+			let now_as_millis_u64 = T::UnixTime::now().as_millis().saturated_into::<u64>();
 
-			let era_duration = now - active_era_start;
+			let era_duration = now_as_millis_u64 - active_era_start;
 			let (total_payout, _max_payout) = inflation::compute_total_payout(
 				&T::RewardCurve::get(),
 				Self::eras_total_stake(&active_era.index),

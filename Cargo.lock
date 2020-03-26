@@ -4514,6 +4514,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "hex",
  "pallet-authorship",
  "pallet-balances",
  "pallet-session",
