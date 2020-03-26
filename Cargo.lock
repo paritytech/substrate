@@ -2328,12 +2328,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f65877bf7d44897a473350b1046277941cee20b263397e90869c50b6e766088b"
 
 [[package]]
-name = "interleaved-ordered"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "141340095b15ed7491bd3d4ced9d20cebfb826174b6bb03386381f62b01e3d77"
-
-[[package]]
 name = "iovec"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2531,9 +2525,8 @@ dependencies = [
 [[package]]
 name = "kvdb"
 version = "0.4.0"
-source = "git+https://github.com/cheme/parity-common?branch=upgraded_del_range#a3a2a54cb50615e15912302f3df21d36f0762b93"
+source = "git+https://github.com/cheme/parity-common?branch=upgraded_del_range#1b90fa8716fabc5f94a0d8d83c5fdd6cf1da8d3e"
 dependencies = [
- "parity-bytes",
  "parity-util-mem",
  "smallvec 1.2.0",
 ]
@@ -2541,7 +2534,7 @@ dependencies = [
 [[package]]
 name = "kvdb-memorydb"
 version = "0.4.0"
-source = "git+https://github.com/cheme/parity-common?branch=upgraded_del_range#a3a2a54cb50615e15912302f3df21d36f0762b93"
+source = "git+https://github.com/cheme/parity-common?branch=upgraded_del_range#1b90fa8716fabc5f94a0d8d83c5fdd6cf1da8d3e"
 dependencies = [
  "kvdb",
  "parity-util-mem",
@@ -2551,10 +2544,9 @@ dependencies = [
 [[package]]
 name = "kvdb-rocksdb"
 version = "0.6.0"
-source = "git+https://github.com/cheme/parity-common?branch=upgraded_del_range#a3a2a54cb50615e15912302f3df21d36f0762b93"
+source = "git+https://github.com/cheme/parity-common?branch=upgraded_del_range#1b90fa8716fabc5f94a0d8d83c5fdd6cf1da8d3e"
 dependencies = [
  "fs-swap",
- "interleaved-ordered",
  "kvdb",
  "log 0.4.8",
  "num_cpus",
@@ -2569,7 +2561,7 @@ dependencies = [
 [[package]]
 name = "kvdb-web"
 version = "0.4.0"
-source = "git+https://github.com/cheme/parity-common?branch=upgraded_del_range#a3a2a54cb50615e15912302f3df21d36f0762b93"
+source = "git+https://github.com/cheme/parity-common?branch=upgraded_del_range#1b90fa8716fabc5f94a0d8d83c5fdd6cf1da8d3e"
 dependencies = [
  "futures 0.3.4",
  "js-sys",
@@ -4595,11 +4587,6 @@ dependencies = [
  "sp-std",
  "sp-storage",
 ]
-
-[[package]]
-name = "parity-bytes"
-version = "0.1.1"
-source = "git+https://github.com/cheme/parity-common?branch=upgraded_del_range#a3a2a54cb50615e15912302f3df21d36f0762b93"
 
 [[package]]
 name = "parity-multiaddr"
@@ -8524,7 +8511,7 @@ version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3bfd5b7557925ce778ff9b9ef90e3ade34c524b5ff10e239c69a42d546d2af56"
 dependencies = [
- "rand 0.7.3",
+ "rand 0.3.23",
 ]
 
 [[package]]

@@ -60,7 +60,6 @@ fn migrate_0_to_1<Block: BlockT>(db_path: &Path, db_type: DatabaseType) -> sp_bl
 	{
 		let db = open_database(db_path, db_type, V0_NUM_COLUMNS)?;
 		db.add_column().map_err(db_err)?;
-		db.flush().map_err(db_err)?;
 	}
 
 	let db = open_database(db_path, db_type, V0_NUM_COLUMNS + 1)?;
