@@ -82,7 +82,7 @@ use sp_runtime::{
 	RuntimeDebug,
 	traits::{Convert, Member, Saturating, AtLeast32Bit}, Perbill, PerThing,
 	transaction_validity::{
-		TransactionValidity, ValidTransaction, InvalidTransaction,
+		TransactionValidity, ValidTransaction, InvalidTransaction, TransactionSource,
 		TransactionPriority,
 	},
 };
@@ -624,7 +624,10 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 	type Call = Call<T>;
 
-	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
+	fn validate_unsigned(
+		_source: TransactionSource,
+		call: &Self::Call,
+	) -> TransactionValidity {
 		if let Call::heartbeat(heartbeat, signature) = call {
 			if <Module<T>>::is_online(heartbeat.authority_index) {
 				// we already received a heartbeat for this authority

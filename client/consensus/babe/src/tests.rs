@@ -553,10 +553,10 @@ fn propose_and_import_block<Transaction>(
 	let pre_digest = sp_runtime::generic::Digest {
 		logs: vec![
 			Item::babe_pre_digest(
-				PreDigest::Secondary {
+				PreDigest::Secondary(SecondaryPreDigest {
 					authority_index: 0,
 					slot_number,
-				},
+				}),
 			),
 		],
 	};

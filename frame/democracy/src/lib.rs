@@ -170,7 +170,7 @@ use sp_runtime::{
 use codec::{Ref, Decode};
 use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error, ensure, Parameter,
-	weights::SimpleDispatchInfo,
+	weights::{SimpleDispatchInfo, Weight, WeighData},
 	traits::{
 		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier, Get,
 		OnUnbalanced, BalanceStatus
@@ -499,8 +499,10 @@ decl_module! {
 
 		fn deposit_event() = default;
 
-		fn on_runtime_upgrade() {
+		fn on_runtime_upgrade() -> Weight {
 			Self::migrate();
+
+			SimpleDispatchInfo::default().weigh_data(())
 		}
 
 		/// Propose a sensitive action to be taken.
@@ -813,10 +815,12 @@ decl_module! {
 			<DispatchQueue<T>>::put(items);
 		}
 
-		fn on_initialize(n: T::BlockNumber) {
+		fn on_initialize(n: T::BlockNumber) -> Weight {
 			if let Err(e) = Self::begin_block(n) {
 				sp_runtime::print(e);
 			}
+
+			SimpleDispatchInfo::default().weigh_data(())
 		}
 
 		/// Specify a proxy that is already open to us. Called by the stash.

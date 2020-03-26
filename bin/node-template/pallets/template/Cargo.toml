@@ -2,7 +2,7 @@
 authors = ['Anonymous']
 edition = '2018'
 name = 'pallet-template'
-version = "2.0.0-alpha.4"
+version = "2.0.0-alpha.5"
 license = "Unlicense"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
@@ -14,27 +14,27 @@ safe-mix = { default-features = false, version = '1.0.0' }
 
 [dependencies.frame-support]
 default-features = false
-version = "2.0.0-alpha.4"
+version = "2.0.0-alpha.5"
 path = "../../../../frame/support"
 
 [dependencies.system]
 default-features = false
 package = 'frame-system'
-version = "2.0.0-alpha.4"
+version = "2.0.0-alpha.5"
 path = "../../../../frame/system"
 [dev-dependencies.sp-core]
 default-features = false
-version = "2.0.0-alpha.4"
+version = "2.0.0-alpha.5"
 path = "../../../../primitives/core"
 
 [dev-dependencies.sp-io]
 default-features = false
-version = "2.0.0-alpha.4"
+version = "2.0.0-alpha.5"
 path = "../../../../primitives/io"
 
 [dev-dependencies.sp-runtime]
 default-features = false
-version = "2.0.0-alpha.4"
+version = "2.0.0-alpha.5"
 path = "../../../../primitives/runtime"
 
 

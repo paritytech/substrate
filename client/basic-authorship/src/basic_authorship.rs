@@ -315,12 +315,14 @@ mod tests {
 		prelude::*,
 		runtime::{Extrinsic, Transfer},
 	};
-	use sp_transaction_pool::{ChainEvent, MaintainedTransactionPool};
+	use sp_transaction_pool::{ChainEvent, MaintainedTransactionPool, TransactionSource};
 	use sc_transaction_pool::{BasicPool, FullChainApi};
 	use sp_api::Core;
 	use backend::Backend;
 	use sp_blockchain::HeaderBackend;
 	use sp_runtime::traits::NumberFor;
+
+	const SOURCE: TransactionSource = TransactionSource::External;
 
 	fn extrinsic(nonce: u64) -> Extrinsic {
 		Transfer {
@@ -338,7 +340,7 @@ mod tests {
 			id: BlockId::Number(block_number.into()),
 			retracted: vec![],
 			is_new_best: true,
-			header: header,
+			header,
 		}
 	}
 
@@ -351,7 +353,7 @@ mod tests {
 		);
 
 		futures::executor::block_on(
-			txpool.submit_at(&BlockId::number(0), vec![extrinsic(0), extrinsic(1)])
+			txpool.submit_at(&BlockId::number(0), SOURCE, vec![extrinsic(0), extrinsic(1)])
 		).unwrap();
 
 		futures::executor::block_on(
@@ -403,7 +405,7 @@ mod tests {
 		let block_id = BlockId::Hash(genesis_hash);
 
 		futures::executor::block_on(
-			txpool.submit_at(&BlockId::number(0), vec![extrinsic(0)]),
+			txpool.submit_at(&BlockId::number(0), SOURCE, vec![extrinsic(0)]),
 		).unwrap();
 
 		futures::executor::block_on(
@@ -454,7 +456,7 @@ mod tests {
 		);
 
 		futures::executor::block_on(
-			txpool.submit_at(&BlockId::number(0), vec![
+			txpool.submit_at(&BlockId::number(0), SOURCE, vec![
 				extrinsic(0),
 				extrinsic(1),
 				Transfer {

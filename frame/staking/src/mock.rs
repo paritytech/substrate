@@ -19,14 +19,15 @@
 use std::{collections::{HashSet, HashMap}, cell::RefCell};
 use sp_runtime::{Perbill, KeyTypeId};
 use sp_runtime::curve::PiecewiseLinear;
-use sp_runtime::traits::{IdentityLookup, Convert, OpaqueKeys, OnInitialize, OnFinalize, SaturatedConversion};
+use sp_runtime::traits::{IdentityLookup, Convert, OpaqueKeys, SaturatedConversion};
 use sp_runtime::testing::{Header, UintAuthorityId};
 use sp_staking::{SessionIndex, offence::{OffenceDetails, OnOffenceHandler}};
 use sp_core::{H256, crypto::key_types};
 use sp_io;
 use frame_support::{
 	assert_ok, impl_outer_origin, parameter_types, StorageValue, StorageMap,
-	StorageDoubleMap, IterableStorageMap, traits::{Currency, Get, FindAuthor}, weights::Weight,
+	StorageDoubleMap, IterableStorageMap,
+	traits::{Currency, Get, FindAuthor, OnFinalize, OnInitialize}, weights::Weight,
 };
 use crate::{
 	EraIndex, GenesisConfig, Module, Trait, StakerStatus, ValidatorPrefs, RewardDestination,
