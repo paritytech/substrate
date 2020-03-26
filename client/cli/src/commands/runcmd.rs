@@ -419,7 +419,7 @@ impl RunCmd {
 			config.telemetry_endpoints = None;
 		} else if !self.telemetry_endpoints.is_empty() {
 			config.telemetry_endpoints = Some(
-				TelemetryEndpoints::new(self.telemetry_endpoints.clone())
+				TelemetryEndpoints::new(self.telemetry_endpoints.clone()).map_err(|e| e.to_string())?
 			);
 		}
 
@@ -689,7 +689,8 @@ mod tests {
 			"test-id",
 			|| (),
 			vec!["boo".to_string()],
-			Some(TelemetryEndpoints::new(vec![("foo".to_string(), 42)])),
+			Some(TelemetryEndpoints::new(vec![("wss://foo/bar".to_string(), 42)])
+				.expect("provided url should be valid")),
 			None,
 			None,
 			None::<()>,
