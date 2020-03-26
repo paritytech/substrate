@@ -2970,6 +2970,7 @@ mod offchain_phragmen {
 					winners,
 					compact,
 					score,
+					active_era(),
 				));
 
 				let queued_result = Staking::queued_elected().unwrap();
@@ -3012,6 +3013,7 @@ mod offchain_phragmen {
 					winners,
 					compact,
 					score,
+					active_era(),
 				));
 
 				let queued_result = Staking::queued_elected().unwrap();
@@ -3056,7 +3058,13 @@ mod offchain_phragmen {
 				Staking::kill_stakers_snapshot();
 
 				assert_noop!(
-					Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
+					Staking::submit_election_solution(
+						Origin::signed(10),
+						winners,
+						compact,
+						score,
+						active_era(),
+					),
 					Error::<Test>::PhragmenEarlySubmission,
 				);
 			})
@@ -3081,12 +3089,19 @@ mod offchain_phragmen {
 					winners,
 					compact,
 					score,
+					active_era(),
 				));
 
 				// a bad solution
 				let (compact, winners, score) = horrible_phragmen_with_post_processing(false);
 				assert_noop!(
-					Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
+					Staking::submit_election_solution(
+						Origin::signed(10),
+						winners,
+						compact,
+						score,
+						active_era(),
+					),
 					Error::<Test>::PhragmenWeakSubmission,
 				);
 			})
@@ -3111,6 +3126,7 @@ mod offchain_phragmen {
 					winners,
 					compact,
 					score,
+					active_era(),
 				));
 
 				// a better solution
@@ -3120,6 +3136,7 @@ mod offchain_phragmen {
 					winners,
 					compact,
 					score,
+					active_era(),
 				));
 			})
 	}
@@ -3157,7 +3174,7 @@ mod offchain_phragmen {
 				TransactionValidity::Ok(ValidTransaction {
 					priority: 1125, // the proposed slot stake.
 					requires: vec![],
-					provides: vec![Staking::current_era().encode()],
+					provides: vec![("StakingOffchain", active_era()).encode()],
 					longevity: 3,
 					propagate: false,
 				})
@@ -3181,6 +3198,7 @@ mod offchain_phragmen {
 				winners,
 				compact,
 				score,
+				active_era(),
 			),);
 
 			// now run the offchain worker in the same chain state.
@@ -3201,7 +3219,9 @@ mod offchain_phragmen {
 					TransactionSource::Local,
 					&inner,
 				),
-				TransactionValidity::Err(InvalidTransaction::Custom(1u8).into()),
+				TransactionValidity::Err(
+					InvalidTransaction::Custom(<Error<Test>>::PhragmenWeakSubmission.as_u8()).into(),
+				),
 			)
 		})
 	}
@@ -3224,7 +3244,13 @@ mod offchain_phragmen {
 				assert_eq!(winners.len(), 3);
 
 				assert_noop!(
-					Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
+					Staking::submit_election_solution(
+						Origin::signed(10),
+						winners,
+						compact,
+						score,
+						active_era(),
+					),
 					Error::<Test>::PhragmenBogusWinnerCount,
 				);
 			})
@@ -3249,7 +3275,13 @@ mod offchain_phragmen {
 				assert_eq!(winners.len(), 3);
 
 				assert_noop!(
-					Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
+					Staking::submit_election_solution(
+						Origin::signed(10),
+						winners,
+						compact,
+						score,
+						active_era(),
+					),
 					Error::<Test>::PhragmenBogusWinnerCount,
 				);
 			})
@@ -3277,6 +3309,7 @@ mod offchain_phragmen {
 					winners,
 					compact,
 					score,
+					active_era(),
 				),);
 			})
 	}
@@ -3302,7 +3335,13 @@ mod offchain_phragmen {
 
 				// The error type sadly cannot be more specific now.
 				assert_noop!(
-					Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
+					Staking::submit_election_solution(
+						Origin::signed(10),
+						winners,
+						compact,
+						score,
+						active_era(),
+					),
 					Error::<Test>::PhragmenBogusCompact,
 				);
 			})
@@ -3329,7 +3368,13 @@ mod offchain_phragmen {
 
 				// The error type sadly cannot be more specific now.
 				assert_noop!(
-					Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
+					Staking::submit_election_solution(
+						Origin::signed(10),
+						winners,
+						compact,
+						score,
+						active_era(),
+					),
 					Error::<Test>::PhragmenBogusCompact,
 				);
 			})
@@ -3355,7 +3400,13 @@ mod offchain_phragmen {
 				let winners = vec![0, 1, 2, 4];
 
 				assert_noop!(
-					Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
+					Staking::submit_election_solution(
+						Origin::signed(10),
+						winners,
+						compact,
+						score,
+						active_era(),
+					),
 					Error::<Test>::PhragmenBogusWinner,
 				);
 			})
@@ -3385,7 +3436,13 @@ mod offchain_phragmen {
 				});
 
 				assert_noop!(
-					Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
+					Staking::submit_election_solution(
+						Origin::signed(10),
+						winners,
+						compact,
+						score,
+						active_era(),
+					),
 					Error::<Test>::PhragmenBogusEdge,
 				);
 			})
@@ -3415,7 +3472,13 @@ mod offchain_phragmen {
 				});
 
 				assert_noop!(
-					Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
+					Staking::submit_election_solution(
+						Origin::signed(10),
+						winners,
+						compact,
+						score,
+						active_era(),
+					),
 					Error::<Test>::PhragmenBogusSelfVote,
 				);
 			})
@@ -3445,7 +3508,13 @@ mod offchain_phragmen {
 
 				// This raises score issue.
 				assert_noop!(
-					Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
+					Staking::submit_election_solution(
+						Origin::signed(10),
+						winners,
+						compact,
+						score,
+						active_era(),
+					),
 					Error::<Test>::PhragmenBogusSelfVote,
 				);
 			})
@@ -3474,7 +3543,13 @@ mod offchain_phragmen {
 				}
 
 				assert_noop!(
-					Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
+					Staking::submit_election_solution(
+						Origin::signed(10),
+						winners,
+						compact,
+						score,
+						active_era(),
+					),
 					Error::<Test>::PhragmenBogusCompact,
 				);
 			})
@@ -3510,7 +3585,13 @@ mod offchain_phragmen {
 				});
 
 				assert_noop!(
-					Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
+					Staking::submit_election_solution(
+						Origin::signed(10),
+						winners,
+						compact,
+						score,
+						active_era(),
+					),
 					Error::<Test>::PhragmenBogusNomination,
 				);
 			})
@@ -3572,6 +3653,7 @@ mod offchain_phragmen {
 					winners,
 					compact,
 					score,
+					active_era(),
 				));
 
 				// a wrong solution.
@@ -3585,7 +3667,13 @@ mod offchain_phragmen {
 
 				// is rejected.
 				assert_noop!(
-					Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
+					Staking::submit_election_solution(
+						Origin::signed(10),
+						winners,
+						compact,
+						score,
+						active_era(),
+					),
 					Error::<Test>::PhragmenSlashedNomination,
 				);
 			})
@@ -3607,7 +3695,13 @@ mod offchain_phragmen {
 				score[0] += 1;
 
 				assert_noop!(
-					Staking::submit_election_solution(Origin::signed(10), winners, compact, score),
+					Staking::submit_election_solution(
+						Origin::signed(10),
+						winners,
+						compact,
+						score,
+						active_era(),
+					),
 					Error::<Test>::PhragmenBogusScore,
 				);
 			})

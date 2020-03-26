@@ -1196,7 +1196,12 @@ decl_module! {
 							"Error in phragmen offchain worker: {:?}",
 							e,
 						);
-					};
+					} else {
+						debug::native::debug!(
+							target: "staking",
+							"Executed offchain worker thread without errors. Transaction submitted to the pool.",
+						);
+					}
 				}
 			}
 		}
@@ -1799,6 +1804,7 @@ decl_module! {
 			winners: Vec<ValidatorIndex>,
 			compact_assignments: CompactAssignments,
 			score: PhragmenScore,
+			era: EraIndex,
 		) {
 			let _who = ensure_signed(origin)?;
 			Self::check_and_replace_solution(
@@ -1806,19 +1812,22 @@ decl_module! {
 				compact_assignments,
 				ElectionCompute::Signed,
 				score,
+				era,
 			)?
 		}
 
 		/// Unsigned version of `submit_election_solution`.
 		///
 		/// Note that this must pass the [`ValidateUnsigned`] check which only allows transactions
-		/// from the local node to be included.
+		/// from the local node to be included. In other words, only the block author can include a
+		/// transaction in the block.
 		#[weight = SimpleDispatchInfo::FixedNormal(100_000_000)]
 		pub fn submit_election_solution_unsigned(
 			origin,
 			winners: Vec<ValidatorIndex>,
 			compact_assignments: CompactAssignments,
 			score: PhragmenScore,
+			era: EraIndex,
 		) {
 			ensure_none(origin)?;
 			Self::check_and_replace_solution(
@@ -1826,7 +1835,12 @@ decl_module! {
 				compact_assignments,
 				ElectionCompute::Unsigned,
 				score,
+				era,
 			)?
+			// TODO: instead of returning an error, panic. This makes the entire produced block
+			// invalid.
+			// This ensures that block authors will not ever try and submit a solution which is not
+			// an improvement, since they will lose their authoring points/rewards.
 		}
 	}
 }
@@ -2068,6 +2082,34 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
+	/// Basic and cheap checks that we perform in validate unsigned, and in the execution.
+	pub fn pre_dispatch_checks(score: PhragmenScore, era: EraIndex) -> Result<(), Error<T>> {
+		// discard solutions that are not in-time
+		// check window open
+		ensure!(
+			Self::era_election_status().is_open(),
+			Error::<T>::PhragmenEarlySubmission,
+		);
+
+		// check current era.
+		if let Some(current_era) = Self::active_era().map(|e| e.index) {
+			ensure!(
+				current_era == era,
+				Error::<T>::PhragmenEarlySubmission,
+			)
+		}
+
+		// assume the given score is valid. Is it better than what we have on-chain, if we have any?
+		if let Some(queued_score) = Self::queued_score() {
+			ensure!(
+				is_score_better(queued_score, score),
+				Error::<T>::PhragmenWeakSubmission,
+			)
+		}
+
+		Ok(())
+	}
+
 	/// Checks a given solution and if correct and improved, writes it on chain as the queued result
 	/// of the next round. This may be called by both a signed and an unsigned transaction.
 	pub fn check_and_replace_solution(
@@ -2075,20 +2117,10 @@ impl<T: Trait> Module<T> {
 		compact_assignments: CompactAssignments,
 		compute: ElectionCompute,
 		claimed_score: PhragmenScore,
+		era: EraIndex,
 	) -> Result<(), Error<T>> {
-		// discard early solutions
-		ensure!(
-			Self::era_election_status().is_open(),
-			Error::<T>::PhragmenEarlySubmission,
-		);
-
-		// assume the given score is valid. Is it better than what we have on-chain, if we have any?
-		if let Some(queued_score) = Self::queued_score() {
-			ensure!(
-				is_score_better(queued_score, claimed_score),
-				Error::<T>::PhragmenWeakSubmission,
-			)
-		}
+		// Do the basic checks. era, claimed score and window open.
+		Self::pre_dispatch_checks(claimed_score, era)?;
 
 		// Check that the number of presented winners is sane. Most often we have more candidates
 		// that we need. Then it should be Self::validator_count(). Else it should be all the
@@ -2923,6 +2955,15 @@ impl<T: Trait + Send + Sync> SignedExtension for LockStakingStatus<T> {
 	}
 }
 
+impl<T: Trait> From<Error<T>> for InvalidTransaction {
+	fn from(e: Error<T>) -> Self {
+		match e {
+			<Error<T>>::PhragmenEarlySubmission => InvalidTransaction::Future,
+			_ => InvalidTransaction::Custom(e.as_u8()),
+		}
+	}
+}
+
 #[allow(deprecated)]
 impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 	type Call = Call<T>;
@@ -2931,6 +2972,7 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 			_,
 			_,
 			score,
+			era,
 		) = call {
 			use offchain_election::DEFAULT_LONGEVITY;
 
@@ -2946,25 +2988,21 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 				}
 			}
 
-			// discard early solution.
-			if Self::era_election_status().is_closed() {
+			if let Err(e) = Self::pre_dispatch_checks(*score, *era) {
 				debug::native::debug!(
 					target: "staking",
-					"rejecting unsigned transaction because it is too early."
+					"validate unsigned failed due to {:?}.",
+					e,
 				);
-				return InvalidTransaction::Future.into();
+				let invalid: InvalidTransaction = e.into();
+				return invalid.into();
 			}
 
-			// discard weak solution.
-			if let Some(queued_score) = Self::queued_score() {
-				if !is_score_better(queued_score, *score) {
-					debug::native::debug!(
-						target: "staking",
-						"rejecting unsigned transaction because the claimed score is not good enough."
-					);
-					return InvalidTransaction::Custom(1u8).into();
-				}
-			}
+			debug::native::debug!(
+				target: "staking",
+				"Validated an unsigned transaction from the local node for era {}.",
+				era,
+			);
 
 			Ok(ValidTransaction {
 				// The higher the score[0], the better a solution is.
@@ -2974,7 +3012,7 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 				// Defensive only. A single solution can exist in the pool per era. Each validator
 				// will run OCW at most once per era, hence there should never exist more than one
 				// transaction anyhow.
-				provides: vec![Self::current_era().encode()],
+				provides: vec![("StakingOffchain", era).encode()],
 				// Note: this can be more accurate in the future. We do something like
 				// `era_end_block - current_block` but that is not needed now as we eagerly run
 				// offchain workers now and the above should be same as `T::ElectionLookahead`
@@ -2987,6 +3025,15 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 		} else {
 			InvalidTransaction::Call.into()
 		}
+	}
+
+	fn pre_dispatch(_: &Self::Call) -> Result<(), TransactionValidityError> {
+		// IMPORTANT NOTE: By default, a sane `pre-dispatch` should always do the same checks as
+		// `validate_unsigned` and overriding this should be done with care. this module has only
+		// one unsigned entry point, in which we call into `<Module<T>>::pre_dispatch_checks()`
+		// which is all the important checks that we do in `validate_unsigned`. Hence, we can safely
+		// override this to save some time.
+		Ok(())
 	}
 }
 

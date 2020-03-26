@@ -113,11 +113,15 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 	// process and prepare it for submission.
 	let (winners, compact, score) = prepare_submission::<T>(assignments, winners, true)?;
 
+	// defensive-only: active era can never be none except genesis.
+	let era = <Module<T>>::active_era().map(|e| e.index).unwrap_or_default();
+
 	// send it.
 	let call: <T as Trait>::Call = Call::submit_election_solution_unsigned(
 		winners,
 		compact,
 		score,
+		era,
 	).into();
 
 	T::SubmitTransaction::submit_unsigned(call)
