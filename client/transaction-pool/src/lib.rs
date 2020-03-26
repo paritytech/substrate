@@ -41,6 +41,7 @@ use sp_runtime::{
 use sp_transaction_pool::{
 	TransactionPool, PoolStatus, ImportNotificationStream, TxHash, TransactionFor,
 	TransactionStatusStreamFor, MaintainedTransactionPool, PoolFuture, ChainEvent,
+	TransactionSource,
 };
 use wasm_timer::Instant;
 
@@ -201,37 +202,40 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 	fn submit_at(
 		&self,
 		at: &BlockId<Self::Block>,
+		source: TransactionSource,
 		xts: Vec<TransactionFor<Self>>,
 	) -> PoolFuture<Vec<Result<TxHash<Self>, Self::Error>>, Self::Error> {
 		let pool = self.pool.clone();
 		let at = *at;
 		async move {
-			pool.submit_at(&at, xts, false).await
+			pool.submit_at(&at, source, xts, false).await
 		}.boxed()
 	}
 
 	fn submit_one(
 		&self,
 		at: &BlockId<Self::Block>,
+		source: TransactionSource,
 		xt: TransactionFor<Self>,
 	) -> PoolFuture<TxHash<Self>, Self::Error> {
 		let pool = self.pool.clone();
 		let at = *at;
 		async move {
-			pool.submit_one(&at, xt).await
+			pool.submit_one(&at, source, xt).await
 		}.boxed()
 	}
 
 	fn submit_and_watch(
 		&self,
 		at: &BlockId<Self::Block>,
+		source: TransactionSource,
 		xt: TransactionFor<Self>,
 	) -> PoolFuture<Box<TransactionStatusStreamFor<Self>>, Self::Error> {
 		let at = *at;
 		let pool = self.pool.clone();
 
 		async move {
-			pool.submit_and_watch(&at, xt)
+			pool.submit_and_watch(&at, source, xt)
 				.map(|result| result.map(|watcher| Box::new(watcher.into_stream()) as _))
 				.await
 		}.boxed()
@@ -437,7 +441,14 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 
 							resubmit_transactions.extend(block_transactions);
 						}
-						if let Err(e) = pool.submit_at(&id, resubmit_transactions, true).await {
+						if let Err(e) = pool.submit_at(
+							&id,
+							// These transactions are coming from retracted blocks, we should
+							// simply consider them external.
+							TransactionSource::External,
+							resubmit_transactions,
+							true
+						).await {
 							log::debug!(
 								target: "txpool",
 								"[{:?}] Error re-submitting transactions: {:?}", id, e
