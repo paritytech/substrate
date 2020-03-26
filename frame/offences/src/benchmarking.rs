@@ -20,7 +20,7 @@ use super::*;
 
 use sp_std::prelude::*;
 use frame_benchmarking::{benchmarks, account};
-use frame_support::traits::Currency;
+use frame_support::{traits::Currency, StorageValue};
 use frame_system::RawOrigin;
 use sp_runtime::{Perbill, traits::{Convert, StaticLookup}};
 use pallet_im_online::UnresponsivenessOffence;
@@ -29,20 +29,46 @@ use pallet_staking::{Module as Staking, RewardDestination, ValidatorPrefs};
 const SEED: u32 = 0;
 const MAX_REPORTERS: u32 = 1000;
 const MAX_OFFENDERS: u32 = 1000;
+const MAX_NOMINATORS: u32 = 1000;
 
 pub trait Trait: pallet_staking::Trait + crate::Trait + pallet_im_online::Trait {}
 
-pub fn create_offender<T: frame_system::Trait + pallet_staking::Trait>(n: u32) -> Result<T::AccountId, &'static str> {
+pub fn create_offender<T: frame_system::Trait + pallet_session::Trait + pallet_staking::Trait>(n: u32) -> Result<T::AccountId, &'static str> {
 	let stash: T::AccountId = account("stash", n, 0);
 	let controller: T::AccountId = account("controller", n, 0);
 	let controller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(controller.clone());
 	let reward_destination = RewardDestination::Staked;
 	let amount = T::Currency::minimum_balance() * 10.into();
-	Staking::<T>::bond(RawOrigin::Signed(stash.clone()).into(), controller_lookup, amount, reward_destination)?;
+	Staking::<T>::bond(RawOrigin::Signed(stash.clone()).into(), controller_lookup.clone(), amount.clone(), reward_destination.clone())?;
 	let validator_prefs = ValidatorPrefs {
 		commission: Perbill::from_percent(50),
 	};
 	Staking::<T>::validate(RawOrigin::Signed(controller.clone()).into(), validator_prefs)?;
+
+	let mut individual_exposures = vec![];
+
+	// Create n nominators
+	for j in 0 .. n {
+		let nominator_stash: T::AccountId = account("nominator stash", n * MAX_NOMINATORS + j, 0);
+		let nominator_controller: T::AccountId = account("nominator controller", n * MAX_NOMINATORS + j, 0);
+		let nominator_controller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(nominator_controller.clone());
+		Staking::<T>::bond(RawOrigin::Signed(nominator_stash.clone()).into(), nominator_controller_lookup.clone(), amount, reward_destination)?;	
+		let selected_validators: Vec<<T::Lookup as StaticLookup>::Source> = vec![controller_lookup.clone()];
+		Staking::<T>::nominate(RawOrigin::Signed(nominator_controller.clone()).into(), selected_validators)?;
+
+		individual_exposures.push(pallet_staking::IndividualExposure {
+			who: nominator_controller.clone(),
+			value: amount.clone(),
+		});
+	}
+
+	let exposure = pallet_staking::Exposure {
+		total: amount.clone() * n.into(),
+		own: amount.clone(),
+		others: individual_exposures,
+	};
+
+	Staking::<T>::add_era_stakers(0u32.into(), stash.clone().into(), exposure);
 
 	return Ok(controller)
 }
@@ -76,7 +102,7 @@ benchmarks! {
 
 		let offence = UnresponsivenessOffence {
 			session_index: 0,
-			validator_set_count: 0,
+			validator_set_count: offenders.len() as u32 / 2,
 			offenders,
 		};
 

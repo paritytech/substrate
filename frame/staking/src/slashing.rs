@@ -216,6 +216,7 @@ pub(crate) struct SlashParams<'a, T: 'a + Trait> {
 pub(crate) fn compute_slash<T: Trait>(params: SlashParams<T>)
 	-> Option<UnappliedSlash<T::AccountId, BalanceOf<T>>>
 {
+	
 	let SlashParams {
 		stash,
 		slash,
@@ -355,6 +356,9 @@ fn slash_nominators<T: Trait>(
 	let mut reward_payout = Zero::zero();
 
 	nominators_slashed.reserve(exposure.others.len());
+	#[cfg(feature = "std")]
+	println!("slash_nominators others: {}", exposure.others.len());
+
 	for nominator in &exposure.others {
 		let stash = &nominator.who;
 		let mut nom_slashed = Zero::zero();
@@ -604,6 +608,9 @@ pub fn do_slash<T: Trait>(
 
 /// Apply a previously-unapplied slash.
 pub(crate) fn apply_slash<T: Trait>(unapplied_slash: UnappliedSlash<T::AccountId, BalanceOf<T>>) {
+	#[cfg(feature = "std")]
+	println!("apply_slash(), others {:?}", unapplied_slash.others.len());
+
 	let mut slashed_imbalance = NegativeImbalanceOf::<T>::zero();
 	let mut reward_payout = unapplied_slash.payout;
 
