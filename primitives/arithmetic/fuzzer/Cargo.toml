@@ -4,6 +4,10 @@ version = "2.0.0-alpha.5"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+description = "Fuzzer for fixed point arithmetic primitives."
+documentation = "https://docs.rs/sp-arithmetic-fuzzer"
 
 [dependencies]
 sp-arithmetic = { version = "2.0.0-alpha.5", path = ".." }
@@ -15,6 +19,10 @@ num-traits = "0.2"
 [[bin]]
 name = "biguint"
 path = "src/biguint.rs"
+
+[[bin]]
+name = "per_thing_rational"
+path = "src/per_thing_rational.rs"
 
 [[bin]]
 name = "rational128"

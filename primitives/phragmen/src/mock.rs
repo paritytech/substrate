@@ -18,10 +18,10 @@
 
 #![cfg(test)]
 
-use crate::{elect, PhragmenResult, PhragmenAssignment};
+use crate::{elect, PhragmenResult, Assignment};
 use sp_runtime::{
-	assert_eq_error_rate, Perbill, PerThing,
-	traits::{Convert, Member, SaturatedConversion}
+	assert_eq_error_rate, PerThing,
+	traits::{Convert, Member, SaturatedConversion, Zero, One}
 };
 use sp_std::collections::btree_map::BTreeMap;
 
@@ -320,22 +320,23 @@ pub(crate) fn create_stake_of(stakes: &[(AccountId, Balance)])
 }
 
 
-pub fn check_assignments(assignments: Vec<(AccountId, Vec<PhragmenAssignment<AccountId, Perbill>>)>) {
-	for (_, a) in assignments {
-		let sum: u32 = a.iter().map(|(_, p)| p.deconstruct()).sum();
-		assert_eq_error_rate!(sum, Perbill::ACCURACY, 5);
+pub fn check_assignments_sum<T: PerThing>(assignments: Vec<Assignment<AccountId, T>>) {
+	for Assignment { distribution, .. } in assignments {
+		let mut sum: u128 = Zero::zero();
+		distribution.iter().for_each(|(_, p)| sum += p.deconstruct().saturated_into());
+		assert_eq_error_rate!(sum, T::ACCURACY.saturated_into(), 1);
 	}
 }
 
-pub(crate) fn run_and_compare(
+pub(crate) fn run_and_compare<Output: PerThing>(
 	candidates: Vec<AccountId>,
 	voters: Vec<(AccountId, Vec<AccountId>)>,
-	stake_of: Box<dyn Fn(&AccountId) -> Balance>,
+	stake_of: &Box<dyn Fn(&AccountId) -> Balance>,
 	to_elect: usize,
 	min_to_elect: usize,
 ) {
 	// run fixed point code.
-	let PhragmenResult { winners, assignments } = elect::<_, _, TestCurrencyToVote, Perbill>(
+	let PhragmenResult { winners, assignments } = elect::<_, _, TestCurrencyToVote, Output>(
 		to_elect,
 		min_to_elect,
 		candidates.clone(),
@@ -353,14 +354,14 @@ pub(crate) fn run_and_compare(
 
 	assert_eq!(winners, truth_value.winners);
 
-	for (nominator, assigned) in assignments.clone() {
-		if let Some(float_assignments) = truth_value.assignments.iter().find(|x| x.0 == nominator) {
-			for (candidate, per_thingy) in assigned {
+	for Assignment { who, distribution } in assignments.clone() {
+		if let Some(float_assignments) = truth_value.assignments.iter().find(|x| x.0 == who) {
+			for (candidate, per_thingy) in distribution {
 				if let Some(float_assignment) = float_assignments.1.iter().find(|x| x.0 == candidate ) {
 					assert_eq_error_rate!(
-						Perbill::from_fraction(float_assignment.1).deconstruct(),
+						Output::from_fraction(float_assignment.1).deconstruct(),
 						per_thingy.deconstruct(),
-						1,
+						Output::Inner::one(),
 					);
 				} else {
 					panic!("candidate mismatch. This should never happen.")
@@ -371,7 +372,7 @@ pub(crate) fn run_and_compare(
 		}
 	}
 
-	check_assignments(assignments);
+	check_assignments_sum(assignments);
 }
 
 pub(crate) fn build_support_map_float<FS>(

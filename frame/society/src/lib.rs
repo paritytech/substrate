@@ -1145,6 +1145,12 @@ impl<T: Trait> EnsureOrigin<T::Origin> for EnsureFounder<T> {
 			(r, _) => Err(T::Origin::from(r)),
 		})
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> T::Origin {
+		let founder = Founder::<T>::get().expect("society founder should exist");
+		T::Origin::from(system::RawOrigin::Signed(founder))
+	}
 }
 
 /// Pick an item at pseudo-random from the slice, given the `rng`. `None` iff the slice is empty.
