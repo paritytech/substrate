@@ -15,6 +15,8 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{chain_spec, factory_impl::FactoryState, service, Cli, FactoryCmd, Subcommand};
+use node_executor::Executor;
+use node_runtime::{Block, RuntimeApi};
 use node_transaction_factory::RuntimeAdapter;
 use sc_cli::{
 	substrate_cli_configuration, substrate_cli_params, CliConfiguration, Result, SubstrateCli,
@@ -51,9 +53,6 @@ pub fn run() -> Result<()> {
 			runtime.run_node(service::new_light, service::new_full)
 		}
 		Some(Subcommand::Inspect(cmd)) => {
-			use node_executor::*;
-			use node_runtime::*;
-
 			let runtime = cli.create_runtime(cmd)?;
 
 			runtime.sync_run(|config| cmd.run::<Block, RuntimeApi, Executor>(config))
@@ -62,7 +61,7 @@ pub fn run() -> Result<()> {
 			let runtime = cli.create_runtime(cmd)?;
 
 			runtime
-				.sync_run(|config| cmd.run::<node_runtime::Block, node_executor::Executor>(config))
+				.sync_run(|config| cmd.run::<Block, Executor>(config))
 		}
 		Some(Subcommand::Factory(cmd)) => {
 			let runtime = cli.create_runtime(cmd)?;
