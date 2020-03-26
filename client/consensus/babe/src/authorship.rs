@@ -21,7 +21,7 @@ use sp_consensus_babe::{
 	AuthorityId, BabeAuthorityWeight, BABE_ENGINE_ID, BABE_VRF_PREFIX,
 	SlotNumber, AuthorityPair, BabeConfiguration
 };
-use sp_consensus_babe::digests::PreDigest;
+use sp_consensus_babe::digests::{PreDigest, PrimaryPreDigest, SecondaryPreDigest};
 use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
 use sp_core::{U256, blake2_256};
 use codec::Encode;
@@ -128,10 +128,10 @@ fn claim_secondary_slot(
 		})
 	{
 		if pair.public() == *expected_author {
-			let pre_digest = PreDigest::Secondary {
+			let pre_digest = PreDigest::Secondary(SecondaryPreDigest {
 				slot_number,
 				authority_index: authority_index as u32,
-			};
+			});
 
 			return Some((pre_digest, pair));
 		}
@@ -200,12 +200,12 @@ fn claim_primary_slot(
 		let pre_digest = get_keypair(&pair)
 			.vrf_sign_after_check(transcript, |inout| super::authorship::check_primary_threshold(inout, threshold))
 			.map(|s| {
-				PreDigest::Primary {
+				PreDigest::Primary(PrimaryPreDigest {
 					slot_number,
 					vrf_output: VRFOutput(s.0.to_output()),
 					vrf_proof: VRFProof(s.1),
 					authority_index: authority_index as u32,
-				}
+				})
 			});
 
 		// early exit on first successful claim

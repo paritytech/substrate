@@ -37,9 +37,8 @@
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
-use impl_trait_for_tuples::impl_for_tuples;
 use codec::{Encode, Decode};
-use sp_arithmetic::traits::{Bounded, Zero};
+use sp_arithmetic::traits::Bounded;
 use sp_runtime::{
 	RuntimeDebug,
 	traits::SignedExtension,
@@ -67,50 +66,11 @@ pub trait ClassifyDispatch<T> {
 	fn classify_dispatch(&self, target: T) -> DispatchClass;
 }
 
-/// Means of determining the weight of a block's life cycle hooks: `on_initialize`, `on_finalize`,
-///  `on_runtime_upgrade`, and such.
-pub trait WeighBlock<BlockNumber> {
-	/// Return the weight of the block's on_runtime_upgrade hook.
-	fn on_runtime_upgrade() -> Weight { Zero::zero() }
-	/// Return the weight of the block's on_initialize hook.
-	fn on_initialize(_: BlockNumber) -> Weight { Zero::zero() }
-	/// Return the weight of the block's on_finalize hook.
-	fn on_finalize(_: BlockNumber) -> Weight { Zero::zero() }
-}
-
 /// Indicates if dispatch function should pay fees or not.
 /// If set to false, the block resource limits are applied, yet no fee is deducted.
 pub trait PaysFee<T> {
 	fn pays_fee(&self, _target: T) -> bool {
 		true
-	}
-}
-
-/// Maybe I can do something to remove the duplicate code here.
-#[impl_for_tuples(30)]
-impl<BlockNumber: Copy> WeighBlock<BlockNumber> for SingleModule {
-	fn on_runtime_upgrade() -> Weight {
-		let mut accumulated_weight: Weight = Zero::zero();
-		for_tuples!(
-			#( accumulated_weight = accumulated_weight.saturating_add(SingleModule::on_runtime_upgrade()); )*
-		);
-		accumulated_weight
-	}
-
-	fn on_initialize(n: BlockNumber) -> Weight {
-		let mut accumulated_weight: Weight = Zero::zero();
-		for_tuples!(
-			#( accumulated_weight = accumulated_weight.saturating_add(SingleModule::on_initialize(n)); )*
-		);
-		accumulated_weight
-	}
-
-	fn on_finalize(n: BlockNumber) -> Weight {
-		let mut accumulated_weight: Weight = Zero::zero();
-		for_tuples!(
-			#( accumulated_weight = accumulated_weight.saturating_add(SingleModule::on_finalize(n)); )*
-		);
-		accumulated_weight
 	}
 }
 

@@ -480,7 +480,6 @@ This paragraph concerns the following supported built-in hash functions:
 - `SHA2` with 256-bit width
 - `KECCAK` with 256-bit width
 - `BLAKE2` with 128-bit and 256-bit widths
-- `TWOX` with 64-bit, 128-bit and 256-bit widths
 
 These functions compute a cryptographic hash on the given inputs and copy the
 resulting hash directly back into the sandboxed Wasm contract output buffer.

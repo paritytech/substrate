@@ -17,8 +17,9 @@
 //! Consensus extension module tests for BABE consensus.
 
 use super::*;
+use frame_support::traits::OnFinalize;
 use mock::{new_test_ext, Babe, System};
-use sp_runtime::{traits::OnFinalize, testing::{Digest, DigestItem}};
+use sp_runtime::testing::{Digest, DigestItem};
 use sp_consensus_vrf::schnorrkel::{RawVRFOutput, RawVRFProof};
 use pallet_session::ShouldEndSession;
 
@@ -35,12 +36,14 @@ fn make_pre_digest(
 	vrf_output: RawVRFOutput,
 	vrf_proof: RawVRFProof,
 ) -> Digest {
-	let digest_data = sp_consensus_babe::digests::RawPreDigest::Primary {
-		authority_index,
-		slot_number,
-		vrf_output,
-		vrf_proof,
-	};
+	let digest_data = sp_consensus_babe::digests::RawPreDigest::Primary(
+		sp_consensus_babe::digests::RawPrimaryPreDigest {
+			authority_index,
+			slot_number,
+			vrf_output,
+			vrf_proof,
+		}
+	);
 	let log = DigestItem::PreRuntime(sp_consensus_babe::BABE_ENGINE_ID, digest_data.encode());
 	Digest { logs: vec![log] }
 }

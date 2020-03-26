@@ -10,7 +10,7 @@
 /// https://github.com/paritytech/substrate/blob/master/frame/example/src/lib.rs
 
 use frame_support::{decl_module, decl_storage, decl_event, decl_error, dispatch};
-use system::ensure_signed;
+use frame_system::{self as system, ensure_signed};
 
 #[cfg(test)]
 mod mock;
@@ -75,6 +75,7 @@ decl_module! {
 		/// Just a dummy entry point.
 		/// function that can be called by the external world as an extrinsics call
 		/// takes a parameter of the type `AccountId`, stores it, and emits an event
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		pub fn do_something(origin, something: u32) -> dispatch::DispatchResult {
 			// Check it was signed and get the signer. See also: ensure_root and ensure_none
 			let who = ensure_signed(origin)?;
@@ -90,6 +91,7 @@ decl_module! {
 
 		/// Another dummy entry point.
 		/// takes no parameters, attempts to increment storage value, and possibly throws an error
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		pub fn cause_error(origin) -> dispatch::DispatchResult {
 			// Check it was signed and get the signer. See also: ensure_root and ensure_none
 			let _who = ensure_signed(origin)?;

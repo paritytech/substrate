@@ -694,3 +694,32 @@ fn imports_stale_once() {
 	assert_eq!(net.peer(1).num_processed_blocks(), 2);
 }
 
+#[test]
+fn can_sync_to_peers_with_wrong_common_block() {
+	let _ = ::env_logger::try_init();
+	let mut net = TestNet::new(2);
+
+	net.peer(0).push_blocks(2, true);
+	net.peer(1).push_blocks(2, true);
+	let fork_hash = net.peer(0).push_blocks_at(BlockId::Number(0), 2, false);
+	net.peer(1).push_blocks_at(BlockId::Number(0), 2, false);
+	// wait for connection
+	block_on(futures::future::poll_fn::<(), _>(|cx| {
+		net.poll(cx);
+		if net.peer(0).num_peers() == 0  || net.peer(1).num_peers() == 0 {
+			Poll::Pending
+		} else {
+			Poll::Ready(())
+		}
+	}));
+
+	// both peers re-org to the same fork without notifying each other
+	net.peer(0).client().finalize_block(BlockId::Hash(fork_hash), Some(Vec::new()), true).unwrap();
+	net.peer(1).client().finalize_block(BlockId::Hash(fork_hash), Some(Vec::new()), true).unwrap();
+	let final_hash = net.peer(0).push_blocks(1, false);
+
+	net.block_until_sync();
+
+	assert!(net.peer(1).client().header(&BlockId::Hash(final_hash)).unwrap().is_some());
+}
+
