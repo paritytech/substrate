@@ -17,9 +17,8 @@ default-features = false
 version = "2.0.0-alpha.5"
 path = "../../../../frame/support"
 
-[dependencies.system]
+[dependencies.frame-system]
 default-features = false
-package = 'frame-system'
 version = "2.0.0-alpha.5"
 path = "../../../../frame/system"
 [dev-dependencies.sp-core]
@@ -44,5 +43,5 @@ std = [
 	'codec/std',
 	'frame-support/std',
 	'safe-mix/std',
-	'system/std'
+	'frame-system/std'
 ]

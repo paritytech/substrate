@@ -27,8 +27,8 @@ sc-network = { version = "0.8.0-alpha.5", path = "../../../client/network" }
 sc-consensus-aura = { version = "0.8.0-alpha.5", path = "../../../client/consensus/aura" }
 sp-consensus-aura = { version = "0.8.0-alpha.5", path = "../../../primitives/consensus/aura" }
 sp-consensus = { version = "0.8.0-alpha.5", path = "../../../primitives/consensus/common" }
-grandpa = { version = "0.8.0-alpha.5", package = "sc-finality-grandpa", path = "../../../client/finality-grandpa" }
-grandpa-primitives = { version = "2.0.0-alpha.5", package = "sp-finality-grandpa", path = "../../../primitives/finality-grandpa" }
+sc-finality-grandpa = { version = "0.8.0-alpha.5", path = "../../../client/finality-grandpa" }
+sp-finality-grandpa = { version = "2.0.0-alpha.5", path = "../../../primitives/finality-grandpa" }
 sc-client = { version = "0.8.0-alpha.5", path = "../../../client/" }
 sc-client-api = { version = "2.0.0-alpha.5", path = "../../../client/api" }
 sp-runtime = { version = "2.0.0-alpha.5", path = "../../../primitives/runtime" }
