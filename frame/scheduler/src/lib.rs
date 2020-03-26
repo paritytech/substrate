@@ -124,12 +124,13 @@ decl_module! {
 			queued.sort_by_key(|(_, s)| s.priority);
 			let mut result = 0;
 			let unused_items = queued.into_iter()
-				.scan(0, |cumulative_weight, (index, s)| {
+				.enumerate()
+				.scan(0, |cumulative_weight, (order, (index, s))| {
 					*cumulative_weight += s.call.get_dispatch_info().weight;
-					Some((index, *cumulative_weight, s))
+					Some((order, index, *cumulative_weight, s))
 				})
-				.filter_map(|(index, cumulative_weight, mut s)| {
-					if s.priority <= schedule::HARD_DEADLINE || cumulative_weight <= limit || index == 0 {
+				.filter_map(|(order, index, cumulative_weight, mut s)| {
+					if s.priority <= schedule::HARD_DEADLINE || cumulative_weight <= limit || order == 0 {
 						let r = s.call.clone().dispatch(system::RawOrigin::Root.into());
 						let maybe_id = s.maybe_id.clone();
 						if let &Some((period, count)) = &s.maybe_periodic {
