@@ -117,7 +117,7 @@ impl frame_system::Trait for Test {
 	type ModuleToIndex = ();
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
-	type OnKilledAccount = Contracts;
+	type OnKilledAccount = ();
 }
 impl pallet_balances::Trait for Test {
 	type Balance = u64;
@@ -308,7 +308,7 @@ fn refunds_unused_gas() {
 }
 
 #[test]
-fn account_removal_removes_storage() {
+fn account_removal_does_not_remove_storage() {
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
 		let trie_id1 = <Test as Trait>::TrieIdGenerator::trie_id(&1);
 		let trie_id2 = <Test as Trait>::TrieIdGenerator::trie_id(&2);
@@ -351,14 +351,22 @@ fn account_removal_removes_storage() {
 		// Transfer funds from account 1 of such amount that after this transfer
 		// the balance of account 1 will be below the existential threshold.
 		//
-		// This should lead to the removal of all storage associated with this account.
+		// This does not remove the contract storage as we are not notified about a
+		// account removal. This cannot happen in reality because a contract can only
+		// remove itself by `ext_terminate`. There is no external event that can remove
+		// the account appart from that.
 		assert_ok!(Balances::transfer(Origin::signed(1), 2, 20));
 
-		// Verify that all entries from account 1 is removed, while
-		// entries from account 2 is in place.
+		// Verify that no entries are removed.
 		{
-			assert!(<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &1, Some(&trie_id1), key1).is_none());
-			assert!(<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &1, Some(&trie_id1), key2).is_none());
+			assert_eq!(
+				<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &1, Some(&trie_id1), key1),
+				Some(b"1".to_vec())
+			);
+			assert_eq!(
+				<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &1, Some(&trie_id1), key2),
+				Some(b"2".to_vec())
+			);
 
 			assert_eq!(
 				<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &2, Some(&trie_id2), key1),
