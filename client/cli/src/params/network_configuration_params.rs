@@ -108,9 +108,9 @@ impl NetworkConfigurationParams {
 	pub fn network_config(
 		&self,
 		chain_spec: &Box<dyn ChainSpec>,
-		client_id: &str,
 		is_dev: bool,
 		net_config_path: &PathBuf,
+		client_id: &str,
 		node_name: &str,
 		node_key: NodeKeyConfig,
 	) -> error::Result<NetworkConfiguration>

@@ -19,8 +19,8 @@ use crate::arg_enums::{
 	DEFAULT_EXECUTION_IMPORT_BLOCK, DEFAULT_EXECUTION_OFFCHAIN_WORKER, DEFAULT_EXECUTION_OTHER,
 	DEFAULT_EXECUTION_SYNCING,
 };
-use crate::error;
 use crate::params::PruningParams;
+use crate::Result;
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::{PruningMode, Roles};
 use structopt::StructOpt;
@@ -78,16 +78,31 @@ pub struct ImportParams {
 }
 
 impl ImportParams {
+	/// Receiver to process tracing messages.
+	pub fn tracing_receiver(&self) -> Result<sc_tracing::TracingReceiver> {
+		Ok(self.tracing_receiver.clone().into())
+	}
+
+	/// Comma separated list of targets for tracing.
+	pub fn tracing_targets(&self) -> Result<Option<String>> {
+		Ok(self.tracing_targets.clone())
+	}
+
+	/// Specify the state cache size.
+	pub fn state_cache_size(&self) -> Result<usize> {
+		Ok(self.state_cache_size)
+	}
+
 	/// Get the WASM execution method from the parameters
-	pub fn wasm_method(&self) -> sc_service::config::WasmExecutionMethod {
-		self.wasm_method.into()
+	pub fn wasm_method(&self) -> Result<sc_service::config::WasmExecutionMethod> {
+		Ok(self.wasm_method.into())
 	}
 
 	/// Get execution strategies for the parameters
 	pub fn execution_strategies(
 		&self,
 		is_dev: bool,
-	) -> error::Result<ExecutionStrategies>
+	) -> Result<ExecutionStrategies>
 	{
 		let exec = &self.execution_strategies;
 		let exec_all_or = |strat: ExecutionStrategy, default: ExecutionStrategy| {
@@ -110,8 +125,13 @@ impl ImportParams {
 	}
 
 	/// Get the pruning mode from the parameters
-	pub fn pruning(&self, roles: Roles, unsafe_pruning: bool) -> error::Result<PruningMode> {
-		self.pruning_params.pruning(roles, unsafe_pruning)
+	pub fn pruning(&self, unsafe_pruning: bool, roles: Roles) -> Result<PruningMode> {
+		self.pruning_params.pruning(unsafe_pruning, roles)
+	}
+
+	/// Limit the memory the database cache can use.
+	pub fn database_cache_size(&self) -> Result<Option<usize>> {
+		Ok(self.database_cache_size)
 	}
 }
 

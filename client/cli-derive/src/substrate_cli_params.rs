@@ -22,6 +22,21 @@ use std::collections::{HashMap, HashSet};
 use syn::parse::Parser;
 use syn::{punctuated::Punctuated, spanned::Spanned, *};
 
+macro_rules! define_if_missing {
+	(
+		$existing_methods:expr, $impl:expr, $path:ident,
+		{ fn $method:ident ( &self $(, $arg:ident : $ty:ty)* $(,)? ) $(-> $result:ty)? }
+	) => {
+		if !$existing_methods.contains(stringify!($method)) {
+			$impl.items.push(ImplItem::Verbatim(quote! {
+				fn $method(&self, $($arg : $ty),*) $(-> $result)? {
+					self.#$path.$method($($arg),*)
+				}
+			}));
+		}
+	}
+}
+
 pub(crate) fn substrate_cli_params(
 	a: proc_macro::TokenStream,
 	i: proc_macro::TokenStream,
@@ -85,149 +100,100 @@ pub(crate) fn substrate_cli_params(
 			_ => None,
 		})
 		.collect::<HashSet<_>>();
-	let missing = |method| !existing_methods.contains(method);
 
-	if let Some(ident) = shared_params {
-		if missing("base_path") {
-			i.items.push(ImplItem::Verbatim(quote! {
-				fn base_path(&self)
-				-> ::sc_cli::Result<::std::option::Option<&::std::path::PathBuf>> {
-					Ok(self.#ident.base_path.as_ref())
-				}
-			}));
-		}
-		if missing("is_dev") {
-			i.items.push(ImplItem::Verbatim(quote! {
-				fn is_dev(&self) -> ::sc_cli::Result<bool> {
-					Ok(self.#ident.dev)
-				}
-			}));
-		}
-		if missing("chain_id") {
-			i.items.push(ImplItem::Verbatim(quote! {
-				fn chain_id(&self, is_dev: bool) -> ::sc_cli::Result<String> {
-					self.#ident.chain_id(is_dev)
-				}
-			}));
-		}
-		if missing("database_config") {
-			i.items.push(ImplItem::Verbatim(quote! {
-				fn database_config(
-					&self,
-					base_path: &::std::path::PathBuf,
-					cache_size: usize,
-				) -> ::sc_cli::Result<::sc_service::config::DatabaseConfig> {
-					Ok(self.#ident.database_config(base_path, cache_size))
-				}
-			}));
-		}
-		if missing("init") {
+	if let Some(path) = shared_params {
+		define_if_missing!(existing_methods, i, path, {
+			fn base_path(&self)
+			-> ::sc_cli::Result<::std::option::Option<::std::path::PathBuf>>
+		});
+
+		define_if_missing!(existing_methods, i, path, {
+			fn is_dev(&self) -> ::sc_cli::Result<bool>
+		});
+
+		define_if_missing!(existing_methods, i, path, {
+			fn chain_id(&self, is_dev: bool) -> ::sc_cli::Result<String>
+		});
+
+		define_if_missing!(existing_methods, i, path, {
+			fn database_config(
+				&self,
+				base_path: &::std::path::PathBuf,
+				cache_size: usize,
+			) -> ::sc_cli::Result<::sc_service::config::DatabaseConfig>
+		});
+
+		if !existing_methods.contains("init") {
 			i.items.push(ImplItem::Verbatim(quote! {
 				fn init<C: ::sc_cli::SubstrateCli>(&self) -> ::sc_cli::Result<()> {
-					self.#ident.init::<C>()
+					self.#path.init::<C>()
 				}
 			}));
 		}
 	}
 
-	if let Some(ident) = import_params {
-		if missing("tracing_receiver") {
-			i.items.push(ImplItem::Verbatim(quote! {
-				fn tracing_receiver(&self) -> ::sc_cli::Result<::sc_service::TracingReceiver> {
-					Ok(self.#ident.tracing_receiver.clone().into())
-				}
-			}));
-		}
-		if missing("tracing_targets") {
-			i.items.push(ImplItem::Verbatim(quote! {
-				fn tracing_targets(&self)
-				-> ::sc_cli::Result<::std::option::Option<::std::string::String>> {
-					Ok(self.#ident.tracing_targets.clone().into())
-				}
-			}));
-		}
-		if missing("state_cache_size") {
-			i.items.push(ImplItem::Verbatim(quote! {
-				fn state_cache_size(&self) -> ::sc_cli::Result<usize> {
-					Ok(self.#ident.state_cache_size)
-				}
-			}));
-		}
-		if missing("wasm_method") {
-			i.items.push(ImplItem::Verbatim(quote! {
-				fn wasm_method(&self)
-				-> ::sc_cli::Result<::sc_service::config::WasmExecutionMethod> {
-					Ok(self.#ident.wasm_method())
-				}
-			}));
-		}
-		if missing("execution_strategies") {
-			i.items.push(ImplItem::Verbatim(quote! {
-				fn execution_strategies(&self, is_dev: bool)
-				-> ::sc_cli::Result<::sc_service::config::ExecutionStrategies> {
-					self.#ident.execution_strategies(is_dev)
-				}
-			}));
-		}
-		if missing("database_cache_size") {
-			i.items.push(ImplItem::Verbatim(quote! {
-				fn database_cache_size(&self) -> ::sc_cli::Result<::std::option::Option<usize>> {
-					Ok(self.#ident.database_cache_size)
-				}
-			}));
-		}
+	if let Some(path) = import_params {
+		define_if_missing!(existing_methods, i, path, {
+			fn tracing_receiver(&self) -> ::sc_cli::Result<::sc_service::TracingReceiver>
+		});
+
+		define_if_missing!(existing_methods, i, path, {
+			fn tracing_targets(&self)
+			-> ::sc_cli::Result<::std::option::Option<::std::string::String>>
+		});
+
+		define_if_missing!(existing_methods, i, path, {
+			fn state_cache_size(&self) -> ::sc_cli::Result<usize>
+		});
+
+		define_if_missing!(existing_methods, i, path, {
+			fn wasm_method(&self)
+			-> ::sc_cli::Result<::sc_service::config::WasmExecutionMethod>
+		});
+
+		define_if_missing!(existing_methods, i, path, {
+			fn execution_strategies(&self, is_dev: bool)
+			-> ::sc_cli::Result<::sc_service::config::ExecutionStrategies>
+		});
+
+		define_if_missing!(existing_methods, i, path, {
+			fn database_cache_size(&self) -> ::sc_cli::Result<::std::option::Option<usize>>
+		});
 	}
 
-	if let Some(ident) = pruning_params {
-		if missing("pruning") {
-			i.items.push(ImplItem::Verbatim(quote! {
-				fn pruning(&self, is_dev: bool, roles: ::sc_service::Roles)
-				-> ::sc_cli::Result<::sc_service::PruningMode> {
-					self.#ident.pruning(roles, is_dev)
-				}
-			}));
-		}
+	if let Some(path) = pruning_params {
+		define_if_missing!(existing_methods, i, path, {
+			fn pruning(&self, is_dev: bool, roles: ::sc_service::Roles)
+			-> ::sc_cli::Result<::sc_service::PruningMode>
+		});
 	}
 
-	if let Some(ident) = keystore_params {
-		if missing("keystore_config") {
-			i.items.push(ImplItem::Verbatim(quote! {
-				fn keystore_config(&self, base_path: &::std::path::PathBuf)
-				-> ::sc_cli::Result<::sc_service::config::KeystoreConfig> {
-					self.#ident.keystore_config(base_path)
-				}
-			}));
-		}
+	if let Some(path) = keystore_params {
+		define_if_missing!(existing_methods, i, path, {
+			fn keystore_config(&self, base_path: &::std::path::PathBuf)
+			-> ::sc_cli::Result<::sc_service::config::KeystoreConfig>
+		});
 	}
 
-	if let Some(ident) = node_key_params {
-		if missing("node_key") {
-			i.items.push(ImplItem::Verbatim(quote! {
-				fn node_key(&self, net_config_dir: &::std::path::PathBuf)
-				-> ::sc_cli::Result<::sc_service::config::NodeKeyConfig> {
-					self.#ident.node_key(net_config_dir)
-				}
-			}));
-		}
+	if let Some(path) = node_key_params {
+		define_if_missing!(existing_methods, i, path, {
+			fn node_key(&self, net_config_dir: &::std::path::PathBuf)
+			-> ::sc_cli::Result<::sc_service::config::NodeKeyConfig>
+		});
 	}
 
-	if let Some(ident) = network_params {
-		if missing("network_config") {
-			i.items.push(ImplItem::Verbatim(quote! {
-				fn network_config(
-					&self,
-					chain_spec: &std::boxed::Box<dyn ::sc_service::ChainSpec>,
-					is_dev: bool,
-					base_path: &::std::path::PathBuf,
-					client_id: &str,
-					node_name: &str,
-					node_key: ::sc_service::config::NodeKeyConfig,
-				) -> ::sc_cli::Result<::sc_service::config::NetworkConfiguration> {
-					self.#ident
-						.network_config(chain_spec, client_id, is_dev, base_path, node_name, node_key)
-				}
-			}));
-		}
+	if let Some(path) = network_params {
+		define_if_missing!(existing_methods, i, path, {
+			fn network_config(
+				&self,
+				chain_spec: &std::boxed::Box<dyn ::sc_service::ChainSpec>,
+				is_dev: bool,
+				net_config_dir: &::std::path::PathBuf,
+				client_id: &str,
+				node_name: &str,
+				node_key: ::sc_service::config::NodeKeyConfig,
+			) -> ::sc_cli::Result<::sc_service::config::NetworkConfiguration>
+		});
 	}
 
 	quote!(#i)

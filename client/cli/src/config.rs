@@ -41,7 +41,7 @@ pub(crate) const DEFAULT_NETWORK_CONFIG_PATH: &'static str = "network";
 /// A trait that allows converting an object to a Configuration
 pub trait CliConfiguration: Sized {
 	/// Get the base path of the configuration (if any)
-	fn base_path(&self) -> Result<Option<&PathBuf>>;
+	fn base_path(&self) -> Result<Option<PathBuf>>;
 
 	/// Returns `true` if the node is for development or not
 	fn is_dev(&self) -> Result<bool> {
@@ -219,17 +219,18 @@ pub trait CliConfiguration: Sized {
 		let is_dev = self.is_dev()?;
 		let chain_id = self.chain_id(is_dev)?;
 		let chain_spec = cli.load_spec(chain_id.as_str())?;
-		let default_config_dir = app_dirs::get_app_root(
-			AppDataType::UserData,
-			&AppInfo {
-				name: C::executable_name(),
-				author: C::author(),
-			},
-		)
-		.expect("app directories exist on all supported platforms; qed");
 		let config_dir = self
 			.base_path()?
-			.unwrap_or(&default_config_dir)
+			.unwrap_or_else(|| {
+				app_dirs::get_app_root(
+					AppDataType::UserData,
+					&AppInfo {
+						name: C::executable_name(),
+						author: C::author(),
+					},
+				)
+				.expect("app directories exist on all supported platforms; qed")
+			})
 			.join("chains")
 			.join(chain_spec.id());
 		let net_config_dir = config_dir.join(DEFAULT_NETWORK_CONFIG_PATH);

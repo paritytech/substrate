@@ -60,7 +60,7 @@ pub(crate) fn substrate_cli_config_wrapper(
 		.collect::<HashSet<_>>();
 
 	define_if_missing!(existing_methods, i, path, {
-		fn base_path(&self) -> ::sc_cli::Result<::std::option::Option<&::std::path::PathBuf>>
+		fn base_path(&self) -> ::sc_cli::Result<::std::option::Option<::std::path::PathBuf>>
 	});
 
 	define_if_missing!(existing_methods, i, path, {

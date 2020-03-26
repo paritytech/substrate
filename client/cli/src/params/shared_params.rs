@@ -54,6 +54,16 @@ pub struct SharedParams {
 }
 
 impl SharedParams {
+	/// Specify custom base path.
+	pub fn base_path(&self) -> Result<Option<PathBuf>> {
+		Ok(self.base_path.clone())
+	}
+
+	/// Specify the development chain.
+	pub fn is_dev(&self) -> Result<bool> {
+		Ok(self.dev)
+	}
+
 	/// Get the chain spec for the parameters provided
 	pub fn chain_id(&self, is_dev: bool) -> Result<String> {
 		Ok(match self.chain {
@@ -91,10 +101,10 @@ impl SharedParams {
 		&self,
 		base_path: &PathBuf,
 		cache_size: usize,
-	) -> DatabaseConfig {
-		DatabaseConfig::Path {
+	) -> Result<DatabaseConfig> {
+		Ok(DatabaseConfig::Path {
 			path: base_path.join(DEFAULT_DB_CONFIG_PATH),
 			cache_size,
-		}
+		})
 	}
 }

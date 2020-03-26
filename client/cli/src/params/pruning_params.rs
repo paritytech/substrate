@@ -35,8 +35,8 @@ impl PruningParams {
 	/// Get the pruning value from the parameters
 	pub fn pruning(
 		&self,
-		roles: sc_service::Roles,
 		unsafe_pruning: bool,
+		roles: sc_service::Roles,
 	) -> error::Result<PruningMode> {
 		// by default we disable pruning if the node is an authority (i.e.
 		// `ArchiveAll`), otherwise we keep state for the last 256 blocks. if the
