@@ -16,7 +16,7 @@
 
 //! Test utilities
 
-use std::{collections::{HashSet, HashMap}, cell::RefCell};
+use std::{collections::HashSet, cell::RefCell};
 use sp_runtime::Perbill;
 use sp_runtime::curve::PiecewiseLinear;
 use sp_runtime::traits::{IdentityLookup, Convert, SaturatedConversion, Zero};
@@ -34,11 +34,7 @@ use sp_io;
 use sp_phragmen::{
 	build_support_map, evaluate_support, reduce, ExtendedBalance, StakedAssignment, PhragmenScore,
 };
-use crate::{
-	EraIndex, GenesisConfig, Module, Trait, StakerStatus, ValidatorPrefs, RewardDestination,
-	Nominators, inflation, SessionInterface, Exposure, ErasStakers, ErasRewardPoints,
-	CompactAssignments, ValidatorIndex, NominatorIndex, Validators, OffchainAccuracy,
-};
+use crate::*;
 
 /// The AccountId alias in this test module.
 pub(crate) type AccountId = u64;
@@ -548,6 +544,7 @@ pub fn assert_ledger_consistent(stash: AccountId) {
 
 pub fn bond_validator(stash: u64, ctrl: u64, val: u64) {
 	let _ = Balances::make_free_balance_be(&stash, val);
+	let _ = Balances::make_free_balance_be(&ctrl, val);
 	assert_ok!(Staking::bond(
 		Origin::signed(stash),
 		ctrl,
@@ -562,6 +559,7 @@ pub fn bond_validator(stash: u64, ctrl: u64, val: u64) {
 
 pub fn bond_nominator(stash: u64, ctrl: u64, val: u64, target: Vec<u64>) {
 	let _ = Balances::make_free_balance_be(&stash, val);
+	let _ = Balances::make_free_balance_be(&ctrl, val);
 	assert_ok!(Staking::bond(
 		Origin::signed(stash),
 		ctrl,
@@ -673,8 +671,6 @@ pub fn on_offence_now(
 pub fn horrible_phragmen_with_post_processing(
 	do_reduce: bool,
 ) -> (CompactAssignments, Vec<ValidatorIndex>, PhragmenScore) {
-	use std::collections::BTreeMap;
-
 	let mut backing_stake_of: BTreeMap<AccountId, Balance> = BTreeMap::new();
 
 	// self stake

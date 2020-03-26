@@ -419,7 +419,7 @@ mod tests {
 
 	#[test]
 	fn test_payout_all() {
-		ExtBuilder::default().stakers(false).build().execute_with(|| {
+		ExtBuilder::default().has_stakers(false).build().execute_with(|| {
 			let v = 10;
 			let n = 100;
 

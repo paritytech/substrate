@@ -4101,14 +4101,14 @@ fn set_history_depth_works() {
 fn test_payout_validator() {
 	// Here we will test validator can set `max_nominators_payout` and it works.
 	// We also test that `payout_extra_nominators` works.
-	ExtBuilder::default().stakers(false).build().execute_with(|| {
+	ExtBuilder::default().has_stakers(false).build().execute_with(|| {
 		let balance = 1000;
 		// Create three validators:
-		bond_validator(10, 11, balance); // Default(64)
+		bond_validator(11, 10, balance); // Default(64)
 
 		// Create nominators, targeting stash of validators
 		for i in 0..100 {
-			bond_nominator(100 + i, 1000 + i, balance + i, vec![11]);
+			bond_nominator(1000 + i, 100 + i, balance + i, vec![11]);
 		}
 
 		start_era(1);
@@ -4181,14 +4181,14 @@ fn test_payout_validator() {
 #[test]
 fn payout_validator_handles_basic_errors() {
 	// Here we will test payouts handle all errors.
-	ExtBuilder::default().stakers(false).build().execute_with(|| {
+	ExtBuilder::default().has_stakers(false).build().execute_with(|| {
 		// Same setup as the test above
 		let balance = 1000;
-		bond_validator(10, 11, balance); // Default(64)
+		bond_validator(11, 10, balance); // Default(64)
 
 		// Create nominators, targeting stash
 		for i in 0..100 {
-			bond_nominator(100 + i, 1000 + i, balance + i, vec![11]);
+			bond_nominator(1000 + i, 100 + i, balance + i, vec![11]);
 		}
 
 		start_era(1);
