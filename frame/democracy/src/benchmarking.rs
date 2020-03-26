@@ -228,12 +228,6 @@ benchmarks! {
 	}: _(RawOrigin::Root, referendum_index)
 
 	cancel_queued {
-		let d in 0 .. 100;
-
-		let referendum_index = add_referendum::<T>(d)?;
-		let block_number: T::BlockNumber = 0.into();
-		let hash: T::Hash = T::Hashing::hash_of(&d);
-		<DispatchQueue<T>>::put(vec![(block_number, hash, referendum_index.clone()); d as usize]);
 	}: _(RawOrigin::Root, referendum_index)
 
 	open_proxy {
@@ -314,19 +308,13 @@ benchmarks! {
 	note_imminent_preimage {
 		// Num of bytes in encoded proposal
 		let b in 0 .. 16_384;
-		// Length of dispatch queue
-		let d in 0 .. 100;
 
 		let mut dispatch_queue = Vec::new();
 		// d + 1 to include the one we are testing
-		for i in 0 .. d + 1 {
-			let encoded_proposal = vec![0; i as usize];
-			let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
-			let block_number = T::BlockNumber::zero();
-			let referendum_index: ReferendumIndex = 0;
-			dispatch_queue.push((block_number, proposal_hash, referendum_index))
-		}
-		<DispatchQueue<T>>::put(dispatch_queue);
+		let encoded_proposal = vec![0; 0];
+		let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
+		let block_number = T::BlockNumber::one();
+		Preimages::<T>::insert(&proposal_hash, PreimageStatus::Missing(block_number))?
 
 		let caller = funded_account::<T>("caller", b);
 		let encoded_proposal = vec![0; d as usize];
@@ -335,18 +323,9 @@ benchmarks! {
 	reap_preimage {
 		// Num of bytes in encoded proposal
 		let b in 0 .. 16_384;
-		// Length of dispatch queue
-		let d in 0 .. 100;
 
-		let mut dispatch_queue = Vec::new();
-		for i in 0 .. d {
-			let encoded_proposal = vec![0; i as usize];
-			let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
-			let block_number = T::BlockNumber::zero();
-			let referendum_index: ReferendumIndex = 0;
-			dispatch_queue.push((block_number, proposal_hash, referendum_index))
-		}
-		<DispatchQueue<T>>::put(dispatch_queue);
+		let encoded_proposal = vec![0; 0 as usize];
+		let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
 
 		let caller = funded_account::<T>("caller", d);
 		let encoded_proposal = vec![0; d as usize];
