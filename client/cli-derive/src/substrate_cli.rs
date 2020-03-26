@@ -22,7 +22,7 @@ use std::collections::{HashMap, HashSet};
 use syn::parse::Parser;
 use syn::{punctuated::Punctuated, spanned::Spanned, *};
 
-pub(crate) fn substrate_cli_configuration(
+pub(crate) fn substrate_cli(
 	a: proc_macro::TokenStream,
 	i: proc_macro::TokenStream,
 ) -> proc_macro2::TokenStream {

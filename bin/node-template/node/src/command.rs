@@ -17,10 +17,10 @@
 use crate::chain_spec;
 use crate::cli::Cli;
 use crate::service;
-use sc_cli::{substrate_cli_configuration, SubstrateCli};
+use sc_cli::{substrate_cli, SubstrateCli};
 use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
 
-#[substrate_cli_configuration(
+#[substrate_cli(
 	impl_name = "Substrate Node",
 	support_url = "support.anonymous.an",
 	copyright_start_year = 2017

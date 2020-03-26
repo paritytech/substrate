@@ -19,11 +19,11 @@ use node_executor::Executor;
 use node_runtime::{Block, RuntimeApi};
 use node_transaction_factory::RuntimeAdapter;
 use sc_cli::{
-	substrate_cli_configuration, substrate_cli_params, CliConfiguration, Result, SubstrateCli,
+	substrate_cli, substrate_cli_params, CliConfiguration, Result, SubstrateCli,
 };
 use sc_service::Configuration;
 
-#[substrate_cli_configuration(
+#[substrate_cli(
 	impl_name = "Substrate Node",
 	support_url = "https://github.com/paritytech/substrate/issues/new",
 	copyright_start_year = 2017,
