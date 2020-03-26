@@ -31,7 +31,7 @@ use frame_support::{
 	decl_module, decl_event, decl_storage, Parameter,
 	weights::{Weight, SimpleDispatchInfo, WeighData},
 };
-use sp_runtime::{traits::Hash, RuntimeDebug};
+use sp_runtime::traits::Hash;
 use sp_staking::{
 	offence::{Offence, ReportOffence, Kind, OnOffenceHandler, OffenceDetails, OffenceError},
 };

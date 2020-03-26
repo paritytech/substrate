@@ -20,25 +20,19 @@ use super::*;
 
 use sp_std::prelude::*;
 use frame_benchmarking::{benchmarks, account};
-use frame_support::traits::{Currency, Get};
-use frame_system::{RawOrigin, Module as System, self};
-use sp_runtime::traits::{Bounded, EnsureOrigin, Convert, StaticLookup};
-use sp_runtime::Perbill;
+use frame_support::traits::Currency;
+use frame_system::RawOrigin;
+use sp_runtime::{Perbill, traits::{Convert, StaticLookup}};
 use pallet_im_online::UnresponsivenessOffence;
-use pallet_staking::{Module as Staking, ExposureOf, RewardDestination, ValidatorPrefs};
-use sp_staking::offence::Offence;
-use pallet_session::historical::IdentificationTuple;
-
-use crate::Module as Offences;
+use pallet_staking::{Module as Staking, RewardDestination, ValidatorPrefs};
 
 const SEED: u32 = 0;
-const MAX_USERS: u32 = 1000;
 const MAX_REPORTERS: u32 = 1000;
 const MAX_OFFENDERS: u32 = 1000;
 
 pub trait Trait: pallet_staking::Trait + crate::Trait + pallet_im_online::Trait {}
 
-pub fn create_stash_controller<T: frame_system::Trait + pallet_staking::Trait>(n: u32) -> Result<(T::AccountId, T::AccountId), &'static str> {
+pub fn create_offender<T: frame_system::Trait + pallet_staking::Trait>(n: u32) -> Result<T::AccountId, &'static str> {
 	let stash: T::AccountId = account("stash", n, 0);
 	let controller: T::AccountId = account("controller", n, 0);
 	let controller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(controller.clone());
@@ -50,7 +44,7 @@ pub fn create_stash_controller<T: frame_system::Trait + pallet_staking::Trait>(n
 	};
 	Staking::<T>::validate(RawOrigin::Signed(controller.clone()).into(), validator_prefs)?;
 
-	return Ok((stash, controller))
+	return Ok(controller)
 }
 
 benchmarks! {
@@ -65,8 +59,8 @@ benchmarks! {
 
 		let mut offenders: Vec<T::AccountId> = vec![];
 		for i in 0 .. o {
-			offenders.push(account("controller", i, 0));
-			create_stash_controller::<T>(i)?;
+			let offender = create_offender::<T>(i)?;
+			offenders.push(offender);
 		}
 
 		let offenders = offenders.iter()
