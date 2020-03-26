@@ -21,5 +21,9 @@ name = "biguint"
 path = "src/biguint.rs"
 
 [[bin]]
+name = "per_thing_rational"
+path = "src/per_thing_rational.rs"
+
+[[bin]]
 name = "rational128"
 path = "src/rational128.rs"

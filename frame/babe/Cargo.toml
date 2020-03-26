@@ -9,7 +9,6 @@ repository = "https://github.com/paritytech/substrate/"
 description = "Consensus extension module for BABE consensus. Collects on-chain randomness from VRF outputs and manages epoch transitions."
 
 [dependencies]
-hex-literal = "0.2.1"
 codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false, features = ["derive"] }
 serde = { version = "1.0.101", optional = true }
 sp-inherents = { version = "2.0.0-alpha.5", default-features = false, path = "../../primitives/inherents" }
@@ -26,11 +25,7 @@ sp-consensus-vrf = { version = "0.8.0-alpha.5", default-features = false, path =
 sp-io = { path = "../../primitives/io", default-features = false , version = "2.0.0-alpha.5"}
 
 [dev-dependencies]
-lazy_static = "1.4.0"
-parking_lot = "0.10.0"
-sp-version = { version = "2.0.0-alpha.5", default-features = false, path = "../../primitives/version" }
 sp-core = { version = "2.0.0-alpha.5", path = "../../primitives/core" }
-substrate-test-runtime = { version = "2.0.0-dev", path = "../../test-utils/runtime" }
 
 [features]
 default = ["std"]
