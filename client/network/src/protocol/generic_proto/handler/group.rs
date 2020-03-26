@@ -302,6 +302,9 @@ impl ProtocolsHandler for NotifsHandler {
 	fn inject_event(&mut self, message: NotifsHandlerIn) {
 		match message {
 			NotifsHandlerIn::Enable => {
+				if let EnabledState::Enabled = self.enabled {
+					error!("enabling already-enabled handler");
+				}
 				self.enabled = EnabledState::Enabled;
 				self.legacy.inject_event(LegacyProtoHandlerIn::Enable);
 				for (handler, _) in &mut self.out_handlers {
@@ -314,6 +317,9 @@ impl ProtocolsHandler for NotifsHandler {
 				}
 			},
 			NotifsHandlerIn::Disable => {
+				if let EnabledState::Disabled = self.enabled {
+					error!("disabling already-disabled handler");
+				}
 				self.legacy.inject_event(LegacyProtoHandlerIn::Disable);
 				// The notifications protocols start in the disabled state. If we were in the
 				// "Initial" state, then we shouldn't disable the notifications protocols again.
