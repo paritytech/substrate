@@ -23,13 +23,13 @@
 use crate::utils::{
 	generate_crate_access, create_host_function_ident, get_function_argument_names,
 	get_function_argument_types_without_ref, get_function_argument_types_ref_and_mut,
-	get_function_argument_names_and_types_without_ref, get_trait_methods, get_function_arguments,
-	get_function_argument_types, create_exchangeable_host_function_ident,
+	get_function_argument_names_and_types_without_ref, get_function_arguments,
+	get_function_argument_types, create_exchangeable_host_function_ident, get_runtime_interface,
+	create_function_ident_with_version,
 };
 
 use syn::{
-	ItemTrait, TraitItemMethod, Result, ReturnType, Ident, TraitItem, Pat, Error, Signature,
-	spanned::Spanned,
+	ItemTrait, TraitItemMethod, Result, ReturnType, Ident, Pat, Error, Signature, spanned::Spanned,
 };
 
 use proc_macro2::{TokenStream, Span};
@@ -44,13 +44,15 @@ use std::iter::{Iterator, self};
 /// implementations for the host functions on the host.
 pub fn generate(trait_def: &ItemTrait, is_wasm_only: bool) -> Result<TokenStream> {
 	let trait_name = &trait_def.ident;
-	let extern_host_function_impls = get_trait_methods(trait_def)
-		.try_fold(TokenStream::new(), |mut t, m| {
-			t.extend(generate_extern_host_function(m, trait_name)?);
+	let extern_host_function_impls = get_runtime_interface(trait_def)?
+		.latest_versions()
+		.try_fold(TokenStream::new(), |mut t, (version, method)| {
+			t.extend(generate_extern_host_function(method, version, trait_name)?);
 			Ok::<_, Error>(t)
 		})?;
-	let exchangeable_host_functions = get_trait_methods(trait_def)
-		.try_fold(TokenStream::new(), |mut t, m| {
+	let exchangeable_host_functions = get_runtime_interface(trait_def)?
+		.latest_versions()
+		.try_fold(TokenStream::new(), |mut t, (_, m)| {
 			t.extend(generate_exchangeable_host_function(m)?);
 			Ok::<_, Error>(t)
 		})?;
@@ -76,7 +78,7 @@ pub fn generate(trait_def: &ItemTrait, is_wasm_only: bool) -> Result<TokenStream
 }
 
 /// Generate the extern host function for the given method.
-fn generate_extern_host_function(method: &TraitItemMethod, trait_name: &Ident) -> Result<TokenStream> {
+fn generate_extern_host_function(method: &TraitItemMethod, version: u32, trait_name: &Ident) -> Result<TokenStream> {
 	let crate_ = generate_crate_access();
 	let args = get_function_arguments(&method.sig);
 	let arg_types = get_function_argument_types_without_ref(&method.sig);
@@ -85,7 +87,7 @@ fn generate_extern_host_function(method: &TraitItemMethod, trait_name: &Ident) -
 	let arg_names2 = get_function_argument_names(&method.sig);
 	let arg_names3 = get_function_argument_names(&method.sig);
 	let function = &method.sig.ident;
-	let ext_function = create_host_function_ident(&method.sig.ident, trait_name);
+	let ext_function = create_host_function_ident(&method.sig.ident, version, trait_name);
 	let doc_string = format!(
 		" Default extern host function implementation for [`super::{}`].",
 		method.sig.ident,
@@ -157,14 +159,12 @@ fn generate_exchangeable_host_function(method: &TraitItemMethod) -> Result<Token
 /// implementations for the extern host functions.
 fn generate_host_functions_struct(trait_def: &ItemTrait, is_wasm_only: bool) -> Result<TokenStream> {
 	let crate_ = generate_crate_access();
-	let host_functions = trait_def
-		.items
-		.iter()
-		.filter_map(|i| match i {
-			TraitItem::Method(ref method) => Some(method),
-			_ => None,
-		})
-		.map(|m| generate_host_function_implementation(&trait_def.ident, m, is_wasm_only))
+
+	let host_functions = get_runtime_interface(trait_def)?
+		.all_versions()
+		.map(|(version, method)|
+			generate_host_function_implementation(&trait_def.ident, method, version, is_wasm_only)
+		)
 		.collect::<Result<Vec<_>>>()?;
 
 	Ok(
@@ -191,9 +191,10 @@ fn generate_host_functions_struct(trait_def: &ItemTrait, is_wasm_only: bool) -> 
 fn generate_host_function_implementation(
 	trait_name: &Ident,
 	method: &TraitItemMethod,
+	version: u32,
 	is_wasm_only: bool,
 ) -> Result<TokenStream> {
-	let name = create_host_function_ident(&method.sig.ident, trait_name).to_string();
+	let name = create_host_function_ident(&method.sig.ident, version, trait_name).to_string();
 	let struct_name = Ident::new(&name.to_pascal_case(), Span::call_site());
 	let crate_ = generate_crate_access();
 	let signature = generate_wasm_interface_signature_for_host_function(&method.sig)?;
@@ -202,7 +203,7 @@ fn generate_host_function_implementation(
 		trait_name,
 	).collect::<Result<Vec<_>>>()?;
 	let ffi_to_host_values = generate_ffi_to_host_value(&method.sig).collect::<Result<Vec<_>>>()?;
-	let host_function_call = generate_host_function_call(&method.sig, is_wasm_only);
+	let host_function_call = generate_host_function_call(&method.sig, version, is_wasm_only);
 	let into_preallocated_ffi_value = generate_into_preallocated_ffi_value(&method.sig)?;
 	let convert_return_value = generate_return_value_into_wasm_value(&method.sig);
 
@@ -211,7 +212,6 @@ fn generate_host_function_implementation(
 			{
 				struct #struct_name;
 
-				#[allow(unused)]
 				impl #crate_::sp_wasm_interface::Function for #struct_name {
 					fn name(&self) -> &str {
 						#name
@@ -322,8 +322,8 @@ fn generate_ffi_to_host_value<'a>(
 }
 
 /// Generate the code to call the host function and the ident that stores the result.
-fn generate_host_function_call(sig: &Signature, is_wasm_only: bool) -> TokenStream {
-	let host_function_name = &sig.ident;
+fn generate_host_function_call(sig: &Signature, version: u32, is_wasm_only: bool) -> TokenStream {
+	let host_function_name = create_function_ident_with_version(&sig.ident, version);
 	let result_var_name = generate_host_function_result_var_name(&sig.ident);
 	let ref_and_mut = get_function_argument_types_ref_and_mut(sig).map(|ram|
 		ram.map(|(vr, vm)| quote!(#vr #vm))

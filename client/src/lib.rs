@@ -47,7 +47,6 @@
 //! ```
 //! use std::sync::Arc;
 //! use sc_client::{Client, in_mem::Backend, LocalCallExecutor};
-//! use sp_core::Blake2Hasher;
 //! use sp_runtime::Storage;
 //! use sc_executor::{NativeExecutor, WasmExecutionMethod};
 //!
@@ -62,13 +61,15 @@
 //! 	backend.clone(),
 //! 	LocalCallExecutor::new(
 //! 		backend.clone(),
-//! 		NativeExecutor::<LocalExecutor>::new(WasmExecutionMethod::Interpreted, None),
+//! 		NativeExecutor::<LocalExecutor>::new(WasmExecutionMethod::Interpreted, None, 8),
+//!         sp_core::tasks::executor(),
 //!		),
 //! 	// This parameter provides the storage for the chain genesis.
 //! 	&<Storage>::default(),
 //! 	Default::default(),
 //! 	Default::default(),
 //! 	Default::default(),
+//!		None,
 //! );
 //! ```
 //!
@@ -98,7 +99,7 @@ pub use crate::{
 	client::{
 		new_with_backend,
 		new_in_mem,
-		BlockBody, ImportNotifications, FinalityNotifications, BlockchainEvents,
+		BlockBackend, ImportNotifications, FinalityNotifications, BlockchainEvents, LockImportRun,
 		BlockImportNotification, Client, ClientInfo, ExecutionStrategies, FinalityNotification,
 		LongestChain, BlockOf, ProvideUncles, BadBlocks, ForkBlocks, apply_aux,
 	},

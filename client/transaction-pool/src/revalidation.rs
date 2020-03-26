@@ -78,7 +78,7 @@ async fn batch_revalidate<Api: ChainApi>(
 			None => continue,
 		};
 
-		match api.validate_transaction(&BlockId::Number(at), ext.data.clone()).await {
+		match api.validate_transaction(&BlockId::Number(at), ext.source, ext.data.clone()).await {
 			Ok(Err(TransactionValidityError::Invalid(err))) => {
 				log::debug!(target: "txpool", "[{:?}]: Revalidation: invalid {:?}", ext_hash, err);
 				invalid_hashes.push(ext_hash);
@@ -94,6 +94,7 @@ async fn batch_revalidate<Api: ChainApi>(
 					ValidatedTransaction::valid_at(
 						at.saturated_into::<u64>(),
 						ext_hash,
+						ext.source,
 						ext.data.clone(),
 						api.hash_and_length(&ext.data).1,
 						validity,
@@ -113,7 +114,9 @@ async fn batch_revalidate<Api: ChainApi>(
 	}
 
 	pool.validated_pool().remove_invalid(&invalid_hashes);
-	pool.resubmit(revalidated);
+	if revalidated.len() > 0 {
+		pool.resubmit(revalidated);
+	}
 }
 
 impl<Api: ChainApi> RevalidationWorker<Api> {
@@ -160,7 +163,15 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 			}
 		}
 
+		for hash in queued_exts.iter() {
+			self.members.remove(hash);
+		}
+
 		queued_exts
+	}
+
+	fn len(&self) -> usize {
+		self.block_ordered.iter().map(|b| b.1.len()).sum()
 	}
 
 	fn push(&mut self, worker_payload: WorkerPayload<Api>) {
@@ -170,7 +181,15 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 
 		for ext_hash in transactions {
 			// we don't add something that already scheduled for revalidation
-			if self.members.contains_key(&ext_hash) { continue; }
+			if self.members.contains_key(&ext_hash) {
+				log::debug!(
+					target: "txpool",
+					"[{:?}] Skipped adding for revalidation: Already there.",
+					ext_hash,
+				);
+
+				continue;
+			}
 
 			self.block_ordered.entry(block_number)
 				.and_modify(|value| { value.insert(ext_hash.clone()); })
@@ -198,7 +217,18 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 			futures::select! {
 				_ = interval.next() => {
 					let next_batch = this.prepare_batch();
+					let batch_len = next_batch.len();
+
 					batch_revalidate(this.pool.clone(), this.api.clone(), this.best_block, next_batch).await;
+
+					if batch_len > 0 || this.len() > 0 {
+						log::debug!(
+							target: "txpool",
+							"Revalidated {} transactions. Left in the queue for revalidation: {}.",
+							batch_len,
+							this.len(),
+						);
+					}
 				},
 				workload = from_queue.next() => {
 					match workload {
@@ -264,6 +294,10 @@ where
 	/// If queue configured without background worker, this will resolve after
 	/// revalidation is actually done.
 	pub async fn revalidate_later(&self, at: NumberFor<Api>, transactions: Vec<ExHash<Api>>) {
+		if transactions.len() > 0 {
+			log::debug!(target: "txpool", "Added {} transactions to revalidation queue", transactions.len());
+		}
+
 		if let Some(ref to_worker) = self.background {
 			if let Err(e) = to_worker.unbounded_send(WorkerPayload { at, transactions }) {
 				log::warn!(target: "txpool", "Failed to update background worker: {:?}", e);
@@ -279,9 +313,9 @@ where
 
 #[cfg(test)]
 mod tests {
-
 	use super::*;
 	use sc_transaction_graph::Pool;
+	use sp_transaction_pool::TransactionSource;
 	use substrate_test_runtime_transaction_pool::{TestApi, uxt};
 	use futures::executor::block_on;
 	use substrate_test_runtime_client::{
@@ -301,7 +335,9 @@ mod tests {
 		let queue = Arc::new(RevalidationQueue::new(api.clone(), pool.clone()));
 
 		let uxt = uxt(Alice, 0);
-		let uxt_hash = block_on(pool.submit_one(&BlockId::number(0), uxt.clone())).expect("Should be valid");
+		let uxt_hash = block_on(
+			pool.submit_one(&BlockId::number(0), TransactionSource::External, uxt.clone())
+		).expect("Should be valid");
 
 		block_on(queue.revalidate_later(0, vec![uxt_hash]));
 

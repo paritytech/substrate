@@ -23,7 +23,7 @@ use super::*;
 use authorship::claim_slot;
 
 use sp_consensus_babe::{AuthorityPair, SlotNumber};
-use sc_block_builder::BlockBuilder;
+use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
 use sp_consensus::{
 	NoNetwork as DummyOracle, Proposal, RecordProof,
 	import_queue::{BoxBlockImport, BoxJustificationImport, BoxFinalityProofImport},
@@ -32,10 +32,9 @@ use sc_network_test::*;
 use sc_network_test::{Block as TestBlock, PeersClient};
 use sc_network::config::{BoxFinalityProofRequestBuilder, ProtocolConfig};
 use sp_runtime::{generic::DigestItem, traits::{Block as BlockT, DigestFor}};
-use tokio::runtime::current_thread;
 use sc_client_api::{BlockchainEvents, backend::TransactionFor};
 use log::debug;
-use std::{time::Duration, cell::RefCell};
+use std::{time::Duration, cell::RefCell, task::Poll};
 
 type Item = DigestItem<Hash>;
 
@@ -123,7 +122,7 @@ impl DummyProposer {
 		// figure out if we should add a consensus digest, since the test runtime
 		// doesn't.
 		let epoch_changes = self.factory.epoch_changes.lock();
-		let epoch = epoch_changes.epoch_for_child_of(
+		let epoch = epoch_changes.epoch_data_for_child_of(
 			descendent_query(&*self.factory.client),
 			&self.parent_hash,
 			self.parent_number,
@@ -131,8 +130,7 @@ impl DummyProposer {
 			|slot| self.factory.config.genesis_epoch(slot),
 		)
 			.expect("client has data to find epoch")
-			.expect("can compute epoch for baked block")
-			.into_inner();
+			.expect("can compute epoch for baked block");
 
 		let first_in_epoch = self.parent_slot < epoch.start_slot;
 		if first_in_epoch {
@@ -354,7 +352,7 @@ fn run_one_test(
 
 	let net = Arc::new(Mutex::new(net));
 	let mut import_notifications = Vec::new();
-	let mut runtime = current_thread::Runtime::new().unwrap();
+	let mut babe_futures = Vec::new();
 	let mut keystore_paths = Vec::new();
 
 	for (peer_id, seed) in peers {
@@ -399,7 +397,7 @@ fn run_one_test(
 		);
 
 
-		runtime.spawn(start_babe(BabeParams {
+		babe_futures.push(start_babe(BabeParams {
 			block_import: data.block_import.lock().take().expect("import set up during init"),
 			select_chain,
 			client,
@@ -410,23 +408,23 @@ fn run_one_test(
 			babe_link: data.link.clone(),
 			keystore,
 			can_author_with: sp_consensus::AlwaysCanAuthor,
-		}).expect("Starts babe").unit_error().compat());
+		}).expect("Starts babe"));
 	}
 
-	runtime.spawn(futures01::future::poll_fn(move || {
-		let mut net = net.lock();
-		net.poll();
-		for p in net.peers() {
-			for (h, e) in p.failed_verifications() {
-				panic!("Verification failed for {:?}: {}", h, e);
+	futures::executor::block_on(future::select(
+		futures::future::poll_fn(move |cx| {
+			let mut net = net.lock();
+			net.poll(cx);
+			for p in net.peers() {
+				for (h, e) in p.failed_verifications() {
+					panic!("Verification failed for {:?}: {}", h, e);
+				}
 			}
-		}
 
-		Ok::<_, ()>(futures01::Async::NotReady::<()>)
-	}));
-
-	runtime.block_on(future::join_all(import_notifications)
-		.unit_error().compat()).unwrap();
+			Poll::<()>::Pending
+		}),
+		future::select(future::join_all(import_notifications), future::join_all(babe_futures))
+	));
 }
 
 #[test]
@@ -555,10 +553,10 @@ fn propose_and_import_block<Transaction>(
 	let pre_digest = sp_runtime::generic::Digest {
 		logs: vec![
 			Item::babe_pre_digest(
-				PreDigest::Secondary {
+				PreDigest::Secondary(SecondaryPreDigest {
 					authority_index: 0,
 					slot_number,
-				},
+				}),
 			),
 		],
 	};
@@ -567,12 +565,11 @@ fn propose_and_import_block<Transaction>(
 
 	let mut block = futures::executor::block_on(proposer.propose_with(pre_digest)).unwrap().block;
 
-	let epoch = proposer_factory.epoch_changes.lock().epoch_for_child_of(
+	let epoch_descriptor = proposer_factory.epoch_changes.lock().epoch_descriptor_for_child_of(
 		descendent_query(&*proposer_factory.client),
 		&parent_hash,
 		*parent.number(),
 		slot_number,
-		|slot| proposer_factory.config.genesis_epoch(slot)
 	).unwrap().unwrap();
 
 	let seal = {
@@ -596,7 +593,7 @@ fn propose_and_import_block<Transaction>(
 	import.body = Some(block.extrinsics);
 	import.intermediates.insert(
 		Cow::from(INTERMEDIATE_KEY),
-		Box::new(BabeIntermediate { epoch }) as Box<dyn Any>,
+		Box::new(BabeIntermediate::<TestBlock> { epoch_descriptor }) as Box<dyn Any>,
 	);
 	import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 	let import_result = block_import.import_block(import, Default::default()).unwrap();
@@ -638,13 +635,13 @@ fn importing_block_one_sets_genesis_epoch() {
 	let genesis_epoch = data.link.config.genesis_epoch(999);
 
 	let epoch_changes = data.link.epoch_changes.lock();
-	let epoch_for_second_block = epoch_changes.epoch_for_child_of(
+	let epoch_for_second_block = epoch_changes.epoch_data_for_child_of(
 		descendent_query(&*client),
 		&block_hash,
 		1,
 		1000,
 		|slot| data.link.config.genesis_epoch(slot),
-	).unwrap().unwrap().into_inner();
+	).unwrap().unwrap();
 
 	assert_eq!(epoch_for_second_block, genesis_epoch);
 }

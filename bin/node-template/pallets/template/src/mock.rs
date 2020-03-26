@@ -6,6 +6,7 @@ use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
 use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup}, testing::Header, Perbill,
 };
+use frame_system as system;
 
 impl_outer_origin! {
 	pub enum Origin for Test {}
@@ -41,7 +42,7 @@ impl system::Trait for Test {
 	type ModuleToIndex = ();
 	type AccountData = ();
 	type OnNewAccount = ();
-	type OnReapAccount = ();
+	type OnKilledAccount = ();
 }
 impl Trait for Test {
 	type Event = ();

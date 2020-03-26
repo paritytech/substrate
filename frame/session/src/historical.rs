@@ -27,8 +27,8 @@
 
 use sp_std::prelude::*;
 use codec::{Encode, Decode};
-use sp_runtime::KeyTypeId;
-use sp_runtime::traits::{Convert, OpaqueKeys, Hash as HashT};
+use sp_runtime::{KeyTypeId, RuntimeDebug};
+use sp_runtime::traits::{Convert, OpaqueKeys};
 use frame_support::{decl_module, decl_storage};
 use frame_support::{Parameter, print};
 use sp_trie::{MemoryDB, Trie, TrieMut, Recorder, EMPTY_PREFIX};
@@ -56,22 +56,18 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Session {
 		/// Mapping from historical session indices to session-data root hash and validator count.
 		HistoricalSessions get(fn historical_root):
-			map hasher(blake2_256) SessionIndex => Option<(T::Hash, ValidatorCount)>;
+			map hasher(twox_64_concat) SessionIndex => Option<(T::Hash, ValidatorCount)>;
 		/// The range of historical sessions we store. [first, last)
 		StoredRange: Option<(SessionIndex, SessionIndex)>;
 		/// Deprecated.
 		CachedObsolete:
-			map hasher(blake2_256) SessionIndex
+			map hasher(twox_64_concat) SessionIndex
 			=> Option<Vec<(T::ValidatorId, T::FullIdentification)>>;
 	}
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn on_initialize(_n: T::BlockNumber) {
-			CachedObsolete::<T>::remove_all();
-		}
-	}
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 }
 
 impl<T: Trait> Module<T> {
@@ -108,6 +104,7 @@ pub trait SessionManager<ValidatorId, FullIdentification>: crate::SessionManager
 	/// If there was a validator set change, its returns the set of new validators along with their
 	/// full identifications.
 	fn new_session(new_index: SessionIndex) -> Option<Vec<(ValidatorId, FullIdentification)>>;
+	fn start_session(start_index: SessionIndex);
 	fn end_session(end_index: SessionIndex);
 }
 
@@ -146,19 +143,20 @@ impl<T: Trait, I> crate::SessionManager<T::ValidatorId> for NoteHistoricalRoot<T
 
 		new_validators
 	}
+	fn start_session(start_index: SessionIndex) {
+		<I as SessionManager<_, _>>::start_session(start_index)
+	}
 	fn end_session(end_index: SessionIndex) {
 		<I as SessionManager<_, _>>::end_session(end_index)
 	}
 }
-
-type HasherOf<T> = <<T as frame_system::Trait>::Hashing as HashT>::Hasher;
 
 /// A tuple of the validator's ID and their full identification.
 pub type IdentificationTuple<T> = (<T as crate::Trait>::ValidatorId, <T as Trait>::FullIdentification);
 
 /// a trie instance for checking and generating proofs.
 pub struct ProvingTrie<T: Trait> {
-	db: MemoryDB<HasherOf<T>>,
+	db: MemoryDB<T::Hashing>,
 	root: T::Hash,
 }
 
@@ -256,10 +254,17 @@ impl<T: Trait> ProvingTrie<T> {
 }
 
 /// Proof of ownership of a specific key.
-#[derive(Encode, Decode, Clone)]
+#[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug)]
 pub struct Proof {
 	session: SessionIndex,
 	trie_nodes: Vec<Vec<u8>>,
+}
+
+impl Proof {
+	/// Returns a session this proof was generated for.
+	pub fn session(&self) -> SessionIndex {
+		self.session
+	}
 }
 
 impl<T: Trait, D: AsRef<[u8]>> frame_support::traits::KeyOwnerProofSystem<(KeyTypeId, D)>
@@ -305,12 +310,12 @@ impl<T: Trait, D: AsRef<[u8]>> frame_support::traits::KeyOwnerProofSystem<(KeyTy
 mod tests {
 	use super::*;
 	use sp_core::crypto::key_types::DUMMY;
-	use sp_runtime::{traits::OnInitialize, testing::UintAuthorityId};
+	use sp_runtime::testing::UintAuthorityId;
 	use crate::mock::{
 		NEXT_VALIDATORS, force_new_session,
 		set_next_validators, Test, System, Session,
 	};
-	use frame_support::traits::KeyOwnerProofSystem;
+	use frame_support::traits::{KeyOwnerProofSystem, OnInitialize};
 
 	type Historical = Module<Test>;
 
@@ -318,7 +323,7 @@ mod tests {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		crate::GenesisConfig::<Test> {
 			keys: NEXT_VALIDATORS.with(|l|
-				l.borrow().iter().cloned().map(|i| (i, UintAuthorityId(i).into())).collect()
+				l.borrow().iter().cloned().map(|i| (i, i, UintAuthorityId(i).into())).collect()
 			),
 		}.assimilate_storage(&mut t).unwrap();
 		sp_io::TestExternalities::new(t)

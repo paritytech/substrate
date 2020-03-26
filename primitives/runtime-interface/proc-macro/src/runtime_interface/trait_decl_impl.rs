@@ -17,10 +17,15 @@
 //! Checks the trait declaration, makes the trait declaration module local, removes all method
 //! default implementations and implements the trait for `&mut dyn Externalities`.
 
-use crate::utils::{generate_crate_access, get_function_argument_types_without_ref};
+use crate::utils::{
+	generate_crate_access,
+	get_function_argument_types_without_ref,
+	get_runtime_interface,
+	create_function_ident_with_version,
+};
 
 use syn::{
-	ItemTrait, TraitItemMethod, Result, TraitItem, Error, fold::{self, Fold}, spanned::Spanned,
+	ItemTrait, TraitItemMethod, Result, Error, fold::{self, Fold}, spanned::Spanned,
 	Visibility, Receiver, Type, Generics,
 };
 
@@ -32,7 +37,7 @@ use quote::quote;
 /// essential definition and implement this essential definition for `dyn Externalities`.
 pub fn process(trait_def: &ItemTrait, is_wasm_only: bool) -> Result<TokenStream> {
 	let impl_trait = impl_trait_for_externalities(trait_def, is_wasm_only)?;
-	let essential_trait_def = ToEssentialTraitDef::convert(trait_def.clone())?;
+	let essential_trait_def = declare_essential_trait(trait_def)?;
 
 	Ok(
 		quote! {
@@ -48,27 +53,33 @@ pub fn process(trait_def: &ItemTrait, is_wasm_only: bool) -> Result<TokenStream>
 struct ToEssentialTraitDef {
 	/// All errors found while doing the conversion.
 	errors: Vec<Error>,
+	methods: Vec<TraitItemMethod>,
 }
 
 impl ToEssentialTraitDef {
-	/// Convert the given trait definition to the essential trait definition.
-	fn convert(trait_def: ItemTrait) -> Result<ItemTrait> {
-		let mut folder = ToEssentialTraitDef {
-			errors: Vec::new(),
-		};
+	fn new() -> Self {
+		ToEssentialTraitDef { errors: vec![], methods: vec![] }
+	}
 
-		let res = folder.fold_item_trait(trait_def);
-
-		if let Some(first_error) = folder.errors.pop() {
+	fn into_methods(self) -> Result<Vec<TraitItemMethod>> {
+		let mut errors = self.errors;
+		let methods = self.methods;
+		if let Some(first_error) = errors.pop() {
 			Err(
-				folder.errors.into_iter().fold(first_error, |mut o, n| {
+				errors.into_iter().fold(first_error, |mut o, n| {
 					o.combine(n);
 					o
 				})
 			)
 		} else {
-			Ok(res)
+			Ok(methods)
 		}
+	}
+
+	fn process(&mut self, method: &TraitItemMethod, version: u32) {
+		let mut folded = self.fold_trait_item_method(method.clone());
+		folded.sig.ident = create_function_ident_with_version(&folded.sig.ident, version);
+		self.methods.push(folded);
 	}
 
 	fn push_error<S: Spanned>(&mut self, span: &S, msg: &str) {
@@ -98,6 +109,8 @@ impl Fold for ToEssentialTraitDef {
 
 		self.error_on_generic_parameters(&method.sig.generics);
 
+		method.attrs.retain(|a| !a.path.is_ident("version"));
+
 		fold::fold_trait_item_method(self, method)
 	}
 
@@ -117,17 +130,40 @@ impl Fold for ToEssentialTraitDef {
 	}
 }
 
+fn declare_essential_trait(trait_def: &ItemTrait) -> Result<TokenStream> {
+	let trait_ = &trait_def.ident;
+
+	if let Some(param) = trait_def.generics.params.first() {
+		return Err(Error::new(param.span(), "Generic parameters not supported."))
+	}
+
+	let interface = get_runtime_interface(trait_def)?;
+	let mut folder = ToEssentialTraitDef::new();
+	for (version, interface_method) in interface.all_versions() {
+		folder.process(interface_method, version);
+	}
+	let methods = folder.into_methods()?;
+
+	Ok(
+		quote! {
+			trait #trait_ {
+				#( #methods )*
+			}
+		}
+	)
+}
+
 /// Implements the given trait definition for `dyn Externalities`.
 fn impl_trait_for_externalities(trait_def: &ItemTrait, is_wasm_only: bool) -> Result<TokenStream> {
 	let trait_ = &trait_def.ident;
 	let crate_ = generate_crate_access();
-	let methods = trait_def
-		.items
-		.iter()
-		.filter_map(|i| match i {
-			TraitItem::Method(ref method) => Some(method),
-			_ => None,
-		});
+	let interface = get_runtime_interface(trait_def)?;
+	let methods = interface.all_versions().map(|(version, method)| {
+		let mut cloned = method.clone();
+		cloned.attrs.retain(|a| !a.path.is_ident("version"));
+		cloned.sig.ident = create_function_ident_with_version(&cloned.sig.ident, version);
+		cloned
+	});
 
 	let impl_type = if is_wasm_only {
 		quote!( &mut dyn #crate_::sp_wasm_interface::FunctionContext )

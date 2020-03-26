@@ -27,15 +27,18 @@ mod keyword {
 	syn::custom_keyword!(build);
 	syn::custom_keyword!(get);
 	syn::custom_keyword!(map);
-	syn::custom_keyword!(linked_map);
 	syn::custom_keyword!(double_map);
-	syn::custom_keyword!(blake2_256);
-	syn::custom_keyword!(blake2_128);
+	syn::custom_keyword!(opaque_blake2_256);
+	syn::custom_keyword!(opaque_blake2_128);
 	syn::custom_keyword!(blake2_128_concat);
-	syn::custom_keyword!(twox_256);
-	syn::custom_keyword!(twox_128);
+	syn::custom_keyword!(opaque_twox_256);
+	syn::custom_keyword!(opaque_twox_128);
 	syn::custom_keyword!(twox_64_concat);
+	syn::custom_keyword!(identity);
 	syn::custom_keyword!(hasher);
+	syn::custom_keyword!(tainted);
+	syn::custom_keyword!(natural);
+	syn::custom_keyword!(prehashed);
 }
 
 /// Specific `Opt` to implement structure with optional parsing
@@ -194,7 +197,6 @@ impl_parse_for_opt!(DeclStorageBuild => keyword::build);
 #[derive(ToTokens, Debug)]
 enum DeclStorageType {
 	Map(DeclStorageMap),
-	LinkedMap(DeclStorageLinkedMap),
 	DoubleMap(DeclStorageDoubleMap),
 	Simple(syn::Type),
 }
@@ -203,8 +205,6 @@ impl syn::parse::Parse for DeclStorageType {
 	fn parse(input: syn::parse::ParseStream) -> syn::parse::Result<Self> {
 		if input.peek(keyword::map) {
 			Ok(Self::Map(input.parse()?))
-		} else if input.peek(keyword::linked_map) {
-			Ok(Self::LinkedMap(input.parse()?))
 		} else if input.peek(keyword::double_map) {
 			Ok(Self::DoubleMap(input.parse()?))
 		} else {
@@ -216,15 +216,6 @@ impl syn::parse::Parse for DeclStorageType {
 #[derive(Parse, ToTokens, Debug)]
 struct DeclStorageMap {
 	pub map_keyword: keyword::map,
-	pub hasher: Opt<SetHasher>,
-	pub key: syn::Type,
-	pub ass_keyword: Token![=>],
-	pub value: syn::Type,
-}
-
-#[derive(Parse, ToTokens, Debug)]
-struct DeclStorageLinkedMap {
-	pub map_keyword: keyword::linked_map,
 	pub hasher: Opt<SetHasher>,
 	pub key: syn::Type,
 	pub ass_keyword: Token![=>],
@@ -245,29 +236,38 @@ struct DeclStorageDoubleMap {
 
 #[derive(ToTokens, Debug)]
 enum Hasher {
-	Blake2_256(keyword::blake2_256),
-	Blake2_128(keyword::blake2_128),
+	Blake2_256(keyword::opaque_blake2_256),
+	Blake2_128(keyword::opaque_blake2_128),
 	Blake2_128Concat(keyword::blake2_128_concat),
-	Twox256(keyword::twox_256),
-	Twox128(keyword::twox_128),
+	Twox256(keyword::opaque_twox_256),
+	Twox128(keyword::opaque_twox_128),
 	Twox64Concat(keyword::twox_64_concat),
+	Identity(keyword::identity),
 }
 
 impl syn::parse::Parse for Hasher {
 	fn parse(input: syn::parse::ParseStream) -> syn::parse::Result<Self> {
 		let lookahead = input.lookahead1();
-		if lookahead.peek(keyword::blake2_256) {
+		if lookahead.peek(keyword::opaque_blake2_256) {
 			Ok(Self::Blake2_256(input.parse()?))
-		} else if lookahead.peek(keyword::blake2_128) {
+		} else if lookahead.peek(keyword::opaque_blake2_128) {
 			Ok(Self::Blake2_128(input.parse()?))
 		} else if lookahead.peek(keyword::blake2_128_concat) {
 			Ok(Self::Blake2_128Concat(input.parse()?))
-		} else if lookahead.peek(keyword::twox_256) {
+		} else if lookahead.peek(keyword::opaque_twox_256) {
 			Ok(Self::Twox256(input.parse()?))
-		} else if lookahead.peek(keyword::twox_128) {
+		} else if lookahead.peek(keyword::opaque_twox_128) {
 			Ok(Self::Twox128(input.parse()?))
 		} else if lookahead.peek(keyword::twox_64_concat) {
 			Ok(Self::Twox64Concat(input.parse()?))
+		} else if lookahead.peek(keyword::identity) {
+			Ok(Self::Identity(input.parse()?))
+		} else if lookahead.peek(keyword::tainted) {
+			Ok(Self::Blake2_128Concat(input.parse()?))
+		} else if lookahead.peek(keyword::natural) {
+			Ok(Self::Twox64Concat(input.parse()?))
+		} else if lookahead.peek(keyword::prehashed) {
+			Ok(Self::Identity(input.parse()?))
 		} else {
 			Err(lookahead.error())
 		}
@@ -313,6 +313,7 @@ impl From<Hasher> for super::HasherKind {
 			Hasher::Twox256(_) => super::HasherKind::Twox256,
 			Hasher::Twox128(_) => super::HasherKind::Twox128,
 			Hasher::Twox64Concat(_) => super::HasherKind::Twox64Concat,
+			Hasher::Identity(_) => super::HasherKind::Identity,
 		}
 	}
 }
@@ -464,18 +465,11 @@ fn parse_storage_line_defs(
 		let span = line.storage_type.span();
 		let no_hasher_error = || syn::Error::new(
 			span,
-			"Default hasher has been removed, use explicit hasher(blake2_256) instead."
+			"Default hasher has been removed, use explicit hasher(blake2_128_concat) instead."
 		);
 
 		let storage_type = match line.storage_type {
 			DeclStorageType::Map(map) => super::StorageLineTypeDef::Map(
-				super::MapDef {
-					hasher: map.hasher.inner.ok_or_else(no_hasher_error)?.into(),
-					key: map.key,
-					value: map.value,
-				}
-			),
-			DeclStorageType::LinkedMap(map) => super::StorageLineTypeDef::LinkedMap(
 				super::MapDef {
 					hasher: map.hasher.inner.ok_or_else(no_hasher_error)?.into(),
 					key: map.key,

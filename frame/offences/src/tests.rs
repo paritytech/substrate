@@ -21,9 +21,10 @@
 use super::*;
 use crate::mock::{
 	Offences, System, Offence, TestEvent, KIND, new_test_ext, with_on_offence_fractions,
-	offence_reports,
+	offence_reports, set_can_report,
 };
 use sp_runtime::Perbill;
+use frame_support::traits::OnInitialize;
 use frame_system::{EventRecord, Phase};
 
 #[test]
@@ -40,7 +41,7 @@ fn should_report_an_authority_and_trigger_on_offence() {
 		};
 
 		// when
-		Offences::report_offence(vec![], offence);
+		Offences::report_offence(vec![], offence).unwrap();
 
 		// then
 		with_on_offence_fractions(|f| {
@@ -61,7 +62,7 @@ fn should_not_report_the_same_authority_twice_in_the_same_slot() {
 			time_slot,
 			offenders: vec![5],
 		};
-		Offences::report_offence(vec![], offence.clone());
+		Offences::report_offence(vec![], offence.clone()).unwrap();
 		with_on_offence_fractions(|f| {
 			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
 			f.clear();
@@ -69,7 +70,7 @@ fn should_not_report_the_same_authority_twice_in_the_same_slot() {
 
 		// when
 		// report for the second time
-		Offences::report_offence(vec![], offence);
+		assert_eq!(Offences::report_offence(vec![], offence), Err(OffenceError::DuplicateReport));
 
 		// then
 		with_on_offence_fractions(|f| {
@@ -91,7 +92,7 @@ fn should_report_in_different_time_slot() {
 			time_slot,
 			offenders: vec![5],
 		};
-		Offences::report_offence(vec![], offence.clone());
+		Offences::report_offence(vec![], offence.clone()).unwrap();
 		with_on_offence_fractions(|f| {
 			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
 			f.clear();
@@ -100,7 +101,7 @@ fn should_report_in_different_time_slot() {
 		// when
 		// report for the second time
 		offence.time_slot += 1;
-		Offences::report_offence(vec![], offence);
+		Offences::report_offence(vec![], offence).unwrap();
 
 		// then
 		with_on_offence_fractions(|f| {
@@ -123,14 +124,14 @@ fn should_deposit_event() {
 		};
 
 		// when
-		Offences::report_offence(vec![], offence);
+		Offences::report_offence(vec![], offence).unwrap();
 
 		// then
 		assert_eq!(
 			System::events(),
 			vec![EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
-				event: TestEvent::offences(crate::Event::Offence(KIND, time_slot.encode())),
+				phase: Phase::Initialization,
+				event: TestEvent::offences(crate::Event::Offence(KIND, time_slot.encode(), true)),
 				topics: vec![],
 			}]
 		);
@@ -149,7 +150,7 @@ fn doesnt_deposit_event_for_dups() {
 			time_slot,
 			offenders: vec![5],
 		};
-		Offences::report_offence(vec![], offence.clone());
+		Offences::report_offence(vec![], offence.clone()).unwrap();
 		with_on_offence_fractions(|f| {
 			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
 			f.clear();
@@ -157,15 +158,15 @@ fn doesnt_deposit_event_for_dups() {
 
 		// when
 		// report for the second time
-		Offences::report_offence(vec![], offence);
+		assert_eq!(Offences::report_offence(vec![], offence), Err(OffenceError::DuplicateReport));
 
 		// then
 		// there is only one event.
 		assert_eq!(
 			System::events(),
 			vec![EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
-				event: TestEvent::offences(crate::Event::Offence(KIND, time_slot.encode())),
+				phase: Phase::Initialization,
+				event: TestEvent::offences(crate::Event::Offence(KIND, time_slot.encode(), true)),
 				topics: vec![],
 			}]
 		);
@@ -191,7 +192,7 @@ fn should_properly_count_offences() {
 			time_slot,
 			offenders: vec![4],
 		};
-		Offences::report_offence(vec![], offence1);
+		Offences::report_offence(vec![], offence1).unwrap();
 		with_on_offence_fractions(|f| {
 			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
 			f.clear();
@@ -199,7 +200,7 @@ fn should_properly_count_offences() {
 
 		// when
 		// report for the second time
-		Offences::report_offence(vec![], offence2);
+		Offences::report_offence(vec![], offence2).unwrap();
 
 		// then
 		// the 1st authority should have count 2 and the 2nd one should be reported only once.
@@ -211,4 +212,55 @@ fn should_properly_count_offences() {
 			]
 		);
 	});
+}
+
+#[test]
+fn should_queue_and_resubmit_rejected_offence() {
+	new_test_ext().execute_with(|| {
+		set_can_report(false);
+
+		// will get deferred
+		let offence = Offence {
+			validator_set_count: 5,
+			time_slot: 42,
+			offenders: vec![5],
+		};
+		Offences::report_offence(vec![], offence).unwrap();
+		assert_eq!(Offences::deferred_offences().len(), 1);
+		// event also indicates unapplied.
+		assert_eq!(
+			System::events(),
+			vec![EventRecord {
+				phase: Phase::Initialization,
+				event: TestEvent::offences(crate::Event::Offence(KIND, 42u128.encode(), false)),
+				topics: vec![],
+			}]
+		);
+
+		// will not dequeue
+		Offences::on_initialize(2);
+
+		// again
+		let offence = Offence {
+			validator_set_count: 5,
+			time_slot: 62,
+			offenders: vec![5],
+		};
+		Offences::report_offence(vec![], offence).unwrap();
+		assert_eq!(Offences::deferred_offences().len(), 2);
+
+		set_can_report(true);
+
+		// can be submitted
+		let offence = Offence {
+			validator_set_count: 5,
+			time_slot: 72,
+			offenders: vec![5],
+		};
+		Offences::report_offence(vec![], offence).unwrap();
+		assert_eq!(Offences::deferred_offences().len(), 2);
+
+		Offences::on_initialize(3);
+		assert_eq!(Offences::deferred_offences().len(), 0);
+	})
 }

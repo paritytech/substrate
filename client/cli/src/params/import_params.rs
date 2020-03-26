@@ -15,10 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use structopt::StructOpt;
-use sc_service::{
-	Configuration, RuntimeGenesis,
-	config::DatabaseConfig, PruningMode,
-};
+use sc_service::{Configuration, config::DatabaseConfig};
 
 use crate::error;
 use crate::arg_enums::{
@@ -26,17 +23,14 @@ use crate::arg_enums::{
 	DEFAULT_EXECUTION_IMPORT_BLOCK, DEFAULT_EXECUTION_OFFCHAIN_WORKER, DEFAULT_EXECUTION_OTHER,
 	DEFAULT_EXECUTION_SYNCING
 };
+use crate::params::PruningParams;
 
 /// Parameters for block import.
 #[derive(Debug, StructOpt, Clone)]
 pub struct ImportParams {
-	/// Specify the state pruning mode, a number of blocks to keep or 'archive'.
-	///
-	/// Default is to keep all block states if the node is running as a
-	/// validator (i.e. 'archive'), otherwise state is only kept for the last
-	/// 256 blocks.
-	#[structopt(long = "pruning", value_name = "PRUNING_MODE")]
-	pub pruning: Option<String>,
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub pruning_params: PruningParams,
 
 	/// Force start with unsafe pruning settings.
 	///
@@ -61,18 +55,18 @@ pub struct ImportParams {
 	pub execution_strategies: ExecutionStrategies,
 
 	/// Limit the memory the database cache can use.
-	#[structopt(long = "db-cache", value_name = "MiB", default_value = "1024")]
+	#[structopt(long = "db-cache", value_name = "MiB", default_value = "128")]
 	pub database_cache_size: u32,
 
 	/// Specify the state cache size.
 	#[structopt(long = "state-cache-size", value_name = "Bytes", default_value = "67108864")]
 	pub state_cache_size: usize,
 
-	/// Comma separated list of targets for tracing
+	/// Comma separated list of targets for tracing.
 	#[structopt(long = "tracing-targets", value_name = "TARGETS")]
 	pub tracing_targets: Option<String>,
 
-	/// Receiver to process tracing messages
+	/// Receiver to process tracing messages.
 	#[structopt(
 		long = "tracing-receiver",
 		value_name = "RECEIVER",
@@ -85,15 +79,12 @@ pub struct ImportParams {
 
 impl ImportParams {
 	/// Put block import CLI params into `config` object.
-	pub fn update_config<G, E>(
+	pub fn update_config(
 		&self,
-		config: &mut Configuration<G, E>,
+		mut config: &mut Configuration,
 		role: sc_service::Roles,
 		is_dev: bool,
-	) -> error::Result<()>
-	where
-		G: RuntimeGenesis,
-	{
+	) -> error::Result<()> {
 		use sc_client_api::execution_extensions::ExecutionStrategies;
 
 		if let Some(DatabaseConfig::Path { ref mut cache_size, .. }) = config.database {
@@ -102,27 +93,7 @@ impl ImportParams {
 
 		config.state_cache_size = self.state_cache_size;
 
-		// by default we disable pruning if the node is an authority (i.e.
-		// `ArchiveAll`), otherwise we keep state for the last 256 blocks. if the
-		// node is an authority and pruning is enabled explicitly, then we error
-		// unless `unsafe_pruning` is set.
-		config.pruning = match &self.pruning {
-			Some(ref s) if s == "archive" => PruningMode::ArchiveAll,
-			None if role == sc_service::Roles::AUTHORITY => PruningMode::ArchiveAll,
-			None => PruningMode::default(),
-			Some(s) => {
-				if role == sc_service::Roles::AUTHORITY && !self.unsafe_pruning {
-					return Err(error::Error::Input(
-						"Validators should run with state pruning disabled (i.e. archive). \
-						You can ignore this check with `--unsafe-pruning`.".to_string()
-					));
-				}
-
-				PruningMode::keep_blocks(s.parse()
-					.map_err(|_| error::Error::Input("Invalid pruning mode specified".to_string()))?
-				)
-			},
-		};
+		self.pruning_params.update_config(&mut config, role, self.unsafe_pruning)?;
 
 		config.wasm_method = self.wasm_method.into();
 
@@ -144,6 +115,7 @@ impl ImportParams {
 				exec_all_or(exec.execution_offchain_worker, DEFAULT_EXECUTION_OFFCHAIN_WORKER),
 			other: exec_all_or(exec.execution_other, DEFAULT_EXECUTION_OTHER),
 		};
+
 		Ok(())
 	}
 }

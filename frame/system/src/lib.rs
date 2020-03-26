@@ -68,13 +68,14 @@
 //! ### Example - Get extrinsic count and parent hash for the current block
 //!
 //! ```
-//! use frame_support::{decl_module, dispatch};
+//! use frame_support::{decl_module, dispatch, weights::SimpleDispatchInfo};
 //! use frame_system::{self as system, ensure_signed};
 //!
 //! pub trait Trait: system::Trait {}
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//! 		#[weight = SimpleDispatchInfo::default()]
 //! 		pub fn system_module_example(origin) -> dispatch::DispatchResult {
 //! 			let _sender = ensure_signed(origin)?;
 //! 			let _extrinsic_count = <system::Module<T>>::extrinsic_count();
@@ -93,6 +94,7 @@ use serde::Serialize;
 use sp_std::prelude::*;
 #[cfg(any(feature = "std", test))]
 use sp_std::map;
+use sp_std::convert::Infallible;
 use sp_std::marker::PhantomData;
 use sp_std::fmt::Debug;
 use sp_version::RuntimeVersion;
@@ -112,10 +114,10 @@ use sp_runtime::{
 
 use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
 use frame_support::{
-	decl_module, decl_event, decl_storage, decl_error, storage, Parameter,
+	decl_module, decl_event, decl_storage, decl_error, storage, Parameter, ensure, debug,
 	traits::{
-		Contains, Get, ModuleToIndex, OnNewAccount, OnReapAccount, IsDeadAccount, Happened,
-		StoredMap
+		Contains, Get, ModuleToIndex, OnNewAccount, OnKilledAccount, IsDeadAccount, Happened,
+		StoredMap,
 	},
 	weights::{Weight, DispatchInfo, DispatchClass, SimpleDispatchInfo, FunctionOf},
 };
@@ -219,7 +221,7 @@ pub trait Trait: 'static + Eq + Clone {
 	/// A function that is invoked when an account has been determined to be dead.
 	///
 	/// All resources should be cleaned up associated with the given account.
-	type OnReapAccount: OnReapAccount<Self::AccountId>;
+	type OnKilledAccount: OnKilledAccount<Self::AccountId>;
 }
 
 pub type DigestOf<T> = generic::Digest<<T as Trait>::Hash>;
@@ -234,8 +236,16 @@ pub type KeyValue = (Vec<u8>, Vec<u8>);
 pub enum Phase {
 	/// Applying an extrinsic.
 	ApplyExtrinsic(u32),
-	/// The end.
+	/// Finalizing the block.
 	Finalization,
+	/// Initializing the block.
+	Initialization,
+}
+
+impl Default for Phase {
+	fn default() -> Self {
+		Self::Initialization
+	}
 }
 
 /// Record of an event happening.
@@ -290,13 +300,54 @@ fn hash69<T: AsMut<[u8]> + Default>() -> T {
 /// which can't contain more than `u32::max_value()` items.
 type EventIndex = u32;
 
+/// Type used to encode the number of references an account has.
+pub type RefCount = u8;
+
+/// Information of an account.
+#[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode)]
+pub struct AccountInfo<Index, AccountData> {
+	/// The number of transactions this account has sent.
+	pub nonce: Index,
+	/// The number of other modules that currently depend on this account's existence. The account
+	/// cannot be reaped until this is zero.
+	pub refcount: RefCount,
+	/// The additional data that belongs to this account. Used to store the balance(s) in a lot of
+	/// chains.
+	pub data: AccountData,
+}
+
+/// Stores the `spec_version` and `spec_name` of when the last runtime upgrade
+/// happened.
+#[derive(sp_runtime::RuntimeDebug, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(PartialEq))]
+pub struct LastRuntimeUpgradeInfo {
+	pub spec_version: codec::Compact<u32>,
+	pub spec_name: sp_runtime::RuntimeString,
+}
+
+impl LastRuntimeUpgradeInfo {
+	/// Returns if the runtime was upgraded in comparison of `self` and `current`.
+	///
+	/// Checks if either the `spec_version` increased or the `spec_name` changed.
+	pub fn was_upgraded(&self, current: &sp_version::RuntimeVersion) -> bool {
+		current.spec_version > self.spec_version.0 || current.spec_name != self.spec_name
+	}
+}
+
+impl From<sp_version::RuntimeVersion> for LastRuntimeUpgradeInfo {
+	fn from(version: sp_version::RuntimeVersion) -> Self {
+		Self {
+			spec_version: version.spec_version.into(),
+			spec_name: version.spec_name,
+		}
+	}
+}
+
 decl_storage! {
 	trait Store for Module<T: Trait> as System {
 		/// The full account information for a particular account ID.
-		// TODO: should be hasher(twox64_concat) - will need staged migration
-		// TODO: should not including T::Index (the nonce)
-		// https://github.com/paritytech/substrate/issues/4917
-		pub Account get(fn account): map hasher(blake2_256) T::AccountId => (T::Index, T::AccountData);
+		pub Account get(fn account):
+			map hasher(blake2_128_concat) T::AccountId => AccountInfo<T::Index, T::AccountData>;
 
 		/// Total extrinsics count for the current block.
 		ExtrinsicCount: Option<u32>;
@@ -308,10 +359,8 @@ decl_storage! {
 		AllExtrinsicsLen: Option<u32>;
 
 		/// Map of block numbers to block hashes.
-		// TODO: should be hasher(twox64_concat) - will need one-off migration
-		// https://github.com/paritytech/substrate/issues/4917
 		pub BlockHash get(fn block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]):
-			map hasher(blake2_256) T::BlockNumber => T::Hash;
+			map hasher(twox_64_concat) T::BlockNumber => T::Hash;
 
 		/// Extrinsics data for the current block (maps an extrinsic's index to its data).
 		ExtrinsicData get(fn extrinsic_data): map hasher(twox_64_concat) u32 => Vec<u8>;
@@ -349,7 +398,13 @@ decl_storage! {
 		/// The value has the type `(T::BlockNumber, EventIndex)` because if we used only just
 		/// the `EventIndex` then in case if the topic has the same contents on the next block
 		/// no notification will be triggered thus the event might be lost.
-		EventTopics get(fn event_topics): map hasher(blake2_256) T::Hash => Vec<(T::BlockNumber, EventIndex)>;
+		EventTopics get(fn event_topics): map hasher(blake2_128_concat) T::Hash => Vec<(T::BlockNumber, EventIndex)>;
+
+		/// Stores the `spec_version` and `spec_name` of when the last runtime upgrade happened.
+		pub LastRuntimeUpgrade build(|_| Some(LastRuntimeUpgradeInfo::from(T::Version::get()))): Option<LastRuntimeUpgradeInfo>;
+
+		/// The execution phase of the block.
+		ExecutionPhase: Option<Phase>;
 	}
 	add_extra_genesis {
 		config(changes_trie_config): Option<ChangesTrieConfiguration>;
@@ -384,7 +439,7 @@ decl_event!(
 		/// A new account was created.
 		NewAccount(AccountId),
 		/// An account was reaped.
-		ReapedAccount(AccountId),
+		KilledAccount(AccountId),
 	}
 );
 
@@ -396,17 +451,16 @@ decl_error! {
 		InvalidSpecName,
 		/// The specification version is not allowed to decrease between the current runtime
 		/// and the new runtime.
-		SpecVersionNotAllowedToDecrease,
-		/// The implementation version is not allowed to decrease between the current runtime
-		/// and the new runtime.
-		ImplVersionNotAllowedToDecrease,
-		/// The specification or the implementation version need to increase between the
-		/// current runtime and the new runtime.
-		SpecOrImplVersionNeedToIncrease,
+		SpecVersionNeedsToIncrease,
 		/// Failed to extract the runtime version from the new runtime.
 		///
 		/// Either calling `Core_version` or decoding `RuntimeVersion` failed.
 		FailedToExtractRuntimeVersion,
+
+		/// Suicide called when the account has non-default composite data.
+		NonDefaultComposite,
+		/// There is a non-zero reference count preventing the account from being purged.
+		NonZeroRefCount,
 	}
 }
 
@@ -442,26 +496,7 @@ decl_module! {
 		/// Set the new runtime code.
 		#[weight = SimpleDispatchInfo::FixedOperational(200_000)]
 		pub fn set_code(origin, code: Vec<u8>) {
-			ensure_root(origin)?;
-
-			let current_version = T::Version::get();
-			let new_version = sp_io::misc::runtime_version(&code)
-				.and_then(|v| RuntimeVersion::decode(&mut &v[..]).ok())
-				.ok_or_else(|| Error::<T>::FailedToExtractRuntimeVersion)?;
-
-			if new_version.spec_name != current_version.spec_name {
-				Err(Error::<T>::InvalidSpecName)?
-			}
-
-			if new_version.spec_version < current_version.spec_version {
-				Err(Error::<T>::SpecVersionNotAllowedToDecrease)?
-			} else if new_version.spec_version == current_version.spec_version {
-				if new_version.impl_version < current_version.impl_version {
-					Err(Error::<T>::ImplVersionNotAllowedToDecrease)?
-				} else if new_version.impl_version == current_version.impl_version {
-					Err(Error::<T>::SpecOrImplVersionNeedToIncrease)?
-				}
-			}
+			Self::can_set_code(origin, &code)?;
 
 			storage::unhashed::put_raw(well_known_keys::CODE, &code);
 			Self::deposit_event(RawEvent::CodeUpdated);
@@ -517,6 +552,17 @@ decl_module! {
 			ensure_root(origin)?;
 			storage::unhashed::kill_prefix(&prefix);
 		}
+
+		/// Kill the sending account, assuming there are no references outstanding and the composite
+		/// data is equal to its default value.
+		#[weight = SimpleDispatchInfo::FixedOperational(25_000)]
+		fn suicide(origin) {
+			let who = ensure_signed(origin)?;
+			let account = Account::<T>::get(&who);
+			ensure!(account.refcount == 0, Error::<T>::NonZeroRefCount);
+			ensure!(account.data == T::AccountData::default(), Error::<T>::NonDefaultComposite);
+			Account::<T>::remove(who);
+		}
 	}
 }
 
@@ -532,12 +578,17 @@ impl<
 			r => Err(O::from(r)),
 		})
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> O {
+		O::from(RawOrigin::Root)
+	}
 }
 
 pub struct EnsureSigned<AccountId>(sp_std::marker::PhantomData<AccountId>);
 impl<
 	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
-	AccountId,
+	AccountId: Default,
 > EnsureOrigin<O> for EnsureSigned<AccountId> {
 	type Success = AccountId;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
@@ -546,13 +597,18 @@ impl<
 			r => Err(O::from(r)),
 		})
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> O {
+		O::from(RawOrigin::Signed(Default::default()))
+	}
 }
 
 pub struct EnsureSignedBy<Who, AccountId>(sp_std::marker::PhantomData<(Who, AccountId)>);
 impl<
 	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
 	Who: Contains<AccountId>,
-	AccountId: PartialEq + Clone + Ord,
+	AccountId: PartialEq + Clone + Ord + Default,
 > EnsureOrigin<O> for EnsureSignedBy<Who, AccountId> {
 	type Success = AccountId;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
@@ -560,6 +616,13 @@ impl<
 			RawOrigin::Signed(ref who) if Who::contains(who) => Ok(who.clone()),
 			r => Err(O::from(r)),
 		})
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> O {
+		let caller: AccountId = Default::default();
+		// Who::add(&caller);
+		O::from(RawOrigin::Signed(caller))
 	}
 }
 
@@ -575,6 +638,11 @@ impl<
 			r => Err(O::from(r)),
 		})
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> O {
+		O::from(RawOrigin::None)
+	}
 }
 
 pub struct EnsureNever<T>(sp_std::marker::PhantomData<T>);
@@ -582,6 +650,11 @@ impl<O, T> EnsureOrigin<O> for EnsureNever<T> {
 	type Success = T;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		Err(o)
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> O {
+		unimplemented!()
 	}
 }
 
@@ -637,20 +710,46 @@ impl Default for InitKind {
 	}
 }
 
+/// Reference status; can be either referenced or unreferenced.
+pub enum RefStatus {
+	Referenced,
+	Unreferenced,
+}
+
 impl<T: Trait> Module<T> {
 	/// Deposits an event into this block's event record.
 	pub fn deposit_event(event: impl Into<T::Event>) {
 		Self::deposit_event_indexed(&[], event.into());
 	}
 
-		/// Deposits an event into this block's event record adding this event
+	/// Increment the reference counter on an account.
+	pub fn inc_ref(who: &T::AccountId) {
+		Account::<T>::mutate(who, |a| a.refcount = a.refcount.saturating_add(1));
+	}
+
+	/// Decrement the reference counter on an account. This *MUST* only be done once for every time
+	/// you called `inc_ref` on `who`.
+	pub fn dec_ref(who: &T::AccountId) {
+		Account::<T>::mutate(who, |a| a.refcount = a.refcount.saturating_sub(1));
+	}
+
+	/// The number of outstanding references for the account `who`.
+	pub fn refs(who: &T::AccountId) -> RefCount {
+		Account::<T>::get(who).refcount
+	}
+
+	/// True if the account has no outstanding references.
+	pub fn allow_death(who: &T::AccountId) -> bool {
+		Account::<T>::get(who).refcount == 0
+	}
+
+	/// Deposits an event into this block's event record adding this event
 	/// to the corresponding topic indexes.
 	///
 	/// This will update storage entries that correspond to the specified topics.
 	/// It is expected that light-clients could subscribe to this topics.
 	pub fn deposit_event_indexed(topics: &[T::Hash], event: T::Event) {
-		let extrinsic_index = Self::extrinsic_index();
-		let phase = extrinsic_index.map_or(Phase::Finalization, |c| Phase::ApplyExtrinsic(c));
+		let phase = ExecutionPhase::get().unwrap_or_default();
 		let event = EventRecord {
 			phase,
 			event,
@@ -742,6 +841,7 @@ impl<T: Trait> Module<T> {
 		kind: InitKind,
 	) {
 		// populate environment
+		ExecutionPhase::put(Phase::Initialization);
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
 		<Number<T>>::put(number);
 		<Digest<T>>::put(digest);
@@ -758,6 +858,7 @@ impl<T: Trait> Module<T> {
 
 	/// Remove temporary "environment" entries in storage.
 	pub fn finalize() -> T::Header {
+		ExecutionPhase::kill();
 		ExtrinsicCount::kill();
 		AllExtrinsicsWeight::kill();
 		AllExtrinsicsLen::kill();
@@ -825,7 +926,7 @@ impl<T: Trait> Module<T> {
 
 	/// Set the block number to something in particular. Can be used as an alternative to
 	/// `initialize` for tests that don't need to bother with the other environment entries.
-	#[cfg(any(feature = "std", test))]
+	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
 	pub fn set_block_number(n: T::BlockNumber) {
 		<Number<T>>::put(n);
 	}
@@ -855,12 +956,12 @@ impl<T: Trait> Module<T> {
 
 	/// Retrieve the account transaction counter from storage.
 	pub fn account_nonce(who: impl EncodeLike<T::AccountId>) -> T::Index {
-		Account::<T>::get(who).0
+		Account::<T>::get(who).nonce
 	}
 
 	/// Increment a particular account's nonce by 1.
 	pub fn inc_account_nonce(who: impl EncodeLike<T::AccountId>) {
-		Account::<T>::mutate(who, |a| a.0 += T::Index::one());
+		Account::<T>::mutate(who, |a| a.nonce += T::Index::one());
 	}
 
 	/// Note what the extrinsic data of the current extrinsic index is. If this
@@ -888,6 +989,7 @@ impl<T: Trait> Module<T> {
 		let next_extrinsic_index = Self::extrinsic_index().unwrap_or_default() + 1u32;
 
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &next_extrinsic_index);
+		ExecutionPhase::put(Phase::ApplyExtrinsic(next_extrinsic_index));
 	}
 
 	/// To be called immediately after `note_applied_extrinsic` of the last extrinsic of the block
@@ -896,6 +998,13 @@ impl<T: Trait> Module<T> {
 		let extrinsic_index: u32 = storage::unhashed::take(well_known_keys::EXTRINSIC_INDEX)
 			.unwrap_or_default();
 		ExtrinsicCount::put(extrinsic_index);
+		ExecutionPhase::put(Phase::Finalization);
+	}
+
+	/// To be called immediately after finishing the initialization of the block
+	/// (e.g., called `on_initialize` for all modules).
+	pub fn note_finished_initialize() {
+		ExecutionPhase::put(Phase::ApplyExtrinsic(0))
 	}
 
 	/// Remove all extrinsic data and save the extrinsics trie root.
@@ -912,18 +1021,54 @@ impl<T: Trait> Module<T> {
 		Self::deposit_event(RawEvent::NewAccount(who));
 	}
 
-	/// Kill the account and reap any related information.
-	pub fn kill_account(who: T::AccountId) {
-		if Account::<T>::contains_key(&who) {
-			Account::<T>::remove(&who);
-			Self::on_killed_account(who);
+	/// Do anything that needs to be done after an account has been killed.
+	fn on_killed_account(who: T::AccountId) {
+		T::OnKilledAccount::on_killed_account(&who);
+		Self::deposit_event(RawEvent::KilledAccount(who));
+	}
+
+	/// Remove an account from storage. This should only be done when its refs are zero or you'll
+	/// get storage leaks in other modules. Nonetheless we assume that the calling logic knows best.
+	///
+	/// This is a no-op if the account doesn't already exist. If it does then it will ensure
+	/// cleanups (those in `on_killed_account`) take place.
+	fn kill_account(who: &T::AccountId) {
+		if Account::<T>::contains_key(who) {
+			let account = Account::<T>::take(who);
+			if account.refcount > 0 {
+				debug::debug!(
+					target: "system",
+					"WARNING: Referenced account deleted. This is probably a bug."
+				);
+			}
+			Module::<T>::on_killed_account(who.clone());
 		}
 	}
 
-	/// Do anything that needs to be done after an account has been killed.
-	fn on_killed_account(who: T::AccountId) {
-		T::OnReapAccount::on_reap_account(&who);
-		Self::deposit_event(RawEvent::ReapedAccount(who));
+	/// Determine whether or not it is possible to update the code.
+	///
+	/// This function has no side effects and is idempotent, but is fairly
+	/// heavy. It is automatically called by `set_code`; in most cases,
+	/// a direct call to `set_code` is preferable. It is useful to call
+	/// `can_set_code` when it is desirable to perform the appropriate
+	/// runtime checks without actually changing the code yet.
+	pub fn can_set_code(origin: T::Origin, code: &[u8]) -> Result<(), sp_runtime::DispatchError> {
+		ensure_root(origin)?;
+
+		let current_version = T::Version::get();
+		let new_version = sp_io::misc::runtime_version(&code)
+			.and_then(|v| RuntimeVersion::decode(&mut &v[..]).ok())
+			.ok_or_else(|| Error::<T>::FailedToExtractRuntimeVersion)?;
+
+		if new_version.spec_name != current_version.spec_name {
+			Err(Error::<T>::InvalidSpecName)?
+		}
+
+		if new_version.spec_version <= current_version.spec_version {
+			Err(Error::<T>::SpecVersionNeedsToIncrease)?
+		}
+
+		Ok(())
 	}
 }
 
@@ -939,7 +1084,7 @@ impl<T: Trait> Happened<T::AccountId> for CallOnCreatedAccount<T> {
 pub struct CallKillAccount<T>(PhantomData<T>);
 impl<T: Trait> Happened<T::AccountId> for CallKillAccount<T> {
 	fn happened(who: &T::AccountId) {
-		Module::<T>::kill_account(who.clone());
+		Module::<T>::kill_account(who)
 	}
 }
 
@@ -948,53 +1093,45 @@ impl<T: Trait> Happened<T::AccountId> for CallKillAccount<T> {
 // Anything more complex will need more sophisticated logic.
 impl<T: Trait> StoredMap<T::AccountId, T::AccountData> for Module<T> {
 	fn get(k: &T::AccountId) -> T::AccountData {
-		Account::<T>::get(k).1
+		Account::<T>::get(k).data
 	}
 	fn is_explicit(k: &T::AccountId) -> bool {
 		Account::<T>::contains_key(k)
 	}
-	fn insert(k: &T::AccountId, t: T::AccountData) {
+	fn insert(k: &T::AccountId, data: T::AccountData) {
 		let existed = Account::<T>::contains_key(k);
-		Account::<T>::insert(k, (T::Index::default(), t));
+		Account::<T>::mutate(k, |a| a.data = data);
 		if !existed {
 			Self::on_created_account(k.clone());
 		}
 	}
 	fn remove(k: &T::AccountId) {
-		if Account::<T>::contains_key(&k) {
-			Self::kill_account(k.clone());
-		}
+		Self::kill_account(k)
 	}
 	fn mutate<R>(k: &T::AccountId, f: impl FnOnce(&mut T::AccountData) -> R) -> R {
 		let existed = Account::<T>::contains_key(k);
-		let r = Account::<T>::mutate(k, |a| f(&mut a.1));
+		let r = Account::<T>::mutate(k, |a| f(&mut a.data));
 		if !existed {
 			Self::on_created_account(k.clone());
 		}
 		r
 	}
 	fn mutate_exists<R>(k: &T::AccountId, f: impl FnOnce(&mut Option<T::AccountData>) -> R) -> R {
-		let (existed, exists, r) = Account::<T>::mutate_exists(k, |maybe_value| {
-			let existed = maybe_value.is_some();
-			let (maybe_nonce, mut maybe_extra) = split_inner(maybe_value.take(), |v| v);
-			let r = f(&mut maybe_extra);
-			*maybe_value = maybe_extra.map(|extra| (maybe_nonce.unwrap_or_default(), extra));
-			(existed, maybe_value.is_some(), r)
-		});
-		if !existed && exists {
-			Self::on_created_account(k.clone());
-		} else if existed && !exists {
-			Self::on_killed_account(k.clone());
-		}
-		r
+		Self::try_mutate_exists(k, |x| -> Result<R, Infallible> { Ok(f(x)) }).expect("Infallible; qed")
 	}
 	fn try_mutate_exists<R, E>(k: &T::AccountId, f: impl FnOnce(&mut Option<T::AccountData>) -> Result<R, E>) -> Result<R, E> {
 		Account::<T>::try_mutate_exists(k, |maybe_value| {
 			let existed = maybe_value.is_some();
-			let (maybe_nonce, mut maybe_extra) = split_inner(maybe_value.take(), |v| v);
-			f(&mut maybe_extra).map(|v| {
-				*maybe_value = maybe_extra.map(|extra| (maybe_nonce.unwrap_or_default(), extra));
-				(existed, maybe_value.is_some(), v)
+			let (maybe_prefix, mut maybe_data) = split_inner(
+				maybe_value.take(),
+				|account| ((account.nonce, account.refcount), account.data)
+			);
+			f(&mut maybe_data).map(|result| {
+				*maybe_value = maybe_data.map(|data| {
+					let (nonce, refcount) = maybe_prefix.unwrap_or_default();
+					AccountInfo { nonce, refcount, data }
+				});
+				(existed, maybe_value.is_some(), result)
 			})
 		}).map(|(existed, exists, v)| {
 			if !existed && exists {
@@ -1187,7 +1324,7 @@ impl<T: Trait> CheckNonce<T> {
 impl<T: Trait> Debug for CheckNonce<T> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		self.0.fmt(f)
+		write!(f, "CheckNonce({})", self.0)
 	}
 
 	#[cfg(not(feature = "std"))]
@@ -1213,17 +1350,18 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 		_info: Self::DispatchInfo,
 		_len: usize,
 	) -> Result<(), TransactionValidityError> {
-		let (expected, extra) = Account::<T>::get(who);
-		if self.0 != expected {
+		let mut account = Account::<T>::get(who);
+		if self.0 != account.nonce {
 			return Err(
-				if self.0 < expected {
+				if self.0 < account.nonce {
 					InvalidTransaction::Stale
 				} else {
 					InvalidTransaction::Future
 				}.into()
 			)
 		}
-		Account::<T>::insert(who, (expected + T::Index::one(), extra));
+		account.nonce += T::Index::one();
+		Account::<T>::insert(who, account);
 		Ok(())
 	}
 
@@ -1235,13 +1373,13 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 		_len: usize,
 	) -> TransactionValidity {
 		// check index
-		let (expected, _extra) = Account::<T>::get(who);
-		if self.0 < expected {
+		let account = Account::<T>::get(who);
+		if self.0 < account.nonce {
 			return InvalidTransaction::Stale.into()
 		}
 
 		let provides = vec![Encode::encode(&(who, self.0))];
-		let requires = if expected < self.0 {
+		let requires = if account.nonce < self.0 {
 			vec![Encode::encode(&(who, self.0 - One::one()))]
 		} else {
 			vec![]
@@ -1265,19 +1403,19 @@ impl<T: Trait> IsDeadAccount<T::AccountId> for Module<T> {
 
 /// Check for transaction mortality.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct CheckEra<T: Trait + Send + Sync>((Era, sp_std::marker::PhantomData<T>));
+pub struct CheckEra<T: Trait + Send + Sync>(Era, sp_std::marker::PhantomData<T>);
 
 impl<T: Trait + Send + Sync> CheckEra<T> {
 	/// utility constructor. Used only in client/factory code.
 	pub fn from(era: Era) -> Self {
-		Self((era, sp_std::marker::PhantomData))
+		Self(era, sp_std::marker::PhantomData)
 	}
 }
 
 impl<T: Trait + Send + Sync> Debug for CheckEra<T> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		self.0.fmt(f)
+		write!(f, "CheckEra({:?})", self.0)
 	}
 
 	#[cfg(not(feature = "std"))]
@@ -1302,7 +1440,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 		_len: usize,
 	) -> TransactionValidity {
 		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
-		let valid_till = (self.0).0.death(current_u64);
+		let valid_till = self.0.death(current_u64);
 		Ok(ValidTransaction {
 			longevity: valid_till.saturating_sub(current_u64),
 			..Default::default()
@@ -1311,7 +1449,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
 		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
-		let n = (self.0).0.birth(current_u64).saturated_into::<T::BlockNumber>();
+		let n = self.0.birth(current_u64).saturated_into::<T::BlockNumber>();
 		if !<BlockHash<T>>::contains_key(n) {
 			Err(InvalidTransaction::AncientBirthBlock.into())
 		} else {
@@ -1411,6 +1549,7 @@ impl<T: Trait> Lookup for ChainContext<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use sp_std::cell::RefCell;
 	use sp_core::H256;
 	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header, DispatchError};
 	use frame_support::{impl_outer_origin, parameter_types};
@@ -1437,6 +1576,15 @@ mod tests {
 		};
 	}
 
+	thread_local!{
+		pub static KILLED: RefCell<Vec<u64>> = RefCell::new(vec![]);
+	}
+
+	pub struct RecordKilled;
+	impl OnKilledAccount<u64> for RecordKilled {
+		fn on_killed_account(who: &u64) { KILLED.with(|r| r.borrow_mut().push(*who)) }
+	}
+
 	impl Trait for Test {
 		type Origin = Origin;
 		type Call = ();
@@ -1454,9 +1602,9 @@ mod tests {
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = Version;
 		type ModuleToIndex = ();
-		type AccountData = ();
+		type AccountData = u32;
 		type OnNewAccount = ();
-		type OnReapAccount = ();
+		type OnKilledAccount = RecordKilled;
 	}
 
 	impl From<Event<Test>> for u16 {
@@ -1494,6 +1642,27 @@ mod tests {
 	}
 
 	#[test]
+	fn stored_map_works() {
+		new_test_ext().execute_with(|| {
+			System::insert(&0, 42);
+			assert!(System::allow_death(&0));
+
+			System::inc_ref(&0);
+			assert!(!System::allow_death(&0));
+
+			System::insert(&0, 69);
+			assert!(!System::allow_death(&0));
+
+			System::dec_ref(&0);
+			assert!(System::allow_death(&0));
+
+			assert!(KILLED.with(|r| r.borrow().is_empty()));
+			System::kill_account(&0);
+			assert_eq!(KILLED.with(|r| r.borrow().clone()), vec![0u64]);
+		});
+	}
+
+	#[test]
 	fn deposit_event_should_work() {
 		new_test_ext().execute_with(|| {
 			System::initialize(
@@ -1524,6 +1693,8 @@ mod tests {
 				&Default::default(),
 				InitKind::Full,
 			);
+			System::deposit_event(32u16);
+			System::note_finished_initialize();
 			System::deposit_event(42u16);
 			System::note_applied_extrinsic(&Ok(()), 0, Default::default());
 			System::note_applied_extrinsic(&Err(DispatchError::BadOrigin), 0, Default::default());
@@ -1533,6 +1704,7 @@ mod tests {
 			assert_eq!(
 				System::events(),
 				vec![
+					EventRecord { phase: Phase::Initialization, event: 32u16, topics: vec![] },
 					EventRecord { phase: Phase::ApplyExtrinsic(0), event: 42u16, topics: vec![] },
 					EventRecord { phase: Phase::ApplyExtrinsic(0), event: 100u16, topics: vec![] },
 					EventRecord { phase: Phase::ApplyExtrinsic(1), event: 101u16, topics: vec![] },
@@ -1645,7 +1817,7 @@ mod tests {
 	#[test]
 	fn signed_ext_check_nonce_works() {
 		new_test_ext().execute_with(|| {
-			Account::<Test>::insert(1, (1, ()));
+			Account::<Test>::insert(1, AccountInfo { nonce: 1, refcount: 0, data: 0 });
 			let info = DispatchInfo::default();
 			let len = 0_usize;
 			// stale
@@ -1823,6 +1995,7 @@ mod tests {
 			fn call_in_wasm(
 				&self,
 				_: &[u8],
+				_: Option<Vec<u8>>,
 				_: &str,
 				_: &[u8],
 				_: &mut dyn sp_externalities::Externalities,
@@ -1832,12 +2005,12 @@ mod tests {
 		}
 
 		let test_data = vec![
-			("test", 1, 2, Ok(())),
-			("test", 1, 1, Err(Error::<Test>::SpecOrImplVersionNeedToIncrease)),
+			("test", 1, 2, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
+			("test", 1, 1, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
 			("test2", 1, 1, Err(Error::<Test>::InvalidSpecName)),
 			("test", 2, 1, Ok(())),
-			("test", 0, 1, Err(Error::<Test>::SpecVersionNotAllowedToDecrease)),
-			("test", 1, 0, Err(Error::<Test>::ImplVersionNotAllowedToDecrease)),
+			("test", 0, 1, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
+			("test", 1, 0, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
 		];
 
 		for (spec_name, spec_version, impl_version, expected) in test_data.into_iter() {
@@ -1875,8 +2048,24 @@ mod tests {
 
 			assert_eq!(
 				System::events(),
-				vec![EventRecord { phase: Phase::ApplyExtrinsic(0), event: 102u16, topics: vec![] }],
+				vec![EventRecord { phase: Phase::Initialization, event: 102u16, topics: vec![] }],
 			);
+		});
+	}
+
+	#[test]
+	fn runtime_upgraded_with_set_storage() {
+		let executor = substrate_test_runtime_client::new_native_executor();
+		let mut ext = new_test_ext();
+		ext.register_extension(sp_core::traits::CallInWasmExt::new(executor));
+		ext.execute_with(|| {
+			System::set_storage(
+				RawOrigin::Root.into(),
+				vec![(
+					well_known_keys::CODE.to_vec(),
+					substrate_test_runtime_client::runtime::WASM_BINARY.to_vec()
+				)],
+			).unwrap();
 		});
 	}
 }

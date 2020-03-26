@@ -19,7 +19,7 @@
 use crate::error;
 use crate::builder::{ServiceBuilderCommand, ServiceBuilder};
 use crate::error::Error;
-use sc_chain_spec::{ChainSpec, RuntimeGenesis, Extension};
+use sc_chain_spec::ChainSpec;
 use log::{warn, info};
 use futures::{future, prelude::*};
 use sp_runtime::traits::{
@@ -35,21 +35,19 @@ use sp_consensus::{
 use sc_executor::{NativeExecutor, NativeExecutionDispatch};
 
 use std::{io::{Read, Write, Seek}, pin::Pin};
+use sc_client_api::BlockBackend;
 
 /// Build a chain spec json
-pub fn build_spec<G, E>(spec: ChainSpec<G, E>, raw: bool) -> error::Result<String> where
-	G: RuntimeGenesis,
-	E: Extension,
-{
-	Ok(spec.to_json(raw)?)
+pub fn build_spec(spec: &dyn ChainSpec, raw: bool) -> error::Result<String> {
+	Ok(spec.as_json(raw)?)
 }
 
 impl<
-	TBl, TRtApi, TGen, TCSExt, TBackend,
+	TBl, TRtApi, TBackend,
 	TExecDisp, TFchr, TSc, TImpQu, TFprb, TFpp,
 	TExPool, TRpc, Backend
 > ServiceBuilderCommand for ServiceBuilder<
-	TBl, TRtApi, TGen, TCSExt,
+	TBl, TRtApi,
 	Client<TBackend, LocalCallExecutor<TBackend, NativeExecutor<TExecDisp>>, TBl, TRtApi>,
 	TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend
 > where
@@ -203,7 +201,7 @@ impl<
 		mut output: impl Write + 'static,
 		from: NumberFor<TBl>,
 		to: Option<NumberFor<TBl>>,
-		json: bool
+		binary: bool
 	) -> Pin<Box<dyn Future<Output = Result<(), Error>>>> {
 		let client = self.client;
 		let mut block = from;
@@ -230,7 +228,7 @@ impl<
 
 			if !wrote_header {
 				info!("Exporting blocks from #{} to #{}", block, last);
-				if !json {
+				if binary {
 					let last_: u64 = last.saturated_into::<u64>();
 					let block_: u64 = block.saturated_into::<u64>();
 					let len: u64 = last_ - block_ + 1;
@@ -241,13 +239,13 @@ impl<
 
 			match client.block(&BlockId::number(block))? {
 				Some(block) => {
-					if json {
+					if binary {
+						output.write_all(&block.encode())?;
+					} else {
 						serde_json::to_writer(&mut output, &block)
 							.map_err(|e| format!("Error writing JSON: {}", e))?;
-						} else {
-							output.write_all(&block.encode())?;
 					}
-				},
+			},
 				// Reached end of the chain.
 				None => return std::task::Poll::Ready(Ok(())),
 			}

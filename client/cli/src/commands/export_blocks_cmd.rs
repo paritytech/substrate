@@ -21,16 +21,15 @@ use std::fmt::Debug;
 use log::info;
 use structopt::StructOpt;
 use sc_service::{
-	Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand, ChainSpec,
-	config::DatabaseConfig,
+	Configuration, ServiceBuilderCommand, ChainSpec,
+	config::DatabaseConfig, Roles,
 };
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 
 use crate::error;
 use crate::VersionInfo;
 use crate::runtime::run_until_exit;
-use crate::params::SharedParams;
-use crate::params::BlockNumber;
+use crate::params::{SharedParams, BlockNumber, PruningParams};
 
 /// The `export-blocks` command used to export blocks.
 #[derive(Debug, StructOpt, Clone)]
@@ -51,26 +50,28 @@ pub struct ExportBlocksCmd {
 	#[structopt(long = "to", value_name = "BLOCK")]
 	pub to: Option<BlockNumber>,
 
-	/// Use JSON output rather than binary.
-	#[structopt(long = "json")]
-	pub json: bool,
+	/// Use binary output rather than JSON.
+	#[structopt(long = "binary", value_name = "BOOL", parse(try_from_str), default_value("false"))]
+	pub binary: bool,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub pruning_params: PruningParams,
 }
 
 impl ExportBlocksCmd {
 	/// Run the export-blocks command
-	pub fn run<G, E, B, BC, BB>(
+	pub fn run<B, BC, BB>(
 		self,
-		config: Configuration<G, E>,
+		config: Configuration,
 		builder: B,
 	) -> error::Result<()>
 	where
-		B: FnOnce(Configuration<G, E>) -> Result<BC, sc_service::error::Error>,
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
+		B: FnOnce(Configuration) -> Result<BC, sc_service::error::Error>,
 		BC: ServiceBuilderCommand<Block = BB> + Unpin,
 		BB: sp_runtime::traits::Block + Debug,
 		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
@@ -82,7 +83,7 @@ impl ExportBlocksCmd {
 		let from = self.from.as_ref().and_then(|f| f.parse().ok()).unwrap_or(1);
 		let to = self.to.as_ref().and_then(|t| t.parse().ok());
 
-		let json = self.json;
+		let binary = self.binary;
 
 		let file: Box<dyn io::Write> = match &self.output {
 			Some(filename) => Box::new(fs::File::create(filename)?),
@@ -90,22 +91,21 @@ impl ExportBlocksCmd {
 		};
 
 		run_until_exit(config, |config| {
-			Ok(builder(config)?.export_blocks(file, from.into(), to, json))
+			Ok(builder(config)?.export_blocks(file, from.into(), to, binary))
 		})
 	}
 
 	/// Update and prepare a `Configuration` with command line parameters
-	pub fn update_config<G, E, F>(
+	pub fn update_config<F>(
 		&self,
-		mut config: &mut Configuration<G, E>,
+		mut config: &mut Configuration,
 		spec_factory: F,
 		version: &VersionInfo,
 	) -> error::Result<()> where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-		F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
+		F: FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
 	{
 		self.shared_params.update_config(&mut config, spec_factory, version)?;
+		self.pruning_params.update_config(&mut config, Roles::FULL, true)?;
 		config.use_in_memory_keystore()?;
 
 		Ok(())

@@ -50,10 +50,10 @@ parameter_types! {
 }
 impl frame_system::Trait for Test {
 	type Origin = Origin;
+	type Call = ();
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
-	type Call = ();
 	type Hashing = BlakeTwo256;
 	type AccountId = sp_core::sr25519::Public;
 	type Lookup = IdentityLookup<Self::AccountId>;
@@ -65,9 +65,9 @@ impl frame_system::Trait for Test {
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
 	type ModuleToIndex = ();
-	type OnReapAccount = ();
-	type OnNewAccount = ();
 	type AccountData = ();
+	type OnNewAccount = ();
+	type OnKilledAccount = ();
 }
 
 type Extrinsic = TestXt<Call<Test>, ()>;
@@ -132,7 +132,7 @@ fn should_make_http_call_and_parse_result() {
 		// when
 		let price = Example::fetch_price().unwrap();
 		// then
-		assert_eq!(price, 15522);
+		assert_eq!(price, 15523);
 	});
 }
 
@@ -164,7 +164,7 @@ fn should_submit_signed_transaction_on_chain() {
 		assert!(pool_state.read().transactions.is_empty());
 		let tx = Extrinsic::decode(&mut &*tx).unwrap();
 		assert_eq!(tx.signature.unwrap().0, 0);
-		assert_eq!(tx.call, Call::submit_price(15522));
+		assert_eq!(tx.call, Call::submit_price(15523));
 	});
 }
 
@@ -186,7 +186,7 @@ fn should_submit_unsigned_transaction_on_chain() {
 		assert!(pool_state.read().transactions.is_empty());
 		let tx = Extrinsic::decode(&mut &*tx).unwrap();
 		assert_eq!(tx.signature, None);
-		assert_eq!(tx.call, Call::submit_price_unsigned(1, 15522));
+		assert_eq!(tx.call, Call::submit_price_unsigned(1, 15523));
 	});
 }
 
@@ -207,4 +207,20 @@ fn price_oracle_response(state: &mut testing::OffchainState) {
 		sent: true,
 		..Default::default()
 	});
+}
+
+#[test]
+fn parse_price_works() {
+	let test_data = vec![
+		("{\"USD\":6536.92}", Some(653692)),
+		("{\"USD\":65.92}", Some(6592)),
+		("{\"USD\":6536.924565}", Some(653692)),
+		("{\"USD\":6536}", Some(653600)),
+		("{\"USD2\":6536}", None),
+		("{\"USD\":\"6432\"}", None),
+	];
+
+	for (json, expected) in test_data {
+		assert_eq!(expected, Example::parse_price(json));
+	}
 }

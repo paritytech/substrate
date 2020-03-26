@@ -23,7 +23,7 @@ pub mod client_ext;
 pub use sc_client::{blockchain, self};
 pub use sc_client_api::{
 	execution_extensions::{ExecutionStrategies, ExecutionExtensions},
-	ForkBlocks, BadBlocks,
+	ForkBlocks, BadBlocks, CloneableSpawn,
 };
 pub use sc_client_db::{Backend, self};
 pub use sp_consensus;
@@ -33,7 +33,7 @@ pub use sp_keyring::{
 	ed25519::Keyring as Ed25519Keyring,
 	sr25519::Keyring as Sr25519Keyring,
 };
-pub use sp_core::{Blake2Hasher, traits::BareCryptoStorePtr};
+pub use sp_core::{traits::BareCryptoStorePtr, tasks::executor as tasks_executor};
 pub use sp_runtime::{Storage, StorageChild};
 pub use sp_state_machine::ExecutionStrategy;
 pub use self::client_ext::{ClientExt, ClientBlockImportExt};
@@ -41,13 +41,13 @@ pub use self::client_ext::{ClientExt, ClientBlockImportExt};
 use std::sync::Arc;
 use std::collections::HashMap;
 use sp_core::storage::{well_known_keys, ChildInfo};
-use sp_runtime::traits::Block as BlockT;
+use sp_runtime::traits::{Block as BlockT, BlakeTwo256};
 use sc_client::LocalCallExecutor;
 
 /// Test client light database backend.
 pub type LightBackend<Block> = sc_client::light::backend::Backend<
 	sc_client_db::light::LightStorage<Block>,
-	Blake2Hasher,
+	BlakeTwo256,
 >;
 
 /// A genesis storage initialization trait.
@@ -210,7 +210,8 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 			ExecutionExtensions::new(
 				self.execution_strategies,
 				self.keystore.clone(),
-			)
+			),
+			None,
 		).expect("Creates new client");
 
 		let longest_chain = sc_client::LongestChain::new(self.backend);
@@ -243,9 +244,9 @@ impl<Block: BlockT, E, Backend, G: GenesisInit> TestClientBuilder<
 		Backend: sc_client_api::backend::Backend<Block> + 'static,
 	{
 		let executor = executor.into().unwrap_or_else(||
-			NativeExecutor::new(WasmExecutionMethod::Interpreted, None)
+			NativeExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
 		);
-		let executor = LocalCallExecutor::new(self.backend.clone(), executor);
+		let executor = LocalCallExecutor::new(self.backend.clone(), executor, tasks_executor());
 
 		self.build_with_executor(executor)
 	}

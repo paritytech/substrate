@@ -23,6 +23,7 @@ use sp_consensus::import_queue::{
 use substrate_test_runtime_client::{self, prelude::*};
 use substrate_test_runtime_client::runtime::{Block, Hash};
 use sp_runtime::generic::BlockId;
+use sc_block_builder::BlockBuilderProvider;
 use super::*;
 
 fn prepare_good_block() -> (TestClient, Hash, u64, PeerId, IncomingBlock<Block>) {

@@ -34,15 +34,14 @@ use sp_runtime::{
 	Justification, BuildStorage,
 	generic::{BlockId, SignedBlock, DigestItem},
 	traits::{
-		Block as BlockT, Header as HeaderT, Zero, NumberFor, HasherFor, SaturatedConversion, One,
+		Block as BlockT, Header as HeaderT, Zero, NumberFor, HashFor, SaturatedConversion, One,
 		DigestFor,
 	},
 };
 use sp_state_machine::{
 	DBValue, Backend as StateBackend, ChangesTrieAnchorBlockId,
 	prove_read, prove_child_read, ChangesTrieRootsStorage, ChangesTrieStorage,
-	ChangesTrieConfigurationRange, key_changes, key_changes_proof, StorageProof,
-	merge_storage_proofs,
+	ChangesTrieConfigurationRange, key_changes, key_changes_proof,
 };
 use sc_executor::{RuntimeVersion, RuntimeInfo};
 use sp_consensus::{
@@ -55,35 +54,39 @@ use sp_blockchain::{self as blockchain,
 	well_known_cache_keys::Id as CacheKeyId,
 	HeaderMetadata, CachedHeaderMetadata,
 };
+use sp_trie::StorageProof;
 
 use sp_api::{
 	CallApiAt, ConstructRuntimeApi, Core as CoreApi, ApiExt, ApiRef, ProvideRuntimeApi,
 	CallApiAtParams,
 };
-use sc_block_builder::BlockBuilderApi;
+use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 
 pub use sc_client_api::{
 	backend::{
 		self, BlockImportOperation, PrunableStateChangesTrieStorage,
 		ClientImportOperation, Finalizer, ImportSummary, NewBlockState,
-		changes_tries_state_at_block,
+		changes_tries_state_at_block, StorageProvider,
+		LockImportRun,
 	},
 	client::{
 		ImportNotifications, FinalityNotification, FinalityNotifications, BlockImportNotification,
-		ClientInfo, BlockchainEvents, BlockBody, ProvideUncles, BadBlocks, ForkBlocks,
+		ClientInfo, BlockchainEvents, BlockBackend, ProvideUncles, BadBlocks, ForkBlocks,
 		BlockOf,
 	},
 	execution_extensions::{ExecutionExtensions, ExecutionStrategies},
 	notifications::{StorageNotifications, StorageEventStream},
-	CallExecutor,
+	CallExecutor, ExecutorProvider, ProofProvider, CloneableSpawn,
 };
 use sp_blockchain::Error;
+use prometheus_endpoint::Registry;
 
 use crate::{
 	call_executor::LocalCallExecutor,
 	light::{call_executor::prove_execution, fetcher::ChangesProof},
 	in_mem, genesis, cht, block_rules::{BlockRules, LookupResult as BlockLookupResult},
 };
+use crate::client::backend::KeyIterator;
 
 /// Substrate Client
 pub struct Client<B, E, Block, RA> where Block: BlockT {
@@ -97,46 +100,6 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	block_rules: BlockRules<Block>,
 	execution_extensions: ExecutionExtensions<Block>,
 	_phantom: PhantomData<RA>,
-}
-
-/// An `Iterator` that iterates keys in a given block under a prefix.
-pub struct KeyIterator<'a, State, Block> {
-	state: State,
-	prefix: Option<&'a StorageKey>,
-	current_key: Vec<u8>,
-	_phantom: PhantomData<Block>,
-}
-
-impl <'a, State, Block> KeyIterator<'a, State, Block> {
-	fn new(state: State, prefix: Option<&'a StorageKey>, current_key: Vec<u8>) -> Self {
-		Self {
-			state,
-			prefix,
-			current_key,
-			_phantom: PhantomData,
-		}
-	}
-}
-
-impl<'a, State, Block> Iterator for KeyIterator<'a, State, Block> where
-	Block: BlockT,
-	State: StateBackend<HasherFor<Block>>,
-{
-	type Item = StorageKey;
-
-	fn next(&mut self) -> Option<Self::Item> {
-		let next_key = self.state
-			.next_storage_key(&self.current_key)
-			.ok()
-			.flatten()?;
-		if let Some(prefix) = self.prefix {
-			if !next_key.starts_with(&prefix.0[..]) {
-				return None;
-			}
-		}
-		self.current_key = next_key.clone();
-		Some(StorageKey(next_key))
-	}
 }
 
 // used in importing a block, where additional changes are made after the runtime
@@ -171,6 +134,8 @@ pub fn new_in_mem<E, Block, S, RA>(
 	executor: E,
 	genesis_storage: &S,
 	keystore: Option<sp_core::traits::BareCryptoStorePtr>,
+	prometheus_registry: Option<Registry>,
+	spawn_handle: Box<dyn CloneableSpawn>,
 ) -> sp_blockchain::Result<Client<
 	in_mem::Backend<Block>,
 	LocalCallExecutor<in_mem::Backend<Block>, E>,
@@ -181,7 +146,7 @@ pub fn new_in_mem<E, Block, S, RA>(
 	S: BuildStorage,
 	Block: BlockT,
 {
-	new_with_backend(Arc::new(in_mem::Backend::new()), executor, genesis_storage, keystore)
+	new_with_backend(Arc::new(in_mem::Backend::new()), executor, genesis_storage, keystore, spawn_handle, prometheus_registry)
 }
 
 /// Create a client with the explicitly provided backend.
@@ -191,6 +156,8 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 	executor: E,
 	build_genesis_storage: &S,
 	keystore: Option<sp_core::traits::BareCryptoStorePtr>,
+	spawn_handle: Box<dyn CloneableSpawn>,
+	prometheus_registry: Option<Registry>,
 ) -> sp_blockchain::Result<Client<B, LocalCallExecutor<B, E>, Block, RA>>
 	where
 		E: CodeExecutor + RuntimeInfo,
@@ -198,7 +165,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 		Block: BlockT,
 		B: backend::LocalBackend<Block> + 'static,
 {
-	let call_executor = LocalCallExecutor::new(backend.clone(), executor);
+	let call_executor = LocalCallExecutor::new(backend.clone(), executor, spawn_handle);
 	let extensions = ExecutionExtensions::new(Default::default(), keystore);
 	Client::new(
 		backend,
@@ -207,6 +174,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 		Default::default(),
 		Default::default(),
 		extensions,
+		prometheus_registry,
 	)
 }
 
@@ -218,19 +186,73 @@ impl<B, E, Block, RA> BlockOf for Client<B, E, Block, RA> where
 	type Type = Block;
 }
 
+impl<B, E, Block, RA> LockImportRun<Block, B> for Client<B, E, Block, RA>
+	where
+		B: backend::Backend<Block>,
+		E: CallExecutor<Block>,
+		Block: BlockT,
+{
+	fn lock_import_and_run<R, Err, F>(&self, f: F) -> Result<R, Err>
+		where
+			F: FnOnce(&mut ClientImportOperation<Block, B>) -> Result<R, Err>,
+			Err: From<sp_blockchain::Error>,
+	{
+		let inner = || {
+			let _import_lock = self.backend.get_import_lock().write();
+
+			let mut op = ClientImportOperation {
+				op: self.backend.begin_operation()?,
+				notify_imported: None,
+				notify_finalized: Vec::new(),
+			};
+
+			let r = f(&mut op)?;
+
+			let ClientImportOperation { op, notify_imported, notify_finalized } = op;
+			self.backend.commit_operation(op)?;
+
+			self.notify_finalized(notify_finalized)?;
+			self.notify_imported(notify_imported)?;
+
+			Ok(r)
+		};
+
+		let result = inner();
+		*self.importing_block.write() = None;
+
+		result
+	}
+}
+
+impl<B, E, Block, RA> LockImportRun<Block, B> for &Client<B, E, Block, RA>
+	where
+		Block: BlockT,
+		B: backend::Backend<Block>,
+		E: CallExecutor<Block>,
+{
+	fn lock_import_and_run<R, Err, F>(&self, f: F) -> Result<R, Err>
+		where
+			F: FnOnce(&mut ClientImportOperation<Block, B>) -> Result<R, Err>,
+			Err: From<sp_blockchain::Error>,
+	{
+		(**self).lock_import_and_run(f)
+	}
+}
+
 impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	B: backend::Backend<Block>,
 	E: CallExecutor<Block>,
 	Block: BlockT,
 {
 	/// Creates new Substrate Client with given blockchain and code executor.
-	pub fn new<S: BuildStorage>(
+	pub fn new(
 		backend: Arc<B>,
 		executor: E,
-		build_genesis_storage: &S,
+		build_genesis_storage: &dyn BuildStorage,
 		fork_blocks: ForkBlocks<Block>,
 		bad_blocks: BadBlocks<Block>,
 		execution_extensions: ExecutionExtensions<Block>,
+		_prometheus_registry: Option<Registry>,
 	) -> sp_blockchain::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
 			let genesis_storage = build_genesis_storage.build_storage()?;
@@ -264,119 +286,14 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		})
 	}
 
-	/// Get a reference to the execution extensions.
-	pub fn execution_extensions(&self) -> &ExecutionExtensions<Block> {
-		&self.execution_extensions
-	}
-
 	/// Get a reference to the state at a given block.
 	pub fn state_at(&self, block: &BlockId<Block>) -> sp_blockchain::Result<B::State> {
 		self.backend.state_at(*block)
 	}
 
-	/// Given a `BlockId` and a key prefix, return the matching storage keys in that block.
-	pub fn storage_keys(&self, id: &BlockId<Block>, key_prefix: &StorageKey) -> sp_blockchain::Result<Vec<StorageKey>> {
-		let keys = self.state_at(id)?.keys(&key_prefix.0).into_iter().map(StorageKey).collect();
-		Ok(keys)
-	}
-
-	/// Given a `BlockId` and a key prefix, return the matching child storage keys and values in that block.
-	pub fn storage_pairs(&self, id: &BlockId<Block>, key_prefix: &StorageKey)
-		-> sp_blockchain::Result<Vec<(StorageKey, StorageData)>>
-	{
-		let state = self.state_at(id)?;
-		let keys = state
-			.keys(&key_prefix.0)
-			.into_iter()
-			.map(|k| {
-				let d = state.storage(&k).ok().flatten().unwrap_or_default();
-				(StorageKey(k), StorageData(d))
-			})
-			.collect();
-		Ok(keys)
-	}
-
-	/// Given a `BlockId` and a key prefix, return a `KeyIterator` iterates matching storage keys in that block.
-	pub fn storage_keys_iter<'a>(
-		&self,
-		id: &BlockId<Block>,
-		prefix: Option<&'a StorageKey>,
-		start_key: Option<&StorageKey>
-	) -> sp_blockchain::Result<KeyIterator<'a, B::State, Block>> {
-		let state = self.state_at(id)?;
-		let start_key = start_key
-			.or(prefix)
-			.map(|key| key.0.clone())
-			.unwrap_or_else(Vec::new);
-		Ok(KeyIterator::new(state, prefix, start_key))
-	}
-
-	/// Given a `BlockId` and a key, return the value under the key in that block.
-	pub fn storage(&self, id: &BlockId<Block>, key: &StorageKey)
-		-> sp_blockchain::Result<Option<StorageData>>
-	{
-		Ok(self.state_at(id)?
-			.storage(&key.0).map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
-			.map(StorageData)
-		)
-	}
-
-	/// Given a `BlockId` and a key, return the value under the hash in that block.
-	pub fn storage_hash(&self, id: &BlockId<Block>, key: &StorageKey)
-		-> sp_blockchain::Result<Option<Block::Hash>>
-	{
-		Ok(self.state_at(id)?
-			.storage_hash(&key.0).map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
-		)
-	}
-
-	/// Given a `BlockId`, a key prefix, and a child storage key, return the matching child storage keys.
-	pub fn child_storage_keys(
-		&self,
-		id: &BlockId<Block>,
-		child_storage_key: &StorageKey,
-		child_info: ChildInfo,
-		key_prefix: &StorageKey
-	) -> sp_blockchain::Result<Vec<StorageKey>> {
-		let keys = self.state_at(id)?
-			.child_keys(&child_storage_key.0, child_info, &key_prefix.0)
-			.into_iter()
-			.map(StorageKey)
-			.collect();
-		Ok(keys)
-	}
-
-	/// Given a `BlockId`, a key and a child storage key, return the value under the key in that block.
-	pub fn child_storage(
-		&self,
-		id: &BlockId<Block>,
-		storage_key: &StorageKey,
-		child_info: ChildInfo,
-		key: &StorageKey
-	) -> sp_blockchain::Result<Option<StorageData>> {
-		Ok(self.state_at(id)?
-			.child_storage(&storage_key.0, child_info, &key.0)
-			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
-			.map(StorageData))
-	}
-
-	/// Given a `BlockId`, a key and a child storage key, return the hash under the key in that block.
-	pub fn child_storage_hash(
-		&self,
-		id: &BlockId<Block>,
-		storage_key: &StorageKey,
-		child_info: ChildInfo,
-		key: &StorageKey
-	) -> sp_blockchain::Result<Option<Block::Hash>> {
-		Ok(self.state_at(id)?
-			.child_storage_hash(&storage_key.0, child_info, &key.0)
-			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
-		)
-	}
-
 	/// Get the code at a given block.
 	pub fn code_at(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Vec<u8>> {
-		Ok(self.storage(id, &StorageKey(well_known_keys::CODE.to_vec()))?
+		Ok(StorageProvider::storage(self, id, &StorageKey(well_known_keys::CODE.to_vec()))?
 			.expect("None is returned if there's no value stored for the given key;\
 				':code' key is always defined; qed").0)
 	}
@@ -384,57 +301,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	/// Get the RuntimeVersion at a given block.
 	pub fn runtime_version_at(&self, id: &BlockId<Block>) -> sp_blockchain::Result<RuntimeVersion> {
 		self.executor.runtime_version(id)
-	}
-
-	/// Get call executor reference.
-	pub fn executor(&self) -> &E {
-		&self.executor
-	}
-
-	/// Reads storage value at a given block + key, returning read proof.
-	pub fn read_proof<I>(&self, id: &BlockId<Block>, keys: I) -> sp_blockchain::Result<StorageProof> where
-		I: IntoIterator,
-		I::Item: AsRef<[u8]>,
-	{
-		self.state_at(id)
-			.and_then(|state| prove_read(state, keys)
-				.map_err(Into::into))
-	}
-
-	/// Reads child storage value at a given block + storage_key + key, returning
-	/// read proof.
-	pub fn read_child_proof<I>(
-		&self,
-		id: &BlockId<Block>,
-		storage_key: &[u8],
-		child_info: ChildInfo,
-		keys: I,
-	) -> sp_blockchain::Result<StorageProof> where
-		I: IntoIterator,
-		I::Item: AsRef<[u8]>,
-	{
-		self.state_at(id)
-			.and_then(|state| prove_child_read(state, storage_key, child_info, keys)
-				.map_err(Into::into))
-	}
-
-	/// Execute a call to a contract on top of state in a block of given hash
-	/// AND returning execution proof.
-	///
-	/// No changes are made.
-	pub fn execution_proof(&self,
-		id: &BlockId<Block>,
-		method: &str,
-		call_data: &[u8]
-	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
-		let state = self.state_at(id)?;
-		let header = self.prepare_environment_block(id)?;
-		prove_execution(state, header, &self.executor, method, call_data)
-	}
-
-	/// Reads given header and generates CHT-based header proof.
-	pub fn header_proof(&self, id: &BlockId<Block>) -> sp_blockchain::Result<(Block::Header, StorageProof)> {
-		self.header_proof_with_cht_size(id, cht::size())
 	}
 
 	/// Get block hash by number.
@@ -462,119 +328,13 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			Some(old_current_num)
 		});
 		let headers = cht_range.map(|num| self.block_hash(num));
-		let proof = cht::build_proof::<Block::Header, HasherFor<Block>, _, _>(
+		let proof = cht::build_proof::<Block::Header, HashFor<Block>, _, _>(
 			cht_size,
 			cht_num,
 			std::iter::once(block_num),
 			headers,
 		)?;
 		Ok((header, proof))
-	}
-
-	/// Get longest range within [first; last] that is possible to use in `key_changes`
-	/// and `key_changes_proof` calls.
-	/// Range could be shortened from the beginning if some changes tries have been pruned.
-	/// Returns Ok(None) if changes tries are not supported.
-	pub fn max_key_changes_range(
-		&self,
-		first: NumberFor<Block>,
-		last: BlockId<Block>,
-	) -> sp_blockchain::Result<Option<(NumberFor<Block>, BlockId<Block>)>> {
-		let last_number = self.backend.blockchain().expect_block_number_from_id(&last)?;
-		let last_hash = self.backend.blockchain().expect_block_hash_from_id(&last)?;
-		if first > last_number {
-			return Err(sp_blockchain::Error::ChangesTrieAccessFailed("Invalid changes trie range".into()));
-		}
-
-		let (storage, configs) = match self.require_changes_trie(first, last_hash, false).ok() {
-			Some((storage, configs)) => (storage, configs),
-			None => return Ok(None),
-		};
-
-		let first_available_changes_trie = configs.last().map(|config| config.0);
-		match first_available_changes_trie {
-			Some(first_available_changes_trie) => {
-				let oldest_unpruned = storage.oldest_pruned_digest_range_end();
-				let first = std::cmp::max(first_available_changes_trie, oldest_unpruned);
-				Ok(Some((first, last)))
-			},
-			None => Ok(None)
-		}
-	}
-
-	/// Get pairs of (block, extrinsic) where key has been changed at given blocks range.
-	/// Works only for runtimes that are supporting changes tries.
-	///
-	/// Changes are returned in descending order (i.e. last block comes first).
-	pub fn key_changes(
-		&self,
-		first: NumberFor<Block>,
-		last: BlockId<Block>,
-		storage_key: Option<&StorageKey>,
-		key: &StorageKey
-	) -> sp_blockchain::Result<Vec<(NumberFor<Block>, u32)>> {
-		let last_number = self.backend.blockchain().expect_block_number_from_id(&last)?;
-		let last_hash = self.backend.blockchain().expect_block_hash_from_id(&last)?;
-		let (storage, configs) = self.require_changes_trie(first, last_hash, true)?;
-
-		let mut result = Vec::new();
-		let best_number = self.backend.blockchain().info().best_number;
-		for (config_zero, config_end, config) in configs {
-			let range_first = ::std::cmp::max(first, config_zero + One::one());
-			let range_anchor = match config_end {
-				Some((config_end_number, config_end_hash)) => if last_number > config_end_number {
-					ChangesTrieAnchorBlockId { hash: config_end_hash, number: config_end_number }
-				} else {
-					ChangesTrieAnchorBlockId { hash: convert_hash(&last_hash), number: last_number }
-				},
-				None => ChangesTrieAnchorBlockId { hash: convert_hash(&last_hash), number: last_number },
-			};
-
-			let config_range = ChangesTrieConfigurationRange {
-				config: &config,
-				zero: config_zero.clone(),
-				end: config_end.map(|(config_end_number, _)| config_end_number),
-			};
-			let result_range: Vec<(NumberFor<Block>, u32)> = key_changes::<HasherFor<Block>, _>(
-				config_range,
-				storage.storage(),
-				range_first,
-				&range_anchor,
-				best_number,
-				storage_key.as_ref().map(|x| &x.0[..]),
-				&key.0)
-			.and_then(|r| r.map(|r| r.map(|(block, tx)| (block, tx))).collect::<Result<_, _>>())
-			.map_err(|err| sp_blockchain::Error::ChangesTrieAccessFailed(err))?;
-			result.extend(result_range);
-		}
-
-		Ok(result)
-	}
-
-	/// Get proof for computation of (block, extrinsic) pairs where key has been changed at given blocks range.
-	/// `min` is the hash of the first block, which changes trie root is known to the requester - when we're using
-	/// changes tries from ascendants of this block, we should provide proofs for changes tries roots
-	/// `max` is the hash of the last block known to the requester - we can't use changes tries from descendants
-	/// of this block.
-	/// Works only for runtimes that are supporting changes tries.
-	pub fn key_changes_proof(
-		&self,
-		first: Block::Hash,
-		last: Block::Hash,
-		min: Block::Hash,
-		max: Block::Hash,
-		storage_key: Option<&StorageKey>,
-		key: &StorageKey,
-	) -> sp_blockchain::Result<ChangesProof<Block::Header>> {
-		self.key_changes_proof_with_cht_size(
-			first,
-			last,
-			min,
-			max,
-			storage_key,
-			key,
-			cht::size(),
-		)
 	}
 
 	/// Does the same work as `key_changes_proof`, but assumes that CHTs are of passed size.
@@ -589,12 +349,12 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		cht_size: NumberFor<Block>,
 	) -> sp_blockchain::Result<ChangesProof<Block::Header>> {
 		struct AccessedRootsRecorder<'a, Block: BlockT> {
-			storage: &'a dyn ChangesTrieStorage<HasherFor<Block>, NumberFor<Block>>,
+			storage: &'a dyn ChangesTrieStorage<HashFor<Block>, NumberFor<Block>>,
 			min: NumberFor<Block>,
 			required_roots_proofs: Mutex<BTreeMap<NumberFor<Block>, Block::Hash>>,
 		};
 
-		impl<'a, Block: BlockT> ChangesTrieRootsStorage<HasherFor<Block>, NumberFor<Block>> for
+		impl<'a, Block: BlockT> ChangesTrieRootsStorage<HashFor<Block>, NumberFor<Block>> for
 			AccessedRootsRecorder<'a, Block>
 		{
 			fn build_anchor(&self, hash: Block::Hash)
@@ -621,11 +381,11 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			}
 		}
 
-		impl<'a, Block: BlockT> ChangesTrieStorage<HasherFor<Block>, NumberFor<Block>> for
+		impl<'a, Block: BlockT> ChangesTrieStorage<HashFor<Block>, NumberFor<Block>> for
 			AccessedRootsRecorder<'a, Block>
 		{
 			fn as_roots_storage(&self)
-				-> &dyn sp_state_machine::ChangesTrieRootsStorage<HasherFor<Block>, NumberFor<Block>>
+				-> &dyn sp_state_machine::ChangesTrieRootsStorage<HashFor<Block>, NumberFor<Block>>
 			{
 				self
 			}
@@ -669,7 +429,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				zero: config_zero,
 				end: config_end.map(|(config_end_number, _)| config_end_number),
 			};
-			let proof_range = key_changes_proof::<HasherFor<Block>, _>(
+			let proof_range = key_changes_proof::<HashFor<Block>, _>(
 				config_range,
 				&recording_storage,
 				first_number,
@@ -714,7 +474,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			Ok(())
 		}, ())?;
 
-		Ok(merge_storage_proofs(proofs))
+		Ok(StorageProof::merge(proofs))
 	}
 
 	/// Generates CHT-based proof for roots of changes tries at given blocks (that are part of single CHT).
@@ -736,7 +496,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			.map(|block|
 				block.and_then(|block| block.digest().log(DigestItem::as_changes_trie_root).cloned()))
 			);
-		let proof = cht::build_proof::<Block::Header, HasherFor<Block>, _, _>(
+		let proof = cht::build_proof::<Block::Header, HashFor<Block>, _, _>(
 			cht_size,
 			cht_num,
 			blocks,
@@ -784,88 +544,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		}
 
 		Ok((storage, configs))
-	}
-
-	/// Create a new block, built on the head of the chain.
-	pub fn new_block(
-		&self,
-		inherent_digests: DigestFor<Block>,
-	) -> sp_blockchain::Result<sc_block_builder::BlockBuilder<Block, Self, B>> where
-		E: Clone + Send + Sync,
-		RA: Send + Sync,
-		Self: ProvideRuntimeApi<Block>,
-		<Self as ProvideRuntimeApi<Block>>::Api: BlockBuilderApi<Block, Error = Error> +
-			ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
-	{
-		let info = self.chain_info();
-		sc_block_builder::BlockBuilder::new(
-			self,
-			info.best_hash,
-			info.best_number,
-			RecordProof::No,
-			inherent_digests,
-			&self.backend,
-		)
-	}
-
-	/// Create a new block, built on top of `parent`.
-	///
-	/// When proof recording is enabled, all accessed trie nodes are saved.
-	/// These recorded trie nodes can be used by a third party to proof the
-	/// output of this block builder without having access to the full storage.
-	pub fn new_block_at<R: Into<RecordProof>>(
-		&self,
-		parent: &BlockId<Block>,
-		inherent_digests: DigestFor<Block>,
-		record_proof: R,
-	) -> sp_blockchain::Result<sc_block_builder::BlockBuilder<Block, Self, B>> where
-		E: Clone + Send + Sync,
-		RA: Send + Sync,
-		Self: ProvideRuntimeApi<Block>,
-		<Self as ProvideRuntimeApi<Block>>::Api: BlockBuilderApi<Block, Error = Error> +
-			ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
-	{
-		sc_block_builder::BlockBuilder::new(
-			self,
-			self.expect_block_hash_from_id(parent)?,
-			self.expect_block_number_from_id(parent)?,
-			record_proof.into(),
-			inherent_digests,
-			&self.backend
-		)
-	}
-
-	/// Lock the import lock, and run operations inside.
-	pub fn lock_import_and_run<R, Err, F>(&self, f: F) -> Result<R, Err> where
-		F: FnOnce(&mut ClientImportOperation<Block, B>) -> Result<R, Err>,
-		Err: From<sp_blockchain::Error>,
-	{
-		let inner = || {
-			let _import_lock = self.backend.get_import_lock().write();
-
-			let mut op = ClientImportOperation {
-				op: self.backend.begin_operation()?,
-				notify_imported: None,
-				notify_finalized: Vec::new(),
-			};
-
-			let r = f(&mut op)?;
-
-			let ClientImportOperation { op, notify_imported, notify_finalized } = op;
-			self.backend.commit_operation(op)?;
-			self.notify_finalized(notify_finalized)?;
-
-			if let Some(notify_imported) = notify_imported {
-				self.notify_imported(notify_imported)?;
-			}
-
-			Ok(r)
-		};
-
-		let result = inner();
-		*self.importing_block.write() = None;
-
-		result
 	}
 
 	/// Apply a checked and validated block to an operation. If a justification is provided
@@ -1130,15 +808,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 					&state,
 					changes_trie_state.as_ref(),
 					*parent_hash,
-				);
-
-				{
-					let _lock = self.backend.get_import_lock().read();
-					self.backend.destroy_state(state)?;
-				}
-
-				// Make sure to consume the error, only after we have destroyed the state.
-				let gen_storage_changes = gen_storage_changes?;
+				)?;
 
 				if import_block.header.state_root()
 					!= &gen_storage_changes.transaction_storage_root
@@ -1227,6 +897,15 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	) -> sp_blockchain::Result<()> {
 		let mut sinks = self.finality_notification_sinks.lock();
 
+		if notify_finalized.is_empty() {
+			// cleanup any closed finality notification sinks
+			// since we won't be running the loop below which
+			// would also remove any closed sinks.
+			sinks.retain(|sink| !sink.is_closed());
+
+			return Ok(());
+		}
+
 		for finalized_hash in notify_finalized {
 			let header = self.header(&BlockId::Hash(finalized_hash))?
 				.expect("header already known to exist in DB because it is indicated in the tree route; qed");
@@ -1247,7 +926,27 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Ok(())
 	}
 
-	fn notify_imported(&self, notify_import: ImportSummary<Block>) -> sp_blockchain::Result<()> {
+	fn notify_imported(
+		&self,
+		notify_import: Option<ImportSummary<Block>>,
+	) -> sp_blockchain::Result<()> {
+		let notify_import = match notify_import {
+			Some(notify_import) => notify_import,
+			None => {
+				// cleanup any closed import notification sinks since we won't
+				// be sending any notifications below which would remove any
+				// closed sinks. this is necessary since during initial sync we
+				// won't send any import notifications which could lead to a
+				// temporary leak of closed/discarded notification sinks (e.g.
+				// from consensus code).
+				self.import_notification_sinks
+					.lock()
+					.retain(|sink| !sink.is_closed());
+
+				return Ok(());
+			}
+		};
+
 		if let Some(storage_changes) = notify_import.storage_changes {
 			// TODO [ToDr] How to handle re-orgs? Should we re-emit all storage changes?
 			self.storage_notifications.lock()
@@ -1339,22 +1038,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		self.backend.blockchain().body(*id)
 	}
 
-	/// Get block justification set by id.
-	pub fn justification(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Justification>> {
-		self.backend.blockchain().justification(*id)
-	}
-
-	/// Get full block by id.
-	pub fn block(&self, id: &BlockId<Block>)
-		-> sp_blockchain::Result<Option<SignedBlock<Block>>>
-	{
-		Ok(match (self.header(id)?, self.body(id)?, self.justification(id)?) {
-			(Some(header), Some(extrinsics), justification) =>
-				Some(SignedBlock { block: Block::new(header, extrinsics), justification }),
-			_ => None,
-		})
-	}
-
 	/// Gets the uncles of the block with `target_hash` going back `max_generation` ancestors.
 	pub fn uncles(&self, target_hash: Block::Hash, max_generation: NumberFor<Block>) -> sp_blockchain::Result<Vec<Block::Hash>> {
 		let load_header = |id: Block::Hash| -> sp_blockchain::Result<Block::Header> {
@@ -1396,6 +1079,318 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			parent_header.hash(),
 			Default::default(),
 		))
+	}
+}
+
+impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
+	B: backend::Backend<Block>,
+	E: CallExecutor<Block>,
+	Block: BlockT,
+{
+	fn read_proof(
+		&self,
+		id: &BlockId<Block>,
+		keys: &mut dyn Iterator<Item=&[u8]>,
+	) -> sp_blockchain::Result<StorageProof> {
+		self.state_at(id)
+			.and_then(|state| prove_read(state, keys)
+				.map_err(Into::into))
+	}
+
+	fn read_child_proof(
+		&self,
+		id: &BlockId<Block>,
+		storage_key: &[u8],
+		child_info: ChildInfo,
+		keys: &mut dyn Iterator<Item=&[u8]>,
+	) -> sp_blockchain::Result<StorageProof> {
+		self.state_at(id)
+			.and_then(|state| prove_child_read(state, storage_key, child_info, keys)
+				.map_err(Into::into))
+	}
+
+	fn execution_proof(
+		&self,
+		id: &BlockId<Block>,
+		method: &str,
+		call_data: &[u8]
+	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
+		// Make sure we include the `:code` and `:heap_pages` in the execution proof to be
+		// backwards compatible.
+		//
+		// TODO: Remove when solved: https://github.com/paritytech/substrate/issues/5047
+		let code_proof = self.read_proof(
+			id,
+			&mut [well_known_keys::CODE, well_known_keys::HEAP_PAGES].iter().map(|v| *v),
+		)?;
+
+		let state = self.state_at(id)?;
+		let header = self.prepare_environment_block(id)?;
+		prove_execution(
+			state,
+			header,
+			&self.executor,
+			method,
+			call_data,
+		).map(|(r, p)| {
+			(r, StorageProof::merge(vec![p, code_proof]))
+		})
+	}
+
+	fn header_proof(&self, id: &BlockId<Block>) -> sp_blockchain::Result<(Block::Header, StorageProof)> {
+		self.header_proof_with_cht_size(id, cht::size())
+	}
+
+	fn key_changes_proof(
+		&self,
+		first: Block::Hash,
+		last: Block::Hash,
+		min: Block::Hash,
+		max: Block::Hash,
+		storage_key: Option<&StorageKey>,
+		key: &StorageKey,
+	) -> sp_blockchain::Result<ChangesProof<Block::Header>> {
+		self.key_changes_proof_with_cht_size(
+			first,
+			last,
+			min,
+			max,
+			storage_key,
+			key,
+			cht::size(),
+		)
+	}
+}
+
+
+impl<B, E, Block, RA> BlockBuilderProvider<B, Block, Self> for Client<B, E, Block, RA>
+	where
+		B: backend::Backend<Block> + Send + Sync + 'static,
+		E: CallExecutor<Block> + Send + Sync + 'static,
+		Block: BlockT,
+		Self: ChainHeaderBackend<Block> + ProvideRuntimeApi<Block>,
+		<Self as ProvideRuntimeApi<Block>>::Api: ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
+			+ BlockBuilderApi<Block, Error = Error>,
+{
+	fn new_block_at<R: Into<RecordProof>>(
+		&self,
+		parent: &BlockId<Block>,
+		inherent_digests: DigestFor<Block>,
+		record_proof: R,
+	) -> sp_blockchain::Result<sc_block_builder::BlockBuilder<Block, Self, B>> {
+		sc_block_builder::BlockBuilder::new(
+			self,
+			self.expect_block_hash_from_id(parent)?,
+			self.expect_block_number_from_id(parent)?,
+			record_proof.into(),
+			inherent_digests,
+			&self.backend
+		)
+	}
+
+	fn new_block(
+		&self,
+		inherent_digests: DigestFor<Block>,
+	) -> sp_blockchain::Result<sc_block_builder::BlockBuilder<Block, Self, B>> {
+		let info = self.chain_info();
+		sc_block_builder::BlockBuilder::new(
+			self,
+			info.best_hash,
+			info.best_number,
+			RecordProof::No,
+			inherent_digests,
+			&self.backend,
+		)
+	}
+}
+
+impl<B, E, Block, RA>  ExecutorProvider<Block> for Client<B, E, Block, RA> where
+	B: backend::Backend<Block>,
+	E: CallExecutor<Block>,
+	Block: BlockT,
+{
+	type Executor = E;
+
+	fn executor(&self) -> &Self::Executor {
+		&self.executor
+	}
+
+	fn execution_extensions(&self) -> &ExecutionExtensions<Block> {
+		&self.execution_extensions
+	}
+}
+
+impl<B, E, Block, RA> StorageProvider<Block, B> for Client<B, E, Block, RA> where
+	B: backend::Backend<Block>,
+	E: CallExecutor<Block>,
+	Block: BlockT,
+{
+	fn storage_keys(&self, id: &BlockId<Block>, key_prefix: &StorageKey) -> sp_blockchain::Result<Vec<StorageKey>> {
+		let keys = self.state_at(id)?.keys(&key_prefix.0).into_iter().map(StorageKey).collect();
+		Ok(keys)
+	}
+
+	fn storage_pairs(&self, id: &BlockId<Block>, key_prefix: &StorageKey)
+		-> sp_blockchain::Result<Vec<(StorageKey, StorageData)>>
+	{
+		let state = self.state_at(id)?;
+		let keys = state
+			.keys(&key_prefix.0)
+			.into_iter()
+			.map(|k| {
+				let d = state.storage(&k).ok().flatten().unwrap_or_default();
+				(StorageKey(k), StorageData(d))
+			})
+			.collect();
+		Ok(keys)
+	}
+
+
+	fn storage_keys_iter<'a>(
+		&self,
+		id: &BlockId<Block>,
+		prefix: Option<&'a StorageKey>,
+		start_key: Option<&StorageKey>
+	) -> sp_blockchain::Result<KeyIterator<'a, B::State, Block>> {
+		let state = self.state_at(id)?;
+		let start_key = start_key
+			.or(prefix)
+			.map(|key| key.0.clone())
+			.unwrap_or_else(Vec::new);
+		Ok(KeyIterator::new(state, prefix, start_key))
+	}
+
+
+	fn storage(&self, id: &BlockId<Block>, key: &StorageKey) -> sp_blockchain::Result<Option<StorageData>>
+	{
+		Ok(self.state_at(id)?
+			.storage(&key.0).map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
+			.map(StorageData)
+		)
+	}
+
+
+	fn storage_hash(&self, id: &BlockId<Block>, key: &StorageKey) -> sp_blockchain::Result<Option<Block::Hash>>
+	{
+		Ok(self.state_at(id)?
+			.storage_hash(&key.0).map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
+		)
+	}
+
+
+	fn child_storage_keys(
+		&self,
+		id: &BlockId<Block>,
+		child_storage_key: &StorageKey,
+		child_info: ChildInfo,
+		key_prefix: &StorageKey
+	) -> sp_blockchain::Result<Vec<StorageKey>> {
+		let keys = self.state_at(id)?
+			.child_keys(&child_storage_key.0, child_info, &key_prefix.0)
+			.into_iter()
+			.map(StorageKey)
+			.collect();
+		Ok(keys)
+	}
+
+
+	fn child_storage(
+		&self,
+		id: &BlockId<Block>,
+		storage_key: &StorageKey,
+		child_info: ChildInfo,
+		key: &StorageKey
+	) -> sp_blockchain::Result<Option<StorageData>> {
+		Ok(self.state_at(id)?
+			.child_storage(&storage_key.0, child_info, &key.0)
+			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
+			.map(StorageData))
+	}
+
+
+	fn child_storage_hash(
+		&self,
+		id: &BlockId<Block>,
+		storage_key: &StorageKey,
+		child_info: ChildInfo,
+		key: &StorageKey
+	) -> sp_blockchain::Result<Option<Block::Hash>> {
+		Ok(self.state_at(id)?
+			.child_storage_hash(&storage_key.0, child_info, &key.0)
+			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
+		)
+	}
+
+	fn max_key_changes_range(
+		&self,
+		first: NumberFor<Block>,
+		last: BlockId<Block>,
+	) -> sp_blockchain::Result<Option<(NumberFor<Block>, BlockId<Block>)>> {
+		let last_number = self.backend.blockchain().expect_block_number_from_id(&last)?;
+		let last_hash = self.backend.blockchain().expect_block_hash_from_id(&last)?;
+		if first > last_number {
+			return Err(sp_blockchain::Error::ChangesTrieAccessFailed("Invalid changes trie range".into()));
+		}
+
+		let (storage, configs) = match self.require_changes_trie(first, last_hash, false).ok() {
+			Some((storage, configs)) => (storage, configs),
+			None => return Ok(None),
+		};
+
+		let first_available_changes_trie = configs.last().map(|config| config.0);
+		match first_available_changes_trie {
+			Some(first_available_changes_trie) => {
+				let oldest_unpruned = storage.oldest_pruned_digest_range_end();
+				let first = std::cmp::max(first_available_changes_trie, oldest_unpruned);
+				Ok(Some((first, last)))
+			},
+			None => Ok(None)
+		}
+	}
+
+	fn key_changes(
+		&self,
+		first: NumberFor<Block>,
+		last: BlockId<Block>,
+		storage_key: Option<&StorageKey>,
+		key: &StorageKey
+	) -> sp_blockchain::Result<Vec<(NumberFor<Block>, u32)>> {
+		let last_number = self.backend.blockchain().expect_block_number_from_id(&last)?;
+		let last_hash = self.backend.blockchain().expect_block_hash_from_id(&last)?;
+		let (storage, configs) = self.require_changes_trie(first, last_hash, true)?;
+
+		let mut result = Vec::new();
+		let best_number = self.backend.blockchain().info().best_number;
+		for (config_zero, config_end, config) in configs {
+			let range_first = ::std::cmp::max(first, config_zero + One::one());
+			let range_anchor = match config_end {
+				Some((config_end_number, config_end_hash)) => if last_number > config_end_number {
+					ChangesTrieAnchorBlockId { hash: config_end_hash, number: config_end_number }
+				} else {
+					ChangesTrieAnchorBlockId { hash: convert_hash(&last_hash), number: last_number }
+				},
+				None => ChangesTrieAnchorBlockId { hash: convert_hash(&last_hash), number: last_number },
+			};
+
+			let config_range = ChangesTrieConfigurationRange {
+				config: &config,
+				zero: config_zero.clone(),
+				end: config_end.map(|(config_end_number, _)| config_end_number),
+			};
+			let result_range: Vec<(NumberFor<Block>, u32)> = key_changes::<HashFor<Block>, _>(
+				config_range,
+				storage.storage(),
+				range_first,
+				&range_anchor,
+				best_number,
+				storage_key.as_ref().map(|x| &x.0[..]),
+				&key.0)
+				.and_then(|r| r.map(|r| r.map(|(block, tx)| (block, tx))).collect::<Result<_, _>>())
+				.map_err(|err| sp_blockchain::Error::ChangesTrieAccessFailed(err))?;
+			result.extend(result_range);
+		}
+
+		Ok(result)
 	}
 }
 
@@ -1823,7 +1818,9 @@ where
 	fn best_block_header(&self) -> sp_blockchain::Result<<Block as BlockT>::Header> {
 		let info = self.backend.blockchain().info();
 		let import_lock = self.backend.get_import_lock();
-		let best_hash = self.backend.blockchain().best_containing(info.best_hash, None, import_lock)?
+		let best_hash = self.backend
+			.blockchain()
+			.best_containing(info.best_hash, None, import_lock)?
 			.unwrap_or(info.best_hash);
 
 		Ok(self.backend.blockchain().header(BlockId::Hash(best_hash))?
@@ -1864,7 +1861,7 @@ where
 	}
 }
 
-impl<B, E, Block, RA> BlockBody<Block> for Client<B, E, Block, RA>
+impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 	where
 		B: backend::Backend<Block>,
 		E: CallExecutor<Block>,
@@ -1875,6 +1872,42 @@ impl<B, E, Block, RA> BlockBody<Block> for Client<B, E, Block, RA>
 		id: &BlockId<Block>,
 	) -> sp_blockchain::Result<Option<Vec<<Block as BlockT>::Extrinsic>>> {
 		self.body(id)
+	}
+
+	fn block(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<SignedBlock<Block>>>
+	{
+		Ok(match (self.header(id)?, self.body(id)?, self.justification(id)?) {
+			(Some(header), Some(extrinsics), justification) =>
+				Some(SignedBlock { block: Block::new(header, extrinsics), justification }),
+			_ => None,
+		})
+	}
+
+	fn block_status(&self, id: &BlockId<Block>) -> sp_blockchain::Result<BlockStatus> {
+		// this can probably be implemented more efficiently
+		if let BlockId::Hash(ref h) = id {
+			if self.importing_block.read().as_ref().map_or(false, |importing| h == importing) {
+				return Ok(BlockStatus::Queued);
+			}
+		}
+		let hash_and_number = match id.clone() {
+			BlockId::Hash(hash) => self.backend.blockchain().number(hash)?.map(|n| (hash, n)),
+			BlockId::Number(n) => self.backend.blockchain().hash(n)?.map(|hash| (hash, n)),
+		};
+		match hash_and_number {
+			Some((hash, number)) => {
+				if self.backend.have_state_at(&hash, number) {
+					Ok(BlockStatus::InChainWithState)
+				} else {
+					Ok(BlockStatus::InChainPruned)
+				}
+			}
+			None => Ok(BlockStatus::Unknown),
+		}
+	}
+
+	fn justification(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Justification>> {
+		self.backend.blockchain().justification(*id)
 	}
 }
 
@@ -3437,5 +3470,81 @@ pub(crate) mod tests {
 			.map(|x| x.0)
 			.collect();
 		assert_eq!(res, [hex!("cf722c0832b5231d35e29f319ff27389f5032bfc7bfc3ba5ed7839f2042fb99f").to_vec()]);
+	}
+
+	#[test]
+	fn cleans_up_closed_notification_sinks_on_block_import() {
+		use substrate_test_runtime_client::GenesisInit;
+
+		// NOTE: we need to build the client here instead of using the client
+		// provided by test_runtime_client otherwise we can't access the private
+		// `import_notification_sinks` and `finality_notification_sinks` fields.
+		let mut client =
+			new_in_mem::<
+				_,
+				substrate_test_runtime_client::runtime::Block,
+				_,
+				substrate_test_runtime_client::runtime::RuntimeApi
+			>(
+				substrate_test_runtime_client::new_native_executor(),
+				&substrate_test_runtime_client::GenesisParameters::default().genesis_storage(),
+				None,
+				None,
+				sp_core::tasks::executor(),
+			)
+			.unwrap();
+
+		type TestClient = Client<
+			in_mem::Backend<Block>,
+			LocalCallExecutor<in_mem::Backend<Block>, sc_executor::NativeExecutor<LocalExecutor>>,
+			substrate_test_runtime_client::runtime::Block,
+			substrate_test_runtime_client::runtime::RuntimeApi,
+		>;
+
+		let import_notif1 = client.import_notification_stream();
+		let import_notif2 = client.import_notification_stream();
+		let finality_notif1 = client.finality_notification_stream();
+		let finality_notif2 = client.finality_notification_stream();
+
+		// for some reason I can't seem to use `ClientBlockImportExt`
+		let bake_and_import_block = |client: &mut TestClient, origin| {
+			let block = client
+				.new_block(Default::default())
+				.unwrap()
+				.build()
+				.unwrap()
+				.block;
+
+			let (header, extrinsics) = block.deconstruct();
+			let mut import = BlockImportParams::new(origin, header);
+			import.body = Some(extrinsics);
+			import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
+			client.import_block(import, Default::default()).unwrap();
+		};
+
+		// after importing a block we should still have 4 notification sinks
+		// (2 import + 2 finality)
+		bake_and_import_block(&mut client, BlockOrigin::Own);
+		assert_eq!(client.import_notification_sinks.lock().len(), 2);
+		assert_eq!(client.finality_notification_sinks.lock().len(), 2);
+
+		// if we drop one import notification receiver and one finality
+		// notification receiver
+		drop(import_notif2);
+		drop(finality_notif2);
+
+		// the sinks should be cleaned up after block import
+		bake_and_import_block(&mut client, BlockOrigin::Own);
+		assert_eq!(client.import_notification_sinks.lock().len(), 1);
+		assert_eq!(client.finality_notification_sinks.lock().len(), 1);
+
+		// the same thing should happen if block import happens during initial
+		// sync
+		drop(import_notif1);
+		drop(finality_notif1);
+
+		bake_and_import_block(&mut client, BlockOrigin::NetworkInitialSync);
+		assert_eq!(client.import_notification_sinks.lock().len(), 0);
+		assert_eq!(client.finality_notification_sinks.lock().len(), 0);
 	}
 }

@@ -50,6 +50,7 @@
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//! 		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 //! 		pub fn is_online(origin, authority_index: u32) -> dispatch::DispatchResult {
 //! 			let _sender = ensure_signed(origin)?;
 //! 			let _is_online = <im_online::Module<T>>::is_online(authority_index);
@@ -69,6 +70,7 @@
 
 mod mock;
 mod tests;
+mod benchmarking;
 
 use sp_application_crypto::RuntimeAppPublic;
 use codec::{Encode, Decode};
@@ -81,7 +83,7 @@ use sp_runtime::{
 	RuntimeDebug,
 	traits::{Convert, Member, Saturating, AtLeast32Bit}, Perbill, PerThing,
 	transaction_validity::{
-		TransactionValidity, ValidTransaction, InvalidTransaction,
+		TransactionValidity, ValidTransaction, InvalidTransaction, TransactionSource,
 		TransactionPriority,
 	},
 };
@@ -274,16 +276,17 @@ decl_storage! {
 		/// The current set of keys that may issue a heartbeat.
 		Keys get(fn keys): Vec<T::AuthorityId>;
 
-		/// For each session index, we keep a mapping of `AuthIndex`
-		/// to `offchain::OpaqueNetworkState`.
+		/// For each session index, we keep a mapping of `AuthIndex` to
+		/// `offchain::OpaqueNetworkState`.
 		ReceivedHeartbeats get(fn received_heartbeats):
-			double_map hasher(blake2_256) SessionIndex, hasher(blake2_256) AuthIndex
+			double_map hasher(twox_64_concat) SessionIndex, hasher(twox_64_concat) AuthIndex
 			=> Option<Vec<u8>>;
 
 		/// For each session index, we keep a mapping of `T::ValidatorId` to the
 		/// number of blocks authored by the given authority.
 		AuthoredBlocks get(fn authored_blocks):
-			double_map hasher(blake2_256) SessionIndex, hasher(blake2_256) T::ValidatorId => u32;
+			double_map hasher(twox_64_concat) SessionIndex, hasher(twox_64_concat) T::ValidatorId
+			=> u32;
 	}
 	add_extra_genesis {
 		config(keys): Vec<T::AuthorityId>;
@@ -307,6 +310,7 @@ decl_module! {
 
 		fn deposit_event() = default;
 
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn heartbeat(
 			origin,
 			heartbeat: Heartbeat<T::BlockNumber>,
@@ -608,7 +612,9 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 
 			let validator_set_count = keys.len() as u32;
 			let offence = UnresponsivenessOffence { session_index, validator_set_count, offenders };
-			T::ReportUnresponsiveness::report_offence(vec![], offence);
+			if let Err(e) = T::ReportUnresponsiveness::report_offence(vec![], offence) {
+				sp_runtime::print(e);
+			}
 		}
 	}
 
@@ -620,7 +626,10 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 	type Call = Call<T>;
 
-	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
+	fn validate_unsigned(
+		_source: TransactionSource,
+		call: &Self::Call,
+	) -> TransactionValidity {
 		if let Call::heartbeat(heartbeat, signature) = call {
 			if <Module<T>>::is_online(heartbeat.authority_index) {
 				// we already received a heartbeat for this authority

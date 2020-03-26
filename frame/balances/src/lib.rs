@@ -155,6 +155,7 @@ mod tests_composite;
 #[cfg(test)]
 #[macro_use]
 mod tests;
+#[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
 use sp_std::prelude::*;
@@ -163,10 +164,10 @@ use codec::{Codec, Encode, Decode};
 use frame_support::{
 	StorageValue, Parameter, decl_event, decl_storage, decl_module, decl_error, ensure,
 	weights::SimpleDispatchInfo, traits::{
-		Currency, OnReapAccount, OnUnbalanced, TryDrop, StoredMap,
+		Currency, OnKilledAccount, OnUnbalanced, TryDrop, StoredMap,
 		WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 		Imbalance, SignedImbalance, ReservableCurrency, Get, ExistenceRequirement::KeepAlive,
-		ExistenceRequirement::AllowDeath, IsDeadAccount, BalanceStatus as Status
+		ExistenceRequirement::AllowDeath, IsDeadAccount, BalanceStatus as Status,
 	}
 };
 use sp_runtime::{
@@ -177,9 +178,6 @@ use sp_runtime::{
 	},
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
-use frame_support::storage::migration::{
-	get_storage_value, take_storage_value, put_storage_value, StorageIterator
-};
 
 pub use self::imbalances::{PositiveImbalance, NegativeImbalance};
 
@@ -346,6 +344,21 @@ impl<Balance: Saturating + Copy + Ord> AccountData<Balance> {
 	}
 }
 
+// A value placed in storage that represents the current version of the Balances storage.
+// This value is used by the `on_runtime_upgrade` logic to determine whether we run
+// storage migration logic. This should match directly with the semantic versions of the Rust crate.
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug)]
+enum Releases {
+	V1_0_0,
+	V2_0_0,
+}
+
+impl Default for Releases {
+	fn default() -> Self {
+		Releases::V1_0_0
+	}
+}
+
 decl_storage! {
 	trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Balances {
 		/// The total units issued in the system.
@@ -359,16 +372,16 @@ decl_storage! {
 		/// is ever zero, then the entry *MUST* be removed.
 		///
 		/// NOTE: This is only used in the case that this module is used to store balances.
-		pub Account: map hasher(blake2_256) T::AccountId => AccountData<T::Balance>;
+		pub Account: map hasher(blake2_128_concat) T::AccountId => AccountData<T::Balance>;
 
 		/// Any liquidity locks on some account balances.
 		/// NOTE: Should only be accessed when setting, changing and freeing a lock.
-		pub Locks get(fn locks): map hasher(blake2_256) T::AccountId => Vec<BalanceLock<T::Balance>>;
+		pub Locks get(fn locks): map hasher(blake2_128_concat) T::AccountId => Vec<BalanceLock<T::Balance>>;
 
-		/// True if network has been upgraded to this version.
+		/// Storage version of the pallet.
 		///
-		/// True for new networks.
-		IsUpgraded build(|_: &GenesisConfig<T, I>| true): bool;
+		/// This is set to v2.0.0 for new networks.
+		StorageVersion build(|_: &GenesisConfig<T, I>| Releases::V2_0_0): Releases;
 	}
 	add_extra_genesis {
 		config(balances): Vec<(T::AccountId, T::Balance)>;
@@ -515,103 +528,11 @@ decl_module! {
 			let dest = T::Lookup::lookup(dest)?;
 			<Self as Currency<_>>::transfer(&transactor, &dest, value, KeepAlive)?;
 		}
-
-		fn on_initialize() {
-			if !IsUpgraded::<I>::get() {
-				IsUpgraded::<I>::put(true);
-				Self::do_upgrade();
-			}
-		}
-	}
-}
-
-#[derive(Decode)]
-struct OldBalanceLock<Balance, BlockNumber> {
-	id: LockIdentifier,
-	amount: Balance,
-	until: BlockNumber,
-	reasons: WithdrawReasons,
-}
-
-impl<Balance, BlockNumber> OldBalanceLock<Balance, BlockNumber> {
-	fn upgraded(self) -> (BalanceLock<Balance>, BlockNumber) {
-		(BalanceLock {
-			id: self.id,
-			amount: self.amount,
-			reasons: self.reasons.into(),
-		}, self.until)
 	}
 }
 
 impl<T: Trait<I>, I: Instance> Module<T, I> {
 	// PRIVATE MUTABLES
-
-	// Upgrade from the pre-#4649 balances/vesting into the new balances.
-	pub fn do_upgrade() {
-		sp_runtime::print("Upgrading account balances...");
-		// First, migrate from old FreeBalance to new Account.
-		// We also move all locks across since only accounts with FreeBalance values have locks.
-		// FreeBalance: map T::AccountId => T::Balance
-		for (hash, free) in StorageIterator::<T::Balance>::new(b"Balances", b"FreeBalance").drain() {
-			let mut account = AccountData { free, ..Default::default() };
-			// Locks: map T::AccountId => Vec<BalanceLock>
-			let old_locks = get_storage_value::<Vec<OldBalanceLock<T::Balance, T::BlockNumber>>>(b"Balances", b"Locks", &hash);
-			if let Some(locks) = old_locks {
-				let locks = locks.into_iter()
-					.map(|i| {
-						let (result, expiry) = i.upgraded();
-						if expiry != T::BlockNumber::max_value() {
-							// Any `until`s that are not T::BlockNumber::max_value come from
-							// democracy and need to be migrated over there.
-							// Democracy: Locks get(locks): map T::AccountId => Option<T::BlockNumber>;
-							put_storage_value(b"Democracy", b"Locks", &hash, expiry);
-						}
-						result
-					})
-					.collect::<Vec<_>>();
-				for l in locks.iter() {
-					if l.reasons == Reasons::All || l.reasons == Reasons::Misc {
-						account.misc_frozen = account.misc_frozen.max(l.amount);
-					}
-					if l.reasons == Reasons::All || l.reasons == Reasons::Fee {
-						account.fee_frozen = account.fee_frozen.max(l.amount);
-					}
-				}
-				put_storage_value(b"Balances", b"Locks", &hash, locks);
-			}
-			put_storage_value(b"Balances", b"Account", &hash, account);
-		}
-		// Second, migrate old ReservedBalance into new Account.
-		// ReservedBalance: map T::AccountId => T::Balance
-		for (hash, reserved) in StorageIterator::<T::Balance>::new(b"Balances", b"ReservedBalance").drain() {
-			let mut account = get_storage_value::<AccountData<T::Balance>>(b"Balances", b"Account", &hash).unwrap_or_default();
-			account.reserved = reserved;
-			put_storage_value(b"Balances", b"Account", &hash, account);
-		}
-
-		// Finally, migrate vesting and ensure locks are in place. We will be lazy and just lock
-		// for the maximum amount (i.e. at genesis). Users will need to call "vest" to reduce the
-		// lock to something sensible.
-		// pub Vesting: map T::AccountId => Option<VestingSchedule>;
-		for (hash, vesting) in StorageIterator::<(T::Balance, T::Balance, T::BlockNumber)>::new(b"Balances", b"Vesting").drain() {
-			let mut account = get_storage_value::<AccountData<T::Balance>>(b"Balances", b"Account", &hash).unwrap_or_default();
-			let mut locks = get_storage_value::<Vec<BalanceLock<T::Balance>>>(b"Balances", b"Locks", &hash).unwrap_or_default();
-			locks.push(BalanceLock {
-				id: *b"vesting ",
-				amount: vesting.0.clone(),
-				reasons: Reasons::Misc,
-			});
-			account.misc_frozen = account.misc_frozen.max(vesting.0.clone());
-			put_storage_value(b"Vesting", b"Vesting", &hash, vesting);
-			put_storage_value(b"Balances", b"Locks", &hash, locks);
-			put_storage_value(b"Balances", b"Account", &hash, account);
-		}
-
-		for (hash, balances) in StorageIterator::<AccountData<T::Balance>>::new(b"Balances", b"Account").drain() {
-			let nonce = take_storage_value::<T::Index>(b"System", b"AccountNonce", &hash).unwrap_or_default();
-			put_storage_value(b"System", b"Account", &hash, (nonce, balances));
-		}
-	}
 
 	/// Get the free balance of an account.
 	pub fn free_balance(who: impl sp_std::borrow::Borrow<T::AccountId>) -> T::Balance {
@@ -721,14 +642,21 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 				}
 			}
 		});
-		Locks::<T, I>::insert(who, locks);
-	}
-}
 
-impl<T: Trait<I>, I: Instance> OnReapAccount<T::AccountId> for Module<T, I> {
-	fn on_reap_account(who: &T::AccountId) {
-		Locks::<T, I>::remove(who);
-		Account::<T, I>::remove(who);
+		let existed = Locks::<T, I>::contains_key(who);
+		if locks.is_empty() {
+			Locks::<T, I>::remove(who);
+			if existed {
+				// TODO: use Locks::<T, I>::hashed_key
+				// https://github.com/paritytech/substrate/issues/4969
+				system::Module::<T>::dec_ref(who);
+			}
+		} else {
+			Locks::<T, I>::insert(who, locks);
+			if !existed {
+				system::Module::<T>::inc_ref(who);
+			}
+		}
 	}
 }
 
@@ -923,7 +851,7 @@ impl<T: Subtrait<I>, I: Instance> frame_system::Trait for ElevatedTrait<T, I> {
 	type Version = T::Version;
 	type ModuleToIndex = T::ModuleToIndex;
 	type OnNewAccount = T::OnNewAccount;
-	type OnReapAccount = T::OnReapAccount;
+	type OnKilledAccount = T::OnKilledAccount;
 	type AccountData = T::AccountData;
 }
 impl<T: Subtrait<I>, I: Instance> Trait<I> for ElevatedTrait<T, I> {
@@ -1040,6 +968,7 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 				)?;
 
 				let allow_death = existence_requirement == ExistenceRequirement::AllowDeath;
+				let allow_death = allow_death && system::Module::<T>::allow_death(transactor);
 				ensure!(allow_death || from_account.free >= ed, Error::<T, I>::KeepAlive);
 
 				Ok(())
@@ -1280,6 +1209,17 @@ impl<T: Trait<I>, I: Instance> ReservableCurrency<T::AccountId> for Module<T, I>
 				Ok(value - actual)
 			})
 		})
+	}
+}
+
+/// Implement `OnKilledAccount` to remove the local account, if using local account storage.
+///
+/// NOTE: You probably won't need to use this! This only needs to be "wired in" to System module
+/// if you're using the local balance storage. **If you're using the composite system account
+/// storage (which is the default in most examples and tests) then there's no need.**
+impl<T: Trait<I>, I: Instance> OnKilledAccount<T::AccountId> for Module<T, I> {
+	fn on_killed_account(who: &T::AccountId) {
+		Account::<T, I>::remove(who);
 	}
 }
 

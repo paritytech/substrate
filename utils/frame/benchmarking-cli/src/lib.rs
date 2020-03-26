@@ -14,15 +14,21 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use sp_runtime::{BuildStorage, traits::{Block as BlockT, Header as HeaderT, NumberFor}};
+use std::fmt::Debug;
+use sp_runtime::{traits::{Block as BlockT, Header as HeaderT, NumberFor}};
 use sc_client::StateMachine;
 use sc_cli::{ExecutionStrategy, WasmExecutionMethod, VersionInfo};
 use sc_client_db::BenchmarkingState;
-use sc_service::{RuntimeGenesis, ChainSpecExtension, Configuration, ChainSpec};
+use sc_service::{Configuration, ChainSpec};
 use sc_executor::{NativeExecutor, NativeExecutionDispatch};
-use std::fmt::Debug;
 use codec::{Encode, Decode};
-use frame_benchmarking::BenchmarkResults;
+use frame_benchmarking::{BenchmarkResults, Analysis};
+use sp_core::{
+	tasks,
+	traits::KeystoreExt,
+	testing::KeyStore,
+};
+use sp_externalities::Extensions;
 
 /// The `benchmark` command used to benchmark FRAME Pallets.
 #[derive(Debug, structopt::StructOpt, Clone)]
@@ -36,8 +42,16 @@ pub struct BenchmarkCmd {
 	pub extrinsic: String,
 
 	/// Select how many samples we should take across the variable components.
-	#[structopt(short, long, default_value = "1")]
-	pub steps: u32,
+	#[structopt(short, long, use_delimiter = true)]
+	pub steps: Vec<u32>,
+
+	/// Indicates lowest values for each of the component ranges.
+	#[structopt(long, use_delimiter = true)]
+	pub lowest_range_values: Vec<u32>,
+
+	/// Indicates highest values for each of the component ranges.
+	#[structopt(long, use_delimiter = true)]
+	pub highest_range_values: Vec<u32>,
 
 	/// Select how many repetitions of this benchmark should run.
 	#[structopt(short, long, default_value = "1")]
@@ -74,13 +88,11 @@ impl BenchmarkCmd {
 	}
 
 	/// Runs the command and benchmarks the chain.
-	pub fn run<G, E, BB, ExecDispatch>(
+	pub fn run<BB, ExecDispatch>(
 		self,
-		config: Configuration<G, E>,
+		config: Configuration,
 	) -> sc_cli::Result<()>
 	where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
 		BB: BlockT + Debug,
 		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
 		<BB as BlockT>::Hash: std::str::FromStr,
@@ -96,63 +108,94 @@ impl BenchmarkCmd {
 		let executor = NativeExecutor::<ExecDispatch>::new(
 			wasm_method,
 			None, // heap pages
+			2, // The runtime instances cache size.
 		);
+
+		let mut extensions = Extensions::default();
+		extensions.register(KeystoreExt(KeyStore::new()));
+
 		let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
 			&state,
 			None,
 			&mut changes,
 			&executor,
 			"Benchmark_dispatch_benchmark",
-			&(&self.pallet, &self.extrinsic, self.steps, self.repeat).encode(),
-			Default::default(),
+			&(
+				&self.pallet,
+				&self.extrinsic,
+				self.lowest_range_values.clone(),
+				self.highest_range_values.clone(),
+				self.steps.clone(),
+				self.repeat,
+			).encode(),
+			extensions,
+			&sp_state_machine::backend::BackendRuntimeCode::new(&state).runtime_code()?,
+			tasks::executor(),
 		)
 		.execute(strategy.into())
 		.map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;
-		let results = <Option<Vec<BenchmarkResults>> as Decode>::decode(&mut &result[..])
-			.unwrap_or(None);
 
-		if let Some(results) = results {
-			// Print benchmark metadata
-			println!(
-				"Pallet: {:?}, Extrinsic: {:?}, Steps: {:?}, Repeat: {:?}",
-				self.pallet,
-				self.extrinsic,
-				self.steps,
-				self.repeat,
-			);
+		let results = <Result<Vec<BenchmarkResults>, String> as Decode>::decode(&mut &result[..])
+			.map_err(|e| format!("Failed to decode benchmark results: {:?}", e))?;
 
-			// Print the table header
-			results[0].0.iter().for_each(|param| print!("{:?},", param.0));
+		match results {
+			Ok(results) => {
+				// Print benchmark metadata
+				println!(
+					"Pallet: {:?}, Extrinsic: {:?}, Lowest values: {:?}, Highest values: {:?}, Steps: {:?}, Repeat: {:?}",
+					self.pallet,
+					self.extrinsic,
+					self.lowest_range_values,
+					self.highest_range_values,
+					self.steps,
+					self.repeat,
+				);
 
-			print!("time\n");
-			// Print the values
-			results.iter().for_each(|result| {
-				let parameters = &result.0;
-				parameters.iter().for_each(|param| print!("{:?},", param.1));
-				print!("{:?}\n", result.1);
-			});
+				// Print the table header
+				results[0].0.iter().for_each(|param| print!("{:?},", param.0));
 
-			eprintln!("Done.");
-		} else {
-			eprintln!("No Results.");
+				print!("extrinsic_time,storage_root_time\n");
+				// Print the values
+				results.iter().for_each(|result| {
+					let parameters = &result.0;
+					parameters.iter().for_each(|param| print!("{:?},", param.1));
+					// Print extrinsic time and storage root time
+					print!("{:?},{:?}\n", result.1, result.2);
+				});
+
+				print!("\n");
+
+				// Conduct analysis.
+				if let Some(analysis) = Analysis::median_slopes(&results) {
+					println!("Median Slopes Analysis\n========\n{}", analysis);
+				}
+
+				if let Some(analysis) = Analysis::min_squares_iqr(&results) {
+					println!("Min Squares Analysis\n========\n{}", analysis);
+				}
+
+				eprintln!("Done.");
+			}
+			Err(error) => eprintln!("Error: {:?}", error),
 		}
 
 		Ok(())
 	}
 
 	/// Update and prepare a `Configuration` with command line parameters
-	pub fn update_config<G, E>(
+	pub fn update_config(
 		&self,
-		mut config: &mut Configuration<G, E>,
-		spec_factory: impl FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-		version: &VersionInfo,
-	) -> sc_cli::Result<()> where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
+		mut config: &mut Configuration,
+		spec_factory: impl FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
+		_version: &VersionInfo,
+	) -> sc_cli::Result<()>
 	{
-		self.shared_params.update_config(&mut config, spec_factory, version)?;
+		// Configure chain spec.
+		let chain_key = self.shared_params.chain.clone().unwrap_or("dev".into());
+		let spec = spec_factory(&chain_key)?;
+		config.chain_spec = Some(spec);
 
-		// make sure to configure keystore
+		// Make sure to configure keystore.
 		config.use_in_memory_keystore()?;
 
 		Ok(())

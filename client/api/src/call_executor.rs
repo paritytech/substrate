@@ -19,7 +19,7 @@
 use std::{panic::UnwindSafe, result, cell::RefCell};
 use codec::{Encode, Decode};
 use sp_runtime::{
-	generic::BlockId, traits::{Block as BlockT, HasherFor},
+	generic::BlockId, traits::{Block as BlockT, HashFor},
 };
 use sp_state_machine::{
 	OverlayedChanges, ExecutionManager, ExecutionStrategy, StorageProof,
@@ -29,6 +29,19 @@ use sp_externalities::Extensions;
 use sp_core::NativeOrEncoded;
 
 use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
+use crate::execution_extensions::ExecutionExtensions;
+
+/// Executor Provider
+pub trait ExecutorProvider<Block: BlockT> {
+	/// executor instance
+	type Executor: CallExecutor<Block>;
+
+	/// Get call executor reference.
+	fn executor(&self) -> &Self::Executor;
+
+	/// Get a reference to the execution extensions.
+	fn execution_extensions(&self) -> &ExecutionExtensions<Block>;
+}
 
 /// Method call executor.
 pub trait CallExecutor<B: BlockT> {
@@ -89,7 +102,7 @@ pub trait CallExecutor<B: BlockT> {
 	/// Execute a call to a contract on top of given state, gathering execution proof.
 	///
 	/// No changes are made.
-	fn prove_at_state<S: sp_state_machine::Backend<HasherFor<B>>>(
+	fn prove_at_state<S: sp_state_machine::Backend<HashFor<B>>>(
 		&self,
 		mut state: S,
 		overlay: &mut OverlayedChanges,
@@ -107,9 +120,9 @@ pub trait CallExecutor<B: BlockT> {
 	/// Execute a call to a contract on top of given trie state, gathering execution proof.
 	///
 	/// No changes are made.
-	fn prove_at_trie_state<S: sp_state_machine::TrieBackendStorage<HasherFor<B>>>(
+	fn prove_at_trie_state<S: sp_state_machine::TrieBackendStorage<HashFor<B>>>(
 		&self,
-		trie_state: &sp_state_machine::TrieBackend<S, HasherFor<B>>,
+		trie_state: &sp_state_machine::TrieBackend<S, HashFor<B>>,
 		overlay: &mut OverlayedChanges,
 		method: &str,
 		call_data: &[u8]

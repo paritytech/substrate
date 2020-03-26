@@ -66,6 +66,8 @@
 //! - `WASM_BUILD_NO_COLOR` - Disable color output of the wasm build.
 //! - `WASM_TARGET_DIRECTORY` - Will copy any build wasm binary to the given directory. The path needs
 //!                            to be absolute.
+//! - `WASM_BUILD_TOOLCHAIN` - The toolchain that should be used to build the wasm binaries. The
+//!                            format needs to be the same as used by cargo, e.g. `nightly-2020-02-20`.
 //!
 //! Each project can be skipped individually by using the environment variable `SKIP_PROJECT_NAME_WASM_BUILD`.
 //! Where `PROJECT_NAME` needs to be replaced by the name of the cargo project, e.g. `node-runtime` will
@@ -77,8 +79,11 @@
 //!
 //! - rust nightly + `wasm32-unknown-unknown` toolchain
 //!
+//! If a specific rust nightly is installed with `rustup`, it is important that the wasm target is installed
+//! as well. For example if installing the rust nightly from 20.02.2020 using `rustup install nightly-2020-02-20`,
+//! the wasm target needs to be installed as well `rustup target add wasm32-unknown-unknown --toolchain nightly-2020-02-20`.
 
-use std::{env, fs, path::PathBuf, process::{Command, Stdio, self}};
+use std::{env, fs, path::PathBuf, process::{Command, self}, io::BufRead};
 
 mod prerequisites;
 mod wasm_project;
@@ -102,6 +107,9 @@ const WASM_TARGET_DIRECTORY: &str = "WASM_TARGET_DIRECTORY";
 
 /// Environment variable to disable color output of the wasm build.
 const WASM_BUILD_NO_COLOR: &str = "WASM_BUILD_NO_COLOR";
+
+/// Environment variable to set the toolchain used to compile the wasm binary.
+const WASM_BUILD_TOOLCHAIN: &str = "WASM_BUILD_TOOLCHAIN";
 
 /// Build the currently built project as wasm binary.
 ///
@@ -178,17 +186,54 @@ fn write_file_if_changed(file: PathBuf, content: String) {
 
 /// Get a cargo command that compiles with nightly
 fn get_nightly_cargo() -> CargoCommand {
+	let env_cargo = CargoCommand::new(
+		&env::var("CARGO").expect("`CARGO` env variable is always set by cargo"),
+	);
 	let default_cargo = CargoCommand::new("cargo");
-	let mut rustup_run_nightly = CargoCommand::new("rustup");
-	rustup_run_nightly.args(&["run", "nightly", "cargo"]);
+	let rustup_run_nightly = CargoCommand::new_with_args("rustup", &["run", "nightly", "cargo"]);
+	let wasm_toolchain = env::var(WASM_BUILD_TOOLCHAIN).ok();
 
-	if default_cargo.is_nightly() {
+	// First check if the user requested a specific toolchain
+	if let Some(cmd) = wasm_toolchain.and_then(|t| get_rustup_nightly(Some(t))) {
+		cmd
+	} else if env_cargo.is_nightly() {
+		env_cargo
+	} else if default_cargo.is_nightly() {
 		default_cargo
-	} else if rustup_run_nightly.works() {
+	} else if rustup_run_nightly.is_nightly() {
 		rustup_run_nightly
 	} else {
-		default_cargo
+		// If no command before provided us with a nightly compiler, we try to search one
+		// with rustup. If that fails as well, we return the default cargo and let the prequisities
+		// check fail.
+		get_rustup_nightly(None).unwrap_or(default_cargo)
 	}
+}
+
+/// Get a nightly from rustup. If `selected` is `Some(_)`, a `CargoCommand` using the given
+/// nightly is returned.
+fn get_rustup_nightly(selected: Option<String>) -> Option<CargoCommand> {
+	let host = format!("-{}", env::var("HOST").expect("`HOST` is always set by cargo"));
+
+	let version = match selected {
+		Some(selected) => selected,
+		None => {
+			let output = Command::new("rustup").args(&["toolchain", "list"]).output().ok()?.stdout;
+			let lines = output.as_slice().lines();
+
+			let mut latest_nightly = None;
+			for line in lines.filter_map(|l| l.ok()) {
+				if line.starts_with("nightly-") && line.ends_with(&host) {
+					// Rustup prints them sorted
+					latest_nightly = Some(line.clone());
+				}
+			}
+
+			latest_nightly?.trim_end_matches(&host).into()
+		}
+	};
+
+	Some(CargoCommand::new_with_args("rustup", &["run", &version, "cargo"]))
 }
 
 /// Builder for cargo commands
@@ -203,28 +248,17 @@ impl CargoCommand {
 		CargoCommand { program: program.into(), args: Vec::new() }
 	}
 
-	fn arg(&mut self, arg: &str) -> &mut Self {
-		self.args.push(arg.into());
-		self
-	}
-
-	fn args(&mut self, args: &[&str]) -> &mut Self {
-		args.into_iter().for_each(|a| { self.arg(a); });
-		self
+	fn new_with_args(program: &str, args: &[&str]) -> Self {
+		CargoCommand {
+			program: program.into(),
+			args: args.iter().map(ToString::to_string).collect(),
+		}
 	}
 
 	fn command(&self) -> Command {
 		let mut cmd = Command::new(&self.program);
 		cmd.args(&self.args);
 		cmd
-	}
-
-	fn works(&self) -> bool {
-		self.command()
-			.stdout(Stdio::null())
-			.stderr(Stdio::null())
-			.status()
-			.map(|s| s.success()).unwrap_or(false)
 	}
 
 	/// Check if the supplied cargo command is a nightly version

@@ -260,10 +260,10 @@ use sp_runtime::{Percent, ModuleId, RuntimeDebug,
 	}
 };
 use frame_support::{decl_error, decl_module, decl_storage, decl_event, ensure, dispatch::DispatchResult};
-use frame_support::weights::SimpleDispatchInfo;
+use frame_support::weights::{SimpleDispatchInfo, Weight, WeighData};
 use frame_support::traits::{
 	Currency, ReservableCurrency, Randomness, Get, ChangeMembers, BalanceStatus,
-	ExistenceRequirement::AllowDeath,
+	ExistenceRequirement::AllowDeath
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 
@@ -414,7 +414,7 @@ decl_storage! {
 
 		/// The set of suspended candidates.
 		pub SuspendedCandidates get(suspended_candidate):
-			map hasher(blake2_256) T::AccountId
+			map hasher(twox_64_concat) T::AccountId
 			=> Option<(BalanceOf<T, I>, BidKind<T::AccountId, BalanceOf<T, I>>)>;
 
 		/// Amount of our account balance that is specifically for the next round's bid(s).
@@ -432,19 +432,19 @@ decl_storage! {
 		}): Vec<T::AccountId>;
 
 		/// The set of suspended members.
-		pub SuspendedMembers get(fn suspended_member): map hasher(blake2_256) T::AccountId => bool;
+		pub SuspendedMembers get(fn suspended_member): map hasher(twox_64_concat) T::AccountId => bool;
 
 		/// The current bids, stored ordered by the value of the bid.
 		Bids: Vec<Bid<T::AccountId, BalanceOf<T, I>>>;
 
 		/// Members currently vouching or banned from vouching again
-		Vouching get(fn vouching): map hasher(blake2_256) T::AccountId => Option<VouchingStatus>;
+		Vouching get(fn vouching): map hasher(twox_64_concat) T::AccountId => Option<VouchingStatus>;
 
 		/// Pending payouts; ordered by block number, with the amount that should be paid out.
-		Payouts: map hasher(blake2_256) T::AccountId => Vec<(T::BlockNumber, BalanceOf<T, I>)>;
+		Payouts: map hasher(twox_64_concat) T::AccountId => Vec<(T::BlockNumber, BalanceOf<T, I>)>;
 
 		/// The ongoing number of losing votes cast by the member.
-		Strikes: map hasher(blake2_256) T::AccountId => StrikeCount;
+		Strikes: map hasher(twox_64_concat) T::AccountId => StrikeCount;
 
 		/// Double map from Candidate -> Voter -> (Maybe) Vote.
 		Votes: double_map
@@ -1028,7 +1028,7 @@ decl_module! {
 			Self::deposit_event(RawEvent::NewMaxMembers(max));
 		}
 
-		fn on_initialize(n: T::BlockNumber) {
+		fn on_initialize(n: T::BlockNumber) -> Weight {
 			let mut members = vec![];
 
 			// Run a candidate/membership rotation
@@ -1045,6 +1045,8 @@ decl_module! {
 				}
 				Self::rotate_challenge(&mut members);
 			}
+
+			SimpleDispatchInfo::default().weigh_data(())
 		}
 	}
 }
@@ -1142,6 +1144,12 @@ impl<T: Trait> EnsureOrigin<T::Origin> for EnsureFounder<T> {
 			(system::RawOrigin::Signed(ref who), Some(ref f)) if who == f => Ok(who.clone()),
 			(r, _) => Err(T::Origin::from(r)),
 		})
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> T::Origin {
+		let founder = Founder::<T>::get().expect("society founder should exist");
+		T::Origin::from(system::RawOrigin::Signed(founder))
 	}
 }
 

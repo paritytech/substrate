@@ -76,9 +76,9 @@ pub trait Trait: frame_system::Trait {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Sudo {
+	trait Store for Module<T: Trait> as Nicks {
 		/// The lookup table for names.
-		NameOf: map hasher(blake2_256) T::AccountId => Option<(Vec<u8>, BalanceOf<T>)>;
+		NameOf: map hasher(twox_64_concat) T::AccountId => Option<(Vec<u8>, BalanceOf<T>)>;
 	}
 }
 
@@ -171,6 +171,7 @@ decl_module! {
 		/// - One storage read/write.
 		/// - One event.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(70_000)]
 		fn clear_name(origin) {
 			let sender = ensure_signed(origin)?;
 
@@ -287,7 +288,7 @@ mod tests {
 		type ModuleToIndex = ();
 		type AccountData = pallet_balances::AccountData<u64>;
 		type OnNewAccount = ();
-		type OnReapAccount = Balances;
+		type OnKilledAccount = ();
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;
