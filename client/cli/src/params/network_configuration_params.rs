@@ -59,6 +59,7 @@ pub struct NetworkConfigurationParams {
 	/// Specify p2p protocol TCP port.
 	///
 	/// Only used if --listen-addr is not specified.
+	// NOTE: this is an option so implementations can set their own defaults
 	#[structopt(long = "port", value_name = "PORT")]
 	pub port: Option<u16>,
 

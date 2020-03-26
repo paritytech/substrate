@@ -30,12 +30,14 @@ use structopt::StructOpt;
 #[derive(Debug, StructOpt, Clone)]
 pub struct ImportBlocksCmd {
 	/// Input file or stdin if unspecified.
+	// NOTE: this is an option so implementations can set their own defaults
 	#[structopt(parse(from_os_str))]
 	pub input: Option<PathBuf>,
 
 	/// The default number of 64KB pages to ever allocate for Wasm execution.
 	///
 	/// Don't alter this unless you know what you're doing.
+	// NOTE: this is an option so implementations can set their own defaults
 	#[structopt(long = "default-heap-pages", value_name = "COUNT")]
 	pub default_heap_pages: Option<u32>,
 
