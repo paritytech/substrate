@@ -28,7 +28,8 @@ use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use sp_core::{self, Hasher, TypeId, RuntimeDebug};
 use crate::codec::{Codec, Encode, Decode};
 use crate::transaction_validity::{
-	ValidTransaction, TransactionValidity, TransactionValidityError, UnknownTransaction,
+	ValidTransaction, TransactionSource, TransactionValidity, TransactionValidityError,
+	UnknownTransaction,
 };
 use crate::generic::{Digest, DigestItem};
 pub use sp_arithmetic::traits::{
@@ -156,6 +157,12 @@ pub trait EnsureOrigin<OuterOrigin> {
 	}
 	/// Perform the origin check.
 	fn try_origin(o: OuterOrigin) -> result::Result<Self::Success, OuterOrigin>;
+
+	/// Returns an outer origin capable of passing `try_origin` check.
+	/// 
+	/// ** Should be used for benchmarking only!!! **
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> OuterOrigin;
 }
 
 /// An error that indicates that a lookup failed.
@@ -851,6 +858,7 @@ pub trait Applyable: Sized + Send + Sync {
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
 	fn validate<V: ValidateUnsigned<Call=Self::Call>>(
 		&self,
+		source: TransactionSource,
 		info: Self::DispatchInfo,
 		len: usize,
 	) -> TransactionValidity;
@@ -897,7 +905,7 @@ pub trait ValidateUnsigned {
 	///
 	/// Changes made to storage WILL be persisted if the call returns `Ok`.
 	fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
-		Self::validate_unsigned(call)
+		Self::validate_unsigned(TransactionSource::InBlock, call)
 			.map(|_| ())
 			.map_err(Into::into)
 	}
@@ -908,7 +916,7 @@ pub trait ValidateUnsigned {
 	/// whether the transaction would panic if it were included or not.
 	///
 	/// Changes made to storage should be discarded by caller.
-	fn validate_unsigned(call: &Self::Call) -> TransactionValidity;
+	fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity;
 }
 
 /// Opaque data type that may be destructured into a series of raw byte slices (which represent
@@ -921,7 +929,7 @@ pub trait OpaqueKeys: Clone {
 	fn key_ids() -> &'static [crate::KeyTypeId];
 	/// Get the raw bytes of key with key-type ID `i`.
 	fn get_raw(&self, i: super::KeyTypeId) -> &[u8];
-	/// Get the decoded key with index `i`.
+	/// Get the decoded key with key-type ID `i`.
 	fn get<T: Decode>(&self, i: super::KeyTypeId) -> Option<T> {
 		T::decode(&mut self.get_raw(i)).ok()
 	}

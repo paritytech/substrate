@@ -554,6 +554,7 @@ pub trait Public: AsRef<[u8]> + AsMut<[u8]> + Default + Derive + CryptoType + Pa
 
 /// An opaque 32-byte cryptographic identifier.
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Default, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Hash))]
 pub struct AccountId32([u8; 32]);
 
 impl UncheckedFrom<crate::hash::H256> for AccountId32 {
@@ -961,6 +962,8 @@ pub mod key_types {
 	pub const IM_ONLINE: KeyTypeId = KeyTypeId(*b"imon");
 	/// Key type for AuthorityDiscovery module, built-in.
 	pub const AUTHORITY_DISCOVERY: KeyTypeId = KeyTypeId(*b"audi");
+	/// Key type for staking, built-in.
+	pub const STAKING: KeyTypeId = KeyTypeId(*b"stak");
 	/// A key type ID useful for tests.
 	pub const DUMMY: KeyTypeId = KeyTypeId(*b"dumy");
 }
