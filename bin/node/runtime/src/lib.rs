@@ -919,6 +919,13 @@ impl_runtime_apis! {
 					steps,
 					repeat,
 				),
+				b"pallet-democracy" | b"democracy" => Democracy::run_benchmark(
+					extrinsic,
+					lowest_range_values,
+					highest_range_values,
+					steps,
+					repeat,
+				),
 				b"pallet-collective" | b"collective" => Council::run_benchmark(
 					extrinsic,
 					lowest_range_values,

@@ -578,12 +578,17 @@ impl<
 			r => Err(O::from(r)),
 		})
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> O {
+		O::from(RawOrigin::Root)
+	}
 }
 
 pub struct EnsureSigned<AccountId>(sp_std::marker::PhantomData<AccountId>);
 impl<
 	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
-	AccountId,
+	AccountId: Default,
 > EnsureOrigin<O> for EnsureSigned<AccountId> {
 	type Success = AccountId;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
@@ -592,13 +597,18 @@ impl<
 			r => Err(O::from(r)),
 		})
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> O {
+		O::from(RawOrigin::Signed(Default::default()))
+	}
 }
 
 pub struct EnsureSignedBy<Who, AccountId>(sp_std::marker::PhantomData<(Who, AccountId)>);
 impl<
 	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
 	Who: Contains<AccountId>,
-	AccountId: PartialEq + Clone + Ord,
+	AccountId: PartialEq + Clone + Ord + Default,
 > EnsureOrigin<O> for EnsureSignedBy<Who, AccountId> {
 	type Success = AccountId;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
@@ -606,6 +616,13 @@ impl<
 			RawOrigin::Signed(ref who) if Who::contains(who) => Ok(who.clone()),
 			r => Err(O::from(r)),
 		})
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> O {
+		let caller: AccountId = Default::default();
+		// Who::add(&caller);
+		O::from(RawOrigin::Signed(caller))
 	}
 }
 
@@ -621,6 +638,11 @@ impl<
 			r => Err(O::from(r)),
 		})
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> O {
+		O::from(RawOrigin::None)
+	}
 }
 
 pub struct EnsureNever<T>(sp_std::marker::PhantomData<T>);
@@ -628,6 +650,11 @@ impl<O, T> EnsureOrigin<O> for EnsureNever<T> {
 	type Success = T;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		Err(o)
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> O {
+		unimplemented!()
 	}
 }
 

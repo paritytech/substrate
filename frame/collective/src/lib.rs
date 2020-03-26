@@ -434,7 +434,7 @@ where
 pub struct EnsureMember<AccountId, I=DefaultInstance>(sp_std::marker::PhantomData<(AccountId, I)>);
 impl<
 	O: Into<Result<RawOrigin<AccountId, I>, O>> + From<RawOrigin<AccountId, I>>,
-	AccountId,
+	AccountId: Default,
 	I,
 > EnsureOrigin<O> for EnsureMember<AccountId, I> {
 	type Success = AccountId;
@@ -443,6 +443,11 @@ impl<
 			RawOrigin::Member(id) => Ok(id),
 			r => Err(O::from(r)),
 		})
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> O {
+		O::from(RawOrigin::Member(Default::default()))
 	}
 }
 
@@ -459,6 +464,11 @@ impl<
 			RawOrigin::Members(n, m) if n >= N::VALUE => Ok((n, m)),
 			r => Err(O::from(r)),
 		})
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> O {
+		O::from(RawOrigin::Members(N::VALUE, N::VALUE))
 	}
 }
 
@@ -479,6 +489,11 @@ impl<
 			r => Err(O::from(r)),
 		})
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> O {
+		O::from(RawOrigin::Members(1u32, 0u32))
+	}
 }
 
 pub struct EnsureProportionAtLeast<N: U32, D: U32, AccountId, I=DefaultInstance>(
@@ -497,6 +512,11 @@ impl<
 			RawOrigin::Members(n, m) if n * D::VALUE >= N::VALUE * m => Ok(()),
 			r => Err(O::from(r)),
 		})
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> O {
+		O::from(RawOrigin::Members(0u32, 0u32))
 	}
 }
 
