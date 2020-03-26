@@ -41,12 +41,12 @@ pub fn run() -> sc_cli::Result<()> {
 
 	match &cli.subcommand {
 		Some(subcommand) => {
-			let runtime = cli.create_runtime(subcommand)?;
-			runtime.run_subcommand(subcommand, |config| Ok(new_full_start!(config).0))
+			let runner = cli.create_runner(subcommand)?;
+			runner.run_subcommand(subcommand, |config| Ok(new_full_start!(config).0))
 		}
 		None => {
-			let runtime = cli.create_runtime(&cli.run)?;
-			runtime.run_node(service::new_light, service::new_full)
+			let runner = cli.create_runner(&cli.run)?;
+			runner.run_node(service::new_light, service::new_full)
 		}
 	}
 }

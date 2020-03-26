@@ -173,9 +173,9 @@ pub trait SubstrateCli: Sized
 		command.create_configuration(cli, task_executor)
 	}
 
-	/// Create a runtime for the command provided in argument. This will create a Configuration and
+	/// Create a runner for the command provided in argument. This will create a Configuration and
 	/// a tokio runtime
-	fn create_runtime<T: CliConfiguration>(&self, command: &T) -> error::Result<Runner<Self>>
+	fn create_runner<T: CliConfiguration>(&self, command: &T) -> error::Result<Runner<Self>>
 	{
 		command.init::<Self>()?;
 		Runner::new(self, command)

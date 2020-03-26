@@ -49,29 +49,29 @@ pub fn run() -> Result<()> {
 
 	match &cli.subcommand {
 		None => {
-			let runtime = cli.create_runtime(&cli.run)?;
-			runtime.run_node(service::new_light, service::new_full)
+			let runner = cli.create_runner(&cli.run)?;
+			runner.run_node(service::new_light, service::new_full)
 		}
 		Some(Subcommand::Inspect(cmd)) => {
-			let runtime = cli.create_runtime(cmd)?;
+			let runner = cli.create_runner(cmd)?;
 
-			runtime.sync_run(|config| cmd.run::<Block, RuntimeApi, Executor>(config))
+			runner.sync_run(|config| cmd.run::<Block, RuntimeApi, Executor>(config))
 		}
 		Some(Subcommand::Benchmark(cmd)) => {
-			let runtime = cli.create_runtime(cmd)?;
+			let runner = cli.create_runner(cmd)?;
 
-			runtime
+			runner
 				.sync_run(|config| cmd.run::<Block, Executor>(config))
 		}
 		Some(Subcommand::Factory(cmd)) => {
-			let runtime = cli.create_runtime(cmd)?;
+			let runner = cli.create_runner(cmd)?;
 
-			runtime.sync_run(|config| cmd.run(config))
+			runner.sync_run(|config| cmd.run(config))
 		}
 		Some(Subcommand::Base(subcommand)) => {
-			let runtime = cli.create_runtime(subcommand)?;
+			let runner = cli.create_runner(subcommand)?;
 
-			runtime.run_subcommand(subcommand, |config| Ok(new_full_start!(config).0))
+			runner.run_subcommand(subcommand, |config| Ok(new_full_start!(config).0))
 		}
 	}
 }
