@@ -1114,6 +1114,35 @@ mod tests {
 	}
 
 	#[test]
+	fn long_sr25519_batching_works() {
+		let mut ext = BasicExternalities::with_tasks_executor();
+		ext.execute_with(|| {
+			extensions::start_verification_extension();
+			let pair = sr25519::Pair::generate_with_phrase(None).0;
+			for it in 0..70 {
+				let msg = format!("Schnorrkel {}!", it);
+				let signature = pair.sign(msg.as_bytes());
+				crypto::batch_push_sr25519(&signature, msg.as_bytes(), &pair.public());
+			}
+
+			// push invlaid
+			crypto::batch_push_sr25519(
+				&Default::default(),
+				&Vec::new(),
+				&Default::default(),
+			);
+			assert!(!crypto::batch_verify());
+
+			for it in 0..70 {
+				let msg = format!("Schnorrkel {}!", it);
+				let signature = pair.sign(msg.as_bytes());
+				crypto::batch_push_sr25519(&signature, msg.as_bytes(), &pair.public());
+			}
+			assert!(crypto::batch_verify());
+		});
+	}
+
+	#[test]
 	fn batching_works() {
 		let mut ext = BasicExternalities::with_tasks_executor();
 		ext.execute_with(|| {
