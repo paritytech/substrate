@@ -3086,6 +3086,15 @@ fn test_payout_validator() {
 			Staking::ledger(&10),
 			Some(StakingLedger { stash: 11, total: 1000, active: 1000, unlocking: vec![], claimed_rewards: vec![15, 98] })
 		);
+
+		// Out of order claims works.
+		assert_ok!(Staking::payout_validator(Origin::signed(1337), 11, 69));
+		assert_ok!(Staking::payout_validator(Origin::signed(1337), 11, 23));
+		assert_ok!(Staking::payout_validator(Origin::signed(1337), 11, 42));
+		assert_eq!(
+			Staking::ledger(&10),
+			Some(StakingLedger { stash: 11, total: 1000, active: 1000, unlocking: vec![], claimed_rewards: vec![15, 23, 42, 69, 98] })
+		);
 	});
 }
 
