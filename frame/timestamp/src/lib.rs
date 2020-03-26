@@ -249,10 +249,12 @@ impl<T: Trait> UnixTime for Module<T> {
 		// now is duration since unix epoch in millisecond as documented in
 		// `sp_timestamp::InherentDataProvider`.
 		let now = Self::now();
-		if now == T::Moment::zero() {
-			debug::error!(
-				"`pallet_timestamp::UnixTime::now` is called at genesis, invalid value returned: 0"
-			);
+		sp_std::if_std! { 
+			if now == T::Moment::zero() {
+				debug::error!(
+					"`pallet_timestamp::UnixTime::now` is called at genesis, invalid value returned: 0"
+				);
+			}
 		}
 		core::time::Duration::from_millis(now.saturated_into::<u64>())
 	}
