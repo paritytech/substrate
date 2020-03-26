@@ -858,6 +858,7 @@ impl_runtime_apis! {
 			// we need these two lines below.
 			use pallet_session_benchmarking::Module as SessionBench;
 			impl pallet_session_benchmarking::Trait for Runtime {}
+			impl pallet_offences::benchmarking::Trait for Runtime {}
 
 			let result = match module.as_slice() {
 				b"pallet-balances" | b"balances" => Balances::run_benchmark(
@@ -917,6 +918,13 @@ impl_runtime_apis! {
 					repeat,
 				),
 				b"pallet-collective" | b"collective" => Council::run_benchmark(
+					extrinsic,
+					lowest_range_values,
+					highest_range_values,
+					steps,
+					repeat,
+				),
+				b"pallet-offences" | b"offences" => Offences::run_benchmark(
 					extrinsic,
 					lowest_range_values,
 					highest_range_values,

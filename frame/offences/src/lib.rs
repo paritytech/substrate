@@ -23,13 +23,15 @@
 
 mod mock;
 mod tests;
+#[cfg(feature = "runtime-benchmarks")]
+pub mod benchmarking;
 
 use sp_std::vec::Vec;
 use frame_support::{
 	decl_module, decl_event, decl_storage, Parameter,
 	weights::{Weight, SimpleDispatchInfo, WeighData},
 };
-use sp_runtime::traits::Hash;
+use sp_runtime::{traits::Hash, RuntimeDebug};
 use sp_staking::{
 	offence::{Offence, ReportOffence, Kind, OnOffenceHandler, OffenceDetails, OffenceError},
 };
@@ -47,7 +49,7 @@ pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
 	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
 	/// Full identification of the validator.
-	type IdentificationTuple: Parameter + Ord;
+	type IdentificationTuple: Parameter + Ord + Default;
 	/// A handler called for every offence report.
 	type OnOffenceHandler: OnOffenceHandler<Self::AccountId, Self::IdentificationTuple>;
 }
@@ -158,6 +160,9 @@ impl<T: Trait> Module<T> {
 		time_slot: &O::TimeSlot,
 		offenders: Vec<T::IdentificationTuple>,
 	) -> Option<TriageOutcome<T>> {
+		#[cfg(feature = "std")]
+		println!("executing triage");
+
 		let mut storage = ReportIndexStorage::<T, O>::load(time_slot);
 
 		let mut any_new = false;
@@ -165,6 +170,9 @@ impl<T: Trait> Module<T> {
 			let report_id = Self::report_id::<O>(time_slot, &offender);
 
 			if !<Reports<T>>::contains_key(&report_id) {
+				#[cfg(feature = "std")]
+				println!("triage inserting report {:?}", report_id);
+
 				any_new = true;
 				<Reports<T>>::insert(
 					&report_id,
@@ -179,11 +187,17 @@ impl<T: Trait> Module<T> {
 		}
 
 		if any_new {
+			#[cfg(feature = "std")]
+			println!("triage any_new");
+
 			// Load report details for the all reports happened at the same time.
 			let concurrent_offenders = storage.concurrent_reports
 				.iter()
 				.filter_map(|report_id| <Reports<T>>::get(report_id))
 				.collect::<Vec<_>>();
+
+			#[cfg(feature = "std")]
+			println!("triage concurrent offenders {:?}", concurrent_offenders.len());
 
 			storage.save();
 
@@ -216,6 +230,9 @@ struct ReportIndexStorage<T: Trait, O: Offence<T::IdentificationTuple>> {
 impl<T: Trait, O: Offence<T::IdentificationTuple>> ReportIndexStorage<T, O> {
 	/// Preload indexes from the storage for the specific `time_slot` and the kind of the offence.
 	fn load(time_slot: &O::TimeSlot) -> Self {
+		#[cfg(feature = "std")]
+		println!("treportindexstorage load");
+
 		let opaque_time_slot = time_slot.encode();
 
 		let same_kind_reports = <ReportsByKindIndex>::get(&O::ID);
@@ -234,6 +251,9 @@ impl<T: Trait, O: Offence<T::IdentificationTuple>> ReportIndexStorage<T, O> {
 
 	/// Insert a new report to the index.
 	fn insert(&mut self, time_slot: &O::TimeSlot, report_id: ReportIdOf<T>) {
+		#[cfg(feature = "std")]
+		println!("treportindexstorage insert");
+
 		// Insert the report id into the list while maintaining the ordering by the time
 		// slot.
 		let pos = match self
@@ -252,6 +272,9 @@ impl<T: Trait, O: Offence<T::IdentificationTuple>> ReportIndexStorage<T, O> {
 
 	/// Dump the indexes to the storage.
 	fn save(self) {
+		#[cfg(feature = "std")]
+		println!("treportindexstorage save");
+
 		<ReportsByKindIndex>::insert(&O::ID, self.same_kind_reports.encode());
 		<ConcurrentReportsIndex<T>>::insert(
 			&O::ID,

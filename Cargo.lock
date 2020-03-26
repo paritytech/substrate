@@ -4375,9 +4375,13 @@ dependencies = [
 name = "pallet-offences"
 version = "2.0.0-alpha.5"
 dependencies = [
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "pallet-balances",
+ "pallet-im-online",
+ "pallet-session",
+ "pallet-staking",
  "parity-scale-codec",
  "serde",
  "sp-core",

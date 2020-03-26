@@ -983,7 +983,7 @@ decl_module! {
 		/// the `origin` falls below _existential deposit_ and gets removed as dust.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
-		fn bond(origin,
+		pub fn bond(origin,
 			controller: <T::Lookup as StaticLookup>::Source,
 			#[compact] value: BalanceOf<T>,
 			payee: RewardDestination
@@ -1173,7 +1173,7 @@ decl_module! {
 		/// - Writes are limited to the `origin` account key.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(750_000)]
-		fn validate(origin, prefs: ValidatorPrefs) {
+		pub fn validate(origin, prefs: ValidatorPrefs) {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let stash = &ledger.stash;
