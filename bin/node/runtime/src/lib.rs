@@ -283,7 +283,7 @@ parameter_types! {
 
 impl pallet_staking::Trait for Runtime {
 	type Currency = Balances;
-	type Time = Timestamp;
+	type UnixTime = Timestamp;
 	type CurrencyToVote = CurrencyToVoteHandler;
 	type RewardRemainder = Treasury;
 	type Event = Event;
@@ -921,6 +921,13 @@ impl_runtime_apis! {
 					steps,
 					repeat,
 				),
+				b"pallet-democracy" | b"democracy" => Democracy::run_benchmark(
+					extrinsic,
+					lowest_range_values,
+					highest_range_values,
+					steps,
+					repeat,
+				),
 				b"pallet-collective" | b"collective" => Council::run_benchmark(
 					extrinsic,
 					lowest_range_values,
@@ -940,7 +947,6 @@ impl_runtime_apis! {
 mod tests {
 	use super::*;
 	use frame_system::offchain::{SignAndSubmitTransaction, SubmitSignedTransaction};
-	use frame_support::traits::OnInitialize;
 
 	#[test]
 	fn validate_transaction_submitter_bounds() {
