@@ -237,16 +237,14 @@ where
 		// any initial checks
 		Self::initial_checks(&block);
 
-		sp_io::extensions::start_verification_extension();
-
+		sp_io::crypto::start_batch_verify();
 		// execute extrinsics
 		let (header, extrinsics) = block.deconstruct();
 		Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
 
-		if !sp_io::crypto::batch_verify() {
+		if !sp_io::crypto::finish_batch_verify() {
 			panic!("Signature verification failed.")
 		}
-		sp_io::extensions::drop_verification_extension();
 
 		// any final checks
 		Self::final_checks(&header);

@@ -476,15 +476,30 @@ pub trait Crypto {
 		}
 	}
 
+	/// Start verification extension.
+	fn start_batch_verify(&mut self) {
+		let scheduler = self.extension::<TaskExecutorExt>()
+			.expect("Task executor extension is required!")
+			.0
+			.clone();
+
+		self.register_extension(VerificationExt(BatchVerifier::new(scheduler)))
+			.expect("Failed to register required extension: VerificationExt");
+	}
+
 	/// Batch-verify signatures.
 	///
 	/// Verify all signatures which were previously pushed in batch.
 	/// Use `batch_push_ed25519`/`batch_push_sr25519` to push collection of signatures
 	/// to the host, and then use this function to verify them all at once.
-	fn batch_verify(&mut self) -> bool {
-		self.extension::<VerificationExt>()
+	fn finish_batch_verify(&mut self) -> bool {
+		let result = self.extension::<VerificationExt>()
 			.expect("No verification extension in current context!")
-			.verify_and_clear()
+			.verify_and_clear();
+
+		self.deregister_extension::<VerificationExt>();
+
+		result
 	}
 
 	/// Returns all `sr25519` public keys for the given key id from the keystore.
@@ -630,25 +645,6 @@ sp_externalities::decl_extension! {
 	pub struct VerificationExt(BatchVerifier);
 }
 
-/// Interface for activating dynamic extensions.
-#[runtime_interface]
-pub trait Extensions {
-	/// Start verification extension.
-	fn start_verification_extension(&mut self) {
-		let scheduler = self.extension::<TaskExecutorExt>()
-			.expect("Task executor extension is required!")
-			.0
-			.clone();
-
-		self.register_extension(VerificationExt(BatchVerifier::new(scheduler)))
-			.expect("Failed to register required extension: VerificationExt");
-	}
-
-	/// Remove and drop verification extension.
-	fn drop_verification_extension(&mut self) {
-		self.deregister_extension::<VerificationExt>();
-	}
-}
 
 /// Interface that provides functions to access the offchain functionality.
 #[runtime_interface]
@@ -1025,7 +1021,6 @@ pub type SubstrateHostFunctions = (
 	logging::HostFunctions,
 	sandbox::HostFunctions,
 	crate::trie::HostFunctions,
-	extensions::HostFunctions,
 );
 
 #[cfg(test)]
@@ -1101,13 +1096,13 @@ mod tests {
 	fn dynamic_extensions_work() {
 		let mut ext = BasicExternalities::with_tasks_executor();
 		ext.execute_with(|| {
-			extensions::start_verification_extension();
+			crypto::start_batch_verify();
 		});
 
 		assert!(ext.extensions().get_mut(TypeId::of::<VerificationExt>()).is_some());
 
 		ext.execute_with(|| {
-			extensions::drop_verification_extension();
+			crypto::finish_batch_verify();
 		});
 
 		assert!(ext.extensions().get_mut(TypeId::of::<VerificationExt>()).is_none());
@@ -1117,7 +1112,7 @@ mod tests {
 	fn long_sr25519_batching_works() {
 		let mut ext = BasicExternalities::with_tasks_executor();
 		ext.execute_with(|| {
-			extensions::start_verification_extension();
+			crypto::start_batch_verify();
 			let pair = sr25519::Pair::generate_with_phrase(None).0;
 			for it in 0..70 {
 				let msg = format!("Schnorrkel {}!", it);
@@ -1131,14 +1126,15 @@ mod tests {
 				&Vec::new(),
 				&Default::default(),
 			);
-			assert!(!crypto::batch_verify());
+			assert!(!crypto::finish_batch_verify());
 
+			crypto::start_batch_verify();
 			for it in 0..70 {
 				let msg = format!("Schnorrkel {}!", it);
 				let signature = pair.sign(msg.as_bytes());
 				crypto::batch_push_sr25519(&signature, msg.as_bytes(), &pair.public());
 			}
-			assert!(crypto::batch_verify());
+			assert!(crypto::finish_batch_verify());
 		});
 	}
 
@@ -1146,17 +1142,17 @@ mod tests {
 	fn batching_works() {
 		let mut ext = BasicExternalities::with_tasks_executor();
 		ext.execute_with(|| {
-			extensions::start_verification_extension();
-
+			crypto::start_batch_verify();
 			// invalid ed25519 signature
 			crypto::batch_push_ed25519(
 				&Default::default(),
 				&Vec::new(),
 				&Default::default(),
 			);
-			assert!(!crypto::batch_verify());
+			assert!(!crypto::finish_batch_verify());
 
 			// 2 valid ed25519 signatures
+			crypto::start_batch_verify();
 			let pair = ed25519::Pair::generate_with_phrase(None).0;
 			let msg = b"Important message";
 			let signature = pair.sign(msg);
@@ -1167,9 +1163,10 @@ mod tests {
 			let signature = pair.sign(msg);
 			crypto::batch_push_ed25519(&signature, msg, &pair.public());
 
-			assert!(crypto::batch_verify());
+			assert!(crypto::finish_batch_verify());
 
 			// 1 valid, 1 invalid ed25519 signature
+			crypto::start_batch_verify();
 			let pair = ed25519::Pair::generate_with_phrase(None).0;
 			let msg = b"Important message";
 			let signature = pair.sign(msg);
@@ -1180,9 +1177,10 @@ mod tests {
 				&Vec::new(),
 				&Default::default(),
 			);
-			assert!(!crypto::batch_verify());
+			assert!(!crypto::finish_batch_verify());
 
 			// 1 valid ed25519, 2 valid sr25519
+			crypto::start_batch_verify();
 			let pair = ed25519::Pair::generate_with_phrase(None).0;
 			let msg = b"Ed25519 batching";
 			let signature = pair.sign(msg);
@@ -1198,9 +1196,10 @@ mod tests {
 			let signature = pair.sign(msg);
 			crypto::batch_push_sr25519(&signature, msg, &pair.public());
 
-			assert!(crypto::batch_verify());
+			assert!(crypto::finish_batch_verify());
 
 			// 1 valid sr25519, 1 invalid sr25519
+			crypto::start_batch_verify();
 			let pair = sr25519::Pair::generate_with_phrase(None).0;
 			let msg = b"Schnorrkel!";
 			let signature = pair.sign(msg);
@@ -1211,7 +1210,7 @@ mod tests {
 				&Vec::new(),
 				&Default::default(),
 			);
-			assert!(!crypto::batch_verify());
+			assert!(!crypto::finish_batch_verify());
 		});
 	}
 }
