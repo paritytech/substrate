@@ -87,11 +87,7 @@ pub trait CliConfiguration: Sized {
 	}
 
 	/// Get the database configuration
-	fn database_config(
-		&self,
-		base_path: &PathBuf,
-		cache_size: usize,
-	) -> Result<DatabaseConfig>;
+	fn database_config(&self, base_path: &PathBuf, cache_size: usize) -> Result<DatabaseConfig>;
 
 	/// Get the state cache size
 	fn state_cache_size(&self) -> Result<usize> {
@@ -297,7 +293,9 @@ pub trait CliConfiguration: Sized {
 /// Generate a valid random name for the node
 pub fn generate_node_name() -> String {
 	let result = loop {
-		let node_name = Generator::with_naming(Name::Numbered).next().unwrap();
+		let node_name = Generator::with_naming(Name::Numbered)
+			.next()
+			.expect("RNG is available on all supported platforms. qed");
 		let count = node_name.chars().count();
 
 		if count < NODE_NAME_MAX_LENGTH {
