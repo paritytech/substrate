@@ -18,7 +18,8 @@
 
 #![cfg(test)]
 
-use sp_runtime::{testing::{H256, Digest}, traits::{Header, OnFinalize}};
+use sp_runtime::{testing::{H256, Digest}, traits::Header};
+use frame_support::traits::OnFinalize;
 use crate::mock::*;
 use frame_system::{EventRecord, Phase};
 use codec::{Decode, Encode};
