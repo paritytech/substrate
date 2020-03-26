@@ -2,7 +2,11 @@
 name = "sc-cli-derive"
 version = "0.8.0-alpha.5"
 authors = ["Parity Technologies <admin@parity.io>"]
+description = "Procedureal macros for Substrate CLI interface"
 edition = "2018"
+license = "GPL-3.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
 
 [lib]
 proc-macro = true
