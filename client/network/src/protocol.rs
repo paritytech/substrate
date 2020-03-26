@@ -23,7 +23,10 @@ use libp2p::{Multiaddr, PeerId};
 use libp2p::core::{ConnectedPoint, nodes::listeners::ListenerId};
 use libp2p::swarm::{ProtocolsHandler, IntoProtocolsHandler};
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
-use sp_core::storage::{StorageKey, PrefixedStorageKey, ChildInfo, ChildType};
+use sp_core::{
+	storage::{StorageKey, PrefixedStorageKey, ChildInfo, ChildType},
+	hexdisplay::HexDisplay
+};
 use sp_consensus::{
 	BlockOrigin,
 	block_validation::BlockAnnounceValidator,
@@ -42,7 +45,6 @@ use prometheus_endpoint::{Registry, Gauge, GaugeVec, PrometheusError, Opts, regi
 use sync::{ChainSync, SyncState};
 use crate::service::{TransactionPool, ExHashT};
 use crate::config::{BoxFinalityProofRequestBuilder, Roles};
-use rustc_hex::ToHex;
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
@@ -223,6 +225,8 @@ pub struct Protocol<B: BlockT, H: ExHashT> {
 	protocol_engine_by_name: HashMap<Cow<'static, [u8]>, ConsensusEngineId>,
 	/// Prometheus metrics.
 	metrics: Option<Metrics>,
+	/// The `PeerId`'s of all boot nodes.
+	boot_node_ids: Arc<HashSet<PeerId>>,
 }
 
 #[derive(Default)]
@@ -429,7 +433,8 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		protocol_id: ProtocolId,
 		peerset_config: sc_peerset::PeersetConfig,
 		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
-		metrics_registry: Option<&Registry>
+		metrics_registry: Option<&Registry>,
+		boot_node_ids: Arc<HashSet<PeerId>>,
 	) -> error::Result<(Protocol<B, H>, sc_peerset::PeersetHandle)> {
 		let info = chain.info();
 		let sync = ChainSync::new(
@@ -478,7 +483,8 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				Some(Metrics::register(r)?)
 			} else {
 				None
-			}
+			},
+			boot_node_ids,
 		};
 
 		Ok((protocol, peerset_handle))
@@ -1009,6 +1015,17 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				);
 				self.peerset_handle.report_peer(who.clone(), rep::GENESIS_MISMATCH);
 				self.behaviour.disconnect_peer(&who);
+
+				if self.boot_node_ids.contains(&who) {
+					error!(
+						target: "sync",
+						"Bootnode with peer id `{}` is on a different chain (our genesis: {} theirs: {})",
+						who,
+						self.genesis_hash,
+						status.genesis_hash,
+					);
+				}
+
 				return CustomMessageOutcome::None;
 			}
 			if status.version < MIN_VERSION && CURRENT_VERSION < status.min_supported_version {
@@ -1550,11 +1567,11 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		}
 
 		let keys_str = || match request.keys.len() {
-			1 => request.keys[0].to_hex::<String>(),
+			1 => HexDisplay::from(&request.keys[0]).to_string(),
 			_ => format!(
 				"{}..{}",
-				request.keys[0].to_hex::<String>(),
-				request.keys[request.keys.len() - 1].to_hex::<String>(),
+				HexDisplay::from(&request.keys[0]),
+				HexDisplay::from(&request.keys[request.keys.len() - 1]),
 			),
 		};
 
@@ -1598,16 +1615,16 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		}
 
 		let keys_str = || match request.keys.len() {
-			1 => request.keys[0].to_hex::<String>(),
+			1 => HexDisplay::from(&request.keys[0]).to_string(),
 			_ => format!(
 				"{}..{}",
-				request.keys[0].to_hex::<String>(),
-				request.keys[request.keys.len() - 1].to_hex::<String>(),
+				HexDisplay::from(&request.keys[0]),
+				HexDisplay::from(&request.keys[request.keys.len() - 1]),
 			),
 		};
 
 		trace!(target: "sync", "Remote read child request {} from {} ({} {} at {})",
-			request.id, who, request.storage_key.to_hex::<String>(), keys_str(), request.block);
+			request.id, who, HexDisplay::from(&request.storage_key), keys_str(), request.block);
 		let prefixed_key = PrefixedStorageKey::new_ref(&request.storage_key);
 		let child_info = match prefixed_key.and_then(|key| ChildType::from_prefixed_key(key)) {
 			Some((ChildType::ParentKeyId, storage_key)) => Ok(ChildInfo::new_default(storage_key)),
@@ -1623,7 +1640,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				trace!(target: "sync", "Remote read child request {} from {} ({} {} at {}) failed with: {}",
 					request.id,
 					who,
-					request.storage_key.to_hex::<String>(),
+					HexDisplay::from(&request.storage_key),
 					keys_str(),
 					request.block,
 					error
@@ -1702,9 +1719,9 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			request.id,
 			who,
 			if let Some(sk) = request.storage_key.as_ref() {
-				format!("{} : {}", sk.to_hex::<String>(), request.key.to_hex::<String>())
+				format!("{} : {}", HexDisplay::from(sk), HexDisplay::from(&request.key))
 			} else {
-				request.key.to_hex::<String>()
+				HexDisplay::from(&request.key).to_string()
 			},
 			request.first,
 			request.last
@@ -1734,9 +1751,9 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 					request.id,
 					who,
 					if let Some(sk) = request.storage_key.as_ref() {
-						format!("{} : {}", sk.to_hex::<String>(), key.0.to_hex::<String>())
+						format!("{} : {}", HexDisplay::from(sk), HexDisplay::from(&key.0))
 					} else {
-						key.0.to_hex::<String>()
+						HexDisplay::from(&key.0).to_string()
 					},
 					request.first,
 					request.last,
@@ -2146,7 +2163,8 @@ mod tests {
 				reserved_nodes: Vec::new(),
 			},
 			Box::new(DefaultBlockAnnounceValidator::new(client.clone())),
-			None
+			None,
+			Default::default(),
 		).unwrap();
 
 		let dummy_peer_id = PeerId::random();

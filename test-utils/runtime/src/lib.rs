@@ -36,6 +36,7 @@ use sp_runtime::{
 	ApplyExtrinsicResult, create_runtime_str, Perbill, impl_opaque_keys,
 	transaction_validity::{
 		TransactionValidity, ValidTransaction, TransactionValidityError, InvalidTransaction,
+		TransactionSource,
 	},
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
@@ -491,7 +492,10 @@ cfg_if! {
 			}
 
 			impl sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block> for Runtime {
-				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
+				fn validate_transaction(
+					_source: TransactionSource,
+					utx: <Block as BlockT>::Extrinsic,
+				) -> TransactionValidity {
 					if let Extrinsic::IncludeData(data) = utx {
 						return Ok(ValidTransaction {
 							priority: data.len() as u64,
@@ -678,7 +682,10 @@ cfg_if! {
 			}
 
 			impl sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block> for Runtime {
-				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
+				fn validate_transaction(
+					_source: TransactionSource,
+					utx: <Block as BlockT>::Extrinsic,
+				) -> TransactionValidity {
 					if let Extrinsic::IncludeData(data) = utx {
 						return Ok(ValidTransaction{
 							priority: data.len() as u64,

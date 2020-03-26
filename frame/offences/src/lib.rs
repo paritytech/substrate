@@ -27,6 +27,7 @@ mod tests;
 use sp_std::vec::Vec;
 use frame_support::{
 	decl_module, decl_event, decl_storage, Parameter,
+	weights::{Weight, SimpleDispatchInfo, WeighData},
 };
 use sp_runtime::traits::Hash;
 use sp_staking::{
@@ -86,10 +87,12 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event() = default;
 
-		fn on_runtime_upgrade() {
+		fn on_runtime_upgrade() -> Weight {
 			Reports::<T>::remove_all();
 			ConcurrentReportsIndex::<T>::remove_all();
 			ReportsByKindIndex::remove_all();
+
+			SimpleDispatchInfo::default().weigh_data(())
 		}
 	}
 }
