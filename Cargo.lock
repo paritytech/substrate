@@ -3641,6 +3641,7 @@ dependencies = [
  "sp-runtime",
  "sp-transaction-pool",
  "structopt",
+ "substrate-build-script-utils",
 ]
 
 [[package]]

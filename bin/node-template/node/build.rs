@@ -1,7 +1,7 @@
-use sc_cli;
+use substrate_build_script_utils::{generate_cargo_keys, rerun_if_git_head_changed};
 
 fn main() {
-	sc_cli::generate_cargo_keys();
+	generate_cargo_keys();
 
-	sc_cli::rerun_if_git_head_changed();
+	rerun_if_git_head_changed();
 }
