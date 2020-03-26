@@ -11,7 +11,6 @@ description = "FRAME pallet staking"
 [dependencies]
 serde = { version = "1.0.101", optional = true }
 codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false, features = ["derive"] }
-sp-keyring = { version = "2.0.0-alpha.5", optional = true, path = "../../primitives/keyring" }
 sp-std = { version = "2.0.0-alpha.5", default-features = false, path = "../../primitives/std" }
 sp-phragmen = { version = "2.0.0-alpha.5", default-features = false, path = "../../primitives/phragmen" }
 sp-io ={ path = "../../primitives/io", default-features = false , version = "2.0.0-alpha.5"}
@@ -21,7 +20,15 @@ frame-support = { version = "2.0.0-alpha.5", default-features = false, path = ".
 frame-system = { version = "2.0.0-alpha.5", default-features = false, path = "../system" }
 pallet-session = { version = "2.0.0-alpha.5", features = ["historical"], path = "../session", default-features = false }
 pallet-authorship = { version = "2.0.0-alpha.5", default-features = false, path = "../authorship" }
+sp-application-crypto = { version = "2.0.0-alpha.4", default-features = false, path = "../../primitives/application-crypto" }
+static_assertions = "1.1.0"
 
+# Optional imports for tesing-utils feature
+pallet-indices = { version = "2.0.0-alpha.4", optional = true, path = "../indices", default-features = false }
+sp-core = { version = "2.0.0-alpha.4", optional = true, path = "../../primitives/core", default-features = false }
+rand = { version = "0.7.3", optional = true, default-features = false }
+
+# Optional imports for benchmarking
 frame-benchmarking = { version = "2.0.0-alpha.5", default-features = false, path = "../benchmarking", optional = true }
 rand_chacha = { version = "0.2", default-features = false, optional = true }
 
@@ -33,13 +40,20 @@ pallet-staking-reward-curve = { version = "2.0.0-alpha.5",  path = "../staking/r
 substrate-test-utils = { version = "2.0.0-alpha.5", path = "../../test-utils" }
 frame-benchmarking = { version = "2.0.0-alpha.5", path = "../benchmarking" }
 rand_chacha = { version = "0.2" }
+parking_lot = "0.10.0"
+env_logger = "0.7.1"
 hex = "0.4"
 
 [features]
+testing-utils = [
+	"std",
+	"pallet-indices/std",
+	"sp-core/std",
+	"rand/std",
+]
 default = ["std"]
 std = [
 	"serde",
-	"sp-keyring",
 	"codec/std",
 	"sp-std/std",
 	"sp-phragmen/std",
@@ -50,6 +64,8 @@ std = [
 	"pallet-session/std",
 	"frame-system/std",
 	"pallet-authorship/std",
+	"sp-application-crypto/std",
+	"sp-core/std",
 ]
 runtime-benchmarks = [
 	"rand_chacha",
