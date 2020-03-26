@@ -55,6 +55,9 @@ pub trait SubstrateCli: Sized
 	/// Implementation name.
 	fn impl_name() -> &'static str;
 	/// Implementation version.
+	///
+	/// By default this will look like this: 2.0.0-b950f731c-x86_64-linux-gnu where the hash is the
+	/// short commit hash of the commit of in the Git repository.
 	fn impl_version() -> &'static str;
 	/// Executable file name.
 	fn executable_name() -> &'static str;

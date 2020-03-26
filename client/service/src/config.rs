@@ -32,7 +32,7 @@ use prometheus_endpoint::Registry;
 pub struct Configuration {
 	/// Implementation name
 	pub impl_name: &'static str,
-	/// Implementation version
+	/// Implementation version (see sc-cli to see an example of format)
 	pub impl_version: &'static str,
 	/// Node roles.
 	pub roles: Roles,
