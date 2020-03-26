@@ -442,6 +442,18 @@ trigger-contracts-ci:
     - master
     - schedules
 
+
+update-polkadot:
+  stage:                           publish
+  image:                           parity/tools:latest
+  <<:                              *kubernetes-build
+  script:
+    - ./.maintain/gitlab/update_polkadot.sh
+  only:
+    - master
+    - schedules
+
+
 #### stage:                        publish
 
 .publish-docker-release:           &publish-docker-release
