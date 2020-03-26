@@ -293,7 +293,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 	fn inject_new_external_addr(&mut self, addr: &Multiaddr) {
 		let new_addr = addr.clone()
 			.with(Protocol::P2p(self.local_peer_id.clone().into()));
-		info!(target: "sub-libp2p", "Discovered new external address for our node: {}", new_addr);
+		info!(target: "sub-libp2p", "🔍 Discovered new external address for our node: {}", new_addr);
 		NetworkBehaviour::inject_new_external_addr(&mut self.kademlia, addr)
 	}
 
