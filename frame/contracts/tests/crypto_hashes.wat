@@ -7,9 +7,6 @@
 	(import "env" "ext_hash_keccak_256" (func $ext_hash_keccak_256 (param i32 i32 i32)))
 	(import "env" "ext_hash_blake2_256" (func $ext_hash_blake2_256 (param i32 i32 i32)))
 	(import "env" "ext_hash_blake2_128" (func $ext_hash_blake2_128 (param i32 i32 i32)))
-	(import "env" "ext_hash_twox_256" (func $ext_hash_twox_256 (param i32 i32 i32)))
-	(import "env" "ext_hash_twox_128" (func $ext_hash_twox_128 (param i32 i32 i32)))
-	(import "env" "ext_hash_twox_64" (func $ext_hash_twox_64 (param i32 i32 i32)))
 
 	(import "env" "memory" (memory 1 1))
 
@@ -20,9 +17,6 @@
 		$ext_hash_keccak_256
 		$ext_hash_blake2_256
 		$ext_hash_blake2_128
-		$ext_hash_twox_256
-		$ext_hash_twox_128
-		$ext_hash_twox_64
 	)
 	(data (i32.const 1) "20202010201008") ;; Output sizes of the hashes in order in hex.
 
@@ -53,9 +47,6 @@
 	;; |     1 |    KECCAK |       256 |
 	;; |     2 |    BLAKE2 |       256 |
 	;; |     3 |    BLAKE2 |       128 |
-	;; |     4 |      TWOX |       256 |
-	;; |     5 |      TWOX |       128 |
-	;; |     6 |      TWOX |        64 |
 	;; ---------------------------------
 	(func (export "call") (result i32)
 		(local $chosen_hash_fn i32)
