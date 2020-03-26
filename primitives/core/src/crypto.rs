@@ -554,6 +554,7 @@ pub trait Public: AsRef<[u8]> + AsMut<[u8]> + Default + Derive + CryptoType + Pa
 
 /// An opaque 32-byte cryptographic identifier.
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Default, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Hash))]
 pub struct AccountId32([u8; 32]);
 
 impl UncheckedFrom<crate::hash::H256> for AccountId32 {

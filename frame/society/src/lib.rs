@@ -260,7 +260,7 @@ use sp_runtime::{Percent, ModuleId, RuntimeDebug,
 	}
 };
 use frame_support::{decl_error, decl_module, decl_storage, decl_event, ensure, dispatch::DispatchResult};
-use frame_support::weights::SimpleDispatchInfo;
+use frame_support::weights::{SimpleDispatchInfo, Weight, WeighData};
 use frame_support::traits::{
 	Currency, ReservableCurrency, Randomness, Get, ChangeMembers, BalanceStatus,
 	ExistenceRequirement::AllowDeath
@@ -1028,7 +1028,7 @@ decl_module! {
 			Self::deposit_event(RawEvent::NewMaxMembers(max));
 		}
 
-		fn on_initialize(n: T::BlockNumber) {
+		fn on_initialize(n: T::BlockNumber) -> Weight {
 			let mut members = vec![];
 
 			// Run a candidate/membership rotation
@@ -1045,6 +1045,8 @@ decl_module! {
 				}
 				Self::rotate_challenge(&mut members);
 			}
+
+			SimpleDispatchInfo::default().weigh_data(())
 		}
 	}
 }
@@ -1142,6 +1144,12 @@ impl<T: Trait> EnsureOrigin<T::Origin> for EnsureFounder<T> {
 			(system::RawOrigin::Signed(ref who), Some(ref f)) if who == f => Ok(who.clone()),
 			(r, _) => Err(T::Origin::from(r)),
 		})
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> T::Origin {
+		let founder = Founder::<T>::get().expect("society founder should exist");
+		T::Origin::from(system::RawOrigin::Signed(founder))
 	}
 }
 

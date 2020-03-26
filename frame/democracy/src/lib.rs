@@ -170,7 +170,7 @@ use sp_runtime::{
 use codec::{Ref, Decode};
 use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error, ensure, Parameter,
-	weights::SimpleDispatchInfo,
+	weights::{SimpleDispatchInfo, Weight, WeighData},
 	traits::{
 		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier, Get,
 		OnUnbalanced, BalanceStatus
@@ -189,6 +189,9 @@ pub use types::{ReferendumInfo, ReferendumStatus, ProxyState, Tally, UnvoteScope
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(feature = "runtime-benchmarks")]
+pub mod benchmarking;
 
 const DEMOCRACY_ID: LockIdentifier = *b"democrac";
 
@@ -499,8 +502,10 @@ decl_module! {
 
 		fn deposit_event() = default;
 
-		fn on_runtime_upgrade() {
+		fn on_runtime_upgrade() -> Weight {
 			Self::migrate();
+
+			SimpleDispatchInfo::default().weigh_data(())
 		}
 
 		/// Propose a sensitive action to be taken.
@@ -514,7 +519,8 @@ decl_module! {
 		/// Emits `Proposed`.
 		///
 		/// # <weight>
-		/// - `O(1)`.
+		/// - `O(P)`
+		/// - P is the number proposals in the `PublicProps` vec.
 		/// - Two DB changes, one DB entry.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(5_000_000)]
@@ -544,7 +550,8 @@ decl_module! {
 		/// - `proposal`: The index of the proposal to second.
 		///
 		/// # <weight>
-		/// - `O(1)`.
+		/// - `O(S)`.
+		/// - S is the number of seconds a proposal already has.
 		/// - One DB entry.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(5_000_000)]
@@ -566,7 +573,8 @@ decl_module! {
 		/// - `vote`: The vote configuration.
 		///
 		/// # <weight>
-		/// - `O(1)`.
+		/// - `O(R)`.
+		/// - R is the number of referendums the voter has voted on.
 		/// - One DB change, one DB entry.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(200_000)]
@@ -608,7 +616,7 @@ decl_module! {
 		/// -`ref_index`: The index of the referendum to cancel.
 		///
 		/// # <weight>
-		/// - Depends on size of storage vec `VotersFor` for this referendum.
+		/// - `O(1)`.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(500_000)]
 		fn emergency_cancel(origin, ref_index: ReferendumIndex) {
@@ -754,6 +762,7 @@ decl_module! {
 		/// - One DB clear.
 		/// - Performs a binary search on `existing_vetoers` which should not
 		///   be very large.
+		/// - O(log v), v is number of `existing_vetoers`
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(200_000)]
 		fn veto_external(origin, proposal_hash: T::Hash) {
@@ -802,6 +811,7 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - One DB change.
+		/// - O(d) where d is the items in the dispatch queue.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn cancel_queued(origin, which: ReferendumIndex) {
@@ -813,10 +823,12 @@ decl_module! {
 			<DispatchQueue<T>>::put(items);
 		}
 
-		fn on_initialize(n: T::BlockNumber) {
+		fn on_initialize(n: T::BlockNumber) -> Weight {
 			if let Err(e) = Self::begin_block(n) {
 				sp_runtime::print(e);
 			}
+
+			SimpleDispatchInfo::default().weigh_data(())
 		}
 
 		/// Specify a proxy that is already open to us. Called by the stash.
@@ -989,7 +1001,7 @@ decl_module! {
 		/// Emits `PreimageNoted`.
 		///
 		/// # <weight>
-		/// - Dependent on the size of `encoded_proposal`.
+		/// - Dependent on the size of `encoded_proposal` and length of dispatch queue.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(100_000)]
 		fn note_imminent_preimage(origin, encoded_proposal: Vec<u8>) {

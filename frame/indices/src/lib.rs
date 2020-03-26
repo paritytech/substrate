@@ -25,6 +25,7 @@ use sp_runtime::traits::{
 	StaticLookup, Member, LookupError, Zero, One, BlakeTwo256, Hash, Saturating, AtLeast32Bit
 };
 use frame_support::{Parameter, decl_module, decl_error, decl_event, decl_storage, ensure};
+use frame_support::weights::{Weight, SimpleDispatchInfo, WeighData};
 use frame_support::dispatch::DispatchResult;
 use frame_support::traits::{Currency, ReservableCurrency, Get, BalanceStatus::Reserved};
 use frame_support::storage::migration::take_storage_value;
@@ -98,8 +99,10 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin, system = frame_system {
 		fn deposit_event() = default;
 
-		fn on_initialize() {
+		fn on_initialize() -> Weight {
 			Self::migrations();
+
+			SimpleDispatchInfo::default().weigh_data(())
 		}
 
 		/// Assign an previously unassigned index.
@@ -118,6 +121,7 @@ decl_module! {
 		/// - One reserve operation.
 		/// - One event.
 		/// # </weight>
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn claim(origin, index: T::AccountIndex) {
 			let who = ensure_signed(origin)?;
 
@@ -145,6 +149,7 @@ decl_module! {
 		/// - One transfer operation.
 		/// - One event.
 		/// # </weight>
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn transfer(origin, new: T::AccountId, index: T::AccountIndex) {
 			let who = ensure_signed(origin)?;
 			ensure!(who != new, Error::<T>::NotTransfer);
@@ -175,6 +180,7 @@ decl_module! {
 		/// - One reserve operation.
 		/// - One event.
 		/// # </weight>
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn free(origin, index: T::AccountIndex) {
 			let who = ensure_signed(origin)?;
 
@@ -203,6 +209,7 @@ decl_module! {
 		/// - Up to one reserve operation.
 		/// - One event.
 		/// # </weight>
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn force_transfer(origin, new: T::AccountId, index: T::AccountIndex) {
 			ensure_root(origin)?;
 

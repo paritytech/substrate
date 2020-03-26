@@ -1,6 +1,6 @@
 [package]
 name = "sc-transaction-graph"
-version = "2.0.0-alpha.4"
+version = "2.0.0-alpha.5"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
@@ -15,10 +15,10 @@ log = "0.4.8"
 parking_lot = "0.10.0"
 serde = { version = "1.0.101", features = ["derive"] }
 wasm-timer = "0.2"
-sp-blockchain = { version = "2.0.0-alpha.4", path = "../../../primitives/blockchain" }
-sp-core = { version = "2.0.0-alpha.4", path = "../../../primitives/core" }
-sp-runtime = { version = "2.0.0-alpha.4", path = "../../../primitives/runtime" }
-sp-transaction-pool = { version = "2.0.0-alpha.4", path = "../../../primitives/transaction-pool" }
+sp-blockchain = { version = "2.0.0-alpha.5", path = "../../../primitives/blockchain" }
+sp-core = { version = "2.0.0-alpha.5", path = "../../../primitives/core" }
+sp-runtime = { version = "2.0.0-alpha.5", path = "../../../primitives/runtime" }
+sp-transaction-pool = { version = "2.0.0-alpha.5", path = "../../../primitives/transaction-pool" }
 parity-util-mem = { version = "0.6.0", default-features = false, features = ["primitive-types"] }
 linked-hash-map = "0.5.2"
 

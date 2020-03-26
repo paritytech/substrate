@@ -32,6 +32,7 @@ mod module1 {
 		pub struct Module<T: Trait<I>, I: Instance = DefaultInstance> for enum Call
 			where origin: <T as system::Trait>::Origin
 		{
+			#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 			pub fn fail(_origin) -> frame_support::dispatch::DispatchResult {
 				Err(Error::<T, I>::Something.into())
 			}
@@ -58,6 +59,7 @@ mod module2 {
 		pub struct Module<T: Trait> for enum Call
 			where origin: <T as system::Trait>::Origin
 		{
+			#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 			pub fn fail(_origin) -> frame_support::dispatch::DispatchResult {
 				Err(Error::<T>::Something.into())
 			}
