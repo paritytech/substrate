@@ -36,6 +36,8 @@ use sp_phragmen::{
 };
 use crate::*;
 
+const INIT_TIMESTAMP: u64 = 30_000;
+
 /// The AccountId alias in this test module.
 pub(crate) type AccountId = u64;
 pub(crate) type AccountIndex = u64;
@@ -478,6 +480,14 @@ impl ExtBuilder {
 			let validators = Session::validators();
 			SESSION.with(|x| *x.borrow_mut() = (validators.clone(), HashSet::new()));
 		});
+
+		// We consider all test to start after timestamp is initialized
+		// This must be ensured by having `timestamp::on_initialize` called before
+		// `staking::on_initialize`
+		ext.execute_with(|| {
+			Timestamp::set_timestamp(INIT_TIMESTAMP);
+		});
+
 		ext
 	}
 }
@@ -591,7 +601,7 @@ pub fn start_session(session_index: SessionIndex) {
 	for i in Session::current_index()..session_index {
 		Staking::on_finalize(System::block_number());
 		System::set_block_number((i + 1).into());
-		Timestamp::set_timestamp(System::block_number() * 1000);
+		Timestamp::set_timestamp(System::block_number() * 1000 + INIT_TIMESTAMP);
 		Session::on_initialize(System::block_number());
 		Staking::on_initialize(System::block_number());
 	}
