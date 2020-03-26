@@ -1947,7 +1947,7 @@ impl<T: Trait> Module<T> {
 			&ledger.stash,
 			validator_staking_payout + validator_commission_payout
 		) {
-			Self::deposit_event(RawEvent::Reward(ledger.stash, imbalance.peek()));
+			Self::deposit_event(RawEvent::Reward(controller, imbalance.peek()));
 		}
 
 		// Lets now calculate how this is split to the nominators.
@@ -1961,7 +1961,9 @@ impl<T: Trait> Module<T> {
 			let nominator_reward: BalanceOf<T> = nominator_exposure_part * validator_leftover_payout;
 			// We can now make nominator payout:
 			if let Some(imbalance) = Self::make_payout(&nominator.who, nominator_reward) {
-				Self::deposit_event(RawEvent::Reward(nominator.who.clone(), imbalance.peek()));
+				let nominator_controller = Self::bonded(nominator.who.clone())
+					.ok_or("Cannot be in exposure without a controller; qed")?;
+				Self::deposit_event(RawEvent::Reward(nominator_controller, imbalance.peek()));
 			}
 		}
 
