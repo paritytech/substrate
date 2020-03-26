@@ -16,7 +16,7 @@ repository = "https://github.com/paritytech/substrate/"
 wasm-opt = false
 
 [badges]
-travis-ci = { repository = "paritytech/substrate", branch = "master" }
+travis-ci = { repository = "paritytech/substrate" }
 maintenance = { status = "actively-developed" }
 is-it-maintained-issue-resolution = { repository = "paritytech/substrate" }
 is-it-maintained-open-issues = { repository = "paritytech/substrate" }

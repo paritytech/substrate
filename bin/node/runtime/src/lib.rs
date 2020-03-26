@@ -213,8 +213,8 @@ parameter_types! {
 
 impl pallet_scheduler::Trait for Runtime {
 	type Event = Event;
-	type Call = Call;
 	type Origin = Origin;
+	type Call = Call;
 	type MaximumWeight = MaximumWeight;
 }
 
@@ -273,6 +273,7 @@ impl pallet_transaction_payment::Trait for Runtime {
 parameter_types! {
 	pub const MinimumPeriod: Moment = SLOT_DURATION / 2;
 }
+
 impl pallet_timestamp::Trait for Runtime {
 	type Moment = Moment;
 	type OnTimestampSet = Babe;
