@@ -68,6 +68,7 @@ use sp_io::hashing::blake2_256;
 use frame_support::{decl_module, decl_event, decl_error, decl_storage, Parameter, ensure, RuntimeDebug};
 use frame_support::{traits::{Get, ReservableCurrency, Currency},
 	weights::{GetDispatchInfo, DispatchClass,FunctionOf},
+	dispatch::PostDispatchInfo,
 };
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::{DispatchError, DispatchResult, traits::Dispatchable};
@@ -83,7 +84,7 @@ pub trait Trait: frame_system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// The overarching call type.
-	type Call: Parameter + Dispatchable<Origin=Self::Origin> + GetDispatchInfo + From<frame_system::Call<Self>>;
+	type Call: Parameter + Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo> + GetDispatchInfo + From<frame_system::Call<Self>>;
 
 	/// The currency mechanism.
 	type Currency: ReservableCurrency<Self::AccountId>;
@@ -246,7 +247,7 @@ decl_module! {
 			for (index, call) in calls.into_iter().enumerate() {
 				let result = call.dispatch(origin.clone());
 				if let Err(e) = result {
-					Self::deposit_event(Event::<T>::BatchInterrupted(index as u32, e));
+					Self::deposit_event(Event::<T>::BatchInterrupted(index as u32, e.error));
 					return Ok(());
 				}
 			}
@@ -269,6 +270,7 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 			let pseudonym = Self::sub_account_id(who, index);
 			call.dispatch(frame_system::RawOrigin::Signed(pseudonym).into())
+				.map(|_| ()).map_err(|e| e.error)
 		}
 
 		/// Register approval for a dispatch to be made from a deterministic composite account if
@@ -357,7 +359,9 @@ decl_module! {
 				let result = call.dispatch(frame_system::RawOrigin::Signed(id.clone()).into());
 				let _ = T::Currency::unreserve(&m.depositor, m.deposit);
 				<Multisigs<T>>::remove(&id, call_hash);
-				Self::deposit_event(RawEvent::MultisigExecuted(who, timepoint, id, result));
+				Self::deposit_event(RawEvent::MultisigExecuted(
+					who, timepoint, id, result.map(|_| ()).map_err(|e| e.error)
+				));
 			} else {
 				ensure!(maybe_timepoint.is_none(), Error::<T>::UnexpectedTimepoint);
 				if threshold > 1 {
@@ -373,6 +377,7 @@ decl_module! {
 					Self::deposit_event(RawEvent::NewMultisig(who, id));
 				} else {
 					return call.dispatch(frame_system::RawOrigin::Signed(id).into())
+						.map(|_| ()).map_err(|e| e.error)
 				}
 			}
 			Ok(())
