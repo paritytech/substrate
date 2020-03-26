@@ -114,7 +114,7 @@ pub(crate) fn substrate_cli_params(
 				fn database_config(
 					&self,
 					base_path: &::std::path::PathBuf,
-					cache_size: ::std::option::Option<usize>,
+					cache_size: usize,
 				) -> ::sc_cli::Result<::sc_service::config::DatabaseConfig> {
 					Ok(self.#ident.database_config(base_path, cache_size))
 				}

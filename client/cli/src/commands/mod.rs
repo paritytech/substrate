@@ -174,7 +174,7 @@ macro_rules! substrate_cli_subcommands {
 			fn database_config(
 				&self,
 				base_path: &::std::path::PathBuf,
-				cache_size: ::std::option::Option<usize>,
+				cache_size: usize,
 			) -> ::sc_cli::Result<::sc_service::config::DatabaseConfig> {
 				match self {
 					$($enum::$variant(cmd) => cmd.database_config(base_path, cache_size)),*

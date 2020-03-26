@@ -90,7 +90,7 @@ pub trait CliConfiguration: Sized {
 	fn database_config(
 		&self,
 		base_path: &PathBuf,
-		cache_size: Option<usize>,
+		cache_size: usize,
 	) -> Result<DatabaseConfig>;
 
 	/// Get the state cache size
@@ -238,8 +238,7 @@ pub trait CliConfiguration: Sized {
 			.join(chain_spec.id());
 		let net_config_dir = config_dir.join(DEFAULT_NETWORK_CONFIG_PATH);
 		let client_id = C::client_id();
-		// TODO: this parameter is really optional, shouldn't we leave it to None?
-		let database_cache_size = Some(self.database_cache_size()?.unwrap_or(128));
+		let database_cache_size = self.database_cache_size()?.unwrap_or(128);
 		let node_key = self.node_key(&net_config_dir)?;
 		let roles = self.roles(is_dev)?;
 		let max_runtime_instances = self.max_runtime_instances()?.unwrap_or(8);

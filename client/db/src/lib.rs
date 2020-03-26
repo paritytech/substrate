@@ -277,7 +277,7 @@ pub enum DatabaseSettingsSrc {
 		/// Path to the database.
 		path: PathBuf,
 		/// Cache size in bytes. If `None` default is used.
-		cache_size: Option<usize>,
+		cache_size: usize,
 	},
 
 	/// Use a custom already-open database.

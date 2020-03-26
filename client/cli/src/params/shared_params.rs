@@ -90,7 +90,7 @@ impl SharedParams {
 	pub fn database_config(
 		&self,
 		base_path: &PathBuf,
-		cache_size: Option<usize>,
+		cache_size: usize,
 	) -> DatabaseConfig {
 		DatabaseConfig::Path {
 			path: base_path.join(DEFAULT_DB_CONFIG_PATH),
