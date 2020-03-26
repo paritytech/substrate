@@ -104,10 +104,11 @@
 //! The **reward and slashing** procedure is the core of the Staking module, attempting to _embrace
 //! valid behavior_ while _punishing any misbehavior or lack of availability_.
 //!
-//! Reward must be claimed by stakers for each era before it gets too old by $HISTORY_DEPTH using
-//! `payout_nominator` and `payout_validator` calls.
+//! Rewards must be claimed for each era before it gets too old by `$HISTORY_DEPTH` using the
+//! `payout_validator` call. Any account can call `payout_validator`, which pays the reward to
+//! the validator as well as its nominators.
 //! Only the [`T::MaxNominatorRewardedPerValidator`] biggest stakers can claim their reward. This
-//! limit the i/o cost to compute nominators payout.
+//! is to limit the i/o cost to mutate storage for each nominator's account.
 //!
 //! Slashing can occur at any point in time, once misbehavior is reported. Once slashing is
 //! determined, a value is deducted from the balance of the validator and all the nominators who
@@ -452,7 +453,8 @@ pub struct StakingLedger<AccountId, Balance: HasCompact> {
 	/// Any balance that is becoming free, which may eventually be transferred out
 	/// of the stash (assuming it doesn't get slashed first).
 	pub unlocking: Vec<UnlockChunk<Balance>>,
-	/// The latest and highest era which the staker has claimed reward for.
+	/// List of eras for which the stakers behind a validator have claimed rewards. Only updated
+	/// for validators.
 	pub claimed_rewards: Vec<EraIndex>,
 }
 
@@ -775,7 +777,7 @@ pub trait Trait: frame_system::Trait {
 	/// A transaction submitter.
 	type SubmitTransaction: SubmitUnsignedTransaction<Self, <Self as Trait>::Call>;
 
-	/// The maximum number of nominator rewarded for each validator.
+	/// The maximum number of nominators rewarded for each validator.
 	///
 	/// For each validator only the `$MaxNominatorRewardedPerValidator` biggest stakers can claim
 	/// their reward. This used to limit the i/o cost for the nominator payout.
@@ -818,13 +820,13 @@ impl Default for Releases {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Staking {
-		/// Number of era to keep in history.
+		/// Number of eras to keep in history.
 		///
-		/// Information is kept for eras in `[current_era - history_depth; current_era]
+		/// Information is kept for eras in `[current_era - history_depth; current_era]`.
 		///
-		/// Must be more than the number of era delayed by session otherwise.
-		/// i.e. active era must always be in history.
-		/// i.e. `active_era > current_era - history_depth` must be guaranteed.
+		/// Must be more than the number of eras delayed by session otherwise.
+		/// I.e. active era must always be in history.
+		/// I.e. `active_era > current_era - history_depth` must be guaranteed.
 		HistoryDepth get(fn history_depth) config(): u32 = 84;
 
 		/// The ideal number of staking participants.
@@ -860,7 +862,7 @@ decl_storage! {
 
 		/// The current era index.
 		///
-		/// This is the latest planned era, depending on how session module queues the validator
+		/// This is the latest planned era, depending on how the Session pallet queues the validator
 		/// set, it might be active or not.
 		pub CurrentEra get(fn current_era): Option<EraIndex>;
 
@@ -870,7 +872,7 @@ decl_storage! {
 		/// Validator set of this era must be equal to `SessionInterface::validators`.
 		pub ActiveEra get(fn active_era): Option<ActiveEraInfo>;
 
-		/// The session index at which the era start for the last `HISTORY_DEPTH` eras
+		/// The session index at which the era start for the last `HISTORY_DEPTH` eras.
 		pub ErasStartSessionIndex get(fn eras_start_session_index):
 			map hasher(twox_64_concat) EraIndex => Option<SessionIndex>;
 
@@ -886,7 +888,7 @@ decl_storage! {
 
 		/// Clipped Exposure of validator at era.
 		///
-		/// This is similar to [`ErasStakers`] but number of nominators exposed is reduce to the
+		/// This is similar to [`ErasStakers`] but number of nominators exposed is reduced to the
 		/// `T::MaxNominatorRewardedPerValidator` biggest stakers.
 		/// (Note: the field `total` and `own` of the exposure remains unchanged).
 		/// This is used to limit the i/o cost for the nominator payout.
@@ -899,7 +901,7 @@ decl_storage! {
 			double_map hasher(twox_64_concat) EraIndex, hasher(twox_64_concat) T::AccountId
 			=> Exposure<T::AccountId, BalanceOf<T>>;
 
-		/// Similarly to `ErasStakers` this holds the preferences of validators.
+		/// Similar to `ErasStakers`, this holds the preferences of validators.
 		///
 		/// This is keyed first by the era index to allow bulk deletion and then the stash account.
 		///
@@ -1035,7 +1037,7 @@ decl_storage! {
 
 decl_event!(
 	pub enum Event<T> where Balance = BalanceOf<T>, <T as frame_system::Trait>::AccountId {
-		/// The staker has been rewarded by this amount. AccountId is controller account.
+		/// The staker has been rewarded by this amount. `AccountId` is the controller account.
 		Reward(AccountId, Balance),
 		/// One validator (and its nominators) has been slashed by the given amount.
 		Slash(AccountId, Balance),
@@ -1088,7 +1090,7 @@ decl_error! {
 		InvalidNumberOfNominations,
 		/// Items are not sorted and unique.
 		NotSortedAndUnique,
-		/// Era rewards have already been claimed.
+		/// Rewards for this era have already been claimed for this validator.
 		AlreadyClaimed,
 		/// The submitted result is received out of the open window.
 		PhragmenEarlySubmission,
@@ -1631,16 +1633,14 @@ decl_module! {
 			<Self as Store>::UnappliedSlashes::insert(&era, &unapplied);
 		}
 
-		/// Make one validator's payout for one era.
+		/// Pay out all the stakers behind a single validator for a single era.
 		///
-		/// - `who` is the controller account of the validator to pay out.
-		/// - `era` may not be lower than one following the most recently paid era. If it is higher,
-		///   then it indicates an instruction to skip the payout of all previous eras.
+		/// - `validator_stash` is the stash account of the validator. Their nominators, up to
+		///   `T::MaxNominatorRewardedPerValidator`, will also receive their rewards.
+		/// - `era` may be any era between `[current_era - history_depth; current_era]`.
 		///
-		/// WARNING: once an era is payed for a validator such validator can't claim the payout of
-		/// previous era.
-		///
-		/// WARNING: Incorrect arguments here can result in loss of payout. Be very careful.
+		/// The origin of this call must be _Signed_. Any account can call this function, even if
+		/// it is not one of the stakers.
 		///
 		/// # <weight>
 		/// - Time complexity: O(1).
