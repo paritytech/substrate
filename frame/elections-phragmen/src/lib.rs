@@ -663,10 +663,21 @@ impl<T: Trait> Module<T> {
 		// previous runners_up are also always candidates for the next round.
 		candidates.append(&mut Self::runners_up_ids());
 
+		// helper closures to deal with balance/stake.
+		let extended = |b: BalanceOf<T>| -> ExtendedBalance {
+			<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(b) as ExtendedBalance
+		};
+		let stake_of = |who: &T::AccountId| -> ExtendedBalance {
+			extended(Self::locked_stake_of(who))
+		};
+		let to_balance = |e: ExtendedBalance| -> BalanceOf<T> {
+			<T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(e)
+		};
+
 		let voters_and_votes = Voting::<T>::iter()
-			.map(|(voter, (stake, targets))| { (voter, stake, targets) })
+			.map(|(voter, (stake, targets))| { (voter, extended(stake), targets) })
 			.collect::<Vec<_>>();
-		let maybe_phragmen_result = sp_phragmen::elect::<_, _, T::CurrencyToVote, Perbill>(
+		let maybe_phragmen_result = sp_phragmen::elect::<T::AccountId, Perbill>(
 			num_to_elect,
 			0,
 			candidates,
@@ -692,11 +703,6 @@ impl<T: Trait> Module<T> {
 				.filter_map(|(m, a)| if a.is_zero() { None } else { Some(m) } )
 				.collect::<Vec<T::AccountId>>();
 
-			let stake_of = |who: &T::AccountId| -> ExtendedBalance {
-				<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(
-					Self::locked_stake_of(who)
-				) as ExtendedBalance
-			};
 			let staked_assignments = sp_phragmen::assignment_ratio_to_staked(
 				phragmen_result.assignments,
 				stake_of,
@@ -704,8 +710,6 @@ impl<T: Trait> Module<T> {
 
 			let (support_map, _) = build_support_map::<T::AccountId>(&new_set, &staked_assignments);
 
-			let to_balance = |e: ExtendedBalance|
-				<T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(e);
 			let new_set_with_stake = new_set
 				.into_iter()
 				.map(|ref m| {
@@ -726,14 +730,14 @@ impl<T: Trait> Module<T> {
 			// sort and save the members.
 			new_members.sort_by(|i, j| i.0.cmp(&j.0));
 
-			let mut prime_votes: Vec<_> = new_members.iter().map(|c| (&c.0, BalanceOf::<T>::zero())).collect();
+			let mut prime_votes: Vec<_> = new_members.iter().map(|c| (&c.0, ExtendedBalance::zero())).collect();
 			for (_, stake, targets) in voters_and_votes.into_iter() {
 				for (votes, who) in targets.iter()
 					.enumerate()
 					.map(|(votes, who)| ((MAXIMUM_VOTE - votes) as u32, who))
 				{
 					if let Ok(i) = prime_votes.binary_search_by_key(&who, |k| k.0) {
-						prime_votes[i].1 += stake * votes.into();
+						prime_votes[i].1 += stake * votes as ExtendedBalance;
 					}
 				}
 			}

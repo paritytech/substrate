@@ -21,17 +21,9 @@
 use crate::{elect, PhragmenResult, Assignment};
 use sp_runtime::{
 	assert_eq_error_rate, PerThing,
-	traits::{Convert, Member, SaturatedConversion, Zero, One}
+	traits::{Member, SaturatedConversion, Zero, One}
 };
 use sp_std::collections::btree_map::BTreeMap;
-
-pub(crate) struct TestCurrencyToVote;
-impl Convert<Balance, u64> for TestCurrencyToVote {
-	fn convert(x: Balance) -> u64 { x.saturated_into() }
-}
-impl Convert<u128, Balance> for TestCurrencyToVote {
-	fn convert(x: u128) -> Balance { x }
-}
 
 #[derive(Default, Debug)]
 pub(crate) struct _Candidate<A> {
@@ -336,7 +328,7 @@ pub(crate) fn run_and_compare<Output: PerThing>(
 	min_to_elect: usize,
 ) {
 	// run fixed point code.
-	let PhragmenResult { winners, assignments } = elect::<_, _, TestCurrencyToVote, Output>(
+	let PhragmenResult { winners, assignments } = elect::<_, Output>(
 		to_elect,
 		min_to_elect,
 		candidates.clone(),

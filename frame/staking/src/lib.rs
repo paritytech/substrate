@@ -2529,11 +2529,11 @@ impl<T: Trait> Module<T> {
 	///
 	/// No storage item is updated.
 	fn do_phragmen<Accuracy: PerThing>() -> Option<PhragmenResult<T::AccountId, Accuracy>> {
-		let mut all_nominators: Vec<(T::AccountId, BalanceOf<T>, Vec<T::AccountId>)> = Vec::new();
+		let mut all_nominators: Vec<(T::AccountId, ExtendedBalance, Vec<T::AccountId>)> = Vec::new();
 		let mut all_validators = Vec::new();
 		for (validator, _) in <Validators<T>>::iter() {
 			// append self vote
-			let self_vote = (validator.clone(), Self::slashable_balance_of(&validator), vec![validator.clone()]);
+			let self_vote = (validator.clone(), Self::slashable_balance_of_extended(&validator), vec![validator.clone()]);
 			all_nominators.push(self_vote);
 			all_validators.push(validator);
 		}
@@ -2553,11 +2553,11 @@ impl<T: Trait> Module<T> {
 			(nominator, targets)
 		});
 		all_nominators.extend(nominator_votes.map(|(n, ns)| {
-			let s = Self::slashable_balance_of(&n);
+			let s = Self::slashable_balance_of_extended(&n);
 			(n, s, ns)
 		}));
 
-		elect::<_, _, T::CurrencyToVote, Accuracy>(
+		elect::<_, Accuracy>(
 			Self::validator_count() as usize,
 			Self::minimum_validator_count().max(1) as usize,
 			all_validators,

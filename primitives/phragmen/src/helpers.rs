@@ -16,7 +16,7 @@
 
 //! Helper methods for phragmen.
 
-use crate::{Assignment, ExtendedBalance, IdentifierT, StakedAssignment};
+use crate::{Assignment, ExtendedBalance, IdentifierT, StakedAssignment, WithApprovalOf};
 use sp_runtime::PerThing;
 use sp_std::prelude::*;
 
@@ -47,6 +47,11 @@ where
 	ExtendedBalance: From<<T as PerThing>::Inner>,
 {
 	ratio.into_iter().map(|a| a.into_assignment(true)).collect()
+}
+
+/// consumes a vector of winners with backing stake to just winners.
+pub fn to_without_backing<A: IdentifierT>(winners: Vec<WithApprovalOf<A>>) -> Vec<A> {
+	winners.into_iter().map(|(who, _)| who).collect::<Vec<A>>()
 }
 
 #[cfg(test)]

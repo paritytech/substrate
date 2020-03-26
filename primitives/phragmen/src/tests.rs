@@ -20,11 +20,11 @@
 
 use crate::mock::*;
 use crate::{
-	elect, equalize, build_support_map, is_score_better,
-	Support, StakedAssignment, Assignment, PhragmenResult, ExtendedBalance,
+	elect, equalize, build_support_map, is_score_better, helpers::*,
+	Support, StakedAssignment, Assignment, PhragmenResult,
 };
 use substrate_test_utils::assert_eq_uvec;
-use sp_runtime::{Perbill, Permill, Percent, PerU16, traits::Convert};
+use sp_runtime::{Perbill, Permill, Percent, PerU16};
 
 #[test]
 fn float_phragmen_poc_works() {
@@ -82,7 +82,7 @@ fn phragmen_poc_works() {
 	];
 
 	let stake_of = create_stake_of(&[(10, 10), (20, 20), (30, 30)]);
-	let PhragmenResult { winners, assignments } = elect::<_, _, TestCurrencyToVote, Perbill>(
+	let PhragmenResult { winners, assignments } = elect::<_, Perbill>(
 		2,
 		2,
 		candidates,
@@ -109,6 +109,76 @@ fn phragmen_poc_works() {
 				],
 			},
 		]
+	);
+}
+
+#[test]
+fn phragmen_poc_works_with_equalise() {
+	let candidates = vec![1, 2, 3];
+	let voters = vec![
+		(10, vec![1, 2]),
+		(20, vec![1, 3]),
+		(30, vec![2, 3]),
+	];
+
+	let stake_of = create_stake_of(&[(10, 10), (20, 20), (30, 30)]);
+	let PhragmenResult { winners, assignments } = elect::<_, Perbill>(
+		2,
+		2,
+		candidates,
+		voters.iter().map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone())).collect::<Vec<_>>(),
+	).unwrap();
+
+	assert_eq_uvec!(winners, vec![(2, 40), (3, 50)]);
+	let staked = assignment_ratio_to_staked(assignments, &stake_of);
+
+	assert_eq_uvec!(
+		staked,
+		vec![
+			StakedAssignment {
+				who: 10u64,
+				distribution: vec![(2, 10)],
+			},
+			StakedAssignment {
+				who: 20,
+				distribution: vec![(3, 20)],
+			},
+			StakedAssignment {
+				who: 30,
+				distribution: vec![
+					(2, 15),
+					(3, 15),
+				],
+			},
+		]
+	);
+
+	let winners = to_without_backing(winners);
+	let mut support_map = build_support_map::<AccountId>(&winners, &staked).0;
+
+	assert_eq!(
+		*support_map.get(&2).unwrap(),
+		Support::<AccountId> { total: 25, voters: vec![(10, 10), (30, 15)] },
+	);
+	assert_eq!(
+		*support_map.get(&3).unwrap(),
+		Support::<AccountId> { total: 35, voters: vec![(20, 20), (30, 15)] },
+	);
+
+	equalize(
+		staked.into_iter().map(|a| (a.clone(), stake_of(&a.who))).collect::<Vec<_>>(),
+		&mut support_map,
+		0,
+		2,
+	);
+
+	assert_eq!(
+		*support_map.get(&2).unwrap(),
+		Support::<AccountId> { total: 30, voters: vec![(10, 10), (30, 20)] },
+	);
+	assert_eq!(
+		*support_map.get(&3).unwrap(),
+		Support::<AccountId> { total: 30, voters: vec![(20, 20), (30, 10)] },
 	);
 }
 
@@ -168,7 +238,7 @@ fn phragmen_accuracy_on_large_scale_only_validators() {
 		(5, (u64::max_value() - 2).into()),
 	]);
 
-	let PhragmenResult { winners, assignments } = elect::<_, _, TestCurrencyToVote, Perbill>(
+	let PhragmenResult { winners, assignments } = elect::<_, Perbill>(
 		2,
 		2,
 		candidates.clone(),
@@ -198,7 +268,7 @@ fn phragmen_accuracy_on_large_scale_validators_and_nominators() {
 		(14, u64::max_value().into()),
 	]);
 
-	let PhragmenResult { winners, assignments } = elect::<_, _, TestCurrencyToVote, Perbill>(
+	let PhragmenResult { winners, assignments } = elect::<_, Perbill>(
 		2,
 		2,
 		candidates,
@@ -241,7 +311,7 @@ fn phragmen_accuracy_on_small_scale_self_vote() {
 		(30, 1),
 	]);
 
-	let PhragmenResult { winners, assignments: _ } = elect::<_, _, TestCurrencyToVote, Perbill>(
+	let PhragmenResult { winners, assignments: _ } = elect::<_, Perbill>(
 		3,
 		3,
 		candidates,
@@ -271,7 +341,7 @@ fn phragmen_accuracy_on_small_scale_no_self_vote() {
 		(3, 1),
 	]);
 
-	let PhragmenResult { winners, assignments: _ } = elect::<_, _, TestCurrencyToVote, Perbill>(
+	let PhragmenResult { winners, assignments: _ } = elect::<_, Perbill>(
 		3,
 		3,
 		candidates,
@@ -304,7 +374,7 @@ fn phragmen_large_scale_test() {
 		(50, 990000000000000000),
 	]);
 
-	let PhragmenResult { winners, assignments } = elect::<_, _, TestCurrencyToVote, Perbill>(
+	let PhragmenResult { winners, assignments } = elect::<_, Perbill>(
 		2,
 		2,
 		candidates,
@@ -330,7 +400,7 @@ fn phragmen_large_scale_test_2() {
 		(50, nom_budget.into()),
 	]);
 
-	let PhragmenResult { winners, assignments } = elect::<_, _, TestCurrencyToVote, Perbill>(
+	let PhragmenResult { winners, assignments } = elect::<_, Perbill>(
 		2,
 		2,
 		candidates,
@@ -406,7 +476,7 @@ fn elect_has_no_entry_barrier() {
 		(2, 10),
 	]);
 
-	let PhragmenResult { winners, assignments: _ } = elect::<_, _, TestCurrencyToVote, Perbill>(
+	let PhragmenResult { winners, assignments: _ } = elect::<_, Perbill>(
 		3,
 		3,
 		candidates,
@@ -433,7 +503,7 @@ fn minimum_to_elect_is_respected() {
 		(2, 10),
 	]);
 
-	let maybe_result = elect::<_, _, TestCurrencyToVote, Perbill>(
+	let maybe_result = elect::<_, Perbill>(
 		10,
 		10,
 		candidates,
@@ -459,7 +529,7 @@ fn self_votes_should_be_kept() {
 		(1, 8),
 	]);
 
-	let result = elect::<_, _, TestCurrencyToVote, Perbill>(
+	let result = elect::<_, Perbill>(
 		2,
 		2,
 		candidates,
@@ -480,16 +550,11 @@ fn self_votes_should_be_kept() {
 		],
 	);
 
-	let staked_assignments: Vec<StakedAssignment<AccountId>> = result.assignments
-		.into_iter()
-		.map(|a| {
-			let stake = <TestCurrencyToVote as Convert<Balance, u64>>::convert(stake_of(&a.who)) as ExtendedBalance;
-			a.into_staked(stake, true)
-		}).collect();
+	let staked_assignments = assignment_ratio_to_staked(result.assignments, &stake_of);
+	let winners = to_without_backing(result.winners);
 
-	let winners = result.winners.into_iter().map(|(who, _)| who).collect::<Vec<AccountId>>();
 	let (mut supports, _) = build_support_map::<AccountId>(
-		winners.as_slice(),
+		&winners,
 		&staked_assignments,
 	);
 
@@ -503,12 +568,11 @@ fn self_votes_should_be_kept() {
 		&Support { total: 24u128, voters: vec![(20u64, 20u128), (1u64, 4u128)] },
 	);
 
-	equalize::<Balance, AccountId, TestCurrencyToVote, _>(
-		staked_assignments,
+	equalize(
+		staked_assignments.into_iter().map(|a| (a.clone(), stake_of(&a.who))).collect::<Vec<_>>(),
 		&mut supports,
 		0,
 		2usize,
-		&stake_of,
 	);
 
 	assert_eq!(
