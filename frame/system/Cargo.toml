@@ -36,7 +36,7 @@ std = [
 	"sp-runtime/std",
 	"sp-version/std",
 ]
-runtime-benchmarks = []
+runtime-benchmarks = ["sp-runtime/runtime-benchmarks"]
 
 [[bench]]
 name = "bench"

@@ -66,9 +66,14 @@
 # Inflation points
 /frame/staking/src/inflation.rs @thiolliere
 
-# NPoS and Governance
+# NPoS and Governance and Phragmén
 /frame/staking/ @kianenigma
 /frame/elections/ @kianenigma
+/frame/elections-phragmen/ @kianenigma
+/primitives/phragmen/ @kianenigma
+
+# Fixed point arithmetic
+/primitives/sp-arithmetic/ @kianenigma @thiolliere
 
 # End to end testing of substrate node
 /bin/node/executor/ @kianenigma
