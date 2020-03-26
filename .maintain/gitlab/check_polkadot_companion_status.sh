@@ -5,6 +5,7 @@
 #
 
 github_api_substrate_pull_url="https://api.github.com/repos/paritytech/substrate/pulls"
+github_api_polkadot_pull_url="https://api.github.com/repos/paritytech/polkadot/pulls"
 # use github api v3 in order to access the data without authentication
 github_header="Accept: application/vnd.github.v3+json" 
 
@@ -30,50 +31,69 @@ status.
 EOT
 
 
-
-# polkadot:master
-if expr match "${CI_COMMIT_REF_NAME}" '^[0-9]\+$' >/dev/null
+if ! expr match "${CI_COMMIT_REF_NAME}" '^[0-9]\+$' >/dev/null
 then
-  boldprint "this is pull request no ${CI_COMMIT_REF_NAME}"
-  # get the last reference to a pr in polkadot
-  pr_body="$(curl -H "${github_header}" -s ${github_api_substrate_pull_url}/${CI_COMMIT_REF_NAME} \
-    | sed -n -r 's/^[[:space:]]+"body": (".*")[^"]+$/\1/p')"
-
-  pr_companion="$(echo "${pr_body}" | sed -n -r \
-      -e 's;^.*polkadot companion: paritytech/polkadot#([0-9]+).*$;\1;p' \
-      -e 's;^.*polkadot companion: https://github.com/paritytech/polkadot/pull/([0-9]+).*$;\1;p' \
-    | tail -n 1)"
-  if [ -z "${pr_companion}" ]
-  then
-    pr_companion="$(echo "${pr_body}" | sed -n -r \
-      's;^.*https://github.com/paritytech/polkadot/pull/([0-9]+).*$;\1;p' \
-      | tail -n 1)"
-  fi
-
-  if [ "${pr_companion}" ]
-  then
-    boldprint "companion pr specified/detected: #${pr_companion}"
-    git fetch --depth 1 origin refs/pull/${pr_companion}/head:pr/${pr_companion}
-    git checkout pr/${pr_companion}
-  else
-    boldprint "no companion pr found - building polkadot:master"
-  fi
-else
-  boldprint "this is not a pull request - building polkadot:master"
+  boldprint "this doesn't seem to be a pull request"
+  exit 1
 fi
 
-# Make sure we override the crates in native and wasm build
-# patching the git path as described in the link below did not test correctly
-# https://doc.rust-lang.org/cargo/reference/overriding-dependencies.html
-mkdir .cargo
-echo "paths = [ \"$SUBSTRATE_PATH\" ]" > .cargo/config
+boldprint "this is pull request no ${CI_COMMIT_REF_NAME}"
 
-mkdir -p target/debug/wbuild/.cargo
-cp .cargo/config target/debug/wbuild/.cargo/config
+pr_body="$(curl -H "${github_header}" -s ${github_api_substrate_pull_url}/${CI_COMMIT_REF_NAME} \
+  | sed -n -r 's/^[[:space:]]+"body": (".*")[^"]+$/\1/p')"
 
-# package, others are updated along the way.
-cargo update
+# get companion if explicitly specified
+pr_companion="$(echo "${pr_body}" | sed -n -r \
+    -e 's;^.*polkadot companion: paritytech/polkadot#([0-9]+).*$;\1;p' \
+    -e 's;^.*polkadot companion: https://github.com/paritytech/polkadot/pull/([0-9]+).*$;\1;p' \
+  | tail -n 1)"
 
-# Test Polkadot pr or master branch with this Substrate commit.
-time cargo test --all --release --verbose
+# get companion mentioned in the description
+if [ -z "${pr_companion}" ]
+then
+  pr_companion="$(echo "${pr_body}" | sed -n -r \
+    's;^.*https://github.com/paritytech/polkadot/pull/([0-9]+).*$;\1;p' \
+    | tail -n 1)"
+fi
+
+if [ -z "${pr_companion}" ]
+else
+  boldprint "no companion pr found"
+  exit 0
+fi
+
+boldprint "companion pr: #${pr_companion}"
+
+# check the status of that pull request - needs to be
+# mergable and approved
+
+curl -H "${github_header}" -sS -o companion_pr.json \
+  ${github_api_polkadot_pull_url}/${pr_companion} 
+
+if jq -e .merged < companion_pr.json >/dev/null
+then
+  boldprint "polkadot pr #${pr_companion} already merged"
+  exit 0
+fi
+
+if jq -e '.mergeable and .mergeable_state == "clean"' < companion_pr.json >/dev/null
+then
+  boldprint "polkadot pr #${pr_companion} mergeable"
+else
+  boldprint "polkadot pr #${pr_companion} not mergeable or clean"
+  exit 1
+fi
+
+curl -H "${github_header}" -sS -o companion_pr_reviews.json \
+  ${github_api_polkadot_pull_url}/${pr_companion}/reviews 
+
+if [ "$(jq -r -e '.[].state' < companion_pr_reviews.json | uniq)" != "APPROVED" ]
+then
+  boldprint "polkadot pr #${pr_companion} not APPROVED"
+  exit 1
+fi
+
+boldprint "polkadot pr #${pr_companion} state APPROVED"
+exit 0
+
 
