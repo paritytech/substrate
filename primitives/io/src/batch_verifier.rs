@@ -124,13 +124,26 @@ impl BatchVerifier {
 	/// Verify all previously pushed signatures since last call and return
 	/// aggregated result.
 	pub fn verify_and_clear(&mut self) -> bool {
+		use parking_lot::{Mutex, Condvar};
+
 		if self.sr25519_items.len() > 0 {
 			self.spawn_sr25519_verification()
 		}
 
-		futures::executor::block_on(
-			futures::future::join_all(self.pending_tasks.drain(..))
-		);
+		let pending = std::mem::replace(&mut self.pending_tasks, vec![]);
+
+		if pending.len() > 0 {
+			let pair = Arc::new((Mutex::new(()), Condvar::new()));
+			let pair_clone = pair.clone();
+			self.scheduler.spawn_obj(FutureObj::new(async move {
+				futures::future::join_all(pending).await;
+				pair_clone.1.notify_one();
+			}.boxed())).expect("Scheduler should not fail");
+
+			let (mtx, cond_var) = &*pair;
+			let mut mtx = mtx.lock();
+			cond_var.wait(&mut mtx);
+		}
 
 		if self.invalid.load(AtomicOrdering::Relaxed) {
 			self.invalid.store(false, AtomicOrdering::Relaxed);

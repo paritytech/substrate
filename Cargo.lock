@@ -7366,6 +7366,7 @@ dependencies = [
  "libsecp256k1",
  "log 0.4.8",
  "parity-scale-codec",
+ "parking_lot 0.10.0",
  "sp-core",
  "sp-externalities",
  "sp-runtime-interface",
