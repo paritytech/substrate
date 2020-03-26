@@ -310,33 +310,29 @@ benchmarks! {
 		// Num of bytes in encoded proposal
 		let b in 0 .. 16_384;
 
-		let mut dispatch_queue = Vec::new();
 		// d + 1 to include the one we are testing
-		let encoded_proposal = vec![0; 0];
+		let encoded_proposal = vec![0; b as usize];
 		let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
 		let block_number = T::BlockNumber::one();
 		Preimages::<T>::insert(&proposal_hash, PreimageStatus::Missing(block_number))?;
 
 		let caller = funded_account::<T>("caller", b);
-		let encoded_proposal = vec![0; d as usize];
+		let encoded_proposal = vec![0; b as usize];
 	}: _(RawOrigin::Signed(caller), encoded_proposal)
 
 	reap_preimage {
 		// Num of bytes in encoded proposal
 		let b in 0 .. 16_384;
 
-		let encoded_proposal = vec![0; 0 as usize];
+		let encoded_proposal = vec![0; b as usize];
 		let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
 
 		let caller = funded_account::<T>("caller", d);
-		let encoded_proposal = vec![0; d as usize];
 		Democracy::<T>::note_preimage(RawOrigin::Signed(caller.clone()).into(), encoded_proposal.clone())?;
 
 		// We need to set this otherwise we get `Early` error.
 		let block_number = T::VotingPeriod::get() + T::EnactmentPeriod::get() + T::BlockNumber::one();
 		System::<T>::set_block_number(block_number.into());
-
-		let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
 
 	}: _(RawOrigin::Signed(caller), proposal_hash)
 
