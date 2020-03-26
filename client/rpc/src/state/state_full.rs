@@ -26,7 +26,7 @@ use rpc::{Result as RpcResult, futures::{stream, Future, Sink, Stream, future::r
 
 use sc_rpc_api::Subscriptions;
 use sc_client_api::backend::Backend;
-use sp_blockchain::{Result as ClientResult, Error as ClientError, HeaderMetadata, CachedHeaderMetadata, HeaderBackend, Info};
+use sp_blockchain::{Result as ClientResult, Error as ClientError, HeaderMetadata, CachedHeaderMetadata, HeaderBackend};
 use sc_client::BlockchainEvents;
 use sp_core::{
 	Bytes, storage::{well_known_keys, StorageKey, StorageData, StorageChangeSet, ChildInfo},
@@ -401,6 +401,15 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 		Box::new(result(call_fn()))
 	}
 
+	fn query_storage_at(
+		&self,
+		keys: Vec<StorageKey>,
+		at: Option<Block::Hash>
+	) -> FutureResult<Vec<StorageChangeSet<Block::Hash>>> {
+		let at = at.unwrap_or_else(|| self.client.info().best_hash);
+		self.query_storage(at, Some(at), keys)
+	}
+
 	fn subscribe_runtime_version(
 		&self,
 		_meta: crate::metadata::Metadata,
@@ -518,10 +527,6 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 		id: SubscriptionId,
 	) -> RpcResult<bool> {
 		Ok(self.subscriptions.cancel(id))
-	}
-
-	fn info(&self) -> Info<Block> {
-		self.client.info()
 	}
 }
 
