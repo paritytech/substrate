@@ -269,6 +269,7 @@ use sp_runtime::{
 	traits::{SignedExtension, Bounded, SaturatedConversion},
 	transaction_validity::{
 		ValidTransaction, TransactionValidityError, InvalidTransaction, TransactionValidity,
+		TransactionSource,
 	},
 };
 
@@ -628,6 +629,7 @@ impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
 	fn validate(
 		&self,
 		_who: &Self::AccountId,
+		_source: TransactionSource,
 		call: &Self::Call,
 		_info: Self::DispatchInfo,
 		len: usize,
@@ -805,16 +807,17 @@ mod tests {
 	fn signed_ext_watch_dummy_works() {
 		new_test_ext().execute_with(|| {
 			let call = <Call<Test>>::set_dummy(10);
+			let source = TransactionSource::External;
 			let info = DispatchInfo::default();
 
 			assert_eq!(
-				WatchDummy::<Test>(PhantomData).validate(&1, &call, info, 150)
+				WatchDummy::<Test>(PhantomData).validate(&1, source, &call, info, 150)
 					.unwrap()
 					.priority,
 				Bounded::max_value(),
 			);
 			assert_eq!(
-				WatchDummy::<Test>(PhantomData).validate(&1, &call, info, 250),
+				WatchDummy::<Test>(PhantomData).validate(&1, source, &call, info, 250),
 				InvalidTransaction::ExhaustsResources.into(),
 			);
 		})

@@ -42,7 +42,7 @@ use sp_runtime::{
 	Fixed64,
 	transaction_validity::{
 		TransactionPriority, ValidTransaction, InvalidTransaction, TransactionValidityError,
-		TransactionValidity,
+		TransactionValidity, TransactionSource,
 	},
 	traits::{Zero, Saturating, SignedExtension, SaturatedConversion, Convert},
 };
@@ -214,6 +214,7 @@ impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T>
 	fn validate(
 		&self,
 		who: &Self::AccountId,
+		_source: TransactionSource,
 		_call: &Self::Call,
 		info: Self::DispatchInfo,
 		len: usize,
@@ -486,6 +487,7 @@ mod tests {
 			assert_eq!(Balances::free_balance(1), 0);
 
 			let len = 100;
+			let source = TransactionSource::External;
 
 			// This is a completely free (and thus wholly insecure/DoS-ridden) transaction.
 			let operational_transaction = DispatchInfo {
@@ -495,7 +497,7 @@ mod tests {
 			};
 			assert!(
 				ChargeTransactionPayment::<Runtime>::from(0)
-					.validate(&1, CALL, operational_transaction , len)
+					.validate(&1, source, CALL, operational_transaction , len)
 					.is_ok()
 			);
 
@@ -507,7 +509,7 @@ mod tests {
 			};
 			assert!(
 				ChargeTransactionPayment::<Runtime>::from(0)
-					.validate(&1, CALL, free_transaction , len)
+					.validate(&1, source, CALL, free_transaction , len)
 					.is_err()
 			);
 		});

@@ -73,7 +73,7 @@ use frame_support::{
 use sp_runtime::{
 	generic::Digest, ApplyExtrinsicResult,
 	traits::{
-		self, Header, Zero, One, Checkable, Applyable, CheckEqual, ValidateUnsigned, NumberFor,
+		self, Header, Zero, One, Checkable, Applyable, CheckEqual, NumberFor,
 		Block as BlockT, Dispatchable, Saturating,
 	},
 	transaction_validity::{TransactionValidity, TransactionSource},
@@ -333,11 +333,7 @@ where
 		let xt = uxt.check(&Default::default())?;
 
 		let dispatch_info = xt.get_dispatch_info();
-<<<<<<< HEAD
-		xt.validate(dispatch_info, encoded_len)
-=======
-		xt.validate::<UnsignedValidator>(source, dispatch_info, encoded_len)
->>>>>>> master
+		xt.validate(source, dispatch_info, encoded_len)
 	}
 
 	/// Start an offchain worker and generate extrinsics.

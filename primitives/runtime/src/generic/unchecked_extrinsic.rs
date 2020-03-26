@@ -136,7 +136,7 @@ where
 					signed: Some((signed, extra)),
 					function,
 				}
-			}
+			},
 			None => CheckedExtrinsic {
 				signed: None,
 				function: self.function,

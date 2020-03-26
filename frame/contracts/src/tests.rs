@@ -28,9 +28,10 @@ use assert_matches::assert_matches;
 use hex_literal::*;
 use codec::{Decode, Encode, KeyedVec};
 use sp_runtime::{
-	Perbill, BuildStorage, transaction_validity::{InvalidTransaction, ValidTransaction},
-	traits::{BlakeTwo256, Hash, IdentityLookup, SignedExtension},
+	Perbill, BuildStorage,
 	testing::{Digest, DigestItem, Header, UintAuthorityId, H256},
+	traits::{BlakeTwo256, Hash, IdentityLookup, SignedExtension},
+	transaction_validity::{InvalidTransaction, ValidTransaction, TransactionSource},
 };
 use frame_support::{
 	assert_ok, assert_err, impl_outer_dispatch, impl_outer_event, impl_outer_origin, parameter_types,
@@ -2626,16 +2627,18 @@ fn cannot_self_destruct_in_constructor() {
 #[test]
 fn check_block_gas_limit_works() {
 	ExtBuilder::default().block_gas_limit(50).build().execute_with(|| {
+		let source = TransactionSource::External;
 		let info = DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: true };
 		let check = CheckBlockGasLimit::<Test>(Default::default());
 		let call: Call = crate::Call::put_code(1000, vec![]).into();
 
 		assert_eq!(
-			check.validate(&0, &call, info, 0), InvalidTransaction::ExhaustsResources.into(),
+			check.validate(&0, source, &call, info, 0),
+			InvalidTransaction::ExhaustsResources.into(),
 		);
 
 		let call: Call = crate::Call::update_schedule(Default::default()).into();
-		assert_eq!(check.validate(&0, &call, info, 0), Ok(Default::default()));
+		assert_eq!(check.validate(&0, source, &call, info, 0), Ok(Default::default()));
 	});
 }
 
