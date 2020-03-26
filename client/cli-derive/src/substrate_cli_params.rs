@@ -90,7 +90,8 @@ pub(crate) fn substrate_cli_params(
 	if let Some(ident) = shared_params {
 		if missing("base_path") {
 			i.items.push(ImplItem::Verbatim(quote! {
-				fn base_path(&self) -> ::sc_cli::Result<::std::option::Option<&::std::path::PathBuf>> {
+				fn base_path(&self)
+				-> ::sc_cli::Result<::std::option::Option<&::std::path::PathBuf>> {
 					Ok(self.#ident.base_path.as_ref())
 				}
 			}));
@@ -139,7 +140,8 @@ pub(crate) fn substrate_cli_params(
 		}
 		if missing("tracing_targets") {
 			i.items.push(ImplItem::Verbatim(quote! {
-				fn tracing_targets(&self) -> ::sc_cli::Result<::std::option::Option<::std::string::String>> {
+				fn tracing_targets(&self)
+				-> ::sc_cli::Result<::std::option::Option<::std::string::String>> {
 					Ok(self.#ident.tracing_targets.clone().into())
 				}
 			}));
@@ -153,14 +155,16 @@ pub(crate) fn substrate_cli_params(
 		}
 		if missing("wasm_method") {
 			i.items.push(ImplItem::Verbatim(quote! {
-				fn wasm_method(&self) -> ::sc_cli::Result<::sc_service::config::WasmExecutionMethod> {
+				fn wasm_method(&self)
+				-> ::sc_cli::Result<::sc_service::config::WasmExecutionMethod> {
 					Ok(self.#ident.wasm_method())
 				}
 			}));
 		}
 		if missing("execution_strategies") {
 			i.items.push(ImplItem::Verbatim(quote! {
-				fn execution_strategies(&self, is_dev: bool) -> ::sc_cli::Result<::sc_service::config::ExecutionStrategies> {
+				fn execution_strategies(&self, is_dev: bool)
+				-> ::sc_cli::Result<::sc_service::config::ExecutionStrategies> {
 					self.#ident.execution_strategies(is_dev)
 				}
 			}));
@@ -177,7 +181,8 @@ pub(crate) fn substrate_cli_params(
 	if let Some(ident) = pruning_params {
 		if missing("pruning") {
 			i.items.push(ImplItem::Verbatim(quote! {
-				fn pruning(&self, is_dev: bool, roles: ::sc_service::Roles) -> ::sc_cli::Result<::sc_service::PruningMode> {
+				fn pruning(&self, is_dev: bool, roles: ::sc_service::Roles)
+				-> ::sc_cli::Result<::sc_service::PruningMode> {
 					self.#ident.pruning(roles, is_dev)
 				}
 			}));
@@ -196,7 +201,7 @@ pub(crate) fn substrate_cli_params(
 	}
 
 	if let Some(ident) = node_key_params {
-		if missing("keystore_config") {
+		if missing("node_key") {
 			i.items.push(ImplItem::Verbatim(quote! {
 				fn node_key(&self, net_config_dir: &::std::path::PathBuf)
 				-> ::sc_cli::Result<::sc_service::config::NodeKeyConfig> {
@@ -211,7 +216,7 @@ pub(crate) fn substrate_cli_params(
 			i.items.push(ImplItem::Verbatim(quote! {
 				fn network_config(
 					&self,
-					chain_spec: &Box<dyn ::sc_service::ChainSpec>,
+					chain_spec: &std::boxed::Box<dyn ::sc_service::ChainSpec>,
 					is_dev: bool,
 					base_path: &::std::path::PathBuf,
 					client_id: &str,
