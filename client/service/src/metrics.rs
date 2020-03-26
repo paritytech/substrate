@@ -21,6 +21,7 @@ struct PrometheusMetrics {
 	state_cache: Gauge<U64>,
 	state_db: GaugeVec<U64>,
 	tokio: GaugeVec<U64>,
+	unbounded_channels: GaugeVec<U64>,
 	internals: GaugeVec<U64>,
 }
 
@@ -83,6 +84,10 @@ impl PrometheusMetrics {
 			)?, registry)?,
 			internals: register(GaugeVec::new(
 				Opts::new("internals", "Other unspecified internals"),
+				&["entity"]
+			)?, registry)?,
+			unbounded_channels: register(GaugeVec::new(
+				Opts::new("internals_unbounded_channels", "items in each mpsc::unbounded instance"),
 				&["entity"]
 			)?, registry)?,
 		})
@@ -259,6 +264,8 @@ impl MetricsService {
 			GLOBAL_METRICS.inner().read().iter().for_each(|(key, value)| {
 				if key.starts_with("tokio_") {
 					metrics.tokio.with_label_values(&[&key[6..]]).set(*value);
+				} else if key.starts_with("mpsc_") {
+					metrics.unbounded_channels.with_label_values(&[&key[5..]]).set(*value);
 				} else {
 					metrics.internals.with_label_values(&[&key[..]]).set(*value);
 				}
