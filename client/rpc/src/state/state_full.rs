@@ -33,7 +33,7 @@ use sp_core::{
 };
 use sp_version::RuntimeVersion;
 use sp_runtime::{
-	generic::BlockId, traits::{Block as BlockT, NumberFor, SaturatedConversion},
+	generic::BlockId, traits::{Block as BlockT, NumberFor, SaturatedConversion, CheckedSub},
 };
 
 use sp_api::{Metadata, ProvideRuntimeApi, CallApiAt};
@@ -94,8 +94,8 @@ impl<BE, Block: BlockT, Client> FullState<BE, Block, Client>
 		let from_meta = self.client.header_metadata(from).map_err(invalid_block_err)?;
 		let to_meta = self.client.header_metadata(to).map_err(invalid_block_err)?;
 
-		if from_meta.number >= to_meta.number {
-			return Err(invalid_block_range(&from_meta, &to_meta, "from number >= to number".to_owned()))
+		if from_meta.number > to_meta.number {
+			return Err(invalid_block_range(&from_meta, &to_meta, "from number > to number".to_owned()))
 		}
 
 		// check if we can get from `to` to `from` by going through parent_hashes.
@@ -122,7 +122,10 @@ impl<BE, Block: BlockT, Client> FullState<BE, Block, Client>
 			.max_key_changes_range(from_number, BlockId::Hash(to_meta.hash))
 			.map_err(client_err)?;
 		let filtered_range_begin = changes_trie_range
-			.map(|(begin, _)| (begin - from_number).saturated_into::<usize>());
+			.and_then(|(begin, _)| {
+				// avoids a corner case where begin < from_number (happens when querying genesis)
+				begin.checked_sub(&from_number).map(|x| x.saturated_into::<usize>())
+			});
 		let (unfiltered_range, filtered_range) = split_range(hashes.len(), filtered_range_begin);
 
 		Ok(QueryStorageRange {
@@ -396,6 +399,15 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 			Ok(changes)
 		};
 		Box::new(result(call_fn()))
+	}
+
+	fn query_storage_at(
+		&self,
+		keys: Vec<StorageKey>,
+		at: Option<Block::Hash>
+	) -> FutureResult<Vec<StorageChangeSet<Block::Hash>>> {
+		let at = at.unwrap_or_else(|| self.client.info().best_hash);
+		self.query_storage(at, Some(at), keys)
 	}
 
 	fn subscribe_runtime_version(

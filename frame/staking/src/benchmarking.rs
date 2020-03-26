@@ -380,7 +380,7 @@ mod tests {
 
 	#[test]
 	fn create_validators_with_nominators_for_era_works() {
-		ExtBuilder::default().stakers(false).build().execute_with(|| {
+		ExtBuilder::default().has_stakers(false).build().execute_with(|| {
 			let v = 10;
 			let n = 100;
 
@@ -396,7 +396,7 @@ mod tests {
 
 	#[test]
 	fn create_validator_with_nominators_works() {
-		ExtBuilder::default().stakers(false).build().execute_with(|| {
+		ExtBuilder::default().has_stakers(false).build().execute_with(|| {
 			let n = 10;
 
 			let validator = create_validator_with_nominators::<Test>(
