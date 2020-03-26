@@ -20,7 +20,7 @@ use super::*;
 
 use rand_chacha::{rand_core::{RngCore, SeedableRng}, ChaChaRng};
 
-use sp_runtime::traits::One;
+use sp_runtime::traits::{Dispatchable, One};
 use sp_io::hashing::blake2_256;
 
 use frame_system::RawOrigin;
@@ -325,6 +325,45 @@ benchmarks! {
 			&mut NegativeImbalanceOf::<T>::zero()
 		);
 	}
+
+	payout_all {
+		let v in 1 .. 10;
+		let n in 1 .. 100;
+		MinimumValidatorCount::put(0);
+		create_validators_with_nominators_for_era::<T>(v, n)?;
+		// Start a new Era
+		let new_validators = Staking::<T>::new_era(SessionIndex::one()).unwrap();
+		assert!(new_validators.len() == v as usize);
+
+		let current_era = CurrentEra::get().unwrap();
+		let mut points_total = 0;
+		let mut points_individual = Vec::new();
+		let mut payout_calls = Vec::new();
+
+		for validator in new_validators.iter() {
+			points_total += 10;
+			points_individual.push((validator.clone(), 10));
+			payout_calls.push(Call::<T>::payout_validator(validator.clone(), current_era))
+		}
+
+		// Give Era Points
+		let reward = EraRewardPoints::<T::AccountId> {
+			total: points_total,
+			individual: points_individual.into_iter().collect(),
+		};
+
+		ErasRewardPoints::<T>::insert(current_era, reward);
+
+		// Create reward pool
+		let total_payout = T::Currency::minimum_balance() * 1000.into();
+		<ErasValidatorReward<T>>::insert(current_era, total_payout);
+
+		let caller: T::AccountId = account("caller", 0, SEED);
+	}: {
+		for call in payout_calls {
+			call.dispatch(RawOrigin::Signed(caller.clone()).into())?;
+		}
+	}
 }
 
 #[cfg(test)]
@@ -336,6 +375,7 @@ mod tests {
 	use crate::benchmarking::{
 		create_validators_with_nominators_for_era,
 		create_validator_with_nominators,
+		SelectedBenchmark,
 	};
 
 	#[test]
@@ -374,6 +414,24 @@ mod tests {
 			let new_free_balance = Balances::free_balance(&stash);
 
 			assert!(original_free_balance < new_free_balance);
+		});
+	}
+
+	#[test]
+	fn test_payout_all() {
+		ExtBuilder::default().stakers(false).build().execute_with(|| {
+			let v = 10;
+			let n = 100;
+
+			let selected_benchmark = SelectedBenchmark::payout_all;
+			let c = vec![(frame_benchmarking::BenchmarkParameter::v, v), (frame_benchmarking::BenchmarkParameter::n, n)];
+			let closure_to_benchmark =
+				<SelectedBenchmark as frame_benchmarking::BenchmarkingSetup<Test>>::instance(
+					&selected_benchmark,
+					&c
+				).unwrap();
+
+			assert_ok!(closure_to_benchmark());
 		});
 	}
 }
