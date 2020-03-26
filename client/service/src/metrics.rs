@@ -72,7 +72,7 @@ impl PrometheusMetrics {
 			)?, registry)?,
 			load_avg: register(GaugeVec::new(
 				Opts::new("load_avg", "System load average"),
-				&["status"]
+				&["over"]
 			)?, registry)?,
 		})
 	}
@@ -237,12 +237,12 @@ impl MetricsService {
 			}
 
 			if let Some(conns) = self.connections_info() {
-				metrics.netstat.with_label_values(&["tcp_listen"]).set(conns.listen);
-				metrics.netstat.with_label_values(&["tcp_established"]).set(conns.established);
-				metrics.netstat.with_label_values(&["tcp_starting"]).set(conns.starting);
-				metrics.netstat.with_label_values(&["tcp_closing"]).set(conns.closing);
-				metrics.netstat.with_label_values(&["tcp_closed"]).set(conns.closed);
-				metrics.netstat.with_label_values(&["tcp_other"]).set(conns.other);
+				metrics.netstat.with_label_values(&["listen"]).set(conns.listen);
+				metrics.netstat.with_label_values(&["established"]).set(conns.established);
+				metrics.netstat.with_label_values(&["starting"]).set(conns.starting);
+				metrics.netstat.with_label_values(&["closing"]).set(conns.closing);
+				metrics.netstat.with_label_values(&["closed"]).set(conns.closed);
+				metrics.netstat.with_label_values(&["other"]).set(conns.other);
 			}
 		}
 
