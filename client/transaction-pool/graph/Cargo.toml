@@ -16,6 +16,7 @@ parking_lot = "0.10.0"
 serde = { version = "1.0.101", features = ["derive"] }
 wasm-timer = "0.2"
 sp-blockchain = { version = "2.0.0-alpha.5", path = "../../../primitives/blockchain" }
+sp-utils = { version = "2.0.0-alpha.5", path = "../../../primitives/utils" }
 sp-core = { version = "2.0.0-alpha.5", path = "../../../primitives/core" }
 sp-runtime = { version = "2.0.0-alpha.5", path = "../../../primitives/runtime" }
 sp-transaction-pool = { version = "2.0.0-alpha.5", path = "../../../primitives/transaction-pool" }

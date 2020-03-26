@@ -24,7 +24,7 @@ use std::{
 use fnv::{FnvHashSet, FnvHashMap};
 use sp_core::storage::{StorageKey, StorageData};
 use sp_runtime::traits::Block as BlockT;
-use crate::metrics::{TracingUnboundedSender, TracingUnboundedReceiver, tracing_unbounded};
+use sp_utils::mpsc::{TracingUnboundedSender, TracingUnboundedReceiver, tracing_unbounded};
 
 /// Storage change set
 #[derive(Debug)]

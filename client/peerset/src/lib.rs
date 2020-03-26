@@ -20,11 +20,12 @@
 mod peersstate;
 
 use std::{collections::{HashSet, HashMap}, collections::VecDeque};
-use futures::{prelude::*, channel::mpsc};
+use futures::prelude::*;
 use log::{debug, error, trace};
 use serde_json::json;
 use std::{pin::Pin, task::{Context, Poll}, time::Duration};
 use wasm_timer::Instant;
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
 
 pub use libp2p::PeerId;
 
@@ -73,7 +74,7 @@ impl ReputationChange {
 /// Shared handle to the peer set manager (PSM). Distributed around the code.
 #[derive(Debug, Clone)]
 pub struct PeersetHandle {
-	tx: mpsc::UnboundedSender<Action>,
+	tx: TracingUnboundedSender<Action>,
 }
 
 impl PeersetHandle {
@@ -183,9 +184,9 @@ pub struct Peerset {
 	/// If true, we only accept reserved nodes.
 	reserved_only: bool,
 	/// Receiver for messages from the `PeersetHandle` and from `tx`.
-	rx: mpsc::UnboundedReceiver<Action>,
+	rx: TracingUnboundedReceiver<Action>,
 	/// Sending side of `rx`.
-	tx: mpsc::UnboundedSender<Action>,
+	tx: TracingUnboundedSender<Action>,
 	/// Queue of messages to be emitted when the `Peerset` is polled.
 	message_queue: VecDeque<Message>,
 	/// When the `Peerset` was created.
@@ -197,7 +198,7 @@ pub struct Peerset {
 impl Peerset {
 	/// Builds a new peerset from the given configuration.
 	pub fn from_config(config: PeersetConfig) -> (Peerset, PeersetHandle) {
-		let (tx, rx) = mpsc::unbounded();
+		let (tx, rx) = tracing_unbounded("mpsc_peerset_messages");
 
 		let handle = PeersetHandle {
 			tx: tx.clone(),

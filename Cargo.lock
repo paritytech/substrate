@@ -5872,6 +5872,7 @@ dependencies = [
  "sp-panic-handler",
  "sp-runtime",
  "sp-state-machine",
+ "sp-utils",
  "structopt",
  "substrate-prometheus-endpoint",
  "tempfile",
@@ -5910,6 +5911,7 @@ dependencies = [
  "sp-state-machine",
  "sp-std",
  "sp-trie",
+ "sp-utils",
  "sp-version",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
@@ -5947,6 +5949,7 @@ dependencies = [
  "sp-test-primitives",
  "sp-transaction-pool",
  "sp-trie",
+ "sp-utils",
  "sp-version",
 ]
 
@@ -6307,6 +6310,7 @@ dependencies = [
  "sp-keyring",
  "sp-runtime",
  "sp-state-machine",
+ "sp-utils",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "tempfile",
@@ -6392,6 +6396,7 @@ dependencies = [
  "sp-keyring",
  "sp-runtime",
  "sp-test-primitives",
+ "sp-utils",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime",
  "substrate-test-runtime-client",
@@ -6414,6 +6419,7 @@ dependencies = [
  "lru",
  "sc-network",
  "sp-runtime",
+ "sp-utils",
  "substrate-test-runtime-client",
  "wasm-timer",
 ]
@@ -6470,6 +6476,7 @@ dependencies = [
  "sp-offchain",
  "sp-runtime",
  "sp-transaction-pool",
+ "sp-utils",
  "substrate-test-runtime-client",
  "threadpool",
  "tokio 0.2.13",
@@ -6484,6 +6491,7 @@ dependencies = [
  "log 0.4.8",
  "rand 0.7.3",
  "serde_json",
+ "sp-utils",
  "wasm-timer",
 ]
 
@@ -6519,6 +6527,7 @@ dependencies = [
  "sp-session",
  "sp-state-machine",
  "sp-transaction-pool",
+ "sp-utils",
  "sp-version",
  "substrate-test-runtime-client",
  "tokio 0.1.22",
@@ -6618,6 +6627,7 @@ dependencies = [
  "sp-runtime",
  "sp-session",
  "sp-transaction-pool",
+ "sp-utils",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "sysinfo",
@@ -6714,6 +6724,7 @@ dependencies = [
  "sp-core",
  "sp-runtime",
  "sp-transaction-pool",
+ "sp-utils",
  "substrate-test-runtime",
  "wasm-timer",
 ]
@@ -6740,6 +6751,7 @@ dependencies = [
  "sp-keyring",
  "sp-runtime",
  "sp-transaction-pool",
+ "sp-utils",
  "substrate-test-runtime-client",
  "substrate-test-runtime-transaction-pool",
  "wasm-timer",
@@ -7253,6 +7265,7 @@ dependencies = [
  "sp-state-machine",
  "sp-std",
  "sp-test-primitives",
+ "sp-utils",
  "sp-version",
 ]
 
@@ -7661,6 +7674,7 @@ dependencies = [
  "serde",
  "sp-api",
  "sp-runtime",
+ "sp-utils",
 ]
 
 [[package]]
@@ -7679,6 +7693,15 @@ dependencies = [
  "trie-db",
  "trie-root",
  "trie-standardmap",
+]
+
+[[package]]
+name = "sp-utils"
+version = "2.0.0-alpha.5"
+dependencies = [
+ "futures 0.3.4",
+ "lazy_static",
+ "parking_lot 0.10.0",
 ]
 
 [[package]]

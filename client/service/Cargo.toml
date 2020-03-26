@@ -37,6 +37,7 @@ netstat2 = "0.8.1"
 sc-keystore = { version = "2.0.0-alpha.5", path = "../keystore" }
 sp-io = { version = "2.0.0-alpha.5", path = "../../primitives/io" }
 sp-runtime = { version = "2.0.0-alpha.5", path = "../../primitives/runtime" }
+sp-utils = { version = "2.0.0-alpha.5", path = "../../primitives/utils" }
 sp-blockchain = { version = "2.0.0-alpha.5", path = "../../primitives/blockchain" }
 sp-core = { version = "2.0.0-alpha.5", path = "../../primitives/core" }
 sp-session = { version = "2.0.0-alpha.5", path = "../../primitives/session" }

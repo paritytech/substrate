@@ -30,6 +30,7 @@ sp-std = { version = "2.0.0-alpha.5", path = "../primitives/std" }
 sp-version = { version = "2.0.0-alpha.5", path = "../primitives/version" }
 sp-api = { version = "2.0.0-alpha.5", path = "../primitives/api" }
 sp-runtime = { version = "2.0.0-alpha.5", path = "../primitives/runtime" }
+sp-utils = { version = "2.0.0-alpha.5", path = "../primitives/utils" }
 sp-blockchain = { version = "2.0.0-alpha.5", path = "../primitives/blockchain" }
 sp-state-machine = { version = "0.8.0-alpha.5", path = "../primitives/state-machine" }
 sc-telemetry = { version = "2.0.0-alpha.5", path = "telemetry" }

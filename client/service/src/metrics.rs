@@ -7,7 +7,7 @@ use crate::NetworkStatus;
 use sp_transaction_pool::PoolStatus;
 use sp_runtime::traits::{NumberFor, Block, SaturatedConversion, UniqueSaturatedInto};
 use netstat2::{TcpState, ProtocolSocketInfo, iterate_sockets_info, AddressFamilyFlags, ProtocolFlags};
-use sc_client_api::GLOBAL_METRICS;
+use sp_utils::metrics::GLOBAL_METRICS;
 
 struct PrometheusMetrics {
 	block_height_number: GaugeVec<U64>,
@@ -79,11 +79,11 @@ impl PrometheusMetrics {
 			)?, registry)?,
 			tokio: register(GaugeVec::new(
 				Opts::new("tokio", "Tokio internals"),
-				&["status"]
+				&["entity"]
 			)?, registry)?,
 			internals: register(GaugeVec::new(
 				Opts::new("internals", "Other unspecified internals"),
-				&["status"]
+				&["entity"]
 			)?, registry)?,
 		})
 	}

@@ -26,12 +26,12 @@ use sc_client_api::{
 	execution_extensions::ExtensionsFactory,
 	ExecutorProvider, CallExecutor
 };
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sc_client::Client;
 use sc_chain_spec::get_extension;
 use sp_consensus::import_queue::ImportQueue;
 use futures::{
 	Future, FutureExt, StreamExt,
-	channel::mpsc,
 	future::ready,
 };
 use sc_keystore::{Store as Keystore};
@@ -774,7 +774,7 @@ ServiceBuilder<
 		)?;
 
 		// A side-channel for essential tasks to communicate shutdown.
-		let (essential_failed_tx, essential_failed_rx) = mpsc::unbounded();
+		let (essential_failed_tx, essential_failed_rx) = tracing_unbounded("mpsc_essential_tasks");
 
 		let import_queue = Box::new(import_queue);
 		let chain_info = client.chain_info();
@@ -967,7 +967,7 @@ ServiceBuilder<
 		// Periodically notify the telemetry.
 		let transaction_pool_ = transaction_pool.clone();
 		let client_ = client.clone();
-		let (state_tx, state_rx) = mpsc::unbounded::<(NetworkStatus<_>, NetworkState)>();
+		let (state_tx, state_rx) = tracing_unbounded::<(NetworkStatus<_>, NetworkState)>("mpsc_netstat1");
 		network_status_sinks.lock().push(std::time::Duration::from_millis(5000), state_tx);
 		let tel_task = state_rx.for_each(move |(net_status, _)| {
 			let info = client_.usage_info();
@@ -985,7 +985,7 @@ ServiceBuilder<
 		);
 
 		// Periodically send the network state to the telemetry.
-		let (netstat_tx, netstat_rx) = mpsc::unbounded::<(NetworkStatus<_>, NetworkState)>();
+		let (netstat_tx, netstat_rx) = tracing_unbounded::<(NetworkStatus<_>, NetworkState)>("mpsc_netstat2");
 		network_status_sinks.lock().push(std::time::Duration::from_secs(30), netstat_tx);
 		let tel_task_2 = netstat_rx.for_each(move |(_, network_state)| {
 			telemetry!(
@@ -1001,7 +1001,7 @@ ServiceBuilder<
 		);
 
 		// RPC
-		let (system_rpc_tx, system_rpc_rx) = mpsc::unbounded();
+		let (system_rpc_tx, system_rpc_rx) = tracing_unbounded("mpsc_system_rpc");
 		let gen_handler = || {
 			use sc_rpc::{chain, state, author, system, offchain};
 
@@ -1082,7 +1082,7 @@ ServiceBuilder<
 			),
 		);
 
-		let telemetry_connection_sinks: Arc<Mutex<Vec<futures::channel::mpsc::UnboundedSender<()>>>> = Default::default();
+		let telemetry_connection_sinks: Arc<Mutex<Vec<TracingUnboundedSender<()>>>> = Default::default();
 
 		// Telemetry
 		let telemetry = config.telemetry_endpoints.clone().map(|endpoints| {

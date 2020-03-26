@@ -19,10 +19,11 @@ use crate::state_machine::{ConsensusGossip, TopicNotification, PERIODIC_MAINTENA
 
 use sc_network::{Event, ReputationChange};
 
-use futures::{prelude::*, channel::mpsc};
+use futures::prelude::*;
 use libp2p::PeerId;
 use sp_runtime::{traits::Block as BlockT, ConsensusEngineId};
 use std::{borrow::Cow, pin::Pin, sync::Arc, task::{Context, Poll}};
+use sp_utils::mpsc::TracingUnboundedReceiver;
 
 /// Wraps around an implementation of the `Network` crate and provides gossiping capabilities on
 /// top of it.
@@ -86,7 +87,7 @@ impl<B: BlockT> GossipEngine<B> {
 
 	/// Get data of valid, incoming messages for a topic (but might have expired meanwhile).
 	pub fn messages_for(&mut self, topic: B::Hash)
-		-> mpsc::UnboundedReceiver<TopicNotification>
+		-> TracingUnboundedReceiver<TopicNotification>
 	{
 		self.state_machine.messages_for(self.engine_id, topic)
 	}

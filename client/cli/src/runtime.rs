@@ -20,7 +20,7 @@ use futures::{Future, future, future::FutureExt};
 use futures::select;
 use futures::pin_mut;
 use sc_service::{AbstractService, Configuration};
-use sc_client_api::GLOBAL_METRICS;
+use sp_utils::metrics::GLOBAL_METRICS;
 use crate::error;
 
 #[cfg(target_family = "unix")]

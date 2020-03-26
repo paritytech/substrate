@@ -18,13 +18,14 @@
 
 use crate::protocol::light_dispatch::RequestData;
 use std::{collections::HashMap, pin::Pin, sync::Arc, task::Context, task::Poll};
-use futures::{prelude::*, channel::mpsc, channel::oneshot};
+use futures::{prelude::*, channel::oneshot};
 use parking_lot::Mutex;
 use sp_blockchain::Error as ClientError;
 use sc_client_api::{
 	Fetcher, FetchChecker, RemoteHeaderRequest, RemoteCallRequest, RemoteReadRequest,
 	RemoteChangesRequest, RemoteReadChildRequest, RemoteBodyRequest,
 };
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 
 /// Implements the `Fetcher` trait of the client. Makes it possible for the light client to perform
@@ -41,10 +42,10 @@ pub struct OnDemand<B: BlockT> {
 	/// Note that a better alternative would be to use a MPMC queue here, and add a `poll` method
 	/// from the `OnDemand`. However there exists no popular implementation of MPMC channels in
 	/// asynchronous Rust at the moment
-	requests_queue: Mutex<Option<mpsc::UnboundedReceiver<RequestData<B>>>>,
+	requests_queue: Mutex<Option<TracingUnboundedReceiver<RequestData<B>>>>,
 
 	/// Sending side of `requests_queue`.
-	requests_send: mpsc::UnboundedSender<RequestData<B>>,
+	requests_send: TracingUnboundedSender<RequestData<B>>,
 }
 
 impl<B: BlockT> OnDemand<B> where
@@ -52,7 +53,7 @@ impl<B: BlockT> OnDemand<B> where
 {
 	/// Creates new on-demand service.
 	pub fn new(checker: Arc<dyn FetchChecker<B>>) -> Self {
-		let (requests_send, requests_queue) = mpsc::unbounded();
+		let (requests_send, requests_queue) = tracing_unbounded("mpsc_ondemad");
 		let requests_queue = Mutex::new(Some(requests_queue));
 
 		OnDemand {
@@ -74,7 +75,7 @@ impl<B: BlockT> OnDemand<B> where
 	///
 	/// If this function returns `None`, that means that the receiver has already been extracted in
 	/// the past, and therefore that something already handles the requests.
-	pub(crate) fn extract_receiver(&self) -> Option<mpsc::UnboundedReceiver<RequestData<B>>> {
+	pub(crate) fn extract_receiver(&self) -> Option<TracingUnboundedReceiver<RequestData<B>>> {
 		self.requests_queue.lock().take()
 	}
 }

@@ -18,7 +18,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
-use futures::{prelude::*, channel::mpsc};
+use futures::prelude::*;
 
 use finality_grandpa::{
 	BlockNumberOps, Error as GrandpaError, voter, voter_set::VoterSet
@@ -27,8 +27,10 @@ use log::{debug, info, warn};
 
 use sp_consensus::SelectChain;
 use sc_client_api::backend::Backend;
+use sp_utils::mpsc::TracingUnboundedReceiver;
 use sp_runtime::traits::{NumberFor, Block as BlockT};
 use sp_blockchain::HeaderMetadata;
+
 use crate::{
 	global_communication, CommandOrError, CommunicationIn, Config, environment,
 	LinkHalf, Error, aux_schema::PersistentData, VoterCommand, VoterSetState,
@@ -206,7 +208,7 @@ struct ObserverWork<B: BlockT, BE, Client, N: NetworkT<B>> {
 	network: NetworkBridge<B, N>,
 	persistent_data: PersistentData<B>,
 	keystore: Option<sc_keystore::KeyStorePtr>,
-	voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
+	voter_commands_rx: TracingUnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
 	_phantom: PhantomData<BE>,
 }
 
@@ -223,7 +225,7 @@ where
 		network: NetworkBridge<B, Network>,
 		persistent_data: PersistentData<B>,
 		keystore: Option<sc_keystore::KeyStorePtr>,
-		voter_commands_rx: mpsc::UnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
+		voter_commands_rx: TracingUnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
 	) -> Self {
 
 		let mut work = ObserverWork {
@@ -411,7 +413,7 @@ mod tests {
 			|| Ok(vec![]),
 		).unwrap();
 
-		let (_tx, voter_command_rx) = mpsc::unbounded();
+		let (_tx, voter_command_rx) = tracing_unbounded("");
 		let observer = ObserverWork::new(
 			client,
 			tester.net_handle.clone(),

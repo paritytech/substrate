@@ -22,8 +22,9 @@ use sc_transaction_graph::{ChainApi, Pool, ExHash, NumberFor, ValidatedTransacti
 use sp_runtime::traits::{Zero, SaturatedConversion};
 use sp_runtime::generic::BlockId;
 use sp_runtime::transaction_validity::TransactionValidityError;
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
 
-use futures::{prelude::*, channel::mpsc, stream::unfold};
+use futures::{prelude::*, stream::unfold};
 use std::time::Duration;
 use futures_timer::Delay;
 
@@ -207,7 +208,7 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 	/// It does two things: periodically tries to process some transactions
 	/// from the queue and also accepts messages to enqueue some more
 	/// transactions from the pool.
-	pub async fn run(mut self, from_queue: mpsc::UnboundedReceiver<WorkerPayload<Api>>) {
+	pub async fn run(mut self, from_queue: TracingUnboundedReceiver<WorkerPayload<Api>>) {
 		let interval = interval(BACKGROUND_REVALIDATION_INTERVAL).fuse();
 		let from_queue = from_queue.fuse();
 		futures::pin_mut!(interval, from_queue);
@@ -254,7 +255,7 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 pub struct RevalidationQueue<Api: ChainApi> {
 	pool: Arc<Pool<Api>>,
 	api: Arc<Api>,
-	background: Option<mpsc::UnboundedSender<WorkerPayload<Api>>>,
+	background: Option<TracingUnboundedSender<WorkerPayload<Api>>>,
 }
 
 impl<Api: ChainApi> RevalidationQueue<Api>
@@ -274,7 +275,7 @@ where
 	pub fn new_background(api: Arc<Api>, pool: Arc<Pool<Api>>) ->
 		(Self, Pin<Box<dyn Future<Output=()> + Send>>)
 	{
-		let (to_worker, from_queue) = mpsc::unbounded();
+		let (to_worker, from_queue) = tracing_unbounded("mpsc_revalidation_queue");
 
 		let worker = RevalidationWorker::new(api.clone(), pool.clone());
 

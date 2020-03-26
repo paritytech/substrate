@@ -19,6 +19,7 @@ wasm-timer = "0.2"
 sp-core = { version = "2.0.0-alpha.5", path = "../../primitives/core" }
 sp-api = { version = "2.0.0-alpha.5", path = "../../primitives/api" }
 sp-runtime = { version = "2.0.0-alpha.5", path = "../../primitives/runtime" }
+sp-utils = { version = "2.0.0-alpha.5", path = "../../primitives/utils" }
 sc-transaction-graph = { version = "2.0.0-alpha.5", path = "./graph" }
 sp-transaction-pool = { version = "2.0.0-alpha.5", path = "../../primitives/transaction-pool" }
 sc-client-api = { version = "2.0.0-alpha.5", path = "../api" }

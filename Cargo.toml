@@ -154,6 +154,7 @@ members = [
 	"primitives/test-primitives",
 	"primitives/transaction-pool",
 	"primitives/trie",
+	"primitives/utils",
 	"primitives/wasm-interface",
 	"test-utils/client",
 	"test-utils/runtime",
