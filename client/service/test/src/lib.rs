@@ -177,7 +177,7 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 		},
 		database: DatabaseConfig::Path {
 			path: root.join("db"),
-			cache_size: None
+			cache_size: 128,
 		},
 		state_cache_size: 16777216,
 		state_cache_child_ratio: None,
