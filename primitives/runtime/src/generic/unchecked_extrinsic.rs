@@ -22,7 +22,7 @@ use codec::{Decode, Encode, EncodeLike, Input, Error};
 use crate::{
 	traits::{
 		self, Member, MaybeDisplay, SignedExtension, Checkable, Extrinsic, ExtrinsicMetadata,
-		IdentifyAccount,
+		IdentifyAccount, BatchResult,
 	},
 	generic::CheckedExtrinsic,
 	transaction_validity::{TransactionValidityError, InvalidTransaction},
@@ -127,7 +127,11 @@ where
 				let signed = lookup.lookup(signed)?;
 				let raw_payload = SignedPayload::new(self.function, extra)?;
 				if !raw_payload.using_encoded(|payload| {
-					signature.verify(payload, &signed)
+					if let BatchResult::Immediate(false) = signature.batch_verify(payload, &signed) {
+						false
+					} else {
+						true
+					}
 				}) {
 					return Err(InvalidTransaction::BadProof.into())
 				}
