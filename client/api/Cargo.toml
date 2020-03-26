@@ -26,6 +26,7 @@ sp-keyring = { version = "2.0.0-alpha.5", path = "../../primitives/keyring" }
 kvdb = "0.5.0"
 log = { version = "0.4.8" }
 parking_lot = "0.10.0"
+lazy_static =  "1.4.0"
 sp-core = { version = "2.0.0-alpha.5", default-features = false, path = "../../primitives/core" }
 sp-std = { version = "2.0.0-alpha.5", default-features = false, path = "../../primitives/std" }
 sp-version = { version = "2.0.0-alpha.5", default-features = false, path = "../../primitives/version" }

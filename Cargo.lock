@@ -5927,6 +5927,7 @@ dependencies = [
  "hash-db",
  "hex-literal",
  "kvdb",
+ "lazy_static",
  "log 0.4.8",
  "parity-scale-codec",
  "parking_lot 0.10.0",

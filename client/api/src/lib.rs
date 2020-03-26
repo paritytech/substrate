@@ -25,6 +25,8 @@ pub mod light;
 pub mod notifications;
 pub mod proof_provider;
 
+mod metrics;
+
 pub use sp_blockchain as blockchain;
 pub use backend::*;
 pub use notifications::*;
@@ -33,6 +35,7 @@ pub use client::*;
 pub use light::*;
 pub use notifications::*;
 pub use proof_provider::*;
+pub use metrics::{GLOBAL_METRICS, InternalMetrics};
 
 pub use sp_state_machine::{StorageProof, ExecutionStrategy, CloneableSpawn};
 

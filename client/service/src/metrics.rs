@@ -7,6 +7,7 @@ use crate::NetworkStatus;
 use sp_transaction_pool::PoolStatus;
 use sp_runtime::traits::{NumberFor, Block, SaturatedConversion, UniqueSaturatedInto};
 use netstat2::{TcpState, ProtocolSocketInfo, iterate_sockets_info, AddressFamilyFlags, ProtocolFlags};
+use sc_client_api::GLOBAL_METRICS;
 
 struct PrometheusMetrics {
 	block_height_number: GaugeVec<U64>,
@@ -19,6 +20,8 @@ struct PrometheusMetrics {
 	database_cache: Gauge<U64>,
 	state_cache: Gauge<U64>,
 	state_db: GaugeVec<U64>,
+	tokio: GaugeVec<U64>,
+	internals: GaugeVec<U64>,
 }
 
 impl PrometheusMetrics {
@@ -73,6 +76,14 @@ impl PrometheusMetrics {
 			load_avg: register(GaugeVec::new(
 				Opts::new("load_avg", "System load average"),
 				&["over"]
+			)?, registry)?,
+			tokio: register(GaugeVec::new(
+				Opts::new("tokio", "Tokio internals"),
+				&["status"]
+			)?, registry)?,
+			internals: register(GaugeVec::new(
+				Opts::new("internals", "Other unspecified internals"),
+				&["status"]
 			)?, registry)?,
 		})
 	}
@@ -244,6 +255,14 @@ impl MetricsService {
 				metrics.netstat.with_label_values(&["closed"]).set(conns.closed);
 				metrics.netstat.with_label_values(&["other"]).set(conns.other);
 			}
+
+			GLOBAL_METRICS.inner().read().iter().for_each(|(key, value)| {
+				if key.starts_with("tokio_") {
+					metrics.tokio.with_label_values(&[&key[6..]]).set(*value);
+				} else {
+					metrics.internals.with_label_values(&[&key[..]]).set(*value);
+				}
+			});
 		}
 
 	}
