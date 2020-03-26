@@ -327,7 +327,7 @@ benchmarks! {
 		let encoded_proposal = vec![0; b as usize];
 		let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
 
-		let caller = funded_account::<T>("caller", d);
+		let caller = funded_account::<T>("caller", b);
 		Democracy::<T>::note_preimage(RawOrigin::Signed(caller.clone()).into(), encoded_proposal.clone())?;
 
 		// We need to set this otherwise we get `Early` error.
