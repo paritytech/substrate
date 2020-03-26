@@ -314,7 +314,7 @@ benchmarks! {
 		let encoded_proposal = vec![0; 0];
 		let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
 		let block_number = T::BlockNumber::one();
-		Preimages::<T>::insert(&proposal_hash, PreimageStatus::Missing(block_number))?
+		Preimages::<T>::insert(&proposal_hash, PreimageStatus::Missing(block_number))?;
 
 		let caller = funded_account::<T>("caller", b);
 		let encoded_proposal = vec![0; d as usize];
