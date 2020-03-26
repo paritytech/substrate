@@ -24,6 +24,7 @@ pub mod config;
 pub mod chain_ops;
 pub mod error;
 
+mod metrics;
 mod builder;
 mod status_sinks;
 mod task_manager;
