@@ -42,6 +42,7 @@ frame-benchmarking = { version = "2.0.0-alpha.5", path = "../benchmarking" }
 rand_chacha = { version = "0.2" }
 parking_lot = "0.10.0"
 env_logger = "0.7.1"
+hex = "0.4"
 
 [features]
 testing-utils = [
@@ -69,5 +70,4 @@ std = [
 runtime-benchmarks = [
 	"rand_chacha",
 	"frame-benchmarking",
-	"frame-system/runtime-benchmarks",
 ]

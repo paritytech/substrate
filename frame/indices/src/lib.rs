@@ -121,6 +121,7 @@ decl_module! {
 		/// - One reserve operation.
 		/// - One event.
 		/// # </weight>
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn claim(origin, index: T::AccountIndex) {
 			let who = ensure_signed(origin)?;
 
@@ -148,6 +149,7 @@ decl_module! {
 		/// - One transfer operation.
 		/// - One event.
 		/// # </weight>
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn transfer(origin, new: T::AccountId, index: T::AccountIndex) {
 			let who = ensure_signed(origin)?;
 			ensure!(who != new, Error::<T>::NotTransfer);
@@ -178,6 +180,7 @@ decl_module! {
 		/// - One reserve operation.
 		/// - One event.
 		/// # </weight>
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn free(origin, index: T::AccountIndex) {
 			let who = ensure_signed(origin)?;
 
@@ -206,6 +209,7 @@ decl_module! {
 		/// - Up to one reserve operation.
 		/// - One event.
 		/// # </weight>
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn force_transfer(origin, new: T::AccountId, index: T::AccountIndex) {
 			ensure_root(origin)?;
 
