@@ -90,7 +90,7 @@ pub enum Subcommand {
 /// # }
 /// ```
 ///
-/// This which will expand to:
+/// Which will expand to:
 ///
 /// ```ignore
 /// impl CliConfiguration for Subcommand {
