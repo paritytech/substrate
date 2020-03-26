@@ -253,18 +253,3 @@ fn kill_color(s: &str) -> String {
 	}
 	RE.replace_all(s, "").to_string()
 }
-
-/// Generate the `cargo:` key output
-pub fn generate_cargo_keys() {
-	use vergen::{generate_cargo_keys, ConstantsFlags};
-
-	generate_cargo_keys(ConstantsFlags::SHA_SHORT).expect("Failed to generate metadata files");
-}
-
-/// Make sure the calling `build.rs` script is rerun when `.git/HEAD` changed.
-///
-/// The file is searched from the `CARGO_MANIFEST_DIR` upwards. If the file can not be found,
-/// a warning is generated.
-pub fn rerun_if_git_head_changed() {
-	build_script_utils::rerun_if_git_head_changed();
-}

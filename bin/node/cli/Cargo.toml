@@ -116,6 +116,7 @@ structopt = { version = "0.3.8", optional = true }
 node-transaction-factory = { version = "0.8.0-alpha.5", optional = true, path = "../transaction-factory" }
 node-inspect = { version = "0.8.0-alpha.5", optional = true, path = "../inspect" }
 frame-benchmarking-cli = { version = "2.0.0-alpha.5", optional = true, path = "../../../utils/frame/benchmarking-cli" }
+substrate-build-script-utils = { version = "2.0.0-alpha.5", optional = true, path = "../../../utils/build-script-utils" }
 
 [build-dependencies.sc-cli]
 version = "0.8.0-alpha.5"
@@ -138,6 +139,7 @@ cli = [
 	"frame-benchmarking-cli",
 	"sc-service/rocksdb",
 	"structopt",
+	"substrate-build-script-utils",
 ]
 wasmtime = [
 	"cli",

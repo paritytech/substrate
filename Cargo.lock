@@ -3451,6 +3451,7 @@ dependencies = [
  "sp-transaction-pool",
  "structopt",
  "substrate-browser-utils",
+ "substrate-build-script-utils",
  "tempfile",
  "tracing",
  "wasm-bindgen",
@@ -5789,7 +5790,6 @@ dependencies = [
  "log 0.4.8",
  "names",
  "parity-util-mem",
- "platforms",
  "regex",
  "rpassword",
  "sc-cli-derive",
@@ -5807,12 +5807,10 @@ dependencies = [
  "sp-runtime",
  "sp-state-machine",
  "structopt",
- "substrate-build-script-utils",
  "substrate-prometheus-endpoint",
  "tempfile",
  "time",
  "tokio 0.2.13",
- "vergen",
 ]
 
 [[package]]
@@ -7811,6 +7809,10 @@ dependencies = [
 [[package]]
 name = "substrate-build-script-utils"
 version = "2.0.0-alpha.5"
+dependencies = [
+ "platforms",
+ "vergen",
+]
 
 [[package]]
 name = "substrate-frame-rpc-support"
@@ -8687,7 +8689,7 @@ version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3bfd5b7557925ce778ff9b9ef90e3ade34c524b5ff10e239c69a42d546d2af56"
 dependencies = [
- "rand 0.6.5",
+ "rand 0.7.3",
 ]
 
 [[package]]

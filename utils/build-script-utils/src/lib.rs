@@ -17,6 +17,7 @@
 //! Crate with utility functions for `build.rs` scripts.
 
 use std::{env, path::PathBuf};
+use vergen::ConstantsFlags;
 
 /// Make sure the calling `build.rs` script is rerun when `.git/HEAD` changed.
 ///
@@ -41,4 +42,9 @@ pub fn rerun_if_git_head_changed() {
 		"cargo:warning=Could not find `.git/HEAD` searching from `{}` upwards!",
 		manifest_dir_copy.display(),
 	);
+}
+
+/// Generate the `cargo:` key output
+pub fn generate_cargo_keys() {
+	vergen::generate_cargo_keys(ConstantsFlags::SHA_SHORT).expect("Failed to generate metadata files");
 }
