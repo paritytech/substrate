@@ -421,7 +421,7 @@ mod tests {
 	#[test]
 	fn cancel_named_scheduling_works_with_normal_cancel() {
 		new_test_ext().execute_with(|| {
-			// at #4, every 3 blocks, 3 times.
+			// at #4.
 			Scheduler::schedule_named(1u32, 4, None, 127, Call::Logger(logger::Call::log(69, 1000))).unwrap();
 			let i = Scheduler::schedule(4, None, 127, Call::Logger(logger::Call::log(42, 1000)));
 			run_to_block(3);
