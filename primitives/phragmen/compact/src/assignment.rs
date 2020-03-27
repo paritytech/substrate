@@ -162,14 +162,13 @@ pub(crate) fn assignment(
 		impl<
 			#voter_type: _phragmen::codec::Codec + Default + Copy,
 			#target_type: _phragmen::codec::Codec + Default + Copy,
-			A: _phragmen::codec::Codec + Default + Clone,
 			Accuracy:
 				_phragmen::codec::Codec + Default + Clone + _phragmen::sp_runtime::PerThing +
 				PartialOrd,
 		>
-		#ident<#voter_type, #target_type, Accuracy, A>
+		#ident<#voter_type, #target_type, Accuracy>
 		{
-			pub fn from_assignment<FV, FT>(
+			pub fn from_assignment<FV, FT, A>(
 				assignments: Vec<_phragmen::Assignment<A, Accuracy>>,
 				index_of_voter: FV,
 				index_of_target: FT,
@@ -177,12 +176,12 @@ pub(crate) fn assignment(
 				where
 					for<'r> FV: Fn(&'r A) -> Option<#voter_type>,
 					for<'r> FT: Fn(&'r A) -> Option<#target_type>,
+					A: _phragmen::IdentifierT,
 			{
 				let mut compact: #ident<
 					#voter_type,
 					#target_type,
 					Accuracy,
-					A,
 				> = Default::default();
 
 				for _phragmen::Assignment { who, distribution } in assignments {
@@ -197,7 +196,7 @@ pub(crate) fn assignment(
 				Ok(compact)
 			}
 
-			pub fn into_assignment(
+			pub fn into_assignment<A: _phragmen::IdentifierT>(
 				self,
 				voter_at: impl Fn(#voter_type) -> Option<A>,
 				target_at: impl Fn(#target_type) -> Option<A>,

@@ -25,12 +25,13 @@ use std::fmt::Display;
 use std::str::FromStr;
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
-use sp_core::{self, Hasher, Blake2Hasher, TypeId, RuntimeDebug};
+use sp_core::{self, Hasher, TypeId, RuntimeDebug};
 use crate::codec::{Codec, Encode, Decode};
 use crate::transaction_validity::{
-	ValidTransaction, TransactionValidity, TransactionValidityError, UnknownTransaction,
+	ValidTransaction, TransactionSource, TransactionValidity, TransactionValidityError,
+	UnknownTransaction,
 };
-use crate::generic::{Digest, DigestItem, CheckSignature};
+use crate::generic::{Digest, DigestItem};
 pub use sp_arithmetic::traits::{
 	AtLeast32Bit, UniqueSaturatedInto, UniqueSaturatedFrom, Saturating, SaturatedConversion,
 	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,
@@ -156,6 +157,12 @@ pub trait EnsureOrigin<OuterOrigin> {
 	}
 	/// Perform the origin check.
 	fn try_origin(o: OuterOrigin) -> result::Result<Self::Success, OuterOrigin>;
+
+	/// Returns an outer origin capable of passing `try_origin` check.
+	/// 
+	/// ** Should be used for benchmarking only!!! **
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> OuterOrigin;
 }
 
 /// An error that indicates that a lookup failed.
@@ -329,60 +336,22 @@ impl<T:
 	sp_std::ops::BitAnd<Self, Output = Self>
 > SimpleBitOps for T {}
 
-/// The block finalization trait. Implementing this lets you express what should happen
-/// for your module when the block is ending.
-#[impl_for_tuples(30)]
-pub trait OnFinalize<BlockNumber> {
-	/// The block is being finalized. Implement to have something happen.
-	fn on_finalize(_n: BlockNumber) {}
-}
-
-/// The block initialization trait. Implementing this lets you express what should happen
-/// for your module when the block is beginning (right before the first extrinsic is executed).
-#[impl_for_tuples(30)]
-pub trait OnInitialize<BlockNumber> {
-	/// The block is being initialized. Implement to have something happen.
-	fn on_initialize(_n: BlockNumber) {}
-}
-
-/// Off-chain computation trait.
-///
-/// Implementing this trait on a module allows you to perform long-running tasks
-/// that make (by default) validators generate transactions that feed results
-/// of those long-running computations back on chain.
-///
-/// NOTE: This function runs off-chain, so it can access the block state,
-/// but cannot preform any alterations. More specifically alterations are
-/// not forbidden, but they are not persisted in any way after the worker
-/// has finished.
-#[impl_for_tuples(30)]
-pub trait OffchainWorker<BlockNumber> {
-	/// This function is being called after every block import (when fully synced).
-	///
-	/// Implement this and use any of the `Offchain` `sp_io` set of APIs
-	/// to perform off-chain computations, calls and submit transactions
-	/// with results to trigger any on-chain changes.
-	/// Any state alterations are lost and are not persisted.
-	fn offchain_worker(_n: BlockNumber) {}
-}
-
 /// Abstraction around hashing
 // Stupid bug in the Rust compiler believes derived
 // traits must be fulfilled by all type parameters.
-pub trait Hash: 'static + MaybeSerializeDeserialize + Debug + Clone + Eq + PartialEq {
+pub trait Hash: 'static + MaybeSerializeDeserialize + Debug + Clone + Eq + PartialEq + Hasher<Out = <Self as Hash>::Output> {
 	/// The hash type produced.
 	type Output: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash
 		+ AsRef<[u8]> + AsMut<[u8]> + Copy + Default + Encode + Decode;
 
-	/// The associated hash_db Hasher type.
-	type Hasher: Hasher<Out=Self::Output>;
-
 	/// Produce the hash of some byte-slice.
-	fn hash(s: &[u8]) -> Self::Output;
+	fn hash(s: &[u8]) -> Self::Output {
+		<Self as Hasher>::hash(s)
+	}
 
 	/// Produce the hash of some codec-encodable value.
 	fn hash_of<S: Encode>(s: &S) -> Self::Output {
-		Encode::using_encoded(s, Self::hash)
+		Encode::using_encoded(s, <Self as Hasher>::hash)
 	}
 
 	/// The ordered Patricia tree root of the given `input`.
@@ -397,12 +366,18 @@ pub trait Hash: 'static + MaybeSerializeDeserialize + Debug + Clone + Eq + Parti
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct BlakeTwo256;
 
-impl Hash for BlakeTwo256 {
-	type Output = sp_core::H256;
-	type Hasher = Blake2Hasher;
-	fn hash(s: &[u8]) -> Self::Output {
+impl Hasher for BlakeTwo256 {
+	type Out = sp_core::H256;
+	type StdHasher = hash256_std_hasher::Hash256StdHasher;
+	const LENGTH: usize = 32;
+
+	fn hash(s: &[u8]) -> Self::Out {
 		sp_io::hashing::blake2_256(s).into()
 	}
+}
+
+impl Hash for BlakeTwo256 {
+	type Output = sp_core::H256;
 
 	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> Self::Output {
 		sp_io::trie::blake2_256_root(input)
@@ -616,8 +591,6 @@ pub trait ExtrinsicMetadata {
 	type SignedExtensions: SignedExtension;
 }
 
-/// Extract the hasher type for a block.
-pub type HasherFor<B> = <HashFor<B> as Hash>::Hasher;
 /// Extract the hashing type for a block.
 pub type HashFor<B> = <<B as Block>::Header as Header>::Hashing;
 /// Extract the number type for a block.
@@ -636,7 +609,7 @@ pub trait Checkable<Context>: Sized {
 	type Checked;
 
 	/// Check self, given an instance of Context.
-	fn check(self, signature: CheckSignature, c: &Context) -> Result<Self::Checked, TransactionValidityError>;
+	fn check(self, c: &Context) -> Result<Self::Checked, TransactionValidityError>;
 }
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
@@ -648,15 +621,15 @@ pub trait BlindCheckable: Sized {
 	type Checked;
 
 	/// Check self.
-	fn check(self, signature: CheckSignature) -> Result<Self::Checked, TransactionValidityError>;
+	fn check(self) -> Result<Self::Checked, TransactionValidityError>;
 }
 
 // Every `BlindCheckable` is also a `StaticCheckable` for arbitrary `Context`.
 impl<T: BlindCheckable, Context> Checkable<Context> for T {
 	type Checked = <Self as BlindCheckable>::Checked;
 
-	fn check(self, signature: CheckSignature, _c: &Context) -> Result<Self::Checked, TransactionValidityError> {
-		BlindCheckable::check(self, signature)
+	fn check(self, _c: &Context) -> Result<Self::Checked, TransactionValidityError> {
+		BlindCheckable::check(self)
 	}
 }
 
@@ -876,29 +849,22 @@ impl SignedExtension for () {
 /// Also provides information on to whom this information is attributable and an index that allows
 /// each piece of attributable information to be disambiguated.
 pub trait Applyable: Sized + Send + Sync {
-	/// ID of the account that is responsible for this piece of information (sender).
-	type AccountId: Member + MaybeDisplay;
-
 	/// Type by which we can dispatch. Restricts the `UnsignedValidator` type.
 	type Call;
 
 	/// An opaque set of information attached to the transaction.
 	type DispatchInfo: Clone;
 
-	/// Returns a reference to the sender if any.
-	fn sender(&self) -> Option<&Self::AccountId>;
-
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
-	#[allow(deprecated)] // Allow ValidateUnsigned
 	fn validate<V: ValidateUnsigned<Call=Self::Call>>(
 		&self,
+		source: TransactionSource,
 		info: Self::DispatchInfo,
 		len: usize,
 	) -> TransactionValidity;
 
 	/// Executes all necessary logic needed prior to dispatch and deconstructs into function call,
 	/// index and sender.
-	#[allow(deprecated)] // Allow ValidateUnsigned
 	fn apply<V: ValidateUnsigned<Call=Self::Call>>(
 		self,
 		info: Self::DispatchInfo,
@@ -924,7 +890,6 @@ pub trait GetNodeBlockType {
 /// the transaction for the transaction pool.
 /// During block execution phase one need to perform the same checks anyway,
 /// since this function is not being called.
-#[deprecated(note = "Use SignedExtensions instead.")]
 pub trait ValidateUnsigned {
 	/// The call to validate
 	type Call;
@@ -940,7 +905,7 @@ pub trait ValidateUnsigned {
 	///
 	/// Changes made to storage WILL be persisted if the call returns `Ok`.
 	fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
-		Self::validate_unsigned(call)
+		Self::validate_unsigned(TransactionSource::InBlock, call)
 			.map(|_| ())
 			.map_err(Into::into)
 	}
@@ -951,7 +916,7 @@ pub trait ValidateUnsigned {
 	/// whether the transaction would panic if it were included or not.
 	///
 	/// Changes made to storage should be discarded by caller.
-	fn validate_unsigned(call: &Self::Call) -> TransactionValidity;
+	fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity;
 }
 
 /// Opaque data type that may be destructured into a series of raw byte slices (which represent
@@ -1288,6 +1253,16 @@ impl Printable for &[u8] {
 impl Printable for &str {
 	fn print(&self) {
 		sp_io::misc::print_utf8(self.as_bytes());
+	}
+}
+
+impl Printable for bool {
+	fn print(&self) {
+		if *self {
+			"true".print()
+		} else {
+			"false".print()
+		}
 	}
 }
 

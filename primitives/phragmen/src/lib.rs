@@ -65,11 +65,16 @@ pub use sp_runtime;
 // re-export the compact solution type.
 pub use sp_phragmen_compact::generate_compact_solution_type;
 
-// an aggregator trait for a generic type of a voter/target identifier. This usually maps to
-// substrate's account id.
-pub trait IdentifierT: Clone + Eq + Default + Ord + Debug {}
+/// A trait to limit the number of votes per voter. The generated compact type will implement this.
+pub trait VotingLimit {
+	const LIMIT: usize;
+}
 
-impl<T: Clone + Eq + Default + Ord + Debug> IdentifierT for T {}
+/// an aggregator trait for a generic type of a voter/target identifier. This usually maps to
+/// substrate's account id.
+pub trait IdentifierT: Clone + Eq + Default + Ord + Debug + codec::Codec {}
+
+impl<T: Clone + Eq + Default + Ord + Debug + codec::Codec> IdentifierT for T {}
 
 /// The errors that might occur in the this crate and compact.
 #[derive(Debug, Eq, PartialEq)]
@@ -144,7 +149,7 @@ pub struct PhragmenResult<AccountId, T: PerThing> {
 	pub winners: Vec<(AccountId, ExtendedBalance)>,
 	/// Individual assignments. for each tuple, the first elements is a voter and the second
 	/// is the list of candidates that it supports.
-	pub assignments: Vec<Assignment<AccountId, T>>
+	pub assignments: Vec<Assignment<AccountId, T>>,
 }
 
 /// A voter's stake assignment among a set of targets, represented as ratios.
@@ -157,10 +162,9 @@ pub struct Assignment<AccountId, T: PerThing> {
 	pub distribution: Vec<(AccountId, T)>,
 }
 
-impl<AccountId: IdentifierT, T: PerThing> Assignment<AccountId, T>
-	where
-		ExtendedBalance: From<<T as PerThing>::Inner>,
-		T: sp_std::ops::Mul<ExtendedBalance, Output=ExtendedBalance>,
+impl<AccountId, T: PerThing> Assignment<AccountId, T>
+where
+	ExtendedBalance: From<<T as PerThing>::Inner>,
 {
 	/// Convert from a ratio assignment into one with absolute values aka. [`StakedAssignment`].
 	///
@@ -172,20 +176,27 @@ impl<AccountId: IdentifierT, T: PerThing> Assignment<AccountId, T>
 	/// If an edge ratio is [`Bounded::max_value()`], it is dropped. This edge can never mean
 	/// anything useful.
 	pub fn into_staked(self, stake: ExtendedBalance, fill: bool) -> StakedAssignment<AccountId>
-		where T: sp_std::ops::Mul<ExtendedBalance, Output=ExtendedBalance>
+	where
+		T: sp_std::ops::Mul<ExtendedBalance, Output = ExtendedBalance>,
 	{
 		let mut sum: ExtendedBalance = Bounded::min_value();
-		let mut distribution = self.distribution.into_iter().filter_map(|(target, p)| {
-			// if this ratio is zero, then skip it.
-			if p == Bounded::min_value() {
-				None
-			} else {
-				let distribution_stake = p * stake;
-				// defensive only. We assume that balance cannot exceed extended balance.
-				sum = sum.saturating_add(distribution_stake);
-				Some((target, distribution_stake))
-			}
-		}).collect::<Vec<(AccountId, ExtendedBalance)>>();
+		let mut distribution = self
+			.distribution
+			.into_iter()
+			.filter_map(|(target, p)| {
+				// if this ratio is zero, then skip it.
+				if p == Bounded::min_value() {
+					None
+				} else {
+					// NOTE: this mul impl will always round to the nearest number, so we might both
+					// overflow and underflow.
+					let distribution_stake = p * stake;
+					// defensive only. We assume that balance cannot exceed extended balance.
+					sum = sum.saturating_add(distribution_stake);
+					Some((target, distribution_stake))
+				}
+			})
+			.collect::<Vec<(AccountId, ExtendedBalance)>>();
 
 		if fill {
 			// NOTE: we can do this better.
@@ -197,10 +208,6 @@ impl<AccountId: IdentifierT, T: PerThing> Assignment<AccountId, T>
 			} else if let Some(excess) = sum.checked_sub(stake) {
 				if let Some(last) = distribution.last_mut() {
 					last.1 = last.1.saturating_sub(excess);
-				}
-			} else if let Some(excess) = sum.checked_sub(stake) {
-				if let Some(last) = distribution.last_mut() {
-					last.1 -= excess;
 				}
 			}
 		}
@@ -223,8 +230,7 @@ pub struct StakedAssignment<AccountId> {
 	pub distribution: Vec<(AccountId, ExtendedBalance)>,
 }
 
-impl<AccountId> StakedAssignment<AccountId>
-{
+impl<AccountId> StakedAssignment<AccountId> {
 	/// Converts self into the normal [`Assignment`] type.
 	///
 	/// If `fill` is set to true, it _tries_ to ensure that all the potential rounding errors are
@@ -234,35 +240,42 @@ impl<AccountId> StakedAssignment<AccountId>
 	/// NOTE: it is quite critical that this attempt always works. The data type returned here will
 	/// potentially get used to create a compact type; a compact type requires sum of ratios to be
 	/// less than 100% upon un-compacting.
-	/// TODO: isolate this process into something like `normalise_assignments` which makes sure all
-	/// is okay.
 	///
 	/// If an edge stake is so small that it cannot be represented in `T`, it is ignored. This edge
 	/// can never be re-created and does not mean anything useful anymore.
 	pub fn into_assignment<T: PerThing>(self, fill: bool) -> Assignment<AccountId, T>
-		where ExtendedBalance: From<<T as PerThing>::Inner>
+	where
+		ExtendedBalance: From<<T as PerThing>::Inner>,
 	{
 		let accuracy: u128 = T::ACCURACY.saturated_into();
 		let mut sum: u128 = Zero::zero();
 		let stake = self.distribution.iter().map(|x| x.1).sum();
-		let mut distribution = self.distribution.into_iter().filter_map(|(target, w)| {
-			let per_thing = T::from_rational_approximation(w, stake);
-			if per_thing == Bounded::min_value() {
-				None
-			} else {
-				sum += per_thing.clone().deconstruct().saturated_into();
-				Some((target, per_thing))
-			}
-		}).collect::<Vec<(AccountId, T)>>();
+		let mut distribution = self
+			.distribution
+			.into_iter()
+			.filter_map(|(target, w)| {
+				let per_thing = T::from_rational_approximation(w, stake);
+				if per_thing == Bounded::min_value() {
+					None
+				} else {
+					sum += per_thing.clone().deconstruct().saturated_into();
+					Some((target, per_thing))
+				}
+			})
+			.collect::<Vec<(AccountId, T)>>();
 
 		if fill {
 			if let Some(leftover) = accuracy.checked_sub(sum) {
 				if let Some(last) = distribution.last_mut() {
-					last.1 = last.1.saturating_add(T::from_parts(leftover.saturated_into()));
+					last.1 = last.1.saturating_add(
+						T::from_parts(leftover.saturated_into())
+					);
 				}
 			} else if let Some(excess) = sum.checked_sub(accuracy) {
 				if let Some(last) = distribution.last_mut() {
-					last.1 = last.1.saturating_sub(T::from_parts(excess.saturated_into()));
+					last.1 = last.1.saturating_sub(
+						T::from_parts(excess.saturated_into())
+					);
 				}
 			}
 		}
@@ -309,16 +322,14 @@ pub type SupportMap<A> = BTreeMap<A, Support<A>>;
 /// responsibility of the caller to make sure only those candidates who have a sensible economic
 /// value are passed in. From the perspective of this function, a candidate can easily be among the
 /// winner with no backing stake.
-pub fn elect<AccountId, Balance, FS, C, R>(
+pub fn elect<AccountId, Balance, C, R>(
 	candidate_count: usize,
 	minimum_candidate_count: usize,
 	initial_candidates: Vec<AccountId>,
-	initial_voters: Vec<(AccountId, Vec<AccountId>)>,
-	stake_of: FS,
+	initial_voters: Vec<(AccountId, Balance, Vec<AccountId>)>,
 ) -> Option<PhragmenResult<AccountId, R>> where
 	AccountId: Default + Ord + Member,
 	Balance: Default + Copy + AtLeast32Bit,
-	for<'r> FS: Fn(&'r AccountId) -> Balance,
 	C: Convert<Balance, u64> + Convert<u128, Balance>,
 	R: PerThing,
 {
@@ -351,8 +362,7 @@ pub fn elect<AccountId, Balance, FS, C, R>(
 
 	// collect voters. use `c_idx_cache` for fast access and aggregate `approval_stake` of
 	// candidates.
-	voters.extend(initial_voters.into_iter().map(|(who, votes)| {
-		let voter_stake = stake_of(&who);
+	voters.extend(initial_voters.into_iter().map(|(who, voter_stake, votes)| {
 		let mut edges: Vec<Edge<AccountId>> = Vec::with_capacity(votes.len());
 		for v in votes {
 			if let Some(idx) = c_idx_cache.get(&v) {
@@ -475,12 +485,12 @@ pub fn elect<AccountId, Balance, FS, C, R>(
 			}
 		}
 
-		if assignment.distribution.len() > 0 {
+		let len = assignment.distribution.len();
+		if len > 0 {
 			// To ensure an assertion indicating: no stake from the voter going to waste,
 			// we add a minimal post-processing to equally assign all of the leftover stake ratios.
-			let vote_count: R::Inner = assignment.distribution.len().saturated_into();
+			let vote_count: R::Inner = len.saturated_into();
 			let accuracy = R::ACCURACY;
-			let len = assignment.distribution.len();
 			let mut sum: R::Inner = Zero::zero();
 			assignment.distribution.iter().for_each(|a| sum = sum.saturating_add(a.1.deconstruct()));
 
@@ -539,9 +549,10 @@ pub fn elect<AccountId, Balance, FS, C, R>(
 ///		},
 /// }
 /// ```
-/// The second returned flag indicates the number of edges who corresponded to an actual winner from
-/// the given winner set. A value in this place larger than 0 indicates a potentially faulty
-/// assignment.
+///
+/// The second returned flag indicates the number of edges who didn't corresponded to an actual
+/// winner from the given winner set. A value in this place larger than 0 indicates a potentially
+/// faulty assignment.
 ///
 /// `O(E)` where `E` is the total number of edges.
 pub fn build_support_map<AccountId>(
@@ -598,7 +609,7 @@ pub fn evaluate_support<AccountId>(
 }
 
 /// Compares two sets of phragmen scores based on desirability and returns true if `that` is
-/// better `this`.
+/// better than `this`.
 ///
 /// Evaluation is done in a lexicographic manner.
 ///
@@ -624,11 +635,11 @@ pub fn is_score_better(this: PhragmenScore, that: PhragmenScore) -> bool {
 ///
 /// No value is returned from the function and the `supports` parameter is updated.
 ///
-/// `assignments`: exactly the same is the output of phragmen.
-/// `supports`: mutable reference to s `SupportMap`. This parameter is updated.
-/// `tolerance`: maximum difference that can occur before an early quite happens.
-/// `iterations`: maximum number of iterations that will be processed.
-/// `stake_of`: something that can return the stake stake of a particular candidate or voter.
+/// - `assignments`: exactly the same is the output of phragmen.
+/// - `supports`: mutable reference to s `SupportMap`. This parameter is updated.
+/// - `tolerance`: maximum difference that can occur before an early quite happens.
+/// - `iterations`: maximum number of iterations that will be processed.
+/// - `stake_of`: something that can return the stake stake of a particular candidate or voter.
 pub fn equalize<Balance, AccountId, C, FS>(
 	mut assignments: Vec<StakedAssignment<AccountId>>,
 	supports: &mut SupportMap<AccountId>,

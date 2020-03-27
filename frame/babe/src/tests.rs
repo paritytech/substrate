@@ -18,8 +18,9 @@
 
 use super::*;
 use mock::*;
-use sp_runtime::traits::OnFinalize;
+use frame_support::traits::OnFinalize;
 use pallet_session::ShouldEndSession;
+use sp_consensus_vrf::schnorrkel::{RawVRFOutput, RawVRFProof};
 
 const EMPTY_RANDOMNESS: [u8; 32] = [
 	74, 25, 49, 128, 53, 97, 244, 49,
@@ -50,18 +51,16 @@ fn check_module() {
 	})
 }
 
-type System = frame_system::Module<Test>;
-
 #[test]
 fn first_block_epoch_zero_start() {
 	new_test_ext(vec![0, 1, 2, 3]).execute_with(|| {
 		let genesis_slot = 100;
-		let first_vrf = [1; 32];
+		let first_vrf = RawVRFOutput([1; 32]);
 		let pre_digest = make_pre_digest(
 			0,
 			genesis_slot,
-			first_vrf,
-			[0xff; 64],
+			first_vrf.clone(),
+			RawVRFProof([0xff; 64]),
 		);
 
 		assert_eq!(Babe::genesis_slot(), 0);
@@ -132,6 +131,6 @@ fn can_predict_next_epoch_change() {
 
 		// next epoch change will be at
 		assert_eq!(Babe::current_epoch_start(), 9); // next change will be 12, 2 slots from now
-		assert_eq!(Babe::next_expected_epoch_change(System::block_number()), 5 + 2);
+		assert_eq!(Babe::next_expected_epoch_change(System::block_number()), Some(5 + 2));
 	})
 }

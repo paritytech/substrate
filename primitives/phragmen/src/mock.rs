@@ -336,12 +336,11 @@ pub(crate) fn run_and_compare<Output: PerThing>(
 	min_to_elect: usize,
 ) {
 	// run fixed point code.
-	let PhragmenResult { winners, assignments } = elect::<_, _, _, TestCurrencyToVote, Output>(
+	let PhragmenResult { winners, assignments } = elect::<_, _, TestCurrencyToVote, Output>(
 		to_elect,
 		min_to_elect,
 		candidates.clone(),
-		voters.clone(),
-		&stake_of,
+		voters.iter().map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone())).collect::<Vec<_>>(),
 	).unwrap();
 
 	// run float poc code.

@@ -29,9 +29,9 @@ use futures::{
 use serde::{Deserialize, Serialize};
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, Member},
+	traits::{Block as BlockT, Member, NumberFor},
 	transaction_validity::{
-		TransactionLongevity, TransactionPriority, TransactionTag,
+		TransactionLongevity, TransactionPriority, TransactionTag, TransactionSource,
 	},
 };
 
@@ -192,6 +192,7 @@ pub trait TransactionPool: Send + Sync {
 	fn submit_at(
 		&self,
 		at: &BlockId<Self::Block>,
+		source: TransactionSource,
 		xts: Vec<TransactionFor<Self>>,
 	) -> PoolFuture<Vec<Result<TxHash<Self>, Self::Error>>, Self::Error>;
 
@@ -199,6 +200,7 @@ pub trait TransactionPool: Send + Sync {
 	fn submit_one(
 		&self,
 		at: &BlockId<Self::Block>,
+		source: TransactionSource,
 		xt: TransactionFor<Self>,
 	) -> PoolFuture<TxHash<Self>, Self::Error>;
 
@@ -206,12 +208,20 @@ pub trait TransactionPool: Send + Sync {
 	fn submit_and_watch(
 		&self,
 		at: &BlockId<Self::Block>,
+		source: TransactionSource,
 		xt: TransactionFor<Self>,
 	) -> PoolFuture<Box<TransactionStatusStreamFor<Self>>, Self::Error>;
 
 	// *** Block production / Networking
-	/// Get an iterator for ready transactions ordered by priority
-	fn ready(&self) -> Box<dyn Iterator<Item=Arc<Self::InPoolTransaction>>>;
+	/// Get an iterator for ready transactions ordered by priority.
+	///
+	/// Guarantees to return only when transaction pool got updated at `at` block.
+	/// Guarantees to return immediately when `None` is passed.
+	fn ready_at(&self, at: NumberFor<Self::Block>)
+		-> Pin<Box<dyn Future<Output=Box<dyn Iterator<Item=Arc<Self::InPoolTransaction>> + Send>> + Send>>;
+
+	/// Get an iterator for ready transactions ordered by priority.
+	fn ready(&self) -> Box<dyn Iterator<Item=Arc<Self::InPoolTransaction>> + Send>;
 
 	// *** Block production
 	/// Remove transactions identified by given hashes (and dependent transactions) from the pool.
@@ -292,7 +302,9 @@ impl<TPool: TransactionPool> OffchainSubmitTransaction<TPool::Block> for TPool {
 			extrinsic
 		);
 
-		let result = futures::executor::block_on(self.submit_one(&at, extrinsic));
+		let result = futures::executor::block_on(self.submit_one(
+				&at, TransactionSource::Local, extrinsic,
+		));
 
 		result.map(|_| ())
 			.map_err(|e| log::warn!(

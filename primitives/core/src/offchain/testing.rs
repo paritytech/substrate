@@ -72,6 +72,8 @@ pub struct OffchainState {
 	pub persistent_storage: InMemOffchainStorage,
 	/// Local storage
 	pub local_storage: InMemOffchainStorage,
+	/// Current timestamp (unix millis)
+	pub timestamp: u64,
 }
 
 impl OffchainState {
@@ -155,7 +157,7 @@ impl offchain::Externalities for TestOffchainExt {
 	}
 
 	fn timestamp(&mut self) -> Timestamp {
-		unimplemented!("not needed in tests so far")
+		Timestamp::from_unix_millis(self.0.read().timestamp)
 	}
 
 	fn sleep_until(&mut self, _deadline: Timestamp) {

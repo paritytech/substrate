@@ -366,7 +366,7 @@ pub trait Misc {
 
 		self.extension::<CallInWasmExt>()
 			.expect("No `CallInWasmExt` associated for the current context!")
-			.call_in_wasm(wasm, "Core_version", &[], &mut ext)
+			.call_in_wasm(wasm, None, "Core_version", &[], &mut ext)
 			.ok()
 	}
 }
@@ -468,13 +468,25 @@ pub trait Crypto {
 
 	/// Verify an `sr25519` signature.
 	///
+	/// Returns `true` when the verification in successful regardless of
+	/// signature version.
+	fn sr25519_verify(sig: &sr25519::Signature, msg: &[u8], pubkey: &sr25519::Public) -> bool {
+		sr25519::Pair::verify_deprecated(sig, msg, pubkey)
+	}
+
+	/// Verify an `sr25519` signature.
+	///
 	/// Returns `true` when the verification in successful.
+	#[version(2)]
 	fn sr25519_verify(sig: &sr25519::Signature, msg: &[u8], pubkey: &sr25519::Public) -> bool {
 		sr25519::Pair::verify(sig, msg, pubkey)
 	}
 
 	/// Verify and recover a SECP256k1 ECDSA signature.
-	/// - `sig` is passed in RSV format. V should be either 0/1 or 27/28.
+	///
+	/// - `sig` is passed in RSV format. V should be either `0/1` or `27/28`.
+	/// - `msg` is the blake2-256 hash of the message.
+	///
 	/// Returns `Err` if the signature is bad, otherwise the 64-byte pubkey
 	/// (doesn't include the 0x04 prefix).
 	fn secp256k1_ecdsa_recover(
@@ -493,8 +505,11 @@ pub trait Crypto {
 	}
 
 	/// Verify and recover a SECP256k1 ECDSA signature.
-	/// - `sig` is passed in RSV format. V should be either 0/1 or 27/28.
-	/// - returns `Err` if the signature is bad, otherwise the 33-byte compressed pubkey.
+	///
+	/// - `sig` is passed in RSV format. V should be either `0/1` or `27/28`.
+	/// - `msg` is the blake2-256 hash of the message.
+	///
+	/// Returns `Err` if the signature is bad, otherwise the 33-byte compressed pubkey.
 	fn secp256k1_ecdsa_recover_compressed(
 		sig: &[u8; 65],
 		msg: &[u8; 32],

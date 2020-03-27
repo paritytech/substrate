@@ -19,36 +19,34 @@ use log::{debug, info};
 use std::sync::Arc;
 use sc_service::{
 	AbstractService, RpcSession, Roles, Configuration, config::{DatabaseConfig, KeystoreConfig},
-	ChainSpec, RuntimeGenesis
+	GenericChainSpec, RuntimeGenesis
 };
 use wasm_bindgen::prelude::*;
 use futures::{prelude::*, channel::{oneshot, mpsc}, future::{poll_fn, ok}, compat::*};
 use std::task::Poll;
 use std::pin::Pin;
 use sc_chain_spec::Extension;
+use libp2p_wasm_ext::{ExtTransport, ffi};
 
-pub use libp2p::wasm_ext::{ExtTransport, ffi::Transport};
 pub use console_error_panic_hook::set_once as set_console_error_panic_hook;
 pub use console_log::init_with_level as init_console_log;
 
-/// Create a service configuration from a chain spec and the websocket transport.
+/// Create a service configuration from a chain spec.
 ///
 /// This configuration contains good defaults for a browser light client.
-pub async fn browser_configuration<G, E>(
-	transport: Transport,
-	chain_spec: ChainSpec<G, E>,
-) -> Result<Configuration<G, E>, Box<dyn std::error::Error>>
+pub async fn browser_configuration<G, E>(chain_spec: GenericChainSpec<G, E>)
+	-> Result<Configuration, Box<dyn std::error::Error>>
 where
-	G: RuntimeGenesis,
-	E: Extension,
+	G: RuntimeGenesis + 'static,
+	E: Extension + 'static + Send,
 {
 	let name = chain_spec.name().to_string();
 
-	let transport = ExtTransport::new(transport);
+	let transport = ExtTransport::new(ffi::websocket_transport());
 	let mut config = Configuration::default();
 	config.network.boot_nodes = chain_spec.boot_nodes().to_vec();
 	config.telemetry_endpoints = chain_spec.telemetry_endpoints().clone();
-	config.chain_spec = Some(chain_spec);
+	config.chain_spec = Some(Box::new(chain_spec));
 	config.network.transport = sc_network::config::TransportConfig::Normal {
 		wasm_external_transport: Some(transport.clone()),
 		allow_private_ipv4: true,
