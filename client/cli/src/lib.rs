@@ -164,13 +164,13 @@ pub trait SubstrateCli: Sized
 	}
 
 	/// Only create a Configuration for the command provided in argument
-	fn create_configuration<C: SubstrateCli, T: CliConfiguration>(
-		cli: &C,
+	fn create_configuration<T: CliConfiguration>(
+		&self,
 		command: &T,
 		task_executor: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>,
 	) -> error::Result<Configuration>
 	{
-		command.create_configuration(cli, task_executor)
+		command.create_configuration(self, task_executor)
 	}
 
 	/// Create a runner for the command provided in argument. This will create a Configuration and
