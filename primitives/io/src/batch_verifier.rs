@@ -116,9 +116,9 @@ impl BatchVerifier {
 	) {
 		self.sr25519_items.push(Sr25519BatchItem { signature, pub_key, message });
 
-		if self.sr25519_items.len() >= SR25519_BATCH_SIZE {
-			self.spawn_sr25519_verification();
-		}
+		// if self.sr25519_items.len() >= SR25519_BATCH_SIZE {
+		// 	self.spawn_sr25519_verification();
+		// }
 	}
 
 	/// Verify all previously pushed signatures since last call and return
@@ -126,24 +126,36 @@ impl BatchVerifier {
 	pub fn verify_and_clear(&mut self) -> bool {
 		use parking_lot::{Mutex, Condvar};
 
-		if self.sr25519_items.len() > 0 {
-			self.spawn_sr25519_verification()
+		// if self.sr25519_items.len() > 0 {
+		// 	self.spawn_sr25519_verification()
+		// }
+
+		// let pending = std::mem::replace(&mut self.pending_tasks, vec![]);
+
+		// if pending.len() > 0 {
+		// 	let pair = Arc::new((Mutex::new(()), Condvar::new()));
+		// 	let pair_clone = pair.clone();
+		// 	self.scheduler.spawn_obj(FutureObj::new(async move {
+		// 		futures::future::join_all(pending).await;
+		// 		pair_clone.1.notify_one();
+		// 	}.boxed())).expect("Scheduler should not fail");
+
+		// 	let (mtx, cond_var) = &*pair;
+		// 	let mut mtx = mtx.lock();
+		// 	cond_var.wait(&mut mtx);
+		// }
+
+		let messages = self.sr25519_items.iter().map(|item| &item.message[..]).collect();
+		let signatures = self.sr25519_items.iter().map(|item| &item.signature).collect();
+		let pub_keys = self.sr25519_items.iter().map(|item| &item.pub_key).collect();
+
+		if !sr25519::verify_batch(messages, signatures, pub_keys) {
+			self.sr25519_items.clear();
+
+			return false;
 		}
 
-		let pending = std::mem::replace(&mut self.pending_tasks, vec![]);
-
-		if pending.len() > 0 {
-			let pair = Arc::new((Mutex::new(()), Condvar::new()));
-			let pair_clone = pair.clone();
-			self.scheduler.spawn_obj(FutureObj::new(async move {
-				futures::future::join_all(pending).await;
-				pair_clone.1.notify_one();
-			}.boxed())).expect("Scheduler should not fail");
-
-			let (mtx, cond_var) = &*pair;
-			let mut mtx = mtx.lock();
-			cond_var.wait(&mut mtx);
-		}
+		self.sr25519_items.clear();
 
 		if self.invalid.load(AtomicOrdering::Relaxed) {
 			self.invalid.store(false, AtomicOrdering::Relaxed);
