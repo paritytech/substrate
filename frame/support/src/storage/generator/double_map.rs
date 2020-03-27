@@ -18,7 +18,7 @@ use sp_std::prelude::*;
 use sp_std::borrow::Borrow;
 use codec::{Ref, FullCodec, FullEncode, Decode, Encode, EncodeLike, EncodeAppend};
 use crate::{storage::{self, unhashed}, traits::Len};
-use crate::hash::{StorageHasher, Twox128, ReversibleStorageHasher};
+use crate::hash::{StorageHasher, ReversibleStorageHasher};
 
 /// Generator for `StorageDoubleMap` used by `decl_storage`.
 ///
@@ -56,20 +56,20 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 	/// Storage prefix. Used for generating final key.
 	fn storage_prefix() -> &'static [u8];
 
-	/// The full prefix; just the hash of `module_prefix` concatenated to the hash of
-	/// `storage_prefix`.
-	fn prefix_hash() -> Vec<u8> {
-		let module_prefix_hashed = Twox128::hash(Self::module_prefix());
-		let storage_prefix_hashed = Twox128::hash(Self::storage_prefix());
-
-		let mut result = Vec::with_capacity(
-			module_prefix_hashed.len() + storage_prefix_hashed.len()
+	/// Module concatenated with the storage prefix. Used for generating final key.
+	fn full_prefix() -> Vec<u8> {
+		let mut r = Vec::<u8>::with_capacity(
+			Self::module_prefix().len()
+				+ Self::storage_prefix().len()
 		);
+		r.extend_from_slice(Self::module_prefix());
+		r.extend_from_slice(Self::storage_prefix());
+		r
+	}
 
-		result.extend_from_slice(&module_prefix_hashed[..]);
-		result.extend_from_slice(&storage_prefix_hashed[..]);
-
-		result
+	/// The full prefix; just the hash of `module_prefix` concatenated with `storage_prefix`.
+	fn prefix_hash() -> [u8; 4] {
+		sp_io::hashing::twox_32(Self::full_prefix().as_ref())
 	}
 
 	/// Convert an optional value retrieved from storage to the type queried.
@@ -82,16 +82,14 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 	fn storage_double_map_final_key1<KArg1>(k1: KArg1) -> Vec<u8> where
 		KArg1: EncodeLike<K1>,
 	{
-		let module_prefix_hashed = Twox128::hash(Self::module_prefix());
-		let storage_prefix_hashed = Twox128::hash(Self::storage_prefix());
+		let prefix_hashed = Self::prefix_hash();
 		let key_hashed = k1.borrow().using_encoded(Self::Hasher1::hash);
 
 		let mut final_key = Vec::with_capacity(
-			module_prefix_hashed.len() + storage_prefix_hashed.len() + key_hashed.as_ref().len()
+			&prefix_hashed[..].len() + key_hashed.as_ref().len()
 		);
 
-		final_key.extend_from_slice(&module_prefix_hashed[..]);
-		final_key.extend_from_slice(&storage_prefix_hashed[..]);
+		final_key.extend_from_slice(&prefix_hashed[..]);
 		final_key.extend_from_slice(key_hashed.as_ref());
 
 		final_key
@@ -102,20 +100,17 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>,
 	{
-		let module_prefix_hashed = Twox128::hash(Self::module_prefix());
-		let storage_prefix_hashed = Twox128::hash(Self::storage_prefix());
+		let prefix_hashed = Self::prefix_hash();
 		let key1_hashed = k1.borrow().using_encoded(Self::Hasher1::hash);
 		let key2_hashed = k2.borrow().using_encoded(Self::Hasher2::hash);
 
 		let mut final_key = Vec::with_capacity(
-			module_prefix_hashed.len()
-				+ storage_prefix_hashed.len()
+			&prefix_hashed[..].len()
 				+ key1_hashed.as_ref().len()
 				+ key2_hashed.as_ref().len()
 		);
 
-		final_key.extend_from_slice(&module_prefix_hashed[..]);
-		final_key.extend_from_slice(&storage_prefix_hashed[..]);
+		final_key.extend_from_slice(&prefix_hashed[..]);
 		final_key.extend_from_slice(key1_hashed.as_ref());
 		final_key.extend_from_slice(key2_hashed.as_ref());
 
@@ -308,20 +303,17 @@ impl<K1, K2, V, G> storage::StorageDoubleMap<K1, K2, V> for G where
 		KeyArg2: EncodeLike<K2>,
 	>(key1: KeyArg1, key2: KeyArg2) -> Option<V> {
 		let old_key = {
-			let module_prefix_hashed = Twox128::hash(Self::module_prefix());
-			let storage_prefix_hashed = Twox128::hash(Self::storage_prefix());
+			let prefix_hashed = Self::prefix_hash();
 			let key1_hashed = key1.borrow().using_encoded(OldHasher1::hash);
 			let key2_hashed = key2.borrow().using_encoded(OldHasher2::hash);
 
 			let mut final_key = Vec::with_capacity(
-				module_prefix_hashed.len()
-					+ storage_prefix_hashed.len()
+				&prefix_hashed[..].len()
 					+ key1_hashed.as_ref().len()
 					+ key2_hashed.as_ref().len()
 			);
 
-			final_key.extend_from_slice(&module_prefix_hashed[..]);
-			final_key.extend_from_slice(&storage_prefix_hashed[..]);
+			final_key.extend_from_slice(&prefix_hashed[..]);
 			final_key.extend_from_slice(key1_hashed.as_ref());
 			final_key.extend_from_slice(key2_hashed.as_ref());
 
@@ -410,7 +402,7 @@ impl<
 	}
 
 	fn translate<O: Decode, F: Fn(O) -> Option<V>>(f: F) {
-		let prefix = G::prefix_hash();
+		let prefix = G::prefix_hash().to_vec();
 		let mut previous_key = prefix.clone();
 		loop {
 			match sp_io::storage::next_key(&previous_key).filter(|n| n.starts_with(&prefix)) {

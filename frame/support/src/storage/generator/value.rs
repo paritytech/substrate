@@ -17,7 +17,7 @@
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::*;
 use codec::{FullCodec, Encode, EncodeAppend, EncodeLike, Decode};
-use crate::{storage::{self, unhashed}, hash::{Twox128, StorageHasher}, traits::Len};
+use crate::{storage::{self, unhashed}, traits::Len};
 
 /// Generator for `StorageValue` used by `decl_storage`.
 ///
@@ -35,6 +35,22 @@ pub trait StorageValue<T: FullCodec> {
 	/// Storage prefix. Used for generating final key.
 	fn storage_prefix() -> &'static [u8];
 
+	/// Module concatenated with the storage prefix. Used for generating final key.
+	fn full_prefix() -> Vec<u8> {
+		let mut r = Vec::<u8>::with_capacity(
+			Self::module_prefix().len()
+				+ Self::storage_prefix().len()
+		);
+		r.extend_from_slice(Self::module_prefix());
+		r.extend_from_slice(Self::storage_prefix());
+		r
+	}
+
+	/// The full prefix; just the hash of `module_prefix` concatenated with `storage_prefix`.
+	fn prefix_hash() -> [u8; 8] {
+		sp_io::hashing::twox_64(Self::full_prefix().as_ref())
+	}
+
 	/// Convert an optional value retrieved from storage to the type queried.
 	fn from_optional_value_to_query(v: Option<T>) -> Self::Query;
 
@@ -42,18 +58,15 @@ pub trait StorageValue<T: FullCodec> {
 	fn from_query_to_optional_value(v: Self::Query) -> Option<T>;
 
 	/// Generate the full key used in top storage.
-	fn storage_value_final_key() -> [u8; 32] {
-		let mut final_key = [0u8; 32];
-		final_key[0..16].copy_from_slice(&Twox128::hash(Self::module_prefix()));
-		final_key[16..32].copy_from_slice(&Twox128::hash(Self::storage_prefix()));
-		final_key
+	fn storage_value_final_key() -> [u8; 8] {
+		Self::prefix_hash()
 	}
 }
 
 impl<T: FullCodec, G: StorageValue<T>> storage::StorageValue<T> for G {
 	type Query = G::Query;
 
-	fn hashed_key() -> [u8; 32] {
+	fn hashed_key() -> [u8; 8] {
 		Self::storage_value_final_key()
 	}
 
