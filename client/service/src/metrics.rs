@@ -9,20 +9,38 @@ use std::convert::TryFrom;
 use sp_runtime::traits::{NumberFor, Block, SaturatedConversion, UniqueSaturatedInto};
 use sp_transaction_pool::PoolStatus;
 use sp_utils::metrics::GLOBAL_METRICS;
-use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
+use sysinfo::{ProcessExt, System, SystemExt};
+
+#[cfg(not(unix))]
+use sysinfo::get_current_pid;
+
+#[cfg(unix)]
+use procfs;
 
 struct PrometheusMetrics {
-	block_height_number: GaugeVec<U64>,
-	ready_transactions_number: Gauge<U64>,
+	// system
+	load_avg: GaugeVec<F64>,
+
+	// process
+	cpu_usage_percentage: Gauge<F64>,
 	memory_usage_bytes: Gauge<U64>,
 	netstat: GaugeVec<U64>,
-	load_avg: GaugeVec<F64>,
+	threads: Gauge<U64>,
+	open_files: GaugeVec<U64>,
+
+	// -- inner counters
+	// generic info
+	block_height_number: GaugeVec<U64>,
+	ready_transactions_number: Gauge<U64>,
 	block_import: GaugeVec<U64>,
-	cpu_usage_percentage: Gauge<F64>,
+
+	// I/O
 	network_per_sec_bytes: GaugeVec<U64>,
 	database_cache: Gauge<U64>,
 	state_cache: Gauge<U64>,
 	state_db: GaugeVec<U64>,
+
+	// low level
 	tokio: GaugeVec<U64>,
 	unbounded_channels: GaugeVec<U64>,
 	internals: GaugeVec<U64>,
@@ -35,7 +53,7 @@ impl PrometheusMetrics {
         register(Gauge::<U64>::with_opts(
             Opts::new(
                 "build_info",
-                "A metric with a constant '1' value labeled by name, version, and commit."
+                "A metric with a constant '1' value labeled by name, version"
             )
                 .const_label("name", name)
                 .const_label("version", version)
@@ -46,19 +64,56 @@ impl PrometheusMetrics {
 		)?, &registry)?.set(roles);
 		
 		Ok(Self {
+
+			// system
+			load_avg: register(GaugeVec::new(
+				Opts::new("load_avg", "System load average"),
+				&["over"]
+			)?, registry)?,
+
+			// process
+			memory_usage_bytes: register(Gauge::new(
+				"memory_usage_bytes", "Node memory usage",
+			)?, registry)?,
+
+			cpu_usage_percentage: register(Gauge::new(
+				"cpu_usage_percentage", "Node CPU usage",
+			)?, registry)?,
+
+			netstat: register(GaugeVec::new(
+				Opts::new("netstat_tcp", "Current TCP connections "),
+				&["status"]
+			)?, registry)?,
+
+			threads: register(Gauge::new(
+				"threads", "Number of threads used by the process",
+			)?, registry)?,
+
+			open_files: register(GaugeVec::new(
+				Opts::new("open_file_handles", "hold by the process"),
+				&["fd_type"]
+			)?, registry)?,
+
+			// --- internal
+
+			// generic counters
+
 			block_height_number: register(GaugeVec::new(
 				Opts::new("block_height_number", "Height of the chain"),
 				&["status"]
 			)?, registry)?,
+
 			ready_transactions_number: register(Gauge::new(
 				"ready_transactions_number", "Number of transactions in the ready queue",
 			)?, registry)?,
-			memory_usage_bytes: register(Gauge::new(
-				"memory_usage_bytes", "Node memory usage",
+
+			block_import: register(GaugeVec::new(
+				Opts::new("block_import", "Block Import"),
+				&["subtype"]
 			)?, registry)?,
-			cpu_usage_percentage: register(Gauge::new(
-				"cpu_usage_percentage", "Node CPU usage",
-			)?, registry)?,
+
+			// I/ O
+			
 			network_per_sec_bytes: register(GaugeVec::new(
 				Opts::new("network_per_sec_bytes", "Networking bytes per second"),
 				&["direction"]
@@ -73,18 +128,8 @@ impl PrometheusMetrics {
 				Opts::new("state_db_cache_bytes", "State DB cache in bytes"),
 				&["subtype"]
 			)?, registry)?,
-			netstat: register(GaugeVec::new(
-				Opts::new("netstat_tcp", "Current TCP connections "),
-				&["status"]
-			)?, registry)?,
-			load_avg: register(GaugeVec::new(
-				Opts::new("load_avg", "System load average"),
-				&["over"]
-			)?, registry)?,
-			block_import: register(GaugeVec::new(
-				Opts::new("block_import", "Block Import"),
-				&["subtype"]
-			)?, registry)?,
+
+			// low level
 			tokio: register(GaugeVec::new(
 				Opts::new("tokio", "Tokio internals"),
 				&["entity"]
@@ -99,12 +144,6 @@ impl PrometheusMetrics {
 			)?, registry)?,
 		})
 	}
-}
-
-pub struct MetricsService {
-	metrics: Option<PrometheusMetrics>,
-	system: sysinfo::System,
-	pid: Option<sysinfo::Pid>,
 }
 
 #[derive(Default)]
@@ -158,7 +197,84 @@ impl From<Vec<u64>> for TimeSeriesInfo {
 		}
 	}
 }
+#[derive(Default)]
+struct FdCounter {
+	paths: u64,
+	sockets: u64,
+	net: u64,
+	pipes: u64,
+	anon_inode: u64,
+	mem: u64,
+	other: u64,
+}
 
+#[derive(Default)]
+struct ProcessInfo {
+	cpu_usage: f64,
+	memory: u64,
+	threads: Option<u64>,
+	open_fd: Option<FdCounter>,
+}
+
+pub struct MetricsService {
+	metrics: Option<PrometheusMetrics>,
+	system: System,
+	pid: Option<i32>,
+}
+
+#[cfg(unix)]
+impl MetricsService {
+	fn inner_new(metrics: Option<PrometheusMetrics>) -> Self {
+		let process = procfs::process::Process::myself()
+			.expect("Procfs doesn't fail on unix. qed");
+
+		Self {
+			metrics,
+			system: System::new(),
+			pid: Some(process.pid),
+		}
+	}
+	fn process_info(&mut self) -> ProcessInfo {
+		let pid = self.pid.clone().expect("unix always has a pid. qed");
+		let mut info = self._process_info_for(&pid);
+		let process = procfs::process::Process::new(pid).expect("Our process exists. qed.");
+		info.threads = process.stat().ok().map(|s|
+			u64::try_from(s.num_threads).expect("There are no negative thread couns.q3ed"));
+		info.open_fd = process.fd().ok().map(|i|
+			i.into_iter().fold(FdCounter::default(), |mut f, info| {
+				match info.target {
+					procfs::process::FDTarget::Path(_) => f.paths += 1,
+					procfs::process::FDTarget::Socket(_) => f.sockets += 1,
+					procfs::process::FDTarget::Net(_) => f.net += 1,
+					procfs::process::FDTarget::Pipe(_) => f.pipes += 1,
+					procfs::process::FDTarget::AnonInode(_) => f.anon_inode += 1,
+					procfs::process::FDTarget::MemFD(_) => f.mem += 1,
+					procfs::process::FDTarget::Other(_,_) => f.other += 1,
+				};
+				f
+			})
+		);
+		info
+	}
+	
+}
+
+
+#[cfg(not(unix))]
+impl MetricsService {
+
+	fn inner_new(metrics: Option<PrometheusMetrics>) -> Self {
+		Self {
+			metrics,
+			system: System(),
+			pid: get_current_pid().ok()
+		}
+	}
+	
+	fn process_info(&mut self) -> ProcessInfo {
+		self.pid.map(|pid| self._process_info_for(pid)).or_else(ProcessInfo::default)
+	}
+}
 
 
 impl MetricsService {
@@ -175,26 +291,15 @@ impl MetricsService {
 		Self::inner_new(None)
 	}
 
-	fn inner_new(metrics: Option<PrometheusMetrics>) -> Self {
-		let system = System::new();
-		let pid = get_current_pid().ok();
-
-		Self {
-			metrics,
-			system,
-			pid,
+	fn _process_info_for(&mut self, pid: &i32) -> ProcessInfo {
+		let mut info = ProcessInfo::default();
+		if self.system.refresh_process(*pid) {
+			let prc = self.system.get_process(*pid)
+				.expect("Above refresh_process succeeds, this must be Some(), qed");
+			info.cpu_usage = prc.cpu_usage().into();
+			info.memory = prc.memory();
 		}
-	}
-
-	fn process_info(&mut self) -> (f32, u64) {
-		match self.pid {
-			Some(pid) => if self.system.refresh_process(pid) {
-					let proc = self.system.get_process(pid)
-						.expect("Above refresh_process succeeds, this must be Some(), qed");
-					(proc.cpu_usage(), proc.memory())
-				} else { (0.0, 0) },
-			None => (0.0, 0)
-		}
+		info
 	}
 
 	fn connections_info(&self) -> Option<ConnectionsCount> {
@@ -232,7 +337,12 @@ impl MetricsService {
 		})
 	}
 
-	pub fn tick<T: Block>(&mut self, info: &ClientInfo<T>, txpool_status: &PoolStatus, net_status: &NetworkStatus<T>) {
+	pub fn tick<T: Block>(
+		&mut self,
+		info: &ClientInfo<T>,
+		txpool_status: &PoolStatus,
+		net_status: &NetworkStatus<T>
+	) {
 
 		let best_number = info.chain.best_number.saturated_into::<u64>();
 		let best_hash = info.chain.best_hash;
@@ -242,8 +352,7 @@ impl MetricsService {
 		let bandwidth_upload = net_status.average_upload_per_sec;
 		let best_seen_block = net_status.best_seen_block
 			.map(|num: NumberFor<T>| num.unique_saturated_into() as u64);
-		let (cpu_usage, memory) = self.process_info();
-
+		let process_info = self.process_info();
 
 		telemetry!(
 			SUBSTRATE_INFO;
@@ -252,8 +361,8 @@ impl MetricsService {
 			"height" => best_number,
 			"best" => ?best_hash,
 			"txcount" => txpool_status.ready,
-			"cpu" => cpu_usage,
-			"memory" => memory,
+			"cpu" => process_info.cpu_usage,
+			"memory" => process_info.memory,
 			"finalized_height" => finalized_number,
 			"finalized_hash" => ?info.chain.finalized_hash,
 			"bandwidth_download" => bandwidth_download,
@@ -276,9 +385,22 @@ impl MetricsService {
 		let series = GLOBAL_METRICS.flush_series();
 
 		if let Some(metrics) = self.metrics.as_ref() {
-			metrics.cpu_usage_percentage.set(cpu_usage as f64);
-			metrics.memory_usage_bytes.set(memory);
-			metrics.ready_transactions_number.set(txpool_status.ready as u64);
+			metrics.cpu_usage_percentage.set(process_info.cpu_usage as f64);
+			metrics.memory_usage_bytes.set(process_info.memory);
+
+			if let Some(threads) = process_info.threads {
+				metrics.threads.set(threads);
+			}
+
+			if let Some(fd_info) = process_info.open_fd {
+				metrics.open_files.with_label_values(&["paths"]).set(fd_info.paths);
+				metrics.open_files.with_label_values(&["mem"]).set(fd_info.mem);
+				metrics.open_files.with_label_values(&["sockets"]).set(fd_info.sockets);
+				metrics.open_files.with_label_values(&["net"]).set(fd_info.net);
+				metrics.open_files.with_label_values(&["pipe"]).set(fd_info.pipes);
+				metrics.open_files.with_label_values(&["anon_inode"]).set(fd_info.anon_inode);
+				metrics.open_files.with_label_values(&["other"]).set(fd_info.other);
+			}
 
 			let load = self.system.get_load_average();
 			metrics.load_avg.with_label_values(&["1min"]).set(load.one);
@@ -290,6 +412,8 @@ impl MetricsService {
 
 			metrics.block_height_number.with_label_values(&["finalized"]).set(finalized_number);
 			metrics.block_height_number.with_label_values(&["best"]).set(best_number);
+
+			metrics.ready_transactions_number.set(txpool_status.ready as u64);
 
 			if let Some(best_seen_block) = best_seen_block {
 				metrics.block_height_number.with_label_values(&["sync_target"]).set(best_seen_block);
