@@ -172,6 +172,3 @@ members = [
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
-
-[package.metadata.docs.rs]
-targets = ["x86_64-unknown-linux-gnu"]
