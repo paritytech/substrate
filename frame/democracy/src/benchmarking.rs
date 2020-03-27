@@ -60,6 +60,13 @@ fn add_referendum<T: Trait>(n: u32) -> Result<ReferendumIndex, &'static str> {
 		0.into(),
 	);
 	let referendum_index: ReferendumIndex = ReferendumCount::get() - 1;
+	let _ = T::Scheduler::schedule_named(
+		(DEMOCRACY_ID, referendum_index),
+		0.into(),
+		None,
+		63,
+		Call::enact_proposal(proposal_hash, referendum_index).into(),
+	);
 	Ok(referendum_index)
 }
 
@@ -92,7 +99,7 @@ benchmarks! {
 		let p in 1 .. MAX_PROPOSALS;
 
 		// Add p proposals
-		for i in 0..p {
+		for i in 0 .. p {
 			add_proposal::<T>(i)?;
 		}
 
@@ -105,7 +112,7 @@ benchmarks! {
 		let s in 0 .. MAX_SECONDERS;
 
 		// Create s existing "seconds"
-		for i in 0..s {
+		for i in 0 .. s {
 			let seconder = funded_account::<T>("seconder", i);
 			Democracy::<T>::second(RawOrigin::Signed(seconder).into(), 0)?;
 		}
@@ -231,7 +238,9 @@ benchmarks! {
 	}: _(RawOrigin::Root, referendum_index)
 
 	cancel_queued {
-		let referendum_index = add_referendum::<T>(0)?;
+		let u in 1 .. MAX_USERS;
+
+		let referendum_index = add_referendum::<T>(u)?;
 	}: _(RawOrigin::Root, referendum_index)
 
 	open_proxy {
@@ -296,9 +305,11 @@ benchmarks! {
 
 	clear_public_proposals {
 		let p in 0 .. MAX_PROPOSALS;
+
 		for i in 0 .. p {
 			add_proposal::<T>(i)?;
 		}
+
 	}: _(RawOrigin::Root)
 
 	note_preimage {
