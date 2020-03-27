@@ -1,6 +1,6 @@
 [package]
 name = "node-rpc-client"
-version = "2.0.0-alpha.3"
+version = "2.0.0-alpha.4"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
@@ -13,5 +13,5 @@ futures = "0.1.29"
 hyper = "0.12.35"
 jsonrpc-core-client = { version = "14.0.3", features = ["http", "ws"] }
 log = "0.4.8"
-node-primitives = { version = "2.0.0-alpha.2", path = "../primitives" }
-sc-rpc = { version = "2.0.0-alpha.2", path = "../../../client/rpc" }
+node-primitives = { version = "2.0.0-alpha.4", path = "../primitives" }
+sc-rpc = { version = "2.0.0-alpha.4", path = "../../../client/rpc" }
