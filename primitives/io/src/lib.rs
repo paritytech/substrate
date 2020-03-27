@@ -286,7 +286,8 @@ pub trait Storage {
 	///
 	/// The hashing algorithm is defined by the `Block`.
 	///
-	/// Returns an `Option` that holds the SCALE encoded hash.
+	/// Returns an `Some(_)` which holds the SCALE encoded hash or `None` when
+	/// changes trie is disabled.
 	fn changes_root(&mut self, parent_hash: &[u8]) -> Option<Vec<u8>> {
 		self.storage_changes_root(parent_hash)
 			.expect("Invalid `parent_hash` given to `changes_root`.")
