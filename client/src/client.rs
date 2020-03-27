@@ -71,7 +71,7 @@ pub use sc_client_api::{
 	},
 	client::{
 		ImportNotifications, FinalityNotification, FinalityNotifications, BlockImportNotification,
-		ClientInfo, BlockchainEvents, BlockBody, ProvideUncles, BadBlocks, ForkBlocks,
+		ClientInfo, BlockchainEvents, BlockBackend, ProvideUncles, BadBlocks, ForkBlocks,
 		BlockOf,
 	},
 	execution_extensions::{ExecutionExtensions, ExecutionStrategies},
@@ -243,10 +243,10 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	Block: BlockT,
 {
 	/// Creates new Substrate Client with given blockchain and code executor.
-	pub fn new<S: BuildStorage>(
+	pub fn new(
 		backend: Arc<B>,
 		executor: E,
-		build_genesis_storage: &S,
+		build_genesis_storage: &dyn BuildStorage,
 		fork_blocks: ForkBlocks<Block>,
 		bad_blocks: BadBlocks<Block>,
 		execution_extensions: ExecutionExtensions<Block>,
@@ -542,28 +542,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		}
 
 		Ok((storage, configs))
-	}
-
-	/// Create a new block, built on the head of the chain.
-	pub fn new_block(
-		&self,
-		inherent_digests: DigestFor<Block>,
-	) -> sp_blockchain::Result<sc_block_builder::BlockBuilder<Block, Self, B>> where
-		E: Clone + Send + Sync,
-		RA: Send + Sync,
-		Self: ProvideRuntimeApi<Block>,
-		<Self as ProvideRuntimeApi<Block>>::Api: BlockBuilderApi<Block, Error = Error> +
-			ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
-	{
-		let info = self.chain_info();
-		sc_block_builder::BlockBuilder::new(
-			self,
-			info.best_hash,
-			info.best_number,
-			RecordProof::No,
-			inherent_digests,
-			&self.backend,
-		)
 	}
 
 	/// Apply a checked and validated block to an operation. If a justification is provided
@@ -1058,11 +1036,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		self.backend.blockchain().body(*id)
 	}
 
-	/// Get block justification set by id.
-	pub fn justification(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Justification>> {
-		self.backend.blockchain().justification(*id)
-	}
-
 	/// Gets the uncles of the block with `target_hash` going back `max_generation` ancestors.
 	pub fn uncles(&self, target_hash: Block::Hash, max_generation: NumberFor<Block>) -> sp_blockchain::Result<Vec<Block::Hash>> {
 		let load_header = |id: Block::Hash| -> sp_blockchain::Result<Block::Header> {
@@ -1204,6 +1177,21 @@ impl<B, E, Block, RA> BlockBuilderProvider<B, Block, Self> for Client<B, E, Bloc
 			record_proof.into(),
 			inherent_digests,
 			&self.backend
+		)
+	}
+
+	fn new_block(
+		&self,
+		inherent_digests: DigestFor<Block>,
+	) -> sp_blockchain::Result<sc_block_builder::BlockBuilder<Block, Self, B>> {
+		let info = self.chain_info();
+		sc_block_builder::BlockBuilder::new(
+			self,
+			info.best_hash,
+			info.best_number,
+			RecordProof::No,
+			inherent_digests,
+			&self.backend,
 		)
 	}
 }
@@ -1865,7 +1853,7 @@ where
 	}
 }
 
-impl<B, E, Block, RA> BlockBody<Block> for Client<B, E, Block, RA>
+impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 	where
 		B: backend::Backend<Block>,
 		E: CallExecutor<Block>,
@@ -1885,6 +1873,33 @@ impl<B, E, Block, RA> BlockBody<Block> for Client<B, E, Block, RA>
 				Some(SignedBlock { block: Block::new(header, extrinsics), justification }),
 			_ => None,
 		})
+	}
+
+	fn block_status(&self, id: &BlockId<Block>) -> sp_blockchain::Result<BlockStatus> {
+		// this can probably be implemented more efficiently
+		if let BlockId::Hash(ref h) = id {
+			if self.importing_block.read().as_ref().map_or(false, |importing| h == importing) {
+				return Ok(BlockStatus::Queued);
+			}
+		}
+		let hash_and_number = match id.clone() {
+			BlockId::Hash(hash) => self.backend.blockchain().number(hash)?.map(|n| (hash, n)),
+			BlockId::Number(n) => self.backend.blockchain().hash(n)?.map(|hash| (hash, n)),
+		};
+		match hash_and_number {
+			Some((hash, number)) => {
+				if self.backend.have_state_at(&hash, number) {
+					Ok(BlockStatus::InChainWithState)
+				} else {
+					Ok(BlockStatus::InChainPruned)
+				}
+			}
+			None => Ok(BlockStatus::Unknown),
+		}
+	}
+
+	fn justification(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Justification>> {
+		self.backend.blockchain().justification(*id)
 	}
 }
 

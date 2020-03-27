@@ -41,6 +41,7 @@ sp-api = { version = "2.0.0-alpha.2", path = "../../../primitives/api" }
 sp-finality-tracker = { version = "2.0.0-alpha.2", default-features = false, path = "../../../primitives/finality-tracker" }
 sp-timestamp = { version = "2.0.0-alpha.2", default-features = false, path = "../../../primitives/timestamp" }
 sp-block-builder = { version = "2.0.0-alpha.2", path = "../../../primitives/block-builder" }
+sc-block-builder = { version = "0.8.0-alpha.3", path = "../../../client/block-builder" }
 sp-inherents = { version = "2.0.0-alpha.2", path = "../../../primitives/inherents" }
 sp-blockchain = { version = "2.0.0-alpha.2", path = "../../../primitives/blockchain" }
 log = "0.4.8"
