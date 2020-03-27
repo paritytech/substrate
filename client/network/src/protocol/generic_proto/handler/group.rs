@@ -65,7 +65,7 @@ use libp2p::swarm::{
 	SubstreamProtocol,
 	NegotiatedSubstream,
 };
-use log::error;
+use log::{debug, error};
 use sp_runtime::ConsensusEngineId;
 use std::{borrow::Cow, error, io, task::{Context, Poll}};
 
@@ -303,7 +303,7 @@ impl ProtocolsHandler for NotifsHandler {
 		match message {
 			NotifsHandlerIn::Enable => {
 				if let EnabledState::Enabled = self.enabled {
-					error!("enabling already-enabled handler");
+					debug!("enabling already-enabled handler");
 				}
 				self.enabled = EnabledState::Enabled;
 				self.legacy.inject_event(LegacyProtoHandlerIn::Enable);
@@ -318,7 +318,7 @@ impl ProtocolsHandler for NotifsHandler {
 			},
 			NotifsHandlerIn::Disable => {
 				if let EnabledState::Disabled = self.enabled {
-					error!("disabling already-disabled handler");
+					debug!("disabling already-disabled handler");
 				}
 				self.legacy.inject_event(LegacyProtoHandlerIn::Disable);
 				// The notifications protocols start in the disabled state. If we were in the
