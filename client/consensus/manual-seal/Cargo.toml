@@ -10,7 +10,7 @@ repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
 derive_more = "0.99.2"
-futures = "0.3.1"
+futures = "0.3.4"
 jsonrpc-core = "14.0.5"
 jsonrpc-core-client = "14.0.5"
 jsonrpc-derive = "14.0.5"

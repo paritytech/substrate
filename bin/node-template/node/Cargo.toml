@@ -12,7 +12,7 @@ repository = "https://github.com/paritytech/substrate/"
 name = "node-template"
 
 [dependencies]
-futures = "0.3.1"
+futures = "0.3.4"
 log = "0.4.8"
 structopt = "0.3.8"
 

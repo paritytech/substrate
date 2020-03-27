@@ -10,7 +10,7 @@ description = "Basic implementation of block-authoring logic."
 
 [dependencies]
 log = "0.4.8"
-futures = "0.3.1"
+futures = "0.3.4"
 codec = { package = "parity-scale-codec", version = "1.2.0" }
 sp-api = { version = "2.0.0-alpha.5", path = "../../primitives/api" }
 sp-runtime = { version = "2.0.0-alpha.5", path = "../../primitives/runtime" }

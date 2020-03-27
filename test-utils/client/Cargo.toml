@@ -14,7 +14,7 @@ sc-client = { version = "0.8.0-alpha.5", path = "../../client/" }
 sc-client-db = { version = "0.8.0-alpha.5", features = ["test-helpers"], path = "../../client/db" }
 sp-consensus = { version = "0.8.0-alpha.5", path = "../../primitives/consensus/common" }
 sc-executor = { version = "0.8.0-alpha.5", path = "../../client/executor" }
-futures = "0.3.1"
+futures = "0.3.4"
 hash-db = "0.15.2"
 sp-keyring = { version = "2.0.0-alpha.5", path = "../../primitives/keyring" }
 codec = { package = "parity-scale-codec", version = "1.2.0" }

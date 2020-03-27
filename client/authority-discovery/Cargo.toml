@@ -16,7 +16,7 @@ prost-build = "0.6.1"
 bytes = "0.5.0"
 codec = { package = "parity-scale-codec", default-features = false, version = "1.2.0" }
 derive_more = "0.99.2"
-futures = "0.3.1"
+futures = "0.3.4"
 futures-timer = "3.0.1"
 libp2p = { version = "0.16.2", default-features = false, features = ["secp256k1", "libp2p-websocket"] }
 log = "0.4.8"
