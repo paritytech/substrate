@@ -31,7 +31,7 @@ status.
 EOT
 
 
-if ! expr match "${CI_COMMIT_REF_NAME}" '^[0-9]\+$' >/dev/null
+if ! [ "${CI_COMMIT_REF_NAME}" -gt 0 2>/dev/null ]
 then
   boldprint "this doesn't seem to be a pull request"
   exit 1
@@ -57,7 +57,7 @@ then
 fi
 
 if [ -z "${pr_companion}" ]
-else
+then
   boldprint "no companion pr found"
   exit 0
 fi
