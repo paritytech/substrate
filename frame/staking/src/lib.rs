@@ -1227,6 +1227,7 @@ decl_module! {
 			// For Kusama the type hasn't actually changed as Moment was u64 and was the number of
 			// millisecond since unix epoch.
 			StorageVersion::put(Releases::V3_0_0);
+			Self::migrate_last_reward_to_claimed_rewards();
 			0
 		}
 
@@ -1825,6 +1826,53 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
+	/// Migrate `last_reward` to `claimed_rewards`
+	pub fn migrate_last_reward_to_claimed_rewards() {
+		use frame_support::migration::{StorageIterator, put_storage_value};
+		// Migrate from `last_reward` to `claimed_rewards`.
+		// We will construct a vector from `current_era - history_depth` to `last_reward`
+		// for each validator. Nominators will have their history removed entirely.
+		//
+		// Old Staking Ledger
+		#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+		struct OldStakingLedger<AccountId, Balance: HasCompact> {
+			pub stash: AccountId,
+			#[codec(compact)]
+			pub total: Balance,
+			#[codec(compact)]
+			pub active: Balance,
+			pub unlocking: Vec<UnlockChunk<Balance>>,
+			pub last_reward: Option<EraIndex>,
+		}
+		// Current era and history depth
+		let current_era = Self::current_era().unwrap_or(0);
+		let history_depth = Self::history_depth();
+		let last_payout_era = current_era.saturating_sub(history_depth);
+		// Start by removing nominator history.
+		for (hash, old_ledger) in StorageIterator::<OldStakingLedger<T::AccountId, BalanceOf<T>>>::new(b"Staking", b"Ledger").drain() {
+			let last_reward = old_ledger.last_reward.unwrap_or(0);
+			let new_ledger = StakingLedger {
+				stash: old_ledger.stash,
+				total: old_ledger.total,
+				active: old_ledger.active,
+				unlocking: old_ledger.unlocking,
+				claimed_rewards: (last_payout_era..=last_reward).collect(),
+			};
+			put_storage_value(b"Staking", b"Ledger", &hash, new_ledger);
+		}
+		// Cleanup Nominator Storage
+		for (nominator, _) in Nominators::<T>::iter() {
+			if let Some(controller) = Self::bonded(nominator) {
+				Ledger::<T>::mutate(controller, |maybe_ledger| {
+					if let Some(ledger) = maybe_ledger {
+						if ledger.claimed_rewards.len() == 0 { return }
+						ledger.claimed_rewards = vec![];
+					}
+				});
+			}
+		}
+	}
+
 	/// The total balance that can be slashed from a stash account as of right now.
 	pub fn slashable_balance_of(stash: &T::AccountId) -> BalanceOf<T> {
 		Self::bonded(stash).and_then(Self::ledger).map(|l| l.active).unwrap_or_default()

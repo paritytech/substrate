@@ -4227,3 +4227,130 @@ fn assert_migration_is_noop() {
 	assert_eq!(era.index, 586);
 	assert_eq!(era.start, Some(1585135674000));
 }
+
+#[test]
+fn test_last_reward_migration() {
+	use sp_storage::Storage;
+
+	let mut s = Storage::default();
+
+	#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+	struct OldStakingLedger<AccountId, Balance: HasCompact> {
+		pub stash: AccountId,
+		#[codec(compact)]
+		pub total: Balance,
+		#[codec(compact)]
+		pub active: Balance,
+		pub unlocking: Vec<UnlockChunk<Balance>>,
+		pub last_reward: Option<EraIndex>,
+	}
+
+	let old_staking10 = OldStakingLedger::<u64, u64> {
+		stash: 0,
+		total: 10,
+		active: 10,
+		unlocking: vec![],
+		last_reward: Some(8),
+	};
+
+	let old_staking11 = OldStakingLedger::<u64, u64> {
+		stash: 1,
+		total: 0,
+		active: 0,
+		unlocking: vec![],
+		last_reward: None,
+	};
+
+	let old_staking12 = OldStakingLedger::<u64, u64> {
+		stash: 2,
+		total: 100,
+		active: 100,
+		unlocking: vec![],
+		last_reward: Some(23),
+	};
+
+	let old_staking13 = OldStakingLedger::<u64, u64> {
+		stash: 3,
+		total: 100,
+		active: 100,
+		unlocking: vec![],
+		last_reward: Some(23),
+	};
+
+	let data = vec![
+		(
+			Ledger::<Test>::hashed_key_for(10),
+			old_staking10.encode().to_vec()
+		),
+		(
+			Ledger::<Test>::hashed_key_for(11),
+			old_staking11.encode().to_vec()
+		),
+		(
+			Ledger::<Test>::hashed_key_for(12),
+			old_staking12.encode().to_vec()
+		),
+		(
+			Ledger::<Test>::hashed_key_for(13),
+			old_staking13.encode().to_vec()
+		),
+	];
+
+	s.top = data.into_iter().collect();
+	sp_io::TestExternalities::new(s).execute_with(|| {
+		HistoryDepth::put(84);
+		CurrentEra::put(99);
+		let nominations = Nominations::<u64> {
+			targets: vec![],
+			submitted_in: 0,
+			suppressed: false
+		};
+		Nominators::<Test>::insert(3, nominations);
+		Bonded::<Test>::insert(3, 13);
+		Staking::migrate_last_reward_to_claimed_rewards();
+		// Test staker out of range
+		assert_eq!(
+			Ledger::<Test>::get(10),
+			Some(StakingLedger {
+				stash: 0,
+				total: 10,
+				active: 10,
+				unlocking: vec![],
+				claimed_rewards: vec![],
+			})
+		);
+		// Test staker none
+		assert_eq!(
+			Ledger::<Test>::get(11),
+			Some(StakingLedger {
+				stash: 1,
+				total: 0,
+				active: 0,
+				unlocking: vec![],
+				claimed_rewards: vec![],
+			})
+		);
+		// Test staker migration
+		assert_eq!(
+			Ledger::<Test>::get(12),
+			Some(StakingLedger {
+				stash: 2,
+				total: 100,
+				active: 100,
+				unlocking: vec![],
+				claimed_rewards: vec![15,16,17,18,19,20,21,22,23],
+			})
+		);
+		// Test nominator migration
+		assert_eq!(
+			Ledger::<Test>::get(13),
+			Some(StakingLedger {
+				stash: 3,
+				total: 100,
+				active: 100,
+				unlocking: vec![],
+				claimed_rewards: vec![],
+			})
+		);
+	});
+}
