@@ -543,6 +543,13 @@ pub trait Hashing {
 		sp_core::hashing::blake2_128(data)
 	}
 
+	/// Conduct a 64-bit Blake2 hash.
+	fn blake2_64(data: &[u8]) -> [u8; 8] {
+		let mut r = [0u8; 8];
+		r.copy_from_slice(&sp_core::hashing::blake2_128(data)[0..8]);
+		r
+	}
+
 	/// Conduct a 256-bit Blake2 hash.
 	fn blake2_256(data: &[u8]) -> [u8; 32] {
 		sp_core::hashing::blake2_256(data)
@@ -561,6 +568,13 @@ pub trait Hashing {
 	/// Conduct two XX hashes to give a 64-bit result.
 	fn twox_64(data: &[u8]) -> [u8; 8] {
 		sp_core::hashing::twox_64(data)
+	}
+
+	/// Conduct two XX hashes to give a 64-bit result.
+	fn twox_32(data: &[u8]) -> [u8; 4] {
+		let mut r = [0u8; 4];
+		r.copy_from_slice(&sp_core::hashing::twox_64(data)[0..4]);
+		r
 	}
 }
 

@@ -31,9 +31,11 @@ mod keyword {
 	syn::custom_keyword!(opaque_blake2_256);
 	syn::custom_keyword!(opaque_blake2_128);
 	syn::custom_keyword!(blake2_128_concat);
+	syn::custom_keyword!(blake2_64_concat);
 	syn::custom_keyword!(opaque_twox_256);
 	syn::custom_keyword!(opaque_twox_128);
 	syn::custom_keyword!(twox_64_concat);
+	syn::custom_keyword!(twox_32_concat);
 	syn::custom_keyword!(identity);
 	syn::custom_keyword!(hasher);
 	syn::custom_keyword!(tainted);
@@ -239,9 +241,11 @@ enum Hasher {
 	Blake2_256(keyword::opaque_blake2_256),
 	Blake2_128(keyword::opaque_blake2_128),
 	Blake2_128Concat(keyword::blake2_128_concat),
+	Blake2_64Concat(keyword::blake2_64_concat),
 	Twox256(keyword::opaque_twox_256),
 	Twox128(keyword::opaque_twox_128),
 	Twox64Concat(keyword::twox_64_concat),
+	Twox32Concat(keyword::twox_32_concat),
 	Identity(keyword::identity),
 }
 
@@ -254,12 +258,16 @@ impl syn::parse::Parse for Hasher {
 			Ok(Self::Blake2_128(input.parse()?))
 		} else if lookahead.peek(keyword::blake2_128_concat) {
 			Ok(Self::Blake2_128Concat(input.parse()?))
+		} else if lookahead.peek(keyword::blake2_64_concat) {
+			Ok(Self::Blake2_64Concat(input.parse()?))
 		} else if lookahead.peek(keyword::opaque_twox_256) {
 			Ok(Self::Twox256(input.parse()?))
 		} else if lookahead.peek(keyword::opaque_twox_128) {
 			Ok(Self::Twox128(input.parse()?))
 		} else if lookahead.peek(keyword::twox_64_concat) {
 			Ok(Self::Twox64Concat(input.parse()?))
+		} else if lookahead.peek(keyword::twox_32_concat) {
+			Ok(Self::Twox32Concat(input.parse()?))
 		} else if lookahead.peek(keyword::identity) {
 			Ok(Self::Identity(input.parse()?))
 		} else if lookahead.peek(keyword::tainted) {
@@ -310,9 +318,11 @@ impl From<Hasher> for super::HasherKind {
 			Hasher::Blake2_256(_) => super::HasherKind::Blake2_256,
 			Hasher::Blake2_128(_) => super::HasherKind::Blake2_128,
 			Hasher::Blake2_128Concat(_) => super::HasherKind::Blake2_128Concat,
+			Hasher::Blake2_64Concat(_) => super::HasherKind::Blake2_64Concat,
 			Hasher::Twox256(_) => super::HasherKind::Twox256,
 			Hasher::Twox128(_) => super::HasherKind::Twox128,
 			Hasher::Twox64Concat(_) => super::HasherKind::Twox64Concat,
+			Hasher::Twox32Concat(_) => super::HasherKind::Twox32Concat,
 			Hasher::Identity(_) => super::HasherKind::Identity,
 		}
 	}

@@ -363,6 +363,8 @@ pub enum HasherKind {
 	Twox128,
 	Twox64Concat,
 	Identity,
+	Blake2_64Concat,
+	Twox32Concat,
 }
 
 impl HasherKind {
@@ -371,9 +373,11 @@ impl HasherKind {
 			HasherKind::Blake2_256 => quote!( Blake2_256 ),
 			HasherKind::Blake2_128 => quote!( Blake2_128 ),
 			HasherKind::Blake2_128Concat => quote!( Blake2_128Concat ),
+			HasherKind::Blake2_64Concat => quote!( Blake2_64Concat ),
 			HasherKind::Twox256 => quote!( Twox256 ),
 			HasherKind::Twox128 => quote!( Twox128 ),
 			HasherKind::Twox64Concat => quote!( Twox64Concat ),
+			HasherKind::Twox32Concat => quote!( Twox32Concat ),
 			HasherKind::Identity => quote!( Identity ),
 		}
 	}
@@ -383,9 +387,11 @@ impl HasherKind {
 			HasherKind::Blake2_256 => quote!( StorageHasher::Blake2_256 ),
 			HasherKind::Blake2_128 => quote!( StorageHasher::Blake2_128 ),
 			HasherKind::Blake2_128Concat => quote!( StorageHasher::Blake2_128Concat ),
+			HasherKind::Blake2_64Concat => quote!( StorageHasher::Blake2_64Concat ),
 			HasherKind::Twox256 => quote!( StorageHasher::Twox256 ),
 			HasherKind::Twox128 => quote!( StorageHasher::Twox128 ),
 			HasherKind::Twox64Concat => quote!( StorageHasher::Twox64Concat ),
+			HasherKind::Twox32Concat => quote!( StorageHasher::Twox32Concat ),
 			HasherKind::Identity => quote!( StorageHasher::Identity ),
 		}
 	}
