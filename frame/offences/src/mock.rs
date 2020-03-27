@@ -43,6 +43,7 @@ pub struct OnOffenceHandler;
 
 thread_local! {
 	pub static ON_OFFENCE_PERBILL: RefCell<Vec<Perbill>> = RefCell::new(Default::default());
+	pub static CAN_REPORT: RefCell<bool> = RefCell::new(true);
 }
 
 impl<Reporter, Offender> offence::OnOffenceHandler<Reporter, Offender> for OnOffenceHandler {
@@ -50,11 +51,25 @@ impl<Reporter, Offender> offence::OnOffenceHandler<Reporter, Offender> for OnOff
 		_offenders: &[OffenceDetails<Reporter, Offender>],
 		slash_fraction: &[Perbill],
 		_offence_session: SessionIndex,
-	) {
-		ON_OFFENCE_PERBILL.with(|f| {
-			*f.borrow_mut() = slash_fraction.to_vec();
-		});
+	) -> Result<(), ()> {
+		if <Self as offence::OnOffenceHandler<Reporter, Offender>>::can_report() {
+			ON_OFFENCE_PERBILL.with(|f| {
+				*f.borrow_mut() = slash_fraction.to_vec();
+			});
+
+			Ok(())
+		} else {
+			Err(())
+		}
 	}
+
+	fn can_report() -> bool {
+		CAN_REPORT.with(|c| *c.borrow())
+	}
+}
+
+pub fn set_can_report(can_report: bool) {
+	CAN_REPORT.with(|c| *c.borrow_mut() = can_report);
 }
 
 pub fn with_on_offence_fractions<R, F: FnOnce(&mut Vec<Perbill>) -> R>(f: F) -> R {

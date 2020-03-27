@@ -16,11 +16,11 @@
 
 //! A slashing implementation for NPoS systems.
 //!
-//! For the purposes of the economic model, it is easiest to think of each validator
-//! of a nominator which nominates only its own identity.
+//! For the purposes of the economic model, it is easiest to think of each validator as a nominator
+//! which nominates only its own identity.
 //!
-//! The act of nomination signals intent to unify economic identity with the validator - to take part in the
-//! rewards of a job well done, and to take part in the punishment of a job done badly.
+//! The act of nomination signals intent to unify economic identity with the validator - to take
+//! part in the rewards of a job well done, and to take part in the punishment of a job done badly.
 //!
 //! There are 3 main difficulties to account for with slashing in NPoS:
 //!   - A nominator can nominate multiple validators and be slashed via any of them.
@@ -52,7 +52,7 @@ use super::{
 	EraIndex, Trait, Module, Store, BalanceOf, Exposure, Perbill, SessionInterface,
 	NegativeImbalanceOf, UnappliedSlash,
 };
-use sp_runtime::{traits::{Zero, Saturating}, PerThing};
+use sp_runtime::{traits::{Zero, Saturating}, PerThing, RuntimeDebug};
 use frame_support::{
 	StorageMap, StorageDoubleMap,
 	traits::{Currency, OnUnbalanced, Imbalance},
@@ -65,7 +65,7 @@ use codec::{Encode, Decode};
 const REWARD_F1: Perbill = Perbill::from_percent(50);
 
 /// The index of a slashing span - unique to each stash.
-pub(crate) type SpanIndex = u32;
+pub type SpanIndex = u32;
 
 // A range of start..end eras for a slashing span.
 #[derive(Encode, Decode)]
@@ -83,7 +83,7 @@ impl SlashingSpan {
 }
 
 /// An encoding of all of a nominator's slashing spans.
-#[derive(Encode, Decode)]
+#[derive(Encode, Decode, RuntimeDebug)]
 pub struct SlashingSpans {
 	// the index of the current slashing span of the nominator. different for
 	// every stash, resets when the account hits free balance 0.
@@ -143,7 +143,7 @@ impl SlashingSpans {
 	}
 
 	/// Yields the era index where the most recent non-zero slash occurred.
-	pub(crate) fn last_nonzero_slash(&self) -> EraIndex {
+	pub fn last_nonzero_slash(&self) -> EraIndex {
 		self.last_nonzero_slash
 	}
 
