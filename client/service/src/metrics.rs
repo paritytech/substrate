@@ -272,6 +272,9 @@ impl MetricsService {
 				.unwrap_or(0),
 		);
 
+		// consume the series, whether there is prometheus or not,to not leak memory here
+		let series = GLOBAL_METRICS.flush_series();
+
 		if let Some(metrics) = self.metrics.as_ref() {
 			metrics.cpu_usage_percentage.set(cpu_usage as f64);
 			metrics.memory_usage_bytes.set(memory);
@@ -321,7 +324,8 @@ impl MetricsService {
 					metrics.internals.with_label_values(&[&key[..]]).set(*value);
 				}
 			});
-			let mut series = GLOBAL_METRICS.flush_series().into_iter().fold(HashMap::<&'static str, Vec<u64>>::new(),
+
+			let mut series = series.into_iter().fold(HashMap::<&'static str, Vec<u64>>::new(),
 				| mut h, (key, value)| {
 					h.entry(key)
 						.and_modify(|v| {
