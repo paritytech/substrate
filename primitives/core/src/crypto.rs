@@ -618,7 +618,7 @@ impl From<AccountId32> for [u8; 32] {
 
 impl From<sr25519::Public> for AccountId32 {
 	fn from(k: sr25519::Public) -> Self {
-        k.0.into()
+		k.0.into()
 	}
 }
 
