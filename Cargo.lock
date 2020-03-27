@@ -3713,6 +3713,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "fs_extra",
+ "futures 0.3.4",
  "log 0.4.8",
  "node-executor",
  "node-primitives",
