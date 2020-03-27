@@ -31,3 +31,6 @@ std = [
 	"sp-wasm-interface/std",
 ]
 strict = []
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

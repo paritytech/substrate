@@ -41,3 +41,6 @@ runtime-benchmarks = ["sp-runtime/runtime-benchmarks"]
 [[bench]]
 name = "bench"
 harness = false
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

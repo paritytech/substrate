@@ -45,3 +45,6 @@ std = [
 	'safe-mix/std',
 	'frame-system/std'
 ]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

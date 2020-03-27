@@ -41,3 +41,6 @@ std = [
 	"sp-timestamp/std"
 ]
 runtime-benchmarks = ["frame-benchmarking", "sp-io"]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

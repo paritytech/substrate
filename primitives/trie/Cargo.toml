@@ -40,3 +40,6 @@ std = [
 	"trie-root/std",
 	"sp-core/std",
 ]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

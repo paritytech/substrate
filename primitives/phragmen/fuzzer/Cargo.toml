@@ -14,3 +14,6 @@ rand = "0.7.3"
 [[bin]]
 name = "reduce"
 path = "src/reduce.rs"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

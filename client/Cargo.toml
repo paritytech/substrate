@@ -43,3 +43,6 @@ tempfile = "3.1.0"
 substrate-test-runtime-client = { version = "2.0.0-dev", path = "../test-utils/runtime/client" }
 kvdb-memorydb = "0.5.0"
 sp-panic-handler = { version = "2.0.0-alpha.5", path = "../primitives/panic-handler" }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

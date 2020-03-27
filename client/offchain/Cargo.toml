@@ -42,3 +42,6 @@ tokio = "0.2"
 
 [features]
 default = []
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

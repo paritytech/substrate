@@ -153,3 +153,6 @@ wasmtime = [
 	"sc-service/wasmtime",
 ]
 runtime-benchmarks = [ "node-runtime/runtime-benchmarks" ]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

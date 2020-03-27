@@ -24,3 +24,6 @@ std = [
 	"sp-application-crypto/std",
 	"serde",
 ]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

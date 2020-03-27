@@ -37,3 +37,6 @@ std = [
 	"frame-system/std",
 ]
 runtime-benchmarks = ["frame-benchmarking"]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

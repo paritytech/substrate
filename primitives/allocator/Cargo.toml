@@ -25,3 +25,6 @@ std = [
 	"log",
 	"derive_more",
 ]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

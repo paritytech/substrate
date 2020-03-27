@@ -46,3 +46,6 @@ std = [
 	"sp-timestamp/std",
 	"pallet-timestamp/std",
 ]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

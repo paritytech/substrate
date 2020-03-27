@@ -28,3 +28,6 @@ std = [
 	"sp-std/std",
 	"sp-allocator/std",
 ]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
