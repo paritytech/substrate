@@ -27,7 +27,7 @@ use sc_service::Configuration;
 	impl_name = "Substrate Node",
 	support_url = "https://github.com/paritytech/substrate/issues/new",
 	copyright_start_year = 2017,
-	executable_name = "substrate"
+	executable_name = "substrate",
 )]
 impl SubstrateCli for Cli {
 	fn load_spec(&self, id: &str) -> std::result::Result<Box<dyn sc_service::ChainSpec>, String> {

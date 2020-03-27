@@ -23,7 +23,7 @@ use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
 #[substrate_cli(
 	impl_name = "Substrate Node",
 	support_url = "support.anonymous.an",
-	copyright_start_year = 2017
+	copyright_start_year = 2017,
 )]
 impl SubstrateCli for Cli {
 	fn load_spec(&self, id: &str) -> Result<Box<dyn sc_service::ChainSpec>, String> {
