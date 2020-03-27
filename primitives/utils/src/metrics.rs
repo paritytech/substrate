@@ -8,13 +8,15 @@ lazy_static! {
 }
 
 pub struct InternalMetrics {
-    metrics: RwLock<HashMap<&'static str, u64>>
+    metrics: RwLock<HashMap<&'static str, u64>>,
+    series: RwLock<Vec<(&'static str, u64)>>
 }
 
 impl InternalMetrics {
     pub fn new() -> Self {
         Self {
-            metrics: RwLock::new(HashMap::new())
+            metrics: RwLock::new(HashMap::new()),
+            series: RwLock::new(Vec::new())
         }
     }
 
@@ -48,11 +50,19 @@ impl InternalMetrics {
         self.metrics.write().insert(key, value);
     }
 
+    pub fn add(&self, key: &'static str, value: u64) {
+        self.series.write().push((key, value))
+    }
+
     pub fn get(&self, key: &'static str) -> Option<u64> {
         self.metrics.read().get(key).cloned()
     }
 
     pub fn inner<'a>(&'a self) -> &'a RwLock<HashMap<&'static str, u64>> {
         &self.metrics
+    }
+
+    pub fn flush_series(&self) -> Vec<(&'static str, u64)> {
+        self.series.write().drain(..).collect::<Vec<_>>()
     }
 }

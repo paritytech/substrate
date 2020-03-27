@@ -1,13 +1,15 @@
 
-use prometheus_endpoint::{register, Gauge, U64, F64, Registry, PrometheusError, Opts, GaugeVec};
-use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
-use sc_telemetry::{telemetry, SUBSTRATE_INFO};
-use sc_client::ClientInfo;
 use crate::NetworkStatus;
-use sp_transaction_pool::PoolStatus;
-use sp_runtime::traits::{NumberFor, Block, SaturatedConversion, UniqueSaturatedInto};
 use netstat2::{TcpState, ProtocolSocketInfo, iterate_sockets_info, AddressFamilyFlags, ProtocolFlags};
+use prometheus_endpoint::{register, Gauge, U64, F64, Registry, PrometheusError, Opts, GaugeVec};
+use sc_client::ClientInfo;
+use sc_telemetry::{telemetry, SUBSTRATE_INFO};
+use std::collections::HashMap;
+use std::convert::TryFrom;
+use sp_runtime::traits::{NumberFor, Block, SaturatedConversion, UniqueSaturatedInto};
+use sp_transaction_pool::PoolStatus;
 use sp_utils::metrics::GLOBAL_METRICS;
+use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 
 struct PrometheusMetrics {
 	block_height_number: GaugeVec<U64>,
@@ -15,6 +17,7 @@ struct PrometheusMetrics {
 	memory_usage_bytes: Gauge<U64>,
 	netstat: GaugeVec<U64>,
 	load_avg: GaugeVec<F64>,
+	block_import: GaugeVec<U64>,
 	cpu_usage_percentage: Gauge<F64>,
 	network_per_sec_bytes: GaugeVec<U64>,
 	database_cache: Gauge<U64>,
@@ -78,6 +81,10 @@ impl PrometheusMetrics {
 				Opts::new("load_avg", "System load average"),
 				&["over"]
 			)?, registry)?,
+			block_import: register(GaugeVec::new(
+				Opts::new("block_import", "Block Import"),
+				&["subtype"]
+			)?, registry)?,
 			tokio: register(GaugeVec::new(
 				Opts::new("tokio", "Tokio internals"),
 				&["entity"]
@@ -101,7 +108,7 @@ pub struct MetricsService {
 }
 
 #[derive(Default)]
-pub struct ConnectionsCount {
+struct ConnectionsCount {
 	listen: u64,
 	established: u64,
 	starting: u64,
@@ -109,6 +116,50 @@ pub struct ConnectionsCount {
 	closed: u64,
 	other: u64
 }
+
+struct TimeSeriesInfo {
+	count: u64,
+	lower_median: u64,
+	median: u64,
+	higher_median: u64,
+	average: u64
+}
+
+
+impl From<Vec<u64>> for TimeSeriesInfo {
+	fn from(mut input: Vec<u64>) -> Self {
+		let count = input.len();
+		if let Some(only_value) = match count {
+			0 => Some(0),
+			1 => Some(input[0]),
+			_ => None
+		} {
+			return TimeSeriesInfo {
+				count: u64::try_from(count).expect("Usize always fits into u64. qed"),
+				lower_median: only_value,
+				median: only_value,
+				higher_median: only_value,
+				average: only_value
+			}
+		}
+
+		input.sort();
+		let median_pos = count.div_euclid(2);
+		let median_dif = median_pos.div_euclid(2);
+		let count = u64::try_from(count).expect("Usize always fits into u64. qed");
+		let average = input.iter().fold(0u64, |acc, val| acc + val).div_euclid(count);
+
+		TimeSeriesInfo {
+			count,
+			lower_median: input[median_pos - median_dif],
+			median: input[median_pos],
+			higher_median: input[median_pos + median_dif],
+			average
+		}
+	}
+}
+
+
 
 impl MetricsService {
 
@@ -269,6 +320,34 @@ impl MetricsService {
 				} else {
 					metrics.internals.with_label_values(&[&key[..]]).set(*value);
 				}
+			});
+			let mut series = GLOBAL_METRICS.flush_series().into_iter().fold(HashMap::<&'static str, Vec<u64>>::new(),
+				| mut h, (key, value)| {
+					h.entry(key)
+						.and_modify(|v| {
+							v.push(value)
+						})
+						.or_insert(vec![value]);
+					h
+				}
+			);
+
+			if let Some(imports) = series.remove("block_imports") {
+				let info = TimeSeriesInfo::from(imports);
+				metrics.block_import.with_label_values(&["count"]).set(info.count);
+				metrics.block_import.with_label_values(&["time_average"]).set(info.average);
+				metrics.block_import.with_label_values(&["time_median"]).set(info.median);
+				metrics.block_import.with_label_values(&["time_lower_median"]).set(info.lower_median);
+				metrics.block_import.with_label_values(&["time_higher_median"]).set(info.higher_median);
+			}
+
+			series.into_iter().for_each(|(key, values)| {
+				let info = TimeSeriesInfo::from(values);
+				metrics.internals.with_label_values(&[&format!("{:}_count", key)[..]]).set(info.count);
+				metrics.internals.with_label_values(&[&format!("{:}_average", key)[..]]).set(info.average);
+				metrics.internals.with_label_values(&[&format!("{:}_median", key)[..]]).set(info.median);
+				metrics.internals.with_label_values(&[&format!("{:}_lower_media", key)[..]]).set(info.lower_median);
+				metrics.internals.with_label_values(&[&format!("{:}_higher_median", key)[..]]).set(info.higher_median);
 			});
 		}
 
