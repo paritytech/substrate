@@ -403,7 +403,7 @@ macro_rules! implement_per_thing {
 			}
 
 			/// See [`PerThing::is_one`].
-			pub fn is_one() -> Self {
+			pub fn is_one(&self) -> bool {
 				PerThing::is_one(self)
 			}
 
