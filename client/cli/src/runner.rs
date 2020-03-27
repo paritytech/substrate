@@ -142,9 +142,9 @@ impl<C: SubstrateCli> Runner<C>
 			C::copyright_start_year(),
 			Local::today().year()
 		);
-		info!("Chain specification: {}", self.config.chain_spec.name());
-		info!("Node name: {}", self.config.network.node_name);
-		info!("Roles: {}", self.config.display_role());
+		info!("📋 Chain specification: {}", self.config.chain_spec.name());
+		info!("🏷 Node name: {}", self.config.network.node_name);
+		info!("👤 Roles: {}", self.config.display_role());
 
 		match self.config.roles {
 			Roles::LIGHT => self.run_service_until_exit(new_light),
