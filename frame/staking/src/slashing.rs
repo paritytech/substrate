@@ -52,7 +52,7 @@ use super::{
 	EraIndex, Trait, Module, Store, BalanceOf, Exposure, Perbill, SessionInterface,
 	NegativeImbalanceOf, UnappliedSlash,
 };
-use sp_runtime::{traits::{Zero, Saturating}, PerThing, RuntimeDebug};
+use sp_runtime::{traits::{Zero, Saturating}, RuntimeDebug};
 use frame_support::{
 	StorageMap, StorageDoubleMap,
 	traits::{Currency, OnUnbalanced, Imbalance},
