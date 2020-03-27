@@ -106,7 +106,7 @@ sc-keystore = { version = "2.0.0-alpha.5", path = "../../../client/keystore" }
 sc-consensus-babe = { version = "0.8.0-alpha.5", features = ["test-helpers"], path = "../../../client/consensus/babe" }
 sc-consensus-epochs = { version = "0.8.0-alpha.5", path = "../../../client/consensus/epochs" }
 sc-service-test = { version = "2.0.0-dev", path = "../../../client/service/test" }
-futures = "0.3.1"
+futures = "0.3.4"
 tempfile = "3.1.0"
 assert_cmd = "0.12"
 nix = "0.17"

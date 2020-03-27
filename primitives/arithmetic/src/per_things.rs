@@ -20,7 +20,7 @@ use serde::{Serialize, Deserialize};
 use sp_std::{ops, fmt, prelude::*, convert::TryInto};
 use codec::{Encode, Decode, CompactAs};
 use crate::traits::{
-	SaturatedConversion, UniqueSaturatedInto, Saturating, BaseArithmetic, Zero, Bounded,
+	SaturatedConversion, UniqueSaturatedInto, Saturating, BaseArithmetic, Bounded, Zero,
 };
 use sp_debug_derive::RuntimeDebug;
 
@@ -316,7 +316,8 @@ macro_rules! implement_per_thing {
 		///
 		#[doc = $title]
 		#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-		#[derive(Encode, Decode, Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, RuntimeDebug, CompactAs)]
+		#[derive(Encode, Decode, Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord,
+				 RuntimeDebug, CompactAs)]
 		pub struct $name($type);
 
 		impl PerThing for $name {
@@ -403,12 +404,51 @@ macro_rules! implement_per_thing {
 				Self(([x, 100][(x > 100) as usize] as $upper_type * $max as $upper_type / 100) as $type)
 			}
 
-			/// Everything.
-			///
-			/// To avoid having to import `PerThing` when one needs to be used in test mocks.
-			#[cfg(feature = "std")]
+			/// See [`PerThing::one`].
 			pub fn one() -> Self {
 				<Self as PerThing>::one()
+			}
+
+			/// See [`PerThing::zero`].
+			pub fn zero() -> Self {
+				<Self as PerThing>::zero()
+			}
+
+			/// See [`PerThing::is_zero`].
+			pub fn is_zero(&self) -> bool {
+				PerThing::is_zero(self)
+			}
+
+			/// See [`PerThing::deconstruct`].
+			pub fn deconstruct(self) -> $type {
+				PerThing::deconstruct(self)
+			}
+
+			/// See [`PerThing::square`].
+			pub fn square(self) -> Self {
+				PerThing::square(self)
+			}
+
+			/// See [`PerThing::from_fraction`].
+			#[cfg(feature = "std")]
+			pub fn from_fraction(x: f64) -> Self {
+				<Self as PerThing>::from_fraction(x)
+			}
+
+			/// See [`PerThing::from_rational_approximation`].
+			pub fn from_rational_approximation<N>(p: N, q: N) -> Self
+				where N: Clone + Ord + From<$type> + TryInto<$type> +
+					TryInto<$upper_type> + ops::Div<N, Output=N> + ops::Rem<N, Output=N> +
+					ops::Add<N, Output=N> {
+				<Self as PerThing>::from_rational_approximation(p, q)
+			}
+
+			/// See [`PerThing::mul_collapse`].
+			pub fn mul_collapse<N>(self, b: N) -> N
+				where N: Clone + From<$type> + UniqueSaturatedInto<$type> +
+					ops::Rem<N, Output=N> + ops::Div<N, Output=N> + ops::Mul<N, Output=N> +
+					ops::Add<N, Output=N> {
+				PerThing::mul_collapse(self, b)
 			}
 		}
 
