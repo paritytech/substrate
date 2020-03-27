@@ -10,7 +10,7 @@ repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
 ansi_term = "0.12.1"
-futures = "0.3.1"
+futures = "0.3.4"
 log = "0.4.8"
 parity-util-mem = { version = "0.6.0", default-features = false, features = ["primitive-types"] }
 wasm-timer = "0.2"
