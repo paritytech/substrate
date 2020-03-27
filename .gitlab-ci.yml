@@ -437,7 +437,7 @@ check_warnings:
       fi
 
 
-check-polkadot-companion-pr-status:
+check-polkadot-companion-status:
   stage:                           post-build-test
   image:                           parity/tools:latest
   <<:                              *kubernetes-build
