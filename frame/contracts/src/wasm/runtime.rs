@@ -405,6 +405,36 @@ define_env!(Env, <E: Ext>,
 		}
 	},
 
+	// Transfer some value to another account.
+	//
+	// If the value transfer was succesful zero is returned. Otherwise one is returned.
+	// The scratch buffer is not touched. The receiver can be a plain account or
+	// a contract.
+	//
+	// - account_ptr: a pointer to the address of the beneficiary account
+	//   Should be decodable as an `T::AccountId`. Traps otherwise.
+	// - account_len: length of the address buffer.
+	// - value_ptr: a pointer to the buffer with value, how much value to send.
+	//   Should be decodable as a `T::Balance`. Traps otherwise.
+	// - value_len: length of the value buffer.
+	ext_transfer(
+		ctx,
+		account_ptr: u32,
+		account_len: u32,
+		value_ptr: u32,
+		value_len: u32
+	) -> u32 => {
+		let callee: <<E as Ext>::T as frame_system::Trait>::AccountId =
+			read_sandbox_memory_as(ctx, account_ptr, account_len)?;
+		let value: BalanceOf<<E as Ext>::T> =
+			read_sandbox_memory_as(ctx, value_ptr, value_len)?;
+
+		match ctx.ext.transfer(&callee, value, ctx.gas_meter) {
+			Ok(_) => Ok(0),
+			Err(_) => Ok(1),
+		}
+	},
+
 	// Make a call to another contract.
 	//
 	// If the called contract runs to completion, then this returns the status code the callee
