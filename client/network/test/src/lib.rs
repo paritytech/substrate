@@ -282,6 +282,7 @@ impl<D> Peer<D> {
 			};
 			self.block_import.import_block(import_block, cache).expect("block_import failed");
 			self.network.on_block_imported(header, true);
+			self.network.service().announce_block(hash, Vec::new());
 			at = hash;
 		}
 
