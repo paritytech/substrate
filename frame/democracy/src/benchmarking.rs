@@ -29,6 +29,9 @@ const SEED: u32 = 0;
 const MAX_USERS: u32 = 1000;
 const MAX_REFERENDUMS: u32 = 100;
 const MAX_PROPOSALS: u32 = 100;
+const MAX_SECONDERS: u32 = 100;
+const MAX_VETOERS: u32 = 100;
+const MAX_BYTES: u32 = 16_384;
 
 fn funded_account<T: Trait>(name: &'static str, index: u32) -> T::AccountId {
 	let caller: T::AccountId = account(name, index, SEED);
@@ -99,7 +102,7 @@ benchmarks! {
 	}: _(RawOrigin::Signed(caller), proposal_hash, value.into())
 
 	second {
-		let s in 0 .. 100;
+		let s in 0 .. MAX_SECONDERS;
 
 		// Create s existing "seconds"
 		for i in 0..s {
@@ -202,7 +205,7 @@ benchmarks! {
 
 	veto_external {
 		// Existing veto-ers
-		let v in 0 .. 100;
+		let v in 0 .. MAX_VETOERS;
 
 		let proposal_hash: T::Hash = T::Hashing::hash_of(&v);
 
@@ -210,7 +213,7 @@ benchmarks! {
 		Democracy::<T>::external_propose_default(origin_propose, proposal_hash.clone())?;
 
 		let mut vetoers: Vec<T::AccountId> = Vec::new();
-		for i in 0..v {
+		for i in 0 .. v {
 			vetoers.push(account("vetoer", i, SEED));
 		}
 		Blacklist::<T>::insert(proposal_hash, (T::BlockNumber::zero(), vetoers));
@@ -292,7 +295,7 @@ benchmarks! {
 	}: _(RawOrigin::Signed(delegator))
 
 	clear_public_proposals {
-		let p in 0 .. 100;
+		let p in 0 .. MAX_PROPOSALS;
 		for i in 0 .. p {
 			add_proposal::<T>(i)?;
 		}
@@ -300,7 +303,7 @@ benchmarks! {
 
 	note_preimage {
 		// Num of bytes in encoded proposal
-		let b in 0 .. 16_384;
+		let b in 0 .. MAX_BYTES;
 
 		let caller = funded_account::<T>("caller", b);
 		let encoded_proposal = vec![0; b as usize];
@@ -308,7 +311,7 @@ benchmarks! {
 
 	note_imminent_preimage {
 		// Num of bytes in encoded proposal
-		let b in 0 .. 16_384;
+		let b in 0 .. MAX_BYTES;
 
 		// d + 1 to include the one we are testing
 		let encoded_proposal = vec![0; b as usize];
@@ -322,7 +325,7 @@ benchmarks! {
 
 	reap_preimage {
 		// Num of bytes in encoded proposal
-		let b in 0 .. 16_384;
+		let b in 0 .. MAX_BYTES;
 
 		let encoded_proposal = vec![0; b as usize];
 		let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
