@@ -522,6 +522,7 @@ fn self_votes_should_be_kept() {
 }
 
 #[test]
+<<<<<<< HEAD
 fn elect_should_never_output_zero() {
 	// phragmen internally uses Rational128 to keep ratios, which is _as accurate as it gets_. When
 	// down-casting this number to a PerThing, this might lead to `Zero::zero()`. This should simply
@@ -532,6 +533,8 @@ fn elect_should_never_output_zero() {
 }
 
 #[test]
+=======
+>>>>>>> f7bd10a548201cb68491f72be73115279d97f160
 fn assignment_convert_works() {
 	let staked = StakedAssignment {
 		who: 1 as AccountId,
@@ -950,7 +953,11 @@ mod compact {
 		);
 	}
 
+<<<<<<< HEAD
 	#[test]
+=======
+		#[test]
+>>>>>>> f7bd10a548201cb68491f72be73115279d97f160
 	fn zero_target_count_is_ignored() {
 		let voters = vec![1 as AccountId, 2];
 		let targets = vec![10 as AccountId, 11];

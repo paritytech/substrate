@@ -45,7 +45,17 @@ env_logger = "0.7.1"
 hex = "0.4"
 
 [features]
+<<<<<<< HEAD
 default = ["std", "runtime-benchmarks"]
+=======
+testing-utils = [
+	"std",
+	"pallet-indices/std",
+	"sp-core/std",
+	"rand/std",
+]
+default = ["std"]
+>>>>>>> f7bd10a548201cb68491f72be73115279d97f160
 std = [
 	"serde",
 	"codec/std",
