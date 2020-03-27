@@ -505,15 +505,19 @@ macro_rules! impl_benchmark {
 		NO_INSTANCE $( $name:ident ),*
 	) => {
 		impl<T: Trait> $crate::Benchmarking<$crate::BenchmarkResults> for Module<T> {
+			fn benchmarks() -> Vec<&'static [u8]> {
+				vec![ $( stringify!($name).as_ref() ),* ]
+			}
+
 			fn run_benchmark(
-				extrinsic: Vec<u8>,
-				lowest_range_values: Vec<u32>,
-				highest_range_values: Vec<u32>,
-				steps: Vec<u32>,
+				extrinsic: &[u8],
+				lowest_range_values: &[u32],
+				highest_range_values: &[u32],
+				steps: &[u32],
 				repeat: u32,
 			) -> Result<Vec<$crate::BenchmarkResults>, &'static str> {
 				// Map the input to the selected benchmark.
-				let extrinsic = sp_std::str::from_utf8(extrinsic.as_slice())
+				let extrinsic = sp_std::str::from_utf8(extrinsic)
 					.map_err(|_| "`extrinsic` is not a valid utf8 string!")?;
 				let selected_benchmark = match extrinsic {
 					$( stringify!($name) => SelectedBenchmark::$name, )*
@@ -597,15 +601,19 @@ macro_rules! impl_benchmark {
 		INSTANCE $( $name:ident ),*
 	) => {
 		impl<T: Trait<I>, I: Instance> $crate::Benchmarking<$crate::BenchmarkResults> for Module<T, I> {
+			fn benchmarks() -> Vec<&'static [u8]> {
+				vec![ $( stringify!($name).as_ref() ),* ]
+			}
+
 			fn run_benchmark(
-				extrinsic: Vec<u8>,
-				lowest_range_values: Vec<u32>,
-				highest_range_values: Vec<u32>,
-				steps: Vec<u32>,
+				extrinsic: &[u8],
+				lowest_range_values: &[u32],
+				highest_range_values: &[u32],
+				steps: &[u32],
 				repeat: u32,
 			) -> Result<Vec<$crate::BenchmarkResults>, &'static str> {
 				// Map the input to the selected benchmark.
-				let extrinsic = sp_std::str::from_utf8(extrinsic.as_slice())
+				let extrinsic = sp_std::str::from_utf8(extrinsic)
 					.map_err(|_| "`extrinsic` is not a valid utf8 string!")?;
 				let selected_benchmark = match extrinsic {
 					$( stringify!($name) => SelectedBenchmark::$name, )*

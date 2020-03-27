@@ -858,13 +858,13 @@ impl_runtime_apis! {
 	#[cfg(feature = "runtime-benchmarks")]
 	impl frame_benchmarking::Benchmark<Block> for Runtime {
 		fn dispatch_benchmark(
-			module: Vec<u8>,
-			extrinsic: Vec<u8>,
+			pallet: Vec<u8>,
+			benchmark: Vec<u8>,
 			lowest_range_values: Vec<u32>,
 			highest_range_values: Vec<u32>,
 			steps: Vec<u32>,
 			repeat: u32,
-		) -> Result<Vec<frame_benchmarking::BenchmarkResults>, sp_runtime::RuntimeString> {
+		) -> Result<Vec<frame_benchmarking::BenchmarkBatch>, sp_runtime::RuntimeString> {
 			use frame_benchmarking::Benchmarking;
 			// Trying to add benchmarks directly to the Session Pallet caused cyclic dependency issues.
 			// To get around that, we separated the Session benchmarks into its own crate, which is why
@@ -872,81 +872,52 @@ impl_runtime_apis! {
 			use pallet_session_benchmarking::Module as SessionBench;
 			impl pallet_session_benchmarking::Trait for Runtime {}
 
-			let result = match module.as_slice() {
-				b"pallet-balances" | b"balances" => Balances::run_benchmark(
-					extrinsic,
-					lowest_range_values,
-					highest_range_values,
-					steps,
-					repeat,
-				),
-				b"pallet-im-online" | b"im-online" => ImOnline::run_benchmark(
-					extrinsic,
-					lowest_range_values,
-					highest_range_values,
-					steps,
-					repeat,
-				),
-				b"pallet-identity" | b"identity" => Identity::run_benchmark(
-					extrinsic,
-					lowest_range_values,
-					highest_range_values,
-					steps,
-					repeat,
-				),
-				b"pallet-session" | b"session" => SessionBench::<Runtime>::run_benchmark(
-					extrinsic,
-					lowest_range_values,
-					highest_range_values,
-					steps,
-					repeat,
-				),
-				b"pallet-staking" | b"staking" => Staking::run_benchmark(
-					extrinsic,
-					lowest_range_values,
-					highest_range_values,
-					steps,
-					repeat,
-				),
-				b"pallet-timestamp" | b"timestamp" => Timestamp::run_benchmark(
-					extrinsic,
-					lowest_range_values,
-					highest_range_values,
-					steps,
-					repeat,
-				),
-				b"pallet-treasury" | b"treasury" => Treasury::run_benchmark(
-					extrinsic,
-					lowest_range_values,
-					highest_range_values,
-					steps,
-					repeat,
-				),
-				b"pallet-vesting" | b"vesting" => Vesting::run_benchmark(
-					extrinsic,
-					lowest_range_values,
-					highest_range_values,
-					steps,
-					repeat,
-				),
-				b"pallet-democracy" | b"democracy" => Democracy::run_benchmark(
-					extrinsic,
-					lowest_range_values,
-					highest_range_values,
-					steps,
-					repeat,
-				),
-				b"pallet-collective" | b"collective" => Council::run_benchmark(
-					extrinsic,
-					lowest_range_values,
-					highest_range_values,
-					steps,
-					repeat,
-				),
-				_ => Err("Benchmark not found for this pallet."),
-			};
+			let mut batches = Vec::<frame_benchmarking::BenchmarkBatch>::new();
+			macro_rules! pallet {
+				( $name:literal, $( $location:tt )* ) => (
+					if &pallet[..] == &$name[..] || &pallet[..] == &b"*"[..] {
+						if &pallet[..] == &b"*"[..] || &benchmark[..] == &b"*"[..] {
+							for benchmark in $( $location )*::benchmarks().into_iter() {
+								batches.push(frame_benchmarking::BenchmarkBatch {
+									results: $( $location )*::run_benchmark(
+										benchmark,
+										&lowest_range_values[..],
+										&highest_range_values[..],
+										&steps[..],
+										repeat,
+									)?,
+									pallet: pallet.to_vec(),
+									benchmark: benchmark.to_vec(),
+								});
+							}
+						} else {
+							batches.push(frame_benchmarking::BenchmarkBatch {
+								results: $( $location )*::run_benchmark(
+									&benchmark[..],
+									&lowest_range_values[..],
+									&highest_range_values[..],
+									&steps[..],
+									repeat,
+								)?,
+								pallet: pallet.to_vec(),
+								benchmark: benchmark.clone(),
+							});
+						}
+					}
+				)
+			}
 
-			result.map_err(|e| e.into())
+			pallet!(b"balances", Balances);
+			pallet!(b"im-online", ImOnline);
+			pallet!(b"identity", Identity);
+			pallet!(b"session", SessionBench::<Runtime>);
+			pallet!(b"staking", Staking);
+			pallet!(b"timestamp", Timestamp);
+			pallet!(b"treasury", Treasury);
+			pallet!(b"vesting", Vesting);
+			pallet!(b"democracy", Democracy);
+			pallet!(b"collective", Council);
+			Ok(batches)
 		}
 	}
 }
