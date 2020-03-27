@@ -19,5 +19,5 @@ proc-macro-error = "0.4.7"
 platforms = "0.2"
 
 [dev-dependencies]
-sc-service = { version = "0.8.0-alpha.5", default-features = false, path = "../service" }
-sc-cli = { version = "0.8.0-alpha.5", default-features = false, path = "../cli" }
+sc-service = { version = "0.8.0-alpha.5", default-features = false, path = "../../service" }
+sc-cli = { version = "0.8.0-alpha.5", default-features = false, path = ".." }
