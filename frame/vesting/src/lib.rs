@@ -53,7 +53,10 @@ use sp_runtime::{DispatchResult, RuntimeDebug, traits::{
 	StaticLookup, Zero, AtLeast32Bit, MaybeSerializeDeserialize, Convert
 }};
 use frame_support::{decl_module, decl_event, decl_storage, decl_error, ensure};
-use frame_support::traits::{Currency, LockableCurrency, VestingSchedule, WithdrawReason, LockIdentifier, ExistenceRequirement, Get, MigrateAccount};
+use frame_support::traits::{
+	Currency, LockableCurrency, VestingSchedule, WithdrawReason, LockIdentifier,
+	ExistenceRequirement, Get
+};
 use frame_support::weights::SimpleDispatchInfo;
 use frame_system::{self as system, ensure_signed};
 
@@ -192,6 +195,7 @@ decl_module! {
 		/// - One storage read (codec `O(1)`) and up to one removal.
 		/// - One event.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::default()]
 		fn vest(origin) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::update_lock(who)
@@ -213,6 +217,7 @@ decl_module! {
 		/// - One storage read (codec `O(1)`) and up to one removal.
 		/// - One event.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::default()]
 		fn vest_other(origin, target: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
 			ensure_signed(origin)?;
 			Self::update_lock(T::Lookup::lookup(target)?)
@@ -251,12 +256,6 @@ decl_module! {
 
 			Ok(())
 		}
-	}
-}
-
-impl<T: Trait> MigrateAccount<T::AccountId> for Module<T> {
-	fn migrate_account(a: &T::AccountId) {
-		Vesting::<T>::migrate_key_from_blake(a);
 	}
 }
 
@@ -388,7 +387,7 @@ mod tests {
 		type Version = ();
 		type ModuleToIndex = ();
 		type AccountData = pallet_balances::AccountData<u64>;
-		type MigrateAccount = (); type OnNewAccount = ();
+		type OnNewAccount = ();
 		type OnKilledAccount = ();
 	}
 	impl pallet_balances::Trait for Test {

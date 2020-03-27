@@ -318,7 +318,7 @@ impl<G: RuntimeGenesis, E: serde::Serialize + Clone> ChainSpec<G, E> {
 impl<G, E> crate::ChainSpec for ChainSpec<G, E>
 where
 	G: RuntimeGenesis,
-	E: GetExtension + serde::Serialize + Clone,
+	E: GetExtension + serde::Serialize + Clone + Send,
 {
 	fn boot_nodes(&self) -> &[String] {
 		ChainSpec::boot_nodes(self)

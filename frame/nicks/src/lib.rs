@@ -171,6 +171,7 @@ decl_module! {
 		/// - One storage read/write.
 		/// - One event.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(70_000)]
 		fn clear_name(origin) {
 			let sender = ensure_signed(origin)?;
 
@@ -286,7 +287,7 @@ mod tests {
 		type Version = ();
 		type ModuleToIndex = ();
 		type AccountData = pallet_balances::AccountData<u64>;
-		type MigrateAccount = (); type OnNewAccount = ();
+		type OnNewAccount = ();
 		type OnKilledAccount = ();
 	}
 	parameter_types! {
