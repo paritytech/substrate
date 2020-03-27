@@ -628,7 +628,7 @@ pub fn verify_batch(
 		&mut messages,
 		&sr_signatures,
 		&sr_pub_keys,
-		false,
+		true,
 	) {
 		Ok(_) => true,
 		Err(_) => false,
