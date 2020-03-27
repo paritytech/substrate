@@ -450,7 +450,7 @@ pub trait Crypto {
 			);
 			true
 		} else {
-			crypto::ed25519_verify(sig, msg, pub_key)
+			ed25519::Pair::verify(sig, msg, pub_key)
 		}
 	}
 
@@ -472,7 +472,7 @@ pub trait Crypto {
 			);
 			true
 		} else {
-			crypto::sr25519_verify(sig, msg, pub_key)
+			sr25519::Pair::verify(sig, msg, pub_key)
 		}
 	}
 
