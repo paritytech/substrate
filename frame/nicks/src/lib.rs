@@ -171,6 +171,7 @@ decl_module! {
 		/// - One storage read/write.
 		/// - One event.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(70_000)]
 		fn clear_name(origin) {
 			let sender = ensure_signed(origin)?;
 
