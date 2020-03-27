@@ -83,11 +83,10 @@ pub struct Twox64Concat;
 impl StorageHasher for Twox64Concat {
 	type Output = Vec<u8>;
 	fn hash(x: &[u8]) -> Vec<u8> {
-		twox_64(x)
-			.iter()
-			.chain(x.into_iter())
-			.cloned()
-			.collect::<Vec<_>>()
+		let mut r = Vec::with_capacity(8 + x.len());
+		r.extend_from_slice(&twox_64(x));
+		r.extend_from_slice(x);
+		r
 	}
 }
 impl ReversibleStorageHasher for Twox64Concat {
@@ -101,11 +100,10 @@ pub struct Blake2_128Concat;
 impl StorageHasher for Blake2_128Concat {
 	type Output = Vec<u8>;
 	fn hash(x: &[u8]) -> Vec<u8> {
-		blake2_128(x)
-			.iter()
-			.chain(x.into_iter())
-			.cloned()
-			.collect::<Vec<_>>()
+		let mut r = Vec::with_capacity(16 + x.len());
+		r.extend_from_slice(&blake2_128(x));
+		r.extend_from_slice(x);
+		r
 	}
 }
 impl ReversibleStorageHasher for Blake2_128Concat {
