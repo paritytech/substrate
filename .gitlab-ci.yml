@@ -328,7 +328,7 @@ check-web-wasm:
     - time cargo build --target=wasm32-unknown-unknown -p sp-consensus
     - time cargo build --target=wasm32-unknown-unknown -p sc-telemetry
     # Note: the command below is a bit weird because several Cargo issues prevent us from compiling the node in a more straight-forward way.
-    - time cargo build --manifest-path=bin/node/cli/Cargo.toml --no-default-features --features "browser" --target=wasm32-unknown-unknown
+    - time cargo +nightly build --manifest-path=bin/node/cli/Cargo.toml --no-default-features --features "browser" --target=wasm32-unknown-unknown -Z features=itarget
     - sccache -s
 
 test-full-crypto-feature:

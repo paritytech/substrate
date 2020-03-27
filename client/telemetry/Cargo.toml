@@ -13,7 +13,7 @@ documentation = "https://docs.rs/sc-telemetry"
 [dependencies]
 bytes = "0.5"
 parking_lot = "0.10.0"
-futures = "0.3.1"
+futures = "0.3.4"
 futures-timer = "3.0.1"
 wasm-timer = "0.2.0"
 libp2p = { version = "0.16.2", default-features = false, features = ["libp2p-websocket"] }
