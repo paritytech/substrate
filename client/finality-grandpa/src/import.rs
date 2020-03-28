@@ -629,7 +629,7 @@ where
 
 		match result {
 			Err(CommandOrError::VoterCommand(command)) => {
-				info!(target: "afg", "Imported justification for block #{} that triggers \
+				info!(target: "afg", "👴 Imported justification for block #{} that triggers \
 					command {}, signaling voter.", number, command);
 
 				// send the command to the voter

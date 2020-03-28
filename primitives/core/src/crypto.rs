@@ -18,6 +18,7 @@
 //! Cryptographic utilities.
 // end::description[]
 
+use crate::{sr25519, ed25519};
 use sp_std::hash::Hash;
 use sp_std::vec::Vec;
 #[cfg(feature = "std")]
@@ -612,6 +613,18 @@ impl<'a> sp_std::convert::TryFrom<&'a [u8]> for AccountId32 {
 impl From<AccountId32> for [u8; 32] {
 	fn from(x: AccountId32) -> [u8; 32] {
 		x.0
+	}
+}
+
+impl From<sr25519::Public> for AccountId32 {
+	fn from(k: sr25519::Public) -> Self {
+		k.0.into()
+	}
+}
+
+impl From<ed25519::Public> for AccountId32 {
+	fn from(k: ed25519::Public) -> Self {
+		k.0.into()
 	}
 }
 

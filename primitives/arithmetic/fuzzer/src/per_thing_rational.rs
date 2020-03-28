@@ -24,8 +24,7 @@
 
 use honggfuzz::fuzz;
 use sp_arithmetic::{
-	PerThing, PerU16, Percent, Perbill, Perquintill,
-	traits::SaturatedConversion,
+	PerThing, PerU16, Percent, Perbill, Perquintill, traits::SaturatedConversion,
 };
 
 fn main() {
