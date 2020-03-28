@@ -119,7 +119,7 @@ impl Precompiles for () {
 static ISTANBUL_CONFIG: Config = Config::istanbul();
 
 /// EVM module trait
-pub trait Trait: frame_system::Trait + pallet_timestamp::Trait + pallet_balances::Trait {
+pub trait Trait: frame_system::Trait + pallet_timestamp::Trait {
 	/// Calculator for current gas price.
 	type FeeCalculator: FeeCalculator;
 	/// Convert account ID to H160;
