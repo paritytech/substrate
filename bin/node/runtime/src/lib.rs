@@ -865,58 +865,26 @@ impl_runtime_apis! {
 			steps: Vec<u32>,
 			repeat: u32,
 		) -> Result<Vec<frame_benchmarking::BenchmarkBatch>, sp_runtime::RuntimeString> {
-			use frame_benchmarking::Benchmarking;
+			use frame_benchmarking::{Benchmarking, BenchmarkBatch, add_benchmark};
 			// Trying to add benchmarks directly to the Session Pallet caused cyclic dependency issues.
 			// To get around that, we separated the Session benchmarks into its own crate, which is why
 			// we need these two lines below.
 			use pallet_session_benchmarking::Module as SessionBench;
 			impl pallet_session_benchmarking::Trait for Runtime {}
 
-			let mut batches = Vec::<frame_benchmarking::BenchmarkBatch>::new();
-			macro_rules! pallet {
-				( $name:literal, $( $location:tt )* ) => (
-					if &pallet[..] == &$name[..] || &pallet[..] == &b"*"[..] {
-						if &pallet[..] == &b"*"[..] || &benchmark[..] == &b"*"[..] {
-							for benchmark in $( $location )*::benchmarks().into_iter() {
-								batches.push(frame_benchmarking::BenchmarkBatch {
-									results: $( $location )*::run_benchmark(
-										benchmark,
-										&lowest_range_values[..],
-										&highest_range_values[..],
-										&steps[..],
-										repeat,
-									)?,
-									pallet: pallet.to_vec(),
-									benchmark: benchmark.to_vec(),
-								});
-							}
-						} else {
-							batches.push(frame_benchmarking::BenchmarkBatch {
-								results: $( $location )*::run_benchmark(
-									&benchmark[..],
-									&lowest_range_values[..],
-									&highest_range_values[..],
-									&steps[..],
-									repeat,
-								)?,
-								pallet: pallet.to_vec(),
-								benchmark: benchmark.clone(),
-							});
-						}
-					}
-				)
-			}
 
-			pallet!(b"balances", Balances);
-			pallet!(b"im-online", ImOnline);
-			pallet!(b"identity", Identity);
-			pallet!(b"session", SessionBench::<Runtime>);
-			pallet!(b"staking", Staking);
-			pallet!(b"timestamp", Timestamp);
-			pallet!(b"treasury", Treasury);
-			pallet!(b"vesting", Vesting);
-			pallet!(b"democracy", Democracy);
-			pallet!(b"collective", Council);
+			let mut batches = Vec::<BenchmarkBatch>::new();
+			let params = (&pallet, &benchmark, &lowest_range_values, &highest_range_values, &steps, repeat);
+			add_benchmark!(params, batches, b"balances", Balances);
+			add_benchmark!(params, batches, b"im-online", ImOnline);
+			add_benchmark!(params, batches, b"identity", Identity);
+			add_benchmark!(params, batches, b"session", SessionBench::<Runtime>);
+			add_benchmark!(params, batches, b"staking", Staking);
+			add_benchmark!(params, batches, b"timestamp", Timestamp);
+			add_benchmark!(params, batches, b"treasury", Treasury);
+			add_benchmark!(params, batches, b"vesting", Vesting);
+			add_benchmark!(params, batches, b"democracy", Democracy);
+			add_benchmark!(params, batches, b"collective", Council);
 			Ok(batches)
 		}
 	}
