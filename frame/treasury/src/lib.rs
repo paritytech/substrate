@@ -206,7 +206,7 @@ decl_storage! {
 
 		/// Proposals that have been made.
 		Proposals get(fn proposals):
-			map hasher(twox_64_concat) ProposalIndex
+			map hasher(twox_32_concat) ProposalIndex
 			=> Option<Proposal<T::AccountId, BalanceOf<T>>>;
 
 		/// Proposal indices that have been approved but not yet awarded.
@@ -216,7 +216,7 @@ decl_storage! {
 		/// This has the insecure enumerable hash function since the key itself is already
 		/// guaranteed to be a secure hash.
 		pub Tips get(fn tips):
-			map hasher(twox_64_concat) T::Hash
+			map hasher(twox_32_concat) T::Hash
 			=> Option<OpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>>;
 
 		/// Simple preimage lookup from the reason's hash to the original data. Again, has an

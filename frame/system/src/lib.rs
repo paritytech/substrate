@@ -347,7 +347,7 @@ decl_storage! {
 	trait Store for Module<T: Trait> as System {
 		/// The full account information for a particular account ID.
 		pub Account get(fn account):
-			map hasher(blake2_128_concat) T::AccountId => AccountInfo<T::Index, T::AccountData>;
+			map hasher(blake2_64_concat) T::AccountId => AccountInfo<T::Index, T::AccountData>;
 
 		/// Total extrinsics count for the current block.
 		ExtrinsicCount: Option<u32>;
@@ -360,10 +360,10 @@ decl_storage! {
 
 		/// Map of block numbers to block hashes.
 		pub BlockHash get(fn block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]):
-			map hasher(twox_64_concat) T::BlockNumber => T::Hash;
+			map hasher(twox_32_concat) T::BlockNumber => T::Hash;
 
 		/// Extrinsics data for the current block (maps an extrinsic's index to its data).
-		ExtrinsicData get(fn extrinsic_data): map hasher(twox_64_concat) u32 => Vec<u8>;
+		ExtrinsicData get(fn extrinsic_data): map hasher(twox_32_concat) u32 => Vec<u8>;
 
 		/// The current block number being processed. Set by `execute_block`.
 		Number get(fn block_number) build(|_| 1.into()): T::BlockNumber;
@@ -398,7 +398,7 @@ decl_storage! {
 		/// The value has the type `(T::BlockNumber, EventIndex)` because if we used only just
 		/// the `EventIndex` then in case if the topic has the same contents on the next block
 		/// no notification will be triggered thus the event might be lost.
-		EventTopics get(fn event_topics): map hasher(blake2_128_concat) T::Hash => Vec<(T::BlockNumber, EventIndex)>;
+		EventTopics get(fn event_topics): map hasher(blake2_64_concat) T::Hash => Vec<(T::BlockNumber, EventIndex)>;
 
 		/// Stores the `spec_version` and `spec_name` of when the last runtime upgrade happened.
 		pub LastRuntimeUpgrade build(|_| Some(LastRuntimeUpgradeInfo::from(T::Version::get()))): Option<LastRuntimeUpgradeInfo>;

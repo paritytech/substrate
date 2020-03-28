@@ -414,7 +414,7 @@ decl_storage! {
 
 		/// The set of suspended candidates.
 		pub SuspendedCandidates get(suspended_candidate):
-			map hasher(twox_64_concat) T::AccountId
+			map hasher(twox_32_concat) T::AccountId
 			=> Option<(BalanceOf<T, I>, BidKind<T::AccountId, BalanceOf<T, I>>)>;
 
 		/// Amount of our account balance that is specifically for the next round's bid(s).
@@ -432,31 +432,31 @@ decl_storage! {
 		}): Vec<T::AccountId>;
 
 		/// The set of suspended members.
-		pub SuspendedMembers get(fn suspended_member): map hasher(twox_64_concat) T::AccountId => bool;
+		pub SuspendedMembers get(fn suspended_member): map hasher(twox_32_concat) T::AccountId => bool;
 
 		/// The current bids, stored ordered by the value of the bid.
 		Bids: Vec<Bid<T::AccountId, BalanceOf<T, I>>>;
 
 		/// Members currently vouching or banned from vouching again
-		Vouching get(fn vouching): map hasher(twox_64_concat) T::AccountId => Option<VouchingStatus>;
+		Vouching get(fn vouching): map hasher(twox_32_concat) T::AccountId => Option<VouchingStatus>;
 
 		/// Pending payouts; ordered by block number, with the amount that should be paid out.
-		Payouts: map hasher(twox_64_concat) T::AccountId => Vec<(T::BlockNumber, BalanceOf<T, I>)>;
+		Payouts: map hasher(twox_32_concat) T::AccountId => Vec<(T::BlockNumber, BalanceOf<T, I>)>;
 
 		/// The ongoing number of losing votes cast by the member.
-		Strikes: map hasher(twox_64_concat) T::AccountId => StrikeCount;
+		Strikes: map hasher(twox_32_concat) T::AccountId => StrikeCount;
 
 		/// Double map from Candidate -> Voter -> (Maybe) Vote.
 		Votes: double_map
-			hasher(twox_64_concat) T::AccountId,
-			hasher(twox_64_concat) T::AccountId
+			hasher(twox_32_concat) T::AccountId,
+			hasher(twox_32_concat) T::AccountId
 		=> Option<Vote>;
 
 		/// The defending member currently being challenged.
 		Defender get(fn defender): Option<T::AccountId>;
 
 		/// Votes for the defender.
-		DefenderVotes: map hasher(twox_64_concat) T::AccountId => Option<Vote>;
+		DefenderVotes: map hasher(twox_32_concat) T::AccountId => Option<Vote>;
 
 		/// The max number of members for the society at one time.
 		MaxMembers get(fn max_members) config(): u32;

@@ -238,7 +238,7 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Recovery {
 		/// The set of recoverable accounts and their recovery configuration.
 		pub Recoverable get(fn recovery_config):
-			map hasher(twox_64_concat) T::AccountId
+			map hasher(twox_32_concat) T::AccountId
 			=> Option<RecoveryConfig<T::BlockNumber, BalanceOf<T>, T::AccountId>>;
 
 		/// Active recovery attempts.
@@ -246,14 +246,14 @@ decl_storage! {
 		/// First account is the account to be recovered, and the second account
 		/// is the user trying to recover the account.
 		pub ActiveRecoveries get(fn active_recovery):
-			double_map hasher(twox_64_concat) T::AccountId, hasher(twox_64_concat) T::AccountId =>
+			double_map hasher(twox_32_concat) T::AccountId, hasher(twox_32_concat) T::AccountId =>
 			Option<ActiveRecovery<T::BlockNumber, BalanceOf<T>, T::AccountId>>;
 
 		/// The list of allowed proxy accounts.
 		///
 		/// Map from the user who can access it to the recovered account.
 		pub Proxy get(fn proxy):
-			map hasher(blake2_128_concat) T::AccountId => Option<T::AccountId>;
+			map hasher(blake2_64_concat) T::AccountId => Option<T::AccountId>;
 	}
 }
 

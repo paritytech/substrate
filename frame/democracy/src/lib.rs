@@ -285,7 +285,7 @@ decl_storage! {
 		pub PublicProps get(fn public_props): Vec<(PropIndex, T::Hash, T::AccountId)>;
 		/// Those who have locked a deposit.
 		pub DepositOf get(fn deposit_of):
-			map hasher(twox_64_concat) PropIndex => Option<(BalanceOf<T>, Vec<T::AccountId>)>;
+			map hasher(twox_32_concat) PropIndex => Option<(BalanceOf<T>, Vec<T::AccountId>)>;
 
 		/// Map of hashes to the proposal preimage, along with who registered it and their deposit.
 		/// The block number is the block at which it was deposited.
@@ -303,7 +303,7 @@ decl_storage! {
 
 		/// Information concerning any given referendum.
 		pub ReferendumInfoOf get(fn referendum_info):
-			map hasher(twox_64_concat) ReferendumIndex
+			map hasher(twox_32_concat) ReferendumIndex
 			=> Option<ReferendumInfo<T::BlockNumber, T::Hash, BalanceOf<T>>>;
 
 		// TODO: Refactor DispatchQueue into its own pallet.
@@ -313,17 +313,17 @@ decl_storage! {
 
 		/// All votes for a particular voter. We store the balance for the number of votes that we
 		/// have recorded. The second item is the total amount of delegations, that will be added.
-		pub VotingOf: map hasher(twox_64_concat) T::AccountId => Voting<BalanceOf<T>, T::AccountId, T::BlockNumber>;
+		pub VotingOf: map hasher(twox_32_concat) T::AccountId => Voting<BalanceOf<T>, T::AccountId, T::BlockNumber>;
 
 		/// Who is able to vote for whom. Value is the fund-holding account, key is the
 		/// vote-transaction-sending account.
 		// TODO: Refactor proxy into its own pallet.
 		// https://github.com/paritytech/substrate/issues/5322
-		pub Proxy get(fn proxy): map hasher(twox_64_concat) T::AccountId => Option<ProxyState<T::AccountId>>;
+		pub Proxy get(fn proxy): map hasher(twox_32_concat) T::AccountId => Option<ProxyState<T::AccountId>>;
 
 		/// Accounts for which there are locks in action which may be removed at some point in the
 		/// future. The value is the block number at which the lock expires and may be removed.
-		pub Locks get(locks): map hasher(twox_64_concat) T::AccountId => Option<T::BlockNumber>;
+		pub Locks get(locks): map hasher(twox_32_concat) T::AccountId => Option<T::BlockNumber>;
 
 		/// True if the last referendum tabled was submitted externally. False if it was a public
 		/// proposal.

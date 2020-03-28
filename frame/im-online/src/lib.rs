@@ -279,13 +279,13 @@ decl_storage! {
 		/// For each session index, we keep a mapping of `AuthIndex` to
 		/// `offchain::OpaqueNetworkState`.
 		ReceivedHeartbeats get(fn received_heartbeats):
-			double_map hasher(twox_64_concat) SessionIndex, hasher(twox_64_concat) AuthIndex
+			double_map hasher(twox_32_concat) SessionIndex, hasher(twox_32_concat) AuthIndex
 			=> Option<Vec<u8>>;
 
 		/// For each session index, we keep a mapping of `T::ValidatorId` to the
 		/// number of blocks authored by the given authority.
 		AuthoredBlocks get(fn authored_blocks):
-			double_map hasher(twox_64_concat) SessionIndex, hasher(twox_64_concat) T::ValidatorId
+			double_map hasher(twox_32_concat) SessionIndex, hasher(twox_32_concat) T::ValidatorId
 			=> u32;
 	}
 	add_extra_genesis {

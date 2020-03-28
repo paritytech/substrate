@@ -160,7 +160,7 @@ decl_storage! {
 		pub ElectionRounds get(fn election_rounds): u32 = Zero::zero();
 
 		/// Votes and locked stake of a particular voter.
-		pub Voting: map hasher(twox_64_concat) T::AccountId => (BalanceOf<T>, Vec<T::AccountId>);
+		pub Voting: map hasher(twox_32_concat) T::AccountId => (BalanceOf<T>, Vec<T::AccountId>);
 
 		/// The present candidate list. Sorted based on account-id. A current member or runner-up
 		/// can never enter this vector and is always implicitly assumed to be a candidate.

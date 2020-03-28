@@ -254,24 +254,24 @@ mod tests {
 	decl_storage! {
 		trait Store for Module<T: Trait> as Test {
 			pub Data get(fn data) build(|_| vec![(15u32, 42u64)]):
-				map hasher(twox_64_concat) u32 => u64;
-			pub OptionLinkedMap: map hasher(blake2_128_concat) u32 => Option<u32>;
+				map hasher(twox_32_concat) u32 => u64;
+			pub OptionLinkedMap: map hasher(blake2_64_concat) u32 => Option<u32>;
 			pub GenericData get(fn generic_data):
 				map hasher(identity) T::BlockNumber => T::BlockNumber;
 			pub GenericData2 get(fn generic_data2):
-				map hasher(blake2_128_concat) T::BlockNumber => Option<T::BlockNumber>;
+				map hasher(blake2_64_concat) T::BlockNumber => Option<T::BlockNumber>;
 			pub GetterNoFnKeyword get(no_fn): Option<u32>;
 
 			pub DataDM config(test_config) build(|_| vec![(15u32, 16u32, 42u64)]):
-				double_map hasher(twox_64_concat) u32, hasher(blake2_128_concat) u32 => u64;
+				double_map hasher(twox_32_concat) u32, hasher(blake2_64_concat) u32 => u64;
 			pub GenericDataDM:
-				double_map hasher(blake2_128_concat) T::BlockNumber, hasher(identity) T::BlockNumber
+				double_map hasher(blake2_64_concat) T::BlockNumber, hasher(identity) T::BlockNumber
 				=> T::BlockNumber;
 			pub GenericData2DM:
-				double_map hasher(blake2_128_concat) T::BlockNumber, hasher(twox_64_concat) T::BlockNumber
+				double_map hasher(blake2_64_concat) T::BlockNumber, hasher(twox_32_concat) T::BlockNumber
 				=> Option<T::BlockNumber>;
 			pub AppendableDM:
-				double_map hasher(blake2_128_concat) u32, hasher(blake2_128_concat) T::BlockNumber => Vec<u32>;
+				double_map hasher(blake2_64_concat) u32, hasher(blake2_64_concat) T::BlockNumber => Vec<u32>;
 		}
 	}
 

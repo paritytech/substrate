@@ -64,7 +64,7 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Offences {
 		/// The primary structure that holds all offence records keyed by report identifiers.
 		Reports get(fn reports):
-			map hasher(twox_64_concat) ReportIdOf<T>
+			map hasher(twox_32_concat) ReportIdOf<T>
 			=> Option<OffenceDetails<T::AccountId, T::IdentificationTuple>>;
 
 		/// Deferred reports that have been rejected by the offence handler and need to be submitted
@@ -73,7 +73,7 @@ decl_storage! {
 
 		/// A vector of reports of the same kind that happened at the same time slot.
 		ConcurrentReportsIndex:
-			double_map hasher(twox_64_concat) Kind, hasher(twox_64_concat) OpaqueTimeSlot
+			double_map hasher(twox_32_concat) Kind, hasher(twox_32_concat) OpaqueTimeSlot
 			=> Vec<ReportIdOf<T>>;
 
 		/// Enumerates all reports of a kind along with the time they happened.
@@ -82,7 +82,7 @@ decl_storage! {
 		///
 		/// Note that the actual type of this mapping is `Vec<u8>`, this is because values of
 		/// different types are not supported at the moment so we are doing the manual serialization.
-		ReportsByKindIndex: map hasher(twox_64_concat) Kind => Vec<u8>; // (O::TimeSlot, ReportIdOf<T>)
+		ReportsByKindIndex: map hasher(twox_32_concat) Kind => Vec<u8>; // (O::TimeSlot, ReportIdOf<T>)
 	}
 }
 

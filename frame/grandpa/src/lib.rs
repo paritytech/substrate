@@ -169,7 +169,7 @@ decl_storage! {
 
 		/// A mapping from grandpa set ID to the index of the *most recent* session for which its
 		/// members were responsible.
-		SetIdSession get(fn session_for_set): map hasher(twox_64_concat) SetId => Option<SessionIndex>;
+		SetIdSession get(fn session_for_set): map hasher(twox_32_concat) SetId => Option<SessionIndex>;
 	}
 	add_extra_genesis {
 		config(authorities): AuthorityList;

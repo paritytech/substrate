@@ -372,11 +372,11 @@ decl_storage! {
 		/// is ever zero, then the entry *MUST* be removed.
 		///
 		/// NOTE: This is only used in the case that this module is used to store balances.
-		pub Account: map hasher(blake2_128_concat) T::AccountId => AccountData<T::Balance>;
+		pub Account: map hasher(blake2_64_concat) T::AccountId => AccountData<T::Balance>;
 
 		/// Any liquidity locks on some account balances.
 		/// NOTE: Should only be accessed when setting, changing and freeing a lock.
-		pub Locks get(fn locks): map hasher(blake2_128_concat) T::AccountId => Vec<BalanceLock<T::Balance>>;
+		pub Locks get(fn locks): map hasher(blake2_64_concat) T::AccountId => Vec<BalanceLock<T::Balance>>;
 
 		/// Storage version of the pallet.
 		///

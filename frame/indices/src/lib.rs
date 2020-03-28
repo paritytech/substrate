@@ -63,7 +63,7 @@ decl_storage! {
 				.cloned()
 				.map(|(a, b)| (a, (b, Zero::zero())))
 				.collect::<Vec<_>>()
-		): map hasher(blake2_128_concat) T::AccountIndex => Option<(T::AccountId, BalanceOf<T>)>;
+		): map hasher(blake2_64_concat) T::AccountIndex => Option<(T::AccountId, BalanceOf<T>)>;
 	}
 	add_extra_genesis {
 		config(indices): Vec<(T::AccountIndex, T::AccountId)>;

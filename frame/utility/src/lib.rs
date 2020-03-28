@@ -128,7 +128,7 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Utility {
 		/// The set of open multisig operations.
 		pub Multisigs: double_map
-			hasher(twox_64_concat) T::AccountId, hasher(blake2_128_concat) [u8; 32]
+			hasher(twox_32_concat) T::AccountId, hasher(blake2_64_concat) [u8; 32]
 			=> Option<Multisig<T::BlockNumber, BalanceOf<T>, T::AccountId>>;
 	}
 }

@@ -56,12 +56,12 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Session {
 		/// Mapping from historical session indices to session-data root hash and validator count.
 		HistoricalSessions get(fn historical_root):
-			map hasher(twox_64_concat) SessionIndex => Option<(T::Hash, ValidatorCount)>;
+			map hasher(twox_32_concat) SessionIndex => Option<(T::Hash, ValidatorCount)>;
 		/// The range of historical sessions we store. [first, last)
 		StoredRange: Option<(SessionIndex, SessionIndex)>;
 		/// Deprecated.
 		CachedObsolete:
-			map hasher(twox_64_concat) SessionIndex
+			map hasher(twox_32_concat) SessionIndex
 			=> Option<Vec<(T::ValidatorId, T::FullIdentification)>>;
 	}
 }
