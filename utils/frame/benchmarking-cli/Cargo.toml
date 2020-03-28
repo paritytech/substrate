@@ -20,7 +20,7 @@ sp-externalities = { version = "0.8.0-alpha.5", path = "../../../primitives/exte
 sp-runtime = { version = "2.0.0-alpha.5", path = "../../../primitives/runtime" }
 sp-state-machine = { version = "0.8.0-alpha.5", path = "../../../primitives/state-machine" }
 structopt = "0.3.8"
-codec = { version = "1.2.0", package = "parity-scale-codec" }
+codec = { version = "1.3.0", package = "parity-scale-codec" }
 
 [features]
 default = ["rocksdb"]

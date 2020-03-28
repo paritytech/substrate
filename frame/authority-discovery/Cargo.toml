@@ -11,7 +11,7 @@ description = "FRAME pallet for authority discovery"
 [dependencies]
 sp-authority-discovery = { version = "2.0.0-alpha.5", default-features = false, path = "../../primitives/authority-discovery" }
 sp-application-crypto = { version = "2.0.0-alpha.5", default-features = false, path = "../../primitives/application-crypto" }
-codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.3.0", default-features = false, features = ["derive"] }
 sp-core = { version = "2.0.0-alpha.5", default-features = false, path = "../../primitives/core" }
 sp-std = { version = "2.0.0-alpha.5", default-features = false, path = "../../primitives/std" }
 serde = { version = "1.0.101", optional = true }
