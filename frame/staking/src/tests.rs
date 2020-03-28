@@ -4249,7 +4249,7 @@ fn test_last_reward_migration() {
 		stash: 0,
 		total: 10,
 		active: 10,
-		unlocking: vec![],
+		unlocking: vec![UnlockChunk{ value: 1234, era: 56}],
 		last_reward: Some(8),
 	};
 
@@ -4265,7 +4265,7 @@ fn test_last_reward_migration() {
 		stash: 2,
 		total: 100,
 		active: 100,
-		unlocking: vec![],
+		unlocking: vec![UnlockChunk{ value: 9876, era: 54}, UnlockChunk{ value: 98, era: 76}],
 		last_reward: Some(23),
 	};
 
@@ -4315,7 +4315,7 @@ fn test_last_reward_migration() {
 				stash: 0,
 				total: 10,
 				active: 10,
-				unlocking: vec![],
+				unlocking: vec![UnlockChunk{ value: 1234, era: 56}],
 				claimed_rewards: vec![],
 			})
 		);
@@ -4337,7 +4337,7 @@ fn test_last_reward_migration() {
 				stash: 2,
 				total: 100,
 				active: 100,
-				unlocking: vec![],
+				unlocking: vec![UnlockChunk{ value: 9876, era: 54}, UnlockChunk{ value: 98, era: 76}],
 				claimed_rewards: vec![15,16,17,18,19,20,21,22,23],
 			})
 		);
