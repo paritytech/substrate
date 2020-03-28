@@ -714,9 +714,9 @@ macro_rules! impl_benchmark {
 /// you want to use target a particular pallet:
 ///
 /// ```ignore
-/// pallet!(batches, b"balances", Balances);
-/// pallet!(batches, b"identity", Identity);
-/// pallet!(batches, b"session", SessionBench::<Runtime>);
+/// add_benchmark!(params, batches, b"balances", Balances);
+/// add_benchmark!(params, batches, b"identity", Identity);
+/// add_benchmark!(params, batches, b"session", SessionBench::<Runtime>);
 /// ...
 /// ```
 ///
