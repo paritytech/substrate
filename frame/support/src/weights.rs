@@ -49,7 +49,10 @@ use sp_runtime::{
 pub use sp_runtime::transaction_validity::TransactionPriority;
 
 /// Numeric range of a transaction weight.
-pub type Weight = u32;
+///
+/// FRAME assumes a weight of `1_000_000_000` equals 1 second of compute on a standard
+/// machine: (TODO: DEFINE STANDARD MACHINE SPECIFICATIONS)
+pub type Weight = u64;
 
 /// Means of weighing some particular kind of data (`T`).
 pub trait WeighData<T> {
