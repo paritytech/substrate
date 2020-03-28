@@ -46,11 +46,11 @@ pub struct BenchmarkCmd {
 	pub steps: Vec<u32>,
 
 	/// Indicates lowest values for each of the component ranges.
-	#[structopt(long, use_delimiter = true)]
+	#[structopt(long = "low", use_delimiter = true)]
 	pub lowest_range_values: Vec<u32>,
 
 	/// Indicates highest values for each of the component ranges.
-	#[structopt(long, use_delimiter = true)]
+	#[structopt(long = "high", use_delimiter = true)]
 	pub highest_range_values: Vec<u32>,
 
 	/// Select how many repetitions of this benchmark should run.
@@ -58,15 +58,15 @@ pub struct BenchmarkCmd {
 	pub repeat: u32,
 
 	/// Print the raw results.
-	#[structopt(short, long)]
+	#[structopt(long = "raw")]
 	pub raw_data: bool,
 
 	/// Don't print the median-slopes linear regression analysis.
-	#[structopt(short, long)]
+	#[structopt(long)]
 	pub no_median_slopes: bool,
 
 	/// Don't print the min-squares linear regression analysis.
-	#[structopt(short, long)]
+	#[structopt(long)]
 	pub no_min_squares: bool,
 
 	#[allow(missing_docs)]
