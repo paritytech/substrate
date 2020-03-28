@@ -101,6 +101,11 @@ wasm-bindgen = { version = "0.2.57", optional = true }
 wasm-bindgen-futures = { version = "0.4.7", optional = true }
 browser-utils = { package = "substrate-browser-utils", path = "../../../utils/browser", optional = true, version = "0.8.0-alpha.5"}
 
+[target.'cfg(target_arch="x86_64")'.dependencies]
+node-executor = { version = "2.0.0-alpha.4", path = "../executor", features = [ "wasmtime" ] }
+sc-cli = { version = "0.8.0-alpha.4", optional = true, path = "../../../client/cli", features = [ "wasmtime" ] }
+sc-service = { version = "0.8.0-alpha.4", default-features = false, path = "../../../client/service", features = [ "wasmtime" ] }
+
 [dev-dependencies]
 sc-keystore = { version = "2.0.0-alpha.5", path = "../../../client/keystore" }
 sc-consensus-babe = { version = "0.8.0-alpha.5", features = ["test-helpers"], path = "../../../client/consensus/babe" }
@@ -130,7 +135,7 @@ version = "3.0.4"
 optional = true
 
 [features]
-default = ["cli", "wasmtime"]
+default = [ "cli" ]
 browser = [
 	"browser-utils",
 	"wasm-bindgen",
@@ -145,11 +150,5 @@ cli = [
 	"sc-service/rocksdb",
 	"structopt",
 	"vergen",
-]
-wasmtime = [
-	"cli",
-	"node-executor/wasmtime",
-	"sc-cli/wasmtime",
-	"sc-service/wasmtime",
 ]
 runtime-benchmarks = [ "node-runtime/runtime-benchmarks" ]
