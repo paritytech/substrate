@@ -100,7 +100,7 @@ pub trait PerThing:
 	/// assert_eq!(Percent::from_percent(34) * 10u64, 3);
 	/// assert_eq!(Percent::from_percent(36) * 10u64, 4);
 	///
-	/// // round down
+	/// // round up 
 	/// assert_eq!(Percent::from_percent(34).mul_ceil(10u64), 4);
 	/// assert_eq!(Percent::from_percent(36).mul_ceil(10u64), 4);
 	/// # }
@@ -199,6 +199,10 @@ pub trait PerThing:
 		ops::Div<N, Output=N> + ops::Rem<N, Output=N> + ops::Add<N, Output=N>;
 }
 
+/// The rounding method to use. 
+///
+/// `Perthing`s are unsigned so `Up` means towards infinity and `Down` means towards zero.
+/// `Nearest` will round an exact half down.
 enum Rounding {
 	Up,
 	Down,
@@ -207,8 +211,6 @@ enum Rounding {
 
 /// Saturating reciprocal multiplication. Compute `x / self`, saturating at the numeric 
 /// bounds instead of overflowing.
-///
-/// If `truncate` is true, round down. Otherwise round to the nearest value of N.
 fn saturating_reciprocal_mul<N, P>(
 	x: N, 
 	part: P::Inner,
@@ -230,8 +232,6 @@ where
 }
 
 /// Overflow-prune multiplication. Accurately multiply a value by `self` without overflowing.
-///
-/// If `truncate` is true, round down. Otherwise round to the nearest value of N.
 fn overflow_prune_mul<N, P>(
 	x: N, 
 	part: P::Inner,
@@ -276,18 +276,19 @@ where
 	let rem_inner = rem.saturated_into::<P::Inner>();
 	// `P::Upper` always fits `P::Inner::max_value().pow(2)`, thus it fits `rem * numer`.
 	let rem_mul_upper = P::Upper::from(rem_inner) * numer_upper;
-	// `rem` is less than `denom`, so if `numer` is an integer then `rem * numer / denom` is less
-	// than `numer`, which fits in `P::Inner`.
+	// `rem` is less than `denom`, so `rem * numer / denom` is less than `numer`, which fits in
+	// `P::Inner`.
 	let mut rem_mul_div_inner = (rem_mul_upper / denom_upper).saturated_into::<P::Inner>();
 	match rounding {
-		// Do nothing
+		// Already rounded down
 		Rounding::Down => {},
-		// Check if the fractional part of the result is greater than 0. 
+		// Round up if the fractional part of the result is non-zero. 
 		Rounding::Up => if rem_mul_upper % denom_upper > 0.into() {
 			// `rem * numer / denom` is less than `numer`, so this will not overflow.
 			rem_mul_div_inner = rem_mul_div_inner + 1.into();
 		},
-		// Check if the fractional part of the result is closer to 1 than 0. 
+		// Round up if the fractional part of the result is greater than a half. An exact half is
+		// rounded down.
 		Rounding::Nearest => if rem_mul_upper % denom_upper > denom_upper / 2.into() {
 			// `rem * numer / denom` is less than `numer`, so this will not overflow.
 			rem_mul_div_inner = rem_mul_div_inner + 1.into();
@@ -306,7 +307,7 @@ macro_rules! implement_per_thing {
 		$upper_type:ty,
 		$title:expr $(,)?
 	) => {
-		/// A fixed point representation of a number between in the range [0, 1].
+		/// A fixed point representation of a number in the range [0, 1].
 		///
 		#[doc = $title]
 		#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
@@ -457,6 +458,14 @@ macro_rules! implement_per_thing {
 				PerThing::mul_ceil(self, b)
 			}
 
+			/// See [`PerThing::saturating_reciprocal_mul`].
+			fn saturating_reciprocal_mul<N>(self, b: N) -> N
+				where N: Clone + From<$type> + UniqueSaturatedInto<$type> + ops::Rem<N, Output=N> +
+					ops::Div<N, Output=N> + ops::Mul<N, Output=N> + ops::Add<N, Output=N> +
+					Saturating {
+				PerThing::saturating_reciprocal_mul(self, b)
+			}
+			
 			/// See [`PerThing::saturating_reciprocal_mul_floor`].
 			fn saturating_reciprocal_mul_floor<N>(self, b: N) -> N
 				where N: Clone + From<$type> + UniqueSaturatedInto<$type> + ops::Rem<N, Output=N> +
