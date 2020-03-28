@@ -57,11 +57,12 @@ pub struct BenchmarkingState<B: BlockT> {
 	db: Cell<Option<Arc<dyn KeyValueDB>>>,
 	genesis: HashMap<Vec<u8>, (Vec<u8>, i32)>,
 	record: Cell<Vec<Vec<u8>>>,
+	cache_size_mb: Option<usize>,
 }
 
 impl<B: BlockT> BenchmarkingState<B> {
 	/// Create a new instance that creates a database in a temporary dir.
-	pub fn new(genesis: Storage) -> Result<Self, String> {
+	pub fn new(genesis: Storage, cache_size_mb: Option<usize>) -> Result<Self, String> {
 		let temp_dir = PathBuf::from(std::env::temp_dir());
 		let name: String = rand::thread_rng().sample_iter(&rand::distributions::Alphanumeric).take(10).collect();
 		let path = temp_dir.join(&name);
@@ -79,6 +80,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 			genesis: Default::default(),
 			genesis_root: Default::default(),
 			record: Default::default(),
+			cache_size_mb,
 		};
 
 		state.reopen()?;
@@ -100,7 +102,10 @@ impl<B: BlockT> BenchmarkingState<B> {
 	fn reopen(&self) -> Result<(), String> {
 		*self.state.borrow_mut() = None;
 		self.db.set(None);
-		let db_config = DatabaseConfig::with_columns(1);
+		let mut db_config = DatabaseConfig::with_columns(1);
+		if let Some(size) = &self.cache_size_mb {
+			db_config.memory_budget.insert(0, *size);
+		}
 		let path = self.path.to_str()
 			.ok_or_else(|| String::from("Invalid database path"))?;
 		let db = Arc::new(Database::open(&db_config, &path).map_err(|e| format!("Error opening database: {:?}", e))?);

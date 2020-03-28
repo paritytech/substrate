@@ -79,6 +79,10 @@ pub struct BenchmarkCmd {
 		default_value = "Interpreted"
 	)]
 	pub wasm_method: WasmExecutionMethod,
+
+	/// Limit the memory the database cache can use.
+	#[structopt(long = "db-cache", value_name = "MiB", default_value = "128")]
+	pub database_cache_size: u32,
 }
 
 impl BenchmarkCmd {
@@ -104,7 +108,8 @@ impl BenchmarkCmd {
 
 		let genesis_storage = spec.build_storage()?;
 		let mut changes = Default::default();
-		let state = BenchmarkingState::<BB>::new(genesis_storage)?;
+		let cache_size = Some(self.database_cache_size as usize);
+		let state = BenchmarkingState::<BB>::new(genesis_storage, cache_size)?;
 		let executor = NativeExecutor::<ExecDispatch>::new(
 			wasm_method,
 			None, // heap pages
