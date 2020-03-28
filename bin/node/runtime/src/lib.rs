@@ -917,6 +917,7 @@ impl_runtime_apis! {
 			pallet!(b"vesting", Vesting);
 			pallet!(b"democracy", Democracy);
 			pallet!(b"collective", Council);
+			if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
 			Ok(batches)
 		}
 	}
