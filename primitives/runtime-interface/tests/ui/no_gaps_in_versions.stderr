@@ -1,0 +1,5 @@
+error: Unexpected version attribute: missing version '2' for this function
+  --> $DIR/no_gaps_in_versions.rs:13:2
+   |
+13 |     #[version(3)]
+   |     ^

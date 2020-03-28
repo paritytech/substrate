@@ -59,12 +59,14 @@
 //! # pub type Balances = u64;
 //! # pub type AllModules = u64;
 //! # pub enum Runtime {};
-//! # use sp_runtime::transaction_validity::{TransactionValidity, UnknownTransaction};
+//! # use sp_runtime::transaction_validity::{
+//! 		TransactionValidity, UnknownTransaction, TransactionSource,
+//! # };
 //! # use sp_runtime::traits::ValidateUnsigned;
 //! # impl ValidateUnsigned for Runtime {
 //! # 	type Call = ();
 //! #
-//! # 	fn validate_unsigned(_call: &Self::Call) -> TransactionValidity {
+//! # 	fn validate_unsigned(_source: TransactionSource, _call: &Self::Call) -> TransactionValidity {
 //! # 		UnknownTransaction::NoUnsignedValidator.into()
 //! # 	}
 //! # }
@@ -75,16 +77,18 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::{prelude::*, marker::PhantomData};
-use frame_support::{storage::StorageValue, weights::{GetDispatchInfo, WeighBlock, DispatchInfo}};
+use frame_support::{
+	storage::StorageValue, weights::{GetDispatchInfo, DispatchInfo},
+	traits::{OnInitialize, OnFinalize, OnRuntimeUpgrade, OffchainWorker},
+};
 use sp_runtime::{
 	generic::Digest, ApplyExtrinsicResult,
 	traits::{
-		self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize, OnInitialize,
-		NumberFor, Block as BlockT, OffchainWorker, Dispatchable, Saturating, OnRuntimeUpgrade,
+		self, Header, Zero, One, Checkable, Applyable, CheckEqual, ValidateUnsigned, NumberFor,
+		Block as BlockT, Dispatchable, Saturating,
 	},
-	transaction_validity::TransactionValidity,
+	transaction_validity::{TransactionValidity, TransactionSource},
 };
-use sp_runtime::traits::ValidateUnsigned;
 use codec::{Codec, Encode};
 use frame_system::{extrinsics_root, DigestOf};
 
@@ -111,8 +115,7 @@ impl<
 		OnRuntimeUpgrade +
 		OnInitialize<System::BlockNumber> +
 		OnFinalize<System::BlockNumber> +
-		OffchainWorker<System::BlockNumber> +
-		WeighBlock<System::BlockNumber>,
+		OffchainWorker<System::BlockNumber>,
 > ExecuteBlock<Block> for Executive<System, Block, Context, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
@@ -137,8 +140,7 @@ impl<
 		OnRuntimeUpgrade +
 		OnInitialize<System::BlockNumber> +
 		OnFinalize<System::BlockNumber> +
-		OffchainWorker<System::BlockNumber> +
-		WeighBlock<System::BlockNumber>,
+		OffchainWorker<System::BlockNumber>,
 > Executive<System, Block, Context, UnsignedValidator, AllModules>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
@@ -179,10 +181,8 @@ where
 		if Self::runtime_upgraded() {
 			// System is not part of `AllModules`, so we need to call this manually.
 			<frame_system::Module::<System> as OnRuntimeUpgrade>::on_runtime_upgrade();
-			<AllModules as OnRuntimeUpgrade>::on_runtime_upgrade();
-			<frame_system::Module<System>>::register_extra_weight_unchecked(
-				<AllModules as WeighBlock<System::BlockNumber>>::on_runtime_upgrade()
-			);
+			let weight = <AllModules as OnRuntimeUpgrade>::on_runtime_upgrade();
+			<frame_system::Module<System>>::register_extra_weight_unchecked(weight);
 		}
 		<frame_system::Module<System>>::initialize(
 			block_number,
@@ -192,13 +192,10 @@ where
 			frame_system::InitKind::Full,
 		);
 		<frame_system::Module<System> as OnInitialize<System::BlockNumber>>::on_initialize(*block_number);
-		<AllModules as OnInitialize<System::BlockNumber>>::on_initialize(*block_number);
-		<frame_system::Module<System>>::register_extra_weight_unchecked(
-			<AllModules as WeighBlock<System::BlockNumber>>::on_initialize(*block_number)
-		);
-		<frame_system::Module<System>>::register_extra_weight_unchecked(
-			<AllModules as WeighBlock<System::BlockNumber>>::on_finalize(*block_number)
-		);
+		let weight = <AllModules as OnInitialize<System::BlockNumber>>::on_initialize(*block_number);
+		<frame_system::Module<System>>::register_extra_weight_unchecked(weight);
+
+		frame_system::Module::<System>::note_finished_initialize();
 	}
 
 	/// Returns if the runtime was upgraded since the last time this function was called.
@@ -343,12 +340,15 @@ where
 	/// side-effects; it merely checks whether the transaction would panic if it were included or not.
 	///
 	/// Changes made to storage should be discarded.
-	pub fn validate_transaction(uxt: Block::Extrinsic) -> TransactionValidity {
+	pub fn validate_transaction(
+		source: TransactionSource,
+		uxt: Block::Extrinsic,
+	) -> TransactionValidity {
 		let encoded_len = uxt.using_encoded(|d| d.len());
 		let xt = uxt.check(&Default::default())?;
 
 		let dispatch_info = xt.get_dispatch_info();
-		xt.validate::<UnsignedValidator>(dispatch_info, encoded_len)
+		xt.validate::<UnsignedValidator>(source, dispatch_info, encoded_len)
 	}
 
 	/// Start an offchain worker and generate extrinsics.
@@ -398,7 +398,7 @@ mod tests {
 	use hex_literal::hex;
 
 	mod custom {
-		use frame_support::weights::SimpleDispatchInfo;
+		use frame_support::weights::{SimpleDispatchInfo, Weight};
 
 		pub trait Trait: frame_system::Trait {}
 
@@ -420,11 +420,11 @@ mod tests {
 
 				// module hooks.
 				// one with block number arg and one without
-				#[weight = SimpleDispatchInfo::FixedNormal(25)]
-				fn on_initialize(n: T::BlockNumber) {
+				fn on_initialize(n: T::BlockNumber) -> Weight {
 					println!("on_initialize({})", n);
+					175
 				}
-				#[weight = SimpleDispatchInfo::FixedNormal(150)]
+
 				fn on_finalize() {
 					println!("on_finalize(?)");
 				}
@@ -481,7 +481,7 @@ mod tests {
 		type Version = RuntimeVersion;
 		type ModuleToIndex = ();
 		type AccountData = pallet_balances::AccountData<u64>;
-		type MigrateAccount = (); type OnNewAccount = ();
+		type OnNewAccount = ();
 		type OnKilledAccount = ();
 	}
 	parameter_types! {
@@ -516,7 +516,10 @@ mod tests {
 			Ok(())
 		}
 
-		fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
+		fn validate_unsigned(
+			_source: TransactionSource,
+			call: &Self::Call,
+		) -> TransactionValidity {
 			match call {
 				Call::Balances(BalancesCall::set_balance(_, _, _)) => Ok(Default::default()),
 				_ => UnknownTransaction::NoUnsignedValidator.into(),
@@ -730,7 +733,10 @@ mod tests {
 		let mut t = new_test_ext(1);
 
 		t.execute_with(|| {
-			assert_eq!(Executive::validate_transaction(xt.clone()), Ok(Default::default()));
+			assert_eq!(
+				Executive::validate_transaction(TransactionSource::InBlock, xt.clone()),
+				Ok(Default::default()),
+			);
 			assert_eq!(Executive::apply_extrinsic(xt), Ok(Err(DispatchError::BadOrigin)));
 		});
 	}

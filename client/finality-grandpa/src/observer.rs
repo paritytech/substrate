@@ -425,20 +425,15 @@ mod tests {
 		tester.trigger_gossip_validator_reputation_change(&peer_id);
 
 		executor::block_on(async move {
+			// Poll the observer once and have it forward the reputation change from the gossip
+			// validator to the test network.
+			assert!(observer.now_or_never().is_none());
+
 			// Ignore initial event stream request by gossip engine.
 			match tester.events.next().now_or_never() {
 				Some(Some(Event::EventStream(_))) => {},
 				_ => panic!("expected event stream request"),
 			};
-
-			assert!(
-				tester.events.next().now_or_never().is_none(),
-				"expect no further network events",
-			);
-
-			// Poll the observer once and have it forward the reputation change from the gossip
-			// validator to the test network.
-			assert!(observer.now_or_never().is_none());
 
 			assert_matches!(tester.events.next().now_or_never(), Some(Some(Event::Report(_, _))));
 		});

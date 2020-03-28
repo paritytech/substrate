@@ -24,17 +24,11 @@ use sp_core::u32_trait::Value as U32;
 use sp_runtime::{
 	RuntimeDebug,
 	ConsensusEngineId, DispatchResult, DispatchError,
-	traits::{MaybeSerializeDeserialize, AtLeast32Bit, Saturating, TrailingZeroInput},
+	traits::{MaybeSerializeDeserialize, AtLeast32Bit, Saturating, TrailingZeroInput, Bounded},
 };
 use crate::dispatch::Parameter;
 use crate::storage::StorageMap;
-
-/// Migrate a given account.
-#[impl_trait_for_tuples::impl_for_tuples(30)]
-pub trait MigrateAccount<A> {
-	/// Migrate the `account`.
-	fn migrate_account(account: &A);
-}
+use impl_trait_for_tuples::impl_for_tuples;
 
 /// An abstraction of a value stored within storage, but possibly as part of a larger composite
 /// item.
@@ -93,7 +87,7 @@ impl<
 	Created: Happened<K>,
 	Removed: Happened<K>,
 	K: FullCodec,
-	T: FullCodec
+	T: FullCodec,
 > StoredMap<K, T> for StorageMapShim<S, Created, Removed, K, T> {
 	fn get(k: &K) -> T { S::get(k) }
 	fn is_explicit(k: &K) -> bool { S::contains_key(k) }
@@ -144,6 +138,35 @@ impl<
 	}
 }
 
+/// Something that can estimate at which block the next session rotation will happen. This should
+/// be the same logical unit that dictates `ShouldEndSession` to the session module. No Assumptions
+/// are made about the scheduling of the sessions.
+pub trait EstimateNextSessionRotation<BlockNumber> {
+	/// Return the block number at which the next session rotation is estimated to happen.
+	///
+	/// None should be returned if the estimation fails to come to an answer
+	fn estimate_next_session_rotation(now: BlockNumber) -> Option<BlockNumber>;
+}
+
+impl<BlockNumber: Bounded> EstimateNextSessionRotation<BlockNumber> for () {
+	fn estimate_next_session_rotation(_: BlockNumber) -> Option<BlockNumber> {
+		Default::default()
+	}
+}
+
+/// Something that can estimate at which block the next `new_session` will be triggered. This must
+/// always be implemented by the session module.
+pub trait EstimateNextNewSession<BlockNumber> {
+	/// Return the block number at which the next new session is estimated to happen.
+	fn estimate_next_new_session(now: BlockNumber) -> Option<BlockNumber>;
+}
+
+impl<BlockNumber: Bounded> EstimateNextNewSession<BlockNumber> for () {
+	fn estimate_next_new_session(_: BlockNumber) -> Option<BlockNumber> {
+		Default::default()
+	}
+}
+
 /// Anything that can have a `::len()` method.
 pub trait Len {
 	/// Return the length of data type.
@@ -178,6 +201,13 @@ pub trait Contains<T: Ord> {
 
 	/// Get the number of items in the set.
 	fn count() -> usize { Self::sorted_members().len() }
+
+	/// Add an item that would satisfy `contains`. It does not make sure any other
+	/// state is correctly maintained or generated.
+	///
+	/// **Should be used for benchmarking only!!!**
+	#[cfg(feature = "runtime-benchmarks")]
+	fn add(t: &T);
 }
 
 /// Determiner to say whether a given account is unused.
@@ -193,14 +223,14 @@ impl<AccountId> IsDeadAccount<AccountId> for () {
 }
 
 /// Handler for when a new account has been created.
-#[impl_trait_for_tuples::impl_for_tuples(30)]
+#[impl_for_tuples(30)]
 pub trait OnNewAccount<AccountId> {
 	/// A new account `who` has been registered.
 	fn on_new_account(who: &AccountId);
 }
 
 /// The account with the given id was reaped.
-#[impl_trait_for_tuples::impl_for_tuples(30)]
+#[impl_for_tuples(30)]
 pub trait OnKilledAccount<AccountId> {
 	/// The account with the given id was reaped.
 	fn on_killed_account(who: &AccountId);
@@ -857,6 +887,12 @@ pub trait Time {
 	fn now() -> Self::Moment;
 }
 
+/// Trait to deal with unix time.
+pub trait UnixTime {
+	/// Return duration since `SystemTime::UNIX_EPOCH`.
+	fn now() -> core::time::Duration;
+}
+
 impl WithdrawReasons {
 	/// Choose all variants except for `one`.
 	///
@@ -1041,4 +1077,92 @@ pub trait GetCallMetadata {
 	fn get_call_names(module: &str) -> &'static [&'static str];
 	/// Return a [`CallMetadata`], containing function and pallet name of the Call.
 	fn get_call_metadata(&self) -> CallMetadata;
+}
+
+/// The block finalization trait. Implementing this lets you express what should happen
+/// for your module when the block is ending.
+#[impl_for_tuples(30)]
+pub trait OnFinalize<BlockNumber> {
+	/// The block is being finalized. Implement to have something happen.
+	fn on_finalize(_n: BlockNumber) {}
+}
+
+/// The block initialization trait. Implementing this lets you express what should happen
+/// for your module when the block is beginning (right before the first extrinsic is executed).
+pub trait OnInitialize<BlockNumber> {
+	/// The block is being initialized. Implement to have something happen.
+	///
+	/// Return the non-negotiable weight consumed in the block.
+	fn on_initialize(_n: BlockNumber) -> crate::weights::Weight { 0 }
+}
+
+#[impl_for_tuples(30)]
+impl<BlockNumber: Clone> OnInitialize<BlockNumber> for Tuple {
+	fn on_initialize(_n: BlockNumber) -> crate::weights::Weight {
+		let mut weight = 0;
+		for_tuples!( #( weight = weight.saturating_add(Tuple::on_initialize(_n.clone())); )* );
+		weight
+	}
+}
+
+/// The runtime upgrade trait. Implementing this lets you express what should happen
+/// when the runtime upgrades, and changes may need to occur to your module.
+pub trait OnRuntimeUpgrade {
+	/// Perform a module upgrade.
+	///
+	/// Return the non-negotiable weight consumed for runtime upgrade.
+	fn on_runtime_upgrade() -> crate::weights::Weight { 0 }
+}
+
+#[impl_for_tuples(30)]
+impl OnRuntimeUpgrade for Tuple {
+	fn on_runtime_upgrade() -> crate::weights::Weight {
+		let mut weight = 0;
+		for_tuples!( #( weight = weight.saturating_add(Tuple::on_runtime_upgrade()); )* );
+		weight
+	}
+}
+
+/// Off-chain computation trait.
+///
+/// Implementing this trait on a module allows you to perform long-running tasks
+/// that make (by default) validators generate transactions that feed results
+/// of those long-running computations back on chain.
+///
+/// NOTE: This function runs off-chain, so it can access the block state,
+/// but cannot preform any alterations. More specifically alterations are
+/// not forbidden, but they are not persisted in any way after the worker
+/// has finished.
+#[impl_for_tuples(30)]
+pub trait OffchainWorker<BlockNumber> {
+	/// This function is being called after every block import (when fully synced).
+	///
+	/// Implement this and use any of the `Offchain` `sp_io` set of APIs
+	/// to perform off-chain computations, calls and submit transactions
+	/// with results to trigger any on-chain changes.
+	/// Any state alterations are lost and are not persisted.
+	fn offchain_worker(_n: BlockNumber) {}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn on_initialize_and_on_runtime_upgrade_weight_merge_works() {
+		struct Test;
+		impl OnInitialize<u8> for Test {
+			fn on_initialize(_n: u8) -> crate::weights::Weight {
+				10
+			}
+		}
+		impl OnRuntimeUpgrade for Test {
+			fn on_runtime_upgrade() -> crate::weights::Weight {
+				20
+			}
+		}
+
+		assert_eq!(<(Test, Test)>::on_initialize(0), 20);
+		assert_eq!(<(Test, Test)>::on_runtime_upgrade(), 40);
+	}
 }

@@ -211,7 +211,7 @@ pub fn init_logger(pattern: &str) {
 	});
 
 	if builder.try_init().is_err() {
-		info!("Not registering Substrate logger, as there is already a global logger registered!");
+		info!("💬 Not registering Substrate logger, as there is already a global logger registered!");
 	}
 }
 

@@ -270,7 +270,7 @@ impl<B: BlockT> LightDispatch<B> where
 		let request = match self.remove(peer.clone(), request_id) {
 			Some(request) => request,
 			None => {
-				info!("Invalid remote {} response from peer {}", rtype, peer);
+				info!("💔 Invalid remote {} response from peer {}", rtype, peer);
 				network.report_peer(&peer, ReputationChange::new_fatal("Invalid remote response"));
 				network.disconnect_peer(&peer);
 				self.remove_peer(&peer);
@@ -282,7 +282,7 @@ impl<B: BlockT> LightDispatch<B> where
 		let (retry_count, retry_request_data) = match try_accept(request, &self.checker) {
 			Accept::Ok => (retry_count, None),
 			Accept::CheckFailed(error, retry_request_data) => {
-				info!("Failed to check remote {} response from peer {}: {}", rtype, peer, error);
+				info!("💔 Failed to check remote {} response from peer {}: {}", rtype, peer, error);
 				network.report_peer(&peer, ReputationChange::new_fatal("Failed remote response check"));
 				network.disconnect_peer(&peer);
 				self.remove_peer(&peer);
@@ -296,7 +296,7 @@ impl<B: BlockT> LightDispatch<B> where
 				}
 			},
 			Accept::Unexpected(retry_request_data) => {
-				info!("Unexpected response to remote {} from peer", rtype);
+				info!("💔 Unexpected response to remote {} from peer", rtype);
 				network.report_peer(&peer, ReputationChange::new_fatal("Unexpected remote response"));
 				network.disconnect_peer(&peer);
 				self.remove_peer(&peer);
@@ -689,7 +689,7 @@ pub mod tests {
 		ChangesProof, RemoteCallRequest, RemoteReadRequest,
 		RemoteReadChildRequest, RemoteChangesRequest, RemoteBodyRequest};
 	use crate::config::Roles;
-	use crate::message::{self, BlockAttributes, Direction, FromBlock, RequestId};
+	use crate::protocol::message::{self, BlockAttributes, Direction, FromBlock, RequestId};
 	use libp2p::PeerId;
 	use super::{REQUEST_TIMEOUT, LightDispatch, LightDispatchNetwork, RequestData, StorageProof};
 	use sp_test_primitives::{Block, Header};

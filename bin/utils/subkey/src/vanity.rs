@@ -62,11 +62,22 @@ fn calculate_score(_desired: &str, key: &str) -> usize {
 	0
 }
 
+/// Validate whether the char is allowed to be used in base58.
+/// num 0, lower l, upper I and O are not allowed.
+fn validate_base58(c :char) -> bool {
+	c.is_alphanumeric() && !"0lIO".contains(c)
+}
+
 pub(super) fn generate_key<C: Crypto>(desired: &str) -> Result<KeyPair<C>, &'static str> where
 		PublicOf<C>: PublicT,
 {
 	if desired.is_empty() {
 		return Err("Pattern must not be empty");
+	}
+
+	if !desired.chars().all(validate_base58) {
+		return Err("Pattern can only contains valid characters in base58 \
+			(all alphanumeric except for 0, l, I and O)");
 	}
 
 	eprintln!("Generating key containing pattern '{}'", desired);
@@ -160,6 +171,22 @@ mod tests {
 			),
 			0
 		);
+	}
+
+	#[test]
+	fn test_invalid_pattern() {
+		assert!(generate_key::<Ed25519>("").is_err());
+		assert!(generate_key::<Ed25519>("0").is_err());
+		assert!(generate_key::<Ed25519>("l").is_err());
+		assert!(generate_key::<Ed25519>("I").is_err());
+		assert!(generate_key::<Ed25519>("O").is_err());
+		assert!(generate_key::<Ed25519>("!").is_err());
+	}
+
+	#[test]
+	fn test_valid_pattern() {
+		assert!(generate_key::<Ed25519>("o").is_ok());
+		assert!(generate_key::<Ed25519>("L").is_ok());
 	}
 
 	#[cfg(feature = "bench")]

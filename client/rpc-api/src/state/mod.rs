@@ -136,6 +136,14 @@ pub trait StateApi<Hash> {
 		hash: Option<Hash>
 	) -> FutureResult<Vec<StorageChangeSet<Hash>>>;
 
+	/// Query storage entries (by key) starting at block hash given as the second parameter.
+	#[rpc(name = "state_queryStorageAt")]
+	fn query_storage_at(
+		&self,
+		keys: Vec<StorageKey>,
+		at: Option<Hash>,
+	) -> FutureResult<Vec<StorageChangeSet<Hash>>>;
+
 	/// New runtime version subscription
 	#[pubsub(
 		subscription = "state_runtimeVersion",

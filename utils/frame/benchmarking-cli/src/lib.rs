@@ -22,8 +22,13 @@ use sc_client_db::BenchmarkingState;
 use sc_service::{Configuration, ChainSpec};
 use sc_executor::{NativeExecutor, NativeExecutionDispatch};
 use codec::{Encode, Decode};
-use frame_benchmarking::BenchmarkResults;
-use sp_core::tasks;
+use frame_benchmarking::{BenchmarkResults, Analysis};
+use sp_core::{
+	tasks,
+	traits::KeystoreExt,
+	testing::KeyStore,
+};
+use sp_externalities::Extensions;
 
 /// The `benchmark` command used to benchmark FRAME Pallets.
 #[derive(Debug, structopt::StructOpt, Clone)]
@@ -106,6 +111,9 @@ impl BenchmarkCmd {
 			2, // The runtime instances cache size.
 		);
 
+		let mut extensions = Extensions::default();
+		extensions.register(KeystoreExt(KeyStore::new()));
+
 		let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
 			&state,
 			None,
@@ -120,7 +128,7 @@ impl BenchmarkCmd {
 				self.steps.clone(),
 				self.repeat,
 			).encode(),
-			Default::default(),
+			extensions,
 			&sp_state_machine::backend::BackendRuntimeCode::new(&state).runtime_code()?,
 			tasks::executor(),
 		)
@@ -154,6 +162,17 @@ impl BenchmarkCmd {
 					// Print extrinsic time and storage root time
 					print!("{:?},{:?},{:?},{:?},{:?}\n", result.1, result.2, result.3, result.4, result.5);
 				});
+
+				print!("\n");
+
+				// Conduct analysis.
+				if let Some(analysis) = Analysis::median_slopes(&results) {
+					println!("Median Slopes Analysis\n========\n{}", analysis);
+				}
+
+				if let Some(analysis) = Analysis::min_squares_iqr(&results) {
+					println!("Min Squares Analysis\n========\n{}", analysis);
+				}
 
 				eprintln!("Done.");
 			}

@@ -95,7 +95,8 @@ impl<Public, Signature, TAnyAppPublic> Signer<Public, Signature> for TAnyAppPubl
 }
 
 /// Retrieves a public key type for given `SignAndSubmitTransaction`.
-pub type PublicOf<T, Call, X> = <
+pub type PublicOf<T, Call, X> =
+<
 	<X as SignAndSubmitTransaction<T, Call>>::CreateTransaction
 	as
 	CreateTransaction<T, <X as SignAndSubmitTransaction<T, Call>>::Extrinsic>
@@ -109,7 +110,7 @@ pub type PublicOf<T, Call, X> = <
 /// you should use.
 pub trait SignAndSubmitTransaction<T: crate::Trait, Call> {
 	/// Unchecked extrinsic type.
-	type Extrinsic: ExtrinsicT<Call=Call> + codec::Encode;
+	type Extrinsic: ExtrinsicT<Call=Call> + Encode;
 
 	/// A runtime-specific type to produce signed data for the extrinsic.
 	type CreateTransaction: CreateTransaction<T, Self::Extrinsic>;
@@ -156,7 +157,7 @@ pub trait SignAndSubmitTransaction<T: crate::Trait, Call> {
 /// you should use.
 pub trait SubmitUnsignedTransaction<T: crate::Trait, Call> {
 	/// Unchecked extrinsic type.
-	type Extrinsic: ExtrinsicT<Call=Call> + codec::Encode;
+	type Extrinsic: ExtrinsicT<Call=Call> + Encode;
 
 	/// Submit given call to the transaction pool as unsigned transaction.
 	///
@@ -164,7 +165,8 @@ pub trait SubmitUnsignedTransaction<T: crate::Trait, Call> {
 	/// and `Err` if transaction was rejected from the pool.
 	fn submit_unsigned(call: impl Into<Call>) -> Result<(), ()> {
 		let xt = Self::Extrinsic::new(call.into(), None).ok_or(())?;
-		sp_io::offchain::submit_transaction(xt.encode())
+		let encoded_xt = xt.encode();
+		sp_io::offchain::submit_transaction(encoded_xt)
 	}
 }
 
@@ -291,7 +293,7 @@ impl<T, E, S, C, Call> SignAndSubmitTransaction<T, Call> for TransactionSubmitte
 	T: crate::Trait,
 	C: CreateTransaction<T, E>,
 	S: Signer<<C as CreateTransaction<T, E>>::Public, <C as CreateTransaction<T, E>>::Signature>,
-	E: ExtrinsicT<Call=Call> + codec::Encode,
+	E: ExtrinsicT<Call=Call> + Encode,
 {
 	type Extrinsic = E;
 	type CreateTransaction = C;
@@ -301,7 +303,7 @@ impl<T, E, S, C, Call> SignAndSubmitTransaction<T, Call> for TransactionSubmitte
 /// A blanket implementation to use the same submitter for unsigned transactions as well.
 impl<T, E, S, C, Call> SubmitUnsignedTransaction<T, Call> for TransactionSubmitter<S, C, E> where
 	T: crate::Trait,
-	E: ExtrinsicT<Call=Call> + codec::Encode,
+	E: ExtrinsicT<Call=Call> + Encode,
 {
 	type Extrinsic = E;
 }
@@ -310,7 +312,7 @@ impl<T, E, S, C, Call> SubmitUnsignedTransaction<T, Call> for TransactionSubmitt
 impl<T, C, E, S, Call> SubmitSignedTransaction<T, Call> for TransactionSubmitter<S, C, E> where
 	T: crate::Trait,
 	C: CreateTransaction<T, E>,
-	E: ExtrinsicT<Call=Call> + codec::Encode,
+	E: ExtrinsicT<Call=Call> + Encode,
 	S: Signer<<C as CreateTransaction<T, E>>::Public, <C as CreateTransaction<T, E>>::Signature>,
 	// Make sure we can unwrap the app crypto key.
 	S: RuntimeAppPublic + AppPublic + Into<<S as AppPublic>::Generic>,

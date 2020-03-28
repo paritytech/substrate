@@ -163,7 +163,6 @@ use frame_support::{
 	traits::{Currency, ReservableCurrency, Get, BalanceStatus},
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
-use frame_support::traits::MigrateAccount;
 
 #[cfg(test)]
 mod mock;
@@ -255,13 +254,6 @@ decl_storage! {
 		/// Map from the user who can access it to the recovered account.
 		pub Proxy get(fn proxy):
 			map hasher(blake2_128_concat) T::AccountId => Option<T::AccountId>;
-	}
-}
-
-impl<T: Trait> MigrateAccount<T::AccountId> for Module<T> {
-	fn migrate_account(a: &T::AccountId) {
-		Recoverable::<T>::migrate_key_from_blake(a);
-		Proxy::<T>::migrate_key_from_blake(a);
 	}
 }
 
@@ -653,6 +645,7 @@ decl_module! {
 		/// # <weight>
 		/// - One storage mutation to check account is recovered by `who`. O(1)
 		/// # </weight>
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn cancel_recovered(origin, account: T::AccountId) {
 			let who = ensure_signed(origin)?;
 			// Check `who` is allowed to make a call on behalf of `account`

@@ -28,7 +28,8 @@ use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use sp_core::{self, Hasher, TypeId, RuntimeDebug};
 use crate::codec::{Codec, Encode, Decode};
 use crate::transaction_validity::{
-	ValidTransaction, TransactionValidity, TransactionValidityError, UnknownTransaction,
+	ValidTransaction, TransactionSource, TransactionValidity, TransactionValidityError,
+	UnknownTransaction,
 };
 use crate::generic::{Digest, DigestItem};
 pub use sp_arithmetic::traits::{
@@ -156,6 +157,12 @@ pub trait EnsureOrigin<OuterOrigin> {
 	}
 	/// Perform the origin check.
 	fn try_origin(o: OuterOrigin) -> result::Result<Self::Success, OuterOrigin>;
+
+	/// Returns an outer origin capable of passing `try_origin` check.
+	/// 
+	/// ** Should be used for benchmarking only!!! **
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> OuterOrigin;
 }
 
 /// An error that indicates that a lookup failed.
@@ -328,51 +335,6 @@ impl<T:
 	sp_std::ops::BitXor<Self, Output = Self> +
 	sp_std::ops::BitAnd<Self, Output = Self>
 > SimpleBitOps for T {}
-
-/// The block finalization trait. Implementing this lets you express what should happen
-/// for your module when the block is ending.
-#[impl_for_tuples(30)]
-pub trait OnFinalize<BlockNumber> {
-	/// The block is being finalized. Implement to have something happen.
-	fn on_finalize(_n: BlockNumber) {}
-}
-
-/// The block initialization trait. Implementing this lets you express what should happen
-/// for your module when the block is beginning (right before the first extrinsic is executed).
-#[impl_for_tuples(30)]
-pub trait OnInitialize<BlockNumber> {
-	/// The block is being initialized. Implement to have something happen.
-	fn on_initialize(_n: BlockNumber) {}
-}
-
-/// The runtime upgrade trait. Implementing this lets you express what should happen
-/// when the runtime upgrades, and changes may need to occur to your module.
-#[impl_for_tuples(30)]
-pub trait OnRuntimeUpgrade {
-	/// Perform a module upgrade.
-	fn on_runtime_upgrade() {}
-}
-
-/// Off-chain computation trait.
-///
-/// Implementing this trait on a module allows you to perform long-running tasks
-/// that make (by default) validators generate transactions that feed results
-/// of those long-running computations back on chain.
-///
-/// NOTE: This function runs off-chain, so it can access the block state,
-/// but cannot preform any alterations. More specifically alterations are
-/// not forbidden, but they are not persisted in any way after the worker
-/// has finished.
-#[impl_for_tuples(30)]
-pub trait OffchainWorker<BlockNumber> {
-	/// This function is being called after every block import (when fully synced).
-	///
-	/// Implement this and use any of the `Offchain` `sp_io` set of APIs
-	/// to perform off-chain computations, calls and submit transactions
-	/// with results to trigger any on-chain changes.
-	/// Any state alterations are lost and are not persisted.
-	fn offchain_worker(_n: BlockNumber) {}
-}
 
 /// Abstraction around hashing
 // Stupid bug in the Rust compiler believes derived
@@ -896,6 +858,7 @@ pub trait Applyable: Sized + Send + Sync {
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
 	fn validate<V: ValidateUnsigned<Call=Self::Call>>(
 		&self,
+		source: TransactionSource,
 		info: Self::DispatchInfo,
 		len: usize,
 	) -> TransactionValidity;
@@ -942,7 +905,7 @@ pub trait ValidateUnsigned {
 	///
 	/// Changes made to storage WILL be persisted if the call returns `Ok`.
 	fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
-		Self::validate_unsigned(call)
+		Self::validate_unsigned(TransactionSource::InBlock, call)
 			.map(|_| ())
 			.map_err(Into::into)
 	}
@@ -953,7 +916,7 @@ pub trait ValidateUnsigned {
 	/// whether the transaction would panic if it were included or not.
 	///
 	/// Changes made to storage should be discarded by caller.
-	fn validate_unsigned(call: &Self::Call) -> TransactionValidity;
+	fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity;
 }
 
 /// Opaque data type that may be destructured into a series of raw byte slices (which represent
@@ -966,7 +929,7 @@ pub trait OpaqueKeys: Clone {
 	fn key_ids() -> &'static [crate::KeyTypeId];
 	/// Get the raw bytes of key with key-type ID `i`.
 	fn get_raw(&self, i: super::KeyTypeId) -> &[u8];
-	/// Get the decoded key with index `i`.
+	/// Get the decoded key with key-type ID `i`.
 	fn get<T: Decode>(&self, i: super::KeyTypeId) -> Option<T> {
 		T::decode(&mut self.get_raw(i)).ok()
 	}
@@ -1290,6 +1253,16 @@ impl Printable for &[u8] {
 impl Printable for &str {
 	fn print(&self) {
 		sp_io::misc::print_utf8(self.as_bytes());
+	}
+}
+
+impl Printable for bool {
+	fn print(&self) {
+		if *self {
+			"true".print()
+		} else {
+			"false".print()
+		}
 	}
 }
 

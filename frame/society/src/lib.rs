@@ -260,8 +260,11 @@ use sp_runtime::{Percent, ModuleId, RuntimeDebug,
 	}
 };
 use frame_support::{decl_error, decl_module, decl_storage, decl_event, ensure, dispatch::DispatchResult};
-use frame_support::weights::SimpleDispatchInfo;
-use frame_support::traits::{Currency, ReservableCurrency, Randomness, Get, ChangeMembers, BalanceStatus, ExistenceRequirement::AllowDeath, MigrateAccount};
+use frame_support::weights::{SimpleDispatchInfo, Weight, WeighData};
+use frame_support::traits::{
+	Currency, ReservableCurrency, Randomness, Get, ChangeMembers, BalanceStatus,
+	ExistenceRequirement::AllowDeath
+};
 use frame_system::{self as system, ensure_signed, ensure_root};
 
 type BalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
@@ -1025,7 +1028,7 @@ decl_module! {
 			Self::deposit_event(RawEvent::NewMaxMembers(max));
 		}
 
-		fn on_initialize(n: T::BlockNumber) {
+		fn on_initialize(n: T::BlockNumber) -> Weight {
 			let mut members = vec![];
 
 			// Run a candidate/membership rotation
@@ -1042,6 +1045,8 @@ decl_module! {
 				}
 				Self::rotate_challenge(&mut members);
 			}
+
+			SimpleDispatchInfo::default().weigh_data(())
 		}
 	}
 }
@@ -1130,12 +1135,6 @@ decl_event! {
 	}
 }
 
-impl<T: Trait> MigrateAccount<T::AccountId> for Module<T> {
-	fn migrate_account(a: &T::AccountId) {
-		Payouts::<T>::migrate_key_from_blake(a);
-	}
-}
-
 /// Simple ensure origin struct to filter for the founder account.
 pub struct EnsureFounder<T>(sp_std::marker::PhantomData<T>);
 impl<T: Trait> EnsureOrigin<T::Origin> for EnsureFounder<T> {
@@ -1145,6 +1144,12 @@ impl<T: Trait> EnsureOrigin<T::Origin> for EnsureFounder<T> {
 			(system::RawOrigin::Signed(ref who), Some(ref f)) if who == f => Ok(who.clone()),
 			(r, _) => Err(T::Origin::from(r)),
 		})
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> T::Origin {
+		let founder = Founder::<T>::get().expect("society founder should exist");
+		T::Origin::from(system::RawOrigin::Signed(founder))
 	}
 }
 

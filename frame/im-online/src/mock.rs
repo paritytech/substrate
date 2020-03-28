@@ -119,7 +119,7 @@ impl frame_system::Trait for Runtime {
 	type Version = ();
 	type ModuleToIndex = ();
 	type AccountData = ();
-	type MigrateAccount = (); type OnNewAccount = ();
+	type OnNewAccount = ();
 	type OnKilledAccount = ();
 }
 
@@ -141,6 +141,7 @@ impl pallet_session::Trait for Runtime {
 	type Keys = UintAuthorityId;
 	type Event = ();
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
+	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
 }
 
 impl pallet_session::historical::Trait for Runtime {
