@@ -378,12 +378,12 @@ impl<B: BlockT> ChainSync<B> {
 				Err(BadPeer(who, rep::BLOCKCHAIN_READ_ERROR))
 			}
 			Ok(BlockStatus::KnownBad) => {
-				info!("New peer with known bad best block {} ({}).", best_hash, best_number);
+				info!("💔 New peer with known bad best block {} ({}).", best_hash, best_number);
 				Err(BadPeer(who, rep::BAD_BLOCK))
 			}
 			Ok(BlockStatus::Unknown) => {
 				if best_number.is_zero() {
-					info!("New peer with unknown genesis hash {} ({}).", best_hash, best_number);
+					info!("💔 New peer with unknown genesis hash {} ({}).", best_hash, best_number);
 					return Err(BadPeer(who, rep::GENESIS_MISMATCH));
 				}
 				// If there are more than `MAJOR_SYNC_BLOCKS` in the import queue then we have
@@ -711,7 +711,7 @@ impl<B: BlockT> ChainSync<B> {
 									return Err(BadPeer(who, rep::UNKNOWN_ANCESTOR))
 								},
 								(_, Err(e)) => {
-									info!("Error answering legitimate blockchain query: {:?}", e);
+									info!("❌ Error answering legitimate blockchain query: {:?}", e);
 									return Err(BadPeer(who, rep::BLOCKCHAIN_READ_ERROR))
 								}
 							};
@@ -943,7 +943,7 @@ impl<B: BlockT> ChainSync<B> {
 
 					if aux.bad_justification {
 						if let Some(peer) = who {
-							info!("Sent block with bad justification to import");
+							info!("💔 Sent block with bad justification to import");
 							output.push(Err(BadPeer(peer, rep::BAD_JUSTIFICATION)));
 						}
 					}
@@ -973,7 +973,7 @@ impl<B: BlockT> ChainSync<B> {
 				},
 				Err(BlockImportError::BadBlock(who)) => {
 					if let Some(peer) = who {
-						info!("Block {:?} received from peer {} has been blacklisted", hash, peer);
+						info!("💔 Block {:?} received from peer {} has been blacklisted", hash, peer);
 						output.push(Err(BadPeer(peer, rep::BAD_BLOCK)));
 					}
 				},

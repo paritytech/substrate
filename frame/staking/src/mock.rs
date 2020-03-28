@@ -38,6 +38,8 @@ use crate::*;
 
 const INIT_TIMESTAMP: u64 = 30_000;
 
+const INIT_TIMESTAMP: u64 = 30_000;
+
 /// The AccountId alias in this test module.
 pub(crate) type AccountId = u64;
 pub(crate) type AccountIndex = u64;
