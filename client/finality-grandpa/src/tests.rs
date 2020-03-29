@@ -30,21 +30,17 @@ use sp_keyring::Ed25519Keyring;
 use sc_client::LongestChain;
 use sc_client_api::backend::TransactionFor;
 use sp_blockchain::Result;
-use sp_api::{ApiRef, ApiErrorExt, Core, RuntimeVersion, ApiExt, StorageProof, ProvideRuntimeApi};
+use sp_api::{ApiRef, StorageProof, ProvideRuntimeApi};
 use substrate_test_runtime_client::runtime::BlockNumber;
 use sp_consensus::{
 	BlockOrigin, ForkChoiceStrategy, ImportedAux, BlockImportParams, ImportResult, BlockImport,
 	import_queue::{BoxJustificationImport, BoxFinalityProofImport},
 };
-use std::{
-	collections::{HashMap, HashSet},
-	result,
-	pin::Pin,
-};
+use std::{collections::{HashMap, HashSet}, pin::Pin};
 use parity_scale_codec::Decode;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, HashFor};
 use sp_runtime::generic::{BlockId, DigestItem};
-use sp_core::{H256, NativeOrEncoded, ExecutionContext, crypto::Public};
+use sp_core::{H256, crypto::Public};
 use sp_finality_grandpa::{GRANDPA_ENGINE_ID, AuthorityList, GrandpaApi};
 use sp_state_machine::{InMemoryBackend, prove_read, read_proof_check};
 
