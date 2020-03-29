@@ -2346,6 +2346,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "141340095b15ed7491bd3d4ced9d20cebfb826174b6bb03386381f62b01e3d77"
 
 [[package]]
+name = "intervalier"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "750dc2c10615a0aa0d38a5adf9d4e62651c178109f40253cb6235b3f638af6a9"
+dependencies = [
+ "futures 0.3.4",
+ "futures-timer 2.0.2",
+]
+
+[[package]]
 name = "iovec"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6690,8 +6700,8 @@ dependencies = [
  "derive_more",
  "futures 0.3.4",
  "futures-diagnose",
- "futures-timer 2.0.2",
  "hex",
+ "intervalier",
  "log 0.4.8",
  "parity-scale-codec",
  "parity-util-mem",
