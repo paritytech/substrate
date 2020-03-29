@@ -17,7 +17,7 @@ sp-phragmen-compact = { version = "2.0.0-alpha.4", path = "./compact" }
 
 [dev-dependencies]
 substrate-test-utils = { version = "2.0.0-alpha.5", path = "../../test-utils" }
-rand = "0.7.3"
+rand = { version = "0.7.3" }
 sp-phragmen = { path = "." }
 
 [features]

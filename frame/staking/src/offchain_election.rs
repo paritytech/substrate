@@ -167,7 +167,7 @@ pub fn prepare_submission<T: Trait>(
 	// convert into absolute value and to obtain the reduced version.
 	let mut staked = sp_phragmen::assignment_ratio_to_staked(
 		assignments,
-		<Module<T>>::slashable_balance_of_extended,
+		<Module<T>>::slashable_balance_of_vote_weight,
 	);
 
 	if do_reduce {
@@ -188,7 +188,7 @@ pub fn prepare_submission<T: Trait>(
 	let score = {
 		let staked = sp_phragmen::assignment_ratio_to_staked(
 			low_accuracy_assignment.clone(),
-			<Module<T>>::slashable_balance_of_extended,
+			<Module<T>>::slashable_balance_of_vote_weight,
 		);
 
 		let (support_map, _) = build_support_map::<T::AccountId>(&winners, &staked);

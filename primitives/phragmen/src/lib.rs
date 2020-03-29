@@ -88,12 +88,18 @@ pub enum Error {
 	CompactInvalidIndex,
 }
 
+/// A type which is used in the API of this crate as a numeric representation of a balance (stake),
+/// down casted to u64 for same computation.
+///
+/// `sp_phragmen` uses this value and converts it to [`ExtendedBalance`] for computation.
+pub type VoteWeight = u64;
+
 /// A type in which performing operations on balances and stakes of candidates and voters are safe.
 ///
-/// This module's functions expect a `Convert` type to convert all balances to u64. Hence, u128 is
-/// a safe type for arithmetic operations over them.
+/// This module's functions expect a [`Balance`] type which is immediately casted into
+/// [`ExtendedBalance`].
 ///
-/// Balance types converted to `ExtendedBalance` are referred to as `Votes`.
+/// [`Balance`] types converted to [`ExtendedBalance`] are referred to as `VoteWeight`.
 pub type ExtendedBalance = u128;
 
 /// The score of an assignment. This can be computed from the support map via [`evaluate_support`].
@@ -329,7 +335,7 @@ pub fn elect<AccountId, R>(
 	candidate_count: usize,
 	minimum_candidate_count: usize,
 	initial_candidates: Vec<AccountId>,
-	initial_voters: Vec<(AccountId, ExtendedBalance, Vec<AccountId>)>,
+	initial_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
 ) -> Option<PhragmenResult<AccountId, R>> where
 	AccountId: Default + Ord + Member,
 	R: PerThing,
@@ -367,14 +373,14 @@ pub fn elect<AccountId, R>(
 			if let Some(idx) = c_idx_cache.get(&v) {
 				// This candidate is valid + already cached.
 				candidates[*idx].approval_stake = candidates[*idx].approval_stake
-					.saturating_add(voter_stake);
+					.saturating_add(voter_stake.into());
 				edges.push(Edge { who: v.clone(), candidate_index: *idx, ..Default::default() });
 			} // else {} would be wrong votes. We don't really care about it.
 		}
 		Voter {
 			who,
 			edges: edges,
-			budget: voter_stake,
+			budget: voter_stake.into(),
 			load: Rational128::zero(),
 		}
 	}));
@@ -640,7 +646,7 @@ pub fn is_score_better(this: PhragmenScore, that: PhragmenScore) -> bool {
 /// - `iterations`: maximum number of iterations that will be processed.
 /// - `stake_of`: something that can return the stake stake of a particular candidate or voter.
 pub fn equalize<AccountId>(
-	mut assignments: Vec<(StakedAssignment<AccountId>, ExtendedBalance)>,
+	mut assignments: Vec<(StakedAssignment<AccountId>, VoteWeight)>,
 	supports: &mut SupportMap<AccountId>,
 	tolerance: ExtendedBalance,
 	iterations: usize,
@@ -654,7 +660,7 @@ pub fn equalize<AccountId>(
 		for (StakedAssignment { who, distribution }, voter_budget) in assignments.iter_mut() {
 			let diff = do_equalize(
 				who,
-				voter_budget.clone(), // TODO: well... budget need not to be mut
+				voter_budget.clone().into(), // TODO: well... budget need not to be mut
 				distribution,
 				supports,
 				tolerance,

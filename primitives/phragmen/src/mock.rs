@@ -58,7 +58,7 @@ pub(crate) struct _Support<A> {
 pub(crate) type _PhragmenAssignment<A> = (A, f64);
 pub(crate) type _SupportMap<A> = BTreeMap<A, _Support<A>>;
 
-pub(crate) type Balance = u128;
+pub(crate) type Balance = u64;
 pub(crate) type AccountId = u64;
 
 #[derive(Debug, Clone)]
@@ -344,7 +344,7 @@ pub(crate) fn run_and_compare<Output: PerThing>(
 		&stake_of,
 	).unwrap();
 
-	assert_eq!(winners, truth_value.winners);
+	assert_eq!(winners.iter().map(|(x, _)| x).collect::<Vec<_>>(), truth_value.winners.iter().map(|(x, _)| x).collect::<Vec<_>>());
 
 	for Assignment { who, distribution } in assignments.clone() {
 		if let Some(float_assignments) = truth_value.assignments.iter().find(|x| x.0 == who) {

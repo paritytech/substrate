@@ -21,7 +21,7 @@
 use crate::mock::*;
 use crate::{
 	elect, equalize, build_support_map, is_score_better, helpers::*,
-	Support, StakedAssignment, Assignment, PhragmenResult,
+	Support, StakedAssignment, Assignment, PhragmenResult, ExtendedBalance,
 };
 use substrate_test_utils::assert_eq_uvec;
 use sp_runtime::{Perbill, Permill, Percent, PerU16};
@@ -590,7 +590,7 @@ fn assignment_convert_works() {
 	let staked = StakedAssignment {
 		who: 1 as AccountId,
 		distribution: vec![
-			(20, 100 as Balance),
+			(20, 100 as ExtendedBalance),
 			(30, 25),
 		],
 	};
@@ -645,7 +645,7 @@ mod compact {
 	use crate::generate_compact_solution_type;
 	use super::{AccountId, Balance};
 	// these need to come from the same dev-dependency `sp-phragmen`, not from the crate.
-	use sp_phragmen::{Assignment, StakedAssignment, Error as PhragmenError};
+	use sp_phragmen::{Assignment, StakedAssignment, Error as PhragmenError, ExtendedBalance};
 	use sp_std::{convert::{TryInto, TryFrom}, fmt::Debug};
 	use sp_runtime::Percent;
 
@@ -800,7 +800,7 @@ mod compact {
 		let assignments = vec![
 			StakedAssignment {
 				who: 2 as AccountId,
-				distribution: vec![(20, 100 as Balance)]
+				distribution: vec![(20, 100 as ExtendedBalance)]
 			},
 			StakedAssignment {
 				who: 4,
@@ -837,7 +837,7 @@ mod compact {
 			targets.iter().position(|x| x == a).map(TryInto::try_into).unwrap().ok()
 		};
 
-		let compacted = <TestCompact<u16, u16, Balance>>::from_staked(
+		let compacted = <TestCompact<u16, u16, ExtendedBalance>>::from_staked(
 			assignments.clone(),
 			voter_index,
 			target_index,
@@ -858,7 +858,7 @@ mod compact {
 			}
 		);
 
-		let max_of_fn = |_: &AccountId| -> Balance { 100u128 };
+		let max_of_fn = |_: &AccountId| -> Balance { 100 as Balance };
 		let voter_at = |a: u16| -> Option<AccountId> { voters.get(a as usize).cloned() };
 		let target_at = |a: u16| -> Option<AccountId> { targets.get(a as usize).cloned() };
 
@@ -876,7 +876,7 @@ mod compact {
 	fn compact_into_stake_must_report_overflow() {
 		// The last edge which is computed from the rest should ALWAYS be positive.
 		// in votes2
-		let compact = TestCompact::<u16, u16, Balance> {
+		let compact = TestCompact::<u16, u16, ExtendedBalance> {
 			votes1: Default::default(),
 			votes2: vec![(0, (1, 10), 2)],
 			..Default::default()
@@ -891,7 +891,7 @@ mod compact {
 		);
 
 		// in votes3 onwards
-		let compact = TestCompact::<u16, u16, Balance> {
+		let compact = TestCompact::<u16, u16, ExtendedBalance> {
 			votes1: Default::default(),
 			votes2: Default::default(),
 			votes3: vec![(0, [(1, 7), (2, 8)], 3)],
@@ -904,7 +904,7 @@ mod compact {
 		);
 
 		// Also if equal
-		let compact = TestCompact::<u16, u16, Balance> {
+		let compact = TestCompact::<u16, u16, ExtendedBalance> {
 			votes1: Default::default(),
 			votes2: Default::default(),
 			// 5 is total, we cannot leave none for 30 here.
@@ -953,13 +953,13 @@ mod compact {
 		let assignments = vec![
 			StakedAssignment {
 				who: 1 as AccountId,
-				distribution: (10..26).map(|i| (i as AccountId, i as Balance)).collect::<Vec<_>>(),
+				distribution: (10..26).map(|i| (i as AccountId, i as ExtendedBalance)).collect::<Vec<_>>(),
 			},
 		];
 
 		let entity_index = |a: &AccountId| -> Option<u16> { Some(*a as u16) };
 
-		let compacted = <TestCompact<u16, u16, Balance>>::from_staked(
+		let compacted = <TestCompact<u16, u16, ExtendedBalance>>::from_staked(
 			assignments.clone(),
 			entity_index,
 			entity_index,
@@ -970,11 +970,11 @@ mod compact {
 		let assignments = vec![
 			StakedAssignment {
 				who: 1 as AccountId,
-				distribution: (10..27).map(|i| (i as AccountId, i as Balance)).collect::<Vec<_>>(),
+				distribution: (10..27).map(|i| (i as AccountId, i as ExtendedBalance)).collect::<Vec<_>>(),
 			},
 		];
 
-		let compacted = <TestCompact<u16, u16, Balance>>::from_staked(
+		let compacted = <TestCompact<u16, u16, ExtendedBalance>>::from_staked(
 			assignments.clone(),
 			entity_index,
 			entity_index,
@@ -1012,7 +1012,7 @@ mod compact {
 		let assignments = vec![
 			StakedAssignment {
 				who: 1 as AccountId,
-				distribution: vec![(10, 100 as Balance), (11, 100)]
+				distribution: vec![(10, 100 as ExtendedBalance), (11, 100)]
 			},
 			StakedAssignment {
 				who: 2,
@@ -1027,7 +1027,7 @@ mod compact {
 			targets.iter().position(|x| x == a).map(TryInto::try_into).unwrap().ok()
 		};
 
-		let compacted = <TestCompact<u16, u16, Balance>>::from_staked(
+		let compacted = <TestCompact<u16, u16, ExtendedBalance>>::from_staked(
 			assignments.clone(),
 			voter_index,
 			target_index,
