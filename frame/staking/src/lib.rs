@@ -1848,7 +1848,7 @@ impl<T: Trait> Module<T> {
 		let current_era = Self::current_era().unwrap_or(0);
 		let history_depth = Self::history_depth();
 		let last_payout_era = current_era.saturating_sub(history_depth);
-		// Start by removing nominator history.
+		// Convert all ledgers to the new format.
 		for (hash, old_ledger) in StorageIterator::<OldStakingLedger<T::AccountId, BalanceOf<T>>>::new(b"Staking", b"Ledger").drain() {
 			let last_reward = old_ledger.last_reward.unwrap_or(0);
 			let new_ledger = StakingLedger {
@@ -1860,6 +1860,7 @@ impl<T: Trait> Module<T> {
 			};
 			put_storage_value(b"Staking", b"Ledger", &hash, new_ledger);
 		}
+
 		// Cleanup Nominator Storage
 		for (nominator, _) in Nominators::<T>::iter() {
 			if let Some(controller) = Self::bonded(nominator) {
@@ -1966,6 +1967,9 @@ impl<T: Trait> Module<T> {
 		let validator_reward_points = era_reward_points.individual.get(&ledger.stash)
 			.map(|points| *points)
 			.unwrap_or_else(|| Zero::zero());
+
+		// Nothing to do if they have no reward points.
+		if validator_reward_points.is_zero() { return Ok(())}
 
 		// This is the fraction of the total reward that the validator and the
 		// nominators will get.
