@@ -7322,6 +7322,7 @@ name = "sp-externalities"
 version = "0.8.0-alpha.5"
 dependencies = [
  "environmental",
+ "sp-stats",
  "sp-std",
  "sp-storage",
 ]
@@ -7468,6 +7469,7 @@ dependencies = [
  "sp-runtime-interface-proc-macro",
  "sp-runtime-interface-test-wasm",
  "sp-state-machine",
+ "sp-stats",
  "sp-std",
  "sp-wasm-interface",
  "static_assertions",
@@ -7576,7 +7578,6 @@ dependencies = [
  "sp-externalities",
  "sp-panic-handler",
  "sp-runtime",
- "sp-runtime-interface",
  "sp-stats",
  "sp-trie",
  "trie-db",
@@ -7585,10 +7586,9 @@ dependencies = [
 
 [[package]]
 name = "sp-stats"
-version = "0.8.0-alpha.3"
+version = "2.0.0-alpha.5"
 dependencies = [
  "parity-scale-codec",
- "sp-runtime-interface",
 ]
 
 [[package]]
