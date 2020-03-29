@@ -13,7 +13,7 @@ repository = "https://github.com/paritytech/substrate/"
 sc-network = { version = "0.8.0-alpha.5", path = "../" }
 log = "0.4.8"
 parking_lot = "0.10.0"
-futures = "0.3.1"
+futures = "0.3.4"
 futures-timer = "3.0.1"
 rand = "0.7.2"
 libp2p = { version = "0.16.2", default-features = false, features = ["libp2p-websocket"] }

@@ -31,7 +31,7 @@ pub use sc_transaction_graph as txpool;
 pub use crate::api::{FullChainApi, LightChainApi};
 
 use std::{collections::HashMap, sync::Arc, pin::Pin};
-use futures::{Future, FutureExt, future::ready, channel::oneshot};
+use futures::{prelude::*, future::ready, channel::oneshot};
 use parking_lot::Mutex;
 
 use sp_runtime::{
@@ -149,6 +149,27 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 		pool_api: Arc<PoolApi>,
 	) -> (Self, Option<Pin<Box<dyn Future<Output=()> + Send>>>) {
 		Self::with_revalidation_type(options, pool_api, RevalidationType::Full)
+	}
+
+	/// Create new basic transaction pool with provided api, for tests.
+	#[cfg(test)]
+	pub fn new_test(
+		pool_api: Arc<PoolApi>,
+	) -> (Self, Pin<Box<dyn Future<Output=()> + Send>>, intervalier::BackSignalControl) {
+		let pool = Arc::new(sc_transaction_graph::Pool::new(Default::default(), pool_api.clone()));
+		let (revalidation_queue, background_task, notifier) =
+			revalidation::RevalidationQueue::new_test(pool_api.clone(), pool.clone());
+		(
+			BasicPool {
+				api: pool_api,
+				pool,
+				revalidation_queue: Arc::new(revalidation_queue),
+				revalidation_strategy: Arc::new(Mutex::new(RevalidationStrategy::Always)),
+				ready_poll: Default::default(),
+			},
+			background_task,
+			notifier,
+		)
 	}
 
 	/// Create new basic transaction pool with provided api and custom

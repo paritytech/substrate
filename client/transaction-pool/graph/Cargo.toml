@@ -10,7 +10,7 @@ description = "Generic Transaction Pool"
 
 [dependencies]
 derive_more = "0.99.2"
-futures = "0.3.1"
+futures = "0.3.4"
 log = "0.4.8"
 parking_lot = "0.10.0"
 serde = { version = "1.0.101", features = ["derive"] }
@@ -24,7 +24,7 @@ linked-hash-map = "0.5.2"
 
 [dev-dependencies]
 assert_matches = "1.3.0"
-codec = { package = "parity-scale-codec", version = "1.2.0" }
+codec = { package = "parity-scale-codec", version = "1.3.0" }
 substrate-test-runtime = { version = "2.0.0-dev", path = "../../../test-utils/runtime" }
 criterion = "0.3"
 
