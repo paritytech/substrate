@@ -105,7 +105,7 @@
 //! valid behavior_ while _punishing any misbehavior or lack of availability_.
 //!
 //! Rewards must be claimed for each era before it gets too old by `$HISTORY_DEPTH` using the
-//! `payout_validator` call. Any account can call `payout_validator`, which pays the reward to
+//! `payout_stakers` call. Any account can call `payout_stakers`, which pays the reward to
 //! the validator as well as its nominators.
 //! Only the [`T::MaxNominatorRewardedPerValidator`] biggest stakers can claim their reward. This
 //! is to limit the i/o cost to mutate storage for each nominator's account.
@@ -1648,9 +1648,9 @@ decl_module! {
 		/// - Contains a limited number of reads and writes.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
-		fn payout_validator(origin, validator_stash: T::AccountId, era: EraIndex) -> DispatchResult {
+		fn payout_stakers(origin, validator_stash: T::AccountId, era: EraIndex) -> DispatchResult {
 			ensure_signed(origin)?;
-			Self::do_payout_validator(validator_stash, era)
+			Self::do_payout_stakers(validator_stash, era)
 		}
 
 		/// Rebond a portion of the stash scheduled to be unlocked.
@@ -1925,7 +1925,7 @@ impl<T: Trait> Module<T> {
 		<SnapshotNominators<T>>::kill();
 	}
 
-	fn do_payout_validator(
+	fn do_payout_stakers(
 		validator_stash: T::AccountId,
 		era: EraIndex,
 	) -> DispatchResult {
