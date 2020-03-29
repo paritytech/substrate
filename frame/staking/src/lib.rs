@@ -1990,13 +1990,13 @@ impl<T: Trait> Module<T> {
 		}
 		// If migrate_era is not populated, then you should use `payout_stakers`
 		let migrate_era = MigrateEra::get().ok_or(Error::<T>::InvalidEraToReward)?;
+		// This payout mechanism will only work for eras before the migration.
+		// Subsequent payouts should use `payout_stakers`.
+		ensure!(era < migrate_era, Error::<T>::InvalidEraToReward);
 		let current_era = CurrentEra::get().unwrap_or(0);
 		ensure!(era <= current_era, Error::<T>::InvalidEraToReward);
 		let history_depth = Self::history_depth();
 		ensure!(era >= current_era.saturating_sub(history_depth), Error::<T>::InvalidEraToReward);
-		// This payout mechanism will only work for eras before the migration.
-		// Subsequent payouts should use `payout_stakers`.
-		ensure!(current_era < migrate_era, Error::<T>::InvalidEraToReward);
 
 		// Note: if era has no reward to be claimed, era may be future. better not to update
 		// `nominator_ledger.last_reward` in this case.
@@ -2056,13 +2056,13 @@ impl<T: Trait> Module<T> {
 	fn do_payout_validator(who: T::AccountId, era: EraIndex) -> DispatchResult {
 		// If migrate_era is not populated, then you should use `payout_stakers`
 		let migrate_era = MigrateEra::get().ok_or(Error::<T>::InvalidEraToReward)?;
+		// This payout mechanism will only work for eras before the migration.
+		// Subsequent payouts should use `payout_stakers`.
+		ensure!(era < migrate_era, Error::<T>::InvalidEraToReward);
 		let current_era = CurrentEra::get().unwrap_or(0);
 		ensure!(era <= current_era, Error::<T>::InvalidEraToReward);
 		let history_depth = Self::history_depth();
 		ensure!(era >= current_era.saturating_sub(history_depth), Error::<T>::InvalidEraToReward);
-		// This payout mechanism will only work for eras before the migration.
-		// Subsequent payouts should use `payout_stakers`.
-		ensure!(current_era < migrate_era, Error::<T>::InvalidEraToReward);
 
 		// Note: if era has no reward to be claimed, era may be future. better not to update
 		// `ledger.last_reward` in this case.
@@ -2121,7 +2121,7 @@ impl<T: Trait> Module<T> {
 		if let Some(migrate_era) = MigrateEra::get() {
 			// This payout mechanism will only work for eras on and after the migration.
 			// Payouts before then should use `payout_nominator`/`payout_validator`.
-			ensure!(migrate_era <= current_era, Error::<T>::InvalidEraToReward);
+			ensure!(migrate_era <= era, Error::<T>::InvalidEraToReward);
 		}
 
 		// Note: if era has no reward to be claimed, era may be future. better not to update
