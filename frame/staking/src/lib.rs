@@ -1637,6 +1637,10 @@ decl_module! {
 			<Self as Store>::UnappliedSlashes::insert(&era, &unapplied);
 		}
 
+		/// **This extrinsic will be removed after `MigrationEra + HistoryDepth` has passed, giving
+		/// opportunity for users to claim all rewards before moving to Simple Payouts. After this
+		/// time, you should use `payout_stakers` instead.**
+		///
 		/// Make one nominator's payout for one era.
 		///
 		/// - `who` is the controller account of the nominator to pay out.
@@ -1696,10 +1700,6 @@ decl_module! {
 			Self::do_payout_validator(who, era)
 		}
 
-		/// **This extrinsic will be removed after `MigrationEra + HistoryDepth` has passed, giving
-		/// opportunity for users to claim all rewards before moving to Simple Payouts. After this
-		/// time, you should use `payout_stakers` instead.**
-		///
 		/// Pay out all the stakers behind a single validator for a single era.
 		///
 		/// - `validator_stash` is the stash account of the validator. Their nominators, up to
