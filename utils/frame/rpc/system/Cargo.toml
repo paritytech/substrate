@@ -10,7 +10,7 @@ description = "FRAME's system exposed over Substrate RPC"
 
 [dependencies]
 sc-client = { version = "0.8.0-alpha.5", path = "../../../../client/" }
-codec = { package = "parity-scale-codec", version = "1.2.0" }
+codec = { package = "parity-scale-codec", version = "1.3.0" }
 futures = "0.3.4"
 jsonrpc-core = "14.0.3"
 jsonrpc-core-client = "14.0.3"

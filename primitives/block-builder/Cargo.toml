@@ -12,7 +12,7 @@ description = "The block builder runtime api."
 sp-runtime = { version = "2.0.0-alpha.5", default-features = false, path = "../runtime" }
 sp-api = { version = "2.0.0-alpha.5", default-features = false, path = "../api" }
 sp-std = { version = "2.0.0-alpha.5", default-features = false, path = "../std" }
-codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false }
+codec = { package = "parity-scale-codec", version = "1.3.0", default-features = false }
 sp-inherents = { version = "2.0.0-alpha.5", default-features = false, path = "../inherents" }
 
 [features]

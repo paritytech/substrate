@@ -10,7 +10,7 @@ description = "A crate that hosts a common definitions that are relevant for the
 
 [dependencies]
 # This crate should not rely on any of the frame primitives.
-codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.3.0", default-features = false, features = ["derive"] }
 sp-std = { version = "2.0.0-alpha.5", default-features = false, path = "../../../primitives/std" }
 sp-runtime = { version = "2.0.0-alpha.5", default-features = false, path = "../../../primitives/runtime" }
 

@@ -9,7 +9,7 @@ repository = "https://github.com/paritytech/substrate/"
 description = "Substrate transaction pool implementation."
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "1.2.0" }
+codec = { package = "parity-scale-codec", version = "1.3.0" }
 derive_more = "0.99.2"
 futures = { version = "0.3.1", features = ["compat"] }
 futures-diagnose = "1.0"
@@ -23,7 +23,7 @@ sc-transaction-graph = { version = "2.0.0-alpha.5", path = "./graph" }
 sp-transaction-pool = { version = "2.0.0-alpha.5", path = "../../primitives/transaction-pool" }
 sc-client-api = { version = "2.0.0-alpha.5", path = "../api" }
 sp-blockchain = { version = "2.0.0-alpha.5", path = "../../primitives/blockchain" }
-futures-timer = "2.0"
+intervalier = "0.3"
 parity-util-mem = { version = "0.6.0", default-features = false, features = ["primitive-types"] }
 
 [dev-dependencies]

@@ -9,7 +9,7 @@ homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "1.2.0" }
+codec = { package = "parity-scale-codec", version = "1.3.0" }
 node-primitives = { version = "2.0.0-alpha.5", path = "../primitives" }
 node-runtime = { version = "2.0.0-alpha.5", path = "../runtime" }
 sc-executor = { version = "0.8.0-alpha.5", path = "../../../client/executor" }
