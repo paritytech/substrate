@@ -4349,7 +4349,7 @@ fn test_last_reward_migration() {
 				total: 100,
 				active: 100,
 				unlocking: vec![],
-				claimed_rewards: vec![],
+				claimed_rewards: vec![15,16,17,18,19,20,21,22,23],
 			})
 		);
 	});
