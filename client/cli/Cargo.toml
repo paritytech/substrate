@@ -44,6 +44,9 @@ parity-util-mem = { version = "0.6.0", default-features = false, features = ["pr
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
 rpassword = "4.0.1"
 
+[target.'cfg(target_family = "unix")'.dependencies]
+nix = "0.17.0"
+
 [dev-dependencies]
 tempfile = "3.1.0"
 

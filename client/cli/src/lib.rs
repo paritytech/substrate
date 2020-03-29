@@ -221,3 +221,21 @@ fn kill_color(s: &str) -> String {
 	}
 	RE.replace_all(s, "").to_string()
 }
+
+/// Reset the signal pipe (`SIGPIPE`) handler to the default one provided by the system.
+/// This will end the program on `SIGPIPE` instead of panicking.
+///
+/// This should be called before calling any cli method or printing any output.
+pub fn reset_signal_pipe_handler() -> Result<()> {
+	#[cfg(target_family = "unix")]
+	{
+		use nix::sys::signal;
+
+		unsafe {
+			signal::signal(signal::Signal::SIGPIPE, signal::SigHandler::SigDfl)
+				.map_err(|e| Error::Other(e.to_string()))?;
+		}
+	}
+
+	Ok(())
+}
