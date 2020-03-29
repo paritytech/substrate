@@ -214,87 +214,13 @@ impl ProvideRuntimeApi<Block> for TestApi {
 	}
 }
 
-impl Core<Block> for RuntimeApi {
-	fn Core_version_runtime_api_impl(
-		&self,
-		_: &BlockId<Block>,
-		_: ExecutionContext,
-		_: Option<()>,
-		_: Vec<u8>,
-	) -> Result<NativeOrEncoded<RuntimeVersion>> {
-		unimplemented!("Not required for testing!")
-	}
+sp_api::mock_impl_runtime_apis! {
+	impl GrandpaApi<Block> for RuntimeApi {
+		type Error = sp_blockchain::Error;
 
-	fn Core_execute_block_runtime_api_impl(
-		&self,
-		_: &BlockId<Block>,
-		_: ExecutionContext,
-		_: Option<Block>,
-		_: Vec<u8>,
-	) -> Result<NativeOrEncoded<()>> {
-		unimplemented!("Not required for testing!")
-	}
-
-	fn Core_initialize_block_runtime_api_impl(
-		&self,
-		_: &BlockId<Block>,
-		_: ExecutionContext,
-		_: Option<&<Block as BlockT>::Header>,
-		_: Vec<u8>,
-	) -> Result<NativeOrEncoded<()>> {
-		unimplemented!("Not required for testing!")
-	}
-}
-
-impl ApiErrorExt for RuntimeApi {
-	type Error = sp_blockchain::Error;
-}
-
-impl ApiExt<Block> for RuntimeApi {
-	type StateBackend = <
-		substrate_test_runtime_client::Backend as sc_client_api::backend::Backend<Block>
-	>::State;
-
-	fn map_api_result<F: FnOnce(&Self) -> result::Result<R, E>, R, E>(
-		&self,
-		_: F
-	) -> result::Result<R, E> {
-		unimplemented!("Not required for testing!")
-	}
-
-	fn runtime_version_at(&self, _: &BlockId<Block>) -> Result<RuntimeVersion> {
-		unimplemented!("Not required for testing!")
-	}
-
-	fn record_proof(&mut self) {
-		unimplemented!("Not required for testing!")
-	}
-
-	fn extract_proof(&mut self) -> Option<StorageProof> {
-		unimplemented!("Not required for testing!")
-	}
-
-	fn into_storage_changes(
-		&self,
-		_: &Self::StateBackend,
-		_: Option<&sp_api::ChangesTrieState<sp_api::HashFor<Block>, sp_api::NumberFor<Block>>>,
-		_: <Block as sp_api::BlockT>::Hash,
-	) -> std::result::Result<sp_api::StorageChanges<Self::StateBackend, Block>, String>
-		where Self: Sized
-	{
-		unimplemented!("Not required for testing!")
-	}
-}
-
-impl GrandpaApi<Block> for RuntimeApi {
-	fn GrandpaApi_grandpa_authorities_runtime_api_impl(
-		&self,
-		_: &BlockId<Block>,
-		_: ExecutionContext,
-		_: Option<()>,
-		_: Vec<u8>,
-	) -> Result<NativeOrEncoded<AuthorityList>> {
-		Ok(self.inner.genesis_authorities.clone()).map(NativeOrEncoded::Native)
+		fn grandpa_authorities(&self) -> AuthorityList {
+			self.inner.genesis_authorities.clone()
+		}
 	}
 }
 
