@@ -5822,6 +5822,7 @@ dependencies = [
  "lazy_static",
  "log 0.4.8",
  "names",
+ "nix",
  "parity-util-mem",
  "regex",
  "rpassword",
