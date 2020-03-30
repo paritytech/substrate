@@ -916,12 +916,12 @@ ServiceBuilder<
 			let is_validator = config.roles.is_authority();
 
 			let (import_stream, finality_stream) = (
-				client.import_notification_stream().map(|n| ChainEvent::NewBlock {
-					id: BlockId::Hash(n.hash),
-					header: n.header,
-					retracted: n.retracted,
-					is_new_best: n.is_new_best,
-				}),
+				client.all_blocks_notification_stream()
+					.map(|n| ChainEvent::BlockReceived {
+						header: n.header,
+						is_initial_sync: n.origin == BlockOrigin::NetworkInitialSync,
+						is_new_best: n.is_new_best,
+					}),
 				client.finality_notification_stream().map(|n| ChainEvent::Finalized {
 					hash: n.hash
 				})
@@ -929,10 +929,10 @@ ServiceBuilder<
 			let events = futures::stream::select(import_stream, finality_stream)
 				.for_each(move |event| {
 					// offchain worker is only interested in block import events
-					if let ChainEvent::NewBlock { ref header, is_new_best, .. } = event {
+					if let ChainEvent::BlockReceived { ref header, is_new_best, is_initial_sync, .. } = event {
 						let offchain = offchain.as_ref().and_then(|o| o.upgrade());
 						match offchain {
-							Some(offchain) if is_new_best => {
+							Some(offchain) if is_initial_sync || is_new_best => {
 								notifications_spawn_handle.spawn(
 									"offchain-on-block",
 									offchain.on_block_imported(

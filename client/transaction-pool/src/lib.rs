@@ -465,6 +465,10 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 					}
 				}.boxed()
 			}
+			ChainEvent::BlockReceived{ .. } => {
+				// nop, except for initial block sync, NewBlock handles this case
+				Box::pin(ready(()))
+			}
 		}
 	}
 }

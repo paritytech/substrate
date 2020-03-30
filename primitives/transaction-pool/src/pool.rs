@@ -256,6 +256,17 @@ pub enum ChainEvent<B: BlockT> {
 		/// List of retracted blocks ordered by block number.
 		retracted: Vec<B::Hash>,
 	},
+
+	/// A block has been received and is added to the chain
+	BlockReceived {
+		/// Header of the just imported block.
+		header: B::Header,
+		/// Is this the new best block.
+		is_new_best: bool,
+		/// A block event cause by an initial sync of a node.
+		is_initial_sync: bool,
+	},
+	
 	/// An existing block has been finalized.
 	Finalized {
 		/// Hash of just finalized block

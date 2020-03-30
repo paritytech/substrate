@@ -95,6 +95,7 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	storage_notifications: Mutex<StorageNotifications<Block>>,
 	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<BlockImportNotification<Block>>>>,
 	finality_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<FinalityNotification<Block>>>>,
+	all_blocks_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<AllBlocksNotification<Block>>>>,
 	// holds the block hash currently being imported. TODO: replace this with block queue
 	importing_block: RwLock<Option<Block::Hash>>,
 	block_rules: BlockRules<Block>,
@@ -279,6 +280,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			storage_notifications: Default::default(),
 			import_notification_sinks: Default::default(),
 			finality_notification_sinks: Default::default(),
+			all_blocks_notification_sinks: Default::default(),
 			importing_block: Default::default(),
 			block_rules: BlockRules::new(fork_blocks, bad_blocks),
 			execution_extensions,
@@ -742,20 +744,29 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 		operation.op.insert_aux(aux)?;
 
+
+		let header = import_headers.into_post();
+		let import_summary = ImportSummary {
+			hash,
+			origin,
+			header,
+			is_new_best,
+			storage_changes,
+			retracted,
+		};
+
+		self.notify_any_block_imported(
+			&import_summary
+		)?;
+
 		if make_notifications {
 			if finalized {
 				operation.notify_finalized.push(hash);
 			}
 
-			operation.notify_imported = Some(ImportSummary {
-				hash,
-				origin,
-				header: import_headers.into_post(),
-				is_new_best,
-				storage_changes,
-				retracted,
-			})
+			operation.notify_imported = Some(import_summary);
 		}
+
 
 		Ok(ImportResult::imported(is_new_best))
 	}
@@ -966,6 +977,21 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		};
 
 		self.import_notification_sinks.lock()
+			.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
+
+		Ok(())
+	}
+
+	fn notify_any_block_imported(&self, notify_import: &ImportSummary<Block>) -> sp_blockchain::Result<()> {
+
+		let notification = AllBlocksNotification::<Block> {
+			hash: notify_import.hash.clone(),
+			origin: notify_import.origin.clone(),
+			header: notify_import.header.clone(),
+			is_new_best: notify_import.is_new_best,
+		};
+
+		self.all_blocks_notification_sinks.lock()
 			.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
 
 		Ok(())
@@ -1772,6 +1798,12 @@ where
 	fn finality_notification_stream(&self) -> FinalityNotifications<Block> {
 		let (sink, stream) = mpsc::unbounded();
 		self.finality_notification_sinks.lock().push(sink);
+		stream
+	}
+
+	fn all_blocks_notification_stream(&self) -> AllBlocksNotifications<Block> {
+		let (sink, stream) = mpsc::unbounded();
+		self.all_blocks_notification_sinks.lock().push(sink);
 		stream
 	}
 
