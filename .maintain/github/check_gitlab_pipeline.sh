@@ -1,16 +1,18 @@
 #!/bin/bash
+SUBSTRATE_API_BASEURL="https://gitlab.parity.io/api/v4/projects/145"
 
-#TAG_NAME=$(echo "$GITHUB_REF" | sed -E 's_refs/tags/(.*)_\1_')
-PIPELINE_ID=$(curl -s https://gitlab.parity.io/api/v4/projects/145/pipelines | jq -r "map(select(.ref==\"$TAG_NAME\")) | .[0] | .id")
+TAG_NAME=$(echo "$GITHUB_REF" | sed -E 's_refs/tags/(.*)_\1_')
+PIPELINE_ID=$(curl -s $SUBSTRATE_API_BASEURL/pipelines | jq -r "map(select(.ref==\"$TAG_NAME\")) | .[0] | .id")
 if [ "$PIPELINE_ID" == "null" ]; then
   echo "[!] Pipeline for $TAG_NAME not found. Exiting."
   exit 1
 fi
-echo "::set-output name=pipeline::https://gitlab.parity.io/parity/substrate/pipelines/$PIPELINE_ID"
+
+echo "[+] Pipeline path: https://gitlab.parity.io/parity/substrate/pipelines/$PIPELINE_ID"
 
 # 130 minute job max
 for (( c=0; c < 130; c++ )); do
-  out=$(curl -s "https://gitlab.parity.io/api/v4/projects/145/pipelines/$PIPELINE_ID" | jq -r .status)
+  out=$(curl -s "$SUBSTRATE_API_BASEURL/pipelines/$PIPELINE_ID" | jq -r .status)
   case $out in
     "success")
       echo "[+] Pipeline $PIPELINE_ID for $TAG_NAME succeeded!"
