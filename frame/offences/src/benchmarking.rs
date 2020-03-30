@@ -33,7 +33,7 @@ const MAX_NOMINATORS: u32 = 1000;
 
 pub trait Trait: pallet_staking::Trait + crate::Trait + pallet_im_online::Trait {}
 
-pub fn create_offender<T: frame_system::Trait + pallet_session::Trait + pallet_staking::Trait>(n: u32) -> Result<T::AccountId, &'static str> {
+pub fn create_offender<T: frame_system::Trait + pallet_session::Trait + pallet_staking::Trait>(n: u32, nominators: u32) -> Result<T::AccountId, &'static str> {
 	let stash: T::AccountId = account("stash", n, 0);
 	let controller: T::AccountId = account("controller", n, 0);
 	let controller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(controller.clone());
@@ -48,7 +48,7 @@ pub fn create_offender<T: frame_system::Trait + pallet_session::Trait + pallet_s
 	let mut individual_exposures = vec![];
 
 	// Create n nominators
-	for j in 0 .. n {
+	for j in 0 .. nominators {
 		let nominator_stash: T::AccountId = account("nominator stash", n * MAX_NOMINATORS + j, 0);
 		let nominator_controller: T::AccountId = account("nominator controller", n * MAX_NOMINATORS + j, 0);
 		let nominator_controller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(nominator_controller.clone());
@@ -77,15 +77,17 @@ benchmarks! {
 	_ {
 		let r in 1 .. MAX_REPORTERS => ();
 		let o in 1 .. MAX_OFFENDERS => ();
+		let n in 1 .. MAX_OFFENDERS => ();
 	}
 
 	report_offence {
 		let r in ...;
 		let o in ...;
+		let n in ...;
 
 		let mut offenders: Vec<T::AccountId> = vec![];
 		for i in 0 .. o {
-			let offender = create_offender::<T>(i)?;
+			let offender = create_offender::<T>(i, n)?;
 			offenders.push(offender);
 		}
 
