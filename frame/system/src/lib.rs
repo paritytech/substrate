@@ -366,7 +366,7 @@ decl_storage! {
 		ExtrinsicData get(fn extrinsic_data): map hasher(twox_64_concat) u32 => Vec<u8>;
 
 		/// The current block number being processed. Set by `execute_block`.
-		Number get(fn block_number) build(|_| 1.into()): T::BlockNumber;
+		Number get(fn block_number) build(|_| T::BlockNumber::zero()): T::BlockNumber;
 
 		/// Hash of the previous block.
 		ParentHash get(fn parent_hash) build(|_| hash69()): T::Hash;
@@ -751,7 +751,7 @@ impl<T: Trait> Module<T> {
 	pub fn deposit_event_indexed(topics: &[T::Hash], event: T::Event) {
 		let block_no = Self::block_number();
 		// Don't populate events on genesis.
-		if block_no == T::BlockNumber::one() { return }
+		if block_no == T::BlockNumber::zero() { return }
 
 		let phase = ExecutionPhase::get().unwrap_or_default();
 		let event = EventRecord {
@@ -2044,6 +2044,7 @@ mod tests {
 		let mut ext = new_test_ext();
 		ext.register_extension(sp_core::traits::CallInWasmExt::new(executor));
 		ext.execute_with(|| {
+			System::set_block_number(1);
 			System::set_code(
 				RawOrigin::Root.into(),
 				substrate_test_runtime_client::runtime::WASM_BINARY.to_vec(),
