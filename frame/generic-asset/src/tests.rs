@@ -1113,6 +1113,7 @@ fn update_permission_should_raise_event() {
 		.free_balance((staking_asset_id, origin, initial_balance))
 		.build()
 		.execute_with(|| {
+			System::set_block_number(1);
 			assert_ok!(GenericAsset::create(
 				Origin::signed(origin),
 				AssetOptions {
@@ -1157,6 +1158,7 @@ fn mint_should_raise_event() {
 		.free_balance((staking_asset_id, origin, initial_balance))
 		.build()
 		.execute_with(|| {
+			System::set_block_number(1);
 			assert_ok!(GenericAsset::create(
 				Origin::signed(origin),
 				AssetOptions {
@@ -1195,6 +1197,7 @@ fn burn_should_raise_event() {
 		.free_balance((staking_asset_id, origin, initial_balance))
 		.build()
 		.execute_with(|| {
+			System::set_block_number(1);
 			assert_ok!(GenericAsset::create(
 				Origin::signed(origin),
 				AssetOptions {
