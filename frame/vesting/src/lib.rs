@@ -462,7 +462,7 @@ mod tests {
 			.existential_deposit(256)
 			.build()
 			.execute_with(|| {
-				assert_eq!(System::block_number(), 1);
+				System::set_block_number(1);
 				let user1_free_balance = Balances::free_balance(&1);
 				let user2_free_balance = Balances::free_balance(&2);
 				let user12_free_balance = Balances::free_balance(&12);
@@ -521,7 +521,7 @@ mod tests {
 			.existential_deposit(10)
 			.build()
 			.execute_with(|| {
-				assert_eq!(System::block_number(), 1);
+				System::set_block_number(1);
 				let user1_free_balance = Balances::free_balance(&1);
 				assert_eq!(user1_free_balance, 100); // Account 1 has free balance
 				// Account 1 has only 5 units vested at block 1 (plus 50 unvested)
@@ -539,7 +539,7 @@ mod tests {
 			.existential_deposit(10)
 			.build()
 			.execute_with(|| {
-				assert_eq!(System::block_number(), 1);
+				System::set_block_number(1);
 				let user1_free_balance = Balances::free_balance(&1);
 				assert_eq!(user1_free_balance, 100); // Account 1 has free balance
 				// Account 1 has only 5 units vested at block 1 (plus 50 unvested)
@@ -555,7 +555,7 @@ mod tests {
 			.existential_deposit(10)
 			.build()
 			.execute_with(|| {
-				assert_eq!(System::block_number(), 1);
+				System::set_block_number(1);
 				let user1_free_balance = Balances::free_balance(&1);
 				assert_eq!(user1_free_balance, 100); // Account 1 has free balance
 				// Account 1 has only 5 units vested at block 1 (plus 50 unvested)
@@ -571,7 +571,7 @@ mod tests {
 			.existential_deposit(10)
 			.build()
 			.execute_with(|| {
-				assert_eq!(System::block_number(), 1);
+				System::set_block_number(1);
 				assert_ok!(Balances::transfer(Some(3).into(), 1, 100));
 				assert_ok!(Balances::transfer(Some(3).into(), 2, 100));
 
@@ -599,7 +599,7 @@ mod tests {
 			.existential_deposit(256)
 			.build()
 			.execute_with(|| {
-				assert_eq!(System::block_number(), 1);
+				System::set_block_number(1);
 				let user12_free_balance = Balances::free_balance(&12);
 
 				assert_eq!(user12_free_balance, 2560); // Account 12 has free balance
@@ -625,7 +625,7 @@ mod tests {
 			.existential_deposit(256)
 			.build()
 			.execute_with(|| {
-				assert_eq!(System::block_number(), 1);
+				System::set_block_number(1);
 				let user3_free_balance = Balances::free_balance(&3);
 				let user4_free_balance = Balances::free_balance(&4);
 				assert_eq!(user3_free_balance, 256 * 30);
@@ -669,7 +669,7 @@ mod tests {
 			.existential_deposit(256)
 			.build()
 			.execute_with(|| {
-				assert_eq!(System::block_number(), 1);
+				System::set_block_number(1);
 				let user2_free_balance = Balances::free_balance(&2);
 				let user4_free_balance = Balances::free_balance(&4);
 				assert_eq!(user2_free_balance, 256 * 20);
