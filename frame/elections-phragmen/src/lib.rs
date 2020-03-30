@@ -153,7 +153,7 @@ decl_storage! {
 	trait Store for Module<T: Trait> as PhragmenElection {
 		// ---- State
 		/// The current elected membership. Sorted based on account id.
-		pub Members get(fn members): Vec<(T::AccountId, BalanceOf<T>)>;
+		pub Members get(fn members) config(): Vec<(T::AccountId, BalanceOf<T>)>;
 		/// The current runners_up. Sorted based on low to high merit (worse to best runner).
 		pub RunnersUp get(fn runners_up): Vec<(T::AccountId, BalanceOf<T>)>;
 		/// The total number of vote rounds that have happened, excluding the upcoming one.

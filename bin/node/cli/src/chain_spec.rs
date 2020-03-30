@@ -20,9 +20,10 @@ use sc_chain_spec::ChainSpecExtension;
 use sp_core::{Pair, Public, crypto::UncheckedInto, sr25519};
 use serde::{Serialize, Deserialize};
 use node_runtime::{
-	AuthorityDiscoveryConfig, BabeConfig, BalancesConfig, ContractsConfig, CouncilConfig, DemocracyConfig,
-	GrandpaConfig, ImOnlineConfig, SessionConfig, SessionKeys, StakerStatus, StakingConfig,
-	IndicesConfig, SocietyConfig, SudoConfig, SystemConfig, TechnicalCommitteeConfig, WASM_BINARY,
+	AuthorityDiscoveryConfig, BabeConfig, BalancesConfig, ContractsConfig, CouncilConfig,
+	DemocracyConfig,GrandpaConfig, ImOnlineConfig, SessionConfig, SessionKeys, StakerStatus,
+	StakingConfig, ElectionsPhragmenConfig, IndicesConfig, SocietyConfig, SudoConfig, SystemConfig,
+	TechnicalCommitteeConfig, WASM_BINARY,
 };
 use node_runtime::Block;
 use node_runtime::constants::currency::*;
@@ -270,6 +271,14 @@ pub fn testnet_genesis(
 			.. Default::default()
 		}),
 		pallet_democracy: Some(DemocracyConfig::default()),
+		pallet_elections_phragmen: Some(ElectionsPhragmenConfig {
+			members: endowed_accounts.iter()
+						.take((num_endowed_accounts + 1) / 2)
+						.cloned().
+						.map(|member| (member, STASH))
+						.collect(),
+			phantom: Default::default(),
+		})
 		pallet_collective_Instance1: Some(CouncilConfig {
 			members: endowed_accounts.iter()
 						.take((num_endowed_accounts + 1) / 2)
