@@ -328,7 +328,7 @@ fn build_network_future<
 	status_sinks: Arc<Mutex<status_sinks::StatusSinks<(NetworkStatus<B>, NetworkState)>>>,
 	mut rpc_rx: mpsc::UnboundedReceiver<sc_rpc::system::Request<B>>,
 	should_have_peers: bool,
-	should_announce_imported_blocks: bool,
+	announce_imported_blocks: bool,
 ) -> impl Future<Output = ()> {
 	let mut imported_blocks_stream = client.import_notification_stream().fuse();
 	let mut finality_notification_stream = client.finality_notification_stream().fuse();
@@ -340,7 +340,7 @@ fn build_network_future<
 		while let Poll::Ready(Some(notification)) = Pin::new(&mut imported_blocks_stream).poll_next(cx) {
 			network.on_block_imported(notification.header, notification.is_new_best);
 
-			if should_announce_imported_blocks {
+			if announce_imported_blocks {
 				network.service().announce_block(notification.hash, Vec::new());
 			}
 		}
