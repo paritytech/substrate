@@ -288,6 +288,7 @@ macro_rules! __decl_generic_event {
 		}
 		impl<$( $generic_param ),* $(, $instance)?> RawEvent<$( $generic_param ),* $(, $instance)?> {
 			#[allow(dead_code)]
+			#[doc(hidden)]
 			pub fn metadata() -> &'static [$crate::event::EventMetadata] {
 				$crate::__events_to_metadata!(; $( $events )* )
 			}

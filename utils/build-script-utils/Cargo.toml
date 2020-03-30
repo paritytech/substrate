@@ -9,3 +9,6 @@ repository = "https://github.com/paritytech/substrate/"
 description = "Crate with utility functions for `build.rs` scripts."
 
 [dependencies]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
