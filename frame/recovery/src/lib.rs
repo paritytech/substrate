@@ -645,6 +645,7 @@ decl_module! {
 		/// # <weight>
 		/// - One storage mutation to check account is recovered by `who`. O(1)
 		/// # </weight>
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn cancel_recovered(origin, account: T::AccountId) {
 			let who = ensure_signed(origin)?;
 			// Check `who` is allowed to make a call on behalf of `account`

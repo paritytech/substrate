@@ -249,6 +249,7 @@ impl<Hash: hash::Hash + Eq + Clone, Ex> FutureTransactions<Hash, Ex> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use sp_runtime::transaction_validity::TransactionSource;
 
 	#[test]
 	fn can_track_heap_size() {
@@ -263,6 +264,7 @@ mod tests {
 				requires: vec![vec![1], vec![2]],
 				provides: vec![vec![3], vec![4]],
 				propagate: true,
+				source: TransactionSource::External,
 			}.into(),
 			missing_tags: vec![vec![1u8], vec![2u8]].into_iter().collect(),
 			imported_at: std::time::Instant::now(),

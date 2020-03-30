@@ -19,7 +19,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 /// Copied from `sp-runtime` and documented there.
-#[cfg(test)]
+#[macro_export]
 macro_rules! assert_eq_error_rate {
 	($x:expr, $y:expr, $error:expr $(,)?) => {
 		assert!(
@@ -40,5 +40,17 @@ mod fixed64;
 mod rational128;
 
 pub use fixed64::Fixed64;
-pub use per_things::{PerThing, Percent, Permill, Perbill, Perquintill};
+pub use per_things::{PerThing, Percent, PerU16, Permill, Perbill, Perquintill};
 pub use rational128::Rational128;
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn peru16_rational_does_not_overflow() {
+		// A historical example that will panic only for per_thing type that are created with
+		// maximum capacity of their type, e.g. PerU16.
+		let _ = PerU16::from_rational_approximation(17424870u32, 17424870);
+	}
+}

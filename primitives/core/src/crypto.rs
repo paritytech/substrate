@@ -18,6 +18,7 @@
 //! Cryptographic utilities.
 // end::description[]
 
+use crate::{sr25519, ed25519};
 use sp_std::hash::Hash;
 use sp_std::vec::Vec;
 #[cfg(feature = "std")]
@@ -554,6 +555,7 @@ pub trait Public: AsRef<[u8]> + AsMut<[u8]> + Default + Derive + CryptoType + Pa
 
 /// An opaque 32-byte cryptographic identifier.
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Default, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Hash))]
 pub struct AccountId32([u8; 32]);
 
 impl UncheckedFrom<crate::hash::H256> for AccountId32 {
@@ -611,6 +613,18 @@ impl<'a> sp_std::convert::TryFrom<&'a [u8]> for AccountId32 {
 impl From<AccountId32> for [u8; 32] {
 	fn from(x: AccountId32) -> [u8; 32] {
 		x.0
+	}
+}
+
+impl From<sr25519::Public> for AccountId32 {
+	fn from(k: sr25519::Public) -> Self {
+		k.0.into()
+	}
+}
+
+impl From<ed25519::Public> for AccountId32 {
+	fn from(k: ed25519::Public) -> Self {
+		k.0.into()
 	}
 }
 
@@ -961,6 +975,8 @@ pub mod key_types {
 	pub const IM_ONLINE: KeyTypeId = KeyTypeId(*b"imon");
 	/// Key type for AuthorityDiscovery module, built-in.
 	pub const AUTHORITY_DISCOVERY: KeyTypeId = KeyTypeId(*b"audi");
+	/// Key type for staking, built-in.
+	pub const STAKING: KeyTypeId = KeyTypeId(*b"stak");
 	/// A key type ID useful for tests.
 	pub const DUMMY: KeyTypeId = KeyTypeId(*b"dumy");
 }

@@ -17,8 +17,6 @@
 //! Schnorrkel-based VRF.
 
 use codec::{Encode, Decode};
-#[cfg(feature = "std")]
-use sp_core::U512;
 use sp_runtime::RuntimeDebug;
 use sp_std::ops::{Deref, DerefMut};
 #[cfg(feature = "std")]
@@ -27,6 +25,8 @@ use std::convert::TryFrom;
 use codec::EncodeLike;
 #[cfg(feature = "std")]
 use schnorrkel::errors::MultiSignatureStage;
+#[cfg(feature = "std")]
+use sp_core::U512;
 
 #[cfg(feature = "std")]
 pub use schnorrkel::{SignatureError, vrf::{VRF_PROOF_LENGTH, VRF_OUTPUT_LENGTH}};

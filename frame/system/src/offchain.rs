@@ -490,4 +490,3 @@ pub trait SignedPayload<T: SigningTypes>: Encode {
 		self.using_encoded(|payload| C::verify(payload, self.public(), signature))
 	}
 }
-

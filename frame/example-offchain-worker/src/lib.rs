@@ -60,7 +60,9 @@ use sp_runtime::{
 	RuntimeDebug,
 	offchain::{http, Duration, storage::StorageValueRef},
 	traits::Zero,
-	transaction_validity::{InvalidTransaction, ValidTransaction, TransactionValidity},
+	transaction_validity::{
+		InvalidTransaction, ValidTransaction, TransactionValidity, TransactionSource,
+	},
 };
 use codec::{Encode, Decode};
 use sp_std::{vec, vec::Vec};
@@ -610,7 +612,10 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 	/// By default unsigned transactions are disallowed, but implementing the validator
 	/// here we make sure that some particular calls (the ones produced by offchain worker)
 	/// are being whitelisted and marked as valid.
-	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
+	fn validate_unsigned(
+		_source: TransactionSource,
+		call: &Self::Call,
+	) -> TransactionValidity {
 		// Firstly let's check that we call the right function.
 		if let Call::submit_price_unsigned_with_signed_payload(
 			ref payload, ref signature

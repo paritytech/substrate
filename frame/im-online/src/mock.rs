@@ -177,6 +177,7 @@ impl pallet_session::Trait for Runtime {
 	type Keys = UintAuthorityId;
 	type Event = ();
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
+	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
 }
 
 impl pallet_session::historical::Trait for Runtime {
