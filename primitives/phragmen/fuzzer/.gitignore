@@ -1,4 +1,2 @@
-
-target
-corpus
-artifacts
+hfuzz_target
+hfuzz_workspace

@@ -88,18 +88,13 @@ pub enum Error {
 	CompactInvalidIndex,
 }
 
-/// A type which is used in the API of this crate as a numeric representation of a balance (stake),
-/// down casted to u64 for same computation.
+/// A type which is used in the API of this crate as a numeric weight of a vote, most of then the
+/// stake of the voter.
 ///
 /// `sp_phragmen` uses this value and converts it to [`ExtendedBalance`] for computation.
 pub type VoteWeight = u64;
 
-/// A type in which performing operations on balances and stakes of candidates and voters are safe.
-///
-/// This module's functions expect a [`Balance`] type which is immediately casted into
-/// [`ExtendedBalance`].
-///
-/// [`Balance`] types converted to [`ExtendedBalance`] are referred to as `VoteWeight`.
+/// A type in which performing operations on vote weights are safe.
 pub type ExtendedBalance = u128;
 
 /// The score of an assignment. This can be computed from the support map via [`evaluate_support`].

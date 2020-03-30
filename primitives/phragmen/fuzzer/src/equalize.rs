@@ -78,10 +78,6 @@ fn generate_random_phragmen_result(
 
 fn main() {
 	fuzz!(|_data: (u64, u64, u64, u64)| {
-		// let (num_targets, num_voters, iterations, to_elect) = data;
-		// if iterations > 20 || to_elect > num_targets || num_targets > num_voters {
-		// 		return
-		// }
 		let num_targets = rr(50, 1000);
 		let iterations = rr(1, 20);
 		let num_voters = rr(50, 2000);

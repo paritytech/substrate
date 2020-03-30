@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Fuzzing fro the reduce algorithm.
+//! Fuzzing for the reduce algorithm.
 //!
 //! It that reduce always return a new set og edges in which the bound is kept (`edges_after <= m +
 //! n,`) and the result must effectively be the same, meaning that the same support map should be
