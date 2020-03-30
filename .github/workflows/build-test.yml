@@ -1,0 +1,61 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Add wasm toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: nightly
+        target: wasm32-unknown-unknown
+        override: true
+    - name: Checkout master
+      uses: actions/checkout@v2
+    - name: Build
+      run: cargo build --release
+    - name: Upload artifact
+      uses: actions/upload-artifact@v1
+      with:
+        name: ubuntu-18.04-substrate
+        path: target/release/substrate
+  
+  test-bins:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Add wasm toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: nightly
+        target: wasm32-unknown-unknown
+        override: true
+    - name: Checkout master
+      uses: actions/checkout@v2
+    - name: Tests
+      run: cargo test --bins
+
+#  test-lib:
+#
+#    runs-on: ubuntu-latest
+#
+#    steps:
+#    - name: Add wasm toolchain
+#      uses: actions-rs/toolchain@v1
+#      with:
+#        toolchain: nightly
+#        target: wasm32-unknown-unknown
+#        override: true
+#    - name: Checkout master
+#      uses: actions/checkout@v2
+#    - name: Tests
+#      run: cargo test --lib
