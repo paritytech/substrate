@@ -1,5 +1,5 @@
 # A github action to track the status of the gitlab pipeline for tagged
-# releases, and cancel the release/create a new PR if it fails
+# releases, and cancel the release/create a new issue if it fails
 
 name: Monitor gitlab pipeline status
 
@@ -20,7 +20,7 @@ jobs:
         id: monitor_pipeline
         env:
           TAGGER: ${{ github.event.pusher.name }}
-      - name: Create PR
+      - name: Create Issue
         if: failure()
         uses: JasonEtco/create-an-issue@v2
         with:
