@@ -12,3 +12,6 @@ documentation = "https://docs.rs/sp-panic-handler"
 [dependencies]
 backtrace = "0.3.38"
 log = "0.4.8"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
