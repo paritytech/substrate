@@ -983,7 +983,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	}
 
 	fn notify_any_block_imported(&self, notify_import: &ImportSummary<Block>) -> sp_blockchain::Result<()> {
-
 		let notification = AllBlocksNotification::<Block> {
 			hash: notify_import.hash.clone(),
 			origin: notify_import.origin.clone(),
