@@ -22,7 +22,7 @@ use serde::{Serialize, Deserialize};
 use node_runtime::{
 	AuthorityDiscoveryConfig, BabeConfig, BalancesConfig, ContractsConfig, CouncilConfig,
 	DemocracyConfig,GrandpaConfig, ImOnlineConfig, SessionConfig, SessionKeys, StakerStatus,
-	StakingConfig, ElectionsPhragmenConfig, IndicesConfig, SocietyConfig, SudoConfig, SystemConfig,
+	StakingConfig, ElectionsConfig, IndicesConfig, SocietyConfig, SudoConfig, SystemConfig,
 	TechnicalCommitteeConfig, WASM_BINARY,
 };
 use node_runtime::Block;
@@ -271,14 +271,13 @@ pub fn testnet_genesis(
 			.. Default::default()
 		}),
 		pallet_democracy: Some(DemocracyConfig::default()),
-		pallet_elections_phragmen: Some(ElectionsPhragmenConfig {
+		pallet_elections_phragmen: Some(ElectionsConfig {
 			members: endowed_accounts.iter()
 						.take((num_endowed_accounts + 1) / 2)
-						.cloned().
+						.cloned()
 						.map(|member| (member, STASH))
 						.collect(),
-			phantom: Default::default(),
-		})
+		}),
 		pallet_collective_Instance1: Some(CouncilConfig {
 			members: endowed_accounts.iter()
 						.take((num_endowed_accounts + 1) / 2)
