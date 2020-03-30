@@ -325,7 +325,6 @@ pub type SupportMap<A> = BTreeMap<A, Support<A>>;
 ///   `None` is returned.
 /// * `initial_candidates`: candidates list to be elected from.
 /// * `initial_voters`: voters list.
-/// * `stake_of`: something that can return the stake stake of a particular candidate or voter.
 ///
 /// This function does not strip out candidates who do not have any backing stake. It is the
 /// responsibility of the caller to make sure only those candidates who have a sensible economic
@@ -638,25 +637,23 @@ pub fn is_score_better(this: PhragmenScore, that: PhragmenScore) -> bool {
 /// rounds. The number of rounds and the maximum diff-per-round tolerance can be tuned through input
 /// parameters.
 ///
-/// No value is returned from the function and the `supports` parameter is updated.
+/// Returns the number of iterations that were preformed.
 ///
 /// - `assignments`: exactly the same is the output of phragmen.
 /// - `supports`: mutable reference to s `SupportMap`. This parameter is updated.
 /// - `tolerance`: maximum difference that can occur before an early quite happens.
 /// - `iterations`: maximum number of iterations that will be processed.
-/// - `stake_of`: something that can return the stake stake of a particular candidate or voter.
 pub fn equalize<AccountId>(
 	mut assignments: Vec<(StakedAssignment<AccountId>, VoteWeight)>,
 	supports: &mut SupportMap<AccountId>,
 	tolerance: ExtendedBalance,
 	iterations: usize,
-) where
-	AccountId: Ord + Clone,
-{
-	// prepare the data for equalize
-	for _i in 0..iterations {
-		let mut max_diff = 0;
+) -> usize where AccountId: Ord + Clone {
+	if iterations == 0 { return 0; }
 
+	let mut i = 0 ;
+	loop {
+		let mut max_diff = 0;
 		for (StakedAssignment { who, distribution }, voter_budget) in assignments.iter_mut() {
 			let diff = do_equalize(
 				who,
@@ -668,8 +665,9 @@ pub fn equalize<AccountId>(
 			if diff > max_diff { max_diff = diff; }
 		}
 
-		if max_diff < tolerance {
-			break;
+		i += 1;
+		if max_diff <= tolerance || i == iterations {
+			break i;
 		}
 	}
 }

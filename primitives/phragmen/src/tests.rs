@@ -110,49 +110,8 @@ fn phragmen_poc_works() {
 			},
 		]
 	);
-}
 
-#[test]
-fn phragmen_poc_works_with_equalise() {
-	let candidates = vec![1, 2, 3];
-	let voters = vec![
-		(10, vec![1, 2]),
-		(20, vec![1, 3]),
-		(30, vec![2, 3]),
-	];
-
-	let stake_of = create_stake_of(&[(10, 10), (20, 20), (30, 30)]);
-	let PhragmenResult { winners, assignments } = elect::<_, Perbill>(
-		2,
-		2,
-		candidates,
-		voters.iter().map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone())).collect::<Vec<_>>(),
-	).unwrap();
-
-	assert_eq_uvec!(winners, vec![(2, 40), (3, 50)]);
 	let staked = assignment_ratio_to_staked(assignments, &stake_of);
-
-	assert_eq_uvec!(
-		staked,
-		vec![
-			StakedAssignment {
-				who: 10u64,
-				distribution: vec![(2, 10)],
-			},
-			StakedAssignment {
-				who: 20,
-				distribution: vec![(3, 20)],
-			},
-			StakedAssignment {
-				who: 30,
-				distribution: vec![
-					(2, 15),
-					(3, 15),
-				],
-			},
-		]
-	);
-
 	let winners = to_without_backing(winners);
 	let mut support_map = build_support_map::<AccountId>(&winners, &staked).0;
 
@@ -642,8 +601,8 @@ fn score_comparison_is_lexicographical() {
 
 mod compact {
 	use codec::{Decode, Encode};
-	use crate::generate_compact_solution_type;
-	use super::{AccountId, Balance};
+	use crate::{generate_compact_solution_type, VoteWeight};
+	use super::{AccountId};
 	// these need to come from the same dev-dependency `sp-phragmen`, not from the crate.
 	use sp_phragmen::{Assignment, StakedAssignment, Error as PhragmenError, ExtendedBalance};
 	use sp_std::{convert::{TryInto, TryFrom}, fmt::Debug};
@@ -858,7 +817,7 @@ mod compact {
 			}
 		);
 
-		let max_of_fn = |_: &AccountId| -> Balance { 100 as Balance };
+		let max_of_fn = |_: &AccountId| -> VoteWeight { 100 };
 		let voter_at = |a: u16| -> Option<AccountId> { voters.get(a as usize).cloned() };
 		let target_at = |a: u16| -> Option<AccountId> { targets.get(a as usize).cloned() };
 
@@ -883,7 +842,7 @@ mod compact {
 		};
 
 		let entity_at = |a: u16| -> Option<AccountId> { Some(a as AccountId) };
-		let max_of = |_: &AccountId| -> Balance { 5 };
+		let max_of = |_: &AccountId| -> VoteWeight { 5 };
 
 		assert_eq!(
 			compact.into_staked(&max_of, &entity_at, &entity_at).unwrap_err(),

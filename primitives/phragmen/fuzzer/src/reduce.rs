@@ -14,6 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Fuzzing fro the reduce algorithm.
+//!
+//! It that reduce always return a new set og edges in which the bound is kept (`edges_after <= m +
+//! n,`) and the result must effectively be the same, meaning that the same support map should be
+//! computable from both.
+//!
 //! # Running
 //!
 //! Run with `cargo hfuzz run reduce`. `honggfuzz`.
@@ -24,6 +30,7 @@
 //! `cargo hfuzz run-debug reduce hfuzz_workspace/reduce/*.fuzz`.
 
 use honggfuzz::fuzz;
+
 use sp_phragmen::{StakedAssignment, ExtendedBalance, build_support_map, reduce};
 use rand::{self, Rng};
 
@@ -34,17 +41,15 @@ type AccountId = u64;
 const KSM: Balance = 1_000_000_000_000;
 
 fn main() {
-	loop {
-		fuzz!(|_data: _| {
-	 		let (assignments, winners) = generate_random_phragmen_assignment(
-	 			rr(100, 1000),
-	 			rr(100, 2000),
-	 			8,
-	 			8,
-	 		);
-			reduce_and_compare(&assignments, &winners);
-	 	});
-	}
+	fuzz!(|_data: &[u8]| {
+		let (assignments, winners) = generate_random_phragmen_assignment(
+			rr(100, 1000),
+			rr(100, 2000),
+			8,
+			8,
+		);
+		reduce_and_compare(&assignments, &winners);
+	});
 }
 
 fn generate_random_phragmen_assignment(

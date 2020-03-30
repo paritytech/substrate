@@ -133,10 +133,6 @@ fn do_phragmen(
 		voters.push((acc, stake, targets));
 	});
 
-	let stake_of = |who: &AccountId| -> VoteWeight {
-		*stake_of_tree.get(who).unwrap()
-	};
-
 	b.iter(|| {
 		let PhragmenResult { winners, assignments } = sp_phragmen::elect::<AccountId, Perbill>(
 			to_elect,
@@ -144,6 +140,10 @@ fn do_phragmen(
 			candidates.clone(),
 			voters.clone(),
 		).unwrap();
+
+		let stake_of = |who: &AccountId| -> VoteWeight {
+			*stake_of_tree.get(who).unwrap()
+		};
 
 		// Do the benchmarking with equalize.
 		if eq_iters > 0 {
