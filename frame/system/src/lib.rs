@@ -366,7 +366,7 @@ decl_storage! {
 		ExtrinsicData get(fn extrinsic_data): map hasher(twox_64_concat) u32 => Vec<u8>;
 
 		/// The current block number being processed. Set by `execute_block`.
-		Number get(fn block_number) build(|_| T::BlockNumber::zero()): T::BlockNumber;
+		Number get(fn block_number): T::BlockNumber;
 
 		/// Hash of the previous block.
 		ParentHash get(fn parent_hash) build(|_| hash69()): T::Hash;
@@ -751,7 +751,7 @@ impl<T: Trait> Module<T> {
 	pub fn deposit_event_indexed(topics: &[T::Hash], event: T::Event) {
 		let block_number = Self::block_number();
 		// Don't populate events on genesis.
-		if block_number == T::BlockNumber::zero() { return }
+		if block_number.is_zero() { return }
 
 		let phase = ExecutionPhase::get().unwrap_or_default();
 		let event = EventRecord {
