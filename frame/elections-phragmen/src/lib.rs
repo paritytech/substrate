@@ -1537,10 +1537,9 @@ mod tests {
 			assert_eq!(balances(&5), (45, 5));
 
 			assert_ok!(Elections::report_defunct_voter(Origin::signed(5), 3));
-			assert_eq!(
-				System::events()[7].event,
-				Event::elections(RawEvent::VoterReported(3, 5, true))
-			);
+			assert!(System::events().iter().any(|event| {
+				event.event == Event::elections(RawEvent::VoterReported(3, 5, true))
+			}));
 
 			assert_eq!(balances(&3), (28, 0));
 			assert_eq!(balances(&5), (47, 5));
@@ -1566,10 +1565,9 @@ mod tests {
 			assert_eq!(balances(&5), (45, 5));
 
 			assert_ok!(Elections::report_defunct_voter(Origin::signed(5), 4));
-			assert_eq!(
-				System::events()[7].event,
-				Event::elections(RawEvent::VoterReported(4, 5, false))
-			);
+			assert!(System::events().iter().any(|event| {
+				event.event == Event::elections(RawEvent::VoterReported(4, 5, false))
+			}));
 
 			assert_eq!(balances(&4), (35, 5));
 			assert_eq!(balances(&5), (45, 3));
@@ -1977,10 +1975,9 @@ mod tests {
 			// 5 is an outgoing loser. will also get slashed.
 			assert_eq!(balances(&5), (45, 2));
 
-			assert_eq!(
-				System::events()[6].event,
-				Event::elections(RawEvent::NewTerm(vec![(4, 40), (5, 50)])),
-			);
+			assert!(System::events().iter().any(|event| {
+				event.event == Event::elections(RawEvent::NewTerm(vec![(4, 40), (5, 50)]))
+			}));
 		})
 	}
 
