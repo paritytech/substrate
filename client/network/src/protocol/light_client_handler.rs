@@ -87,13 +87,13 @@ pub struct Config {
 impl Config {
 	/// Create a fresh configuration with the following options:
 	///
-	/// - max. data size = 1 MiB
+	/// - max. data size = 64 MiB
 	/// - max. pending requests = 128
 	/// - inactivity timeout = 15s
 	/// - request timeout = 15s
 	pub fn new(id: &ProtocolId) -> Self {
 		let mut c = Config {
-			max_data_size: 1024 * 1024,
+			max_data_size: 64 * 1024 * 1024,
 			max_pending_requests: 128,
 			inactivity_timeout: Duration::from_secs(15),
 			request_timeout: Duration::from_secs(15),
