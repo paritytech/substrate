@@ -32,3 +32,6 @@ sp-test-primitives = { version = "2.0.0-dev", path = "../../test-primitives" }
 
 [features]
 default = []
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

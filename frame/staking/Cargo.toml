@@ -71,3 +71,6 @@ runtime-benchmarks = [
 	"rand_chacha",
 	"frame-benchmarking",
 ]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

@@ -21,3 +21,6 @@ sc-rpc-api = { version = "0.8.0-alpha.5", path = "../../../../client/rpc-api" }
 [dev-dependencies]
 frame-system = { version = "2.0.0-alpha.5", path = "../../../../frame/system" }
 tokio = "0.2"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

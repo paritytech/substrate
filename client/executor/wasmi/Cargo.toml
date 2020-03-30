@@ -19,3 +19,6 @@ sp-wasm-interface = { version = "2.0.0-alpha.5", path = "../../../primitives/was
 sp-runtime-interface = { version = "2.0.0-alpha.5", path = "../../../primitives/runtime-interface" }
 sp-core = { version = "2.0.0-alpha.5", path = "../../../primitives/core" }
 sp-allocator = { version = "2.0.0-alpha.5", path = "../../../primitives/allocator" }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

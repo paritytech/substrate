@@ -46,3 +46,6 @@ std = [
 disable_panic_handler = []
 disable_oom = []
 disable_allocator = []
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
