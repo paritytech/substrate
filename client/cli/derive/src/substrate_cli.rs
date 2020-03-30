@@ -22,6 +22,21 @@ use std::collections::{HashMap, HashSet};
 use syn::parse::Parser;
 use syn::{punctuated::Punctuated, spanned::Spanned, *};
 
+macro_rules! define_if_missing {
+	(
+		$existing_methods:expr, $impl:expr,
+		{ fn $method:ident () $(-> $result:ty)? }
+	) => {
+		if !$existing_methods.contains(stringify!($method)) {
+			$impl.items.push(ImplItem::Verbatim(quote! {
+				fn $method() $(-> $result)? {
+					#$method
+				}
+			}));
+		}
+	}
+}
+
 pub(crate) fn substrate_cli(
 	a: proc_macro::TokenStream,
 	i: proc_macro::TokenStream,
@@ -97,49 +112,34 @@ pub(crate) fn substrate_cli(
 			_ => None,
 		})
 		.collect::<HashSet<_>>();
-	let missing = |method| !existing_methods.contains(method);
 
-	if missing("impl_name") {
-		i.items.push(ImplItem::Verbatim(quote! {
-			fn impl_name() -> &'static str { #impl_name }
-		}));
-	}
+	define_if_missing!(existing_methods, i, {
+		fn impl_name() -> &'static str
+	});
 
-	if missing("impl_version") {
-		i.items.push(ImplItem::Verbatim(quote! {
-			fn impl_version() -> &'static str { #impl_version }
-		}));
-	}
+	define_if_missing!(existing_methods, i, {
+		fn impl_version() -> &'static str
+	});
 
-	if missing("support_url") {
-		i.items.push(ImplItem::Verbatim(quote! {
-			fn support_url() -> &'static str { #support_url }
-		}));
-	}
+	define_if_missing!(existing_methods, i, {
+		fn support_url() -> &'static str
+	});
 
-	if missing("executable_name") {
-		i.items.push(ImplItem::Verbatim(quote! {
-			fn executable_name() -> &'static str { #executable_name }
-		}));
-	}
+	define_if_missing!(existing_methods, i, {
+		fn executable_name() -> &'static str
+	});
 
-	if missing("author") {
-		i.items.push(ImplItem::Verbatim(quote! {
-			fn author() -> &'static str { #author }
-		}));
-	}
+	define_if_missing!(existing_methods, i, {
+		fn author() -> &'static str
+	});
 
-	if missing("description") {
-		i.items.push(ImplItem::Verbatim(quote! {
-			fn description() -> &'static str { #description }
-		}));
-	}
+	define_if_missing!(existing_methods, i, {
+		fn description() -> &'static str
+	});
 
-	if missing("copyright_start_year") {
-		i.items.push(ImplItem::Verbatim(quote! {
-			fn copyright_start_year() -> i32 { #copyright_start_year }
-		}));
-	}
+	define_if_missing!(existing_methods, i, {
+		fn copyright_start_year() -> i32
+	});
 
 	quote!(#i)
 }
@@ -160,7 +160,9 @@ fn get_platform() -> String {
 
 fn get_version() -> String {
 	let impl_commit = std::env::var("VERGEN_SHA_SHORT")
-		.expect("missing env variable VERGEN_SHA_SHORT. You might want to add a build.rs script that runs sc_cli::generate_cargo_keys()");
+		.unwrap_or_else(|_| {
+			abort_call_site!("missing env variable VERGEN_SHA_SHORT. You might want to add a build.rs script that runs substrate_build_script_utils::generate_cargo_keys()")
+		});
 	let commit_dash = if impl_commit.is_empty() { "" } else { "-" };
 
 	format!(

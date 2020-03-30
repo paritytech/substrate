@@ -51,7 +51,6 @@ use proc_macro_error::proc_macro_error;
 ///         unimplemented!()
 ///     }
 /// }
-///
 /// ```
 #[proc_macro_attribute]
 #[proc_macro_error]

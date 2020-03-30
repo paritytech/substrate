@@ -1,0 +1,8 @@
+error: unknown macro parameters: unknown_param
+  --> $DIR/unknown_attrs.rs:7:1
+   |
+7  | / #[substrate_cli_params(
+8  | |     shared_params = shared,
+9  | |     unknown_param = 42,
+10 | | )]
+   | |__^

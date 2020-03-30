@@ -11,6 +11,14 @@ repository = "https://github.com/paritytech/substrate/"
 [lib]
 proc-macro = true
 
+[[test]]
+name = "trybuild"
+path = "tests/trybuild.rs"
+
+[[test]]
+name = "overriding"
+path = "tests/overriding.rs"
+
 [dependencies]
 syn = { version = "1", default-features = false, features = ["parsing", "proc-macro"] }
 quote = "1"
@@ -21,3 +29,4 @@ platforms = "0.2"
 [dev-dependencies]
 sc-service = { version = "0.8.0-alpha.5", default-features = false, path = "../../service" }
 sc-cli = { version = "0.8.0-alpha.5", default-features = false, path = ".." }
+trybuild = "1.0"

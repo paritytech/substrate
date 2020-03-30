@@ -1,0 +1,10 @@
+error: unknown macro parameters: unknown_attrs
+  --> $DIR/unknown_attrs.rs:5:1
+   |
+5  | / #[substrate_cli(
+6  | |     support_url = "http://example.org",
+7  | |     copyright_start_year = 2020,
+8  | |     impl_version = "0.1.0",
+9  | |     unknown_attrs = 42,
+10 | | )]
+   | |__^

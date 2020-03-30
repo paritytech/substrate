@@ -1,0 +1,7 @@
+error[E0609]: no field `bar` on type `&Wrapper`
+ --> $DIR/unknown_field.rs:7:32
+  |
+7 | #[substrate_cli_config_wrapper(bar)]
+  |                                ^^^ unknown field
+  |
+  = note: available fields are: `foo`
