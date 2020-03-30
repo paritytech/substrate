@@ -238,7 +238,7 @@ pub fn extract_block_type_from_trait_path(trait_: &Path) -> Result<&TypePath> {
 		},
 		PathArguments::Parenthesized(_) => {
 			Err(Error::new(generics.arguments.span(), "Unexpected parentheses in path!"))
-		}
+		},
 	}
 }
 
