@@ -932,7 +932,7 @@ ServiceBuilder<
 					if let ChainEvent::BlockReceived { ref header, is_new_best, is_initial_sync, .. } = event {
 						let offchain = offchain.as_ref().and_then(|o| o.upgrade());
 						match offchain {
-							Some(offchain) if is_initial_sync || is_new_best => {
+							Some(offchain) if is_new_best && !is_initial_sync => {
 								notifications_spawn_handle.spawn(
 									"offchain-on-block",
 									offchain.on_block_imported(
