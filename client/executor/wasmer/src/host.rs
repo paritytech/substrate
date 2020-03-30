@@ -117,16 +117,16 @@ impl<'a> sp_wasm_interface::FunctionContext for HostContext<'a> {
 	}
 
 	fn allocate_memory(&mut self, size: WordSize) -> sp_wasm_interface::Result<Pointer<u8>> {
-		dbg!(self.allocator
+		self.allocator
 			.borrow_mut()
 			.allocate(&mut util::AllocatorMemory(&self.memory), size)
-			.map_err(|e| e.to_string()))
+			.map_err(|e| e.to_string())
 	}
 
 	fn deallocate_memory(&mut self, ptr: Pointer<u8>) -> sp_wasm_interface::Result<()> {
 		self.allocator
 			.borrow_mut()
-			.deallocate(&mut util::AllocatorMemory(&self.memory), dbg!(ptr))
+			.deallocate(&mut util::AllocatorMemory(&self.memory), ptr)
 			.map_err(|e| e.to_string())
 	}
 

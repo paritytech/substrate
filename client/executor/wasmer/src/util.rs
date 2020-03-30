@@ -20,7 +20,6 @@ use wasmer_runtime_core::memory::Memory;
 pub fn write_memory(memory: &Memory, offset: u32, data: &[u8]) -> Result<(), ()> {
 	let offset = offset as usize;
 	let view = memory.view::<u8>();
-	dbg!(view.len());
 	for (i, v) in data.iter().enumerate() {
 		let cell = view.get(offset + i).ok_or(())?;
 		cell.set(*v);

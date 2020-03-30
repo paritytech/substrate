@@ -137,7 +137,7 @@ fn inject_input_data(
 		.allocate(&mut util::AllocatorMemory(memory), len)
 		.map_err(|e| e.to_string())
 		.unwrap();
-	util::write_memory(memory, dbg!(ptr).into(), dbg!(input_data)).unwrap();
+	util::write_memory(memory, ptr.into(), input_data).unwrap();
 	(ptr.into(), len)
 }
 
