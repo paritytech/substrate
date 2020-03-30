@@ -27,3 +27,6 @@ log = "0.4.8"
 
 [dev-dependencies]
 substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../../test-utils/runtime/client" }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

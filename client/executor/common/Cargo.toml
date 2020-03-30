@@ -22,3 +22,6 @@ sp-serializer = { version = "2.0.0-alpha.5", path = "../../../primitives/seriali
 
 [features]
 default = []
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

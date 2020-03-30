@@ -21,3 +21,6 @@ sp-api = { version = "2.0.0-alpha.5", path = "../../../primitives/api" }
 sp-runtime = { version = "2.0.0-alpha.5", path = "../../../primitives/runtime" }
 sc-service = { version = "0.8.0-alpha.5", default-features = false, path = "../../../client/service" }
 sp-blockchain = { version = "2.0.0-alpha.5", path = "../../../primitives/blockchain" }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

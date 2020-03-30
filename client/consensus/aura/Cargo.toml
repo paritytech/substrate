@@ -43,3 +43,6 @@ sc-service = { version = "0.8.0-alpha.5", path = "../../service" }
 substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../../test-utils/runtime/client" }
 env_logger = "0.7.0"
 tempfile = "3.1.0"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
