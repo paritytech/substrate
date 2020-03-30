@@ -129,6 +129,14 @@
 //! light-client-related requests for information about the state. Each request is the encoding of
 //! a `light::Request` and each response is the encoding of a `light::Response`, as defined in the
 //! `light.v1.proto` file in this source tree.
+//! - **`/<protocol-id>/transactions/1`** is a notifications protocol (see below) where
+//! transactions are pushed to other nodes. The handshake is empty on both sides. The message
+//! format is a SCALE-encoded list of transactions, where each transaction is an opaque list of
+//! bytes.
+//! - **`/<protocol-id>/block-announces/1`** is a notifications protocol (see below) where
+//! block announces are pushed to other nodes. The handshake is empty on both sides. The message
+//! format is a SCALE-encoded tuple containing a block header followed with an opaque list of
+//! bytes containing some data associated with this block announcement, e.g. a candidate message.
 //! - Notifications protocols that are registered using the `register_notifications_protocol`
 //! method. For example: `/paritytech/grandpa/1`. See below for more information.
 //!

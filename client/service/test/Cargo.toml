@@ -23,3 +23,6 @@ sc-client = { version = "0.8.0-alpha.5", path = "../../" }
 sp-runtime = { version = "2.0.0-alpha.5", path = "../../../primitives/runtime" }
 sp-core = { version = "2.0.0-alpha.5", path = "../../../primitives/core" }
 sp-transaction-pool = { version = "2.0.0-alpha.5", path = "../../../primitives/transaction-pool" }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
