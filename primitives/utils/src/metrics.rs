@@ -35,7 +35,7 @@ impl InternalMetrics {
         let mut h = self.metrics.write();
         h.entry(key)
             .and_modify(|v| {
-                *v = v.checked_add(value).unwrap_or(u64::MAX)
+                *v = v.checked_add(value).unwrap_or(core::u64::MAX)
             })
             .or_insert(value);
     }
