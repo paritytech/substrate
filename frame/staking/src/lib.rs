@@ -2071,31 +2071,12 @@ impl<T: Trait> Convert<T::AccountId, Option<Exposure<T::AccountId, BalanceOf<T>>
 {
 	fn convert(validator: T::AccountId) -> Option<Exposure<T::AccountId, BalanceOf<T>>> {
 		if let Some(active_era) = <Module<T>>::active_era() {
-			let exposure = <Module<T>>::eras_stakers(active_era.index, &validator);
-			#[cfg(feature = "std")]
-			println!("active era {:?} validator {:?} exposure = {:?}", active_era, validator, exposure);
-			Some(exposure)
+			Some(<Module<T>>::eras_stakers(active_era.index, &validator))
 		} else {
-			#[cfg(feature = "std")]
-			println!("no exposure");
 			None
 		}
 	}
 }
-
-
-// #[cfg(feature = "runtime-benchmarks")]
-// impl<T: Trait> Convert<T::AccountId, Option<Exposure<T::AccountId, BalanceOf<T>>>>
-// 	for ExposureOf<T>
-// {
-// 	fn convert(_validator: T::AccountId) -> Option<Exposure<T::AccountId, BalanceOf<T>>> {
-// 		Some(Exposure {
-// 			total: 1000.into(),
-// 			own: 1000.into(),
-// 			others: vec![],
-// 		})
-// 	}
-// }
 
 /// This is intended to be used with `FilterHistoricalOffences`.
 impl <T: Trait> OnOffenceHandler<T::AccountId, pallet_session::historical::IdentificationTuple<T>> for Module<T> where
@@ -2113,22 +2094,15 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, pallet_session::historical::Ident
 		slash_fraction: &[Perbill],
 		slash_session: SessionIndex,
 	) {
-		#[cfg(feature = "std")]
-		println!("on_offence(), offenders: {}, slash_fraction {:?}, slash_session: {:?}", offenders.len(), slash_fraction, slash_session);
 		let reward_proportion = SlashRewardFraction::get();
 
 		let active_era = {
 			let active_era = Self::active_era();
 			if active_era.is_none() {
-				#[cfg(feature = "std")]
-				println!("on_offence active era is none");
-		
 				return
 			}
 			active_era.unwrap().index
 		};
-		#[cfg(feature = "std")]
-		println!("on_offence active_era: {:?}", active_era);
 
 		let active_era_start_session_index = Self::eras_start_session_index(active_era)
 			.unwrap_or_else(|| {
@@ -2144,19 +2118,13 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, pallet_session::historical::Ident
 			active_era
 		} else {
 			let eras = BondedEras::get();
-			#[cfg(feature = "std")]
-			println!("on_offence eras: {:?}", eras);
-	
+
 			// reverse because it's more likely to find reports from recent eras.
 			match eras.iter().rev().filter(|&&(_, ref sesh)| sesh <= &slash_session).next() {
 				None => return, // before bonding period. defensive - should be filtered out.
 				Some(&(ref slash_era, _)) => *slash_era,
 			}
 		};
-
-		#[cfg(feature = "std")]
-		println!("on_offence slash_era {:?}", slash_era);
-
 
 		<Self as Store>::EarliestUnappliedSlash::mutate(|earliest| {
 			if earliest.is_none() {
@@ -2187,13 +2155,10 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, pallet_session::historical::Ident
 
 			if let Some(mut unapplied) = unapplied {
 				unapplied.reporters = details.reporters.clone();
-				if true {
+				if slash_defer_duration == 0 {
 					// apply right away.
 					slashing::apply_slash::<T>(unapplied);
 				} else {
-					#[cfg(feature = "std")]
-					println!("on_offence defering slash, stash {:?}", stash);
-
 					// defer to end of some `slash_defer_duration` from now.
 					<Self as Store>::UnappliedSlashes::mutate(
 						active_era,

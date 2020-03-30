@@ -160,9 +160,6 @@ impl<T: Trait> Module<T> {
 		time_slot: &O::TimeSlot,
 		offenders: Vec<T::IdentificationTuple>,
 	) -> Option<TriageOutcome<T>> {
-		#[cfg(feature = "std")]
-		println!("triage, reporters: {}, offenders: {}", reporters.len(), offenders.len());
-
 		let mut storage = ReportIndexStorage::<T, O>::load(time_slot);
 
 		let mut any_new = false;
@@ -184,17 +181,11 @@ impl<T: Trait> Module<T> {
 		}
 
 		if any_new {
-			#[cfg(feature = "std")]
-			println!("triage any_new");
-
 			// Load report details for the all reports happened at the same time.
 			let concurrent_offenders = storage.concurrent_reports
 				.iter()
 				.filter_map(|report_id| <Reports<T>>::get(report_id))
 				.collect::<Vec<_>>();
-
-			#[cfg(feature = "std")]
-			println!("triage concurrent offenders {:?}", concurrent_offenders.len());
 
 			storage.save();
 
@@ -235,12 +226,6 @@ impl<T: Trait, O: Offence<T::IdentificationTuple>> ReportIndexStorage<T, O> {
 				.unwrap_or_default();
 
 		let concurrent_reports = <ConcurrentReportsIndex<T>>::get(&O::ID, &opaque_time_slot);
-		#[cfg(feature = "std")]
-		println!("load() = opaque_time_slot: {}, concurrent_reports: {}, same_kind_reports: {}",
-			opaque_time_slot.len(),
-			concurrent_reports.len(),
-			same_kind_reports.len(),
-		);
 
 		Self {
 			opaque_time_slot,
@@ -260,8 +245,6 @@ impl<T: Trait, O: Offence<T::IdentificationTuple>> ReportIndexStorage<T, O> {
 			Ok(pos) => pos,
 			Err(pos) => pos,
 		};
-		#[cfg(feature = "std")]
-		println!("insert(), same_kind_reports: {}, pos: {}", self.same_kind_reports.len(), pos);
 
 		self.same_kind_reports
 			.insert(pos, (time_slot.clone(), report_id));
@@ -272,9 +255,6 @@ impl<T: Trait, O: Offence<T::IdentificationTuple>> ReportIndexStorage<T, O> {
 
 	/// Dump the indexes to the storage.
 	fn save(self) {
-		#[cfg(feature = "std")]
-		println!("save(), same_kind_reports: {}, concurrent_reports {}", self.same_kind_reports.len(), self.concurrent_reports.len());
-
 		<ReportsByKindIndex>::insert(&O::ID, self.same_kind_reports.encode());
 		<ConcurrentReportsIndex<T>>::insert(
 			&O::ID,
