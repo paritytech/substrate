@@ -68,7 +68,10 @@ pub trait BlockchainEvents<Block: BlockT> {
 	fn finality_notification_stream(&self) -> FinalityNotifications<Block>;
 
 	/// Get a block import stream of notification. Guaranteed to be fired for every
-	/// imported block.
+	/// imported block even when doing a major sync.
+	///
+	/// Use cautiously, cause it may have a significant impact on performance. Note that the events are being
+	/// sent using unbounded channel, so make sure to process them as soon as possible.
 	fn all_blocks_notification_stream(&self) -> AllBlocksNotifications<Block>;
 
 	/// Get storage changes event stream.
