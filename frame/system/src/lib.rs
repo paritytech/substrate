@@ -749,6 +749,10 @@ impl<T: Trait> Module<T> {
 	/// This will update storage entries that correspond to the specified topics.
 	/// It is expected that light-clients could subscribe to this topics.
 	pub fn deposit_event_indexed(topics: &[T::Hash], event: T::Event) {
+		let block_no = Self::block_number();
+		// Don't populate events on genesis.
+		if block_no == T::BlockNumber::One() { return }
+
 		let phase = ExecutionPhase::get().unwrap_or_default();
 		let event = EventRecord {
 			phase,
@@ -781,7 +785,6 @@ impl<T: Trait> Module<T> {
 			return;
 		}
 
-		let block_no = Self::block_number();
 		for topic in topics {
 			// The same applies here.
 			if <EventTopics<T>>::append(topic, &[(block_no, event_idx)]).is_err() {
