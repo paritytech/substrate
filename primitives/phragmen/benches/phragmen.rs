@@ -16,6 +16,7 @@
 //! Note that execution times will not be accurate in an absolute scale, since
 //! - Everything is executed in the context of `TestExternalities`
 //! - Everything is executed in native environment.
+
 #![cfg(feature = "bench")]
 #![feature(test)]
 

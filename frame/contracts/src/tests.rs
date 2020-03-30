@@ -117,7 +117,7 @@ impl frame_system::Trait for Test {
 	type ModuleToIndex = ();
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
-	type OnKilledAccount = Contracts;
+	type OnKilledAccount = ();
 }
 impl pallet_balances::Trait for Test {
 	type Balance = u64;
@@ -308,7 +308,7 @@ fn refunds_unused_gas() {
 }
 
 #[test]
-fn account_removal_removes_storage() {
+fn account_removal_does_not_remove_storage() {
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
 		let trie_id1 = <Test as Trait>::TrieIdGenerator::trie_id(&1);
 		let trie_id2 = <Test as Trait>::TrieIdGenerator::trie_id(&2);
@@ -351,14 +351,22 @@ fn account_removal_removes_storage() {
 		// Transfer funds from account 1 of such amount that after this transfer
 		// the balance of account 1 will be below the existential threshold.
 		//
-		// This should lead to the removal of all storage associated with this account.
+		// This does not remove the contract storage as we are not notified about a
+		// account removal. This cannot happen in reality because a contract can only
+		// remove itself by `ext_terminate`. There is no external event that can remove
+		// the account appart from that.
 		assert_ok!(Balances::transfer(Origin::signed(1), 2, 20));
 
-		// Verify that all entries from account 1 is removed, while
-		// entries from account 2 is in place.
+		// Verify that no entries are removed.
 		{
-			assert!(<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &1, Some(&trie_id1), key1).is_none());
-			assert!(<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &1, Some(&trie_id1), key2).is_none());
+			assert_eq!(
+				<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &1, Some(&trie_id1), key1),
+				Some(b"1".to_vec())
+			);
+			assert_eq!(
+				<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &1, Some(&trie_id1), key2),
+				Some(b"2".to_vec())
+			);
 
 			assert_eq!(
 				<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &2, Some(&trie_id2), key1),
@@ -422,44 +430,44 @@ fn instantiate_and_call_and_deposit_event() {
 
 		assert_eq!(System::events(), vec![
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::system(frame_system::RawEvent::NewAccount(1)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::balances(pallet_balances::RawEvent::Endowed(1, 1_000_000)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::contracts(RawEvent::CodeStored(code_hash.into())),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::system(frame_system::RawEvent::NewAccount(BOB)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::balances(
 					pallet_balances::RawEvent::Endowed(BOB, 100)
 				),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::contracts(RawEvent::Transfer(ALICE, BOB, 100)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::contracts(RawEvent::ContractExecution(BOB, vec![1, 2, 3, 4])),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::contracts(RawEvent::Instantiated(ALICE, BOB)),
 				topics: vec![],
 			}
@@ -505,17 +513,17 @@ fn dispatch_call() {
 		// wasm source this test will fail and will show you the actual hash.
 		assert_eq!(System::events(), vec![
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::system(frame_system::RawEvent::NewAccount(1)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::balances(pallet_balances::RawEvent::Endowed(1, 1_000_000)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::contracts(RawEvent::CodeStored(code_hash.into())),
 				topics: vec![],
 			},
@@ -539,58 +547,58 @@ fn dispatch_call() {
 
 		assert_eq!(System::events(), vec![
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::system(frame_system::RawEvent::NewAccount(1)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::balances(pallet_balances::RawEvent::Endowed(1, 1_000_000)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::contracts(RawEvent::CodeStored(code_hash.into())),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::system(frame_system::RawEvent::NewAccount(BOB)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::balances(
 					pallet_balances::RawEvent::Endowed(BOB, 100)
 				),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::contracts(RawEvent::Transfer(ALICE, BOB, 100)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::contracts(RawEvent::Instantiated(ALICE, BOB)),
 				topics: vec![],
 			},
 
 			// Dispatching the call.
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::system(frame_system::RawEvent::NewAccount(CHARLIE)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::balances(
 					pallet_balances::RawEvent::Endowed(CHARLIE, 50)
 				),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::balances(
 					pallet_balances::RawEvent::Transfer(BOB, CHARLIE, 50)
 				),
@@ -599,7 +607,7 @@ fn dispatch_call() {
 
 			// Event emitted as a result of dispatch.
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::contracts(RawEvent::Dispatched(BOB, true)),
 				topics: vec![],
 			}
@@ -643,17 +651,17 @@ fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
 		// wasm source this test will fail and will show you the actual hash.
 		assert_eq!(System::events(), vec![
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::system(frame_system::RawEvent::NewAccount(1)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::balances(pallet_balances::RawEvent::Endowed(1, 1_000_000)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::contracts(RawEvent::CodeStored(code_hash.into())),
 				topics: vec![],
 			},
@@ -681,39 +689,39 @@ fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
 		);
 		assert_eq!(System::events(), vec![
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::system(frame_system::RawEvent::NewAccount(1)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::balances(pallet_balances::RawEvent::Endowed(1, 1_000_000)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::contracts(RawEvent::CodeStored(code_hash.into())),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::system(frame_system::RawEvent::NewAccount(BOB)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::balances(
 					pallet_balances::RawEvent::Endowed(BOB, 100)
 				),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::contracts(RawEvent::Transfer(ALICE, BOB, 100)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::contracts(RawEvent::Instantiated(ALICE, BOB)),
 				topics: vec![],
 			},
@@ -898,17 +906,17 @@ fn test_set_rent_code_and_hash() {
 		// and will show you the actual hash.
 		assert_eq!(System::events(), vec![
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::system(frame_system::RawEvent::NewAccount(1)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::balances(pallet_balances::RawEvent::Endowed(1, 1_000_000)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::contracts(RawEvent::CodeStored(code_hash.into())),
 				topics: vec![],
 			},
@@ -1225,7 +1233,7 @@ fn call_removed_contract() {
 		// Calling a contract that is about to evict shall emit an event.
 		assert_eq!(System::events(), vec![
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::contracts(RawEvent::Evicted(BOB, true)),
 				topics: vec![],
 			},
@@ -1414,22 +1422,22 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 		// and will show you the actual hash.
 		assert_eq!(System::events(), vec![
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::system(frame_system::RawEvent::NewAccount(1)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::balances(pallet_balances::RawEvent::Endowed(1, 1_000_000)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::contracts(RawEvent::CodeStored(restoration_code_hash.into())),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::contracts(RawEvent::CodeStored(set_rent_code_hash.into())),
 				topics: vec![],
 			},
@@ -1473,7 +1481,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 		assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
 		assert_eq!(System::events(), vec![
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::contracts(
 					RawEvent::Evicted(BOB.clone(), true)
 				),
@@ -1526,7 +1534,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 				(true, false) => {
 					assert_eq!(System::events(), vec![
 						EventRecord {
-							phase: Phase::ApplyExtrinsic(0),
+							phase: Phase::Initialization,
 							event: MetaEvent::contracts(
 								RawEvent::Restored(DJANGO, BOB, bob_code_hash, 50, false)
 							),
@@ -1537,42 +1545,42 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 				(_, true) => {
 					assert_eq!(System::events(), vec![
 						EventRecord {
-							phase: Phase::ApplyExtrinsic(0),
+							phase: Phase::Initialization,
 							event: MetaEvent::contracts(RawEvent::Evicted(BOB, true)),
 							topics: vec![],
 						},
 						EventRecord {
-							phase: Phase::ApplyExtrinsic(0),
+							phase: Phase::Initialization,
 							event: MetaEvent::system(frame_system::RawEvent::NewAccount(CHARLIE)),
 							topics: vec![],
 						},
 						EventRecord {
-							phase: Phase::ApplyExtrinsic(0),
+							phase: Phase::Initialization,
 							event: MetaEvent::balances(pallet_balances::RawEvent::Endowed(CHARLIE, 1_000_000)),
 							topics: vec![],
 						},
 						EventRecord {
-							phase: Phase::ApplyExtrinsic(0),
+							phase: Phase::Initialization,
 							event: MetaEvent::system(frame_system::RawEvent::NewAccount(DJANGO)),
 							topics: vec![],
 						},
 						EventRecord {
-							phase: Phase::ApplyExtrinsic(0),
+							phase: Phase::Initialization,
 							event: MetaEvent::balances(pallet_balances::RawEvent::Endowed(DJANGO, 30_000)),
 							topics: vec![],
 						},
 						EventRecord {
-							phase: Phase::ApplyExtrinsic(0),
+							phase: Phase::Initialization,
 							event: MetaEvent::contracts(RawEvent::Transfer(CHARLIE, DJANGO, 30_000)),
 							topics: vec![],
 						},
 						EventRecord {
-							phase: Phase::ApplyExtrinsic(0),
+							phase: Phase::Initialization,
 							event: MetaEvent::contracts(RawEvent::Instantiated(CHARLIE, DJANGO)),
 							topics: vec![],
 						},
 						EventRecord {
-							phase: Phase::ApplyExtrinsic(0),
+							phase: Phase::Initialization,
 							event: MetaEvent::contracts(RawEvent::Restored(
 								DJANGO,
 								BOB,
@@ -1599,12 +1607,12 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 			assert!(ContractInfoOf::<Test>::get(DJANGO).is_none());
 			assert_eq!(System::events(), vec![
 				EventRecord {
-					phase: Phase::ApplyExtrinsic(0),
+					phase: Phase::Initialization,
 					event: MetaEvent::system(system::RawEvent::KilledAccount(DJANGO)),
 					topics: vec![],
 				},
 				EventRecord {
-					phase: Phase::ApplyExtrinsic(0),
+					phase: Phase::Initialization,
 					event: MetaEvent::contracts(
 						RawEvent::Restored(DJANGO, BOB, bob_contract.code_hash, 50, true)
 					),
@@ -2747,9 +2755,6 @@ const CODE_CRYPTO_HASHES: &str = r#"
 	(import "env" "ext_hash_keccak_256" (func $ext_hash_keccak_256 (param i32 i32 i32)))
 	(import "env" "ext_hash_blake2_256" (func $ext_hash_blake2_256 (param i32 i32 i32)))
 	(import "env" "ext_hash_blake2_128" (func $ext_hash_blake2_128 (param i32 i32 i32)))
-	(import "env" "ext_hash_twox_256" (func $ext_hash_twox_256 (param i32 i32 i32)))
-	(import "env" "ext_hash_twox_128" (func $ext_hash_twox_128 (param i32 i32 i32)))
-	(import "env" "ext_hash_twox_64" (func $ext_hash_twox_64 (param i32 i32 i32)))
 
 	(import "env" "memory" (memory 1 1))
 
@@ -2760,9 +2765,6 @@ const CODE_CRYPTO_HASHES: &str = r#"
 		$ext_hash_keccak_256
 		$ext_hash_blake2_256
 		$ext_hash_blake2_128
-		$ext_hash_twox_256
-		$ext_hash_twox_128
-		$ext_hash_twox_64
 	)
 	(data (i32.const 1) "20202010201008") ;; Output sizes of the hashes in order in hex.
 
@@ -2793,9 +2795,6 @@ const CODE_CRYPTO_HASHES: &str = r#"
 	;; |     1 |    KECCAK |       256 |
 	;; |     2 |    BLAKE2 |       256 |
 	;; |     3 |    BLAKE2 |       128 |
-	;; |     4 |      TWOX |       256 |
-	;; |     5 |      TWOX |       128 |
-	;; |     6 |      TWOX |        64 |
 	;; ---------------------------------
 	(func (export "call") (result i32)
 		(local $chosen_hash_fn i32)
@@ -2860,9 +2859,6 @@ fn crypto_hashes() {
 			(dyn_hash_fn!(keccak_256), 32),
 			(dyn_hash_fn!(blake2_256), 32),
 			(dyn_hash_fn!(blake2_128), 16),
-			(dyn_hash_fn!(twox_256), 32),
-			(dyn_hash_fn!(twox_128), 16),
-			(dyn_hash_fn!(twox_64), 8),
 		];
 		// Test the given hash functions for the input: "_DEAD_BEEF"
 		for (n, (hash_fn, expected_size)) in test_cases.iter().enumerate() {

@@ -827,7 +827,7 @@ ServiceBuilder<
 		let chain_spec = config.expect_chain_spec();
 
 		let version = config.full_version();
-		info!("Highest known block at #{}", chain_info.best_number);
+		info!("📦 Highest known block at #{}", chain_info.best_number);
 		telemetry!(
 			SUBSTRATE_INFO;
 			"node.start";

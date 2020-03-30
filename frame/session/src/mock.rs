@@ -205,6 +205,7 @@ impl Trait for Test {
 	type Keys = MockSessionKeys;
 	type Event = ();
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
+	type NextSessionRotation = ();
 }
 
 #[cfg(feature = "historical")]

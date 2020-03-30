@@ -16,14 +16,22 @@
 
 //! Test utilities
 
-use super::{Trait, Module, GenesisConfig};
+use codec::Encode;
+use super::{Trait, Module, GenesisConfig, CurrentSlot};
 use sp_runtime::{
-	traits::IdentityLookup, Perbill, testing::{Header, UintAuthorityId}, impl_opaque_keys,
+	Perbill, impl_opaque_keys,
+	testing::{Header, UintAuthorityId, Digest, DigestItem},
+	traits::IdentityLookup,
 };
-use sp_version::RuntimeVersion;
-use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
+use frame_system::InitKind;
+use frame_support::{
+	impl_outer_origin, parameter_types, StorageValue,
+	traits::OnInitialize,
+	weights::Weight,
+};
 use sp_io;
 use sp_core::H256;
+use sp_consensus_vrf::schnorrkel::{RawVRFOutput, RawVRFProof};
 
 impl_outer_origin!{
 	pub enum Origin for Test  where system = frame_system {}
@@ -43,7 +51,6 @@ parameter_types! {
 	pub const MinimumPeriod: u64 = 1;
 	pub const EpochDuration: u64 = 3;
 	pub const ExpectedBlockTime: u64 = 1;
-	pub const Version: RuntimeVersion = substrate_test_runtime::VERSION;
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(16);
 }
 
@@ -53,7 +60,7 @@ impl frame_system::Trait for Test {
 	type BlockNumber = u64;
 	type Call = ();
 	type Hash = H256;
-	type Version = Version;
+	type Version = ();
 	type Hashing = sp_runtime::traits::BlakeTwo256;
 	type AccountId = DummyValidatorId;
 	type Lookup = IdentityLookup<Self::AccountId>;
@@ -79,11 +86,12 @@ impl pallet_session::Trait for Test {
 	type Event = ();
 	type ValidatorId = <Self as frame_system::Trait>::AccountId;
 	type ShouldEndSession = Babe;
-	type SessionHandler = (Babe,Babe,);
+	type SessionHandler = (Babe,);
 	type SessionManager = ();
 	type ValidatorIdOf = ();
 	type Keys = MockSessionKeys;
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
+	type NextSessionRotation = Babe;
 }
 
 impl pallet_timestamp::Trait for Test {
@@ -106,5 +114,44 @@ pub fn new_test_ext(authorities: Vec<DummyValidatorId>) -> sp_io::TestExternalit
 	t.into()
 }
 
+pub fn go_to_block(n: u64, s: u64) {
+	let pre_digest = make_pre_digest(0, s, RawVRFOutput([1; 32]), RawVRFProof([0xff; 64]));
+	System::initialize(&n, &Default::default(), &Default::default(), &pre_digest, InitKind::Full);
+	System::set_block_number(n);
+	if s > 1 {
+		CurrentSlot::put(s);
+	}
+	// includes a call into `Babe::do_initialize`.
+	Session::on_initialize(n);
+}
+
+/// Slots will grow accordingly to blocks
+pub fn progress_to_block(n: u64) {
+	let mut slot = Babe::current_slot() + 1;
+	for i in System::block_number()+1..=n {
+		go_to_block(i, slot);
+		slot += 1;
+	}
+}
+
+pub fn make_pre_digest(
+	authority_index: sp_consensus_babe::AuthorityIndex,
+	slot_number: sp_consensus_babe::SlotNumber,
+	vrf_output: RawVRFOutput,
+	vrf_proof: RawVRFProof,
+) -> Digest {
+	let digest_data = sp_consensus_babe::digests::RawPreDigest::Primary(
+		sp_consensus_babe::digests::RawPrimaryPreDigest {
+			authority_index,
+			slot_number,
+			vrf_output,
+			vrf_proof,
+		}
+	);
+	let log = DigestItem::PreRuntime(sp_consensus_babe::BABE_ENGINE_ID, digest_data.encode());
+	Digest { logs: vec![log] }
+}
+
 pub type System = frame_system::Module<Test>;
 pub type Babe = Module<Test>;
+pub type Session = pallet_session::Module<Test>;

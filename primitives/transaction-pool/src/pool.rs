@@ -31,7 +31,7 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Member, NumberFor},
 	transaction_validity::{
-		TransactionLongevity, TransactionPriority, TransactionTag,
+		TransactionLongevity, TransactionPriority, TransactionTag, TransactionSource,
 	},
 };
 
@@ -192,6 +192,7 @@ pub trait TransactionPool: Send + Sync {
 	fn submit_at(
 		&self,
 		at: &BlockId<Self::Block>,
+		source: TransactionSource,
 		xts: Vec<TransactionFor<Self>>,
 	) -> PoolFuture<Vec<Result<TxHash<Self>, Self::Error>>, Self::Error>;
 
@@ -199,6 +200,7 @@ pub trait TransactionPool: Send + Sync {
 	fn submit_one(
 		&self,
 		at: &BlockId<Self::Block>,
+		source: TransactionSource,
 		xt: TransactionFor<Self>,
 	) -> PoolFuture<TxHash<Self>, Self::Error>;
 
@@ -206,6 +208,7 @@ pub trait TransactionPool: Send + Sync {
 	fn submit_and_watch(
 		&self,
 		at: &BlockId<Self::Block>,
+		source: TransactionSource,
 		xt: TransactionFor<Self>,
 	) -> PoolFuture<Box<TransactionStatusStreamFor<Self>>, Self::Error>;
 
@@ -299,7 +302,9 @@ impl<TPool: TransactionPool> OffchainSubmitTransaction<TPool::Block> for TPool {
 			extrinsic
 		);
 
-		let result = futures::executor::block_on(self.submit_one(&at, extrinsic));
+		let result = futures::executor::block_on(self.submit_one(
+				&at, TransactionSource::Local, extrinsic,
+		));
 
 		result.map(|_| ())
 			.map_err(|e| log::warn!(
