@@ -929,7 +929,7 @@ pub trait OpaqueKeys: Clone {
 	fn key_ids() -> &'static [crate::KeyTypeId];
 	/// Get the raw bytes of key with key-type ID `i`.
 	fn get_raw(&self, i: super::KeyTypeId) -> &[u8];
-	/// Get the decoded key with index `i`.
+	/// Get the decoded key with key-type ID `i`.
 	fn get<T: Decode>(&self, i: super::KeyTypeId) -> Option<T> {
 		T::decode(&mut self.get_raw(i)).ok()
 	}

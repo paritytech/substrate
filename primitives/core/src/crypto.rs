@@ -18,6 +18,7 @@
 //! Cryptographic utilities.
 // end::description[]
 
+use crate::{sr25519, ed25519};
 use sp_std::hash::Hash;
 use sp_std::vec::Vec;
 #[cfg(feature = "std")]
@@ -615,6 +616,18 @@ impl From<AccountId32> for [u8; 32] {
 	}
 }
 
+impl From<sr25519::Public> for AccountId32 {
+	fn from(k: sr25519::Public) -> Self {
+		k.0.into()
+	}
+}
+
+impl From<ed25519::Public> for AccountId32 {
+	fn from(k: ed25519::Public) -> Self {
+		k.0.into()
+	}
+}
+
 #[cfg(feature = "std")]
 impl std::fmt::Display for AccountId32 {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -962,6 +975,8 @@ pub mod key_types {
 	pub const IM_ONLINE: KeyTypeId = KeyTypeId(*b"imon");
 	/// Key type for AuthorityDiscovery module, built-in.
 	pub const AUTHORITY_DISCOVERY: KeyTypeId = KeyTypeId(*b"audi");
+	/// Key type for staking, built-in.
+	pub const STAKING: KeyTypeId = KeyTypeId(*b"stak");
 	/// A key type ID useful for tests.
 	pub const DUMMY: KeyTypeId = KeyTypeId(*b"dumy");
 }
