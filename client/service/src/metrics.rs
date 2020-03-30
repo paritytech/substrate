@@ -4,11 +4,10 @@ use netstat2::{TcpState, ProtocolSocketInfo, iterate_sockets_info, AddressFamily
 use prometheus_endpoint::{register, Gauge, U64, F64, Registry, PrometheusError, Opts, GaugeVec};
 use sc_client::ClientInfo;
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
-use std::collections::HashMap;
 use std::convert::TryFrom;
 use sp_runtime::traits::{NumberFor, Block, SaturatedConversion, UniqueSaturatedInto};
 use sp_transaction_pool::PoolStatus;
-use sp_utils::metrics::GLOBAL_METRICS;
+use sp_utils::metrics::register_globals;
 use sysinfo::{ProcessExt, System, SystemExt};
 
 #[cfg(not(unix))]
@@ -32,7 +31,6 @@ struct PrometheusMetrics {
 	// generic info
 	block_height_number: GaugeVec<U64>,
 	ready_transactions_number: Gauge<U64>,
-	block_import: GaugeVec<U64>,
 
 	// I/O
 	network_per_sec_bytes: GaugeVec<U64>,
@@ -41,8 +39,6 @@ struct PrometheusMetrics {
 	state_db: GaugeVec<U64>,
 
 	// low level
-	tokio: GaugeVec<U64>,
-	unbounded_channels: GaugeVec<U64>,
 	internals: GaugeVec<U64>,
 }
 
@@ -62,6 +58,8 @@ impl PrometheusMetrics {
         register(Gauge::<U64>::new(
             "node_roles", "The roles the node is running as",
 		)?, &registry)?.set(roles);
+
+		register_globals(registry)?;
 		
 		Ok(Self {
 
@@ -107,11 +105,6 @@ impl PrometheusMetrics {
 				"ready_transactions_number", "Number of transactions in the ready queue",
 			)?, registry)?,
 
-			block_import: register(GaugeVec::new(
-				Opts::new("block_import", "Block Import"),
-				&["subtype"]
-			)?, registry)?,
-
 			// I/ O
 			
 			network_per_sec_bytes: register(GaugeVec::new(
@@ -130,16 +123,12 @@ impl PrometheusMetrics {
 			)?, registry)?,
 
 			// low level
-			tokio: register(GaugeVec::new(
-				Opts::new("tokio", "Tokio internals"),
-				&["entity"]
-			)?, registry)?,
+			// tokio: register(GaugeVec::new(
+			// 	Opts::new("tokio", "Tokio internals"),
+			// 	&["entity"]
+			// )?, registry)?,
 			internals: register(GaugeVec::new(
 				Opts::new("internals", "Other unspecified internals"),
-				&["entity"]
-			)?, registry)?,
-			unbounded_channels: register(GaugeVec::new(
-				Opts::new("internals_unbounded_channels", "items in each mpsc::unbounded instance"),
 				&["entity"]
 			)?, registry)?,
 		})
@@ -156,47 +145,6 @@ struct ConnectionsCount {
 	other: u64
 }
 
-struct TimeSeriesInfo {
-	count: u64,
-	lower_median: u64,
-	median: u64,
-	higher_median: u64,
-	average: u64
-}
-
-
-impl From<Vec<u64>> for TimeSeriesInfo {
-	fn from(mut input: Vec<u64>) -> Self {
-		let count = input.len();
-		if let Some(only_value) = match count {
-			0 => Some(0),
-			1 => Some(input[0]),
-			_ => None
-		} {
-			return TimeSeriesInfo {
-				count: u64::try_from(count).expect("Usize always fits into u64. qed"),
-				lower_median: only_value,
-				median: only_value,
-				higher_median: only_value,
-				average: only_value
-			}
-		}
-
-		input.sort();
-		let median_pos = count.div_euclid(2);
-		let median_dif = median_pos.div_euclid(2);
-		let count = u64::try_from(count).expect("Usize always fits into u64. qed");
-		let average = input.iter().fold(0u64, |acc, val| acc + val).div_euclid(count);
-
-		TimeSeriesInfo {
-			count,
-			lower_median: input[median_pos - median_dif],
-			median: input[median_pos],
-			higher_median: input[median_pos + median_dif],
-			average
-		}
-	}
-}
 #[derive(Default)]
 struct FdCounter {
 	paths: u64,
@@ -381,9 +329,6 @@ impl MetricsService {
 				.unwrap_or(0),
 		);
 
-		// consume the series, whether there is prometheus or not,to not leak memory here
-		let series = GLOBAL_METRICS.flush_series();
-
 		if let Some(metrics) = self.metrics.as_ref() {
 			metrics.cpu_usage_percentage.set(process_info.cpu_usage as f64);
 			metrics.memory_usage_bytes.set(process_info.memory);
@@ -438,46 +383,6 @@ impl MetricsService {
 				metrics.netstat.with_label_values(&["closed"]).set(conns.closed);
 				metrics.netstat.with_label_values(&["other"]).set(conns.other);
 			}
-
-			GLOBAL_METRICS.inner().read().iter().for_each(|(key, value)| {
-				if key.starts_with("tokio_") {
-					metrics.tokio.with_label_values(&[&key[6..]]).set(*value);
-				} else if key.starts_with("mpsc_") {
-					metrics.unbounded_channels.with_label_values(&[&key[5..]]).set(*value);
-				} else {
-					metrics.internals.with_label_values(&[&key[..]]).set(*value);
-				}
-			});
-
-			let mut series = series.into_iter().fold(HashMap::<&'static str, Vec<u64>>::new(),
-				| mut h, (key, value)| {
-					h.entry(key)
-						.and_modify(|v| {
-							v.push(value)
-						})
-						.or_insert(vec![value]);
-					h
-				}
-			);
-
-			if let Some(imports) = series.remove("block_imports") {
-				let info = TimeSeriesInfo::from(imports);
-				metrics.block_import.with_label_values(&["count"]).set(info.count);
-				metrics.block_import.with_label_values(&["time_average"]).set(info.average);
-				metrics.block_import.with_label_values(&["time_median"]).set(info.median);
-				metrics.block_import.with_label_values(&["time_lower_median"]).set(info.lower_median);
-				metrics.block_import.with_label_values(&["time_higher_median"]).set(info.higher_median);
-			}
-
-			series.into_iter().for_each(|(key, values)| {
-				let info = TimeSeriesInfo::from(values);
-				metrics.internals.with_label_values(&[&format!("{:}_count", key)[..]]).set(info.count);
-				metrics.internals.with_label_values(&[&format!("{:}_average", key)[..]]).set(info.average);
-				metrics.internals.with_label_values(&[&format!("{:}_median", key)[..]]).set(info.median);
-				metrics.internals.with_label_values(&[&format!("{:}_lower_media", key)[..]]).set(info.lower_median);
-				metrics.internals.with_label_values(&[&format!("{:}_higher_median", key)[..]]).set(info.higher_median);
-			});
 		}
-
 	}
 }

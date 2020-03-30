@@ -26,14 +26,13 @@
 //! queues to be instantiated simply.
 
 use std::collections::HashMap;
-use std::time::Instant;
 use sp_runtime::{Justification, traits::{Block as BlockT, Header as _, NumberFor}};
 use crate::error::Error as ConsensusError;
 use crate::block_import::{
 	BlockImport, BlockOrigin, BlockImportParams, ImportedAux, JustificationImport, ImportResult,
 	BlockCheckParams, FinalityProofImport,
 };
-use sp_utils::metrics::GLOBAL_METRICS;
+use sp_utils::metrics::BLOCK_IMPORT;
 
 pub use basic_queue::BasicQueue;
 
@@ -188,7 +187,7 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>, Transaction>(
 	block: IncomingBlock<B>,
 	verifier: &mut V,
 ) -> Result<BlockImportResult<NumberFor<B>>, BlockImportError> {
-	let beginning = Instant::now();
+	let _timer = BLOCK_IMPORT.start_timer(); // records on drop
 	let peer = block.origin;
 
 	let (header, justification) = match (block.header, block.justification) {
@@ -261,9 +260,5 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>, Transaction>(
 	}
 	import_block.allow_missing_state = block.allow_missing_state;
 
-	
-	let res = import_handle.import_block(import_block.convert_transaction(), cache);
-	let elapsed = beginning.elapsed();
-	GLOBAL_METRICS.add("block_imports", (elapsed.as_secs() * 1000) + (elapsed.subsec_millis() as u64));
-	import_error(res)
+	import_error(import_handle.import_block(import_block.convert_transaction(), cache))
 }

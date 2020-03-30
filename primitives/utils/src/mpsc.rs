@@ -21,7 +21,7 @@ mod inner {
     };
     use futures::{sink::Sink, task::{Poll, Context}, stream::Stream};
     use std::pin::Pin;
-    use crate::metrics::GLOBAL_METRICS;
+    use crate::metrics::UNBOUNDED_CHANNELS_COUNTER;
 
     /// Wrapper Type around `UnboundedSender` that increases the global
     /// measure when a message is added
@@ -34,7 +34,7 @@ mod inner {
     pub struct TracingUnboundedReceiver<T>(&'static str, UnboundedReceiver<T>);
 
     /// Wrapper around `mpsc::unbounded` that tracks the in- and outflow via
-    /// `GLOBAL_METRICS`
+    /// `UNBOUNDED_CHANNELS_COUNTER`
     pub fn tracing_unbounded<T>(key: &'static str) ->(TracingUnboundedSender<T>, TracingUnboundedReceiver<T>) {
         let (s, r) = mpsc::unbounded();
         (TracingUnboundedSender(key.clone(), s), TracingUnboundedReceiver(key,r))
@@ -69,7 +69,7 @@ mod inner {
         /// Proxy function to mpsc::UnboundedSender
         pub fn unbounded_send(&self, msg: T) -> Result<(), TrySendError<T>> {
             self.1.unbounded_send(msg).map(|s|{
-                GLOBAL_METRICS.incr(self.0);
+                UNBOUNDED_CHANNELS_COUNTER.with_label_values(self.0).incr();
                 s
             })
         }
@@ -97,7 +97,7 @@ mod inner {
 
             // and discount the messages
             if count > 0 {
-                GLOBAL_METRICS.decr_by(self.0, count);
+                UNBOUNDED_CHANNELS_COUNTER.with_label_values(self.0).decr_by(count);
             }
 
         }
@@ -114,7 +114,7 @@ mod inner {
         pub fn try_next(&mut self) -> Result<Option<T>, TryRecvError> {
             self.1.try_next().map(|s| {
                 if s.is_some() {
-                    GLOBAL_METRICS.decr(self.0);
+                    UNBOUNDED_CHANNELS_COUNTER.with_label_values(self.0).decr();
                 }
                 s
             })
@@ -140,8 +140,8 @@ mod inner {
             match Pin::new(&mut s.1).poll_next(cx) {
                 Poll::Ready(msg) => {
                     if msg.is_some() {
-                        GLOBAL_METRICS.decr(s.0);
-                    }
+                        UNBOUNDED_CHANNELS_COUNTER.with_label_values(self.0).decr();
+                   }
                     Poll::Ready(msg)
                 }
                 Poll::Pending => {
