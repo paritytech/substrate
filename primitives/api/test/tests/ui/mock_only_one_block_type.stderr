@@ -4,6 +4,12 @@ error: Block type should be the same between all runtime apis.
 22 |     impl Api2<Block2> for MockApi {
    |               ^^^^^^
 
+error: First block type found here
+  --> $DIR/mock_only_one_block_type.rs:18:11
+   |
+18 |     impl Api<Block> for MockApi {
+   |              ^^^^^
+
 warning: unused import: `substrate_test_runtime_client::runtime::Block`
  --> $DIR/mock_only_one_block_type.rs:1:5
   |

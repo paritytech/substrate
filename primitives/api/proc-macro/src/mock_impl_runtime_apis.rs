@@ -283,8 +283,8 @@ struct GeneratedRuntimeApiImpls {
 fn generate_runtime_api_impls(impls: &[ItemImpl]) -> Result<GeneratedRuntimeApiImpls> {
 	let mut result = Vec::with_capacity(impls.len());
 	let mut error_type = None;
-	let mut global_block_type = None;
-	let mut self_ty = None;
+	let mut global_block_type: Option<TypePath> = None;
+	let mut self_ty: Option<Box<Type>> = None;
 
 	for impl_ in impls {
 		let impl_trait_path = extract_impl_trait(&impl_, RequireQualifiedTraitPath::No)?;
@@ -300,10 +300,17 @@ fn generate_runtime_api_impls(impls: &[ItemImpl]) -> Result<GeneratedRuntimeApiI
 				if self_ty == impl_.self_ty {
 					Some(self_ty)
 				} else {
-					return Err(Error::new(
+					let mut error =Error::new(
 						impl_.self_ty.span(),
 						"Self type should not change between runtime apis",
-					))
+					);
+
+					error.combine(Error::new(
+						self_ty.span(),
+						"First self type found here",
+					));
+
+					return Err(error)
 				}
 			},
 			None => Some(impl_.self_ty.clone()),
@@ -314,10 +321,17 @@ fn generate_runtime_api_impls(impls: &[ItemImpl]) -> Result<GeneratedRuntimeApiI
 				if global_block_type == *block_type {
 					Some(global_block_type)
 				} else {
-					return Err(Error::new(
+					let mut error = Error::new(
 						block_type.span(),
 						"Block type should be the same between all runtime apis.",
-					))
+					);
+
+					error.combine(Error::new(
+						global_block_type.span(),
+						"First block type found here",
+					));
+
+					return Err(error)
 				}
 			},
 			None => Some(block_type.clone()),
