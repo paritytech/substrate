@@ -8,8 +8,8 @@ if [ "$PIPELINE_ID" == "null" ]; then
 fi
 echo "::set-output name=pipeline::https://gitlab.parity.io/parity/substrate/pipelines/$PIPELINE_ID"
 
-# 60 minute job max
-for (( c=0; c < 60; c++ )); do
+# 130 minute job max
+for (( c=0; c < 130; c++ )); do
   out=$(curl -s "https://gitlab.parity.io/api/v4/projects/145/pipelines/$PIPELINE_ID" | jq -r .status)
   case $out in
     "success")
