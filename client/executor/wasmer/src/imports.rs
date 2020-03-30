@@ -28,6 +28,7 @@ pub struct Imports {
 	pub import_object: ImportObject,
 	pub memory: Option<Memory>,
 	_call_ctx_vec: Vec<Box<CallCtx>>,
+	_dynamic_funcs: Vec<Box<DynamicFunc<'static>>>,
 	_trampoline_bufs: Vec<TrampolineBuffer>,
 }
 
@@ -49,6 +50,7 @@ pub fn resolve_imports(
 	let mut namespaces = HashMap::new();
 	let mut call_ctx_vec = Vec::new();
 	let mut trampoline_bufs = Vec::new();
+	let mut dynamic_funcs = Vec::new();
 	let mut memory = None;
 	for import in imports {
 		if import.module() != "env" {
@@ -72,6 +74,7 @@ pub fn resolve_imports(
 				host_functions,
 				allow_missing_func_imports,
 				&mut call_ctx_vec,
+				&mut dynamic_funcs,
 				&mut trampoline_bufs,
 			),
 		};
@@ -86,6 +89,7 @@ pub fn resolve_imports(
 		import_object,
 		_call_ctx_vec: call_ctx_vec,
 		_trampoline_bufs: trampoline_bufs,
+		_dynamic_funcs: dynamic_funcs,
 		memory,
 	}
 }
@@ -119,6 +123,7 @@ fn resolve_func_import(
 	host_functions: &[&'static dyn Function],
 	allow_missing_func_imports: bool,
 	call_ctx_vec: &mut Vec<Box<CallCtx>>,
+	dynamic_funcs: &mut Vec<Box<DynamicFunc<'static>>>,
 	trampoline_bufs: &mut Vec<TrampolineBuffer>,
 ) -> Export {
 	let func_ty = match import.external() {
@@ -161,14 +166,39 @@ fn resolve_func_import(
 		.map(into_wasmer_ty)
 		.collect::<Vec<_>>();
 
-	DynamicFunc::new(
+	let boxed_func = Box::new(DynamicFunc::new(
 		Arc::new(FuncSig::new(params, returns)),
 		move |ctx, args| -> Vec<wasmer_runtime_core::types::Value> {
-			dbg!();
-			vec![]
+			let call_ctx = unsafe { &*call_ctx_ptr };
+			let (host_func, state_holder) = match call_ctx {
+				CallCtx::Missing => panic!("calling missing function"),
+				CallCtx::Resolved {
+					ref host_func,
+					ref state_holder,
+					..
+				} => (host_func, state_holder),
+			};
+
+			let num_params = host_func.signature().args.len();
+			let args = args.iter().cloned().map(from_wasmer_val);
+
+			let execution_result = state_holder.with_context(|host_ctx| {
+				let mut host_ctx = host_ctx.unwrap();
+				host_func.execute(&mut host_ctx, &mut args.into_iter())
+			});
+
+			match execution_result {
+				Ok(Some(ret_val)) => {
+					vec![into_wasmer_val(ret_val)]
+				}
+				Ok(None) => vec![],
+				Err(_msg) => panic!("host function returned an error"),
+			}
 		},
-	)
-	.to_export()
+	));
+	let export = boxed_func.to_export();
+	dynamic_funcs.push(boxed_func);
+	export
 }
 
 fn from_wasmer_val(val: wasmer_runtime_core::types::Value) -> Value {
