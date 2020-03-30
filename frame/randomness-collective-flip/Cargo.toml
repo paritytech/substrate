@@ -10,7 +10,7 @@ description = "FRAME randomness collective flip pallet"
 
 [dependencies]
 safe-mix = { version = "1.0", default-features = false }
-codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.3.0", default-features = false, features = ["derive"] }
 sp-runtime = { version = "2.0.0-alpha.5", default-features = false, path = "../../primitives/runtime" }
 frame-support = { version = "2.0.0-alpha.5", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0-alpha.5", default-features = false, path = "../system" }

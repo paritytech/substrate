@@ -9,7 +9,7 @@ repository = "https://github.com/paritytech/substrate/"
 description = "RPC interface for the transaction payment module."
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "1.2.0" }
+codec = { package = "parity-scale-codec", version = "1.3.0" }
 jsonrpc-core = "14.0.3"
 jsonrpc-core-client = "14.0.3"
 jsonrpc-derive = "14.0.3"
