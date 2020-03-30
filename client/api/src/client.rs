@@ -36,7 +36,6 @@ pub type ImportNotifications<Block> = mpsc::UnboundedReceiver<BlockImportNotific
 /// A stream of block finality notifications.
 pub type FinalityNotifications<Block> = mpsc::UnboundedReceiver<FinalityNotification<Block>>;
 
-
 /// A stream of block import events.
 pub type AllBlocksNotifications<Block> = mpsc::UnboundedReceiver<AllBlocksNotification<Block>>;
 
