@@ -79,7 +79,7 @@ trait Crypto: Sized {
 	) where
 		<Self::Pair as Pair>::Public: PublicT,
 	{
-		let v = network_override.unwrap_or(Ss58AddressFormat::default());
+		let v = network_override.unwrap_or_default();
 		if let Ok((pair, seed)) = Self::Pair::from_phrase(uri, password) {
 			let public_key = Self::public_from_pair(&pair);
 
