@@ -751,7 +751,7 @@ impl<T: Trait> Module<T> {
 	pub fn deposit_event_indexed(topics: &[T::Hash], event: T::Event) {
 		let block_no = Self::block_number();
 		// Don't populate events on genesis.
-		if block_no == T::BlockNumber::One() { return }
+		if block_no == T::BlockNumber::one() { return }
 
 		let phase = ExecutionPhase::get().unwrap_or_default();
 		let event = EventRecord {
