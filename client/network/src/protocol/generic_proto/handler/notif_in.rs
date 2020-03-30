@@ -36,7 +36,7 @@ use libp2p::swarm::{
 };
 use log::{error, warn};
 use smallvec::SmallVec;
-use std::{borrow::Cow, fmt, pin::Pin, str, task::{Context, Poll}};
+use std::{borrow::Cow, fmt, pin::Pin, task::{Context, Poll}};
 
 /// Implements the `IntoProtocolsHandler` trait of libp2p.
 ///
@@ -156,16 +156,19 @@ impl ProtocolsHandler for NotifsInHandler {
 		&mut self,
 		(msg, proto): <Self::InboundProtocol as InboundUpgrade<NegotiatedSubstream>>::Output
 	) {
+		// If a substream already exists, we drop it and replace it with the new incoming one.
 		if self.substream.is_some() {
-			warn!(
-				target: "sub-libp2p",
-				"Received duplicate inbound notifications substream for {:?}",
-				str::from_utf8(self.in_protocol.protocol_name()),
-			);
-			return;
+			self.events_queue.push(ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Closed));
 		}
 
+		// Note that we drop the existing substream, which will send an equivalent to a TCP "RST"
+		// to the remote and force-close the substream. It  might seem like an unclean way to get
+		// rid of a substream. However, keep in mind that it is invalid for the remote to open
+		// multiple such substreams, and therefore sending a "RST" is the correct thing to do.
+		// Also note that we have already closed our writing side during the initial handshake,
+		// and we can't close "more" than that anyway.
 		self.substream = Some(proto);
+
 		self.events_queue.push(ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::OpenRequest(msg)));
 		self.pending_accept_refuses = self.pending_accept_refuses
 			.checked_add(1)
@@ -235,8 +238,15 @@ impl ProtocolsHandler for NotifsInHandler {
 
 		match self.substream.as_mut().map(|s| Stream::poll_next(Pin::new(s), cx)) {
 			None | Some(Poll::Pending) => {},
-			Some(Poll::Ready(Some(Ok(msg)))) =>
-				return Poll::Ready(ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Notif(msg))),
+			Some(Poll::Ready(Some(Ok(msg)))) => {
+				if self.pending_accept_refuses != 0 {
+					warn!(
+						target: "sub-libp2p",
+						"Bad state in inbound-only handler: notif before accepting substream"
+					);
+				}
+				return Poll::Ready(ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Notif(msg)))
+			},
 			Some(Poll::Ready(None)) | Some(Poll::Ready(Some(Err(_)))) => {
 				self.substream = None;
 				return Poll::Ready(ProtocolsHandlerEvent::Custom(NotifsInHandlerOut::Closed));

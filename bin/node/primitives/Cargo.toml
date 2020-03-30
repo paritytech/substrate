@@ -8,7 +8,7 @@ homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.3.0", default-features = false, features = ["derive"] }
 sp-application-crypto = { version = "2.0.0-alpha.5", default-features = false, path = "../../../primitives/application-crypto" }
 sp-core = { version = "2.0.0-alpha.5", default-features = false, path = "../../../primitives/core" }
 sp-runtime = { version = "2.0.0-alpha.5", default-features = false, path = "../../../primitives/runtime" }
@@ -25,3 +25,6 @@ std = [
 	"sp-core/std",
 	"sp-runtime/std",
 ]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

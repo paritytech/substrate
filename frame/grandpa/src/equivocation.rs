@@ -37,7 +37,7 @@ use frame_support::traits::KeyOwnerProofSystem;
 use frame_system::offchain::SubmitSignedTransaction;
 use sp_application_crypto::{key_types::GRANDPA, RuntimeAppPublic};
 use sp_finality_grandpa::{EquivocationProof, RoundNumber, SetId};
-use sp_runtime::{traits::IdentifyAccount, DispatchResult, KeyTypeId, PerThing, Perbill};
+use sp_runtime::{traits::IdentifyAccount, DispatchResult, KeyTypeId, Perbill};
 use sp_staking::{
 	offence::{Kind, Offence, OffenceError, ReportOffence},
 	SessionIndex,

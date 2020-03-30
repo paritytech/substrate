@@ -27,11 +27,13 @@ use frame_system::{RawOrigin, ensure_signed, ensure_none};
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn dummy(origin, _n: u32) -> DispatchResult {
 			let _sender = ensure_signed(origin)?;
 			Ok(())
 		}
 
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn other_dummy(origin, _n: u32) -> DispatchResult {
 			let _sender = ensure_none(origin)?;
 			Ok(())

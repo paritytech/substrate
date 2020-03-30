@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use node_runtime::{
-	Call, Executive, Indices, Runtime, SubmitImOnlineTransaction, UncheckedExtrinsic,
+	Call, Executive, Indices, Runtime, TransactionSubmitterOf, UncheckedExtrinsic,
 };
 use sp_application_crypto::AppKey;
 use sp_core::testing::KeyStore;
@@ -30,6 +30,8 @@ use codec::Decode;
 
 pub mod common;
 use self::common::*;
+
+type SubmitTransaction = TransactionSubmitterOf<pallet_im_online::sr25519::AuthorityId>;
 
 #[test]
 fn should_submit_unsigned_transaction() {
@@ -47,7 +49,7 @@ fn should_submit_unsigned_transaction() {
 		};
 
 		let call = pallet_im_online::Call::heartbeat(heartbeat_data, signature);
-		<SubmitImOnlineTransaction as SubmitUnsignedTransaction<Runtime, Call>>
+		<SubmitTransaction as SubmitUnsignedTransaction<Runtime, Call>>
 			::submit_unsigned(call)
 			.unwrap();
 
@@ -70,17 +72,17 @@ fn should_submit_signed_transaction() {
 	t.register_extension(KeystoreExt(keystore));
 
 	t.execute_with(|| {
-		let keys = <SubmitImOnlineTransaction as SubmitSignedTransaction<Runtime, Call>>
+		let keys = <SubmitTransaction as SubmitSignedTransaction<Runtime, Call>>
 			::find_all_local_keys();
 		assert_eq!(keys.len(), 3, "Missing keys: {:?}", keys);
 
-		let can_sign = <SubmitImOnlineTransaction as SubmitSignedTransaction<Runtime, Call>>
+		let can_sign = <SubmitTransaction as SubmitSignedTransaction<Runtime, Call>>
 			::can_sign();
 		assert!(can_sign, "Since there are keys, `can_sign` should return true");
 
 		let call = pallet_balances::Call::transfer(Default::default(), Default::default());
 		let results =
-			<SubmitImOnlineTransaction as SubmitSignedTransaction<Runtime, Call>>::submit_signed(call);
+			<SubmitTransaction as SubmitSignedTransaction<Runtime, Call>>::submit_signed(call);
 
 		let len = results.len();
 		assert_eq!(len, 3);
@@ -102,7 +104,7 @@ fn should_submit_signed_twice_from_the_same_account() {
 	t.execute_with(|| {
 		let call = pallet_balances::Call::transfer(Default::default(), Default::default());
 		let results =
-			<SubmitImOnlineTransaction as SubmitSignedTransaction<Runtime, Call>>::submit_signed(call);
+			<SubmitTransaction as SubmitSignedTransaction<Runtime, Call>>::submit_signed(call);
 
 		let len = results.len();
 		assert_eq!(len, 1);
@@ -112,7 +114,7 @@ fn should_submit_signed_twice_from_the_same_account() {
 		// submit another one from the same account. The nonce should be incremented.
 		let call = pallet_balances::Call::transfer(Default::default(), Default::default());
 		let results =
-			<SubmitImOnlineTransaction as SubmitSignedTransaction<Runtime, Call>>::submit_signed(call);
+			<SubmitTransaction as SubmitSignedTransaction<Runtime, Call>>::submit_signed(call);
 
 		let len = results.len();
 		assert_eq!(len, 1);
@@ -152,7 +154,7 @@ fn submitted_transaction_should_be_valid() {
 	t.execute_with(|| {
 		let call = pallet_balances::Call::transfer(Default::default(), Default::default());
 		let results =
-			<SubmitImOnlineTransaction as SubmitSignedTransaction<Runtime, Call>>::submit_signed(call);
+			<SubmitTransaction as SubmitSignedTransaction<Runtime, Call>>::submit_signed(call);
 		let len = results.len();
 		assert_eq!(len, 1);
 		assert_eq!(results.into_iter().filter_map(|x| x.1.ok()).count(), len);
