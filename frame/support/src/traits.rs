@@ -24,7 +24,7 @@ use sp_core::u32_trait::Value as U32;
 use sp_runtime::{
 	RuntimeDebug,
 	ConsensusEngineId, DispatchResult, DispatchError,
-	traits::{MaybeSerializeDeserialize, AtLeast32Bit, Saturating, TrailingZeroInput},
+	traits::{MaybeSerializeDeserialize, AtLeast32Bit, Saturating, TrailingZeroInput, Bounded},
 };
 use crate::dispatch::Parameter;
 use crate::storage::StorageMap;
@@ -87,7 +87,7 @@ impl<
 	Created: Happened<K>,
 	Removed: Happened<K>,
 	K: FullCodec,
-	T: FullCodec
+	T: FullCodec,
 > StoredMap<K, T> for StorageMapShim<S, Created, Removed, K, T> {
 	fn get(k: &K) -> T { S::get(k) }
 	fn is_explicit(k: &K) -> bool { S::contains_key(k) }
@@ -135,6 +135,35 @@ impl<
 			}
 			v
 		})
+	}
+}
+
+/// Something that can estimate at which block the next session rotation will happen. This should
+/// be the same logical unit that dictates `ShouldEndSession` to the session module. No Assumptions
+/// are made about the scheduling of the sessions.
+pub trait EstimateNextSessionRotation<BlockNumber> {
+	/// Return the block number at which the next session rotation is estimated to happen.
+	///
+	/// None should be returned if the estimation fails to come to an answer
+	fn estimate_next_session_rotation(now: BlockNumber) -> Option<BlockNumber>;
+}
+
+impl<BlockNumber: Bounded> EstimateNextSessionRotation<BlockNumber> for () {
+	fn estimate_next_session_rotation(_: BlockNumber) -> Option<BlockNumber> {
+		Default::default()
+	}
+}
+
+/// Something that can estimate at which block the next `new_session` will be triggered. This must
+/// always be implemented by the session module.
+pub trait EstimateNextNewSession<BlockNumber> {
+	/// Return the block number at which the next new session is estimated to happen.
+	fn estimate_next_new_session(now: BlockNumber) -> Option<BlockNumber>;
+}
+
+impl<BlockNumber: Bounded> EstimateNextNewSession<BlockNumber> for () {
+	fn estimate_next_new_session(_: BlockNumber) -> Option<BlockNumber> {
+		Default::default()
 	}
 }
 

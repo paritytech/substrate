@@ -19,3 +19,6 @@ ref-cast = "1.0.0"
 [features]
 default = [ "std" ]
 std = [ "sp-std/std", "serde", "impl-serde" ]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
