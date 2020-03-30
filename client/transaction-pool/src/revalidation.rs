@@ -24,9 +24,8 @@ use sp_runtime::generic::BlockId;
 use sp_runtime::transaction_validity::TransactionValidityError;
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
 
-use futures::{prelude::*, stream::unfold};
+use futures::prelude::*;
 use std::time::Duration;
-use futures_timer::Delay;
 
 #[cfg(not(test))]
 const BACKGROUND_REVALIDATION_INTERVAL: Duration = Duration::from_millis(200);
@@ -53,12 +52,6 @@ struct RevalidationWorker<Api: ChainApi> {
 }
 
 impl<Api: ChainApi> Unpin for RevalidationWorker<Api> {}
-
-fn interval(duration: Duration) -> impl Stream<Item=()> + Unpin {
-	unfold((), move |_| {
-		Delay::new(duration).map(|_| Some(((), ())))
-	}).map(drop)
-}
 
 /// Revalidate batch of transaction.
 ///
@@ -208,8 +201,13 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 	/// It does two things: periodically tries to process some transactions
 	/// from the queue and also accepts messages to enqueue some more
 	/// transactions from the pool.
-	pub async fn run(mut self, from_queue: TracingUnboundedReceiver<WorkerPayload<Api>>) {
-		let interval = interval(BACKGROUND_REVALIDATION_INTERVAL).fuse();
+	pub async fn run<R: intervalier::IntoStream>(
+		mut self,
+		from_queue: TracingUnboundedReceiver<WorkerPayload<Api>>,
+		interval: R,
+	) where R: Send, R::Guard: Send
+	{
+		let interval = interval.into_stream().fuse();
 		let from_queue = from_queue.fuse();
 		futures::pin_mut!(interval, from_queue);
 		let this = &mut self;
@@ -271,9 +269,12 @@ where
 		}
 	}
 
-	/// New revalidation queue with background worker.
-	pub fn new_background(api: Arc<Api>, pool: Arc<Pool<Api>>) ->
-		(Self, Pin<Box<dyn Future<Output=()> + Send>>)
+	pub fn new_with_interval<R: intervalier::IntoStream>(
+		api: Arc<Api>,
+		pool: Arc<Pool<Api>>,
+		interval: R,
+	) -> (Self, Pin<Box<dyn Future<Output=()> + Send>>)
+	where R: Send + 'static, R::Guard: Send
 	{
 		let (to_worker, from_queue) = tracing_unbounded("mpsc_revalidation_queue");
 
@@ -286,7 +287,25 @@ where
 				background: Some(to_worker),
 			};
 
-		(queue, worker.run(from_queue).boxed())
+		(queue, worker.run(from_queue, interval).boxed())
+	}
+
+	/// New revalidation queue with background worker.
+	pub fn new_background(api: Arc<Api>, pool: Arc<Pool<Api>>) ->
+		(Self, Pin<Box<dyn Future<Output=()> + Send>>)
+	{
+		Self::new_with_interval(api, pool, intervalier::Interval::new(BACKGROUND_REVALIDATION_INTERVAL))
+	}
+
+	/// New revalidation queue with background worker and test signal.
+	#[cfg(test)]
+	pub fn new_test(api: Arc<Api>, pool: Arc<Pool<Api>>) ->
+		(Self, Pin<Box<dyn Future<Output=()> + Send>>, intervalier::BackSignalControl)
+	{
+		let (interval, notifier) = intervalier::BackSignalInterval::new(BACKGROUND_REVALIDATION_INTERVAL);
+		let (queue, background) = Self::new_with_interval(api, pool, interval);
+
+		(queue, background, notifier)
 	}
 
 	/// Queue some transaction for later revalidation.

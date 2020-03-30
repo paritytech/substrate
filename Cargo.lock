@@ -368,9 +368,13 @@ checksum = "5da9b3d9f6f585199287a473f4f8dfab6566cf827d15c00c219f53c645687ead"
 
 [[package]]
 name = "bitvec"
-version = "0.15.2"
+version = "0.17.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a993f74b4c99c1908d156b8d2e0fb6277736b0ecbd833982fd1241d39b2766a6"
+checksum = "41262f11d771fd4a61aa3ce019fca363b4b6c282fca9da2a31186d3965a47a5c"
+dependencies = [
+ "either",
+ "radium",
+]
 
 [[package]]
 name = "blake2"
@@ -2354,6 +2358,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "141340095b15ed7491bd3d4ced9d20cebfb826174b6bb03386381f62b01e3d77"
 
 [[package]]
+name = "intervalier"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "750dc2c10615a0aa0d38a5adf9d4e62651c178109f40253cb6235b3f638af6a9"
+dependencies = [
+ "futures 0.3.4",
+ "futures-timer 2.0.2",
+]
+
+[[package]]
 name = "iovec"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3476,6 +3490,7 @@ dependencies = [
  "pallet-contracts",
  "pallet-im-online",
  "pallet-indices",
+ "pallet-staking",
  "pallet-timestamp",
  "pallet-transaction-payment",
  "parity-scale-codec",
@@ -4081,12 +4096,9 @@ version = "2.0.0-alpha.5"
 dependencies = [
  "frame-support",
  "frame-system",
- "hex-literal",
- "lazy_static",
  "pallet-session",
  "pallet-timestamp",
  "parity-scale-codec",
- "parking_lot 0.10.0",
  "serde",
  "sp-consensus-babe",
  "sp-consensus-vrf",
@@ -4097,8 +4109,6 @@ dependencies = [
  "sp-staking",
  "sp-std",
  "sp-timestamp",
- "sp-version",
- "substrate-test-runtime",
 ]
 
 [[package]]
@@ -4558,25 +4568,30 @@ dependencies = [
 name = "pallet-staking"
 version = "2.0.0-alpha.5"
 dependencies = [
+ "env_logger 0.7.1",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
  "hex",
  "pallet-authorship",
  "pallet-balances",
+ "pallet-indices",
  "pallet-session",
  "pallet-staking-reward-curve",
  "pallet-timestamp",
  "parity-scale-codec",
+ "parking_lot 0.10.0",
+ "rand 0.7.3",
  "rand_chacha 0.2.2",
  "serde",
+ "sp-application-crypto",
  "sp-core",
  "sp-io",
- "sp-keyring",
  "sp-phragmen",
  "sp-runtime",
  "sp-staking",
  "sp-std",
+ "static_assertions",
  "substrate-test-utils",
 ]
 
@@ -4766,9 +4781,9 @@ dependencies = [
 
 [[package]]
 name = "parity-scale-codec"
-version = "1.2.0"
+version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f509c5e67ca0605ee17dcd3f91ef41cadd685c75a298fb6261b781a5acb3f910"
+checksum = "329c8f7f4244ddb5c37c103641027a76c530e65e8e4b8240b29f81ea40508b17"
 dependencies = [
  "arrayvec 0.5.1",
  "bitvec",
@@ -5269,6 +5284,12 @@ checksum = "2bdc6c187c65bca4260c9011c9e3132efe4909da44726bad24cf7572ae338d7f"
 dependencies = [
  "proc-macro2",
 ]
+
+[[package]]
+name = "radium"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "def50a86306165861203e7f84ecffbbdfdea79f0e51039b33de1e952358c47ac"
 
 [[package]]
 name = "rand"
@@ -5889,6 +5910,7 @@ dependencies = [
  "lazy_static",
  "log 0.4.8",
  "names",
+ "nix",
  "parity-util-mem",
  "regex",
  "rpassword",
@@ -6771,8 +6793,8 @@ dependencies = [
  "derive_more",
  "futures 0.3.4",
  "futures-diagnose",
- "futures-timer 2.0.2",
  "hex",
+ "intervalier",
  "log 0.4.8",
  "parity-scale-codec",
  "parity-util-mem",
@@ -7494,12 +7516,24 @@ dependencies = [
 name = "sp-phragmen"
 version = "2.0.0-alpha.5"
 dependencies = [
+ "parity-scale-codec",
  "rand 0.7.3",
  "serde",
- "sp-io",
+ "sp-phragmen",
+ "sp-phragmen-compact",
  "sp-runtime",
  "sp-std",
  "substrate-test-utils",
+]
+
+[[package]]
+name = "sp-phragmen-compact"
+version = "2.0.0-dev"
+dependencies = [
+ "proc-macro-crate",
+ "proc-macro2",
+ "quote 1.0.3",
+ "syn 1.0.16",
 ]
 
 [[package]]
