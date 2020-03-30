@@ -52,7 +52,7 @@ pub fn create_offender<T: frame_system::Trait + pallet_session::Trait + pallet_s
 		let nominator_stash: T::AccountId = account("nominator stash", n * MAX_NOMINATORS + j, 0);
 		let nominator_controller: T::AccountId = account("nominator controller", n * MAX_NOMINATORS + j, 0);
 		let nominator_controller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(nominator_controller.clone());
-		Staking::<T>::bond(RawOrigin::Signed(nominator_stash.clone()).into(), nominator_controller_lookup.clone(), amount, reward_destination)?;	
+		Staking::<T>::bond(RawOrigin::Signed(nominator_stash.clone()).into(), nominator_controller_lookup.clone(), amount, reward_destination)?;
 		let selected_validators: Vec<<T::Lookup as StaticLookup>::Source> = vec![controller_lookup.clone()];
 		Staking::<T>::nominate(RawOrigin::Signed(nominator_controller.clone()).into(), selected_validators)?;
 

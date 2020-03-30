@@ -272,7 +272,7 @@ struct ReportIndexStorage<T: Trait, O: Offence<T::IdentificationTuple>> {
 
 impl<T: Trait, O: Offence<T::IdentificationTuple>> ReportIndexStorage<T, O> {
 	/// Preload indexes from the storage for the specific `time_slot` and the kind of the offence.
-	fn load(time_slot: &O::TimeSlot) -> Self {	
+	fn load(time_slot: &O::TimeSlot) -> Self {
 		let opaque_time_slot = time_slot.encode();
 
 		let same_kind_reports = <ReportsByKindIndex>::get(&O::ID);
