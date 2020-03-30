@@ -2802,7 +2802,6 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, pallet_session::historical::Ident
 			}
 			active_era.expect("value checked not to be `None`; qed").index
 		};
-
 		let active_era_start_session_index = Self::eras_start_session_index(active_era)
 			.unwrap_or_else(|| {
 				frame_support::print("Error: start_session_index must be set for current_era");

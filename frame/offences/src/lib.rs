@@ -300,7 +300,6 @@ impl<T: Trait, O: Offence<T::IdentificationTuple>> ReportIndexStorage<T, O> {
 			Ok(pos) => pos,
 			Err(pos) => pos,
 		};
-
 		self.same_kind_reports
 			.insert(pos, (time_slot.clone(), report_id));
 

@@ -355,7 +355,6 @@ fn slash_nominators<T: Trait>(
 	let mut reward_payout = Zero::zero();
 
 	nominators_slashed.reserve(exposure.others.len());
-
 	for nominator in &exposure.others {
 		let stash = &nominator.who;
 		let mut nom_slashed = Zero::zero();
