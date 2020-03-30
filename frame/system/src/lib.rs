@@ -749,9 +749,9 @@ impl<T: Trait> Module<T> {
 	/// This will update storage entries that correspond to the specified topics.
 	/// It is expected that light-clients could subscribe to this topics.
 	pub fn deposit_event_indexed(topics: &[T::Hash], event: T::Event) {
-		let block_no = Self::block_number();
+		let block_number = Self::block_number();
 		// Don't populate events on genesis.
-		if block_no == T::BlockNumber::zero() { return }
+		if block_number == T::BlockNumber::zero() { return }
 
 		let phase = ExecutionPhase::get().unwrap_or_default();
 		let event = EventRecord {
@@ -787,7 +787,7 @@ impl<T: Trait> Module<T> {
 
 		for topic in topics {
 			// The same applies here.
-			if <EventTopics<T>>::append(topic, &[(block_no, event_idx)]).is_err() {
+			if <EventTopics<T>>::append(topic, &[(block_number, event_idx)]).is_err() {
 				return;
 			}
 		}
@@ -2070,6 +2070,20 @@ mod tests {
 					substrate_test_runtime_client::runtime::WASM_BINARY.to_vec()
 				)],
 			).unwrap();
+		});
+	}
+
+	#[test]
+	fn events_not_emitted_during_genesis() {
+		new_test_ext().execute_with(|| {
+			// Block Number is zero at genesis
+			assert!(System::block_number().is_zero());
+			System::on_created_account(Default::default());
+			assert!(System::events().is_empty());
+			// Events will be emitted starting on block 1
+			System::set_block_number(1);
+			System::on_created_account(Default::default());
+			assert!(System::events().len() == 1);
 		});
 	}
 }
