@@ -28,3 +28,6 @@ sp-transaction-pool = { version = "2.0.0-alpha.5", path = "../../../../primitive
 substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../../../test-utils/runtime/client" }
 env_logger = "0.7.0"
 sc-transaction-pool = { version = "2.0.0-alpha.5", path = "../../../../client/transaction-pool" }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

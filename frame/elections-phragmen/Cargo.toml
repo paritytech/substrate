@@ -35,3 +35,6 @@ std = [
 	"sp-std/std",
 ]
 runtime-benchmarks = ["frame-support/runtime-benchmarks"]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

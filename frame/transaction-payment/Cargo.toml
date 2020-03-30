@@ -31,3 +31,6 @@ std = [
 	"frame-system/std",
 	"pallet-transaction-payment-rpc-runtime-api/std"
 ]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

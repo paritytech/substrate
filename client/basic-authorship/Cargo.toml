@@ -29,3 +29,6 @@ futures-timer = "3.0.1"
 sc-transaction-pool = { version = "2.0.0-alpha.5", path = "../../client/transaction-pool" }
 substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../test-utils/runtime/client" }
 parking_lot = "0.10.0"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
