@@ -788,6 +788,7 @@ pub trait TestNetFactory: Sized {
 						notification.header,
 						true,
 					);
+					peer.network.service().announce_block(notification.hash, Vec::new());
 				}
 
 				// We poll `finality_notification_stream`, but we only take the last event.
