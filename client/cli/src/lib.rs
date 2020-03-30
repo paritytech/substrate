@@ -211,7 +211,7 @@ pub fn init_logger(pattern: &str) {
 	});
 
 	if builder.try_init().is_err() {
-		info!("Not registering Substrate logger, as there is already a global logger registered!");
+		info!("💬 Not registering Substrate logger, as there is already a global logger registered!");
 	}
 }
 
@@ -220,4 +220,22 @@ fn kill_color(s: &str) -> String {
 		static ref RE: Regex = Regex::new("\x1b\\[[^m]+m").expect("Error initializing color regex");
 	}
 	RE.replace_all(s, "").to_string()
+}
+
+/// Reset the signal pipe (`SIGPIPE`) handler to the default one provided by the system.
+/// This will end the program on `SIGPIPE` instead of panicking.
+///
+/// This should be called before calling any cli method or printing any output.
+pub fn reset_signal_pipe_handler() -> Result<()> {
+	#[cfg(target_family = "unix")]
+	{
+		use nix::sys::signal;
+
+		unsafe {
+			signal::signal(signal::Signal::SIGPIPE, signal::SigHandler::SigDfl)
+				.map_err(|e| Error::Other(e.to_string()))?;
+		}
+	}
+
+	Ok(())
 }

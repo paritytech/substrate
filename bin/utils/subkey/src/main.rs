@@ -648,7 +648,7 @@ fn read_pair<C: Crypto>(
 }
 
 fn format_signature<C: Crypto>(signature: &SignatureOf<C>) -> String {
-	format!("{}", hex::encode(signature))
+	format!("{}", HexDisplay::from(&signature.as_ref()))
 }
 
 fn format_seed<C: Crypto>(seed: SeedOf<C>) -> String {
@@ -683,6 +683,7 @@ fn create_extrinsic<C: Crypto>(
 			frame_system::CheckWeight::<Runtime>::new(),
 			pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(f),
 			Default::default(),
+			Default::default(),
 		)
 	};
 	let raw_payload = SignedPayload::from_raw(
@@ -692,6 +693,7 @@ fn create_extrinsic<C: Crypto>(
 			VERSION.spec_version as u32,
 			genesis_hash,
 			genesis_hash,
+			(),
 			(),
 			(),
 			(),
@@ -711,7 +713,7 @@ fn create_extrinsic<C: Crypto>(
 }
 
 fn print_extrinsic(extrinsic: UncheckedExtrinsic) {
-	println!("0x{}", hex::encode(&extrinsic.encode()));
+	println!("0x{}", HexDisplay::from(&extrinsic.encode()));
 }
 
 fn print_usage(matches: &ArgMatches) {

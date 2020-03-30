@@ -19,3 +19,6 @@ fs2 = "0.4.3"
 wasm-gc-api = "0.1.11"
 atty = "0.2.13"
 itertools = "0.8.2"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

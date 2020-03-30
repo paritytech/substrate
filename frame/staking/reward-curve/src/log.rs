@@ -14,13 +14,13 @@ pub fn log2(p: u32, q: u32) -> u32 {
 	}
 
 	let mut n = 0u32;
-	while !(p >= 2u32.pow(n)*q) || !(p < 2u32.pow(n+1)*q) {
+	while !(p >= (1u32 << n)*q) || !(p < (1u32 << (n+1))*q) {
 		n += 1;
 	}
-	assert!(p < 2u32.pow(n+1) * q);
+	assert!(p < (1u32 << (n+1)) * q);
 
-	let y_num: u32 = (p - 2u32.pow(n) * q).try_into().unwrap();
-	let y_den: u32 = (p + 2u32.pow(n) * q).try_into().unwrap();
+	let y_num: u32 = (p - (1u32 << n) * q).try_into().unwrap();
+	let y_den: u32 = (p + (1u32 << n) * q).try_into().unwrap();
 
 	let _2_div_ln_2 = 2_885_390u32;
 

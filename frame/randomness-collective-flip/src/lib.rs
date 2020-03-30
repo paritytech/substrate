@@ -35,12 +35,13 @@
 //! ### Example - Get random seed for the current block
 //!
 //! ```
-//! use frame_support::{decl_module, dispatch, traits::Randomness};
+//! use frame_support::{decl_module, dispatch, traits::Randomness, weights::SimpleDispatchInfo};
 //!
 //! pub trait Trait: frame_system::Trait {}
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//! 		#[weight = SimpleDispatchInfo::default()]
 //! 		pub fn random_module_example(origin) -> dispatch::DispatchResult {
 //! 			let _random_seed = <pallet_randomness_collective_flip::Module<T>>::random_seed();
 //! 			Ok(())
@@ -54,7 +55,10 @@
 
 use sp_std::{prelude::*, convert::TryInto};
 use sp_runtime::traits::Hash;
-use frame_support::{decl_module, decl_storage, traits::Randomness};
+use frame_support::{
+	decl_module, decl_storage, traits::Randomness,
+	weights::{Weight, SimpleDispatchInfo, WeighData}
+};
 use safe_mix::TripletMix;
 use codec::Encode;
 use frame_system::Trait;
@@ -69,7 +73,7 @@ fn block_number_to_index<T: Trait>(block_number: T::BlockNumber) -> usize {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn on_initialize(block_number: T::BlockNumber) {
+		fn on_initialize(block_number: T::BlockNumber) -> Weight {
 			let parent_hash = <frame_system::Module<T>>::parent_hash();
 
 			<RandomMaterial<T>>::mutate(|ref mut values| if values.len() < RANDOM_MATERIAL_LEN as usize {
@@ -78,6 +82,8 @@ decl_module! {
 				let index = block_number_to_index::<T>(block_number);
 				values[index] = parent_hash;
 			});
+
+			SimpleDispatchInfo::default().weigh_data(())
 		}
 	}
 }
@@ -156,9 +162,11 @@ mod tests {
 	use sp_runtime::{
 		Perbill,
 		testing::Header,
-		traits::{BlakeTwo256, OnInitialize, Header as _, IdentityLookup},
+		traits::{BlakeTwo256, Header as _, IdentityLookup},
 	};
-	use frame_support::{impl_outer_origin, parameter_types, weights::Weight, traits::Randomness};
+	use frame_support::{
+		impl_outer_origin, parameter_types, weights::Weight, traits::{Randomness, OnInitialize},
+	};
 
 	#[derive(Clone, PartialEq, Eq)]
 	pub struct Test;
