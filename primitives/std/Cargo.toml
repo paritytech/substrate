@@ -13,3 +13,6 @@ documentation = "https://docs.rs/sp-std"
 [features]
 default = ["std"]
 std = []
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

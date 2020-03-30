@@ -978,7 +978,7 @@ dependencies = [
 
 [[package]]
 name = "parity-scale-codec"
-version = "1.2.0"
+version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f509c5e67ca0605ee17dcd3f91ef41cadd685c75a298fb6261b781a5acb3f910"
 dependencies = [
@@ -991,7 +991,7 @@ dependencies = [
 
 [[package]]
 name = "parity-scale-codec-derive"
-version = "1.2.0"
+version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a0ec292e92e8ec7c58e576adacc1e3f399c597c8f263c42f18420abe58e7245"
 dependencies = [
@@ -1078,7 +1078,7 @@ dependencies = [
  "cloudabi",
  "libc",
  "redox_syscall",
- "smallvec 1.2.0",
+ "smallvec 1.3.0",
  "winapi",
 ]
 
@@ -1482,7 +1482,7 @@ dependencies = [
 
 [[package]]
 name = "smallvec"
-version = "1.2.0"
+version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c2fb2ec9bcd216a5b0d0ccf31ab17b5ed1d627960edff65bbe95d3ce221cefc"
 
@@ -1958,7 +1958,7 @@ dependencies = [
  "hashbrown",
  "log",
  "rustc-hex",
- "smallvec 1.2.0",
+ "smallvec 1.3.0",
 ]
 
 [[package]]
@@ -2003,7 +2003,7 @@ version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5479532badd04e128284890390c1e876ef7a993d0570b3597ae43dfa1d59afa4"
 dependencies = [
- "smallvec 1.2.0",
+ "smallvec 1.3.0",
 ]
 
 [[package]]
