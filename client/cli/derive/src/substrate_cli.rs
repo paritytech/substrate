@@ -161,7 +161,7 @@ fn get_platform() -> String {
 fn get_version() -> String {
 	let impl_commit = std::env::var("VERGEN_SHA_SHORT")
 		.unwrap_or_else(|_| {
-			abort_call_site!("missing env variable VERGEN_SHA_SHORT. You might want to add a build.rs script that runs substrate_build_script_utils::generate_cargo_keys()")
+			abort_call_site!("missing env variable VERGEN_SHA_SHORT. You might want to add a build.rs script that runs substrate_build_script_utils::generate_cargo_keys() or provide the macro attribute impl_version yourself (impl_version = \"1.0.0\")")
 		});
 	let commit_dash = if impl_commit.is_empty() { "" } else { "-" };
 

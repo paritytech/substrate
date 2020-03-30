@@ -6,7 +6,7 @@ struct MyCommand {
 
 #[substrate_cli_params(
 	shared_params = shared,
-	unknown_param = 42,
+	unknown_attr = 42,
 )]
 impl sc_cli::CliConfiguration for MyCommand {
 	fn is_dev(&self) -> sc_cli::Result<bool> {
