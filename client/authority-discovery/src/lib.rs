@@ -63,7 +63,7 @@ use prost::Message;
 use sc_client_api::blockchain::HeaderBackend;
 use sc_network::{DhtEvent, ExHashT, NetworkStateInfo};
 use sp_authority_discovery::{AuthorityDiscoveryApi, AuthorityId, AuthoritySignature, AuthorityPair};
-use sp_core::crypto::{key_types, Pair};
+use sp_core::crypto::{key_types, CryptoTypePublicPair, Pair};
 use sp_core::traits::BareCryptoStorePtr;
 use sp_runtime::{traits::Block as BlockT, generic::BlockId};
 use sp_api::ProvideRuntimeApi;
@@ -283,19 +283,36 @@ where
 			.encode(&mut serialized_addresses)
 			.map_err(Error::EncodingProto)?;
 
-		for key in self.get_priv_keys_within_authority_set()?.into_iter() {
-			let signature = key.sign(&serialized_addresses);
+		let keys: Vec<CryptoTypePublicPair> = self.get_own_public_keys_within_authority_set()?
+			.into_iter()
+			.map(Into::into)
+			.collect();
 
+		let signatures = self.key_store
+			.read()
+			.sign_with_all(
+				key_types::AUTHORITY_DISCOVERY,
+				keys.clone(),
+				serialized_addresses.as_slice(),
+			)
+			.map_err(|_| Error::Signing)?;
+
+		for (sign_result, key) in signatures.iter().zip(keys) {
 			let mut signed_addresses = vec![];
+
+			// sign_with_all returns Result<Signature, Error> signature
+			// is generated for a public key that is supported.
+			// Verify that all signatures exist for all provided keys.
+			let signature = sign_result.as_ref().map_err(|_| Error::MissingSignature(key.clone()))?;
 			schema::SignedAuthorityAddresses {
 				addresses: serialized_addresses.clone(),
-				signature: signature.encode(),
+				signature: Encode::encode(&signature),
 			}
 			.encode(&mut signed_addresses)
 				.map_err(Error::EncodingProto)?;
 
 			self.network.put_value(
-				hash_authority_id(key.public().as_ref())?,
+				hash_authority_id(key.1.as_ref())?,
 				signed_addresses,
 			);
 		}
@@ -444,21 +461,6 @@ where
 		}
 
 		Ok(())
-	}
-
-	/// Retrieve all local authority discovery private keys that are within the current authority
-	/// set.
-	fn get_priv_keys_within_authority_set(&mut self) -> Result<Vec<AuthorityPair>> {
-		let keys = self.get_own_public_keys_within_authority_set()?
-			.into_iter()
-			.map(std::convert::Into::into)
-			.filter_map(|pub_key| {
-				self.key_store.read().sr25519_key_pair(key_types::AUTHORITY_DISCOVERY, &pub_key)
-			})
-			.map(std::convert::Into::into)
-			.collect();
-
-		Ok(keys)
 	}
 
 	/// Retrieve our public keys within the current authority set.

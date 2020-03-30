@@ -12,7 +12,7 @@ documentation = "https://docs.rs/sp-runtime"
 
 [dependencies]
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
-codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.3.0", default-features = false, features = ["derive"] }
 sp-core = { version = "2.0.0-alpha.5", default-features = false, path = "../core" }
 sp-application-crypto = { version = "2.0.0-alpha.5", default-features = false, path = "../application-crypto" }
 sp-arithmetic = { version = "2.0.0-alpha.5", default-features = false, path = "../arithmetic" }
@@ -32,6 +32,7 @@ rand = "0.7.2"
 
 [features]
 bench = []
+runtime-benchmarks = []
 default = ["std"]
 std = [
 	"sp-application-crypto/std",
@@ -47,3 +48,6 @@ std = [
 	"parity-util-mem/std",
 	"hash256-std-hasher/std",
 ]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

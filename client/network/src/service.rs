@@ -1090,7 +1090,7 @@ impl<'a, B: BlockT, H: ExHashT> Link<B> for NetworkLink<'a, B, H> {
 	fn justification_imported(&mut self, who: PeerId, hash: &B::Hash, number: NumberFor<B>, success: bool) {
 		self.protocol.user_protocol_mut().justification_import_result(hash.clone(), number, success);
 		if !success {
-			info!("Invalid justification provided by {} for #{}", who, hash);
+			info!("💔 Invalid justification provided by {} for #{}", who, hash);
 			self.protocol.user_protocol_mut().disconnect_peer(&who);
 			self.protocol.user_protocol_mut().report_peer(who, ReputationChange::new_fatal("Invalid justification"));
 		}
@@ -1110,7 +1110,7 @@ impl<'a, B: BlockT, H: ExHashT> Link<B> for NetworkLink<'a, B, H> {
 		let success = finalization_result.is_ok();
 		self.protocol.user_protocol_mut().finality_proof_import_result(request_block, finalization_result);
 		if !success {
-			info!("Invalid finality proof provided by {} for #{}", who, request_block.0);
+			info!("💔 Invalid finality proof provided by {} for #{}", who, request_block.0);
 			self.protocol.user_protocol_mut().disconnect_peer(&who);
 			self.protocol.user_protocol_mut().report_peer(who, ReputationChange::new_fatal("Invalid finality proof"));
 		}

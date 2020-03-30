@@ -157,6 +157,12 @@ pub trait EnsureOrigin<OuterOrigin> {
 	}
 	/// Perform the origin check.
 	fn try_origin(o: OuterOrigin) -> result::Result<Self::Success, OuterOrigin>;
+
+	/// Returns an outer origin capable of passing `try_origin` check.
+	/// 
+	/// ** Should be used for benchmarking only!!! **
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> OuterOrigin;
 }
 
 /// An error that indicates that a lookup failed.
@@ -923,7 +929,7 @@ pub trait OpaqueKeys: Clone {
 	fn key_ids() -> &'static [crate::KeyTypeId];
 	/// Get the raw bytes of key with key-type ID `i`.
 	fn get_raw(&self, i: super::KeyTypeId) -> &[u8];
-	/// Get the decoded key with index `i`.
+	/// Get the decoded key with key-type ID `i`.
 	fn get<T: Decode>(&self, i: super::KeyTypeId) -> Option<T> {
 		T::decode(&mut self.get_raw(i)).ok()
 	}
