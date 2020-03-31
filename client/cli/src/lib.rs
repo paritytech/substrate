@@ -50,6 +50,13 @@ use structopt::{
 };
 
 /// Substrate client CLI
+///
+/// This trait needs to be defined on the root structopt of the application. It will provide the
+/// implementation name, version, executable name, description, author, support_url, copyright start
+/// year and most importantly: how to load the chain spec.
+///
+/// StructOpt must not be in scope to use from_args (or the similar methods). This trait provides
+/// its own implementation that will fill the necessary field based on the trait's functions.
 pub trait SubstrateCli: Sized
 {
 	/// Implementation name.
