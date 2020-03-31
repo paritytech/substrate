@@ -56,9 +56,6 @@ then
   # get the last reference to a pr in polkadot
   pr_data="$(curl -sSL -H "${github_header}" -s ${github_api_substrate_pull_url}/${CI_COMMIT_REF_NAME})"
   pr_ref="$(echo $pr_data | perl -ne 'print "$1\n" if /"ref"\s*:\s*"((?!master)[^"]*)"/')"
-  echo $pr_ref
-  echo $pr_data
-  exit 1
   pr_body="$(echo $pr_data | sed -n -r 's/^[[:space:]]+"body": (".*")[^"]+$/\1/p')"
 
   pr_companion="$(echo "${pr_body}" | sed -n -r \
