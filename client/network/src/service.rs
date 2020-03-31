@@ -221,7 +221,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			}
 		}
 
-		// treat sentry nodes as reserved for the peerset, we always want to maintain contains to
+		// treat sentry nodes as reserved for the peerset, we always want to maintain connections to
 		// our sentries.
 		for sentry in params.network_config.sentry_nodes.iter() {
 			if !add_reserved(sentry) {
