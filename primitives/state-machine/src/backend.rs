@@ -178,9 +178,8 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	fn full_storage_root<I1, I2i, I2>(
 		&self,
 		delta: I1,
-		child_deltas: I2)
-	-> (H::Out, Self::Transaction)
-	where
+		child_deltas: I2,
+	) -> (H::Out, Self::Transaction) where
 		I1: IntoIterator<Item=(StorageKey, Option<StorageValue>)>,
 		I2i: IntoIterator<Item=(StorageKey, Option<StorageValue>)>,
 		I2: IntoIterator<Item=(StorageKey, I2i, OwnedChildInfo)>,
