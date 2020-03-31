@@ -1,3 +1,33 @@
+// Copyright 2020 Parity Technologies (UK) Ltd.
+// This file is part of Substrate.
+
+// Substrate is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Substrate is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+
+//! Block import benchmark.
+//!
+//! This benchmark is expected to measure block import operation of
+//! some more or less full block.
+//!
+//! As we also want to protect against cold-cache attacks, this
+//! benchmark should not rely on any caching (except those that
+//! DO NOT depend on user input). Thus block generation should be
+//! based on randomized operation.
+//!
+//! This is supposed to be very simple benchmark and is not subject
+//! to much configuring - just block full of randomized transactions.
+//! It is not supposed to measure runtime modules weight correctness
+
 use std::borrow::Cow;
 
 use node_testing::bench::{BenchDb, Profile, BlockType, KeyTypes};
