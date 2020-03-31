@@ -403,8 +403,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 	}
 
 	/// You must call this when a new block is imported by the client.
-	pub fn on_block_imported(&mut self, header: B::Header, data: Vec<u8>, is_best: bool) {
-		self.network_service.user_protocol_mut().on_block_imported(&header, data, is_best);
+	pub fn on_block_imported(&mut self, header: B::Header, is_best: bool) {
+		self.network_service.user_protocol_mut().on_block_imported(&header, is_best);
 	}
 
 	/// You must call this when a new block is finalized by the client.

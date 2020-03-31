@@ -113,7 +113,7 @@ sc-consensus-epochs = { version = "0.8.0-alpha.5", path = "../../../client/conse
 sc-service-test = { version = "2.0.0-dev", path = "../../../client/service/test" }
 futures = "0.3.4"
 tempfile = "3.1.0"
-assert_cmd = "0.12"
+assert_cmd = "1.0"
 nix = "0.17"
 serde_json = "1.0"
 
