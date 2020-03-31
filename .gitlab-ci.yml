@@ -22,7 +22,7 @@
 #     - ./.maintain/gitlab/my_amazing_script.sh
 
 stages:
-  - build2
+  - build
 
 variables:
   GIT_STRATEGY:                    fetch
