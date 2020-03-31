@@ -24,7 +24,7 @@ use crate::{Module, Trait};
 use sp_runtime::Perbill;
 use sp_staking::{SessionIndex, offence::{ReportOffence, OffenceError}};
 use sp_runtime::testing::{Header, UintAuthorityId, TestXt};
-use sp_runtime::traits::{IdentityLookup, BlakeTwo256, ConvertInto, Zero};
+use sp_runtime::traits::{IdentityLookup, BlakeTwo256, ConvertInto};
 use sp_core::H256;
 use frame_support::{impl_outer_origin, impl_outer_dispatch, parameter_types, weights::Weight};
 
@@ -175,11 +175,7 @@ pub type System = frame_system::Module<Runtime>;
 pub type Session = pallet_session::Module<Runtime>;
 
 pub fn advance_session() {
-	let now = if System::block_number().is_zero() {
-		1
-	} else {
-		System::block_number()
-	};
+	let now = System::block_number().max(1);
 	System::set_block_number(now + 1);
 	Session::rotate_session();
 	assert_eq!(Session::current_index(), (now / Period::get()) as u32);
