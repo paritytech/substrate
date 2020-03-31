@@ -495,7 +495,7 @@ mod tests {
 					name: DecodeDifferent::Encode("Data"),
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::Map{
-						hasher: StorageHasher::Twox64Concat,
+						hasher: StorageHasher::Twox64Concat::Twox32Concat,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("u64"),
 						unused: false,
@@ -509,7 +509,7 @@ mod tests {
 					name: DecodeDifferent::Encode("OptionLinkedMap"),
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::Map {
-						hasher: StorageHasher::Blake2_128Concat,
+						hasher: StorageHasher::Blake2_64Concat,
 						key: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("u32"),
 						unused: false,
@@ -537,7 +537,7 @@ mod tests {
 					name: DecodeDifferent::Encode("GenericData2"),
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::Map{
-						hasher: StorageHasher::Blake2_128Concat,
+						hasher: StorageHasher::Blake2_64Concat,
 						key: DecodeDifferent::Encode("T::BlockNumber"),
 						value: DecodeDifferent::Encode("T::BlockNumber"),
 						unused: false
@@ -560,11 +560,11 @@ mod tests {
 					name: DecodeDifferent::Encode("DataDM"),
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::DoubleMap{
-						hasher: StorageHasher::Twox64Concat,
+						hasher: StorageHasher::Twox64Concat::Twox32Concat,
 						key1: DecodeDifferent::Encode("u32"),
 						key2: DecodeDifferent::Encode("u32"),
 						value: DecodeDifferent::Encode("u64"),
-						key2_hasher: StorageHasher::Blake2_128Concat,
+						key2_hasher: StorageHasher::Blake2_64Concat,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructDataDM(PhantomData::<Test>))
@@ -575,7 +575,7 @@ mod tests {
 					name: DecodeDifferent::Encode("GenericDataDM"),
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::DoubleMap{
-						hasher: StorageHasher::Blake2_128Concat,
+						hasher: StorageHasher::Blake2_64Concat,
 						key1: DecodeDifferent::Encode("T::BlockNumber"),
 						key2: DecodeDifferent::Encode("T::BlockNumber"),
 						value: DecodeDifferent::Encode("T::BlockNumber"),
@@ -590,11 +590,11 @@ mod tests {
 					name: DecodeDifferent::Encode("GenericData2DM"),
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::DoubleMap{
-						hasher: StorageHasher::Blake2_128Concat,
+						hasher: StorageHasher::Blake2_64Concat,
 						key1: DecodeDifferent::Encode("T::BlockNumber"),
 						key2: DecodeDifferent::Encode("T::BlockNumber"),
 						value: DecodeDifferent::Encode("T::BlockNumber"),
-						key2_hasher: StorageHasher::Twox64Concat,
+						key2_hasher: StorageHasher::Twox64Concat::Twox32Concat,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructGenericData2DM(PhantomData::<Test>))
@@ -605,11 +605,11 @@ mod tests {
 					name: DecodeDifferent::Encode("AppendableDM"),
 					modifier: StorageEntryModifier::Default,
 					ty: StorageEntryType::DoubleMap{
-						hasher: StorageHasher::Blake2_128Concat,
+						hasher: StorageHasher::Blake2_64Concat,
 						key1: DecodeDifferent::Encode("u32"),
 						key2: DecodeDifferent::Encode("T::BlockNumber"),
 						value: DecodeDifferent::Encode("Vec<u32>"),
-						key2_hasher: StorageHasher::Blake2_128Concat,
+						key2_hasher: StorageHasher::Blake2_64Concat,
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructGenericData2DM(PhantomData::<Test>))
