@@ -9,11 +9,6 @@
 # polkadot companion: paritytech/polkadot#567
 #
 
-git rev-parse --abbrev-ref HEAD
-
-export
-exit 1
-
 
 github_api_substrate_pull_url="https://api.github.com/repos/paritytech/substrate/pulls"
 # use github api v3 in order to access the data without authentication
@@ -57,9 +52,11 @@ cd polkadot
 if expr match "${CI_COMMIT_REF_NAME}" '^[0-9]\+$' >/dev/null
 then
   boldprint "this is pull request no ${CI_COMMIT_REF_NAME}"
+
   # get the last reference to a pr in polkadot
-  pr_body="$(curl -H "${github_header}" -s ${github_api_substrate_pull_url}/${CI_COMMIT_REF_NAME} \
-    | sed -n -r 's/^[[:space:]]+"body": (".*")[^"]+$/\1/p')"
+  pr_data="$(curl -H "${github_header}" -s ${github_api_substrate_pull_url}/${CI_COMMIT_REF_NAME})"
+  pr_ref="$(echo $pr_data | sed -n -r 's/^[[:space:]]+"ref": (".*")[^"]+$/\1/p')"
+  pr_body="$(echo $pr_data | sed -n -r 's/^[[:space:]]+"body": (".*")[^"]+$/\1/p')"
 
   pr_companion="$(echo "${pr_body}" | sed -n -r \
       -e 's;^.*polkadot companion: paritytech/polkadot#([0-9]+).*$;\1;p' \
@@ -78,11 +75,10 @@ then
     git fetch --depth 1 origin refs/pull/${pr_companion}/head:pr/${pr_companion}
     git checkout pr/${pr_companion}
   else
-    if git fetch --depth 1 origin \
-      "$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME":branch/"$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"
+    if git fetch --depth 1 origin "$pr_ref":branch/"$pr_ref"
     then
-      boldprint "companion branch detected: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"
-      git checkout branch/"$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"
+      boldprint "companion branch detected: $pr_ref"
+      git checkout branch/"$pr_ref"
     else
       boldprint "no companion branch found - building polkadot:master"
     fi
