@@ -16,6 +16,8 @@
 
 //! Test utilities
 
+#![cfg(test)]
+
 use sp_runtime::{Perbill, traits::{ConvertInto, IdentityLookup}, testing::Header};
 use sp_core::H256;
 use sp_io;
