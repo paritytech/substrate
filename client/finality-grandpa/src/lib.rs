@@ -52,6 +52,8 @@
 //! or prune any signaled changes based on whether the signaling block is
 //! included in the newly-finalized chain.
 
+use std::collections::HashSet;
+
 use futures::prelude::*;
 use futures::StreamExt;
 use log::{debug, info};
@@ -204,6 +206,10 @@ pub struct Config {
 	pub is_authority: bool,
 	/// Some local identifier of the voter.
 	pub name: Option<String>,
+	/// The set of favorite peers which we should treat preferably when gossiping messages
+	/// (i.e. we prioritize sending any data to them over other peers). The favorite peers
+	/// are usually reserved nodes and/or sentry nodes.
+	pub favorite_peers: HashSet<sc_network::PeerId>,
 	/// The keystore that manages the keys of this node.
 	pub keystore: Option<sc_keystore::KeyStorePtr>,
 }

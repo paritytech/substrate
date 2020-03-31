@@ -1110,6 +1110,9 @@ impl<Block: BlockT> Inner<Block> {
 		let round_duration = self.config.gossip_duration * ROUND_DURATION;
 		let round_elapsed = self.round_start.elapsed();
 
+		if self.config.favorite_peers.contains(who) {
+			return true;
+		}
 
 		if !self.config.is_authority
 			&& round_elapsed < round_duration * PROPAGATION_ALL
@@ -1169,6 +1172,10 @@ impl<Block: BlockT> Inner<Block> {
 	fn global_message_allowed<N>(&self, who: &PeerId, peer: &PeerInfo<N>) -> bool {
 		let round_duration = self.config.gossip_duration * ROUND_DURATION;
 		let round_elapsed = self.round_start.elapsed();
+
+		if self.config.favorite_peers.contains(who) {
+			return true;
+		}
 
 		if peer.roles.is_authority() {
 			let authorities = self.peers.authorities();
