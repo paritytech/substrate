@@ -3417,6 +3417,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "node-bench"
+version = "0.1.0"
+dependencies = [
+ "log 0.4.8",
+ "node-primitives",
+ "node-testing",
+ "sc-cli",
+ "sc-client-api",
+ "serde",
+ "serde_json",
+ "sp-runtime",
+ "structopt",
+]
+
+[[package]]
 name = "node-cli"
 version = "2.0.0-alpha.5"
 dependencies = [
