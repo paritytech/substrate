@@ -95,6 +95,7 @@ where
 		transaction_pool: Default::default(),
 		wasm_method: Default::default(),
 		max_runtime_instances: 8,
+		announce_block: true,
 	};
 
 	Ok(config)
