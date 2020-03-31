@@ -1281,6 +1281,10 @@ decl_module! {
 
 			system::Module::<T>::inc_ref(&stash);
 
+			let current_era = CurrentEra::get().unwrap_or(0);
+			let history_depth = Self::history_depth();
+			let last_reward_era = current_era.saturating_sub(history_depth);
+
 			let stash_balance = T::Currency::free_balance(&stash);
 			let value = value.min(stash_balance);
 			Self::deposit_event(RawEvent::Bonded(stash.clone(), value));
@@ -1289,7 +1293,7 @@ decl_module! {
 				total: value,
 				active: value,
 				unlocking: vec![],
-				claimed_rewards: vec![],
+				claimed_rewards: (last_reward_era..current_era).collect(),
 			};
 			Self::update_ledger(&controller, &item);
 		}
@@ -1993,7 +1997,7 @@ impl<T: Trait> Module<T> {
 		// This payout mechanism will only work for eras before the migration.
 		// Subsequent payouts should use `payout_stakers`.
 		ensure!(era < migrate_era, Error::<T>::InvalidEraToReward);
-		let current_era = CurrentEra::get().unwrap_or(0);
+		let current_era = CurrentEra::get().ok_or(Error::<T>::InvalidEraToReward)?;
 		ensure!(era <= current_era, Error::<T>::InvalidEraToReward);
 		let history_depth = Self::history_depth();
 		ensure!(era >= current_era.saturating_sub(history_depth), Error::<T>::InvalidEraToReward);
@@ -2059,7 +2063,7 @@ impl<T: Trait> Module<T> {
 		// This payout mechanism will only work for eras before the migration.
 		// Subsequent payouts should use `payout_stakers`.
 		ensure!(era < migrate_era, Error::<T>::InvalidEraToReward);
-		let current_era = CurrentEra::get().unwrap_or(0);
+		let current_era = CurrentEra::get().ok_or(Error::<T>::InvalidEraToReward)?;
 		ensure!(era <= current_era, Error::<T>::InvalidEraToReward);
 		let history_depth = Self::history_depth();
 		ensure!(era >= current_era.saturating_sub(history_depth), Error::<T>::InvalidEraToReward);
@@ -2112,7 +2116,7 @@ impl<T: Trait> Module<T> {
 		era: EraIndex,
 	) -> DispatchResult {
 		/* Validate input data */
-		let current_era = CurrentEra::get().unwrap_or(0);
+		let current_era = CurrentEra::get().ok_or(Error::<T>::InvalidEraToReward)?;
 		ensure!(era <= current_era, Error::<T>::InvalidEraToReward);
 		let history_depth = Self::history_depth();
 		ensure!(era >= current_era.saturating_sub(history_depth), Error::<T>::InvalidEraToReward);

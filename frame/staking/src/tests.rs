@@ -310,7 +310,7 @@ fn staking_should_work() {
 					total: 1500,
 					active: 1500,
 					unlocking: vec![],
-					claimed_rewards: vec![],
+					claimed_rewards: vec![0],
 				})
 			);
 			// e.g. it cannot spend more than 500 that it has free from the total 2000
@@ -4218,6 +4218,50 @@ fn payout_stakers_handles_basic_errors() {
 		assert_noop!(Staking::payout_stakers(Origin::signed(1337), 11, 98), Error::<Test>::AlreadyClaimed);
 	});
 }
+
+#[test]
+fn bond_during_era_correctly_populates_claimed_rewards() {
+	ExtBuilder::default().has_stakers(false).build().execute_with(|| {
+		// Era = None
+		bond_validator(9, 8, 1000);
+		assert_eq!(
+			Staking::ledger(&8),
+			Some(StakingLedger {
+				stash: 9,
+				total: 1000,
+				active: 1000,
+				unlocking: vec![],
+				claimed_rewards: vec![],
+			})
+		);
+		mock::start_era(5);
+		bond_validator(11, 10, 1000);
+		assert_eq!(
+			Staking::ledger(&10),
+			Some(StakingLedger {
+				stash: 11,
+				total: 1000,
+				active: 1000,
+				unlocking: vec![],
+				claimed_rewards: (0..5).collect(),
+			})
+		);
+		mock::start_era(99);
+		bond_validator(13, 12, 1000);
+		assert_eq!(
+			Staking::ledger(&12),
+			Some(StakingLedger {
+				stash: 13,
+				total: 1000,
+				active: 1000,
+				unlocking: vec![],
+				claimed_rewards: (15..99).collect(),
+			})
+		);
+	});
+}
+
+/* These migration tests below can be removed once migration code is removed */
 
 #[test]
 fn assert_migration_is_noop() {
