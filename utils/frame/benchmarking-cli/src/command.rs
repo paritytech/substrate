@@ -75,47 +75,50 @@ impl BenchmarkCmd {
 		.execute(strategy.into())
 		.map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;
 
-		let results = <std::result::Result<Vec<BenchmarkResults>, String> as Decode>::decode(&mut &result[..])
+		let results = <Result<Vec<BenchmarkBatch>, String> as Decode>::decode(&mut &result[..])
 			.map_err(|e| format!("Failed to decode benchmark results: {:?}", e))?;
 
 		match results {
-			Ok(results) => {
+			Ok(batches) => for batch in batches.into_iter() {
 				// Print benchmark metadata
 				println!(
 					"Pallet: {:?}, Extrinsic: {:?}, Lowest values: {:?}, Highest values: {:?}, Steps: {:?}, Repeat: {:?}",
-					self.pallet,
-					self.extrinsic,
+					String::from_utf8(batch.pallet).expect("Encoded from String; qed"),
+					String::from_utf8(batch.benchmark).expect("Encoded from String; qed"),
 					self.lowest_range_values,
 					self.highest_range_values,
 					self.steps,
 					self.repeat,
 				);
 
-				// Print the table header
-				results[0].0.iter().for_each(|param| print!("{:?},", param.0));
+				if self.raw_data {
+					// Print the table header
+					batch.results[0].0.iter().for_each(|param| print!("{:?},", param.0));
 
-				print!("extrinsic_time,storage_root_time\n");
-				// Print the values
-				results.iter().for_each(|result| {
-					let parameters = &result.0;
-					parameters.iter().for_each(|param| print!("{:?},", param.1));
-					// Print extrinsic time and storage root time
-					print!("{:?},{:?}\n", result.1, result.2);
-				});
+					print!("extrinsic_time,storage_root_time\n");
+					// Print the values
+					batch.results.iter().for_each(|result| {
+						let parameters = &result.0;
+						parameters.iter().for_each(|param| print!("{:?},", param.1));
+						// Print extrinsic time and storage root time
+						print!("{:?},{:?}\n", result.1, result.2);
+					});
 
-				print!("\n");
+					print!("\n");
+				}
 
 				// Conduct analysis.
-				if let Some(analysis) = Analysis::median_slopes(&results) {
-					println!("Median Slopes Analysis\n========\n{}", analysis);
+				if !self.no_median_slopes {
+					if let Some(analysis) = Analysis::median_slopes(&batch.results) {
+						println!("Median Slopes Analysis\n========\n{}", analysis);
+					}
 				}
-
-				if let Some(analysis) = Analysis::min_squares_iqr(&results) {
-					println!("Min Squares Analysis\n========\n{}", analysis);
+				if !self.no_min_squares {
+					if let Some(analysis) = Analysis::min_squares_iqr(&batch.results) {
+						println!("Min Squares Analysis\n========\n{}", analysis);
+					}
 				}
-
-				eprintln!("Done.");
-			}
+			},
 			Err(error) => eprintln!("Error: {:?}", error),
 		}
 

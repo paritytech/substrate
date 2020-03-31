@@ -22,11 +22,11 @@ use std::fmt::Debug;
 /// The `benchmark` command used to benchmark FRAME Pallets.
 #[derive(Debug, structopt::StructOpt, Clone)]
 pub struct BenchmarkCmd {
-	/// Select a FRAME Pallet to benchmark.
+	/// Select a FRAME Pallet to benchmark, or `*` for all (in which case `extrinsic` must be `*`).
 	#[structopt(short, long)]
 	pub pallet: String,
 
-	/// Select an extrinsic to benchmark.
+	/// Select an extrinsic inside the pallet to benchmark, or `*` for all.
 	#[structopt(short, long)]
 	pub extrinsic: String,
 
@@ -35,16 +35,28 @@ pub struct BenchmarkCmd {
 	pub steps: Vec<u32>,
 
 	/// Indicates lowest values for each of the component ranges.
-	#[structopt(long, use_delimiter = true)]
+	#[structopt(long = "low", use_delimiter = true)]
 	pub lowest_range_values: Vec<u32>,
 
 	/// Indicates highest values for each of the component ranges.
-	#[structopt(long, use_delimiter = true)]
+	#[structopt(long = "high", use_delimiter = true)]
 	pub highest_range_values: Vec<u32>,
 
 	/// Select how many repetitions of this benchmark should run.
 	#[structopt(short, long, default_value = "1")]
 	pub repeat: u32,
+
+	/// Print the raw results.
+	#[structopt(long = "raw")]
+	pub raw_data: bool,
+
+	/// Don't print the median-slopes linear regression analysis.
+	#[structopt(long)]
+	pub no_median_slopes: bool,
+
+	/// Don't print the min-squares linear regression analysis.
+	#[structopt(long)]
+	pub no_min_squares: bool,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
