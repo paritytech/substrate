@@ -25,17 +25,15 @@ use sp_core::offchain::{
 	testing::TestTransactionPoolExt,
 };
 use frame_system::offchain::{
-	SendRawUnsignedTransaction,
 	SendSignedTransaction,
 	Signer,
+	SubmitTransaction,
 };
 use pallet_im_online::sr25519::AuthorityPair as Key;
 use codec::Decode;
 
 pub mod common;
 use self::common::*;
-
-type SubmitTransaction = TransactionSubmitterOf<pallet_im_online::sr25519::AuthorityId>;
 
 #[test]
 fn should_submit_unsigned_transaction() {
@@ -53,7 +51,7 @@ fn should_submit_unsigned_transaction() {
 		};
 
 		let call = pallet_im_online::Call::heartbeat(heartbeat_data, signature);
-		Signer::<Runtime, ImOnlineAuthorityId>::send_raw_unsigned_transaction(call)
+		SubmitTransaction::<Runtime, pallet_im_online::Call<Runtime>>::submit_unsigned_transaction(call.into())
 			.unwrap();
 
 		assert_eq!(state.read().transactions.len(), 1)
