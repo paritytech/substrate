@@ -17,7 +17,7 @@
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::*;
 use sp_std::borrow::Borrow;
-use sp_io::hashing::twox_32;
+use sp_io::hashing::{twox_32, twox_64};
 use codec::{FullCodec, FullEncode, Decode, Encode, EncodeLike, Ref, EncodeAppend};
 use crate::{storage::{self, unhashed}, traits::Len};
 use crate::hash::{StorageHasher, ReversibleStorageHasher};
@@ -47,19 +47,15 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	fn storage_prefix() -> &'static [u8];
 
 	/// Module concatenated with the storage prefix. Used for generating final key.
-	fn full_prefix() -> Vec<u8> {
-		let mut r = Vec::<u8>::with_capacity(
-			Self::module_prefix().len()
-				+ Self::storage_prefix().len()
-		);
-		r.extend_from_slice(Self::module_prefix());
-		r.extend_from_slice(Self::storage_prefix());
+	fn full_prefix() -> [u8; 8] {
+		let mut r = twox_64(Self::module_prefix());
+		r[4..].copy_from_slice(&twox_32(Self::storage_prefix()));
 		r
 	}
 
 	/// The full prefix; just the hash of `module_prefix` concatenated with `storage_prefix`.
 	fn prefix_hash() -> [u8; 4] {
-		twox_32(Self::full_prefix().as_ref())
+		twox_32(&Self::full_prefix())
 	}
 
 	/// Convert an optional value retrieved from storage to the type queried.

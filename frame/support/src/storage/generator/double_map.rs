@@ -16,6 +16,7 @@
 
 use sp_std::prelude::*;
 use sp_std::borrow::Borrow;
+use sp_io::hashing::{twox_32, twox_64};
 use codec::{Ref, FullCodec, FullEncode, Decode, Encode, EncodeLike, EncodeAppend};
 use crate::{storage::{self, unhashed}, traits::Len};
 use crate::hash::{StorageHasher, ReversibleStorageHasher};
@@ -57,19 +58,15 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 	fn storage_prefix() -> &'static [u8];
 
 	/// Module concatenated with the storage prefix. Used for generating final key.
-	fn full_prefix() -> Vec<u8> {
-		let mut r = Vec::<u8>::with_capacity(
-			Self::module_prefix().len()
-				+ Self::storage_prefix().len()
-		);
-		r.extend_from_slice(Self::module_prefix());
-		r.extend_from_slice(Self::storage_prefix());
+	fn full_prefix() -> [u8; 8] {
+		let mut r = twox_64(Self::module_prefix());
+		r[4..].copy_from_slice(&twox_32(Self::storage_prefix()));
 		r
 	}
 
 	/// The full prefix; just the hash of `module_prefix` concatenated with `storage_prefix`.
 	fn prefix_hash() -> [u8; 4] {
-		sp_io::hashing::twox_32(Self::full_prefix().as_ref())
+		twox_32(&Self::full_prefix())
 	}
 
 	/// Convert an optional value retrieved from storage to the type queried.
@@ -86,7 +83,7 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		let key_hashed = k1.borrow().using_encoded(Self::Hasher1::hash);
 
 		let mut final_key = Vec::with_capacity(
-			&prefix_hashed[..].len() + key_hashed.as_ref().len()
+			prefix_hashed.len() + key_hashed.as_ref().len()
 		);
 
 		final_key.extend_from_slice(&prefix_hashed[..]);
@@ -105,7 +102,7 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		let key2_hashed = k2.borrow().using_encoded(Self::Hasher2::hash);
 
 		let mut final_key = Vec::with_capacity(
-			&prefix_hashed[..].len()
+			prefix_hashed.len()
 				+ key1_hashed.as_ref().len()
 				+ key2_hashed.as_ref().len()
 		);
