@@ -16,10 +16,10 @@
 
 //! Timestamp pallet benchmarking.
 
+#![cfg(feature = "runtime-benchmarks")]
+
 use super::*;
-
 use sp_std::prelude::*;
-
 use frame_system::RawOrigin;
 use frame_benchmarking::benchmarks;
 
