@@ -178,15 +178,16 @@ dependencies = [
 
 [[package]]
 name = "assert_cmd"
-version = "0.12.1"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35ad62275a8bda1c2c9a9303aea121eb04204272d3be0735d5dc1f49eb9ff9a9"
+checksum = "36101401a715c232f2c63a534a4b639415064b79d128d2a60d35678f8fb45204"
 dependencies = [
  "doc-comment",
  "escargot",
  "predicates",
  "predicates-core",
  "predicates-tree",
+ "wait-timeout",
 ]
 
 [[package]]
@@ -8933,6 +8934,15 @@ dependencies = [
  "cc",
  "cmake",
  "glob 0.2.11",
+]
+
+[[package]]
+name = "wait-timeout"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9f200f5b12eb75f8c1ed65abd4b2db8a6e1b138a20de009dacee265a2498f3f6"
+dependencies = [
+ "libc",
 ]
 
 [[package]]
