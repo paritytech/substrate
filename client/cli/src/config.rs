@@ -210,6 +210,11 @@ pub trait CliConfiguration: Sized {
 		Ok(Default::default())
 	}
 
+	/// Activate or not the automatic announcing of blocks after import
+	fn announce_block(&self) -> Result<bool> {
+		Ok(true)
+	}
+
 	/// Create a Configuration object from the current object
 	fn create_configuration<C: SubstrateCli>(
 		&self,
@@ -278,6 +283,7 @@ pub trait CliConfiguration: Sized {
 			tracing_receiver: self.tracing_receiver()?,
 			chain_spec,
 			max_runtime_instances,
+			announce_block: self.announce_block()?,
 		})
 	}
 

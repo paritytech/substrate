@@ -99,6 +99,8 @@ pub struct Configuration {
 	///
 	/// The default value is 8.
 	pub max_runtime_instances: usize,
+	/// Announce block automatically after they have been imported
+	pub announce_block: bool,
 }
 
 /// Configuration of the client keystore.
