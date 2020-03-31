@@ -73,7 +73,12 @@ then
     git fetch --depth 1 origin refs/pull/${pr_companion}/head:pr/${pr_companion}
     git checkout pr/${pr_companion}
   else
-    boldprint "no companion pr found - building polkadot:master"
+    if git fetch --depth 1 origin "$CI_COMMIT_BRANCH":branch/"$CI_COMMIT_BRANCH"; then
+      boldprint "companion branch detected: $CI_COMMIT_BRANCH"
+      git checkout branch/"$CI_COMMIT_BRANCH"
+    else
+      boldprint "no companion branch found - building polkadot:master"
+    fi
   fi
 else
   boldprint "this is not a pull request - building polkadot:master"
