@@ -9,7 +9,10 @@
 # polkadot companion: paritytech/polkadot#567
 #
 
+git rev-parse --abbrev-ref HEAD
+
 export
+exit 1
 
 
 github_api_substrate_pull_url="https://api.github.com/repos/paritytech/substrate/pulls"
