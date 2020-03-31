@@ -24,6 +24,7 @@
 stages:
   - test
   - build
+  - post-build-test
   - publish
   - kubernetes
   - flaming-fir
@@ -127,11 +128,13 @@ check-line-width:
   allow_failure:                   true
 
 
-check-polkadot:
+
+
+check-polkadot-companion-build:
   stage:                           build
   <<:                              *docker-env
   script:
-    - ./.maintain/gitlab/check_polkadot.sh
+    - ./.maintain/gitlab/check_polkadot_companion_build.sh
   interruptible:                   true
   allow_failure:                   true
 
@@ -432,6 +435,17 @@ check_warnings:
       else
         echo "___No warnings___";
       fi
+
+
+check-polkadot-companion-status:
+  stage:                           post-build-test
+  image:                           parity/tools:latest
+  <<:                              *kubernetes-build
+  only:
+    - /^[0-9]+$/
+  script:
+    - ./.maintain/gitlab/check_polkadot_companion_status.sh
+
 
 
 trigger-contracts-ci:
