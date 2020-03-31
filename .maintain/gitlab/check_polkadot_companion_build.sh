@@ -22,8 +22,8 @@ boldcat () { printf "|\n"; while read l; do printf "| \033[1m${l}\033[0m\n"; don
 boldcat <<-EOT
 
 
-check_polkadot
-==============
+check_polkadot_companion_build
+==============================
 
 this job checks if there is a string in the description of the pr like
 
