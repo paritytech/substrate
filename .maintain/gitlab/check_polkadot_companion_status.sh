@@ -76,11 +76,11 @@ then
   exit 0
 fi
 
-if jq -e '.mergeable and .mergeable_state == "clean"' < companion_pr.json >/dev/null
+if jq -e '.mergeable' < companion_pr.json >/dev/null
 then
   boldprint "polkadot pr #${pr_companion} mergeable"
 else
-  boldprint "polkadot pr #${pr_companion} not mergeable or clean"
+  boldprint "polkadot pr #${pr_companion} not mergeable"
   exit 1
 fi
 
