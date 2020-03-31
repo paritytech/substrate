@@ -16,13 +16,34 @@
 
 //! Shareable Substrate traits.
 
-use crate::{crypto::KeyTypeId, ed25519, sr25519};
+use crate::{
+	crypto::{KeyTypeId, CryptoTypePublicPair},
+	ed25519, sr25519,
+};
 
 use std::{
-	fmt::{Debug, Display}, panic::UnwindSafe, sync::Arc, borrow::Cow,
+	borrow::Cow,
+	fmt::{Debug, Display},
+	panic::UnwindSafe,
+	sync::Arc,
 };
 
 pub use sp_externalities::{Externalities, ExternalitiesExt};
+
+/// BareCryptoStore error
+#[derive(Debug)]
+pub enum BareCryptoStoreError {
+	/// Public key type is not supported
+	KeyNotSupported(KeyTypeId),
+	/// Pair not found for public key and KeyTypeId
+	PairNotFound(String),
+	/// Validation error
+	ValidationError(String),
+	/// Keystore unavailable
+	Unavailable,
+	/// Programming errors
+	Other(String)
+}
 
 /// Something that generates, stores and provides access to keys.
 pub trait BareCryptoStore: Send + Sync {
@@ -37,10 +58,7 @@ pub trait BareCryptoStore: Send + Sync {
 		&mut self,
 		id: KeyTypeId,
 		seed: Option<&str>,
-	) -> Result<sr25519::Public, String>;
-	/// Returns the sr25519 key pair for the given key type and public key combination.
-	fn sr25519_key_pair(&self, id: KeyTypeId, pub_key: &sr25519::Public) -> Option<sr25519::Pair>;
-
+	) -> Result<sr25519::Public, BareCryptoStoreError>;
 	/// Returns all ed25519 public keys for the given key type.
 	fn ed25519_public_keys(&self, id: KeyTypeId) -> Vec<ed25519::Public>;
 	/// Generate a new ed25519 key pair for the given key type and an optional seed.
@@ -52,10 +70,7 @@ pub trait BareCryptoStore: Send + Sync {
 		&mut self,
 		id: KeyTypeId,
 		seed: Option<&str>,
-	) -> Result<ed25519::Public, String>;
-
-	/// Returns the ed25519 key pair for the given key type and public key combination.
-	fn ed25519_key_pair(&self, id: KeyTypeId, pub_key: &ed25519::Public) -> Option<ed25519::Pair>;
+	) -> Result<ed25519::Public, BareCryptoStoreError>;
 
 	/// Insert a new key. This doesn't require any known of the crypto; but a public key must be
 	/// manually provided.
@@ -67,11 +82,78 @@ pub trait BareCryptoStore: Send + Sync {
 
 	/// Get the password for this store.
 	fn password(&self) -> Option<&str>;
+	/// Find intersection between provided keys and supported keys
+	///
+	/// Provided a list of (CryptoTypeId,[u8]) pairs, this would return
+	/// a filtered set of public keys which are supported by the keystore.
+	fn supported_keys(
+		&self,
+		id: KeyTypeId,
+		keys: Vec<CryptoTypePublicPair>
+	) -> Result<Vec<CryptoTypePublicPair>, BareCryptoStoreError>;
+	/// List all supported keys
+	///
+	/// Returns a set of public keys the signer supports.
+	fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, BareCryptoStoreError>;
 
 	/// Checks if the private keys for the given public key and key type combinations exist.
 	///
 	/// Returns `true` iff all private keys could be found.
 	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool;
+
+	/// Sign with key
+	///
+	/// Signs a message with the private key that matches
+	/// the public key passed.
+	///
+	/// Returns the SCALE encoded signature if key is found & supported,
+	/// an error otherwise.
+	fn sign_with(
+		&self,
+		id: KeyTypeId,
+		key: &CryptoTypePublicPair,
+		msg: &[u8],
+	) -> Result<Vec<u8>, BareCryptoStoreError>;
+
+	/// Sign with any key
+	///
+	/// Given a list of public keys, find the first supported key and
+	/// sign the provided message with that key.
+	///
+	/// Returns a tuple of the used key and the signature
+	fn sign_with_any(
+		&self,
+		id: KeyTypeId,
+		keys: Vec<CryptoTypePublicPair>,
+		msg: &[u8]
+	) -> Result<(CryptoTypePublicPair, Vec<u8>), BareCryptoStoreError> {
+		if keys.len() == 1 {
+			return self.sign_with(id, &keys[0], msg).map(|s| (keys[0].clone(), s));
+		} else {
+			for k in self.supported_keys(id, keys)? {
+				if let Ok(sign) = self.sign_with(id, &k, msg) {
+					return Ok((k, sign));
+				}
+			}
+		}
+		Err(BareCryptoStoreError::KeyNotSupported(id))
+	}
+
+	/// Sign with all keys
+	///
+	/// Provided a list of public keys, sign a message with
+	/// each key given that the key is supported.
+	///
+	/// Returns a list of `Result`s each representing the signature of each key or
+	/// a BareCryptoStoreError for non-supported keys.
+	fn sign_with_all(
+		&self,
+		id: KeyTypeId,
+		keys: Vec<CryptoTypePublicPair>,
+		msg: &[u8],
+	) -> Result<Vec<Result<Vec<u8>, BareCryptoStoreError>>, ()>{
+		Ok(keys.iter().map(|k| self.sign_with(id, k, msg)).collect())
+	}
 }
 
 /// A pointer to the key store.

@@ -27,20 +27,25 @@ use substrate_test_runtime_client::{
 	AccountKeyring::*,
 };
 use substrate_test_runtime_transaction_pool::{TestApi, uxt};
-use crate::revalidation::BACKGROUND_REVALIDATION_INTERVAL;
-use futures::task::Poll;
+use futures::{prelude::*, task::Poll};
 use codec::Encode;
 
 fn pool() -> Pool<TestApi> {
 	Pool::new(Default::default(), TestApi::with_alice_nonce(209).into())
 }
 
-fn maintained_pool() -> (BasicPool<TestApi, Block>, futures::executor::ThreadPool) {
-	let (pool, background_task) = BasicPool::new(Default::default(), std::sync::Arc::new(TestApi::with_alice_nonce(209)));
+fn maintained_pool() -> (
+	BasicPool<TestApi, Block>,
+	futures::executor::ThreadPool,
+	intervalier::BackSignalControl,
+) {
+	let (pool, background_task, notifier) = BasicPool::new_test(
+		std::sync::Arc::new(TestApi::with_alice_nonce(209))
+	);
 
 	let thread_pool = futures::executor::ThreadPool::new().unwrap();
-	thread_pool.spawn_ok(background_task.expect("basic pool have background task"));
-	(pool, thread_pool)
+	thread_pool.spawn_ok(background_task);
+	(pool, thread_pool, notifier)
 }
 
 fn header(number: u64) -> Header {
@@ -190,7 +195,7 @@ fn block_event_with_retracted(id: u64, retracted: Vec<Hash>) -> ChainEvent<Block
 fn should_prune_old_during_maintenance() {
 	let xt = uxt(Alice, 209);
 
-	let (pool, _guard) = maintained_pool();
+	let (pool, _guard, _notifier) = maintained_pool();
 
 	block_on(pool.submit_one(&BlockId::number(0), SOURCE, xt.clone())).expect("1. Imported");
 	assert_eq!(pool.status().ready, 1);
@@ -206,7 +211,7 @@ fn should_revalidate_during_maintenance() {
 	let xt1 = uxt(Alice, 209);
 	let xt2 = uxt(Alice, 210);
 
-	let (pool, _guard) = maintained_pool();
+	let (pool, _guard, mut notifier) = maintained_pool();
 	block_on(pool.submit_one(&BlockId::number(0), SOURCE, xt1.clone())).expect("1. Imported");
 	block_on(pool.submit_one(&BlockId::number(0), SOURCE, xt2.clone())).expect("2. Imported");
 	assert_eq!(pool.status().ready, 2);
@@ -215,12 +220,9 @@ fn should_revalidate_during_maintenance() {
 	pool.api.push_block(1, vec![xt1.clone()]);
 
 	block_on(pool.maintain(block_event(1)));
-
-	// maintaince is in background
-	block_on(futures_timer::Delay::new(BACKGROUND_REVALIDATION_INTERVAL*2));
-
-	block_on(pool.maintain(block_event(1)));
 	assert_eq!(pool.status().ready, 1);
+	block_on(notifier.next_blocking());
+
 	// test that pool revalidated transaction that left ready and not included in the block
 	assert_eq!(pool.api.validation_requests().len(), 3);
 }
@@ -230,7 +232,7 @@ fn should_resubmit_from_retracted_during_maintenance() {
 	let xt = uxt(Alice, 209);
 	let retracted_hash = Hash::random();
 
-	let (pool, _guard) = maintained_pool();
+	let (pool, _guard, _notifier) = maintained_pool();
 
 	block_on(pool.submit_one(&BlockId::number(0), SOURCE, xt.clone())).expect("1. Imported");
 	assert_eq!(pool.status().ready, 1);
@@ -249,7 +251,7 @@ fn should_not_retain_invalid_hashes_from_retracted() {
 	let xt = uxt(Alice, 209);
 	let retracted_hash = Hash::random();
 
-	let (pool, _guard) = maintained_pool();
+	let (pool, _guard, mut notifier) = maintained_pool();
 
 	block_on(pool.submit_one(&BlockId::number(0), SOURCE, xt.clone())).expect("1. Imported");
 	assert_eq!(pool.status().ready, 1);
@@ -261,13 +263,9 @@ fn should_not_retain_invalid_hashes_from_retracted() {
 	let event = block_event_with_retracted(1, vec![retracted_hash]);
 
 	block_on(pool.maintain(event));
-
 	// maintenance is in background
-	block_on(futures_timer::Delay::new(BACKGROUND_REVALIDATION_INTERVAL*2));
-
-	let event = block_event_with_retracted(1, vec![retracted_hash]);
-
-	block_on(pool.maintain(event));
+	block_on(notifier.next_blocking());
+	
 	assert_eq!(pool.status().ready, 0);
 }
 
@@ -275,16 +273,15 @@ fn should_not_retain_invalid_hashes_from_retracted() {
 fn should_revalidate_transaction_multiple_times() {
 	let xt = uxt(Alice, 209);
 
-	let (pool, _guard) = maintained_pool();
+	let (pool, _guard, mut notifier) = maintained_pool();
 
 	block_on(pool.submit_one(&BlockId::number(0), SOURCE, xt.clone())).expect("1. Imported");
 	assert_eq!(pool.status().ready, 1);
 
 	pool.api.push_block(1, vec![xt.clone()]);
 
-	// maintenance is in background
 	block_on(pool.maintain(block_event(1)));
-	block_on(futures_timer::Delay::new(BACKGROUND_REVALIDATION_INTERVAL*2));
+	block_on(notifier.next_blocking());
 
 	block_on(pool.submit_one(&BlockId::number(0), SOURCE, xt.clone())).expect("1. Imported");
 	assert_eq!(pool.status().ready, 1);
@@ -292,9 +289,8 @@ fn should_revalidate_transaction_multiple_times() {
 	pool.api.push_block(2, vec![]);
 	pool.api.add_invalid(&xt);
 
-	// maintenance is in background
 	block_on(pool.maintain(block_event(2)));
-	block_on(futures_timer::Delay::new(BACKGROUND_REVALIDATION_INTERVAL*2));
+	block_on(notifier.next_blocking());
 
 	assert_eq!(pool.status().ready, 0);
 }
@@ -305,7 +301,7 @@ fn should_revalidate_across_many_blocks() {
 	let xt2 = uxt(Alice, 210);
 	let xt3 = uxt(Alice, 211);
 
-	let (pool, _guard) = maintained_pool();
+	let (pool, _guard, mut notifier) = maintained_pool();
 
 	block_on(pool.submit_one(&BlockId::number(1), SOURCE, xt1.clone())).expect("1. Imported");
 	block_on(pool.submit_one(&BlockId::number(1), SOURCE, xt2.clone())).expect("1. Imported");
@@ -313,15 +309,14 @@ fn should_revalidate_across_many_blocks() {
 
 	pool.api.push_block(1, vec![]);
 	block_on(pool.maintain(block_event(1)));
-	block_on(futures_timer::Delay::new(BACKGROUND_REVALIDATION_INTERVAL*2));
-
+	block_on(notifier.next_blocking());
 
 	block_on(pool.submit_one(&BlockId::number(2), SOURCE, xt3.clone())).expect("1. Imported");
 	assert_eq!(pool.status().ready, 3);
 
 	pool.api.push_block(2, vec![xt1.clone()]);
 	block_on(pool.maintain(block_event(2)));
-	block_on(futures_timer::Delay::new(BACKGROUND_REVALIDATION_INTERVAL*2));
+	block_on(notifier.next_blocking());
 
 	assert_eq!(pool.status().ready, 2);
 	// xt1 and xt2 validated twice, then xt3 once, then xt2 and xt3 again
@@ -336,7 +331,7 @@ fn should_push_watchers_during_maintaince() {
 	}
 
 	// given
-	let (pool, _guard) = maintained_pool();
+	let (pool, _guard, mut notifier) = maintained_pool();
 
 	let tx0 = alice_uxt(0);
 	let watcher0 = block_on(
@@ -363,15 +358,14 @@ fn should_push_watchers_during_maintaince() {
 	// when
 	pool.api.add_invalid(&tx3);
 	pool.api.add_invalid(&tx4);
-	block_on(pool.maintain(block_event(0)));
 
-	// revalidation is in background
-	block_on(futures_timer::Delay::new(BACKGROUND_REVALIDATION_INTERVAL*2));
+	// clear timer events if any
+	block_on(pool.maintain(block_event(0)));
+	block_on(notifier.next_blocking());
 
 	// then
 	// hash3 is now invalid
 	// hash4 is now invalid
-
 	assert_eq!(pool.status().ready, 3);
 	assert_eq!(
 		futures::executor::block_on_stream(watcher3).collect::<Vec<_>>(),
@@ -409,7 +403,7 @@ fn should_push_watchers_during_maintaince() {
 
 #[test]
 fn can_track_heap_size() {
-	let (pool, _guard) = maintained_pool();
+	let (pool, _guard, _notifier) = maintained_pool();
 	block_on(pool.submit_one(&BlockId::number(0), SOURCE, uxt(Alice, 209))).expect("1. Imported");
 	block_on(pool.submit_one(&BlockId::number(0), SOURCE, uxt(Alice, 210))).expect("1. Imported");
 	block_on(pool.submit_one(&BlockId::number(0), SOURCE, uxt(Alice, 211))).expect("1. Imported");
@@ -629,7 +623,7 @@ fn fork_aware_finalization() {
 
 #[test]
 fn ready_set_should_not_resolve_before_block_update() {
-	let (pool, _guard) = maintained_pool();
+	let (pool, _guard, _notifier) = maintained_pool();
 	let xt1 = uxt(Alice, 209);
 	block_on(pool.submit_one(&BlockId::number(1), SOURCE, xt1.clone())).expect("1. Imported");
 
@@ -638,7 +632,7 @@ fn ready_set_should_not_resolve_before_block_update() {
 
 #[test]
 fn ready_set_should_resolve_after_block_update() {
-	let (pool, _guard) = maintained_pool();
+	let (pool, _guard, _notifier) = maintained_pool();
 	pool.api.push_block(1, vec![]);
 
 	let xt1 = uxt(Alice, 209);
@@ -651,7 +645,7 @@ fn ready_set_should_resolve_after_block_update() {
 
 #[test]
 fn ready_set_should_eventually_resolve_when_block_update_arrives() {
-	let (pool, _guard) = maintained_pool();
+	let (pool, _guard, _notifier) = maintained_pool();
 	pool.api.push_block(1, vec![]);
 
 	let xt1 = uxt(Alice, 209);

@@ -175,7 +175,7 @@ pub type System = frame_system::Module<Runtime>;
 pub type Session = pallet_session::Module<Runtime>;
 
 pub fn advance_session() {
-	let now = System::block_number();
+	let now = System::block_number().max(1);
 	System::set_block_number(now + 1);
 	Session::rotate_session();
 	assert_eq!(Session::current_index(), (now / Period::get()) as u32);
