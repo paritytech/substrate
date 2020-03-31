@@ -111,7 +111,7 @@ fn phragmen_poc_works() {
 		]
 	);
 
-	let staked = assignment_ratio_to_staked(assignments, &stake_of);
+	let mut staked = assignment_ratio_to_staked(assignments, &stake_of);
 	let winners = to_without_backing(winners);
 	let mut support_map = build_support_map::<AccountId>(&winners, &staked).0;
 
@@ -145,7 +145,6 @@ fn phragmen_poc_works() {
 		Support::<AccountId> { total: 35, voters: vec![(20, 20), (30, 15)] },
 	);
 
-	let mut staked = staked.into_iter().map(|a| (a.clone(), stake_of(&a.who))).collect::<Vec<_>>();
 	equalize(
 		&mut staked,
 		&mut support_map,
@@ -153,9 +152,8 @@ fn phragmen_poc_works() {
 		2,
 	);
 
-	let equalized_staked = staked.into_iter().map(|(a, _)| a).collect::<Vec<_>>();
 	assert_eq_uvec!(
-		equalized_staked,
+		staked,
 		vec![
 			StakedAssignment {
 				who: 10u64,
@@ -553,7 +551,7 @@ fn self_votes_should_be_kept() {
 		],
 	);
 
-	let staked_assignments = assignment_ratio_to_staked(result.assignments, &stake_of);
+	let mut staked_assignments = assignment_ratio_to_staked(result.assignments, &stake_of);
 	let winners = to_without_backing(result.winners);
 
 	let (mut supports, _) = build_support_map::<AccountId>(
@@ -571,9 +569,8 @@ fn self_votes_should_be_kept() {
 		&Support { total: 24u128, voters: vec![(20u64, 20u128), (1u64, 4u128)] },
 	);
 
-	let mut staked = staked_assignments.into_iter().map(|a| (a.clone(), stake_of(&a.who))).collect::<Vec<_>>();
 	equalize(
-		&mut staked,
+		&mut staked_assignments,
 		&mut supports,
 		0,
 		2usize,

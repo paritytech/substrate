@@ -289,6 +289,11 @@ impl<AccountId> StakedAssignment<AccountId> {
 			distribution,
 		}
 	}
+
+	/// Get the total stake of this assignment (aka voter budget).
+	pub fn total(&self) -> ExtendedBalance {
+		self.distribution.iter().fold(Zero::zero(), |a, b| a.saturating_add(b.1))
+	}
 }
 
 /// A structure to demonstrate the phragmen result from the perspective of the candidate, i.e. how
@@ -639,7 +644,7 @@ pub fn is_score_better(this: PhragmenScore, that: PhragmenScore) -> bool {
 /// - `tolerance`: maximum difference that can occur before an early quite happens.
 /// - `iterations`: maximum number of iterations that will be processed.
 pub fn equalize<AccountId>(
-	assignments: &mut Vec<(StakedAssignment<AccountId>, VoteWeight)>,
+	assignments: &mut Vec<StakedAssignment<AccountId>>,
 	supports: &mut SupportMap<AccountId>,
 	tolerance: ExtendedBalance,
 	iterations: usize,
@@ -649,7 +654,9 @@ pub fn equalize<AccountId>(
 	let mut i = 0 ;
 	loop {
 		let mut max_diff = 0;
-		for (StakedAssignment { who, distribution }, voter_budget) in assignments.iter_mut() {
+		for assignment in assignments.iter_mut() {
+			let voter_budget = assignment.total();
+			let StakedAssignment { who, distribution } =  assignment;
 			let diff = do_equalize(
 				who,
 				voter_budget.clone().into(), // TODO: well... budget need not to be mut
