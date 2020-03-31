@@ -438,8 +438,8 @@ pub trait SendSignedTransaction<
 			account.id.clone(),
 			account_data.nonce
 		)?;
-		let xt = T::Extrinsic::new(call, Some(signature))?;
-		let res = sp_io::offchain::submit_transaction(xt.encode());
+		let res = SubmitTransaction::<T, <T as SendTransactionTypes<LocalCall>>::OverarchingCall>
+			::submit_transaction(call, Some(signature));
 
 		if res.is_ok() {
 			// increment the nonce. This is fine, since the code should always
