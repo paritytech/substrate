@@ -30,3 +30,6 @@ std = [
 	"sp-runtime/std",
 	"sp-std/std",
 ]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

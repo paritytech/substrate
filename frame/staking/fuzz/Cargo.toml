@@ -33,3 +33,6 @@ members = ["."]
 [[bin]]
 name = "submit_solution"
 path = "fuzz_targets/submit_solution.rs"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

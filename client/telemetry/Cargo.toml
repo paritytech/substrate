@@ -26,3 +26,6 @@ slog-json = { version = "2.3.0", features = ["nested-values"] }
 slog-scope = "4.1.2"
 take_mut = "0.2.2"
 void = "1.0.2"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

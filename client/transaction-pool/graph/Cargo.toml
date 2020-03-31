@@ -31,3 +31,6 @@ criterion = "0.3"
 [[bench]]
 name = "basics"
 harness = false
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

@@ -26,3 +26,6 @@ std = [
 	"codec/std",
 	"sp-inherents/std",
 ]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

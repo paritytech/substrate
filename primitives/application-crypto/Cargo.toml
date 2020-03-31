@@ -31,3 +31,6 @@ full_crypto = [
 	"sp-io/disable_panic_handler",
 	"sp-io/disable_oom",
 ]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

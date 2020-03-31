@@ -25,3 +25,6 @@ codec = { version = "1.3.0", package = "parity-scale-codec" }
 [features]
 default = ["rocksdb"]
 rocksdb = ["sc-client-db/kvdb-rocksdb"]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

@@ -48,3 +48,6 @@ std = [
 	"parity-util-mem/std",
 	"hash256-std-hasher/std",
 ]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

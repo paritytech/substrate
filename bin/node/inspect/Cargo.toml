@@ -18,3 +18,6 @@ sp-blockchain = { version = "2.0.0-alpha.5", path = "../../../primitives/blockch
 sp-core = { version = "2.0.0-alpha.5", path = "../../../primitives/core" }
 sp-runtime = { version = "2.0.0-alpha.5", path = "../../../primitives/runtime" }
 structopt = "0.3.8"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
