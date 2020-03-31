@@ -70,7 +70,7 @@ pub trait Trait: system::Trait {
 	type Call: Parameter + Dispatchable<Origin=<Self as Trait>::Origin> + GetDispatchInfo;
 
 	/// The maximum weight that may be scheduled per block for any dispatchables of less priority
-	/// than 255.
+	/// than `schedule::HARD_DEADLINE`.
 	type MaximumWeight: Get<Weight>;
 }
 
