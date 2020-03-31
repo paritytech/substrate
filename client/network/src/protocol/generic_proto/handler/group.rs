@@ -64,7 +64,6 @@ use libp2p::swarm::{
 	NegotiatedSubstream,
 };
 use log::{debug, error};
-use sp_runtime::ConsensusEngineId;
 use std::{borrow::Cow, error, io, str, task::{Context, Poll}};
 
 /// Implements the `IntoProtocolsHandler` trait of libp2p.
