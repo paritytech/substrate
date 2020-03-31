@@ -41,7 +41,14 @@ type AccountId = u64;
 const KSM: Balance = 1_000_000_000_000;
 
 fn main() {
-	let to_range = |x: usize, a: usize, b: usize| ((x % b).saturating_add(a));
+	let to_range = |x: usize, a: usize, b: usize| {
+		let collapsed = x % b;
+		if collapsed >= a {
+			collapsed
+		} else {
+			collapsed + a
+		}
+	};
 	loop {
 		fuzz!(|data: (usize, usize, u64)| {
 			let (mut voter_count, mut target_count, seed) = data;

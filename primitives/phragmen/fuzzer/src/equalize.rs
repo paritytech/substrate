@@ -38,18 +38,19 @@ fn generate_random_phragmen_result(
 	mut rng: impl RngCore,
 ) -> (PhragmenResult<AccountId, Perbill>, BTreeMap<AccountId, VoteWeight>) {
 	let prefix = 100_000;
-	let base_stake = 100_000;
+	// Note, it is important that stakes are always bigger than ed and
+	let base_stake: u64 = 1_000_000_000;
+	let ed: u64 = base_stake;
 
 	let mut candidates = Vec::with_capacity(target_count as usize);
 	let mut stake_of_tree: BTreeMap<AccountId, VoteWeight> = BTreeMap::new();
 
 	(1..=target_count).for_each(|acc| {
 		candidates.push(acc);
-		let stake_var = rng.gen_range(10, 10000) as VoteWeight;
+		let stake_var = rng.gen_range(ed, 100 * ed);
 		stake_of_tree.insert(acc, base_stake + stake_var);
 	});
 
-	dbg!(&candidates);
 	let mut voters = Vec::with_capacity(voter_count as usize);
 	(prefix ..= (prefix + voter_count)).for_each(|acc| {
 		// all possible targets
@@ -62,7 +63,7 @@ fn generate_random_phragmen_result(
 		})
 		.collect::<Vec<AccountId>>();
 
-		let stake_var = rng.gen_range(10, 10000) as VoteWeight;
+		let stake_var = rng.gen_range(ed, 100 * ed) ;
 		let stake = base_stake + stake_var;
 		stake_of_tree.insert(acc, stake);
 		voters.push((acc, stake, targets));
@@ -80,22 +81,30 @@ fn generate_random_phragmen_result(
 }
 
 fn main() {
-	let to_range = |x: usize, a: usize, b: usize| ((x % b).saturating_add(a));
+	let to_range = |x: usize, a: usize, b: usize| {
+		let collapsed = x % b;
+		if collapsed >= a {
+			collapsed
+		} else {
+			collapsed + a
+		}
+	};
 	loop {
-		fuzz!(|data: (usize, usize, usize, usize, u64)| {
-			let (mut target_count, mut voter_count, mut iterations, mut to_elect, seed) = data;
+		fuzz!(|data: (usize, usize, usize, usize, usize, u64)| {
+			let (mut target_count, mut voter_count, mut iterations, mut edge_per_voter, mut to_elect, seed) = data;
 			let rng = rand::rngs::SmallRng::seed_from_u64(seed);
-			target_count = to_range(target_count, 50, 1000);
-			voter_count = to_range(voter_count, 50, 2000);
+			target_count = to_range(target_count, 50, 2000);
+			voter_count = to_range(voter_count, 50, 1000);
 			iterations = to_range(iterations, 1, 20);
 			to_elect = to_range(to_elect, 50, target_count);
+			edge_per_voter = to_range(edge_per_voter, 1, target_count);
 
-			println!("++ [{} / {} / {} / {}]", target_count, voter_count, to_elect, iterations);
+			println!("++ [{} / {} / {} / {}]", voter_count, target_count, to_elect, iterations);
 			let (PhragmenResult { winners, assignments }, stake_of_tree) = generate_random_phragmen_result(
 				voter_count as u64,
 				target_count as u64,
 				to_elect,
-				8,
+				edge_per_voter as u64,
 				rng,
 			);
 
@@ -107,7 +116,9 @@ fn main() {
 			let winners = to_without_backing(winners);
 			let mut support = build_support_map(winners.as_ref(), staked.as_ref()).0;
 
+			println!("Assignments = {:?}", &assignments);
 			println!("Initial support = {:?}", support);
+
 			let initial_score = evaluate_support(&support);
 			if initial_score[0] == 0 {
 				// such cases cannot be improved by reduce.
@@ -122,7 +133,14 @@ fn main() {
 			);
 
 			println!("Equalized support = {:?}", support);
+
 			let final_score = evaluate_support(&support);
+			if final_score[0] == initial_score[0] {
+				// such solutions can only be improved by such a tiny fiction that it is most often
+				// wrong due to rounding errors.
+				return;
+			}
+
 			let enhance = is_score_better(initial_score, final_score);
 
 			println!(
