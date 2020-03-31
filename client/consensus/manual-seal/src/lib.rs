@@ -29,7 +29,7 @@ use sp_consensus::{
 		BoxBlockImport,
 	},
 };
-use sp_blockchain::HeaderBackend;
+use sp_blockchain::{HeaderBackend};
 use sp_inherents::InherentDataProviders;
 use sp_runtime::{traits::Block as BlockT, Justification};
 use sc_client_api::backend::{Backend as ClientBackend, Finalizer};
@@ -49,39 +49,8 @@ pub use self::{
 	error::Error,
 	rpc::{EngineCommand, CreatedBlock},
 };
-
-/// The synchronous block-import worker of the engine.
-pub struct ManualSealBlockImport<I> {
-	inner: I,
-}
-
-impl<I> From<I> for ManualSealBlockImport<I> {
-	fn from(i: I) -> Self {
-		ManualSealBlockImport { inner: i }
-	}
-}
-
-impl<B, I> BlockImport<B> for ManualSealBlockImport<I>
-	where
-		B: BlockT,
-		I: BlockImport<B, Transaction = ()>,
-{
-	type Error = I::Error;
-	type Transaction = ();
-
-	fn check_block(&mut self, block: BlockCheckParams<B>) -> Result<ImportResult, Self::Error>
-	{
-		self.inner.check_block(block)
-	}
-
-	fn import_block(
-		&mut self,
-		block: BlockImportParams<B, Self::Transaction>,
-		cache: HashMap<CacheKeyId, Vec<u8>>,
-	) -> Result<ImportResult, Self::Error> {
-		self.inner.import_block(block, cache)
-	}
-}
+use sc_client_api::{TransactionFor, StateBackend, Backend};
+use sp_runtime::traits::HashFor;
 
 /// The verifier for the manual seal engine; instantly finalizes.
 struct ManualSealVerifier;
@@ -105,7 +74,12 @@ impl<B: BlockT> Verifier<B> for ManualSealVerifier {
 }
 
 /// Instantiate the import queue for the manual seal consensus engine.
-pub fn import_queue<B: BlockT>(block_import: BoxBlockImport<B, ()>) -> BasicQueue<B, ()>
+pub fn import_queue<Block, B>(
+	block_import: BoxBlockImport<Block, TransactionFor<B, Block>>
+) -> BasicQueue<Block, TransactionFor<B, Block>>
+	where
+		Block: BlockT,
+		B: Backend<Block> + 'static,
 {
 	BasicQueue::new(
 		ManualSealVerifier,
