@@ -276,7 +276,7 @@ pub enum DatabaseSettingsSrc {
 	Path {
 		/// Path to the database.
 		path: PathBuf,
-		/// Cache size in bytes. If `None` default is used.
+		/// Cache size in bytes.
 		cache_size: usize,
 	},
 

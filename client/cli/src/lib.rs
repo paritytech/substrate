@@ -57,8 +57,7 @@ use structopt::{
 ///
 /// StructOpt must not be in scope to use from_args (or the similar methods). This trait provides
 /// its own implementation that will fill the necessary field based on the trait's functions.
-pub trait SubstrateCli: Sized
-{
+pub trait SubstrateCli: Sized {
 	/// Implementation name.
 	fn impl_name() -> &'static str;
 	/// Implementation version.
@@ -175,15 +174,13 @@ pub trait SubstrateCli: Sized
 		&self,
 		command: &T,
 		task_executor: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>,
-	) -> error::Result<Configuration>
-	{
+	) -> error::Result<Configuration> {
 		command.create_configuration(self, task_executor)
 	}
 
 	/// Create a runner for the command provided in argument. This will create a Configuration and
 	/// a tokio runtime
-	fn create_runner<T: CliConfiguration>(&self, command: &T) -> error::Result<Runner<Self>>
-	{
+	fn create_runner<T: CliConfiguration>(&self, command: &T) -> error::Result<Runner<Self>> {
 		command.init::<Self>()?;
 		Runner::new(self, command)
 	}

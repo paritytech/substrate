@@ -1,4 +1,4 @@
-// Copyright 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -105,8 +105,7 @@ pub struct Runner<C: SubstrateCli> {
 	phantom: PhantomData<C>,
 }
 
-impl<C: SubstrateCli> Runner<C>
-{
+impl<C: SubstrateCli> Runner<C> {
 	/// Create a new runtime with the command provided in argument
 	pub fn new<T: CliConfiguration>(cli: &C, command: &T) -> Result<Runner<C>> {
 		let tokio_runtime = build_runtime()?;
@@ -213,7 +212,7 @@ impl<C: SubstrateCli> Runner<C>
 	/// the signal SIGTERM or SIGINT
 	pub fn async_run<FUT>(self, runner: impl FnOnce(Configuration) -> FUT) -> Result<()>
 	where
-		FUT: Future<Output = Result<()>> + future::Future,
+		FUT: Future<Output = Result<()>>,
 	{
 		run_until_exit(self.tokio_runtime, runner(self.config))
 	}
