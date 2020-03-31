@@ -366,7 +366,7 @@ decl_storage! {
 		ExtrinsicData get(fn extrinsic_data): map hasher(twox_64_concat) u32 => Vec<u8>;
 
 		/// The current block number being processed. Set by `execute_block`.
-		Number get(fn block_number) build(|_| 1.into()): T::BlockNumber;
+		Number get(fn block_number): T::BlockNumber;
 
 		/// Hash of the previous block.
 		ParentHash get(fn parent_hash) build(|_| hash69()): T::Hash;
@@ -749,6 +749,10 @@ impl<T: Trait> Module<T> {
 	/// This will update storage entries that correspond to the specified topics.
 	/// It is expected that light-clients could subscribe to this topics.
 	pub fn deposit_event_indexed(topics: &[T::Hash], event: T::Event) {
+		let block_number = Self::block_number();
+		// Don't populate events on genesis.
+		if block_number.is_zero() { return }
+
 		let phase = ExecutionPhase::get().unwrap_or_default();
 		let event = EventRecord {
 			phase,
@@ -781,10 +785,9 @@ impl<T: Trait> Module<T> {
 			return;
 		}
 
-		let block_no = Self::block_number();
 		for topic in topics {
 			// The same applies here.
-			if <EventTopics<T>>::append(topic, &[(block_no, event_idx)]).is_err() {
+			if <EventTopics<T>>::append(topic, &[(block_number, event_idx)]).is_err() {
 				return;
 			}
 		}
@@ -2041,6 +2044,7 @@ mod tests {
 		let mut ext = new_test_ext();
 		ext.register_extension(sp_core::traits::CallInWasmExt::new(executor));
 		ext.execute_with(|| {
+			System::set_block_number(1);
 			System::set_code(
 				RawOrigin::Root.into(),
 				substrate_test_runtime_client::runtime::WASM_BINARY.to_vec(),
@@ -2066,6 +2070,20 @@ mod tests {
 					substrate_test_runtime_client::runtime::WASM_BINARY.to_vec()
 				)],
 			).unwrap();
+		});
+	}
+
+	#[test]
+	fn events_not_emitted_during_genesis() {
+		new_test_ext().execute_with(|| {
+			// Block Number is zero at genesis
+			assert!(System::block_number().is_zero());
+			System::on_created_account(Default::default());
+			assert!(System::events().is_empty());
+			// Events will be emitted starting on block 1
+			System::set_block_number(1);
+			System::on_created_account(Default::default());
+			assert!(System::events().len() == 1);
 		});
 	}
 }

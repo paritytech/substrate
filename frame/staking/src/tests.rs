@@ -1706,7 +1706,6 @@ fn new_era_elects_correct_number_of_validators() {
 			assert_eq!(Staking::validator_count(), 1);
 			assert_eq!(validator_controllers().len(), 1);
 
-			System::set_block_number(1);
 			Session::on_initialize(System::block_number());
 
 			assert_eq!(validator_controllers().len(), 1);
