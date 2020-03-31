@@ -2047,7 +2047,6 @@ impl<B: BlockT, H: ExHashT> Drop for Protocol<B, H> {
 #[cfg(test)]
 mod tests {
 	use crate::PeerId;
-	use crate::protocol::light_dispatch::AlwaysBadChecker;
 	use crate::config::{EmptyTransactionPool, Roles};
 	use super::{CustomMessageOutcome, Protocol, ProtocolConfig};
 
@@ -2066,7 +2065,6 @@ mod tests {
 				max_parallel_downloads: 10,
 			},
 			client.clone(),
-			Arc::new(AlwaysBadChecker),
 			Arc::new(EmptyTransactionPool),
 			None,
 			None,

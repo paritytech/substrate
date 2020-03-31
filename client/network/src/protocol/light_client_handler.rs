@@ -1236,7 +1236,7 @@ mod tests {
 	use crate::{
 		chain::Client,
 		config::ProtocolId,
-		protocol::{api, light_dispatch::tests::{DummyFetchChecker, dummy_header}}
+		protocol::api,
 	};
 	use futures::{channel::oneshot, prelude::*};
 	use libp2p::{
@@ -1258,15 +1258,15 @@ mod tests {
 	use sp_blockchain::{Error as ClientError};
 	use sp_core::storage::ChildInfo;
 	use std::{
-		collections::HashSet,
+		collections::{HashMap, HashSet},
 		io,
 		iter::{self, FromIterator},
 		pin::Pin,
 		sync::Arc,
 		task::{Context, Poll}
 	};
-	use sp_runtime::{generic::Header, traits::BlakeTwo256};
-	use super::{Event, LightClientHandler, Request, OutboundProtocol, PeerStatus};
+	use sp_runtime::{generic::Header, traits::{BlakeTwo256, Block as BlockT, NumberFor}};
+	use super::{Event, LightClientHandler, Request, Response, OutboundProtocol, PeerStatus};
 	use void::Void;
 
 	const CHILD_INFO: ChildInfo<'static> = ChildInfo::new_default(b"foobarbaz");
@@ -1281,7 +1281,7 @@ mod tests {
 
 	fn make_swarm(ok: bool, ps: sc_peerset::PeersetHandle, cf: super::Config) -> Swarm {
 		let client = Arc::new(substrate_test_runtime_client::new());
-		let checker = Arc::new(DummyFetchChecker::new(ok));
+		let checker = Arc::new(DummyFetchChecker { ok, _mark: std::marker::PhantomData });
 		let id_key = identity::Keypair::generate_ed25519();
 		let dh_key = Keypair::<X25519>::new().into_authentic(&id_key).unwrap();
 		let local_peer = id_key.public().into_peer_id();
@@ -1295,8 +1295,102 @@ mod tests {
 		Swarm::new(transport, LightClientHandler::new(cf, client, checker, ps), local_peer)
 	}
 
+	struct DummyFetchChecker<B> {
+		ok: bool,
+		_mark: std::marker::PhantomData<B>
+	}
+
+	impl<B: BlockT> fetcher::FetchChecker<B> for DummyFetchChecker<B> {
+		fn check_header_proof(
+			&self,
+			_request: &fetcher::RemoteHeaderRequest<B::Header>,
+			header: Option<B::Header>,
+			_remote_proof: fetcher::StorageProof,
+		) -> Result<B::Header, ClientError> {
+			match self.ok {
+				true if header.is_some() => Ok(header.unwrap()),
+				_ => Err(ClientError::Backend("Test error".into())),
+			}
+		}
+
+		fn check_read_proof(
+			&self,
+			request: &fetcher::RemoteReadRequest<B::Header>,
+			_: fetcher::StorageProof,
+		) -> Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError> {
+			match self.ok {
+				true => Ok(request.keys
+					.iter()
+					.cloned()
+					.map(|k| (k, Some(vec![42])))
+					.collect()
+				),
+				false => Err(ClientError::Backend("Test error".into())),
+			}
+		}
+
+		fn check_read_child_proof(
+			&self,
+			request: &fetcher::RemoteReadChildRequest<B::Header>,
+			_: fetcher::StorageProof,
+		) -> Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError> {
+			match self.ok {
+				true => Ok(request.keys
+					.iter()
+					.cloned()
+					.map(|k| (k, Some(vec![42])))
+					.collect()
+				),
+				false => Err(ClientError::Backend("Test error".into())),
+			}
+		}
+
+		fn check_execution_proof(
+			&self,
+			_: &fetcher::RemoteCallRequest<B::Header>,
+			_: fetcher::StorageProof,
+		) -> Result<Vec<u8>, ClientError> {
+			match self.ok {
+				true => Ok(vec![42]),
+				false => Err(ClientError::Backend("Test error".into())),
+			}
+		}
+
+		fn check_changes_proof(
+			&self,
+			_: &fetcher::RemoteChangesRequest<B::Header>,
+			_: fetcher::ChangesProof<B::Header>
+		) -> Result<Vec<(NumberFor<B>, u32)>, ClientError> {
+			match self.ok {
+				true => Ok(vec![(100.into(), 2)]),
+				false => Err(ClientError::Backend("Test error".into())),
+			}
+		}
+
+		fn check_body_proof(
+			&self,
+			_: &fetcher::RemoteBodyRequest<B::Header>,
+			body: Vec<B::Extrinsic>
+		) -> Result<Vec<B::Extrinsic>, ClientError> {
+			match self.ok {
+				true => Ok(body),
+				false => Err(ClientError::Backend("Test error".into())),
+			}
+		}
+	}
+
 	fn make_config() -> super::Config {
 		super::Config::new(&ProtocolId::from(&b"foo"[..]))
+	}
+
+	fn dummy_header() -> sp_test_primitives::Header {
+		sp_test_primitives::Header {
+			parent_hash: Default::default(),
+			number: 0,
+			state_root: Default::default(),
+			extrinsics_root: Default::default(),
+			digest: Default::default(),
+		}
 	}
 
 	struct EmptyPollParams(PeerId);
@@ -1341,7 +1435,7 @@ mod tests {
 		) -> LightClientHandler<Block>
 	{
 		let client = Arc::new(substrate_test_runtime_client::new());
-		let checker = Arc::new(DummyFetchChecker::new(ok));
+		let checker = Arc::new(DummyFetchChecker { ok, _mark: std::marker::PhantomData });
 		LightClientHandler::new(cf, client, checker, ps)
 	}
 
@@ -1468,7 +1562,7 @@ mod tests {
 			}
 		};
 
-		behaviour.inject_node_event(peer.clone(), Event::Response(request_id, response));
+		behaviour.inject_node_event(peer.clone(), Event::Response(request_id, Response::Light(response)));
 		assert!(behaviour.peers.is_empty());
 
 		poll(&mut behaviour); // More progress
@@ -1497,7 +1591,7 @@ mod tests {
 			}
 		};
 
-		behaviour.inject_node_event(peer.clone(), Event::Response(2347895932, response));
+		behaviour.inject_node_event(peer.clone(), Event::Response(2347895932, Response::Light(response)));
 
 		assert!(behaviour.peers.is_empty());
 		poll(&mut behaviour);
@@ -1539,7 +1633,7 @@ mod tests {
 			}
 		};
 
-		behaviour.inject_node_event(peer.clone(), Event::Response(request_id, response));
+		behaviour.inject_node_event(peer.clone(), Event::Response(request_id, Response::Light(response)));
 		assert!(behaviour.peers.is_empty());
 
 		poll(&mut behaviour); // More progress
@@ -1591,7 +1685,7 @@ mod tests {
 					response: Some(api::v1::light::response::Response::RemoteCallResponse(r))
 				}
 			};
-			behaviour.inject_node_event(responding_peer, Event::Response(request_id, response.clone()));
+			behaviour.inject_node_event(responding_peer, Event::Response(request_id, Response::Light(response.clone())));
 			assert_matches!(poll(&mut behaviour), Poll::Ready(NetworkBehaviourAction::SendEvent { .. }));
 			assert_matches!(chan.1.try_recv(), Ok(None))
 		}
@@ -1604,7 +1698,7 @@ mod tests {
 				response: Some(api::v1::light::response::Response::RemoteCallResponse(r)),
 			}
 		};
-		behaviour.inject_node_event(responding_peer, Event::Response(request_id, response));
+		behaviour.inject_node_event(responding_peer, Event::Response(request_id, Response::Light(response)));
 		assert_matches!(poll(&mut behaviour), Poll::Pending);
 		assert_matches!(chan.1.try_recv(), Ok(Some(Err(ClientError::RemoteFetchFailed))))
 	}
@@ -1618,6 +1712,7 @@ mod tests {
 		assert_eq!(1, behaviour.peers.len());
 
 		let response = match request {
+			Request::Body { .. } => unimplemented!(),
 			Request::Header{..} => {
 				let r = api::v1::light::RemoteHeaderResponse {
 					header: dummy_header().encode(),
@@ -1667,7 +1762,7 @@ mod tests {
 		assert_eq!(1, behaviour.outstanding.len());
 		assert_eq!(1, *behaviour.outstanding.keys().next().unwrap());
 
-		behaviour.inject_node_event(peer.clone(), Event::Response(1, response));
+		behaviour.inject_node_event(peer.clone(), Event::Response(1, Response::Light(response)));
 
 		poll(&mut behaviour);
 
