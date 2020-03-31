@@ -1,6 +1,6 @@
 [package]
 name = "sc-executor-wasmer"
-version = "0.8.0"
+version = "0.8.0-alpha.5"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
@@ -10,11 +10,12 @@ log = "0.4.8"
 wasmi = "0.6.2"
 parity-wasm = "0.41.0"
 codec = { package = "parity-scale-codec", version = "1.0.0" }
-sc-executor-common = { version = "0.8", path = "../common" }
-sp-wasm-interface = { version = "2.0.0", path = "../../../primitives/wasm-interface" }
-sp-runtime-interface = { version = "2.0.0", path = "../../../primitives/runtime-interface" }
-sp-core = { version = "2.0.0", path = "../../../primitives/core" }
-sp-allocator = { version = "2.0.0", path = "../../../primitives/allocator" }
+scoped-tls = "1.0"
+sc-executor-common = { version = "0.8.0-alpha.5", path = "../common" }
+sp-wasm-interface = { version = "2.0.0-alpha.5", path = "../../../primitives/wasm-interface" }
+sp-runtime-interface = { version = "2.0.0-alpha.5", path = "../../../primitives/runtime-interface" }
+sp-core = { version = "2.0.0-alpha.5", path = "../../../primitives/core" }
+sp-allocator = { version = "2.0.0-alpha.5", path = "../../../primitives/allocator" }
 
 wasmer-runtime = { git = "https://github.com/wasmerio/wasmer.git", default-features = false, features = ["default-backend-llvm"]}
 wasmer-runtime-core = { git = "https://github.com/wasmerio/wasmer.git", features = ["dynamicfunc-fat-closures"] }

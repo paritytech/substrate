@@ -101,7 +101,7 @@ fn call_not_existing_function(wasm_method: WasmExecutionMethod) {
 				#[cfg(feature = "wasmer")]
 				WasmExecutionMethod::Compiled2 => assert_eq!(
 					&format!("{:?}", e),
-					"Other(\"Wasm execution trapped: Call error: \\\"calling missing function\\\"\")"
+					"\"Wasm execution trapped: Call error: \\\"calling missing function\\\"\""
 				),
 			}
 		}
@@ -136,7 +136,7 @@ fn call_yet_another_not_existing_function(wasm_method: WasmExecutionMethod) {
 				#[cfg(feature = "wasmer")]
 				WasmExecutionMethod::Compiled2 => assert_eq!(
 					&format!("{:?}", e),
-					"Other(\"Wasm execution trapped: Call error: \\\"calling missing function\\\"\")"
+					"\"Wasm execution trapped: Call error: \\\"calling missing function\\\"\""
 				),
 			}
 		}

@@ -287,7 +287,7 @@ pub fn create_wasm_runtime_with_code(
 				heap_pages,
 				host_functions,
 				allow_missing_func_imports
-			).map(|runtime| -> Box<dyn WasmRuntime> { Box::new(runtime) }),
+			).map(|runtime| -> Box<dyn WasmModule> { Box::new(runtime) }),
 	}
 }
 

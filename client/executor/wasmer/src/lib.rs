@@ -16,15 +16,16 @@
 
 use sc_executor_common::{
 	error::{Error, Result, WasmError},
-	wasm_runtime::WasmRuntime,
+	wasm_runtime,
 };
 use sp_allocator::FreeingBumpHeapAllocator;
 use sp_runtime_interface::unpack_ptr_and_len;
-use sp_wasm_interface::{Function, Pointer, WordSize};
+use sp_wasm_interface::{Function, Pointer, WordSize, Value};
 use wasmer_runtime::{
 	compile_with, compiler_for_backend, func, imports, instantiate, Backend, ImportObject, Memory,
 	Module,
 };
+use std::sync::Arc;
 
 mod host;
 mod imports;
@@ -33,28 +34,24 @@ mod util;
 
 use crate::host::HostState;
 use crate::imports::Imports;
-use crate::state_holder::StateHolder;
 
 pub struct WasmerRuntime {
-	module: Module,
-	state_holder: StateHolder,
+	module: Arc<Module>,
 	host_functions: Vec<&'static dyn Function>,
 	imports: Imports,
 }
 
-impl WasmRuntime for WasmerRuntime {
-	fn host_functions(&self) -> &[&'static dyn Function] {
-		&self.host_functions
-	}
+unsafe impl Sync for WasmerRuntime {
+}
 
-	fn call(&mut self, method: &str, data: &[u8]) -> Result<Vec<u8>> {
-		call_method(
-			&self.module,
-			&self.state_holder,
-			&self.imports,
-			method,
-			data,
-		)
+impl wasm_runtime::WasmModule for WasmerRuntime {
+	fn new_instance(&self) -> Result<Box<dyn wasm_runtime::WasmInstance>> {
+		let (import_object, memory) = self.imports.materialize();
+		Ok(Box::new(WasmerInstance {
+			module: self.module.clone(),
+			memory,
+			import_object
+		}))
 	}
 }
 
@@ -65,11 +62,9 @@ pub fn create_instance(
 	allow_missing_func_imports: bool,
 ) -> std::result::Result<WasmerRuntime, WasmError> {
 	let compiler = compiler_for_backend(Backend::default()).unwrap();
-	let module = compile_with(code, compiler.as_ref()).unwrap();
+	let module = Arc::new(compile_with(code, compiler.as_ref()).unwrap());
 
-	let state_holder = StateHolder::empty();
 	let imports = imports::resolve_imports(
-		&state_holder,
 		&host_functions,
 		code,
 		allow_missing_func_imports,
@@ -79,28 +74,51 @@ pub fn create_instance(
 	Ok(WasmerRuntime {
 		module,
 		host_functions,
-		state_holder,
 		imports,
 	})
 }
 
+pub struct WasmerInstance {
+	module: Arc<Module>,
+	memory: Option<Memory>,
+	import_object: ImportObject,
+}
+
+impl wasm_runtime::WasmInstance for WasmerInstance {
+	fn call(&self, method: &str, data: &[u8]) -> Result<Vec<u8>> {
+		call_method(
+			&self.module,
+			&self.import_object,
+			self.memory.as_ref(),
+			method,
+			data,
+		)
+	}
+
+	fn get_global_const(&self, name: &str) -> Result<Option<Value>> {
+		todo!()
+	}
+}
+
 fn call_method(
 	module: &Module,
-	state_holder: &StateHolder,
-	imports: &Imports,
+	import_object: &ImportObject,
+	memory: Option<&Memory>,
 	method: &str,
 	data: &[u8],
 ) -> Result<Vec<u8>> {
-	let instance = module.instantiate(&imports.import_object).unwrap();
+	// This import object can contain shared functions, but it should have its own memory.
+	let instance = module.instantiate(import_object).unwrap();
 
 	let heap_base = 1054880; // TODO:
 	let mut allocator = FreeingBumpHeapAllocator::new(heap_base);
-	let memory = imports.memory.as_ref().unwrap().clone();
 
-	let (data_ptr, data_len) = inject_input_data(&mut allocator, &memory, data);
+	let memory = memory.unwrap(); // TODO: Support non imported memory.
+
+	let (data_ptr, data_len) = inject_input_data(&mut allocator, memory, data);
 
 	let host_state = HostState::new(allocator, memory.clone());
-	let (ret, host_state) = state_holder.with_initialized_state(host_state, || {
+	let ret = state_holder::with_initialized_state(&host_state, || {
 		match instance.call(
 			method,
 			&[
@@ -122,7 +140,7 @@ fn call_method(
 	});
 
 	let (output_ptr, output_len) = ret?;
-	let output = extract_output_data(&memory, output_ptr, output_len);
+	let output = extract_output_data(memory, output_ptr, output_len);
 
 	Ok(output)
 }
