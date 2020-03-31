@@ -74,12 +74,10 @@ impl<B: BlockT> Verifier<B> for ManualSealVerifier {
 }
 
 /// Instantiate the import queue for the manual seal consensus engine.
-pub fn import_queue<Block, B, I>(block_import: I) -> BasicQueue<Block, TransactionFor<B, Block>>
+pub fn import_queue<Block, B>(block_import: BoxBlockImport<Block, TransactionFor<B, Block>>) -> BasicQueue<Block, TransactionFor<B, Block>>
 	where
 		Block: BlockT,
 		B: Backend<Block> + 'static,
-		I: BlockImport<Block, Transaction = TransactionFor<B, Block>, Error = sp_consensus::Error>
-			+ Send + Sync + 'static,
 {
 	BasicQueue::new(
 		ManualSealVerifier,
