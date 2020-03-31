@@ -114,7 +114,9 @@ fn new_test_ext() -> sp_io::TestExternalities {
 	pallet_balances::GenesisConfig::<Test> {
 		balances: vec![(1, 10), (2, 10), (3, 10), (4, 10), (5, 10)],
 	}.assimilate_storage(&mut t).unwrap();
-	t.into()
+	let mut ext = sp_io::TestExternalities::new(t);
+	ext.execute_with(|| System::set_block_number(1));
+	ext
 }
 
 fn last_event() -> TestEvent {
