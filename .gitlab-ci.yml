@@ -22,11 +22,7 @@
 #     - ./.maintain/gitlab/my_amazing_script.sh
 
 stages:
-  - test
-  - build
-  - publish
-  - kubernetes
-  - flaming-fir
+  - build2
 
 variables:
   GIT_STRATEGY:                    fetch
@@ -128,7 +124,7 @@ check-line-width:
 
 
 check-polkadot:
-  stage:                           build
+  stage:                           build2
   <<:                              *docker-env
   script:
     - ./.maintain/gitlab/check_polkadot.sh
