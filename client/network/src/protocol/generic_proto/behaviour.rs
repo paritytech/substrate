@@ -15,12 +15,10 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{DiscoveryNetBehaviour, config::ProtocolId};
-use crate::protocol::message::generic::{Message as GenericMessage, ConsensusMessage};
 use crate::protocol::generic_proto::handler::{NotifsHandlerProto, NotifsHandlerOut, NotifsHandlerIn};
 use crate::protocol::generic_proto::upgrade::RegisteredProtocol;
 
 use bytes::BytesMut;
-use codec::Encode as _;
 use fnv::FnvHashMap;
 use futures::prelude::*;
 use libp2p::core::{ConnectedPoint, Multiaddr, PeerId};
@@ -28,10 +26,9 @@ use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use log::{debug, error, trace, warn};
 use rand::distributions::{Distribution as _, Uniform};
 use smallvec::SmallVec;
-use sp_runtime::ConsensusEngineId;
-use std::{borrow::Cow, collections::hash_map::Entry, cmp};
-use std::{error, mem, pin::Pin, str, time::Duration};
 use std::task::{Context, Poll};
+use std::{borrow::Cow, cmp, collections::hash_map::Entry};
+use std::{error, mem, pin::Pin, str, time::Duration};
 use wasm_timer::Instant;
 
 /// Network behaviour that handles opening substreams for custom protocols with other nodes.
@@ -84,7 +81,7 @@ pub struct GenericProto {
 	legacy_protocol: RegisteredProtocol,
 
 	/// Notification protocols. Entries are only ever added and not removed.
-	notif_protocols: Vec<(Cow<'static, [u8]>, ConsensusEngineId, Vec<u8>)>,
+	notif_protocols: Vec<(Cow<'static, [u8]>, Vec<u8>)>,
 
 	/// Receiver for instructions about who to connect to or disconnect from.
 	peerset: sc_peerset::Peerset,
@@ -238,12 +235,22 @@ pub enum GenericProtoOut {
 		reason: Cow<'static, str>,
 	},
 
+	/// Receives a message on the legacy substream.
+	LegacyMessage {
+		/// Id of the peer the message came from.
+		peer_id: PeerId,
+		/// Message that has been received.
+		message: BytesMut,
+	},
+
 	/// Receives a message on a custom protocol substream.
 	///
 	/// Also concerns received notifications for the notifications API.
-	CustomMessage {
+	Notification {
 		/// Id of the peer the message came from.
 		peer_id: PeerId,
+		/// Engine corresponding to the message.
+		protocol_name: Cow<'static, [u8]>,
 		/// Message that has been received.
 		message: BytesMut,
 	},
@@ -285,10 +292,9 @@ impl GenericProto {
 	pub fn register_notif_protocol(
 		&mut self,
 		protocol_name: impl Into<Cow<'static, [u8]>>,
-		engine_id: ConsensusEngineId,
 		handshake_msg: impl Into<Vec<u8>>
 	) {
-		self.notif_protocols.push((protocol_name.into(), engine_id, handshake_msg.into()));
+		self.notif_protocols.push((protocol_name.into(), handshake_msg.into()));
 	}
 
 	/// Returns the number of discovered nodes that we keep in memory.
@@ -406,14 +412,15 @@ impl GenericProto {
 	/// Also note that even if we have a valid open substream, it may in fact be already closed
 	/// without us knowing, in which case the packet will not be received.
 	///
-	/// > **Note**: Ideally the `engine_id` parameter wouldn't be necessary. See the documentation
-	/// >			of [`NotifsHandlerIn`] for more information.
+	/// The `fallback` parameter is used for backwards-compatibility reason if the remote doesn't
+	/// support our protocol. One needs to pass the equivalent of what would have been passed
+	/// with `send_packet`.
 	pub fn write_notification(
 		&mut self,
 		target: &PeerId,
-		engine_id: ConsensusEngineId,
 		protocol_name: Cow<'static, [u8]>,
 		message: impl Into<Vec<u8>>,
+		encoded_fallback_message: Vec<u8>,
 	) {
 		if !self.is_open(target) {
 			return;
@@ -421,7 +428,7 @@ impl GenericProto {
 
 		trace!(
 			target: "sub-libp2p",
-			"External API => Notification for {:?} with protocol {:?}",
+			"External API => Notification({:?}, {:?})",
 			target,
 			str::from_utf8(&protocol_name)
 		);
@@ -431,7 +438,7 @@ impl GenericProto {
 			peer_id: target.clone(),
 			event: NotifsHandlerIn::SendNotification {
 				message: message.into(),
-				engine_id,
+				encoded_fallback_message,
 				protocol_name,
 			},
 		});
@@ -999,7 +1006,7 @@ impl NetworkBehaviour for GenericProto {
 				debug_assert!(self.is_open(&source));
 				trace!(target: "sub-libp2p", "Handler({:?}) => Message", source);
 				trace!(target: "sub-libp2p", "External API <= Message({:?})", source);
-				let event = GenericProtoOut::CustomMessage {
+				let event = GenericProtoOut::LegacyMessage {
 					peer_id: source,
 					message,
 				};
@@ -1007,7 +1014,7 @@ impl NetworkBehaviour for GenericProto {
 				self.events.push(NetworkBehaviourAction::GenerateEvent(event));
 			}
 
-			NotifsHandlerOut::Notification { protocol_name, engine_id, message } => {
+			NotifsHandlerOut::Notification { protocol_name, message } => {
 				debug_assert!(self.is_open(&source));
 				trace!(
 					target: "sub-libp2p",
@@ -1015,18 +1022,11 @@ impl NetworkBehaviour for GenericProto {
 					source,
 					str::from_utf8(&protocol_name)
 				);
-				trace!(target: "sub-libp2p", "External API <= Message({:?})", source);
-				let event = GenericProtoOut::CustomMessage {
+				trace!(target: "sub-libp2p", "External API <= Message({:?}, {:?})", protocol_name, source);
+				let event = GenericProtoOut::Notification {
 					peer_id: source,
-					message: {
-						let message = GenericMessage::<(), (), (), ()>::Consensus(ConsensusMessage {
-							engine_id,
-							data: message.to_vec(),
-						});
-
-						// Note that we clone `message` here.
-						From::from(&message.encode()[..])
-					},
+					protocol_name,
+					message,
 				};
 
 				self.events.push(NetworkBehaviourAction::GenerateEvent(event));
