@@ -98,10 +98,10 @@ impl TelemetryWorker {
 						.map_ok(|data| BytesMut::from(data.as_ref()));
 					future::ready(Ok::<_, io::Error>(connec))
 				})
-		})
-			.timeout(CONNECT_TIMEOUT);
+		});
 
 		let transport = transport
+			.timeout(CONNECT_TIMEOUT)
 			.map_err(|err| io::Error::new(io::ErrorKind::Other, err))
 			.map(|out, _| {
 				let out = out

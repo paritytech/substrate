@@ -46,7 +46,10 @@ pub fn build(service: &impl AbstractService, format: OutputFormat) -> impl futur
 			if let Some(ref usage) = info.usage {
 				trace!(target: "usage", "Usage statistics: {}", usage);
 			} else {
-				trace!(target: "usage", "Usage statistics not displayed as backend does not provide it")
+				trace!(
+					target: "usage",
+					"Usage statistics not displayed as backend does not provide it",
+				)
 			}
 			#[cfg(not(target_os = "unknown"))]
 			trace!(
@@ -76,7 +79,7 @@ pub fn build(service: &impl AbstractService, format: OutputFormat) -> impl futur
 
 				match maybe_ancestor {
 					Ok(ref ancestor) if ancestor.hash != *last_hash => info!(
-						"Reorg from #{},{} to #{},{}, common ancestor #{},{}",
+						"♻️ Reorg from #{},{} to #{},{}, common ancestor #{},{}",
 						last_num, last_hash,
 						n.header.number(), n.hash,
 						ancestor.number, ancestor.hash,
@@ -91,7 +94,7 @@ pub fn build(service: &impl AbstractService, format: OutputFormat) -> impl futur
 			last_best = Some((n.header.number().clone(), n.hash.clone()));
 		}
 
-		info!(target: "substrate", "Imported #{} ({})", n.header.number(), n.hash);
+		info!(target: "substrate", "✨ Imported #{} ({})", n.header.number(), n.hash);
 		future::ready(())
 	});
 

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Utilites to build a `TestClient` for `node-runtime`.
+//! Utilities to build a `TestClient` for `node-runtime`.
 
 use sp_runtime::BuildStorage;
 

@@ -91,14 +91,37 @@ pub trait Offence<Offender> {
 	) -> Perbill;
 }
 
+/// Errors that may happen on offence reports.
+#[derive(PartialEq, sp_runtime::RuntimeDebug)]
+pub enum OffenceError {
+	/// The report has already been sumbmitted.
+	DuplicateReport,
+
+	/// Other error has happened.
+	Other(u8),
+}
+
+impl sp_runtime::traits::Printable for OffenceError {
+	fn print(&self) {
+		"OffenceError".print();
+		match self {
+			Self::DuplicateReport => "DuplicateReport".print(),
+			Self::Other(e) => {
+				"Other".print();
+				e.print();
+			}
+		}
+	}
+}
+
 /// A trait for decoupling offence reporters from the actual handling of offence reports.
 pub trait ReportOffence<Reporter, Offender, O: Offence<Offender>> {
 	/// Report an `offence` and reward given `reporters`.
-	fn report_offence(reporters: Vec<Reporter>, offence: O);
+	fn report_offence(reporters: Vec<Reporter>, offence: O) -> Result<(), OffenceError>;
 }
 
 impl<Reporter, Offender, O: Offence<Offender>> ReportOffence<Reporter, Offender, O> for () {
-	fn report_offence(_reporters: Vec<Reporter>, _offence: O) {}
+	fn report_offence(_reporters: Vec<Reporter>, _offence: O) -> Result<(), OffenceError> { Ok(()) }
 }
 
 /// A trait to take action on an offence.
@@ -119,11 +142,20 @@ pub trait OnOffenceHandler<Reporter, Offender> {
 	/// Zero is a valid value for a fraction.
 	///
 	/// The `session` parameter is the session index of the offence.
+	///
+	/// The receiver might decide to not accept this offence. In this case, the call site is
+	/// responsible for queuing the report and re-submitting again.
 	fn on_offence(
 		offenders: &[OffenceDetails<Reporter, Offender>],
 		slash_fraction: &[Perbill],
 		session: SessionIndex,
-	);
+	) -> Result<(), ()>;
+
+	/// Can an offence be reported now or not. This is an method to short-circuit a call into
+	/// `on_offence`. Ideally, a correct implementation should return `false` if `on_offence` will
+	/// return `Err`. Nonetheless, this is up to the implementation and this trait cannot guarantee
+	/// it.
+	fn can_report() -> bool;
 }
 
 impl<Reporter, Offender> OnOffenceHandler<Reporter, Offender> for () {
@@ -131,7 +163,9 @@ impl<Reporter, Offender> OnOffenceHandler<Reporter, Offender> for () {
 		_offenders: &[OffenceDetails<Reporter, Offender>],
 		_slash_fraction: &[Perbill],
 		_session: SessionIndex,
-	) {}
+	) -> Result<(), ()> { Ok(()) }
+
+	fn can_report() -> bool { true }
 }
 
 /// A details about an offending authority for a particular kind of offence.

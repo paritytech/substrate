@@ -312,7 +312,7 @@ impl InherentDataProviders {
 
 	/// Converts a given encoded error into a `String`.
 	///
-	/// Useful if the implementation encouters an error for an identifier it does not know.
+	/// Useful if the implementation encounters an error for an identifier it does not know.
 	pub fn error_to_string(&self, identifier: &InherentIdentifier, error: &[u8]) -> String {
 		let res = self.providers.read().iter().filter_map(|p|
 			if p.inherent_identifier() == identifier {

@@ -62,29 +62,28 @@ pub fn config_endowed(
 			code: code.map(|x| x.to_vec()).unwrap_or_else(|| WASM_BINARY.to_vec()),
 		}),
 		pallet_indices: Some(IndicesConfig {
-			ids: vec![alice(), bob(), charlie(), dave(), eve(), ferdie()],
+			indices: vec![],
 		}),
 		pallet_balances: Some(BalancesConfig {
 			balances: endowed,
 		}),
 		pallet_session: Some(SessionConfig {
 			keys: vec![
-				(alice(), to_session_keys(
+				(dave(), alice(), to_session_keys(
 					&Ed25519Keyring::Alice,
 					&Sr25519Keyring::Alice,
 				)),
-				(bob(), to_session_keys(
+				(eve(), bob(), to_session_keys(
 					&Ed25519Keyring::Bob,
 					&Sr25519Keyring::Bob,
 				)),
-				(charlie(), to_session_keys(
+				(ferdie(), charlie(), to_session_keys(
 					&Ed25519Keyring::Charlie,
 					&Sr25519Keyring::Charlie,
 				)),
 			]
 		}),
 		pallet_staking: Some(StakingConfig {
-			current_era: 0,
 			stakers: vec![
 				(dave(), alice(), 111 * DOLLARS, pallet_staking::StakerStatus::Validator),
 				(eve(), bob(), 100 * DOLLARS, pallet_staking::StakerStatus::Validator),

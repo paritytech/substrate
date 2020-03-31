@@ -336,6 +336,7 @@ mod tests {
 
 	mod event_module {
 		use crate::dispatch::DispatchResult;
+		use crate::weights::SimpleDispatchInfo;
 
 		pub trait Trait: super::system::Trait {
 			type Balance;
@@ -353,6 +354,7 @@ mod tests {
 			pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 				type Error = Error<T>;
 
+				#[weight = SimpleDispatchInfo::default()]
 				fn aux_0(_origin) -> DispatchResult { unreachable!() }
 			}
 		}
@@ -404,6 +406,7 @@ mod tests {
 
 	impl_outer_event! {
 		pub enum TestEvent for TestRuntime {
+			system,
 			event_module<T>,
 			event_module2<T>,
 		}

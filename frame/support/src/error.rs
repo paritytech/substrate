@@ -28,13 +28,14 @@ pub use frame_metadata::{ModuleErrorMetadata, ErrorMetadata, DecodeDifferent};
 /// implements `From<ErrorType> for DispatchResult` to make the error type usable as error
 /// in the dispatchable functions.
 ///
-/// It is required that the error type is registed in `decl_module!` to make the error
+/// It is required that the error type is registered in `decl_module!` to make the error
 /// exported in the metadata.
 ///
 /// # Usage
 ///
 /// ```
 /// # use frame_support::{decl_error, decl_module};
+/// # use frame_support::weights::SimpleDispatchInfo;
 /// decl_error! {
 ///     /// Errors that can occur in my module.
 ///     pub enum MyError for Module<T: Trait> {
@@ -54,6 +55,7 @@ pub use frame_metadata::{ModuleErrorMetadata, ErrorMetadata, DecodeDifferent};
 ///     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 ///         type Error = MyError<T>;
 ///
+/// 		#[weight = SimpleDispatchInfo::default()]
 ///         fn do_something(origin) -> frame_support::dispatch::DispatchResult {
 ///             Err(MyError::<T>::YouAreNotCoolEnough.into())
 ///         }

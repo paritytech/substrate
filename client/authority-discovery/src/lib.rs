@@ -58,12 +58,12 @@ use codec::{Decode, Encode};
 use error::{Error, Result};
 use libp2p::Multiaddr;
 use log::{debug, error, log_enabled, warn};
+use prometheus_endpoint::{Counter, CounterVec, Gauge, Opts, U64, register};
 use prost::Message;
 use sc_client_api::blockchain::HeaderBackend;
-use sc_network::specialization::NetworkSpecialization;
 use sc_network::{DhtEvent, ExHashT, NetworkStateInfo};
 use sp_authority_discovery::{AuthorityDiscoveryApi, AuthorityId, AuthoritySignature, AuthorityPair};
-use sp_core::crypto::{key_types, Pair};
+use sp_core::crypto::{key_types, CryptoTypePublicPair, Pair};
 use sp_core::traits::BareCryptoStorePtr;
 use sp_runtime::{traits::Block as BlockT, generic::BlockId};
 use sp_api::ProvideRuntimeApi;
@@ -87,6 +87,53 @@ const LIBP2P_KADEMLIA_BOOTSTRAP_TIME: Duration = Duration::from_secs(30);
 /// Name of the Substrate peerset priority group for authorities discovered through the authority
 /// discovery module.
 const AUTHORITIES_PRIORITY_GROUP_NAME: &'static str = "authorities";
+
+/// Prometheus metrics for an `AuthorityDiscovery`.
+#[derive(Clone)]
+pub(crate) struct Metrics {
+	publish: Counter<U64>,
+	amount_last_published: Gauge<U64>,
+	request: Counter<U64>,
+	dht_event_received: CounterVec<U64>,
+}
+
+impl Metrics {
+	pub(crate) fn register(registry: &prometheus_endpoint::Registry) -> Result<Self> {
+		Ok(Self {
+			publish: register(
+				Counter::new(
+					"authority_discovery_times_published_total",
+					"Number of times authority discovery has published external addresses."
+				)?,
+				registry,
+			)?,
+			amount_last_published: register(
+				Gauge::new(
+					"authority_discovery_amount_external_addresses_last_published",
+					"Number of external addresses published when authority discovery last published addresses ."
+				)?,
+				registry,
+			)?,
+			request: register(
+				Counter::new(
+					"authority_discovery_times_requested_total",
+					"Number of times authority discovery has requested external addresses."
+				)?,
+				registry,
+			)?,
+			dht_event_received: register(
+				CounterVec::new(
+					Opts::new(
+						"authority_discovery_dht_event_received",
+						"Number of dht events received by authority discovery."
+					),
+					&["name"],
+				)?,
+				registry,
+			)?,
+		})
+	}
+}
 
 /// An `AuthorityDiscovery` makes a given authority discoverable and discovers other authorities.
 pub struct AuthorityDiscovery<Client, Network, Block>
@@ -119,6 +166,8 @@ where
 
 	addr_cache: addr_cache::AddrCache<AuthorityId, Multiaddr>,
 
+	metrics: Option<Metrics>,
+
 	phantom: PhantomData<Block>,
 }
 
@@ -141,6 +190,7 @@ where
 		sentry_nodes: Vec<String>,
 		key_store: BareCryptoStorePtr,
 		dht_event_rx: Pin<Box<dyn Stream<Item = DhtEvent> + Send>>,
+		prometheus_registry: Option<prometheus_endpoint::Registry>,
 	) -> Self {
 		// Kademlia's default time-to-live for Dht records is 36h, republishing records every 24h.
 		// Given that a node could restart at any point in time, one can not depend on the
@@ -178,6 +228,19 @@ where
 
 		let addr_cache = AddrCache::new();
 
+		let metrics = match prometheus_registry {
+			Some(registry) => {
+				match Metrics::register(&registry) {
+					Ok(metrics) => Some(metrics),
+					Err(e) => {
+						error!(target: "sub-authority-discovery", "Failed to register metrics: {:?}", e);
+						None
+					},
+				}
+			},
+			None => None,
+		};
+
 		AuthorityDiscovery {
 			client,
 			network,
@@ -187,13 +250,18 @@ where
 			publish_interval,
 			query_interval,
 			addr_cache,
+			metrics,
 			phantom: PhantomData,
 		}
 	}
 
 	/// Publish either our own or if specified the public addresses of our sentry nodes.
 	fn publish_ext_addresses(&mut self) -> Result<()> {
-		let addresses = match &self.sentry_nodes {
+		if let Some(metrics) = &self.metrics {
+			metrics.publish.inc()
+		}
+
+		let addresses: Vec<_> = match &self.sentry_nodes {
 			Some(addrs) => addrs.clone().into_iter()
 				.map(|a| a.to_vec())
 				.collect(),
@@ -206,24 +274,45 @@ where
 				.collect(),
 		};
 
+		if let Some(metrics) = &self.metrics {
+			metrics.amount_last_published.set(addresses.len() as u64);
+		}
+
 		let mut serialized_addresses = vec![];
 		schema::AuthorityAddresses { addresses }
 			.encode(&mut serialized_addresses)
 			.map_err(Error::EncodingProto)?;
 
-		for key in self.get_priv_keys_within_authority_set()?.into_iter() {
-			let signature = key.sign(&serialized_addresses);
+		let keys: Vec<CryptoTypePublicPair> = self.get_own_public_keys_within_authority_set()?
+			.into_iter()
+			.map(Into::into)
+			.collect();
 
+		let signatures = self.key_store
+			.read()
+			.sign_with_all(
+				key_types::AUTHORITY_DISCOVERY,
+				keys.clone(),
+				serialized_addresses.as_slice(),
+			)
+			.map_err(|_| Error::Signing)?;
+
+		for (sign_result, key) in signatures.iter().zip(keys) {
 			let mut signed_addresses = vec![];
+
+			// sign_with_all returns Result<Signature, Error> signature
+			// is generated for a public key that is supported.
+			// Verify that all signatures exist for all provided keys.
+			let signature = sign_result.as_ref().map_err(|_| Error::MissingSignature(key.clone()))?;
 			schema::SignedAuthorityAddresses {
 				addresses: serialized_addresses.clone(),
-				signature: signature.encode(),
+				signature: Encode::encode(&signature),
 			}
 			.encode(&mut signed_addresses)
 				.map_err(Error::EncodingProto)?;
 
 			self.network.put_value(
-				hash_authority_id(key.public().as_ref())?,
+				hash_authority_id(key.1.as_ref())?,
 				signed_addresses,
 			);
 		}
@@ -232,6 +321,10 @@ where
 	}
 
 	fn request_addresses_of_others(&mut self) -> Result<()> {
+		if let Some(metrics) = &self.metrics {
+			metrics.request.inc();
+		}
+
 		let id = BlockId::hash(self.client.info().best_hash);
 
 		let authorities = self
@@ -252,6 +345,10 @@ where
 		while let Poll::Ready(Some(event)) = self.dht_event_rx.poll_next_unpin(cx) {
 			match event {
 				DhtEvent::ValueFound(v) => {
+					if let Some(metrics) = &self.metrics {
+						metrics.dht_event_received.with_label_values(&["value_found"]).inc();
+					}
+
 					if log_enabled!(log::Level::Debug) {
 						let hashes = v.iter().map(|(hash, _value)| hash.clone());
 						debug!(
@@ -262,17 +359,36 @@ where
 
 					self.handle_dht_value_found_event(v)?;
 				}
-				DhtEvent::ValueNotFound(hash) => debug!(
-					target: "sub-authority-discovery",
-					"Value for hash '{:?}' not found on Dht.", hash
-				),
-				DhtEvent::ValuePut(hash) => debug!(
-					target: "sub-authority-discovery",
-					"Successfully put hash '{:?}' on Dht.", hash),
-				DhtEvent::ValuePutFailed(hash) => warn!(
-					target: "sub-authority-discovery",
-					"Failed to put hash '{:?}' on Dht.", hash
-				),
+				DhtEvent::ValueNotFound(hash) => {
+					if let Some(metrics) = &self.metrics {
+						metrics.dht_event_received.with_label_values(&["value_not_found"]).inc();
+					}
+
+					debug!(
+						target: "sub-authority-discovery",
+						"Value for hash '{:?}' not found on Dht.", hash
+					)
+				},
+				DhtEvent::ValuePut(hash) => {
+					if let Some(metrics) = &self.metrics {
+						metrics.dht_event_received.with_label_values(&["value_put"]).inc();
+					}
+
+					debug!(
+						target: "sub-authority-discovery",
+						"Successfully put hash '{:?}' on Dht.", hash,
+					)
+				},
+				DhtEvent::ValuePutFailed(hash) => {
+					if let Some(metrics) = &self.metrics {
+						metrics.dht_event_received.with_label_values(&["value_put_failed"]).inc();
+					}
+
+					warn!(
+						target: "sub-authority-discovery",
+						"Failed to put hash '{:?}' on Dht.", hash
+					)
+				},
 			}
 		}
 
@@ -347,21 +463,6 @@ where
 		Ok(())
 	}
 
-	/// Retrieve all local authority discovery private keys that are within the current authority
-	/// set.
-	fn get_priv_keys_within_authority_set(&mut self) -> Result<Vec<AuthorityPair>> {
-		let keys = self.get_own_public_keys_within_authority_set()?
-			.into_iter()
-			.map(std::convert::Into::into)
-			.filter_map(|pub_key| {
-				self.key_store.read().sr25519_key_pair(key_types::AUTHORITY_DISCOVERY, &pub_key)
-			})
-			.map(std::convert::Into::into)
-			.collect();
-
-		Ok(keys)
-	}
-
 	/// Retrieve our public keys within the current authority set.
 	//
 	// A node might have multiple authority discovery keys within its keystore, e.g. an old one and
@@ -395,7 +496,7 @@ where
 
 	/// Update the peer set 'authority' priority group.
 	//
-	fn update_peer_set_priority_group(&self) -> Result<()>{
+	fn update_peer_set_priority_group(&self) -> Result<()> {
 		let addresses = self.addr_cache.get_subset();
 
 		debug!(
@@ -477,10 +578,9 @@ pub trait NetworkProvider: NetworkStateInfo {
 	fn get_value(&self, key: &libp2p::kad::record::Key);
 }
 
-impl<B, S, H> NetworkProvider for sc_network::NetworkService<B, S, H>
+impl<B, H> NetworkProvider for sc_network::NetworkService<B, H>
 where
 	B: BlockT + 'static,
-	S: NetworkSpecialization<B>,
 	H: ExHashT,
 {
 	fn set_priority_group(

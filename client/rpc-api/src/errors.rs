@@ -20,7 +20,7 @@ pub fn internal<E: ::std::fmt::Debug>(e: E) -> jsonrpc_core::Error {
 	warn!("Unknown error: {:?}", e);
 	jsonrpc_core::Error {
 		code: jsonrpc_core::ErrorCode::InternalError,
-		message: "Unknown error occured".into(),
+		message: "Unknown error occurred".into(),
 		data: Some(format!("{:?}", e).into()),
 	}
 }

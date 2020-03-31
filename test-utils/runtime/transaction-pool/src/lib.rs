@@ -25,6 +25,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, Hash as HashT},
 	transaction_validity::{
 		TransactionValidity, ValidTransaction, TransactionValidityError, InvalidTransaction,
+		TransactionSource,
 	},
 };
 use std::collections::{HashSet, HashMap};
@@ -50,7 +51,7 @@ impl std::error::Error for Error {
 }
 
 #[derive(Default)]
-struct ChainState {
+pub struct ChainState {
 	pub block_by_number: HashMap<BlockNumber, Vec<Extrinsic>>,
 	pub block_by_hash: HashMap<Hash, Vec<Extrinsic>>,
 	pub header_by_number: HashMap<BlockNumber, Header>,
@@ -96,16 +97,24 @@ impl TestApi {
 	}
 
 	/// Push block as a part of canonical chain under given number.
-	pub fn push_block(&self, block_number: BlockNumber, xts: Vec<Extrinsic>) {
+	pub fn push_block(&self, block_number: BlockNumber, xts: Vec<Extrinsic>) -> Header {
 		let mut chain = self.chain.write();
-		chain.block_by_number.insert(block_number, xts);
-		chain.header_by_number.insert(block_number, Header {
+		chain.block_by_number.insert(block_number, xts.clone());
+		let header = Header {
 			number: block_number,
 			digest: Default::default(),
 			extrinsics_root:  Default::default(),
-			parent_hash: Default::default(),
+			parent_hash: block_number
+				.checked_sub(1)
+				.and_then(|num| {
+					chain.header_by_number.get(&num)
+						.cloned().map(|h| h.hash())
+				}).unwrap_or_default(),
 			state_root: Default::default(),
-		});
+		};
+		chain.block_by_hash.insert(header.hash(), xts);
+		chain.header_by_number.insert(block_number, header.clone());
+		header
 	}
 
 	/// Push a block without a number.
@@ -114,6 +123,20 @@ impl TestApi {
 	pub fn push_fork_block(&self, block_hash: Hash, xts: Vec<Extrinsic>) {
 		let mut chain = self.chain.write();
 		chain.block_by_hash.insert(block_hash, xts);
+	}
+
+	pub fn push_fork_block_with_parent(&self, parent: Hash, xts: Vec<Extrinsic>) -> Header {
+		let mut chain = self.chain.write();
+		let blocknum = chain.block_by_number.keys().max().expect("block_by_number shouldn't be empty");
+		let header = Header {
+			number: *blocknum,
+			digest: Default::default(),
+			extrinsics_root:  Default::default(),
+			parent_hash: parent,
+			state_root: Default::default(),
+		};
+		chain.block_by_hash.insert(header.hash(), xts);
+		header
 	}
 
 	fn hash_and_length_inner(ex: &Extrinsic) -> (Hash, usize) {
@@ -136,6 +159,11 @@ impl TestApi {
 		self.validation_requests.read().clone()
 	}
 
+	/// get a reference to the chain state
+	pub fn chain(&self) -> &RwLock<ChainState> {
+		&self.chain
+	}
+
 	/// Increment nonce in the inner state.
 	pub fn increment_nonce(&self, account: AccountId) {
 		let mut chain = self.chain.write();
@@ -153,6 +181,7 @@ impl sc_transaction_graph::ChainApi for TestApi {
 	fn validate_transaction(
 		&self,
 		_at: &BlockId<Self::Block>,
+		_source: TransactionSource,
 		uxt: sc_transaction_graph::ExtrinsicFor<Self>,
 	) -> Self::ValidationFuture {
 		self.validation_requests.write().push(uxt.clone());
@@ -197,7 +226,12 @@ impl sc_transaction_graph::ChainApi for TestApi {
 	) -> Result<Option<sc_transaction_graph::BlockHash<Self>>, Error> {
 		Ok(match at {
 			generic::BlockId::Hash(x) => Some(x.clone()),
-			_ => Some(Default::default()),
+			generic::BlockId::Number(num) => {
+				self.chain.read()
+					.header_by_number.get(num)
+					.map(|h| h.hash())
+					.or_else(|| Some(Default::default()))
+			},
 		})
 	}
 
@@ -209,10 +243,9 @@ impl sc_transaction_graph::ChainApi for TestApi {
 	}
 
 	fn block_body(&self, id: &BlockId<Self::Block>) -> Self::BodyFuture {
-		futures::future::ready(Ok(if let BlockId::Number(num) = id {
-			self.chain.read().block_by_number.get(num).cloned()
-		} else {
-			None
+		futures::future::ready(Ok(match id {
+			BlockId::Number(num) => self.chain.read().block_by_number.get(num).cloned(),
+			BlockId::Hash(hash) => self.chain.read().block_by_hash.get(hash).cloned(),
 		}))
 	}
 }
@@ -234,7 +267,7 @@ pub fn uxt(who: AccountKeyring, nonce: Index) -> Extrinsic {
 		nonce,
 		amount: 1,
 	};
-	let signature = transfer.using_encoded(|e| who.sign(e));
-	Extrinsic::Transfer(transfer, signature.into())
+	let signature = transfer.using_encoded(|e| who.sign(e)).into();
+	Extrinsic::Transfer { transfer, signature, exhaust_resources_when_not_first: false }
 }
 

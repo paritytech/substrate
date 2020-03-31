@@ -1,4 +1,4 @@
-error: expected `,`
+error: expected `::`
  --> $DIR/invalid_token_after_module.rs:9:18
   |
 9 |         system: System ?

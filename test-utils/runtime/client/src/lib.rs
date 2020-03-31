@@ -33,7 +33,7 @@ pub use self::block_builder_ext::BlockBuilderExt;
 use sp_core::{sr25519, ChangesTrieConfiguration};
 use sp_core::storage::{ChildInfo, Storage, StorageChild};
 use substrate_test_runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, NumberFor, HasherFor};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, NumberFor, HashFor};
 use sc_client::{
 	light::fetcher::{
 		Fetcher,
@@ -82,7 +82,7 @@ pub type LightExecutor = sc_client::light::call_executor::GenesisCallExecutor<
 	sc_client::LocalCallExecutor<
 		sc_client::light::backend::Backend<
 			sc_client_db::light::LightStorage<substrate_test_runtime::Block>,
-			HasherFor<substrate_test_runtime::Block>
+			HashFor<substrate_test_runtime::Block>
 		>,
 		NativeExecutor<LocalExecutor>
 	>
@@ -243,7 +243,7 @@ impl<B> TestClientBuilderExt<B> for TestClientBuilder<
 	B: sc_client_api::backend::Backend<substrate_test_runtime::Block> + 'static,
 	// Rust bug: https://github.com/rust-lang/rust/issues/24159
 	<B as sc_client_api::backend::Backend<substrate_test_runtime::Block>>::State:
-		sp_api::StateBackend<HasherFor<substrate_test_runtime::Block>>,
+		sp_api::StateBackend<HashFor<substrate_test_runtime::Block>>,
 {
 	fn genesis_init_mut(&mut self) -> &mut GenesisParameters {
 		Self::genesis_init_mut(self)
@@ -349,7 +349,7 @@ pub fn new_light() -> (
 	let blockchain = Arc::new(sc_client::light::blockchain::Blockchain::new(storage));
 	let backend = Arc::new(LightBackend::new(blockchain.clone()));
 	let executor = new_native_executor();
-	let local_call_executor = sc_client::LocalCallExecutor::new(backend.clone(), executor);
+	let local_call_executor = sc_client::LocalCallExecutor::new(backend.clone(), executor, sp_core::tasks::executor());
 	let call_executor = LightExecutor::new(
 		backend.clone(),
 		local_call_executor,
@@ -370,5 +370,5 @@ pub fn new_light_fetcher() -> LightFetcher {
 
 /// Create a new native executor.
 pub fn new_native_executor() -> sc_executor::NativeExecutor<LocalExecutor> {
-	sc_executor::NativeExecutor::new(sc_executor::WasmExecutionMethod::Interpreted, None)
+	sc_executor::NativeExecutor::new(sc_executor::WasmExecutionMethod::Interpreted, None, 8)
 }

@@ -69,7 +69,7 @@ impl<Block: BlockT, T: CacheItemT> Entry<Block, T> {
 			.map(|(entry, next)| (entry.valid_from, next)))
 	}
 
-	/// Searches the list, ending with THIS entry for the best entry preceeding (or at)
+	/// Searches the list, ending with THIS entry for the best entry preceding (or at)
 	/// given block number.
 	/// If the entry is found, result is the entry and the block id of next entry (if exists).
 	/// NOTE that this function does not check that the passed block is actually linked to

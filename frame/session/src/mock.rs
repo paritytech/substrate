@@ -92,6 +92,7 @@ impl SessionHandler<u64> for TestSessionHandler {
 pub struct TestSessionManager;
 impl SessionManager<u64> for TestSessionManager {
 	fn end_session(_: SessionIndex) {}
+	fn start_session(_: SessionIndex) {}
 	fn new_session(_: SessionIndex) -> Option<Vec<u64>> {
 		if !TEST_SESSION_CHANGED.with(|l| *l.borrow()) {
 			VALIDATORS.with(|v| {
@@ -112,6 +113,7 @@ impl SessionManager<u64> for TestSessionManager {
 #[cfg(feature = "historical")]
 impl crate::historical::SessionManager<u64, u64> for TestSessionManager {
 	fn end_session(_: SessionIndex) {}
+	fn start_session(_: SessionIndex) {}
 	fn new_session(new_index: SessionIndex)
 		-> Option<Vec<(u64, u64)>>
 	{
@@ -176,6 +178,9 @@ impl frame_system::Trait for Test {
 	type MaximumBlockLength = MaximumBlockLength;
 	type Version = ();
 	type ModuleToIndex = ();
+	type AccountData = ();
+	type OnNewAccount = ();
+	type OnKilledAccount = ();
 }
 
 impl pallet_timestamp::Trait for Test {
@@ -200,6 +205,7 @@ impl Trait for Test {
 	type Keys = MockSessionKeys;
 	type Event = ();
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
+	type NextSessionRotation = ();
 }
 
 #[cfg(feature = "historical")]

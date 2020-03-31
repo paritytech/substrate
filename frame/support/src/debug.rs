@@ -24,7 +24,7 @@
 //! and size of the blob. Luckily there are some ways to mitigate
 //! this that are described below.
 //!
-//! First component to utilize debug-printing and loggin is actually
+//! First component to utilize debug-printing and logging is actually
 //! located in `primitives` crate: `sp_core::RuntimeDebug`.
 //! This custom-derive generates `core::fmt::Debug` implementation,
 //! just like regular `derive(Debug)`, however it does not generate

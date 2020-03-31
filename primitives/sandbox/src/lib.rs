@@ -193,7 +193,7 @@ impl<T> Instance<T> {
 	/// - This module doesn't have an exported function with the given name,
 	/// - If types of the arguments passed to the function doesn't match function signature
 	///   then trap occurs (as if the exported function was called via call_indirect),
-	/// - Trap occured at the execution time.
+	/// - Trap occurred at the execution time.
 	pub fn invoke(
 		&mut self,
 		name: &str,

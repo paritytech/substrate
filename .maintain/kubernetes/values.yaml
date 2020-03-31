@@ -48,7 +48,7 @@ validator: {}
   # substrate-1-node-key <node-secret-key>
   #
   # pod names are canonical. changing these or providing different amount of
-  # keys than the replicas count will lead to behavior noone ever has
+  # keys than the replicas count will lead to behavior no one ever has
   # experienced before.
 
 
