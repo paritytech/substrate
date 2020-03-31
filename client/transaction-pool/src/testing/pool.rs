@@ -219,10 +219,9 @@ fn should_revalidate_during_maintenance() {
 
 	pool.api.push_block(1, vec![xt1.clone()]);
 
-	notifier.clear();
 	block_on(pool.maintain(block_event(1)));
 	assert_eq!(pool.status().ready, 1);
-	block_on(notifier.next());
+	block_on(notifier.next_blocking());
 
 	// test that pool revalidated transaction that left ready and not included in the block
 	assert_eq!(pool.api.validation_requests().len(), 3);
@@ -263,14 +262,10 @@ fn should_not_retain_invalid_hashes_from_retracted() {
 
 	let event = block_event_with_retracted(1, vec![retracted_hash]);
 
-	notifier.clear();
 	block_on(pool.maintain(event));
 	// maintenance is in background
-	block_on(notifier.next());
-
-	let event = block_event_with_retracted(1, vec![retracted_hash]);
-
-	block_on(pool.maintain(event));
+	block_on(notifier.next_blocking());
+	
 	assert_eq!(pool.status().ready, 0);
 }
 
@@ -285,9 +280,8 @@ fn should_revalidate_transaction_multiple_times() {
 
 	pool.api.push_block(1, vec![xt.clone()]);
 
-	notifier.clear();
 	block_on(pool.maintain(block_event(1)));
-	block_on(notifier.next());
+	block_on(notifier.next_blocking());
 
 	block_on(pool.submit_one(&BlockId::number(0), SOURCE, xt.clone())).expect("1. Imported");
 	assert_eq!(pool.status().ready, 1);
@@ -295,9 +289,8 @@ fn should_revalidate_transaction_multiple_times() {
 	pool.api.push_block(2, vec![]);
 	pool.api.add_invalid(&xt);
 
-	notifier.clear();
 	block_on(pool.maintain(block_event(2)));
-	block_on(notifier.next());
+	block_on(notifier.next_blocking());
 
 	assert_eq!(pool.status().ready, 0);
 }
@@ -315,17 +308,15 @@ fn should_revalidate_across_many_blocks() {
 	assert_eq!(pool.status().ready, 2);
 
 	pool.api.push_block(1, vec![]);
-	notifier.clear();
 	block_on(pool.maintain(block_event(1)));
-	block_on(notifier.next());
+	block_on(notifier.next_blocking());
 
 	block_on(pool.submit_one(&BlockId::number(2), SOURCE, xt3.clone())).expect("1. Imported");
 	assert_eq!(pool.status().ready, 3);
 
 	pool.api.push_block(2, vec![xt1.clone()]);
-	notifier.clear();
 	block_on(pool.maintain(block_event(2)));
-	block_on(notifier.next());
+	block_on(notifier.next_blocking());
 
 	assert_eq!(pool.status().ready, 2);
 	// xt1 and xt2 validated twice, then xt3 once, then xt2 and xt3 again
@@ -369,9 +360,8 @@ fn should_push_watchers_during_maintaince() {
 	pool.api.add_invalid(&tx4);
 
 	// clear timer events if any
-	notifier.clear();
 	block_on(pool.maintain(block_event(0)));
-	block_on(notifier.next());
+	block_on(notifier.next_blocking());
 
 	// then
 	// hash3 is now invalid
