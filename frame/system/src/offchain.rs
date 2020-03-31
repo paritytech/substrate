@@ -28,6 +28,23 @@ pub enum ForAll {}
 /// Marker enum used to flag using any of the supported keys to sign a payload.
 pub enum ForAny {}
 
+pub struct SubmitTransaction<T: SendTransactionTypes<LocalCall>, LocalCall> {
+	_phantom: sp_std::marker::PhantomData<(T, LocalCall)>
+}
+
+impl<T, LocalCall> SubmitTransaction<T, LocalCall>
+where
+	T: SendTransactionTypes<LocalCall>,
+{
+	pub fn submit_transaction(
+		call: LocalCall,
+		signature: Option<<T::Extrinsic as ExtrinsicT>::SignaturePayload>
+	) -> Result<(), ()> {
+		let xt = T::Extrinsic::new(call.into(), signature).ok_or(())?;
+		sp_io::offchain::submit_transaction(xt.encode())
+	}
+}
+
 /// Provides an implementation for signing transaction payloads
 ///
 /// Keys used for signing are defined when instantiating the signer object.
@@ -131,18 +148,6 @@ impl<T: SigningTypes, C: AppCrypto<T::Public, T::Signature>> Signer<T, C, ForAny
 			}
 		}
 		None
-	}
-}
-
-impl<
-	T: SigningTypes + SendTransactionTypes<LocalCall>,
-	C: AppCrypto<T::Public, T::Signature>,
-	X,
-	LocalCall,
-> SendRawUnsignedTransaction<T, LocalCall> for Signer<T, C, X> {
-	fn send_raw_unsigned_transaction(call: LocalCall) -> Result<(), ()> {
-		let xt = T::Extrinsic::new(call.into(), None).ok_or(())?;
-		sp_io::offchain::submit_transaction(xt.encode())
 	}
 }
 
@@ -470,11 +475,6 @@ pub trait SendUnsignedTransaction<
 		let xt = T::Extrinsic::new(call.into(), None)?;
 		Some(sp_io::offchain::submit_transaction(xt.encode()))
 	}
-}
-
-/// Submit a raw unsigned transaction onchain
-pub trait SendRawUnsignedTransaction<T: SendTransactionTypes<C>, C> {
-	fn send_raw_unsigned_transaction(call: C) -> Result<(), ()>;
 }
 
 /// Utility trait to be implemented on payloads
