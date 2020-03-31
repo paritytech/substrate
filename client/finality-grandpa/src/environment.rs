@@ -1090,9 +1090,9 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 			let (new_id, set_ref) = authority_set.current();
 
 			if set_ref.len() > 16 {
-				info!("Applying GRANDPA set change to new set with {} authorities", set_ref.len());
+				info!("👴 Applying GRANDPA set change to new set with {} authorities", set_ref.len());
 			} else {
-				info!("Applying GRANDPA set change to new set {:?}", set_ref);
+				info!("👴 Applying GRANDPA set change to new set {:?}", set_ref);
 			}
 
 			telemetry!(CONSENSUS_INFO; "afg.generating_new_authority_set";

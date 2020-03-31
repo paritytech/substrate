@@ -164,12 +164,9 @@ where TSubstream: AsyncRead + AsyncWrite,
 {
 	/// Sends the handshake in order to inform the remote that we accept the substream.
 	pub fn send_handshake(&mut self, message: impl Into<Vec<u8>>) {
-		match self.handshake {
-			NotificationsInSubstreamHandshake::NotSent => {}
-			_ => {
-				error!(target: "sub-libp2p", "Tried to send handshake twice");
-				return;
-			}
+		if !matches!(self.handshake, NotificationsInSubstreamHandshake::NotSent) {
+			error!(target: "sub-libp2p", "Tried to send handshake twice");
+			return;
 		}
 
 		self.handshake = NotificationsInSubstreamHandshake::PendingSend(message.into());
@@ -189,8 +186,10 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin,
 			match mem::replace(this.handshake, NotificationsInSubstreamHandshake::Sent) {
 				NotificationsInSubstreamHandshake::Sent =>
 					return Stream::poll_next(this.socket.as_mut(), cx),
-				NotificationsInSubstreamHandshake::NotSent =>
-					return Poll::Pending,
+				NotificationsInSubstreamHandshake::NotSent => {
+					*this.handshake = NotificationsInSubstreamHandshake::NotSent;
+					return Poll::Pending
+				},
 				NotificationsInSubstreamHandshake::PendingSend(msg) =>
 					match Sink::poll_ready(this.socket.as_mut(), cx) {
 						Poll::Ready(_) => {
