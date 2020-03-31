@@ -125,12 +125,14 @@ macro_rules! new_full {
 			name,
 			disable_grandpa,
 			sentry_nodes,
+			reserved_nodes,
 		) = (
 			$config.roles.is_authority(),
 			$config.force_authoring,
 			$config.name.clone(),
 			$config.disable_grandpa,
 			$config.network.sentry_nodes.clone(),
+			$config.network.reserved_nodes.clone(),
 		);
 
 		// sentry nodes announce themselves as authorities to the network
@@ -190,7 +192,7 @@ macro_rules! new_full {
 			let authority_discovery = sc_authority_discovery::AuthorityDiscovery::new(
 				service.client(),
 				network,
-				sentry_nodes,
+				sentry_nodes.clone(),
 				service.keystore(),
 				dht_event_stream,
 				service.prometheus_registry(),
@@ -207,12 +209,20 @@ macro_rules! new_full {
 			None
 		};
 
+		let favorite_peers = reserved_nodes
+			.into_iter()
+			.chain(sentry_nodes.into_iter())
+			.filter_map(|n| sc_network::config::parse_str_addr(&n).ok())
+			.map(|(peer_id, _)| peer_id)
+			.collect();
+
 		let config = grandpa::Config {
 			// FIXME #1578 make this available through chainspec
 			gossip_duration: std::time::Duration::from_millis(333),
 			justification_period: 512,
 			name: Some(name),
 			observer_enabled: false,
+			favorite_peers,
 			keystore,
 			is_authority,
 		};

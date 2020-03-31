@@ -141,6 +141,7 @@ pub fn new_full(config: Configuration)
 		justification_period: 512,
 		name: Some(name),
 		observer_enabled: false,
+		favorite_peers: Default::default(),
 		keystore,
 		is_authority,
 	};
