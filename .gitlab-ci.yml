@@ -362,7 +362,7 @@ test-browser-node:
     - job:                         check-web-wasm
       artifacts:                   false
   script:
-    - cargo test --target wasm32-unknown-unknown -p node-browser-testing
+    - cargo +nightly test --target wasm32-unknown-unknown -p node-browser-testing -Z features=itarget
 
 build-linux-substrate:             &build-binary
   stage:                           build
