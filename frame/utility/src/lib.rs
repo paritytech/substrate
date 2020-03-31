@@ -837,6 +837,7 @@ mod tests {
 	#[test]
 	fn multisig_2_of_3_cannot_reissue_same_call() {
 		new_test_ext().execute_with(|| {
+			System::set_block_number(1);
 			let multi = Utility::multi_account_id(&[1, 2, 3][..], 2);
 			assert_ok!(Balances::transfer(Origin::signed(1), multi, 5));
 			assert_ok!(Balances::transfer(Origin::signed(2), multi, 5));
