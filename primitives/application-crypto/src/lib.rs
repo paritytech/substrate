@@ -21,7 +21,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[doc(hidden)]
-pub use sp_core::{self, crypto::{CryptoType, Public, Derive, IsWrappedBy, Wraps}, RuntimeDebug};
+pub use sp_core::{self, crypto::{CryptoType, CryptoTypePublicPair, Public, Derive, IsWrappedBy, Wraps}, RuntimeDebug};
 #[doc(hidden)]
 #[cfg(feature = "full_crypto")]
 pub use sp_core::crypto::{SecretStringError, DeriveJunction, Ss58Codec, Pair};
