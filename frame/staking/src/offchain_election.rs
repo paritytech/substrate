@@ -19,7 +19,7 @@
 use crate::{
 	Call, CompactAssignments, Module, NominatorIndex, OffchainAccuracy, Trait, ValidatorIndex,
 };
-use frame_system::offchain::SubmitUnsignedTransaction;
+use frame_system::offchain::SubmitTransaction;
 use sp_phragmen::{
 	build_support_map, evaluate_support, reduce, Assignment, ExtendedBalance, PhragmenResult,
 	PhragmenScore,
@@ -117,14 +117,14 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 	let era = <Module<T>>::active_era().map(|e| e.index).unwrap_or_default();
 
 	// send it.
-	let call: <T as Trait>::Call = Call::submit_election_solution_unsigned(
+	let call = Call::submit_election_solution_unsigned(
 		winners,
 		compact,
 		score,
 		era,
 	).into();
 
-	T::SubmitTransaction::submit_unsigned(call)
+	SubmitTransaction::<T, Call<T>>::submit_transaction(call, None)
 		.map_err(|_| OffchainElectionError::PoolSubmissionFailed)
 }
 

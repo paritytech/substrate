@@ -98,8 +98,7 @@ use frame_support::{
 use frame_system::{self as system, ensure_none};
 use frame_system::offchain::{
 	AppCrypto,
-	Signer,
-	SendRawUnsignedTransaction,
+	SubmitTransaction,
 	SendTransactionTypes,
 };
 
@@ -489,8 +488,7 @@ impl<T: Trait> Module<T> {
 					call,
 				);
 
-				Signer::<T, T::OffchainAuthorityId>
-					::send_raw_unsigned_transaction(call)
+				SubmitTransaction::<T, Call<T>>::submit_transaction(call, None)
 					.map_err(|_| OffchainErr::SubmitTransaction)?;
 
 				Ok(())

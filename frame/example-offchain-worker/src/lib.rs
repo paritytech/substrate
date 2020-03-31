@@ -46,7 +46,7 @@ use frame_system::{
 	ensure_none,
 	offchain::{
 		AppCrypto, CreateSignedTransaction, SendUnsignedTransaction,
-		SendRawUnsignedTransaction, SignedPayload, SigningTypes, Signer,
+		SignedPayload, SigningTypes, Signer, SubmitTransaction,
 	}
 };
 use frame_support::{
@@ -210,6 +210,7 @@ decl_module! {
 			Ok(())
 		}
 
+		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		pub fn submit_price_unsigned_with_signed_payload(
 			origin,
 			price_payload: PricePayload<T::Public, T::BlockNumber>,
@@ -418,8 +419,9 @@ impl<T: Trait> Module<T> {
 		// attack vectors. See validation logic docs for more details.
 		//
 		// Method 1: Unsigned transaction / Unsigned payload
-		let _result_raw: Result<(), &'static str> = Signer::<T, T::AuthorityId>::send_raw_unsigned_transaction(call)
-			.map_err(|()| "Unable to submit unsigned transaction.");
+		let _result_raw: Result<(), &'static str> =
+			SubmitTransaction::<T, Call<T>>::submit_transaction(call, None)
+				.map_err(|()| "Unable to submit unsigned transaction.");
 
 		// Method 2: Unsigned transction / signed payload
 		let _result_signed_payload = Signer::<T, T::AuthorityId>::all_accounts().send_unsigned_transaction(

@@ -302,7 +302,7 @@ use sp_staking::{
 use sp_runtime::{Serialize, Deserialize};
 use frame_system::{
 	self as system, ensure_signed, ensure_root, ensure_none,
-	offchain::SubmitUnsignedTransaction,
+	offchain::SendTransactionTypes,
 };
 use sp_phragmen::{
 	ExtendedBalance, Assignment, PhragmenScore, PhragmenResult, build_support_map, evaluate_support,
@@ -712,7 +712,7 @@ impl<T: Trait> SessionInterface<<T as frame_system::Trait>::AccountId> for T whe
 	}
 }
 
-pub trait Trait: frame_system::Trait {
+pub trait Trait: SendTransactionTypes<Call<Self>> {
 	/// The staking balance.
 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
 
@@ -771,9 +771,6 @@ pub trait Trait: frame_system::Trait {
 
 	/// The overarching call type.
 	type Call: From<Call<Self>> + IsSubType<Module<Self>, Self> + Clone;
-
-	/// A transaction submitter.
-	type SubmitTransaction: SubmitUnsignedTransaction<Self, <Self as Trait>::Call>;
 
 	/// The maximum number of nominator rewarded for each validator.
 	///
