@@ -235,9 +235,7 @@ mod tests {
 	use substrate_test_runtime_transaction_pool::{TestApi, uxt};
 	use sp_transaction_pool::{TransactionPool, MaintainedTransactionPool};
 	use sp_runtime::generic::BlockId;
-	use sp_blockchain::HeaderBackend;
 	use sp_consensus::ImportedAux;
-	use sc_client::LongestChain;
 	use sp_inherents::InherentDataProviders;
 	use sc_basic_authorship::ProposerFactory;
 
@@ -248,9 +246,8 @@ mod tests {
 	#[tokio::test]
 	async fn instant_seal() {
 		let builder = TestClientBuilder::new();
-		let backend = builder.backend();
-		let client = Arc::new(builder.build());
-		let select_chain = LongestChain::new(backend.clone());
+		let (client, select_chain) = builder.build_with_longest_chain();
+		let client = Arc::new(client);
 		let inherent_data_providers = InherentDataProviders::new();
 		let pool = Arc::new(BasicPool::new(Options::default(), api()).0);
 		let env = ProposerFactory::new(
@@ -275,7 +272,7 @@ mod tests {
 		let future = run_manual_seal(
 			Box::new(client.clone()),
 			env,
-			backend.clone(),
+			client.clone(),
 			pool.pool().clone(),
 			stream,
 			select_chain,
@@ -307,15 +304,14 @@ mod tests {
 			}
 		);
 		// assert that there's a new block in the db.
-		assert!(backend.blockchain().header(BlockId::Number(1)).unwrap().is_some())
+		assert!(client.header(&BlockId::Number(1)).unwrap().is_some())
 	}
 
 	#[tokio::test]
 	async fn manual_seal_and_finalization() {
 		let builder = TestClientBuilder::new();
-		let backend = builder.backend();
-		let client = Arc::new(builder.build());
-		let select_chain = LongestChain::new(backend.clone());
+		let (client, select_chain) = builder.build_with_longest_chain();
+		let client = Arc::new(client);
 		let inherent_data_providers = InherentDataProviders::new();
 		let pool = Arc::new(BasicPool::new(Options::default(), api()).0);
 		let env = ProposerFactory::new(
@@ -327,7 +323,7 @@ mod tests {
 		let future = run_manual_seal(
 			Box::new(client.clone()),
 			env,
-			backend.clone(),
+			client.clone(),
 			pool.pool().clone(),
 			stream,
 			select_chain,
@@ -367,7 +363,7 @@ mod tests {
 			}
 		);
 		// assert that there's a new block in the db.
-		let header = backend.blockchain().header(BlockId::Number(1)).unwrap().unwrap();
+		let header = client.header(&BlockId::Number(1)).unwrap().unwrap();
 		let (tx, rx) = futures::channel::oneshot::channel();
 		sink.send(EngineCommand::FinalizeBlock {
 			sender: Some(tx),
@@ -381,9 +377,8 @@ mod tests {
 	#[tokio::test]
 	async fn manual_seal_fork_blocks() {
 		let builder = TestClientBuilder::new();
-		let backend = builder.backend();
-		let client = Arc::new(builder.build());
-		let select_chain = LongestChain::new(backend.clone());
+		let (client, select_chain) = builder.build_with_longest_chain();
+		let client = Arc::new(client);
 		let inherent_data_providers = InherentDataProviders::new();
 		let pool_api = api();
 		let pool = Arc::new(BasicPool::new(Options::default(), pool_api.clone()).0);
@@ -396,7 +391,7 @@ mod tests {
 		let future = run_manual_seal(
 			Box::new(client.clone()),
 			env,
-			backend.clone(),
+			client.clone(),
 			pool.pool().clone(),
 			stream,
 			select_chain,
@@ -438,12 +433,12 @@ mod tests {
 			}
 		);
 		// assert that there's a new block in the db.
-		assert!(backend.blockchain().header(BlockId::Number(0)).unwrap().is_some());
+		assert!(client.header(&BlockId::Number(0)).unwrap().is_some());
 		assert!(pool.submit_one(&BlockId::Number(1), uxt(Alice, 1)).await.is_ok());
 
 		pool.maintain(sp_transaction_pool::ChainEvent::NewBlock {
 			id: BlockId::Number(1),
-			header: backend.blockchain().header(BlockId::Number(1)).expect("db error").expect("imported above"),
+			header: client.header(&BlockId::Number(1)).expect("db error").expect("imported above"),
 			is_new_best: true,
 			retracted: vec![],
 		}).await;
@@ -459,7 +454,7 @@ mod tests {
 			rx1.await.expect("should be no error receiving"),
 			Ok(_)
 		);
-		assert!(backend.blockchain().header(BlockId::Number(1)).unwrap().is_some());
+		assert!(client.header(&BlockId::Number(1)).unwrap().is_some());
 		pool_api.increment_nonce(Alice.into());
 
 		assert!(pool.submit_one(&BlockId::Number(2), uxt(Alice, 2)).await.is_ok());
@@ -472,6 +467,6 @@ mod tests {
 		}).await.is_ok());
 		let imported = rx2.await.unwrap().unwrap();
 		// assert that fork block is in the db
-		assert!(backend.blockchain().header(BlockId::Hash(imported.hash)).unwrap().is_some())
+		assert!(client.header(&BlockId::Hash(imported.hash)).unwrap().is_some())
 	}
 }

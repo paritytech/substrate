@@ -41,7 +41,7 @@ use sp_inherents::InherentDataProviders;
 const MAX_PROPOSAL_DURATION: u64 = 10;
 
 /// params for sealing a new block
-pub struct SealBlockParams<'a, B: BlockT, C, HB, E, T, P: txpool::ChainApi> {
+pub struct SealBlockParams<'a, B: BlockT, SC, HB, E, T, P: txpool::ChainApi> {
 	/// if true, empty blocks(without extrinsics) will be created.
 	/// otherwise, will return Error::EmptyTransactionPool.
 	pub create_empty: bool,
@@ -58,7 +58,7 @@ pub struct SealBlockParams<'a, B: BlockT, C, HB, E, T, P: txpool::ChainApi> {
 	/// Environment trait object for creating a proposer
 	pub env: &'a mut E,
 	/// SelectChain object
-	pub select_chain: &'a C,
+	pub select_chain: &'a SC,
 	/// block import object
 	pub block_import: &'a mut BoxBlockImport<B, T>,
 	/// inherent data provider
