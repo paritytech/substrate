@@ -113,7 +113,6 @@ fn should_report_in_different_time_slot() {
 #[test]
 fn should_deposit_event() {
 	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
 		// given
 		let time_slot = 42;
 		assert_eq!(offence_reports(KIND, time_slot), vec![]);
@@ -142,7 +141,6 @@ fn should_deposit_event() {
 #[test]
 fn doesnt_deposit_event_for_dups() {
 	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
 		// given
 		let time_slot = 42;
 		assert_eq!(offence_reports(KIND, time_slot), vec![]);
@@ -219,7 +217,6 @@ fn should_properly_count_offences() {
 #[test]
 fn should_queue_and_resubmit_rejected_offence() {
 	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
 		set_can_report(false);
 
 		// will get deferred

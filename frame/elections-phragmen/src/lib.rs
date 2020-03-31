@@ -1040,7 +1040,7 @@ mod tests {
 			VOTING_BOND.with(|v| *v.borrow_mut() = self.voter_bond);
 			TERM_DURATION.with(|v| *v.borrow_mut() = self.term_duration);
 			DESIRED_RUNNERS_UP.with(|v| *v.borrow_mut() = self.desired_runners_up);
-			GenesisConfig {
+			let mut ext: sp_io::TestExternalities = GenesisConfig {
 				pallet_balances: Some(pallet_balances::GenesisConfig::<Test>{
 					balances: vec![
 						(1, 10 * self.balance_factor),
@@ -1051,7 +1051,9 @@ mod tests {
 						(6, 60 * self.balance_factor)
 					],
 				}),
-			}.build_storage().unwrap().into()
+			}.build_storage().unwrap().into();
+			ext.execute_with(|| System::set_block_number(1));
+			ext
 		}
 	}
 
@@ -1072,7 +1074,6 @@ mod tests {
 	#[test]
 	fn params_should_work() {
 		ExtBuilder::default().build().execute_with(|| {
-			System::set_block_number(1);
 			assert_eq!(Elections::desired_members(), 2);
 			assert_eq!(Elections::term_duration(), 5);
 			assert_eq!(Elections::election_rounds(), 0);
@@ -1096,7 +1097,6 @@ mod tests {
 			.build()
 			.execute_with(||
 		{
-			System::set_block_number(1);
 			assert_eq!(Elections::term_duration(), 0);
 			assert_eq!(Elections::desired_members(), 2);
 			assert_eq!(Elections::election_rounds(), 0);

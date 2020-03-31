@@ -279,7 +279,9 @@ impl ExtBuilder {
 			},
 			gas_price: self.gas_price,
 		}.assimilate_storage(&mut t).unwrap();
-		sp_io::TestExternalities::new(t)
+		let mut ext = sp_io::TestExternalities::new(t);
+		ext.execute_with(|| System::set_block_number(1));
+		ext
 	}
 }
 
@@ -415,7 +417,6 @@ fn instantiate_and_call_and_deposit_event() {
 	let (wasm, code_hash) = compile_module::<Test>(CODE_RETURN_FROM_START_FN).unwrap();
 
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
-		System::set_block_number(1);
 		Balances::deposit_creating(&ALICE, 1_000_000);
 
 		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
@@ -506,7 +507,6 @@ fn dispatch_call() {
 	let (wasm, code_hash) = compile_module::<Test>(CODE_DISPATCH_CALL).unwrap();
 
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		System::set_block_number(1);
 		Balances::deposit_creating(&ALICE, 1_000_000);
 
 		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
@@ -645,7 +645,6 @@ fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
 	let (wasm, code_hash) = compile_module::<Test>(CODE_DISPATCH_CALL_THEN_TRAP).unwrap();
 
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		System::set_block_number(1);
 		Balances::deposit_creating(&ALICE, 1_000_000);
 
 		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
@@ -902,7 +901,6 @@ fn test_set_rent_code_and_hash() {
 	let (wasm, code_hash) = compile_module::<Test>(CODE_SET_RENT).unwrap();
 
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		System::set_block_number(1);
 		Balances::deposit_creating(&ALICE, 1_000_000);
 		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
 
@@ -971,7 +969,6 @@ fn deduct_blocks() {
 	let (wasm, code_hash) = compile_module::<Test>(CODE_SET_RENT).unwrap();
 
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		System::set_block_number(1);
 		// Create
 		Balances::deposit_creating(&ALICE, 1_000_000);
 		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
@@ -1066,7 +1063,6 @@ fn claim_surcharge(blocks: u64, trigger_call: impl Fn() -> bool, removes: bool) 
 	let (wasm, code_hash) = compile_module::<Test>(CODE_SET_RENT).unwrap();
 
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		System::set_block_number(1);
 		// Create
 		Balances::deposit_creating(&ALICE, 1_000_000);
 		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
@@ -1420,7 +1416,6 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 		compile_module::<Test>(CODE_RESTORATION).unwrap();
 
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		System::set_block_number(1);
 		Balances::deposit_creating(&ALICE, 1_000_000);
 		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, restoration_wasm));
 		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, set_rent_wasm));

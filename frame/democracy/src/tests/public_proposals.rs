@@ -21,7 +21,6 @@ use super::*;
 #[test]
 fn backing_for_should_work() {
 	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
 		assert_ok!(propose_set_balance_and_note(1, 2, 2));
 		assert_ok!(propose_set_balance_and_note(1, 4, 4));
 		assert_ok!(propose_set_balance_and_note(1, 3, 3));
@@ -34,7 +33,6 @@ fn backing_for_should_work() {
 #[test]
 fn deposit_for_proposals_should_be_taken() {
 	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
 		assert_ok!(propose_set_balance_and_note(1, 2, 5));
 		assert_ok!(Democracy::second(Origin::signed(2), 0));
 		assert_ok!(Democracy::second(Origin::signed(5), 0));
@@ -49,7 +47,6 @@ fn deposit_for_proposals_should_be_taken() {
 #[test]
 fn deposit_for_proposals_should_be_returned() {
 	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
 		assert_ok!(propose_set_balance_and_note(1, 2, 5));
 		assert_ok!(Democracy::second(Origin::signed(2), 0));
 		assert_ok!(Democracy::second(Origin::signed(5), 0));
@@ -65,7 +62,6 @@ fn deposit_for_proposals_should_be_returned() {
 #[test]
 fn proposal_with_deposit_below_minimum_should_not_work() {
 	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
 		assert_noop!(propose_set_balance(1, 2, 0), Error::<Test>::ValueLow);
 	});
 }
@@ -73,7 +69,6 @@ fn proposal_with_deposit_below_minimum_should_not_work() {
 #[test]
 fn poor_proposer_should_not_work() {
 	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
 		assert_noop!(propose_set_balance(1, 2, 11), BalancesError::<Test, _>::InsufficientBalance);
 	});
 }
@@ -81,7 +76,6 @@ fn poor_proposer_should_not_work() {
 #[test]
 fn poor_seconder_should_not_work() {
 	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
 		assert_ok!(propose_set_balance_and_note(2, 2, 11));
 		assert_noop!(Democracy::second(Origin::signed(1), 0), BalancesError::<Test, _>::InsufficientBalance);
 	});
