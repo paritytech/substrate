@@ -175,7 +175,7 @@ decl_storage! {
 				// make sure they have enough stake
 				assert!(
 					T::Currency::free_balance(member) >= *stake,
-					"Genesis member does not have enough stake"
+					"Genesis member does not have enough stake",
 				);
 
 				// reserve candidacy bond and set as members.
@@ -185,8 +185,8 @@ decl_storage! {
 				// Note: all members will only vote for themselves, hence they must be given exactly
 				// their own stake as total backing. Any sane election should behave as such.
 				// Nonetheless, stakes will be updated for term 1 onwards according to the election.
-				// TODO: can't use append here?
-				<Members<T>>::mutate(|members| members.push((member.clone(), *stake)));
+				<Members<T>>::append(&[(member.clone(), *stake)])
+					.expect("Failed to append genesis members.");
 
 				// set self-votes to make persistent.
 				<Module<T>>::vote(
