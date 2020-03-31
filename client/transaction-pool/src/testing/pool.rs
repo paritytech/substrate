@@ -265,10 +265,7 @@ fn should_not_retain_invalid_hashes_from_retracted() {
 	block_on(pool.maintain(event));
 	// maintenance is in background
 	block_on(notifier.next_blocking());
-
-	let event = block_event_with_retracted(1, vec![retracted_hash]);
-
-	block_on(pool.maintain(event));
+	
 	assert_eq!(pool.status().ready, 0);
 }
 
