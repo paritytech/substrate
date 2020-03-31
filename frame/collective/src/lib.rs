@@ -590,19 +590,20 @@ mod tests {
 	);
 
 	fn make_ext() -> sp_io::TestExternalities {
-		GenesisConfig {
+		let mut ext: sp_io::TestExternalities = GenesisConfig {
 			collective_Instance1: Some(collective::GenesisConfig {
 				members: vec![1, 2, 3],
 				phantom: Default::default(),
 			}),
 			collective: None,
-		}.build_storage().unwrap().into()
+		}.build_storage().unwrap().into();
+		ext.execute_with(|| System::set_block_number(1));
+		ext
 	}
 
 	#[test]
 	fn motions_basic_environment_works() {
 		make_ext().execute_with(|| {
-			System::set_block_number(1);
 			assert_eq!(Collective::members(), vec![1, 2, 3]);
 			assert_eq!(Collective::proposals(), Vec::<H256>::new());
 		});
@@ -615,7 +616,6 @@ mod tests {
 	#[test]
 	fn close_works() {
 		make_ext().execute_with(|| {
-			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			let hash = BlakeTwo256::hash_of(&proposal);
 
@@ -644,7 +644,6 @@ mod tests {
 	#[test]
 	fn close_with_prime_works() {
 		make_ext().execute_with(|| {
-			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			let hash = BlakeTwo256::hash_of(&proposal);
 			assert_ok!(Collective::set_members(Origin::ROOT, vec![1, 2, 3], Some(3)));
@@ -668,7 +667,6 @@ mod tests {
 	#[test]
 	fn close_with_voting_prime_works() {
 		make_ext().execute_with(|| {
-			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			let hash = BlakeTwo256::hash_of(&proposal);
 			assert_ok!(Collective::set_members(Origin::ROOT, vec![1, 2, 3], Some(1)));
@@ -693,7 +691,6 @@ mod tests {
 	#[test]
 	fn removal_of_old_voters_votes_works() {
 		make_ext().execute_with(|| {
-			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			let hash = BlakeTwo256::hash_of(&proposal);
 			let end = 4;
@@ -728,7 +725,6 @@ mod tests {
 	#[test]
 	fn removal_of_old_voters_votes_works_with_set_members() {
 		make_ext().execute_with(|| {
-			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			let hash = BlakeTwo256::hash_of(&proposal);
 			let end = 4;
@@ -763,7 +759,6 @@ mod tests {
 	#[test]
 	fn propose_works() {
 		make_ext().execute_with(|| {
-			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			let hash = proposal.blake2_256().into();
 			let end = 4;
@@ -793,7 +788,6 @@ mod tests {
 	#[test]
 	fn motions_ignoring_non_collective_proposals_works() {
 		make_ext().execute_with(|| {
-			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			assert_noop!(
 				Collective::propose(Origin::signed(42), 3, Box::new(proposal.clone())),
@@ -805,7 +799,6 @@ mod tests {
 	#[test]
 	fn motions_ignoring_non_collective_votes_works() {
 		make_ext().execute_with(|| {
-			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
 			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
@@ -833,7 +826,6 @@ mod tests {
 	#[test]
 	fn motions_revoting_works() {
 		make_ext().execute_with(|| {
-			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
 			let end = 4;
@@ -885,7 +877,6 @@ mod tests {
 	#[test]
 	fn motions_reproposing_disapproved_works() {
 		make_ext().execute_with(|| {
-			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
 			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
@@ -899,7 +890,6 @@ mod tests {
 	#[test]
 	fn motions_disapproval_works() {
 		make_ext().execute_with(|| {
-			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
 			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
@@ -942,7 +932,6 @@ mod tests {
 	#[test]
 	fn motions_approval_works() {
 		make_ext().execute_with(|| {
-			System::set_block_number(1);
 			let proposal = make_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
 			assert_ok!(Collective::propose(Origin::signed(1), 2, Box::new(proposal.clone())));
