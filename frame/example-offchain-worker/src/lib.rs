@@ -420,7 +420,7 @@ impl<T: Trait> Module<T> {
 		//
 		// Method 1: Unsigned transaction / Unsigned payload
 		let _result_raw: Result<(), &'static str> =
-			SubmitTransaction::<T, Call<T>>::submit_transaction(call, None)
+			SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into())
 				.map_err(|()| "Unable to submit unsigned transaction.");
 
 		// Method 2: Unsigned transction / signed payload

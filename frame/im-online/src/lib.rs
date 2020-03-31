@@ -488,7 +488,7 @@ impl<T: Trait> Module<T> {
 					call,
 				);
 
-				SubmitTransaction::<T, Call<T>>::submit_transaction(call, None)
+				SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into())
 					.map_err(|_| OffchainErr::SubmitTransaction)?;
 
 				Ok(())

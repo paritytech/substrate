@@ -124,7 +124,7 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 		era,
 	).into();
 
-	SubmitTransaction::<T, Call<T>>::submit_transaction(call, None)
+	SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call)
 		.map_err(|_| OffchainElectionError::PoolSubmissionFailed)
 }
 
