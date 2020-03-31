@@ -14,7 +14,7 @@ sp-phragmen = { version = "2.0.0-alpha.5", path = ".." }
 sp-std = { version = "2.0.0-alpha.5", path = "../../std" }
 sp-runtime = { version = "2.0.0-alpha.5", path = "../../runtime" }
 honggfuzz = "0.5"
-rand = "0.7.3"
+rand = { version = "0.7.3", features = ["std", "small_rng"] }
 
 [[bin]]
 name = "reduce"
