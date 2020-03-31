@@ -205,12 +205,27 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			)?;
 
 		// Initialize the reserved peers.
-		for reserved in params.network_config.reserved_nodes.iter() {
-			if let Ok((peer_id, addr)) = parse_str_addr(reserved) {
+		let mut add_reserved = |node| {
+			if let Ok((peer_id, addr)) = parse_str_addr(node) {
 				reserved_nodes.push(peer_id.clone());
 				known_addresses.push((peer_id, addr));
-			} else {
+				return true;
+			}
+
+			false
+		};
+
+		for reserved in params.network_config.reserved_nodes.iter() {
+			if !add_reserved(reserved) {
 				warn!(target: "sub-libp2p", "Not a valid reserved node address: {}", reserved);
+			}
+		}
+
+		// treat sentry nodes as reserved for the peerset, we always want to maintain contains to
+		// our sentries.
+		for sentry in params.network_config.sentry_nodes.iter() {
+			if !add_reserved(sentry) {
+				warn!(target: "sub-libp2p", "Not a valid sentry node address: {}", sentry);
 			}
 		}
 
