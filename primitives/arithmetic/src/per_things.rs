@@ -201,7 +201,7 @@ pub trait PerThing:
 
 /// The rounding method to use.
 ///
-/// `Perthing`s are unsigned so `Up` means towards infinity and `Down` means towards zero.
+/// `PerThing`s are unsigned so `Up` means towards infinity and `Down` means towards zero.
 /// `Nearest` will round an exact half down.
 enum Rounding {
 	Up,
