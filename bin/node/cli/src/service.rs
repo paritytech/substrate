@@ -209,6 +209,7 @@ macro_rules! new_full {
 			None
 		};
 
+		// add reserved and sentry nodes as favorite peers to GRANDPA
 		let favorite_peers = reserved_nodes
 			.into_iter()
 			.chain(sentry_nodes.into_iter())
