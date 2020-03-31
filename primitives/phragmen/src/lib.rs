@@ -639,7 +639,7 @@ pub fn is_score_better(this: PhragmenScore, that: PhragmenScore) -> bool {
 /// - `tolerance`: maximum difference that can occur before an early quite happens.
 /// - `iterations`: maximum number of iterations that will be processed.
 pub fn equalize<AccountId>(
-	mut assignments: Vec<(StakedAssignment<AccountId>, VoteWeight)>,
+	assignments: &mut Vec<(StakedAssignment<AccountId>, VoteWeight)>,
 	supports: &mut SupportMap<AccountId>,
 	tolerance: ExtendedBalance,
 	iterations: usize,
