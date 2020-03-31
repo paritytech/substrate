@@ -28,8 +28,8 @@ pub enum ForAll {}
 /// Marker enum used to flag using any of the supported keys to sign a payload.
 pub enum ForAny {}
 
-pub struct SubmitTransaction<T: SendTransactionTypes<LocalCall>, LocalCall> {
-	_phantom: sp_std::marker::PhantomData<(T, LocalCall)>
+pub struct SubmitTransaction<T: SendTransactionTypes<OverarchingCall>, OverarchingCall> {
+	_phantom: sp_std::marker::PhantomData<(T, OverarchingCall)>
 }
 
 impl<T, LocalCall> SubmitTransaction<T, LocalCall>
@@ -37,11 +37,17 @@ where
 	T: SendTransactionTypes<LocalCall>,
 {
 	pub fn submit_transaction(
-		call: LocalCall,
+		call: <T as SendTransactionTypes<LocalCall>>::OverarchingCall,
 		signature: Option<<T::Extrinsic as ExtrinsicT>::SignaturePayload>
 	) -> Result<(), ()> {
 		let xt = T::Extrinsic::new(call.into(), signature).ok_or(())?;
 		sp_io::offchain::submit_transaction(xt.encode())
+	}
+
+	pub fn submit_unsigned_transaction(
+		call: <T as SendTransactionTypes<LocalCall>>::OverarchingCall,
+	) -> Result<(), ()> {
+		SubmitTransaction::<T, LocalCall>::submit_transaction(call, None)
 	}
 }
 
@@ -438,7 +444,7 @@ pub trait SendSignedTransaction<
 			account.id.clone(),
 			account_data.nonce
 		)?;
-		let res = SubmitTransaction::<T, <T as SendTransactionTypes<LocalCall>>::OverarchingCall>
+		let res = SubmitTransaction::<T, LocalCall>
 			::submit_transaction(call, Some(signature));
 
 		if res.is_ok() {
@@ -472,8 +478,8 @@ pub trait SendUnsignedTransaction<
 		&self,
 		call: LocalCall
 	) -> Option<Result<(), ()>> {
-		let xt = T::Extrinsic::new(call.into(), None)?;
-		Some(sp_io::offchain::submit_transaction(xt.encode()))
+		Some(SubmitTransaction::<T, LocalCall>
+			::submit_unsigned_transaction(call.into()))
 	}
 }
 
