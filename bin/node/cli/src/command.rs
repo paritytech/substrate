@@ -25,6 +25,8 @@ where
 	I: Iterator<Item = T>,
 	T: Into<std::ffi::OsString> + Clone,
 {
+	sc_cli::reset_signal_pipe_handler()?;
+
 	let args: Vec<_> = args.collect();
 	let opt = sc_cli::from_iter::<Cli, _>(args.clone(), &version);
 

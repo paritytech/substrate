@@ -31,3 +31,6 @@ rand6 = { package = "rand", version = "0.6", features = ["wasm-bindgen"] }
 rand = { version = "0.7", features = ["wasm-bindgen"] }
 futures-timer = { version = "3.0.1", features = ["wasm-bindgen"]}
 chrono = { version = "0.4", features = ["wasmbind"] }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
