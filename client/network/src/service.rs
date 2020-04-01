@@ -25,31 +25,42 @@
 //! The methods of the [`NetworkService`] are implemented by sending a message over a channel,
 //! which is then processed by [`NetworkWorker::poll`].
 
-use std::{borrow::Cow, collections::{HashMap, HashSet}, fs, marker::PhantomData, io, path::Path, str};
-use std::sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering}};
-use std::pin::Pin;
-use std::task::Poll;
-
-use sp_consensus::import_queue::{ImportQueue, Link};
-use sp_consensus::import_queue::{BlockImportResult, BlockImportError};
+use crate::{
+	behaviour::{Behaviour, BehaviourOut},
+	config::{parse_addr, parse_str_addr, NonReservedPeerMode, Params, TransportConfig},
+	error::Error,
+	network_state::{
+		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
+	},
+	on_demand_layer::AlwaysBadChecker,
+	protocol::{self, event::Event, light_client_handler, sync::SyncState, PeerInfo, Protocol},
+	transport, ReputationChange,
+};
 use futures::{prelude::*, channel::mpsc};
-use log::{warn, error, info, trace};
-use libp2p::{PeerId, Multiaddr, kad::record};
 use libp2p::swarm::{NetworkBehaviour, SwarmBuilder, SwarmEvent};
+use libp2p::{kad::record, Multiaddr, PeerId};
+use log::{error, info, trace, warn};
 use parking_lot::Mutex;
+use prometheus_endpoint::{
+	register, Counter, CounterVec, Gauge, GaugeVec, Opts, PrometheusError, Registry, U64,
+};
 use sc_peerset::PeersetHandle;
-use sp_runtime::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
-use prometheus_endpoint::{Registry, Counter, CounterVec, Gauge, GaugeVec, Opts, U64, register, PrometheusError};
-
-use crate::{behaviour::{Behaviour, BehaviourOut}, config::{parse_str_addr, parse_addr}};
-use crate::{transport, config::NonReservedPeerMode, ReputationChange};
-use crate::config::{Params, TransportConfig};
-use crate::error::Error;
-use crate::network_state::{NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer};
-use crate::protocol::{self, Protocol, PeerInfo};
-use crate::protocol::{event::Event, light_dispatch::{AlwaysBadChecker, RequestData}};
-use crate::protocol::sync::SyncState;
-
+use sp_consensus::import_queue::{BlockImportError, BlockImportResult, ImportQueue, Link};
+use sp_runtime::{
+	traits::{Block as BlockT, NumberFor},
+	ConsensusEngineId,
+};
+use std::{
+	borrow::Cow,
+	collections::{HashMap, HashSet},
+	fs, io,
+	marker::PhantomData,
+	path::Path,
+	pin::Pin,
+	str,
+	sync::{atomic::{AtomicBool, AtomicUsize, Ordering}, Arc},
+	task::Poll,
+};
 
 /// Minimum Requirements for a Hash within Networking
 pub trait ExHashT: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static {}
@@ -240,7 +251,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				max_parallel_downloads: params.network_config.max_parallel_downloads,
 			},
 			params.chain.clone(),
-			checker.clone(),
 			params.transaction_pool,
 			params.finality_proof_provider.clone(),
 			params.finality_proof_request_builder,
@@ -773,7 +783,7 @@ pub struct NetworkWorker<B: BlockT + 'static, H: ExHashT> {
 	/// Messages from the `NetworkService` and that must be processed.
 	from_worker: mpsc::UnboundedReceiver<ServiceToWorkerMsg<B, H>>,
 	/// Receiver for queries from the light client that must be processed.
-	light_client_rqs: Option<mpsc::UnboundedReceiver<RequestData<B>>>,
+	light_client_rqs: Option<mpsc::UnboundedReceiver<light_client_handler::Request<B>>>,
 	/// Senders for events that happen on the network.
 	event_streams: Vec<mpsc::UnboundedSender<Event>>,
 	/// Prometheus network metrics.
@@ -789,6 +799,7 @@ struct Metrics {
 	import_queue_finality_proofs_submitted: Counter<U64>,
 	import_queue_justifications_submitted: Counter<U64>,
 	is_major_syncing: Gauge<U64>,
+	issued_light_requests: Counter<U64>,
 	kbuckets_num_nodes: Gauge<U64>,
 	network_per_sec_bytes: GaugeVec<U64>,
 	notifications_total: CounterVec<U64>,
@@ -821,6 +832,10 @@ impl Metrics {
 			)?, registry)?,
 			is_major_syncing: register(Gauge::new(
 				"sub_libp2p_is_major_syncing", "Whether the node is performing a major sync or not.",
+			)?, registry)?,
+			issued_light_requests: register(Counter::new(
+				"issued_light_requests",
+				"Number of light client requests that our node has issued.",
 			)?, registry)?,
 			kbuckets_num_nodes: register(Gauge::new(
 				"sub_libp2p_kbuckets_num_nodes", "Number of nodes in the Kademlia k-buckets"
@@ -897,7 +912,13 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 		// Check for new incoming light client requests.
 		if let Some(light_client_rqs) = this.light_client_rqs.as_mut() {
 			while let Poll::Ready(Some(rq)) = light_client_rqs.poll_next_unpin(cx) {
-				this.network_service.user_protocol_mut().add_light_client_request(rq);
+				// This can error if there are too many queued requests already.
+				if this.network_service.light_client_request(rq).is_err() {
+					log::warn!("Couldn't start light client request: too many pending requests");
+				}
+				if let Some(metrics) = this.metrics.as_ref() {
+					metrics.issued_light_requests.inc();
+				}
 			}
 		}
 
