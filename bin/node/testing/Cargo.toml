@@ -29,7 +29,7 @@ pallet-session = { version = "2.0.0-alpha.5", path = "../../../frame/session" }
 pallet-society = { version = "2.0.0-alpha.5", path = "../../../frame/society" }
 sp-runtime = { version = "2.0.0-alpha.5", path = "../../../primitives/runtime" }
 pallet-staking = { version = "2.0.0-alpha.5", path = "../../../frame/staking" }
-sc-executor = { version = "0.8.0-alpha.5", path = "../../../client/executor", features = ["wasmtime"] }
+sc-executor = { version = "0.8.0-alpha.5", path = "../../../client/executor", features = ["wasmtime", "wasmer"] }
 sp-consensus = { version = "0.8.0-alpha.5", path = "../../../primitives/consensus/common" }
 frame-system = { version = "2.0.0-alpha.5", path = "../../../frame/system" }
 substrate-test-client = { version = "2.0.0-dev", path = "../../../test-utils/client" }

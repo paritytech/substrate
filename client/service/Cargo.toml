@@ -16,6 +16,9 @@ rocksdb = ["sc-client-db/kvdb-rocksdb"]
 wasmtime = [
 	"sc-executor/wasmtime",
 ]
+wasmer = [
+	"sc-executor/wasmer",
+]
 
 [dependencies]
 derive_more = "0.99.2"

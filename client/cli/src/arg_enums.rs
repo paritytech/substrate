@@ -26,8 +26,10 @@ arg_enum! {
 	pub enum WasmExecutionMethod {
 		// Uses an interpreter.
 		Interpreted,
-		// Uses a compiled runtime.
+		// Uses a compiled wasm runtime.
 		Compiled,
+		// Uses a second compiled wasm runtime.
+		Compiled2,
 	}
 }
 
@@ -48,9 +50,15 @@ impl Into<sc_service::config::WasmExecutionMethod> for WasmExecutionMethod {
 			WasmExecutionMethod::Interpreted => sc_service::config::WasmExecutionMethod::Interpreted,
 			#[cfg(feature = "wasmtime")]
 			WasmExecutionMethod::Compiled => sc_service::config::WasmExecutionMethod::Compiled,
+			#[cfg(feature = "wasmer")]
+			WasmExecutionMethod::Compiled2 => sc_service::config::WasmExecutionMethod::Compiled,
 			#[cfg(not(feature = "wasmtime"))]
 			WasmExecutionMethod::Compiled => panic!(
 				"Substrate must be compiled with \"wasmtime\" feature for compiled Wasm execution"
+			),
+			#[cfg(not(feature = "wasmer"))]
+			WasmExecutionMethod::Compiled2 => panic!(
+				"Substrate must be compiled with \"wasmer\" feature for Wasm execution with wasmer"
 			),
 		}
 	}

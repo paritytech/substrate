@@ -208,6 +208,8 @@ fn bench_execute_block(c: &mut Criterion) {
 			ExecutionMethod::Wasm(WasmExecutionMethod::Interpreted),
 			#[cfg(feature = "wasmtime")]
 			ExecutionMethod::Wasm(WasmExecutionMethod::Compiled),
+			#[cfg(feature = "wasmer")]
+			ExecutionMethod::Wasm(WasmExecutionMethod::Compiled2),
 		],
 	);
 }

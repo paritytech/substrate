@@ -44,6 +44,9 @@ wabt = "0.9.2"
 wasmtime = [
 	"sc-executor/wasmtime",
 ]
+wasmer = [
+	"sc-executor/wasmer",
+]
 wasmi-errno = [
 	"sc-executor/wasmi-errno",
 ]
