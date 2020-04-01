@@ -80,7 +80,7 @@ pub fn build(service: &impl AbstractService, format: OutputFormat) -> impl futur
 
 				match maybe_ancestor {
 					Ok(ref ancestor) if ancestor.hash != *last_hash => info!(
-						"♻️ Reorg on #{},{} to #{},{}, common ancestor #{},{}",
+						"♻️  Reorg on #{},{} to #{},{}, common ancestor #{},{}",
 						Colour::Red.bold().paint(format!("{}", last_num)), last_hash,
 						Colour::Green.bold().paint(format!("{}", n.header.number())), n.hash,
 						Colour::White.bold().paint(format!("{}", ancestor.number)), ancestor.hash,
