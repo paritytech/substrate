@@ -14,15 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use assert_cmd::cargo::cargo_bin;
 use std::process::Command;
 use tempfile::tempdir;
+
+mod common;
 
 #[test]
 fn build_spec_works() {
 	let base_path = tempdir().expect("could not create a temp dir");
 
-	let output = Command::new(cargo_bin("substrate"))
+	let output = Command::new(common::cargo_bin("substrate"))
 		.args(&["build-spec", "--dev", "-d"])
 		.arg(base_path.path())
 		.output()

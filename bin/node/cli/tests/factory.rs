@@ -16,7 +16,6 @@
 
 #![cfg(unix)]
 
-use assert_cmd::cargo::cargo_bin;
 use std::process::{Command, Stdio};
 use tempfile::tempdir;
 
@@ -26,7 +25,7 @@ mod common;
 fn factory_works() {
 	let base_path = tempdir().expect("could not create a temp dir");
 
-	let status = Command::new(cargo_bin("substrate"))
+	let status = Command::new(common::cargo_bin("substrate"))
 		.stdout(Stdio::null())
 		.args(&["factory", "--dev", "-d"])
 		.arg(base_path.path())

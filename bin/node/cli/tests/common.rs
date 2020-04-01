@@ -17,8 +17,7 @@
 #![cfg(unix)]
 #![allow(dead_code)]
 
-use std::{process::{Child, ExitStatus}, thread, time::Duration, path::Path};
-use assert_cmd::cargo::cargo_bin;
+use std::{env, process::{Child, ExitStatus}, thread, time::Duration, path::{Path, PathBuf}};
 use std::{convert::TryInto, process::Command};
 use nix::sys::signal::{kill, Signal::SIGINT};
 use nix::unistd::Pid;
@@ -63,4 +62,29 @@ pub fn run_dev_node_for_a_while(base_path: &Path) {
 	// Stop the process
 	kill(Pid::from_raw(cmd.id().try_into().unwrap()), SIGINT).unwrap();
 	assert!(wait_for(&mut cmd, 40).map(|x| x.success()).unwrap_or_default());
+}
+
+// Code taken directly from https://github.com/assert-rs/assert_cmd/blob/d9fcca1ac40496afbcdaea719082e5d7f105f4d9/src/cargo.rs
+// Adapted from
+// https://github.com/rust-lang/cargo/blob/485670b3983b52289a2f353d589c57fae2f60f82/tests/testsuite/support/mod.rs#L507
+fn target_dir() -> PathBuf {
+	env::current_exe()
+		.ok()
+		.map(|mut path| {
+			path.pop();
+			if path.ends_with("deps") {
+				path.pop();
+			}
+			path
+		})
+		.unwrap()
+}
+
+/// Look up the path to a cargo-built binary within an integration test.
+pub fn cargo_bin<S: AsRef<str>>(name: S) -> PathBuf {
+	cargo_bin_str(name.as_ref())
+}
+
+fn cargo_bin_str(name: &str) -> PathBuf {
+	target_dir().join(format!("{}{}", name, env::consts::EXE_SUFFIX))
 }

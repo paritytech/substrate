@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use assert_cmd::cargo::cargo_bin;
 use std::{convert::TryInto, process::Command, thread, time::Duration};
 use tempfile::tempdir;
 
@@ -28,7 +27,7 @@ fn running_the_node_works_and_can_be_interrupted() {
 
 	fn run_command_and_kill(signal: Signal) {
 		let base_path = tempdir().expect("could not create a temp dir");
-		let mut cmd = Command::new(cargo_bin("substrate"))
+		let mut cmd = Command::new(common::cargo_bin("substrate"))
 			.args(&["--dev", "-d"])
 			.arg(base_path.path())
 			.spawn()

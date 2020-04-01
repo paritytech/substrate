@@ -16,7 +16,6 @@
 
 #![cfg(unix)]
 
-use assert_cmd::cargo::cargo_bin;
 use std::process::Command;
 use tempfile::tempdir;
 
@@ -28,7 +27,7 @@ fn inspect_works() {
 
 	common::run_dev_node_for_a_while(base_path.path());
 
-	let status = Command::new(cargo_bin("substrate"))
+	let status = Command::new(common::cargo_bin("substrate"))
 		.args(&["inspect", "--dev", "--pruning", "archive", "-d"])
 		.arg(base_path.path())
 		.args(&["block", "1"])

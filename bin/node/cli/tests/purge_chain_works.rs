@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use assert_cmd::cargo::cargo_bin;
 use std::process::Command;
 use tempfile::tempdir;
 
@@ -27,7 +26,7 @@ fn purge_chain_works() {
 
 	common::run_dev_node_for_a_while(base_path.path());
 
-	let status = Command::new(cargo_bin("substrate"))
+	let status = Command::new(common::cargo_bin("substrate"))
 		.args(&["purge-chain", "--dev", "-d"])
 		.arg(base_path.path())
 		.arg("-y")
