@@ -20,8 +20,6 @@ use sp_core::{ed25519, sr25519, crypto::Pair, traits::CloneableSpawn};
 use std::sync::{Arc, atomic::{AtomicBool, Ordering as AtomicOrdering}};
 use futures::{future::FutureExt, task::FutureObj, channel::oneshot};
 
-const SR25519_BATCH_SIZE: usize = 64;
-
 #[derive(Debug, Clone)]
 struct Ed25519BatchItem {
 	signature: ed25519::Signature,
@@ -91,22 +89,6 @@ impl BatchVerifier {
 		self.spawn_verification_task(move || ed25519::Pair::verify(&signature, &message, &pub_key));
 	}
 
-	fn spawn_sr25519_verification(&mut self) {
-		if self.sr25519_items.len() == 0 {
-			return;
-		}
-
-		let sr25519_batch = std::mem::replace(&mut self.sr25519_items, vec![]);
-
-		self.spawn_verification_task(move || {
-			let messages = sr25519_batch.iter().map(|item| &item.message[..]).collect();
-			let signatures = sr25519_batch.iter().map(|item| &item.signature).collect();
-			let pub_keys = sr25519_batch.iter().map(|item| &item.pub_key).collect();
-
-			sr25519::verify_batch(messages, signatures, pub_keys)
-		});
-	}
-
 	/// Push sr25519 signature to verify.
 	pub fn push_sr25519(
 		&mut self,
@@ -115,10 +97,6 @@ impl BatchVerifier {
 		message: Vec<u8>,
 	) {
 		self.sr25519_items.push(Sr25519BatchItem { signature, pub_key, message });
-
-		// if self.sr25519_items.len() >= SR25519_BATCH_SIZE {
-		// 	self.spawn_sr25519_verification();
-		// }
 	}
 
 	/// Verify all previously pushed signatures since last call and return
@@ -126,24 +104,20 @@ impl BatchVerifier {
 	pub fn verify_and_clear(&mut self) -> bool {
 		use parking_lot::{Mutex, Condvar};
 
-		// if self.sr25519_items.len() > 0 {
-		// 	self.spawn_sr25519_verification()
-		// }
+		let pending = std::mem::replace(&mut self.pending_tasks, vec![]);
 
-		// let pending = std::mem::replace(&mut self.pending_tasks, vec![]);
+		if pending.len() > 0 {
+			let pair = Arc::new((Mutex::new(()), Condvar::new()));
+			let pair_clone = pair.clone();
+			self.scheduler.spawn_obj(FutureObj::new(async move {
+				futures::future::join_all(pending).await;
+				pair_clone.1.notify_one();
+			}.boxed())).expect("Scheduler should not fail");
 
-		// if pending.len() > 0 {
-		// 	let pair = Arc::new((Mutex::new(()), Condvar::new()));
-		// 	let pair_clone = pair.clone();
-		// 	self.scheduler.spawn_obj(FutureObj::new(async move {
-		// 		futures::future::join_all(pending).await;
-		// 		pair_clone.1.notify_one();
-		// 	}.boxed())).expect("Scheduler should not fail");
-
-		// 	let (mtx, cond_var) = &*pair;
-		// 	let mut mtx = mtx.lock();
-		// 	cond_var.wait(&mut mtx);
-		// }
+			let (mtx, cond_var) = &*pair;
+			let mut mtx = mtx.lock();
+			cond_var.wait(&mut mtx);
+		}
 
 		let messages = self.sr25519_items.iter().map(|item| &item.message[..]).collect();
 		let signatures = self.sr25519_items.iter().map(|item| &item.signature).collect();
