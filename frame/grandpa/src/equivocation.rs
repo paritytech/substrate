@@ -36,7 +36,7 @@ use codec::{self as codec, Decode, Encode};
 use frame_support::traits::KeyOwnerProofSystem;
 use frame_system::offchain::SubmitSignedTransaction;
 use sp_application_crypto::{key_types::GRANDPA, RuntimeAppPublic};
-use sp_finality_grandpa::{EquivocationProof, RoundNumber, SetId};
+use sp_finality_grandpa::{AuthorityId, EquivocationProof, RoundNumber, SetId};
 use sp_runtime::{traits::IdentifyAccount, DispatchResult, KeyTypeId, Perbill};
 use sp_staking::{
 	offence::{Kind, Offence, OffenceError, ReportOffence},
@@ -149,7 +149,7 @@ pub struct EquivocationHandler<
 	R,
 	K,
 	O = GrandpaEquivocationOffence<
-		<P as KeyOwnerProofSystem<(KeyTypeId, Vec<u8>)>>::IdentificationTuple,
+		<P as KeyOwnerProofSystem<(KeyTypeId, AuthorityId)>>::IdentificationTuple,
 	>,
 > {
 	_phantom: sp_std::marker::PhantomData<(P, S, O, R, K)>,
@@ -170,7 +170,7 @@ where
 	// of a validator set, needed for validating equivocation reports. The
 	// session index and validator count of the session are part of the proof
 	// as extra data.
-	P: KeyOwnerProofSystem<(KeyTypeId, Vec<u8>)>,
+	P: KeyOwnerProofSystem<(KeyTypeId, AuthorityId)>,
 	P::Proof: GetSessionNumber + GetValidatorCount,
 	// A transaction submitter. Used for submitting equivocation reports.
 	S: SubmitSignedTransaction<T, <T as super::Trait>::Call>,
@@ -193,7 +193,7 @@ where
 		key_owner_proof: Self::KeyOwnerProof,
 	) -> Option<Self::KeyOwnerIdentification> {
 		let offender = P::check_proof(
-			(GRANDPA, equivocation_proof.offender().encode()),
+			(GRANDPA, equivocation_proof.offender().clone()),
 			key_owner_proof,
 		)?;
 
