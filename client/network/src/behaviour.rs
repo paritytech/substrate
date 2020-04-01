@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{
-	debug_info, discovery::DiscoveryBehaviour, discovery::DiscoveryOut, DiscoveryNetBehaviour,
+	debug_info, discovery::DiscoveryBehaviour, discovery::DiscoveryOut,
 	Event, protocol::event::DhtEvent, ExHashT,
 };
 use crate::protocol::{self, light_client_handler, CustomMessageOutcome, Protocol};
