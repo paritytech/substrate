@@ -786,6 +786,16 @@ impl_runtime_apis! {
 				key_owner_proof,
 			)
 		}
+
+		fn generate_key_ownership_proof(
+			session_key: fg_primitives::AuthorityId,
+		) -> Option<Vec<u8>> {
+			use codec::Encode;
+			use frame_support::traits::KeyOwnerProofSystem;
+
+			Historical::prove((fg_primitives::KEY_TYPE, session_key))
+				.map(|p| p.encode())
+		}
 	}
 
 	impl sp_consensus_babe::BabeApi<Block> for Runtime {
@@ -876,16 +886,6 @@ impl_runtime_apis! {
 			encoded: Vec<u8>,
 		) -> Option<Vec<(Vec<u8>, sp_core::crypto::KeyTypeId)>> {
 			SessionKeys::decode_into_raw_public_keys(&encoded)
-		}
-	}
-
-	impl sp_session::SessionMembership<Block> for Runtime {
-		fn generate_session_membership_proof(
-			session_key: (sp_core::crypto::KeyTypeId, Vec<u8>),
-		) -> Option<sp_session::MembershipProof> {
-			use frame_support::traits::KeyOwnerProofSystem;
-
-			Historical::prove(session_key)
 		}
 	}
 

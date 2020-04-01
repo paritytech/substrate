@@ -47,17 +47,6 @@ sp_api::decl_runtime_apis! {
 		/// Returns the list of public raw public keys + key type.
 		fn decode_session_keys(encoded: Vec<u8>) -> Option<Vec<(Vec<u8>, KeyTypeId)>>;
 	}
-
-	/// Historical session membership runtime api.
-	pub trait SessionMembership {
-		/// Generates a proof that the given session key is a part of the
-		/// current session. The generated proof can later on be validated with
-		/// the historical session module. Proofs of membership are useful e.g.
-		/// for validating misbehavior reports.
-		fn generate_session_membership_proof(
-			session_key: (KeyTypeId, Vec<u8>),
-		) -> Option<MembershipProof>;
-	}
 }
 
 /// Number of validators in a given session.

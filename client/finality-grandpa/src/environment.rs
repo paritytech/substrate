@@ -39,7 +39,6 @@ use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero,
 };
-use sp_session::SessionMembership;
 use sc_telemetry::{telemetry, CONSENSUS_INFO};
 
 use crate::{
@@ -584,7 +583,7 @@ where
 	Block: 'static,
 	B: Backend<Block>,
 	C: crate::ClientForGrandpa<Block, B> + 'static,
-	C::Api: GrandpaApi<Block>+ SessionMembership<Block, Error = sp_blockchain::Error>,
+	C::Api: GrandpaApi<Block, Error = sp_blockchain::Error>,
  	N: NetworkT<Block> + 'static + Send,
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, C>,
@@ -980,7 +979,7 @@ where
 	Block: BlockT,
 	BE: Backend<Block>,
 	Client: crate::ClientForGrandpa<Block, BE>,
-	Client::Api: GrandpaApi<Block>+ SessionMembership<Block, Error = sp_blockchain::Error>,
+	Client::Api: GrandpaApi<Block, Error = sp_blockchain::Error>,
 	SC: SelectChain<Block> + 'static,
 {
 	let is_descendent_of = is_descendent_of(&**client, None);
@@ -1021,15 +1020,12 @@ where
 		None => best_header.hash(),
 	};
 
-	// generate membership proof at that block
-	let membership_proof = match client
+	// generate key ownership proof at that block
+	let key_owner_proof = match client
 		.runtime_api()
-		.generate_session_membership_proof(
+		.generate_key_ownership_proof(
 			&BlockId::Hash(current_set_latest_hash),
-			(
-				sp_finality_grandpa::KEY_TYPE,
-				equivocation.offender().encode(),
-			),
+			equivocation.offender().clone(),
 		)
 		.map_err(Error::Client)?
 	{
@@ -1050,7 +1046,7 @@ where
 		.submit_report_equivocation_extrinsic(
 			&BlockId::Hash(best_header.hash()),
 			equivocation_proof,
-			membership_proof.encode(),
+			key_owner_proof,
 		).map_err(Error::Client)?;
 
 	Ok(())

@@ -68,7 +68,6 @@ use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{NumberFor, Block as BlockT, DigestFor, Zero};
 use sc_keystore::KeyStorePtr;
 use sp_inherents::InherentDataProviders;
-use sp_session::SessionMembership;
 use sp_consensus::{SelectChain, BlockImport};
 use sp_core::Pair;
 use sc_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG};
@@ -617,7 +616,7 @@ pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR>(
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
 	C: ClientForGrandpa<Block, BE> + 'static,
-	C::Api: GrandpaApi<Block>+ SessionMembership<Block, Error = sp_blockchain::Error>,
+	C::Api: GrandpaApi<Block, Error = sp_blockchain::Error>,
 {
 	let GrandpaParams {
 		mut config,
@@ -713,7 +712,7 @@ where
 	Block: BlockT,
 	B: Backend<Block> + 'static,
 	C: ClientForGrandpa<Block, B> + 'static,
-	C::Api: GrandpaApi<Block>+ SessionMembership<Block, Error = sp_blockchain::Error>,
+	C::Api: GrandpaApi<Block, Error = sp_blockchain::Error>,
 	N: NetworkT<Block> + Sync,
 	NumberFor<Block>: BlockNumberOps,
 	SC: SelectChain<Block> + 'static,
@@ -899,7 +898,7 @@ where
 	NumberFor<Block>: BlockNumberOps,
 	SC: SelectChain<Block> + 'static,
 	C: ClientForGrandpa<Block, B> + 'static,
-	C::Api: GrandpaApi<Block>+ SessionMembership<Block, Error = sp_blockchain::Error>,
+	C::Api: GrandpaApi<Block, Error = sp_blockchain::Error>,
 	VR: VotingRule<Block, C> + Clone + 'static,
 {
 	type Output = Result<(), Error>;

@@ -356,14 +356,6 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl sp_session::SessionMembership<Block> for Runtime {
-		fn generate_session_membership_proof(
-			_session_key: (sp_core::crypto::KeyTypeId, Vec<u8>),
-		) -> Option<sp_session::MembershipProof> {
-			None
-		}
-	}
-
 	impl fg_primitives::GrandpaApi<Block> for Runtime {
 		fn grandpa_authorities() -> GrandpaAuthorityList {
 			Grandpa::grandpa_authorities()
@@ -376,6 +368,12 @@ impl_runtime_apis! {
 			>,
 			_key_owner_proof: Vec<u8>,
 		) -> Option<()> {
+			None
+		}
+
+		fn generate_key_ownership_proof(
+			_authority_key: fg_primitives::AuthorityId,
+		) -> Option<Vec<u8>> {
 			None
 		}
 	}

@@ -484,5 +484,13 @@ sp_api::decl_runtime_apis! {
 			equivocation_proof: EquivocationProof<Block::Hash, NumberFor<Block>>,
 			key_owner_proof: Vec<u8>,
 		) -> Option<()>;
+
+		/// Generates a proof that the given session key is a part of the
+		/// current session. The generated proof can later on be validated with
+		/// the historical session module. Proofs of membership are useful e.g.
+		/// for validating misbehavior reports.
+		fn generate_key_ownership_proof(
+			authority_key: AuthorityId,
+		) -> Option<Vec<u8>>;
 	}
 }
