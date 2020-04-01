@@ -21,7 +21,6 @@ use super::*;
 #[test]
 fn cancel_referendum_should_work() {
 	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
 		let r = Democracy::inject_referendum(
 			2,
 			set_balance_proposal_hash_and_note(2),
