@@ -743,7 +743,7 @@ variables:
   script:
     - mkdir -p ${CARGO_HOME}
     - echo "Purging ${PURGE_JOB} cache"
-    - ls ${CARGO_HOME}/../${PURGE_JOB}
+    - ls ${CARGO_HOME}/../"${PURGE_JOB}"
 
 purge_cargo_home 2 6:
   <<:                              *purge_cargo_home
