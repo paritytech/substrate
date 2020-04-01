@@ -21,6 +21,7 @@ sp-std = { version = "2.0.0-alpha.5", default-features = false, path = "../../pr
 sp-io = { version = "2.0.0-alpha.5", path = "../../primitives/io" }
 hex-literal = "0.2.1"
 pallet-balances = { version = "2.0.0-alpha.5", path = "../balances" }
+pallet-scheduler = { version = "2.0.0-alpha.5", path = "../scheduler" }
 sp-core = { version = "2.0.0-alpha.5", path = "../../primitives/core" }
 substrate-test-utils = { version = "2.0.0-alpha.5", path = "../../test-utils" }
 
