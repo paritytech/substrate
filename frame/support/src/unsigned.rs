@@ -18,7 +18,8 @@
 pub use crate::sp_runtime::traits::ValidateUnsigned;
 #[doc(hidden)]
 pub use crate::sp_runtime::transaction_validity::{
-	TransactionValidity, UnknownTransaction, TransactionValidityError, TransactionSource,
+	TransactionValidity, InvalidTransaction, TransactionValidityError, TransactionSource,
+	IsFullyValidated,
 };
 
 
@@ -69,13 +70,16 @@ macro_rules! impl_outer_validate_unsigned {
 		impl $crate::unsigned::ValidateUnsigned for $runtime {
 			type Call = Call;
 
-			fn pre_dispatch(call: &Self::Call) -> Result<(), $crate::unsigned::TransactionValidityError> {
+			fn pre_dispatch(call: &Self::Call)-> Result<
+				$crate::unsigned::IsFullyValidated,
+				$crate::unsigned::TransactionValidityError
+			> {
 				#[allow(unreachable_patterns)]
 				match call {
 					$( Call::$module(inner_call) => $module::pre_dispatch(inner_call), )*
 					// pre-dispatch should not stop inherent extrinsics, validation should prevent
 					// including arbitrary (non-inherent) extrinsics to blocks.
-					_ => Ok(()),
+					_ => Ok($crate::unsigned::IsFullyValidated::Yes),
 				}
 			}
 
@@ -87,7 +91,7 @@ macro_rules! impl_outer_validate_unsigned {
 				#[allow(unreachable_patterns)]
 				match call {
 					$( Call::$module(inner_call) => $module::validate_unsigned(source, inner_call), )*
-					_ => $crate::unsigned::UnknownTransaction::NoUnsignedValidator.into(),
+					_ => $crate::unsigned::InvalidTransaction::NotFullyValidated.into(),
 				}
 			}
 		}

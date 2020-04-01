@@ -52,6 +52,13 @@ pub enum InvalidTransaction {
 	ExhaustsResources,
 	/// Any other custom invalid validity that is not covered by this enum.
 	Custom(u8),
+	/// No validator has been able to fully verify this transaction.
+	///
+	/// The transactions are disallowed from being included by default. Some validator
+	/// (`SignedExtension`) needs to whitelist them first. This error usually means that either you
+	/// are either missing a `UnsignedValidator` or you forgot to add some `SignedExtension`
+	/// to your runtime.
+	NotFullyValidated,
 }
 
 impl InvalidTransaction {
@@ -77,6 +84,8 @@ impl From<InvalidTransaction> for &'static str {
 			InvalidTransaction::Payment =>
 				"Inability to pay some fees (e.g. account balance too low)",
 			InvalidTransaction::Custom(_) => "InvalidTransaction custom error",
+			InvalidTransaction::NotFullyValidated =>
+				"Missing SignedExtension or UnsignedValidator to fully verify the transaction.",
 		}
 	}
 }
@@ -88,6 +97,9 @@ pub enum UnknownTransaction {
 	/// Could not lookup some information that is required to validate the transaction.
 	CannotLookup,
 	/// No validator found for the given unsigned transaction.
+	///
+	/// Replaced by `InvalidTransaction::NoUnsignedValidator`.
+	#[deprecated]
 	NoUnsignedValidator,
 	/// Any other custom unknown validity that is not covered by this enum.
 	Custom(u8),
@@ -247,6 +259,57 @@ impl ValidTransaction {
 			longevity: self.longevity.min(other.longevity),
 			propagate: self.propagate && other.propagate,
 		}
+	}
+
+	/// Does this validity contain any `provides` tags?
+	///
+	/// Transactions with no `provides` tags are considered invalid, but we let
+	/// `ValidTransaction` to be created in that way, to allow composition
+	/// with results from `SignedExtension`s that are not able to fully validate the
+	/// transaction, but would like to augment the result in case it's validated somewhere down
+	/// the pipeline.
+	/// Transactions with no tags should be rejected from the transaction pool and, what's more
+	/// important, should never be allowed in a block (i.e. the `pre_dispatch` should fail).
+	pub fn is_fully_validated(&self) -> IsFullyValidated {
+		IsFullyValidated::from(!self.provides.is_empty())
+	}
+}
+
+/// Enum determining if the transaction has been fully validated during `pre_dispatch` phase.
+///
+/// This mechanism is in place to prevent letting invalid transactions to be included in the block.
+/// Since in `SignedExtension`s we only run `pre_dispatch` for in-block transactions we use the
+/// enum to prevent a situation, where not a single `SignedExtension` rejects the transaction
+/// (some of them probably even augment it with some values), but there is no extension that
+/// fully validates the transaction (i.e. returns some `provides` tags).
+#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
+pub enum IsFullyValidated {
+	/// The transaction would pass `validate` and would return some `provides` tags.
+	///
+	/// i.e. the transaction is safe to be included in the block and should not fail during
+	/// `pre_dispatch`.
+	Yes,
+	/// The transaction might pass `validate`, but the result would not have any `provides` tags.
+	///
+	/// This means the transaction should be rejected in `pre_dispatch`. For instance it's an
+	/// unsigned transaction that has no validator assigned in any of the pallets.
+	No,
+}
+
+impl core::ops::BitOrAssign for IsFullyValidated {
+    fn bitor_assign(&mut self, rhs: Self) {
+		*self = match (*self, rhs) {
+			(Self::Yes, _) => Self::Yes,
+			(_, Self::Yes) => Self::Yes,
+			_ => Self::No,
+		};
+	}
+
+}
+
+impl From<bool> for IsFullyValidated {
+	fn from(other: bool) -> Self {
+		if other { IsFullyValidated::Yes } else { IsFullyValidated::No }
 	}
 }
 

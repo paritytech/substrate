@@ -20,7 +20,9 @@
 use crate::traits::{
 	self, Member, MaybeDisplay, SignedExtension, Dispatchable,
 };
-use crate::transaction_validity::{TransactionValidity, TransactionSource};
+use crate::transaction_validity::{
+	TransactionValidity, TransactionSource, IsFullyValidated, InvalidTransaction,
+};
 
 /// Definition of something that the external world might want to say; its
 /// existence implies that it has been checked and is good, particularly with
@@ -53,10 +55,15 @@ where
 		info: Self::DispatchInfo,
 		len: usize,
 	) -> TransactionValidity {
-		if let Some((ref id, ref extra)) = self.signed {
+		let validity = if let Some((ref id, ref extra)) = self.signed {
 			Extra::validate(extra, id, source, &self.function, info, len)
 		} else {
 			Extra::validate_unsigned(source, &self.function, info, len)
+		}?;
+
+		match validity.is_fully_validated() {
+			IsFullyValidated::No => Err(InvalidTransaction::NotFullyValidated)?,
+			IsFullyValidated::Yes => Ok(validity),
 		}
 	}
 
@@ -71,6 +78,10 @@ where
 		} else {
 			let pre = Extra::pre_dispatch_unsigned(&self.function, info.clone(), len)?;
 			(None, pre)
+		};
+		let pre = match pre {
+			(_, IsFullyValidated::No) => return Err(InvalidTransaction::NotFullyValidated)?,
+			(pre, _) => pre,
 		};
 		let res = self.function.dispatch(Origin::from(maybe_who));
 		Extra::post_dispatch(pre, info.clone(), len);

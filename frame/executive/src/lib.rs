@@ -371,7 +371,7 @@ mod tests {
 	use sp_runtime::{
 		generic::Era, Perbill, DispatchError, testing::{Digest, Header, Block},
 		traits::{Header as HeaderT, BlakeTwo256, IdentityLookup, ConvertInto},
-		transaction_validity::{InvalidTransaction, UnknownTransaction, TransactionValidityError},
+		transaction_validity::{InvalidTransaction, IsFullyValidated, TransactionValidityError},
 	};
 	use frame_support::{
 		impl_outer_event, impl_outer_origin, parameter_types, impl_outer_dispatch,
@@ -497,8 +497,8 @@ mod tests {
 	impl traits::ValidateUnsigned for Runtime {
 		type Call = Call;
 
-		fn pre_dispatch(_call: &Self::Call) -> Result<(), TransactionValidityError> {
-			Ok(())
+		fn pre_dispatch(_call: &Self::Call) -> Result<IsFullyValidated, TransactionValidityError> {
+			Ok(IsFullyValidated::Yes)
 		}
 
 		fn validate_unsigned(
@@ -507,7 +507,7 @@ mod tests {
 		) -> TransactionValidity {
 			match call {
 				Call::Balances(BalancesCall::set_balance(_, _, _)) => Ok(Default::default()),
-				_ => UnknownTransaction::NoUnsignedValidator.into(),
+				_ => InvalidTransaction::NotFullyValidated.into(),
 			}
 		}
 	}
