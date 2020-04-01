@@ -254,8 +254,6 @@ fn staking_should_work() {
 			// --- Block 1:
 			start_session(1);
 
-			Timestamp::set_timestamp(1); // Initialize time.
-
 			// remember + compare this along with the test.
 			assert_eq_uvec!(validator_controllers(), vec![20, 10]);
 
@@ -1039,7 +1037,6 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		assert_ne!(Staking::eras_stakers(Staking::active_era().unwrap().index, 11), Exposure { total: 1000 + 100, own: 1000 + 100, others: vec![] });
 
 		// trigger next era.
-		Timestamp::set_timestamp(10);
 		start_era(2);
 		assert_eq!(Staking::active_era().unwrap().index, 2);
 
@@ -1709,7 +1706,6 @@ fn new_era_elects_correct_number_of_validators() {
 			assert_eq!(Staking::validator_count(), 1);
 			assert_eq!(validator_controllers().len(), 1);
 
-			System::set_block_number(1);
 			Session::on_initialize(System::block_number());
 
 			assert_eq!(validator_controllers().len(), 1);

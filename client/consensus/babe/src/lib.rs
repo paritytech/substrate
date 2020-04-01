@@ -368,7 +368,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 		&inherent_data_providers,
 	)?;
 
-	babe_info!("Starting BABE Authorship worker");
+	babe_info!("👶 Starting BABE Authorship worker");
 	Ok(sc_consensus_slots::start_slot_worker(
 		config.0,
 		select_chain,
@@ -1010,7 +1010,7 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 				ConsensusError::ClientImport(Error::<Block>::FetchEpoch(parent_hash).into())
 			})?;
 
-			babe_info!("New epoch {} launching at block {} (block slot {} >= start slot {}).",
+			babe_info!("👶 New epoch {} launching at block {} (block slot {} >= start slot {}).",
 					   viable_epoch.as_ref().epoch_index,
 					   hash,
 					   slot_number,
@@ -1018,7 +1018,7 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 
 			let next_epoch = viable_epoch.increment(next_epoch_descriptor);
 
-			babe_info!("Next epoch starts at slot {}", next_epoch.as_ref().start_slot);
+			babe_info!("👶 Next epoch starts at slot {}", next_epoch.as_ref().start_slot);
 
 			// prune the tree of epochs not part of the finalized chain or
 			// that are not live anymore, and then track the given epoch change
