@@ -92,7 +92,6 @@ pub use bench::BenchmarkingState;
 #[cfg(feature = "test-helpers")]
 use sc_client_api::in_mem::Backend as InMemoryBackend;
 
-const CANONICALIZATION_DELAY: u64 = 4096;
 const MIN_BLOCKS_TO_KEEP_CHANGES_TRIES_FOR: u32 = 32768;
 
 /// Default value for storage cache child ratio.

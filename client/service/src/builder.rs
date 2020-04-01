@@ -257,7 +257,7 @@ fn new_full_parts<TBl, TRtApi, TExecDisp>(
 			Some(keystore.clone()),
 		);
 
-		sc_client_db::new_client(
+		new_client(
 			db_config,
 			executor,
 			config.expect_chain_spec().as_storage_builder(),
@@ -298,6 +298,8 @@ pub fn new_client<E, Block, RA>(
 		Block: BlockT,
 		E: CodeExecutor + RuntimeInfo,
 {
+	const CANONICALIZATION_DELAY: u64 = 4096;
+
 	let backend = Arc::new(Backend::new(settings, CANONICALIZATION_DELAY)?);
 	let executor = sc_client::LocalCallExecutor::new(backend.clone(), executor, spawn_handle);
 	Ok((
