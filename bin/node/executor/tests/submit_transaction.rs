@@ -181,9 +181,8 @@ fn submitted_transaction_should_be_valid() {
 			priority: 2_411_002_000_000,
 			requires: vec![],
 			provides: vec![(address, 0).encode()],
-			longevity: 127,
+			longevity: 128,
 			propagate: true,
 		});
 	});
 }
-
