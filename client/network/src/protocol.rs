@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::{DiscoveryNetBehaviour, config::ProtocolId};
+use crate::config::ProtocolId;
 use crate::utils::interval;
 use bytes::{Bytes, BytesMut};
 use futures::prelude::*;
@@ -1582,6 +1582,13 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		self.sync.request_finality_proof(&hash, number)
 	}
 
+	/// Notify the protocol that we have learned about the existence of nodes.
+	///
+	/// Can be called multiple times with the same `PeerId`s.
+	pub fn add_discovered_nodes(&mut self, peer_ids: impl Iterator<Item = PeerId>) {
+		self.behaviour.add_discovered_nodes(peer_ids)
+	}
+
 	pub fn finality_proof_import_result(
 		&mut self,
 		request_block: (B::Hash, NumberFor<B>),
@@ -2202,12 +2209,6 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 
 	fn inject_listener_closed(&mut self, id: ListenerId) {
 		self.behaviour.inject_listener_closed(id);
-	}
-}
-
-impl<B: BlockT, H: ExHashT> DiscoveryNetBehaviour for Protocol<B, H> {
-	fn add_discovered_nodes(&mut self, peer_ids: impl Iterator<Item = PeerId>) {
-		self.behaviour.add_discovered_nodes(peer_ids)
 	}
 }
 
