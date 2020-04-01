@@ -165,15 +165,16 @@
 
 use sp_std::prelude::*;
 use sp_runtime::{
-	DispatchResult, DispatchError, traits::{Zero, EnsureOrigin, Hash, Dispatchable, Saturating},
+	DispatchResult, DispatchError, RuntimeDebug,
+	traits::{Zero, EnsureOrigin, Hash, Dispatchable, Saturating},
 };
-use codec::{Ref, Decode};
+use codec::{Ref, Encode, Decode};
 use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error, ensure, Parameter,
 	weights::{SimpleDispatchInfo, Weight, WeighData},
 	traits::{
 		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier, Get,
-		OnUnbalanced, BalanceStatus
+		OnUnbalanced, BalanceStatus, schedule::Named as ScheduleNamed
 	}
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
@@ -206,7 +207,7 @@ type NegativeImbalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
 pub trait Trait: frame_system::Trait + Sized {
-	type Proposal: Parameter + Dispatchable<Origin=Self::Origin>;
+	type Proposal: Parameter + Dispatchable<Origin=Self::Origin> + From<Call<Self>>;
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// Currency type for this module.
@@ -273,6 +274,33 @@ pub trait Trait: frame_system::Trait + Sized {
 
 	/// Handler for the unbalanced reduction when slashing a preimage deposit.
 	type Slash: OnUnbalanced<NegativeImbalanceOf<Self>>;
+
+	/// The Scheduler.
+	type Scheduler: ScheduleNamed<Self::BlockNumber, Self::Proposal>;
+}
+
+#[derive(Clone, Encode, Decode, RuntimeDebug)]
+pub enum PreimageStatus<AccountId, Balance, BlockNumber> {
+	/// The preimage is imminently needed at the argument.
+	Missing(BlockNumber),
+	/// The preimage is available.
+	Available {
+		data: Vec<u8>,
+		provider: AccountId,
+		deposit: Balance,
+		since: BlockNumber,
+		/// None if it's not imminent.
+		expiry: Option<BlockNumber>,
+	},
+}
+
+impl<AccountId, Balance, BlockNumber> PreimageStatus<AccountId, Balance, BlockNumber> {
+	fn to_missing_expiry(self) -> Option<BlockNumber> {
+		match self {
+			PreimageStatus::Missing(expiry) => Some(expiry),
+			_ => None,
+		}
+	}
 }
 
 decl_storage! {
@@ -293,7 +321,7 @@ decl_storage! {
 		// https://github.com/paritytech/substrate/issues/5322
 		pub Preimages:
 			map hasher(identity) T::Hash
-			=> Option<(Vec<u8>, T::AccountId, BalanceOf<T>, T::BlockNumber)>;
+			=> Option<PreimageStatus<T::AccountId, BalanceOf<T>, T::BlockNumber>>;
 
 		/// The next free referendum index, aka the number of referenda started so far.
 		pub ReferendumCount get(fn referendum_count) build(|_| 0 as ReferendumIndex): ReferendumIndex;
@@ -305,11 +333,6 @@ decl_storage! {
 		pub ReferendumInfoOf get(fn referendum_info):
 			map hasher(twox_64_concat) ReferendumIndex
 			=> Option<ReferendumInfo<T::BlockNumber, T::Hash, BalanceOf<T>>>;
-
-		// TODO: Refactor DispatchQueue into its own pallet.
-		// https://github.com/paritytech/substrate/issues/5322
-		/// Queue of successful referenda to be dispatched. Stored ordered by block number.
-		pub DispatchQueue get(fn dispatch_queue): Vec<(T::BlockNumber, T::Hash, ReferendumIndex)>;
 
 		/// All votes for a particular voter. We store the balance for the number of votes that we
 		/// have recorded. The second item is the total amount of delegations, that will be added.
@@ -816,11 +839,8 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn cancel_queued(origin, which: ReferendumIndex) {
 			ensure_root(origin)?;
-			let mut items = <DispatchQueue<T>>::get();
-			let original_len = items.len();
-			items.retain(|i| i.2 != which);
-			ensure!(items.len() < original_len, Error::<T>::ProposalMissing);
-			<DispatchQueue<T>>::put(items);
+			T::Scheduler::cancel_named((DEMOCRACY_ID, which))
+				.map_err(|_| Error::<T>::ProposalMissing)?;
 		}
 
 		fn on_initialize(n: T::BlockNumber) -> Weight {
@@ -986,7 +1006,14 @@ decl_module! {
 			T::Currency::reserve(&who, deposit)?;
 
 			let now = <frame_system::Module<T>>::block_number();
-			<Preimages<T>>::insert(proposal_hash, (encoded_proposal, who.clone(), deposit, now));
+			let a = PreimageStatus::Available {
+				data: encoded_proposal,
+				provider: who.clone(),
+				deposit,
+				since: now,
+				expiry: None,
+			};
+			<Preimages<T>>::insert(proposal_hash, a);
 
 			Self::deposit_event(RawEvent::PreimageNoted(proposal_hash, who, deposit));
 		}
@@ -1007,13 +1034,19 @@ decl_module! {
 		fn note_imminent_preimage(origin, encoded_proposal: Vec<u8>) {
 			let who = ensure_signed(origin)?;
 			let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
-			ensure!(!<Preimages<T>>::contains_key(&proposal_hash), Error::<T>::DuplicatePreimage);
-			let queue = <DispatchQueue<T>>::get();
-			ensure!(queue.iter().any(|item| &item.1 == &proposal_hash), Error::<T>::NotImminent);
+			let status = Preimages::<T>::get(&proposal_hash).ok_or(Error::<T>::NotImminent)?;
+			let expiry = status.to_missing_expiry().ok_or(Error::<T>::DuplicatePreimage)?;
 
 			let now = <frame_system::Module<T>>::block_number();
 			let free = <BalanceOf<T>>::zero();
-			<Preimages<T>>::insert(proposal_hash, (encoded_proposal, who.clone(), free, now));
+			let a = PreimageStatus::Available {
+				data: encoded_proposal,
+				provider: who.clone(),
+				deposit: Zero::zero(),
+				since: now,
+				expiry: Some(expiry),
+			};
+			<Preimages<T>>::insert(proposal_hash, a);
 
 			Self::deposit_event(RawEvent::PreimageNoted(proposal_hash, who, free));
 		}
@@ -1036,20 +1069,22 @@ decl_module! {
 		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
 		fn reap_preimage(origin, proposal_hash: T::Hash) {
 			let who = ensure_signed(origin)?;
+			let (provider, deposit, since, expiry) = <Preimages<T>>::get(&proposal_hash)
+				.and_then(|m| match m {
+					PreimageStatus::Available { provider, deposit, since, expiry, .. }
+						=> Some((provider, deposit, since, expiry)),
+					_ => None,
+				}).ok_or(Error::<T>::PreimageMissing)?;
 
-			let (_, old, deposit, then) = <Preimages<T>>::get(&proposal_hash)
-				.ok_or(Error::<T>::PreimageMissing)?;
 			let now = <frame_system::Module<T>>::block_number();
 			let (voting, enactment) = (T::VotingPeriod::get(), T::EnactmentPeriod::get());
-			let additional = if who == old { Zero::zero() } else { enactment };
-			ensure!(now >= then + voting + additional, Error::<T>::TooEarly);
+			let additional = if who == provider { Zero::zero() } else { enactment };
+			ensure!(now >= since + voting + additional, Error::<T>::TooEarly);
+			ensure!(expiry.map_or(true, |e| now > e), Error::<T>::Imminent);
 
-			let queue = <DispatchQueue<T>>::get();
-			ensure!(!queue.iter().any(|item| &item.1 == &proposal_hash), Error::<T>::Imminent);
-
-			let _ = T::Currency::repatriate_reserved(&old, &who, deposit, BalanceStatus::Free);
+			let _ = T::Currency::repatriate_reserved(&provider, &who, deposit, BalanceStatus::Free);
 			<Preimages<T>>::remove(&proposal_hash);
-			Self::deposit_event(RawEvent::PreimageReaped(proposal_hash, old, deposit, who));
+			Self::deposit_event(RawEvent::PreimageReaped(proposal_hash, provider, deposit, who));
 		}
 
 		/// Unlock tokens that have an expired lock.
@@ -1221,6 +1256,13 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 			let target = Self::proxy(who).and_then(|a| a.as_active()).ok_or(Error::<T>::NotProxy)?;
 			Self::try_remove_vote(&target, index, UnvoteScope::Any)
+		}
+
+		/// Enact a proposal from a referendum. For now we just make the weight be the maximum.
+		#[weight = SimpleDispatchInfo::MaxNormal]
+		fn enact_proposal(origin, proposal_hash: T::Hash, index: ReferendumIndex) -> DispatchResult {
+			ensure_root(origin)?;
+			Self::do_enact_proposal(proposal_hash, index)
 		}
 	}
 }
@@ -1544,28 +1586,6 @@ impl<T: Trait> Module<T> {
 		ref_index
 	}
 
-	/// Enact a proposal from a referendum.
-	fn enact_proposal(proposal_hash: T::Hash, index: ReferendumIndex) -> DispatchResult {
-		if let Some((encoded_proposal, who, amount, _)) = <Preimages<T>>::take(&proposal_hash) {
-			if let Ok(proposal) = T::Proposal::decode(&mut &encoded_proposal[..]) {
-				let _ = T::Currency::unreserve(&who, amount);
-				Self::deposit_event(RawEvent::PreimageUsed(proposal_hash, who, amount));
-
-				let ok = proposal.dispatch(frame_system::RawOrigin::Root.into()).is_ok();
-				Self::deposit_event(RawEvent::Executed(index, ok));
-
-				Ok(())
-			} else {
-				T::Slash::on_unbalanced(T::Currency::slash_reserved(&who, amount).0);
-				Self::deposit_event(RawEvent::PreimageInvalid(proposal_hash, index));
-				Err(Error::<T>::PreimageInvalid.into())
-			}
-		} else {
-			Self::deposit_event(RawEvent::PreimageMissing(proposal_hash, index));
-			Err(Error::<T>::PreimageMissing.into())
-		}
-	}
-
 	/// Table the next waiting proposal for a vote.
 	fn launch_next(now: T::BlockNumber) -> DispatchResult {
 		if LastTabledWasExternal::take() {
@@ -1622,6 +1642,28 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
+	fn do_enact_proposal(proposal_hash: T::Hash, index: ReferendumIndex) -> DispatchResult {
+		let preimage = <Preimages<T>>::take(&proposal_hash);
+		if let Some(PreimageStatus::Available { data, provider, deposit, .. }) = preimage {
+			if let Ok(proposal) = T::Proposal::decode(&mut &data[..]) {
+				let _ = T::Currency::unreserve(&provider, deposit);
+				Self::deposit_event(RawEvent::PreimageUsed(proposal_hash, provider, deposit));
+
+				let ok = proposal.dispatch(frame_system::RawOrigin::Root.into()).is_ok();
+				Self::deposit_event(RawEvent::Executed(index, ok));
+
+				Ok(())
+			} else {
+				T::Slash::on_unbalanced(T::Currency::slash_reserved(&provider, deposit).0);
+				Self::deposit_event(RawEvent::PreimageInvalid(proposal_hash, index));
+				Err(Error::<T>::PreimageInvalid.into())
+			}
+		} else {
+			Self::deposit_event(RawEvent::PreimageMissing(proposal_hash, index));
+			Err(Error::<T>::PreimageMissing.into())
+		}
+	}
+
 	fn bake_referendum(
 		now: T::BlockNumber,
 		index: ReferendumIndex,
@@ -1633,13 +1675,24 @@ impl<T: Trait> Module<T> {
 		if approved {
 			Self::deposit_event(RawEvent::Passed(index));
 			if status.delay.is_zero() {
-				let _ = Self::enact_proposal(status.proposal_hash, index);
+				let _ = Self::do_enact_proposal(status.proposal_hash, index);
 			} else {
-				let item = (now + status.delay, status.proposal_hash, index);
-				<DispatchQueue<T>>::mutate(|queue| {
-					let pos = queue.binary_search_by_key(&item.0, |x| x.0).unwrap_or_else(|e| e);
-					queue.insert(pos, item);
+				let when = now + status.delay;
+				// Note that we need the preimage now.
+				Preimages::<T>::mutate_exists(&status.proposal_hash, |maybe_pre| match *maybe_pre {
+					Some(PreimageStatus::Available { ref mut expiry, .. }) => *expiry = Some(when),
+					ref mut a => *a = Some(PreimageStatus::Missing(when)),
 				});
+
+				if T::Scheduler::schedule_named(
+					(DEMOCRACY_ID, index),
+					when,
+					None,
+					63,
+					Call::enact_proposal(status.proposal_hash, index).into(),
+				).is_err() {
+					frame_support::print("LOGIC ERROR: bake_referendum/schedule_named failed");
+				}
 			}
 		} else {
 			Self::deposit_event(RawEvent::NotPassed(index));
@@ -1661,17 +1714,6 @@ impl<T: Trait> Module<T> {
 		for (index, info) in Self::maturing_referenda_at(now).into_iter() {
 			let approved = Self::bake_referendum(now, index, info)?;
 			ReferendumInfoOf::<T>::insert(index, ReferendumInfo::Finished { end: now, approved });
-		}
-
-		let queue = <DispatchQueue<T>>::get();
-		let mut used = 0;
-		// It's stored in order, so the earliest will always be at the start.
-		for &(_, proposal_hash, index) in queue.iter().take_while(|x| x.0 == now) {
-			let _ = Self::enact_proposal(proposal_hash.clone(), index);
-			used += 1;
-		}
-		if used != 0 {
-			<DispatchQueue<T>>::put(&queue[used..]);
 		}
 		Ok(())
 	}
