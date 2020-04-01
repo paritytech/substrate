@@ -207,7 +207,7 @@ mod tests {
 		txpool::Options,
 	};
 	use substrate_test_runtime_transaction_pool::{TestApi, uxt};
-	use sp_transaction_pool::{TransactionPool, MaintainedTransactionPool};
+	use sp_transaction_pool::{TransactionPool, MaintainedTransactionPool, TransactionSource};
 	use sp_runtime::generic::BlockId;
 	use sp_consensus::ImportedAux;
 	use sp_inherents::InherentDataProviders;
@@ -216,6 +216,8 @@ mod tests {
 	fn api() -> Arc<TestApi> {
 		Arc::new(TestApi::empty())
 	}
+
+	const SOURCE: TransactionSource = TransactionSource::External;
 
 	#[tokio::test]
 	async fn instant_seal() {
@@ -258,7 +260,7 @@ mod tests {
 			rt.block_on(future);
 		});
 		// submit a transaction to pool.
-		let result = pool.submit_one(&BlockId::Number(0), uxt(Alice, 0)).await;
+		let result = pool.submit_one(&BlockId::Number(0), SOURCE, uxt(Alice, 0)).await;
 		// assert that it was successfully imported
 		assert!(result.is_ok());
 		// assert that the background task returns ok
@@ -309,7 +311,7 @@ mod tests {
 			rt.block_on(future);
 		});
 		// submit a transaction to pool.
-		let result = pool.submit_one(&BlockId::Number(0), uxt(Alice, 0)).await;
+		let result = pool.submit_one(&BlockId::Number(0), SOURCE, uxt(Alice, 0)).await;
 		// assert that it was successfully imported
 		assert!(result.is_ok());
 		let (tx, rx) = futures::channel::oneshot::channel();
@@ -377,7 +379,7 @@ mod tests {
 			rt.block_on(future);
 		});
 		// submit a transaction to pool.
-		let result = pool.submit_one(&BlockId::Number(0), uxt(Alice, 0)).await;
+		let result = pool.submit_one(&BlockId::Number(0), SOURCE, uxt(Alice, 0)).await;
 		// assert that it was successfully imported
 		assert!(result.is_ok());
 
@@ -431,7 +433,7 @@ mod tests {
 		assert!(client.header(&BlockId::Number(1)).unwrap().is_some());
 		pool_api.increment_nonce(Alice.into());
 
-		assert!(pool.submit_one(&BlockId::Number(2), uxt(Alice, 2)).await.is_ok());
+		assert!(pool.submit_one(&BlockId::Number(2), SOURCE, uxt(Alice, 2)).await.is_ok());
 		let (tx2, rx2) = futures::channel::oneshot::channel();
 		assert!(sink.send(EngineCommand::SealNewBlock {
 			parent_hash: Some(created_block.hash),

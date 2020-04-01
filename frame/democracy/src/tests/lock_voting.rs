@@ -140,7 +140,6 @@ fn no_locks_without_conviction_should_work() {
 #[test]
 fn lock_voting_should_work_with_delegation() {
 	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
 		let r = Democracy::inject_referendum(
 			2,
 			set_balance_proposal_hash_and_note(2),

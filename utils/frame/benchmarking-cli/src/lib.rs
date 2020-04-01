@@ -22,7 +22,7 @@ use sc_client_db::BenchmarkingState;
 use sc_service::{Configuration, ChainSpec};
 use sc_executor::{NativeExecutor, NativeExecutionDispatch};
 use codec::{Encode, Decode};
-use frame_benchmarking::{BenchmarkResults, Analysis};
+use frame_benchmarking::{BenchmarkBatch, Analysis};
 use sp_core::{
 	tasks,
 	traits::KeystoreExt,
@@ -33,11 +33,11 @@ use sp_externalities::Extensions;
 /// The `benchmark` command used to benchmark FRAME Pallets.
 #[derive(Debug, structopt::StructOpt, Clone)]
 pub struct BenchmarkCmd {
-	/// Select a FRAME Pallet to benchmark.
+	/// Select a FRAME Pallet to benchmark, or `*` for all (in which case `extrinsic` must be `*`).
 	#[structopt(short, long)]
 	pub pallet: String,
 
-	/// Select an extrinsic to benchmark.
+	/// Select an extrinsic inside the pallet to benchmark, or `*` for all.
 	#[structopt(short, long)]
 	pub extrinsic: String,
 
@@ -46,16 +46,28 @@ pub struct BenchmarkCmd {
 	pub steps: Vec<u32>,
 
 	/// Indicates lowest values for each of the component ranges.
-	#[structopt(long, use_delimiter = true)]
+	#[structopt(long = "low", use_delimiter = true)]
 	pub lowest_range_values: Vec<u32>,
 
 	/// Indicates highest values for each of the component ranges.
-	#[structopt(long, use_delimiter = true)]
+	#[structopt(long = "high", use_delimiter = true)]
 	pub highest_range_values: Vec<u32>,
 
 	/// Select how many repetitions of this benchmark should run.
 	#[structopt(short, long, default_value = "1")]
 	pub repeat: u32,
+
+	/// Print the raw results.
+	#[structopt(long = "raw")]
+	pub raw_data: bool,
+
+	/// Don't print the median-slopes linear regression analysis.
+	#[structopt(long)]
+	pub no_median_slopes: bool,
+
+	/// Don't print the min-squares linear regression analysis.
+	#[structopt(long)]
+	pub no_min_squares: bool,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -135,47 +147,50 @@ impl BenchmarkCmd {
 		.execute(strategy.into())
 		.map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;
 
-		let results = <Result<Vec<BenchmarkResults>, String> as Decode>::decode(&mut &result[..])
+		let results = <Result<Vec<BenchmarkBatch>, String> as Decode>::decode(&mut &result[..])
 			.map_err(|e| format!("Failed to decode benchmark results: {:?}", e))?;
 
 		match results {
-			Ok(results) => {
+			Ok(batches) => for batch in batches.into_iter() {
 				// Print benchmark metadata
 				println!(
 					"Pallet: {:?}, Extrinsic: {:?}, Lowest values: {:?}, Highest values: {:?}, Steps: {:?}, Repeat: {:?}",
-					self.pallet,
-					self.extrinsic,
+					String::from_utf8(batch.pallet).expect("Encoded from String; qed"),
+					String::from_utf8(batch.benchmark).expect("Encoded from String; qed"),
 					self.lowest_range_values,
 					self.highest_range_values,
 					self.steps,
 					self.repeat,
 				);
 
-				// Print the table header
-				results[0].0.iter().for_each(|param| print!("{:?},", param.0));
+				if self.raw_data {
+					// Print the table header
+					batch.results[0].0.iter().for_each(|param| print!("{:?},", param.0));
 
-				print!("extrinsic_time,storage_root_time\n");
-				// Print the values
-				results.iter().for_each(|result| {
-					let parameters = &result.0;
-					parameters.iter().for_each(|param| print!("{:?},", param.1));
-					// Print extrinsic time and storage root time
-					print!("{:?},{:?}\n", result.1, result.2);
-				});
+					print!("extrinsic_time,storage_root_time\n");
+					// Print the values
+					batch.results.iter().for_each(|result| {
+						let parameters = &result.0;
+						parameters.iter().for_each(|param| print!("{:?},", param.1));
+						// Print extrinsic time and storage root time
+						print!("{:?},{:?}\n", result.1, result.2);
+					});
 
-				print!("\n");
+					print!("\n");
+				}
 
 				// Conduct analysis.
-				if let Some(analysis) = Analysis::median_slopes(&results) {
-					println!("Median Slopes Analysis\n========\n{}", analysis);
+				if !self.no_median_slopes {
+					if let Some(analysis) = Analysis::median_slopes(&batch.results) {
+						println!("Median Slopes Analysis\n========\n{}", analysis);
+					}
 				}
-
-				if let Some(analysis) = Analysis::min_squares_iqr(&results) {
-					println!("Min Squares Analysis\n========\n{}", analysis);
+				if !self.no_min_squares {
+					if let Some(analysis) = Analysis::min_squares_iqr(&batch.results) {
+						println!("Min Squares Analysis\n========\n{}", analysis);
+					}
 				}
-
-				eprintln!("Done.");
-			}
+			},
 			Err(error) => eprintln!("Error: {:?}", error),
 		}
 

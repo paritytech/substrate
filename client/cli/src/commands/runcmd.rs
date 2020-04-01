@@ -140,7 +140,7 @@ pub struct RunCmd {
 	///
 	/// A comma-separated list of origins (protocol://domain or special `null`
 	/// value). Value of `all` will disable origin validation. Default is to
-	/// allow localhost and https://polkadot.js.org origins. When running in 
+	/// allow localhost and https://polkadot.js.org origins. When running in
 	/// --dev mode the default is to allow all origins.
 	#[structopt(long = "rpc-cors", value_name = "ORIGINS", parse(try_from_str = parse_cors))]
 	pub rpc_cors: Option<Cors>,
@@ -419,7 +419,7 @@ impl RunCmd {
 			config.telemetry_endpoints = None;
 		} else if !self.telemetry_endpoints.is_empty() {
 			config.telemetry_endpoints = Some(
-				TelemetryEndpoints::new(self.telemetry_endpoints.clone())
+				TelemetryEndpoints::new(self.telemetry_endpoints.clone()).map_err(|e| e.to_string())?
 			);
 		}
 
@@ -461,9 +461,9 @@ impl RunCmd {
 		info!("{}", version.name);
 		info!("  version {}", config.full_version());
 		info!("  by {}, {}-{}", version.author, version.copyright_start_year, Local::today().year());
-		info!("Chain specification: {}", config.expect_chain_spec().name());
-		info!("Node name: {}", config.name);
-		info!("Roles: {}", config.display_role());
+		info!("📋 Chain specification: {}", config.expect_chain_spec().name());
+		info!("🏷 Node name: {}", config.name);
+		info!("👤 Roles: {}", config.display_role());
 
 		match config.roles {
 			Roles::LIGHT => run_service_until_exit(
@@ -689,7 +689,8 @@ mod tests {
 			"test-id",
 			|| (),
 			vec!["boo".to_string()],
-			Some(TelemetryEndpoints::new(vec![("foo".to_string(), 42)])),
+			Some(TelemetryEndpoints::new(vec![("wss://foo/bar".to_string(), 42)])
+				.expect("provided url should be valid")),
 			None,
 			None,
 			None::<()>,

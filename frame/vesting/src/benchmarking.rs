@@ -16,6 +16,8 @@
 
 //! Vesting pallet benchmarking.
 
+#![cfg(feature = "runtime-benchmarks")]
+
 use super::*;
 
 use frame_system::{RawOrigin, Module as System};
@@ -119,6 +121,6 @@ benchmarks! {
 		};
 
 		let _ = T::Currency::make_free_balance_be(&from, transfer_amount * 10.into());
-		
+
 	}: _(RawOrigin::Signed(from), to_lookup, vesting_schedule)
 }

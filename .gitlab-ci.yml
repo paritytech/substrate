@@ -24,6 +24,7 @@
 stages:
   - test
   - build
+  - post-build-test
   - publish
   - kubernetes
   - flaming-fir
@@ -39,7 +40,7 @@ variables:
   ARCH:                            "x86_64"
   # FIXME set to release
   CARGO_UNLEASH_INSTALL_PARAMS:    "--version 1.0.0-alpha.10"
-  CARGO_UNLEASH_PKG_DEF:           "--skip node node-* pallet-template pallet-example pallet-example-* subkey chain-spec-builder"
+  CARGO_UNLEASH_PKG_DEF:           "--skip node node-* pallet-template pallet-example pallet-example-* subkey chain-spec-builder sp-arithmetic-fuzzer"
 
 
 .collect-artifacts:                &collect-artifacts
@@ -127,11 +128,13 @@ check-line-width:
   allow_failure:                   true
 
 
-check-polkadot:
+
+
+check-polkadot-companion-build:
   stage:                           build
   <<:                              *docker-env
   script:
-    - ./.maintain/gitlab/check_polkadot.sh
+    - ./.maintain/gitlab/check_polkadot_companion_build.sh
   interruptible:                   true
   allow_failure:                   true
 
@@ -145,6 +148,20 @@ cargo-audit:
     - cargo audit
   allow_failure:                   true
 
+cargo-deny:
+  stage:                           test
+  <<:                              *docker-env
+  script:
+    - cargo deny check --hide-inclusion-graph -c .maintain/deny.toml
+  after_script:
+    - echo "___The complete log is in the artifacts___"
+    - cargo deny check -c .maintain/deny.toml 2> deny.log
+  artifacts:
+    name:                          $CI_COMMIT_SHORT_SHA
+    expire_in:                     3 days
+    when:                          always
+    paths:
+      - deny.log
 
 cargo-check-benches:
   stage:                           test
@@ -176,7 +193,7 @@ test-linux-stable:                 &test-linux
     variables:
       - $DEPLOY_TAG
   script:
-    - WASM_BUILD_NO_COLOR=1 time cargo test --all --release --verbose --locked |
+    - WASM_BUILD_NO_COLOR=1 time cargo test --all --release --verbose --locked |&
         tee output.log
     - sccache -s
   after_script:
@@ -314,7 +331,7 @@ check-web-wasm:
     - time cargo build --target=wasm32-unknown-unknown -p sp-consensus
     - time cargo build --target=wasm32-unknown-unknown -p sc-telemetry
     # Note: the command below is a bit weird because several Cargo issues prevent us from compiling the node in a more straight-forward way.
-    - time cargo build --manifest-path=bin/node/cli/Cargo.toml --no-default-features --features "browser" --target=wasm32-unknown-unknown
+    - time cargo +nightly build --manifest-path=bin/node/cli/Cargo.toml --no-default-features --features "browser" --target=wasm32-unknown-unknown -Z features=itarget
     - sccache -s
 
 test-full-crypto-feature:
@@ -418,6 +435,17 @@ check_warnings:
       else
         echo "___No warnings___";
       fi
+
+
+check-polkadot-companion-status:
+  stage:                           post-build-test
+  image:                           parity/tools:latest
+  <<:                              *kubernetes-build
+  only:
+    - /^[0-9]+$/
+  script:
+    - ./.maintain/gitlab/check_polkadot_companion_status.sh
+
 
 
 trigger-contracts-ci:

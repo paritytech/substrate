@@ -213,6 +213,7 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 		tracing_targets: None,
 		tracing_receiver: Default::default(),
 		max_runtime_instances: 8,
+		announce_block: true,
 	}
 }
 
@@ -482,9 +483,10 @@ pub fn sync<G, E, Fb, F, Lb, L, B, ExF, U>(
 	let first_user_data = &network.full_nodes[0].2;
 	let best_block = BlockId::number(first_service.get().client().chain_info().best_number);
 	let extrinsic = extrinsic_factory(&first_service.get(), first_user_data);
+	let source = sp_transaction_pool::TransactionSource::External;
 
 	futures::executor::block_on(
-		first_service.get().transaction_pool().submit_one(&best_block, extrinsic)
+		first_service.get().transaction_pool().submit_one(&best_block, source, extrinsic)
 	).expect("failed to submit extrinsic");
 
 	network.run_until_all_full(

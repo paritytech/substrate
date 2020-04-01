@@ -68,13 +68,14 @@
 //! ### Example - Get extrinsic count and parent hash for the current block
 //!
 //! ```
-//! use frame_support::{decl_module, dispatch};
+//! use frame_support::{decl_module, dispatch, weights::SimpleDispatchInfo};
 //! use frame_system::{self as system, ensure_signed};
 //!
 //! pub trait Trait: system::Trait {}
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//! 		#[weight = SimpleDispatchInfo::default()]
 //! 		pub fn system_module_example(origin) -> dispatch::DispatchResult {
 //! 			let _sender = ensure_signed(origin)?;
 //! 			let _extrinsic_count = <system::Module<T>>::extrinsic_count();
@@ -365,7 +366,7 @@ decl_storage! {
 		ExtrinsicData get(fn extrinsic_data): map hasher(twox_64_concat) u32 => Vec<u8>;
 
 		/// The current block number being processed. Set by `execute_block`.
-		Number get(fn block_number) build(|_| 1.into()): T::BlockNumber;
+		Number get(fn block_number): T::BlockNumber;
 
 		/// Hash of the previous block.
 		ParentHash get(fn parent_hash) build(|_| hash69()): T::Hash;
@@ -577,12 +578,17 @@ impl<
 			r => Err(O::from(r)),
 		})
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> O {
+		O::from(RawOrigin::Root)
+	}
 }
 
 pub struct EnsureSigned<AccountId>(sp_std::marker::PhantomData<AccountId>);
 impl<
 	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
-	AccountId,
+	AccountId: Default,
 > EnsureOrigin<O> for EnsureSigned<AccountId> {
 	type Success = AccountId;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
@@ -591,13 +597,18 @@ impl<
 			r => Err(O::from(r)),
 		})
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> O {
+		O::from(RawOrigin::Signed(Default::default()))
+	}
 }
 
 pub struct EnsureSignedBy<Who, AccountId>(sp_std::marker::PhantomData<(Who, AccountId)>);
 impl<
 	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
 	Who: Contains<AccountId>,
-	AccountId: PartialEq + Clone + Ord,
+	AccountId: PartialEq + Clone + Ord + Default,
 > EnsureOrigin<O> for EnsureSignedBy<Who, AccountId> {
 	type Success = AccountId;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
@@ -605,6 +616,13 @@ impl<
 			RawOrigin::Signed(ref who) if Who::contains(who) => Ok(who.clone()),
 			r => Err(O::from(r)),
 		})
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> O {
+		let caller: AccountId = Default::default();
+		// Who::add(&caller);
+		O::from(RawOrigin::Signed(caller))
 	}
 }
 
@@ -620,6 +638,11 @@ impl<
 			r => Err(O::from(r)),
 		})
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> O {
+		O::from(RawOrigin::None)
+	}
 }
 
 pub struct EnsureNever<T>(sp_std::marker::PhantomData<T>);
@@ -627,6 +650,11 @@ impl<O, T> EnsureOrigin<O> for EnsureNever<T> {
 	type Success = T;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		Err(o)
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> O {
+		unimplemented!()
 	}
 }
 
@@ -721,6 +749,10 @@ impl<T: Trait> Module<T> {
 	/// This will update storage entries that correspond to the specified topics.
 	/// It is expected that light-clients could subscribe to this topics.
 	pub fn deposit_event_indexed(topics: &[T::Hash], event: T::Event) {
+		let block_number = Self::block_number();
+		// Don't populate events on genesis.
+		if block_number.is_zero() { return }
+
 		let phase = ExecutionPhase::get().unwrap_or_default();
 		let event = EventRecord {
 			phase,
@@ -753,10 +785,9 @@ impl<T: Trait> Module<T> {
 			return;
 		}
 
-		let block_no = Self::block_number();
 		for topic in topics {
 			// The same applies here.
-			if <EventTopics<T>>::append(topic, &[(block_no, event_idx)]).is_err() {
+			if <EventTopics<T>>::append(topic, &[(block_number, event_idx)]).is_err() {
 				return;
 			}
 		}
@@ -2013,6 +2044,7 @@ mod tests {
 		let mut ext = new_test_ext();
 		ext.register_extension(sp_core::traits::CallInWasmExt::new(executor));
 		ext.execute_with(|| {
+			System::set_block_number(1);
 			System::set_code(
 				RawOrigin::Root.into(),
 				substrate_test_runtime_client::runtime::WASM_BINARY.to_vec(),
@@ -2038,6 +2070,20 @@ mod tests {
 					substrate_test_runtime_client::runtime::WASM_BINARY.to_vec()
 				)],
 			).unwrap();
+		});
+	}
+
+	#[test]
+	fn events_not_emitted_during_genesis() {
+		new_test_ext().execute_with(|| {
+			// Block Number is zero at genesis
+			assert!(System::block_number().is_zero());
+			System::on_created_account(Default::default());
+			assert!(System::events().is_empty());
+			// Events will be emitted starting on block 1
+			System::set_block_number(1);
+			System::on_created_account(Default::default());
+			assert!(System::events().len() == 1);
 		});
 	}
 }

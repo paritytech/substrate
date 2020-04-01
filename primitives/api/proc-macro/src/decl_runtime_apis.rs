@@ -19,7 +19,7 @@ use crate::utils::{
 	fold_fn_decl_for_client_side, extract_parameter_names_types_and_borrows,
 	generate_native_call_generator_fn_name, return_type_extract_type,
 	generate_method_runtime_api_impl_name, generate_call_api_at_fn_name, prefix_function_with_trait,
-	replace_wild_card_parameter_names,
+	replace_wild_card_parameter_names, AllowSelfRefInParameters,
 };
 
 use proc_macro2::{TokenStream, Span};
@@ -198,7 +198,7 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 
 	// Generate a native call generator for each function of the given trait.
 	for fn_ in fns {
-		let params = extract_parameter_names_types_and_borrows(&fn_)?;
+		let params = extract_parameter_names_types_and_borrows(&fn_, AllowSelfRefInParameters::No)?;
 		let trait_fn_name = &fn_.ident;
 		let fn_name = generate_native_call_generator_fn_name(&fn_.ident);
 		let output = return_type_replace_block_with_node_block(fn_.output.clone());
@@ -592,7 +592,10 @@ impl<'a> ToClientSideDecl<'a> {
 
 		// Get types and if the value is borrowed from all parameters.
 		// If there is an error, we push it as the block to the user.
-		let param_types = match extract_parameter_names_types_and_borrows(fn_sig) {
+		let param_types = match extract_parameter_names_types_and_borrows(
+			fn_sig,
+			AllowSelfRefInParameters::No,
+		) {
 			Ok(res) => res.into_iter().map(|v| {
 				let ty = v.1;
 				let borrow = v.2;
@@ -629,7 +632,10 @@ impl<'a> ToClientSideDecl<'a> {
 		mut method: TraitItemMethod,
 		context: TokenStream,
 	) -> TraitItemMethod {
-		let params = match extract_parameter_names_types_and_borrows(&method.sig) {
+		let params = match extract_parameter_names_types_and_borrows(
+			&method.sig,
+			AllowSelfRefInParameters::No,
+		) {
 			Ok(res) => res.into_iter().map(|v| v.0).collect::<Vec<_>>(),
 			Err(e) => {
 				self.errors.push(e.to_compile_error());
@@ -780,7 +786,7 @@ fn generate_runtime_api_id(trait_name: &str) -> TokenStream {
 	let mut res = [0; 8];
 	res.copy_from_slice(blake2_rfc::blake2b::blake2b(8, &[], trait_name.as_bytes()).as_bytes());
 
-	quote!(	const ID: [u8; 8] = [ #( #res ),* ]; )
+	quote!( const ID: [u8; 8] = [ #( #res ),* ]; )
 }
 
 /// Generates the const variable that holds the runtime api version.

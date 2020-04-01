@@ -117,7 +117,7 @@ impl frame_system::Trait for Test {
 	type ModuleToIndex = ();
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
-	type OnKilledAccount = Contracts;
+	type OnKilledAccount = ();
 }
 impl pallet_balances::Trait for Test {
 	type Balance = u64;
@@ -279,7 +279,9 @@ impl ExtBuilder {
 			},
 			gas_price: self.gas_price,
 		}.assimilate_storage(&mut t).unwrap();
-		sp_io::TestExternalities::new(t)
+		let mut ext = sp_io::TestExternalities::new(t);
+		ext.execute_with(|| System::set_block_number(1));
+		ext
 	}
 }
 
@@ -308,7 +310,7 @@ fn refunds_unused_gas() {
 }
 
 #[test]
-fn account_removal_removes_storage() {
+fn account_removal_does_not_remove_storage() {
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
 		let trie_id1 = <Test as Trait>::TrieIdGenerator::trie_id(&1);
 		let trie_id2 = <Test as Trait>::TrieIdGenerator::trie_id(&2);
@@ -351,14 +353,22 @@ fn account_removal_removes_storage() {
 		// Transfer funds from account 1 of such amount that after this transfer
 		// the balance of account 1 will be below the existential threshold.
 		//
-		// This should lead to the removal of all storage associated with this account.
+		// This does not remove the contract storage as we are not notified about a
+		// account removal. This cannot happen in reality because a contract can only
+		// remove itself by `ext_terminate`. There is no external event that can remove
+		// the account appart from that.
 		assert_ok!(Balances::transfer(Origin::signed(1), 2, 20));
 
-		// Verify that all entries from account 1 is removed, while
-		// entries from account 2 is in place.
+		// Verify that no entries are removed.
 		{
-			assert!(<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &1, Some(&trie_id1), key1).is_none());
-			assert!(<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &1, Some(&trie_id1), key2).is_none());
+			assert_eq!(
+				<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &1, Some(&trie_id1), key1),
+				Some(b"1".to_vec())
+			);
+			assert_eq!(
+				<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &1, Some(&trie_id1), key2),
+				Some(b"2".to_vec())
+			);
 
 			assert_eq!(
 				<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &2, Some(&trie_id2), key1),
@@ -2747,9 +2757,6 @@ const CODE_CRYPTO_HASHES: &str = r#"
 	(import "env" "ext_hash_keccak_256" (func $ext_hash_keccak_256 (param i32 i32 i32)))
 	(import "env" "ext_hash_blake2_256" (func $ext_hash_blake2_256 (param i32 i32 i32)))
 	(import "env" "ext_hash_blake2_128" (func $ext_hash_blake2_128 (param i32 i32 i32)))
-	(import "env" "ext_hash_twox_256" (func $ext_hash_twox_256 (param i32 i32 i32)))
-	(import "env" "ext_hash_twox_128" (func $ext_hash_twox_128 (param i32 i32 i32)))
-	(import "env" "ext_hash_twox_64" (func $ext_hash_twox_64 (param i32 i32 i32)))
 
 	(import "env" "memory" (memory 1 1))
 
@@ -2760,9 +2767,6 @@ const CODE_CRYPTO_HASHES: &str = r#"
 		$ext_hash_keccak_256
 		$ext_hash_blake2_256
 		$ext_hash_blake2_128
-		$ext_hash_twox_256
-		$ext_hash_twox_128
-		$ext_hash_twox_64
 	)
 	(data (i32.const 1) "20202010201008") ;; Output sizes of the hashes in order in hex.
 
@@ -2793,9 +2797,6 @@ const CODE_CRYPTO_HASHES: &str = r#"
 	;; |     1 |    KECCAK |       256 |
 	;; |     2 |    BLAKE2 |       256 |
 	;; |     3 |    BLAKE2 |       128 |
-	;; |     4 |      TWOX |       256 |
-	;; |     5 |      TWOX |       128 |
-	;; |     6 |      TWOX |        64 |
 	;; ---------------------------------
 	(func (export "call") (result i32)
 		(local $chosen_hash_fn i32)
@@ -2860,9 +2861,6 @@ fn crypto_hashes() {
 			(dyn_hash_fn!(keccak_256), 32),
 			(dyn_hash_fn!(blake2_256), 32),
 			(dyn_hash_fn!(blake2_128), 16),
-			(dyn_hash_fn!(twox_256), 32),
-			(dyn_hash_fn!(twox_128), 16),
-			(dyn_hash_fn!(twox_64), 8),
 		];
 		// Test the given hash functions for the input: "_DEAD_BEEF"
 		for (n, (hash_fn, expected_size)) in test_cases.iter().enumerate() {

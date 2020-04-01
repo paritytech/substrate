@@ -16,11 +16,13 @@
 
 //! Treasury pallet benchmarking.
 
+#![cfg(feature = "runtime-benchmarks")]
+
 use super::*;
 
 use frame_system::RawOrigin;
 use frame_benchmarking::{benchmarks, account};
-use sp_runtime::traits::OnInitialize;
+use frame_support::traits::OnInitialize;
 
 use crate::Module as Treasury;
 
