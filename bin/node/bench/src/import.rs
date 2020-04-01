@@ -89,26 +89,26 @@ impl core::Benchmark for ImportBenchmark {
 	fn run(&mut self) -> std::time::Duration {
 		let mut context = self.database.create_context(self.profile);
 
-        let _ = context.client.runtime_version_at(&BlockId::Number(0))
-            .expect("Failed to get runtime version")
-            .spec_version;
+		let _ = context.client.runtime_version_at(&BlockId::Number(0))
+			.expect("Failed to get runtime version")
+			.spec_version;
 
-        let start = std::time::Instant::now();
-        context.import_block(self.block.clone());
-        let elapsed = start.elapsed();
+		let start = std::time::Instant::now();
+		context.import_block(self.block.clone());
+		let elapsed = start.elapsed();
 
-        log::info!(
-            target: "bench-logistics",
-            "imported block with {} tx, took: {:#?}",
-            self.block.extrinsics.len(),
-            elapsed,
-        );
+		log::info!(
+			target: "bench-logistics",
+			"imported block with {} tx, took: {:#?}",
+			self.block.extrinsics.len(),
+			elapsed,
+		);
 
-        log::info!(
-            target: "bench-logistics",
-            "usage info: {}",
-            context.backend.usage_info()
-                .expect("RocksDB backend always provides usage info!"),
+		log::info!(
+			target: "bench-logistics",
+			"usage info: {}",
+			context.backend.usage_info()
+				.expect("RocksDB backend always provides usage info!"),
 		);
 
 		elapsed
