@@ -62,6 +62,13 @@ impl<Balance: Saturating> Saturating for Delegations<Balance> {
 			capital: self.capital.saturating_mul(o.capital),
 		}
 	}
+
+	fn saturating_pow(self, exp: usize) -> Self {
+		Self {
+			votes: self.votes.saturating_pow(exp),
+			capital: self.capital.saturating_pow(exp),
+		}
+	}
 }
 
 impl<

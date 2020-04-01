@@ -18,8 +18,10 @@
 //! Cryptographic utilities.
 // end::description[]
 
+use crate::{sr25519, ed25519};
 use sp_std::hash::Hash;
 use sp_std::vec::Vec;
+use sp_std::str;
 #[cfg(feature = "std")]
 use sp_std::convert::TryInto;
 use sp_std::convert::TryFrom;
@@ -32,7 +34,8 @@ use codec::{Encode, Decode};
 use regex::Regex;
 #[cfg(feature = "std")]
 use base58::{FromBase58, ToBase58};
-
+#[cfg(feature = "std")]
+use crate::hexdisplay::HexDisplay;
 use zeroize::Zeroize;
 #[doc(hidden)]
 pub use sp_std::ops::Deref;
@@ -538,7 +541,9 @@ impl<T: Sized + AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 }
 
 /// Trait suitable for typical cryptographic PKI key public type.
-pub trait Public: AsRef<[u8]> + AsMut<[u8]> + Default + Derive + CryptoType + PartialEq + Eq + Clone + Send + Sync {
+pub trait Public:
+	AsRef<[u8]> + AsMut<[u8]> + Default + Derive + CryptoType + PartialEq + Eq + Clone + Send + Sync
+{
 	/// A new instance from the given slice.
 	///
 	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
@@ -612,6 +617,18 @@ impl<'a> sp_std::convert::TryFrom<&'a [u8]> for AccountId32 {
 impl From<AccountId32> for [u8; 32] {
 	fn from(x: AccountId32) -> [u8; 32] {
 		x.0
+	}
+}
+
+impl From<sr25519::Public> for AccountId32 {
+	fn from(k: sr25519::Public) -> Self {
+		k.0.into()
+	}
+}
+
+impl From<ed25519::Public> for AccountId32 {
+	fn from(k: ed25519::Public) -> Self {
+		k.0.into()
 	}
 }
 
@@ -939,6 +956,27 @@ impl<'a> TryFrom<&'a str> for KeyTypeId {
 		let mut res = KeyTypeId::default();
 		res.0.copy_from_slice(&b[0..4]);
 		Ok(res)
+	}
+}
+
+/// An identifier for a specific cryptographic algorithm used by a key pair
+#[derive(Debug, Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
+pub struct CryptoTypeId(pub [u8; 4]);
+
+/// A type alias of CryptoTypeId & a public key
+#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
+pub struct CryptoTypePublicPair(pub CryptoTypeId, pub Vec<u8>);
+
+#[cfg(feature = "std")]
+impl sp_std::fmt::Display for CryptoTypePublicPair {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+		let id = match str::from_utf8(&(self.0).0[..]) {
+			Ok(id) => id.to_string(),
+			Err(_) => {
+				format!("{:#?}", self.0)
+			}
+		};
+		write!(f, "{}-{}", id, HexDisplay::from(&self.1))
 	}
 }
 
