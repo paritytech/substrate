@@ -226,7 +226,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		let local_identity = params.network_config.node_key.clone().into_keypair()?;
 		let local_public = local_identity.public();
 		let local_peer_id = local_public.clone().into_peer_id();
-		info!(target: "sub-libp2p", "Local node identity is: {}", local_peer_id.to_base58());
+		info!(target: "sub-libp2p", "🏷  Local node identity is: {}", local_peer_id.to_base58());
 
 		let checker = params.on_demand.as_ref()
 			.map(|od| od.checker().clone())
