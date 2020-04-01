@@ -9,7 +9,6 @@ use prometheus::{
 };
 use std::time::Instant;
 use std::convert::TryFrom;
-use futures_core::task::Poll;
 use parking_lot::Mutex;
 
 use crate::channels::{ Sender, Receiver, OnFullStrategy, channel_with_strategy };
