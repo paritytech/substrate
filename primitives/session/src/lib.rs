@@ -60,6 +60,9 @@ sp_api::decl_runtime_apis! {
 	}
 }
 
+/// Number of validators in a given session.
+pub type ValidatorCount = u32;
+
 /// Proof of membership of a specific key in a given session.
 #[derive(Encode, Decode, Clone, Eq, PartialEq, Default, RuntimeDebug)]
 pub struct MembershipProof {
@@ -67,12 +70,19 @@ pub struct MembershipProof {
 	pub session: SessionIndex,
 	/// Trie nodes of a merkle proof of session membership.
 	pub trie_nodes: Vec<Vec<u8>>,
+	/// The validator count of the session on which the specific key is a member.
+	pub validator_count: ValidatorCount,
 }
 
 impl MembershipProof {
 	/// Returns a session this proof was generated for.
 	pub fn session(&self) -> SessionIndex {
 		self.session
+	}
+
+	/// Returns the validator count of the session this proof was generated for.
+	pub fn validator_count(&self) -> ValidatorCount {
+		self.validator_count
 	}
 }
 

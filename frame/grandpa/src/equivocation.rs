@@ -30,7 +30,7 @@
 //! equivocation proofs in the extrinsic and report the offences.
 //!
 
-use sp_std::{fmt::Debug, prelude::*};
+use sp_std::prelude::*;
 
 use codec::{self as codec, Decode, Encode};
 use frame_support::traits::KeyOwnerProofSystem;
@@ -51,7 +51,7 @@ use sp_staking::{
 /// (useful only in offchain context).
 pub trait HandleEquivocation<T: super::Trait> {
 	/// The proof of key ownership.
-	type KeyOwnerProof: Clone + Debug + Decode + Encode + PartialEq;
+	type KeyOwnerProof: Decode + Encode + GetSessionNumber + GetValidatorCount;
 	/// The identification of a key owner.
 	type KeyOwnerIdentification;
 	/// The offence type used for reporting offences on valid equivocation reports.
@@ -62,7 +62,7 @@ pub trait HandleEquivocation<T: super::Trait> {
 	fn check_proof(
 		equivocation_proof: &EquivocationProof<T::Hash, T::BlockNumber>,
 		key_owner_proof: Self::KeyOwnerProof,
-	) -> Option<(Self::KeyOwnerIdentification, SessionIndex, u32)>;
+	) -> Option<Self::KeyOwnerIdentification>;
 
 	/// Report an offence proved by the given reporters.
 	fn report_offence(
@@ -85,7 +85,7 @@ impl<T: super::Trait> HandleEquivocation<T> for () {
 	fn check_proof(
 		_equivocation_proof: &EquivocationProof<T::Hash, T::BlockNumber>,
 		_key_owner_proof: Self::KeyOwnerProof,
-	) -> Option<(Self::KeyOwnerIdentification, SessionIndex, u32)> {
+	) -> Option<Self::KeyOwnerIdentification> {
 		None
 	}
 
@@ -101,6 +101,41 @@ impl<T: super::Trait> HandleEquivocation<T> for () {
 		_key_owner_proof: Self::KeyOwnerProof,
 	) -> DispatchResult {
 		Ok(())
+	}
+}
+
+/// A trait to get a session number the `MembershipProof` belongs to.
+pub trait GetSessionNumber {
+	fn session(&self) -> SessionIndex;
+}
+
+/// A trait to get the validator count at the session the `MembershipProof`
+/// belongs to.
+pub trait GetValidatorCount {
+	fn validator_count(&self) -> sp_session::ValidatorCount;
+}
+
+impl GetSessionNumber for () {
+	fn session(&self) -> SessionIndex {
+		Default::default()
+	}
+}
+
+impl GetValidatorCount for () {
+	fn validator_count(&self) -> sp_session::ValidatorCount {
+		Default::default()
+	}
+}
+
+impl GetSessionNumber for sp_session::MembershipProof {
+	fn session(&self) -> SessionIndex {
+		self.session()
+	}
+}
+
+impl GetValidatorCount for sp_session::MembershipProof {
+	fn validator_count(&self) -> sp_session::ValidatorCount {
+		self.validator_count()
 	}
 }
 
@@ -135,7 +170,8 @@ where
 	// of a validator set, needed for validating equivocation reports. The
 	// session index and validator count of the session are part of the proof
 	// as extra data.
-	P: KeyOwnerProofSystem<(KeyTypeId, Vec<u8>), ExtraData = (SessionIndex, u32)>,
+	P: KeyOwnerProofSystem<(KeyTypeId, Vec<u8>)>,
+	P::Proof: GetSessionNumber + GetValidatorCount,
 	// A transaction submitter. Used for submitting equivocation reports.
 	S: SubmitSignedTransaction<T, <T as super::Trait>::Call>,
 	// The offence type that should be used when reporting.
@@ -155,13 +191,13 @@ where
 	fn check_proof(
 		equivocation_proof: &EquivocationProof<T::Hash, T::BlockNumber>,
 		key_owner_proof: Self::KeyOwnerProof,
-	) -> Option<(Self::KeyOwnerIdentification, SessionIndex, u32)> {
-		let (offender, (session_index, validator_set_count)) = P::check_proof(
+	) -> Option<Self::KeyOwnerIdentification> {
+		let offender = P::check_proof(
 			(GRANDPA, equivocation_proof.offender().encode()),
 			key_owner_proof,
 		)?;
 
-		Some((offender, session_index, validator_set_count))
+		Some(offender)
 	}
 
 	fn report_offence(reporters: Vec<T::AccountId>, offence: O) -> Result<(), OffenceError> {

@@ -219,18 +219,26 @@ decl_module! {
 			// key_owner_proof: <T::HandleEquivocation as equivocation::HandleEquivocation<T>>::KeyOwnerProof,
 			key_owner_proof: Vec<u8>,
 		) {
-			use equivocation::{GrandpaOffence, HandleEquivocation};
+			use equivocation::{
+				GetSessionNumber, GetValidatorCount, GrandpaOffence, HandleEquivocation,
+			};
 
 			let reporter_id = ensure_signed(origin)?;
 
 			// FIXME: this is a hack needed because the typed argument version above fails to
 			// compile (due to missing codec implementation)
-			let key_owner_proof = Decode::decode(&mut &key_owner_proof[..])
-				.map_err(|_| "Key owner proof decoding failed.")?;
+			let key_owner_proof: <T::HandleEquivocation as HandleEquivocation<T>>::KeyOwnerProof =
+				Decode::decode(&mut &key_owner_proof[..])
+					.map_err(|_| "Key owner proof decoding failed.")?;
+
+			let (session_index, validator_set_count) = (
+				key_owner_proof.session(),
+				key_owner_proof.validator_count(),
+			);
 
 			// validate the membership proof and extract session index and
 			// validator set count of the session that we're proving membership of
-			let (offender, session_index, validator_set_count) =
+			let offender =
 				T::HandleEquivocation::check_proof(
 					&equivocation_proof,
 					key_owner_proof,

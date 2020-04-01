@@ -4327,6 +4327,7 @@ dependencies = [
  "sp-finality-grandpa",
  "sp-io",
  "sp-runtime",
+ "sp-session",
  "sp-staking",
  "sp-std",
 ]
