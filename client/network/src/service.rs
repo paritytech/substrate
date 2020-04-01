@@ -25,7 +25,7 @@
 //! The methods of the [`NetworkService`] are implemented by sending a message over a channel,
 //! which is then processed by [`NetworkWorker::poll`].
 
-use std::{borrow::Cow, collections::{HashMap, HashSet}, fs, marker::PhantomData, io, path::Path, str};
+use std::{borrow::Cow, collections::{HashMap, HashSet}, fs, marker::PhantomData, io, str};
 use std::sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering}};
 use std::pin::Pin;
 use std::task::Poll;

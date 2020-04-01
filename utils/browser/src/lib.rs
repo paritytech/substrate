@@ -21,7 +21,7 @@ use sc_network::config::TransportConfig;
 use sc_service::{
 	AbstractService, RpcSession, Roles, Configuration,
 	config::{DatabaseConfig, KeystoreConfig, NetworkConfiguration},
-	ChainSpec, GenericChainSpec, RuntimeGenesis
+	GenericChainSpec, RuntimeGenesis
 };
 use wasm_bindgen::prelude::*;
 use futures::{prelude::*, channel::{oneshot, mpsc}, future::{poll_fn, ok}, compat::*};

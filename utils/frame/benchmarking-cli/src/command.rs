@@ -16,7 +16,7 @@
 
 use crate::BenchmarkCmd;
 use codec::{Decode, Encode};
-use frame_benchmarking::{Analysis, BenchmarkResults};
+use frame_benchmarking::{Analysis, BenchmarkBatch};
 use sc_cli::{substrate_cli_params, CliConfiguration, ExecutionStrategy, Result};
 use sc_client::StateMachine;
 use sc_client_db::BenchmarkingState;
@@ -75,7 +75,7 @@ impl BenchmarkCmd {
 		.execute(strategy.into())
 		.map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;
 
-		let results = <Result<Vec<BenchmarkBatch>, String> as Decode>::decode(&mut &result[..])
+		let results = <std::result::Result<Vec<BenchmarkBatch>, String> as Decode>::decode(&mut &result[..])
 			.map_err(|e| format!("Failed to decode benchmark results: {:?}", e))?;
 
 		match results {
