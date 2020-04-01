@@ -99,7 +99,6 @@ fn single_proposal_should_work() {
 #[test]
 fn controversial_voting_should_work() {
 	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
 		let r = Democracy::inject_referendum(
 			2,
 			set_balance_proposal_hash_and_note(2),
@@ -126,7 +125,6 @@ fn controversial_voting_should_work() {
 #[test]
 fn controversial_low_turnout_voting_should_work() {
 	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
 		let r = Democracy::inject_referendum(
 			2,
 			set_balance_proposal_hash_and_note(2),
@@ -151,7 +149,6 @@ fn passing_low_turnout_voting_should_work() {
 		assert_eq!(Balances::free_balance(42), 0);
 		assert_eq!(Balances::total_issuance(), 210);
 
-		System::set_block_number(1);
 		let r = Democracy::inject_referendum(
 			2,
 			set_balance_proposal_hash_and_note(2),

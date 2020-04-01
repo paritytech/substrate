@@ -11,7 +11,7 @@ repository = "https://github.com/paritytech/substrate/"
 [dependencies]
 sc-consensus-babe = { version = "0.8.0-alpha.5", path = "../" }
 jsonrpc-core = "14.0.3"
-jsonrpc-core-client = "14.0.3"
+jsonrpc-core-client = "14.0.5"
 jsonrpc-derive = "14.0.3"
 sp-consensus-babe = { version = "0.8.0-alpha.5", path = "../../../../primitives/consensus/babe" }
 serde = { version = "1.0.104", features=["derive"] }

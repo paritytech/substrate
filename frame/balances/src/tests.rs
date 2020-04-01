@@ -16,6 +16,8 @@
 
 //! Macro for creating the tests for the module.
 
+#![cfg(test)]
+
 #[macro_export]
 macro_rules! decl_tests {
 	($test:ty, $ext_builder:ty, $existential_deposit:expr) => {
