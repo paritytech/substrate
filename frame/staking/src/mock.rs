@@ -489,6 +489,7 @@ impl ExtBuilder {
 		// This must be ensured by having `timestamp::on_initialize` called before
 		// `staking::on_initialize`
 		ext.execute_with(|| {
+			System::set_block_number(1);
 			Timestamp::set_timestamp(INIT_TIMESTAMP);
 		});
 

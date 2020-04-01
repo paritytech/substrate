@@ -318,7 +318,8 @@ impl MetricsService {
 
 		if let Some(metrics) = self.metrics.as_ref() {
 			metrics.cpu_usage_percentage.set(process_info.cpu_usage as f64);
-			metrics.memory_usage_bytes.set(process_info.memory);
+			// `sysinfo::Process::memory` returns memory usage in KiB and not bytes.
+			metrics.memory_usage_bytes.set(process_info.memory * 1024);
 
 			if let Some(threads) = process_info.threads {
 				metrics.threads.set(threads);

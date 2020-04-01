@@ -1079,6 +1079,7 @@ ServiceBuilder<
 				network_status_sinks.clone(),
 				system_rpc_rx,
 				has_bootnodes,
+				config.announce_block,
 			),
 		);
 

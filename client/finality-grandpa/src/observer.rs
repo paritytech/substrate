@@ -257,6 +257,7 @@ where
 			self.client.clone(),
 			&self.network,
 			&self.keystore,
+			None,
 		);
 
 		let last_finalized_number = self.client.info().finalized_number;
