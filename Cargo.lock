@@ -3542,6 +3542,7 @@ dependencies = [
  "sc-consensus-babe",
  "sc-consensus-babe-rpc",
  "sc-consensus-epochs",
+ "sc-finality-grandpa-rpc",
  "sc-keystore",
  "sp-api",
  "sp-blockchain",
@@ -6375,6 +6376,18 @@ dependencies = [
  "substrate-test-runtime-client",
  "tempfile",
  "tokio 0.2.18",
+]
+
+[[package]]
+name = "sc-finality-grandpa-rpc"
+version = "0.8.0-dev"
+dependencies = [
+ "futures 0.3.4",
+ "jsonrpc-core",
+ "jsonrpc-core-client",
+ "jsonrpc-derive",
+ "sc-finality-grandpa",
+ "substrate-test-runtime-client",
 ]
 
 [[package]]
