@@ -741,7 +741,7 @@ variables:
     variables:
       - $JOB_NAME
   script:
-    # - mkdir -p ${CARGO_HOME}
+    - mkdir -p ${CARGO_HOME}
     - echo 'Purging "${CARGO_HOME}"/../"${JOB_NAME}" cache'
     - ls "${CARGO_HOME}"/../"${JOB_NAME}"
 
