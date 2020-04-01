@@ -626,6 +626,7 @@ mod tests {
 					check_unsigned,
 					payment,
 					Default::default(),
+					Default::default(),
 				);
 				let raw_payload = SignedPayload::from_raw(
 					function,

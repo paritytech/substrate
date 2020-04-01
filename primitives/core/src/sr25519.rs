@@ -39,7 +39,7 @@ use crate::crypto::{
 #[cfg(feature = "std")]
 use crate::crypto::Ss58Codec;
 
-use crate::{crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive}};
+use crate::crypto::{Public as TraitPublic, CryptoTypePublicPair, UncheckedFrom, CryptoType, Derive, CryptoTypeId};
 use crate::hash::{H256, H512};
 use codec::{Encode, Decode};
 use sp_std::ops::Deref;
@@ -53,6 +53,9 @@ use sp_runtime_interface::pass_by::PassByInner;
 // signing context
 #[cfg(feature = "full_crypto")]
 const SIGNING_CTX: &[u8] = b"substrate";
+
+/// An identifier used to match public keys against sr25519 keys
+pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"sr25");
 
 /// An Schnorrkel/Ristretto x25519 ("sr25519") public key.
 #[cfg_attr(feature = "full_crypto", derive(Hash))]
@@ -390,6 +393,18 @@ impl TraitPublic for Public {
 	}
 }
 
+impl From<Public> for CryptoTypePublicPair {
+    fn from(key: Public) -> Self {
+        (&key).into()
+    }
+}
+
+impl From<&Public> for CryptoTypePublicPair {
+    fn from(key: &Public) -> Self {
+        CryptoTypePublicPair(CRYPTO_ID, key.to_raw_vec())
+    }
+}
+
 #[cfg(feature = "std")]
 impl From<MiniSecretKey> for Pair {
 	fn from(sec: MiniSecretKey) -> Pair {
@@ -599,7 +614,7 @@ impl CryptoType for Pair {
 #[cfg(test)]
 mod compatibility_test {
 	use super::*;
-	use crate::crypto::{DEV_PHRASE};
+	use crate::crypto::DEV_PHRASE;
 	use hex_literal::hex;
 
 	// NOTE: tests to ensure addresses that are created with the `0.1.x` version (pre-audit) are

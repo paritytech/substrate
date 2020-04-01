@@ -16,3 +16,6 @@ sp-runtime-interface-test-wasm-deprecated = { version = "2.0.0-dev", path = "../
 sp-state-machine = { version = "0.8.0-alpha.5", path = "../../../primitives/state-machine" }
 sp-runtime = { version = "2.0.0-alpha.5", path = "../../runtime" }
 sp-io = { version = "2.0.0-alpha.5", path = "../../io" }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

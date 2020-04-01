@@ -106,11 +106,6 @@ impl<T: Trait> Module<T> {
 	///
 	/// All dispatchables must be annotated with weight and will have some fee info. This function
 	/// always returns.
-	// NOTE: we can actually make it understand `ChargeTransactionPayment`, but would be some hassle
-	// for sure. We have to make it aware of the index of `ChargeTransactionPayment` in `Extra`.
-	// Alternatively, we could actually execute the tx's per-dispatch and record the balance of the
-	// sender before and after the pipeline.. but this is way too much hassle for a very very little
-	// potential gain in the future.
 	pub fn query_info<Extrinsic: GetDispatchInfo>(
 		unchecked_extrinsic: Extrinsic,
 		len: u32,
@@ -119,6 +114,11 @@ impl<T: Trait> Module<T> {
 		T: Send + Sync,
 		BalanceOf<T>: Send + Sync,
 	{
+		// NOTE: we can actually make it understand `ChargeTransactionPayment`, but would be some
+		// hassle for sure. We have to make it aware of the index of `ChargeTransactionPayment` in
+		// `Extra`. Alternatively, we could actually execute the tx's per-dispatch and record the
+		// balance of the sender before and after the pipeline.. but this is way too much hassle for
+		// a very very little potential gain in the future.
 		let dispatch_info = <Extrinsic as GetDispatchInfo>::get_dispatch_info(&unchecked_extrinsic);
 
 		let partial_fee =

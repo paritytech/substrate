@@ -331,6 +331,14 @@ impl<Block, F, Client> StateBackend<Block, Client> for LightState<Block, F, Clie
 		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
 	}
 
+	fn query_storage_at(
+		&self,
+		_keys: Vec<StorageKey>,
+		_at: Option<Block::Hash>
+	) -> FutureResult<Vec<StorageChangeSet<Block::Hash>>> {
+		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
+	}
+
 	fn subscribe_storage(
 		&self,
 		_meta: crate::metadata::Metadata,

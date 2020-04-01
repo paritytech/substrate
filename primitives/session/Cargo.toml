@@ -17,3 +17,6 @@ sp-runtime = { version = "2.0.0-alpha.5", optional = true, path = "../runtime" }
 [features]
 default = [ "std" ]
 std = [ "sp-api/std", "sp-std/std", "sp-runtime", "sp-core/std" ]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

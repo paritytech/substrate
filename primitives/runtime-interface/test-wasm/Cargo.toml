@@ -21,3 +21,6 @@ wasm-builder-runner = { version = "1.0.5", package = "substrate-wasm-builder-run
 [features]
 default = [ "std" ]
 std = [ "sp-runtime-interface/std", "sp-std/std", "sp-core/std", "sp-io/std" ]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

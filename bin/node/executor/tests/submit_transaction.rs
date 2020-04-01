@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use node_runtime::{
-	Call, Executive, Indices, Runtime, SubmitTransaction, UncheckedExtrinsic,
+	Call, Executive, Indices, Runtime, TransactionSubmitterOf, UncheckedExtrinsic,
 };
 use sp_application_crypto::AppKey;
 use sp_core::testing::KeyStore;
@@ -30,6 +30,8 @@ use codec::Decode;
 
 pub mod common;
 use self::common::*;
+
+type SubmitTransaction = TransactionSubmitterOf<pallet_im_online::sr25519::AuthorityId>;
 
 #[test]
 fn should_submit_unsigned_transaction() {
@@ -179,9 +181,8 @@ fn submitted_transaction_should_be_valid() {
 			priority: 2_411_002_000_000,
 			requires: vec![],
 			provides: vec![(address, 0).encode()],
-			longevity: 127,
+			longevity: 128,
 			propagate: true,
 		});
 	});
 }
-
