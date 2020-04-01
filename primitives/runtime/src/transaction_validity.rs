@@ -90,32 +90,39 @@ impl From<InvalidTransaction> for &'static str {
 	}
 }
 
-/// An unknown transaction validity.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, Copy, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(serde::Serialize))]
-pub enum UnknownTransaction {
-	/// Could not lookup some information that is required to validate the transaction.
-	CannotLookup,
-	/// No validator found for the given unsigned transaction.
-	///
-	/// Replaced by `InvalidTransaction::NoUnsignedValidator`.
-	#[deprecated]
-	NoUnsignedValidator,
-	/// Any other custom unknown validity that is not covered by this enum.
-	Custom(u8),
-}
+#[allow(deprecated)] // NoUnsignedValidator in generated code
+mod unknown {
+	use super::*;
 
-impl From<UnknownTransaction> for &'static str {
-	fn from(unknown: UnknownTransaction) -> &'static str {
-		match unknown {
-			UnknownTransaction::CannotLookup =>
-				"Could not lookup information required to validate the transaction",
-			UnknownTransaction::NoUnsignedValidator =>
-				"Could not find an unsigned validator for the unsigned transaction",
-			UnknownTransaction::Custom(_) => "UnknownTransaction custom error",
+	/// An unknown transaction validity.
+	#[derive(Clone, PartialEq, Eq, Encode, Decode, Copy, RuntimeDebug)]
+	#[cfg_attr(feature = "std", derive(serde::Serialize))]
+	pub enum UnknownTransaction {
+		/// Could not lookup some information that is required to validate the transaction.
+		CannotLookup,
+		/// No validator found for the given unsigned transaction.
+		///
+		/// Replaced by `InvalidTransaction::NotFullyValidated`.
+		#[deprecated]
+		NoUnsignedValidator,
+		/// Any other custom unknown validity that is not covered by this enum.
+		Custom(u8),
+	}
+
+	impl From<UnknownTransaction> for &'static str {
+		fn from(unknown: UnknownTransaction) -> &'static str {
+			match unknown {
+				UnknownTransaction::CannotLookup =>
+					"Could not lookup information required to validate the transaction",
+				UnknownTransaction::NoUnsignedValidator =>
+					"Could not find an unsigned validator for the unsigned transaction",
+				UnknownTransaction::Custom(_) => "UnknownTransaction custom error",
+			}
 		}
 	}
 }
+
+pub use self::unknown::UnknownTransaction;
 
 /// Errors that can occur while checking the validity of a transaction.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, Copy, RuntimeDebug)]
