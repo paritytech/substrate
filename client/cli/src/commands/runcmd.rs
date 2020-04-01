@@ -689,7 +689,7 @@ mod tests {
 			"test",
 			"test-id",
 			|| (),
-			vec!["boo".to_string()],
+			vec!["/ip4/127.0.0.1/tcp/30333/p2p/QmdSHZLmwEL5Axz5JvWNE2mmxU7qyd7xHBFpyUfktgAdg7".parse().unwrap()],
 			Some(TelemetryEndpoints::new(vec![("wss://foo/bar".to_string(), 42)])
 				.expect("provided url should be valid")),
 			None,
