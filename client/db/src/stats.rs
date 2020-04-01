@@ -98,6 +98,8 @@ impl StateUsageStats {
 			}
 		}
 
+		let elapsed = self.started.elapsed();
+		let duration_since_unix = SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards");
 		sp_stats::UsageInfo {
 			reads: unit(&self.reads, &self.bytes_read),
 			writes: unit(&self.writes, &self.bytes_written),
@@ -106,8 +108,10 @@ impl StateUsageStats {
 			//       imposing `MallocSizeOf` requirement on half of the codebase,
 			//       so it is an open question how to do it better
 			memory: 0,
-			started: SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards"),
-			span: self.started.elapsed(),
+			// `started` field on for `usage_info` is a `Duration`, so we must convert self.started, which is an `Instant`.
+			// We do this by calculating the time since `UNIX_EPOCH`, and substracting the `elapsed` time since `self.started`.
+			started: duration_since_unix.checked_sub(elapsed).expect("Elapsed time is bigger than time since unix"),
+			span: elapsed,
 		}
 	}
 }
