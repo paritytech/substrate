@@ -112,7 +112,7 @@ fn main() {
 				*stake_of_tree.get(who).unwrap()
 			};
 
-			let staked = assignment_ratio_to_staked(assignments.clone(), &stake_of);
+			let mut staked = assignment_ratio_to_staked(assignments.clone(), &stake_of);
 			let winners = to_without_backing(winners);
 			let mut support = build_support_map(winners.as_ref(), staked.as_ref()).0;
 
@@ -126,7 +126,7 @@ fn main() {
 			}
 
 			let i = equalize(
-				staked.into_iter().map(|a| (a.clone(), stake_of(&a.who))).collect(),
+				&mut staked,
 				&mut support,
 				10,
 				iterations,
