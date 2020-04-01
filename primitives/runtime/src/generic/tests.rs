@@ -65,7 +65,7 @@ fn non_system_mmr_digest_item_encoding() {
 	let encoded = item.encode();
 	assert_eq!(encoded, vec![
 		// type = DigestItemType::MerkleMountainRangeRoot
-		18,
+		8,
 		// trie root
 		0, 0, 0, 0,
 		0, 0, 0, 0,

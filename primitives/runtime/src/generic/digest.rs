@@ -199,7 +199,7 @@ pub enum DigestItemType {
 	Seal = 5,
 	PreRuntime = 6,
 	ChangesTrieSignal = 7,
-	MerkleMountainRangeRoot = 18,
+	MerkleMountainRangeRoot = 8,
 }
 
 /// Type of a digest item that contains raw data; this also names the consensus engine ID where
@@ -465,7 +465,7 @@ mod tests {
 
 		assert_eq!(
 			::serde_json::to_string(&digest).unwrap(),
-			r#"{"logs":["0x0204000000","0x000c010203","0x05746573740c010203","0x1205000000"]}"#
+			r#"{"logs":["0x0204000000","0x000c010203","0x05746573740c010203","0x0805000000"]}"#
 		);
 	}
 }
