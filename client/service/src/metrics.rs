@@ -37,9 +37,6 @@ struct PrometheusMetrics {
 	database_cache: Gauge<U64>,
 	state_cache: Gauge<U64>,
 	state_db: GaugeVec<U64>,
-
-	// low level
-	internals: GaugeVec<U64>,
 }
 
 impl PrometheusMetrics {
@@ -120,16 +117,6 @@ impl PrometheusMetrics {
 			state_db: register(GaugeVec::new(
 				Opts::new("state_db_cache_bytes", "State DB cache in bytes"),
 				&["subtype"]
-			)?, registry)?,
-
-			// low level
-			// tokio: register(GaugeVec::new(
-			// 	Opts::new("tokio", "Tokio internals"),
-			// 	&["entity"]
-			// )?, registry)?,
-			internals: register(GaugeVec::new(
-				Opts::new("internals", "Other unspecified internals"),
-				&["entity"]
 			)?, registry)?,
 		})
 	}
