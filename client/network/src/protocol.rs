@@ -553,20 +553,20 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			GenericMessage::Transactions(m) =>
 				self.on_extrinsics(who, m),
 			GenericMessage::RemoteCallRequest(request) => self.on_remote_call_request(who, request),
-			GenericMessage::RemoteCallResponse(response) =>
-				self.on_remote_call_response(who, response),
+			GenericMessage::RemoteCallResponse(_) =>
+				warn!(target: "sub-libp2p", "Received unexpected RemoteCallResponse"),
 			GenericMessage::RemoteReadRequest(request) =>
 				self.on_remote_read_request(who, request),
-			GenericMessage::RemoteReadResponse(response) =>
-				self.on_remote_read_response(who, response),
+			GenericMessage::RemoteReadResponse(_) =>
+				warn!(target: "sub-libp2p", "Received unexpected RemoteReadResponse"),
 			GenericMessage::RemoteHeaderRequest(request) =>
 				self.on_remote_header_request(who, request),
-			GenericMessage::RemoteHeaderResponse(response) =>
-				self.on_remote_header_response(who, response),
+			GenericMessage::RemoteHeaderResponse(_) =>
+				warn!(target: "sub-libp2p", "Received unexpected RemoteHeaderResponse"),
 			GenericMessage::RemoteChangesRequest(request) =>
 				self.on_remote_changes_request(who, request),
-			GenericMessage::RemoteChangesResponse(response) =>
-				self.on_remote_changes_response(who, response),
+			GenericMessage::RemoteChangesResponse(_) =>
+				warn!(target: "sub-libp2p", "Received unexpected RemoteChangesResponse"),
 			GenericMessage::FinalityProofRequest(request) =>
 				self.on_finality_proof_request(who, request),
 			GenericMessage::FinalityProofResponse(response) =>
@@ -1446,13 +1446,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		self.sync.on_finality_proof_import(request_block, finalization_result)
 	}
 
-	fn on_remote_call_response(
-		&mut self,
-		_: PeerId,
-		_: message::RemoteCallResponse
-	) {
-	}
-
 	fn on_remote_read_request(
 		&mut self,
 		who: PeerId,
@@ -1567,13 +1560,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		);
 	}
 
-	fn on_remote_read_response(
-		&mut self,
-		_: PeerId,
-		_: message::RemoteReadResponse
-	) {
-	}
-
 	fn on_remote_header_request(
 		&mut self,
 		who: PeerId,
@@ -1602,13 +1588,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				proof,
 			}),
 		);
-	}
-
-	fn on_remote_header_response(
-		&mut self,
-		_: PeerId,
-		_: message::RemoteHeaderResponse<B::Header>,
-	) {
 	}
 
 	fn on_remote_changes_request(
@@ -1670,13 +1649,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				roots_proof: proof.roots_proof,
 			}),
 		);
-	}
-
-	fn on_remote_changes_response(
-		&mut self,
-		_: PeerId,
-		_: message::RemoteChangesResponse<NumberFor<B>, B::Hash>,
-	) {
 	}
 
 	fn on_finality_proof_request(
