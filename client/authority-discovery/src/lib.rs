@@ -209,7 +209,7 @@ where
 		);
 
 		let sentry_nodes = if !sentry_nodes.is_empty() {
-			Some(sentry_nodes)
+			Some(sentry_nodes.into_iter().map(|ma| ma.concat()).collect::<Vec<_>>())
 		} else {
 			None
 		};

@@ -223,11 +223,17 @@ pub struct MultiaddrWithPeerId {
 	pub peer_id: PeerId,
 }
 
+impl MultiaddrWithPeerId {
+	/// Concatenates the multiaddress and peer ID into one multiaddress containing both.
+	pub fn concat(&self) -> Multiaddr {
+		let proto = multiaddr::Protocol::P2p(From::from(self.peer_id.clone()));
+		self.multiaddr.clone().with(proto)
+	}
+}
+
 impl fmt::Display for MultiaddrWithPeerId {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		let proto = multiaddr::Protocol::P2p(From::from(self.peer_id.clone()));
-		let combo = self.multiaddr.clone().with(proto);
-		fmt::Display::fmt(&combo, f)
+		fmt::Display::fmt(&self.concat(), f)
 	}
 }
 

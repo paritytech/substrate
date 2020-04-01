@@ -119,7 +119,7 @@ impl NetworkConfigurationParams {
 
 		if let Role::Authority { sentry_nodes } = &mut config.role {
 			sentry_nodes.extend(self.sentry_nodes.clone());
-		} else {
+		} else if !self.sentry_nodes.is_empty() {
 			return Err(error::Error::Other("non-empty list of sentry nodes for non-validator".to_string()))
 		}
 
