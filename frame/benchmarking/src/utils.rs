@@ -20,6 +20,7 @@ use codec::{Encode, Decode};
 use sp_std::{vec::Vec, prelude::Box};
 use sp_io::hashing::blake2_256;
 use sp_runtime::RuntimeString;
+use sp_stats::UsageInfo;
 
 /// An alphabet of possible parameters to use for benchmarking.
 #[derive(codec::Encode, codec::Decode, Clone, Copy, PartialEq, Debug)]
@@ -32,7 +33,7 @@ pub enum BenchmarkParameter {
 /// Results from running benchmarks on a FRAME pallet.
 /// Contains duration of the function call in nanoseconds along with the benchmark parameters
 /// used for that benchmark result.
-pub type BenchmarkResults = (Vec<(BenchmarkParameter, u32)>, u128, u128);
+pub type BenchmarkResults = (Vec<(BenchmarkParameter, u32)>, u128, u128, u64, u64);
 
 sp_api::decl_runtime_apis! {
 	/// Runtime api for benchmarking a FRAME runtime.
@@ -70,6 +71,11 @@ pub trait Benchmarking {
 	/// Commit pending storage changes to the trie database and clear the database cache.
 	fn commit_db(&mut self) {
 		self.commit()
+	}
+
+	/// Wrapper function to get the usage info from the benchmarking state.
+	fn db_usage_info(&self) -> UsageInfo {
+		self.bench_usage_info()
 	}
 }
 

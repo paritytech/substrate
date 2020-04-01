@@ -22,11 +22,12 @@ use codec::{Decode, Encode};
 
 use sp_core::{traits::RuntimeCode, storage::{ChildInfo, OwnedChildInfo, well_known_keys}};
 use sp_trie::{TrieMut, MemoryDB, trie_types::TrieDBMut};
+use sp_stats::UsageInfo;
 
 use crate::{
 	trie_backend::TrieBackend,
 	trie_backend_essence::TrieBackendStorage,
-	UsageInfo, StorageKey, StorageValue, StorageCollection,
+	StorageKey, StorageValue, StorageCollection,
 };
 
 /// A state backend is used to read state data and can have changes committed

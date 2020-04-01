@@ -32,6 +32,7 @@ use sp_core::{
 };
 use log::warn;
 use codec::Encode;
+use sp_stats::UsageInfo;
 
 /// Simple Map-based Externalities impl.
 #[derive(Debug)]
@@ -276,6 +277,10 @@ impl Externalities for BasicExternalities {
 	fn wipe(&mut self) {}
 
 	fn commit(&mut self) {}
+
+	fn bench_usage_info(&self) -> UsageInfo {
+		UsageInfo::empty()
+	}
 }
 
 impl sp_externalities::ExtensionStore for BasicExternalities {

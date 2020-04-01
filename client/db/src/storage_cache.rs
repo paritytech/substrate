@@ -663,7 +663,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 		self.state.as_trie_backend()
 	}
 
-	fn usage_info(&self) -> sp_state_machine::UsageInfo {
+	fn usage_info(&self) -> sp_stats::UsageInfo {
 		self.usage.take()
 	}
 }
@@ -852,7 +852,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Syncin
 			.as_trie_backend()
 	}
 
-	fn usage_info(&self) -> sp_state_machine::UsageInfo {
+	fn usage_info(&self) -> sp_stats::UsageInfo {
 		self.caching_state().usage_info()
 	}
 }

@@ -12,4 +12,5 @@ documentation = "https://docs.rs/sp-externalities"
 [dependencies]
 sp-storage = { version = "2.0.0-alpha.5", path = "../storage" }
 sp-std = { version = "2.0.0-alpha.5", path = "../std" }
+sp-stats = { version = "2.0.0-alpha.5", path = "../stats" }
 environmental = { version = "1.1.1" }

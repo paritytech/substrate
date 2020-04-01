@@ -30,6 +30,7 @@ use sp_core::{
 use sp_trie::{trie_types::Layout, default_child_trie_root};
 use sp_externalities::Extensions;
 use codec::{Decode, Encode};
+use sp_stats::UsageInfo;
 
 use std::{error, fmt, any::{Any, TypeId}};
 use log::{warn, trace};
@@ -536,6 +537,10 @@ where
 			changes.transaction,
 		).expect(EXT_NOT_ALLOWED_TO_FAIL);
 		self.storage_transaction_cache.reset();
+	}
+
+	fn bench_usage_info(&self) -> UsageInfo {
+		self.backend.usage_info()
 	}
 }
 

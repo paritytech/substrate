@@ -29,6 +29,8 @@ use sp_runtime::Storage;
 use sp_state_machine::{DBValue, backend::Backend as StateBackend};
 use kvdb::{KeyValueDB, DBTransaction};
 use kvdb_rocksdb::{Database, DatabaseConfig};
+use crate::stats::StateUsageStats; // Scott
+use sp_stats::UsageInfo;
 
 type DbState<B> = sp_state_machine::TrieBackend<
 	Arc<dyn sp_state_machine::Storage<HashFor<B>>>, HashFor<B>
@@ -55,6 +57,7 @@ pub struct BenchmarkingState<B: BlockT> {
 	state: RefCell<Option<DbState<B>>>,
 	db: Cell<Option<Arc<dyn KeyValueDB>>>,
 	genesis: <DbState<B> as StateBackend<HashFor<B>>>::Transaction,
+	state_usage_stats: StateUsageStats,
 }
 
 impl<B: BlockT> BenchmarkingState<B> {
@@ -76,6 +79,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 			root: Cell::new(root),
 			genesis: Default::default(),
 			genesis_root: Default::default(),
+			state_usage_stats: StateUsageStats::new(),
 		};
 
 		state.reopen()?;
@@ -135,7 +139,11 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 	type TrieBackendStorage = <DbState<B> as StateBackend<HashFor<B>>>::TrieBackendStorage;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.state.borrow().as_ref().ok_or_else(state_err)?.storage(key)
+		let state = self.state.borrow();
+		let db_state = state.as_ref().ok_or_else(state_err)?;
+		let value = db_state.storage(key)?;
+		self.state_usage_stats.tally_key_read(key, value.as_ref(), false);
+		Ok(value)
 	}
 
 	fn storage_hash(&self, key: &[u8]) -> Result<Option<B::Hash>, Self::Error> {
@@ -148,7 +156,13 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		child_info: ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.state.borrow().as_ref().ok_or_else(state_err)?.child_storage(storage_key, child_info, key)
+		let state = self.state.borrow();
+		let db_state = state.as_ref().ok_or_else(state_err)?;
+		
+		let value = db_state.child_storage(storage_key, child_info, key)?;
+		let key = (storage_key.to_vec(), key.to_vec());
+		let value = self.state_usage_stats.tally_child_key_read(&key, value, false);
+		Ok(value)
 	}
 
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
@@ -257,14 +271,23 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 	{
 		if let Some(db) = self.db.take() {
 			let mut db_transaction = DBTransaction::new();
+			let mut ops: u64 = 0;
+			let mut bytes: u64 = 0;
 
 			for (key, (val, rc)) in transaction.drain() {
 				if rc > 0 {
+					ops += 1;
+					bytes += key.len() as u64 + val.len() as u64;
+
 					db_transaction.put(0, &key, &val);
 				} else if rc < 0 {
+					ops += 1;
+					bytes += key.len() as u64;
+
 					db_transaction.delete(0, &key);
 				}
 			}
+			self.state_usage_stats.tally_writes(ops, bytes);
 			db.write(db_transaction).map_err(|_| String::from("Error committing transaction"))?;
 			self.root.set(storage_root);
 		} else {
@@ -278,6 +301,10 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		self.reopen()?;
 		self.commit(self.genesis_root.clone(), self.genesis.clone())?;
 		Ok(())
+	}
+
+	fn usage_info(&self) -> UsageInfo {
+		self.state_usage_stats.take()
 	}
 }
 

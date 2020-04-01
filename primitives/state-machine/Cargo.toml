@@ -22,6 +22,7 @@ codec = { package = "parity-scale-codec", version = "1.3.0" }
 num-traits = "0.2.8"
 rand = "0.7.2"
 sp-externalities = { version = "0.8.0-alpha.5", path = "../externalities" }
+sp-stats = { version = "2.0.0-alpha.5", path = "../stats" }
 
 [dev-dependencies]
 hex-literal = "0.2.1"

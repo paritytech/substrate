@@ -25,6 +25,7 @@
 use std::any::{Any, TypeId};
 
 use sp_storage::{ChildStorageKey, ChildInfo};
+use sp_stats::UsageInfo;
 
 pub use scope_limited::{set_and_run_with_externalities, with_externalities};
 pub use extensions::{Extension, Extensions, ExtensionStore};
@@ -188,6 +189,13 @@ pub trait Externalities: ExtensionStore {
 	///
 	/// Commits all changes to the database and clears all caches.
 	fn commit(&mut self);
+
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	/// Benchmarking related functionality and shouldn't be used anywhere else!
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	///
+	/// Returns the benchmarking usage info.
+	fn bench_usage_info(&self) -> UsageInfo;
 }
 
 /// Extension for the [`Externalities`] trait.
