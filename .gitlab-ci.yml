@@ -739,28 +739,28 @@ variables:
     GIT_STRATEGY:                  none
   only:
     variables:
-      - $PURGE_JOB
+      - $PURGE
   script:
     - mkdir -p ${CARGO_HOME}
-    - echo "Purging ${PURGE_JOB} cache"
-    - ls ${CARGO_HOME}/../"${PURGE_JOB}"
+    - echo "Purging ${PURGE} cache"
+    - ls ${CARGO_HOME}/../"${PURGE}"
 
-purge_cargo_home 2 6:
+purge_cargo_home_ci2:
   <<:                              *purge_cargo_home
   tags:
     - ci2
 
-purge_cargo_home 3 6:
+purge_cargo_home_ci3:
   <<:                              *purge_cargo_home
   tags:
     - ci3
 
-purge_cargo_home 5 6:
+purge_cargo_home_ci5:
   <<:                              *purge_cargo_home
   tags:
     - ci5
 
-purge_cargo_home 6 6:
+purge_cargo_home_ci6:
   <<:                              *purge_cargo_home
   tags:
     - ci6
