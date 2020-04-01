@@ -60,7 +60,7 @@ fn api<T: Into<Option<Status>>>(sync: T) -> System<Block> {
 					for _peer in 0..status.peers {
 						peers.push(PeerInfo {
 							peer_id: status.peer_id.to_base58(),
-							roles: format!("{:?}", Roles::FULL),
+							roles: format!("{}", Role::Full),
 							protocol_version: 1,
 							best_hash: Default::default(),
 							best_number: 1,

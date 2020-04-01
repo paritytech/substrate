@@ -58,7 +58,7 @@ pub use self::builder::{
 	ServiceBuilder, ServiceBuilderCommand, TFullClient, TLightClient, TFullBackend, TLightBackend,
 	TFullCallExecutor, TLightCallExecutor,
 };
-pub use config::{Configuration, Roles, PruningMode, DatabaseConfig};
+pub use config::{Configuration, Role, PruningMode, DatabaseConfig};
 pub use sc_chain_spec::{
 	ChainSpec, GenericChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension
 };
@@ -322,7 +322,7 @@ fn build_network_future<
 	C: sc_client::BlockchainEvents<B>,
 	H: sc_network::ExHashT
 > (
-	roles: Roles,
+	role: Role,
 	mut network: sc_network::NetworkWorker<B, H>,
 	client: Arc<C>,
 	status_sinks: Arc<Mutex<status_sinks::StatusSinks<(NetworkStatus<B>, NetworkState)>>>,
@@ -399,17 +399,14 @@ fn build_network_future<
 				sc_rpc::system::Request::NodeRoles(sender) => {
 					use sc_rpc::system::NodeRole;
 
-					let node_roles = (0 .. 8)
-						.filter(|&bit_number| (roles.bits() >> bit_number) & 1 == 1)
-						.map(|bit_number| match Roles::from_bits(1 << bit_number) {
-							Some(Roles::AUTHORITY) => NodeRole::Authority,
-							Some(Roles::LIGHT) => NodeRole::LightClient,
-							Some(Roles::FULL) => NodeRole::Full,
-							_ => NodeRole::UnknownRole(bit_number),
-						})
-						.collect();
+					let node_role = match role {
+						Role::Authority { .. } => NodeRole::Authority,
+						Role::Light => NodeRole::LightClient,
+						Role::Full => NodeRole::Full,
+						Role::Sentry { .. } => NodeRole::Sentry,
+					};
 
-					let _ = sender.send(node_roles);
+					let _ = sender.send(vec![node_role]);
 				}
 			};
 		}

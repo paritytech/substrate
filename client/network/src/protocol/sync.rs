@@ -34,9 +34,9 @@ use sp_consensus::{BlockOrigin, BlockStatus,
 	import_queue::{IncomingBlock, BlockImportResult, BlockImportError}
 };
 use crate::{
-	config::{Roles, BoxFinalityProofRequestBuilder},
+	config::BoxFinalityProofRequestBuilder,
 	protocol::message::{self, generic::FinalityProofRequest, BlockAnnounce, BlockAttributes, BlockRequest, BlockResponse,
-	FinalityProofResponse},
+	FinalityProofResponse, Roles},
 };
 use either::Either;
 use extra_requests::ExtraRequests;

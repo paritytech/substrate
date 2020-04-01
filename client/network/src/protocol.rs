@@ -39,12 +39,12 @@ use sp_runtime::traits::{
 };
 use sp_arithmetic::traits::SaturatedConversion;
 use message::{BlockAnnounce, BlockAttributes, Direction, FromBlock, Message, RequestId};
-use message::generic::{Message as GenericMessage, ConsensusMessage};
+use message::generic::{Message as GenericMessage, ConsensusMessage, Roles};
 use light_dispatch::{LightDispatch, LightDispatchNetwork, RequestData};
 use prometheus_endpoint::{Registry, Gauge, GaugeVec, PrometheusError, Opts, register, U64};
 use sync::{ChainSync, SyncState};
 use crate::service::{TransactionPool, ExHashT};
-use crate::config::{BoxFinalityProofRequestBuilder, Roles};
+use crate::config::BoxFinalityProofRequestBuilder;
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
@@ -1191,13 +1191,14 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 	/// Registers a new notifications protocol.
 	///
-	/// You are very strongly encouraged to call this method very early on. Any connection open
-	/// will retain the protocols that were registered then, and not any new one.
-	pub fn register_notifications_protocol(
-		&mut self,
+	/// While registering a protocol while we already have open connections is discouraged, we
+	/// nonetheless handle it by notifying that we opened channels with everyone. This function
+	/// returns a list of substreams to open as a result.
+	pub fn register_notifications_protocol<'a>(
+		&'a mut self,
 		engine_id: ConsensusEngineId,
 		protocol_name: impl Into<Cow<'static, [u8]>>,
-	) -> Vec<event::Event> {
+	) -> impl ExactSizeIterator<Item = (&'a PeerId, Roles)> + 'a {
 		let protocol_name = protocol_name.into();
 		if self.protocol_name_by_engine.insert(engine_id, protocol_name.clone()).is_some() {
 			error!(target: "sub-libp2p", "Notifications protocol already registered: {:?}", protocol_name);
@@ -1206,16 +1207,8 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			self.legacy_equiv_by_name.insert(protocol_name, Fallback::Consensus(engine_id));
 		}
 
-		// Registering a protocol while we already have open connections isn't great, but for now
-		// we handle it by notifying that we opened channels with everyone.
 		self.context_data.peers.iter()
-			.map(|(peer_id, peer)|
-				event::Event::NotificationStreamOpened {
-					remote: peer_id.clone(),
-					engine_id,
-					roles: peer.info.roles,
-				})
-			.collect()
+			.map(|(peer_id, peer)| (peer_id, peer.info.roles))
 	}
 
 	/// Called when peer sends us new extrinsics
@@ -2221,8 +2214,8 @@ impl<B: BlockT, H: ExHashT> Drop for Protocol<B, H> {
 #[cfg(test)]
 mod tests {
 	use crate::PeerId;
-	use crate::protocol::light_dispatch::AlwaysBadChecker;
-	use crate::config::{EmptyTransactionPool, Roles};
+	use crate::protocol::{light_dispatch::AlwaysBadChecker, message::Roles};
+	use crate::config::EmptyTransactionPool;
 	use super::{CustomMessageOutcome, Protocol, ProtocolConfig};
 
 	use sp_consensus::block_validation::DefaultBlockAnnounceValidator;

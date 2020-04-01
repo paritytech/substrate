@@ -23,8 +23,8 @@ use names::{Generator, Name};
 use regex::Regex;
 use chrono::prelude::*;
 use sc_service::{
-	AbstractService, Configuration, ChainSpec, Roles,
-	config::{KeystoreConfig, PrometheusConfig},
+	AbstractService, Configuration, ChainSpec, Role,
+	config::{MultiaddrWithPeerId, KeystoreConfig, PrometheusConfig},
 };
 use sc_telemetry::TelemetryEndpoints;
 
@@ -78,9 +78,10 @@ pub struct RunCmd {
 	/// available to relay to private nodes.
 	#[structopt(
 		long = "sentry",
-		conflicts_with_all = &[ "validator", "light" ]
+		conflicts_with_all = &[ "validator", "light" ],
+		parse(try_from_str)
 	)]
-	pub sentry: bool,
+	pub sentry: Option<MultiaddrWithPeerId>,
 
 	/// Disable GRANDPA voter when running in validator mode, otherwise disable the GRANDPA observer.
 	#[structopt(long = "no-grandpa")]
@@ -329,18 +330,18 @@ impl RunCmd {
 		let keyring = self.get_keyring();
 		let is_dev = self.shared_params.dev;
 		let is_light = self.light;
-		let is_authority = (self.validator || self.sentry || is_dev || keyring.is_some())
+		let is_authority = (self.validator || self.sentry.is_some() || is_dev || keyring.is_some())
 			&& !is_light;
 		let role =
 			if is_light {
-				sc_service::Roles::LIGHT
+				sc_service::Role::Light
 			} else if is_authority {
-				sc_service::Roles::AUTHORITY
+				sc_service::Role::Authority { sentry_nodes: Vec::new(), }
 			} else {
-				sc_service::Roles::FULL
+				sc_service::Role::Full
 			};
 
-		self.import_params.update_config(&mut config, role, is_dev)?;
+		self.import_params.update_config(&mut config, &role, is_dev)?;
 
 		config.name = match (self.name.as_ref(), keyring) {
 			(Some(name), _) => name.to_string(),
@@ -357,16 +358,16 @@ impl RunCmd {
 		}
 
 		// set sentry mode (i.e. act as an authority but **never** actively participate)
-		config.sentry_mode = self.sentry;
+		config.sentry_mode = self.sentry.is_some();
 
-		config.offchain_worker = match (&self.offchain_worker, role) {
-			(OffchainWorkerEnabled::WhenValidating, sc_service::Roles::AUTHORITY) => true,
+		config.offchain_worker = match (&self.offchain_worker, &role) {
+			(OffchainWorkerEnabled::WhenValidating, sc_service::Role::Authority { .. }) => true,
 			(OffchainWorkerEnabled::Always, _) => true,
 			(OffchainWorkerEnabled::Never, _) => false,
 			(OffchainWorkerEnabled::WhenValidating, _) => false,
 		};
 
-		config.roles = role;
+		config.role = role;
 		config.disable_grandpa = self.no_grandpa;
 
 		let client_id = config.client_id();
@@ -463,10 +464,10 @@ impl RunCmd {
 		info!("  by {}, {}-{}", version.author, version.copyright_start_year, Local::today().year());
 		info!("📋 Chain specification: {}", config.expect_chain_spec().name());
 		info!("🏷 Node name: {}", config.name);
-		info!("👤 Roles: {}", config.display_role());
+		info!("👤 Role: {}", config.display_role());
 
-		match config.roles {
-			Roles::LIGHT => run_service_until_exit(
+		match config.role {
+			Role::Light => run_service_until_exit(
 				config,
 				new_light,
 			),

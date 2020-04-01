@@ -175,14 +175,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 
 		// Process the bootnodes.
 		for bootnode in params.network_config.boot_nodes.iter() {
-			match parse_str_addr(bootnode) {
-				Ok((peer_id, addr)) => {
-					bootnodes.push(peer_id.clone());
-					boot_node_ids.insert(peer_id.clone());
-					known_addresses.push((peer_id, addr));
-				},
-				Err(_) => warn!(target: "sub-libp2p", "Not a valid bootnode address: {}", bootnode),
-			}
+			bootnodes.push(bootnode.peer_id.clone());
+			boot_node_ids.insert(bootnode.peer_id.clone());
+			known_addresses.push((bootnode.peer_id.clone(), bootnode.multiaddr.clone()));
 		}
 
 		let boot_node_ids = Arc::new(boot_node_ids);
@@ -206,12 +201,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 
 		// Initialize the reserved peers.
 		for reserved in params.network_config.reserved_nodes.iter() {
-			if let Ok((peer_id, addr)) = parse_str_addr(reserved) {
-				reserved_nodes.push(peer_id.clone());
-				known_addresses.push((peer_id, addr));
-			} else {
-				warn!(target: "sub-libp2p", "Not a valid reserved node address: {}", reserved);
-			}
+			reserved_nodes.push(reserved.peer_id.clone());
+			known_addresses.push((reserved.peer_id.clone(), reserved.multiaddr.clone()));
 		}
 
 		let peerset_config = sc_peerset::PeersetConfig {
@@ -236,7 +227,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
 		let (protocol, peerset_handle) = Protocol::new(
 			protocol::ProtocolConfig {
-				roles: params.roles,
+				roles: From::from(&params.role),
 				max_parallel_downloads: params.network_config.max_parallel_downloads,
 			},
 			params.chain.clone(),
@@ -268,6 +259,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			};
 			let behaviour = futures::executor::block_on(Behaviour::new(
 				protocol,
+				params.role,
 				user_agent,
 				local_public,
 				known_addresses,
@@ -935,11 +927,8 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					this.network_service.user_protocol_mut().write_notification(target, engine_id, message)
 				},
 				ServiceToWorkerMsg::RegisterNotifProtocol { engine_id, protocol_name } => {
-					let events = this.network_service.user_protocol_mut()
+					this.network_service
 						.register_notifications_protocol(engine_id, protocol_name);
-					for event in events {
-						this.event_streams.retain(|sender| sender.unbounded_send(event.clone()).is_ok());
-					}
 				},
 				ServiceToWorkerMsg::DisconnectPeer(who) =>
 					this.network_service.user_protocol_mut().disconnect_peer(&who),

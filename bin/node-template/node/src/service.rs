@@ -72,7 +72,7 @@ macro_rules! new_full_start {
 pub fn new_full(config: Configuration)
 	-> Result<impl AbstractService, ServiceError>
 {
-	let is_authority = config.roles.is_authority();
+	let is_authority = config.role.is_authority();
 	let force_authoring = config.force_authoring;
 	let name = config.name.clone();
 	let disable_grandpa = config.disable_grandpa;

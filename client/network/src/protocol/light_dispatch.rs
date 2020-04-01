@@ -30,9 +30,8 @@ use sp_blockchain::Error as ClientError;
 use sc_client_api::{FetchChecker, RemoteHeaderRequest,
 	RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest, ChangesProof,
 	RemoteReadChildRequest, RemoteBodyRequest, StorageProof};
-use crate::protocol::message::{self, BlockAttributes, Direction, FromBlock, RequestId};
+use crate::protocol::message::{self, BlockAttributes, Direction, FromBlock, RequestId, Roles};
 use libp2p::PeerId;
-use crate::config::Roles;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use sc_peerset::ReputationChange;
 
@@ -688,8 +687,7 @@ pub mod tests {
 	use sc_client_api::{FetchChecker, RemoteHeaderRequest,
 		ChangesProof, RemoteCallRequest, RemoteReadRequest,
 		RemoteReadChildRequest, RemoteChangesRequest, RemoteBodyRequest};
-	use crate::config::Roles;
-	use crate::protocol::message::{self, BlockAttributes, Direction, FromBlock, RequestId};
+	use crate::protocol::message::{self, BlockAttributes, Direction, FromBlock, RequestId, Roles};
 	use libp2p::PeerId;
 	use super::{REQUEST_TIMEOUT, LightDispatch, LightDispatchNetwork, RequestData, StorageProof};
 	use sp_test_primitives::{Block, Header};
