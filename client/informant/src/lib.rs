@@ -81,9 +81,9 @@ pub fn build(service: &impl AbstractService, format: OutputFormat) -> impl futur
 				match maybe_ancestor {
 					Ok(ref ancestor) if ancestor.hash != *last_hash => info!(
 						"♻️ Reorg on #{},{} to #{},{}, common ancestor #{},{}",
-						Colour::Red.bold().paint(last_num), last_hash,
-						Colour::Green.bold().paint(n.header.number()), n.hash,
-						Colour::White.bold().paint(ancestor.number), ancestor.hash,
+						Colour::Red.bold().paint(format!("{}", last_num)), last_hash,
+						Colour::Green.bold().paint(format!("{}", n.header.number())), n.hash,
+						Colour::White.bold().paint(format!("{}", ancestor.number)), ancestor.hash,
 					),
 					Ok(_) => {},
 					Err(e) => warn!("Error computing tree route: {}", e),
@@ -95,7 +95,7 @@ pub fn build(service: &impl AbstractService, format: OutputFormat) -> impl futur
 			last_best = Some((n.header.number().clone(), n.hash.clone()));
 		}
 
-		info!(target: "substrate", "✨ Imported #{} ({})", Colour::White.bold().paint(n.header.number()), n.hash);
+		info!(target: "substrate", "✨ Imported #{} ({})", Colour::White.bold().paint(format!("{}", n.header.number())), n.hash);
 		future::ready(())
 	});
 
