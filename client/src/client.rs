@@ -67,7 +67,7 @@ pub use sc_client_api::{
 		self, BlockImportOperation, PrunableStateChangesTrieStorage,
 		ClientImportOperation, Finalizer, ImportSummary, NewBlockState,
 		changes_tries_state_at_block, StorageProvider,
-		LockImportRun,
+		LockImportRun, apply_aux,
 	},
 	client::{
 		ImportNotifications, FinalityNotification, FinalityNotifications, BlockImportNotification,
@@ -77,6 +77,7 @@ pub use sc_client_api::{
 	execution_extensions::{ExecutionExtensions, ExecutionStrategies},
 	notifications::{StorageNotifications, StorageEventStream},
 	CallExecutor, ExecutorProvider, ProofProvider, CloneableSpawn,
+	cht, in_mem,
 };
 use sp_blockchain::Error;
 use prometheus_endpoint::Registry;
@@ -84,7 +85,7 @@ use prometheus_endpoint::Registry;
 use crate::{
 	call_executor::LocalCallExecutor,
 	light::{call_executor::prove_execution, fetcher::ChangesProof},
-	in_mem, genesis, cht, block_rules::{BlockRules, LookupResult as BlockLookupResult},
+	genesis, block_rules::{BlockRules, LookupResult as BlockLookupResult},
 };
 use crate::client::backend::KeyIterator;
 
@@ -1886,26 +1887,6 @@ impl<B, E, Block, RA> backend::AuxStore for &Client<B, E, Block, RA>
 	fn get_aux(&self, key: &[u8]) -> sp_blockchain::Result<Option<Vec<u8>>> {
 		(**self).get_aux(key)
 	}
-}
-
-
-/// Helper function to apply auxiliary data insertion into an operation.
-pub fn apply_aux<'a, 'b: 'a, 'c: 'a, B, Block, D, I>(
-	operation: &mut ClientImportOperation<Block, B>,
-	insert: I,
-	delete: D,
-) -> sp_blockchain::Result<()>
-where
-	Block: BlockT,
-	B: backend::Backend<Block>,
-	I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
-	D: IntoIterator<Item=&'a &'b [u8]>,
-{
-	operation.op.insert_aux(
-		insert.into_iter()
-			.map(|(k, v)| (k.to_vec(), Some(v.to_vec())))
-			.chain(delete.into_iter().map(|k| (k.to_vec(), None)))
-	)
 }
 
 impl<BE, E, B, RA> sp_consensus::block_validation::Chain<B> for Client<BE, E, B, RA>

@@ -32,7 +32,6 @@ use sp_state_machine::{
 };
 use sp_runtime::{generic::BlockId, Justification, Storage};
 use sp_runtime::traits::{Block as BlockT, NumberFor, Zero, Header, HashFor};
-use crate::in_mem::check_genesis_storage;
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use sc_client_api::{
 	backend::{
@@ -43,6 +42,7 @@ use sc_client_api::{
 		HeaderBackend as BlockchainHeaderBackend, well_known_cache_keys,
 	},
 	light::Storage as BlockchainStorage,
+	in_mem::check_genesis_storage,
 	UsageInfo,
 };
 use crate::light::blockchain::Blockchain;

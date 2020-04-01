@@ -22,18 +22,19 @@ use parking_lot::RwLock;
 
 use kvdb::{KeyValueDB, DBTransaction};
 
-use sc_client_api::{backend::{AuxStore, NewBlockState}, UsageInfo};
-use sc_client_api::blockchain::{
-	BlockStatus, Cache as BlockchainCache,Info as BlockchainInfo,
+use sc_client_api::{
+	backend::{AuxStore, NewBlockState}, UsageInfo, cht,
+	blockchain::{
+		BlockStatus, Cache as BlockchainCache, Info as BlockchainInfo,
+	},
+	light::Storage as LightBlockchainStorage,
 };
-use sc_client::cht;
 use sp_blockchain::{
 	CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache,
 	Error as ClientError, Result as ClientResult,
 	HeaderBackend as BlockchainHeaderBackend,
 	well_known_cache_keys,
 };
-use sc_client::light::blockchain::Storage as LightBlockchainStorage;
 use codec::{Decode, Encode};
 use sp_runtime::generic::{DigestItem, BlockId};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Zero, One, NumberFor, HashFor};
@@ -613,7 +614,7 @@ fn cht_key<N: TryInto<u32>>(cht_type: u8, block: N) -> ClientResult<[u8; 5]> {
 
 #[cfg(test)]
 pub(crate) mod tests {
-	use sc_client::cht;
+	use sc_client_api::cht;
 	use sp_core::ChangesTrieConfiguration;
 	use sp_runtime::generic::{DigestItem, ChangesTrieSignal};
 	use sp_runtime::testing::{H256 as Hash, Header, Block as RawBlock, ExtrinsicWrapper};

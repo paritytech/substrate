@@ -46,7 +46,8 @@
 //!
 //! ```
 //! use std::sync::Arc;
-//! use sc_client::{Client, in_mem::Backend, LocalCallExecutor};
+//! use sc_client_api::in_mem::Backend;
+//! use sc_client::{Client, LocalCallExecutor};
 //! use sp_runtime::Storage;
 //! use sc_executor::{NativeExecutor, WasmExecutionMethod};
 //!
@@ -77,11 +78,8 @@
 #![warn(missing_docs)]
 #![recursion_limit="128"]
 
-pub mod cht;
-pub mod in_mem;
 pub mod genesis;
 pub mod light;
-pub mod leaves;
 mod call_executor;
 mod client;
 mod block_rules;
@@ -101,8 +99,7 @@ pub use crate::{
 		new_in_mem,
 		BlockBackend, ImportNotifications, FinalityNotifications, BlockchainEvents, LockImportRun,
 		BlockImportNotification, Client, ClientInfo, ExecutionStrategies, FinalityNotification,
-		BlockOf, ProvideUncles, BadBlocks, ForkBlocks, apply_aux,
+		BlockOf, ProvideUncles, BadBlocks, ForkBlocks,
 	},
-	leaves::LeafSet,
 };
 pub use sp_state_machine::{ExecutionStrategy, StorageProof, StateMachine};

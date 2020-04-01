@@ -35,13 +35,13 @@ use sp_state_machine::{
 pub use sp_state_machine::StorageProof;
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
 
-use crate::cht;
 pub use sc_client_api::{
 	light::{
 		RemoteCallRequest, RemoteHeaderRequest, RemoteReadRequest, RemoteReadChildRequest,
 		RemoteChangesRequest, ChangesProof, RemoteBodyRequest, Fetcher, FetchChecker,
 		Storage as BlockchainStorage,
 	},
+	cht,
 };
 use crate::light::blockchain::{Blockchain};
 use crate::light::call_executor::check_execution_proof;
@@ -349,7 +349,6 @@ pub mod tests {
 	};
 	use sp_consensus::BlockOrigin;
 
-	use crate::in_mem::Blockchain as InMemoryBlockchain;
 	use crate::light::fetcher::{FetchChecker, LightDataChecker, RemoteHeaderRequest};
 	use crate::light::blockchain::tests::{DummyStorage, DummyBlockchain};
 	use sp_core::{blake2_256, ChangesTrieConfiguration, H256};
@@ -357,7 +356,7 @@ pub mod tests {
 	use sp_runtime::{generic::BlockId, traits::BlakeTwo256};
 	use sp_state_machine::Backend;
 	use super::*;
-	use sc_client_api::{StorageProvider, ProofProvider};
+	use sc_client_api::{StorageProvider, ProofProvider, in_mem::Blockchain as InMemoryBlockchain};
 	use sc_block_builder::BlockBuilderProvider;
 
 	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_1");

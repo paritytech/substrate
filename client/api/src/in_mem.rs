@@ -32,14 +32,15 @@ use sp_state_machine::{
 };
 use sp_blockchain::{CachedHeaderMetadata, HeaderMetadata};
 
-use sc_client_api::{
+use crate::{
 	backend::{self, NewBlockState},
 	blockchain::{
 		self, BlockStatus, HeaderBackend, well_known_cache_keys::Id as CacheKeyId
 	},
 	UsageInfo,
+	light,
+	leaves::LeafSet,
 };
-use crate::leaves::LeafSet;
 
 struct PendingBlock<B: BlockT> {
 	block: StoredBlock<B>,
@@ -399,7 +400,7 @@ impl<Block: BlockT> backend::AuxStore for Blockchain<Block> {
 	}
 }
 
-impl<Block: BlockT> sc_client_api::light::Storage<Block> for Blockchain<Block>
+impl<Block: BlockT> light::Storage<Block> for Blockchain<Block>
 	where
 		Block::Hash: From<[u8; 32]>,
 {
@@ -453,7 +454,7 @@ impl<Block: BlockT> sc_client_api::light::Storage<Block> for Blockchain<Block>
 		None
 	}
 
-	fn usage_info(&self) -> Option<sc_client_api::UsageInfo> {
+	fn usage_info(&self) -> Option<UsageInfo> {
 		None
 	}
 }
@@ -713,7 +714,7 @@ impl<Block: BlockT> backend::RemoteBackend<Block> for Backend<Block> where Block
 			.unwrap_or(false)
 	}
 
-	fn remote_blockchain(&self) -> Arc<dyn crate::light::blockchain::RemoteBlockchain<Block>> {
+	fn remote_blockchain(&self) -> Arc<dyn light::RemoteBlockchain<Block>> {
 		unimplemented!()
 	}
 }
@@ -736,7 +737,7 @@ mod tests {
 	use sp_core::offchain::{OffchainStorage, storage::InMemOffchainStorage};
 	use std::sync::Arc;
 
-	type TestBackend = substrate_test_runtime_client::sc_client::in_mem::Backend<substrate_test_runtime_client::runtime::Block>;
+	type TestBackend = sc_client_api::in_mem::Backend<substrate_test_runtime_client::runtime::Block>;
 
 	#[test]
 	fn test_leaves_with_complex_block_tree() {

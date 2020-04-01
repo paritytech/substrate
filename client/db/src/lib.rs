@@ -50,6 +50,7 @@ use sc_client_api::{
 	ForkBlocks, UsageInfo, MemoryInfo, BadBlocks, IoInfo, MemorySize, CloneableSpawn,
 	execution_extensions::ExecutionExtensions,
 	backend::{NewBlockState, PrunableStateChangesTrieStorage},
+	leaves::{LeafSet, FinalizationDisplaced},
 };
 use sp_blockchain::{
 	Result as ClientResult, Error as ClientError,
@@ -77,7 +78,6 @@ use sp_state_machine::{
 };
 use crate::utils::{DatabaseType, Meta, db_err, meta_keys, read_db, read_meta};
 use crate::changes_tries_storage::{DbChangesTrieStorage, DbChangesTrieStorageTransaction};
-use sc_client::leaves::{LeafSet, FinalizationDisplaced};
 use sc_state_db::StateDb;
 use sp_blockchain::{CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache};
 use crate::storage_cache::{CachingState, SyncingCachingState, SharedCache, new_shared_cache};
@@ -90,7 +90,7 @@ use prometheus_endpoint::Registry;
 pub use bench::BenchmarkingState;
 
 #[cfg(feature = "test-helpers")]
-use sc_client::in_mem::Backend as InMemoryBackend;
+use sc_client_api::in_mem::Backend as InMemoryBackend;
 
 const CANONICALIZATION_DELAY: u64 = 4096;
 const MIN_BLOCKS_TO_KEEP_CHANGES_TRIES_FOR: u32 = 32768;
@@ -282,47 +282,6 @@ pub enum DatabaseSettingsSrc {
 
 	/// Use a custom already-open database.
 	Custom(Arc<dyn KeyValueDB>),
-}
-
-/// Create an instance of db-backed client.
-pub fn new_client<E, Block, RA>(
-	settings: DatabaseSettings,
-	executor: E,
-	genesis_storage: &dyn BuildStorage,
-	fork_blocks: ForkBlocks<Block>,
-	bad_blocks: BadBlocks<Block>,
-	execution_extensions: ExecutionExtensions<Block>,
-	spawn_handle: Box<dyn CloneableSpawn>,
-	prometheus_registry: Option<Registry>,
-) -> Result<(
-		sc_client::Client<
-			Backend<Block>,
-			sc_client::LocalCallExecutor<Backend<Block>, E>,
-			Block,
-			RA,
-		>,
-		Arc<Backend<Block>>,
-	),
-	sp_blockchain::Error,
->
-	where
-		Block: BlockT,
-		E: CodeExecutor + RuntimeInfo,
-{
-	let backend = Arc::new(Backend::new(settings, CANONICALIZATION_DELAY)?);
-	let executor = sc_client::LocalCallExecutor::new(backend.clone(), executor, spawn_handle);
-	Ok((
-		sc_client::Client::new(
-			backend.clone(),
-			executor,
-			genesis_storage,
-			fork_blocks,
-			bad_blocks,
-			execution_extensions,
-			prometheus_registry,
-		)?,
-		backend,
-	))
 }
 
 pub(crate) mod columns {

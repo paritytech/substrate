@@ -19,11 +19,8 @@ use crate::{TaskManagerBuilder, start_rpc_servers, build_network_future, Transac
 use crate::status_sinks;
 use crate::config::{Configuration, DatabaseConfig, KeystoreConfig, PrometheusConfig};
 use sc_client_api::{
-	self,
-	BlockchainEvents,
-	backend::RemoteBackend, light::RemoteBlockchain,
-	execution_extensions::ExtensionsFactory,
-	ExecutorProvider, CallExecutor
+	self, BlockchainEvents, backend::RemoteBackend, light::RemoteBlockchain, execution_extensions::ExtensionsFactory,
+	ExecutorProvider, CallExecutor, ForkBlocks, BadBlocks, CloneableSpawn,
 };
 use sc_client::Client;
 use sc_chain_spec::get_extension;
@@ -43,7 +40,7 @@ use sp_runtime::traits::{
 	Block as BlockT, NumberFor, SaturatedConversion, HashFor, UniqueSaturatedInto,
 };
 use sp_api::ProvideRuntimeApi;
-use sc_executor::{NativeExecutor, NativeExecutionDispatch};
+use sc_executor::{NativeExecutor, NativeExecutionDispatch, RuntimeInfo};
 use std::{
 	io::{Read, Write, Seek},
 	marker::PhantomData, sync::Arc, pin::Pin
@@ -54,6 +51,10 @@ use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_transaction_pool::{MaintainedTransactionPool, ChainEvent};
 use sp_blockchain;
 use prometheus_endpoint::{register, Gauge, U64, F64, Registry, PrometheusError, Opts, GaugeVec};
+use sc_client_db::{Backend, DatabaseSettings};
+use sp_core::traits::CodeExecutor;
+use sp_runtime::BuildStorage;
+use sc_client_api::execution_extensions::ExecutionExtensions;
 
 struct ServiceMetrics {
 	block_height_number: GaugeVec<U64>,
@@ -269,6 +270,48 @@ fn new_full_parts<TBl, TRtApi, TExecDisp>(
 	};
 
 	Ok((client, backend, keystore, tasks_builder))
+}
+
+
+/// Create an instance of db-backed client.
+pub fn new_client<E, Block, RA>(
+	settings: DatabaseSettings,
+	executor: E,
+	genesis_storage: &dyn BuildStorage,
+	fork_blocks: ForkBlocks<Block>,
+	bad_blocks: BadBlocks<Block>,
+	execution_extensions: ExecutionExtensions<Block>,
+	spawn_handle: Box<dyn CloneableSpawn>,
+	prometheus_registry: Option<Registry>,
+) -> Result<(
+	sc_client::Client<
+		Backend<Block>,
+		sc_client::LocalCallExecutor<Backend<Block>, E>,
+		Block,
+		RA,
+	>,
+	Arc<Backend<Block>>,
+),
+	sp_blockchain::Error,
+>
+	where
+		Block: BlockT,
+		E: CodeExecutor + RuntimeInfo,
+{
+	let backend = Arc::new(Backend::new(settings, CANONICALIZATION_DELAY)?);
+	let executor = sc_client::LocalCallExecutor::new(backend.clone(), executor, spawn_handle);
+	Ok((
+		sc_client::Client::new(
+			backend.clone(),
+			executor,
+			genesis_storage,
+			fork_blocks,
+			bad_blocks,
+			execution_extensions,
+			prometheus_registry,
+		)?,
+		backend,
+	))
 }
 
 impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {

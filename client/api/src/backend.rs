@@ -79,6 +79,25 @@ pub struct ClientImportOperation<Block: BlockT, B: Backend<Block>> {
 	pub notify_finalized: Vec<Block::Hash>,
 }
 
+/// Helper function to apply auxiliary data insertion into an operation.
+pub fn apply_aux<'a, 'b: 'a, 'c: 'a, B, Block, D, I>(
+	operation: &mut ClientImportOperation<Block, B>,
+	insert: I,
+	delete: D,
+) -> sp_blockchain::Result<()>
+	where
+		Block: BlockT,
+		B: Backend<Block>,
+		I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
+		D: IntoIterator<Item=&'a &'b [u8]>,
+{
+	operation.op.insert_aux(
+		insert.into_iter()
+			.map(|(k, v)| (k.to_vec(), Some(v.to_vec())))
+			.chain(delete.into_iter().map(|k| (k.to_vec(), None)))
+	)
+}
+
 /// State of a new block.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NewBlockState {

@@ -299,8 +299,7 @@ mod tests {
 	use sc_executor::{NativeExecutor, WasmExecutionMethod};
 	use sp_core::{H256, tasks::executor as tasks_executor};
 	use sc_client_api::backend::{Backend, NewBlockState};
-	use crate::in_mem::Backend as InMemBackend;
-	use sc_client_api::ProofProvider;
+	use sc_client_api::{ProofProvider, in_mem::Backend as InMemBackend};
 	use sp_runtime::traits::BlakeTwo256;
 	use sc_block_builder::BlockBuilderProvider;
 

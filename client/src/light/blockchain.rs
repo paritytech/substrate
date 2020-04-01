@@ -38,9 +38,9 @@ pub use sc_client_api::{
 	},
 	light::{
 		RemoteBlockchain, LocalOrRemote, Storage
-	}
+	},
+	cht,
 };
-use crate::cht;
 use crate::light::fetcher::{Fetcher, RemoteHeaderRequest};
 
 /// Light client blockchain.

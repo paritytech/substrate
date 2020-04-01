@@ -20,8 +20,11 @@
 pub mod backend;
 pub mod call_executor;
 pub mod client;
+pub mod cht;
 pub mod execution_extensions;
+pub mod in_mem;
 pub mod light;
+pub mod leaves;
 pub mod notifications;
 pub mod proof_provider;
 mod longest_chain;

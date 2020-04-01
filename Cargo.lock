@@ -6116,7 +6116,6 @@ dependencies = [
  "pin-project",
  "rand 0.7.3",
  "sc-block-builder",
- "sc-client",
  "sc-client-api",
  "sc-keystore",
  "sc-network",
