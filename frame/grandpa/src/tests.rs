@@ -18,7 +18,8 @@
 
 #![cfg(test)]
 
-use sp_runtime::{testing::{H256, Digest}, traits::{Header, OnFinalize}};
+use sp_runtime::{testing::{H256, Digest}, traits::Header};
+use frame_support::traits::OnFinalize;
 use crate::mock::*;
 use frame_system::{EventRecord, Phase};
 use codec::{Decode, Encode};
@@ -317,22 +318,4 @@ fn time_slot_have_sane_ord() {
 		}
 	];
 	assert!(FIXTURE.windows(2).all(|f| f[0] < f[1]));
-}
-
-#[test]
-#[cfg(feature = "migrate-authorities")]
-fn authorities_migration() {
-	use sp_runtime::traits::OnInitialize;
-
-	with_externalities(&mut new_test_ext(vec![]), || {
-		let authorities = to_authorities(vec![(1, 1), (2, 1), (3, 1)]);
-
-		Authorities::put(authorities.clone());
-		assert!(Grandpa::grandpa_authorities().is_empty());
-
-		Grandpa::on_initialize(1);
-
-		assert!(!Authorities::exists());
-		assert_eq!(Grandpa::grandpa_authorities(), authorities);
-	});
 }

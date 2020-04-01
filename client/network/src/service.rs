@@ -171,17 +171,21 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		let mut known_addresses = Vec::new();
 		let mut bootnodes = Vec::new();
 		let mut reserved_nodes = Vec::new();
+		let mut boot_node_ids = HashSet::new();
 
 		// Process the bootnodes.
 		for bootnode in params.network_config.boot_nodes.iter() {
 			match parse_str_addr(bootnode) {
 				Ok((peer_id, addr)) => {
 					bootnodes.push(peer_id.clone());
+					boot_node_ids.insert(peer_id.clone());
 					known_addresses.push((peer_id, addr));
 				},
 				Err(_) => warn!(target: "sub-libp2p", "Not a valid bootnode address: {}", bootnode),
 			}
 		}
+
+		let boot_node_ids = Arc::new(boot_node_ids);
 
 		// Check for duplicate bootnodes.
 		known_addresses.iter()
@@ -243,7 +247,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			params.protocol_id.clone(),
 			peerset_config,
 			params.block_announce_validator,
-			params.metrics_registry.as_ref()
+			params.metrics_registry.as_ref(),
+			boot_node_ids.clone(),
 		)?;
 
 		// Build the swarm.
@@ -331,7 +336,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			metrics: match params.metrics_registry {
 				Some(registry) => Some(Metrics::register(&registry)?),
 				None => None
-			}
+			},
+			boot_node_ids,
 		})
 	}
 
@@ -375,6 +381,11 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		self.network_service.user_protocol().num_queued_blocks()
 	}
 
+	/// Returns the number of processed blocks.
+	pub fn num_processed_blocks(&self) -> usize {
+		self.network_service.user_protocol().num_processed_blocks()
+	}
+
 	/// Number of active sync requests.
 	pub fn num_sync_requests(&self) -> usize {
 		self.network_service.user_protocol().num_sync_requests()
@@ -392,8 +403,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 	}
 
 	/// You must call this when a new block is imported by the client.
-	pub fn on_block_imported(&mut self, header: B::Header, data: Vec<u8>, is_best: bool) {
-		self.network_service.user_protocol_mut().on_block_imported(&header, data, is_best);
+	pub fn on_block_imported(&mut self, header: B::Header, is_best: bool) {
+		self.network_service.user_protocol_mut().on_block_imported(&header, is_best);
 	}
 
 	/// You must call this when a new block is finalized by the client.
@@ -767,6 +778,8 @@ pub struct NetworkWorker<B: BlockT + 'static, H: ExHashT> {
 	event_streams: Vec<mpsc::UnboundedSender<Event>>,
 	/// Prometheus network metrics.
 	metrics: Option<Metrics>,
+	/// The `PeerId`'s of all boot nodes.
+	boot_node_ids: Arc<HashSet<PeerId>>,
 }
 
 struct Metrics {
@@ -986,8 +999,29 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					trace!(target: "sub-libp2p", "Libp2p => NewListenAddr({})", addr),
 				Poll::Ready(SwarmEvent::ExpiredListenAddr(addr)) =>
 					trace!(target: "sub-libp2p", "Libp2p => ExpiredListenAddr({})", addr),
-				Poll::Ready(SwarmEvent::UnreachableAddr { peer_id, address, error }) =>
-					trace!(target: "sub-libp2p", "Libp2p => Failed to reach {:?} through {:?}: {}", peer_id, address, error),
+				Poll::Ready(SwarmEvent::UnreachableAddr { peer_id, address, error }) => {
+					let error = error.to_string();
+
+					trace!(
+						target: "sub-libp2p", "Libp2p => Failed to reach {:?} through {:?}: {}",
+						peer_id,
+						address,
+						error,
+					);
+
+					if let Some(peer_id) = peer_id {
+						if this.boot_node_ids.contains(&peer_id)
+							&& error.contains("Peer ID mismatch")
+						{
+							error!(
+								"Connecting to bootnode with peer id `{}` and address `{}` failed \
+								because it returned a different peer id!",
+								peer_id,
+								address,
+							);
+						}
+					}
+				},
 				Poll::Ready(SwarmEvent::StartConnect(peer_id)) =>
 					trace!(target: "sub-libp2p", "Libp2p => StartConnect({:?})", peer_id),
 			};
@@ -1056,7 +1090,7 @@ impl<'a, B: BlockT, H: ExHashT> Link<B> for NetworkLink<'a, B, H> {
 	fn justification_imported(&mut self, who: PeerId, hash: &B::Hash, number: NumberFor<B>, success: bool) {
 		self.protocol.user_protocol_mut().justification_import_result(hash.clone(), number, success);
 		if !success {
-			info!("Invalid justification provided by {} for #{}", who, hash);
+			info!("💔 Invalid justification provided by {} for #{}", who, hash);
 			self.protocol.user_protocol_mut().disconnect_peer(&who);
 			self.protocol.user_protocol_mut().report_peer(who, ReputationChange::new_fatal("Invalid justification"));
 		}
@@ -1076,7 +1110,7 @@ impl<'a, B: BlockT, H: ExHashT> Link<B> for NetworkLink<'a, B, H> {
 		let success = finalization_result.is_ok();
 		self.protocol.user_protocol_mut().finality_proof_import_result(request_block, finalization_result);
 		if !success {
-			info!("Invalid finality proof provided by {} for #{}", who, request_block.0);
+			info!("💔 Invalid finality proof provided by {} for #{}", who, request_block.0);
 			self.protocol.user_protocol_mut().disconnect_peer(&who);
 			self.protocol.user_protocol_mut().report_peer(who, ReputationChange::new_fatal("Invalid finality proof"));
 		}

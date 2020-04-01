@@ -51,11 +51,13 @@ use libp2p::{
 };
 use nohash_hasher::IntMap;
 use prost::Message;
-use rustc_hex::ToHex;
 use sc_client::light::fetcher;
 use sc_client_api::StorageProof;
 use sc_peerset::ReputationChange;
-use sp_core::storage::{ChildInfo, StorageKey};
+use sp_core::{
+	storage::{ChildInfo, StorageKey},
+	hexdisplay::HexDisplay,
+};
 use sp_blockchain::{Error as ClientError};
 use sp_runtime::{
 	traits::{Block, Header, NumberFor, Zero},
@@ -75,7 +77,8 @@ use wasm_timer::Instant;
 /// Configuration options for `LightClientHandler` behaviour.
 #[derive(Debug, Clone)]
 pub struct Config {
-	max_data_size: usize,
+	max_request_size: usize,
+	max_response_size: usize,
 	max_pending_requests: usize,
 	inactivity_timeout: Duration,
 	request_timeout: Duration,
@@ -85,13 +88,15 @@ pub struct Config {
 impl Config {
 	/// Create a fresh configuration with the following options:
 	///
-	/// - max. data size = 1 MiB
+	/// - max. request size = 1 MiB
+	/// - max. response size = 16 MiB
 	/// - max. pending requests = 128
 	/// - inactivity timeout = 15s
 	/// - request timeout = 15s
 	pub fn new(id: &ProtocolId) -> Self {
 		let mut c = Config {
-			max_data_size: 1024 * 1024,
+			max_request_size: 1 * 1024 * 1024,
+			max_response_size: 16 * 1024 * 1024,
 			max_pending_requests: 128,
 			inactivity_timeout: Duration::from_secs(15),
 			request_timeout: Duration::from_secs(15),
@@ -101,9 +106,15 @@ impl Config {
 		c
 	}
 
-	/// Limit the max. length of incoming request bytes.
-	pub fn set_max_data_size(&mut self, v: usize) -> &mut Self {
-		self.max_data_size = v;
+	/// Limit the max. length in bytes of a request.
+	pub fn set_max_request_size(&mut self, v: usize) -> &mut Self {
+		self.max_request_size = v;
+		self
+	}
+
+	/// Limit the max. length in bytes of a response.
+	pub fn set_max_response_size(&mut self, v: usize) -> &mut Self {
+		self.max_response_size = v;
 		self
 	}
 
@@ -504,7 +515,7 @@ where
 
 		log::trace!("remote read child request from {} ({} {} at {:?})",
 			peer,
-			request.storage_key.to_hex::<String>(),
+			HexDisplay::from(&request.storage_key),
 			fmt_keys(request.keys.first(), request.keys.last()),
 			request.block);
 
@@ -522,7 +533,7 @@ where
 					Err(error) => {
 						log::trace!("remote read child request from {} ({} {} at {:?}) failed with: {}",
 							peer,
-							request.storage_key.to_hex::<String>(),
+							HexDisplay::from(&request.storage_key),
 							fmt_keys(request.keys.first(), request.keys.last()),
 							request.block,
 							error);
@@ -532,7 +543,7 @@ where
 			} else {
 				log::trace!("remote read child request from {} ({} {} at {:?}) failed with: {}",
 					peer,
-					request.storage_key.to_hex::<String>(),
+					HexDisplay::from(&request.storage_key),
 					fmt_keys(request.keys.first(), request.keys.last()),
 					request.block,
 					"invalid child info and type"
@@ -585,9 +596,9 @@ where
 		log::trace!("remote changes proof request from {} for key {} ({:?}..{:?})",
 			peer,
 			if !request.storage_key.is_empty() {
-				format!("{} : {}", request.storage_key.to_hex::<String>(), request.key.to_hex::<String>())
+				format!("{} : {}", HexDisplay::from(&request.storage_key), HexDisplay::from(&request.key))
 			} else {
-				request.key.to_hex::<String>()
+				HexDisplay::from(&request.key).to_string()
 			},
 			request.first,
 			request.last);
@@ -610,9 +621,9 @@ where
 				log::trace!("remote changes proof request from {} for key {} ({:?}..{:?}) failed with: {}",
 					peer,
 					if let Some(sk) = storage_key {
-						format!("{} : {}", sk.0.to_hex::<String>(), key.0.to_hex::<String>())
+						format!("{} : {}", HexDisplay::from(&sk.0), HexDisplay::from(&key.0))
 					} else {
-						key.0.to_hex::<String>()
+						HexDisplay::from(&key.0).to_string()
 					},
 					request.first,
 					request.last,
@@ -652,7 +663,7 @@ where
 
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {
 		let p = InboundProtocol {
-			max_data_size: self.config.max_data_size,
+			max_request_size: self.config.max_request_size,
 			protocol: self.config.protocol.clone(),
 		};
 		OneShotHandler::new(SubstreamProtocol::new(p), self.config.inactivity_timeout)
@@ -839,7 +850,7 @@ where
 					let protocol = OutboundProtocol {
 						request: buf,
 						request_id: id,
-						max_data_size: self.config.max_data_size,
+						max_response_size: self.config.max_response_size,
 						protocol: self.config.protocol.clone(),
 					};
 					self.peers.get_mut(&peer).map(|info| info.status = PeerStatus::BusyWith(id));
@@ -1006,7 +1017,7 @@ pub enum Event<T> {
 #[derive(Debug, Clone)]
 pub struct InboundProtocol {
 	/// The max. request length in bytes.
-	max_data_size: usize,
+	max_request_size: usize,
 	/// The protocol to use for upgrade negotiation.
 	protocol: Bytes,
 }
@@ -1030,7 +1041,7 @@ where
 
     fn upgrade_inbound(self, mut s: T, _: Self::Info) -> Self::Future {
 		let future = async move {
-			let vec = read_one(&mut s, self.max_data_size).await?;
+			let vec = read_one(&mut s, self.max_request_size).await?;
 			match api::v1::light::Request::decode(&vec[..]) {
 				Ok(r) => Ok(Event::Request(r, s)),
 				Err(e) => Err(ReadOneError::Io(io::Error::new(io::ErrorKind::Other, e)))
@@ -1049,8 +1060,8 @@ pub struct OutboundProtocol {
 	request: Vec<u8>,
 	/// Local identifier for the request. Used to associate it with a response.
 	request_id: u64,
-	/// The max. request length in bytes.
-	max_data_size: usize,
+	/// The max. response length in bytes.
+	max_response_size: usize,
 	/// The protocol to use for upgrade negotiation.
 	protocol: Bytes,
 }
@@ -1075,7 +1086,7 @@ where
     fn upgrade_outbound(self, mut s: T, _: Self::Info) -> Self::Future {
 		let future = async move {
 			write_one(&mut s, &self.request).await?;
-			let vec = read_one(&mut s, self.max_data_size).await?;
+			let vec = read_one(&mut s, self.max_response_size).await?;
 			api::v1::light::Response::decode(&vec[..])
 				.map(|r| Event::Response(self.request_id, r))
 				.map_err(|e| {
@@ -1089,9 +1100,9 @@ where
 fn fmt_keys(first: Option<&Vec<u8>>, last: Option<&Vec<u8>>) -> String {
 	if let (Some(first), Some(last)) = (first, last) {
 		if first == last {
-			first.to_hex::<String>()
+			HexDisplay::from(first).to_string()
 		} else {
-			format!("{}..{}", first.to_hex::<String>(), last.to_hex::<String>())
+			format!("{}..{}", HexDisplay::from(first), HexDisplay::from(last))
 		}
 	} else {
 		String::from("n/a")

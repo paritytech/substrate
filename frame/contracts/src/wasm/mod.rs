@@ -183,6 +183,12 @@ mod tests {
 	}
 
 	#[derive(Debug, PartialEq, Eq)]
+	struct TerminationEntry {
+		beneficiary: u64,
+		gas_left: u64,
+	}
+
+	#[derive(Debug, PartialEq, Eq)]
 	struct TransferEntry {
 		to: u64,
 		value: u64,
@@ -195,6 +201,7 @@ mod tests {
 		storage: HashMap<StorageKey, Vec<u8>>,
 		rent_allowance: u64,
 		instantiates: Vec<InstantiateEntry>,
+		terminations: Vec<TerminationEntry>,
 		transfers: Vec<TransferEntry>,
 		dispatches: Vec<DispatchEntry>,
 		restores: Vec<RestoreEntry>,
@@ -242,7 +249,13 @@ mod tests {
 			let address = self.next_account_id;
 			self.next_account_id += 1;
 
-			Ok((address, ExecReturnValue { status: STATUS_SUCCESS, data: Vec::new() }))
+			Ok((
+				address,
+				ExecReturnValue {
+					status: STATUS_SUCCESS,
+					data: Vec::new(),
+				},
+			))
 		}
 		fn transfer(
 			&mut self,
@@ -274,6 +287,17 @@ mod tests {
 			// Assume for now that it was just a plain transfer.
 			// TODO: Add tests for different call outcomes.
 			Ok(ExecReturnValue { status: STATUS_SUCCESS, data: Vec::new() })
+		}
+		fn terminate(
+			&mut self,
+			beneficiary: &u64,
+			gas_meter: &mut GasMeter<Test>,
+		) -> Result<(), DispatchError> {
+			self.terminations.push(TerminationEntry {
+				beneficiary: *beneficiary,
+				gas_left: gas_meter.gas_left(),
+			});
+			Ok(())
 		}
 		fn note_dispatch_call(&mut self, call: Call) {
 			self.dispatches.push(DispatchEntry(call));
@@ -378,6 +402,13 @@ mod tests {
 			gas_meter: &mut GasMeter<Test>,
 		) -> Result<(), DispatchError> {
 			(**self).transfer(to, value, gas_meter)
+		}
+		fn terminate(
+			&mut self,
+			beneficiary: &u64,
+			gas_meter: &mut GasMeter<Test>,
+		) -> Result<(), DispatchError> {
+			(**self).terminate(beneficiary, gas_meter)
 		}
 		fn call(
 			&mut self,
@@ -645,6 +676,47 @@ mod tests {
 				endowment: 3,
 				data: vec![1, 2, 3, 4],
 				gas_left: 49947,
+			}]
+		);
+	}
+
+	const CODE_TERMINATE: &str = r#"
+(module
+	;; ext_terminate(
+	;;     beneficiary_ptr: u32,
+	;;     beneficiary_len: u32,
+	;; )
+	(import "env" "ext_terminate" (func $ext_terminate (param i32 i32)))
+	(import "env" "memory" (memory 1 1))
+	(func (export "call")
+		(call $ext_terminate
+			(i32.const 4)  ;; Pointer to "beneficiary" address.
+			(i32.const 8)  ;; Length of "beneficiary" address.
+		)
+	)
+	(func (export "deploy"))
+
+	;; Beneficiary AccountId to transfer the funds.
+	;; Represented by u64 (8 bytes long) in little endian.
+	(data (i32.const 4) "\09\00\00\00\00\00\00\00")
+)
+"#;
+
+	#[test]
+	fn contract_terminate() {
+		let mut mock_ext = MockExt::default();
+		execute(
+			CODE_TERMINATE,
+			vec![],
+			&mut mock_ext,
+			&mut GasMeter::with_limit(50_000, 1),
+		).unwrap();
+
+		assert_eq!(
+			&mock_ext.terminations,
+			&[TerminationEntry {
+				beneficiary: 0x09,
+				gas_left: 49989,
 			}]
 		);
 	}

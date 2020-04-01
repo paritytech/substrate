@@ -131,7 +131,7 @@ where F: Send + 'static, L: Send +'static, U: Clone + Send + 'static
 	}
 }
 
-fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'static> (
+fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'static + Send> (
 	index: usize,
 	spec: &GenericChainSpec<G, E>,
 	role: Roles,
@@ -213,13 +213,14 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 		tracing_targets: None,
 		tracing_receiver: Default::default(),
 		max_runtime_instances: 8,
+		announce_block: true,
 	}
 }
 
 impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 	F: AbstractService,
 	L: AbstractService,
-	E: ChainSpecExtension + Clone + 'static,
+	E: ChainSpecExtension + Clone + 'static + Send,
 	G: RuntimeGenesis + 'static,
 {
 	fn new(
@@ -324,7 +325,7 @@ pub fn connectivity<G, E, Fb, F, Lb, L>(
 	full_builder: Fb,
 	light_builder: Lb,
 ) where
-	E: ChainSpecExtension + Clone + 'static,
+	E: ChainSpecExtension + Clone + 'static + Send,
 	G: RuntimeGenesis + 'static,
 	Fb: Fn(Configuration) -> Result<F, Error>,
 	F: AbstractService,
@@ -432,7 +433,7 @@ pub fn sync<G, E, Fb, F, Lb, L, B, ExF, U>(
 	B: FnMut(&F, &mut U),
 	ExF: FnMut(&F, &U) -> <F::Block as BlockT>::Extrinsic,
 	U: Clone + Send + 'static,
-	E: ChainSpecExtension + Clone + 'static,
+	E: ChainSpecExtension + Clone + 'static + Send,
 	G: RuntimeGenesis + 'static,
 {
 	const NUM_FULL_NODES: usize = 10;
@@ -482,7 +483,12 @@ pub fn sync<G, E, Fb, F, Lb, L, B, ExF, U>(
 	let first_user_data = &network.full_nodes[0].2;
 	let best_block = BlockId::number(first_service.get().client().chain_info().best_number);
 	let extrinsic = extrinsic_factory(&first_service.get(), first_user_data);
-	futures::executor::block_on(first_service.get().transaction_pool().submit_one(&best_block, extrinsic)).unwrap();
+	let source = sp_transaction_pool::TransactionSource::External;
+
+	futures::executor::block_on(
+		first_service.get().transaction_pool().submit_one(&best_block, source, extrinsic)
+	).expect("failed to submit extrinsic");
+
 	network.run_until_all_full(
 		|_index, service| service.get().transaction_pool().ready().count() == 1,
 		|_index, _service| true,
@@ -499,7 +505,7 @@ pub fn consensus<G, E, Fb, F, Lb, L>(
 	F: AbstractService,
 	Lb: Fn(Configuration) -> Result<L, Error>,
 	L: AbstractService,
-	E: ChainSpecExtension + Clone + 'static,
+	E: ChainSpecExtension + Clone + 'static + Send,
 	G: RuntimeGenesis + 'static,
 {
 	const NUM_FULL_NODES: usize = 10;

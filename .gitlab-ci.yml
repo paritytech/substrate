@@ -24,6 +24,7 @@
 stages:
   - test
   - build
+  - post-build-test
   - publish
   - kubernetes
   - flaming-fir
@@ -38,8 +39,8 @@ variables:
   DOCKER_OS:                       "debian:stretch"
   ARCH:                            "x86_64"
   # FIXME set to release
-  CARGO_UNLEASH_INSTALL_PARAMS:    "--version 1.0.0-alpha.8"
-  CARGO_UNLEASH_PKG_DEF:           "--skip node node-* pallet-template pallet-example pallet-example-* subkey chain-spec-builder"
+  CARGO_UNLEASH_INSTALL_PARAMS:    "--version 1.0.0-alpha.10"
+  CARGO_UNLEASH_PKG_DEF:           "--skip node node-* pallet-template pallet-example pallet-example-* subkey chain-spec-builder sp-arithmetic-fuzzer"
 
 
 .collect-artifacts:                &collect-artifacts
@@ -127,6 +128,17 @@ check-line-width:
   allow_failure:                   true
 
 
+
+
+check-polkadot-companion-build:
+  stage:                           build
+  <<:                              *docker-env
+  script:
+    - ./.maintain/gitlab/check_polkadot_companion_build.sh
+  interruptible:                   true
+  allow_failure:                   true
+
+
 cargo-audit:
   stage:                           test
   <<:                              *docker-env
@@ -136,6 +148,20 @@ cargo-audit:
     - cargo audit
   allow_failure:                   true
 
+cargo-deny:
+  stage:                           test
+  <<:                              *docker-env
+  script:
+    - cargo deny check --hide-inclusion-graph -c .maintain/deny.toml
+  after_script:
+    - echo "___The complete log is in the artifacts___"
+    - cargo deny check -c .maintain/deny.toml 2> deny.log
+  artifacts:
+    name:                          $CI_COMMIT_SHORT_SHA
+    expire_in:                     3 days
+    when:                          always
+    paths:
+      - deny.log
 
 cargo-check-benches:
   stage:                           test
@@ -167,7 +193,7 @@ test-linux-stable:                 &test-linux
     variables:
       - $DEPLOY_TAG
   script:
-    - WASM_BUILD_NO_COLOR=1 time cargo test --all --release --verbose --locked |
+    - WASM_BUILD_NO_COLOR=1 time cargo test --all --release --verbose --locked |&
         tee output.log
     - sccache -s
   after_script:
@@ -214,6 +240,24 @@ test-frame-staking:
     - WASM_BUILD_NO_COLOR=1 time cargo test --release --verbose --no-default-features --features std
     - sccache -s
 
+test-frame-examples-compile-to-wasm:
+  stage:                           test
+  <<:                              *docker-env
+  variables:
+    # Enable debug assertions since we are running optimized builds for testing
+    # but still want to have debug assertions.
+    RUSTFLAGS: -Cdebug-assertions=y
+    RUST_BACKTRACE: 1
+  except:
+    variables:
+      - $DEPLOY_TAG
+  script:
+    - cd frame/example-offchain-worker/
+    - cargo +nightly build --target=wasm32-unknown-unknown --no-default-features
+    - cd ../example
+    - cargo +nightly build --target=wasm32-unknown-unknown --no-default-features
+    - sccache -s
+
 test-wasmtime:
   stage:                           test
   <<:                              *docker-env
@@ -228,6 +272,22 @@ test-wasmtime:
   script:
     - cd client/executor
     - WASM_BUILD_NO_COLOR=1 time cargo test --release --verbose --features wasmtime
+    - sccache -s
+
+test-runtime-benchmarks:
+  stage:                           test
+  <<:                              *docker-env
+  variables:
+    # Enable debug assertions since we are running optimized builds for testing
+    # but still want to have debug assertions.
+    RUSTFLAGS: -Cdebug-assertions=y
+    RUST_BACKTRACE: 1
+  except:
+    variables:
+      - $DEPLOY_TAG
+  script:
+    - cd bin/node/cli
+    - BUILD_DUMMY_WASM_BINARY=1 time cargo check --verbose --features runtime-benchmarks
     - sccache -s
 
 test-linux-stable-int:
@@ -271,7 +331,7 @@ check-web-wasm:
     - time cargo build --target=wasm32-unknown-unknown -p sp-consensus
     - time cargo build --target=wasm32-unknown-unknown -p sc-telemetry
     # Note: the command below is a bit weird because several Cargo issues prevent us from compiling the node in a more straight-forward way.
-    - time cargo build --manifest-path=bin/node/cli/Cargo.toml --no-default-features --features "browser" --target=wasm32-unknown-unknown
+    - time cargo +nightly build --manifest-path=bin/node/cli/Cargo.toml --no-default-features --features "browser" --target=wasm32-unknown-unknown -Z features=itarget
     - sccache -s
 
 test-full-crypto-feature:
@@ -376,30 +436,17 @@ check_warnings:
         echo "___No warnings___";
       fi
 
-# Nightly check whether Polkadot 'master' branch builds.
-check_polkadot:
-  stage:                           build
-  <<:                              *docker-env
-  allow_failure:                   true
+
+check-polkadot-companion-status:
+  stage:                           post-build-test
+  image:                           parity/tools:latest
+  <<:                              *kubernetes-build
   only:
-    - master
-    - schedules
+    - /^[0-9]+$/
   script:
-    - SUBSTRATE_PATH=$(pwd)
-    # Clone the current Polkadot master branch into ./polkadot.
-    - git clone --depth 1 https://gitlab.parity.io/parity/polkadot.git
-    - cd polkadot
-    # Make sure we override the crates in native and wasm build
-    - mkdir .cargo
-    - echo "paths = [ \"$SUBSTRATE_PATH\" ]" > .cargo/config
-    - mkdir -p target/debug/wbuild/.cargo
-    - echo "paths = [ \"$SUBSTRATE_PATH\" ]" > target/debug/wbuild/.cargo/config
-    # package, others are updated along the way.
-    - cargo update
-    # Check whether Polkadot 'master' branch builds with this Substrate commit.
-    - time cargo check
-    - cd -
-    - sccache -s
+    - ./.maintain/gitlab/check_polkadot_companion_status.sh
+
+
 
 trigger-contracts-ci:
   stage:                           publish
@@ -578,7 +625,7 @@ publish-to-crates-io:
   <<:                              *docker-env
   only:
     - tags
-    - /^v[0-9]+\.[0-9]+\.[0-9]+.*$/
+    - /^ci-release-.*$/
   script:
     - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
     - cargo unleash em-dragons --no-check ${CARGO_UNLEASH_PKG_DEF}

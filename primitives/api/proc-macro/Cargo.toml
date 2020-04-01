@@ -1,6 +1,6 @@
 [package]
 name = "sp-api-proc-macro"
-version = "2.0.0-alpha.3"
+version = "2.0.0-alpha.5"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
@@ -24,3 +24,6 @@ proc-macro-crate = "0.1.4"
 [features]
 default = [ "std" ]
 std = []
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

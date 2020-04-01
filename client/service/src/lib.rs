@@ -328,6 +328,7 @@ fn build_network_future<
 	status_sinks: Arc<Mutex<status_sinks::StatusSinks<(NetworkStatus<B>, NetworkState)>>>,
 	mut rpc_rx: mpsc::UnboundedReceiver<sc_rpc::system::Request<B>>,
 	should_have_peers: bool,
+	announce_imported_blocks: bool,
 ) -> impl Future<Output = ()> {
 	let mut imported_blocks_stream = client.import_notification_stream().fuse();
 	let mut finality_notification_stream = client.finality_notification_stream().fuse();
@@ -337,7 +338,11 @@ fn build_network_future<
 
 		// We poll `imported_blocks_stream`.
 		while let Poll::Ready(Some(notification)) = Pin::new(&mut imported_blocks_stream).poll_next(cx) {
-			network.on_block_imported(notification.header, Vec::new(), notification.is_new_best);
+			network.on_block_imported(notification.header, notification.is_new_best);
+
+			if announce_imported_blocks {
+				network.service().announce_block(notification.hash, Vec::new());
+			}
 		}
 
 		// We poll `finality_notification_stream`, but we only take the last event.
@@ -621,7 +626,8 @@ where
 		match Decode::decode(&mut &encoded[..]) {
 			Ok(uxt) => {
 				let best_block_id = BlockId::hash(self.client.info().best_hash);
-				let import_future = self.pool.submit_one(&best_block_id, uxt);
+				let source = sp_transaction_pool::TransactionSource::External;
+				let import_future = self.pool.submit_one(&best_block_id, source, uxt);
 				let import_future = import_future
 					.map(move |import_result| {
 						match import_result {
@@ -648,7 +654,11 @@ where
 	}
 
 	fn transaction(&self, hash: &H) -> Option<B::Extrinsic> {
-		self.pool.ready_transaction(hash).map(|tx| tx.data().clone())
+		self.pool.ready_transaction(hash)
+			.and_then(
+				// Only propagable transactions should be resolved for network service.
+				|tx| if tx.is_propagable() { Some(tx.data().clone()) } else { None }
+			)
 	}
 }
 
@@ -670,6 +680,7 @@ mod tests {
 			Default::default(),
 			Arc::new(FullChainApi::new(client.clone())),
 		).0);
+		let source = sp_runtime::transaction_validity::TransactionSource::External;
 		let best = longest_chain.best_chain().unwrap();
 		let transaction = Transfer {
 			amount: 5,
@@ -677,8 +688,12 @@ mod tests {
 			from: AccountKeyring::Alice.into(),
 			to: Default::default(),
 		}.into_signed_tx();
-		block_on(pool.submit_one(&BlockId::hash(best.hash()), transaction.clone())).unwrap();
-		block_on(pool.submit_one(&BlockId::hash(best.hash()), Extrinsic::IncludeData(vec![1]))).unwrap();
+		block_on(pool.submit_one(
+			&BlockId::hash(best.hash()), source, transaction.clone()),
+		).unwrap();
+		block_on(pool.submit_one(
+			&BlockId::hash(best.hash()), source, Extrinsic::IncludeData(vec![1])),
+		).unwrap();
 		assert_eq!(pool.status().ready, 2);
 
 		// when

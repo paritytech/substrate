@@ -110,11 +110,17 @@ impl Saturating for Fixed64 {
 	fn saturating_add(self, rhs: Self) -> Self {
 		Self(self.0.saturating_add(rhs.0))
 	}
+
 	fn saturating_mul(self, rhs: Self) -> Self {
 		Self(self.0.saturating_mul(rhs.0) / DIV)
 	}
+
 	fn saturating_sub(self, rhs: Self) -> Self {
 		Self(self.0.saturating_sub(rhs.0))
+	}
+
+	fn saturating_pow(self, exp: usize) -> Self {
+		Self(self.0.saturating_pow(exp as u32))
 	}
 }
 

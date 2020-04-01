@@ -116,8 +116,8 @@ impl frame_system::Trait for Test {
 	type Version = ();
 	type ModuleToIndex = ();
 	type AccountData = pallet_balances::AccountData<u64>;
-	type MigrateAccount = (); type OnNewAccount = ();
-	type OnKilledAccount = Contracts;
+	type OnNewAccount = ();
+	type OnKilledAccount = ();
 }
 impl pallet_balances::Trait for Test {
 	type Balance = u64;
@@ -279,7 +279,9 @@ impl ExtBuilder {
 			},
 			gas_price: self.gas_price,
 		}.assimilate_storage(&mut t).unwrap();
-		sp_io::TestExternalities::new(t)
+		let mut ext = sp_io::TestExternalities::new(t);
+		ext.execute_with(|| System::set_block_number(1));
+		ext
 	}
 }
 
@@ -308,7 +310,7 @@ fn refunds_unused_gas() {
 }
 
 #[test]
-fn account_removal_removes_storage() {
+fn account_removal_does_not_remove_storage() {
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
 		let trie_id1 = <Test as Trait>::TrieIdGenerator::trie_id(&1);
 		let trie_id2 = <Test as Trait>::TrieIdGenerator::trie_id(&2);
@@ -351,14 +353,22 @@ fn account_removal_removes_storage() {
 		// Transfer funds from account 1 of such amount that after this transfer
 		// the balance of account 1 will be below the existential threshold.
 		//
-		// This should lead to the removal of all storage associated with this account.
+		// This does not remove the contract storage as we are not notified about a
+		// account removal. This cannot happen in reality because a contract can only
+		// remove itself by `ext_terminate`. There is no external event that can remove
+		// the account appart from that.
 		assert_ok!(Balances::transfer(Origin::signed(1), 2, 20));
 
-		// Verify that all entries from account 1 is removed, while
-		// entries from account 2 is in place.
+		// Verify that no entries are removed.
 		{
-			assert!(<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &1, Some(&trie_id1), key1).is_none());
-			assert!(<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &1, Some(&trie_id1), key2).is_none());
+			assert_eq!(
+				<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &1, Some(&trie_id1), key1),
+				Some(b"1".to_vec())
+			);
+			assert_eq!(
+				<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &1, Some(&trie_id1), key2),
+				Some(b"2".to_vec())
+			);
 
 			assert_eq!(
 				<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &2, Some(&trie_id2), key1),
@@ -422,44 +432,44 @@ fn instantiate_and_call_and_deposit_event() {
 
 		assert_eq!(System::events(), vec![
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::system(frame_system::RawEvent::NewAccount(1)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::balances(pallet_balances::RawEvent::Endowed(1, 1_000_000)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::contracts(RawEvent::CodeStored(code_hash.into())),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::system(frame_system::RawEvent::NewAccount(BOB)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::balances(
 					pallet_balances::RawEvent::Endowed(BOB, 100)
 				),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::contracts(RawEvent::Transfer(ALICE, BOB, 100)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::contracts(RawEvent::ContractExecution(BOB, vec![1, 2, 3, 4])),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::contracts(RawEvent::Instantiated(ALICE, BOB)),
 				topics: vec![],
 			}
@@ -505,17 +515,17 @@ fn dispatch_call() {
 		// wasm source this test will fail and will show you the actual hash.
 		assert_eq!(System::events(), vec![
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::system(frame_system::RawEvent::NewAccount(1)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::balances(pallet_balances::RawEvent::Endowed(1, 1_000_000)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::contracts(RawEvent::CodeStored(code_hash.into())),
 				topics: vec![],
 			},
@@ -539,58 +549,58 @@ fn dispatch_call() {
 
 		assert_eq!(System::events(), vec![
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::system(frame_system::RawEvent::NewAccount(1)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::balances(pallet_balances::RawEvent::Endowed(1, 1_000_000)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::contracts(RawEvent::CodeStored(code_hash.into())),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::system(frame_system::RawEvent::NewAccount(BOB)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::balances(
 					pallet_balances::RawEvent::Endowed(BOB, 100)
 				),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::contracts(RawEvent::Transfer(ALICE, BOB, 100)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::contracts(RawEvent::Instantiated(ALICE, BOB)),
 				topics: vec![],
 			},
 
 			// Dispatching the call.
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::system(frame_system::RawEvent::NewAccount(CHARLIE)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::balances(
 					pallet_balances::RawEvent::Endowed(CHARLIE, 50)
 				),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::balances(
 					pallet_balances::RawEvent::Transfer(BOB, CHARLIE, 50)
 				),
@@ -599,7 +609,7 @@ fn dispatch_call() {
 
 			// Event emitted as a result of dispatch.
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::contracts(RawEvent::Dispatched(BOB, true)),
 				topics: vec![],
 			}
@@ -643,17 +653,17 @@ fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
 		// wasm source this test will fail and will show you the actual hash.
 		assert_eq!(System::events(), vec![
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::system(frame_system::RawEvent::NewAccount(1)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::balances(pallet_balances::RawEvent::Endowed(1, 1_000_000)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::contracts(RawEvent::CodeStored(code_hash.into())),
 				topics: vec![],
 			},
@@ -681,39 +691,39 @@ fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
 		);
 		assert_eq!(System::events(), vec![
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::system(frame_system::RawEvent::NewAccount(1)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::balances(pallet_balances::RawEvent::Endowed(1, 1_000_000)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::contracts(RawEvent::CodeStored(code_hash.into())),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::system(frame_system::RawEvent::NewAccount(BOB)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::balances(
 					pallet_balances::RawEvent::Endowed(BOB, 100)
 				),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::contracts(RawEvent::Transfer(ALICE, BOB, 100)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::contracts(RawEvent::Instantiated(ALICE, BOB)),
 				topics: vec![],
 			},
@@ -898,17 +908,17 @@ fn test_set_rent_code_and_hash() {
 		// and will show you the actual hash.
 		assert_eq!(System::events(), vec![
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::system(frame_system::RawEvent::NewAccount(1)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::balances(pallet_balances::RawEvent::Endowed(1, 1_000_000)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::contracts(RawEvent::CodeStored(code_hash.into())),
 				topics: vec![],
 			},
@@ -1225,7 +1235,7 @@ fn call_removed_contract() {
 		// Calling a contract that is about to evict shall emit an event.
 		assert_eq!(System::events(), vec![
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::contracts(RawEvent::Evicted(BOB, true)),
 				topics: vec![],
 			},
@@ -1414,22 +1424,22 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 		// and will show you the actual hash.
 		assert_eq!(System::events(), vec![
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::system(frame_system::RawEvent::NewAccount(1)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::balances(pallet_balances::RawEvent::Endowed(1, 1_000_000)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::contracts(RawEvent::CodeStored(restoration_code_hash.into())),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::contracts(RawEvent::CodeStored(set_rent_code_hash.into())),
 				topics: vec![],
 			},
@@ -1473,7 +1483,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 		assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
 		assert_eq!(System::events(), vec![
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(0),
+				phase: Phase::Initialization,
 				event: MetaEvent::contracts(
 					RawEvent::Evicted(BOB.clone(), true)
 				),
@@ -1526,7 +1536,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 				(true, false) => {
 					assert_eq!(System::events(), vec![
 						EventRecord {
-							phase: Phase::ApplyExtrinsic(0),
+							phase: Phase::Initialization,
 							event: MetaEvent::contracts(
 								RawEvent::Restored(DJANGO, BOB, bob_code_hash, 50, false)
 							),
@@ -1537,42 +1547,42 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 				(_, true) => {
 					assert_eq!(System::events(), vec![
 						EventRecord {
-							phase: Phase::ApplyExtrinsic(0),
+							phase: Phase::Initialization,
 							event: MetaEvent::contracts(RawEvent::Evicted(BOB, true)),
 							topics: vec![],
 						},
 						EventRecord {
-							phase: Phase::ApplyExtrinsic(0),
+							phase: Phase::Initialization,
 							event: MetaEvent::system(frame_system::RawEvent::NewAccount(CHARLIE)),
 							topics: vec![],
 						},
 						EventRecord {
-							phase: Phase::ApplyExtrinsic(0),
+							phase: Phase::Initialization,
 							event: MetaEvent::balances(pallet_balances::RawEvent::Endowed(CHARLIE, 1_000_000)),
 							topics: vec![],
 						},
 						EventRecord {
-							phase: Phase::ApplyExtrinsic(0),
+							phase: Phase::Initialization,
 							event: MetaEvent::system(frame_system::RawEvent::NewAccount(DJANGO)),
 							topics: vec![],
 						},
 						EventRecord {
-							phase: Phase::ApplyExtrinsic(0),
+							phase: Phase::Initialization,
 							event: MetaEvent::balances(pallet_balances::RawEvent::Endowed(DJANGO, 30_000)),
 							topics: vec![],
 						},
 						EventRecord {
-							phase: Phase::ApplyExtrinsic(0),
+							phase: Phase::Initialization,
 							event: MetaEvent::contracts(RawEvent::Transfer(CHARLIE, DJANGO, 30_000)),
 							topics: vec![],
 						},
 						EventRecord {
-							phase: Phase::ApplyExtrinsic(0),
+							phase: Phase::Initialization,
 							event: MetaEvent::contracts(RawEvent::Instantiated(CHARLIE, DJANGO)),
 							topics: vec![],
 						},
 						EventRecord {
-							phase: Phase::ApplyExtrinsic(0),
+							phase: Phase::Initialization,
 							event: MetaEvent::contracts(RawEvent::Restored(
 								DJANGO,
 								BOB,
@@ -1599,12 +1609,12 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 			assert!(ContractInfoOf::<Test>::get(DJANGO).is_none());
 			assert_eq!(System::events(), vec![
 				EventRecord {
-					phase: Phase::ApplyExtrinsic(0),
+					phase: Phase::Initialization,
 					event: MetaEvent::system(system::RawEvent::KilledAccount(DJANGO)),
 					topics: vec![],
 				},
 				EventRecord {
-					phase: Phase::ApplyExtrinsic(0),
+					phase: Phase::Initialization,
 					event: MetaEvent::contracts(
 						RawEvent::Restored(DJANGO, BOB, bob_contract.code_hash, 50, true)
 					),
@@ -2088,13 +2098,107 @@ fn deploy_works_without_gas_price() {
 	});
 }
 
+const CODE_DRAIN: &str = r#"
+(module
+	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
+	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
+	(import "env" "ext_balance" (func $ext_balance))
+	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func $assert (param i32)
+		(block $ok
+			(br_if $ok
+				(get_local 0)
+			)
+			(unreachable)
+		)
+	)
+
+	(func (export "deploy"))
+
+	(func (export "call")
+		;; Send entire remaining balance to the 0 address.
+		(call $ext_balance)
+
+		;; Balance should be encoded as a u64.
+		(call $assert
+			(i32.eq
+				(call $ext_scratch_size)
+				(i32.const 8)
+			)
+		)
+
+		;; Read balance into memory.
+		(call $ext_scratch_read
+			(i32.const 8)	;; Pointer to write balance to
+			(i32.const 0)	;; Offset into scratch buffer
+			(i32.const 8)	;; Length of encoded balance
+		)
+
+		;; Self-destruct by sending full balance to the 0 address.
+		(call $assert
+			(i32.eq
+				(call $ext_call
+					(i32.const 0)	;; Pointer to destination address
+					(i32.const 8)	;; Length of destination address
+					(i64.const 0)	;; How much gas to devote for the execution. 0 = all.
+					(i32.const 8)	;; Pointer to the buffer with value to transfer
+					(i32.const 8)	;; Length of the buffer with value to transfer
+					(i32.const 0)	;; Pointer to input data buffer address
+					(i32.const 0)	;; Length of input data buffer
+				)
+				(i32.const 0)
+			)
+		)
+	)
+)
+"#;
+
+#[test]
+fn cannot_self_destruct_through_draning() {
+	let (wasm, code_hash) = compile_module::<Test>(CODE_DRAIN).unwrap();
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		Balances::deposit_creating(&ALICE, 1_000_000);
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
+
+		// Instantiate the BOB contract.
+		assert_ok!(Contracts::instantiate(
+			Origin::signed(ALICE),
+			100_000,
+			100_000,
+			code_hash.into(),
+			vec![],
+		));
+
+		// Check that the BOB contract has been instantiated.
+		assert_matches!(
+			ContractInfoOf::<Test>::get(BOB),
+			Some(ContractInfo::Alive(_))
+		);
+
+		// Call BOB with no input data, forcing it to run until out-of-balance
+		// and eventually trapping because below existential deposit.
+		assert_err!(
+			Contracts::call(
+				Origin::signed(ALICE),
+				BOB,
+				0,
+				100_000,
+				vec![],
+			),
+			"contract trapped during execution"
+		);
+	});
+}
+
 const CODE_SELF_DESTRUCT: &str = r#"
 (module
 	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
 	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
 	(import "env" "ext_address" (func $ext_address))
-	(import "env" "ext_balance" (func $ext_balance))
 	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
+	(import "env" "ext_terminate" (func $ext_terminate (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(func $assert (param i32)
@@ -2148,80 +2252,20 @@ const CODE_SELF_DESTRUCT: &str = r#"
 					)
 				)
 			)
-		)
-
-		;; Send entire remaining balance to the 0 address.
-		(call $ext_balance)
-
-		;; Balance should be encoded as a u64.
-		(call $assert
-			(i32.eq
-				(call $ext_scratch_size)
-				(i32.const 8)
-			)
-		)
-
-		;; Read balance into memory.
-		(call $ext_scratch_read
-			(i32.const 8)	;; Pointer to write balance to
-			(i32.const 0)	;; Offset into scratch buffer
-			(i32.const 8)	;; Length of encoded balance
-		)
-
-		;; Self-destruct by sending full balance to the 0 address.
-		(call $assert
-			(i32.eq
-				(call $ext_call
-					(i32.const 0)	;; Pointer to destination address
-					(i32.const 8)	;; Length of destination address
-					(i64.const 0)	;; How much gas to devote for the execution. 0 = all.
-					(i32.const 8)	;; Pointer to the buffer with value to transfer
-					(i32.const 8)	;; Length of the buffer with value to transfer
-					(i32.const 0)	;; Pointer to input data buffer address
-					(i32.const 0)	;; Length of input data buffer
+			(else
+				;; Try to terminate and give balance to django.
+				(call $ext_terminate
+					(i32.const 32)	;; Pointer to beneficiary address
+					(i32.const 8)	;; Length of beneficiary address
 				)
-				(i32.const 0)
+				(unreachable) ;; ext_terminate never returns
 			)
 		)
 	)
+	;; Address of django
+	(data (i32.const 32) "\04\00\00\00\00\00\00\00")
 )
 "#;
-
-#[test]
-fn self_destruct_by_draining_balance() {
-	let (wasm, code_hash) = compile_module::<Test>(CODE_SELF_DESTRUCT).unwrap();
-	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
-
-		// Instantiate the BOB contract.
-		assert_ok!(Contracts::instantiate(
-			Origin::signed(ALICE),
-			100_000,
-			100_000,
-			code_hash.into(),
-			vec![],
-		));
-
-		// Check that the BOB contract has been instantiated.
-		assert_matches!(
-			ContractInfoOf::<Test>::get(BOB),
-			Some(ContractInfo::Alive(_))
-		);
-
-		// Call BOB with no input data, forcing it to self-destruct.
-		assert_ok!(Contracts::call(
-			Origin::signed(ALICE),
-			BOB,
-			0,
-			100_000,
-			vec![],
-		));
-
-		// Check that BOB is now dead.
-		assert!(ContractInfoOf::<Test>::get(BOB).is_none());
-	});
-}
 
 #[test]
 fn cannot_self_destruct_while_live() {
@@ -2263,6 +2307,48 @@ fn cannot_self_destruct_while_live() {
 			ContractInfoOf::<Test>::get(BOB),
 			Some(ContractInfo::Alive(_))
 		);
+	});
+}
+
+#[test]
+fn self_destruct_works() {
+	let (wasm, code_hash) = compile_module::<Test>(CODE_SELF_DESTRUCT).unwrap();
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		Balances::deposit_creating(&ALICE, 1_000_000);
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
+
+		// Instantiate the BOB contract.
+		assert_ok!(Contracts::instantiate(
+			Origin::signed(ALICE),
+			100_000,
+			100_000,
+			code_hash.into(),
+			vec![],
+		));
+
+		// Check that the BOB contract has been instantiated.
+		assert_matches!(
+			ContractInfoOf::<Test>::get(BOB),
+			Some(ContractInfo::Alive(_))
+		);
+
+		// Call BOB without input data which triggers termination.
+		assert_matches!(
+			Contracts::call(
+				Origin::signed(ALICE),
+				BOB,
+				0,
+				100_000,
+				vec![],
+			),
+			Ok(())
+		);
+
+		// Check that account is gone
+		assert!(ContractInfoOf::<Test>::get(BOB).is_none());
+
+		// check that the beneficiary (django) got remaining balance
+		assert_eq!(Balances::free_balance(DJANGO), 100_000);
 	});
 }
 
@@ -2524,8 +2610,8 @@ fn cannot_self_destruct_in_constructor() {
 		Balances::deposit_creating(&ALICE, 1_000_000);
 		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
 
-		// Fail to instantiate the BOB contract since its final balance is below existential
-		// deposit.
+		// Fail to instantiate the BOB because the call that is issued in the deploy
+		// function exhausts all balances which puts it below the existential deposit.
 		assert_err!(
 			Contracts::instantiate(
 				Origin::signed(ALICE),
@@ -2534,7 +2620,7 @@ fn cannot_self_destruct_in_constructor() {
 				code_hash.into(),
 				vec![],
 			),
-			"insufficient remaining balance"
+			"contract trapped during execution"
 		);
 	});
 }
@@ -2659,4 +2745,138 @@ fn get_runtime_storage() {
 			vec![],
 		));
 	});
+}
+
+const CODE_CRYPTO_HASHES: &str = r#"
+(module
+	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
+	(import "env" "ext_scratch_read" (func $ext_scratch_read (param i32 i32 i32)))
+	(import "env" "ext_scratch_write" (func $ext_scratch_write (param i32 i32)))
+
+	(import "env" "ext_hash_sha2_256" (func $ext_hash_sha2_256 (param i32 i32 i32)))
+	(import "env" "ext_hash_keccak_256" (func $ext_hash_keccak_256 (param i32 i32 i32)))
+	(import "env" "ext_hash_blake2_256" (func $ext_hash_blake2_256 (param i32 i32 i32)))
+	(import "env" "ext_hash_blake2_128" (func $ext_hash_blake2_128 (param i32 i32 i32)))
+
+	(import "env" "memory" (memory 1 1))
+
+	(type $hash_fn_sig (func (param i32 i32 i32)))
+	(table 8 funcref)
+	(elem (i32.const 1)
+		$ext_hash_sha2_256
+		$ext_hash_keccak_256
+		$ext_hash_blake2_256
+		$ext_hash_blake2_128
+	)
+	(data (i32.const 1) "20202010201008") ;; Output sizes of the hashes in order in hex.
+
+	;; Not in use by the tests besides instantiating the contract.
+	(func (export "deploy"))
+
+	;; Called by the tests.
+	;;
+	;; The `call` function expects data in a certain format in the scratch
+	;; buffer.
+	;;
+	;; 1. The first byte encodes an identifier for the crypto hash function
+	;;    under test. (*)
+	;; 2. The rest encodes the input data that is directly fed into the
+	;;    crypto hash function chosen in 1.
+	;;
+	;; The `deploy` function then computes the chosen crypto hash function
+	;; given the input and puts the result back into the scratch buffer.
+	;; After contract execution the test driver then asserts that the returned
+	;; values are equal to the expected bytes for the input and chosen hash
+	;; function.
+	;;
+	;; (*) The possible value for the crypto hash identifiers can be found below:
+	;;
+	;; | value | Algorithm | Bit Width |
+	;; |-------|-----------|-----------|
+	;; |     0 |      SHA2 |       256 |
+	;; |     1 |    KECCAK |       256 |
+	;; |     2 |    BLAKE2 |       256 |
+	;; |     3 |    BLAKE2 |       128 |
+	;; ---------------------------------
+	(func (export "call") (result i32)
+		(local $chosen_hash_fn i32)
+		(local $input_ptr i32)
+		(local $input_len i32)
+		(local $output_ptr i32)
+		(local $output_len i32)
+		(local.set $input_ptr (i32.const 10))
+		(call $ext_scratch_read (local.get $input_ptr) (i32.const 0) (call $ext_scratch_size))
+		(local.set $chosen_hash_fn (i32.load8_u (local.get $input_ptr)))
+		(if (i32.gt_u (local.get $chosen_hash_fn) (i32.const 7))
+			;; We check that the chosen hash fn  identifier is within bounds: [0,7]
+			(unreachable)
+		)
+		(local.set $input_ptr (i32.add (local.get $input_ptr) (i32.const 1)))
+		(local.set $input_len (i32.sub (call $ext_scratch_size) (i32.const 1)))
+		(local.set $output_ptr (i32.const 100))
+		(local.set $output_len (i32.load8_u (local.get $chosen_hash_fn)))
+		(call_indirect (type $hash_fn_sig)
+			(local.get $input_ptr)
+			(local.get $input_len)
+			(local.get $output_ptr)
+			(local.get $chosen_hash_fn) ;; Which crypto hash function to execute.
+		)
+		(call $ext_scratch_write
+			(local.get $output_ptr) ;; Linear memory location of the output buffer.
+			(local.get $output_len) ;; Number of output buffer bytes.
+		)
+		(i32.const 0)
+	)
+)
+"#;
+
+#[test]
+fn crypto_hashes() {
+	let (wasm, code_hash) = compile_module::<Test>(&CODE_CRYPTO_HASHES).unwrap();
+
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		Balances::deposit_creating(&ALICE, 1_000_000);
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
+
+		// Instantiate the CRYPTO_HASHES contract.
+		assert_ok!(Contracts::instantiate(
+			Origin::signed(ALICE),
+			100_000,
+			100_000,
+			code_hash.into(),
+			vec![],
+		));
+		// Perform the call.
+		let input = b"_DEAD_BEEF";
+		use sp_io::hashing::*;
+		// Wraps a hash function into a more dynamic form usable for testing.
+		macro_rules! dyn_hash_fn {
+			($name:ident) => {
+				Box::new(|input| $name(input).as_ref().to_vec().into_boxed_slice())
+			};
+		}
+		// All hash functions and their associated output byte lengths.
+		let test_cases: &[(Box<dyn Fn(&[u8]) -> Box<[u8]>>, usize)] = &[
+			(dyn_hash_fn!(sha2_256), 32),
+			(dyn_hash_fn!(keccak_256), 32),
+			(dyn_hash_fn!(blake2_256), 32),
+			(dyn_hash_fn!(blake2_128), 16),
+		];
+		// Test the given hash functions for the input: "_DEAD_BEEF"
+		for (n, (hash_fn, expected_size)) in test_cases.iter().enumerate() {
+			// We offset data in the contract tables by 1.
+			let mut params = vec![(n + 1) as u8];
+			params.extend_from_slice(input);
+			let result = <Module<Test>>::bare_call(
+				ALICE,
+				BOB,
+				0,
+				100_000,
+				params,
+			).unwrap();
+			assert_eq!(result.status, 0);
+			let expected = hash_fn(input.as_ref());
+			assert_eq!(&result.data[..*expected_size], &*expected);
+		}
+	})
 }

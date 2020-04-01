@@ -77,10 +77,8 @@ use frame_support::{
 	weights::SimpleDispatchInfo,
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
-use frame_support::traits::MigrateAccount;
 
-#[cfg(feature = "runtime-benchmarks")]
-pub mod benchmarking;
+mod benchmarking;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
@@ -887,18 +885,6 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> MigrateAccount<T::AccountId> for Module<T> {
-	fn migrate_account(a: &T::AccountId) {
-		if IdentityOf::<T>::migrate_key_from_blake(a).is_some() {
-			if let Some((_, subs)) = SubsOf::<T>::migrate_key_from_blake(a) {
-				for sub in subs.into_iter() {
-					SuperOf::<T>::migrate_key_from_blake(sub);
-				}
-			}
-		}
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -949,7 +935,7 @@ mod tests {
 		type Version = ();
 		type ModuleToIndex = ();
 		type AccountData = pallet_balances::AccountData<u64>;
-		type MigrateAccount = (); type OnNewAccount = ();
+		type OnNewAccount = ();
 		type OnKilledAccount = ();
 	}
 	parameter_types! {

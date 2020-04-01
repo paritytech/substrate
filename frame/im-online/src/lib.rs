@@ -50,6 +50,7 @@
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//! 		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 //! 		pub fn is_online(origin, authority_index: u32) -> dispatch::DispatchResult {
 //! 			let _sender = ensure_signed(origin)?;
 //! 			let _is_online = <im_online::Module<T>>::is_online(authority_index);
@@ -69,6 +70,7 @@
 
 mod mock;
 mod tests;
+mod benchmarking;
 
 use sp_application_crypto::RuntimeAppPublic;
 use codec::{Encode, Decode};
@@ -79,9 +81,9 @@ use pallet_session::historical::IdentificationTuple;
 use sp_runtime::{
 	offchain::storage::StorageValueRef,
 	RuntimeDebug,
-	traits::{Convert, Member, Saturating, AtLeast32Bit}, Perbill, PerThing,
+	traits::{Convert, Member, Saturating, AtLeast32Bit}, Perbill,
 	transaction_validity::{
-		TransactionValidity, ValidTransaction, InvalidTransaction,
+		TransactionValidity, ValidTransaction, InvalidTransaction, TransactionSource,
 		TransactionPriority,
 	},
 };
@@ -95,7 +97,6 @@ use frame_support::{
 };
 use frame_system::{self as system, ensure_none};
 use frame_system::offchain::SubmitUnsignedTransaction;
-use frame_support::traits::MigrateAccount;
 
 pub mod sr25519 {
 	mod app_sr25519 {
@@ -303,38 +304,13 @@ decl_error! {
 	}
 }
 
-mod migration {
-	use super::*;
-	use frame_support::Blake2_256;
-	pub fn migrate<T: Trait>() {
-		let current_index = <pallet_session::Module<T>>::current_index();
-		let key_count = Keys::<T>::get().len() as AuthIndex;
-		for i in 0..key_count {
-			ReceivedHeartbeats::migrate_keys::<Blake2_256, Blake2_256, _, _>(current_index, i);
-		}
-	}
-}
-
-impl<T: Trait> MigrateAccount<T::AccountId> for Module<T> {
-	fn migrate_account(a: &T::AccountId) {
-		use frame_support::Blake2_256;
-		let current_index = <pallet_session::Module<T>>::current_index();
-		if let Ok(v) = a.using_encoded(|mut d| T::ValidatorId::decode(&mut d)) {
-			AuthoredBlocks::<T>::migrate_keys::<Blake2_256, Blake2_256, _, _>(current_index, v);
-		}
-	}
-}
-
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
 		fn deposit_event() = default;
 
-		fn on_runtime_upgrade() {
-			migration::migrate::<T>();
-		}
-
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn heartbeat(
 			origin,
 			heartbeat: Heartbeat<T::BlockNumber>,
@@ -650,7 +626,10 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 	type Call = Call<T>;
 
-	fn validate_unsigned(call: &Self::Call) -> TransactionValidity {
+	fn validate_unsigned(
+		_source: TransactionSource,
+		call: &Self::Call,
+	) -> TransactionValidity {
 		if let Call::heartbeat(heartbeat, signature) = call {
 			if <Module<T>>::is_online(heartbeat.authority_index) {
 				// we already received a heartbeat for this authority
