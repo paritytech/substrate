@@ -110,7 +110,7 @@ impl StateUsageStats {
 			memory: 0,
 			// `started` field on for `usage_info` is a `Duration`, so we must convert self.started, which is an `Instant`.
 			// We do this by calculating the time since `UNIX_EPOCH`, and substracting the `elapsed` time since `self.started`.
-			started: duration_since_unix.checked_sub(elapsed).expect("Elapsed time is bigger than time since unix"),
+			started: duration_since_unix.checked_sub(elapsed).expect("Elapsed time is bigger than time since UNIX_EPOCH"),
 			span: elapsed,
 		}
 	}
