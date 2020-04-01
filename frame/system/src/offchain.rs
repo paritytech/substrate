@@ -28,6 +28,12 @@ pub enum ForAll {}
 /// Marker enum used to flag using any of the supported keys to sign a payload.
 pub enum ForAny {}
 
+/// Provides the ability to directly submit signed and unsigned
+/// transaction onchain.
+///
+/// For submitting unsigned transactions, `submit_unsigned_transaction`
+/// utility function can be used. However, this struct is used by `Signer`
+/// to submit a signed transactions providing the signature along with the call.
 pub struct SubmitTransaction<T: SendTransactionTypes<OverarchingCall>, OverarchingCall> {
 	_phantom: sp_std::marker::PhantomData<(T, OverarchingCall)>
 }
@@ -61,7 +67,6 @@ where
 /// - A list of provided keys
 ///
 /// The signer is then able to:
-/// - Submit a raw unsigned transaction
 /// - Submit a unsigned transaction with a signed payload
 /// - Submit a signed transaction
 pub struct Signer<T: SigningTypes, C: AppCrypto<T::Public, T::Signature>, X = ForAny> {
