@@ -1,8 +1,10 @@
 [package]
 name = "node-bench"
-version = "0.1.0"
-authors = ["NikVolf <nikvolf@gmail.com>"]
+version = "0.8.0-alpha.5"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Substrate node integration benchmarks."
 edition = "2018"
+license = "GPL-3.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
