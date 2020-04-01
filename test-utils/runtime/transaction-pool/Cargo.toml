@@ -18,3 +18,6 @@ sp-transaction-pool = { version = "2.0.0-alpha.5", path = "../../../primitives/t
 sc-transaction-graph = { version = "2.0.0-alpha.5", path = "../../../client/transaction-pool/graph" }
 futures = { version = "0.3.1", features = ["compat"] }
 derive_more = "0.99.2"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

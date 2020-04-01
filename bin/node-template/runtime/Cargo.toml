@@ -68,3 +68,6 @@ std = [
 	"transaction-payment/std",
 	"template/std",
 ]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

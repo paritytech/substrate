@@ -119,3 +119,6 @@ full_crypto = [
 	"libsecp256k1",
 	"sp-runtime-interface/disable_target_static_assertions",
 ]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

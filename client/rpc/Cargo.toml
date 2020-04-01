@@ -42,3 +42,6 @@ sp-io = { version = "2.0.0-alpha.5", path = "../../primitives/io" }
 substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../test-utils/runtime/client" }
 tokio = "0.1.22"
 sc-transaction-pool = { version = "2.0.0-alpha.5", path = "../transaction-pool" }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

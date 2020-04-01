@@ -127,6 +127,8 @@ pub struct Configuration {
 	///
 	/// The default value is 8.
 	pub max_runtime_instances: usize,
+	/// Announce block automatically after they have been imported
+	pub announce_block: bool,
 }
 
 /// Configuration of the client keystore.
@@ -229,6 +231,7 @@ impl Default for Configuration {
 			tracing_targets: Default::default(),
 			tracing_receiver: Default::default(),
 			max_runtime_instances: 8,
+			announce_block: true,
 		}
 	}
 }
