@@ -741,7 +741,8 @@ variables:
     variables:
       - $PURGE_JOB
   script:
-    - echo ${PURGE_JOB}
+    - mkdir -p ${CARGO_HOME}
+    - echo "Purging ${PURGE_JOB} cache"
     - ls ${CARGO_HOME}/../${PURGE_JOB}
 
 purge_cargo_home 2 6:
