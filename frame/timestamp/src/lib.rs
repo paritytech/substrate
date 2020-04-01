@@ -91,7 +91,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
 use sp_std::{result, cmp};
@@ -250,7 +249,7 @@ impl<T: Trait> UnixTime for Module<T> {
 		// now is duration since unix epoch in millisecond as documented in
 		// `sp_timestamp::InherentDataProvider`.
 		let now = Self::now();
-		sp_std::if_std! { 
+		sp_std::if_std! {
 			if now == T::Moment::zero() {
 				debug::error!(
 					"`pallet_timestamp::UnixTime::now` is called at genesis, invalid value returned: 0"

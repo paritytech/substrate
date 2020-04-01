@@ -77,7 +77,7 @@ impl ServiceMetrics {
 				"ready_transactions_number", "Number of transactions in the ready queue",
 			)?, registry)?,
 			memory_usage_bytes: register(Gauge::new(
-				"memory_usage_bytes", "Node memory usage",
+				"memory_usage_bytes", "Node memory (resident set size) usage",
 			)?, registry)?,
 			cpu_usage_percentage: register(Gauge::new(
 				"cpu_usage_percentage", "Node CPU usage",
@@ -827,7 +827,7 @@ ServiceBuilder<
 		let chain_spec = config.expect_chain_spec();
 
 		let version = config.full_version();
-		info!("Highest known block at #{}", chain_info.best_number);
+		info!("📦 Highest known block at #{}", chain_info.best_number);
 		telemetry!(
 			SUBSTRATE_INFO;
 			"node.start";
@@ -1074,7 +1074,8 @@ ServiceBuilder<
 					.unwrap_or(0),
 			);
 			if let Some(metrics) = metrics.as_ref() {
-				metrics.memory_usage_bytes.set(memory);
+				// `sysinfo::Process::memory` returns memory usage in KiB and not bytes.
+				metrics.memory_usage_bytes.set(memory * 1024);
 				metrics.cpu_usage_percentage.set(f64::from(cpu_usage));
 				metrics.ready_transactions_number.set(txpool_status.ready as u64);
 
@@ -1203,6 +1204,7 @@ ServiceBuilder<
 				network_status_sinks.clone(),
 				system_rpc_rx,
 				has_bootnodes,
+				config.announce_block,
 			),
 		);
 

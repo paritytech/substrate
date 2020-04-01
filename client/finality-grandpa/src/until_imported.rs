@@ -29,13 +29,17 @@ use super::{
 };
 
 use log::{debug, warn};
-use sc_client_api::{BlockImportNotification, ImportNotifications};
 use futures::prelude::*;
 use futures::stream::Fuse;
 use futures_timer::Delay;
 use futures::channel::mpsc::UnboundedReceiver;
 use finality_grandpa::voter;
 use parking_lot::Mutex;
+use prometheus_endpoint::{
+	Gauge, U64, PrometheusError, register, Registry,
+};
+use sc_client_api::{BlockImportNotification, ImportNotifications};
+use sp_finality_grandpa::AuthorityId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 
 use std::collections::{HashMap, VecDeque};
@@ -43,7 +47,6 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
-use sp_finality_grandpa::AuthorityId;
 
 const LOG_PENDING_INTERVAL: Duration = Duration::from_secs(15);
 
@@ -77,6 +80,63 @@ pub(crate) enum DiscardWaitOrReady<Block: BlockT, W, R> {
 	Ready(R),
 }
 
+/// Prometheus metrics for the `UntilImported` queue.
+//
+// At a given point in time there can be more than one `UntilImported` queue. One can not register a
+// metric twice, thus queues need to share the same Prometheus metrics instead of instantiating
+// their own ones.
+//
+// When a queue is dropped it might still contain messages. In order for those to not distort the
+// Prometheus metrics, the `Metric` struct cleans up after itself within its `Drop` implementation
+// by subtracting the local_waiting_messages (the amount of messages left in the queue about to
+// be dropped) from the global_waiting_messages gauge.
+pub(crate) struct Metrics {
+	global_waiting_messages: Gauge<U64>,
+	local_waiting_messages: u64,
+}
+
+impl Metrics {
+	pub(crate) fn register(registry: &Registry) -> Result<Self, PrometheusError> {
+		Ok(Self {
+			global_waiting_messages: register(Gauge::new(
+				"finality_grandpa_until_imported_waiting_messages_number",
+				"Number of finality grandpa messages waiting within the until imported queue.",
+			)?, registry)?,
+			local_waiting_messages: 0,
+		})
+	}
+
+	fn waiting_messages_inc(&mut self) {
+		self.local_waiting_messages += 1;
+		self.global_waiting_messages.inc();
+	}
+
+	fn waiting_messages_dec(&mut self) {
+		self.local_waiting_messages -= 1;
+		self.global_waiting_messages.dec();
+	}
+}
+
+
+impl Clone for Metrics {
+	fn clone(&self) -> Self {
+		Metrics {
+			global_waiting_messages: self.global_waiting_messages.clone(),
+			// When cloned, reset local_waiting_messages, so the global counter is not reduced a
+			// second time for the same messages on `drop` of the clone.
+			local_waiting_messages: 0,
+		}
+	}
+}
+
+impl Drop for Metrics {
+	fn drop(&mut self) {
+		// Reduce the global counter by the amount of messages that were still left in the dropped
+		// queue.
+		self.global_waiting_messages.sub(self.local_waiting_messages)
+	}
+}
+
 /// Buffering imported messages until blocks with given hashes are imported.
 #[pin_project::pin_project]
 pub(crate) struct UntilImported<Block: BlockT, BlockStatus, BlockSyncRequester, I, M: BlockUntilImported<Block>> {
@@ -86,12 +146,17 @@ pub(crate) struct UntilImported<Block: BlockT, BlockStatus, BlockSyncRequester, 
 	#[pin]
 	inner: Fuse<I>,
 	ready: VecDeque<M::Blocked>,
+	/// Interval at which to check status of each awaited block.
 	check_pending: Pin<Box<dyn Stream<Item = Result<(), std::io::Error>> + Send>>,
 	/// Mapping block hashes to their block number, the point in time it was
 	/// first encountered (Instant) and a list of GRANDPA messages referencing
 	/// the block hash.
 	pending: HashMap<Block::Hash, (NumberFor<Block>, Instant, Vec<M>)>,
+
+	/// Queue identifier for differentiation in logs.
 	identifier: &'static str,
+	/// Prometheus metrics.
+	metrics: Option<Metrics>,
 }
 
 impl<Block, BlockStatus, BlockSyncRequester, I, M> UntilImported<Block, BlockStatus, BlockSyncRequester, I, M> where
@@ -108,6 +173,7 @@ impl<Block, BlockStatus, BlockSyncRequester, I, M> UntilImported<Block, BlockSta
 		status_check: BlockStatus,
 		stream: I,
 		identifier: &'static str,
+		metrics: Option<Metrics>,
 	) -> Self {
 		// how often to check if pending messages that are waiting for blocks to be
 		// imported can be checked.
@@ -131,6 +197,7 @@ impl<Block, BlockStatus, BlockSyncRequester, I, M> UntilImported<Block, BlockSta
 			check_pending: Box::pin(check_pending),
 			pending: HashMap::new(),
 			identifier,
+			metrics,
 		}
 	}
 }
@@ -167,6 +234,10 @@ impl<Block, BStatus, BSyncRequester, I, M> Stream for UntilImported<Block, BStat
 							}
 						},
 						DiscardWaitOrReady::Ready(item) => this.ready.push_back(item),
+					}
+
+					if let Some(metrics) = &mut this.metrics {
+						metrics.waiting_messages_inc();
 					}
 				}
 				Poll::Pending => break,
@@ -238,6 +309,9 @@ impl<Block, BStatus, BSyncRequester, I, M> Stream for UntilImported<Block, BStat
 		}
 
 		if let Some(ready) = this.ready.pop_front() {
+			if let Some(metrics) = &mut this.metrics {
+				metrics.waiting_messages_dec();
+			}
 			return Poll::Ready(Some(Ok(ready)))
 		}
 
@@ -583,6 +657,7 @@ mod tests {
 			block_status,
 			global_rx,
 			"global",
+			None,
 		);
 
 		global_tx.unbounded_send(msg).unwrap();
@@ -609,6 +684,7 @@ mod tests {
 			block_status,
 			global_rx,
 			"global",
+			None,
 		);
 
 		global_tx.unbounded_send(msg).unwrap();
@@ -863,6 +939,7 @@ mod tests {
 			block_status,
 			global_rx,
 			"global",
+			None,
 		);
 
 		let h1 = make_header(5);
@@ -985,5 +1062,26 @@ mod tests {
 		// All blocks, that the message depended on, have been imported. Still, given the above
 		// block number mismatch this should return None.
 		assert!(waiting_block_2.wait_completed(2).is_none());
+	}
+
+	#[test]
+	fn metrics_cleans_up_after_itself() {
+		let r = Registry::new();
+
+		let mut m1 = Metrics::register(&r).unwrap();
+		let m2 = m1.clone();
+
+		// Add a new message to the 'queue' of m1.
+		m1.waiting_messages_inc();
+
+		// m1 and m2 are synced through the shared atomic.
+		assert_eq!(1, m2.global_waiting_messages.get());
+
+		// Drop 'queue' m1.
+		drop(m1);
+
+		// Make sure m1 cleaned up after itself, removing all messages that were left in its queue
+		// when dropped from the global metric.
+		assert_eq!(0, m2.global_waiting_messages.get());
 	}
 }

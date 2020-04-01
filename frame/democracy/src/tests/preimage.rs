@@ -21,7 +21,6 @@ use super::*;
 #[test]
 fn missing_preimage_should_fail() {
 	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
 		let r = Democracy::inject_referendum(
 			2,
 			set_balance_proposal_hash(2),
@@ -40,7 +39,6 @@ fn missing_preimage_should_fail() {
 #[test]
 fn preimage_deposit_should_be_required_and_returned() {
 	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
 		// fee of 100 is too much.
 		PREIMAGE_BYTE_DEPOSIT.with(|v| *v.borrow_mut() = 100);
 		assert_noop!(
@@ -71,7 +69,6 @@ fn preimage_deposit_should_be_required_and_returned() {
 #[test]
 fn preimage_deposit_should_be_reapable_earlier_by_owner() {
 	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
 		PREIMAGE_BYTE_DEPOSIT.with(|v| *v.borrow_mut() = 1);
 		assert_ok!(Democracy::note_preimage(Origin::signed(6), set_balance_proposal(2)));
 
@@ -93,7 +90,6 @@ fn preimage_deposit_should_be_reapable_earlier_by_owner() {
 #[test]
 fn preimage_deposit_should_be_reapable() {
 	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
 		assert_noop!(
 				Democracy::reap_preimage(Origin::signed(5), set_balance_proposal_hash(2)),
 				Error::<Test>::PreimageMissing
@@ -122,7 +118,6 @@ fn preimage_deposit_should_be_reapable() {
 #[test]
 fn noting_imminent_preimage_for_free_should_work() {
 	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
 		PREIMAGE_BYTE_DEPOSIT.with(|v| *v.borrow_mut() = 1);
 
 		let r = Democracy::inject_referendum(
@@ -152,7 +147,6 @@ fn noting_imminent_preimage_for_free_should_work() {
 #[test]
 fn reaping_imminent_preimage_should_fail() {
 	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
 		let h = set_balance_proposal_hash_and_note(2);
 		let r = Democracy::inject_referendum(3, h, VoteThreshold::SuperMajorityApprove, 1);
 		assert_ok!(Democracy::vote(Origin::signed(1), r, aye(1)));

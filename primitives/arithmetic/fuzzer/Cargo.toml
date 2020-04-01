@@ -27,3 +27,6 @@ path = "src/per_thing_rational.rs"
 [[bin]]
 name = "rational128"
 path = "src/rational128.rs"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
