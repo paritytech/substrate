@@ -18,6 +18,8 @@ sp-runtime = { version = "2.0.0-alpha.5", default-features = false, path = "../.
 sp-std = { version = "2.0.0-alpha.5", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "2.0.0-alpha.5", default-features = false, path = "../../primitives/io" }
 
+frame-benchmarking = { version = "2.0.0-alpha.5", default-features = false, path = "../benchmarking", optional = true }
+
 [dev-dependencies]
 sp-core = { version = "2.0.0-alpha.5", path = "../../primitives/core" }
 pallet-balances = { version = "2.0.0-alpha.5", path = "../balances" }
@@ -32,6 +34,10 @@ std = [
 	"frame-system/std",
 	"sp-io/std",
 	"sp-std/std"
+]
+runtime-benchmarks = [
+	"frame-benchmarking",
+	"frame-support/runtime-benchmarks",
 ]
 
 [package.metadata.docs.rs]
