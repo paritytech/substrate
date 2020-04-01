@@ -7622,7 +7622,9 @@ name = "sp-utils"
 version = "2.0.0-alpha.5"
 dependencies = [
  "futures 0.3.4",
+ "futures-core",
  "lazy_static",
+ "parking_lot 0.10.0",
  "prometheus",
 ]
 

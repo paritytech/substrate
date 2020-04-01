@@ -10,8 +10,10 @@ description = "I/O for Substrate runtimes"
 
 [dependencies]
 futures = "0.3.4"
+futures-core = "0.3.4"
 lazy_static = "1.4.0"
 prometheus = "0.8.0"
+parking_lot = "0.10.0"
 
 [features]
 default = ["metered"]
