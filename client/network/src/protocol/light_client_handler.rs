@@ -51,8 +51,7 @@ use libp2p::{
 };
 use nohash_hasher::IntMap;
 use prost::Message;
-use sc_client::light::fetcher;
-use sc_client_api::StorageProof;
+use sc_client_api::{StorageProof, light};
 use sc_peerset::ReputationChange;
 use sp_core::{
 	storage::{ChildInfo, StorageKey},
@@ -177,23 +176,23 @@ pub enum Error {
 #[derive(Debug)]
 pub enum Request<B: Block> {
 	Header {
-		request: fetcher::RemoteHeaderRequest<B::Header>,
+		request: light::RemoteHeaderRequest<B::Header>,
 		sender: oneshot::Sender<Result<B::Header, ClientError>>
 	},
 	Read {
-		request: fetcher::RemoteReadRequest<B::Header>,
+		request: light::RemoteReadRequest<B::Header>,
 		sender: oneshot::Sender<Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError>>
 	},
 	ReadChild {
-		request: fetcher::RemoteReadChildRequest<B::Header>,
+		request: light::RemoteReadChildRequest<B::Header>,
 		sender: oneshot::Sender<Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError>>
 	},
 	Call {
-		request: fetcher::RemoteCallRequest<B::Header>,
+		request: light::RemoteCallRequest<B::Header>,
 		sender: oneshot::Sender<Result<Vec<u8>, ClientError>>
 	},
 	Changes {
-		request: fetcher::RemoteChangesRequest<B::Header>,
+		request: light::RemoteChangesRequest<B::Header>,
 		sender: oneshot::Sender<Result<Vec<(NumberFor<B>, u32)>, ClientError>>
 	}
 }
@@ -248,7 +247,7 @@ pub struct LightClientHandler<B: Block> {
 	/// Blockchain client.
 	chain: Arc<dyn Client<B>>,
 	/// Verifies that received responses are correct.
-	checker: Arc<dyn fetcher::FetchChecker<B>>,
+	checker: Arc<dyn light::FetchChecker<B>>,
 	/// Peer information (addresses, their best block, etc.)
 	peers: HashMap<PeerId, PeerInfo<B>>,
 	/// Futures sending back response to remote clients.
@@ -271,7 +270,7 @@ where
 	pub fn new(
 		cfg: Config,
 		chain: Arc<dyn Client<B>>,
-		checker: Arc<dyn fetcher::FetchChecker<B>>,
+		checker: Arc<dyn light::FetchChecker<B>>,
 		peerset: sc_peerset::PeersetHandle,
 	) -> Self {
 		LightClientHandler {
@@ -401,7 +400,7 @@ where
 						}
 						r
 					};
-					let reply = self.checker.check_changes_proof(&request, fetcher::ChangesProof {
+					let reply = self.checker.check_changes_proof(&request, light::ChangesProof {
 						max_block,
 						proof: response.proof,
 						roots,
@@ -629,7 +628,7 @@ where
 					request.last,
 					error);
 
-				fetcher::ChangesProof::<B::Header> {
+				light::ChangesProof::<B::Header> {
 					max_block: Zero::zero(),
 					proof: Vec::new(),
 					roots: BTreeMap::new(),
@@ -1135,7 +1134,6 @@ mod tests {
 		yamux
 	};
 	use sc_client_api::StorageProof;
-	use sc_client::light::fetcher;
 	use sp_blockchain::{Error as ClientError};
 	use sp_core::storage::ChildInfo;
 	use std::{
@@ -1147,7 +1145,7 @@ mod tests {
 		task::{Context, Poll}
 	};
 	use sp_runtime::{generic::Header, traits::BlakeTwo256};
-	use super::{Event, LightClientHandler, Request, OutboundProtocol, PeerStatus};
+	use super::{Event, LightClientHandler, Request, OutboundProtocol, PeerStatus, light};
 	use void::Void;
 
 	const CHILD_INFO: ChildInfo<'static> = ChildInfo::new_default(b"foobarbaz");
@@ -1270,7 +1268,7 @@ mod tests {
 
 		// Issue our first request!
 		let chan = oneshot::channel();
-		let request = fetcher::RemoteCallRequest {
+		let request = light::RemoteCallRequest {
 			block: Default::default(),
 			header: dummy_header(),
 			method: "test".into(),
@@ -1325,7 +1323,7 @@ mod tests {
 		assert_eq!(1, behaviour.peers.len());
 
 		let chan = oneshot::channel();
-		let request = fetcher::RemoteCallRequest {
+		let request = light::RemoteCallRequest {
 			block: Default::default(),
 			header: dummy_header(),
 			method: "test".into(),
@@ -1396,7 +1394,7 @@ mod tests {
 		assert_eq!(1, behaviour.peers.len());
 
 		let chan = oneshot::channel();
-		let request = fetcher::RemoteCallRequest {
+		let request = light::RemoteCallRequest {
 			block: Default::default(),
 			header: dummy_header(),
 			method: "test".into(),
@@ -1447,7 +1445,7 @@ mod tests {
 		assert_eq!(4, behaviour.peers.len());
 
 		let mut chan = oneshot::channel();
-		let request = fetcher::RemoteCallRequest {
+		let request = light::RemoteCallRequest {
 			block: Default::default(),
 			header: dummy_header(),
 			method: "test".into(),
@@ -1559,7 +1557,7 @@ mod tests {
 	#[test]
 	fn receives_remote_call_response() {
 		let mut chan = oneshot::channel();
-		let request = fetcher::RemoteCallRequest {
+		let request = light::RemoteCallRequest {
 			block: Default::default(),
 			header: dummy_header(),
 			method: "test".into(),
@@ -1573,7 +1571,7 @@ mod tests {
 	#[test]
 	fn receives_remote_read_response() {
 		let mut chan = oneshot::channel();
-		let request = fetcher::RemoteReadRequest {
+		let request = light::RemoteReadRequest {
 			header: dummy_header(),
 			block: Default::default(),
 			keys: vec![b":key".to_vec()],
@@ -1587,7 +1585,7 @@ mod tests {
 	fn receives_remote_read_child_response() {
 		let info = CHILD_INFO.info();
 		let mut chan = oneshot::channel();
-		let request = fetcher::RemoteReadChildRequest {
+		let request = light::RemoteReadChildRequest {
 			header: dummy_header(),
 			block: Default::default(),
 			storage_key: b":child_storage:sub".to_vec(),
@@ -1603,7 +1601,7 @@ mod tests {
 	#[test]
 	fn receives_remote_header_response() {
 		let mut chan = oneshot::channel();
-		let request = fetcher::RemoteHeaderRequest {
+		let request = light::RemoteHeaderRequest {
 			cht_root: Default::default(),
 			block: 1,
 			retry_count: None,
@@ -1615,7 +1613,7 @@ mod tests {
 	#[test]
 	fn receives_remote_changes_response() {
 		let mut chan = oneshot::channel();
-		let request = fetcher::RemoteChangesRequest {
+		let request = light::RemoteChangesRequest {
 			changes_trie_configs: vec![sp_core::ChangesTrieConfigurationRange {
 				zero: (0, Default::default()),
 				end: None,
@@ -1660,7 +1658,7 @@ mod tests {
 	#[test]
 	fn send_receive_call() {
 		let chan = oneshot::channel();
-		let request = fetcher::RemoteCallRequest {
+		let request = light::RemoteCallRequest {
 			block: Default::default(),
 			header: dummy_header(),
 			method: "test".into(),
@@ -1675,7 +1673,7 @@ mod tests {
 	#[test]
 	fn send_receive_read() {
 		let chan = oneshot::channel();
-		let request = fetcher::RemoteReadRequest {
+		let request = light::RemoteReadRequest {
 			header: dummy_header(),
 			block: Default::default(),
 			keys: vec![b":key".to_vec()],
@@ -1690,7 +1688,7 @@ mod tests {
 	fn send_receive_read_child() {
 		let info = CHILD_INFO.info();
 		let chan = oneshot::channel();
-		let request = fetcher::RemoteReadChildRequest {
+		let request = light::RemoteReadChildRequest {
 			header: dummy_header(),
 			block: Default::default(),
 			storage_key: b":child_storage:sub".to_vec(),
@@ -1708,7 +1706,7 @@ mod tests {
 	fn send_receive_header() {
 		let _ = env_logger::try_init();
 		let chan = oneshot::channel();
-		let request = fetcher::RemoteHeaderRequest {
+		let request = light::RemoteHeaderRequest {
 			cht_root: Default::default(),
 			block: 1,
 			retry_count: None,
@@ -1721,7 +1719,7 @@ mod tests {
 	#[test]
 	fn send_receive_changes() {
 		let chan = oneshot::channel();
-		let request = fetcher::RemoteChangesRequest {
+		let request = light::RemoteChangesRequest {
 			changes_trie_configs: vec![sp_core::ChangesTrieConfigurationRange {
 				zero: (0, Default::default()),
 				end: None,

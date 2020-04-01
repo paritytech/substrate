@@ -37,7 +37,6 @@ prost = "0.6.1"
 rand = "0.7.2"
 hex = "0.4.0"
 sc-block-builder = { version = "0.8.0-alpha.5", path = "../block-builder" }
-sc-client = { version = "0.8.0-alpha.5", path = "../" }
 sc-client-api = { version = "2.0.0-alpha.5", path = "../api" }
 sc-peerset = { version = "2.0.0-alpha.5", path = "../peerset" }
 pin-project = "0.4.6"

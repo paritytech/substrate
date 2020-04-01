@@ -21,7 +21,6 @@
 use std::sync::Arc;
 
 use sc_consensus_babe;
-use sc_client::{self, LongestChain};
 use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider, StorageAndProofProvider};
 use node_executor;
 use node_primitives::Block;
@@ -33,6 +32,7 @@ use sp_inherents::InherentDataProviders;
 
 use sc_service::{Service, NetworkStatus};
 use sc_client::{Client, LocalCallExecutor};
+use sc_client_api::LongestChain;
 use sc_client_db::Backend;
 use sp_runtime::traits::Block as BlockT;
 use node_executor::NativeExecutor;
@@ -54,7 +54,7 @@ macro_rules! new_full_start {
 			node_primitives::Block, node_runtime::RuntimeApi, node_executor::Executor
 		>($config)?
 			.with_select_chain(|_config, backend| {
-				Ok(sc_client::LongestChain::new(backend.clone()))
+				Ok(sc_client_api::LongestChain::new(backend.clone()))
 			})?
 			.with_transaction_pool(|config, client, _fetcher| {
 				let pool_api = sc_transaction_pool::FullChainApi::new(client.clone());

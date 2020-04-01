@@ -179,7 +179,7 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 			Block,
 			RuntimeApi,
 		>,
-		sc_client::LongestChain<Backend, Block>,
+		sc_client_api::LongestChain<Backend, Block>,
 	) where
 		Executor: sc_client::CallExecutor<Block> + 'static,
 		Backend: sc_client_api::backend::Backend<Block>,
@@ -214,7 +214,7 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 			None,
 		).expect("Creates new client");
 
-		let longest_chain = sc_client::LongestChain::new(self.backend);
+		let longest_chain = sc_client_api::LongestChain::new(self.backend);
 
 		(client, longest_chain)
 	}
@@ -237,7 +237,7 @@ impl<Block: BlockT, E, Backend, G: GenesisInit> TestClientBuilder<
 			Block,
 			RuntimeApi
 		>,
-		sc_client::LongestChain<Backend, Block>,
+		sc_client_api::LongestChain<Backend, Block>,
 	) where
 		I: Into<Option<NativeExecutor<E>>>,
 		E: sc_executor::NativeExecutionDispatch + 'static,

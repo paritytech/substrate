@@ -228,7 +228,7 @@ mod tests {
 	use sp_runtime::generic::BlockId;
 	use sp_blockchain::HeaderBackend;
 	use sp_consensus::ImportedAux;
-	use sc_client::LongestChain;
+	use sc_client_api::LongestChain;
 	use sp_inherents::InherentDataProviders;
 	use sc_basic_authorship::ProposerFactory;
 

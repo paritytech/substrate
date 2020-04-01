@@ -23,7 +23,6 @@ codec = { package = "parity-scale-codec", version = "1.3.0", features = ["derive
 sc-client-api = { version = "2.0.0-alpha.5", path = "../api" }
 sp-core = { version = "2.0.0-alpha.5", path = "../../primitives/core" }
 sp-runtime = { version = "2.0.0-alpha.5", path = "../../primitives/runtime" }
-sc-client = { version = "0.8.0-alpha.5", path = "../" }
 sp-state-machine = { version = "0.8.0-alpha.5", path = "../../primitives/state-machine" }
 sc-executor = { version = "0.8.0-alpha.5", path = "../executor" }
 sc-state-db = { version = "0.8.0-alpha.5", path = "../state-db" }

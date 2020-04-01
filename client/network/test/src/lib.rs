@@ -29,9 +29,11 @@ use sc_network::config::FinalityProofProvider;
 use sp_blockchain::{
 	Result as ClientResult, well_known_cache_keys::{self, Id as CacheKeyId}, Info as BlockchainInfo,
 };
-use sc_client_api::{BlockchainEvents, BlockImportNotification, FinalityNotifications, ImportNotifications, FinalityNotification, backend::{TransactionFor, AuxStore, Backend, Finalizer}, BlockBackend};
+use sc_client_api::{
+	BlockchainEvents, BlockImportNotification, FinalityNotifications, ImportNotifications, FinalityNotification,
+	backend::{TransactionFor, AuxStore, Backend, Finalizer}, BlockBackend, LongestChain,
+};
 use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
-use sc_client::LongestChain;
 use sc_network::config::Roles;
 use sp_consensus::block_validation::DefaultBlockAnnounceValidator;
 use sp_consensus::import_queue::{

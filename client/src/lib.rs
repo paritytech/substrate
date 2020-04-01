@@ -101,7 +101,7 @@ pub use crate::{
 		new_in_mem,
 		BlockBackend, ImportNotifications, FinalityNotifications, BlockchainEvents, LockImportRun,
 		BlockImportNotification, Client, ClientInfo, ExecutionStrategies, FinalityNotification,
-		LongestChain, BlockOf, ProvideUncles, BadBlocks, ForkBlocks, apply_aux,
+		BlockOf, ProvideUncles, BadBlocks, ForkBlocks, apply_aux,
 	},
 	leaves::LeafSet,
 };

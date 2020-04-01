@@ -404,14 +404,14 @@ impl<Block: BlockT> BlockchainDb<Block> {
 	}
 }
 
-impl<Block: BlockT> sc_client::blockchain::HeaderBackend<Block> for BlockchainDb<Block> {
+impl<Block: BlockT> sc_client_api::blockchain::HeaderBackend<Block> for BlockchainDb<Block> {
 	fn header(&self, id: BlockId<Block>) -> ClientResult<Option<Block::Header>> {
 		utils::read_header(&*self.db, columns::KEY_LOOKUP, columns::HEADER, id)
 	}
 
-	fn info(&self) -> sc_client::blockchain::Info<Block> {
+	fn info(&self) -> sc_client_api::blockchain::Info<Block> {
 		let meta = self.meta.read();
-		sc_client::blockchain::Info {
+		sc_client_api::blockchain::Info {
 			best_hash: meta.best_hash,
 			best_number: meta.best_number,
 			genesis_hash: meta.genesis_hash,
@@ -420,7 +420,7 @@ impl<Block: BlockT> sc_client::blockchain::HeaderBackend<Block> for BlockchainDb
 		}
 	}
 
-	fn status(&self, id: BlockId<Block>) -> ClientResult<sc_client::blockchain::BlockStatus> {
+	fn status(&self, id: BlockId<Block>) -> ClientResult<sc_client_api::blockchain::BlockStatus> {
 		let exists = match id {
 			BlockId::Hash(_) => read_db(
 				&*self.db,
@@ -431,8 +431,8 @@ impl<Block: BlockT> sc_client::blockchain::HeaderBackend<Block> for BlockchainDb
 			BlockId::Number(n) => n <= self.meta.read().best_number,
 		};
 		match exists {
-			true => Ok(sc_client::blockchain::BlockStatus::InChain),
-			false => Ok(sc_client::blockchain::BlockStatus::Unknown),
+			true => Ok(sc_client_api::blockchain::BlockStatus::InChain),
+			false => Ok(sc_client_api::blockchain::BlockStatus::Unknown),
 		}
 	}
 
@@ -448,7 +448,7 @@ impl<Block: BlockT> sc_client::blockchain::HeaderBackend<Block> for BlockchainDb
 	}
 }
 
-impl<Block: BlockT> sc_client::blockchain::Backend<Block> for BlockchainDb<Block> {
+impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<Block> {
 	fn body(&self, id: BlockId<Block>) -> ClientResult<Option<Vec<Block::Extrinsic>>> {
 		match read_db(&*self.db, columns::KEY_LOOKUP, columns::BODY, id)? {
 			Some(body) => match Decode::decode(&mut &body[..]) {
@@ -477,7 +477,7 @@ impl<Block: BlockT> sc_client::blockchain::Backend<Block> for BlockchainDb<Block
 		Ok(self.meta.read().finalized_hash.clone())
 	}
 
-	fn cache(&self) -> Option<Arc<dyn sc_client::blockchain::Cache<Block>>> {
+	fn cache(&self) -> Option<Arc<dyn sc_client_api::blockchain::Cache<Block>>> {
 		None
 	}
 
@@ -490,8 +490,8 @@ impl<Block: BlockT> sc_client::blockchain::Backend<Block> for BlockchainDb<Block
 	}
 }
 
-impl<Block: BlockT> sc_client::blockchain::ProvideCache<Block> for BlockchainDb<Block> {
-	fn cache(&self) -> Option<Arc<dyn sc_client::blockchain::Cache<Block>>> {
+impl<Block: BlockT> sc_client_api::blockchain::ProvideCache<Block> for BlockchainDb<Block> {
+	fn cache(&self) -> Option<Arc<dyn sc_client_api::blockchain::Cache<Block>>> {
 		None
 	}
 }
@@ -838,7 +838,7 @@ impl<Block: BlockT> Backend<Block> {
 	#[cfg(feature = "test-helpers")]
 	pub fn as_in_memory(&self) -> InMemoryBackend<Block> {
 		use sc_client_api::backend::{Backend as ClientBackend, BlockImportOperation};
-		use sc_client::blockchain::Backend as BlockchainBackend;
+		use sc_client_api::blockchain::Backend as BlockchainBackend;
 
 		let inmem = InMemoryBackend::<Block>::new();
 
@@ -1025,7 +1025,7 @@ impl<Block: BlockT> Backend<Block> {
 			let hash = if new_canonical == number_u64 {
 				hash
 			} else {
-				::sc_client::blockchain::HeaderBackend::hash(&self.blockchain, new_canonical.saturated_into())?
+				::sc_client_api::blockchain::HeaderBackend::hash(&self.blockchain, new_canonical.saturated_into())?
 					.expect("existence of block with number `new_canonical` \
 						implies existence of blocks with all numbers before it; qed")
 			};
@@ -1219,7 +1219,7 @@ impl<Block: BlockT> Backend<Block> {
 		};
 
 		let cache_update = if let Some(set_head) = operation.set_head {
-			if let Some(header) = sc_client::blockchain::HeaderBackend::header(&self.blockchain, set_head)? {
+			if let Some(header) = sc_client_api::blockchain::HeaderBackend::header(&self.blockchain, set_head)? {
 				let number = header.number();
 				let hash = header.hash();
 
@@ -1586,7 +1586,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	}
 
 	fn state_at(&self, block: BlockId<Block>) -> ClientResult<Self::State> {
-		use sc_client::blockchain::HeaderBackend as BcHeaderBackend;
+		use sc_client_api::blockchain::HeaderBackend as BcHeaderBackend;
 
 		// special case for genesis initialization
 		match block {
@@ -1687,7 +1687,7 @@ pub(crate) mod tests {
 	use crate::columns;
 	use sp_core::H256;
 	use sc_client_api::backend::{Backend as BTrait, BlockImportOperation as Op};
-	use sc_client::blockchain::Backend as BLBTrait;
+	use sc_client_api::blockchain::Backend as BLBTrait;
 	use sp_runtime::testing::{Header, Block as RawBlock, ExtrinsicWrapper};
 	use sp_runtime::traits::{Hash, BlakeTwo256};
 	use sp_runtime::generic::DigestItem;
@@ -2266,7 +2266,7 @@ pub(crate) mod tests {
 
 	#[test]
 	fn test_finalize_block_with_justification() {
-		use sc_client::blockchain::{Backend as BlockChainBackend};
+		use sc_client_api::blockchain::{Backend as BlockChainBackend};
 
 		let backend = Backend::<Block>::new_test(10, 10);
 

@@ -26,7 +26,7 @@ use std::sync::Arc;
 use std::collections::HashMap;
 pub use substrate_test_client::*;
 pub use substrate_test_runtime as runtime;
-pub use sc_client::LongestChain;
+pub use sc_client_api::LongestChain;
 
 pub use self::block_builder_ext::BlockBuilderExt;
 
@@ -230,7 +230,7 @@ pub trait TestClientBuilderExt<B>: Sized {
 	}
 
 	/// Build the test client and longest chain selector.
-	fn build_with_longest_chain(self) -> (Client<B>, sc_client::LongestChain<B, substrate_test_runtime::Block>);
+	fn build_with_longest_chain(self) -> (Client<B>, sc_client_api::LongestChain<B, substrate_test_runtime::Block>);
 
 	/// Build the test client and the backend.
 	fn build_with_backend(self) -> (Client<B>, Arc<B>);
@@ -249,7 +249,7 @@ impl<B> TestClientBuilderExt<B> for TestClientBuilder<
 		Self::genesis_init_mut(self)
 	}
 
-	fn build_with_longest_chain(self) -> (Client<B>, sc_client::LongestChain<B, substrate_test_runtime::Block>) {
+	fn build_with_longest_chain(self) -> (Client<B>, sc_client_api::LongestChain<B, substrate_test_runtime::Block>) {
 		self.build_with_native_executor(None)
 	}
 

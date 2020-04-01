@@ -45,8 +45,8 @@ use sp_state_machine::{
 };
 use sc_executor::{RuntimeVersion, RuntimeInfo};
 use sp_consensus::{
-	Error as ConsensusError, BlockStatus, BlockImportParams, BlockCheckParams, ImportResult,
-	BlockOrigin, ForkChoiceStrategy, SelectChain, RecordProof,
+	Error as ConsensusError, BlockStatus, BlockImportParams, BlockCheckParams,
+	ImportResult, BlockOrigin, ForkChoiceStrategy, RecordProof,
 };
 use sp_blockchain::{self as blockchain,
 	Backend as ChainBackend,
@@ -1782,82 +1782,6 @@ where
 		child_filter_keys: Option<&[(StorageKey, Option<Vec<StorageKey>>)]>,
 	) -> sp_blockchain::Result<StorageEventStream<Block::Hash>> {
 		Ok(self.storage_notifications.lock().listen(filter_keys, child_filter_keys))
-	}
-}
-
-/// Implement Longest Chain Select implementation
-/// where 'longest' is defined as the highest number of blocks
-pub struct LongestChain<B, Block> {
-	backend: Arc<B>,
-	_phantom: PhantomData<Block>
-}
-
-impl<B, Block> Clone for LongestChain<B, Block> {
-	fn clone(&self) -> Self {
-		let backend = self.backend.clone();
-		LongestChain {
-			backend,
-			_phantom: Default::default()
-		}
-	}
-}
-
-impl<B, Block> LongestChain<B, Block>
-where
-	B: backend::Backend<Block>,
-	Block: BlockT,
-{
-	/// Instantiate a new LongestChain for Backend B
-	pub fn new(backend: Arc<B>) -> Self {
-		LongestChain {
-			backend,
-			_phantom: Default::default()
-		}
-	}
-
-	fn best_block_header(&self) -> sp_blockchain::Result<<Block as BlockT>::Header> {
-		let info = self.backend.blockchain().info();
-		let import_lock = self.backend.get_import_lock();
-		let best_hash = self.backend
-			.blockchain()
-			.best_containing(info.best_hash, None, import_lock)?
-			.unwrap_or(info.best_hash);
-
-		Ok(self.backend.blockchain().header(BlockId::Hash(best_hash))?
-			.expect("given block hash was fetched from block in db; qed"))
-	}
-
-	fn leaves(&self) -> Result<Vec<<Block as BlockT>::Hash>, sp_blockchain::Error> {
-		self.backend.blockchain().leaves()
-	}
-}
-
-impl<B, Block> SelectChain<Block> for LongestChain<B, Block>
-where
-	B: backend::Backend<Block>,
-	Block: BlockT,
-{
-
-	fn leaves(&self) -> Result<Vec<<Block as BlockT>::Hash>, ConsensusError> {
-		LongestChain::leaves(self)
-			.map_err(|e| ConsensusError::ChainLookup(e.to_string()).into())
-	}
-
-	fn best_chain(&self)
-		-> Result<<Block as BlockT>::Header, ConsensusError>
-	{
-		LongestChain::best_block_header(&self)
-			.map_err(|e| ConsensusError::ChainLookup(e.to_string()).into())
-	}
-
-	fn finality_target(
-		&self,
-		target_hash: Block::Hash,
-		maybe_max_number: Option<NumberFor<Block>>
-	) -> Result<Option<Block::Hash>, ConsensusError> {
-		let import_lock = self.backend.get_import_lock();
-		self.backend.blockchain().best_containing(target_hash, maybe_max_number, import_lock)
-			.map_err(|e| ConsensusError::ChainLookup(e.to_string()).into())
 	}
 }
 
