@@ -469,6 +469,7 @@ mod test {
 				].into_iter().collect(),
 			},
 			collect_extrinsics: true,
+			stats: Default::default(),
 		};
 		let config = Configuration { digest_interval: 4, digest_levels: 2 };
 
