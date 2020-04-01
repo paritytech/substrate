@@ -18,7 +18,7 @@
 use serde::{Serialize, Deserialize};
 
 use sp_std::{ops, fmt, prelude::*, convert::TryInto};
-use codec::{Encode, CompactAs};
+use codec::Encode;
 use crate::traits::{
 	SaturatedConversion, UniqueSaturatedInto, Saturating, BaseArithmetic, Bounded, Zero,
 };
@@ -311,8 +311,7 @@ macro_rules! implement_per_thing {
 		///
 		#[doc = $title]
 		#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-		#[derive(Encode, Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord,
-				 RuntimeDebug, CompactAs)]
+		#[derive(Encode, Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, RuntimeDebug)]
 		pub struct $name($type);
 
 		impl PerThing for $name {
@@ -605,40 +604,6 @@ macro_rules! implement_per_thing {
 
 				// make sure saturating_pow won't overflow the upper type
 				assert!(<$upper_type>::from($max) * <$upper_type>::from($max) < <$upper_type>::max_value());
-			}
-
-			#[derive(Encode, Decode, PartialEq, Eq, RuntimeDebug)]
-			struct WithCompact<T: codec::HasCompact> {
-				data: T,
-			}
-
-			#[test]
-			fn has_compact() {
-				let data = WithCompact { data: $name(1) };
-				let encoded = data.encode();
-				assert_eq!(data, WithCompact::<$name>::decode(&mut &encoded[..]).unwrap());
-			}
-
-			#[test]
-			fn compact_encoding() {
-				let tests = [
-					// assume all per_things have the size u8 at least.
-					(0 as $type, 1usize),
-					(1 as $type, 1usize),
-					(63, 1),
-					(64, 2),
-					(65, 2),
-					// (<$type>::max_value(), <$type>::max_value().encode().len() + 1)
-				];
-				for &(n, l) in &tests {
-					let compact: codec::Compact<$name> = $name(n).into();
-					let encoded = compact.encode();
-					assert_eq!(encoded.len(), l);
-					let decoded = <codec::Compact<$name>>::decode(&mut & encoded[..])
-						.unwrap();
-					let per_thingy: $name = decoded.into();
-					assert_eq!(per_thingy, $name(n));
-				}
 			}
 
 			#[test]
