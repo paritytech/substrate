@@ -119,16 +119,22 @@ pub fn run_benchmark(benchmark: Box<dyn BenchmarkDescription>) -> BenchmarkOutpu
 }
 
 macro_rules! matrix(
-	($var:ident in $over:expr => $tt:expr) => {
+	( $var:ident in $over:expr => $tt:expr,  $( $rest:tt )* ) => {
 		{
 			let mut res = Vec::<Box<dyn crate::core::BenchmarkDescription>>::new();
 			for $var in $over.iter() {
 				res.push(Box::new($tt));
 			}
+			res.extend(matrix!( $($rest)* ));
 			res
 		}
 	};
-	($instance:expr) => {
-		vec![Box::new($instance) as Box<dyn crate::core::BenchmarkDescription>]
+	( $var:expr, $( $rest:tt )*) => {
+		{
+			let mut res = vec![Box::new($var) as Box<dyn crate::core::BenchmarkDescription>];
+			res.extend(matrix!( $($rest)* ));
+			res
+		}
 	};
+	() => { vec![] }
 );

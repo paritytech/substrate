@@ -41,20 +41,17 @@ fn main() {
         sc_cli::init_logger("");
     }
 
-    let mut benchmarks = matrix!(
+    let benchmarks = matrix!(
         profile in [Profile::Wasm, Profile::Native] =>
             ImportBenchmarkDescription {
                 profile: *profile,
                 key_types: KeyTypes::Sr25519,
-            }
-    );
-
-    benchmarks.extend(matrix!(
+            },
         ImportBenchmarkDescription {
             profile: Profile::Native,
             key_types: KeyTypes::Ed25519,
-        }
-    ));
+        },
+    );
 
     if opt.list {
         for benchmark in benchmarks.iter() {
