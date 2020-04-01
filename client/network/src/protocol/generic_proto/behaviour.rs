@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::{DiscoveryNetBehaviour, config::ProtocolId};
+use crate::config::ProtocolId;
 use crate::protocol::generic_proto::handler::{NotifsHandlerProto, NotifsHandlerOut, NotifsHandlerIn};
 use crate::protocol::generic_proto::upgrade::RegisteredProtocol;
 
@@ -405,6 +405,16 @@ impl GenericProto {
 		}
 	}
 
+	/// Notify the behaviour that we have learned about the existence of nodes.
+	///
+	/// Can be called multiple times with the same `PeerId`s.
+	pub fn add_discovered_nodes(&mut self, peer_ids: impl Iterator<Item = PeerId>) {
+		self.peerset.discovered(peer_ids.into_iter().map(|peer_id| {
+			debug!(target: "sub-libp2p", "PSM <= Discovered({:?})", peer_id);
+			peer_id
+		}));
+	}
+
 	/// Sends a notification to a peer.
 	///
 	/// Has no effect if the custom protocol is not open with the given peer.
@@ -705,15 +715,6 @@ impl GenericProto {
 			event: NotifsHandlerIn::Disable,
 		});
 		*state = PeerState::Disabled { open: false, connected_point, banned_until: None };
-	}
-}
-
-impl DiscoveryNetBehaviour for GenericProto {
-	fn add_discovered_nodes(&mut self, peer_ids: impl Iterator<Item = PeerId>) {
-		self.peerset.discovered(peer_ids.into_iter().map(|peer_id| {
-			debug!(target: "sub-libp2p", "PSM <= Discovered({:?})", peer_id);
-			peer_id
-		}));
 	}
 }
 
