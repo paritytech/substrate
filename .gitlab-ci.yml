@@ -734,28 +734,31 @@ variables:
 .purge_cargo_home:                 &purge_cargo_home
   stage:                           test
   image:                           parity/tools:latest
+  variables:
+    GIT_STRATEGY:                  none
   only:
     variables:
       - $JOB_NAME
   script:
-    - echo "$JOB_NAME"
+    - echo ${JOB_NAME}
+    - ls ${CARGO_HOME}/../${JOB_NAME}
 
-purge_cargo_home 2 6:
+2 6 purge_cargo_home:
   <<:                              *purge_cargo_home
   tags:
     - ci2
 
-purge_cargo_home 3 6:
+3 6 purge_cargo_home:
   <<:                              *purge_cargo_home
   tags:
     - ci3
 
-purge_cargo_home 5 6:
+5 6 purge_cargo_home:
   <<:                              *purge_cargo_home
   tags:
     - ci5
 
-purge_cargo_home 6 6:
+6 6 purge_cargo_home:
   <<:                              *purge_cargo_home
   tags:
     - ci6
