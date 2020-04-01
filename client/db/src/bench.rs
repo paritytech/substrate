@@ -305,6 +305,14 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		self.reopen()?;
 		Ok(())
 	}
+
+	fn register_overlay_stats(&mut self, stats: &sp_state_machine::StateMachineStats) {
+		self.state.borrow_mut().as_mut().map(|s| s.register_overlay_stats(stats));
+	}
+
+	fn usage_info(&self) -> sp_state_machine::UsageInfo {
+		self.state.borrow().as_ref().map_or(sp_state_machine::UsageInfo::empty(), |s| s.usage_info())
+	}
 }
 
 impl<Block: BlockT> std::fmt::Debug for BenchmarkingState<Block> {
