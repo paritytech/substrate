@@ -655,7 +655,7 @@ mod tests {
 			out_peers: 2,
 			bootnodes: vec![bootnode.clone()],
 			reserved_only: false,
-			reserved_nodes: vec![],
+			priority_groups: vec![],
 		};
 
 		let (mut peerset, _handle) = Peerset::from_config(config);
@@ -676,7 +676,7 @@ mod tests {
 			out_peers: 25,
 			bootnodes: vec![],
 			reserved_only: false,
-			reserved_nodes: vec![],
+			priority_groups: vec![],
 		});
 
 		// We ban a node by setting its reputation under the threshold.
