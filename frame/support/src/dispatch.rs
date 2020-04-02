@@ -157,19 +157,19 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # use frame_system::{self as system, Trait, ensure_signed};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-///			#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
+/// 		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
 /// 		fn my_long_function(origin, do_expensive_calc: bool) -> DispatchResultWithPostInfo {
-///				ensure_signed(origin).map_err(|e| e.with_weight(100_000))?;
-///				if do_expensive_calc {
-///					// do the expensive calculation
-///					// ...
-///					// return None to indicate that we are using all weight (the default)
-///					return Ok(None.into());
-///				}
-///				// expensive calculation not executed: use only a portion of the weight
+/// 			ensure_signed(origin).map_err(|e| e.with_weight(100_000))?;
+/// 			if do_expensive_calc {
+/// 				// do the expensive calculation
+/// 				// ...
+/// 				// return None to indicate that we are using all weight (the default)
+/// 				return Ok(None.into());
+/// 			}
+/// 			// expensive calculation not executed: use only a portion of the weight
 /// 			Ok(Some(100_000).into())
 /// 		}
-///		}
+/// 	}
 /// }
 /// # fn main() {}
 /// ```
