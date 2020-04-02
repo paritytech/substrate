@@ -262,7 +262,7 @@ use frame_support::{
 	},
 };
 use sp_std::prelude::*;
-use frame_system::{self as system, ensure_signed, ensure_root, RawOrigin};
+use frame_system::{self as system, ensure_signed, ensure_root};
 use codec::{Encode, Decode};
 use sp_runtime::{
 	traits::{SignedExtension, Bounded, SaturatedConversion},
@@ -654,6 +654,7 @@ impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
 mod benchmarking {
 	use super::*;
 	use frame_benchmarking::{benchmarks, account};
+	use frame_system::RawOrigin;
 
 	benchmarks!{
 		_ {
