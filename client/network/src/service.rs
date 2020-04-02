@@ -27,7 +27,7 @@
 
 use crate::{
 	behaviour::{Behaviour, BehaviourOut},
-	config::{parse_addr, parse_str_addr, NonReservedPeerMode, Params, TransportConfig},
+	config::{parse_addr, parse_str_addr, NonReservedPeerMode, Params, Role, TransportConfig},
 	error::Error,
 	network_state::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
@@ -181,7 +181,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		// List of multiaddresses that we know in the network.
 		let mut known_addresses = Vec::new();
 		let mut bootnodes = Vec::new();
-		let mut reserved_nodes = Vec::new();
 		let mut boot_node_ids = HashSet::new();
 
 		// Process the bootnodes.
@@ -210,18 +209,43 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				}
 			)?;
 
-		// Initialize the reserved peers.
-		for reserved in params.network_config.reserved_nodes.iter() {
-			reserved_nodes.push(reserved.peer_id.clone());
-			known_addresses.push((reserved.peer_id.clone(), reserved.multiaddr.clone()));
-		}
+		// Initialize the peers we should always be connected to.
+		let priority_groups = {
+			let mut reserved_nodes = HashSet::new();
+			for reserved in params.network_config.reserved_nodes.iter() {
+				reserved_nodes.insert(reserved.peer_id.clone());
+				known_addresses.push((reserved.peer_id.clone(), reserved.multiaddr.clone()));
+			}
+
+			let mut sentries_and_validators = HashSet::new();
+			match &params.role {
+				Role::Sentry { validators } => {
+					for validator in validators {
+						sentries_and_validators.insert(validator.peer_id.clone());
+						known_addresses.push((validator.peer_id.clone(), validator.multiaddr.clone()));
+					}
+				}
+				Role::Authority { sentry_nodes } => {
+					for sentry_node in sentry_nodes {
+						sentries_and_validators.insert(sentry_node.peer_id.clone());
+						known_addresses.push((sentry_node.peer_id.clone(), sentry_node.multiaddr.clone()));
+					}
+				}
+				_ => {}
+			}
+
+			vec![
+				("reserved".to_owned(), reserved_nodes),
+				("sentries_and_validators".to_owned(), sentries_and_validators),
+			]
+		};
 
 		let peerset_config = sc_peerset::PeersetConfig {
 			in_peers: params.network_config.in_peers,
 			out_peers: params.network_config.out_peers,
 			bootnodes,
 			reserved_only: params.network_config.non_reserved_mode == NonReservedPeerMode::Deny,
-			reserved_nodes,
+			priority_groups,
 		};
 
 		// Private and public keys configuration.

@@ -337,7 +337,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 		let important_peers = {
 			let mut imp_p = HashSet::new();
-			for reserved in &peerset_config.reserved_nodes {
+			for reserved in peerset_config.priority_groups.iter().flat_map(|(_, l)| l.iter()) {
 				imp_p.insert(reserved.clone());
 			}
 			imp_p.shrink_to_fit();
@@ -2037,7 +2037,7 @@ mod tests {
 				out_peers: 10,
 				bootnodes: Vec::new(),
 				reserved_only: false,
-				reserved_nodes: Vec::new(),
+				priority_groups: Vec::new(),
 			},
 			Box::new(DefaultBlockAnnounceValidator::new(client.clone())),
 			None,
