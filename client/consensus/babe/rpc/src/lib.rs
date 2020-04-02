@@ -126,6 +126,9 @@ impl<B, C, SC> BabeApi for BabeRPCHandler<B, C, SC>
 						PreDigest::Secondary { .. } => {
 							claims.entry(key.public()).or_default().secondary.push(slot_number);
 						}
+						PreDigest::SecondaryVRF { .. } => {
+							claims.entry(key.public()).or_default().secondary_vrf.push(slot_number);
+						},
 					};
 				}
 			}
@@ -144,6 +147,8 @@ pub struct EpochAuthorship {
 	primary: Vec<u64>,
 	/// the array of secondary slots that can be claimed
 	secondary: Vec<u64>,
+	/// The array of secondary VRF slots that can be claimed.
+	secondary_vrf: Vec<u64>,
 }
 
 /// Errors encountered by the RPC

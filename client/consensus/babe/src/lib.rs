@@ -255,7 +255,26 @@ impl Config {
 		C: AuxStore + ProvideRuntimeApi<B>, C::Api: BabeApi<B, Error = sp_blockchain::Error>,
 	{
 		trace!(target: "babe", "Getting slot duration");
-		match sc_consensus_slots::SlotDuration::get_or_compute(client, |a, b| a.configuration(b)).map(Self) {
+		match sc_consensus_slots::SlotDuration::get_or_compute(client, |a, b| {
+			let has_api_v1 = a.has_api_with::<dyn BabeApi<B, Error = sp_blockchain::Error>, _>(
+				&b, |v| v == 1,
+			)?;
+			let has_api_v2 = a.has_api_with::<dyn BabeApi<B, Error = sp_blockchain::Error>, _>(
+				&b, |v| v == 1,
+			)?;
+
+			if has_api_v1 {
+				#[allow(deprecated)] {
+					Ok(a.configuration_before_version_2(b)?.into())
+				}
+			} else if has_api_v2 {
+				a.configuration(b)
+			} else {
+				Err(sp_blockchain::Error::VersionInvalid(
+					"Unsupported or invalid BabeApi version".to_string()
+				))
+			}
+		}).map(Self) {
 			Ok(s) => Ok(s),
 			Err(s) => {
 				warn!(target: "babe", "Failed to get slot duration");

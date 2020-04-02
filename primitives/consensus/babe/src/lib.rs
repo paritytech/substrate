@@ -91,7 +91,7 @@ pub enum ConsensusLog {
 
 /// Configuration data used by the BABE consensus engine.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
-pub struct BabeConfiguration {
+pub struct BabeConfigurationV1 {
 	/// The slot duration in milliseconds for BABE. Currently, only
 	/// the value provided by this type at genesis will be used.
 	///
@@ -120,6 +120,76 @@ pub struct BabeConfiguration {
 	pub secondary_slots: bool,
 }
 
+impl From<BabeConfigurationV1> for BabeConfiguration {
+	fn from(v1: BabeConfigurationV1) -> Self {
+		Self {
+			slot_duration: v1.slot_duration,
+			epoch_length: v1.epoch_length,
+			c: v1.c,
+			genesis_authorities: v1.genesis_authorities,
+			randomness: v1.randomness,
+			allowed_slots: if v1.secondary_slots {
+				AllowedSlots::PrimaryAndSecondarySlots
+			} else {
+				AllowedSlots::PrimarySlots
+			},
+		}
+	}
+}
+
+/// Configuration data used by the BABE consensus engine.
+#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
+pub struct BabeConfiguration {
+	/// The slot duration in milliseconds for BABE. Currently, only
+	/// the value provided by this type at genesis will be used.
+	///
+	/// Dynamic slot duration may be supported in the future.
+	pub slot_duration: u64,
+
+	/// The duration of epochs in slots.
+	pub epoch_length: SlotNumber,
+
+	/// A constant value that is used in the threshold calculation formula.
+	/// Expressed as a rational where the first member of the tuple is the
+	/// numerator and the second is the denominator. The rational should
+	/// represent a value between 0 and 1.
+	/// In the threshold formula calculation, `1 - c` represents the probability
+	/// of a slot being empty.
+	pub c: (u64, u64),
+
+	/// The authorities for the genesis epoch.
+	pub genesis_authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
+
+	/// The randomness for the genesis epoch.
+	pub randomness: Randomness,
+
+	/// Type of allowed slots.
+	pub allowed_slots: AllowedSlots,
+}
+
+/// Types of allowed slots.
+#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
+pub enum AllowedSlots {
+	/// Only allow primary slots.
+	PrimarySlots,
+	/// Allow primary and secondary slots, but disallow secondary VRF slots.
+	PrimaryAndSecondarySlots,
+	/// Allow primary and secondary slots. Enable secondary VRF slots after slot number.
+	PrimaryAndSecondaryVRFSlots,
+}
+
+impl AllowedSlots {
+	/// Whether plain secondary slots are allowed.
+	pub fn is_secondary_slots_allowed(&self) -> bool {
+		*self == Self::PrimaryAndSecondarySlots
+	}
+
+	/// Whether VRF secondary slots are allowed.
+	pub fn is_secondary_vrf_slots_allowed(&self) -> bool {
+		*self == Self::PrimaryAndSecondaryVRFSlots
+	}
+}
+
 #[cfg(feature = "std")]
 impl sp_consensus::SlotData for BabeConfiguration {
 	fn slot_duration(&self) -> u64 {
@@ -131,12 +201,17 @@ impl sp_consensus::SlotData for BabeConfiguration {
 
 sp_api::decl_runtime_apis! {
 	/// API necessary for block authorship with BABE.
+	#[api_version(2)]
 	pub trait BabeApi {
 		/// Return the configuration for BABE. Currently,
 		/// only the value provided by this type at genesis will be used.
 		///
 		/// Dynamic configuration may be supported in the future.
 		fn configuration() -> BabeConfiguration;
+
+		/// Return the configuration for BABE. Version 1.
+		#[changed_in(2)]
+		fn configuration() -> BabeConfigurationV1;
 
 		/// Returns the slot number that started the current epoch.
 		fn current_epoch_start() -> SlotNumber;
