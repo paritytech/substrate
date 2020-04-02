@@ -25,7 +25,6 @@ sp-timestamp = { version = "2.0.0-alpha.5", path = "../../../primitives/timestam
 sc-telemetry = { version = "2.0.0-alpha.5", path = "../../telemetry" }
 sc-keystore = { version = "2.0.0-alpha.5", path = "../../keystore" }
 sc-client-api = { version = "2.0.0-alpha.5", path = "../../api" }
-sc-client = { version = "0.8.0-alpha.5", path = "../../" }
 sc-consensus-epochs = { version = "0.8.0-alpha.5", path = "../epochs" }
 sp-api = { version = "2.0.0-alpha.5", path = "../../../primitives/api" }
 sp-block-builder = { version = "2.0.0-alpha.5", path = "../../../primitives/block-builder" }
