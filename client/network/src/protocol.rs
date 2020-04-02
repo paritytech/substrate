@@ -2013,8 +2013,8 @@ impl<B: BlockT, H: ExHashT> Drop for Protocol<B, H> {
 #[cfg(test)]
 mod tests {
 	use crate::PeerId;
-	use crate::protocol::light_dispatch::AlwaysBadChecker;
-	use crate::config::{EmptyTransactionPool, Roles};
+	use crate::config::EmptyTransactionPool;
+	use super::{CustomMessageOutcome, Protocol, ProtocolConfig};
 
 	use sp_consensus::block_validation::DefaultBlockAnnounceValidator;
 	use std::sync::Arc;
@@ -2026,10 +2026,7 @@ mod tests {
 		let client = Arc::new(TestClientBuilder::with_default_backend().build_with_longest_chain().0);
 
 		let (mut protocol, _) = Protocol::<Block, Hash>::new(
-			ProtocolConfig {
-				roles: Roles::FULL,
-				max_parallel_downloads: 10,
-			},
+			ProtocolConfig::default(),
 			client.clone(),
 			Arc::new(EmptyTransactionPool),
 			None,
