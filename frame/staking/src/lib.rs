@@ -280,7 +280,7 @@ use frame_support::{
 	dispatch::{IsSubType, DispatchResult},
 	traits::{
 		Currency, LockIdentifier, LockableCurrency, WithdrawReasons, OnUnbalanced, Imbalance, Get,
-		UnixTime, EstimateNextNewSession, EnsureOrigin,
+		UnixTime, EstimateNextNewSession, Randomness, EnsureOrigin,
 	}
 };
 use pallet_session::historical;
@@ -355,7 +355,7 @@ generate_compact_solution_type!(pub GenericCompactAssignments, 16);
 #[derive(Encode, Decode, RuntimeDebug)]
 pub struct ActiveEraInfo {
 	/// Index of era.
-	index: EraIndex,
+	pub index: EraIndex,
 	/// Moment of start expresed as millisecond from `$UNIX_EPOCH`.
 	///
 	/// Start can be none if start hasn't been set for the era yet,
@@ -789,7 +789,13 @@ pub trait Trait: frame_system::Trait {
 	/// A transaction submitter.
 	type SubmitTransaction: SubmitUnsignedTransaction<Self, <Self as Trait>::Call>;
 
-	/// The maximum number of nominators rewarded for each validator.
+	/// Something that can provide randomness
+	type Randomness: Randomness<Self::Hash>;
+
+	/// Maximum number of equalise iterations to run in the offchain submission
+	type MaxIterations: Get<u32>;
+
+	/// The maximum number of nominator rewarded for each validator.
 	///
 	/// For each validator only the `$MaxNominatorRewardedPerValidator` biggest stakers can claim
 	/// their reward. This used to limit the i/o cost for the nominator payout.
@@ -1172,6 +1178,7 @@ decl_module! {
 			{
 				if let Some(next_session_change) = T::NextNewSession::estimate_next_new_session(now){
 					if let Some(remaining) = next_session_change.checked_sub(&now) {
+						debug::native::debug!(target: "staking", "remaining: {:?}", remaining);
 						if remaining <= T::ElectionLookahead::get() && !remaining.is_zero() {
 							// create snapshot.
 							if Self::create_stakers_snapshot() {
@@ -1202,6 +1209,13 @@ decl_module! {
 
 			if Self::era_election_status().is_open_at(now) {
 				let offchain_status = set_check_offchain_execution_status::<T>(now);
+				debug::native::debug!(
+					target: "staking",
+					"RUNNING OFFCHAIN WORKER! {:?}/{}/{:?}",
+					Self::era_election_status(),
+					now,
+					offchain_status,
+				);
 				if let Err(why) = offchain_status {
 					log!(debug, "skipping offchain worker in open election window due to [{}]", why);
 				} else {
@@ -2285,6 +2299,7 @@ impl<T: Trait> Module<T> {
 	fn new_session(session_index: SessionIndex) -> Option<Vec<T::AccountId>> {
 		if let Some(current_era) = Self::current_era() {
 			// Initial era has been set.
+			sp_runtime::print("💰 new_session normal era");
 
 			let current_era_start_session_index = Self::eras_start_session_index(current_era)
 				.unwrap_or_else(|| {
@@ -2312,6 +2327,7 @@ impl<T: Trait> Module<T> {
 			IsCurrentSessionFinal::put(false);
 			Self::new_era(session_index)
 		} else {
+			sp_runtime::print("💰 new_session initial era");
 			// Set initial era
 			Self::new_era(session_index)
 		}
@@ -2494,6 +2510,16 @@ impl<T: Trait> Module<T> {
 
 	/// Start a session potentially starting an era.
 	fn start_session(start_session: SessionIndex) {
+		sp_runtime::print("💸 start_session doing something");
+		sp_std::if_std! {
+			let next_active_era = Self::active_era().map(|e| e.index + 1).unwrap_or(0);
+			println!(
+				"next_active = {} / eras_start_session_index(next_active) = {:?} / start_session = {}",
+				next_active_era,
+				Self::eras_start_session_index(next_active_era),
+				start_session,
+			);
+		}
 		let next_active_era = Self::active_era().map(|e| e.index + 1).unwrap_or(0);
 		if let Some(next_active_era_start_session_index) =
 			Self::eras_start_session_index(next_active_era)
@@ -2921,9 +2947,13 @@ impl<T: Trait> Module<T> {
 /// some session can lag in between the newest session planned and the latest session started.
 impl<T: Trait> pallet_session::SessionManager<T::AccountId> for Module<T> {
 	fn new_session(new_index: SessionIndex) -> Option<Vec<T::AccountId>> {
+		sp_runtime::print("⏰ Staking new session");
+		sp_runtime::print(new_index as u64);
 		Self::new_session(new_index)
 	}
 	fn start_session(start_index: SessionIndex) {
+		sp_runtime::print("⏰ Staking start session");
+		sp_runtime::print(start_index);
 		Self::start_session(start_index)
 	}
 	fn end_session(end_index: SessionIndex) {

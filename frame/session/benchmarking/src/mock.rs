@@ -177,6 +177,8 @@ impl pallet_staking::Trait for Test {
 	type SubmitTransaction = SubmitTransaction;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type UnsignedPriority = UnsignedPriority;
+	type Randomness = ();
+	type MaxIterations = ();
 }
 
 impl crate::Trait for Test {}
