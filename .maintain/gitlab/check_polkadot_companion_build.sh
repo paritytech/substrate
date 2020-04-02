@@ -30,10 +30,11 @@ this job checks if there is a string in the description of the pr like
 polkadot companion: paritytech/polkadot#567
 
 
-it will then run cargo check from this polkadot's branch with substrate code 
-from this pull request. in absence of that string it will check if a polkadot 
-pr is mentioned and will use the last one instead. if none of the above can be 
-found it will check the build against polkadot:master.
+it will then run cargo check from this polkadot's branch with substrate code
+from this pull request. in absence of that string it will check if a polkadot
+pr is mentioned and will use the last one instead. if none of the above can be
+found it will check if polkadot has a branch of the exact same name than the
+substrate's branch. if it can't find anything, it will uses master instead
 
 
 EOT
@@ -52,9 +53,11 @@ cd polkadot
 if expr match "${CI_COMMIT_REF_NAME}" '^[0-9]\+$' >/dev/null
 then
   boldprint "this is pull request no ${CI_COMMIT_REF_NAME}"
+
   # get the last reference to a pr in polkadot
-  pr_body="$(curl -H "${github_header}" -s ${github_api_substrate_pull_url}/${CI_COMMIT_REF_NAME} \
-    | sed -n -r 's/^[[:space:]]+"body": (".*")[^"]+$/\1/p')"
+  pr_data="$(curl -sSL -H "${github_header}" -s ${github_api_substrate_pull_url}/${CI_COMMIT_REF_NAME})"
+  pr_ref="$(echo $pr_data | grep -Po '"ref"\s*:\s*"\K(?!master)[^"]*')"
+  pr_body="$(echo $pr_data | sed -n -r 's/^[[:space:]]+"body": (".*")[^"]+$/\1/p')"
 
   pr_companion="$(echo "${pr_body}" | sed -n -r \
       -e 's;^.*polkadot companion: paritytech/polkadot#([0-9]+).*$;\1;p' \
@@ -73,7 +76,13 @@ then
     git fetch --depth 1 origin refs/pull/${pr_companion}/head:pr/${pr_companion}
     git checkout pr/${pr_companion}
   else
-    boldprint "no companion pr found - building polkadot:master"
+    if git fetch --depth 1 origin "$pr_ref":branch/"$pr_ref"
+    then
+      boldprint "companion branch detected: $pr_ref"
+      git checkout branch/"$pr_ref"
+    else
+      boldprint "no companion branch found - building polkadot:master"
+    fi
   fi
 else
   boldprint "this is not a pull request - building polkadot:master"

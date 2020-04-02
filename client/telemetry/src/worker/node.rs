@@ -116,7 +116,7 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 				pending.push_back(payload.into());
 				Ok(())
 			} else {
-				warn!(target: "telemetry", "Rejected log entry because queue is full for {:?}",
+				warn!(target: "telemetry", "⚠️ Rejected log entry because queue is full for {:?}",
 					self.addr);
 				Err(())
 			}
@@ -137,7 +137,7 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 							break NodeSocket::Connected(conn)
 						},
 						Poll::Ready(Err(err)) => {
-							warn!(target: "telemetry", "Disconnected from {}: {:?}", self.addr, err);
+							warn!(target: "telemetry", "⚠️ Disconnected from {}: {:?}", self.addr, err);
 							let timeout = gen_rand_reconnect_delay();
 							self.socket = NodeSocket::WaitingReconnect(timeout);
 							return Poll::Ready(NodeEvent::Disconnected(err))
@@ -146,7 +146,7 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 				}
 				NodeSocket::Dialing(mut s) => match Future::poll(Pin::new(&mut s), cx) {
 					Poll::Ready(Ok(sink)) => {
-						debug!(target: "telemetry", "Connected to {}", self.addr);
+						debug!(target: "telemetry", "✅ Connected to {}", self.addr);
 						let conn = NodeSocketConnected {
 							sink,
 							pending: VecDeque::new(),
@@ -158,7 +158,7 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 					},
 					Poll::Pending => break NodeSocket::Dialing(s),
 					Poll::Ready(Err(err)) => {
-						warn!(target: "telemetry", "Error while dialing {}: {:?}", self.addr, err);
+						warn!(target: "telemetry", "❌ Error while dialing {}: {:?}", self.addr, err);
 						let timeout = gen_rand_reconnect_delay();
 						socket = NodeSocket::WaitingReconnect(timeout);
 					}
@@ -169,7 +169,7 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 						socket = NodeSocket::Dialing(d);
 					}
 					Err(err) => {
-						warn!(target: "telemetry", "Error while dialing {}: {:?}", self.addr, err);
+						warn!(target: "telemetry", "❌ Error while dialing {}: {:?}", self.addr, err);
 						let timeout = gen_rand_reconnect_delay();
 						socket = NodeSocket::WaitingReconnect(timeout);
 					}
@@ -181,7 +181,7 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 						break NodeSocket::WaitingReconnect(s)
 					}
 				NodeSocket::Poisoned => {
-					error!(target: "telemetry", "Poisoned connection with {}", self.addr);
+					error!(target: "telemetry", "‼️ Poisoned connection with {}", self.addr);
 					break NodeSocket::Poisoned
 				}
 			}

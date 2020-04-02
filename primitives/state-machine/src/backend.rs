@@ -206,13 +206,16 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 		(root, txs)
 	}
 
+	/// Register stats from overlay of state machine.
+	///
+	/// By default nothing is registered.
+	fn register_overlay_stats(&mut self, _stats: &crate::stats::StateMachineStats);
+
 	/// Query backend usage statistics (i/o, memory)
 	///
 	/// Not all implementations are expected to be able to do this. In the
 	/// case when they don't, empty statistics is returned.
-	fn usage_info(&self) -> UsageInfo {
-		UsageInfo::empty()
-	}
+	fn usage_info(&self) -> UsageInfo;
 
 	/// Wipe the state database.
 	fn wipe(&self) -> Result<(), Self::Error> {
@@ -308,10 +311,12 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 		(*self).for_key_values_with_prefix(prefix, f);
 	}
 
+	fn register_overlay_stats(&mut self, _stats: &crate::stats::StateMachineStats) {	}
+
 	fn usage_info(&self) -> UsageInfo {
 		(*self).usage_info()
 	}
- }
+}
 
 /// Trait that allows consolidate two transactions together.
 pub trait Consolidate {
