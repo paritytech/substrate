@@ -57,7 +57,7 @@ const INITIAL_KEEPALIVE_TIME: Duration = Duration::from_secs(5);
 pub struct NotifsOutHandlerProto {
 	/// Name of the protocol to negotiate.
 	protocol_name: Cow<'static, [u8]>,
-	/// Optional prometheus histogram to report message queue sizes variations.
+	/// Optional Prometheus histogram to report message queue size variations.
 	queue_size_report: Option<Histogram>,
 }
 
@@ -368,10 +368,7 @@ impl ProtocolsHandler for NotifsOutHandler {
 		match &mut self.state {
 			State::Open { substream, initial_message } =>
 				match Sink::poll_flush(Pin::new(substream), cx) {
-					Poll::Pending | Poll::Ready(Ok(())) =>
-						if let Some(metric) = &self.queue_size_report {
-							metric.observe(substream.queue_len() as f64);
-						},
+					Poll::Pending | Poll::Ready(Ok(())) => {},
 					Poll::Ready(Err(_)) => {
 						// We try to re-open a substream.
 						let initial_message = mem::replace(initial_message, Vec::new());
