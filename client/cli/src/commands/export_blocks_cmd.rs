@@ -16,7 +16,7 @@
 
 use crate::error;
 use crate::params::{BlockNumber, PruningParams, SharedParams};
-use crate::{substrate_cli_params, CliConfiguration};
+use crate::CliConfiguration;
 use log::info;
 use sc_service::{
 	config::DatabaseConfig, Configuration, ServiceBuilderCommand,
@@ -98,5 +98,12 @@ impl ExportBlocksCmd {
 	}
 }
 
-#[substrate_cli_params(shared_params = shared_params, pruning_params = pruning_params)]
-impl CliConfiguration for ExportBlocksCmd {}
+impl CliConfiguration for ExportBlocksCmd {
+	fn shared_params(&self) -> &SharedParams {
+		&self.shared_params
+	}
+
+	fn pruning_params(&self) -> Option<&PruningParams> {
+		Some(&self.pruning_params)
+	}
+}

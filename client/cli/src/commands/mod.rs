@@ -121,6 +121,30 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
+			fn import_params(&self) -> Option<&::sc_cli::ImportParams> {
+				match self {
+					$($enum::$variant(cmd) => cmd.import_params()),*
+				}
+			}
+
+			fn pruning_params(&self) -> Option<&::sc_cli::PruningParams> {
+				match self {
+					$($enum::$variant(cmd) => cmd.pruning_params()),*
+				}
+			}
+
+			fn keystore_params(&self) -> Option<&::sc_cli::KeystoreParams> {
+				match self {
+					$($enum::$variant(cmd) => cmd.keystore_params()),*
+				}
+			}
+
+			fn network_configuration_params(&self) -> Option<&::sc_cli::NetworkConfigurationParams> {
+				match self {
+					$($enum::$variant(cmd) => cmd.network_configuration_params()),*
+				}
+			}
+
 			fn base_path(&self) -> ::sc_cli::Result<::std::option::Option<::std::path::PathBuf>> {
 				match self {
 					$($enum::$variant(cmd) => cmd.base_path()),*
@@ -343,6 +367,12 @@ macro_rules! substrate_cli_subcommands {
 			fn max_runtime_instances(&self) -> ::sc_cli::Result<::std::option::Option<usize>> {
 				match self {
 					$($enum::$variant(cmd) => cmd.max_runtime_instances()),*
+				}
+			}
+
+			fn log_filters(&self) -> ::sc_cli::Result<::std::option::Option<String>> {
+				match self {
+					$($enum::$variant(cmd) => cmd.log_filters()),*
 				}
 			}
 		}

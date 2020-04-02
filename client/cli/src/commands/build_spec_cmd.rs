@@ -17,7 +17,7 @@
 use crate::error;
 use crate::params::NodeKeyParams;
 use crate::params::SharedParams;
-use crate::{substrate_cli_params, CliConfiguration};
+use crate::CliConfiguration;
 use log::info;
 use sc_network::config::build_multiaddr;
 use sc_service::Configuration;
@@ -68,5 +68,12 @@ impl BuildSpecCmd {
 	}
 }
 
-#[substrate_cli_params(shared_params = shared_params, node_key_params = node_key_params)]
-impl CliConfiguration for BuildSpecCmd {}
+impl CliConfiguration for BuildSpecCmd {
+	fn shared_params(&self) -> &SharedParams {
+		&self.shared_params
+	}
+
+	fn node_key_params(&self) -> Option<&NodeKeyParams> {
+		Some(&self.node_key_params)
+	}
+}

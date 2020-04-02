@@ -20,7 +20,6 @@ use crate::params::KeystoreParams;
 use crate::params::NetworkConfigurationParams;
 use crate::params::SharedParams;
 use crate::params::TransactionPoolParams;
-use crate::substrate_cli_params;
 use crate::CliConfiguration;
 use regex::Regex;
 use sc_service::{
@@ -273,13 +272,23 @@ impl RunCmd {
 	}
 }
 
-#[substrate_cli_params(
-	shared_params = shared_params,
-	import_params = import_params,
-	network_params = network_config,
-	keystore_params = keystore_params,
-)]
 impl CliConfiguration for RunCmd {
+	fn shared_params(&self) -> &SharedParams {
+		&self.shared_params
+	}
+
+	fn import_params(&self) -> Option<&ImportParams> {
+		Some(&self.import_params)
+	}
+
+	fn network_configuration_params(&self) -> Option<&NetworkConfigurationParams> {
+		Some(&self.network_config)
+	}
+
+	fn keystore_params(&self) -> Option<&KeystoreParams> {
+		Some(&self.keystore_params)
+	}
+
 	fn node_name(&self) -> Result<String> {
 		let name: String = match (self.name.as_ref(), self.get_keyring()) {
 			(Some(name), _) => name.to_string(),

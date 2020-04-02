@@ -91,7 +91,7 @@ pub trait SubstrateCli: Sized {
 	where
 		Self: StructOpt + Sized,
 	{
-		<Self as StructOpt>::from_iter(&mut std::env::args_os())
+		<Self as SubstrateCli>::from_iter(&mut std::env::args_os())
 	}
 
 	/// Helper function used to parse the command line arguments. This is the equivalent of
