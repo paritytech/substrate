@@ -7642,7 +7642,6 @@ dependencies = [
  "futures 0.3.4",
  "futures-core",
  "lazy_static",
- "parking_lot 0.10.0",
  "prometheus",
 ]
 

@@ -32,7 +32,6 @@ use crate::block_import::{
 	BlockImport, BlockOrigin, BlockImportParams, ImportedAux, JustificationImport, ImportResult,
 	BlockCheckParams, FinalityProofImport,
 };
-use sp_utils::metrics::BLOCK_IMPORT;
 
 pub use basic_queue::BasicQueue;
 
@@ -187,7 +186,6 @@ pub fn import_single_block<B: BlockT, V: Verifier<B>, Transaction>(
 	block: IncomingBlock<B>,
 	verifier: &mut V,
 ) -> Result<BlockImportResult<NumberFor<B>>, BlockImportError> {
-	let _timer = BLOCK_IMPORT.start_timer(); // records on drop
 	let peer = block.origin;
 
 	let (header, justification) = match (block.header, block.justification) {

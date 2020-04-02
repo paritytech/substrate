@@ -7,7 +7,7 @@ use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use std::convert::TryFrom;
 use sp_runtime::traits::{NumberFor, Block, SaturatedConversion, UniqueSaturatedInto};
 use sp_transaction_pool::PoolStatus;
-use sp_utils::metrics::{register_globals, tick as tick_globals};
+use sp_utils::metrics::register_globals;
 use sysinfo::{ProcessExt, System, SystemExt};
 
 #[cfg(not(unix))]
@@ -317,7 +317,6 @@ impl MetricsService {
 		);
 
 		if let Some(metrics) = self.metrics.as_ref() {
-			tick_globals();
 			metrics.cpu_usage_percentage.set(process_info.cpu_usage as f64);
 			// `sysinfo::Process::memory` returns memory usage in KiB and not bytes.
 			metrics.memory_usage_bytes.set(process_info.memory * 1024);
