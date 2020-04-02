@@ -22,7 +22,7 @@
 use super::*;
 use authorship::claim_slot;
 
-use sp_consensus_babe::{AuthorityPair, SlotNumber};
+use sp_consensus_babe::{AuthorityPair, SlotNumber, AllowedSlots};
 use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
 use sp_consensus::{
 	NoNetwork as DummyOracle, Proposal, RecordProof,
@@ -513,7 +513,7 @@ fn can_author_block() {
 		c: (3, 10),
 		genesis_authorities: Vec::new(),
 		randomness: [0; 32],
-		secondary_slots: true,
+		allowed_slots: AllowedSlots::PrimaryAndSecondarySlots,
 	};
 
 	// with secondary slots enabled it should never be empty
@@ -524,7 +524,7 @@ fn can_author_block() {
 
 	// otherwise with only vrf-based primary slots we might need to try a couple
 	// of times.
-	config.secondary_slots = false;
+	config.allowed_slots = AllowedSlots::PrimarySlots;
 	loop {
 		match claim_slot(i, &epoch, &config, &keystore) {
 			None => i += 1,
