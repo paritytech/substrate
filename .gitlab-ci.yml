@@ -24,6 +24,7 @@
 stages:
   - test
   - build
+  - post-build-test
   - publish
   - kubernetes
   - flaming-fir
@@ -31,7 +32,7 @@ stages:
 variables:
   GIT_STRATEGY:                    fetch
   GIT_DEPTH:                       100
-  CARGO_HOME:                      "/ci-cache/${CI_PROJECT_NAME}/cargo/${CI_JOB_NAME}"
+  CARGO_HOME:                      "/ci-cache/${CI_PROJECT_NAME}/cargo/${CI_COMMIT_REF_NAME}/${CI_JOB_NAME}"
   SCCACHE_DIR:                     "/ci-cache/${CI_PROJECT_NAME}/sccache"
   CARGO_INCREMENTAL:               0
   CI_SERVER_NAME:                  "GitLab CI"
@@ -127,11 +128,13 @@ check-line-width:
   allow_failure:                   true
 
 
-check-polkadot:
+
+
+check-polkadot-companion-build:
   stage:                           build
   <<:                              *docker-env
   script:
-    - ./.maintain/gitlab/check_polkadot.sh
+    - ./.maintain/gitlab/check_polkadot_companion_build.sh
   interruptible:                   true
   allow_failure:                   true
 
@@ -432,6 +435,17 @@ check_warnings:
       else
         echo "___No warnings___";
       fi
+
+
+check-polkadot-companion-status:
+  stage:                           post-build-test
+  image:                           parity/tools:latest
+  <<:                              *kubernetes-build
+  only:
+    - /^[0-9]+$/
+  script:
+    - ./.maintain/gitlab/check_polkadot_companion_status.sh
+
 
 
 trigger-contracts-ci:

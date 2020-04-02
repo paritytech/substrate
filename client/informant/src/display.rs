@@ -76,16 +76,16 @@ impl<B: BlockT> InformantDisplay<B> {
 		if self.format == OutputFormat::Coloured {
 			info!(
 				target: "substrate",
-				"{}{} ({} peers), best: #{} ({}), finalized #{} ({}), ⬇ {} ⬆ {}",
+				"{}{} ({} peers), best: #{} ({}), finalized #{} ({}), {} {}",
 				Colour::White.bold().paint(&status),
 				target,
 				Colour::White.bold().paint(format!("{}", num_connected_peers)),
-				Colour::White.paint(format!("{}", best_number)),
+				Colour::White.bold().paint(format!("{}", best_number)),
 				best_hash,
-				Colour::White.paint(format!("{}", finalized_number)),
+				Colour::White.bold().paint(format!("{}", finalized_number)),
 				info.chain.finalized_hash,
-				TransferRateFormat(net_status.average_download_per_sec),
-				TransferRateFormat(net_status.average_upload_per_sec),
+				Colour::Green.paint(format!("⬇ {}", TransferRateFormat(net_status.average_download_per_sec))),
+				Colour::Red.paint(format!("⬆ {}", TransferRateFormat(net_status.average_upload_per_sec))),
 			);
 		} else {
 			info!(

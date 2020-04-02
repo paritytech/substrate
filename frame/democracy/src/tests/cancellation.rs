@@ -21,7 +21,6 @@ use super::*;
 #[test]
 fn cancel_referendum_should_work() {
 	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
 		let r = Democracy::inject_referendum(
 			2,
 			set_balance_proposal_hash_and_note(2),
@@ -51,13 +50,11 @@ fn cancel_queued_should_work() {
 
 		fast_forward_to(4);
 
-		assert_eq!(Democracy::dispatch_queue(), vec![
-			(6, set_balance_proposal_hash_and_note(2), 0)
-		]);
+		assert!(pallet_scheduler::Agenda::<Test>::get(6)[0].is_some());
 
 		assert_noop!(Democracy::cancel_queued(Origin::ROOT, 1), Error::<Test>::ProposalMissing);
 		assert_ok!(Democracy::cancel_queued(Origin::ROOT, 0));
-		assert_eq!(Democracy::dispatch_queue(), vec![]);
+		assert!(pallet_scheduler::Agenda::<Test>::get(6)[0].is_none());
 	});
 }
 
