@@ -32,7 +32,7 @@ stages:
 variables:
   GIT_STRATEGY:                    fetch
   GIT_DEPTH:                       100
-  CARGO_HOME:                      "/ci-cache/${CI_PROJECT_NAME}/cargo/${CI_JOB_NAME}"
+  CARGO_HOME:                      "/ci-cache/${CI_PROJECT_NAME}/cargo/${CI_COMMIT_REF_NAME}/${CI_JOB_NAME}"
   SCCACHE_DIR:                     "/ci-cache/${CI_PROJECT_NAME}/sccache"
   CARGO_INCREMENTAL:               0
   CI_SERVER_NAME:                  "GitLab CI"
