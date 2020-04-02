@@ -128,7 +128,6 @@ fn make_inputs<T: Trait>(r: u32, o: u32, n: u32)
 			.expect("failed to convert validator id to full identification"))
 		.collect::<Vec<IdentificationTuple<T>>>();
 
-
 	let offence = UnresponsivenessOffence {
 		session_index: 0,
 		validator_set_count: offenders.len() as u32 / 2,
