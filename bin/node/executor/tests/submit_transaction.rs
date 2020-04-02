@@ -27,14 +27,13 @@ use sp_core::{
 	traits::KeystoreExt,
 };
 use frame_system::{
-	mock,
+	mock::{sr25519::AuthorityId, TestAuthorityId},
 	offchain::{
 		Signer,
 		SubmitTransaction,
 		SendSignedTransaction,
 	}
 };
-use pallet_im_online::sr25519::AuthorityPair as Key;
 use codec::Decode;
 
 pub mod common;
@@ -72,13 +71,13 @@ fn should_submit_signed_transaction() {
 	t.register_extension(TransactionPoolExt::new(pool));
 
 	let keystore = KeyStore::new();
-	keystore.write().sr25519_generate_new(Key::ID, Some(&format!("{}/hunter1", PHRASE))).unwrap();
-	keystore.write().sr25519_generate_new(Key::ID, Some(&format!("{}/hunter2", PHRASE))).unwrap();
-	keystore.write().sr25519_generate_new(Key::ID, Some(&format!("{}/hunter3", PHRASE))).unwrap();
+	keystore.write().sr25519_generate_new(AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE))).unwrap();
+	keystore.write().sr25519_generate_new(AuthorityId::ID, Some(&format!("{}/hunter2", PHRASE))).unwrap();
+	keystore.write().sr25519_generate_new(AuthorityId::ID, Some(&format!("{}/hunter3", PHRASE))).unwrap();
 	t.register_extension(KeystoreExt(keystore));
 
 	t.execute_with(|| {
-		let results = Signer::<Runtime, mock::TestAuthorityId>::all_accounts()
+		let results = Signer::<Runtime, TestAuthorityId>::all_accounts()
 			.send_signed_transaction(|_| {
 				pallet_balances::Call::transfer(Default::default(), Default::default())
 			});
@@ -97,11 +96,11 @@ fn should_submit_signed_twice_from_the_same_account() {
 	t.register_extension(TransactionPoolExt::new(pool));
 
 	let keystore = KeyStore::new();
-	keystore.write().sr25519_generate_new(Key::ID, Some(&format!("{}/hunter1", PHRASE))).unwrap();
+	keystore.write().sr25519_generate_new(AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE))).unwrap();
 	t.register_extension(KeystoreExt(keystore));
 
 	t.execute_with(|| {
-		let results = Signer::<Runtime, mock::TestAuthorityId>::all_accounts()
+		let results = Signer::<Runtime, TestAuthorityId>::all_accounts()
 			.send_signed_transaction(|_| {
 				pallet_balances::Call::transfer(Default::default(), Default::default())
 			});
@@ -112,7 +111,7 @@ fn should_submit_signed_twice_from_the_same_account() {
 		assert_eq!(state.read().transactions.len(), 1);
 
 		// submit another one from the same account. The nonce should be incremented.
-		let results = Signer::<Runtime, mock::TestAuthorityId>::all_accounts()
+		let results = Signer::<Runtime, TestAuthorityId>::all_accounts()
 			.send_signed_transaction(|_| {
 				pallet_balances::Call::transfer(Default::default(), Default::default())
 			});
@@ -149,11 +148,11 @@ fn submitted_transaction_should_be_valid() {
 	t.register_extension(TransactionPoolExt::new(pool));
 
 	let keystore = KeyStore::new();
-	keystore.write().sr25519_generate_new(Key::ID, Some(&format!("{}/hunter1", PHRASE))).unwrap();
+	keystore.write().sr25519_generate_new(AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE))).unwrap();
 	t.register_extension(KeystoreExt(keystore));
 
 	t.execute_with(|| {
-		let results = Signer::<Runtime, mock::TestAuthorityId>::all_accounts()
+		let results = Signer::<Runtime, TestAuthorityId>::all_accounts()
 			.send_signed_transaction(|_| {
 				pallet_balances::Call::transfer(Default::default(), Default::default())
 			});
