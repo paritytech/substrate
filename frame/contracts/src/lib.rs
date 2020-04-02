@@ -690,7 +690,7 @@ impl<T: Trait> Module<T> {
 			.get_alive()
 			.ok_or(ContractAccessError::IsTombstone)?;
 
-		let child_info = trie_unique_id(&contract_info.trie_id);
+		let child_info = child_trie_info(&contract_info.trie_id);
 		let maybe_value = AccountDb::<T>::get_storage(
 			&DirectAccountDb,
 			&address,

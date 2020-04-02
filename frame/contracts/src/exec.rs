@@ -577,7 +577,7 @@ where
 	{
 		let (output, change_set, deferred) = {
 			let mut nested = self.nested(dest, trie_id.map(|trie_id| {
-				crate::trie_unique_id(&trie_id)
+				crate::child_trie_info(&trie_id)
 			}));
 			let output = func(&mut nested)?;
 			(output, nested.overlay.into_change_set(), nested.deferred)

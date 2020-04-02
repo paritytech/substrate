@@ -311,8 +311,8 @@ fn account_removal_does_not_remove_storage() {
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
 		let trie_id1 = <Test as Trait>::TrieIdGenerator::trie_id(&1);
 		let trie_id2 = <Test as Trait>::TrieIdGenerator::trie_id(&2);
-		let child_info1 = crate::trie_unique_id(trie_id1.as_ref());
-		let child_info2 = crate::trie_unique_id(trie_id2.as_ref());
+		let child_info1 = crate::child_trie_info(trie_id1.as_ref());
+		let child_info2 = crate::child_trie_info(trie_id2.as_ref());
 		let child_info1 = Some(&child_info1);
 		let child_info2 = Some(&child_info2);
 		let key1 = &[1; 32];

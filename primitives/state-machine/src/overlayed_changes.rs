@@ -29,16 +29,13 @@ use crate::{
 use std::iter::FromIterator;
 use std::collections::{HashMap, BTreeMap, BTreeSet};
 use codec::{Decode, Encode};
-use sp_core::storage::{well_known_keys::EXTRINSIC_INDEX, ChildInfo};
+use sp_core::storage::{well_known_keys::EXTRINSIC_INDEX, ChildInfo, PrefixedStorageKey};
 use std::{mem, ops};
 
 use sp_core::Hasher;
 
 /// Storage key.
 pub type StorageKey = Vec<u8>;
-
-/// Storage key.
-pub type PrefixedStorageKey = Vec<u8>;
 
 /// Storage value.
 pub type StorageValue = Vec<u8>;

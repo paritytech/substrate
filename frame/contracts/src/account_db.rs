@@ -215,7 +215,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 					new_info.last_write = Some(<frame_system::Module<T>>::block_number());
 				}
 
-				let child_info = &new_info.child_trie_unique_id();
+				let child_info = &new_info.child_trie_info();
 				for (k, v) in changed.storage.into_iter() {
 					if let Some(value) = child::get_raw(
 						child_info,

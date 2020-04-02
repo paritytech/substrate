@@ -98,7 +98,19 @@ impl<B: BlockT> BenchmarkingState<B> {
 			child_delta,
 			false,
 		);
-		state.genesis = transaction.clone().drain();
+		let mut keyspace = crate::Keyspaced::new(&[]);
+		for (info, mut updates) in transaction.clone().into_iter() {
+			keyspace.change_keyspace(info.keyspace());
+			for (key, rc_val) in updates.drain() {
+				let key = if info.is_top_trie() {
+					key
+				} else {
+					keyspace.prefix_key(key.as_slice()).to_vec()
+				};
+
+				state.genesis.insert(key, rc_val);
+			}
+		}
 		state.genesis_root = root.clone();
 		state.commit(root, transaction)?;
 		Ok(state)
@@ -287,8 +299,8 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 					} else if rc < 0 {
 						db_transaction.delete(0, &key);
 					}
+					keys.push(key);
 				}
-				keys.push(key);
 			}
 			self.record.set(keys);
 			db.write(db_transaction).map_err(|_| String::from("Error committing transaction"))?;

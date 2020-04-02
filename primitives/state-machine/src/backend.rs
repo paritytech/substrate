@@ -21,7 +21,7 @@ use sp_core::{Hasher, InnerHasher};
 use codec::{Decode, Encode};
 
 use sp_core::{traits::RuntimeCode,
-	storage::{ChildInfo, ChildrenMap, well_known_keys}};
+	storage::{ChildInfo, ChildrenMap, well_known_keys, PrefixedStorageKey}};
 use sp_trie::{TrieMut, MemoryDB, trie_types::TrieDBMut};
 use crate::{
 	trie_backend::TrieBackend,

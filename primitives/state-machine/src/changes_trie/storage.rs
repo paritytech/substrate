@@ -17,7 +17,8 @@
 //! Changes trie storage utilities.
 
 use std::collections::{BTreeMap, HashSet, HashMap};
-use hash_db::{Hasher, Prefix, EMPTY_PREFIX};
+use hash_db::{Prefix, EMPTY_PREFIX};
+use sp_core::Hasher;
 use sp_core::storage::PrefixedStorageKey;
 use sp_core::storage::ChildInfo;
 use sp_trie::DBValue;
