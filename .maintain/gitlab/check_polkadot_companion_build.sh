@@ -56,24 +56,19 @@ then
 
   # get the last reference to a pr in polkadot
   pr_data="$(curl -sSL -H "${github_header}" -s ${github_api_substrate_pull_url}/${CI_COMMIT_REF_NAME})"
-  boldprint "pr_dta: #${pr_data}"
   pr_ref="$(echo $pr_data | grep -Po '"ref"\s*:\s*"\K(?!master)[^"]*')"
-  boldprint "pr_ref: #${pr_ref}"
-  pr_body="$(echo "${pr_data}" | sed -n -r 's/^[[:space:]]+"body": (".*")[^"]+$/\1/p')"
-  boldprint "pr_body: #${pr_body}"
+  pr_body="$(echo $pr_data | sed -n -r 's/^[[:space:]]+"body": (".*")[^"]+$/\1/p')"
 
-  pr_companion="$(echo "${pr_body}" | sed -n -r \
+  pr_companion="$(echo "${pr_data}" | sed -n -r \
       -e 's;^.*polkadot companion: paritytech/polkadot#([0-9]+).*$;\1;p' \
       -e 's;^.*polkadot companion: https://github.com/paritytech/polkadot/pull/([0-9]+).*$;\1;p' \
     | tail -n 1)"
-  boldprint "pr_comp: #${pr_companion}"
   if [ -z "${pr_companion}" ]
   then
     pr_companion="$(echo "${pr_body}" | sed -n -r \
       's;^.*https://github.com/paritytech/polkadot/pull/([0-9]+).*$;\1;p' \
       | tail -n 1)"
   fi
-  boldprint "pr_com2: #${pr_companion}"
 
   if [ "${pr_companion}" ]
   then
@@ -107,3 +102,4 @@ cargo update
 
 # Test Polkadot pr or master branch with this Substrate commit.
 time cargo test --all --release --verbose
+
