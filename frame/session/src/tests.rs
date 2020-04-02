@@ -17,9 +17,9 @@
 // Tests for the Session Pallet
 
 use super::*;
-use frame_support::assert_ok;
+use frame_support::{traits::OnInitialize, assert_ok};
 use sp_core::crypto::key_types::DUMMY;
-use sp_runtime::{traits::OnInitialize, testing::UintAuthorityId};
+use sp_runtime::testing::UintAuthorityId;
 use mock::{
 	NEXT_VALIDATORS, SESSION_CHANGED, TEST_SESSION_CHANGED, authorities, force_new_session,
 	set_next_validators, set_session_length, session_changed, Test, Origin, System, Session,

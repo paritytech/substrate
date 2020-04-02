@@ -37,7 +37,7 @@ use sp_core::{Bytes, traits::BareCryptoStorePtr};
 use sp_api::ProvideRuntimeApi;
 use sp_runtime::generic;
 use sp_transaction_pool::{
-	TransactionPool, InPoolTransaction, TransactionStatus,
+	TransactionPool, InPoolTransaction, TransactionStatus, TransactionSource,
 	BlockHash, TxHash, TransactionFor, error::IntoPoolError,
 };
 use sp_session::SessionKeys;
@@ -74,6 +74,14 @@ impl<P, Client> Author<P, Client> {
 		}
 	}
 }
+
+
+/// Currently we treat all RPC transactions as externals.
+///
+/// Possibly in the future we could allow opt-in for special treatment
+/// of such transactions, so that the block authors can inject
+/// some unique transactions via RPC and have them included in the pool.
+const TX_SOURCE: TransactionSource = TransactionSource::External;
 
 impl<P, Client> AuthorApi<TxHash<P>, BlockHash<P>> for Author<P, Client>
 	where
@@ -127,7 +135,7 @@ impl<P, Client> AuthorApi<TxHash<P>, BlockHash<P>> for Author<P, Client>
 		};
 		let best_block_hash = self.client.info().best_hash;
 		Box::new(self.pool
-			.submit_one(&generic::BlockId::hash(best_block_hash), xt)
+			.submit_one(&generic::BlockId::hash(best_block_hash), TX_SOURCE, xt)
 			.compat()
 			.map_err(|e| e.into_pool_error()
 				.map(Into::into)
@@ -173,7 +181,7 @@ impl<P, Client> AuthorApi<TxHash<P>, BlockHash<P>> for Author<P, Client>
 				.map_err(error::Error::from)?;
 			Ok(
 				self.pool
-					.submit_and_watch(&generic::BlockId::hash(best_block_hash), dxt)
+					.submit_and_watch(&generic::BlockId::hash(best_block_hash), TX_SOURCE, dxt)
 					.map_err(|e| e.into_pool_error()
 						.map(error::Error::from)
 						.unwrap_or_else(|e| error::Error::Verification(Box::new(e)).into())

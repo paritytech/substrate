@@ -68,7 +68,10 @@ pub use sp_application_crypto::{RuntimeAppPublic, BoundToRuntimeAppPublic};
 pub use sp_core::RuntimeDebug;
 
 /// Re-export top-level arithmetic stuff.
-pub use sp_arithmetic::{Perquintill, Perbill, Permill, Percent, Rational128, Fixed64, PerThing};
+pub use sp_arithmetic::{
+	Perquintill, Perbill, Permill, Percent, PerU16, Rational128, Fixed64, PerThing,
+	traits::SaturatedConversion,
+};
 /// Re-export 128 bit helpers.
 pub use sp_arithmetic::helpers_128bit;
 /// Re-export big_uint stuff.

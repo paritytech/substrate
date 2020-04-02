@@ -22,6 +22,7 @@ use crate::{
 		NO_EXTRINSIC_INDEX, BlockNumber, build_changes_trie,
 		State as ChangesTrieState,
 	},
+	stats::StateMachineStats,
 };
 
 #[cfg(test)]
@@ -29,16 +30,13 @@ use std::iter::FromIterator;
 use std::collections::{HashMap, BTreeMap, BTreeSet};
 use codec::{Decode, Encode};
 use sp_core::storage::{well_known_keys::EXTRINSIC_INDEX, ChildInfo,
-	ChildChange, ChildUpdate};
+	PrefixedStorageKey, ChildChange, ChildUpdate};
 use std::{mem, ops};
 
 use sp_core::Hasher;
 
 /// Storage key.
 pub type StorageKey = Vec<u8>;
-
-/// Storage key.
-pub type PrefixedStorageKey = Vec<u8>;
 
 /// Storage value.
 pub type StorageValue = Vec<u8>;
@@ -61,6 +59,8 @@ pub struct OverlayedChanges {
 	pub(crate) committed: OverlayedChangeSet,
 	/// True if extrinsics stats must be collected.
 	pub(crate) collect_extrinsics: bool,
+	/// Collect statistic on this execution.
+	pub(crate) stats: StateMachineStats,
 }
 
 /// The storage value, used inside OverlayedChanges.
@@ -86,6 +86,7 @@ pub struct ChildChangeSet {
 	/// for first bulk deletion.
 	pub change: (ChildChange, Option<u32>),
 	/// Deltas of modified values for this change.
+	/// The map key is the child storage key without the common prefix.
 	pub values: BTreeMap<StorageKey, OverlayedValue>,
 }
 
@@ -228,7 +229,11 @@ impl OverlayedChanges {
 	pub fn storage(&self, key: &[u8]) -> Option<Option<&[u8]>> {
 		self.prospective.top.get(key)
 			.or_else(|| self.committed.top.get(key))
-			.map(|x| x.value.as_ref().map(AsRef::as_ref))
+			.map(|x| {
+				let size_read = x.value.as_ref().map(|x| x.len() as u64).unwrap_or(0);
+				self.stats.tally_read_modified(size_read);
+				x.value.as_ref().map(AsRef::as_ref)
+			})
 	}
 
 	/// Returns a double-Option: None if the key is unknown (i.e. and the query should be referred
@@ -240,6 +245,8 @@ impl OverlayedChanges {
 				return Some(None);
 			}
 			if let Some(val) = child.values.get(key) {
+				let size_read = val.value.as_ref().map(|x| x.len() as u64).unwrap_or(0);
+				self.stats.tally_read_modified(size_read);
 				return Some(val.value.as_ref().map(AsRef::as_ref));
 			}
 		}
@@ -249,6 +256,8 @@ impl OverlayedChanges {
 				return Some(None);
 			}
 			if let Some(val) = child.values.get(key) {
+				let size_read = val.value.as_ref().map(|x| x.len() as u64).unwrap_or(0);
+				self.stats.tally_read_modified(size_read);
 				return Some(val.value.as_ref().map(AsRef::as_ref));
 			}
 		}
@@ -260,6 +269,8 @@ impl OverlayedChanges {
 	///
 	/// `None` can be used to delete a value specified by the given key.
 	pub(crate) fn set_storage(&mut self, key: StorageKey, val: Option<StorageValue>) {
+		let size_write = val.as_ref().map(|x| x.len() as u64).unwrap_or(0);
+		self.stats.tally_write_overlay(size_write);
 		let extrinsic_index = self.extrinsic_index();
 		let entry = self.prospective.top.entry(key).or_default();
 		entry.value = val;
@@ -279,6 +290,8 @@ impl OverlayedChanges {
 		key: StorageKey,
 		val: Option<StorageValue>,
 	) {
+		let size_write = val.as_ref().map(|x| x.len() as u64).unwrap_or(0);
+		self.stats.tally_write_overlay(size_write);
 		let extrinsic_index = self.extrinsic_index();
 		let map_entry = self.get_or_init_prospective(child_info);
 		let updatable = map_entry.info.try_update(&map_entry.change.0, child_info);

@@ -20,6 +20,7 @@ use crate::{
 	StorageKey, StorageValue, StorageCollection,
 	trie_backend::TrieBackend,
 	backend::{Backend, insert_into_memory_db},
+	stats::UsageInfo,
 };
 use std::{error, fmt, collections::{BTreeMap, HashMap}, marker::PhantomData, ops};
 use sp_core::{Hasher, InnerHasher};
@@ -357,7 +358,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 				} else {
 					let prefix_storage_key = child_info.prefixed_storage_key();
 					let ch = insert_into_memory_db::<H, _>(&mut mdb, map.clone().into_iter())?;
-					new_child_roots.push((prefix_storage_key, ch.as_ref().into()));
+					new_child_roots.push((prefix_storage_key.into_inner(), ch.as_ref().into()));
 				}
 			} else {
 				debug_assert!(child_change != &ChildChange::BulkDeleteByKeyspace);
@@ -376,6 +377,12 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 		};
 		self.trie = Some(TrieBackend::new(mdb, root));
 		self.trie.as_ref()
+	}
+
+	fn register_overlay_stats(&mut self, _stats: &crate::stats::StateMachineStats) { }
+
+	fn usage_info(&self) -> UsageInfo {
+		UsageInfo::empty()
 	}
 }
 

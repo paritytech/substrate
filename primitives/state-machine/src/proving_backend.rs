@@ -301,6 +301,12 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 			(root, is_empty, None)
 		}
 	}
+
+	fn register_overlay_stats(&mut self, _stats: &crate::stats::StateMachineStats) { }
+
+	fn usage_info(&self) -> crate::stats::UsageInfo {
+		self.0.usage_info()
+	}
 }
 
 /// Create proof check backend.

@@ -25,31 +25,42 @@
 //! The methods of the [`NetworkService`] are implemented by sending a message over a channel,
 //! which is then processed by [`NetworkWorker::poll`].
 
-use std::{borrow::Cow, collections::{HashMap, HashSet}, fs, marker::PhantomData, io, path::Path, str};
-use std::sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering}};
-use std::pin::Pin;
-use std::task::Poll;
-
-use sp_consensus::import_queue::{ImportQueue, Link};
-use sp_consensus::import_queue::{BlockImportResult, BlockImportError};
+use crate::{
+	behaviour::{Behaviour, BehaviourOut},
+	config::{parse_addr, parse_str_addr, NonReservedPeerMode, Params, TransportConfig},
+	error::Error,
+	network_state::{
+		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
+	},
+	on_demand_layer::AlwaysBadChecker,
+	protocol::{self, event::Event, light_client_handler, sync::SyncState, PeerInfo, Protocol},
+	transport, ReputationChange,
+};
 use futures::{prelude::*, channel::mpsc};
-use log::{warn, error, info, trace};
-use libp2p::{PeerId, Multiaddr, kad::record};
 use libp2p::swarm::{NetworkBehaviour, SwarmBuilder, SwarmEvent};
+use libp2p::{kad::record, Multiaddr, PeerId};
+use log::{error, info, trace, warn};
 use parking_lot::Mutex;
+use prometheus_endpoint::{
+	register, Counter, CounterVec, Gauge, GaugeVec, Opts, PrometheusError, Registry, U64,
+};
 use sc_peerset::PeersetHandle;
-use sp_runtime::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId};
-use prometheus_endpoint::{Registry, Counter, CounterVec, Gauge, GaugeVec, Opts, U64, register, PrometheusError};
-
-use crate::{behaviour::{Behaviour, BehaviourOut}, config::{parse_str_addr, parse_addr}};
-use crate::{transport, config::NonReservedPeerMode, ReputationChange};
-use crate::config::{Params, TransportConfig};
-use crate::error::Error;
-use crate::network_state::{NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer};
-use crate::protocol::{self, Protocol, PeerInfo};
-use crate::protocol::{event::Event, light_dispatch::{AlwaysBadChecker, RequestData}};
-use crate::protocol::sync::SyncState;
-
+use sp_consensus::import_queue::{BlockImportError, BlockImportResult, ImportQueue, Link};
+use sp_runtime::{
+	traits::{Block as BlockT, NumberFor},
+	ConsensusEngineId,
+};
+use std::{
+	borrow::Cow,
+	collections::{HashMap, HashSet},
+	fs, io,
+	marker::PhantomData,
+	path::Path,
+	pin::Pin,
+	str,
+	sync::{atomic::{AtomicBool, AtomicUsize, Ordering}, Arc},
+	task::Poll,
+};
 
 /// Minimum Requirements for a Hash within Networking
 pub trait ExHashT: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static {}
@@ -171,17 +182,21 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		let mut known_addresses = Vec::new();
 		let mut bootnodes = Vec::new();
 		let mut reserved_nodes = Vec::new();
+		let mut boot_node_ids = HashSet::new();
 
 		// Process the bootnodes.
 		for bootnode in params.network_config.boot_nodes.iter() {
 			match parse_str_addr(bootnode) {
 				Ok((peer_id, addr)) => {
 					bootnodes.push(peer_id.clone());
+					boot_node_ids.insert(peer_id.clone());
 					known_addresses.push((peer_id, addr));
 				},
 				Err(_) => warn!(target: "sub-libp2p", "Not a valid bootnode address: {}", bootnode),
 			}
 		}
+
+		let boot_node_ids = Arc::new(boot_node_ids);
 
 		// Check for duplicate bootnodes.
 		known_addresses.iter()
@@ -222,7 +237,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		let local_identity = params.network_config.node_key.clone().into_keypair()?;
 		let local_public = local_identity.public();
 		let local_peer_id = local_public.clone().into_peer_id();
-		info!(target: "sub-libp2p", "Local node identity is: {}", local_peer_id.to_base58());
+		info!(target: "sub-libp2p", "🏷  Local node identity is: {}", local_peer_id.to_base58());
 
 		let checker = params.on_demand.as_ref()
 			.map(|od| od.checker().clone())
@@ -236,14 +251,14 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				max_parallel_downloads: params.network_config.max_parallel_downloads,
 			},
 			params.chain.clone(),
-			checker.clone(),
 			params.transaction_pool,
 			params.finality_proof_provider.clone(),
 			params.finality_proof_request_builder,
 			params.protocol_id.clone(),
 			peerset_config,
 			params.block_announce_validator,
-			params.metrics_registry.as_ref()
+			params.metrics_registry.as_ref(),
+			boot_node_ids.clone(),
 		)?;
 
 		// Build the swarm.
@@ -331,7 +346,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			metrics: match params.metrics_registry {
 				Some(registry) => Some(Metrics::register(&registry)?),
 				None => None
-			}
+			},
+			boot_node_ids,
 		})
 	}
 
@@ -375,6 +391,11 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		self.network_service.user_protocol().num_queued_blocks()
 	}
 
+	/// Returns the number of processed blocks.
+	pub fn num_processed_blocks(&self) -> usize {
+		self.network_service.user_protocol().num_processed_blocks()
+	}
+
 	/// Number of active sync requests.
 	pub fn num_sync_requests(&self) -> usize {
 		self.network_service.user_protocol().num_sync_requests()
@@ -392,8 +413,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 	}
 
 	/// You must call this when a new block is imported by the client.
-	pub fn on_block_imported(&mut self, header: B::Header, data: Vec<u8>, is_best: bool) {
-		self.network_service.user_protocol_mut().on_block_imported(&header, data, is_best);
+	pub fn on_block_imported(&mut self, header: B::Header, is_best: bool) {
+		self.network_service.user_protocol_mut().on_block_imported(&header, is_best);
 	}
 
 	/// You must call this when a new block is finalized by the client.
@@ -762,11 +783,13 @@ pub struct NetworkWorker<B: BlockT + 'static, H: ExHashT> {
 	/// Messages from the `NetworkService` and that must be processed.
 	from_worker: mpsc::UnboundedReceiver<ServiceToWorkerMsg<B, H>>,
 	/// Receiver for queries from the light client that must be processed.
-	light_client_rqs: Option<mpsc::UnboundedReceiver<RequestData<B>>>,
+	light_client_rqs: Option<mpsc::UnboundedReceiver<light_client_handler::Request<B>>>,
 	/// Senders for events that happen on the network.
 	event_streams: Vec<mpsc::UnboundedSender<Event>>,
 	/// Prometheus network metrics.
 	metrics: Option<Metrics>,
+	/// The `PeerId`'s of all boot nodes.
+	boot_node_ids: Arc<HashSet<PeerId>>,
 }
 
 struct Metrics {
@@ -776,6 +799,7 @@ struct Metrics {
 	import_queue_finality_proofs_submitted: Counter<U64>,
 	import_queue_justifications_submitted: Counter<U64>,
 	is_major_syncing: Gauge<U64>,
+	issued_light_requests: Counter<U64>,
 	kbuckets_num_nodes: Gauge<U64>,
 	network_per_sec_bytes: GaugeVec<U64>,
 	notifications_total: CounterVec<U64>,
@@ -808,6 +832,10 @@ impl Metrics {
 			)?, registry)?,
 			is_major_syncing: register(Gauge::new(
 				"sub_libp2p_is_major_syncing", "Whether the node is performing a major sync or not.",
+			)?, registry)?,
+			issued_light_requests: register(Counter::new(
+				"issued_light_requests",
+				"Number of light client requests that our node has issued.",
 			)?, registry)?,
 			kbuckets_num_nodes: register(Gauge::new(
 				"sub_libp2p_kbuckets_num_nodes", "Number of nodes in the Kademlia k-buckets"
@@ -884,7 +912,13 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 		// Check for new incoming light client requests.
 		if let Some(light_client_rqs) = this.light_client_rqs.as_mut() {
 			while let Poll::Ready(Some(rq)) = light_client_rqs.poll_next_unpin(cx) {
-				this.network_service.user_protocol_mut().add_light_client_request(rq);
+				// This can error if there are too many queued requests already.
+				if this.network_service.light_client_request(rq).is_err() {
+					log::warn!("Couldn't start light client request: too many pending requests");
+				}
+				if let Some(metrics) = this.metrics.as_ref() {
+					metrics.issued_light_requests.inc();
+				}
 			}
 		}
 
@@ -986,8 +1020,29 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					trace!(target: "sub-libp2p", "Libp2p => NewListenAddr({})", addr),
 				Poll::Ready(SwarmEvent::ExpiredListenAddr(addr)) =>
 					trace!(target: "sub-libp2p", "Libp2p => ExpiredListenAddr({})", addr),
-				Poll::Ready(SwarmEvent::UnreachableAddr { peer_id, address, error }) =>
-					trace!(target: "sub-libp2p", "Libp2p => Failed to reach {:?} through {:?}: {}", peer_id, address, error),
+				Poll::Ready(SwarmEvent::UnreachableAddr { peer_id, address, error }) => {
+					let error = error.to_string();
+
+					trace!(
+						target: "sub-libp2p", "Libp2p => Failed to reach {:?} through {:?}: {}",
+						peer_id,
+						address,
+						error,
+					);
+
+					if let Some(peer_id) = peer_id {
+						if this.boot_node_ids.contains(&peer_id)
+							&& error.contains("Peer ID mismatch")
+						{
+							error!(
+								"Connecting to bootnode with peer id `{}` and address `{}` failed \
+								because it returned a different peer id!",
+								peer_id,
+								address,
+							);
+						}
+					}
+				},
 				Poll::Ready(SwarmEvent::StartConnect(peer_id)) =>
 					trace!(target: "sub-libp2p", "Libp2p => StartConnect({:?})", peer_id),
 			};
@@ -1056,7 +1111,7 @@ impl<'a, B: BlockT, H: ExHashT> Link<B> for NetworkLink<'a, B, H> {
 	fn justification_imported(&mut self, who: PeerId, hash: &B::Hash, number: NumberFor<B>, success: bool) {
 		self.protocol.user_protocol_mut().justification_import_result(hash.clone(), number, success);
 		if !success {
-			info!("Invalid justification provided by {} for #{}", who, hash);
+			info!("💔 Invalid justification provided by {} for #{}", who, hash);
 			self.protocol.user_protocol_mut().disconnect_peer(&who);
 			self.protocol.user_protocol_mut().report_peer(who, ReputationChange::new_fatal("Invalid justification"));
 		}
@@ -1076,7 +1131,7 @@ impl<'a, B: BlockT, H: ExHashT> Link<B> for NetworkLink<'a, B, H> {
 		let success = finalization_result.is_ok();
 		self.protocol.user_protocol_mut().finality_proof_import_result(request_block, finalization_result);
 		if !success {
-			info!("Invalid finality proof provided by {} for #{}", who, request_block.0);
+			info!("💔 Invalid finality proof provided by {} for #{}", who, request_block.0);
 			self.protocol.user_protocol_mut().disconnect_peer(&who);
 			self.protocol.user_protocol_mut().report_peer(who, ReputationChange::new_fatal("Invalid finality proof"));
 		}

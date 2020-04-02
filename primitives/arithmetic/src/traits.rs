@@ -21,7 +21,7 @@ use codec::HasCompact;
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{
 	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,
-	CheckedShl, CheckedShr
+	CheckedShl, CheckedShr, checked_pow
 };
 use sp_std::ops::{
 	Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
@@ -104,28 +104,40 @@ impl<T: Bounded + Sized, S: TryInto<T> + Sized> UniqueSaturatedInto<T> for S {
 	}
 }
 
-/// Simple trait to use checked mul and max value to give a saturated mul operation over
-/// supported types.
+/// Saturating arithmetic operations, returning maximum or minimum values instead of overflowing.
 pub trait Saturating {
-	/// Saturated addition - if the product can't fit in the type then just use max-value.
-	fn saturating_add(self, o: Self) -> Self;
+	/// Saturating addition. Compute `self + rhs`, saturating at the numeric bounds instead of
+	/// overflowing.
+	fn saturating_add(self, rhs: Self) -> Self;
 
-	/// Saturated subtraction - if the product can't fit in the type then just use max-value.
-	fn saturating_sub(self, o: Self) -> Self;
+	/// Saturating subtraction. Compute `self - rhs`, saturating at the numeric bounds instead of
+	/// overflowing.
+	fn saturating_sub(self, rhs: Self) -> Self;
 
-	/// Saturated multiply - if the product can't fit in the type then just use max-value.
-	fn saturating_mul(self, o: Self) -> Self;
+	/// Saturating multiply. Compute `self * rhs`, saturating at the numeric bounds instead of
+	/// overflowing.
+	fn saturating_mul(self, rhs: Self) -> Self;
+	
+	/// Saturating exponentiation. Compute `self.pow(exp)`, saturating at the numeric bounds
+	/// instead of overflowing.
+	fn saturating_pow(self, exp: usize) -> Self;
 }
 
-impl<T: CheckedMul + Bounded + num_traits::Saturating> Saturating for T {
+impl<T: Clone + One + CheckedMul + Bounded + num_traits::Saturating> Saturating for T {
 	fn saturating_add(self, o: Self) -> Self {
 		<Self as num_traits::Saturating>::saturating_add(self, o)
 	}
+
 	fn saturating_sub(self, o: Self) -> Self {
 		<Self as num_traits::Saturating>::saturating_sub(self, o)
 	}
+
 	fn saturating_mul(self, o: Self) -> Self {
 		self.checked_mul(&o).unwrap_or_else(Bounded::max_value)
+	}
+
+	fn saturating_pow(self, exp: usize) -> Self {
+		checked_pow(self, exp).unwrap_or_else(Bounded::max_value)
 	}
 }
 

@@ -23,6 +23,7 @@ use codec::{Decode, Encode, Codec};
 use sp_core::Hasher;
 use sp_core::storage::ChildInfo;
 use num_traits::Zero;
+use sp_core::storage::PrefixedStorageKey;
 use sp_trie::Recorder;
 use crate::changes_trie::{AnchorBlockId, ConfigurationRange, RootsStorage, Storage, BlockNumber};
 use crate::changes_trie::input::{DigestIndex, ExtrinsicIndex, DigestIndexValue, ExtrinsicIndexValue};
@@ -41,7 +42,7 @@ pub fn key_changes<'a, H: Hasher, Number: BlockNumber>(
 	begin: Number,
 	end: &'a AnchorBlockId<H::Out, Number>,
 	max: Number,
-	storage_key: Option<&'a [u8]>,
+	storage_key: Option<&'a PrefixedStorageKey>,
 	key: &'a [u8],
 ) -> Result<DrilldownIterator<'a, H, Number>, String> {
 	// we can't query any roots before root
@@ -81,7 +82,7 @@ pub fn key_changes_proof<'a, H: Hasher, Number: BlockNumber>(
 	begin: Number,
 	end: &AnchorBlockId<H::Out, Number>,
 	max: Number,
-	storage_key: Option<&[u8]>,
+	storage_key: Option<&PrefixedStorageKey>,
 	key: &[u8],
 ) -> Result<Vec<Vec<u8>>, String> where H::Out: Codec {
 	// we can't query any roots before root
@@ -129,7 +130,7 @@ pub fn key_changes_proof_check<'a, H: Hasher, Number: BlockNumber>(
 	begin: Number,
 	end: &AnchorBlockId<H::Out, Number>,
 	max: Number,
-	storage_key: Option<&[u8]>,
+	storage_key: Option<&PrefixedStorageKey>,
 	key: &[u8]
 ) -> Result<Vec<(Number, u32)>, String> where H::Out: Encode {
 	key_changes_proof_check_with_db(
@@ -152,7 +153,7 @@ pub fn key_changes_proof_check_with_db<'a, H: Hasher, Number: BlockNumber>(
 	begin: Number,
 	end: &AnchorBlockId<H::Out, Number>,
 	max: Number,
-	storage_key: Option<&[u8]>,
+	storage_key: Option<&PrefixedStorageKey>,
 	key: &[u8]
 ) -> Result<Vec<(Number, u32)>, String> where H::Out: Encode {
 	// we can't query any roots before root
@@ -191,7 +192,7 @@ pub struct DrilldownIteratorEssence<'a, H, Number>
 		Number: BlockNumber,
 		H::Out: 'a,
 {
-	storage_key: Option<&'a [u8]>,
+	storage_key: Option<&'a PrefixedStorageKey>,
 	key: &'a [u8],
 	roots_storage: &'a dyn RootsStorage<H, Number>,
 	storage: &'a dyn Storage<H, Number>,
@@ -241,7 +242,7 @@ impl<'a, H, Number> DrilldownIteratorEssence<'a, H, Number>
 				let trie_root = if let Some(storage_key) = self.storage_key {
 					let child_key = ChildIndex {
 						block: block.clone(),
-						storage_key: storage_key.to_vec(),
+						storage_key: storage_key.clone(),
 					}.encode();
 					if let Some(trie_root) = trie_reader(self.storage, trie_root, &child_key)?
 						.and_then(|v| ChildIndexValue::decode(&mut &v[..]).ok())
@@ -392,6 +393,11 @@ mod tests {
 	use sp_runtime::traits::BlakeTwo256;
 	use super::*;
 
+	fn child_key() -> PrefixedStorageKey {
+		let child_info = sp_core::storage::ChildInfo::new_default(&b"1"[..]);
+		child_info.prefixed_storage_key()
+	}
+
 	fn prepare_for_drilldown() -> (Configuration, InMemoryStorage<BlakeTwo256, u64>) {
 		let config = Configuration { digest_interval: 4, digest_levels: 2 };
 		let backend = InMemoryStorage::with_inputs(vec![
@@ -428,7 +434,7 @@ mod tests {
 			(16, vec![
 				InputPair::DigestIndex(DigestIndex { block: 16, key: vec![42] }, vec![4, 8]),
 			]),
-		], vec![(b"1".to_vec(), vec![
+		], vec![(child_key(), vec![
 				(1, vec![
 					InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 1, key: vec![42] }, vec![0]),
 				]),
@@ -545,7 +551,7 @@ mod tests {
 			1,
 			&AnchorBlockId { hash: Default::default(), number: 100 },
 			1000,
-			Some(&b"1"[..]),
+			Some(&child_key()),
 			&[42],
 		).and_then(|i| i.collect::<Result<Vec<_>, _>>()).is_err());
 	}
@@ -587,7 +593,7 @@ mod tests {
 		let (remote_config, remote_storage) = prepare_for_drilldown();
 		let remote_proof_child = key_changes_proof::<BlakeTwo256, u64>(
 			configuration_range(&remote_config, 0), &remote_storage, 1,
-			&AnchorBlockId { hash: Default::default(), number: 16 }, 16, Some(&b"1"[..]), &[42]).unwrap();
+			&AnchorBlockId { hash: Default::default(), number: 16 }, 16, Some(&child_key()), &[42]).unwrap();
 
 		// happens on local light node:
 
@@ -602,7 +608,7 @@ mod tests {
 		local_storage.clear_storage();
 		let local_result_child = key_changes_proof_check::<BlakeTwo256, u64>(
 			configuration_range(&local_config, 0), &local_storage, remote_proof_child, 1,
-			&AnchorBlockId { hash: Default::default(), number: 16 }, 16, Some(&b"1"[..]), &[42]);
+			&AnchorBlockId { hash: Default::default(), number: 16 }, 16, Some(&child_key()), &[42]);
 
 		// check that drilldown result is the same as if it was happening at the full node
 		assert_eq!(local_result, Ok(vec![(8, 2), (8, 1), (6, 3), (3, 0)]));

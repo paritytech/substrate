@@ -66,6 +66,8 @@ impl GenesisInit for () {
 pub struct TestClientBuilder<Block: BlockT, Executor, Backend, G: GenesisInit> {
 	execution_strategies: ExecutionStrategies,
 	genesis_init: G,
+	/// The key is an unprefixed storage key, this only contains
+	/// default child trie content.
 	child_storage_extension: HashMap<Vec<u8>, StorageChild>,
 	backend: Arc<Backend>,
 	_executor: std::marker::PhantomData<Executor>,

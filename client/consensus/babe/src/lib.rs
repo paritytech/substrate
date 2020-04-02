@@ -62,7 +62,9 @@ pub use sp_consensus_babe::{
 	BabeApi, ConsensusLog, BABE_ENGINE_ID, SlotNumber, BabeConfiguration,
 	AuthorityId, AuthorityPair, AuthoritySignature,
 	BabeAuthorityWeight, VRF_OUTPUT_LENGTH,
-	digests::{PreDigest, CompatibleDigestItem, NextEpochDescriptor},
+	digests::{
+		CompatibleDigestItem, NextEpochDescriptor, PreDigest, PrimaryPreDigest, SecondaryPreDigest,
+	},
 };
 pub use sp_consensus::SyncOracle;
 use std::{
@@ -366,7 +368,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 		&inherent_data_providers,
 	)?;
 
-	babe_info!("Starting BABE Authorship worker");
+	babe_info!("👶 Starting BABE Authorship worker");
 	Ok(sc_consensus_slots::start_slot_worker(
 		config.0,
 		select_chain,
@@ -580,10 +582,10 @@ fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, Error<B>>
 	// genesis block doesn't contain a pre digest so let's generate a
 	// dummy one to not break any invariants in the rest of the code
 	if header.number().is_zero() {
-		return Ok(PreDigest::Secondary {
+		return Ok(PreDigest::Secondary(SecondaryPreDigest {
 			slot_number: 0,
 			authority_index: 0,
-		});
+		}));
 	}
 
 	let mut pre_digest: Option<_> = None;
@@ -1008,7 +1010,7 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 				ConsensusError::ClientImport(Error::<Block>::FetchEpoch(parent_hash).into())
 			})?;
 
-			babe_info!("New epoch {} launching at block {} (block slot {} >= start slot {}).",
+			babe_info!("👶 New epoch {} launching at block {} (block slot {} >= start slot {}).",
 					   viable_epoch.as_ref().epoch_index,
 					   hash,
 					   slot_number,
@@ -1016,7 +1018,7 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 
 			let next_epoch = viable_epoch.increment(next_epoch_descriptor);
 
-			babe_info!("Next epoch starts at slot {}", next_epoch.as_ref().start_slot);
+			babe_info!("👶 Next epoch starts at slot {}", next_epoch.as_ref().start_slot);
 
 			// prune the tree of epochs not part of the finalized chain or
 			// that are not live anymore, and then track the given epoch change

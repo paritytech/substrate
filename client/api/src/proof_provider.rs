@@ -19,7 +19,7 @@ use sp_runtime::{
 	traits::{Block as BlockT},
 };
 use crate::{StorageProof, ChangesProof};
-use sp_storage::{ChildInfo, StorageKey};
+use sp_storage::{ChildInfo, StorageKey, PrefixedStorageKey};
 
 /// Interface for providing block proving utilities.
 pub trait ProofProvider<Block: BlockT> {
@@ -64,7 +64,7 @@ pub trait ProofProvider<Block: BlockT> {
 		last: Block::Hash,
 		min: Block::Hash,
 		max: Block::Hash,
-		storage_key: Option<&StorageKey>,
+		storage_key: Option<&PrefixedStorageKey>,
 		key: &StorageKey,
 	) -> sp_blockchain::Result<ChangesProof<Block::Header>>;
 }

@@ -36,7 +36,7 @@ extern crate self as sp_api;
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use sp_state_machine::{
-	OverlayedChanges, StorageProof, Backend as StateBackend, ChangesTrieState,
+	OverlayedChanges, StorageProof, Backend as StateBackend, ChangesTrieState, InMemoryBackend,
 };
 #[doc(hidden)]
 #[cfg(feature = "std")]
@@ -78,7 +78,8 @@ use std::{panic::UnwindSafe, cell::RefCell};
 /// declaration. Besides one exception, the macro adds an extra generic parameter `Block: BlockT`
 /// to the client side and the runtime side. This generic parameter is usable by the user.
 ///
-/// For implementing these macros you should use the `impl_runtime_apis!` macro.
+/// For implementing these macros you should use the
+/// [`impl_runtime_apis!`](macro.impl_runtime_apis.html) macro.
 ///
 /// # Example
 ///
@@ -143,8 +144,9 @@ pub use sp_api_proc_macro::decl_runtime_apis;
 
 /// Tags given trait implementations as runtime apis.
 ///
-/// All traits given to this macro, need to be declared with the `decl_runtime_apis!` macro.
-/// The implementation of the trait should follow the declaration given to the `decl_runtime_apis!`
+/// All traits given to this macro, need to be declared with the
+/// [`decl_runtime_apis!`](macro.decl_runtime_apis.html) macro. The implementation of the trait
+/// should follow the declaration given to the [`decl_runtime_apis!`](macro.decl_runtime_apis.html)
 /// macro, besides the `Block` type that is required as first generic parameter for each runtime
 /// api trait. When implementing a runtime api trait, it is required that the trait is referenced
 /// by a path, e.g. `impl my_trait::MyTrait for Runtime`. The macro will use this path to access
@@ -182,7 +184,7 @@ pub use sp_api_proc_macro::decl_runtime_apis;
 /// #     }
 /// #     pub trait BlockBuilder {
 /// #        fn build_block() -> Block;
-/// #    }
+/// #     }
 /// # }
 ///
 /// /// All runtime api implementations need to be done in one call of the macro!
@@ -225,6 +227,70 @@ pub use sp_api_proc_macro::decl_runtime_apis;
 /// # fn main() {}
 /// ```
 pub use sp_api_proc_macro::impl_runtime_apis;
+
+/// Mocks given trait implementations as runtime apis.
+///
+/// Accepts similar syntax as [`impl_runtime_apis!`](macro.impl_runtime_apis.html) and generates
+/// simplified mock implementations of the given runtime apis. The difference in syntax is that the
+/// trait does not need to be referenced by a qualified path, methods accept the `&self` parameter
+/// and the error type can be specified as associated type. If no error type is specified `String`
+/// is used as error type.
+///
+/// Besides implementing the given traits, the [`Core`], [`ApiExt`] and [`ApiErrorExt`] are
+/// implemented automatically.
+///
+/// # Example
+///
+/// ```rust
+/// use sp_version::create_runtime_str;
+/// #
+/// # use sp_runtime::traits::Block as BlockT;
+/// # use sp_test_primitives::Block;
+/// #
+/// # sp_api::decl_runtime_apis! {
+/// #     /// Declare the api trait.
+/// #     pub trait Balance {
+/// #         /// Get the balance.
+/// #         fn get_balance() -> u64;
+/// #         /// Set the balance.
+/// #         fn set_balance(val: u64);
+/// #     }
+/// #     pub trait BlockBuilder {
+/// #        fn build_block() -> Block;
+/// #     }
+/// # }
+///
+/// struct MockApi {
+///     balance: u64,
+/// }
+///
+/// /// All runtime api mock implementations need to be done in one call of the macro!
+/// sp_api::mock_impl_runtime_apis! {
+///     impl Balance<Block> for MockApi {
+///         /// Here we take the `&self` to access the instance.
+///         fn get_balance(&self) -> u64 {
+///             self.balance
+///         }
+///         fn set_balance(_bal: u64) {
+///             // Store the balance
+///         }
+///     }
+///
+///     impl BlockBuilder<Block> for MockApi {
+///         /// Sets the error type that is being used by the mock implementation.
+///         /// The error type is used by all runtime apis. It is only required to
+///         /// be specified in one trait implementation.
+///         type Error = String;
+///
+///         fn build_block() -> Block {
+///              unimplemented!("Not Required in tests")
+///         }
+///     }
+/// }
+///
+/// # fn main() {}
+/// ```
+pub use sp_api_proc_macro::mock_impl_runtime_apis;
 
 /// A type that records all accessed trie nodes and generates a proof out of it.
 #[cfg(feature = "std")]
@@ -293,21 +359,14 @@ pub trait ApiExt<Block: BlockT>: ApiErrorExt {
 	fn has_api<A: RuntimeApiInfo + ?Sized>(
 		&self,
 		at: &BlockId<Block>,
-	) -> Result<bool, Self::Error> where Self: Sized {
-		self.runtime_version_at(at).map(|v| v.has_api_with(&A::ID, |v| v == A::VERSION))
-	}
+	) -> Result<bool, Self::Error> where Self: Sized;
 
 	/// Check if the given api is implemented and the version passes a predicate.
 	fn has_api_with<A: RuntimeApiInfo + ?Sized, P: Fn(u32) -> bool>(
 		&self,
 		at: &BlockId<Block>,
 		pred: P,
-	) -> Result<bool, Self::Error> where Self: Sized {
-		self.runtime_version_at(at).map(|v| v.has_api_with(&A::ID, pred))
-	}
-
-	/// Returns the runtime version at the given block id.
-	fn runtime_version_at(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, Self::Error>;
+	) -> Result<bool, Self::Error> where Self: Sized;
 
 	/// Start recording all accessed trie nodes for generating proofs.
 	fn record_proof(&mut self);

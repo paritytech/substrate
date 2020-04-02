@@ -137,7 +137,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 					number: request.last_block.0,
 				},
 				remote_max_block,
-				request.storage_key.as_ref().map(Vec::as_slice),
+				request.storage_key.as_ref(),
 				&request.key)
 			.map_err(|err| ClientError::ChangesTrieAccessFailed(err))?;
 			result.extend(result_range);
@@ -244,7 +244,7 @@ impl<E, Block, H, S> FetchChecker<Block> for LightDataChecker<E, H, Block, S>
 		request: &RemoteReadChildRequest<Block::Header>,
 		remote_proof: StorageProof,
 	) -> ClientResult<HashMap<Vec<u8>, Option<Vec<u8>>>> {
-		let child_info = match ChildType::from_prefixed_key(&request.storage_key[..]) {
+		let child_info = match ChildType::from_prefixed_key(&request.storage_key) {
 			Some((ChildType::ParentKeyId, storage_key)) => ChildInfo::new_default(storage_key),
 			None => return Err("Invalid child type".into()),
 		};
@@ -513,6 +513,7 @@ pub mod tests {
 
 	#[test]
 	fn storage_child_read_proof_is_generated_and_checked() {
+		let child_info = ChildInfo::new_default(&b"child1"[..]);
 		let (
 			local_checker,
 			remote_block_header,
@@ -523,7 +524,7 @@ pub mod tests {
 			&RemoteReadChildRequest::<Header> {
 				block: remote_block_header.hash(),
 				header: remote_block_header,
-				storage_key: b":child_storage:default:child1".to_vec(),
+				storage_key: child_info.prefixed_storage_key(),
 				keys: vec![b"key1".to_vec()],
 				retry_count: None,
 			},

@@ -26,8 +26,8 @@ use parking_lot::{Mutex, RwLock};
 use codec::{Encode, Decode};
 use hash_db::Prefix;
 use sp_core::{
-	ChangesTrieConfiguration, convert_hash, traits::CodeExecutor,
-	NativeOrEncoded, storage::{StorageKey, StorageData, well_known_keys, ChildInfo},
+	ChangesTrieConfiguration, convert_hash, traits::CodeExecutor, NativeOrEncoded,
+	storage::{StorageKey, PrefixedStorageKey, StorageData, well_known_keys, ChildInfo},
 };
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_runtime::{
@@ -260,7 +260,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			backend.begin_state_operation(&mut op, BlockId::Hash(Default::default()))?;
 			let state_root = op.reset_storage(genesis_storage)?;
 			let genesis_block = genesis::construct_genesis_block::<Block>(state_root.into());
-			info!("Initializing Genesis block/state (state: {}, header-hash: {})",
+			info!("🔨 Initializing Genesis block/state (state: {}, header-hash: {})",
 				genesis_block.header().state_root(),
 				genesis_block.header().hash()
 			);
@@ -344,7 +344,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		last: Block::Hash,
 		min: Block::Hash,
 		max: Block::Hash,
-		storage_key: Option<&StorageKey>,
+		storage_key: Option<&PrefixedStorageKey>,
 		key: &StorageKey,
 		cht_size: NumberFor<Block>,
 	) -> sp_blockchain::Result<ChangesProof<Block::Header>> {
@@ -393,7 +393,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			fn with_cached_changed_keys(
 				&self,
 				root: &Block::Hash,
-				functor: &mut dyn FnMut(&HashMap<Option<Vec<u8>>, HashSet<Vec<u8>>>),
+				functor: &mut dyn FnMut(&HashMap<Option<PrefixedStorageKey>, HashSet<Vec<u8>>>),
 			) -> bool {
 				self.storage.with_cached_changed_keys(root, functor)
 			}
@@ -442,7 +442,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 					number: last_number,
 				},
 				max_number,
-				storage_key.as_ref().map(|x| &x.0[..]),
+				storage_key,
 				&key.0,
 			)
 			.map_err(|err| sp_blockchain::Error::ChangesTrieAccessFailed(err))?;
@@ -1152,7 +1152,7 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 		last: Block::Hash,
 		min: Block::Hash,
 		max: Block::Hash,
-		storage_key: Option<&StorageKey>,
+		storage_key: Option<&PrefixedStorageKey>,
 		key: &StorageKey,
 	) -> sp_blockchain::Result<ChangesProof<Block::Header>> {
 		self.key_changes_proof_with_cht_size(
@@ -1351,7 +1351,7 @@ impl<B, E, Block, RA> StorageProvider<Block, B> for Client<B, E, Block, RA> wher
 		&self,
 		first: NumberFor<Block>,
 		last: BlockId<Block>,
-		storage_key: Option<&StorageKey>,
+		storage_key: Option<&PrefixedStorageKey>,
 		key: &StorageKey
 	) -> sp_blockchain::Result<Vec<(NumberFor<Block>, u32)>> {
 		let last_number = self.backend.blockchain().expect_block_number_from_id(&last)?;
@@ -1382,7 +1382,7 @@ impl<B, E, Block, RA> StorageProvider<Block, B> for Client<B, E, Block, RA> wher
 				range_first,
 				&range_anchor,
 				best_number,
-				storage_key.as_ref().map(|x| &x.0[..]),
+				storage_key,
 				&key.0)
 				.and_then(|r| r.map(|r| r.map(|(block, tx)| (block, tx))).collect::<Result<_, _>>())
 				.map_err(|err| sp_blockchain::Error::ChangesTrieAccessFailed(err))?;
