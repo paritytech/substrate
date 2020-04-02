@@ -696,7 +696,7 @@ mod tests {
 		let mut network = TestNetwork;
 
 		let peer_id = PeerId::random();
-		consensus.new_peer(&mut network, peer_id.clone(), Role::Full);
+		consensus.new_peer(&mut network, peer_id.clone(), ObservedRole::Full);
 		assert!(consensus.peers.contains_key(&peer_id));
 
 		consensus.peer_disconnected(&mut network, peer_id.clone());
