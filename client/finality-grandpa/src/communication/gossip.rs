@@ -1163,7 +1163,7 @@ impl<Block: BlockT> Inner<Block> {
 				} else {
 					false
 				}
-			}
+			},
 		}
 	}
 

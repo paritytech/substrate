@@ -207,7 +207,7 @@ macro_rules! new_full {
 			name: Some(name),
 			observer_enabled: false,
 			keystore,
-			is_authority: role.is_authority(),
+			is_authority: matches!(role, Role::Authority { .. } | Role::Sentry { .. }),
 		};
 
 		let enable_grandpa = !disable_grandpa;
