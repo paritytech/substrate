@@ -212,7 +212,7 @@ impl<A, B, Block, C> ProposerInner<B, Block, C, A>
 		let mut unqueue_invalid = Vec::new();
 		let pending_iterator = match executor::block_on(future::select(
 			self.transaction_pool.ready_at(self.parent_number),
-			futures_timer::Delay::new((deadline - (self.now)()) / 8),
+			futures_timer::Delay::new(deadline.saturating_duration_since((self.now)()) / 8),
 		)) {
 			Either::Left((iterator, _)) => iterator,
 			Either::Right(_) => {
@@ -391,6 +391,36 @@ mod tests {
 		// block should have some extrinsics although we have some more in the pool.
 		assert_eq!(block.extrinsics().len(), 1);
 		assert_eq!(txpool.ready().count(), 2);
+	}
+
+	#[test]
+	fn should_not_panic_when_deadline_is_reached() {
+		let client = Arc::new(substrate_test_runtime_client::new());
+		let txpool = Arc::new(
+			BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone()))).0
+		);
+
+		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone());
+
+		let cell = Mutex::new((false, time::Instant::now()));
+		let mut proposer = proposer_factory.init_with_now(
+			&client.header(&BlockId::number(0)).unwrap().unwrap(),
+			Box::new(move || {
+				let mut value = cell.lock();
+				if !value.0 {
+					value.0 = true;
+					return value.1;
+				}
+				let new = value.1 + time::Duration::from_secs(160);
+				*value = (true, new);
+				new
+			})
+		);
+
+		let deadline = time::Duration::from_secs(1);
+		futures::executor::block_on(
+			proposer.propose(Default::default(), Default::default(), deadline, RecordProof::No)
+		).map(|r| r.block).unwrap();
 	}
 
 	#[test]
