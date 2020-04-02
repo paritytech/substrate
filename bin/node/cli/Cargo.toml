@@ -56,7 +56,6 @@ sp-consensus = { version = "0.8.0-alpha.5", path = "../../../primitives/consensu
 
 # client dependencies
 sc-client-api = { version = "2.0.0-alpha.5", path = "../../../client/api" }
-sc-client = { version = "0.8.0-alpha.5", path = "../../../client/" }
 sc-chain-spec = { version = "2.0.0-alpha.5", path = "../../../client/chain-spec" }
 sc-transaction-pool = { version = "2.0.0-alpha.5", path = "../../../client/transaction-pool" }
 sp-transaction-pool = { version = "2.0.0-alpha.5", path = "../../../primitives/transaction-pool" }

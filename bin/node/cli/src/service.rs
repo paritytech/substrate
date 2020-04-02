@@ -31,7 +31,6 @@ use sc_service::{
 use sp_inherents::InherentDataProviders;
 
 use sc_service::{Service, NetworkStatus};
-use sc_client::{Client, LocalCallExecutor};
 use sc_client_api::LongestChain;
 use sc_client_db::Backend;
 use sp_runtime::traits::Block as BlockT;
@@ -257,37 +256,11 @@ macro_rules! new_full {
 }
 
 type ConcreteBlock = node_primitives::Block;
-type ConcreteClient =
-	Client<
-		Backend<ConcreteBlock>,
-		LocalCallExecutor<Backend<ConcreteBlock>, NativeExecutor<node_executor::Executor>>,
-		ConcreteBlock,
-		node_runtime::RuntimeApi
-	>;
-type ConcreteBackend = Backend<ConcreteBlock>;
-type ConcreteTransactionPool = sc_transaction_pool::BasicPool<
-	sc_transaction_pool::FullChainApi<ConcreteClient, ConcreteBlock>,
-	ConcreteBlock
->;
+
 
 /// Builds a new service for a full client.
 pub fn new_full(config: Configuration)
--> Result<
-	Service<
-		ConcreteBlock,
-		ConcreteClient,
-		LongestChain<ConcreteBackend, ConcreteBlock>,
-		NetworkStatus<ConcreteBlock>,
-		NetworkService<ConcreteBlock, <ConcreteBlock as BlockT>::Hash>,
-		ConcreteTransactionPool,
-		OffchainWorkers<
-			ConcreteClient,
-			<ConcreteBackend as sc_client_api::backend::Backend<Block>>::OffchainStorage,
-			ConcreteBlock,
-		>
-	>,
-	ServiceError,
->
+-> Result<impl AbstractService, ServiceError>
 {
 	new_full!(config).map(|(service, _)| service)
 }
@@ -406,7 +379,7 @@ mod tests {
 		use sp_core::ed25519::Pair;
 
 		use {service_test, Factory};
-		use sc_client::{BlockImportParams, BlockOrigin};
+		use sp_consensus::{BlockImportParams, BlockOrigin};
 
 		let alice: Arc<ed25519::Pair> = Arc::new(Keyring::Alice.into());
 		let bob: Arc<ed25519::Pair> = Arc::new(Keyring::Bob.into());

@@ -8,7 +8,7 @@ homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
-sc-client = { version = "0.8.0-alpha.5", path = "../../../client/" }
+sc-client-api = { version = "2.0.0-alpha.5", path = "../../../client/api" }
 jsonrpc-core = "14.0.3"
 node-primitives = { version = "2.0.0-alpha.5", path = "../primitives" }
 node-runtime = { version = "2.0.0-alpha.5", path = "../runtime" }
