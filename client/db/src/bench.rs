@@ -102,7 +102,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 		let mut keyspace = crate::Keyspaced::new(&[]);
 		for (info, mut updates) in transaction.clone().into_iter() {
 			keyspace.change_keyspace(info.keyspace());
-			for (key, rc_val) in updates.drain() {
+			for (key, rc_val) in updates.1.drain() {
 				let key = if info.is_top_trie() {
 					key
 				} else {
@@ -305,8 +305,8 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 						} else if rc < 0 {
 							db_transaction.delete(0, &key);
 						}
+						keys.push(key);
 					}
-					keys.push(key);
 				}
 			}
 			self.record.set(keys);

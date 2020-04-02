@@ -175,10 +175,10 @@ members = [
 panic = "unwind"
 
 [patch.crates-io]
-kvdb = { git = "https://github.com/cheme/parity-common", branch="upgraded_del_range" }
-kvdb-rocksdb = { git = "https://github.com/cheme/parity-common", branch="upgraded_del_range" }
-kvdb-web = { git = "https://github.com/cheme/parity-common", branch="upgraded_del_range" }
-kvdb-memorydb = { git = "https://github.com/cheme/parity-common", branch="upgraded_del_range" }
-#parity-util-mem = { git = "https://github.com/cheme/parity-common", branch="upgraded_del_range" }
-#fixed-hash = { git = "https://github.com/cheme/parity-common", branch="upgraded_del_range" }
-#primitive-types = { git = "https://github.com/cheme/parity-common", branch="upgraded_del_range" }
+kvdb = { git = "https://github.com/cheme/parity-common", branch="upgraded_del_range_pr" }
+kvdb-rocksdb = { git = "https://github.com/cheme/parity-common", branch="upgraded_del_range_pr" }
+kvdb-web = { git = "https://github.com/cheme/parity-common", branch="upgraded_del_range_pr" }
+kvdb-memorydb = { git = "https://github.com/cheme/parity-common", branch="upgraded_del_range_pr" }
+#parity-util-mem = { git = "https://github.com/cheme/parity-common", branch="upgraded_del_range_pr" }
+#fixed-hash = { git = "https://github.com/cheme/parity-common", branch="upgraded_del_range_pr" }
+#primitive-types = { git = "https://github.com/cheme/parity-common", branch="upgraded_del_range_pr" }

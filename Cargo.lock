@@ -2271,12 +2271,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f65877bf7d44897a473350b1046277941cee20b263397e90869c50b6e766088b"
 
 [[package]]
-name = "interleaved-ordered"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "141340095b15ed7491bd3d4ced9d20cebfb826174b6bb03386381f62b01e3d77"
-
-[[package]]
 name = "intervalier"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2481,8 +2475,7 @@ dependencies = [
 [[package]]
 name = "kvdb"
 version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cad096c6849b2ef027fabe35c4aed356d0e3d3f586d0a8361e5e17f1e50a7ce5"
+source = "git+https://github.com/cheme/parity-common?branch=upgraded_del_range_pr#cf619698bb98b4868538f74eb05da10aebb78b26"
 dependencies = [
  "parity-util-mem",
  "smallvec 1.2.0",
@@ -2491,8 +2484,7 @@ dependencies = [
 [[package]]
 name = "kvdb-memorydb"
 version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4aa954d12cfac958822dfd77aab34f3eec71f103b918c4ab79ab59a36ee594ea"
+source = "git+https://github.com/cheme/parity-common?branch=upgraded_del_range_pr#cf619698bb98b4868538f74eb05da10aebb78b26"
 dependencies = [
  "kvdb",
  "parity-util-mem",
@@ -2502,11 +2494,9 @@ dependencies = [
 [[package]]
 name = "kvdb-rocksdb"
 version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b3f14c3a10c8894d26175e57e9e26032e6d6c49c30cbe2468c5bf5f6b64bb0be"
+source = "git+https://github.com/cheme/parity-common?branch=upgraded_del_range_pr#cf619698bb98b4868538f74eb05da10aebb78b26"
 dependencies = [
  "fs-swap",
- "interleaved-ordered",
  "kvdb",
  "log",
  "num_cpus",
@@ -2521,8 +2511,7 @@ dependencies = [
 [[package]]
 name = "kvdb-web"
 version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26f96eec962af83cdf7c83036b3dbb0ae6a1249ddab746820618e2567ca8ebcd"
+source = "git+https://github.com/cheme/parity-common?branch=upgraded_del_range_pr#cf619698bb98b4868538f74eb05da10aebb78b26"
 dependencies = [
  "futures 0.3.4",
  "js-sys",
@@ -9240,23 +9229,3 @@ dependencies = [
  "glob 0.3.0",
  "libc",
 ]
-
-[[patch.unused]]
-name = "kvdb"
-version = "0.4.0"
-source = "git+https://github.com/cheme/parity-common?branch=upgraded_del_range#1b90fa8716fabc5f94a0d8d83c5fdd6cf1da8d3e"
-
-[[patch.unused]]
-name = "kvdb-memorydb"
-version = "0.4.0"
-source = "git+https://github.com/cheme/parity-common?branch=upgraded_del_range#1b90fa8716fabc5f94a0d8d83c5fdd6cf1da8d3e"
-
-[[patch.unused]]
-name = "kvdb-rocksdb"
-version = "0.6.0"
-source = "git+https://github.com/cheme/parity-common?branch=upgraded_del_range#1b90fa8716fabc5f94a0d8d83c5fdd6cf1da8d3e"
-
-[[patch.unused]]
-name = "kvdb-web"
-version = "0.4.0"
-source = "git+https://github.com/cheme/parity-common?branch=upgraded_del_range#1b90fa8716fabc5f94a0d8d83c5fdd6cf1da8d3e"

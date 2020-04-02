@@ -1176,7 +1176,7 @@ impl<Block: BlockT> Backend<Block> {
 				let mut ops: u64 = 0;
 				let mut bytes: u64 = 0;
 				for (key, value) in operation.storage_updates.iter()
-					.chain(operation.child_storage_updates.iter().flat_map(|(_, s, _)| s.iter())) {
+					.chain(operation.child_storage_updates.iter().flat_map(|(_, _, s)| s.iter())) {
 						ops += 1;
 						bytes += key.len() as u64;
 						if let Some(v) = value.as_ref() {
