@@ -20,15 +20,13 @@
 
 use std::cell::RefCell;
 
-use codec::{Encode, Decode};
-use crate::{Module, Trait, sr25519};
+use crate::{Module, Trait};
 use sp_runtime::Perbill;
 use sp_staking::{SessionIndex, offence::{ReportOffence, OffenceError}};
 use sp_runtime::testing::{Header, UintAuthorityId, TestXt};
-use sp_runtime::traits::{IdentityLookup, IdentifyAccount, BlakeTwo256, ConvertInto, Extrinsic as ExtrinsicT};
-use sp_core::{H256, sr25519::{Public, Signature}};
+use sp_runtime::traits::{IdentityLookup, BlakeTwo256, ConvertInto};
+use sp_core::H256;
 use frame_support::{impl_outer_origin, impl_outer_dispatch, parameter_types, weights::Weight};
-
 use frame_system as system;
 impl_outer_origin!{
 	pub enum Origin for Runtime {}
@@ -48,13 +46,6 @@ thread_local! {
 	]));
 }
 
-pub struct ImOnlineAuthorityId;
-impl frame_system::offchain::AppCrypto<PublicWrapper, Signature> for ImOnlineAuthorityId {
-	type RuntimeAppPublic = sr25519::AuthorityId;
-	type GenericSignature = Signature;
-	type GenericPublic = Public;
-}
-
 pub struct TestSessionManager;
 impl pallet_session::SessionManager<u64> for TestSessionManager {
 	fn new_session(_new_index: SessionIndex) -> Option<Vec<u64>> {
@@ -70,7 +61,7 @@ impl pallet_session::historical::SessionManager<u64, u64> for TestSessionManager
 			.borrow_mut()
 			.take()
 			.map(|validators| {
-				validators.iter().map(|v| (v.clone(), v.clone())).collect()
+				validators.iter().map(|v| (*v, *v)).collect()
 			})
 		)
 	}
@@ -100,32 +91,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	let t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 	t.into()
 }
-
-#[derive(Clone, Debug, Eq, PartialEq, Encode, Decode)]
-pub struct PublicWrapper(Public);
-
-impl IdentifyAccount for PublicWrapper {
-	type AccountId = u64;
-	fn into_account(self) -> Self::AccountId {
-		let bytes = self.0.to_vec();
-		let mut truncated = [0u8; 8];
-		truncated.copy_from_slice(bytes.as_slice());
-		u64::from_be_bytes(truncated)
-	}
-}
-
-impl From<Public> for PublicWrapper {
-	fn from(public: Public) -> Self {
-		Self(public)
-	}
-}
-
-impl Into<Public> for PublicWrapper {
-	fn into(self) -> Public {
-		self.0
-	}
-}
-
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Runtime;
@@ -198,7 +163,6 @@ impl pallet_authorship::Trait for Runtime {
 
 impl Trait for Runtime {
 	type AuthorityId = UintAuthorityId;
-	type OffchainAuthorityId = ImOnlineAuthorityId;
 	type Event = ();
 	type ReportUnresponsiveness = OffenceHandler;
 	type SessionDuration = Period;
@@ -209,24 +173,6 @@ impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runt
 {
 	type OverarchingCall = Call;
 	type Extrinsic = Extrinsic;
-}
-
-impl frame_system::offchain::SigningTypes for Runtime {
-	type Public = PublicWrapper;
-	type Signature = Signature;
-}
-
-impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for Runtime where
-	Call: From<LocalCall>,
-{
-	fn create_transaction<C: frame_system::offchain::AppCrypto<Self::Public, Self::Signature>>(
-		call: Call,
-		_public: PublicWrapper,
-		_account: u64,
-		nonce: u64,
-	) -> Option<(Call, <Extrinsic as ExtrinsicT>::SignaturePayload)> {
-		Some((call, (nonce, ())))
-	}
 }
 
 /// Im Online module.

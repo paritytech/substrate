@@ -139,8 +139,7 @@ fn should_mark_online_validator_when_heartbeat_is_received() {
 	new_test_ext().execute_with(|| {
 		advance_session();
 		// given
-		let validators = vec![1, 2, 3, 4, 5, 6];
-		VALIDATORS.with(|l| *l.borrow_mut() = Some(validators.clone()));
+		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 3, 4, 5, 6]));
 		assert_eq!(Session::validators(), Vec::<u64>::new());
 		// enact the change and buffer another one
 		advance_session();
@@ -175,9 +174,7 @@ fn late_heartbeat_should_fail() {
 	new_test_ext().execute_with(|| {
 		advance_session();
 		// given
-		let validators = vec![1, 2, 3, 4, 5, 6];
-		VALIDATORS.with(|l| *l.borrow_mut() = Some(validators.clone()));
-		assert_eq!(Session::validators(), Vec::<u64>::new());
+		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 3, 4, 5, 6]));		assert_eq!(Session::validators(), Vec::<u64>::new());
 		// enact the change and buffer another one
 		advance_session();
 
@@ -208,8 +205,7 @@ fn should_generate_heartbeats() {
 		// buffer new validators
 		Session::rotate_session();
 		// enact the change and buffer another one
-		let validators = vec![1, 2, 3, 4, 5, 6];
-		VALIDATORS.with(|l| *l.borrow_mut() = Some(validators.clone()));
+		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 3, 4, 5, 6]));
 		Session::rotate_session();
 
 		// when
@@ -241,8 +237,7 @@ fn should_cleanup_received_heartbeats_on_session_end() {
 	new_test_ext().execute_with(|| {
 		advance_session();
 
-		let validators = vec![1, 2, 3];
-		VALIDATORS.with(|l| *l.borrow_mut() = Some(validators.clone()));
+		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 3]));
 		assert_eq!(Session::validators(), Vec::<u64>::new());
 
 		// enact the change and buffer another one
@@ -273,8 +268,7 @@ fn should_mark_online_validator_when_block_is_authored() {
 	new_test_ext().execute_with(|| {
 		advance_session();
 		// given
-		let validators = vec![1, 2, 3, 4, 5, 6];
-		VALIDATORS.with(|l| *l.borrow_mut() = Some(validators.clone()));
+		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 3, 4, 5, 6]));
 		assert_eq!(Session::validators(), Vec::<u64>::new());
 		// enact the change and buffer another one
 		advance_session();
@@ -310,8 +304,7 @@ fn should_not_send_a_report_if_already_online() {
 	ext.execute_with(|| {
 		advance_session();
 		// given
-		let validators = vec![1, 2, 3, 4, 5, 6];
-		VALIDATORS.with(|l| *l.borrow_mut() = Some(validators.clone()));
+		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 3, 4, 5, 6]));
 		assert_eq!(Session::validators(), Vec::<u64>::new());
 		// enact the change and buffer another one
 		advance_session();

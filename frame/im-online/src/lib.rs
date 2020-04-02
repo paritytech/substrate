@@ -97,9 +97,8 @@ use frame_support::{
 };
 use frame_system::{self as system, ensure_none};
 use frame_system::offchain::{
-	AppCrypto,
-	SubmitTransaction,
 	SendTransactionTypes,
+	SubmitTransaction,
 };
 
 pub mod sr25519 {
@@ -226,9 +225,6 @@ pub struct Heartbeat<BlockNumber>
 pub trait Trait: SendTransactionTypes<Call<Self>> + pallet_session::historical::Trait {
 	/// The identifier type for an authority.
 	type AuthorityId: Member + Parameter + RuntimeAppPublic + Default + Ord;
-
-	/// TODO How can this be used in place of AuthorityId
-	type OffchainAuthorityId: AppCrypto<Self::Public, Self::Signature>;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;

@@ -17,13 +17,12 @@
 //! Test utilities
 
 use std::{collections::{HashSet, HashMap}, cell::RefCell};
-use codec::{Encode, Decode};
 use sp_runtime::Perbill;
 use sp_runtime::curve::PiecewiseLinear;
-use sp_runtime::traits::{IdentityLookup, IdentifyAccount, Convert, SaturatedConversion, Zero};
+use sp_runtime::traits::{IdentityLookup, Convert, SaturatedConversion, Zero};
 use sp_runtime::testing::{Header, UintAuthorityId, TestXt};
 use sp_staking::{SessionIndex, offence::{OffenceDetails, OnOffenceHandler}};
-use sp_core::{H256, sr25519::{Public, Signature}};
+use sp_core::H256;
 use frame_support::{
 	assert_ok, impl_outer_origin, parameter_types, impl_outer_dispatch, impl_outer_event,
 	StorageValue, StorageMap, StorageDoubleMap, IterableStorageMap,
@@ -184,31 +183,6 @@ impl FindAuthor<u64> for Author11 {
 	}
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Encode, Decode)]
-pub struct PublicWrapper(Public);
-
-impl IdentifyAccount for PublicWrapper {
-	type AccountId = u64;
-	fn into_account(self) -> Self::AccountId {
-		let bytes = self.0.to_vec();
-		let mut truncated = [0u8; 8];
-		truncated.copy_from_slice(bytes.as_slice());
-		u64::from_be_bytes(truncated)
-	}
-}
-
-impl From<Public> for PublicWrapper {
-	fn from(public: Public) -> Self {
-		Self(public)
-	}
-}
-
-impl Into<Public> for PublicWrapper {
-	fn into(self) -> Public {
-		self.0
-	}
-}
-
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Test;
@@ -328,11 +302,6 @@ impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Test
 {
 	type OverarchingCall = Call;
 	type Extrinsic = Extrinsic;
-}
-
-impl frame_system::offchain::SigningTypes for Test {
-	type Public = PublicWrapper;
-	type Signature = Signature;
 }
 
 pub type Extrinsic = TestXt<Call, ()>;

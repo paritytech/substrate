@@ -15,19 +15,24 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use node_runtime::{
-	Executive, Indices, Runtime, UncheckedExtrinsic, ImOnlineAuthorityId,
+	Executive, Indices, Runtime, UncheckedExtrinsic,
 };
 use sp_application_crypto::AppKey;
 use sp_core::testing::KeyStore;
-use sp_core::traits::KeystoreExt;
-use sp_core::offchain::{
-	TransactionPoolExt,
-	testing::TestTransactionPoolExt,
+use sp_core::{
+	offchain::{
+		TransactionPoolExt,
+		testing::TestTransactionPoolExt,
+	},
+	traits::KeystoreExt,
 };
-use frame_system::offchain::{
-	SendSignedTransaction,
-	Signer,
-	SubmitTransaction,
+use frame_system::{
+	mock,
+	offchain::{
+		Signer,
+		SubmitTransaction,
+		SendSignedTransaction,
+	}
 };
 use pallet_im_online::sr25519::AuthorityPair as Key;
 use codec::Decode;
@@ -73,7 +78,7 @@ fn should_submit_signed_transaction() {
 	t.register_extension(KeystoreExt(keystore));
 
 	t.execute_with(|| {
-		let results = Signer::<Runtime, ImOnlineAuthorityId>::all_accounts()
+		let results = Signer::<Runtime, mock::TestAuthorityId>::all_accounts()
 			.send_signed_transaction(|_| {
 				pallet_balances::Call::transfer(Default::default(), Default::default())
 			});
@@ -96,7 +101,7 @@ fn should_submit_signed_twice_from_the_same_account() {
 	t.register_extension(KeystoreExt(keystore));
 
 	t.execute_with(|| {
-		let results = Signer::<Runtime, ImOnlineAuthorityId>::all_accounts()
+		let results = Signer::<Runtime, mock::TestAuthorityId>::all_accounts()
 			.send_signed_transaction(|_| {
 				pallet_balances::Call::transfer(Default::default(), Default::default())
 			});
@@ -107,7 +112,7 @@ fn should_submit_signed_twice_from_the_same_account() {
 		assert_eq!(state.read().transactions.len(), 1);
 
 		// submit another one from the same account. The nonce should be incremented.
-		let results = Signer::<Runtime, ImOnlineAuthorityId>::all_accounts()
+		let results = Signer::<Runtime, mock::TestAuthorityId>::all_accounts()
 			.send_signed_transaction(|_| {
 				pallet_balances::Call::transfer(Default::default(), Default::default())
 			});
@@ -148,7 +153,7 @@ fn submitted_transaction_should_be_valid() {
 	t.register_extension(KeystoreExt(keystore));
 
 	t.execute_with(|| {
-		let results = Signer::<Runtime, ImOnlineAuthorityId>::all_accounts()
+		let results = Signer::<Runtime, mock::TestAuthorityId>::all_accounts()
 			.send_signed_transaction(|_| {
 				pallet_balances::Call::transfer(Default::default(), Default::default())
 			});

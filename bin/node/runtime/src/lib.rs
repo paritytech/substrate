@@ -483,10 +483,6 @@ parameter_types! {
 	pub const SessionDuration: BlockNumber = EPOCH_DURATION_IN_SLOTS as _;
 }
 
-impl frame_system::offchain::SigningTypes for Runtime {
-	type Public = <Signature as traits::Verify>::Signer;
-	type Signature = Signature;
-}
 
 impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for Runtime where
 	Call: From<LocalCall>,
@@ -530,28 +526,20 @@ impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for R
 	}
 }
 
+impl frame_system::offchain::SigningTypes for Runtime {
+	type Public = <Signature as traits::Verify>::Signer;
+	type Signature = Signature;
+}
+
 impl<C> frame_system::offchain::SendTransactionTypes<C> for Runtime where
 	Call: From<C>,
 {
 	type OverarchingCall = Call;
 	type Extrinsic = UncheckedExtrinsic;
 }
-pub struct ImOnlineAuthorityId;
-impl frame_system::offchain::AppCrypto<<Signature as traits::Verify>::Signer, Signature> for ImOnlineAuthorityId {
-	// TODO [ToDr] Get rid of this trait and instead
-	// have `RuntimeAppPublic` be able to give you `GenericSignature/GenericPublic`
-	// or see the proposal at `system/src/offchain.rs`.
-	//
-	// That way `AppCrypto` would just have a blanket impl for `RuntimeAppPublic`;
-	type RuntimeAppPublic = ImOnlineId;
-	type GenericSignature = sp_core::sr25519::Signature;
-	type GenericPublic = sp_core::sr25519::Public;
-}
-
 
 impl pallet_im_online::Trait for Runtime {
 	type AuthorityId = ImOnlineId;
-	type OffchainAuthorityId = ImOnlineAuthorityId;
 	type Event = Event;
 	type SessionDuration = SessionDuration;
 	type ReportUnresponsiveness = Offences;

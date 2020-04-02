@@ -193,7 +193,7 @@ impl<T: SigningTypes, C: AppCrypto<T::Public, T::Signature>> SignMessage<T> for 
 }
 
 impl<
-	T: CreateSignedTransaction<LocalCall>,
+	T: CreateSignedTransaction<LocalCall> + SigningTypes,
 	C: AppCrypto<T::Public, T::Signature>,
 	LocalCall,
 > SendSignedTransaction<T, C, LocalCall> for Signer<T, C, ForAny> {
@@ -383,7 +383,7 @@ pub trait SigningTypes: crate::Trait {
 }
 
 /// A wrapper around the transaction and call types
-pub trait SendTransactionTypes<LocalCall>: SigningTypes {
+pub trait SendTransactionTypes<LocalCall> {
 	type Extrinsic: ExtrinsicT<Call=Self::OverarchingCall> + codec::Encode;
 	type OverarchingCall: From<LocalCall>;
 }
@@ -391,7 +391,7 @@ pub trait SendTransactionTypes<LocalCall>: SigningTypes {
 /// Create signed transaction
 ///
 /// Should be implemented by the runtime to sign transaction data
-pub trait CreateSignedTransaction<LocalCall>: SendTransactionTypes<LocalCall> {
+pub trait CreateSignedTransaction<LocalCall>: SendTransactionTypes<LocalCall> + SigningTypes {
 	/// Attempt to create signed extrinsic data that encodes call from given account.
 	///
 	/// Runtime implementation is free to construct the payload to sign and the signature
