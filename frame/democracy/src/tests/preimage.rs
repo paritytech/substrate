@@ -152,7 +152,6 @@ fn reaping_imminent_preimage_should_fail() {
 		assert_ok!(Democracy::vote(Origin::signed(1), r, aye(1)));
 		next_block();
 		next_block();
-		// now imminent.
 		assert_noop!(Democracy::reap_preimage(Origin::signed(6), h), Error::<Test>::Imminent);
 	});
 }

@@ -16,6 +16,7 @@
 
 //! Console informant. Prints sync progress and block events. Runs on the calling thread.
 
+use ansi_term::Colour;
 use sc_client_api::BlockchainEvents;
 use futures::prelude::*;
 use log::{info, warn, trace};
@@ -79,10 +80,10 @@ pub fn build(service: &impl AbstractService, format: OutputFormat) -> impl futur
 
 				match maybe_ancestor {
 					Ok(ref ancestor) if ancestor.hash != *last_hash => info!(
-						"♻️ Reorg from #{},{} to #{},{}, common ancestor #{},{}",
-						last_num, last_hash,
-						n.header.number(), n.hash,
-						ancestor.number, ancestor.hash,
+						"♻️  Reorg on #{},{} to #{},{}, common ancestor #{},{}",
+						Colour::Red.bold().paint(format!("{}", last_num)), last_hash,
+						Colour::Green.bold().paint(format!("{}", n.header.number())), n.hash,
+						Colour::White.bold().paint(format!("{}", ancestor.number)), ancestor.hash,
 					),
 					Ok(_) => {},
 					Err(e) => warn!("Error computing tree route: {}", e),
@@ -94,7 +95,7 @@ pub fn build(service: &impl AbstractService, format: OutputFormat) -> impl futur
 			last_best = Some((n.header.number().clone(), n.hash.clone()));
 		}
 
-		info!(target: "substrate", "✨ Imported #{} ({})", n.header.number(), n.hash);
+		info!(target: "substrate", "✨ Imported #{} ({})", Colour::White.bold().paint(format!("{}", n.header.number())), n.hash);
 		future::ready(())
 	});
 
