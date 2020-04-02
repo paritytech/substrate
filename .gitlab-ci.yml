@@ -68,16 +68,16 @@ variables:
     # copy recursively all the files from the newest dir which has $CI_JOB_NAME, if it exists
     - |
       if [[ ! -d $CARGO_HOME ]]; then
-        mkdir -p /home/gitlab-runner/ci-cache/${CI_PROJECT_NAME}/cargo/${CI_COMMIT_REF_NAME};
-        FRESH_CACHE=$(find /home/gitlab-runner/ci-cache/${CI_PROJECT_NAME}/cargo -mindepth 2 -maxdepth 2 \
+        mkdir -p /ci-cache/${CI_PROJECT_NAME}/cargo/${CI_COMMIT_REF_NAME};
+        FRESH_CACHE=$(find /ci-cache/${CI_PROJECT_NAME}/cargo -mindepth 2 -maxdepth 2 \
           -type d -name ${CI_JOB_NAME}  -exec stat --printf="%Y\t%n\n" {} \; |sort -n -r |head -1 |cut -f2);
         echo "$FRESH_CACHE"
         if [[ -d $FRESH_CACHE ]]; then
           echo "____Using" "$FRESH_CACHE" "to prepopulate the cache____";
           cp -r "${FRESH_CACHE}" "${CARGO_HOME}";
           touch ${CARGO_HOME}/config;
-          ls /home/gitlab-runner/ci-cache/${CI_PROJECT_NAME}/cargo/;
-          ls /home/gitlab-runner/ci-cache/${CI_PROJECT_NAME}/cargo/${CI_COMMIT_REF_NAME}/;
+          ls /ci-cache/${CI_PROJECT_NAME}/cargo/;
+          ls /ci-cache/${CI_PROJECT_NAME}/cargo/${CI_COMMIT_REF_NAME}/;
           ls $CARGO_HOME;
         else
           echo "_____No such cargo dir, proceeding from scratch_____";
@@ -85,7 +85,6 @@ variables:
       else
         echo "____No need to prepopulate the cache____";
       fi
-    
   only:
     - master
     - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
@@ -101,7 +100,7 @@ variables:
   dependencies:                    []
   interruptible:                   true
   tags:
-    - linux-docker
+    - ci2
 
 .build-only:                       &build-only
   only:
