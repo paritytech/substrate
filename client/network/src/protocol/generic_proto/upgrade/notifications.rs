@@ -43,9 +43,8 @@ use unsigned_varint::codec::UviBytes;
 
 /// Maximum allowed size of the two handshake messages, in bytes.
 const MAX_HANDSHAKE_SIZE: usize = 1024;
-/// Maximum number of buffered messages before we consider the remote unresponsive and kill the
-/// substream.
-const MAX_PENDING_MESSAGES: usize = 256;
+/// Maximum number of buffered messages before we refuse to accept more.
+const MAX_PENDING_MESSAGES: usize = 1024;
 
 /// Upgrade that accepts a substream, sends back a status message, then becomes a unidirectional
 /// stream of messages.
