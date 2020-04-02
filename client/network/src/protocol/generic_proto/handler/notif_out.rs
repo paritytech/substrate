@@ -307,7 +307,7 @@ impl ProtocolsHandler for NotifsOutHandler {
 					if !matches!(substream.send(msg).now_or_never(), Some(Ok(_))) {
 						log::warn!(
 							target: "sub-libp2p",
-							"📞 Queue of notifications with {} is full, dropped message (protocol: {:?})",
+							"📞 Notifications queue with peer {} is full, dropped message (protocol: {:?})",
 							self.peer_id,
 							self.protocol_name,
 						);
