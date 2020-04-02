@@ -3510,6 +3510,7 @@ dependencies = [
  "pallet-indices",
  "pallet-membership",
  "pallet-offences",
+ "pallet-offences-benchmarking",
  "pallet-randomness-collective-flip",
  "pallet-recovery",
  "pallet-scheduler",
@@ -4275,17 +4276,29 @@ dependencies = [
 name = "pallet-offences"
 version = "2.0.0-alpha.5"
 dependencies = [
- "frame-benchmarking",
  "frame-support",
  "frame-system",
  "pallet-balances",
- "pallet-im-online",
- "pallet-session",
- "pallet-staking",
  "parity-scale-codec",
  "serde",
  "sp-core",
  "sp-io",
+ "sp-runtime",
+ "sp-staking",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-offences-benchmarking"
+version = "2.0.0-alpha.5"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-im-online",
+ "pallet-offences",
+ "pallet-session",
+ "pallet-staking",
  "sp-runtime",
  "sp-staking",
  "sp-std",

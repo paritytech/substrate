@@ -15,12 +15,8 @@ sp-std = { version = "2.0.0-alpha.5", default-features = false, path = "../../pr
 serde = { version = "1.0.101", optional = true }
 sp-runtime = { version = "2.0.0-alpha.5", default-features = false, path = "../../primitives/runtime" }
 sp-staking = { version = "2.0.0-alpha.5", default-features = false, path = "../../primitives/staking" }
-frame-benchmarking = { version = "2.0.0-alpha.5", default-features = false, path = "../benchmarking", optional = true }
 frame-support = { version = "2.0.0-alpha.5", default-features = false, path = "../support" }
 frame-system = { version = "2.0.0-alpha.5", default-features = false, path = "../system" }
-pallet-im-online = { version = "2.0.0-alpha.5", default-features = false, path = "../im-online" }
-pallet-staking = { version = "2.0.0-alpha.5", default-features = false, path = "../staking" }
-pallet-session = { version = "2.0.0-alpha.5", default-features = false, path = "../session" }
 
 [dev-dependencies]
 sp-io = { version = "2.0.0-alpha.5", path = "../../primitives/io" }
@@ -30,19 +26,14 @@ sp-core = { version = "2.0.0-alpha.5", path = "../../primitives/core" }
 default = ["std"]
 std = [
 	"pallet-balances/std",
-	"pallet-im-online/std",
-	"pallet-staking/std",
-	"pallet-session/std",
 	"codec/std",
 	"sp-std/std",
 	"serde",
 	"sp-runtime/std",
 	"sp-staking/std",
-	"frame-benchmarking/std",
 	"frame-support/std",
 	"frame-system/std",
 ]
-runtime-benchmarks = ["frame-benchmarking"]
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
