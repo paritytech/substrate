@@ -142,7 +142,7 @@ impl<C: SubstrateCli> Runner<C> {
 			Local::today().year()
 		);
 		info!("📋 Chain specification: {}", self.config.chain_spec.name());
-		info!("🏷 Node name: {}", self.config.network.node_name);
+		info!("🏷  Node name: {}", self.config.network.node_name);
 		info!("👤 Roles: {}", self.config.display_role());
 
 		match self.config.roles {
