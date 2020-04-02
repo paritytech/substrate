@@ -504,7 +504,9 @@ macro_rules! impl_benchmark {
 	(
 		NO_INSTANCE $( $name:ident ),*
 	) => {
-		impl<T: Trait> $crate::Benchmarking<$crate::BenchmarkResults> for Module<T> {
+		impl<T: Trait> $crate::Benchmarking<$crate::BenchmarkResults> for Module<T>
+			where T: frame_system::Trait
+		{
 			fn benchmarks() -> Vec<&'static [u8]> {
 				vec![ $( stringify!($name).as_ref() ),* ]
 			}
@@ -602,7 +604,9 @@ macro_rules! impl_benchmark {
 	(
 		INSTANCE $( $name:ident ),*
 	) => {
-		impl<T: Trait<I>, I: Instance> $crate::Benchmarking<$crate::BenchmarkResults> for Module<T, I> {
+		impl<T: Trait<I>, I: Instance> $crate::Benchmarking<$crate::BenchmarkResults> for Module<T, I>:
+			where T: frame_system::Trait
+		{
 			fn benchmarks() -> Vec<&'static [u8]> {
 				vec![ $( stringify!($name).as_ref() ),* ]
 			}
