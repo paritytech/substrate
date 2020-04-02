@@ -64,6 +64,7 @@ use libp2p::swarm::{
 	NegotiatedSubstream,
 };
 use log::{debug, error};
+use prometheus_endpoint::HistogramVec;
 use std::{borrow::Cow, error, io, str, task::{Context, Poll}};
 
 /// Implements the `IntoProtocolsHandler` trait of libp2p.
@@ -225,12 +226,30 @@ pub enum NotifsHandlerOut {
 
 impl NotifsHandlerProto {
 	/// Builds a new handler.
-	pub fn new(legacy: RegisteredProtocol, list: impl Into<Vec<(Cow<'static, [u8]>, Vec<u8>)>>) -> Self {
+	///
+	/// The `queue_size_report` is an optional Prometheus metric that can report the size of the
+	/// messages queue. If passed, it must have one label for the protocol name.
+	pub fn new(legacy: RegisteredProtocol, list: impl Into<Vec<(Cow<'static, [u8]>, Vec<u8>)>>, queue_size_report: Option<HistogramVec>) -> Self {
 		let list = list.into();
+
+		let out_handlers = list
+			.clone()
+			.into_iter()
+			.map(|(p, _)| {
+				let queue_size_report = queue_size_report.as_ref().and_then(|qs| {
+					if let Ok(utf8) = str::from_utf8(&p) {
+						Some(qs.with_label_values(&[utf8]))
+					} else {
+						log::warn!("Ignoring Prometheus metric because {:?} isn't UTF-8", p);
+						None
+					}
+				});
+				NotifsOutHandlerProto::new(p, queue_size_report)
+			}).collect();
 
 		NotifsHandlerProto {
 			in_handlers: list.clone().into_iter().map(|(p, _)| NotifsInHandlerProto::new(p)).collect(),
-			out_handlers: list.clone().into_iter().map(|(p, _)| NotifsOutHandlerProto::new(p)).collect(),
+			out_handlers,
 			legacy: LegacyProtoHandlerProto::new(legacy),
 		}
 	}
