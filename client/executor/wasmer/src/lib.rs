@@ -110,7 +110,21 @@ fn call_method(
 	// This import object can contain shared functions, but it should have its own memory.
 	let instance = module.instantiate(import_object).unwrap();
 
-	let heap_base = 1054880; // TODO:
+	let heap_base = {
+		let (_, export) = instance
+			.exports()
+			.find(|(name, _)| name == "__heap_base")
+			.ok_or(Error::from("__heap_base should be present"))?;
+		let global_val = match export {
+			wasmer_runtime::Export::Global(global) => global.get(),
+			_ => return Err(Error::from("__heap_base should be a global")),
+		};
+		match global_val {
+			wasmer_runtime::Value::I32(v) => v as u32,
+			_ => return Err(Error::from("__heap_base should be of type i32")),
+		}
+	};
+
 	let mut allocator = FreeingBumpHeapAllocator::new(heap_base);
 
 	let memory = memory.unwrap(); // TODO: Support non imported memory.
