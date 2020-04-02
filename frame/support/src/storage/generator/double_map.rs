@@ -388,7 +388,6 @@ impl<T> Iterator for MapIterator<T> {
 	}
 }
 
-
 impl<
 	K1: FullCodec,
 	K2: FullCodec,
