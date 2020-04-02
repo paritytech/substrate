@@ -3511,6 +3511,7 @@ dependencies = [
  "pallet-offences",
  "pallet-randomness-collective-flip",
  "pallet-recovery",
+ "pallet-scheduler",
  "pallet-session",
  "pallet-session-benchmarking",
  "pallet-society",
@@ -4042,6 +4043,7 @@ dependencies = [
  "frame-system",
  "hex-literal",
  "pallet-balances",
+ "pallet-scheduler",
  "parity-scale-codec",
  "serde",
  "sp-core",
@@ -4075,6 +4077,7 @@ dependencies = [
  "frame-system",
  "hex-literal",
  "pallet-balances",
+ "pallet-scheduler",
  "parity-scale-codec",
  "serde",
  "sp-core",
@@ -4304,6 +4307,21 @@ dependencies = [
  "frame-support",
  "frame-system",
  "pallet-balances",
+ "parity-scale-codec",
+ "serde",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-scheduler"
+version = "2.0.0-alpha.5"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
  "parity-scale-codec",
  "serde",
  "sp-core",

@@ -21,6 +21,7 @@ frame-system = { version = "2.0.0-alpha.5", default-features = false, path = "..
 [dev-dependencies]
 sp-core = { version = "2.0.0-alpha.5", path = "../../primitives/core" }
 pallet-balances = { version = "2.0.0-alpha.5", path = "../balances" }
+pallet-scheduler = { version = "2.0.0-alpha.5", path = "../scheduler" }
 sp-storage = { version = "2.0.0-alpha.5", path = "../../primitives/storage" }
 hex-literal = "0.2.1"
 
