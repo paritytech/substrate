@@ -210,7 +210,6 @@ pub fn parse_addr(mut addr: Multiaddr)-> Result<(PeerId, Multiaddr), ParseErr> {
 /// # use sc_network::{Multiaddr, PeerId, config::MultiaddrWithPeerId};
 /// let addr: MultiaddrWithPeerId =
 /// 	"/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV".parse().unwrap();
-/// ).unwrap();
 /// assert_eq!(addr.peer_id.to_base58(), "QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV");
 /// assert_eq!(addr.multiaddr.to_string(), "/ip4/198.51.100.19/tcp/30333");
 /// ```
