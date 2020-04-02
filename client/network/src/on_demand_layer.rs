@@ -16,16 +16,17 @@
 
 //! On-demand requests service.
 
-use crate::protocol::light_dispatch::RequestData;
-use std::{collections::HashMap, pin::Pin, sync::Arc, task::Context, task::Poll};
-use futures::{prelude::*, channel::mpsc, channel::oneshot};
+use crate::protocol::light_client_handler;
+
+use futures::{channel::mpsc, channel::oneshot, prelude::*};
 use parking_lot::Mutex;
-use sp_blockchain::Error as ClientError;
 use sc_client_api::{
-	Fetcher, FetchChecker, RemoteHeaderRequest, RemoteCallRequest, RemoteReadRequest,
-	RemoteChangesRequest, RemoteReadChildRequest, RemoteBodyRequest,
+	FetchChecker, Fetcher, RemoteBodyRequest, RemoteCallRequest, RemoteChangesRequest,
+	RemoteHeaderRequest, RemoteReadChildRequest, RemoteReadRequest, StorageProof, ChangesProof,
 };
+use sp_blockchain::Error as ClientError;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
+use std::{collections::HashMap, pin::Pin, sync::Arc, task::Context, task::Poll};
 
 /// Implements the `Fetcher` trait of the client. Makes it possible for the light client to perform
 /// network requests for some state.
@@ -41,13 +42,72 @@ pub struct OnDemand<B: BlockT> {
 	/// Note that a better alternative would be to use a MPMC queue here, and add a `poll` method
 	/// from the `OnDemand`. However there exists no popular implementation of MPMC channels in
 	/// asynchronous Rust at the moment
-	requests_queue: Mutex<Option<mpsc::UnboundedReceiver<RequestData<B>>>>,
+	requests_queue: Mutex<Option<mpsc::UnboundedReceiver<light_client_handler::Request<B>>>>,
 
 	/// Sending side of `requests_queue`.
-	requests_send: mpsc::UnboundedSender<RequestData<B>>,
+	requests_send: mpsc::UnboundedSender<light_client_handler::Request<B>>,
 }
 
-impl<B: BlockT> OnDemand<B> where
+/// Dummy implementation of `FetchChecker` that always assumes that responses are bad.
+///
+/// Considering that it is the responsibility of the client to build the fetcher, it can use this
+/// implementation if it knows that it will never perform any request.
+#[derive(Default, Clone)]
+pub struct AlwaysBadChecker;
+
+impl<Block: BlockT> FetchChecker<Block> for AlwaysBadChecker {
+	fn check_header_proof(
+		&self,
+		_request: &RemoteHeaderRequest<Block::Header>,
+		_remote_header: Option<Block::Header>,
+		_remote_proof: StorageProof,
+	) -> Result<Block::Header, ClientError> {
+		Err(ClientError::Msg("AlwaysBadChecker".into()))
+	}
+
+	fn check_read_proof(
+		&self,
+		_request: &RemoteReadRequest<Block::Header>,
+		_remote_proof: StorageProof,
+	) -> Result<HashMap<Vec<u8>,Option<Vec<u8>>>, ClientError> {
+		Err(ClientError::Msg("AlwaysBadChecker".into()))
+	}
+
+	fn check_read_child_proof(
+		&self,
+		_request: &RemoteReadChildRequest<Block::Header>,
+		_remote_proof: StorageProof,
+	) -> Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError> {
+		Err(ClientError::Msg("AlwaysBadChecker".into()))
+	}
+
+	fn check_execution_proof(
+		&self,
+		_request: &RemoteCallRequest<Block::Header>,
+		_remote_proof: StorageProof,
+	) -> Result<Vec<u8>, ClientError> {
+		Err(ClientError::Msg("AlwaysBadChecker".into()))
+	}
+
+	fn check_changes_proof(
+		&self,
+		_request: &RemoteChangesRequest<Block::Header>,
+		_remote_proof: ChangesProof<Block::Header>
+	) -> Result<Vec<(NumberFor<Block>, u32)>, ClientError> {
+		Err(ClientError::Msg("AlwaysBadChecker".into()))
+	}
+
+	fn check_body_proof(
+		&self,
+		_request: &RemoteBodyRequest<Block::Header>,
+		_body: Vec<Block::Extrinsic>
+	) -> Result<Vec<Block::Extrinsic>, ClientError> {
+		Err(ClientError::Msg("AlwaysBadChecker".into()))
+	}
+}
+
+impl<B: BlockT> OnDemand<B>
+where
 	B::Header: HeaderT,
 {
 	/// Creates new on-demand service.
@@ -74,12 +134,15 @@ impl<B: BlockT> OnDemand<B> where
 	///
 	/// If this function returns `None`, that means that the receiver has already been extracted in
 	/// the past, and therefore that something already handles the requests.
-	pub(crate) fn extract_receiver(&self) -> Option<mpsc::UnboundedReceiver<RequestData<B>>> {
+	pub(crate) fn extract_receiver(
+		&self,
+	) -> Option<mpsc::UnboundedReceiver<light_client_handler::Request<B>>> {
 		self.requests_queue.lock().take()
 	}
 }
 
-impl<B> Fetcher<B> for OnDemand<B> where
+impl<B> Fetcher<B> for OnDemand<B>
+where
 	B: BlockT,
 	B::Header: HeaderT,
 {
@@ -91,40 +154,55 @@ impl<B> Fetcher<B> for OnDemand<B> where
 
 	fn remote_header(&self, request: RemoteHeaderRequest<B::Header>) -> Self::RemoteHeaderResult {
 		let (sender, receiver) = oneshot::channel();
-		let _ = self.requests_send.unbounded_send(RequestData::RemoteHeader(request, sender));
+		let _ = self
+			.requests_send
+			.unbounded_send(light_client_handler::Request::Header { request, sender });
 		RemoteResponse { receiver }
 	}
 
 	fn remote_read(&self, request: RemoteReadRequest<B::Header>) -> Self::RemoteReadResult {
 		let (sender, receiver) = oneshot::channel();
-		let _ = self.requests_send.unbounded_send(RequestData::RemoteRead(request, sender));
+		let _ = self
+			.requests_send
+			.unbounded_send(light_client_handler::Request::Read { request, sender });
 		RemoteResponse { receiver }
 	}
 
 	fn remote_read_child(
 		&self,
-		request: RemoteReadChildRequest<B::Header>
+		request: RemoteReadChildRequest<B::Header>,
 	) -> Self::RemoteReadResult {
 		let (sender, receiver) = oneshot::channel();
-		let _ = self.requests_send.unbounded_send(RequestData::RemoteReadChild(request, sender));
+		let _ = self
+			.requests_send
+			.unbounded_send(light_client_handler::Request::ReadChild { request, sender });
 		RemoteResponse { receiver }
 	}
 
 	fn remote_call(&self, request: RemoteCallRequest<B::Header>) -> Self::RemoteCallResult {
 		let (sender, receiver) = oneshot::channel();
-		let _ = self.requests_send.unbounded_send(RequestData::RemoteCall(request, sender));
+		let _ = self
+			.requests_send
+			.unbounded_send(light_client_handler::Request::Call { request, sender });
 		RemoteResponse { receiver }
 	}
 
-	fn remote_changes(&self, request: RemoteChangesRequest<B::Header>) -> Self::RemoteChangesResult {
+	fn remote_changes(
+		&self,
+		request: RemoteChangesRequest<B::Header>,
+	) -> Self::RemoteChangesResult {
 		let (sender, receiver) = oneshot::channel();
-		let _ = self.requests_send.unbounded_send(RequestData::RemoteChanges(request, sender));
+		let _ = self
+			.requests_send
+			.unbounded_send(light_client_handler::Request::Changes { request, sender });
 		RemoteResponse { receiver }
 	}
 
 	fn remote_body(&self, request: RemoteBodyRequest<B::Header>) -> Self::RemoteBodyResult {
 		let (sender, receiver) = oneshot::channel();
-		let _ = self.requests_send.unbounded_send(RequestData::RemoteBody(request, sender));
+		let _ = self
+			.requests_send
+			.unbounded_send(light_client_handler::Request::Body { request, sender });
 		RemoteResponse { receiver }
 	}
 }
