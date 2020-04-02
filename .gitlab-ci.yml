@@ -30,19 +30,20 @@ stages:
   - flaming-fir
 
 variables:
-  GIT_STRATEGY:                               fetch
-  GIT_DEPTH:                                  100
-  CARGO_HOME:                                 "/ci-cache/${CI_PROJECT_NAME}/cargo/${CI_JOB_NAME}"
-  SCCACHE_DIR:                                "/ci-cache/${CI_PROJECT_NAME}/sccache"
-  CARGO_INCREMENTAL:                          0
-  CI_SERVER_NAME:                             "GitLab CI"
-  DOCKER_OS:                                  "debian:stretch"
-  ARCH:                                       "x86_64"
+  GIT_STRATEGY:                    fetch
+  GIT_DEPTH:                       100
+  CARGO_HOME:                      "/ci-cache/${CI_PROJECT_NAME}/cargo/${CI_COMMIT_REF_NAME}/${CI_JOB_NAME}"
+  SCCACHE_DIR:                     "/ci-cache/${CI_PROJECT_NAME}/sccache"
+  CARGO_INCREMENTAL:               0
+  CI_SERVER_NAME:                  "GitLab CI"
+  DOCKER_OS:                       "debian:stretch"
+  ARCH:                            "x86_64"
   # FIXME set to release
   CARGO_UNLEASH_INSTALL_PARAMS:    "--version 1.0.0-alpha.10"
   CARGO_UNLEASH_PKG_DEF:           "--skip node node-* pallet-template pallet-example pallet-example-* subkey chain-spec-builder sp-arithmetic-fuzzer"
   CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER: "wasm-bindgen-test-runner"
   WASM_BINDGEN_TEST_TIMEOUT: 60
+
 
 .collect-artifacts:                &collect-artifacts
   artifacts:
