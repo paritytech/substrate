@@ -2053,6 +2053,7 @@ mod tests {
 			Box::new(DefaultBlockAnnounceValidator::new(client.clone())),
 			None,
 			Default::default(),
+			None,
 		).unwrap();
 
 		let dummy_peer_id = PeerId::random();
