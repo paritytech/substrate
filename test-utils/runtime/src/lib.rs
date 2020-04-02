@@ -626,7 +626,7 @@ cfg_if! {
 						genesis_authorities: system::authorities()
 							.into_iter().map(|x|(x, 1)).collect(),
 						randomness: <pallet_babe::Module<Runtime>>::randomness(),
-						secondary_slots: true,
+						allowed_slots: AllowedSlots::PrimaryAndSecondarySlots,
 					}
 				}
 
