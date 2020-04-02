@@ -22,7 +22,7 @@ use sp_consensus::{
 	Environment, Proposer, ForkChoiceStrategy, BlockImportParams, BlockOrigin, SelectChain,
 	import_queue::{BasicQueue, CacheKeyId, Verifier, BoxBlockImport},
 };
-use sp_blockchain::{HeaderBackend};
+use sp_blockchain::HeaderBackend;
 use sp_inherents::InherentDataProviders;
 use sp_runtime::{traits::Block as BlockT, Justification};
 use sc_client_api::backend::{Backend as ClientBackend, Finalizer};
