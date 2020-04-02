@@ -88,7 +88,7 @@ pub enum ObservedRole {
 	OurSentry,
 	/// When we are a sentry node, this is the authority we are protecting.
 	OurGuardedAuthority,
-	/// Third-parity authority.
+	/// Third-party authority.
 	Authority,
 }
 

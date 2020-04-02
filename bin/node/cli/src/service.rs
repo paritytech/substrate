@@ -207,7 +207,11 @@ macro_rules! new_full {
 			name: Some(name),
 			observer_enabled: false,
 			keystore,
-			is_authority: matches!(role, Role::Authority { .. } | Role::Sentry { .. }),
+			is_authority: match role {
+				sc_service::config::Role::Authority { .. } |
+				sc_service::config::Role::Sentry { .. } => true,
+				_ => false,
+			}
 		};
 
 		let enable_grandpa = !disable_grandpa;
