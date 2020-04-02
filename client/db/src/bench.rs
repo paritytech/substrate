@@ -19,6 +19,7 @@
 use std::sync::Arc;
 use std::path::PathBuf;
 use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 use rand::Rng;
 
 use hash_db::{Prefix, Hasher};
@@ -59,12 +60,14 @@ pub struct BenchmarkingState<B: BlockT> {
 	genesis_root: B::Hash,
 	state: RefCell<Option<DbState<B>>>,
 	db: Cell<Option<Arc<dyn KeyValueDB>>>,
-	genesis: <DbState<B> as StateBackend<HashFor<B>>>::Transaction,
+	genesis: HashMap<Vec<u8>, (Vec<u8>, i32)>,
+	record: Cell<Vec<Vec<u8>>>,
+	cache_size_mb: Option<usize>,
 }
 
 impl<B: BlockT> BenchmarkingState<B> {
 	/// Create a new instance that creates a database in a temporary dir.
-	pub fn new(genesis: Storage) -> Result<Self, String> {
+	pub fn new(genesis: Storage, cache_size_mb: Option<usize>) -> Result<Self, String> {
 		let temp_dir = PathBuf::from(std::env::temp_dir());
 		let name: String = rand::thread_rng().sample_iter(&rand::distributions::Alphanumeric).take(10).collect();
 		let path = temp_dir.join(&name);
@@ -81,6 +84,8 @@ impl<B: BlockT> BenchmarkingState<B> {
 			root: Cell::new(root),
 			genesis: Default::default(),
 			genesis_root: Default::default(),
+			record: Default::default(),
+			cache_size_mb,
 		};
 
 		state.reopen()?;
@@ -93,7 +98,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 			child_delta,
 			false,
 		);
-		state.genesis = transaction.clone();
+		state.genesis = transaction.clone().drain();
 		state.genesis_root = root.clone();
 		state.commit(root, transaction)?;
 		Ok(state)
@@ -102,7 +107,10 @@ impl<B: BlockT> BenchmarkingState<B> {
 	fn reopen(&self) -> Result<(), String> {
 		*self.state.borrow_mut() = None;
 		self.db.set(None);
-		let db_config = DatabaseConfig::with_columns(1);
+		let mut db_config = DatabaseConfig::with_columns(1);
+		if let Some(size) = &self.cache_size_mb {
+			db_config.memory_budget.insert(0, *size);
+		}
 		let path = self.path.to_str()
 			.ok_or_else(|| String::from("Invalid database path"))?;
 		let db = Arc::new(Database::open(&db_config, &path).map_err(|e| format!("Error opening database: {:?}", e))?);
@@ -255,6 +263,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 	{
 		if let Some(db) = self.db.take() {
 			let mut db_transaction = DBTransaction::new();
+			let mut keys = Vec::new();
 			let mut keyspace = crate::Keyspaced::new(&[]);
 			for (info, mut updates) in transaction.into_iter() {
 				// child info with strong unique id are using the same state-db with prefixed key
@@ -279,7 +288,9 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 						db_transaction.delete(0, &key);
 					}
 				}
+				keys.push(key);
 			}
+			self.record.set(keys);
 			db.write(db_transaction).map_err(|_| String::from("Error committing transaction"))?;
 			self.root.set(storage_root);
 		} else {
@@ -289,10 +300,33 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 	}
 
 	fn wipe(&self) -> Result<(), Self::Error> {
-		self.kill()?;
+		// Restore to genesis
+		let record = self.record.take();
+		if let Some(db) = self.db.take() {
+			let mut db_transaction = DBTransaction::new();
+			for key in record {
+				match self.genesis.get(&key) {
+					Some((v, _)) => db_transaction.put(0, &key, v),
+					None => db_transaction.delete(0, &key),
+				}
+			}
+			db.write(db_transaction).map_err(|_| String::from("Error committing transaction"))?;
+		}
+
+		self.db.set(None);
+		*self.state.borrow_mut() = None;
+
+		self.root.set(self.genesis_root.clone());
 		self.reopen()?;
-		self.commit(self.genesis_root.clone(), self.genesis.clone())?;
 		Ok(())
+	}
+
+	fn register_overlay_stats(&mut self, stats: &sp_state_machine::StateMachineStats) {
+		self.state.borrow_mut().as_mut().map(|s| s.register_overlay_stats(stats));
+	}
+
+	fn usage_info(&self) -> sp_state_machine::UsageInfo {
+		self.state.borrow().as_ref().map_or(sp_state_machine::UsageInfo::empty(), |s| s.usage_info())
 	}
 }
 

@@ -25,6 +25,8 @@ use sp_std::collections::btree_map::BTreeMap;
 use sp_debug_derive::RuntimeDebug;
 
 use sp_std::vec::Vec;
+use sp_std::ops::{Deref, DerefMut};
+use ref_cast::RefCast;
 
 /// Storage key.
 #[derive(PartialEq, Eq, RuntimeDebug)]
@@ -33,6 +35,51 @@ pub struct StorageKey(
 	#[cfg_attr(feature = "std", serde(with="impl_serde::serialize"))]
 	pub Vec<u8>,
 );
+
+/// Storage key of a child trie, it contains the prefix to the key.
+#[derive(PartialEq, Eq, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Hash, PartialOrd, Ord, Clone))]
+#[repr(transparent)]
+#[derive(RefCast)]
+pub struct PrefixedStorageKey(
+	#[cfg_attr(feature = "std", serde(with="impl_serde::serialize"))]
+	Vec<u8>,
+);
+
+impl Deref for PrefixedStorageKey {
+	type Target = Vec<u8>;
+
+	fn deref(&self) -> &Vec<u8> {
+		&self.0
+	}
+}
+
+impl DerefMut for PrefixedStorageKey {
+	fn deref_mut(&mut self) -> &mut Vec<u8> {
+		&mut self.0
+	}
+}
+
+impl PrefixedStorageKey {
+	/// Create a prefixed storage key from its byte array
+	/// representation.
+	pub fn new(inner: Vec<u8>) -> Self {
+		PrefixedStorageKey(inner)
+	}
+
+	/// Create a prefixed storage key reference.
+	pub fn new_ref(inner: &Vec<u8>) -> &Self {
+		PrefixedStorageKey::ref_cast(inner)
+	}
+
+	/// Get inner key, this should
+	/// only be needed when writing
+	/// into parent trie to avoid an
+	/// allocation.
+	pub fn into_inner(self) -> Vec<u8> {
+		self.0
+	}
+}
 
 /// Storage data associated to a [`StorageKey`].
 #[derive(PartialEq, Eq, RuntimeDebug)]
@@ -110,29 +157,6 @@ pub mod well_known_keys {
 	pub fn is_child_storage_key(key: &[u8]) -> bool {
 		// Other code might depend on this, so be careful changing this.
 		key.starts_with(CHILD_STORAGE_KEY_PREFIX)
-	}
-
-	/// Determine whether a child trie key is valid.
-	///
-	/// For now, the only valid child trie keys are those starting with `:child_storage:default:`.
-	///
-	/// `trie_root` can panic if invalid value is provided to them.
-	pub fn is_child_trie_key_valid(storage_key: &[u8]) -> bool {
-		let has_right_prefix = storage_key.starts_with(super::DEFAULT_CHILD_TYPE_PARENT_PREFIX);
-		if has_right_prefix {
-			// This is an attempt to catch a change of `is_child_storage_key`, which
-			// just checks if the key has prefix `:child_storage:` at the moment of writing.
-			debug_assert!(
-				is_child_storage_key(&storage_key),
-				"`is_child_trie_key_valid` is a subset of `is_child_storage_key`",
-			);
-		}
-		has_right_prefix
-	}
-
-	/// Return true if the variable part of the key is empty.
-	pub fn is_child_trie_key_empty(storage_key: &[u8]) -> bool {
-		storage_key.len() == b":child_storage:default:".len()
 	}
 }
 
@@ -233,7 +257,7 @@ impl ChildInfo {
 
 	/// Return a the full location in the direct parent of
 	/// this trie.
-	pub fn prefixed_storage_key(&self) -> Vec<u8> {
+	pub fn prefixed_storage_key(&self) -> PrefixedStorageKey {
 		match self {
 			ChildInfo::ParentKeyId(ChildTrieParentKeyId {
 				data,
@@ -243,13 +267,13 @@ impl ChildInfo {
 
 	/// Returns a the full location in the direct parent of
 	/// this trie.
-	pub fn into_prefixed_storage_key(self) -> Vec<u8> {
+	pub fn into_prefixed_storage_key(self) -> PrefixedStorageKey {
 		match self {
 			ChildInfo::ParentKeyId(ChildTrieParentKeyId {
 				mut data,
 			}) => {
 				ChildType::ParentKeyId.do_prefix_key(&mut data);
-				data
+				PrefixedStorageKey(data)
 			},
 		}
 	}
@@ -285,7 +309,7 @@ impl ChildType {
 
 	/// Transform a prefixed key into a tuple of the child type
 	/// and the unprefixed representation of the key.
-	pub fn from_prefixed_key<'a>(storage_key: &'a [u8]) -> Option<(Self, &'a [u8])> {
+	pub fn from_prefixed_key<'a>(storage_key: &'a PrefixedStorageKey) -> Option<(Self, &'a [u8])> {
 		let match_type = |storage_key: &'a [u8], child_type: ChildType| {
 			let prefix = child_type.parent_prefix();
 			if storage_key.starts_with(prefix) {
@@ -298,12 +322,12 @@ impl ChildType {
 	}
 
 	/// Produce a prefixed key for a given child type.
-	fn new_prefixed_key(&self, key: &[u8]) -> Vec<u8> {
+	fn new_prefixed_key(&self, key: &[u8]) -> PrefixedStorageKey {
 		let parent_prefix = self.parent_prefix();
 		let mut result = Vec::with_capacity(parent_prefix.len() + key.len());
 		result.extend_from_slice(parent_prefix);
 		result.extend_from_slice(key);
-		result
+		PrefixedStorageKey(result)
 	}
 
 	/// Prefixes a vec with the prefix for this child type.

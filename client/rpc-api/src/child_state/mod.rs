@@ -17,12 +17,15 @@
 //! Substrate state API.
 
 use jsonrpc_derive::rpc;
-use sp_core::storage::{StorageKey, StorageData};
+use sp_core::storage::{StorageKey, PrefixedStorageKey, StorageData};
 use crate::state::error::FutureResult;
 
 pub use self::gen_client::Client as ChildStateClient;
 
 /// Substrate child state API
+///
+/// Note that all `PrefixedStorageKey` are desierialized
+/// from json and not guaranted valid.
 #[rpc]
 pub trait ChildStateApi<Hash> {
 	/// RPC Metadata
@@ -32,7 +35,7 @@ pub trait ChildStateApi<Hash> {
 	#[rpc(name = "childstate_getKeys")]
 	fn storage_keys(
 		&self,
-		child_storage_key: StorageKey,
+		child_storage_key: PrefixedStorageKey,
 		prefix: StorageKey,
 		hash: Option<Hash>
 	) -> FutureResult<Vec<StorageKey>>;
@@ -41,7 +44,7 @@ pub trait ChildStateApi<Hash> {
 	#[rpc(name = "childstate_getStorage")]
 	fn storage(
 		&self,
-		child_storage_key: StorageKey,
+		child_storage_key: PrefixedStorageKey,
 		key: StorageKey,
 		hash: Option<Hash>
 	) -> FutureResult<Option<StorageData>>;
@@ -50,7 +53,7 @@ pub trait ChildStateApi<Hash> {
 	#[rpc(name = "childstate_getStorageHash")]
 	fn storage_hash(
 		&self,
-		child_storage_key: StorageKey,
+		child_storage_key: PrefixedStorageKey,
 		key: StorageKey,
 		hash: Option<Hash>
 	) -> FutureResult<Option<Hash>>;
@@ -59,7 +62,7 @@ pub trait ChildStateApi<Hash> {
 	#[rpc(name = "childstate_getStorageSize")]
 	fn storage_size(
 		&self,
-		child_storage_key: StorageKey,
+		child_storage_key: PrefixedStorageKey,
 		key: StorageKey,
 		hash: Option<Hash>
 	) -> FutureResult<Option<u64>>;

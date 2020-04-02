@@ -151,7 +151,7 @@ pub trait PowAlgorithm<B: BlockT> {
 	///
 	/// This function will be called twice during the import process, so the implementation
 	/// should be properly cached.
-	fn difficulty(&self, parent: &BlockId<B>) -> Result<Self::Difficulty, Error<B>>;
+	fn difficulty(&self, parent: B::Hash) -> Result<Self::Difficulty, Error<B>>;
 	/// Verify that the seal is valid against given pre hash when parent block is not yet imported.
 	///
 	/// None means that preliminary verify is not available for this algorithm.
@@ -335,7 +335,7 @@ impl<B, I, C, S, Algorithm> BlockImport<B> for PowBlockImport<B, I, C, S, Algori
 
 		let difficulty = match intermediate.difficulty {
 			Some(difficulty) => difficulty,
-			None => self.algorithm.difficulty(&BlockId::hash(parent_hash))?,
+			None => self.algorithm.difficulty(parent_hash)?,
 		};
 
 		let pre_hash = block.header.hash();
@@ -617,9 +617,7 @@ fn mine_loop<B: BlockT, C, Algorithm, E, SO, S, CAW>(
 
 		let (header, body) = proposal.block.deconstruct();
 		let (difficulty, seal) = {
-			let difficulty = algorithm.difficulty(
-				&BlockId::Hash(best_hash),
-			)?;
+			let difficulty = algorithm.difficulty(best_hash)?;
 
 			loop {
 				let seal = algorithm.mine(

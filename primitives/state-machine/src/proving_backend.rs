@@ -285,6 +285,12 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		let (root, is_empty, mut tx) = self.0.child_storage_root(child_info, delta);
 		(root, is_empty, tx.remove(child_info))
 	}
+
+	fn register_overlay_stats(&mut self, _stats: &crate::stats::StateMachineStats) { }
+
+	fn usage_info(&self) -> crate::stats::UsageInfo {
+		self.0.usage_info()
+	}
 }
 
 /// Create proof check backend.

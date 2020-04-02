@@ -172,7 +172,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 		delta: I1,
 		child_deltas: I2,
 		return_child_roots: bool,
-	) -> (H::Out, Self::Transaction, Vec<(StorageKey, Option<H::Out>)>)
+	) -> (H::Out, Self::Transaction, Vec<(PrefixedStorageKey, Option<H::Out>)>)
 	where
 		I1: IntoIterator<Item=(StorageKey, Option<StorageValue>)>,
 		I2i: IntoIterator<Item=(StorageKey, Option<StorageValue>)>,
@@ -192,13 +192,13 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 				if return_child_roots {
 					result_child_roots.push((prefixed_storage_key.clone(), None));
 				}
-				child_roots.push((prefixed_storage_key, None));
+				child_roots.push((prefixed_storage_key.into_inner(), None));
 			} else {
 				if return_child_roots {
-					child_roots.push((prefixed_storage_key.clone(), Some(child_root.encode())));
+					child_roots.push((prefixed_storage_key.clone().into_inner(), Some(child_root.encode())));
 					result_child_roots.push((prefixed_storage_key, Some(child_root)));
 				} else {
-					child_roots.push((prefixed_storage_key, Some(child_root.encode())));
+					child_roots.push((prefixed_storage_key.into_inner(), Some(child_root.encode())));
 				}
 			}
 		}
@@ -209,13 +209,16 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 		(root, txs, result_child_roots)
 	}
 
+	/// Register stats from overlay of state machine.
+	///
+	/// By default nothing is registered.
+	fn register_overlay_stats(&mut self, _stats: &crate::stats::StateMachineStats);
+
 	/// Query backend usage statistics (i/o, memory)
 	///
 	/// Not all implementations are expected to be able to do this. In the
 	/// case when they don't, empty statistics is returned.
-	fn usage_info(&self) -> UsageInfo {
-		UsageInfo::empty()
-	}
+	fn usage_info(&self) -> UsageInfo;
 
 	/// Wipe the state database.
 	fn wipe(&self) -> Result<(), Self::Error> {
@@ -306,10 +309,12 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 		(*self).for_key_values_with_prefix(prefix, f);
 	}
 
+	fn register_overlay_stats(&mut self, _stats: &crate::stats::StateMachineStats) {	}
+
 	fn usage_info(&self) -> UsageInfo {
 		(*self).usage_info()
 	}
- }
+}
 
 /// Trait that allows consolidate two transactions together.
 pub trait Consolidate {

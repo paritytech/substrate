@@ -76,6 +76,7 @@ decl_module! {
 
 		/// Hint that the author of this block thinks the best finalized
 		/// block is the given number.
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn final_hint(origin, #[compact] hint: T::BlockNumber) {
 			ensure_none(origin)?;
 			ensure!(!<Self as Store>::Update::exists(), Error::<T>::AlreadyUpdated);
@@ -207,9 +208,11 @@ mod tests {
 	use sp_core::H256;
 	use sp_runtime::{
 		testing::Header, Perbill,
-		traits::{BlakeTwo256, IdentityLookup, OnFinalize, Header as HeaderT},
+		traits::{BlakeTwo256, IdentityLookup, Header as HeaderT},
 	};
-	use frame_support::{assert_ok, impl_outer_origin, parameter_types, weights::Weight};
+	use frame_support::{
+		assert_ok, impl_outer_origin, parameter_types, weights::Weight, traits::OnFinalize
+	};
 	use frame_system as system;
 	use std::cell::RefCell;
 
@@ -262,7 +265,7 @@ mod tests {
 		type Version = ();
 		type ModuleToIndex = ();
 		type AccountData = ();
-		type MigrateAccount = (); type OnNewAccount = ();
+		type OnNewAccount = ();
 		type OnKilledAccount = ();
 	}
 	parameter_types! {
