@@ -169,7 +169,8 @@ decl_event! {
 	/// Events type.
 	pub enum Event<T> where
 		AccountId = <T as system::Trait>::AccountId,
-		BlockNumber = <T as system::Trait>::BlockNumber
+		BlockNumber = <T as system::Trait>::BlockNumber,
+		CallHash = [u8; 32]
 	{
 		/// Batch of dispatches did not complete fully. Index of first failing dispatch given, as
 		/// well as the error.
@@ -178,16 +179,16 @@ decl_event! {
 		BatchCompleted,
 		/// A new multisig operation has begun. First param is the account that is approving,
 		/// second is the multisig account.
-		NewMultisig(AccountId, AccountId),
+		NewMultisig(AccountId, AccountId, CallHash),
 		/// A multisig operation has been approved by someone. First param is the account that is
 		/// approving, third is the multisig account.
-		MultisigApproval(AccountId, Timepoint<BlockNumber>, AccountId),
+		MultisigApproval(AccountId, Timepoint<BlockNumber>, AccountId, CallHash),
 		/// A multisig operation has been executed. First param is the account that is
 		/// approving, third is the multisig account.
-		MultisigExecuted(AccountId, Timepoint<BlockNumber>, AccountId, DispatchResult),
+		MultisigExecuted(AccountId, Timepoint<BlockNumber>, AccountId, CallHash, DispatchResult),
 		/// A multisig operation has been cancelled. First param is the account that is
 		/// cancelling, third is the multisig account.
-		MultisigCancelled(AccountId, Timepoint<BlockNumber>, AccountId),
+		MultisigCancelled(AccountId, Timepoint<BlockNumber>, AccountId, CallHash),
 	}
 }
 
@@ -345,7 +346,7 @@ decl_module! {
 					if (m.approvals.len() as u16) < threshold - 1 {
 						m.approvals.insert(pos, who.clone());
 						<Multisigs<T>>::insert(&id, call_hash, m);
-						Self::deposit_event(RawEvent::MultisigApproval(who, timepoint, id));
+						Self::deposit_event(RawEvent::MultisigApproval(who, timepoint, id, call_hash));
 						return Ok(())
 					}
 				} else {
@@ -357,7 +358,7 @@ decl_module! {
 				let result = call.dispatch(frame_system::RawOrigin::Signed(id.clone()).into());
 				let _ = T::Currency::unreserve(&m.depositor, m.deposit);
 				<Multisigs<T>>::remove(&id, call_hash);
-				Self::deposit_event(RawEvent::MultisigExecuted(who, timepoint, id, result));
+				Self::deposit_event(RawEvent::MultisigExecuted(who, timepoint, id, call_hash, result));
 			} else {
 				ensure!(maybe_timepoint.is_none(), Error::<T>::UnexpectedTimepoint);
 				if threshold > 1 {
@@ -370,7 +371,7 @@ decl_module! {
 						depositor: who.clone(),
 						approvals: vec![who.clone()],
 					});
-					Self::deposit_event(RawEvent::NewMultisig(who, id));
+					Self::deposit_event(RawEvent::NewMultisig(who, id, call_hash));
 				} else {
 					return call.dispatch(frame_system::RawOrigin::Signed(id).into())
 				}
@@ -439,7 +440,7 @@ decl_module! {
 				if let Err(pos) = m.approvals.binary_search(&who) {
 					m.approvals.insert(pos, who.clone());
 					<Multisigs<T>>::insert(&id, call_hash, m);
-					Self::deposit_event(RawEvent::MultisigApproval(who, timepoint, id));
+					Self::deposit_event(RawEvent::MultisigApproval(who, timepoint, id, call_hash));
 				} else {
 					Err(Error::<T>::AlreadyApproved)?
 				}
@@ -455,7 +456,7 @@ decl_module! {
 						depositor: who.clone(),
 						approvals: vec![who.clone()],
 					});
-					Self::deposit_event(RawEvent::NewMultisig(who, id));
+					Self::deposit_event(RawEvent::NewMultisig(who, id, call_hash));
 				} else {
 					Err(Error::<T>::NoApprovalsNeeded)?
 				}
@@ -515,7 +516,7 @@ decl_module! {
 			let _ = T::Currency::unreserve(&m.depositor, m.deposit);
 			<Multisigs<T>>::remove(&id, call_hash);
 
-			Self::deposit_event(RawEvent::MultisigCancelled(who, timepoint, id));
+			Self::deposit_event(RawEvent::MultisigCancelled(who, timepoint, id, call_hash));
 			Ok(())
 		}
 	}
