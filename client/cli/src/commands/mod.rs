@@ -115,6 +115,12 @@ pub enum Subcommand {
 macro_rules! substrate_cli_subcommands {
 	($enum:ident => $($variant:ident),*) => {
 		impl ::sc_cli::CliConfiguration for $enum {
+			fn shared_params(&self) -> &::sc_cli::SharedParams {
+				match self {
+					$($enum::$variant(cmd) => cmd.shared_params()),*
+				}
+			}
+
 			fn base_path(&self) -> ::sc_cli::Result<::std::option::Option<::std::path::PathBuf>> {
 				match self {
 					$($enum::$variant(cmd) => cmd.base_path()),*

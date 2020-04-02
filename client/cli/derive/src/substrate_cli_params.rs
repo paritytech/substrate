@@ -101,32 +101,11 @@ pub(crate) fn substrate_cli_params(
 		})
 		.collect::<HashSet<_>>();
 
-	if let Some(path) = shared_params {
-		define_if_missing!(existing_methods, i, path, {
-			fn base_path(&self)
-			-> ::sc_cli::Result<::std::option::Option<::std::path::PathBuf>>
-		});
-
-		define_if_missing!(existing_methods, i, path, {
-			fn is_dev(&self) -> ::sc_cli::Result<bool>
-		});
-
-		define_if_missing!(existing_methods, i, path, {
-			fn chain_id(&self, is_dev: bool) -> ::sc_cli::Result<String>
-		});
-
-		define_if_missing!(existing_methods, i, path, {
-			fn database_config(
-				&self,
-				base_path: &::std::path::PathBuf,
-				cache_size: usize,
-			) -> ::sc_cli::Result<::sc_service::config::DatabaseConfig>
-		});
-
-		if !existing_methods.contains("init") {
+	if let Some(_) = shared_params {
+		if !existing_methods.contains("shared_params") {
 			i.items.push(ImplItem::Verbatim(quote! {
-				fn init<C: ::sc_cli::SubstrateCli>(&self) -> ::sc_cli::Result<()> {
-					self.#path.init::<C>()
+				fn shared_params(&self) -> &::sc_cli::SharedParams {
+					&self.shared_params
 				}
 			}));
 		}

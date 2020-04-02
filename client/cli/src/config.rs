@@ -17,7 +17,7 @@
 //! Configuration trait for a CLI based on substrate
 
 use crate::error::Result;
-use crate::SubstrateCli;
+use crate::{init_logger, SubstrateCli, SharedParams};
 use app_dirs::{AppDataType, AppInfo};
 use names::{Generator, Name};
 use sc_service::config::{
@@ -40,12 +40,17 @@ pub(crate) const DEFAULT_NETWORK_CONFIG_PATH: &'static str = "network";
 
 /// A trait that allows converting an object to a Configuration
 pub trait CliConfiguration: Sized {
+	/// Get the SharedParams for this object
+	fn shared_params(&self) -> &SharedParams;
+
 	/// Get the base path of the configuration (if any)
-	fn base_path(&self) -> Result<Option<PathBuf>>;
+	fn base_path(&self) -> Result<Option<PathBuf>> {
+		self.shared_params().base_path()
+	}
 
 	/// Returns `true` if the node is for development or not
 	fn is_dev(&self) -> Result<bool> {
-		Ok(false)
+		self.shared_params().is_dev()
 	}
 
 	/// Get the roles
@@ -87,7 +92,9 @@ pub trait CliConfiguration: Sized {
 	}
 
 	/// Get the database configuration
-	fn database_config(&self, base_path: &PathBuf, cache_size: usize) -> Result<DatabaseConfig>;
+	fn database_config(&self, base_path: &PathBuf, cache_size: usize) -> Result<DatabaseConfig> {
+		self.shared_params().database_config(base_path, cache_size)
+	}
 
 	/// Get the state cache size
 	fn state_cache_size(&self) -> Result<usize> {
@@ -105,7 +112,9 @@ pub trait CliConfiguration: Sized {
 	}
 
 	/// Get the chain ID (string)
-	fn chain_id(&self, is_dev: bool) -> Result<String>;
+	fn chain_id(&self, is_dev: bool) -> Result<String> {
+		self.shared_params().chain_id(is_dev)
+	}
 
 	/// Get the name of the node
 	fn node_name(&self) -> Result<String> {
@@ -287,6 +296,11 @@ pub trait CliConfiguration: Sized {
 		})
 	}
 
+	/// Get the filters for the logging
+	fn log_filters(&self) -> Result<Option<String>> {
+		self.shared_params().log_filters()
+	}
+
 	/// Initialize substrate. This must be done only once.
 	///
 	/// This method:
@@ -294,7 +308,16 @@ pub trait CliConfiguration: Sized {
 	/// 1. Set the panic handler
 	/// 2. Raise the FD limit
 	/// 3. Initialize the logger
-	fn init<C: SubstrateCli>(&self) -> Result<()>;
+	fn init<C: SubstrateCli>(&self) -> Result<()> {
+		let logger_pattern = self.log_filters()?.unwrap_or_default();
+
+		sp_panic_handler::set(C::support_url(), C::impl_version());
+
+		fdlimit::raise_fd_limit();
+		init_logger(logger_pattern.as_str());
+
+		Ok(())
+	}
 }
 
 /// Generate a valid random name for the node

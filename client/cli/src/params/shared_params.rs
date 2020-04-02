@@ -19,8 +19,6 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 
 use crate::error::Result;
-use crate::init_logger;
-use crate::SubstrateCli;
 
 /// default sub directory to store database
 const DEFAULT_DB_CONFIG_PATH: &'static str = "db";
@@ -81,24 +79,6 @@ impl SharedParams {
 		})
 	}
 
-	/// Initialize substrate. This must be done only once.
-	///
-	/// This method:
-	///
-	/// 1. Set the panic handler
-	/// 2. Raise the FD limit
-	/// 3. Initialize the logger
-	pub fn init<C: SubstrateCli>(&self) -> Result<()> {
-		let logger_pattern = self.log.as_ref().map(|v| v.as_ref()).unwrap_or("");
-
-		sp_panic_handler::set(C::support_url(), C::impl_version());
-
-		fdlimit::raise_fd_limit();
-		init_logger(logger_pattern);
-
-		Ok(())
-	}
-
 	/// Get the database configuration object for the parameters provided
 	pub fn database_config(
 		&self,
@@ -109,5 +89,10 @@ impl SharedParams {
 			path: base_path.join(DEFAULT_DB_CONFIG_PATH),
 			cache_size,
 		})
+	}
+
+	/// Get the filters for the logging
+	pub fn log_filters(&self) -> Result<Option<String>> {
+		Ok(self.log.clone())
 	}
 }
