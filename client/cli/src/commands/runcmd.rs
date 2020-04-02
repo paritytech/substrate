@@ -81,7 +81,7 @@ pub struct RunCmd {
 		conflicts_with_all = &[ "validator", "light" ],
 		parse(try_from_str)
 	)]
-	pub sentry: Option<MultiaddrWithPeerId>,
+	pub sentry: Vec<MultiaddrWithPeerId>,
 
 	/// Disable GRANDPA voter when running in validator mode, otherwise disable the GRANDPA observer.
 	#[structopt(long = "no-grandpa")]
@@ -330,13 +330,15 @@ impl RunCmd {
 		let keyring = self.get_keyring();
 		let is_dev = self.shared_params.dev;
 		let is_light = self.light;
-		let is_authority = (self.validator || self.sentry.is_some() || is_dev || keyring.is_some())
+		let is_authority = (self.validator || is_dev || keyring.is_some())
 			&& !is_light;
 		let role =
 			if is_light {
 				sc_service::Role::Light
 			} else if is_authority {
-				sc_service::Role::Authority { sentry_nodes: Vec::new(), }
+				sc_service::Role::Authority { sentry_nodes: self.network_config.sentry_nodes.clone() }
+			} else if !self.sentry.is_empty() {
+				sc_service::Role::Sentry { validators: self.sentry.clone() }
 			} else {
 				sc_service::Role::Full
 			};
@@ -356,9 +358,6 @@ impl RunCmd {
 				)
 			));
 		}
-
-		// set sentry mode (i.e. act as an authority but **never** actively participate)
-		config.sentry_mode = self.sentry.is_some();
 
 		config.offchain_worker = match (&self.offchain_worker, &role) {
 			(OffchainWorkerEnabled::WhenValidating, sc_service::Role::Authority { .. }) => true,

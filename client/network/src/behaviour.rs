@@ -177,8 +177,8 @@ fn reported_roles_to_observed_role(local_role: &Role, remote: &PeerId, roles: Ro
 		match local_role {
 			Role::Authority { sentry_nodes }
 				if sentry_nodes.iter().any(|s| s.peer_id == *remote) => ObservedRole::OurSentry,
-			Role::Sentry { validator } if validator.peer_id == *remote =>
-				ObservedRole::OurGuardedAuthority,
+			Role::Sentry { validators }
+				if validators.iter().any(|s| s.peer_id == *remote) => ObservedRole::OurGuardedAuthority,
 			_ => ObservedRole::Authority
 		}
 	} else if roles.is_full() {

@@ -19,7 +19,7 @@ use std::iter;
 use std::net::Ipv4Addr;
 use structopt::StructOpt;
 use sc_network::{
-	config::{MultiaddrWithPeerId, NonReservedPeerMode, Role, TransportConfig}, multiaddr::Protocol, Multiaddr,
+	config::{MultiaddrWithPeerId, NonReservedPeerMode, TransportConfig}, multiaddr::Protocol, Multiaddr,
 };
 use sc_service::Configuration;
 
@@ -115,12 +115,6 @@ impl NetworkConfigurationParams {
 		config.network.reserved_nodes.extend(self.reserved_nodes.clone());
 		if self.reserved_only {
 			config.network.non_reserved_mode = NonReservedPeerMode::Deny;
-		}
-
-		if let Role::Authority { sentry_nodes } = &mut config.role {
-			sentry_nodes.extend(self.sentry_nodes.clone());
-		} else if !self.sentry_nodes.is_empty() {
-			return Err(error::Error::Other("non-empty list of sentry nodes for non-validator".to_string()))
 		}
 
 		config.network.listen_addresses.extend(self.listen_addr.iter().cloned());

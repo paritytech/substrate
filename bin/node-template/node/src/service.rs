@@ -77,11 +77,6 @@ pub fn new_full(config: Configuration)
 	let name = config.name.clone();
 	let disable_grandpa = config.disable_grandpa;
 
-	// sentry nodes announce themselves as authorities to the network
-	// and should run the same protocols authorities do, but it should
-	// never actively participate in any consensus process.
-	let participates_in_consensus = is_authority && !config.sentry_mode;
-
 	let (builder, mut import_setup, inherent_data_providers) = new_full_start!(config);
 
 	let (block_import, grandpa_link) =
@@ -96,7 +91,7 @@ pub fn new_full(config: Configuration)
 		})?
 		.build()?;
 
-	if participates_in_consensus {
+	if is_authority {
 		let proposer = sc_basic_authorship::ProposerFactory::new(
 			service.client(),
 			service.transaction_pool()
@@ -129,7 +124,7 @@ pub fn new_full(config: Configuration)
 
 	// if the node isn't actively participating in consensus then it doesn't
 	// need a keystore, regardless of which protocol we use below.
-	let keystore = if participates_in_consensus {
+	let keystore = if is_authority {
 		Some(service.keystore())
 	} else {
 		None

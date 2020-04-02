@@ -104,10 +104,10 @@ pub enum Role {
 	Light,
 	/// Sentry node that guards an authority. Will be reported as "authority" on the wire protocol.
 	Sentry {
-		/// Address and identity of the validator node we're guarding.
+		/// Address and identity of the validator nodes that we're guarding.
 		///
-		/// The node will be granted some priviledged status.
-		validator: MultiaddrWithPeerId,
+		/// The nodes will be granted some priviledged status.
+		validators: Vec<MultiaddrWithPeerId>,
 	},
 	/// Actual authority.
 	Authority {

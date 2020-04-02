@@ -542,10 +542,12 @@ impl<N: Ord> Peers<N> {
 	}
 
 	fn authorities(&self) -> usize {
+		// Note that our sentry and our validator are neither authorities nor non-authorities.
 		self.inner.iter().filter(|(_, info)| matches!(info.roles, ObservedRole::Authority)).count()
 	}
 
 	fn non_authorities(&self) -> usize {
+		// Note that our sentry and our validator are neither authorities nor non-authorities.
 		self.inner
 			.iter()
 			.filter(|(_, info)| matches!(info.roles, ObservedRole::Full | ObservedRole::Light))

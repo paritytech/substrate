@@ -205,7 +205,6 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 		telemetry_external_transport: None,
 		default_heap_pages: None,
 		offchain_worker: false,
-		sentry_mode: false,
 		force_authoring: false,
 		disable_grandpa: false,
 		dev_key_seed: key_seed,

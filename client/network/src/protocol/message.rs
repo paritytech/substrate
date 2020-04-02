@@ -160,7 +160,6 @@ pub mod generic {
 		}
 	}
 
-	// TODO: are these necessary?
 	impl Roles {
 		/// Does this role represents a client that holds full chain data locally?
 		pub fn is_full(&self) -> bool {
