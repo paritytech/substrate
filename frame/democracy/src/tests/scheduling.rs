@@ -21,7 +21,6 @@ use super::*;
 #[test]
 fn simple_passing_should_work() {
 	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
 		let r = Democracy::inject_referendum(
 			2,
 			set_balance_proposal_hash_and_note(2),
@@ -39,7 +38,6 @@ fn simple_passing_should_work() {
 #[test]
 fn simple_failing_should_work() {
 	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
 		let r = Democracy::inject_referendum(
 			2,
 			set_balance_proposal_hash_and_note(2),
@@ -59,7 +57,6 @@ fn simple_failing_should_work() {
 #[test]
 fn ooo_inject_referendums_should_work() {
 	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
 		let r1 = Democracy::inject_referendum(
 			3,
 			set_balance_proposal_hash_and_note(3),
@@ -90,7 +87,6 @@ fn ooo_inject_referendums_should_work() {
 #[test]
 fn delayed_enactment_should_work() {
 	new_test_ext().execute_with(|| {
-		System::set_block_number(1);
 		let r = Democracy::inject_referendum(
 			2,
 			set_balance_proposal_hash_and_note(2),
