@@ -1714,7 +1714,7 @@ decl_module! {
 		/// it is not one of the stakers.
 		///
 		/// # <weight>
-		/// - Time complexity: O(1).
+		/// - Time complexity: at most O(MaxNominatorRewardedPerValidator).
 		/// - Contains a limited number of reads and writes.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
@@ -1901,7 +1901,7 @@ impl<T: Trait> Module<T> {
 		use frame_support::migration::{StorageIterator, put_storage_value};
 		// Migrate from `last_reward` to `claimed_rewards`.
 		// We will construct a vector from `current_era - history_depth` to `last_reward`
-		// for each validator. Nominators will have their history removed entirely.
+		// for each validator and nominator.
 		//
 		// Old Staking Ledger
 		#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
