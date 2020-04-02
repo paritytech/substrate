@@ -16,7 +16,7 @@
 
 use std::fmt::Debug;
 use sp_runtime::{traits::{Block as BlockT, Header as HeaderT, NumberFor}};
-use sc_client::StateMachine;
+use sp_state_machine::StateMachine;
 use sc_cli::{ExecutionStrategy, WasmExecutionMethod, VersionInfo};
 use sc_client_db::BenchmarkingState;
 use sc_service::{Configuration, ChainSpec};

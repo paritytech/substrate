@@ -13,7 +13,6 @@ frame-benchmarking = { version = "2.0.0-alpha.5", path = "../../../frame/benchma
 sp-core = { version = "2.0.0-alpha.5", path = "../../../primitives/core" }
 sc-service = { version = "0.8.0-alpha.5", default-features = false, path = "../../../client/service" }
 sc-cli = { version = "0.8.0-alpha.5", path = "../../../client/cli" }
-sc-client = { version = "0.8.0-alpha.5", path = "../../../client" }
 sc-client-db = { version = "0.8.0-alpha.5", path = "../../../client/db" }
 sc-executor = { version = "0.8.0-alpha.5", path = "../../../client/executor" }
 sp-externalities = { version = "0.8.0-alpha.5", path = "../../../primitives/externalities" }
