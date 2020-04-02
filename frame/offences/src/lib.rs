@@ -23,8 +23,6 @@
 
 mod mock;
 mod tests;
-#[cfg(feature = "runtime-benchmarks")]
-pub mod benchmarking;
 
 use sp_std::vec::Vec;
 use frame_support::{
@@ -190,6 +188,8 @@ impl<T: Trait> Module<T> {
 		) {
 			Ok(_) => true,
 			Err(_) => {
+				#[cfg(feature = "std")]
+				println!("HERE DEFERRED");
 				<DeferredOffences<T>>::mutate(|d|
 					d.push((concurrent_offenders.to_vec(), slash_perbill.to_vec(), session_index))
 				);
