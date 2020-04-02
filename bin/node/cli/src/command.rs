@@ -19,7 +19,7 @@ use node_executor::Executor;
 use node_runtime::{Block, RuntimeApi};
 use node_transaction_factory::RuntimeAdapter;
 use sc_cli::{
-	substrate_cli, substrate_cli_params, CliConfiguration, Result, SubstrateCli,
+	substrate_cli, CliConfiguration, ImportParams, Result, SharedParams, SubstrateCli,
 };
 use sc_service::Configuration;
 
@@ -62,8 +62,7 @@ pub fn run() -> Result<()> {
 		Some(Subcommand::Benchmark(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
 
-			runner
-				.sync_run(|config| cmd.run::<Block, Executor>(config))
+			runner.sync_run(|config| cmd.run::<Block, Executor>(config))
 		}
 		Some(Subcommand::Factory(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
@@ -78,8 +77,15 @@ pub fn run() -> Result<()> {
 	}
 }
 
-#[substrate_cli_params(shared_params = shared_params, import_params = import_params)]
-impl CliConfiguration for FactoryCmd {}
+impl CliConfiguration for FactoryCmd {
+	fn shared_params(&self) -> &SharedParams {
+		&self.shared_params
+	}
+
+	fn import_params(&self) -> Option<&ImportParams> {
+		Some(&self.import_params)
+	}
+}
 
 impl FactoryCmd {
 	fn run(&self, config: Configuration) -> Result<()> {

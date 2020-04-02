@@ -17,7 +17,7 @@
 use crate::BenchmarkCmd;
 use codec::{Decode, Encode};
 use frame_benchmarking::{Analysis, BenchmarkBatch};
-use sc_cli::{substrate_cli_params, CliConfiguration, ExecutionStrategy, Result};
+use sc_cli::{SharedParams, CliConfiguration, ExecutionStrategy, Result};
 use sc_client::StateMachine;
 use sc_client_db::BenchmarkingState;
 use sc_executor::NativeExecutor;
@@ -127,8 +127,11 @@ impl BenchmarkCmd {
 	}
 }
 
-#[substrate_cli_params(shared_params = shared_params)]
 impl CliConfiguration for BenchmarkCmd {
+	fn shared_params(&self) -> &SharedParams {
+		&self.shared_params
+	}
+
 	fn chain_id(&self, _is_dev: bool) -> Result<String> {
 		Ok(match self.shared_params.chain {
 			Some(ref chain) => chain.clone(),

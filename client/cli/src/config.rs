@@ -17,7 +17,10 @@
 //! Configuration trait for a CLI based on substrate
 
 use crate::error::Result;
-use crate::{init_logger, SubstrateCli, SharedParams};
+use crate::{
+	init_logger, ImportParams, KeystoreParams, NetworkConfigurationParams, NodeKeyParams,
+	PruningParams, SharedParams, SubstrateCli,
+};
 use app_dirs::{AppDataType, AppInfo};
 use names::{Generator, Name};
 use sc_service::config::{
@@ -43,6 +46,32 @@ pub trait CliConfiguration: Sized {
 	/// Get the SharedParams for this object
 	fn shared_params(&self) -> &SharedParams;
 
+	/// Get the ImportParams for this object
+	fn import_params(&self) -> Option<&ImportParams> {
+		None
+	}
+
+	/// Get the PruningParams for this object
+	fn pruning_params(&self) -> Option<&PruningParams> {
+		self.import_params().map(|x| &x.pruning_params)
+	}
+
+	/// Get the KeystoreParams for this object
+	fn keystore_params(&self) -> Option<&KeystoreParams> {
+		None
+	}
+
+	/// Get the NetworkConfigurationParams for this object
+	fn network_configuration_params(&self) -> Option<&NetworkConfigurationParams> {
+		None
+	}
+
+	/// Get the NodeKeyParams for this object
+	fn node_key_params(&self) -> Option<&NodeKeyParams> {
+		self.network_configuration_params()
+			.map(|x| &x.node_key_params)
+	}
+
 	/// Get the base path of the configuration (if any)
 	fn base_path(&self) -> Result<Option<PathBuf>> {
 		self.shared_params().base_path()
@@ -66,29 +95,44 @@ pub trait CliConfiguration: Sized {
 	/// Get the network configuration
 	fn network_config(
 		&self,
-		_chain_spec: &Box<dyn ChainSpec>,
-		_is_dev: bool,
+		chain_spec: &Box<dyn ChainSpec>,
+		is_dev: bool,
 		net_config_dir: &PathBuf,
 		client_id: &str,
 		node_name: &str,
 		node_key: NodeKeyConfig,
 	) -> Result<NetworkConfiguration> {
-		Ok(NetworkConfiguration::new(
-			node_name,
-			client_id,
-			node_key,
-			net_config_dir,
-		))
+		if let Some(network_configuration_params) = self.network_configuration_params() {
+			network_configuration_params.network_config(
+				chain_spec,
+				is_dev,
+				net_config_dir,
+				client_id,
+				node_name,
+				node_key,
+			)
+		} else {
+			Ok(NetworkConfiguration::new(
+				node_name,
+				client_id,
+				node_key,
+				net_config_dir,
+			))
+		}
 	}
 
 	/// Get the keystore configuration
-	fn keystore_config(&self, _base_path: &PathBuf) -> Result<KeystoreConfig> {
-		Ok(KeystoreConfig::InMemory)
+	fn keystore_config(&self, base_path: &PathBuf) -> Result<KeystoreConfig> {
+		self.keystore_params()
+			.map(|x| x.keystore_config(base_path))
+			.unwrap_or(Ok(KeystoreConfig::InMemory))
 	}
 
 	/// Get the database cache size (None for default)
 	fn database_cache_size(&self) -> Result<Option<usize>> {
-		Ok(Default::default())
+		self.import_params()
+			.map(|x| x.database_cache_size())
+			.unwrap_or(Ok(Default::default()))
 	}
 
 	/// Get the database configuration
@@ -98,7 +142,9 @@ pub trait CliConfiguration: Sized {
 
 	/// Get the state cache size
 	fn state_cache_size(&self) -> Result<usize> {
-		Ok(Default::default())
+		self.import_params()
+			.map(|x| x.state_cache_size())
+			.unwrap_or(Ok(Default::default()))
 	}
 
 	/// Get the state cache child ratio (if any)
@@ -107,8 +153,10 @@ pub trait CliConfiguration: Sized {
 	}
 
 	/// Get the pruning mode
-	fn pruning(&self, _is_dev: bool, _roles: Roles) -> Result<PruningMode> {
-		Ok(Default::default())
+	fn pruning(&self, is_dev: bool, roles: Roles) -> Result<PruningMode> {
+		self.import_params()
+			.map(|x| x.pruning(is_dev, roles))
+			.unwrap_or(Ok(Default::default()))
 	}
 
 	/// Get the chain ID (string)
@@ -123,12 +171,16 @@ pub trait CliConfiguration: Sized {
 
 	/// Get the WASM execution method
 	fn wasm_method(&self) -> Result<WasmExecutionMethod> {
-		Ok(Default::default())
+		self.import_params()
+			.map(|x| x.wasm_method())
+			.unwrap_or(Ok(Default::default()))
 	}
 
 	/// Get the execution strategies
-	fn execution_strategies(&self, _is_dev: bool) -> Result<ExecutionStrategies> {
-		Ok(Default::default())
+	fn execution_strategies(&self, is_dev: bool) -> Result<ExecutionStrategies> {
+		self.import_params()
+			.map(|x| x.execution_strategies(is_dev))
+			.unwrap_or(Ok(Default::default()))
 	}
 
 	/// Get the RPC HTTP address (`None` if disabled)
@@ -201,17 +253,23 @@ pub trait CliConfiguration: Sized {
 
 	/// Get the tracing targets from the current object (if any)
 	fn tracing_targets(&self) -> Result<Option<String>> {
-		Ok(Default::default())
+		self.import_params()
+			.map(|x| x.tracing_targets())
+			.unwrap_or(Ok(Default::default()))
 	}
 
 	/// Get the TracingReceiver value from the current object
 	fn tracing_receiver(&self) -> Result<sc_tracing::TracingReceiver> {
-		Ok(Default::default())
+		self.import_params()
+			.map(|x| x.tracing_receiver())
+			.unwrap_or(Ok(Default::default()))
 	}
 
 	/// Get the node key from the current object
-	fn node_key(&self, _net_config_dir: &PathBuf) -> Result<NodeKeyConfig> {
-		Ok(Default::default())
+	fn node_key(&self, net_config_dir: &PathBuf) -> Result<NodeKeyConfig> {
+		self.node_key_params()
+			.map(|x| x.node_key(net_config_dir))
+			.unwrap_or(Ok(Default::default()))
 	}
 
 	/// Get maximum runtime instances
