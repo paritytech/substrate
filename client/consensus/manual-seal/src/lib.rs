@@ -19,22 +19,15 @@
 
 use futures::prelude::*;
 use sp_consensus::{
-	self, BlockImport, Environment, Proposer, BlockCheckParams,
-	ForkChoiceStrategy, BlockImportParams, BlockOrigin,
-	ImportResult, SelectChain,
-	import_queue::{
-		BasicQueue,
-		CacheKeyId,
-		Verifier,
-		BoxBlockImport,
-	},
+	Environment, Proposer, ForkChoiceStrategy, BlockImportParams, BlockOrigin, SelectChain,
+	import_queue::{BasicQueue, CacheKeyId, Verifier, BoxBlockImport},
 };
 use sp_blockchain::{HeaderBackend};
 use sp_inherents::InherentDataProviders;
 use sp_runtime::{traits::Block as BlockT, Justification};
 use sc_client_api::backend::{Backend as ClientBackend, Finalizer};
 use sc_transaction_pool::txpool;
-use std::{collections::HashMap, sync::Arc, marker::PhantomData};
+use std::{sync::Arc, marker::PhantomData};
 
 mod error;
 mod finalize_block;
@@ -49,8 +42,7 @@ pub use self::{
 	error::Error,
 	rpc::{EngineCommand, CreatedBlock},
 };
-use sc_client_api::{TransactionFor, StateBackend, Backend};
-use sp_runtime::traits::HashFor;
+use sc_client_api::{TransactionFor, Backend};
 
 /// The verifier for the manual seal engine; instantly finalizes.
 struct ManualSealVerifier;
@@ -410,7 +402,7 @@ mod tests {
 		);
 		// assert that there's a new block in the db.
 		assert!(client.header(&BlockId::Number(0)).unwrap().is_some());
-		assert!(pool.submit_one(&BlockId::Number(1), uxt(Alice, 1)).await.is_ok());
+		assert!(pool.submit_one(&BlockId::Number(1), SOURCE, uxt(Alice, 1)).await.is_ok());
 
 		pool.maintain(sp_transaction_pool::ChainEvent::NewBlock {
 			id: BlockId::Number(1),
