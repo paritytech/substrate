@@ -541,7 +541,7 @@ mod tests {
 	use sc_client_api::BlockImportNotification;
 	use futures::future::Either;
 	use futures_timer::Delay;
-	use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
+	use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 	use finality_grandpa::Precommit;
 
 	#[derive(Clone)]

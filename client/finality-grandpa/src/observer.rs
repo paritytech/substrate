@@ -378,6 +378,7 @@ mod tests {
 	use super::*;
 
 	use assert_matches::assert_matches;
+	use sp_utils::mpsc::tracing_unbounded;
 	use crate::{aux_schema,	communication::tests::{Event, make_test_network}};
 	use substrate_test_runtime_client::{TestClientBuilder, TestClientBuilderExt};
 	use sc_network::PeerId;

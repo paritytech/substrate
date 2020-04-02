@@ -117,7 +117,7 @@ impl TimeSeriesCollector {
     }
     fn aggregate(&self) -> TimeSeriesInfo {
         let mut entries = Vec::new();
-        while let Ok((Some(val))) = self.rx.lock().try_next() {
+        while let Ok(Some(val)) = self.rx.lock().try_next() {
             entries.push(val)
         }
 
