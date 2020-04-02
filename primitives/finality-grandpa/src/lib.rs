@@ -253,7 +253,7 @@ impl<H, N> Equivocation<H, N> {
 
 /// Verifies the equivocation proof by making sure that both votes target
 /// different blocks and that its signatures are valid.
-pub fn check_equivocation_proof<H, N>(report: &EquivocationProof<H, N>) -> Result<(), ()>
+pub fn check_equivocation_proof<H, N>(report: EquivocationProof<H, N>) -> Result<(), ()>
 where
 	H: Clone + Encode + PartialEq,
 	N: Clone + Encode + PartialEq,
@@ -264,13 +264,14 @@ where
 		( $equivocation:expr, $message:expr ) => {
 			// if both votes have the same target the equivocation is invalid.
 			if $equivocation.first.0.target_hash == $equivocation.second.0.target_hash &&
-				$equivocation.first.0.target_number == $equivocation.second.0.target_number {
+				$equivocation.first.0.target_number == $equivocation.second.0.target_number
+			{
 				return Err(());
 			}
 
 			// check signatures on both votes are valid
 			check_message_signature(
-				&$message($equivocation.first.0.clone()),
+				&$message($equivocation.first.0),
 				&$equivocation.identity,
 				&$equivocation.first.1,
 				$equivocation.round_number,
@@ -278,7 +279,7 @@ where
 			)?;
 
 			check_message_signature(
-				&$message($equivocation.second.0.clone()),
+				&$message($equivocation.second.0),
 				&$equivocation.identity,
 				&$equivocation.second.1,
 				$equivocation.round_number,
@@ -290,10 +291,10 @@ where
 	}
 
 	match report.equivocation {
-		Equivocation::Prevote(ref equivocation) => {
+		Equivocation::Prevote(equivocation) => {
 			check!(equivocation, grandpa::Message::Prevote);
 		}
-		Equivocation::Precommit(ref equivocation) => {
+		Equivocation::Precommit(equivocation) => {
 			check!(equivocation, grandpa::Message::Precommit);
 		}
 	}

@@ -244,14 +244,17 @@ decl_module! {
 					key_owner_proof,
 				).ok_or("Invalid/outdated key ownership proof.")?;
 
-			// validate equivocation proof (check votes are different and
-			// signatures are valid).
-			fg_primitives::check_equivocation_proof(&equivocation_proof)
-				.map_err(|_| "Invalid equivocation proof.")?;
-
 			// we check the equivocation within the context of its set id (and
 			// associated session).
 			let set_id = equivocation_proof.set_id();
+
+			// the GRANDPA round when the offence happened
+			let round = equivocation_proof.round();
+
+			// validate equivocation proof (check votes are different and
+			// signatures are valid).
+			fg_primitives::check_equivocation_proof(equivocation_proof)
+				.map_err(|_| "Invalid equivocation proof.")?;
 
 			// fetch the current and previous sets last session index. on the
 			// genesis set there's no previous set.
@@ -285,7 +288,7 @@ decl_module! {
 					validator_set_count,
 					offender,
 					set_id,
-					equivocation_proof.round(),
+					round,
 				),
 			).map_err(|_| "Duplicate offence report.")?;
 		}
