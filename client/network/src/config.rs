@@ -20,7 +20,7 @@
 //! See the documentation of [`Params`].
 
 pub use crate::chain::{Client, FinalityProofProvider};
-pub use crate::on_demand_layer::OnDemand;
+pub use crate::on_demand_layer::{AlwaysBadChecker, OnDemand};
 pub use crate::service::{TransactionPool, EmptyTransactionPool};
 pub use libp2p::{identity, core::PublicKey, wasm_ext::ExtTransport, build_multiaddr};
 
