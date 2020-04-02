@@ -24,7 +24,8 @@ use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use libp2p::identify::{Identify, IdentifyEvent, IdentifyInfo};
 use libp2p::ping::{Ping, PingConfig, PingEvent, PingSuccess};
 use log::{debug, trace, error};
-use std::error;
+use smallvec::SmallVec;
+use std::{error, io};
 use std::collections::hash_map::Entry;
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -57,7 +58,7 @@ struct NodeInfo {
 	/// to the node.
 	info_expire: Option<Instant>,
 	/// How we're connected to the node.
-	endpoint: ConnectedPoint,
+	endpoints: SmallVec<[ConnectedPoint; 2]>,
 	/// Version reported by the remote, or `None` if unknown.
 	client_version: Option<String>,
 	/// Latest ping time with this node.
@@ -123,7 +124,7 @@ pub struct Node<'a>(&'a NodeInfo);
 impl<'a> Node<'a> {
 	/// Returns the endpoint we are connected to or were last connected to.
 	pub fn endpoint(&self) -> &'a ConnectedPoint {
-		&self.0.endpoint
+		&self.0.endpoints[0] // TODO: Multiple?
 	}
 
 	/// Returns the latest version information we know of.
@@ -168,15 +169,21 @@ impl NetworkBehaviour for DebugInfoBehaviour {
 		list
 	}
 
-	fn inject_connected(&mut self, peer_id: PeerId, endpoint: ConnectedPoint) {
-		self.ping.inject_connected(peer_id.clone(), endpoint.clone());
-		self.identify.inject_connected(peer_id.clone(), endpoint.clone());
+	fn inject_connected(&mut self, peer_id: &PeerId) {
+		self.ping.inject_connected(peer_id);
+		self.identify.inject_connected(peer_id);
+	}
 
-		match self.nodes_info.entry(peer_id) {
+	fn inject_connection_established(&mut self, peer_id: &PeerId, conn: &ConnectionId, endpoint: &ConnectedPoint) {
+		self.ping.inject_connection_established(peer_id, conn, endpoint);
+		self.identify.inject_connection_established(peer_id, conn, endpoint);
+		match self.nodes_info.entry(peer_id.clone()) {
 			Entry::Vacant(e) => {
+				let mut endpoints = SmallVec::new();
+				endpoints.push(endpoint.clone());
 				e.insert(NodeInfo {
 					info_expire: None,
-					endpoint,
+					endpoints,
 					client_version: None,
 					latest_ping: None,
 				});
@@ -188,14 +195,26 @@ impl NetworkBehaviour for DebugInfoBehaviour {
 					e.latest_ping = None;
 				}
 				e.info_expire = None;
-				e.endpoint = endpoint;
+				e.endpoints.push(endpoint.clone());
 			}
 		}
 	}
 
-	fn inject_disconnected(&mut self, peer_id: &PeerId, endpoint: ConnectedPoint) {
-		self.ping.inject_disconnected(peer_id, endpoint.clone());
-		self.identify.inject_disconnected(peer_id, endpoint);
+	fn inject_connection_closed(&mut self, peer_id: &PeerId, conn: &ConnectionId, endpoint: &ConnectedPoint) {
+		self.ping.inject_connection_closed(peer_id, conn, endpoint);
+		self.identify.inject_connection_closed(peer_id, conn, endpoint);
+
+		if let Some(entry) = self.nodes_info.get_mut(peer_id) {
+			entry.endpoints.retain(|ep| ep != endpoint)
+		} else {
+			error!(target: "sub-libp2p",
+				"Unknown connection to {:?} closed: {:?}", peer_id, endpoint);
+		}
+	}
+
+	fn inject_disconnected(&mut self, peer_id: &PeerId) {
+		self.ping.inject_disconnected(peer_id);
+		self.identify.inject_disconnected(peer_id);
 
 		if let Some(entry) = self.nodes_info.get_mut(peer_id) {
 			entry.info_expire = Some(Instant::now() + CACHE_EXPIRE);
@@ -247,9 +266,9 @@ impl NetworkBehaviour for DebugInfoBehaviour {
 		self.identify.inject_listener_error(id, err);
 	}
 
-	fn inject_listener_closed(&mut self, id: ListenerId) {
-		self.ping.inject_listener_closed(id);
-		self.identify.inject_listener_closed(id);
+	fn inject_listener_closed(&mut self, id: ListenerId, reason: Result<(), &io::Error>) {
+		self.ping.inject_listener_closed(id, reason);
+		self.identify.inject_listener_closed(id, reason);
 	}
 
 	fn poll(
@@ -272,8 +291,8 @@ impl NetworkBehaviour for DebugInfoBehaviour {
 				},
 				Poll::Ready(NetworkBehaviourAction::DialAddress { address }) =>
 					return Poll::Ready(NetworkBehaviourAction::DialAddress { address }),
-				Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id }) =>
-					return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id }),
+				Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition }) =>
+					return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition }),
 				Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }) =>
 					return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
 						peer_id,
@@ -302,8 +321,8 @@ impl NetworkBehaviour for DebugInfoBehaviour {
 				},
 				Poll::Ready(NetworkBehaviourAction::DialAddress { address }) =>
 					return Poll::Ready(NetworkBehaviourAction::DialAddress { address }),
-				Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id }) =>
-					return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id }),
+				Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition }) =>
+					return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition }),
 				Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }) =>
 					return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
 						peer_id,

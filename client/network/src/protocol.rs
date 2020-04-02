@@ -48,7 +48,7 @@ use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use std::fmt::Write;
-use std::{cmp, num::NonZeroUsize, pin::Pin, task::Poll, time};
+use std::{cmp, io, num::NonZeroUsize, pin::Pin, task::Poll, time};
 use log::{log, Level, trace, debug, warn, error};
 use crate::chain::{Client, FinalityProofProvider};
 use sc_client_api::{ChangesProof, StorageProof};
@@ -1837,12 +1837,20 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 		self.behaviour.addresses_of_peer(peer_id)
 	}
 
-	fn inject_connected(&mut self, peer_id: PeerId, endpoint: ConnectedPoint) {
-		self.behaviour.inject_connected(peer_id, endpoint)
+	fn inject_connection_established(&mut self, peer_id: &PeerId, conn: &ConnectionId, endpoint: &ConnectedPoint) {
+		self.behaviour.inject_connection_established(peer_id, conn, endpoint)
 	}
 
-	fn inject_disconnected(&mut self, peer_id: &PeerId, endpoint: ConnectedPoint) {
-		self.behaviour.inject_disconnected(peer_id, endpoint)
+	fn inject_connection_closed(&mut self, peer_id: &PeerId, conn: &ConnectionId, endpoint: &ConnectedPoint) {
+		self.behaviour.inject_connection_closed(peer_id, conn, endpoint)
+	}
+
+	fn inject_connected(&mut self, peer_id: &PeerId) {
+		self.behaviour.inject_connected(peer_id)
+	}
+
+	fn inject_disconnected(&mut self, peer_id: &PeerId) {
+		self.behaviour.inject_disconnected(peer_id)
 	}
 
 	fn inject_event(
@@ -1908,8 +1916,8 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 			Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev)) => ev,
 			Poll::Ready(NetworkBehaviourAction::DialAddress { address }) =>
 				return Poll::Ready(NetworkBehaviourAction::DialAddress { address }),
-			Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id }) =>
-				return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id }),
+			Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition }) =>
+				return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition }),
 			Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }) =>
 				return Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }),
 			Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }) =>
@@ -2004,8 +2012,8 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 		self.behaviour.inject_listener_error(id, err);
 	}
 
-	fn inject_listener_closed(&mut self, id: ListenerId) {
-		self.behaviour.inject_listener_closed(id);
+	fn inject_listener_closed(&mut self, id: ListenerId, reason: Result<(), &io::Error>) {
+		self.behaviour.inject_listener_closed(id, reason);
 	}
 }
 

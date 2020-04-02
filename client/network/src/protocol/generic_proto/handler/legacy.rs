@@ -109,7 +109,7 @@ impl IntoProtocolsHandler for LegacyProtoHandlerProto {
 	}
 
 	fn into_handler(self, remote_peer_id: &PeerId, connected_point: &ConnectedPoint) -> Self::Handler {
-		let mut handler = LegacyProtoHandler {
+		LegacyProtoHandler {
 			protocol: self.protocol,
 			endpoint: connected_point.clone(),
 			remote_peer_id: remote_peer_id.clone(),
@@ -118,9 +118,7 @@ impl IntoProtocolsHandler for LegacyProtoHandlerProto {
 				init_deadline: Delay::new(Duration::from_secs(5))
 			},
 			events_queue: SmallVec::new(),
-		};
-		handler.events_queue.push(ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::Init {}));
-		handler
+		}
 	}
 }
 
@@ -216,12 +214,6 @@ pub enum LegacyProtoHandlerIn {
 /// Event that can be emitted by a `LegacyProtoHandler`.
 #[derive(Debug)]
 pub enum LegacyProtoHandlerOut {
-	/// The handler is requesting initialisation.
-	///
-	/// This is always the first event emitted by a handler, and it is only
-	/// emitted once.
-	Init,
-
 	/// Opened a custom protocol with the remote.
 	CustomProtocolOpen {
 		/// Version of the protocol that has been opened.

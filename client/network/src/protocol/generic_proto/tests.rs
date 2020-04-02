@@ -148,12 +148,20 @@ impl NetworkBehaviour for CustomProtoWithAddr {
 		list
 	}
 
-	fn inject_connected(&mut self, peer_id: PeerId, endpoint: ConnectedPoint) {
-		self.inner.inject_connected(peer_id, endpoint)
+	fn inject_connected(&mut self, peer_id: &PeerId) {
+		self.inner.inject_connected(peer_id)
 	}
 
-	fn inject_disconnected(&mut self, peer_id: &PeerId, endpoint: ConnectedPoint) {
-		self.inner.inject_disconnected(peer_id, endpoint)
+	fn inject_disconnected(&mut self, peer_id: &PeerId) {
+		self.inner.inject_disconnected(peer_id)
+	}
+
+	fn inject_connection_established(&mut self, peer_id: &PeerId, conn: &ConnectionId, endpoint: &ConnectedPoint) {
+		self.inner.inject_connection_established(peer_id, conn, endpoint)
+	}
+
+	fn inject_connection_closed(&mut self, peer_id: &PeerId, conn: &ConnectionId, endpoint: &ConnectedPoint) {
+		self.inner.inject_connection_closed(peer_id, conn, endpoint)
 	}
 
 	fn inject_event(
@@ -202,8 +210,8 @@ impl NetworkBehaviour for CustomProtoWithAddr {
 		self.inner.inject_listener_error(id, err);
 	}
 
-	fn inject_listener_closed(&mut self, id: ListenerId) {
-		self.inner.inject_listener_closed(id);
+	fn inject_listener_closed(&mut self, id: ListenerId, reason: Result<(), &io::Error>) {
+		self.inner.inject_listener_closed(id, reason);
 	}
 }
 

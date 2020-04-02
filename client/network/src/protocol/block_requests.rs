@@ -44,6 +44,7 @@ use libp2p::{
 		NetworkBehaviour,
 		NetworkBehaviourAction,
 		OneShotHandler,
+		OneShotHandlerConfig,
 		PollParameters,
 		SubstreamProtocol
 	}
@@ -258,17 +259,19 @@ where
 			max_request_len: self.config.max_request_len,
 			protocol: self.config.protocol.clone(),
 		};
-		OneShotHandler::new(SubstreamProtocol::new(p), self.config.inactivity_timeout)
+		let mut cfg = OneShotHandlerConfig::default();
+		cfg.inactive_timeout = self.config.inactivity_timeout;
+		OneShotHandler::new(SubstreamProtocol::new(p), cfg)
 	}
 
 	fn addresses_of_peer(&mut self, _: &PeerId) -> Vec<Multiaddr> {
 		Vec::new()
 	}
 
-	fn inject_connected(&mut self, _peer: PeerId, _info: ConnectedPoint) {
+	fn inject_connected(&mut self, _peer: &PeerId) {
 	}
 
-	fn inject_disconnected(&mut self, _peer: &PeerId, _info: ConnectedPoint) {
+	fn inject_disconnected(&mut self, _peer: &PeerId) {
 	}
 
 	fn inject_event(

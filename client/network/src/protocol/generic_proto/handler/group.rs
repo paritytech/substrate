@@ -181,13 +181,6 @@ pub enum NotifsHandlerIn {
 /// Event that can be emitted by a `NotifsHandler`.
 #[derive(Debug)]
 pub enum NotifsHandlerOut {
-	/// The connection handler is requesting initialisation, i.e.
-	/// to be either enabled or disabled.
-	///
-	/// This is always the first event emitted by a handler and it is only
-	/// emitted once.
-	Init,
-
 	/// The connection is open for custom protocols.
 	Open {
 		/// The endpoint of the connection that is open for custom protocols.
@@ -509,10 +502,6 @@ impl ProtocolsHandler for NotifsHandler {
 						protocol: protocol.map_upgrade(EitherUpgrade::B),
 						info: None,
 					}),
-				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::Init) =>
-					return Poll::Ready(ProtocolsHandlerEvent::Custom(
-						NotifsHandlerOut::Init
-					)),
 				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolOpen { endpoint, .. }) =>
 					return Poll::Ready(ProtocolsHandlerEvent::Custom(
 						NotifsHandlerOut::Open { endpoint }

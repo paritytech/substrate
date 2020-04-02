@@ -47,8 +47,9 @@ use libp2p::{
 		NetworkBehaviourAction,
 		NotifyHandler,
 		OneShotHandler,
+		OneShotHandlerConfig,
 		PollParameters,
-		SubstreamProtocol
+		SubstreamProtocol,
 	}
 };
 use nohash_hasher::IntMap;
@@ -60,6 +61,7 @@ use sp_core::{
 	storage::{ChildInfo, StorageKey},
 	hexdisplay::HexDisplay,
 };
+use smallvec::SmallVec;
 use sp_blockchain::{Error as ClientError};
 use sp_runtime::{
 	traits::{Block, Header, NumberFor, Zero},
@@ -246,9 +248,19 @@ struct RequestWrapper<B: Block, P> {
 /// Information we have about some peer.
 #[derive(Debug)]
 struct PeerInfo<B: Block> {
-	address: Multiaddr,
+	addresses: SmallVec<[Multiaddr; 2]>,
 	best_block: Option<NumberFor<B>>,
 	status: PeerStatus,
+}
+
+impl<B: Block> Default for PeerInfo<B> {
+	fn default() -> Self {
+		PeerInfo {
+			addresses: SmallVec::new(),
+			best_block: None,
+			status: PeerStatus::Idle,
+		}
+	}
 }
 
 /// A peer is either idle or busy processing a request from us.
@@ -725,35 +737,48 @@ where
 			max_request_size: self.config.max_request_size,
 			protocol: self.config.light_protocol.clone(),
 		};
-		OneShotHandler::new(SubstreamProtocol::new(p), self.config.inactivity_timeout)
+		let mut cfg = OneShotHandlerConfig::default();
+		cfg.inactive_timeout = self.config.inactivity_timeout;
+		OneShotHandler::new(SubstreamProtocol::new(p), cfg)
 	}
 
 	fn addresses_of_peer(&mut self, peer: &PeerId) -> Vec<Multiaddr> {
 		self.peers.get(peer)
-			.map(|info| vec![info.address.clone()])
+			.map(|info| info.addresses.to_vec())
 			.unwrap_or_default()
 	}
 
-	fn inject_connected(&mut self, peer: PeerId, info: ConnectedPoint) {
+	fn inject_connected(&mut self, peer: &PeerId) {
+	}
+
+	fn inject_connection_established(&mut self, peer: &PeerId, _: &ConnectionId, info: &ConnectedPoint) {
+		let peer_address = match info {
+			ConnectedPoint::Listener { send_back_addr, .. } => send_back_addr.clone(),
+			ConnectedPoint::Dialer { address } => address.clone()
+		};
+
+		log::trace!("peer {} connected with address {}", peer, peer_address);
+
+		let entry = self.peers.entry(peer.clone()).or_default();
+		entry.addresses.push(peer_address);
+	}
+
+	fn inject_disconnected(&mut self, peer: &PeerId) {
+		log::trace!("peer {} disconnected", peer);
+		self.remove_peer(peer)
+	}
+
+	fn inject_connection_closed(&mut self, peer: &PeerId, _: &ConnectionId, info: &ConnectedPoint) {
 		let peer_address = match info {
 			ConnectedPoint::Listener { send_back_addr, .. } => send_back_addr,
 			ConnectedPoint::Dialer { address } => address
 		};
 
-		log::trace!("peer {} connected with address {}", peer, peer_address);
+		log::trace!("connection to peer {} closed: {}", peer, peer_address);
 
-		let info = PeerInfo {
-			address: peer_address,
-			best_block: None,
-			status: PeerStatus::Idle,
-		};
-
-		self.peers.insert(peer, info);
-	}
-
-	fn inject_disconnected(&mut self, peer: &PeerId, _: ConnectedPoint) {
-		log::trace!("peer {} disconnected", peer);
-		self.remove_peer(peer)
+		if let Some(info) = self.peers.get_mut(peer) {
+			info.addresses.retain(|a| a != peer_address)
+		}
 	}
 
 	fn inject_event(&mut self, peer: PeerId, _: ConnectionId, event: Event<NegotiatedSubstream>) {
@@ -1463,10 +1488,12 @@ mod tests {
 		let pset = peerset();
 		let mut behaviour = make_behaviour(true, pset.1, make_config());
 
-		behaviour.inject_connected(peer.clone(), empty_dialer());
+		behaviour.inject_connection_established(&peer, &ConnectionId::new(1), &empty_dialer());
+		behaviour.inject_connected(&peer);
 		assert_eq!(1, behaviour.peers.len());
 
-		behaviour.inject_disconnected(&peer, empty_dialer());
+		behaviour.inject_connection_closed(&peer, &ConnectionId::new(1), &empty_dialer());
+		behaviour.inject_disconnected(&peer);
 		assert_eq!(0, behaviour.peers.len())
 	}
 
@@ -1477,8 +1504,10 @@ mod tests {
 		let pset = peerset();
 		let mut behaviour = make_behaviour(true, pset.1, make_config());
 
-		behaviour.inject_connected(peer0.clone(), empty_dialer());
-		behaviour.inject_connected(peer1.clone(), empty_dialer());
+		behaviour.inject_connection_established(&peer0, &ConnectionId::new(1), &empty_dialer());
+		behaviour.inject_connected(&peer0);
+		behaviour.inject_connection_established(&peer1, &ConnectionId::new(2), &empty_dialer());
+		behaviour.inject_connected(&peer1);
 
 		// We now know about two peers.
 		assert_eq!(HashSet::from_iter(&[peer0.clone(), peer1.clone()]), behaviour.peers.keys().collect::<HashSet<_>>());
@@ -1540,7 +1569,9 @@ mod tests {
 		let mut behaviour = make_behaviour(false, pset.1, make_config());
 		//                                 ^--- Making sure the response data check fails.
 
-		behaviour.inject_connected(peer.clone(), empty_dialer());
+		let conn = ConnectionId::new(1);
+		behaviour.inject_connection_established(&peer, &conn, &empty_dialer());
+		behaviour.inject_connected(&peer);
 		assert_eq!(1, behaviour.peers.len());
 
 		let chan = oneshot::channel();
@@ -1568,7 +1599,6 @@ mod tests {
 			}
 		};
 
-		let conn = ConnectionId::new(0);
 		behaviour.inject_event(peer.clone(), conn, Event::Response(request_id, Response::Light(response)));
 		assert!(behaviour.peers.is_empty());
 
@@ -1585,7 +1615,9 @@ mod tests {
 		let pset = peerset();
 		let mut behaviour = make_behaviour(true, pset.1, make_config());
 
-		behaviour.inject_connected(peer.clone(), empty_dialer());
+		let conn = ConnectionId::new(1);
+		behaviour.inject_connection_established(&peer, &conn, &empty_dialer());
+		behaviour.inject_connected(&peer);
 		assert_eq!(1, behaviour.peers.len());
 		assert_eq!(0, behaviour.pending_requests.len());
 		assert_eq!(0, behaviour.outstanding.len());
@@ -1598,7 +1630,6 @@ mod tests {
 			}
 		};
 
-		let conn = ConnectionId::new(0);
 		behaviour.inject_event(peer.clone(), conn, Event::Response(2347895932, Response::Light(response)));
 
 		assert!(behaviour.peers.is_empty());
@@ -1613,7 +1644,9 @@ mod tests {
 		let pset = peerset();
 		let mut behaviour = make_behaviour(true, pset.1, make_config());
 
-		behaviour.inject_connected(peer.clone(), empty_dialer());
+		let conn = ConnectionId::new(1);
+		behaviour.inject_connection_established(&peer, &conn, &empty_dialer());
+		behaviour.inject_connected(&peer);
 		assert_eq!(1, behaviour.peers.len());
 
 		let chan = oneshot::channel();
@@ -1641,7 +1674,6 @@ mod tests {
 			}
 		};
 
-		let conn = ConnectionId::new(0);
 		behaviour.inject_event(peer.clone(), conn, Event::Response(request_id, Response::Light(response)));
 		assert!(behaviour.peers.is_empty());
 
@@ -1662,10 +1694,18 @@ mod tests {
 		let mut behaviour = make_behaviour(false, pset.1, make_config());
 		//                                 ^--- Making sure the response data check fails.
 
-		behaviour.inject_connected(peer1.clone(), empty_dialer());
-		behaviour.inject_connected(peer2.clone(), empty_dialer());
-		behaviour.inject_connected(peer3.clone(), empty_dialer());
-		behaviour.inject_connected(peer4.clone(), empty_dialer());
+		let conn1 = ConnectionId::new(1);
+		behaviour.inject_connection_established(&peer1, &conn1, &empty_dialer());
+		behaviour.inject_connected(&peer1);
+		let conn2 = ConnectionId::new(2);
+		behaviour.inject_connection_established(&peer2, &conn2, &empty_dialer());
+		behaviour.inject_connected(&peer2);
+		let conn3 = ConnectionId::new(3);
+		behaviour.inject_connection_established(&peer3, &conn3, &empty_dialer());
+		behaviour.inject_connected(&peer3);
+		let conn4 = ConnectionId::new(3);
+		behaviour.inject_connection_established(&peer4, &conn4, &empty_dialer());
+		behaviour.inject_connected(&peer4);
 		assert_eq!(4, behaviour.peers.len());
 
 		let mut chan = oneshot::channel();
@@ -1684,7 +1724,7 @@ mod tests {
 		assert_eq!(0, behaviour.pending_requests.len());
 		assert_eq!(1, behaviour.outstanding.len());
 
-		for i in 0 .. 3 {
+		for i in 1 ..= 3 {
 			// Construct an invalid response
 			let request_id = *behaviour.outstanding.keys().next().unwrap();
 			let responding_peer = behaviour.outstanding.values().next().unwrap().peer.clone();
@@ -1708,8 +1748,7 @@ mod tests {
 				response: Some(api::v1::light::response::Response::RemoteCallResponse(r)),
 			}
 		};
-		let conn = ConnectionId::new(3);
-		behaviour.inject_event(responding_peer, conn, Event::Response(request_id, Response::Light(response)));
+		behaviour.inject_event(responding_peer, conn4, Event::Response(request_id, Response::Light(response)));
 		assert_matches!(poll(&mut behaviour), Poll::Pending);
 		assert_matches!(chan.1.try_recv(), Ok(Some(Err(ClientError::RemoteFetchFailed))))
 	}
@@ -1719,7 +1758,9 @@ mod tests {
 		let pset = peerset();
 		let mut behaviour = make_behaviour(true, pset.1, make_config());
 
-		behaviour.inject_connected(peer.clone(), empty_dialer());
+		let conn = ConnectionId::new(1);
+		behaviour.inject_connection_established(&peer, &conn, &empty_dialer());
+		behaviour.inject_connected(&peer);
 		assert_eq!(1, behaviour.peers.len());
 
 		let response = match request {
@@ -1773,7 +1814,6 @@ mod tests {
 		assert_eq!(1, behaviour.outstanding.len());
 		assert_eq!(1, *behaviour.outstanding.keys().next().unwrap());
 
-		let conn = ConnectionId::new(0);
 		behaviour.inject_event(peer.clone(), conn, Event::Response(1, Response::Light(response)));
 
 		poll(&mut behaviour);

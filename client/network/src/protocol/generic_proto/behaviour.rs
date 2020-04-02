@@ -22,7 +22,13 @@ use bytes::BytesMut;
 use fnv::FnvHashMap;
 use futures::prelude::*;
 use libp2p::core::{ConnectedPoint, Multiaddr, PeerId, connection::ConnectionId};
-use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, NotifyHandler, PollParameters};
+use libp2p::swarm::{
+	DialPeerCondition,
+	NetworkBehaviour,
+	NetworkBehaviourAction,
+	NotifyHandler,
+	PollParameters
+};
 use log::{debug, error, trace, warn};
 use prometheus_endpoint::HistogramVec;
 use rand::distributions::{Distribution as _, Uniform};
@@ -546,7 +552,10 @@ impl GenericProto {
 				// If there's no entry in `self.peers`, start dialing.
 				debug!(target: "sub-libp2p", "PSM => Connect({:?}): Starting to connect", entry.key());
 				debug!(target: "sub-libp2p", "Libp2p <= Dial {:?}", entry.key());
-				self.events.push(NetworkBehaviourAction::DialPeer { peer_id: entry.key().clone() });
+				self.events.push(NetworkBehaviourAction::DialPeer {
+					peer_id: entry.key().clone(),
+					condition: DialPeerCondition::Disconnected
+				});
 				entry.insert(PeerState::Requested);
 				return;
 			}
@@ -567,7 +576,10 @@ impl GenericProto {
 			PeerState::Banned { .. } => {
 				debug!(target: "sub-libp2p", "PSM => Connect({:?}): Starting to connect", occ_entry.key());
 				debug!(target: "sub-libp2p", "Libp2p <= Dial {:?}", occ_entry.key());
-				self.events.push(NetworkBehaviourAction::DialPeer { peer_id: occ_entry.key().clone() });
+				self.events.push(NetworkBehaviourAction::DialPeer {
+					peer_id: occ_entry.key().clone(),
+					condition: DialPeerCondition::Disconnected
+				});
 				*occ_entry.into_mut() = PeerState::Requested;
 			},
 
@@ -793,22 +805,32 @@ impl NetworkBehaviour for GenericProto {
 		Vec::new()
 	}
 
-	fn inject_connected(&mut self, peer_id: PeerId, connected_point: ConnectedPoint) {
-		match (self.peers.entry(peer_id.clone()).or_insert(PeerState::Poisoned), connected_point) {
-			(st @ &mut PeerState::Requested, connected_point) |
-			(st @ &mut PeerState::PendingRequest { .. }, connected_point) => {
+	fn inject_connected(&mut self, _: &PeerId) {
+	}
+
+	fn inject_connection_established(&mut self, peer_id: &PeerId, conn: &ConnectionId, endpoint: &ConnectedPoint) {
+		debug!(target: "sub-libp2p", "Libp2p => Connection ({:?},{:?}) to {} established.",
+			conn, endpoint, peer_id);
+		match (self.peers.entry(peer_id.clone()).or_insert(PeerState::Poisoned), endpoint) {
+			(st @ &mut PeerState::Requested, endpoint) |
+			(st @ &mut PeerState::PendingRequest { .. }, endpoint) => {
 				debug!(target: "sub-libp2p",
-					"Libp2p => Connected({:?}, {:?}): Connection was requested by PSM.",
-					peer_id, connected_point
+					"Libp2p => Connected({}, {:?}): Connection was requested by PSM.",
+					peer_id, endpoint
 				);
 				*st = PeerState::Enabled { open: SmallVec::new() };
+				self.events.push(NetworkBehaviourAction::NotifyHandler {
+					peer_id: peer_id.clone(),
+					handler: NotifyHandler::One(*conn),
+					event: NotifsHandlerIn::Enable
+				});
 			}
 
 			// Note: it may seem weird that "Banned" peers get treated as if they were absent.
 			// This is because the word "Banned" means "temporarily prevent outgoing connections to
 			// this peer", and not "banned" in the sense that we would refuse the peer altogether.
-			(st @ &mut PeerState::Poisoned, connected_point @ ConnectedPoint::Listener { .. }) |
-			(st @ &mut PeerState::Banned { .. }, connected_point @ ConnectedPoint::Listener { .. }) => {
+			(st @ &mut PeerState::Poisoned, endpoint @ ConnectedPoint::Listener { .. }) |
+			(st @ &mut PeerState::Banned { .. }, endpoint @ ConnectedPoint::Listener { .. }) => {
 				let incoming_id = self.next_incoming_index.clone();
 				self.next_incoming_index.0 = match self.next_incoming_index.0.checked_add(1) {
 					Some(v) => v,
@@ -817,10 +839,10 @@ impl NetworkBehaviour for GenericProto {
 						return
 					}
 				};
-				debug!(target: "sub-libp2p", "Libp2p => Connected({:?}, {:?}): Incoming connection",
-					peer_id, connected_point);
-				debug!(target: "sub-libp2p", "PSM <= Incoming({:?}, {:?}).",
-					incoming_id, peer_id);
+				debug!(target: "sub-libp2p", "Libp2p => Connected({}, {:?}): Incoming connection",
+					peer_id, endpoint);
+				debug!(target: "sub-libp2p", "PSM <= Incoming({}, {:?}).",
+					peer_id, incoming_id);
 				self.peerset.incoming(peer_id.clone(), incoming_id);
 				self.incoming.push(IncomingPeer {
 					peer_id: peer_id.clone(),
@@ -830,93 +852,111 @@ impl NetworkBehaviour for GenericProto {
 				*st = PeerState::Incoming { };
 			}
 
-			(st @ &mut PeerState::Poisoned, connected_point) |
-			(st @ &mut PeerState::Banned { .. }, connected_point) => {
+			(st @ &mut PeerState::Poisoned, endpoint) |
+			(st @ &mut PeerState::Banned { .. }, endpoint) => {
 				let banned_until = if let PeerState::Banned { until } = st {
 					Some(*until)
 				} else {
 					None
 				};
 				debug!(target: "sub-libp2p",
-					"Libp2p => Connected({:?},{:?}): Not requested by PSM, disabling.",
-					peer_id, connected_point);
+					"Libp2p => Connected({},{:?}): Not requested by PSM, disabling.",
+					peer_id, endpoint);
 				*st = PeerState::Disabled { open: SmallVec::new(), banned_until };
+				self.events.push(NetworkBehaviourAction::NotifyHandler {
+					peer_id: peer_id.clone(),
+					handler: NotifyHandler::One(*conn),
+					event: NotifsHandlerIn::Disable
+				});
 			}
 
-			st => {
-				// This is a serious bug either in this state machine or in libp2p.
-				error!(target: "sub-libp2p", "Received inject_connected for \
-					already-connected peer; state is {:?}", st
-				);
+			(PeerState::Incoming { .. }, _) => {
+				debug!(target: "sub-libp2p",
+					"Secondary connection {:?} to {} waiting for PSM decision.",
+					conn, peer_id);
+			},
+
+			(PeerState::Enabled { .. }, _) => {
+				debug!(target: "sub-libp2p", "Handler({},{:?}) <= Enable secondary connection",
+					peer_id, conn);
+				self.events.push(NetworkBehaviourAction::NotifyHandler {
+					peer_id: peer_id.clone(),
+					handler: NotifyHandler::One(*conn),
+					event: NotifsHandlerIn::Enable
+				});
+			}
+
+			(PeerState::Disabled { .. }, _) | (PeerState::DisabledPendingEnable { .. }, _) => {
+				debug!(target: "sub-libp2p", "Handler({},{:?}) <= Disable secondary connection",
+					peer_id, conn);
+				self.events.push(NetworkBehaviourAction::NotifyHandler {
+					peer_id: peer_id.clone(),
+					handler: NotifyHandler::One(*conn),
+					event: NotifsHandlerIn::Disable
+				});
 			}
 		}
 	}
 
-	fn inject_disconnected(&mut self, peer_id: &PeerId, endpoint: ConnectedPoint) {
+	fn inject_connection_closed(&mut self, peer_id: &PeerId, conn: &ConnectionId, endpoint: &ConnectedPoint) {
+		debug!(target: "sub-libp2p", "Libp2p => Connection ({:?},{:?}) to {} closed.",
+			conn, endpoint, peer_id);
+		match self.peers.get_mut(peer_id) {
+			Some(PeerState::Disabled { open, .. }) |
+			Some(PeerState::DisabledPendingEnable { open, .. }) |
+			Some(PeerState::Enabled { open, .. }) => {
+				// Check if the "link" to the peer is already considered closed,
+				// i.e. there is no connection that is open for custom protocols,
+				// in which case `CustomProtocolClosed` was already emitted.
+				let closed = open.is_empty();
+				open.retain(|c| c != conn);
+				if !closed {
+					debug!(target: "sub-libp2p", "External API <= Closed({})", peer_id);
+					let event = GenericProtoOut::CustomProtocolClosed {
+						peer_id: peer_id.clone(),
+						reason: "Disconnected by libp2p".into(),
+					};
+
+					self.events.push(NetworkBehaviourAction::GenerateEvent(event));
+				}
+			}
+			_ => {}
+		}
+	}
+
+	fn inject_disconnected(&mut self, peer_id: &PeerId) {
 		match self.peers.remove(peer_id) {
 			None | Some(PeerState::Requested) | Some(PeerState::PendingRequest { .. }) |
 			Some(PeerState::Banned { .. }) =>
 				// This is a serious bug either in this state machine or in libp2p.
-				error!(target: "sub-libp2p", "Received inject_disconnected for non-connected \
-					peer {:?}", peer_id),
+				error!(target: "sub-libp2p",
+					"`inject_disconnected` called for unknown peer {}",
+					peer_id),
 
-			Some(PeerState::Disabled { open, banned_until }) => {
-				debug!(target: "sub-libp2p", "Libp2p => Disconnected({:?}, {:?}): Was disabled.",
-					peer_id, endpoint);
+			Some(PeerState::Disabled { banned_until, .. }) => {
+				debug!(target: "sub-libp2p", "Libp2p => Disconnected({}): Was disabled.", peer_id);
 				if let Some(until) = banned_until {
 					self.peers.insert(peer_id.clone(), PeerState::Banned { until });
 				}
-
-				if !open.is_empty() {
-					debug!(target: "sub-libp2p", "External API <= Closed({:?})", peer_id);
-					let event = GenericProtoOut::CustomProtocolClosed {
-						peer_id: peer_id.clone(),
-						reason: "Disconnected by libp2p".into(),
-					};
-
-					self.events.push(NetworkBehaviourAction::GenerateEvent(event));
-				}
 			}
 
-			Some(PeerState::DisabledPendingEnable { open, timer_deadline, .. }) => {
+			Some(PeerState::DisabledPendingEnable { timer_deadline, .. }) => {
 				debug!(target: "sub-libp2p",
-					"Libp2p => Disconnected({:?}, {:?}): Was disabled but pending enable.",
-					peer_id, endpoint);
-				debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", peer_id);
+					"Libp2p => Disconnected({}): Was disabled but pending enable.",
+					peer_id);
+				debug!(target: "sub-libp2p", "PSM <= Dropped({})", peer_id);
 				self.peerset.dropped(peer_id.clone());
 				self.peers.insert(peer_id.clone(), PeerState::Banned { until: timer_deadline });
-				if !open.is_empty() {
-					debug!(target: "sub-libp2p", "External API <= Closed({:?})", peer_id);
-					let event = GenericProtoOut::CustomProtocolClosed {
-						peer_id: peer_id.clone(),
-						reason: "Disconnected by libp2p".into(),
-					};
-
-					self.events.push(NetworkBehaviourAction::GenerateEvent(event));
-				}
 			}
 
-			Some(PeerState::Enabled { open, .. }) => {
-				debug!(target: "sub-libp2p",
-					"Libp2p => Disconnected({:?}, {:?}): Was enabled.",
-					peer_id, endpoint);
-				debug!(target: "sub-libp2p", "PSM <= Dropped({:?})", peer_id);
+			Some(PeerState::Enabled { .. }) => {
+				debug!(target: "sub-libp2p", "Libp2p => Disconnected({}): Was enabled.", peer_id);
+				debug!(target: "sub-libp2p", "PSM <= Dropped({})", peer_id);
 				self.peerset.dropped(peer_id.clone());
-
 				let ban_dur = Uniform::new(5, 10).sample(&mut rand::thread_rng());
 				self.peers.insert(peer_id.clone(), PeerState::Banned {
 					until: Instant::now() + Duration::from_secs(ban_dur)
 				});
-
-				if !open.is_empty() {
-					debug!(target: "sub-libp2p", "External API <= Closed({:?})", peer_id);
-					let event = GenericProtoOut::CustomProtocolClosed {
-						peer_id: peer_id.clone(),
-						reason: "Disconnected by libp2p".into(),
-					};
-
-					self.events.push(NetworkBehaviourAction::GenerateEvent(event));
-				}
 			}
 
 			// In the incoming state, we don't report "Dropped". Instead we will just ignore the
@@ -924,8 +964,8 @@ impl NetworkBehaviour for GenericProto {
 			Some(PeerState::Incoming { }) => {
 				if let Some(state) = self.incoming.iter_mut().find(|i| i.peer_id == *peer_id) {
 					debug!(target: "sub-libp2p",
-						"Libp2p => Disconnected({:?},{:?}): Was in incoming mode with id {:?}.",
-						peer_id, endpoint, state.incoming_id);
+						"Libp2p => Disconnected({}): Was in incoming mode with id {:?}.",
+						peer_id, state.incoming_id);
 					state.alive = false;
 				} else {
 					error!(target: "sub-libp2p", "State mismatch in libp2p: no entry in incoming \
@@ -934,7 +974,7 @@ impl NetworkBehaviour for GenericProto {
 			}
 
 			Some(PeerState::Poisoned) =>
-				error!(target: "sub-libp2p", "State of {:?} is poisoned", peer_id),
+				error!(target: "sub-libp2p", "State of peer {} is poisoned", peer_id),
 		}
 	}
 
@@ -986,44 +1026,6 @@ impl NetworkBehaviour for GenericProto {
 		event: NotifsHandlerOut,
 	) {
 		match event {
-			NotifsHandlerOut::Init => {
-				debug!(target: "sub-libp2p", "Handler({:?}) => Init", source);
-
-				let entry = if let Entry::Occupied(entry) = self.peers.entry(source.clone()) {
-					entry
-				} else {
-					error!(target: "sub-libp2p", "Init: State mismatch in the custom protos handler");
-					return
-				};
-
-				let event = match entry.get() {
-					// Waiting for a decision from the PSM. Let the handler stay
-					// in initialisation state.
-					PeerState::Incoming { .. } => None,
-					PeerState::Enabled { .. } => {
-						debug!(target: "sub-libp2p", "Handler({:?}) <= Enable", source);
-						Some(NotifsHandlerIn::Enable)
-					}
-					PeerState::Disabled { .. } => {
-						debug!(target: "sub-libp2p", "Handler({:?}) <= Disable", source);
-						Some(NotifsHandlerIn::Disable)
-					}
-					state => {
-						error!(target: "sub-libp2p",
-							"Unexpected peer state on request for handler initialisation: {:?}",
-							state);
-						None
-					}
-				};
-
-				if let Some(event) = event {
-					self.events.push(NetworkBehaviourAction::NotifyHandler {
-						peer_id: source,
-						handler: NotifyHandler::One(connection),
-						event
-					});
-				}
-			}
 			NotifsHandlerOut::Closed { endpoint, reason } => {
 				debug!(target: "sub-libp2p",
 					"Handler({:?}) => Endpoint {:?} closed for custom protocols: {}",
@@ -1246,7 +1248,10 @@ impl NetworkBehaviour for GenericProto {
 					}
 
 					debug!(target: "sub-libp2p", "Libp2p <= Dial {:?} now that ban has expired", peer_id);
-					self.events.push(NetworkBehaviourAction::DialPeer { peer_id: peer_id.clone() });
+					self.events.push(NetworkBehaviourAction::DialPeer {
+						peer_id: peer_id.clone(),
+						condition: DialPeerCondition::Disconnected
+					});
 					*peer_state = PeerState::Requested;
 				}
 

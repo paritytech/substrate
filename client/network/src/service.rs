@@ -37,8 +37,8 @@ use crate::{
 	transport, ReputationChange,
 };
 use futures::{prelude::*, channel::mpsc};
+use libp2p::{PeerId, Multiaddr, core::Executor, kad::record};
 use libp2p::swarm::{NetworkBehaviour, SwarmBuilder, SwarmEvent};
-use libp2p::{kad::record, Multiaddr, PeerId};
 use log::{error, info, trace, warn};
 use parking_lot::Mutex;
 use prometheus_endpoint::{
@@ -309,8 +309,15 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				transport::build_transport(local_identity, config_mem, config_wasm, flowctrl)
 			};
 			let mut builder = SwarmBuilder::new(transport, behaviour, local_peer_id.clone());
+			// TODO: Connection limits
 			if let Some(spawner) = params.executor {
-				builder = builder.executor_fn(spawner);
+				struct SpawnImpl<F>(F);
+				impl<F: Fn(Pin<Box<dyn Future<Output = ()> + Send>>)> Executor for SpawnImpl<F> {
+					fn exec(&self, f: Pin<Box<dyn Future<Output = ()> + Send>>) {
+						(self.0)(f)
+					}
+				}
+				builder = builder.executor(Box::new(SpawnImpl(spawner)));
 			}
 			(builder.build(), bandwidth)
 		};
@@ -1019,13 +1026,13 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						metrics.update_with_network_event(&ev);
 					}
 				},
-				Poll::Ready(SwarmEvent::Connected(peer_id)) => {
+				Poll::Ready(SwarmEvent::ConnectionEstablished { peer_id, .. }) => {
 					trace!(target: "sub-libp2p", "Libp2p => Connected({:?})", peer_id);
 					if let Some(metrics) = this.metrics.as_ref() {
 						metrics.connections.inc();
 					}
 				},
-				Poll::Ready(SwarmEvent::Disconnected(peer_id)) => {
+				Poll::Ready(SwarmEvent::ConnectionClosed { peer_id, .. }) => {
 					trace!(target: "sub-libp2p", "Libp2p => Disconnected({:?})", peer_id);
 					if let Some(metrics) = this.metrics.as_ref() {
 						metrics.connections.dec();
@@ -1035,7 +1042,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					trace!(target: "sub-libp2p", "Libp2p => NewListenAddr({})", addr),
 				Poll::Ready(SwarmEvent::ExpiredListenAddr(addr)) =>
 					trace!(target: "sub-libp2p", "Libp2p => ExpiredListenAddr({})", addr),
-				Poll::Ready(SwarmEvent::UnreachableAddr { peer_id, address, error }) => {
+				Poll::Ready(SwarmEvent::UnreachableAddr { peer_id, address, error, .. }) => {
 					let error = error.to_string();
 
 					trace!(
@@ -1045,21 +1052,35 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						error,
 					);
 
-					if let Some(peer_id) = peer_id {
-						if this.boot_node_ids.contains(&peer_id)
-							&& error.contains("Peer ID mismatch")
-						{
-							error!(
-								"Connecting to bootnode with peer id `{}` and address `{}` failed \
-								because it returned a different peer id!",
-								peer_id,
-								address,
-							);
-						}
+					if this.boot_node_ids.contains(&peer_id)
+						&& error.contains("Peer ID mismatch")
+					{
+						error!(
+							"Connecting to bootnode with peer id `{}` and address `{}` failed \
+							because it returned a different peer id!",
+							peer_id,
+							address,
+						);
 					}
-				},
-				Poll::Ready(SwarmEvent::StartConnect(peer_id)) =>
-					trace!(target: "sub-libp2p", "Libp2p => StartConnect({:?})", peer_id),
+				}
+				Poll::Ready(SwarmEvent::Dialing(peer_id)) =>
+					trace!(target: "sub-libp2p", "Libp2p => Dialing({:?})", peer_id),
+				Poll::Ready(SwarmEvent::IncomingConnection { local_addr, send_back_addr }) =>
+					trace!(target: "sub-libp2p", "Libp2p => IncomingConnection({},{}))",
+						local_addr, send_back_addr),
+				Poll::Ready(SwarmEvent::IncomingConnectionError { local_addr, send_back_addr, error }) =>
+					trace!(target: "sub-libp2p", "Libp2p => IncomingConnectionError({},{}): {}",
+						local_addr, send_back_addr, error),
+				Poll::Ready(SwarmEvent::BannedPeer { peer_id, endpoint }) =>
+					trace!(target: "sub-libp2p", "Libp2p => BannedPeer({}). Connected via {:?}.",
+						peer_id, endpoint),
+				Poll::Ready(SwarmEvent::UnknownPeerUnreachableAddr { address, error }) =>
+					trace!(target: "sub-libp2p", "Libp2p => UnknownPeerUnreachableAddr({}): {}",
+						address, error),
+				Poll::Ready(SwarmEvent::ListenerClosed { reason, addresses: _ }) =>
+					trace!(target: "sub-libp2p", "Libp2p => ListenerClosed: {:?}", reason),
+				Poll::Ready(SwarmEvent::ListenerError { error }) =>
+					trace!(target: "sub-libp2p", "Libp2p => ListenerError: {}", error),
 			};
 		}
 

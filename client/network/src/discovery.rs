@@ -58,7 +58,7 @@ use libp2p::{swarm::toggle::Toggle};
 use libp2p::mdns::{Mdns, MdnsEvent};
 use libp2p::multiaddr::Protocol;
 use log::{debug, info, trace, warn, error};
-use std::{cmp, collections::VecDeque, time::Duration};
+use std::{cmp, collections::VecDeque, io, time::Duration};
 use std::task::{Context, Poll};
 use sp_core::hexdisplay::HexDisplay;
 
@@ -260,14 +260,22 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		list
 	}
 
-	fn inject_connected(&mut self, peer_id: PeerId, endpoint: ConnectedPoint) {
+	fn inject_connection_established(&mut self, peer_id: &PeerId, conn: &ConnectionId, endpoint: &ConnectedPoint) {
 		self.num_connections += 1;
-		NetworkBehaviour::inject_connected(&mut self.kademlia, peer_id, endpoint)
+		NetworkBehaviour::inject_connection_established(&mut self.kademlia, peer_id, conn, endpoint)
 	}
 
-	fn inject_disconnected(&mut self, peer_id: &PeerId, endpoint: ConnectedPoint) {
+	fn inject_connected(&mut self, peer_id: &PeerId) {
+		NetworkBehaviour::inject_connected(&mut self.kademlia, peer_id)
+	}
+
+	fn inject_connection_closed(&mut self, peer_id: &PeerId, conn: &ConnectionId, endpoint: &ConnectedPoint) {
 		self.num_connections -= 1;
-		NetworkBehaviour::inject_disconnected(&mut self.kademlia, peer_id, endpoint)
+		NetworkBehaviour::inject_connection_closed(&mut self.kademlia, peer_id, conn, endpoint)
+	}
+
+	fn inject_disconnected(&mut self, peer_id: &PeerId) {
+		NetworkBehaviour::inject_disconnected(&mut self.kademlia, peer_id)
 	}
 
 	fn inject_addr_reach_failure(
@@ -313,9 +321,9 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		NetworkBehaviour::inject_listener_error(&mut self.kademlia, id, err);
 	}
 
-	fn inject_listener_closed(&mut self, id: ListenerId) {
-		error!(target: "sub-libp2p", "Libp2p listener {:?} closed", id);
-		NetworkBehaviour::inject_listener_closed(&mut self.kademlia, id);
+	fn inject_listener_closed(&mut self, id: ListenerId, reason: Result<(), &io::Error>) {
+		error!(target: "sub-libp2p", "Libp2p listener {:?} closed: {:?}", id, reason);
+		NetworkBehaviour::inject_listener_closed(&mut self.kademlia, id, reason);
 	}
 
 	fn poll(
@@ -450,8 +458,8 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 				},
 				NetworkBehaviourAction::DialAddress { address } =>
 					return Poll::Ready(NetworkBehaviourAction::DialAddress { address }),
-				NetworkBehaviourAction::DialPeer { peer_id } =>
-					return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id }),
+				NetworkBehaviourAction::DialPeer { peer_id, condition } =>
+					return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition }),
 				NetworkBehaviourAction::NotifyHandler { peer_id, handler, event } =>
 					return Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }),
 				NetworkBehaviourAction::ReportObservedAddr { address } =>
@@ -481,8 +489,8 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 				},
 				NetworkBehaviourAction::DialAddress { address } =>
 					return Poll::Ready(NetworkBehaviourAction::DialAddress { address }),
-				NetworkBehaviourAction::DialPeer { peer_id } =>
-					return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id }),
+				NetworkBehaviourAction::DialPeer { peer_id, condition } =>
+					return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition }),
 				NetworkBehaviourAction::NotifyHandler { event, .. } =>
 					match event {},		// `event` is an enum with no variant
 				NetworkBehaviourAction::ReportObservedAddr { address } =>
