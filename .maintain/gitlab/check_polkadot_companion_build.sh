@@ -59,7 +59,7 @@ then
   pr_ref="$(echo $pr_data | grep -Po '"ref"\s*:\s*"\K(?!master)[^"]*')"
   pr_body="$(echo "$pr_data" | sed -n -r 's/^[[:space:]]+"body": (".*")[^"]+$/\1/p')"
 
-  pr_companion="$(echo "${pr_body}" | sed -n -r \
+  pr_companion="$(echo "${pr_data}" | sed -n -r \
       -e 's;^.*polkadot companion: paritytech/polkadot#([0-9]+).*$;\1;p' \
       -e 's;^.*polkadot companion: https://github.com/paritytech/polkadot/pull/([0-9]+).*$;\1;p' \
     | tail -n 1)"
