@@ -29,6 +29,7 @@ use sp_externalities::Extensions;
 use sp_state_machine::{
 	self, Backend as StateBackend, OverlayedChanges, ExecutionStrategy, create_proof_check_backend,
 	execution_proof_check_on_trie_backend, ExecutionManager, StorageProof, CloneableSpawn,
+	merge_storage_proofs,
 };
 use sp_core::Hasher;
 
@@ -205,7 +206,7 @@ pub fn prove_execution<Block, S, E>(
 		method,
 		call_data,
 	)?;
-	let total_proof = merge_storage_proofs::<HasherFor<Block>, _>(vec![init_proof, exec_proof])?;
+	let total_proof = merge_storage_proofs::<HashFor<Block>, _>(vec![init_proof, exec_proof])?;
 
 	Ok((result, total_proof))
 }

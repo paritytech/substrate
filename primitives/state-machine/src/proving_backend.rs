@@ -18,13 +18,13 @@
 
 use std::sync::Arc;
 use parking_lot::RwLock;
-use codec::{Decode, Codec};
+use codec::{Encode, Decode, Codec};
 use log::debug;
 use hash_db::{HashDB, EMPTY_PREFIX, Prefix};
 use sp_core::{Hasher, InnerHasher};
 use sp_trie::{
 	MemoryDB, empty_child_trie_root, read_trie_value_with,
-	record_all_keys, StorageProof,
+	record_all_keys,
 };
 pub use sp_trie::Recorder;
 pub use sp_trie::trie_types::{Layout, TrieError};
@@ -32,7 +32,7 @@ use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::{BackendStorageDBRef, TrieBackendEssence,
 	TrieBackendStorage, TrieBackendStorageRef};
 use crate::{Error, ExecutionError, Backend};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use crate::DBValue;
 use sp_core::storage::{ChildInfo, ChildType, ChildrenMap};
 
@@ -168,7 +168,7 @@ impl StorageProof {
 			};
 			for (child_info, (compact_scheme, proof)) in children {
 				match child_info.child_type() {
-					ChildType::CryptoUniqueId => {
+					ChildType::ParentKeyId => {
 						match compact_scheme {
 							CompactScheme::TrieSkipHashes => {
 								// Note that we could check the proof from the unpacking.
@@ -197,7 +197,7 @@ impl StorageProof {
 			let mut result = ChildrenMap::default();
 			for (child_info, proof) in children {
 				match child_info.child_type() {
-					ChildType::CryptoUniqueId => {
+					ChildType::ParentKeyId => {
 						let root = roots.get(&child_info)
 							.and_then(|r| Decode::decode(&mut &r[..]).ok())
 							.ok_or_else(|| "Missing root for packing".to_string())?;
@@ -222,7 +222,7 @@ impl StorageProof {
 			let mut result = Vec::new();
 			children.into_iter().for_each(|(child_info, proof)| {
 				match child_info.child_type() {
-					ChildType::CryptoUniqueId => {
+					ChildType::ParentKeyId => {
 						// this can get merged with top, since it is proof we do not use prefix
 						result.extend(proof);
 					}
@@ -787,7 +787,7 @@ mod tests {
 	use sp_runtime::traits::BlakeTwo256;
 
 	fn test_proving<'a>(
-		trie_backend: &'a TrieBackend<PrefixedMemoryDB<Blake2Hasher>,Blake2Hasher>,
+		trie_backend: &'a TrieBackend<PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256>,
 		flat: bool,
 	) -> ProvingBackend<'a, PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256> {
 		ProvingBackend::new(trie_backend, flat)
@@ -934,7 +934,7 @@ mod tests {
 				).unwrap();
 			
 				assert_eq!(
-					proof_check.child_storage(&child_info1, &[64]).unwrap().unwrap(),
+					proof_check.child_storage(&child_info_1, &[64]).unwrap().unwrap(),
 					vec![64]
 				);
 			} else {
@@ -944,7 +944,7 @@ mod tests {
 				).unwrap();
 			
 				assert_eq!(
-					proof_check.child_storage(&child_info1, &[64]).unwrap().unwrap(),
+					proof_check.child_storage(&child_info_1, &[64]).unwrap().unwrap(),
 					vec![64]
 				);
 			}

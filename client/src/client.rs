@@ -41,8 +41,8 @@ use sp_runtime::{
 use sp_state_machine::{
 	DBValue, Backend as StateBackend, ChangesTrieAnchorBlockId,
 	prove_read, prove_child_read, ChangesTrieRootsStorage, ChangesTrieStorage,
-	ChangesTrieConfigurationRange, key_changes, key_changes_proof, StorageProofKind,
-	merge_storage_proofs,
+	ChangesTrieConfigurationRange, key_changes, key_changes_proof, StorageProof,
+	StorageProofKind, merge_storage_proofs,
 };
 use sc_executor::{RuntimeVersion, RuntimeInfo};
 use sp_consensus::{
@@ -55,7 +55,6 @@ use sp_blockchain::{self as blockchain,
 	well_known_cache_keys::Id as CacheKeyId,
 	HeaderMetadata, CachedHeaderMetadata,
 };
-use sp_trie::StorageProof;
 
 use sp_api::{
 	CallApiAt, ConstructRuntimeApi, Core as CoreApi, ApiExt, ApiRef, ProvideRuntimeApi,
@@ -479,7 +478,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			Ok(())
 		}, ())?;
 
-		Ok(merge_storage_proofs::<HasherFor<Block>, _>(proofs)?)
+		Ok(merge_storage_proofs::<HashFor<Block>, _>(proofs)?)
 	}
 
 	/// Generates CHT-based proof for roots of changes tries at given blocks (that are part of single CHT).
@@ -1097,8 +1096,10 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 		id: &BlockId<Block>,
 		keys: &mut dyn Iterator<Item=&[u8]>,
 	) -> sp_blockchain::Result<StorageProof> {
+		// TODO keep flatten proof here?? or move choice to caller?
+		// TODO EMCH this should be parametereized fo client
 		self.state_at(id)
-			.and_then(|state| prove_read(state, keys)
+			.and_then(|state| prove_read(state, keys, StorageProofKind::Flatten)
 				.map_err(Into::into))
 	}
 
@@ -1108,8 +1109,9 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 		child_info: &ChildInfo,
 		keys: &mut dyn Iterator<Item=&[u8]>,
 	) -> sp_blockchain::Result<StorageProof> {
+		// TODO EMCH this should be parametereized fo client
 		self.state_at(id)
-			.and_then(|state| prove_child_read(state, child_info, keys)
+			.and_then(|state| prove_child_read(state, child_info, keys, StorageProofKind::Flatten)
 				.map_err(Into::into))
 	}
 
@@ -1136,8 +1138,9 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 			&self.executor,
 			method,
 			call_data,
-		).map(|(r, p)| {
-			(r, StorageProof::merge(vec![p, code_proof]))
+		).and_then(|(r, p)| {
+			// TODO EMCH using flatten??
+			Ok((r, merge_storage_proofs::<HashFor<Block>, _>(vec![p, code_proof])?))
 		})
 	}
 
