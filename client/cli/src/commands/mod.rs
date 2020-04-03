@@ -68,10 +68,8 @@ pub enum Subcommand {
 /// # struct EmptyVariant {}
 ///
 ///	# impl sc_cli::CliConfiguration for EmptyVariant {
-///	#     fn base_path(&self) -> sc_cli::Result<Option<std::path::PathBuf>> { unimplemented!() }
-///	#     fn database_config(&self, _: &std::path::PathBuf, _: usize) -> sc_cli::Result<sc_service::config::DatabaseConfig> { unimplemented!() }
-///	#     fn chain_id(&self, _: bool) -> sc_cli::Result<String> { Ok("test-chain-id".to_string()) }
-///	#     fn init<C>(&self) -> sc_cli::Result<()> { unimplemented!() }
+///	#     fn shared_params(&self) -> &::sc_cli::SharedParams { unimplemented!() }
+///	#     fn chain_id(&self, _: bool) -> ::sc_cli::Result<String> { Ok("test-chain-id".to_string()) }
 ///	# }
 ///
 /// # fn main() {
