@@ -58,12 +58,15 @@ fn setup_awesome<T: Trait>(length: u32) -> (T::AccountId, Vec<u8>, T::AccountId)
 fn setup_tip<T: Trait>(r: u32, t: u32) ->
 	Result<(T::AccountId, Vec<u8>, T::AccountId, BalanceOf<T>), &'static str>
 {
+	let tippers_count = T::Tippers::count();
+
 	for i in 0 .. t {
 		let member = account("member", i, SEED);
 		T::Tippers::add(&member);
+		ensure!(T::Tippers::contains(&member), "caller is not a tipper WHATT");
 	}
 
-	ensure!(T::Tippers::count() == t as usize, "problem creating tippers");
+	ensure!(T::Tippers::count() == tippers_count + t as usize, "problem creating tippers");
 	let caller = account("member", t - 1, SEED);
 	let reason = vec![0; r as usize];
 	let beneficiary = account("beneficiary", t, SEED);
@@ -71,7 +74,7 @@ fn setup_tip<T: Trait>(r: u32, t: u32) ->
 	Ok((caller, reason, beneficiary, value))
 }
 
-// Create `t` new types for the tip proposal with `hash`.
+// Create `t` new tips for the tip proposal with `hash`.
 // This function automatically moves forward the block number to a time which
 // would resolve the tipping process.
 fn create_tips<T: Trait>(t: u32, hash: T::Hash, value: BalanceOf<T>) -> Result<(), &'static str> {

@@ -3947,6 +3947,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "hex-literal",
  "pallet-transaction-payment",
  "parity-scale-codec",
  "serde",
