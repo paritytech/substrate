@@ -134,9 +134,9 @@ impl<C: SubstrateCli> Runner<C> {
 		SF: AbstractService + Unpin,
 	{
 		info!("{}", C::impl_name());
-		info!("  version {}", C::impl_version());
+		info!("✌️  version {}", C::impl_version());
 		info!(
-			"  by {}, {}-{}",
+			"❤️  by {}, {}-{}",
 			C::author(),
 			C::copyright_start_year(),
 			Local::today().year()
