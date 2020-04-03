@@ -28,7 +28,7 @@ use structopt::StructOpt;
 
 /// Parameters used to create the network configuration.
 #[derive(Debug, StructOpt, Clone)]
-pub struct NetworkConfigurationParams {
+pub struct NetworkParams {
 	/// Specify a list of bootnodes.
 	#[structopt(long = "bootnodes", value_name = "URL")]
 	pub bootnodes: Vec<String>,
@@ -104,7 +104,7 @@ pub struct NetworkConfigurationParams {
 	pub use_yamux_flow_control: bool,
 }
 
-impl NetworkConfigurationParams {
+impl NetworkParams {
 	/// Fill the given `NetworkConfiguration` by looking at the cli parameters.
 	pub fn network_config(
 		&self,

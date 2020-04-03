@@ -139,9 +139,9 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
-			fn network_configuration_params(&self) -> Option<&::sc_cli::NetworkConfigurationParams> {
+			fn network_params(&self) -> Option<&::sc_cli::NetworkParams> {
 				match self {
-					$($enum::$variant(cmd) => cmd.network_configuration_params()),*
+					$($enum::$variant(cmd) => cmd.network_params()),*
 				}
 			}
 

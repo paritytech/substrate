@@ -18,7 +18,7 @@
 
 use crate::error::Result;
 use crate::{
-	init_logger, ImportParams, KeystoreParams, NetworkConfigurationParams, NodeKeyParams,
+	init_logger, ImportParams, KeystoreParams, NetworkParams, NodeKeyParams,
 	PruningParams, SharedParams, SubstrateCli,
 };
 use app_dirs::{AppDataType, AppInfo};
@@ -61,14 +61,14 @@ pub trait CliConfiguration: Sized {
 		None
 	}
 
-	/// Get the NetworkConfigurationParams for this object
-	fn network_configuration_params(&self) -> Option<&NetworkConfigurationParams> {
+	/// Get the NetworkParams for this object
+	fn network_params(&self) -> Option<&NetworkParams> {
 		None
 	}
 
 	/// Get the NodeKeyParams for this object
 	fn node_key_params(&self) -> Option<&NodeKeyParams> {
-		self.network_configuration_params()
+		self.network_params()
 			.map(|x| &x.node_key_params)
 	}
 
@@ -102,8 +102,8 @@ pub trait CliConfiguration: Sized {
 		node_name: &str,
 		node_key: NodeKeyConfig,
 	) -> Result<NetworkConfiguration> {
-		if let Some(network_configuration_params) = self.network_configuration_params() {
-			network_configuration_params.network_config(
+		if let Some(network_params) = self.network_params() {
+			network_params.network_config(
 				chain_spec,
 				is_dev,
 				net_config_dir,

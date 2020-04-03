@@ -17,7 +17,7 @@
 use crate::error::{Error, Result};
 use crate::params::ImportParams;
 use crate::params::KeystoreParams;
-use crate::params::NetworkConfigurationParams;
+use crate::params::NetworkParams;
 use crate::params::SharedParams;
 use crate::params::TransactionPoolParams;
 use crate::CliConfiguration;
@@ -191,7 +191,7 @@ pub struct RunCmd {
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
-	pub network_config: NetworkConfigurationParams,
+	pub network_params: NetworkParams,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -281,8 +281,8 @@ impl CliConfiguration for RunCmd {
 		Some(&self.import_params)
 	}
 
-	fn network_configuration_params(&self) -> Option<&NetworkConfigurationParams> {
-		Some(&self.network_config)
+	fn network_params(&self) -> Option<&NetworkParams> {
+		Some(&self.network_params)
 	}
 
 	fn keystore_params(&self) -> Option<&KeystoreParams> {
