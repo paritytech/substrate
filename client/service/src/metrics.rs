@@ -98,7 +98,7 @@ impl PrometheusMetrics {
 				"cpu_usage_percentage", "Node CPU usage",
 			)?, registry)?,
 
-			#[cfg(std)]
+			#[cfg(any(unix, windows))]
 			netstat: register(GaugeVec::new(
 				Opts::new("netstat_tcp", "Current TCP connections "),
 				&["status"]
