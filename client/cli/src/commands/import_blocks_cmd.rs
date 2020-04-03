@@ -17,7 +17,7 @@
 use crate::error;
 use crate::params::ImportParams;
 use crate::params::SharedParams;
-use crate::{substrate_cli_params, CliConfiguration};
+use crate::CliConfiguration;
 use sc_service::{Configuration, ServiceBuilderCommand};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::fmt::Debug;
@@ -85,5 +85,12 @@ impl ImportBlocksCmd {
 	}
 }
 
-#[substrate_cli_params(shared_params = shared_params, import_params = import_params)]
-impl CliConfiguration for ImportBlocksCmd {}
+impl CliConfiguration for ImportBlocksCmd {
+	fn shared_params(&self) -> &SharedParams {
+		&self.shared_params
+	}
+
+	fn import_params(&self) -> Option<&ImportParams> {
+		Some(&self.import_params)
+	}
+}

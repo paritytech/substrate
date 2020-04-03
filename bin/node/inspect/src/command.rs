@@ -16,13 +16,12 @@
 
 //! Command ran by the CLI
 
-use std::str::FromStr;
-
 use crate::cli::{InspectCmd, InspectSubCmd};
 use crate::Inspector;
-use sc_cli::{substrate_cli_params, CliConfiguration, Result};
+use sc_cli::{CliConfiguration, ImportParams, Result, SharedParams};
 use sc_service::{new_full_client, Configuration, NativeExecutionDispatch};
 use sp_runtime::traits::Block;
+use std::str::FromStr;
 
 impl InspectCmd {
 	/// Run the inspect command, passing the inspector.
@@ -53,5 +52,12 @@ impl InspectCmd {
 	}
 }
 
-#[substrate_cli_params(shared_params = shared_params, import_params = import_params)]
-impl CliConfiguration for InspectCmd {}
+impl CliConfiguration for InspectCmd {
+	fn shared_params(&self) -> &SharedParams {
+		&self.shared_params
+	}
+
+	fn import_params(&self) -> Option<&ImportParams> {
+		Some(&self.import_params)
+	}
+}

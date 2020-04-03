@@ -14,14 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use crate::error;
+use crate::params::{BlockNumber, PruningParams, SharedParams};
+use crate::CliConfiguration;
 use sc_service::{Configuration, ServiceBuilderCommand};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::fmt::Debug;
 use structopt::StructOpt;
-
-use crate::error;
-use crate::params::{BlockNumber, PruningParams, SharedParams};
-use crate::{substrate_cli_params, CliConfiguration};
 
 /// The `revert` command used revert the chain to a previous state.
 #[derive(Debug, StructOpt, Clone)]
@@ -56,5 +55,12 @@ impl RevertCmd {
 	}
 }
 
-#[substrate_cli_params(shared_params = shared_params, pruning_params = pruning_params)]
-impl CliConfiguration for RevertCmd {}
+impl CliConfiguration for RevertCmd {
+	fn shared_params(&self) -> &SharedParams {
+		&self.shared_params
+	}
+
+	fn pruning_params(&self) -> Option<&PruningParams> {
+		Some(&self.pruning_params)
+	}
+}

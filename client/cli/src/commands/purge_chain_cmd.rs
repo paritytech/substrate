@@ -16,7 +16,7 @@
 
 use crate::error;
 use crate::params::SharedParams;
-use crate::{substrate_cli_params, CliConfiguration};
+use crate::CliConfiguration;
 use sc_service::{config::DatabaseConfig, Configuration};
 use std::fmt::Debug;
 use std::fs;
@@ -78,5 +78,8 @@ impl PurgeChainCmd {
 	}
 }
 
-#[substrate_cli_params(shared_params = shared_params)]
-impl CliConfiguration for PurgeChainCmd {}
+impl CliConfiguration for PurgeChainCmd {
+	fn shared_params(&self) -> &SharedParams {
+		&self.shared_params
+	}
+}
