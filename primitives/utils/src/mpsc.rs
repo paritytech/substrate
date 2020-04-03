@@ -43,7 +43,7 @@ mod inner {
 
 	/// Wrapper Type around `UnboundedSender` that increases the global
 	/// measure when a message is added
-	#[derive(Debug)]
+	#[derive(Debug, Clone)]
 	pub struct TracingUnboundedSender<T>(&'static str, UnboundedSender<T>);
 
 	/// Wrapper Type around `UnboundedReceiver` that decreases the global
@@ -95,12 +95,6 @@ mod inner {
 		/// Proxy function to mpsc::UnboundedSender
 		pub fn same_receiver(&self, other: &UnboundedSender<T>) -> bool {
 			self.1.same_receiver(other)
-		}
-	}
-
-	impl<T> Clone for TracingUnboundedSender<T> {
-		fn clone(&self) -> Self {
-			Self(self.0.clone(), self.1.clone())
 		}
 	}
 
