@@ -15,7 +15,6 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::NetworkStatus;
-use netstat2::{TcpState, ProtocolSocketInfo, iterate_sockets_info, AddressFamilyFlags, ProtocolFlags};
 use prometheus_endpoint::{register, Gauge, U64, F64, Registry, PrometheusError, Opts, GaugeVec};
 use sc_client::ClientInfo;
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
@@ -23,7 +22,12 @@ use std::convert::TryFrom;
 use sp_runtime::traits::{NumberFor, Block, SaturatedConversion, UniqueSaturatedInto};
 use sp_transaction_pool::PoolStatus;
 use sp_utils::metrics::register_globals;
+
+#[cfg(any(windows, unix))]
 use sysinfo::{ProcessExt, System, SystemExt};
+
+#[cfg(any(unix, windows))]
+use netstat2::{TcpState, ProtocolSocketInfo, iterate_sockets_info, AddressFamilyFlags, ProtocolFlags};
 
 #[cfg(not(unix))]
 use sysinfo::get_current_pid;
@@ -33,14 +37,17 @@ use procfs;
 
 struct PrometheusMetrics {
 	// system
+	#[cfg(any(unix, windows))]
 	load_avg: GaugeVec<F64>,
 
 	// process
 	cpu_usage_percentage: Gauge<F64>,
 	memory_usage_bytes: Gauge<U64>,
-	netstat: GaugeVec<U64>,
 	threads: Gauge<U64>,
 	open_files: GaugeVec<U64>,
+	
+	#[cfg(any(unix, windows))]
+	netstat: GaugeVec<U64>,
 
 	// -- inner counters
 	// generic info
@@ -75,8 +82,8 @@ impl PrometheusMetrics {
 		register_globals(registry)?;
 		
 		Ok(Self {
-
 			// system
+			#[cfg(any(unix, windows))]
 			load_avg: register(GaugeVec::new(
 				Opts::new("load_avg", "System load average"),
 				&["over"]
@@ -91,6 +98,7 @@ impl PrometheusMetrics {
 				"cpu_usage_percentage", "Node CPU usage",
 			)?, registry)?,
 
+			#[cfg(std)]
 			netstat: register(GaugeVec::new(
 				Opts::new("netstat_tcp", "Current TCP connections "),
 				&["status"]
@@ -142,6 +150,7 @@ impl PrometheusMetrics {
 	}
 }
 
+#[cfg(any(unix, windows))]
 #[derive(Default)]
 struct ConnectionsCount {
 	listen: u64,
@@ -173,6 +182,7 @@ struct ProcessInfo {
 
 pub struct MetricsService {
 	metrics: Option<PrometheusMetrics>,
+	#[cfg(any(windows, unix))]
 	system: System,
 	pid: Option<i32>,
 }
@@ -215,7 +225,7 @@ impl MetricsService {
 }
 
 
-#[cfg(not(unix))]
+#[cfg(windows)]
 impl MetricsService {
 	fn inner_new(metrics: Option<PrometheusMetrics>) -> Self {
 		Self {
@@ -227,6 +237,20 @@ impl MetricsService {
 	
 	fn process_info(&mut self) -> ProcessInfo {
 		self.pid.map(|pid| self._process_info_for(pid)).or_else(ProcessInfo::default)
+	}
+}
+
+#[cfg(not(any(unix, windows)))]
+impl MetricsService {
+	fn inner_new(metrics: Option<PrometheusMetrics>) -> Self {
+		Self {
+			metrics,
+			pid: None
+		}
+	}
+	
+	fn process_info(&mut self) -> ProcessInfo {
+		ProcessInfo::default()
 	}
 }
 
@@ -245,6 +269,7 @@ impl MetricsService {
 		Self::inner_new(None)
 	}
 
+	#[cfg(any(windows, unix))]
 	fn _process_info_for(&mut self, pid: &i32) -> ProcessInfo {
 		let mut info = ProcessInfo::default();
 		if self.system.refresh_process(*pid) {
@@ -256,6 +281,7 @@ impl MetricsService {
 		info
 	}
 
+	#[cfg(any(unix, windows))]
 	fn connections_info(&self) -> Option<ConnectionsCount> {
 		self.pid.as_ref().and_then(|pid| {
 			let af_flags = AddressFamilyFlags::IPV4 | AddressFamilyFlags::IPV6;
@@ -354,10 +380,14 @@ impl MetricsService {
 				metrics.open_files.with_label_values(&["other"]).set(fd_info.other);
 			}
 
-			let load = self.system.get_load_average();
-			metrics.load_avg.with_label_values(&["1min"]).set(load.one);
-			metrics.load_avg.with_label_values(&["5min"]).set(load.five);
-			metrics.load_avg.with_label_values(&["15min"]).set(load.fifteen);
+			#[cfg(any(windows, unix))]
+			{
+				let load = self.system.get_load_average();
+				metrics.load_avg.with_label_values(&["1min"]).set(load.one);
+				metrics.load_avg.with_label_values(&["5min"]).set(load.five);
+				metrics.load_avg.with_label_values(&["15min"]).set(load.fifteen);
+
+			}
 
 			metrics.network_per_sec_bytes.with_label_values(&["download"]).set(net_status.average_download_per_sec);
 			metrics.network_per_sec_bytes.with_label_values(&["upload"]).set(net_status.average_upload_per_sec);
@@ -385,6 +415,7 @@ impl MetricsService {
 				metrics.state_db.with_label_values(&["pinned"]).set(info.memory.state_db.pinned.as_bytes() as u64);
 			}
 
+			#[cfg(any(unix, windows))]
 			if let Some(conns) = self.connections_info() {
 				metrics.netstat.with_label_values(&["listen"]).set(conns.listen);
 				metrics.netstat.with_label_values(&["established"]).set(conns.established);
