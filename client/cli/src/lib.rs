@@ -37,7 +37,6 @@ use log::info;
 pub use params::*;
 use regex::Regex;
 pub use runner::*;
-pub use sc_cli_derive::*;
 use sc_service::{ChainSpec, Configuration};
 use std::future::Future;
 use std::io::Write;

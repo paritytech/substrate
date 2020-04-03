@@ -18,18 +18,38 @@ use crate::{chain_spec, factory_impl::FactoryState, service, Cli, FactoryCmd, Su
 use node_executor::Executor;
 use node_runtime::{Block, RuntimeApi};
 use node_transaction_factory::RuntimeAdapter;
-use sc_cli::{
-	substrate_cli, CliConfiguration, ImportParams, Result, SharedParams, SubstrateCli,
-};
+use sc_cli::{CliConfiguration, ImportParams, Result, SharedParams, SubstrateCli};
 use sc_service::Configuration;
 
-#[substrate_cli(
-	impl_name = "Substrate Node",
-	support_url = "https://github.com/paritytech/substrate/issues/new",
-	copyright_start_year = 2017,
-	executable_name = "substrate",
-)]
 impl SubstrateCli for Cli {
+	fn impl_name() -> &'static str {
+		"Substrate Node"
+	}
+
+	fn impl_version() -> &'static str {
+		env!("SUBSTRATE_CLI_IMPL_VERSION")
+	}
+
+	fn description() -> &'static str {
+		env!("CARGO_PKG_DESCRIPTION")
+	}
+
+	fn author() -> &'static str {
+		env!("CARGO_PKG_AUTHORS")
+	}
+
+	fn support_url() -> &'static str {
+		"https://github.com/paritytech/substrate/issues/new"
+	}
+
+	fn copyright_start_year() -> i32 {
+		2017
+	}
+
+	fn executable_name() -> &'static str {
+		"substrate"
+	}
+
 	fn load_spec(&self, id: &str) -> std::result::Result<Box<dyn sc_service::ChainSpec>, String> {
 		Ok(match id {
 			"dev" => Box::new(chain_spec::development_config()),

@@ -5712,7 +5712,6 @@ dependencies = [
  "parity-util-mem",
  "regex",
  "rpassword",
- "sc-cli-derive",
  "sc-client-api",
  "sc-informant",
  "sc-network",
@@ -5731,20 +5730,6 @@ dependencies = [
  "tempfile",
  "time",
  "tokio 0.2.13",
-]
-
-[[package]]
-name = "sc-cli-derive"
-version = "0.8.0-alpha.5"
-dependencies = [
- "platforms",
- "proc-macro-error",
- "proc-macro2",
- "quote",
- "sc-cli",
- "sc-service",
- "syn",
- "trybuild",
 ]
 
 [[package]]
