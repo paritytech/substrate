@@ -69,6 +69,14 @@ impl InvalidTransaction {
 			_ => false,
 		}
 	}
+
+	/// Returns if the reason for the invalidity was a mandatory call failing.
+	pub fn was_mandatory(&self) -> bool {
+		match self {
+			Self::BadMandatory => true,
+			_ => false,
+		}
+	}
 }
 
 impl From<InvalidTransaction> for &'static str {
@@ -131,6 +139,15 @@ impl TransactionValidityError {
 	pub fn exhausted_resources(&self) -> bool {
 		match self {
 			Self::Invalid(e) => e.exhausted_resources(),
+			Self::Unknown(_) => false,
+		}
+	}
+
+	/// Returns `true` if the reason for the error was it being a mandatory dispatch that could not
+	/// be completed successfully.
+	pub fn was_mandatory(&self) -> bool {
+		match self {
+			Self::Invalid(e) => e.was_mandatory(),
 			Self::Unknown(_) => false,
 		}
 	}
