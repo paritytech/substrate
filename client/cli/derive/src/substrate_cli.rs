@@ -144,32 +144,9 @@ pub(crate) fn substrate_cli(
 	quote!(#i)
 }
 
-fn get_platform() -> String {
-	use platforms::*;
-
-	let env_dash = if TARGET_ENV.is_some() { "-" } else { "" };
-
-	format!(
-		"{}-{}{}{}",
-		TARGET_ARCH.as_str(),
-		TARGET_OS.as_str(),
-		env_dash,
-		TARGET_ENV.map(|x| x.as_str()).unwrap_or(""),
-	)
-}
-
 fn get_version() -> String {
-	let impl_commit = std::env::var("VERGEN_SHA_SHORT")
+	std::env::var("SUBSTRATE_CLI_IMPL_VERSION")
 		.unwrap_or_else(|_| {
 			abort_call_site!("missing env variable VERGEN_SHA_SHORT. You might want to add a build.rs script that runs substrate_build_script_utils::generate_cargo_keys() or provide the macro attribute impl_version yourself (impl_version = \"1.0.0\")")
-		});
-	let commit_dash = if impl_commit.is_empty() { "" } else { "-" };
-
-	format!(
-		"{}{}{}-{}",
-		std::env::var("CARGO_PKG_VERSION").unwrap_or_default(),
-		commit_dash,
-		impl_commit,
-		get_platform(),
-	)
+		})
 }
