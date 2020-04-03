@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Features to meter unbounded channelss
+//! Features to meter unbounded channels
 
 #[cfg(not(features = "metered"))]
 mod inner {
