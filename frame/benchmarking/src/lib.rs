@@ -504,7 +504,9 @@ macro_rules! impl_benchmark {
 	(
 		NO_INSTANCE $( $name:ident ),*
 	) => {
-		impl<T: Trait> $crate::Benchmarking<$crate::BenchmarkResults> for Module<T> {
+		impl<T: Trait> $crate::Benchmarking<$crate::BenchmarkResults> for Module<T>
+			where T: frame_system::Trait
+		{
 			fn benchmarks() -> Vec<&'static [u8]> {
 				vec![ $( stringify!($name).as_ref() ),* ]
 			}
@@ -567,6 +569,8 @@ macro_rules! impl_benchmark {
 
 						// Run the benchmark `repeat` times.
 						for _ in 0..repeat {
+							// Set the block number to 1 so events are deposited.
+							frame_system::Module::<T>::set_block_number(1.into());
 							// Set up the externalities environment for the setup we want to benchmark.
 							let closure_to_benchmark = <SelectedBenchmark as $crate::BenchmarkingSetup<T>>::instance(&selected_benchmark, &c)?;
 
@@ -600,7 +604,9 @@ macro_rules! impl_benchmark {
 	(
 		INSTANCE $( $name:ident ),*
 	) => {
-		impl<T: Trait<I>, I: Instance> $crate::Benchmarking<$crate::BenchmarkResults> for Module<T, I> {
+		impl<T: Trait<I>, I: Instance> $crate::Benchmarking<$crate::BenchmarkResults> for Module<T, I>
+			where T: frame_system::Trait
+		{
 			fn benchmarks() -> Vec<&'static [u8]> {
 				vec![ $( stringify!($name).as_ref() ),* ]
 			}
@@ -663,6 +669,8 @@ macro_rules! impl_benchmark {
 
 						// Run the benchmark `repeat` times.
 						for _ in 0..repeat {
+							// Set the block number to 1 so events are deposited.
+							frame_system::Module::<T>::set_block_number(1.into());
 							// Set up the externalities environment for the setup we want to benchmark.
 							let closure_to_benchmark = <SelectedBenchmark as $crate::BenchmarkingSetupInstance<T, I>>::instance(&selected_benchmark, &c)?;
 

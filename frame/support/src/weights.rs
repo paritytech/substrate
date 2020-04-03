@@ -44,6 +44,7 @@ use sp_runtime::{
 	traits::SignedExtension,
 	generic::{CheckedExtrinsic, UncheckedExtrinsic},
 };
+use crate::dispatch::{DispatchErrorWithPostInfo, DispatchError};
 
 /// Re-export priority as type
 pub use sp_runtime::transaction_validity::TransactionPriority;
@@ -114,6 +115,64 @@ pub struct DispatchInfo {
 	pub class: DispatchClass,
 	/// Does this transaction pay fees.
 	pub pays_fee: bool,
+}
+
+/// Weight information that is only available post dispatch.
+#[derive(Clone, Copy, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode)]
+pub struct PostDispatchInfo {
+	/// Actual weight consumed by a call or `None` which stands for the worst case static weight.
+	pub actual_weight: Option<Weight>,
+}
+
+impl From<Option<Weight>> for PostDispatchInfo {
+	fn from(actual_weight: Option<Weight>) -> Self {
+		Self {
+			actual_weight,
+		}
+	}
+}
+
+impl From<()> for PostDispatchInfo {
+	fn from(_: ()) -> Self {
+		Self {
+			actual_weight: None,
+		}
+	}
+}
+
+impl sp_runtime::traits::Printable for PostDispatchInfo {
+	fn print(&self) {
+		"actual_weight=".print();
+		match self.actual_weight {
+			Some(weight) => weight.print(),
+			None => "max-weight".print(),
+		}
+	}
+}
+
+/// Allows easy conversion from `DispatchError` to `DispatchErrorWithPostInfo` for dispatchables
+/// that want to return a custom a posteriori weight on error.
+pub trait WithPostDispatchInfo {
+	/// Call this on your modules custom errors type in order to return a custom weight on error.
+	///
+	/// # Example
+	///
+	/// ```ignore
+	/// let who = ensure_signed(origin).map_err(|e| e.with_weight(100))?;
+	/// ensure!(who == me, Error::<T>::NotMe.with_weight(200_000));
+	/// ```
+	fn with_weight(self, actual_weight: Weight) -> DispatchErrorWithPostInfo;
+}
+
+impl<T> WithPostDispatchInfo for T where
+	T: Into<DispatchError>
+{
+	fn with_weight(self, actual_weight: Weight) -> DispatchErrorWithPostInfo {
+		DispatchErrorWithPostInfo {
+			post_info: PostDispatchInfo { actual_weight: Some(actual_weight) },
+			error: self.into(),
+		}
+	}
 }
 
 /// A `Dispatchable` function (aka transaction) that can carry some static information along with

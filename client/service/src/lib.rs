@@ -441,7 +441,7 @@ fn build_network_future<
 		log!(
 			target: "service",
 			if polling_dur >= Duration::from_secs(1) { Level::Warn } else { Level::Trace },
-			"Polling the network future took {:?}",
+			"⚠️  Polling the network future took {:?}",
 			polling_dur
 		);
 

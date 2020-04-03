@@ -313,7 +313,7 @@ benchmarks! {
 	}: _(RawOrigin::Signed(validator), current_era)
 
 	payout_nominator {
-		let v in 0 .. MAX_NOMINATIONS as u32;
+		let v in 1 .. MAX_NOMINATIONS as u32;
 		let (nominator, validators) = create_nominator_with_validators::<T>(v)?;
 		let current_era = CurrentEra::get().unwrap();
 		let find_nominator = validators.into_iter().map(|x| (x, 0)).collect();
