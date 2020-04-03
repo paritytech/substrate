@@ -46,10 +46,17 @@ fn main() {
 			ImportBenchmarkDescription {
 				profile: *profile,
 				key_types: KeyTypes::Sr25519,
+				size: SizeType::Medium,
 			},
 		ImportBenchmarkDescription {
 			profile: Profile::Native,
 			key_types: KeyTypes::Ed25519,
+			size: SizeType::Medium,
+		},
+		ImportBenchmarkDescription {
+			profile: Profile::Native,
+			key_types: KeyTypes::Sr25519,
+			size: SizeType::Large,
 		},
 	);
 
