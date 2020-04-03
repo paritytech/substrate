@@ -590,13 +590,8 @@ macro_rules! impl_benchmark {
 							results.push((c.clone(),
 								elapsed_extrinsic,
 								elapsed_storage_root,
-								usage_info.reads.bytes,
-								usage_info.writes.bytes,
-								usage_info.cache_reads.bytes,
-								usage_info.modified_reads.bytes,
-								usage_info.nodes_writes.bytes,
-								usage_info.overlay_writes.bytes,
-								usage_info.removed_nodes.bytes
+								usage_info.reads.ops,
+								usage_info.writes.ops,
 							));
 
 							// Wipe the DB back to the genesis state.
@@ -697,13 +692,8 @@ macro_rules! impl_benchmark {
 							results.push((c.clone(),
 								elapsed_extrinsic,
 								elapsed_storage_root,
-								usage_info.reads.bytes,
-								usage_info.writes.bytes,
-								usage_info.cache_reads.bytes,
-								usage_info.modified_reads.bytes,
-								usage_info.nodes_writes.bytes,
-								usage_info.overlay_writes.bytes,
-								usage_info.removed_nodes.bytes
+								usage_info.reads.ops,
+								usage_info.writes.ops,
 							));
 
 							// Wipe the DB back to the genesis state.

@@ -30,7 +30,7 @@ use sp_runtime::Storage;
 use sp_state_machine::{DBValue, backend::Backend as StateBackend};
 use kvdb::{KeyValueDB, DBTransaction};
 use kvdb_rocksdb::{Database, DatabaseConfig};
-use crate::stats::StateUsageStats; // Scott
+use crate::stats::StateUsageStats;
 use sp_stats::StateMachineStats;
 
 type DbState<B> = sp_state_machine::TrieBackend<
@@ -333,23 +333,15 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 	}
 
 	fn register_overlay_stats(&mut self, stats: &sp_stats::StateMachineStats) {
-		// never called
-		// unimplemented!();
-		// self.overlay_stats.add(stats);
-		// *self.overlay_stats.reads_modified.borrow_mut() += 10;
 		self.state.borrow_mut().as_mut().map(|s| s.register_overlay_stats(stats));
 	}
 
 	fn usage_info(&self) -> sp_stats::UsageInfo {
 		let mut info = self.state_usage_stats.take();
-		// *self.overlay_stats.reads_modified.borrow_mut() += 10;
 		info.include_state_machine_states(&self.overlay_stats);
 		info
 	}
 
-	// fn usage_info(&self) -> sp_stats::UsageInfo {
-	// 	self.state.borrow().as_ref().map_or(sp_stats::UsageInfo::empty(), |s| s.usage_info())
-	// }
 }
 
 impl<Block: BlockT> std::fmt::Debug for BenchmarkingState<Block> {

@@ -71,7 +71,6 @@ impl UsageInfo {
 			cache_reads: UsageUnit::default(),
 			modified_reads: UsageUnit::default(),
 			memory: 0,
-			// SCOTT
 			started: Default::default(),
 			span: Default::default(),
 		}
