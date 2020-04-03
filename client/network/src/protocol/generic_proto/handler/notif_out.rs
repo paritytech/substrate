@@ -312,17 +312,16 @@ impl ProtocolsHandler for NotifsOutHandler {
 
 			NotifsOutHandlerIn::Send(msg) =>
 				if let State::Open { substream, .. } = &mut self.state {
-					if let Some(Ok(_)) = substream.send(msg).now_or_never() {
-						if let Some(metric) = &self.queue_size_report {
-							metric.observe(substream.queue_len() as f64);
-						}
-					} else {
+					if substream.push_message(msg).is_err() {
 						log::warn!(
 							target: "sub-libp2p",
 							"📞 Notifications queue with peer {} is full, dropped message (protocol: {:?})",
 							self.peer_id,
 							self.protocol_name,
 						);
+					}
+					if let Some(metric) = &self.queue_size_report {
+						metric.observe(substream.queue_len() as f64);
 					}
 				} else {
 					// This is an API misuse.
