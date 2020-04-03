@@ -66,7 +66,7 @@ impl PrometheusMetrics {
 				&["over"]
 			)?, registry)?,
 
-			// processhttps://github.com/paritytech/substrate/issues/5485
+			// process
 			memory_usage_bytes: register(Gauge::new(
 				"memory_usage_bytes", "Node memory usage",
 			)?, registry)?,
@@ -174,7 +174,7 @@ impl MetricsService {
 		let mut info = self._process_info_for(&pid);
 		let process = procfs::process::Process::new(pid).expect("Our process exists. qed.");
 		info.threads = process.stat().ok().map(|s|
-			u64::try_from(s.num_threads).expect("There are no negative thread couns.q3ed"));
+			u64::try_from(s.num_threads).expect("There are no negative thread counts. qed"));
 		info.open_fd = process.fd().ok().map(|i|
 			i.into_iter().fold(FdCounter::default(), |mut f, info| {
 				match info.target {

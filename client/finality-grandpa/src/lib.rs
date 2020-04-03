@@ -476,7 +476,7 @@ where
 		}
 	)?;
 
-	let (voter_commands_tx, voter_commands_rx) = tracing_unbounded("mpsc_grandpa_voter_comand");
+	let (voter_commands_tx, voter_commands_rx) = tracing_unbounded("mpsc_grandpa_voter_command");
 
 	// create pending change objects with 0 delay and enacted on finality
 	// (i.e. standard changes) for each authority set hard fork.

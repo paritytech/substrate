@@ -113,7 +113,7 @@ where
 {
 	/// Creates new on-demand service.
 	pub fn new(checker: Arc<dyn FetchChecker<B>>) -> Self {
-		let (requests_send, requests_queue) = tracing_unbounded("mpsc_ondemad");
+		let (requests_send, requests_queue) = tracing_unbounded("mpsc_ondemand");
 		let requests_queue = Mutex::new(Some(requests_queue));
 
 		OnDemand {

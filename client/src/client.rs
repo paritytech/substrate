@@ -1770,7 +1770,7 @@ where
 	}
 
 	fn finality_notification_stream(&self) -> FinalityNotifications<Block> {
-		let (sink, stream) = tracing_unbounded("mpsc_finality_notifications");
+		let (sink, stream) = tracing_unbounded("mpsc_finality_notification_stream");
 		self.finality_notification_sinks.lock().push(sink);
 		stream
 	}
