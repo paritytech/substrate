@@ -37,6 +37,7 @@ use sp_runtime::generic::BlockId;
 
 use crate::core::{self, Path};
 
+#[derive(Clone, Copy, Debug)]
 pub enum SizeType { Small, Medium, Large }
 
 impl SizeType {
@@ -88,7 +89,7 @@ impl core::BenchmarkDescription for ImportBenchmarkDescription {
 	fn setup(self: Box<Self>) -> Box<dyn core::Benchmark> {
 		let profile = self.profile;
 		let mut bench_db = BenchDb::with_key_types(self.size.transactions(), self.key_types);
-		let block = bench_db.generate_block(BlockType::RandomTransfers(100));
+		let block = bench_db.generate_block(BlockType::RandomTransfers(self.size.transactions()));
 		Box::new(ImportBenchmark {
 			database: bench_db,
 			block,

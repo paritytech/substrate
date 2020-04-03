@@ -18,7 +18,7 @@
 mod import;
 
 use crate::core::run_benchmark;
-use import::ImportBenchmarkDescription;
+use import::{ImportBenchmarkDescription, SizeType};
 use node_testing::bench::{Profile, KeyTypes};
 use structopt::StructOpt;
 
@@ -53,11 +53,12 @@ fn main() {
 			key_types: KeyTypes::Ed25519,
 			size: SizeType::Medium,
 		},
-		ImportBenchmarkDescription {
-			profile: Profile::Native,
-			key_types: KeyTypes::Sr25519,
-			size: SizeType::Large,
-		},
+		size in [SizeType::Small, SizeType::Large] =>
+			ImportBenchmarkDescription {
+				profile: Profile::Native,
+				key_types: KeyTypes::Sr25519,
+				size: *size,
+			},
 	);
 
 	if opt.list {
@@ -82,5 +83,4 @@ fn main() {
 		let json_result: String = serde_json::to_string(&results).expect("Failed to construct json");
 		println!("{}", json_result);
 	}
-
 }
