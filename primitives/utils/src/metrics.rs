@@ -20,7 +20,7 @@ lazy_static! {
 
 	pub static ref UNBOUNDED_CHANNELS_COUNTER : GenericGaugeVec<AtomicU64> = GenericGaugeVec::new(
         Opts::new("unbounded_channel_len", "Items in each mpsc::unbounded instance"),
-        &["entity"]
+        &["entity","action"] // 'name of channel, send|received|dropped
     ).expect("Creating of statics doesn't fail. qed");
 
 }

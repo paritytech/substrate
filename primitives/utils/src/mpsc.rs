@@ -69,7 +69,7 @@ mod inner {
         /// Proxy function to mpsc::UnboundedSender
         pub fn unbounded_send(&self, msg: T) -> Result<(), TrySendError<T>> {
             self.1.unbounded_send(msg).map(|s|{
-                UNBOUNDED_CHANNELS_COUNTER.with_label_values(self.0).incr();
+                UNBOUNDED_CHANNELS_COUNTER.with_label_values(&[self.0, &"send"]).incr();
                 s
             })
         }
@@ -97,7 +97,7 @@ mod inner {
 
             // and discount the messages
             if count > 0 {
-                UNBOUNDED_CHANNELS_COUNTER.with_label_values(self.0).decr_by(count);
+                UNBOUNDED_CHANNELS_COUNTER.with_label_values(&[self.0, &"dropped"]).incr_by(count);
             }
 
         }
@@ -114,7 +114,7 @@ mod inner {
         pub fn try_next(&mut self) -> Result<Option<T>, TryRecvError> {
             self.1.try_next().map(|s| {
                 if s.is_some() {
-                    UNBOUNDED_CHANNELS_COUNTER.with_label_values(self.0).decr();
+                    UNBOUNDED_CHANNELS_COUNTER.with_label_values(&[self.0, &"received"]).incr();
                 }
                 s
             })
@@ -140,7 +140,7 @@ mod inner {
             match Pin::new(&mut s.1).poll_next(cx) {
                 Poll::Ready(msg) => {
                     if msg.is_some() {
-                        UNBOUNDED_CHANNELS_COUNTER.with_label_values(self.0).decr();
+                        UNBOUNDED_CHANNELS_COUNTER.with_label_values(&[self.0, "received"]).incr();
                    }
                     Poll::Ready(msg)
                 }
