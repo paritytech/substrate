@@ -178,10 +178,8 @@ impl<T> WeighData<T> for SimpleDispatchInfo {
 			SimpleDispatchInfo::FixedNormal(w) => *w,
 			SimpleDispatchInfo::MaxNormal => Bounded::max_value(),
 			SimpleDispatchInfo::InsecureFreeNormal => Bounded::min_value(),
-
 			SimpleDispatchInfo::FixedOperational(w) => *w,
 			SimpleDispatchInfo::MaxOperational => Bounded::max_value(),
-
 			SimpleDispatchInfo::FixedMandatory(w) => *w,
 		}
 	}
@@ -199,10 +197,8 @@ impl<T> PaysFee<T> for SimpleDispatchInfo {
 			SimpleDispatchInfo::FixedNormal(_) => true,
 			SimpleDispatchInfo::MaxNormal => true,
 			SimpleDispatchInfo::InsecureFreeNormal => true,
-
 			SimpleDispatchInfo::FixedOperational(_) => true,
 			SimpleDispatchInfo::MaxOperational => true,
-
 			SimpleDispatchInfo::FixedMandatory(_) => true,
 		}
 	}

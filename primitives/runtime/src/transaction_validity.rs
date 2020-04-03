@@ -50,6 +50,8 @@ pub enum InvalidTransaction {
 	///
 	/// The transaction might be valid, but there are not enough resources left in the current block.
 	ExhaustsResources,
+	/// Any other custom invalid validity that is not covered by this enum.
+	Custom(u8),
 	/// An extrinsic with a Mandatory dispatch resulted in Error. This is indicative of either a
 	/// malicious validator or a buggy `provide_inherent`. In any case, it can result in dangerously
 	/// overweight blocks and therefore if found, invalidates the block.
@@ -57,8 +59,6 @@ pub enum InvalidTransaction {
 	/// A transaction with a mandatory dispatch. This is invalid; only inherent extrinsics are
 	/// allowed to have mandatory dispatches.
 	MandatoryDispatch,
-	/// Any other custom invalid validity that is not covered by this enum.
-	Custom(u8),
 }
 
 impl InvalidTransaction {
