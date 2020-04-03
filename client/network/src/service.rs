@@ -308,7 +308,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				};
 				transport::build_transport(local_identity, config_mem, config_wasm, flowctrl)
 			};
-			let mut builder = SwarmBuilder::new(transport, behaviour, local_peer_id.clone());
+			let mut builder = SwarmBuilder::new(transport, behaviour, local_peer_id.clone())
+				.peer_connection_limit(crate::MAX_CONNECTIONS_PER_PEER);
 			// TODO: Connection limits
 			if let Some(spawner) = params.executor {
 				struct SpawnImpl<F>(F);

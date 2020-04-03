@@ -167,7 +167,7 @@ enum PeerState {
 	/// We may still have ongoing traffic with that peer, but it should cease shortly.
 	Disabled {
 		/// The connections that are currently open for custom protocol traffic.
-		open: SmallVec<[ConnectionId; 2]>,
+		open: SmallVec<[ConnectionId; crate::MAX_CONNECTIONS_PER_PEER]>,
 		/// If `Some`, any dial attempts to this peer are delayed until the given `Instant`.
 		banned_until: Option<Instant>,
 	},
@@ -177,7 +177,7 @@ enum PeerState {
 	/// but should get disconnected in a few seconds.
 	DisabledPendingEnable {
 		/// The connections that are currently open for custom protocol traffic.
-		open: SmallVec<[ConnectionId; 2]>,
+		open: SmallVec<[ConnectionId; crate::MAX_CONNECTIONS_PER_PEER]>,
 		/// When to enable this remote.
 		timer: futures_timer::Delay,
 		/// When the `timer` will trigger.
@@ -188,7 +188,7 @@ enum PeerState {
 	/// enabled state.
 	Enabled {
 		/// The connections that are currently open for custom protocol traffic.
-		open: SmallVec<[ConnectionId; 2]>,
+		open: SmallVec<[ConnectionId; crate::MAX_CONNECTIONS_PER_PEER]>,
 	},
 
 	/// We received an incoming connection from this peer and forwarded that

@@ -57,12 +57,25 @@ struct NodeInfo {
 	/// When we will remove the entry about this node from the list, or `None` if we're connected
 	/// to the node.
 	info_expire: Option<Instant>,
-	/// How we're connected to the node.
-	endpoints: SmallVec<[ConnectedPoint; 2]>,
+	/// Non-empty list of connected endpoints, one per connection.
+	endpoints: SmallVec<[ConnectedPoint; crate::MAX_CONNECTIONS_PER_PEER]>,
 	/// Version reported by the remote, or `None` if unknown.
 	client_version: Option<String>,
 	/// Latest ping time with this node.
 	latest_ping: Option<Duration>,
+}
+
+impl NodeInfo {
+	fn new(endpoint: ConnectedPoint) -> Self {
+		let mut endpoints = SmallVec::new();
+		endpoints.push(endpoint);
+		NodeInfo {
+			info_expire: None,
+			endpoints,
+			client_version: None,
+			latest_ping: None,
+		}
+	}
 }
 
 impl DebugInfoBehaviour {
@@ -122,9 +135,9 @@ impl DebugInfoBehaviour {
 pub struct Node<'a>(&'a NodeInfo);
 
 impl<'a> Node<'a> {
-	/// Returns the endpoint we are connected to or were last connected to.
+	/// Returns the endpoint of an established connection to the peer.
 	pub fn endpoint(&self) -> &'a ConnectedPoint {
-		&self.0.endpoints[0] // TODO: Multiple?
+		&self.0.endpoints[0] // `endpoints` are non-empty by definition
 	}
 
 	/// Returns the latest version information we know of.
@@ -179,14 +192,7 @@ impl NetworkBehaviour for DebugInfoBehaviour {
 		self.identify.inject_connection_established(peer_id, conn, endpoint);
 		match self.nodes_info.entry(peer_id.clone()) {
 			Entry::Vacant(e) => {
-				let mut endpoints = SmallVec::new();
-				endpoints.push(endpoint.clone());
-				e.insert(NodeInfo {
-					info_expire: None,
-					endpoints,
-					client_version: None,
-					latest_ping: None,
-				});
+				e.insert(NodeInfo::new(endpoint.clone()));
 			}
 			Entry::Occupied(e) => {
 				let e = e.into_mut();
