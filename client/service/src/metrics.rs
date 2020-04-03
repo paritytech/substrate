@@ -1,3 +1,18 @@
+// Copyright 2020 Parity Technologies (UK) Ltd.
+// This file is part of Substrate.
+
+// Substrate is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Substrate is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::NetworkStatus;
 use netstat2::{TcpState, ProtocolSocketInfo, iterate_sockets_info, AddressFamilyFlags, ProtocolFlags};
@@ -44,17 +59,17 @@ impl PrometheusMetrics {
 	fn setup(registry: &Registry, name: &str, version: &str, roles: u64)
 		-> Result<Self, PrometheusError>
 	{
-        register(Gauge::<U64>::with_opts(
-            Opts::new(
-                "build_info",
-                "A metric with a constant '1' value labeled by name, version"
-            )
-                .const_label("name", name)
-                .const_label("version", version)
+		register(Gauge::<U64>::with_opts(
+			Opts::new(
+				"build_info",
+				"A metric with a constant '1' value labeled by name, version"
+			)
+				.const_label("name", name)
+				.const_label("version", version)
 		)?, &registry)?.set(1);
 		
-        register(Gauge::<U64>::new(
-            "node_roles", "The roles the node is running as",
+		register(Gauge::<U64>::new(
+			"node_roles", "The roles the node is running as",
 		)?, &registry)?.set(roles);
 
 		register_globals(registry)?;
@@ -69,7 +84,7 @@ impl PrometheusMetrics {
 
 			// process
 			memory_usage_bytes: register(Gauge::new(
-				"memory_usage_bytes", "Node memory usage",
+				"memory_usage_bytes", "Node memory (resident set size) usage",
 			)?, registry)?,
 
 			cpu_usage_percentage: register(Gauge::new(
@@ -86,7 +101,7 @@ impl PrometheusMetrics {
 			)?, registry)?,
 
 			open_files: register(GaugeVec::new(
-				Opts::new("open_file_handles", "hold by the process"),
+				Opts::new("open_file_handles", "Open file handlers held by the process"),
 				&["fd_type"]
 			)?, registry)?,
 
@@ -95,7 +110,7 @@ impl PrometheusMetrics {
 			// generic internals
 
 			block_height: register(GaugeVec::new(
-				Opts::new("block_height", "Block Height Info of the chain"),
+				Opts::new("block_height", "Block height info of the chain"),
 				&["status"]
 			)?, registry)?,
 
@@ -202,7 +217,6 @@ impl MetricsService {
 
 #[cfg(not(unix))]
 impl MetricsService {
-
 	fn inner_new(metrics: Option<PrometheusMetrics>) -> Self {
 		Self {
 			metrics,
