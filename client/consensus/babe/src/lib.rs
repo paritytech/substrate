@@ -260,7 +260,7 @@ impl Config {
 				&b, |v| v == 1,
 			)?;
 			let has_api_v2 = a.has_api_with::<dyn BabeApi<B, Error = sp_blockchain::Error>, _>(
-				&b, |v| v == 1,
+				&b, |v| v == 2,
 			)?;
 
 			if has_api_v1 {
