@@ -40,7 +40,23 @@ use std::{io::{Read, Write, Seek}, pin::Pin};
 use sc_client_api::BlockBackend;
 use std::sync::Arc;
 
-/// Build a chain spec json
-pub fn build_spec(spec: &dyn ChainSpec, raw: bool) -> error::Result<String> {
-	Ok(spec.as_json(raw)?)
+pub fn revert_chain<B, BA, CE, IQ>(
+	client: Arc<Client<BA, CE, B, ()>>,
+	blocks: NumberFor<B>
+) -> Result<(), Error>
+where
+	B: BlockT,
+	BA: sc_client_api::backend::Backend<B> + 'static,
+	CE: sc_client_api::call_executor::CallExecutor<B> + Send + Sync + 'static,
+	IQ: ImportQueue<B> + Sync + 'static,
+{
+	let reverted = client.revert(blocks)?;
+	let info = client.chain_info();
+
+	if reverted.is_zero() {
+		info!("There aren't any non-finalized blocks to revert.");
+	} else {
+		info!("Reverted {} blocks. Best: #{} ({})", reverted, info.best_number, info.best_hash);
+	}
+	Ok(())
 }

@@ -39,8 +39,28 @@ use sc_executor::{NativeExecutor, NativeExecutionDispatch};
 use std::{io::{Read, Write, Seek}, pin::Pin};
 use sc_client_api::BlockBackend;
 use std::sync::Arc;
+use crate::import_blocks::import_blocks;
 
-/// Build a chain spec json
-pub fn build_spec(spec: &dyn ChainSpec, raw: bool) -> error::Result<String> {
-	Ok(spec.as_json(raw)?)
+pub fn check_block<B, BA, CE, IQ>(
+	client: Arc<Client<BA, CE, B, ()>>,
+	import_queue: &'static mut IQ,
+	block_id: BlockId<B>
+) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>
+where
+	B: BlockT,
+	BA: sc_client_api::backend::Backend<B> + 'static,
+	CE: sc_client_api::call_executor::CallExecutor<B> + Send + Sync + 'static,
+	IQ: ImportQueue<B> + Sync + 'static,
+{
+	match client.block(&block_id) {
+		Ok(Some(block)) => {
+			let mut buf = Vec::new();
+			1u64.encode_to(&mut buf);
+			block.encode_to(&mut buf);
+			let reader = std::io::Cursor::new(buf);
+			import_blocks(client, import_queue, reader, true)
+		}
+		Ok(None) => Box::pin(future::err("Unknown block".into())),
+		Err(e) => Box::pin(future::err(format!("Error reading block: {:?}", e).into())),
+	}
 }

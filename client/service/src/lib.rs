@@ -28,6 +28,10 @@ mod metrics;
 mod builder;
 mod status_sinks;
 mod task_manager;
+mod revert_chain;
+mod check_block;
+mod import_blocks;
+mod export_blocks;
 
 use std::{borrow::Cow, io, pin::Pin};
 use std::marker::PhantomData;
