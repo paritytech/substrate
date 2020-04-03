@@ -29,7 +29,8 @@ struct PrometheusMetrics {
 
 	// -- inner counters
 	// generic info
-	chain_info: GaugeVec<U64>,
+	block_height: GaugeVec<U64>,
+	number_leaves: Gauge<U64>,
 	ready_transactions_number: Gauge<U64>,
 
 	// I/O
@@ -93,9 +94,13 @@ impl PrometheusMetrics {
 
 			// generic internals
 
-			chain_info: register(GaugeVec::new(
-				Opts::new("chain_info", "Height and Fork Info of the chain"),
+			block_height: register(GaugeVec::new(
+				Opts::new("block_height", "Block Height Info of the chain"),
 				&["status"]
+			)?, registry)?,
+
+			number_leaves: register(Gauge::new(
+				"number_leaves", "Number of known chain leaves (aka forks)",
 			)?, registry)?,
 
 			ready_transactions_number: register(Gauge::new(
@@ -343,16 +348,16 @@ impl MetricsService {
 			metrics.network_per_sec_bytes.with_label_values(&["download"]).set(net_status.average_download_per_sec);
 			metrics.network_per_sec_bytes.with_label_values(&["upload"]).set(net_status.average_upload_per_sec);
 
-			metrics.chain_info.with_label_values(&["finalized"]).set(finalized_number);
-			metrics.chain_info.with_label_values(&["best"]).set(best_number);
+			metrics.block_height.with_label_values(&["finalized"]).set(finalized_number);
+			metrics.block_height.with_label_values(&["best"]).set(best_number);
 			if let Ok(leaves) = u64::try_from(info.chain.number_leaves) {
-				metrics.chain_info.with_label_values(&["leaves"]).set(leaves);
+				metrics.number_leaves.set(leaves);
 			}
 
 			metrics.ready_transactions_number.set(txpool_status.ready as u64);
 
 			if let Some(best_seen_block) = best_seen_block {
-				metrics.chain_info.with_label_values(&["sync_target"]).set(best_seen_block);
+				metrics.block_height.with_label_values(&["sync_target"]).set(best_seen_block);
 			}
 
 			if let Some(info) = info.usage.as_ref() {
