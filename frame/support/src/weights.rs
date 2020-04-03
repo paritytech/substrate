@@ -168,7 +168,10 @@ pub enum SimpleDispatchInfo {
 	FixedOperational(Weight),
 	/// An operational dispatch with the maximum weight.
 	MaxOperational,
-	/// An mandatory dispatch with fixed weight.
+	/// A mandatory dispatch with fixed weight.
+	///
+	/// NOTE: Signed transactions may not (directly) dispatch this kind of a call, so the other
+	/// attributes concerning transactability (e.g. priority, fee paying) are moot.
 	FixedMandatory(Weight),
 }
 
