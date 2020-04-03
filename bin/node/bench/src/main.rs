@@ -25,12 +25,21 @@ use structopt::StructOpt;
 #[derive(Debug, StructOpt)]
 #[structopt(name = "node-bench", about = "Node integration benchmarks")]
 struct Opt {
+	/// Show list of all available benchmarks.
+	///
+	/// Will output ("name", "path"). Benchmarks can then be filtered by path.
 	#[structopt(short, long)]
 	list: bool,
 
+	/// Machine readable json output.
+	///
+	/// This also suppresses all regular output (except to stderr)
 	#[structopt(short, long)]
 	json: bool,
 
+	/// Filter benchmarks.
+	///
+	/// Run with `--list` for the hint of what to filter.
 	filter: Option<String>,
 }
 
