@@ -154,6 +154,10 @@ decl_storage! {
 		Initialized get(fn initialized): Option<MaybeVrf>;
 
 		/// How late the current block is compared to its parent.
+		///
+		/// This entry is populated as part of block execution and is cleaned up
+		/// on block finalization. Querying this storage entry outside of block
+		/// execution context should always yield `None`.
 		Lateness get(fn lateness): Option<T::BlockNumber>;
 	}
 	add_extra_genesis {
@@ -194,6 +198,7 @@ decl_module! {
 				Self::deposit_vrf_output(&vrf_output);
 			}
 
+			// remove temporary "environment" entry from storage
 			Lateness::<T>::kill();
 		}
 	}
