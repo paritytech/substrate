@@ -196,14 +196,23 @@ impl<A, B, Block, C> ProposerInner<B, Block, C, A>
 
 		// We don't check the API versions any further here since the dispatch compatibility
 		// check should be enough.
-		for extrinsic in self.client.runtime_api()
+		for inherent in self.client.runtime_api()
 			.inherent_extrinsics_with_context(
 				&self.parent_id,
 				ExecutionContext::BlockConstruction,
 				inherent_data
 			)?
 		{
-			block_builder.push(extrinsic)?;
+			match block_builder.push(inherent) {
+				Err(sp_blockchain::Error::ApplyExtrinsicFailed(sp_blockchain::ApplyExtrinsicFailed::Validity(e)))
+				if e.exhausted_resources() => {
+					warn!("⚠️  Dropping non-mandatory inherent from overweight block.");
+				}
+				Err(e) => {
+					warn!("❗️ Inherent extrinsic returned unexpected error: {}. Dropping.", e);
+				}
+				Ok(_) => {}
+			}
 		}
 
 		// proceed with transactions
