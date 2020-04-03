@@ -25,10 +25,27 @@ pub use frame_metadata::{
 };
 pub use crate::weights::{
 	SimpleDispatchInfo, GetDispatchInfo, DispatchInfo, WeighData, ClassifyDispatch,
-	TransactionPriority, Weight, PaysFee,
+	TransactionPriority, Weight, PaysFee, PostDispatchInfo, WithPostDispatchInfo,
 };
-pub use sp_runtime::{traits::Dispatchable, DispatchError, DispatchResult};
+pub use sp_runtime::{traits::Dispatchable, DispatchError};
 pub use crate::traits::{CallMetadata, GetCallMetadata, GetCallName};
+
+/// The return typ of a `Dispatchable` in frame. When returned explicitly from
+/// a dispatchable function it allows overriding the default `PostDispatchInfo`
+/// returned from a dispatch.
+pub type DispatchResultWithPostInfo =
+	sp_runtime::DispatchResultWithInfo<crate::weights::PostDispatchInfo>;
+
+/// Unaugmented version of `DispatchResultWithPostInfo` that can be returned from
+/// dispatchable functions and is automatically converted to the augmented type. Should be
+/// used whenever the `PostDispatchInfo` does not need to be overwritten. As this should
+/// be the common case it is the implicit return type when none is specified.
+pub type DispatchResult = Result<(), sp_runtime::DispatchError>;
+
+/// The error type contained in a `DispatchResultWithPostInfo`.
+pub type DispatchErrorWithPostInfo =
+	sp_runtime::DispatchErrorWithPostInfo<crate::weights::PostDispatchInfo>;
+
 
 /// A type that cannot be instantiated.
 pub enum Never {}
@@ -36,7 +53,7 @@ pub enum Never {}
 /// Serializable version of Dispatchable.
 /// This value can be used as a "function" in an extrinsic.
 pub trait Callable<T> {
-	type Call: Dispatchable + Codec + Clone + PartialEq + Eq;
+	type Call: Dispatchable<PostInfo=PostDispatchInfo> + Codec + Clone + PartialEq + Eq;
 }
 
 // dirty hack to work around serde_derive issue
@@ -115,6 +132,44 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 ///				// Your implementation
 /// 		}
 ///		}
+/// }
+/// # fn main() {}
+/// ```
+///
+/// ### Consuming only portions of the annotated static weight
+///
+/// Per default a callable function consumes all of its static weight as declared via
+/// the #[weight] attribute. However, there are use cases where only a portion of this
+/// weight should be consumed. In that case the static weight is charged pre dispatch and
+/// the difference is refunded post dispatch.
+///
+/// In order to make use of this feature the function must return `DispatchResultWithPostInfo`
+/// in place of the default `DispatchResult`. Then the actually consumed weight can be returned.
+/// To consume a non default weight while returning an error
+/// [`WithPostDispatchInfo::with_weight`](./weight/trait.WithPostDispatchInfo.html) can be used
+/// to augment any error with custom weight information.
+///
+/// ```
+/// # #[macro_use]
+/// # extern crate frame_support;
+/// # use frame_support::dispatch::{DispatchResultWithPostInfo, WithPostDispatchInfo};
+/// # use frame_support::weights::SimpleDispatchInfo;
+/// # use frame_system::{self as system, Trait, ensure_signed};
+/// decl_module! {
+/// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+/// 		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
+/// 		fn my_long_function(origin, do_expensive_calc: bool) -> DispatchResultWithPostInfo {
+/// 			ensure_signed(origin).map_err(|e| e.with_weight(100_000))?;
+/// 			if do_expensive_calc {
+/// 				// do the expensive calculation
+/// 				// ...
+/// 				// return None to indicate that we are using all weight (the default)
+/// 				return Ok(None.into());
+/// 			}
+/// 			// expensive calculation not executed: use only a portion of the weight
+/// 			Ok(Some(100_000).into())
+/// 		}
+/// 	}
 /// }
 /// # fn main() {}
 /// ```
@@ -938,7 +993,7 @@ macro_rules! decl_module {
 		$ignore:ident
 		$mod_type:ident<$trait_instance:ident $(, $instance:ident)?> $fn_name:ident $origin:ident $system:ident [ $( $param_name:ident),* ]
 	) => {
-		<$mod_type<$trait_instance $(, $instance)?>>::$fn_name( $origin $(, $param_name )* )
+		<$mod_type<$trait_instance $(, $instance)?>>::$fn_name( $origin $(, $param_name )* ).map(Into::into).map_err(Into::into)
 	};
 
 	// no `deposit_event` function wanted
@@ -1538,7 +1593,8 @@ macro_rules! decl_module {
 		{
 			type Trait = $trait_instance;
 			type Origin = $origin_type;
-			fn dispatch(self, _origin: Self::Origin) -> $crate::sp_runtime::DispatchResult {
+			type PostInfo = $crate::weights::PostDispatchInfo;
+			fn dispatch(self, _origin: Self::Origin) -> $crate::dispatch::DispatchResultWithPostInfo {
 				match self {
 					$(
 						$call_type::$fn_name( $( $param_name ),* ) => {
@@ -1563,10 +1619,10 @@ macro_rules! decl_module {
 			where $( $other_where_bounds )*
 		{
 			#[doc(hidden)]
-			pub fn dispatch<D: $crate::dispatch::Dispatchable<Trait = $trait_instance>>(
+			pub fn dispatch<D: $crate::dispatch::Dispatchable<Trait = $trait_instance, PostInfo = $crate::weights::PostDispatchInfo>>(
 				d: D,
 				origin: D::Origin
-			) -> $crate::sp_runtime::DispatchResult {
+			) -> $crate::dispatch::DispatchResultWithPostInfo {
 				d.dispatch(origin)
 			}
 		}
@@ -1664,10 +1720,11 @@ macro_rules! impl_outer_dispatch {
 		impl $crate::dispatch::Dispatchable for $call_type {
 			type Origin = $origin;
 			type Trait = $call_type;
+			type PostInfo = $crate::weights::PostDispatchInfo;
 			fn dispatch(
 				self,
 				origin: $origin,
-			) -> $crate::sp_runtime::DispatchResult {
+			) -> $crate::dispatch::DispatchResultWithPostInfo {
 				$crate::impl_outer_dispatch! {
 					@DISPATCH_MATCH
 					self

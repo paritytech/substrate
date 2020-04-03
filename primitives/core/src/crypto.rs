@@ -459,6 +459,8 @@ ss58_address_format!(
 		(16, "kulupu", "Kulupu mainnet, standard account (*25519).")
 	DarwiniaAccount =>
 		(18, "darwinia", "Darwinia Chain mainnet, standard account (*25519).")
+	RobonomicsAccount =>
+		(32, "robonomics", "Any Robonomics network standard account (*25519).")
 	CentrifugeAccount =>
 		(36, "centrifuge", "Centrifuge Chain mainnet, standard account (*25519).")
 	SubstrateAccount =>

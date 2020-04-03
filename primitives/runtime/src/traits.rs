@@ -642,8 +642,11 @@ pub trait Dispatchable {
 	type Origin;
 	/// ...
 	type Trait;
+	/// Additional information that is returned by `dispatch`. Can be used to supply the caller
+	/// with information about a `Dispatchable` that is ownly known post dispatch.
+	type PostInfo: Eq + PartialEq + Clone + Copy + Encode + Decode + Printable;
 	/// Actually dispatch this call and result the result of it.
-	fn dispatch(self, origin: Self::Origin) -> crate::DispatchResult;
+	fn dispatch(self, origin: Self::Origin) -> crate::DispatchResultWithInfo<Self::PostInfo>;
 }
 
 /// Means by which a transaction may be extended. This type embodies both the data and the logic
