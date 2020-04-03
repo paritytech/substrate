@@ -59,7 +59,8 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 pub use sp_consensus_babe::{
-	BabeApi, ConsensusLog, BABE_ENGINE_ID, SlotNumber, BabeConfiguration,
+	BabeApi, ConsensusLog, BABE_ENGINE_ID, SlotNumber,
+	BabeEpochConfiguration, BabeGenesisConfiguration,
 	AuthorityId, AuthorityPair, AuthoritySignature,
 	BabeAuthorityWeight, VRF_OUTPUT_LENGTH,
 	digests::{
@@ -123,31 +124,37 @@ pub mod authorship;
 mod tests;
 
 /// BABE epoch information
-#[derive(Decode, Encode, Default, PartialEq, Eq, Clone, Debug)]
+#[derive(Decode, Encode, PartialEq, Eq, Clone, Debug)]
 pub struct Epoch {
-	/// The epoch index
+	/// The epoch index.
 	pub epoch_index: u64,
-	/// The starting slot of the epoch,
+	/// The starting slot of the epoch.
 	pub start_slot: SlotNumber,
-	/// The duration of this epoch
+	/// The duration of this epoch.
 	pub duration: SlotNumber,
-	/// The authorities and their weights
+	/// The authorities and their weights.
 	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
-	/// Randomness for this epoch
+	/// Randomness for this epoch.
 	pub randomness: [u8; VRF_OUTPUT_LENGTH],
+	/// Configuration of the epoch.
+	pub config: BabeEpochConfiguration,
 }
 
 impl EpochT for Epoch {
-	type NextEpochDescriptor = NextEpochDescriptor;
+	type NextEpochDescriptor = (NextEpochDescriptor, BabeEpochConfiguration);
 	type SlotNumber = SlotNumber;
 
-	fn increment(&self, descriptor: NextEpochDescriptor) -> Epoch {
+	fn increment(
+		&self,
+		(descriptor, config): (NextEpochDescriptor, BabeEpochConfiguration)
+	) -> Epoch {
 		Epoch {
 			epoch_index: self.epoch_index + 1,
 			start_slot: self.start_slot + self.duration,
 			duration: self.duration,
 			authorities: descriptor.authorities,
 			randomness: descriptor.randomness,
+			config,
 		}
 	}
 
@@ -160,6 +167,25 @@ impl EpochT for Epoch {
 	}
 }
 
+impl Epoch {
+	/// Create the genesis epoch (epoch #0). This is defined to start at the slot of
+	/// the first block, so that has to be provided.
+	pub fn genesis(
+		genesis_config: &BabeGenesisConfiguration,
+		epoch_config: &BabeEpochConfiguration,
+		slot_number: SlotNumber
+	) -> Epoch {
+		Epoch {
+			epoch_index: 0,
+			start_slot: slot_number,
+			duration: epoch_config.epoch_length,
+			authorities: genesis_config.genesis_authorities.clone(),
+			randomness: genesis_config.randomness.clone(),
+			config: epoch_config.clone(),
+		}
+	}
+}
+
 #[derive(derive_more::Display, Debug)]
 enum Error<B: BlockT> {
 	#[display(fmt = "Multiple BABE pre-runtime digests, rejecting!")]
@@ -168,6 +194,8 @@ enum Error<B: BlockT> {
 	NoPreRuntimeDigest,
 	#[display(fmt = "Multiple BABE epoch change digests, rejecting!")]
 	MultipleEpochChangeDigests,
+	#[display(fmt = "Fetch new epoch configuration failed")]
+	FetchEpochConfig(B::Hash),
 	#[display(fmt = "Could not extract timestamp and slot: {:?}", _0)]
 	Extraction(sp_consensus::Error),
 	#[display(fmt = "Could not fetch epoch at {:?}", _0)]
@@ -246,7 +274,7 @@ pub static INTERMEDIATE_KEY: &[u8] = b"babe1";
 // and `super::babe::Config` can be eliminated.
 // https://github.com/paritytech/substrate/issues/2434
 #[derive(Clone)]
-pub struct Config(sc_consensus_slots::SlotDuration<BabeConfiguration>);
+pub struct Config(sc_consensus_slots::SlotDuration<BabeGenesisConfiguration>);
 
 impl Config {
 	/// Either fetch the slot duration from disk or compute it from the genesis
@@ -255,7 +283,9 @@ impl Config {
 		C: AuxStore + ProvideRuntimeApi<B>, C::Api: BabeApi<B, Error = sp_blockchain::Error>,
 	{
 		trace!(target: "babe", "Getting slot duration");
-		match sc_consensus_slots::SlotDuration::get_or_compute(client, |a, b| a.configuration(b)).map(Self) {
+		match sc_consensus_slots::SlotDuration::get_or_compute(client, |a, b| {
+			a.genesis_configuration(b)
+		}).map(Self) {
 			Ok(s) => Ok(s),
 			Err(s) => {
 				warn!(target: "babe", "Failed to get slot duration");
@@ -263,24 +293,12 @@ impl Config {
 			}
 		}
 	}
-
-	/// Create the genesis epoch (epoch #0). This is defined to start at the slot of
-	/// the first block, so that has to be provided.
-	pub fn genesis_epoch(&self, slot_number: SlotNumber) -> Epoch {
-		Epoch {
-			epoch_index: 0,
-			start_slot: slot_number,
-			duration: self.epoch_length,
-			authorities: self.genesis_authorities.clone(),
-			randomness: self.randomness.clone(),
-		}
-	}
 }
 
 impl std::ops::Deref for Config {
-	type Target = BabeConfiguration;
+	type Target = BabeGenesisConfiguration;
 
-	fn deref(&self) -> &BabeConfiguration {
+	fn deref(&self) -> &BabeGenesisConfiguration {
 		&*self.0
 	}
 }
@@ -438,7 +456,12 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 
 	fn authorities_len(&self, epoch_descriptor: &Self::EpochData) -> Option<usize> {
 		self.epoch_changes.lock()
-			.viable_epoch(&epoch_descriptor, |slot| self.config.genesis_epoch(slot))
+			.viable_epoch(&epoch_descriptor, |slot| {
+				let epoch_config = self.client.runtime_api()
+					.epoch_configuration(&BlockId::number(Zero::zero()))
+					.ok()?;
+				Some(Epoch::genesis(&self.config, &epoch_config, slot))
+			})
 			.map(|epoch| epoch.as_ref().authorities.len())
 	}
 
@@ -453,9 +476,13 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 			slot_number,
 			self.epoch_changes.lock().viable_epoch(
 				&epoch_descriptor,
-				|slot| self.config.genesis_epoch(slot)
+				|slot| {
+					let epoch_config = self.client.runtime_api()
+						.epoch_configuration(&BlockId::number(Zero::zero()))
+						.ok()?;
+					Some(Epoch::genesis(&self.config, &epoch_config, slot))
+				}
 			)?.as_ref(),
-			&*self.config,
 			&self.keystore,
 		);
 
@@ -746,7 +773,12 @@ impl<Block, Client> Verifier<Block> for BabeVerifier<Block, Client> where
 			.ok_or_else(|| Error::<Block>::FetchEpoch(parent_hash))?;
 		let viable_epoch = epoch_changes.viable_epoch(
 			&epoch_descriptor,
-			|slot| self.config.genesis_epoch(slot)
+			|slot| {
+				let epoch_config = self.client.runtime_api()
+					.epoch_configuration(&BlockId::number(Zero::zero()))
+					.ok()?;
+				Some(Epoch::genesis(&self.config, &epoch_config, slot))
+			}
 		).ok_or_else(|| Error::<Block>::FetchEpoch(parent_hash))?;
 
 		// We add one to the current slot to allow for some small drift.
@@ -756,7 +788,6 @@ impl<Block, Client> Verifier<Block> for BabeVerifier<Block, Client> where
 			pre_digest: Some(pre_digest.clone()),
 			slot_now: slot_now + 1,
 			epoch: viable_epoch.as_ref(),
-			config: &self.config,
 		};
 
 		match verification::check_header::<Block>(v_params)? {
@@ -1005,10 +1036,21 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 
 			let viable_epoch = epoch_changes.viable_epoch(
 				&epoch_descriptor,
-				|slot| self.config.genesis_epoch(slot),
+				|slot| {
+					let epoch_config = self.client.runtime_api()
+						.epoch_configuration(&BlockId::number(Zero::zero()))
+						.ok()?;
+					Some(Epoch::genesis(&self.config, &epoch_config, slot))
+				}
 			).ok_or_else(|| {
 				ConsensusError::ClientImport(Error::<Block>::FetchEpoch(parent_hash).into())
 			})?;
+
+			let epoch_config = self.client.runtime_api()
+				.epoch_configuration(&BlockId::hash(parent_hash))
+				.map_err(|_| ConsensusError::ClientImport(
+					Error::<Block>::FetchEpochConfig(parent_hash).into()
+				))?;
 
 			babe_info!("👶 New epoch {} launching at block {} (block slot {} >= start slot {}).",
 					   viable_epoch.as_ref().epoch_index,
@@ -1016,7 +1058,7 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 					   slot_number,
 					   viable_epoch.as_ref().start_slot);
 
-			let next_epoch = viable_epoch.increment(next_epoch_descriptor);
+			let next_epoch = viable_epoch.increment((next_epoch_descriptor, epoch_config));
 
 			babe_info!("👶 Next epoch starts at slot {}", next_epoch.as_ref().start_slot);
 

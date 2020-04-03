@@ -89,15 +89,32 @@ pub enum ConsensusLog {
 	OnDisabled(AuthorityIndex),
 }
 
-/// Configuration data used by the BABE consensus engine.
+/// Genesis configuration data used by the BABE consensus engine.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
-pub struct BabeConfiguration {
+pub struct BabeGenesisConfiguration {
 	/// The slot duration in milliseconds for BABE. Currently, only
 	/// the value provided by this type at genesis will be used.
-	///
-	/// Dynamic slot duration may be supported in the future.
 	pub slot_duration: u64,
 
+	/// The authorities for the genesis epoch.
+	pub genesis_authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
+
+	/// The randomness for the genesis epoch.
+	pub randomness: Randomness,
+}
+
+#[cfg(feature = "std")]
+impl sp_consensus::SlotData for BabeGenesisConfiguration {
+	fn slot_duration(&self) -> u64 {
+		self.slot_duration
+	}
+
+	const SLOT_KEY: &'static [u8] = b"babe_configuration";
+}
+
+/// Configuration data used by the BABE consensus engine.
+#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
+pub struct BabeEpochConfiguration {
 	/// The duration of epochs in slots.
 	pub epoch_length: SlotNumber,
 
@@ -109,34 +126,19 @@ pub struct BabeConfiguration {
 	/// of a slot being empty.
 	pub c: (u64, u64),
 
-	/// The authorities for the genesis epoch.
-	pub genesis_authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
-
-	/// The randomness for the genesis epoch.
-	pub randomness: Randomness,
-
 	/// Whether this chain should run with secondary slots, which are assigned
 	/// in round-robin manner.
 	pub secondary_slots: bool,
 }
 
-#[cfg(feature = "std")]
-impl sp_consensus::SlotData for BabeConfiguration {
-	fn slot_duration(&self) -> u64 {
-		self.slot_duration
-	}
-
-	const SLOT_KEY: &'static [u8] = b"babe_configuration";
-}
-
 sp_api::decl_runtime_apis! {
 	/// API necessary for block authorship with BABE.
 	pub trait BabeApi {
-		/// Return the configuration for BABE. Currently,
-		/// only the value provided by this type at genesis will be used.
-		///
-		/// Dynamic configuration may be supported in the future.
-		fn configuration() -> BabeConfiguration;
+		/// Return the epoch configuration for BABE. The configuration is read once every epoch.
+		fn epoch_configuration() -> BabeEpochConfiguration;
+
+		/// Return the genesis configuration for BABE. The configuration is only read on genesis.
+		fn genesis_configuration() -> BabeGenesisConfiguration;
 
 		/// Returns the slot number that started the current epoch.
 		fn current_epoch_start() -> SlotNumber;

@@ -394,11 +394,11 @@ impl<Hash, Number, E: Epoch> EpochChanges<Hash, Number, E> where
 		descriptor: &ViableEpochDescriptor<Hash, Number, E>,
 		make_genesis: G,
 	) -> Option<ViableEpoch<E, &E>> where
-		G: FnOnce(E::SlotNumber) -> E
+		G: FnOnce(E::SlotNumber) -> Option<E>
 	{
 		match descriptor {
 			ViableEpochDescriptor::UnimportedGenesis(slot_number) => {
-				Some(ViableEpoch::UnimportedGenesis(make_genesis(*slot_number)))
+				make_genesis(*slot_number).map(ViableEpoch::UnimportedGenesis)
 			},
 			ViableEpochDescriptor::Signaled(identifier, _) => {
 				self.epoch(&identifier).map(ViableEpoch::Signaled)
