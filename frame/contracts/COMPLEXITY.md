@@ -141,7 +141,7 @@ Note that in case of storage modification we need to construct a key in the unde
 - then perform `blake2_256` hashing of the storage key.
 - concatenation of these hashes will constitute the key in the underlying storage.
 
-There is also a special case to think of: if the balance of some account goes below `existential_deposit`, then all storage entries of that account will be erased, which requires time proprotional to the number of storage entries that account has.
+There is also a special case to think of: if the balance of some account goes below `existential_deposit`, then all storage entries of that account will be erased, which requires time proportional to the number of storage entries that account has.
 
 **complexity**: `N` inserts into a `Map` or eventually into the storage (if committed). Every deleted account will induce removal of all its storage which is proportional to the number of storage entries that account has.
 
@@ -166,7 +166,8 @@ This function performs the following steps:
 
 In the course of the execution this function can perform up to 2 DB reads to `get_balance` of source and destination accounts. It can also induce up to 2 DB writes via `set_balance` if flushed to the storage.
 
-Moreover, if the source balance goes below `existential_deposit` then the account will be deleted along with all its storage which requires time proportional to the number of storage entries of that account.
+Moreover, if the source balance goes below `existential_deposit`  then the transfer is denied and
+returns with an error.
 
 Assuming marshaled size of a balance value is of the constant size we can neglect its effect on the performance.
 
@@ -186,6 +187,23 @@ implementation they just involve a DB read.
 
 For subsequent calls and instantiations during contract execution, the initialization requires no
 expensive operations.
+
+## Terminate
+
+This function performs the following steps:
+
+1. Check the calling contract is not already on the callstack by calling `is_live`.
+2. `transfer` funds from caller to the beneficiary.
+3. Flag the caller contract as deleted in the overlay.
+
+`is_live` does not do any database access nor does it allocate memory. It walks up the call
+stack and therefore executes in linear time depending on size of the call stack. Because
+the call stack is of a fixed maximum size we consider this operation as constant time.
+
+**complexity**: Database accesses as described in Transfer + Removal of the contract. Currently,
+we are using child trie removal which is linear in the amount of stored keys. Upcoming changes
+will make the account removal constant time.
+
 
 ## Call
 
@@ -236,7 +254,7 @@ This function takes the code of the constructor and input data. Instantiation of
 
 **Note** that the complexity of executing the constructor code should be considered separately.
 
-**Note** that the complexity of `DetermineContractAddress` hook should be considered separately as well. Most likely it will use some kind of hashing over the code of the constructor and input data. The default `SimpleAddressDeterminator` does precisely that.
+**Note** that the complexity of `DetermineContractAddress` hook should be considered separately as well. Most likely it will use some kind of hashing over the code of the constructor and input data. The default `SimpleAddressDeterminer` does precisely that.
 
 **Note** that the constructor returns code in the owned form and it's obtained via return facilities, which should have take fee for the return value.
 
@@ -261,9 +279,19 @@ Each external function invoked from a contract can involve some overhead.
 This function receives a `key` and `value` as arguments. It consists of the following steps:
 
 1. Reading the sandbox memory for `key` and `value` (see sandboxing memory get).
-2. Setting the storage by the given `key` with the given `value` (see `set_storage`).
+2. Setting the storage at the given `key` to the given `value` (see `set_storage`).
 
 **complexity**: Complexity is proportional to the size of the `value`. This function induces a DB write of size proportional to the `value` size (if flushed to the storage), so should be priced accordingly.
+
+## ext_clear_storage
+
+This function receives a `key` as argument. It consists of the following steps:
+
+1. Reading the sandbox memory for `key` (see sandboxing memory get).
+2. Clearing the storage at the given `key` (see `set_storage`).
+
+**complexity**: Complexity is constant. This function induces a DB write to clear the storage entry
+(upon being flushed to the storage) and should be priced accordingly.
 
 ## ext_get_storage
 
@@ -280,6 +308,21 @@ performed. Moreover, the DB read has to be synchronous and no progress can be ma
 
 **complexity**: The memory and computing complexity is proportional to the size of the fetched value. This function performs a
 DB read.
+
+## ext_transfer
+
+This function receives the following arguments:
+
+- `account` buffer of a marshaled `AccountId`,
+- `value` buffer of a marshaled `Balance`,
+
+It consists of the following steps:
+
+1. Loading `account` buffer from the sandbox memory (see sandboxing memory get) and then decoding it.
+2. Loading `value` buffer from the sandbox memory and then decoding it.
+4. Invoking the executive function `transfer`.
+
+Loading of `account` and `value` buffers should be charged. This is because the sizes of buffers are specified by the calling code, even though marshaled representations are, essentially, of constant size. This can be fixed by assigning an upper bound for sizes of `AccountId` and `Balance`.
 
 ## ext_call
 
@@ -324,6 +367,20 @@ Loading of `value` buffer should be charged. This is because the size of the buf
 Loading `init_code` and `input_data` should be charged in any case.
 
 **complexity**: All complexity comes from loading buffers and executing `instantiate` executive function. The former component is proportional to the sizes of `init_code`, `value` and `input_data` buffers. The latter component completely depends on the complexity of `instantiate` executive function and also dominated by it.
+
+## ext_terminate
+
+This function receives the following arguments:
+
+- `beneficiary`, buffer of a marshaled `AccountId`
+
+It consists of the following steps:
+
+1. Loading `beneficiary` buffer from the sandbox memory (see sandboxing memory get) and then decoding it.
+
+Loading of the `beneficiary` buffer should be charged. This is because the sizes of buffers are specified by the calling code, even though marshaled representations are, essentially, of constant size. This can be fixed by assigning an upper bound for sizes of `AccountId`.
+
+**complexity**: All complexity comes from loading buffers and executing `terminate` executive function. The former component is proportional to the size of the `beneficiary` buffer. The latter component completely depends on the complexity of `terminate` executive function and also dominated by it.
 
 ## ext_return
 
@@ -415,3 +472,27 @@ function performs a DB read.
 This function serializes the current block's number into the scratch buffer.
 
 **complexity**: Assuming that the block number is of constant size, this function has constant complexity.
+
+## Built-in hashing functions
+
+This paragraph concerns the following supported built-in hash functions:
+
+- `SHA2` with 256-bit width
+- `KECCAK` with 256-bit width
+- `BLAKE2` with 128-bit and 256-bit widths
+
+These functions compute a cryptographic hash on the given inputs and copy the
+resulting hash directly back into the sandboxed Wasm contract output buffer.
+
+Execution of the function consists of the following steps:
+
+1. Load data stored in the input buffer into an intermediate buffer.
+2. Compute the cryptographic hash `H` on the intermediate buffer.
+3. Copy back the bytes of `H` into the contract side output buffer.
+
+**complexity**: Complexity is proportional to the size of the input buffer in bytes
+as well as to the size of the output buffer in bytes. Also different cryptographic
+algorithms have different inherent complexity so users must expect the above
+mentioned crypto hashes to have varying gas costs.
+The complexity of each cryptographic hash function highly depends on the underlying
+implementation.

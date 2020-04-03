@@ -21,35 +21,39 @@ use self::error::Error;
 use std::sync::Arc;
 use assert_matches::assert_matches;
 use futures01::stream::Stream;
-use sp_core::{storage::{well_known_keys, ChildInfo}, ChangesTrieConfiguration};
+use sp_core::{storage::ChildInfo, ChangesTrieConfiguration};
 use sp_core::hash::H256;
+use sc_block_builder::BlockBuilderProvider;
 use sp_io::hashing::blake2_256;
 use substrate_test_runtime_client::{
 	prelude::*,
 	sp_consensus::BlockOrigin,
 	runtime,
 };
+use sp_runtime::generic::BlockId;
 
-const CHILD_UID: &'static [u8] = b"unique_id";
+const STORAGE_KEY: &[u8] = b"child";
+
+fn prefixed_storage_key() -> PrefixedStorageKey {
+	let child_info = ChildInfo::new_default(&STORAGE_KEY[..]);
+	child_info.prefixed_storage_key()
+}
 
 #[test]
 fn should_return_storage() {
 	const KEY: &[u8] = b":mock";
 	const VALUE: &[u8] = b"hello world";
-	const STORAGE_KEY: &[u8] = b":child_storage:default:child";
 	const CHILD_VALUE: &[u8] = b"hello world !";
-	let child_info1 = ChildInfo::new_default(CHILD_UID);
+
+	let child_info = ChildInfo::new_default(STORAGE_KEY);
 	let mut core = tokio::runtime::Runtime::new().unwrap();
 	let client = TestClientBuilder::new()
 		.add_extra_storage(KEY.to_vec(), VALUE.to_vec())
-		.add_extra_child_storage(STORAGE_KEY.to_vec(), &child_info1, KEY.to_vec(), CHILD_VALUE.to_vec())
+		.add_extra_child_storage(&child_info, KEY.to_vec(), CHILD_VALUE.to_vec())
 		.build();
 	let genesis_hash = client.genesis_hash();
-	let client = new_full(Arc::new(client), Subscriptions::new(Arc::new(core.executor())));
+	let (client, child) = new_full(Arc::new(client), Subscriptions::new(Arc::new(core.executor())));
 	let key = StorageKey(KEY.to_vec());
-	let storage_key = StorageKey(STORAGE_KEY.to_vec());
-	let (child_info, child_type) = child_info1.info();
-	let child_info = StorageKey(child_info.to_vec());
 
 	assert_eq!(
 		client.storage(key.clone(), Some(genesis_hash).into()).wait()
@@ -67,7 +71,7 @@ fn should_return_storage() {
 	);
 	assert_eq!(
 		core.block_on(
-			client.child_storage(storage_key, child_info, child_type, key, Some(genesis_hash).into())
+			child.storage(prefixed_storage_key(), key, Some(genesis_hash).into())
 				.map(|x| x.map(|x| x.0.len()))
 		).unwrap().unwrap() as usize,
 		CHILD_VALUE.len(),
@@ -77,46 +81,36 @@ fn should_return_storage() {
 
 #[test]
 fn should_return_child_storage() {
-	let child_info1 = ChildInfo::new_default(CHILD_UID);
-	let (child_info, child_type) = child_info1.info();
-	let child_info = StorageKey(child_info.to_vec());
+	let child_info = ChildInfo::new_default(STORAGE_KEY);
 	let core = tokio::runtime::Runtime::new().unwrap();
 	let client = Arc::new(substrate_test_runtime_client::TestClientBuilder::new()
-		.add_child_storage("test", "key", &child_info1, vec![42_u8])
+		.add_child_storage(&child_info, "key", vec![42_u8])
 		.build());
 	let genesis_hash = client.genesis_hash();
-	let client = new_full(client, Subscriptions::new(Arc::new(core.executor())));
-	let child_key = StorageKey(
-		well_known_keys::CHILD_STORAGE_KEY_PREFIX.iter().chain(b"test").cloned().collect()
-	);
+	let (_client, child) = new_full(client, Subscriptions::new(Arc::new(core.executor())));
+	let child_key = prefixed_storage_key();
 	let key = StorageKey(b"key".to_vec());
 
 
 	assert_matches!(
-		client.child_storage(
+		child.storage(
 			child_key.clone(),
-			child_info.clone(),
-			child_type,
 			key.clone(),
 			Some(genesis_hash).into(),
 		).wait(),
 		Ok(Some(StorageData(ref d))) if d[0] == 42 && d.len() == 1
 	);
 	assert_matches!(
-		client.child_storage_hash(
+		child.storage_hash(
 			child_key.clone(),
-			child_info.clone(),
-			child_type,
 			key.clone(),
 			Some(genesis_hash).into(),
 		).wait().map(|x| x.is_some()),
 		Ok(true)
 	);
 	assert_matches!(
-		client.child_storage_size(
+		child.storage_size(
 			child_key.clone(),
-			child_info.clone(),
-			child_type,
 			key.clone(),
 			None,
 		).wait(),
@@ -129,7 +123,7 @@ fn should_call_contract() {
 	let core = tokio::runtime::Runtime::new().unwrap();
 	let client = Arc::new(substrate_test_runtime_client::new());
 	let genesis_hash = client.genesis_hash();
-	let client = new_full(client, Subscriptions::new(Arc::new(core.executor())));
+	let (client, _child) = new_full(client, Subscriptions::new(Arc::new(core.executor())));
 
 	assert_matches!(
 		client.call("balanceOf".into(), Bytes(vec![1,2,3]), Some(genesis_hash).into()).wait(),
@@ -145,7 +139,7 @@ fn should_notify_about_storage_changes() {
 
 	{
 		let mut client = Arc::new(substrate_test_runtime_client::new());
-		let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
+		let (api, _child) = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
 
 		api.subscribe_storage(Default::default(), subscriber, None.into());
 
@@ -178,7 +172,7 @@ fn should_send_initial_storage_changes_and_notifications() {
 
 	{
 		let mut client = Arc::new(substrate_test_runtime_client::new());
-		let api = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
+		let (api, _child) = new_full(client.clone(), Subscriptions::new(Arc::new(remote)));
 
 		let alice_balance_key = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Alice.into()));
 
@@ -212,9 +206,9 @@ fn should_send_initial_storage_changes_and_notifications() {
 
 #[test]
 fn should_query_storage() {
-	fn run_tests(mut client: Arc<TestClient>) {
+	fn run_tests(mut client: Arc<TestClient>, has_changes_trie_config: bool) {
 		let core = tokio::runtime::Runtime::new().unwrap();
-		let api = new_full(client.clone(), Subscriptions::new(Arc::new(core.executor())));
+		let (api, _child) = new_full(client.clone(), Subscriptions::new(Arc::new(core.executor())));
 
 		let mut add_block = |nonce| {
 			let mut builder = client.new_block(Default::default()).unwrap();
@@ -236,6 +230,13 @@ fn should_query_storage() {
 		let block1_hash = add_block(0);
 		let block2_hash = add_block(1);
 		let genesis_hash = client.genesis_hash();
+
+		if has_changes_trie_config {
+			assert_eq!(
+				client.max_key_changes_range(1, BlockId::Hash(block1_hash)).unwrap(),
+				Some((0, BlockId::Hash(block1_hash))),
+			);
+		}
 
 		let mut expected = vec![
 			StorageChangeSet {
@@ -306,7 +307,7 @@ fn should_query_storage() {
 			Err(Error::InvalidBlockRange {
 				from: format!("1 ({:?})", block1_hash),
 				to: format!("0 ({:?})", genesis_hash),
-				details: "from number >= to number".to_owned(),
+				details: "from number > to number".to_owned(),
 			}).map_err(|e| e.to_string())
 		);
 
@@ -376,12 +377,39 @@ fn should_query_storage() {
 				details: format!("UnknownBlock: header not found in db: {}", random_hash1),
 			}).map_err(|e| e.to_string()),
 		);
+
+		// single block range
+		let result = api.query_storage_at(
+			keys.clone(),
+			Some(block1_hash),
+		);
+
+		assert_eq!(
+			result.wait().unwrap(),
+			vec![
+				StorageChangeSet {
+					block: block1_hash,
+					changes: vec![
+						(StorageKey(vec![1_u8]), None),
+						(StorageKey(vec![2_u8]), Some(StorageData(vec![2_u8]))),
+						(StorageKey(vec![3_u8]), Some(StorageData(vec![3_u8]))),
+						(StorageKey(vec![4_u8]), None),
+						(StorageKey(vec![5_u8]), Some(StorageData(vec![0_u8]))),
+					]
+				}
+			]
+		);
 	}
 
-	run_tests(Arc::new(substrate_test_runtime_client::new()));
-	run_tests(Arc::new(TestClientBuilder::new()
-		.changes_trie_config(Some(ChangesTrieConfiguration::new(4, 2)))
-		.build()));
+	run_tests(Arc::new(substrate_test_runtime_client::new()), false);
+	run_tests(
+		Arc::new(
+			TestClientBuilder::new()
+				.changes_trie_config(Some(ChangesTrieConfiguration::new(4, 2)))
+				.build(),
+		),
+		true,
+	);
 }
 
 #[test]
@@ -399,11 +427,11 @@ fn should_return_runtime_version() {
 	let core = tokio::runtime::Runtime::new().unwrap();
 
 	let client = Arc::new(substrate_test_runtime_client::new());
-	let api = new_full(client.clone(), Subscriptions::new(Arc::new(core.executor())));
+	let (api, _child) = new_full(client.clone(), Subscriptions::new(Arc::new(core.executor())));
 
 	let result = "{\"specName\":\"test\",\"implName\":\"parity-test\",\"authoringVersion\":1,\
-		\"specVersion\":1,\"implVersion\":2,\"apis\":[[\"0xdf6acb689907609b\",2],\
-		[\"0x37e397fc7c91f5e4\",1],[\"0xd2bc9897eed08f15\",1],[\"0x40fe3ad401f8959a\",4],\
+		\"specVersion\":2,\"implVersion\":2,\"apis\":[[\"0xdf6acb689907609b\",2],\
+		[\"0x37e397fc7c91f5e4\",1],[\"0xd2bc9897eed08f15\",2],[\"0x40fe3ad401f8959a\",4],\
 		[\"0xc6e9a76309f39b09\",1],[\"0xdd718d5cc53262d4\",1],[\"0xcbca25e39f142387\",1],\
 		[\"0xf78b278be53f454c\",2],[\"0xab3c0572291feb8b\",1],[\"0xbc9d89904f5b923f\",1]]}";
 
@@ -422,7 +450,7 @@ fn should_notify_on_runtime_version_initially() {
 
 	{
 		let client = Arc::new(substrate_test_runtime_client::new());
-		let api = new_full(client.clone(), Subscriptions::new(Arc::new(core.executor())));
+		let (api, _child) = new_full(client.clone(), Subscriptions::new(Arc::new(core.executor())));
 
 		api.subscribe_runtime_version(Default::default(), subscriber);
 

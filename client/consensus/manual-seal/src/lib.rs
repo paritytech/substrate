@@ -89,20 +89,11 @@ impl<B: BlockT> Verifier<B> for ManualSealVerifier {
 		justification: Option<Justification>,
 		body: Option<Vec<B::Extrinsic>>,
 	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
-		let import_params = BlockImportParams {
-			origin,
-			header,
-			justification,
-			post_digests: Vec::new(),
-			body,
-			storage_changes: None,
-			finalized: true,
-			auxiliary: Vec::new(),
-			intermediates: HashMap::new(),
-			fork_choice: Some(ForkChoiceStrategy::LongestChain),
-			allow_missing_state: false,
-			import_existing: false,
-		};
+		let mut import_params = BlockImportParams::new(origin, header);
+		import_params.justification = justification;
+		import_params.body = body;
+		import_params.finalized = true;
+		import_params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
 		Ok((import_params, None))
 	}
@@ -198,7 +189,7 @@ pub async fn run_instant_seal<B, CB, E, A, C, T>(
 {
 	// instant-seal creates blocks as soon as transactions are imported
 	// into the transaction pool.
-	let seal_block_channel = pool.import_notification_stream()
+	let seal_block_channel = pool.validated_pool().import_notification_stream()
 		.map(|_| {
 			EngineCommand::SealNewBlock {
 				create_empty: false,
@@ -233,7 +224,7 @@ mod tests {
 		txpool::Options,
 	};
 	use substrate_test_runtime_transaction_pool::{TestApi, uxt};
-	use sp_transaction_pool::TransactionPool;
+	use sp_transaction_pool::{TransactionPool, MaintainedTransactionPool, TransactionSource};
 	use sp_runtime::generic::BlockId;
 	use sp_blockchain::HeaderBackend;
 	use sp_consensus::ImportedAux;
@@ -245,6 +236,8 @@ mod tests {
 		Arc::new(TestApi::empty())
 	}
 
+	const SOURCE: TransactionSource = TransactionSource::External;
+
 	#[tokio::test]
 	async fn instant_seal() {
 		let builder = TestClientBuilder::new();
@@ -252,15 +245,15 @@ mod tests {
 		let client = Arc::new(builder.build());
 		let select_chain = LongestChain::new(backend.clone());
 		let inherent_data_providers = InherentDataProviders::new();
-		let pool = Arc::new(BasicPool::new(Options::default(), api()));
-		let env = ProposerFactory {
-			transaction_pool: pool.clone(),
-			client: client.clone(),
-		};
+		let pool = Arc::new(BasicPool::new(Options::default(), api()).0);
+		let env = ProposerFactory::new(
+			client.clone(),
+			pool.clone()
+		);
 		// this test checks that blocks are created as soon as transactions are imported into the pool.
 		let (sender, receiver) = futures::channel::oneshot::channel();
 		let mut sender = Arc::new(Some(sender));
-		let stream = pool.pool().import_notification_stream()
+		let stream = pool.pool().validated_pool().import_notification_stream()
 			.map(move |_| {
 				// we're only going to submit one tx so this fn will only be called once.
 				let mut_sender =  Arc::get_mut(&mut sender).unwrap();
@@ -287,7 +280,7 @@ mod tests {
 			rt.block_on(future);
 		});
 		// submit a transaction to pool.
-		let result = pool.submit_one(&BlockId::Number(0), uxt(Alice, 0)).await;
+		let result = pool.submit_one(&BlockId::Number(0), SOURCE, uxt(Alice, 0)).await;
 		// assert that it was successfully imported
 		assert!(result.is_ok());
 		// assert that the background task returns ok
@@ -317,11 +310,11 @@ mod tests {
 		let client = Arc::new(builder.build());
 		let select_chain = LongestChain::new(backend.clone());
 		let inherent_data_providers = InherentDataProviders::new();
-		let pool = Arc::new(BasicPool::new(Options::default(), api()));
-		let env = ProposerFactory {
-			transaction_pool: pool.clone(),
-			client: client.clone(),
-		};
+		let pool = Arc::new(BasicPool::new(Options::default(), api()).0);
+		let env = ProposerFactory::new(
+			client.clone(),
+			pool.clone()
+		);
 		// this test checks that blocks are created as soon as an engine command is sent over the stream.
 		let (mut sink, stream) = futures::channel::mpsc::channel(1024);
 		let future = run_manual_seal(
@@ -339,7 +332,7 @@ mod tests {
 			rt.block_on(future);
 		});
 		// submit a transaction to pool.
-		let result = pool.submit_one(&BlockId::Number(0), uxt(Alice, 0)).await;
+		let result = pool.submit_one(&BlockId::Number(0), SOURCE, uxt(Alice, 0)).await;
 		// assert that it was successfully imported
 		assert!(result.is_ok());
 		let (tx, rx) = futures::channel::oneshot::channel();
@@ -386,11 +379,11 @@ mod tests {
 		let select_chain = LongestChain::new(backend.clone());
 		let inherent_data_providers = InherentDataProviders::new();
 		let pool_api = api();
-		let pool = Arc::new(BasicPool::new(Options::default(), pool_api.clone()));
-		let env = ProposerFactory {
-			transaction_pool: pool.clone(),
-			client: client.clone(),
-		};
+		let pool = Arc::new(BasicPool::new(Options::default(), pool_api.clone()).0);
+		let env = ProposerFactory::new(
+			client.clone(),
+			pool.clone(),
+		);
 		// this test checks that blocks are created as soon as an engine command is sent over the stream.
 		let (mut sink, stream) = futures::channel::mpsc::channel(1024);
 		let future = run_manual_seal(
@@ -408,7 +401,7 @@ mod tests {
 			rt.block_on(future);
 		});
 		// submit a transaction to pool.
-		let result = pool.submit_one(&BlockId::Number(0), uxt(Alice, 0)).await;
+		let result = pool.submit_one(&BlockId::Number(0), SOURCE, uxt(Alice, 0)).await;
 		// assert that it was successfully imported
 		assert!(result.is_ok());
 
@@ -439,20 +432,30 @@ mod tests {
 		);
 		// assert that there's a new block in the db.
 		assert!(backend.blockchain().header(BlockId::Number(0)).unwrap().is_some());
-		assert!(pool.submit_one(&BlockId::Number(1), uxt(Alice, 1)).await.is_ok());
+		assert!(pool.submit_one(&BlockId::Number(1), SOURCE, uxt(Alice, 1)).await.is_ok());
+
+		pool.maintain(sp_transaction_pool::ChainEvent::NewBlock {
+			id: BlockId::Number(1),
+			header: backend.blockchain().header(BlockId::Number(1)).expect("db error").expect("imported above"),
+			is_new_best: true,
+			retracted: vec![],
+		}).await;
 
 		let (tx1, rx1) = futures::channel::oneshot::channel();
 		assert!(sink.send(EngineCommand::SealNewBlock {
-			parent_hash: Some(created_block.hash.clone()),
+			parent_hash: Some(created_block.hash),
 			sender: Some(tx1),
 			create_empty: false,
 			finalize: false,
 		}).await.is_ok());
-		assert!(rx1.await.unwrap().is_ok());
+		assert_matches::assert_matches!(
+			rx1.await.expect("should be no error receiving"),
+			Ok(_)
+		);
 		assert!(backend.blockchain().header(BlockId::Number(1)).unwrap().is_some());
 		pool_api.increment_nonce(Alice.into());
 
-		assert!(pool.submit_one(&BlockId::Number(2), uxt(Alice, 2)).await.is_ok());
+		assert!(pool.submit_one(&BlockId::Number(2), SOURCE, uxt(Alice, 2)).await.is_ok());
 		let (tx2, rx2) = futures::channel::oneshot::channel();
 		assert!(sink.send(EngineCommand::SealNewBlock {
 			parent_hash: Some(created_block.hash),

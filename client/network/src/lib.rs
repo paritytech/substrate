@@ -78,12 +78,8 @@
 //! - DNS for addresses of the form `/dns4/example.com/tcp/5` or `/dns4/example.com/tcp/5/ws`. A
 //! node's address can contain a domain name.
 //!
-//! The following encryption protocols are supported:
-//!
-//! - [Secio](https://github.com/libp2p/specs/tree/master/secio). A TLS-1.2-like protocol but
-//! without certificates. Support for secio will likely be deprecated in the far future.
-//! - [Noise](https://noiseprotocol.org/). Support for noise is very experimental. The details are
-//! very blurry and may change at any moment.
+//! On top of the base-layer protocol, the [Noise](https://noiseprotocol.org/) protocol is
+//! negotiated and applied. The exact handshake protocol is experimental and is subject to change.
 //!
 //! The following multiplexing protocols are supported:
 //!
@@ -94,23 +90,57 @@
 //! ## Substreams
 //!
 //! Once a connection has been established and uses multiplexing, substreams can be opened. When
-//! a substream is open, the **multistream-select** protocol is used to negotiate which protocol to
-//! use on that given substream. In practice, Substrate opens the following substreams:
+//! a substream is open, the **multistream-select** protocol is used to negotiate which protocol
+//! to use on that given substream.
 //!
-//! - We periodically open an ephemeral substream in order to ping the remote and check whether the
-//! connection is still alive. Failure for the remote to reply leads to a disconnection. This uses
-//! the libp2p ping protocol.
-//! - We periodically open an ephemeral substream in order to ask information from the remote. This
-//! is called [the `identify` protocol](https://github.com/libp2p/specs/tree/master/identify).
-//! - We periodically open ephemeral substreams for Kademlia random walk queries. Each Kademlia
-//! query is done in a new separate substream. This uses the
-//! [standard libp2p Kademlia protocol](https://github.com/libp2p/specs/pull/108).
-//! - We optionally keep a substream alive for all Substrate-based communications. The name of the
-//! protocol negotiated is based on the *protocol ID* passed as part of the network configuration.
-//! This protocol ID should be unique for each chain and prevents nodes from different chains from
-//! connecting to each other. More information below.
+//! Protocols that are specific to a certain chain have a `<protocol-id>` in their name. This
+//! "protocol ID" is defined in the chain specifications. For example, the protocol ID of Polkadot
+//! is "dot". In the protocol names below, `<protocol-id>` must be replaced with the corresponding
+//! protocol ID.
 //!
-//! ## The Substrate substream
+//! > **Note**: It is possible for the same connection to be used for multiple chains. For example,
+//! >           one can use both the `/dot/sync/2` and `/sub/sync/2` protocols on the same
+//! >           connection, provided that the remote supports them.
+//!
+//! Substrate uses the following standard libp2p protocols:
+//!
+//! - **`/ipfs/ping/1.0.0`**. We periodically open an ephemeral substream in order to ping the
+//! remote and check whether the connection is still alive. Failure for the remote to reply leads
+//! to a disconnection.
+//! - **[`/ipfs/id/1.0.0`](https://github.com/libp2p/specs/tree/master/identify)**. We
+//! periodically open an ephemeral substream in order to ask information from the remote.
+//! - **[`/ipfs/kad/1.0.0`](https://github.com/libp2p/specs/pull/108)**. We periodically open
+//! ephemeral substreams for Kademlia random walk queries. Each Kademlia query is done in a
+//! separate substream.
+//!
+//! Additionally, Substrate uses the following non-libp2p-standard protocols:
+//!
+//! - **`/substrate/<protocol-id>/<version>`** (where `<protocol-id>` must be replaced with the
+//! protocol ID of the targeted chain, and `<version>` is a number between 2 and 6). For each
+//! connection we optionally keep an additional substream for all Substrate-based communications alive.
+//! This protocol is considered legacy, and is progressively being replaced with alternatives.
+//! This is designated as "The legacy Substrate substream" in this documentation. See below for
+//! more details.
+//! - **`/<protocol-id>/sync/2`** is a request-response protocol (see below) that lets one perform
+//! requests for information about blocks. Each request is the encoding of a `BlockRequest` and
+//! each response is the encoding of a `BlockResponse`, as defined in the `api.v1.proto` file in
+//! this source tree.
+//! - **`/<protocol-id>/light/2`** is a request-response protocol (see below) that lets one perform
+//! light-client-related requests for information about the state. Each request is the encoding of
+//! a `light::Request` and each response is the encoding of a `light::Response`, as defined in the
+//! `light.v1.proto` file in this source tree.
+//! - **`/<protocol-id>/transactions/1`** is a notifications protocol (see below) where
+//! transactions are pushed to other nodes. The handshake is empty on both sides. The message
+//! format is a SCALE-encoded list of transactions, where each transaction is an opaque list of
+//! bytes.
+//! - **`/<protocol-id>/block-announces/1`** is a notifications protocol (see below) where
+//! block announces are pushed to other nodes. The handshake is empty on both sides. The message
+//! format is a SCALE-encoded tuple containing a block header followed with an opaque list of
+//! bytes containing some data associated with this block announcement, e.g. a candidate message.
+//! - Notifications protocols that are registered using the `register_notifications_protocol`
+//! method. For example: `/paritytech/grandpa/1`. See below for more information.
+//!
+//! ## The legacy Substrate substream
 //!
 //! Substrate uses a component named the **peerset manager (PSM)**. Through the discovery
 //! mechanism, the PSM is aware of the nodes that are part of the network and decides which nodes
@@ -123,8 +153,8 @@
 //! Note that at the moment there is no mechanism in place to solve the issues that arise where the
 //! two sides of a connection open the unique substream simultaneously. In order to not run into
 //! issues, only the dialer of a connection is allowed to open the unique substream. When the
-//! substream is closed, the entire connection is closed as well. This is a bug, and should be
-//! fixed by improving the protocol.
+//! substream is closed, the entire connection is closed as well. This is a bug that will be
+//! resolved by deprecating the protocol entirely.
 //!
 //! Within the unique Substrate substream, messages encoded using
 //! [*parity-scale-codec*](https://github.com/paritytech/parity-scale-codec) are exchanged.
@@ -140,14 +170,47 @@
 //! - Light-client requests. When a light client requires information, a random node we have a
 //! substream open with is chosen, and the information is requested from it.
 //! - Gossiping. Used for example by grandpa.
-//! - Network specialization. The network protocol can be specialized through a template parameter
-//! of the network service. This specialization is free to send and receive messages with the
-//! remote. This is meant to be used by the chain that is being built on top of Substrate
-//! (eg. Polkadot).
 //!
-//! It is intended that in the future each of these components gets more isolated, so that they
-//! are free to open and close their own substreams, and so that syncing and light client requests
-//! are able to communicate with nodes outside of the range of the PSM.
+//! ## Request-response protocols
+//!
+//! A so-called request-response protocol is defined as follow:
+//!
+//! - When a substream is opened, the opening side sends a message whose content is
+//! protocol-specific. The message must be prefixed with an
+//! [LEB128-encoded number](https://en.wikipedia.org/wiki/LEB128) indicating its length. After the
+//! message has been sent, the writing side is closed.
+//! - The remote sends back the response prefixed with a LEB128-encoded length, and closes its
+//! side as well.
+//!
+//! Each request is performed in a new separate substream.
+//!
+//! ## Notifications protocols
+//!
+//! A so-called notifications protocol is defined as follow:
+//!
+//! - When a substream is opened, the opening side sends a handshake message whose content is
+//! protocol-specific. The handshake message must be prefixed with an
+//! [LEB128-encoded number](https://en.wikipedia.org/wiki/LEB128) indicating its length. The
+//! handshake message can be of length 0, in which case the sender has to send a single `0`.
+//! - The receiver then either immediately closes the substream, or answers with its own
+//! LEB128-prefixed protocol-specific handshake response. The message can be of length 0, in which
+//! case a single `0` has to be sent back. The receiver is then encouraged to close its sending
+//! side.
+//! - Once the handshake has completed, the notifications protocol is unidirectional. Only the
+//! node which initiated the substream can push notifications. If the remote wants to send
+//! notifications as well, it has to open its own undirectional substream.
+//! - Each notification must be prefixed with an LEB128-encoded length. The encoding of the
+//! messages is specific to each protocol.
+//!
+//! The API of `sc-network` allows one to register user-defined notification protocols.
+//! `sc-network` automatically tries to open a substream towards each node for which the legacy
+//! Substream substream is open. The handshake is then performed automatically.
+//!
+//! For example, the `sc-finality-grandpa` crate registers the `/paritytech/grandpa/1`
+//! notifications protocol.
+//!
+//! At the moment, for backwards-compatibility, notification protocols are tied to the legacy
+//! Substrate substream. In the future, though, it will no longer be the case.
 //!
 //! # Usage
 //!
@@ -160,7 +223,8 @@
 //!
 //! After the `NetworkWorker` has been created, the important things to do are:
 //!
-//! - Calling `NetworkWorker::poll` in order to advance the network.
+//! - Calling `NetworkWorker::poll` in order to advance the network. This can be done by
+//! dispatching a background task with the [`NetworkWorker`].
 //! - Calling `on_block_import` whenever a block is added to the client.
 //! - Calling `on_block_finalized` whenever a block is finalized.
 //! - Calling `trigger_repropagate` when a transaction is added to the pool.
@@ -180,126 +244,14 @@ mod utils;
 
 pub mod config;
 pub mod error;
+pub mod network_state;
 
-pub use chain::{Client as ClientHandle, FinalityProofProvider};
-pub use service::{
-	NetworkService, NetworkWorker, TransactionPool, ExHashT, ReportHandle,
-	NetworkStateInfo,
-};
-pub use protocol::{PeerInfo, Context, ProtocolConfig, message, specialization};
+pub use service::{NetworkService, NetworkStateInfo, NetworkWorker, ExHashT, ReportHandle};
+pub use protocol::PeerInfo;
 pub use protocol::event::{Event, DhtEvent};
 pub use protocol::sync::SyncState;
 pub use libp2p::{Multiaddr, PeerId};
 #[doc(inline)]
 pub use libp2p::multiaddr;
 
-pub use message::{generic as generic_message, RequestId, Status as StatusMessage};
-pub use on_demand_layer::{OnDemand, RemoteResponse};
 pub use sc_peerset::ReputationChange;
-
-// Used by the `construct_simple_protocol!` macro.
-#[doc(hidden)]
-pub use sp_runtime::traits::Block as BlockT;
-
-use libp2p::core::ConnectedPoint;
-use serde::{Deserialize, Serialize};
-use slog_derive::SerdeValue;
-use std::{collections::{HashMap, HashSet}, time::Duration};
-
-/// Extension trait for `NetworkBehaviour` that also accepts discovering nodes.
-pub trait DiscoveryNetBehaviour {
-	/// Notify the protocol that we have learned about the existence of nodes.
-	///
-	/// Can (or most likely will) be called multiple times with the same `PeerId`s.
-	///
-	/// Also note that there is no notification for expired nodes. The implementer must add a TTL
-	/// system, or remove nodes that will fail to reach.
-	fn add_discovered_nodes(&mut self, nodes: impl Iterator<Item = PeerId>);
-}
-
-/// Returns general information about the networking.
-///
-/// Meant for general diagnostic purposes.
-///
-/// **Warning**: This API is not stable.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, SerdeValue)]
-#[serde(rename_all = "camelCase")]
-pub struct NetworkState {
-	/// PeerId of the local node.
-	pub peer_id: String,
-	/// List of addresses the node is currently listening on.
-	pub listened_addresses: HashSet<Multiaddr>,
-	/// List of addresses the node knows it can be reached as.
-	pub external_addresses: HashSet<Multiaddr>,
-	/// List of node we're connected to.
-	pub connected_peers: HashMap<String, NetworkStatePeer>,
-	/// List of node that we know of but that we're not connected to.
-	pub not_connected_peers: HashMap<String, NetworkStateNotConnectedPeer>,
-	/// Downloaded bytes per second averaged over the past few seconds.
-	pub average_download_per_sec: u64,
-	/// Uploaded bytes per second averaged over the past few seconds.
-	pub average_upload_per_sec: u64,
-	/// State of the peerset manager.
-	pub peerset: serde_json::Value,
-}
-
-/// Part of the `NetworkState` struct. Unstable.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NetworkStatePeer {
-	/// How we are connected to the node.
-	pub endpoint: NetworkStatePeerEndpoint,
-	/// Node information, as provided by the node itself. Can be empty if not known yet.
-	pub version_string: Option<String>,
-	/// Latest ping duration with this node.
-	pub latest_ping_time: Option<Duration>,
-	/// If true, the peer is "enabled", which means that we try to open Substrate-related protocols
-	/// with this peer. If false, we stick to Kademlia and/or other network-only protocols.
-	pub enabled: bool,
-	/// If true, the peer is "open", which means that we have a Substrate-related protocol
-	/// with this peer.
-	pub open: bool,
-	/// List of addresses known for this node.
-	pub known_addresses: HashSet<Multiaddr>,
-}
-
-/// Part of the `NetworkState` struct. Unstable.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NetworkStateNotConnectedPeer {
-	/// List of addresses known for this node.
-	pub known_addresses: HashSet<Multiaddr>,
-	/// Node information, as provided by the node itself, if we were ever connected to this node.
-	pub version_string: Option<String>,
-	/// Latest ping duration with this node, if we were ever connected to this node.
-	pub latest_ping_time: Option<Duration>,
-}
-
-/// Part of the `NetworkState` struct. Unstable.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum NetworkStatePeerEndpoint {
-	/// We are dialing the given address.
-	Dialing(Multiaddr),
-	/// We are listening.
-	Listening {
-		/// Local address of the connection.
-		local_addr: Multiaddr,
-		/// Address data is sent back to.
-		send_back_addr: Multiaddr,
-	},
-}
-
-impl From<ConnectedPoint> for NetworkStatePeerEndpoint {
-	fn from(endpoint: ConnectedPoint) -> Self {
-		match endpoint {
-			ConnectedPoint::Dialer { address } =>
-				NetworkStatePeerEndpoint::Dialing(address),
-			ConnectedPoint::Listener { local_addr, send_back_addr } =>
-				NetworkStatePeerEndpoint::Listening {
-					local_addr,
-					send_back_addr
-				}
-		}
-	}
-}

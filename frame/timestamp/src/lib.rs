@@ -69,6 +69,7 @@
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//! 		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 //! 		pub fn get_time(origin) -> dispatch::DispatchResult {
 //! 			let _sender = ensure_signed(origin)?;
 //! 			let _now = <timestamp::Module<T>>::get();
@@ -79,7 +80,7 @@
 //! # fn main() {}
 //! ```
 //!
-//! ### Example from the SRML
+//! ### Example from the FRAME
 //!
 //! The [Session module](https://github.com/paritytech/substrate/blob/master/frame/session/src/lib.rs) uses
 //! the Timestamp module for session management.
@@ -94,15 +95,17 @@ mod benchmarking;
 
 use sp_std::{result, cmp};
 use sp_inherents::{ProvideInherent, InherentData, InherentIdentifier};
-use frame_support::{Parameter, decl_storage, decl_module};
-use frame_support::traits::{Time, Get};
+use frame_support::{
+	Parameter, decl_storage, decl_module, debug,
+	traits::{Time, UnixTime, Get},
+	weights::SimpleDispatchInfo,
+};
 use sp_runtime::{
 	RuntimeString,
 	traits::{
-		SimpleArithmetic, Zero, SaturatedConversion, Scale
+		AtLeast32Bit, Zero, SaturatedConversion, Scale
 	}
 };
-use frame_support::weights::SimpleDispatchInfo;
 use frame_system::ensure_none;
 use sp_timestamp::{
 	InherentError, INHERENT_IDENTIFIER, InherentType,
@@ -112,7 +115,7 @@ use sp_timestamp::{
 /// The module configuration trait
 pub trait Trait: frame_system::Trait {
 	/// Type used for expressing timestamp.
-	type Moment: Parameter + Default + SimpleArithmetic
+	type Moment: Parameter + Default + AtLeast32Bit
 		+ Scale<Self::BlockNumber, Output = Self::Moment> + Copy;
 
 	/// Something which can be notified when the timestamp is set. Set this to `()` if not needed.
@@ -238,6 +241,25 @@ impl<T: Trait> Time for Module<T> {
 	}
 }
 
+/// Before the timestamp inherent is applied, it returns the time of previous block.
+///
+/// On genesis the time returned is not valid.
+impl<T: Trait> UnixTime for Module<T> {
+	fn now() -> core::time::Duration {
+		// now is duration since unix epoch in millisecond as documented in
+		// `sp_timestamp::InherentDataProvider`.
+		let now = Self::now();
+		sp_std::if_std! {
+			if now == T::Moment::zero() {
+				debug::error!(
+					"`pallet_timestamp::UnixTime::now` is called at genesis, invalid value returned: 0"
+				);
+			}
+		}
+		core::time::Duration::from_millis(now.saturated_into::<u64>())
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -276,6 +298,9 @@ mod tests {
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();
 		type ModuleToIndex = ();
+		type AccountData = ();
+		type OnNewAccount = ();
+		type OnKilledAccount = ();
 	}
 	parameter_types! {
 		pub const MinimumPeriod: u64 = 5;

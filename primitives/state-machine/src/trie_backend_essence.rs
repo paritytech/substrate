@@ -24,8 +24,8 @@ use log::{debug, warn};
 use sp_core::Hasher;
 use hash_db::{self, EMPTY_PREFIX, Prefix};
 use sp_trie::{Trie, MemoryDB, PrefixedMemoryDB, DBValue,
-	read_trie_value, check_if_empty_root,
-	for_keys_in_trie, TrieDBIterator};
+	check_if_empty_root, read_trie_value,
+	TrieDBIterator, for_keys_in_trie};
 use sp_trie::trie_types::{TrieDB, TrieError, Layout};
 use crate::{backend::Consolidate, StorageKey, StorageValue};
 use sp_core::storage::{ChildInfo, ChildrenMap};
@@ -383,7 +383,6 @@ impl<'a, S, H> hash_db::HashDBRef<H, DBValue> for BackendStorageDBRef<'a, S, H> 
 	}
 }
 
-
 /// Key-value pairs storage that is used by trie backend essence.
 pub trait TrieBackendStorageRef<H: Hasher> {
 	/// Type of in-memory overlay.
@@ -485,7 +484,8 @@ mod test {
 
 	#[test]
 	fn next_storage_key_and_next_child_storage_key_work() {
-		let child_info = ChildInfo::new_default(b"uniqueid");
+		let child_info = ChildInfo::new_default(b"MyChild");
+		let child_info = &child_info;
 		// Contains values
 		let mut root_1 = H256::default();
 		// Contains child trie
@@ -500,8 +500,8 @@ mod test {
 		}
 		{
 			let mut trie = TrieDBMut::new(&mut mdb, &mut root_2);
-			// using top trie as child trie (both with same content)
-			trie.insert(b"MyChild", root_1.as_ref()).expect("insert failed");
+			trie.insert(child_info.prefixed_storage_key().as_slice(), root_1.as_ref())
+				.expect("insert failed");
 		};
 
 		let essence_1 = TrieBackend::new(mdb, root_1);
@@ -516,19 +516,19 @@ mod test {
 		let essence_2 = TrieBackend::new(mdb, root_2);
 
 		assert_eq!(
-			essence_2.next_child_storage_key(b"MyChild", &child_info, b"2"), Ok(Some(b"3".to_vec()))
+			essence_2.next_child_storage_key(child_info, b"2"), Ok(Some(b"3".to_vec()))
 		);
 		assert_eq!(
-			essence_2.next_child_storage_key(b"MyChild", &child_info, b"3"), Ok(Some(b"4".to_vec()))
+			essence_2.next_child_storage_key(child_info, b"3"), Ok(Some(b"4".to_vec()))
 		);
 		assert_eq!(
-			essence_2.next_child_storage_key(b"MyChild", &child_info, b"4"), Ok(Some(b"6".to_vec()))
+			essence_2.next_child_storage_key(child_info, b"4"), Ok(Some(b"6".to_vec()))
 		);
 		assert_eq!(
-			essence_2.next_child_storage_key(b"MyChild", &child_info, b"5"), Ok(Some(b"6".to_vec()))
+			essence_2.next_child_storage_key(child_info, b"5"), Ok(Some(b"6".to_vec()))
 		);
 		assert_eq!(
-			essence_2.next_child_storage_key(b"MyChild", &child_info, b"6"), Ok(None)
+			essence_2.next_child_storage_key(child_info, b"6"), Ok(None)
 		);
 	}
 }

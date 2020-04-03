@@ -1,23 +1,32 @@
 [package]
 name = "sp-arithmetic-fuzzer"
-version = "2.0.0"
+version = "2.0.0-alpha.5"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+description = "Fuzzer for fixed point arithmetic primitives."
+documentation = "https://docs.rs/sp-arithmetic-fuzzer"
 
 [dependencies]
-sp-arithmetic = { version = "2.0.0", path = ".." }
+sp-arithmetic = { version = "2.0.0-alpha.5", path = ".." }
 honggfuzz = "0.5"
-primitive-types = "0.6.2"
+primitive-types = "0.7.0"
 num-bigint = "0.2"
 num-traits = "0.2"
-
-[workspace]
 
 [[bin]]
 name = "biguint"
 path = "src/biguint.rs"
 
 [[bin]]
+name = "per_thing_rational"
+path = "src/per_thing_rational.rs"
+
+[[bin]]
 name = "rational128"
 path = "src/rational128.rs"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

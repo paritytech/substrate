@@ -21,8 +21,8 @@ use futures::executor::block_on;
 use futures::future::poll_fn;
 use libp2p::{kad, PeerId};
 
-use sp_api::{ApiExt, ApiErrorExt, Core, RuntimeVersion, StorageProof, ProvideRuntimeApi, ApiRef};
-use sp_core::{testing::KeyStore, ExecutionContext, NativeOrEncoded};
+use sp_api::{ProvideRuntimeApi, ApiRef};
+use sp_core::testing::KeyStore;
 use sp_runtime::traits::{Zero, Block as BlockT, NumberFor};
 use substrate_test_runtime_client::runtime::Block;
 
@@ -99,8 +99,7 @@ impl ProvideRuntimeApi<Block> for TestApi {
 	fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api> {
 		RuntimeApi {
 			authorities: self.authorities.clone(),
-		}
-		.into()
+		}.into()
 	}
 }
 
@@ -149,90 +148,13 @@ struct RuntimeApi {
 	authorities: Vec<AuthorityId>,
 }
 
-impl Core<Block> for RuntimeApi {
-	fn Core_version_runtime_api_impl(
-		&self,
-		_: &BlockId<Block>,
-		_: ExecutionContext,
-		_: Option<()>,
-		_: Vec<u8>,
-	) -> std::result::Result<NativeOrEncoded<RuntimeVersion>, sp_blockchain::Error> {
-		unimplemented!("Not required for testing!")
-	}
+sp_api::mock_impl_runtime_apis! {
+	impl AuthorityDiscoveryApi<Block> for RuntimeApi {
+		type Error = sp_blockchain::Error;
 
-	fn Core_execute_block_runtime_api_impl(
-		&self,
-		_: &BlockId<Block>,
-		_: ExecutionContext,
-		_: Option<Block>,
-		_: Vec<u8>,
-	) -> std::result::Result<NativeOrEncoded<()>, sp_blockchain::Error> {
-		unimplemented!("Not required for testing!")
-	}
-
-	fn Core_initialize_block_runtime_api_impl(
-		&self,
-		_: &BlockId<Block>,
-		_: ExecutionContext,
-		_: Option<&<Block as BlockT>::Header>,
-		_: Vec<u8>,
-	) -> std::result::Result<NativeOrEncoded<()>, sp_blockchain::Error> {
-		unimplemented!("Not required for testing!")
-	}
-}
-
-impl ApiErrorExt for RuntimeApi {
-	type Error = sp_blockchain::Error;
-}
-
-impl ApiExt<Block> for RuntimeApi {
-	type StateBackend = <
-		substrate_test_runtime_client::Backend as sc_client_api::backend::Backend<Block>
-	>::State;
-
-	fn map_api_result<F: FnOnce(&Self) -> std::result::Result<R, E>, R, E>(
-		&self,
-		_: F
-	) -> std::result::Result<R, E> {
-		unimplemented!("Not required for testing!")
-	}
-
-	fn runtime_version_at(
-		&self,
-		_: &BlockId<Block>,
-	) -> std::result::Result<RuntimeVersion, Self::Error> {
-		unimplemented!("Not required for testing!")
-	}
-
-	fn record_proof(&mut self) {
-		unimplemented!("Not required for testing!")
-	}
-
-	fn extract_proof(&mut self) -> Option<StorageProof> {
-		unimplemented!("Not required for testing!")
-	}
-
-	fn into_storage_changes(
-		&self,
-		_: &Self::StateBackend,
-		_: Option<&sp_api::ChangesTrieState<sp_api::HasherFor<Block>, sp_api::NumberFor<Block>>>,
-		_: <Block as sp_api::BlockT>::Hash,
-	) -> std::result::Result<sp_api::StorageChanges<Self::StateBackend, Block>, String>
-		where Self: Sized
-	{
-		unimplemented!("Not required for testing!")
-	}
-}
-
-impl AuthorityDiscoveryApi<Block> for RuntimeApi {
-	fn AuthorityDiscoveryApi_authorities_runtime_api_impl(
-		&self,
-		_: &BlockId<Block>,
-		_: ExecutionContext,
-		_: Option<()>,
-		_: Vec<u8>,
-	) -> std::result::Result<NativeOrEncoded<Vec<AuthorityId>>, sp_blockchain::Error> {
-		return Ok(NativeOrEncoded::Native(self.authorities.clone()));
+		fn authorities(&self) -> Vec<AuthorityId> {
+			self.authorities.clone()
+		}
 	}
 }
 
@@ -276,6 +198,29 @@ impl NetworkStateInfo for TestNetwork {
 }
 
 #[test]
+fn new_registers_metrics() {
+	let (_dht_event_tx, dht_event_rx) = channel(1000);
+	let network: Arc<TestNetwork> = Arc::new(Default::default());
+	let key_store = KeyStore::new();
+	let test_api = Arc::new(TestApi {
+		authorities: vec![],
+	});
+
+	let registry = prometheus_endpoint::Registry::new();
+
+	AuthorityDiscovery::new(
+		test_api,
+		network.clone(),
+		vec![],
+		key_store,
+		dht_event_rx.boxed(),
+		Some(registry.clone()),
+	);
+
+	assert!(registry.gather().len() > 0);
+}
+
+#[test]
 fn publish_ext_addresses_puts_record_on_dht() {
 	let (_dht_event_tx, dht_event_rx) = channel(1000);
 	let network: Arc<TestNetwork> = Arc::new(Default::default());
@@ -294,6 +239,7 @@ fn publish_ext_addresses_puts_record_on_dht() {
 		vec![],
 		key_store,
 		dht_event_rx.boxed(),
+		None,
 	);
 
 	authority_discovery.publish_ext_addresses().unwrap();
@@ -324,6 +270,7 @@ fn request_addresses_of_others_triggers_dht_get_query() {
 		vec![],
 		key_store,
 		dht_event_rx.boxed(),
+		None,
 	);
 
 	authority_discovery.request_addresses_of_others().unwrap();
@@ -351,6 +298,7 @@ fn handle_dht_events_with_value_found_should_call_set_priority_group() {
 		vec![],
 		key_store,
 		dht_event_rx.boxed(),
+		None,
 	);
 
 	// Create sample dht event.

@@ -365,7 +365,7 @@ impl<'a, Hash> DigestItemRef<'a, Hash> {
 	}
 
 	/// Try to match this digest item to the given opaque item identifier; if it matches, then
-	/// try to cast to the given datatype; if that works, return it.
+	/// try to cast to the given data type; if that works, return it.
 	pub fn try_to<T: Decode>(&self, id: OpaqueDigestItemId) -> Option<T> {
 		self.try_as_raw(id).and_then(|mut x| Decode::decode(&mut x).ok())
 	}

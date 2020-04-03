@@ -14,58 +14,69 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Primitives for the runtime modules.
+//! Primitive traits for the runtime arithmetic.
 
 use sp_std::{self, convert::{TryFrom, TryInto}};
 use codec::HasCompact;
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{
 	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,
-	CheckedShl, CheckedShr
+	CheckedShl, CheckedShr, checked_pow
 };
 use sp_std::ops::{
 	Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
 	RemAssign, Shl, Shr
 };
 
+/// A meta trait for arithmetic type operations, regardless of any limitation on size.
+pub trait BaseArithmetic:
+	From<u8> +
+	Zero + One + IntegerSquareRoot +
+	Add<Self, Output = Self> + AddAssign<Self> +
+	Sub<Self, Output = Self> + SubAssign<Self> +
+	Mul<Self, Output = Self> + MulAssign<Self> +
+	Div<Self, Output = Self> + DivAssign<Self> +
+	Rem<Self, Output = Self> + RemAssign<Self> +
+	Shl<u32, Output = Self> + Shr<u32, Output = Self> +
+	CheckedShl + CheckedShr + CheckedAdd + CheckedSub + CheckedMul + CheckedDiv + Saturating +
+	PartialOrd<Self> + Ord + Bounded + HasCompact + Sized +
+	TryFrom<u8> + TryInto<u8> + TryFrom<u16> + TryInto<u16> + TryFrom<u32> + TryInto<u32> +
+	TryFrom<u64> + TryInto<u64> + TryFrom<u128> + TryInto<u128> + TryFrom<usize> + TryInto<usize> +
+	UniqueSaturatedFrom<u8> + UniqueSaturatedInto<u8> +
+	UniqueSaturatedFrom<u16> + UniqueSaturatedInto<u16> +
+	UniqueSaturatedFrom<u32> + UniqueSaturatedInto<u32> +
+	UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64> +
+	UniqueSaturatedFrom<u128> + UniqueSaturatedInto<u128>
+{}
+
+impl<T:
+	From<u8> +
+	Zero + One + IntegerSquareRoot +
+	Add<Self, Output = Self> + AddAssign<Self> +
+	Sub<Self, Output = Self> + SubAssign<Self> +
+	Mul<Self, Output = Self> + MulAssign<Self> +
+	Div<Self, Output = Self> + DivAssign<Self> +
+	Rem<Self, Output = Self> + RemAssign<Self> +
+	Shl<u32, Output = Self> + Shr<u32, Output = Self> +
+	CheckedShl + CheckedShr + CheckedAdd + CheckedSub + CheckedMul + CheckedDiv + Saturating +
+	PartialOrd<Self> + Ord + Bounded + HasCompact + Sized +
+	TryFrom<u8> + TryInto<u8> + TryFrom<u16> + TryInto<u16> + TryFrom<u32> + TryInto<u32> +
+	TryFrom<u64> + TryInto<u64> + TryFrom<u128> + TryInto<u128> + TryFrom<usize> + TryInto<usize> +
+	UniqueSaturatedFrom<u8> + UniqueSaturatedInto<u8> +
+	UniqueSaturatedFrom<u16> + UniqueSaturatedInto<u16> +
+	UniqueSaturatedFrom<u32> + UniqueSaturatedInto<u32> +
+	UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64> +
+	UniqueSaturatedFrom<u128> + UniqueSaturatedInto<u128>
+> BaseArithmetic for T {}
+
 /// A meta trait for arithmetic.
 ///
 /// Arithmetic types do all the usual stuff you'd expect numbers to do. They are guaranteed to
 /// be able to represent at least `u32` values without loss, hence the trait implies `From<u32>`
-/// and smaller ints. All other conversions are fallible.
-pub trait SimpleArithmetic:
-	Zero + One + IntegerSquareRoot +
-	From<u8> + From<u16> + From<u32> + TryInto<u8> + TryInto<u16> + TryInto<u32> +
-	TryFrom<u64> + TryInto<u64> + TryFrom<u128> + TryInto<u128> + TryFrom<usize> + TryInto<usize> +
-	UniqueSaturatedInto<u8> + UniqueSaturatedInto<u16> + UniqueSaturatedInto<u32> +
-	UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128> + UniqueSaturatedInto<u128> +
-	Add<Self, Output = Self> + AddAssign<Self> +
-	Sub<Self, Output = Self> + SubAssign<Self> +
-	Mul<Self, Output = Self> + MulAssign<Self> +
-	Div<Self, Output = Self> + DivAssign<Self> +
-	Rem<Self, Output = Self> + RemAssign<Self> +
-	Shl<u32, Output = Self> + Shr<u32, Output = Self> +
-	CheckedShl + CheckedShr + CheckedAdd + CheckedSub + CheckedMul + CheckedDiv +
-	Saturating + PartialOrd<Self> + Ord + Bounded +
-	HasCompact + Sized
-{}
-impl<T:
-	Zero + One + IntegerSquareRoot +
-	From<u8> + From<u16> + From<u32> + TryInto<u8> + TryInto<u16> + TryInto<u32> +
-	TryFrom<u64> + TryInto<u64> + TryFrom<u128> + TryInto<u128> + TryFrom<usize> + TryInto<usize> +
-	UniqueSaturatedInto<u8> + UniqueSaturatedInto<u16> + UniqueSaturatedInto<u32> +
-	UniqueSaturatedFrom<u64> + UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128> +
-	UniqueSaturatedInto<u128> + UniqueSaturatedFrom<usize> + UniqueSaturatedInto<usize> +
-	Add<Self, Output = Self> + AddAssign<Self> +
-	Sub<Self, Output = Self> + SubAssign<Self> +
-	Mul<Self, Output = Self> + MulAssign<Self> +
-	Div<Self, Output = Self> + DivAssign<Self> +
-	Rem<Self, Output = Self> + RemAssign<Self> +
-	Shl<u32, Output = Self> + Shr<u32, Output = Self> +
-	CheckedShl + CheckedShr + CheckedAdd + CheckedSub + CheckedMul + CheckedDiv +
-	Saturating + PartialOrd<Self> + Ord + Bounded +
-	HasCompact + Sized
-> SimpleArithmetic for T {}
+/// and smaller integers. All other conversions are fallible.
+pub trait AtLeast32Bit: BaseArithmetic + From<u16> + From<u32> {}
+
+impl<T: BaseArithmetic + From<u16> + From<u32>> AtLeast32Bit for T {}
 
 /// Just like `From` except that if the source value is too big to fit into the destination type
 /// then it'll saturate the destination.
@@ -93,28 +104,40 @@ impl<T: Bounded + Sized, S: TryInto<T> + Sized> UniqueSaturatedInto<T> for S {
 	}
 }
 
-/// Simple trait to use checked mul and max value to give a saturated mul operation over
-/// supported types.
+/// Saturating arithmetic operations, returning maximum or minimum values instead of overflowing.
 pub trait Saturating {
-	/// Saturated addition - if the product can't fit in the type then just use max-value.
-	fn saturating_add(self, o: Self) -> Self;
+	/// Saturating addition. Compute `self + rhs`, saturating at the numeric bounds instead of
+	/// overflowing.
+	fn saturating_add(self, rhs: Self) -> Self;
 
-	/// Saturated subtraction - if the product can't fit in the type then just use max-value.
-	fn saturating_sub(self, o: Self) -> Self;
+	/// Saturating subtraction. Compute `self - rhs`, saturating at the numeric bounds instead of
+	/// overflowing.
+	fn saturating_sub(self, rhs: Self) -> Self;
 
-	/// Saturated multiply - if the product can't fit in the type then just use max-value.
-	fn saturating_mul(self, o: Self) -> Self;
+	/// Saturating multiply. Compute `self * rhs`, saturating at the numeric bounds instead of
+	/// overflowing.
+	fn saturating_mul(self, rhs: Self) -> Self;
+	
+	/// Saturating exponentiation. Compute `self.pow(exp)`, saturating at the numeric bounds
+	/// instead of overflowing.
+	fn saturating_pow(self, exp: usize) -> Self;
 }
 
-impl<T: CheckedMul + Bounded + num_traits::Saturating> Saturating for T {
+impl<T: Clone + One + CheckedMul + Bounded + num_traits::Saturating> Saturating for T {
 	fn saturating_add(self, o: Self) -> Self {
 		<Self as num_traits::Saturating>::saturating_add(self, o)
 	}
+
 	fn saturating_sub(self, o: Self) -> Self {
 		<Self as num_traits::Saturating>::saturating_sub(self, o)
 	}
+
 	fn saturating_mul(self, o: Self) -> Self {
 		self.checked_mul(&o).unwrap_or_else(Bounded::max_value)
+	}
+
+	fn saturating_pow(self, exp: usize) -> Self {
+		checked_pow(self, exp).unwrap_or_else(Bounded::max_value)
 	}
 }
 

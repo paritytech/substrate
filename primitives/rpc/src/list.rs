@@ -23,7 +23,7 @@ use serde::{Serialize, Deserialize};
 /// For some RPCs it's convenient to call them with either
 /// a single value or a whole list of values to get a proper response.
 /// In theory you could do a batch query, but it's:
-/// 1. Less convient in client libraries
+/// 1. Less convenient in client libraries
 /// 2. If the response value is small, the protocol overhead might be dominant.
 ///
 /// Also it's nice to be able to maintain backward compatibility for methods that

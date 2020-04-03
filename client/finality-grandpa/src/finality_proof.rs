@@ -34,16 +34,15 @@
 //! finality proof (that finalizes some block C that is ancestor of the B and descendant
 //! of the U) could be returned.
 
-use std::iter;
 use std::sync::Arc;
 use log::{trace, warn};
 
 use sp_blockchain::{Backend as BlockchainBackend, Error as ClientError, Result as ClientResult};
 use sc_client_api::{
-	backend::Backend, CallExecutor, StorageProof,
+	backend::Backend, StorageProof,
 	light::{FetchChecker, RemoteReadRequest},
+	StorageProvider, ProofProvider,
 };
-use sc_client::Client;
 use parity_scale_codec::{Encode, Decode};
 use finality_grandpa::BlockNumberOps;
 use sp_runtime::{
@@ -67,12 +66,25 @@ pub trait AuthoritySetForFinalityProver<Block: BlockT>: Send + Sync {
 	fn prove_authorities(&self, block: &BlockId<Block>) -> ClientResult<StorageProof>;
 }
 
-/// Client-based implementation of AuthoritySetForFinalityProver.
-impl<B, E, Block: BlockT, RA> AuthoritySetForFinalityProver<Block> for Client<B, E, Block, RA>
+/// Trait that combines `StorageProvider` and `ProofProvider`
+pub trait StorageAndProofProvider<Block, BE>: StorageProvider<Block, BE> + ProofProvider<Block> + Send + Sync
 	where
-		B: Backend<Block> + Send + Sync + 'static,
-		E: CallExecutor<Block> + 'static + Clone + Send + Sync,
-		RA: Send + Sync,
+		Block: BlockT,
+		BE: Backend<Block> + Send + Sync,
+{}
+
+/// Blanket implementation.
+impl<Block, BE, P> StorageAndProofProvider<Block, BE> for P
+	where
+		Block: BlockT,
+		BE: Backend<Block> + Send + Sync,
+		P: StorageProvider<Block, BE> + ProofProvider<Block> + Send + Sync,
+{}
+
+/// Implementation of AuthoritySetForFinalityProver.
+impl<BE, Block: BlockT> AuthoritySetForFinalityProver<Block> for Arc<dyn StorageAndProofProvider<Block, BE>>
+	where
+		BE: Backend<Block> + Send + Sync + 'static,
 {
 	fn authorities(&self, block: &BlockId<Block>) -> ClientResult<AuthorityList> {
 		let storage_key = StorageKey(GRANDPA_AUTHORITIES_KEY.to_vec());
@@ -83,7 +95,7 @@ impl<B, E, Block: BlockT, RA> AuthoritySetForFinalityProver<Block> for Client<B,
 	}
 
 	fn prove_authorities(&self, block: &BlockId<Block>) -> ClientResult<StorageProof> {
-		self.read_proof(block, iter::once(GRANDPA_AUTHORITIES_KEY))
+		self.read_proof(block, &mut std::iter::once(GRANDPA_AUTHORITIES_KEY))
 	}
 }
 
@@ -146,15 +158,17 @@ impl<B, Block: BlockT> FinalityProofProvider<B, Block>
 	///
 	/// - backend for accessing blockchain data;
 	/// - authority_provider for calling and proving runtime methods.
-	pub fn new(
+	pub fn new<P>(
 		backend: Arc<B>,
-		authority_provider: Arc<dyn AuthoritySetForFinalityProver<Block>>,
-	) -> Self {
-		FinalityProofProvider { backend, authority_provider }
+		authority_provider: P,
+	) -> Self
+		where P: AuthoritySetForFinalityProver<Block> + 'static,
+	{
+		FinalityProofProvider { backend, authority_provider: Arc::new(authority_provider) }
 	}
 }
 
-impl<B, Block> sc_network::FinalityProofProvider<Block> for FinalityProofProvider<B, Block>
+impl<B, Block> sc_network::config::FinalityProofProvider<Block> for FinalityProofProvider<B, Block>
 	where
 		Block: BlockT,
 		NumberFor<Block>: BlockNumberOps,
@@ -920,7 +934,7 @@ pub(crate) mod tests {
 	}
 
 	#[test]
-	fn finality_proof_check_fails_when_intemediate_fragment_has_unknown_headers() {
+	fn finality_proof_check_fails_when_intermediate_fragment_has_unknown_headers() {
 		let blockchain = test_blockchain();
 
 		// when intermediate (#0) fragment has non-empty unknown headers
@@ -945,7 +959,7 @@ pub(crate) mod tests {
 	}
 
 	#[test]
-	fn finality_proof_check_fails_when_intemediate_fragment_has_no_authorities_proof() {
+	fn finality_proof_check_fails_when_intermediate_fragment_has_no_authorities_proof() {
 		let blockchain = test_blockchain();
 
 		// when intermediate (#0) fragment has empty authorities proof
@@ -1004,7 +1018,7 @@ pub(crate) mod tests {
 	#[test]
 	fn finality_proof_is_none_if_first_justification_is_generated_by_unknown_set() {
 		// this is the case for forced change: set_id has been forcibly increased on full node
-		// and ligh node missed that
+		// and light node missed that
 		// => justification verification will fail on light node anyways, so we do not return
 		// finality proof at all
 		let blockchain = test_blockchain();

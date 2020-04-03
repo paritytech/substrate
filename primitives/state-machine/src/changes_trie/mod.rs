@@ -16,7 +16,7 @@
 
 //! Changes trie related structures and functions.
 //!
-//! Changes trie is a trie built of { storage key => extrinsiscs } pairs
+//! Changes trie is a trie built of { storage key => extrinsics } pairs
 //! at the end of each block. For every changed storage key it contains
 //! a pair, mapping key to the set of extrinsics where it has been changed.
 //!
@@ -73,6 +73,7 @@ use sp_core::storage::ChildInfo;
 use num_traits::{One, Zero};
 use codec::{Decode, Encode};
 use sp_core;
+use sp_core::storage::PrefixedStorageKey;
 use sp_trie::{MemoryDB, DBValue, TrieMut};
 use sp_trie::trie_types::TrieDBMut;
 use crate::{
@@ -132,7 +133,7 @@ pub struct AnchorBlockId<Hash: std::fmt::Debug, Number: BlockNumber> {
 pub struct State<'a, H, Number> {
 	/// Configuration that is active at given block.
 	pub config: Configuration,
-	/// Configuration activation block number. Zero if it is the first coonfiguration on the chain,
+	/// Configuration activation block number. Zero if it is the first configuration on the chain,
 	/// or number of the block that have emit NewConfiguration signal (thus activating configuration
 	/// starting from the **next** block).
 	pub zero: Number,
@@ -158,7 +159,7 @@ pub trait Storage<H: Hasher, Number: BlockNumber>: RootsStorage<H, Number> {
 	fn with_cached_changed_keys(
 		&self,
 		root: &H::Out,
-		functor: &mut dyn FnMut(&HashMap<Option<StorageKey>, HashSet<StorageKey>>),
+		functor: &mut dyn FnMut(&HashMap<Option<PrefixedStorageKey>, HashSet<StorageKey>>),
 	) -> bool;
 	/// Get a trie node.
 	fn get(

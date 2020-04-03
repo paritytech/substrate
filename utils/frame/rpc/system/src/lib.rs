@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! System SRML specific RPC methods.
+//! System FRAME specific RPC methods.
 
 use std::sync::Arc;
 
@@ -87,7 +87,7 @@ where
 	P: TransactionPool + 'static,
 	Block: traits::Block,
 	AccountId: Clone + std::fmt::Display + Codec,
-	Index: Clone + std::fmt::Display + Codec + Send + traits::SimpleArithmetic + 'static,
+	Index: Clone + std::fmt::Display + Codec + Send + traits::AtLeast32Bit + 'static,
 {
 	fn nonce(&self, account: AccountId) -> FutureResult<Index> {
 		let get_nonce = || {
@@ -141,7 +141,7 @@ where
 	F: Fetcher<Block> + 'static,
 	Block: traits::Block,
 	AccountId: Clone + std::fmt::Display + Codec + Send + 'static,
-	Index: Clone + std::fmt::Display + Codec + Send + traits::SimpleArithmetic + 'static,
+	Index: Clone + std::fmt::Display + Codec + Send + traits::AtLeast32Bit + 'static,
 {
 	fn nonce(&self, account: AccountId) -> FutureResult<Index> {
 		let best_hash = self.client.info().best_hash;
@@ -189,7 +189,7 @@ fn adjust_nonce<P, AccountId, Index>(
 ) -> Index where
 	P: TransactionPool,
 	AccountId: Clone + std::fmt::Display + Encode,
-	Index: Clone + std::fmt::Display + Encode + traits::SimpleArithmetic + 'static,
+	Index: Clone + std::fmt::Display + Encode + traits::AtLeast32Bit + 'static,
 {
 	log::debug!(target: "rpc", "State nonce for {}: {}", account, nonce);
 	// Now we need to query the transaction pool
@@ -236,9 +236,10 @@ mod tests {
 		let _ = env_logger::try_init();
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let pool = Arc::new(
-			BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone())))
+			BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone()))).0
 		);
 
+		let source = sp_runtime::transaction_validity::TransactionSource::External;
 		let new_transaction = |nonce: u64| {
 			let t = Transfer {
 				from: AccountKeyring::Alice.into(),
@@ -250,9 +251,9 @@ mod tests {
 		};
 		// Populate the pool
 		let ext0 = new_transaction(0);
-		block_on(pool.submit_one(&BlockId::number(0), ext0)).unwrap();
+		block_on(pool.submit_one(&BlockId::number(0), source, ext0)).unwrap();
 		let ext1 = new_transaction(1);
-		block_on(pool.submit_one(&BlockId::number(0), ext1)).unwrap();
+		block_on(pool.submit_one(&BlockId::number(0), source, ext1)).unwrap();
 
 		let accounts = FullSystem::new(client, pool);
 

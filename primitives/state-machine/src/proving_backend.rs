@@ -18,13 +18,13 @@
 
 use std::sync::Arc;
 use parking_lot::RwLock;
-use codec::{Decode, Encode, Codec};
+use codec::{Decode, Codec};
 use log::debug;
 use hash_db::{HashDB, EMPTY_PREFIX, Prefix};
 use sp_core::{Hasher, InnerHasher};
 use sp_trie::{
-	MemoryDB, default_child_trie_root, read_trie_value_with,
-	record_all_keys,
+	MemoryDB, empty_child_trie_root, read_trie_value_with,
+	record_all_keys, StorageProof,
 };
 pub use sp_trie::Recorder;
 pub use sp_trie::trie_types::{Layout, TrieError};
@@ -32,7 +32,7 @@ use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::{BackendStorageDBRef, TrieBackendEssence,
 	TrieBackendStorage, TrieBackendStorageRef};
 use crate::{Error, ExecutionError, Backend};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use crate::DBValue;
 use sp_core::storage::{ChildInfo, ChildType, ChildrenMap};
 
@@ -267,6 +267,8 @@ impl Iterator for StorageProofNodeIterator {
 /// proofs due to deduplication of trie nodes.
 /// Merge to `Flatten` if any item is flatten (we cannot unflatten), if not `Flatten` we output to
 /// non compact form.
+/// TODO EMCH on master this has moved to a StorageProof function: do it (same for the other merge
+/// function)
 pub fn merge_storage_proofs<H, I>(proofs: I) -> Result<StorageProof, String>
 	where
 		I: IntoIterator<Item=StorageProof>,
@@ -361,13 +363,13 @@ impl<'a, S, H> ProvingBackendRecorder<'a, S, H>
 	/// Produce proof for a child key query.
 	pub fn child_storage(
 		&mut self,
-		storage_key: &[u8],
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, String> {
+		let storage_key = child_info.storage_key();
 		let root = self.storage(storage_key)?
 			.and_then(|r| Decode::decode(&mut &r[..]).ok())
-			.unwrap_or(default_child_trie_root::<Layout<H>>(storage_key));
+			.unwrap_or(empty_child_trie_root::<Layout<H>>());
 
 		let eph = BackendStorageDBRef::new(
 			self.backend.backend_storage(),
@@ -464,7 +466,7 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 		let root = essence.root().clone();
 		let recorder = ProofRecorderBackend {
 			backend: essence.backend_storage(),
-			proof_recorder: proof_recorder,
+			proof_recorder,
 		};
 		ProvingBackend(TrieBackend::new_with_roots(recorder, root))
 	}
@@ -562,20 +564,18 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 
 	fn child_storage(
 		&self,
-		storage_key: &[u8],
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.0.child_storage(storage_key, child_info, key)
+		self.0.child_storage(child_info, key)
 	}
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
 		&self,
-		storage_key: &[u8],
 		child_info: &ChildInfo,
 		f: F,
 	) {
-		self.0.for_keys_in_child_storage(storage_key, child_info, f)
+		self.0.for_keys_in_child_storage(child_info, f)
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -584,11 +584,10 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 
 	fn next_child_storage_key(
 		&self,
-		storage_key: &[u8],
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.0.next_child_storage_key(storage_key, child_info, key)
+		self.0.next_child_storage_key(child_info, key)
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
@@ -601,12 +600,11 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
 		&self,
-		storage_key: &[u8],
 		child_info: &ChildInfo,
 		prefix: &[u8],
 		f: F,
 	) {
-		self.0.for_child_keys_with_prefix(storage_key, child_info, prefix, f)
+		self.0.for_child_keys_with_prefix( child_info, prefix, f)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -619,11 +617,10 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 
 	fn child_keys(
 		&self,
-		storage_key: &[u8],
 		child_info: &ChildInfo,
 		prefix: &[u8],
 	) -> Vec<Vec<u8>> {
-		self.0.child_keys(storage_key, child_info, prefix)
+		self.0.child_keys(child_info, prefix)
 	}
 
 	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
@@ -635,7 +632,6 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 
 	fn child_storage_root<I>(
 		&self,
-		storage_key: &[u8],
 		child_info: &ChildInfo,
 		delta: I,
 	) -> (H::Out, bool, Self::Transaction)
@@ -643,8 +639,14 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord
 	{
-		let (root, is_empty, mut tx) = self.0.child_storage_root(storage_key, child_info, delta);
+		let (root, is_empty, mut tx) = self.0.child_storage_root(child_info, delta);
 		(root, is_empty, tx.remove(child_info))
+	}
+
+	fn register_overlay_stats(&mut self, _stats: &crate::stats::StateMachineStats) { }
+
+	fn usage_info(&self) -> crate::stats::UsageInfo {
+		self.0.usage_info()
 	}
 }
 
@@ -780,14 +782,14 @@ mod tests {
 	use crate::InMemoryBackend;
 	use crate::trie_backend::tests::test_trie;
 	use super::*;
-	use sp_core::{Blake2Hasher, storage::ChildStorageKey};
 	use crate::proving_backend::create_proof_check_backend;
 	use sp_trie::PrefixedMemoryDB;
+	use sp_runtime::traits::BlakeTwo256;
 
 	fn test_proving<'a>(
 		trie_backend: &'a TrieBackend<PrefixedMemoryDB<Blake2Hasher>,Blake2Hasher>,
 		flat: bool,
-	) -> ProvingBackend<'a, PrefixedMemoryDB<Blake2Hasher>, Blake2Hasher> {
+	) -> ProvingBackend<'a, PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256> {
 		ProvingBackend::new(trie_backend, flat)
 	}
 
@@ -813,7 +815,7 @@ mod tests {
 	#[test]
 	fn proof_is_invalid_when_does_not_contains_root() {
 		use sp_core::H256;
-		let result = create_proof_check_backend::<Blake2Hasher>(
+		let result = create_proof_check_backend::<BlakeTwo256>(
 			H256::from_low_u64_be(1),
 			StorageProof::empty()
 		);
@@ -821,7 +823,7 @@ mod tests {
 	}
 
 	#[test]
-	fn passes_throgh_backend_calls() {
+	fn passes_through_backend_calls() {
 		let test = |flat| {
 			let trie_backend = test_trie();
 			let proving_backend = test_proving(&trie_backend, flat);
@@ -841,7 +843,7 @@ mod tests {
 	#[test]
 	fn proof_recorded_and_checked() {
 		let contents = (0..64).map(|i| (vec![i], Some(vec![i]))).collect::<Vec<_>>();
-		let in_memory = InMemoryBackend::<Blake2Hasher>::default();
+		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
 		let mut in_memory = in_memory.update(vec![(None, contents)]);
 		let in_memory_root = in_memory.storage_root(::std::iter::empty()).0;
 		(0..64).for_each(|i| assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i]));
@@ -857,7 +859,7 @@ mod tests {
 
 			let proof = proving.extract_proof().unwrap();
 
-			let proof_check = create_proof_check_backend::<Blake2Hasher>(in_memory_root.into(), proof).unwrap();
+			let proof_check = create_proof_check_backend::<BlakeTwo256>(in_memory_root.into(), proof).unwrap();
 			assert_eq!(proof_check.storage(&[42]).unwrap().unwrap(), vec![42]);
 		};
 		test(true);
@@ -866,24 +868,22 @@ mod tests {
 
 	#[test]
 	fn proof_recorded_and_checked_with_child() {
-		let child_info1 = ChildInfo::new_default(b"unique_id_1");
-		let child_info2 = ChildInfo::new_default(b"unique_id_2");
-		let subtrie1 = ChildStorageKey::from_slice(b":child_storage:default:sub1").unwrap();
-		let subtrie2 = ChildStorageKey::from_slice(b":child_storage:default:sub2").unwrap();
-		let own1 = subtrie1.into_owned();
-		let own2 = subtrie2.into_owned();
+		let child_info_1 = ChildInfo::new_default(b"sub1");
+		let child_info_2 = ChildInfo::new_default(b"sub2");
+		let child_info_1 = &child_info_1;
+		let child_info_2 = &child_info_2;
 		let contents = vec![
 			(None, (0..64).map(|i| (vec![i], Some(vec![i]))).collect()),
-			(Some((own1.clone(), child_info1.clone())),
+			(Some(child_info_1.clone()),
 				(28..65).map(|i| (vec![i], Some(vec![i]))).collect()),
-			(Some((own2.clone(), child_info2.clone())),
+			(Some(child_info_2.clone()),
 				(10..15).map(|i| (vec![i], Some(vec![i]))).collect()),
 		];
-		let in_memory = InMemoryBackend::<Blake2Hasher>::default();
+		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
 		let mut in_memory = in_memory.update(contents);
 		let in_memory_root = in_memory.full_storage_root::<_, Vec<_>, _>(
 			::std::iter::empty(),
-			in_memory.child_storage_keys().map(|k|(k.0.to_vec(), Vec::new(), k.1.to_owned())),
+			in_memory.child_storage_infos().map(|k|(k.to_owned(), Vec::new())),
 			false,
 		).0;
 		(0..64).for_each(|i| assert_eq!(
@@ -891,11 +891,11 @@ mod tests {
 			vec![i]
 		));
 		(28..65).for_each(|i| assert_eq!(
-			in_memory.child_storage(&own1[..], &child_info1, &[i]).unwrap().unwrap(),
+			in_memory.child_storage(child_info_1, &[i]).unwrap().unwrap(),
 			vec![i]
 		));
 		(10..15).for_each(|i| assert_eq!(
-			in_memory.child_storage(&own2[..], &child_info2, &[i]).unwrap().unwrap(),
+			in_memory.child_storage(child_info_2, &[i]).unwrap().unwrap(),
 			vec![i]
 		));
 
@@ -913,7 +913,7 @@ mod tests {
 
 			let proof = proving.extract_proof().unwrap();
 
-			let proof_check = create_proof_check_backend::<Blake2Hasher>(
+			let proof_check = create_proof_check_backend::<BlakeTwo256>(
 				in_memory_root.into(),
 				proof
 			).unwrap();
@@ -924,27 +924,27 @@ mod tests {
 			assert_eq!(proof_check.storage(&[64]).unwrap(), None);
 
 			let proving = ProvingBackend::new(trie, flat);
-			assert_eq!(proving.child_storage(&own1[..], &child_info1, &[64]), Ok(Some(vec![64])));
+			assert_eq!(proving.child_storage(child_info_1, &[64]), Ok(Some(vec![64])));
 
 			let proof = proving.extract_proof().unwrap();
 			if flat {
-				let proof_check = create_flat_proof_check_backend::<Blake2Hasher>(
+				let proof_check = create_flat_proof_check_backend::<BlakeTwo256>(
 					in_memory_root.into(),
 					proof
 				).unwrap();
 			
 				assert_eq!(
-					proof_check.child_storage(&own1[..], &child_info1, &[64]).unwrap().unwrap(),
+					proof_check.child_storage(&child_info1, &[64]).unwrap().unwrap(),
 					vec![64]
 				);
 			} else {
-				let proof_check = create_proof_check_backend::<Blake2Hasher>(
+				let proof_check = create_proof_check_backend::<BlakeTwo256>(
 					in_memory_root.into(),
 					proof
 				).unwrap();
 			
 				assert_eq!(
-					proof_check.child_storage(&own1[..], &child_info1, &[64]).unwrap().unwrap(),
+					proof_check.child_storage(&child_info1, &[64]).unwrap().unwrap(),
 					vec![64]
 				);
 			}

@@ -33,7 +33,7 @@ pub use self::block_builder_ext::BlockBuilderExt;
 use sp_core::{sr25519, ChangesTrieConfiguration};
 use sp_core::storage::{ChildInfo, Storage, StorageChild};
 use substrate_test_runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, NumberFor, HasherFor};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, NumberFor, HashFor};
 use sc_client::{
 	light::fetcher::{
 		Fetcher,
@@ -82,7 +82,7 @@ pub type LightExecutor = sc_client::light::call_executor::GenesisCallExecutor<
 	sc_client::LocalCallExecutor<
 		sc_client::light::backend::Backend<
 			sc_client_db::light::LightStorage<substrate_test_runtime::Block>,
-			HasherFor<substrate_test_runtime::Block>
+			HashFor<substrate_test_runtime::Block>
 		>,
 		NativeExecutor<LocalExecutor>
 	>
@@ -123,11 +123,12 @@ impl substrate_test_client::GenesisInit for GenesisParameters {
 
 		let mut storage = self.genesis_config().genesis_map();
 
-		let child_roots = storage.children.iter().map(|(sk, child_content)| {
+		let child_roots = storage.children_default.iter().map(|(_sk, child_content)| {
 			let state_root = <<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
 				child_content.data.clone().into_iter().collect()
 			);
-			(sk.clone(), state_root.encode())
+			let prefixed_storage_key = child_content.child_info.prefixed_storage_key();
+			(prefixed_storage_key.into_inner(), state_root.encode())
 		});
 		let state_root = <<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
 			storage.top.clone().into_iter().chain(child_roots).collect()
@@ -192,22 +193,21 @@ pub trait TestClientBuilderExt<B>: Sized {
 	/// # Panics
 	///
 	/// Panics if the key is empty.
-	fn add_extra_child_storage<SK: Into<Vec<u8>>, K: Into<Vec<u8>>, V: Into<Vec<u8>>>(
+	fn add_extra_child_storage<K: Into<Vec<u8>>, V: Into<Vec<u8>>>(
 		mut self,
-		storage_key: SK,
 		child_info: &ChildInfo,
 		key: K,
 		value: V,
 	) -> Self {
-		let storage_key = storage_key.into();
+		let storage_key = child_info.storage_key().to_vec();
 		let key = key.into();
 		assert!(!storage_key.is_empty());
 		assert!(!key.is_empty());
-		self.genesis_init_mut().extra_storage.children
+		self.genesis_init_mut().extra_storage.children_default
 			.entry(storage_key)
 			.or_insert_with(|| StorageChild {
 				data: Default::default(),
-				child_info: child_info.to_owned(),
+				child_info: child_info.clone(),
 			}).data.insert(key, value.into());
 		self
 	}
@@ -243,7 +243,7 @@ impl<B> TestClientBuilderExt<B> for TestClientBuilder<
 	B: sc_client_api::backend::Backend<substrate_test_runtime::Block> + 'static,
 	// Rust bug: https://github.com/rust-lang/rust/issues/24159
 	<B as sc_client_api::backend::Backend<substrate_test_runtime::Block>>::State:
-		sp_api::StateBackend<HasherFor<substrate_test_runtime::Block>>,
+		sp_api::StateBackend<HashFor<substrate_test_runtime::Block>>,
 {
 	fn genesis_init_mut(&mut self) -> &mut GenesisParameters {
 		Self::genesis_init_mut(self)
@@ -311,7 +311,10 @@ impl Fetcher<substrate_test_runtime::Block> for LightFetcher {
 		unimplemented!()
 	}
 
-	fn remote_read_child(&self, _: RemoteReadChildRequest<substrate_test_runtime::Header>) -> Self::RemoteReadResult {
+	fn remote_read_child(
+		&self,
+		_: RemoteReadChildRequest<substrate_test_runtime::Header>,
+	) -> Self::RemoteReadResult {
 		unimplemented!()
 	}
 
@@ -349,7 +352,7 @@ pub fn new_light() -> (
 	let blockchain = Arc::new(sc_client::light::blockchain::Blockchain::new(storage));
 	let backend = Arc::new(LightBackend::new(blockchain.clone()));
 	let executor = new_native_executor();
-	let local_call_executor = sc_client::LocalCallExecutor::new(backend.clone(), executor);
+	let local_call_executor = sc_client::LocalCallExecutor::new(backend.clone(), executor, sp_core::tasks::executor());
 	let call_executor = LightExecutor::new(
 		backend.clone(),
 		local_call_executor,
@@ -370,5 +373,5 @@ pub fn new_light_fetcher() -> LightFetcher {
 
 /// Create a new native executor.
 pub fn new_native_executor() -> sc_executor::NativeExecutor<LocalExecutor> {
-	sc_executor::NativeExecutor::new(sc_executor::WasmExecutionMethod::Interpreted, None)
+	sc_executor::NativeExecutor::new(sc_executor::WasmExecutionMethod::Interpreted, None, 8)
 }

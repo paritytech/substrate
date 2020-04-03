@@ -151,13 +151,6 @@ decl_error! {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as GrandpaFinality {
-		/// DEPRECATED
-		///
-		/// This used to store the current authority set, which has been migrated to the well-known
-		/// GRANDPA_AUTHORITES_KEY unhashed key.
-		#[cfg(feature = "migrate-authorities")]
-		pub(crate) Authorities get(fn authorities): AuthorityList;
-
 		/// State of the current authority set.
 		State get(fn state): StoredState<T::BlockNumber> = StoredState::Live;
 
@@ -174,8 +167,9 @@ decl_storage! {
 		/// in the "set" of Grandpa validators from genesis.
 		CurrentSetId get(fn current_set_id) build(|_| fg_primitives::SetId::default()): SetId;
 
-		/// A mapping from grandpa set ID to the index of the *most recent* session for which its members were responsible.
-		SetIdSession get(fn session_for_set): map hasher(blake2_256) SetId => Option<SessionIndex>;
+		/// A mapping from grandpa set ID to the index of the *most recent* session for which its
+		/// members were responsible.
+		SetIdSession get(fn session_for_set): map hasher(twox_64_concat) SetId => Option<SessionIndex>;
 	}
 	add_extra_genesis {
 		config(authorities): AuthorityList;
@@ -190,14 +184,10 @@ decl_module! {
 		fn deposit_event() = default;
 
 		/// Report some misbehavior.
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn report_misbehavior(origin, _report: Vec<u8>) {
 			ensure_signed(origin)?;
 			// FIXME: https://github.com/paritytech/substrate/issues/1112
-		}
-
-		fn on_initialize() {
-			#[cfg(feature = "migrate-authorities")]
-			Self::migrate_authorities();
 		}
 
 		fn on_finalize(block_number: T::BlockNumber) {
@@ -370,13 +360,6 @@ impl<T: Trait> Module<T> {
 			Self::set_grandpa_authorities(authorities);
 		}
 	}
-
-	#[cfg(feature = "migrate-authorities")]
-	fn migrate_authorities() {
-		if Authorities::exists() {
-			Self::set_grandpa_authorities(&Authorities::take());
-		}
-	}
 }
 
 impl<T: Trait> Module<T> {
@@ -435,7 +418,7 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T>
 		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
 	{
 		// Always issue a change if `session` says that the validators have changed.
-		// Even if their session keys are the same as before, the underyling economic
+		// Even if their session keys are the same as before, the underlying economic
 		// identities have changed.
 		let current_set_id = if changed {
 			let next_authorities = validators.map(|(_, k)| (k, 1)).collect::<Vec<_>>();
@@ -481,7 +464,6 @@ struct GrandpaTimeSlot {
 
 // TODO [slashing]: Integrate this.
 /// A grandpa equivocation offence report.
-#[allow(dead_code)]
 struct GrandpaEquivocationOffence<FullIdentification> {
 	/// Time slot at which this incident happened.
 	time_slot: GrandpaTimeSlot,

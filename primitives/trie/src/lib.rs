@@ -21,6 +21,7 @@
 mod error;
 mod node_header;
 mod node_codec;
+mod storage_proof;
 mod trie_stream;
 
 use sp_std::boxed::Box;
@@ -35,6 +36,7 @@ pub use error::Error;
 pub use trie_stream::TrieStream;
 /// The Substrate format implementation of `NodeCodec`.
 pub use node_codec::NodeCodec;
+pub use storage_proof::StorageProof;
 /// Various re-exports from the `trie-db` crate.
 pub use trie_db::{
 	Trie, TrieMut, DBValue, Recorder, CError, Query, TrieLayout, TrieConfiguration, nibble_ops, TrieDBIterator,
@@ -91,7 +93,6 @@ pub type PlainDB<'a, K> = dyn hash_db::PlainDB<K, trie_db::DBValue> + 'a;
 /// key conflict for non random keys).
 pub type PrefixedMemoryDB<H> = memory_db::MemoryDB<H, memory_db::PrefixedKey<H>, trie_db::DBValue>;
 /// Reexport from `hash_db`, with genericity set for `Hasher` trait.
-/// This uses the `KeyFunction` for prefixing keys internally (avoiding
 /// This uses a noops `KeyFunction` (key addressing must be hashed or using
 /// an encoding scheme that avoid key conflict).
 pub type MemoryDB<H> = memory_db::MemoryDB<H, memory_db::HashKey<H>, trie_db::DBValue>;
@@ -210,9 +211,8 @@ pub fn read_trie_value_with<
 	Ok(TrieDB::<L>::new(&*db, root)?.get_with(key, query).map(|x| x.map(|val| val.to_vec()))?)
 }
 
-/// Determine the default child trie root.
-pub fn default_child_trie_root<L: TrieConfiguration>(
-	_storage_key: &[u8],
+/// Determine the empty child trie root.
+pub fn empty_child_trie_root<L: TrieConfiguration>(
 ) -> <L::Hash as InnerHasher>::Out {
 	L::trie_root::<_, Vec<u8>, Vec<u8>>(core::iter::empty())
 }
@@ -244,7 +244,6 @@ pub fn for_keys_in_trie<L: TrieConfiguration, F: FnMut(&[u8]), DB>(
 
 	Ok(())
 }
-
 
 /// Record all keys for a given root.
 pub fn record_all_keys<L: TrieConfiguration, DB>(

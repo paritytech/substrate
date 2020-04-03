@@ -29,9 +29,9 @@ use futures::{
 use serde::{Deserialize, Serialize};
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, Member},
+	traits::{Block as BlockT, Member, NumberFor},
 	transaction_validity::{
-		TransactionLongevity, TransactionPriority, TransactionTag,
+		TransactionLongevity, TransactionPriority, TransactionTag, TransactionSource,
 	},
 };
 
@@ -71,12 +71,18 @@ impl PoolStatus {
 ///		- `Invalid`
 ///		- `Usurped`
 ///		- `Dropped`
+///	4. Re-entering the pool:
+///		- `Retracted`
+///	5. Block finalized:
+///		- `Finalized`
+///		- `FinalityTimeout`
 ///
 /// The events will always be received in the order described above, however
 /// there might be cases where transactions alternate between `Future` and `Ready`
 /// pool, and are `Broadcast` in the meantime.
 ///
 /// There is also only single event causing the transaction to leave the pool.
+/// I.e. only one of the listed ones should be triggered.
 ///
 /// Note that there are conditions that may cause transactions to reappear in the pool.
 /// 1. Due to possible forks, the transaction that ends up being in included
@@ -86,8 +92,15 @@ impl PoolStatus {
 /// 3. `Invalid` transaction may become valid at some point in the future.
 /// (Note that runtimes are encouraged to use `UnknownValidity` to inform the pool about
 /// such case).
+/// 4. `Retracted` transactions might be included in some next block.
 ///
-/// However the user needs to re-subscribe to receive such notifications.
+/// The stream is considered finished only when either `Finalized` or `FinalityTimeout`
+/// event is triggered. You are however free to unsubscribe from notifications at any point.
+/// The first one will be emitted when the block, in which transaction was included gets
+/// finalized. The `FinalityTimeout` event will be emitted when the block did not reach finality
+/// within 512 blocks. This either indicates that finality is not available for your chain,
+/// or that finality gadget is lagging behind. If you choose to wait for finality longer, you can
+/// re-subscribe for a particular transaction hash manually again.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum TransactionStatus<Hash, BlockHash> {
@@ -98,8 +111,14 @@ pub enum TransactionStatus<Hash, BlockHash> {
 	/// The transaction has been broadcast to the given peers.
 	Broadcast(Vec<String>),
 	/// Transaction has been included in block with given hash.
-	#[serde(rename = "finalized")] // See #4438
 	InBlock(BlockHash),
+	/// The block this transaction was included in has been retracted.
+	Retracted(BlockHash),
+	/// Maximum number of finality watchers has been reached,
+	/// old watchers are being removed.
+	FinalityTimeout(BlockHash),
+	/// Transaction has been finalized by a finality-gadget, e.g GRANDPA
+	Finalized(BlockHash),
 	/// Transaction has been replaced in the pool, by another transaction
 	/// that provides the same tags. (e.g. same (sender, nonce)).
 	Usurped(Hash),
@@ -150,7 +169,7 @@ pub trait InPoolTransaction {
 	/// Get tags that transaction provides.
 	fn provides(&self) -> &[TransactionTag];
 	/// Return a flag indicating if the transaction should be propagated to other peers.
-	fn is_propagateable(&self) -> bool;
+	fn is_propagable(&self) -> bool;
 }
 
 /// Transaction pool interface.
@@ -173,6 +192,7 @@ pub trait TransactionPool: Send + Sync {
 	fn submit_at(
 		&self,
 		at: &BlockId<Self::Block>,
+		source: TransactionSource,
 		xts: Vec<TransactionFor<Self>>,
 	) -> PoolFuture<Vec<Result<TxHash<Self>, Self::Error>>, Self::Error>;
 
@@ -180,6 +200,7 @@ pub trait TransactionPool: Send + Sync {
 	fn submit_one(
 		&self,
 		at: &BlockId<Self::Block>,
+		source: TransactionSource,
 		xt: TransactionFor<Self>,
 	) -> PoolFuture<TxHash<Self>, Self::Error>;
 
@@ -187,12 +208,20 @@ pub trait TransactionPool: Send + Sync {
 	fn submit_and_watch(
 		&self,
 		at: &BlockId<Self::Block>,
+		source: TransactionSource,
 		xt: TransactionFor<Self>,
 	) -> PoolFuture<Box<TransactionStatusStreamFor<Self>>, Self::Error>;
 
 	// *** Block production / Networking
-	/// Get an iterator for ready transactions ordered by priority
-	fn ready(&self) -> Box<dyn Iterator<Item=Arc<Self::InPoolTransaction>>>;
+	/// Get an iterator for ready transactions ordered by priority.
+	///
+	/// Guarantees to return only when transaction pool got updated at `at` block.
+	/// Guarantees to return immediately when `None` is passed.
+	fn ready_at(&self, at: NumberFor<Self::Block>)
+		-> Pin<Box<dyn Future<Output=Box<dyn Iterator<Item=Arc<Self::InPoolTransaction>> + Send>> + Send>>;
+
+	/// Get an iterator for ready transactions ordered by priority.
+	fn ready(&self) -> Box<dyn Iterator<Item=Arc<Self::InPoolTransaction>> + Send>;
 
 	// *** Block production
 	/// Remove transactions identified by given hashes (and dependent transactions) from the pool.
@@ -217,11 +246,30 @@ pub trait TransactionPool: Send + Sync {
 	fn ready_transaction(&self, hash: &TxHash<Self>) -> Option<Arc<Self::InPoolTransaction>>;
 }
 
+/// Events that the transaction pool listens for.
+pub enum ChainEvent<B: BlockT> {
+	/// New blocks have been added to the chain
+	NewBlock {
+		/// Is this the new best block.
+		is_new_best: bool,
+		/// Id of the just imported block.
+		id: BlockId<B>,
+		/// Header of the just imported block
+		header: B::Header,
+		/// List of retracted blocks ordered by block number.
+		retracted: Vec<B::Hash>,
+	},
+	/// An existing block has been finalized.
+	Finalized {
+		/// Hash of just finalized block
+		hash: B::Hash,
+	},
+}
+
 /// Trait for transaction pool maintenance.
-pub trait MaintainedTransactionPool : TransactionPool {
+pub trait MaintainedTransactionPool: TransactionPool {
 	/// Perform maintenance
-	fn maintain(&self, block: &BlockId<Self::Block>, retracted: &[BlockHash<Self>])
-		-> Pin<Box<dyn Future<Output=()> + Send>>;
+	fn maintain(&self, event: ChainEvent<Self::Block>) -> Pin<Box<dyn Future<Output=()> + Send>>;
 }
 
 /// An abstraction for transaction pool.
@@ -254,7 +302,9 @@ impl<TPool: TransactionPool> OffchainSubmitTransaction<TPool::Block> for TPool {
 			extrinsic
 		);
 
-		let result = futures::executor::block_on(self.submit_one(&at, extrinsic));
+		let result = futures::executor::block_on(self.submit_one(
+				&at, TransactionSource::Local, extrinsic,
+		));
 
 		result.map(|_| ())
 			.map_err(|e| log::warn!(

@@ -33,7 +33,7 @@ use sp_core::RuntimeDebug;
 #[cfg(feature = "std")]
 type StringBuf = String;
 
-/// Curent prefix of metadata
+/// Current prefix of metadata
 pub const META_RESERVED: u32 = 0x6174656d; // 'meta' warn endianness
 
 /// On `no_std` we do not support `Decode` and thus `StringBuf` is just `&'static str`.
@@ -277,6 +277,7 @@ pub enum StorageHasher {
 	Twox128,
 	Twox256,
 	Twox64Concat,
+	Identity,
 }
 
 /// A storage entry type.
@@ -288,7 +289,8 @@ pub enum StorageEntryType {
 		hasher: StorageHasher,
 		key: DecodeDifferentStr,
 		value: DecodeDifferentStr,
-		is_linked: bool,
+		// is_linked flag previously, unused now to keep backwards compat
+		unused: bool,
 	},
 	DoubleMap {
 		hasher: StorageHasher,

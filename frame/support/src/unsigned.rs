@@ -15,11 +15,10 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 #[doc(hidden)]
-#[allow(deprecated)]
 pub use crate::sp_runtime::traits::ValidateUnsigned;
 #[doc(hidden)]
 pub use crate::sp_runtime::transaction_validity::{
-	TransactionValidity, UnknownTransaction, TransactionValidityError,
+	TransactionValidity, UnknownTransaction, TransactionValidityError, TransactionSource,
 };
 
 
@@ -35,7 +34,8 @@ pub use crate::sp_runtime::transaction_validity::{
 /// # 	impl frame_support::unsigned::ValidateUnsigned for Module {
 /// # 		type Call = Call;
 /// #
-/// # 		fn validate_unsigned(call: &Self::Call) -> frame_support::unsigned::TransactionValidity {
+/// # 		fn validate_unsigned(_source: frame_support::unsigned::TransactionSource, _call: &Self::Call)
+/// 			-> frame_support::unsigned::TransactionValidity {
 /// # 			unimplemented!();
 /// # 		}
 /// # 	}
@@ -66,7 +66,6 @@ macro_rules! impl_outer_validate_unsigned {
 			$( $module:ident )*
 		}
 	) => {
-		#[allow(deprecated)] // Allow ValidateUnsigned
 		impl $crate::unsigned::ValidateUnsigned for $runtime {
 			type Call = Call;
 
@@ -80,10 +79,14 @@ macro_rules! impl_outer_validate_unsigned {
 				}
 			}
 
-			fn validate_unsigned(call: &Self::Call) -> $crate::unsigned::TransactionValidity {
+			fn validate_unsigned(
+				#[allow(unused_variables)]
+				source: $crate::unsigned::TransactionSource,
+				call: &Self::Call,
+			) -> $crate::unsigned::TransactionValidity {
 				#[allow(unreachable_patterns)]
 				match call {
-					$( Call::$module(inner_call) => $module::validate_unsigned(inner_call), )*
+					$( Call::$module(inner_call) => $module::validate_unsigned(source, inner_call), )*
 					_ => $crate::unsigned::UnknownTransaction::NoUnsignedValidator.into(),
 				}
 			}
@@ -109,11 +112,13 @@ mod test_partial_and_full_call {
 	pub mod timestamp {
 		pub struct Module;
 
-		#[allow(deprecated)] // Allow ValidateUnsigned
 		impl super::super::ValidateUnsigned for Module {
 			type Call = Call;
 
-			fn validate_unsigned(_call: &Self::Call) -> super::super::TransactionValidity {
+			fn validate_unsigned(
+				_source: super::super::TransactionSource,
+				_call: &Self::Call
+			) -> super::super::TransactionValidity {
 				unimplemented!();
 			}
 		}

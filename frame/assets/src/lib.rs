@@ -133,7 +133,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::{Parameter, decl_module, decl_event, decl_storage, decl_error, ensure};
-use sp_runtime::traits::{Member, SimpleArithmetic, Zero, StaticLookup};
+use sp_runtime::traits::{Member, AtLeast32Bit, Zero, StaticLookup};
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::traits::One;
 
@@ -143,10 +143,10 @@ pub trait Trait: frame_system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// The units in which we record balances.
-	type Balance: Member + Parameter + SimpleArithmetic + Default + Copy;
+	type Balance: Member + Parameter + AtLeast32Bit + Default + Copy;
 
 	/// The arithmetic type of asset identifier.
-	type AssetId: Parameter + SimpleArithmetic + Default + Copy;
+	type AssetId: Parameter + AtLeast32Bit + Default + Copy;
 }
 
 decl_module! {
@@ -157,6 +157,7 @@ decl_module! {
 		/// Issue a new class of fungible assets. There are, and will only ever be, `total`
 		/// such assets and they'll all belong to the `origin` initially. It will have an
 		/// identifier `AssetId` instance: this will be specified in the `Issued` event.
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn issue(origin, #[compact] total: T::Balance) {
 			let origin = ensure_signed(origin)?;
 
@@ -170,6 +171,7 @@ decl_module! {
 		}
 
 		/// Move some assets from one holder to another.
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn transfer(origin,
 			#[compact] id: T::AssetId,
 			target: <T::Lookup as StaticLookup>::Source,
@@ -188,6 +190,7 @@ decl_module! {
 		}
 
 		/// Destroy any assets of `id` owned by `origin`.
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn destroy(origin, #[compact] id: T::AssetId) {
 			let origin = ensure_signed(origin)?;
 			let balance = <Balances<T>>::take((id, &origin));
@@ -228,11 +231,11 @@ decl_error! {
 decl_storage! {
 	trait Store for Module<T: Trait> as Assets {
 		/// The number of units of assets held by any given account.
-		Balances: map hasher(blake2_256) (T::AssetId, T::AccountId) => T::Balance;
+		Balances: map hasher(blake2_128_concat) (T::AssetId, T::AccountId) => T::Balance;
 		/// The next asset identifier up for grabs.
 		NextAssetId get(fn next_asset_id): T::AssetId;
 		/// The total unit supply of an asset.
-		TotalSupply: map hasher(blake2_256) T::AssetId => T::Balance;
+		TotalSupply: map hasher(twox_64_concat) T::AssetId => T::Balance;
 	}
 }
 
@@ -265,9 +268,9 @@ mod tests {
 		pub enum Origin for Test  where system = frame_system {}
 	}
 
-	// For testing the module, we construct most of a mock runtime. This means
+	// For testing the pallet, we construct most of a mock runtime. This means
 	// first constructing a configuration type (`Test`) which `impl`s each of the
-	// configuration traits of modules we want to use.
+	// configuration traits of pallets we want to use.
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
 	parameter_types! {
@@ -293,6 +296,9 @@ mod tests {
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();
 		type ModuleToIndex = ();
+		type AccountData = ();
+		type OnNewAccount = ();
+		type OnKilledAccount = ();
 	}
 	impl Trait for Test {
 		type Event = ();

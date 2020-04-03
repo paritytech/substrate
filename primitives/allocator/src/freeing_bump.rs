@@ -37,7 +37,7 @@
 //! allocation size is capped, therefore the number of orders and thus the linked lists is as well
 //! limited.
 //!
-//! When the allocater serves an allocation request it first checks the linked list for the respective
+//! When the allocator serves an allocation request it first checks the linked list for the respective
 //! order. If it doesn't have any free chunks, the allocator requests memory from the bump allocator.
 //! In any case the order is stored in the header of the allocation.
 //!
@@ -48,7 +48,7 @@ use crate::Error;
 use sp_std::{convert::{TryFrom, TryInto}, ops::{Range, Index, IndexMut}};
 use sp_wasm_interface::{Pointer, WordSize};
 
-/// The minimal alignment guaranteed by this allocator. The alignment of 8 is choosen because it is
+/// The minimal alignment guaranteed by this allocator. The alignment of 8 is chosen because it is
 /// the alignment guaranteed by wasm32.
 const ALIGNMENT: u32 = 8;
 

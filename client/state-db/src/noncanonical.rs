@@ -30,6 +30,7 @@ const NON_CANONICAL_JOURNAL: &[u8] = b"noncanonical_journal";
 const LAST_CANONICAL: &[u8] = b"last_canonical";
 
 /// See module documentation.
+#[derive(parity_util_mem_derive::MallocSizeOf)]
 pub struct NonCanonicalOverlay<BlockHash: Hash, Key: Hash> {
 	last_canonicalized: Option<(BlockHash, u64)>,
 	levels: VecDeque<Vec<BlockOverlay<BlockHash, Key>>>,
@@ -55,6 +56,7 @@ fn to_journal_key(block: u64, index: u64) -> Vec<u8> {
 }
 
 #[cfg_attr(test, derive(PartialEq, Debug))]
+#[derive(parity_util_mem_derive::MallocSizeOf)]
 struct BlockOverlay<BlockHash: Hash, Key: Hash> {
 	hash: BlockHash,
 	journal_key: Vec<u8>,
@@ -99,14 +101,16 @@ fn discard_descendants<BlockHash: Hash, Key: Hash>(
 	let mut discarded = Vec::new();
 	if let Some(level) = levels.get_mut(index) {
 		*level = level.drain(..).filter_map(|overlay| {
-			let parent = parents.get(&overlay.hash).expect("there is a parent entry for each entry in levels; qed").clone();
-			if parent == *hash {
+			let parent = parents.get(&overlay.hash)
+				.expect("there is a parent entry for each entry in levels; qed");
+
+			if parent == hash {
 				discarded.push(overlay.hash.clone());
 				if pinned.contains_key(&overlay.hash) {
 					// save to be discarded later.
 					pinned_insertions.insert(overlay.hash.clone(), overlay.inserted);
 				} else {
-					// discard immediatelly.
+					// discard immediately.
 					parents.remove(&overlay.hash);
 					discard_values(&mut values, overlay.inserted);
 				}
@@ -375,7 +379,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		None
 	}
 
-	/// Check if the block is in the canonicalization queue. 
+	/// Check if the block is in the canonicalization queue.
 	pub fn have_block(&self, hash: &BlockHash) -> bool {
 		(self.parents.contains_key(hash) || self.pending_insertions.contains(hash))
 			&& !self.pending_canonicalizations.contains(hash)
@@ -436,7 +440,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		while let Some(hash) = parent {
 			let refs = self.pinned.entry(hash.clone()).or_default();
 			if *refs == 0 {
-				trace!(target: "state-db", "Pinned non-canon block: {:?}", hash);
+				trace!(target: "state-db-pin", "Pinned non-canon block: {:?}", hash);
 			}
 			*refs += 1;
 			parent = self.parents.get(hash);
@@ -455,7 +459,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 					if *entry.get() == 0 {
 						entry.remove();
 						if let Some(inserted) = self.pinned_insertions.remove(&hash) {
-							trace!(target: "state-db", "Discarding unpinned non-canon block: {:?}", hash);
+							trace!(target: "state-db-pin", "Discarding unpinned non-canon block: {:?}", hash);
 							discard_values(&mut self.values, inserted);
 							self.parents.remove(&hash);
 						}

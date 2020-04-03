@@ -18,7 +18,10 @@
 
 
 use sp_runtime::generic::BlockId;
-use sp_core::{testing::{KeyStore, SR25519}, crypto::Pair};
+use sp_core::{
+	crypto::Pair,
+	testing::{KeyStore, SR25519},
+};
 use substrate_test_runtime_client::{
 	TestClientBuilder, DefaultTestClientBuilderExt, TestClientBuilderExt,
 	runtime::TestAPI,
@@ -34,8 +37,7 @@ fn sr25519_works_in_runtime() {
 		.test_sr25519_crypto(&BlockId::Number(0))
 		.expect("Tests `sr25519` crypto.");
 
-	let key_pair = keystore.read().sr25519_key_pair(SR25519, public.as_ref())
-		.expect("There should be at a `sr25519` key in the keystore for the given public key.");
-
-	assert!(AppPair::verify(&signature, "sr25519", &AppPublic::from(key_pair.public())));
+	let supported_keys = keystore.read().keys(SR25519).unwrap();
+	assert!(supported_keys.contains(&public.clone().into()));
+	assert!(AppPair::verify(&signature, "sr25519", &AppPublic::from(public)));
 }
