@@ -380,14 +380,6 @@ impl MetricsService {
 				metrics.open_files.with_label_values(&["other"]).set(fd_info.other);
 			}
 
-			#[cfg(any(windows, unix))]
-			{
-				let load = self.system.get_load_average();
-				metrics.load_avg.with_label_values(&["1min"]).set(load.one);
-				metrics.load_avg.with_label_values(&["5min"]).set(load.five);
-				metrics.load_avg.with_label_values(&["15min"]).set(load.fifteen);
-
-			}
 
 			metrics.network_per_sec_bytes.with_label_values(&["download"]).set(net_status.average_download_per_sec);
 			metrics.network_per_sec_bytes.with_label_values(&["upload"]).set(net_status.average_upload_per_sec);
@@ -416,13 +408,20 @@ impl MetricsService {
 			}
 
 			#[cfg(any(unix, windows))]
-			if let Some(conns) = self.connections_info() {
-				metrics.netstat.with_label_values(&["listen"]).set(conns.listen);
-				metrics.netstat.with_label_values(&["established"]).set(conns.established);
-				metrics.netstat.with_label_values(&["starting"]).set(conns.starting);
-				metrics.netstat.with_label_values(&["closing"]).set(conns.closing);
-				metrics.netstat.with_label_values(&["closed"]).set(conns.closed);
-				metrics.netstat.with_label_values(&["other"]).set(conns.other);
+			{
+				let load = self.system.get_load_average();
+				metrics.load_avg.with_label_values(&["1min"]).set(load.one);
+				metrics.load_avg.with_label_values(&["5min"]).set(load.five);
+				metrics.load_avg.with_label_values(&["15min"]).set(load.fifteen);
+
+				if let Some(conns) = self.connections_info() {
+					metrics.netstat.with_label_values(&["listen"]).set(conns.listen);
+					metrics.netstat.with_label_values(&["established"]).set(conns.established);
+					metrics.netstat.with_label_values(&["starting"]).set(conns.starting);
+					metrics.netstat.with_label_values(&["closing"]).set(conns.closing);
+					metrics.netstat.with_label_values(&["closed"]).set(conns.closed);
+					metrics.netstat.with_label_values(&["other"]).set(conns.other);
+				}
 			}
 		}
 	}
