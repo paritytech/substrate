@@ -40,7 +40,6 @@ substrate's branch. if it can't find anything, it will uses master instead
 EOT
 
 
-
 SUBSTRATE_PATH=$(pwd)
 
 # Clone the current Polkadot master branch into ./polkadot.
@@ -54,15 +53,18 @@ if expr match "${CI_COMMIT_REF_NAME}" '^[0-9]\+$' >/dev/null
 then
   boldprint "this is pull request no ${CI_COMMIT_REF_NAME}"
 
+  pr_data_file="$(mktemp)"
   # get the last reference to a pr in polkadot
-  pr_data="$(curl -sSL -H "${github_header}" -s ${github_api_substrate_pull_url}/${CI_COMMIT_REF_NAME})"
-  pr_ref="$(echo $pr_data | grep -Po '"ref"\s*:\s*"\K(?!master)[^"]*')"
-  pr_body="$(echo $pr_data | sed -n -r 's/^[[:space:]]+"body": (".*")[^"]+$/\1/p')"
+  curl -sSL -H "${github_header}" -o "${pr_data_file}" \
+    "${github_api_substrate_pull_url}/${CI_COMMIT_REF_NAME}"
+
+  pr_body="$(sed -n -r 's/^[[:space:]]+"body": (".*")[^"]+$/\1/p' "${pr_data_file}")"
 
   pr_companion="$(echo "${pr_body}" | sed -n -r \
       -e 's;^.*polkadot companion: paritytech/polkadot#([0-9]+).*$;\1;p' \
       -e 's;^.*polkadot companion: https://github.com/paritytech/polkadot/pull/([0-9]+).*$;\1;p' \
     | tail -n 1)"
+
   if [ -z "${pr_companion}" ]
   then
     pr_companion="$(echo "${pr_body}" | sed -n -r \
@@ -76,7 +78,8 @@ then
     git fetch --depth 1 origin refs/pull/${pr_companion}/head:pr/${pr_companion}
     git checkout pr/${pr_companion}
   else
-    if git fetch --depth 1 origin "$pr_ref":branch/"$pr_ref"
+    pr_ref="$(grep -Po '"ref"\s*:\s*"\K(?!master)[^"]*' "${pr_data_file}")"
+    if git fetch --depth 1 origin "$pr_ref":branch/"$pr_ref" 2>/dev/null
     then
       boldprint "companion branch detected: $pr_ref"
       git checkout branch/"$pr_ref"
@@ -84,6 +87,7 @@ then
       boldprint "no companion branch found - building polkadot:master"
     fi
   fi
+  rm -f "${pr_data_file}"
 else
   boldprint "this is not a pull request - building polkadot:master"
 fi
