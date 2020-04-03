@@ -4458,7 +4458,6 @@ dependencies = [
  "frame-support",
  "frame-system",
  "parity-scale-codec",
- "safe-mix",
  "sp-core",
  "sp-io",
  "sp-runtime",
