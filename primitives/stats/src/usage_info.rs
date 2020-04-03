@@ -16,7 +16,7 @@
 
 //! Usage statistics
 
-use core::time::{SystemTime, Duration};
+use core::time::Duration;
 use codec::{Encode, Decode};
 use crate::state_machine_stats::StateMachineStats;
 
@@ -71,7 +71,8 @@ impl UsageInfo {
 			cache_reads: UsageUnit::default(),
 			modified_reads: UsageUnit::default(),
 			memory: 0,
-			started: SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards"),
+			// SCOTT
+			started: Default::default(),
 			span: Default::default(),
 		}
 	}
