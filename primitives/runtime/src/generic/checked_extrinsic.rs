@@ -79,7 +79,7 @@ where
 			(None, pre)
 		};
 		let res = self.function.dispatch(Origin::from(maybe_who));
-		Extra::post_dispatch(pre, info.clone(), len);
+		Extra::post_dispatch(pre, info.clone(), len, &res)?;
 		Ok(res.map_err(Into::into))
 	}
 }

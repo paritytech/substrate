@@ -84,6 +84,19 @@ pub enum DispatchClass {
 	Normal,
 	/// An operational dispatch.
 	Operational,
+	/// A mandatory dispatch. These kinds of dispatch are always included regardless of their
+	/// weight, therefore it is critical that they are separately validated to ensure that a
+	/// malicious validator cannot craft a valid but impossibly heavy block. Usually this just means
+	/// ensuring that the extrinsic can only be included once and that it is always very light.
+	///
+	/// Do *NOT* use it for extrinsics that can be heavy.
+	///
+	/// The only real use case for this is inherent extrinsics that are required to execute in a
+	/// block for the block to be valid, and it solves the issue in the case that the block
+	/// initialisation is sufficiently heavy to mean that those inherents do not fit into the
+	/// block. Essentially, we assume that in these exceptional circumstances, if is better to
+	/// allow an overweight block to be created than to not allow any block at all to be created.
+	Mandatory,
 }
 
 impl Default for DispatchClass {
@@ -101,6 +114,8 @@ impl From<SimpleDispatchInfo> for DispatchClass {
 			SimpleDispatchInfo::FixedNormal(_) => DispatchClass::Normal,
 			SimpleDispatchInfo::MaxNormal => DispatchClass::Normal,
 			SimpleDispatchInfo::InsecureFreeNormal => DispatchClass::Normal,
+
+			SimpleDispatchInfo::FixedMandatory(_) => DispatchClass::Mandatory,
 		}
 	}
 }
@@ -153,6 +168,8 @@ pub enum SimpleDispatchInfo {
 	FixedOperational(Weight),
 	/// An operational dispatch with the maximum weight.
 	MaxOperational,
+	/// An mandatory dispatch with fixed weight.
+	FixedMandatory(Weight),
 }
 
 impl<T> WeighData<T> for SimpleDispatchInfo {
@@ -164,6 +181,8 @@ impl<T> WeighData<T> for SimpleDispatchInfo {
 
 			SimpleDispatchInfo::FixedOperational(w) => *w,
 			SimpleDispatchInfo::MaxOperational => Bounded::max_value(),
+
+			SimpleDispatchInfo::FixedMandatory(w) => *w,
 		}
 	}
 }
@@ -183,6 +202,8 @@ impl<T> PaysFee<T> for SimpleDispatchInfo {
 
 			SimpleDispatchInfo::FixedOperational(_) => true,
 			SimpleDispatchInfo::MaxOperational => true,
+
+			SimpleDispatchInfo::FixedMandatory(_) => true,
 		}
 	}
 }

@@ -39,6 +39,7 @@ pub use sp_arithmetic::traits::{
 };
 use sp_application_crypto::AppKey;
 use impl_trait_for_tuples::impl_for_tuples;
+use crate::DispatchResult;
 
 /// A lazy value.
 pub trait Lazy<T: ?Sized> {
@@ -159,7 +160,7 @@ pub trait EnsureOrigin<OuterOrigin> {
 	fn try_origin(o: OuterOrigin) -> result::Result<Self::Success, OuterOrigin>;
 
 	/// Returns an outer origin capable of passing `try_origin` check.
-	/// 
+	///
 	/// ** Should be used for benchmarking only!!! **
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> OuterOrigin;
@@ -642,7 +643,7 @@ pub trait Dispatchable {
 	type Origin;
 	/// ...
 	type Trait;
-	/// Actually dispatch this call and result the result of it.
+	/// Actually dispatch this call and return the result of it.
 	fn dispatch(self, origin: Self::Origin) -> crate::DispatchResult;
 }
 
@@ -751,7 +752,14 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 	}
 
 	/// Do any post-flight stuff for a transaction.
-	fn post_dispatch(_pre: Self::Pre, _info: Self::DispatchInfo, _len: usize) { }
+	fn post_dispatch(
+		_pre: Self::Pre,
+		_info: Self::DispatchInfo,
+		_len: usize,
+		_result: &DispatchResult,
+	) -> Result<(), TransactionValidityError> {
+		Ok(())
+	}
 
 	/// Returns the list of unique identifier for this signed extension.
 	///
@@ -819,8 +827,10 @@ impl<AccountId, Call, Info: Clone> SignedExtension for Tuple {
 		pre: Self::Pre,
 		info: Self::DispatchInfo,
 		len: usize,
-	) {
-		for_tuples!( #( Tuple::post_dispatch(pre.Tuple, info.clone(), len); )* )
+		result: &DispatchResult,
+	) -> Result<(), TransactionValidityError> {
+		for_tuples!( #( Tuple::post_dispatch(pre.Tuple, info.clone(), len, result)?; )* );
+		Ok(())
 	}
 
 	fn identifier() -> Vec<&'static str> {

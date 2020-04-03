@@ -50,6 +50,13 @@ pub enum InvalidTransaction {
 	///
 	/// The transaction might be valid, but there are not enough resources left in the current block.
 	ExhaustsResources,
+	/// An extrinsic with a Mandatory dispatch resulted in Error. This is indicative of either a
+	/// malicious validator or a buggy `provide_inherent`. In any case, it can result in dangerously
+	/// overweight blocks and therefore if found, invalidates the block.
+	BadMandatory,
+	/// A transaction with a mandatory dispatch. This is invalid; only inherent extrinsics are
+	/// allowed to have mandatory dispatches.
+	MandatoryDispatch,
 	/// Any other custom invalid validity that is not covered by this enum.
 	Custom(u8),
 }
@@ -76,6 +83,10 @@ impl From<InvalidTransaction> for &'static str {
 				"Transaction would exhausts the block limits",
 			InvalidTransaction::Payment =>
 				"Inability to pay some fees (e.g. account balance too low)",
+			InvalidTransaction::BadMandatory =>
+				"A call was labelled as mandatory, but resulted in an Error.",
+			InvalidTransaction::MandatoryDispatch =>
+				"Tranaction dispatch is mandatory; transactions may not have mandatory dispatches.",
 			InvalidTransaction::Custom(_) => "InvalidTransaction custom error",
 		}
 	}
