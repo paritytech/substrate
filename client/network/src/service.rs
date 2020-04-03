@@ -42,7 +42,7 @@ use libp2p::{kad::record, Multiaddr, PeerId};
 use log::{error, info, trace, warn};
 use parking_lot::Mutex;
 use prometheus_endpoint::{
-	register, Counter, CounterVec, Gauge, GaugeVec, Opts, PrometheusError, Registry, U64,
+	register, Counter, CounterVec, Gauge, GaugeVec, HistogramOpts, HistogramVec, Opts, PrometheusError, Registry, U64,
 };
 use sc_peerset::PeersetHandle;
 use sp_consensus::import_queue::{BlockImportError, BlockImportResult, ImportQueue, Link};
@@ -239,6 +239,12 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		let local_peer_id = local_public.clone().into_peer_id();
 		info!(target: "sub-libp2p", "🏷  Local node identity is: {}", local_peer_id.to_base58());
 
+		// Initialize the metrics.
+		let metrics = match &params.metrics_registry {
+			Some(registry) => Some(Metrics::register(&registry)?),
+			None => None
+		};
+
 		let checker = params.on_demand.as_ref()
 			.map(|od| od.checker().clone())
 			.unwrap_or(Arc::new(AlwaysBadChecker));
@@ -259,6 +265,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			params.block_announce_validator,
 			params.metrics_registry.as_ref(),
 			boot_node_ids.clone(),
+			metrics.as_ref().map(|m| m.notifications_queues_size.clone()),
 		)?;
 
 		// Build the swarm.
@@ -343,10 +350,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			from_worker,
 			light_client_rqs: params.on_demand.and_then(|od| od.extract_receiver()),
 			event_streams: Vec::new(),
-			metrics: match params.metrics_registry {
-				Some(registry) => Some(Metrics::register(&registry)?),
-				None => None
-			},
+			metrics,
 			boot_node_ids,
 		})
 	}
@@ -802,6 +806,7 @@ struct Metrics {
 	issued_light_requests: Counter<U64>,
 	kbuckets_num_nodes: Gauge<U64>,
 	network_per_sec_bytes: GaugeVec<U64>,
+	notifications_queues_size: HistogramVec,
 	notifications_total: CounterVec<U64>,
 	num_event_stream_channels: Gauge<U64>,
 	opened_notification_streams: GaugeVec<U64>,
@@ -846,6 +851,16 @@ impl Metrics {
 					"Average bandwidth usage per second"
 				),
 				&["direction"]
+			)?, registry)?,
+			notifications_queues_size: register(HistogramVec::new(
+				HistogramOpts {
+					common_opts: Opts::new(
+						"sub_libp2p_notifications_queues_size",
+						"Total size of all the notification queues"
+					),
+					buckets: vec![0.0, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0],
+				},
+				&["protocol"]
 			)?, registry)?,
 			notifications_total: register(CounterVec::new(
 				Opts::new(
