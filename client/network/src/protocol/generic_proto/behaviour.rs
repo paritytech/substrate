@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::{DiscoveryNetBehaviour, config::ProtocolId};
+use crate::config::ProtocolId;
 use crate::protocol::generic_proto::handler::{NotifsHandlerProto, NotifsHandlerOut, NotifsHandlerIn};
 use crate::protocol::generic_proto::upgrade::RegisteredProtocol;
 
@@ -24,6 +24,7 @@ use futures::prelude::*;
 use libp2p::core::{ConnectedPoint, Multiaddr, PeerId};
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use log::{debug, error, trace, warn};
+use prometheus_endpoint::HistogramVec;
 use rand::distributions::{Distribution as _, Uniform};
 use smallvec::SmallVec;
 use std::task::{Context, Poll};
@@ -99,6 +100,9 @@ pub struct GenericProto {
 
 	/// Events to produce from `poll()`.
 	events: SmallVec<[NetworkBehaviourAction<NotifsHandlerIn, GenericProtoOut>; 4]>,
+
+	/// If `Some`, report the message queue sizes on this `Histogram`.
+	queue_size_report: Option<HistogramVec>,
 }
 
 /// State of a peer we're connected to.
@@ -267,10 +271,14 @@ pub enum GenericProtoOut {
 
 impl GenericProto {
 	/// Creates a `CustomProtos`.
+	///
+	/// The `queue_size_report` is an optional Prometheus metric that can report the size of the
+	/// messages queue. If passed, it must have one label for the protocol name.
 	pub fn new(
 		protocol: impl Into<ProtocolId>,
 		versions: &[u8],
 		peerset: sc_peerset::Peerset,
+		queue_size_report: Option<HistogramVec>,
 	) -> Self {
 		let legacy_protocol = RegisteredProtocol::new(protocol, versions);
 
@@ -282,6 +290,7 @@ impl GenericProto {
 			incoming: SmallVec::new(),
 			next_incoming_index: sc_peerset::IncomingIndex(0),
 			events: SmallVec::new(),
+			queue_size_report,
 		}
 	}
 
@@ -403,6 +412,16 @@ impl GenericProto {
 			Some(PeerState::Banned { .. }) => false,
 			Some(PeerState::Poisoned) => false,
 		}
+	}
+
+	/// Notify the behaviour that we have learned about the existence of nodes.
+	///
+	/// Can be called multiple times with the same `PeerId`s.
+	pub fn add_discovered_nodes(&mut self, peer_ids: impl Iterator<Item = PeerId>) {
+		self.peerset.discovered(peer_ids.into_iter().map(|peer_id| {
+			debug!(target: "sub-libp2p", "PSM <= Discovered({:?})", peer_id);
+			peer_id
+		}));
 	}
 
 	/// Sends a notification to a peer.
@@ -708,21 +727,16 @@ impl GenericProto {
 	}
 }
 
-impl DiscoveryNetBehaviour for GenericProto {
-	fn add_discovered_nodes(&mut self, peer_ids: impl Iterator<Item = PeerId>) {
-		self.peerset.discovered(peer_ids.into_iter().map(|peer_id| {
-			debug!(target: "sub-libp2p", "PSM <= Discovered({:?})", peer_id);
-			peer_id
-		}));
-	}
-}
-
 impl NetworkBehaviour for GenericProto {
 	type ProtocolsHandler = NotifsHandlerProto;
 	type OutEvent = GenericProtoOut;
 
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {
-		NotifsHandlerProto::new(self.legacy_protocol.clone(), self.notif_protocols.clone())
+		NotifsHandlerProto::new(
+			self.legacy_protocol.clone(),
+			self.notif_protocols.clone(),
+			self.queue_size_report.clone()
+		)
 	}
 
 	fn addresses_of_peer(&mut self, _: &PeerId) -> Vec<Multiaddr> {

@@ -3315,6 +3315,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "node-bench"
+version = "0.8.0-alpha.5"
+dependencies = [
+ "log",
+ "node-primitives",
+ "node-testing",
+ "sc-cli",
+ "sc-client-api",
+ "serde",
+ "serde_json",
+ "sp-runtime",
+ "structopt",
+]
+
+[[package]]
 name = "node-cli"
 version = "2.0.0-alpha.5"
 dependencies = [
@@ -3512,6 +3527,7 @@ dependencies = [
  "pallet-offences",
  "pallet-randomness-collective-flip",
  "pallet-recovery",
+ "pallet-scheduler",
  "pallet-session",
  "pallet-session-benchmarking",
  "pallet-society",
@@ -4044,6 +4060,7 @@ dependencies = [
  "frame-system",
  "hex-literal",
  "pallet-balances",
+ "pallet-scheduler",
  "parity-scale-codec",
  "serde",
  "sp-core",
@@ -4077,6 +4094,7 @@ dependencies = [
  "frame-system",
  "hex-literal",
  "pallet-balances",
+ "pallet-scheduler",
  "parity-scale-codec",
  "serde",
  "sp-core",
@@ -4315,6 +4333,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-scheduler"
+version = "2.0.0-alpha.5"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "serde",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-scored-pool"
 version = "2.0.0-alpha.5"
 dependencies = [
@@ -4441,7 +4474,6 @@ dependencies = [
  "frame-support",
  "frame-system",
  "parity-scale-codec",
- "safe-mix",
  "sp-core",
  "sp-io",
  "sp-runtime",
