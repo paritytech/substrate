@@ -94,7 +94,7 @@ pub enum DispatchClass {
 	///
 	/// The only real use case for this is inherent extrinsics that are required to execute in a
 	/// block for the block to be valid, and it solves the issue in the case that the block
-	/// initialisation is sufficiently heavy to mean that those inherents do not fit into the
+	/// initialization is sufficiently heavy to mean that those inherents do not fit into the
 	/// block. Essentially, we assume that in these exceptional circumstances, it is better to
 	/// allow an overweight block to be created than to not allow any block at all to be created.
 	Mandatory,
