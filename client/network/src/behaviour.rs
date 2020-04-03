@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{
-	debug_info, discovery::DiscoveryBehaviour, discovery::DiscoveryOut, DiscoveryNetBehaviour,
+	debug_info, discovery::DiscoveryBehaviour, discovery::DiscoveryOut,
 	Event, protocol::event::DhtEvent, ExHashT,
 };
 use crate::protocol::{self, light_client_handler, CustomMessageOutcome, Protocol};
@@ -133,7 +133,6 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 	}
 
 	/// Issue a light client request.
-	#[allow(unused)]
 	pub fn light_client_request(&mut self, r: light_client_handler::Request<B>) -> Result<(), light_client_handler::Error> {
 		self.light_client_handler.request(r)
 	}
@@ -175,6 +174,9 @@ Behaviour<B, H> {
 				let ev = Event::NotificationsReceived { remote, messages };
 				self.events.push(BehaviourOut::Event(ev));
 			},
+			CustomMessageOutcome::PeerNewBest(peer_id, number) => {
+				self.light_client_handler.update_best_block(&peer_id, number);
+			}
 			CustomMessageOutcome::None => {}
 		}
 	}
