@@ -57,6 +57,7 @@ then
   # get the last reference to a pr in polkadot
   pr_data="$(curl -sSL -H "${github_header}" -s ${github_api_substrate_pull_url}/${CI_COMMIT_REF_NAME})"
   pr_ref="$(echo $pr_data | grep -Po '"ref"\s*:\s*"\K(?!master)[^"]*')"
+  pr_body="$(echo "$pr_data" | sed -n -r 's/^[[:space:]]+"body": (".*")[^"]+$/\1/p')"
 
   pr_companion="$(echo "${pr_data}" | sed -n -r \
       -e 's;^.*polkadot companion: paritytech/polkadot#([0-9]+).*$;\1;p' \
@@ -64,7 +65,7 @@ then
     | tail -n 1)"
   if [ -z "${pr_companion}" ]
   then
-    pr_companion="$(echo "${pr_data}" | sed -n -r \
+    pr_companion="$(echo "${pr_body}" | sed -n -r \
       's;^.*https://github.com/paritytech/polkadot/pull/([0-9]+).*$;\1;p' \
       | tail -n 1)"
   fi
