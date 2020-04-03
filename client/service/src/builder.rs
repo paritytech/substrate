@@ -14,6 +14,18 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+#![allow(unused_imports)]
+
+use crate::error::Error;
+use futures::Future;
+use std::pin::Pin;
+use sp_runtime::generic::BlockId;
+use sp_runtime::traits::NumberFor;
+use std::io::{Read, Write, Seek};
+use sp_runtime::traits::Block as BlockT;
+use sc_executor::NativeExecutionDispatch;
+
+/*
 use crate::{Service, NetworkStatus, NetworkState, error::Error, DEFAULT_PROTOCOL_ID, MallocSizeOfWasm};
 use crate::{TaskManagerBuilder, start_rpc_servers, build_network_future, TransactionPoolAdapter};
 use crate::status_sinks;
@@ -656,7 +668,9 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 		})
 	}
 }
+*/
 
+/*
 /// Implemented on `ServiceBuilder`. Allows running block commands, such as import/export/validate
 /// components to the builder.
 pub trait ServiceBuilderCommand {
@@ -692,7 +706,9 @@ pub trait ServiceBuilderCommand {
 		block: BlockId<Self::Block>
 	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
 }
+*/
 
+/*
 impl<TBl, TRtApi, TBackend, TExec, TSc, TImpQu, TExPool, TRpc>
 ServiceBuilder<
 	TBl,
@@ -1168,3 +1184,4 @@ ServiceBuilder<
 		})
 	}
 }
+*/

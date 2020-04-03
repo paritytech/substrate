@@ -16,8 +16,10 @@
 
 //! Chain utilities.
 
+#![allow(unused_imports)]
+
 use crate::error;
-use crate::builder::{ServiceBuilderCommand, ServiceBuilder};
+//use crate::builder::{ServiceBuilderCommand, ServiceBuilder};
 use crate::error::Error;
 use sc_chain_spec::ChainSpec;
 use log::{warn, info};
@@ -36,32 +38,25 @@ use sc_executor::{NativeExecutor, NativeExecutionDispatch};
 
 use std::{io::{Read, Write, Seek}, pin::Pin};
 use sc_client_api::BlockBackend;
+use std::sync::Arc;
 
 /// Build a chain spec json
 pub fn build_spec(spec: &dyn ChainSpec, raw: bool) -> error::Result<String> {
 	Ok(spec.as_json(raw)?)
 }
 
-impl<
-	TBl, TRtApi, TBackend,
-	TExecDisp, TFchr, TSc, TImpQu, TFprb, TFpp,
-	TExPool, TRpc, Backend
-> ServiceBuilderCommand for ServiceBuilder<
-	TBl, TRtApi,
-	Client<TBackend, LocalCallExecutor<TBackend, NativeExecutor<TExecDisp>>, TBl, TRtApi>,
-	TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend
-> where
-	TBl: BlockT,
-	TBackend: 'static + sc_client_api::backend::Backend<TBl> + Send,
-	TExecDisp: 'static + NativeExecutionDispatch,
-	TImpQu: 'static + ImportQueue<TBl>,
-	TRtApi: 'static + Send + Sync,
+pub trait ServiceBuilderCommand<B, BA, CE, IQ>: Sized
+where
+	B: BlockT,
+	BA: sc_client_api::backend::Backend<B> + 'static,
+	CE: sc_client_api::call_executor::CallExecutor<B> + Send + Sync + 'static,
+	IQ: ImportQueue<B> + Sync + 'static,
 {
-	type Block = TBl;
-	type NativeDispatch = TExecDisp;
+	fn client(&self) -> Arc<Client<BA, CE, B, ()>>;
+	fn import_queue(&mut self) -> &mut IQ;
 
 	fn import_blocks(
-		self,
+		&'static mut self,
 		input: impl Read + Seek + Send + 'static,
 		force: bool,
 	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>> {
@@ -98,8 +93,8 @@ impl<
 			}
 		}
 
-		let client = self.client;
-		let mut queue = self.import_queue;
+		let client = self.client();
+		let mut queue = self.import_queue();
 
 		let mut io_reader_input = IoReader(input);
 		let mut count = None::<u64>;
@@ -133,13 +128,13 @@ impl<
 
 			// Read blocks from the input.
 			if read_block_count < count {
-				match SignedBlock::<Self::Block>::decode(&mut io_reader_input) {
+				match SignedBlock::<B>::decode(&mut io_reader_input) {
 					Ok(signed) => {
 						let (header, extrinsics) = signed.block.deconstruct();
 						let hash = header.hash();
 						// import queue handles verification and importing it into the client
 						queue.import_blocks(BlockOrigin::File, vec![
-							IncomingBlock::<Self::Block> {
+							IncomingBlock::<B> {
 								hash,
 								header: Some(header),
 								body: Some(extrinsics),
@@ -197,13 +192,13 @@ impl<
 	}
 
 	fn export_blocks(
-		self,
+		&'static self,
 		mut output: impl Write + 'static,
-		from: NumberFor<TBl>,
-		to: Option<NumberFor<TBl>>,
+		from: NumberFor<B>,
+		to: Option<NumberFor<B>>,
 		binary: bool
 	) -> Pin<Box<dyn Future<Output = Result<(), Error>>>> {
-		let client = self.client;
+		let client = self.client();
 		let mut block = from;
 
 		let last = match to {
@@ -267,10 +262,10 @@ impl<
 
 	fn revert_chain(
 		&self,
-		blocks: NumberFor<TBl>
+		blocks: NumberFor<B>
 	) -> Result<(), Error> {
-		let reverted = self.client.revert(blocks)?;
-		let info = self.client.chain_info();
+		let reverted = self.client().revert(blocks)?;
+		let info = self.client().chain_info();
 
 		if reverted.is_zero() {
 			info!("There aren't any non-finalized blocks to revert.");
@@ -281,10 +276,10 @@ impl<
 	}
 
 	fn check_block(
-		self,
-		block_id: BlockId<TBl>
+		&'static mut self,
+		block_id: BlockId<B>
 	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>> {
-		match self.client.block(&block_id) {
+		match self.client().block(&block_id) {
 			Ok(Some(block)) => {
 				let mut buf = Vec::new();
 				1u64.encode_to(&mut buf);
