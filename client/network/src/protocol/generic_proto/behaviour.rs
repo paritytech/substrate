@@ -24,6 +24,7 @@ use futures::prelude::*;
 use libp2p::core::{ConnectedPoint, Multiaddr, PeerId};
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use log::{debug, error, trace, warn};
+use prometheus_endpoint::HistogramVec;
 use rand::distributions::{Distribution as _, Uniform};
 use smallvec::SmallVec;
 use std::task::{Context, Poll};
@@ -99,6 +100,9 @@ pub struct GenericProto {
 
 	/// Events to produce from `poll()`.
 	events: SmallVec<[NetworkBehaviourAction<NotifsHandlerIn, GenericProtoOut>; 4]>,
+
+	/// If `Some`, report the message queue sizes on this `Histogram`.
+	queue_size_report: Option<HistogramVec>,
 }
 
 /// State of a peer we're connected to.
@@ -267,10 +271,14 @@ pub enum GenericProtoOut {
 
 impl GenericProto {
 	/// Creates a `CustomProtos`.
+	///
+	/// The `queue_size_report` is an optional Prometheus metric that can report the size of the
+	/// messages queue. If passed, it must have one label for the protocol name.
 	pub fn new(
 		protocol: impl Into<ProtocolId>,
 		versions: &[u8],
 		peerset: sc_peerset::Peerset,
+		queue_size_report: Option<HistogramVec>,
 	) -> Self {
 		let legacy_protocol = RegisteredProtocol::new(protocol, versions);
 
@@ -282,6 +290,7 @@ impl GenericProto {
 			incoming: SmallVec::new(),
 			next_incoming_index: sc_peerset::IncomingIndex(0),
 			events: SmallVec::new(),
+			queue_size_report,
 		}
 	}
 
@@ -723,7 +732,11 @@ impl NetworkBehaviour for GenericProto {
 	type OutEvent = GenericProtoOut;
 
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {
-		NotifsHandlerProto::new(self.legacy_protocol.clone(), self.notif_protocols.clone())
+		NotifsHandlerProto::new(
+			self.legacy_protocol.clone(),
+			self.notif_protocols.clone(),
+			self.queue_size_report.clone()
+		)
 	}
 
 	fn addresses_of_peer(&mut self, _: &PeerId) -> Vec<Multiaddr> {

@@ -38,7 +38,7 @@ use futures::{prelude::*, ready};
 use futures_codec::Framed;
 use libp2p::core::{UpgradeInfo, InboundUpgrade, OutboundUpgrade, upgrade};
 use log::error;
-use std::{borrow::Cow, collections::VecDeque, io, iter, mem, pin::Pin, task::{Context, Poll}};
+use std::{borrow::Cow, collections::VecDeque, convert::TryFrom as _, io, iter, mem, pin::Pin, task::{Context, Poll}};
 use unsigned_varint::codec::UviBytes;
 
 /// Maximum allowed size of the two handshake messages, in bytes.
@@ -277,6 +277,13 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 				need_flush: false,
 			}))
 		})
+	}
+}
+
+impl<TSubstream> NotificationsOutSubstream<TSubstream> {
+	/// Returns the number of items in the queue, capped to `u32::max_value()`.
+	pub fn queue_len(&self) -> u32 {
+		u32::try_from(self.messages_queue.len()).unwrap_or(u32::max_value())
 	}
 }
 
