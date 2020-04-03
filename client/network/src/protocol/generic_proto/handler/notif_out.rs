@@ -79,13 +79,14 @@ impl IntoProtocolsHandler for NotifsOutHandlerProto {
 		DeniedUpgrade
 	}
 
-	fn into_handler(self, _: &PeerId, _: &ConnectedPoint) -> Self::Handler {
+	fn into_handler(self, peer_id: &PeerId, _: &ConnectedPoint) -> Self::Handler {
 		NotifsOutHandler {
 			protocol_name: self.protocol_name,
 			when_connection_open: Instant::now(),
 			queue_size_report: self.queue_size_report,
 			state: State::Disabled,
 			events_queue: SmallVec::new(),
+			peer_id: peer_id.clone(),
 		}
 	}
 }
@@ -116,6 +117,9 @@ pub struct NotifsOutHandler {
 	/// This queue must only ever be modified to insert elements at the back, or remove the first
 	/// element.
 	events_queue: SmallVec<[ProtocolsHandlerEvent<NotificationsOut, (), NotifsOutHandlerOut, void::Void>; 16]>,
+
+	/// Who we are connected to.
+	peer_id: PeerId,
 }
 
 /// Our relationship with the node we're connected to.
@@ -308,15 +312,16 @@ impl ProtocolsHandler for NotifsOutHandler {
 
 			NotifsOutHandlerIn::Send(msg) =>
 				if let State::Open { substream, .. } = &mut self.state {
-					if let Some(Ok(_)) = substream.send(msg).now_or_never() {
-						if let Some(metric) = &self.queue_size_report {
-							metric.observe(substream.queue_len() as f64);
-						}
-					} else {
+					if substream.push_message(msg).is_err() {
 						log::warn!(
 							target: "sub-libp2p",
-							"📞 Failed to push message to queue, dropped it"
+							"📞 Notifications queue with peer {} is full, dropped message (protocol: {:?})",
+							self.peer_id,
+							self.protocol_name,
 						);
+					}
+					if let Some(metric) = &self.queue_size_report {
+						metric.observe(substream.queue_len() as f64);
 					}
 				} else {
 					// This is an API misuse.
