@@ -751,7 +751,19 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 			.map_err(Into::into)
 	}
 
-	/// Do any post-flight stuff for a transaction.
+	/// Do any post-flight stuff for an extrinsic.
+	///
+	/// This gets given the `DispatchResult` `_result` from the extrinsic and can, if desired,
+	/// introduce a `TransactionValidityError`, causing the block to become invalid for including
+	/// it.
+	///
+	/// WARNING: It is dangerous to return an error here. To do so will fundamentally invalidate the
+	/// transaction and any block that it is included in, causing the block author to not be
+	/// compensated for their work in validating the transaction or producing the block so far.
+	///
+	/// It can only be used safely when you *know* that the extrinsic is one that can only be
+	/// introduced by the current block author; generally this implies that it is an inherent and
+	/// will come from either an offchain-worker or via `InherentData`.
 	fn post_dispatch(
 		_pre: Self::Pre,
 		_info: Self::DispatchInfo,
