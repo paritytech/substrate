@@ -34,7 +34,7 @@ use sc_telemetry::{telemetry, CONSENSUS_INFO};
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 use sp_api::{ProvideRuntimeApi, ApiExt};
 use futures::{executor, future, future::Either};
-use sp_blockchain::{HeaderBackend, ApplyExtrinsicFailed};
+use sp_blockchain::{HeaderBackend, ApplyExtrinsicFailed::Validity, Error::ApplyExtrinsicFailed};
 use std::marker::PhantomData;
 
 /// Proposer factory.
@@ -204,16 +204,11 @@ impl<A, B, Block, C> ProposerInner<B, Block, C, A>
 			)?
 		{
 			match block_builder.push(inherent) {
-				Err(sp_blockchain::Error::ApplyExtrinsicFailed(sp_blockchain::ApplyExtrinsicFailed::Validity(e)))
-					if e.exhausted_resources() =>
-				{
-					warn!("⚠️  Dropping non-mandatory inherent from overweight block.");
-				}
-				Err(sp_blockchain::Error::ApplyExtrinsicFailed(sp_blockchain::ApplyExtrinsicFailed::Validity(e)))
-					if e.was_mandatory() =>
-				{
-					error!("❌️ Mandatory inherent extrinsic returned error: {}. Block cannot be produced.", e);
-					Err(e)?
+				Err(ApplyExtrinsicFailed(Validity(e))) if e.exhausted_resources() =>
+					warn!("⚠️  Dropping non-mandatory inherent from overweight block."),
+				Err(ApplyExtrinsicFailed(Validity(e))) if e.was_mandatory() => {
+					error!("❌️ Mandatory inherent extrinsic returned error. Block cannot be produced.");
+					Err(ApplyExtrinsicFailed(Validity(e)))?
 				}
 				Err(e) => {
 					warn!("❗️ Inherent extrinsic returned unexpected error: {}. Dropping.", e);
@@ -257,7 +252,7 @@ impl<A, B, Block, C> ProposerInner<B, Block, C, A>
 				Ok(()) => {
 					debug!("[{:?}] Pushed to the block.", pending_tx_hash);
 				}
-				Err(sp_blockchain::Error::ApplyExtrinsicFailed(ApplyExtrinsicFailed::Validity(e)))
+				Err(ApplyExtrinsicFailed(Validity(e)))
 						if e.exhausted_resources() => {
 					if is_first {
 						debug!("[{:?}] Invalid transaction: FullBlock on empty block", pending_tx_hash);
