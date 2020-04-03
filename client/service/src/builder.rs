@@ -23,7 +23,14 @@ use sp_runtime::generic::BlockId;
 use sp_runtime::traits::NumberFor;
 use std::io::{Read, Write, Seek};
 use sp_runtime::traits::Block as BlockT;
-use sc_executor::NativeExecutionDispatch;
+use sc_executor::{NativeExecutor, NativeExecutionDispatch};
+use sc_chain_spec::get_extension;
+use crate::config::{Configuration, DatabaseConfig, KeystoreConfig};
+use crate::TaskManagerBuilder;
+use parking_lot::{Mutex, RwLock};
+use std::sync::Arc;
+use sc_client::Client;
+use sc_keystore::{Store as Keystore};
 
 /*
 use crate::{Service, NetworkStatus, NetworkState, error::Error, DEFAULT_PROTOCOL_ID, MallocSizeOfWasm};
@@ -104,6 +111,7 @@ pub struct ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
 	marker: PhantomData<(TBl, TRtApi)>,
 	background_tasks: Vec<(&'static str, BackgroundTask)>,
 }
+*/
 
 /// Full client type.
 pub type TFullClient<TBl, TRtApi, TExecDisp> = Client<
@@ -122,6 +130,7 @@ pub type TFullCallExecutor<TBl, TExecDisp> = sc_client::LocalCallExecutor<
 	NativeExecutor<TExecDisp>,
 >;
 
+/*
 /// Light client type.
 pub type TLightClient<TBl, TRtApi, TExecDisp> = Client<
 	TLightBackend<TBl>,
@@ -150,6 +159,7 @@ pub type TLightCallExecutor<TBl, TExecDisp> = sc_client::light::call_executor::G
 		NativeExecutor<TExecDisp>
 	>,
 >;
+*/
 
 type TFullParts<TBl, TRtApi, TExecDisp> = (
 	TFullClient<TBl, TRtApi, TExecDisp>,
@@ -236,6 +246,7 @@ fn new_full_parts<TBl, TRtApi, TExecDisp>(
 	Ok((client, backend, keystore, tasks_builder))
 }
 
+/*
 impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 	/// Start the service builder with a configuration.
 	pub fn new_full<TBl: BlockT, TRtApi, TExecDisp: NativeExecutionDispatch + 'static>(
