@@ -5,7 +5,7 @@ use std::time::Duration;
 use sc_client::LongestChain;
 use sc_client_api::ExecutorProvider;
 use node_template_runtime::{self, opaque::Block, RuntimeApi};
-use sc_service::{error::{Error as ServiceError}, AbstractService, Configuration, ServiceBuilder};
+use sc_service::{error::{Error as ServiceError}, AbstractService, Configuration};
 use sp_inherents::InherentDataProviders;
 use sc_executor::native_executor_instance;
 pub use sc_executor::NativeExecutor;
@@ -26,19 +26,61 @@ native_executor_instance!(
 macro_rules! new_full_start {
 	($config:expr) => {{
 		use std::sync::Arc;
-		let mut import_setup = None;
+		//let mut import_setup = None;
 		let inherent_data_providers = sp_inherents::InherentDataProviders::new();
 
+		let (client, backend, keystore, tasks_builder) = sc_service::new_full_parts::<
+			node_template_runtime::opaque::Block, node_template_runtime::RuntimeApi, crate::service::Executor
+		>(&$config)?;
+		let client = Arc::new(client);
+		/*
 		let builder = sc_service::ServiceBuilder::new_full::<
 			node_template_runtime::opaque::Block, node_template_runtime::RuntimeApi, crate::service::Executor
 		>($config)?
+		*/
+		let select_chain = sc_client::LongestChain::new(backend.clone());
+		/*
 			.with_select_chain(|_config, backend| {
 				Ok(sc_client::LongestChain::new(backend.clone()))
 			})?
+		*/
+		let pool_api = sc_transaction_pool::FullChainApi::new(Arc::clone(&client));
+		let (transaction_pool, background_task_one) = sc_transaction_pool::BasicPool::new($config.transaction_pool.clone(), std::sync::Arc::new(pool_api));
+		let transaction_pool = Arc::new(transaction_pool);
+		let background_tasks = Vec::new();
+
+		if let Some(bg_t) = background_task_one {
+			background_tasks.push(("txpool-background", bg_t));
+		}
+
+		/*
 			.with_transaction_pool(|config, client, _fetcher| {
 				let pool_api = sc_transaction_pool::FullChainApi::new(client.clone());
 				Ok(sc_transaction_pool::BasicPool::new(config, std::sync::Arc::new(pool_api)))
 			})?
+		*/
+		let (import_queue, import_setup) = {
+			let (grandpa_block_import, grandpa_link) =
+				sc_finality_grandpa::block_import(Arc::clone(&client), &(Arc::clone(&client) as Arc<_>), select_chain)?;
+
+			let aura_block_import = sc_consensus_aura::AuraBlockImport::<_, _, _, AuraPair>::new(
+				grandpa_block_import.clone(), Arc::clone(&client),
+			);
+
+			let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair>(
+				sc_consensus_aura::slot_duration(&*client)?,
+				aura_block_import,
+				Some(Box::new(grandpa_block_import.clone())),
+				None,
+				client,
+				inherent_data_providers.clone(),
+			)?;
+
+			let import_setup = Some((grandpa_block_import, grandpa_link));
+
+			(import_queue, import_setup)
+		};
+		/*
 			.with_import_queue(|_config, client, mut select_chain, _transaction_pool| {
 				let select_chain = select_chain.take()
 					.ok_or_else(|| sc_service::Error::SelectChainRequired)?;
@@ -63,8 +105,13 @@ macro_rules! new_full_start {
 
 				Ok(import_queue)
 			})?;
+		*/
 
-		(builder, import_setup, inherent_data_providers)
+		//(builder, import_setup, inherent_data_providers)
+		(
+			client, import_setup, inherent_data_providers, backend, tasks_builder, keystore,
+			import_queue, select_chain, transaction_pool, background_tasks,
+		)
 	}}
 }
 
@@ -77,19 +124,42 @@ pub fn new_full(config: Configuration)
 	let name = config.network.node_name.clone();
 	let disable_grandpa = config.disable_grandpa;
 
-	let (builder, mut import_setup, inherent_data_providers) = new_full_start!(config);
+	let (
+		client, mut import_setup, inherent_data_providers, backend, task_builder, keystore,
+		import_queue, select_chain, transaction_pool, background_tasks,
+	) = new_full_start!(config);
 
 	let (block_import, grandpa_link) =
 		import_setup.take()
 			.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
-	let service = builder
+	//let service = builder
+	let provider = client as Arc<dyn StorageAndProofProvider<_, _>>;
+	let finality_proof_provider = Arc::new(GrandpaFinalityProofProvider::new(backend, provider));
+	/*
 		.with_finality_proof_provider(|client, backend| {
 			// GenesisAuthoritySetProvider is implemented for StorageAndProofProvider
 			let provider = client as Arc<dyn StorageAndProofProvider<_, _>>;
 			Ok(Arc::new(GrandpaFinalityProofProvider::new(backend, provider)) as _)
 		})?
-		.build()?;
+	*/
+	let service = sc_service::build(
+		config,
+		client,
+		backend,
+		task_builder,
+		keystore,
+		None,
+		Some(select_chain),
+		import_queue,
+		None,
+		Some(finality_proof_provider),
+		transaction_pool,
+		(),
+		None,
+		background_tasks,
+	)?;
+		//.build()?;
 
 	if role.is_authority() {
 		let proposer =

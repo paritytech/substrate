@@ -38,6 +38,7 @@ pub use check_block::*;
 pub use import_blocks::*;
 pub use export_blocks::*;
 pub use sp_consensus::import_queue::ImportQueue;
+pub use builder::*;
 use std::{borrow::Cow, io, pin::Pin};
 use std::marker::PhantomData;
 use std::net::SocketAddr;
@@ -63,13 +64,13 @@ use parity_util_mem::MallocSizeOf;
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver,  TracingUnboundedSender};
 
 pub use self::error::Error;
+/*
 pub use self::builder::{
 	new_full_client,
-/*
 	ServiceBuilder, ServiceBuilderCommand, TFullClient, TLightClient, TFullBackend, TLightBackend,
 	TFullCallExecutor, TLightCallExecutor,
-*/
 };
+*/
 pub use config::{Configuration, Role, PruningMode, DatabaseConfig};
 pub use sc_chain_spec::{
 	ChainSpec, GenericChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension,
