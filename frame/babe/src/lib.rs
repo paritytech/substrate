@@ -157,8 +157,8 @@ decl_storage! {
 		///
 		/// This entry is populated as part of block execution and is cleaned up
 		/// on block finalization. Querying this storage entry outside of block
-		/// execution context should always yield `None`.
-		Lateness get(fn lateness): Option<T::BlockNumber>;
+		/// execution context should always yield zero.
+		Lateness get(fn lateness): T::BlockNumber;
 	}
 	add_extra_genesis {
 		config(authorities): Vec<(AuthorityId, BabeAuthorityWeight)>;
@@ -518,9 +518,7 @@ impl<T: Trait> frame_support::traits::EstimateNextSessionRotation<T::BlockNumber
 
 impl<T: Trait> frame_support::traits::Lateness<T::BlockNumber> for Module<T> {
 	fn lateness(&self) -> T::BlockNumber {
-		use sp_runtime::traits::Zero;
-
-		Self::lateness().unwrap_or(Zero::zero())
+		Self::lateness()
 	}
 }
 
