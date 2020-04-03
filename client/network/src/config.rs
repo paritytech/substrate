@@ -121,6 +121,12 @@ impl Role {
 	pub fn is_authority(&self) -> bool {
 		matches!(self, Role::Authority { .. })
 	}
+
+	/// True for `Role::Authority` and `Role::Sentry` since they're both
+	/// announced as having the authority role to the network.
+	pub fn is_network_authority(&self) -> bool {
+		matches!(self, Role::Authority { .. } | Role::Sentry { .. })
+	}
 }
 
 impl fmt::Display for Role {

@@ -45,10 +45,10 @@ impl PruningParams {
 		// unless `unsafe_pruning` is set.
 		config.pruning = match &self.pruning {
 			Some(ref s) if s == "archive" => PruningMode::ArchiveAll,
-			None if matches!(role, sc_service::Role::Authority { .. }) => PruningMode::ArchiveAll,
+			None if role.is_network_authority() => PruningMode::ArchiveAll,
 			None => PruningMode::default(),
 			Some(s) => {
-				if matches!(role, sc_service::Role::Authority { .. }) && !unsafe_pruning {
+				if role.is_network_authority() && !unsafe_pruning {
 					return Err(error::Error::Input(
 						"Validators should run with state pruning disabled (i.e. archive). \
 						You can ignore this check with `--unsafe-pruning`.".to_string()
