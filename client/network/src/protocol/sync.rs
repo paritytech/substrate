@@ -818,7 +818,7 @@ impl<B: BlockT> ChainSync<B> {
 			if let Some(peer) = self.peers.get_mut(&who) {
 				peer
 			} else {
-				error!(target: "sync", "Called on_block_justification with a bad peer ID");
+				error!(target: "sync", "💔 Called on_block_justification with a bad peer ID");
 				return Ok(OnBlockJustification::Nothing)
 			};
 
@@ -831,7 +831,7 @@ impl<B: BlockT> ChainSync<B> {
 				if hash != block.hash {
 					info!(
 						target: "sync",
-						"Invalid block justification provided by {}: requested: {:?} got: {:?}", who, hash, block.hash
+						"💔 Invalid block justification provided by {}: requested: {:?} got: {:?}", who, hash, block.hash
 					);
 					return Err(BadPeer(who, rep::BAD_JUSTIFICATION));
 				}
@@ -865,7 +865,7 @@ impl<B: BlockT> ChainSync<B> {
 			if let Some(peer) = self.peers.get_mut(&who) {
 				peer
 			} else {
-				error!(target: "sync", "Called on_block_finality_proof_data with a bad peer ID");
+				error!(target: "sync", "💔 Called on_block_finality_proof_data with a bad peer ID");
 				return Ok(OnBlockFinalityProof::Nothing)
 			};
 
@@ -877,7 +877,7 @@ impl<B: BlockT> ChainSync<B> {
 			if hash != resp.block {
 				info!(
 					target: "sync",
-					"Invalid block finality proof provided: requested: {:?} got: {:?}",
+					"💔 Invalid block finality proof provided: requested: {:?} got: {:?}",
 					hash,
 					resp.block
 				);
@@ -959,14 +959,14 @@ impl<B: BlockT> ChainSync<B> {
 				},
 				Err(BlockImportError::IncompleteHeader(who)) => {
 					if let Some(peer) = who {
-						warn!("Peer sent block with incomplete header to import");
+						warn!("💔 Peer sent block with incomplete header to import");
 						output.push(Err(BadPeer(peer, rep::INCOMPLETE_HEADER)));
 						output.extend(self.restart());
 					}
 				},
 				Err(BlockImportError::VerificationFailed(who, e)) => {
 					if let Some(peer) = who {
-						warn!("Verification failed for block {:?} received from peer: {}, {:?}", hash, peer, e);
+						warn!("💔 Verification failed for block {:?} received from peer: {}, {:?}", hash, peer, e);
 						output.push(Err(BadPeer(peer, rep::VERIFICATION_FAIL)));
 						output.extend(self.restart());
 					}
@@ -985,7 +985,7 @@ impl<B: BlockT> ChainSync<B> {
 				},
 				e @ Err(BlockImportError::UnknownParent) |
 				e @ Err(BlockImportError::Other(_)) => {
-					warn!(target: "sync", "Error importing block {:?}: {:?}", hash, e);
+					warn!(target: "sync", "💔 Error importing block {:?}: {:?}", hash, e);
 					output.extend(self.restart());
 				},
 				Err(BlockImportError::Cancelled) => {}
@@ -1017,7 +1017,7 @@ impl<B: BlockT> ChainSync<B> {
 		});
 
 		if let Err(err) = r {
-			warn!(target: "sync", "Error cleaning up pending extra finality proof data requests: {:?}", err)
+			warn!(target: "sync", "💔 Error cleaning up pending extra finality proof data requests: {:?}", err)
 		}
 
 		let client = &self.client;
@@ -1026,7 +1026,7 @@ impl<B: BlockT> ChainSync<B> {
 		});
 
 		if let Err(err) = r {
-			warn!(target: "sync", "Error cleaning up pending extra justification data requests: {:?}", err);
+			warn!(target: "sync", "💔 Error cleaning up pending extra justification data requests: {:?}", err);
 		}
 	}
 
@@ -1080,7 +1080,7 @@ impl<B: BlockT> ChainSync<B> {
 		let number = *header.number();
 		debug!(target: "sync", "Received block announcement {:?} with number {:?} from {}", hash, number, who);
 		if number.is_zero() {
-			warn!(target: "sync", "Ignored genesis block (#0) announcement from {}: {}", who, hash);
+			warn!(target: "sync", "💔 Ignored genesis block (#0) announcement from {}: {}", who, hash);
 			return OnBlockAnnounce::Nothing
 		}
 		let parent_status = self.block_status(header.parent_hash()).ok().unwrap_or(BlockStatus::Unknown);
@@ -1091,7 +1091,7 @@ impl<B: BlockT> ChainSync<B> {
 		let peer = if let Some(peer) = self.peers.get_mut(&who) {
 			peer
 		} else {
-			error!(target: "sync", "Called on_block_announce with a bad peer ID");
+			error!(target: "sync", "💔 Called on_block_announce with a bad peer ID");
 			return OnBlockAnnounce::Nothing
 		};
 		while peer.recently_announced.len() >= ANNOUNCE_HISTORY_SIZE {
@@ -1137,7 +1137,7 @@ impl<B: BlockT> ChainSync<B> {
 				return OnBlockAnnounce::Nothing
 			}
 			Err(e) => {
-				error!(target: "sync", "Block announcement validation errored: {}", e);
+				error!(target: "sync", "💔 Block announcement validation errored: {}", e);
 				return OnBlockAnnounce::Nothing
 			}
 		}

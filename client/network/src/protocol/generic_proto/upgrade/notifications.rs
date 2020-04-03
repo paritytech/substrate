@@ -38,13 +38,12 @@ use futures::{prelude::*, ready};
 use futures_codec::Framed;
 use libp2p::core::{UpgradeInfo, InboundUpgrade, OutboundUpgrade, upgrade};
 use log::error;
-use std::{borrow::Cow, collections::VecDeque, io, iter, mem, pin::Pin, task::{Context, Poll}};
+use std::{borrow::Cow, collections::VecDeque, convert::TryFrom as _, io, iter, mem, pin::Pin, task::{Context, Poll}};
 use unsigned_varint::codec::UviBytes;
 
 /// Maximum allowed size of the two handshake messages, in bytes.
 const MAX_HANDSHAKE_SIZE: usize = 1024;
-/// Maximum number of buffered messages before we consider the remote unresponsive and kill the
-/// substream.
+/// Maximum number of buffered messages before we refuse to accept more.
 const MAX_PENDING_MESSAGES: usize = 256;
 
 /// Upgrade that accepts a substream, sends back a status message, then becomes a unidirectional
@@ -280,6 +279,25 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 	}
 }
 
+impl<TSubstream> NotificationsOutSubstream<TSubstream> {
+	/// Returns the number of items in the queue, capped to `u32::max_value()`.
+	pub fn queue_len(&self) -> u32 {
+		u32::try_from(self.messages_queue.len()).unwrap_or(u32::max_value())
+	}
+
+	/// Push a message to the queue of messages.
+	///
+	/// This has the same effect as the `Sink::start_send` implementation.
+	pub fn push_message(&mut self, item: Vec<u8>) -> Result<(), NotificationsOutError> {
+		if self.messages_queue.len() >= MAX_PENDING_MESSAGES {
+			return Err(NotificationsOutError::Clogged);
+		}
+
+		self.messages_queue.push_back(item);
+		Ok(())
+	}
+}
+
 impl<TSubstream> Sink<Vec<u8>> for NotificationsOutSubstream<TSubstream>
 	where TSubstream: AsyncRead + AsyncWrite + Unpin,
 {
@@ -290,12 +308,7 @@ impl<TSubstream> Sink<Vec<u8>> for NotificationsOutSubstream<TSubstream>
 	}
 
 	fn start_send(mut self: Pin<&mut Self>, item: Vec<u8>) -> Result<(), Self::Error> {
-		if self.messages_queue.len() >= MAX_PENDING_MESSAGES {
-			return Err(NotificationsOutError::Clogged);
-		}
-
-		self.messages_queue.push_back(item);
-		Ok(())
+		self.push_message(item)
 	}
 
 	fn poll_flush(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
