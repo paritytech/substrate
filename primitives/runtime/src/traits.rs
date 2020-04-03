@@ -147,24 +147,6 @@ impl From<BadOrigin> for &'static str {
 	}
 }
 
-/// Some sort of check on the origin is performed by this object.
-pub trait EnsureOrigin<OuterOrigin> {
-	/// A return type.
-	type Success;
-	/// Perform the origin check.
-	fn ensure_origin(o: OuterOrigin) -> result::Result<Self::Success, BadOrigin> {
-		Self::try_origin(o).map_err(|_| BadOrigin)
-	}
-	/// Perform the origin check.
-	fn try_origin(o: OuterOrigin) -> result::Result<Self::Success, OuterOrigin>;
-
-	/// Returns an outer origin capable of passing `try_origin` check.
-	/// 
-	/// ** Should be used for benchmarking only!!! **
-	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> OuterOrigin;
-}
-
 /// An error that indicates that a lookup failed.
 #[derive(Encode, Decode, RuntimeDebug)]
 pub struct LookupError;

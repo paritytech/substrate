@@ -278,7 +278,7 @@ use frame_support::{
 	dispatch::{IsSubType, DispatchResult},
 	traits::{
 		Currency, LockIdentifier, LockableCurrency, WithdrawReasons, OnUnbalanced, Imbalance, Get,
-		UnixTime, EstimateNextNewSession,
+		UnixTime, EstimateNextNewSession, EnsureOrigin,
 	}
 };
 use pallet_session::historical;
@@ -287,7 +287,7 @@ use sp_runtime::{
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, StaticLookup, CheckedSub, Saturating, SaturatedConversion, AtLeast32Bit,
-		EnsureOrigin, SignedExtension,
+		SignedExtension,
 	},
 	transaction_validity::{
 		TransactionValidityError, TransactionValidity, ValidTransaction, InvalidTransaction,
