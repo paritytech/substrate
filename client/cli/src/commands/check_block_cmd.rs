@@ -18,12 +18,13 @@ use crate::error;
 use crate::params::ImportParams;
 use crate::params::SharedParams;
 use crate::CliConfiguration;
-use sc_service::{Configuration, ServiceBuilderCommand};
+//use sc_service::{Configuration, ServiceBuilderCommand};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::fmt::Debug;
 use std::str::FromStr;
 use structopt::StructOpt;
+use sc_service::check_block;
 
 /// The `check-block` command used to validate blocks.
 #[derive(Debug, StructOpt, Clone)]
@@ -49,17 +50,17 @@ pub struct CheckBlockCmd {
 
 impl CheckBlockCmd {
 	/// Run the check-block command
-	pub async fn run<B, BC, BB>(
+	pub async fn run<B, BA, CE, IQ>(
 		&self,
-		config: Configuration,
-		builder: B,
+		client: std::sync::Arc<sc_service::Client<BA, CE, B, ()>>,
+		import_queue: IQ,
 	) -> error::Result<()>
 	where
-		B: FnOnce(Configuration) -> Result<BC, sc_service::error::Error>,
-		BC: ServiceBuilderCommand<Block = BB> + Unpin,
-		BB: sp_runtime::traits::Block + Debug,
-		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
-		<BB as BlockT>::Hash: std::str::FromStr,
+		B: BlockT,
+		BA: sc_client_api::backend::Backend<B> + 'static,
+		CE: sc_client_api::call_executor::CallExecutor<B> + Send + Sync + 'static,
+		IQ: sc_service::ImportQueue<B> + Sync + 'static,
+		<B as sp_runtime::traits::Block>::Hash: std::str::FromStr,
 	{
 		let input = if self.input.starts_with("0x") {
 			&self.input[2..]
@@ -79,7 +80,7 @@ impl CheckBlockCmd {
 		};
 
 		let start = std::time::Instant::now();
-		builder(config)?.check_block(block_id).await?;
+		check_block(client, import_queue, block_id).await?;
 		println!("Completed in {} ms.", start.elapsed().as_millis());
 
 		Ok(())

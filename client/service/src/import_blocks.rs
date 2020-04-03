@@ -42,7 +42,7 @@ use std::sync::Arc;
 
 pub fn import_blocks<B, BA, CE, IQ>(
 	client: Arc<Client<BA, CE, B, ()>>,
-	import_queue: &'static mut IQ,
+	import_queue: IQ,
 	input: impl Read + Seek + Send + 'static,
 	force: bool,
 ) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>

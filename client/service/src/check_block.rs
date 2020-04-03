@@ -43,7 +43,7 @@ use crate::import_blocks::import_blocks;
 
 pub fn check_block<B, BA, CE, IQ>(
 	client: Arc<Client<BA, CE, B, ()>>,
-	import_queue: &'static mut IQ,
+	import_queue: IQ,
 	block_id: BlockId<B>
 ) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>
 where

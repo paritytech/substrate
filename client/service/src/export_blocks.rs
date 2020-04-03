@@ -40,7 +40,7 @@ use std::{io::{Read, Write, Seek}, pin::Pin};
 use sc_client_api::BlockBackend;
 use std::sync::Arc;
 
-pub fn export_blocks<B, BA, CE, IQ>(
+pub fn export_blocks<B, BA, CE>(
 	client: Arc<Client<BA, CE, B, ()>>,
 	mut output: impl Write + 'static,
 	from: NumberFor<B>,
@@ -51,7 +51,6 @@ where
 	B: BlockT,
 	BA: sc_client_api::backend::Backend<B> + 'static,
 	CE: sc_client_api::call_executor::CallExecutor<B> + Send + Sync + 'static,
-	IQ: ImportQueue<B> + Sync + 'static,
 {
 	let client = client;
 	let mut block = from;
