@@ -154,7 +154,7 @@ pub trait CliConfiguration: Sized {
 
 	/// Get the pruning mode
 	fn pruning(&self, is_dev: bool, roles: Roles) -> Result<PruningMode> {
-		self.import_params()
+		self.pruning_params()
 			.map(|x| x.pruning(is_dev, roles))
 			.unwrap_or(Ok(Default::default()))
 	}
