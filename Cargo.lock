@@ -3342,7 +3342,9 @@ dependencies = [
  "pallet-timestamp",
  "pallet-transaction-payment",
  "parity-scale-codec",
+ "platforms",
  "rand 0.7.3",
+ "regex",
  "sc-authority-discovery",
  "sc-basic-authorship",
  "sc-chain-spec",
@@ -7741,7 +7743,6 @@ name = "substrate-build-script-utils"
 version = "2.0.0-alpha.5"
 dependencies = [
  "platforms",
- "vergen",
 ]
 
 [[package]]
@@ -8726,16 +8727,6 @@ name = "vec_map"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "05c78687fb1a80548ae3250346c3db86a80a7cdd77bda190189f2d0a0987c81a"
-
-[[package]]
-name = "vergen"
-version = "3.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ce50d8996df1f85af15f2cd8d33daae6e479575123ef4314a51a70a230739cb"
-dependencies = [
- "bitflags",
- "chrono",
-]
 
 [[package]]
 name = "version_check"

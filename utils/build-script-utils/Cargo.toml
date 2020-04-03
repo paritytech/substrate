@@ -9,7 +9,6 @@ repository = "https://github.com/paritytech/substrate/"
 description = "Crate with utility functions for `build.rs` scripts."
 
 [dependencies]
-vergen = "3.0.4"
 platforms = "0.2.1"
 
 [package.metadata.docs.rs]
