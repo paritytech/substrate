@@ -58,7 +58,7 @@ pub use self::builder::{
 	ServiceBuilder, ServiceBuilderCommand, TFullClient, TLightClient, TFullBackend, TLightBackend,
 	TFullCallExecutor, TLightCallExecutor,
 };
-pub use config::{Configuration, Roles, PruningMode};
+pub use config::{Configuration, Roles, PruningMode, DatabaseConfig};
 pub use sc_chain_spec::{
 	ChainSpec, GenericChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension
 };
@@ -441,7 +441,7 @@ fn build_network_future<
 		log!(
 			target: "service",
 			if polling_dur >= Duration::from_secs(1) { Level::Warn } else { Level::Trace },
-			"Polling the network future took {:?}",
+			"⚠️  Polling the network future took {:?}",
 			polling_dur
 		);
 

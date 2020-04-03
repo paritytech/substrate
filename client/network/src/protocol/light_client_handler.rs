@@ -29,7 +29,7 @@ use codec::{self, Encode, Decode};
 use crate::{
 	chain::Client,
 	config::ProtocolId,
-	protocol::{api, light_dispatch::TIMEOUT_REPUTATION_CHANGE}
+	protocol::{api, message::BlockAttributes}
 };
 use futures::{channel::oneshot, future::BoxFuture, prelude::*, stream::FuturesUnordered};
 use libp2p::{
@@ -74,6 +74,9 @@ use std::{
 use void::Void;
 use wasm_timer::Instant;
 
+/// Reputation change for a peer when a request timed out.
+pub(crate) const TIMEOUT_REPUTATION_CHANGE: i32 = -(1 << 8);
+
 /// Configuration options for `LightClientHandler` behaviour.
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -82,7 +85,8 @@ pub struct Config {
 	max_pending_requests: usize,
 	inactivity_timeout: Duration,
 	request_timeout: Duration,
-	protocol: Bytes,
+	light_protocol: Bytes,
+	block_protocol: Bytes,
 }
 
 impl Config {
@@ -100,7 +104,8 @@ impl Config {
 			max_pending_requests: 128,
 			inactivity_timeout: Duration::from_secs(15),
 			request_timeout: Duration::from_secs(15),
-			protocol: Bytes::new(),
+			light_protocol: Bytes::new(),
+			block_protocol: Bytes::new(),
 		};
 		c.set_protocol(id);
 		c
@@ -138,11 +143,18 @@ impl Config {
 
 	/// Set protocol to use for upgrade negotiation.
 	pub fn set_protocol(&mut self, id: &ProtocolId) -> &mut Self {
-		let mut v = Vec::new();
-		v.extend_from_slice(b"/");
-		v.extend_from_slice(id.as_bytes());
-		v.extend_from_slice(b"/light/2");
-		self.protocol = v.into();
+		let mut vl = Vec::new();
+		vl.extend_from_slice(b"/");
+		vl.extend_from_slice(id.as_bytes());
+		vl.extend_from_slice(b"/light/2");
+		self.light_protocol = vl.into();
+
+		let mut vb = Vec::new();
+		vb.extend_from_slice(b"/");
+		vb.extend_from_slice(id.as_bytes());
+		vb.extend_from_slice(b"/sync/2");
+		self.block_protocol = vb.into();
+
 		self
 	}
 }
@@ -176,6 +188,10 @@ pub enum Error {
 // used because we currently only support a subset of those.
 #[derive(Debug)]
 pub enum Request<B: Block> {
+	Body {
+		request: fetcher::RemoteBodyRequest<B::Header>,
+		sender: oneshot::Sender<Result<Vec<B::Extrinsic>, ClientError>>
+	},
 	Header {
 		request: fetcher::RemoteHeaderRequest<B::Header>,
 		sender: oneshot::Sender<Result<B::Header, ClientError>>
@@ -208,7 +224,8 @@ enum Reply<B: Block> {
 	VecU8(Vec<u8>),
 	VecNumberU32(Vec<(<B::Header as Header>::Number, u32)>),
 	MapVecU8OptVecU8(HashMap<Vec<u8>, Option<Vec<u8>>>),
-	Header(B::Header)
+	Header(B::Header),
+	Extrinsics(Vec<B::Extrinsic>),
 }
 
 /// Augments a light client request with metadata.
@@ -291,6 +308,7 @@ where
 	/// means to determine it ourselves.
 	pub fn update_best_block(&mut self, peer: &PeerId, num: NumberFor<B>) {
 		if let Some(info) = self.peers.get_mut(peer) {
+			log::trace!("new best block for {:?}: {:?}", peer, num);
 			info.best_block = Some(num)
 		}
 	}
@@ -360,10 +378,23 @@ where
 		( &mut self
 		, peer: &PeerId
 		, request: &Request<B>
-		, response: api::v1::light::Response
+		, response: Response
 		) -> Result<Reply<B>, Error>
 	{
 		log::trace!("response from {}", peer);
+		match response {
+			Response::Light(r) => self.on_response_light(peer, request, r),
+			Response::Block(r) => self.on_response_block(peer, request, r),
+		}
+	}
+
+	fn on_response_light
+		( &mut self
+		, peer: &PeerId
+		, request: &Request<B>
+		, response: api::v1::light::Response
+		) -> Result<Reply<B>, Error>
+	{
 		use api::v1::light::response::Response;
 		match response.response {
 			Some(Response::RemoteCallResponse(response)) =>
@@ -427,6 +458,32 @@ where
 				}
 			None => Err(Error::UnexpectedResponse)
 		}
+	}
+
+	fn on_response_block
+		( &mut self
+		, peer: &PeerId
+		, request: &Request<B>
+		, response: api::v1::BlockResponse
+		) -> Result<Reply<B>, Error>
+	{
+		let request = if let Request::Body { request , .. } = &request {
+			request
+		} else {
+			return Err(Error::UnexpectedResponse);
+		};
+
+		let body: Vec<_> = match response.blocks.into_iter().next() {
+			Some(b) => b.body,
+			None => return Err(Error::UnexpectedResponse),
+		};
+
+		let body = body.into_iter()
+			.map(|mut extrinsic| B::Extrinsic::decode(&mut &extrinsic[..]))
+			.collect::<Result<_, _>>()?;
+
+		let body = self.checker.check_body_proof(&request, body)?;
+		Ok(Reply::Extrinsics(body))
 	}
 
 	fn on_remote_call_request
@@ -664,7 +721,7 @@ where
 	fn new_handler(&mut self) -> Self::ProtocolsHandler {
 		let p = InboundProtocol {
 			max_request_size: self.config.max_request_size,
-			protocol: self.config.protocol.clone(),
+			protocol: self.config.light_protocol.clone(),
 		};
 		OneShotHandler::new(SubstreamProtocol::new(p), self.config.inactivity_timeout)
 	}
@@ -839,30 +896,40 @@ where
 				}
 			};
 			if let Some(peer) = available_peer {
-				let rq = serialize_request(&request.request);
-				let mut buf = Vec::with_capacity(rq.encoded_len());
-				if let Err(e) = rq.encode(&mut buf) {
-					log::debug!("failed to serialize request: {}", e);
-					send_reply(Err(ClientError::RemoteFetchFailed), request.request)
-				} else {
-					let id = self.next_request_id();
-					log::trace!("sending request {} to peer {}", id, peer);
-					let protocol = OutboundProtocol {
-						request: buf,
-						request_id: id,
-						max_response_size: self.config.max_response_size,
-						protocol: self.config.protocol.clone(),
-					};
-					self.peers.get_mut(&peer).map(|info| info.status = PeerStatus::BusyWith(id));
-					let rw = RequestWrapper {
-						timestamp: request.timestamp,
-						retries: request.retries,
-						request: request.request,
-						peer: peer.clone(),
-					};
-					self.outstanding.insert(id, rw);
-					return Poll::Ready(NetworkBehaviourAction::SendEvent { peer_id: peer, event: protocol })
-				}
+				let buf = match serialize_request(&request.request) {
+					Ok(b) => b,
+					Err(e) => {
+						log::debug!("failed to serialize request: {}", e);
+						send_reply(Err(ClientError::RemoteFetchFailed), request.request);
+						continue;
+					}
+				};
+
+				let id = self.next_request_id();
+				log::trace!("sending request {} to peer {}", id, peer);
+				let protocol = OutboundProtocol {
+					request: buf,
+					request_id: id,
+					expected: match request.request {
+						Request::Body { .. } => ExpectedResponseTy::Block,
+						_ => ExpectedResponseTy::Light,
+					},
+					max_response_size: self.config.max_response_size,
+					protocol: match request.request {
+						Request::Body { .. } => self.config.block_protocol.clone(),
+						_ => self.config.light_protocol.clone(),
+					},
+				};
+				self.peers.get_mut(&peer).map(|info| info.status = PeerStatus::BusyWith(id));
+				let rw = RequestWrapper {
+					timestamp: request.timestamp,
+					retries: request.retries,
+					request: request.request,
+					peer: peer.clone(),
+				};
+				self.outstanding.insert(id, rw);
+				return Poll::Ready(NetworkBehaviourAction::SendEvent { peer_id: peer, event: protocol })
+
 			} else {
 				self.pending_requests.push_front(request);
 				log::debug!("no peer available to send request to");
@@ -903,6 +970,7 @@ where
 
 fn required_block<B: Block>(request: &Request<B>) -> NumberFor<B> {
 	match request {
+		Request::Body { request, .. } => *request.header.number(),
 		Request::Header { request, .. } => request.block,
 		Request::Read { request, .. } => *request.header.number(),
 		Request::ReadChild { request, .. } => *request.header.number(),
@@ -913,6 +981,7 @@ fn required_block<B: Block>(request: &Request<B>) -> NumberFor<B> {
 
 fn retries<B: Block>(request: &Request<B>) -> usize {
 	let rc = match request {
+		Request::Body { request, .. } => request.retry_count,
 		Request::Header { request, .. } => request.retry_count,
 		Request::Read { request, .. } => request.retry_count,
 		Request::ReadChild { request, .. } => request.retry_count,
@@ -922,8 +991,20 @@ fn retries<B: Block>(request: &Request<B>) -> usize {
 	rc.unwrap_or(0)
 }
 
-fn serialize_request<B: Block>(request: &Request<B>) -> api::v1::light::Request {
+fn serialize_request<B: Block>(request: &Request<B>) -> Result<Vec<u8>, prost::EncodeError> {
 	let request = match request {
+		Request::Body { request, .. } => {
+			let rq = api::v1::BlockRequest {
+				fields: u32::from(BlockAttributes::BODY.bits()),
+				from_block: Some(api::v1::block_request::FromBlock::Hash(request.header.hash().encode())),
+				to_block: Vec::new(),
+				direction: api::v1::Direction::Ascending as i32,
+				max_blocks: 1,
+			};
+			let mut buf = Vec::with_capacity(rq.encoded_len());
+			rq.encode(&mut buf)?;
+			return Ok(buf);
+		}
 		Request::Header { request, .. } => {
 			let r = api::v1::light::RemoteHeaderRequest { block: request.block.encode() };
 			api::v1::light::request::Request::RemoteHeaderRequest(r)
@@ -966,7 +1047,10 @@ fn serialize_request<B: Block>(request: &Request<B>) -> api::v1::light::Request 
 		}
 	};
 
-	api::v1::light::Request { request: Some(request) }
+	let rq = api::v1::light::Request { request: Some(request) };
+	let mut buf = Vec::with_capacity(rq.encoded_len());
+	rq.encode(&mut buf)?;
+	Ok(buf)
 }
 
 fn send_reply<B: Block>(result: Result<Reply<B>, ClientError>, request: Request<B>) {
@@ -974,6 +1058,11 @@ fn send_reply<B: Block>(result: Result<Reply<B>, ClientError>, request: Request<
 		let _ = sender.send(item); // It is okay if the other end already hung up.
 	}
 	match request {
+		Request::Body { request, sender } => match result {
+			Err(e) => send(Err(e), sender),
+			Ok(Reply::Extrinsics(x)) => send(Ok(x), sender),
+			reply => log::error!("invalid reply for body request: {:?}, {:?}", reply, request),
+		}
 		Request::Header { request, sender } => match result {
 			Err(e) => send(Err(e), sender),
 			Ok(Reply::Header(x)) => send(Ok(x), sender),
@@ -1008,7 +1097,16 @@ pub enum Event<T> {
 	/// Incoming request from remote and substream to use for the response.
 	Request(api::v1::light::Request, T),
 	/// Incoming response from remote.
-	Response(u64, api::v1::light::Response),
+	Response(u64, Response),
+}
+
+/// Incoming response from remote.
+#[derive(Debug, Clone)]
+pub enum Response {
+	/// Incoming light response from remote.
+	Light(api::v1::light::Response),
+	/// Incoming block response from remote.
+	Block(api::v1::BlockResponse),
 }
 
 /// Substream upgrade protocol.
@@ -1023,23 +1121,23 @@ pub struct InboundProtocol {
 }
 
 impl UpgradeInfo for InboundProtocol {
-    type Info = Bytes;
-    type InfoIter = iter::Once<Self::Info>;
+	type Info = Bytes;
+	type InfoIter = iter::Once<Self::Info>;
 
-    fn protocol_info(&self) -> Self::InfoIter {
-        iter::once(self.protocol.clone())
-    }
+	fn protocol_info(&self) -> Self::InfoIter {
+		iter::once(self.protocol.clone())
+	}
 }
 
 impl<T> InboundUpgrade<T> for InboundProtocol
 where
 	T: AsyncRead + AsyncWrite + Unpin + Send + 'static
 {
-    type Output = Event<T>;
-    type Error = ReadOneError;
-    type Future = BoxFuture<'static, Result<Self::Output, Self::Error>>;
+	type Output = Event<T>;
+	type Error = ReadOneError;
+	type Future = BoxFuture<'static, Result<Self::Output, Self::Error>>;
 
-    fn upgrade_inbound(self, mut s: T, _: Self::Info) -> Self::Future {
+	fn upgrade_inbound(self, mut s: T, _: Self::Info) -> Self::Future {
 		let future = async move {
 			let vec = read_one(&mut s, self.max_request_size).await?;
 			match api::v1::light::Request::decode(&vec[..]) {
@@ -1060,38 +1158,59 @@ pub struct OutboundProtocol {
 	request: Vec<u8>,
 	/// Local identifier for the request. Used to associate it with a response.
 	request_id: u64,
+	/// Kind of response expected for this request.
+	expected: ExpectedResponseTy,
 	/// The max. response length in bytes.
 	max_response_size: usize,
 	/// The protocol to use for upgrade negotiation.
 	protocol: Bytes,
 }
 
-impl UpgradeInfo for OutboundProtocol {
-    type Info = Bytes;
-    type InfoIter = iter::Once<Self::Info>;
+/// Type of response expected from the remote for this request.
+#[derive(Debug, Clone)]
+enum ExpectedResponseTy {
+	Light,
+	Block,
+}
 
-    fn protocol_info(&self) -> Self::InfoIter {
-        iter::once(self.protocol.clone())
-    }
+impl UpgradeInfo for OutboundProtocol {
+	type Info = Bytes;
+	type InfoIter = iter::Once<Self::Info>;
+
+	fn protocol_info(&self) -> Self::InfoIter {
+		iter::once(self.protocol.clone())
+	}
 }
 
 impl<T> OutboundUpgrade<T> for OutboundProtocol
 where
 	T: AsyncRead + AsyncWrite + Unpin + Send + 'static
 {
-    type Output = Event<T>;
-    type Error = ReadOneError;
-    type Future = BoxFuture<'static, Result<Self::Output, Self::Error>>;
+	type Output = Event<T>;
+	type Error = ReadOneError;
+	type Future = BoxFuture<'static, Result<Self::Output, Self::Error>>;
 
-    fn upgrade_outbound(self, mut s: T, _: Self::Info) -> Self::Future {
+	fn upgrade_outbound(self, mut s: T, _: Self::Info) -> Self::Future {
 		let future = async move {
 			write_one(&mut s, &self.request).await?;
 			let vec = read_one(&mut s, self.max_response_size).await?;
-			api::v1::light::Response::decode(&vec[..])
-				.map(|r| Event::Response(self.request_id, r))
-				.map_err(|e| {
-					ReadOneError::Io(io::Error::new(io::ErrorKind::Other, e))
-				})
+
+			match self.expected {
+				ExpectedResponseTy::Light => {
+					api::v1::light::Response::decode(&vec[..])
+						.map(|r| Event::Response(self.request_id, Response::Light(r)))
+						.map_err(|e| {
+							ReadOneError::Io(io::Error::new(io::ErrorKind::Other, e))
+						})
+				},
+				ExpectedResponseTy::Block => {
+					api::v1::BlockResponse::decode(&vec[..])
+						.map(|r| Event::Response(self.request_id, Response::Block(r)))
+						.map_err(|e| {
+							ReadOneError::Io(io::Error::new(io::ErrorKind::Other, e))
+						})
+				}
+			}
 		};
 		future.boxed()
 	}
@@ -1117,7 +1236,7 @@ mod tests {
 	use crate::{
 		chain::Client,
 		config::ProtocolId,
-		protocol::{api, light_dispatch::tests::{DummyFetchChecker, dummy_header}}
+		protocol::api,
 	};
 	use futures::{channel::oneshot, prelude::*};
 	use libp2p::{
@@ -1139,15 +1258,15 @@ mod tests {
 	use sp_blockchain::{Error as ClientError};
 	use sp_core::storage::ChildInfo;
 	use std::{
-		collections::HashSet,
+		collections::{HashMap, HashSet},
 		io,
 		iter::{self, FromIterator},
 		pin::Pin,
 		sync::Arc,
 		task::{Context, Poll}
 	};
-	use sp_runtime::{generic::Header, traits::BlakeTwo256};
-	use super::{Event, LightClientHandler, Request, OutboundProtocol, PeerStatus};
+	use sp_runtime::{generic::Header, traits::{BlakeTwo256, Block as BlockT, NumberFor}};
+	use super::{Event, LightClientHandler, Request, Response, OutboundProtocol, PeerStatus};
 	use void::Void;
 
 	const CHILD_INFO: ChildInfo<'static> = ChildInfo::new_default(b"foobarbaz");
@@ -1162,7 +1281,7 @@ mod tests {
 
 	fn make_swarm(ok: bool, ps: sc_peerset::PeersetHandle, cf: super::Config) -> Swarm {
 		let client = Arc::new(substrate_test_runtime_client::new());
-		let checker = Arc::new(DummyFetchChecker::new(ok));
+		let checker = Arc::new(DummyFetchChecker { ok, _mark: std::marker::PhantomData });
 		let id_key = identity::Keypair::generate_ed25519();
 		let dh_key = Keypair::<X25519>::new().into_authentic(&id_key).unwrap();
 		let local_peer = id_key.public().into_peer_id();
@@ -1176,8 +1295,102 @@ mod tests {
 		Swarm::new(transport, LightClientHandler::new(cf, client, checker, ps), local_peer)
 	}
 
+	struct DummyFetchChecker<B> {
+		ok: bool,
+		_mark: std::marker::PhantomData<B>
+	}
+
+	impl<B: BlockT> fetcher::FetchChecker<B> for DummyFetchChecker<B> {
+		fn check_header_proof(
+			&self,
+			_request: &fetcher::RemoteHeaderRequest<B::Header>,
+			header: Option<B::Header>,
+			_remote_proof: fetcher::StorageProof,
+		) -> Result<B::Header, ClientError> {
+			match self.ok {
+				true if header.is_some() => Ok(header.unwrap()),
+				_ => Err(ClientError::Backend("Test error".into())),
+			}
+		}
+
+		fn check_read_proof(
+			&self,
+			request: &fetcher::RemoteReadRequest<B::Header>,
+			_: fetcher::StorageProof,
+		) -> Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError> {
+			match self.ok {
+				true => Ok(request.keys
+					.iter()
+					.cloned()
+					.map(|k| (k, Some(vec![42])))
+					.collect()
+				),
+				false => Err(ClientError::Backend("Test error".into())),
+			}
+		}
+
+		fn check_read_child_proof(
+			&self,
+			request: &fetcher::RemoteReadChildRequest<B::Header>,
+			_: fetcher::StorageProof,
+		) -> Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError> {
+			match self.ok {
+				true => Ok(request.keys
+					.iter()
+					.cloned()
+					.map(|k| (k, Some(vec![42])))
+					.collect()
+				),
+				false => Err(ClientError::Backend("Test error".into())),
+			}
+		}
+
+		fn check_execution_proof(
+			&self,
+			_: &fetcher::RemoteCallRequest<B::Header>,
+			_: fetcher::StorageProof,
+		) -> Result<Vec<u8>, ClientError> {
+			match self.ok {
+				true => Ok(vec![42]),
+				false => Err(ClientError::Backend("Test error".into())),
+			}
+		}
+
+		fn check_changes_proof(
+			&self,
+			_: &fetcher::RemoteChangesRequest<B::Header>,
+			_: fetcher::ChangesProof<B::Header>
+		) -> Result<Vec<(NumberFor<B>, u32)>, ClientError> {
+			match self.ok {
+				true => Ok(vec![(100.into(), 2)]),
+				false => Err(ClientError::Backend("Test error".into())),
+			}
+		}
+
+		fn check_body_proof(
+			&self,
+			_: &fetcher::RemoteBodyRequest<B::Header>,
+			body: Vec<B::Extrinsic>
+		) -> Result<Vec<B::Extrinsic>, ClientError> {
+			match self.ok {
+				true => Ok(body),
+				false => Err(ClientError::Backend("Test error".into())),
+			}
+		}
+	}
+
 	fn make_config() -> super::Config {
 		super::Config::new(&ProtocolId::from(&b"foo"[..]))
+	}
+
+	fn dummy_header() -> sp_test_primitives::Header {
+		sp_test_primitives::Header {
+			parent_hash: Default::default(),
+			number: 0,
+			state_root: Default::default(),
+			extrinsics_root: Default::default(),
+			digest: Default::default(),
+		}
 	}
 
 	struct EmptyPollParams(PeerId);
@@ -1222,7 +1435,7 @@ mod tests {
 		) -> LightClientHandler<Block>
 	{
 		let client = Arc::new(substrate_test_runtime_client::new());
-		let checker = Arc::new(DummyFetchChecker::new(ok));
+		let checker = Arc::new(DummyFetchChecker { ok, _mark: std::marker::PhantomData });
 		LightClientHandler::new(cf, client, checker, ps)
 	}
 
@@ -1349,7 +1562,7 @@ mod tests {
 			}
 		};
 
-		behaviour.inject_node_event(peer.clone(), Event::Response(request_id, response));
+		behaviour.inject_node_event(peer.clone(), Event::Response(request_id, Response::Light(response)));
 		assert!(behaviour.peers.is_empty());
 
 		poll(&mut behaviour); // More progress
@@ -1378,7 +1591,7 @@ mod tests {
 			}
 		};
 
-		behaviour.inject_node_event(peer.clone(), Event::Response(2347895932, response));
+		behaviour.inject_node_event(peer.clone(), Event::Response(2347895932, Response::Light(response)));
 
 		assert!(behaviour.peers.is_empty());
 		poll(&mut behaviour);
@@ -1420,7 +1633,7 @@ mod tests {
 			}
 		};
 
-		behaviour.inject_node_event(peer.clone(), Event::Response(request_id, response));
+		behaviour.inject_node_event(peer.clone(), Event::Response(request_id, Response::Light(response)));
 		assert!(behaviour.peers.is_empty());
 
 		poll(&mut behaviour); // More progress
@@ -1472,7 +1685,7 @@ mod tests {
 					response: Some(api::v1::light::response::Response::RemoteCallResponse(r))
 				}
 			};
-			behaviour.inject_node_event(responding_peer, Event::Response(request_id, response.clone()));
+			behaviour.inject_node_event(responding_peer, Event::Response(request_id, Response::Light(response.clone())));
 			assert_matches!(poll(&mut behaviour), Poll::Ready(NetworkBehaviourAction::SendEvent { .. }));
 			assert_matches!(chan.1.try_recv(), Ok(None))
 		}
@@ -1485,7 +1698,7 @@ mod tests {
 				response: Some(api::v1::light::response::Response::RemoteCallResponse(r)),
 			}
 		};
-		behaviour.inject_node_event(responding_peer, Event::Response(request_id, response));
+		behaviour.inject_node_event(responding_peer, Event::Response(request_id, Response::Light(response)));
 		assert_matches!(poll(&mut behaviour), Poll::Pending);
 		assert_matches!(chan.1.try_recv(), Ok(Some(Err(ClientError::RemoteFetchFailed))))
 	}
@@ -1499,6 +1712,7 @@ mod tests {
 		assert_eq!(1, behaviour.peers.len());
 
 		let response = match request {
+			Request::Body { .. } => unimplemented!(),
 			Request::Header{..} => {
 				let r = api::v1::light::RemoteHeaderResponse {
 					header: dummy_header().encode(),
@@ -1548,7 +1762,7 @@ mod tests {
 		assert_eq!(1, behaviour.outstanding.len());
 		assert_eq!(1, *behaviour.outstanding.keys().next().unwrap());
 
-		behaviour.inject_node_event(peer.clone(), Event::Response(1, response));
+		behaviour.inject_node_event(peer.clone(), Event::Response(1, Response::Light(response)));
 
 		poll(&mut behaviour);
 

@@ -29,6 +29,9 @@ const SEED: u32 = 0;
 const MAX_USERS: u32 = 1000;
 const MAX_REFERENDUMS: u32 = 100;
 const MAX_PROPOSALS: u32 = 100;
+const MAX_SECONDERS: u32 = 100;
+const MAX_VETOERS: u32 = 100;
+const MAX_BYTES: u32 = 16_384;
 
 fn funded_account<T: Trait>(name: &'static str, index: u32) -> T::AccountId {
 	let caller: T::AccountId = account(name, index, SEED);
@@ -57,6 +60,13 @@ fn add_referendum<T: Trait>(n: u32) -> Result<ReferendumIndex, &'static str> {
 		0.into(),
 	);
 	let referendum_index: ReferendumIndex = ReferendumCount::get() - 1;
+	let _ = T::Scheduler::schedule_named(
+		(DEMOCRACY_ID, referendum_index),
+		0.into(),
+		None,
+		63,
+		Call::enact_proposal(proposal_hash, referendum_index).into(),
+	);
 	Ok(referendum_index)
 }
 
@@ -89,7 +99,7 @@ benchmarks! {
 		let p in 1 .. MAX_PROPOSALS;
 
 		// Add p proposals
-		for i in 0..p {
+		for i in 0 .. p {
 			add_proposal::<T>(i)?;
 		}
 
@@ -99,10 +109,10 @@ benchmarks! {
 	}: _(RawOrigin::Signed(caller), proposal_hash, value.into())
 
 	second {
-		let s in 0 .. 100;
+		let s in 0 .. MAX_SECONDERS;
 
 		// Create s existing "seconds"
-		for i in 0..s {
+		for i in 0 .. s {
 			let seconder = funded_account::<T>("seconder", i);
 			Democracy::<T>::second(RawOrigin::Signed(seconder).into(), 0)?;
 		}
@@ -202,7 +212,7 @@ benchmarks! {
 
 	veto_external {
 		// Existing veto-ers
-		let v in 0 .. 100;
+		let v in 0 .. MAX_VETOERS;
 
 		let proposal_hash: T::Hash = T::Hashing::hash_of(&v);
 
@@ -210,7 +220,7 @@ benchmarks! {
 		Democracy::<T>::external_propose_default(origin_propose, proposal_hash.clone())?;
 
 		let mut vetoers: Vec<T::AccountId> = Vec::new();
-		for i in 0..v {
+		for i in 0 .. v {
 			vetoers.push(account("vetoer", i, SEED));
 		}
 		Blacklist::<T>::insert(proposal_hash, (T::BlockNumber::zero(), vetoers));
@@ -228,12 +238,9 @@ benchmarks! {
 	}: _(RawOrigin::Root, referendum_index)
 
 	cancel_queued {
-		let d in 0 .. 100;
+		let u in 1 .. MAX_USERS;
 
-		let referendum_index = add_referendum::<T>(d)?;
-		let block_number: T::BlockNumber = 0.into();
-		let hash: T::Hash = T::Hashing::hash_of(&d);
-		<DispatchQueue<T>>::put(vec![(block_number, hash, referendum_index.clone()); d as usize]);
+		let referendum_index = add_referendum::<T>(u)?;
 	}: _(RawOrigin::Root, referendum_index)
 
 	open_proxy {
@@ -297,15 +304,17 @@ benchmarks! {
 	}: _(RawOrigin::Signed(delegator))
 
 	clear_public_proposals {
-		let p in 0 .. 100;
+		let p in 0 .. MAX_PROPOSALS;
+
 		for i in 0 .. p {
 			add_proposal::<T>(i)?;
 		}
+
 	}: _(RawOrigin::Root)
 
 	note_preimage {
 		// Num of bytes in encoded proposal
-		let b in 0 .. 16_384;
+		let b in 0 .. MAX_BYTES;
 
 		let caller = funded_account::<T>("caller", b);
 		let encoded_proposal = vec![0; b as usize];
@@ -313,50 +322,31 @@ benchmarks! {
 
 	note_imminent_preimage {
 		// Num of bytes in encoded proposal
-		let b in 0 .. 16_384;
-		// Length of dispatch queue
-		let d in 0 .. 100;
+		let b in 0 .. MAX_BYTES;
 
-		let mut dispatch_queue = Vec::new();
 		// d + 1 to include the one we are testing
-		for i in 0 .. d + 1 {
-			let encoded_proposal = vec![0; i as usize];
-			let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
-			let block_number = T::BlockNumber::zero();
-			let referendum_index: ReferendumIndex = 0;
-			dispatch_queue.push((block_number, proposal_hash, referendum_index))
-		}
-		<DispatchQueue<T>>::put(dispatch_queue);
+		let encoded_proposal = vec![0; b as usize];
+		let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
+		let block_number = T::BlockNumber::one();
+		Preimages::<T>::insert(&proposal_hash, PreimageStatus::Missing(block_number));
 
 		let caller = funded_account::<T>("caller", b);
-		let encoded_proposal = vec![0; d as usize];
+		let encoded_proposal = vec![0; b as usize];
 	}: _(RawOrigin::Signed(caller), encoded_proposal)
 
 	reap_preimage {
 		// Num of bytes in encoded proposal
-		let b in 0 .. 16_384;
-		// Length of dispatch queue
-		let d in 0 .. 100;
+		let b in 0 .. MAX_BYTES;
 
-		let mut dispatch_queue = Vec::new();
-		for i in 0 .. d {
-			let encoded_proposal = vec![0; i as usize];
-			let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
-			let block_number = T::BlockNumber::zero();
-			let referendum_index: ReferendumIndex = 0;
-			dispatch_queue.push((block_number, proposal_hash, referendum_index))
-		}
-		<DispatchQueue<T>>::put(dispatch_queue);
+		let encoded_proposal = vec![0; b as usize];
+		let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
 
-		let caller = funded_account::<T>("caller", d);
-		let encoded_proposal = vec![0; d as usize];
+		let caller = funded_account::<T>("caller", b);
 		Democracy::<T>::note_preimage(RawOrigin::Signed(caller.clone()).into(), encoded_proposal.clone())?;
 
 		// We need to set this otherwise we get `Early` error.
 		let block_number = T::VotingPeriod::get() + T::EnactmentPeriod::get() + T::BlockNumber::one();
 		System::<T>::set_block_number(block_number.into());
-
-		let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
 
 	}: _(RawOrigin::Signed(caller), proposal_hash)
 

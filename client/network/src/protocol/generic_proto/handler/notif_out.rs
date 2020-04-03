@@ -34,6 +34,7 @@ use libp2p::swarm::{
 	NegotiatedSubstream,
 };
 use log::error;
+use prometheus_endpoint::Histogram;
 use smallvec::SmallVec;
 use std::{borrow::Cow, fmt, mem, pin::Pin, task::{Context, Poll}, time::Duration};
 use wasm_timer::Instant;
@@ -56,14 +57,17 @@ const INITIAL_KEEPALIVE_TIME: Duration = Duration::from_secs(5);
 pub struct NotifsOutHandlerProto {
 	/// Name of the protocol to negotiate.
 	protocol_name: Cow<'static, [u8]>,
+	/// Optional Prometheus histogram to report message queue size variations.
+	queue_size_report: Option<Histogram>,
 }
 
 impl NotifsOutHandlerProto {
 	/// Builds a new [`NotifsOutHandlerProto`]. Will use the given protocol name for the
 	/// notifications substream.
-	pub fn new(protocol_name: impl Into<Cow<'static, [u8]>>) -> Self {
+	pub fn new(protocol_name: impl Into<Cow<'static, [u8]>>, queue_size_report: Option<Histogram>) -> Self {
 		NotifsOutHandlerProto {
 			protocol_name: protocol_name.into(),
+			queue_size_report,
 		}
 	}
 }
@@ -79,6 +83,7 @@ impl IntoProtocolsHandler for NotifsOutHandlerProto {
 		NotifsOutHandler {
 			protocol_name: self.protocol_name,
 			when_connection_open: Instant::now(),
+			queue_size_report: self.queue_size_report,
 			state: State::Disabled,
 			events_queue: SmallVec::new(),
 		}
@@ -102,6 +107,9 @@ pub struct NotifsOutHandler {
 
 	/// When the connection with the remote has been successfully established.
 	when_connection_open: Instant,
+
+	/// Optional prometheus histogram to report message queue sizes variations.
+	queue_size_report: Option<Histogram>,
 
 	/// Queue of events to send to the outside.
 	///
@@ -244,8 +252,8 @@ impl ProtocolsHandler for NotifsOutHandler {
 
 			// Any other situation should never happen.
 			State::Disabled | State::Refused | State::Open { .. } | State::DisabledOpen(_) =>
-				error!("State mismatch in notifications handler: substream already open"),
-			State::Poisoned => error!("Notifications handler in a poisoned state"),
+				error!("☎️ State mismatch in notifications handler: substream already open"),
+			State::Poisoned => error!("☎️ Notifications handler in a poisoned state"),
 		}
 	}
 
@@ -270,7 +278,7 @@ impl ProtocolsHandler for NotifsOutHandler {
 						if sub.close().now_or_never().is_none() {
 							log::warn!(
 								target: "sub-libp2p",
-								"Improperly closed outbound notifications substream"
+								"📞 Improperly closed outbound notifications substream"
 							);
 						}
 
@@ -282,36 +290,39 @@ impl ProtocolsHandler for NotifsOutHandler {
 						self.state = State::Opening { initial_message };
 					},
 					State::Opening { .. } | State::Refused | State::Open { .. } =>
-						error!("Tried to enable notifications handler that was already enabled"),
-					State::Poisoned => error!("Notifications handler in a poisoned state"),
+						error!("☎️ Tried to enable notifications handler that was already enabled"),
+					State::Poisoned => error!("☎️ Notifications handler in a poisoned state"),
 				}
 			}
 
 			NotifsOutHandlerIn::Disable => {
 				match mem::replace(&mut self.state, State::Poisoned) {
 					State::Disabled | State::DisabledOpen(_) | State::DisabledOpening =>
-						error!("Tried to disable notifications handler that was already disabled"),
+						error!("☎️ Tried to disable notifications handler that was already disabled"),
 					State::Opening { .. } => self.state = State::DisabledOpening,
 					State::Refused => self.state = State::Disabled,
 					State::Open { substream, .. } => self.state = State::DisabledOpen(substream),
-					State::Poisoned => error!("Notifications handler in a poisoned state"),
+					State::Poisoned => error!("☎️ Notifications handler in a poisoned state"),
 				}
 			}
 
 			NotifsOutHandlerIn::Send(msg) =>
 				if let State::Open { substream, .. } = &mut self.state {
 					if let Some(Ok(_)) = substream.send(msg).now_or_never() {
+						if let Some(metric) = &self.queue_size_report {
+							metric.observe(substream.queue_len() as f64);
+						}
 					} else {
 						log::warn!(
 							target: "sub-libp2p",
-							"Failed to push message to queue, dropped it"
+							"📞 Failed to push message to queue, dropped it"
 						);
 					}
 				} else {
 					// This is an API misuse.
 					log::warn!(
 						target: "sub-libp2p",
-						"Tried to send a notification on a disabled handler"
+						"📞 Tried to send a notification on a disabled handler"
 					);
 				},
 		}
@@ -321,14 +332,14 @@ impl ProtocolsHandler for NotifsOutHandler {
 		match mem::replace(&mut self.state, State::Poisoned) {
 			State::Disabled => {},
 			State::DisabledOpen(_) | State::Refused | State::Open { .. } =>
-				error!("State mismatch in NotificationsOut"),
+				error!("☎️ State mismatch in NotificationsOut"),
 			State::Opening { .. } => {
 				self.state = State::Refused;
 				let ev = NotifsOutHandlerOut::Refused;
 				self.events_queue.push(ProtocolsHandlerEvent::Custom(ev));
 			},
 			State::DisabledOpening => self.state = State::Disabled,
-			State::Poisoned => error!("Notifications handler in a poisoned state"),
+			State::Poisoned => error!("☎️ Notifications handler in a poisoned state"),
 		}
 	}
 
