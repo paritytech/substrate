@@ -89,7 +89,7 @@ pub use random_number_generator::RandomNumberGenerator;
 /// bypasses this problem.
 pub type Justification = Vec<u8>;
 
-use traits::{Verify, Lazy, BatchResult};
+use traits::{Verify, Lazy};
 
 /// A module identifier. These are per module and should be stored in a registry somewhere.
 #[derive(Clone, Copy, Eq, PartialEq, Encode, Decode)]
@@ -314,16 +314,6 @@ impl Verify for MultiSignature {
 			}
 		}
 	}
-
-	fn batch_verify<L: Lazy<[u8]>>(&self, msg: L, signer: &AccountId32) -> BatchResult {
-		match (self, signer) {
-			(MultiSignature::Ed25519(ref sig), who) => sig.batch_verify(msg, &ed25519::Public::from_slice(who.as_ref())),
-			(MultiSignature::Sr25519(ref sig), who) => sig.batch_verify(msg, &sr25519::Public::from_slice(who.as_ref())),
-			_ => {
-				BatchResult::Immediate(self.verify(msg, signer))
-			},
-		}
-	}
 }
 
 /// Signature verify that can work with any known signature types..
@@ -341,20 +331,6 @@ impl Verify for AnySignature {
 		|| ed25519::Signature::try_from(self.0.as_fixed_bytes().as_ref())
 			.map(|s| s.verify(msg, &ed25519::Public::from_slice(signer.as_ref())))
 			.unwrap_or(false)
-	}
-
-	fn batch_verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &sr25519::Public) -> BatchResult {
-		let msg = msg.get();
-		match sr25519::Signature::try_from(self.0.as_fixed_bytes().as_ref()) {
-			Err(_) => {
-				ed25519::Signature::try_from(self.0.as_fixed_bytes().as_ref())
-					.map(|s| s.batch_verify(msg, &ed25519::Public::from_slice(signer.as_ref())))
-					.unwrap_or(BatchResult::Immediate(false))
-			},
-			Ok(signature) => {
-				signature.batch_verify(msg, signer)
-			},
-		}
 	}
 }
 

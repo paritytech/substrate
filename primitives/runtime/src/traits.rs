@@ -76,27 +76,6 @@ impl IdentifyAccount for sp_core::ecdsa::Public {
 	fn into_account(self) -> Self { self }
 }
 
-/// Batch verification result.
-pub enum BatchResult {
-	/// Batching was a success.
-	Ok,
-	/// No batching required or implemented, immediate verififcation result.
-	Immediate(bool),
-}
-
-impl BatchResult {
-	/// Is verification ok.
-	///
-	/// Returns true if verification is either produced immediate positive outcome or
-	/// is batched.
-	pub fn ok(&self) -> bool {
-		match self {
-			Self::Ok => true,
-			Self::Immediate(val) => *val,
-		}
-	}
-}
-
 /// Means of signature verification.
 pub trait Verify {
 	/// Type of the signer.
@@ -105,14 +84,6 @@ pub trait Verify {
 	///
 	/// Return `true` if signature is valid for the value.
 	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &<Self::Signer as IdentifyAccount>::AccountId) -> bool;
-
-	/// Verify signature batched, if possible.
-	///
-	/// Should either BatchResult::Immediate(_) if no batching implemented/required
-	/// or BatchResult::Ok if signature verification was batched.
-	fn batch_verify<L: Lazy<[u8]>>(&self, msg: L, signer: &<Self::Signer as IdentifyAccount>::AccountId) -> BatchResult {
-		BatchResult::Immediate(self.verify(msg, signer))
-	}
 }
 
 impl Verify for sp_core::ed25519::Signature {
@@ -121,13 +92,6 @@ impl Verify for sp_core::ed25519::Signature {
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &sp_core::ed25519::Public) -> bool {
 		sp_io::crypto::ed25519_verify(self, msg.get(), signer)
 	}
-
-	fn batch_verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &<Self::Signer as IdentifyAccount>::AccountId) -> BatchResult {
-		if !sp_io::crypto::batch_push_ed25519(self, msg.get(), signer) {
-			return BatchResult::Immediate(false)
-		}
-		BatchResult::Ok
-	}
 }
 
 impl Verify for sp_core::sr25519::Signature {
@@ -135,13 +99,6 @@ impl Verify for sp_core::sr25519::Signature {
 
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &sp_core::sr25519::Public) -> bool {
 		sp_io::crypto::sr25519_verify(self, msg.get(), signer)
-	}
-
-	fn batch_verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &<Self::Signer as IdentifyAccount>::AccountId) -> BatchResult {
-		if !sp_io::crypto::batch_push_sr25519(self, msg.get(), signer) {
-			return BatchResult::Immediate(false)
-		}
-		BatchResult::Ok
 	}
 }
 
@@ -206,7 +163,7 @@ pub trait EnsureOrigin<OuterOrigin> {
 	fn try_origin(o: OuterOrigin) -> result::Result<Self::Success, OuterOrigin>;
 
 	/// Returns an outer origin capable of passing `try_origin` check.
-	/// 
+	///
 	/// ** Should be used for benchmarking only!!! **
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> OuterOrigin;

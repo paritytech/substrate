@@ -3613,6 +3613,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "fs_extra",
+ "futures 0.3.4",
  "log",
  "node-executor",
  "node-primitives",
@@ -7154,6 +7155,7 @@ dependencies = [
  "lazy_static",
  "libsecp256k1",
  "log",
+ "merlin",
  "num-traits",
  "parity-scale-codec",
  "parity-util-mem",
@@ -7234,10 +7236,12 @@ dependencies = [
 name = "sp-io"
 version = "2.0.0-alpha.5"
 dependencies = [
+ "futures 0.3.4",
  "hash-db",
  "libsecp256k1",
  "log",
  "parity-scale-codec",
+ "parking_lot 0.10.0",
  "sp-core",
  "sp-externalities",
  "sp-runtime-interface",
