@@ -82,7 +82,7 @@ impl ImportParams {
 	pub fn update_config(
 		&self,
 		mut config: &mut Configuration,
-		role: sc_service::Roles,
+		role: &sc_service::Role,
 		is_dev: bool,
 	) -> error::Result<()> {
 		use sc_client_api::execution_extensions::ExecutionStrategies;

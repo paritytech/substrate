@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use sc_cli::VersionInfo;
-use sc_service::{Roles as ServiceRoles};
+use sc_service::{Role as ServiceRole};
 use node_transaction_factory::RuntimeAdapter;
 use crate::{Cli, service, ChainSpec, load_spec, Subcommand, factory_impl::FactoryState};
 
@@ -65,7 +65,7 @@ where
 			cli_args.shared_params.update_config(&mut config, load_spec, &version)?;
 			cli_args.import_params.update_config(
 				&mut config,
-				ServiceRoles::FULL,
+				&ServiceRole::Full,
 				cli_args.shared_params.dev,
 			)?;
 
