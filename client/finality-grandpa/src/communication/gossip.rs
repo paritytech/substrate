@@ -84,7 +84,7 @@
 
 use sp_runtime::traits::{NumberFor, Block as BlockT, Zero};
 use sc_network_gossip::{MessageIntent, ValidatorContext};
-use sc_network::{config::Roles, PeerId, ReputationChange};
+use sc_network::{ObservedRole, PeerId, ReputationChange};
 use parity_scale_codec::{Encode, Decode};
 use sp_finality_grandpa::AuthorityId;
 
@@ -439,11 +439,11 @@ impl Misbehavior {
 
 struct PeerInfo<N> {
 	view: View<N>,
-	roles: Roles,
+	roles: ObservedRole,
 }
 
 impl<N> PeerInfo<N> {
-	fn new(roles: Roles) -> Self {
+	fn new(roles: ObservedRole) -> Self {
 		PeerInfo {
 			view: View::default(),
 			roles,
@@ -469,14 +469,17 @@ impl<N> Default for Peers<N> {
 }
 
 impl<N: Ord> Peers<N> {
-	fn new_peer(&mut self, who: PeerId, roles: Roles) {
-		if roles.is_authority() && self.lucky_authorities.len() < MIN_LUCKY {
-			self.lucky_authorities.insert(who.clone());
+	fn new_peer(&mut self, who: PeerId, role: ObservedRole) {
+		match role {
+			ObservedRole::Authority if self.lucky_authorities.len() < MIN_LUCKY => {
+				self.lucky_authorities.insert(who.clone());
+			},
+			ObservedRole::Full | ObservedRole::Light if self.lucky_peers.len() < MIN_LUCKY => {
+				self.lucky_peers.insert(who.clone());
+			},
+			_ => {}
 		}
-		if !roles.is_authority() && self.lucky_peers.len() < MIN_LUCKY {
-			self.lucky_peers.insert(who.clone());
-		}
-		self.inner.insert(who, PeerInfo::new(roles));
+		self.inner.insert(who, PeerInfo::new(role));
 	}
 
 	fn peer_disconnected(&mut self, who: &PeerId) {
@@ -539,21 +542,28 @@ impl<N: Ord> Peers<N> {
 	}
 
 	fn authorities(&self) -> usize {
-		self.inner.iter().filter(|(_, info)| info.roles.is_authority()).count()
+		// Note that our sentry and our validator are neither authorities nor non-authorities.
+		self.inner.iter().filter(|(_, info)| matches!(info.roles, ObservedRole::Authority)).count()
 	}
 
 	fn non_authorities(&self) -> usize {
-		self.inner.iter().filter(|(_, info)| !info.roles.is_authority()).count()
+		// Note that our sentry and our validator are neither authorities nor non-authorities.
+		self.inner
+			.iter()
+			.filter(|(_, info)| matches!(info.roles, ObservedRole::Full | ObservedRole::Light))
+			.count()
 	}
 
 	fn reshuffle(&mut self) {
 		let mut lucky_peers: Vec<_> = self.inner
 			.iter()
-			.filter_map(|(id, info)| if !info.roles.is_authority() { Some(id.clone()) } else { None })
+			.filter_map(|(id, info)|
+				if matches!(info.roles, ObservedRole::Full | ObservedRole::Light) { Some(id.clone()) } else { None })
 			.collect();
 		let mut lucky_authorities: Vec<_> = self.inner
 			.iter()
-			.filter_map(|(id, info)| if info.roles.is_authority() { Some(id.clone()) } else { None })
+			.filter_map(|(id, info)|
+				if matches!(info.roles, ObservedRole::Authority) { Some(id.clone()) } else { None })
 			.collect();
 
 		let num_non_authorities = ((lucky_peers.len() as f32).sqrt() as usize)
@@ -633,8 +643,11 @@ impl CatchUpConfig {
 	fn request_allowed<N>(&self, peer: &PeerInfo<N>) -> bool {
 		match self {
 			CatchUpConfig::Disabled => false,
-			CatchUpConfig::Enabled { only_from_authorities, .. } =>
-				!only_from_authorities || peer.roles.is_authority(),
+			CatchUpConfig::Enabled { only_from_authorities, .. } => match peer.roles {
+				ObservedRole::Authority | ObservedRole::OurSentry |
+				ObservedRole::OurGuardedAuthority => true,
+				_ => !only_from_authorities
+			}
 		}
 	}
 }
@@ -1121,34 +1134,38 @@ impl<Block: BlockT> Inner<Block> {
 			return false;
 		}
 
-		if peer.roles.is_authority() {
-			let authorities = self.peers.authorities();
+		match peer.roles {
+			ObservedRole::OurGuardedAuthority | ObservedRole::OurSentry => true,
+			ObservedRole::Authority => {
+				let authorities = self.peers.authorities();
 
-			// the target node is an authority, on the first round duration we start by
-			// sending the message to only `sqrt(authorities)` (if we're
-			// connected to at least `MIN_LUCKY`).
-			if round_elapsed < round_duration * PROPAGATION_ALL_AUTHORITIES
-				&& authorities > MIN_LUCKY
-			{
-				self.peers.lucky_authorities.contains(who)
-			} else {
-				// otherwise we already went through the step above, so
-				// we won't filter the message and send it to all
-				// authorities for whom it is polite to do so
-				true
-			}
-		} else {
-			// the node is not an authority so we apply stricter filters
-			if round_elapsed >= round_duration * PROPAGATION_ALL {
-				// if we waited for 3 (or more) rounds
-				// then it is allowed to be sent to all peers.
-				true
-			} else if round_elapsed >= round_duration * PROPAGATION_SOME_NON_AUTHORITIES {
-				// otherwise we only send it to `sqrt(non-authorities)`.
-				self.peers.lucky_peers.contains(who)
-			} else {
-				false
-			}
+				// the target node is an authority, on the first round duration we start by
+				// sending the message to only `sqrt(authorities)` (if we're
+				// connected to at least `MIN_LUCKY`).
+				if round_elapsed < round_duration * PROPAGATION_ALL_AUTHORITIES
+					&& authorities > MIN_LUCKY
+				{
+					self.peers.lucky_authorities.contains(who)
+				} else {
+					// otherwise we already went through the step above, so
+					// we won't filter the message and send it to all
+					// authorities for whom it is polite to do so
+					true
+				}
+			},
+			ObservedRole::Full | ObservedRole::Light => {
+				// the node is not an authority so we apply stricter filters
+				if round_elapsed >= round_duration * PROPAGATION_ALL {
+					// if we waited for 3 (or more) rounds
+					// then it is allowed to be sent to all peers.
+					true
+				} else if round_elapsed >= round_duration * PROPAGATION_SOME_NON_AUTHORITIES {
+					// otherwise we only send it to `sqrt(non-authorities)`.
+					self.peers.lucky_peers.contains(who)
+				} else {
+					false
+				}
+			},
 		}
 	}
 
@@ -1170,38 +1187,42 @@ impl<Block: BlockT> Inner<Block> {
 		let round_duration = self.config.gossip_duration * ROUND_DURATION;
 		let round_elapsed = self.round_start.elapsed();
 
-		if peer.roles.is_authority() {
-			let authorities = self.peers.authorities();
+		match peer.roles {
+			ObservedRole::OurSentry | ObservedRole::OurGuardedAuthority => true,
+			ObservedRole::Authority => {
+				let authorities = self.peers.authorities();
 
-			// the target node is an authority, on the first round duration we start by
-			// sending the message to only `sqrt(authorities)` (if we're
-			// connected to at least `MIN_LUCKY`).
-			if round_elapsed < round_duration * PROPAGATION_ALL_AUTHORITIES
-				&& authorities > MIN_LUCKY
-			{
-				self.peers.lucky_authorities.contains(who)
-			} else {
-				// otherwise we already went through the step above, so
-				// we won't filter the message and send it to all
-				// authorities for whom it is polite to do so
-				true
-			}
-		} else {
-			let non_authorities = self.peers.non_authorities();
+				// the target node is an authority, on the first round duration we start by
+				// sending the message to only `sqrt(authorities)` (if we're
+				// connected to at least `MIN_LUCKY`).
+				if round_elapsed < round_duration * PROPAGATION_ALL_AUTHORITIES
+					&& authorities > MIN_LUCKY
+				{
+					self.peers.lucky_authorities.contains(who)
+				} else {
+					// otherwise we already went through the step above, so
+					// we won't filter the message and send it to all
+					// authorities for whom it is polite to do so
+					true
+				}
+			},
+			ObservedRole::Full | ObservedRole::Light => {
+				let non_authorities = self.peers.non_authorities();
 
-			// the target node is not an authority, on the first and second
-			// round duration we start by sending the message to only
-			// `sqrt(non_authorities)` (if we're connected to at least
-			// `MIN_LUCKY`).
-			if round_elapsed < round_duration * PROPAGATION_SOME_NON_AUTHORITIES
-				&& non_authorities > MIN_LUCKY
-			{
-				self.peers.lucky_peers.contains(who)
-			} else {
-				// otherwise we already went through the step above, so
-				// we won't filter the message and send it to all
-				// non-authorities for whom it is polite to do so
-				true
+				// the target node is not an authority, on the first and second
+				// round duration we start by sending the message to only
+				// `sqrt(non_authorities)` (if we're connected to at least
+				// `MIN_LUCKY`).
+				if round_elapsed < round_duration * PROPAGATION_SOME_NON_AUTHORITIES
+					&& non_authorities > MIN_LUCKY
+				{
+					self.peers.lucky_peers.contains(who)
+				} else {
+					// otherwise we already went through the step above, so
+					// we won't filter the message and send it to all
+					// non-authorities for whom it is polite to do so
+					true
+				}
 			}
 		}
 	}
@@ -1397,7 +1418,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 }
 
 impl<Block: BlockT> sc_network_gossip::Validator<Block> for GossipValidator<Block> {
-	fn new_peer(&self, context: &mut dyn ValidatorContext<Block>, who: &PeerId, roles: Roles) {
+	fn new_peer(&self, context: &mut dyn ValidatorContext<Block>, who: &PeerId, roles: ObservedRole) {
 		let packet = {
 			let mut inner = self.inner.write();
 			inner.peers.new_peer(who.clone(), roles);
@@ -1657,7 +1678,7 @@ mod tests {
 		assert!(res.unwrap().is_none());
 
 		// connect & disconnect.
-		peers.new_peer(id.clone(), Roles::AUTHORITY);
+		peers.new_peer(id.clone(), ObservedRole::Authority);
 		peers.peer_disconnected(&id);
 
 		let res = peers.update_peer_state(&id, update.clone());
@@ -1693,7 +1714,7 @@ mod tests {
 		let mut peers = Peers::default();
 		let id = PeerId::random();
 
-		peers.new_peer(id.clone(), Roles::AUTHORITY);
+		peers.new_peer(id.clone(), ObservedRole::Authority);
 
 		let mut check_update = move |update: NeighborPacket<_>| {
 			let view = peers.update_peer_state(&id, update.clone()).unwrap().unwrap();
@@ -1713,7 +1734,7 @@ mod tests {
 		let mut peers = Peers::default();
 
 		let id = PeerId::random();
-		peers.new_peer(id.clone(), Roles::AUTHORITY);
+		peers.new_peer(id.clone(), ObservedRole::Authority);
 
 		peers.update_peer_state(&id, NeighborPacket {
 			round: Round(10),
@@ -1914,7 +1935,7 @@ mod tests {
 		// add the peer making the request to the validator,
 		// otherwise it is discarded
 		let mut inner = val.inner.write();
-		inner.peers.new_peer(peer.clone(), Roles::AUTHORITY);
+		inner.peers.new_peer(peer.clone(), ObservedRole::Authority);
 
 		let res = inner.handle_catch_up_request(
 			&peer,
@@ -1965,7 +1986,7 @@ mod tests {
 		// add the peer making the request to the validator,
 		// otherwise it is discarded
 		let peer = PeerId::random();
-		val.inner.write().peers.new_peer(peer.clone(), Roles::AUTHORITY);
+		val.inner.write().peers.new_peer(peer.clone(), ObservedRole::Authority);
 
 		let send_request = |set_id, round| {
 			let mut inner = val.inner.write();
@@ -2045,7 +2066,7 @@ mod tests {
 		// add the peer making the request to the validator,
 		// otherwise it is discarded.
 		let peer = PeerId::random();
-		val.inner.write().peers.new_peer(peer.clone(), Roles::AUTHORITY);
+		val.inner.write().peers.new_peer(peer.clone(), ObservedRole::Authority);
 
 		let import_neighbor_message = |set_id, round| {
 			let (_, _, catch_up_request, _) = val.inner.write().import_neighbor_message(
@@ -2119,7 +2140,7 @@ mod tests {
 		// add the peer making the request to the validator,
 		// otherwise it is discarded.
 		let peer = PeerId::random();
-		val.inner.write().peers.new_peer(peer.clone(), Roles::AUTHORITY);
+		val.inner.write().peers.new_peer(peer.clone(), ObservedRole::Authority);
 
 		// importing a neighbor message from a peer in the same set in a later
 		// round should lead to a catch up request but since they're disabled
@@ -2155,8 +2176,8 @@ mod tests {
 		let peer_authority = PeerId::random();
 		let peer_full = PeerId::random();
 
-		val.inner.write().peers.new_peer(peer_authority.clone(), Roles::AUTHORITY);
-		val.inner.write().peers.new_peer(peer_full.clone(), Roles::FULL);
+		val.inner.write().peers.new_peer(peer_authority.clone(), ObservedRole::Authority);
+		val.inner.write().peers.new_peer(peer_full.clone(), ObservedRole::Full);
 
 		let import_neighbor_message = |peer| {
 			let (_, _, catch_up_request, _) = val.inner.write().import_neighbor_message(
@@ -2213,7 +2234,7 @@ mod tests {
 		// add the peer making the requests to the validator, otherwise it is
 		// discarded.
 		let peer_full = PeerId::random();
-		val.inner.write().peers.new_peer(peer_full.clone(), Roles::FULL);
+		val.inner.write().peers.new_peer(peer_full.clone(), ObservedRole::Full);
 
 		let (_, _, catch_up_request, _) = val.inner.write().import_neighbor_message(
 			&peer_full,
@@ -2290,8 +2311,8 @@ mod tests {
 		full_nodes.resize_with(30, || PeerId::random());
 
 		for i in 0..30 {
-			val.inner.write().peers.new_peer(authorities[i].clone(), Roles::AUTHORITY);
-			val.inner.write().peers.new_peer(full_nodes[i].clone(), Roles::FULL);
+			val.inner.write().peers.new_peer(authorities[i].clone(), ObservedRole::Authority);
+			val.inner.write().peers.new_peer(full_nodes[i].clone(), ObservedRole::Full);
 		}
 
 		let test = |num_round, peers| {
@@ -2363,7 +2384,7 @@ mod tests {
 		let mut authorities = Vec::new();
 		for _ in 0..5 {
 			let peer_id = PeerId::random();
-			val.inner.write().peers.new_peer(peer_id.clone(), Roles::AUTHORITY);
+			val.inner.write().peers.new_peer(peer_id.clone(), ObservedRole::Authority);
 			authorities.push(peer_id);
 		}
 
@@ -2403,7 +2424,7 @@ mod tests {
 		let mut authorities = Vec::new();
 		for _ in 0..100 {
 			let peer_id = PeerId::random();
-			val.inner.write().peers.new_peer(peer_id.clone(), Roles::AUTHORITY);
+			val.inner.write().peers.new_peer(peer_id.clone(), ObservedRole::Authority);
 			authorities.push(peer_id);
 		}
 
@@ -2454,7 +2475,7 @@ mod tests {
 		val.inner
 			.write()
 			.peers
-			.new_peer(peer1.clone(), Roles::AUTHORITY);
+			.new_peer(peer1.clone(), ObservedRole::Authority);
 
 		val.inner
 			.write()
@@ -2474,7 +2495,7 @@ mod tests {
 		val.inner
 			.write()
 			.peers
-			.new_peer(peer2.clone(), Roles::AUTHORITY);
+			.new_peer(peer2.clone(), ObservedRole::Authority);
 
 		// create a commit for round 1 of set id 1
 		// targeting a block at height 2

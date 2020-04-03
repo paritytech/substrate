@@ -26,7 +26,7 @@ use lru::LruCache;
 use libp2p::PeerId;
 use sp_runtime::traits::{Block as BlockT, Hash, HashFor};
 use sp_runtime::ConsensusEngineId;
-use sc_network::config::Roles;
+use sc_network::ObservedRole;
 use wasm_timer::Instant;
 
 // FIXME: Add additional spam/DoS attack protection: https://github.com/paritytech/substrate/issues/1115
@@ -51,7 +51,7 @@ mod rep {
 
 struct PeerConsensus<H> {
 	known_messages: HashSet<H>,
-	roles: Roles,
+	role: ObservedRole,
 }
 
 /// Topic stream message with sender.
@@ -192,10 +192,10 @@ impl<B: BlockT> ConsensusGossip<B> {
 		validator: Arc<dyn Validator<B>>
 	) {
 		self.register_validator_internal(engine_id, validator.clone());
-		let peers: Vec<_> = self.peers.iter().map(|(id, peer)| (id.clone(), peer.roles)).collect();
-		for (id, roles) in peers {
+		let peers: Vec<_> = self.peers.iter().map(|(id, peer)| (id.clone(), peer.role.clone())).collect();
+		for (id, role) in peers {
 			let mut context = NetworkContext { gossip: self, network, engine_id: engine_id.clone() };
-			validator.new_peer(&mut context, &id, roles);
+			validator.new_peer(&mut context, &id, role);
 		}
 	}
 
@@ -204,20 +204,20 @@ impl<B: BlockT> ConsensusGossip<B> {
 	}
 
 	/// Handle new connected peer.
-	pub fn new_peer(&mut self, network: &mut dyn Network<B>, who: PeerId, roles: Roles) {
+	pub fn new_peer(&mut self, network: &mut dyn Network<B>, who: PeerId, role: ObservedRole) {
 		// light nodes are not valid targets for consensus gossip messages
-		if !roles.is_full() {
+		if role.is_light() {
 			return;
 		}
 
-		trace!(target:"gossip", "Registering {:?} {}", roles, who);
+		trace!(target:"gossip", "Registering {:?} {}", role, who);
 		self.peers.insert(who.clone(), PeerConsensus {
 			known_messages: HashSet::new(),
-			roles,
+			role: role.clone(),
 		});
 		for (engine_id, v) in self.validators.clone() {
 			let mut context = NetworkContext { gossip: self, network, engine_id: engine_id.clone() };
-			v.new_peer(&mut context, &who, roles);
+			v.new_peer(&mut context, &who, role.clone());
 		}
 	}
 
@@ -696,7 +696,7 @@ mod tests {
 		let mut network = TestNetwork;
 
 		let peer_id = PeerId::random();
-		consensus.new_peer(&mut network, peer_id.clone(), Roles::FULL);
+		consensus.new_peer(&mut network, peer_id.clone(), ObservedRole::Full);
 		assert!(consensus.peers.contains_key(&peer_id));
 
 		consensus.peer_disconnected(&mut network, peer_id.clone());

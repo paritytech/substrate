@@ -137,11 +137,11 @@ impl<B: BlockT> Future for GossipEngine<B> {
 		loop {
 			match this.network_event_stream.poll_next_unpin(cx) {
 				Poll::Ready(Some(event)) => match event {
-					Event::NotificationStreamOpened { remote, engine_id: msg_engine_id, roles } => {
+					Event::NotificationStreamOpened { remote, engine_id: msg_engine_id, role } => {
 						if msg_engine_id != this.engine_id {
 							continue;
 						}
-						this.state_machine.new_peer(&mut *this.network, remote, roles);
+						this.state_machine.new_peer(&mut *this.network, remote, role);
 					}
 					Event::NotificationStreamClosed { remote, engine_id: msg_engine_id } => {
 						if msg_engine_id != this.engine_id {
