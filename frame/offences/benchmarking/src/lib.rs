@@ -23,7 +23,7 @@ use sp_std::vec;
 
 use frame_system::RawOrigin;
 use frame_benchmarking::{benchmarks, account};
-use frame_support::traits::Currency;
+use frame_support::traits::{Currency, OnInitialize};
 
 use sp_runtime::{Perbill, traits::{Convert, StaticLookup}};
 use sp_staking::offence::ReportOffence;
@@ -32,16 +32,18 @@ use pallet_im_online::{Trait as ImOnlineTrait, UnresponsivenessOffence};
 use pallet_offences::{Trait as OffencesTrait, Module as OffencesModule};
 use pallet_staking::{
 	Module as Staking, Trait as StakingTrait, RewardDestination, ValidatorPrefs,
-	Exposure, IndividualExposure,
+	Exposure, IndividualExposure, ElectionStatus
 };
 use pallet_session::Trait as SessionTrait;
 use pallet_session::historical::{Trait as HistoricalTrait, IdentificationTuple};
 
 const SEED: u32 = 0;
 
-const MAX_REPORTERS: u32 = 1000;
-const MAX_OFFENDERS: u32 = 1000;
-const MAX_NOMINATORS: u32 = 1000;
+
+const MAX_USERS: u32 = 1000;
+const MAX_REPORTERS: u32 = 100;
+const MAX_OFFENDERS: u32 = 100;
+const MAX_NOMINATORS: u32 = 100;
 
 pub struct Module<T: Trait>(OffencesModule<T>);
 
@@ -139,6 +141,7 @@ fn make_inputs<T: Trait>(r: u32, o: u32, n: u32)
 
 benchmarks! {
 	_ {
+		let u in 1 .. MAX_USERS => ();
 		let r in 1 .. MAX_REPORTERS => ();
 		let o in 1 .. MAX_OFFENDERS => ();
 		let n in 1 .. MAX_NOMINATORS => ();
@@ -152,5 +155,13 @@ benchmarks! {
 		let (reporters, offence) = make_inputs::<T>(r, o, n)?;
 	}: {
 		let _ = <T as ImOnlineTrait>::ReportUnresponsiveness::report_offence(reporters, offence);
+	}
+
+	on_initialize {
+		let u in ...; 
+
+		Staking::<T>::put_election_status(ElectionStatus::Closed);
+	}: {
+		OffencesModule::<T>::on_initialize(u.into());
 	}
 }

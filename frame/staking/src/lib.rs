@@ -2683,6 +2683,11 @@ impl<T: Trait> Module<T> {
 	pub fn add_era_stakers(current_era: EraIndex, controller: T::AccountId, exposure: Exposure<T::AccountId, BalanceOf<T>>) {
 		<ErasStakers<T>>::insert(&current_era, &controller, &exposure);
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	pub fn put_election_status(status: ElectionStatus::<T::BlockNumber>) {
+		<EraElectionStatus<T>>::put(status);
+	}
 }
 
 /// In this implementation `new_session(session)` must be called before `end_session(session-1)`
