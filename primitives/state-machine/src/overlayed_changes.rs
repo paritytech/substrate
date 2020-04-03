@@ -22,7 +22,6 @@ use crate::{
 		NO_EXTRINSIC_INDEX, BlockNumber, build_changes_trie,
 		State as ChangesTrieState,
 	},
-	stats::StateMachineStats,
 };
 
 #[cfg(test)]
@@ -31,6 +30,7 @@ use std::collections::{HashMap, BTreeMap, BTreeSet};
 use codec::{Decode, Encode};
 use sp_core::storage::{well_known_keys::EXTRINSIC_INDEX, OwnedChildInfo, ChildInfo};
 use std::{mem, ops};
+use sp_stats::StateMachineStats;
 
 use hash_db::Hasher;
 

@@ -210,7 +210,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	/// Register stats from overlay of state machine.
 	///
 	/// By default nothing is registered.
-	fn register_overlay_stats(&mut self, _stats: &crate::stats::StateMachineStats);
+	fn register_overlay_stats(&mut self, _stats: &sp_stats::StateMachineStats);
 
 	/// Query backend usage statistics (i/o, memory)
 	///
@@ -312,7 +312,7 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 		(*self).for_key_values_with_prefix(prefix, f);
 	}
 
-	fn register_overlay_stats(&mut self, _stats: &crate::stats::StateMachineStats) {	}
+	fn register_overlay_stats(&mut self, _stats: &sp_stats::StateMachineStats) {	}
 
 	fn usage_info(&self) -> UsageInfo {
 		(*self).usage_info()

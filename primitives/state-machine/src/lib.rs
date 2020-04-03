@@ -28,6 +28,7 @@ use sp_core::{
 };
 use overlayed_changes::OverlayedChangeSet;
 use sp_externalities::Extensions;
+use sp_stats::StateMachineStats;
 
 pub mod backend;
 mod in_memory_backend;

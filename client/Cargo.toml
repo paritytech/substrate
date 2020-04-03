@@ -32,6 +32,7 @@ sp-api = { version = "2.0.0-alpha.5", path = "../primitives/api" }
 sp-runtime = { version = "2.0.0-alpha.5", path = "../primitives/runtime" }
 sp-blockchain = { version = "2.0.0-alpha.5", path = "../primitives/blockchain" }
 sp-state-machine = { version = "0.8.0-alpha.5", path = "../primitives/state-machine" }
+sp-stats = { version = "2.0.0-alpha.5", path = "../primitives/stats" }
 sc-telemetry = { version = "2.0.0-alpha.5", path = "telemetry" }
 sp-trie = { version = "2.0.0-alpha.5", path = "../primitives/trie" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.8.0-alpha.5", path = "../utils/prometheus" }

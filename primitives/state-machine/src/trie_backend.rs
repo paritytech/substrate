@@ -241,10 +241,10 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		Some(self)
 	}
 
-	fn register_overlay_stats(&mut self, _stats: &crate::stats::StateMachineStats) { }
+	fn register_overlay_stats(&mut self, _stats: &sp_stats::StateMachineStats) { }
 
-	fn usage_info(&self) -> crate::UsageInfo {
-		crate::UsageInfo::empty()
+	fn usage_info(&self) -> sp_stats::UsageInfo {
+		sp_stats::UsageInfo::empty()
 	}
 }
 
