@@ -133,6 +133,7 @@ pub struct RunCmd {
 	/// value). Value of `all` will disable origin validation. Default is to
 	/// allow localhost and https://polkadot.js.org origins. When running in
 	/// --dev mode the default is to allow all origins.
+	// NOTE: this is an option so implementations can set their own defaults
 	#[structopt(long = "rpc-cors", value_name = "ORIGINS", parse(try_from_str = parse_cors))]
 	pub rpc_cors: Option<Cors>,
 
