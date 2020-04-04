@@ -24,7 +24,7 @@ use sp_core::u32_trait::Value as U32;
 use sp_runtime::{
 	RuntimeDebug,
 	ConsensusEngineId, DispatchResult, DispatchError,
-	traits::{MaybeSerializeDeserialize, AtLeast32Bit, Saturating, TrailingZeroInput, Bounded},
+	traits::{MaybeSerializeDeserialize, AtLeast32Bit, Saturating, TrailingZeroInput, Bounded, Zero},
 };
 use crate::dispatch::Parameter;
 use crate::storage::StorageMap;
@@ -1029,6 +1029,21 @@ pub trait Randomness<Output> {
 impl<Output: Decode + Default> Randomness<Output> for () {
 	fn random(subject: &[u8]) -> Output {
 		Output::decode(&mut TrailingZeroInput::new(subject)).unwrap_or_default()
+	}
+}
+
+/// Trait to be used by block producing consensus engine modules to determine
+/// how late the current block is (e.g. in a slot-based proposal mechanism how
+/// many slots were skipped since the previous block).
+pub trait Lateness<N> {
+	/// Returns a generic measure of how late the current block is compared to
+	/// its parent.
+	fn lateness(&self) -> N;
+}
+
+impl<N: Zero> Lateness<N> for () {
+	fn lateness(&self) -> N {
+		Zero::zero()
 	}
 }
 
