@@ -32,7 +32,7 @@ use netstat2::{TcpState, ProtocolSocketInfo, iterate_sockets_info, AddressFamily
 #[cfg(not(unix))]
 use sysinfo::get_current_pid;
 
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 use procfs;
 
 struct PrometheusMetrics {
@@ -187,7 +187,7 @@ pub struct MetricsService {
 	pid: Option<i32>,
 }
 
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 impl MetricsService {
 	fn inner_new(metrics: Option<PrometheusMetrics>) -> Self {
 		let process = procfs::process::Process::myself()
@@ -225,7 +225,7 @@ impl MetricsService {
 }
 
 
-#[cfg(windows)]
+#[cfg(all(any(unix, windows), not(target_os = "linux")))]
 impl MetricsService {
 	fn inner_new(metrics: Option<PrometheusMetrics>) -> Self {
 		Self {
