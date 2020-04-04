@@ -90,7 +90,7 @@ use sp_finality_grandpa::AuthorityId;
 
 use sc_telemetry::{telemetry, CONSENSUS_DEBUG};
 use log::{trace, debug};
-use futures::channel::mpsc;
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use prometheus_endpoint::{CounterVec, Opts, PrometheusError, register, Registry, U64};
 use rand::seq::SliceRandom;
 
@@ -1254,7 +1254,7 @@ impl Metrics {
 pub(super) struct GossipValidator<Block: BlockT> {
 	inner: parking_lot::RwLock<Inner<Block>>,
 	set_state: environment::SharedVoterSetState<Block>,
-	report_sender: mpsc::UnboundedSender<PeerReport>,
+	report_sender: TracingUnboundedSender<PeerReport>,
 	metrics: Option<Metrics>,
 }
 
@@ -1266,7 +1266,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 		config: crate::Config,
 		set_state: environment::SharedVoterSetState<Block>,
 		prometheus_registry: Option<&Registry>,
-	) -> (GossipValidator<Block>, mpsc::UnboundedReceiver<PeerReport>)	{
+	) -> (GossipValidator<Block>, TracingUnboundedReceiver<PeerReport>)	{
 		let metrics = match prometheus_registry.map(Metrics::register) {
 			Some(Ok(metrics)) => Some(metrics),
 			Some(Err(e)) => {
@@ -1276,7 +1276,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 			None => None,
 		};
 
-		let (tx, rx) = mpsc::unbounded();
+		let (tx, rx) = tracing_unbounded("mpsc_grandpa_gossip_validator");
 		let val = GossipValidator {
 			inner: parking_lot::RwLock::new(Inner::new(config)),
 			set_state,
