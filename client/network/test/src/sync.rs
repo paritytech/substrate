@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use sc_network::config::Roles;
 use sp_consensus::BlockOrigin;
 use std::time::Duration;
 use futures::executor::block_on;
@@ -372,10 +371,8 @@ fn blocks_are_not_announced_by_light_nodes() {
 
 	// full peer0 is connected to light peer
 	// light peer1 is connected to full peer2
-	let mut light_config = ProtocolConfig::default();
-	light_config.roles = Roles::LIGHT;
-	net.add_full_peer(&ProtocolConfig::default());
-	net.add_light_peer(&light_config);
+	net.add_full_peer();
+	net.add_light_peer();
 
 	// Sync between 0 and 1.
 	net.peer(0).push_blocks(1, false);
@@ -384,7 +381,7 @@ fn blocks_are_not_announced_by_light_nodes() {
 	assert_eq!(net.peer(1).client.info().best_number, 1);
 
 	// Add another node and remove node 0.
-	net.add_full_peer(&ProtocolConfig::default());
+	net.add_full_peer();
 	net.peers.remove(0);
 
 	// Poll for a few seconds and make sure 1 and 2 (now 0 and 1) don't sync together.
@@ -465,7 +462,7 @@ fn can_not_sync_from_light_peer() {
 
 	// given the network with 1 full nodes (#0) and 1 light node (#1)
 	let mut net = TestNet::new(1);
-	net.add_light_peer(&Default::default());
+	net.add_light_peer();
 
 	// generate some blocks on #0
 	net.peer(0).push_blocks(1, false);
@@ -481,7 +478,7 @@ fn can_not_sync_from_light_peer() {
 	assert_eq!(light_info.best_hash, full0_info.best_hash);
 
 	// add new full client (#2) && remove #0
-	net.add_full_peer(&Default::default());
+	net.add_full_peer();
 	net.peers.remove(0);
 
 	// ensure that the #2 (now #1) fails to sync block #1 even after 5 seconds
@@ -511,7 +508,7 @@ fn light_peer_imports_header_from_announce() {
 
 	// given the network with 1 full nodes (#0) and 1 light node (#1)
 	let mut net = TestNet::new(1);
-	net.add_light_peer(&Default::default());
+	net.add_light_peer();
 
 	// let them connect to each other
 	net.block_until_sync();
@@ -583,9 +580,8 @@ fn can_sync_explicit_forks() {
 fn syncs_header_only_forks() {
 	let _ = ::env_logger::try_init();
 	let mut net = TestNet::new(0);
-	let config = ProtocolConfig::default();
-	net.add_full_peer_with_states(&config, None);
-	net.add_full_peer_with_states(&config, Some(3));
+	net.add_full_peer_with_states(None);
+	net.add_full_peer_with_states(Some(3));
 	net.peer(0).push_blocks(2, false);
 	net.peer(1).push_blocks(2, false);
 

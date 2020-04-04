@@ -29,10 +29,10 @@ use super::{
 };
 
 use log::{debug, warn};
+use sp_utils::mpsc::TracingUnboundedReceiver;
 use futures::prelude::*;
 use futures::stream::Fuse;
 use futures_timer::Delay;
-use futures::channel::mpsc::UnboundedReceiver;
 use finality_grandpa::voter;
 use parking_lot::Mutex;
 use prometheus_endpoint::{
@@ -140,7 +140,7 @@ impl Drop for Metrics {
 /// Buffering imported messages until blocks with given hashes are imported.
 #[pin_project::pin_project]
 pub(crate) struct UntilImported<Block: BlockT, BlockStatus, BlockSyncRequester, I, M: BlockUntilImported<Block>> {
-	import_notifications: Fuse<UnboundedReceiver<BlockImportNotification<Block>>>,
+	import_notifications: Fuse<TracingUnboundedReceiver<BlockImportNotification<Block>>>,
 	block_sync_requester: BlockSyncRequester,
 	status_check: BlockStatus,
 	#[pin]
@@ -541,18 +541,18 @@ mod tests {
 	use sc_client_api::BlockImportNotification;
 	use futures::future::Either;
 	use futures_timer::Delay;
-	use futures::channel::mpsc;
+	use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 	use finality_grandpa::Precommit;
 
 	#[derive(Clone)]
 	struct TestChainState {
-		sender: mpsc::UnboundedSender<BlockImportNotification<Block>>,
+		sender: TracingUnboundedSender<BlockImportNotification<Block>>,
 		known_blocks: Arc<Mutex<HashMap<Hash, u64>>>,
 	}
 
 	impl TestChainState {
 		fn new() -> (Self, ImportNotifications<Block>) {
-			let (tx, rx) = mpsc::unbounded();
+			let (tx, rx) = tracing_unbounded("test");
 			let state = TestChainState {
 				sender: tx,
 				known_blocks: Arc::new(Mutex::new(HashMap::new())),
@@ -649,7 +649,7 @@ mod tests {
 		// enact all dependencies before importing the message
 		enact_dependencies(&chain_state);
 
-		let (global_tx, global_rx) = futures::channel::mpsc::unbounded();
+		let (global_tx, global_rx) = tracing_unbounded("test");
 
 		let until_imported = UntilGlobalMessageBlocksImported::new(
 			import_notifications,
@@ -676,7 +676,7 @@ mod tests {
 		let (chain_state, import_notifications) = TestChainState::new();
 		let block_status = chain_state.block_status();
 
-		let (global_tx, global_rx) = futures::channel::mpsc::unbounded();
+		let (global_tx, global_rx) = tracing_unbounded("test");
 
 		let until_imported = UntilGlobalMessageBlocksImported::new(
 			import_notifications,
@@ -929,7 +929,7 @@ mod tests {
 		let (chain_state, import_notifications) = TestChainState::new();
 		let block_status = chain_state.block_status();
 
-		let (global_tx, global_rx) = futures::channel::mpsc::unbounded();
+		let (global_tx, global_rx) = tracing_unbounded("test");
 
 		let block_sync_requester = TestBlockSyncRequester::default();
 

@@ -18,12 +18,13 @@
 
 use crate::protocol::light_client_handler;
 
-use futures::{channel::mpsc, channel::oneshot, prelude::*};
+use futures::{channel::oneshot, prelude::*};
 use parking_lot::Mutex;
 use sc_client_api::{
 	FetchChecker, Fetcher, RemoteBodyRequest, RemoteCallRequest, RemoteChangesRequest,
 	RemoteHeaderRequest, RemoteReadChildRequest, RemoteReadRequest, StorageProof, ChangesProof,
 };
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_blockchain::Error as ClientError;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use std::{collections::HashMap, pin::Pin, sync::Arc, task::Context, task::Poll};
@@ -42,10 +43,10 @@ pub struct OnDemand<B: BlockT> {
 	/// Note that a better alternative would be to use a MPMC queue here, and add a `poll` method
 	/// from the `OnDemand`. However there exists no popular implementation of MPMC channels in
 	/// asynchronous Rust at the moment
-	requests_queue: Mutex<Option<mpsc::UnboundedReceiver<light_client_handler::Request<B>>>>,
+	requests_queue: Mutex<Option<TracingUnboundedReceiver<light_client_handler::Request<B>>>>,
 
 	/// Sending side of `requests_queue`.
-	requests_send: mpsc::UnboundedSender<light_client_handler::Request<B>>,
+	requests_send: TracingUnboundedSender<light_client_handler::Request<B>>,
 }
 
 /// Dummy implementation of `FetchChecker` that always assumes that responses are bad.
@@ -112,7 +113,7 @@ where
 {
 	/// Creates new on-demand service.
 	pub fn new(checker: Arc<dyn FetchChecker<B>>) -> Self {
-		let (requests_send, requests_queue) = mpsc::unbounded();
+		let (requests_send, requests_queue) = tracing_unbounded("mpsc_ondemand");
 		let requests_queue = Mutex::new(Some(requests_queue));
 
 		OnDemand {
@@ -134,9 +135,9 @@ where
 	///
 	/// If this function returns `None`, that means that the receiver has already been extracted in
 	/// the past, and therefore that something already handles the requests.
-	pub(crate) fn extract_receiver(
-		&self,
-	) -> Option<mpsc::UnboundedReceiver<light_client_handler::Request<B>>> {
+	pub(crate) fn extract_receiver(&self)
+		-> Option<TracingUnboundedReceiver<light_client_handler::Request<B>>>
+	{
 		self.requests_queue.lock().take()
 	}
 }
