@@ -95,8 +95,10 @@ mod benchmarking;
 
 use sp_std::{result, cmp};
 use sp_inherents::{ProvideInherent, InherentData, InherentIdentifier};
+#[cfg(feature = "std")]
+use frame_support::debug;
 use frame_support::{
-	Parameter, decl_storage, decl_module, debug,
+	Parameter, decl_storage, decl_module,
 	traits::{Time, UnixTime, Get},
 	weights::SimpleDispatchInfo,
 };

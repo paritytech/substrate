@@ -39,11 +39,11 @@ use sp_runtime::traits::{
 };
 use sp_arithmetic::traits::SaturatedConversion;
 use message::{BlockAnnounce, Message};
-use message::generic::{Message as GenericMessage, ConsensusMessage};
+use message::generic::{Message as GenericMessage, ConsensusMessage, Roles};
 use prometheus_endpoint::{Registry, Gauge, GaugeVec, HistogramVec, PrometheusError, Opts, register, U64};
 use sync::{ChainSync, SyncState};
 use crate::service::{TransactionPool, ExHashT};
-use crate::config::{BoxFinalityProofRequestBuilder, Roles};
+use crate::config::BoxFinalityProofRequestBuilder;
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::sync::Arc;
@@ -338,7 +338,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 		let important_peers = {
 			let mut imp_p = HashSet::new();
-			for reserved in &peerset_config.reserved_nodes {
+			for reserved in peerset_config.priority_groups.iter().flat_map(|(_, l)| l.iter()) {
 				imp_p.insert(reserved.clone());
 			}
 			imp_p.shrink_to_fit();
@@ -1033,13 +1033,14 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 	/// Registers a new notifications protocol.
 	///
-	/// You are very strongly encouraged to call this method very early on. Any connection open
-	/// will retain the protocols that were registered then, and not any new one.
-	pub fn register_notifications_protocol(
-		&mut self,
+	/// While registering a protocol while we already have open connections is discouraged, we
+	/// nonetheless handle it by notifying that we opened channels with everyone. This function
+	/// returns a list of substreams to open as a result.
+	pub fn register_notifications_protocol<'a>(
+		&'a mut self,
 		engine_id: ConsensusEngineId,
 		protocol_name: impl Into<Cow<'static, [u8]>>,
-	) -> Vec<event::Event> {
+	) -> impl ExactSizeIterator<Item = (&'a PeerId, Roles)> + 'a {
 		let protocol_name = protocol_name.into();
 		if self.protocol_name_by_engine.insert(engine_id, protocol_name.clone()).is_some() {
 			error!(target: "sub-libp2p", "Notifications protocol already registered: {:?}", protocol_name);
@@ -1048,16 +1049,8 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			self.legacy_equiv_by_name.insert(protocol_name, Fallback::Consensus(engine_id));
 		}
 
-		// Registering a protocol while we already have open connections isn't great, but for now
-		// we handle it by notifying that we opened channels with everyone.
 		self.context_data.peers.iter()
-			.map(|(peer_id, peer)|
-				event::Event::NotificationStreamOpened {
-					remote: peer_id.clone(),
-					engine_id,
-					roles: peer.info.roles,
-				})
-			.collect()
+			.map(|(peer_id, peer)| (peer_id, peer.info.roles))
 	}
 
 	/// Called when peer sends us new extrinsics
@@ -2021,7 +2014,7 @@ impl<B: BlockT, H: ExHashT> Drop for Protocol<B, H> {
 #[cfg(test)]
 mod tests {
 	use crate::PeerId;
-	use crate::config::{EmptyTransactionPool, Roles};
+	use crate::config::EmptyTransactionPool;
 	use super::{CustomMessageOutcome, Protocol, ProtocolConfig};
 
 	use sp_consensus::block_validation::DefaultBlockAnnounceValidator;
@@ -2034,10 +2027,7 @@ mod tests {
 		let client = Arc::new(TestClientBuilder::with_default_backend().build_with_longest_chain().0);
 
 		let (mut protocol, _) = Protocol::<Block, Hash>::new(
-			ProtocolConfig {
-				roles: Roles::FULL,
-				max_parallel_downloads: 10,
-			},
+			ProtocolConfig::default(),
 			client.clone(),
 			Arc::new(EmptyTransactionPool),
 			None,
@@ -2048,7 +2038,7 @@ mod tests {
 				out_peers: 10,
 				bootnodes: Vec::new(),
 				reserved_only: false,
-				reserved_nodes: Vec::new(),
+				priority_groups: Vec::new(),
 			},
 			Box::new(DefaultBlockAnnounceValidator::new(client.clone())),
 			None,

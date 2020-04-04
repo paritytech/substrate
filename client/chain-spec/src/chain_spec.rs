@@ -27,7 +27,7 @@ use sp_runtime::BuildStorage;
 use serde_json as json;
 use crate::RuntimeGenesis;
 use crate::extension::GetExtension;
-use sc_network::Multiaddr;
+use sc_network::config::MultiaddrWithPeerId;
 use sc_telemetry::TelemetryEndpoints;
 
 enum GenesisSource<G> {
@@ -137,7 +137,7 @@ enum Genesis<G> {
 struct ClientSpec<E> {
 	name: String,
 	id: String,
-	boot_nodes: Vec<String>,
+	boot_nodes: Vec<MultiaddrWithPeerId>,
 	telemetry_endpoints: Option<TelemetryEndpoints>,
 	protocol_id: Option<String>,
 	properties: Option<Properties>,
@@ -174,7 +174,7 @@ impl<G, E: Clone> Clone for ChainSpec<G, E> {
 
 impl<G, E> ChainSpec<G, E> {
 	/// A list of bootnode addresses.
-	pub fn boot_nodes(&self) -> &[String] {
+	pub fn boot_nodes(&self) -> &[MultiaddrWithPeerId] {
 		&self.client_spec.boot_nodes
 	}
 
@@ -206,8 +206,8 @@ impl<G, E> ChainSpec<G, E> {
 	}
 
 	/// Add a bootnode to the list.
-	pub fn add_boot_node(&mut self, addr: Multiaddr) {
-		self.client_spec.boot_nodes.push(addr.to_string())
+	pub fn add_boot_node(&mut self, addr: MultiaddrWithPeerId) {
+		self.client_spec.boot_nodes.push(addr)
 	}
 
 	/// Returns a reference to defined chain spec extensions.
@@ -220,7 +220,7 @@ impl<G, E> ChainSpec<G, E> {
 		name: &str,
 		id: &str,
 		constructor: F,
-		boot_nodes: Vec<String>,
+		boot_nodes: Vec<MultiaddrWithPeerId>,
 		telemetry_endpoints: Option<TelemetryEndpoints>,
 		protocol_id: Option<&str>,
 		properties: Option<Properties>,
@@ -320,7 +320,7 @@ where
 	G: RuntimeGenesis,
 	E: GetExtension + serde::Serialize + Clone + Send,
 {
-	fn boot_nodes(&self) -> &[String] {
+	fn boot_nodes(&self) -> &[MultiaddrWithPeerId] {
 		ChainSpec::boot_nodes(self)
 	}
 
@@ -344,7 +344,7 @@ where
 		ChainSpec::properties(self)
 	}
 
-	fn add_boot_node(&mut self, addr: Multiaddr) {
+	fn add_boot_node(&mut self, addr: MultiaddrWithPeerId) {
 		ChainSpec::add_boot_node(self, addr)
 	}
 
