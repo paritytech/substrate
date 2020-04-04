@@ -135,8 +135,6 @@ impl FactoryCmd {
 				.select_chain()
 				.expect("The select_chain is always initialized by new_full_start!; QED"),
 		)
-		.map_err(|e| format!("Error in transaction factory: {}", e))?;
-
-		Ok(())
+		.map_err(|e| format!("Error in transaction factory: {}", e))
 	}
 }
