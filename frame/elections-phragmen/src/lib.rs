@@ -187,7 +187,7 @@ decl_storage! {
 				// Nonetheless, stakes will be updated for term 1 onwards according to the election.
 				Members::<T>::mutate(|members| {
 					match members.binary_search_by(|(a, _b)| a.cmp(member)) {
-						Ok(_) => (),
+						Ok(_) => panic!("Duplicate member in elections phragmen genesis"),
 						Err(pos) => members.insert(pos, (member.clone(), *stake)),
 					}
 				});
@@ -1187,6 +1187,12 @@ mod tests {
 	fn genesis_members_cannot_over_stake_1() {
 		// 10 cannot reserve 20 as voting bond and extra genesis will panic.
 		ExtBuilder::default().voter_bond(20).genesis_members(vec![(1, 10), (2, 20)]).build();
+	}
+
+	#[test]
+	#[should_panic = "Duplicate member in elections phragmen genesis"]
+	fn genesis_members_cannot_be_duplicate() {
+		ExtBuilder::default().genesis_members(vec![(1, 10), (2, 10), (2, 10)]).build();
 	}
 
 	#[test]
