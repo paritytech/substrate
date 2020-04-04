@@ -24,6 +24,7 @@ pub mod config;
 pub mod chain_ops;
 pub mod error;
 
+mod metrics;
 mod builder;
 mod status_sinks;
 mod task_manager;
@@ -40,7 +41,6 @@ use parking_lot::Mutex;
 use sc_client::Client;
 use futures::{
 	Future, FutureExt, Stream, StreamExt,
-	channel::mpsc,
 	compat::*,
 	sink::SinkExt,
 	task::{Spawn, FutureObj, SpawnError},
@@ -51,6 +51,7 @@ use codec::{Encode, Decode};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{NumberFor, Block as BlockT};
 use parity_util_mem::MallocSizeOf;
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver,  TracingUnboundedSender};
 
 pub use self::error::Error;
 pub use self::builder::{
@@ -98,13 +99,13 @@ pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	transaction_pool: Arc<TTxPool>,
 	/// Send a signal when a spawned essential task has concluded. The next time
 	/// the service future is polled it should complete with an error.
-	essential_failed_tx: mpsc::UnboundedSender<()>,
+	essential_failed_tx: TracingUnboundedSender<()>,
 	/// A receiver for spawned essential-tasks concluding.
-	essential_failed_rx: mpsc::UnboundedReceiver<()>,
+	essential_failed_rx: TracingUnboundedReceiver<()>,
 	rpc_handlers: sc_rpc_server::RpcHandler<sc_rpc::Metadata>,
 	_rpc: Box<dyn std::any::Any + Send + Sync>,
 	_telemetry: Option<sc_telemetry::Telemetry>,
-	_telemetry_on_connect_sinks: Arc<Mutex<Vec<futures::channel::mpsc::UnboundedSender<()>>>>,
+	_telemetry_on_connect_sinks: Arc<Mutex<Vec<TracingUnboundedSender<()>>>>,
 	_offchain_workers: Option<Arc<TOc>>,
 	keystore: sc_keystore::KeyStorePtr,
 	marker: PhantomData<TBl>,
@@ -130,7 +131,7 @@ pub trait AbstractService: 'static + Future<Output = Result<(), Error>> +
 	type TransactionPool: TransactionPool<Block = Self::Block> + MallocSizeOfWasm;
 
 	/// Get event stream for telemetry connection established events.
-	fn telemetry_on_connect_stream(&self) -> futures::channel::mpsc::UnboundedReceiver<()>;
+	fn telemetry_on_connect_stream(&self) -> TracingUnboundedReceiver<()>;
 
 	/// return a shared instance of Telemetry (if enabled)
 	fn telemetry(&self) -> Option<sc_telemetry::Telemetry>;
@@ -171,7 +172,7 @@ pub trait AbstractService: 'static + Future<Output = Result<(), Error>> +
 		-> Arc<NetworkService<Self::Block, <Self::Block as BlockT>::Hash>>;
 
 	/// Returns a receiver that periodically receives a status of the network.
-	fn network_status(&self, interval: Duration) -> mpsc::UnboundedReceiver<(NetworkStatus<Self::Block>, NetworkState)>;
+	fn network_status(&self, interval: Duration) -> TracingUnboundedReceiver<(NetworkStatus<Self::Block>, NetworkState)>;
 
 	/// Get shared transaction pool instance.
 	fn transaction_pool(&self) -> Arc<Self::TransactionPool>;
@@ -203,8 +204,8 @@ where
 	type SelectChain = TSc;
 	type TransactionPool = TExPool;
 
-	fn telemetry_on_connect_stream(&self) -> futures::channel::mpsc::UnboundedReceiver<()> {
-		let (sink, stream) = futures::channel::mpsc::unbounded();
+	fn telemetry_on_connect_stream(&self) -> TracingUnboundedReceiver<()> {
+		let (sink, stream) = tracing_unbounded("mpsc_telemetry_on_connect");
 		self._telemetry_on_connect_sinks.lock().push(sink);
 		stream
 	}
@@ -259,8 +260,8 @@ where
 		self.network.clone()
 	}
 
-	fn network_status(&self, interval: Duration) -> mpsc::UnboundedReceiver<(NetworkStatus<Self::Block>, NetworkState)> {
-		let (sink, stream) = mpsc::unbounded();
+	fn network_status(&self, interval: Duration) -> TracingUnboundedReceiver<(NetworkStatus<Self::Block>, NetworkState)> {
+		let (sink, stream) = tracing_unbounded("mpsc_network_status");
 		self.network_status_sinks.lock().push(interval, sink);
 		stream
 	}
@@ -326,7 +327,7 @@ fn build_network_future<
 	mut network: sc_network::NetworkWorker<B, H>,
 	client: Arc<C>,
 	status_sinks: Arc<Mutex<status_sinks::StatusSinks<(NetworkStatus<B>, NetworkState)>>>,
-	mut rpc_rx: mpsc::UnboundedReceiver<sc_rpc::system::Request<B>>,
+	mut rpc_rx: TracingUnboundedReceiver<sc_rpc::system::Request<B>>,
 	should_have_peers: bool,
 	announce_imported_blocks: bool,
 ) -> impl Future<Output = ()> {

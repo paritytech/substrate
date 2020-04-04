@@ -993,7 +993,7 @@ fn voter_persists_its_votes() {
 	use std::iter::FromIterator;
 	use std::sync::atomic::{AtomicUsize, Ordering};
 	use futures::future;
-	use futures::channel::mpsc;
+	use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 
 	let _ = env_logger::try_init();
 	let mut runtime = Runtime::new().unwrap();
@@ -1018,7 +1018,7 @@ fn voter_persists_its_votes() {
 
 	// channel between the voter and the main controller.
 	// sending a message on the `voter_tx` restarts the voter.
-	let (voter_tx, voter_rx) = mpsc::unbounded::<()>();
+	let (voter_tx, voter_rx) = tracing_unbounded::<()>("");
 
 	let mut keystore_paths = Vec::new();
 
@@ -1031,7 +1031,7 @@ fn voter_persists_its_votes() {
 
 		struct ResettableVoter {
 			voter: Pin<Box<dyn Future<Output = ()> + Send + Unpin>>,
-			voter_rx: mpsc::UnboundedReceiver<()>,
+			voter_rx: TracingUnboundedReceiver<()>,
 			net: Arc<Mutex<GrandpaTestNet>>,
 			client: PeersClient,
 			keystore: KeyStorePtr,
