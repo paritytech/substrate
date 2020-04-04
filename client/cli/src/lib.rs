@@ -19,8 +19,6 @@
 #![warn(missing_docs)]
 #![warn(unused_extern_crates)]
 
-extern crate self as sc_cli;
-
 mod arg_enums;
 mod commands;
 mod config;

@@ -69,8 +69,8 @@ pub enum Subcommand {
 /// # struct EmptyVariant {}
 ///
 ///	# impl sc_cli::CliConfiguration for EmptyVariant {
-///	#     fn shared_params(&self) -> &::sc_cli::SharedParams { unimplemented!() }
-///	#     fn chain_id(&self, _: bool) -> ::sc_cli::Result<String> { Ok("test-chain-id".to_string()) }
+///	#     fn shared_params(&self) -> &sc_cli::SharedParams { unimplemented!() }
+///	#     fn chain_id(&self, _: bool) -> sc_cli::Result<String> { Ok("test-chain-id".to_string()) }
 ///	# }
 ///
 /// # fn main() {
@@ -113,57 +113,57 @@ pub enum Subcommand {
 #[macro_export]
 macro_rules! substrate_cli_subcommands {
 	($enum:ident => $($variant:ident),*) => {
-		impl ::sc_cli::CliConfiguration for $enum {
-			fn shared_params(&self) -> &::sc_cli::SharedParams {
+		impl $crate::CliConfiguration for $enum {
+			fn shared_params(&self) -> &$crate::SharedParams {
 				match self {
 					$($enum::$variant(cmd) => cmd.shared_params()),*
 				}
 			}
 
-			fn import_params(&self) -> Option<&::sc_cli::ImportParams> {
+			fn import_params(&self) -> Option<&$crate::ImportParams> {
 				match self {
 					$($enum::$variant(cmd) => cmd.import_params()),*
 				}
 			}
 
-			fn pruning_params(&self) -> Option<&::sc_cli::PruningParams> {
+			fn pruning_params(&self) -> Option<&$crate::PruningParams> {
 				match self {
 					$($enum::$variant(cmd) => cmd.pruning_params()),*
 				}
 			}
 
-			fn keystore_params(&self) -> Option<&::sc_cli::KeystoreParams> {
+			fn keystore_params(&self) -> Option<&$crate::KeystoreParams> {
 				match self {
 					$($enum::$variant(cmd) => cmd.keystore_params()),*
 				}
 			}
 
-			fn network_params(&self) -> Option<&::sc_cli::NetworkParams> {
+			fn network_params(&self) -> Option<&$crate::NetworkParams> {
 				match self {
 					$($enum::$variant(cmd) => cmd.network_params()),*
 				}
 			}
 
-			fn base_path(&self) -> ::sc_cli::Result<::std::option::Option<::std::path::PathBuf>> {
+			fn base_path(&self) -> $crate::Result<::std::option::Option<::std::path::PathBuf>> {
 				match self {
 					$($enum::$variant(cmd) => cmd.base_path()),*
 				}
 			}
 
-			fn is_dev(&self) -> ::sc_cli::Result<bool> {
+			fn is_dev(&self) -> $crate::Result<bool> {
 				match self {
 					$($enum::$variant(cmd) => cmd.is_dev()),*
 				}
 			}
 
-			fn role(&self, is_dev: bool) -> ::sc_cli::Result<::sc_service::Role> {
+			fn role(&self, is_dev: bool) -> $crate::Result<::sc_service::Role> {
 				match self {
 					$($enum::$variant(cmd) => cmd.role(is_dev)),*
 				}
 			}
 
 			fn transaction_pool(&self)
-			-> ::sc_cli::Result<::sc_service::config::TransactionPoolOptions> {
+			-> $crate::Result<::sc_service::config::TransactionPoolOptions> {
 				match self {
 					$($enum::$variant(cmd) => cmd.transaction_pool()),*
 				}
@@ -177,7 +177,7 @@ macro_rules! substrate_cli_subcommands {
 				client_id: &str,
 				node_name: &str,
 				node_key: ::sc_service::config::NodeKeyConfig,
-			) -> ::sc_cli::Result<::sc_service::config::NetworkConfiguration> {
+			) -> $crate::Result<::sc_service::config::NetworkConfiguration> {
 				match self {
 					$(
 						$enum::$variant(cmd) => cmd.network_config(
@@ -188,13 +188,13 @@ macro_rules! substrate_cli_subcommands {
 			}
 
 			fn keystore_config(&self, base_path: &::std::path::PathBuf)
-			-> ::sc_cli::Result<::sc_service::config::KeystoreConfig> {
+			-> $crate::Result<::sc_service::config::KeystoreConfig> {
 				match self {
 					$($enum::$variant(cmd) => cmd.keystore_config(base_path)),*
 				}
 			}
 
-			fn database_cache_size(&self) -> ::sc_cli::Result<::std::option::Option<usize>> {
+			fn database_cache_size(&self) -> $crate::Result<::std::option::Option<usize>> {
 				match self {
 					$($enum::$variant(cmd) => cmd.database_cache_size()),*
 				}
@@ -204,89 +204,89 @@ macro_rules! substrate_cli_subcommands {
 				&self,
 				base_path: &::std::path::PathBuf,
 				cache_size: usize,
-			) -> ::sc_cli::Result<::sc_service::config::DatabaseConfig> {
+			) -> $crate::Result<::sc_service::config::DatabaseConfig> {
 				match self {
 					$($enum::$variant(cmd) => cmd.database_config(base_path, cache_size)),*
 				}
 			}
 
-			fn state_cache_size(&self) -> ::sc_cli::Result<usize> {
+			fn state_cache_size(&self) -> $crate::Result<usize> {
 				match self {
 					$($enum::$variant(cmd) => cmd.state_cache_size()),*
 				}
 			}
 
-			fn state_cache_child_ratio(&self) -> ::sc_cli::Result<::std::option::Option<usize>> {
+			fn state_cache_child_ratio(&self) -> $crate::Result<::std::option::Option<usize>> {
 				match self {
 					$($enum::$variant(cmd) => cmd.state_cache_child_ratio()),*
 				}
 			}
 
 			fn pruning(&self, is_dev: bool, role: &::sc_service::Role)
-			-> ::sc_cli::Result<::sc_service::config::PruningMode> {
+			-> $crate::Result<::sc_service::config::PruningMode> {
 				match self {
 					$($enum::$variant(cmd) => cmd.pruning(is_dev, role)),*
 				}
 			}
 
-			fn chain_id(&self, is_dev: bool) -> ::sc_cli::Result<String> {
+			fn chain_id(&self, is_dev: bool) -> $crate::Result<String> {
 				match self {
 					$($enum::$variant(cmd) => cmd.chain_id(is_dev)),*
 				}
 			}
 
-			fn init<C: ::sc_cli::SubstrateCli>(&self) -> ::sc_cli::Result<()> {
+			fn init<C: $crate::SubstrateCli>(&self) -> $crate::Result<()> {
 				match self {
 					$($enum::$variant(cmd) => cmd.init::<C>()),*
 				}
 			}
 
-			fn node_name(&self) -> ::sc_cli::Result<String> {
+			fn node_name(&self) -> $crate::Result<String> {
 				match self {
 					$($enum::$variant(cmd) => cmd.node_name()),*
 				}
 			}
 
-			fn wasm_method(&self) -> ::sc_cli::Result<::sc_service::config::WasmExecutionMethod> {
+			fn wasm_method(&self) -> $crate::Result<::sc_service::config::WasmExecutionMethod> {
 				match self {
 					$($enum::$variant(cmd) => cmd.wasm_method()),*
 				}
 			}
 
 			fn execution_strategies(&self, is_dev: bool)
-			-> ::sc_cli::Result<::sc_service::config::ExecutionStrategies> {
+			-> $crate::Result<::sc_service::config::ExecutionStrategies> {
 				match self {
 					$($enum::$variant(cmd) => cmd.execution_strategies(is_dev)),*
 				}
 			}
 
-			fn rpc_http(&self) -> ::sc_cli::Result<::std::option::Option<::std::net::SocketAddr>> {
+			fn rpc_http(&self) -> $crate::Result<::std::option::Option<::std::net::SocketAddr>> {
 				match self {
 					$($enum::$variant(cmd) => cmd.rpc_http()),*
 				}
 			}
 
-			fn rpc_ws(&self) -> ::sc_cli::Result<::std::option::Option<::std::net::SocketAddr>> {
+			fn rpc_ws(&self) -> $crate::Result<::std::option::Option<::std::net::SocketAddr>> {
 				match self {
 					$($enum::$variant(cmd) => cmd.rpc_ws()),*
 				}
 			}
 
-			fn rpc_ws_max_connections(&self) -> ::sc_cli::Result<::std::option::Option<usize>> {
+			fn rpc_ws_max_connections(&self) -> $crate::Result<::std::option::Option<usize>> {
 				match self {
 					$($enum::$variant(cmd) => cmd.rpc_ws_max_connections()),*
 				}
 			}
 
 			fn rpc_cors(&self, is_dev: bool)
-			-> ::sc_cli::Result<::std::option::Option<::std::vec::Vec<String>>> {
+			-> $crate::Result<::std::option::Option<::std::vec::Vec<String>>> {
 				match self {
 					$($enum::$variant(cmd) => cmd.rpc_cors(is_dev)),*
 				}
 			}
 
 			fn prometheus_config(&self)
-			-> ::sc_cli::Result<::std::option::Option<::sc_service::config::PrometheusConfig>> {
+			-> $crate::Result<::std::option::Option<::sc_service::config::PrometheusConfig>> {
 				match self {
 					$($enum::$variant(cmd) => cmd.prometheus_config()),*
 				}
@@ -295,75 +295,75 @@ macro_rules! substrate_cli_subcommands {
 			fn telemetry_endpoints(
 				&self,
 				chain_spec: &Box<dyn ::sc_service::ChainSpec>,
-			) -> ::sc_cli::Result<::std::option::Option<::sc_service::config::TelemetryEndpoints>> {
+			) -> $crate::Result<::std::option::Option<::sc_service::config::TelemetryEndpoints>> {
 				match self {
 					$($enum::$variant(cmd) => cmd.telemetry_endpoints(chain_spec)),*
 				}
 			}
 
 			fn telemetry_external_transport(&self)
-			-> ::sc_cli::Result<::std::option::Option<::sc_service::config::ExtTransport>> {
+			-> $crate::Result<::std::option::Option<::sc_service::config::ExtTransport>> {
 				match self {
 					$($enum::$variant(cmd) => cmd.telemetry_external_transport()),*
 				}
 			}
 
-			fn default_heap_pages(&self) -> ::sc_cli::Result<::std::option::Option<u64>> {
+			fn default_heap_pages(&self) -> $crate::Result<::std::option::Option<u64>> {
 				match self {
 					$($enum::$variant(cmd) => cmd.default_heap_pages()),*
 				}
 			}
 
-			fn offchain_worker(&self, role: &::sc_service::Role) -> ::sc_cli::Result<bool> {
+			fn offchain_worker(&self, role: &::sc_service::Role) -> $crate::Result<bool> {
 				match self {
 					$($enum::$variant(cmd) => cmd.offchain_worker(role)),*
 				}
 			}
 
-			fn force_authoring(&self) -> ::sc_cli::Result<bool> {
+			fn force_authoring(&self) -> $crate::Result<bool> {
 				match self {
 					$($enum::$variant(cmd) => cmd.force_authoring()),*
 				}
 			}
 
-			fn disable_grandpa(&self) -> ::sc_cli::Result<bool> {
+			fn disable_grandpa(&self) -> $crate::Result<bool> {
 				match self {
 					$($enum::$variant(cmd) => cmd.disable_grandpa()),*
 				}
 			}
 
-			fn dev_key_seed(&self, is_dev: bool) -> ::sc_cli::Result<::std::option::Option<String>> {
+			fn dev_key_seed(&self, is_dev: bool) -> $crate::Result<::std::option::Option<String>> {
 				match self {
 					$($enum::$variant(cmd) => cmd.dev_key_seed(is_dev)),*
 				}
 			}
 
-			fn tracing_targets(&self) -> ::sc_cli::Result<::std::option::Option<String>> {
+			fn tracing_targets(&self) -> $crate::Result<::std::option::Option<String>> {
 				match self {
 					$($enum::$variant(cmd) => cmd.tracing_targets()),*
 				}
 			}
 
-			fn tracing_receiver(&self) -> ::sc_cli::Result<::sc_service::TracingReceiver> {
+			fn tracing_receiver(&self) -> $crate::Result<::sc_service::TracingReceiver> {
 				match self {
 					$($enum::$variant(cmd) => cmd.tracing_receiver()),*
 				}
 			}
 
 			fn node_key(&self, net_config_dir: &::std::path::PathBuf)
-			-> ::sc_cli::Result<::sc_service::config::NodeKeyConfig> {
+			-> $crate::Result<::sc_service::config::NodeKeyConfig> {
 				match self {
 					$($enum::$variant(cmd) => cmd.node_key(net_config_dir)),*
 				}
 			}
 
-			fn max_runtime_instances(&self) -> ::sc_cli::Result<::std::option::Option<usize>> {
+			fn max_runtime_instances(&self) -> $crate::Result<::std::option::Option<usize>> {
 				match self {
 					$($enum::$variant(cmd) => cmd.max_runtime_instances()),*
 				}
 			}
 
-			fn log_filters(&self) -> ::sc_cli::Result<::std::option::Option<String>> {
+			fn log_filters(&self) -> $crate::Result<::std::option::Option<String>> {
 				match self {
 					$($enum::$variant(cmd) => cmd.log_filters()),*
 				}
