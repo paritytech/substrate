@@ -20,7 +20,7 @@ use super::*;
 
 use rand_chacha::{rand_core::{RngCore, SeedableRng}, ChaChaRng};
 
-use sp_runtime::traits::One;
+use sp_runtime::traits::{Dispatchable, One};
 use sp_io::hashing::blake2_256;
 
 use frame_system::RawOrigin;
@@ -147,61 +147,6 @@ pub fn create_validator_with_nominators<T: Trait>(n: u32, upper_bound: u32) -> R
 	Ok(v_controller)
 }
 
-// This function generates one nominator nominating v validators.
-// It starts an era and creates pending payouts.
-pub fn create_nominator_with_validators<T: Trait>(v: u32) -> Result<(T::AccountId, Vec<T::AccountId>), &'static str> {
-	let mut validators = Vec::new();
-	let mut points_total = 0;
-	let mut points_individual = Vec::new();
-
-	MinimumValidatorCount::put(0);
-
-	// Create v validators
-	let mut validator_lookups = Vec::new();
-	for i in 0 .. v {
-		let (v_stash, v_controller) = create_stash_controller::<T>(i)?;
-		let validator_prefs = ValidatorPrefs {
-			commission: Perbill::from_percent(50),
-		};
-		Staking::<T>::validate(RawOrigin::Signed(v_controller.clone()).into(), validator_prefs)?;
-		let stash_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(v_stash.clone());
-
-		points_total += 10;
-		points_individual.push((v_stash.clone(), 10));
-		validator_lookups.push(stash_lookup);
-		// Add to the list if it is less than the number we want the nominator to have
-		if validators.len() < v as usize {
-			validators.push(v_stash.clone())
-		}
-	}
-
-	// Create a nominator
-	let (_n_stash, n_controller) = create_stash_controller::<T>(u32::max_value())?;
-	Staking::<T>::nominate(RawOrigin::Signed(n_controller.clone()).into(), validator_lookups)?;
-
-	ValidatorCount::put(v);
-
-	// Start a new Era
-	let new_validators = Staking::<T>::new_era(SessionIndex::one()).unwrap();
-
-	assert!(new_validators.len() == v as usize);
-
-	// Give Era Points
-	let reward = EraRewardPoints::<T::AccountId> {
-		total: points_total,
-		individual: points_individual.into_iter().collect(),
-	};
-
-	let current_era = CurrentEra::get().unwrap();
-	ErasRewardPoints::<T>::insert(current_era, reward);
-
-	// Create reward pool
-	let total_payout = T::Currency::minimum_balance() * 1000.into();
-	<ErasValidatorReward<T>>::insert(current_era, total_payout);
-
-	Ok((n_controller, validators))
-}
-
 benchmarks! {
 	_{
 		// User account seed
@@ -306,18 +251,12 @@ benchmarks! {
 		let slash_indices: Vec<u32> = (0 .. s).collect();
 	}: _(RawOrigin::Root, era, slash_indices)
 
-	payout_validator {
+	payout_stakers {
 		let n in 1 .. MAX_NOMINATIONS as u32;
 		let validator = create_validator_with_nominators::<T>(n, MAX_NOMINATIONS as u32)?;
 		let current_era = CurrentEra::get().unwrap();
-	}: _(RawOrigin::Signed(validator), current_era)
-
-	payout_nominator {
-		let v in 1 .. MAX_NOMINATIONS as u32;
-		let (nominator, validators) = create_nominator_with_validators::<T>(v)?;
-		let current_era = CurrentEra::get().unwrap();
-		let find_nominator = validators.into_iter().map(|x| (x, 0)).collect();
-	}: _(RawOrigin::Signed(nominator), current_era, find_nominator)
+		let caller = account("caller", n, SEED);
+	}: _(RawOrigin::Signed(caller), validator, current_era)
 
 	rebond {
 		let l in 1 .. 1000;
@@ -386,6 +325,45 @@ benchmarks! {
 			&mut NegativeImbalanceOf::<T>::zero()
 		);
 	}
+
+	payout_all {
+		let v in 1 .. 10;
+		let n in 1 .. 100;
+		MinimumValidatorCount::put(0);
+		create_validators_with_nominators_for_era::<T>(v, n)?;
+		// Start a new Era
+		let new_validators = Staking::<T>::new_era(SessionIndex::one()).unwrap();
+		assert!(new_validators.len() == v as usize);
+
+		let current_era = CurrentEra::get().unwrap();
+		let mut points_total = 0;
+		let mut points_individual = Vec::new();
+		let mut payout_calls = Vec::new();
+
+		for validator in new_validators.iter() {
+			points_total += 10;
+			points_individual.push((validator.clone(), 10));
+			payout_calls.push(Call::<T>::payout_stakers(validator.clone(), current_era))
+		}
+
+		// Give Era Points
+		let reward = EraRewardPoints::<T::AccountId> {
+			total: points_total,
+			individual: points_individual.into_iter().collect(),
+		};
+
+		ErasRewardPoints::<T>::insert(current_era, reward);
+
+		// Create reward pool
+		let total_payout = T::Currency::minimum_balance() * 1000.into();
+		<ErasValidatorReward<T>>::insert(current_era, total_payout);
+
+		let caller: T::AccountId = account("caller", 0, SEED);
+	}: {
+		for call in payout_calls {
+			call.dispatch(RawOrigin::Signed(caller.clone()).into())?;
+		}
+	}
 }
 
 #[cfg(test)]
@@ -397,7 +375,7 @@ mod tests {
 	use crate::benchmarking::{
 		create_validators_with_nominators_for_era,
 		create_validator_with_nominators,
-		create_nominator_with_validators,
+		SelectedBenchmark,
 	};
 
 	#[test]
@@ -429,36 +407,31 @@ mod tests {
 			let current_era = CurrentEra::get().unwrap();
 			let controller = validator;
 			let ledger = Staking::ledger(&controller).unwrap();
-			let stash = &ledger.stash;
+			let stash = ledger.stash;
 
-			let original_free_balance = Balances::free_balance(stash);
-			assert_ok!(Staking::payout_validator(Origin::signed(controller), current_era));
-			let new_free_balance = Balances::free_balance(stash);
+			let original_free_balance = Balances::free_balance(&stash);
+			assert_ok!(Staking::payout_stakers(Origin::signed(1337), stash, current_era));
+			let new_free_balance = Balances::free_balance(&stash);
 
 			assert!(original_free_balance < new_free_balance);
 		});
 	}
 
 	#[test]
-	fn create_nominator_with_validators_works() {
+	fn test_payout_all() {
 		ExtBuilder::default().has_stakers(false).build().execute_with(|| {
-			let v = 5;
+			let v = 10;
+			let n = 100;
 
-			let (nominator, validators) = create_nominator_with_validators::<Test>(v).unwrap();
+			let selected_benchmark = SelectedBenchmark::payout_all;
+			let c = vec![(frame_benchmarking::BenchmarkParameter::v, v), (frame_benchmarking::BenchmarkParameter::n, n)];
+			let closure_to_benchmark =
+				<SelectedBenchmark as frame_benchmarking::BenchmarkingSetup<Test>>::instance(
+					&selected_benchmark,
+					&c
+				).unwrap();
 
-			let current_era = CurrentEra::get().unwrap();
-			let controller = nominator;
-			let ledger = Staking::ledger(&controller).unwrap();
-			let stash = &ledger.stash;
-
-			let find_nominator = validators.into_iter().map(|x| (x, 0)).collect();
-
-			let original_free_balance = Balances::free_balance(stash);
-			assert_ok!(Staking::payout_nominator(Origin::signed(controller), current_era, find_nominator));
-			let new_free_balance = Balances::free_balance(stash);
-
-			assert!(original_free_balance < new_free_balance);
+			assert_ok!(closure_to_benchmark());
 		});
 	}
-
 }
