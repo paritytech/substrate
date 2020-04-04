@@ -579,21 +579,21 @@ macro_rules! impl_benchmark {
 							closure_to_benchmark()?;
 							let finish_extrinsic = $crate::benchmarking::current_time();
 							let elapsed_extrinsic = finish_extrinsic - start_extrinsic;
-
+ 
 							// Time the storage root recalculation.
 							let start_storage_root = $crate::benchmarking::current_time();
 							$crate::storage_root();
 							let finish_storage_root = $crate::benchmarking::current_time();
 							let elapsed_storage_root = finish_storage_root - start_storage_root;
 							let usage_info = $crate::benchmarking::db_usage_info();
-
+ 
 							results.push((c.clone(),
 								elapsed_extrinsic,
 								elapsed_storage_root,
 								usage_info.reads.ops,
 								usage_info.writes.ops,
 							));
-
+ 
 							// Wipe the DB back to the genesis state.
 							$crate::benchmarking::wipe_db();
 						}

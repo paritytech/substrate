@@ -212,14 +212,14 @@ mod tests {
 	#[test]
 	fn analysis_median_slopes_should_work() {
 		let a = Analysis::median_slopes(&vec![
-			(vec![(BenchmarkParameter::n, 1), (BenchmarkParameter::m, 5)], 11_500_000, 0, 0),
-			(vec![(BenchmarkParameter::n, 2), (BenchmarkParameter::m, 5)], 12_500_000, 0, 0),
-			(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 5)], 13_500_000, 0, 0),
-			(vec![(BenchmarkParameter::n, 4), (BenchmarkParameter::m, 5)], 14_500_000, 0, 0),
-			(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 1)], 13_100_000, 0, 0),
-			(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 3)], 13_300_000, 0, 0),
-			(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 7)], 13_700_000, 0, 0),
-			(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 10)], 14_000_000, 0, 0),
+			(vec![(BenchmarkParameter::n, 1), (BenchmarkParameter::m, 5)], 11_500_000, 0, 0, 0),
+			(vec![(BenchmarkParameter::n, 2), (BenchmarkParameter::m, 5)], 12_500_000, 0, 0, 0),
+			(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 5)], 13_500_000, 0, 0, 0),
+			(vec![(BenchmarkParameter::n, 4), (BenchmarkParameter::m, 5)], 14_500_000, 0, 0, 0),
+			(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 1)], 13_100_000, 0, 0, 0),
+			(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 3)], 13_300_000, 0, 0, 0),
+			(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 7)], 13_700_000, 0, 0, 0),
+			(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 10)], 14_000_000, 0, 0, 0),
 		]).unwrap();
 		assert_eq!(a.base, 10_000_000);
 		assert_eq!(a.slopes, vec![1_000_000, 100_000]);
@@ -228,14 +228,14 @@ mod tests {
 	#[test]
 	fn analysis_median_min_squares_should_work() {
 		let a = Analysis::min_squares_iqr(&vec![
-			(vec![(BenchmarkParameter::n, 1), (BenchmarkParameter::m, 5)], 11_500_000, 0, 0),
-			(vec![(BenchmarkParameter::n, 2), (BenchmarkParameter::m, 5)], 12_500_000, 0, 0),
-			(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 5)], 13_500_000, 0, 0),
-			(vec![(BenchmarkParameter::n, 4), (BenchmarkParameter::m, 5)], 14_500_000, 0, 0),
-			(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 1)], 13_100_000, 0, 0),
-			(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 3)], 13_300_000, 0, 0),
-			(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 7)], 13_700_000, 0, 0),
-			(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 10)], 14_000_000, 0, 0),
+			(vec![(BenchmarkParameter::n, 1), (BenchmarkParameter::m, 5)], 11_500_000, 0, 0, 0),
+			(vec![(BenchmarkParameter::n, 2), (BenchmarkParameter::m, 5)], 12_500_000, 0, 0, 0),
+			(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 5)], 13_500_000, 0, 0, 0),
+			(vec![(BenchmarkParameter::n, 4), (BenchmarkParameter::m, 5)], 14_500_000, 0, 0, 0),
+			(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 1)], 13_100_000, 0, 0, 0),
+			(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 3)], 13_300_000, 0, 0, 0),
+			(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 7)], 13_700_000, 0, 0, 0),
+			(vec![(BenchmarkParameter::n, 3), (BenchmarkParameter::m, 10)], 14_000_000, 0, 0, 0),
 		]).unwrap();
 		assert_eq!(a.base, 10_000_000);
 		assert_eq!(a.slopes, vec![1_000_000, 100_000]);
