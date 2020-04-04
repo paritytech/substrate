@@ -29,7 +29,7 @@ use sysinfo::{ProcessExt, System, SystemExt};
 #[cfg(any(unix, windows))]
 use netstat2::{TcpState, ProtocolSocketInfo, iterate_sockets_info, AddressFamilyFlags, ProtocolFlags};
 
-#[cfg(not(unix))]
+#[cfg(all(any(unix, windows), not(target_os = "linux")))]
 use sysinfo::get_current_pid;
 
 #[cfg(target_os = "linux")]
