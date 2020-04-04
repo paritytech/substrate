@@ -94,7 +94,7 @@ impl ExportBlocksCmd {
 		builder(config)?
 			.export_blocks(file, from.into(), to, binary)
 			.await
-			.map_err(|e| e.into())
+			.map_err(Into::into)
 	}
 }
 
