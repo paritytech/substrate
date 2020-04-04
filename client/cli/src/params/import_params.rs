@@ -22,7 +22,7 @@ use crate::arg_enums::{
 use crate::params::PruningParams;
 use crate::Result;
 use sc_client_api::execution_extensions::ExecutionStrategies;
-use sc_service::{PruningMode, Roles};
+use sc_service::{PruningMode, Role};
 use structopt::StructOpt;
 
 /// Parameters for block import.
@@ -127,8 +127,8 @@ impl ImportParams {
 	}
 
 	/// Get the pruning mode from the parameters
-	pub fn pruning(&self, unsafe_pruning: bool, roles: Roles) -> Result<PruningMode> {
-		self.pruning_params.pruning(unsafe_pruning, roles)
+	pub fn pruning(&self, unsafe_pruning: bool, role: &Role) -> Result<PruningMode> {
+		self.pruning_params.pruning(unsafe_pruning, role)
 	}
 
 	/// Limit the memory the database cache can use.

@@ -20,7 +20,7 @@ use sc_network::{
 	config::{NetworkConfiguration, NodeKeyConfig, NonReservedPeerMode, TransportConfig},
 	multiaddr::Protocol,
 };
-use sc_service::ChainSpec;
+use sc_service::{ChainSpec, config::{Multiaddr, MultiaddrWithPeerId}};
 use std::iter;
 use std::net::Ipv4Addr;
 use std::path::PathBuf;
@@ -30,12 +30,12 @@ use structopt::StructOpt;
 #[derive(Debug, StructOpt, Clone)]
 pub struct NetworkParams {
 	/// Specify a list of bootnodes.
-	#[structopt(long = "bootnodes", value_name = "URL")]
-	pub bootnodes: Vec<String>,
+	#[structopt(long = "bootnodes", value_name = "ADDR")]
+	pub bootnodes: Vec<MultiaddrWithPeerId>,
 
 	/// Specify a list of reserved node addresses.
-	#[structopt(long = "reserved-nodes", value_name = "URL")]
-	pub reserved_nodes: Vec<String>,
+	#[structopt(long = "reserved-nodes", value_name = "ADDR")]
+	pub reserved_nodes: Vec<MultiaddrWithPeerId>,
 
 	/// Whether to only allow connections to/from reserved nodes.
 	///
@@ -44,17 +44,9 @@ pub struct NetworkParams {
 	#[structopt(long = "reserved-only")]
 	pub reserved_only: bool,
 
-	/// Specify a list of sentry node public addresses.
-	#[structopt(
-		long = "sentry-nodes",
-		value_name = "URL",
-		conflicts_with_all = &[ "sentry" ]
-	)]
-	pub sentry_nodes: Vec<String>,
-
 	/// Listen on this multiaddress.
 	#[structopt(long = "listen-addr", value_name = "LISTEN_ADDR")]
-	pub listen_addr: Vec<String>,
+	pub listen_addr: Vec<Multiaddr>,
 
 	/// Specify p2p protocol TCP port.
 	///
@@ -121,13 +113,7 @@ impl NetworkParams {
 			.chain(iter::once(Protocol::Tcp(port)))
 			.collect()];
 
-		for addr in self.listen_addr.iter() {
-			let addr = addr
-				.parse()
-				.ok()
-				.ok_or(error::Error::InvalidListenMultiaddress)?;
-			listen_addresses.push(addr);
-		}
+		listen_addresses.extend(self.listen_addr.iter().cloned());
 
 		let mut boot_nodes = chain_spec.boot_nodes().to_vec();
 		boot_nodes.extend(self.bootnodes.clone());
@@ -145,7 +131,6 @@ impl NetworkParams {
 			public_addresses: Vec::new(),
 			node_key,
 			node_name: node_name.to_string(),
-			sentry_nodes: self.sentry_nodes.clone(),
 			client_version: client_id.to_string(),
 			in_peers: self.in_peers,
 			out_peers: self.out_peers,

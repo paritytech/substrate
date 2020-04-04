@@ -25,7 +25,7 @@ use app_dirs::{AppDataType, AppInfo};
 use names::{Generator, Name};
 use sc_service::config::{
 	Configuration, DatabaseConfig, ExecutionStrategies, ExtTransport, KeystoreConfig,
-	NetworkConfiguration, NodeKeyConfig, PrometheusConfig, PruningMode, Roles, TelemetryEndpoints,
+	NetworkConfiguration, NodeKeyConfig, PrometheusConfig, PruningMode, Role, TelemetryEndpoints,
 	TransactionPoolOptions, WasmExecutionMethod,
 };
 use sc_service::ChainSpec;
@@ -82,9 +82,9 @@ pub trait CliConfiguration: Sized {
 		self.shared_params().is_dev()
 	}
 
-	/// Get the roles
-	fn roles(&self, _is_dev: bool) -> Result<Roles> {
-		Ok(Roles::FULL)
+	/// Get the role
+	fn role(&self, _is_dev: bool) -> Result<Role> {
+		Ok(Role::Full)
 	}
 
 	/// Get the transaction pool options
@@ -153,9 +153,9 @@ pub trait CliConfiguration: Sized {
 	}
 
 	/// Get the pruning mode
-	fn pruning(&self, is_dev: bool, roles: Roles) -> Result<PruningMode> {
+	fn pruning(&self, is_dev: bool, role: &Role) -> Result<PruningMode> {
 		self.pruning_params()
-			.map(|x| x.pruning(is_dev, roles))
+			.map(|x| x.pruning(is_dev, role))
 			.unwrap_or(Ok(Default::default()))
 	}
 
@@ -227,12 +227,7 @@ pub trait CliConfiguration: Sized {
 	}
 
 	/// Returns `Ok(true)` if offchain worker should be used
-	fn offchain_worker(&self, _roles: Roles) -> Result<bool> {
-		Ok(Default::default())
-	}
-
-	/// Get sentry mode (i.e. act as an authority but **never** actively participate)
-	fn sentry_mode(&self) -> Result<bool> {
+	fn offchain_worker(&self, _role: &Role) -> Result<bool> {
 		Ok(Default::default())
 	}
 
@@ -309,13 +304,12 @@ pub trait CliConfiguration: Sized {
 		let client_id = C::client_id();
 		let database_cache_size = self.database_cache_size()?.unwrap_or(128);
 		let node_key = self.node_key(&net_config_dir)?;
-		let roles = self.roles(is_dev)?;
+		let role = self.role(is_dev)?;
 		let max_runtime_instances = self.max_runtime_instances()?.unwrap_or(8);
 
 		Ok(Configuration {
 			impl_name: C::impl_name(),
 			impl_version: C::impl_version(),
-			roles,
 			task_executor,
 			transaction_pool: self.transaction_pool()?,
 			network: self.network_config(
@@ -330,7 +324,7 @@ pub trait CliConfiguration: Sized {
 			database: self.database_config(&config_dir, database_cache_size)?,
 			state_cache_size: self.state_cache_size()?,
 			state_cache_child_ratio: self.state_cache_child_ratio()?,
-			pruning: self.pruning(is_dev, roles)?,
+			pruning: self.pruning(is_dev, &role)?,
 			wasm_method: self.wasm_method()?,
 			execution_strategies: self.execution_strategies(is_dev)?,
 			rpc_http: self.rpc_http()?,
@@ -341,8 +335,7 @@ pub trait CliConfiguration: Sized {
 			telemetry_endpoints: self.telemetry_endpoints(&chain_spec)?,
 			telemetry_external_transport: self.telemetry_external_transport()?,
 			default_heap_pages: self.default_heap_pages()?,
-			offchain_worker: self.offchain_worker(roles)?,
-			sentry_mode: self.sentry_mode()?,
+			offchain_worker: self.offchain_worker(&role)?,
 			force_authoring: self.force_authoring()?,
 			disable_grandpa: self.disable_grandpa()?,
 			dev_key_seed: self.dev_key_seed(is_dev)?,
@@ -351,6 +344,7 @@ pub trait CliConfiguration: Sized {
 			chain_spec,
 			max_runtime_instances,
 			announce_block: self.announce_block()?,
+			role,
 		})
 	}
 

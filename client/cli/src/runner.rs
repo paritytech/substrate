@@ -23,7 +23,7 @@ use futures::pin_mut;
 use futures::select;
 use futures::{future, future::FutureExt, Future};
 use log::info;
-use sc_service::{AbstractService, Configuration, Roles, ServiceBuilderCommand};
+use sc_service::{AbstractService, Configuration, Role, ServiceBuilderCommand};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -143,10 +143,10 @@ impl<C: SubstrateCli> Runner<C> {
 		);
 		info!("📋 Chain specification: {}", self.config.chain_spec.name());
 		info!("🏷  Node name: {}", self.config.network.node_name);
-		info!("👤 Roles: {}", self.config.display_role());
+		info!("👤 Role: {}", self.config.display_role());
 
-		match self.config.roles {
-			Roles::LIGHT => self.run_service_until_exit(new_light),
+		match self.config.role {
+			Role::Light => self.run_service_until_exit(new_light),
 			_ => self.run_service_until_exit(new_full),
 		}
 	}

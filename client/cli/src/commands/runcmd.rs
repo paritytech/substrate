@@ -23,8 +23,8 @@ use crate::params::TransactionPoolParams;
 use crate::CliConfiguration;
 use regex::Regex;
 use sc_service::{
-	config::{PrometheusConfig, TransactionPoolOptions},
-	ChainSpec, Roles,
+	config::{MultiaddrWithPeerId, PrometheusConfig, TransactionPoolOptions},
+	ChainSpec, Role,
 };
 use sc_telemetry::TelemetryEndpoints;
 use std::net::SocketAddr;
@@ -66,9 +66,10 @@ pub struct RunCmd {
 	/// available to relay to private nodes.
 	#[structopt(
 		long = "sentry",
-		conflicts_with_all = &[ "validator", "light" ]
+		conflicts_with_all = &[ "validator", "light" ],
+		parse(try_from_str)
 	)]
-	pub sentry: bool,
+	pub sentry: Vec<MultiaddrWithPeerId>,
 
 	/// Disable GRANDPA voter when running in validator mode, otherwise disable the GRANDPA observer.
 	#[structopt(long = "no-grandpa")]
@@ -243,6 +244,14 @@ pub struct RunCmd {
 	// NOTE: this is an option so implementations can set their own defaults
 	#[structopt(long)]
 	pub max_runtime_instances: Option<usize>,
+
+	/// Specify a list of sentry node public addresses.
+	#[structopt(
+		long = "sentry-nodes",
+		value_name = "ADDR",
+		conflicts_with_all = &[ "sentry" ]
+	)]
+	pub sentry_nodes: Vec<MultiaddrWithPeerId>,
 }
 
 impl RunCmd {
@@ -332,22 +341,20 @@ impl CliConfiguration for RunCmd {
 		})
 	}
 
-	fn sentry_mode(&self) -> Result<bool> {
-		Ok(self.sentry)
-	}
-
-	fn roles(&self, is_dev: bool) -> Result<Roles> {
+	fn role(&self, is_dev: bool) -> Result<Role> {
 		let keyring = self.get_keyring();
 		let is_light = self.light;
 		let is_authority =
-			(self.validator || self.sentry || is_dev || keyring.is_some()) && !is_light;
+			(self.validator || is_dev || keyring.is_some()) && !is_light;
 
 		Ok(if is_light {
-			sc_service::Roles::LIGHT
+			sc_service::Role::Light
 		} else if is_authority {
-			sc_service::Roles::AUTHORITY
+			sc_service::Role::Authority { sentry_nodes: self.sentry_nodes.clone() }
+		} else if !self.sentry.is_empty() {
+			sc_service::Role::Sentry { validators: self.sentry.clone() }
 		} else {
-			sc_service::Roles::FULL
+			sc_service::Role::Full
 		})
 	}
 
@@ -424,9 +431,9 @@ impl CliConfiguration for RunCmd {
 		)?))
 	}
 
-	fn offchain_worker(&self, roles: Roles) -> Result<bool> {
-		Ok(match (&self.offchain_worker, roles) {
-			(OffchainWorkerEnabled::WhenValidating, Roles::AUTHORITY) => true,
+	fn offchain_worker(&self, role: &Role) -> Result<bool> {
+		Ok(match (&self.offchain_worker, role) {
+			(OffchainWorkerEnabled::WhenValidating, Role::Authority { .. }) => true,
 			(OffchainWorkerEnabled::Always, _) => true,
 			(OffchainWorkerEnabled::Never, _) => false,
 			(OffchainWorkerEnabled::WhenValidating, _) => false,

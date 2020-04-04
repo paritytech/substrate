@@ -20,7 +20,7 @@ use crate::params::SharedParams;
 use crate::CliConfiguration;
 use log::info;
 use sc_network::config::build_multiaddr;
-use sc_service::Configuration;
+use sc_service::{config::MultiaddrWithPeerId, Configuration};
 use structopt::StructOpt;
 
 /// The `build-spec` command used to build a specification.
@@ -56,7 +56,10 @@ impl BuildSpecCmd {
 		if spec.boot_nodes().is_empty() && !self.disable_default_bootnode {
 			let keys = config.network.node_key.into_keypair()?;
 			let peer_id = keys.public().into_peer_id();
-			let addr = build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(30333u16), P2p(peer_id)];
+			let addr = MultiaddrWithPeerId {
+				multiaddr: build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(30333u16)],
+				peer_id,
+			};
 			spec.add_boot_node(addr)
 		}
 

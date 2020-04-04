@@ -58,6 +58,7 @@ pub enum Subcommand {
 	PurgeChain(PurgeChainCmd),
 }
 
+// TODO: move to config.rs?
 /// Macro that helps implement CliConfiguration on an enum of subcommand automatically
 ///
 /// # Example
@@ -155,9 +156,9 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
-			fn roles(&self, is_dev: bool) -> ::sc_cli::Result<::sc_service::Roles> {
+			fn role(&self, is_dev: bool) -> ::sc_cli::Result<::sc_service::Role> {
 				match self {
-					$($enum::$variant(cmd) => cmd.roles(is_dev)),*
+					$($enum::$variant(cmd) => cmd.role(is_dev)),*
 				}
 			}
 
@@ -221,10 +222,10 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
-			fn pruning(&self, is_dev: bool, roles: ::sc_service::Roles)
+			fn pruning(&self, is_dev: bool, role: &::sc_service::Role)
 			-> ::sc_cli::Result<::sc_service::config::PruningMode> {
 				match self {
-					$($enum::$variant(cmd) => cmd.pruning(is_dev, roles)),*
+					$($enum::$variant(cmd) => cmd.pruning(is_dev, role)),*
 				}
 			}
 
@@ -313,15 +314,9 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
-			fn offchain_worker(&self, roles: ::sc_service::Roles) -> ::sc_cli::Result<bool> {
+			fn offchain_worker(&self, role: &::sc_service::Role) -> ::sc_cli::Result<bool> {
 				match self {
-					$($enum::$variant(cmd) => cmd.offchain_worker(roles)),*
-				}
-			}
-
-			fn sentry_mode(&self) -> ::sc_cli::Result<bool> {
-				match self {
-					$($enum::$variant(cmd) => cmd.sentry_mode()),*
+					$($enum::$variant(cmd) => cmd.offchain_worker(role)),*
 				}
 			}
 

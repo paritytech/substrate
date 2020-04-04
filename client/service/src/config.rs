@@ -18,7 +18,8 @@
 
 pub use sc_client::ExecutionStrategies;
 pub use sc_client_db::{kvdb::KeyValueDB, PruningMode};
-pub use sc_network::config::{ExtTransport, NetworkConfiguration, Roles, NodeKeyConfig};
+pub use sc_network::Multiaddr;
+pub use sc_network::config::{ExtTransport, MultiaddrWithPeerId, NetworkConfiguration, Role, NodeKeyConfig};
 pub use sc_executor::WasmExecutionMethod;
 
 use std::{future::Future, path::{PathBuf, Path}, pin::Pin, net::SocketAddr, sync::Arc};
@@ -34,8 +35,8 @@ pub struct Configuration {
 	pub impl_name: &'static str,
 	/// Implementation version (see sc-cli to see an example of format)
 	pub impl_version: &'static str,
-	/// Node roles.
-	pub roles: Roles,
+	/// Node role.
+	pub role: Role,
 	/// How to spawn background tasks. Mandatory, otherwise creating a `Service` will error.
 	pub task_executor: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>,
 	/// Extrinsic pool configuration.
@@ -77,10 +78,6 @@ pub struct Configuration {
 	pub default_heap_pages: Option<u64>,
 	/// Should offchain workers be executed.
 	pub offchain_worker: bool,
-	/// Sentry mode is enabled, the node's role is AUTHORITY but it should not
-	/// actively participate in consensus (i.e. no keystores should be passed to
-	/// consensus modules).
-	pub sentry_mode: bool,
 	/// Enable authoring even when offline.
 	pub force_authoring: bool,
 	/// Disable GRANDPA when running in validator mode
@@ -165,14 +162,8 @@ impl PrometheusConfig {
 }
 
 impl Configuration {
-	/// Returns a string displaying the node role, special casing the sentry mode
-	/// (returning `SENTRY`), since the node technically has an `AUTHORITY` role but
-	/// doesn't participate.
+	/// Returns a string displaying the node role.
 	pub fn display_role(&self) -> String {
-		if self.sentry_mode {
-			"SENTRY".to_string()
-		} else {
-			self.roles.to_string()
-		}
+		self.role.to_string()
 	}
 }
