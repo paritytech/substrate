@@ -18,7 +18,7 @@ use futures01::sync::mpsc as mpsc01;
 use log::{debug, info};
 use std::sync::Arc;
 use sc_service::{
-	AbstractService, RpcSession, Roles, Configuration, config::{DatabaseConfig, KeystoreConfig},
+	AbstractService, RpcSession, Role, Configuration, config::{DatabaseConfig, KeystoreConfig},
 	GenericChainSpec, RuntimeGenesis
 };
 use wasm_bindgen::prelude::*;
@@ -57,7 +57,7 @@ where
 		wasm_bindgen_futures::spawn_local(fut)
 	}));
 	config.telemetry_external_transport = Some(transport);
-	config.roles = Roles::LIGHT;
+	config.role = Role::Light;
 	config.name = format!("{} (Browser)", name);
 	config.database = Some({
 		info!("Opening Indexed DB database '{}'...", name);

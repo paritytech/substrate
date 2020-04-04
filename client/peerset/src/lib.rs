@@ -163,14 +163,14 @@ pub struct PeersetConfig {
 	/// >			otherwise it will not be able to connect to them.
 	pub bootnodes: Vec<PeerId>,
 
-	/// If true, we only accept reserved nodes.
+	/// If true, we only accept nodes in [`PeersetConfig::priority_groups`].
 	pub reserved_only: bool,
 
-	/// List of nodes that we should always be connected to.
+	/// Lists of nodes we should always be connected to.
 	///
 	/// > **Note**: Keep in mind that the networking has to know an address for these nodes,
 	/// >			otherwise it will not be able to connect to them.
-	pub reserved_nodes: Vec<PeerId>,
+	pub priority_groups: Vec<(String, HashSet<PeerId>)>,
 }
 
 /// Side of the peer set manager owned by the network. In other words, the "receiving" side.
@@ -215,7 +215,10 @@ impl Peerset {
 			latest_time_update: now,
 		};
 
-		peerset.data.set_priority_group(RESERVED_NODES, config.reserved_nodes.into_iter().collect());
+		for (group, nodes) in config.priority_groups {
+			peerset.data.set_priority_group(&group, nodes);
+		}
+
 		for peer_id in config.bootnodes {
 			if let peersstate::Peer::Unknown(entry) = peerset.data.peer(&peer_id) {
 				entry.discover();
@@ -597,7 +600,7 @@ mod tests {
 			out_peers: 2,
 			bootnodes: vec![bootnode],
 			reserved_only: true,
-			reserved_nodes: Vec::new(),
+			priority_groups: Vec::new(),
 		};
 
 		let (peerset, handle) = Peerset::from_config(config);
@@ -625,7 +628,7 @@ mod tests {
 			out_peers: 1,
 			bootnodes: vec![bootnode.clone()],
 			reserved_only: false,
-			reserved_nodes: Vec::new(),
+			priority_groups: Vec::new(),
 		};
 
 		let (mut peerset, _handle) = Peerset::from_config(config);
@@ -652,7 +655,7 @@ mod tests {
 			out_peers: 2,
 			bootnodes: vec![bootnode.clone()],
 			reserved_only: false,
-			reserved_nodes: vec![],
+			priority_groups: vec![],
 		};
 
 		let (mut peerset, _handle) = Peerset::from_config(config);
@@ -673,7 +676,7 @@ mod tests {
 			out_peers: 25,
 			bootnodes: vec![],
 			reserved_only: false,
-			reserved_nodes: vec![],
+			priority_groups: vec![],
 		});
 
 		// We ban a node by setting its reputation under the threshold.

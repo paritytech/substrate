@@ -18,7 +18,7 @@
 
 use futures::channel::mpsc;
 use futures::prelude::*;
-use sc_network::{Event as NetworkEvent, PeerId, config::Roles};
+use sc_network::{Event as NetworkEvent, ObservedRole, PeerId};
 use sc_network_test::{Block, Hash};
 use sc_network_gossip::Validator;
 use std::sync::Arc;
@@ -256,7 +256,7 @@ fn good_commit_leads_to_relay() {
 	let test = make_test_network().0
 		.then(move |tester| {
 			// register a peer.
-			tester.gossip_validator.new_peer(&mut NoopContext, &id, sc_network::config::Roles::FULL);
+			tester.gossip_validator.new_peer(&mut NoopContext, &id, ObservedRole::Full);
 			future::ready((tester, id))
 		})
 		.then(move |(tester, id)| {
@@ -284,7 +284,7 @@ fn good_commit_leads_to_relay() {
 					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
 						remote: sender_id.clone(),
 						engine_id: GRANDPA_ENGINE_ID,
-						roles: Roles::FULL,
+						role: ObservedRole::Full,
 					});
 
 					let _ = sender.unbounded_send(NetworkEvent::NotificationsReceived {
@@ -297,7 +297,7 @@ fn good_commit_leads_to_relay() {
 					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
 						remote: receiver_id.clone(),
 						engine_id: GRANDPA_ENGINE_ID,
-						roles: Roles::FULL,
+						role: ObservedRole::Full,
 					});
 
 					// Announce its local set has being on the current set id through a neighbor
@@ -404,7 +404,7 @@ fn bad_commit_leads_to_report() {
 	let test = make_test_network().0
 		.map(move |tester| {
 			// register a peer.
-			tester.gossip_validator.new_peer(&mut NoopContext, &id, sc_network::config::Roles::FULL);
+			tester.gossip_validator.new_peer(&mut NoopContext, &id, ObservedRole::Full);
 			(tester, id)
 		})
 		.then(move |(tester, id)| {
@@ -431,7 +431,7 @@ fn bad_commit_leads_to_report() {
 					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
 						remote: sender_id.clone(),
 						engine_id: GRANDPA_ENGINE_ID,
-						roles: Roles::FULL,
+						role: ObservedRole::Full,
 					});
 					let _ = sender.unbounded_send(NetworkEvent::NotificationsReceived {
 						remote: sender_id.clone(),
@@ -482,7 +482,7 @@ fn peer_with_higher_view_leads_to_catch_up_request() {
 	let test = tester
 		.map(move |tester| {
 			// register a peer with authority role.
-			tester.gossip_validator.new_peer(&mut NoopContext, &id, sc_network::config::Roles::AUTHORITY);
+			tester.gossip_validator.new_peer(&mut NoopContext, &id, ObservedRole::Authority);
 			(tester, id)
 		})
 		.then(move |(tester, id)| {

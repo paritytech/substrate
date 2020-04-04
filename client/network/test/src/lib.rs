@@ -32,7 +32,7 @@ use sp_blockchain::{
 use sc_client_api::{BlockchainEvents, BlockImportNotification, FinalityNotifications, ImportNotifications, FinalityNotification, backend::{TransactionFor, AuxStore, Backend, Finalizer}, BlockBackend};
 use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
 use sc_client::LongestChain;
-use sc_network::config::Roles;
+use sc_network::config::Role;
 use sp_consensus::block_validation::DefaultBlockAnnounceValidator;
 use sp_consensus::import_queue::{
 	BasicQueue, BoxJustificationImport, Verifier, BoxFinalityProofImport,
@@ -557,17 +557,17 @@ pub trait TestNetFactory: Sized {
 
 		for i in 0..n {
 			trace!(target: "test_network", "Adding peer {}", i);
-			net.add_full_peer(&config);
+			net.add_full_peer();
 		}
 		net
 	}
 
-	fn add_full_peer(&mut self, config: &ProtocolConfig) {
-		self.add_full_peer_with_states(config, None)
+	fn add_full_peer(&mut self) {
+		self.add_full_peer_with_states(None)
 	}
 
 	/// Add a full peer.
-	fn add_full_peer_with_states(&mut self, config: &ProtocolConfig, keep_blocks: Option<u32>) {
+	fn add_full_peer_with_states(&mut self, keep_blocks: Option<u32>) {
 		let test_client_builder = match keep_blocks {
 			Some(keep_blocks) => TestClientBuilder::with_pruning_window(keep_blocks),
 			None => TestClientBuilder::with_default_backend(),
@@ -586,7 +586,7 @@ pub trait TestNetFactory: Sized {
 
 		let verifier = self.make_verifier(
 			PeersClient::Full(client.clone(), backend.clone()),
-			config,
+			&Default::default(),
 			&data,
 		);
 		let verifier = VerifierAdapter::new(Arc::new(Mutex::new(Box::new(verifier) as Box<_>)));
@@ -601,7 +601,7 @@ pub trait TestNetFactory: Sized {
 		let listen_addr = build_multiaddr![Memory(rand::random::<u64>())];
 
 		let network = NetworkWorker::new(sc_network::config::Params {
-			roles: config.roles,
+			role: Role::Full,
 			executor: None,
 			network_config: NetworkConfiguration {
 				listen_addresses: vec![listen_addr.clone()],
@@ -644,10 +644,7 @@ pub trait TestNetFactory: Sized {
 	}
 
 	/// Add a light peer.
-	fn add_light_peer(&mut self, config: &ProtocolConfig) {
-		let mut config = config.clone();
-		config.roles = Roles::LIGHT;
-
+	fn add_light_peer(&mut self) {
 		let (c, backend) = substrate_test_runtime_client::new_light();
 		let client = Arc::new(c);
 		let (
@@ -660,7 +657,7 @@ pub trait TestNetFactory: Sized {
 
 		let verifier = self.make_verifier(
 			PeersClient::Light(client.clone(), backend.clone()),
-			&config,
+			&Default::default(),
 			&data,
 		);
 		let verifier = VerifierAdapter::new(Arc::new(Mutex::new(Box::new(verifier) as Box<_>)));
@@ -675,7 +672,7 @@ pub trait TestNetFactory: Sized {
 		let listen_addr = build_multiaddr![Memory(rand::random::<u64>())];
 
 		let network = NetworkWorker::new(sc_network::config::Params {
-			roles: config.roles,
+			role: Role::Light,
 			executor: None,
 			network_config: NetworkConfiguration {
 				listen_addresses: vec![listen_addr.clone()],

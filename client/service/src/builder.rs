@@ -35,7 +35,7 @@ use futures::{
 };
 use sc_keystore::{Store as Keystore};
 use log::{info, warn, error};
-use sc_network::config::{FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
+use sc_network::config::{Role, FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
 use sc_network::{NetworkService, NetworkStateInfo};
 use parking_lot::{Mutex, RwLock};
 use sp_runtime::generic::BlockId;
@@ -840,7 +840,7 @@ ServiceBuilder<
 			.register_transaction_pool(Arc::downgrade(&transaction_pool) as _);
 
 		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
-			imports_external_transactions: !config.roles.is_light(),
+			imports_external_transactions: !matches!(config.role, Role::Light),
 			pool: transaction_pool.clone(),
 			client: client.clone(),
 			executor: tasks_builder.spawn_handle(),
@@ -863,7 +863,7 @@ ServiceBuilder<
 			Box::new(sp_consensus::block_validation::DefaultBlockAnnounceValidator::new(client.clone()));
 
 		let network_params = sc_network::config::Params {
-			roles: config.roles,
+			role: config.role.clone(),
 			executor: {
 				let spawn_handle = tasks_builder.spawn_handle();
 				Some(Box::new(move |fut| {
@@ -913,7 +913,7 @@ ServiceBuilder<
 			let offchain = offchain_workers.as_ref().map(Arc::downgrade);
 			let notifications_spawn_handle = tasks_builder.spawn_handle();
 			let network_state_info: Arc<dyn NetworkStateInfo + Send + Sync> = network.clone();
-			let is_validator = config.roles.is_authority();
+			let is_validator = config.role.is_authority();
 
 			let (import_stream, finality_stream) = (
 				client.import_notification_stream().map(|n| ChainEvent::NewBlock {
@@ -1003,9 +1003,16 @@ ServiceBuilder<
 					.const_label("version", config.impl_version)
 					.const_label("commit", config.impl_commit),
 			)?, &registry)?.set(1);
+
+			let role_bits = match config.role {
+				Role::Full => 1,
+				Role::Light => 2,
+				Role::Sentry { .. } => 3,
+				Role::Authority { .. } => 4,
+			};
 			register(Gauge::<U64>::new(
-				"node_roles", "The roles the node is running as",
-			)?, &registry)?.set(u64::from(config.roles.bits()));
+				"node_role", "The role the node is running as",
+			)?, &registry)?.set(role_bits);
 
 			let metrics = ServiceMetrics::register(&registry)?;
 
@@ -1198,7 +1205,7 @@ ServiceBuilder<
 		spawn_handle.spawn(
 			"network-worker",
 			build_network_future(
-				config.roles,
+				config.role.clone(),
 				network_mut,
 				client.clone(),
 				network_status_sinks.clone(),
@@ -1212,7 +1219,7 @@ ServiceBuilder<
 
 		// Telemetry
 		let telemetry = config.telemetry_endpoints.clone().map(|endpoints| {
-			let is_authority = config.roles.is_authority();
+			let is_authority = config.role.is_authority();
 			let network_id = network.local_peer_id().to_base58();
 			let name = config.name.clone();
 			let impl_name = config.impl_name.to_owned();
