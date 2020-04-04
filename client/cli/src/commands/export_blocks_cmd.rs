@@ -32,6 +32,7 @@ use structopt::StructOpt;
 #[derive(Debug, StructOpt, Clone)]
 pub struct ExportBlocksCmd {
 	/// Output file name or stdout if unspecified.
+	// NOTE: this is an option so implementations can set their own defaults
 	#[structopt(parse(from_os_str))]
 	pub output: Option<PathBuf>,
 
