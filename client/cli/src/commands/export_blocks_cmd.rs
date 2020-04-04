@@ -39,7 +39,6 @@ pub struct ExportBlocksCmd {
 	/// Specify starting block number.
 	///
 	/// Default is 1.
-	// NOTE: this is an option so implementations can set their own defaults
 	#[structopt(long = "from", value_name = "BLOCK")]
 	pub from: Option<BlockNumber>,
 
