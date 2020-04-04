@@ -22,9 +22,10 @@ use sp_std::{prelude::*, result, marker::PhantomData, ops::Div, fmt::Debug};
 use codec::{FullCodec, Codec, Encode, Decode, EncodeLike};
 use sp_core::u32_trait::Value as U32;
 use sp_runtime::{
-	RuntimeDebug,
-	ConsensusEngineId, DispatchResult, DispatchError,
-	traits::{MaybeSerializeDeserialize, AtLeast32Bit, Saturating, TrailingZeroInput, Bounded, Zero},
+	RuntimeDebug, ConsensusEngineId, DispatchResult, DispatchError, traits::{
+		MaybeSerializeDeserialize, AtLeast32Bit, Saturating, TrailingZeroInput, Bounded, Zero,
+		BadOrigin
+	},
 };
 use crate::dispatch::Parameter;
 use crate::storage::StorageMap;
@@ -1235,6 +1236,24 @@ pub mod schedule {
 		/// If it ends up being delayed beyond the point of execution, then it cannot be cancelled.
 		fn cancel_named(id: impl Encode) -> Result<(), ()>;
 	}
+}
+
+/// Some sort of check on the origin is performed by this object.
+pub trait EnsureOrigin<OuterOrigin> {
+	/// A return type.
+	type Success;
+	/// Perform the origin check.
+	fn ensure_origin(o: OuterOrigin) -> result::Result<Self::Success, BadOrigin> {
+		Self::try_origin(o).map_err(|_| BadOrigin)
+	}
+	/// Perform the origin check.
+	fn try_origin(o: OuterOrigin) -> result::Result<Self::Success, OuterOrigin>;
+
+	/// Returns an outer origin capable of passing `try_origin` check.
+	///
+	/// ** Should be used for benchmarking only!!! **
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> OuterOrigin;
 }
 
 #[cfg(test)]
