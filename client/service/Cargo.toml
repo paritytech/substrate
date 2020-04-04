@@ -62,12 +62,12 @@ sc-tracing = { version = "2.0.0-alpha.5", path = "../tracing" }
 tracing = "0.1.10"
 parity-util-mem = { version = "0.6.0", default-features = false, features = ["primitive-types"] }
 
-[target.'cfg(unix)'.dependencies]
-procfs = '0.7.8'
+
+[target.'cfg(any(unix, windows))'.dependencies]
 netstat2 = "0.8.1"
 
-[target.'cfg(windows)'.dependencies]
-netstat2 = "0.8.1"
+[target.'cfg(target_os = "linux")'.dependencies]
+procfs = '0.7.8'
 
 
 [dev-dependencies]
