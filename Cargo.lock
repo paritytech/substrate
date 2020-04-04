@@ -4437,6 +4437,7 @@ dependencies = [
  "sp-runtime",
  "sp-staking",
  "sp-std",
+ "sp-storage",
  "static_assertions",
  "substrate-test-utils",
 ]
