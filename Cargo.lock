@@ -1428,6 +1428,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-runtime-interface",
+ "sp-stats",
  "sp-std",
 ]
 
@@ -3497,6 +3498,7 @@ dependencies = [
  "pallet-authorship",
  "pallet-babe",
  "pallet-balances",
+ "pallet-benchmark",
  "pallet-collective",
  "pallet-contracts",
  "pallet-contracts-primitives",
@@ -5757,6 +5759,7 @@ dependencies = [
  "sp-panic-handler",
  "sp-runtime",
  "sp-state-machine",
+ "sp-stats",
  "sp-std",
  "sp-trie",
  "sp-version",
@@ -5824,6 +5827,7 @@ dependencies = [
  "sp-keyring",
  "sp-runtime",
  "sp-state-machine",
+ "sp-stats",
  "sp-trie",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
@@ -7212,6 +7216,7 @@ name = "sp-externalities"
 version = "0.8.0-alpha.5"
 dependencies = [
  "environmental",
+ "sp-stats",
  "sp-std",
  "sp-storage",
 ]
@@ -7358,6 +7363,7 @@ dependencies = [
  "sp-runtime-interface-proc-macro",
  "sp-runtime-interface-test-wasm",
  "sp-state-machine",
+ "sp-stats",
  "sp-std",
  "sp-wasm-interface",
  "static_assertions",
@@ -7466,9 +7472,17 @@ dependencies = [
  "sp-externalities",
  "sp-panic-handler",
  "sp-runtime",
+ "sp-stats",
  "sp-trie",
  "trie-db",
  "trie-root",
+]
+
+[[package]]
+name = "sp-stats"
+version = "2.0.0-alpha.5"
+dependencies = [
+ "parity-scale-codec",
 ]
 
 [[package]]
