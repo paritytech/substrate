@@ -16,7 +16,7 @@
 
 //! Tests for the communication portion of the GRANDPA crate.
 
-use futures::channel::mpsc;
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use futures::prelude::*;
 use sc_network::{Event as NetworkEvent, ObservedRole, PeerId};
 use sc_network_test::{Block, Hash};
@@ -33,7 +33,7 @@ use super::{AuthorityId, VoterSet, Round, SetId};
 
 #[derive(Debug)]
 pub(crate) enum Event {
-	EventStream(mpsc::UnboundedSender<NetworkEvent>),
+	EventStream(TracingUnboundedSender<NetworkEvent>),
 	WriteNotification(sc_network::PeerId, Vec<u8>),
 	Report(sc_network::PeerId, sc_network::ReputationChange),
 	Announce(Hash),
@@ -41,12 +41,12 @@ pub(crate) enum Event {
 
 #[derive(Clone)]
 pub(crate) struct TestNetwork {
-	sender: mpsc::UnboundedSender<Event>,
+	sender: TracingUnboundedSender<Event>,
 }
 
 impl sc_network_gossip::Network<Block> for TestNetwork {
 	fn event_stream(&self) -> Pin<Box<dyn Stream<Item = NetworkEvent> + Send>> {
-		let (tx, rx) = mpsc::unbounded();
+		let (tx, rx) = tracing_unbounded("test");
 		let _ = self.sender.unbounded_send(Event::EventStream(tx));
 		Box::pin(rx)
 	}
@@ -97,7 +97,7 @@ impl sc_network_gossip::ValidatorContext<Block> for TestNetwork {
 pub(crate) struct Tester {
 	pub(crate) net_handle: super::NetworkBridge<Block, TestNetwork>,
 	gossip_validator: Arc<GossipValidator<Block>>,
-	pub(crate) events: mpsc::UnboundedReceiver<Event>,
+	pub(crate) events: TracingUnboundedReceiver<Event>,
 }
 
 impl Tester {
@@ -161,7 +161,7 @@ pub(crate) fn make_test_network() -> (
 	impl Future<Output = Tester>,
 	TestNetwork,
 ) {
-	let (tx, rx) = mpsc::unbounded();
+	let (tx, rx) = tracing_unbounded("test");
 	let net = TestNetwork { sender: tx };
 
 	#[derive(Clone)]

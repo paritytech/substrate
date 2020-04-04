@@ -36,6 +36,7 @@ target_info = "0.1.0"
 sc-keystore = { version = "2.0.0-alpha.5", path = "../keystore" }
 sp-io = { version = "2.0.0-alpha.5", path = "../../primitives/io" }
 sp-runtime = { version = "2.0.0-alpha.5", path = "../../primitives/runtime" }
+sp-utils = { version = "2.0.0-alpha.5", path = "../../primitives/utils" }
 sp-blockchain = { version = "2.0.0-alpha.5", path = "../../primitives/blockchain" }
 sp-core = { version = "2.0.0-alpha.5", path = "../../primitives/core" }
 sp-session = { version = "2.0.0-alpha.5", path = "../../primitives/session" }
@@ -60,6 +61,14 @@ prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../..
 sc-tracing = { version = "2.0.0-alpha.5", path = "../tracing" }
 tracing = "0.1.10"
 parity-util-mem = { version = "0.6.0", default-features = false, features = ["primitive-types"] }
+
+[target.'cfg(unix)'.dependencies]
+procfs = '0.7.8'
+netstat2 = "0.8.1"
+
+[target.'cfg(windows)'.dependencies]
+netstat2 = "0.8.1"
+
 
 [dev-dependencies]
 substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../test-utils/runtime/client" }

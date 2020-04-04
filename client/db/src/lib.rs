@@ -425,6 +425,7 @@ impl<Block: BlockT> sc_client::blockchain::HeaderBackend<Block> for BlockchainDb
 			genesis_hash: meta.genesis_hash,
 			finalized_hash: meta.finalized_hash,
 			finalized_number: meta.finalized_number,
+			number_leaves: self.leaves.read().count(),
 		}
 	}
 

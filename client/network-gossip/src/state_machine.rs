@@ -21,10 +21,10 @@ use std::sync::Arc;
 use std::iter;
 use std::time;
 use log::trace;
-use futures::channel::mpsc;
 use lru::LruCache;
 use libp2p::PeerId;
 use sp_runtime::traits::{Block as BlockT, Hash, HashFor};
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
 use sp_runtime::ConsensusEngineId;
 use sc_network::ObservedRole;
 use wasm_timer::Instant;
@@ -164,7 +164,7 @@ fn propagate<'a, B: BlockT, I>(
 /// Consensus network protocol handler. Manages statements and candidate requests.
 pub struct ConsensusGossip<B: BlockT> {
 	peers: HashMap<PeerId, PeerConsensus<B::Hash>>,
-	live_message_sinks: HashMap<(ConsensusEngineId, B::Hash), Vec<mpsc::UnboundedSender<TopicNotification>>>,
+	live_message_sinks: HashMap<(ConsensusEngineId, B::Hash), Vec<TracingUnboundedSender<TopicNotification>>>,
 	messages: Vec<MessageEntry<B>>,
 	known_messages: LruCache<B::Hash, ()>,
 	validators: HashMap<ConsensusEngineId, Arc<dyn Validator<B>>>,
@@ -333,9 +333,9 @@ impl<B: BlockT> ConsensusGossip<B> {
 
 	/// Get data of valid, incoming messages for a topic (but might have expired meanwhile)
 	pub fn messages_for(&mut self, engine_id: ConsensusEngineId, topic: B::Hash)
-		-> mpsc::UnboundedReceiver<TopicNotification>
+		-> TracingUnboundedReceiver<TopicNotification>
 	{
-		let (tx, rx) = mpsc::unbounded();
+		let (tx, rx) = tracing_unbounded("mpsc_gossip_messages_for");
 		for entry in self.messages.iter_mut()
 			.filter(|e| e.topic == topic && e.engine_id == engine_id)
 		{
