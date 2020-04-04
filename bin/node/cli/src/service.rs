@@ -120,23 +120,16 @@ macro_rules! new_full {
 		use sc_client_api::ExecutorProvider;
 
 		let (
-			is_authority,
+			role,
 			force_authoring,
 			name,
 			disable_grandpa,
-			sentry_nodes,
 		) = (
-			$config.roles.is_authority(),
+			$config.role.clone(),
 			$config.force_authoring,
 			$config.name.clone(),
 			$config.disable_grandpa,
-			$config.network.sentry_nodes.clone(),
 		);
-
-		// sentry nodes announce themselves as authorities to the network
-		// and should run the same protocols authorities do, but it should
-		// never actively participate in any consensus process.
-		let participates_in_consensus = is_authority && !$config.sentry_mode;
 
 		let (builder, mut import_setup, inherent_data_providers) = new_full_start!($config);
 
@@ -153,7 +146,7 @@ macro_rules! new_full {
 
 		($with_startup_data)(&block_import, &babe_link);
 
-		if participates_in_consensus {
+		if let sc_service::config::Role::Authority { sentry_nodes } = &role {
 			let proposer = sc_basic_authorship::ProposerFactory::new(
 				service.client(),
 				service.transaction_pool()
@@ -190,7 +183,7 @@ macro_rules! new_full {
 			let authority_discovery = sc_authority_discovery::AuthorityDiscovery::new(
 				service.client(),
 				network,
-				sentry_nodes,
+				sentry_nodes.clone(),
 				service.keystore(),
 				dht_event_stream,
 				service.prometheus_registry(),
@@ -201,7 +194,7 @@ macro_rules! new_full {
 
 		// if the node isn't actively participating in consensus then it doesn't
 		// need a keystore, regardless of which protocol we use below.
-		let keystore = if participates_in_consensus {
+		let keystore = if role.is_authority() {
 			Some(service.keystore())
 		} else {
 			None
@@ -214,7 +207,7 @@ macro_rules! new_full {
 			name: Some(name),
 			observer_enabled: false,
 			keystore,
-			is_authority,
+			is_authority: role.is_network_authority(),
 		};
 
 		let enable_grandpa = !disable_grandpa;

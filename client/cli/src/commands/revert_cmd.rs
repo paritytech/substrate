@@ -17,7 +17,7 @@
 use std::fmt::Debug;
 use structopt::StructOpt;
 use sc_service::{
-	Configuration, ServiceBuilderCommand, ChainSpec, Roles,
+	Configuration, ServiceBuilderCommand, ChainSpec, Role,
 };
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 
@@ -71,7 +71,7 @@ impl RevertCmd {
 		F: FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
 	{
 		self.shared_params.update_config(&mut config, spec_factory, version)?;
-		self.pruning_params.update_config(&mut config, Roles::FULL, true)?;
+		self.pruning_params.update_config(&mut config, &Role::Full, true)?;
 		config.use_in_memory_keystore()?;
 
 		Ok(())

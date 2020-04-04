@@ -19,9 +19,9 @@
 use super::*;
 
 use frame_benchmarking::{benchmarks, account};
-use frame_support::traits::{Currency, Get};
+use frame_support::traits::{Currency, Get, EnsureOrigin};
 use frame_system::{RawOrigin, Module as System, self};
-use sp_runtime::traits::{Bounded, EnsureOrigin, One};
+use sp_runtime::traits::{Bounded, One};
 
 use crate::Module as Democracy;
 

@@ -16,6 +16,7 @@
 
 use futures_util::{FutureExt, future::Future};
 pub use prometheus::{
+	self,
 	Registry, Error as PrometheusError, Opts,
 	Histogram, HistogramOpts, HistogramVec,
 	core::{

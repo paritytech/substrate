@@ -22,9 +22,9 @@ use std::{
 };
 
 use fnv::{FnvHashSet, FnvHashMap};
-use futures::channel::mpsc;
 use sp_core::storage::{StorageKey, StorageData};
 use sp_runtime::traits::Block as BlockT;
+use sp_utils::mpsc::{TracingUnboundedSender, TracingUnboundedReceiver, tracing_unbounded};
 
 /// Storage change set
 #[derive(Debug)]
@@ -67,7 +67,7 @@ impl StorageChangeSet {
 }
 
 /// Type that implements `futures::Stream` of storage change events.
-pub type StorageEventStream<H> = mpsc::UnboundedReceiver<(H, StorageChangeSet)>;
+pub type StorageEventStream<H> = TracingUnboundedReceiver<(H, StorageChangeSet)>;
 
 type SubscriberId = u64;
 
@@ -82,7 +82,7 @@ pub struct StorageNotifications<Block: BlockT> {
 		FnvHashSet<SubscriberId>
 	)>,
 	sinks: FnvHashMap<SubscriberId, (
-		mpsc::UnboundedSender<(Block::Hash, StorageChangeSet)>,
+		TracingUnboundedSender<(Block::Hash, StorageChangeSet)>,
 		Option<HashSet<StorageKey>>,
 		Option<HashMap<StorageKey, Option<HashSet<StorageKey>>>>,
 	)>,
@@ -299,7 +299,7 @@ impl<Block: BlockT> StorageNotifications<Block> {
 
 
 		// insert sink
-		let (tx, rx) = mpsc::unbounded();
+		let (tx, rx) = tracing_unbounded("mpsc_storage_notification_items");
 		self.sinks.insert(current_id, (tx, keys, child_keys));
 		rx
 	}

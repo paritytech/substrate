@@ -24,10 +24,7 @@ use crate::base_pool as base;
 use crate::watcher::Watcher;
 use serde::Serialize;
 
-use futures::{
-	Future, FutureExt,
-	channel::mpsc,
-};
+use futures::{Future, FutureExt};
 use sp_runtime::{
 	generic::BlockId,
 	traits::{self, SaturatedConversion},
@@ -37,12 +34,13 @@ use sp_runtime::{
 };
 use sp_transaction_pool::error;
 use wasm_timer::Instant;
+use sp_utils::mpsc::TracingUnboundedReceiver;
 
 use crate::validated_pool::ValidatedPool;
 pub use crate::validated_pool::ValidatedTransaction;
 
 /// Modification notification event stream type;
-pub type EventStream<H> = mpsc::UnboundedReceiver<H>;
+pub type EventStream<H> = TracingUnboundedReceiver<H>;
 
 /// Extrinsic hash type for a pool.
 pub type ExHash<A> = <A as ChainApi>::Hash;

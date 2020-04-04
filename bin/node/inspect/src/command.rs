@@ -45,7 +45,7 @@ impl InspectCmd {
 		// and all import params (especially pruning that has to match db meta)
 		self.import_params.update_config(
 			&mut config,
-			sc_service::Roles::FULL,
+			&sc_service::Role::Full,
 			self.shared_params.dev,
 		)?;
 
