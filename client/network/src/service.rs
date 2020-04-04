@@ -36,7 +36,8 @@ use crate::{
 	protocol::{self, event::Event, light_client_handler, sync::SyncState, PeerInfo, Protocol},
 	transport, ReputationChange,
 };
-use futures::{prelude::*, channel::mpsc};
+use futures::prelude::*;
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
 use libp2p::swarm::{NetworkBehaviour, SwarmBuilder, SwarmEvent};
 use libp2p::{kad::record, Multiaddr, PeerId};
 use log::{error, info, trace, warn};
@@ -158,7 +159,7 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	/// nodes it should be connected to or not.
 	peerset: PeersetHandle,
 	/// Channel that sends messages to the actual worker.
-	to_worker: mpsc::UnboundedSender<ServiceToWorkerMsg<B, H>>,
+	to_worker: TracingUnboundedSender<ServiceToWorkerMsg<B, H>>,
 	/// Marker to pin the `H` generic. Serves no purpose except to not break backwards
 	/// compatibility.
 	_marker: PhantomData<H>,
@@ -171,7 +172,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 	/// for the network processing to advance. From it, you can extract a `NetworkService` using
 	/// `worker.service()`. The `NetworkService` can be shared through the codebase.
 	pub fn new(params: Params<B, H>) -> Result<NetworkWorker<B, H>, Error> {
-		let (to_worker, from_worker) = mpsc::unbounded();
+		let (to_worker, from_worker) = tracing_unbounded("mpsc_network_worker");
 
 		fs::create_dir_all(&params.network_config.net_config_path)?;
 
@@ -547,7 +548,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// The stream never ends (unless the `NetworkWorker` gets shut down).
 	pub fn event_stream(&self) -> impl Stream<Item = Event> {
 		// Note: when transitioning to stable futures, remove the `Error` entirely
-		let (tx, rx) = mpsc::unbounded();
+		let (tx, rx) = tracing_unbounded("mpsc_network_event_stream");
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::EventStream(tx));
 		rx
 	}
@@ -767,7 +768,7 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 	PutValue(record::Key, Vec<u8>),
 	AddKnownAddress(PeerId, Multiaddr),
 	SyncFork(Vec<PeerId>, B::Hash, NumberFor<B>),
-	EventStream(mpsc::UnboundedSender<Event>),
+	EventStream(TracingUnboundedSender<Event>),
 	WriteNotification {
 		message: Vec<u8>,
 		engine_id: ConsensusEngineId,
@@ -798,11 +799,11 @@ pub struct NetworkWorker<B: BlockT + 'static, H: ExHashT> {
 	/// The import queue that was passed as initialization.
 	import_queue: Box<dyn ImportQueue<B>>,
 	/// Messages from the `NetworkService` and that must be processed.
-	from_worker: mpsc::UnboundedReceiver<ServiceToWorkerMsg<B, H>>,
+	from_worker: TracingUnboundedReceiver<ServiceToWorkerMsg<B, H>>,
 	/// Receiver for queries from the light client that must be processed.
-	light_client_rqs: Option<mpsc::UnboundedReceiver<light_client_handler::Request<B>>>,
+	light_client_rqs: Option<TracingUnboundedReceiver<light_client_handler::Request<B>>>,
 	/// Senders for events that happen on the network.
-	event_streams: Vec<mpsc::UnboundedSender<Event>>,
+	event_streams: Vec<TracingUnboundedSender<Event>>,
 	/// Prometheus network metrics.
 	metrics: Option<Metrics>,
 	/// The `PeerId`'s of all boot nodes.

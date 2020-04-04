@@ -25,6 +25,7 @@ use futures::{future, future::FutureExt, Future};
 use log::info;
 use sc_service::{AbstractService, Configuration, Role, ServiceBuilderCommand};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
+use sp_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::sync::Arc;
@@ -81,6 +82,13 @@ pub fn build_runtime() -> std::result::Result<tokio::runtime::Runtime, std::io::
 	tokio::runtime::Builder::new()
 		.thread_name("main-tokio-")
 		.threaded_scheduler()
+		.on_thread_start(||{
+			TOKIO_THREADS_ALIVE.inc();
+			TOKIO_THREADS_TOTAL.inc();
+		})
+		.on_thread_stop(||{
+			TOKIO_THREADS_ALIVE.dec();
+		})
 		.enable_all()
 		.build()
 }

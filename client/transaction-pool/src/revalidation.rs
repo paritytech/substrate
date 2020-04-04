@@ -22,8 +22,9 @@ use sc_transaction_graph::{ChainApi, Pool, ExHash, NumberFor, ValidatedTransacti
 use sp_runtime::traits::{Zero, SaturatedConversion};
 use sp_runtime::generic::BlockId;
 use sp_runtime::transaction_validity::TransactionValidityError;
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
 
-use futures::{prelude::*, channel::mpsc};
+use futures::prelude::*;
 use std::time::Duration;
 
 #[cfg(not(test))]
@@ -202,7 +203,7 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 	/// transactions from the pool.
 	pub async fn run<R: intervalier::IntoStream>(
 		mut self,
-		from_queue: mpsc::UnboundedReceiver<WorkerPayload<Api>>,
+		from_queue: TracingUnboundedReceiver<WorkerPayload<Api>>,
 		interval: R,
 	) where R: Send, R::Guard: Send
 	{
@@ -252,7 +253,7 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 pub struct RevalidationQueue<Api: ChainApi> {
 	pool: Arc<Pool<Api>>,
 	api: Arc<Api>,
-	background: Option<mpsc::UnboundedSender<WorkerPayload<Api>>>,
+	background: Option<TracingUnboundedSender<WorkerPayload<Api>>>,
 }
 
 impl<Api: ChainApi> RevalidationQueue<Api>
@@ -275,7 +276,7 @@ where
 	) -> (Self, Pin<Box<dyn Future<Output=()> + Send>>)
 	where R: Send + 'static, R::Guard: Send
 	{
-		let (to_worker, from_queue) = mpsc::unbounded();
+		let (to_worker, from_queue) = tracing_unbounded("mpsc_revalidation_queue");
 
 		let worker = RevalidationWorker::new(api.clone(), pool.clone());
 
