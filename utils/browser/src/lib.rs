@@ -19,7 +19,7 @@ use log::{debug, info};
 use std::sync::Arc;
 use sc_network::config::TransportConfig;
 use sc_service::{
-	AbstractService, RpcSession, Roles, Configuration,
+	AbstractService, RpcSession, Role, Configuration,
 	config::{DatabaseConfig, KeystoreConfig, NetworkConfiguration},
 	GenericChainSpec, RuntimeGenesis
 };
@@ -65,7 +65,7 @@ where
 		chain_spec: Box::new(chain_spec),
 		task_executor: Arc::new(move |fut| wasm_bindgen_futures::spawn_local(fut)),
 		telemetry_external_transport: Some(transport),
-		roles: Roles::LIGHT,
+		role: Role::Light,
 		database: {
 			info!("Opening Indexed DB database '{}'...", name);
 			let db = kvdb_web::Database::open(name, 10).await?;
