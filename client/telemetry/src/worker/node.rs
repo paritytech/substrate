@@ -116,7 +116,7 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 				pending.push_back(payload.into());
 				Ok(())
 			} else {
-				warn!(target: "telemetry", "⚠️ Rejected log entry because queue is full for {:?}",
+				warn!(target: "telemetry", "⚠️  Rejected log entry because queue is full for {:?}",
 					self.addr);
 				Err(())
 			}
@@ -137,7 +137,7 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 							break NodeSocket::Connected(conn)
 						},
 						Poll::Ready(Err(err)) => {
-							warn!(target: "telemetry", "⚠️ Disconnected from {}: {:?}", self.addr, err);
+							warn!(target: "telemetry", "⚠️  Disconnected from {}: {:?}", self.addr, err);
 							let timeout = gen_rand_reconnect_delay();
 							self.socket = NodeSocket::WaitingReconnect(timeout);
 							return Poll::Ready(NodeEvent::Disconnected(err))
