@@ -24,15 +24,12 @@ use sp_transaction_pool::PoolStatus;
 use sp_utils::metrics::register_globals;
 
 #[cfg(any(windows, unix))]
-use sysinfo::{ProcessExt, System, SystemExt};
+use sysinfo::{self, ProcessExt, SystemExt};
 
 #[cfg(any(unix, windows))]
 use netstat2::{TcpState, ProtocolSocketInfo, iterate_sockets_info, AddressFamilyFlags, ProtocolFlags};
 
-#[cfg(not(unix))]
-use sysinfo::get_current_pid;
-
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 use procfs;
 
 struct PrometheusMetrics {
@@ -183,11 +180,11 @@ struct ProcessInfo {
 pub struct MetricsService {
 	metrics: Option<PrometheusMetrics>,
 	#[cfg(any(windows, unix))]
-	system: System,
+	system: sysinfo::System,
 	pid: Option<i32>,
 }
 
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 impl MetricsService {
 	fn inner_new(metrics: Option<PrometheusMetrics>) -> Self {
 		let process = procfs::process::Process::myself()
@@ -195,7 +192,7 @@ impl MetricsService {
 
 		Self {
 			metrics,
-			system: System::new(),
+			system: sysinfo::System::new(),
 			pid: Some(process.pid),
 		}
 	}
@@ -224,19 +221,18 @@ impl MetricsService {
 	
 }
 
-
-#[cfg(windows)]
+#[cfg(all(any(unix, windows), not(target_os = "linux")))]
 impl MetricsService {
 	fn inner_new(metrics: Option<PrometheusMetrics>) -> Self {
 		Self {
 			metrics,
-			system: System(),
-			pid: get_current_pid().ok()
+			system: sysinfo::System::new(),
+			pid: sysinfo::get_current_pid().ok()
 		}
 	}
 	
 	fn process_info(&mut self) -> ProcessInfo {
-		self.pid.map(|pid| self._process_info_for(pid)).or_else(ProcessInfo::default)
+		self.pid.map(|pid| self._process_info_for(&pid)).unwrap_or_else(ProcessInfo::default)
 	}
 }
 
