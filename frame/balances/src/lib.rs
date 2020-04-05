@@ -468,7 +468,7 @@ decl_module! {
 			let who = T::Lookup::lookup(who)?;
 			let existential_deposit = T::ExistentialDeposit::get();
 
-			let wipeout = new_free + new_reserved < existential_deposit;
+			let wipeout = new_free.saturating_add(new_reserved) < existential_deposit;
 			let new_free = if wipeout { Zero::zero() } else { new_free };
 			let new_reserved = if wipeout { Zero::zero() } else { new_reserved };
 
@@ -903,6 +903,7 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 		if amount.is_zero() { return NegativeImbalance::zero() }
 		<TotalIssuance<T, I>>::mutate(|issued|
 			*issued = issued.checked_add(&amount).unwrap_or_else(|| {
+				// TODO CHECK THIS
 				amount = Self::Balance::max_value() - *issued;
 				Self::Balance::max_value()
 			})
@@ -1067,8 +1068,8 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 
 			// bail if we need to keep the account alive and this would kill it.
 			let ed = T::ExistentialDeposit::get();
-			let would_be_dead = new_free_account + account.reserved < ed;
-			let would_kill = would_be_dead && account.free + account.reserved >= ed;
+			let would_be_dead = new_free_account.saturating_add(account.reserved) < ed;
+			let would_kill = would_be_dead && account.free.saturating_add(account.reserved) >= ed;
 			ensure!(liveness == AllowDeath || !would_kill, Error::<T, I>::KeepAlive);
 
 			Self::ensure_can_withdraw(who, value, reasons, new_free_account)?;
@@ -1094,7 +1095,7 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 			// equal and opposite cause (returned as an Imbalance), then in the
 			// instance that there's no other accounts on the system at all, we might
 			// underflow the issuance and our arithmetic will be off.
-			ensure!(value + account.reserved >= ed || !account.total().is_zero(), ());
+			ensure!(value.saturating_add(account.reserved) >= ed || !account.total().is_zero(), ());
 
 			let imbalance = if account.free <= value {
 				SignedImbalance::Positive(PositiveImbalance::new(value - account.free))
