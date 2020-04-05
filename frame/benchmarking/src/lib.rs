@@ -611,6 +611,7 @@ macro_rules! impl_benchmark {
 					let components = <SelectedBenchmark as $crate::BenchmarkingSetup<T>>::components(&selected_benchmark);
 
 					for (_, (name, low, high)) in components.iter().enumerate() {
+						// Test only the low and high value, assuming values in the middle won't break
 						for component_value in vec![low, high] {
 							// Select the max value for all the other components.
 							let c: Vec<($crate::BenchmarkParameter, u32)> = components.iter()
@@ -628,7 +629,7 @@ macro_rules! impl_benchmark {
 							frame_system::Module::<T>::set_block_number(1.into());
 							// Set up the externalities environment for the setup we want to benchmark.
 							let closure_to_benchmark = <SelectedBenchmark as $crate::BenchmarkingSetup<T>>::instance(&selected_benchmark, &c)?;
-
+							// Run the benchmark
 							closure_to_benchmark()?;
 						}
 					}
@@ -736,6 +737,8 @@ macro_rules! impl_benchmark {
 				return Ok(results);
 			}
 		}
+
+		// TODO: ADD TESTS
 	}
 }
 

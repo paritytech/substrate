@@ -445,3 +445,17 @@ benchmarks! {
 
 	}: _(RawOrigin::Signed(proxy), referendum_index)
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::tests::{new_test_ext, Test};
+	use frame_support::assert_ok;
+
+	#[test]
+	fn propose() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(test_benchmark_propose::<Test>());
+		});
+	}
+}
