@@ -99,7 +99,7 @@ use sp_std::marker::PhantomData;
 use sp_std::fmt::Debug;
 use sp_version::RuntimeVersion;
 use sp_runtime::{
-	RuntimeDebug, Perbill, DispatchOutcome, DispatchError,
+	RuntimeDebug, Perbill, DispatchOutcome, DispatchError, DispatchResult,
 	generic::{self, Era},
 	transaction_validity::{
 		ValidTransaction, TransactionPriority, TransactionLongevity, TransactionValidityError,
@@ -119,7 +119,7 @@ use frame_support::{
 		Contains, Get, ModuleToIndex, OnNewAccount, OnKilledAccount, IsDeadAccount, Happened,
 		StoredMap, EnsureOrigin,
 	},
-	weights::{Weight, DispatchInfo, DispatchClass, SimpleDispatchInfo, FunctionOf},
+	weights::{Weight, DispatchInfo, DispatchClass, SimpleDispatchInfo, FunctionOf}
 };
 use codec::{Encode, Decode, FullCodec, EncodeLike};
 
@@ -1170,7 +1170,8 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 	/// a portion.
 	fn get_dispatch_limit_ratio(class: DispatchClass) -> Perbill {
 		match class {
-			DispatchClass::Operational => <Perbill as sp_runtime::PerThing>::one(),
+			DispatchClass::Operational | DispatchClass::Mandatory
+				=> <Perbill as sp_runtime::PerThing>::one(),
 			DispatchClass::Normal => T::AvailableBlockRatio::get(),
 		}
 	}
@@ -1186,7 +1187,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 		let limit = Self::get_dispatch_limit_ratio(info.class) * maximum_weight;
 		let added_weight = info.weight.min(limit);
 		let next_weight = current_weight.saturating_add(added_weight);
-		if next_weight > limit {
+		if next_weight > limit && info.class != DispatchClass::Mandatory {
 			Err(InvalidTransaction::ExhaustsResources.into())
 		} else {
 			Ok(next_weight)
@@ -1216,7 +1217,9 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 	fn get_priority(info: <Self as SignedExtension>::DispatchInfo) -> TransactionPriority {
 		match info.class {
 			DispatchClass::Normal => info.weight.into(),
-			DispatchClass::Operational => Bounded::max_value()
+			DispatchClass::Operational => Bounded::max_value(),
+			// Mandatory extrinsics are only for inherents; never transactions.
+			DispatchClass::Mandatory => Bounded::min_value(),
 		}
 	}
 
@@ -1271,6 +1274,9 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 		info: Self::DispatchInfo,
 		len: usize,
 	) -> Result<(), TransactionValidityError> {
+		if info.class == DispatchClass::Mandatory {
+			Err(InvalidTransaction::MandatoryDispatch)?
+		}
 		Self::do_pre_dispatch(info, len)
 	}
 
@@ -1281,6 +1287,9 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 		info: Self::DispatchInfo,
 		len: usize,
 	) -> TransactionValidity {
+		if info.class == DispatchClass::Mandatory {
+			Err(InvalidTransaction::MandatoryDispatch)?
+		}
 		Self::do_validate(info, len)
 	}
 
@@ -1298,6 +1307,21 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 		len: usize,
 	) -> TransactionValidity {
 		Self::do_validate(info, len)
+	}
+
+	fn post_dispatch(
+		_pre: Self::Pre,
+		info: Self::DispatchInfo,
+		_len: usize,
+		result: &DispatchResult,
+	) -> Result<(), TransactionValidityError> {
+		// Since mandatory dispatched do not get validated for being overweight, we are sensitive
+		// to them actually being useful. Block producers are thus not allowed to include mandatory
+		// extrinsics that result in error.
+		if info.class == DispatchClass::Mandatory && result.is_err() {
+			Err(InvalidTransaction::BadMandatory)?
+		}
+		Ok(())
 	}
 }
 
