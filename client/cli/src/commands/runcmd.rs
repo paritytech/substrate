@@ -17,6 +17,7 @@
 use std::path::PathBuf;
 use std::net::SocketAddr;
 use std::fs;
+use std::fmt;
 use log::info;
 use structopt::{StructOpt, clap::arg_enum};
 use names::{Generator, Name};
@@ -172,8 +173,8 @@ pub struct RunCmd {
 	///
 	/// This flag can be passed multiple times as a means to specify multiple
 	/// telemetry endpoints. Verbosity levels range from 0-9, with 0 denoting
-	/// the least verbosity. If no verbosity level is specified the default is
-	/// 0.
+	/// the least verbosity.
+	/// Expected format is 'URL VERBOSITY', e.g. `--telemetry-url 'wss://foo/bar 0'`.
 	#[structopt(long = "telemetry-url", value_name = "URL VERBOSITY", parse(try_from_str = parse_telemetry_endpoints))]
 	pub telemetry_endpoints: Vec<(String, u8)>,
 
@@ -565,16 +566,30 @@ fn interface_str(
 	}
 }
 
-/// Default to verbosity level 0, if none is provided.
-fn parse_telemetry_endpoints(s: &str) -> Result<(String, u8), Box<dyn std::error::Error>> {
+#[derive(Debug)]
+enum TelemetryParsingError {
+	MissingVerbosity,
+	VerbosityParsingError(std::num::ParseIntError),
+}
+
+impl std::error::Error for TelemetryParsingError {}
+
+impl fmt::Display for TelemetryParsingError {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match &*self {
+			TelemetryParsingError::MissingVerbosity => write!(f, "Verbosity level missing"),
+			TelemetryParsingError::VerbosityParsingError(e) => write!(f, "{}", e),
+		}
+	}
+}
+
+fn parse_telemetry_endpoints(s: &str) -> Result<(String, u8), TelemetryParsingError> {
 	let pos = s.find(' ');
 	match pos {
-		None => {
-			Ok((s.to_owned(), 0))
-		},
+		None => Err(TelemetryParsingError::MissingVerbosity),
 		Some(pos_) => {
-			let verbosity = s[pos_ + 1..].parse()?;
-			let url = s[..pos_].parse()?;
+			let url = s[..pos_].to_string();
+			let verbosity = s[pos_ + 1..].parse().map_err(TelemetryParsingError::VerbosityParsingError)?;
 			Ok((url, verbosity))
 		}
 	}
