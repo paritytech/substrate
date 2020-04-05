@@ -768,6 +768,8 @@ macro_rules! impl_benchmark_tests {
 							let closure_to_benchmark = <SelectedBenchmark as $crate::BenchmarkingSetup<T>>::instance(&selected_benchmark, &c)?;
 							// Run the benchmark
 							closure_to_benchmark()?;
+							// Reset the state
+							$crate::benchmarking::wipe_db();
 						}
 					}
 					Ok(())
