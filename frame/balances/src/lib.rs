@@ -903,7 +903,6 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 		if amount.is_zero() { return NegativeImbalance::zero() }
 		<TotalIssuance<T, I>>::mutate(|issued|
 			*issued = issued.checked_add(&amount).unwrap_or_else(|| {
-				// TODO CHECK THIS
 				amount = Self::Balance::max_value() - *issued;
 				Self::Balance::max_value()
 			})

@@ -681,5 +681,25 @@ macro_rules! decl_tests {
 					assert!(Balances::withdraw(&1, 10, WithdrawReasons::all(), ExistenceRequirement::AllowDeath).is_ok());
 				});
 		}
+
+		#[test]
+		fn issue_works() {
+			<$ext_builder>::default()
+				.existential_deposit(100)
+				.build()
+				.execute_with(|| {
+					let starting_total_issuance = Balances::total_issuance();
+					let amt_to_issue = 10;
+					let issued = Balances::issue(amt_to_issue);
+					assert_eq!(issued.peek(), amt_to_issue);
+					assert_eq!(Balances::total_issuance(), starting_total_issuance + amt_to_issue);
+					let issued = Balances::issue(u64::max_value());
+					assert_eq!(issued.peek(), u64::max_value() - (starting_total_issuance + amt_to_issue));
+					assert_eq!(Balances::total_issuance(), u64::max_value());
+					let issued = Balances::issue(u64::max_value());
+					assert_eq!(issued.peek(), Zero::zero());
+					assert_eq!(Balances::total_issuance(), u64::max_value());
+				});
+		}
 	}
 }
