@@ -574,6 +574,9 @@ macro_rules! impl_benchmark {
 							// This will enable worst case scenario for reading from the database.
 							$crate::benchmarking::commit_db();
 
+							// Flushing the usage info statistics.
+							let _ = $crate::benchmarking::db_usage_info();
+
 							// Time the extrinsic logic.
 							let start_extrinsic = $crate::benchmarking::current_time();
 							closure_to_benchmark()?;
@@ -585,6 +588,10 @@ macro_rules! impl_benchmark {
 							$crate::storage_root();
 							let finish_storage_root = $crate::benchmarking::current_time();
 							let elapsed_storage_root = finish_storage_root - start_storage_root;
+
+							// Committing to db to get the write stats.
+							$crate::benchmarking::commit_db();
+
 							let usage_info = $crate::benchmarking::db_usage_info();
  
 							results.push((c.clone(),
@@ -676,6 +683,9 @@ macro_rules! impl_benchmark {
 							// This will enable worst case scenario for reading from the database.
 							$crate::benchmarking::commit_db();
 
+							// Flushing the usage info statistics.
+							let _ = $crate::benchmarking::db_usage_info();
+
 							// Time the extrinsic logic.
 							let start_extrinsic = $crate::benchmarking::current_time();
 							closure_to_benchmark()?;
@@ -687,6 +697,10 @@ macro_rules! impl_benchmark {
 							$crate::storage_root();
 							let finish_storage_root = $crate::benchmarking::current_time();
 							let elapsed_storage_root = finish_storage_root - start_storage_root;
+
+							// Committing to db to get the write stats.
+							$crate::benchmarking::commit_db();
+
 							let usage_info = $crate::benchmarking::db_usage_info();
 
 							results.push((c.clone(),
