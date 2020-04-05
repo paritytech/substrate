@@ -187,7 +187,7 @@ decl_storage! {
 				// Nonetheless, stakes will be updated for term 1 onwards according to the election.
 				Members::<T>::mutate(|members| {
 					match members.binary_search_by(|(a, _b)| a.cmp(member)) {
-						Ok(_) => panic!("Duplicate member in elections phragmen genesis"),
+						Ok(_) => panic!("Duplicate member in elections phragmen genesis: {}", member),
 						Err(pos) => members.insert(pos, (member.clone(), *stake)),
 					}
 				});
@@ -1190,7 +1190,7 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic = "Duplicate member in elections phragmen genesis"]
+	#[should_panic = "Duplicate member in elections phragmen genesis: 2"]
 	fn genesis_members_cannot_be_duplicate() {
 		ExtBuilder::default().genesis_members(vec![(1, 10), (2, 10), (2, 10)]).build();
 	}
