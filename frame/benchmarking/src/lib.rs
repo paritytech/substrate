@@ -135,9 +135,12 @@ macro_rules! benchmarks {
 		}
 		$( $rest:tt )*
 	) => {
-		$crate::benchmarks_iter!(NO_INSTANCE {
-			$( { $common , $common_from , $common_to , $common_instancer } )*
-		} ( ) $( $rest )* );
+		$crate::benchmarks_iter!(
+			NO_INSTANCE
+			{ $( { $common , $common_from , $common_to , $common_instancer } )* }
+			( )
+			$( $rest )*
+		);
 	}
 }
 
@@ -151,9 +154,12 @@ macro_rules! benchmarks_instance {
 		}
 		$( $rest:tt )*
 	) => {
-		$crate::benchmarks_iter!(INSTANCE {
-			$( { $common , $common_from , $common_to , $common_instancer } )*
-		} ( ) $( $rest )* );
+		$crate::benchmarks_iter!(
+			INSTANCE
+			{ $( { $common , $common_from , $common_to , $common_instancer } )* }
+			( )
+			$( $rest )*
+		);
 	}
 }
 
@@ -169,7 +175,11 @@ macro_rules! benchmarks_iter {
 		$( $rest:tt )*
 	) => {
 		$crate::benchmarks_iter! {
-			$instance { $( $common )* } ( $( $names )* ) $name { $( $code )* }: $name ( $origin $( , $arg )* ) $( $rest )*
+			$instance
+			{ $( $common )* }
+			( $( $names )* )
+			$name { $( $code )* }: $name ( $origin $( , $arg )* )
+			$( $rest )*
 		}
 	};
 	// no instance mutation arm:
@@ -182,9 +192,12 @@ macro_rules! benchmarks_iter {
 	) => {
 		$crate::benchmarks_iter! {
 			NO_INSTANCE
-			{ $( $common )* } ( $( $names )* ) $name { $( $code )* }: {
+			{ $( $common )* }
+			( $( $names )* )
+			$name { $( $code )* }: {
 				<Call<T> as $crate::Dispatchable>::dispatch(Call::<T>::$dispatch($($arg),*), $origin.into())?;
-			} $( $rest )*
+			}
+			$( $rest )*
 		}
 	};
 	// instance mutation arm:
@@ -197,9 +210,12 @@ macro_rules! benchmarks_iter {
 	) => {
 		$crate::benchmarks_iter! {
 			INSTANCE
-			{ $( $common )* } ( $( $names )* ) $name { $( $code )* }: {
+			{ $( $common )* }
+			( $( $names )* )
+			$name { $( $code )* }: {
 				<Call<T, I> as $crate::Dispatchable>::dispatch(Call::<T, I>::$dispatch($($arg),*), $origin.into())?;
-			} $( $rest )*
+			}
+			$( $rest )*
 		}
 	};
 	// iteration arm:
@@ -211,9 +227,19 @@ macro_rules! benchmarks_iter {
 		$( $rest:tt )*
 	) => {
 		$crate::benchmark_backend! {
-			$instance $name { $( $common )* } { } { $eval } { $( $code )* }
+			$instance
+			$name
+			{ $( $common )* }
+			{ }
+			{ $eval }
+			{ $( $code )* }
 		}
-		$crate::benchmarks_iter!( $instance { $( $common )* } ( $( $names )* $name ) $( $rest )* );
+		$crate::benchmarks_iter!(
+			$instance
+			{ $( $common )* }
+			( $( $names )* $name )
+			$( $rest )*
+		);
 	};
 	// iteration-exit arm
 	( $instance:ident { $( $common:tt )* } ( $( $names:ident )* ) ) => {
@@ -702,13 +728,13 @@ macro_rules! impl_benchmark {
 				return Ok(results);
 			}
 		}
-
-		// TODO: ADD TESTS
 	}
 }
 
+// This creates tests from the main benchmark macro.
 #[macro_export]
 macro_rules! impl_benchmark_tests {
+	// TODO INSTANCE/NO_INSTANCE arms
 	(
 		$instance:ident $( $name:ident ),*
 	) => {
