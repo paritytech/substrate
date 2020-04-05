@@ -282,9 +282,8 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 			return Err(PublicError::BadLength);
 		}
 		let ver = d[0]
-			.to_string()
-			.as_str()
 			.try_into()
+			.or_else(|_| d[0].to_string().as_str().try_into())
 			.map_err(|_: ()| PublicError::UnknownVersion)?;
 
 		if d[len + 1..len + 3] != ss58hash(&d[0..len + 1]).as_bytes()[0..2] {
