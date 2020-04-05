@@ -98,8 +98,8 @@ pub fn create_validators_with_nominators_for_era<T: Trait>(v: u32, n: u32) -> Re
 	Ok(())
 }
 
-// This function generates one validator being nominated by n nominators.
-// It starts an era and creates pending payouts.
+// This function generates one validator being nominated by n nominators, and returns
+//the validator stash account. It also starts an era and creates pending payouts.
 pub fn create_validator_with_nominators<T: Trait>(n: u32, upper_bound: u32) -> Result<T::AccountId, &'static str> {
 	let mut points_total = 0;
 	let mut points_individual = Vec::new();
@@ -114,7 +114,7 @@ pub fn create_validator_with_nominators<T: Trait>(n: u32, upper_bound: u32) -> R
 	let stash_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(v_stash.clone());
 
 	points_total += 10;
-	points_individual.push((v_stash, 10));
+	points_individual.push((v_stash.clone(), 10));
 
 	// Give the validator n nominators, but keep total users in the system the same.
 	for i in 0 .. upper_bound {
@@ -144,7 +144,7 @@ pub fn create_validator_with_nominators<T: Trait>(n: u32, upper_bound: u32) -> R
 	let total_payout = T::Currency::minimum_balance() * 1000.into();
 	<ErasValidatorReward<T>>::insert(current_era, total_payout);
 
-	Ok(v_controller)
+	Ok(v_stash)
 }
 
 benchmarks! {
