@@ -150,7 +150,11 @@ decl_module! {
 								Lookup::<T>::remove(id);
 							}
 						}
-						Self::deposit_event(RawEvent::Dispatched((now, index), maybe_id, r));
+						Self::deposit_event(RawEvent::Dispatched(
+							(now, index),
+							maybe_id,
+							r.map(|_| ()).map_err(|e| e.error)
+						));
 						result = cumulative_weight;
 						None
 					} else {

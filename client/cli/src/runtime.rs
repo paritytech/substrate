@@ -20,6 +20,7 @@ use futures::{Future, future, future::FutureExt};
 use futures::select;
 use futures::pin_mut;
 use sc_service::{AbstractService, Configuration};
+use sp_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
 use crate::error;
 
 #[cfg(target_family = "unix")]
@@ -73,6 +74,13 @@ fn build_runtime() -> Result<tokio::runtime::Runtime, std::io::Error> {
 	tokio::runtime::Builder::new()
 		.thread_name("main-tokio-")
 		.threaded_scheduler()
+		.on_thread_start(||{
+			TOKIO_THREADS_ALIVE.inc();
+			TOKIO_THREADS_TOTAL.inc();
+		})
+		.on_thread_stop(||{
+			TOKIO_THREADS_ALIVE.dec();
+		})
 		.enable_all()
 		.build()
 }

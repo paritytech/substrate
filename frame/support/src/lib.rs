@@ -209,7 +209,11 @@ macro_rules! assert_err {
 #[cfg(feature = "std")]
 macro_rules! assert_ok {
 	( $x:expr $(,)? ) => {
-		assert_eq!($x, Ok(()));
+		let is = $x;
+		match is {
+			Ok(_) => (),
+			_ => assert!(false, "Expected Ok(_). Got {:#?}", is),
+		}
 	};
 	( $x:expr, $y:expr $(,)? ) => {
 		assert_eq!($x, Ok($y));

@@ -17,7 +17,7 @@
 use super::*;
 
 use sc_network::{self, PeerId};
-use sc_network::config::Roles;
+use sc_network::config::Role;
 use substrate_test_runtime_client::runtime::Block;
 use assert_matches::assert_matches;
 use futures::{prelude::*, channel::mpsc};
@@ -60,7 +60,7 @@ fn api<T: Into<Option<Status>>>(sync: T) -> System<Block> {
 					for _peer in 0..status.peers {
 						peers.push(PeerInfo {
 							peer_id: status.peer_id.to_base58(),
-							roles: format!("{:?}", Roles::FULL),
+							roles: format!("{}", Role::Full),
 							protocol_version: 1,
 							best_hash: Default::default(),
 							best_number: 1,

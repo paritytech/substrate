@@ -16,7 +16,7 @@
 
 use structopt::StructOpt;
 use log::info;
-use sc_network::config::build_multiaddr;
+use sc_network::config::{build_multiaddr, MultiaddrWithPeerId};
 use sc_service::{Configuration, ChainSpec};
 
 use crate::error;
@@ -60,11 +60,10 @@ impl BuildSpecCmd {
 		if spec.boot_nodes().is_empty() && !self.disable_default_bootnode {
 			let keys = config.network.node_key.into_keypair()?;
 			let peer_id = keys.public().into_peer_id();
-			let addr = build_multiaddr![
-				Ip4([127, 0, 0, 1]),
-				Tcp(30333u16),
-				P2p(peer_id)
-			];
+			let addr = MultiaddrWithPeerId {
+				multiaddr: build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(30333u16)],
+				peer_id,
+			};
 			spec.add_boot_node(addr)
 		}
 

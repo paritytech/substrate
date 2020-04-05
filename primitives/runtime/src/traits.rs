@@ -17,7 +17,7 @@
 //! Primitives for the runtime modules.
 
 use sp_std::prelude::*;
-use sp_std::{self, result, marker::PhantomData, convert::{TryFrom, TryInto}, fmt::Debug};
+use sp_std::{self, marker::PhantomData, convert::{TryFrom, TryInto}, fmt::Debug};
 use sp_io;
 #[cfg(feature = "std")]
 use std::fmt::Display;
@@ -145,24 +145,6 @@ impl From<BadOrigin> for &'static str {
 	fn from(_: BadOrigin) -> &'static str {
 		"Bad origin"
 	}
-}
-
-/// Some sort of check on the origin is performed by this object.
-pub trait EnsureOrigin<OuterOrigin> {
-	/// A return type.
-	type Success;
-	/// Perform the origin check.
-	fn ensure_origin(o: OuterOrigin) -> result::Result<Self::Success, BadOrigin> {
-		Self::try_origin(o).map_err(|_| BadOrigin)
-	}
-	/// Perform the origin check.
-	fn try_origin(o: OuterOrigin) -> result::Result<Self::Success, OuterOrigin>;
-
-	/// Returns an outer origin capable of passing `try_origin` check.
-	/// 
-	/// ** Should be used for benchmarking only!!! **
-	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> OuterOrigin;
 }
 
 /// An error that indicates that a lookup failed.
@@ -642,8 +624,11 @@ pub trait Dispatchable {
 	type Origin;
 	/// ...
 	type Trait;
+	/// Additional information that is returned by `dispatch`. Can be used to supply the caller
+	/// with information about a `Dispatchable` that is ownly known post dispatch.
+	type PostInfo: Eq + PartialEq + Clone + Copy + Encode + Decode + Printable;
 	/// Actually dispatch this call and result the result of it.
-	fn dispatch(self, origin: Self::Origin) -> crate::DispatchResult;
+	fn dispatch(self, origin: Self::Origin) -> crate::DispatchResultWithInfo<Self::PostInfo>;
 }
 
 /// Means by which a transaction may be extended. This type embodies both the data and the logic

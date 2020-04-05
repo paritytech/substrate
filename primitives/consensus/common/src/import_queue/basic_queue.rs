@@ -15,10 +15,11 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::{mem, pin::Pin, time::Duration, marker::PhantomData, sync::Arc};
-use futures::{prelude::*, channel::mpsc, task::Context, task::Poll};
+use futures::{prelude::*, task::Context, task::Poll};
 use futures_timer::Delay;
 use parking_lot::{Mutex, Condvar};
 use sp_runtime::{Justification, traits::{Block as BlockT, Header as HeaderT, NumberFor}};
+use sp_utils::mpsc::{TracingUnboundedSender, tracing_unbounded};
 
 use crate::block_import::BlockOrigin;
 use crate::import_queue::{
@@ -32,7 +33,7 @@ use crate::import_queue::{
 /// task, with plugable verification.
 pub struct BasicQueue<B: BlockT, Transaction> {
 	/// Channel to send messages to the background task.
-	sender: mpsc::UnboundedSender<ToWorkerMsg<B>>,
+	sender: TracingUnboundedSender<ToWorkerMsg<B>>,
 	/// Results coming from the worker task.
 	result_port: BufferedLinkReceiver<B>,
 	/// If it isn't possible to spawn the future in `future_to_spawn` (which is notably the case in
@@ -195,8 +196,8 @@ impl<B: BlockT, Transaction: Send> BlockImportWorker<B, Transaction> {
 		block_import: BoxBlockImport<B, Transaction>,
 		justification_import: Option<BoxJustificationImport<B>>,
 		finality_proof_import: Option<BoxFinalityProofImport<B>>,
-	) -> (impl Future<Output = ()> + Send, mpsc::UnboundedSender<ToWorkerMsg<B>>) {
-		let (sender, mut port) = mpsc::unbounded();
+	) -> (impl Future<Output = ()> + Send, TracingUnboundedSender<ToWorkerMsg<B>>) {
+		let (sender, mut port) = tracing_unbounded("mpsc_block_import_worker");
 
 		let mut worker = BlockImportWorker {
 			result_sender,

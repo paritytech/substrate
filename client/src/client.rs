@@ -21,7 +21,6 @@ use std::{
 	result,
 };
 use log::{info, trace, warn};
-use futures::channel::mpsc;
 use parking_lot::{Mutex, RwLock};
 use codec::{Encode, Decode};
 use hash_db::Prefix;
@@ -78,6 +77,7 @@ pub use sc_client_api::{
 	notifications::{StorageNotifications, StorageEventStream},
 	CallExecutor, ExecutorProvider, ProofProvider, CloneableSpawn,
 };
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sp_blockchain::Error;
 use prometheus_endpoint::Registry;
 
@@ -93,8 +93,8 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	backend: Arc<B>,
 	executor: E,
 	storage_notifications: Mutex<StorageNotifications<Block>>,
-	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<BlockImportNotification<Block>>>>,
-	finality_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<FinalityNotification<Block>>>>,
+	import_notification_sinks: Mutex<Vec<TracingUnboundedSender<BlockImportNotification<Block>>>>,
+	finality_notification_sinks: Mutex<Vec<TracingUnboundedSender<FinalityNotification<Block>>>>,
 	// holds the block hash currently being imported. TODO: replace this with block queue
 	importing_block: RwLock<Option<Block::Hash>>,
 	block_rules: BlockRules<Block>,
@@ -1764,13 +1764,13 @@ where
 {
 	/// Get block import event stream.
 	fn import_notification_stream(&self) -> ImportNotifications<Block> {
-		let (sink, stream) = mpsc::unbounded();
+		let (sink, stream) = tracing_unbounded("mpsc_import_notification_stream");
 		self.import_notification_sinks.lock().push(sink);
 		stream
 	}
 
 	fn finality_notification_stream(&self) -> FinalityNotifications<Block> {
-		let (sink, stream) = mpsc::unbounded();
+		let (sink, stream) = tracing_unbounded("mpsc_finality_notification_stream");
 		self.finality_notification_sinks.lock().push(sink);
 		stream
 	}

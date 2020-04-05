@@ -20,7 +20,7 @@ use std::fs;
 use std::path::PathBuf;
 use structopt::StructOpt;
 use sc_service::{
-	Configuration, ServiceBuilderCommand, ChainSpec, Roles,
+	Configuration, ServiceBuilderCommand, ChainSpec, Role,
 };
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 
@@ -95,7 +95,7 @@ impl ImportBlocksCmd {
 		F: FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
 	{
 		self.shared_params.update_config(&mut config, spec_factory, version)?;
-		self.import_params.update_config(&mut config, Roles::FULL, self.shared_params.dev)?;
+		self.import_params.update_config(&mut config, &Role::Full, self.shared_params.dev)?;
 		config.use_in_memory_keystore()?;
 
 		Ok(())
