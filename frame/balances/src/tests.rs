@@ -660,5 +660,26 @@ macro_rules! decl_tests {
 					assert_eq!(Balances::reserved_balance(1), 0);
 				});
 		}
+
+		#[test]
+		fn set_balance_doesnt_overflow() {
+			<$ext_builder>::default()
+				.existential_deposit(100)
+				.build()
+				.execute_with(|| {
+					assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, u64::max_value(), u64::max_value()));
+				});
+		}
+
+		#[test]
+		fn withdraw_doesnt_overflow() {
+			<$ext_builder>::default()
+				.existential_deposit(100)
+				.build()
+				.execute_with(|| {
+					assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, u64::max_value(), u64::max_value()));
+					assert!(Balances::withdraw(&1, 10, WithdrawReasons::all(), ExistenceRequirement::AllowDeath).is_ok());
+				});
+		}
 	}
 }
