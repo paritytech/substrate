@@ -524,7 +524,7 @@ impl CryptoType for Pair {
 mod test {
 	use super::*;
 	use hex_literal::hex;
-	use crate::crypto::DEV_PHRASE;
+	use crate::crypto::{DEV_PHRASE, set_default_ss58_version};
 	use serde_json;
 
 	#[test]
@@ -646,6 +646,20 @@ mod test {
 		println!("Correct: {}", s);
 		let cmp = Public::from_ss58check(&s).unwrap();
 		assert_eq!(cmp, public);
+	}
+
+	#[test]
+	fn ss58check_custom_format_works() {
+		use crate::crypto::Ss58AddressFormat;
+		let default = Ss58AddressFormat::default();
+		set_default_ss58_version(Ss58AddressFormat::try_from("200").expect(""));
+		// custom
+		let addr = "2X64kMNEWAW5KLZMSKcGKEc96MyuaRsRUku7vomuYxKgqjVCRj";
+		let _ = Public::from_ss58check(&addr).unwrap();
+		set_default_ss58_version(default);
+		// normal
+		let addr = "KWAfgC2aRG5UVD6CpbPQXCx4YZZUhvWqqAJE6qcYc9Rtr6g5C";
+		let _ = Public::from_ss58check(&addr).unwrap();
 	}
 
 	#[test]
