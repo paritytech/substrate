@@ -458,4 +458,32 @@ mod tests {
 			assert_ok!(test_benchmark_propose::<Test>());
 		});
 	}
+
+	#[test]
+	fn second() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(test_benchmark_second::<Test>());
+		});
+	}
+
+	#[test]
+	fn vote() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(test_benchmark_vote::<Test>());
+		});
+	}
+
+	#[test]
+	fn proxy_vote() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(test_benchmark_proxy_vote::<Test>());
+		});
+	}
+
+	#[test]
+	fn emergency_cancel() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(test_benchmark_emergency_cancel::<Test>());
+		});
+	}
 }
