@@ -245,6 +245,7 @@ macro_rules! benchmarks_iter {
 	( $instance:ident { $( $common:tt )* } ( $( $names:ident )* ) ) => {
 		$crate::selected_benchmark!( $instance $( $names ),* );
 		$crate::impl_benchmark!( $instance $( $names ),* );
+		#[cfg(test)]
 		$crate::impl_benchmark_tests!( $instance $( $names ),* );
 	}
 }
