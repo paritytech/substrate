@@ -604,16 +604,18 @@ macro_rules! impl_benchmark {
 
 		$(
 			$crate::paste::item! {
-				fn [<test_benchmark_ $name>] <T: Trait> () -> Result<(), &'static str> {
+				fn [<test_benchmark_ $name>] <T: Trait> () -> Result<(), &'static str>
+					where T: frame_system::Trait
+				{
 					let selected_benchmark = SelectedBenchmark::$name;
 					let components = <SelectedBenchmark as $crate::BenchmarkingSetup<T>>::components(&selected_benchmark);
 
-					for (idx, (name, low, high)) in components.iter().enumerate() {
+					for (_, (name, low, high)) in components.iter().enumerate() {
 						for component_value in vec![low, high] {
 							// Select the max value for all the other components.
 							let c: Vec<($crate::BenchmarkParameter, u32)> = components.iter()
 								.enumerate()
-								.map(|(idx, (n, _, h))|
+								.map(|(_, (n, _, h))|
 									if n == name {
 										(*n, *component_value)
 									} else {
