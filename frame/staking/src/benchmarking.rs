@@ -219,11 +219,11 @@ benchmarks! {
 		let c in 0 .. 1000;
 	}: _(RawOrigin::Root, c)
 
-	force_no_eras { let i in 1 .. 1; }: _(RawOrigin::Root)
+	force_no_eras { let i in 0 .. 1; }: _(RawOrigin::Root)
 
-	force_new_era {let i in 1 .. 1; }: _(RawOrigin::Root)
+	force_new_era {let i in 0 .. 1; }: _(RawOrigin::Root)
 
-	force_new_era_always { let i in 1 .. 1; }: _(RawOrigin::Root)
+	force_new_era_always { let i in 0 .. 1; }: _(RawOrigin::Root)
 
 	// Worst case scenario, the list of invulnerables is very long.
 	set_invulnerables {
