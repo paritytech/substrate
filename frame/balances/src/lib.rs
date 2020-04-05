@@ -439,9 +439,13 @@ decl_module! {
 			dest: <T::Lookup as StaticLookup>::Source,
 			#[compact] value: T::Balance
 		) {
+			#[cfg(feature = "std")]
+			println!("START transfer ----------");
 			let transactor = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
 			<Self as Currency<_>>::transfer(&transactor, &dest, value, ExistenceRequirement::AllowDeath)?;
+			#[cfg(feature = "std")]
+			println!("END transfer ----------");
 		}
 
 		/// Set the balances of a given account.

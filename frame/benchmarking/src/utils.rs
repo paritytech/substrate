@@ -82,6 +82,10 @@ pub trait Benchmarking {
 	fn commit_db(&mut self) {
 		self.commit()
 	}
+
+	fn fill_cache(&mut self) {
+		self.fill_cache()
+	}
 }
 
 /// The pallet benchmarking trait.

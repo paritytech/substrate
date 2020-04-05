@@ -276,6 +276,8 @@ impl Externalities for BasicExternalities {
 	fn wipe(&mut self) {}
 
 	fn commit(&mut self) {}
+
+	fn fill_cache(&mut self) {}
 }
 
 impl sp_externalities::ExtensionStore for BasicExternalities {

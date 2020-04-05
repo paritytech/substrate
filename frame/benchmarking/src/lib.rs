@@ -577,6 +577,7 @@ macro_rules! impl_benchmark {
 							// Commit the externalities to the database, flushing the DB cache.
 							// This will enable worst case scenario for reading from the database.
 							$crate::benchmarking::commit_db();
+							$crate::benchmarking::fill_cache();
 
 							// Time the extrinsic logic.
 							let start_extrinsic = $crate::benchmarking::current_time();
@@ -677,6 +678,7 @@ macro_rules! impl_benchmark {
 							// Commit the externalities to the database, flushing the DB cache.
 							// This will enable worst case scenario for reading from the database.
 							$crate::benchmarking::commit_db();
+							$crate::benchmarking::fill_cache();
 
 							// Time the extrinsic logic.
 							let start_extrinsic = $crate::benchmarking::current_time();

@@ -226,6 +226,11 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	fn commit(&self, _storage_root: H::Out, _transaction: Self::Transaction) -> Result<(), Self::Error> {
 		unimplemented!()
 	}
+
+	/// Fill the cache with dummy values.
+	fn fill_cache(&self) -> Result<(), Self::Error> {
+		unimplemented!()
+	}
 }
 
 impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {

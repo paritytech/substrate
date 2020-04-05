@@ -537,6 +537,11 @@ where
 		).expect(EXT_NOT_ALLOWED_TO_FAIL);
 		self.storage_transaction_cache.reset();
 	}
+
+	fn fill_cache(&mut self) {
+		// self.backend.fill_cache().expect(EXT_NOT_ALLOWED_TO_FAIL);
+		// self.storage_transaction_cache.reset();
+	}
 }
 
 impl<'a, H, B, N> sp_externalities::ExtensionStore for Ext<'a, H, N, B>

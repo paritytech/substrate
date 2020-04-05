@@ -188,6 +188,13 @@ pub trait Externalities: ExtensionStore {
 	///
 	/// Commits all changes to the database and clears all caches.
 	fn commit(&mut self);
+
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	/// Benchmarking related functionality and shouldn't be used anywhere else!
+	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	///
+	/// Commits all changes to the database and clears all caches.
+	fn fill_cache(&mut self);
 }
 
 /// Extension for the [`Externalities`] trait.

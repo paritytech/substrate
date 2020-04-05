@@ -22,14 +22,19 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use rand::Rng;
 
+use codec::{Encode, Decode};
+
 use hash_db::{Prefix, Hasher};
 use sp_trie::{MemoryDB, prefixed_key};
-use sp_core::storage::ChildInfo;
+use sp_core::{storage::ChildInfo, blake2_256};
 use sp_runtime::traits::{Block as BlockT, HashFor};
 use sp_runtime::Storage;
 use sp_state_machine::{DBValue, backend::Backend as StateBackend};
 use kvdb::{KeyValueDB, DBTransaction};
 use kvdb_rocksdb::{Database, DatabaseConfig};
+use std::time::{Duration, Instant};
+
+use log::trace;
 
 type DbState<B> = sp_state_machine::TrieBackend<
 	Arc<dyn sp_state_machine::Storage<HashFor<B>>>, HashFor<B>
@@ -43,8 +48,19 @@ struct StorageDb<Block: BlockT> {
 impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Block> {
 	fn get(&self, key: &Block::Hash, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		let key = prefixed_key::<HashFor<Block>>(key, prefix);
-		self.db.get(0, &key)
-			.map_err(|e| format!("Database backend error: {:?}", e))
+		let now = Instant::now();
+
+		let r = self.db.get(0, &key)
+			.map_err(|e| format!("Database backend error: {:?}", e));
+		// let l = match r {
+		// 	Ok(ref o) => match o {
+		// 		Some(v) => v.len(),
+		// 		_ => 42,
+		// 	},
+		// 	_ => 0,
+		// };
+		println!("Bench StorageDb get time = {} ns, key len {:?}, r = {:?}", now.elapsed().as_nanos(), key.len(), r);
+		r
 	}
 }
 
@@ -100,18 +116,36 @@ impl<B: BlockT> BenchmarkingState<B> {
 	}
 
 	fn reopen(&self) -> Result<(), String> {
+		use std::time::{Duration, Instant};
+		use std::thread::sleep;
+
+		sleep(Duration::new(60, 0));
+
+
 		*self.state.borrow_mut() = None;
 		self.db.set(None);
 		let mut db_config = DatabaseConfig::with_columns(1);
 		if let Some(size) = &self.cache_size_mb {
+			println!("MEMORY {}", size);
 			db_config.memory_budget.insert(0, *size);
 		}
 		let path = self.path.to_str()
 			.ok_or_else(|| String::from("Invalid database path"))?;
 		let db = Arc::new(Database::open(&db_config, &path).map_err(|e| format!("Error opening database: {:?}", e))?);
+
+		for j in 0 .. 10 {
+			for i in 0 .. 100 {
+				let key = (b"dummy key", i).using_encoded(blake2_256);
+				let _ = db.get(0, &key.to_vec()).map_err(|_| String::from("Error getting dummy value"))?;
+			}	
+		}
+
+
 		self.db.set(Some(db.clone()));
 		let storage_db = Arc::new(StorageDb::<B> { db, _block: Default::default() });
 		*self.state.borrow_mut() = Some(DbState::<B>::new(storage_db, self.root.get()));
+
+
 		Ok(())
 	}
 
@@ -275,9 +309,23 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 				}
 				keys.push(key);
 			}
+			for i in 0 .. 100 {
+				let key = (b"dummy key", i).using_encoded(blake2_256);
+				let mut value = (b"dummy value", i).using_encoded(blake2_256).to_vec();
+				let value = {
+					for j in 0 .. 1_000_000 {
+						value.push(1u8);
+					}
+					value
+				};
+				db_transaction.put(0, &key.to_vec(), &value);
+				keys.push(key.to_vec());
+			}
+
 			self.record.set(keys);
 			db.write(db_transaction).map_err(|_| String::from("Error committing transaction"))?;
 			self.root.set(storage_root);
+
 		} else {
 			return Err("Trying to commit to a closed db".into())
 		}
@@ -295,6 +343,12 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 					None => db_transaction.delete(0, &key),
 				}
 			}
+
+			for i in 0 .. 10 {
+				let key = (b"dummy key", i).using_encoded(blake2_256);
+				db_transaction.delete(0, &key.to_vec());
+			}
+
 			db.write(db_transaction).map_err(|_| String::from("Error committing transaction"))?;
 		}
 
@@ -312,6 +366,21 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 
 	fn usage_info(&self) -> sp_state_machine::UsageInfo {
 		self.state.borrow().as_ref().map_or(sp_state_machine::UsageInfo::empty(), |s| s.usage_info())
+	}
+
+	fn fill_cache(&self) -> Result<(), Self::Error> {
+		// if let Some(db) = self.db.take() {
+		// 	let mut db_transaction = DBTransaction::new();
+		// 	for i in 0 .. 1 {
+		// 		let key = (b"dummy key", i).using_encoded(blake2_256);
+		// 		let value = (b"dummy value", i).using_encoded(blake2_256);
+		// 		println!("writting key {:?}", key);
+		// 		db_transaction.put(0, &key, &value);
+		// 	}
+		// 	db.write(db_transaction).map_err(|_| String::from("Error committing transaction"))?;
+		// }
+
+		Ok(())
 	}
 }
 
