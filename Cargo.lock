@@ -1436,6 +1436,7 @@ dependencies = [
  "frame-system",
  "linregress",
  "parity-scale-codec",
+ "paste",
  "sp-api",
  "sp-io",
  "sp-runtime",

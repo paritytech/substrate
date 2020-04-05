@@ -29,6 +29,7 @@ pub use analysis::Analysis;
 #[doc(hidden)]
 pub use sp_io::storage::root as storage_root;
 pub use sp_runtime::traits::Dispatchable;
+pub use paste;
 
 /// Construct pallet benchmarks for weighing dispatchables.
 ///
@@ -600,6 +601,39 @@ macro_rules! impl_benchmark {
 				return Ok(results);
 			}
 		}
+
+		$(
+			$crate::paste::item! {
+				fn [<test_benchmark_ $name>] <T: Trait> () -> Result<(), &'static str> {
+					let selected_benchmark = SelectedBenchmark::$name;
+					let components = <SelectedBenchmark as $crate::BenchmarkingSetup<T>>::components(&selected_benchmark);
+
+					for (idx, (name, low, high)) in components.iter().enumerate() {
+						for component_value in vec![low, high] {
+							// Select the max value for all the other components.
+							let c: Vec<($crate::BenchmarkParameter, u32)> = components.iter()
+								.enumerate()
+								.map(|(idx, (n, _, h))|
+									if n == name {
+										(*n, *component_value)
+									} else {
+										(*n, *h)
+									}
+								)
+								.collect();
+
+							// Set the block number to 1 so events are deposited.
+							frame_system::Module::<T>::set_block_number(1.into());
+							// Set up the externalities environment for the setup we want to benchmark.
+							let closure_to_benchmark = <SelectedBenchmark as $crate::BenchmarkingSetup<T>>::instance(&selected_benchmark, &c)?;
+
+							closure_to_benchmark()?;
+						}
+					}
+					Ok(())
+				}
+			}
+		)*
 	};
 	(
 		INSTANCE $( $name:ident ),*
