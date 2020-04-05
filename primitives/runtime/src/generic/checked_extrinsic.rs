@@ -78,8 +78,10 @@ where
 			U::pre_dispatch(&self.function)?;
 			(None, pre)
 		};
-		let res = self.function.dispatch(Origin::from(maybe_who));
-		Extra::post_dispatch(pre, info, len);
-		Ok(res.map(|_| ()).map_err(|e| e.error))
+		let res = self.function.dispatch(Origin::from(maybe_who))
+			.map(|_| ())
+			.map_err(|e| e.error);
+		Extra::post_dispatch(pre, info.clone(), len, &res)?;
+		Ok(res)
 	}
 }
