@@ -88,7 +88,7 @@ impl StateUsageStats {
 		self.bytes_removed_nodes.fetch_add(data_bytes, AtomicOrdering::Relaxed);
 	}
 
-	/// Tally some write trie nodes operations, including their byte count.
+	/// Tally some write key values operations, including their byte count.
 	pub fn tally_writes(&self, ops: u64, data_bytes: u64) {
 		self.writes.fetch_add(ops, AtomicOrdering::Relaxed);
 		self.bytes_written.fetch_add(data_bytes, AtomicOrdering::Relaxed);
