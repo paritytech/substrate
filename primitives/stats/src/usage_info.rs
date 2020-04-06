@@ -16,7 +16,6 @@
 
 //! Usage statistics
 
-use core::time::Duration;
 use codec::{Encode, Decode};
 use crate::state_machine_stats::StateMachineStats;
 
