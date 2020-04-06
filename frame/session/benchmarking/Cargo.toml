@@ -13,6 +13,7 @@ sp-std = { version = "2.0.0-alpha.5", default-features = false, path = "../../..
 sp-runtime = { version = "2.0.0-alpha.5", default-features = false, path = "../../../primitives/runtime" }
 frame-system = { version = "2.0.0-alpha.5", default-features = false, path = "../../system" }
 frame-benchmarking = { version = "2.0.0-alpha.5", default-features = false, path = "../../benchmarking" }
+frame-support = { version = "2.0.0-alpha.5", default-features = false, path = "../../support" }
 pallet-staking = { version = "2.0.0-alpha.5", default-features = false, features = ["runtime-benchmarks"], path = "../../staking" }
 pallet-session = { version = "2.0.0-alpha.5", default-features = false, path = "../../session" }
 
@@ -23,6 +24,7 @@ std = [
 	"sp-runtime/std",
 	"frame-system/std",
 	"frame-benchmarking/std",
+	"frame-support/std",
 	"pallet-staking/std",
 	"pallet-session/std",
 ]

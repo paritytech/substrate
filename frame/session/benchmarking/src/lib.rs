@@ -57,3 +57,18 @@ benchmarks! {
 		Session::<T>::set_keys(RawOrigin::Signed(v_controller.clone()).into(), keys, proof)?;
 	}: _(RawOrigin::Signed(v_controller))
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use pallet_session::mock::{new_test_ext, Test};
+	use frame_support::assert_ok;
+
+	#[test]
+	fn test_benchmarks() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(test_benchmark_set_keys::<Test>());
+			assert_ok!(test_benchmark_purge_keys::<Test>());
+		});
+	}
+}
