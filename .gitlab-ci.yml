@@ -33,7 +33,6 @@ variables:
   GIT_STRATEGY:                    fetch
   GIT_DEPTH:                       100
   CARGO_HOME:                      "/ci-cache/${CI_PROJECT_NAME}/cargo/${CI_COMMIT_REF_NAME}/${CI_JOB_NAME}"
-  SCCACHE_DIR:                     "/ci-cache/${CI_PROJECT_NAME}/sccache"
   CARGO_INCREMENTAL:               0
   CI_SERVER_NAME:                  "GitLab CI"
   DOCKER_OS:                       "debian:stretch"
@@ -353,6 +352,9 @@ test-full-crypto-feature:
 
 test-macos-stable:
   <<:                              *test-linux
+  variables:
+    CARGO_HOME:                      "$HOME/ci-cache/${CI_PROJECT_NAME}/cargo/${CI_COMMIT_REF_NAME}/${CI_JOB_NAME}"
+  allow_failure:                   true
   tags:
     - osx
 
@@ -361,6 +363,8 @@ cargo-check-macos:
   <<:                              *docker-env
   except:
     - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
+  variables:
+    CARGO_HOME:                      "$HOME/ci-cache/${CI_PROJECT_NAME}/cargo/${CI_COMMIT_REF_NAME}/${CI_JOB_NAME}"
   script:
     - BUILD_DUMMY_WASM_BINARY=1 time cargo check --release
     - sccache -s
@@ -393,7 +397,6 @@ build-linux-substrate:             &build-binary
     - sha256sum ./artifacts/substrate/substrate | tee ./artifacts/substrate/substrate.sha256
     - printf '\n# building node-template\n\n'
     - ./.maintain/node-template-release.sh ./artifacts/substrate/substrate-node-template.tar.gz
-    - cp -r .maintain/docker/substrate.Dockerfile ./artifacts/substrate/
     - sccache -s
     
 
@@ -411,16 +414,19 @@ build-linux-subkey:                &build-subkey
         sed -n -E 's/^subkey ([0-9.]+.*)/\1/p' |
           tee ./artifacts/subkey/VERSION;
     - sha256sum ./artifacts/subkey/subkey | tee ./artifacts/subkey/subkey.sha256
-    - cp -r .maintain/docker/subkey.Dockerfile ./artifacts/subkey/
     - sccache -s
 
 build-macos-substrate:
   <<:                              *build-binary
+  variables:
+    CARGO_HOME:                      "$HOME/ci-cache/${CI_PROJECT_NAME}/cargo/${CI_COMMIT_REF_NAME}/${CI_JOB_NAME}"
   tags:
     - osx
 
 build-macos-subkey:
   <<:                              *build-subkey
+  variables:
+    CARGO_HOME:                      "$HOME/ci-cache/${CI_PROJECT_NAME}/cargo/${CI_COMMIT_REF_NAME}/${CI_JOB_NAME}"
   tags:
     - osx
 
