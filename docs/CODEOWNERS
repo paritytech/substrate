@@ -34,8 +34,8 @@
 /primitives/core/src/sandbox.rs @pepyakin
 
 # Transaction pool
-/client/transaction-pool/ @tomusdrw @NikVolf
-/primitives/transaction-pool/ @tomusdrw @NikVolf
+/client/transaction-pool/ @NikVolf
+/primitives/transaction-pool/ @NikVolf
 
 # Offchain
 /client/offchain/ @tomusdrw
