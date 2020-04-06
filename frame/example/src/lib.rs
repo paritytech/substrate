@@ -257,7 +257,7 @@ use sp_std::marker::PhantomData;
 use frame_support::{
 	dispatch::DispatchResult, decl_module, decl_storage, decl_event,
 	weights::{
-		SimpleDispatchInfo, DispatchClass, ClassifyDispatch, WeighData, Weight,
+		SimpleDispatchInfo, DispatchInfo, DispatchClass, ClassifyDispatch, WeighData, Weight,
 		PaysFee,
 	},
 };
@@ -810,7 +810,7 @@ mod tests {
 	fn signed_ext_watch_dummy_works() {
 		new_test_ext().execute_with(|| {
 			let call = <Call<Test>>::set_dummy(10);
-			let info = frame_support::weights::DispatchInfo::default();
+			let info = DispatchInfo::default();
 
 			assert_eq!(
 				WatchDummy::<Test>(PhantomData).validate(&1, &call, &info, 150)
