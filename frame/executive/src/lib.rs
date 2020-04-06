@@ -120,7 +120,7 @@ impl<
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>:
-		Applyable+
+		Applyable +
 		GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>: Dispatchable<Info=DispatchInfo>,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
