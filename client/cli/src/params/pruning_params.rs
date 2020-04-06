@@ -58,7 +58,7 @@ impl PruningParams {
 
 				PruningMode::keep_blocks(s.parse().map_err(|_| {
 					error::Error::Input("Invalid pruning mode specified".to_string())
-				})?)
+				})
 			}
 		})
 	}
