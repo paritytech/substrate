@@ -67,7 +67,7 @@ impl PurgeChainCmd {
 			Ok(_) => {
 				println!("{:?} removed.", &db_path);
 				Ok(())
-			}
+			},
 			Err(ref err) if err.kind() == io::ErrorKind::NotFound => {
 				eprintln!("{:?} did not exist.", &db_path);
 				Ok(())
