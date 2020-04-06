@@ -147,7 +147,7 @@ impl<C: SubstrateCli> Runner<C> {
 			"❤️  by {}, {}-{}",
 			C::author(),
 			C::copyright_start_year(),
-			Local::today().year()
+			Local::today().year(),
 		);
 		info!("📋 Chain specification: {}", self.config.chain_spec.name());
 		info!("🏷  Node name: {}", self.config.network.node_name);
