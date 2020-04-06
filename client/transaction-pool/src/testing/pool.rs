@@ -20,15 +20,14 @@ use futures::executor::block_on;
 use txpool::{self, Pool};
 use sp_runtime::{
 	generic::BlockId,
-	transaction_validity::{ValidTransaction, InvalidTransaction, TransactionSource},
+	transaction_validity::{ValidTransaction, TransactionSource},
 };
 use substrate_test_runtime_client::{
-	runtime::{Block, Hash, Index, Header, Extrinsic, Transfer},
+	runtime::{Block, Hash, Index, Header, Extrinsic},
 	AccountKeyring::*,
 };
 use substrate_test_runtime_transaction_pool::{TestApi, uxt};
 use futures::{prelude::*, task::Poll};
-use codec::Encode;
 
 fn pool() -> Pool<TestApi> {
 	Pool::new(Default::default(), TestApi::with_alice_nonce(209).into())
