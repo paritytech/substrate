@@ -50,9 +50,9 @@ pub struct CheckBlockCmd {
 
 impl CheckBlockCmd {
 	/// Run the check-block command
-	pub async fn run<B, BA, CE, IQ>(
+	pub async fn run<B, BA, CE, IQ, RA>(
 		&self,
-		client: std::sync::Arc<sc_service::Client<BA, CE, B, ()>>,
+		client: std::sync::Arc<sc_service::Client<BA, CE, B, RA>>,
 		import_queue: IQ,
 	) -> error::Result<()>
 	where
@@ -60,6 +60,7 @@ impl CheckBlockCmd {
 		BA: sc_client_api::backend::Backend<B> + 'static,
 		CE: sc_client_api::call_executor::CallExecutor<B> + Send + Sync + 'static,
 		IQ: sc_service::ImportQueue<B> + Sync + 'static,
+		RA: Send + Sync + 'static,
 		<B as sp_runtime::traits::Block>::Hash: std::str::FromStr,
 	{
 		let input = if self.input.starts_with("0x") {

@@ -41,8 +41,8 @@ use sc_client_api::BlockBackend;
 use std::sync::Arc;
 use crate::import_blocks::import_blocks;
 
-pub fn check_block<B, BA, CE, IQ>(
-	client: Arc<Client<BA, CE, B, ()>>,
+pub fn check_block<B, BA, CE, RA, IQ>(
+	client: Arc<Client<BA, CE, B, RA>>,
 	import_queue: IQ,
 	block_id: BlockId<B>
 ) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>
@@ -51,6 +51,7 @@ where
 	BA: sc_client_api::backend::Backend<B> + 'static,
 	CE: sc_client_api::call_executor::CallExecutor<B> + Send + Sync + 'static,
 	IQ: ImportQueue<B> + Sync + 'static,
+	RA: Send + Sync + 'static,
 {
 	match client.block(&block_id) {
 		Ok(Some(block)) => {

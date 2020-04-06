@@ -41,11 +41,12 @@ pub struct RevertCmd {
 
 impl RevertCmd {
 	/// Run the revert command
-	pub fn run<B, BA, CE>(&self, client: std::sync::Arc<sc_service::Client<BA, CE, B, ()>>) -> error::Result<()>
+	pub fn run<B, BA, CE, RA>(&self, client: std::sync::Arc<sc_service::Client<BA, CE, B, RA>>) -> error::Result<()>
 	where
 		B: BlockT,
 		BA: sc_client_api::backend::Backend<B> + 'static,
 		CE: sc_client_api::call_executor::CallExecutor<B> + Send + Sync + 'static,
+		RA: Send + Sync + 'static,
 		<<<B as sp_runtime::traits::Block>::Header as sp_runtime::traits::Header>::Number as std::str::FromStr>::Err: std::fmt::Debug,
 	{
 		let blocks = self.num.parse()?;

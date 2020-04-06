@@ -56,15 +56,16 @@ impl<T: Read + Seek> ReadPlusSeek for T {}
 
 impl ImportBlocksCmd {
 	/// Run the import-blocks command
-	pub async fn run<B, BA, CE, IQ>(
+	pub async fn run<B, BA, CE, RA, IQ>(
 		&self,
-		client: std::sync::Arc<sc_service::Client<BA, CE, B, ()>>,
+		client: std::sync::Arc<sc_service::Client<BA, CE, B, RA>>,
 		import_queue: IQ,
 	) -> error::Result<()>
 	where
 		B: BlockT,
 		BA: sc_client_api::backend::Backend<B> + 'static,
 		CE: sc_client_api::call_executor::CallExecutor<B> + Send + Sync + 'static,
+		RA: Send + Sync + 'static,
 		IQ: sc_service::ImportQueue<B> + Sync + 'static,
 	{
 		let file: Box<dyn ReadPlusSeek + Send> = match &self.input {

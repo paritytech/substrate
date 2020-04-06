@@ -40,8 +40,8 @@ use std::{io::{Read, Write, Seek}, pin::Pin};
 use sc_client_api::BlockBackend;
 use std::sync::Arc;
 
-pub fn import_blocks<B, BA, CE, IQ>(
-	client: Arc<Client<BA, CE, B, ()>>,
+pub fn import_blocks<B, BA, CE, RA, IQ>(
+	client: Arc<Client<BA, CE, B, RA>>,
 	import_queue: IQ,
 	input: impl Read + Seek + Send + 'static,
 	force: bool,
@@ -51,6 +51,7 @@ where
 	BA: sc_client_api::backend::Backend<B> + 'static,
 	CE: sc_client_api::call_executor::CallExecutor<B> + Send + Sync + 'static,
 	IQ: ImportQueue<B> + Sync + 'static,
+	RA: Send + Sync + 'static,
 {
 	struct WaitLink {
 		imported_blocks: u64,

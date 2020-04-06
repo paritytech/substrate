@@ -63,14 +63,15 @@ pub struct ExportBlocksCmd {
 
 impl ExportBlocksCmd {
 	/// Run the export-blocks command
-	pub async fn run<B, BA, CE>(
+	pub async fn run<B, BA, CE, RA>(
 		&self,
-		client: std::sync::Arc<sc_service::Client<BA, CE, B, ()>>,
+		client: std::sync::Arc<sc_service::Client<BA, CE, B, RA>>,
 	) -> error::Result<()>
 	where
 		B: BlockT,
 		BA: sc_client_api::backend::Backend<B> + 'static,
 		CE: sc_client_api::call_executor::CallExecutor<B> + Send + Sync + 'static,
+		RA: Send + Sync + 'static,
 		<<<B as sp_runtime::traits::Block>::Header as sp_runtime::traits::Header>::Number as std::str::FromStr>::Err: std::fmt::Debug,
 	{
 		// TODO: should probably not be here

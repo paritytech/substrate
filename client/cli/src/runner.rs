@@ -161,17 +161,18 @@ impl<C: SubstrateCli> Runner<C> {
 
 	/// A helper function that runs a future with tokio and stops if the process receives the signal
 	/// `SIGTERM` or `SIGINT`.
-	pub fn run_subcommand<BU, B, BA, CE, IQ>(self, subcommand: &Subcommand, builder: BU) -> Result<()>
+	pub fn run_subcommand<BU, B, BA, CE, RA, IQ>(self, subcommand: &Subcommand, builder: BU) -> Result<()>
 	where
-		BU: FnOnce(Configuration) -> sc_service::error::Result<(std::sync::Arc<sc_service::Client<BA, CE, B, ()>>, IQ)>,
+		BU: FnOnce(Configuration) -> sc_service::error::Result<(std::sync::Arc<sc_service::Client<BA, CE, B, RA>>, IQ)>,
 		B: BlockT,
 		BA: sc_client_api::backend::Backend<B> + 'static,
 		CE: sc_client_api::call_executor::CallExecutor<B> + Send + Sync + 'static,
 		IQ: sc_service::ImportQueue<B> + Sync + 'static,
+		RA: Send + Sync + 'static,
 		<B as sp_runtime::traits::Block>::Hash: std::str::FromStr,
 		<<<B as sp_runtime::traits::Block>::Header as sp_runtime::traits::Header>::Number as std::str::FromStr>::Err: std::fmt::Debug,
 	{
-		let (client, mut import_queue) = builder(self.config)?;
+		let (client, import_queue) = builder(self.config)?;
 
 		match subcommand {
 			//Subcommand::BuildSpec(cmd) => cmd.run(client),
