@@ -16,8 +16,6 @@
 
 //! The main database trait, allowing Substrate to store data persistently.
 
-use std::{fmt::Debug, hash::Hash};
-
 /// An identifier for a column.
 pub type ColumnId = u32;
 
@@ -56,14 +54,7 @@ impl<H> Transaction<H> {
 	}
 }
 
-pub trait HashKey:
-	AsRef<[u8]> + AsMut<[u8]> + Ord + PartialOrd + Eq + PartialEq + Clone + Debug + Hash
-{}
-impl<
-	H: AsRef<[u8]> + AsMut<[u8]> + Ord + PartialOrd + Eq + PartialEq + Clone + Debug + Hash
-> HashKey for H {}
-
-pub trait Database<H: HashKey> {
+pub trait Database<H: Clone> {
 	/// Create a new transaction to be prepared and committed atomically.
 	fn new_transaction(&self) -> Transaction<H> { Transaction(Vec::new()) }
 	/// Commit the `transaction` to the database atomically. Any further calls to `get` or `lookup`
