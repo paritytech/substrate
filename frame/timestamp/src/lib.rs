@@ -95,8 +95,10 @@ mod benchmarking;
 
 use sp_std::{result, cmp};
 use sp_inherents::{ProvideInherent, InherentData, InherentIdentifier};
+#[cfg(feature = "std")]
+use frame_support::debug;
 use frame_support::{
-	Parameter, decl_storage, decl_module, debug,
+	Parameter, decl_storage, decl_module,
 	traits::{Time, UnixTime, Get},
 	weights::SimpleDispatchInfo,
 };
@@ -145,7 +147,7 @@ decl_module! {
 		/// `MinimumPeriod`.
 		///
 		/// The dispatch origin for this call must be `Inherent`.
-		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
+		#[weight = SimpleDispatchInfo::FixedMandatory(10_000)]
 		fn set(origin, #[compact] now: T::Moment) {
 			ensure_none(origin)?;
 			assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");

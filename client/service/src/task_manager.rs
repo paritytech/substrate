@@ -22,17 +22,18 @@ use exit_future::Signal;
 use log::{debug, error};
 use futures::{
 	Future, FutureExt, Stream,
-	future::select, channel::mpsc,
+	future::select,
 	compat::*,
 	task::{Spawn, FutureObj, SpawnError},
 };
 use sc_client_api::CloneableSpawn;
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
 
 /// Type alias for service task executor (usually runtime).
 pub type ServiceTaskExecutor = Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>;
 
 /// Type alias for the task scheduler.
-pub type TaskScheduler = mpsc::UnboundedSender<(Pin<Box<dyn Future<Output = ()> + Send>>, Cow<'static, str>)>;
+pub type TaskScheduler = TracingUnboundedSender<(Pin<Box<dyn Future<Output = ()> + Send>>, Cow<'static, str>)>;
 
 /// Helper struct to setup background tasks execution for service.
 pub struct TaskManagerBuilder {
@@ -44,14 +45,14 @@ pub struct TaskManagerBuilder {
 	/// Sender for futures that must be spawned as background tasks.
 	to_spawn_tx: TaskScheduler,
 	/// Receiver for futures that must be spawned as background tasks.
-	to_spawn_rx: mpsc::UnboundedReceiver<(Pin<Box<dyn Future<Output = ()> + Send>>, Cow<'static, str>)>,
+	to_spawn_rx: TracingUnboundedReceiver<(Pin<Box<dyn Future<Output = ()> + Send>>, Cow<'static, str>)>,
 }
 
 impl TaskManagerBuilder {
 	/// New asynchronous task manager setup.
 	pub fn new() -> Self {
 		let (signal, on_exit) = exit_future::signal();
-		let (to_spawn_tx, to_spawn_rx) = mpsc::unbounded();
+		let (to_spawn_tx, to_spawn_rx) = tracing_unbounded("mpsc_task_manager");
 		Self {
 			on_exit,
 			signal: Some(signal),
@@ -144,7 +145,7 @@ pub struct TaskManager {
 	/// Sender for futures that must be spawned as background tasks.
 	to_spawn_tx: TaskScheduler,
 	/// Receiver for futures that must be spawned as background tasks.
-	to_spawn_rx: mpsc::UnboundedReceiver<(Pin<Box<dyn Future<Output = ()> + Send>>, Cow<'static, str>)>,
+	to_spawn_rx: TracingUnboundedReceiver<(Pin<Box<dyn Future<Output = ()> + Send>>, Cow<'static, str>)>,
 	/// How to spawn background tasks.
 	executor: ServiceTaskExecutor,
 }
