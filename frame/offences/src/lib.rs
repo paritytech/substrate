@@ -110,12 +110,7 @@ decl_module! {
 		fn on_initialize(now: T::BlockNumber) -> Weight {
 			// only decode storage if we can actually submit anything again.
 			if T::OnOffenceHandler::can_report() {
-				#[cfg(feature = "std")]
-				println!("inside can_report()");
-
 				<DeferredOffences<T>>::mutate(|deferred| {
-					#[cfg(feature = "std")]
-					println!("deferred offences len = {}", deferred.len());
 					// keep those that fail to be reported again. An error log is emitted here; this
 					// should not happen if staking's `can_report` is implemented properly.
 					deferred.retain(|(o, p, s)| {
@@ -193,8 +188,6 @@ impl<T: Trait> Module<T> {
 		) {
 			Ok(_) => true,
 			Err(_) => {
-				#[cfg(feature = "std")]
-				println!("HERE DEFERRED");
 				<DeferredOffences<T>>::mutate(|d|
 					d.push((concurrent_offenders.to_vec(), slash_perbill.to_vec(), session_index))
 				);
