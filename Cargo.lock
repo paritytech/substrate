@@ -7307,6 +7307,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp-database"
+version = "2.0.0-alpha.5"
+
+[[package]]
 name = "sp-debug-derive"
 version = "2.0.0-alpha.5"
 dependencies = [
