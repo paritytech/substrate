@@ -772,7 +772,7 @@ pub trait Trait: frame_system::Trait {
 	type ElectionLookahead: Get<Self::BlockNumber>;
 
 	/// The overarching call type.
-	type Call: From<Call<Self>> + IsSubType<Module<Self>, Self> + Clone;
+	type Call: Dispatchable + From<Call<Self>> + IsSubType<Module<Self>, Self> + Clone;
 
 	/// A transaction submitter.
 	type SubmitTransaction: SubmitUnsignedTransaction<Self, <Self as Trait>::Call>;
@@ -3120,9 +3120,7 @@ impl<T> Default for LockStakingStatus<T> {
 	}
 }
 
-impl<T: Trait + Send + Sync> SignedExtension for LockStakingStatus<T> where
-	<T as Trait>::Call: Dispatchable
-{
+impl<T: Trait + Send + Sync> SignedExtension for LockStakingStatus<T> {
 	const IDENTIFIER: &'static str = "LockStakingStatus";
 	type AccountId = T::AccountId;
 	type Call = <T as Trait>::Call;

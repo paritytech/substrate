@@ -53,7 +53,7 @@ pub enum Never {}
 /// Serializable version of Dispatchable.
 /// This value can be used as a "function" in an extrinsic.
 pub trait Callable<T> {
-	type Call: Dispatchable<PostInfo=PostDispatchInfo> + Codec + Clone + PartialEq + Eq;
+	type Call: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo> + Codec + Clone + PartialEq + Eq;
 }
 
 // dirty hack to work around serde_derive issue

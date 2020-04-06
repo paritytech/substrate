@@ -147,7 +147,7 @@ pub trait Trait: 'static + Eq + Clone {
 		+ Clone;
 
 	/// The aggregated `Call` type.
-	type Call: Debug;
+	type Call: Dispatchable + Debug;
 
 	/// Account index (aka nonce) type. This stores the number of previous transactions associated
 	/// with a sender account.
@@ -1457,9 +1457,7 @@ impl<T: Trait + Send + Sync> Debug for CheckEra<T> {
 	}
 }
 
-impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> where
-	T::Call: Dispatchable
-{
+impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 	type AccountId = T::AccountId;
 	type Call = T::Call;
 	type AdditionalSigned = T::Hash;
@@ -1515,9 +1513,7 @@ impl<T: Trait + Send + Sync> CheckGenesis<T> {
 	}
 }
 
-impl<T: Trait + Send + Sync> SignedExtension for CheckGenesis<T> where
-	T::Call: Dispatchable
-{
+impl<T: Trait + Send + Sync> SignedExtension for CheckGenesis<T> {
 	type AccountId = T::AccountId;
 	type Call = <T as Trait>::Call;
 	type AdditionalSigned = T::Hash;
@@ -1552,9 +1548,7 @@ impl<T: Trait + Send + Sync> CheckVersion<T> {
 	}
 }
 
-impl<T: Trait + Send + Sync> SignedExtension for CheckVersion<T> where
-	T::Call: Dispatchable
-{
+impl<T: Trait + Send + Sync> SignedExtension for CheckVersion<T> {
 	type AccountId = T::AccountId;
 	type Call = <T as Trait>::Call;
 	type AdditionalSigned = u32;
