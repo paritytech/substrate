@@ -179,16 +179,16 @@ decl_event! {
 		/// Batch of dispatches completed fully with no error.
 		BatchCompleted,
 		/// A new multisig operation has begun. First param is the account that is approving,
-		/// second is the multisig account.
+		/// second is the multisig account, third is hash of the call.
 		NewMultisig(AccountId, AccountId, CallHash),
 		/// A multisig operation has been approved by someone. First param is the account that is
-		/// approving, third is the multisig account.
+		/// approving, third is the multisig account, fourth is hash of the call.
 		MultisigApproval(AccountId, Timepoint<BlockNumber>, AccountId, CallHash),
 		/// A multisig operation has been executed. First param is the account that is
-		/// approving, third is the multisig account.
+		/// approving, third is the multisig account, fourth is hash of the call to be executed.
 		MultisigExecuted(AccountId, Timepoint<BlockNumber>, AccountId, CallHash, DispatchResult),
 		/// A multisig operation has been cancelled. First param is the account that is
-		/// cancelling, third is the multisig account.
+		/// cancelling, third is the multisig account, fourth is hash of the call.
 		MultisigCancelled(AccountId, Timepoint<BlockNumber>, AccountId, CallHash),
 	}
 }
