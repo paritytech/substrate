@@ -217,7 +217,11 @@ impl PeerState {
 				} else {
 					None
 				}
-			_ => None
+			PeerState::Poisoned => None,
+			PeerState::Banned { .. } => None,
+			PeerState::PendingRequest { .. } => None,
+			PeerState::Requested => None,
+			PeerState::Incoming { .. } => None,
 		}
 	}
 

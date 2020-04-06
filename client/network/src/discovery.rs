@@ -322,7 +322,6 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 	}
 
 	fn inject_listener_closed(&mut self, id: ListenerId, reason: Result<(), &io::Error>) {
-		error!(target: "sub-libp2p", "Libp2p listener {:?} closed: {:?}", id, reason);
 		NetworkBehaviour::inject_listener_closed(&mut self.kademlia, id, reason);
 	}
 

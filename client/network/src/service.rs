@@ -37,7 +37,9 @@ use crate::{
 	transport, ReputationChange,
 };
 use futures::{prelude::*, channel::mpsc};
-use libp2p::{PeerId, Multiaddr, core::Executor, kad::record};
+use libp2p::{PeerId, Multiaddr};
+use libp2p::core::{Executor, connection::PendingConnectionError};
+use libp2p::kad::record;
 use libp2p::swarm::{NetworkBehaviour, SwarmBuilder, SwarmEvent};
 use log::{error, info, trace, warn};
 use parking_lot::Mutex;
@@ -1043,8 +1045,6 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 				Poll::Ready(SwarmEvent::ExpiredListenAddr(addr)) =>
 					trace!(target: "sub-libp2p", "Libp2p => ExpiredListenAddr({})", addr),
 				Poll::Ready(SwarmEvent::UnreachableAddr { peer_id, address, error, .. }) => {
-					let error = error.to_string();
-
 					trace!(
 						target: "sub-libp2p", "Libp2p => Failed to reach {:?} through {:?}: {}",
 						peer_id,
@@ -1052,15 +1052,14 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						error,
 					);
 
-					if this.boot_node_ids.contains(&peer_id)
-						&& error.contains("Peer ID mismatch")
-					{
-						error!(
-							"Connecting to bootnode with peer id `{}` and address `{}` failed \
-							because it returned a different peer id!",
-							peer_id,
-							address,
-						);
+					if this.boot_node_ids.contains(&peer_id) {
+						if let PendingConnectionError::InvalidPeerId = error {
+							error!(
+								"Invalid peer ID from bootnode, expected `{}` at address `{}`.",
+								peer_id,
+								address,
+							);
+						}
 					}
 				}
 				Poll::Ready(SwarmEvent::Dialing(peer_id)) =>
@@ -1078,7 +1077,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					trace!(target: "sub-libp2p", "Libp2p => UnknownPeerUnreachableAddr({}): {}",
 						address, error),
 				Poll::Ready(SwarmEvent::ListenerClosed { reason, addresses: _ }) =>
-					trace!(target: "sub-libp2p", "Libp2p => ListenerClosed: {:?}", reason),
+					warn!(target: "sub-libp2p", "Libp2p => ListenerClosed: {:?}", reason),
 				Poll::Ready(SwarmEvent::ListenerError { error }) =>
 					trace!(target: "sub-libp2p", "Libp2p => ListenerError: {}", error),
 			};
