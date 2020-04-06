@@ -303,10 +303,10 @@ fn multisig_2_of_3_cannot_reissue_same_call() {
 		assert_eq!(Balances::free_balance(multi), 5);
 
 		assert_ok!(Utility::as_multi(Origin::signed(1), 2, vec![2, 3], None, call.clone()));
-		assert_ok!(Utility::as_multi(Origin::signed(3), 2, vec![1, 2], Some(now()), call));
+		assert_ok!(Utility::as_multi(Origin::signed(3), 2, vec![1, 2], Some(now()), call.clone()));
 
 		let err = DispatchError::from(BalancesError::<Test, _>::InsufficientBalance).stripped();
-		expect_event(RawEvent::MultisigExecuted(3, now(), multi, Err(err)));
+		expect_event(RawEvent::MultisigExecuted(3, now(), multi, call.using_encoded(blake2_256), Err(err)));
 	});
 }
 
