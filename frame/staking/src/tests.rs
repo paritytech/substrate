@@ -2934,7 +2934,7 @@ mod offchain_phragmen {
 				// given
 				assert_eq!(Staking::era_election_status(), ElectionStatus::Open(12));
 
-				// chill and nominate are now allowed.
+				// chill and nominate are now not allowed.
 				assert_noop!(
 					Staking::chill(Origin::signed(10)),
 					Error::<Test>::CallNotAllowed,
