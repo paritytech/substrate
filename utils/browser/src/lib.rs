@@ -87,7 +87,6 @@ where
 		rpc_http: Default::default(),
 		rpc_ws: Default::default(),
 		rpc_ws_max_connections: Default::default(),
-		sentry_mode: Default::default(),
 		state_cache_child_ratio: Default::default(),
 		state_cache_size: Default::default(),
 		tracing_receiver: Default::default(),
