@@ -257,8 +257,7 @@ use sp_std::marker::PhantomData;
 use frame_support::{
 	dispatch::DispatchResult, decl_module, decl_storage, decl_event,
 	weights::{
-		SimpleDispatchInfo, DispatchInfo, DispatchClass, ClassifyDispatch, WeighData, Weight,
-		PaysFee,
+		SimpleDispatchInfo, DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee,
 	},
 };
 use sp_std::prelude::*;
@@ -697,7 +696,7 @@ mod tests {
 	use super::*;
 
 	use frame_support::{
-		assert_ok, impl_outer_origin, parameter_types, weights::GetDispatchInfo,
+		assert_ok, impl_outer_origin, parameter_types, weights::{DispatchInfo, GetDispatchInfo},
 		traits::{OnInitialize, OnFinalize}
 	};
 	use sp_core::H256;
