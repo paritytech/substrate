@@ -28,7 +28,7 @@ use sc_service::config::{
 	NetworkConfiguration, NodeKeyConfig, PrometheusConfig, PruningMode, Role, TelemetryEndpoints,
 	TransactionPoolOptions, WasmExecutionMethod,
 };
-use sc_service::ChainSpec;
+use sc_service::{ChainSpec, TracingReceiver};
 use std::future::Future;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -73,26 +73,38 @@ pub trait CliConfiguration: Sized {
 	}
 
 	/// Get the base path of the configuration (if any)
+	///
+	/// By default this is retrieved from `SharedParams`.
 	fn base_path(&self) -> Result<Option<PathBuf>> {
 		self.shared_params().base_path()
 	}
 
 	/// Returns `true` if the node is for development or not
+	///
+	/// By default this is retrieved from `SharedParams`.
 	fn is_dev(&self) -> Result<bool> {
 		self.shared_params().is_dev()
 	}
 
-	/// Get the role
+	/// Gets the role
+	///
+	/// By default this is `Role::Full`.
 	fn role(&self, _is_dev: bool) -> Result<Role> {
 		Ok(Role::Full)
 	}
 
 	/// Get the transaction pool options
+	///
+	/// By default this is `TransactionPoolOptions::default()`.
 	fn transaction_pool(&self) -> Result<TransactionPoolOptions> {
 		Ok(Default::default())
 	}
 
 	/// Get the network configuration
+	///
+	/// By default this is retrieved from `NetworkParams` if it is available otherwise it creates
+	/// a default `NetworkConfiguration` based on `node_name`, `client_id`, `node_key` and
+	/// `net_config_dir`.
 	fn network_config(
 		&self,
 		chain_spec: &Box<dyn ChainSpec>,
@@ -121,94 +133,130 @@ pub trait CliConfiguration: Sized {
 		}
 	}
 
-	/// Get the keystore configuration
+	/// Get the keystore configuration.
+	///
+	/// Bu default this is retrieved from `KeystoreParams` if it is available. Otherwise it uses
+	/// `KeystoreConfig::InMemory`.
 	fn keystore_config(&self, base_path: &PathBuf) -> Result<KeystoreConfig> {
 		self.keystore_params()
 			.map(|x| x.keystore_config(base_path))
 			.unwrap_or(Ok(KeystoreConfig::InMemory))
 	}
 
-	/// Get the database cache size (None for default)
+	/// Get the database cache size.
+	///
+	/// By default this is retrieved from `ImportParams` if it is available. Otherwise its `None`.
 	fn database_cache_size(&self) -> Result<Option<usize>> {
 		self.import_params()
 			.map(|x| x.database_cache_size())
 			.unwrap_or(Ok(Default::default()))
 	}
 
-	/// Get the database configuration
+	/// Get the database configuration.
+	///
+	/// By default this is retrieved from `SharedParams`
 	fn database_config(&self, base_path: &PathBuf, cache_size: usize) -> Result<DatabaseConfig> {
 		self.shared_params().database_config(base_path, cache_size)
 	}
 
-	/// Get the state cache size
+	/// Get the state cache size.
+	///
+	/// By default this is retrieved from `ImportParams` if it is available. Otherwise its `0`.
 	fn state_cache_size(&self) -> Result<usize> {
 		self.import_params()
 			.map(|x| x.state_cache_size())
 			.unwrap_or(Ok(Default::default()))
 	}
 
-	/// Get the state cache child ratio (if any)
+	/// Get the state cache child ratio (if any).
+	///
+	/// By default this is `None`.
 	fn state_cache_child_ratio(&self) -> Result<Option<usize>> {
 		Ok(Default::default())
 	}
 
-	/// Get the pruning mode
+	/// Get the pruning mode.
+	///
+	/// By default this is retrieved from `PruningMode` if it is available. Otherwise its
+	/// `PruningMode::default()`.
 	fn pruning(&self, is_dev: bool, role: &Role) -> Result<PruningMode> {
 		self.pruning_params()
 			.map(|x| x.pruning(is_dev, role))
 			.unwrap_or(Ok(Default::default()))
 	}
 
-	/// Get the chain ID (string)
+	/// Get the chain ID (string).
+	///
+	/// By default this is retrieved from `SharedParams`.
 	fn chain_id(&self, is_dev: bool) -> Result<String> {
 		self.shared_params().chain_id(is_dev)
 	}
 
-	/// Get the name of the node
+	/// Get the name of the node.
+	///
+	/// By default a random name is generated.
 	fn node_name(&self) -> Result<String> {
 		Ok(generate_node_name())
 	}
 
-	/// Get the WASM execution method
+	/// Get the WASM execution method.
+	///
+	/// By default this is retrieved from `ImportParams` if it is available. Otherwise its
+	/// `WasmExecutionMethod::default()`.
 	fn wasm_method(&self) -> Result<WasmExecutionMethod> {
 		self.import_params()
 			.map(|x| x.wasm_method())
 			.unwrap_or(Ok(Default::default()))
 	}
 
-	/// Get the execution strategies
+	/// Get the execution strategies.
+	///
+	/// By default this is retrieved from `ImportParams` if it is available. Otherwise its
+	/// `ExecutionStrategies::default()`.
 	fn execution_strategies(&self, is_dev: bool) -> Result<ExecutionStrategies> {
 		self.import_params()
 			.map(|x| x.execution_strategies(is_dev))
 			.unwrap_or(Ok(Default::default()))
 	}
 
-	/// Get the RPC HTTP address (`None` if disabled)
+	/// Get the RPC HTTP address (`None` if disabled).
+	///
+	/// By default this is `None`.
 	fn rpc_http(&self) -> Result<Option<SocketAddr>> {
 		Ok(Default::default())
 	}
 
-	/// Get the RPC websocket address (`None` if disabled)
+	/// Get the RPC websocket address (`None` if disabled).
+	///
+	/// By default this is `None`.
 	fn rpc_ws(&self) -> Result<Option<SocketAddr>> {
 		Ok(Default::default())
 	}
 
-	/// Get the RPC websockets maximum connections (`None` if unlimited)
+	/// Get the RPC websockets maximum connections (`None` if unlimited).
+	///
+	/// By default this is `None`.
 	fn rpc_ws_max_connections(&self) -> Result<Option<usize>> {
 		Ok(Default::default())
 	}
 
 	/// Get the RPC cors (`None` if disabled)
+	///
+	/// By default this is `None`.
 	fn rpc_cors(&self, _is_dev: bool) -> Result<Option<Vec<String>>> {
 		Ok(Some(Vec::new()))
 	}
 
 	/// Get the prometheus configuration (`None` if disabled)
+	///
+	/// By default this is `None`.
 	fn prometheus_config(&self) -> Result<Option<PrometheusConfig>> {
 		Ok(Default::default())
 	}
 
 	/// Get the telemetry endpoints (if any)
+	///
+	/// By default this is retrieved from the chain spec loaded by `load_spec`.
 	fn telemetry_endpoints(
 		&self,
 		chain_spec: &Box<dyn ChainSpec>,
@@ -217,36 +265,51 @@ pub trait CliConfiguration: Sized {
 	}
 
 	/// Get the telemetry external transport
+	///
+	/// By default this is `None`.
 	fn telemetry_external_transport(&self) -> Result<Option<ExtTransport>> {
 		Ok(Default::default())
 	}
 
 	/// Get the default value for heap pages
+	///
+	/// By default this is `None`.
 	fn default_heap_pages(&self) -> Result<Option<u64>> {
 		Ok(Default::default())
 	}
 
 	/// Returns `Ok(true)` if offchain worker should be used
+	///
+	/// By default this is `false`.
 	fn offchain_worker(&self, _role: &Role) -> Result<bool> {
 		Ok(Default::default())
 	}
 
 	/// Returns `Ok(true)` if authoring should be forced
+	///
+	/// By default this is `false`.
 	fn force_authoring(&self) -> Result<bool> {
 		Ok(Default::default())
 	}
 
 	/// Returns `Ok(true)` if grandpa should be disabled
+	///
+	/// By default this is `false`.
 	fn disable_grandpa(&self) -> Result<bool> {
 		Ok(Default::default())
 	}
 
 	/// Get the development key seed from the current object
+	///
+	/// By default this is `None`.
 	fn dev_key_seed(&self, _is_dev: bool) -> Result<Option<String>> {
 		Ok(Default::default())
 	}
 
 	/// Get the tracing targets from the current object (if any)
+	///
+	/// By default this is retrieved from `ImportParams` if it is available. Otherwise its
+	/// `None`.
 	fn tracing_targets(&self) -> Result<Option<String>> {
 		self.import_params()
 			.map(|x| x.tracing_targets())
@@ -254,13 +317,19 @@ pub trait CliConfiguration: Sized {
 	}
 
 	/// Get the TracingReceiver value from the current object
-	fn tracing_receiver(&self) -> Result<sc_tracing::TracingReceiver> {
+	///
+	/// By default this is retrieved from `ImportParams` if it is available. Otherwise its
+	/// `TracingReceiver::default()`.
+	fn tracing_receiver(&self) -> Result<TracingReceiver> {
 		self.import_params()
 			.map(|x| x.tracing_receiver())
 			.unwrap_or(Ok(Default::default()))
 	}
 
 	/// Get the node key from the current object
+	///
+	/// By default this is retrieved from `NodeKeyParams` if it is available. Otherwise its
+	/// `NodeKeyConfig::default()`.
 	fn node_key(&self, net_config_dir: &PathBuf) -> Result<NodeKeyConfig> {
 		self.node_key_params()
 			.map(|x| x.node_key(net_config_dir))
@@ -268,11 +337,15 @@ pub trait CliConfiguration: Sized {
 	}
 
 	/// Get maximum runtime instances
+	///
+	/// By default this is `None`.
 	fn max_runtime_instances(&self) -> Result<Option<usize>> {
 		Ok(Default::default())
 	}
 
 	/// Activate or not the automatic announcing of blocks after import
+	///
+	/// By default this is `false`.
 	fn announce_block(&self) -> Result<bool> {
 		Ok(true)
 	}
@@ -348,7 +421,9 @@ pub trait CliConfiguration: Sized {
 		})
 	}
 
-	/// Get the filters for the logging
+	/// Get the filters for the logging.
+	///
+	/// By default this is retrieved from `SharedParams`.
 	fn log_filters(&self) -> Result<Option<String>> {
 		self.shared_params().log_filters()
 	}
