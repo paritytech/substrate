@@ -374,9 +374,14 @@ impl From<DispatchError> for DispatchOutcome {
 	}
 }
 
-/// Result of a module function call; either nothing (functions are only called for "side effects")
-/// or an error message.
+/// This is the legacy return type of `Dispatchable`. It is still exposed for compatibilty
+/// reasons. The new return type is `DispatchResultWithInfo`.
+/// FRAME runtimes should use frame_support::dispatch::DispatchResult
 pub type DispatchResult = sp_std::result::Result<(), DispatchError>;
+
+/// Return type of a `Dispatchable` which contains the `DispatchResult` and additional information
+/// about the `Dispatchable` that is only known post dispatch.
+pub type DispatchResultWithInfo<T> = sp_std::result::Result<T, DispatchErrorWithPostInfo<T>>;
 
 /// Reason why a dispatch call failed
 #[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, RuntimeDebug)]
@@ -400,6 +405,18 @@ pub enum DispatchError {
 	},
 }
 
+/// Result of a `Dispatchable` which contains the `DispatchResult` and additional information
+/// about the `Dispatchable` that is only known post dispatch.
+#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, RuntimeDebug)]
+pub struct DispatchErrorWithPostInfo<Info> where
+	Info: Eq + PartialEq + Clone + Copy + Encode + Decode + traits::Printable
+{
+	/// Addditional information about the `Dispatchable` which is only known post dispatch.
+	pub post_info: Info,
+	/// The actual `DispatchResult` indicating whether the dispatch was succesfull.
+	pub error: DispatchError,
+}
+
 impl DispatchError {
 	/// Return the same error but without the attached message.
 	pub fn stripped(self) -> Self {
@@ -407,6 +424,18 @@ impl DispatchError {
 			DispatchError::Module { index, error, message: Some(_) }
 				=> DispatchError::Module { index, error, message: None },
 			m => m,
+		}
+	}
+}
+
+impl<T, E> From<E> for DispatchErrorWithPostInfo<T> where
+	T: Eq + PartialEq + Clone + Copy + Encode + Decode + traits::Printable + Default,
+	E: Into<DispatchError>
+{
+	fn from(error: E) -> Self {
+		Self {
+			post_info: Default::default(),
+			error: error.into(),
 		}
 	}
 }
@@ -440,6 +469,14 @@ impl From<DispatchError> for &'static str {
 	}
 }
 
+impl<T> From<DispatchErrorWithPostInfo<T>> for &'static str where
+	T: Eq + PartialEq + Clone + Copy + Encode + Decode + traits::Printable
+{
+	fn from(err: DispatchErrorWithPostInfo<T>) -> &'static str {
+		err.error.into()
+	}
+}
+
 impl traits::Printable for DispatchError {
 	fn print(&self) {
 		"DispatchError".print();
@@ -455,6 +492,16 @@ impl traits::Printable for DispatchError {
 				}
 			}
 		}
+	}
+}
+
+impl<T> traits::Printable for DispatchErrorWithPostInfo<T> where
+	T: Eq + PartialEq + Clone + Copy + Encode + Decode + traits::Printable
+{
+	fn print(&self) {
+		self.error.print();
+		"PostInfo: ".print();
+		self.post_info.print();
 	}
 }
 

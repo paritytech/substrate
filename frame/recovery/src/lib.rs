@@ -161,6 +161,7 @@ use frame_support::{
 	decl_module, decl_event, decl_storage, decl_error, ensure,
 	Parameter, RuntimeDebug, weights::{GetDispatchInfo, SimpleDispatchInfo, FunctionOf},
 	traits::{Currency, ReservableCurrency, Get, BalanceStatus},
+	dispatch::PostDispatchInfo,
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 
@@ -178,7 +179,7 @@ pub trait Trait: frame_system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// The overarching call type.
-	type Call: Parameter + Dispatchable<Origin=Self::Origin> + GetDispatchInfo;
+	type Call: Parameter + Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo> + GetDispatchInfo;
 
 	/// The currency mechanism.
 	type Currency: ReservableCurrency<Self::AccountId>;
@@ -348,6 +349,7 @@ decl_module! {
 			let target = Self::proxy(&who).ok_or(Error::<T>::NotAllowed)?;
 			ensure!(&target == &account, Error::<T>::NotAllowed);
 			call.dispatch(frame_system::RawOrigin::Signed(account).into())
+				.map(|_| ()).map_err(|e| e.error)
 		}
 
 		/// Allow ROOT to bypass the recovery process and set an a rescuer account

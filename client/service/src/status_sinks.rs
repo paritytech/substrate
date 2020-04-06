@@ -14,11 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use futures::{Stream, stream::futures_unordered::FuturesUnordered, channel::mpsc};
+use futures::{Stream, stream::futures_unordered::FuturesUnordered};
 use std::time::Duration;
 use std::pin::Pin;
 use std::task::{Poll, Context};
 use futures_timer::Delay;
+use sp_utils::mpsc::TracingUnboundedSender;
 
 /// Holds a list of `UnboundedSender`s, each associated with a certain time period. Every time the
 /// period elapses, we push an element on the sender.
@@ -31,7 +32,7 @@ pub struct StatusSinks<T> {
 struct YieldAfter<T> {
 	delay: Delay,
 	interval: Duration,
-	sender: Option<mpsc::UnboundedSender<T>>,
+	sender: Option<TracingUnboundedSender<T>>,
 }
 
 impl<T> StatusSinks<T> {
@@ -45,7 +46,7 @@ impl<T> StatusSinks<T> {
 	/// Adds a sender to the collection.
 	///
 	/// The `interval` is the time period between two pushes on the sender.
-	pub fn push(&mut self, interval: Duration, sender: mpsc::UnboundedSender<T>) {
+	pub fn push(&mut self, interval: Duration, sender: TracingUnboundedSender<T>) {
 		self.entries.push(YieldAfter {
 			delay: Delay::new(interval),
 			interval,
@@ -88,7 +89,7 @@ impl<T> StatusSinks<T> {
 }
 
 impl<T> futures::Future for YieldAfter<T> {
-	type Output = (mpsc::UnboundedSender<T>, Duration);
+	type Output = (TracingUnboundedSender<T>, Duration);
 
 	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		let this = Pin::into_inner(self);

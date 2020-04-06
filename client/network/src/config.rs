@@ -31,23 +31,21 @@ pub use crate::protocol::ProtocolConfig;
 
 use crate::service::ExHashT;
 
-use bitflags::bitflags;
 use sp_consensus::{block_validation::BlockAnnounceValidator, import_queue::ImportQueue};
 use sp_runtime::traits::{Block as BlockT};
 use libp2p::identity::{Keypair, ed25519};
 use libp2p::wasm_ext;
 use libp2p::{PeerId, Multiaddr, multiaddr};
 use core::{fmt, iter};
-use std::{future::Future, pin::Pin};
+use std::{convert::TryFrom, future::Future, pin::Pin, str::FromStr};
 use std::{error::Error, fs, io::{self, Write}, net::Ipv4Addr, path::{Path, PathBuf}, sync::Arc};
 use zeroize::Zeroize;
 use prometheus_endpoint::Registry;
 
-
 /// Network initialization parameters.
 pub struct Params<B: BlockT, H: ExHashT> {
-	/// Assigned roles for our node (full, light, ...).
-	pub roles: Roles,
+	/// Assigned role for our node (full, light, ...).
+	pub role: Role,
 
 	/// How to spawn background tasks. If you pass `None`, then a threads pool will be used by
 	/// default.
@@ -97,54 +95,48 @@ pub struct Params<B: BlockT, H: ExHashT> {
 	pub metrics_registry: Option<Registry>,
 }
 
-bitflags! {
-	/// Bitmask of the roles that a node fulfills.
-	pub struct Roles: u8 {
-		/// No network.
-		const NONE = 0b00000000;
-		/// Full node, does not participate in consensus.
-		const FULL = 0b00000001;
-		/// Light client node.
-		const LIGHT = 0b00000010;
-		/// Act as an authority
-		const AUTHORITY = 0b00000100;
+/// Role of the local node.
+#[derive(Debug, Clone)]
+pub enum Role {
+	/// Regular full node.
+	Full,
+	/// Regular light node.
+	Light,
+	/// Sentry node that guards an authority. Will be reported as "authority" on the wire protocol.
+	Sentry {
+		/// Address and identity of the validator nodes that we're guarding.
+		///
+		/// The nodes will be granted some priviledged status.
+		validators: Vec<MultiaddrWithPeerId>,
+	},
+	/// Actual authority.
+	Authority {
+		/// List of public addresses and identities of our sentry nodes.
+		sentry_nodes: Vec<MultiaddrWithPeerId>,
 	}
 }
 
-impl Roles {
-	/// Does this role represents a client that holds full chain data locally?
-	pub fn is_full(&self) -> bool {
-		self.intersects(Roles::FULL | Roles::AUTHORITY)
-	}
-
-	/// Does this role represents a client that does not participates in the consensus?
+impl Role {
+	/// True for `Role::Authority`
 	pub fn is_authority(&self) -> bool {
-		*self == Roles::AUTHORITY
+		matches!(self, Role::Authority { .. })
 	}
 
-	/// Does this role represents a client that does not hold full chain data locally?
-	pub fn is_light(&self) -> bool {
-		!self.is_full()
+	/// True for `Role::Authority` and `Role::Sentry` since they're both
+	/// announced as having the authority role to the network.
+	pub fn is_network_authority(&self) -> bool {
+		matches!(self, Role::Authority { .. } | Role::Sentry { .. })
 	}
 }
 
-impl fmt::Display for Roles {
+impl fmt::Display for Role {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "{:?}", self)
-	}
-}
-
-impl codec::Encode for Roles {
-	fn encode_to<T: codec::Output>(&self, dest: &mut T) {
-		dest.push_byte(self.bits())
-	}
-}
-
-impl codec::EncodeLike for Roles {}
-
-impl codec::Decode for Roles {
-	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
-		Self::from_bits(input.read_byte()?).ok_or_else(|| codec::Error::from("Invalid bytes"))
+		match self {
+			Role::Full => write!(f, "FULL"),
+			Role::Light => write!(f, "LIGHT"),
+			Role::Sentry { .. } => write!(f, "SENTRY"),
+			Role::Authority { .. } => write!(f, "AUTHORITY"),
+		}
 	}
 }
 
@@ -214,6 +206,67 @@ pub fn parse_addr(mut addr: Multiaddr)-> Result<(PeerId, Multiaddr), ParseErr> {
 	Ok((who, addr))
 }
 
+/// Address of a node, including its identity.
+///
+/// This struct represents a decoded version of a multiaddress that ends with `/p2p/<peerid>`.
+///
+/// # Example
+///
+/// ```
+/// # use sc_network::{Multiaddr, PeerId, config::MultiaddrWithPeerId};
+/// let addr: MultiaddrWithPeerId =
+/// 	"/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV".parse().unwrap();
+/// assert_eq!(addr.peer_id.to_base58(), "QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV");
+/// assert_eq!(addr.multiaddr.to_string(), "/ip4/198.51.100.19/tcp/30333");
+/// ```
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct MultiaddrWithPeerId {
+	/// Address of the node.
+	pub multiaddr: Multiaddr,
+	/// Its identity.
+	pub peer_id: PeerId,
+}
+
+impl MultiaddrWithPeerId {
+	/// Concatenates the multiaddress and peer ID into one multiaddress containing both.
+	pub fn concat(&self) -> Multiaddr {
+		let proto = multiaddr::Protocol::P2p(From::from(self.peer_id.clone()));
+		self.multiaddr.clone().with(proto)
+	}
+}
+
+impl fmt::Display for MultiaddrWithPeerId {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		fmt::Display::fmt(&self.concat(), f)
+	}
+}
+
+impl FromStr for MultiaddrWithPeerId {
+	type Err = ParseErr;
+
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		let (peer_id, multiaddr) = parse_str_addr(s)?;
+		Ok(MultiaddrWithPeerId {
+			peer_id,
+			multiaddr,
+		})
+	}
+}
+
+impl From<MultiaddrWithPeerId> for String {
+	fn from(ma: MultiaddrWithPeerId) -> String {
+		format!("{}", ma)
+	}
+}
+
+impl TryFrom<String> for MultiaddrWithPeerId {
+	type Error = ParseErr;
+	fn try_from(string: String) -> Result<Self, Self::Error> {
+		string.parse()
+	}
+}
+
 /// Error that can be generated by `parse_str_addr`.
 #[derive(Debug)]
 pub enum ParseErr {
@@ -263,7 +316,7 @@ pub struct NetworkConfiguration {
 	/// Multiaddresses to advertise. Detected automatically if empty.
 	pub public_addresses: Vec<Multiaddr>,
 	/// List of initial node addresses
-	pub boot_nodes: Vec<String>,
+	pub boot_nodes: Vec<MultiaddrWithPeerId>,
 	/// The node key configuration, which determines the node's network identity keypair.
 	pub node_key: NodeKeyConfig,
 	/// Maximum allowed number of incoming connections.
@@ -271,11 +324,9 @@ pub struct NetworkConfiguration {
 	/// Number of outgoing connections we're trying to maintain.
 	pub out_peers: u32,
 	/// List of reserved node addresses.
-	pub reserved_nodes: Vec<String>,
+	pub reserved_nodes: Vec<MultiaddrWithPeerId>,
 	/// The non-reserved peer mode.
 	pub non_reserved_mode: NonReservedPeerMode,
-	/// List of sentry node public addresses.
-	pub sentry_nodes: Vec<String>,
 	/// Client identifier. Sent over the wire for debugging purposes.
 	pub client_version: String,
 	/// Name of the node. Sent over the wire for debugging purposes.
@@ -299,7 +350,6 @@ impl Default for NetworkConfiguration {
 			out_peers: 75,
 			reserved_nodes: Vec::new(),
 			non_reserved_mode: NonReservedPeerMode::Accept,
-			sentry_nodes: Vec::new(),
 			client_version: "unknown".into(),
 			node_name: "unknown".into(),
 			transport: TransportConfig::Normal {
