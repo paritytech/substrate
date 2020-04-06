@@ -133,7 +133,7 @@ impl<C: SubstrateCli> Runner<C> {
 	}
 
 	/// A helper function that runs an `AbstractService` with tokio and stops if the process receives
-	/// the signal SIGTERM or SIGINT
+	/// the signal `SIGTERM` or `SIGINT`.
 	pub fn run_node<FNL, FNF, SL, SF>(self, new_light: FNL, new_full: FNF) -> Result<()>
 	where
 		FNL: FnOnce(Configuration) -> sc_service::error::Result<SL>,
