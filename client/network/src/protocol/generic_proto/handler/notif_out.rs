@@ -34,6 +34,7 @@ use libp2p::swarm::{
 	NegotiatedSubstream,
 };
 use log::error;
+use prometheus_endpoint::Histogram;
 use smallvec::SmallVec;
 use std::{borrow::Cow, fmt, mem, pin::Pin, task::{Context, Poll}, time::Duration};
 use wasm_timer::Instant;
@@ -56,14 +57,17 @@ const INITIAL_KEEPALIVE_TIME: Duration = Duration::from_secs(5);
 pub struct NotifsOutHandlerProto {
 	/// Name of the protocol to negotiate.
 	protocol_name: Cow<'static, [u8]>,
+	/// Optional Prometheus histogram to report message queue size variations.
+	queue_size_report: Option<Histogram>,
 }
 
 impl NotifsOutHandlerProto {
 	/// Builds a new [`NotifsOutHandlerProto`]. Will use the given protocol name for the
 	/// notifications substream.
-	pub fn new(protocol_name: impl Into<Cow<'static, [u8]>>) -> Self {
+	pub fn new(protocol_name: impl Into<Cow<'static, [u8]>>, queue_size_report: Option<Histogram>) -> Self {
 		NotifsOutHandlerProto {
 			protocol_name: protocol_name.into(),
+			queue_size_report,
 		}
 	}
 }
@@ -75,12 +79,14 @@ impl IntoProtocolsHandler for NotifsOutHandlerProto {
 		DeniedUpgrade
 	}
 
-	fn into_handler(self, _: &PeerId, _: &ConnectedPoint) -> Self::Handler {
+	fn into_handler(self, peer_id: &PeerId, _: &ConnectedPoint) -> Self::Handler {
 		NotifsOutHandler {
 			protocol_name: self.protocol_name,
 			when_connection_open: Instant::now(),
+			queue_size_report: self.queue_size_report,
 			state: State::Disabled,
 			events_queue: SmallVec::new(),
+			peer_id: peer_id.clone(),
 		}
 	}
 }
@@ -103,11 +109,17 @@ pub struct NotifsOutHandler {
 	/// When the connection with the remote has been successfully established.
 	when_connection_open: Instant,
 
+	/// Optional prometheus histogram to report message queue sizes variations.
+	queue_size_report: Option<Histogram>,
+
 	/// Queue of events to send to the outside.
 	///
 	/// This queue must only ever be modified to insert elements at the back, or remove the first
 	/// element.
 	events_queue: SmallVec<[ProtocolsHandlerEvent<NotificationsOut, (), NotifsOutHandlerOut, void::Void>; 16]>,
+
+	/// Who we are connected to.
+	peer_id: PeerId,
 }
 
 /// Our relationship with the node we're connected to.
@@ -300,12 +312,16 @@ impl ProtocolsHandler for NotifsOutHandler {
 
 			NotifsOutHandlerIn::Send(msg) =>
 				if let State::Open { substream, .. } = &mut self.state {
-					if let Some(Ok(_)) = substream.send(msg).now_or_never() {
-					} else {
+					if substream.push_message(msg).is_err() {
 						log::warn!(
 							target: "sub-libp2p",
-							"📞 Failed to push message to queue, dropped it"
+							"📞 Notifications queue with peer {} is full, dropped message (protocol: {:?})",
+							self.peer_id,
+							self.protocol_name,
 						);
+					}
+					if let Some(metric) = &self.queue_size_report {
+						metric.observe(substream.queue_len() as f64);
 					}
 				} else {
 					// This is an API misuse.

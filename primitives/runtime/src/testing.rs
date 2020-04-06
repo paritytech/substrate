@@ -379,6 +379,6 @@ impl<Origin, Call, Extra, Info> Applyable for TestXt<Call, Extra> where
 			None
 		};
 
-		Ok(self.call.dispatch(maybe_who.into()).map_err(Into::into))
+		Ok(self.call.dispatch(maybe_who.into()).map(|_| ()).map_err(|e| e.error))
 	}
 }
