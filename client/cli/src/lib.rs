@@ -221,7 +221,7 @@ pub fn init_logger(pattern: &str) {
 			format!(
 				"{} {}",
 				Colour::Black.bold().paint(timestamp),
-				record.args()
+				record.args(),
 			)
 		} else {
 			let name = ::std::thread::current()
