@@ -20,7 +20,7 @@
 
 use sp_runtime::{
 	Perbill,
-	traits::{ConvertInto, IdentityLookup, Dispatchable},
+	traits::{ConvertInto, IdentityLookup},
 	testing::Header,
 	
 };
@@ -30,7 +30,7 @@ use frame_support::{impl_outer_origin, parameter_types};
 use frame_support::traits::Get;
 use frame_support::weights::{Weight, DispatchInfo};
 use std::cell::RefCell;
-use crate::{GenesisConfig, Module, Trait, decl_tests};
+use crate::{GenesisConfig, Module, Trait, decl_tests, tests::CallWithDispatchInfo};
 
 use frame_system as system;
 impl_outer_origin!{
@@ -55,23 +55,11 @@ parameter_types! {
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
-#[derive(Debug, Default)]
-pub struct Call {}
-impl Dispatchable for Call {
-	type Origin = ();
-	type Trait = ();
-	type Info = DispatchInfo;
-	type PostInfo = ();
-	fn dispatch(self, _origin: Self::Origin)
-		-> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
-			panic!("Do not use dummy implementation for dispatch.");
-	}
-}
 impl frame_system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = Call;
+	type Call = CallWithDispatchInfo;
 	type Hash = H256;
 	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;

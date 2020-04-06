@@ -18,6 +18,19 @@
 
 #![cfg(test)]
 
+#[derive(Debug)]
+pub struct CallWithDispatchInfo;
+impl sp_runtime::traits::Dispatchable for CallWithDispatchInfo {
+	type Origin = ();
+	type Trait = ();
+	type Info = frame_support::weights::DispatchInfo;
+	type PostInfo = frame_support::weights::PostDispatchInfo;
+	fn dispatch(self, _origin: Self::Origin)
+		-> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
+			panic!("Do not use dummy implementation for dispatch.");
+	}
+}
+
 #[macro_export]
 macro_rules! decl_tests {
 	($test:ty, $ext_builder:ty, $existential_deposit:expr) => {
@@ -39,6 +52,8 @@ macro_rules! decl_tests {
 
 		pub type System = frame_system::Module<$test>;
 		pub type Balances = Module<$test>;
+
+		pub const CALL: &<$test as frame_system::Trait>::Call = &$crate::tests::CallWithDispatchInfo;
 
 		/// create a transaction info struct from weight. Handy to avoid building the whole struct.
 		pub fn info_from_weight(w: Weight) -> DispatchInfo {
@@ -151,14 +166,14 @@ macro_rules! decl_tests {
 					assert!(<ChargeTransactionPayment<$test> as SignedExtension>::pre_dispatch(
 						ChargeTransactionPayment::from(1),
 						&1,
-						&Default::default(),
+						CALL,
 						&info_from_weight(1),
 						1,
 					).is_err());
 					assert!(<ChargeTransactionPayment<$test> as SignedExtension>::pre_dispatch(
 						ChargeTransactionPayment::from(0),
 						&1,
-						&Default::default(),
+						CALL,
 						&info_from_weight(1),
 						1,
 					).is_ok());
@@ -169,14 +184,14 @@ macro_rules! decl_tests {
 					assert!(<ChargeTransactionPayment<$test> as SignedExtension>::pre_dispatch(
 						ChargeTransactionPayment::from(1),
 						&1,
-						&Default::default(),
+						CALL,
 						&info_from_weight(1),
 						1,
 					).is_err());
 					assert!(<ChargeTransactionPayment<$test> as SignedExtension>::pre_dispatch(
 						ChargeTransactionPayment::from(0),
 						&1,
-						&Default::default(),
+						CALL,
 						&info_from_weight(1),
 						1,
 					).is_err());
