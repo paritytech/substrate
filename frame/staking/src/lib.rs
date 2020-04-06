@@ -292,7 +292,7 @@ use sp_runtime::{
 	},
 	transaction_validity::{
 		TransactionValidityError, TransactionValidity, ValidTransaction, InvalidTransaction,
-		TransactionSource,
+		TransactionSource, TransactionPriority,
 	},
 };
 use sp_staking::{
@@ -314,6 +314,17 @@ const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 const STAKING_ID: LockIdentifier = *b"staking ";
 pub const MAX_UNLOCKING_CHUNKS: usize = 32;
 pub const MAX_NOMINATIONS: usize = <CompactAssignments as VotingLimit>::LIMIT;
+
+// syntactic sugar for logging
+const LOG_TARGET: &'static str = "staking";
+macro_rules! log {
+	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
+		debug::native::$level!(
+			target: LOG_TARGET,
+			$patter $(, $values)*
+		)
+	};
+}
 
 /// Data type used to index nominators in the compact type
 pub type NominatorIndex = u32;
@@ -1122,6 +1133,8 @@ decl_error! {
 		PhragmenBogusEdge,
 		/// The claimed score does not match with the one computed from the data.
 		PhragmenBogusScore,
+		/// The call is not allowed at the given time due to restrictions of election period.
+		CallNotAllowed,
 	}
 }
 
@@ -1158,26 +1171,15 @@ decl_module! {
 								<EraElectionStatus<T>>::put(
 									ElectionStatus::<T::BlockNumber>::Open(now)
 								);
-								debug::native::info!(
-									target: "staking",
-									"Election window is Open({:?}). Snapshot created",
-									now,
-								);
+								log!(info, "💸 Election window is Open({:?}). Snapshot created", now);
 							} else {
-								debug::native::warn!(
-									target: "staking",
-									"Failed to create snapshot at {:?}. Election window will remain closed.",
-									now,
-								);
+								log!(warn, "💸 Failed to create snapshot at {:?}.", now);
 							}
 
 						}
 					}
 				} else {
-					debug::native::warn!(
-						target: "staking",
-						"estimate_next_new_session() failed to execute. Election status cannot be changed.",
-					);
+					log!(warn, "💸 Estimating next session change failed.");
 				}
 			}
 
@@ -1193,23 +1195,12 @@ decl_module! {
 			if Self::era_election_status().is_open_at(now) {
 				let offchain_status = set_check_offchain_execution_status::<T>(now);
 				if let Err(why) = offchain_status {
-					debug::native::warn!(
-						target: "staking",
-						"skipping offchain worker in open election window due to [{}]",
-						why,
-					);
+					log!(debug, "skipping offchain worker in open election window due to [{}]", why);
 				} else {
 					if let Err(e) = compute_offchain_election::<T>() {
-						debug::native::warn!(
-							target: "staking",
-							"Error in phragmen offchain worker: {:?}",
-							e,
-						);
+						log!(warn, "💸 Error in phragmen offchain worker: {:?}", e);
 					} else {
-						debug::native::debug!(
-							target: "staking",
-							"Executed offchain worker thread without errors. Transaction submitted to the pool.",
-						);
+						log!(debug, "Executed offchain worker thread without errors.");
 					}
 				}
 			}
@@ -1959,9 +1950,9 @@ impl<T: Trait> Module<T> {
 			num_validators > MAX_VALIDATORS ||
 			num_nominators.saturating_add(num_validators) > MAX_NOMINATORS
 		{
-			debug::native::warn!(
-				target: "staking",
-				"Snapshot size too big [{} <> {}][{} <> {}].",
+			log!(
+				warn,
+				"💸 Snapshot size too big [{} <> {}][{} <> {}].",
 				num_validators,
 				MAX_VALIDATORS,
 				num_nominators,
@@ -2371,11 +2362,7 @@ impl<T: Trait> Module<T> {
 			validator_at,
 		).map_err(|e| {
 			// log the error since it is not propagated into the runtime error.
-			debug::native::warn!(
-				target: "staking",
-				"un-compacting solution failed due to {:?}",
-				e,
-			);
+			debug::native::warn!("💸 un-compacting solution failed due to {:?}", e);
 			Error::<T>::PhragmenBogusCompact
 		})?;
 
@@ -2390,10 +2377,7 @@ impl<T: Trait> Module<T> {
 				// all of the indices must map to either a validator or a nominator. If this is ever
 				// not the case, then the locking system of staking is most likely faulty, or we
 				// have bigger problems.
-				debug::native::error!(
-					target: "staking",
-					"detected an error in the staking locking and snapshot."
-				);
+				log!(error, "💸 detected an error in the staking locking and snapshot.");
 				// abort.
 				return Err(Error::<T>::PhragmenBogusNominator);
 			}
@@ -2457,9 +2441,9 @@ impl<T: Trait> Module<T> {
 
 		// At last, alles Ok. Exposures and store the result.
 		let exposures = Self::collect_exposure(supports);
-		debug::native::info!(
-			target: "staking",
-			"A better solution (with compute {:?}) has been validated and stored on chain.",
+		log!(
+			info,
+			"💸 A better solution (with compute {:?}) has been validated and stored on chain.",
 			compute,
 		);
 
@@ -2640,9 +2624,9 @@ impl<T: Trait> Module<T> {
 			// emit event
 			Self::deposit_event(RawEvent::StakingElection(compute));
 
-			debug::native::info!(
-				target: "staking",
-				"new validator set of size {:?} has been elected via {:?} for era {:?}",
+			log!(
+				info,
+				"💸 new validator set of size {:?} has been elected via {:?} for era {:?}",
 				elected_stashes.len(),
 				compute,
 				current_era,
@@ -3140,8 +3124,28 @@ impl<T: Trait + Send + Sync> SignedExtension for LockStakingStatus<T> {
 		if let Some(inner_call) = call.is_sub_type() {
 			if let ElectionStatus::Open(_) = <Module<T>>::era_election_status() {
 				match inner_call {
+					// bonding, and declaring the intention to validate is fine. The new stakers
+					// will not be considered for the next round, if the election window is open.
+					Call::<T>::bond(..) |
+					Call::<T>::bond_extra(..) |
+					Call::<T>::rebond(..) |
+					Call::<T>::validate(..) |
+
+					// unbonding and removing any unbonded value is fine. No exposure will change.
+					Call::<T>::unbond(..) |
+					Call::<T>::withdraw_unbonded(..) |
+
+					// nominate is not allowed; it could potentially change the election outcome.
+					// chill is not not allowed; a validator who is already in the snapshot data of
+					// the next round can no longer bail.
+
+					// payee and controller can be changed.
 					Call::<T>::set_payee(..) |
 					Call::<T>::set_controller(..) |
+
+					// root calls are allowed. Note that calling `set_validator_count` could cause
+					// invalidation of lots of solutions, but we assume that root calls will be done
+					// with care.
 					Call::<T>::set_validator_count(..) |
 					Call::<T>::force_no_eras(..) |
 					Call::<T>::force_new_era(..) |
@@ -3150,28 +3154,36 @@ impl<T: Trait + Send + Sync> SignedExtension for LockStakingStatus<T> {
 					Call::<T>::force_new_era_always(..) |
 					Call::<T>::cancel_deferred_slash(..) |
 					Call::<T>::set_history_depth(..) |
+
+					// all payout types are allowed; They will not change the exposure.
+					Call::<T>::payout_nominator(..) |
+					Call::<T>::payout_validator(..) |
+					Call::<T>::payout_stakers(..) |
+
+					// garbage collection -- okay.
 					Call::<T>::reap_stash(..) |
+
+					// election solutions -- okay.
 					Call::<T>::submit_election_solution(..) |
-					Call::<T>::submit_election_solution_unsigned(..) => {
-						// These calls are allowed. Nothing.
-					}
+					Call::<T>::submit_election_solution_unsigned(..)
+
+					// all of these ^^ calls are okay. Nothing should happen.
+					=> {},
+
+					// reject everything else.
 					_ => {
-						return Err(InvalidTransaction::Stale.into());
+						return Err(InvalidTransaction::from(Error::<T>::CallNotAllowed).into());
 					}
 				}
 			}
 		}
-
 		Ok(Default::default())
 	}
 }
 
 impl<T: Trait> From<Error<T>> for InvalidTransaction {
 	fn from(e: Error<T>) -> Self {
-		match e {
-			<Error<T>>::PhragmenEarlySubmission => InvalidTransaction::Future,
-			_ => InvalidTransaction::Custom(e.as_u8()),
-		}
+		InvalidTransaction::Custom(e.as_u8())
 	}
 }
 
@@ -3191,33 +3203,24 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 			match source {
 				TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ }
 				_ => {
-					debug::native::debug!(
-						target: "staking",
-						"rejecting unsigned transaction because it is not local/in-block."
-					);
+					log!(debug, "rejecting unsigned transaction because it is not local/in-block.");
 					return InvalidTransaction::Call.into();
 				}
 			}
 
 			if let Err(e) = Self::pre_dispatch_checks(*score, *era) {
-				debug::native::debug!(
-					target: "staking",
-					"validate unsigned failed due to {:?}.",
-					e,
-				);
-				let invalid: InvalidTransaction = e.into();
-				return invalid.into();
+				log!(debug, "validate unsigned pre dispatch checks failed due to {:?}.", e);
+				return InvalidTransaction::from(e).into();
 			}
 
-			debug::native::debug!(
-				target: "staking",
-				"Validated an unsigned transaction from the local node for era {}.",
-				era,
-			);
+			log!(debug, "validateUnsigned succeeded for a solution at era {}.", era);
+
+			// TODO: make this configurable https://github.com/paritytech/substrate/issues/5532
+			let base_priority = TransactionPriority::max_value() / 2;
 
 			Ok(ValidTransaction {
 				// The higher the score[0], the better a solution is.
-				priority: score[0].saturated_into(),
+				priority: base_priority.saturating_add(score[0].saturated_into()),
 				// no requires.
 				requires: vec![],
 				// Defensive only. A single solution can exist in the pool per era. Each validator

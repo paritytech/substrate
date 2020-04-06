@@ -2902,7 +2902,6 @@ mod offchain_phragmen {
 	fn offchain_wont_work_if_snapshot_fails() {
 		ExtBuilder::default()
 			.offchain_phragmen_ext()
-			.election_lookahead(3)
 			.build()
 			.execute_with(|| {
 				run_to_block(12);
@@ -2934,13 +2933,15 @@ mod offchain_phragmen {
 				assert!(Staking::snapshot_validators().is_some());
 				assert_eq!(Staking::era_election_status(), ElectionStatus::Open(12));
 
-				let call = crate::Call::bond(999, 998, Default::default());
+				let call = crate::Call::chill();
 				let outer: mock::Call = call.into();
 
 				let lock_staking: LockStakingStatus<Test> = Default::default();
 				assert_eq!(
 					lock_staking.validate(&10, &outer, Default::default(), Default::default(),),
-					TransactionValidity::Err(InvalidTransaction::Stale.into()),
+					TransactionValidity::Err(
+						InvalidTransaction::Custom(<Error<Test>>::CallNotAllowed.as_u8()).into(),
+					),
 				)
 			})
 	}
@@ -3165,7 +3166,7 @@ mod offchain_phragmen {
 					&inner,
 				),
 				TransactionValidity::Ok(ValidTransaction {
-					priority: 1125, // the proposed slot stake.
+					priority: u64::max_value() / 2 + 1125, // the proposed slot stake.
 					requires: vec![],
 					provides: vec![("StakingOffchain", active_era()).encode()],
 					longevity: 3,
