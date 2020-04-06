@@ -16,25 +16,24 @@
 
 //! The main database trait, allowing Substrate to store data persistently.
 
-/// A hash type.
-pub type Hash = [u8; 32];
+use std::{fmt::Debug, hash::Hash};
 
 /// An identifier for a column.
 pub type ColumnId = u32;
 
 /// An alteration to the database.
-enum Change {
+enum Change<H> {
 	Set(ColumnId, Vec<u8>, Vec<u8>),
 	Remove(ColumnId, Vec<u8>),
-	Store(Hash, Vec<u8>),
-	Release(Hash),
+	Store(H, Vec<u8>),
+	Release(H),
 }
 
 /// A series of changes to the database that can be committed atomically. They do not take effect
 /// until passed into `Database::commit`.
-pub struct Transaction(Vec<Change>);
+pub struct Transaction<H>(Vec<Change<H>>);
 
-impl Transaction {
+impl<H> Transaction<H> {
 	/// Set the value of `key` in `col` to `value`, replacing anything that is there currently.
 	pub fn set(&mut self, col: ColumnId, key: &[u8], value: &[u8]) {
 		self.0.push(Change::Set(col, key.to_vec(), value.to_vec()))
@@ -46,23 +45,30 @@ impl Transaction {
 	/// Store the `preimage` of `hash` into the database, so that it may be looked up later with
 	/// `Database::lookup`. This may be called multiple times, but `Database::lookup` but subsequent
 	/// calls will ignore `preimage` and simply increase the number of references on `hash`.
-	pub fn store(&mut self, hash: Hash, preimage: &[u8]) {
+	pub fn store(&mut self, hash: H, preimage: &[u8]) {
 		self.0.push(Change::Store(hash, preimage.to_vec()))
 	}
 	/// Release the preimage of `hash` from the database. An equal number of these to the number of
 	/// corresponding `store`s must have been given before it is legal for `Database::lookup` to
 	/// be unable to provide the preimage.
-	pub fn release(&mut self, hash: Hash) {
+	pub fn release(&mut self, hash: H) {
 		self.0.push(Change::Release(hash))
 	}
 }
 
-pub trait Database {
+pub trait HashKey:
+	AsRef<[u8]> + AsMut<[u8]> + Ord + PartialOrd + Eq + PartialEq + Clone + Debug + Hash
+{}
+impl<
+	H: AsRef<[u8]> + AsMut<[u8]> + Ord + PartialOrd + Eq + PartialEq + Clone + Debug + Hash
+> HashKey for H {}
+
+pub trait Database<H: HashKey> {
 	/// Create a new transaction to be prepared and committed atomically.
-	fn new_transaction(&self) -> Transaction;
+	fn new_transaction(&self) -> Transaction<H>;
 	/// Commit the `transaction` to the database atomically. Any further calls to `get` or `lookup`
 	/// will reflect the new state.
-	fn commit(&self, transaction: Transaction);
+	fn commit(&self, transaction: Transaction<H>);
 
 	/// Retrieve the value previously stored against `key` or `None` if
 	/// `key` is not currently in the database.
@@ -87,26 +93,26 @@ pub trait Database {
 
 	/// Retrieve the first preimage previously `store`d for `hash` or `None` if no preimage is
 	/// currently stored.
-	fn lookup(&self, hash: &Hash) -> Option<Vec<u8>>;
+	fn lookup(&self, hash: &H) -> Option<Vec<u8>>;
 	/// Call `f` with the preimage stored for `hash` and return the result, or `None` if no preimage
 	/// is currently stored.
 	///
 	/// This may be faster than `get` since it doesn't allocate.
-	fn with_lookup<R>(&self, hash: &Hash, f: impl FnOnce(&[u8]) -> R) -> Option<R>;
+	fn with_lookup<R>(&self, hash: &H, f: impl FnOnce(&[u8]) -> R) -> Option<R>;
 	/// Store the `preimage` of `hash` into the database, so that it may be looked up later with
 	/// `Database::lookup`. This may be called multiple times, but `Database::lookup` but subsequent
 	/// calls will ignore `preimage` and simply increase the number of references on `hash`.
-	fn store(&self, hash: &Hash, preimage: &[u8]) {
+	fn store(&self, hash: &H, preimage: &[u8]) {
 		let mut t = self.new_transaction();
-		t.store(*hash, preimage);
+		t.store(hash.clone(), preimage);
 		self.commit(t);
 	}
 	/// Release the preimage of `hash` from the database. An equal number of these to the number of
 	/// corresponding `store`s must have been given before it is legal for `Database::lookup` to
 	/// be unable to provide the preimage.
-	fn release(&self, hash: &Hash) {
+	fn release(&self, hash: &H) {
 		let mut t = self.new_transaction();
-		t.release(*hash);
+		t.release(hash.clone());
 		self.commit(t);
 	}
 }
