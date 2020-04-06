@@ -404,7 +404,7 @@ build-macos-substrate:
   tags:
     - osx
 
-build-macos-substrate:
+build-macos-subkey:
   <<:                              *build-subkey
   tags:
     - osx
