@@ -160,7 +160,7 @@ impl<C: SubstrateCli> Runner<C> {
 	}
 
 	/// A helper function that runs a future with tokio and stops if the process receives the signal
-	/// SIGTERM or SIGINT
+	/// `SIGTERM` or `SIGINT`.
 	pub fn run_subcommand<B, BC, BB>(self, subcommand: &Subcommand, builder: B) -> Result<()>
 	where
 		B: FnOnce(Configuration) -> sc_service::error::Result<BC>,
