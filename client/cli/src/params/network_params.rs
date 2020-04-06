@@ -105,8 +105,7 @@ impl NetworkParams {
 		client_id: &str,
 		node_name: &str,
 		node_key: NodeKeyConfig,
-	) -> error::Result<NetworkConfiguration>
-	{
+	) -> error::Result<NetworkConfiguration> {
 		let port = self.port.unwrap_or(30333);
 		let mut listen_addresses = vec![iter::once(Protocol::Ip4(Ipv4Addr::new(0, 0, 0, 0)))
 			.chain(iter::once(Protocol::Tcp(port)))
