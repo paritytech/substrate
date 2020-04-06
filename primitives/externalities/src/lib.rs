@@ -172,7 +172,7 @@ pub trait Externalities: ExtensionStore {
 		storage_key: ChildStorageKey,
 	) -> Vec<u8>;
 
-	/// Get the change trie root of the current storage overlay at a block with given `parent`.
+	/// Get the changes trie root of the current storage overlay at a block with given `parent`.
 	///
 	/// `parent` expects a SCALE encoded hash.
 	///
