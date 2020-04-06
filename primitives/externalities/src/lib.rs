@@ -174,7 +174,7 @@ pub trait Externalities: ExtensionStore {
 	///
 	/// `parent` expects a SCALE encoded hash.
 	///
-	/// The returned hash is defined by the `Block` and is scale encoded.
+	/// The returned hash is defined by the `Block` and is SCALE encoded.
 	fn storage_changes_root(&mut self, parent: &[u8]) -> Result<Option<Vec<u8>>, ()>;
 
 	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
