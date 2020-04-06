@@ -86,6 +86,9 @@ variables:
     - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
     - /^pre-v[0-9]+\.[0-9]+-[0-9a-f]+$/
     - web
+  tags:
+    - linux-docker
+    - osx
 
 
 
@@ -409,7 +412,8 @@ build-rust-doc-release:
     expire_in:                     7 days
     paths:
     - ./crate-docs
-  <<:                              *build-only
+  tags:
+    - linux-docker
   script:
     - rm -f ./crate-docs/index.html # use it as an indicator if the job succeeds
     - BUILD_DUMMY_WASM_BINARY=1 RUSTDOCFLAGS="--html-in-header $(pwd)/.maintain/rustdoc-header.html" time cargo +nightly doc --release --all --verbose
