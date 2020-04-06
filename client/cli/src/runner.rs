@@ -167,7 +167,7 @@ impl<C: SubstrateCli> Runner<C> {
 		B: BlockT,
 		BA: sc_client_api::backend::Backend<B> + 'static,
 		CE: sc_client_api::call_executor::CallExecutor<B> + Send + Sync + 'static,
-		IQ: sc_service::ImportQueue<B> + Sync + 'static,
+		IQ: sc_service::ImportQueue<B> + 'static,
 		RA: Send + Sync + 'static,
 		<B as sp_runtime::traits::Block>::Hash: std::str::FromStr,
 		<<<B as sp_runtime::traits::Block>::Header as sp_runtime::traits::Header>::Number as std::str::FromStr>::Err: std::fmt::Debug,

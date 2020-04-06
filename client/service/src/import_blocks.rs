@@ -50,7 +50,7 @@ where
 	B: BlockT,
 	BA: sc_client_api::backend::Backend<B> + 'static,
 	CE: sc_client_api::call_executor::CallExecutor<B> + Send + Sync + 'static,
-	IQ: ImportQueue<B> + Sync + 'static,
+	IQ: ImportQueue<B> + 'static,
 	RA: Send + Sync + 'static,
 {
 	struct WaitLink {

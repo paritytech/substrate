@@ -59,7 +59,7 @@ impl CheckBlockCmd {
 		B: BlockT,
 		BA: sc_client_api::backend::Backend<B> + 'static,
 		CE: sc_client_api::call_executor::CallExecutor<B> + Send + Sync + 'static,
-		IQ: sc_service::ImportQueue<B> + Sync + 'static,
+		IQ: sc_service::ImportQueue<B> + 'static,
 		RA: Send + Sync + 'static,
 		<B as sp_runtime::traits::Block>::Hash: std::str::FromStr,
 	{

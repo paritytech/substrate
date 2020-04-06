@@ -66,7 +66,7 @@ impl ImportBlocksCmd {
 		BA: sc_client_api::backend::Backend<B> + 'static,
 		CE: sc_client_api::call_executor::CallExecutor<B> + Send + Sync + 'static,
 		RA: Send + Sync + 'static,
-		IQ: sc_service::ImportQueue<B> + Sync + 'static,
+		IQ: sc_service::ImportQueue<B> + 'static,
 	{
 		let file: Box<dyn ReadPlusSeek + Send> = match &self.input {
 			Some(filename) => Box::new(fs::File::open(filename)?),
