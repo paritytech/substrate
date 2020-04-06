@@ -305,7 +305,7 @@ test-runtime-benchmarks:
       - $DEPLOY_TAG
   script:
     - cd bin/node/cli
-    - BUILD_DUMMY_WASM_BINARY=1 time cargo test --verbose --features runtime-benchmarks
+    - BUILD_DUMMY_WASM_BINARY=1 time cargo test --release --verbose --features runtime-benchmarks
     - sccache -s
 
 test-linux-stable-int:
