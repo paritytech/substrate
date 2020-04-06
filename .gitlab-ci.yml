@@ -86,11 +86,6 @@ variables:
     - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
     - /^pre-v[0-9]+\.[0-9]+-[0-9a-f]+$/
     - web
-  tags:
-    - linux-docker
-    - osx
-
-
 
 #### stage:                        test
 
@@ -384,13 +379,14 @@ build-linux-substrate:             &build-binary
     - ./.maintain/node-template-release.sh ./artifacts/substrate/substrate-node-template.tar.gz
     - cp -r .maintain/docker/substrate.Dockerfile ./artifacts/substrate/
     - sccache -s
+    
 
-build-linux-subkey:
+build-linux-subkey:                &build-subkey
   <<:                              *build-binary
   before_script:
     - mkdir -p ./artifacts/subkey
   script:
-    - cd ./bin/utils/subkey
+    - cd ./bin/utils/subkeynning 
     - BUILD_DUMMY_WASM_BINARY=1 time cargo build --release --verbose
     - cd -
     - mv ./target/release/subkey ./artifacts/subkey/.
@@ -402,6 +398,17 @@ build-linux-subkey:
     - cp -r .maintain/docker/subkey.Dockerfile ./artifacts/subkey/
     - sccache -s
 
+build-macos-substrate:
+  <<:                              *build-binary
+  tags:
+    - osx
+
+build-macos-substrate:
+  <<:                              *build-subkey
+  tags:
+    - osx
+
+
 build-rust-doc-release:
   stage:                           build
   <<:                              *docker-env
@@ -412,14 +419,14 @@ build-rust-doc-release:
     expire_in:                     7 days
     paths:
     - ./crate-docs
-  tags:
-    - linux-docker
+  <<:                              *build-only
   script:
     - rm -f ./crate-docs/index.html # use it as an indicator if the job succeeds
     - BUILD_DUMMY_WASM_BINARY=1 RUSTDOCFLAGS="--html-in-header $(pwd)/.maintain/rustdoc-header.html" time cargo +nightly doc --release --all --verbose
     - cp -R ./target/doc ./crate-docs
     - echo "<meta http-equiv=refresh content=0;url=sc_service/index.html>" > ./crate-docs/index.html
     - sccache -s
+
 
 check_warnings:
   stage:                           build
@@ -449,7 +456,6 @@ check-polkadot-companion-status:
     - /^[0-9]+$/
   script:
     - ./.maintain/gitlab/check_polkadot_companion_status.sh
-
 
 
 trigger-contracts-ci:
