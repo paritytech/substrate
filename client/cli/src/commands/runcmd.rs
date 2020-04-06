@@ -165,8 +165,8 @@ pub struct RunCmd {
 	///
 	/// This flag can be passed multiple times as a means to specify multiple
 	/// telemetry endpoints. Verbosity levels range from 0-9, with 0 denoting
-	/// the least verbosity. If no verbosity level is specified the default is
-	/// 0.
+	/// the least verbosity.
+	/// Expected format is 'URL VERBOSITY', e.g. `--telemetry-url 'wss://foo/bar 0'`.
 	#[structopt(long = "telemetry-url", value_name = "URL VERBOSITY", parse(try_from_str = parse_telemetry_endpoints))]
 	pub telemetry_endpoints: Vec<(String, u8)>,
 
@@ -344,15 +344,18 @@ impl CliConfiguration for RunCmd {
 	fn role(&self, is_dev: bool) -> Result<Role> {
 		let keyring = self.get_keyring();
 		let is_light = self.light;
-		let is_authority =
-			(self.validator || is_dev || keyring.is_some()) && !is_light;
+		let is_authority = (self.validator || is_dev || keyring.is_some()) && !is_light;
 
 		Ok(if is_light {
 			sc_service::Role::Light
 		} else if is_authority {
-			sc_service::Role::Authority { sentry_nodes: self.sentry_nodes.clone() }
+			sc_service::Role::Authority {
+				sentry_nodes: self.sentry_nodes.clone(),
+			}
 		} else if !self.sentry.is_empty() {
-			sc_service::Role::Sentry { validators: self.sentry.clone() }
+			sc_service::Role::Sentry {
+				validators: self.sentry.clone(),
+			}
 		} else {
 			sc_service::Role::Full
 		})
@@ -508,16 +511,32 @@ fn interface_str(
 	}
 }
 
-/// Default to verbosity level 0, if none is provided.
-fn parse_telemetry_endpoints(
-	s: &str,
-) -> std::result::Result<(String, u8), Box<dyn std::error::Error>> {
+#[derive(Debug)]
+enum TelemetryParsingError {
+	MissingVerbosity,
+	VerbosityParsingError(std::num::ParseIntError),
+}
+
+impl std::error::Error for TelemetryParsingError {}
+
+impl std::fmt::Display for TelemetryParsingError {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match &*self {
+			TelemetryParsingError::MissingVerbosity => write!(f, "Verbosity level missing"),
+			TelemetryParsingError::VerbosityParsingError(e) => write!(f, "{}", e),
+		}
+	}
+}
+
+fn parse_telemetry_endpoints(s: &str) -> std::result::Result<(String, u8), TelemetryParsingError> {
 	let pos = s.find(' ');
 	match pos {
-		None => Ok((s.to_owned(), 0)),
+		None => Err(TelemetryParsingError::MissingVerbosity),
 		Some(pos_) => {
-			let verbosity = s[pos_ + 1..].parse()?;
-			let url = s[..pos_].parse()?;
+			let url = s[..pos_].to_string();
+			let verbosity = s[pos_ + 1..]
+				.parse()
+				.map_err(TelemetryParsingError::VerbosityParsingError)?;
 			Ok((url, verbosity))
 		}
 	}

@@ -291,7 +291,7 @@ cargo run --release \-- \
   --chain=local \
   --alice \
   --node-key 0000000000000000000000000000000000000000000000000000000000000001 \
-  --telemetry-url ws://telemetry.polkadot.io:1024 \
+  --telemetry-url 'ws://telemetry.polkadot.io:1024 0' \
   --validator
 
 In the second terminal, we'll run the following to start Bob's Substrate node on a different TCP port of 30334, and with his chain database stored locally at `/tmp/bob`. We'll specify a value for the `--bootnodes` option that will connect his node to Alice's Bootnode ID on TCP port 30333:
@@ -303,7 +303,7 @@ cargo run --release \-- \
   --chain=local \
   --bob \
   --port 30334 \
-  --telemetry-url ws://telemetry.polkadot.io:1024 \
+  --telemetry-url 'ws://telemetry.polkadot.io:1024 0' \
   --validator
 
 Additional Substrate CLI usage options are available and may be shown by running `cargo run \-- --help`.
