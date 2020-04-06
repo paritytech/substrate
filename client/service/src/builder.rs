@@ -956,7 +956,7 @@ ServiceBuilder<
 			};
 			let metrics = MetricsService::with_prometheus(
 				&registry,
-				&config.name,
+				&config.network.node_name,
 				&config.impl_version,
 				role_bits,
 			)?;
