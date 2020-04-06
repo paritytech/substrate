@@ -115,7 +115,7 @@ use frame_support::{
 use frame_system::{self as system, ensure_signed};
 
 #[cfg(test)]
-pub mod mock;
+mod mock;
 #[cfg(test)]
 mod tests;
 
