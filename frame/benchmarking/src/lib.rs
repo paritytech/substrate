@@ -125,6 +125,25 @@ pub use paste;
 ///   }: { m.into_iter().collect::<BTreeSet>() }
 /// }
 /// ```
+///
+/// Test functions are automatically generated for each benchmark and are accessible to you when you
+/// run `cargo test`. All tests are named `test_benchmark_<benchmark_name>`, expect you to pass them
+/// the Runtime Trait, and run them in a test externalities environment. The test function runs your
+/// benchmark just like a regular benchmark, but only testing at the lowest and highest values for
+/// each component. The function will return `Ok(())` if the benchmarks return no errors.
+///
+/// You can construct benchmark tests like so:
+///
+/// ```ignore
+/// #[test]
+/// fn test_benchmarks() {
+///   new_test_ext().execute_with(|| {
+///     assert_ok!(test_benchmark_dummy::<Test>());
+///     assert_err!(test_benchmark_other_name::<Test>(), "Bad origin");
+///     assert_ok!(test_benchmark_sort_vector::<Test>());
+///     assert_err!(test_benchmark_broken_benchmark::<Test>(), "You forgot to sort!");
+///   });
+/// }
 #[macro_export]
 macro_rules! benchmarks {
 	(
@@ -246,7 +265,7 @@ macro_rules! benchmarks_iter {
 		$crate::selected_benchmark!( $instance $( $names ),* );
 		$crate::impl_benchmark!( $instance $( $names ),* );
 		#[cfg(test)]
-		$crate::impl_benchmark_tests!( $instance $( $names ),* );
+		$crate::impl_benchmark_tests!( $( $names ),* );
 	}
 }
 
@@ -732,12 +751,13 @@ macro_rules! impl_benchmark {
 	}
 }
 
-// This creates tests from the main benchmark macro.
+// This creates unit tests from the main benchmark macro.
+// They run the benchmark using the `high` and `low` value for each component
+// and ensure that everything completes successfully.
 #[macro_export]
 macro_rules! impl_benchmark_tests {
-	// TODO INSTANCE/NO_INSTANCE arms
 	(
-		$instance:ident $( $name:ident ),*
+		$( $name:ident ),*
 	) => {
 		$(
 			$crate::paste::item! {
