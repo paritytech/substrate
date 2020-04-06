@@ -77,7 +77,9 @@ pub trait Database<H: Clone> {
 	/// `key` is not currently in the database.
 	///
 	/// This may be faster than `get` since it doesn't allocate.
-	fn with_get<R>(&self, col: ColumnId, key: &[u8], f: impl FnOnce(&[u8]) -> R) -> Option<R>;
+	fn with_get<R>(&self, col: ColumnId, key: &[u8], f: impl FnOnce(&[u8]) -> R) -> Option<R> {
+		self.get(col, key).map(|v| f(&v))
+	}
 	/// Set the value of `key` in `col` to `value`, replacing anything that is there currently.
 	fn set(&self, col: ColumnId, key: &[u8], value: &[u8]) {
 		let mut t = self.new_transaction();
@@ -98,7 +100,9 @@ pub trait Database<H: Clone> {
 	/// is currently stored.
 	///
 	/// This may be faster than `get` since it doesn't allocate.
-	fn with_lookup<R>(&self, hash: &H, f: impl FnOnce(&[u8]) -> R) -> Option<R>;
+	fn with_lookup<R>(&self, hash: &H, f: impl FnOnce(&[u8]) -> R) -> Option<R> {
+		self.lookup(hash).map(|v| f(&v))
+	}
 	/// Store the `preimage` of `hash` into the database, so that it may be looked up later with
 	/// `Database::lookup`. This may be called multiple times, but `Database::lookup` but subsequent
 	/// calls will ignore `preimage` and simply increase the number of references on `hash`.
