@@ -80,7 +80,7 @@ then
     git checkout pr/${pr_companion}
   else
     pr_ref="$(grep -Po '"ref"\s*:\s*"\K(?!master)[^"]*' "${pr_data_file}")"
-    if git fetch --depth 1 origin "$pr_ref":branch/"$pr_ref" 2>/dev/null
+    if git fetch --depth 1 origin "$pr_ref":branch/"$pr_ref"
     then
       boldprint "companion branch detected: $pr_ref"
       git checkout branch/"$pr_ref"
