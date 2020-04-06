@@ -387,7 +387,7 @@ build-linux-subkey:                &build-subkey
   before_script:
     - mkdir -p ./artifacts/subkey
   script:
-    - cd ./bin/utils/subkeynning 
+    - cd ./bin/utils/subkey 
     - BUILD_DUMMY_WASM_BINARY=1 time cargo build --release --verbose
     - cd -
     - mv ./target/release/subkey ./artifacts/subkey/.
