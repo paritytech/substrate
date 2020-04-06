@@ -885,7 +885,8 @@ impl Metrics {
 						"sub_libp2p_notifications_sizes",
 						"Sizes of the notifications send to and received from all nodes"
 					),
-					buckets: vec![64.0, 256.0, 1024.0, 4.0 * 1024.0, 64.0 * 1024.0, 256.0 * 1024.0, 1024.0 * 1024.0],
+					buckets: prometheus_endpoint::exponential_buckets(64.0, 4.0, 8)
+						.expect("parameters are always valid values; qed"),
 				},
 				&["direction", "protocol"]
 			)?, registry)?,
