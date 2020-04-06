@@ -144,6 +144,7 @@ pub use paste;
 ///     assert_err!(test_benchmark_broken_benchmark::<Test>(), "You forgot to sort!");
 ///   });
 /// }
+/// ```
 #[macro_export]
 macro_rules! benchmarks {
 	(
