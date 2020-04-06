@@ -210,7 +210,7 @@ mod tests {
 					.node_key(net_config_dir)
 					.and_then(move |c| match c {
 						NodeKeyConfig::Ed25519(sc_network::config::Secret::File(ref f))
-							if typ == NodeKeyType::Ed25519
+						if typ == NodeKeyType::Ed25519
 								&& f == &dir.join(NODE_KEY_ED25519_FILE) =>
 						{
 							Ok(())
