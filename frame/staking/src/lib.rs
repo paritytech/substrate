@@ -288,7 +288,6 @@ use sp_runtime::{
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, StaticLookup, CheckedSub, Saturating, SaturatedConversion, AtLeast32Bit,
-		SignedExtension,
 	},
 	transaction_validity::{
 		TransactionValidityError, TransactionValidity, ValidTransaction, InvalidTransaction,
@@ -316,6 +315,7 @@ pub const MAX_UNLOCKING_CHUNKS: usize = 32;
 pub const MAX_NOMINATIONS: usize = <CompactAssignments as VotingLimit>::LIMIT;
 
 // syntactic sugar for logging
+#[cfg(feature = "std")]
 const LOG_TARGET: &'static str = "staking";
 macro_rules! log {
 	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
@@ -1447,7 +1447,8 @@ decl_module! {
 
 		/// Declare the desire to nominate `targets` for the origin controller.
 		///
-		/// Effects will be felt at the beginning of the next era.
+		/// Effects will be felt at the beginning of the next era. This can only be called when
+		/// [`EraElectionStatus`] is `Closed`.
 		///
 		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
 		///
@@ -1458,6 +1459,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(750_000)]
 		fn nominate(origin, targets: Vec<<T::Lookup as StaticLookup>::Source>) {
+			ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let stash = &ledger.stash;
@@ -1480,7 +1482,8 @@ decl_module! {
 
 		/// Declare no desire to either validate or nominate.
 		///
-		/// Effects will be felt at the beginning of the next era.
+		/// Effects will be felt at the beginning of the next era.  This can only be called when
+		/// [`EraElectionStatus`] is `Closed`.
 		///
 		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
 		///
@@ -1491,6 +1494,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		fn chill(origin) {
+			ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			Self::chill_stash(&ledger.stash);
@@ -1541,8 +1545,6 @@ decl_module! {
 				}
 			}
 		}
-
-		// ----- Root calls.
 
 		/// The ideal number of validators.
 		#[weight = SimpleDispatchInfo::FixedNormal(5_000)]
@@ -3077,107 +3079,6 @@ impl<T, Reporter, Offender, R, O> ReportOffence<Reporter, Offender, O>
 			);
 			Ok(())
 		}
-	}
-}
-
-/// Disallows any transactions that change the election result to be submitted after the election
-/// window is open.
-#[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct LockStakingStatus<T>(sp_std::marker::PhantomData<T>);
-
-impl<T: Trait + Send + Sync> sp_std::fmt::Debug for LockStakingStatus<T> {
-	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		write!(f, "LockStakingStatus")
-	}
-}
-
-impl<T> LockStakingStatus<T> {
-	/// Create new `LockStakingStatus`.
-	pub fn new() -> Self {
-		Self(sp_std::marker::PhantomData)
-	}
-}
-
-impl<T> Default for LockStakingStatus<T> {
-	fn default() -> Self {
-		Self::new()
-	}
-}
-
-impl<T: Trait + Send + Sync> SignedExtension for LockStakingStatus<T> {
-	const IDENTIFIER: &'static str = "LockStakingStatus";
-	type AccountId = T::AccountId;
-	type Call = <T as Trait>::Call;
-	type AdditionalSigned = ();
-	type DispatchInfo = frame_support::weights::DispatchInfo;
-	type Pre = ();
-
-	fn additional_signed(&self) -> Result<(), TransactionValidityError> { Ok(()) }
-
-	fn validate(
-		&self,
-		_who: &Self::AccountId,
-		call: &Self::Call,
-		_info: Self::DispatchInfo,
-		_len: usize,
-	) -> TransactionValidity {
-		if let Some(inner_call) = call.is_sub_type() {
-			if let ElectionStatus::Open(_) = <Module<T>>::era_election_status() {
-				match inner_call {
-					// bonding, and declaring the intention to validate is fine. The new stakers
-					// will not be considered for the next round, if the election window is open.
-					Call::<T>::bond(..) |
-					Call::<T>::bond_extra(..) |
-					Call::<T>::rebond(..) |
-					Call::<T>::validate(..) |
-
-					// unbonding and removing any unbonded value is fine. No exposure will change.
-					Call::<T>::unbond(..) |
-					Call::<T>::withdraw_unbonded(..) |
-
-					// nominate is not allowed; it could potentially change the election outcome.
-					// chill is not not allowed; a validator who is already in the snapshot data of
-					// the next round can no longer bail.
-
-					// payee and controller can be changed.
-					Call::<T>::set_payee(..) |
-					Call::<T>::set_controller(..) |
-
-					// root calls are allowed. Note that calling `set_validator_count` could cause
-					// invalidation of lots of solutions, but we assume that root calls will be done
-					// with care.
-					Call::<T>::set_validator_count(..) |
-					Call::<T>::force_no_eras(..) |
-					Call::<T>::force_new_era(..) |
-					Call::<T>::set_invulnerables(..) |
-					Call::<T>::force_unstake(..) |
-					Call::<T>::force_new_era_always(..) |
-					Call::<T>::cancel_deferred_slash(..) |
-					Call::<T>::set_history_depth(..) |
-
-					// all payout types are allowed; They will not change the exposure.
-					Call::<T>::payout_nominator(..) |
-					Call::<T>::payout_validator(..) |
-					Call::<T>::payout_stakers(..) |
-
-					// garbage collection -- okay.
-					Call::<T>::reap_stash(..) |
-
-					// election solutions -- okay.
-					Call::<T>::submit_election_solution(..) |
-					Call::<T>::submit_election_solution_unsigned(..)
-
-					// all of these ^^ calls are okay. Nothing should happen.
-					=> {},
-
-					// reject everything else.
-					_ => {
-						return Err(InvalidTransaction::from(Error::<T>::CallNotAllowed).into());
-					}
-				}
-			}
-		}
-		Ok(Default::default())
 	}
 }
 

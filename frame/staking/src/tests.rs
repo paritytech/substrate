@@ -2931,18 +2931,14 @@ mod offchain_phragmen {
 			.execute_with(|| {
 				run_to_block(12);
 				assert!(Staking::snapshot_validators().is_some());
+				// given
 				assert_eq!(Staking::era_election_status(), ElectionStatus::Open(12));
 
-				let call = crate::Call::chill();
-				let outer: mock::Call = call.into();
-
-				let lock_staking: LockStakingStatus<Test> = Default::default();
-				assert_eq!(
-					lock_staking.validate(&10, &outer, Default::default(), Default::default(),),
-					TransactionValidity::Err(
-						InvalidTransaction::Custom(<Error<Test>>::CallNotAllowed.as_u8()).into(),
-					),
-				)
+				// chill and nominate are now allowed.
+				assert_noop!(
+					Staking::chill(Origin::signed(10)),
+					Error::<Test>::CallNotAllowed,
+				);
 			})
 	}
 
