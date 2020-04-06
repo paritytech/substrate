@@ -111,14 +111,15 @@ benchmarks! {
 	second {
 		let s in 0 .. MAX_SECONDERS;
 
+		let caller = funded_account::<T>("caller", 0);
+		let proposal_hash = add_proposal::<T>(s)?;
+
 		// Create s existing "seconds"
 		for i in 0 .. s {
 			let seconder = funded_account::<T>("seconder", i);
 			Democracy::<T>::second(RawOrigin::Signed(seconder).into(), 0)?;
 		}
 
-		let caller = funded_account::<T>("caller", 0);
-		let proposal_hash = add_proposal::<T>(s)?;
 	}: _(RawOrigin::Signed(caller), 0)
 
 	vote {
