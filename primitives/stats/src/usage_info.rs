@@ -50,11 +50,6 @@ pub struct UsageInfo {
 	/// Memory used.
 	// Encoded as u64 because wasm's usize is u64.
 	pub memory: u64,
-
-	/// Moment at which current statistics has been started being collected.
-	pub started: Duration,
-	/// Timespan of the statistics.
-	pub span: Duration,
 }
 
 impl UsageInfo {
@@ -71,8 +66,6 @@ impl UsageInfo {
 			cache_reads: UsageUnit::default(),
 			modified_reads: UsageUnit::default(),
 			memory: 0,
-			started: Default::default(),
-			span: Default::default(),
 		}
 	}
 
