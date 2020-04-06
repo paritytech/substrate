@@ -28,8 +28,8 @@ use frame_support::traits::{Currency, OnInitialize};
 use sp_runtime::{Perbill, traits::{Convert, StaticLookup}};
 use sp_staking::offence::ReportOffence;
 
-use pallet_im_online::{Trait as ImOnlineTrait, UnresponsivenessOffence};
-use pallet_offences::{Trait as OffencesTrait, Module as OffencesModule};
+use pallet_im_online::{Trait as ImOnlineTrait, Module as ImOnline, UnresponsivenessOffence};
+use pallet_offences::{Trait as OffencesTrait, Module as Offences};
 use pallet_staking::{
 	Module as Staking, Trait as StakingTrait, RewardDestination, ValidatorPrefs,
 	Exposure, IndividualExposure, ElectionStatus
@@ -39,15 +39,15 @@ use pallet_session::historical::{Trait as HistoricalTrait, IdentificationTuple};
 
 const SEED: u32 = 0;
 
-
 const MAX_USERS: u32 = 1000;
 const MAX_REPORTERS: u32 = 100;
 const MAX_OFFENDERS: u32 = 100;
 const MAX_NOMINATORS: u32 = 100;
+const MAX_DEFERRED_OFFENCES: u32 = 100;
 
-pub struct Module<T: Trait>(OffencesModule<T>);
+pub struct Module<T: Trait>(Offences<T>);
 
-pub trait Trait: SessionTrait + StakingTrait + OffencesTrait + ImOnlineTrait {}
+pub trait Trait: SessionTrait + StakingTrait + OffencesTrait + ImOnlineTrait + HistoricalTrait {}
 
 fn create_offender<T: Trait>(n: u32, nominators: u32) -> Result<T::AccountId, &'static str> {
 	let stash: T::AccountId = account("stash", n, SEED);
@@ -100,27 +100,18 @@ fn create_offender<T: Trait>(n: u32, nominators: u32) -> Result<T::AccountId, &'
 	let current_era = 0u32;
 	Staking::<T>::add_era_stakers(current_era.into(), stash.clone().into(), exposure);
 
-	return Ok(controller)
+	Ok(controller)
 }
 
-fn make_inputs<T: Trait>(r: u32, o: u32, n: u32)
-	-> Result<(Vec<T::AccountId>, UnresponsivenessOffence<IdentificationTuple<T>>), &'static str> {
-
-	// Make reporters.
-	let mut reporters = vec![];
-	for i in 0 .. r {
-		let reporter = account("reporter", i, SEED);
-		reporters.push(reporter);
-	}
-
-	// Make offence with `o` offenders and `n` nominators each one.
+fn make_offenders<T: Trait>(num_offenders: u32, num_nominators: u32) -> Result<Vec<IdentificationTuple<T>>, &'static str> {
 	let mut offenders: Vec<T::AccountId> = vec![];
-	for i in 0 .. o {
-		let offender = create_offender::<T>(i, n)?;
+
+	for i in 0 .. num_offenders {
+		let offender = create_offender::<T>(i, num_nominators)?;
 		offenders.push(offender);
 	}
 
-	let offenders = offenders.iter()
+	Ok(offenders.iter()
 		.map(|id|
 			<T as SessionTrait>::ValidatorIdOf::convert(id.clone())
 				.expect("failed to get validator id from account id"))
@@ -128,15 +119,7 @@ fn make_inputs<T: Trait>(r: u32, o: u32, n: u32)
 			<T as HistoricalTrait>::FullIdentificationOf::convert(validator_id.clone())
 			.map(|full_id| (validator_id, full_id))
 			.expect("failed to convert validator id to full identification"))
-		.collect::<Vec<IdentificationTuple<T>>>();
-
-	let offence = UnresponsivenessOffence {
-		session_index: 0,
-		validator_set_count: offenders.len() as u32 / 2,
-		offenders,
-	};
-
-	Ok((reporters, offence))
+		.collect::<Vec<IdentificationTuple<T>>>())
 }
 
 benchmarks! {
@@ -145,6 +128,7 @@ benchmarks! {
 		let r in 1 .. MAX_REPORTERS => ();
 		let o in 1 .. MAX_OFFENDERS => ();
 		let n in 1 .. MAX_NOMINATORS => ();
+		let d in 1 .. MAX_DEFERRED_OFFENCES => ();
 	}
 
 	report_offence {
@@ -152,16 +136,40 @@ benchmarks! {
 		let o in ...;
 		let n in ...;
 
-		let (reporters, offence) = make_inputs::<T>(r, o, n)?;
+		let mut reporters = vec![];
+
+		for i in 0 .. r {
+			let reporter = account("reporter", i, SEED);
+			reporters.push(reporter);
+		}
+	
+		let offenders = make_offenders::<T>(o, n).expect("failed to create offenders");
+		let keys =  ImOnline::<T>::keys();
+
+		let offence = UnresponsivenessOffence {
+			session_index: 0,
+			validator_set_count: keys.len() as u32,
+			offenders,
+		};
+
 	}: {
 		let _ = <T as ImOnlineTrait>::ReportUnresponsiveness::report_offence(reporters, offence);
 	}
 
 	on_initialize {
-		let u in ...; 
+		let d in ...;
 
 		Staking::<T>::put_election_status(ElectionStatus::Closed);
+
+		let mut deferred_offences = vec![];
+
+		for i in 0 .. d {
+			deferred_offences.push((vec![], vec![], 0u32));
+		}
+
+		Offences::<T>::set_deferred_offences(deferred_offences);
+
 	}: {
-		OffencesModule::<T>::on_initialize(u.into());
+		Offences::<T>::on_initialize(u.into());
 	}
 }

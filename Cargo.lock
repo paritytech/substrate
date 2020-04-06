@@ -4299,6 +4299,8 @@ dependencies = [
  "pallet-offences",
  "pallet-session",
  "pallet-staking",
+ "parity-scale-codec",
+ "sp-io",
  "sp-runtime",
  "sp-staking",
  "sp-std",

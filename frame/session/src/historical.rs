@@ -40,7 +40,7 @@ type ValidatorCount = u32;
 /// Trait necessary for the historical module.
 pub trait Trait: super::Trait {
 	/// Full identification of the validator.
-	type FullIdentification: Parameter;
+	type FullIdentification: Parameter + Ord;
 
 	/// A conversion from validator ID to full identification.
 	///

@@ -347,7 +347,7 @@ pub trait Trait: frame_system::Trait {
 	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// A stable ID for a validator.
-	type ValidatorId: Member + Parameter;
+	type ValidatorId: Member + Parameter + Ord;
 
 	/// A conversion from account ID to validator ID.
 	type ValidatorIdOf: Convert<Self::AccountId, Option<Self::ValidatorId>>;
