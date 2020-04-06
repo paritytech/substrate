@@ -105,7 +105,7 @@ impl BenchmarkCmd {
 						print!("{:?},{:?}\n", result.1, result.2);
 					});
 
-					print!("\n");
+					println!();
 				}
 
 				// Conduct analysis.
