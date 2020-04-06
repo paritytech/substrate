@@ -186,8 +186,8 @@ pub fn init_logger(pattern: &str) {
 			let name = ::std::thread::current()
 				.name()
 				.map_or_else(Default::default, |x| format!("{}", Colour::Blue.bold().paint(x)));
-			let millis = (now.tm_nsec as f32 / 1000000.0).round() as usize;
-			let timestamp = format!("{}.{:03}", timestamp, millis);
+			let millis = (now.tm_nsec as f32 / 1000000.0).floor() as usize;
+			let timestamp = format!("{}.{}", timestamp, millis);
 			format!(
 				"{} {} {} {}  {}",
 				Colour::Black.bold().paint(timestamp),

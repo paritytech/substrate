@@ -83,8 +83,8 @@ pub enum NodeRole {
 	LightClient,
 	/// The node is an authority
 	Authority,
-	/// An unknown role with a bit number
-	UnknownRole(u8)
+	/// The node is a sentry
+	Sentry,
 }
 
 #[cfg(test)]

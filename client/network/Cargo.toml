@@ -47,6 +47,7 @@ slog = { version = "2.5.2", features = ["nested-values"] }
 slog_derive = "0.2.0"
 smallvec = "0.6.10"
 sp-arithmetic = { version = "2.0.0-alpha.5", path = "../../primitives/arithmetic" }
+sp-utils = { version = "2.0.0-alpha.5", path = "../../primitives/utils" }
 sp-blockchain = { version = "2.0.0-alpha.5", path = "../../primitives/blockchain" }
 sp-consensus = { version = "0.8.0-alpha.5", path = "../../primitives/consensus/common" }
 sp-consensus-babe = { version = "0.8.0-alpha.5", path = "../../primitives/consensus/babe" }
