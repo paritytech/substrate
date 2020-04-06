@@ -23,7 +23,7 @@ macro_rules! decl_tests {
 	($test:ty, $ext_builder:ty, $existential_deposit:expr) => {
 
 		use crate::*;
-		use sp_runtime::{Fixed64, traits::{SignedExtension, BadOrigin}};
+		use sp_runtime::{Fixed64, traits::{SignedExtension, BadOrigin, One}};
 		use frame_support::{
 			assert_noop, assert_ok, assert_err,
 			traits::{
@@ -667,7 +667,9 @@ macro_rules! decl_tests {
 				.existential_deposit(100)
 				.build()
 				.execute_with(|| {
-					assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, u64::max_value(), u64::max_value()));
+					assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, u64::max_value(), u64::one()));
+					assert_eq!(Balances::free_balance(&1), u64::max_value());
+					assert_eq!(Balances::reserved_balance(&1), u64::one());
 				});
 		}
 
@@ -677,8 +679,8 @@ macro_rules! decl_tests {
 				.existential_deposit(100)
 				.build()
 				.execute_with(|| {
-					assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, u64::max_value(), u64::max_value()));
-					assert!(Balances::withdraw(&1, 10, WithdrawReasons::all(), ExistenceRequirement::AllowDeath).is_ok());
+					assert_ok!(Balances::set_balance(RawOrigin::Root.into(), 1, u64::max_value(), 200));
+					assert!(Balances::withdraw(&1, 199, WithdrawReasons::all(), ExistenceRequirement::KeepAlive).is_ok());
 				});
 		}
 
