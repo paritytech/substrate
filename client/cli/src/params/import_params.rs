@@ -55,7 +55,6 @@ pub struct ImportParams {
 	pub execution_strategies: ExecutionStrategiesParams,
 
 	/// Limit the memory the database cache can use.
-	// NOTE: this is an option so implementations can set their own defaults
 	#[structopt(long = "db-cache", value_name = "MiB")]
 	pub database_cache_size: Option<usize>,
 
@@ -64,7 +63,6 @@ pub struct ImportParams {
 	pub state_cache_size: usize,
 
 	/// Comma separated list of targets for tracing.
-	// NOTE: this is an option so implementations can set their own defaults
 	#[structopt(long = "tracing-targets", value_name = "TARGETS")]
 	pub tracing_targets: Option<String>,
 

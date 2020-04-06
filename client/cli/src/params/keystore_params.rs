@@ -27,7 +27,6 @@ const DEFAULT_KEYSTORE_CONFIG_PATH: &'static str = "keystore";
 #[derive(Debug, StructOpt, Clone)]
 pub struct KeystoreParams {
 	/// Specify custom keystore path.
-	// NOTE: this is an option so implementations can set their own defaults
 	#[structopt(long = "keystore-path", value_name = "PATH", parse(from_os_str))]
 	pub keystore_path: Option<PathBuf>,
 
@@ -39,7 +38,6 @@ pub struct KeystoreParams {
 	pub password_interactive: bool,
 
 	/// Password used by the keystore.
-	// NOTE: this is an option so implementations can set their own defaults
 	#[structopt(
 		long = "password",
 		conflicts_with_all = &[ "password-interactive", "password-filename" ]
@@ -47,7 +45,6 @@ pub struct KeystoreParams {
 	pub password: Option<String>,
 
 	/// File that contains the password used by the keystore.
-	// NOTE: this is an option so implementations can set their own defaults
 	#[structopt(
 		long = "password-filename",
 		value_name = "PATH",

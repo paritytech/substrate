@@ -57,21 +57,28 @@ use structopt::{
 pub trait SubstrateCli: Sized {
 	/// Implementation name.
 	fn impl_name() -> &'static str;
+
 	/// Implementation version.
 	///
 	/// By default this will look like this: 2.0.0-b950f731c-x86_64-linux-gnu where the hash is the
 	/// short commit hash of the commit of in the Git repository.
 	fn impl_version() -> &'static str;
+
 	/// Executable file name.
 	fn executable_name() -> &'static str;
+
 	/// Executable file description.
 	fn description() -> &'static str;
+
 	/// Executable file author.
 	fn author() -> &'static str;
+
 	/// Support URL.
 	fn support_url() -> &'static str;
+
 	/// Copyright starting year (x-current year)
 	fn copyright_start_year() -> i32;
+
 	/// Chain spec factory
 	fn load_spec(&self, id: &str) -> std::result::Result<Box<dyn ChainSpec>, String>;
 

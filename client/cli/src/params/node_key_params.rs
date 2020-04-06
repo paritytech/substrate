@@ -45,7 +45,6 @@ pub struct NodeKeyParams {
 	/// WARNING: Secrets provided as command-line arguments are easily exposed.
 	/// Use of this option should be limited to development and testing. To use
 	/// an externally managed secret key, use `--node-key-file` instead.
-	// NOTE: this is an option so implementations can set their own defaults
 	#[structopt(long = "node-key", value_name = "KEY")]
 	pub node_key: Option<String>,
 
@@ -86,7 +85,6 @@ pub struct NodeKeyParams {
 	///
 	/// If the file does not exist, it is created with a newly generated secret key of
 	/// the chosen type.
-	// NOTE: this is an option so implementations can set their own defaults
 	#[structopt(long = "node-key-file", value_name = "FILE")]
 	pub node_key_file: Option<PathBuf>,
 }

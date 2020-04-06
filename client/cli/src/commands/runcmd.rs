@@ -114,17 +114,14 @@ pub struct RunCmd {
 	pub prometheus_external: bool,
 
 	/// Specify HTTP RPC server TCP port.
-	// NOTE: this is an option so implementations can set their own defaults
 	#[structopt(long = "rpc-port", value_name = "PORT")]
 	pub rpc_port: Option<u16>,
 
 	/// Specify WebSockets RPC server TCP port.
-	// NOTE: this is an option so implementations can set their own defaults
 	#[structopt(long = "ws-port", value_name = "PORT")]
 	pub ws_port: Option<u16>,
 
 	/// Maximum number of WS RPC server connections.
-	// NOTE: this is an option so implementations can set their own defaults
 	#[structopt(long = "ws-max-connections", value_name = "COUNT")]
 	pub ws_max_connections: Option<usize>,
 
@@ -134,7 +131,6 @@ pub struct RunCmd {
 	/// value). Value of `all` will disable origin validation. Default is to
 	/// allow localhost and https://polkadot.js.org origins. When running in
 	/// --dev mode the default is to allow all origins.
-	// NOTE: this is an option so implementations can set their own defaults
 	#[structopt(long = "rpc-cors", value_name = "ORIGINS", parse(try_from_str = parse_cors))]
 	pub rpc_cors: Option<Cors>,
 
@@ -151,7 +147,6 @@ pub struct RunCmd {
 	/// The human-readable name for this node.
 	///
 	/// The node name will be reported to the telemetry server, if enabled.
-	// NOTE: this is an option so implementations can set their own defaults
 	#[structopt(long = "name", value_name = "NAME")]
 	pub name: Option<String>,
 
@@ -241,7 +236,6 @@ pub struct RunCmd {
 	/// The size of the instances cache for each runtime.
 	///
 	/// The default value is 8 and the values higher than 256 are ignored.
-	// NOTE: this is an option so implementations can set their own defaults
 	#[structopt(long)]
 	pub max_runtime_instances: Option<usize>,
 

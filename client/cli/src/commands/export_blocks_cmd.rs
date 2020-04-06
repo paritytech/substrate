@@ -32,21 +32,18 @@ use structopt::StructOpt;
 #[derive(Debug, StructOpt, Clone)]
 pub struct ExportBlocksCmd {
 	/// Output file name or stdout if unspecified.
-	// NOTE: this is an option so implementations can set their own defaults
 	#[structopt(parse(from_os_str))]
 	pub output: Option<PathBuf>,
 
 	/// Specify starting block number.
 	///
 	/// Default is 1.
-	// NOTE: this is an option so implementations can set their own defaults
 	#[structopt(long = "from", value_name = "BLOCK")]
 	pub from: Option<BlockNumber>,
 
 	/// Specify last block number.
 	///
 	/// Default is best block.
-	// NOTE: this is an option so implementations can set their own defaults
 	#[structopt(long = "to", value_name = "BLOCK")]
 	pub to: Option<BlockNumber>,
 

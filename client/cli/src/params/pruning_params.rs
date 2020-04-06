@@ -27,7 +27,6 @@ pub struct PruningParams {
 	/// Default is to keep all block states if the node is running as a
 	/// validator (i.e. 'archive'), otherwise state is only kept for the last
 	/// 256 blocks.
-	// NOTE: this is an option so implementations can set their own defaults
 	#[structopt(long = "pruning", value_name = "PRUNING_MODE")]
 	pub pruning: Option<String>,
 }

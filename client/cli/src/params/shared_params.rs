@@ -27,7 +27,6 @@ const DEFAULT_DB_CONFIG_PATH: &'static str = "db";
 #[derive(Debug, StructOpt, Clone)]
 pub struct SharedParams {
 	/// Specify the chain specification (one of dev, local, or staging).
-	// NOTE: this is an option so implementations can set their own defaults
 	#[structopt(long = "chain", value_name = "CHAIN_SPEC")]
 	pub chain: Option<String>,
 
@@ -36,7 +35,6 @@ pub struct SharedParams {
 	pub dev: bool,
 
 	/// Specify custom base path.
-	// NOTE: this is an option so implementations can set their own defaults
 	#[structopt(
 		long = "base-path",
 		short = "d",
@@ -49,7 +47,6 @@ pub struct SharedParams {
 	///
 	/// Log levels (least to most verbose) are error, warn, info, debug, and trace.
 	/// By default, all targets log `info`. The global log level can be set with -l<level>.
-	// NOTE: this is an option so implementations can set their own defaults
 	#[structopt(short = "l", long = "log", value_name = "LOG_PATTERN")]
 	pub log: Option<String>,
 }
