@@ -264,6 +264,13 @@ impl Default for ValidTransaction {
 }
 
 impl ValidTransaction {
+	pub fn for_pallet(prefix: &'static str) -> ValidTransactionBuilder {
+		ValidTransactionBuilder {
+			prefix,
+			validity: Default::default(),
+		}
+	}
+
 	/// Combine two instances into one, as a best effort. This will take the superset of each of the
 	/// `provides` and `requires` tags, it will sum the priorities, take the minimum longevity and
 	/// the logic *And* of the propagate flags.
@@ -277,6 +284,62 @@ impl ValidTransaction {
 		}
 	}
 }
+
+// TODO [ToDr] Docs
+#[derive(Clone, RuntimeDebug)]
+pub struct ValidTransactionBuilder {
+	prefix: &'static str,
+	validity: ValidTransaction,
+}
+
+impl ValidTransactionBuilder {
+	pub fn priority(mut self, priority: TransactionPriority) -> Self {
+		self.validity.priority = priority;
+		self
+	}
+
+	pub fn longevity(mut self, longevity: TransactionLongevity) -> Self {
+		self.validity.longevity = longevity;
+		self
+	}
+
+	pub fn propagate(mut self, propagate: bool) -> Self {
+		self.validity.propagate = propagate;
+		self
+	}
+
+	pub fn and_requires(mut self, tag: impl Encode) -> Self {
+		self.validity.requires.push((self.prefix, tag).encode());
+		self
+	}
+
+	pub fn and_provides(mut self, tag: impl Encode) -> Self {
+		self.validity.provides.push((self.prefix, tag).encode());
+		self
+	}
+
+	pub fn combine_with(mut self, validity: ValidTransaction) -> Self {
+		self.validity = core::mem::take(&mut self.validity).combine_with(validity);
+		self
+	}
+
+	pub fn build(self) -> TransactionValidity {
+		self.into()
+	}
+}
+
+impl From<ValidTransactionBuilder> for TransactionValidity {
+	fn from(builder: ValidTransactionBuilder) -> Self {
+		Ok(builder.into())
+	}
+}
+
+impl From<ValidTransactionBuilder> for ValidTransaction {
+	fn from(builder: ValidTransactionBuilder) -> Self {
+		builder.validity
+	}
+}
+
 
 #[cfg(test)]
 mod tests {

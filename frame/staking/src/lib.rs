@@ -292,7 +292,7 @@ use sp_runtime::{
 	},
 	transaction_validity::{
 		TransactionValidityError, TransactionValidity, ValidTransaction, InvalidTransaction,
-		TransactionSource,
+		TransactionSource, TransactionPriority,
 	},
 };
 use sp_staking::{
@@ -782,6 +782,12 @@ pub trait Trait: frame_system::Trait {
 	/// For each validator only the `$MaxNominatorRewardedPerValidator` biggest stakers can claim
 	/// their reward. This used to limit the i/o cost for the nominator payout.
 	type MaxNominatorRewardedPerValidator: Get<u32>;
+
+	/// A configuration for base priority of unsigned transactions.
+	///
+	/// This is exposed so that it can be tuned for particular runtime, when
+	/// multiple pallets send unsigned transactions.
+	type UnsignedPriority: Get<TransactionPriority>;
 }
 
 /// Mode of era-forcing.
@@ -3217,7 +3223,7 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 
 			Ok(ValidTransaction {
 				// The higher the score[0], the better a solution is.
-				priority: score[0].saturated_into(),
+				priority: T::UnsignedPriority::get().saturating_add(score[0].saturated_into()),
 				// no requires.
 				requires: vec![],
 				// Defensive only. A single solution can exist in the pool per era. Each validator

@@ -53,6 +53,7 @@ use sp_runtime::{
 	traits::Zero,
 	transaction_validity::{
 		InvalidTransaction, ValidTransaction, TransactionValidity, TransactionSource,
+		TransactionPriority,
 	},
 };
 use sp_std::{vec, vec::Vec};
@@ -106,6 +107,12 @@ pub trait Trait: frame_system::Trait {
 	///
 	/// This ensures that we only accept unsigned transactions once, every `UnsignedInterval` blocks.
 	type UnsignedInterval: Get<Self::BlockNumber>;
+
+	/// A configuration for base priority of unsigned transactions.
+	///
+	/// This is exposed so that it can be tuned for particular runtime, when
+	/// multiple pallets send unsigned transactions.
+	type UnsignedPriority: Get<TransactionPriority>;
 }
 
 decl_storage! {
@@ -542,7 +549,7 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 				// transactions in the pool. Next we tweak the priority depending on how much
 				// it differs from the current average. (the more it differs the more priority it
 				// has).
-				priority: (1 << 20) + avg_price as u64,
+				priority: T::UnsignedPriority::get().saturating_add(avg_price as _),
 				// This transaction does not require anything else to go before into the pool.
 				// In theory we could require `previous_unsigned_at` transaction to go first,
 				// but it's not necessary in our case.
