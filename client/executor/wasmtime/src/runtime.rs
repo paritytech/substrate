@@ -52,10 +52,15 @@ impl WasmModule for WasmtimeRuntime {
 			self.allow_missing_func_imports,
 		)?;
 
+		let instance_wrapper = InstanceWrapper::new(&self.module, &imports, self.heap_pages)?;
+		let heap_base = instance_wrapper.extract_heap_base()?;
+
 		Ok(Box::new(WasmtimeInstance {
-			module: self.module.clone(),
+			instance_wrapper: Rc::new(instance_wrapper),
+			module: Arc::clone(&self.module),
 			imports,
 			heap_pages: self.heap_pages,
+			heap_base,
 		}))
 	}
 }
@@ -64,8 +69,10 @@ impl WasmModule for WasmtimeRuntime {
 /// to execute the compiled code.
 pub struct WasmtimeInstance {
 	module: Arc<Module>,
+	instance_wrapper: Rc<InstanceWrapper>,
 	imports: Imports,
 	heap_pages: u32,
+	heap_base: u32,
 }
 
 // This is safe because `WasmtimeInstance` does not leak reference to `self.imports`
@@ -74,13 +81,13 @@ unsafe impl Send for WasmtimeInstance {}
 
 impl WasmInstance for WasmtimeInstance {
 	fn call(&self, method: &str, data: &[u8]) -> Result<Vec<u8>> {
-		// TODO: reuse the instance and reset globals after call
-		// https://github.com/paritytech/substrate/issues/5141
-		let instance = Rc::new(InstanceWrapper::new(&self.module, &self.imports, self.heap_pages)?);
-		call_method(
-			instance,
-			method,
+		let entrypoint = self.instance_wrapper.resolve_entrypoint(method)?;
+		let allocator = FreeingBumpHeapAllocator::new(self.heap_base);
+		perform_call(
 			data,
+			Rc::clone(&self.instance_wrapper),
+			entrypoint,
+			allocator,
 		)
 	}
 
@@ -114,19 +121,6 @@ pub fn create_runtime(
 		allow_missing_func_imports,
 		host_functions,
 	})
-}
-
-/// Call a function inside a precompiled Wasm module.
-fn call_method(
-	instance_wrapper: Rc<InstanceWrapper>,
-	method: &str,
-	data: &[u8],
-) -> Result<Vec<u8>> {
-	let entrypoint = instance_wrapper.resolve_entrypoint(method)?;
-	let heap_base = instance_wrapper.extract_heap_base()?;
-	let allocator = FreeingBumpHeapAllocator::new(heap_base);
-
-	perform_call(data, instance_wrapper, entrypoint, allocator)
 }
 
 fn perform_call(
