@@ -2364,7 +2364,7 @@ impl<T: Trait> Module<T> {
 			validator_at,
 		).map_err(|e| {
 			// log the error since it is not propagated into the runtime error.
-			debug::native::warn!("💸 un-compacting solution failed due to {:?}", e);
+			log!(warn, "💸 un-compacting solution failed due to {:?}", e);
 			Error::<T>::PhragmenBogusCompact
 		})?;
 
