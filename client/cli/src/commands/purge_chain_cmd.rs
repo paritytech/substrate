@@ -59,7 +59,7 @@ impl PurgeChainCmd {
 				_ => {
 					println!("Aborted");
 					return Ok(());
-				}
+				},
 			}
 		}
 
