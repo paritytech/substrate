@@ -508,7 +508,7 @@ pub fn active_era() -> EraIndex {
 }
 
 pub fn check_exposure_all(era: EraIndex) {
-	ErasStakers::<Test>::iter_prefix(era).for_each(check_exposure)
+	ErasStakers::<Test>::iter_prefix_values(era).for_each(check_exposure)
 }
 
 pub fn check_nominator_all(era: EraIndex) {
