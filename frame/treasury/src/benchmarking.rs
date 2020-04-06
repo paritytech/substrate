@@ -232,9 +232,9 @@ mod tests {
 			assert_ok!(test_benchmark_approve_proposal::<Test>());
 			assert_ok!(test_benchmark_report_awesome::<Test>());
 			assert_ok!(test_benchmark_retract_tip::<Test>());
-			// assert_ok!(test_benchmark_tip_new::<Test>());
-			// assert_ok!(test_benchmark_tip::<Test>());
-			// assert_ok!(test_benchmark_close_tip::<Test>());
+			assert_ok!(test_benchmark_tip_new::<Test>());
+			assert_ok!(test_benchmark_tip::<Test>());
+			assert_ok!(test_benchmark_close_tip::<Test>());
 			assert_ok!(test_benchmark_on_initialize::<Test>());
 		});
 	}
