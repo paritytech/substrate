@@ -125,7 +125,7 @@ pub fn new_full(config: Configuration)
 	let disable_grandpa = config.disable_grandpa;
 
 	let (
-		client, mut import_setup, inherent_data_providers, backend, task_builder, keystore,
+		client, mut import_setup, inherent_data_providers, backend, tasks_builder, keystore,
 		import_queue, select_chain, transaction_pool, background_tasks,
 	) = new_full_start!(config);
 
@@ -147,7 +147,7 @@ pub fn new_full(config: Configuration)
 		config,
 		client,
 		backend,
-		task_builder,
+		tasks_builder,
 		keystore,
 		None,
 		Some(select_chain),
@@ -249,10 +249,30 @@ pub fn new_light(config: Configuration)
 {
 	let inherent_data_providers = InherentDataProviders::new();
 
+	let ((client, backend, keystore, tasks_builder), fetcher) = sc_service::new_light_parts::<
+		Block, RuntimeApi, Executor
+	>(&config)?;
+	let client = Arc::new(client);
+	/*
 	ServiceBuilder::new_light::<Block, RuntimeApi, Executor>(config)?
+	*/
+	let select_chain = LongestChain::new(backend.clone());
+	/*
 		.with_select_chain(|_config, backend| {
 			Ok(LongestChain::new(backend.clone()))
 		})?
+	*/
+	let pool_api = sc_transaction_pool::LightChainApi::new(client.clone(), fetcher.clone());
+	let (transaction_pool, background_task_one) = sc_transaction_pool::BasicPool::with_revalidation_type(
+		config.transaction_pool.clone(), Arc::new(pool_api), sc_transaction_pool::RevalidationType::Light,
+	);
+	let transaction_pool = Arc::new(transaction_pool);
+	let background_tasks = Vec::new();
+
+	if let Some(bg_t) = background_task_one {
+		background_tasks.push(("txpool-background", bg_t));
+	}
+	/*
 		.with_transaction_pool(|config, client, fetcher| {
 			let fetcher = fetcher
 				.ok_or_else(|| "Trying to start light transaction pool without active fetcher")?;
@@ -263,6 +283,27 @@ pub fn new_light(config: Configuration)
 			);
 			Ok(pool)
 		})?
+	*/
+	let fetch_checker = fetcher.checker().clone();
+	let grandpa_block_import = sc_finality_grandpa::light_block_import(
+		client.clone(),
+		backend,
+		&(client.clone() as Arc<_>),
+		Arc::new(fetch_checker),
+	)?;
+	let finality_proof_import = grandpa_block_import.clone();
+	let finality_proof_request_builder =
+		finality_proof_import.create_finality_proof_request_builder();
+
+	let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair>(
+		sc_consensus_aura::slot_duration(&*client)?,
+		grandpa_block_import,
+		None,
+		Some(Box::new(finality_proof_import)),
+		client,
+		inherent_data_providers.clone(),
+	)?;
+	/*
 		.with_import_queue_and_fprb(|_config, client, backend, fetcher, _select_chain, _tx_pool| {
 			let fetch_checker = fetcher
 				.map(|fetcher| fetcher.checker().clone())
@@ -288,10 +329,32 @@ pub fn new_light(config: Configuration)
 
 			Ok((import_queue, finality_proof_request_builder))
 		})?
+	*/
+	// GenesisAuthoritySetProvider is implemented for StorageAndProofProvider
+	let provider = client as Arc<dyn StorageAndProofProvider<_, _>>;
+	let finality_proof_provider = Arc::new(GrandpaFinalityProofProvider::new(backend, provider));
+	/*
 		.with_finality_proof_provider(|client, backend| {
 			// GenesisAuthoritySetProvider is implemented for StorageAndProofProvider
 			let provider = client as Arc<dyn StorageAndProofProvider<_, _>>;
 			Ok(Arc::new(GrandpaFinalityProofProvider::new(backend, provider)) as _)
 		})?
-		.build()
+	*/
+	sc_service::build(
+		config,
+		client,
+		backend,
+		tasks_builder,
+		keystore,
+		None,
+		Some(select_chain),
+		import_queue,
+		None,
+		Some(finality_proof_provider),
+		transaction_pool,
+		(),
+		None,
+		background_tasks,
+	)
+		//.build()
 }

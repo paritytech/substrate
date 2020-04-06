@@ -114,7 +114,13 @@ pub type TFullCallExecutor<TBl, TExecDisp> = sc_client::LocalCallExecutor<
 	NativeExecutor<TExecDisp>,
 >;
 
-/*
+type TFullParts<TBl, TRtApi, TExecDisp> = (
+	TFullClient<TBl, TRtApi, TExecDisp>,
+	Arc<TFullBackend<TBl>>,
+	Arc<RwLock<sc_keystore::Store>>,
+	TaskManagerBuilder,
+);
+
 /// Light client type.
 pub type TLightClient<TBl, TRtApi, TExecDisp> = Client<
 	TLightBackend<TBl>,
@@ -143,11 +149,10 @@ pub type TLightCallExecutor<TBl, TExecDisp> = sc_client::light::call_executor::G
 		NativeExecutor<TExecDisp>
 	>,
 >;
-*/
 
-type TFullParts<TBl, TRtApi, TExecDisp> = (
-	TFullClient<TBl, TRtApi, TExecDisp>,
-	Arc<TFullBackend<TBl>>,
+type TLightParts<TBl, TRtApi, TExecDisp> = (
+	TLightClient<TBl, TRtApi, TExecDisp>,
+	Arc<TLightBackend<TBl>>,
 	Arc<RwLock<sc_keystore::Store>>,
 	TaskManagerBuilder,
 );
@@ -228,6 +233,66 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 	};
 
 	Ok((client, backend, keystore, tasks_builder))
+}
+
+/// Start the service builder with a configuration.
+pub fn new_light_parts<TBl: BlockT, TRtApi, TExecDisp: NativeExecutionDispatch + 'static>(
+	config: &Configuration,
+) -> Result<(TLightParts<TBl, TRtApi, TExecDisp>, Arc<OnDemand<TBl>>), Error> {
+	let tasks_builder = TaskManagerBuilder::new();
+
+	let keystore = match &config.keystore {
+		KeystoreConfig::Path { path, password } => Keystore::open(
+			path.clone(),
+			password.clone()
+		)?,
+		KeystoreConfig::InMemory => Keystore::new_in_memory(),
+	};
+
+	let executor = NativeExecutor::<TExecDisp>::new(
+		config.wasm_method,
+		config.default_heap_pages,
+		config.max_runtime_instances,
+	);
+
+	let db_storage = {
+		let db_settings = sc_client_db::DatabaseSettings {
+			state_cache_size: config.state_cache_size,
+			state_cache_child_ratio:
+				config.state_cache_child_ratio.map(|v| (v, 100)),
+			pruning: config.pruning.clone(),
+			source: match &config.database {
+				DatabaseConfig::Path { path, cache_size } =>
+					sc_client_db::DatabaseSettingsSrc::Path {
+						path: path.clone(),
+						cache_size: *cache_size,
+					},
+				DatabaseConfig::Custom(db) =>
+					sc_client_db::DatabaseSettingsSrc::Custom(db.clone()),
+			},
+		};
+		sc_client_db::light::LightStorage::new(db_settings)?
+	};
+	let light_blockchain = sc_client::light::new_light_blockchain(db_storage);
+	let fetch_checker = Arc::new(
+		sc_client::light::new_fetch_checker::<_, TBl, _>(
+			light_blockchain.clone(),
+			executor.clone(),
+			Box::new(tasks_builder.spawn_handle()),
+		),
+	);
+	let fetcher = Arc::new(sc_network::config::OnDemand::new(fetch_checker));
+	let backend = sc_client::light::new_light_backend(light_blockchain);
+	let remote_blockchain = backend.remote_blockchain();
+	let client = sc_client::light::new_light(
+		backend.clone(),
+		config.chain_spec.as_storage_builder(),
+		executor,
+		Box::new(tasks_builder.spawn_handle()),
+		config.prometheus_config.as_ref().map(|config| config.registry.clone()),
+	)?;
+
+	Ok(((client, backend, keystore, tasks_builder), fetcher))
 }
 
 /*
