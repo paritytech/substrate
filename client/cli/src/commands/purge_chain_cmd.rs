@@ -55,7 +55,7 @@ impl PurgeChainCmd {
 			let input = input.trim();
 
 			match input.chars().nth(0) {
-				Some('y') | Some('Y') => {}
+				Some('y') | Some('Y') => {},
 				_ => {
 					println!("Aborted");
 					return Ok(());
