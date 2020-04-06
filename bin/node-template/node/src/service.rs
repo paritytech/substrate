@@ -196,7 +196,7 @@ pub fn new_light(config: Configuration)
 {
 	let inherent_data_providers = InherentDataProviders::new();
 
-	let ((client, backend, keystore, tasks_builder), fetcher) = sc_service::new_light_parts::<
+	let ((client, backend, keystore, tasks_builder), fetcher, remote_blockchain) = sc_service::new_light_parts::<
 		Block, RuntimeApi, Executor
 	>(&config)?;
 	let client = Arc::new(client);
@@ -246,7 +246,7 @@ pub fn new_light(config: Configuration)
 		Some(finality_proof_provider),
 		transaction_pool,
 		(),
-		None,
+		Some(remote_blockchain),
 		background_tasks,
 	)
 }

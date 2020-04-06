@@ -199,7 +199,7 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 /// Start the service builder with a configuration.
 pub fn new_light_parts<TBl: BlockT, TRtApi, TExecDisp: NativeExecutionDispatch + 'static>(
 	config: &Configuration,
-) -> Result<(TLightParts<TBl, TRtApi, TExecDisp>, Arc<OnDemand<TBl>>), Error> {
+) -> Result<(TLightParts<TBl, TRtApi, TExecDisp>, Arc<OnDemand<TBl>>, Arc<dyn RemoteBlockchain<TBl>>), Error> {
 	let tasks_builder = TaskManagerBuilder::new();
 
 	let keystore = match &config.keystore {
@@ -253,7 +253,7 @@ pub fn new_light_parts<TBl: BlockT, TRtApi, TExecDisp: NativeExecutionDispatch +
 		config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 	)?;
 
-	Ok(((client, backend, keystore, tasks_builder), fetcher))
+	Ok(((client, backend, keystore, tasks_builder), fetcher, remote_blockchain))
 }
 
 /// Builds the service.
