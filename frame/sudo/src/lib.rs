@@ -87,7 +87,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::prelude::*;
-use sp_runtime::{traits::{StaticLookup, Dispatchable}, DispatchError};
+use sp_runtime::traits::{StaticLookup, Dispatchable};
 
 use frame_support::{
 	Parameter, decl_module, decl_event, decl_storage, decl_error, ensure,
@@ -133,7 +133,6 @@ decl_module! {
 			let res = match call.dispatch(frame_system::RawOrigin::Root.into()) {
 				Ok(_) => true,
 				Err(e) => {
-					let e: DispatchError = e.into();
 					sp_runtime::print(e);
 					false
 				}
@@ -192,7 +191,6 @@ decl_module! {
 			let res = match call.dispatch(frame_system::RawOrigin::Signed(who).into()) {
 				Ok(_) => true,
 				Err(e) => {
-					let e: DispatchError = e.into();
 					sp_runtime::print(e);
 					false
 				}
