@@ -14,10 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use crate::error;
 use sc_service::{PruningMode, Role};
 use structopt::StructOpt;
-
-use crate::error;
 
 /// Parameters to define the pruning mode
 #[derive(Debug, StructOpt, Clone)]
@@ -33,11 +32,7 @@ pub struct PruningParams {
 
 impl PruningParams {
 	/// Get the pruning value from the parameters
-	pub fn pruning(
-		&self,
-		unsafe_pruning: bool,
-		role: &Role,
-	) -> error::Result<PruningMode> {
+	pub fn pruning(&self, unsafe_pruning: bool, role: &Role) -> error::Result<PruningMode> {
 		// by default we disable pruning if the node is an authority (i.e.
 		// `ArchiveAll`), otherwise we keep state for the last 256 blocks. if the
 		// node is an authority and pruning is enabled explicitly, then we error
@@ -57,7 +52,7 @@ impl PruningParams {
 
 				PruningMode::keep_blocks(s.parse().map_err(|_| {
 					error::Error::Input("Invalid pruning mode specified".to_string())
-				})
+				})?)
 			}
 		})
 	}
