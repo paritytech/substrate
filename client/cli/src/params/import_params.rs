@@ -102,8 +102,7 @@ impl ImportParams {
 	pub fn execution_strategies(
 		&self,
 		is_dev: bool,
-	) -> Result<ExecutionStrategies>
-	{
+	) -> Result<ExecutionStrategies> {
 		let exec = &self.execution_strategies;
 		let exec_all_or = |strat: ExecutionStrategy, default: ExecutionStrategy| {
 			exec.execution.unwrap_or(if strat == default && is_dev {
