@@ -141,8 +141,6 @@ pub trait Externalities: ExtensionStore {
 	fn place_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>);
 
 	/// Set or clear a child storage entry.
-	///
-	/// Returns whether the operation succeeds.
 	fn place_child_storage(
 		&mut self,
 		storage_key: ChildStorageKey,
