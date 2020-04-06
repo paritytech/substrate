@@ -42,7 +42,7 @@ impl PruningParams {
 		// `ArchiveAll`), otherwise we keep state for the last 256 blocks. if the
 		// node is an authority and pruning is enabled explicitly, then we error
 		// unless `unsafe_pruning` is set.
-		Ok(match &self.pruning {
+		match &self.pruning {
 			Some(ref s) if s == "archive" => PruningMode::ArchiveAll,
 			None if role.is_network_authority() => PruningMode::ArchiveAll,
 			None => PruningMode::default(),
