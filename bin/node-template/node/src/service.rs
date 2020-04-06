@@ -242,7 +242,7 @@ pub fn new_light(config: Configuration)
 		None,
 		Some(select_chain),
 		import_queue,
-		None,
+		Some(finality_proof_request_builder),
 		Some(finality_proof_provider),
 		transaction_pool,
 		(),
