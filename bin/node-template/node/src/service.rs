@@ -47,7 +47,7 @@ macro_rules! new_full_start {
 		let pool_api = sc_transaction_pool::FullChainApi::new(Arc::clone(&client));
 		let (transaction_pool, background_task_one) = sc_transaction_pool::BasicPool::new($config.transaction_pool.clone(), std::sync::Arc::new(pool_api));
 		let transaction_pool = Arc::new(transaction_pool);
-		let background_tasks = Vec::new();
+		let mut background_tasks = Vec::new();
 
 		if let Some(bg_t) = background_task_one {
 			background_tasks.push(("txpool-background", bg_t));
@@ -61,7 +61,7 @@ macro_rules! new_full_start {
 		*/
 		let (import_queue, import_setup) = {
 			let (grandpa_block_import, grandpa_link) =
-				sc_finality_grandpa::block_import(Arc::clone(&client), &(Arc::clone(&client) as Arc<_>), select_chain)?;
+				sc_finality_grandpa::block_import(Arc::clone(&client), &(Arc::clone(&client) as Arc<_>), select_chain.clone())?;
 
 			let aura_block_import = sc_consensus_aura::AuraBlockImport::<_, _, _, AuraPair>::new(
 				grandpa_block_import.clone(), Arc::clone(&client),
@@ -72,7 +72,7 @@ macro_rules! new_full_start {
 				aura_block_import,
 				Some(Box::new(grandpa_block_import.clone())),
 				None,
-				client,
+				client.clone(),
 				inherent_data_providers.clone(),
 			)?;
 
@@ -134,8 +134,8 @@ pub fn new_full(config: Configuration)
 			.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
 
 	//let service = builder
-	let provider = client as Arc<dyn StorageAndProofProvider<_, _>>;
-	let finality_proof_provider = Arc::new(GrandpaFinalityProofProvider::new(backend, provider));
+	let provider = client.clone() as Arc<dyn StorageAndProofProvider<_, _>>;
+	let finality_proof_provider = Arc::new(GrandpaFinalityProofProvider::new(backend.clone(), provider));
 	/*
 		.with_finality_proof_provider(|client, backend| {
 			// GenesisAuthoritySetProvider is implemented for StorageAndProofProvider
@@ -267,7 +267,7 @@ pub fn new_light(config: Configuration)
 		config.transaction_pool.clone(), Arc::new(pool_api), sc_transaction_pool::RevalidationType::Light,
 	);
 	let transaction_pool = Arc::new(transaction_pool);
-	let background_tasks = Vec::new();
+	let mut background_tasks = Vec::new();
 
 	if let Some(bg_t) = background_task_one {
 		background_tasks.push(("txpool-background", bg_t));
@@ -287,7 +287,7 @@ pub fn new_light(config: Configuration)
 	let fetch_checker = fetcher.checker().clone();
 	let grandpa_block_import = sc_finality_grandpa::light_block_import(
 		client.clone(),
-		backend,
+		backend.clone(),
 		&(client.clone() as Arc<_>),
 		Arc::new(fetch_checker),
 	)?;
@@ -300,7 +300,7 @@ pub fn new_light(config: Configuration)
 		grandpa_block_import,
 		None,
 		Some(Box::new(finality_proof_import)),
-		client,
+		client.clone(),
 		inherent_data_providers.clone(),
 	)?;
 	/*
@@ -331,8 +331,8 @@ pub fn new_light(config: Configuration)
 		})?
 	*/
 	// GenesisAuthoritySetProvider is implemented for StorageAndProofProvider
-	let provider = client as Arc<dyn StorageAndProofProvider<_, _>>;
-	let finality_proof_provider = Arc::new(GrandpaFinalityProofProvider::new(backend, provider));
+	let provider = client.clone() as Arc<dyn StorageAndProofProvider<_, _>>;
+	let finality_proof_provider = Arc::new(GrandpaFinalityProofProvider::new(backend.clone(), provider));
 	/*
 		.with_finality_proof_provider(|client, backend| {
 			// GenesisAuthoritySetProvider is implemented for StorageAndProofProvider
