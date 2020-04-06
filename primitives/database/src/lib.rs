@@ -22,7 +22,7 @@ use std::{fmt::Debug, hash::Hash};
 pub type ColumnId = u32;
 
 /// An alteration to the database.
-enum Change<H> {
+pub enum Change<H> {
 	Set(ColumnId, Vec<u8>, Vec<u8>),
 	Remove(ColumnId, Vec<u8>),
 	Store(H, Vec<u8>),
@@ -31,7 +31,7 @@ enum Change<H> {
 
 /// A series of changes to the database that can be committed atomically. They do not take effect
 /// until passed into `Database::commit`.
-pub struct Transaction<H>(Vec<Change<H>>);
+pub struct Transaction<H>(pub Vec<Change<H>>);
 
 impl<H> Transaction<H> {
 	/// Set the value of `key` in `col` to `value`, replacing anything that is there currently.
@@ -65,10 +65,19 @@ impl<
 
 pub trait Database<H: HashKey> {
 	/// Create a new transaction to be prepared and committed atomically.
-	fn new_transaction(&self) -> Transaction<H>;
+	fn new_transaction(&self) -> Transaction<H> { Transaction(Vec::new()) }
 	/// Commit the `transaction` to the database atomically. Any further calls to `get` or `lookup`
 	/// will reflect the new state.
-	fn commit(&self, transaction: Transaction<H>);
+	fn commit(&self, transaction: Transaction<H>) {
+		for change in transaction.0.into_iter() {
+			match change {
+				Change::Set(col, key, value) => self.set(col, &key, &value),
+				Change::Remove(col, key) => self.remove(col, &key),
+				Change::Store(hash, preimage) => self.store(&hash, &preimage),
+				Change::Release(hash) => self.release(&hash),
+			}
+		}
+	}
 
 	/// Retrieve the value previously stored against `key` or `None` if
 	/// `key` is not currently in the database.
