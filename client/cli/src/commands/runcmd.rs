@@ -299,12 +299,12 @@ impl CliConfiguration for RunCmd {
 			(None, None) => crate::generate_node_name(),
 		};
 
-		if let Err(msg) = is_node_name_valid(&name) {
-			return Err(Error::Input(format!(
+		is_node_name_valid(&name).map_err(|msg| {
+			Error::Input(format!(
 				"Invalid node name '{}'. Reason: {}. If unsure, use none.",
 				name, msg
-			)));
-		}
+			));
+		})?;
 
 		Ok(name)
 	}
