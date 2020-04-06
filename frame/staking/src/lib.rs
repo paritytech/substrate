@@ -288,7 +288,7 @@ use sp_runtime::{
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, StaticLookup, CheckedSub, Saturating, SaturatedConversion, AtLeast32Bit,
-		SignedExtension,
+		SignedExtension, Dispatchable
 	},
 	transaction_validity::{
 		TransactionValidityError, TransactionValidity, ValidTransaction, InvalidTransaction,
@@ -3120,12 +3120,13 @@ impl<T> Default for LockStakingStatus<T> {
 	}
 }
 
-impl<T: Trait + Send + Sync> SignedExtension for LockStakingStatus<T> {
+impl<T: Trait + Send + Sync> SignedExtension for LockStakingStatus<T> where
+	<T as Trait>::Call: Dispatchable
+{
 	const IDENTIFIER: &'static str = "LockStakingStatus";
 	type AccountId = T::AccountId;
 	type Call = <T as Trait>::Call;
 	type AdditionalSigned = ();
-	type DispatchInfo = frame_support::weights::DispatchInfo;
 	type Pre = ();
 
 	fn additional_signed(&self) -> Result<(), TransactionValidityError> { Ok(()) }
@@ -3134,7 +3135,7 @@ impl<T: Trait + Send + Sync> SignedExtension for LockStakingStatus<T> {
 		&self,
 		_who: &Self::AccountId,
 		call: &Self::Call,
-		_info: Self::DispatchInfo,
+		_info: &<Self::Call as Dispatchable>::Info,
 		_len: usize,
 	) -> TransactionValidity {
 		if let Some(inner_call) = call.is_sub_type() {

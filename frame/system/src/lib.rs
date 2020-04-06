@@ -109,6 +109,7 @@ use sp_runtime::{
 		self, CheckEqual, AtLeast32Bit, Zero, SignedExtension, Lookup, LookupError,
 		SimpleBitOps, Hash, Member, MaybeDisplay, BadOrigin, SaturatedConversion,
 		MaybeSerialize, MaybeSerializeDeserialize, MaybeMallocSizeOf, StaticLookup, One, Bounded,
+		Dispatchable,
 	},
 };
 
@@ -1164,7 +1165,9 @@ pub fn split_inner<T, R, S>(option: Option<T>, splitter: impl FnOnce(T) -> (R, S
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct CheckWeight<T: Trait + Send + Sync>(PhantomData<T>);
 
-impl<T: Trait + Send + Sync> CheckWeight<T> {
+impl<T: Trait + Send + Sync> CheckWeight<T> where
+	T::Call: Dispatchable<Info=DispatchInfo>
+{
 	/// Get the quota ratio of each dispatch class type. This indicates that all operational
 	/// dispatches can use the full capacity of any resource, while user-triggered ones can consume
 	/// a portion.
@@ -1180,7 +1183,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 	///
 	/// Upon successes, it returns the new block weight as a `Result`.
 	fn check_weight(
-		info: <Self as SignedExtension>::DispatchInfo,
+		info: &<T::Call as Dispatchable>::Info,
 	) -> Result<Weight, TransactionValidityError> {
 		let current_weight = Module::<T>::all_extrinsics_weight();
 		let maximum_weight = T::MaximumBlockWeight::get();
@@ -1198,7 +1201,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 	///
 	/// Upon successes, it returns the new block length as a `Result`.
 	fn check_block_length(
-		info: <Self as SignedExtension>::DispatchInfo,
+		info: &<T::Call as Dispatchable>::Info,
 		len: usize,
 	) -> Result<u32, TransactionValidityError> {
 		let current_len = Module::<T>::all_extrinsics_len();
@@ -1214,7 +1217,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 	}
 
 	/// get the priority of an extrinsic denoted by `info`.
-	fn get_priority(info: <Self as SignedExtension>::DispatchInfo) -> TransactionPriority {
+	fn get_priority(info: &<T::Call as Dispatchable>::Info) -> TransactionPriority {
 		match info.class {
 			DispatchClass::Normal => info.weight.into(),
 			DispatchClass::Operational => Bounded::max_value(),
@@ -1232,7 +1235,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 	///
 	/// It checks and notes the new weight and length.
 	fn do_pre_dispatch(
-		info: <Self as SignedExtension>::DispatchInfo,
+		info: &<T::Call as Dispatchable>::Info,
 		len: usize,
 	) -> Result<(), TransactionValidityError> {
 		let next_len = Self::check_block_length(info, len)?;
@@ -1246,7 +1249,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 	///
 	/// It only checks that the block weight and length limit will not exceed.
 	fn do_validate(
-		info: <Self as SignedExtension>::DispatchInfo,
+		info: &<T::Call as Dispatchable>::Info,
 		len: usize,
 	) -> TransactionValidity {
 		// ignore the next weight and length. If they return `Ok`, then it is below the limit.
@@ -1257,11 +1260,12 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 	}
 }
 
-impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
+impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> where
+	T::Call: Dispatchable<Info=DispatchInfo>
+{
 	type AccountId = T::AccountId;
 	type Call = T::Call;
 	type AdditionalSigned = ();
-	type DispatchInfo = DispatchInfo;
 	type Pre = ();
 	const IDENTIFIER: &'static str = "CheckWeight";
 
@@ -1271,7 +1275,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 		self,
 		_who: &Self::AccountId,
 		_call: &Self::Call,
-		info: Self::DispatchInfo,
+		info: &<Self::Call as Dispatchable>::Info,
 		len: usize,
 	) -> Result<(), TransactionValidityError> {
 		if info.class == DispatchClass::Mandatory {
@@ -1284,7 +1288,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 		&self,
 		_who: &Self::AccountId,
 		_call: &Self::Call,
-		info: Self::DispatchInfo,
+		info: &<Self::Call as Dispatchable>::Info,
 		len: usize,
 	) -> TransactionValidity {
 		if info.class == DispatchClass::Mandatory {
@@ -1295,7 +1299,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 
 	fn pre_dispatch_unsigned(
 		_call: &Self::Call,
-		info: Self::DispatchInfo,
+		info: &<Self::Call as Dispatchable>::Info,
 		len: usize,
 	) -> Result<(), TransactionValidityError> {
 		Self::do_pre_dispatch(info, len)
@@ -1303,7 +1307,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 
 	fn validate_unsigned(
 		_call: &Self::Call,
-		info: Self::DispatchInfo,
+		info: &<Self::Call as Dispatchable>::Info,
 		len: usize,
 	) -> TransactionValidity {
 		Self::do_validate(info, len)
@@ -1311,7 +1315,8 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 
 	fn post_dispatch(
 		_pre: Self::Pre,
-		info: Self::DispatchInfo,
+		info: &<Self::Call as Dispatchable>::Info,
+		_post_info: &<Self::Call as Dispatchable>::PostInfo,
 		_len: usize,
 		result: &DispatchResult,
 	) -> Result<(), TransactionValidityError> {
@@ -1360,11 +1365,12 @@ impl<T: Trait> Debug for CheckNonce<T> {
 	}
 }
 
-impl<T: Trait> SignedExtension for CheckNonce<T> {
+impl<T: Trait> SignedExtension for CheckNonce<T> where
+	T::Call: Dispatchable<Info=DispatchInfo>
+{
 	type AccountId = T::AccountId;
 	type Call = T::Call;
 	type AdditionalSigned = ();
-	type DispatchInfo = DispatchInfo;
 	type Pre = ();
 	const IDENTIFIER: &'static str = "CheckNonce";
 
@@ -1374,7 +1380,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 		self,
 		who: &Self::AccountId,
 		_call: &Self::Call,
-		_info: Self::DispatchInfo,
+		_info: &<Self::Call as Dispatchable>::Info,
 		_len: usize,
 	) -> Result<(), TransactionValidityError> {
 		let mut account = Account::<T>::get(who);
@@ -1396,7 +1402,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 		&self,
 		who: &Self::AccountId,
 		_call: &Self::Call,
-		info: Self::DispatchInfo,
+		info: &<Self::Call as Dispatchable>::Info,
 		_len: usize,
 	) -> TransactionValidity {
 		// check index
@@ -1451,11 +1457,12 @@ impl<T: Trait + Send + Sync> Debug for CheckEra<T> {
 	}
 }
 
-impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
+impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> where
+	T::Call: Dispatchable
+{
 	type AccountId = T::AccountId;
 	type Call = T::Call;
 	type AdditionalSigned = T::Hash;
-	type DispatchInfo = DispatchInfo;
 	type Pre = ();
 	const IDENTIFIER: &'static str = "CheckEra";
 
@@ -1463,7 +1470,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 		&self,
 		_who: &Self::AccountId,
 		_call: &Self::Call,
-		_info: Self::DispatchInfo,
+		_info: &<Self::Call as Dispatchable>::Info,
 		_len: usize,
 	) -> TransactionValidity {
 		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
@@ -1508,11 +1515,12 @@ impl<T: Trait + Send + Sync> CheckGenesis<T> {
 	}
 }
 
-impl<T: Trait + Send + Sync> SignedExtension for CheckGenesis<T> {
+impl<T: Trait + Send + Sync> SignedExtension for CheckGenesis<T> where
+	T::Call: Dispatchable
+{
 	type AccountId = T::AccountId;
 	type Call = <T as Trait>::Call;
 	type AdditionalSigned = T::Hash;
-	type DispatchInfo = DispatchInfo;
 	type Pre = ();
 	const IDENTIFIER: &'static str = "CheckGenesis";
 
@@ -1544,11 +1552,12 @@ impl<T: Trait + Send + Sync> CheckVersion<T> {
 	}
 }
 
-impl<T: Trait + Send + Sync> SignedExtension for CheckVersion<T> {
+impl<T: Trait + Send + Sync> SignedExtension for CheckVersion<T> where
+	T::Call: Dispatchable
+{
 	type AccountId = T::AccountId;
 	type Call = <T as Trait>::Call;
 	type AdditionalSigned = u32;
-	type DispatchInfo = DispatchInfo;
 	type Pre = ();
 	const IDENTIFIER: &'static str = "CheckVersion";
 
@@ -1612,9 +1621,22 @@ mod tests {
 		fn on_killed_account(who: &u64) { KILLED.with(|r| r.borrow_mut().push(*who)) }
 	}
 
+	#[derive(Debug)]
+	pub struct Call {}
+	impl Dispatchable for Call {
+		type Origin = ();
+		type Trait = ();
+		type Info = DispatchInfo;
+		type PostInfo = ();
+		fn dispatch(self, _origin: Self::Origin)
+			-> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
+				panic!("Do not use dummy implementation for dispatch.");
+		}
+	}
+
 	impl Trait for Test {
 		type Origin = Origin;
-		type Call = ();
+		type Call = Call;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
@@ -1647,7 +1669,7 @@ mod tests {
 
 	type System = Module<Test>;
 
-	const CALL: &<Test as Trait>::Call = &();
+	const CALL: &<Test as Trait>::Call = &Call {};
 
 	fn new_test_ext() -> sp_io::TestExternalities {
 		GenesisConfig::default().build_storage::<Test>().unwrap().into()
@@ -1848,14 +1870,14 @@ mod tests {
 			let info = DispatchInfo::default();
 			let len = 0_usize;
 			// stale
-			assert!(CheckNonce::<Test>(0).validate(&1, CALL, info, len).is_err());
-			assert!(CheckNonce::<Test>(0).pre_dispatch(&1, CALL, info, len).is_err());
+			assert!(CheckNonce::<Test>(0).validate(&1, CALL, &info, len).is_err());
+			assert!(CheckNonce::<Test>(0).pre_dispatch(&1, CALL, &info, len).is_err());
 			// correct
-			assert!(CheckNonce::<Test>(1).validate(&1, CALL, info, len).is_ok());
-			assert!(CheckNonce::<Test>(1).pre_dispatch(&1, CALL, info, len).is_ok());
+			assert!(CheckNonce::<Test>(1).validate(&1, CALL, &info, len).is_ok());
+			assert!(CheckNonce::<Test>(1).pre_dispatch(&1, CALL, &info, len).is_ok());
 			// future
-			assert!(CheckNonce::<Test>(5).validate(&1, CALL, info, len).is_ok());
-			assert!(CheckNonce::<Test>(5).pre_dispatch(&1, CALL, info, len).is_err());
+			assert!(CheckNonce::<Test>(5).validate(&1, CALL, &info, len).is_ok());
+			assert!(CheckNonce::<Test>(5).pre_dispatch(&1, CALL, &info, len).is_err());
 		})
 	}
 
@@ -1880,9 +1902,9 @@ mod tests {
 				if f { assert!(r.is_err()) } else { assert!(r.is_ok()) }
 			};
 
-			reset_check_weight(small, false, 0);
-			reset_check_weight(medium, false, 0);
-			reset_check_weight(big, true, 1);
+			reset_check_weight(&small, false, 0);
+			reset_check_weight(&medium, false, 0);
+			reset_check_weight(&big, true, 1);
 		})
 	}
 
@@ -1893,7 +1915,7 @@ mod tests {
 			let len = 0_usize;
 
 			assert_eq!(System::all_extrinsics_weight(), 0);
-			let r = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, free, len);
+			let r = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &free, len);
 			assert!(r.is_ok());
 			assert_eq!(System::all_extrinsics_weight(), 0);
 		})
@@ -1907,7 +1929,7 @@ mod tests {
 			let normal_limit = normal_weight_limit();
 
 			assert_eq!(System::all_extrinsics_weight(), 0);
-			let r = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, max, len);
+			let r = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &max, len);
 			assert!(r.is_ok());
 			assert_eq!(System::all_extrinsics_weight(), normal_limit);
 		})
@@ -1924,15 +1946,15 @@ mod tests {
 			// given almost full block
 			AllExtrinsicsWeight::put(normal_limit);
 			// will not fit.
-			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, normal, len).is_err());
+			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &normal, len).is_err());
 			// will fit.
-			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, op, len).is_ok());
+			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &op, len).is_ok());
 
 			// likewise for length limit.
 			let len = 100_usize;
 			AllExtrinsicsLen::put(normal_length_limit());
-			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, normal, len).is_err());
-			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, op, len).is_ok());
+			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &normal, len).is_err());
+			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &op, len).is_ok());
 		})
 	}
 
@@ -1944,13 +1966,13 @@ mod tests {
 			let len = 0_usize;
 
 			let priority = CheckWeight::<Test>(PhantomData)
-				.validate(&1, CALL, normal, len)
+				.validate(&1, CALL, &normal, len)
 				.unwrap()
 				.priority;
 			assert_eq!(priority, 100);
 
 			let priority = CheckWeight::<Test>(PhantomData)
-				.validate(&1, CALL, op, len)
+				.validate(&1, CALL, &op, len)
 				.unwrap()
 				.priority;
 			assert_eq!(priority, u64::max_value());
@@ -1968,16 +1990,16 @@ mod tests {
 				if f { assert!(r.is_err()) } else { assert!(r.is_ok()) }
 			};
 
-			reset_check_weight(normal, normal_limit - 1, false);
-			reset_check_weight(normal, normal_limit, false);
-			reset_check_weight(normal, normal_limit + 1, true);
+			reset_check_weight(&normal, normal_limit - 1, false);
+			reset_check_weight(&normal, normal_limit, false);
+			reset_check_weight(&normal, normal_limit + 1, true);
 
 			// Operational ones don't have this limit.
 			let op = DispatchInfo { weight: 0, class: DispatchClass::Operational, pays_fee: true };
-			reset_check_weight(op, normal_limit, false);
-			reset_check_weight(op, normal_limit + 100, false);
-			reset_check_weight(op, 1024, false);
-			reset_check_weight(op, 1025, true);
+			reset_check_weight(&op, normal_limit, false);
+			reset_check_weight(&op, normal_limit + 100, false);
+			reset_check_weight(&op, 1024, false);
+			reset_check_weight(&op, 1025, true);
 		})
 	}
 
@@ -2009,7 +2031,7 @@ mod tests {
 			System::set_block_number(17);
 			<BlockHash<Test>>::insert(16, H256::repeat_byte(1));
 
-			assert_eq!(ext.validate(&1, CALL, normal, len).unwrap().longevity, 15);
+			assert_eq!(ext.validate(&1, CALL, &normal, len).unwrap().longevity, 15);
 		})
 	}
 

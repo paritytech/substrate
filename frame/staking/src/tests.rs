@@ -2939,7 +2939,7 @@ mod offchain_phragmen {
 
 				let lock_staking: LockStakingStatus<Test> = Default::default();
 				assert_eq!(
-					lock_staking.validate(&10, &outer, Default::default(), Default::default(),),
+					lock_staking.validate(&10, &outer, &Default::default(), Default::default(),),
 					TransactionValidity::Err(InvalidTransaction::Stale.into()),
 				)
 			})

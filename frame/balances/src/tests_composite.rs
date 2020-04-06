@@ -18,7 +18,11 @@
 
 #![cfg(test)]
 
-use sp_runtime::{Perbill, traits::{ConvertInto, IdentityLookup}, testing::Header};
+use sp_runtime::{
+	Perbill,
+	traits::{ConvertInto, IdentityLookup, Dispatchable},
+	testing::Header
+};
 use sp_core::H256;
 use sp_io;
 use frame_support::{impl_outer_origin, parameter_types};
@@ -50,11 +54,23 @@ parameter_types! {
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
+#[derive(Debug, Default)]
+pub struct Call {}
+impl Dispatchable for Call {
+	type Origin = ();
+	type Trait = ();
+	type Info = DispatchInfo;
+	type PostInfo = ();
+	fn dispatch(self, _origin: Self::Origin)
+		-> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
+			panic!("Do not use dummy implementation for dispatch.");
+	}
+}
 impl frame_system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = ();
+	type Call = Call;
 	type Hash = H256;
 	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;

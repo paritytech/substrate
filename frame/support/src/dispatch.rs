@@ -1593,6 +1593,7 @@ macro_rules! decl_module {
 		{
 			type Trait = $trait_instance;
 			type Origin = $origin_type;
+			type Info = $crate::weights::DispatchInfo;
 			type PostInfo = $crate::weights::PostDispatchInfo;
 			fn dispatch(self, _origin: Self::Origin) -> $crate::dispatch::DispatchResultWithPostInfo {
 				match self {
@@ -1720,6 +1721,7 @@ macro_rules! impl_outer_dispatch {
 		impl $crate::dispatch::Dispatchable for $call_type {
 			type Origin = $origin;
 			type Trait = $call_type;
+			type Info = $crate::weights::DispatchInfo;
 			type PostInfo = $crate::weights::PostDispatchInfo;
 			fn dispatch(
 				self,

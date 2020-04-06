@@ -40,8 +40,6 @@ macro_rules! decl_tests {
 		pub type System = frame_system::Module<$test>;
 		pub type Balances = Module<$test>;
 
-		pub const CALL: &<$test as frame_system::Trait>::Call = &();
-
 		/// create a transaction info struct from weight. Handy to avoid building the whole struct.
 		pub fn info_from_weight(w: Weight) -> DispatchInfo {
 			DispatchInfo { weight: w, pays_fee: true, ..Default::default() }
@@ -153,15 +151,15 @@ macro_rules! decl_tests {
 					assert!(<ChargeTransactionPayment<$test> as SignedExtension>::pre_dispatch(
 						ChargeTransactionPayment::from(1),
 						&1,
-						CALL,
-						info_from_weight(1),
+						&Default::default(),
+						&info_from_weight(1),
 						1,
 					).is_err());
 					assert!(<ChargeTransactionPayment<$test> as SignedExtension>::pre_dispatch(
 						ChargeTransactionPayment::from(0),
 						&1,
-						CALL,
-						info_from_weight(1),
+						&Default::default(),
+						&info_from_weight(1),
 						1,
 					).is_ok());
 
@@ -171,15 +169,15 @@ macro_rules! decl_tests {
 					assert!(<ChargeTransactionPayment<$test> as SignedExtension>::pre_dispatch(
 						ChargeTransactionPayment::from(1),
 						&1,
-						CALL,
-						info_from_weight(1),
+						&Default::default(),
+						&info_from_weight(1),
 						1,
 					).is_err());
 					assert!(<ChargeTransactionPayment<$test> as SignedExtension>::pre_dispatch(
 						ChargeTransactionPayment::from(0),
 						&1,
-						CALL,
-						info_from_weight(1),
+						&Default::default(),
+						&info_from_weight(1),
 						1,
 					).is_err());
 				});
