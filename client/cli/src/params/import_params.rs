@@ -79,30 +79,30 @@ pub struct ImportParams {
 
 impl ImportParams {
 	/// Receiver to process tracing messages.
-	pub fn tracing_receiver(&self) -> Result<sc_tracing::TracingReceiver> {
-		Ok(self.tracing_receiver.clone().into())
+	pub fn tracing_receiver(&self) -> sc_service::TracingReceiver {
+		self.tracing_receiver.clone().into()
 	}
 
 	/// Comma separated list of targets for tracing.
-	pub fn tracing_targets(&self) -> Result<Option<String>> {
-		Ok(self.tracing_targets.clone())
+	pub fn tracing_targets(&self) -> Option<String> {
+		self.tracing_targets.clone()
 	}
 
 	/// Specify the state cache size.
-	pub fn state_cache_size(&self) -> Result<usize> {
-		Ok(self.state_cache_size)
+	pub fn state_cache_size(&self) -> usize {
+		self.state_cache_size
 	}
 
 	/// Get the WASM execution method from the parameters
-	pub fn wasm_method(&self) -> Result<sc_service::config::WasmExecutionMethod> {
-		Ok(self.wasm_method.into())
+	pub fn wasm_method(&self) -> sc_service::config::WasmExecutionMethod {
+		self.wasm_method.into()
 	}
 
 	/// Get execution strategies for the parameters
 	pub fn execution_strategies(
 		&self,
 		is_dev: bool,
-	) -> Result<ExecutionStrategies> {
+	) -> ExecutionStrategies {
 		let exec = &self.execution_strategies;
 		let exec_all_or = |strat: ExecutionStrategy, default: ExecutionStrategy| {
 			exec.execution.unwrap_or(if strat == default && is_dev {
@@ -112,7 +112,7 @@ impl ImportParams {
 			}).into()
 		};
 
-		Ok(ExecutionStrategies {
+		ExecutionStrategies {
 			syncing: exec_all_or(exec.execution_syncing, DEFAULT_EXECUTION_SYNCING),
 			importing: exec_all_or(exec.execution_import_block, DEFAULT_EXECUTION_IMPORT_BLOCK),
 			block_construction:
@@ -120,7 +120,7 @@ impl ImportParams {
 			offchain_worker:
 				exec_all_or(exec.execution_offchain_worker, DEFAULT_EXECUTION_OFFCHAIN_WORKER),
 			other: exec_all_or(exec.execution_other, DEFAULT_EXECUTION_OTHER),
-		})
+		}
 	}
 
 	/// Get the pruning mode from the parameters
@@ -129,8 +129,8 @@ impl ImportParams {
 	}
 
 	/// Limit the memory the database cache can use.
-	pub fn database_cache_size(&self) -> Result<Option<usize>> {
-		Ok(self.database_cache_size)
+	pub fn database_cache_size(&self) -> Option<usize> {
+		self.database_cache_size
 	}
 }
 

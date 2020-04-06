@@ -76,14 +76,14 @@ pub trait CliConfiguration: Sized {
 	///
 	/// By default this is retrieved from `SharedParams`.
 	fn base_path(&self) -> Result<Option<PathBuf>> {
-		self.shared_params().base_path()
+		Ok(self.shared_params().base_path())
 	}
 
 	/// Returns `true` if the node is for development or not
 	///
 	/// By default this is retrieved from `SharedParams`.
 	fn is_dev(&self) -> Result<bool> {
-		self.shared_params().is_dev()
+		Ok(self.shared_params().is_dev())
 	}
 
 	/// Gets the role
@@ -114,7 +114,7 @@ pub trait CliConfiguration: Sized {
 		node_name: &str,
 		node_key: NodeKeyConfig,
 	) -> Result<NetworkConfiguration> {
-		if let Some(network_params) = self.network_params() {
+		Ok(if let Some(network_params) = self.network_params() {
 			network_params.network_config(
 				chain_spec,
 				is_dev,
@@ -124,13 +124,13 @@ pub trait CliConfiguration: Sized {
 				node_key,
 			)
 		} else {
-			Ok(NetworkConfiguration::new(
+			NetworkConfiguration::new(
 				node_name,
 				client_id,
 				node_key,
 				net_config_dir,
-			))
-		}
+			)
+		})
 	}
 
 	/// Get the keystore configuration.
@@ -147,25 +147,25 @@ pub trait CliConfiguration: Sized {
 	///
 	/// By default this is retrieved from `ImportParams` if it is available. Otherwise its `None`.
 	fn database_cache_size(&self) -> Result<Option<usize>> {
-		self.import_params()
+		Ok(self.import_params()
 			.map(|x| x.database_cache_size())
-			.unwrap_or(Ok(Default::default()))
+			.unwrap_or(Default::default()))
 	}
 
 	/// Get the database configuration.
 	///
 	/// By default this is retrieved from `SharedParams`
 	fn database_config(&self, base_path: &PathBuf, cache_size: usize) -> Result<DatabaseConfig> {
-		self.shared_params().database_config(base_path, cache_size)
+		Ok(self.shared_params().database_config(base_path, cache_size))
 	}
 
 	/// Get the state cache size.
 	///
 	/// By default this is retrieved from `ImportParams` if it is available. Otherwise its `0`.
 	fn state_cache_size(&self) -> Result<usize> {
-		self.import_params()
+		Ok(self.import_params()
 			.map(|x| x.state_cache_size())
-			.unwrap_or(Ok(Default::default()))
+			.unwrap_or(Default::default()))
 	}
 
 	/// Get the state cache child ratio (if any).
@@ -189,7 +189,7 @@ pub trait CliConfiguration: Sized {
 	///
 	/// By default this is retrieved from `SharedParams`.
 	fn chain_id(&self, is_dev: bool) -> Result<String> {
-		self.shared_params().chain_id(is_dev)
+		Ok(self.shared_params().chain_id(is_dev))
 	}
 
 	/// Get the name of the node.
@@ -204,9 +204,9 @@ pub trait CliConfiguration: Sized {
 	/// By default this is retrieved from `ImportParams` if it is available. Otherwise its
 	/// `WasmExecutionMethod::default()`.
 	fn wasm_method(&self) -> Result<WasmExecutionMethod> {
-		self.import_params()
+		Ok(self.import_params()
 			.map(|x| x.wasm_method())
-			.unwrap_or(Ok(Default::default()))
+			.unwrap_or(Default::default()))
 	}
 
 	/// Get the execution strategies.
@@ -214,9 +214,9 @@ pub trait CliConfiguration: Sized {
 	/// By default this is retrieved from `ImportParams` if it is available. Otherwise its
 	/// `ExecutionStrategies::default()`.
 	fn execution_strategies(&self, is_dev: bool) -> Result<ExecutionStrategies> {
-		self.import_params()
+		Ok(self.import_params()
 			.map(|x| x.execution_strategies(is_dev))
-			.unwrap_or(Ok(Default::default()))
+			.unwrap_or(Default::default()))
 	}
 
 	/// Get the RPC HTTP address (`None` if disabled).
@@ -311,9 +311,9 @@ pub trait CliConfiguration: Sized {
 	/// By default this is retrieved from `ImportParams` if it is available. Otherwise its
 	/// `None`.
 	fn tracing_targets(&self) -> Result<Option<String>> {
-		self.import_params()
+		Ok(self.import_params()
 			.map(|x| x.tracing_targets())
-			.unwrap_or(Ok(Default::default()))
+			.unwrap_or(Default::default()))
 	}
 
 	/// Get the TracingReceiver value from the current object
@@ -321,9 +321,9 @@ pub trait CliConfiguration: Sized {
 	/// By default this is retrieved from `ImportParams` if it is available. Otherwise its
 	/// `TracingReceiver::default()`.
 	fn tracing_receiver(&self) -> Result<TracingReceiver> {
-		self.import_params()
+		Ok(self.import_params()
 			.map(|x| x.tracing_receiver())
-			.unwrap_or(Ok(Default::default()))
+			.unwrap_or(Default::default()))
 	}
 
 	/// Get the node key from the current object
@@ -425,7 +425,7 @@ pub trait CliConfiguration: Sized {
 	///
 	/// By default this is retrieved from `SharedParams`.
 	fn log_filters(&self) -> Result<Option<String>> {
-		self.shared_params().log_filters()
+		Ok(self.shared_params().log_filters())
 	}
 
 	/// Initialize substrate. This must be done only once.

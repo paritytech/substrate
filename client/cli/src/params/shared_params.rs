@@ -18,8 +18,6 @@ use sc_service::config::DatabaseConfig;
 use std::path::PathBuf;
 use structopt::StructOpt;
 
-use crate::error::Result;
-
 /// default sub directory to store database
 const DEFAULT_DB_CONFIG_PATH: &'static str = "db";
 
@@ -53,18 +51,18 @@ pub struct SharedParams {
 
 impl SharedParams {
 	/// Specify custom base path.
-	pub fn base_path(&self) -> Result<Option<PathBuf>> {
-		Ok(self.base_path.clone())
+	pub fn base_path(&self) -> Option<PathBuf> {
+		self.base_path.clone()
 	}
 
 	/// Specify the development chain.
-	pub fn is_dev(&self) -> Result<bool> {
-		Ok(self.dev)
+	pub fn is_dev(&self) -> bool {
+		self.dev
 	}
 
 	/// Get the chain spec for the parameters provided
-	pub fn chain_id(&self, is_dev: bool) -> Result<String> {
-		Ok(match self.chain {
+	pub fn chain_id(&self, is_dev: bool) -> String {
+		match self.chain {
 			Some(ref chain) => chain.clone(),
 			None => {
 				if is_dev {
@@ -73,7 +71,7 @@ impl SharedParams {
 					"".into()
 				}
 			}
-		})
+		}
 	}
 
 	/// Get the database configuration object for the parameters provided
@@ -81,15 +79,15 @@ impl SharedParams {
 		&self,
 		base_path: &PathBuf,
 		cache_size: usize,
-	) -> Result<DatabaseConfig> {
-		Ok(DatabaseConfig::Path {
+	) -> DatabaseConfig {
+		DatabaseConfig::Path {
 			path: base_path.join(DEFAULT_DB_CONFIG_PATH),
 			cache_size,
-		})
+		}
 	}
 
 	/// Get the filters for the logging
-	pub fn log_filters(&self) -> Result<Option<String>> {
-		Ok(self.log.clone())
+	pub fn log_filters(&self) -> Option<String> {
+		self.log.clone()
 	}
 }

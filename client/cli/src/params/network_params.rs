@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::error;
 use crate::params::node_key_params::NodeKeyParams;
 use sc_network::{
 	config::{NetworkConfiguration, NodeKeyConfig, NonReservedPeerMode, TransportConfig},
@@ -105,7 +104,7 @@ impl NetworkParams {
 		client_id: &str,
 		node_name: &str,
 		node_key: NodeKeyConfig,
-	) -> error::Result<NetworkConfiguration> {
+	) -> NetworkConfiguration {
 		let port = self.port.unwrap_or(30333);
 		let mut listen_addresses = vec![iter::once(Protocol::Ip4(Ipv4Addr::new(0, 0, 0, 0)))
 			.chain(iter::once(Protocol::Tcp(port)))
@@ -116,7 +115,7 @@ impl NetworkParams {
 		let mut boot_nodes = chain_spec.boot_nodes().to_vec();
 		boot_nodes.extend(self.bootnodes.clone());
 
-		Ok(NetworkConfiguration {
+		NetworkConfiguration {
 			boot_nodes,
 			net_config_path: net_config_path.clone(),
 			reserved_nodes: self.reserved_nodes.clone(),
@@ -139,6 +138,6 @@ impl NetworkParams {
 				use_yamux_flow_control: self.use_yamux_flow_control,
 			},
 			max_parallel_downloads: self.max_parallel_downloads,
-		})
+		}
 	}
 }

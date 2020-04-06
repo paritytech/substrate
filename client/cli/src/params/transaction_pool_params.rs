@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::error;
 use sc_service::config::TransactionPoolOptions;
 use structopt::StructOpt;
 
@@ -32,7 +31,7 @@ pub struct TransactionPoolParams {
 
 impl TransactionPoolParams {
 	/// Fill the given `PoolConfiguration` by looking at the cli parameters.
-	pub fn transaction_pool(&self) -> error::Result<TransactionPoolOptions> {
+	pub fn transaction_pool(&self) -> TransactionPoolOptions {
 		let mut opts = TransactionPoolOptions::default();
 
 		// ready queue
@@ -44,6 +43,6 @@ impl TransactionPoolParams {
 		opts.future.count = self.pool_limit / factor;
 		opts.future.total_bytes = self.pool_kbytes * 1024 / factor;
 
-		Ok(opts)
+		opts
 	}
 }

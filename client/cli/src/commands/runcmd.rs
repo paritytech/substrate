@@ -438,7 +438,7 @@ impl CliConfiguration for RunCmd {
 	}
 
 	fn transaction_pool(&self) -> Result<TransactionPoolOptions> {
-		self.pool_config.transaction_pool()
+		Ok(self.pool_config.transaction_pool())
 	}
 
 	fn max_runtime_instances(&self) -> Result<Option<usize>> {
