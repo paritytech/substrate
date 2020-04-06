@@ -119,6 +119,7 @@ impl<Block: BlockT> HeaderBackend<Block> for TestApi {
 			finalized_hash: Default::default(),
 			finalized_number: Zero::zero(),
 			genesis_hash: Default::default(),
+			number_leaves: Default::default(),
 		}
 	}
 

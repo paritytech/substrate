@@ -248,7 +248,7 @@ pub mod network_state;
 
 pub use service::{NetworkService, NetworkStateInfo, NetworkWorker, ExHashT, ReportHandle};
 pub use protocol::PeerInfo;
-pub use protocol::event::{Event, DhtEvent};
+pub use protocol::event::{Event, DhtEvent, ObservedRole};
 pub use protocol::sync::SyncState;
 pub use libp2p::{Multiaddr, PeerId};
 #[doc(inline)]

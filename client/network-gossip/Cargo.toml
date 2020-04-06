@@ -18,6 +18,7 @@ log = "0.4.8"
 lru = "0.4.3"
 sc-network = { version = "0.8.0-alpha.5", path = "../network" }
 sp-runtime = { version = "2.0.0-alpha.5", path = "../../primitives/runtime" }
+sp-utils = { version = "2.0.0-alpha.5", path = "../../primitives/utils" }
 wasm-timer = "0.2"
 
 [dev-dependencies]

@@ -68,7 +68,8 @@ then
   if [ -z "${pr_companion}" ]
   then
     pr_companion="$(echo "${pr_body}" | sed -n -r \
-      's;^.*https://github.com/paritytech/polkadot/pull/([0-9]+).*$;\1;p' \
+      -e 's;^.*paritytech/polkadot/#([0-9]+).*$;\1;p' \
+      -e 's;^.*https://github.com/paritytech/polkadot/pull/([0-9]+).*$;\1;p' \
       | tail -n 1)"
   fi
 

@@ -56,12 +56,11 @@ use futures_timer::Delay;
 
 use codec::{Decode, Encode};
 use error::{Error, Result};
-use libp2p::Multiaddr;
 use log::{debug, error, log_enabled, warn};
 use prometheus_endpoint::{Counter, CounterVec, Gauge, Opts, U64, register};
 use prost::Message;
 use sc_client_api::blockchain::HeaderBackend;
-use sc_network::{DhtEvent, ExHashT, NetworkStateInfo};
+use sc_network::{Multiaddr, config::MultiaddrWithPeerId, DhtEvent, ExHashT, NetworkStateInfo};
 use sp_authority_discovery::{AuthorityDiscoveryApi, AuthorityId, AuthoritySignature, AuthorityPair};
 use sp_core::crypto::{key_types, CryptoTypePublicPair, Pair};
 use sp_core::traits::BareCryptoStorePtr;
@@ -187,7 +186,7 @@ where
 	pub fn new(
 		client: Arc<Client>,
 		network: Arc<Network>,
-		sentry_nodes: Vec<String>,
+		sentry_nodes: Vec<MultiaddrWithPeerId>,
 		key_store: BareCryptoStorePtr,
 		dht_event_rx: Pin<Box<dyn Stream<Item = DhtEvent> + Send>>,
 		prometheus_registry: Option<prometheus_endpoint::Registry>,
@@ -210,18 +209,7 @@ where
 		);
 
 		let sentry_nodes = if !sentry_nodes.is_empty() {
-			let addrs = sentry_nodes.into_iter().filter_map(|a| match a.parse() {
-				Ok(addr) => Some(addr),
-				Err(e) => {
-					error!(
-						target: "sub-authority-discovery",
-						"Failed to parse sentry node public address '{:?}', continuing anyways.", e,
-					);
-					None
-				}
-			}).collect::<Vec<Multiaddr>>();
-
-			Some(addrs)
+			Some(sentry_nodes.into_iter().map(|ma| ma.concat()).collect::<Vec<_>>())
 		} else {
 			None
 		};
