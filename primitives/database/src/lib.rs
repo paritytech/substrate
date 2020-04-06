@@ -16,8 +16,6 @@
 
 //! The main database trait, allowing Substrate to store data persistently.
 
-use core::collections::Vec;
-
 /// A hash type.
 pub type Hash = [u8; 32];
 
@@ -64,7 +62,7 @@ pub trait Database {
 	fn new_transaction(&self) -> Transaction;
 	/// Commit the `transaction` to the database atomically. Any further calls to `get` or `lookup`
 	/// will reflect the new state.
-	fn commit(transaction: Transaction);
+	fn commit(&self, transaction: Transaction);
 
 	/// Retrieve the value previously stored against `key` or `None` if
 	/// `key` is not currently in the database.
@@ -101,7 +99,7 @@ pub trait Database {
 	fn store(&self, hash: &Hash, preimage: &[u8]) {
 		let mut t = self.new_transaction();
 		t.store(*hash, preimage);
-		self.commit(t)?;
+		self.commit(t);
 	}
 	/// Release the preimage of `hash` from the database. An equal number of these to the number of
 	/// corresponding `store`s must have been given before it is legal for `Database::lookup` to
@@ -109,6 +107,6 @@ pub trait Database {
 	fn release(&self, hash: &Hash) {
 		let mut t = self.new_transaction();
 		t.release(*hash);
-		self.commit(t)?;
+		self.commit(t);
 	}
 }
