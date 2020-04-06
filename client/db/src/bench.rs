@@ -284,6 +284,9 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 			let mut ops: u64 = 0;
 			let mut bytes: u64 = 0;
 
+			let mut removal: u64 = 0;
+			let mut bytes_removal: u64 = 0;
+
 			let changes = transaction.drain();
 			let mut keys = Vec::with_capacity(changes.len());
 			for (key, (val, rc)) in changes {
@@ -293,14 +296,16 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 
 					db_transaction.put(0, &key, &val);
 				} else if rc < 0 {
-					ops += 1;
-					bytes += key.len() as u64;
+					removal += 1;
+					bytes_removal += key.len() as u64;
 
 					db_transaction.delete(0, &key);
 				}
 				keys.push(key);
 			}
-			self.state_usage_stats.tally_writes(ops, bytes);
+			self.state_usage_stats.tally_writes_nodes(ops, bytes);
+			self.state_usage_stats.tally_removed_nodes(removal, bytes_removal);
+
 			let mut data = self.record.take();
 			data.append(&mut keys);
 			self.record.set(data);
@@ -331,6 +336,13 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 
 		self.root.set(self.genesis_root.clone());
 		self.reopen()?;
+
+		// Wiping usage info.
+		let _ = self.state_usage_stats.take();
+
+		// Wiping overlay stats.
+		let _ = self.overlay_stats.take();
+
 		Ok(())
 	}
 

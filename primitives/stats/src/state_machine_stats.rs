@@ -45,7 +45,17 @@ impl StateMachineStats {
 		*self.writes_overlay.borrow_mut() += *other.writes_overlay.borrow();
 		*self.bytes_writes_overlay.borrow_mut() += *other.bytes_writes_overlay.borrow();
 	}
+
+	pub fn take(&self) -> Self {
+		let stats = self.clone();
+		*self.reads_modified.borrow_mut() = 0;
+		*self.bytes_read_modified.borrow_mut() = 0;
+		*self.writes_overlay.borrow_mut() = 0;
+		*self.bytes_writes_overlay.borrow_mut() = 0;
+		stats
+	}
 }
+
 
 impl StateMachineStats {
 	/// Tally one read modified operation, of some length.
