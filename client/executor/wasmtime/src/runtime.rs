@@ -15,30 +15,32 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Defines the compiled Wasm runtime that uses Wasmtime internally.
-use std::rc::Rc;
-use std::sync::Arc;
 
 use crate::host::HostState;
 use crate::imports::{Imports, resolve_imports};
-use crate::instance_wrapper::InstanceWrapper;
+use crate::instance_wrapper::{ModuleWrapper, InstanceWrapper, GlobalsSnapshot};
 use crate::state_holder;
 
+use std::rc::Rc;
+use std::sync::Arc;
 use sc_executor_common::{
 	error::{Error, Result, WasmError},
 	wasm_runtime::{WasmModule, WasmInstance},
+	state_snapshot::{DataSegmentsSnapshot, DeserializedModule},
 };
 use sp_allocator::FreeingBumpHeapAllocator;
 use sp_runtime_interface::unpack_ptr_and_len;
 use sp_wasm_interface::{Function, Pointer, WordSize, Value};
-use wasmtime::{Config, Engine, Module, Store};
+use wasmtime::{Config, Engine, Store};
 
 /// A `WasmModule` implementation using wasmtime to compile the runtime module to machine code
 /// and execute the compiled code.
 pub struct WasmtimeRuntime {
-	module: Arc<Module>,
+	module_wrapper: Arc<ModuleWrapper>,
 	heap_pages: u32,
 	allow_missing_func_imports: bool,
 	host_functions: Vec<&'static dyn Function>,
+	data_segments_snapshot: DataSegmentsSnapshot,
 }
 
 impl WasmModule for WasmtimeRuntime {
@@ -46,19 +48,23 @@ impl WasmModule for WasmtimeRuntime {
 		// Scan all imports, find the matching host functions, and create stubs that adapt arguments
 		// and results.
 		let imports = resolve_imports(
-			&self.module,
+			self.module_wrapper.module(),
 			&self.host_functions,
 			self.heap_pages,
 			self.allow_missing_func_imports,
 		)?;
 
-		let instance_wrapper = InstanceWrapper::new(&self.module, &imports, self.heap_pages)?;
+		let instance_wrapper =
+			InstanceWrapper::new(&self.module_wrapper, &imports, self.heap_pages)?;
 		let heap_base = instance_wrapper.extract_heap_base()?;
+		let globals_snapshot = instance_wrapper.get_globals_snapshot();
 
 		Ok(Box::new(WasmtimeInstance {
 			instance_wrapper: Rc::new(instance_wrapper),
-			module: Arc::clone(&self.module),
+			module_wrapper: Arc::clone(&self.module_wrapper),
 			imports,
+			data_segments_snapshot: self.data_segments_snapshot.clone(),
+			globals_snapshot,
 			heap_pages: self.heap_pages,
 			heap_base,
 		}))
@@ -68,8 +74,10 @@ impl WasmModule for WasmtimeRuntime {
 /// A `WasmInstance` implementation that reuses compiled module and spawns instances
 /// to execute the compiled code.
 pub struct WasmtimeInstance {
-	module: Arc<Module>,
+	module_wrapper: Arc<ModuleWrapper>,
 	instance_wrapper: Rc<InstanceWrapper>,
+	data_segments_snapshot: DataSegmentsSnapshot,
+	globals_snapshot: GlobalsSnapshot,
 	imports: Imports,
 	heap_pages: u32,
 	heap_base: u32,
@@ -83,6 +91,14 @@ impl WasmInstance for WasmtimeInstance {
 	fn call(&self, method: &str, data: &[u8]) -> Result<Vec<u8>> {
 		let entrypoint = self.instance_wrapper.resolve_entrypoint(method)?;
 		let allocator = FreeingBumpHeapAllocator::new(self.heap_base);
+
+		self.data_segments_snapshot.apply(|offset, contents| {
+			self.instance_wrapper
+				.write_memory_from(Pointer::new(offset), contents)
+		})?;
+		self.instance_wrapper
+			.set_globals_snapshot(&self.globals_snapshot);
+
 		perform_call(
 			data,
 			Rc::clone(&self.instance_wrapper),
@@ -92,11 +108,10 @@ impl WasmInstance for WasmtimeInstance {
 	}
 
 	fn get_global_const(&self, name: &str) -> Result<Option<Value>> {
-		let instance = InstanceWrapper::new(&self.module, &self.imports, self.heap_pages)?;
+		let instance = InstanceWrapper::new(&self.module_wrapper, &self.imports, self.heap_pages)?;
 		instance.get_global_val(name)
 	}
 }
-
 
 /// Create a new `WasmtimeRuntime` given the code. This function performs translation from Wasm to
 /// machine code, which can be computationally heavy.
@@ -112,11 +127,16 @@ pub fn create_runtime(
 
 	let engine = Engine::new(&config);
 	let store = Store::new(&engine);
-	let module = Module::new(&store, code)
+
+	let deserialized_module = DeserializedModule::new(code).unwrap(); // TODO:
+	let module_wrapper = ModuleWrapper::new(&store, code, &deserialized_module)
 		.map_err(|e| WasmError::Other(format!("cannot create module: {}", e)))?;
 
+	let data_segments_snapshot = DataSegmentsSnapshot::take(&deserialized_module).unwrap(); // TODO:
+
 	Ok(WasmtimeRuntime {
-		module: Arc::new(module),
+		module_wrapper: Arc::new(module_wrapper),
+		data_segments_snapshot,
 		heap_pages: heap_pages as u32,
 		allow_missing_func_imports,
 		host_functions,

@@ -20,11 +20,47 @@
 use crate::util;
 use crate::imports::Imports;
 
-use sc_executor_common::error::{Error, Result};
+use std::{slice, marker};
+use sc_executor_common::{
+	error::{Error, Result},
+	state_snapshot::DeserializedModule,
+};
 use sp_wasm_interface::{Pointer, WordSize, Value};
-use std::slice;
-use std::marker;
-use wasmtime::{Instance, Module, Memory, Table, Val};
+use wasmtime::{Store, Instance, Module, Memory, Table, Val};
+
+pub struct ModuleWrapper {
+	imported_globals_count: u32,
+	globals_count: u32,
+	module: Module,
+}
+
+impl ModuleWrapper {
+	pub fn new(
+		store: &Store,
+		code: &[u8],
+		deserialized_module: &DeserializedModule,
+	) -> Result<Self> {
+		let module = Module::new(&store, code)
+			.map_err(|e| Error::from(format!("cannot create module: {}", e)))?;
+
+		let declared_globals_count = deserialized_module.declared_globals_count();
+		let imported_globals_count = deserialized_module.imported_globals_count();
+		let globals_count = imported_globals_count + declared_globals_count;
+
+		dbg!(imported_globals_count);
+		dbg!(globals_count);
+
+		Ok(Self {
+			module,
+			imported_globals_count, // TODO:
+			globals_count,
+		})
+	}
+
+	pub fn module(&self) -> &Module {
+		&self.module
+	}
+}
 
 /// Wrap the given WebAssembly Instance of a wasm module with Substrate-runtime.
 ///
@@ -32,6 +68,8 @@ use wasmtime::{Instance, Module, Memory, Table, Val};
 /// routines.
 pub struct InstanceWrapper {
 	instance: Instance,
+	globals_count: u32,
+	imported_globals_count: u32,
 	// The memory instance of the `instance`.
 	//
 	// It is important to make sure that we don't make any copies of this to make it easier to proof
@@ -44,8 +82,8 @@ pub struct InstanceWrapper {
 
 impl InstanceWrapper {
 	/// Create a new instance wrapper from the given wasm module.
-	pub fn new(module: &Module, imports: &Imports, heap_pages: u32) -> Result<Self> {
-		let instance = Instance::new(module, &imports.externs)
+	pub fn new(module_wrapper: &ModuleWrapper, imports: &Imports, heap_pages: u32) -> Result<Self> {
+		let instance = Instance::new(&module_wrapper.module, &imports.externs)
 			.map_err(|e| Error::from(format!("cannot instantiate: {}", e)))?;
 
 		let memory = match imports.memory_import_index {
@@ -66,8 +104,10 @@ impl InstanceWrapper {
 
 		Ok(Self {
 			table: get_table(&instance),
-			memory,
 			instance,
+			globals_count: module_wrapper.globals_count,
+			imported_globals_count: module_wrapper.imported_globals_count,
+			memory,
 			_not_send_nor_sync: marker::PhantomData,
 		})
 	}
@@ -271,6 +311,88 @@ impl InstanceWrapper {
 			&mut []
 		} else {
 			slice::from_raw_parts_mut(ptr, len)
+		}
+	}
+}
+
+pub struct GlobalsSnapshot {
+	values: Vec<Value>,
+}
+
+impl InstanceWrapper {
+	pub fn get_globals_snapshot(&self) -> GlobalsSnapshot {
+		// EVIL:
+		// usage of an undocumented function.
+		let handle = self.instance.handle();
+
+		let mut values = vec![];
+
+		for global_idx in self.imported_globals_count..self.globals_count {
+			let (def, global) =
+				match handle.lookup_by_declaration(&wasmtime_environ::Export::Global(
+					cranelift_wasm::GlobalIndex::from_u32(global_idx),
+				)) {
+					wasmtime_runtime::Export::Global {
+						definition, global, ..
+					} => (definition, global),
+					_ => unreachable!("only globals can be returned for a global request"),
+				};
+
+			// skip immutable globals.
+			if !global.mutability {
+				continue;
+			}
+
+			let value = unsafe {
+				let def = def.as_ref().unwrap();
+				match global.ty {
+					cranelift_codegen::ir::types::I32 => Value::I32(*def.as_i32()),
+					cranelift_codegen::ir::types::I64 => Value::I64(*def.as_i64()),
+					cranelift_codegen::ir::types::F32 => Value::F32(*def.as_u32()),
+					cranelift_codegen::ir::types::F64 => Value::F64(*def.as_u64()),
+					_ => panic!(), // TODO:
+				}
+			};
+
+			values.push(value);
+		}
+
+		GlobalsSnapshot { values }
+	}
+
+	pub fn set_globals_snapshot(&self, snapshot: &GlobalsSnapshot) {
+		// EVIL:
+		// usage of an undocumented function.
+		let handle = self.instance.handle();
+
+		let mut values_iter = snapshot.values.iter();
+		for global_idx in self.imported_globals_count..self.globals_count {
+			let (def, global) =
+				match handle.lookup_by_declaration(&wasmtime_environ::Export::Global(
+					cranelift_wasm::GlobalIndex::from_u32(global_idx),
+				)) {
+					wasmtime_runtime::Export::Global {
+						definition, global, ..
+					} => (definition, global),
+					_ => unreachable!("only globals can be returned for a global request"),
+				};
+
+			// skip immutable globals.
+			if !global.mutability {
+				continue;
+			}
+
+			let value = values_iter.next().cloned().unwrap(); // TODO:
+
+			unsafe {
+				let def = def.as_mut().unwrap();
+				match value {
+					Value::I32(v) => *def.as_i32_mut() = v,
+					Value::I64(v) => *def.as_i64_mut() = v,
+					Value::F32(v) => *def.as_u32_mut() = v,
+					Value::F64(v) => *def.as_u64_mut() = v,
+				}
+			}
 		}
 	}
 }
