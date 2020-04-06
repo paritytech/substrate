@@ -34,11 +34,7 @@ use sp_io;
 use sp_phragmen::{
 	build_support_map, evaluate_support, reduce, ExtendedBalance, StakedAssignment, PhragmenScore,
 };
-use crate::{
-	EraIndex, GenesisConfig, Module, Trait, StakerStatus, ValidatorPrefs, RewardDestination,
-	Nominators, inflation, SessionInterface, Exposure, ErasStakers, ErasRewardPoints,
-	CompactAssignments, ValidatorIndex, NominatorIndex, Validators, OffchainAccuracy,
-};
+use crate::*;
 
 const INIT_TIMESTAMP: u64 = 30_000;
 
@@ -559,6 +555,7 @@ pub fn assert_ledger_consistent(stash: AccountId) {
 
 pub fn bond_validator(stash: u64, ctrl: u64, val: u64) {
 	let _ = Balances::make_free_balance_be(&stash, val);
+	let _ = Balances::make_free_balance_be(&ctrl, val);
 	assert_ok!(Staking::bond(
 		Origin::signed(stash),
 		ctrl,
@@ -573,6 +570,7 @@ pub fn bond_validator(stash: u64, ctrl: u64, val: u64) {
 
 pub fn bond_nominator(stash: u64, ctrl: u64, val: u64, target: Vec<u64>) {
 	let _ = Balances::make_free_balance_be(&stash, val);
+	let _ = Balances::make_free_balance_be(&ctrl, val);
 	assert_ok!(Staking::bond(
 		Origin::signed(stash),
 		ctrl,
@@ -684,8 +682,6 @@ pub fn on_offence_now(
 pub fn horrible_phragmen_with_post_processing(
 	do_reduce: bool,
 ) -> (CompactAssignments, Vec<ValidatorIndex>, PhragmenScore) {
-	use std::collections::BTreeMap;
-
 	let mut backing_stake_of: BTreeMap<AccountId, Balance> = BTreeMap::new();
 
 	// self stake
@@ -867,7 +863,7 @@ pub fn prepare_submission_with(
 }
 
 /// Make all validator and nominator request their payment
-pub fn make_all_reward_payment(era: EraIndex) {
+pub fn make_all_reward_payment_before_migration(era: EraIndex) {
 	let validators_with_reward = ErasRewardPoints::<Test>::get(era).individual.keys()
 		.cloned()
 		.collect::<Vec<_>>();
@@ -895,6 +891,20 @@ pub fn make_all_reward_payment(era: EraIndex) {
 	// reward validators
 	for validator_controller in validators_with_reward.iter().filter_map(Staking::bonded) {
 		assert_ok!(Staking::payout_validator(Origin::signed(validator_controller), era));
+	}
+}
+
+/// Make all validator and nominator request their payment
+pub fn make_all_reward_payment(era: EraIndex) {
+	let validators_with_reward = ErasRewardPoints::<Test>::get(era).individual.keys()
+		.cloned()
+		.collect::<Vec<_>>();
+
+	// reward validators
+	for validator_controller in validators_with_reward.iter().filter_map(Staking::bonded) {
+		let ledger = <Ledger<Test>>::get(&validator_controller).unwrap();
+
+		assert_ok!(Staking::payout_stakers(Origin::signed(1337), ledger.stash, era));
 	}
 }
 

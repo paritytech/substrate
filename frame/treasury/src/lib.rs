@@ -96,9 +96,10 @@ use frame_support::traits::{
 	ReservableCurrency, WithdrawReason
 };
 use sp_runtime::{Permill, ModuleId, Percent, RuntimeDebug, traits::{
-	Zero, EnsureOrigin, StaticLookup, AccountIdConversion, Saturating, Hash, BadOrigin
+	Zero, StaticLookup, AccountIdConversion, Saturating, Hash, BadOrigin
 }};
-use frame_support::{weights::{Weight, WeighData, SimpleDispatchInfo}, traits::Contains};
+use frame_support::weights::{Weight, WeighData, SimpleDispatchInfo};
+use frame_support::traits::{Contains, EnsureOrigin};
 use codec::{Encode, Decode};
 use frame_system::{self as system, ensure_signed, ensure_root};
 

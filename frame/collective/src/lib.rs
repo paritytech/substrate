@@ -39,11 +39,11 @@
 use sp_std::{prelude::*, result};
 use sp_core::u32_trait::Value as U32;
 use sp_runtime::RuntimeDebug;
-use sp_runtime::traits::{Hash, EnsureOrigin};
+use sp_runtime::traits::Hash;
 use frame_support::weights::SimpleDispatchInfo;
 use frame_support::{
 	dispatch::{Dispatchable, Parameter}, codec::{Encode, Decode},
-	traits::{Get, ChangeMembers, InitializeMembers}, decl_module, decl_event,
+	traits::{Get, ChangeMembers, InitializeMembers, EnsureOrigin}, decl_module, decl_event,
 	decl_storage, decl_error, ensure,
 };
 use frame_system::{self as system, ensure_signed, ensure_root};

@@ -17,7 +17,7 @@
 //! Primitives for the runtime modules.
 
 use sp_std::prelude::*;
-use sp_std::{self, result, marker::PhantomData, convert::{TryFrom, TryInto}, fmt::Debug};
+use sp_std::{self, marker::PhantomData, convert::{TryFrom, TryInto}, fmt::Debug};
 use sp_io;
 #[cfg(feature = "std")]
 use std::fmt::Display;
@@ -39,6 +39,7 @@ pub use sp_arithmetic::traits::{
 };
 use sp_application_crypto::AppKey;
 use impl_trait_for_tuples::impl_for_tuples;
+use crate::DispatchResult;
 
 /// A lazy value.
 pub trait Lazy<T: ?Sized> {
@@ -145,24 +146,6 @@ impl From<BadOrigin> for &'static str {
 	fn from(_: BadOrigin) -> &'static str {
 		"Bad origin"
 	}
-}
-
-/// Some sort of check on the origin is performed by this object.
-pub trait EnsureOrigin<OuterOrigin> {
-	/// A return type.
-	type Success;
-	/// Perform the origin check.
-	fn ensure_origin(o: OuterOrigin) -> result::Result<Self::Success, BadOrigin> {
-		Self::try_origin(o).map_err(|_| BadOrigin)
-	}
-	/// Perform the origin check.
-	fn try_origin(o: OuterOrigin) -> result::Result<Self::Success, OuterOrigin>;
-
-	/// Returns an outer origin capable of passing `try_origin` check.
-	/// 
-	/// ** Should be used for benchmarking only!!! **
-	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> OuterOrigin;
 }
 
 /// An error that indicates that a lookup failed.
@@ -642,8 +625,11 @@ pub trait Dispatchable {
 	type Origin;
 	/// ...
 	type Trait;
-	/// Actually dispatch this call and result the result of it.
-	fn dispatch(self, origin: Self::Origin) -> crate::DispatchResult;
+	/// Additional information that is returned by `dispatch`. Can be used to supply the caller
+	/// with information about a `Dispatchable` that is ownly known post dispatch.
+	type PostInfo: Eq + PartialEq + Clone + Copy + Encode + Decode + Printable;
+	/// Actually dispatch this call and return the result of it.
+	fn dispatch(self, origin: Self::Origin) -> crate::DispatchResultWithInfo<Self::PostInfo>;
 }
 
 /// Means by which a transaction may be extended. This type embodies both the data and the logic
@@ -750,8 +736,27 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 			.map_err(Into::into)
 	}
 
-	/// Do any post-flight stuff for a transaction.
-	fn post_dispatch(_pre: Self::Pre, _info: Self::DispatchInfo, _len: usize) { }
+	/// Do any post-flight stuff for an extrinsic.
+	///
+	/// This gets given the `DispatchResult` `_result` from the extrinsic and can, if desired,
+	/// introduce a `TransactionValidityError`, causing the block to become invalid for including
+	/// it.
+	///
+	/// WARNING: It is dangerous to return an error here. To do so will fundamentally invalidate the
+	/// transaction and any block that it is included in, causing the block author to not be
+	/// compensated for their work in validating the transaction or producing the block so far.
+	///
+	/// It can only be used safely when you *know* that the extrinsic is one that can only be
+	/// introduced by the current block author; generally this implies that it is an inherent and
+	/// will come from either an offchain-worker or via `InherentData`.
+	fn post_dispatch(
+		_pre: Self::Pre,
+		_info: Self::DispatchInfo,
+		_len: usize,
+		_result: &DispatchResult,
+	) -> Result<(), TransactionValidityError> {
+		Ok(())
+	}
 
 	/// Returns the list of unique identifier for this signed extension.
 	///
@@ -819,8 +824,10 @@ impl<AccountId, Call, Info: Clone> SignedExtension for Tuple {
 		pre: Self::Pre,
 		info: Self::DispatchInfo,
 		len: usize,
-	) {
-		for_tuples!( #( Tuple::post_dispatch(pre.Tuple, info.clone(), len); )* )
+		result: &DispatchResult,
+	) -> Result<(), TransactionValidityError> {
+		for_tuples!( #( Tuple::post_dispatch(pre.Tuple, info.clone(), len, result)?; )* );
+		Ok(())
 	}
 
 	fn identifier() -> Vec<&'static str> {

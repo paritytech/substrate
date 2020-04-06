@@ -78,11 +78,11 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 				vec![]
 			},
 			reserved_only: false,
-			reserved_nodes: Vec::new(),
+			priority_groups: Vec::new(),
 		});
 
 		let behaviour = CustomProtoWithAddr {
-			inner: GenericProto::new(&b"test"[..], &[1], peerset),
+			inner: GenericProto::new(&b"test"[..], &[1], peerset, None),
 			addrs: addrs
 				.iter()
 				.enumerate()

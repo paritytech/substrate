@@ -256,14 +256,14 @@ use codec::{Encode, Decode};
 use sp_runtime::{Percent, ModuleId, RuntimeDebug,
 	traits::{
 		StaticLookup, AccountIdConversion, Saturating, Zero, IntegerSquareRoot, Hash,
-		TrailingZeroInput, CheckedSub, EnsureOrigin
+		TrailingZeroInput, CheckedSub
 	}
 };
 use frame_support::{decl_error, decl_module, decl_storage, decl_event, ensure, dispatch::DispatchResult};
 use frame_support::weights::{SimpleDispatchInfo, Weight, WeighData};
 use frame_support::traits::{
 	Currency, ReservableCurrency, Randomness, Get, ChangeMembers, BalanceStatus,
-	ExistenceRequirement::AllowDeath
+	ExistenceRequirement::AllowDeath, EnsureOrigin
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 
