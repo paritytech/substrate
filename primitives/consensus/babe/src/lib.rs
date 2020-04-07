@@ -29,7 +29,7 @@ pub use sp_consensus_vrf::schnorrkel::{
 use codec::{Encode, Decode};
 use sp_std::vec::Vec;
 use sp_runtime::{ConsensusEngineId, RuntimeDebug};
-use crate::digests::NextEpochDescriptor;
+use crate::digests::{NextEpochDescriptor, NextConfigDescriptor};
 
 mod app {
 	use sp_application_crypto::{app_crypto, key_types::BABE, sr25519};
@@ -87,20 +87,41 @@ pub enum ConsensusLog {
 	/// Disable the authority with given index.
 	#[codec(index = "2")]
 	OnDisabled(AuthorityIndex),
+	/// The epoch has changed, and the epoch after the current one will
+	/// enact different epoch configurations.
+	#[codec(index = "3")]
+	NextConfigData(NextConfigDescriptor),
 }
 
-/// Genesis configuration data used by the BABE consensus engine.
+/// Configuration data used by the BABE consensus engine.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
 pub struct BabeGenesisConfiguration {
 	/// The slot duration in milliseconds for BABE. Currently, only
 	/// the value provided by this type at genesis will be used.
+	///
+	/// Dynamic slot duration may be supported in the future.
 	pub slot_duration: u64,
+
+	/// The duration of epochs in slots.
+	pub epoch_length: SlotNumber,
+
+	/// A constant value that is used in the threshold calculation formula.
+	/// Expressed as a rational where the first member of the tuple is the
+	/// numerator and the second is the denominator. The rational should
+	/// represent a value between 0 and 1.
+	/// In the threshold formula calculation, `1 - c` represents the probability
+	/// of a slot being empty.
+	pub c: (u64, u64),
 
 	/// The authorities for the genesis epoch.
 	pub genesis_authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 
 	/// The randomness for the genesis epoch.
 	pub randomness: Randomness,
+
+	/// Whether this chain should run with secondary slots, which are assigned
+	/// in round-robin manner.
+	pub secondary_slots: bool,
 }
 
 #[cfg(feature = "std")]
@@ -115,9 +136,6 @@ impl sp_consensus::SlotData for BabeGenesisConfiguration {
 /// Configuration data used by the BABE consensus engine.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
 pub struct BabeEpochConfiguration {
-	/// The duration of epochs in slots.
-	pub epoch_length: SlotNumber,
-
 	/// A constant value that is used in the threshold calculation formula.
 	/// Expressed as a rational where the first member of the tuple is the
 	/// numerator and the second is the denominator. The rational should
@@ -134,11 +152,8 @@ pub struct BabeEpochConfiguration {
 sp_api::decl_runtime_apis! {
 	/// API necessary for block authorship with BABE.
 	pub trait BabeApi {
-		/// Return the epoch configuration for BABE. The configuration is read once every epoch.
-		fn epoch_configuration() -> BabeEpochConfiguration;
-
 		/// Return the genesis configuration for BABE. The configuration is only read on genesis.
-		fn genesis_configuration() -> BabeGenesisConfiguration;
+		fn configuration() -> BabeGenesisConfiguration;
 
 		/// Returns the slot number that started the current epoch.
 		fn current_epoch_start() -> SlotNumber;

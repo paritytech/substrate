@@ -64,7 +64,8 @@ pub use sp_consensus_babe::{
 	AuthorityId, AuthorityPair, AuthoritySignature,
 	BabeAuthorityWeight, VRF_OUTPUT_LENGTH,
 	digests::{
-		CompatibleDigestItem, NextEpochDescriptor, PreDigest, PrimaryPreDigest, SecondaryPreDigest,
+		CompatibleDigestItem, NextEpochDescriptor, NextConfigDescriptor,
+		PreDigest, PrimaryPreDigest, SecondaryPreDigest,
 	},
 };
 pub use sp_consensus::SyncOracle;
@@ -172,16 +173,18 @@ impl Epoch {
 	/// the first block, so that has to be provided.
 	pub fn genesis(
 		genesis_config: &BabeGenesisConfiguration,
-		epoch_config: &BabeEpochConfiguration,
 		slot_number: SlotNumber
 	) -> Epoch {
 		Epoch {
 			epoch_index: 0,
 			start_slot: slot_number,
-			duration: epoch_config.epoch_length,
+			duration: genesis_config.epoch_length,
 			authorities: genesis_config.genesis_authorities.clone(),
 			randomness: genesis_config.randomness.clone(),
-			config: epoch_config.clone(),
+			config: BabeEpochConfiguration {
+				c: genesis_config.c,
+				secondary_slots: genesis_config.secondary_slots,
+			},
 		}
 	}
 }
@@ -194,8 +197,8 @@ enum Error<B: BlockT> {
 	NoPreRuntimeDigest,
 	#[display(fmt = "Multiple BABE epoch change digests, rejecting!")]
 	MultipleEpochChangeDigests,
-	#[display(fmt = "Fetch new epoch configuration failed")]
-	FetchEpochConfig(B::Hash),
+	#[display(fmt = "Multiple BABE config change digests, rejecting!")]
+	MultipleConfigChangeDigests,
 	#[display(fmt = "Could not extract timestamp and slot: {:?}", _0)]
 	Extraction(sp_consensus::Error),
 	#[display(fmt = "Could not fetch epoch at {:?}", _0)]
@@ -228,6 +231,8 @@ enum Error<B: BlockT> {
 	FetchParentHeader(sp_blockchain::Error),
 	#[display(fmt = "Expected epoch change to happen at {:?}, s{}", _0, _1)]
 	ExpectedEpochChange(B::Hash, u64),
+	#[display(fmt = "Unexpected config change")]
+	UnexpectedConfigChange,
 	#[display(fmt = "Unexpected epoch change")]
 	UnexpectedEpochChange,
 	#[display(fmt = "Parent block of {} has no associated weight", _0)]
@@ -283,9 +288,7 @@ impl Config {
 		C: AuxStore + ProvideRuntimeApi<B>, C::Api: BabeApi<B, Error = sp_blockchain::Error>,
 	{
 		trace!(target: "babe", "Getting slot duration");
-		match sc_consensus_slots::SlotDuration::get_or_compute(client, |a, b| {
-			a.genesis_configuration(b)
-		}).map(Self) {
+		match sc_consensus_slots::SlotDuration::get_or_compute(client, |a, b| a.configuration(b)).map(Self) {
 			Ok(s) => Ok(s),
 			Err(s) => {
 				warn!(target: "babe", "Failed to get slot duration");
@@ -456,12 +459,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 
 	fn authorities_len(&self, epoch_descriptor: &Self::EpochData) -> Option<usize> {
 		self.epoch_changes.lock()
-			.viable_epoch(&epoch_descriptor, |slot| {
-				let epoch_config = self.client.runtime_api()
-					.epoch_configuration(&BlockId::number(Zero::zero()))
-					.ok()?;
-				Some(Epoch::genesis(&self.config, &epoch_config, slot))
-			})
+			.viable_epoch(&epoch_descriptor, |slot| Epoch::genesis(&self.config, slot))
 			.map(|epoch| epoch.as_ref().authorities.len())
 	}
 
@@ -476,12 +474,7 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 			slot_number,
 			self.epoch_changes.lock().viable_epoch(
 				&epoch_descriptor,
-				|slot| {
-					let epoch_config = self.client.runtime_api()
-						.epoch_configuration(&BlockId::number(Zero::zero()))
-						.ok()?;
-					Some(Epoch::genesis(&self.config, &epoch_config, slot))
-				}
+				|slot| Epoch::genesis(&self.config, slot)
 			)?.as_ref(),
 			&self.keystore,
 		);
@@ -646,6 +639,24 @@ fn find_next_epoch_digest<B: BlockT>(header: &B::Header)
 	Ok(epoch_digest)
 }
 
+/// Extract the BABE config change digest from the given header, if it exists.
+fn find_next_config_digest<B: BlockT>(header: &B::Header)
+	-> Result<Option<NextConfigDescriptor>, Error<B>>
+	where DigestItemFor<B>: CompatibleDigestItem,
+{
+	let mut config_digest: Option<_> = None;
+	for log in header.digest().logs() {
+		trace!(target: "babe", "Checking log {:?}, looking for epoch change digest.", log);
+		let log = log.try_to::<ConsensusLog>(OpaqueDigestItemId::Consensus(&BABE_ENGINE_ID));
+		match (log, config_digest.is_some()) {
+			(Some(ConsensusLog::NextConfigData(_)), true) => return Err(babe_err(Error::MultipleConfigChangeDigests)),
+			(Some(ConsensusLog::NextConfigData(config)), false) => config_digest = Some(config),
+			_ => trace!(target: "babe", "Ignoring digest not meant for us"),
+		}
+	}
+
+	Ok(config_digest)
+}
 
 #[derive(Default, Clone)]
 struct TimeSource(Arc<Mutex<(Option<Duration>, Vec<(Instant, u64)>)>>);
@@ -773,12 +784,7 @@ impl<Block, Client> Verifier<Block> for BabeVerifier<Block, Client> where
 			.ok_or_else(|| Error::<Block>::FetchEpoch(parent_hash))?;
 		let viable_epoch = epoch_changes.viable_epoch(
 			&epoch_descriptor,
-			|slot| {
-				let epoch_config = self.client.runtime_api()
-					.epoch_configuration(&BlockId::number(Zero::zero()))
-					.ok()?;
-				Some(Epoch::genesis(&self.config, &epoch_config, slot))
-			}
+			|slot| Epoch::genesis(&self.config, slot)
 		).ok_or_else(|| Error::<Block>::FetchEpoch(parent_hash))?;
 
 		// We add one to the current slot to allow for some small drift.
@@ -1009,19 +1015,32 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 		// search for this all the time so we can reject unexpected announcements.
 		let next_epoch_digest = find_next_epoch_digest::<Block>(&block.header)
 			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?;
+		let next_config_digest = find_next_config_digest::<Block>(&block.header)
+			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?;
 
-		match (first_in_epoch, next_epoch_digest.is_some()) {
-			(true, true) => {},
-			(false, false) => {},
-			(true, false) => {
+		match (first_in_epoch, next_epoch_digest.is_some(), next_config_digest.is_some()) {
+			(true, true, _) => {},
+			(false, false, false) => {},
+			(false, false, true) => {
+				return Err(
+					ConsensusError::ClientImport(
+						babe_err(Error::<Block>::UnexpectedConfigChange).into(),
+					)
+				)
+			},
+			(true, false, _) => {
 				return Err(
 					ConsensusError::ClientImport(
 						babe_err(Error::<Block>::ExpectedEpochChange(hash, slot_number)).into(),
 					)
-				);
+				)
 			},
-			(false, true) => {
-				return Err(ConsensusError::ClientImport(Error::<Block>::UnexpectedEpochChange.into()));
+			(false, true, _) => {
+				return Err(
+					ConsensusError::ClientImport(
+						babe_err(Error::<Block>::UnexpectedEpochChange).into(),
+					)
+				)
 			},
 		}
 
@@ -1036,21 +1055,14 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 
 			let viable_epoch = epoch_changes.viable_epoch(
 				&epoch_descriptor,
-				|slot| {
-					let epoch_config = self.client.runtime_api()
-						.epoch_configuration(&BlockId::number(Zero::zero()))
-						.ok()?;
-					Some(Epoch::genesis(&self.config, &epoch_config, slot))
-				}
+				|slot| Epoch::genesis(&self.config, slot)
 			).ok_or_else(|| {
 				ConsensusError::ClientImport(Error::<Block>::FetchEpoch(parent_hash).into())
 			})?;
 
-			let epoch_config = self.client.runtime_api()
-				.epoch_configuration(&BlockId::hash(parent_hash))
-				.map_err(|_| ConsensusError::ClientImport(
-					Error::<Block>::FetchEpochConfig(parent_hash).into()
-				))?;
+			let epoch_config = next_config_digest.unwrap_or_else(
+				|| viable_epoch.as_ref().config.clone()
+			);
 
 			babe_info!("👶 New epoch {} launching at block {} (block slot {} >= start slot {}).",
 					   viable_epoch.as_ref().epoch_index,
