@@ -33,12 +33,6 @@ use crate::transaction_validity::{TransactionValidity, TransactionValidityError,
 #[derive(Default, PartialEq, Eq, Clone, Encode, Decode, Debug, Hash, Serialize, Deserialize, PartialOrd, Ord)]
 pub struct UintAuthorityId(pub u64);
 
-impl fmt::Display for UintAuthorityId {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "{}", self.0)
-	}
-}
-
 impl From<u64> for UintAuthorityId {
 	fn from(id: u64) -> Self {
 		UintAuthorityId(id)
