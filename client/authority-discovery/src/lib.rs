@@ -112,7 +112,8 @@ impl Metrics {
 			amount_last_published: register(
 				Gauge::new(
 					"authority_discovery_amount_external_addresses_last_published",
-					"Number of external addresses published when authority discovery last published addresses ."
+					"Number of external addresses published when authority discovery last \
+					 published addresses ."
 				)?,
 				registry,
 			)?,
@@ -235,7 +236,10 @@ where
 				match Metrics::register(&registry) {
 					Ok(metrics) => Some(metrics),
 					Err(e) => {
-						error!(target: "sub-authority-discovery", "Failed to register metrics: {:?}", e);
+						error!(
+							target: "sub-authority-discovery",
+							"Failed to register metrics: {:?}", e,
+						);
 						None
 					},
 				}
@@ -293,10 +297,10 @@ where
 			.encode(&mut serialized_addresses)
 			.map_err(Error::EncodingProto)?;
 
-		let keys: Vec<CryptoTypePublicPair> = AuthorityDiscovery::get_own_public_keys_within_authority_set(&key_store, &self.client)?
-			.into_iter()
-			.map(Into::into)
-			.collect();
+		let keys = AuthorityDiscovery::get_own_public_keys_within_authority_set(
+			&key_store,
+			&self.client,
+		)?.into_iter().map(Into::into).collect::<Vec<_> >();
 
 		let signatures = key_store.read()
 			.sign_with_all(
@@ -513,7 +517,10 @@ where
 			"Applying priority group {:?} to peerset.", addresses,
 		);
 		self.network
-			.set_priority_group(AUTHORITIES_PRIORITY_GROUP_NAME.to_string(), addresses.into_iter().collect())
+			.set_priority_group(
+				AUTHORITIES_PRIORITY_GROUP_NAME.to_string(),
+				addresses.into_iter().collect(),
+			)
 			.map_err(Error::SettingPeersetPriorityGroup)?;
 
 		Ok(())
