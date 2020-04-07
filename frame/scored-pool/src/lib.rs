@@ -191,8 +191,8 @@ decl_storage! {
 					<CandidateExists<T, I>>::insert(who, true);
 				});
 
-			/// Sorts the `Pool` by score in a descending order. Entities which
-			/// have a score of `None` are sorted to the beginning of the vec.
+			// Sorts the `Pool` by score in a descending order. Entities which
+			// have a score of `None` are sorted to the beginning of the vec.
 			pool.sort_by_key(|(_, maybe_score)|
 				Reverse(maybe_score.unwrap_or_default())
 			);

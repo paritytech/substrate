@@ -140,6 +140,8 @@ macro_rules! ord_parameter_types {
 			fn contains(t: &$type) -> bool { &$value == t }
 			fn sorted_members() -> $crate::sp_std::prelude::Vec<$type> { vec![$value] }
 			fn count() -> usize { 1 }
+			#[cfg(feature = "runtime-benchmarks")]
+			fn add(_: &$type) {}
 		}
 	}
 }

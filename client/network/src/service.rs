@@ -42,8 +42,7 @@ use libp2p::{kad::record, Multiaddr, PeerId};
 use log::{error, info, trace, warn};
 use parking_lot::Mutex;
 use prometheus_endpoint::{
-	register, Counter, CounterVec, Gauge, GaugeVec, HistogramOpts, HistogramVec, Opts,
-	PrometheusError, Registry, U64,
+	register, Counter, Gauge, GaugeVec, HistogramOpts, HistogramVec, Opts, PrometheusError, Registry, U64,
 };
 use sc_peerset::PeersetHandle;
 use sp_consensus::import_queue::{BlockImportError, BlockImportResult, ImportQueue, Link};
@@ -57,7 +56,6 @@ use std::{
 	collections::{HashMap, HashSet},
 	fs, io,
 	marker::PhantomData,
-	path::Path,
 	pin::Pin,
 	str,
 	sync::{
@@ -181,9 +179,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 	pub fn new(params: Params<B, H>) -> Result<NetworkWorker<B, H>, Error> {
 		let (to_worker, from_worker) = tracing_unbounded("mpsc_network_worker");
 
-		if let Some(ref path) = params.network_config.net_config_path {
-			fs::create_dir_all(Path::new(path))?;
-		}
+		fs::create_dir_all(&params.network_config.net_config_path)?;
 
 		// List of multiaddresses that we know in the network.
 		let mut known_addresses = Vec::new();
@@ -843,7 +839,7 @@ struct Metrics {
 	kbuckets_num_nodes: Gauge<U64>,
 	network_per_sec_bytes: GaugeVec<U64>,
 	notifications_queues_size: HistogramVec,
-	notifications_total: CounterVec<U64>,
+	notifications_sizes: HistogramVec,
 	num_event_stream_channels: Gauge<U64>,
 	opened_notification_streams: GaugeVec<U64>,
 	peers_count: Gauge<U64>,
@@ -898,11 +894,15 @@ impl Metrics {
 				},
 				&["protocol"]
 			)?, registry)?,
-			notifications_total: register(CounterVec::new(
-				Opts::new(
-					"sub_libp2p_notifications_total",
-					"Number of notification received from all nodes"
-				),
+			notifications_sizes: register(HistogramVec::new(
+				HistogramOpts {
+					common_opts: Opts::new(
+						"sub_libp2p_notifications_sizes",
+						"Sizes of the notifications send to and received from all nodes"
+					),
+					buckets: prometheus_endpoint::exponential_buckets(64.0, 4.0, 8)
+						.expect("parameters are always valid values; qed"),
+				},
 				&["direction", "protocol"]
 			)?, registry)?,
 			num_event_stream_channels: register(Gauge::new(
@@ -940,8 +940,10 @@ impl Metrics {
 				self.opened_notification_streams.with_label_values(&[&engine_id_to_string(&engine_id)]).dec();
 			},
 			Event::NotificationsReceived { messages, .. } => {
-				for (engine_id, _) in messages {
-					self.notifications_total.with_label_values(&["in", &engine_id_to_string(&engine_id)]).inc();
+				for (engine_id, message) in messages {
+					self.notifications_sizes
+						.with_label_values(&["in", &engine_id_to_string(&engine_id)])
+						.observe(message.len() as f64);
 				}
 			},
 			_ => {}
@@ -1002,7 +1004,9 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					this.event_streams.push(sender),
 				ServiceToWorkerMsg::WriteNotification { message, engine_id, target } => {
 					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.notifications_total.with_label_values(&["out", &engine_id_to_string(&engine_id)]).inc();
+						metrics.notifications_sizes
+							.with_label_values(&["out", &engine_id_to_string(&engine_id)])
+							.observe(message.len() as f64);
 					}
 					this.network_service.user_protocol_mut().write_notification(target, engine_id, message)
 				},
@@ -1083,7 +1087,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 							&& error.contains("Peer ID mismatch")
 						{
 							error!(
-								"Connecting to bootnode with peer id `{}` and address `{}` failed \
+								"💔 Connecting to bootnode with peer id `{}` and address `{}` failed \
 								because it returned a different peer id!",
 								peer_id,
 								address,

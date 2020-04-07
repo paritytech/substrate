@@ -280,3 +280,27 @@ benchmarks! {
 		}
 	}: _(RawOrigin::Root, caller_lookup)
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::tests::{new_test_ext, Test};
+	use frame_support::assert_ok;
+
+	#[test]
+	fn test_benchmarks() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(test_benchmark_add_registrar::<Test>());
+			assert_ok!(test_benchmark_set_identity::<Test>());
+			assert_ok!(test_benchmark_set_subs::<Test>());
+			assert_ok!(test_benchmark_clear_identity::<Test>());
+			assert_ok!(test_benchmark_request_judgement::<Test>());
+			assert_ok!(test_benchmark_cancel_request::<Test>());
+			assert_ok!(test_benchmark_set_fee::<Test>());
+			assert_ok!(test_benchmark_set_account_id::<Test>());
+			assert_ok!(test_benchmark_set_fields::<Test>());
+			assert_ok!(test_benchmark_provide_judgement::<Test>());
+			assert_ok!(test_benchmark_kill_identity::<Test>());
+		});
+	}
+}
