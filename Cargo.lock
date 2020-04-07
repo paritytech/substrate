@@ -3395,7 +3395,9 @@ dependencies = [
  "pallet-timestamp",
  "pallet-transaction-payment",
  "parity-scale-codec",
+ "platforms",
  "rand 0.7.3",
+ "regex",
  "sc-authority-discovery",
  "sc-basic-authorship",
  "sc-chain-spec",
@@ -3434,7 +3436,6 @@ dependencies = [
  "substrate-build-script-utils",
  "tempfile",
  "tracing",
- "vergen",
  "wasm-bindgen",
  "wasm-bindgen-futures",
 ]
@@ -3625,7 +3626,6 @@ dependencies = [
  "sp-transaction-pool",
  "structopt",
  "substrate-build-script-utils",
- "vergen",
 ]
 
 [[package]]
@@ -4934,6 +4934,12 @@ name = "plain"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
+
+[[package]]
+name = "platforms"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "feb3b2b1033b8a60b4da6ee470325f887758c95d5320f52f9ce0df055a55940e"
 
 [[package]]
 name = "plotters"
@@ -6597,7 +6603,6 @@ dependencies = [
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "sysinfo",
- "target_info",
  "tracing",
  "wasm-timer",
 ]
@@ -7879,6 +7884,9 @@ dependencies = [
 [[package]]
 name = "substrate-build-script-utils"
 version = "2.0.0-alpha.5"
+dependencies = [
+ "platforms",
+]
 
 [[package]]
 name = "substrate-frame-rpc-support"
@@ -8209,12 +8217,6 @@ name = "target-lexicon"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab0e7238dcc7b40a7be719a25365910f6807bd864f4cce6b2e6b873658e2b19d"
-
-[[package]]
-name = "target_info"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c63f48baada5c52e65a29eef93ab4f8982681b67f9e8d29c7b05abcfec2b9ffe"
 
 [[package]]
 name = "tempfile"
@@ -8894,16 +8896,6 @@ name = "vec_map"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "05c78687fb1a80548ae3250346c3db86a80a7cdd77bda190189f2d0a0987c81a"
-
-[[package]]
-name = "vergen"
-version = "3.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ce50d8996df1f85af15f2cd8d33daae6e479575123ef4314a51a70a230739cb"
-dependencies = [
- "bitflags",
- "chrono",
-]
 
 [[package]]
 name = "version_check"

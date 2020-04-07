@@ -56,7 +56,6 @@ use std::{
 	collections::{HashMap, HashSet},
 	fs, io,
 	marker::PhantomData,
-	path::Path,
 	pin::Pin,
 	str,
 	sync::{atomic::{AtomicBool, AtomicUsize, Ordering}, Arc},
@@ -175,9 +174,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 	pub fn new(params: Params<B, H>) -> Result<NetworkWorker<B, H>, Error> {
 		let (to_worker, from_worker) = tracing_unbounded("mpsc_network_worker");
 
-		if let Some(ref path) = params.network_config.net_config_path {
-			fs::create_dir_all(Path::new(path))?;
-		}
+		fs::create_dir_all(&params.network_config.net_config_path)?;
 
 		// List of multiaddresses that we know in the network.
 		let mut known_addresses = Vec::new();
