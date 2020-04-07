@@ -129,7 +129,7 @@ fn build_nodes_one_proto()
 		notifications_protocols: vec![(ENGINE_ID, From::from(&b"/foo"[..]))],
 		listen_addresses: vec![listen_addr.clone()],
 		transport: config::TransportConfig::MemoryOnly,
-		.. config::NetworkConfiguration::default()
+		.. config::NetworkConfiguration::new_local()
 	});
 
 	let (node2, events_stream2) = build_test_full_node(config::NetworkConfiguration {
@@ -139,7 +139,7 @@ fn build_nodes_one_proto()
 			peer_id: node1.local_peer_id().clone(),
 		}],
 		transport: config::TransportConfig::MemoryOnly,
-		.. config::NetworkConfiguration::default()
+		.. config::NetworkConfiguration::new_local()
 	});
 
 	(node1, events_stream1, node2, events_stream2)
@@ -147,8 +147,8 @@ fn build_nodes_one_proto()
 
 #[test]
 fn notifications_state_consistent() {
-	//! Runs two nodes and ensures that events are propagated out of the API in a consistent
-	//! correct order, which means no notification received on a closed substream.
+	// Runs two nodes and ensures that events are propagated out of the API in a consistent
+	// correct order, which means no notification received on a closed substream.
 
 	let (node1, mut events_stream1, node2, mut events_stream2) = build_nodes_one_proto();
 
