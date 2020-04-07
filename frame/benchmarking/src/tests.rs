@@ -116,11 +116,7 @@ benchmarks!{
 
 	other_name {
 		let b in ...;
-		let caller = account::<T::AccountId>("caller", 0, 0);
-	}: dummy (RawOrigin::Signed(caller), b.into())
-	verify {
-		assert_eq!(Value::get(), None)
-	}
+	}: dummy (RawOrigin::None, b.into())
 
 	sort_vector {
 		let x in 1 .. 10000;
@@ -134,7 +130,12 @@ benchmarks!{
 		ensure!(m[0] == 0, "You forgot to sort!")
 	}
 
-	broken_benchmark {
+	bad_origin {
+		let b in ...;
+		let caller = account::<T::AccountId>("caller", 0, 0);
+	}: dummy (RawOrigin::Signed(caller), b.into())
+
+	bad_verify {
 		let x in 1 .. 10000;
 		let mut m = Vec::<u32>::new();
 		for i in (0..x).rev() {
@@ -177,7 +178,7 @@ fn benchmarks_macro_rename_works() {
 	).expect("failed to create closure");
 
 	new_test_ext().execute_with(|| {
-		assert_eq!(closure(), Err("Bad origin"));
+		assert_ok!(closure());
 	});
 }
 
@@ -201,37 +202,11 @@ fn benchmarks_macro_verify_works() {
 	// Check postcondition for benchmark `set_value` is valid.
 	let selected_benchmark = SelectedBenchmark::set_value;
 
-	let closure = <SelectedBenchmark as BenchmarkingSetup<Test>>::instance(
-		&selected_benchmark,
-		&[(BenchmarkParameter::b, 1)],
-	).expect("failed to create closure");
-
 	new_test_ext().execute_with(|| {
-		assert!(closure().is_ok());
-		let _ = <SelectedBenchmark as BenchmarkingSetup<Test>>::verify(
+		assert_ok!(<SelectedBenchmark as BenchmarkingSetup<Test>>::verify(
 			&selected_benchmark,
 			&[(BenchmarkParameter::b, 1)],
-		);
-	});
-}
-
-#[test]
-#[should_panic]
-fn benchmarks_macro_verify_fail_works() {
-	// Check postcondition for benchmark `other_name` is invalid.
-	let selected_benchmark = SelectedBenchmark::other_name;
-
-	let closure = <SelectedBenchmark as BenchmarkingSetup<Test>>::instance(
-		&selected_benchmark,
-		&[(BenchmarkParameter::b, 1)],
-	).expect("failed to create closure");
-
-	new_test_ext().execute_with(|| {
-		assert!(closure().is_ok());
-		let _ = <SelectedBenchmark as BenchmarkingSetup<Test>>::verify(
-			&selected_benchmark,
-			&[(BenchmarkParameter::b, 1)],
-		);
+		));
 	});
 }
 
@@ -239,8 +214,9 @@ fn benchmarks_macro_verify_fail_works() {
 fn benchmarks_generate_unit_tests() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(test_benchmark_set_value::<Test>());
-		assert_err!(test_benchmark_other_name::<Test>(), "Bad origin");
+		assert_ok!(test_benchmark_other_name::<Test>());
 		assert_ok!(test_benchmark_sort_vector::<Test>());
-		assert_err!(test_benchmark_broken_benchmark::<Test>(), "You forgot to sort!");
+		assert_err!(test_benchmark_bad_origin::<Test>(), "Bad origin");
+		assert_err!(test_benchmark_bad_verify::<Test>(), "You forgot to sort!");
 	});
 }
