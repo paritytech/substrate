@@ -448,6 +448,7 @@ pub trait Crypto {
 				false
 			}
 		})
+		// So if for whatever reason batching is not active, we do regular verification.
 		.unwrap_or_else(|| ed25519::Pair::verify(sig, msg, pub_key))
 	}
 
@@ -477,6 +478,7 @@ pub trait Crypto {
 				false
 			}
 		})
+		// So if for whatever reason batching is not active, we do regular verification.
 		.unwrap_or_else(||sr25519::Pair::verify(sig, msg, pub_key))
 	}
 
