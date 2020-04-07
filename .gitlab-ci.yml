@@ -196,14 +196,14 @@ test-linux-stable:                 &test-linux
     - WASM_BUILD_NO_COLOR=1 time cargo test --all --release --verbose --locked |&
         tee output.log
     - sccache -s
-  after_script:
-    - echo "___Collecting warnings for check_warnings job___"
+    - echo "____Test job successful, checking for warnings____"
     - awk '/^warning:/,/^$/ { print }' output.log > ${CI_COMMIT_SHORT_SHA}_warnings.log
-  artifacts:
-    name:                          $CI_COMMIT_SHORT_SHA
-    expire_in:                     3 days
-    paths:
-      - ${CI_COMMIT_SHORT_SHA}_warnings.log
+    - if [ -s ${CI_COMMIT_SHORT_SHA}_warnings.log ]; then
+        cat ${CI_COMMIT_SHORT_SHA}_warnings.log;
+        exit 1;
+      else
+        echo "___No warnings___";
+      fi
 
 test-dependency-rules:
   stage:                           test
@@ -416,26 +416,6 @@ build-rust-doc-release:
     - cp -R ./target/doc ./crate-docs
     - echo "<meta http-equiv=refresh content=0;url=sc_service/index.html>" > ./crate-docs/index.html
     - sccache -s
-
-check_warnings:
-  stage:                           build
-  <<:                              *docker-env
-  except:
-    variables:
-      - $DEPLOY_TAG
-  variables:
-    GIT_STRATEGY:                  none
-  needs:
-    - job:                         test-linux-stable
-      artifacts:                   true
-  script:
-    - if [ -s ${CI_COMMIT_SHORT_SHA}_warnings.log ]; then
-        cat ${CI_COMMIT_SHORT_SHA}_warnings.log;
-        exit 1;
-      else
-        echo "___No warnings___";
-      fi
-
 
 check-polkadot-companion-status:
   stage:                           post-build-test
