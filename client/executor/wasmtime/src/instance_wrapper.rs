@@ -23,7 +23,7 @@ use crate::imports::Imports;
 use std::{slice, marker};
 use sc_executor_common::{
 	error::{Error, Result},
-	util::{DeserializedModule, DataSegmentsSnapshot},
+	util::{WasmModuleInfo, DataSegmentsSnapshot},
 };
 use sp_wasm_interface::{Pointer, WordSize, Value};
 use wasmtime::{Store, Instance, Module, Memory, Table, Val};
@@ -44,13 +44,12 @@ impl ModuleWrapper {
 		let module = Module::new(&store, code)
 			.map_err(|e| Error::from(format!("cannot create module: {}", e)))?;
 
-		let deserialized_module = DeserializedModule::new(code).unwrap(); // TODO:
-
-		let data_segments_snapshot = DataSegmentsSnapshot::take(&deserialized_module).unwrap(); // TODO:
-
-		let declared_globals_count = deserialized_module.declared_globals_count();
-		let imported_globals_count = deserialized_module.imported_globals_count();
+		let module_info = WasmModuleInfo::new(code).unwrap(); // TODO:
+		let declared_globals_count = module_info.declared_globals_count();
+		let imported_globals_count = module_info.imported_globals_count();
 		let globals_count = imported_globals_count + declared_globals_count;
+
+		let data_segments_snapshot = DataSegmentsSnapshot::take(&module_info).unwrap(); // TODO:
 
 		Ok(Self {
 			module,

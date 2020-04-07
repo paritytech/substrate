@@ -20,13 +20,11 @@ use std::mem;
 use parity_wasm::elements::{deserialize_buffer, DataSegment, Instruction, Module as RawModule};
 use sp_wasm_interface::Value;
 
-// TODO: Rename this module
-
-pub struct DeserializedModule {
+pub struct WasmModuleInfo {
 	raw_module: RawModule,
 }
 
-impl DeserializedModule {
+impl WasmModuleInfo {
 	pub fn new(wasm_code: &[u8]) -> Option<Self> {
 		let raw_module: RawModule = deserialize_buffer(wasm_code).ok()?;
 		Some(Self { raw_module })
@@ -70,7 +68,7 @@ pub struct DataSegmentsSnapshot {
 }
 
 impl DataSegmentsSnapshot {
-	pub fn take(module: &DeserializedModule) -> Option<Self> {
+	pub fn take(module: &WasmModuleInfo) -> Option<Self> {
 		let data_segments = module
 			.data_segments()
 			.into_iter()
