@@ -664,13 +664,14 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 				return InvalidTransaction::BadProof.into();
 			}
 
-			Ok(ValidTransaction {
-				priority: T::UnsignedPriority::get(),
-				requires: vec![],
-				provides: vec![(current_session, authority_id).encode()],
-				longevity: TryInto::<u64>::try_into(T::SessionDuration::get() / 2.into()).unwrap_or(64_u64),
-				propagate: true,
-			})
+			ValidTransaction::for_pallet("ImOnline")
+				.priority(T::UnsignedPriority::get())
+				.and_provides((current_session, authority_id))
+				.longevity(TryInto::<u64>::try_into(
+					T::SessionDuration::get() / 2.into()
+				).unwrap_or(64_u64))
+				.propagate(true)
+				.build()
 		} else {
 			InvalidTransaction::Call.into()
 		}
