@@ -29,7 +29,7 @@ type FutureResult<T> = Box<dyn jsonrpc_core::futures::Future<Item = T, Error = E
 #[rpc]
 pub trait GrandpaApi {
 	#[rpc(name = "grandpa_roundState")]
-	fn grandpa_round_state(&self) -> FutureResult<RoundState>;
+	fn round_state(&self) -> FutureResult<ReportedRoundStates>;
 }
 
 pub struct GrandpaRpcHandler<Hash, Block> {
@@ -51,20 +51,66 @@ impl<Hash, Block> GrandpaRpcHandler<Hash, Block> {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Prevotes {
+	pub current_weight: u64,
+	pub missing: HashSet<AuthorityId>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Precommits {
+	pub current_weight: u64,
+	pub missing: HashSet<AuthorityId>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RoundState {
-	pub set_id: u64,
 	pub round: u64,
 	pub total_weight: u64,
 	pub threshold_weight: u64,
-
-	pub prevote_current_weight: u64,
-	pub prevote_missing: HashSet<AuthorityId>,
-
-	pub precommit_current_weight: u64,
-	pub precommit_missing: HashSet<AuthorityId>,
+	pub prevotes: Prevotes,
+	pub precommits: Precommits,
 }
 
 impl RoundState {
+	pub fn from(
+		round: u64,
+		round_state: voter::report::RoundState<AuthorityId>,
+		voters: HashSet<AuthorityId>
+	) -> Self {
+		let prevotes = round_state.prevote_ids;
+		let missing_prevotes = voters.difference(&prevotes).cloned().collect();
+
+		let precommits = round_state.precommit_ids;
+		let missing_precommits = voters.difference(&precommits).cloned().collect();
+
+		Self {
+			round,
+			total_weight: round_state.total_weight,
+			threshold_weight: round_state.threshold_weight,
+			prevotes: Prevotes {
+				current_weight: round_state.prevote_current_weight,
+				missing: missing_prevotes,
+			},
+			precommits: Precommits {
+				current_weight: round_state.precommit_current_weight,
+				missing: missing_precommits,
+			}
+		}
+	}
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReportedRoundStates {
+	pub set_id: u64,
+	pub best: RoundState,
+	// pub background,
+}
+
+impl ReportedRoundStates {
 	pub fn from<Hash, Block>(
 		voter_state: &SharedVoterState<AuthorityId>,
 		authority_set: &SharedAuthoritySet<Hash, Block>
@@ -80,24 +126,13 @@ impl RoundState {
 		let current_authorities = authority_set.current_authorities();
 		let voters: HashSet<AuthorityId> = current_authorities.voters().iter().map(|p| p.0.clone()).collect();
 
-		let prevotes = voter_state.best_round.1.prevote_ids;
-		let missing_prevotes = voters.difference(&prevotes).cloned().collect();
+		let set_id = voter_state.best_round.0;
+		let best = {
+			let (round, round_state) = voter_state.best_round;
+			RoundState::from(round, round_state, voters)
+		};
 
-		let precommits = voter_state.best_round.1.precommit_ids;
-		let missing_precommits = voters.difference(&precommits).cloned().collect();
-
-		Self {
-			set_id: authority_set.set_id(),
-			round: voter_state.best_round.0,
-			total_weight: voter_state.best_round.1.total_weight,
-			threshold_weight: voter_state.best_round.1.threshold_weight,
-
-			prevote_current_weight: voter_state.best_round.1.prevote_current_weight,
-			prevote_missing: missing_prevotes,
-
-			precommit_current_weight: voter_state.best_round.1.precommit_current_weight,
-			precommit_missing: missing_precommits,
-		}
+		Self { set_id, best }
 	}
 }
 
@@ -105,10 +140,13 @@ impl<Hash, Block: Send + Sync> GrandpaApi for GrandpaRpcHandler<Hash, Block> whe
 	Hash: Debug + Clone + Eq + Send + Sync + 'static,
 	Block: BlockNumberOps + Send + Sync + 'static,
 {
-	fn grandpa_round_state(&self) -> FutureResult<RoundState> {
-		let round_state = RoundState::from(&self.shared_voter_state, &self.shared_authority_set);
+	fn round_state(&self) -> FutureResult<ReportedRoundStates> {
+		let round_states = ReportedRoundStates::from(
+			&self.shared_voter_state,
+			&self.shared_authority_set
+		);
 		let future = async move {
-			Ok(round_state)
+			Ok(round_states)
 		}.boxed();
 		Box::new(future.compat())
 	}
