@@ -36,7 +36,7 @@ use crate::{
 	protocol::{self, event::Event, light_client_handler, sync::SyncState, PeerInfo, Protocol},
 	transport, ReputationChange,
 };
-use futures::{prelude::*, channel::mpsc};
+use futures::prelude::*;
 use libp2p::{PeerId, Multiaddr};
 use libp2p::core::{Executor, connection::PendingConnectionError};
 use libp2p::kad::record;
