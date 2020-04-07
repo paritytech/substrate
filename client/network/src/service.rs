@@ -26,15 +26,15 @@
 //! which is then processed by [`NetworkWorker::poll`].
 
 use crate::{
-    behaviour::{Behaviour, BehaviourOut},
-    config::{parse_addr, parse_str_addr, NonReservedPeerMode, Params, Role, TransportConfig},
-    error::Error,
-    network_state::{
-        NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
-    },
-    on_demand_layer::AlwaysBadChecker,
-    protocol::{self, event::Event, light_client_handler, sync::SyncState, PeerInfo, Protocol},
-    transport, ReputationChange,
+	behaviour::{Behaviour, BehaviourOut},
+	config::{parse_addr, parse_str_addr, NonReservedPeerMode, Params, Role, TransportConfig},
+	error::Error,
+	network_state::{
+		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
+	},
+	on_demand_layer::AlwaysBadChecker,
+	protocol::{self, event::Event, light_client_handler, sync::SyncState, PeerInfo, Protocol},
+	transport, ReputationChange,
 };
 use futures::prelude::*;
 use libp2p::swarm::{NetworkBehaviour, SwarmBuilder, SwarmEvent};
@@ -42,29 +42,29 @@ use libp2p::{kad::record, Multiaddr, PeerId};
 use log::{error, info, trace, warn};
 use parking_lot::Mutex;
 use prometheus_endpoint::{
-    register, Counter, CounterVec, Gauge, GaugeVec, HistogramOpts, HistogramVec, Opts,
-    PrometheusError, Registry, U64,
+	register, Counter, CounterVec, Gauge, GaugeVec, HistogramOpts, HistogramVec, Opts,
+	PrometheusError, Registry, U64,
 };
 use sc_peerset::PeersetHandle;
 use sp_consensus::import_queue::{BlockImportError, BlockImportResult, ImportQueue, Link};
 use sp_runtime::{
-    traits::{Block as BlockT, NumberFor},
-    ConsensusEngineId,
+	traits::{Block as BlockT, NumberFor},
+	ConsensusEngineId,
 };
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use std::{
-    borrow::Cow,
-    collections::{HashMap, HashSet},
-    fs, io,
-    marker::PhantomData,
-    path::Path,
-    pin::Pin,
-    str,
-    sync::{
-        atomic::{AtomicBool, AtomicUsize, Ordering},
-        Arc,
-    },
-    task::Poll,
+	borrow::Cow,
+	collections::{HashMap, HashSet},
+	fs, io,
+	marker::PhantomData,
+	path::Path,
+	pin::Pin,
+	str,
+	sync::{
+		atomic::{AtomicBool, AtomicUsize, Ordering},
+		Arc,
+	},
+	task::Poll,
 };
 
 #[cfg(test)]
@@ -78,7 +78,7 @@ impl<T> ExHashT for T where T: std::hash::Hash + Eq + std::fmt::Debug + Clone + 
 
 /// Transaction pool interface
 pub trait TransactionPool<H: ExHashT, B: BlockT>: Send + Sync {
-    /// Get transactions from the pool that are ready to be propagated.
+	/// Get transactions from the pool that are ready to be propagated.
 	fn transactions(&self) -> Vec<(H, B::Extrinsic)>;
 	/// Get hash of transaction.
 	fn hash_of(&self, transaction: &B::Extrinsic) -> H;
@@ -173,11 +173,11 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 }
 
 impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
-    /// Creates the network service.
-    ///
-    /// Returns a `NetworkWorker` that implements `Future` and must be regularly polled in order
-    /// for the network processing to advance. From it, you can extract a `NetworkService` using
-    /// `worker.service()`. The `NetworkService` can be shared through the codebase.
+	/// Creates the network service.
+	///
+	/// Returns a `NetworkWorker` that implements `Future` and must be regularly polled in order
+	/// for the network processing to advance. From it, you can extract a `NetworkService` using
+	/// `worker.service()`. The `NetworkService` can be shared through the codebase.
 	pub fn new(params: Params<B, H>) -> Result<NetworkWorker<B, H>, Error> {
 		let (to_worker, from_worker) = tracing_unbounded("mpsc_network_worker");
 
@@ -302,15 +302,15 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				protocol::BlockRequests::new(config, params.chain.clone())
 			};
 			let light_client_handler = {
-                let config = protocol::light_client_handler::Config::new(&params.protocol_id);
-                protocol::LightClientHandler::new(
-                    config,
-                    params.chain,
-                    checker,
-                    peerset_handle.clone(),
-                )
-            };
-            let mut behaviour = futures::executor::block_on(Behaviour::new(
+				let config = protocol::light_client_handler::Config::new(&params.protocol_id);
+				protocol::LightClientHandler::new(
+					config,
+					params.chain,
+					checker,
+					peerset_handle.clone(),
+				)
+			};
+			let mut behaviour = futures::executor::block_on(Behaviour::new(
 				protocol,
 				params.role,
 				user_agent,
@@ -328,11 +328,11 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				block_requests,
 				light_client_handler
 			));
-            for (engine_id, protocol_name) in &params.network_config.notifications_protocols {
-                behaviour.register_notifications_protocol(*engine_id, protocol_name.clone());
-            }
-            let (transport, bandwidth) = {
-                let (config_mem, config_wasm, flowctrl) = match params.network_config.transport {
+			for (engine_id, protocol_name) in &params.network_config.notifications_protocols {
+				behaviour.register_notifications_protocol(*engine_id, protocol_name.clone());
+			}
+			let (transport, bandwidth) = {
+				let (config_mem, config_wasm, flowctrl) = match params.network_config.transport {
 					TransportConfig::MemoryOnly => (true, None, false),
 					TransportConfig::Normal { wasm_external_transport, use_yamux_flow_control, .. } =>
 						(false, wasm_external_transport, use_yamux_flow_control)
@@ -539,10 +539,10 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 }
 
 impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
-    /// Returns the local `PeerId`.
-    pub fn local_peer_id(&self) -> &PeerId {
-        &self.local_peer_id
-    }
+	/// Returns the local `PeerId`.
+	pub fn local_peer_id(&self) -> &PeerId {
+		&self.local_peer_id
+	}
 
 	/// Writes a message on an open notifications channel. Has no effect if the notifications
 	/// channel with this protocol name is closed.
