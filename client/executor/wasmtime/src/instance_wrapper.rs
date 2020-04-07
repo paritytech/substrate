@@ -44,12 +44,14 @@ impl ModuleWrapper {
 		let module = Module::new(&store, code)
 			.map_err(|e| Error::from(format!("cannot create module: {}", e)))?;
 
-		let module_info = WasmModuleInfo::new(code).unwrap(); // TODO:
+		let module_info = WasmModuleInfo::new(code)
+			.ok_or_else(|| Error::from("cannot deserialize module".to_string()))?;
 		let declared_globals_count = module_info.declared_globals_count();
 		let imported_globals_count = module_info.imported_globals_count();
 		let globals_count = imported_globals_count + declared_globals_count;
 
-		let data_segments_snapshot = DataSegmentsSnapshot::take(&module_info).unwrap(); // TODO:
+		let data_segments_snapshot = DataSegmentsSnapshot::take(&module_info)
+			.map_err(|e| Error::from(format!("cannot take data segments snapshot: {}", e)))?;
 
 		Ok(Self {
 			module,
