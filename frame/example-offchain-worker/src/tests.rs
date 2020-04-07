@@ -33,7 +33,7 @@ use sp_runtime::{
 	testing::{Header, TestXt},
 	traits::{
 		BlakeTwo256, IdentityLookup, Extrinsic as ExtrinsicT,
-		IdentifyAccount, Verify
+		IdentifyAccount, Verify,
 	},
 };
 
