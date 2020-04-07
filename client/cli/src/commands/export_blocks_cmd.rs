@@ -14,22 +14,19 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::io;
-use std::fs;
-use std::path::PathBuf;
-use std::fmt::Debug;
+use crate::error;
+use crate::params::{BlockNumber, PruningParams, SharedParams};
+use crate::CliConfiguration;
 use log::info;
-use structopt::StructOpt;
 use sc_service::{
-	Configuration, ServiceBuilderCommand, ChainSpec,
-	config::DatabaseConfig, Role,
+	config::DatabaseConfig, Configuration, ServiceBuilderCommand,
 };
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
-
-use crate::error;
-use crate::VersionInfo;
-use crate::runtime::run_until_exit;
-use crate::params::{SharedParams, BlockNumber, PruningParams};
+use std::fmt::Debug;
+use std::fs;
+use std::io;
+use std::path::PathBuf;
+use structopt::StructOpt;
 
 /// The `export-blocks` command used to export blocks.
 #[derive(Debug, StructOpt, Clone)]
@@ -65,8 +62,8 @@ pub struct ExportBlocksCmd {
 
 impl ExportBlocksCmd {
 	/// Run the export-blocks command
-	pub fn run<B, BC, BB>(
-		self,
+	pub async fn run<B, BC, BB>(
+		&self,
 		config: Configuration,
 		builder: B,
 	) -> error::Result<()>
@@ -77,9 +74,10 @@ impl ExportBlocksCmd {
 		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
 		<BB as BlockT>::Hash: std::str::FromStr,
 	{
-		if let DatabaseConfig::Path { ref path, .. } = config.expect_database() {
+		if let DatabaseConfig::Path { ref path, .. } = &config.database {
 			info!("DB path: {}", path.display());
 		}
+
 		let from = self.from.as_ref().and_then(|f| f.parse().ok()).unwrap_or(1);
 		let to = self.to.as_ref().and_then(|t| t.parse().ok());
 
@@ -90,24 +88,19 @@ impl ExportBlocksCmd {
 			None => Box::new(io::stdout()),
 		};
 
-		run_until_exit(config, |config| {
-			Ok(builder(config)?.export_blocks(file, from.into(), to, binary))
-		})
+		builder(config)?
+			.export_blocks(file, from.into(), to, binary)
+			.await
+			.map_err(Into::into)
+	}
+}
+
+impl CliConfiguration for ExportBlocksCmd {
+	fn shared_params(&self) -> &SharedParams {
+		&self.shared_params
 	}
 
-	/// Update and prepare a `Configuration` with command line parameters
-	pub fn update_config<F>(
-		&self,
-		mut config: &mut Configuration,
-		spec_factory: F,
-		version: &VersionInfo,
-	) -> error::Result<()> where
-		F: FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
-	{
-		self.shared_params.update_config(&mut config, spec_factory, version)?;
-		self.pruning_params.update_config(&mut config, &Role::Full, true)?;
-		config.use_in_memory_keystore()?;
-
-		Ok(())
+	fn pruning_params(&self) -> Option<&PruningParams> {
+		Some(&self.pruning_params)
 	}
 }

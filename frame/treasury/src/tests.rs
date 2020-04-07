@@ -19,7 +19,7 @@
 #![cfg(test)]
 
 use super::*;
-
+use std::cell::RefCell;
 use frame_support::{
 	assert_noop, assert_ok, impl_outer_origin, parameter_types, weights::Weight,
 	traits::{Contains, OnInitialize}
@@ -74,16 +74,24 @@ impl pallet_balances::Trait for Test {
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
 }
+thread_local! {
+	static TEN_TO_FOURTEEN: RefCell<Vec<u64>> = RefCell::new(vec![10,11,12,13,14]);
+}
 pub struct TenToFourteen;
 impl Contains<u64> for TenToFourteen {
-	fn contains(n: &u64) -> bool {
-		*n >= 10 && *n <= 14
-	}
 	fn sorted_members() -> Vec<u64> {
-		vec![10, 11, 12, 13, 14]
+		TEN_TO_FOURTEEN.with(|v| {
+			v.borrow().clone()
+		})
 	}
 	#[cfg(feature = "runtime-benchmarks")]
-	fn add(_: &u64) { unimplemented!() }
+	fn add(new: &u64) {
+		TEN_TO_FOURTEEN.with(|v| {
+			let mut members = v.borrow_mut();
+			members.push(*new);
+			members.sort();
+		})
+	}
 }
 parameter_types! {
 	pub const ProposalBond: Permill = Permill::from_percent(5);
@@ -115,7 +123,7 @@ type System = frame_system::Module<Test>;
 type Balances = pallet_balances::Module<Test>;
 type Treasury = Module<Test>;
 
-fn new_test_ext() -> sp_io::TestExternalities {
+pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	pallet_balances::GenesisConfig::<Test>{
 		// Total issuance will be 200 with treasury account initialized at ED.

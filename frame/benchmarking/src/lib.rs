@@ -29,6 +29,7 @@ pub use analysis::Analysis;
 #[doc(hidden)]
 pub use sp_io::storage::root as storage_root;
 pub use sp_runtime::traits::Dispatchable;
+pub use paste;
 
 /// Construct pallet benchmarks for weighing dispatchables.
 ///
@@ -124,6 +125,26 @@ pub use sp_runtime::traits::Dispatchable;
 ///   }: { m.into_iter().collect::<BTreeSet>() }
 /// }
 /// ```
+///
+/// Test functions are automatically generated for each benchmark and are accessible to you when you
+/// run `cargo test`. All tests are named `test_benchmark_<benchmark_name>`, expect you to pass them
+/// the Runtime Trait, and run them in a test externalities environment. The test function runs your
+/// benchmark just like a regular benchmark, but only testing at the lowest and highest values for
+/// each component. The function will return `Ok(())` if the benchmarks return no errors.
+///
+/// You can construct benchmark tests like so:
+///
+/// ```ignore
+/// #[test]
+/// fn test_benchmarks() {
+///   new_test_ext().execute_with(|| {
+///     assert_ok!(test_benchmark_dummy::<Test>());
+///     assert_err!(test_benchmark_other_name::<Test>(), "Bad origin");
+///     assert_ok!(test_benchmark_sort_vector::<Test>());
+///     assert_err!(test_benchmark_broken_benchmark::<Test>(), "You forgot to sort!");
+///   });
+/// }
+/// ```
 #[macro_export]
 macro_rules! benchmarks {
 	(
@@ -134,9 +155,12 @@ macro_rules! benchmarks {
 		}
 		$( $rest:tt )*
 	) => {
-		$crate::benchmarks_iter!(NO_INSTANCE {
-			$( { $common , $common_from , $common_to , $common_instancer } )*
-		} ( ) $( $rest )* );
+		$crate::benchmarks_iter!(
+			NO_INSTANCE
+			{ $( { $common , $common_from , $common_to , $common_instancer } )* }
+			( )
+			$( $rest )*
+		);
 	}
 }
 
@@ -150,9 +174,12 @@ macro_rules! benchmarks_instance {
 		}
 		$( $rest:tt )*
 	) => {
-		$crate::benchmarks_iter!(INSTANCE {
-			$( { $common , $common_from , $common_to , $common_instancer } )*
-		} ( ) $( $rest )* );
+		$crate::benchmarks_iter!(
+			INSTANCE
+			{ $( { $common , $common_from , $common_to , $common_instancer } )* }
+			( )
+			$( $rest )*
+		);
 	}
 }
 
@@ -168,7 +195,11 @@ macro_rules! benchmarks_iter {
 		$( $rest:tt )*
 	) => {
 		$crate::benchmarks_iter! {
-			$instance { $( $common )* } ( $( $names )* ) $name { $( $code )* }: $name ( $origin $( , $arg )* ) $( $rest )*
+			$instance
+			{ $( $common )* }
+			( $( $names )* )
+			$name { $( $code )* }: $name ( $origin $( , $arg )* )
+			$( $rest )*
 		}
 	};
 	// no instance mutation arm:
@@ -181,9 +212,12 @@ macro_rules! benchmarks_iter {
 	) => {
 		$crate::benchmarks_iter! {
 			NO_INSTANCE
-			{ $( $common )* } ( $( $names )* ) $name { $( $code )* }: {
+			{ $( $common )* }
+			( $( $names )* )
+			$name { $( $code )* }: {
 				<Call<T> as $crate::Dispatchable>::dispatch(Call::<T>::$dispatch($($arg),*), $origin.into())?;
-			} $( $rest )*
+			}
+			$( $rest )*
 		}
 	};
 	// instance mutation arm:
@@ -196,9 +230,12 @@ macro_rules! benchmarks_iter {
 	) => {
 		$crate::benchmarks_iter! {
 			INSTANCE
-			{ $( $common )* } ( $( $names )* ) $name { $( $code )* }: {
+			{ $( $common )* }
+			( $( $names )* )
+			$name { $( $code )* }: {
 				<Call<T, I> as $crate::Dispatchable>::dispatch(Call::<T, I>::$dispatch($($arg),*), $origin.into())?;
-			} $( $rest )*
+			}
+			$( $rest )*
 		}
 	};
 	// iteration arm:
@@ -210,14 +247,26 @@ macro_rules! benchmarks_iter {
 		$( $rest:tt )*
 	) => {
 		$crate::benchmark_backend! {
-			$instance $name { $( $common )* } { } { $eval } { $( $code )* }
+			$instance
+			$name
+			{ $( $common )* }
+			{ }
+			{ $eval }
+			{ $( $code )* }
 		}
-		$crate::benchmarks_iter!( $instance { $( $common )* } ( $( $names )* $name ) $( $rest )* );
+		$crate::benchmarks_iter!(
+			$instance
+			{ $( $common )* }
+			( $( $names )* $name )
+			$( $rest )*
+		);
 	};
 	// iteration-exit arm
 	( $instance:ident { $( $common:tt )* } ( $( $names:ident )* ) ) => {
 		$crate::selected_benchmark!( $instance $( $names ),* );
 		$crate::impl_benchmark!( $instance $( $names ),* );
+		#[cfg(test)]
+		$crate::impl_benchmark_tests!( $( $names ),* );
 	}
 }
 
@@ -700,6 +749,54 @@ macro_rules! impl_benchmark {
 				return Ok(results);
 			}
 		}
+	}
+}
+
+// This creates unit tests from the main benchmark macro.
+// They run the benchmark using the `high` and `low` value for each component
+// and ensure that everything completes successfully.
+#[macro_export]
+macro_rules! impl_benchmark_tests {
+	(
+		$( $name:ident ),*
+	) => {
+		$(
+			$crate::paste::item! {
+				fn [<test_benchmark_ $name>] <T: Trait> () -> Result<(), &'static str>
+					where T: frame_system::Trait
+				{
+					let selected_benchmark = SelectedBenchmark::$name;
+					let components = <SelectedBenchmark as $crate::BenchmarkingSetup<T>>::components(&selected_benchmark);
+
+					for (_, (name, low, high)) in components.iter().enumerate() {
+						// Test only the low and high value, assuming values in the middle won't break
+						for component_value in vec![low, high] {
+							// Select the max value for all the other components.
+							let c: Vec<($crate::BenchmarkParameter, u32)> = components.iter()
+								.enumerate()
+								.map(|(_, (n, _, h))|
+									if n == name {
+										(*n, *component_value)
+									} else {
+										(*n, *h)
+									}
+								)
+								.collect();
+
+							// Set the block number to 1 so events are deposited.
+							frame_system::Module::<T>::set_block_number(1.into());
+							// Set up the externalities environment for the setup we want to benchmark.
+							let closure_to_benchmark = <SelectedBenchmark as $crate::BenchmarkingSetup<T>>::instance(&selected_benchmark, &c)?;
+							// Run the benchmark
+							closure_to_benchmark()?;
+							// Reset the state
+							$crate::benchmarking::wipe_db();
+						}
+					}
+					Ok(())
+				}
+			}
+		)*
 	}
 }
 
