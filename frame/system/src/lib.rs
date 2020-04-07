@@ -620,9 +620,12 @@ impl<
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn successful_origin() -> O {
-		let caller: AccountId = Default::default();
-		// Who::add(&caller);
-		O::from(RawOrigin::Signed(caller))
+		let members = Who::sorted_members();
+		let first_member = match members.get(0) {
+			Some(account) => account.clone(),
+			None => Default::default(),
+		};
+		O::from(RawOrigin::Signed(first_member.clone()))
 	}
 }
 

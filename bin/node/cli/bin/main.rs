@@ -19,16 +19,5 @@
 #![warn(missing_docs)]
 
 fn main() -> sc_cli::Result<()> {
-	let version = sc_cli::VersionInfo {
-		name: "Substrate Node",
-		commit: env!("VERGEN_SHA_SHORT"),
-		version: env!("CARGO_PKG_VERSION"),
-		executable_name: "substrate",
-		author: "Parity Technologies <admin@parity.io>",
-		description: "Generic substrate node",
-		support_url: "https://github.com/paritytech/substrate/issues/new",
-		copyright_start_year: 2017,
-	};
-
-	node_cli::run(std::env::args(), version)
+	node_cli::run()
 }

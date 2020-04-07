@@ -14,10 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use structopt::StructOpt;
-use sc_service::{Configuration, PruningMode};
-
 use crate::error;
+use sc_service::{PruningMode, Role};
+use structopt::StructOpt;
 
 /// Parameters to define the pruning mode
 #[derive(Debug, StructOpt, Clone)]
@@ -32,18 +31,13 @@ pub struct PruningParams {
 }
 
 impl PruningParams {
-	/// Put block pruning CLI params into `config` object.
-	pub fn update_config(
-		&self,
-		mut config: &mut Configuration,
-		role: &sc_service::Role,
-		unsafe_pruning: bool,
-	) -> error::Result<()> {
+	/// Get the pruning value from the parameters
+	pub fn pruning(&self, unsafe_pruning: bool, role: &Role) -> error::Result<PruningMode> {
 		// by default we disable pruning if the node is an authority (i.e.
 		// `ArchiveAll`), otherwise we keep state for the last 256 blocks. if the
 		// node is an authority and pruning is enabled explicitly, then we error
 		// unless `unsafe_pruning` is set.
-		config.pruning = match &self.pruning {
+		Ok(match &self.pruning {
 			Some(ref s) if s == "archive" => PruningMode::ArchiveAll,
 			None if role.is_network_authority() => PruningMode::ArchiveAll,
 			None => PruningMode::default(),
@@ -51,16 +45,15 @@ impl PruningParams {
 				if role.is_network_authority() && !unsafe_pruning {
 					return Err(error::Error::Input(
 						"Validators should run with state pruning disabled (i.e. archive). \
-						You can ignore this check with `--unsafe-pruning`.".to_string()
+						You can ignore this check with `--unsafe-pruning`."
+							.to_string(),
 					));
 				}
 
-				PruningMode::keep_blocks(s.parse()
-					.map_err(|_| error::Error::Input("Invalid pruning mode specified".to_string()))?
-				)
-			},
-		};
-
-		Ok(())
+				PruningMode::keep_blocks(s.parse().map_err(|_| {
+					error::Error::Input("Invalid pruning mode specified".to_string())
+				})?)
+			}
+		})
 	}
 }

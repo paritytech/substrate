@@ -14,104 +14,126 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use sc_cli::VersionInfo;
-use sc_service::{Role as ServiceRole};
+use crate::{chain_spec, factory_impl::FactoryState, service, Cli, FactoryCmd, Subcommand};
+use node_executor::Executor;
+use node_runtime::{Block, RuntimeApi};
 use node_transaction_factory::RuntimeAdapter;
-use crate::{Cli, service, ChainSpec, load_spec, Subcommand, factory_impl::FactoryState};
+use sc_cli::{CliConfiguration, ImportParams, Result, SharedParams, SubstrateCli};
+use sc_service::Configuration;
+
+impl SubstrateCli for Cli {
+	fn impl_name() -> &'static str {
+		"Substrate Node"
+	}
+
+	fn impl_version() -> &'static str {
+		env!("SUBSTRATE_CLI_IMPL_VERSION")
+	}
+
+	fn description() -> &'static str {
+		env!("CARGO_PKG_DESCRIPTION")
+	}
+
+	fn author() -> &'static str {
+		env!("CARGO_PKG_AUTHORS")
+	}
+
+	fn support_url() -> &'static str {
+		"https://github.com/paritytech/substrate/issues/new"
+	}
+
+	fn copyright_start_year() -> i32 {
+		2017
+	}
+
+	fn executable_name() -> &'static str {
+		"substrate"
+	}
+
+	fn load_spec(&self, id: &str) -> std::result::Result<Box<dyn sc_service::ChainSpec>, String> {
+		Ok(match id {
+			"dev" => Box::new(chain_spec::development_config()),
+			"local" => Box::new(chain_spec::local_testnet_config()),
+			"" | "fir" | "flaming-fir" => Box::new(chain_spec::flaming_fir_config()?),
+			"staging" => Box::new(chain_spec::staging_testnet_config()),
+			path => Box::new(chain_spec::ChainSpec::from_json_file(
+				std::path::PathBuf::from(path),
+			)?),
+		})
+	}
+}
 
 /// Parse command line arguments into service configuration.
-pub fn run<I, T>(args: I, version: VersionInfo) -> sc_cli::Result<()>
-where
-	I: Iterator<Item = T>,
-	T: Into<std::ffi::OsString> + Clone,
-{
+pub fn run() -> Result<()> {
 	sc_cli::reset_signal_pipe_handler()?;
 
-	let args: Vec<_> = args.collect();
-	let opt = sc_cli::from_iter::<Cli, _>(args.clone(), &version);
+	let cli = Cli::from_args();
 
-	let mut config = sc_service::Configuration::from_version(&version);
-
-	match opt.subcommand {
+	match &cli.subcommand {
 		None => {
-			opt.run.init(&version)?;
-			opt.run.update_config(&mut config, load_spec, &version)?;
-			opt.run.run(
-				config,
-				service::new_light,
-				service::new_full,
-				&version,
-			)
-		},
+			let runner = cli.create_runner(&cli.run)?;
+			runner.run_node(service::new_light, service::new_full)
+		}
 		Some(Subcommand::Inspect(cmd)) => {
-			cmd.init(&version)?;
-			cmd.update_config(&mut config, load_spec, &version)?;
+			let runner = cli.create_runner(cmd)?;
 
-			let client = sc_service::new_full_client::<
-				node_runtime::Block, node_runtime::RuntimeApi, node_executor::Executor,
-			>(&config)?;
-			let inspect = node_inspect::Inspector::<node_runtime::Block>::new(client);
-
-			cmd.run(inspect)
-		},
+			runner.sync_run(|config| cmd.run::<Block, RuntimeApi, Executor>(config))
+		}
 		Some(Subcommand::Benchmark(cmd)) => {
-			cmd.init(&version)?;
-			cmd.update_config(&mut config, load_spec, &version)?;
+			let runner = cli.create_runner(cmd)?;
 
-			cmd.run::<node_runtime::Block, node_executor::Executor>(config)
-		},
-		Some(Subcommand::Factory(cli_args)) => {
-			cli_args.shared_params.init(&version)?;
-			cli_args.shared_params.update_config(&mut config, load_spec, &version)?;
-			cli_args.import_params.update_config(
-				&mut config,
-				&ServiceRole::Full,
-				cli_args.shared_params.dev,
-			)?;
+			runner.sync_run(|config| cmd.run::<Block, Executor>(config))
+		}
+		Some(Subcommand::Factory(cmd)) => {
+			let runner = cli.create_runner(cmd)?;
 
-			config.use_in_memory_keystore()?;
-
-			match ChainSpec::from(config.expect_chain_spec().id()) {
-				Some(ref c) if c == &ChainSpec::Development || c == &ChainSpec::LocalTestnet => {},
-				_ => return Err(
-					"Factory is only supported for development and local testnet.".into()
-				),
-			}
-
-			// Setup tracing.
-			if let Some(tracing_targets) = cli_args.import_params.tracing_targets.as_ref() {
-				let subscriber = sc_tracing::ProfilingSubscriber::new(
-					cli_args.import_params.tracing_receiver.into(), tracing_targets
-				);
-				if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
-					return Err(
-						format!("Unable to set global default subscriber {}", e).into()
-					);
-				}
-			}
-
-			let factory_state = FactoryState::new(
-				cli_args.blocks,
-				cli_args.transactions,
-			);
-
-			let service_builder = new_full_start!(config).0;
-			node_transaction_factory::factory(
-				factory_state,
-				service_builder.client(),
-				service_builder.select_chain()
-					.expect("The select_chain is always initialized by new_full_start!; QED")
-			).map_err(|e| format!("Error in transaction factory: {}", e))?;
-
-			Ok(())
-		},
+			runner.sync_run(|config| cmd.run(config))
+		}
 		Some(Subcommand::Base(subcommand)) => {
-			subcommand.init(&version)?;
-			subcommand.update_config(&mut config, load_spec, &version)?;
-			subcommand.run(
-				config,
-				|config: sc_service::Configuration| Ok(new_full_start!(config).0),
-			)
-		},
+			let runner = cli.create_runner(subcommand)?;
+
+			runner.run_subcommand(subcommand, |config| Ok(new_full_start!(config).0))
+		}
+	}
+}
+
+impl CliConfiguration for FactoryCmd {
+	fn shared_params(&self) -> &SharedParams {
+		&self.shared_params
+	}
+
+	fn import_params(&self) -> Option<&ImportParams> {
+		Some(&self.import_params)
+	}
+}
+
+impl FactoryCmd {
+	fn run(&self, config: Configuration) -> Result<()> {
+		match config.chain_spec.id() {
+			"dev" | "local" => {}
+			_ => return Err("Factory is only supported for development and local testnet.".into()),
+		}
+
+		// Setup tracing.
+		if let Some(tracing_targets) = self.import_params.tracing_targets.as_ref() {
+			let subscriber = sc_tracing::ProfilingSubscriber::new(
+				self.import_params.tracing_receiver.into(),
+				tracing_targets,
+			);
+			if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
+				return Err(format!("Unable to set global default subscriber {}", e).into());
+			}
+		}
+
+		let factory_state = FactoryState::new(self.blocks, self.transactions);
+
+		let service_builder = new_full_start!(config).0;
+		node_transaction_factory::factory(
+			factory_state,
+			service_builder.client(),
+			service_builder
+				.select_chain()
+				.expect("The select_chain is always initialized by new_full_start!; qed"),
+		)
 	}
 }

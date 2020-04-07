@@ -103,17 +103,8 @@ macro_rules! app_crypto_pair {
 			type Signature = Signature;
 			type DeriveError = <$pair as $crate::Pair>::DeriveError;
 
-			#[cfg(feature = "std")]
-			fn generate_with_phrase(password: Option<&str>) -> (Self, String, Self::Seed) {
-				let r = <$pair>::generate_with_phrase(password);
-				(Self(r.0), r.1, r.2)
-			}
-			#[cfg(feature = "std")]
-			fn from_phrase(phrase: &str, password: Option<&str>)
-				-> Result<(Self, Self::Seed), $crate::SecretStringError>
-			{
-				<$pair>::from_phrase(phrase, password).map(|r| (Self(r.0), r.1))
-			}
+			$crate::app_crypto_pair_functions_if_std!($pair);
+
 			fn derive<
 				Iter: Iterator<Item=$crate::DeriveJunction>
 			>(&self, path: Iter, seed: Option<Self::Seed>) -> Result<(Self, Option<Self::Seed>), Self::DeriveError> {
@@ -158,10 +149,38 @@ macro_rules! app_crypto_pair {
 	};
 }
 
+/// Implements functions for the `Pair` trait when `feature = "std"` is enabled.
+#[doc(hidden)]
+#[cfg(feature = "std")]
+#[macro_export]
+macro_rules! app_crypto_pair_functions_if_std {
+	($pair:ty) => {
+		fn generate_with_phrase(password: Option<&str>) -> (Self, String, Self::Seed) {
+			let r = <$pair>::generate_with_phrase(password);
+			(Self(r.0), r.1, r.2)
+		}
+
+		fn from_phrase(phrase: &str, password: Option<&str>)
+			-> Result<(Self, Self::Seed), $crate::SecretStringError>
+		{
+			<$pair>::from_phrase(phrase, password).map(|r| (Self(r.0), r.1))
+		}
+	}
+}
+
+#[doc(hidden)]
+#[cfg(not(feature = "std"))]
+#[macro_export]
+macro_rules! app_crypto_pair_functions_if_std {
+	($pair:ty) => {}
+}
+
+
 /// Declares Public type which is functionally equivalent to `$public`, but is new
 /// Application-specific type whose identifier is `$key_type`.
 /// can only be used together with `full_crypto` feature
 /// For full functionality, app_crypto_public_common! must be called too.
+#[doc(hidden)]
 #[macro_export]
 macro_rules! app_crypto_public_full_crypto {
 	($public:ty, $key_type:expr) => {
@@ -195,6 +214,7 @@ macro_rules! app_crypto_public_full_crypto {
 /// Application-specific type whose identifier is `$key_type`.
 /// can only be used without `full_crypto` feature
 /// For full functionality, app_crypto_public_common! must be called too.
+#[doc(hidden)]
 #[macro_export]
 macro_rules! app_crypto_public_not_full_crypto {
 	($public:ty, $key_type:expr) => {
@@ -223,44 +243,11 @@ macro_rules! app_crypto_public_not_full_crypto {
 /// Declares Public type which is functionally equivalent to `$public`, but is new
 /// Application-specific type whose identifier is `$key_type`.
 /// For full functionality, app_crypto_public_(not)_full_crypto! must be called too.
+#[doc(hidden)]
 #[macro_export]
 macro_rules! app_crypto_public_common {
 	($public:ty, $sig:ty, $key_type:expr) => {
-		impl $crate::Derive for Public {
-			#[cfg(feature = "std")]
-			fn derive<Iter: Iterator<Item=$crate::DeriveJunction>>(&self,
-				path: Iter
-			) -> Option<Self> {
-				self.0.derive(path).map(Self)
-			}
-		}
-
-		#[cfg(feature = "std")]
-		impl std::fmt::Display for Public {
-			fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-				use $crate::Ss58Codec;
-				write!(f, "{}", self.0.to_ss58check())
-			}
-		}
-		#[cfg(feature = "std")]
-		impl $crate::serde::Serialize for Public {
-			fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> where
-				S: $crate::serde::Serializer
-			{
-				use $crate::Ss58Codec;
-				serializer.serialize_str(&self.to_ss58check())
-			}
-		}
-		#[cfg(feature = "std")]
-		impl<'de> $crate::serde::Deserialize<'de> for Public {
-			fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error> where
-				D: $crate::serde::Deserializer<'de>
-			{
-				use $crate::Ss58Codec;
-				Public::from_ss58check(&String::deserialize(deserializer)?)
-					.map_err(|e| $crate::serde::de::Error::custom(format!("{:?}", e)))
-			}
-		}
+		$crate::app_crypto_public_common_if_std!();
 
 		impl AsRef<[u8]> for Public {
 			fn as_ref(&self) -> &[u8] { self.0.as_ref() }
@@ -309,10 +296,63 @@ macro_rules! app_crypto_public_common {
 	}
 }
 
+/// Implements traits for the public key type if `feature = "std"` is enabled.
+#[cfg(feature = "std")]
+#[doc(hidden)]
+#[macro_export]
+macro_rules! app_crypto_public_common_if_std {
+	() => {
+		impl $crate::Derive for Public {
+			fn derive<Iter: Iterator<Item=$crate::DeriveJunction>>(&self,
+				path: Iter
+			) -> Option<Self> {
+				self.0.derive(path).map(Self)
+			}
+		}
+
+		impl std::fmt::Display for Public {
+			fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+				use $crate::Ss58Codec;
+				write!(f, "{}", self.0.to_ss58check())
+			}
+		}
+
+		impl $crate::serde::Serialize for Public {
+			fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> where
+				S: $crate::serde::Serializer
+			{
+				use $crate::Ss58Codec;
+				serializer.serialize_str(&self.to_ss58check())
+			}
+		}
+
+		impl<'de> $crate::serde::Deserialize<'de> for Public {
+			fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error> where
+				D: $crate::serde::Deserializer<'de>
+			{
+				use $crate::Ss58Codec;
+				Public::from_ss58check(&String::deserialize(deserializer)?)
+					.map_err(|e| $crate::serde::de::Error::custom(format!("{:?}", e)))
+			}
+		}
+	}
+}
+
+#[cfg(not(feature = "std"))]
+#[doc(hidden)]
+#[macro_export]
+macro_rules! app_crypto_public_common_if_std {
+	() => {
+		impl $crate::Derive for Public {}
+	}
+}
+
+
 /// Declares Signature type which is functionally equivalent to `$sig`, but is new
 /// Application-specific type whose identifier is `$key_type`.
 /// can only be used together with `full_crypto` feature
 /// For full functionality, app_crypto_public_common! must be called too.
+#[doc(hidden)]
 #[macro_export]
 macro_rules! app_crypto_signature_full_crypto {
 	($sig:ty, $key_type:expr) => {
@@ -345,6 +385,7 @@ macro_rules! app_crypto_signature_full_crypto {
 /// Application-specific type whose identifier is `$key_type`.
 /// can only be used without `full_crypto` feature
 /// For full functionality, app_crypto_public_common! must be called too.
+#[doc(hidden)]
 #[macro_export]
 macro_rules! app_crypto_signature_not_full_crypto {
 	($sig:ty, $key_type:expr) => {
@@ -372,6 +413,7 @@ macro_rules! app_crypto_signature_not_full_crypto {
 /// Declares Signature type which is functionally equivalent to `$sig`, but is new
 /// Application-specific type whose identifier is `$key_type`.
 /// For full functionality, app_crypto_public_(not)_full_crypto! must be called too.
+#[doc(hidden)]
 #[macro_export]
 macro_rules! app_crypto_signature_common {
 	($sig:ty, $key_type:expr) => {

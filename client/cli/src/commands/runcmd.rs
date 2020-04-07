@@ -14,34 +14,21 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::path::PathBuf;
-use std::net::SocketAddr;
-use std::fs;
-use std::fmt;
-use log::info;
-use structopt::{StructOpt, clap::arg_enum};
-use names::{Generator, Name};
+use crate::error::{Error, Result};
+use crate::params::ImportParams;
+use crate::params::KeystoreParams;
+use crate::params::NetworkParams;
+use crate::params::SharedParams;
+use crate::params::TransactionPoolParams;
+use crate::CliConfiguration;
 use regex::Regex;
-use chrono::prelude::*;
 use sc_service::{
-	AbstractService, Configuration, ChainSpec, Role,
-	config::{MultiaddrWithPeerId, KeystoreConfig, PrometheusConfig},
+	config::{MultiaddrWithPeerId, PrometheusConfig, TransactionPoolOptions},
+	ChainSpec, Role,
 };
 use sc_telemetry::TelemetryEndpoints;
-
-use crate::VersionInfo;
-use crate::error;
-use crate::params::ImportParams;
-use crate::params::SharedParams;
-use crate::params::NetworkConfigurationParams;
-use crate::params::TransactionPoolParams;
-use crate::runtime::run_service_until_exit;
-
-/// The maximum number of characters for a node name.
-const NODE_NAME_MAX_LENGTH: usize = 32;
-
-/// default sub directory for the key store
-const DEFAULT_KEYSTORE_CONFIG_PATH : &'static str = "keystore";
+use std::net::SocketAddr;
+use structopt::{clap::arg_enum, StructOpt};
 
 arg_enum! {
 	/// Whether off-chain workers are enabled.
@@ -200,7 +187,7 @@ pub struct RunCmd {
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
-	pub network_config: NetworkConfigurationParams,
+	pub network_params: NetworkParams,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -242,38 +229,23 @@ pub struct RunCmd {
 	#[structopt(long = "force-authoring")]
 	pub force_authoring: bool,
 
-	/// Specify custom keystore path.
-	#[structopt(long = "keystore-path", value_name = "PATH", parse(from_os_str))]
-	pub keystore_path: Option<PathBuf>,
-
-	/// Use interactive shell for entering the password used by the keystore.
-	#[structopt(
-		long = "password-interactive",
-		conflicts_with_all = &[ "password", "password-filename" ]
-	)]
-	pub password_interactive: bool,
-
-	/// Password used by the keystore.
-	#[structopt(
-		long = "password",
-		conflicts_with_all = &[ "password-interactive", "password-filename" ]
-	)]
-	pub password: Option<String>,
-
-	/// File that contains the password used by the keystore.
-	#[structopt(
-		long = "password-filename",
-		value_name = "PATH",
-		parse(from_os_str),
-		conflicts_with_all = &[ "password-interactive", "password" ]
-	)]
-	pub password_filename: Option<PathBuf>,
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub keystore_params: KeystoreParams,
 
 	/// The size of the instances cache for each runtime.
 	///
 	/// The default value is 8 and the values higher than 256 are ignored.
-	#[structopt(long = "max-runtime-instances", default_value = "8")]
-	pub max_runtime_instances: usize,
+	#[structopt(long)]
+	pub max_runtime_instances: Option<usize>,
+
+	/// Specify a list of sentry node public addresses.
+	#[structopt(
+		long = "sentry-nodes",
+		value_name = "ADDR",
+		conflicts_with_all = &[ "sentry" ]
+	)]
+	pub sentry_nodes: Vec<MultiaddrWithPeerId>,
 }
 
 impl RunCmd {
@@ -281,219 +253,203 @@ impl RunCmd {
 	pub fn get_keyring(&self) -> Option<sp_keyring::Sr25519Keyring> {
 		use sp_keyring::Sr25519Keyring::*;
 
-		if self.alice { Some(Alice) }
-		else if self.bob { Some(Bob) }
-		else if self.charlie { Some(Charlie) }
-		else if self.dave { Some(Dave) }
-		else if self.eve { Some(Eve) }
-		else if self.ferdie { Some(Ferdie) }
-		else if self.one { Some(One) }
-		else if self.two { Some(Two) }
-		else { None }
-	}
-
-	/// Update and prepare a `Configuration` with command line parameters of `RunCmd` and `VersionInfo`.
-	pub fn update_config<F>(
-		&self,
-		mut config: &mut Configuration,
-		spec_factory: F,
-		version: &VersionInfo,
-	) -> error::Result<()>
-	where
-		F: FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
-	{
-		self.shared_params.update_config(&mut config, spec_factory, version)?;
-
-		let password = if self.password_interactive {
-			#[cfg(not(target_os = "unknown"))]
-			{
-				Some(input_keystore_password()?.into())
-			}
-			#[cfg(target_os = "unknown")]
-			None
-		} else if let Some(ref file) = self.password_filename {
-			Some(fs::read_to_string(file).map_err(|e| format!("{}", e))?.into())
-		} else if let Some(ref password) = self.password {
-			Some(password.clone().into())
+		if self.alice {
+			Some(Alice)
+		} else if self.bob {
+			Some(Bob)
+		} else if self.charlie {
+			Some(Charlie)
+		} else if self.dave {
+			Some(Dave)
+		} else if self.eve {
+			Some(Eve)
+		} else if self.ferdie {
+			Some(Ferdie)
+		} else if self.one {
+			Some(One)
+		} else if self.two {
+			Some(Two)
 		} else {
 			None
-		};
+		}
+	}
+}
 
-		let path = self.keystore_path.clone().or(
-			config.in_chain_config_dir(DEFAULT_KEYSTORE_CONFIG_PATH)
-		);
+impl CliConfiguration for RunCmd {
+	fn shared_params(&self) -> &SharedParams {
+		&self.shared_params
+	}
 
-		config.keystore = KeystoreConfig::Path {
-			path: path.ok_or_else(|| "No `base_path` provided to create keystore path!".to_string())?,
-			password,
-		};
+	fn import_params(&self) -> Option<&ImportParams> {
+		Some(&self.import_params)
+	}
 
-		let keyring = self.get_keyring();
-		let is_dev = self.shared_params.dev;
-		let is_light = self.light;
-		let is_authority = (self.validator || is_dev || keyring.is_some())
-			&& !is_light;
-		let role =
-			if is_light {
-				sc_service::Role::Light
-			} else if is_authority {
-				sc_service::Role::Authority { sentry_nodes: self.network_config.sentry_nodes.clone() }
-			} else if !self.sentry.is_empty() {
-				sc_service::Role::Sentry { validators: self.sentry.clone() }
-			} else {
-				sc_service::Role::Full
-			};
+	fn network_params(&self) -> Option<&NetworkParams> {
+		Some(&self.network_params)
+	}
 
-		self.import_params.update_config(&mut config, &role, is_dev)?;
+	fn keystore_params(&self) -> Option<&KeystoreParams> {
+		Some(&self.keystore_params)
+	}
 
-		config.name = match (self.name.as_ref(), keyring) {
+	fn node_name(&self) -> Result<String> {
+		let name: String = match (self.name.as_ref(), self.get_keyring()) {
 			(Some(name), _) => name.to_string(),
 			(_, Some(keyring)) => keyring.to_string(),
-			(None, None) => generate_node_name(),
+			(None, None) => crate::generate_node_name(),
 		};
-		if let Err(msg) = is_node_name_valid(&config.name) {
-			return Err(error::Error::Input(
-				format!("Invalid node name '{}'. Reason: {}. If unsure, use none.",
-					config.name,
-					msg,
-				)
-			));
-		}
 
-		config.offchain_worker = match (&self.offchain_worker, &role) {
-			(OffchainWorkerEnabled::WhenValidating, sc_service::Role::Authority { .. }) => true,
+		is_node_name_valid(&name).map_err(|msg| {
+			Error::Input(format!(
+				"Invalid node name '{}'. Reason: {}. If unsure, use none.",
+				name, msg
+			));
+		})?;
+
+		Ok(name)
+	}
+
+	fn dev_key_seed(&self, is_dev: bool) -> Result<Option<String>> {
+		Ok(self.get_keyring().map(|a| format!("//{}", a)).or_else(|| {
+			if is_dev && !self.light {
+				Some("//Alice".into())
+			} else {
+				None
+			}
+		}))
+	}
+
+	fn telemetry_endpoints(
+		&self,
+		chain_spec: &Box<dyn ChainSpec>,
+	) -> Result<Option<TelemetryEndpoints>> {
+		Ok(if self.no_telemetry {
+			None
+		} else if !self.telemetry_endpoints.is_empty() {
+			Some(
+				TelemetryEndpoints::new(self.telemetry_endpoints.clone())
+					.map_err(|e| e.to_string())?,
+			)
+		} else {
+			chain_spec.telemetry_endpoints().clone()
+		})
+	}
+
+	fn role(&self, is_dev: bool) -> Result<Role> {
+		let keyring = self.get_keyring();
+		let is_light = self.light;
+		let is_authority = (self.validator || is_dev || keyring.is_some()) && !is_light;
+
+		Ok(if is_light {
+			sc_service::Role::Light
+		} else if is_authority {
+			sc_service::Role::Authority {
+				sentry_nodes: self.sentry_nodes.clone(),
+			}
+		} else if !self.sentry.is_empty() {
+			sc_service::Role::Sentry {
+				validators: self.sentry.clone(),
+			}
+		} else {
+			sc_service::Role::Full
+		})
+	}
+
+	fn force_authoring(&self) -> Result<bool> {
+		// Imply forced authoring on --dev
+		Ok(self.shared_params.dev || self.force_authoring)
+	}
+
+	fn prometheus_config(&self) -> Result<Option<PrometheusConfig>> {
+		if self.no_prometheus {
+			Ok(None)
+		} else {
+			let prometheus_interface: &str = if self.prometheus_external {
+				"0.0.0.0"
+			} else {
+				"127.0.0.1"
+			};
+
+			Ok(Some(PrometheusConfig::new_with_default_registry(
+				parse_address(
+					&format!("{}:{}", prometheus_interface, 9615),
+					self.prometheus_port,
+				)?,
+			)))
+		}
+	}
+
+	fn disable_grandpa(&self) -> Result<bool> {
+		Ok(self.no_grandpa)
+	}
+
+	fn rpc_ws_max_connections(&self) -> Result<Option<usize>> {
+		Ok(self.ws_max_connections)
+	}
+
+	fn rpc_cors(&self, is_dev: bool) -> Result<Option<Vec<String>>> {
+		Ok(self
+			.rpc_cors
+			.clone()
+			.unwrap_or_else(|| {
+				if is_dev {
+					log::warn!("Running in --dev mode, RPC CORS has been disabled.");
+					Cors::All
+				} else {
+					Cors::List(vec![
+						"http://localhost:*".into(),
+						"http://127.0.0.1:*".into(),
+						"https://localhost:*".into(),
+						"https://127.0.0.1:*".into(),
+						"https://polkadot.js.org".into(),
+					])
+				}
+			})
+			.into())
+	}
+
+	fn rpc_http(&self) -> Result<Option<SocketAddr>> {
+		let rpc_interface: &str =
+			interface_str(self.rpc_external, self.unsafe_rpc_external, self.validator)?;
+
+		Ok(Some(parse_address(
+			&format!("{}:{}", rpc_interface, 9933),
+			self.rpc_port,
+		)?))
+	}
+
+	fn rpc_ws(&self) -> Result<Option<SocketAddr>> {
+		let ws_interface: &str =
+			interface_str(self.ws_external, self.unsafe_ws_external, self.validator)?;
+
+		Ok(Some(parse_address(
+			&format!("{}:{}", ws_interface, 9944),
+			self.ws_port,
+		)?))
+	}
+
+	fn offchain_worker(&self, role: &Role) -> Result<bool> {
+		Ok(match (&self.offchain_worker, role) {
+			(OffchainWorkerEnabled::WhenValidating, Role::Authority { .. }) => true,
 			(OffchainWorkerEnabled::Always, _) => true,
 			(OffchainWorkerEnabled::Never, _) => false,
 			(OffchainWorkerEnabled::WhenValidating, _) => false,
-		};
-
-		config.role = role;
-		config.disable_grandpa = self.no_grandpa;
-
-		let client_id = config.client_id();
-		let network_path = config
-			.in_chain_config_dir(crate::commands::DEFAULT_NETWORK_CONFIG_PATH)
-			.expect("We provided a basepath");
-		self.network_config.update_config(
-			&mut config,
-			network_path,
-			client_id,
-			is_dev,
-		)?;
-
-		self.pool_config.update_config(&mut config)?;
-
-		config.dev_key_seed = keyring
-			.map(|a| format!("//{}", a)).or_else(|| {
-				if is_dev && !is_light {
-					Some("//Alice".into())
-				} else {
-					None
-				}
-			});
-
-		if config.rpc_http.is_none() || self.rpc_port.is_some() {
-			let rpc_interface: &str = interface_str(self.rpc_external, self.unsafe_rpc_external, self.validator)?;
-			config.rpc_http = Some(parse_address(&format!("{}:{}", rpc_interface, 9933), self.rpc_port)?);
-		}
-		if config.rpc_ws.is_none() || self.ws_port.is_some() {
-			let ws_interface: &str = interface_str(self.ws_external, self.unsafe_ws_external, self.validator)?;
-			config.rpc_ws = Some(parse_address(&format!("{}:{}", ws_interface, 9944), self.ws_port)?);
-		}
-
-		config.rpc_ws_max_connections = self.ws_max_connections;
-		config.rpc_cors = self.rpc_cors.clone().unwrap_or_else(|| if is_dev {
-			log::warn!("Running in --dev mode, RPC CORS has been disabled.");
-			Cors::All
-		} else {
-			Cors::List(vec![
-				"http://localhost:*".into(),
-				"http://127.0.0.1:*".into(),
-				"https://localhost:*".into(),
-				"https://127.0.0.1:*".into(),
-				"https://polkadot.js.org".into(),
-			])
-		}).into();
-
-		// Override telemetry
-		if self.no_telemetry {
-			config.telemetry_endpoints = None;
-		} else if !self.telemetry_endpoints.is_empty() {
-			config.telemetry_endpoints = Some(
-				TelemetryEndpoints::new(self.telemetry_endpoints.clone()).map_err(|e| e.to_string())?
-			);
-		}
-
-		// Override prometheus
-		if self.no_prometheus {
-			config.prometheus_config = None;
-		} else if config.prometheus_config.is_none() {
-			let prometheus_interface: &str = if self.prometheus_external { "0.0.0.0" } else { "127.0.0.1" };
-			config.prometheus_config = Some(PrometheusConfig::new_with_default_registry(
-				parse_address(&format!("{}:{}", prometheus_interface, 9615), self.prometheus_port)?,
-			));
-		}
-
-		config.tracing_targets = self.import_params.tracing_targets.clone().into();
-		config.tracing_receiver = self.import_params.tracing_receiver.clone().into();
-
-		// Imply forced authoring on --dev
-		config.force_authoring = self.shared_params.dev || self.force_authoring;
-
-		config.max_runtime_instances = self.max_runtime_instances.min(256);
-
-		Ok(())
+		})
 	}
 
-	/// Run the command that runs the node.
-	pub fn run<FNL, FNF, SL, SF>(
-		self,
-		config: Configuration,
-		new_light: FNL,
-		new_full: FNF,
-		version: &VersionInfo,
-	) -> error::Result<()>
-	where
-		FNL: FnOnce(Configuration) -> Result<SL, sc_service::error::Error>,
-		FNF: FnOnce(Configuration) -> Result<SF, sc_service::error::Error>,
-		SL: AbstractService + Unpin,
-		SF: AbstractService + Unpin,
-	{
-		info!("{}", version.name);
-		info!("✌️  version {}", config.full_version());
-		info!("❤️  by {}, {}-{}", version.author, version.copyright_start_year, Local::today().year());
-		info!("📋 Chain specification: {}", config.expect_chain_spec().name());
-		info!("🏷  Node name: {}", config.name);
-		info!("👤 Role: {}", config.display_role());
-
-		match config.role {
-			Role::Light => run_service_until_exit(
-				config,
-				new_light,
-			),
-			_ => run_service_until_exit(
-				config,
-				new_full,
-			),
-		}
+	fn transaction_pool(&self) -> Result<TransactionPoolOptions> {
+		Ok(self.pool_config.transaction_pool())
 	}
 
-	/// Initialize substrate. This must be done only once.
-	///
-	/// This method:
-	///
-	/// 1. Set the panic handler
-	/// 2. Raise the FD limit
-	/// 3. Initialize the logger
-	pub fn init(&self, version: &VersionInfo) -> error::Result<()> {
-		self.shared_params.init(version)
+	fn max_runtime_instances(&self) -> Result<Option<usize>> {
+		Ok(self.max_runtime_instances.map(|x| x.min(256)))
 	}
 }
 
 /// Check whether a node name is considered as valid.
-pub fn is_node_name_valid(_name: &str) -> Result<(), &str> {
+pub fn is_node_name_valid(_name: &str) -> std::result::Result<(), &str> {
 	let name = _name.to_string();
-	if name.chars().count() >= NODE_NAME_MAX_LENGTH {
+	if name.chars().count() >= crate::NODE_NAME_MAX_LENGTH {
 		return Err("Node name too long");
 	}
 
@@ -512,32 +468,10 @@ pub fn is_node_name_valid(_name: &str) -> Result<(), &str> {
 	Ok(())
 }
 
-#[cfg(not(target_os = "unknown"))]
-fn input_keystore_password() -> Result<String, String> {
-	rpassword::read_password_from_tty(Some("Keystore password: "))
-		.map_err(|e| format!("{:?}", e))
-}
-
-fn generate_node_name() -> String {
-	let result = loop {
-		let node_name = Generator::with_naming(Name::Numbered).next().unwrap();
-		let count = node_name.chars().count();
-
-		if count < NODE_NAME_MAX_LENGTH {
-			break node_name
-		}
-	};
-
-	result
-}
-
-fn parse_address(
-	address: &str,
-	port: Option<u16>,
-) -> Result<SocketAddr, String> {
-	let mut address: SocketAddr = address.parse().map_err(
-		|_| format!("Invalid address: {}", address)
-	)?;
+fn parse_address(address: &str, port: Option<u16>) -> std::result::Result<SocketAddr, String> {
+	let mut address: SocketAddr = address
+		.parse()
+		.map_err(|_| format!("Invalid address: {}", address))?;
 	if let Some(port) = port {
 		address.set_port(port);
 	}
@@ -549,16 +483,21 @@ fn interface_str(
 	is_external: bool,
 	is_unsafe_external: bool,
 	is_validator: bool,
-) -> Result<&'static str, error::Error> {
+) -> Result<&'static str> {
 	if is_external && is_validator {
-		return Err(error::Error::Input("--rpc-external and --ws-external options shouldn't be \
+		return Err(Error::Input(
+			"--rpc-external and --ws-external options shouldn't be \
 		used if the node is running as a validator. Use `--unsafe-rpc-external` if you understand \
-		the risks. See the options description for more information.".to_owned()));
+		the risks. See the options description for more information."
+				.to_owned(),
+		));
 	}
 
 	if is_external || is_unsafe_external {
-		log::warn!("It isn't safe to expose RPC publicly without a proxy server that filters \
-		available set of RPC methods.");
+		log::warn!(
+			"It isn't safe to expose RPC publicly without a proxy server that filters \
+		available set of RPC methods."
+		);
 
 		Ok("0.0.0.0")
 	} else {
@@ -574,8 +513,8 @@ enum TelemetryParsingError {
 
 impl std::error::Error for TelemetryParsingError {}
 
-impl fmt::Display for TelemetryParsingError {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl std::fmt::Display for TelemetryParsingError {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match &*self {
 			TelemetryParsingError::MissingVerbosity => write!(f, "Verbosity level missing"),
 			TelemetryParsingError::VerbosityParsingError(e) => write!(f, "{}", e),
@@ -583,13 +522,15 @@ impl fmt::Display for TelemetryParsingError {
 	}
 }
 
-fn parse_telemetry_endpoints(s: &str) -> Result<(String, u8), TelemetryParsingError> {
+fn parse_telemetry_endpoints(s: &str) -> std::result::Result<(String, u8), TelemetryParsingError> {
 	let pos = s.find(' ');
 	match pos {
 		None => Err(TelemetryParsingError::MissingVerbosity),
 		Some(pos_) => {
 			let url = s[..pos_].to_string();
-			let verbosity = s[pos_ + 1..].parse().map_err(TelemetryParsingError::VerbosityParsingError)?;
+			let verbosity = s[pos_ + 1..]
+				.parse()
+				.map_err(TelemetryParsingError::VerbosityParsingError)?;
 			Ok((url, verbosity))
 		}
 	}
@@ -617,7 +558,7 @@ impl From<Cors> for Option<Vec<String>> {
 }
 
 /// Parse cors origins.
-fn parse_cors(s: &str) -> Result<Cors, Box<dyn std::error::Error>> {
+fn parse_cors(s: &str) -> std::result::Result<Cors, Box<dyn std::error::Error>> {
 	let mut is_all = false;
 	let mut origins = Vec::new();
 	for part in s.split(',') {
@@ -625,29 +566,21 @@ fn parse_cors(s: &str) -> Result<Cors, Box<dyn std::error::Error>> {
 			"all" | "*" => {
 				is_all = true;
 				break;
-			},
+			}
 			other => origins.push(other.to_owned()),
 		}
 	}
 
-	Ok(if is_all { Cors::All } else { Cors::List(origins) })
+	Ok(if is_all {
+		Cors::All
+	} else {
+		Cors::List(origins)
+	})
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sc_service::{GenericChainSpec, config::DatabaseConfig};
-
-	const TEST_VERSION_INFO: &'static VersionInfo = &VersionInfo {
-		name: "node-test",
-		version: "0.1.0",
-		commit: "some_commit",
-		executable_name: "node-test",
-		description: "description",
-		author: "author",
-		support_url: "http://example.org",
-		copyright_start_year: 2020,
-	};
 
 	#[test]
 	fn tests_node_name_good() {
@@ -662,95 +595,5 @@ mod tests {
 		assert!(is_node_name_valid("https://visit.me").is_err());
 		assert!(is_node_name_valid("www.visit.me").is_err());
 		assert!(is_node_name_valid("email@domain").is_err());
-	}
-
-	#[test]
-	fn keystore_path_is_generated_correctly() {
-		let chain_spec = GenericChainSpec::from_genesis(
-			"test",
-			"test-id",
-			|| (),
-			Vec::new(),
-			None,
-			None,
-			None,
-			None::<()>,
-		);
-
-		for keystore_path in vec![None, Some("/keystore/path")] {
-			let args: Vec<&str> = vec![];
-			let mut cli = RunCmd::from_iter(args);
-			cli.keystore_path = keystore_path.clone().map(PathBuf::from);
-
-			let mut config = Configuration::default();
-			config.config_dir = Some(PathBuf::from("/test/path"));
-			config.chain_spec = Some(Box::new(chain_spec.clone()));
-			let chain_spec = chain_spec.clone();
-			cli.update_config(&mut config, move |_| Ok(Box::new(chain_spec)), TEST_VERSION_INFO).unwrap();
-
-			let expected_path = match keystore_path {
-				Some(path) => PathBuf::from(path),
-				None => PathBuf::from("/test/path/chains/test-id/keystore"),
-			};
-
-			assert_eq!(expected_path, config.keystore.path().unwrap().to_owned());
-		}
-	}
-
-	#[test]
-	fn ensure_load_spec_provide_defaults() {
-		let chain_spec = GenericChainSpec::from_genesis(
-			"test",
-			"test-id",
-			|| (),
-			vec!["/ip4/127.0.0.1/tcp/30333/p2p/QmdSHZLmwEL5Axz5JvWNE2mmxU7qyd7xHBFpyUfktgAdg7".parse().unwrap()],
-			Some(TelemetryEndpoints::new(vec![("wss://foo/bar".to_string(), 42)])
-				.expect("provided url should be valid")),
-			None,
-			None,
-			None::<()>,
-		);
-
-		let args: Vec<&str> = vec![];
-		let cli = RunCmd::from_iter(args);
-
-		let mut config = Configuration::from_version(TEST_VERSION_INFO);
-		cli.update_config(&mut config, |_| Ok(Box::new(chain_spec)), TEST_VERSION_INFO).unwrap();
-
-		assert!(config.chain_spec.is_some());
-		assert!(!config.network.boot_nodes.is_empty());
-		assert!(config.telemetry_endpoints.is_some());
-	}
-
-	#[test]
-	fn ensure_update_config_for_running_node_provides_defaults() {
-		let chain_spec = GenericChainSpec::from_genesis(
-			"test",
-			"test-id",
-			|| (),
-			vec![],
-			None,
-			None,
-			None,
-			None::<()>,
-		);
-
-		let args: Vec<&str> = vec![];
-		let cli = RunCmd::from_iter(args);
-
-		let mut config = Configuration::from_version(TEST_VERSION_INFO);
-		cli.init(&TEST_VERSION_INFO).unwrap();
-		cli.update_config(&mut config, |_| Ok(Box::new(chain_spec)), TEST_VERSION_INFO).unwrap();
-
-		assert!(config.config_dir.is_some());
-		assert!(config.database.is_some());
-		if let Some(DatabaseConfig::Path { ref cache_size, .. }) = config.database {
-			assert!(cache_size.is_some());
-		} else {
-			panic!("invalid config.database variant");
-		}
-		assert!(!config.name.is_empty());
-		assert!(config.network.config_path.is_some());
-		assert!(!config.network.listen_addresses.is_empty());
 	}
 }
