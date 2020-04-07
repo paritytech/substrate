@@ -434,9 +434,12 @@ pub trait Crypto {
 		msg: &[u8],
 		pub_key: &ed25519::Public,
 	) -> bool {
+		// TODO: see #5554, this is used outside of externalities context/runtime, thus this manual
+		// `with_externalities`.
+		//
 		// This `with_externalities(..)` block returns Some(true) if signature verification was successfully
 		// batched, everything else (Some(false)/None) means it was not batched.
-		sp_externalities::with_externalities(|mut instance| {
+		if !sp_externalities::with_externalities(|mut instance| {
 			if let Some(extension) = instance.extension::<VerificationExt>() {
 				extension.push_ed25519(
 					sig.clone(),
@@ -447,9 +450,11 @@ pub trait Crypto {
 			} else {
 				false
 			}
-		})
-		// So if for whatever reason batching is not active, we do regular verification.
-		.unwrap_or_else(|| ed25519::Pair::verify(sig, msg, pub_key))
+		}).unwrap_or(false) {
+			// So if for whatever reason batching is not active, we do regular verification.
+			return ed25519::Pair::verify(sig, msg, pub_key);
+		}
+		true
 	}
 
 	/// Verify `sr25519` signature.
@@ -464,9 +469,12 @@ pub trait Crypto {
 		msg: &[u8],
 		pub_key: &sr25519::Public,
 	) -> bool {
+		// TODO: see #5554, this is used outside of externalities context/runtime, thus this manual
+		// `with_externalities`.
+		//
 		// This `with_externalities(..)` block returns Some(true) if signature verification was successfully
 		// batched, everything else (Some(false)/None) means it was not batched.
-		sp_externalities::with_externalities(|mut instance| {
+		if !sp_externalities::with_externalities(|mut instance| {
 			if let Some(extension) = instance.extension::<VerificationExt>() {
 				extension.push_sr25519(
 					sig.clone(),
@@ -477,9 +485,11 @@ pub trait Crypto {
 			} else {
 				false
 			}
-		})
-		// So if for whatever reason batching is not active, we do regular verification.
-		.unwrap_or_else(||sr25519::Pair::verify(sig, msg, pub_key))
+		}).unwrap_or(false) {
+			// So if for whatever reason batching is not active, we do regular verification.
+			return sr25519::Pair::verify(sig, msg, pub_key);
+		}
+		true
 	}
 
 	/// Start verification extension.
