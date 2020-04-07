@@ -26,6 +26,7 @@ use sp_utils::metrics::register_globals;
 
 use sysinfo::{self, ProcessExt, SystemExt};
 
+#[cfg(not(target_os = "unknown"))]
 use netstat2::{
 	TcpState, ProtocolSocketInfo, iterate_sockets_info, AddressFamilyFlags, ProtocolFlags,
 };
@@ -175,7 +176,7 @@ struct ProcessInfo {
 
 pub struct MetricsService {
 	metrics: Option<PrometheusMetrics>,
-	#[cfg(any(windows, unix))]
+	#[cfg(not(target_os = "unknown"))]
 	system: sysinfo::System,
 	pid: Option<sysinfo::Pid>,
 }
@@ -218,7 +219,21 @@ impl MetricsService {
 	}
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(target_os = "unknown")]
+impl MetricsService {
+	fn inner_new(metrics: Option<PrometheusMetrics>) -> Self {
+		Self {
+			metrics,
+			pid: None,
+		}
+	}
+
+	fn process_info(&mut self) -> ProcessInfo {
+		Default::default()
+	}
+}
+
+#[cfg(any(unix, windows))]
 impl MetricsService {
 	fn inner_new(metrics: Option<PrometheusMetrics>) -> Self {
 		Self {
@@ -231,9 +246,21 @@ impl MetricsService {
 	fn process_info(&mut self) -> ProcessInfo {
 		self.pid.map(|pid| self.process_info_for(&pid)).unwrap_or_default()
 	}
+
+	fn process_info_for(&mut self, pid: &sysinfo::Pid) -> ProcessInfo {
+		let mut info = ProcessInfo::default();
+		if self.system.refresh_process(*pid) {
+			let prc = self.system.get_process(*pid)
+				.expect("Above refresh_process succeeds, this must be Some(), qed");
+			info.cpu_usage = prc.cpu_usage().into();
+			info.memory = prc.memory();
+		}
+		info
+	}
 }
 
-#[cfg(not(any(unix, windows)))]
+
+#[cfg(target_os = "linux")]
 impl MetricsService {
 	fn inner_new(metrics: Option<PrometheusMetrics>) -> Self {
 		Self {
@@ -261,17 +288,7 @@ impl MetricsService {
 		Self::inner_new(None)
 	}
 
-	fn process_info_for(&mut self, pid: &sysinfo::Pid) -> ProcessInfo {
-		let mut info = ProcessInfo::default();
-		if self.system.refresh_process(*pid) {
-			let prc = self.system.get_process(*pid)
-				.expect("Above refresh_process succeeds, this must be Some(), qed");
-			info.cpu_usage = prc.cpu_usage().into();
-			info.memory = prc.memory();
-		}
-		info
-	}
-
+	#[cfg(not(target_os = "unknown"))]
 	fn connections_info(&self) -> Option<ConnectionsCount> {
 		self.pid.as_ref().and_then(|pid| {
 			let af_flags = AddressFamilyFlags::IPV4 | AddressFamilyFlags::IPV6;
@@ -402,6 +419,7 @@ impl MetricsService {
 				);
 			}
 
+			#[cfg(not(target_os = "unknown"))]
 			{
 				let load = self.system.get_load_average();
 				metrics.load_avg.with_label_values(&["1min"]).set(load.one);
