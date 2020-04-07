@@ -23,10 +23,10 @@ use sp_runtime::app_crypto::RuntimeAppPublic;
 use sp_runtime::traits::{Extrinsic as ExtrinsicT, IdentifyAccount, One};
 use frame_support::{debug, storage::StorageMap};
 
-/// Marker enum used to flag using all supported keys to sign a payload.
-pub enum ForAll {}
-/// Marker enum used to flag using any of the supported keys to sign a payload.
-pub enum ForAny {}
+/// Marker struct used to flag using all supported keys to sign a payload.
+pub struct ForAll {}
+/// Marker struct used to flag using any of the supported keys to sign a payload.
+pub struct ForAny {}
 
 /// Provides the ability to directly submit signed and unsigned
 /// transaction onchain.
