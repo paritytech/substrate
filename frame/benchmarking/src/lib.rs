@@ -165,10 +165,11 @@ macro_rules! benchmarks_iter {
 		{ $( $common:tt )* }
 		( $( $names:ident )* )
 		$name:ident { $( $code:tt )* }: _ ( $origin:expr $( , $arg:expr )* )
+		$postcode:block
 		$( $rest:tt )*
 	) => {
 		$crate::benchmarks_iter! {
-			$instance { $( $common )* } ( $( $names )* ) $name { $( $code )* }: $name ( $origin $( , $arg )* ) $( $rest )*
+			$instance { $( $common )* } ( $( $names )* ) $name { $( $code )* }: $name ( $origin $( , $arg )* ) $postcode $( $rest )*
 		}
 	};
 	// no instance mutation arm:
@@ -177,13 +178,14 @@ macro_rules! benchmarks_iter {
 		{ $( $common:tt )* }
 		( $( $names:ident )* )
 		$name:ident { $( $code:tt )* }: $dispatch:ident ( $origin:expr $( , $arg:expr )* )
+		$postcode:block
 		$( $rest:tt )*
 	) => {
 		$crate::benchmarks_iter! {
 			NO_INSTANCE
 			{ $( $common )* } ( $( $names )* ) $name { $( $code )* }: {
 				<Call<T> as $crate::Dispatchable>::dispatch(Call::<T>::$dispatch($($arg),*), $origin.into())?;
-			} $( $rest )*
+			} $postcode $( $rest )*
 		}
 	};
 	// instance mutation arm:
@@ -192,13 +194,14 @@ macro_rules! benchmarks_iter {
 		{ $( $common:tt )* }
 		( $( $names:ident )* )
 		$name:ident { $( $code:tt )* }: $dispatch:ident ( $origin:expr $( , $arg:expr )* )
+		$postcode:block
 		$( $rest:tt )*
 	) => {
 		$crate::benchmarks_iter! {
 			INSTANCE
 			{ $( $common )* } ( $( $names )* ) $name { $( $code )* }: {
 				<Call<T, I> as $crate::Dispatchable>::dispatch(Call::<T, I>::$dispatch($($arg),*), $origin.into())?;
-			} $( $rest )*
+			} $postcode $( $rest )*
 		}
 	};
 	// iteration arm:
@@ -207,10 +210,11 @@ macro_rules! benchmarks_iter {
 		{ $( $common:tt )* }
 		( $( $names:ident )* )
 		$name:ident { $( $code:tt )* }: $eval:block
+		$postcode:block
 		$( $rest:tt )*
 	) => {
 		$crate::benchmark_backend! {
-			$instance $name { $( $common )* } { } { $eval } { $( $code )* }
+			$instance $name { $( $common )* } { } { $eval } { $( $code )* } $postcode
 		}
 		$crate::benchmarks_iter!( $instance { $( $common )* } ( $( $names )* $name ) $( $rest )* );
 	};
@@ -232,12 +236,12 @@ macro_rules! benchmark_backend {
 	} { $eval:block } {
 			let $pre_id:tt : $pre_ty:ty = $pre_ex:expr;
 			$( $rest:tt )*
-	} ) => {
+	} $postcode:block) => {
 		$crate::benchmark_backend! {
 			$instance $name { $( $common )* } {
 				$( PRE { $( $pre_parsed )* } )*
 				PRE { $pre_id , $pre_ty , $pre_ex }
-			} { $eval } { $( $rest )* }
+			} { $eval } { $( $rest )* } $postcode
 		}
 	};
 	($instance:ident $name:ident {
@@ -247,12 +251,12 @@ macro_rules! benchmark_backend {
 	} { $eval:block } {
 		let $param:ident in ( $param_from:expr ) .. $param_to:expr => $param_instancer:expr;
 		$( $rest:tt )*
-	}) => {
+	} $postcode:block) => {
 		$crate::benchmark_backend! {
 			$instance $name { $( $common )* } {
 				$( $parsed )*
 				PARAM { $param , $param_from , $param_to , $param_instancer }
-			} { $eval } { $( $rest )* }
+			} { $eval } { $( $rest )* } $postcode
 		}
 	};
 	// mutation arm to look after defaulting to a common param
@@ -263,7 +267,7 @@ macro_rules! benchmark_backend {
 	} { $eval:block } {
 		let $param:ident in ...;
 		$( $rest:tt )*
-	}) => {
+	} $postcode:block) => {
 		$crate::benchmark_backend! {
 			$instance $name {
 				$( { $common , $common_from , $common_to , $common_instancer } )*
@@ -275,7 +279,7 @@ macro_rules! benchmark_backend {
 					.. ({ $( let $common = $common_to; )* $param })
 					=> ({ $( let $common = || -> Result<(), &'static str> { $common_instancer ; Ok(()) }; )* $param()? });
 				$( $rest )*
-			}
+			} $postcode
 		}
 	};
 	// mutation arm to look after defaulting only the range to common param
@@ -286,7 +290,7 @@ macro_rules! benchmark_backend {
 	} { $eval:block } {
 		let $param:ident in _ .. _ => $param_instancer:expr ;
 		$( $rest:tt )*
-	}) => {
+	} $postcode:block) => {
 		$crate::benchmark_backend! {
 			$instance $name {
 				$( { $common , $common_from , $common_to , $common_instancer } )*
@@ -298,7 +302,7 @@ macro_rules! benchmark_backend {
 					.. ({ $( let $common = $common_to; )* $param })
 					=> $param_instancer ;
 				$( $rest )*
-			}
+			} $postcode
 		}
 	};
 	// mutation arm to look after a single tt for param_from.
@@ -309,12 +313,12 @@ macro_rules! benchmark_backend {
 	} { $eval:block } {
 		let $param:ident in $param_from:tt .. $param_to:expr => $param_instancer:expr ;
 		$( $rest:tt )*
-	}) => {
+	} $postcode:block) => {
 		$crate::benchmark_backend! {
 			$instance $name { $( $common )* } { $( $parsed )* } { $eval } {
 				let $param in ( $param_from ) .. $param_to => $param_instancer;
 				$( $rest )*
-			}
+			} $postcode
 		}
 	};
 	// mutation arm to look after the default tail of `=> ()`
@@ -325,12 +329,12 @@ macro_rules! benchmark_backend {
 	} { $eval:block } {
 		let $param:ident in $param_from:tt .. $param_to:expr;
 		$( $rest:tt )*
-	}) => {
+	} $postcode:block) => {
 		$crate::benchmark_backend! {
 			$instance $name { $( $common )* } { $( $parsed )* } { $eval } {
 				let $param in $param_from .. $param_to => ();
 				$( $rest )*
-			}
+			} $postcode
 		}
 	};
 	// mutation arm to look after `let _ =`
@@ -341,12 +345,12 @@ macro_rules! benchmark_backend {
 	} { $eval:block } {
 		let $pre_id:tt = $pre_ex:expr;
 		$( $rest:tt )*
-	}) => {
+	} $postcode:block) => {
 		$crate::benchmark_backend! {
 			$instance $name { $( $common )* } { $( $parsed )* } { $eval } {
 				let $pre_id : _ = $pre_ex;
 				$( $rest )*
-			}
+			} $postcode
 		}
 	};
 	// no instance actioning arm
@@ -355,7 +359,7 @@ macro_rules! benchmark_backend {
 	} {
 		$( PRE { $pre_id:tt , $pre_ty:ty , $pre_ex:expr } )*
 		$( PARAM { $param:ident , $param_from:expr , $param_to:expr , $param_instancer:expr } )*
-	} { $eval:block } { $( $post:tt )* } ) => {
+	} { $eval:block } { $( $post:tt )* } $postcode:block) => {
 		#[allow(non_camel_case_types)]
 		struct $name;
 		#[allow(unused_variables)]
@@ -386,6 +390,11 @@ macro_rules! benchmark_backend {
 
 				Ok(Box::new(move || -> Result<(), &'static str> { $eval; Ok(()) }))
 			}
+
+			fn verify(&self, components: &[($crate::BenchmarkParameter, u32)]) -> Result<(), &'static str> {
+				$postcode
+				Ok(())
+			}
 		}
 	};
 	// instance actioning arm
@@ -394,7 +403,7 @@ macro_rules! benchmark_backend {
 	} {
 		$( PRE { $pre_id:tt , $pre_ty:ty , $pre_ex:expr } )*
 		$( PARAM { $param:ident , $param_from:expr , $param_to:expr , $param_instancer:expr } )*
-	} { $eval:block } { $( $post:tt )* } ) => {
+	} { $eval:block } { $( $post:tt )* } $postcode:block) => {
 		#[allow(non_camel_case_types)]
 		struct $name;
 		#[allow(unused_variables)]
@@ -424,6 +433,11 @@ macro_rules! benchmark_backend {
 				$( $post )*
 
 				Ok(Box::new(move || -> Result<(), &'static str> { $eval; Ok(()) }))
+			}
+
+			fn verify(&self, components: &[($crate::BenchmarkParameter, u32)]) -> Result<(), &'static str> {
+				$postcode
+				Ok(())
 			}
 		}
 	}
@@ -469,6 +483,12 @@ macro_rules! selected_benchmark {
 					$( Self::$bench => <$bench as $crate::BenchmarkingSetup<T>>::instance(&$bench, components), )*
 				}
 			}
+
+			fn verify(&self, components: &[($crate::BenchmarkParameter, u32)]) -> Result<(), &'static str> {
+				match self {
+					$( Self::$bench => <$bench as $crate::BenchmarkingSetup<T>>::verify(&$bench, components), )*
+				}
+			}
 		}
 	};
 	(
@@ -493,6 +513,12 @@ macro_rules! selected_benchmark {
 			{
 				match self {
 					$( Self::$bench => <$bench as $crate::BenchmarkingSetupInstance<T, I>>::instance(&$bench, components), )*
+				}
+			}
+
+			fn verify(&self, components: &[($crate::BenchmarkParameter, u32)]) -> Result<(), &'static str> {
+				match self {
+					$( Self::$bench => <$bench as $crate::BenchmarkingSetupInstance<T, I>>::verify(&$bench, components), )*
 				}
 			}
 		}
@@ -589,6 +615,9 @@ macro_rules! impl_benchmark {
 							$crate::storage_root();
 							let finish_storage_root = $crate::benchmarking::current_time();
 							let elapsed_storage_root = finish_storage_root - start_storage_root;
+
+							// Verify postconditions.
+							<SelectedBenchmark as $crate::BenchmarkingSetup<T>>::verify(&selected_benchmark, &c)?;
 
 							results.push((c.clone(), elapsed_extrinsic, elapsed_storage_root));
 
@@ -689,6 +718,9 @@ macro_rules! impl_benchmark {
 							$crate::storage_root();
 							let finish_storage_root = $crate::benchmarking::current_time();
 							let elapsed_storage_root = finish_storage_root - start_storage_root;
+
+							// Verify postconditions.
+							<SelectedBenchmark as $crate::BenchmarkingSetupInstance<T, I>>::verify(&selected_benchmark, &c)?;
 
 							results.push((c.clone(), elapsed_extrinsic, elapsed_storage_root));
 

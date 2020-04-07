@@ -115,6 +115,9 @@ pub trait BenchmarkingSetup<T> {
 
 	/// Set up the storage, and prepare a closure to test in a single run of the benchmark.
 	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>;
+
+	/// Verify postconditions for an instance.
+	fn verify(&self, components: &[(BenchmarkParameter, u32)]) -> Result<(), &'static str>;
 }
 
 /// The required setup for creating a benchmark.
@@ -124,6 +127,9 @@ pub trait BenchmarkingSetupInstance<T, I> {
 
 	/// Set up the storage, and prepare a closure to test in a single run of the benchmark.
 	fn instance(&self, components: &[(BenchmarkParameter, u32)]) -> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>;
+
+	/// Verify postconditions.
+	fn verify(&self, components: &[(BenchmarkParameter, u32)]) -> Result<(), &'static str>;
 }
 
 /// Grab an account, seeded by a name and index.

@@ -22,8 +22,14 @@ use super::*;
 use codec::Decode;
 use sp_std::prelude::*;
 use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::{H256, Header}};
-use frame_support::{dispatch::DispatchResult, decl_module, impl_outer_origin};
+use frame_support::{dispatch::DispatchResult, decl_module, decl_storage, impl_outer_origin};
 use frame_system::{RawOrigin, ensure_signed, ensure_none};
+
+decl_storage! {
+	trait Store for Module<T: Trait> as Test {
+		Value get(fn value): Option<u32>;
+	}
+}
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
@@ -82,7 +88,7 @@ impl Trait for Test {
 	type BlockNumber = u32;
 	type Origin = Origin;
 	type AccountId = u64;
-}
+} 
 
 // This function basically just builds a genesis storage key/value store according to
 // our desired mockup.
@@ -99,22 +105,24 @@ benchmarks!{
 	dummy {
 		let b in ...;
 		let caller = account("caller", 0, 0);
-	}: _ (RawOrigin::Signed(caller), b.into())
+	}: _ (RawOrigin::Signed(caller), b.into()) {
+		assert_eq!(Value::get(), None);
+	}
 
 	other_name {
 		let b in ...;
 		let caller = account("caller", 0, 0);
-	}: other_dummy (RawOrigin::Signed(caller), b.into())
+	}: other_dummy (RawOrigin::Signed(caller), b.into()) {}
 
 	sort_vector {
 		let x in 0 .. 10000;
 		let mut m = Vec::<u32>::new();
-		for i in 0..x {
+		for i in 0 .. x {
 			m.push(i);
 		}
 	}: {
 		m.sort();
-	}
+	} {}
 }
 
 #[test]
@@ -132,6 +140,10 @@ fn benchmarks_macro_works() {
 
 	new_test_ext().execute_with(|| {
 		assert_eq!(closure(), Ok(()));
+		let _ = <SelectedBenchmark as BenchmarkingSetup<Test>>::verify(
+			&SelectedBenchmark::dummy,
+			&[(BenchmarkParameter::b, 1)],
+		);
 	});
 }
 
