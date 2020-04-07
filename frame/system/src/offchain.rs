@@ -279,9 +279,9 @@ impl<
 
 /// Account information used for signing payloads
 pub struct Account<T: SigningTypes> {
-	index: usize,
-	id: T::AccountId,
-	public: T::Public,
+	pub index: usize,
+	pub id: T::AccountId,
+	pub public: T::Public,
 }
 
 impl<T: SigningTypes> Account<T> {
