@@ -273,7 +273,7 @@ macro_rules! benchmarks_iter {
 		$crate::selected_benchmark!( $instance $( $names ),* );
 		$crate::impl_benchmark!( $instance $( $names ),* );
 		#[cfg(test)]
-		$crate::impl_benchmark_tests!( $( $names ),* );
+		$crate::impl_benchmark_tests!( $instance $( $names ),* );
 	};
 	// add verify block to _() format
 	(
@@ -866,6 +866,7 @@ macro_rules! impl_benchmark {
 #[macro_export]
 macro_rules! impl_benchmark_tests {
 	(
+		NO_INSTANCE
 		$( $name:ident ),*
 	) => {
 		$(
@@ -903,7 +904,47 @@ macro_rules! impl_benchmark_tests {
 				}
 			}
 		)*
-	}
+	};
+	(
+		INSTANCE
+		$( $name:ident ),*
+	) => {
+		$(
+			$crate::paste::item! {
+				fn [<test_benchmark_ $name>] <T: Trait> () -> Result<(), &'static str>
+					where T: frame_system::Trait
+				{
+					let selected_benchmark = SelectedBenchmark::$name;
+					let components = <SelectedBenchmark as $crate::BenchmarkingSetupInstance<T, _>>::components(&selected_benchmark);
+
+					for (_, (name, low, high)) in components.iter().enumerate() {
+						// Test only the low and high value, assuming values in the middle won't break
+						for component_value in vec![low, high] {
+							// Select the max value for all the other components.
+							let c: Vec<($crate::BenchmarkParameter, u32)> = components.iter()
+								.enumerate()
+								.map(|(_, (n, _, h))|
+									if n == name {
+										(*n, *component_value)
+									} else {
+										(*n, *h)
+									}
+								)
+								.collect();
+
+							// Set the block number to 1 so events are deposited.
+							frame_system::Module::<T>::set_block_number(1.into());
+							// Verify the setup we want to benchmark.
+							<SelectedBenchmark as $crate::BenchmarkingSetupInstance<T, _>>::verify(&selected_benchmark, &c)?;
+							// Reset the state
+							$crate::benchmarking::wipe_db();
+						}
+					}
+					Ok(())
+				}
+			}
+		)*
+	};
 }
 
 
