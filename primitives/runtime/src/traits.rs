@@ -1315,6 +1315,15 @@ mod tests {
 		app_crypto!(sr25519, KeyTypeId(*b"test"));
 	}
 
+	#[test]
+	fn app_verify_works() {
+		use t::*;
+		use super::AppVerify;
+
+		let s = Signature::default();
+		let _ = s.verify(&[0u8; 100][..], &Public::default());
+	}
+
 	#[derive(Encode, Decode, Default, PartialEq, Debug)]
 	struct U32Value(u32);
 	impl super::TypeId for U32Value {
