@@ -87,8 +87,8 @@ impl ImportParams {
 	) -> error::Result<()> {
 		use sc_client_api::execution_extensions::ExecutionStrategies;
 
-		if let Some(DatabaseConfig::Path { ref mut cache_size, .. }) = config.database {
-			*cache_size = Some(self.database_cache_size);
+		if let Some(DatabaseConfig::RocksDb { ref mut cache_size, .. }) = config.database {
+			*cache_size = Some(self.database_cache_size as usize);
 		}
 
 		config.state_cache_size = self.state_cache_size;

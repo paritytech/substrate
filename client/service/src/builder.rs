@@ -195,8 +195,8 @@ fn new_full_parts<TBl, TRtApi, TExecDisp>(
 			config.state_cache_child_ratio.map(|v| (v, 100)),
 			pruning: config.pruning.clone(),
 			source: match config.expect_database() {
-				DatabaseConfig::Path { path, cache_size } =>
-					sc_client_db::DatabaseSettingsSrc::Path {
+				DatabaseConfig::RocksDb { path, cache_size } =>
+					sc_client_db::DatabaseSettingsSrc::RocksDb {
 						path: path.clone(),
 						cache_size: cache_size.clone().map(|u| u as usize),
 					},
@@ -304,15 +304,7 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 				state_cache_child_ratio:
 					config.state_cache_child_ratio.map(|v| (v, 100)),
 				pruning: config.pruning.clone(),
-				source: match config.expect_database() {
-					DatabaseConfig::Path { path, cache_size } =>
-						sc_client_db::DatabaseSettingsSrc::Path {
-							path: path.clone(),
-							cache_size: cache_size.clone().map(|u| u as usize),
-						},
-					DatabaseConfig::Custom(db) =>
-						sc_client_db::DatabaseSettingsSrc::Custom(db.clone()),
-				},
+				source: config.expect_database().clone(),
 			};
 			sc_client_db::light::LightStorage::new(db_settings)?
 		};

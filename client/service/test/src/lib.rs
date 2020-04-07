@@ -185,7 +185,7 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 			password: None
 		},
 		config_dir: Some(root.clone()),
-		database: Some(DatabaseConfig::Path {
+		database: Some(DatabaseConfig::RocksDb {
 			path: root.join("db"),
 			cache_size: None
 		}),

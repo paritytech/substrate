@@ -30,6 +30,7 @@ sc-state-db = { version = "0.8.0-alpha.5", path = "../state-db" }
 sp-trie = { version = "2.0.0-alpha.5", path = "../../primitives/trie" }
 sp-consensus = { version = "0.8.0-alpha.5", path = "../../primitives/consensus/common" }
 sp-blockchain = { version = "2.0.0-alpha.5", path = "../../primitives/blockchain" }
+sp-database = { version = "2.0.0-alpha.5", path = "../../primitives/database" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.8.0-alpha.5", path = "../../utils/prometheus" }
 
 [dev-dependencies]

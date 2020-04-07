@@ -75,7 +75,7 @@ impl SharedParams {
 		}
 
 		if config.database.is_none() {
-			config.database = Some(DatabaseConfig::Path {
+			config.database = Some(DatabaseConfig::RocksDb {
 				path: config
 					.in_chain_config_dir(DEFAULT_DB_CONFIG_PATH)
 					.expect("We provided a base_path/config_dir."),

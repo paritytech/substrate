@@ -20,8 +20,6 @@ use std::{sync::Arc, collections::HashMap};
 use std::convert::TryInto;
 use parking_lot::RwLock;
 
-use kvdb::{KeyValueDB, DBTransaction};
-
 use sc_client_api::{backend::{AuxStore, NewBlockState}, UsageInfo};
 use sc_client::blockchain::{
 	BlockStatus, Cache as BlockchainCache,Info as BlockchainInfo,
@@ -33,13 +31,14 @@ use sp_blockchain::{
 	HeaderBackend as BlockchainHeaderBackend,
 	well_known_cache_keys,
 };
+use sp_database::{Database, Transaction};
 use sc_client::light::blockchain::Storage as LightBlockchainStorage;
 use codec::{Decode, Encode};
 use sp_runtime::generic::{DigestItem, BlockId};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Zero, One, NumberFor, HashFor};
 use crate::cache::{DbCacheSync, DbCache, ComplexBlockId, EntryType as CacheEntryType};
-use crate::utils::{self, meta_keys, DatabaseType, Meta, db_err, read_db, block_id_to_lookup_key, read_meta};
-use crate::{DatabaseSettings, FrozenForDuration};
+use crate::utils::{self, meta_keys, DatabaseType, Meta, read_db, block_id_to_lookup_key, read_meta};
+use crate::{DatabaseSettings, FrozenForDuration, DbHash};
 use log::{trace, warn, debug};
 
 pub(crate) mod columns {
@@ -59,7 +58,7 @@ const CHANGES_TRIE_CHT_PREFIX: u8 = 1;
 /// Light blockchain storage. Stores most recent headers + CHTs for older headers.
 /// Locks order: meta, cache.
 pub struct LightStorage<Block: BlockT> {
-	db: Arc<dyn KeyValueDB>,
+	db: Arc<dyn Database<DbHash>>,
 	meta: RwLock<Meta<NumberFor<Block>, Block::Hash>>,
 	cache: Arc<DbCacheSync<Block>>,
 	header_metadata_cache: HeaderMetadataCache<Block>,
@@ -78,14 +77,11 @@ impl<Block: BlockT> LightStorage<Block> {
 	/// Create new memory-backed `LightStorage` for tests.
 	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn new_test() -> Self {
-		use utils::NUM_COLUMNS;
-
-		let db = Arc::new(::kvdb_memorydb::create(NUM_COLUMNS));
-
+		let db = Arc::new(sp_database::MemDb::default());
 		Self::from_kvdb(db as Arc<_>).expect("failed to create test-db")
 	}
 
-	fn from_kvdb(db: Arc<dyn KeyValueDB>) -> ClientResult<Self> {
+	fn from_kvdb(db: Arc<dyn Database<DbHash>>) -> ClientResult<Self> {
 		let meta = read_meta::<Block>(&*db, columns::HEADER)?;
 		let cache = DbCache::new(
 			db.clone(),
@@ -230,7 +226,7 @@ impl<Block: BlockT> LightStorage<Block> {
 	/// to be best, `route_to` should equal to `best_to`.
 	fn set_head_with_transaction(
 		&self,
-		transaction: &mut DBTransaction,
+		transaction: &mut Transaction<DbHash>,
 		route_to: Block::Hash,
 		best_to: (NumberFor<Block>, Block::Hash),
 	) -> ClientResult<()> {
@@ -266,7 +262,7 @@ impl<Block: BlockT> LightStorage<Block> {
 			}
 		}
 
-		transaction.put(columns::META, meta_keys::BEST_BLOCK, &lookup_key);
+		transaction.set_from_vec(columns::META, meta_keys::BEST_BLOCK, lookup_key);
 		utils::insert_number_to_key_mapping(
 			transaction,
 			columns::KEY_LOOKUP,
@@ -280,7 +276,7 @@ impl<Block: BlockT> LightStorage<Block> {
 	// Note that a block is finalized. Only call with child of last finalized block.
 	fn note_finalized(
 		&self,
-		transaction: &mut DBTransaction,
+		transaction: &mut Transaction<DbHash>,
 		header: &Block::Header,
 		hash: Block::Hash,
 	) -> ClientResult<()> {
@@ -293,7 +289,7 @@ impl<Block: BlockT> LightStorage<Block> {
 		}
 
 		let lookup_key = utils::number_and_hash_to_lookup_key(header.number().clone(), hash)?;
-		transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, &lookup_key);
+		transaction.set_from_vec(columns::META, meta_keys::FINALIZED_BLOCK, lookup_key);
 
 		// build new CHT(s) if required
 		if let Some(new_cht_number) = cht::is_build_required(cht::size(), *header.number()) {
@@ -309,7 +305,7 @@ impl<Block: BlockT> LightStorage<Block> {
 			let new_header_cht_root = cht::compute_root::<Block::Header, HashFor<Block>, _>(
 				cht::size(), new_cht_number, cht_range.map(|num| self.hash(num))
 			)?;
-			transaction.put(
+			transaction.set(
 				columns::CHT,
 				&cht_key(HEADER_CHT_PREFIX, new_cht_start)?,
 				new_header_cht_root.as_ref()
@@ -327,7 +323,7 @@ impl<Block: BlockT> LightStorage<Block> {
 					cht::size(), new_cht_number, cht_range
 						.map(|num| self.changes_trie_root(BlockId::Number(num)))
 				)?;
-				transaction.put(
+				transaction.set(
 					columns::CHT,
 					&cht_key(CHANGES_TRIE_CHT_PREFIX, new_cht_start)?,
 					new_changes_trie_cht_root.as_ref()
@@ -350,7 +346,7 @@ impl<Block: BlockT> LightStorage<Block> {
 						prune_block,
 						hash
 					)?;
-					transaction.delete(columns::HEADER, &lookup_key);
+					transaction.remove(columns::HEADER, &lookup_key);
 				}
 				prune_block += One::one();
 			}
@@ -377,7 +373,7 @@ impl<Block: BlockT> LightStorage<Block> {
 		}
 
 		let cht_start = cht::start_number(cht_size, cht_number);
-		self.db.get(columns::CHT, &cht_key(cht_type, cht_start)?).map_err(db_err)?
+		self.db.get(columns::CHT, &cht_key(cht_type, cht_start)?)
 			.ok_or_else(no_cht_for_block)
 			.and_then(|hash| Block::Hash::decode(&mut &*hash).map_err(|_| no_cht_for_block()))
 			.map(Some)
@@ -394,18 +390,19 @@ impl<Block> AuxStore for LightStorage<Block>
 		I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
 		D: IntoIterator<Item=&'a &'b [u8]>,
 	>(&self, insert: I, delete: D) -> ClientResult<()> {
-		let mut transaction = DBTransaction::new();
+		let mut transaction = Transaction::new();
 		for (k, v) in insert {
-			transaction.put(columns::AUX, k, v);
+			transaction.set(columns::AUX, k, v);
 		}
 		for k in delete {
-			transaction.delete(columns::AUX, k);
+			transaction.remove(columns::AUX, k);
 		}
-		self.db.write(transaction).map_err(db_err)
+		self.db.commit(transaction);
+		Ok(())
 	}
 
 	fn get_aux(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
-		self.db.get(columns::AUX, key).map(|r| r.map(|v| v.to_vec())).map_err(db_err)
+		Ok(self.db.get(columns::AUX, key))
 	}
 }
 
@@ -419,7 +416,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		leaf_state: NewBlockState,
 		aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	) -> ClientResult<()> {
-		let mut transaction = DBTransaction::new();
+		let mut transaction = Transaction::new();
 
 		let hash = header.hash();
 		let number = *header.number();
@@ -427,8 +424,8 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 
 		for (key, maybe_val) in aux_ops {
 			match maybe_val {
-				Some(val) => transaction.put_vec(columns::AUX, &key, val),
-				None => transaction.delete(columns::AUX, &key),
+				Some(val) => transaction.set_from_vec(columns::AUX, &key, val),
+				None => transaction.remove(columns::AUX, &key),
 			}
 		}
 
@@ -445,7 +442,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 			number,
 			hash,
 		)?;
-		transaction.put(columns::HEADER, &lookup_key, &header.encode());
+		transaction.set_from_vec(columns::HEADER, &lookup_key, header.encode());
 
 		let header_metadata = CachedHeaderMetadata::from(&header);
 		self.header_metadata_cache.insert_header_metadata(
@@ -456,7 +453,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		let is_genesis = number.is_zero();
 		if is_genesis {
 			self.cache.0.write().set_genesis_hash(hash);
-			transaction.put(columns::META, meta_keys::GENESIS_HASH, hash.as_ref());
+			transaction.set(columns::META, meta_keys::GENESIS_HASH, hash.as_ref());
 		}
 
 		let finalized = match leaf_state {
@@ -493,7 +490,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 
 			debug!("Light DB Commit {:?} ({})", hash, number);
 
-			self.db.write(transaction).map_err(db_err)?;
+			self.db.commit(transaction);
 			cache.commit(cache_ops)
 				.expect("only fails if cache with given name isn't loaded yet;\
 						cache is already loaded because there are cache_ops; qed");
@@ -509,9 +506,9 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 			let hash = header.hash();
 			let number = header.number();
 
-			let mut transaction = DBTransaction::new();
+			let mut transaction = Transaction::new();
 			self.set_head_with_transaction(&mut transaction, hash.clone(), (number.clone(), hash.clone()))?;
-			self.db.write(transaction).map_err(db_err)?;
+			self.db.commit(transaction);
 			self.update_meta(hash, header.number().clone(), true, false);
 			Ok(())
 		} else {
@@ -537,7 +534,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 
 	fn finalize_header(&self, id: BlockId<Block>) -> ClientResult<()> {
 		if let Some(header) = self.header(id)? {
-			let mut transaction = DBTransaction::new();
+			let mut transaction = Transaction::new();
 			let hash = header.hash();
 			let number = *header.number();
 			self.note_finalized(&mut transaction, &header, hash.clone())?;
@@ -550,7 +547,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 					)?
 					.into_ops();
 
-				self.db.write(transaction).map_err(db_err)?;
+				self.db.commit(transaction);
 				cache.commit(cache_ops)
 					.expect("only fails if cache with given name isn't loaded yet;\
 							cache is already loaded because there are cache_ops; qed");
@@ -575,8 +572,9 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 	fn usage_info(&self) -> Option<UsageInfo> {
 		use sc_client_api::{MemoryInfo, IoInfo, MemorySize};
 
-		let database_cache = MemorySize::from_bytes(parity_util_mem::malloc_size(&*self.db));
-		let io_stats = self.io_stats.take_or_else(|| self.db.io_stats(kvdb::IoStatsKind::SincePrevious));
+		// TODO: reimplement IO stats
+		let database_cache = MemorySize::from_bytes(0);
+		let io_stats = self.io_stats.take_or_else(|| kvdb::IoStats::empty());
 
 		Some(UsageInfo {
 			memory: MemoryInfo {
@@ -732,21 +730,25 @@ pub(crate) mod tests {
 
 	#[test]
 	fn import_header_works() {
-		let db = LightStorage::new_test();
+		let raw_db = Arc::new(sp_database::MemDb::default());
+		let db = LightStorage::from_kvdb(raw_db.clone()).unwrap();
 
 		let genesis_hash = insert_block(&db, HashMap::new(), || default_header(&Default::default(), 0));
-		assert_eq!(db.db.iter(columns::HEADER).count(), 1);
-		assert_eq!(db.db.iter(columns::KEY_LOOKUP).count(), 2);
+		assert_eq!(raw_db.count(columns::HEADER), 1);
+		assert_eq!(raw_db.count(columns::KEY_LOOKUP), 2);
 
 		let _ = insert_block(&db, HashMap::new(), || default_header(&genesis_hash, 1));
-		assert_eq!(db.db.iter(columns::HEADER).count(), 2);
-		assert_eq!(db.db.iter(columns::KEY_LOOKUP).count(), 4);
+		assert_eq!(raw_db.count(columns::HEADER), 2);
+		assert_eq!(raw_db.count(columns::KEY_LOOKUP), 4);
 	}
 
 	#[test]
 	fn finalized_ancient_headers_are_replaced_with_cht() {
-		fn insert_headers<F: Fn(&Hash, u64) -> Header>(header_producer: F) -> LightStorage<Block> {
-			let db = LightStorage::new_test();
+		fn insert_headers<F: Fn(&Hash, u64) -> Header>(header_producer: F) ->
+			(Arc<sp_database::MemDb<DbHash>>, LightStorage<Block>)
+		{
+			let raw_db = Arc::new(sp_database::MemDb::default());
+			let db = LightStorage::from_kvdb(raw_db.clone()).unwrap();
 			let cht_size: u64 = cht::size();
 			let ucht_size: usize = cht_size as _;
 
@@ -758,8 +760,8 @@ pub(crate) mod tests {
 			for number in 0..cht::size() {
 				prev_hash = insert_block(&db, HashMap::new(), || header_producer(&prev_hash, 1 + number));
 			}
-			assert_eq!(db.db.iter(columns::HEADER).count(), 1 + ucht_size);
-			assert_eq!(db.db.iter(columns::CHT).count(), 0);
+			assert_eq!(raw_db.count(columns::HEADER), 1 + ucht_size);
+			assert_eq!(raw_db.count(columns::CHT), 0);
 
 			// insert next SIZE blocks && ensure that nothing is pruned
 			for number in 0..(cht_size as _) {
@@ -769,8 +771,8 @@ pub(crate) mod tests {
 					|| header_producer(&prev_hash, 1 + cht_size + number),
 				);
 			}
-			assert_eq!(db.db.iter(columns::HEADER).count(), 1 + ucht_size + ucht_size);
-			assert_eq!(db.db.iter(columns::CHT).count(), 0);
+			assert_eq!(raw_db.count(columns::HEADER), 1 + ucht_size + ucht_size);
+			assert_eq!(raw_db.count(columns::CHT), 0);
 
 			// insert block #{2 * cht::size() + 1} && check that new CHT is created + headers of this CHT are pruned
 			// nothing is yet finalized, so nothing is pruned.
@@ -779,23 +781,23 @@ pub(crate) mod tests {
 				HashMap::new(),
 				|| header_producer(&prev_hash, 1 + cht_size + cht_size),
 			);
-			assert_eq!(db.db.iter(columns::HEADER).count(), 2 + ucht_size + ucht_size);
-			assert_eq!(db.db.iter(columns::CHT).count(), 0);
+			assert_eq!(raw_db.count(columns::HEADER), 2 + ucht_size + ucht_size);
+			assert_eq!(raw_db.count(columns::CHT), 0);
 
 			// now finalize the block.
 			for i in (0..(ucht_size + ucht_size)).map(|i| i + 1) {
 				db.finalize_header(BlockId::Number(i as _)).unwrap();
 			}
 			db.finalize_header(BlockId::Hash(prev_hash)).unwrap();
-			db
+			(raw_db, db)
 		}
 
 		// when headers are created without changes tries roots
-		let db = insert_headers(default_header);
+		let (raw_db, db) = insert_headers(default_header);
 		let cht_size: u64 = cht::size();
-		assert_eq!(db.db.iter(columns::HEADER).count(), (1 + cht_size + 1) as usize);
-		assert_eq!(db.db.iter(columns::KEY_LOOKUP).count(), (2 * (1 + cht_size + 1)) as usize);
-		assert_eq!(db.db.iter(columns::CHT).count(), 1);
+		assert_eq!(raw_db.count(columns::HEADER), (1 + cht_size + 1) as usize);
+		assert_eq!(raw_db.count(columns::KEY_LOOKUP), (2 * (1 + cht_size + 1)) as usize);
+		assert_eq!(raw_db.count(columns::CHT), 1);
 		assert!((0..cht_size as _).all(|i| db.header(BlockId::Number(1 + i)).unwrap().is_none()));
 		assert!(db.header_cht_root(cht_size, cht_size / 2).unwrap().is_some());
 		assert!(db.header_cht_root(cht_size, cht_size + cht_size / 2).unwrap().is_none());
@@ -803,9 +805,9 @@ pub(crate) mod tests {
 		assert!(db.changes_trie_cht_root(cht_size, cht_size + cht_size / 2).unwrap().is_none());
 
 		// when headers are created with changes tries roots
-		let db = insert_headers(header_with_changes_trie);
-		assert_eq!(db.db.iter(columns::HEADER).count(), (1 + cht_size + 1) as usize);
-		assert_eq!(db.db.iter(columns::CHT).count(), 2);
+		let (raw_db, db) = insert_headers(header_with_changes_trie);
+		assert_eq!(raw_db.count(columns::HEADER), (1 + cht_size + 1) as usize);
+		assert_eq!(raw_db.count(columns::CHT), 2);
 		assert!((0..cht_size as _).all(|i| db.header(BlockId::Number(1 + i)).unwrap().is_none()));
 		assert!(db.header_cht_root(cht_size, cht_size / 2).unwrap().is_some());
 		assert!(db.header_cht_root(cht_size, cht_size + cht_size / 2).unwrap().is_none());

@@ -5845,6 +5845,7 @@ dependencies = [
  "sp-blockchain",
  "sp-consensus",
  "sp-core",
+ "sp-database",
  "sp-externalities",
  "sp-inherents",
  "sp-keyring",
@@ -5918,6 +5919,7 @@ dependencies = [
  "sp-blockchain",
  "sp-consensus",
  "sp-core",
+ "sp-database",
  "sp-keyring",
  "sp-runtime",
  "sp-state-machine",
@@ -7309,6 +7311,10 @@ dependencies = [
 [[package]]
 name = "sp-database"
 version = "2.0.0-alpha.5"
+dependencies = [
+ "kvdb",
+ "parking_lot 0.10.0",
+]
 
 [[package]]
 name = "sp-debug-derive"
@@ -7852,6 +7858,7 @@ dependencies = [
  "sc-informant",
  "sc-network",
  "sc-service",
+ "sp-database",
  "wasm-bindgen",
  "wasm-bindgen-futures",
 ]

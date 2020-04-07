@@ -744,7 +744,7 @@ mod tests {
 
 		assert!(config.config_dir.is_some());
 		assert!(config.database.is_some());
-		if let Some(DatabaseConfig::Path { ref cache_size, .. }) = config.database {
+		if let Some(DatabaseConfig::RocksDb { ref cache_size, .. }) = config.database {
 			assert!(cache_size.is_some());
 		} else {
 			panic!("invalid config.database variant");
