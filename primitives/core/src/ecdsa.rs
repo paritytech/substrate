@@ -651,15 +651,18 @@ mod test {
 	#[test]
 	fn ss58check_custom_format_works() {
 		use crate::crypto::Ss58AddressFormat;
+		// temp save default format version
 		let default_format = Ss58AddressFormat::default();
-		set_default_ss58_version(Ss58AddressFormat::try_from("200").expect(""));
-		// custom
+		// set current ss58 version is custom "200" `Ss58AddressFormat::Custom(200)`
+		set_default_ss58_version(Ss58AddressFormat::try_from("200")
+			.expect("parse str to u8 must success"));
+		// custom addr encoded by version 200
 		let addr = "2X64kMNEWAW5KLZMSKcGKEc96MyuaRsRUku7vomuYxKgqjVCRj";
-		let _ = Public::from_ss58check(&addr).unwrap();
+		assert!(Public::from_ss58check(&addr).is_ok());
 		set_default_ss58_version(default_format);
-		// normal
+		// set  current ss58 version to default version
 		let addr = "KWAfgC2aRG5UVD6CpbPQXCx4YZZUhvWqqAJE6qcYc9Rtr6g5C";
-		let _ = Public::from_ss58check(&addr).unwrap();
+		assert!(Public::from_ss58check(&addr).is_ok());
 	}
 
 	#[test]
