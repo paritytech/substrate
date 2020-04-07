@@ -34,13 +34,14 @@ decl_storage! {
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
-		fn dummy(origin, _n: u32) -> DispatchResult {
+		fn set_value(origin, n: u32) -> DispatchResult {
 			let _sender = ensure_signed(origin)?;
+			Value::put(n);
 			Ok(())
 		}
 
 		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
-		fn other_dummy(origin, _n: u32) -> DispatchResult {
+		fn dummy(origin, _n: u32) -> DispatchResult {
 			let _sender = ensure_none(origin)?;
 			Ok(())
 		}
@@ -102,17 +103,19 @@ benchmarks!{
 		let b in 1 .. 1000 => ();
 	}
 
-	dummy {
+	set_value {
 		let b in ...;
 		let caller = account("caller", 0, 0);
 	}: _ (RawOrigin::Signed(caller), b.into()) {
-		assert_eq!(Value::get(), None);
+		assert_eq!(Value::get(), Some(b));
 	}
 
 	other_name {
 		let b in ...;
 		let caller = account("caller", 0, 0);
-	}: other_dummy (RawOrigin::Signed(caller), b.into()) {}
+	}: dummy (RawOrigin::Signed(caller), b.into()) {
+		assert_eq!(Value::get(), None)
+	}
 
 	sort_vector {
 		let x in 0 .. 10000;
@@ -127,8 +130,8 @@ benchmarks!{
 
 #[test]
 fn benchmarks_macro_works() {
-	// Check benchmark creation for `dummy`.
-	let selected_benchmark = SelectedBenchmark::dummy;
+	// Check benchmark creation for `set_value`.
+	let selected_benchmark = SelectedBenchmark::set_value;
 
 	let components = <SelectedBenchmark as BenchmarkingSetup<Test>>::components(&selected_benchmark);
 	assert_eq!(components, vec![(BenchmarkParameter::b, 1, 1000)]);
@@ -140,10 +143,6 @@ fn benchmarks_macro_works() {
 
 	new_test_ext().execute_with(|| {
 		assert_eq!(closure(), Ok(()));
-		let _ = <SelectedBenchmark as BenchmarkingSetup<Test>>::verify(
-			&SelectedBenchmark::dummy,
-			&[(BenchmarkParameter::b, 1)],
-		);
 	});
 }
 
@@ -177,4 +176,30 @@ fn benchmarks_macro_works_for_non_dispatchable() {
 	).expect("failed to create closure");
 
 	assert_eq!(closure(), Ok(()));
+}
+
+#[test]
+fn benchmarks_macro_verify_works() {
+	// Check postcondition for benchmark `set_value` is valid.
+	let selected_benchmark = SelectedBenchmark::set_value;
+
+	new_test_ext().execute_with(|| {
+		let _ = <SelectedBenchmark as BenchmarkingSetup<Test>>::verify(
+			&selected_benchmark,
+			&[(BenchmarkParameter::b, 1)],
+		);
+	});
+}
+
+#[test]
+fn benchmarks_macro_verify_fail_works() {
+	// Check postcondition for benchmark `other_name` is invalid.
+	let selected_benchmark = SelectedBenchmark::other_name;
+
+	new_test_ext().execute_with(|| {
+		let _ = <SelectedBenchmark as BenchmarkingSetup<Test>>::verify(
+			&selected_benchmark,
+			&[(BenchmarkParameter::b, 1)],
+		);
+	});
 }

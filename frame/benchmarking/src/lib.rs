@@ -392,7 +392,20 @@ macro_rules! benchmark_backend {
 			}
 
 			fn verify(&self, components: &[($crate::BenchmarkParameter, u32)]) -> Result<(), &'static str> {
+				$(
+					let $common = $common_from;
+				)*
+				$(
+					// Prepare instance
+					let $param = components.iter().find(|&c| c.0 == $crate::BenchmarkParameter::$param).unwrap().1;
+				)*
+				$(
+					let $pre_id : $pre_ty = $pre_ex;
+				)*
+				$( $param_instancer ; )*
+
 				$postcode
+
 				Ok(())
 			}
 		}
@@ -436,7 +449,20 @@ macro_rules! benchmark_backend {
 			}
 
 			fn verify(&self, components: &[($crate::BenchmarkParameter, u32)]) -> Result<(), &'static str> {
+				$(
+					let $common = $common_from;
+				)*
+				$(
+					// Prepare instance
+					let $param = components.iter().find(|&c| c.0 == $crate::BenchmarkParameter::$param).unwrap().1;
+				)*
+				$(
+					let $pre_id : $pre_ty = $pre_ex;
+				)*
+				$( $param_instancer ; )*
+
 				$postcode
+
 				Ok(())
 			}
 		}
