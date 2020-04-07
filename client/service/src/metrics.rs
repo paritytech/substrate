@@ -233,7 +233,7 @@ impl MetricsService {
 	}
 }
 
-#[cfg(any(unix, windows))]
+#[cfg(all(any(unix, windows), not(target_os = "linux")))]
 impl MetricsService {
 	fn inner_new(metrics: Option<PrometheusMetrics>) -> Self {
 		Self {
@@ -246,21 +246,10 @@ impl MetricsService {
 	fn process_info(&mut self) -> ProcessInfo {
 		self.pid.map(|pid| self.process_info_for(&pid)).unwrap_or_default()
 	}
-
-	fn process_info_for(&mut self, pid: &sysinfo::Pid) -> ProcessInfo {
-		let mut info = ProcessInfo::default();
-		if self.system.refresh_process(*pid) {
-			let prc = self.system.get_process(*pid)
-				.expect("Above refresh_process succeeds, this must be Some(), qed");
-			info.cpu_usage = prc.cpu_usage().into();
-			info.memory = prc.memory();
-		}
-		info
-	}
 }
 
 
-#[cfg(target_os = "linux")]
+#[cfg(target_os = "unknown")]
 impl MetricsService {
 	fn inner_new(metrics: Option<PrometheusMetrics>) -> Self {
 		Self {
@@ -286,6 +275,18 @@ impl MetricsService {
 
 	pub fn new() -> Self {
 		Self::inner_new(None)
+	}
+
+	#[cfg(not(target_os = "unknown"))]
+	fn process_info_for(&mut self, pid: &sysinfo::Pid) -> ProcessInfo {
+		let mut info = ProcessInfo::default();
+		if self.system.refresh_process(*pid) {
+			let prc = self.system.get_process(*pid)
+				.expect("Above refresh_process succeeds, this must be Some(), qed");
+			info.cpu_usage = prc.cpu_usage().into();
+			info.memory = prc.memory();
+		}
+		info
 	}
 
 	#[cfg(not(target_os = "unknown"))]
