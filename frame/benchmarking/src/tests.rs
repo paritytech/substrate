@@ -234,7 +234,7 @@ fn benchmarks_macro_verify_fail_works() {
 #[test]
 fn benchmarks_generate_unit_tests() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(test_benchmark_dummy::<Test>());
+		assert_ok!(test_benchmark_set_value::<Test>());
 		assert_err!(test_benchmark_other_name::<Test>(), "Bad origin");
 		assert_ok!(test_benchmark_sort_vector::<Test>());
 		assert_err!(test_benchmark_broken_benchmark::<Test>(), "You forgot to sort!");
