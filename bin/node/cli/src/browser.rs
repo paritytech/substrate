@@ -41,10 +41,10 @@ async fn start_inner(chain_spec: String, log_level: String) -> Result<Client, Bo
 	let config = browser_configuration(chain_spec).await?;
 
 	info!("Substrate browser node");
-	info!("✌️  version {}", config.full_version());
+	info!("✌️  version {}", config.impl_version);
 	info!("❤️  by Parity Technologies, 2017-2020");
-	info!("📋 Chain specification: {}", config.expect_chain_spec().name());
-	info!("🏷  Node name: {}", config.name);
+	info!("📋 Chain specification: {}", config.chain_spec.name());
+	info!("🏷  Node name: {}", config.network.node_name);
 	info!("👤 Role: {:?}", config.role);
 
 	// Create the service. This is the most heavy initialization step.

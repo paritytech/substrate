@@ -14,15 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use structopt::StructOpt;
-use log::info;
-use sc_network::config::{build_multiaddr, MultiaddrWithPeerId};
-use sc_service::{Configuration, ChainSpec};
-
 use crate::error;
-use crate::VersionInfo;
-use crate::params::SharedParams;
 use crate::params::NodeKeyParams;
+use crate::params::SharedParams;
+use crate::CliConfiguration;
+use log::info;
+use sc_network::config::build_multiaddr;
+use sc_service::{config::MultiaddrWithPeerId, Configuration};
+use structopt::StructOpt;
 
 /// The `build-spec` command used to build a specification.
 #[derive(Debug, StructOpt, Clone)]
@@ -49,12 +48,9 @@ pub struct BuildSpecCmd {
 
 impl BuildSpecCmd {
 	/// Run the build-spec command
-	pub fn run(
-		self,
-		config: Configuration,
-	) -> error::Result<()> {
+	pub fn run(&self, config: Configuration) -> error::Result<()> {
 		info!("Building chain spec");
-		let mut spec = config.chain_spec.expect("`chain_spec` is set to `Some` in `update_config`");
+		let mut spec = config.chain_spec;
 		let raw_output = self.raw;
 
 		if spec.boot_nodes().is_empty() && !self.disable_default_bootnode {
@@ -73,25 +69,14 @@ impl BuildSpecCmd {
 
 		Ok(())
 	}
-
-	/// Update and prepare a `Configuration` with command line parameters
-	pub fn update_config<F>(
-		&self,
-		mut config: &mut Configuration,
-		spec_factory: F,
-		version: &VersionInfo,
-	) -> error::Result<()> where
-		F: FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
-	{
-		self.shared_params.update_config(&mut config, spec_factory, version)?;
-
-		let net_config_path = config
-			.in_chain_config_dir(crate::commands::DEFAULT_NETWORK_CONFIG_PATH)
-			.expect("We provided a base_path");
-
-		self.node_key_params.update_config(&mut config, Some(&net_config_path))?;
-
-		Ok(())
-	}
 }
 
+impl CliConfiguration for BuildSpecCmd {
+	fn shared_params(&self) -> &SharedParams {
+		&self.shared_params
+	}
+
+	fn node_key_params(&self) -> Option<&NodeKeyParams> {
+		Some(&self.node_key_params)
+	}
+}

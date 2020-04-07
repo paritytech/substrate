@@ -55,6 +55,7 @@ pallet-indices = { version = "2.0.0-alpha.5", default-features = false, path = "
 pallet-identity = { version = "2.0.0-alpha.5", default-features = false, path = "../../../frame/identity" }
 pallet-membership = { version = "2.0.0-alpha.5", default-features = false, path = "../../../frame/membership" }
 pallet-offences = { version = "2.0.0-alpha.5", default-features = false, path = "../../../frame/offences" }
+pallet-offences-benchmarking = { version = "2.0.0-alpha.5", path = "../../../frame/offences/benchmarking", default-features = false, optional = true }
 pallet-randomness-collective-flip = { version = "2.0.0-alpha.5", default-features = false, path = "../../../frame/randomness-collective-flip" }
 pallet-recovery = { version = "2.0.0-alpha.5", default-features = false, path = "../../../frame/recovery" }
 pallet-session = { version = "2.0.0-alpha.5", features = ["historical"], path = "../../../frame/session", default-features = false }
@@ -150,6 +151,7 @@ runtime-benchmarks = [
 	"pallet-utility/runtime-benchmarks",
 	"pallet-vesting/runtime-benchmarks",
 	"pallet-collective/runtime-benchmarks",
+	"pallet-offences-benchmarking",
 	"pallet-session-benchmarking",
 ]
 
