@@ -108,15 +108,17 @@ benchmarks!{
 
 	set_value {
 		let b in ...;
-		let caller = account("caller", 0, 0);
-	}: _ (RawOrigin::Signed(caller), b.into()) {
+		let caller = account::<T::AccountId>("caller", 0, 0);
+	}: _ (RawOrigin::Signed(caller), b.into())
+	verify {
 		assert_eq!(Value::get(), Some(b));
 	}
 
 	other_name {
 		let b in ...;
-		let caller = account("caller", 0, 0);
-	}: dummy (RawOrigin::Signed(caller), b.into()) {
+		let caller = account::<T::AccountId>("caller", 0, 0);
+	}: dummy (RawOrigin::Signed(caller), b.into())
+	verify {
 		assert_eq!(Value::get(), None)
 	}
 
@@ -129,7 +131,7 @@ benchmarks!{
 	}: {
 		m.sort();
 		ensure!(m[0] == 0, "You forgot to sort!")
-	} {}
+	}
 
 	broken_benchmark {
 		let x in 1 .. 10000;
@@ -137,9 +139,10 @@ benchmarks!{
 		for i in (0..x).rev() {
 			m.push(i);
 		}
-	}: {
+	}: { }
+	verify {
 		ensure!(m[0] == 0, "You forgot to sort!")
-	} {}
+	}
 }
 
 #[test]

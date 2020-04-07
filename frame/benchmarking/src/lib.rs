@@ -192,7 +192,7 @@ macro_rules! benchmarks_iter {
 		{ $( $common:tt )* }
 		( $( $names:ident )* )
 		$name:ident { $( $code:tt )* }: _ ( $origin:expr $( , $arg:expr )* )
-		$postcode:block
+		verify $postcode:block
 		$( $rest:tt )*
 	) => {
 		$crate::benchmarks_iter! {
@@ -200,7 +200,7 @@ macro_rules! benchmarks_iter {
 			{ $( $common )* }
 			( $( $names )* )
 			$name { $( $code )* }: $name ( $origin $( , $arg )* )
-			$postcode
+			verify $postcode
 			$( $rest )*
 		}
 	};
@@ -210,7 +210,7 @@ macro_rules! benchmarks_iter {
 		{ $( $common:tt )* }
 		( $( $names:ident )* )
 		$name:ident { $( $code:tt )* }: $dispatch:ident ( $origin:expr $( , $arg:expr )* )
-		$postcode:block
+		verify $postcode:block
 		$( $rest:tt )*
 	) => {
 		$crate::benchmarks_iter! {
@@ -220,7 +220,7 @@ macro_rules! benchmarks_iter {
 			$name { $( $code )* }: {
 				<Call<T> as $crate::Dispatchable>::dispatch(Call::<T>::$dispatch($($arg),*), $origin.into())?;
 			}
-			$postcode
+			verify $postcode
 			$( $rest )*
 		}
 	};
@@ -230,7 +230,7 @@ macro_rules! benchmarks_iter {
 		{ $( $common:tt )* }
 		( $( $names:ident )* )
 		$name:ident { $( $code:tt )* }: $dispatch:ident ( $origin:expr $( , $arg:expr )* )
-		$postcode:block
+		verify $postcode:block
 		$( $rest:tt )*
 	) => {
 		$crate::benchmarks_iter! {
@@ -240,7 +240,7 @@ macro_rules! benchmarks_iter {
 			$name { $( $code )* }: {
 				<Call<T, I> as $crate::Dispatchable>::dispatch(Call::<T, I>::$dispatch($($arg),*), $origin.into())?;
 			}
-			$postcode
+			verify $postcode
 			$( $rest )*
 		}
 	};
@@ -250,7 +250,7 @@ macro_rules! benchmarks_iter {
 		{ $( $common:tt )* }
 		( $( $names:ident )* )
 		$name:ident { $( $code:tt )* }: $eval:block
-		$postcode:block
+		verify $postcode:block
 		$( $rest:tt )*
 	) => {
 		$crate::benchmark_backend! {
@@ -274,7 +274,58 @@ macro_rules! benchmarks_iter {
 		$crate::impl_benchmark!( $instance $( $names ),* );
 		#[cfg(test)]
 		$crate::impl_benchmark_tests!( $( $names ),* );
-	}
+	};
+	// add verify block to _() format
+	(
+		$instance:ident
+		{ $( $common:tt )* }
+		( $( $names:ident )* )
+		$name:ident { $( $code:tt )* }: _ ( $origin:expr $( , $arg:expr )* )
+		$( $rest:tt )*
+	) => {
+		$crate::benchmarks_iter! {
+			$instance
+			{ $( $common )* }
+			( $( $names )* )
+			$name { $( $code )* }: _ ( $origin $( , $arg )* )
+			verify { }
+			$( $rest )*
+		}
+	};
+	// add verify block to name() format
+	(
+		$instance:ident
+		{ $( $common:tt )* }
+		( $( $names:ident )* )
+		$name:ident { $( $code:tt )* }: $dispatch:ident ( $origin:expr $( , $arg:expr )* )
+		$( $rest:tt )*
+	) => {
+		$crate::benchmarks_iter! {
+			$instance
+			{ $( $common )* }
+			( $( $names )* )
+			$name { $( $code )* }: $dispatch ( $origin $( , $arg )* )
+			verify { }
+			$( $rest )*
+		}
+	};
+	// add verify block to {} format
+	(
+		$instance:ident
+		{ $( $common:tt )* }
+		( $( $names:ident )* )
+		$name:ident { $( $code:tt )* }: $eval:block
+		$( $rest:tt )*
+	) => {
+		$crate::benchmarks_iter!(
+			$instance
+			{ $( $common )* }
+			( $( $names )* )
+			$name { $( $code )* }: $eval
+			verify { }
+			$( $rest )*
+		);
+	};
 }
 
 #[macro_export]
@@ -455,7 +506,7 @@ macro_rules! benchmark_backend {
 					let $pre_id : $pre_ty = $pre_ex;
 				)*
 				$( $param_instancer ; )*
-
+				$( $post )*
 				$postcode
 
 				Ok(())
@@ -850,6 +901,8 @@ macro_rules! impl_benchmark_tests {
 							let closure_to_benchmark = <SelectedBenchmark as $crate::BenchmarkingSetup<T>>::instance(&selected_benchmark, &c)?;
 							// Run the benchmark
 							closure_to_benchmark()?;
+							// Run verify block
+							<SelectedBenchmark as $crate::BenchmarkingSetup<T>>::verify(&selected_benchmark, &c)?;
 							// Reset the state
 							$crate::benchmarking::wipe_db();
 						}
