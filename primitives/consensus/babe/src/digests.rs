@@ -17,8 +17,8 @@
 //! Private implementation details of BABE digests.
 
 #[cfg(feature = "std")]
-use super::{BABE_ENGINE_ID, AuthoritySignature, BabeEpochConfiguration};
-use super::{AuthorityId, AuthorityIndex, SlotNumber, BabeAuthorityWeight};
+use super::{BABE_ENGINE_ID, AuthoritySignature};
+use super::{AuthorityId, AuthorityIndex, SlotNumber, BabeAuthorityWeight, BabeEpochConfiguration};
 #[cfg(feature = "std")]
 use sp_runtime::{DigestItem, generic::OpaqueDigestItemId};
 #[cfg(feature = "std")]

@@ -1305,13 +1305,12 @@ pub mod test_helpers {
 			&parent.hash(),
 			parent.number().clone(),
 			slot_number,
-			|slot| link.config.genesis_epoch(slot),
+			|slot| Epoch::genesis(&link.config, slot),
 		).unwrap().unwrap();
 
 		authorship::claim_slot(
 			slot_number,
 			&epoch,
-			&link.config,
 			keystore,
 		).map(|(digest, _)| digest)
 	}

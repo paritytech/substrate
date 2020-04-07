@@ -136,6 +136,7 @@ mod test {
 	use substrate_test_runtime_client;
 	use sp_core::H256;
 	use sp_runtime::traits::NumberFor;
+	use sp_consensus_babe::BabeEpochConfiguration;
 	use sc_consensus_epochs::{PersistedEpoch, PersistedEpochHeader, EpochHeader};
 	use sp_consensus::Error as ConsensusError;
 	use sc_network_test::Block as TestBlock;
@@ -148,6 +149,10 @@ mod test {
 			randomness: [0; 32],
 			epoch_index: 1,
 			duration: 100,
+			config: BabeEpochConfiguration {
+				c: (3, 10),
+				secondary_slots: true,
+			},
 		};
 		let client = substrate_test_runtime_client::new();
 		let mut v0_tree = ForkTree::<H256, NumberFor<TestBlock>, _>::new();
