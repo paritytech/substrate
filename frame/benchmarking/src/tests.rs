@@ -192,6 +192,7 @@ fn benchmarks_macro_verify_works() {
 }
 
 #[test]
+#[should_panic]
 fn benchmarks_macro_verify_fail_works() {
 	// Check postcondition for benchmark `other_name` is invalid.
 	let selected_benchmark = SelectedBenchmark::other_name;
