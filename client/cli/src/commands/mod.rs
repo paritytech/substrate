@@ -204,9 +204,10 @@ macro_rules! substrate_cli_subcommands {
 				&self,
 				base_path: &::std::path::PathBuf,
 				cache_size: usize,
+				database: crate::arg_enums::Database,
 			) -> $crate::Result<::sc_service::config::DatabaseConfig> {
 				match self {
-					$($enum::$variant(cmd) => cmd.database_config(base_path, cache_size)),*
+					$($enum::$variant(cmd) => cmd.database_config(base_path, cache_size, database)),*
 				}
 			}
 

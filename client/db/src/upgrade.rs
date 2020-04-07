@@ -21,7 +21,7 @@ use std::io::{Read, Write, ErrorKind};
 use std::path::{Path, PathBuf};
 
 use sp_runtime::traits::Block as BlockT;
-use crate::utils::{DatabaseType, db_err};
+use crate::utils::DatabaseType;
 
 /// Version file name.
 const VERSION_FILE_NAME: &'static str = "db_version";
@@ -59,6 +59,11 @@ fn current_version(path: &Path) -> sp_blockchain::Result<u32> {
 			u32::from_str_radix(&s, 10).map_err(|_| unknown_version_err())
 		},
 	}
+}
+
+/// Maps database error to client error
+fn db_err(err: std::io::Error) -> sp_blockchain::Error {
+	sp_blockchain::Error::Backend(format!("{}", err))
 }
 
 /// Writes current database version to the file.

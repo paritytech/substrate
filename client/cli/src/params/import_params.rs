@@ -17,7 +17,7 @@
 use crate::arg_enums::{
 	ExecutionStrategy, TracingReceiver, WasmExecutionMethod, DEFAULT_EXECUTION_BLOCK_CONSTRUCTION,
 	DEFAULT_EXECUTION_IMPORT_BLOCK, DEFAULT_EXECUTION_OFFCHAIN_WORKER, DEFAULT_EXECUTION_OTHER,
-	DEFAULT_EXECUTION_SYNCING,
+	DEFAULT_EXECUTION_SYNCING, Database,
 };
 use crate::params::PruningParams;
 use crate::Result;
@@ -53,6 +53,16 @@ pub struct ImportParams {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub execution_strategies: ExecutionStrategiesParams,
+
+	/// Select database backend to use.
+	#[structopt(
+		long = "database",
+		alias = "db",
+		value_name = "DB",
+		case_insensitive = true,
+		default_value = "RocksDb"
+	)]
+	pub database: Database,
 
 	/// Limit the memory the database cache can use.
 	#[structopt(long = "db-cache", value_name = "MiB")]
@@ -131,6 +141,11 @@ impl ImportParams {
 	/// Limit the memory the database cache can use.
 	pub fn database_cache_size(&self) -> Option<usize> {
 		self.database_cache_size
+	}
+
+	/// Limit the memory the database cache can use.
+	pub fn database(&self) -> Database {
+		self.database
 	}
 }
 

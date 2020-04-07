@@ -18,7 +18,7 @@
 //! full and light storages.
 
 use std::sync::Arc;
-use std::{io, convert::TryInto};
+use std::convert::TryInto;
 
 use log::debug;
 
@@ -205,11 +205,6 @@ pub fn block_id_to_lookup_key<Block>(
 	})
 }
 
-/// Maps database error to client error
-pub fn db_err(err: io::Error) -> sp_blockchain::Error {
-	sp_blockchain::Error::Backend(format!("{}", err))
-}
-
 /// Opens the configured database.
 pub fn open_database<Block: BlockT>(
 	config: &DatabaseSettings,
@@ -238,12 +233,25 @@ pub fn open_database<Block: BlockT>(
 			}
 
 			db_config.memory_budget = memory_budget;
-			let db = kvdb_rocksdb::Database::open(&db_config, &path).map_err(db_err)?;
+			let db = kvdb_rocksdb::Database::open(&db_config, &path)
+				.map_err(|err| sp_blockchain::Error::Backend(format!("{}", err)))?;
 			sp_database::as_database(db)
 		},
+		#[cfg(any(feature = "kvdb-rocksdb", test))]
+		DatabaseSettingsSrc::SubDb { .. } => {
+			unimplemented!();
+		},
+		#[cfg(any(feature = "kvdb-rocksdb", test))]
+		DatabaseSettingsSrc::ParityDb { path } => {
+			crate::parity_db::open(&path, NUM_COLUMNS).map_err(|e|
+				sp_blockchain::Error::Backend(format!("{:?}", e)))?
+		},
 		#[cfg(not(any(feature = "kvdb-rocksdb", test)))]
-		DatabaseSettingsSrc::RocksDb { .. } => {
-			let msg = "Try to open RocksDB database with RocksDB disabled".into();
+		DatabaseSettingsSrc::RocksDb { .. }
+		| DatabaseSettingsSrc::ParityDb { .. }
+		| DatabaseSettingsSrc::SubDb { .. } =>
+		{
+			let msg = "Trying to open a unsupported database".into();
 			return Err(sp_blockchain::Error::Backend(msg));
 		},
 		DatabaseSettingsSrc::Custom(db) => db.clone(),

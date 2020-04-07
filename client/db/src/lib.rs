@@ -40,9 +40,11 @@ mod storage_cache;
 mod upgrade;
 mod utils;
 mod stats;
+#[cfg(any(feature = "kvdb-rocksdb", test))]
+mod parity_db;
 
 use std::sync::Arc;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::io;
 use std::collections::HashMap;
 
@@ -281,7 +283,7 @@ pub struct DatabaseSettings {
 /// Where to find the database..
 #[derive(Clone)]
 pub enum DatabaseSettingsSrc {
-	/// Load a database from a given path. Recommended for most uses.
+	/// Load a RocksDB database from a given path. Recommended for most uses.
 	RocksDb {
 		/// Path to the database.
 		path: PathBuf,
@@ -289,8 +291,32 @@ pub enum DatabaseSettingsSrc {
 		cache_size: usize,
 	},
 
+	/// Load a ParityDb database from a given path.
+	ParityDb {
+		/// Path to the database.
+		path: PathBuf,
+	},
+
+	/// Load a Subdb database from a given path.
+	SubDb {
+		/// Path to the database.
+		path: PathBuf,
+	},
+
 	/// Use a custom already-open database.
 	Custom(Arc<dyn Database<DbHash>>),
+}
+
+impl DatabaseSettingsSrc {
+	/// Return dabase path for databases that are on the disk.
+	pub fn path(&self) -> Option<&Path> {
+		match self {
+			DatabaseSettingsSrc::RocksDb { path, .. } => Some(path.as_path()),
+			DatabaseSettingsSrc::ParityDb { path, .. } => Some(path.as_path()),
+			DatabaseSettingsSrc::SubDb { path, .. } => Some(path.as_path()),
+			DatabaseSettingsSrc::Custom(_) => None,
+		}
+	}
 }
 
 /// Create an instance of db-backed client.
