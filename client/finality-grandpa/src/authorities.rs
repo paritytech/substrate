@@ -605,11 +605,16 @@ mod tests {
 		);
 
 		// finalizing "hash_c" won't enact the change signaled at "hash_a" but it will prune out "hash_b"
-		let status = authorities.apply_standard_changes("hash_c", 11, &is_descendent_of(|base, hash| match (*base, *hash) {
-			("hash_a", "hash_c") => true,
-			("hash_b", "hash_c") => false,
-			_ => unreachable!(),
-		})).unwrap();
+		let status = authorities.apply_standard_changes(
+			"hash_c",
+			11,
+			&is_descendent_of(|base, hash| match (*base, *hash) {
+				("hash_a", "hash_c") => true,
+				("hash_b", "hash_c") => false,
+				_ => unreachable!(),
+			}),
+			false,
+		).unwrap();
 
 		assert!(status.changed);
 		assert_eq!(status.new_set_block, None);
@@ -619,10 +624,15 @@ mod tests {
 		);
 
 		// finalizing "hash_d" will enact the change signaled at "hash_a"
-		let status = authorities.apply_standard_changes("hash_d", 15, &is_descendent_of(|base, hash| match (*base, *hash) {
-			("hash_a", "hash_d") => true,
-			_ => unreachable!(),
-		})).unwrap();
+		let status = authorities.apply_standard_changes(
+			"hash_d",
+			15,
+			&is_descendent_of(|base, hash| match (*base, *hash) {
+				("hash_a", "hash_d") => true,
+				_ => unreachable!(),
+			}),
+			false,
+		).unwrap();
 
 		assert!(status.changed);
 		assert_eq!(status.new_set_block, Some(("hash_d", 15)));
@@ -677,12 +687,18 @@ mod tests {
 		});
 
 		// trying to finalize past `change_c` without finalizing `change_a` first
-		match authorities.apply_standard_changes("hash_d", 40, &is_descendent_of) {
-			Err(fork_tree::Error::UnfinalizedAncestor) => {},
-			_ => unreachable!(),
-		}
+		assert!(matches!(
+			authorities.apply_standard_changes("hash_d", 40, &is_descendent_of, false),
+			Err(fork_tree::Error::UnfinalizedAncestor)
+		));
 
-		let status = authorities.apply_standard_changes("hash_b", 15, &is_descendent_of).unwrap();
+		let status = authorities.apply_standard_changes(
+			"hash_b",
+			15,
+			&is_descendent_of,
+			false,
+		).unwrap();
+
 		assert!(status.changed);
 		assert_eq!(status.new_set_block, Some(("hash_b", 15)));
 
@@ -690,7 +706,13 @@ mod tests {
 		assert_eq!(authorities.set_id, 1);
 
 		// after finalizing `change_a` it should be possible to finalize `change_c`
-		let status = authorities.apply_standard_changes("hash_d", 40, &is_descendent_of).unwrap();
+		let status = authorities.apply_standard_changes(
+			"hash_d",
+			40,
+			&is_descendent_of,
+			false,
+		).unwrap();
+
 		assert!(status.changed);
 		assert_eq!(status.new_set_block, Some(("hash_d", 40)));
 
@@ -823,20 +845,30 @@ mod tests {
 		assert!(authorities.add_pending_change(change_c, &is_descendent_of_a).is_err());
 
 		// too early.
-		assert!(authorities.apply_forced_changes("hash_a10", 10, &static_is_descendent_of(true)).unwrap().is_none());
+		assert!(
+			authorities.apply_forced_changes("hash_a10", 10, &static_is_descendent_of(true), false)
+				.unwrap()
+				.is_none()
+		);
 
 		// too late.
-		assert!(authorities.apply_forced_changes("hash_a16", 16, &static_is_descendent_of(true)).unwrap().is_none());
+		assert!(
+			authorities.apply_forced_changes("hash_a16", 16, &static_is_descendent_of(true), false)
+				.unwrap()
+				.is_none()
+		);
 
 		// on time -- chooses the right change.
 		assert_eq!(
-			authorities.apply_forced_changes("hash_a15", 15, &is_descendent_of_a).unwrap().unwrap(),
+			authorities.apply_forced_changes("hash_a15", 15, &is_descendent_of_a, false)
+				.unwrap()
+				.unwrap(),
 			(42, AuthoritySet {
 				current_authorities: set_a,
 				set_id: 1,
 				pending_standard_changes: ForkTree::new(),
 				pending_forced_changes: Vec::new(),
-			})
+			}),
 		);
 	}
 }
