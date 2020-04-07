@@ -18,60 +18,35 @@
 
 pub use sc_client::ExecutionStrategies;
 pub use sc_client_db::{kvdb::KeyValueDB, PruningMode};
-pub use sc_network::{Multiaddr, config::{MultiaddrWithPeerId, ExtTransport, NetworkConfiguration, Role}};
+pub use sc_network::Multiaddr;
+pub use sc_network::config::{ExtTransport, MultiaddrWithPeerId, NetworkConfiguration, Role, NodeKeyConfig};
 pub use sc_executor::WasmExecutionMethod;
 
 use std::{future::Future, path::{PathBuf, Path}, pin::Pin, net::SocketAddr, sync::Arc};
 pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
 use sc_chain_spec::ChainSpec;
 use sp_core::crypto::Protected;
-use target_info::Target;
-use sc_telemetry::TelemetryEndpoints;
+pub use sc_telemetry::TelemetryEndpoints;
 use prometheus_endpoint::Registry;
-
-/// Executable version. Used to pass version information from the root crate.
-#[derive(Clone)]
-pub struct VersionInfo {
-	/// Implementation name.
-	pub name: &'static str,
-	/// Implementation version.
-	pub version: &'static str,
-	/// SCM Commit hash.
-	pub commit: &'static str,
-	/// Executable file name.
-	pub executable_name: &'static str,
-	/// Executable file description.
-	pub description: &'static str,
-	/// Executable file author.
-	pub author: &'static str,
-	/// Support URL.
-	pub support_url: &'static str,
-	/// Copyright starting year (x-current year)
-	pub copyright_start_year: i32,
-}
 
 /// Service configuration.
 pub struct Configuration {
 	/// Implementation name
 	pub impl_name: &'static str,
-	/// Implementation version
+	/// Implementation version (see sc-cli to see an example of format)
 	pub impl_version: &'static str,
-	/// Git commit if any.
-	pub impl_commit: &'static str,
 	/// Node role.
 	pub role: Role,
 	/// How to spawn background tasks. Mandatory, otherwise creating a `Service` will error.
-	pub task_executor: Option<Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>>,
+	pub task_executor: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>,
 	/// Extrinsic pool configuration.
 	pub transaction_pool: TransactionPoolOptions,
 	/// Network configuration.
 	pub network: NetworkConfiguration,
-	/// Path to the base configuration directory.
-	pub config_dir: Option<PathBuf>,
 	/// Configuration for the keystore.
 	pub keystore: KeystoreConfig,
 	/// Configuration for the database.
-	pub database: Option<DatabaseConfig>,
+	pub database: DatabaseConfig,
 	/// Size of internal state cache in Bytes
 	pub state_cache_size: usize,
 	/// Size in percent of cache size dedicated to child tries
@@ -79,9 +54,7 @@ pub struct Configuration {
 	/// Pruning settings.
 	pub pruning: PruningMode,
 	/// Chain configuration.
-	pub chain_spec: Option<Box<dyn ChainSpec>>,
-	/// Node name.
-	pub name: String,
+	pub chain_spec: Box<dyn ChainSpec>,
 	/// Wasm execution method.
 	pub wasm_method: WasmExecutionMethod,
 	/// Execution strategies.
@@ -130,8 +103,6 @@ pub struct Configuration {
 /// Configuration of the client keystore.
 #[derive(Clone)]
 pub enum KeystoreConfig {
-	/// No config supplied.
-	None,
 	/// Keystore at a path on-disk. Recommended for native nodes.
 	Path {
 		/// The path of the keystore.
@@ -147,8 +118,8 @@ impl KeystoreConfig {
 	/// Returns the path for the keystore.
 	pub fn path(&self) -> Option<&Path> {
 		match self {
-			Self::Path { path, .. } => Some(&path),
-			Self::None | Self::InMemory => None,
+			Self::Path { path, .. } => Some(path),
+			Self::InMemory => None,
 		}
 	}
 }
@@ -161,7 +132,7 @@ pub enum DatabaseConfig {
 		/// Path to the database.
 		path: PathBuf,
 		/// Cache Size for internal database in MiB
-		cache_size: Option<u32>,
+		cache_size: usize,
 	},
 
 	/// A custom implementation of an already-open database.
@@ -190,123 +161,9 @@ impl PrometheusConfig {
 	}
 }
 
-impl Default for Configuration {
-	/// Create a default config
-	fn default() -> Self {
-		Configuration {
-			impl_name: "parity-substrate",
-			impl_version: "0.0.0",
-			impl_commit: "",
-			chain_spec: None,
-			config_dir: None,
-			name: Default::default(),
-			role: Role::Full,
-			task_executor: None,
-			transaction_pool: Default::default(),
-			network: Default::default(),
-			keystore: KeystoreConfig::None,
-			database: None,
-			state_cache_size: Default::default(),
-			state_cache_child_ratio: Default::default(),
-			pruning: PruningMode::default(),
-			wasm_method: WasmExecutionMethod::Interpreted,
-			execution_strategies: Default::default(),
-			rpc_http: None,
-			rpc_ws: None,
-			rpc_ws_max_connections: None,
-			rpc_cors: Some(vec![]),
-			prometheus_config: None,
-			telemetry_endpoints: None,
-			telemetry_external_transport: None,
-			default_heap_pages: None,
-			offchain_worker: Default::default(),
-			force_authoring: false,
-			disable_grandpa: false,
-			dev_key_seed: None,
-			tracing_targets: Default::default(),
-			tracing_receiver: Default::default(),
-			max_runtime_instances: 8,
-			announce_block: true,
-		}
-	}
-}
-
 impl Configuration {
-	/// Create a default config using `VersionInfo`
-	pub fn from_version(version: &VersionInfo) -> Self {
-		let mut config = Configuration::default();
-		config.impl_name = version.name;
-		config.impl_version = version.version;
-		config.impl_commit = version.commit;
-
-		config
-	}
-
-	/// Returns full version string of this configuration.
-	pub fn full_version(&self) -> String {
-		full_version_from_strs(self.impl_version, self.impl_commit)
-	}
-
-	/// Implementation id and version.
-	pub fn client_id(&self) -> String {
-		format!("{}/v{}", self.impl_name, self.full_version())
-	}
-
-	/// Generate a PathBuf to sub in the chain configuration directory
-	/// if given
-	pub fn in_chain_config_dir(&self, sub: &str) -> Option<PathBuf> {
-		self.config_dir.clone().map(|mut path| {
-			path.push("chains");
-			path.push(self.expect_chain_spec().id());
-			path.push(sub);
-			path
-		})
-	}
-
-	/// Return a reference to the `ChainSpec` of this `Configuration`.
-	///
-	/// ### Panics
-	///
-	/// This method panic if the `chain_spec` is `None`
-	pub fn expect_chain_spec(&self) -> &dyn ChainSpec {
-		&**self.chain_spec.as_ref().expect("chain_spec must be specified")
-	}
-
-	/// Return a reference to the `DatabaseConfig` of this `Configuration`.
-	///
-	/// ### Panics
-	///
-	/// This method panic if the `database` is `None`
-	pub fn expect_database(&self) -> &DatabaseConfig {
-		self.database.as_ref().expect("database must be specified")
-	}
-
 	/// Returns a string displaying the node role.
 	pub fn display_role(&self) -> String {
 		self.role.to_string()
 	}
-
-	/// Use in memory keystore config when it is not required at all.
-	///
-	/// This function returns an error if the keystore is already set to something different than
-	/// `KeystoreConfig::None`.
-	pub fn use_in_memory_keystore(&mut self) -> Result<(), String> {
-		match &mut self.keystore {
-			cfg @ KeystoreConfig::None => { *cfg = KeystoreConfig::InMemory; Ok(()) },
-			_ => Err("Keystore config specified when it should not be!".into()),
-		}
-	}
-}
-
-/// Returns platform info
-pub fn platform() -> String {
-	let env = Target::env();
-	let env_dash = if env.is_empty() { "" } else { "-" };
-	format!("{}-{}{}{}", Target::arch(), Target::os(), env_dash, env)
-}
-
-/// Returns full version string, using supplied version and commit.
-pub fn full_version_from_strs(impl_version: &str, impl_commit: &str) -> String {
-	let commit_dash = if impl_commit.is_empty() { "" } else { "-" };
-	format!("{}{}{}-{}", impl_version, commit_dash, impl_commit, platform())
 }
