@@ -80,6 +80,11 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 		Self::new_with_code(&[], storage)
 	}
 
+	/// New empty test externalities.
+	pub fn new_empty() -> Self {
+		Self::new_with_code(&[], Storage::default())
+	}
+
 	/// Create a new instance of `TestExternalities` with code and storage.
 	pub fn new_with_code(code: &[u8], mut storage: Storage) -> Self {
 		let mut overlay = OverlayedChanges::default();

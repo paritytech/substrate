@@ -430,21 +430,25 @@ pub trait Crypto {
 	/// caller should call `crypto::finish_batch_verify` to actualy check all submitted
 	/// signatures.
 	fn ed25519_verify(
-		&mut self,
 		sig: &ed25519::Signature,
 		msg: &[u8],
 		pub_key: &ed25519::Public,
 	) -> bool {
-		if let Some(extension) = self.extension::<VerificationExt>() {
-			extension.push_ed25519(
-				sig.clone(),
-				pub_key.clone(),
-				msg.to_vec(),
-			);
-			true
-		} else {
-			ed25519::Pair::verify(sig, msg, pub_key)
-		}
+		// This "with_externalities block" returns Some(true) if signature verification can be successfully
+		// batched, everything else (Some(false)/None) means it cannot be batched.
+		sp_externalities::with_externalities(|mut instance| {
+			if let Some(extension) = instance.extension::<VerificationExt>() {
+				extension.push_ed25519(
+					sig.clone(),
+					pub_key.clone(),
+					msg.to_vec(),
+				);
+				true
+			} else {
+				false
+			}
+		})
+		.unwrap_or_else(|| ed25519::Pair::verify(sig, msg, pub_key))
 	}
 
 	/// Verify `sr25519` signature.
@@ -455,21 +459,25 @@ pub trait Crypto {
 	/// caller should call `crypto::finish_batch_verify` to actualy check all submitted
 	#[version(2)]
 	fn sr25519_verify(
-		&mut self,
 		sig: &sr25519::Signature,
 		msg: &[u8],
 		pub_key: &sr25519::Public,
 	) -> bool {
-		if let Some(extension) = self.extension::<VerificationExt>() {
-			extension.push_sr25519(
-				sig.clone(),
-				pub_key.clone(),
-				msg.to_vec(),
-			);
-			true
-		} else {
-			sr25519::Pair::verify(sig, msg, pub_key)
-		}
+		// This "with_externalities block" returns Some(true) if signature verification can be successfully
+		// batched, everything else (Some(false)/None) means it cannot be batched.
+		sp_externalities::with_externalities(|mut instance| {
+			if let Some(extension) = instance.extension::<VerificationExt>() {
+				extension.push_sr25519(
+					sig.clone(),
+					pub_key.clone(),
+					msg.to_vec(),
+				);
+				true
+			} else {
+				false
+			}
+		})
+		.unwrap_or_else(||sr25519::Pair::verify(sig, msg, pub_key))
 	}
 
 	/// Start verification extension.
