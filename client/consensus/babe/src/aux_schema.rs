@@ -74,7 +74,7 @@ pub(crate) fn load_epoch_changes<Block: BlockT, B: AuxStore>(
 
 	let epoch_changes = Arc::new(Mutex::new(maybe_epoch_changes.unwrap_or_else(|| {
 		info!(target: "babe",
-			  "Creating empty BABE epoch changes on what appears to be first startup."
+			  "👶 Creating empty BABE epoch changes on what appears to be first startup."
 		);
 		EpochChangesFor::<Block, Epoch>::default()
 	})));

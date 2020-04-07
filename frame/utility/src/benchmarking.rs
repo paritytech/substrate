@@ -146,3 +146,24 @@ benchmarks! {
 		Utility::<T>::as_multi(RawOrigin::Signed(caller.clone()).into(), s as u16, signatories.clone(), None, call.clone())?;
 	}: _(RawOrigin::Signed(caller), s as u16, signatories, timepoint, call_hash)
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::tests::{new_test_ext, Test};
+	use frame_support::assert_ok;
+
+	#[test]
+	fn test_benchmarks() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(test_benchmark_batch::<Test>());
+			assert_ok!(test_benchmark_as_sub::<Test>());
+			assert_ok!(test_benchmark_as_multi_create::<Test>());
+			assert_ok!(test_benchmark_as_multi_approve::<Test>());
+			assert_ok!(test_benchmark_as_multi_complete::<Test>());
+			assert_ok!(test_benchmark_approve_as_multi_create::<Test>());
+			assert_ok!(test_benchmark_approve_as_multi_approve::<Test>());
+			assert_ok!(test_benchmark_cancel_as_multi::<Test>());
+		});
+	}
+}
