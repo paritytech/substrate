@@ -167,10 +167,13 @@ fn notifications_state_consistent() {
 		let mut node2_to_node1_open = false;
 		// We stop the test after a certain number of iterations.
 		let mut iterations = 0;
+		// Safe guard because we don't want the test to pass if no substream has been open.
+		let mut something_happened = false;
 
 		loop {
 			iterations += 1;
 			if iterations >= 1_000 {
+				assert!(something_happened);
 				break;
 			}
 
@@ -210,12 +213,14 @@ fn notifications_state_consistent() {
 
 			match next_event {
 				future::Either::Left(Event::NotificationStreamOpened { remote, engine_id, .. }) => {
+					something_happened = true;
 					assert!(!node1_to_node2_open);
 					node1_to_node2_open = true;
 					assert_eq!(remote, *node2.local_peer_id());
 					assert_eq!(engine_id, ENGINE_ID);
 				}
 				future::Either::Right(Event::NotificationStreamOpened { remote, engine_id, .. }) => {
+					something_happened = true;
 					assert!(!node2_to_node1_open);
 					node2_to_node1_open = true;
 					assert_eq!(remote, *node1.local_peer_id());
