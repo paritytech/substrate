@@ -90,3 +90,80 @@ where
 		Ok(res)
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use traits::Applyable;
+	use crate::transaction_validity::TransactionValidityError;
+
+	type AccountId = u32;
+	#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+	struct Call;
+
+	impl traits::Dispatchable for Call {
+		type Origin = Option<AccountId>;
+		type Trait = ();
+		type PostInfo = ();
+
+		fn dispatch(self, _origin: Self::Origin) -> crate::DispatchResultWithInfo<Self::PostInfo> {
+			panic!("Should never be triggered.")
+		}
+	}
+
+	#[derive(Debug, Eq, Clone, PartialEq, codec::Encode, codec::Decode)]
+	struct Extra;
+	impl SignedExtension for Extra {
+		const IDENTIFIER: &'static str = "test";
+
+		type AccountId = AccountId;
+		type Call = Call;
+		type AdditionalSigned = ();
+		type Pre = ();
+		type DispatchInfo = ();
+
+		fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
+			Ok(())
+		}
+
+	}
+
+	type Extrinsic = CheckedExtrinsic<AccountId, Call, Extra>;
+
+	fn extrinsics() -> (Extrinsic, Extrinsic) {
+		let unsigned = Extrinsic {
+			signed: None,
+			function: Call,
+		};
+		let signed = Extrinsic {
+			signed: Some((1, Extra)),
+			function: Call,
+		};
+		(signed, unsigned)
+	}
+
+	fn is_applyable<T: Applyable>() {}
+
+	#[test]
+	fn should_fail_apply_if_pre_dispatch_is_not_fully_validated() {
+		is_applyable::<Extrinsic>();
+		let (signed, unsigned) = extrinsics();
+
+		let res = signed.apply(Default::default(), 1);
+		assert_eq!(res.unwrap_err(), InvalidTransaction::NotFullyValidated.into());
+		let res = unsigned.apply(Default::default(), 1);
+		assert_eq!(res.unwrap_err(), InvalidTransaction::NotFullyValidated.into());
+	}
+
+	#[test]
+	fn should_fail_validate_if_is_not_fully_validated() {
+		is_applyable::<Extrinsic>();
+		let (signed, unsigned) = extrinsics();
+		let source = TransactionSource::External;
+
+		let res = signed.validate(source, Default::default(), 1);
+		assert_eq!(res.unwrap_err(), InvalidTransaction::NotFullyValidated.into());
+		let res = unsigned.validate(source, Default::default(), 1);
+		assert_eq!(res.unwrap_err(), InvalidTransaction::NotFullyValidated.into());
+	}
+}

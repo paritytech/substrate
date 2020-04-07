@@ -1249,6 +1249,12 @@ impl<T: Printable> Printable for &T {
 	}
 }
 
+impl Printable for () {
+	fn print(&self) {
+		"()".print()
+	}
+}
+
 impl Printable for u8 {
 	fn print(&self) {
 		(*self as u64).print()
