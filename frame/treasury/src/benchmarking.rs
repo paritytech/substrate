@@ -115,7 +115,7 @@ benchmarks! {
 	propose_spend {
 		let u in 0 .. 1000;
 		let (caller, value, beneficiary_lookup) = setup_proposal::<T>(u);
-	}: _(RawOrigin::Signed(caller), value, beneficiary_lookup) {}
+	}: _(RawOrigin::Signed(caller), value, beneficiary_lookup)
 
 	reject_proposal {
 		let u in 0 .. 1000;
@@ -126,7 +126,7 @@ benchmarks! {
 			beneficiary_lookup
 		)?;
 		let proposal_id = ProposalCount::get() - 1;
-	}: _(RawOrigin::Root, proposal_id) {}
+	}: _(RawOrigin::Root, proposal_id)
 
 	approve_proposal {
 		let u in 0 .. 1000;
@@ -137,12 +137,12 @@ benchmarks! {
 			beneficiary_lookup
 		)?;
 		let proposal_id = ProposalCount::get() - 1;
-	}: _(RawOrigin::Root, proposal_id) {}
+	}: _(RawOrigin::Root, proposal_id)
 
 	report_awesome {
 		let r in 0 .. MAX_BYTES;
 		let (caller, reason, awesome_person) = setup_awesome::<T>(r);
-	}: _(RawOrigin::Signed(caller), reason, awesome_person) {}
+	}: _(RawOrigin::Signed(caller), reason, awesome_person)
 
 	retract_tip {
 		let r in 0 .. MAX_BYTES;
@@ -154,14 +154,14 @@ benchmarks! {
 		)?;
 		let reason_hash = T::Hashing::hash(&reason[..]);
 		let hash = T::Hashing::hash_of(&(&reason_hash, &awesome_person));
-	}: _(RawOrigin::Signed(caller), hash) {}
+	}: _(RawOrigin::Signed(caller), hash)
 
 	tip_new {
 		let r in 0 .. MAX_BYTES;
 		let t in 1 .. MAX_TIPPERS;
 
 		let (caller, reason, beneficiary, value) = setup_tip::<T>(r, t)?;
-	}: _(RawOrigin::Signed(caller), reason, beneficiary, value) {}
+	}: _(RawOrigin::Signed(caller), reason, beneficiary, value)
 
 	tip {
 		let t in 1 .. MAX_TIPPERS;
@@ -178,7 +178,7 @@ benchmarks! {
 		ensure!(Tips::<T>::contains_key(hash), "tip does not exist");
 		create_tips::<T>(t - 1, hash.clone(), value)?;
 		let caller = account("member", t - 1, SEED);
-	}: _(RawOrigin::Signed(caller), hash, value) {}
+	}: _(RawOrigin::Signed(caller), hash, value)
 
 	close_tip {
 		let t in 1 .. MAX_TIPPERS;
@@ -205,7 +205,7 @@ benchmarks! {
 		create_tips::<T>(t, hash.clone(), value)?;
 
 		let caller = account("caller", t, SEED);
-	}: _(RawOrigin::Signed(caller), hash) {}
+	}: _(RawOrigin::Signed(caller), hash)
 
 	on_initialize {
 		let p in 0 .. 100;
@@ -215,7 +215,7 @@ benchmarks! {
 		create_approved_proposals::<T>(p)?;
 	}: {
 		Treasury::<T>::on_initialize(T::BlockNumber::zero());
-	} {}
+	}
 }
 
 #[cfg(test)]

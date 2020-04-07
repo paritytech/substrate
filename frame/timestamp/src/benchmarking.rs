@@ -32,7 +32,7 @@ benchmarks! {
 
 	set {
 		let n in ...;
-	}: _(RawOrigin::None, n.into()) {}
+	}: _(RawOrigin::None, n.into())
 }
 
 #[cfg(test)]

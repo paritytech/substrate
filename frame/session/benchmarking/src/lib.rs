@@ -48,7 +48,7 @@ benchmarks! {
 		let v_controller = pallet_staking::Module::<T>::bonded(&v_stash).ok_or("not stash")?;
 		let keys = T::Keys::default();
 		let proof: Vec<u8> = vec![0,1,2,3];
-	}: _(RawOrigin::Signed(v_controller), keys, proof) {}
+	}: _(RawOrigin::Signed(v_controller), keys, proof)
 
 	purge_keys {
 		let n in 1 .. MAX_NOMINATIONS as u32;
@@ -57,7 +57,7 @@ benchmarks! {
 		let keys = T::Keys::default();
 		let proof: Vec<u8> = vec![0,1,2,3];
 		Session::<T>::set_keys(RawOrigin::Signed(v_controller.clone()).into(), keys, proof)?;
-	}: _(RawOrigin::Signed(v_controller)) {}
+	}: _(RawOrigin::Signed(v_controller))
 }
 
 #[cfg(test)]

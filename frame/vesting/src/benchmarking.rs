@@ -76,14 +76,14 @@ benchmarks! {
 
 		let caller = setup::<T>(0u32);
 
-	}: vest(RawOrigin::Signed(caller)) {}
+	}: vest(RawOrigin::Signed(caller))
 
 	vest_not_locked {
 		let l in ...;
 
 		let caller = setup::<T>(1u32);
 
-	}: vest(RawOrigin::Signed(caller)) {}
+	}: vest(RawOrigin::Signed(caller))
 
 	vest_other_locked {
 		let l in ...;
@@ -93,7 +93,7 @@ benchmarks! {
 
 		let caller = account("caller", 0, SEED);
 
-	}: vest_other(RawOrigin::Signed(caller), other_lookup) {}
+	}: vest_other(RawOrigin::Signed(caller), other_lookup)
 
 	vest_other_not_locked {
 		let l in ...;
@@ -103,7 +103,7 @@ benchmarks! {
 
 		let caller = account("caller", 0, SEED);
 
-	}: vest_other(RawOrigin::Signed(caller), other_lookup) {}
+	}: vest_other(RawOrigin::Signed(caller), other_lookup)
 
 	vested_transfer {
 		let u in 0 .. 1000;
@@ -122,7 +122,7 @@ benchmarks! {
 
 		let _ = T::Currency::make_free_balance_be(&from, transfer_amount * 10.into());
 
-	}: _(RawOrigin::Signed(from), to_lookup, vesting_schedule) {}
+	}: _(RawOrigin::Signed(from), to_lookup, vesting_schedule)
 }
 
 #[cfg(test)]

@@ -44,53 +44,53 @@ benchmarks! {
 				}
 			}
 		};
-	} {}
+	}
 
 	add_member_list {
 		let m in ...;
-	}: _(RawOrigin::Signed(account("member", m + 1, SEED))) {}
+	}: _(RawOrigin::Signed(account("member", m + 1, SEED)))
 
 	append_member_list {
 		let m in ...;
-	}: _(RawOrigin::Signed(account("member", m + 1, SEED))) {}
+	}: _(RawOrigin::Signed(account("member", m + 1, SEED)))
 
 	read_value {
 		let n in 1 .. 1000;
 		MyValue::put(n);
-	}: _(RawOrigin::Signed(account("user", 0, SEED)), n) {}
+	}: _(RawOrigin::Signed(account("user", 0, SEED)), n)
 
 	put_value {
 		let n in 1 .. 1000;
-	}: _(RawOrigin::Signed(account("user", 0, SEED)), n) {}
+	}: _(RawOrigin::Signed(account("user", 0, SEED)), n)
 
 	exists_value {
 		let n in 1 .. 1000;
 		MyValue::put(n);
-	}: _(RawOrigin::Signed(account("user", 0, SEED)), n) {}
+	}: _(RawOrigin::Signed(account("user", 0, SEED)), n)
 
 	remove_value {
 		let i in ...;
-	}: _(RawOrigin::Signed(account("user", 0, SEED)), i) {}
+	}: _(RawOrigin::Signed(account("user", 0, SEED)), i)
 
 	read_map {
 		let i in ...;
-	}: _(RawOrigin::Signed(account("user", 0, SEED)), i) {}
+	}: _(RawOrigin::Signed(account("user", 0, SEED)), i)
 
 	insert_map {
 		let n in 1 .. 1000;
-	}: _(RawOrigin::Signed(account("user", 0, SEED)), n) {}
+	}: _(RawOrigin::Signed(account("user", 0, SEED)), n)
 
 	contains_key_map {
 		let i in ...;
-	}: _(RawOrigin::Signed(account("user", 0, SEED)), i) {}
+	}: _(RawOrigin::Signed(account("user", 0, SEED)), i)
 
 	remove_prefix {
 		let d in ...;
-	}: _(RawOrigin::Signed(account("user", 0, SEED)), d) {}
+	}: _(RawOrigin::Signed(account("user", 0, SEED)), d)
 
 	do_nothing {
 		let n in 1 .. 1000;
-	}: _(RawOrigin::Signed(account("user", 0, SEED)), n) {}
+	}: _(RawOrigin::Signed(account("user", 0, SEED)), n)
 
 	encode_accounts {
 		let a in 1 .. 1000;
@@ -98,7 +98,7 @@ benchmarks! {
 		for _ in 0..a {
 			accounts.push(account::<T::AccountId>("encode", a, SEED));
 		}
-	}: _(RawOrigin::Signed(account("user", 0, SEED)), accounts) {}
+	}: _(RawOrigin::Signed(account("user", 0, SEED)), accounts)
 
 	decode_accounts {
 		let a in 1 .. 1000;
@@ -107,7 +107,7 @@ benchmarks! {
 			accounts.push(account::<T::AccountId>("encode", a, SEED));
 		}
 		let bytes = accounts.encode();
-	}: _(RawOrigin::Signed(account("user", 0, SEED)), bytes) {}
+	}: _(RawOrigin::Signed(account("user", 0, SEED)), bytes)
 
 	// Custom implementation to handle benchmarking of storage recalculation.
 	// Puts `repeat` number of items into random storage keys, and then times how
@@ -119,7 +119,7 @@ benchmarks! {
 			let random = (index).using_encoded(sp_io::hashing::blake2_256);
 			sp_io::storage::set(&random, &random);
 		}
-	} {}
+	}
 
 	// Custom implementation to handle benchmarking of calling a host function.
 	// Will check how long it takes to call `current_time()`.
@@ -129,5 +129,5 @@ benchmarks! {
 		for _ in 0 .. z {
 			let _ = frame_benchmarking::benchmarking::current_time();
 		}
-	} {}
+	}
 }

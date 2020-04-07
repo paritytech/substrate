@@ -62,7 +62,7 @@ benchmarks_instance! {
 
 		Collective::<T, _>::set_members(SystemOrigin::Root.into(), old_members, prime.clone())?;
 
-	}: _(SystemOrigin::Root, new_members, prime) {}
+	}: _(SystemOrigin::Root, new_members, prime)
 
 	execute {
 		let u in ...;
@@ -72,7 +72,7 @@ benchmarks_instance! {
 
 		Collective::<T, _>::set_members(SystemOrigin::Root.into(), vec![caller.clone()], None)?;
 
-	}: _(SystemOrigin::Signed(caller), Box::new(proposal)) {}
+	}: _(SystemOrigin::Signed(caller), Box::new(proposal))
 
 	propose {
 		let u in ...;
@@ -84,7 +84,7 @@ benchmarks_instance! {
 
 		let member_count = 0;
 
-	}: _(SystemOrigin::Signed(caller), member_count, Box::new(proposal.into())) {}
+	}: _(SystemOrigin::Signed(caller), member_count, Box::new(proposal.into()))
 
 	propose_else_branch {
 		let u in ...;
@@ -103,7 +103,7 @@ benchmarks_instance! {
 			Collective::<T, _>::propose(SystemOrigin::Signed(caller.clone()).into(), member_count.clone(), Box::new(proposal.into()))?;
 		}
 
-	}: propose(SystemOrigin::Signed(caller), member_count, Box::new(proposal.into())) {}
+	}: propose(SystemOrigin::Signed(caller), member_count, Box::new(proposal.into()))
 
 	vote {
 		let u in ...;
@@ -122,7 +122,7 @@ benchmarks_instance! {
 		let index = 0;
 		let approve = true;
 
-	}: _(SystemOrigin::Signed(caller2), proposal_hash, index, approve) {}
+	}: _(SystemOrigin::Signed(caller2), proposal_hash, index, approve)
 
 	vote_not_approve {
 		let u in ...;
@@ -141,7 +141,7 @@ benchmarks_instance! {
 		let index = 0;
 		let approve = false;
 
-	}: vote(SystemOrigin::Signed(caller2), proposal_hash, index, approve) {}
+	}: vote(SystemOrigin::Signed(caller2), proposal_hash, index, approve)
 
 	vote_approved {
 		let u in ...;
@@ -160,7 +160,7 @@ benchmarks_instance! {
 		let index = 0;
 		let approve = true;
 
-	}: vote(SystemOrigin::Signed(caller2), proposal_hash, index, approve) {}
+	}: vote(SystemOrigin::Signed(caller2), proposal_hash, index, approve)
 
 	close {
 		let u in ...;
@@ -181,5 +181,5 @@ benchmarks_instance! {
 		let vote_end = T::MotionDuration::get() + 1u32.into();
 		System::<T>::set_block_number(vote_end);
 
-	}: _(SystemOrigin::Signed(caller2), proposal_hash, index) {}
+	}: _(SystemOrigin::Signed(caller2), proposal_hash, index)
 }
