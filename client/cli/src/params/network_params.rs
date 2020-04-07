@@ -14,21 +14,20 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::path::PathBuf;
+use crate::params::node_key_params::NodeKeyParams;
+use sc_network::{
+	config::{NetworkConfiguration, NodeKeyConfig, NonReservedPeerMode, TransportConfig},
+	multiaddr::Protocol,
+};
+use sc_service::{ChainSpec, config::{Multiaddr, MultiaddrWithPeerId}};
 use std::iter;
 use std::net::Ipv4Addr;
+use std::path::PathBuf;
 use structopt::StructOpt;
-use sc_network::{
-	config::{MultiaddrWithPeerId, NonReservedPeerMode, TransportConfig}, multiaddr::Protocol, Multiaddr,
-};
-use sc_service::Configuration;
-
-use crate::error;
-use crate::params::node_key_params::NodeKeyParams;
 
 /// Parameters used to create the network configuration.
 #[derive(Debug, StructOpt, Clone)]
-pub struct NetworkConfigurationParams {
+pub struct NetworkParams {
 	/// Specify a list of bootnodes.
 	#[structopt(long = "bootnodes", value_name = "ADDR")]
 	pub bootnodes: Vec<MultiaddrWithPeerId>,
@@ -43,14 +42,6 @@ pub struct NetworkConfigurationParams {
 	/// nodes regardless of whether they are defined as reserved nodes.
 	#[structopt(long = "reserved-only")]
 	pub reserved_only: bool,
-
-	/// Specify a list of sentry node public addresses.
-	#[structopt(
-		long = "sentry-nodes",
-		value_name = "ADDR",
-		conflicts_with_all = &[ "sentry" ]
-	)]
-	pub sentry_nodes: Vec<MultiaddrWithPeerId>,
 
 	/// Listen on this multiaddress.
 	#[structopt(long = "listen-addr", value_name = "LISTEN_ADDR")]
@@ -87,7 +78,11 @@ pub struct NetworkConfigurationParams {
 	///
 	/// This allows downloading announced blocks from multiple peers. Decrease to save
 	/// traffic and risk increased latency.
-	#[structopt(long = "max-parallel-downloads", value_name = "COUNT", default_value = "5")]
+	#[structopt(
+		long = "max-parallel-downloads",
+		value_name = "COUNT",
+		default_value = "5"
+	)]
 	pub max_parallel_downloads: u32,
 
 	#[allow(missing_docs)]
@@ -99,53 +94,50 @@ pub struct NetworkConfigurationParams {
 	pub use_yamux_flow_control: bool,
 }
 
-impl NetworkConfigurationParams {
+impl NetworkParams {
 	/// Fill the given `NetworkConfiguration` by looking at the cli parameters.
-	pub fn update_config(
+	pub fn network_config(
 		&self,
-		mut config: &mut Configuration,
-		config_path: PathBuf,
-		client_id: String,
+		chain_spec: &Box<dyn ChainSpec>,
 		is_dev: bool,
-	) -> error::Result<()> {
-		config.network.boot_nodes.extend(self.bootnodes.clone());
-		config.network.config_path = Some(config_path.clone());
-		config.network.net_config_path = Some(config_path.clone());
+		net_config_path: &PathBuf,
+		client_id: &str,
+		node_name: &str,
+		node_key: NodeKeyConfig,
+	) -> NetworkConfiguration {
+		let port = self.port.unwrap_or(30333);
+		let mut listen_addresses = vec![iter::once(Protocol::Ip4(Ipv4Addr::new(0, 0, 0, 0)))
+			.chain(iter::once(Protocol::Tcp(port)))
+			.collect()];
 
-		config.network.reserved_nodes.extend(self.reserved_nodes.clone());
-		if self.reserved_only {
-			config.network.non_reserved_mode = NonReservedPeerMode::Deny;
+		listen_addresses.extend(self.listen_addr.iter().cloned());
+
+		let mut boot_nodes = chain_spec.boot_nodes().to_vec();
+		boot_nodes.extend(self.bootnodes.clone());
+
+		NetworkConfiguration {
+			boot_nodes,
+			net_config_path: net_config_path.clone(),
+			reserved_nodes: self.reserved_nodes.clone(),
+			non_reserved_mode: if self.reserved_only {
+				NonReservedPeerMode::Deny
+			} else {
+				NonReservedPeerMode::Accept
+			},
+			listen_addresses,
+			public_addresses: Vec::new(),
+			node_key,
+			node_name: node_name.to_string(),
+			client_version: client_id.to_string(),
+			in_peers: self.in_peers,
+			out_peers: self.out_peers,
+			transport: TransportConfig::Normal {
+				enable_mdns: !is_dev && !self.no_mdns,
+				allow_private_ipv4: !self.no_private_ipv4,
+				wasm_external_transport: None,
+				use_yamux_flow_control: self.use_yamux_flow_control,
+			},
+			max_parallel_downloads: self.max_parallel_downloads,
 		}
-
-		config.network.listen_addresses.extend(self.listen_addr.iter().cloned());
-		if config.network.listen_addresses.is_empty() {
-			let port = match self.port {
-				Some(port) => port,
-				None => 30333,
-			};
-
-			config.network.listen_addresses = vec![
-				iter::once(Protocol::Ip4(Ipv4Addr::new(0, 0, 0, 0)))
-					.chain(iter::once(Protocol::Tcp(port)))
-					.collect()
-			];
-		}
-
-		config.network.client_version = client_id;
-		self.node_key_params.update_config(&mut config, Some(&config_path))?;
-
-		config.network.in_peers = self.in_peers;
-		config.network.out_peers = self.out_peers;
-
-		config.network.transport = TransportConfig::Normal {
-			enable_mdns: !is_dev && !self.no_mdns,
-			allow_private_ipv4: !self.no_private_ipv4,
-			wasm_external_transport: None,
-			use_yamux_flow_control: self.use_yamux_flow_control,
-		};
-
-		config.network.max_parallel_downloads = self.max_parallel_downloads;
-
-		Ok(())
 	}
 }

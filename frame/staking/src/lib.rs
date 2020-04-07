@@ -594,10 +594,10 @@ pub struct Nominations<AccountId> {
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug)]
 pub struct IndividualExposure<AccountId, Balance: HasCompact> {
 	/// The stash account of the nominator in question.
-	who: AccountId,
+	pub who: AccountId,
 	/// Amount of funds exposed.
 	#[codec(compact)]
-	value: Balance,
+	pub value: Balance,
 }
 
 /// A snapshot of the stake backing a single validator in the system.
@@ -1243,7 +1243,7 @@ decl_module! {
 		/// unless the `origin` falls below _existential deposit_ and gets removed as dust.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
-		fn bond(origin,
+		pub fn bond(origin,
 			controller: <T::Lookup as StaticLookup>::Source,
 			#[compact] value: BalanceOf<T>,
 			payee: RewardDestination,
@@ -1444,7 +1444,7 @@ decl_module! {
 		/// - Writes are limited to the `origin` account key.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(750_000)]
-		fn validate(origin, prefs: ValidatorPrefs) {
+		pub fn validate(origin, prefs: ValidatorPrefs) {
 			ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
@@ -1467,7 +1467,7 @@ decl_module! {
 		/// - Both the reads and writes follow a similar pattern.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(750_000)]
-		fn nominate(origin, targets: Vec<<T::Lookup as StaticLookup>::Source>) {
+		pub fn nominate(origin, targets: Vec<<T::Lookup as StaticLookup>::Source>) {
 			ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
@@ -1714,6 +1714,8 @@ decl_module! {
 		///
 		/// The origin of this call must be _Signed_. Any account can call this function, even if
 		/// it is not one of the stakers.
+		///
+		/// This can only be called when [`EraElectionStatus`] is `Closed`.
 		///
 		/// # <weight>
 		/// - Time complexity: at most O(MaxNominatorRewardedPerValidator).
@@ -2884,6 +2886,16 @@ impl<T: Trait> Module<T> {
 			Forcing::ForceAlways | Forcing::ForceNew => (),
 			_ => ForceEra::put(Forcing::ForceNew),
 		}
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	pub fn add_era_stakers(current_era: EraIndex, controller: T::AccountId, exposure: Exposure<T::AccountId, BalanceOf<T>>) {
+		<ErasStakers<T>>::insert(&current_era, &controller, &exposure);
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	pub fn put_election_status(status: ElectionStatus::<T::BlockNumber>) {
+		<EraElectionStatus<T>>::put(status);
 	}
 }
 

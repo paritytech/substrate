@@ -600,14 +600,19 @@ pub trait TestNetFactory: Sized {
 
 		let listen_addr = build_multiaddr![Memory(rand::random::<u64>())];
 
+		let mut network_config = NetworkConfiguration::new(
+			"test-node",
+			"test-client",
+			Default::default(),
+			&std::env::current_dir().expect("current directory must exist"),
+		);
+		network_config.transport = TransportConfig::MemoryOnly;
+		network_config.listen_addresses = vec![listen_addr.clone()];
+
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: Role::Full,
 			executor: None,
-			network_config: NetworkConfiguration {
-				listen_addresses: vec![listen_addr.clone()],
-				transport: TransportConfig::MemoryOnly,
-				..NetworkConfiguration::default()
-			},
+			network_config,
 			chain: client.clone(),
 			finality_proof_provider: self.make_finality_proof_provider(
 				PeersClient::Full(client.clone(), backend.clone()),
@@ -671,14 +676,19 @@ pub trait TestNetFactory: Sized {
 
 		let listen_addr = build_multiaddr![Memory(rand::random::<u64>())];
 
+		let mut network_config = NetworkConfiguration::new(
+			"test-node",
+			"test-client",
+			Default::default(),
+			&std::env::current_dir().expect("current directory must exist"),
+		);
+		network_config.transport = TransportConfig::MemoryOnly;
+		network_config.listen_addresses = vec![listen_addr.clone()];
+
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: Role::Light,
 			executor: None,
-			network_config: NetworkConfiguration {
-				listen_addresses: vec![listen_addr.clone()],
-				transport: TransportConfig::MemoryOnly,
-				..NetworkConfiguration::default()
-			},
+			network_config,
 			chain: client.clone(),
 			finality_proof_provider: self.make_finality_proof_provider(
 				PeersClient::Light(client.clone(), backend.clone())

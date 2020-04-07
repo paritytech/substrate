@@ -74,7 +74,7 @@ pub fn new_full(config: Configuration)
 {
 	let role = config.role.clone();
 	let force_authoring = config.force_authoring;
-	let name = config.name.clone();
+	let name = config.network.node_name.clone();
 	let disable_grandpa = config.disable_grandpa;
 
 	let (builder, mut import_setup, inherent_data_providers) = new_full_start!(config);
