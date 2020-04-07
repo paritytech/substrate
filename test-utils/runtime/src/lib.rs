@@ -150,7 +150,11 @@ impl BlindCheckable for Extrinsic {
 		match self {
 			Extrinsic::AuthoritiesChange(new_auth) => Ok(Extrinsic::AuthoritiesChange(new_auth)),
 			Extrinsic::Transfer { transfer, signature, exhaust_resources_when_not_first } => {
-				Ok(Extrinsic::Transfer { transfer, signature, exhaust_resources_when_not_first })
+				if sp_runtime::verify_encoded_lazy(&signature, &transfer, &transfer.from) {
+					Ok(Extrinsic::Transfer { transfer, signature, exhaust_resources_when_not_first })
+				} else {
+					Err(InvalidTransaction::BadProof.into())
+				}
 			},
 			Extrinsic::IncludeData(_) => Err(InvalidTransaction::BadProof.into()),
 			Extrinsic::StorageChange(key, value) => Ok(Extrinsic::StorageChange(key, value)),
