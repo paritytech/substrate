@@ -16,15 +16,19 @@
 
 //! A set of utilities for resetting a wasm instance to its initial state.
 
+use crate::error::{self, Error};
 use std::mem;
 use parity_wasm::elements::{deserialize_buffer, DataSegment, Instruction, Module as RawModule};
-use sp_wasm_interface::Value;
 
+/// A bunch of information collected from a WebAssembly module.
 pub struct WasmModuleInfo {
 	raw_module: RawModule,
 }
 
 impl WasmModuleInfo {
+	/// Create `WasmModuleInfo` from the given wasm code.
+	///
+	/// Returns `None` if the wasm code cannot be deserialized.
 	pub fn new(wasm_code: &[u8]) -> Option<Self> {
 		let raw_module: RawModule = deserialize_buffer(wasm_code).ok()?;
 		Some(Self { raw_module })
@@ -68,7 +72,8 @@ pub struct DataSegmentsSnapshot {
 }
 
 impl DataSegmentsSnapshot {
-	pub fn take(module: &WasmModuleInfo) -> Option<Self> {
+	/// Create a snapshot from the data segments from the module.
+	pub fn take(module: &WasmModuleInfo) -> error::Result<Self> {
 		let data_segments = module
 			.data_segments()
 			.into_iter()
@@ -80,26 +85,47 @@ impl DataSegmentsSnapshot {
 				let init_expr = match segment.offset() {
 					Some(offset) => offset.code(),
 					// Return if the segment is passive
-					None => return None,
+					None => return Err(Error::from("Shared memory is not supported".to_string())),
 				};
 
 				// [op, End]
 				if init_expr.len() != 2 {
-					return None;
+					return Err(Error::from(
+						"initializer expression can have only up to 2 expressions in wasm 1.0"
+							.to_string(),
+					));
 				}
-				let offset = match init_expr[0] {
-					Instruction::I32Const(v) => v as u32,
-					Instruction::GetGlobal(idx) => return None, // TODO: Not supported for now.
-					_ => return None,
+				let offset = match &init_expr[0] {
+					Instruction::I32Const(v) => *v as u32,
+					Instruction::GetGlobal(_) => {
+						// In a valid wasm file, initializer expressions can only refer imported
+						// globals.
+						//
+						// At the moment of writing the Substrate Runtime Interface does not provide
+						// any globals. There is nothing that prevents us from supporting this
+						// if/when we gain those.
+						return Err(Error::from(
+							"Imported globals are not supported yet".to_string(),
+						));
+					}
+					insn => {
+						return Err(Error::from(format!(
+							"{:?} is not supported as initializer expression in wasm 1.0",
+							insn
+						)))
+					}
 				};
 
-				Some((offset, contents))
+				Ok((offset, contents))
 			})
-			.collect::<Option<Vec<_>>>()?;
+			.collect::<error::Result<Vec<_>>>()?;
 
-		Some(Self { data_segments })
+		Ok(Self { data_segments })
 	}
 
+	/// Apply the given snapshot to a linear memory.
+	///
+	/// Linear memory interface is represented by a closure `memory_set`.
 	pub fn apply<E>(
 		&self,
 		mut memory_set: impl FnMut(u32, &[u8]) -> Result<(), E>,
