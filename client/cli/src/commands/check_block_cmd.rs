@@ -14,20 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use crate::error;
+use crate::params::ImportParams;
+use crate::params::SharedParams;
+use crate::CliConfiguration;
+use sc_service::{Configuration, ServiceBuilderCommand};
+use sp_runtime::generic::BlockId;
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::fmt::Debug;
 use std::str::FromStr;
 use structopt::StructOpt;
-use sc_service::{
-	Configuration, ServiceBuilderCommand, Role, ChainSpec,
-};
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
-use sp_runtime::generic::BlockId;
-
-use crate::error;
-use crate::VersionInfo;
-use crate::runtime::run_until_exit;
-use crate::params::SharedParams;
-use crate::params::ImportParams;
 
 /// The `check-block` command used to validate blocks.
 #[derive(Debug, StructOpt, Clone)]
@@ -53,8 +49,8 @@ pub struct CheckBlockCmd {
 
 impl CheckBlockCmd {
 	/// Run the check-block command
-	pub fn run<B, BC, BB>(
-		self,
+	pub async fn run<B, BC, BB>(
+		&self,
 		config: Configuration,
 		builder: B,
 	) -> error::Result<()>
@@ -65,37 +61,37 @@ impl CheckBlockCmd {
 		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
 		<BB as BlockT>::Hash: std::str::FromStr,
 	{
-		let input = if self.input.starts_with("0x") { &self.input[2..] } else { &self.input[..] };
+		let input = if self.input.starts_with("0x") {
+			&self.input[2..]
+		} else {
+			&self.input[..]
+		};
 		let block_id = match FromStr::from_str(input) {
 			Ok(hash) => BlockId::hash(hash),
 			Err(_) => match self.input.parse::<u32>() {
 				Ok(n) => BlockId::number((n as u32).into()),
-				Err(_) => return Err(error::Error::Input("Invalid hash or number specified".into())),
-			}
+				Err(_) => {
+					return Err(error::Error::Input(
+						"Invalid hash or number specified".into(),
+					))
+				}
+			},
 		};
 
 		let start = std::time::Instant::now();
-		run_until_exit(config, |config| {
-			Ok(builder(config)?.check_block(block_id))
-		})?;
+		builder(config)?.check_block(block_id).await?;
 		println!("Completed in {} ms.", start.elapsed().as_millis());
 
 		Ok(())
 	}
+}
 
-	/// Update and prepare a `Configuration` with command line parameters
-	pub fn update_config<F>(
-		&self,
-		mut config: &mut Configuration,
-		spec_factory: F,
-		version: &VersionInfo,
-	) -> error::Result<()> where
-		F: FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
-	{
-		self.shared_params.update_config(&mut config, spec_factory, version)?;
-		self.import_params.update_config(&mut config, &Role::Full, self.shared_params.dev)?;
-		config.use_in_memory_keystore()?;
+impl CliConfiguration for CheckBlockCmd {
+	fn shared_params(&self) -> &SharedParams {
+		&self.shared_params
+	}
 
-		Ok(())
+	fn import_params(&self) -> Option<&ImportParams> {
+		Some(&self.import_params)
 	}
 }

@@ -3024,7 +3024,7 @@ pub(crate) mod tests {
 				pruning: PruningMode::ArchiveAll,
 				source: DatabaseSettingsSrc::Path {
 					path: tmp.path().into(),
-					cache_size: None,
+					cache_size: 128,
 				}
 			},
 			u64::max_value(),
@@ -3226,7 +3226,7 @@ pub(crate) mod tests {
 					pruning: PruningMode::keep_blocks(1),
 					source: DatabaseSettingsSrc::Path {
 						path: tmp.path().into(),
-						cache_size: None,
+						cache_size: 128,
 					}
 				},
 				u64::max_value(),

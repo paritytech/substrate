@@ -79,46 +79,15 @@ benchmarks! {
 
 #[cfg(test)]
 mod tests {
-	use crate::*;
-	use super::SelectedBenchmark;
-	use crate::mock::*;
+	use super::*;
+	use crate::mock::{new_test_ext, Runtime};
 	use frame_support::assert_ok;
 
 	#[test]
-	fn test_heartbeat_benchmark() {
+	fn test_benchmarks() {
 		new_test_ext().execute_with(|| {
-			let k = 10;
-
-			assert_eq!(ReceivedHeartbeats::iter_prefix(0).count(), 0);
-
-			let selected_benchmark = SelectedBenchmark::heartbeat;
-			let c = vec![(frame_benchmarking::BenchmarkParameter::k, k)];
-			let closure_to_benchmark =
-				<SelectedBenchmark as frame_benchmarking::BenchmarkingSetup<Runtime>>::instance(
-					&selected_benchmark,
-					&c
-				).unwrap();
-
-			assert_ok!(closure_to_benchmark());
-
-			assert_eq!(ReceivedHeartbeats::iter_prefix(0).count(), 1);
-		});
-	}
-
-	#[test]
-	fn test_validate_unsigned_benchmark() {
-		new_test_ext().execute_with(|| {
-			let k = 10;
-
-			let selected_benchmark = SelectedBenchmark::validate_unsigned;
-			let c = vec![(frame_benchmarking::BenchmarkParameter::k, k)];
-			let closure_to_benchmark =
-				<SelectedBenchmark as frame_benchmarking::BenchmarkingSetup<Runtime>>::instance(
-					&selected_benchmark,
-					&c
-				).unwrap();
-
-			assert_ok!(closure_to_benchmark());
+			assert_ok!(test_benchmark_heartbeat::<Runtime>());
+			assert_ok!(test_benchmark_validate_unsigned::<Runtime>());
 		});
 	}
 }

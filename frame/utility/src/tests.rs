@@ -109,7 +109,7 @@ type Utility = Module<Test>;
 use pallet_balances::Call as BalancesCall;
 use pallet_balances::Error as BalancesError;
 
-fn new_test_ext() -> sp_io::TestExternalities {
+pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	pallet_balances::GenesisConfig::<Test> {
 		balances: vec![(1, 10), (2, 10), (3, 10), (4, 10), (5, 10)],

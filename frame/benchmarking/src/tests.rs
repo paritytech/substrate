@@ -22,7 +22,10 @@ use super::*;
 use codec::Decode;
 use sp_std::prelude::*;
 use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::{H256, Header}};
-use frame_support::{dispatch::DispatchResult, decl_module, decl_storage, impl_outer_origin};
+use frame_support::{
+	dispatch::DispatchResult, decl_module, decl_storage, impl_outer_origin,
+	assert_ok, assert_err, ensure
+};
 use frame_system::{RawOrigin, ensure_signed, ensure_none};
 
 decl_storage! {
@@ -89,7 +92,7 @@ impl Trait for Test {
 	type BlockNumber = u32;
 	type Origin = Origin;
 	type AccountId = u64;
-} 
+}
 
 // This function basically just builds a genesis storage key/value store according to
 // our desired mockup.
@@ -118,13 +121,24 @@ benchmarks!{
 	}
 
 	sort_vector {
-		let x in 0 .. 10000;
+		let x in 1 .. 10000;
 		let mut m = Vec::<u32>::new();
-		for i in 0 .. x {
+		for i in (0..x).rev() {
 			m.push(i);
 		}
 	}: {
 		m.sort();
+		ensure!(m[0] == 0, "You forgot to sort!")
+	} {}
+
+	broken_benchmark {
+		let x in 1 .. 10000;
+		let mut m = Vec::<u32>::new();
+		for i in (0..x).rev() {
+			m.push(i);
+		}
+	}: {
+		ensure!(m[0] == 0, "You forgot to sort!")
 	} {}
 }
 
@@ -168,7 +182,7 @@ fn benchmarks_macro_works_for_non_dispatchable() {
 	let selected_benchmark = SelectedBenchmark::sort_vector;
 
 	let components = <SelectedBenchmark as BenchmarkingSetup<Test>>::components(&selected_benchmark);
-	assert_eq!(components, vec![(BenchmarkParameter::x, 0, 10000)]);
+	assert_eq!(components, vec![(BenchmarkParameter::x, 1, 10000)]);
 
 	let closure = <SelectedBenchmark as BenchmarkingSetup<Test>>::instance(
 		&selected_benchmark,
@@ -214,5 +228,15 @@ fn benchmarks_macro_verify_fail_works() {
 			&selected_benchmark,
 			&[(BenchmarkParameter::b, 1)],
 		);
+	});
+}
+
+#[test]
+fn benchmarks_generate_unit_tests() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(test_benchmark_dummy::<Test>());
+		assert_err!(test_benchmark_other_name::<Test>(), "Bad origin");
+		assert_ok!(test_benchmark_sort_vector::<Test>());
+		assert_err!(test_benchmark_broken_benchmark::<Test>(), "You forgot to sort!");
 	});
 }

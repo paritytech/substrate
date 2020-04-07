@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog].
 
 ## Unreleased
 
+### Changed
+
+* `sc_rpc::system::SystemInfo.impl_version` now returns the full version (2.0.0-alpha.2-b950f731c-x86_64-linux-gnu) instead of the short version (1.0.0) (#5271)
+
 ## 2.0.0-alpha.4 -> 2.0.0-alpha.5
 
 Runtime
