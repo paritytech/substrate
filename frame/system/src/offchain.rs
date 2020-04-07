@@ -388,7 +388,7 @@ pub trait SendTransactionTypes<LocalCall> {
 	type OverarchingCall: From<LocalCall>;
 }
 
-/// Create signed transaction
+/// Create signed transaction.
 ///
 /// Should be implemented by the runtime to sign transaction data
 pub trait CreateSignedTransaction<LocalCall>: SendTransactionTypes<LocalCall> + SigningTypes {
