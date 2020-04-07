@@ -45,7 +45,7 @@ benchmarks! {
 		let validator = create_validator_with_nominators::<T>(n, MAX_NOMINATIONS as u32)?;
 		let keys = T::Keys::default();
 		let proof: Vec<u8> = vec![0,1,2,3];
-	}: _(RawOrigin::Signed(validator), keys, proof)
+	}: _(RawOrigin::Signed(validator), keys, proof) {}
 
 	purge_keys {
 		let n in 1 .. MAX_NOMINATIONS as u32;
@@ -53,5 +53,5 @@ benchmarks! {
 		let keys = T::Keys::default();
 		let proof: Vec<u8> = vec![0,1,2,3];
 		Session::<T>::set_keys(RawOrigin::Signed(validator.clone()).into(), keys, proof)?;
-	}: _(RawOrigin::Signed(validator))
+	}: _(RawOrigin::Signed(validator)) {}
 }

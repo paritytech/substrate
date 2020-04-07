@@ -115,7 +115,7 @@ benchmarks! {
 
 	add_registrar {
 		let r in ...;
-	}: _(RawOrigin::Root, account::<T>("registrar", r + 1))
+	}: _(RawOrigin::Root, account::<T>("registrar", r + 1)) {}
 
 	set_identity {
 		let r in ...;
@@ -148,7 +148,7 @@ benchmarks! {
 	}: _(
 		RawOrigin::Signed(caller),
 		create_identity_info::<T>(x)
-	)
+	) {}
 
 	set_subs {
 		let caller = account::<T>("caller", 0);
@@ -164,7 +164,7 @@ benchmarks! {
 		let data = Data::Raw(vec![0; 32]);
 		subs.push((account::<T>("sub", s + 1), data));
 
-	}: _(RawOrigin::Signed(caller), subs)
+	}: _(RawOrigin::Signed(caller), subs) {}
 
 	clear_identity {
 		let caller = account::<T>("caller", 0);
@@ -186,7 +186,7 @@ benchmarks! {
 				Judgement::Reasonable
 			)?;
 		}
-	}: _(RawOrigin::Signed(caller))
+	}: _(RawOrigin::Signed(caller)) {}
 
 	request_judgement {
 		let caller = account::<T>("caller", 0);
@@ -194,7 +194,7 @@ benchmarks! {
 
 		let r in ...;
 		let x in ...;
-	}: _(RawOrigin::Signed(caller), r - 1, 10.into())
+	}: _(RawOrigin::Signed(caller), r - 1, 10.into()) {}
 
 	cancel_request {
 		let caller = account::<T>("caller", 0);
@@ -205,7 +205,7 @@ benchmarks! {
 		let x in ...;
 
 		Identity::<T>::request_judgement(caller_origin, r - 1, 10.into())?;
-	}: _(RawOrigin::Signed(caller), r - 1)
+	}: _(RawOrigin::Signed(caller), r - 1) {}
 
 	set_fee {
 		let caller = account::<T>("caller", 0);
@@ -213,7 +213,7 @@ benchmarks! {
 		let r in ...;
 
 		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone())?;
-	}: _(RawOrigin::Signed(caller), r, 10.into())
+	}: _(RawOrigin::Signed(caller), r, 10.into()) {}
 
 	set_account_id {
 		let caller = account::<T>("caller", 0);
@@ -222,7 +222,7 @@ benchmarks! {
 		let r in ...;
 
 		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone())?;
-	}: _(RawOrigin::Signed(caller), r, account::<T>("new", 0))
+	}: _(RawOrigin::Signed(caller), r, account::<T>("new", 0)) {}
 
 	set_fields {
 		let caller = account::<T>("caller", 0);
@@ -235,7 +235,7 @@ benchmarks! {
 			IdentityField::Display | IdentityField::Legal | IdentityField::Web | IdentityField::Riot
 			| IdentityField::Email | IdentityField::PgpFingerprint | IdentityField::Image | IdentityField::Twitter
 		);
-	}: _(RawOrigin::Signed(caller), r, fields)
+	}: _(RawOrigin::Signed(caller), r, fields) {}
 
 	provide_judgement {
 		// The user
@@ -256,7 +256,7 @@ benchmarks! {
 
 		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone())?;
 		Identity::<T>::request_judgement(user_origin.clone(), r, 10.into())?;
-	}: _(RawOrigin::Signed(caller), r, user_lookup, Judgement::Reasonable)
+	}: _(RawOrigin::Signed(caller), r, user_lookup, Judgement::Reasonable) {}
 
 	kill_identity {
 		let caller = account::<T>("caller", 0);
@@ -278,5 +278,5 @@ benchmarks! {
 				Judgement::Reasonable
 			)?;
 		}
-	}: _(RawOrigin::Root, caller_lookup)
+	}: _(RawOrigin::Root, caller_lookup) {}
 }

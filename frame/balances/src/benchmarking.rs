@@ -54,7 +54,7 @@ benchmarks! {
 		let recipient = account("recipient", u, SEED);
 		let recipient_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(recipient);
 		let transfer_amount = existential_deposit.saturating_mul((e - 1).into()) + 1.into();
-	}: _(RawOrigin::Signed(caller), recipient_lookup, transfer_amount)
+	}: _(RawOrigin::Signed(caller), recipient_lookup, transfer_amount) {}
 
 	// Benchmark `transfer` with the best possible condition:
 	// * Both accounts exist and will continue to exist.
@@ -73,7 +73,7 @@ benchmarks! {
 		let existential_deposit = T::ExistentialDeposit::get();
 		let _ = <Balances<T> as Currency<_>>::make_free_balance_be(&recipient, existential_deposit);
 		let transfer_amount = existential_deposit.saturating_mul(e.into());
-	}: transfer(RawOrigin::Signed(caller), recipient_lookup, transfer_amount)
+	}: transfer(RawOrigin::Signed(caller), recipient_lookup, transfer_amount) {}
 
 	// Benchmark `transfer_keep_alive` with the worst possible condition:
 	// * The recipient account is created.
@@ -89,7 +89,7 @@ benchmarks! {
 		let _ = <Balances<T> as Currency<_>>::make_free_balance_be(&caller, T::Balance::max_value());
 		let existential_deposit = T::ExistentialDeposit::get();
 		let transfer_amount = existential_deposit.saturating_mul(e.into());
-	}: _(RawOrigin::Signed(caller), recipient_lookup, transfer_amount)
+	}: _(RawOrigin::Signed(caller), recipient_lookup, transfer_amount) {}
 
 	// Benchmark `set_balance` coming from ROOT account. This always creates an account.
 	set_balance {
@@ -103,7 +103,7 @@ benchmarks! {
 		let existential_deposit = T::ExistentialDeposit::get();
 		let balance_amount = existential_deposit.saturating_mul(e.into());
 		let _ = <Balances<T> as Currency<_>>::make_free_balance_be(&user, balance_amount);
-	}: _(RawOrigin::Root, user_lookup, balance_amount, balance_amount)
+	}: _(RawOrigin::Root, user_lookup, balance_amount, balance_amount) {}
 
 	// Benchmark `set_balance` coming from ROOT account. This always kills an account.
 	set_balance_killing {
@@ -117,5 +117,5 @@ benchmarks! {
 		let existential_deposit = T::ExistentialDeposit::get();
 		let balance_amount = existential_deposit.saturating_mul(e.into());
 		let _ = <Balances<T> as Currency<_>>::make_free_balance_be(&user, balance_amount);
-	}: set_balance(RawOrigin::Root, user_lookup, 0.into(), 0.into())
+	}: set_balance(RawOrigin::Root, user_lookup, 0.into(), 0.into()) {}
 }

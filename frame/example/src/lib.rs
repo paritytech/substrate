@@ -660,25 +660,25 @@ mod benchmarking {
 		_ {
 			// Define a common range for `b`.
 			let b in 1 .. 1000 => ();
-		}
+		} {}
 
 		// This will measure the execution time of `accumulate_dummy` for b in [1..1000] range.
 		accumulate_dummy {
 			let b in ...;
 			let caller = account("caller", 0, 0);
-		}: _ (RawOrigin::Signed(caller), b.into())
+		}: _ (RawOrigin::Signed(caller), b.into()) {}
 
 		// This will measure the execution time of `set_dummy` for b in [1..1000] range.
 		set_dummy {
 			let b in ...;
 			let caller = account("caller", 0, 0);
-		}: set_dummy (RawOrigin::Signed(caller), b.into())
+		}: set_dummy (RawOrigin::Signed(caller), b.into()) {}
 
 		// This will measure the execution time of `set_dummy` for b in [1..10] range.
 		another_set_dummy {
 			let b in 1 .. 10;
 			let caller = account("caller", 0, 0);
-		}: set_dummy (RawOrigin::Signed(caller), b.into())
+		}: set_dummy (RawOrigin::Signed(caller), b.into()) {}
 
 		// This will measure the execution time of sorting a vector.
 		sort_vector {
@@ -689,7 +689,7 @@ mod benchmarking {
 			}
 		}: {
 			m.sort();
-		}
+		} {}
 	}
 }
 
