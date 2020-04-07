@@ -219,20 +219,6 @@ impl MetricsService {
 	}
 }
 
-#[cfg(target_os = "unknown")]
-impl MetricsService {
-	fn inner_new(metrics: Option<PrometheusMetrics>) -> Self {
-		Self {
-			metrics,
-			pid: None,
-		}
-	}
-
-	fn process_info(&mut self) -> ProcessInfo {
-		Default::default()
-	}
-}
-
 #[cfg(all(any(unix, windows), not(target_os = "linux")))]
 impl MetricsService {
 	fn inner_new(metrics: Option<PrometheusMetrics>) -> Self {
