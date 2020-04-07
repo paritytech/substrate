@@ -264,7 +264,7 @@ fn should_not_retain_invalid_hashes_from_retracted() {
 	block_on(pool.maintain(event));
 	// maintenance is in background
 	block_on(notifier.next_blocking());
-
+	
 	assert_eq!(pool.status().ready, 0);
 }
 
@@ -670,4 +670,37 @@ fn ready_set_should_eventually_resolve_when_block_update_arrives() {
 			assert_eq!(data.len(), 1);
 		}
 	}
+}
+
+#[test]
+fn should_not_accept_old_signatures() {
+	use std::convert::TryFrom;
+
+	let client = Arc::new(substrate_test_runtime_client::new());
+	let pool = Arc::new(
+		BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client))).0
+	);
+
+	let transfer = Transfer {
+		from: Alice.into(),
+		to: Bob.into(),
+		nonce: 0,
+		amount: 1,
+	};
+	let _bytes: sp_core::sr25519::Signature = transfer.using_encoded(|e| Alice.sign(e)).into();
+
+	// generated with schnorrkel 0.1.1 from `_bytes`
+	let old_singature = sp_core::sr25519::Signature::try_from(&hex::decode(
+		"c427eb672e8c441c86d31f1a81b22b43102058e9ce237cabe9897ea5099ffd426cd1c6a1f4f2869c3df57901d36bedcb295657adb3a4355add86ed234eb83108"
+	).expect("hex invalid")[..]).expect("signature construction failed");
+
+	let xt = Extrinsic::Transfer { transfer, signature: old_singature, exhaust_resources_when_not_first: false };
+
+	assert_matches::assert_matches!(
+		block_on(pool.submit_one(&BlockId::number(0), SOURCE, xt.clone())),
+		Err(error::Error::Pool(
+			sp_transaction_pool::error::Error::InvalidTransaction(InvalidTransaction::BadProof)
+		)),
+		"Should be invalid transactiono with bad proof",
+	);
 }
