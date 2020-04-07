@@ -507,6 +507,7 @@ macro_rules! benchmark_backend {
 				)*
 				$( $param_instancer ; )*
 				$( $post )*
+				$eval
 				$postcode
 
 				Ok(())
@@ -563,7 +564,8 @@ macro_rules! benchmark_backend {
 					let $pre_id : $pre_ty = $pre_ex;
 				)*
 				$( $param_instancer ; )*
-
+				$( $post )*
+				$eval
 				$postcode
 
 				Ok(())
@@ -745,9 +747,6 @@ macro_rules! impl_benchmark {
 							let finish_storage_root = $crate::benchmarking::current_time();
 							let elapsed_storage_root = finish_storage_root - start_storage_root;
 
-							// Verify postconditions.
-							<SelectedBenchmark as $crate::BenchmarkingSetup<T>>::verify(&selected_benchmark, &c)?;
-
 							results.push((c.clone(), elapsed_extrinsic, elapsed_storage_root));
 
 							// Wipe the DB back to the genesis state.
@@ -848,9 +847,6 @@ macro_rules! impl_benchmark {
 							let finish_storage_root = $crate::benchmarking::current_time();
 							let elapsed_storage_root = finish_storage_root - start_storage_root;
 
-							// Verify postconditions.
-							<SelectedBenchmark as $crate::BenchmarkingSetupInstance<T, I>>::verify(&selected_benchmark, &c)?;
-
 							results.push((c.clone(), elapsed_extrinsic, elapsed_storage_root));
 
 							// Wipe the DB back to the genesis state.
@@ -897,11 +893,7 @@ macro_rules! impl_benchmark_tests {
 
 							// Set the block number to 1 so events are deposited.
 							frame_system::Module::<T>::set_block_number(1.into());
-							// Set up the externalities environment for the setup we want to benchmark.
-							let closure_to_benchmark = <SelectedBenchmark as $crate::BenchmarkingSetup<T>>::instance(&selected_benchmark, &c)?;
-							// Run the benchmark
-							closure_to_benchmark()?;
-							// Run verify block
+							// Verify the setup we want to benchmark.
 							<SelectedBenchmark as $crate::BenchmarkingSetup<T>>::verify(&selected_benchmark, &c)?;
 							// Reset the state
 							$crate::benchmarking::wipe_db();

@@ -130,6 +130,7 @@ benchmarks!{
 		}
 	}: {
 		m.sort();
+	} verify {
 		ensure!(m[0] == 0, "You forgot to sort!")
 	}
 
