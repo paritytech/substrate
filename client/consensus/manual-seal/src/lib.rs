@@ -58,7 +58,6 @@ impl<B: BlockT> Verifier<B> for ManualSealVerifier {
 		let mut import_params = BlockImportParams::new(origin, header);
 		import_params.justification = justification;
 		import_params.body = body;
-		import_params.finalized = true;
 		import_params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
 		Ok((import_params, None))
