@@ -31,6 +31,32 @@ use node_primitives::{Hash, BlockNumber};
 use node_testing::keyring::*;
 use sp_externalities::Externalities;
 
+use sp_core::{
+	crypto::KeyTypeId,
+	sr25519::Signature,
+};
+use sp_runtime::{MultiSigner, MultiSignature};
+use frame_system::offchain::AppCrypto;
+
+pub const TEST_KEY_TYPE_ID: KeyTypeId = KeyTypeId(*b"test");
+
+pub mod sr25519 {
+	mod app_sr25519 {
+		use sp_application_crypto::{app_crypto, sr25519};
+		use super::super::TEST_KEY_TYPE_ID;
+		app_crypto!(sr25519, TEST_KEY_TYPE_ID);
+	}
+
+	pub type AuthorityId = app_sr25519::Public;
+}
+
+pub struct TestAuthorityId;
+impl AppCrypto<MultiSigner, MultiSignature> for TestAuthorityId {
+	type RuntimeAppPublic = sr25519::AuthorityId;
+	type GenericSignature = Signature;
+	type GenericPublic = sp_core::sr25519::Public;
+}
+
 /// The wasm runtime code.
 ///
 /// `compact` since it is after post-processing with wasm-gc which performs tree-shaking thus
