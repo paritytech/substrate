@@ -38,7 +38,7 @@ use sc_service::{
 	Error,
 };
 use sc_network::{multiaddr, Multiaddr, NetworkStateInfo};
-use sc_network::config::{NetworkConfiguration, TransportConfig, NodeKeyConfig, Secret, NonReservedPeerMode};
+use sc_network::config::{NetworkConfiguration, TransportConfig};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use sp_transaction_pool::TransactionPool;
 
@@ -143,57 +143,46 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 {
 	let root = root.path().join(format!("node-{}", index));
 
-	let config_path = Some(root.join("network"));
-	let net_config_path = config_path.clone();
+	let net_config_path = root.join("network");
 
-	let network_config = NetworkConfiguration {
-		config_path,
-		net_config_path,
-		listen_addresses: vec! [
-			iter::once(multiaddr::Protocol::Ip4(Ipv4Addr::new(127, 0, 0, 1)))
-				.chain(iter::once(multiaddr::Protocol::Tcp(base_port + index as u16)))
-				.collect()
-		],
-		public_addresses: vec![],
-		boot_nodes: vec![],
-		node_key: NodeKeyConfig::Ed25519(Secret::New),
-		in_peers: 50,
-		out_peers: 450,
-		reserved_nodes: vec![],
-		non_reserved_mode: NonReservedPeerMode::Accept,
-		client_version: "network/test/0.1".to_owned(),
-		node_name: "unknown".to_owned(),
-		transport: TransportConfig::Normal {
-			enable_mdns: false,
-			allow_private_ipv4: true,
-			wasm_external_transport: None,
-			use_yamux_flow_control: true,
-		},
-		max_parallel_downloads: NetworkConfiguration::default().max_parallel_downloads,
+	let mut network_config = NetworkConfiguration::new(
+		format!("Node {}", index),
+		"network/test/0.1",
+		Default::default(), &net_config_path,
+	);
+
+	network_config.listen_addresses.push(
+		iter::once(multiaddr::Protocol::Ip4(Ipv4Addr::new(127, 0, 0, 1)))
+			.chain(iter::once(multiaddr::Protocol::Tcp(base_port + index as u16)))
+			.collect()
+	);
+
+	network_config.transport = TransportConfig::Normal {
+		enable_mdns: false,
+		allow_private_ipv4: true,
+		wasm_external_transport: None,
+		use_yamux_flow_control: true,
 	};
 
 	Configuration {
 		impl_name: "network-test-impl",
 		impl_version: "0.1",
-		impl_commit: "",
 		role,
-		task_executor: Some(task_executor),
+		task_executor,
 		transaction_pool: Default::default(),
 		network: network_config,
 		keystore: KeystoreConfig::Path {
 			path: root.join("key"),
 			password: None
 		},
-		config_dir: Some(root.clone()),
-		database: Some(DatabaseConfig::Path {
+		database: DatabaseConfig::Path {
 			path: root.join("db"),
-			cache_size: None
-		}),
+			cache_size: 128,
+		},
 		state_cache_size: 16777216,
 		state_cache_child_ratio: None,
 		pruning: Default::default(),
-		chain_spec: Some(Box::new((*spec).clone())),
-		name: format!("Node {}", index),
+		chain_spec: Box::new((*spec).clone()),
 		wasm_method: sc_service::config::WasmExecutionMethod::Interpreted,
 		execution_strategies: Default::default(),
 		rpc_http: None,

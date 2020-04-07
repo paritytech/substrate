@@ -90,3 +90,7 @@
 
 # Prometheus endpoint
 /utils/prometheus/ @mxinden
+
+# CLI API
+/client/cli @cecton
+/client/cli-derive @cecton

@@ -14,21 +14,17 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use crate::error;
+use crate::params::ImportParams;
+use crate::params::SharedParams;
+use crate::CliConfiguration;
+use sc_service::{Configuration, ServiceBuilderCommand};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::fmt::Debug;
-use std::io::{Read, Seek, self};
 use std::fs;
+use std::io::{self, Read, Seek};
 use std::path::PathBuf;
 use structopt::StructOpt;
-use sc_service::{
-	Configuration, ServiceBuilderCommand, ChainSpec, Role,
-};
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
-
-use crate::error;
-use crate::VersionInfo;
-use crate::runtime::run_until_exit;
-use crate::params::SharedParams;
-use crate::params::ImportParams;
 
 /// The `import-blocks` command used to import blocks.
 #[derive(Debug, StructOpt, Clone)]
@@ -59,8 +55,8 @@ impl<T: Read + Seek> ReadPlusSeek for T {}
 
 impl ImportBlocksCmd {
 	/// Run the import-blocks command
-	pub fn run<B, BC, BB>(
-		self,
+	pub async fn run<B, BC, BB>(
+		&self,
 		config: Configuration,
 		builder: B,
 	) -> error::Result<()>
@@ -77,27 +73,22 @@ impl ImportBlocksCmd {
 				let mut buffer = Vec::new();
 				io::stdin().read_to_end(&mut buffer)?;
 				Box::new(io::Cursor::new(buffer))
-			},
+			}
 		};
 
-		run_until_exit(config, |config| {
-			Ok(builder(config)?.import_blocks(file, false))
-		})
+		builder(config)?
+			.import_blocks(file, false)
+			.await
+			.map_err(Into::into)
+	}
+}
+
+impl CliConfiguration for ImportBlocksCmd {
+	fn shared_params(&self) -> &SharedParams {
+		&self.shared_params
 	}
 
-	/// Update and prepare a `Configuration` with command line parameters
-	pub fn update_config<F>(
-		&self,
-		mut config: &mut Configuration,
-		spec_factory: F,
-		version: &VersionInfo,
-	) -> error::Result<()> where
-		F: FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
-	{
-		self.shared_params.update_config(&mut config, spec_factory, version)?;
-		self.import_params.update_config(&mut config, &Role::Full, self.shared_params.dev)?;
-		config.use_in_memory_keystore()?;
-
-		Ok(())
+	fn import_params(&self) -> Option<&ImportParams> {
+		Some(&self.import_params)
 	}
 }
