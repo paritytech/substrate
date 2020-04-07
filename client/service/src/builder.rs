@@ -17,7 +17,7 @@
 use crate::{Service, NetworkStatus, NetworkState, error::Error, DEFAULT_PROTOCOL_ID, MallocSizeOfWasm};
 use crate::{TaskManagerBuilder, start_rpc_servers, build_network_future, TransactionPoolAdapter};
 use crate::status_sinks;
-use crate::config::{Configuration, DatabaseConfig, KeystoreConfig, PrometheusConfig};
+use crate::config::{Configuration, KeystoreConfig, PrometheusConfig};
 use crate::metrics::MetricsService;
 use sc_client_api::{
 	self,
@@ -168,7 +168,6 @@ fn new_full_parts<TBl, TRtApi, TExecDisp>(
 			password.clone()
 		)?,
 		KeystoreConfig::InMemory => Keystore::new_in_memory(),
-		KeystoreConfig::None => return Err("No keystore config provided!".into()),
 	};
 
 	let tasks_builder = TaskManagerBuilder::new();
@@ -179,7 +178,7 @@ fn new_full_parts<TBl, TRtApi, TExecDisp>(
 		config.max_runtime_instances,
 	);
 
-	let chain_spec = config.expect_chain_spec();
+	let chain_spec = &config.chain_spec;
 	let fork_blocks = get_extension::<sc_client::ForkBlocks<TBl>>(chain_spec.extensions())
 		.cloned()
 		.unwrap_or_default();
@@ -194,15 +193,7 @@ fn new_full_parts<TBl, TRtApi, TExecDisp>(
 			state_cache_child_ratio:
 			config.state_cache_child_ratio.map(|v| (v, 100)),
 			pruning: config.pruning.clone(),
-			source: match config.expect_database() {
-				DatabaseConfig::RocksDb { path, cache_size } =>
-					sc_client_db::DatabaseSettingsSrc::RocksDb {
-						path: path.clone(),
-						cache_size: cache_size.clone().map(|u| u as usize),
-					},
-				DatabaseConfig::Custom(db) =>
-					sc_client_db::DatabaseSettingsSrc::Custom(db.clone()),
-			},
+			source: config.database.clone(),
 		};
 
 		let extensions = sc_client_api::execution_extensions::ExecutionExtensions::new(
@@ -213,7 +204,7 @@ fn new_full_parts<TBl, TRtApi, TExecDisp>(
 		sc_client_db::new_client(
 			db_config,
 			executor,
-			config.expect_chain_spec().as_storage_builder(),
+			chain_spec.as_storage_builder(),
 			fork_blocks,
 			bad_blocks,
 			extensions,
@@ -289,7 +280,6 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 				password.clone()
 			)?,
 			KeystoreConfig::InMemory => Keystore::new_in_memory(),
-			KeystoreConfig::None => return Err("No keystore config provided!".into()),
 		};
 
 		let executor = NativeExecutor::<TExecDisp>::new(
@@ -304,7 +294,7 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 				state_cache_child_ratio:
 					config.state_cache_child_ratio.map(|v| (v, 100)),
 				pruning: config.pruning.clone(),
-				source: config.expect_database().clone(),
+				source: config.database.clone(),
 			};
 			sc_client_db::light::LightStorage::new(db_settings)?
 		};
@@ -321,7 +311,7 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 		let remote_blockchain = backend.remote_blockchain();
 		let client = Arc::new(sc_client::light::new_light(
 			backend.clone(),
-			config.expect_chain_spec().as_storage_builder(),
+			config.chain_spec.as_storage_builder(),
 			executor,
 			Box::new(tasks_builder.spawn_handle()),
 			config.prometheus_config.as_ref().map(|config| config.registry.clone()),
@@ -770,9 +760,9 @@ ServiceBuilder<
 
 		let import_queue = Box::new(import_queue);
 		let chain_info = client.chain_info();
-		let chain_spec = config.expect_chain_spec();
+		let chain_spec = &config.chain_spec;
 
-		let version = config.full_version();
+		let version = config.impl_version;
 		info!("📦 Highest known block at #{}", chain_info.best_number);
 		telemetry!(
 			SUBSTRATE_INFO;
@@ -950,7 +940,7 @@ ServiceBuilder<
 			};
 			let metrics = MetricsService::with_prometheus(
 				&registry,
-				&config.name,
+				&config.network.node_name,
 				&config.impl_version,
 				role_bits,
 			)?;
@@ -1089,10 +1079,10 @@ ServiceBuilder<
 		let telemetry = config.telemetry_endpoints.clone().map(|endpoints| {
 			let is_authority = config.role.is_authority();
 			let network_id = network.local_peer_id().to_base58();
-			let name = config.name.clone();
+			let name = config.network.node_name.clone();
 			let impl_name = config.impl_name.to_owned();
 			let version = version.clone();
-			let chain_name = config.expect_chain_spec().name().to_owned();
+			let chain_name = config.chain_spec.name().to_owned();
 			let telemetry_connection_sinks_ = telemetry_connection_sinks.clone();
 			let telemetry = sc_telemetry::init_telemetry(sc_telemetry::TelemetryConfig {
 				endpoints,
@@ -1144,7 +1134,7 @@ ServiceBuilder<
 
 		Ok(Service {
 			client,
-			task_manager: tasks_builder.into_task_manager(config.task_executor.ok_or(Error::TaskExecutorRequired)?),
+			task_manager: tasks_builder.into_task_manager(config.task_executor),
 			network,
 			network_status_sinks,
 			select_chain,

@@ -97,7 +97,7 @@ mod tests {
 			state_cache_size: 0,
 			state_cache_child_ratio: None,
 			pruning: PruningMode::ArchiveAll,
-			source: DatabaseSettingsSrc::RocksDb { path: db_path.to_owned(), cache_size: None },
+			source: DatabaseSettingsSrc::RocksDb { path: db_path.to_owned(), cache_size: 128 },
 		}, DatabaseType::Full).map(|_| ())
 	}
 
