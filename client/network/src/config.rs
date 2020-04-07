@@ -31,16 +31,23 @@ pub use crate::protocol::ProtocolConfig;
 
 use crate::service::ExHashT;
 
-use sp_consensus::{block_validation::BlockAnnounceValidator, import_queue::ImportQueue};
-use sp_runtime::traits::{Block as BlockT};
-use libp2p::identity::{Keypair, ed25519};
-use libp2p::wasm_ext;
-use libp2p::{PeerId, Multiaddr, multiaddr};
 use core::{fmt, iter};
-use std::{convert::TryFrom, future::Future, pin::Pin, str::FromStr};
-use std::{error::Error, fs, io::{self, Write}, net::Ipv4Addr, path::{Path, PathBuf}, sync::Arc};
-use zeroize::Zeroize;
+use libp2p::identity::{ed25519, Keypair};
+use libp2p::wasm_ext;
+use libp2p::{multiaddr, Multiaddr, PeerId};
 use prometheus_endpoint::Registry;
+use sp_consensus::{block_validation::BlockAnnounceValidator, import_queue::ImportQueue};
+use sp_runtime::{traits::Block as BlockT, ConsensusEngineId};
+use std::{borrow::Cow, convert::TryFrom, future::Future, pin::Pin, str::FromStr};
+use std::{
+    error::Error,
+    fs,
+    io::{self, Write},
+    net::Ipv4Addr,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
+use zeroize::Zeroize;
 
 /// Network initialization parameters.
 pub struct Params<B: BlockT, H: ExHashT> {
@@ -307,38 +314,41 @@ impl From<multiaddr::Error> for ParseErr {
 /// Network service configuration.
 #[derive(Clone, Debug)]
 pub struct NetworkConfiguration {
-	/// Directory path to store general network configuration. None means nothing will be saved.
-	pub config_path: Option<PathBuf>,
-	/// Directory path to store network-specific configuration. None means nothing will be saved.
-	pub net_config_path: Option<PathBuf>,
-	/// Multiaddresses to listen for incoming connections.
-	pub listen_addresses: Vec<Multiaddr>,
-	/// Multiaddresses to advertise. Detected automatically if empty.
-	pub public_addresses: Vec<Multiaddr>,
-	/// List of initial node addresses
-	pub boot_nodes: Vec<MultiaddrWithPeerId>,
-	/// The node key configuration, which determines the node's network identity keypair.
-	pub node_key: NodeKeyConfig,
-	/// Maximum allowed number of incoming connections.
-	pub in_peers: u32,
-	/// Number of outgoing connections we're trying to maintain.
-	pub out_peers: u32,
-	/// List of reserved node addresses.
-	pub reserved_nodes: Vec<MultiaddrWithPeerId>,
-	/// The non-reserved peer mode.
-	pub non_reserved_mode: NonReservedPeerMode,
-	/// Client identifier. Sent over the wire for debugging purposes.
-	pub client_version: String,
-	/// Name of the node. Sent over the wire for debugging purposes.
-	pub node_name: String,
-	/// Configuration for the transport layer.
-	pub transport: TransportConfig,
-	/// Maximum number of peers to ask the same blocks in parallel.
-	pub max_parallel_downloads: u32,
+    /// Directory path to store general network configuration. None means nothing will be saved.
+    pub config_path: Option<PathBuf>,
+    /// Directory path to store network-specific configuration. None means nothing will be saved.
+    pub net_config_path: Option<PathBuf>,
+    /// Multiaddresses to listen for incoming connections.
+    pub listen_addresses: Vec<Multiaddr>,
+    /// Multiaddresses to advertise. Detected automatically if empty.
+    pub public_addresses: Vec<Multiaddr>,
+    /// List of initial node addresses
+    pub boot_nodes: Vec<MultiaddrWithPeerId>,
+    /// The node key configuration, which determines the node's network identity keypair.
+    pub node_key: NodeKeyConfig,
+    /// List of notifications protocols that the node supports. Must also include a
+    /// `ConsensusEngineId` for backwards-compatibility.
+    pub notifications_protocols: Vec<(ConsensusEngineId, Cow<'static, [u8]>)>,
+    /// Maximum allowed number of incoming connections.
+    pub in_peers: u32,
+    /// Number of outgoing connections we're trying to maintain.
+    pub out_peers: u32,
+    /// List of reserved node addresses.
+    pub reserved_nodes: Vec<MultiaddrWithPeerId>,
+    /// The non-reserved peer mode.
+    pub non_reserved_mode: NonReservedPeerMode,
+    /// Client identifier. Sent over the wire for debugging purposes.
+    pub client_version: String,
+    /// Name of the node. Sent over the wire for debugging purposes.
+    pub node_name: String,
+    /// Configuration for the transport layer.
+    pub transport: TransportConfig,
+    /// Maximum number of peers to ask the same blocks in parallel.
+    pub max_parallel_downloads: u32,
 }
 
 impl Default for NetworkConfiguration {
-	fn default() -> Self {
+    fn default() -> Self {
 		NetworkConfiguration {
 			config_path: None,
 			net_config_path: None,
@@ -346,6 +356,7 @@ impl Default for NetworkConfiguration {
 			public_addresses: Vec::new(),
 			boot_nodes: Vec::new(),
 			node_key: NodeKeyConfig::Ed25519(Secret::New),
+			notifications_protocols: Vec::new(),
 			in_peers: 25,
 			out_peers: 75,
 			reserved_nodes: Vec::new(),
