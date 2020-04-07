@@ -34,9 +34,9 @@ pub struct FinalizeBlockParams<B: BlockT, F, CB> {
 	pub sender: rpc::Sender<()>,
 	/// finalization justification
 	pub justification: Option<Justification>,
-	/// client backend
+	/// Finalizer trait object.
 	pub finalizer: Arc<F>,
-	/// phantom type
+	/// phantom type to pin the Backend type
 	pub _phantom: PhantomData<CB>,
 }
 
