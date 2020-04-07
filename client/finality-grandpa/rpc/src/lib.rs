@@ -16,24 +16,99 @@
 
 //! RPC API for GRANDPA.
 
-use futures::{FutureExt as _, TryFutureExt as _};
+use futures::{FutureExt, TryFutureExt};
 use jsonrpc_derive::rpc;
-use jsonrpc_core::{Error as RpcError, futures::future as rpc_future};
+use jsonrpc_core::Error;
+use sc_finality_grandpa::{SharedVoterState, SharedAuthoritySet, AuthorityId, voter};
+use finality_grandpa::BlockNumberOps;
+use serde::{Serialize, Deserialize};
+use std::{collections::HashSet, fmt::Debug};
 
-type FutureResult<T> = Box<dyn rpc_future::Future<Item = T, Error = RpcError> + Send>;
+type FutureResult<T> = Box<dyn jsonrpc_core::futures::Future<Item = T, Error = Error> + Send>;
 
 #[rpc]
 pub trait GrandpaApi {
 	#[rpc(name = "grandpa_roundState")]
-	fn grandpa_roundState(&self) -> FutureResult<String>;
+	fn grandpa_round_state(&self) -> FutureResult<RoundState>;
 }
 
-pub struct GrandpaRpcHandler;
+pub struct GrandpaRpcHandler<Hash, Block> {
+	// WIP: pass AuthorityId as type parameter
+	shared_voter_state: SharedVoterState<AuthorityId>,
+	shared_authority_set: SharedAuthoritySet<Hash, Block>,
+}
 
-impl GrandpaApi for GrandpaRpcHandler {
-	fn grandpa_roundState(&self) -> FutureResult<String> {
+impl<Hash, Block> GrandpaRpcHandler<Hash, Block> {
+	pub fn new(
+		shared_voter_state: SharedVoterState<AuthorityId>,
+		shared_authority_set: SharedAuthoritySet<Hash, Block>
+	) -> Self {
+		Self {
+			shared_voter_state,
+			shared_authority_set,
+		}
+	}
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct RoundState {
+	pub set_id: u64,
+	pub round: u64,
+	pub total_weight: u64,
+	pub threshold_weight: u64,
+
+	pub prevote_current_weight: u64,
+	pub prevote_missing: HashSet<AuthorityId>,
+
+	pub precommit_current_weight: u64,
+	pub precommit_missing: HashSet<AuthorityId>,
+}
+
+impl RoundState {
+	pub fn from<Hash, Block>(
+		voter_state: &SharedVoterState<AuthorityId>,
+		authority_set: &SharedAuthoritySet<Hash, Block>
+	) -> Self
+	where
+		Hash: Debug + Clone + Eq + Send + Sync + 'static,
+		Block: BlockNumberOps + Send + Sync + 'static,
+	{
+		let voter_state = voter_state.read().as_ref().map(|vs| vs.voter_state());
+		// WIP: handle unwrap of lazily instantiated VoterState
+		let voter_state = voter_state.unwrap();
+
+		let current_authorities = authority_set.current_authorities();
+		let voters: HashSet<AuthorityId> = current_authorities.voters().iter().map(|p| p.0.clone()).collect();
+
+		let prevotes = voter_state.best_round.1.prevote_ids;
+		let missing_prevotes = voters.difference(&prevotes).cloned().collect();
+
+		let precommits = voter_state.best_round.1.precommit_ids;
+		let missing_precommits = voters.difference(&precommits).cloned().collect();
+
+		Self {
+			set_id: authority_set.set_id(),
+			round: voter_state.best_round.0,
+			total_weight: voter_state.best_round.1.total_weight,
+			threshold_weight: voter_state.best_round.1.threshold_weight,
+
+			prevote_current_weight: voter_state.best_round.1.prevote_current_weight,
+			prevote_missing: missing_prevotes,
+
+			precommit_current_weight: voter_state.best_round.1.precommit_current_weight,
+			precommit_missing: missing_precommits,
+		}
+	}
+}
+
+impl<Hash, Block: Send + Sync> GrandpaApi for GrandpaRpcHandler<Hash, Block> where
+	Hash: Debug + Clone + Eq + Send + Sync + 'static,
+	Block: BlockNumberOps + Send + Sync + 'static,
+{
+	fn grandpa_round_state(&self) -> FutureResult<RoundState> {
+		let round_state = RoundState::from(&self.shared_voter_state, &self.shared_authority_set);
 		let future = async move {
-			Ok(String::from("Hello world"))
+			Ok(round_state)
 		}.boxed();
 		Box::new(future.compat())
 	}

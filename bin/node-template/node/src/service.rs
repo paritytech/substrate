@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 use std::time::Duration;
+use parking_lot::RwLock;
 use sc_client::LongestChain;
 use sc_client_api::ExecutorProvider;
 use node_template_runtime::{self, opaque::Block, RuntimeApi};
@@ -78,6 +79,7 @@ pub fn new_full(config: Configuration)
 	let force_authoring = config.force_authoring;
 	let name = config.network.node_name.clone();
 	let disable_grandpa = config.disable_grandpa;
+	let shared_voter_state = Arc::new(RwLock::new(None));
 
 	let (builder, mut import_setup, inherent_data_providers) = new_full_start!(config);
 
@@ -155,7 +157,8 @@ pub fn new_full(config: Configuration)
 			inherent_data_providers: inherent_data_providers.clone(),
 			telemetry_on_connect: Some(service.telemetry_on_connect_stream()),
 			voting_rule: sc_finality_grandpa::VotingRulesBuilder::default().build(),
-			prometheus_registry: service.prometheus_registry()
+			prometheus_registry: service.prometheus_registry(),
+			shared_voter_state,
 		};
 
 		// the GRANDPA voter task is considered infallible, i.e.

@@ -72,11 +72,13 @@ use sp_core::Pair;
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 use sc_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG};
 use serde_json;
+use parking_lot::RwLock;
 
 use sp_finality_tracker;
 
 use finality_grandpa::Error as GrandpaError;
-use finality_grandpa::{voter, BlockNumberOps, voter_set::VoterSet};
+use finality_grandpa::{BlockNumberOps, voter_set::VoterSet};
+pub use finality_grandpa::voter;
 
 use std::{fmt, io};
 use std::sync::Arc;
@@ -114,6 +116,7 @@ mod observer;
 mod until_imported;
 mod voting_rule;
 
+pub use authorities::SharedAuthoritySet;
 pub use finality_proof::{FinalityProofProvider, StorageAndProofProvider};
 pub use justification::GrandpaJustification;
 pub use light_import::light_block_import;
@@ -202,6 +205,9 @@ type CommunicationOutH<Block, H> = finality_grandpa::voter::CommunicationOut<
 	AuthoritySignature,
 	AuthorityId,
 >;
+
+// WIP: convert to struct
+pub type SharedVoterState<Id> = Arc<RwLock<Option<Box<dyn voter::VoterState<Id> + Sync + Send>>>>;
 
 /// Configuration for the GRANDPA service.
 #[derive(Clone)]
@@ -397,6 +403,12 @@ pub struct LinkHalf<Block: BlockT, C, SC> {
 	select_chain: SC,
 	persistent_data: PersistentData<Block>,
 	voter_commands_rx: TracingUnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
+}
+
+impl<Block: BlockT, C, SC> LinkHalf<Block, C, SC> {
+	pub fn shared_authority_set(&self) -> &SharedAuthoritySet<Block::Hash, NumberFor<Block>> {
+		&self.persistent_data.authority_set
+	}
 }
 
 /// Provider for the Grandpa authority set configured on the genesis block.
@@ -620,6 +632,9 @@ pub struct GrandpaParams<Block: BlockT, C, N, SC, VR> {
 	pub voting_rule: VR,
 	/// The prometheus metrics registry.
 	pub prometheus_registry: Option<prometheus_endpoint::Registry>,
+	/// The voter state is exposed at an RPC endpoint.
+	// WIP: should we use Environment::Id istead of AuthorityId?
+	pub shared_voter_state: SharedVoterState<AuthorityId>,
 }
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
@@ -644,6 +659,7 @@ pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR>(
 		telemetry_on_connect,
 		voting_rule,
 		prometheus_registry,
+		shared_voter_state,
 	} = grandpa_params;
 
 	// NOTE: we have recently removed `run_grandpa_observer` from the public
@@ -704,6 +720,7 @@ pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR>(
 		persistent_data,
 		voter_commands_rx,
 		prometheus_registry,
+		shared_voter_state,
 	);
 
 	let voter_work = voter_work
@@ -734,6 +751,7 @@ impl Metrics {
 #[must_use]
 struct VoterWork<B, Block: BlockT, C, N: NetworkT<Block>, SC, VR> {
 	voter: Pin<Box<dyn Future<Output = Result<(), CommandOrError<Block::Hash, NumberFor<Block>>>> + Send>>,
+	shared_voter_state: SharedVoterState<AuthorityId>,
 	env: Arc<Environment<B, Block, C, N, SC, VR>>,
 	voter_commands_rx: TracingUnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
 	network: NetworkBridge<Block, N>,
@@ -761,6 +779,7 @@ where
 		persistent_data: PersistentData<Block>,
 		voter_commands_rx: TracingUnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
 		prometheus_registry: Option<prometheus_endpoint::Registry>,
+		shared_voter_state: SharedVoterState<AuthorityId>
 	) -> Self {
 		let metrics = match prometheus_registry.as_ref().map(Metrics::register) {
 			Some(Ok(metrics)) => Some(metrics),
@@ -791,6 +810,7 @@ where
 			// `voter` is set to a temporary value and replaced below when
 			// calling `rebuild_voter`.
 			voter: Box::pin(future::pending()),
+			shared_voter_state,
 			env,
 			voter_commands_rx,
 			network,
@@ -857,6 +877,10 @@ where
 					last_completed_round.base.clone(),
 					last_finalized,
 				);
+
+				// Repoint shared_voter_state so that the RPC endpoint can query the state
+				let mut shared_voter_state = self.shared_voter_state.write();
+				*shared_voter_state = Some(voter.voter_state());
 
 				self.voter = Box::pin(voter);
 			},

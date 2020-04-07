@@ -8,10 +8,13 @@ license = "GPL-3.0"
 
 [dependencies]
 sc-finality-grandpa = { version = "0.8.0-dev", path = "../" }
+finality-grandpa = { version = "0.11.2", features = ["derive-codec"] }
 jsonrpc-core = "14.0.3"
 jsonrpc-core-client = "14.0.3"
 jsonrpc-derive = "14.0.3"
 futures = "0.3.1"
+serde = { version = "1.0.105", features = ["derive"] }
+serde_json = "1.0.50"
 
 [dev-dependencies]
 substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../../test-utils/runtime/client" }

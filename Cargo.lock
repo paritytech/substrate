@@ -3424,6 +3424,7 @@ dependencies = [
  "pallet-timestamp",
  "pallet-transaction-payment",
  "parity-scale-codec",
+ "parking_lot 0.10.2",
  "platforms",
  "rand 0.7.3",
  "regex",
@@ -3542,6 +3543,7 @@ dependencies = [
  "sc-consensus-babe",
  "sc-consensus-babe-rpc",
  "sc-consensus-epochs",
+ "sc-finality-grandpa",
  "sc-finality-grandpa-rpc",
  "sc-keystore",
  "sp-api",
@@ -3637,6 +3639,7 @@ dependencies = [
  "futures 0.3.4",
  "log",
  "node-template-runtime",
+ "parking_lot 0.10.2",
  "sc-basic-authorship",
  "sc-cli",
  "sc-client",
@@ -6382,11 +6385,14 @@ dependencies = [
 name = "sc-finality-grandpa-rpc"
 version = "0.8.0-dev"
 dependencies = [
+ "finality-grandpa",
  "futures 0.3.4",
  "jsonrpc-core",
  "jsonrpc-core-client",
  "jsonrpc-derive",
  "sc-finality-grandpa",
+ "serde",
+ "serde_json",
  "substrate-test-runtime-client",
 ]
 

@@ -30,7 +30,7 @@ use std::ops::Add;
 use std::sync::Arc;
 
 /// A shared authority set.
-pub(crate) struct SharedAuthoritySet<H, N> {
+pub struct SharedAuthoritySet<H, N> {
 	inner: Arc<RwLock<AuthoritySet<H, N>>>,
 }
 
@@ -58,12 +58,12 @@ where N: Add<Output=N> + Ord + Clone + Debug,
 	}
 
 	/// Get the current set ID. This is incremented every time the set changes.
-	pub(crate) fn set_id(&self) -> u64 {
+	pub fn set_id(&self) -> u64 {
 		self.inner.read().set_id
 	}
 
 	/// Get the current authorities and their weights (for the current set ID).
-	pub(crate) fn current_authorities(&self) -> VoterSet<AuthorityId> {
+	pub fn current_authorities(&self) -> VoterSet<AuthorityId> {
 		self.inner.read().current_authorities.iter().cloned().collect()
 	}
 }
