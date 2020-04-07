@@ -87,7 +87,11 @@ fi
 curl -H "${github_header}" -sS -o companion_pr_reviews.json \
   ${github_api_polkadot_pull_url}/${pr_companion}/reviews 
 
-if [ "$(jq -r -e '.[].state' < companion_pr_reviews.json | uniq)" != "APPROVED" ]
+
+# make sure the pr is approved
+status="$(jq -r -e '.[].state' < companion_pr_reviews.json | sort -u \
+  | grep -v -e COMMENTED)"
+if [ "${status}" != "APPROVED" ]
 then
   boldprint "polkadot pr #${pr_companion} not APPROVED"
   exit 1
