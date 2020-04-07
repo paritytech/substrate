@@ -1069,7 +1069,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 							&& error.contains("Peer ID mismatch")
 						{
 							error!(
-								"Connecting to bootnode with peer id `{}` and address `{}` failed \
+								"💔 Connecting to bootnode with peer id `{}` and address `{}` failed \
 								because it returned a different peer id!",
 								peer_id,
 								address,
