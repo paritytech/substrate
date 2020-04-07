@@ -679,11 +679,11 @@ pub struct UnresponsivenessOffence<Offender> {
 	///
 	/// It acts as a time measure for unresponsiveness reports and effectively will always point
 	/// at the end of the session.
-	session_index: SessionIndex,
+	pub session_index: SessionIndex,
 	/// The size of the validator set in current session/era.
-	validator_set_count: u32,
+	pub validator_set_count: u32,
 	/// Authorities that were unresponsive during the current era.
-	offenders: Vec<Offender>,
+	pub offenders: Vec<Offender>,
 }
 
 impl<Offender: Clone> Offence<Offender> for UnresponsivenessOffence<Offender> {
