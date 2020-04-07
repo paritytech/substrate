@@ -273,7 +273,8 @@ macro_rules! benchmarks_iter {
 		$( $rest:tt )*
 	) => {
 		$crate::benchmark_backend! {
-			$instance $name
+			$instance
+			$name
 			{ $( $common )* }
 			{ }
 			{ $eval }
