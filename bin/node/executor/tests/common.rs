@@ -15,10 +15,21 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use codec::{Encode, Decode};
+use frame_system::offchain::AppCrypto;
 use frame_support::Hashable;
 use sp_state_machine::TestExternalities as CoreTestExternalities;
-use sp_core::{NeverNativeValue, NativeOrEncoded, traits::{CodeExecutor, RuntimeCode}};
-use sp_runtime::{ApplyExtrinsicResult, traits::{Header as HeaderT, BlakeTwo256}};
+use sp_core::{
+	NeverNativeValue, NativeOrEncoded,
+	crypto::KeyTypeId,
+	sr25519::Signature,
+	traits::{CodeExecutor, RuntimeCode},
+};
+use sp_runtime::{
+	ApplyExtrinsicResult,
+	MultiSigner,
+	MultiSignature,
+	traits::{Header as HeaderT, BlakeTwo256}
+};
 use sc_executor::{NativeExecutor, WasmExecutionMethod};
 use sc_executor::error::Result;
 
@@ -30,13 +41,6 @@ use node_runtime::{
 use node_primitives::{Hash, BlockNumber};
 use node_testing::keyring::*;
 use sp_externalities::Externalities;
-
-use sp_core::{
-	crypto::KeyTypeId,
-	sr25519::Signature,
-};
-use sp_runtime::{MultiSigner, MultiSignature};
-use frame_system::offchain::AppCrypto;
 
 pub const TEST_KEY_TYPE_ID: KeyTypeId = KeyTypeId(*b"test");
 
