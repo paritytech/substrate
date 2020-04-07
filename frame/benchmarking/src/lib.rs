@@ -756,10 +756,12 @@ macro_rules! impl_benchmark {
 							$crate::benchmarking::commit_db();
 
 							// Time the extrinsic logic.
+							frame_support::debug::trace!(target: "benchmark", "Start Benchmark: {:?} {:?}", name, component_value);
 							let start_extrinsic = $crate::benchmarking::current_time();
 							closure_to_benchmark()?;
 							let finish_extrinsic = $crate::benchmarking::current_time();
 							let elapsed_extrinsic = finish_extrinsic - start_extrinsic;
+							frame_support::debug::trace!(target: "benchmark", "End Benchmark: {} ns", elapsed_extrinsic);
 
 							// Time the storage root recalculation.
 							let start_storage_root = $crate::benchmarking::current_time();
@@ -856,10 +858,12 @@ macro_rules! impl_benchmark {
 							$crate::benchmarking::commit_db();
 
 							// Time the extrinsic logic.
+							frame_support::debug::trace!(target: "benchmark", "Start Benchmark: {:?} {:?}", name, component_value);
 							let start_extrinsic = $crate::benchmarking::current_time();
 							closure_to_benchmark()?;
 							let finish_extrinsic = $crate::benchmarking::current_time();
 							let elapsed_extrinsic = finish_extrinsic - start_extrinsic;
+							frame_support::debug::trace!(target: "benchmark", "End Benchmark: {} ns", elapsed_extrinsic);
 
 							// Time the storage root recalculation.
 							let start_storage_root = $crate::benchmarking::current_time();
