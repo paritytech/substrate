@@ -27,7 +27,6 @@ use sp_core::{
 	traits::KeystoreExt,
 };
 use frame_system::{
-	mock::{sr25519::AuthorityId, TestAuthorityId},
 	offchain::{
 		Signer,
 		SubmitTransaction,
@@ -71,9 +70,9 @@ fn should_submit_signed_transaction() {
 	t.register_extension(TransactionPoolExt::new(pool));
 
 	let keystore = KeyStore::new();
-	keystore.write().sr25519_generate_new(AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE))).unwrap();
-	keystore.write().sr25519_generate_new(AuthorityId::ID, Some(&format!("{}/hunter2", PHRASE))).unwrap();
-	keystore.write().sr25519_generate_new(AuthorityId::ID, Some(&format!("{}/hunter3", PHRASE))).unwrap();
+	keystore.write().sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE))).unwrap();
+	keystore.write().sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter2", PHRASE))).unwrap();
+	keystore.write().sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter3", PHRASE))).unwrap();
 	t.register_extension(KeystoreExt(keystore));
 
 	t.execute_with(|| {
@@ -96,7 +95,7 @@ fn should_submit_signed_twice_from_the_same_account() {
 	t.register_extension(TransactionPoolExt::new(pool));
 
 	let keystore = KeyStore::new();
-	keystore.write().sr25519_generate_new(AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE))).unwrap();
+	keystore.write().sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE))).unwrap();
 	t.register_extension(KeystoreExt(keystore));
 
 	t.execute_with(|| {
@@ -148,7 +147,7 @@ fn submitted_transaction_should_be_valid() {
 	t.register_extension(TransactionPoolExt::new(pool));
 
 	let keystore = KeyStore::new();
-	keystore.write().sr25519_generate_new(AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE))).unwrap();
+	keystore.write().sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE))).unwrap();
 	t.register_extension(KeystoreExt(keystore));
 
 	t.execute_with(|| {
