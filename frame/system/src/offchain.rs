@@ -57,7 +57,7 @@ where
 	}
 }
 
-/// Provides an implementation for signing transaction payloads
+/// Provides an implementation for signing transaction payloads.
 ///
 /// Keys used for signing are defined when instantiating the signer object.
 /// Signing can be done using:
@@ -242,7 +242,7 @@ impl<
 	) -> Self::Result
 	where
 		F: Fn(&Account<T>) -> TPayload,
-		TPayload: SignedPayload<T>
+		TPayload: SignedPayload<T>, 
 	{
 		self.for_any(|account| {
 			let payload = f(account);
@@ -382,13 +382,13 @@ pub trait SigningTypes: crate::Trait {
 		+ codec::Codec;
 }
 
-/// A wrapper around the transaction and call types
+/// A wrapper around the transaction and call types.
 pub trait SendTransactionTypes<LocalCall> {
 	type Extrinsic: ExtrinsicT<Call=Self::OverarchingCall> + codec::Encode;
 	type OverarchingCall: From<LocalCall>;
 }
 
-/// Create signed transaction
+/// Create signed transaction.
 ///
 /// Should be implemented by the runtime to sign transaction data
 pub trait CreateSignedTransaction<LocalCall>: SendTransactionTypes<LocalCall> + SigningTypes {
