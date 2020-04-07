@@ -21,20 +21,10 @@ use frame_support::{traits::OnInitialize, assert_ok};
 use sp_core::crypto::key_types::DUMMY;
 use sp_runtime::testing::UintAuthorityId;
 use mock::{
-	NEXT_VALIDATORS, SESSION_CHANGED, TEST_SESSION_CHANGED, authorities, force_new_session,
-	set_next_validators, set_session_length, session_changed, Test, Origin, System, Session,
-	reset_before_session_end_called, before_session_end_called,
+	SESSION_CHANGED, TEST_SESSION_CHANGED, authorities, force_new_session,
+	set_next_validators, set_session_length, session_changed, Origin, System, Session,
+	reset_before_session_end_called, before_session_end_called, new_test_ext,
 };
-
-fn new_test_ext() -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	GenesisConfig::<Test> {
-		keys: NEXT_VALIDATORS.with(|l|
-			l.borrow().iter().cloned().map(|i| (i, i, UintAuthorityId(i).into())).collect()
-		),
-	}.assimilate_storage(&mut t).unwrap();
-	sp_io::TestExternalities::new(t)
-}
 
 fn initialize_block(block: u64) {
 	SESSION_CHANGED.with(|l| *l.borrow_mut() = false);

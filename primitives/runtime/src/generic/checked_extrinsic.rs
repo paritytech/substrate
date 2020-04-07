@@ -83,8 +83,10 @@ where
 			(_, IsFullyValidated::No) => return Err(InvalidTransaction::NotFullyValidated)?,
 			(pre, _) => pre,
 		};
-		let res = self.function.dispatch(Origin::from(maybe_who));
-		Extra::post_dispatch(pre, info.clone(), len);
-		Ok(res.map_err(Into::into))
+		let res = self.function.dispatch(Origin::from(maybe_who))
+			.map(|_| ())
+			.map_err(|e| e.error);
+		Extra::post_dispatch(pre, info.clone(), len, &res)?;
+		Ok(res)
 	}
 }

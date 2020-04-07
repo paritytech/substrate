@@ -52,6 +52,13 @@ pub enum InvalidTransaction {
 	ExhaustsResources,
 	/// Any other custom invalid validity that is not covered by this enum.
 	Custom(u8),
+	/// An extrinsic with a Mandatory dispatch resulted in Error. This is indicative of either a
+	/// malicious validator or a buggy `provide_inherent`. In any case, it can result in dangerously
+	/// overweight blocks and therefore if found, invalidates the block.
+	BadMandatory,
+	/// A transaction with a mandatory dispatch. This is invalid; only inherent extrinsics are
+	/// allowed to have mandatory dispatches.
+	MandatoryDispatch,
 	/// No validator has been able to fully verify this transaction.
 	///
 	/// The transactions are disallowed from being included by default. Some validator
@@ -69,6 +76,14 @@ impl InvalidTransaction {
 			_ => false,
 		}
 	}
+
+	/// Returns if the reason for the invalidity was a mandatory call failing.
+	pub fn was_mandatory(&self) -> bool {
+		match self {
+			Self::BadMandatory => true,
+			_ => false,
+		}
+	}
 }
 
 impl From<InvalidTransaction> for &'static str {
@@ -83,6 +98,10 @@ impl From<InvalidTransaction> for &'static str {
 				"Transaction would exhausts the block limits",
 			InvalidTransaction::Payment =>
 				"Inability to pay some fees (e.g. account balance too low)",
+			InvalidTransaction::BadMandatory =>
+				"A call was labelled as mandatory, but resulted in an Error.",
+			InvalidTransaction::MandatoryDispatch =>
+				"Tranaction dispatch is mandatory; transactions may not have mandatory dispatches.",
 			InvalidTransaction::Custom(_) => "InvalidTransaction custom error",
 			InvalidTransaction::NotFullyValidated =>
 				"Missing SignedExtension or UnsignedValidator to fully verify the transaction.",
@@ -139,6 +158,15 @@ impl TransactionValidityError {
 	pub fn exhausted_resources(&self) -> bool {
 		match self {
 			Self::Invalid(e) => e.exhausted_resources(),
+			Self::Unknown(_) => false,
+		}
+	}
+
+	/// Returns `true` if the reason for the error was it being a mandatory dispatch that could not
+	/// be completed successfully.
+	pub fn was_mandatory(&self) -> bool {
+		match self {
+			Self::Invalid(e) => e.was_mandatory(),
 			Self::Unknown(_) => false,
 		}
 	}

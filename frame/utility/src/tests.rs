@@ -109,7 +109,7 @@ type Utility = Module<Test>;
 use pallet_balances::Call as BalancesCall;
 use pallet_balances::Error as BalancesError;
 
-fn new_test_ext() -> sp_io::TestExternalities {
+pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	pallet_balances::GenesisConfig::<Test> {
 		balances: vec![(1, 10), (2, 10), (3, 10), (4, 10), (5, 10)],
@@ -303,10 +303,10 @@ fn multisig_2_of_3_cannot_reissue_same_call() {
 		assert_eq!(Balances::free_balance(multi), 5);
 
 		assert_ok!(Utility::as_multi(Origin::signed(1), 2, vec![2, 3], None, call.clone()));
-		assert_ok!(Utility::as_multi(Origin::signed(3), 2, vec![1, 2], Some(now()), call));
+		assert_ok!(Utility::as_multi(Origin::signed(3), 2, vec![1, 2], Some(now()), call.clone()));
 
 		let err = DispatchError::from(BalancesError::<Test, _>::InsufficientBalance).stripped();
-		expect_event(RawEvent::MultisigExecuted(3, now(), multi, Err(err)));
+		expect_event(RawEvent::MultisigExecuted(3, now(), multi, call.using_encoded(blake2_256), Err(err)));
 	});
 }
 
