@@ -113,7 +113,10 @@ use sp_std::{prelude::*, marker::PhantomData, fmt::Debug};
 use codec::{Codec, Encode, Decode};
 use sp_io::hashing::blake2_256;
 use sp_runtime::{
-	traits::{Hash, StaticLookup, Zero, MaybeSerializeDeserialize, Member, SignedExtension},
+	traits::{
+		Hash, StaticLookup, Zero, MaybeSerializeDeserialize, Member, SignedExtension,
+		DispatchInfoOf,
+	},
 	transaction_validity::{
 		ValidTransaction, InvalidTransaction, TransactionValidity, TransactionValidityError,
 	},
@@ -1098,7 +1101,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckBlockGasLimit<T> {
 		&self,
 		_: &Self::AccountId,
 		call: &Self::Call,
-		_: &<Self::Call as Dispatchable>::Info,
+		_: &DispatchInfoOf<Self::Call>,
 		_: usize,
 	) -> TransactionValidity {
 		let call = match call.is_sub_type() {

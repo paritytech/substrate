@@ -21,7 +21,7 @@ use std::{fmt::Debug, ops::Deref, fmt, cell::RefCell};
 use crate::codec::{Codec, Encode, Decode};
 use crate::traits::{
 	self, Checkable, Applyable, BlakeTwo256, OpaqueKeys,
-	SignedExtension, Dispatchable,
+	SignedExtension, Dispatchable, DispatchInfoOf,
 };
 use crate::traits::ValidateUnsigned;
 use crate::{generic, KeyTypeId, ApplyExtrinsicResult};
@@ -356,7 +356,7 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 	fn validate<U: ValidateUnsigned<Call=Self::Call>>(
 		&self,
 		_source: TransactionSource,
-		_info: &<Self::Call as Dispatchable>::Info,
+		_info: &DispatchInfoOf<Self::Call>,
 		_len: usize,
 	) -> TransactionValidity {
 		Ok(Default::default())
@@ -366,7 +366,7 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 	/// index and sender.
 	fn apply<U: ValidateUnsigned<Call=Self::Call>>(
 		self,
-		info: &<Self::Call as Dispatchable>::Info,
+		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> ApplyExtrinsicResult {
 		let maybe_who = if let Some((who, extra)) = self.signature {

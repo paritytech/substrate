@@ -18,9 +18,8 @@
 //! stage.
 
 use crate::traits::{
-	self, Member, MaybeDisplay, SignedExtension, Dispatchable,
+	self, Member, MaybeDisplay, SignedExtension, Dispatchable, DispatchInfoOf, ValidateUnsigned,
 };
-use crate::traits::ValidateUnsigned;
 use crate::transaction_validity::{TransactionValidity, TransactionSource};
 
 /// Definition of something that the external world might want to say; its
@@ -51,7 +50,7 @@ where
 		// TODO [#5006;ToDr] should source be passed to `SignedExtension`s?
 		// Perhaps a change for 2.0 to avoid breaking too much APIs?
 		source: TransactionSource,
-		info: &<Self::Call as Dispatchable>::Info,
+		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> TransactionValidity {
 		if let Some((ref id, ref extra)) = self.signed {
@@ -65,7 +64,7 @@ where
 
 	fn apply<U: ValidateUnsigned<Call=Self::Call>>(
 		self,
-		info: &<Self::Call as Dispatchable>::Info,
+		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> crate::ApplyExtrinsicResult {
 		let (maybe_who, pre) = if let Some((id, extra)) = self.signed {

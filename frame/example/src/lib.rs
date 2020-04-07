@@ -264,7 +264,9 @@ use sp_std::prelude::*;
 use frame_system::{self as system, ensure_signed, ensure_root};
 use codec::{Encode, Decode};
 use sp_runtime::{
-	traits::{SignedExtension, Bounded, SaturatedConversion, Dispatchable},
+	traits::{
+		SignedExtension, Bounded, SaturatedConversion, DispatchInfoOf,
+	},
 	transaction_validity::{
 		ValidTransaction, TransactionValidityError, InvalidTransaction, TransactionValidity,
 	},
@@ -626,7 +628,7 @@ impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
 		&self,
 		_who: &Self::AccountId,
 		call: &Self::Call,
-		_info: &<Self::Call as Dispatchable>::Info,
+		_info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> TransactionValidity {
 		// if the transaction is too big, just drop it.

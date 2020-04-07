@@ -288,7 +288,7 @@ use sp_runtime::{
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, StaticLookup, CheckedSub, Saturating, SaturatedConversion, AtLeast32Bit,
-		SignedExtension, Dispatchable
+		SignedExtension, Dispatchable, DispatchInfoOf,
 	},
 	transaction_validity::{
 		TransactionValidityError, TransactionValidity, ValidTransaction, InvalidTransaction,
@@ -3133,7 +3133,7 @@ impl<T: Trait + Send + Sync> SignedExtension for LockStakingStatus<T> {
 		&self,
 		_who: &Self::AccountId,
 		call: &Self::Call,
-		_info: &<Self::Call as Dispatchable>::Info,
+		_info: &DispatchInfoOf<Self::Call>,
 		_len: usize,
 	) -> TransactionValidity {
 		if let Some(inner_call) = call.is_sub_type() {

@@ -636,6 +636,11 @@ pub trait Dispatchable {
 	fn dispatch(self, origin: Self::Origin) -> crate::DispatchResultWithInfo<Self::PostInfo>;
 }
 
+/// Shortcut to reference the `Info` type of a `Dispatchable`.
+pub type DispatchInfoOf<T> = <T as Dispatchable>::Info;
+/// Shortcut to reference the `PostInfo` type of a `Dispatchable`.
+pub type PostDispatchInfoOf<T> = <T as Dispatchable>::PostInfo;
+
 impl Dispatchable for () {
 	type Origin = ();
 	type Trait = ();
@@ -685,7 +690,7 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 		&self,
 		_who: &Self::AccountId,
 		_call: &Self::Call,
-		_info: &<Self::Call as Dispatchable>::Info,
+		_info: &DispatchInfoOf<Self::Call>,
 		_len: usize,
 	) -> TransactionValidity {
 		Ok(ValidTransaction::default())
@@ -703,7 +708,7 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 		self,
 		who: &Self::AccountId,
 		call: &Self::Call,
-		info: &<Self::Call as Dispatchable>::Info,
+		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> Result<Self::Pre, TransactionValidityError> {
 		self.validate(who, call, info.clone(), len)
@@ -721,7 +726,7 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 	/// Make sure to perform the same checks in `pre_dispatch_unsigned` function.
 	fn validate_unsigned(
 		_call: &Self::Call,
-		_info: &<Self::Call as Dispatchable>::Info,
+		_info: &DispatchInfoOf<Self::Call>,
 		_len: usize,
 	) -> TransactionValidity {
 		Ok(ValidTransaction::default())
@@ -737,7 +742,7 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 	/// perform the same validation as in `validate_unsigned`.
 	fn pre_dispatch_unsigned(
 		call: &Self::Call,
-		info: &<Self::Call as Dispatchable>::Info,
+		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> Result<Self::Pre, TransactionValidityError> {
 		Self::validate_unsigned(call, info.clone(), len)
@@ -760,8 +765,8 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 	/// will come from either an offchain-worker or via `InherentData`.
 	fn post_dispatch(
 		_pre: Self::Pre,
-		_info: &<Self::Call as Dispatchable>::Info,
-		_post_info: &<Self::Call as Dispatchable>::PostInfo,
+		_info: &DispatchInfoOf<Self::Call>,
+		_post_info: &PostDispatchInfoOf<Self::Call>,
 		_len: usize,
 		_result: &DispatchResult,
 	) -> Result<(), TransactionValidityError> {
@@ -797,7 +802,7 @@ impl<AccountId, Call: Dispatchable> SignedExtension for Tuple {
 		&self,
 		who: &Self::AccountId,
 		call: &Self::Call,
-		info: &<Self::Call as Dispatchable>::Info,
+		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> TransactionValidity {
 		let valid = ValidTransaction::default();
@@ -805,7 +810,7 @@ impl<AccountId, Call: Dispatchable> SignedExtension for Tuple {
 		Ok(valid)
 	}
 
-	fn pre_dispatch(self, who: &Self::AccountId, call: &Self::Call, info: &<Self::Call as Dispatchable>::Info, len: usize)
+	fn pre_dispatch(self, who: &Self::AccountId, call: &Self::Call, info: &DispatchInfoOf<Self::Call>, len: usize)
 		-> Result<Self::Pre, TransactionValidityError>
 	{
 		Ok(for_tuples!( ( #( Tuple.pre_dispatch(who, call, info, len)? ),* ) ))
@@ -813,7 +818,7 @@ impl<AccountId, Call: Dispatchable> SignedExtension for Tuple {
 
 	fn validate_unsigned(
 		call: &Self::Call,
-		info: &<Self::Call as Dispatchable>::Info,
+		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> TransactionValidity {
 		let valid = ValidTransaction::default();
@@ -823,7 +828,7 @@ impl<AccountId, Call: Dispatchable> SignedExtension for Tuple {
 
 	fn pre_dispatch_unsigned(
 		call: &Self::Call,
-		info: &<Self::Call as Dispatchable>::Info,
+		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> Result<Self::Pre, TransactionValidityError> {
 		Ok(for_tuples!( ( #( Tuple::pre_dispatch_unsigned(call, info, len)? ),* ) ))
@@ -831,8 +836,8 @@ impl<AccountId, Call: Dispatchable> SignedExtension for Tuple {
 
 	fn post_dispatch(
 		pre: Self::Pre,
-		info: &<Self::Call as Dispatchable>::Info,
-		post_info: &<Self::Call as Dispatchable>::PostInfo,
+		info: &DispatchInfoOf<Self::Call>,
+		post_info: &PostDispatchInfoOf<Self::Call>,
 		len: usize,
 		result: &DispatchResult,
 	) -> Result<(), TransactionValidityError> {
@@ -872,7 +877,7 @@ pub trait Applyable: Sized + Send + Sync {
 	fn validate<V: ValidateUnsigned<Call=Self::Call>>(
 		&self,
 		source: TransactionSource,
-		info: &<Self::Call as Dispatchable>::Info,
+		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> TransactionValidity;
 
@@ -880,7 +885,7 @@ pub trait Applyable: Sized + Send + Sync {
 	/// index and sender.
 	fn apply<V: ValidateUnsigned<Call=Self::Call>>(
 		self,
-		info: &<Self::Call as Dispatchable>::Info,
+		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> crate::ApplyExtrinsicResult;
 }

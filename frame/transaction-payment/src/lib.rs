@@ -44,7 +44,10 @@ use sp_runtime::{
 		TransactionPriority, ValidTransaction, InvalidTransaction, TransactionValidityError,
 		TransactionValidity,
 	},
-	traits::{Zero, Saturating, SignedExtension, SaturatedConversion, Convert, Dispatchable},
+	traits::{
+		Zero, Saturating, SignedExtension, SaturatedConversion, Convert, Dispatchable,
+		DispatchInfoOf,
+	},
 };
 use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 
@@ -160,7 +163,7 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> where
 	/// final_fee = base_fee + targeted_fee_adjustment(len_fee + weight_fee) + tip;
 	pub fn compute_fee(
 		len: u32,
-		info: &<T::Call as Dispatchable>::Info,
+		info: &DispatchInfoOf<T::Call>,
 		tip: BalanceOf<T>,
 	) -> BalanceOf<T>
 	where
@@ -219,7 +222,7 @@ impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T> whe
 		&self,
 		who: &Self::AccountId,
 		_call: &Self::Call,
-		info: &<Self::Call as Dispatchable>::Info,
+		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> TransactionValidity {
 		// pay any fees.

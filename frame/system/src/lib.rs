@@ -109,7 +109,7 @@ use sp_runtime::{
 		self, CheckEqual, AtLeast32Bit, Zero, SignedExtension, Lookup, LookupError,
 		SimpleBitOps, Hash, Member, MaybeDisplay, BadOrigin, SaturatedConversion,
 		MaybeSerialize, MaybeSerializeDeserialize, MaybeMallocSizeOf, StaticLookup, One, Bounded,
-		Dispatchable,
+		Dispatchable, DispatchInfoOf, PostDispatchInfoOf,
 	},
 };
 
@@ -1183,7 +1183,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 	///
 	/// Upon successes, it returns the new block weight as a `Result`.
 	fn check_weight(
-		info: &<T::Call as Dispatchable>::Info,
+		info: &DispatchInfoOf<T::Call>,
 	) -> Result<Weight, TransactionValidityError> {
 		let current_weight = Module::<T>::all_extrinsics_weight();
 		let maximum_weight = T::MaximumBlockWeight::get();
@@ -1201,7 +1201,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 	///
 	/// Upon successes, it returns the new block length as a `Result`.
 	fn check_block_length(
-		info: &<T::Call as Dispatchable>::Info,
+		info: &DispatchInfoOf<T::Call>,
 		len: usize,
 	) -> Result<u32, TransactionValidityError> {
 		let current_len = Module::<T>::all_extrinsics_len();
@@ -1217,7 +1217,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 	}
 
 	/// get the priority of an extrinsic denoted by `info`.
-	fn get_priority(info: &<T::Call as Dispatchable>::Info) -> TransactionPriority {
+	fn get_priority(info: &DispatchInfoOf<T::Call>) -> TransactionPriority {
 		match info.class {
 			DispatchClass::Normal => info.weight.into(),
 			DispatchClass::Operational => Bounded::max_value(),
@@ -1235,7 +1235,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 	///
 	/// It checks and notes the new weight and length.
 	fn do_pre_dispatch(
-		info: &<T::Call as Dispatchable>::Info,
+		info: &DispatchInfoOf<T::Call>,
 		len: usize,
 	) -> Result<(), TransactionValidityError> {
 		let next_len = Self::check_block_length(info, len)?;
@@ -1249,7 +1249,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 	///
 	/// It only checks that the block weight and length limit will not exceed.
 	fn do_validate(
-		info: &<T::Call as Dispatchable>::Info,
+		info: &DispatchInfoOf<T::Call>,
 		len: usize,
 	) -> TransactionValidity {
 		// ignore the next weight and length. If they return `Ok`, then it is below the limit.
@@ -1275,7 +1275,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> where
 		self,
 		_who: &Self::AccountId,
 		_call: &Self::Call,
-		info: &<Self::Call as Dispatchable>::Info,
+		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> Result<(), TransactionValidityError> {
 		if info.class == DispatchClass::Mandatory {
@@ -1288,7 +1288,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> where
 		&self,
 		_who: &Self::AccountId,
 		_call: &Self::Call,
-		info: &<Self::Call as Dispatchable>::Info,
+		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> TransactionValidity {
 		if info.class == DispatchClass::Mandatory {
@@ -1299,7 +1299,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> where
 
 	fn pre_dispatch_unsigned(
 		_call: &Self::Call,
-		info: &<Self::Call as Dispatchable>::Info,
+		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> Result<(), TransactionValidityError> {
 		Self::do_pre_dispatch(info, len)
@@ -1307,7 +1307,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> where
 
 	fn validate_unsigned(
 		_call: &Self::Call,
-		info: &<Self::Call as Dispatchable>::Info,
+		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> TransactionValidity {
 		Self::do_validate(info, len)
@@ -1315,8 +1315,8 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> where
 
 	fn post_dispatch(
 		_pre: Self::Pre,
-		info: &<Self::Call as Dispatchable>::Info,
-		_post_info: &<Self::Call as Dispatchable>::PostInfo,
+		info: &DispatchInfoOf<Self::Call>,
+		_post_info: &PostDispatchInfoOf<Self::Call>,
 		_len: usize,
 		result: &DispatchResult,
 	) -> Result<(), TransactionValidityError> {
@@ -1380,7 +1380,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> where
 		self,
 		who: &Self::AccountId,
 		_call: &Self::Call,
-		_info: &<Self::Call as Dispatchable>::Info,
+		_info: &DispatchInfoOf<Self::Call>,
 		_len: usize,
 	) -> Result<(), TransactionValidityError> {
 		let mut account = Account::<T>::get(who);
@@ -1402,7 +1402,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> where
 		&self,
 		who: &Self::AccountId,
 		_call: &Self::Call,
-		info: &<Self::Call as Dispatchable>::Info,
+		info: &DispatchInfoOf<Self::Call>,
 		_len: usize,
 	) -> TransactionValidity {
 		// check index
@@ -1468,7 +1468,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 		&self,
 		_who: &Self::AccountId,
 		_call: &Self::Call,
-		_info: &<Self::Call as Dispatchable>::Info,
+		_info: &DispatchInfoOf<Self::Call>,
 		_len: usize,
 	) -> TransactionValidity {
 		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
