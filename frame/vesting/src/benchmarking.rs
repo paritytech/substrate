@@ -124,3 +124,21 @@ benchmarks! {
 
 	}: _(RawOrigin::Signed(from), to_lookup, vesting_schedule)
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::tests::{ExtBuilder, Test};
+	use frame_support::assert_ok;
+
+	#[test]
+	fn test_benchmarks() {
+		ExtBuilder::default().existential_deposit(256).build().execute_with(|| {
+			assert_ok!(test_benchmark_vest_locked::<Test>());
+			assert_ok!(test_benchmark_vest_not_locked::<Test>());
+			assert_ok!(test_benchmark_vest_other_locked::<Test>());
+			assert_ok!(test_benchmark_vest_other_not_locked::<Test>());
+			assert_ok!(test_benchmark_vested_transfer::<Test>());
+		});
+	}
+}

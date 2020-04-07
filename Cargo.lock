@@ -1436,6 +1436,7 @@ dependencies = [
  "frame-system",
  "linregress",
  "parity-scale-codec",
+ "paste",
  "sp-api",
  "sp-io",
  "sp-runtime",
@@ -4433,9 +4434,17 @@ name = "pallet-session-benchmarking"
 version = "2.0.0-alpha.5"
 dependencies = [
  "frame-benchmarking",
+ "frame-support",
  "frame-system",
+ "pallet-balances",
  "pallet-session",
  "pallet-staking",
+ "pallet-staking-reward-curve",
+ "pallet-timestamp",
+ "parity-scale-codec",
+ "serde",
+ "sp-core",
+ "sp-io",
  "sp-runtime",
  "sp-std",
 ]
