@@ -85,8 +85,21 @@ pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"btc!");
 /// the types with this pallet-specific identifier.
 pub mod crypto {
 	use super::KEY_TYPE;
-	use sp_runtime::app_crypto::{app_crypto, sr25519};
+	use sp_runtime::{
+		app_crypto::{app_crypto, sr25519},
+		traits::Verify,
+	};
+	use sp_core::{
+		sr25519::Signature as Sr25519Signature,
+	};
 	app_crypto!(sr25519, KEY_TYPE);
+
+	pub struct TestAuthId;
+	impl frame_system::offchain::AppCrypto<<Sr25519Signature as Verify>::Signer, Sr25519Signature> for TestAuthId {
+		type RuntimeAppPublic = Public;
+		type GenericSignature = sp_core::sr25519::Signature;
+		type GenericPublic = sp_core::sr25519::Public;
+	}
 }
 
 /// This pallet's configuration trait

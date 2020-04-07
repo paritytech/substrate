@@ -89,12 +89,6 @@ impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Test
 	type Extrinsic = Extrinsic;
 }
 
-pub struct TestAuthId;
-impl frame_system::offchain::AppCrypto<<Signature as Verify>::Signer, Signature> for TestAuthId {
-	type RuntimeAppPublic = crypto::Public;
-	type GenericSignature = sp_core::sr25519::Signature;
-	type GenericPublic = sp_core::sr25519::Public;
-}
 
 impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for Test where
 	Call<Test>: From<LocalCall>,
@@ -116,7 +110,7 @@ parameter_types! {
 
 impl Trait for Test {
 	type Event = ();
-	type AuthorityId = TestAuthId;
+	type AuthorityId = crypto::TestAuthId;
 	type Call = Call<Test>;
 	type GracePeriod = GracePeriod;
 	type UnsignedInterval = UnsignedInterval;
