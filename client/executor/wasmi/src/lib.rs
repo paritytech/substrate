@@ -34,7 +34,7 @@ use sc_executor_common::{
 	error::{Error, WasmError},
 	sandbox,
 };
-use sc_executor_common::state_snapshot::{DataSegmentsSnapshot, DeserializedModule};
+use sc_executor_common::util::{DataSegmentsSnapshot, DeserializedModule};
 
 struct FunctionExecutor<'a> {
 	sandbox_store: sandbox::Store<wasmi::FuncRef>,

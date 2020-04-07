@@ -23,7 +23,7 @@ use crate::imports::Imports;
 use std::{slice, marker};
 use sc_executor_common::{
 	error::{Error, Result},
-	state_snapshot::{DeserializedModule, DataSegmentsSnapshot},
+	util::{DeserializedModule, DataSegmentsSnapshot},
 };
 use sp_wasm_interface::{Pointer, WordSize, Value};
 use wasmtime::{Store, Instance, Module, Memory, Table, Val};

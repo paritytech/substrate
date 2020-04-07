@@ -20,5 +20,5 @@
 
 pub mod error;
 pub mod sandbox;
-pub mod state_snapshot;
+pub mod util;
 pub mod wasm_runtime;
