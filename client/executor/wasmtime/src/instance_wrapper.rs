@@ -23,42 +23,49 @@ use crate::imports::Imports;
 use std::{slice, marker};
 use sc_executor_common::{
 	error::{Error, Result},
-	state_snapshot::DeserializedModule,
+	state_snapshot::{DeserializedModule, DataSegmentsSnapshot},
 };
 use sp_wasm_interface::{Pointer, WordSize, Value};
 use wasmtime::{Store, Instance, Module, Memory, Table, Val};
+
+mod globals_snapshot;
+
+pub use globals_snapshot::GlobalsSnapshot;
 
 pub struct ModuleWrapper {
 	imported_globals_count: u32,
 	globals_count: u32,
 	module: Module,
+	data_segments_snapshot: DataSegmentsSnapshot,
 }
 
 impl ModuleWrapper {
-	pub fn new(
-		store: &Store,
-		code: &[u8],
-		deserialized_module: &DeserializedModule,
-	) -> Result<Self> {
+	pub fn new(store: &Store, code: &[u8]) -> Result<Self> {
 		let module = Module::new(&store, code)
 			.map_err(|e| Error::from(format!("cannot create module: {}", e)))?;
+
+		let deserialized_module = DeserializedModule::new(code).unwrap(); // TODO:
+
+		let data_segments_snapshot = DataSegmentsSnapshot::take(&deserialized_module).unwrap(); // TODO:
 
 		let declared_globals_count = deserialized_module.declared_globals_count();
 		let imported_globals_count = deserialized_module.imported_globals_count();
 		let globals_count = imported_globals_count + declared_globals_count;
 
-		dbg!(imported_globals_count);
-		dbg!(globals_count);
-
 		Ok(Self {
 			module,
-			imported_globals_count, // TODO:
+			imported_globals_count,
 			globals_count,
+			data_segments_snapshot,
 		})
 	}
 
 	pub fn module(&self) -> &Module {
 		&self.module
+	}
+
+	pub fn data_segments_snapshot(&self) -> &DataSegmentsSnapshot {
+		&self.data_segments_snapshot
 	}
 }
 
@@ -311,88 +318,6 @@ impl InstanceWrapper {
 			&mut []
 		} else {
 			slice::from_raw_parts_mut(ptr, len)
-		}
-	}
-}
-
-pub struct GlobalsSnapshot {
-	values: Vec<Value>,
-}
-
-impl InstanceWrapper {
-	pub fn get_globals_snapshot(&self) -> GlobalsSnapshot {
-		// EVIL:
-		// usage of an undocumented function.
-		let handle = self.instance.handle();
-
-		let mut values = vec![];
-
-		for global_idx in self.imported_globals_count..self.globals_count {
-			let (def, global) =
-				match handle.lookup_by_declaration(&wasmtime_environ::Export::Global(
-					cranelift_wasm::GlobalIndex::from_u32(global_idx),
-				)) {
-					wasmtime_runtime::Export::Global {
-						definition, global, ..
-					} => (definition, global),
-					_ => unreachable!("only globals can be returned for a global request"),
-				};
-
-			// skip immutable globals.
-			if !global.mutability {
-				continue;
-			}
-
-			let value = unsafe {
-				let def = def.as_ref().unwrap();
-				match global.ty {
-					cranelift_codegen::ir::types::I32 => Value::I32(*def.as_i32()),
-					cranelift_codegen::ir::types::I64 => Value::I64(*def.as_i64()),
-					cranelift_codegen::ir::types::F32 => Value::F32(*def.as_u32()),
-					cranelift_codegen::ir::types::F64 => Value::F64(*def.as_u64()),
-					_ => panic!(), // TODO:
-				}
-			};
-
-			values.push(value);
-		}
-
-		GlobalsSnapshot { values }
-	}
-
-	pub fn set_globals_snapshot(&self, snapshot: &GlobalsSnapshot) {
-		// EVIL:
-		// usage of an undocumented function.
-		let handle = self.instance.handle();
-
-		let mut values_iter = snapshot.values.iter();
-		for global_idx in self.imported_globals_count..self.globals_count {
-			let (def, global) =
-				match handle.lookup_by_declaration(&wasmtime_environ::Export::Global(
-					cranelift_wasm::GlobalIndex::from_u32(global_idx),
-				)) {
-					wasmtime_runtime::Export::Global {
-						definition, global, ..
-					} => (definition, global),
-					_ => unreachable!("only globals can be returned for a global request"),
-				};
-
-			// skip immutable globals.
-			if !global.mutability {
-				continue;
-			}
-
-			let value = values_iter.next().cloned().unwrap(); // TODO:
-
-			unsafe {
-				let def = def.as_mut().unwrap();
-				match value {
-					Value::I32(v) => *def.as_i32_mut() = v,
-					Value::I64(v) => *def.as_i64_mut() = v,
-					Value::F32(v) => *def.as_u32_mut() = v,
-					Value::F64(v) => *def.as_u64_mut() = v,
-				}
-			}
 		}
 	}
 }

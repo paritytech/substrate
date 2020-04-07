@@ -26,7 +26,6 @@ use std::sync::Arc;
 use sc_executor_common::{
 	error::{Error, Result, WasmError},
 	wasm_runtime::{WasmModule, WasmInstance},
-	state_snapshot::{DataSegmentsSnapshot, DeserializedModule},
 };
 use sp_allocator::FreeingBumpHeapAllocator;
 use sp_runtime_interface::unpack_ptr_and_len;
@@ -40,7 +39,6 @@ pub struct WasmtimeRuntime {
 	heap_pages: u32,
 	allow_missing_func_imports: bool,
 	host_functions: Vec<&'static dyn Function>,
-	data_segments_snapshot: DataSegmentsSnapshot,
 }
 
 impl WasmModule for WasmtimeRuntime {
@@ -57,13 +55,12 @@ impl WasmModule for WasmtimeRuntime {
 		let instance_wrapper =
 			InstanceWrapper::new(&self.module_wrapper, &imports, self.heap_pages)?;
 		let heap_base = instance_wrapper.extract_heap_base()?;
-		let globals_snapshot = instance_wrapper.get_globals_snapshot();
+		let globals_snapshot = GlobalsSnapshot::take(&instance_wrapper)?;
 
 		Ok(Box::new(WasmtimeInstance {
 			instance_wrapper: Rc::new(instance_wrapper),
 			module_wrapper: Arc::clone(&self.module_wrapper),
 			imports,
-			data_segments_snapshot: self.data_segments_snapshot.clone(),
 			globals_snapshot,
 			heap_pages: self.heap_pages,
 			heap_base,
@@ -76,7 +73,6 @@ impl WasmModule for WasmtimeRuntime {
 pub struct WasmtimeInstance {
 	module_wrapper: Arc<ModuleWrapper>,
 	instance_wrapper: Rc<InstanceWrapper>,
-	data_segments_snapshot: DataSegmentsSnapshot,
 	globals_snapshot: GlobalsSnapshot,
 	imports: Imports,
 	heap_pages: u32,
@@ -92,12 +88,14 @@ impl WasmInstance for WasmtimeInstance {
 		let entrypoint = self.instance_wrapper.resolve_entrypoint(method)?;
 		let allocator = FreeingBumpHeapAllocator::new(self.heap_base);
 
-		self.data_segments_snapshot.apply(|offset, contents| {
-			self.instance_wrapper
-				.write_memory_from(Pointer::new(offset), contents)
-		})?;
-		self.instance_wrapper
-			.set_globals_snapshot(&self.globals_snapshot);
+		self.module_wrapper
+			.data_segments_snapshot()
+			.apply(|offset, contents| {
+				self.instance_wrapper
+					.write_memory_from(Pointer::new(offset), contents)
+			})?;
+
+		self.globals_snapshot.apply(&*self.instance_wrapper)?;
 
 		perform_call(
 			data,
@@ -128,15 +126,11 @@ pub fn create_runtime(
 	let engine = Engine::new(&config);
 	let store = Store::new(&engine);
 
-	let deserialized_module = DeserializedModule::new(code).unwrap(); // TODO:
-	let module_wrapper = ModuleWrapper::new(&store, code, &deserialized_module)
+	let module_wrapper = ModuleWrapper::new(&store, code)
 		.map_err(|e| WasmError::Other(format!("cannot create module: {}", e)))?;
-
-	let data_segments_snapshot = DataSegmentsSnapshot::take(&deserialized_module).unwrap(); // TODO:
 
 	Ok(WasmtimeRuntime {
 		module_wrapper: Arc::new(module_wrapper),
-		data_segments_snapshot,
 		heap_pages: heap_pages as u32,
 		allow_missing_func_imports,
 		host_functions,

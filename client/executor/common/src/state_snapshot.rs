@@ -43,6 +43,7 @@ impl DeserializedModule {
 			.to_vec()
 	}
 
+	/// The number of globals defined in locally in this module.
 	pub fn declared_globals_count(&self) -> u32 {
 		self.raw_module
 			.global_section()
@@ -50,6 +51,7 @@ impl DeserializedModule {
 			.unwrap_or(0)
 	}
 
+	/// The number of imports of globals.
 	pub fn imported_globals_count(&self) -> u32 {
 		self.raw_module
 			.import_section()
