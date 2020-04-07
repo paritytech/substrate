@@ -146,7 +146,7 @@ macro_rules! new_full {
 
 		($with_startup_data)(&block_import, &babe_link);
 
-		if let sc_service::config::Role::Authority { sentry_nodes } = &role {
+		if let sc_service::config::Role::Authority { .. } = &role {
 			let proposer = sc_basic_authorship::ProposerFactory::new(
 				service.client(),
 				service.transaction_pool()
@@ -174,6 +174,26 @@ macro_rules! new_full {
 
 			let babe = sc_consensus_babe::start_babe(babe_config)?;
 			service.spawn_essential_task("babe-proposer", babe);
+		}
+
+		// Spawn authority discovery module.
+		if matches!(role, sc_service::config::Role::Authority{..} | sc_service::config::Role::Sentry{..}) {
+			let sentries;
+			let authority_discovery_role;
+
+			match role {
+				sc_service::config::Role::Authority { ref sentry_nodes } => {
+					sentries = sentry_nodes.clone();
+					authority_discovery_role = sc_authority_discovery::Role::Authority (
+						service.keystore(),
+					);
+				}
+				sc_service::config::Role::Sentry {..} => {
+					sentries = vec![];
+					authority_discovery_role = sc_authority_discovery::Role::Sentry;
+				}
+				_ => unreachable!("Due to outer matches! constraint; qed.")
+			}
 
 			let network = service.network();
 			let dht_event_stream = network.event_stream().filter_map(|e| async move { match e {
@@ -183,9 +203,9 @@ macro_rules! new_full {
 			let authority_discovery = sc_authority_discovery::AuthorityDiscovery::new(
 				service.client(),
 				network,
-				sentry_nodes.clone(),
-				service.keystore(),
+				sentries,
 				dht_event_stream,
+				authority_discovery_role,
 				service.prometheus_registry(),
 			);
 

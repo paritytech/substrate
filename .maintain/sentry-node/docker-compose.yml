@@ -79,7 +79,6 @@ services:
       - "--chain=local"
       - "--port"
       - "30333"
-      - "--charlie"
       - "--bootnodes"
       - "/dns4/validator-a/tcp/30333/p2p/QmRpheLN4JWdAnY7HGJfWFNbfkQCb6tFf4vvA6hgjMZKrR"
       - "--bootnodes"
@@ -95,6 +94,7 @@ services:
       - "--log"
       - "sub-authority-discovery=trace"
       - "--sentry"
+      - "/dns4/validator-a/tcp/30333/p2p/QmRpheLN4JWdAnY7HGJfWFNbfkQCb6tFf4vvA6hgjMZKrR"
 
   validator-b:
     image: parity/substrate
