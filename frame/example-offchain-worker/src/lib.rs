@@ -56,7 +56,7 @@ use sp_runtime::{
 		TransactionPriority,
 	},
 };
-use sp_std::{vec, vec::Vec};
+use sp_std::vec::Vec;
 use lite_json::json::JsonValue;
 
 #[cfg(test)]
