@@ -382,7 +382,7 @@ pub trait SigningTypes: crate::Trait {
 		+ codec::Codec;
 }
 
-/// A wrapper around the transaction and call types
+/// A wrapper around the transaction and call types.
 pub trait SendTransactionTypes<LocalCall> {
 	type Extrinsic: ExtrinsicT<Call=Self::OverarchingCall> + codec::Encode;
 	type OverarchingCall: From<LocalCall>;
