@@ -445,3 +445,44 @@ benchmarks! {
 
 	}: _(RawOrigin::Signed(proxy), referendum_index)
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::tests::{new_test_ext, Test};
+	use frame_support::assert_ok;
+
+	#[test]
+	fn test_benchmarks() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(test_benchmark_propose::<Test>());
+			assert_ok!(test_benchmark_second::<Test>());
+			assert_ok!(test_benchmark_vote::<Test>());
+			assert_ok!(test_benchmark_proxy_vote::<Test>());
+			assert_ok!(test_benchmark_emergency_cancel::<Test>());
+			assert_ok!(test_benchmark_external_propose::<Test>());
+			assert_ok!(test_benchmark_external_propose_majority::<Test>());
+			assert_ok!(test_benchmark_external_propose_default::<Test>());
+			assert_ok!(test_benchmark_fast_track::<Test>());
+			assert_ok!(test_benchmark_veto_external::<Test>());
+			assert_ok!(test_benchmark_cancel_referendum::<Test>());
+			assert_ok!(test_benchmark_cancel_queued::<Test>());
+			assert_ok!(test_benchmark_open_proxy::<Test>());
+			assert_ok!(test_benchmark_activate_proxy::<Test>());
+			assert_ok!(test_benchmark_close_proxy::<Test>());
+			assert_ok!(test_benchmark_deactivate_proxy::<Test>());
+			assert_ok!(test_benchmark_delegate::<Test>());
+			assert_ok!(test_benchmark_undelegate::<Test>());
+			assert_ok!(test_benchmark_clear_public_proposals::<Test>());
+			assert_ok!(test_benchmark_note_preimage::<Test>());
+			assert_ok!(test_benchmark_note_imminent_preimage::<Test>());
+			assert_ok!(test_benchmark_reap_preimage::<Test>());
+			assert_ok!(test_benchmark_unlock::<Test>());
+			assert_ok!(test_benchmark_remove_vote::<Test>());
+			assert_ok!(test_benchmark_remove_other_vote::<Test>());
+			assert_ok!(test_benchmark_proxy_delegate::<Test>());
+			assert_ok!(test_benchmark_proxy_undelegate::<Test>());
+			assert_ok!(test_benchmark_proxy_remove_vote::<Test>());
+		});
+	}
+}
