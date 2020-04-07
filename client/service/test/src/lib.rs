@@ -42,6 +42,9 @@ use sc_network::config::{NetworkConfiguration, TransportConfig, NodeKeyConfig, S
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use sp_transaction_pool::TransactionPool;
 
+#[cfg(test)]
+mod client;
+
 /// Maximum duration of single wait call.
 const MAX_WAIT_TIME: Duration = Duration::from_secs(60 * 3);
 

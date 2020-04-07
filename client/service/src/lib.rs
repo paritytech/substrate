@@ -18,6 +18,7 @@
 //! Manages communication between them.
 
 #![warn(missing_docs)]
+#![recursion_limit="128"]
 
 pub mod config;
 #[macro_use]
@@ -25,6 +26,10 @@ pub mod chain_ops;
 pub mod error;
 
 mod builder;
+#[cfg(feature = "test-helpers")]
+pub mod client;
+#[cfg(not(feature = "test-helpers"))]
+mod client;
 mod status_sinks;
 mod task_manager;
 
@@ -37,7 +42,7 @@ use wasm_timer::Instant;
 use std::task::{Poll, Context};
 use parking_lot::Mutex;
 
-use sc_client::Client;
+use client::Client;
 use futures::{
 	Future, FutureExt, Stream, StreamExt,
 	channel::mpsc,
@@ -54,7 +59,7 @@ use parity_util_mem::MallocSizeOf;
 
 pub use self::error::Error;
 pub use self::builder::{
-	new_full_client,
+	new_full_client, new_client,
 	ServiceBuilder, ServiceBuilderCommand, TFullClient, TLightClient, TFullBackend, TLightBackend,
 	TFullCallExecutor, TLightCallExecutor,
 };
@@ -64,7 +69,6 @@ pub use sc_chain_spec::{
 };
 pub use sp_transaction_pool::{TransactionPool, InPoolTransaction, error::IntoPoolError};
 pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
-pub use sc_client::FinalityNotifications;
 pub use sc_rpc::Metadata as RpcMetadata;
 pub use sc_executor::NativeExecutionDispatch;
 #[doc(hidden)]
@@ -73,6 +77,7 @@ pub use std::{ops::Deref, result::Result, sync::Arc};
 pub use sc_network::config::{FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
 pub use task_manager::{TaskManagerBuilder, SpawnTaskHandle};
 use task_manager::TaskManager;
+use sc_client_api::{BlockchainEvents, CallExecutor};
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 
@@ -121,7 +126,7 @@ pub trait AbstractService: 'static + Future<Output = Result<(), Error>> +
 	/// Backend storage for the client.
 	type Backend: 'static + sc_client_api::backend::Backend<Self::Block>;
 	/// How to execute calls towards the runtime.
-	type CallExecutor: 'static + sc_client::CallExecutor<Self::Block> + Send + Sync + Clone;
+	type CallExecutor: 'static + CallExecutor<Self::Block> + Send + Sync + Clone;
 	/// API that the runtime provides.
 	type RuntimeApi: Send + Sync;
 	/// Chain selection algorithm.
@@ -161,7 +166,7 @@ pub trait AbstractService: 'static + Future<Output = Result<(), Error>> +
 	fn rpc_query(&self, mem: &RpcSession, request: &str) -> Pin<Box<dyn Future<Output = Option<String>> + Send>>;
 
 	/// Get shared client instance.
-	fn client(&self) -> Arc<sc_client::Client<Self::Backend, Self::CallExecutor, Self::Block, Self::RuntimeApi>>;
+	fn client(&self) -> Arc<crate::client::Client<Self::Backend, Self::CallExecutor, Self::Block, Self::RuntimeApi>>;
 
 	/// Get clone of select chain.
 	fn select_chain(&self) -> Option<Self::SelectChain>;
@@ -190,7 +195,7 @@ impl<TBl, TBackend, TExec, TRtApi, TSc, TExPool, TOc> AbstractService for
 where
 	TBl: BlockT,
 	TBackend: 'static + sc_client_api::backend::Backend<TBl>,
-	TExec: 'static + sc_client::CallExecutor<TBl> + Send + Sync + Clone,
+	TExec: 'static + CallExecutor<TBl> + Send + Sync + Clone,
 	TRtApi: 'static + Send + Sync,
 	TSc: sp_consensus::SelectChain<TBl> + 'static + Clone + Send + Unpin,
 	TExPool: 'static + TransactionPool<Block = TBl> + MallocSizeOfWasm,
@@ -245,7 +250,7 @@ where
 		)
 	}
 
-	fn client(&self) -> Arc<sc_client::Client<Self::Backend, Self::CallExecutor, Self::Block, Self::RuntimeApi>> {
+	fn client(&self) -> Arc<crate::client::Client<Self::Backend, Self::CallExecutor, Self::Block, Self::RuntimeApi>> {
 		self.client.clone()
 	}
 
@@ -319,7 +324,7 @@ impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Spawn for
 /// The `status_sink` contain a list of senders to send a periodic network status to.
 fn build_network_future<
 	B: BlockT,
-	C: sc_client::BlockchainEvents<B>,
+	C: BlockchainEvents<B>,
 	H: sc_network::ExHashT
 > (
 	roles: Roles,

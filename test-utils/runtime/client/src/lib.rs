@@ -34,7 +34,8 @@ use sp_core::{sr25519, ChangesTrieConfiguration};
 use sp_core::storage::{ChildInfo, Storage, StorageChild};
 use substrate_test_runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, NumberFor, HashFor};
-use sc_client::{
+use sc_service::client::{
+	self,
 	light::fetcher::{
 		Fetcher,
 		RemoteHeaderRequest, RemoteReadRequest, RemoteReadChildRequest,
@@ -68,7 +69,7 @@ sc_executor::native_executor_instance! {
 pub type Backend = substrate_test_client::Backend<substrate_test_runtime::Block>;
 
 /// Test client executor.
-pub type Executor = sc_client::LocalCallExecutor<
+pub type Executor = client::LocalCallExecutor<
 	Backend,
 	NativeExecutor<LocalExecutor>,
 >;
@@ -77,10 +78,10 @@ pub type Executor = sc_client::LocalCallExecutor<
 pub type LightBackend = substrate_test_client::LightBackend<substrate_test_runtime::Block>;
 
 /// Test client light executor.
-pub type LightExecutor = sc_client::light::call_executor::GenesisCallExecutor<
+pub type LightExecutor = client::light::call_executor::GenesisCallExecutor<
 	LightBackend,
-	sc_client::LocalCallExecutor<
-		sc_client::light::backend::Backend<
+	client::LocalCallExecutor<
+		client::light::backend::Backend<
 			sc_client_db::light::LightStorage<substrate_test_runtime::Block>,
 			HashFor<substrate_test_runtime::Block>
 		>,
@@ -132,7 +133,7 @@ impl substrate_test_client::GenesisInit for GenesisParameters {
 		let state_root = <<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
 			storage.top.clone().into_iter().chain(child_roots).collect()
 		);
-		let block: runtime::Block = sc_client::genesis::construct_genesis_block(state_root);
+		let block: runtime::Block = client::genesis::construct_genesis_block(state_root);
 		storage.top.extend(additional_storage_with_genesis(&block));
 
 		storage
@@ -148,9 +149,9 @@ pub type TestClientBuilder<E, B> = substrate_test_client::TestClientBuilder<
 >;
 
 /// Test client type with `LocalExecutor` and generic Backend.
-pub type Client<B> = sc_client::Client<
+pub type Client<B> = client::Client<
 	B,
-	sc_client::LocalCallExecutor<B, sc_executor::NativeExecutor<LocalExecutor>>,
+	client::LocalCallExecutor<B, sc_executor::NativeExecutor<LocalExecutor>>,
 	substrate_test_runtime::Block,
 	substrate_test_runtime::RuntimeApi,
 >;
@@ -237,7 +238,7 @@ pub trait TestClientBuilderExt<B>: Sized {
 }
 
 impl<B> TestClientBuilderExt<B> for TestClientBuilder<
-	sc_client::LocalCallExecutor<B, sc_executor::NativeExecutor<LocalExecutor>>,
+	client::LocalCallExecutor<B, sc_executor::NativeExecutor<LocalExecutor>>,
 	B
 > where
 	B: sc_client_api::backend::Backend<substrate_test_runtime::Block> + 'static,
@@ -341,15 +342,15 @@ pub fn new() -> Client<Backend> {
 
 /// Creates new light client instance used for tests.
 pub fn new_light() -> (
-	sc_client::Client<LightBackend, LightExecutor, substrate_test_runtime::Block, substrate_test_runtime::RuntimeApi>,
+	client::Client<LightBackend, LightExecutor, substrate_test_runtime::Block, substrate_test_runtime::RuntimeApi>,
 	Arc<LightBackend>,
 ) {
 
 	let storage = sc_client_db::light::LightStorage::new_test();
-	let blockchain = Arc::new(sc_client::light::blockchain::Blockchain::new(storage));
+	let blockchain = Arc::new(client::light::blockchain::Blockchain::new(storage));
 	let backend = Arc::new(LightBackend::new(blockchain.clone()));
 	let executor = new_native_executor();
-	let local_call_executor = sc_client::LocalCallExecutor::new(backend.clone(), executor, sp_core::tasks::executor());
+	let local_call_executor = client::LocalCallExecutor::new(backend.clone(), executor, sp_core::tasks::executor());
 	let call_executor = LightExecutor::new(
 		backend.clone(),
 		local_call_executor,

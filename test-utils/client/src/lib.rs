@@ -20,7 +20,6 @@
 
 pub mod client_ext;
 
-pub use sc_client::{blockchain, self};
 pub use sc_client_api::{
 	execution_extensions::{ExecutionStrategies, ExecutionExtensions},
 	ForkBlocks, BadBlocks, CloneableSpawn,
@@ -42,10 +41,10 @@ use std::sync::Arc;
 use std::collections::HashMap;
 use sp_core::storage::{well_known_keys, ChildInfo};
 use sp_runtime::traits::{Block as BlockT, BlakeTwo256};
-use sc_client::LocalCallExecutor;
+use sc_service::client::{self, LocalCallExecutor};
 
 /// Test client light database backend.
-pub type LightBackend<Block> = sc_client::light::backend::Backend<
+pub type LightBackend<Block> = client::light::backend::Backend<
 	sc_client_db::light::LightStorage<Block>,
 	BlakeTwo256,
 >;
@@ -173,7 +172,7 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 		self,
 		executor: Executor,
 	) -> (
-		sc_client::Client<
+		client::Client<
 			Backend,
 			Executor,
 			Block,
@@ -181,7 +180,7 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 		>,
 		sc_client_api::LongestChain<Backend, Block>,
 	) where
-		Executor: sc_client::CallExecutor<Block> + 'static,
+		Executor: sc_client_api::CallExecutor<Block> + 'static,
 		Backend: sc_client_api::backend::Backend<Block>,
 	{
 		let storage = {
@@ -201,7 +200,7 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 			storage
 		};
 
-		let client = sc_client::Client::new(
+		let client = client::Client::new(
 			self.backend.clone(),
 			executor,
 			&storage,
@@ -222,7 +221,7 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 
 impl<Block: BlockT, E, Backend, G: GenesisInit> TestClientBuilder<
 	Block,
-	sc_client::LocalCallExecutor<Backend, NativeExecutor<E>>,
+	client::LocalCallExecutor<Backend, NativeExecutor<E>>,
 	Backend,
 	G,
 > {
@@ -231,9 +230,9 @@ impl<Block: BlockT, E, Backend, G: GenesisInit> TestClientBuilder<
 		self,
 		executor: I,
 	) -> (
-		sc_client::Client<
+		client::Client<
 			Backend,
-			sc_client::LocalCallExecutor<Backend, NativeExecutor<E>>,
+			client::LocalCallExecutor<Backend, NativeExecutor<E>>,
 			Block,
 			RuntimeApi
 		>,

@@ -10,7 +10,7 @@ publish = false
 
 [dependencies]
 sc-client-api = { version = "2.0.0-alpha.5", path = "../../client/api" }
-sc-client = { version = "0.8.0-alpha.5", path = "../../client/" }
+sc-service = { version = "0.8.0-alpha.5", features = ["test-helpers"], path = "../../client/service" }
 sc-client-db = { version = "0.8.0-alpha.5", features = ["test-helpers"], path = "../../client/db" }
 sp-consensus = { version = "0.8.0-alpha.5", path = "../../primitives/consensus/common" }
 sc-executor = { version = "0.8.0-alpha.5", path = "../../client/executor" }

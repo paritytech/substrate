@@ -22,7 +22,7 @@ use sc_client_api::{
 	self, BlockchainEvents, backend::RemoteBackend, light::RemoteBlockchain, execution_extensions::ExtensionsFactory,
 	ExecutorProvider, CallExecutor, ForkBlocks, BadBlocks, CloneableSpawn,
 };
-use sc_client::Client;
+use crate::client::Client;
 use sc_chain_spec::get_extension;
 use sp_consensus::import_queue::ImportQueue;
 use futures::{
@@ -152,7 +152,7 @@ pub type TFullClient<TBl, TRtApi, TExecDisp> = Client<
 pub type TFullBackend<TBl> = sc_client_db::Backend<TBl>;
 
 /// Full client call executor type.
-pub type TFullCallExecutor<TBl, TExecDisp> = sc_client::LocalCallExecutor<
+pub type TFullCallExecutor<TBl, TExecDisp> = crate::client::LocalCallExecutor<
 	sc_client_db::Backend<TBl>,
 	NativeExecutor<TExecDisp>,
 >;
@@ -166,19 +166,19 @@ pub type TLightClient<TBl, TRtApi, TExecDisp> = Client<
 >;
 
 /// Light client backend type.
-pub type TLightBackend<TBl> = sc_client::light::backend::Backend<
+pub type TLightBackend<TBl> = crate::client::light::backend::Backend<
 	sc_client_db::light::LightStorage<TBl>,
 	HashFor<TBl>,
 >;
 
 /// Light call executor type.
-pub type TLightCallExecutor<TBl, TExecDisp> = sc_client::light::call_executor::GenesisCallExecutor<
-	sc_client::light::backend::Backend<
+pub type TLightCallExecutor<TBl, TExecDisp> = crate::client::light::call_executor::GenesisCallExecutor<
+	crate::client::light::backend::Backend<
 		sc_client_db::light::LightStorage<TBl>,
 		HashFor<TBl>
 	>,
-	sc_client::LocalCallExecutor<
-		sc_client::light::backend::Backend<
+	crate::client::LocalCallExecutor<
+		crate::client::light::backend::Backend<
 			sc_client_db::light::LightStorage<TBl>,
 			HashFor<TBl>
 		>,
@@ -227,11 +227,11 @@ fn new_full_parts<TBl, TRtApi, TExecDisp>(
 	);
 
 	let chain_spec = config.expect_chain_spec();
-	let fork_blocks = get_extension::<sc_client::ForkBlocks<TBl>>(chain_spec.extensions())
+	let fork_blocks = get_extension::<ForkBlocks<TBl>>(chain_spec.extensions())
 		.cloned()
 		.unwrap_or_default();
 
-	let bad_blocks = get_extension::<sc_client::BadBlocks<TBl>>(chain_spec.extensions())
+	let bad_blocks = get_extension::<BadBlocks<TBl>>(chain_spec.extensions())
 		.cloned()
 		.unwrap_or_default();
 
@@ -284,9 +284,9 @@ pub fn new_client<E, Block, RA>(
 	spawn_handle: Box<dyn CloneableSpawn>,
 	prometheus_registry: Option<Registry>,
 ) -> Result<(
-	sc_client::Client<
+	crate::client::Client<
 		Backend<Block>,
-		sc_client::LocalCallExecutor<Backend<Block>, E>,
+		crate::client::LocalCallExecutor<Backend<Block>, E>,
 		Block,
 		RA,
 	>,
@@ -301,9 +301,9 @@ pub fn new_client<E, Block, RA>(
 	const CANONICALIZATION_DELAY: u64 = 4096;
 
 	let backend = Arc::new(Backend::new(settings, CANONICALIZATION_DELAY)?);
-	let executor = sc_client::LocalCallExecutor::new(backend.clone(), executor, spawn_handle);
+	let executor = crate::client::LocalCallExecutor::new(backend.clone(), executor, spawn_handle);
 	Ok((
-		sc_client::Client::new(
+		crate::client::Client::new(
 			backend.clone(),
 			executor,
 			genesis_storage,
@@ -407,18 +407,18 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 			};
 			sc_client_db::light::LightStorage::new(db_settings)?
 		};
-		let light_blockchain = sc_client::light::new_light_blockchain(db_storage);
+		let light_blockchain = crate::client::light::new_light_blockchain(db_storage);
 		let fetch_checker = Arc::new(
-			sc_client::light::new_fetch_checker::<_, TBl, _>(
+			crate::client::light::new_fetch_checker::<_, TBl, _>(
 				light_blockchain.clone(),
 				executor.clone(),
 				Box::new(tasks_builder.spawn_handle()),
 			),
 		);
 		let fetcher = Arc::new(sc_network::config::OnDemand::new(fetch_checker));
-		let backend = sc_client::light::new_light_backend(light_blockchain);
+		let backend = crate::client::light::new_light_backend(light_blockchain);
 		let remote_blockchain = backend.remote_blockchain();
-		let client = Arc::new(sc_client::light::new_light(
+		let client = Arc::new(crate::client::light::new_light(
 			backend.clone(),
 			config.expect_chain_spec().as_storage_builder(),
 			executor,
@@ -811,7 +811,7 @@ ServiceBuilder<
 	TBl: BlockT,
 	TRtApi: 'static + Send + Sync,
 	TBackend: 'static + sc_client_api::backend::Backend<TBl> + Send,
-	TExec: 'static + sc_client::CallExecutor<TBl> + Send + Sync + Clone,
+	TExec: 'static + CallExecutor<TBl> + Send + Sync + Clone,
 	TSc: Clone,
 	TImpQu: 'static + ImportQueue<TBl>,
 	TExPool: MaintainedTransactionPool<Block=TBl, Hash = <TBl as BlockT>::Hash> + MallocSizeOfWasm + 'static,

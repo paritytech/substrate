@@ -13,7 +13,6 @@ members = [
 	"bin/node/transaction-factory",
 	"bin/utils/subkey",
 	"bin/utils/chain-spec-builder",
-	"client",
 	"client/api",
 	"client/authority-discovery",
 	"client/basic-authorship",

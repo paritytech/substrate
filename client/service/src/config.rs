@@ -15,11 +15,10 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Service configuration.
-
-pub use sc_client::ExecutionStrategies;
 pub use sc_client_db::{kvdb::KeyValueDB, PruningMode};
 pub use sc_network::config::{ExtTransport, NetworkConfiguration, Roles};
 pub use sc_executor::WasmExecutionMethod;
+use sc_client_api::execution_extensions::ExecutionStrategies;
 
 use std::{future::Future, path::{PathBuf, Path}, pin::Pin, net::SocketAddr, sync::Arc};
 pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;

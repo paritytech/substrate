@@ -17,8 +17,9 @@
 //! Substrate Client
 
 use std::{
-	marker::PhantomData, collections::{HashSet, BTreeMap, HashMap}, sync::Arc, panic::UnwindSafe,
-	result,
+	marker::PhantomData,
+	collections::{HashSet, BTreeMap, HashMap},
+	sync::Arc, panic::UnwindSafe, result,
 };
 use log::{info, trace, warn};
 use futures::channel::mpsc;
@@ -34,8 +35,8 @@ use sp_runtime::{
 	Justification, BuildStorage,
 	generic::{BlockId, SignedBlock, DigestItem},
 	traits::{
-		Block as BlockT, Header as HeaderT, Zero, NumberFor, HashFor, SaturatedConversion, One,
-		DigestFor,
+		Block as BlockT, Header as HeaderT, Zero, NumberFor,
+		HashFor, SaturatedConversion, One, DigestFor,
 	},
 };
 use sp_state_machine::{
@@ -48,21 +49,20 @@ use sp_consensus::{
 	Error as ConsensusError, BlockStatus, BlockImportParams, BlockCheckParams,
 	ImportResult, BlockOrigin, ForkChoiceStrategy, RecordProof,
 };
-use sp_blockchain::{self as blockchain,
+use sp_blockchain::{
+	self as blockchain,
 	Backend as ChainBackend,
 	HeaderBackend as ChainHeaderBackend, ProvideCache, Cache,
 	well_known_cache_keys::Id as CacheKeyId,
 	HeaderMetadata, CachedHeaderMetadata,
 };
 use sp_trie::StorageProof;
-
 use sp_api::{
 	CallApiAt, ConstructRuntimeApi, Core as CoreApi, ApiExt, ApiRef, ProvideRuntimeApi,
 	CallApiAtParams,
 };
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
-
-pub use sc_client_api::{
+use sc_client_api::{
 	backend::{
 		self, BlockImportOperation, PrunableStateChangesTrieStorage,
 		ClientImportOperation, Finalizer, ImportSummary, NewBlockState,
@@ -76,26 +76,24 @@ pub use sc_client_api::{
 	},
 	execution_extensions::{ExecutionExtensions, ExecutionStrategies},
 	notifications::{StorageNotifications, StorageEventStream},
-	CallExecutor, ExecutorProvider, ProofProvider, CloneableSpawn,
+	KeyIterator, CallExecutor, ExecutorProvider, ProofProvider, CloneableSpawn,
 	cht, in_mem,
 };
 use sp_blockchain::Error;
 use prometheus_endpoint::Registry;
-
-use crate::{
-	call_executor::LocalCallExecutor,
+use super::{
+	genesis, call_executor::LocalCallExecutor,
 	light::{call_executor::prove_execution, fetcher::ChangesProof},
-	genesis, block_rules::{BlockRules, LookupResult as BlockLookupResult},
+	block_rules::{BlockRules, LookupResult as BlockLookupResult},
 };
-use crate::client::backend::KeyIterator;
 
 /// Substrate Client
 pub struct Client<B, E, Block, RA> where Block: BlockT {
 	backend: Arc<B>,
 	executor: E,
 	storage_notifications: Mutex<StorageNotifications<Block>>,
-	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<BlockImportNotification<Block>>>>,
-	finality_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<FinalityNotification<Block>>>>,
+	pub import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<BlockImportNotification<Block>>>>,
+	pub finality_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<FinalityNotification<Block>>>>,
 	// holds the block hash currently being imported. TODO: replace this with block queue
 	importing_block: RwLock<Option<Block::Hash>>,
 	block_rules: BlockRules<Block>,
@@ -147,7 +145,14 @@ pub fn new_in_mem<E, Block, S, RA>(
 	S: BuildStorage,
 	Block: BlockT,
 {
-	new_with_backend(Arc::new(in_mem::Backend::new()), executor, genesis_storage, keystore, spawn_handle, prometheus_registry)
+	new_with_backend(
+		Arc::new(in_mem::Backend::new()),
+		executor,
+		genesis_storage,
+		keystore,
+		spawn_handle,
+		prometheus_registry
+	)
 }
 
 /// Create a client with the explicitly provided backend.
@@ -1922,7 +1927,7 @@ pub(crate) mod tests {
 	/// 2) roots of changes tries for these blocks
 	/// 3) test cases in form (begin, end, key, vec![(block, extrinsic)]) that are required to pass
 	pub fn prepare_client_with_key_changes() -> (
-		substrate_test_runtime_client::sc_client::Client<substrate_test_runtime_client::Backend, substrate_test_runtime_client::Executor, Block, RuntimeApi>,
+		substrate_test_runtime_client::client::Client<substrate_test_runtime_client::Backend, substrate_test_runtime_client::Executor, Block, RuntimeApi>,
 		Vec<H256>,
 		Vec<(u64, u64, Vec<u8>, Vec<(u64, u32)>)>,
 	) {

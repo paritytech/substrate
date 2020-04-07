@@ -16,6 +16,8 @@ rocksdb = ["sc-client-db/kvdb-rocksdb"]
 wasmtime = [
 	"sc-executor/wasmtime",
 ]
+# exposes the client.
+test-helpers = []
 
 [dependencies]
 derive_more = "0.99.2"
@@ -33,6 +35,7 @@ serde = "1.0.101"
 serde_json = "1.0.41"
 sysinfo = "0.12.0"
 target_info = "0.1.0"
+hash-db = "0.15.2"
 
 sp-io = { version = "2.0.0-alpha.5", path = "../../primitives/io" }
 sp-runtime = { version = "2.0.0-alpha.5", path = "../../primitives/runtime" }
@@ -43,12 +46,16 @@ sp-application-crypto = { version = "2.0.0-alpha.5", path = "../../primitives/ap
 sp-consensus = { version = "0.8.0-alpha.5", path = "../../primitives/consensus/common" }
 sp-api = { version = "2.0.0-alpha.5", path = "../../primitives/api" }
 sp-transaction-pool = { version = "2.0.0-alpha.5", path = "../../primitives/transaction-pool" }
+sp-state-machine = { version = "0.8.0-alpha.5", path = "../../primitives/state-machine" }
+sp-trie = { version = "2.0.0-alpha.5", path = "../../primitives/trie" }
+sp-externalities  = { version = "0.8.0-alpha.5", path = "../../primitives/externalities" }
+sp-version = { version = "2.0.0-alpha.5", path = "../../primitives/version" }
 
 sc-keystore = { version = "2.0.0-alpha.5", path = "../keystore" }
 sc-network = { version = "0.8.0-alpha.5", path = "../network" }
 sc-chain-spec = { version = "2.0.0-alpha.5", path = "../chain-spec" }
 sc-client-api = { version = "2.0.0-alpha.5", path = "../api" }
-sc-client = { version = "0.8.0-alpha.5", path = "../" }
+sc-block-builder = { version = "0.8.0-alpha.5", path = "../block-builder" }
 sc-client-db = { version = "0.8.0-alpha.5", path = "../db" }
 sc-executor = { version = "0.8.0-alpha.5", path = "../executor" }
 sc-transaction-pool = { version = "2.0.0-alpha.5", path = "../transaction-pool" }

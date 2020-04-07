@@ -47,7 +47,7 @@
 //! ```
 //! use std::sync::Arc;
 //! use sc_client_api::in_mem::Backend;
-//! use sc_client::{Client, LocalCallExecutor};
+//! use crate::client::{Client, LocalCallExecutor};
 //! use sp_runtime::Storage;
 //! use sc_executor::{NativeExecutor, WasmExecutionMethod};
 //!
@@ -75,31 +75,13 @@
 //! ```
 //!
 
-#![warn(missing_docs)]
-#![recursion_limit="128"]
-
 pub mod genesis;
 pub mod light;
 mod call_executor;
 mod client;
 mod block_rules;
 
-pub use sc_client_api::{
-	blockchain,
-	blockchain::well_known_cache_keys,
-	blockchain::Info as ChainInfo,
-	notifications::{StorageEventStream, StorageChangeSet},
-	call_executor::CallExecutor,
-	utils,
-};
-pub use crate::{
+pub use self::{
 	call_executor::LocalCallExecutor,
-	client::{
-		new_with_backend,
-		new_in_mem,
-		BlockBackend, ImportNotifications, FinalityNotifications, BlockchainEvents, LockImportRun,
-		BlockImportNotification, Client, ClientInfo, ExecutionStrategies, FinalityNotification,
-		BlockOf, ProvideUncles, BadBlocks, ForkBlocks,
-	},
+	client::{new_with_backend, new_in_mem, Client},
 };
-pub use sp_state_machine::{ExecutionStrategy, StorageProof, StateMachine};

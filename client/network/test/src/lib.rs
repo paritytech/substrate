@@ -53,7 +53,7 @@ use sp_runtime::generic::{BlockId, OpaqueDigestItemId};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use sp_runtime::Justification;
 use substrate_test_runtime_client::{self, AccountKeyring};
-
+use sc_service::client::Client;
 pub use sc_network::config::EmptyTransactionPool;
 pub use substrate_test_runtime_client::runtime::{Block, Extrinsic, Hash, Transfer};
 pub use substrate_test_runtime_client::{TestClient, TestClientBuilder, TestClientBuilderExt};
@@ -89,10 +89,18 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 	}
 }
 
-pub type PeersFullClient =
-	sc_client::Client<substrate_test_runtime_client::Backend, substrate_test_runtime_client::Executor, Block, substrate_test_runtime_client::runtime::RuntimeApi>;
-pub type PeersLightClient =
-	sc_client::Client<substrate_test_runtime_client::LightBackend, substrate_test_runtime_client::LightExecutor, Block, substrate_test_runtime_client::runtime::RuntimeApi>;
+pub type PeersFullClient = Client<
+	substrate_test_runtime_client::Backend,
+	substrate_test_runtime_client::Executor,
+	Block,
+	substrate_test_runtime_client::runtime::RuntimeApi
+>;
+pub type PeersLightClient = Client<
+	substrate_test_runtime_client::LightBackend,
+	substrate_test_runtime_client::LightExecutor,
+	Block,
+	substrate_test_runtime_client::runtime::RuntimeApi
+>;
 
 #[derive(Clone)]
 pub enum PeersClient {
