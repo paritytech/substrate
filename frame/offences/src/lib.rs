@@ -44,7 +44,7 @@ type OpaqueTimeSlot = Vec<u8>;
 type ReportIdOf<T> = <T as frame_system::Trait>::Hash;
 
 /// Type of data stored as a deferred offence
-type DeferredOffenceOf<T> = (
+pub type DeferredOffenceOf<T> = (
 	Vec<OffenceDetails<<T as frame_system::Trait>::AccountId, <T as Trait>::IdentificationTuple>>,
 	Vec<Perbill>,
 	SessionIndex,
@@ -248,6 +248,11 @@ impl<T: Trait> Module<T> {
 		} else {
 			None
 		}
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	pub fn set_deferred_offences(offences: Vec<DeferredOffenceOf<T>>) {
+		<DeferredOffences<T>>::put(offences);
 	}
 }
 
