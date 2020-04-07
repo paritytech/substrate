@@ -26,8 +26,14 @@ type TestNetworkService = NetworkService<
 	substrate_test_runtime_client::runtime::Hash,
 >;
 
-/// Builds a full node to be used for testing.
-fn build_test_full_node(config: config::NetworkConfiguration) -> (Arc<TestNetworkService>, impl Stream<Item = Event>) {
+/// Builds a full node to be used for testing. Returns the node service and its associated events
+/// stream.
+///
+/// > **Note**: We return the events stream in order to not possibly lose events between the
+/// >			construction of the service and the moment the events stream is grabbed.
+fn build_test_full_node(config: config::NetworkConfiguration)
+	-> (Arc<TestNetworkService>, impl Stream<Item = Event>)
+{
 	let client = Arc::new(
 		TestClientBuilder::with_default_backend()
 			.build_with_longest_chain()
@@ -112,8 +118,11 @@ fn build_test_full_node(config: config::NetworkConfiguration) -> (Arc<TestNetwor
 
 const ENGINE_ID: sp_runtime::ConsensusEngineId = *b"foo\0";
 
-/// Builds a full node to be used for testing.
-fn build_nodes_one_proto() -> (Arc<TestNetworkService>, impl Stream<Item = Event>, Arc<TestNetworkService>, impl Stream<Item = Event>) {
+/// Builds two nodes and their associated events stream.
+/// The nodes are connected together and have the `ENGINE_ID` protocol registered.
+fn build_nodes_one_proto()
+	-> (Arc<TestNetworkService>, impl Stream<Item = Event>, Arc<TestNetworkService>, impl Stream<Item = Event>)
+{
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
 
 	let (node1, events_stream1) = build_test_full_node(config::NetworkConfiguration {
@@ -138,9 +147,18 @@ fn build_nodes_one_proto() -> (Arc<TestNetworkService>, impl Stream<Item = Event
 
 #[test]
 fn notifications_state_consistent() {
-	//! Runs two nodes and ensures that events are propagated out of the API in the correct order.
+	//! Runs two nodes and ensures that events are propagated out of the API in a consistent
+	//! correct order, which means no notification received on a closed substream.
 
 	let (node1, mut events_stream1, node2, mut events_stream2) = build_nodes_one_proto();
+
+	// Write some initial notifications that shouldn't get through.
+	for _ in 0..(rand::random::<u8>() % 5) {
+		node1.write_notification(node2.local_peer_id().clone(), ENGINE_ID, b"hello world".to_vec());
+	}
+	for _ in 0..(rand::random::<u8>() % 5) {
+		node2.write_notification(node1.local_peer_id().clone(), ENGINE_ID, b"hello world".to_vec());
+	}
 
 	async_std::task::block_on(async move {
 		// True if we have an active substream from node1 to node2.
@@ -160,11 +178,12 @@ fn notifications_state_consistent() {
 			// test consists in ensuring that notifications get ignored if the stream isn't open.
 			if rand::random::<u8>() % 5 >= 3 {
 				node1.write_notification(node2.local_peer_id().clone(), ENGINE_ID, b"hello world".to_vec());
-			} else {
+			}
+			if rand::random::<u8>() % 5 >= 3 {
 				node2.write_notification(node1.local_peer_id().clone(), ENGINE_ID, b"hello world".to_vec());
 			}
 
-			// Also randomly disconnect the two nodes.
+			// Also randomly disconnect the two nodes from time to time.
 			if rand::random::<u8>() % 20 == 0 {
 				node1.disconnect_peer(node2.local_peer_id().clone());
 			}
@@ -176,9 +195,9 @@ fn notifications_state_consistent() {
 			let next_event = {
 				let next1 = events_stream1.next();
 				let next2 = events_stream2.next();
-				// We also await on a small timer in order to be sure that the test continues
-				// running.
-				let continue_test = futures_timer::Delay::new(Duration::from_millis(50));
+				// We also await on a small timer, otherwise it is possible for the test to wait
+				// forever while nothing at all happens on the network.
+				let continue_test = futures_timer::Delay::new(Duration::from_millis(20));
 				match future::select(future::select(next1, next2), continue_test).await {
 					future::Either::Left((future::Either::Left((Some(ev), _)), _)) =>
 						future::Either::Left(ev),
@@ -196,21 +215,16 @@ fn notifications_state_consistent() {
 					assert_eq!(remote, *node2.local_peer_id());
 					assert_eq!(engine_id, ENGINE_ID);
 				}
-				future::Either::Left(Event::NotificationStreamClosed { remote, engine_id, .. }) => {
-					assert!(node1_to_node2_open);
-					node1_to_node2_open = false;
-					assert_eq!(remote, *node2.local_peer_id());
-					assert_eq!(engine_id, ENGINE_ID);
-				}
-				future::Either::Left(Event::NotificationsReceived { remote, .. }) => {
-					assert!(node1_to_node2_open);
-					assert_eq!(remote, *node2.local_peer_id());
-					node1.write_notification(node2.local_peer_id().clone(), ENGINE_ID, b"hello world".to_vec());
-				}
 				future::Either::Right(Event::NotificationStreamOpened { remote, engine_id, .. }) => {
 					assert!(!node2_to_node1_open);
 					node2_to_node1_open = true;
 					assert_eq!(remote, *node1.local_peer_id());
+					assert_eq!(engine_id, ENGINE_ID);
+				}
+				future::Either::Left(Event::NotificationStreamClosed { remote, engine_id, .. }) => {
+					assert!(node1_to_node2_open);
+					node1_to_node2_open = false;
+					assert_eq!(remote, *node2.local_peer_id());
 					assert_eq!(engine_id, ENGINE_ID);
 				}
 				future::Either::Right(Event::NotificationStreamClosed { remote, engine_id, .. }) => {
@@ -219,10 +233,27 @@ fn notifications_state_consistent() {
 					assert_eq!(remote, *node1.local_peer_id());
 					assert_eq!(engine_id, ENGINE_ID);
 				}
+				future::Either::Left(Event::NotificationsReceived { remote, .. }) => {
+					assert!(node1_to_node2_open);
+					assert_eq!(remote, *node2.local_peer_id());
+					if rand::random::<u8>() % 5 >= 4 {
+						node1.write_notification(
+							node2.local_peer_id().clone(),
+							ENGINE_ID,
+							b"hello world".to_vec()
+						);
+					}
+				}
 				future::Either::Right(Event::NotificationsReceived { remote, .. }) => {
 					assert!(node2_to_node1_open);
 					assert_eq!(remote, *node1.local_peer_id());
-					node2.write_notification(node1.local_peer_id().clone(), ENGINE_ID, b"hello world".to_vec());
+					if rand::random::<u8>() % 5 >= 4 {
+						node2.write_notification(
+							node1.local_peer_id().clone(),
+							ENGINE_ID,
+							b"hello world".to_vec()
+						);
+					}
 				}
 				_ => {}
 			};
