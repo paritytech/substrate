@@ -300,7 +300,7 @@ mod tests {
 	#[test]
 	fn flush_to_disk() {
 		const PREFIX: &[u8] = b"abcdefg";
-		let db = ::kvdb_memorydb::create(1);
+		let db = kvdb_memorydb::create(1);
 
 		let mut set = LeafSet::new();
 		set.import(0u32, 0u32, 0u32);
@@ -334,7 +334,7 @@ mod tests {
 	#[test]
 	fn finalization_consistent_with_disk() {
 		const PREFIX: &[u8] = b"prefix";
-		let db = ::kvdb_memorydb::create(1);
+		let db = kvdb_memorydb::create(1);
 
 		let mut set = LeafSet::new();
 		set.import(10_1u32, 10u32, 0u32);

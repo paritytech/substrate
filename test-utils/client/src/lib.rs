@@ -35,13 +35,14 @@ pub use sp_keyring::{
 pub use sp_core::{traits::BareCryptoStorePtr, tasks::executor as tasks_executor};
 pub use sp_runtime::{Storage, StorageChild};
 pub use sp_state_machine::ExecutionStrategy;
+pub use sc_service::client;
 pub use self::client_ext::{ClientExt, ClientBlockImportExt};
 
 use std::sync::Arc;
 use std::collections::HashMap;
 use sp_core::storage::{well_known_keys, ChildInfo};
 use sp_runtime::traits::{Block as BlockT, BlakeTwo256};
-use sc_service::client::{self, LocalCallExecutor};
+use sc_service::client::LocalCallExecutor;
 
 /// Test client light database backend.
 pub type LightBackend<Block> = client::light::backend::Backend<

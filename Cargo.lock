@@ -5715,6 +5715,7 @@ dependencies = [
  "hash-db",
  "hex-literal",
  "kvdb",
+ "kvdb-memorydb",
  "log",
  "parity-scale-codec",
  "parking_lot 0.10.0",
@@ -5735,6 +5736,7 @@ dependencies = [
  "sp-transaction-pool",
  "sp-trie",
  "sp-version",
+ "substrate-test-runtime",
 ]
 
 [[package]]
@@ -7813,6 +7815,7 @@ dependencies = [
  "sc-service",
  "sp-api",
  "sp-blockchain",
+ "sp-consensus",
  "sp-core",
  "sp-runtime",
  "substrate-test-client",

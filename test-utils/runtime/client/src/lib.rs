@@ -35,7 +35,6 @@ use sp_core::storage::{ChildInfo, Storage, StorageChild};
 use substrate_test_runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, NumberFor, HashFor};
 use sc_service::client::{
-	self,
 	light::fetcher::{
 		Fetcher,
 		RemoteHeaderRequest, RemoteReadRequest, RemoteReadChildRequest,

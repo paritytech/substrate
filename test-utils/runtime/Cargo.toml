@@ -37,7 +37,7 @@ frame-support = { version = "2.0.0-alpha.5", default-features = false, path = ".
 pallet-babe = { version = "2.0.0-alpha.5", default-features = false, path = "../../frame/babe" }
 pallet-timestamp = { version = "2.0.0-alpha.5", default-features = false, path = "../../frame/timestamp" }
 
-sc-service = { version = "0.8.0-alpha.5", optional = true, path = "../../client/service" }
+sc-service = { version = "0.8.0-alpha.5", optional = true, features = ["test-helpers"], path = "../../client/service" }
 
 # 1st party
 codec = { package = "parity-scale-codec", version = "1.3.0", default-features = false, features = ["derive"] }
