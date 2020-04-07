@@ -120,7 +120,7 @@ use frame_support::{
 		Contains, Get, ModuleToIndex, OnNewAccount, OnKilledAccount, IsDeadAccount, Happened,
 		StoredMap, EnsureOrigin,
 	},
-	weights::{Weight, DispatchInfo, DispatchClass, SimpleDispatchInfo, FunctionOf}
+	weights::{Weight, DispatchInfo, PostDispatchInfo, DispatchClass, SimpleDispatchInfo, FunctionOf}
 };
 use codec::{Encode, Decode, FullCodec, EncodeLike};
 
@@ -1169,7 +1169,7 @@ pub fn split_inner<T, R, S>(option: Option<T>, splitter: impl FnOnce(T) -> (R, S
 pub struct CheckWeight<T: Trait + Send + Sync>(PhantomData<T>);
 
 impl<T: Trait + Send + Sync> CheckWeight<T> where
-	T::Call: Dispatchable<Info=DispatchInfo>
+	T::Call: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>
 {
 	/// Get the quota ratio of each dispatch class type. This indicates that all operational
 	/// dispatches can use the full capacity of any resource, while user-triggered ones can consume
@@ -1264,7 +1264,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 }
 
 impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> where
-	T::Call: Dispatchable<Info=DispatchInfo>
+	T::Call: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>
 {
 	type AccountId = T::AccountId;
 	type Call = T::Call;
@@ -1319,7 +1319,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> where
 	fn post_dispatch(
 		_pre: Self::Pre,
 		info: &DispatchInfoOf<Self::Call>,
-		_post_info: &PostDispatchInfoOf<Self::Call>,
+		post_info: &PostDispatchInfoOf<Self::Call>,
 		_len: usize,
 		result: &DispatchResult,
 	) -> Result<(), TransactionValidityError> {
@@ -1329,6 +1329,14 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> where
 		if info.class == DispatchClass::Mandatory && result.is_err() {
 			Err(InvalidTransaction::BadMandatory)?
 		}
+
+		let unspent = post_info.calc_unspent(info);
+		if unspent > 0 {
+			AllExtrinsicsWeight::mutate(|weight| {
+				*weight = weight.map(|w| w.saturating_sub(unspent));
+			})
+		}
+
 		Ok(())
 	}
 }
@@ -1624,7 +1632,7 @@ mod tests {
 		type Origin = ();
 		type Trait = ();
 		type Info = DispatchInfo;
-		type PostInfo = ();
+		type PostInfo = PostDispatchInfo;
 		fn dispatch(self, _origin: Self::Origin)
 			-> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
 				panic!("Do not use dummy implementation for dispatch.");
