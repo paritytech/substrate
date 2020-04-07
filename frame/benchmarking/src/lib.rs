@@ -132,6 +132,25 @@ pub use paste;
 /// benchmark just like a regular benchmark, but only testing at the lowest and highest values for
 /// each component. The function will return `Ok(())` if the benchmarks return no errors.
 ///
+/// You can optionally add a `verify` code block at the end of a benchmark to test any final state
+/// of your benchmark in a unit test. For example:
+///
+/// ```ignore
+/// sort_vector {
+/// 	let x in 1 .. 10000;
+/// 	let mut m = Vec::<u32>::new();
+/// 	for i in (0..x).rev() {
+/// 		m.push(i);
+/// 	}
+/// }: {
+/// 	m.sort();
+/// } verify {
+/// 	ensure!(m[0] == 0, "You forgot to sort!")
+/// }
+/// ```
+///
+/// These `verify` blocks will not execute when running your actual benchmarks!
+///
 /// You can construct benchmark tests like so:
 ///
 /// ```ignore
