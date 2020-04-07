@@ -183,7 +183,13 @@ fn benchmarks_macro_verify_works() {
 	// Check postcondition for benchmark `set_value` is valid.
 	let selected_benchmark = SelectedBenchmark::set_value;
 
+	let closure = <SelectedBenchmark as BenchmarkingSetup<Test>>::instance(
+		&selected_benchmark,
+		&[(BenchmarkParameter::b, 1)],
+	).expect("failed to create closure");
+
 	new_test_ext().execute_with(|| {
+		assert!(closure().is_ok());
 		let _ = <SelectedBenchmark as BenchmarkingSetup<Test>>::verify(
 			&selected_benchmark,
 			&[(BenchmarkParameter::b, 1)],
@@ -197,7 +203,13 @@ fn benchmarks_macro_verify_fail_works() {
 	// Check postcondition for benchmark `other_name` is invalid.
 	let selected_benchmark = SelectedBenchmark::other_name;
 
+	let closure = <SelectedBenchmark as BenchmarkingSetup<Test>>::instance(
+		&selected_benchmark,
+		&[(BenchmarkParameter::b, 1)],
+	).expect("failed to create closure");
+
 	new_test_ext().execute_with(|| {
+		assert!(closure().is_ok());
 		let _ = <SelectedBenchmark as BenchmarkingSetup<Test>>::verify(
 			&selected_benchmark,
 			&[(BenchmarkParameter::b, 1)],
