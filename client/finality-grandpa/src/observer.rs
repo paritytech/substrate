@@ -124,6 +124,7 @@ fn grandpa_observer<BE, Block: BlockT, Client, S, F>(
 				finalized_hash,
 				finalized_number,
 				(round, commit).into(),
+				false,
 			) {
 				Ok(_) => {},
 				Err(e) => return future::err(e),
