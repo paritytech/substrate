@@ -96,28 +96,25 @@ fn should_submit_signed_twice_from_the_same_account() {
 
 	let keystore = KeyStore::new();
 	keystore.write().sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE))).unwrap();
+	keystore.write().sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter2", PHRASE))).unwrap();
 	t.register_extension(KeystoreExt(keystore));
 
 	t.execute_with(|| {
-		let results = Signer::<Runtime, TestAuthorityId>::all_accounts()
+		let result = Signer::<Runtime, TestAuthorityId>::any_account()
 			.send_signed_transaction(|_| {
 				pallet_balances::Call::transfer(Default::default(), Default::default())
 			});
 
-		let len = results.len();
-		assert_eq!(len, 1);
-		assert_eq!(results.into_iter().filter_map(|x| x.1.ok()).count(), len);
+		assert!(result.is_some());
 		assert_eq!(state.read().transactions.len(), 1);
 
 		// submit another one from the same account. The nonce should be incremented.
-		let results = Signer::<Runtime, TestAuthorityId>::all_accounts()
+		let result = Signer::<Runtime, TestAuthorityId>::any_account()
 			.send_signed_transaction(|_| {
 				pallet_balances::Call::transfer(Default::default(), Default::default())
 			});
 
-		let len = results.len();
-		assert_eq!(len, 1);
-		assert_eq!(results.into_iter().filter_map(|x| x.1.ok()).count(), len);
+		assert!(result.is_some());
 		assert_eq!(state.read().transactions.len(), 2);
 
 		// now check that the transaction nonces are not equal
@@ -131,6 +128,60 @@ fn should_submit_signed_twice_from_the_same_account() {
 		assert!(
 			nonce1 != nonce2,
 			"Transactions should have different nonces. Got: {:?}", nonce1
+		);
+	});
+}
+
+#[test]
+fn should_submit_signed_twice_from_all_accounts() {
+	let mut t = new_test_ext(COMPACT_CODE, false);
+	let (pool, state) = TestTransactionPoolExt::new();
+	t.register_extension(TransactionPoolExt::new(pool));
+
+	let keystore = KeyStore::new();
+	keystore.write().sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter1", PHRASE))).unwrap();
+	keystore.write().sr25519_generate_new(sr25519::AuthorityId::ID, Some(&format!("{}/hunter2", PHRASE))).unwrap();
+	t.register_extension(KeystoreExt(keystore));
+
+	t.execute_with(|| {
+		let results = Signer::<Runtime, TestAuthorityId>::all_accounts()
+			.send_signed_transaction(|_| {
+				pallet_balances::Call::transfer(Default::default(), Default::default())
+			});
+
+		let len = results.len();
+		assert_eq!(len, 2);
+		assert_eq!(results.into_iter().filter_map(|x| x.1.ok()).count(), len);
+		assert_eq!(state.read().transactions.len(), 2);
+
+		// submit another one from the same account. The nonce should be incremented.
+		let results = Signer::<Runtime, TestAuthorityId>::all_accounts()
+			.send_signed_transaction(|_| {
+				pallet_balances::Call::transfer(Default::default(), Default::default())
+			});
+
+		let len = results.len();
+		assert_eq!(len, 2);
+		assert_eq!(results.into_iter().filter_map(|x| x.1.ok()).count(), len);
+		assert_eq!(state.read().transactions.len(), 4);
+
+		// now check that the transaction nonces are not equal
+		let s = state.read();
+		fn nonce(tx: UncheckedExtrinsic) -> frame_system::CheckNonce<Runtime> {
+			let extra = tx.signature.unwrap().2;
+			extra.3
+		}
+		let nonce1 = nonce(UncheckedExtrinsic::decode(&mut &*s.transactions[0]).unwrap());
+		let nonce2 = nonce(UncheckedExtrinsic::decode(&mut &*s.transactions[1]).unwrap());
+		let nonce3 = nonce(UncheckedExtrinsic::decode(&mut &*s.transactions[2]).unwrap());
+		let nonce4 = nonce(UncheckedExtrinsic::decode(&mut &*s.transactions[3]).unwrap());
+		assert!(
+			nonce1 != nonce3,
+			"Transactions should have different nonces. Got: 1st tx nonce: {:?}, 2nd nonce: {:?}", nonce1, nonce3
+		);
+		assert!(
+			nonce2 != nonce4,
+			"Transactions should have different nonces. Got: 1st tx nonce: {:?}, 2nd tx nonce: {:?}", nonce2, nonce4
 		);
 	});
 }
