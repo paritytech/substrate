@@ -53,7 +53,7 @@ pub struct SealBlockParams<'a, B: BlockT, SC, HB, E, T, P: txpool::ChainApi> {
 	pub sender: rpc::Sender<CreatedBlock<<B as BlockT>::Hash>>,
 	/// transaction pool
 	pub pool: Arc<txpool::Pool<P>>,
-	/// HeaderBackend trait
+	/// header backend
 	pub client: Arc<HB>,
 	/// Environment trait object for creating a proposer
 	pub env: &'a mut E,
