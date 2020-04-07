@@ -57,7 +57,7 @@ where
 	}
 }
 
-/// Provides an implementation for signing transaction payloads
+/// Provides an implementation for signing transaction payloads.
 ///
 /// Keys used for signing are defined when instantiating the signer object.
 /// Signing can be done using:
