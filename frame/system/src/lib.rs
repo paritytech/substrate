@@ -128,9 +128,6 @@ use sp_io::TestExternalities;
 
 pub mod offchain;
 
-#[cfg(any(feature = "test-helpers", test))]
-pub mod mock;
-
 /// Compute the trie root of a list of extrinsics.
 pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output {
 	extrinsics_data_root::<H>(extrinsics.iter().map(codec::Encode::encode).collect())
