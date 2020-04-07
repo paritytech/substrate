@@ -95,8 +95,10 @@ mod benchmarking;
 
 use sp_std::{result, cmp};
 use sp_inherents::{ProvideInherent, InherentData, InherentIdentifier};
+#[cfg(feature = "std")]
+use frame_support::debug;
 use frame_support::{
-	Parameter, decl_storage, decl_module, debug,
+	Parameter, decl_storage, decl_module,
 	traits::{Time, UnixTime, Get},
 	weights::SimpleDispatchInfo,
 };
@@ -145,7 +147,7 @@ decl_module! {
 		/// `MinimumPeriod`.
 		///
 		/// The dispatch origin for this call must be `Inherent`.
-		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
+		#[weight = SimpleDispatchInfo::FixedMandatory(10_000)]
 		fn set(origin, #[compact] now: T::Moment) {
 			ensure_none(origin)?;
 			assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
@@ -269,6 +271,11 @@ mod tests {
 	use sp_core::H256;
 	use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
+	pub fn new_test_ext() -> TestExternalities {
+		let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		TestExternalities::new(t)
+	}
+
 	impl_outer_origin! {
 		pub enum Origin for Test  where system = frame_system {}
 	}
@@ -314,8 +321,7 @@ mod tests {
 
 	#[test]
 	fn timestamp_works() {
-		let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		TestExternalities::new(t).execute_with(|| {
+		new_test_ext().execute_with(|| {
 			Timestamp::set_timestamp(42);
 			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::NONE));
 			assert_eq!(Timestamp::now(), 69);
@@ -325,8 +331,7 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Timestamp must be updated only once in the block")]
 	fn double_timestamp_should_fail() {
-		let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		TestExternalities::new(t).execute_with(|| {
+		new_test_ext().execute_with(|| {
 			Timestamp::set_timestamp(42);
 			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::NONE));
 			let _ = Timestamp::dispatch(Call::set(70), Origin::NONE);
@@ -336,8 +341,7 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Timestamp must increment by at least <MinimumPeriod> between sequential blocks")]
 	fn block_period_minimum_enforced() {
-		let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		TestExternalities::new(t).execute_with(|| {
+		new_test_ext().execute_with(|| {
 			Timestamp::set_timestamp(42);
 			let _ = Timestamp::dispatch(Call::set(46), Origin::NONE);
 		});

@@ -69,8 +69,8 @@ impl<B: BlockT> InformantDisplay<B> {
 
 		let (status, target) = match (net_status.sync_state, net_status.best_seen_block) {
 			(SyncState::Idle, _) => ("💤 Idle".into(), "".into()),
-			(SyncState::Downloading, None) => (format!("⚙️ Syncing{}", speed), "".into()),
-			(SyncState::Downloading, Some(n)) => (format!("⚙️ Syncing{}", speed), format!(", target=#{}", n)),
+			(SyncState::Downloading, None) => (format!("⚙️  Preparing{}", speed), "".into()),
+			(SyncState::Downloading, Some(n)) => (format!("⚙️  Syncing{}", speed), format!(", target=#{}", n)),
 		};
 
 		if self.format == OutputFormat::Coloured {

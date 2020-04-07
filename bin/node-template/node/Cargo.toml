@@ -2,6 +2,7 @@
 name = "node-template"
 version = "2.0.0-alpha.5"
 authors = ["Anonymous"]
+description = "Substrate Node template"
 edition = "2018"
 license = "Unlicense"
 build = "build.rs"
@@ -37,8 +38,7 @@ sc-basic-authorship = { path = "../../../client/basic-authorship", version = "0.
 node-template-runtime = { version = "2.0.0-alpha.5", path = "../runtime" }
 
 [build-dependencies]
-vergen = "3.0.4"
-build-script-utils = { version = "2.0.0-alpha.5", package = "substrate-build-script-utils", path = "../../../utils/build-script-utils" }
+substrate-build-script-utils = { version = "2.0.0-alpha.5", path = "../../../utils/build-script-utils" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
