@@ -541,7 +541,7 @@ struct GlobalValsSnapshot {
 
 impl GlobalValsSnapshot {
 	// Returns `None` if instance is not valid.
-	fn take(module_instance: &ModuleRef) -> Option<Self> {
+	fn take(module_instance: &ModuleRef) -> Self {
 		// Collect all values of mutable globals.
 		let global_mut_values = module_instance
 			.globals()
@@ -549,8 +549,7 @@ impl GlobalValsSnapshot {
 			.filter(|g| g.is_mutable())
 			.map(|g| g.get())
 			.collect();
-
-		Some(Self { global_mut_values })
+		Self { global_mut_values }
 	}
 
 	/// Reset the runtime instance to the initial version by restoring
@@ -636,9 +635,12 @@ pub fn create_runtime(
 		)
 		.map_err(|e| WasmError::Instantiation(e.to_string()))?;
 
-		let data_segments_snapshot =
-			DataSegmentsSnapshot::take(&WasmModuleInfo::new(code).unwrap()).unwrap(); // TODO:
-		let global_vals_snapshot = GlobalValsSnapshot::take(&instance).unwrap(); // TODO:
+		let data_segments_snapshot = DataSegmentsSnapshot::take(
+			&WasmModuleInfo::new(code)
+				.ok_or_else(|| WasmError::Other("cannot deserialize module".to_string()))?,
+		)
+		.map_err(|e| WasmError::Other(e.to_string()))?;
+		let global_vals_snapshot = GlobalValsSnapshot::take(&instance);
 
 		(data_segments_snapshot, global_vals_snapshot)
 	};
@@ -659,10 +661,10 @@ pub struct WasmiInstance {
 	instance: ModuleRef,
 	/// The memory instance of used by the wasm module.
 	memory: MemoryRef,
-
+	/// The snapshot of global variable values just after instantiation.
 	global_vals_snapshot: GlobalValsSnapshot,
+	/// The snapshot of data segments.
 	data_segments_snapshot: DataSegmentsSnapshot,
-
 	/// The host functions registered for this instance.
 	host_functions: Arc<Vec<&'static dyn Function>>,
 	/// Enable stub generation for functions that are not available in `host_functions`.
