@@ -242,7 +242,7 @@ impl<
 	) -> Self::Result
 	where
 		F: Fn(&Account<T>) -> TPayload,
-		TPayload: SignedPayload<T>
+		TPayload: SignedPayload<T>, 
 	{
 		self.for_any(|account| {
 			let payload = f(account);
