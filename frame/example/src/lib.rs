@@ -262,8 +262,7 @@ use frame_support::{
 	},
 };
 use sp_std::prelude::*;
-use frame_benchmarking::{benchmarks, account};
-use frame_system::{self as system, ensure_signed, ensure_root, RawOrigin};
+use frame_system::{self as system, ensure_signed, ensure_root};
 use codec::{Encode, Decode};
 use sp_runtime::{
 	traits::{SignedExtension, Bounded, SaturatedConversion},
@@ -651,39 +650,61 @@ impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
 	}
 }
 
-benchmarks!{
-	_ {
-		// Define a common range for `b`.
-		let b in 1 .. 1000 => ();
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking {
+	use super::*;
+	use frame_benchmarking::{benchmarks, account};
+	use frame_system::RawOrigin;
+
+	benchmarks!{
+		_ {
+			// Define a common range for `b`.
+			let b in 1 .. 1000 => ();
+		}
+
+		// This will measure the execution time of `accumulate_dummy` for b in [1..1000] range.
+		accumulate_dummy {
+			let b in ...;
+			let caller = account("caller", 0, 0);
+		}: _ (RawOrigin::Signed(caller), b.into())
+
+		// This will measure the execution time of `set_dummy` for b in [1..1000] range.
+		set_dummy {
+			let b in ...;
+		}: set_dummy (RawOrigin::Root, b.into())
+
+		// This will measure the execution time of `set_dummy` for b in [1..10] range.
+		another_set_dummy {
+			let b in 1 .. 10;
+		}: set_dummy (RawOrigin::Root, b.into())
+
+		// This will measure the execution time of sorting a vector.
+		sort_vector {
+			let x in 0 .. 10000;
+			let mut m = Vec::<u32>::new();
+			for i in (0..x).rev() {
+				m.push(i);
+			}
+		}: {
+			m.sort();
+		}
 	}
 
-	// This will measure the execution time of `accumulate_dummy` for b in [1..1000] range.
-	accumulate_dummy {
-		let b in ...;
-		let caller = account("caller", 0, 0);
-	}: _ (RawOrigin::Signed(caller), b.into())
+	#[cfg(test)]
+	mod tests {
+		use super::*;
+		use crate::tests::{new_test_ext, Test};
+		use frame_support::assert_ok;
 
-	// This will measure the execution time of `set_dummy` for b in [1..1000] range.
-	set_dummy {
-		let b in ...;
-		let caller = account("caller", 0, 0);
-	}: set_dummy (RawOrigin::Signed(caller), b.into())
-
-	// This will measure the execution time of `set_dummy` for b in [1..10] range.
-	another_set_dummy {
-		let b in 1 .. 10;
-		let caller = account("caller", 0, 0);
-	}: set_dummy (RawOrigin::Signed(caller), b.into())
-
-	// This will measure the execution time of sorting a vector.
-	sort_vector {
-		let x in 0 .. 10000;
-		let mut m = Vec::<u32>::new();
-		for i in 0..x {
-			m.push(i);
+		#[test]
+		fn test_benchmarks() {
+			new_test_ext().execute_with(|| {
+				assert_ok!(test_benchmark_accumulate_dummy::<Test>());
+				assert_ok!(test_benchmark_set_dummy::<Test>());
+				assert_ok!(test_benchmark_another_set_dummy::<Test>());
+				assert_ok!(test_benchmark_sort_vector::<Test>());
+			});
 		}
-	}: {
-		m.sort();
 	}
 }
 
@@ -758,7 +779,7 @@ mod tests {
 
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
-	fn new_test_ext() -> sp_io::TestExternalities {
+	pub fn new_test_ext() -> sp_io::TestExternalities {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		// We use default for brevity, but you can configure as desired if needed.
 		pallet_balances::GenesisConfig::<Test>::default().assimilate_storage(&mut t).unwrap();

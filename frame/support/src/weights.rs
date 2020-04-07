@@ -44,6 +44,7 @@ use sp_runtime::{
 	traits::SignedExtension,
 	generic::{CheckedExtrinsic, UncheckedExtrinsic},
 };
+use crate::dispatch::{DispatchErrorWithPostInfo, DispatchError};
 
 /// Re-export priority as type
 pub use sp_runtime::transaction_validity::TransactionPriority;
@@ -84,6 +85,19 @@ pub enum DispatchClass {
 	Normal,
 	/// An operational dispatch.
 	Operational,
+	/// A mandatory dispatch. These kinds of dispatch are always included regardless of their
+	/// weight, therefore it is critical that they are separately validated to ensure that a
+	/// malicious validator cannot craft a valid but impossibly heavy block. Usually this just means
+	/// ensuring that the extrinsic can only be included once and that it is always very light.
+	///
+	/// Do *NOT* use it for extrinsics that can be heavy.
+	///
+	/// The only real use case for this is inherent extrinsics that are required to execute in a
+	/// block for the block to be valid, and it solves the issue in the case that the block
+	/// initialization is sufficiently heavy to mean that those inherents do not fit into the
+	/// block. Essentially, we assume that in these exceptional circumstances, it is better to
+	/// allow an overweight block to be created than to not allow any block at all to be created.
+	Mandatory,
 }
 
 impl Default for DispatchClass {
@@ -101,6 +115,8 @@ impl From<SimpleDispatchInfo> for DispatchClass {
 			SimpleDispatchInfo::FixedNormal(_) => DispatchClass::Normal,
 			SimpleDispatchInfo::MaxNormal => DispatchClass::Normal,
 			SimpleDispatchInfo::InsecureFreeNormal => DispatchClass::Normal,
+
+			SimpleDispatchInfo::FixedMandatory(_) => DispatchClass::Mandatory,
 		}
 	}
 }
@@ -114,6 +130,64 @@ pub struct DispatchInfo {
 	pub class: DispatchClass,
 	/// Does this transaction pay fees.
 	pub pays_fee: bool,
+}
+
+/// Weight information that is only available post dispatch.
+#[derive(Clone, Copy, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode)]
+pub struct PostDispatchInfo {
+	/// Actual weight consumed by a call or `None` which stands for the worst case static weight.
+	pub actual_weight: Option<Weight>,
+}
+
+impl From<Option<Weight>> for PostDispatchInfo {
+	fn from(actual_weight: Option<Weight>) -> Self {
+		Self {
+			actual_weight,
+		}
+	}
+}
+
+impl From<()> for PostDispatchInfo {
+	fn from(_: ()) -> Self {
+		Self {
+			actual_weight: None,
+		}
+	}
+}
+
+impl sp_runtime::traits::Printable for PostDispatchInfo {
+	fn print(&self) {
+		"actual_weight=".print();
+		match self.actual_weight {
+			Some(weight) => weight.print(),
+			None => "max-weight".print(),
+		}
+	}
+}
+
+/// Allows easy conversion from `DispatchError` to `DispatchErrorWithPostInfo` for dispatchables
+/// that want to return a custom a posteriori weight on error.
+pub trait WithPostDispatchInfo {
+	/// Call this on your modules custom errors type in order to return a custom weight on error.
+	///
+	/// # Example
+	///
+	/// ```ignore
+	/// let who = ensure_signed(origin).map_err(|e| e.with_weight(100))?;
+	/// ensure!(who == me, Error::<T>::NotMe.with_weight(200_000));
+	/// ```
+	fn with_weight(self, actual_weight: Weight) -> DispatchErrorWithPostInfo;
+}
+
+impl<T> WithPostDispatchInfo for T where
+	T: Into<DispatchError>
+{
+	fn with_weight(self, actual_weight: Weight) -> DispatchErrorWithPostInfo {
+		DispatchErrorWithPostInfo {
+			post_info: PostDispatchInfo { actual_weight: Some(actual_weight) },
+			error: self.into(),
+		}
+	}
 }
 
 /// A `Dispatchable` function (aka transaction) that can carry some static information along with
@@ -153,6 +227,11 @@ pub enum SimpleDispatchInfo {
 	FixedOperational(Weight),
 	/// An operational dispatch with the maximum weight.
 	MaxOperational,
+	/// A mandatory dispatch with fixed weight.
+	///
+	/// NOTE: Signed transactions may not (directly) dispatch this kind of a call, so the other
+	/// attributes concerning transactability (e.g. priority, fee paying) are moot.
+	FixedMandatory(Weight),
 }
 
 impl<T> WeighData<T> for SimpleDispatchInfo {
@@ -161,9 +240,9 @@ impl<T> WeighData<T> for SimpleDispatchInfo {
 			SimpleDispatchInfo::FixedNormal(w) => *w,
 			SimpleDispatchInfo::MaxNormal => Bounded::max_value(),
 			SimpleDispatchInfo::InsecureFreeNormal => Bounded::min_value(),
-
 			SimpleDispatchInfo::FixedOperational(w) => *w,
 			SimpleDispatchInfo::MaxOperational => Bounded::max_value(),
+			SimpleDispatchInfo::FixedMandatory(w) => *w,
 		}
 	}
 }
@@ -180,9 +259,9 @@ impl<T> PaysFee<T> for SimpleDispatchInfo {
 			SimpleDispatchInfo::FixedNormal(_) => true,
 			SimpleDispatchInfo::MaxNormal => true,
 			SimpleDispatchInfo::InsecureFreeNormal => true,
-
 			SimpleDispatchInfo::FixedOperational(_) => true,
 			SimpleDispatchInfo::MaxOperational => true,
+			SimpleDispatchInfo::FixedMandatory(_) => true,
 		}
 	}
 }

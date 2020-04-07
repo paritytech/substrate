@@ -27,7 +27,7 @@
 
 use crate::{
 	behaviour::{Behaviour, BehaviourOut},
-	config::{parse_addr, parse_str_addr, NonReservedPeerMode, Params, TransportConfig},
+	config::{parse_addr, parse_str_addr, NonReservedPeerMode, Params, Role, TransportConfig},
 	error::Error,
 	network_state::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
@@ -36,13 +36,14 @@ use crate::{
 	protocol::{self, event::Event, light_client_handler, sync::SyncState, PeerInfo, Protocol},
 	transport, ReputationChange,
 };
-use futures::{prelude::*, channel::mpsc};
+use futures::prelude::*;
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
 use libp2p::swarm::{NetworkBehaviour, SwarmBuilder, SwarmEvent};
 use libp2p::{kad::record, Multiaddr, PeerId};
 use log::{error, info, trace, warn};
 use parking_lot::Mutex;
 use prometheus_endpoint::{
-	register, Counter, CounterVec, Gauge, GaugeVec, HistogramOpts, HistogramVec, Opts, PrometheusError, Registry, U64,
+	register, Counter, Gauge, GaugeVec, HistogramOpts, HistogramVec, Opts, PrometheusError, Registry, U64,
 };
 use sc_peerset::PeersetHandle;
 use sp_consensus::import_queue::{BlockImportError, BlockImportResult, ImportQueue, Link};
@@ -55,7 +56,6 @@ use std::{
 	collections::{HashMap, HashSet},
 	fs, io,
 	marker::PhantomData,
-	path::Path,
 	pin::Pin,
 	str,
 	sync::{atomic::{AtomicBool, AtomicUsize, Ordering}, Arc},
@@ -159,7 +159,7 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	/// nodes it should be connected to or not.
 	peerset: PeersetHandle,
 	/// Channel that sends messages to the actual worker.
-	to_worker: mpsc::UnboundedSender<ServiceToWorkerMsg<B, H>>,
+	to_worker: TracingUnboundedSender<ServiceToWorkerMsg<B, H>>,
 	/// Marker to pin the `H` generic. Serves no purpose except to not break backwards
 	/// compatibility.
 	_marker: PhantomData<H>,
@@ -172,28 +172,20 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 	/// for the network processing to advance. From it, you can extract a `NetworkService` using
 	/// `worker.service()`. The `NetworkService` can be shared through the codebase.
 	pub fn new(params: Params<B, H>) -> Result<NetworkWorker<B, H>, Error> {
-		let (to_worker, from_worker) = mpsc::unbounded();
+		let (to_worker, from_worker) = tracing_unbounded("mpsc_network_worker");
 
-		if let Some(ref path) = params.network_config.net_config_path {
-			fs::create_dir_all(Path::new(path))?;
-		}
+		fs::create_dir_all(&params.network_config.net_config_path)?;
 
 		// List of multiaddresses that we know in the network.
 		let mut known_addresses = Vec::new();
 		let mut bootnodes = Vec::new();
-		let mut reserved_nodes = Vec::new();
 		let mut boot_node_ids = HashSet::new();
 
 		// Process the bootnodes.
 		for bootnode in params.network_config.boot_nodes.iter() {
-			match parse_str_addr(bootnode) {
-				Ok((peer_id, addr)) => {
-					bootnodes.push(peer_id.clone());
-					boot_node_ids.insert(peer_id.clone());
-					known_addresses.push((peer_id, addr));
-				},
-				Err(_) => warn!(target: "sub-libp2p", "Not a valid bootnode address: {}", bootnode),
-			}
+			bootnodes.push(bootnode.peer_id.clone());
+			boot_node_ids.insert(bootnode.peer_id.clone());
+			known_addresses.push((bootnode.peer_id.clone(), bootnode.multiaddr.clone()));
 		}
 
 		let boot_node_ids = Arc::new(boot_node_ids);
@@ -215,22 +207,43 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				}
 			)?;
 
-		// Initialize the reserved peers.
-		for reserved in params.network_config.reserved_nodes.iter() {
-			if let Ok((peer_id, addr)) = parse_str_addr(reserved) {
-				reserved_nodes.push(peer_id.clone());
-				known_addresses.push((peer_id, addr));
-			} else {
-				warn!(target: "sub-libp2p", "Not a valid reserved node address: {}", reserved);
+		// Initialize the peers we should always be connected to.
+		let priority_groups = {
+			let mut reserved_nodes = HashSet::new();
+			for reserved in params.network_config.reserved_nodes.iter() {
+				reserved_nodes.insert(reserved.peer_id.clone());
+				known_addresses.push((reserved.peer_id.clone(), reserved.multiaddr.clone()));
 			}
-		}
+
+			let mut sentries_and_validators = HashSet::new();
+			match &params.role {
+				Role::Sentry { validators } => {
+					for validator in validators {
+						sentries_and_validators.insert(validator.peer_id.clone());
+						known_addresses.push((validator.peer_id.clone(), validator.multiaddr.clone()));
+					}
+				}
+				Role::Authority { sentry_nodes } => {
+					for sentry_node in sentry_nodes {
+						sentries_and_validators.insert(sentry_node.peer_id.clone());
+						known_addresses.push((sentry_node.peer_id.clone(), sentry_node.multiaddr.clone()));
+					}
+				}
+				_ => {}
+			}
+
+			vec![
+				("reserved".to_owned(), reserved_nodes),
+				("sentries_and_validators".to_owned(), sentries_and_validators),
+			]
+		};
 
 		let peerset_config = sc_peerset::PeersetConfig {
 			in_peers: params.network_config.in_peers,
 			out_peers: params.network_config.out_peers,
 			bootnodes,
 			reserved_only: params.network_config.non_reserved_mode == NonReservedPeerMode::Deny,
-			reserved_nodes,
+			priority_groups,
 		};
 
 		// Private and public keys configuration.
@@ -253,7 +266,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
 		let (protocol, peerset_handle) = Protocol::new(
 			protocol::ProtocolConfig {
-				roles: params.roles,
+				roles: From::from(&params.role),
 				max_parallel_downloads: params.network_config.max_parallel_downloads,
 			},
 			params.chain.clone(),
@@ -285,6 +298,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			};
 			let behaviour = futures::executor::block_on(Behaviour::new(
 				protocol,
+				params.role,
 				user_agent,
 				local_public,
 				known_addresses,
@@ -534,7 +548,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// The stream never ends (unless the `NetworkWorker` gets shut down).
 	pub fn event_stream(&self) -> impl Stream<Item = Event> {
 		// Note: when transitioning to stable futures, remove the `Error` entirely
-		let (tx, rx) = mpsc::unbounded();
+		let (tx, rx) = tracing_unbounded("mpsc_network_event_stream");
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::EventStream(tx));
 		rx
 	}
@@ -754,7 +768,7 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 	PutValue(record::Key, Vec<u8>),
 	AddKnownAddress(PeerId, Multiaddr),
 	SyncFork(Vec<PeerId>, B::Hash, NumberFor<B>),
-	EventStream(mpsc::UnboundedSender<Event>),
+	EventStream(TracingUnboundedSender<Event>),
 	WriteNotification {
 		message: Vec<u8>,
 		engine_id: ConsensusEngineId,
@@ -785,11 +799,11 @@ pub struct NetworkWorker<B: BlockT + 'static, H: ExHashT> {
 	/// The import queue that was passed as initialization.
 	import_queue: Box<dyn ImportQueue<B>>,
 	/// Messages from the `NetworkService` and that must be processed.
-	from_worker: mpsc::UnboundedReceiver<ServiceToWorkerMsg<B, H>>,
+	from_worker: TracingUnboundedReceiver<ServiceToWorkerMsg<B, H>>,
 	/// Receiver for queries from the light client that must be processed.
-	light_client_rqs: Option<mpsc::UnboundedReceiver<light_client_handler::Request<B>>>,
+	light_client_rqs: Option<TracingUnboundedReceiver<light_client_handler::Request<B>>>,
 	/// Senders for events that happen on the network.
-	event_streams: Vec<mpsc::UnboundedSender<Event>>,
+	event_streams: Vec<TracingUnboundedSender<Event>>,
 	/// Prometheus network metrics.
 	metrics: Option<Metrics>,
 	/// The `PeerId`'s of all boot nodes.
@@ -807,7 +821,7 @@ struct Metrics {
 	kbuckets_num_nodes: Gauge<U64>,
 	network_per_sec_bytes: GaugeVec<U64>,
 	notifications_queues_size: HistogramVec,
-	notifications_total: CounterVec<U64>,
+	notifications_sizes: HistogramVec,
 	num_event_stream_channels: Gauge<U64>,
 	opened_notification_streams: GaugeVec<U64>,
 	peers_count: Gauge<U64>,
@@ -862,11 +876,15 @@ impl Metrics {
 				},
 				&["protocol"]
 			)?, registry)?,
-			notifications_total: register(CounterVec::new(
-				Opts::new(
-					"sub_libp2p_notifications_total",
-					"Number of notification received from all nodes"
-				),
+			notifications_sizes: register(HistogramVec::new(
+				HistogramOpts {
+					common_opts: Opts::new(
+						"sub_libp2p_notifications_sizes",
+						"Sizes of the notifications send to and received from all nodes"
+					),
+					buckets: prometheus_endpoint::exponential_buckets(64.0, 4.0, 8)
+						.expect("parameters are always valid values; qed"),
+				},
 				&["direction", "protocol"]
 			)?, registry)?,
 			num_event_stream_channels: register(Gauge::new(
@@ -904,8 +922,10 @@ impl Metrics {
 				self.opened_notification_streams.with_label_values(&[&engine_id_to_string(&engine_id)]).dec();
 			},
 			Event::NotificationsReceived { messages, .. } => {
-				for (engine_id, _) in messages {
-					self.notifications_total.with_label_values(&["in", &engine_id_to_string(&engine_id)]).inc();
+				for (engine_id, message) in messages {
+					self.notifications_sizes
+						.with_label_values(&["in", &engine_id_to_string(&engine_id)])
+						.observe(message.len() as f64);
 				}
 			},
 			_ => {}
@@ -966,16 +986,15 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					this.event_streams.push(sender),
 				ServiceToWorkerMsg::WriteNotification { message, engine_id, target } => {
 					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.notifications_total.with_label_values(&["out", &engine_id_to_string(&engine_id)]).inc();
+						metrics.notifications_sizes
+							.with_label_values(&["out", &engine_id_to_string(&engine_id)])
+							.observe(message.len() as f64);
 					}
 					this.network_service.user_protocol_mut().write_notification(target, engine_id, message)
 				},
 				ServiceToWorkerMsg::RegisterNotifProtocol { engine_id, protocol_name } => {
-					let events = this.network_service.user_protocol_mut()
+					this.network_service
 						.register_notifications_protocol(engine_id, protocol_name);
-					for event in events {
-						this.event_streams.retain(|sender| sender.unbounded_send(event.clone()).is_ok());
-					}
 				},
 				ServiceToWorkerMsg::DisconnectPeer(who) =>
 					this.network_service.user_protocol_mut().disconnect_peer(&who),
@@ -1050,7 +1069,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 							&& error.contains("Peer ID mismatch")
 						{
 							error!(
-								"Connecting to bootnode with peer id `{}` and address `{}` failed \
+								"💔 Connecting to bootnode with peer id `{}` and address `{}` failed \
 								because it returned a different peer id!",
 								peer_id,
 								address,

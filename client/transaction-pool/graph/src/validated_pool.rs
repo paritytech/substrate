@@ -27,7 +27,6 @@ use crate::watcher::Watcher;
 use serde::Serialize;
 use log::{debug, warn};
 
-use futures::channel::mpsc;
 use parking_lot::{Mutex, RwLock};
 use sp_runtime::{
 	generic::BlockId,
@@ -36,6 +35,7 @@ use sp_runtime::{
 };
 use sp_transaction_pool::{error, PoolStatus};
 use wasm_timer::Instant;
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 
 use crate::base_pool::PruneStatus;
 use crate::pool::{EventStream, Options, ChainApi, ExHash, ExtrinsicFor, TransactionFor};
@@ -95,7 +95,7 @@ pub struct ValidatedPool<B: ChainApi> {
 		ExHash<B>,
 		ExtrinsicFor<B>,
 	>>,
-	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<ExHash<B>>>>,
+	import_notification_sinks: Mutex<Vec<TracingUnboundedSender<ExHash<B>>>>,
 	rotator: PoolRotator<ExHash<B>>,
 }
 
@@ -504,7 +504,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 	/// Consumers of this stream should use the `ready` method to actually get the
 	/// pending transactions in the right order.
 	pub fn import_notification_stream(&self) -> EventStream<ExHash<B>> {
-		let (sink, stream) = mpsc::unbounded();
+		let (sink, stream) = tracing_unbounded("mpsc_import_notifications");
 		self.import_notification_sinks.lock().push(sink);
 		stream
 	}
