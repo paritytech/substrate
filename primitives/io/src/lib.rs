@@ -434,8 +434,8 @@ pub trait Crypto {
 		msg: &[u8],
 		pub_key: &ed25519::Public,
 	) -> bool {
-		// This "with_externalities block" returns Some(true) if signature verification can be successfully
-		// batched, everything else (Some(false)/None) means it cannot be batched.
+		// This `with_externalities(..)` block returns Some(true) if signature verification was successfully
+		// batched, everything else (Some(false)/None) means it was not batched.
 		sp_externalities::with_externalities(|mut instance| {
 			if let Some(extension) = instance.extension::<VerificationExt>() {
 				extension.push_ed25519(
@@ -463,8 +463,8 @@ pub trait Crypto {
 		msg: &[u8],
 		pub_key: &sr25519::Public,
 	) -> bool {
-		// This "with_externalities block" returns Some(true) if signature verification can be successfully
-		// batched, everything else (Some(false)/None) means it cannot be batched.
+		// This `with_externalities(..)` block returns Some(true) if signature verification was successfully
+		// batched, everything else (Some(false)/None) means it was not batched.
 		sp_externalities::with_externalities(|mut instance| {
 			if let Some(extension) = instance.extension::<VerificationExt>() {
 				extension.push_sr25519(
