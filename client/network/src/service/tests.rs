@@ -18,14 +18,16 @@ use crate::{config, Event, NetworkService, NetworkWorker};
 
 use futures::prelude::*;
 use sp_runtime::traits::{Block as BlockT, Header as _};
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use substrate_test_runtime_client::{TestClientBuilder, TestClientBuilderExt as _};
 
-/// Builds a full node to be used for testing.
-fn build_test_full_node(config: config::NetworkConfiguration) -> (Arc<NetworkService<
+type TestNetworkService = NetworkService<
 	substrate_test_runtime_client::runtime::Block,
 	substrate_test_runtime_client::runtime::Hash,
->>, impl Stream<Item = Event>) {
+>;
+
+/// Builds a full node to be used for testing.
+fn build_test_full_node(config: config::NetworkConfiguration) -> (Arc<TestNetworkService>, impl Stream<Item = Event>) {
 	let client = Arc::new(
 		TestClientBuilder::with_default_backend()
 			.build_with_longest_chain()
@@ -111,13 +113,7 @@ fn build_test_full_node(config: config::NetworkConfiguration) -> (Arc<NetworkSer
 const ENGINE_ID: sp_runtime::ConsensusEngineId = *b"foo\0";
 
 /// Builds a full node to be used for testing.
-fn build_nodes_one_proto() -> (Arc<NetworkService<
-	substrate_test_runtime_client::runtime::Block,
-	substrate_test_runtime_client::runtime::Hash,
->>, impl Stream<Item = Event>, Arc<NetworkService<
-substrate_test_runtime_client::runtime::Block,
-substrate_test_runtime_client::runtime::Hash,
->>, impl Stream<Item = Event>) {
+fn build_nodes_one_proto() -> (Arc<TestNetworkService>, impl Stream<Item = Event>, Arc<TestNetworkService>, impl Stream<Item = Event>) {
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
 
 	let (node1, events_stream1) = build_test_full_node(config::NetworkConfiguration {
@@ -142,6 +138,8 @@ substrate_test_runtime_client::runtime::Hash,
 
 #[test]
 fn notifications_state_consistent() {
+	//! Runs two nodes and ensures that events are propagated out of the API in the correct order.
+
 	let (node1, mut events_stream1, node2, mut events_stream2) = build_nodes_one_proto();
 
 	async_std::task::block_on(async move {
@@ -162,8 +160,7 @@ fn notifications_state_consistent() {
 			// test consists in ensuring that notifications get ignored if the stream isn't open.
 			if rand::random::<u8>() % 5 >= 3 {
 				node1.write_notification(node2.local_peer_id().clone(), ENGINE_ID, b"hello world".to_vec());
-			}
-			if rand::random::<u8>() % 5 >= 3 {
+			} else {
 				node2.write_notification(node1.local_peer_id().clone(), ENGINE_ID, b"hello world".to_vec());
 			}
 
@@ -179,9 +176,15 @@ fn notifications_state_consistent() {
 			let next_event = {
 				let next1 = events_stream1.next();
 				let next2 = events_stream2.next();
-				match future::select(next1, next2).await {
-					future::Either::Left((Some(ev), _)) => future::Either::Left(ev),
-					future::Either::Right((Some(ev), _)) => future::Either::Right(ev),
+				// We also await on a small timer in order to be sure that the test continues
+				// running.
+				let continue_test = futures_timer::Delay::new(Duration::from_millis(50));
+				match future::select(future::select(next1, next2), continue_test).await {
+					future::Either::Left((future::Either::Left((Some(ev), _)), _)) =>
+						future::Either::Left(ev),
+					future::Either::Left((future::Either::Right((Some(ev), _)), _)) =>
+						future::Either::Right(ev),
+					future::Either::Right(_) => continue,
 					_ => break,
 				}
 			};
