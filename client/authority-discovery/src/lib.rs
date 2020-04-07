@@ -330,9 +330,9 @@ where
 	}
 
 	fn handle_dht_events(&mut self, cx: &mut Context) -> Result<()> {
-		while let Poll::Ready(Some(event)) = self.dht_event_rx.poll_next_unpin(cx) {
-			match event {
-				DhtEvent::ValueFound(v) => {
+		loop {
+			match self.dht_event_rx.poll_next_unpin(cx) {
+				Poll::Ready(Some(DhtEvent::ValueFound(v))) => {
 					if let Some(metrics) = &self.metrics {
 						metrics.dht_event_received.with_label_values(&["value_found"]).inc();
 					}
@@ -347,7 +347,7 @@ where
 
 					self.handle_dht_value_found_event(v)?;
 				}
-				DhtEvent::ValueNotFound(hash) => {
+				Poll::Ready(Some(DhtEvent::ValueNotFound(hash))) => {
 					if let Some(metrics) = &self.metrics {
 						metrics.dht_event_received.with_label_values(&["value_not_found"]).inc();
 					}
@@ -357,7 +357,7 @@ where
 						"Value for hash '{:?}' not found on Dht.", hash
 					)
 				},
-				DhtEvent::ValuePut(hash) => {
+				Poll::Ready(Some(DhtEvent::ValuePut(hash))) => {
 					if let Some(metrics) = &self.metrics {
 						metrics.dht_event_received.with_label_values(&["value_put"]).inc();
 					}
@@ -367,7 +367,7 @@ where
 						"Successfully put hash '{:?}' on Dht.", hash,
 					)
 				},
-				DhtEvent::ValuePutFailed(hash) => {
+				Poll::Ready(Some(DhtEvent::ValuePutFailed(hash))) => {
 					if let Some(metrics) = &self.metrics {
 						metrics.dht_event_received.with_label_values(&["value_put_failed"]).inc();
 					}
@@ -377,10 +377,12 @@ where
 						"Failed to put hash '{:?}' on Dht.", hash
 					)
 				},
+				// The sender side of the dht event stream has been closed, likely due to the
+				// network terminating.
+				Poll::Ready(None) => return Err(Error::DhtEventStreamTerminated),
+				Poll::Pending => return Ok(()),
 			}
 		}
-
-		Ok(())
 	}
 
 	fn handle_dht_value_found_event(
@@ -483,7 +485,6 @@ where
 	}
 
 	/// Update the peer set 'authority' priority group.
-	//
 	fn update_peer_set_priority_group(&self) -> Result<()> {
 		let addresses = self.addr_cache.get_subset();
 
@@ -539,11 +540,18 @@ where
 
 		match inner() {
 			Ok(()) => {}
+
+			// Handle fatal errors.
+			//
+			// Given that the network likely terminated authority discovery should do the same.
+			Err(Error::DhtEventStreamTerminated) => return Poll::Ready(()),
+
+			// Handle non-fatal errors.
 			Err(e) => error!(target: "sub-authority-discovery", "Poll failure: {:?}", e),
 		};
 
-		// Make sure to always return NotReady as this is a long running task with the same lifetime
-		// as the node itself.
+		// Return Poll::Pending as this is a long running task with the same lifetime as the node
+		// itself.
 		Poll::Pending
 	}
 }
