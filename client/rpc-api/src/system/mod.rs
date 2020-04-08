@@ -27,7 +27,6 @@ use self::error::Result as SystemResult;
 
 pub use self::helpers::{SystemInfo, Health, PeerInfo, NodeRole};
 pub use self::gen_client::Client as SystemClient;
-use sp_chain_spec::Properties;
 
 /// Substrate system RPC API
 #[rpc]
@@ -50,7 +49,7 @@ pub trait SystemApi<Hash, Number> {
 
 	/// Get a custom set of properties as a JSON object, defined in the chain spec.
 	#[rpc(name = "system_properties")]
-	fn system_properties(&self) -> SystemResult<Properties>;
+	fn system_properties(&self) -> SystemResult<sp_chain_spec::Properties>;
 
 	/// Return health status of the node.
 	///
