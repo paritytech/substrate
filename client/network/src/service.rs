@@ -956,7 +956,7 @@ impl Metrics {
 			pending_connections_errors_total: register(CounterVec::new(
 				Opts::new(
 					"sub_libp2p_pending_connections_errors_total",
-					"Total number of failures to connection to a node"
+					"Total number of node connection failures"
 				),
 				&["reason"]
 			)?, registry)?,
