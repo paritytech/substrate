@@ -34,7 +34,7 @@ use sp_trie::trie_types::{TrieDB, TrieDBMut};
 use sp_api::{decl_runtime_apis, impl_runtime_apis};
 use sp_runtime::{
 	create_runtime_str, impl_opaque_keys,
-	ApplyExtrinsicResult, KeyTypeId, Perbill,
+	ApplyExtrinsicResult, Perbill,
 	transaction_validity::{
 		TransactionValidity, ValidTransaction, TransactionValidityError, InvalidTransaction,
 		TransactionSource,
@@ -655,14 +655,6 @@ cfg_if! {
 				}
 			}
 
-			impl sp_session::SessionMembership<Block> for Runtime {
-				fn generate_session_membership_proof(
-					_session_key: (KeyTypeId, Vec<u8>),
-				) -> Option<sp_session::MembershipProof> {
-					None
-				}
-			}
-
 			impl sp_finality_grandpa::GrandpaApi<Block> for Runtime {
 				fn grandpa_authorities() -> sp_finality_grandpa::AuthorityList {
 					Vec::new()
@@ -675,6 +667,12 @@ cfg_if! {
 					>,
 					_key_owner_proof: Vec<u8>,
 				) -> Option<()> {
+					None
+				}
+
+				fn generate_key_ownership_proof(
+					_authority_key: sp_finality_grandpa::AuthorityId,
+				) -> Option<Vec<u8>> {
 					None
 				}
 			}
@@ -870,14 +868,6 @@ cfg_if! {
 					encoded: Vec<u8>,
 				) -> Option<Vec<(Vec<u8>, sp_core::crypto::KeyTypeId)>> {
 					SessionKeys::decode_into_raw_public_keys(&encoded)
-				}
-			}
-
-			impl sp_session::SessionMembership<Block> for Runtime {
-				fn generate_session_membership_proof(
-					_session_key: (KeyTypeId, Vec<u8>),
-				) -> Option<sp_session::MembershipProof> {
-					None
 				}
 			}
 
