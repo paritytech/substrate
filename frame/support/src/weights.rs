@@ -37,6 +37,7 @@
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
+use core::ops::Mul;
 use codec::{Encode, Decode};
 use sp_arithmetic::traits::Bounded;
 use sp_runtime::{
@@ -378,24 +379,86 @@ impl<Call: Encode, Extra: Encode> GetDispatchInfo for sp_runtime::testing::TestX
 	}
 }
 
+/// The weight of various database operations that the runtime can invoke.
+#[derive(Clone, Copy, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode)]
+pub struct RuntimeDbWeight {
+	pub read: Weight,
+	pub read_repeat: Weight,
+	pub read_none: Weight,
+	pub write: Weight,
+	pub write_repeat: Weight,
+	pub write_none: Weight,
+}
+
+impl Mul<(Weight, Weight, Weight, Weight, Weight, Weight)> for RuntimeDbWeight {
+	type Output = Self;
+
+	fn mul(self, rhs: (Weight, Weight, Weight, Weight, Weight, Weight)) -> Self::Output {
+		RuntimeDbWeight {
+			read: self.read.saturating_mul(rhs.0),
+			read_repeat: self.read_repeat.saturating_mul(rhs.1),
+			read_none: self.read_none.saturating_mul(rhs.2),
+			write: self.write.saturating_mul(rhs.3),
+			write_repeat: self.write_repeat.saturating_mul(rhs.4),
+			write_none: self.write_none.saturating_mul(rhs.5),
+		}
+	}
+}
+
+impl<T> WeighData<T> for RuntimeDbWeight {
+	fn weigh_data(&self, _: T) -> Weight {
+		return self.read
+			.saturating_add(self.read_repeat)
+			.saturating_add(self.read_none)
+			.saturating_add(self.write)
+			.saturating_add(self.write_repeat)
+			.saturating_add(self.write_none)
+	}
+}
+
+impl<T> ClassifyDispatch<T> for RuntimeDbWeight {
+	fn classify_dispatch(&self, _: T) -> DispatchClass {
+		DispatchClass::Normal
+	}
+}
+
+impl<T> PaysFee<T> for RuntimeDbWeight {
+	fn pays_fee(&self, _: T) -> bool {
+		true
+	}
+}
+
 #[cfg(test)]
 #[allow(dead_code)]
 mod tests {
-	use crate::decl_module;
+	use crate::{decl_module, parameter_types, traits::Get};
 	use super::*;
 
 	pub trait Trait {
 		type Origin;
 		type Balance;
 		type BlockNumber;
+		type DbWeight: Get<RuntimeDbWeight>;
 	}
 
 	pub struct TraitImpl {}
+
+	parameter_types! {
+		pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
+			read: 100,
+			read_repeat: 10,
+			read_none: 100,
+			write: 1000,
+			write_repeat: 20,
+			write_none: 1000,
+		};
+	}
 
 	impl Trait for TraitImpl {
 		type Origin = u32;
 		type BlockNumber = u32;
 		type Balance = u32;
+		type DbWeight = DbWeight;
 	}
 
 	decl_module! {
@@ -410,13 +473,21 @@ mod tests {
 
 			#[weight = FunctionOf(|_: (&u32, &u32)| 0, DispatchClass::Operational, true)]
 			fn f12(_origin, _a: u32, _eb: u32) { unimplemented!(); }
+
+			#[weight = T::DbWeight::get() * (1, 2, 0, 1, 2, 0)]
+			fn f2(_origin) { unimplemented!(); }
+
 		}
 	}
 
 	#[test]
 	fn weights_are_correct() {
+		assert_eq!(Call::<TraitImpl>::f0().get_dispatch_info().weight, 1000);
 		assert_eq!(Call::<TraitImpl>::f11(10, 20).get_dispatch_info().weight, 120);
 		assert_eq!(Call::<TraitImpl>::f11(10, 20).get_dispatch_info().class, DispatchClass::Normal);
-		assert_eq!(Call::<TraitImpl>::f0().get_dispatch_info().weight, 1000);
+		assert_eq!(Call::<TraitImpl>::f12(10, 20).get_dispatch_info().weight, 0);
+		assert_eq!(Call::<TraitImpl>::f12(10, 20).get_dispatch_info().class, DispatchClass::Operational);
+		assert_eq!(Call::<TraitImpl>::f2().get_dispatch_info().weight, 1160);
+		assert_eq!(Call::<TraitImpl>::f2().get_dispatch_info().class, DispatchClass::Normal);
 	}
 }

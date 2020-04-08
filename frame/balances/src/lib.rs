@@ -433,7 +433,7 @@ decl_module! {
 		///     check that the transfer will not kill the origin account.
 		///
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(800_000)]
+		#[weight = T::DbWeight::get() * (1, 24, 0, 1, 12, 0)]
 		pub fn transfer(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
