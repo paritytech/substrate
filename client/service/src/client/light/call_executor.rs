@@ -241,7 +241,11 @@ pub fn check_execution_proof<Header, E, H>(
 	)
 }
 
-pub fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader: Fn(&Header) -> Header>(
+/// Check remote contextual execution proof using given backend and header factory.
+///
+/// Method is executed using passed header as environment' current block.
+/// Proof should include both environment preparation proof and method execution proof.
+pub fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader>(
 	executor: &E,
 	spawn_handle: Box<dyn CloneableSpawn>,
 	request: &RemoteCallRequest<Header>,
@@ -249,10 +253,11 @@ pub fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader: Fn(&
 	make_next_header: MakeNextHeader,
 ) -> ClientResult<Vec<u8>>
 	where
-		Header: HeaderT,
 		E: CodeExecutor + Clone + 'static,
 		H: Hasher,
+		Header: HeaderT,
 		H::Out: Ord + codec::Codec + 'static,
+		MakeNextHeader: Fn(&Header) -> Header,
 {
 	let local_state_root = request.header.state_root();
 	let root: H::Out = convert_hash(&local_state_root);

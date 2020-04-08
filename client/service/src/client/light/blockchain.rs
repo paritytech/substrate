@@ -17,7 +17,6 @@
 //! Light client blockchain backend. Only stores headers and justifications of recent
 //! blocks. CHT roots are stored for headers of ancient blocks.
 
-use std::future::Future;
 use std::sync::Arc;
 
 use sp_runtime::{Justification, generic::BlockId};
@@ -41,7 +40,7 @@ pub use sc_client_api::{
 	},
 	cht,
 };
-use super::fetcher::{Fetcher, RemoteHeaderRequest};
+use super::fetcher::RemoteHeaderRequest;
 
 /// Light client blockchain.
 pub struct Blockchain<S> {

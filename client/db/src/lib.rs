@@ -47,8 +47,7 @@ use std::io;
 use std::collections::HashMap;
 
 use sc_client_api::{
-	ForkBlocks, UsageInfo, MemoryInfo, BadBlocks, IoInfo, MemorySize, CloneableSpawn,
-	execution_extensions::ExecutionExtensions,
+	UsageInfo, MemoryInfo, IoInfo, MemorySize,
 	backend::{NewBlockState, PrunableStateChangesTrieStorage},
 	leaves::{LeafSet, FinalizationDisplaced},
 };
@@ -61,16 +60,12 @@ use hash_db::Prefix;
 use kvdb::{KeyValueDB, DBTransaction};
 use sp_trie::{MemoryDB, PrefixedMemoryDB, prefixed_key};
 use parking_lot::RwLock;
-use sp_core::{ChangesTrieConfiguration, traits::CodeExecutor};
+use sp_core::ChangesTrieConfiguration;
 use sp_core::storage::{well_known_keys, ChildInfo};
-use sp_runtime::{
-	generic::BlockId, Justification, Storage,
-	BuildStorage,
-};
+use sp_runtime::{generic::BlockId, Justification, Storage};
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, Zero, One, SaturatedConversion, HashFor,
 };
-use sc_executor::RuntimeInfo;
 use sp_state_machine::{
 	DBValue, ChangesTrieTransaction, ChangesTrieCacheAction, UsageInfo as StateUsageInfo,
 	StorageCollection, ChildStorageCollection,
@@ -84,7 +79,6 @@ use crate::storage_cache::{CachingState, SyncingCachingState, SharedCache, new_s
 use crate::stats::StateUsageStats;
 use log::{trace, debug, warn};
 pub use sc_state_db::PruningMode;
-use prometheus_endpoint::Registry;
 
 #[cfg(any(feature = "kvdb-rocksdb", test))]
 pub use bench::BenchmarkingState;

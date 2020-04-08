@@ -74,7 +74,7 @@ use sc_client_api::{
 		ClientInfo, BlockchainEvents, BlockBackend, ProvideUncles, BadBlocks, ForkBlocks,
 		BlockOf,
 	},
-	execution_extensions::{ExecutionExtensions, ExecutionStrategies},
+	execution_extensions::ExecutionExtensions,
 	notifications::{StorageNotifications, StorageEventStream},
 	KeyIterator, CallExecutor, ExecutorProvider, ProofProvider, CloneableSpawn,
 	cht, in_mem,
@@ -87,13 +87,15 @@ use super::{
 	block_rules::{BlockRules, LookupResult as BlockLookupResult},
 };
 
+type NotificationSinks<T> = Mutex<Vec<mpsc::UnboundedSender<T>>>;
+
 /// Substrate Client
 pub struct Client<B, E, Block, RA> where Block: BlockT {
 	backend: Arc<B>,
 	executor: E,
 	storage_notifications: Mutex<StorageNotifications<Block>>,
-	pub import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<BlockImportNotification<Block>>>>,
-	pub finality_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<FinalityNotification<Block>>>>,
+	import_notification_sinks: NotificationSinks<BlockImportNotification<Block>>,
+	finality_notification_sinks: NotificationSinks<FinalityNotification<Block>>,
 	// holds the block hash currently being imported. TODO: replace this with block queue
 	importing_block: RwLock<Option<Block::Hash>>,
 	block_rules: BlockRules<Block>,
@@ -290,6 +292,18 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			execution_extensions,
 			_phantom: Default::default(),
 		})
+	}
+
+	/// returns a reference to the block import notification sinks
+	/// useful for test environments.
+	pub fn import_notification_sinks(&self) -> &NotificationSinks<BlockImportNotification<Block>> {
+		&self.import_notification_sinks
+	}
+
+	/// returns a reference to the finality notification sinks
+	/// useful for test environments.
+	pub fn finality_notification_sinks(&self) -> &NotificationSinks<FinalityNotification<Block>> {
+		&self.finality_notification_sinks
 	}
 
 	/// Get a reference to the state at a given block.

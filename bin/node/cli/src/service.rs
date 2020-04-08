@@ -29,14 +29,7 @@ use sc_service::{
 	AbstractService, ServiceBuilder, config::Configuration, error::{Error as ServiceError},
 };
 use sp_inherents::InherentDataProviders;
-
-use sc_service::{Service, NetworkStatus};
 use sc_client_api::LongestChain;
-use sc_client_db::Backend;
-use sp_runtime::traits::Block as BlockT;
-use node_executor::NativeExecutor;
-use sc_network::NetworkService;
-use sc_offchain::OffchainWorkers;
 
 /// Starts a `ServiceBuilder` for a full service.
 ///
@@ -254,9 +247,6 @@ macro_rules! new_full {
 		new_full!($config, |_, _| {})
 	}}
 }
-
-type ConcreteBlock = node_primitives::Block;
-
 
 /// Builds a new service for a full client.
 pub fn new_full(config: Configuration)

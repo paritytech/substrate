@@ -16,7 +16,7 @@
 
 use parity_scale_codec::{Encode, Decode, Joiner};
 use sc_executor::native_executor_instance;
-use sp_state_machine::{StateMachine, OverlayedChanges, ExecutionStrategy, InMemoryBackend, Layout};
+use sp_state_machine::{StateMachine, OverlayedChanges, ExecutionStrategy, InMemoryBackend};
 use substrate_test_runtime_client::{
 	prelude::*,
 	runtime::{
@@ -39,7 +39,6 @@ use substrate_test_runtime::TestAPI;
 use sp_state_machine::backend::Backend as _;
 use sp_api::ProvideRuntimeApi;
 use sp_core::tasks::executor as tasks_executor;
-use hex_literal::*;
 use sp_core::{H256, ChangesTrieConfiguration, blake2_256};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -48,7 +47,8 @@ use sp_consensus::{
 	BlockStatus, BlockImportParams, ForkChoiceStrategy,
 };
 use sp_storage::StorageKey;
-use sp_runtime::{generic::BlockId, DigestItem, traits::Header as _};
+use sp_trie::{TrieConfiguration, trie_types::Layout};
+use sp_runtime::{generic::BlockId, DigestItem};
 use hex_literal::hex;
 
 mod light;
@@ -146,8 +146,6 @@ fn construct_block(
 	state_root: Hash,
 	txs: Vec<Transfer>,
 ) -> (Vec<u8>, Hash) {
-	use sp_trie::{TrieConfiguration, trie_types::Layout};
-
 	let transactions = txs.into_iter().map(|tx| tx.into_signed_tx()).collect::<Vec<_>>();
 
 	let iter = transactions.iter().map(Encode::encode);
@@ -1765,8 +1763,8 @@ fn cleans_up_closed_notification_sinks_on_block_import() {
 	// after importing a block we should still have 4 notification sinks
 	// (2 import + 2 finality)
 	bake_and_import_block(&mut client, BlockOrigin::Own);
-	assert_eq!(client.import_notification_sinks.lock().len(), 2);
-	assert_eq!(client.finality_notification_sinks.lock().len(), 2);
+	assert_eq!(client.import_notification_sinks().lock().len(), 2);
+	assert_eq!(client.finality_notification_sinks().lock().len(), 2);
 
 	// if we drop one import notification receiver and one finality
 	// notification receiver
@@ -1775,8 +1773,8 @@ fn cleans_up_closed_notification_sinks_on_block_import() {
 
 	// the sinks should be cleaned up after block import
 	bake_and_import_block(&mut client, BlockOrigin::Own);
-	assert_eq!(client.import_notification_sinks.lock().len(), 1);
-	assert_eq!(client.finality_notification_sinks.lock().len(), 1);
+	assert_eq!(client.import_notification_sinks().lock().len(), 1);
+	assert_eq!(client.finality_notification_sinks().lock().len(), 1);
 
 	// the same thing should happen if block import happens during initial
 	// sync
@@ -1784,7 +1782,7 @@ fn cleans_up_closed_notification_sinks_on_block_import() {
 	drop(finality_notif1);
 
 	bake_and_import_block(&mut client, BlockOrigin::NetworkInitialSync);
-	assert_eq!(client.import_notification_sinks.lock().len(), 0);
-	assert_eq!(client.finality_notification_sinks.lock().len(), 0);
+	assert_eq!(client.import_notification_sinks().lock().len(), 0);
+	assert_eq!(client.finality_notification_sinks().lock().len(), 0);
 }
 
