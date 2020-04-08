@@ -106,6 +106,13 @@ impl BatchVerifier {
 
 		let pending = std::mem::replace(&mut self.pending_tasks, vec![]);
 
+		log::trace!(
+			target: "runtime",
+			"Batch-verification: {} pending tasks, {} sr25519 signatures",
+			pending.len(),
+			self.sr25519_items.len(),
+		);
+
 		if pending.len() > 0 {
 			let pair = Arc::new((Mutex::new(()), Condvar::new()));
 			let pair_clone = pair.clone();
