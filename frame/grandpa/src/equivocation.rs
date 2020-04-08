@@ -33,11 +33,10 @@
 use sp_std::prelude::*;
 
 use codec::{self as codec, Decode, Encode};
-use frame_support::traits::KeyOwnerProofSystem;
 use frame_system::offchain::SubmitSignedTransaction;
-use sp_application_crypto::{key_types::GRANDPA, RuntimeAppPublic};
-use sp_finality_grandpa::{AuthorityId, EquivocationProof, RoundNumber, SetId};
-use sp_runtime::{traits::IdentifyAccount, DispatchResult, KeyTypeId, Perbill};
+use sp_application_crypto::RuntimeAppPublic;
+use sp_finality_grandpa::{EquivocationProof, RoundNumber, SetId};
+use sp_runtime::{traits::IdentifyAccount, DispatchResult, Perbill};
 use sp_staking::{
 	offence::{Kind, Offence, OffenceError, ReportOffence},
 	SessionIndex,
@@ -50,19 +49,8 @@ use sp_staking::{
 /// report, and also for creating and submitting equivocation report extrinsics
 /// (useful only in offchain context).
 pub trait HandleEquivocation<T: super::Trait> {
-	/// The proof of key ownership.
-	type KeyOwnerProof: Decode + Encode + GetSessionNumber + GetValidatorCount;
-	/// The identification of a key owner.
-	type KeyOwnerIdentification;
 	/// The offence type used for reporting offences on valid equivocation reports.
-	type Offence: GrandpaOffence<Self::KeyOwnerIdentification>;
-
-	/// Verifies the key ownership proof and the equivocation proof against the
-	/// offending key owner.
-	fn check_proof(
-		equivocation_proof: &EquivocationProof<T::Hash, T::BlockNumber>,
-		key_owner_proof: Self::KeyOwnerProof,
-	) -> Option<Self::KeyOwnerIdentification>;
+	type Offence: GrandpaOffence<T::KeyOwnerIdentification>;
 
 	/// Report an offence proved by the given reporters.
 	fn report_offence(
@@ -73,32 +61,23 @@ pub trait HandleEquivocation<T: super::Trait> {
 	/// Create and dispatch an equivocation report extrinsic.
 	fn submit_equivocation_report(
 		equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
-		key_owner_proof: Self::KeyOwnerProof,
+		key_owner_proof: T::KeyOwnerProof,
 	) -> DispatchResult;
 }
 
 impl<T: super::Trait> HandleEquivocation<T> for () {
-	type KeyOwnerProof = ();
-	type KeyOwnerIdentification = ();
-	type Offence = GrandpaEquivocationOffence<Self::KeyOwnerIdentification>;
-
-	fn check_proof(
-		_equivocation_proof: &EquivocationProof<T::Hash, T::BlockNumber>,
-		_key_owner_proof: Self::KeyOwnerProof,
-	) -> Option<Self::KeyOwnerIdentification> {
-		None
-	}
+	type Offence = GrandpaEquivocationOffence<T::KeyOwnerIdentification>;
 
 	fn report_offence(
 		_reporters: Vec<T::AccountId>,
-		_offence: GrandpaEquivocationOffence<Self::KeyOwnerIdentification>,
+		_offence: GrandpaEquivocationOffence<T::KeyOwnerIdentification>,
 	) -> Result<(), OffenceError> {
 		Ok(())
 	}
 
 	fn submit_equivocation_report(
 		_equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
-		_key_owner_proof: Self::KeyOwnerProof,
+		_key_owner_proof: T::KeyOwnerProof,
 	) -> DispatchResult {
 		Ok(())
 	}
@@ -115,13 +94,13 @@ pub trait GetValidatorCount {
 	fn validator_count(&self) -> sp_session::ValidatorCount;
 }
 
-impl GetSessionNumber for () {
+impl GetSessionNumber for frame_support::Void {
 	fn session(&self) -> SessionIndex {
 		Default::default()
 	}
 }
 
-impl GetValidatorCount for () {
+impl GetValidatorCount for frame_support::Void {
 	fn validator_count(&self) -> sp_session::ValidatorCount {
 		Default::default()
 	}
@@ -143,19 +122,11 @@ impl GetValidatorCount for sp_session::MembershipProof {
 /// using existing subsystems that are part of frame (type bounds described
 /// below) and will dispatch to them directly, it's only purpose is to wire all
 /// subsystems together.
-pub struct EquivocationHandler<
-	P,
-	S,
-	R,
-	K,
-	O = GrandpaEquivocationOffence<
-		<P as KeyOwnerProofSystem<(KeyTypeId, AuthorityId)>>::IdentificationTuple,
-	>,
-> {
-	_phantom: sp_std::marker::PhantomData<(P, S, O, R, K)>,
+pub struct EquivocationHandler<I, S, R, K, O = GrandpaEquivocationOffence<I>> {
+	_phantom: sp_std::marker::PhantomData<(I, S, O, R, K)>,
 }
 
-impl<P, S, R, K, O> Default for EquivocationHandler<P, S, R, K, O> {
+impl<I, S, R, K, O> Default for EquivocationHandler<I, S, R, K, O> {
 	fn default() -> Self {
 		Self {
 			_phantom: Default::default(),
@@ -163,42 +134,23 @@ impl<P, S, R, K, O> Default for EquivocationHandler<P, S, R, K, O> {
 	}
 }
 
-impl<T, P, S, R, K, O> HandleEquivocation<T> for EquivocationHandler<P, S, R, K, O>
+impl<T, S, R, K, O> HandleEquivocation<T>
+	for EquivocationHandler<T::KeyOwnerIdentification, S, R, K, O>
 where
-	T: super::Trait<HandleEquivocation = Self>,
-	// A system for proving ownership of keys, i.e. that a given key was part
-	// of a validator set, needed for validating equivocation reports. The
-	// session index and validator count of the session are part of the proof
-	// as extra data.
-	P: KeyOwnerProofSystem<(KeyTypeId, AuthorityId)>,
-	P::Proof: GetSessionNumber + GetValidatorCount,
+	T: super::Trait,
 	// A transaction submitter. Used for submitting equivocation reports.
 	S: SubmitSignedTransaction<T, <T as super::Trait>::Call>,
 	// The offence type that should be used when reporting.
-	O: GrandpaOffence<P::IdentificationTuple>,
+	O: GrandpaOffence<T::KeyOwnerIdentification>,
 	// A system for reporting offences after valid equivocation reports are
 	// processed.
-	R: ReportOffence<T::AccountId, P::IdentificationTuple, O>,
+	R: ReportOffence<T::AccountId, T::KeyOwnerIdentification, O>,
 	// Key type to use when signing equivocation report transactions, must be
 	// convertible to and from an account id since that's what we need to use
 	// to sign transactions.
 	K: RuntimeAppPublic + IdentifyAccount<AccountId = T::AccountId>,
 {
-	type KeyOwnerProof = P::Proof;
-	type KeyOwnerIdentification = P::IdentificationTuple;
 	type Offence = O;
-
-	fn check_proof(
-		equivocation_proof: &EquivocationProof<T::Hash, T::BlockNumber>,
-		key_owner_proof: Self::KeyOwnerProof,
-	) -> Option<Self::KeyOwnerIdentification> {
-		let offender = P::check_proof(
-			(GRANDPA, equivocation_proof.offender().clone()),
-			key_owner_proof,
-		)?;
-
-		Some(offender)
-	}
 
 	fn report_offence(reporters: Vec<T::AccountId>, offence: O) -> Result<(), OffenceError> {
 		R::report_offence(reporters, offence)
@@ -206,10 +158,9 @@ where
 
 	fn submit_equivocation_report(
 		equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
-		key_owner_proof: Self::KeyOwnerProof,
+		key_owner_proof: T::KeyOwnerProof,
 	) -> DispatchResult {
-		let call =
-			super::Call::report_equivocation(equivocation_proof.clone(), key_owner_proof.encode());
+		let call = super::Call::report_equivocation(equivocation_proof, key_owner_proof);
 
 		let res = S::submit_signed_from(call, K::all().into_iter().map(|k| k.into_account()));
 

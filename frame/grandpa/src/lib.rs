@@ -39,13 +39,14 @@ use fg_primitives::{
 	GRANDPA_ENGINE_ID,
 };
 use frame_support::{
-	decl_error, decl_event, decl_module, decl_storage, storage, weights::SimpleDispatchInfo,
+	decl_error, decl_event, decl_module, decl_storage, storage, traits::KeyOwnerProofSystem,
+	weights::SimpleDispatchInfo, Parameter,
 };
 use frame_system::{self as system, ensure_signed, DigestOf};
 use sp_runtime::{
 	generic::{DigestItem, OpaqueDigestItemId},
 	traits::Zero,
-	DispatchResult,
+	DispatchResult, KeyTypeId,
 };
 use sp_staking::SessionIndex;
 
@@ -54,7 +55,8 @@ mod mock;
 mod tests;
 
 pub use equivocation::{
-	EquivocationHandler, GrandpaEquivocationOffence, GrandpaTimeSlot, GrandpaOffence
+	EquivocationHandler, GetSessionNumber, GetValidatorCount, GrandpaOffence, GrandpaTimeSlot,
+	HandleEquivocation,
 };
 
 pub trait Trait: frame_system::Trait {
@@ -64,9 +66,26 @@ pub trait Trait: frame_system::Trait {
 	/// The function call.
 	type Call: From<Call<Self>>;
 
-	/// The equivocation handling subsystem, equivocation report validation and
-	/// offence reporting will be defined based on this type.
-	type HandleEquivocation: equivocation::HandleEquivocation<Self>;
+	/// The proof of key ownership, used for validating equivocation reports.
+	/// The proof must include the session index and validator count of the
+	/// session at which the equivocation occurred.
+	type KeyOwnerProof: Parameter + GetSessionNumber + GetValidatorCount;
+
+	/// The identification of a key owner, used when reporting equivocations.
+	type KeyOwnerIdentification: Parameter;
+
+	/// A system for proving ownership of keys, i.e. that a given key was part
+	/// of a validator set, needed for validating equivocation reports.
+	type KeyOwnerProofSystem: KeyOwnerProofSystem<
+		(KeyTypeId, AuthorityId),
+		Proof = Self::KeyOwnerProof,
+		IdentificationTuple = Self::KeyOwnerIdentification,
+	>;
+
+	/// The equivocation handling subsystem, defines methods to report an
+	/// offence (after the equivocation has been validated) and for submitting a
+	/// transaction to report an equivocation (from an offchain context).
+	type HandleEquivocation: HandleEquivocation<Self>;
 }
 
 /// A stored pending change, old format.
@@ -216,20 +235,9 @@ decl_module! {
 		fn report_equivocation(
 			origin,
 			equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
-			// key_owner_proof: <T::HandleEquivocation as equivocation::HandleEquivocation<T>>::KeyOwnerProof,
-			key_owner_proof: Vec<u8>,
+			key_owner_proof: T::KeyOwnerProof,
 		) {
-			use equivocation::{
-				GetSessionNumber, GetValidatorCount, GrandpaOffence, HandleEquivocation,
-			};
-
 			let reporter_id = ensure_signed(origin)?;
-
-			// FIXME: this is a hack needed because the typed argument version above fails to
-			// compile (due to missing codec implementation)
-			let key_owner_proof: <T::HandleEquivocation as HandleEquivocation<T>>::KeyOwnerProof =
-				Decode::decode(&mut &key_owner_proof[..])
-					.map_err(|_| "Key owner proof decoding failed.")?;
 
 			let (session_index, validator_set_count) = (
 				key_owner_proof.session(),
@@ -239,8 +247,8 @@ decl_module! {
 			// validate the membership proof and extract session index and
 			// validator set count of the session that we're proving membership of
 			let offender =
-				T::HandleEquivocation::check_proof(
-					&equivocation_proof,
+				T::KeyOwnerProofSystem::check_proof(
+					(fg_primitives::KEY_TYPE, equivocation_proof.offender().clone()),
 					key_owner_proof,
 				).ok_or("Invalid/outdated key ownership proof.")?;
 
@@ -283,7 +291,7 @@ decl_module! {
 			// report to the offences module rewarding the sender.
 			T::HandleEquivocation::report_offence(
 				vec![reporter_id],
-				<T::HandleEquivocation as equivocation::HandleEquivocation<T>>::Offence::new(
+				<T::HandleEquivocation as HandleEquivocation<T>>::Offence::new(
 					session_index,
 					validator_set_count,
 					offender,
@@ -470,10 +478,8 @@ impl<T: Trait> Module<T> {
 	/// Only useful in an offchain context.
 	pub fn submit_report_equivocation_extrinsic(
 		equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
-		key_owner_proof: <T::HandleEquivocation as equivocation::HandleEquivocation<T>>::KeyOwnerProof,
+		key_owner_proof: T::KeyOwnerProof,
 	) -> Option<()> {
-		use equivocation::HandleEquivocation;
-
 		T::HandleEquivocation::submit_equivocation_report(equivocation_proof, key_owner_proof)
 			.ok()?;
 

@@ -9,7 +9,7 @@
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 use sp_std::prelude::*;
-use sp_core::OpaqueMetadata;
+use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_runtime::{
 	ApplyExtrinsicResult, generic, create_runtime_str, impl_opaque_keys, MultiSignature,
 	transaction_validity::{TransactionValidity, TransactionSource},
@@ -33,7 +33,7 @@ pub use balances::Call as BalancesCall;
 pub use sp_runtime::{Permill, Perbill};
 pub use frame_support::{
 	StorageValue, construct_runtime, parameter_types,
-	traits::Randomness,
+	traits::{KeyOwnerProofSystem, Randomness},
 	weights::Weight,
 };
 
@@ -176,6 +176,17 @@ impl aura::Trait for Runtime {
 impl grandpa::Trait for Runtime {
 	type Event = Event;
 	type Call = Call;
+
+	type KeyOwnerProofSystem = ();
+
+	type KeyOwnerProof =
+		<Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, Vec<u8>)>>::Proof;
+
+	type KeyOwnerIdentification = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
+		KeyTypeId,
+		Vec<u8>,
+	)>>::IdentificationTuple;
+
 	type HandleEquivocation = ();
 }
 
@@ -351,7 +362,7 @@ impl_runtime_apis! {
 
 		fn decode_session_keys(
 			encoded: Vec<u8>,
-		) -> Option<Vec<(Vec<u8>, sp_core::crypto::KeyTypeId)>> {
+		) -> Option<Vec<(Vec<u8>, KeyTypeId)>> {
 			opaque::SessionKeys::decode_into_raw_public_keys(&encoded)
 		}
 	}
@@ -374,6 +385,9 @@ impl_runtime_apis! {
 		fn generate_key_ownership_proof(
 			_authority_key: fg_primitives::AuthorityId,
 		) -> Option<Vec<u8>> {
+			// NOTE: this is the only implementation possible since we've
+			// defined our key owner proof type as a bottom type (i.e. a type
+			// with no values).
 			None
 		}
 	}

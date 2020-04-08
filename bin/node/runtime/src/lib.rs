@@ -24,9 +24,13 @@ use sp_std::prelude::*;
 use frame_support::{
 	construct_runtime, parameter_types, debug,
 	weights::Weight,
-	traits::{Currency, Randomness, OnUnbalanced, Imbalance},
+	traits::{Currency, Imbalance, KeyOwnerProofSystem, OnUnbalanced, Randomness},
 };
-use sp_core::u32_trait::{_1, _2, _3, _4};
+use sp_core::{
+	crypto::KeyTypeId,
+	u32_trait::{_1, _2, _3, _4},
+	OpaqueMetadata,
+};
 pub use node_primitives::{AccountId, Signature};
 use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
 use sp_api::impl_runtime_apis;
@@ -43,7 +47,6 @@ use sp_runtime::traits::{
 use sp_version::RuntimeVersion;
 #[cfg(any(feature = "std", test))]
 use sp_version::NativeVersion;
-use sp_core::OpaqueMetadata;
 use pallet_grandpa::AuthorityList as GrandpaAuthorityList;
 use pallet_grandpa::fg_primitives;
 use pallet_im_online::sr25519::{AuthorityId as ImOnlineId};
@@ -563,8 +566,19 @@ impl pallet_authority_discovery::Trait for Runtime {}
 impl pallet_grandpa::Trait for Runtime {
 	type Event = Event;
 	type Call = Call;
+
+	type KeyOwnerProofSystem = Historical;
+
+	type KeyOwnerProof =
+		<Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, Vec<u8>)>>::Proof;
+
+	type KeyOwnerIdentification = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
+		KeyTypeId,
+		Vec<u8>,
+	)>>::IdentificationTuple;
+
 	type HandleEquivocation = pallet_grandpa::EquivocationHandler<
-		Historical,
+		Self::KeyOwnerIdentification,
 		TransactionSubmitterOf<node_primitives::report::ReporterId>,
 		Offences,
 		node_primitives::report::ReporterId,
@@ -808,7 +822,6 @@ impl_runtime_apis! {
 			session_key: fg_primitives::AuthorityId,
 		) -> Option<Vec<u8>> {
 			use codec::Encode;
-			use frame_support::traits::KeyOwnerProofSystem;
 
 			Historical::prove((fg_primitives::KEY_TYPE, session_key))
 				.map(|p| p.encode())
@@ -901,7 +914,7 @@ impl_runtime_apis! {
 
 		fn decode_session_keys(
 			encoded: Vec<u8>,
-		) -> Option<Vec<(Vec<u8>, sp_core::crypto::KeyTypeId)>> {
+		) -> Option<Vec<(Vec<u8>, KeyTypeId)>> {
 			SessionKeys::decode_into_raw_public_keys(&encoded)
 		}
 	}
