@@ -106,8 +106,10 @@ macro_rules! new_full_start {
 						babe_config: sc_consensus_babe::BabeLink::config(babe_link).clone(),
 						shared_epoch_changes: sc_consensus_babe::BabeLink::epoch_changes(babe_link).clone()
 					},
-					shared_voter_state: Arc::clone(&shared_voter_state),
-					shared_authority_set: shared_authority_set.clone(),
+					grandpa: node_rpc::GrandpaDeps {
+						shared_voter_state: Arc::clone(&shared_voter_state),
+						shared_authority_set: shared_authority_set.clone(),
+					}
 				};
 				Ok(node_rpc::create_full(deps))
 			})?;

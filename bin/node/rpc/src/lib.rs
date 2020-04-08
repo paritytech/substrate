@@ -67,6 +67,14 @@ pub struct BabeDeps {
 	pub keystore: KeyStorePtr,
 }
 
+/// Extra dependencies for GRANDPA
+pub struct GrandpaDeps {
+	/// Voting round info.
+	pub shared_voter_state: SharedVoterState<AuthorityId>,
+	/// Authority set info.
+	pub shared_authority_set: SharedAuthoritySet<Hash, BlockNumber>,
+}
+
 /// Full client dependencies.
 pub struct FullDeps<C, P, SC> {
 	/// The client instance to use.
@@ -77,10 +85,8 @@ pub struct FullDeps<C, P, SC> {
 	pub select_chain: SC,
 	/// BABE specific dependencies.
 	pub babe: BabeDeps,
-	/// Used to query the voter state in GRANDPA.
-	pub shared_voter_state: SharedVoterState<AuthorityId>,
-	/// WIP: add doc
-	pub shared_authority_set: SharedAuthoritySet<Hash, BlockNumber>,
+	/// GRANDPA specific dependencies.
+	pub grandpa: GrandpaDeps,
 }
 
 /// Instantiate all Full RPC extensions.
@@ -109,14 +115,17 @@ pub fn create_full<C, P, M, SC>(
 		pool,
 		select_chain,
 		babe,
-		shared_voter_state,
-		shared_authority_set,
+		grandpa,
 	} = deps;
 	let BabeDeps {
 		keystore,
 		babe_config,
 		shared_epoch_changes,
 	} = babe;
+	let GrandpaDeps {
+		shared_voter_state,
+		shared_authority_set,
+	} = grandpa;
 
 	io.extend_with(
 		SystemApi::to_delegate(FullSystem::new(client.clone(), pool))
