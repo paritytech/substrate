@@ -88,7 +88,7 @@ macro_rules! new_full_start {
 				import_setup = Some((block_import, grandpa_link, babe_link));
 				Ok(import_queue)
 			})?
-			.with_rpc_extensions(|builder| -> Result<RpcExtension, _> {
+			.with_rpc_extensions(|builder| -> std::result::Result<RpcExtension, _> {
 				let babe_link = import_setup.as_ref().map(|s| &s.2)
 					.expect("BabeLink is present for full services or set up failed; qed.");
 				let deps = node_rpc::FullDeps {
@@ -127,7 +127,7 @@ macro_rules! new_full {
 		) = (
 			$config.role.clone(),
 			$config.force_authoring,
-			$config.name.clone(),
+			$config.network.node_name.clone(),
 			$config.disable_grandpa,
 		);
 

@@ -14,16 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use structopt::StructOpt;
-use sc_service::{Configuration, config::DatabaseConfig};
-
-use crate::error;
 use crate::arg_enums::{
-	WasmExecutionMethod, TracingReceiver, ExecutionStrategy, DEFAULT_EXECUTION_BLOCK_CONSTRUCTION,
+	ExecutionStrategy, TracingReceiver, WasmExecutionMethod, DEFAULT_EXECUTION_BLOCK_CONSTRUCTION,
 	DEFAULT_EXECUTION_IMPORT_BLOCK, DEFAULT_EXECUTION_OFFCHAIN_WORKER, DEFAULT_EXECUTION_OTHER,
-	DEFAULT_EXECUTION_SYNCING
+	DEFAULT_EXECUTION_SYNCING,
 };
 use crate::params::PruningParams;
+use crate::Result;
+use sc_client_api::execution_extensions::ExecutionStrategies;
+use sc_service::{PruningMode, Role};
+use structopt::StructOpt;
 
 /// Parameters for block import.
 #[derive(Debug, StructOpt, Clone)]
@@ -52,11 +52,11 @@ pub struct ImportParams {
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
-	pub execution_strategies: ExecutionStrategies,
+	pub execution_strategies: ExecutionStrategiesParams,
 
 	/// Limit the memory the database cache can use.
-	#[structopt(long = "db-cache", value_name = "MiB", default_value = "128")]
-	pub database_cache_size: u32,
+	#[structopt(long = "db-cache", value_name = "MiB")]
+	pub database_cache_size: Option<usize>,
 
 	/// Specify the state cache size.
 	#[structopt(long = "state-cache-size", value_name = "Bytes", default_value = "67108864")]
@@ -78,25 +78,31 @@ pub struct ImportParams {
 }
 
 impl ImportParams {
-	/// Put block import CLI params into `config` object.
-	pub fn update_config(
+	/// Receiver to process tracing messages.
+	pub fn tracing_receiver(&self) -> sc_service::TracingReceiver {
+		self.tracing_receiver.clone().into()
+	}
+
+	/// Comma separated list of targets for tracing.
+	pub fn tracing_targets(&self) -> Option<String> {
+		self.tracing_targets.clone()
+	}
+
+	/// Specify the state cache size.
+	pub fn state_cache_size(&self) -> usize {
+		self.state_cache_size
+	}
+
+	/// Get the WASM execution method from the parameters
+	pub fn wasm_method(&self) -> sc_service::config::WasmExecutionMethod {
+		self.wasm_method.into()
+	}
+
+	/// Get execution strategies for the parameters
+	pub fn execution_strategies(
 		&self,
-		mut config: &mut Configuration,
-		role: &sc_service::Role,
 		is_dev: bool,
-	) -> error::Result<()> {
-		use sc_client_api::execution_extensions::ExecutionStrategies;
-
-		if let Some(DatabaseConfig::Path { ref mut cache_size, .. }) = config.database {
-			*cache_size = Some(self.database_cache_size);
-		}
-
-		config.state_cache_size = self.state_cache_size;
-
-		self.pruning_params.update_config(&mut config, role, self.unsafe_pruning)?;
-
-		config.wasm_method = self.wasm_method.into();
-
+	) -> ExecutionStrategies {
 		let exec = &self.execution_strategies;
 		let exec_all_or = |strat: ExecutionStrategy, default: ExecutionStrategy| {
 			exec.execution.unwrap_or(if strat == default && is_dev {
@@ -106,7 +112,7 @@ impl ImportParams {
 			}).into()
 		};
 
-		config.execution_strategies = ExecutionStrategies {
+		ExecutionStrategies {
 			syncing: exec_all_or(exec.execution_syncing, DEFAULT_EXECUTION_SYNCING),
 			importing: exec_all_or(exec.execution_import_block, DEFAULT_EXECUTION_IMPORT_BLOCK),
 			block_construction:
@@ -114,15 +120,23 @@ impl ImportParams {
 			offchain_worker:
 				exec_all_or(exec.execution_offchain_worker, DEFAULT_EXECUTION_OFFCHAIN_WORKER),
 			other: exec_all_or(exec.execution_other, DEFAULT_EXECUTION_OTHER),
-		};
+		}
+	}
 
-		Ok(())
+	/// Get the pruning mode from the parameters
+	pub fn pruning(&self, unsafe_pruning: bool, role: &Role) -> Result<PruningMode> {
+		self.pruning_params.pruning(unsafe_pruning, role)
+	}
+
+	/// Limit the memory the database cache can use.
+	pub fn database_cache_size(&self) -> Option<usize> {
+		self.database_cache_size
 	}
 }
 
 /// Execution strategies parameters.
 #[derive(Debug, StructOpt, Clone)]
-pub struct ExecutionStrategies {
+pub struct ExecutionStrategiesParams {
 	/// The means of execution used when calling into the runtime while syncing blocks.
 	#[structopt(
 		long = "execution-syncing",

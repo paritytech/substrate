@@ -2,7 +2,7 @@
 name = "node-cli"
 version = "2.0.0-alpha.5"
 authors = ["Parity Technologies <admin@parity.io>"]
-description = "Substrate node implementation in Rust."
+description = "Generic Substrate node implementation in Rust."
 build = "build.rs"
 edition = "2018"
 license = "GPL-3.0"
@@ -116,22 +116,20 @@ tempfile = "3.1.0"
 assert_cmd = "1.0"
 nix = "0.17"
 serde_json = "1.0"
+regex = "1"
+platforms = "0.2.1"
 
 [build-dependencies]
-build-script-utils = { version = "2.0.0-alpha.5", package = "substrate-build-script-utils", path = "../../../utils/build-script-utils" }
 structopt = { version = "0.3.8", optional = true }
 node-transaction-factory = { version = "0.8.0-alpha.5", optional = true, path = "../transaction-factory" }
 node-inspect = { version = "0.8.0-alpha.5", optional = true, path = "../inspect" }
 frame-benchmarking-cli = { version = "2.0.0-alpha.5", optional = true, path = "../../../utils/frame/benchmarking-cli" }
+substrate-build-script-utils = { version = "2.0.0-alpha.5", optional = true, path = "../../../utils/build-script-utils" }
 
 [build-dependencies.sc-cli]
 version = "0.8.0-alpha.5"
 package = "sc-cli"
 path = "../../../client/cli"
-optional = true
-
-[build-dependencies.vergen]
-version = "3.0.4"
 optional = true
 
 [features]
@@ -149,7 +147,7 @@ cli = [
 	"frame-benchmarking-cli",
 	"sc-service/rocksdb",
 	"structopt",
-	"vergen",
+	"substrate-build-script-utils",
 ]
 runtime-benchmarks = [ "node-runtime/runtime-benchmarks" ]
 
