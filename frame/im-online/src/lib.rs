@@ -247,6 +247,12 @@ pub trait Trait: frame_system::Trait + pallet_session::historical::Trait {
 			IdentificationTuple<Self>,
 			UnresponsivenessOffence<IdentificationTuple<Self>>,
 		>;
+
+	/// A configuration for base priority of unsigned transactions.
+	///
+	/// This is exposed so that it can be tuned for particular runtime, when
+	/// multiple pallets send unsigned transactions.
+	type UnsignedPriority: Get<TransactionPriority>;
 }
 
 decl_event!(
@@ -658,13 +664,14 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 				return InvalidTransaction::BadProof.into();
 			}
 
-			Ok(ValidTransaction {
-				priority: TransactionPriority::max_value(),
-				requires: vec![],
-				provides: vec![(current_session, authority_id).encode()],
-				longevity: TryInto::<u64>::try_into(T::SessionDuration::get() / 2.into()).unwrap_or(64_u64),
-				propagate: true,
-			})
+			ValidTransaction::with_tag_prefix("ImOnline")
+				.priority(T::UnsignedPriority::get())
+				.and_provides((current_session, authority_id))
+				.longevity(TryInto::<u64>::try_into(
+					T::SessionDuration::get() / 2.into()
+				).unwrap_or(64_u64))
+				.propagate(true)
+				.build()
 		} else {
 			InvalidTransaction::Call.into()
 		}
