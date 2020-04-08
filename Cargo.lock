@@ -2300,9 +2300,9 @@ checksum = "141340095b15ed7491bd3d4ced9d20cebfb826174b6bb03386381f62b01e3d77"
 
 [[package]]
 name = "intervalier"
-version = "0.3.1"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14200459dc2319eb13708aed1c1efb8307e0e0e801e7282476939492e1492631"
+checksum = "64fa110ec7b8f493f416eed552740d10e7030ad5f63b2308f82c9608ec2df275"
 dependencies = [
  "futures 0.3.4",
  "futures-timer 2.0.2",
