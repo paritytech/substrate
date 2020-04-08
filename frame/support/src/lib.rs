@@ -216,9 +216,11 @@ macro_rules! assert_ok {
 	}
 }
 
+use codec::{Decode, Encode};
+
 /// The void type - it cannot exist.
 // Oh rust, you crack me up...
-#[derive(Clone, Eq, PartialEq, RuntimeDebug)]
+#[derive(Clone, Decode, Encode, Eq, PartialEq, RuntimeDebug)]
 pub enum Void {}
 
 #[cfg(feature = "std")]
