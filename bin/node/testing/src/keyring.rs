@@ -76,6 +76,7 @@ pub fn signed_extra(nonce: Index, extra_fee: Balance) -> SignedExtra {
 		pallet_transaction_payment::ChargeTransactionPayment::from(extra_fee),
 		Default::default(),
 		Default::default(),
+		Default::default(),
 	)
 }
 

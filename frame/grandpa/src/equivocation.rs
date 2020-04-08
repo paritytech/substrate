@@ -52,6 +52,12 @@ use sp_staking::{
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct ValidateEquivocationReport<T>(sp_std::marker::PhantomData<T>);
 
+impl<T> Default for ValidateEquivocationReport<T> {
+	fn default() -> ValidateEquivocationReport<T> {
+		ValidateEquivocationReport(Default::default())
+	}
+}
+
 impl<T> sp_std::fmt::Debug for ValidateEquivocationReport<T> {
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		write!(f, "ValidateEquivocationReport<T>")
