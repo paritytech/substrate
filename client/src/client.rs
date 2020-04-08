@@ -95,6 +95,7 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	storage_notifications: Mutex<StorageNotifications<Block>>,
 	import_notification_sinks: Mutex<Vec<TracingUnboundedSender<BlockImportNotification<Block>>>>,
 	finality_notification_sinks: Mutex<Vec<TracingUnboundedSender<FinalityNotification<Block>>>>,
+	justification_notification_sinks: Mutex<Vec<TracingUnboundedSender<JustificationNotification<Block>>>>,
 	// holds the block hash currently being imported. TODO: replace this with block queue
 	importing_block: RwLock<Option<Block::Hash>>,
 	block_rules: BlockRules<Block>,
@@ -1774,6 +1775,12 @@ where
 	fn finality_notification_stream(&self) -> FinalityNotifications<Block> {
 		let (sink, stream) = tracing_unbounded("mpsc_finality_notification_stream");
 		self.finality_notification_sinks.lock().push(sink);
+		stream
+	}
+
+	fn justification_notification_stream(&self) -> JustificationNotifications<Block> {
+		let (sink, stream) = tracing_unbounded("mpsc_justification_notification_stream");
+		self.justification_notification_sinks.lock().push(sink);
 		stream
 	}
 

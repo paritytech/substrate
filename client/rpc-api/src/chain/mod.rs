@@ -109,4 +109,24 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 		metadata: Option<Self::Metadata>,
 		id: SubscriptionId,
 	) -> RpcResult<bool>;
+
+	/// Subscribe to finality events.
+	#[pubsub(
+		subscription = "grandpa_finality",
+		subscribe,
+		name = "grandpa_subscribeToFinality",
+	)]
+	fn subscribe_finality(&self, metadata: Self::Metadata, subscriber: Subscriber<Header>);
+
+	/// Unsubscribe to finality events.
+	#[pubsub(
+		subscription = "grandpa_finality",
+		unsubscribe,
+		name = "grandpa_subscribeToFinality",
+	)]
+	fn unsubscribe_finality(
+		&self,
+		metadata: Option<Self::Metadata>,
+		id: SubscriptionId,
+	) -> RpcResult<bool>;
 }

@@ -36,6 +36,9 @@ pub type ImportNotifications<Block> = TracingUnboundedReceiver<BlockImportNotifi
 /// A stream of block finality notifications.
 pub type FinalityNotifications<Block> = TracingUnboundedReceiver<FinalityNotification<Block>>;
 
+/// A stream of Grandpa Justification notifications.
+pub type JustificationNotifications<Block> = TracingUnboundedReceiver<JustificationNotification<Block>>;
+
 /// Expected hashes of blocks at given heights.
 ///
 /// This may be used as chain spec extension to set trusted checkpoints, i.e.
@@ -245,4 +248,13 @@ pub struct FinalityNotification<Block: BlockT> {
 	pub hash: Block::Hash,
 	/// Imported block header.
 	pub header: Block::Header,
+}
+
+/// Justification for a finalized block.
+#[derive(Clone, Debug)]
+pub struct JustificationNotification<Block: BlockT> {
+	/// Highest finalized block header
+	pub header: Block::Header,
+
+	// Should contain a GrandpaJustification
 }

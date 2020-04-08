@@ -173,6 +173,58 @@ trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
 	) -> RpcResult<bool> {
 		Ok(self.subscriptions().cancel(id))
 	}
+
+	/// Subscribe to finality events.
+	fn subscribe_finality(
+		&self,
+		metadata: crate::metadata::Metadata,
+		subscriber: Subscriber<Block::Header>
+	) {
+		let block_stream = match self.client().finality_notification_stream() {
+			Ok(stream) => stream,
+			Err(e) => {
+				todo!();
+			}
+		};
+
+		let justification_stream = match self.client().justification_notification_stream() {
+			Ok(stream) => stream,
+			Err(e) => {
+				todo!();
+			}
+		};
+
+		self.subscriptions().add(subscriber, |sink|{
+			let header = self.client().header(BlockId::Hash(self.client().info().finalized_hash))
+				.map_err(client_err)
+				.and_then(|header| {
+					header.ok_or_else(|| "Best header missing.".to_owned().into())
+				})
+				.map_err(Into::into);
+
+			// How do I know that the right header is matched to the right justification?
+			// Should we be doing any filtering here?
+			// Probably depends on what we end up getting from the justification_stream
+			let stream = block_stream.zip(justification_stream);
+
+			// stream::iter_result(vec![Ok(version)])
+			// .chain(stream)
+			sink
+				.sink_map_err(|e| warn!("Error sending notifications: {:?}", e))
+				.send_all(stream)
+				// we ignore the resulting Stream (if the first stream is over we are unsubscribed)
+				.map(|_| ())
+		});
+	}
+
+	/// Unsubscribe to finality events.
+	fn unsubscribe_finality(
+		&self,
+		metadata: Option<crate::metadata::Metadata>,
+		id: SubscriptionId,
+	) -> RpcResult<bool> {
+		Ok(self.Subscriptions.cancel(id))
+	}
 }
 
 /// Create new state API that works on full node.
@@ -274,6 +326,15 @@ impl<Block, Client> ChainApi<NumberFor<Block>, Block::Hash, Block::Header, Signe
 
 	fn unsubscribe_finalized_heads(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool> {
 		self.backend.unsubscribe_finalized_heads(metadata, id)
+	}
+
+	// TODO: Figure out what `T` should be for `Subscriber`
+	fn subscribe_finality(&self, metadata: Self::Metadata, subscriber: Subscriber<Block::Header>) {
+		self.backend.subscribe_finality(metadata, subscriber)
+	}
+
+	fn unsubscribe_finality(&self, metadata: Option<Self::Metadata>, id: SubscriptionId) -> RpcResult<bool> {
+		self.backend.unsubscribe_finality(metadata, id)
 	}
 }
 
