@@ -1449,8 +1449,6 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 		}
 		account.nonce += T::Index::one();
 		Account::<T>::insert(who, account);
-		// since this extension generates `provides` tags, we consider it's doing full validation
-		// (i.e. such extension is REQUIRED in the runtime, otherwise the txpool will go bananas)
 		Ok(())
 	}
 
