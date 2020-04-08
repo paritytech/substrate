@@ -45,7 +45,7 @@ pub trait SystemApi<Hash, Number> {
 	fn system_chain(&self) -> SystemResult<String>;
 
 	/// Get the chain's type.
-	#[rpc(name = "system_type")]
+	#[rpc(name = "system_chainType")]
 	fn system_type(&self) -> SystemResult<sc_chain_spec::ChainType>;
 
 	/// Get a custom set of properties as a JSON object, defined in the chain spec.
