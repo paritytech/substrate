@@ -229,9 +229,9 @@ decl_module! {
 		/// against the extracted offender. If both are valid, the offence
 		/// will be reported.
 		///
-		/// FIXME: I have no clue about the weight (but we're checking two
-		/// ed25519 signatures).
-		#[weight = SimpleDispatchInfo::FixedOperational(10_000_000)]
+		/// Since the weight is 0 in order to avoid DoS pre-validation is implemented in a
+		/// `SignedExtension`.
+		#[weight = SimpleDispatchInfo::FixedNormal(0)]
 		fn report_equivocation(
 			origin,
 			equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
@@ -244,49 +244,17 @@ decl_module! {
 				key_owner_proof.validator_count(),
 			);
 
-			// validate the membership proof and extract session index and
-			// validator set count of the session that we're proving membership of
+			// we have already checked this proof in `SignedExtension`, we to
+			// check it again to get the full identification of the offender.
 			let offender =
 				T::KeyOwnerProofSystem::check_proof(
 					(fg_primitives::KEY_TYPE, equivocation_proof.offender().clone()),
 					key_owner_proof,
-				).ok_or("Invalid/outdated key ownership proof.")?;
+				).ok_or("Invalid key ownership proof.")?;
 
-			// we check the equivocation within the context of its set id (and
-			// associated session).
+			// the set id and round when the offence happened
 			let set_id = equivocation_proof.set_id();
-
-			// the GRANDPA round when the offence happened
 			let round = equivocation_proof.round();
-
-			// validate equivocation proof (check votes are different and
-			// signatures are valid).
-			fg_primitives::check_equivocation_proof(equivocation_proof)
-				.map_err(|_| "Invalid equivocation proof.")?;
-
-			// fetch the current and previous sets last session index. on the
-			// genesis set there's no previous set.
-			let previous_set_id_session_index = if set_id == 0 {
-				None
-			} else {
-				let session_index = SetIdSession::get(set_id - 1)
-					.ok_or("Invalid equivocation set id.")?;
-
-				Some(session_index)
-			};
-
-			let set_id_session_index = SetIdSession::get(set_id)
-				.ok_or("Invalid equivocation set id.")?;
-
-			// check that the session id for the membership proof is within the
-			// bounds of the set id reported in the equivocation.
-			if session_index > set_id_session_index ||
-				previous_set_id_session_index
-					.map(|previous_index| session_index <= previous_index)
-					.unwrap_or(false)
-			{
-				return Err("Invalid equivocation set id provided.".into());
-			}
 
 			// report to the offences module rewarding the sender.
 			T::HandleEquivocation::report_offence(

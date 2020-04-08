@@ -33,20 +33,143 @@
 use sp_std::prelude::*;
 
 use codec::{self as codec, Decode, Encode};
+use frame_support::{dispatch::IsSubType, traits::KeyOwnerProofSystem};
 use frame_system::offchain::SubmitSignedTransaction;
 use sp_finality_grandpa::{EquivocationProof, RoundNumber, SetId};
-use sp_runtime::{DispatchResult, Perbill};
+use sp_runtime::{
+	traits::{DispatchInfoOf, SignedExtension},
+	transaction_validity::{
+		InvalidTransaction, TransactionValidity, TransactionValidityError, ValidTransaction,
+	},
+	DispatchResult, Perbill,
+};
 use sp_staking::{
 	offence::{Kind, Offence, OffenceError, ReportOffence},
 	SessionIndex,
 };
 
+/// Ensure that equivocation reports are only processed if valid.
+#[derive(Encode, Decode, Clone, Eq, PartialEq)]
+pub struct ValidateEquivocationReport<T>(sp_std::marker::PhantomData<T>);
+
+impl<T> sp_std::fmt::Debug for ValidateEquivocationReport<T> {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+		write!(f, "ValidateEquivocationReport<T>")
+	}
+}
+
+/// Custom validity error used when validating equivocation reports.
+#[derive(Debug)]
+#[repr(u8)]
+pub enum ReportEquivocationValidityError {
+	/// The proof provided in the report is not valid.
+	InvalidEquivocationProof = 1,
+	/// The proof provided in the report is not valid.
+	InvalidKeyOwnershipProof = 2,
+	/// The set id provided in the report is not valid.
+	InvalidSetId = 3,
+	/// The session index provided in the report is not valid.
+	InvalidSession = 4,
+}
+
+impl From<ReportEquivocationValidityError> for TransactionValidityError {
+	fn from(e: ReportEquivocationValidityError) -> TransactionValidityError {
+		TransactionValidityError::from(InvalidTransaction::Custom(e as u8))
+	}
+}
+
+impl<T: super::Trait + Send + Sync> SignedExtension for ValidateEquivocationReport<T>
+where
+	<T as frame_system::Trait>::Call: IsSubType<super::Module<T>, T>,
+{
+	const IDENTIFIER: &'static str = "ValidateEquivocationReport";
+	type AccountId = T::AccountId;
+	type Call = <T as frame_system::Trait>::Call;
+	type AdditionalSigned = ();
+	type Pre = ();
+
+	fn additional_signed(
+		&self,
+	) -> sp_std::result::Result<Self::AdditionalSigned, TransactionValidityError> {
+		Ok(())
+	}
+
+	fn validate(
+		&self,
+		_who: &Self::AccountId,
+		call: &Self::Call,
+		_info: &DispatchInfoOf<Self::Call>,
+		_len: usize,
+	) -> TransactionValidity {
+		let (equivocation_proof, key_owner_proof) = match call.is_sub_type() {
+			Some(super::Call::report_equivocation(equivocation_proof, key_owner_proof)) => {
+				(equivocation_proof, key_owner_proof)
+			}
+			_ => return Ok(ValidTransaction::default()),
+		};
+
+		// validate the key ownership proof extracting the id of the offender.
+		if let None = T::KeyOwnerProofSystem::check_proof(
+			(
+				sp_finality_grandpa::KEY_TYPE,
+				equivocation_proof.offender().clone(),
+			),
+			key_owner_proof.clone(),
+		) {
+			return Err(ReportEquivocationValidityError::InvalidKeyOwnershipProof.into());
+		}
+
+		// we check the equivocation within the context of its set id (and
+		// associated session).
+		let set_id = equivocation_proof.set_id();
+		let session_index = key_owner_proof.session();
+
+		// validate equivocation proof (check votes are different and
+		// signatures are valid).
+		if let Err(_) = sp_finality_grandpa::check_equivocation_proof(equivocation_proof.clone()) {
+			return Err(ReportEquivocationValidityError::InvalidEquivocationProof.into());
+		}
+
+		// fetch the current and previous sets last session index. on the
+		// genesis set there's no previous set.
+		let previous_set_id_session_index = if set_id == 0 {
+			None
+		} else {
+			let session_index =
+				if let Some(session_id) = <super::Module<T>>::session_for_set(set_id - 1) {
+					session_id
+				} else {
+					return Err(ReportEquivocationValidityError::InvalidSetId.into());
+				};
+
+			Some(session_index)
+		};
+
+		let set_id_session_index =
+			if let Some(session_id) = <super::Module<T>>::session_for_set(set_id) {
+				session_id
+			} else {
+				return Err(ReportEquivocationValidityError::InvalidSetId.into());
+			};
+
+		// check that the session id for the membership proof is within the
+		// bounds of the set id reported in the equivocation.
+		if session_index > set_id_session_index ||
+			previous_set_id_session_index
+				.map(|previous_index| session_index <= previous_index)
+				.unwrap_or(false)
+		{
+			return Err(ReportEquivocationValidityError::InvalidSession.into());
+		}
+
+		Ok(ValidTransaction::default())
+	}
+}
+
 /// A trait with utility methods for handling equivocation reports in GRANDPA.
-/// The key owner proof and offence types are generic, and the trait provides
-/// methods to check an equivocation proof (i.e. the equivocation itself and the
-/// key ownership proof), reporting an offence triggered by a valid equivocation
-/// report, and also for creating and submitting equivocation report extrinsics
-/// (useful only in offchain context).
+/// The offence type is generic, and the trait provides , reporting an offence
+/// triggered by a valid equivocation report, and also for creating and
+/// submitting equivocation report extrinsics (useful only in offchain context).
 pub trait HandleEquivocation<T: super::Trait> {
 	/// The offence type used for reporting offences on valid equivocation reports.
 	type Offence: GrandpaOffence<T::KeyOwnerIdentification>;
@@ -79,41 +202,6 @@ impl<T: super::Trait> HandleEquivocation<T> for () {
 		_key_owner_proof: T::KeyOwnerProof,
 	) -> DispatchResult {
 		Ok(())
-	}
-}
-
-/// A trait to get a session number the `MembershipProof` belongs to.
-pub trait GetSessionNumber {
-	fn session(&self) -> SessionIndex;
-}
-
-/// A trait to get the validator count at the session the `MembershipProof`
-/// belongs to.
-pub trait GetValidatorCount {
-	fn validator_count(&self) -> sp_session::ValidatorCount;
-}
-
-impl GetSessionNumber for frame_support::Void {
-	fn session(&self) -> SessionIndex {
-		Default::default()
-	}
-}
-
-impl GetValidatorCount for frame_support::Void {
-	fn validator_count(&self) -> sp_session::ValidatorCount {
-		Default::default()
-	}
-}
-
-impl GetSessionNumber for sp_session::MembershipProof {
-	fn session(&self) -> SessionIndex {
-		self.session()
-	}
-}
-
-impl GetValidatorCount for sp_session::MembershipProof {
-	fn validator_count(&self) -> sp_session::ValidatorCount {
-		self.validator_count()
 	}
 }
 
@@ -247,5 +335,40 @@ impl<FullIdentification: Clone> Offence<FullIdentification>
 		let x = Perbill::from_rational_approximation(3 * offenders_count, validator_set_count);
 		// _ ^ 2
 		x.square()
+	}
+}
+
+/// A trait to get a session number the `MembershipProof` belongs to.
+pub trait GetSessionNumber {
+	fn session(&self) -> SessionIndex;
+}
+
+/// A trait to get the validator count at the session the `MembershipProof`
+/// belongs to.
+pub trait GetValidatorCount {
+	fn validator_count(&self) -> sp_session::ValidatorCount;
+}
+
+impl GetSessionNumber for frame_support::Void {
+	fn session(&self) -> SessionIndex {
+		Default::default()
+	}
+}
+
+impl GetValidatorCount for frame_support::Void {
+	fn validator_count(&self) -> sp_session::ValidatorCount {
+		Default::default()
+	}
+}
+
+impl GetSessionNumber for sp_session::MembershipProof {
+	fn session(&self) -> SessionIndex {
+		self.session()
+	}
+}
+
+impl GetValidatorCount for sp_session::MembershipProof {
+	fn validator_count(&self) -> sp_session::ValidatorCount {
+		self.validator_count()
 	}
 }
