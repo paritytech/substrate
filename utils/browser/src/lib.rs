@@ -17,8 +17,10 @@
 use futures01::sync::mpsc as mpsc01;
 use log::{debug, info};
 use std::sync::Arc;
+use sc_network::config::TransportConfig;
 use sc_service::{
-	AbstractService, RpcSession, Role, Configuration, config::{DatabaseConfig, KeystoreConfig},
+	AbstractService, RpcSession, Role, Configuration,
+	config::{DatabaseConfig, KeystoreConfig, NetworkConfiguration},
 	GenericChainSpec, RuntimeGenesis
 };
 use wasm_bindgen::prelude::*;
@@ -43,29 +45,57 @@ where
 	let name = chain_spec.name().to_string();
 
 	let transport = ExtTransport::new(ffi::websocket_transport());
-	let mut config = Configuration::default();
-	config.network.boot_nodes = chain_spec.boot_nodes().to_vec();
-	config.telemetry_endpoints = chain_spec.telemetry_endpoints().clone();
-	config.chain_spec = Some(Box::new(chain_spec));
-	config.network.transport = sc_network::config::TransportConfig::Normal {
+	let mut network = NetworkConfiguration::new(
+		format!("{} (Browser)", name),
+		"unknown",
+		Default::default(),
+		&std::env::current_dir().expect("current directory must exist"),
+	);
+	network.boot_nodes = chain_spec.boot_nodes().to_vec();
+	network.transport = TransportConfig::Normal {
 		wasm_external_transport: Some(transport.clone()),
 		allow_private_ipv4: true,
 		enable_mdns: false,
 		use_yamux_flow_control: true,
 	};
-	config.task_executor = Some(Arc::new(move |fut| {
-		wasm_bindgen_futures::spawn_local(fut)
-	}));
-	config.telemetry_external_transport = Some(transport);
-	config.role = Role::Light;
-	config.name = format!("{} (Browser)", name);
-	config.database = Some({
-		info!("Opening Indexed DB database '{}'...", name);
-		let db = kvdb_web::Database::open(name, 10)
-			.await?;
-		DatabaseConfig::Custom(Arc::new(db))
-	});
-	config.keystore = KeystoreConfig::InMemory;
+
+	let config = Configuration {
+		network,
+		telemetry_endpoints: chain_spec.telemetry_endpoints().clone(),
+		chain_spec: Box::new(chain_spec),
+		task_executor: Arc::new(move |fut| wasm_bindgen_futures::spawn_local(fut)),
+		telemetry_external_transport: Some(transport),
+		role: Role::Light,
+		database: {
+			info!("Opening Indexed DB database '{}'...", name);
+			let db = kvdb_web::Database::open(name, 10).await?;
+
+			DatabaseConfig::Custom(Arc::new(db))
+		},
+		keystore: KeystoreConfig::InMemory,
+		default_heap_pages: Default::default(),
+		dev_key_seed: Default::default(),
+		disable_grandpa: Default::default(),
+		execution_strategies: Default::default(),
+		force_authoring: Default::default(),
+		impl_name: "parity-substrate",
+		impl_version: "0.0.0",
+		offchain_worker: Default::default(),
+		prometheus_config: Default::default(),
+		pruning: Default::default(),
+		rpc_cors: Default::default(),
+		rpc_http: Default::default(),
+		rpc_ws: Default::default(),
+		rpc_ws_max_connections: Default::default(),
+		state_cache_child_ratio: Default::default(),
+		state_cache_size: Default::default(),
+		tracing_receiver: Default::default(),
+		tracing_targets: Default::default(),
+		transaction_pool: Default::default(),
+		wasm_method: Default::default(),
+		max_runtime_instances: 8,
+		announce_block: true,
+	};
 
 	Ok(config)
 }

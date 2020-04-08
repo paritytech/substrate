@@ -288,11 +288,11 @@ use sp_runtime::{
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, StaticLookup, CheckedSub, Saturating, SaturatedConversion, AtLeast32Bit,
-		SignedExtension,
+		SignedExtension, Dispatchable, DispatchInfoOf,
 	},
 	transaction_validity::{
 		TransactionValidityError, TransactionValidity, ValidTransaction, InvalidTransaction,
-		TransactionSource,
+		TransactionSource, TransactionPriority,
 	},
 };
 use sp_staking::{
@@ -583,10 +583,10 @@ pub struct Nominations<AccountId> {
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug)]
 pub struct IndividualExposure<AccountId, Balance: HasCompact> {
 	/// The stash account of the nominator in question.
-	who: AccountId,
+	pub who: AccountId,
 	/// Amount of funds exposed.
 	#[codec(compact)]
-	value: Balance,
+	pub value: Balance,
 }
 
 /// A snapshot of the stake backing a single validator in the system.
@@ -772,7 +772,7 @@ pub trait Trait: frame_system::Trait {
 	type ElectionLookahead: Get<Self::BlockNumber>;
 
 	/// The overarching call type.
-	type Call: From<Call<Self>> + IsSubType<Module<Self>, Self> + Clone;
+	type Call: Dispatchable + From<Call<Self>> + IsSubType<Module<Self>, Self> + Clone;
 
 	/// A transaction submitter.
 	type SubmitTransaction: SubmitUnsignedTransaction<Self, <Self as Trait>::Call>;
@@ -782,6 +782,12 @@ pub trait Trait: frame_system::Trait {
 	/// For each validator only the `$MaxNominatorRewardedPerValidator` biggest stakers can claim
 	/// their reward. This used to limit the i/o cost for the nominator payout.
 	type MaxNominatorRewardedPerValidator: Get<u32>;
+
+	/// A configuration for base priority of unsigned transactions.
+	///
+	/// This is exposed so that it can be tuned for particular runtime, when
+	/// multiple pallets send unsigned transactions.
+	type UnsignedPriority: Get<TransactionPriority>;
 }
 
 /// Mode of era-forcing.
@@ -1252,7 +1258,7 @@ decl_module! {
 		/// unless the `origin` falls below _existential deposit_ and gets removed as dust.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
-		fn bond(origin,
+		pub fn bond(origin,
 			controller: <T::Lookup as StaticLookup>::Source,
 			#[compact] value: BalanceOf<T>,
 			payee: RewardDestination,
@@ -1446,7 +1452,7 @@ decl_module! {
 		/// - Writes are limited to the `origin` account key.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(750_000)]
-		fn validate(origin, prefs: ValidatorPrefs) {
+		pub fn validate(origin, prefs: ValidatorPrefs) {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let stash = &ledger.stash;
@@ -1466,7 +1472,7 @@ decl_module! {
 		/// - Both the reads and writes follow a similar pattern.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(750_000)]
-		fn nominate(origin, targets: Vec<<T::Lookup as StaticLookup>::Source>) {
+		pub fn nominate(origin, targets: Vec<<T::Lookup as StaticLookup>::Source>) {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let stash = &ledger.stash;
@@ -2878,6 +2884,16 @@ impl<T: Trait> Module<T> {
 			_ => ForceEra::put(Forcing::ForceNew),
 		}
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	pub fn add_era_stakers(current_era: EraIndex, controller: T::AccountId, exposure: Exposure<T::AccountId, BalanceOf<T>>) {
+		<ErasStakers<T>>::insert(&current_era, &controller, &exposure);
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	pub fn put_election_status(status: ElectionStatus::<T::BlockNumber>) {
+		<EraElectionStatus<T>>::put(status);
+	}
 }
 
 /// In this implementation `new_session(session)` must be called before `end_session(session-1)`
@@ -3125,7 +3141,6 @@ impl<T: Trait + Send + Sync> SignedExtension for LockStakingStatus<T> {
 	type AccountId = T::AccountId;
 	type Call = <T as Trait>::Call;
 	type AdditionalSigned = ();
-	type DispatchInfo = frame_support::weights::DispatchInfo;
 	type Pre = ();
 
 	fn additional_signed(&self) -> Result<(), TransactionValidityError> { Ok(()) }
@@ -3134,7 +3149,7 @@ impl<T: Trait + Send + Sync> SignedExtension for LockStakingStatus<T> {
 		&self,
 		_who: &Self::AccountId,
 		call: &Self::Call,
-		_info: Self::DispatchInfo,
+		_info: &DispatchInfoOf<Self::Call>,
 		_len: usize,
 	) -> TransactionValidity {
 		if let Some(inner_call) = call.is_sub_type() {
@@ -3215,24 +3230,24 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 				era,
 			);
 
-			Ok(ValidTransaction {
+			ValidTransaction::with_tag_prefix("StakingOffchain")
 				// The higher the score[0], the better a solution is.
-				priority: score[0].saturated_into(),
-				// no requires.
-				requires: vec![],
+				.priority(T::UnsignedPriority::get().saturating_add(score[0].saturated_into()))
 				// Defensive only. A single solution can exist in the pool per era. Each validator
 				// will run OCW at most once per era, hence there should never exist more than one
 				// transaction anyhow.
-				provides: vec![("StakingOffchain", era).encode()],
+				.and_provides(era)
 				// Note: this can be more accurate in the future. We do something like
 				// `era_end_block - current_block` but that is not needed now as we eagerly run
 				// offchain workers now and the above should be same as `T::ElectionLookahead`
 				// without the need to query more storage in the validation phase. If we randomize
 				// offchain worker, then we might re-consider this.
-				longevity: TryInto::<u64>::try_into(T::ElectionLookahead::get()).unwrap_or(DEFAULT_LONGEVITY),
+				.longevity(TryInto::<u64>::try_into(
+						T::ElectionLookahead::get()).unwrap_or(DEFAULT_LONGEVITY)
+				)
 				// We don't propagate this. This can never the validated at a remote node.
-				propagate: false,
-			})
+				.propagate(false)
+				.build()
 		} else {
 			InvalidTransaction::Call.into()
 		}

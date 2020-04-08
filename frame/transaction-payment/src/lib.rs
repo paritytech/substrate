@@ -44,7 +44,10 @@ use sp_runtime::{
 		TransactionPriority, ValidTransaction, InvalidTransaction, TransactionValidityError,
 		TransactionValidity,
 	},
-	traits::{Zero, Saturating, SignedExtension, SaturatedConversion, Convert},
+	traits::{
+		Zero, Saturating, SignedExtension, SaturatedConversion, Convert, Dispatchable,
+		DispatchInfoOf,
+	},
 };
 use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 
@@ -98,7 +101,9 @@ decl_module! {
 	}
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Trait> Module<T> where
+	T::Call: Dispatchable<Info=DispatchInfo>,
+{
 	/// Query the data that we know about the fee of a given `call`.
 	///
 	/// As this module is not and cannot be aware of the internals of a signed extension, it only
@@ -122,7 +127,7 @@ impl<T: Trait> Module<T> {
 		let dispatch_info = <Extrinsic as GetDispatchInfo>::get_dispatch_info(&unchecked_extrinsic);
 
 		let partial_fee =
-			<ChargeTransactionPayment<T>>::compute_fee(len, dispatch_info, 0u32.into());
+			<ChargeTransactionPayment<T>>::compute_fee(len, &dispatch_info, 0u32.into());
 		let DispatchInfo { weight, class, .. } = dispatch_info;
 
 		RuntimeDispatchInfo { weight, class, partial_fee }
@@ -134,7 +139,9 @@ impl<T: Trait> Module<T> {
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct ChargeTransactionPayment<T: Trait + Send + Sync>(#[codec(compact)] BalanceOf<T>);
 
-impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
+impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> where
+	T::Call: Dispatchable<Info=DispatchInfo>,
+{
 	/// utility constructor. Used only in client/factory code.
 	pub fn from(fee: BalanceOf<T>) -> Self {
 		Self(fee)
@@ -156,7 +163,7 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> {
 	/// final_fee = base_fee + targeted_fee_adjustment(len_fee + weight_fee) + tip;
 	pub fn compute_fee(
 		len: u32,
-		info: <Self as SignedExtension>::DispatchInfo,
+		info: &DispatchInfoOf<T::Call>,
 		tip: BalanceOf<T>,
 	) -> BalanceOf<T>
 	where
@@ -200,14 +207,14 @@ impl<T: Trait + Send + Sync> sp_std::fmt::Debug for ChargeTransactionPayment<T> 
 	}
 }
 
-impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T>
-	where BalanceOf<T>: Send + Sync
+impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T> where
+	BalanceOf<T>: Send + Sync,
+	T::Call: Dispatchable<Info=DispatchInfo>,
 {
 	const IDENTIFIER: &'static str = "ChargeTransactionPayment";
 	type AccountId = T::AccountId;
 	type Call = T::Call;
 	type AdditionalSigned = ();
-	type DispatchInfo = DispatchInfo;
 	type Pre = ();
 	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
 
@@ -215,7 +222,7 @@ impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T>
 		&self,
 		who: &Self::AccountId,
 		_call: &Self::Call,
-		info: Self::DispatchInfo,
+		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> TransactionValidity {
 		// pay any fees.
@@ -438,14 +445,14 @@ mod tests {
 			let len = 10;
 			assert!(
 				ChargeTransactionPayment::<Runtime>::from(0)
-					.pre_dispatch(&1, CALL, info_from_weight(5), len)
+					.pre_dispatch(&1, CALL, &info_from_weight(5), len)
 					.is_ok()
 			);
 			assert_eq!(Balances::free_balance(1), 100 - 5 - 5 - 10);
 
 			assert!(
 				ChargeTransactionPayment::<Runtime>::from(5 /* tipped */)
-					.pre_dispatch(&2, CALL, info_from_weight(3), len)
+					.pre_dispatch(&2, CALL, &info_from_weight(3), len)
 					.is_ok()
 			);
 			assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 3 - 5);
@@ -463,7 +470,7 @@ mod tests {
 			// maximum weight possible
 			assert!(
 				ChargeTransactionPayment::<Runtime>::from(0)
-					.pre_dispatch(&1, CALL, info_from_weight(Weight::max_value()), 10)
+					.pre_dispatch(&1, CALL, &info_from_weight(Weight::max_value()), 10)
 					.is_ok()
 			);
 			// fee will be proportional to what is the actual maximum weight in the runtime.
@@ -495,7 +502,7 @@ mod tests {
 			};
 			assert!(
 				ChargeTransactionPayment::<Runtime>::from(0)
-					.validate(&1, CALL, operational_transaction , len)
+					.validate(&1, CALL, &operational_transaction , len)
 					.is_ok()
 			);
 
@@ -507,7 +514,7 @@ mod tests {
 			};
 			assert!(
 				ChargeTransactionPayment::<Runtime>::from(0)
-					.validate(&1, CALL, free_transaction , len)
+					.validate(&1, CALL, &free_transaction , len)
 					.is_err()
 			);
 		});
@@ -527,7 +534,7 @@ mod tests {
 
 			assert!(
 				ChargeTransactionPayment::<Runtime>::from(10) // tipped
-					.pre_dispatch(&1, CALL, info_from_weight(3), len)
+					.pre_dispatch(&1, CALL, &info_from_weight(3), len)
 					.is_ok()
 			);
 			assert_eq!(Balances::free_balance(1), 100 - 10 - 5 - (10 + 3) * 3 / 2);
@@ -587,25 +594,25 @@ mod tests {
 				class: DispatchClass::Operational,
 				pays_fee: false,
 			};
-			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(0, dispatch_info, 10), 10);
+			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(0, &dispatch_info, 10), 10);
 			// No tip, only base fee works
 			let dispatch_info = DispatchInfo {
 				weight: 0,
 				class: DispatchClass::Operational,
 				pays_fee: true,
 			};
-			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(0, dispatch_info, 0), 100);
+			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(0, &dispatch_info, 0), 100);
 			// Tip + base fee works
-			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(0, dispatch_info, 69), 169);
+			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(0, &dispatch_info, 69), 169);
 			// Len (byte fee) + base fee works
-			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(42, dispatch_info, 0), 520);
+			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(42, &dispatch_info, 0), 520);
 			// Weight fee + base fee works
 			let dispatch_info = DispatchInfo {
 				weight: 1000,
 				class: DispatchClass::Operational,
 				pays_fee: true,
 			};
-			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(0, dispatch_info, 0), 1100);
+			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(0, &dispatch_info, 0), 1100);
 		});
 	}
 
@@ -626,7 +633,7 @@ mod tests {
 				class: DispatchClass::Operational,
 				pays_fee: true,
 			};
-			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(0, dispatch_info, 0), 100);
+			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(0, &dispatch_info, 0), 100);
 
 			// Everything works together :)
 			let dispatch_info = DispatchInfo {
@@ -638,7 +645,7 @@ mod tests {
 			// adjustable fee = (123 * 1) + (456 * 10) = 4683
 			// adjusted fee = (4683 * .5) + 4683 = 7024.5 -> 7024
 			// final fee = 100 + 7024 + 789 tip = 7913
-			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(456, dispatch_info, 789), 7913);
+			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(456, &dispatch_info, 789), 7913);
 		});
 	}
 
@@ -660,7 +667,7 @@ mod tests {
 			assert_eq!(
 				ChargeTransactionPayment::<Runtime>::compute_fee(
 					<u32>::max_value(),
-					dispatch_info,
+					&dispatch_info,
 					<u64>::max_value()
 				),
 				<u64>::max_value()

@@ -217,3 +217,25 @@ benchmarks! {
 		Treasury::<T>::on_initialize(T::BlockNumber::zero());
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::tests::{new_test_ext, Test};
+	use frame_support::assert_ok;
+
+	#[test]
+	fn test_benchmarks() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(test_benchmark_propose_spend::<Test>());
+			assert_ok!(test_benchmark_reject_proposal::<Test>());
+			assert_ok!(test_benchmark_approve_proposal::<Test>());
+			assert_ok!(test_benchmark_report_awesome::<Test>());
+			assert_ok!(test_benchmark_retract_tip::<Test>());
+			assert_ok!(test_benchmark_tip_new::<Test>());
+			assert_ok!(test_benchmark_tip::<Test>());
+			assert_ok!(test_benchmark_close_tip::<Test>());
+			assert_ok!(test_benchmark_on_initialize::<Test>());
+		});
+	}
+}

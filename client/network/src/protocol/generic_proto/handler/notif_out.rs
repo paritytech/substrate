@@ -33,7 +33,7 @@ use libp2p::swarm::{
 	SubstreamProtocol,
 	NegotiatedSubstream,
 };
-use log::error;
+use log::{debug, warn, error};
 use prometheus_endpoint::Histogram;
 use smallvec::SmallVec;
 use std::{borrow::Cow, fmt, mem, pin::Pin, task::{Context, Poll}, time::Duration};
@@ -280,7 +280,7 @@ impl ProtocolsHandler for NotifsOutHandler {
 						// be recovered. When in doubt, let's drop the existing substream and
 						// open a new one.
 						if sub.close().now_or_never().is_none() {
-							log::warn!(
+							warn!(
 								target: "sub-libp2p",
 								"📞 Improperly closed outbound notifications substream"
 							);
@@ -293,16 +293,22 @@ impl ProtocolsHandler for NotifsOutHandler {
 						});
 						self.state = State::Opening { initial_message };
 					},
-					State::Opening { .. } | State::Refused | State::Open { .. } =>
-						error!("☎️ Tried to enable notifications handler that was already enabled"),
-					State::Poisoned => error!("☎️ Notifications handler in a poisoned state"),
+					st @ State::Opening { .. } | st @ State::Refused | st @ State::Open { .. } => {
+						debug!(target: "sub-libp2p",
+							"Tried to enable notifications handler that was already enabled");
+						self.state = st;
+					}
+					State::Poisoned => error!("Notifications handler in a poisoned state"),
 				}
 			}
 
 			NotifsOutHandlerIn::Disable => {
 				match mem::replace(&mut self.state, State::Poisoned) {
-					State::Disabled | State::DisabledOpen(_) | State::DisabledOpening =>
-						error!("☎️ Tried to disable notifications handler that was already disabled"),
+					st @ State::Disabled | st @ State::DisabledOpen(_) | st @ State::DisabledOpening => {
+						debug!(target: "sub-libp2p",
+							"Tried to disable notifications handler that was already disabled");
+						self.state = st;
+					}
 					State::Opening { .. } => self.state = State::DisabledOpening,
 					State::Refused => self.state = State::Disabled,
 					State::Open { substream, .. } => self.state = State::DisabledOpen(substream),
@@ -313,7 +319,7 @@ impl ProtocolsHandler for NotifsOutHandler {
 			NotifsOutHandlerIn::Send(msg) =>
 				if let State::Open { substream, .. } = &mut self.state {
 					if substream.push_message(msg).is_err() {
-						log::warn!(
+						warn!(
 							target: "sub-libp2p",
 							"📞 Notifications queue with peer {} is full, dropped message (protocol: {:?})",
 							self.peer_id,
@@ -325,7 +331,7 @@ impl ProtocolsHandler for NotifsOutHandler {
 					}
 				} else {
 					// This is an API misuse.
-					log::warn!(
+					warn!(
 						target: "sub-libp2p",
 						"📞 Tried to send a notification on a disabled handler"
 					);
