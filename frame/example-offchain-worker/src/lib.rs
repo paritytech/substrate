@@ -544,7 +544,7 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 				.map(|price| if &price > new_price { price - new_price } else { new_price - price })
 				.unwrap_or(0);
 
-			ValidTransaction::for_pallet("ExampleOffchainWorker")
+			ValidTransaction::with_tag_prefix("ExampleOffchainWorker")
 				// We set base priority to 2**20 to make sure it's included before any other
 				// transactions in the pool. Next we tweak the priority depending on how much
 				// it differs from the current average. (the more it differs the more priority it

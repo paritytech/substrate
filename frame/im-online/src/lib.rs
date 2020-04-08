@@ -664,7 +664,7 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 				return InvalidTransaction::BadProof.into();
 			}
 
-			ValidTransaction::for_pallet("ImOnline")
+			ValidTransaction::with_tag_prefix("ImOnline")
 				.priority(T::UnsignedPriority::get())
 				.and_provides((current_session, authority_id))
 				.longevity(TryInto::<u64>::try_into(

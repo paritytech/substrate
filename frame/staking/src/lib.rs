@@ -3231,7 +3231,7 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 				era,
 			);
 
-			ValidTransaction::for_pallet("StakingOffchain")
+			ValidTransaction::with_tag_prefix("StakingOffchain")
 				// The higher the score[0], the better a solution is.
 				.priority(T::UnsignedPriority::get().saturating_add(score[0].saturated_into()))
 				// Defensive only. A single solution can exist in the pool per era. Each validator

@@ -266,9 +266,9 @@ impl Default for ValidTransaction {
 impl ValidTransaction {
 	/// Initiate `ValidTransaction` builder object with a particular prefix for tags.
 	///
-	/// To avoid conflicts between different pallets it's recommended to build `requires`
+	/// To avoid conflicts between different parts in runtime it's recommended to build `requires`
 	/// and `provides` tags with a unique prefix.
-	pub fn for_pallet(prefix: &'static str) -> ValidTransactionBuilder {
+	pub fn with_tag_prefix(prefix: &'static str) -> ValidTransactionBuilder {
 		ValidTransactionBuilder {
 			prefix: Some(prefix),
 			validity: Default::default(),
@@ -293,7 +293,7 @@ impl ValidTransaction {
 ///
 ///
 /// Allows to easily construct `ValidTransaction` and most importantly takes care of
-/// prefixing `requires` and `provides` tags to avoid pallet conflicts.
+/// prefixing `requires` and `provides` tags to avoid conflicts.
 #[derive(Default, Clone, RuntimeDebug)]
 pub struct ValidTransactionBuilder {
 	prefix: Option<&'static str>,
@@ -306,7 +306,8 @@ impl ValidTransactionBuilder {
 	/// Note that the final priority for `FRAME` is combined from all `SignedExtension`s.
 	/// Most likely for unsigned transactions you want the priority to be higher
 	/// than for regular transactions. We recommend exposing a base priority for unsigned
-	/// transactions as a pallet parameter, so that the runtime can tune inter-pallet priorities.
+	/// transactions as a runtime module parameter, so that the runtime can tune inter-module
+	/// priorities.
 	pub fn priority(mut self, priority: TransactionPriority) -> Self {
 		self.validity.priority = priority;
 		self
@@ -316,7 +317,7 @@ impl ValidTransactionBuilder {
 	///
 	/// By default the transaction will be considered valid forever and will not be revalidated
 	/// by the transaction pool. It's recommended though to set the longevity to a finite value
-	/// though. If unsure, it's also reasonable to expose this parameter via pallet configuration
+	/// though. If unsure, it's also reasonable to expose this parameter via module configuration
 	/// and let the runtime decide.
 	pub fn longevity(mut self, longevity: TransactionLongevity) -> Self {
 		self.validity.longevity = longevity;
@@ -335,7 +336,7 @@ impl ValidTransactionBuilder {
 
 	/// Add a `TransactionTag` to the set of required tags.
 	///
-	/// The tag will be encoded and prefixed with pallet prefix (if any).
+	/// The tag will be encoded and prefixed with module prefix (if any).
 	/// If you'd rather add a raw `require` tag, consider using `#combine_with` method.
 	pub fn and_requires(mut self, tag: impl Encode) -> Self {
 		self.validity.requires.push(match self.prefix.as_ref() {
@@ -347,7 +348,7 @@ impl ValidTransactionBuilder {
 
 	/// Add a `TransactionTag` to the set of provided tags.
 	///
-	/// The tag will be encoded and prefixed with pallet prefix (if any).
+	/// The tag will be encoded and prefixed with module prefix (if any).
 	/// If you'd rather add a raw `require` tag, consider using `#combine_with` method.
 	pub fn and_provides(mut self, tag: impl Encode) -> Self {
 		self.validity.provides.push(match self.prefix.as_ref() {
@@ -413,7 +414,7 @@ mod tests {
 	#[test]
 	fn builder_should_prefix_the_tags() {
 		const PREFIX: &str = "test";
-		let a: ValidTransaction = ValidTransaction::for_pallet(PREFIX)
+		let a: ValidTransaction = ValidTransaction::with_tag_prefix(PREFIX)
 			.and_requires(1)
 			.and_requires(2)
 			.and_provides(3)
