@@ -368,7 +368,6 @@ pub trait AppCrypto<Public, Signature> {
 /// A wrapper around the types which are used for signing transactions.
 /// This trait should be implemented on the runtime.
 pub trait SigningTypes: crate::Trait {
-	//type AccountId;
 	// TODO [ToDr] Could this be just `T::Signature as traits::Verify>::Signer`?
 	// Seems that this may cause issues with bounds resolution.
 	type Public: Clone
