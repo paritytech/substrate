@@ -181,6 +181,16 @@ impl ExtrinsicT for Extrinsic {
 	}
 }
 
+impl sp_runtime::traits::Dispatchable for Extrinsic {
+	type Origin = ();
+	type Trait = ();
+	type Info = ();
+	type PostInfo = ();
+	fn dispatch(self, _origin: Self::Origin) -> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
+		panic!("This implemention should not be used for actual dispatch.");
+	}
+}
+
 impl Extrinsic {
 	pub fn transfer(&self) -> &Transfer {
 		match self {

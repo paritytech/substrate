@@ -161,11 +161,16 @@ impl pallet_authorship::Trait for Runtime {
 	type EventHandler = ImOnline;
 }
 
+parameter_types! {
+	pub const UnsignedPriority: u64 = 1 << 20;
+}
+
 impl Trait for Runtime {
 	type AuthorityId = UintAuthorityId;
 	type Event = ();
 	type ReportUnresponsiveness = OffenceHandler;
 	type SessionDuration = Period;
+	type UnsignedPriority = UnsignedPriority;
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime where

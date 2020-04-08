@@ -2939,7 +2939,7 @@ mod offchain_phragmen {
 
 				let lock_staking: LockStakingStatus<Test> = Default::default();
 				assert_eq!(
-					lock_staking.validate(&10, &outer, Default::default(), Default::default(),),
+					lock_staking.validate(&10, &outer, &Default::default(), Default::default(),),
 					TransactionValidity::Err(InvalidTransaction::Stale.into()),
 				)
 			})
@@ -3165,7 +3165,7 @@ mod offchain_phragmen {
 					&inner,
 				),
 				TransactionValidity::Ok(ValidTransaction {
-					priority: 1125, // the proposed slot stake.
+					priority: (1 << 20) + 1125, // the proposed slot stake.
 					requires: vec![],
 					provides: vec![("StakingOffchain", active_era()).encode()],
 					longevity: 3,

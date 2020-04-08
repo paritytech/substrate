@@ -106,6 +106,7 @@ impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for T
 parameter_types! {
 	pub const GracePeriod: u64 = 5;
 	pub const UnsignedInterval: u64 = 128;
+	pub const UnsignedPriority: u64 = 1 << 20;
 }
 
 impl Trait for Test {
@@ -114,6 +115,7 @@ impl Trait for Test {
 	type Call = Call<Test>;
 	type GracePeriod = GracePeriod;
 	type UnsignedInterval = UnsignedInterval;
+	type UnsignedPriority = UnsignedPriority;
 }
 
 type Example = Module<Test>;
