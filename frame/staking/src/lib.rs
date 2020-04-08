@@ -288,11 +288,11 @@ use sp_runtime::{
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, StaticLookup, CheckedSub, Saturating, SaturatedConversion, AtLeast32Bit,
-		SignedExtension, Dispatchable, DispatchInfoOf,
+		SignedExtension,
 	},
 	transaction_validity::{
 		TransactionValidityError, TransactionValidity, ValidTransaction, InvalidTransaction,
-		TransactionSource, TransactionPriority,
+		TransactionSource,
 	},
 };
 use sp_staking::{
@@ -772,7 +772,7 @@ pub trait Trait: frame_system::Trait {
 	type ElectionLookahead: Get<Self::BlockNumber>;
 
 	/// The overarching call type.
-	type Call: Dispatchable + From<Call<Self>> + IsSubType<Module<Self>, Self> + Clone;
+	type Call: From<Call<Self>> + IsSubType<Module<Self>, Self> + Clone;
 
 	/// A transaction submitter.
 	type SubmitTransaction: SubmitUnsignedTransaction<Self, <Self as Trait>::Call>;
@@ -782,12 +782,6 @@ pub trait Trait: frame_system::Trait {
 	/// For each validator only the `$MaxNominatorRewardedPerValidator` biggest stakers can claim
 	/// their reward. This used to limit the i/o cost for the nominator payout.
 	type MaxNominatorRewardedPerValidator: Get<u32>;
-
-	/// A configuration for base priority of unsigned transactions.
-	///
-	/// This is exposed so that it can be tuned for particular runtime, when
-	/// multiple pallets send unsigned transactions.
-	type UnsignedPriority: Get<TransactionPriority>;
 }
 
 /// Mode of era-forcing.
@@ -998,7 +992,8 @@ decl_storage! {
 		/// solutions to be submitted.
 		pub EraElectionStatus get(fn era_election_status): ElectionStatus<T::BlockNumber>;
 
-		/// True if the current planned session is final.
+		/// True if the current **planned** session is final. Note that this does not take era
+		/// forcing into account.
 		pub IsCurrentSessionFinal get(fn is_current_session_final): bool = false;
 
 		/// True if network has been upgraded to this version.
@@ -1152,7 +1147,8 @@ decl_module! {
 			if
 				// if we don't have any ongoing offchain compute.
 				Self::era_election_status().is_closed() &&
-				Self::is_current_session_final()
+				// either current session final based on the plan, or we're forcing.
+				(Self::is_current_session_final() || Self::will_era_be_forced())
 			{
 				if let Some(next_session_change) = T::NextNewSession::estimate_next_new_session(now){
 					if let Some(remaining) = next_session_change.checked_sub(&now) {
@@ -2885,6 +2881,13 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
+	fn will_era_be_forced() -> bool {
+		match ForceEra::get() {
+			Forcing::ForceAlways | Forcing::ForceNew => true,
+			Forcing::ForceNone | Forcing::NotForcing => false,
+		}
+	}
+
 	#[cfg(feature = "runtime-benchmarks")]
 	pub fn add_era_stakers(current_era: EraIndex, controller: T::AccountId, exposure: Exposure<T::AccountId, BalanceOf<T>>) {
 		<ErasStakers<T>>::insert(&current_era, &controller, &exposure);
@@ -3149,7 +3152,7 @@ impl<T: Trait + Send + Sync> SignedExtension for LockStakingStatus<T> {
 		&self,
 		_who: &Self::AccountId,
 		call: &Self::Call,
-		_info: &DispatchInfoOf<Self::Call>,
+		_info: Self::DispatchInfo,
 		_len: usize,
 	) -> TransactionValidity {
 		if let Some(inner_call) = call.is_sub_type() {
@@ -3230,24 +3233,24 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 				era,
 			);
 
-			ValidTransaction::with_tag_prefix("StakingOffchain")
+			Ok(ValidTransaction {
 				// The higher the score[0], the better a solution is.
-				.priority(T::UnsignedPriority::get().saturating_add(score[0].saturated_into()))
+				priority: score[0].saturated_into(),
+				// no requires.
+				requires: vec![],
 				// Defensive only. A single solution can exist in the pool per era. Each validator
 				// will run OCW at most once per era, hence there should never exist more than one
 				// transaction anyhow.
-				.and_provides(era)
+				provides: vec![("StakingOffchain", era).encode()],
 				// Note: this can be more accurate in the future. We do something like
 				// `era_end_block - current_block` but that is not needed now as we eagerly run
 				// offchain workers now and the above should be same as `T::ElectionLookahead`
 				// without the need to query more storage in the validation phase. If we randomize
 				// offchain worker, then we might re-consider this.
-				.longevity(TryInto::<u64>::try_into(
-						T::ElectionLookahead::get()).unwrap_or(DEFAULT_LONGEVITY)
-				)
+				longevity: TryInto::<u64>::try_into(T::ElectionLookahead::get()).unwrap_or(DEFAULT_LONGEVITY),
 				// We don't propagate this. This can never the validated at a remote node.
-				.propagate(false)
-				.build()
+				propagate: false,
+			})
 		} else {
 			InvalidTransaction::Call.into()
 		}
