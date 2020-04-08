@@ -29,7 +29,7 @@ use sp_core::{self, Hasher, TypeId, RuntimeDebug};
 use crate::codec::{Codec, Encode, Decode};
 use crate::transaction_validity::{
 	ValidTransaction, TransactionSource, TransactionValidity, TransactionValidityError,
-	UnknownTransaction, IsFullyValidated,
+	UnknownTransaction, InvalidTransaction,
 };
 use crate::generic::{Digest, DigestItem};
 pub use sp_arithmetic::traits::{
@@ -697,9 +697,9 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 		call: &Self::Call,
 		info: Self::DispatchInfo,
 		len: usize,
-	) -> Result<(Self::Pre, IsFullyValidated), TransactionValidityError> {
+	) -> Result<Self::Pre, TransactionValidityError> {
 		self.validate(who, TransactionSource::InBlock, call, info.clone(), len)
-			.map(|res| (Self::Pre::default(), res.is_fully_validated()))
+			.map(|_| Self::Pre::default())
 			.map_err(Into::into)
 	}
 
@@ -711,6 +711,11 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 	/// and quickly eliminate ones that are stale or incorrect.
 	///
 	/// Make sure to perform the same checks in `pre_dispatch_unsigned` function.
+	///
+	/// Returning a `Err(InvalidTransaction::NoUnsignedValidator)` indicates that
+	/// this particular extension is not interested in the call, but if multiple
+	/// `SignedExtensions` are composed, it allows others to handle and potentially
+	/// whitelist the call.
 	fn validate_unsigned(
 		_source: TransactionSource,
 		_call: &Self::Call,
@@ -728,13 +733,22 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 	///
 	/// If you ever override this function, you need to make sure to always
 	/// perform the same validation as in `validate_unsigned`.
+	///
+	/// Returning a `Err(InvalidTransaction::NoUnsignedValidator)` indicates that
+	/// this particular extension is not interested in the call, but if multiple
+	/// `SignedExtensions` are composed, it allows others to handle and potentially
+	/// whitelist the call.
 	fn pre_dispatch_unsigned(
 		call: &Self::Call,
 		info: Self::DispatchInfo,
 		len: usize,
-	) -> Result<(Self::Pre, IsFullyValidated), TransactionValidityError> {
+	) -> Result<Self::Pre, TransactionValidityError> {
 		Self::validate_unsigned(TransactionSource::InBlock, call, info.clone(), len)
-			.map(|res| (Self::Pre::default(), res.is_fully_validated()))
+			.and_then(|res| if res.has_provides_tags() {
+				Ok(Self::Pre::default())
+			} else {
+				Err(InvalidTransaction::NoUnsignedValidator.into())
+			})
 			.map_err(Into::into)
 	}
 
@@ -802,15 +816,11 @@ impl<AccountId, Call, Info: Clone> SignedExtension for Tuple {
 	}
 
 	fn pre_dispatch(self, who: &Self::AccountId, call: &Self::Call, info: Self::DispatchInfo, len: usize)
-		-> Result<(Self::Pre, IsFullyValidated), TransactionValidityError>
+		-> Result<Self::Pre, TransactionValidityError>
 	{
-		let mut fully_validated = IsFullyValidated::No;
-		let tuple = for_tuples!(( #( {
-			let (pre, validation) = Tuple.pre_dispatch(who, call, info.clone(), len)?;
-			fully_validated |= validation;
-			pre
-		} ),* ));
-		Ok((tuple, fully_validated))
+		Ok(for_tuples!((
+			#( Tuple.pre_dispatch(who, call, info.clone(), len)?),*
+		)))
 	}
 
 	fn validate_unsigned(
@@ -822,24 +832,43 @@ impl<AccountId, Call, Info: Clone> SignedExtension for Tuple {
 		let valid = ValidTransaction::default();
 		for_tuples!( #(
 			let valid = valid.combine_with(
-				Tuple::validate_unsigned(source, call, info.clone(), len)?
+				match Tuple::validate_unsigned(source, call, info.clone(), len) {
+					Ok(valid) => valid,
+					Err(e) if e.missing_unsigned_validator() => Default::default(),
+					Err(e) => return Err(e),
+				}
 			);
 		)* );
-		Ok(valid)
+
+		if valid.has_provides_tags() {
+			Ok(valid)
+		} else {
+			Err(InvalidTransaction::NoUnsignedValidator.into())
+		}
 	}
 
 	fn pre_dispatch_unsigned(
 		call: &Self::Call,
 		info: Self::DispatchInfo,
 		len: usize,
-	) -> Result<(Self::Pre, IsFullyValidated), TransactionValidityError> {
-		let mut fully_validated = IsFullyValidated::No;
-		let tuple = for_tuples!(( #( {
-			let (pre, validation) = Tuple::pre_dispatch_unsigned(call, info.clone(), len)?;
-			fully_validated |= validation;
-			pre
-		} ),* ));
-		Ok((tuple, fully_validated))
+	) -> Result<Self::Pre, TransactionValidityError> {
+		let mut is_whitelisted = false;
+		let tuple = for_tuples!(( #(
+			match Tuple::pre_dispatch_unsigned(call, info.clone(), len) {
+				Ok(pre) => {
+					is_whitelisted = true;
+					pre
+				},
+				Err(e) if e.missing_unsigned_validator() => Default::default(),
+				Err(e) => return Err(e),
+			}
+		),* ));
+
+		if is_whitelisted {
+			Ok(tuple)
+		} else {
+			Err(InvalidTransaction::NoUnsignedValidator.into())
+		}
 	}
 
 	fn post_dispatch(
@@ -933,9 +962,9 @@ pub trait ValidateUnsigned {
 	/// this function again to make sure we never include an invalid transaction.
 	///
 	/// Changes made to storage WILL be persisted if the call returns `Ok`.
-	fn pre_dispatch(call: &Self::Call) -> Result<IsFullyValidated, TransactionValidityError> {
+	fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
 		Self::validate_unsigned(TransactionSource::InBlock, call)
-			.map(|valid| valid.is_fully_validated())
+			.map(|_| ())
 			.map_err(Into::into)
 	}
 

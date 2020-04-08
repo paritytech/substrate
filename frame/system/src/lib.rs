@@ -103,7 +103,7 @@ use sp_runtime::{
 	generic::{self, Era},
 	transaction_validity::{
 		ValidTransaction, TransactionPriority, TransactionLongevity, TransactionValidityError,
-		InvalidTransaction, TransactionValidity, TransactionSource, IsFullyValidated,
+		InvalidTransaction, TransactionValidity, TransactionSource,
 	},
 	traits::{
 		self, CheckEqual, AtLeast32Bit, Zero, SignedExtension, Lookup, LookupError,
@@ -1276,11 +1276,12 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 		_call: &Self::Call,
 		info: Self::DispatchInfo,
 		len: usize,
-	) -> Result<(Self::Pre, IsFullyValidated), TransactionValidityError> {
+	) -> Result<Self::Pre, TransactionValidityError> {
 		if info.class == DispatchClass::Mandatory {
 			Err(InvalidTransaction::MandatoryDispatch)?
 		}
-		Ok((Self::do_pre_dispatch(info, len)?, IsFullyValidated::No))
+
+		Self::do_pre_dispatch(info, len)
 	}
 
 	fn validate(
@@ -1301,8 +1302,8 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 		_call: &Self::Call,
 		info: Self::DispatchInfo,
 		len: usize,
-	) -> Result<(Self::Pre, IsFullyValidated), TransactionValidityError> {
-		Ok((Self::do_pre_dispatch(info, len)?, IsFullyValidated::No))
+	) -> Result<Self::Pre, TransactionValidityError> {
+		Self::do_pre_dispatch(info, len)
 	}
 
 	fn validate_unsigned(
@@ -1370,11 +1371,8 @@ impl<T> SignedExtension for ValidateUnsigned<T> where
 		call: &Self::Call,
 		_info: Self::DispatchInfo,
 		_len: usize,
-	) -> Result<(Self::Pre, IsFullyValidated), TransactionValidityError> {
-		Ok((
-			(),
-			<T as traits::ValidateUnsigned>::pre_dispatch(call)?
-		))
+	) -> Result<Self::Pre, TransactionValidityError> {
+		<T as traits::ValidateUnsigned>::pre_dispatch(call)
 	}
 
 	fn validate_unsigned(
@@ -1438,7 +1436,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 		_call: &Self::Call,
 		_info: Self::DispatchInfo,
 		_len: usize,
-	) -> Result<(Self::Pre, IsFullyValidated), TransactionValidityError> {
+	) -> Result<Self::Pre, TransactionValidityError> {
 		let mut account = Account::<T>::get(who);
 		if self.0 != account.nonce {
 			return Err(
@@ -1453,7 +1451,7 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 		Account::<T>::insert(who, account);
 		// since this extension generates `provides` tags, we consider it's doing full validation
 		// (i.e. such extension is REQUIRED in the runtime, otherwise the txpool will go bananas)
-		Ok(((), IsFullyValidated::Yes))
+		Ok(())
 	}
 
 	fn validate(

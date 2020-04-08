@@ -20,9 +20,7 @@
 use crate::traits::{
 	self, Member, MaybeDisplay, SignedExtension, Dispatchable,
 };
-use crate::transaction_validity::{
-	TransactionValidity, TransactionSource, IsFullyValidated, InvalidTransaction,
-};
+use crate::transaction_validity::{TransactionValidity, TransactionSource};
 
 /// Definition of something that the external world might want to say; its
 /// existence implies that it has been checked and is good, particularly with
@@ -55,15 +53,10 @@ where
 		info: Self::DispatchInfo,
 		len: usize,
 	) -> TransactionValidity {
-		let validity = if let Some((ref id, ref extra)) = self.signed {
+		if let Some((ref id, ref extra)) = self.signed {
 			Extra::validate(extra, id, source, &self.function, info, len)
 		} else {
 			Extra::validate_unsigned(source, &self.function, info, len)
-		}?;
-
-		match validity.is_fully_validated() {
-			IsFullyValidated::No => Err(InvalidTransaction::NotFullyValidated)?,
-			IsFullyValidated::Yes => Ok(validity),
 		}
 	}
 
@@ -79,10 +72,6 @@ where
 			let pre = Extra::pre_dispatch_unsigned(&self.function, info.clone(), len)?;
 			(None, pre)
 		};
-		let pre = match pre {
-			(_, IsFullyValidated::No) => return Err(InvalidTransaction::NotFullyValidated)?,
-			(pre, _) => pre,
-		};
 		let res = self.function.dispatch(Origin::from(maybe_who))
 			.map(|_| ())
 			.map_err(|e| e.error);
@@ -95,7 +84,9 @@ where
 mod tests {
 	use super::*;
 	use traits::Applyable;
-	use crate::transaction_validity::TransactionValidityError;
+	use crate::transaction_validity::{
+		TransactionValidityError, InvalidTransaction, ValidTransaction,
+	};
 
 	type AccountId = u32;
 	#[derive(PartialEq, Eq, Clone, Copy, Debug)]
@@ -106,8 +97,10 @@ mod tests {
 		type Trait = ();
 		type PostInfo = ();
 
-		fn dispatch(self, _origin: Self::Origin) -> crate::DispatchResultWithInfo<Self::PostInfo> {
-			panic!("Should never be triggered.")
+		fn dispatch(self, origin: Self::Origin) -> crate::DispatchResultWithInfo<Self::PostInfo> {
+			origin
+				.map(|_| ())
+				.ok_or_else(|| panic!("Should not dispatch unsigned transactions."))
 		}
 	}
 
@@ -145,25 +138,25 @@ mod tests {
 	fn is_applyable<T: Applyable>() {}
 
 	#[test]
-	fn should_fail_apply_if_pre_dispatch_is_not_fully_validated() {
+	fn should_allow_signed_and_forbid_unsigned_during_apply() {
 		is_applyable::<Extrinsic>();
 		let (signed, unsigned) = extrinsics();
 
 		let res = signed.apply(Default::default(), 1);
-		assert_eq!(res.unwrap_err(), InvalidTransaction::NotFullyValidated.into());
+		assert_eq!(res.unwrap().unwrap(), ());
 		let res = unsigned.apply(Default::default(), 1);
-		assert_eq!(res.unwrap_err(), InvalidTransaction::NotFullyValidated.into());
+		assert_eq!(res.unwrap_err(), InvalidTransaction::NoUnsignedValidator.into());
 	}
 
 	#[test]
-	fn should_fail_validate_if_is_not_fully_validated() {
+	fn should_allow_signed_and_forbid_unsigned_during_validate() {
 		is_applyable::<Extrinsic>();
 		let (signed, unsigned) = extrinsics();
 		let source = TransactionSource::External;
 
 		let res = signed.validate(source, Default::default(), 1);
-		assert_eq!(res.unwrap_err(), InvalidTransaction::NotFullyValidated.into());
+		assert_eq!(res.unwrap(), ValidTransaction::default());
 		let res = unsigned.validate(source, Default::default(), 1);
-		assert_eq!(res.unwrap_err(), InvalidTransaction::NotFullyValidated.into());
+		assert_eq!(res.unwrap_err(), InvalidTransaction::NoUnsignedValidator.into());
 	}
 }

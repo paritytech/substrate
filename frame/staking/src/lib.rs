@@ -292,7 +292,7 @@ use sp_runtime::{
 	},
 	transaction_validity::{
 		TransactionValidityError, TransactionValidity, ValidTransaction, InvalidTransaction,
-		TransactionSource, IsFullyValidated,
+		TransactionSource,
 	},
 };
 use sp_staking::{
@@ -3249,13 +3249,13 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 		}
 	}
 
-	fn pre_dispatch(_: &Self::Call) -> Result<IsFullyValidated, TransactionValidityError> {
+	fn pre_dispatch(_: &Self::Call) -> Result<(), TransactionValidityError> {
 		// IMPORTANT NOTE: By default, a sane `pre-dispatch` should always do the same checks as
 		// `validate_unsigned` and overriding this should be done with care. this module has only
 		// one unsigned entry point, in which we call into `<Module<T>>::pre_dispatch_checks()`
 		// which is all the important checks that we do in `validate_unsigned`. Hence, we can safely
 		// override this to save some time.
-		Ok(IsFullyValidated::Yes)
+		Ok(())
 	}
 }
 

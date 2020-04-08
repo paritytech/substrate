@@ -19,7 +19,6 @@ pub use crate::sp_runtime::traits::ValidateUnsigned;
 #[doc(hidden)]
 pub use crate::sp_runtime::transaction_validity::{
 	TransactionValidity, InvalidTransaction, TransactionValidityError, TransactionSource,
-	IsFullyValidated,
 };
 
 
@@ -71,15 +70,19 @@ macro_rules! impl_outer_validate_unsigned {
 			type Call = Call;
 
 			fn pre_dispatch(call: &Self::Call)-> Result<
-				$crate::unsigned::IsFullyValidated,
-				$crate::unsigned::TransactionValidityError
+				(), $crate::unsigned::TransactionValidityError
 			> {
 				#[allow(unreachable_patterns)]
 				match call {
 					$( Call::$module(inner_call) => $module::pre_dispatch(inner_call), )*
-					// pre-dispatch should not stop inherent extrinsics, validation should prevent
-					// including arbitrary (non-inherent) extrinsics to blocks.
-					_ => Ok($crate::unsigned::IsFullyValidated::Yes),
+					// Inherent extrinsics are going through this path as well. Their pallets
+					// do not specify `ValidateUnsigned`, so we do allow calls to those pallets
+					// to be dispatched.
+					// i.e. This means that unsigned calls to in-runtime pallets that don't
+					// specify `ValidateUnsigned` are not failing during `pre_dispatch`, but
+					// if the pallet provides `ValidateUnsigned` then it can control that
+					// behavior.
+					_ => Ok(()),
 				}
 			}
 
@@ -91,7 +94,11 @@ macro_rules! impl_outer_validate_unsigned {
 				#[allow(unreachable_patterns)]
 				match call {
 					$( Call::$module(inner_call) => $module::validate_unsigned(source, inner_call), )*
-					_ => $crate::unsigned::InvalidTransaction::NotFullyValidated.into(),
+					// `validate_unsigned` always fails if the call is not whitelisted. A
+					// consequence of this and `pre_dispatch` behavior is to allow inherent
+					// extrinsics to pallets even if these pallets don't specify
+					// `UnsignedValidator`.
+					_ => $crate::unsigned::InvalidTransaction::NoUnsignedValidator.into(),
 				}
 			}
 		}

@@ -59,13 +59,17 @@ pub enum InvalidTransaction {
 	/// A transaction with a mandatory dispatch. This is invalid; only inherent extrinsics are
 	/// allowed to have mandatory dispatches.
 	MandatoryDispatch,
-	/// No validator has been able to fully verify this transaction.
+	/// None of the unsigned validators whitelisted this call.
 	///
-	/// The transactions are disallowed from being included by default. Some validator
-	/// (`SignedExtension`) needs to whitelist them first. This error usually means that either you
-	/// are either missing a `UnsignedValidator` or you forgot to add some `SignedExtension`
-	/// to your runtime.
-	NotFullyValidated,
+	/// Unsigned transactions are considered invalid by default. Some `UnsignedValidator`
+	/// or `SignedExtension` needs to whitelist them first. This error usually means that either you
+	/// are either missing a `UnsignedValidator` in a pallet or you forgot to include
+	/// a `SignedExtension` to extrinsic type.
+	///
+	/// Returning this error in `SignedExtension::pre_dispatch_unsigned` does not short-circuit
+	/// the validation pipeline. This means that other `SignedExtensions` are allowed to validate the call
+	/// as well. Only if all of them return this error we fail.
+	NoUnsignedValidator,
 }
 
 impl InvalidTransaction {
@@ -81,6 +85,14 @@ impl InvalidTransaction {
 	pub fn was_mandatory(&self) -> bool {
 		match self {
 			Self::BadMandatory => true,
+			_ => false,
+		}
+	}
+
+	/// Returns if the reason for the invalidity was missing unsigned validator.
+	pub fn missing_unsigned_validator(&self) -> bool {
+		match self {
+			Self::NoUnsignedValidator => true,
 			_ => false,
 		}
 	}
@@ -103,8 +115,8 @@ impl From<InvalidTransaction> for &'static str {
 			InvalidTransaction::MandatoryDispatch =>
 				"Tranaction dispatch is mandatory; transactions may not have mandatory dispatches.",
 			InvalidTransaction::Custom(_) => "InvalidTransaction custom error",
-			InvalidTransaction::NotFullyValidated =>
-				"Missing SignedExtension or UnsignedValidator to fully verify the transaction.",
+			InvalidTransaction::NoUnsignedValidator =>
+				"Missing SignedExtension or UnsignedValidator to whitelist unsigned transaction.",
 		}
 	}
 }
@@ -121,7 +133,7 @@ mod unknown {
 		CannotLookup,
 		/// No validator found for the given unsigned transaction.
 		///
-		/// Replaced by `InvalidTransaction::NotFullyValidated`.
+		/// Replaced by `InvalidTransaction::NoUnsignedValidator`.
 		#[deprecated]
 		NoUnsignedValidator,
 		/// Any other custom unknown validity that is not covered by this enum.
@@ -158,6 +170,15 @@ impl TransactionValidityError {
 	pub fn exhausted_resources(&self) -> bool {
 		match self {
 			Self::Invalid(e) => e.exhausted_resources(),
+			Self::Unknown(_) => false,
+		}
+	}
+
+	/// Returns `true` if the reason for the error was it being a unsigned transaction that was
+	/// not explicitly whitelisted by the callee.
+	pub fn missing_unsigned_validator(&self) -> bool {
+		match self {
+			Self::Invalid(e) => e.missing_unsigned_validator(),
 			Self::Unknown(_) => false,
 		}
 	}
@@ -305,46 +326,8 @@ impl ValidTransaction {
 	/// the pipeline.
 	/// Transactions with no tags should be rejected from the transaction pool and, what's more
 	/// important, should never be allowed in a block (i.e. the `pre_dispatch` should fail).
-	pub fn is_fully_validated(&self) -> IsFullyValidated {
-		IsFullyValidated::from(!self.provides.is_empty())
-	}
-}
-
-/// Enum determining if the transaction has been fully validated during `pre_dispatch` phase.
-///
-/// This mechanism is in place to prevent letting invalid transactions to be included in the block.
-/// Since in `SignedExtension`s we only run `pre_dispatch` for in-block transactions we use the
-/// enum to prevent a situation, where not a single `SignedExtension` rejects the transaction
-/// (some of them probably even augment it with some values), but there is no extension that
-/// fully validates the transaction (i.e. returns some `provides` tags).
-#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
-pub enum IsFullyValidated {
-	/// The transaction would pass `validate` and would return some `provides` tags.
-	///
-	/// i.e. the transaction is safe to be included in the block and should not fail during
-	/// `pre_dispatch`.
-	Yes,
-	/// The transaction might pass `validate`, but the result would not have any `provides` tags.
-	///
-	/// This means the transaction should be rejected in `pre_dispatch`. For instance it's an
-	/// unsigned transaction that has no validator assigned in any of the pallets.
-	No,
-}
-
-impl core::ops::BitOrAssign for IsFullyValidated {
-    fn bitor_assign(&mut self, rhs: Self) {
-		*self = match (*self, rhs) {
-			(Self::Yes, _) => Self::Yes,
-			(_, Self::Yes) => Self::Yes,
-			_ => Self::No,
-		};
-	}
-
-}
-
-impl From<bool> for IsFullyValidated {
-	fn from(other: bool) -> Self {
-		if other { IsFullyValidated::Yes } else { IsFullyValidated::No }
+	pub fn has_provides_tags(&self) -> bool {
+		!self.provides.is_empty()
 	}
 }
 
