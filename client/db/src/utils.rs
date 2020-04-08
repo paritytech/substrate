@@ -238,8 +238,10 @@ pub fn open_database<Block: BlockT>(
 			sp_database::as_database(db)
 		},
 		#[cfg(any(feature = "kvdb-rocksdb", test))]
-		DatabaseSettingsSrc::SubDb { .. } => {
-			unimplemented!();
+		DatabaseSettingsSrc::SubDb { path } => {
+			let options = subdb::Options::from_path(path.into());
+			Arc::new(subdb::SafeDatabase::from(options.open()
+				.map_err(|err| sp_blockchain::Error::Backend(format!("{}", err)))?))
 		},
 		#[cfg(any(feature = "kvdb-rocksdb", test))]
 		DatabaseSettingsSrc::ParityDb { path } => {
