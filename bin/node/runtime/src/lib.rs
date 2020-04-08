@@ -586,7 +586,6 @@ impl pallet_grandpa::Trait for Runtime {
 		Self::KeyOwnerIdentification,
 		TransactionSubmitterOf<node_primitives::report::ReporterId>,
 		Offences,
-		node_primitives::report::ReporterId,
 	>;
 }
 

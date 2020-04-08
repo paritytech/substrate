@@ -34,9 +34,8 @@ use sp_std::prelude::*;
 
 use codec::{self as codec, Decode, Encode};
 use frame_system::offchain::SubmitSignedTransaction;
-use sp_application_crypto::RuntimeAppPublic;
 use sp_finality_grandpa::{EquivocationProof, RoundNumber, SetId};
-use sp_runtime::{traits::IdentifyAccount, DispatchResult, Perbill};
+use sp_runtime::{DispatchResult, Perbill};
 use sp_staking::{
 	offence::{Kind, Offence, OffenceError, ReportOffence},
 	SessionIndex,
@@ -122,11 +121,11 @@ impl GetValidatorCount for sp_session::MembershipProof {
 /// using existing subsystems that are part of frame (type bounds described
 /// below) and will dispatch to them directly, it's only purpose is to wire all
 /// subsystems together.
-pub struct EquivocationHandler<I, S, R, K, O = GrandpaEquivocationOffence<I>> {
-	_phantom: sp_std::marker::PhantomData<(I, S, O, R, K)>,
+pub struct EquivocationHandler<I, S, R, O = GrandpaEquivocationOffence<I>> {
+	_phantom: sp_std::marker::PhantomData<(I, S, R, O)>,
 }
 
-impl<I, S, R, K, O> Default for EquivocationHandler<I, S, R, K, O> {
+impl<I, S, R, O> Default for EquivocationHandler<I, S, R, O> {
 	fn default() -> Self {
 		Self {
 			_phantom: Default::default(),
@@ -134,8 +133,7 @@ impl<I, S, R, K, O> Default for EquivocationHandler<I, S, R, K, O> {
 	}
 }
 
-impl<T, S, R, K, O> HandleEquivocation<T>
-	for EquivocationHandler<T::KeyOwnerIdentification, S, R, K, O>
+impl<T, S, R, O> HandleEquivocation<T> for EquivocationHandler<T::KeyOwnerIdentification, S, R, O>
 where
 	T: super::Trait,
 	// A transaction submitter. Used for submitting equivocation reports.
@@ -145,10 +143,6 @@ where
 	// A system for reporting offences after valid equivocation reports are
 	// processed.
 	R: ReportOffence<T::AccountId, T::KeyOwnerIdentification, O>,
-	// Key type to use when signing equivocation report transactions, must be
-	// convertible to and from an account id since that's what we need to use
-	// to sign transactions.
-	K: RuntimeAppPublic + IdentifyAccount<AccountId = T::AccountId>,
 {
 	type Offence = O;
 
@@ -162,7 +156,7 @@ where
 	) -> DispatchResult {
 		let call = super::Call::report_equivocation(equivocation_proof, key_owner_proof);
 
-		let res = S::submit_signed_from(call, K::all().into_iter().map(|k| k.into_account()));
+		let res = S::submit_signed(call);
 
 		if res.iter().any(|(_, r)| r.is_ok()) {
 			Ok(())
