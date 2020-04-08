@@ -596,32 +596,32 @@ impl<T: Trait> Module<T> {
 			.map(|price| if &price > new_price { price - new_price } else { new_price - price })
 			.unwrap_or(0);
 
-		Ok(ValidTransaction {
+		ValidTransaction::with_tag_prefix("ExampleOffchainWorker")
 			// We set base priority to 2**20 and hope it's included before any other
 			// transactions in the pool. Next we tweak the priority depending on how much
 			// it differs from the current average. (the more it differs the more priority it
 			// has).
-			priority: (1 << 20) + avg_price as u64,
+			.priority(T::UnsignedPriority::get().saturating_add(avg_price as _))
 			// This transaction does not require anything else to go before into the pool.
 			// In theory we could require `previous_unsigned_at` transaction to go first,
 			// but it's not necessary in our case.
-			requires: vec![],
+			//.and_requires()
 			// We set the `provides` tag to be the same as `next_unsigned_at`. This makes
 			// sure only one transaction produced after `next_unsigned_at` will ever
 			// get to the transaction pool and will end up in the block.
 			// We can still have multiple transactions compete for the same "spot",
 			// and the one with higher priority will replace other one in the pool.
-			provides: vec![Encode::encode(&(KEY_TYPE.0, next_unsigned_at))],
+			.and_provides(next_unsigned_at)
 			// The transaction is only valid for next 5 blocks. After that it's
 			// going to be revalidated by the pool.
-			longevity: 5,
+			.longevity(5)
 			// It's fine to propagate that transaction to other peers, which means it can be
 			// created even by nodes that don't produce blocks.
 			// Note that sometimes it's better to keep it for yourself (if you are the block
 			// producer), since for instance in some schemes others may copy your solution and
 			// claim a reward.
-			propagate: true,
-		})
+			.propagate(true)
+			.build()
 	}
 }
 
@@ -646,49 +646,9 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 			if !signature_valid {
 				return InvalidTransaction::BadProof.into();
 			}
-<<<<<<< variant A
 			Self::validate_transaction_parameters(&payload.block_number, &payload.price)
 		} else if let Call::submit_price_unsigned(block_number, new_price) = call {
 			Self::validate_transaction_parameters(block_number, new_price)
->>>>>>> variant B
-
-			// We prioritize transactions that are more far away from current average.
-			//
-			// Note this doesn't make much sense when building an actual oracle, but this example
-			// is here mostly to show off offchain workers capabilities, not about building an
-			// oracle.
-			let avg_price = Self::average_price()
-				.map(|price| if &price > new_price { price - new_price } else { new_price - price })
-				.unwrap_or(0);
-
-			ValidTransaction::with_tag_prefix("ExampleOffchainWorker")
-				// We set base priority to 2**20 to make sure it's included before any other
-				// transactions in the pool. Next we tweak the priority depending on how much
-				// it differs from the current average. (the more it differs the more priority it
-				// has).
-				.priority(T::UnsignedPriority::get().saturating_add(avg_price as _))
-				// This transaction does not require anything else to go before into the pool.
-				// In theory we could require `previous_unsigned_at` transaction to go first,
-				// but it's not necessary in our case.
-				//.and_requires()
-
-				// We set the `provides` tag to be the same as `next_unsigned_at`. This makes
-				// sure only one transaction produced after `next_unsigned_at` will ever
-				// get to the transaction pool and will end up in the block.
-				// We can still have multiple transactions compete for the same "spot",
-				// and the one with higher priority will replace other one in the pool.
-				.and_provides(next_unsigned_at)
-				// The transaction is only valid for next 5 blocks. After that it's
-				// going to be revalidated by the pool.
-				.longevity(5)
-				// It's fine to propagate that transaction to other peers, which means it can be
-				// created even by nodes that don't produce blocks.
-				// Note that sometimes it's better to keep it for yourself (if you are the block
-				// producer), since for instance in some schemes others may copy your solution and
-				// claim a reward.
-				.propagate(true)
-				.build()
-======= end
 		} else {
 			InvalidTransaction::Call.into()
 		}
