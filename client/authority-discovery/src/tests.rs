@@ -349,7 +349,7 @@ fn handle_dht_events_with_value_found_should_call_set_priority_group() {
 }
 
 #[test]
-fn terminate_when_event_stream_termiantes() {
+fn terminate_when_event_stream_terminates() {
 	let (dht_event_tx, dht_event_rx) = channel(1000);
 	let network: Arc<TestNetwork> = Arc::new(Default::default());
 	let key_store = KeyStore::new();
@@ -379,5 +379,4 @@ fn terminate_when_event_stream_termiantes() {
 			event channel is terminated.",
 		);
 	});
-
 }
