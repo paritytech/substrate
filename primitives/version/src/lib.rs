@@ -113,7 +113,7 @@ impl fmt::Display for RuntimeVersion {
 			self.spec_name,
 			self.spec_version,
 			self.impl_name,
-			self.impl_version
+			self.impl_version,
 			self.transaction_version,
 			self.authoring_version,
 		)
