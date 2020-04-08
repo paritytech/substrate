@@ -2934,7 +2934,7 @@ mod offchain_phragmen {
 				// given
 				assert_eq!(Staking::era_election_status(), ElectionStatus::Open(12));
 
-				// chill and nominate are now not allowed.
+				// chill et. al. are now not allowed.
 				assert_noop!(
 					Staking::chill(Origin::signed(10)),
 					Error::<Test>::CallNotAllowed,
@@ -3162,7 +3162,7 @@ mod offchain_phragmen {
 					&inner,
 				),
 				TransactionValidity::Ok(ValidTransaction {
-					priority: u64::max_value() / 2 + 1125, // the proposed slot stake.
+					priority: (1 << 20) + 1125, // the proposed slot stake.
 					requires: vec![],
 					provides: vec![("StakingOffchain", active_era()).encode()],
 					longevity: 3,
