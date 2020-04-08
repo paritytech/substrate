@@ -20,13 +20,30 @@ use finality_grandpa::BlockNumberOps;
 use sc_finality_grandpa::{voter, AuthorityId, SharedAuthoritySet, SharedVoterState};
 
 use futures::{FutureExt, TryFutureExt};
-use jsonrpc_core::Error;
 use jsonrpc_derive::rpc;
 use log::warn;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, fmt::Debug};
 
-type FutureResult<T> = Box<dyn jsonrpc_core::futures::Future<Item = T, Error = Error> + Send>;
+type FutureResult<T> =
+    Box<dyn jsonrpc_core::futures::Future<Item = T, Error = jsonrpc_core::Error> + Send>;
+
+#[derive(derive_more::Display, derive_more::From)]
+pub enum Error {
+    #[display(fmt = "GRANDPA RPC endpoint not ready")]
+    EndpointNotReady,
+}
+
+impl From<Error> for jsonrpc_core::Error {
+    fn from(error: Error) -> Self {
+        jsonrpc_core::Error {
+            message: format!("{}", error).into(),
+            // WIP: what error code should we use?
+            code: jsonrpc_core::ErrorCode::ServerError(1234),
+            data: None,
+        }
+    }
+}
 
 #[rpc]
 pub trait GrandpaApi {
@@ -116,14 +133,16 @@ impl ReportedRoundStates {
     pub fn from<Hash, Block>(
         voter_state: &SharedVoterState<AuthorityId>,
         authority_set: &SharedAuthoritySet<Hash, Block>,
-    ) -> Self
+    ) -> Result<Self, Error>
     where
         Hash: Debug + Clone + Eq + Send + Sync + 'static,
         Block: BlockNumberOps + Send + Sync + 'static,
     {
-        let voter_state = voter_state.read().as_ref().map(|vs| vs.voter_state());
-        // WIP: handle unwrap of lazily instantiated VoterState
-        let voter_state = voter_state.unwrap();
+        let voter_state = voter_state
+            .read()
+            .as_ref()
+            .map(|vs| vs.voter_state())
+            .ok_or(Error::EndpointNotReady)?;
 
         let current_voters: HashSet<AuthorityId> = authority_set
             .current_authorities()
@@ -148,11 +167,11 @@ impl ReportedRoundStates {
             .map(|(round, round_state)| RoundState::from(*round, round_state, &current_voters))
             .collect();
 
-        Self {
+        Ok(Self {
             set_id,
             best,
             background,
-        }
+        })
     }
 }
 
@@ -164,8 +183,8 @@ where
     fn round_state(&self) -> FutureResult<ReportedRoundStates> {
         let round_states =
             ReportedRoundStates::from(&self.shared_voter_state, &self.shared_authority_set);
-        let future = async move { Ok(round_states) }.boxed();
-        Box::new(future.compat())
+        let future = async move { round_states }.boxed();
+        Box::new(future.map_err(jsonrpc_core::Error::from).compat())
     }
 }
 
