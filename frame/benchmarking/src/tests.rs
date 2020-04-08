@@ -202,11 +202,13 @@ fn benchmarks_macro_verify_works() {
 	// Check postcondition for benchmark `set_value` is valid.
 	let selected_benchmark = SelectedBenchmark::set_value;
 
+	let closure = <SelectedBenchmark as BenchmarkingSetup<Test>>::verify(
+		&selected_benchmark,
+		&[(BenchmarkParameter::b, 1)],
+	).expect("failed to create closure");
+
 	new_test_ext().execute_with(|| {
-		assert_ok!(<SelectedBenchmark as BenchmarkingSetup<Test>>::verify(
-			&selected_benchmark,
-			&[(BenchmarkParameter::b, 1)],
-		));
+		assert_ok!(closure());
 	});
 }
 

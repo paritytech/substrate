@@ -28,7 +28,7 @@ pub use utils::*;
 pub use analysis::Analysis;
 #[doc(hidden)]
 pub use sp_io::storage::root as storage_root;
-pub use sp_runtime::traits::Dispatchable;
+pub use sp_runtime::traits::{Dispatchable, Zero};
 pub use paste;
 
 /// Construct pallet benchmarks for weighing dispatchables.
@@ -514,7 +514,9 @@ macro_rules! benchmark_backend {
 				Ok(Box::new(move || -> Result<(), &'static str> { $eval; Ok(()) }))
 			}
 
-			fn verify(&self, components: &[($crate::BenchmarkParameter, u32)]) -> Result<(), &'static str> {
+			fn verify(&self, components: &[($crate::BenchmarkParameter, u32)])
+				-> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>
+			{
 				$(
 					let $common = $common_from;
 				)*
@@ -527,10 +529,8 @@ macro_rules! benchmark_backend {
 				)*
 				$( $param_instancer ; )*
 				$( $post )*
-				$eval
-				$postcode
 
-				Ok(())
+				Ok(Box::new(move || -> Result<(), &'static str> { $eval; $postcode; Ok(()) }))
 			}
 		}
 	};
@@ -572,7 +572,9 @@ macro_rules! benchmark_backend {
 				Ok(Box::new(move || -> Result<(), &'static str> { $eval; Ok(()) }))
 			}
 
-			fn verify(&self, components: &[($crate::BenchmarkParameter, u32)]) -> Result<(), &'static str> {
+			fn verify(&self, components: &[($crate::BenchmarkParameter, u32)])
+				-> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>
+			{
 				$(
 					let $common = $common_from;
 				)*
@@ -585,10 +587,8 @@ macro_rules! benchmark_backend {
 				)*
 				$( $param_instancer ; )*
 				$( $post )*
-				$eval
-				$postcode
 
-				Ok(())
+				Ok(Box::new(move || -> Result<(), &'static str> { $eval; $postcode; Ok(()) }))
 			}
 		}
 	}
@@ -635,7 +635,9 @@ macro_rules! selected_benchmark {
 				}
 			}
 
-			fn verify(&self, components: &[($crate::BenchmarkParameter, u32)]) -> Result<(), &'static str> {
+			fn verify(&self, components: &[($crate::BenchmarkParameter, u32)])
+				-> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>
+			{
 				match self {
 					$( Self::$bench => <$bench as $crate::BenchmarkingSetup<T>>::verify(&$bench, components), )*
 				}
@@ -667,7 +669,9 @@ macro_rules! selected_benchmark {
 				}
 			}
 
-			fn verify(&self, components: &[($crate::BenchmarkParameter, u32)]) -> Result<(), &'static str> {
+			fn verify(&self, components: &[($crate::BenchmarkParameter, u32)])
+				-> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>
+			{
 				match self {
 					$( Self::$bench => <$bench as $crate::BenchmarkingSetupInstance<T, I>>::verify(&$bench, components), )*
 				}
@@ -746,10 +750,13 @@ macro_rules! impl_benchmark {
 
 						// Run the benchmark `repeat` times.
 						for _ in 0..repeat {
-							// Set the block number to 1 so events are deposited.
-							frame_system::Module::<T>::set_block_number(1.into());
 							// Set up the externalities environment for the setup we want to benchmark.
 							let closure_to_benchmark = <SelectedBenchmark as $crate::BenchmarkingSetup<T>>::instance(&selected_benchmark, &c)?;
+
+							// Set the block number to at least 1 so events are deposited.
+							if $crate::Zero::is_zero(&frame_system::Module::<T>::block_number()) {
+								frame_system::Module::<T>::set_block_number(1.into());
+							}
 
 							// Commit the externalities to the database, flushing the DB cache.
 							// This will enable worst case scenario for reading from the database.
@@ -848,10 +855,13 @@ macro_rules! impl_benchmark {
 
 						// Run the benchmark `repeat` times.
 						for _ in 0..repeat {
-							// Set the block number to 1 so events are deposited.
-							frame_system::Module::<T>::set_block_number(1.into());
 							// Set up the externalities environment for the setup we want to benchmark.
 							let closure_to_benchmark = <SelectedBenchmark as $crate::BenchmarkingSetupInstance<T, I>>::instance(&selected_benchmark, &c)?;
+
+							// Set the block number to at least 1 so events are deposited.
+							if $crate::Zero::is_zero(&frame_system::Module::<T>::block_number()) {
+								frame_system::Module::<T>::set_block_number(1.into());
+							}
 
 							// Commit the externalities to the database, flushing the DB cache.
 							// This will enable worst case scenario for reading from the database.
@@ -916,10 +926,17 @@ macro_rules! impl_benchmark_tests {
 								)
 								.collect();
 
-							// Set the block number to 1 so events are deposited.
-							frame_system::Module::<T>::set_block_number(1.into());
-							// Verify the setup we want to benchmark.
-							<SelectedBenchmark as $crate::BenchmarkingSetup<T>>::verify(&selected_benchmark, &c)?;
+							// Set up the verification state
+							let closure_to_verify = <SelectedBenchmark as $crate::BenchmarkingSetup<T>>::verify(&selected_benchmark, &c)?;
+
+							// Set the block number to at least 1 so events are deposited.
+							if $crate::Zero::is_zero(&frame_system::Module::<T>::block_number()) {
+								frame_system::Module::<T>::set_block_number(1.into());
+							}
+
+							// Run verification
+							closure_to_verify()?;
+
 							// Reset the state
 							$crate::benchmarking::wipe_db();
 						}
@@ -956,10 +973,17 @@ macro_rules! impl_benchmark_tests {
 								)
 								.collect();
 
-							// Set the block number to 1 so events are deposited.
-							frame_system::Module::<T>::set_block_number(1.into());
-							// Verify the setup we want to benchmark.
-							<SelectedBenchmark as $crate::BenchmarkingSetupInstance<T, _>>::verify(&selected_benchmark, &c)?;
+							// Set up the verification state
+							let closure_to_verify = <SelectedBenchmark as $crate::BenchmarkingSetupInstance<T, _>>::verify(&selected_benchmark, &c)?;
+
+							// Set the block number to at least 1 so events are deposited.
+							if $crate::Zero::is_zero(&frame_system::Module::<T>::block_number()) {
+								frame_system::Module::<T>::set_block_number(1.into());
+							}
+
+							// Run verification
+							closure_to_verify()?;
+
 							// Reset the state
 							$crate::benchmarking::wipe_db();
 						}
