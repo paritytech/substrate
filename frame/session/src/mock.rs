@@ -150,6 +150,16 @@ pub fn reset_before_session_end_called() {
 	BEFORE_SESSION_END_CALLED.with(|b| *b.borrow_mut() = false);
 }
 
+pub fn new_test_ext() -> sp_io::TestExternalities {
+	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	GenesisConfig::<Test> {
+		keys: NEXT_VALIDATORS.with(|l|
+			l.borrow().iter().cloned().map(|i| (i, i, UintAuthorityId(i).into())).collect()
+		),
+	}.assimilate_storage(&mut t).unwrap();
+	sp_io::TestExternalities::new(t)
+}
+
 #[derive(Clone, Eq, PartialEq)]
 pub struct Test;
 

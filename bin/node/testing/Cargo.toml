@@ -52,9 +52,5 @@ fs_extra = "1"
 criterion = "0.3.0"
 sc-cli = { version = "0.8.0-alpha.5", path = "../../../client/cli" }
 
-[[bench]]
-name = "import"
-harness = false
-
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

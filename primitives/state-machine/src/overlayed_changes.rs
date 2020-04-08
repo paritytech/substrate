@@ -22,6 +22,7 @@ use crate::{
 		NO_EXTRINSIC_INDEX, BlockNumber, build_changes_trie,
 		State as ChangesTrieState,
 	},
+	stats::StateMachineStats,
 };
 
 #[cfg(test)]
@@ -57,6 +58,8 @@ pub struct OverlayedChanges {
 	pub(crate) committed: OverlayedChangeSet,
 	/// True if extrinsics stats must be collected.
 	pub(crate) collect_extrinsics: bool,
+	/// Collect statistic on this execution.
+	pub(crate) stats: StateMachineStats,
 }
 
 /// The storage value, used inside OverlayedChanges.
@@ -206,7 +209,11 @@ impl OverlayedChanges {
 	pub fn storage(&self, key: &[u8]) -> Option<Option<&[u8]>> {
 		self.prospective.top.get(key)
 			.or_else(|| self.committed.top.get(key))
-			.map(|x| x.value.as_ref().map(AsRef::as_ref))
+			.map(|x| {
+				let size_read = x.value.as_ref().map(|x| x.len() as u64).unwrap_or(0);
+				self.stats.tally_read_modified(size_read);
+				x.value.as_ref().map(AsRef::as_ref)
+			})
 	}
 
 	/// Returns a double-Option: None if the key is unknown (i.e. and the query should be referred
@@ -215,12 +222,16 @@ impl OverlayedChanges {
 	pub fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Option<Option<&[u8]>> {
 		if let Some(map) = self.prospective.children.get(storage_key) {
 			if let Some(val) = map.0.get(key) {
+				let size_read = val.value.as_ref().map(|x| x.len() as u64).unwrap_or(0);
+				self.stats.tally_read_modified(size_read);
 				return Some(val.value.as_ref().map(AsRef::as_ref));
 			}
 		}
 
 		if let Some(map) = self.committed.children.get(storage_key) {
 			if let Some(val) = map.0.get(key) {
+				let size_read = val.value.as_ref().map(|x| x.len() as u64).unwrap_or(0);
+				self.stats.tally_read_modified(size_read);
 				return Some(val.value.as_ref().map(AsRef::as_ref));
 			}
 		}
@@ -232,6 +243,8 @@ impl OverlayedChanges {
 	///
 	/// `None` can be used to delete a value specified by the given key.
 	pub(crate) fn set_storage(&mut self, key: StorageKey, val: Option<StorageValue>) {
+		let size_write = val.as_ref().map(|x| x.len() as u64).unwrap_or(0);
+		self.stats.tally_write_overlay(size_write);
 		let extrinsic_index = self.extrinsic_index();
 		let entry = self.prospective.top.entry(key).or_default();
 		entry.value = val;
@@ -252,6 +265,8 @@ impl OverlayedChanges {
 		key: StorageKey,
 		val: Option<StorageValue>,
 	) {
+		let size_write = val.as_ref().map(|x| x.len() as u64).unwrap_or(0);
+		self.stats.tally_write_overlay(size_write);
 		let extrinsic_index = self.extrinsic_index();
 		let map_entry = self.prospective.children.entry(storage_key)
 			.or_insert_with(|| (Default::default(), child_info.to_owned()));

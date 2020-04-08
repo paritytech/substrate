@@ -39,6 +39,7 @@ hash-db = "0.15.2"
 
 sp-io = { version = "2.0.0-alpha.5", path = "../../primitives/io" }
 sp-runtime = { version = "2.0.0-alpha.5", path = "../../primitives/runtime" }
+sp-utils = { version = "2.0.0-alpha.5", path = "../../primitives/utils" }
 sp-blockchain = { version = "2.0.0-alpha.5", path = "../../primitives/blockchain" }
 sp-core = { version = "2.0.0-alpha.5", path = "../../primitives/core" }
 sp-session = { version = "2.0.0-alpha.5", path = "../../primitives/session" }
@@ -70,6 +71,14 @@ parity-multiaddr = { package = "parity-multiaddr", version = "0.7.3" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus" , version = "0.8.0-alpha.5"}
 tracing = "0.1.10"
 parity-util-mem = { version = "0.6.0", default-features = false, features = ["primitive-types"] }
+
+
+[target.'cfg(any(unix, windows))'.dependencies]
+netstat2 = "0.8.1"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+procfs = '0.7.8'
+
 
 [dev-dependencies]
 substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../test-utils/runtime/client" }

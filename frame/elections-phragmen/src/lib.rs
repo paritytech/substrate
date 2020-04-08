@@ -185,8 +185,12 @@ decl_storage! {
 				// Note: all members will only vote for themselves, hence they must be given exactly
 				// their own stake as total backing. Any sane election should behave as such.
 				// Nonetheless, stakes will be updated for term 1 onwards according to the election.
-				<Members<T>>::append(&[(member.clone(), *stake)])
-					.expect("Failed to append genesis members.");
+				Members::<T>::mutate(|members| {
+					match members.binary_search_by(|(a, _b)| a.cmp(member)) {
+						Ok(_) => panic!("Duplicate member in elections phragmen genesis: {}", member),
+						Err(pos) => members.insert(pos, (member.clone(), *stake)),
+					}
+				});
 
 				// set self-votes to make persistent.
 				<Module<T>>::vote(
@@ -759,7 +763,7 @@ impl<T: Trait> Module<T> {
 			let mut new_members = (&new_set_with_stake[..split_point]).to_vec();
 
 			// save the runners up as-is. They are sorted based on desirability.
-			// sort and save the members.
+			// save the members, sorted based on account id.
 			new_members.sort_by(|i, j| i.0.cmp(&j.0));
 
 			let mut prime_votes: Vec<_> = new_members.iter().map(|c| (&c.0, BalanceOf::<T>::zero())).collect();
@@ -1155,6 +1159,23 @@ mod tests {
 	}
 
 	#[test]
+	fn genesis_members_unsorted_should_work() {
+		ExtBuilder::default().genesis_members(vec![(2, 20), (1, 10)]).build().execute_with(|| {
+			System::set_block_number(1);
+			assert_eq!(Elections::members(), vec![(1, 10), (2, 20)]);
+
+			assert_eq!(Elections::voting(1), (10, vec![1]));
+			assert_eq!(Elections::voting(2), (20, vec![2]));
+
+			// they will persist since they have self vote.
+			System::set_block_number(5);
+			assert_ok!(Elections::end_block(System::block_number()));
+
+			assert_eq!(Elections::members_ids(), vec![1, 2]);
+		})
+	}
+
+	#[test]
 	#[should_panic = "Genesis member does not have enough stake"]
 	fn genesis_members_cannot_over_stake_0() {
 		// 10 cannot lock 20 as their stake and extra genesis will panic.
@@ -1166,6 +1187,12 @@ mod tests {
 	fn genesis_members_cannot_over_stake_1() {
 		// 10 cannot reserve 20 as voting bond and extra genesis will panic.
 		ExtBuilder::default().voter_bond(20).genesis_members(vec![(1, 10), (2, 20)]).build();
+	}
+
+	#[test]
+	#[should_panic = "Duplicate member in elections phragmen genesis: 2"]
+	fn genesis_members_cannot_be_duplicate() {
+		ExtBuilder::default().genesis_members(vec![(1, 10), (2, 10), (2, 10)]).build();
 	}
 
 	#[test]

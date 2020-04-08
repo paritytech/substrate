@@ -35,7 +35,7 @@ use sp_runtime::{
 	impl_opaque_keys, generic, create_runtime_str,
 };
 use sp_runtime::curve::PiecewiseLinear;
-use sp_runtime::transaction_validity::{TransactionValidity, TransactionSource};
+use sp_runtime::transaction_validity::{TransactionValidity, TransactionSource, TransactionPriority};
 use sp_runtime::traits::{
 	self, BlakeTwo256, Block as BlockT, StaticLookup, SaturatedConversion,
 	ConvertInto, OpaqueKeys,
@@ -208,6 +208,17 @@ impl pallet_utility::Trait for Runtime {
 }
 
 parameter_types! {
+	pub const MaximumWeight: Weight = 2_000_000;
+}
+
+impl pallet_scheduler::Trait for Runtime {
+	type Event = Event;
+	type Origin = Origin;
+	type Call = Call;
+	type MaximumWeight = MaximumWeight;
+}
+
+parameter_types! {
 	pub const EpochDuration: u64 = EPOCH_DURATION_IN_SLOTS;
 	pub const ExpectedBlockTime: Moment = MILLISECS_PER_BLOCK;
 }
@@ -262,6 +273,7 @@ impl pallet_transaction_payment::Trait for Runtime {
 parameter_types! {
 	pub const MinimumPeriod: Moment = SLOT_DURATION / 2;
 }
+
 impl pallet_timestamp::Trait for Runtime {
 	type Moment = Moment;
 	type OnTimestampSet = Babe;
@@ -349,6 +361,7 @@ impl pallet_staking::Trait for Runtime {
 	type Call = Call;
 	type SubmitTransaction = TransactionSubmitterOf<()>;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
+	type UnsignedPriority = StakingUnsignedPriority;
 }
 
 parameter_types! {
@@ -392,6 +405,7 @@ impl pallet_democracy::Trait for Runtime {
 	type CooloffPeriod = CooloffPeriod;
 	type PreimageByteDeposit = PreimageByteDeposit;
 	type Slash = Treasury;
+	type Scheduler = Scheduler;
 }
 
 parameter_types! {
@@ -527,6 +541,9 @@ impl pallet_sudo::Trait for Runtime {
 
 parameter_types! {
 	pub const SessionDuration: BlockNumber = EPOCH_DURATION_IN_SLOTS as _;
+	pub const ImOnlineUnsignedPriority: TransactionPriority = TransactionPriority::max_value();
+	/// We prioritize im-online heartbeats over phragmen solution submission.
+	pub const StakingUnsignedPriority: TransactionPriority = TransactionPriority::max_value() / 2;
 }
 
 impl pallet_im_online::Trait for Runtime {
@@ -536,6 +553,7 @@ impl pallet_im_online::Trait for Runtime {
 	type SubmitTransaction = TransactionSubmitterOf<Self::AuthorityId>;
 	type SessionDuration = SessionDuration;
 	type ReportUnresponsiveness = Offences;
+	type UnsignedPriority = ImOnlineUnsignedPriority;
 }
 
 impl pallet_offences::Trait for Runtime {
@@ -670,6 +688,7 @@ construct_runtime!(
 		Society: pallet_society::{Module, Call, Storage, Event<T>, Config<T>},
 		Recovery: pallet_recovery::{Module, Call, Storage, Event<T>},
 		Vesting: pallet_vesting::{Module, Call, Storage, Event<T>, Config<T>},
+		Scheduler: pallet_scheduler::{Module, Call, Storage, Event<T>},
 	}
 );
 
@@ -873,10 +892,14 @@ impl_runtime_apis! {
 			// To get around that, we separated the Session benchmarks into its own crate, which is why
 			// we need these two lines below.
 			use pallet_session_benchmarking::Module as SessionBench;
+			use pallet_offences_benchmarking::Module as OffencesBench;
+
 			impl pallet_session_benchmarking::Trait for Runtime {}
+			impl pallet_offences_benchmarking::Trait for Runtime {}
 
 			let mut batches = Vec::<BenchmarkBatch>::new();
 			let params = (&pallet, &benchmark, &lowest_range_values, &highest_range_values, &steps, repeat);
+
 			add_benchmark!(params, batches, b"balances", Balances);
 			add_benchmark!(params, batches, b"collective", Council);
 			add_benchmark!(params, batches, b"democracy", Democracy);
@@ -888,6 +911,8 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, b"treasury", Treasury);
 			add_benchmark!(params, batches, b"utility", Utility);
 			add_benchmark!(params, batches, b"vesting", Vesting);
+			add_benchmark!(params, batches, b"offences", OffencesBench::<Runtime>);
+
 			if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
 			Ok(batches)
 		}

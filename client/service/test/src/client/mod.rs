@@ -1263,7 +1263,7 @@ fn doesnt_import_blocks_that_revert_finality() {
 			pruning: PruningMode::ArchiveAll,
 			source: DatabaseSettingsSrc::Path {
 				path: tmp.path().into(),
-				cache_size: None,
+				cache_size: 1024,
 			},
 		},
 		u64::max_value(),
@@ -1464,7 +1464,7 @@ fn returns_status_for_pruned_blocks() {
 			pruning: PruningMode::keep_blocks(1),
 			source: DatabaseSettingsSrc::Path {
 				path: tmp.path().into(),
-				cache_size: None,
+				cache_size: 1024,
 			},
 		},
 		u64::max_value(),

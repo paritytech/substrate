@@ -160,36 +160,38 @@ where
 					recorder.clone(),
 				);
 
-				StateMachine::new(
+				let changes = &mut *changes.borrow_mut();
+				let mut state_machine = StateMachine::new(
 					&backend,
 					changes_trie_state,
-					&mut *changes.borrow_mut(),
+					changes,
 					&self.executor,
 					method,
 					call_data,
 					extensions.unwrap_or_default(),
 					&runtime_code,
 					self.spawn_handle.clone(),
-				)
+				);
 				// TODO: https://github.com/paritytech/substrate/issues/4455
 				// .with_storage_transaction_cache(storage_transaction_cache.as_mut().map(|c| &mut **c))
-				.execute_using_consensus_failure_handler(execution_manager, native_call)
+				state_machine.execute_using_consensus_failure_handler(execution_manager, native_call)
 			},
 			None => {
 				let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
-				StateMachine::new(
+				let runtime_code = state_runtime_code.runtime_code()?;
+				let changes = &mut *changes.borrow_mut();
+				let mut state_machine = StateMachine::new(
 					&state,
 					changes_trie_state,
-					&mut *changes.borrow_mut(),
+					changes,
 					&self.executor,
 					method,
 					call_data,
 					extensions.unwrap_or_default(),
-					&state_runtime_code.runtime_code()?,
+					&runtime_code,
 					self.spawn_handle.clone(),
-				)
-				.with_storage_transaction_cache(storage_transaction_cache.as_mut().map(|c| &mut **c))
-				.execute_using_consensus_failure_handler(execution_manager, native_call)
+				).with_storage_transaction_cache(storage_transaction_cache.as_mut().map(|c| &mut **c));
+				state_machine.execute_using_consensus_failure_handler(execution_manager, native_call)
 			}
 		}.map_err(Into::into)
 	}
