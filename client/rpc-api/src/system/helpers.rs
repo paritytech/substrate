@@ -18,10 +18,7 @@
 
 use std::fmt;
 use serde::{Serialize, Deserialize};
-use serde_json::{Value, map::Map};
-
-/// Node properties
-pub type Properties = Map<String, Value>;
+use sp_chain_spec::{Properties, ChainType};
 
 /// Running node's static details.
 #[derive(Clone, Debug)]
@@ -34,6 +31,8 @@ pub struct SystemInfo {
 	pub chain_name: String,
 	/// A custom set of properties defined in the chain spec.
 	pub properties: Properties,
+	/// The type of this chain.
+	pub chain_type: ChainType,
 }
 
 /// Health struct returned by the RPC

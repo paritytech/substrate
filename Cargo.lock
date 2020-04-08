@@ -594,6 +594,7 @@ dependencies = [
  "ansi_term 0.12.1",
  "node-cli",
  "rand 0.7.3",
+ "sc-chain-spec",
  "sc-keystore",
  "sp-core",
  "structopt",
@@ -5841,6 +5842,7 @@ dependencies = [
  "sc-telemetry",
  "serde",
  "serde_json",
+ "sp-chain-spec",
  "sp-core",
  "sp-runtime",
 ]
@@ -6539,6 +6541,7 @@ dependencies = [
  "serde_json",
  "sp-api",
  "sp-blockchain",
+ "sp-chain-spec",
  "sp-core",
  "sp-io",
  "sp-offchain",
@@ -6568,6 +6571,7 @@ dependencies = [
  "parking_lot 0.10.0",
  "serde",
  "serde_json",
+ "sp-chain-spec",
  "sp-core",
  "sp-rpc",
  "sp-runtime",
@@ -7265,6 +7269,14 @@ dependencies = [
  "sp-consensus",
  "sp-runtime",
  "sp-state-machine",
+]
+
+[[package]]
+name = "sp-chain-spec"
+version = "2.0.0-alpha.5"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
