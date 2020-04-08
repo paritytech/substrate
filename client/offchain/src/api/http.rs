@@ -32,11 +32,12 @@ use futures::{prelude::*, future, channel::mpsc};
 use log::error;
 use sp_core::offchain::{HttpRequestId, Timestamp, HttpRequestStatus, HttpError};
 use std::{fmt, io::Read as _, mem, pin::Pin, task::Context, task::Poll};
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
 
 /// Creates a pair of [`HttpApi`] and [`HttpWorker`].
 pub fn http() -> (HttpApi, HttpWorker) {
-	let (to_worker, from_api) = mpsc::unbounded();
-	let (to_api, from_worker) = mpsc::unbounded();
+	let (to_worker, from_api) = tracing_unbounded("mpsc_ocw_to_worker");
+	let (to_api, from_worker) = tracing_unbounded("mpsc_ocw_to_api");
 
 	let api = HttpApi {
 		to_worker,
@@ -63,10 +64,10 @@ pub fn http() -> (HttpApi, HttpWorker) {
 /// to offchain workers.
 pub struct HttpApi {
 	/// Used to sends messages to the worker.
-	to_worker: mpsc::UnboundedSender<ApiToWorker>,
+	to_worker: TracingUnboundedSender<ApiToWorker>,
 	/// Used to receive messages from the worker.
 	/// We use a `Fuse` in order to have an extra protection against panicking.
-	from_worker: stream::Fuse<mpsc::UnboundedReceiver<WorkerToApi>>,
+	from_worker: stream::Fuse<TracingUnboundedReceiver<WorkerToApi>>,
 	/// Id to assign to the next HTTP request that is started.
 	next_id: HttpRequestId,
 	/// List of HTTP requests in preparation or in progress.
@@ -304,7 +305,7 @@ impl HttpApi {
 				let mut output = Vec::with_capacity(ids.len());
 				let mut must_wait_more = false;
 				for id in ids {
-					output.push(match self.requests.get_mut(id) {
+					output.push(match self.requests.get(id) {
 						None => HttpRequestStatus::Invalid,
 						Some(HttpApiRequest::NotDispatched(_, _)) =>
 							unreachable!("we replaced all the NotDispatched with Dispatched earlier; qed"),
@@ -322,10 +323,8 @@ impl HttpApi {
 				// Are we ready to call `return`?
 				let is_done = if let future::MaybeDone::Done(_) = deadline {
 					true
-				} else if !must_wait_more {
-					true
 				} else {
-					false
+					!must_wait_more
 				};
 
 				if is_done {
@@ -548,9 +547,9 @@ enum WorkerToApi {
 /// Must be continuously polled for the [`HttpApi`] to properly work.
 pub struct HttpWorker {
 	/// Used to sends messages to the `HttpApi`.
-	to_api: mpsc::UnboundedSender<WorkerToApi>,
+	to_api: TracingUnboundedSender<WorkerToApi>,
 	/// Used to receive messages from the `HttpApi`.
-	from_api: mpsc::UnboundedReceiver<ApiToWorker>,
+	from_api: TracingUnboundedReceiver<ApiToWorker>,
 	/// The engine that runs HTTP requests.
 	http_client: hyper::Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>, hyper::Body>,
 	/// HTTP requests that are being worked on by the engine.
@@ -700,6 +699,12 @@ mod tests {
 			fn tokio_run<T>(future: impl std::future::Future<Output = T>) {
 				let _ = tokio::runtime::Runtime::new().unwrap().block_on(future);
 			}
+
+			// We spawn quite a bit of HTTP servers here due to how async API
+			// works for offchain workers, so be sure to raise the FD limit
+			// (particularly useful for macOS where the default soft limit may
+			// not be enough).
+			fdlimit::raise_fd_limit();
 
 			let (api, worker) = http();
 			std::thread::spawn(move || tokio_run(worker));

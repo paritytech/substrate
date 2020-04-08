@@ -14,22 +14,19 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::io;
-use std::fs;
-use std::path::PathBuf;
-use std::fmt::Debug;
+use crate::error;
+use crate::params::{BlockNumber, PruningParams, SharedParams};
+use crate::CliConfiguration;
 use log::info;
-use structopt::StructOpt;
 use sc_service::{
-	Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand, ChainSpec,
-	config::DatabaseConfig, Roles,
+	config::DatabaseConfig, Configuration, ServiceBuilderCommand,
 };
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
-
-use crate::error;
-use crate::VersionInfo;
-use crate::runtime::run_until_exit;
-use crate::params::{SharedParams, BlockNumber, PruningParams};
+use std::fmt::Debug;
+use std::fs;
+use std::io;
+use std::path::PathBuf;
+use structopt::StructOpt;
 
 /// The `export-blocks` command used to export blocks.
 #[derive(Debug, StructOpt, Clone)]
@@ -65,23 +62,22 @@ pub struct ExportBlocksCmd {
 
 impl ExportBlocksCmd {
 	/// Run the export-blocks command
-	pub fn run<G, E, B, BC, BB>(
-		self,
-		config: Configuration<G, E>,
+	pub async fn run<B, BC, BB>(
+		&self,
+		config: Configuration,
 		builder: B,
 	) -> error::Result<()>
 	where
-		B: FnOnce(Configuration<G, E>) -> Result<BC, sc_service::error::Error>,
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
+		B: FnOnce(Configuration) -> Result<BC, sc_service::error::Error>,
 		BC: ServiceBuilderCommand<Block = BB> + Unpin,
 		BB: sp_runtime::traits::Block + Debug,
 		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
 		<BB as BlockT>::Hash: std::str::FromStr,
 	{
-		if let DatabaseConfig::Path { ref path, .. } = config.expect_database() {
+		if let DatabaseConfig::Path { ref path, .. } = &config.database {
 			info!("DB path: {}", path.display());
 		}
+
 		let from = self.from.as_ref().and_then(|f| f.parse().ok()).unwrap_or(1);
 		let to = self.to.as_ref().and_then(|t| t.parse().ok());
 
@@ -92,26 +88,19 @@ impl ExportBlocksCmd {
 			None => Box::new(io::stdout()),
 		};
 
-		run_until_exit(config, |config| {
-			Ok(builder(config)?.export_blocks(file, from.into(), to, binary))
-		})
+		builder(config)?
+			.export_blocks(file, from.into(), to, binary)
+			.await
+			.map_err(Into::into)
+	}
+}
+
+impl CliConfiguration for ExportBlocksCmd {
+	fn shared_params(&self) -> &SharedParams {
+		&self.shared_params
 	}
 
-	/// Update and prepare a `Configuration` with command line parameters
-	pub fn update_config<G, E, F>(
-		&self,
-		mut config: &mut Configuration<G, E>,
-		spec_factory: F,
-		version: &VersionInfo,
-	) -> error::Result<()> where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-		F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-	{
-		self.shared_params.update_config(&mut config, spec_factory, version)?;
-		self.pruning_params.update_config(&mut config, Roles::FULL, true)?;
-		config.use_in_memory_keystore()?;
-
-		Ok(())
+	fn pruning_params(&self) -> Option<&PruningParams> {
+		Some(&self.pruning_params)
 	}
 }

@@ -17,23 +17,24 @@
 //! A set of APIs supported by the client along with their primitives.
 
 use std::{fmt, collections::HashSet};
-use futures::channel::mpsc;
 use sp_core::storage::StorageKey;
 use sp_runtime::{
 	traits::{Block as BlockT, NumberFor},
-	generic::{BlockId, SignedBlock}
+	generic::{BlockId, SignedBlock},
+	Justification,
 };
 use sp_consensus::BlockOrigin;
 
 use crate::blockchain::Info;
 use crate::notifications::StorageEventStream;
+use sp_utils::mpsc::TracingUnboundedReceiver;
 use sp_blockchain;
 
 /// Type that implements `futures::Stream` of block import events.
-pub type ImportNotifications<Block> = mpsc::UnboundedReceiver<BlockImportNotification<Block>>;
+pub type ImportNotifications<Block> = TracingUnboundedReceiver<BlockImportNotification<Block>>;
 
 /// A stream of block finality notifications.
-pub type FinalityNotifications<Block> = mpsc::UnboundedReceiver<FinalityNotification<Block>>;
+pub type FinalityNotifications<Block> = TracingUnboundedReceiver<FinalityNotification<Block>>;
 
 /// Expected hashes of blocks at given heights.
 ///
@@ -73,8 +74,8 @@ pub trait BlockchainEvents<Block: BlockT> {
 	) -> sp_blockchain::Result<StorageEventStream<Block::Hash>>;
 }
 
-/// Fetch block body by ID.
-pub trait BlockBody<Block: BlockT> {
+/// Interface for fetching block data.
+pub trait BlockBackend<Block: BlockT> {
 	/// Get block body by ID. Returns `None` if the body is not stored.
 	fn block_body(
 		&self,
@@ -83,6 +84,12 @@ pub trait BlockBody<Block: BlockT> {
 
 	/// Get full block by id.
 	fn block(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<SignedBlock<Block>>>;
+
+	/// Get block status.
+	fn block_status(&self, id: &BlockId<Block>) -> sp_blockchain::Result<sp_consensus::BlockStatus>;
+
+	/// Get block justification set by id.
+	fn justification(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Justification>>;
 }
 
 /// Provide a list of potential uncle headers for a given block.
@@ -172,8 +179,12 @@ pub struct IoInfo {
 	pub state_reads: u64,
 	/// State reads (keys) from cache.
 	pub state_reads_cache: u64,
-	/// State reads (keys) from cache.
+	/// State reads (keys)
 	pub state_writes: u64,
+	/// State write (keys) already cached.
+	pub state_writes_cache: u64,
+	/// State write (trie nodes) to backend db.
+	pub state_writes_nodes: u64,
 }
 
 /// Usage statistics for running client instance.
@@ -195,7 +206,7 @@ impl fmt::Display for UsageInfo {
 			f,
 			"caches: ({} state, {} db overlay), \
 			 state db: ({} non-canonical, {} pruning, {} pinned), \
-			 i/o: ({} tx, {} write, {} read, {} avg tx, {}/{} key cache reads/total, {} key writes)",
+			 i/o: ({} tx, {} write, {} read, {} avg tx, {}/{} key cache reads/total, {} trie nodes writes)",
 			self.memory.state_cache,
 			self.memory.database_cache,
 			self.memory.state_db.non_canonical,
@@ -207,7 +218,7 @@ impl fmt::Display for UsageInfo {
 			self.io.average_transaction_size,
 			self.io.state_reads_cache,
 			self.io.state_reads,
-			self.io.state_writes,
+			self.io.state_writes_nodes,
 		)
 	}
 }

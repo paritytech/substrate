@@ -19,7 +19,8 @@ use crate::utils::{
 	generate_runtime_mod_name_for_trait, generate_method_runtime_api_impl_name,
 	extract_parameter_names_types_and_borrows, generate_native_call_generator_fn_name,
 	return_type_extract_type, generate_call_api_at_fn_name, prefix_function_with_trait,
-	extract_all_signature_types,
+	extract_all_signature_types, extract_block_type_from_trait_path, extract_impl_trait,
+	AllowSelfRefInParameters, RequireQualifiedTraitPath,
 };
 
 use proc_macro2::{Span, TokenStream};
@@ -66,7 +67,7 @@ fn generate_impl_call(
 	input: &Ident,
 	impl_trait: &Path
 ) -> Result<TokenStream> {
-	let params = extract_parameter_names_types_and_borrows(signature)?;
+	let params = extract_parameter_names_types_and_borrows(signature, AllowSelfRefInParameters::No)?;
 
 	let c = generate_crate_access(HIDDEN_INCLUDES_ID);
 	let c_iter = iter::repeat(&c);
@@ -93,50 +94,6 @@ fn generate_impl_call(
 	)
 }
 
-/// Extract the trait that is implemented in the given `ItemImpl`.
-fn extract_impl_trait<'a>(impl_: &'a ItemImpl) -> Result<&'a Path> {
-	impl_.trait_.as_ref().map(|v| &v.1).ok_or_else(
-		|| Error::new(impl_.span(), "Only implementation of traits are supported!")
-	).and_then(|p| {
-		if p.segments.len() > 1 {
-			Ok(p)
-		} else {
-			Err(
-				Error::new(
-					p.span(),
-					"The implemented trait has to be referenced with a path, \
-					e.g. `impl client::Core for Runtime`."
-				)
-			)
-		}
-	})
-}
-
-/// Extracts the runtime block identifier.
-fn extract_runtime_block_ident(trait_: &Path) -> Result<&TypePath> {
-	let span = trait_.span();
-	let generics = trait_
-		.segments
-		.last()
-		.ok_or_else(|| Error::new(span, "Empty path not supported"))?;
-
-	match &generics.arguments {
-		PathArguments::AngleBracketed(ref args) => {
-			args.args.first().and_then(|v| match v {
-			GenericArgument::Type(Type::Path(ref block)) => Some(block),
-				_ => None
-			}).ok_or_else(|| Error::new(args.span(), "Missing `Block` generic parameter."))
-		},
-		PathArguments::None => {
-			let span = trait_.segments.last().as_ref().unwrap().span();
-			Err(Error::new(span, "Missing `Block` generic parameter."))
-		},
-		PathArguments::Parenthesized(_) => {
-			Err(Error::new(generics.arguments.span(), "Unexpected parentheses in path!"))
-		}
-	}
-}
-
 /// Generate all the implementation calls for the given functions.
 fn generate_impl_calls(
 	impls: &[ItemImpl],
@@ -145,7 +102,7 @@ fn generate_impl_calls(
 	let mut impl_calls = Vec::new();
 
 	for impl_ in impls {
-		let impl_trait_path = extract_impl_trait(impl_)?;
+		let impl_trait_path = extract_impl_trait(impl_, RequireQualifiedTraitPath::Yes)?;
 		let impl_trait = extend_with_runtime_decl_path(impl_trait_path.clone());
 		let impl_trait_ident = &impl_trait_path
 			.segments
@@ -307,11 +264,19 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				res
 			}
 
-			fn runtime_version_at(
+			fn has_api<A: #crate_::RuntimeApiInfo + ?Sized>(
 				&self,
 				at: &#crate_::BlockId<Block>,
-			) -> std::result::Result<#crate_::RuntimeVersion, C::Error> {
-				self.call.runtime_version_at(at)
+			) -> std::result::Result<bool, C::Error> where Self: Sized {
+				self.call.runtime_version_at(at).map(|v| v.has_api_with(&A::ID, |v| v == A::VERSION))
+			}
+
+			fn has_api_with<A: #crate_::RuntimeApiInfo + ?Sized, P: Fn(u32) -> bool>(
+				&self,
+				at: &#crate_::BlockId<Block>,
+				pred: P,
+			) -> std::result::Result<bool, C::Error> where Self: Sized {
+				self.call.runtime_version_at(at).map(|v| v.has_api_with(&A::ID, pred))
 			}
 
 			fn record_proof(&mut self) {
@@ -450,7 +415,7 @@ fn generate_api_impl_for_runtime(impls: &[ItemImpl]) -> Result<TokenStream> {
 	// we put the `RuntimeBlock` as first argument for the trait generics.
 	for impl_ in impls.iter() {
 		let mut impl_ = impl_.clone();
-		let trait_ = extract_impl_trait(&impl_)?.clone();
+		let trait_ = extract_impl_trait(&impl_, RequireQualifiedTraitPath::Yes)?.clone();
 		let trait_ = extend_with_runtime_decl_path(trait_);
 
 		impl_.trait_.as_mut().unwrap().1 = trait_;
@@ -506,7 +471,10 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 				}).collect::<Vec<_>>()
 			};
 
-			let (param_types, error) = match extract_parameter_names_types_and_borrows(&input.sig) {
+			let (param_types, error) = match extract_parameter_names_types_and_borrows(
+				&input.sig,
+				AllowSelfRefInParameters::No,
+			) {
 				Ok(res) => (
 					res.into_iter().map(|v| {
 						let ty = v.1;
@@ -645,13 +613,13 @@ fn generate_api_impl_for_runtime_api(impls: &[ItemImpl]) -> Result<TokenStream> 
 	let mut result = Vec::with_capacity(impls.len());
 
 	for impl_ in impls {
-		let impl_trait_path = extract_impl_trait(&impl_)?;
+		let impl_trait_path = extract_impl_trait(&impl_, RequireQualifiedTraitPath::Yes)?;
 		let impl_trait = &impl_trait_path
 			.segments
 			.last()
 			.ok_or_else(|| Error::new(impl_trait_path.span(), "Empty trait path not possible!"))?
 			.clone();
-		let runtime_block = extract_runtime_block_ident(impl_trait_path)?;
+		let runtime_block = extract_block_type_from_trait_path(impl_trait_path)?;
 		let runtime_type = &impl_.self_ty;
 		let mut runtime_mod_path = extend_with_runtime_decl_path(impl_trait_path.clone());
 		// remove the trait to get just the module path
@@ -682,7 +650,9 @@ fn generate_runtime_api_versions(impls: &[ItemImpl]) -> Result<TokenStream> {
 	let mut processed_traits = HashSet::new();
 
 	for impl_ in impls {
-		let mut path = extend_with_runtime_decl_path(extract_impl_trait(&impl_)?.clone());
+		let mut path = extend_with_runtime_decl_path(
+			extract_impl_trait(&impl_, RequireQualifiedTraitPath::Yes)?.clone(),
+		);
 		// Remove the trait
 		let trait_ = path
 			.segments

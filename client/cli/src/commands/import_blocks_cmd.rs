@@ -14,21 +14,17 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use crate::error;
+use crate::params::ImportParams;
+use crate::params::SharedParams;
+use crate::CliConfiguration;
+use sc_service::{Configuration, ServiceBuilderCommand};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::fmt::Debug;
-use std::io::{Read, Seek, self};
 use std::fs;
+use std::io::{self, Read, Seek};
 use std::path::PathBuf;
 use structopt::StructOpt;
-use sc_service::{
-	Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand, ChainSpec, Roles,
-};
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
-
-use crate::error;
-use crate::VersionInfo;
-use crate::runtime::run_until_exit;
-use crate::params::SharedParams;
-use crate::params::ImportParams;
 
 /// The `import-blocks` command used to import blocks.
 #[derive(Debug, StructOpt, Clone)]
@@ -59,15 +55,13 @@ impl<T: Read + Seek> ReadPlusSeek for T {}
 
 impl ImportBlocksCmd {
 	/// Run the import-blocks command
-	pub fn run<G, E, B, BC, BB>(
-		self,
-		config: Configuration<G, E>,
+	pub async fn run<B, BC, BB>(
+		&self,
+		config: Configuration,
 		builder: B,
 	) -> error::Result<()>
 	where
-		B: FnOnce(Configuration<G, E>) -> Result<BC, sc_service::error::Error>,
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
+		B: FnOnce(Configuration) -> Result<BC, sc_service::error::Error>,
 		BC: ServiceBuilderCommand<Block = BB> + Unpin,
 		BB: sp_runtime::traits::Block + Debug,
 		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
@@ -79,29 +73,22 @@ impl ImportBlocksCmd {
 				let mut buffer = Vec::new();
 				io::stdin().read_to_end(&mut buffer)?;
 				Box::new(io::Cursor::new(buffer))
-			},
+			}
 		};
 
-		run_until_exit(config, |config| {
-			Ok(builder(config)?.import_blocks(file, false))
-		})
+		builder(config)?
+			.import_blocks(file, false)
+			.await
+			.map_err(Into::into)
+	}
+}
+
+impl CliConfiguration for ImportBlocksCmd {
+	fn shared_params(&self) -> &SharedParams {
+		&self.shared_params
 	}
 
-	/// Update and prepare a `Configuration` with command line parameters
-	pub fn update_config<G, E, F>(
-		&self,
-		mut config: &mut Configuration<G, E>,
-		spec_factory: F,
-		version: &VersionInfo,
-	) -> error::Result<()> where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-		F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-	{
-		self.shared_params.update_config(&mut config, spec_factory, version)?;
-		self.import_params.update_config(&mut config, Roles::FULL, self.shared_params.dev)?;
-		config.use_in_memory_keystore()?;
-
-		Ok(())
+	fn import_params(&self) -> Option<&ImportParams> {
+		Some(&self.import_params)
 	}
 }

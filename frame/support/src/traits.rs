@@ -19,16 +19,17 @@
 //! NOTE: If you're looking for `parameter_types`, it has moved in to the top-level module.
 
 use sp_std::{prelude::*, result, marker::PhantomData, ops::Div, fmt::Debug};
-use codec::{FullCodec, Codec, Encode, Decode};
+use codec::{FullCodec, Codec, Encode, Decode, EncodeLike};
 use sp_core::u32_trait::Value as U32;
 use sp_runtime::{
-	RuntimeDebug,
-	ConsensusEngineId, DispatchResult, DispatchError,
-	traits::{MaybeSerializeDeserialize, AtLeast32Bit, Saturating, TrailingZeroInput},
+	RuntimeDebug, ConsensusEngineId, DispatchResult, DispatchError, traits::{
+		MaybeSerializeDeserialize, AtLeast32Bit, Saturating, TrailingZeroInput, Bounded, Zero,
+		BadOrigin
+	},
 };
-
 use crate::dispatch::Parameter;
 use crate::storage::StorageMap;
+use impl_trait_for_tuples::impl_for_tuples;
 
 /// An abstraction of a value stored within storage, but possibly as part of a larger composite
 /// item.
@@ -87,7 +88,7 @@ impl<
 	Created: Happened<K>,
 	Removed: Happened<K>,
 	K: FullCodec,
-	T: FullCodec
+	T: FullCodec,
 > StoredMap<K, T> for StorageMapShim<S, Created, Removed, K, T> {
 	fn get(k: &K) -> T { S::get(k) }
 	fn is_explicit(k: &K) -> bool { S::contains_key(k) }
@@ -138,6 +139,35 @@ impl<
 	}
 }
 
+/// Something that can estimate at which block the next session rotation will happen. This should
+/// be the same logical unit that dictates `ShouldEndSession` to the session module. No Assumptions
+/// are made about the scheduling of the sessions.
+pub trait EstimateNextSessionRotation<BlockNumber> {
+	/// Return the block number at which the next session rotation is estimated to happen.
+	///
+	/// None should be returned if the estimation fails to come to an answer
+	fn estimate_next_session_rotation(now: BlockNumber) -> Option<BlockNumber>;
+}
+
+impl<BlockNumber: Bounded> EstimateNextSessionRotation<BlockNumber> for () {
+	fn estimate_next_session_rotation(_: BlockNumber) -> Option<BlockNumber> {
+		Default::default()
+	}
+}
+
+/// Something that can estimate at which block the next `new_session` will be triggered. This must
+/// always be implemented by the session module.
+pub trait EstimateNextNewSession<BlockNumber> {
+	/// Return the block number at which the next new session is estimated to happen.
+	fn estimate_next_new_session(now: BlockNumber) -> Option<BlockNumber>;
+}
+
+impl<BlockNumber: Bounded> EstimateNextNewSession<BlockNumber> for () {
+	fn estimate_next_new_session(_: BlockNumber) -> Option<BlockNumber> {
+		Default::default()
+	}
+}
+
 /// Anything that can have a `::len()` method.
 pub trait Len {
 	/// Return the length of data type.
@@ -172,6 +202,13 @@ pub trait Contains<T: Ord> {
 
 	/// Get the number of items in the set.
 	fn count() -> usize { Self::sorted_members().len() }
+
+	/// Add an item that would satisfy `contains`. It does not make sure any other
+	/// state is correctly maintained or generated.
+	///
+	/// **Should be used for benchmarking only!!!**
+	#[cfg(feature = "runtime-benchmarks")]
+	fn add(t: &T);
 }
 
 /// Determiner to say whether a given account is unused.
@@ -187,14 +224,14 @@ impl<AccountId> IsDeadAccount<AccountId> for () {
 }
 
 /// Handler for when a new account has been created.
-#[impl_trait_for_tuples::impl_for_tuples(30)]
+#[impl_for_tuples(30)]
 pub trait OnNewAccount<AccountId> {
 	/// A new account `who` has been registered.
 	fn on_new_account(who: &AccountId);
 }
 
 /// The account with the given id was reaped.
-#[impl_trait_for_tuples::impl_for_tuples(30)]
+#[impl_for_tuples(30)]
 pub trait OnKilledAccount<AccountId> {
 	/// The account with the given id was reaped.
 	fn on_killed_account(who: &AccountId);
@@ -256,6 +293,13 @@ pub trait KeyOwnerProofSystem<Key> {
 /// - Someone got slashed.
 /// - Someone paid for a transaction to be included.
 pub trait OnUnbalanced<Imbalance: TryDrop> {
+	/// Handler for some imbalances. The different imbalances might have different origins or
+	/// meanings, dependent on the context. Will default to simply calling on_unbalanced for all
+	/// of them. Infallible.
+	fn on_unbalanceds<B>(amounts: impl Iterator<Item=Imbalance>) where Imbalance: crate::traits::Imbalance<B> {
+		Self::on_unbalanced(amounts.fold(Imbalance::zero(), |i, x| x.merge(i)))
+	}
+
 	/// Handler for some imbalance. Infallible.
 	fn on_unbalanced(amount: Imbalance) {
 		amount.try_drop().unwrap_or_else(Self::on_nonzero_unbalanced)
@@ -263,12 +307,10 @@ pub trait OnUnbalanced<Imbalance: TryDrop> {
 
 	/// Actually handle a non-zero imbalance. You probably want to implement this rather than
 	/// `on_unbalanced`.
-	fn on_nonzero_unbalanced(amount: Imbalance);
-}
-
-impl<Imbalance: TryDrop> OnUnbalanced<Imbalance> for () {
 	fn on_nonzero_unbalanced(amount: Imbalance) { drop(amount); }
 }
+
+impl<Imbalance: TryDrop> OnUnbalanced<Imbalance> for () {}
 
 /// Simple boolean for whether an account needs to be kept in existence.
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -331,9 +373,70 @@ pub trait Imbalance<Balance>: Sized + TryDrop {
 	/// is guaranteed to be at most `amount` and the second will be the remainder.
 	fn split(self, amount: Balance) -> (Self, Self);
 
+	/// Consume `self` and return two independent instances; the amounts returned will be in
+	/// approximately the same ratio as `first`:`second`.
+	///
+	/// NOTE: This requires up to `first + second` room for a multiply, and `first + second` should
+	/// fit into a `u32`. Overflow will safely saturate in both cases.
+	fn ration(self, first: u32, second: u32) -> (Self, Self)
+		where Balance: From<u32> + Saturating + Div<Output=Balance>
+	{
+		let total: u32 = first.saturating_add(second);
+		let amount1 = self.peek().saturating_mul(first.into()) / total.into();
+		self.split(amount1)
+	}
+
+	/// Consume self and add its two components, defined by the first component's balance,
+	/// element-wise to two pre-existing Imbalances.
+	///
+	/// A convenient replacement for `split` and `merge`.
+	fn split_merge(self, amount: Balance, others: (Self, Self)) -> (Self, Self) {
+		let (a, b) = self.split(amount);
+		(a.merge(others.0), b.merge(others.1))
+	}
+
+	/// Consume self and add its two components, defined by the ratio `first`:`second`,
+	/// element-wise to two pre-existing Imbalances.
+	///
+	/// A convenient replacement for `split` and `merge`.
+	fn ration_merge(self, first: u32, second: u32, others: (Self, Self)) -> (Self, Self)
+		where Balance: From<u32> + Saturating + Div<Output=Balance>
+	{
+		let (a, b) = self.ration(first, second);
+		(a.merge(others.0), b.merge(others.1))
+	}
+
+	/// Consume self and add its two components, defined by the first component's balance,
+	/// element-wise into two pre-existing Imbalance refs.
+	///
+	/// A convenient replacement for `split` and `subsume`.
+	fn split_merge_into(self, amount: Balance, others: &mut (Self, Self)) {
+		let (a, b) = self.split(amount);
+		others.0.subsume(a);
+		others.1.subsume(b);
+	}
+
+	/// Consume self and add its two components, defined by the ratio `first`:`second`,
+	/// element-wise to two pre-existing Imbalances.
+	///
+	/// A convenient replacement for `split` and `merge`.
+	fn ration_merge_into(self, first: u32, second: u32, others: &mut (Self, Self))
+		where Balance: From<u32> + Saturating + Div<Output=Balance>
+	{
+		let (a, b) = self.ration(first, second);
+		others.0.subsume(a);
+		others.1.subsume(b);
+	}
+
 	/// Consume `self` and an `other` to return a new instance that combines
 	/// both.
 	fn merge(self, other: Self) -> Self;
+
+	/// Consume self to mutate `other` so that it combines both. Just like `subsume`, only with
+	/// reversed arguments.
+	fn merge_into(self, other: &mut Self) {
+		other.subsume(self)
+	}
 
 	/// Consume `self` and maybe an `other` to return a new instance that combines
 	/// both.
@@ -785,6 +888,12 @@ pub trait Time {
 	fn now() -> Self::Moment;
 }
 
+/// Trait to deal with unix time.
+pub trait UnixTime {
+	/// Return duration since `SystemTime::UNIX_EPOCH`.
+	fn now() -> core::time::Duration;
+}
+
 impl WithdrawReasons {
 	/// Choose all variants except for `one`.
 	///
@@ -924,6 +1033,21 @@ impl<Output: Decode + Default> Randomness<Output> for () {
 	}
 }
 
+/// Trait to be used by block producing consensus engine modules to determine
+/// how late the current block is (e.g. in a slot-based proposal mechanism how
+/// many slots were skipped since the previous block).
+pub trait Lateness<N> {
+	/// Returns a generic measure of how late the current block is compared to
+	/// its parent.
+	fn lateness(&self) -> N;
+}
+
+impl<N: Zero> Lateness<N> for () {
+	fn lateness(&self) -> N {
+		Zero::zero()
+	}
+}
+
 /// Implementors of this trait provide information about whether or not some validator has
 /// been registered with them. The [Session module](../../pallet_session/index.html) is an implementor.
 pub trait ValidatorRegistration<ValidatorId> {
@@ -969,4 +1093,188 @@ pub trait GetCallMetadata {
 	fn get_call_names(module: &str) -> &'static [&'static str];
 	/// Return a [`CallMetadata`], containing function and pallet name of the Call.
 	fn get_call_metadata(&self) -> CallMetadata;
+}
+
+/// The block finalization trait. Implementing this lets you express what should happen
+/// for your module when the block is ending.
+#[impl_for_tuples(30)]
+pub trait OnFinalize<BlockNumber> {
+	/// The block is being finalized. Implement to have something happen.
+	fn on_finalize(_n: BlockNumber) {}
+}
+
+/// The block initialization trait. Implementing this lets you express what should happen
+/// for your module when the block is beginning (right before the first extrinsic is executed).
+pub trait OnInitialize<BlockNumber> {
+	/// The block is being initialized. Implement to have something happen.
+	///
+	/// Return the non-negotiable weight consumed in the block.
+	fn on_initialize(_n: BlockNumber) -> crate::weights::Weight { 0 }
+}
+
+#[impl_for_tuples(30)]
+impl<BlockNumber: Clone> OnInitialize<BlockNumber> for Tuple {
+	fn on_initialize(_n: BlockNumber) -> crate::weights::Weight {
+		let mut weight = 0;
+		for_tuples!( #( weight = weight.saturating_add(Tuple::on_initialize(_n.clone())); )* );
+		weight
+	}
+}
+
+/// The runtime upgrade trait. Implementing this lets you express what should happen
+/// when the runtime upgrades, and changes may need to occur to your module.
+pub trait OnRuntimeUpgrade {
+	/// Perform a module upgrade.
+	///
+	/// Return the non-negotiable weight consumed for runtime upgrade.
+	fn on_runtime_upgrade() -> crate::weights::Weight { 0 }
+}
+
+#[impl_for_tuples(30)]
+impl OnRuntimeUpgrade for Tuple {
+	fn on_runtime_upgrade() -> crate::weights::Weight {
+		let mut weight = 0;
+		for_tuples!( #( weight = weight.saturating_add(Tuple::on_runtime_upgrade()); )* );
+		weight
+	}
+}
+
+/// Off-chain computation trait.
+///
+/// Implementing this trait on a module allows you to perform long-running tasks
+/// that make (by default) validators generate transactions that feed results
+/// of those long-running computations back on chain.
+///
+/// NOTE: This function runs off-chain, so it can access the block state,
+/// but cannot preform any alterations. More specifically alterations are
+/// not forbidden, but they are not persisted in any way after the worker
+/// has finished.
+#[impl_for_tuples(30)]
+pub trait OffchainWorker<BlockNumber> {
+	/// This function is being called after every block import (when fully synced).
+	///
+	/// Implement this and use any of the `Offchain` `sp_io` set of APIs
+	/// to perform off-chain computations, calls and submit transactions
+	/// with results to trigger any on-chain changes.
+	/// Any state alterations are lost and are not persisted.
+	fn offchain_worker(_n: BlockNumber) {}
+}
+
+pub mod schedule {
+	use super::*;
+
+	/// Information relating to the period of a scheduled task. First item is the length of the
+	/// period and the second is the number of times it should be executed in total before the task
+	/// is considered finished and removed.
+	pub type Period<BlockNumber> = (BlockNumber, u32);
+
+	/// Priority with which a call is scheduled. It's just a linear amount with lowest values meaning
+	/// higher priority.
+	pub type Priority = u8;
+
+	/// The highest priority. We invert the value so that normal sorting will place the highest
+	/// priority at the beginning of the list.
+	pub const HIGHEST_PRORITY: Priority = 0;
+	/// Anything of this value or lower will definitely be scheduled on the block that they ask for, even
+	/// if it breaches the `MaximumWeight` limitation.
+	pub const HARD_DEADLINE: Priority = 63;
+	/// The lowest priority. Most stuff should be around here.
+	pub const LOWEST_PRORITY: Priority = 255;
+
+	/// A type that can be used as a scheduler.
+	pub trait Anon<BlockNumber, Call> {
+		/// An address which can be used for removing a scheduled task.
+		type Address: Codec + Clone + Eq + EncodeLike + Debug;
+
+		/// Schedule a one-off dispatch to happen at the beginning of some block in the future.
+		///
+		/// This is not named.
+		///
+		/// Infallible.
+		fn schedule(
+			when: BlockNumber,
+			maybe_periodic: Option<Period<BlockNumber>>,
+			priority: Priority,
+			call: Call
+		) -> Self::Address;
+
+		/// Cancel a scheduled task. If periodic, then it will cancel all further instances of that,
+		/// also.
+		///
+		/// Will return an error if the `address` is invalid.
+		///
+		/// NOTE: This guaranteed to work only *before* the point that it is due to be executed.
+		/// If it ends up being delayed beyond the point of execution, then it cannot be cancelled.
+		///
+		/// NOTE2: This will not work to cancel periodic tasks after their initial execution. For
+		/// that, you must name the task explicitly using the `Named` trait.
+		fn cancel(address: Self::Address) -> Result<(), ()>;
+	}
+
+	/// A type that can be used as a scheduler.
+	pub trait Named<BlockNumber, Call> {
+		/// An address which can be used for removing a scheduled task.
+		type Address: Codec + Clone + Eq + EncodeLike + sp_std::fmt::Debug;
+
+		/// Schedule a one-off dispatch to happen at the beginning of some block in the future.
+		///
+		/// - `id`: The identity of the task. This must be unique and will return an error if not.
+		fn schedule_named(
+			id: impl Encode,
+			when: BlockNumber,
+			maybe_periodic: Option<Period<BlockNumber>>,
+			priority: Priority,
+			call: Call
+		) -> Result<Self::Address, ()>;
+
+		/// Cancel a scheduled, named task. If periodic, then it will cancel all further instances
+		/// of that, also.
+		///
+		/// Will return an error if the `id` is invalid.
+		///
+		/// NOTE: This guaranteed to work only *before* the point that it is due to be executed.
+		/// If it ends up being delayed beyond the point of execution, then it cannot be cancelled.
+		fn cancel_named(id: impl Encode) -> Result<(), ()>;
+	}
+}
+
+/// Some sort of check on the origin is performed by this object.
+pub trait EnsureOrigin<OuterOrigin> {
+	/// A return type.
+	type Success;
+	/// Perform the origin check.
+	fn ensure_origin(o: OuterOrigin) -> result::Result<Self::Success, BadOrigin> {
+		Self::try_origin(o).map_err(|_| BadOrigin)
+	}
+	/// Perform the origin check.
+	fn try_origin(o: OuterOrigin) -> result::Result<Self::Success, OuterOrigin>;
+
+	/// Returns an outer origin capable of passing `try_origin` check.
+	///
+	/// ** Should be used for benchmarking only!!! **
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> OuterOrigin;
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn on_initialize_and_on_runtime_upgrade_weight_merge_works() {
+		struct Test;
+		impl OnInitialize<u8> for Test {
+			fn on_initialize(_n: u8) -> crate::weights::Weight {
+				10
+			}
+		}
+		impl OnRuntimeUpgrade for Test {
+			fn on_runtime_upgrade() -> crate::weights::Weight {
+				20
+			}
+		}
+
+		assert_eq!(<(Test, Test)>::on_initialize(0), 20);
+		assert_eq!(<(Test, Test)>::on_runtime_upgrade(), 40);
+	}
 }

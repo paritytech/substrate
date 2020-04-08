@@ -42,7 +42,7 @@ impl RpcClient {
 					client.insert_key(key_type, suri, public).map(|_| ())
 				})
 				.map_err(|e| {
-					println!("Error inserting key: {:?}", e);
+					eprintln!("Error inserting key: {:?}", e);
 				})
 		);
 	}

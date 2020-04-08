@@ -14,20 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use crate::error;
+use crate::params::ImportParams;
+use crate::params::SharedParams;
+use crate::CliConfiguration;
+use sc_service::{Configuration, ServiceBuilderCommand};
+use sp_runtime::generic::BlockId;
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::fmt::Debug;
 use std::str::FromStr;
 use structopt::StructOpt;
-use sc_service::{
-	Configuration, ChainSpecExtension, RuntimeGenesis, ServiceBuilderCommand, Roles, ChainSpec,
-};
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
-use sp_runtime::generic::BlockId;
-
-use crate::error;
-use crate::VersionInfo;
-use crate::runtime::run_until_exit;
-use crate::params::SharedParams;
-use crate::params::ImportParams;
 
 /// The `check-block` command used to validate blocks.
 #[derive(Debug, StructOpt, Clone)]
@@ -53,53 +49,49 @@ pub struct CheckBlockCmd {
 
 impl CheckBlockCmd {
 	/// Run the check-block command
-	pub fn run<G, E, B, BC, BB>(
-		self,
-		config: Configuration<G, E>,
+	pub async fn run<B, BC, BB>(
+		&self,
+		config: Configuration,
 		builder: B,
 	) -> error::Result<()>
 	where
-		B: FnOnce(Configuration<G, E>) -> Result<BC, sc_service::error::Error>,
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
+		B: FnOnce(Configuration) -> Result<BC, sc_service::error::Error>,
 		BC: ServiceBuilderCommand<Block = BB> + Unpin,
 		BB: sp_runtime::traits::Block + Debug,
 		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
 		<BB as BlockT>::Hash: std::str::FromStr,
 	{
-		let input = if self.input.starts_with("0x") { &self.input[2..] } else { &self.input[..] };
+		let input = if self.input.starts_with("0x") {
+			&self.input[2..]
+		} else {
+			&self.input[..]
+		};
 		let block_id = match FromStr::from_str(input) {
 			Ok(hash) => BlockId::hash(hash),
 			Err(_) => match self.input.parse::<u32>() {
 				Ok(n) => BlockId::number((n as u32).into()),
-				Err(_) => return Err(error::Error::Input("Invalid hash or number specified".into())),
-			}
+				Err(_) => {
+					return Err(error::Error::Input(
+						"Invalid hash or number specified".into(),
+					))
+				}
+			},
 		};
 
 		let start = std::time::Instant::now();
-		run_until_exit(config, |config| {
-			Ok(builder(config)?.check_block(block_id))
-		})?;
+		builder(config)?.check_block(block_id).await?;
 		println!("Completed in {} ms.", start.elapsed().as_millis());
 
 		Ok(())
 	}
+}
 
-	/// Update and prepare a `Configuration` with command line parameters
-	pub fn update_config<G, E, F>(
-		&self,
-		mut config: &mut Configuration<G, E>,
-		spec_factory: F,
-		version: &VersionInfo,
-	) -> error::Result<()> where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-		F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-	{
-		self.shared_params.update_config(&mut config, spec_factory, version)?;
-		self.import_params.update_config(&mut config, Roles::FULL, self.shared_params.dev)?;
-		config.use_in_memory_keystore()?;
+impl CliConfiguration for CheckBlockCmd {
+	fn shared_params(&self) -> &SharedParams {
+		&self.shared_params
+	}
 
-		Ok(())
+	fn import_params(&self) -> Option<&ImportParams> {
+		Some(&self.import_params)
 	}
 }

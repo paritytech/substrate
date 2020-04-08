@@ -14,15 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use structopt::StructOpt;
+use crate::error;
+use crate::params::NodeKeyParams;
+use crate::params::SharedParams;
+use crate::CliConfiguration;
 use log::info;
 use sc_network::config::build_multiaddr;
-use sc_service::{Configuration, ChainSpecExtension, RuntimeGenesis, ChainSpec};
-
-use crate::error;
-use crate::VersionInfo;
-use crate::params::SharedParams;
-use crate::params::NodeKeyParams;
+use sc_service::{config::MultiaddrWithPeerId, Configuration};
+use structopt::StructOpt;
 
 /// The `build-spec` command used to build a specification.
 #[derive(Debug, StructOpt, Clone)]
@@ -49,56 +48,35 @@ pub struct BuildSpecCmd {
 
 impl BuildSpecCmd {
 	/// Run the build-spec command
-	pub fn run<G, E>(
-		self,
-		config: Configuration<G, E>,
-	) -> error::Result<()>
-	where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-	{
+	pub fn run(&self, config: Configuration) -> error::Result<()> {
 		info!("Building chain spec");
-		let mut spec = config.expect_chain_spec().clone();
+		let mut spec = config.chain_spec;
 		let raw_output = self.raw;
 
 		if spec.boot_nodes().is_empty() && !self.disable_default_bootnode {
 			let keys = config.network.node_key.into_keypair()?;
 			let peer_id = keys.public().into_peer_id();
-			let addr = build_multiaddr![
-				Ip4([127, 0, 0, 1]),
-				Tcp(30333u16),
-				P2p(peer_id)
-			];
+			let addr = MultiaddrWithPeerId {
+				multiaddr: build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(30333u16)],
+				peer_id,
+			};
 			spec.add_boot_node(addr)
 		}
 
-		let json = sc_service::chain_ops::build_spec(spec, raw_output)?;
+		let json = sc_service::chain_ops::build_spec(&*spec, raw_output)?;
 
 		print!("{}", json);
 
 		Ok(())
 	}
-
-	/// Update and prepare a `Configuration` with command line parameters
-	pub fn update_config<G, E, F>(
-		&self,
-		mut config: &mut Configuration<G, E>,
-		spec_factory: F,
-		version: &VersionInfo,
-	) -> error::Result<()> where
-		G: RuntimeGenesis,
-		E: ChainSpecExtension,
-		F: FnOnce(&str) -> Result<Option<ChainSpec<G, E>>, String>,
-	{
-		self.shared_params.update_config(&mut config, spec_factory, version)?;
-
-		let net_config_path = config
-			.in_chain_config_dir(crate::commands::DEFAULT_NETWORK_CONFIG_PATH)
-			.expect("We provided a base_path");
-
-		self.node_key_params.update_config(&mut config, Some(&net_config_path))?;
-
-		Ok(())
-	}
 }
 
+impl CliConfiguration for BuildSpecCmd {
+	fn shared_params(&self) -> &SharedParams {
+		&self.shared_params
+	}
+
+	fn node_key_params(&self) -> Option<&NodeKeyParams> {
+		Some(&self.node_key_params)
+	}
+}

@@ -36,6 +36,7 @@ use sp_runtime::{
 	ApplyExtrinsicResult, create_runtime_str, Perbill, impl_opaque_keys,
 	transaction_validity::{
 		TransactionValidity, ValidTransaction, TransactionValidityError, InvalidTransaction,
+		TransactionSource,
 	},
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
@@ -43,7 +44,7 @@ use sp_runtime::{
 	},
 };
 use sp_version::RuntimeVersion;
-pub use sp_core::{hash::H256};
+pub use sp_core::hash::H256;
 #[cfg(any(feature = "std", test))]
 use sp_version::NativeVersion;
 use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
@@ -64,10 +65,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("test"),
 	impl_name: create_runtime_str!("parity-test"),
 	authoring_version: 1,
-	spec_version: 1,
-	#[cfg(feature = "std")]
-	impl_version: 1,
-	#[cfg(not(feature = "std"))]
+	spec_version: 2,
 	impl_version: 2,
 	apis: RUNTIME_API_VERSIONS,
 };
@@ -495,7 +493,10 @@ cfg_if! {
 			}
 
 			impl sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block> for Runtime {
-				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
+				fn validate_transaction(
+					_source: TransactionSource,
+					utx: <Block as BlockT>::Extrinsic,
+				) -> TransactionValidity {
 					if let Extrinsic::IncludeData(data) = utx {
 						return Ok(ValidTransaction {
 							priority: data.len() as u64,
@@ -682,7 +683,10 @@ cfg_if! {
 			}
 
 			impl sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block> for Runtime {
-				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
+				fn validate_transaction(
+					_source: TransactionSource,
+					utx: <Block as BlockT>::Extrinsic,
+				) -> TransactionValidity {
 					if let Extrinsic::IncludeData(data) = utx {
 						return Ok(ValidTransaction{
 							priority: data.len() as u64,
@@ -952,6 +956,7 @@ mod tests {
 	use sp_core::storage::well_known_keys::HEAP_PAGES;
 	use sp_state_machine::ExecutionStrategy;
 	use codec::Encode;
+	use sc_block_builder::BlockBuilderProvider;
 
 	#[test]
 	fn heap_pages_is_respected() {

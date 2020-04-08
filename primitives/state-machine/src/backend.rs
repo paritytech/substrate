@@ -18,9 +18,9 @@
 
 use log::warn;
 use hash_db::Hasher;
-use codec::Encode;
+use codec::{Decode, Encode};
 
-use sp_core::storage::{ChildInfo, OwnedChildInfo};
+use sp_core::{traits::RuntimeCode, storage::{ChildInfo, OwnedChildInfo, well_known_keys}};
 use sp_trie::{TrieMut, MemoryDB, trie_types::TrieDBMut};
 
 use crate::{
@@ -206,13 +206,16 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 		(root, txs)
 	}
 
+	/// Register stats from overlay of state machine.
+	///
+	/// By default nothing is registered.
+	fn register_overlay_stats(&mut self, _stats: &crate::stats::StateMachineStats);
+
 	/// Query backend usage statistics (i/o, memory)
 	///
 	/// Not all implementations are expected to be able to do this. In the
 	/// case when they don't, empty statistics is returned.
-	fn usage_info(&self) -> UsageInfo {
-		UsageInfo::empty()
-	}
+	fn usage_info(&self) -> UsageInfo;
 
 	/// Wipe the state database.
 	fn wipe(&self) -> Result<(), Self::Error> {
@@ -308,10 +311,12 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 		(*self).for_key_values_with_prefix(prefix, f);
 	}
 
+	fn register_overlay_stats(&mut self, _stats: &crate::stats::StateMachineStats) {	}
+
 	fn usage_info(&self) -> UsageInfo {
 		(*self).usage_info()
 	}
- }
+}
 
 /// Trait that allows consolidate two transactions together.
 pub trait Consolidate {
@@ -358,4 +363,43 @@ pub(crate) fn insert_into_memory_db<H, I>(mdb: &mut MemoryDB<H>, input: I) -> Op
 	}
 
 	Some(root)
+}
+
+/// Wrapper to create a [`RuntimeCode`] from a type that implements [`Backend`].
+pub struct BackendRuntimeCode<'a, B, H> {
+	backend: &'a B,
+	_marker: std::marker::PhantomData<H>,
+}
+
+impl<'a, B: Backend<H>, H: Hasher> sp_core::traits::FetchRuntimeCode for
+	BackendRuntimeCode<'a, B, H>
+{
+	fn fetch_runtime_code<'b>(&'b self) -> Option<std::borrow::Cow<'b, [u8]>> {
+		self.backend.storage(well_known_keys::CODE).ok().flatten().map(Into::into)
+	}
+}
+
+impl<'a, B: Backend<H>, H: Hasher> BackendRuntimeCode<'a, B, H> where H::Out: Encode {
+	/// Create a new instance.
+	pub fn new(backend: &'a B) -> Self {
+		Self {
+			backend,
+			_marker: std::marker::PhantomData,
+		}
+	}
+
+	/// Return the [`RuntimeCode`] build from the wrapped `backend`.
+	pub fn runtime_code(&self) -> Result<RuntimeCode, &'static str> {
+		let hash = self.backend.storage_hash(well_known_keys::CODE)
+			.ok()
+			.flatten()
+			.ok_or("`:code` hash not found")?
+			.encode();
+		let heap_pages = self.backend.storage(well_known_keys::HEAP_PAGES)
+			.ok()
+			.flatten()
+			.and_then(|d| Decode::decode(&mut &d[..]).ok());
+
+		Ok(RuntimeCode { code_fetcher: self, hash, heap_pages })
+	}
 }

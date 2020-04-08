@@ -16,6 +16,8 @@
 
 //! Identity pallet benchmarking.
 
+#![cfg(feature = "runtime-benchmarks")]
+
 use super::*;
 
 use frame_system::RawOrigin;
@@ -53,7 +55,7 @@ fn add_registrars<T: Trait>(r: u32) -> Result<(), &'static str> {
 
 // Adds `s` sub-accounts to the identity of `who`. Each wil have 32 bytes of raw data added to it.
 // This additionally returns the vector of sub-accounts to it can be modified if needed.
-fn add_sub_accounts<T: Trait>(who: T::AccountId, s: u32) -> Result<Vec<(T::AccountId, Data)>, &'static str> {
+fn add_sub_accounts<T: Trait>(who: &T::AccountId, s: u32) -> Result<Vec<(T::AccountId, Data)>, &'static str> {
 	let mut subs = Vec::new();
 	let who_origin = RawOrigin::Signed(who.clone());
 	let data = Data::Raw(vec![0; 32]);
@@ -62,6 +64,12 @@ fn add_sub_accounts<T: Trait>(who: T::AccountId, s: u32) -> Result<Vec<(T::Accou
 		let sub_account = account::<T>("sub", i);
 		subs.push((sub_account, data.clone()));
 	}
+
+	// Set identity so `set_subs` does not fail.
+	let _ = T::Currency::make_free_balance_be(&who, BalanceOf::<T>::max_value());
+	let info = create_identity_info::<T>(1);
+	Identity::<T>::set_identity(who_origin.clone().into(), info)?;
+
 	Identity::<T>::set_subs(who_origin.into(), subs.clone())?;
 
 	return Ok(subs)
@@ -94,7 +102,7 @@ benchmarks! {
 		let s in 1 .. T::MaxSubAccounts::get() => {
 			// Give them s many sub accounts
 			let caller = account::<T>("caller", 0);
-			let _ = add_sub_accounts::<T>(caller, s)?;
+			let _ = add_sub_accounts::<T>(&caller, s)?;
 		};
 		let x in 1 .. T::MaxAdditionalFields::get() => {
 			// Create their main identity with x additional fields
@@ -143,23 +151,20 @@ benchmarks! {
 	)
 
 	set_subs {
-		let s in ...;
-
 		let caller = account::<T>("caller", 0);
-		let caller_origin: <T as frame_system::Trait>::Origin = RawOrigin::Signed(caller.clone()).into();
-		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
-		// Create their main identity
-		let info = create_identity_info::<T>(1);
-		Identity::<T>::set_identity(caller_origin, info)?;
-	}: _(RawOrigin::Signed(caller), {
+		// Give them s many sub accounts.
+		let s in 1 .. T::MaxSubAccounts::get() - 1 => {
+			let _ = add_sub_accounts::<T>(&caller, s)?;
+		};
+
 		let mut subs = Module::<T>::subs(&caller);
-		// Generic data to be used.
+
+		// Create an s + 1 sub account.
 		let data = Data::Raw(vec![0; 32]);
-		// Create an s+1 sub account to add
 		subs.push((account::<T>("sub", s + 1), data));
-		subs
-	})
+
+	}: _(RawOrigin::Signed(caller), subs)
 
 	clear_identity {
 		let caller = account::<T>("caller", 0);
@@ -274,4 +279,28 @@ benchmarks! {
 			)?;
 		}
 	}: _(RawOrigin::Root, caller_lookup)
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::tests::{new_test_ext, Test};
+	use frame_support::assert_ok;
+
+	#[test]
+	fn test_benchmarks() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(test_benchmark_add_registrar::<Test>());
+			assert_ok!(test_benchmark_set_identity::<Test>());
+			assert_ok!(test_benchmark_set_subs::<Test>());
+			assert_ok!(test_benchmark_clear_identity::<Test>());
+			assert_ok!(test_benchmark_request_judgement::<Test>());
+			assert_ok!(test_benchmark_cancel_request::<Test>());
+			assert_ok!(test_benchmark_set_fee::<Test>());
+			assert_ok!(test_benchmark_set_account_id::<Test>());
+			assert_ok!(test_benchmark_set_fields::<Test>());
+			assert_ok!(test_benchmark_provide_judgement::<Test>());
+			assert_ok!(test_benchmark_kill_identity::<Test>());
+		});
+	}
 }

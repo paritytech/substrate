@@ -18,8 +18,10 @@
 //! Cryptographic utilities.
 // end::description[]
 
+use crate::{sr25519, ed25519};
 use sp_std::hash::Hash;
 use sp_std::vec::Vec;
+use sp_std::str;
 #[cfg(feature = "std")]
 use sp_std::convert::TryInto;
 use sp_std::convert::TryFrom;
@@ -32,7 +34,8 @@ use codec::{Encode, Decode};
 use regex::Regex;
 #[cfg(feature = "std")]
 use base58::{FromBase58, ToBase58};
-
+#[cfg(feature = "std")]
+use crate::hexdisplay::HexDisplay;
 use zeroize::Zeroize;
 #[doc(hidden)]
 pub use sp_std::ops::Deref;
@@ -345,7 +348,7 @@ fn ss58hash(data: &[u8]) -> blake2_rfc::blake2b::Blake2bResult {
 #[cfg(feature = "std")]
 lazy_static::lazy_static! {
 	static ref DEFAULT_VERSION: Mutex<Ss58AddressFormat>
-		= Mutex::new(Ss58AddressFormat::SubstrateAccountDirect);
+		= Mutex::new(Ss58AddressFormat::SubstrateAccount);
 }
 
 #[cfg(feature = "full_crypto")]
@@ -430,36 +433,47 @@ macro_rules! ss58_address_format {
 
 #[cfg(feature = "full_crypto")]
 ss58_address_format!(
-	SubstrateAccountDirect =>
-		(42, "substrate", "Any Substrate network, direct checksum, standard account (*25519).")
-	PolkadotAccountDirect =>
-		(0, "polkadot", "Polkadot Relay-chain, direct checksum, standard account (*25519).")
-	KusamaAccountDirect =>
-		(2, "kusama", "Kusama Relay-chain, direct checksum, standard account (*25519).")
-	PlasmAccountDirect =>
-		(5, "plasm", "Plasm Network, direct checksum, standard account (*25519).")
-	BifrostAccountDirect =>
+	PolkadotAccount =>
+		(0, "polkadot", "Polkadot Relay-chain, standard account (*25519).")
+	Reserved1 =>
+		(1, "reserved1", "Reserved for future use (1).")
+	KusamaAccount =>
+		(2, "kusama", "Kusama Relay-chain, standard account (*25519).")
+	Reserved3 =>
+		(3, "reserved3", "Reserved for future use (3).")
+	PlasmAccount =>
+		(5, "plasm", "Plasm Network, standard account (*25519).")
+	BifrostAccount =>
 		(6, "bifrost", "Bifrost mainnet, direct checksum, standard account (*25519).")
-	EdgewareAccountDirect =>
-		(7, "edgeware", "Edgeware mainnet, direct checksum, standard account (*25519).")
-	KaruraAccountDirect =>
-		(8, "karura", "Acala Karura canary network, direct checksum, standard account (*25519).")
-	ReynoldsAccountDirect =>
-		(9, "reynolds", "Laminar Reynolds canary network, direct checksum, standard account (*25519).")
-	AcalaAccountDirect =>
-		(10, "acala", "Acala mainnet, direct checksum, standard account (*25519).")
-	LaminarAccountDirect =>
-		(11, "laminar", "Laminar mainnet, direct checksum, standard account (*25519).")
-	KulupuAccountDirect =>
-		(16, "kulupu", "Kulupu mainnet, direct checksum, standard account (*25519).")
-	DothereumAccountDirect =>
-		(20, "dothereum", "Dothereum Para-chain, direct checksum, standard account (*25519).")
-	CentrifugeAccountDirect =>
-		(36, "centrifuge", "Centrifuge Chain mainnet, direct checksum, standard account (*25519).")
-	SubstraTeeAccountDirect =>
-		(44, "substratee", "Any SubstraTEE off-chain network private account, direct checksum, standard account (*25519).")
-	DarwiniaAccountDirect =>
-		(18, "darwinia", "Darwinia Chain mainnet, direct checksum, standard account (*25519).")
+	EdgewareAccount =>
+		(7, "edgeware", "Edgeware mainnet, standard account (*25519).")
+	KaruraAccount =>
+		(8, "karura", "Acala Karura canary network, standard account (*25519).")
+	ReynoldsAccount =>
+		(9, "reynolds", "Laminar Reynolds canary network, standard account (*25519).")
+	AcalaAccount =>
+		(10, "acala", "Acala mainnet, standard account (*25519).")
+	LaminarAccount =>
+		(11, "laminar", "Laminar mainnet, standard account (*25519).")
+	KulupuAccount =>
+		(16, "kulupu", "Kulupu mainnet, standard account (*25519).")
+	DarwiniaAccount =>
+		(18, "darwinia", "Darwinia Chain mainnet, standard account (*25519).")
+	RobonomicsAccount =>
+		(32, "robonomics", "Any Robonomics network standard account (*25519).")
+	CentrifugeAccount =>
+		(36, "centrifuge", "Centrifuge Chain mainnet, standard account (*25519).")
+	SubstrateAccount =>
+		(42, "substrate", "Any Substrate network, standard account (*25519).")
+	Reserved43 =>
+		(43, "reserved43", "Reserved for future use (43).")
+	SubstraTeeAccount =>
+		(44, "substratee", "Any SubstraTEE off-chain network private account (*25519).")
+	Reserved46 =>
+		(46, "reserved46", "Reserved for future use (46).")
+	Reserved47 =>
+		(47, "reserved47", "Reserved for future use (47).")
+	// Note: 48 and above are reserved.
 );
 
 /// Set the default "version" (actually, this is a bit of a misnomer and the version byte is
@@ -529,7 +543,9 @@ impl<T: Sized + AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 }
 
 /// Trait suitable for typical cryptographic PKI key public type.
-pub trait Public: AsRef<[u8]> + AsMut<[u8]> + Default + Derive + CryptoType + PartialEq + Eq + Clone + Send + Sync {
+pub trait Public:
+	AsRef<[u8]> + AsMut<[u8]> + Default + Derive + CryptoType + PartialEq + Eq + Clone + Send + Sync
+{
 	/// A new instance from the given slice.
 	///
 	/// NOTE: No checking goes on to ensure this is a real public key. Only use it if
@@ -545,6 +561,7 @@ pub trait Public: AsRef<[u8]> + AsMut<[u8]> + Default + Derive + CryptoType + Pa
 
 /// An opaque 32-byte cryptographic identifier.
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Default, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Hash))]
 pub struct AccountId32([u8; 32]);
 
 impl UncheckedFrom<crate::hash::H256> for AccountId32 {
@@ -602,6 +619,18 @@ impl<'a> sp_std::convert::TryFrom<&'a [u8]> for AccountId32 {
 impl From<AccountId32> for [u8; 32] {
 	fn from(x: AccountId32) -> [u8; 32] {
 		x.0
+	}
+}
+
+impl From<sr25519::Public> for AccountId32 {
+	fn from(k: sr25519::Public) -> Self {
+		k.0.into()
+	}
+}
+
+impl From<ed25519::Public> for AccountId32 {
+	fn from(k: ed25519::Public) -> Self {
+		k.0.into()
 	}
 }
 
@@ -932,6 +961,27 @@ impl<'a> TryFrom<&'a str> for KeyTypeId {
 	}
 }
 
+/// An identifier for a specific cryptographic algorithm used by a key pair
+#[derive(Debug, Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
+pub struct CryptoTypeId(pub [u8; 4]);
+
+/// A type alias of CryptoTypeId & a public key
+#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
+pub struct CryptoTypePublicPair(pub CryptoTypeId, pub Vec<u8>);
+
+#[cfg(feature = "std")]
+impl sp_std::fmt::Display for CryptoTypePublicPair {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+		let id = match str::from_utf8(&(self.0).0[..]) {
+			Ok(id) => id.to_string(),
+			Err(_) => {
+				format!("{:#?}", self.0)
+			}
+		};
+		write!(f, "{}-{}", id, HexDisplay::from(&self.1))
+	}
+}
+
 /// Known key types; this also functions as a global registry of key types for projects wishing to
 /// avoid collisions with each other.
 ///
@@ -952,6 +1002,8 @@ pub mod key_types {
 	pub const IM_ONLINE: KeyTypeId = KeyTypeId(*b"imon");
 	/// Key type for AuthorityDiscovery module, built-in.
 	pub const AUTHORITY_DISCOVERY: KeyTypeId = KeyTypeId(*b"audi");
+	/// Key type for staking, built-in.
+	pub const STAKING: KeyTypeId = KeyTypeId(*b"stak");
 	/// A key type ID useful for tests.
 	pub const DUMMY: KeyTypeId = KeyTypeId(*b"dumy");
 }

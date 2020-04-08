@@ -172,9 +172,9 @@ impl<S, Block> ClientBackend<Block> for Backend<S, HashFor<Block>>
 				match maybe_val {
 					Some(val) => self.blockchain.storage().insert_aux(
 						&[(&key[..], &val[..])],
-						::std::iter::empty(),
+						std::iter::empty(),
 					)?,
-					None => self.blockchain.storage().insert_aux(::std::iter::empty(), &[&key[..]])?,
+					None => self.blockchain.storage().insert_aux(std::iter::empty(), &[&key[..]])?,
 				}
 			}
 		}
@@ -503,6 +503,12 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 			GenesisOrUnavailableState::Genesis(ref state) => state.keys(prefix),
 			GenesisOrUnavailableState::Unavailable => Vec::new(),
 		}
+	}
+
+	fn register_overlay_stats(&mut self, _stats: &sp_state_machine::StateMachineStats) { }
+
+	fn usage_info(&self) -> sp_state_machine::UsageInfo {
+		sp_state_machine::UsageInfo::empty()
 	}
 
 	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {
