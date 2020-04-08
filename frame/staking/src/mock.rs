@@ -505,6 +505,10 @@ pub fn active_era() -> EraIndex {
 	Staking::active_era().unwrap().index
 }
 
+pub fn current_era() -> EraIndex {
+	Staking::current_era().unwrap()
+}
+
 pub fn check_exposure_all(era: EraIndex) {
 	ErasStakers::<Test>::iter_prefix(era).for_each(check_exposure)
 }

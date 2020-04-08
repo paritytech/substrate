@@ -2963,13 +2963,67 @@ mod offchain_phragmen {
 					winners,
 					compact,
 					score,
-					active_era(),
+					current_era(),
 				));
 
 				let queued_result = Staking::queued_elected().unwrap();
 				assert_eq!(queued_result.compute, ElectionCompute::Signed);
 
 				run_to_block(15);
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
+
+				assert_eq!(
+					System::events()
+						.into_iter()
+						.map(|r| r.event)
+						.filter_map(|e| {
+							if let MetaEvent::staking(inner) = e {
+								Some(inner)
+							} else {
+								None
+							}
+						})
+						.last()
+						.unwrap(),
+					RawEvent::StakingElection(ElectionCompute::Signed),
+				);
+			})
+	}
+
+	#[test]
+	fn signed_result_can_be_submitted_regardless_active_era() {
+		// should check that we have a new validator set normally,
+		// event says that it comes from offchain.
+		// active_era is not used for election related stuff.
+		ExtBuilder::default()
+			.offchain_phragmen_ext()
+			.build()
+			.execute_with(|| {
+				run_to_block(32);
+				<Staking as Store>::ActiveEra::put(ActiveEraInfo {
+					index: 0,
+					start: Some(0),
+				});
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Open(32));
+				assert!(Staking::snapshot_validators().is_some());
+
+				let (compact, winners, score) = prepare_submission_with(true, |_| {});
+				assert_ok!(Staking::submit_election_solution(
+					Origin::signed(10),
+					winners,
+					compact,
+					score,
+					current_era(),
+				));
+
+				let queued_result = Staking::queued_elected().unwrap();
+				assert_eq!(queued_result.compute, ElectionCompute::Signed);
+
+				run_to_block(35);
+				<Staking as Store>::ActiveEra::put(ActiveEraInfo {
+					index: 0,
+					start: Some(0),
+				});
 				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
 
 				assert_eq!(
@@ -3006,7 +3060,7 @@ mod offchain_phragmen {
 					winners,
 					compact,
 					score,
-					active_era(),
+					current_era(),
 				));
 
 				let queued_result = Staking::queued_elected().unwrap();
@@ -3056,7 +3110,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenEarlySubmission,
 				);
@@ -3082,7 +3136,7 @@ mod offchain_phragmen {
 					winners,
 					compact,
 					score,
-					active_era(),
+					current_era(),
 				));
 
 				// a bad solution
@@ -3093,7 +3147,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenWeakSubmission,
 				);
@@ -3119,7 +3173,7 @@ mod offchain_phragmen {
 					winners,
 					compact,
 					score,
-					active_era(),
+					current_era(),
 				));
 
 				// a better solution
@@ -3129,7 +3183,7 @@ mod offchain_phragmen {
 					winners,
 					compact,
 					score,
-					active_era(),
+					current_era(),
 				));
 			})
 	}
@@ -3191,7 +3245,7 @@ mod offchain_phragmen {
 				winners,
 				compact,
 				score,
-				active_era(),
+				current_era(),
 			),);
 
 			// now run the offchain worker in the same chain state.
@@ -3242,7 +3296,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenBogusWinnerCount,
 				);
@@ -3273,7 +3327,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenBogusWinnerCount,
 				);
@@ -3302,7 +3356,7 @@ mod offchain_phragmen {
 					winners,
 					compact,
 					score,
-					active_era(),
+					current_era(),
 				),);
 			})
 	}
@@ -3333,7 +3387,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenBogusCompact,
 				);
@@ -3366,7 +3420,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenBogusCompact,
 				);
@@ -3398,7 +3452,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenBogusWinner,
 				);
@@ -3434,7 +3488,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenBogusEdge,
 				);
@@ -3470,7 +3524,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenBogusSelfVote,
 				);
@@ -3506,7 +3560,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenBogusSelfVote,
 				);
@@ -3541,7 +3595,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenBogusCompact,
 				);
@@ -3583,7 +3637,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenBogusNomination,
 				);
@@ -3646,7 +3700,7 @@ mod offchain_phragmen {
 					winners,
 					compact,
 					score,
-					active_era(),
+					current_era(),
 				));
 
 				// a wrong solution.
@@ -3665,7 +3719,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenSlashedNomination,
 				);
@@ -3693,7 +3747,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenBogusScore,
 				);
