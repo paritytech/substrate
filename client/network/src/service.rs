@@ -853,7 +853,7 @@ impl Metrics {
 			connections: register(GaugeVec::new(
 				Opts::new(
 					"sub_libp2p_connections",
-					"Number of libp2p connections"
+					"Number of active libp2p connections"
 				),
 				&["direction"]
 			)?, registry)?,
