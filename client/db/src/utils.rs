@@ -227,24 +227,22 @@ pub fn open_database<Block: BlockT>(
 
 			// and now open database assuming that it has the latest version
 			let mut db_config = DatabaseConfig::with_columns(NUM_COLUMNS);
-
-			if let Some(cache_size) = cache_size {
-				let state_col_budget = (*cache_size as f64 * 0.9) as usize;
-				let other_col_budget = (cache_size - state_col_budget) / (NUM_COLUMNS as usize - 1);
-
-				let mut memory_budget = std::collections::HashMap::new();
-				for i in 0..NUM_COLUMNS {
-					if i == crate::columns::STATE {
-						memory_budget.insert(i, state_col_budget);
-					} else {
-						memory_budget.insert(i, other_col_budget);
-					}
-				}
-
-				db_config.memory_budget = memory_budget;
-			}
+			let state_col_budget = (*cache_size as f64 * 0.9) as usize;
+			let other_col_budget = (cache_size - state_col_budget) / (NUM_COLUMNS as usize - 1);
+			let mut memory_budget = std::collections::HashMap::new();
 			let path = path.to_str()
 				.ok_or_else(|| sp_blockchain::Error::Backend("Invalid database path".into()))?;
+
+			for i in 0..NUM_COLUMNS {
+				if i == crate::columns::STATE {
+					memory_budget.insert(i, state_col_budget);
+				} else {
+					memory_budget.insert(i, other_col_budget);
+				}
+			}
+
+			db_config.memory_budget = memory_budget;
+
 			Arc::new(Database::open(&db_config, &path).map_err(db_err)?)
 		},
 		#[cfg(not(any(feature = "kvdb-rocksdb", test)))]

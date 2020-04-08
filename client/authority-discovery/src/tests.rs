@@ -304,7 +304,7 @@ fn handle_dht_events_with_value_found_should_call_set_priority_group() {
 
 	// Create sample dht event.
 
-	let authority_id_1 = hash_authority_id(key_pair.public().as_ref()).unwrap();
+	let authority_id_1 = hash_authority_id(key_pair.public().as_ref());
 	let address_1: Multiaddr = "/ip6/2001:db8::".parse().unwrap();
 
 	let mut serialized_addresses = vec![];
