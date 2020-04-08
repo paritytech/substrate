@@ -20,8 +20,11 @@
 
 use sp_runtime::{Perbill, DigestItem, traits::IdentityLookup, testing::{Header, UintAuthorityId}};
 use sp_io;
-use frame_support::{impl_outer_origin, impl_outer_event, parameter_types, weights::Weight};
-use sp_core::H256;
+use frame_support::{
+	impl_outer_origin, impl_outer_event, parameter_types,
+	traits::KeyOwnerProofSystem, weights::Weight,
+};
+use sp_core::{crypto::KeyTypeId, H256};
 use codec::{Encode, Decode};
 use crate::{AuthorityId, AuthorityList, Call, GenesisConfig, Trait, Module, ConsensusLog};
 use sp_finality_grandpa::GRANDPA_ENGINE_ID;
@@ -42,6 +45,17 @@ pub struct Test;
 impl Trait for Test {
 	type Event = TestEvent;
 	type Call = Call<Test>;
+
+	type KeyOwnerProofSystem = ();
+
+	type KeyOwnerProof =
+		<Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, Vec<u8>)>>::Proof;
+
+	type KeyOwnerIdentification = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
+		KeyTypeId,
+		Vec<u8>,
+	)>>::IdentificationTuple;
+
 	type HandleEquivocation = ();
 }
 parameter_types! {

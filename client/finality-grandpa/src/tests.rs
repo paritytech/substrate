@@ -41,7 +41,7 @@ use parity_scale_codec::Decode;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, HashFor};
 use sp_runtime::generic::{BlockId, DigestItem};
 use sp_core::{H256, crypto::Public};
-use sp_finality_grandpa::{GRANDPA_ENGINE_ID, AuthorityList, GrandpaApi};
+use sp_finality_grandpa::{GRANDPA_ENGINE_ID, AuthorityList, EquivocationProof, GrandpaApi};
 use sp_state_machine::{InMemoryBackend, prove_read, read_proof_check};
 
 use authorities::AuthoritySet;
@@ -217,19 +217,19 @@ sp_api::mock_impl_runtime_apis! {
 		fn grandpa_authorities(&self) -> AuthorityList {
 			self.inner.genesis_authorities.clone()
 		}
-	}
 
-	fn GrandpaApi_submit_report_equivocation_extrinsic_runtime_api_impl(
-		&self,
-		_: &BlockId<Block>,
-		_: ExecutionContext,
-		_: Option<(
-			sp_finality_grandpa::EquivocationProof<<Block as BlockT>::Hash, NumberFor<Block>>,
-			Vec<u8>,
-		)>,
-		_: Vec<u8>,
-	) -> Result<NativeOrEncoded<Option<()>>> {
-		Ok(NativeOrEncoded::Native(None))
+		fn submit_report_equivocation_extrinsic(
+			_equivocation_proof: EquivocationProof<Hash, BlockNumber>,
+			_key_owner_proof: Vec<u8>,
+		) -> Option<()> {
+			None
+		}
+
+		fn generate_key_ownership_proof(
+			_authority_key: AuthorityId,
+		) -> Option<Vec<u8>> {
+			None
+		}
 	}
 }
 
