@@ -814,9 +814,9 @@ impl_runtime_apis! {
 				<Block as BlockT>::Hash,
 				NumberFor<Block>,
 			>,
-			key_owner_proof: Vec<u8>,
+			key_owner_proof: fg_primitives::OpaqueKeyOwnershipProof,
 		) -> Option<()> {
-			let key_owner_proof = codec::Decode::decode(&mut &key_owner_proof[..]).ok()?;
+			let key_owner_proof = key_owner_proof.decode()?;
 
 			Grandpa::submit_report_equivocation_extrinsic(
 				equivocation_proof,
@@ -826,11 +826,12 @@ impl_runtime_apis! {
 
 		fn generate_key_ownership_proof(
 			session_key: fg_primitives::AuthorityId,
-		) -> Option<Vec<u8>> {
+		) -> Option<fg_primitives::OpaqueKeyOwnershipProof> {
 			use codec::Encode;
 
 			Historical::prove((fg_primitives::KEY_TYPE, session_key))
 				.map(|p| p.encode())
+				.map(fg_primitives::OpaqueKeyOwnershipProof::new)
 		}
 	}
 

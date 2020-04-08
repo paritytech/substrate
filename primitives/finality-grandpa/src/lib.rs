@@ -454,6 +454,29 @@ impl<'a> Decode for VersionedAuthorityList<'a> {
 	}
 }
 
+/// An opaque type used to represent the key ownership proof at the runtime API
+/// boundary. The inner value is an encoded representation of the actual key
+/// ownership proof which will be parameterized when defining the runtime. At
+/// the runtime API boundary this type is unknown and as such we keep this
+/// opaque representation, implementors of the runtime API will have to make
+/// sure that all usages of `OpaqueKeyOwnershipProof` refer to the same type.
+#[derive(Decode, Encode, PartialEq)]
+pub struct OpaqueKeyOwnershipProof(Vec<u8>);
+
+impl OpaqueKeyOwnershipProof {
+	/// Create a new `OpaqueKeyOwnershipProof` using the given encoded
+	/// representation.
+	pub fn new(inner: Vec<u8>) -> OpaqueKeyOwnershipProof {
+		OpaqueKeyOwnershipProof(inner)
+	}
+
+	/// Try to decode this `OpaqueKeyOwnershipProof` into the given concrete key
+	/// ownership proof type.
+	pub fn decode<T: Decode>(self) -> Option<T> {
+		codec::Decode::decode(&mut &self.0[..]).ok()
+	}
+}
+
 sp_api::decl_runtime_apis! {
 	/// APIs for integrating the GRANDPA finality gadget into runtimes.
 	/// This should be implemented on the runtime side.
@@ -483,7 +506,7 @@ sp_api::decl_runtime_apis! {
 		#[skip_initialize_block]
 		fn submit_report_equivocation_extrinsic(
 			equivocation_proof: EquivocationProof<Block::Hash, NumberFor<Block>>,
-			key_owner_proof: Vec<u8>,
+			key_owner_proof: OpaqueKeyOwnershipProof,
 		) -> Option<()>;
 
 		/// Generates a proof that the given session key is a part of the
@@ -492,6 +515,6 @@ sp_api::decl_runtime_apis! {
 		/// for validating misbehavior reports.
 		fn generate_key_ownership_proof(
 			authority_key: AuthorityId,
-		) -> Option<Vec<u8>>;
+		) -> Option<OpaqueKeyOwnershipProof>;
 	}
 }

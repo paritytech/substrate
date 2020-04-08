@@ -675,14 +675,14 @@ cfg_if! {
 						<Block as BlockT>::Hash,
 						NumberFor<Block>,
 					>,
-					_key_owner_proof: Vec<u8>,
+					_key_owner_proof: sp_finality_grandpa::OpaqueKeyOwnershipProof,
 				) -> Option<()> {
 					None
 				}
 
 				fn generate_key_ownership_proof(
 					_authority_key: sp_finality_grandpa::AuthorityId,
-				) -> Option<Vec<u8>> {
+				) -> Option<sp_finality_grandpa::OpaqueKeyOwnershipProof> {
 					None
 				}
 			}

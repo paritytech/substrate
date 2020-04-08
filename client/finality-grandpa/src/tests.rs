@@ -41,7 +41,7 @@ use parity_scale_codec::Decode;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, HashFor};
 use sp_runtime::generic::{BlockId, DigestItem};
 use sp_core::{H256, crypto::Public};
-use sp_finality_grandpa::{GRANDPA_ENGINE_ID, AuthorityList, EquivocationProof, GrandpaApi};
+use sp_finality_grandpa::{GRANDPA_ENGINE_ID, AuthorityList, EquivocationProof, GrandpaApi, OpaqueKeyOwnershipProof};
 use sp_state_machine::{InMemoryBackend, prove_read, read_proof_check};
 
 use authorities::AuthoritySet;
@@ -217,14 +217,14 @@ sp_api::mock_impl_runtime_apis! {
 
 		fn submit_report_equivocation_extrinsic(
 			_equivocation_proof: EquivocationProof<Hash, BlockNumber>,
-			_key_owner_proof: Vec<u8>,
+			_key_owner_proof: OpaqueKeyOwnershipProof,
 		) -> Option<()> {
 			None
 		}
 
 		fn generate_key_ownership_proof(
 			_authority_key: AuthorityId,
-		) -> Option<Vec<u8>> {
+		) -> Option<OpaqueKeyOwnershipProof> {
 			None
 		}
 	}

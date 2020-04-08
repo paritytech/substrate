@@ -6336,7 +6336,6 @@ dependencies = [
  "sp-inherents",
  "sp-keyring",
  "sp-runtime",
- "sp-session",
  "sp-state-machine",
  "sp-utils",
  "substrate-prometheus-endpoint",
