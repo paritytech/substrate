@@ -33,12 +33,12 @@ use crate::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
 	},
 	on_demand_layer::AlwaysBadChecker,
-	protocol::{self, event::Event, light_client_handler, sync::SyncState, PeerInfo, Protocol},
+	protocol::{self, event::Event, light_client_handler, LegacyConnectionKillError, sync::SyncState, PeerInfo, Protocol},
 	transport, ReputationChange,
 };
 use futures::prelude::*;
 use libp2p::{PeerId, Multiaddr};
-use libp2p::core::{ConnectedPoint, Executor, connection::{ConnectionError, PendingConnectionError}};
+use libp2p::core::{ConnectedPoint, Executor, connection::{ConnectionError, PendingConnectionError}, either::EitherError};
 use libp2p::kad::record;
 use libp2p::swarm::{NetworkBehaviour, SwarmBuilder, SwarmEvent, protocols_handler::NodeHandlerWrapperError};
 use log::{error, info, trace, warn};
@@ -1116,6 +1116,9 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 								metrics.connections_closed_total.with_label_values(&["transport-error"]).inc(),
 							ConnectionError::ConnectionLimit(_) =>
 								metrics.connections_closed_total.with_label_values(&["limit-reached"]).inc(),
+							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
+								EitherError::A(EitherError::A(EitherError::B(LegacyConnectionKillError))))))) =>
+								metrics.connections_closed_total.with_label_values(&["force-closed"]).inc(),
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(_)) =>
 								metrics.connections_closed_total.with_label_values(&["protocol-error"]).inc(),
 							ConnectionError::Handler(NodeHandlerWrapperError::KeepAliveTimeout) =>
