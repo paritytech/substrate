@@ -20,7 +20,7 @@ use bytes::{Bytes, BytesMut};
 use futures::prelude::*;
 use generic_proto::{GenericProto, GenericProtoOut};
 use libp2p::{Multiaddr, PeerId};
-use libp2p::core::{ConnectedPoint, nodes::listeners::ListenerId};
+use libp2p::core::{ConnectedPoint, connection::{ConnectionId, ListenerId}};
 use libp2p::swarm::{ProtocolsHandler, IntoProtocolsHandler};
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use sp_core::{
@@ -48,7 +48,7 @@ use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use std::fmt::Write;
-use std::{cmp, num::NonZeroUsize, pin::Pin, task::Poll, time};
+use std::{cmp, io, num::NonZeroUsize, pin::Pin, task::Poll, time};
 use log::{log, Level, trace, debug, warn, error};
 use crate::chain::{Client, FinalityProofProvider};
 use sc_client_api::{ChangesProof, StorageProof};
@@ -1830,20 +1830,29 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 		self.behaviour.addresses_of_peer(peer_id)
 	}
 
-	fn inject_connected(&mut self, peer_id: PeerId, endpoint: ConnectedPoint) {
-		self.behaviour.inject_connected(peer_id, endpoint)
+	fn inject_connection_established(&mut self, peer_id: &PeerId, conn: &ConnectionId, endpoint: &ConnectedPoint) {
+		self.behaviour.inject_connection_established(peer_id, conn, endpoint)
 	}
 
-	fn inject_disconnected(&mut self, peer_id: &PeerId, endpoint: ConnectedPoint) {
-		self.behaviour.inject_disconnected(peer_id, endpoint)
+	fn inject_connection_closed(&mut self, peer_id: &PeerId, conn: &ConnectionId, endpoint: &ConnectedPoint) {
+		self.behaviour.inject_connection_closed(peer_id, conn, endpoint)
 	}
 
-	fn inject_node_event(
+	fn inject_connected(&mut self, peer_id: &PeerId) {
+		self.behaviour.inject_connected(peer_id)
+	}
+
+	fn inject_disconnected(&mut self, peer_id: &PeerId) {
+		self.behaviour.inject_disconnected(peer_id)
+	}
+
+	fn inject_event(
 		&mut self,
 		peer_id: PeerId,
+		connection: ConnectionId,
 		event: <<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::OutEvent,
 	) {
-		self.behaviour.inject_node_event(peer_id, event)
+		self.behaviour.inject_event(peer_id, connection, event)
 	}
 
 	fn poll(
@@ -1900,10 +1909,10 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 			Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev)) => ev,
 			Poll::Ready(NetworkBehaviourAction::DialAddress { address }) =>
 				return Poll::Ready(NetworkBehaviourAction::DialAddress { address }),
-			Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id }) =>
-				return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id }),
-			Poll::Ready(NetworkBehaviourAction::SendEvent { peer_id, event }) =>
-				return Poll::Ready(NetworkBehaviourAction::SendEvent { peer_id, event }),
+			Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition }) =>
+				return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition }),
+			Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }) =>
+				return Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }),
 			Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }) =>
 				return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
 		};
@@ -1967,10 +1976,6 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 		}
 	}
 
-	fn inject_replaced(&mut self, peer_id: PeerId, closed_endpoint: ConnectedPoint, new_endpoint: ConnectedPoint) {
-		self.behaviour.inject_replaced(peer_id, closed_endpoint, new_endpoint)
-	}
-
 	fn inject_addr_reach_failure(
 		&mut self,
 		peer_id: Option<&PeerId>,
@@ -2000,8 +2005,8 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 		self.behaviour.inject_listener_error(id, err);
 	}
 
-	fn inject_listener_closed(&mut self, id: ListenerId) {
-		self.behaviour.inject_listener_closed(id);
+	fn inject_listener_closed(&mut self, id: ListenerId, reason: Result<(), &io::Error>) {
+		self.behaviour.inject_listener_closed(id, reason);
 	}
 }
 
