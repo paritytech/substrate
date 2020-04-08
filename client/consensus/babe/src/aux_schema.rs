@@ -24,13 +24,13 @@ use codec::{Decode, Encode};
 use sc_client_api::backend::AuxStore;
 use sp_blockchain::{Result as ClientResult, Error as ClientError};
 use sp_runtime::traits::Block as BlockT;
-use sp_consensus_babe::BabeBlockWeight;
+use sp_consensus_babe::{BabeBlockWeight, BabeGenesisConfiguration};
 use sc_consensus_epochs::{EpochChangesFor, SharedEpochChanges, migration::EpochChangesForV0};
-use crate::Epoch;
+use crate::{Epoch, migration::EpochV0};
 
 const BABE_EPOCH_CHANGES_VERSION: &[u8] = b"babe_epoch_changes_version";
 const BABE_EPOCH_CHANGES_KEY: &[u8] = b"babe_epoch_changes";
-const BABE_EPOCH_CHANGES_CURRENT_VERSION: u32 = 1;
+const BABE_EPOCH_CHANGES_CURRENT_VERSION: u32 = 2;
 
 fn block_weight_key<H: Encode>(block_hash: H) -> Vec<u8> {
 	(b"block_weight", block_hash).encode()
@@ -53,14 +53,19 @@ fn load_decode<B, T>(backend: &B, key: &[u8]) -> ClientResult<Option<T>>
 /// Load or initialize persistent epoch change data from backend.
 pub(crate) fn load_epoch_changes<Block: BlockT, B: AuxStore>(
 	backend: &B,
+	config: &BabeGenesisConfiguration,
 ) -> ClientResult<SharedEpochChanges<Block, Epoch>> {
 	let version = load_decode::<_, u32>(backend, BABE_EPOCH_CHANGES_VERSION)?;
 
 	let maybe_epoch_changes = match version {
-		None => load_decode::<_, EpochChangesForV0<Block, Epoch>>(
+		None => load_decode::<_, EpochChangesForV0<Block, EpochV0>>(
 			backend,
 			BABE_EPOCH_CHANGES_KEY,
-		)?.map(|v0| v0.migrate()),
+		)?.map(|v0| v0.migrate().map(|_, _, epoch| epoch.migrate(config))),
+		Some(1) => load_decode::<_, EpochChangesFor<Block, EpochV0>>(
+			backend,
+			BABE_EPOCH_CHANGES_KEY,
+		)?.map(|v1| v1.map(|_, _, epoch| epoch.migrate(config))),
 		Some(BABE_EPOCH_CHANGES_CURRENT_VERSION) => load_decode::<_, EpochChangesFor<Block, Epoch>>(
 			backend,
 			BABE_EPOCH_CHANGES_KEY,

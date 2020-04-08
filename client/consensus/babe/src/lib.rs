@@ -120,6 +120,7 @@ use sp_api::ApiExt;
 
 mod aux_schema;
 mod verification;
+mod migration;
 pub mod authorship;
 #[cfg(test)]
 mod tests;
@@ -1212,7 +1213,7 @@ pub fn block_import<Client, Block: BlockT, I>(
 ) -> ClientResult<(BabeBlockImport<Block, Client, I>, BabeLink<Block>)> where
 	Client: AuxStore + HeaderBackend<Block> + HeaderMetadata<Block, Error = sp_blockchain::Error>,
 {
-	let epoch_changes = aux_schema::load_epoch_changes::<Block, _>(&*client)?;
+	let epoch_changes = aux_schema::load_epoch_changes::<Block, _>(&*client, &config)?;
 	let link = BabeLink {
 		epoch_changes: epoch_changes.clone(),
 		time_source: Default::default(),
