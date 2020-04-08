@@ -996,7 +996,7 @@ mod tests {
 
 		// we apply the change at A0 which should prune it and the fork at B
 		authorities
-			.apply_standard_changes("hash_a0", 5, &is_descendent_of)
+			.apply_standard_changes("hash_a0", 5, &is_descendent_of, false)
 			.unwrap();
 
 		// the next change is now at A1 (#10)
