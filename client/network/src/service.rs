@@ -854,7 +854,7 @@ impl Metrics {
 			connections: register(GaugeVec::new(
 				Opts::new(
 					"sub_libp2p_connections",
-					"Number of active libp2p connections"
+					"Number of established libp2p connections"
 				),
 				&["direction"]
 			)?, registry)?,
@@ -957,7 +957,7 @@ impl Metrics {
 			pending_connections_errors_total: register(CounterVec::new(
 				Opts::new(
 					"sub_libp2p_pending_connections_errors_total",
-					"Total number of node connection failures"
+					"Total number of pending connection errors"
 				),
 				&["reason"]
 			)?, registry)?,
