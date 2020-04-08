@@ -20,7 +20,7 @@ use bytes::{Bytes, BytesMut};
 use futures::prelude::*;
 use generic_proto::{GenericProto, GenericProtoOut};
 use libp2p::{Multiaddr, PeerId};
-use libp2p::core::{ConnectedPoint, nodes::listeners::ListenerId};
+use libp2p::core::{ConnectedPoint, connection::{ConnectionId, ListenerId}};
 use libp2p::swarm::{ProtocolsHandler, IntoProtocolsHandler};
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use sp_core::{
@@ -39,16 +39,16 @@ use sp_runtime::traits::{
 };
 use sp_arithmetic::traits::SaturatedConversion;
 use message::{BlockAnnounce, Message};
-use message::generic::{Message as GenericMessage, ConsensusMessage};
-use prometheus_endpoint::{Registry, Gauge, GaugeVec, PrometheusError, Opts, register, U64};
+use message::generic::{Message as GenericMessage, ConsensusMessage, Roles};
+use prometheus_endpoint::{Registry, Gauge, GaugeVec, HistogramVec, PrometheusError, Opts, register, U64};
 use sync::{ChainSync, SyncState};
 use crate::service::{TransactionPool, ExHashT};
-use crate::config::{BoxFinalityProofRequestBuilder, Roles};
+use crate::config::BoxFinalityProofRequestBuilder;
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use std::fmt::Write;
-use std::{cmp, num::NonZeroUsize, pin::Pin, task::Poll, time};
+use std::{cmp, io, num::NonZeroUsize, pin::Pin, task::Poll, time};
 use log::{log, Level, trace, debug, warn, error};
 use crate::chain::{Client, FinalityProofProvider};
 use sc_client_api::{ChangesProof, StorageProof};
@@ -324,6 +324,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
 		metrics_registry: Option<&Registry>,
 		boot_node_ids: Arc<HashSet<PeerId>>,
+		queue_size_report: Option<HistogramVec>,
 	) -> error::Result<(Protocol<B, H>, sc_peerset::PeersetHandle)> {
 		let info = chain.info();
 		let sync = ChainSync::new(
@@ -337,7 +338,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 		let important_peers = {
 			let mut imp_p = HashSet::new();
-			for reserved in &peerset_config.reserved_nodes {
+			for reserved in peerset_config.priority_groups.iter().flat_map(|(_, l)| l.iter()) {
 				imp_p.insert(reserved.clone());
 			}
 			imp_p.shrink_to_fit();
@@ -346,7 +347,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 		let (peerset, peerset_handle) = sc_peerset::Peerset::from_config(peerset_config);
 		let versions = &((MIN_VERSION as u8)..=(CURRENT_VERSION as u8)).collect::<Vec<u8>>();
-		let mut behaviour = GenericProto::new(protocol_id.clone(), versions, peerset);
+		let mut behaviour = GenericProto::new(protocol_id.clone(), versions, peerset, queue_size_report);
 
 		let mut legacy_equiv_by_name = HashMap::new();
 
@@ -1032,13 +1033,14 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 	/// Registers a new notifications protocol.
 	///
-	/// You are very strongly encouraged to call this method very early on. Any connection open
-	/// will retain the protocols that were registered then, and not any new one.
-	pub fn register_notifications_protocol(
-		&mut self,
+	/// While registering a protocol while we already have open connections is discouraged, we
+	/// nonetheless handle it by notifying that we opened channels with everyone. This function
+	/// returns a list of substreams to open as a result.
+	pub fn register_notifications_protocol<'a>(
+		&'a mut self,
 		engine_id: ConsensusEngineId,
 		protocol_name: impl Into<Cow<'static, [u8]>>,
-	) -> Vec<event::Event> {
+	) -> impl ExactSizeIterator<Item = (&'a PeerId, Roles)> + 'a {
 		let protocol_name = protocol_name.into();
 		if self.protocol_name_by_engine.insert(engine_id, protocol_name.clone()).is_some() {
 			error!(target: "sub-libp2p", "Notifications protocol already registered: {:?}", protocol_name);
@@ -1047,16 +1049,8 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			self.legacy_equiv_by_name.insert(protocol_name, Fallback::Consensus(engine_id));
 		}
 
-		// Registering a protocol while we already have open connections isn't great, but for now
-		// we handle it by notifying that we opened channels with everyone.
 		self.context_data.peers.iter()
-			.map(|(peer_id, peer)|
-				event::Event::NotificationStreamOpened {
-					remote: peer_id.clone(),
-					engine_id,
-					roles: peer.info.roles,
-				})
-			.collect()
+			.map(|(peer_id, peer)| (peer_id, peer.info.roles))
 	}
 
 	/// Called when peer sends us new extrinsics
@@ -1836,20 +1830,29 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 		self.behaviour.addresses_of_peer(peer_id)
 	}
 
-	fn inject_connected(&mut self, peer_id: PeerId, endpoint: ConnectedPoint) {
-		self.behaviour.inject_connected(peer_id, endpoint)
+	fn inject_connection_established(&mut self, peer_id: &PeerId, conn: &ConnectionId, endpoint: &ConnectedPoint) {
+		self.behaviour.inject_connection_established(peer_id, conn, endpoint)
 	}
 
-	fn inject_disconnected(&mut self, peer_id: &PeerId, endpoint: ConnectedPoint) {
-		self.behaviour.inject_disconnected(peer_id, endpoint)
+	fn inject_connection_closed(&mut self, peer_id: &PeerId, conn: &ConnectionId, endpoint: &ConnectedPoint) {
+		self.behaviour.inject_connection_closed(peer_id, conn, endpoint)
 	}
 
-	fn inject_node_event(
+	fn inject_connected(&mut self, peer_id: &PeerId) {
+		self.behaviour.inject_connected(peer_id)
+	}
+
+	fn inject_disconnected(&mut self, peer_id: &PeerId) {
+		self.behaviour.inject_disconnected(peer_id)
+	}
+
+	fn inject_event(
 		&mut self,
 		peer_id: PeerId,
+		connection: ConnectionId,
 		event: <<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::OutEvent,
 	) {
-		self.behaviour.inject_node_event(peer_id, event)
+		self.behaviour.inject_event(peer_id, connection, event)
 	}
 
 	fn poll(
@@ -1906,10 +1909,10 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 			Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev)) => ev,
 			Poll::Ready(NetworkBehaviourAction::DialAddress { address }) =>
 				return Poll::Ready(NetworkBehaviourAction::DialAddress { address }),
-			Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id }) =>
-				return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id }),
-			Poll::Ready(NetworkBehaviourAction::SendEvent { peer_id, event }) =>
-				return Poll::Ready(NetworkBehaviourAction::SendEvent { peer_id, event }),
+			Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition }) =>
+				return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition }),
+			Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }) =>
+				return Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }),
 			Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }) =>
 				return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
 		};
@@ -1973,10 +1976,6 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 		}
 	}
 
-	fn inject_replaced(&mut self, peer_id: PeerId, closed_endpoint: ConnectedPoint, new_endpoint: ConnectedPoint) {
-		self.behaviour.inject_replaced(peer_id, closed_endpoint, new_endpoint)
-	}
-
 	fn inject_addr_reach_failure(
 		&mut self,
 		peer_id: Option<&PeerId>,
@@ -2006,8 +2005,8 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 		self.behaviour.inject_listener_error(id, err);
 	}
 
-	fn inject_listener_closed(&mut self, id: ListenerId) {
-		self.behaviour.inject_listener_closed(id);
+	fn inject_listener_closed(&mut self, id: ListenerId, reason: Result<(), &io::Error>) {
+		self.behaviour.inject_listener_closed(id, reason);
 	}
 }
 
@@ -2020,7 +2019,7 @@ impl<B: BlockT, H: ExHashT> Drop for Protocol<B, H> {
 #[cfg(test)]
 mod tests {
 	use crate::PeerId;
-	use crate::config::{EmptyTransactionPool, Roles};
+	use crate::config::EmptyTransactionPool;
 	use super::{CustomMessageOutcome, Protocol, ProtocolConfig};
 
 	use sp_consensus::block_validation::DefaultBlockAnnounceValidator;
@@ -2033,10 +2032,7 @@ mod tests {
 		let client = Arc::new(TestClientBuilder::with_default_backend().build_with_longest_chain().0);
 
 		let (mut protocol, _) = Protocol::<Block, Hash>::new(
-			ProtocolConfig {
-				roles: Roles::FULL,
-				max_parallel_downloads: 10,
-			},
+			ProtocolConfig::default(),
 			client.clone(),
 			Arc::new(EmptyTransactionPool),
 			None,
@@ -2047,11 +2043,12 @@ mod tests {
 				out_peers: 10,
 				bootnodes: Vec::new(),
 				reserved_only: false,
-				reserved_nodes: Vec::new(),
+				priority_groups: Vec::new(),
 			},
 			Box::new(DefaultBlockAnnounceValidator::new(client.clone())),
 			None,
 			Default::default(),
+			None,
 		).unwrap();
 
 		let dummy_peer_id = PeerId::random();

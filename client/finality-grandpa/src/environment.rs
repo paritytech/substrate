@@ -20,7 +20,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
-use log::{debug, warn, info};
+use log::{debug, warn};
 use parity_scale_codec::{Decode, Encode};
 use futures::prelude::*;
 use futures_timer::Delay;
@@ -1006,6 +1006,7 @@ where
 			hash,
 			number,
 			(round, commit).into(),
+			false,
 		)
 	}
 
@@ -1069,6 +1070,7 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 	hash: Block::Hash,
 	number: NumberFor<Block>,
 	justification_or_commit: JustificationOrCommit<Block>,
+	initial_sync: bool,
 ) -> Result<(), CommandOrError<Block::Hash, NumberFor<Block>>> where
 	Block:  BlockT,
 	BE: Backend<Block>,
@@ -1110,6 +1112,7 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 			hash,
 			number,
 			&is_descendent_of::<Block, _>(&*client, None),
+			initial_sync,
 		).map_err(|e| Error::Safety(e.to_string()))?;
 
 		// check if this is this is the first finalization of some consensus changes
@@ -1190,9 +1193,15 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 			let (new_id, set_ref) = authority_set.current();
 
 			if set_ref.len() > 16 {
-				info!("👴 Applying GRANDPA set change to new set with {} authorities", set_ref.len());
+				afg_log!(initial_sync,
+					"👴 Applying GRANDPA set change to new set with {} authorities",
+					set_ref.len(),
+				);
 			} else {
-				info!("👴 Applying GRANDPA set change to new set {:?}", set_ref);
+				afg_log!(initial_sync,
+					"👴 Applying GRANDPA set change to new set {:?}",
+					set_ref,
+				);
 			}
 
 			telemetry!(CONSENSUS_INFO; "afg.generating_new_authority_set";

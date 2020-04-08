@@ -18,6 +18,7 @@ use crate::{Service, NetworkStatus, NetworkState, error::Error, DEFAULT_PROTOCOL
 use crate::{TaskManagerBuilder, start_rpc_servers, build_network_future, TransactionPoolAdapter};
 use crate::status_sinks;
 use crate::config::{Configuration, DatabaseConfig, KeystoreConfig, PrometheusConfig};
+use crate::metrics::MetricsService;
 use sc_client_api::{
 	self,
 	BlockchainEvents,
@@ -25,22 +26,22 @@ use sc_client_api::{
 	execution_extensions::ExtensionsFactory,
 	ExecutorProvider, CallExecutor
 };
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sc_client::Client;
 use sc_chain_spec::get_extension;
 use sp_consensus::import_queue::ImportQueue;
 use futures::{
 	Future, FutureExt, StreamExt,
-	channel::mpsc,
 	future::ready,
 };
 use sc_keystore::{Store as Keystore};
 use log::{info, warn, error};
-use sc_network::config::{FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
+use sc_network::config::{Role, FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
 use sc_network::{NetworkService, NetworkStateInfo};
 use parking_lot::{Mutex, RwLock};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{
-	Block as BlockT, NumberFor, SaturatedConversion, HashFor, UniqueSaturatedInto,
+	Block as BlockT, NumberFor, SaturatedConversion, HashFor,
 };
 use sp_api::ProvideRuntimeApi;
 use sc_executor::{NativeExecutor, NativeExecutionDispatch};
@@ -49,56 +50,9 @@ use std::{
 	marker::PhantomData, sync::Arc, pin::Pin
 };
 use wasm_timer::SystemTime;
-use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_transaction_pool::{MaintainedTransactionPool, ChainEvent};
 use sp_blockchain;
-use prometheus_endpoint::{register, Gauge, U64, F64, Registry, PrometheusError, Opts, GaugeVec};
-
-struct ServiceMetrics {
-	block_height_number: GaugeVec<U64>,
-	ready_transactions_number: Gauge<U64>,
-	memory_usage_bytes: Gauge<U64>,
-	cpu_usage_percentage: Gauge<F64>,
-	network_per_sec_bytes: GaugeVec<U64>,
-	database_cache: Gauge<U64>,
-	state_cache: Gauge<U64>,
-	state_db: GaugeVec<U64>,
-}
-
-impl ServiceMetrics {
-	fn register(registry: &Registry) -> Result<Self, PrometheusError> {
-		Ok(Self {
-			block_height_number: register(GaugeVec::new(
-				Opts::new("block_height_number", "Height of the chain"),
-				&["status"]
-			)?, registry)?,
-			ready_transactions_number: register(Gauge::new(
-				"ready_transactions_number", "Number of transactions in the ready queue",
-			)?, registry)?,
-			memory_usage_bytes: register(Gauge::new(
-				"memory_usage_bytes", "Node memory (resident set size) usage",
-			)?, registry)?,
-			cpu_usage_percentage: register(Gauge::new(
-				"cpu_usage_percentage", "Node CPU usage",
-			)?, registry)?,
-			network_per_sec_bytes: register(GaugeVec::new(
-				Opts::new("network_per_sec_bytes", "Networking bytes per second"),
-				&["direction"]
-			)?, registry)?,
-			database_cache: register(Gauge::new(
-				"database_cache_bytes", "RocksDB cache size in bytes",
-			)?, registry)?,
-			state_cache: register(Gauge::new(
-				"state_cache_bytes", "State cache size in bytes",
-			)?, registry)?,
-			state_db: register(GaugeVec::new(
-				Opts::new("state_db_cache_bytes", "State DB cache in bytes"),
-				&["subtype"]
-			)?, registry)?,
-		})
-	}
-}
 
 pub type BackgroundTask = Pin<Box<dyn Future<Output=()> + Send>>;
 
@@ -214,7 +168,6 @@ fn new_full_parts<TBl, TRtApi, TExecDisp>(
 			password.clone()
 		)?,
 		KeystoreConfig::InMemory => Keystore::new_in_memory(),
-		KeystoreConfig::None => return Err("No keystore config provided!".into()),
 	};
 
 	let tasks_builder = TaskManagerBuilder::new();
@@ -225,7 +178,7 @@ fn new_full_parts<TBl, TRtApi, TExecDisp>(
 		config.max_runtime_instances,
 	);
 
-	let chain_spec = config.expect_chain_spec();
+	let chain_spec = &config.chain_spec;
 	let fork_blocks = get_extension::<sc_client::ForkBlocks<TBl>>(chain_spec.extensions())
 		.cloned()
 		.unwrap_or_default();
@@ -240,11 +193,11 @@ fn new_full_parts<TBl, TRtApi, TExecDisp>(
 			state_cache_child_ratio:
 			config.state_cache_child_ratio.map(|v| (v, 100)),
 			pruning: config.pruning.clone(),
-			source: match config.expect_database() {
+			source: match &config.database {
 				DatabaseConfig::Path { path, cache_size } =>
 					sc_client_db::DatabaseSettingsSrc::Path {
 						path: path.clone(),
-						cache_size: cache_size.clone().map(|u| u as usize),
+						cache_size: *cache_size,
 					},
 				DatabaseConfig::Custom(db) =>
 					sc_client_db::DatabaseSettingsSrc::Custom(db.clone()),
@@ -259,7 +212,7 @@ fn new_full_parts<TBl, TRtApi, TExecDisp>(
 		sc_client_db::new_client(
 			db_config,
 			executor,
-			config.expect_chain_spec().as_storage_builder(),
+			chain_spec.as_storage_builder(),
 			fork_blocks,
 			bad_blocks,
 			extensions,
@@ -335,7 +288,6 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 				password.clone()
 			)?,
 			KeystoreConfig::InMemory => Keystore::new_in_memory(),
-			KeystoreConfig::None => return Err("No keystore config provided!".into()),
 		};
 
 		let executor = NativeExecutor::<TExecDisp>::new(
@@ -350,11 +302,11 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 				state_cache_child_ratio:
 					config.state_cache_child_ratio.map(|v| (v, 100)),
 				pruning: config.pruning.clone(),
-				source: match config.expect_database() {
+				source: match &config.database {
 					DatabaseConfig::Path { path, cache_size } =>
 						sc_client_db::DatabaseSettingsSrc::Path {
 							path: path.clone(),
-							cache_size: cache_size.clone().map(|u| u as usize),
+							cache_size: *cache_size,
 						},
 					DatabaseConfig::Custom(db) =>
 						sc_client_db::DatabaseSettingsSrc::Custom(db.clone()),
@@ -375,7 +327,7 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 		let remote_blockchain = backend.remote_blockchain();
 		let client = Arc::new(sc_client::light::new_light(
 			backend.clone(),
-			config.expect_chain_spec().as_storage_builder(),
+			config.chain_spec.as_storage_builder(),
 			executor,
 			Box::new(tasks_builder.spawn_handle()),
 			config.prometheus_config.as_ref().map(|config| config.registry.clone()),
@@ -820,13 +772,13 @@ ServiceBuilder<
 		)?;
 
 		// A side-channel for essential tasks to communicate shutdown.
-		let (essential_failed_tx, essential_failed_rx) = mpsc::unbounded();
+		let (essential_failed_tx, essential_failed_rx) = tracing_unbounded("mpsc_essential_tasks");
 
 		let import_queue = Box::new(import_queue);
 		let chain_info = client.chain_info();
-		let chain_spec = config.expect_chain_spec();
+		let chain_spec = &config.chain_spec;
 
-		let version = config.full_version();
+		let version = config.impl_version;
 		info!("📦 Highest known block at #{}", chain_info.best_number);
 		telemetry!(
 			SUBSTRATE_INFO;
@@ -840,7 +792,7 @@ ServiceBuilder<
 			.register_transaction_pool(Arc::downgrade(&transaction_pool) as _);
 
 		let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
-			imports_external_transactions: !config.roles.is_light(),
+			imports_external_transactions: !matches!(config.role, Role::Light),
 			pool: transaction_pool.clone(),
 			client: client.clone(),
 			executor: tasks_builder.spawn_handle(),
@@ -863,7 +815,7 @@ ServiceBuilder<
 			Box::new(sp_consensus::block_validation::DefaultBlockAnnounceValidator::new(client.clone()));
 
 		let network_params = sc_network::config::Params {
-			roles: config.roles,
+			role: config.role.clone(),
 			executor: {
 				let spawn_handle = tasks_builder.spawn_handle();
 				Some(Box::new(move |fut| {
@@ -913,7 +865,7 @@ ServiceBuilder<
 			let offchain = offchain_workers.as_ref().map(Arc::downgrade);
 			let notifications_spawn_handle = tasks_builder.spawn_handle();
 			let network_state_info: Arc<dyn NetworkStateInfo + Send + Sync> = network.clone();
-			let is_validator = config.roles.is_authority();
+			let is_validator = config.role.is_authority();
 
 			let (import_stream, finality_stream) = (
 				client.import_notification_stream().map(|n| ChainEvent::NewBlock {
@@ -992,115 +944,44 @@ ServiceBuilder<
 		}
 
 		// Prometheus metrics.
-		let metrics = if let Some(PrometheusConfig { port, registry }) = config.prometheus_config.clone() {
+		let mut metrics_service = if let Some(PrometheusConfig { port, registry }) = config.prometheus_config.clone() {
 			// Set static metrics.
-			register(Gauge::<U64>::with_opts(
-				Opts::new(
-					"build_info",
-					"A metric with a constant '1' value labeled by name, version, and commit."
-				)
-					.const_label("name", config.impl_name)
-					.const_label("version", config.impl_version)
-					.const_label("commit", config.impl_commit),
-			)?, &registry)?.set(1);
-			register(Gauge::<U64>::new(
-				"node_roles", "The roles the node is running as",
-			)?, &registry)?.set(u64::from(config.roles.bits()));
 
-			let metrics = ServiceMetrics::register(&registry)?;
 
+			let role_bits = match config.role {
+				Role::Full => 1u64,
+				Role::Light => 2u64,
+				Role::Sentry { .. } => 3u64,
+				Role::Authority { .. } => 4u64,
+			};
+			let metrics = MetricsService::with_prometheus(
+				&registry,
+				&config.network.node_name,
+				&config.impl_version,
+				role_bits,
+			)?;
 			spawn_handle.spawn(
 				"prometheus-endpoint",
 				prometheus_endpoint::init_prometheus(port, registry).map(drop)
 			);
 
-			Some(metrics)
+			metrics
 		} else {
-			None
+			MetricsService::new()
 		};
 
 		// Periodically notify the telemetry.
 		let transaction_pool_ = transaction_pool.clone();
 		let client_ = client.clone();
-		let mut sys = System::new();
-		let self_pid = get_current_pid().ok();
-		let (state_tx, state_rx) = mpsc::unbounded::<(NetworkStatus<_>, NetworkState)>();
+		let (state_tx, state_rx) = tracing_unbounded::<(NetworkStatus<_>, NetworkState)>("mpsc_netstat1");
 		network_status_sinks.lock().push(std::time::Duration::from_millis(5000), state_tx);
 		let tel_task = state_rx.for_each(move |(net_status, _)| {
 			let info = client_.usage_info();
-			let best_number = info.chain.best_number.saturated_into::<u64>();
-			let best_hash = info.chain.best_hash;
-			let num_peers = net_status.num_connected_peers;
-			let txpool_status = transaction_pool_.status();
-			let finalized_number: u64 = info.chain.finalized_number.saturated_into::<u64>();
-			let bandwidth_download = net_status.average_download_per_sec;
-			let bandwidth_upload = net_status.average_upload_per_sec;
-			let best_seen_block = net_status.best_seen_block
-				.map(|num: NumberFor<TBl>| num.unique_saturated_into() as u64);
-
-			// get cpu usage and memory usage of this process
-			let (cpu_usage, memory) = if let Some(self_pid) = self_pid {
-				if sys.refresh_process(self_pid) {
-					let proc = sys.get_process(self_pid)
-						.expect("Above refresh_process succeeds, this should be Some(), qed");
-					(proc.cpu_usage(), proc.memory())
-				} else { (0.0, 0) }
-			} else { (0.0, 0) };
-
-			telemetry!(
-				SUBSTRATE_INFO;
-				"system.interval";
-				"peers" => num_peers,
-				"height" => best_number,
-				"best" => ?best_hash,
-				"txcount" => txpool_status.ready,
-				"cpu" => cpu_usage,
-				"memory" => memory,
-				"finalized_height" => finalized_number,
-				"finalized_hash" => ?info.chain.finalized_hash,
-				"bandwidth_download" => bandwidth_download,
-				"bandwidth_upload" => bandwidth_upload,
-				"used_state_cache_size" => info.usage.as_ref()
-					.map(|usage| usage.memory.state_cache.as_bytes())
-					.unwrap_or(0),
-				"used_db_cache_size" => info.usage.as_ref()
-					.map(|usage| usage.memory.database_cache.as_bytes())
-					.unwrap_or(0),
-				"disk_read_per_sec" => info.usage.as_ref()
-					.map(|usage| usage.io.bytes_read)
-					.unwrap_or(0),
-				"disk_write_per_sec" => info.usage.as_ref()
-					.map(|usage| usage.io.bytes_written)
-					.unwrap_or(0),
+			metrics_service.tick(
+				&info,
+				&transaction_pool_.status(),
+				&net_status,
 			);
-			if let Some(metrics) = metrics.as_ref() {
-				// `sysinfo::Process::memory` returns memory usage in KiB and not bytes.
-				metrics.memory_usage_bytes.set(memory * 1024);
-				metrics.cpu_usage_percentage.set(f64::from(cpu_usage));
-				metrics.ready_transactions_number.set(txpool_status.ready as u64);
-
-				metrics.network_per_sec_bytes.with_label_values(&["download"]).set(net_status.average_download_per_sec);
-				metrics.network_per_sec_bytes.with_label_values(&["upload"]).set(net_status.average_upload_per_sec);
-
-				metrics.block_height_number.with_label_values(&["finalized"]).set(finalized_number);
-				metrics.block_height_number.with_label_values(&["best"]).set(best_number);
-
-				if let Some(best_seen_block) = best_seen_block {
-					metrics.block_height_number.with_label_values(&["sync_target"]).set(best_seen_block);
-				}
-
-				if let Some(info) = info.usage.as_ref() {
-					metrics.database_cache.set(info.memory.database_cache.as_bytes() as u64);
-					metrics.state_cache.set(info.memory.state_cache.as_bytes() as u64);
-
-					metrics.state_db.with_label_values(&["non_canonical"]).set(info.memory.state_db.non_canonical.as_bytes() as u64);
-					if let Some(pruning) = info.memory.state_db.pruning {
-						metrics.state_db.with_label_values(&["pruning"]).set(pruning.as_bytes() as u64);
-					}
-					metrics.state_db.with_label_values(&["pinned"]).set(info.memory.state_db.pinned.as_bytes() as u64);
-				}
-			}
-
 			ready(())
 		});
 
@@ -1110,7 +991,7 @@ ServiceBuilder<
 		);
 
 		// Periodically send the network state to the telemetry.
-		let (netstat_tx, netstat_rx) = mpsc::unbounded::<(NetworkStatus<_>, NetworkState)>();
+		let (netstat_tx, netstat_rx) = tracing_unbounded::<(NetworkStatus<_>, NetworkState)>("mpsc_netstat2");
 		network_status_sinks.lock().push(std::time::Duration::from_secs(30), netstat_tx);
 		let tel_task_2 = netstat_rx.for_each(move |(_, network_state)| {
 			telemetry!(
@@ -1126,7 +1007,7 @@ ServiceBuilder<
 		);
 
 		// RPC
-		let (system_rpc_tx, system_rpc_rx) = mpsc::unbounded();
+		let (system_rpc_tx, system_rpc_rx) = tracing_unbounded("mpsc_system_rpc");
 		let gen_handler = || {
 			use sc_rpc::{chain, state, author, system, offchain};
 
@@ -1135,6 +1016,7 @@ ServiceBuilder<
 				impl_name: config.impl_name.into(),
 				impl_version: config.impl_version.into(),
 				properties: chain_spec.properties().clone(),
+				chain_type: chain_spec.chain_type().clone(),
 			};
 
 			let subscriptions = sc_rpc::Subscriptions::new(Arc::new(tasks_builder.spawn_handle()));
@@ -1198,7 +1080,7 @@ ServiceBuilder<
 		spawn_handle.spawn(
 			"network-worker",
 			build_network_future(
-				config.roles,
+				config.role.clone(),
 				network_mut,
 				client.clone(),
 				network_status_sinks.clone(),
@@ -1208,16 +1090,16 @@ ServiceBuilder<
 			),
 		);
 
-		let telemetry_connection_sinks: Arc<Mutex<Vec<futures::channel::mpsc::UnboundedSender<()>>>> = Default::default();
+		let telemetry_connection_sinks: Arc<Mutex<Vec<TracingUnboundedSender<()>>>> = Default::default();
 
 		// Telemetry
 		let telemetry = config.telemetry_endpoints.clone().map(|endpoints| {
-			let is_authority = config.roles.is_authority();
+			let is_authority = config.role.is_authority();
 			let network_id = network.local_peer_id().to_base58();
-			let name = config.name.clone();
+			let name = config.network.node_name.clone();
 			let impl_name = config.impl_name.to_owned();
 			let version = version.clone();
-			let chain_name = config.expect_chain_spec().name().to_owned();
+			let chain_name = config.chain_spec.name().to_owned();
 			let telemetry_connection_sinks_ = telemetry_connection_sinks.clone();
 			let telemetry = sc_telemetry::init_telemetry(sc_telemetry::TelemetryConfig {
 				endpoints,
@@ -1269,7 +1151,7 @@ ServiceBuilder<
 
 		Ok(Service {
 			client,
-			task_manager: tasks_builder.into_task_manager(config.task_executor.ok_or(Error::TaskExecutorRequired)?),
+			task_manager: tasks_builder.into_task_manager(config.task_executor),
 			network,
 			network_status_sinks,
 			select_chain,

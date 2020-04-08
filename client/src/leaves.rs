@@ -195,6 +195,11 @@ impl<H, N> LeafSet<H, N> where
 		self.storage.iter().flat_map(|(_, hashes)| hashes.iter()).cloned().collect()
 	}
 
+	/// Number of known leaves
+	pub fn count(&self) -> usize {
+		self.storage.len()
+	}
+
 	/// Write the leaf list to the database transaction.
 	pub fn prepare_transaction(&mut self, tx: &mut DBTransaction, column: u32, prefix: &[u8]) {
 		let mut buf = prefix.to_vec();
