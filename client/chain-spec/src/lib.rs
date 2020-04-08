@@ -107,13 +107,13 @@
 //! pub type MyChainSpec<G> = GenericChainSpec<G, Extension>;
 //! ```
 
-
 mod chain_spec;
 mod extension;
 
-pub use chain_spec::{ChainSpec as GenericChainSpec, Properties, NoExtension};
+pub use chain_spec::{ChainSpec as GenericChainSpec, NoExtension};
 pub use extension::{Group, Fork, Forks, Extension, GetExtension, get_extension};
 pub use sc_chain_spec_derive::{ChainSpecExtension, ChainSpecGroup};
+pub use sp_chain_spec::{Properties, ChainType};
 
 use serde::{Serialize, de::DeserializeOwned};
 use sp_runtime::BuildStorage;
@@ -124,29 +124,7 @@ use sc_telemetry::TelemetryEndpoints;
 pub trait RuntimeGenesis: Serialize + DeserializeOwned + BuildStorage {}
 impl<T: Serialize + DeserializeOwned + BuildStorage> RuntimeGenesis for T {}
 
-/// The type of a chain.
-///
-/// This can be used by tools to determine the type of a chain for displaying
-/// additional information or enabling additional features.
-#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
-pub enum ChainType {
-	/// A development chain that runs mainly on one node.
-	Development,
-	/// A local chain that runs locally on multiple nodes for testing purposes.
-	Local,
-	/// A live chain.
-	Live,
-	/// Some custom chain type.
-	Custom(String),
-}
-
-impl Default for ChainType {
-	fn default() -> Self {
-		Self::Live
-	}
-}
-
-/// Common interface to `GenericChainSpec`
+/// Common interface of a chain specification.
 pub trait ChainSpec: BuildStorage + Send {
 	/// Spec name.
 	fn name(&self) -> &str;

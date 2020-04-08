@@ -5797,6 +5797,7 @@ dependencies = [
  "sc-telemetry",
  "serde",
  "serde_json",
+ "sp-chain-spec",
  "sp-core",
  "sp-runtime",
 ]
@@ -6519,9 +6520,9 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "parking_lot 0.10.0",
- "sc-chain-spec",
  "serde",
  "serde_json",
+ "sp-chain-spec",
  "sp-core",
  "sp-rpc",
  "sp-runtime",
@@ -7219,6 +7220,14 @@ dependencies = [
  "sp-consensus",
  "sp-runtime",
  "sp-state-machine",
+]
+
+[[package]]
+name = "sp-chain-spec"
+version = "2.0.0-alpha.5"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

@@ -18,7 +18,7 @@
 
 use std::fmt;
 use serde::{Serialize, Deserialize};
-use sc_chain_spec::{Properties, ChainType};
+use sp_chain_spec::{Properties, ChainType};
 
 /// Running node's static details.
 #[derive(Clone, Debug)]

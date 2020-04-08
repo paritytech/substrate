@@ -25,7 +25,7 @@ use serde::{Serialize, Deserialize};
 use sp_core::storage::{StorageKey, StorageData, ChildInfo, Storage, StorageChild};
 use sp_runtime::BuildStorage;
 use serde_json as json;
-use crate::{RuntimeGenesis, ChainType, extension::GetExtension};
+use crate::{RuntimeGenesis, ChainType, extension::GetExtension, Properties};
 use sc_network::config::MultiaddrWithPeerId;
 use sc_telemetry::TelemetryEndpoints;
 
@@ -149,9 +149,6 @@ struct ClientSpec<E> {
 	#[serde(skip_serializing)]
 	genesis: serde::de::IgnoredAny,
 }
-
-/// Arbitrary properties defined in chain spec as a JSON object
-pub type Properties = json::map::Map<String, json::Value>;
 
 /// A type denoting empty extensions.
 ///
