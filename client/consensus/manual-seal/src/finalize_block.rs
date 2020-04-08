@@ -23,35 +23,40 @@ use sp_runtime::{
 	generic::BlockId,
 };
 use std::sync::Arc;
-use sc_client_api::backend::Backend as ClientBackend;
+use sc_client_api::backend::{Backend as ClientBackend, Finalizer};
+use std::marker::PhantomData;
 
 /// params for block finalization.
-pub struct FinalizeBlockParams<B: BlockT, CB> {
+pub struct FinalizeBlockParams<B: BlockT, F, CB> {
 	/// hash of the block
 	pub hash: <B as BlockT>::Hash,
 	/// sender to report errors/success to the rpc.
 	pub sender: rpc::Sender<()>,
 	/// finalization justification
 	pub justification: Option<Justification>,
-	/// client backend
-	pub backend: Arc<CB>,
+	/// Finalizer trait object.
+	pub finalizer: Arc<F>,
+	/// phantom type to pin the Backend type
+	pub _phantom: PhantomData<CB>,
 }
 
+
 /// finalizes a block in the backend with the given params.
-pub async fn finalize_block<B, CB>(params: FinalizeBlockParams<B, CB>)
+pub async fn finalize_block<B, F, CB>(params: FinalizeBlockParams<B, F, CB>)
 	where
 		B: BlockT,
+		F: Finalizer<B, CB>,
 		CB: ClientBackend<B>,
 {
 	let FinalizeBlockParams {
 		hash,
 		mut sender,
 		justification,
-		backend: back_end,
+		finalizer,
 		..
 	} = params;
 
-	match back_end.finalize_block(BlockId::Hash(hash), justification) {
+	match finalizer.finalize_block(BlockId::Hash(hash), justification, true) {
 		Err(e) => {
 			log::warn!("Failed to finalize block {:?}", e);
 			rpc::send_result(&mut sender, Err(e.into()))
