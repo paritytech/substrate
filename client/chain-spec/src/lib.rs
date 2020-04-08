@@ -124,12 +124,36 @@ use sc_telemetry::TelemetryEndpoints;
 pub trait RuntimeGenesis: Serialize + DeserializeOwned + BuildStorage {}
 impl<T: Serialize + DeserializeOwned + BuildStorage> RuntimeGenesis for T {}
 
+/// The type of a chain.
+///
+/// This can be used by tools to determine the type of a chain for displaying
+/// additional information or enabling additional features.
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
+pub enum ChainType {
+	/// A development chain that runs mainly on one node.
+	Development,
+	/// A local chain that runs locally on multiple nodes for testing purposes.
+	Local,
+	/// A live chain.
+	Live,
+	/// Some custom chain type.
+	Custom(String),
+}
+
+impl Default for ChainType {
+	fn default() -> Self {
+		Self::Live
+	}
+}
+
 /// Common interface to `GenericChainSpec`
 pub trait ChainSpec: BuildStorage + Send {
 	/// Spec name.
 	fn name(&self) -> &str;
 	/// Spec id.
 	fn id(&self) -> &str;
+	/// Type of the chain.
+	fn chain_type(&self) -> ChainType;
 	/// A list of bootnode addresses.
 	fn boot_nodes(&self) -> &[MultiaddrWithPeerId];
 	/// Telemetry endpoints (if any)

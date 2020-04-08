@@ -25,8 +25,9 @@ use futures::{future::BoxFuture, compat::Compat};
 
 use self::error::Result as SystemResult;
 
-pub use self::helpers::{Properties, SystemInfo, Health, PeerInfo, NodeRole};
+pub use self::helpers::{SystemInfo, Health, PeerInfo, NodeRole};
 pub use self::gen_client::Client as SystemClient;
+use sc_chain_spec::Properties;
 
 /// Substrate system RPC API
 #[rpc]
@@ -39,9 +40,13 @@ pub trait SystemApi<Hash, Number> {
 	#[rpc(name = "system_version")]
 	fn system_version(&self) -> SystemResult<String>;
 
-	/// Get the chain's type. Given as a string identifier.
+	/// Get the chain's name. Given as a string identifier.
 	#[rpc(name = "system_chain")]
 	fn system_chain(&self) -> SystemResult<String>;
+
+	/// Get the chain's type.
+	#[rpc(name = "system_type")]
+	fn system_type(&self) -> SystemResult<sc_chain_spec::ChainType>;
 
 	/// Get a custom set of properties as a JSON object, defined in the chain spec.
 	#[rpc(name = "system_properties")]

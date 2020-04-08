@@ -30,6 +30,7 @@ sp-state-machine = { version = "0.8.0-alpha.5", path = "../../primitives/state-m
 sc-executor = { version = "0.8.0-alpha.5", path = "../executor" }
 sc-block-builder = { version = "0.8.0-alpha.5", path = "../../client/block-builder" }
 sc-keystore = { version = "2.0.0-alpha.5", path = "../keystore" }
+sc-chain-spec = { version = "2.0.0-alpha.5", path = "../chain-spec" }
 sp-transaction-pool = { version = "2.0.0-alpha.5", path = "../../primitives/transaction-pool" }
 sp-blockchain = { version = "2.0.0-alpha.5", path = "../../primitives/blockchain" }
 hash-db = { version = "0.15.2", default-features = false }
