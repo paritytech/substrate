@@ -40,6 +40,7 @@ use futures::prelude::*;
 use libp2p::{PeerId, Multiaddr};
 use libp2p::core::{ConnectedPoint, Executor, connection::{ConnectionError, PendingConnectionError}, either::EitherError};
 use libp2p::kad::record;
+use libp2p::ping::handler::PingFailure;
 use libp2p::swarm::{NetworkBehaviour, SwarmBuilder, SwarmEvent, protocols_handler::NodeHandlerWrapperError};
 use log::{error, info, trace, warn};
 use parking_lot::Mutex;
@@ -1116,6 +1117,9 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 								metrics.connections_closed_total.with_label_values(&["transport-error"]).inc(),
 							ConnectionError::ConnectionLimit(_) =>
 								metrics.connections_closed_total.with_label_values(&["limit-reached"]).inc(),
+							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
+								EitherError::A(EitherError::B(EitherError::A(PingFailure::Timeout))))))) =>
+								metrics.connections_closed_total.with_label_values(&["ping-timeout"]).inc(),
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
 								EitherError::A(EitherError::A(EitherError::B(LegacyConnectionKillError))))))) =>
 								metrics.connections_closed_total.with_label_values(&["force-closed"]).inc(),
