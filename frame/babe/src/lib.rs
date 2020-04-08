@@ -19,14 +19,17 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![forbid(unused_must_use, unsafe_code, unused_variables, unused_must_use)]
-#![deny(unused_imports)]
-pub use pallet_timestamp;
+
+use pallet_timestamp;
 
 use sp_std::{result, prelude::*};
-use frame_support::{decl_storage, decl_module, traits::{FindAuthor, Get, Randomness as RandomnessT}};
+use frame_support::{
+	decl_storage, decl_module, traits::{FindAuthor, Get, Randomness as RandomnessT},
+	weights::{Weight, SimpleDispatchInfo, WeighData},
+};
 use sp_timestamp::OnTimestampSet;
-use sp_runtime::{generic::DigestItem, ConsensusEngineId, Perbill, PerThing};
-use sp_runtime::traits::{IsMember, SaturatedConversion, Saturating, Hash};
+use sp_runtime::{generic::DigestItem, ConsensusEngineId, Perbill};
+use sp_runtime::traits::{IsMember, SaturatedConversion, Saturating, Hash, One};
 use sp_staking::{
 	SessionIndex,
 	offence::{Offence, Kind},
@@ -149,6 +152,13 @@ decl_storage! {
 		/// Temporary value (cleared at block finalization) which is `Some`
 		/// if per-block initialization has already been called for current block.
 		Initialized get(fn initialized): Option<MaybeVrf>;
+
+		/// How late the current block is compared to its parent.
+		///
+		/// This entry is populated as part of block execution and is cleaned up
+		/// on block finalization. Querying this storage entry outside of block
+		/// execution context should always yield zero.
+		Lateness get(fn lateness): T::BlockNumber;
 	}
 	add_extra_genesis {
 		config(authorities): Vec<(AuthorityId, BabeAuthorityWeight)>;
@@ -171,8 +181,10 @@ decl_module! {
 		const ExpectedBlockTime: T::Moment = T::ExpectedBlockTime::get();
 
 		/// Initialization
-		fn on_initialize(now: T::BlockNumber) {
+		fn on_initialize(now: T::BlockNumber) -> Weight {
 			Self::do_initialize(now);
+
+			SimpleDispatchInfo::default().weigh_data(())
 		}
 
 		/// Block finalization
@@ -185,6 +197,9 @@ decl_module! {
 			if let Some(Some(vrf_output)) = Initialized::take() {
 				Self::deposit_vrf_output(&vrf_output);
 			}
+
+			// remove temporary "environment" entry from storage
+			Lateness::<T>::kill();
 		}
 	}
 }
@@ -209,12 +224,7 @@ impl<T: Trait> FindAuthor<u32> for Module<T> {
 		for (id, mut data) in digests.into_iter() {
 			if id == BABE_ENGINE_ID {
 				let pre_digest: RawPreDigest = RawPreDigest::decode(&mut data).ok()?;
-				return Some(match pre_digest {
-					RawPreDigest::Primary { authority_index, .. } =>
-						authority_index,
-					RawPreDigest::Secondary { authority_index, .. } =>
-						authority_index,
-				});
+				return Some(pre_digest.authority_index())
 			}
 		}
 
@@ -307,10 +317,32 @@ impl<T: Trait> Module<T> {
 		// epoch 0 as having started at the slot of block 1. We want to use
 		// the same randomness and validator set as signalled in the genesis,
 		// so we don't rotate the epoch.
-		now != sp_runtime::traits::One::one() && {
+		now != One::one() && {
 			let diff = CurrentSlot::get().saturating_sub(Self::current_epoch_start());
 			diff >= T::EpochDuration::get()
 		}
+	}
+
+	/// Return the _best guess_ block number, at which the next epoch change is predicted to happen.
+	///
+	/// Returns None if the prediction is in the past; This implies an error internally in the Babe
+	/// and should not happen under normal circumstances.
+	///
+	/// In other word, this is only accurate if no slots are missed. Given missed slots, the slot
+	/// number will grow while the block number will not. Hence, the result can be interpreted as an
+	/// upper bound.
+	// -------------- IMPORTANT NOTE --------------
+	// This implementation is linked to how [`should_epoch_change`] is working. This might need to
+	// be updated accordingly, if the underlying mechanics of slot and epochs change.
+	pub fn next_expected_epoch_change(now: T::BlockNumber) -> Option<T::BlockNumber> {
+		let next_slot = Self::current_epoch_start().saturating_add(T::EpochDuration::get());
+		next_slot
+			.checked_sub(CurrentSlot::get())
+			.map(|slots_remaining| {
+				// This is a best effort guess. Drifts in the slot/block ratio will cause errors here.
+				let blocks_remaining: T::BlockNumber = slots_remaining.saturated_into();
+				now.saturating_add(blocks_remaining)
+			})
 	}
 
 	/// DANGEROUS: Enact an epoch change. Should be done on every block where `should_epoch_change` has returned `true`,
@@ -324,10 +356,7 @@ impl<T: Trait> Module<T> {
 	) {
 		// PRECONDITION: caller has done initialization and is guaranteed
 		// by the session module to be called before this.
-		#[cfg(debug_assertions)]
-		{
-			assert!(Self::initialized().is_some())
-		}
+		debug_assert!(Self::initialized().is_some());
 
 		// Update epoch index
 		let epoch_index = EpochIndex::get()
@@ -424,13 +453,21 @@ impl<T: Trait> Module<T> {
 				Self::deposit_consensus(ConsensusLog::NextEpochData(next))
 			}
 
-			CurrentSlot::put(digest.slot_number());
+			// the slot number of the current block being initialized
+			let current_slot = digest.slot_number();
 
-			if let RawPreDigest::Primary { vrf_output, .. } = digest {
+			// how many slots were skipped between current and last block
+			let lateness = current_slot.saturating_sub(CurrentSlot::get() + 1);
+			let lateness = T::BlockNumber::from(lateness as u32);
+
+			Lateness::<T>::put(lateness);
+			CurrentSlot::put(current_slot);
+
+			if let RawPreDigest::Primary(primary) = digest {
 				// place the VRF output into the `Initialized` storage item
 				// and it'll be put onto the under-construction randomness
 				// later, once we've decided which epoch this block is in.
-				Some(vrf_output)
+				Some(primary.vrf_output)
 			} else {
 				None
 			}
@@ -471,6 +508,18 @@ impl<T: Trait> Module<T> {
 
 impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
 	fn on_timestamp_set(_moment: T::Moment) { }
+}
+
+impl<T: Trait> frame_support::traits::EstimateNextSessionRotation<T::BlockNumber> for Module<T> {
+	fn estimate_next_session_rotation(now: T::BlockNumber) -> Option<T::BlockNumber> {
+		Self::next_expected_epoch_change(now)
+	}
+}
+
+impl<T: Trait> frame_support::traits::Lateness<T::BlockNumber> for Module<T> {
+	fn lateness(&self) -> T::BlockNumber {
+		Self::lateness()
+	}
 }
 
 impl<T: Trait> sp_runtime::BoundToRuntimeAppPublic for Module<T> {

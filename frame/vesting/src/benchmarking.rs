@@ -16,6 +16,8 @@
 
 //! Vesting pallet benchmarking.
 
+#![cfg(feature = "runtime-benchmarks")]
+
 use super::*;
 
 use frame_system::{RawOrigin, Module as System};
@@ -119,6 +121,24 @@ benchmarks! {
 		};
 
 		let _ = T::Currency::make_free_balance_be(&from, transfer_amount * 10.into());
-		
+
 	}: _(RawOrigin::Signed(from), to_lookup, vesting_schedule)
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::tests::{ExtBuilder, Test};
+	use frame_support::assert_ok;
+
+	#[test]
+	fn test_benchmarks() {
+		ExtBuilder::default().existential_deposit(256).build().execute_with(|| {
+			assert_ok!(test_benchmark_vest_locked::<Test>());
+			assert_ok!(test_benchmark_vest_not_locked::<Test>());
+			assert_ok!(test_benchmark_vest_other_locked::<Test>());
+			assert_ok!(test_benchmark_vest_other_not_locked::<Test>());
+			assert_ok!(test_benchmark_vested_transfer::<Test>());
+		});
+	}
 }

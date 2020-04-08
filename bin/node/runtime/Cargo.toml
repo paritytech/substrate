@@ -11,7 +11,7 @@ repository = "https://github.com/paritytech/substrate/"
 [dependencies]
 
 # third-party dependencies
-codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.3.0", default-features = false, features = ["derive"] }
 integer-sqrt = { version = "0.1.2" }
 serde = { version = "1.0.102", optional = true }
 
@@ -55,14 +55,16 @@ pallet-indices = { version = "2.0.0-alpha.5", default-features = false, path = "
 pallet-identity = { version = "2.0.0-alpha.5", default-features = false, path = "../../../frame/identity" }
 pallet-membership = { version = "2.0.0-alpha.5", default-features = false, path = "../../../frame/membership" }
 pallet-offences = { version = "2.0.0-alpha.5", default-features = false, path = "../../../frame/offences" }
+pallet-offences-benchmarking = { version = "2.0.0-alpha.5", path = "../../../frame/offences/benchmarking", default-features = false, optional = true }
 pallet-randomness-collective-flip = { version = "2.0.0-alpha.5", default-features = false, path = "../../../frame/randomness-collective-flip" }
 pallet-recovery = { version = "2.0.0-alpha.5", default-features = false, path = "../../../frame/recovery" }
 pallet-session = { version = "2.0.0-alpha.5", features = ["historical"], path = "../../../frame/session", default-features = false }
 pallet-session-benchmarking = { version = "2.0.0-alpha.5", path = "../../../frame/session/benchmarking", default-features = false, optional = true }
 pallet-staking = { version = "2.0.0-alpha.5", default-features = false, path = "../../../frame/staking" }
 pallet-staking-reward-curve = { version = "2.0.0-alpha.5", default-features = false, path = "../../../frame/staking/reward-curve" }
-pallet-sudo = { version = "2.0.0-alpha.5", default-features = false, path = "../../../frame/sudo" }
+pallet-scheduler = { version = "2.0.0-alpha.5", default-features = false, path = "../../../frame/scheduler" }
 pallet-society = { version = "2.0.0-alpha.5", default-features = false, path = "../../../frame/society" }
+pallet-sudo = { version = "2.0.0-alpha.5", default-features = false, path = "../../../frame/sudo" }
 pallet-timestamp = { version = "2.0.0-alpha.5", default-features = false, path = "../../../frame/timestamp" }
 pallet-treasury = { version = "2.0.0-alpha.5", default-features = false, path = "../../../frame/treasury" }
 pallet-utility = { version = "2.0.0-alpha.5", default-features = false, path = "../../../frame/utility" }
@@ -134,15 +136,24 @@ std = [
 runtime-benchmarks = [
 	"frame-benchmarking",
 	"frame-support/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks",
 	"pallet-balances/runtime-benchmarks",
+	"pallet-collective/runtime-benchmarks",
+	"pallet-democracy/runtime-benchmarks",
 	"pallet-elections-phragmen/runtime-benchmarks",
 	"pallet-identity/runtime-benchmarks",
+	"pallet-im-online/runtime-benchmarks",
+	"pallet-society/runtime-benchmarks",
+	"pallet-staking/runtime-benchmarks",
 	"pallet-timestamp/runtime-benchmarks",
 	"pallet-treasury/runtime-benchmarks",
-	"pallet-session-benchmarking",
-	"pallet-staking/runtime-benchmarks",
+	"pallet-utility/runtime-benchmarks",
 	"pallet-vesting/runtime-benchmarks",
+	"pallet-collective/runtime-benchmarks",
+	"pallet-offences-benchmarking",
 	"pallet-session-benchmarking",
-	"pallet-staking/runtime-benchmarks",
-	"pallet-im-online/runtime-benchmarks",
 ]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

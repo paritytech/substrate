@@ -16,6 +16,8 @@
 
 //! Generic utilities for epoch-based consensus engines.
 
+pub mod migration;
+
 use std::{sync::Arc, ops::Add, collections::BTreeMap, borrow::{Borrow, BorrowMut}};
 use parking_lot::Mutex;
 use codec::{Encode, Decode};

@@ -87,13 +87,14 @@ use sp_runtime::{
 	print, DispatchResult, DispatchError, Perbill, traits::{Zero, StaticLookup, Convert},
 };
 use frame_support::{
-	decl_storage, decl_event, ensure, decl_module, decl_error, weights::SimpleDispatchInfo,
-	storage::{StorageMap, IterableStorageMap}, traits::{
+	decl_storage, decl_event, ensure, decl_module, decl_error,
+	weights::{SimpleDispatchInfo, Weight, WeighData}, storage::{StorageMap, IterableStorageMap},
+	traits::{
 		Currency, Get, LockableCurrency, LockIdentifier, ReservableCurrency, WithdrawReasons,
-		ChangeMembers, OnUnbalanced, WithdrawReason, Contains, BalanceStatus
+		ChangeMembers, OnUnbalanced, WithdrawReason, Contains, BalanceStatus, InitializeMembers,
 	}
 };
-use sp_phragmen::ExtendedBalance;
+use sp_phragmen::{build_support_map, ExtendedBalance};
 use frame_system::{self as system, ensure_signed, ensure_root};
 
 const MODULE_ID: LockIdentifier = *b"phrelect";
@@ -116,6 +117,9 @@ pub trait Trait: frame_system::Trait {
 
 	/// What to do when the members change.
 	type ChangeMembers: ChangeMembers<Self::AccountId>;
+
+	/// What to do with genesis members
+	type InitializeMembers: InitializeMembers<Self::AccountId>;
 
 	/// Convert a balance into a number used for election calculation.
 	/// This must fit into a `u64` but is allowed to be sensibly lossy.
@@ -159,11 +163,48 @@ decl_storage! {
 		pub ElectionRounds get(fn election_rounds): u32 = Zero::zero();
 
 		/// Votes and locked stake of a particular voter.
-		pub Voting: map hasher(twox_64_concat) T::AccountId => (BalanceOf<T>, Vec<T::AccountId>);
+		pub Voting get(fn voting): map hasher(twox_64_concat) T::AccountId => (BalanceOf<T>, Vec<T::AccountId>);
 
 		/// The present candidate list. Sorted based on account-id. A current member or runner-up
 		/// can never enter this vector and is always implicitly assumed to be a candidate.
 		pub Candidates get(fn candidates): Vec<T::AccountId>;
+	} add_extra_genesis {
+		config(members): Vec<(T::AccountId, BalanceOf<T>)>;
+		build(|config: &GenesisConfig<T>| {
+			let members = config.members.iter().map(|(ref member, ref stake)| {
+				// make sure they have enough stake
+				assert!(
+					T::Currency::free_balance(member) >= *stake,
+					"Genesis member does not have enough stake",
+				);
+
+				// reserve candidacy bond and set as members.
+				T::Currency::reserve(&member, T::CandidacyBond::get())
+					.expect("Genesis member does not have enough balance to be a candidate");
+
+				// Note: all members will only vote for themselves, hence they must be given exactly
+				// their own stake as total backing. Any sane election should behave as such.
+				// Nonetheless, stakes will be updated for term 1 onwards according to the election.
+				Members::<T>::mutate(|members| {
+					match members.binary_search_by(|(a, _b)| a.cmp(member)) {
+						Ok(_) => panic!("Duplicate member in elections phragmen genesis: {}", member),
+						Err(pos) => members.insert(pos, (member.clone(), *stake)),
+					}
+				});
+
+				// set self-votes to make persistent.
+				<Module<T>>::vote(
+					T::Origin::from(Some(member.clone()).into()),
+					vec![member.clone()],
+					*stake,
+				).expect("Genesis member could not vote.");
+
+				member.clone()
+			}).collect::<Vec<T::AccountId>>();
+
+			// report genesis members to upstream, if any.
+			T::InitializeMembers::initialize_members(&members);
+		})
 	}
 }
 
@@ -223,8 +264,10 @@ decl_module! {
 
 		fn deposit_event() = default;
 
-		fn on_runtime_upgrade() {
+		fn on_runtime_upgrade() -> Weight {
 			migration::migrate::<T>();
+
+			SimpleDispatchInfo::default().weigh_data(())
 		}
 
 		const CandidacyBond: BalanceOf<T> = T::CandidacyBond::get();
@@ -461,11 +504,13 @@ decl_module! {
 		}
 
 		/// What to do at the end of each block. Checks if an election needs to happen or not.
-		fn on_initialize(n: T::BlockNumber) {
+		fn on_initialize(n: T::BlockNumber) -> Weight {
 			if let Err(e) = Self::end_block(n) {
 				print("Guru meditation");
 				print(e);
 			}
+
+			SimpleDispatchInfo::default().weigh_data(())
 		}
 	}
 }
@@ -687,11 +732,17 @@ impl<T: Trait> Module<T> {
 				.filter_map(|(m, a)| if a.is_zero() { None } else { Some(m) } )
 				.collect::<Vec<T::AccountId>>();
 
-			let support_map = sp_phragmen::build_support_map::<_, _, _, T::CurrencyToVote, Perbill>(
-				&new_set,
-				&phragmen_result.assignments,
-				Self::locked_stake_of,
+			let stake_of = |who: &T::AccountId| -> ExtendedBalance {
+				<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(
+					Self::locked_stake_of(who)
+				) as ExtendedBalance
+			};
+			let staked_assignments = sp_phragmen::assignment_ratio_to_staked(
+				phragmen_result.assignments,
+				stake_of,
 			);
+
+			let (support_map, _) = build_support_map::<T::AccountId>(&new_set, &staked_assignments);
 
 			let to_balance = |e: ExtendedBalance|
 				<T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(e);
@@ -712,7 +763,7 @@ impl<T: Trait> Module<T> {
 			let mut new_members = (&new_set_with_stake[..split_point]).to_vec();
 
 			// save the runners up as-is. They are sorted based on desirability.
-			// sort and save the members.
+			// save the members, sorted based on account id.
 			new_members.sort_by(|i, j| i.0.cmp(&j.0));
 
 			let mut prime_votes: Vec<_> = new_members.iter().map(|c| (&c.0, BalanceOf::<T>::zero())).collect();
@@ -833,7 +884,7 @@ mod tests {
 		Perbill, testing::Header, BuildStorage,
 		traits::{BlakeTwo256, IdentityLookup, Block as BlockT},
 	};
-	use crate as elections;
+	use crate as elections_phragmen;
 	use frame_system as system;
 
 	parameter_types! {
@@ -969,6 +1020,7 @@ mod tests {
 		type Currency = Balances;
 		type CurrencyToVote = CurrencyToVoteHandler;
 		type ChangeMembers = TestChangeMembers;
+		type InitializeMembers = ();
 		type CandidacyBond = CandidacyBond;
 		type VotingBond = VotingBond;
 		type TermDuration = TermDuration;
@@ -990,11 +1042,12 @@ mod tests {
 		{
 			System: system::{Module, Call, Event<T>},
 			Balances: pallet_balances::{Module, Call, Event<T>, Config<T>},
-			Elections: elections::{Module, Call, Event<T>},
+			Elections: elections_phragmen::{Module, Call, Event<T>, Config<T>},
 		}
 	);
 
 	pub struct ExtBuilder {
+		genesis_members: Vec<(u64, u64)>,
 		balance_factor: u64,
 		voter_bond: u64,
 		term_duration: u64,
@@ -1004,6 +1057,7 @@ mod tests {
 	impl Default for ExtBuilder {
 		fn default() -> Self {
 			Self {
+				genesis_members: vec![],
 				balance_factor: 1,
 				voter_bond: 2,
 				desired_runners_up: 0,
@@ -1025,11 +1079,16 @@ mod tests {
 			self.term_duration = duration;
 			self
 		}
+		pub fn genesis_members(mut self, members: Vec<(u64, u64)>) -> Self {
+			self.genesis_members = members;
+			self
+		}
 		pub fn build(self) -> sp_io::TestExternalities {
 			VOTING_BOND.with(|v| *v.borrow_mut() = self.voter_bond);
 			TERM_DURATION.with(|v| *v.borrow_mut() = self.term_duration);
 			DESIRED_RUNNERS_UP.with(|v| *v.borrow_mut() = self.desired_runners_up);
-			GenesisConfig {
+			MEMBERS.with(|m| *m.borrow_mut() = self.genesis_members.iter().map(|(m, _)| m.clone()).collect::<Vec<_>>());
+			let mut ext: sp_io::TestExternalities = GenesisConfig {
 				pallet_balances: Some(pallet_balances::GenesisConfig::<Test>{
 					balances: vec![
 						(1, 10 * self.balance_factor),
@@ -1040,7 +1099,12 @@ mod tests {
 						(6, 60 * self.balance_factor)
 					],
 				}),
-			}.build_storage().unwrap().into()
+				elections_phragmen: Some(elections_phragmen::GenesisConfig::<Test> {
+					members: self.genesis_members
+				}),
+			}.build_storage().unwrap().into();
+			ext.execute_with(|| System::set_block_number(1));
+			ext
 		}
 	}
 
@@ -1061,7 +1125,6 @@ mod tests {
 	#[test]
 	fn params_should_work() {
 		ExtBuilder::default().build().execute_with(|| {
-			System::set_block_number(1);
 			assert_eq!(Elections::desired_members(), 2);
 			assert_eq!(Elections::term_duration(), 5);
 			assert_eq!(Elections::election_rounds(), 0);
@@ -1079,13 +1142,66 @@ mod tests {
 	}
 
 	#[test]
+	fn genesis_members_should_work() {
+		ExtBuilder::default().genesis_members(vec![(1, 10), (2, 20)]).build().execute_with(|| {
+			System::set_block_number(1);
+			assert_eq!(Elections::members(), vec![(1, 10), (2, 20)]);
+
+			assert_eq!(Elections::voting(1), (10, vec![1]));
+			assert_eq!(Elections::voting(2), (20, vec![2]));
+
+			// they will persist since they have self vote.
+			System::set_block_number(5);
+			assert_ok!(Elections::end_block(System::block_number()));
+
+			assert_eq!(Elections::members_ids(), vec![1, 2]);
+		})
+	}
+
+	#[test]
+	fn genesis_members_unsorted_should_work() {
+		ExtBuilder::default().genesis_members(vec![(2, 20), (1, 10)]).build().execute_with(|| {
+			System::set_block_number(1);
+			assert_eq!(Elections::members(), vec![(1, 10), (2, 20)]);
+
+			assert_eq!(Elections::voting(1), (10, vec![1]));
+			assert_eq!(Elections::voting(2), (20, vec![2]));
+
+			// they will persist since they have self vote.
+			System::set_block_number(5);
+			assert_ok!(Elections::end_block(System::block_number()));
+
+			assert_eq!(Elections::members_ids(), vec![1, 2]);
+		})
+	}
+
+	#[test]
+	#[should_panic = "Genesis member does not have enough stake"]
+	fn genesis_members_cannot_over_stake_0() {
+		// 10 cannot lock 20 as their stake and extra genesis will panic.
+		ExtBuilder::default().genesis_members(vec![(1, 20), (2, 20)]).build();
+	}
+
+	#[test]
+	#[should_panic]
+	fn genesis_members_cannot_over_stake_1() {
+		// 10 cannot reserve 20 as voting bond and extra genesis will panic.
+		ExtBuilder::default().voter_bond(20).genesis_members(vec![(1, 10), (2, 20)]).build();
+	}
+
+	#[test]
+	#[should_panic = "Duplicate member in elections phragmen genesis: 2"]
+	fn genesis_members_cannot_be_duplicate() {
+		ExtBuilder::default().genesis_members(vec![(1, 10), (2, 10), (2, 10)]).build();
+	}
+
+	#[test]
 	fn term_duration_zero_is_passive() {
 		ExtBuilder::default()
 			.term_duration(0)
 			.build()
 			.execute_with(||
 		{
-			System::set_block_number(1);
 			assert_eq!(Elections::term_duration(), 0);
 			assert_eq!(Elections::desired_members(), 2);
 			assert_eq!(Elections::election_rounds(), 0);
@@ -1526,10 +1642,9 @@ mod tests {
 			assert_eq!(balances(&5), (45, 5));
 
 			assert_ok!(Elections::report_defunct_voter(Origin::signed(5), 3));
-			assert_eq!(
-				System::events()[7].event,
-				Event::elections(RawEvent::VoterReported(3, 5, true))
-			);
+			assert!(System::events().iter().any(|event| {
+				event.event == Event::elections_phragmen(RawEvent::VoterReported(3, 5, true))
+			}));
 
 			assert_eq!(balances(&3), (28, 0));
 			assert_eq!(balances(&5), (47, 5));
@@ -1555,10 +1670,9 @@ mod tests {
 			assert_eq!(balances(&5), (45, 5));
 
 			assert_ok!(Elections::report_defunct_voter(Origin::signed(5), 4));
-			assert_eq!(
-				System::events()[7].event,
-				Event::elections(RawEvent::VoterReported(4, 5, false))
-			);
+			assert!(System::events().iter().any(|event| {
+				event.event == Event::elections_phragmen(RawEvent::VoterReported(4, 5, false))
+			}));
 
 			assert_eq!(balances(&4), (35, 5));
 			assert_eq!(balances(&5), (45, 3));
@@ -1966,10 +2080,9 @@ mod tests {
 			// 5 is an outgoing loser. will also get slashed.
 			assert_eq!(balances(&5), (45, 2));
 
-			assert_eq!(
-				System::events()[6].event,
-				Event::elections(RawEvent::NewTerm(vec![(4, 40), (5, 50)])),
-			);
+			assert!(System::events().iter().any(|event| {
+				event.event == Event::elections_phragmen(RawEvent::NewTerm(vec![(4, 40), (5, 50)]))
+			}));
 		})
 	}
 

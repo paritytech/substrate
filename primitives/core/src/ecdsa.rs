@@ -36,9 +36,12 @@ use crate::{hashing::blake2_256, crypto::{Pair as TraitPair, DeriveJunction, Sec
 use crate::crypto::Ss58Codec;
 #[cfg(feature = "std")]
 use serde::{de, Serializer, Serialize, Deserializer, Deserialize};
-use crate::crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive};
+use crate::crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive, CryptoTypeId};
 #[cfg(feature = "full_crypto")]
 use secp256k1::{PublicKey, SecretKey};
+
+/// An identifier used to match public keys against ecdsa keys
+pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"ecds");
 
 /// A secret seed (which is bytewise essentially equivalent to a SecretKey).
 ///

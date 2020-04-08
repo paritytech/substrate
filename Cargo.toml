@@ -3,6 +3,7 @@ members = [
 	"bin/node-template/node",
 	"bin/node-template/runtime",
 	"bin/node-template/pallets/template",
+	"bin/node/bench",
 	"bin/node/cli",
 	"bin/node/executor",
 	"bin/node/primitives",
@@ -86,6 +87,7 @@ members = [
 	"frame/offences",
 	"frame/randomness-collective-flip",
 	"frame/recovery",
+	"frame/scheduler",
 	"frame/scored-pool",
 	"frame/session",
 	"frame/session/benchmarking",
@@ -130,6 +132,7 @@ members = [
 	"primitives/offchain",
 	"primitives/panic-handler",
 	"primitives/phragmen",
+	"primitives/phragmen/compact",
 	"primitives/rpc",
 	"primitives/runtime-interface",
 	"primitives/runtime-interface/proc-macro",
@@ -142,6 +145,7 @@ members = [
 	"primitives/api/proc-macro",
 	"primitives/api/test",
 	"primitives/arithmetic",
+	"primitives/arithmetic/fuzzer",
 	"primitives/io",
 	"primitives/runtime",
 	"primitives/sandbox",
@@ -153,6 +157,7 @@ members = [
 	"primitives/test-primitives",
 	"primitives/transaction-pool",
 	"primitives/trie",
+	"primitives/utils",
 	"primitives/wasm-interface",
 	"test-utils/client",
 	"test-utils/runtime",
@@ -170,3 +175,4 @@ members = [
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
+
