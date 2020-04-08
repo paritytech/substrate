@@ -16,6 +16,8 @@
 
 //! Treasury pallet benchmarking.
 
+#![cfg(feature = "runtime-benchmarks")]
+
 use super::*;
 
 use frame_system::RawOrigin;
@@ -56,12 +58,15 @@ fn setup_awesome<T: Trait>(length: u32) -> (T::AccountId, Vec<u8>, T::AccountId)
 fn setup_tip<T: Trait>(r: u32, t: u32) ->
 	Result<(T::AccountId, Vec<u8>, T::AccountId, BalanceOf<T>), &'static str>
 {
+	let tippers_count = T::Tippers::count();
+
 	for i in 0 .. t {
 		let member = account("member", i, SEED);
 		T::Tippers::add(&member);
+		ensure!(T::Tippers::contains(&member), "failed to add tipper");
 	}
 
-	ensure!(T::Tippers::count() == t as usize, "problem creating tippers");
+	ensure!(T::Tippers::count() == tippers_count + t as usize, "problem creating tippers");
 	let caller = account("member", t - 1, SEED);
 	let reason = vec![0; r as usize];
 	let beneficiary = account("beneficiary", t, SEED);
@@ -69,16 +74,19 @@ fn setup_tip<T: Trait>(r: u32, t: u32) ->
 	Ok((caller, reason, beneficiary, value))
 }
 
-// Create `t` new types for the tip proposal with `hash`.
-// This function automatically moves forward the block number to a time which
-// would resolve the tipping process.
+// Create `t` new tips for the tip proposal with `hash`.
+// This function automatically makes the tip able to close.
 fn create_tips<T: Trait>(t: u32, hash: T::Hash, value: BalanceOf<T>) -> Result<(), &'static str> {
 	for i in 0 .. t {
 		let caller = account("member", i, SEED);
 		ensure!(T::Tippers::contains(&caller), "caller is not a tipper");
 		Treasury::<T>::tip(RawOrigin::Signed(caller).into(), hash, value)?;
 	}
-	frame_system::Module::<T>::set_block_number(T::TipCountdown::get() * 10.into());
+	Tips::<T>::mutate(hash, |maybe_tip| {
+		if let Some(open_tip) = maybe_tip {
+			open_tip.closes = Some(T::BlockNumber::zero());
+		}
+	});
 	Ok(())
 }
 
@@ -207,5 +215,27 @@ benchmarks! {
 		create_approved_proposals::<T>(p)?;
 	}: {
 		Treasury::<T>::on_initialize(T::BlockNumber::zero());
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::tests::{new_test_ext, Test};
+	use frame_support::assert_ok;
+
+	#[test]
+	fn test_benchmarks() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(test_benchmark_propose_spend::<Test>());
+			assert_ok!(test_benchmark_reject_proposal::<Test>());
+			assert_ok!(test_benchmark_approve_proposal::<Test>());
+			assert_ok!(test_benchmark_report_awesome::<Test>());
+			assert_ok!(test_benchmark_retract_tip::<Test>());
+			assert_ok!(test_benchmark_tip_new::<Test>());
+			assert_ok!(test_benchmark_tip::<Test>());
+			assert_ok!(test_benchmark_close_tip::<Test>());
+			assert_ok!(test_benchmark_on_initialize::<Test>());
+		});
 	}
 }

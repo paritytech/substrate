@@ -279,7 +279,9 @@ impl ExtBuilder {
 			},
 			gas_price: self.gas_price,
 		}.assimilate_storage(&mut t).unwrap();
-		sp_io::TestExternalities::new(t)
+		let mut ext = sp_io::TestExternalities::new(t);
+		ext.execute_with(|| System::set_block_number(1));
+		ext
 	}
 }
 
@@ -2631,11 +2633,11 @@ fn check_block_gas_limit_works() {
 		let call: Call = crate::Call::put_code(1000, vec![]).into();
 
 		assert_eq!(
-			check.validate(&0, &call, info, 0), InvalidTransaction::ExhaustsResources.into(),
+			check.validate(&0, &call, &info, 0), InvalidTransaction::ExhaustsResources.into(),
 		);
 
 		let call: Call = crate::Call::update_schedule(Default::default()).into();
-		assert_eq!(check.validate(&0, &call, info, 0), Ok(Default::default()));
+		assert_eq!(check.validate(&0, &call, &info, 0), Ok(Default::default()));
 	});
 }
 

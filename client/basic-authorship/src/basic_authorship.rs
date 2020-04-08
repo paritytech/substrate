@@ -23,7 +23,7 @@ use sc_client_api::backend;
 use codec::Decode;
 use sp_consensus::{evaluation, Proposal, RecordProof};
 use sp_inherents::InherentData;
-use log::{error, info, debug, trace};
+use log::{error, info, debug, trace, warn};
 use sp_core::ExecutionContext;
 use sp_runtime::{
 	generic::BlockId,
@@ -34,7 +34,7 @@ use sc_telemetry::{telemetry, CONSENSUS_INFO};
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 use sp_api::{ProvideRuntimeApi, ApiExt};
 use futures::{executor, future, future::Either};
-use sp_blockchain::{HeaderBackend, ApplyExtrinsicFailed};
+use sp_blockchain::{HeaderBackend, ApplyExtrinsicFailed::Validity, Error::ApplyExtrinsicFailed};
 use std::marker::PhantomData;
 
 /// Proposer factory.
@@ -196,14 +196,25 @@ impl<A, B, Block, C> ProposerInner<B, Block, C, A>
 
 		// We don't check the API versions any further here since the dispatch compatibility
 		// check should be enough.
-		for extrinsic in self.client.runtime_api()
+		for inherent in self.client.runtime_api()
 			.inherent_extrinsics_with_context(
 				&self.parent_id,
 				ExecutionContext::BlockConstruction,
 				inherent_data
 			)?
 		{
-			block_builder.push(extrinsic)?;
+			match block_builder.push(inherent) {
+				Err(ApplyExtrinsicFailed(Validity(e))) if e.exhausted_resources() =>
+					warn!("⚠️  Dropping non-mandatory inherent from overweight block."),
+				Err(ApplyExtrinsicFailed(Validity(e))) if e.was_mandatory() => {
+					error!("❌️ Mandatory inherent extrinsic returned error. Block cannot be produced.");
+					Err(ApplyExtrinsicFailed(Validity(e)))?
+				}
+				Err(e) => {
+					warn!("❗️ Inherent extrinsic returned unexpected error: {}. Dropping.", e);
+				}
+				Ok(_) => {}
+			}
 		}
 
 		// proceed with transactions
@@ -212,7 +223,7 @@ impl<A, B, Block, C> ProposerInner<B, Block, C, A>
 		let mut unqueue_invalid = Vec::new();
 		let pending_iterator = match executor::block_on(future::select(
 			self.transaction_pool.ready_at(self.parent_number),
-			futures_timer::Delay::new((deadline - (self.now)()) / 8),
+			futures_timer::Delay::new(deadline.saturating_duration_since((self.now)()) / 8),
 		)) {
 			Either::Left((iterator, _)) => iterator,
 			Either::Right(_) => {
@@ -241,7 +252,7 @@ impl<A, B, Block, C> ProposerInner<B, Block, C, A>
 				Ok(()) => {
 					debug!("[{:?}] Pushed to the block.", pending_tx_hash);
 				}
-				Err(sp_blockchain::Error::ApplyExtrinsicFailed(ApplyExtrinsicFailed::Validity(e)))
+				Err(ApplyExtrinsicFailed(Validity(e)))
 						if e.exhausted_resources() => {
 					if is_first {
 						debug!("[{:?}] Invalid transaction: FullBlock on empty block", pending_tx_hash);
@@ -391,6 +402,36 @@ mod tests {
 		// block should have some extrinsics although we have some more in the pool.
 		assert_eq!(block.extrinsics().len(), 1);
 		assert_eq!(txpool.ready().count(), 2);
+	}
+
+	#[test]
+	fn should_not_panic_when_deadline_is_reached() {
+		let client = Arc::new(substrate_test_runtime_client::new());
+		let txpool = Arc::new(
+			BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone()))).0
+		);
+
+		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone());
+
+		let cell = Mutex::new((false, time::Instant::now()));
+		let mut proposer = proposer_factory.init_with_now(
+			&client.header(&BlockId::number(0)).unwrap().unwrap(),
+			Box::new(move || {
+				let mut value = cell.lock();
+				if !value.0 {
+					value.0 = true;
+					return value.1;
+				}
+				let new = value.1 + time::Duration::from_secs(160);
+				*value = (true, new);
+				new
+			})
+		);
+
+		let deadline = time::Duration::from_secs(1);
+		futures::executor::block_on(
+			proposer.propose(Default::default(), Default::default(), deadline, RecordProof::No)
+		).map(|r| r.block).unwrap();
 	}
 
 	#[test]

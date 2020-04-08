@@ -19,12 +19,13 @@
 //! NOTE: If you're looking for `parameter_types`, it has moved in to the top-level module.
 
 use sp_std::{prelude::*, result, marker::PhantomData, ops::Div, fmt::Debug};
-use codec::{FullCodec, Codec, Encode, Decode};
+use codec::{FullCodec, Codec, Encode, Decode, EncodeLike};
 use sp_core::u32_trait::Value as U32;
 use sp_runtime::{
-	RuntimeDebug,
-	ConsensusEngineId, DispatchResult, DispatchError,
-	traits::{MaybeSerializeDeserialize, AtLeast32Bit, Saturating, TrailingZeroInput, Bounded},
+	RuntimeDebug, ConsensusEngineId, DispatchResult, DispatchError, traits::{
+		MaybeSerializeDeserialize, AtLeast32Bit, Saturating, TrailingZeroInput, Bounded, Zero,
+		BadOrigin
+	},
 };
 use crate::dispatch::Parameter;
 use crate::storage::StorageMap;
@@ -1032,6 +1033,21 @@ impl<Output: Decode + Default> Randomness<Output> for () {
 	}
 }
 
+/// Trait to be used by block producing consensus engine modules to determine
+/// how late the current block is (e.g. in a slot-based proposal mechanism how
+/// many slots were skipped since the previous block).
+pub trait Lateness<N> {
+	/// Returns a generic measure of how late the current block is compared to
+	/// its parent.
+	fn lateness(&self) -> N;
+}
+
+impl<N: Zero> Lateness<N> for () {
+	fn lateness(&self) -> N {
+		Zero::zero()
+	}
+}
+
 /// Implementors of this trait provide information about whether or not some validator has
 /// been registered with them. The [Session module](../../pallet_session/index.html) is an implementor.
 pub trait ValidatorRegistration<ValidatorId> {
@@ -1142,6 +1158,102 @@ pub trait OffchainWorker<BlockNumber> {
 	/// with results to trigger any on-chain changes.
 	/// Any state alterations are lost and are not persisted.
 	fn offchain_worker(_n: BlockNumber) {}
+}
+
+pub mod schedule {
+	use super::*;
+
+	/// Information relating to the period of a scheduled task. First item is the length of the
+	/// period and the second is the number of times it should be executed in total before the task
+	/// is considered finished and removed.
+	pub type Period<BlockNumber> = (BlockNumber, u32);
+
+	/// Priority with which a call is scheduled. It's just a linear amount with lowest values meaning
+	/// higher priority.
+	pub type Priority = u8;
+
+	/// The highest priority. We invert the value so that normal sorting will place the highest
+	/// priority at the beginning of the list.
+	pub const HIGHEST_PRORITY: Priority = 0;
+	/// Anything of this value or lower will definitely be scheduled on the block that they ask for, even
+	/// if it breaches the `MaximumWeight` limitation.
+	pub const HARD_DEADLINE: Priority = 63;
+	/// The lowest priority. Most stuff should be around here.
+	pub const LOWEST_PRORITY: Priority = 255;
+
+	/// A type that can be used as a scheduler.
+	pub trait Anon<BlockNumber, Call> {
+		/// An address which can be used for removing a scheduled task.
+		type Address: Codec + Clone + Eq + EncodeLike + Debug;
+
+		/// Schedule a one-off dispatch to happen at the beginning of some block in the future.
+		///
+		/// This is not named.
+		///
+		/// Infallible.
+		fn schedule(
+			when: BlockNumber,
+			maybe_periodic: Option<Period<BlockNumber>>,
+			priority: Priority,
+			call: Call
+		) -> Self::Address;
+
+		/// Cancel a scheduled task. If periodic, then it will cancel all further instances of that,
+		/// also.
+		///
+		/// Will return an error if the `address` is invalid.
+		///
+		/// NOTE: This guaranteed to work only *before* the point that it is due to be executed.
+		/// If it ends up being delayed beyond the point of execution, then it cannot be cancelled.
+		///
+		/// NOTE2: This will not work to cancel periodic tasks after their initial execution. For
+		/// that, you must name the task explicitly using the `Named` trait.
+		fn cancel(address: Self::Address) -> Result<(), ()>;
+	}
+
+	/// A type that can be used as a scheduler.
+	pub trait Named<BlockNumber, Call> {
+		/// An address which can be used for removing a scheduled task.
+		type Address: Codec + Clone + Eq + EncodeLike + sp_std::fmt::Debug;
+
+		/// Schedule a one-off dispatch to happen at the beginning of some block in the future.
+		///
+		/// - `id`: The identity of the task. This must be unique and will return an error if not.
+		fn schedule_named(
+			id: impl Encode,
+			when: BlockNumber,
+			maybe_periodic: Option<Period<BlockNumber>>,
+			priority: Priority,
+			call: Call
+		) -> Result<Self::Address, ()>;
+
+		/// Cancel a scheduled, named task. If periodic, then it will cancel all further instances
+		/// of that, also.
+		///
+		/// Will return an error if the `id` is invalid.
+		///
+		/// NOTE: This guaranteed to work only *before* the point that it is due to be executed.
+		/// If it ends up being delayed beyond the point of execution, then it cannot be cancelled.
+		fn cancel_named(id: impl Encode) -> Result<(), ()>;
+	}
+}
+
+/// Some sort of check on the origin is performed by this object.
+pub trait EnsureOrigin<OuterOrigin> {
+	/// A return type.
+	type Success;
+	/// Perform the origin check.
+	fn ensure_origin(o: OuterOrigin) -> result::Result<Self::Success, BadOrigin> {
+		Self::try_origin(o).map_err(|_| BadOrigin)
+	}
+	/// Perform the origin check.
+	fn try_origin(o: OuterOrigin) -> result::Result<Self::Success, OuterOrigin>;
+
+	/// Returns an outer origin capable of passing `try_origin` check.
+	///
+	/// ** Should be used for benchmarking only!!! **
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> OuterOrigin;
 }
 
 #[cfg(test)]

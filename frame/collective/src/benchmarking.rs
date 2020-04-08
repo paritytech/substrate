@@ -50,7 +50,7 @@ benchmarks_instance! {
 			new_members.push(member);
 		}
 
-		// Set old members. 
+		// Set old members.
 		// We compute the difference of old and new members, so it should influence timing.
 		let mut old_members = vec![];
 		for i in 0 .. n {
@@ -62,7 +62,11 @@ benchmarks_instance! {
 
 		Collective::<T, _>::set_members(SystemOrigin::Root.into(), old_members, prime.clone())?;
 
-	}: _(SystemOrigin::Root, new_members, prime)
+	}: _(SystemOrigin::Root, new_members.clone(), prime)
+	verify {
+		new_members.sort();
+		assert_eq!(Collective::<T, _>::members(), new_members);
+	}
 
 	execute {
 		let u in ...;
@@ -148,7 +152,7 @@ benchmarks_instance! {
 
 		let caller1: T::AccountId = account("caller1", u, SEED);
 		let caller2: T::AccountId = account("caller2", u, SEED);
-		
+
 		let proposal: Box<T::Proposal> = Box::new(Call::<T, I>::close(Default::default(), Default::default()).into());
 		let proposal_hash = T::Hashing::hash_of(&proposal);
 
@@ -167,7 +171,7 @@ benchmarks_instance! {
 
 		let caller1: T::AccountId = account("caller1", u, SEED);
 		let caller2: T::AccountId = account("caller2", u, SEED);
-		
+
 		let proposal: Box<T::Proposal> = Box::new(Call::<T, I>::close(Default::default(), Default::default()).into());
 		let proposal_hash = T::Hashing::hash_of(&proposal);
 
@@ -182,4 +186,25 @@ benchmarks_instance! {
 		System::<T>::set_block_number(vote_end);
 
 	}: _(SystemOrigin::Signed(caller2), proposal_hash, index)
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::tests::{new_test_ext, Test};
+	use frame_support::assert_ok;
+
+	#[test]
+	fn test_benchmarks() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(test_benchmark_set_members::<Test>());
+			assert_ok!(test_benchmark_execute::<Test>());
+			assert_ok!(test_benchmark_propose::<Test>());
+			assert_ok!(test_benchmark_propose_else_branch::<Test>());
+			assert_ok!(test_benchmark_vote::<Test>());
+			assert_ok!(test_benchmark_vote_not_approve::<Test>());
+			assert_ok!(test_benchmark_vote_approved::<Test>());
+			assert_ok!(test_benchmark_close::<Test>());
+		});
+	}
 }

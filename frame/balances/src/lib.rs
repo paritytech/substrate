@@ -148,14 +148,10 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(test)]
-mod tests_local;
-#[cfg(test)]
-mod tests_composite;
-#[cfg(test)]
 #[macro_use]
 mod tests;
-#[cfg(feature = "runtime-benchmarks")]
+mod tests_local;
+mod tests_composite;
 mod benchmarking;
 
 use sp_std::prelude::*;

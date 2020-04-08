@@ -29,6 +29,7 @@ sc-client-api = { version = "2.0.0-alpha.5", path = "../api" }
 sp-blockchain = { version = "2.0.0-alpha.5", path = "../../primitives/blockchain" }
 sc-network = { version = "0.8.0-alpha.5", path = "../network" }
 sp-runtime = { version = "2.0.0-alpha.5", path = "../../primitives/runtime" }
+sp-utils = { version = "2.0.0-alpha.5", path = "../../primitives/utils" }
 sp-core = { version = "2.0.0-alpha.5", path = "../../primitives/core" }
 sc-service = { version = "0.8.0-alpha.5", default-features = false, path = "../service" }
 sp-state-machine = { version = "0.8.0-alpha.5", path = "../../primitives/state-machine" }
@@ -44,6 +45,9 @@ parity-util-mem = { version = "0.6.0", default-features = false, features = ["pr
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
 rpassword = "4.0.1"
 
+[target.'cfg(target_family = "unix")'.dependencies]
+nix = "0.17.0"
+
 [dev-dependencies]
 tempfile = "3.1.0"
 
@@ -51,3 +55,6 @@ tempfile = "3.1.0"
 wasmtime = [
 	"sc-service/wasmtime",
 ]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
