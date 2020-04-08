@@ -30,7 +30,7 @@ use std::time::Duration;
 #[cfg(not(test))]
 const BACKGROUND_REVALIDATION_INTERVAL: Duration = Duration::from_millis(200);
 #[cfg(test)]
-pub const BACKGROUND_REVALIDATION_INTERVAL: Duration = Duration::from_millis(5);
+pub const BACKGROUND_REVALIDATION_INTERVAL: Duration = Duration::from_millis(1);
 
 const BACKGROUND_REVALIDATION_BATCH_SIZE: usize = 20;
 
@@ -214,11 +214,20 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 
 		loop {
 			futures::select! {
-				_ = interval.next() => {
+				_guard = interval.next() => {
 					let next_batch = this.prepare_batch();
 					let batch_len = next_batch.len();
 
 					batch_revalidate(this.pool.clone(), this.api.clone(), this.best_block, next_batch).await;
+
+					#[cfg(test)]
+					{
+						use intervalier::Guard;
+						// only trigger test events if something was processed
+						if batch_len == 0 {
+							_guard.expect("Always some() in tests").skip();
+						}
+					}
 
 					if batch_len > 0 || this.len() > 0 {
 						log::debug!(
