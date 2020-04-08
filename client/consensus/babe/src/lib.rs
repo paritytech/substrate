@@ -103,7 +103,7 @@ use sc_client_api::{
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 
 use futures::prelude::*;
-use log::{warn, debug, info, trace};
+use log::{debug, info, log, trace, warn};
 use sc_consensus_slots::{
 	SlotWorker, SlotInfo, SlotCompatible, StorageChanges, CheckedHeader, check_equivocation,
 };
@@ -255,16 +255,6 @@ fn babe_err<B: BlockT>(error: Error<B>) -> Error<B> {
 	error
 }
 
-macro_rules! babe_info {
-	($($i: expr),+) => {
-		{
-			info!(target: "babe", $($i),+);
-			format!($($i),+)
-		}
-	};
-}
-
-
 /// Intermediate value passed to block importer.
 pub struct BabeIntermediate<B: BlockT> {
 	/// The epoch descriptor.
@@ -389,7 +379,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 		&inherent_data_providers,
 	)?;
 
-	babe_info!("👶 Starting BABE Authorship worker");
+	info!(target: "babe", "👶 Starting BABE Authorship worker");
 	Ok(sc_consensus_slots::start_slot_worker(
 		config.0,
 		select_chain,
@@ -1060,19 +1050,33 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 				ConsensusError::ClientImport(Error::<Block>::FetchEpoch(parent_hash).into())
 			})?;
 
-			let epoch_config = next_config_digest.unwrap_or_else(
+      let epoch_config = next_config_digest.unwrap_or_else(
 				|| viable_epoch.as_ref().config.clone()
 			);
+      
+			// restrict info logging during initial sync to avoid spam
+			let log_level = if block.origin == BlockOrigin::NetworkInitialSync {
+				log::Level::Debug
+			} else {
+				log::Level::Info
+			};
 
-			babe_info!("👶 New epoch {} launching at block {} (block slot {} >= start slot {}).",
-					   viable_epoch.as_ref().epoch_index,
-					   hash,
-					   slot_number,
-					   viable_epoch.as_ref().start_slot);
+			log!(target: "babe",
+				log_level, 
+				"👶 New epoch {} launching at block {} (block slot {} >= start slot {}).",
+				viable_epoch.as_ref().epoch_index,
+				hash,
+				slot_number,
+				viable_epoch.as_ref().start_slot,
+			);
 
 			let next_epoch = viable_epoch.increment((next_epoch_descriptor, epoch_config));
 
-			babe_info!("👶 Next epoch starts at slot {}", next_epoch.as_ref().start_slot);
+			log!(target: "babe",
+				log_level,
+				"👶 Next epoch starts at slot {}",
+				next_epoch.as_ref().start_slot,
+			);
 
 			// prune the tree of epochs not part of the finalized chain or
 			// that are not live anymore, and then track the given epoch change
