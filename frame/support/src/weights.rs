@@ -50,7 +50,7 @@ pub use sp_runtime::transaction_validity::TransactionPriority;
 
 /// Numeric range of a transaction weight.
 ///
-/// FRAME assumes a weight of `1_000_000_000` equals 1 second of compute on a standard
+/// FRAME assumes a weight of `1_000_000_000_000` equals 1 second of compute on a standard
 /// machine: (TODO: DEFINE STANDARD MACHINE SPECIFICATIONS)
 pub type Weight = u64;
 
