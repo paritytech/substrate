@@ -877,7 +877,7 @@ impl Metrics {
 				"Number of justifications submitted to the import queue.",
 			)?, registry)?,
 			incoming_connections_errors_total: register(Counter::new(
-				"sub_libp2p_incoming_connections_errors_total",
+				"sub_libp2p_incoming_connections_handshake_errors_total",
 				"Total number of incoming connections that have failed during the initial handshake"
 			)?, registry)?,
 			incoming_connections_total: register(Counter::new(
