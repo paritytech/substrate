@@ -35,7 +35,7 @@ use sp_runtime::{
 	impl_opaque_keys, generic, create_runtime_str,
 };
 use sp_runtime::curve::PiecewiseLinear;
-use sp_runtime::transaction_validity::{TransactionValidity, TransactionSource};
+use sp_runtime::transaction_validity::{TransactionValidity, TransactionSource, TransactionPriority};
 use sp_runtime::traits::{
 	self, BlakeTwo256, Block as BlockT, StaticLookup, SaturatedConversion,
 	ConvertInto, OpaqueKeys,
@@ -361,6 +361,7 @@ impl pallet_staking::Trait for Runtime {
 	type Call = Call;
 	type SubmitTransaction = TransactionSubmitterOf<()>;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
+	type UnsignedPriority = StakingUnsignedPriority;
 }
 
 parameter_types! {
@@ -540,6 +541,9 @@ impl pallet_sudo::Trait for Runtime {
 
 parameter_types! {
 	pub const SessionDuration: BlockNumber = EPOCH_DURATION_IN_SLOTS as _;
+	pub const ImOnlineUnsignedPriority: TransactionPriority = TransactionPriority::max_value();
+	/// We prioritize im-online heartbeats over phragmen solution submission.
+	pub const StakingUnsignedPriority: TransactionPriority = TransactionPriority::max_value() / 2;
 }
 
 impl pallet_im_online::Trait for Runtime {
@@ -549,6 +553,7 @@ impl pallet_im_online::Trait for Runtime {
 	type SubmitTransaction = TransactionSubmitterOf<Self::AuthorityId>;
 	type SessionDuration = SessionDuration;
 	type ReportUnresponsiveness = Offences;
+	type UnsignedPriority = ImOnlineUnsignedPriority;
 }
 
 impl pallet_offences::Trait for Runtime {
