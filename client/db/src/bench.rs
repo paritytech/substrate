@@ -27,10 +27,13 @@ use sp_runtime::traits::{Block as BlockT, HashFor};
 use sp_runtime::Storage;
 use sp_state_machine::{DBValue, backend::Backend as StateBackend};
 use kvdb::{KeyValueDB, DBTransaction};
+use crate::storage_cache::{CachingState, SharedCache, new_shared_cache};
 
 type DbState<B> = sp_state_machine::TrieBackend<
 	Arc<dyn sp_state_machine::Storage<HashFor<B>>>, HashFor<B>
 >;
+
+type State<B> = CachingState<DbState<B>, B>;
 
 struct StorageDb<Block: BlockT> {
 	db: Arc<dyn KeyValueDB>,
@@ -49,10 +52,11 @@ impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Bloc
 pub struct BenchmarkingState<B: BlockT> {
 	root: Cell<B::Hash>,
 	genesis_root: B::Hash,
-	state: RefCell<Option<DbState<B>>>,
+	state: RefCell<Option<State<B>>>,
 	db: Cell<Option<Arc<dyn KeyValueDB>>>,
 	genesis: HashMap<Vec<u8>, (Vec<u8>, i32)>,
 	record: Cell<Vec<Vec<u8>>>,
+	shared_cache: SharedCache<B>, // shared cache is always empty
 }
 
 impl<B: BlockT> BenchmarkingState<B> {
@@ -69,6 +73,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 			genesis: Default::default(),
 			genesis_root: Default::default(),
 			record: Default::default(),
+			shared_cache: new_shared_cache(0, (1, 10)),
 		};
 
 		state.reopen()?;
@@ -96,7 +101,11 @@ impl<B: BlockT> BenchmarkingState<B> {
 		};
 		self.db.set(Some(db.clone()));
 		let storage_db = Arc::new(StorageDb::<B> { db, _block: Default::default() });
-		*self.state.borrow_mut() = Some(DbState::<B>::new(storage_db, self.root.get()));
+		*self.state.borrow_mut() = Some(State::new(
+			DbState::<B>::new(storage_db, self.root.get()),
+			self.shared_cache.clone(),
+			None
+		));
 		Ok(())
 	}
 }
