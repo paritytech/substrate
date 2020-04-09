@@ -186,7 +186,7 @@ impl BenchDb {
 			pruning: PruningMode::ArchiveAll,
 			source: sc_client_db::DatabaseSettingsSrc::Path {
 				path: dir.into(),
-				cache_size: 128,
+				cache_size: 512,
 			},
 		};
 
