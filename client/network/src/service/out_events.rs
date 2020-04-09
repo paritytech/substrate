@@ -192,7 +192,7 @@ impl Metrics {
 			)?, registry)?,
 			out_events_in: register(CounterVec::new(
 				Opts::new(
-					"sub_libp2p_out_events_notifications_opened_count",
+					"sub_libp2p_out_events_notifications_in_count",
 					"Number of events that have been put in the channels that broadcast network events"
 				),
 				&["event_name"]
@@ -206,7 +206,7 @@ impl Metrics {
 			)?, registry)?,
 			out_events_out: register(CounterVec::new(
 				Opts::new(
-					"sub_libp2p_out_events_notifications_opened_count",
+					"sub_libp2p_out_events_notifications_out_count",
 					"Number of events that have been pulled out of the channels that broadcast network events"
 				),
 				&["event_name"]
