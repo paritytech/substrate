@@ -90,6 +90,9 @@ mod rep {
 	/// Reputation change for peers which send us a known bad block.
 	pub const BAD_BLOCK: Rep = Rep::new(-(1 << 29), "Bad block");
 
+	/// Reputation change for peers which send us a known block.
+	pub const KNOWN_BLOCK: Rep = Rep::new(-(1 << 29), "Duplicate block");
+
 	/// Reputation change for peers which send us a block with bad justifications.
 	pub const BAD_JUSTIFICATION: Rep = Rep::new(-(1 << 16), "Bad justification");
 
@@ -674,7 +677,7 @@ impl<B: BlockT> ChainSync<B> {
 					match &mut peer.state {
 						PeerSyncState::DownloadingNew(start_block) => {
 							self.blocks.clear_peer_download(&who);
-							self.blocks.insert(*start_block, blocks, who);
+							self.blocks.insert(*start_block, blocks, who.clone());
 							peer.state = PeerSyncState::Available;
 							self.blocks
 								.drain(self.best_queued_number + One::one())
@@ -764,7 +767,7 @@ impl<B: BlockT> ChainSync<B> {
 											parent_hash: None,
 											peers: Default::default(),
 										})
-									.peers.insert(who);
+									.peers.insert(who.clone());
 								}
 								peer.state = PeerSyncState::Available;
 								Vec::new()
@@ -793,17 +796,27 @@ impl<B: BlockT> ChainSync<B> {
 				Vec::new()
 			};
 
-		let orig_len = new_blocks.len();
-		new_blocks.retain(|b| !self.queue_blocks.contains(&b.hash));
-		if new_blocks.len() != orig_len {
-			debug!(target: "sync", "Ignoring {} blocks that are already queued", orig_len - new_blocks.len());
-		}
-
+		// When doing initial sync we don't request blocks in parallel.
+		// So the only way this can happen is when peers lie about the
+		// common block.
 		let is_recent = new_blocks.first()
 			.map(|block| {
 				self.peers.iter().any(|(_, peer)| peer.recently_announced.contains(&block.hash))
 			})
 			.unwrap_or(false);
+
+		if !is_recent && new_blocks.last().map_or(false, |b| self.is_known(&b.hash)) {
+			// When doing initial sync we don't request blocks in parallel.
+			// So the only way this can happen is when peers lie about the
+			// common block.
+			debug!(target: "sync", "Ignoring known blocks from {}", who);
+			return Err(BadPeer(who, rep::KNOWN_BLOCK));
+		}
+		let orig_len = new_blocks.len();
+		new_blocks.retain(|b| !self.queue_blocks.contains(&b.hash));
+		if new_blocks.len() != orig_len {
+			debug!(target: "sync", "Ignoring {} blocks that are already queued", orig_len - new_blocks.len());
+		}
 
 		let origin =
 			if is_recent {
