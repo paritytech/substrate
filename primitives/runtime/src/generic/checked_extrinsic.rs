@@ -18,7 +18,7 @@
 //! stage.
 
 use crate::traits::{
-	self, Member, MaybeDisplay, SignedExtension, Dispatchable,
+	self, Member, MaybeDisplay, SignedExtension, Dispatchable, DispatchInfoOf, ValidateUnsigned,
 };
 use crate::transaction_validity::{TransactionValidity, TransactionSource};
 
@@ -35,22 +35,20 @@ pub struct CheckedExtrinsic<AccountId, Call, Extra> {
 	pub function: Call,
 }
 
-impl<AccountId, Call, Extra, Origin, Info> traits::Applyable for
+impl<AccountId, Call, Extra, Origin> traits::Applyable for
 	CheckedExtrinsic<AccountId, Call, Extra>
 where
 	AccountId: Member + MaybeDisplay,
 	Call: Member + Dispatchable<Origin=Origin>,
-	Extra: SignedExtension<AccountId=AccountId, Call=Call, DispatchInfo=Info>,
+	Extra: SignedExtension<AccountId=AccountId, Call=Call>,
 	Origin: From<Option<AccountId>>,
-	Info: Clone,
 {
 	type Call = Call;
-	type DispatchInfo = Info;
 
 	fn validate(
 		&self,
 		source: TransactionSource,
-		info: Self::DispatchInfo,
+		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> TransactionValidity {
 		if let Some((ref id, ref extra)) = self.signed {
@@ -62,20 +60,23 @@ where
 
 	fn apply(
 		self,
-		info: Self::DispatchInfo,
+		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> crate::ApplyExtrinsicResult {
 		let (maybe_who, pre) = if let Some((id, extra)) = self.signed {
-			let pre = Extra::pre_dispatch(extra, &id, &self.function, info.clone(), len)?;
+			let pre = Extra::pre_dispatch(extra, &id, &self.function, info, len)?;
 			(Some(id), pre)
 		} else {
-			let pre = Extra::pre_dispatch_unsigned(&self.function, info.clone(), len)?;
+			let pre = Extra::pre_dispatch_unsigned(&self.function, info, len)?;
 			(None, pre)
 		};
-		let res = self.function.dispatch(Origin::from(maybe_who))
-			.map(|_| ())
-			.map_err(|e| e.error);
-		Extra::post_dispatch(pre, info.clone(), len, &res)?;
+		let res = self.function.dispatch(Origin::from(maybe_who));
+		let post_info = match res {
+			Ok(info) => info,
+			Err(err) => err.post_info,
+		};
+		let res = res.map(|_| ()).map_err(|e| e.error);
+		Extra::post_dispatch(pre, info, &post_info, len, &res)?;
 		Ok(res)
 	}
 }

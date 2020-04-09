@@ -272,6 +272,7 @@ parameter_types! {
 	pub const BondingDuration: EraIndex = 3;
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &I_NPOS;
 	pub const MaxNominatorRewardedPerValidator: u32 = 64;
+	pub const UnsignedPriority: u64 = 1 << 20;
 }
 
 impl Trait for Test {
@@ -293,6 +294,7 @@ impl Trait for Test {
 	type Call = Call;
 	type SubmitTransaction = SubmitTransaction;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
+	type UnsignedPriority = UnsignedPriority;
 }
 
 pub type Extrinsic = TestXt<Call, ()>;

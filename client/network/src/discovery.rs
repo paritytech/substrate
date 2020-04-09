@@ -47,7 +47,7 @@
 
 use futures::prelude::*;
 use futures_timer::Delay;
-use libp2p::core::{nodes::listeners::ListenerId, ConnectedPoint, Multiaddr, PeerId, PublicKey};
+use libp2p::core::{connection::{ConnectionId, ListenerId}, ConnectedPoint, Multiaddr, PeerId, PublicKey};
 use libp2p::swarm::{ProtocolsHandler, NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use libp2p::kad::{Kademlia, KademliaEvent, Quorum, Record};
 use libp2p::kad::GetClosestPeersError;
@@ -58,7 +58,7 @@ use libp2p::{swarm::toggle::Toggle};
 use libp2p::mdns::{Mdns, MdnsEvent};
 use libp2p::multiaddr::Protocol;
 use log::{debug, info, trace, warn, error};
-use std::{cmp, collections::VecDeque, time::Duration};
+use std::{cmp, collections::VecDeque, io, time::Duration};
 use std::task::{Context, Poll};
 use sp_core::hexdisplay::HexDisplay;
 
@@ -149,6 +149,7 @@ impl DiscoveryBehaviour {
 	/// If we didn't know this address before, also generates a `Discovered` event.
 	pub fn add_known_address(&mut self, peer_id: PeerId, addr: Multiaddr) {
 		if self.user_defined.iter().all(|(p, a)| *p != peer_id && *a != addr) {
+			self.kademlia.add_address(&peer_id, addr.clone());
 			self.discoveries.push_back(peer_id.clone());
 			self.user_defined.push((peer_id, addr));
 		}
@@ -259,18 +260,22 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		list
 	}
 
-	fn inject_connected(&mut self, peer_id: PeerId, endpoint: ConnectedPoint) {
+	fn inject_connection_established(&mut self, peer_id: &PeerId, conn: &ConnectionId, endpoint: &ConnectedPoint) {
 		self.num_connections += 1;
-		NetworkBehaviour::inject_connected(&mut self.kademlia, peer_id, endpoint)
+		NetworkBehaviour::inject_connection_established(&mut self.kademlia, peer_id, conn, endpoint)
 	}
 
-	fn inject_disconnected(&mut self, peer_id: &PeerId, endpoint: ConnectedPoint) {
+	fn inject_connected(&mut self, peer_id: &PeerId) {
+		NetworkBehaviour::inject_connected(&mut self.kademlia, peer_id)
+	}
+
+	fn inject_connection_closed(&mut self, peer_id: &PeerId, conn: &ConnectionId, endpoint: &ConnectedPoint) {
 		self.num_connections -= 1;
-		NetworkBehaviour::inject_disconnected(&mut self.kademlia, peer_id, endpoint)
+		NetworkBehaviour::inject_connection_closed(&mut self.kademlia, peer_id, conn, endpoint)
 	}
 
-	fn inject_replaced(&mut self, peer_id: PeerId, closed: ConnectedPoint, opened: ConnectedPoint) {
-		NetworkBehaviour::inject_replaced(&mut self.kademlia, peer_id, closed, opened)
+	fn inject_disconnected(&mut self, peer_id: &PeerId) {
+		NetworkBehaviour::inject_disconnected(&mut self.kademlia, peer_id)
 	}
 
 	fn inject_addr_reach_failure(
@@ -282,12 +287,13 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		NetworkBehaviour::inject_addr_reach_failure(&mut self.kademlia, peer_id, addr, error)
 	}
 
-	fn inject_node_event(
+	fn inject_event(
 		&mut self,
 		peer_id: PeerId,
+		connection: ConnectionId,
 		event: <Self::ProtocolsHandler as ProtocolsHandler>::OutEvent,
 	) {
-		NetworkBehaviour::inject_node_event(&mut self.kademlia, peer_id, event)
+		NetworkBehaviour::inject_event(&mut self.kademlia, peer_id, connection, event)
 	}
 
 	fn inject_new_external_addr(&mut self, addr: &Multiaddr) {
@@ -315,9 +321,8 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		NetworkBehaviour::inject_listener_error(&mut self.kademlia, id, err);
 	}
 
-	fn inject_listener_closed(&mut self, id: ListenerId) {
-		error!(target: "sub-libp2p", "Libp2p listener {:?} closed", id);
-		NetworkBehaviour::inject_listener_closed(&mut self.kademlia, id);
+	fn inject_listener_closed(&mut self, id: ListenerId, reason: Result<(), &io::Error>) {
+		NetworkBehaviour::inject_listener_closed(&mut self.kademlia, id, reason);
 	}
 
 	fn poll(
@@ -340,8 +345,9 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		while let Poll::Ready(_) = self.next_kad_random_query.poll_unpin(cx) {
 			let actually_started = if self.num_connections < self.discovery_only_if_under_num {
 				let random_peer_id = PeerId::random();
-				debug!(target: "sub-libp2p", "Libp2p <= Starting random Kademlia request for \
-					{:?}", random_peer_id);
+				debug!(target: "sub-libp2p",
+					"Libp2p <= Starting random Kademlia request for {:?}",
+					random_peer_id);
 
 				self.kademlia.get_closest_peers(random_peer_id);
 				true
@@ -451,10 +457,10 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 				},
 				NetworkBehaviourAction::DialAddress { address } =>
 					return Poll::Ready(NetworkBehaviourAction::DialAddress { address }),
-				NetworkBehaviourAction::DialPeer { peer_id } =>
-					return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id }),
-				NetworkBehaviourAction::SendEvent { peer_id, event } =>
-					return Poll::Ready(NetworkBehaviourAction::SendEvent { peer_id, event }),
+				NetworkBehaviourAction::DialPeer { peer_id, condition } =>
+					return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition }),
+				NetworkBehaviourAction::NotifyHandler { peer_id, handler, event } =>
+					return Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, handler, event }),
 				NetworkBehaviourAction::ReportObservedAddr { address } =>
 					return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),
 			}
@@ -482,9 +488,9 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 				},
 				NetworkBehaviourAction::DialAddress { address } =>
 					return Poll::Ready(NetworkBehaviourAction::DialAddress { address }),
-				NetworkBehaviourAction::DialPeer { peer_id } =>
-					return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id }),
-				NetworkBehaviourAction::SendEvent { event, .. } =>
+				NetworkBehaviourAction::DialPeer { peer_id, condition } =>
+					return Poll::Ready(NetworkBehaviourAction::DialPeer { peer_id, condition }),
+				NetworkBehaviourAction::NotifyHandler { event, .. } =>
 					match event {},		// `event` is an enum with no variant
 				NetworkBehaviourAction::ReportObservedAddr { address } =>
 					return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address }),

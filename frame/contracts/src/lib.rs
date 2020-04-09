@@ -113,7 +113,10 @@ use sp_std::{prelude::*, marker::PhantomData, fmt::Debug};
 use codec::{Codec, Encode, Decode};
 use sp_io::hashing::blake2_256;
 use sp_runtime::{
-	traits::{Hash, StaticLookup, Zero, MaybeSerializeDeserialize, Member, SignedExtension},
+	traits::{
+		Hash, StaticLookup, Zero, MaybeSerializeDeserialize, Member, SignedExtension,
+		DispatchInfoOf,
+	},
 	transaction_validity::{
 		ValidTransaction, InvalidTransaction, TransactionValidity, TransactionValidityError,
 		TransactionSource,
@@ -124,7 +127,6 @@ use frame_support::dispatch::{DispatchResult, Dispatchable};
 use frame_support::{
 	Parameter, decl_module, decl_event, decl_storage, decl_error, storage::child,
 	parameter_types, IsSubType,
-	weights::DispatchInfo,
 };
 use frame_support::traits::{OnUnbalanced, Currency, Get, Time, Randomness};
 use frame_system::{self as system, ensure_signed, RawOrigin, ensure_root};
@@ -1092,7 +1094,6 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckBlockGasLimit<T> {
 	type AccountId = T::AccountId;
 	type Call = <T as Trait>::Call;
 	type AdditionalSigned = ();
-	type DispatchInfo = DispatchInfo;
 	type Pre = ();
 
 	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
@@ -1102,7 +1103,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckBlockGasLimit<T> {
 		_: &Self::AccountId,
 		_: TransactionSource,
 		call: &Self::Call,
-		_: Self::DispatchInfo,
+		_: &DispatchInfoOf<Self::Call>,
 		_: usize,
 	) -> TransactionValidity {
 		let call = match call.is_sub_type() {
