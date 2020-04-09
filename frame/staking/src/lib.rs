@@ -1170,7 +1170,6 @@ decl_module! {
 									now,
 								);
 							}
-
 						}
 					}
 				} else {
