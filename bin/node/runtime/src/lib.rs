@@ -256,8 +256,9 @@ impl pallet_balances::Trait for Runtime {
 parameter_types! {
 	pub const TransactionBaseFee: Balance = 1 * CENTS;
 	pub const TransactionByteFee: Balance = 10 * MILLICENTS;
-	// setting this to zero will disable the weight fee.
-	pub const WeightFeeCoefficient: Balance = 1_000_000;
+	// In the Substrate node, a weight of 10_000_000 (smallest non-zero weight)
+	// is mapped to 10_000_000 units of fees, hence:
+	pub const WeightFeeCoefficient: Balance = 1;
 	// for a sane configuration, this should always be less than `AvailableBlockRatio`.
 	pub const TargetBlockFullness: Perbill = Perbill::from_percent(25);
 }

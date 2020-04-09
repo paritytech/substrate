@@ -338,7 +338,7 @@ fn full_native_block_import_works() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
 				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 10000, class: DispatchClass::Mandatory, pays_fee: true }
+					DispatchInfo { weight: 10_000_000, class: DispatchClass::Mandatory, pays_fee: true }
 				)),
 				topics: vec![],
 			},
@@ -359,7 +359,7 @@ fn full_native_block_import_works() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
 				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 1000000, class: DispatchClass::Normal, pays_fee: true }
+					DispatchInfo { weight: 200_000_000, class: DispatchClass::Normal, pays_fee: true }
 				)),
 				topics: vec![],
 			},
@@ -391,7 +391,7 @@ fn full_native_block_import_works() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
 				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 10000, class: DispatchClass::Mandatory, pays_fee: true }
+					DispatchInfo { weight: 10_000_000, class: DispatchClass::Mandatory, pays_fee: true }
 				)),
 				topics: vec![],
 			},
@@ -414,7 +414,7 @@ fn full_native_block_import_works() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
 				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 1000000, class: DispatchClass::Normal, pays_fee: true }
+					DispatchInfo { weight: 200_000_000, class: DispatchClass::Normal, pays_fee: true }
 				)),
 				topics: vec![],
 			},
@@ -437,7 +437,7 @@ fn full_native_block_import_works() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(2),
 				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 1000000, class: DispatchClass::Normal, pays_fee: true }
+					DispatchInfo { weight: 200_000_000, class: DispatchClass::Normal, pays_fee: true }
 				)),
 				topics: vec![],
 			},
@@ -817,5 +817,3 @@ fn should_import_block_with_test_client() {
 
 	client.import(BlockOrigin::Own, block).unwrap();
 }
-
-
