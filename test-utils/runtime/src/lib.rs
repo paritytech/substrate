@@ -382,11 +382,7 @@ parameter_types! {
 	pub const MaximumBlockWeight: Weight = 4 * 1024 * 1024;
 	pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
 		read: 100,
-		read_repeat: 10,
-		read_none: 100,
 		write: 1000,
-		write_repeat: 20,
-		write_none: 1000,
 	};
 	pub const MaximumBlockLength: u32 = 4 * 1024 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
