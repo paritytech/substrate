@@ -236,7 +236,7 @@ decl_module! {
 		}
 
 		/// Issue an EVM call operation. This is similar to a message call transaction in Ethereum.
-		#[weight = FunctionOf(|(_, _, _, gas_limit, gas_price, _): (&H160, &Vec<u8>, &U256, &u32, &U256, &Option<U256>)| (*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit), DispatchClass::Normal, true)]
+		#[weight = FunctionOf(|(_, _, _, gas_limit, gas_price, _): (&H160, &Vec<u8>, &U256, &u32, &U256, &Option<U256>)| (*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit as Weight), DispatchClass::Normal, true)]
 		fn call(
 			origin,
 			target: H160,
@@ -267,7 +267,7 @@ decl_module! {
 
 		/// Issue an EVM create operation. This is similar to a contract creation transaction in
 		/// Ethereum.
-		#[weight = FunctionOf(|(_, _, gas_limit, gas_price, _): (&Vec<u8>, &U256, &u32, &U256, &Option<U256>)| (*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit), DispatchClass::Normal, true)]
+		#[weight = FunctionOf(|(_, _, gas_limit, gas_price, _): (&Vec<u8>, &U256, &u32, &U256, &Option<U256>)| (*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit as Weight), DispatchClass::Normal, true)]
 		fn create(
 			origin,
 			init: Vec<u8>,
@@ -302,7 +302,7 @@ decl_module! {
 		}
 
 		/// Issue an EVM create2 operation.
-		#[weight = FunctionOf(|(_, _, _, gas_limit, gas_price, _): (&Vec<u8>, &H256, &U256, &u32, &U256, &Option<U256>)| (*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit), DispatchClass::Normal, true)]
+		#[weight = FunctionOf(|(_, _, _, gas_limit, gas_price, _): (&Vec<u8>, &H256, &U256, &u32, &U256, &Option<U256>)| (*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit as Weight), DispatchClass::Normal, true)]
 		fn create2(
 			origin,
 			init: Vec<u8>,

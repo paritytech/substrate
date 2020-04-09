@@ -661,7 +661,7 @@ mod tests {
 		{
 			// Overflow is handled
 			let dispatch_info = DispatchInfo {
-				weight: <u32>::max_value(),
+				weight: Weight::max_value(),
 				class: DispatchClass::Operational,
 				pays_fee: true,
 			};

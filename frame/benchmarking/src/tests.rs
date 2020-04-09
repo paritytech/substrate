@@ -78,6 +78,7 @@ impl frame_system::Trait for Test {
 	type Event = ();
 	type BlockHashCount = ();
 	type MaximumBlockWeight = ();
+	type DbWeight = ();
 	type MaximumBlockLength = ();
 	type AvailableBlockRatio = ();
 	type Version = ();

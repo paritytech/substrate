@@ -195,7 +195,7 @@ pub trait Trait: 'static + Eq + Clone {
 	/// The maximum weight of a block.
 	type MaximumBlockWeight: Get<Weight>;
 
-	/// The weight of runtime database operations.
+	/// The weight of runtime database operations the runtime can invoke.
 	type DbWeight: Get<RuntimeDbWeight>;
 
 	/// The maximum length of a block (in bytes).

@@ -27,7 +27,7 @@ use sp_core::H256;
 use sp_io;
 use frame_support::{impl_outer_origin, parameter_types};
 use frame_support::traits::{Get, StorageMapShim};
-use frame_support::weights::{Weight, RuntimeDbWeight, DispatchInfo};
+use frame_support::weights::{Weight, DispatchInfo};
 use std::cell::RefCell;
 use crate::{GenesisConfig, Module, Trait, decl_tests, tests::CallWithDispatchInfo};
 
