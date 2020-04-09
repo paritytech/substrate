@@ -80,7 +80,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "rate(substrate_block_height_number{status=\"finalized\",job=\"substrate_[[hostname]]\",network=\"[[network]]\"}[10m])/rate(substrate_block_height_number{status=\"finalized\",job=\"substrate_[[hostname]]\",network=\"[[network]]\"}[1m])",
+          "expr": "rate(substrate_block_height_number{status=\"finalized\",instance=\"[[instance]]\",network=\"[[network]]\"}[10m])/rate(substrate_block_height_number{status=\"finalized\",instance=\"[[instance]]\",network=\"[[network]]\"}[1m])",
           "intervalFactor": 1,
           "legendFormat": "rate[10m] / rate[1m]",
           "refId": "A"
@@ -169,7 +169,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "substrate_sub_libp2p_peers_count{job=\"substrate_[[hostname]]\",network=\"[[network]]\"}",
+          "expr": "substrate_sub_libp2p_peers_count{instance=\"[[instance]]\",network=\"[[network]]\"}",
           "legendFormat": "{{hostname}}",
           "refId": "A"
         }
@@ -260,7 +260,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "scalar(substrate_block_height_number{status=\"best\",job=\"substrate_[[hostname]]\",network=\"[[network]]\"})-scalar(substrate_block_height_number{status=\"finalized\",job=\"substrate_[[hostname]]\",network=\"[[network]]\"})",
+          "expr": "scalar(substrate_block_height_number{status=\"best\",instance=\"[[instance]]\",network=\"[[network]]\"})-scalar(substrate_block_height_number{status=\"finalized\",instance=\"[[instance]]\",network=\"[[network]]\"})",
           "intervalFactor": 2,
           "legendFormat": "[[hostname]]",
           "refId": "A"
@@ -351,7 +351,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "rate(substrate_block_height_number{status=\"finalized\",job=\"substrate_[[hostname]]\",network=\"[[network]]\"}[10m])*60",
+          "expr": "rate(substrate_block_height_number{status=\"finalized\",instance=\"[[instance]]\",network=\"[[network]]\"}[10m])*60",
           "intervalFactor": 10,
           "legendFormat": "{{hostname}}  Blocks / minute",
           "refId": "A"
@@ -441,7 +441,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "increase(substrate_block_height_number{job=\"substrate_[[hostname]]\",network=\"[[network]]\",status=~\"finalized|sync_target\"}[1m])",
+          "expr": "increase(substrate_block_height_number{instance=\"[[instance]]\",network=\"[[network]]\",status=~\"finalized|sync_target\"}[1m])",
           "intervalFactor": 5,
           "legendFormat": "{{status}}",
           "refId": "A"
@@ -530,7 +530,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "substrate_block_height_number{job=\"substrate_[[hostname]]\",network=\"[[network]]\",status=~\"finalized|sync_target\"}",
+          "expr": "substrate_block_height_number{instance=\"[[instance]]\",network=\"[[network]]\",status=~\"finalized|sync_target\"}",
           "legendFormat": "{{hostname}} {{status}}",
           "refId": "A"
         }
@@ -618,7 +618,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "substrate_block_height_number{status=\"best\",job=\"substrate_[[hostname]]\",network=\"[[network]]\"}",
+          "expr": "substrate_block_height_number{status=\"best\",instance=\"[[instance]]\",network=\"[[network]]\"}",
           "legendFormat": "{{hostname}}",
           "refId": "A"
         }
@@ -707,7 +707,7 @@
       "targets": [
         {
           "data": "",
-          "expr": "substrate_ready_transactions_number{job=\"substrate_[[hostname]]\",network=\"[[network]]\"}",
+          "expr": "substrate_ready_transactions_number{instance=\"[[instance]]\",network=\"[[network]]\"}",
           "hide": false,
           "legendFormat": "{{hostname}}",
           "refId": "A",
@@ -797,22 +797,22 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "substrate_sync_extra_finality_proofs_active{job=\"substrate_[[hostname]]\",network=\"[[network]]\"}",
+          "expr": "substrate_sync_extra_finality_proofs_active{instance=\"[[instance]]\",network=\"[[network]]\"}",
           "legendFormat": "{{hostname}} active",
           "refId": "A"
         },
         {
-          "expr": "substrate_sync_extra_finality_proofs_failed{job=\"substrate_[[hostname]]\",network=\"[[network]]\"}",
+          "expr": "substrate_sync_extra_finality_proofs_failed{instance=\"[[instance]]\",network=\"[[network]]\"}",
           "legendFormat": "{{hostname}} failed",
           "refId": "B"
         },
         {
-          "expr": "substrate_sync_extra_finality_proofs_importing{job=\"substrate_[[hostname]]\",network=\"[[network]]\"}",
+          "expr": "substrate_sync_extra_finality_proofs_importing{instance=\"[[instance]]\",network=\"[[network]]\"}",
           "legendFormat": "{{hostname}} importing",
           "refId": "C"
         },
         {
-          "expr": "substrate_sync_extra_finality_proofs_pending{job=\"substrate_[[hostname]]\",network=\"[[network]]\"}",
+          "expr": "substrate_sync_extra_finality_proofs_pending{instance=\"[[instance]]\",network=\"[[network]]\"}",
           "legendFormat": "{{hostname}} pending",
           "refId": "D"
         }
@@ -899,22 +899,22 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "substrate_sync_extra_justifications_active{job=\"substrate_[[hostname]]\",network=\"[[network]]\"}",
+          "expr": "substrate_sync_extra_justifications_active{instance=\"[[instance]]\",network=\"[[network]]\"}",
           "legendFormat": "{{hostname}} active",
           "refId": "A"
         },
         {
-          "expr": "substrate_sync_extra_justifications_failed{job=\"substrate_[[hostname]]\",network=\"[[network]]\"}",
+          "expr": "substrate_sync_extra_justifications_failed{instance=\"[[instance]]\",network=\"[[network]]\"}",
           "legendFormat": "{{hostname}} failed",
           "refId": "B"
         },
         {
-          "expr": "substrate_sync_extra_justifications_importing{job=\"substrate_[[hostname]]\",network=\"[[network]]\"}",
+          "expr": "substrate_sync_extra_justifications_importing{instance=\"[[instance]]\",network=\"[[network]]\"}",
           "legendFormat": "{{hostname}} importing",
           "refId": "C"
         },
         {
-          "expr": "substrate_sync_extra_justifications_pending{job=\"substrate_[[hostname]]\",network=\"[[network]]\"}",
+          "expr": "substrate_sync_extra_justifications_pending{instance=\"[[instance]]\",network=\"[[network]]\"}",
           "legendFormat": "{{hostname}} pending",
           "refId": "D"
         }
@@ -1002,19 +1002,19 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "substrate_sub_libp2p_connections{job=\"substrate_[[hostname]]\",network=\"[[network]]\"}",
+          "expr": "substrate_sub_libp2p_connections{instance=\"[[instance]]\",network=\"[[network]]\"}",
           "hide": false,
           "legendFormat": "{{hostname}} connections",
           "refId": "A"
         },
         {
-          "expr": "substrate_sub_libp2p_is_major_syncing{job=\"substrate_[[hostname]]\",network=\"[[network]]\"}",
+          "expr": "substrate_sub_libp2p_is_major_syncing{instance=\"[[instance]]\",network=\"[[network]]\"}",
           "hide": false,
           "legendFormat": "{{hostname}} syncing",
           "refId": "B"
         },
         {
-          "expr": "substrate_sub_libp2p_kbuckets_num_nodes{job=\"substrate_[[hostname]]\",network=\"[[network]]\"}",
+          "expr": "substrate_sub_libp2p_kbuckets_num_nodes{instance=\"[[instance]]\",network=\"[[network]]\"}",
           "hide": false,
           "legendFormat": "{{hostname}} num_nodes",
           "refId": "C"
@@ -1103,13 +1103,13 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "substrate_sub_libp2p_notifications_total{job=\"substrate_[[hostname]]\",network=\"[[network]]\",protocol=\"FRNK\",direction=\"in\"}",
+          "expr": "substrate_sub_libp2p_notifications_total{instance=\"[[instance]]\",network=\"[[network]]\",protocol=\"FRNK\",direction=\"in\"}",
           "hide": false,
           "legendFormat": "{{hostname}} FRNK in",
           "refId": "A"
         },
         {
-          "expr": "substrate_sub_libp2p_notifications_total{job=\"substrate_[[hostname]]\",network=\"[[network]]\",protocol=\"FRNK\",direction=\"out\"}",
+          "expr": "substrate_sub_libp2p_notifications_total{instance=\"[[instance]]\",network=\"[[network]]\",protocol=\"FRNK\",direction=\"out\"}",
           "hide": false,
           "legendFormat": "{{hostname}} FRNK out",
           "refId": "B"
@@ -1198,7 +1198,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "substrate_cpu_usage_percentage{job=\"substrate_[[hostname]]\",network=\"[[network]]\"}",
+          "expr": "substrate_cpu_usage_percentage{instance=\"[[instance]]\",network=\"[[network]]\"}",
           "legendFormat": "{{hostname}}",
           "refId": "A"
         }
@@ -1285,7 +1285,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "substrate_memory_usage_bytes{job=\"substrate_[[hostname]]\",network=\"[[network]]\"}",
+          "expr": "substrate_memory_usage_bytes{instance=\"[[instance]]\",network=\"[[network]]\"}",
           "legendFormat": "{{hostname}} Mem bytes",
           "refId": "A"
         },
@@ -1478,19 +1478,19 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "substrate_sub_libp2p_notifications_total{job=\"substrate_[[hostname]]\",network=\"[[network]]\",protocol=\"dot1\",direction=\"in\"}",
+          "expr": "substrate_sub_libp2p_notifications_total{instance=\"[[instance]]\",network=\"[[network]]\",protocol=\"dot1\",direction=\"in\"}",
           "hide": false,
           "legendFormat": "{{hostname}} dot1 in",
           "refId": "B"
         },
         {
-          "expr": "substrate_sub_libp2p_notifications_total{job=\"substrate_[[hostname]]\",network=\"[[network]]\",protocol=\"dot2\",direction=\"in\"}",
+          "expr": "substrate_sub_libp2p_notifications_total{instance=\"[[instance]]\",network=\"[[network]]\",protocol=\"dot2\",direction=\"in\"}",
           "hide": false,
           "legendFormat": "{{hostname}} dot2 in",
           "refId": "C"
         },
         {
-          "expr": "substrate_sub_libp2p_notifications_total{job=\"substrate_[[hostname]]\",network=\"[[network]]\",protocol=\"dot2\",direction=\"out\"}",
+          "expr": "substrate_sub_libp2p_notifications_total{instance=\"[[instance]]\",network=\"[[network]]\",protocol=\"dot2\",direction=\"out\"}",
           "hide": false,
           "legendFormat": "{{hostname}} dot2 out",
           "refId": "A"
