@@ -62,7 +62,7 @@ pub use self::builder::{
 pub use config::{Configuration, Role, PruningMode, DatabaseConfig};
 pub use sc_chain_spec::{
 	ChainSpec, GenericChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension,
-	NoExtension,
+	NoExtension, ChainType,
 };
 pub use sp_transaction_pool::{TransactionPool, InPoolTransaction, error::IntoPoolError};
 pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
