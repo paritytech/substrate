@@ -35,7 +35,7 @@ use super::engine_id_to_string;
 
 use futures::{prelude::*, channel::mpsc, ready};
 use parking_lot::Mutex;
-use prometheus_endpoint::{register, Gauge, GaugeVec, Opts, PrometheusError, Registry, U64};
+use prometheus_endpoint::{register, CounterVec, Gauge, GaugeVec, Opts, PrometheusError, Registry, U64};
 use std::{
 	convert::TryFrom as _,
 	fmt, pin::Pin, sync::Arc,
@@ -93,7 +93,7 @@ impl Stream for Receiver {
 		if let Some(ev) = ready!(Pin::new(&mut self.inner).poll_next(cx)) {
 			let metrics = self.metrics.lock().clone();
 			if let Some(Some(metrics)) = metrics.as_ref().map(|m| &**m) {
-				decrease_metrics(metrics, &ev);
+				metrics.event_out(&ev);
 			} else {
 				log::warn!("Inconsistency in out_events: event happened before sender associated");
 			}
@@ -162,7 +162,7 @@ impl OutChannels {
 		// The number of elements remaining in `event_streams` corresponds to the number of times
 		// we have sent an element on the channel.
 		if let Some(metrics) = &*self.metrics {
-			increase_metrics(metrics, &event, self.event_streams.len() as u64);
+			metrics.event_in(&event, self.event_streams.len() as u64);
 		}
 	}
 }
@@ -177,37 +177,25 @@ impl fmt::Debug for OutChannels {
 
 struct Metrics {
 	// This list is ordered alphabetically
-	out_events_dht_count: Gauge<U64>,
 	out_events_num_channels: Gauge<U64>,
-	out_events_notifications_closed_count: GaugeVec<U64>,
-	out_events_notifications_opened_count: GaugeVec<U64>,
+	out_events_in: CounterVec<U64>,
 	out_events_notifications_sizes: GaugeVec<U64>,
+	out_events_out: CounterVec<U64>,
 }
 
 impl Metrics {
 	fn register(registry: &Registry) -> Result<Self, PrometheusError> {
 		Ok(Self {
-			out_events_dht_count: register(Gauge::new(
-				"sub_libp2p_out_events_dht_count",
-				"Number of DHT events currently pending in the channels that broadcast network events",
-			)?, registry)?,
 			out_events_num_channels: register(Gauge::new(
 				"sub_libp2p_out_events_num_channels",
 				"Number of internal active channels that broadcast network events",
 			)?, registry)?,
-			out_events_notifications_closed_count: register(GaugeVec::new(
-				Opts::new(
-					"sub_libp2p_out_events_notifications_closed_count",
-					"Number of notification substreams opened events pending in the channels that broadcast network events"
-				),
-				&["protocol"]
-			)?, registry)?,
-			out_events_notifications_opened_count: register(GaugeVec::new(
+			out_events_in: register(CounterVec::new(
 				Opts::new(
 					"sub_libp2p_out_events_notifications_opened_count",
-					"Number of notification substreams opened events pending in the channels that broadcast network events"
+					"Number of events pending in the channels that broadcast network events"
 				),
-				&["protocol"]
+				&["event_name"]
 			)?, registry)?,
 			out_events_notifications_sizes: register(GaugeVec::new(
 				Opts::new(
@@ -216,52 +204,73 @@ impl Metrics {
 				),
 				&["protocol"]
 			)?, registry)?,
+			out_events_out: register(CounterVec::new(
+				Opts::new(
+					"sub_libp2p_out_events_notifications_opened_count",
+					"Number of events pending in the channels that broadcast network events"
+				),
+				&["event_name"]
+			)?, registry)?,
 		})
 	}
-}
 
-fn increase_metrics(metrics: &Metrics, event: &Event, num: u64) {
-	match event {
-		Event::Dht(_) => metrics.out_events_dht_count.inc(),
-		Event::NotificationStreamOpened { engine_id, .. } => {
-			metrics.out_events_notifications_opened_count
-				.with_label_values(&[&engine_id_to_string(engine_id)])
-				.add(num);
-		},
-		Event::NotificationStreamClosed { engine_id, .. } => {
-			metrics.out_events_notifications_closed_count
-				.with_label_values(&[&engine_id_to_string(engine_id)])
-				.add(num);
-		},
-		Event::NotificationsReceived { messages, .. } => {
-			for (engine_id, message) in messages {
-				metrics.out_events_notifications_sizes
-					.with_label_values(&[&engine_id_to_string(engine_id)])
-					.add(num.saturating_mul(u64::try_from(message.len()).unwrap_or(u64::max_value())));
+	fn event_in(&self, event: &Event, num: u64) {
+		match event {
+			Event::Dht(_) => {
+				self.out_events_in
+					.with_label_values(&["dht"])
+					.inc_by(num);
 			}
-		},
+			Event::NotificationStreamOpened { engine_id, .. } => {
+				self.out_events_in
+					.with_label_values(&[&format!("notif-open-{:?}", engine_id)])
+					.inc_by(num);
+			},
+			Event::NotificationStreamClosed { engine_id, .. } => {
+				self.out_events_in
+					.with_label_values(&[&format!("notif-open-{:?}", engine_id)])
+					.inc_by(num);
+			},
+			Event::NotificationsReceived { messages, .. } => {
+				for (engine_id, message) in messages {
+					self.out_events_in
+						.with_label_values(&[&format!("notif-{:?}", engine_id)])
+						.inc_by(num);
+					self.out_events_notifications_sizes
+						.with_label_values(&[&engine_id_to_string(engine_id)])
+						.add(num.saturating_mul(u64::try_from(message.len()).unwrap_or(u64::max_value())));
+				}
+			},
+		}
 	}
-}
 
-fn decrease_metrics(metrics: &Metrics, event: &Event) {
-	match event {
-		Event::Dht(_) => metrics.out_events_dht_count.inc(),
-		Event::NotificationStreamOpened { engine_id, .. } => {
-			metrics.out_events_notifications_opened_count
-				.with_label_values(&[&engine_id_to_string(engine_id)])
-				.dec();
-		},
-		Event::NotificationStreamClosed { engine_id, .. } => {
-			metrics.out_events_notifications_closed_count
-				.with_label_values(&[&engine_id_to_string(engine_id)])
-				.dec();
-		},
-		Event::NotificationsReceived { messages, .. } => {
-			for (engine_id, message) in messages {
-				metrics.out_events_notifications_sizes
-					.with_label_values(&[&engine_id_to_string(engine_id)])
-					.sub(u64::try_from(message.len()).unwrap_or(u64::max_value()));
+	fn event_out(&self, event: &Event) {
+		match event {
+			Event::Dht(_) => {
+				self.out_events_out
+					.with_label_values(&["dht"])
+					.inc();
 			}
-		},
+			Event::NotificationStreamOpened { engine_id, .. } => {
+				self.out_events_out
+					.with_label_values(&[&format!("notif-open-{:?}", engine_id)])
+					.inc();
+			},
+			Event::NotificationStreamClosed { engine_id, .. } => {
+				self.out_events_out
+					.with_label_values(&[&format!("notif-open-{:?}", engine_id)])
+					.inc();
+			},
+			Event::NotificationsReceived { messages, .. } => {
+				for (engine_id, message) in messages {
+					self.out_events_out
+						.with_label_values(&[&format!("notif-{:?}", engine_id)])
+						.inc();
+					self.out_events_notifications_sizes
+						.with_label_values(&[&engine_id_to_string(engine_id)])
+						.sub(u64::try_from(message.len()).unwrap_or(u64::max_value()));
+				}
+			},
+		}
 	}
 }
