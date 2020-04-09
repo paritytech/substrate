@@ -2873,6 +2873,27 @@ mod offchain_phragmen {
 	}
 
 	#[test]
+	fn offchain_election_flag_is_triggered_when_forcing() {
+		ExtBuilder::default()
+			.session_per_era(5)
+			.session_length(10)
+			.election_lookahead(3)
+			.build()
+			.execute_with(|| {
+				run_to_block(7);
+				assert_session_era!(0, 0);
+
+				run_to_block(12);
+				ForceEra::put(Forcing::ForceNew);
+				run_to_block(13);
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
+
+				run_to_block(17); // instead of 47
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Open(17));
+			})
+	}
+
+	#[test]
 	fn election_on_chain_fallback_works() {
 		ExtBuilder::default().build().execute_with(|| {
 			start_session(1);
