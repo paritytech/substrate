@@ -2,6 +2,7 @@
   "annotations": {
     "list": [
       {
+        "$$hashKey": "object:15",
         "builtIn": 1,
         "datasource": "-- Grafana --",
         "enable": true,
@@ -15,8 +16,7 @@
   "editable": true,
   "gnetId": null,
   "graphTooltip": 0,
-  "id": 24,
-  "iteration": 1584471071021,
+  "iteration": 1586420949945,
   "links": [
     {
       "icon": "external link",
@@ -80,7 +80,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "rate(polkadot_block_height_number{status=\"finalized\",hostname=\"[[hostname]]\",job=\"polkadot_[[hostname]]\",network=\"[[network]]\"}[10m])/rate(polkadot_block_height_number{status=\"finalized\",hostname=\"[[hostname]]\",job=\"polkadot_[[hostname]]\",network=\"[[network]]\"}[1m])",
+          "expr": "rate(substrate_block_height_number{status=\"finalized\",hostname=\"[[hostname]]\",job=\"substrate_[[hostname]]\",network=\"[[network]]\"}[10m])/rate(substrate_block_height_number{status=\"finalized\",hostname=\"[[hostname]]\",job=\"substrate_[[hostname]]\",network=\"[[network]]\"}[1m])",
           "intervalFactor": 1,
           "legendFormat": "rate[10m] / rate[1m]",
           "refId": "A"
@@ -169,7 +169,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "polkadot_sub_libp2p_peers_count{hostname=\"[[hostname]]\",job=\"polkadot_[[hostname]]\",network=\"[[network]]\"}",
+          "expr": "substrate_sub_libp2p_peers_count{hostname=\"[[hostname]]\",job=\"substrate_[[hostname]]\",network=\"[[network]]\"}",
           "legendFormat": "{{hostname}}",
           "refId": "A"
         }
@@ -260,7 +260,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "scalar(polkadot_block_height_number{status=\"best\",hostname=\"[[hostname]]\",job=\"polkadot_[[hostname]]\",network=\"[[network]]\"})-scalar(polkadot_block_height_number{status=\"finalized\",hostname=\"[[hostname]]\",job=\"polkadot_[[hostname]]\",network=\"[[network]]\"})",
+          "expr": "scalar(substrate_block_height_number{status=\"best\",hostname=\"[[hostname]]\",job=\"substrate_[[hostname]]\",network=\"[[network]]\"})-scalar(substrate_block_height_number{status=\"finalized\",hostname=\"[[hostname]]\",job=\"substrate_[[hostname]]\",network=\"[[network]]\"})",
           "intervalFactor": 2,
           "legendFormat": "[[hostname]]",
           "refId": "A"
@@ -351,7 +351,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "rate(polkadot_block_height_number{status=\"finalized\",hostname=\"[[hostname]]\",job=\"polkadot_[[hostname]]\",network=\"[[network]]\"}[10m])*60",
+          "expr": "rate(substrate_block_height_number{status=\"finalized\",hostname=\"[[hostname]]\",job=\"substrate_[[hostname]]\",network=\"[[network]]\"}[10m])*60",
           "intervalFactor": 10,
           "legendFormat": "{{hostname}}  Blocks / minute",
           "refId": "A"
@@ -441,7 +441,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "increase(polkadot_block_height_number{hostname=\"[[hostname]]\",job=\"polkadot_[[hostname]]\",network=\"[[network]]\",status=~\"finalized|sync_target\"}[1m])",
+          "expr": "increase(substrate_block_height_number{hostname=\"[[hostname]]\",job=\"substrate_[[hostname]]\",network=\"[[network]]\",status=~\"finalized|sync_target\"}[1m])",
           "intervalFactor": 5,
           "legendFormat": "{{status}}",
           "refId": "A"
@@ -530,7 +530,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "polkadot_block_height_number{hostname=\"[[hostname]]\",job=\"polkadot_[[hostname]]\",network=\"[[network]]\",status=~\"finalized|sync_target\"}",
+          "expr": "substrate_block_height_number{hostname=\"[[hostname]]\",job=\"substrate_[[hostname]]\",network=\"[[network]]\",status=~\"finalized|sync_target\"}",
           "legendFormat": "{{hostname}} {{status}}",
           "refId": "A"
         }
@@ -618,7 +618,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "polkadot_block_height_number{status=\"best\",hostname=\"[[hostname]]\",job=\"polkadot_[[hostname]]\",network=\"[[network]]\"}",
+          "expr": "substrate_block_height_number{status=\"best\",hostname=\"[[hostname]]\",job=\"substrate_[[hostname]]\",network=\"[[network]]\"}",
           "legendFormat": "{{hostname}}",
           "refId": "A"
         }
@@ -707,7 +707,7 @@
       "targets": [
         {
           "data": "",
-          "expr": "polkadot_ready_transactions_number{hostname=\"[[hostname]]\",job=\"polkadot_[[hostname]]\",network=\"[[network]]\"}",
+          "expr": "substrate_ready_transactions_number{hostname=\"[[hostname]]\",job=\"substrate_[[hostname]]\",network=\"[[network]]\"}",
           "hide": false,
           "legendFormat": "{{hostname}}",
           "refId": "A",
@@ -797,22 +797,22 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "polkadot_sync_extra_finality_proofs_active{hostname=\"[[hostname]]\",job=\"polkadot_[[hostname]]\",network=\"[[network]]\"}",
+          "expr": "substrate_sync_extra_finality_proofs_active{hostname=\"[[hostname]]\",job=\"substrate_[[hostname]]\",network=\"[[network]]\"}",
           "legendFormat": "{{hostname}} active",
           "refId": "A"
         },
         {
-          "expr": "polkadot_sync_extra_finality_proofs_failed{hostname=\"[[hostname]]\",job=\"polkadot_[[hostname]]\",network=\"[[network]]\"}",
+          "expr": "substrate_sync_extra_finality_proofs_failed{hostname=\"[[hostname]]\",job=\"substrate_[[hostname]]\",network=\"[[network]]\"}",
           "legendFormat": "{{hostname}} failed",
           "refId": "B"
         },
         {
-          "expr": "polkadot_sync_extra_finality_proofs_importing{hostname=\"[[hostname]]\",job=\"polkadot_[[hostname]]\",network=\"[[network]]\"}",
+          "expr": "substrate_sync_extra_finality_proofs_importing{hostname=\"[[hostname]]\",job=\"substrate_[[hostname]]\",network=\"[[network]]\"}",
           "legendFormat": "{{hostname}} importing",
           "refId": "C"
         },
         {
-          "expr": "polkadot_sync_extra_finality_proofs_pending{hostname=\"[[hostname]]\",job=\"polkadot_[[hostname]]\",network=\"[[network]]\"}",
+          "expr": "substrate_sync_extra_finality_proofs_pending{hostname=\"[[hostname]]\",job=\"substrate_[[hostname]]\",network=\"[[network]]\"}",
           "legendFormat": "{{hostname}} pending",
           "refId": "D"
         }
@@ -899,22 +899,22 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "polkadot_sync_extra_justifications_active{hostname=\"[[hostname]]\",job=\"polkadot_[[hostname]]\",network=\"[[network]]\"}",
+          "expr": "substrate_sync_extra_justifications_active{hostname=\"[[hostname]]\",job=\"substrate_[[hostname]]\",network=\"[[network]]\"}",
           "legendFormat": "{{hostname}} active",
           "refId": "A"
         },
         {
-          "expr": "polkadot_sync_extra_justifications_failed{hostname=\"[[hostname]]\",job=\"polkadot_[[hostname]]\",network=\"[[network]]\"}",
+          "expr": "substrate_sync_extra_justifications_failed{hostname=\"[[hostname]]\",job=\"substrate_[[hostname]]\",network=\"[[network]]\"}",
           "legendFormat": "{{hostname}} failed",
           "refId": "B"
         },
         {
-          "expr": "polkadot_sync_extra_justifications_importing{hostname=\"[[hostname]]\",job=\"polkadot_[[hostname]]\",network=\"[[network]]\"}",
+          "expr": "substrate_sync_extra_justifications_importing{hostname=\"[[hostname]]\",job=\"substrate_[[hostname]]\",network=\"[[network]]\"}",
           "legendFormat": "{{hostname}} importing",
           "refId": "C"
         },
         {
-          "expr": "polkadot_sync_extra_justifications_pending{hostname=\"[[hostname]]\",job=\"polkadot_[[hostname]]\",network=\"[[network]]\"}",
+          "expr": "substrate_sync_extra_justifications_pending{hostname=\"[[hostname]]\",job=\"substrate_[[hostname]]\",network=\"[[network]]\"}",
           "legendFormat": "{{hostname}} pending",
           "refId": "D"
         }
@@ -1002,19 +1002,19 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "polkadot_sub_libp2p_connections{hostname=\"[[hostname]]\",job=\"polkadot_[[hostname]]\",network=\"[[network]]\"}",
+          "expr": "substrate_sub_libp2p_connections{hostname=\"[[hostname]]\",job=\"substrate_[[hostname]]\",network=\"[[network]]\"}",
           "hide": false,
           "legendFormat": "{{hostname}} connections",
           "refId": "A"
         },
         {
-          "expr": "polkadot_sub_libp2p_is_major_syncing{hostname=\"[[hostname]]\",job=\"polkadot_[[hostname]]\",network=\"[[network]]\"}",
+          "expr": "substrate_sub_libp2p_is_major_syncing{hostname=\"[[hostname]]\",job=\"substrate_[[hostname]]\",network=\"[[network]]\"}",
           "hide": false,
           "legendFormat": "{{hostname}} syncing",
           "refId": "B"
         },
         {
-          "expr": "polkadot_sub_libp2p_kbuckets_num_nodes{hostname=\"[[hostname]]\",job=\"polkadot_[[hostname]]\",network=\"[[network]]\"}",
+          "expr": "substrate_sub_libp2p_kbuckets_num_nodes{hostname=\"[[hostname]]\",job=\"substrate_[[hostname]]\",network=\"[[network]]\"}",
           "hide": false,
           "legendFormat": "{{hostname}} num_nodes",
           "refId": "C"
@@ -1103,13 +1103,13 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "polkadot_sub_libp2p_notifications_total{hostname=\"[[hostname]]\",job=\"polkadot_[[hostname]]\",network=\"[[network]]\",protocol=\"FRNK\",direction=\"in\"}",
+          "expr": "substrate_sub_libp2p_notifications_total{hostname=\"[[hostname]]\",job=\"substrate_[[hostname]]\",network=\"[[network]]\",protocol=\"FRNK\",direction=\"in\"}",
           "hide": false,
           "legendFormat": "{{hostname}} FRNK in",
           "refId": "A"
         },
         {
-          "expr": "polkadot_sub_libp2p_notifications_total{hostname=\"[[hostname]]\",job=\"polkadot_[[hostname]]\",network=\"[[network]]\",protocol=\"FRNK\",direction=\"out\"}",
+          "expr": "substrate_sub_libp2p_notifications_total{hostname=\"[[hostname]]\",job=\"substrate_[[hostname]]\",network=\"[[network]]\",protocol=\"FRNK\",direction=\"out\"}",
           "hide": false,
           "legendFormat": "{{hostname}} FRNK out",
           "refId": "B"
@@ -1198,7 +1198,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "polkadot_cpu_usage_percentage{hostname=\"[[hostname]]\",job=\"polkadot_[[hostname]]\",network=\"[[network]]\"}",
+          "expr": "substrate_cpu_usage_percentage{hostname=\"[[hostname]]\",job=\"substrate_[[hostname]]\",network=\"[[network]]\"}",
           "legendFormat": "{{hostname}}",
           "refId": "A"
         }
@@ -1285,7 +1285,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "polkadot_memory_usage_bytes{hostname=\"[[hostname]]\",job=\"polkadot_[[hostname]]\",network=\"[[network]]\"}",
+          "expr": "substrate_memory_usage_bytes{hostname=\"[[hostname]]\",job=\"substrate_[[hostname]]\",network=\"[[network]]\"}",
           "legendFormat": "{{hostname}} Mem bytes",
           "refId": "A"
         },
@@ -1380,13 +1380,13 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "polkadot_sub_libp2p_network_per_sec_bytes",
+          "expr": "substrate_sub_libp2p_network_per_sec_bytes",
           "hide": false,
           "legendFormat": "{{hostname}}",
           "refId": "A"
         },
         {
-          "expr": "polkadot_sub_libp2p_notifications_total",
+          "expr": "substrate_sub_libp2p_notifications_total",
           "hide": true,
           "legendFormat": "{{hostname}}",
           "refId": "B"
@@ -1478,19 +1478,19 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "polkadot_sub_libp2p_notifications_total{hostname=\"[[hostname]]\",job=\"polkadot_[[hostname]]\",network=\"[[network]]\",protocol=\"dot1\",direction=\"in\"}",
+          "expr": "substrate_sub_libp2p_notifications_total{hostname=\"[[hostname]]\",job=\"substrate_[[hostname]]\",network=\"[[network]]\",protocol=\"dot1\",direction=\"in\"}",
           "hide": false,
           "legendFormat": "{{hostname}} dot1 in",
           "refId": "B"
         },
         {
-          "expr": "polkadot_sub_libp2p_notifications_total{hostname=\"[[hostname]]\",job=\"polkadot_[[hostname]]\",network=\"[[network]]\",protocol=\"dot2\",direction=\"in\"}",
+          "expr": "substrate_sub_libp2p_notifications_total{hostname=\"[[hostname]]\",job=\"substrate_[[hostname]]\",network=\"[[network]]\",protocol=\"dot2\",direction=\"in\"}",
           "hide": false,
           "legendFormat": "{{hostname}} dot2 in",
           "refId": "C"
         },
         {
-          "expr": "polkadot_sub_libp2p_notifications_total{hostname=\"[[hostname]]\",job=\"polkadot_[[hostname]]\",network=\"[[network]]\",protocol=\"dot2\",direction=\"out\"}",
+          "expr": "substrate_sub_libp2p_notifications_total{hostname=\"[[hostname]]\",job=\"substrate_[[hostname]]\",network=\"[[network]]\",protocol=\"dot2\",direction=\"out\"}",
           "hide": false,
           "legendFormat": "{{hostname}} dot2 out",
           "refId": "A"
@@ -1538,8 +1538,8 @@
       }
     }
   ],
-  "refresh": "30s",
-  "schemaVersion": 21,
+  "refresh": "5s",
+  "schemaVersion": 22,
   "style": "dark",
   "tags": [],
   "templating": {
@@ -1547,13 +1547,15 @@
       {
         "allValue": null,
         "current": {
-          "text": "kusama",
-          "value": "kusama"
+          "selected": true,
+          "text": "dev",
+          "value": "dev"
         },
         "datasource": "Prometheus",
         "definition": "label_values(network)",
         "hide": 0,
         "includeAll": false,
+        "index": -1,
         "label": null,
         "multi": false,
         "name": "network",
@@ -1572,14 +1574,15 @@
       {
         "allValue": null,
         "current": {
-          "tags": [],
-          "text": "kusama-validator-2",
-          "value": "kusama-validator-2"
+          "selected": true,
+          "text": "validator-a",
+          "value": "validator-a"
         },
         "datasource": "Prometheus",
         "definition": "label_values(hostname)",
         "hide": 0,
         "includeAll": false,
+        "index": -1,
         "label": null,
         "multi": false,
         "name": "hostname",
@@ -1594,6 +1597,34 @@
         "tagsQuery": "",
         "type": "query",
         "useTags": false
+      },
+      {
+        "allValue": null,
+        "current": {
+          "selected": false,
+          "text": "substrate_",
+          "value": "substrate_"
+        },
+        "hide": 0,
+        "includeAll": false,
+        "label": null,
+        "multi": false,
+        "name": "metric_namespace",
+        "options": [
+          {
+            "selected": true,
+            "text": "substrate_",
+            "value": "substrate_"
+          },
+          {
+            "selected": false,
+            "text": "polkadot_",
+            "value": "polkadot_"
+          }
+        ],
+        "query": "substrate_, polkadot_",
+        "skipUrlSync": false,
+        "type": "custom"
       }
     ]
   },
@@ -1618,5 +1649,8 @@
   "timezone": "",
   "title": "Substrate Dashboard",
   "uid": "ColmenaLabs",
-  "version": 11
+  "variables": {
+    "list": []
+  },
+  "version": 1
 }
