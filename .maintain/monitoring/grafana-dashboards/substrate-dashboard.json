@@ -16,7 +16,7 @@
   "editable": true,
   "gnetId": null,
   "graphTooltip": 0,
-  "iteration": 1586423405539,
+  "iteration": 1586424254170,
   "links": [
     {
       "icon": "external link",
@@ -262,7 +262,7 @@
         {
           "expr": "scalar(substrate_block_height{status=\"best\",instance=\"[[instance]]\",network=\"[[network]]\"})-scalar(substrate_block_height{status=\"finalized\",instance=\"[[instance]]\",network=\"[[network]]\"})",
           "intervalFactor": 2,
-          "legendFormat": "[[instance]]",
+          "legendFormat": "[[hostname]]",
           "refId": "A"
         }
       ],
@@ -1288,12 +1288,6 @@
           "expr": "substrate_memory_usage_bytes{instance=\"[[instance]]\",network=\"[[network]]\"}",
           "legendFormat": "{{instance}} Mem bytes",
           "refId": "A"
-        },
-        {
-          "expr": "node_memory_MemFree_bytes{hostname=\"[[hostname]]\",job=\"node_[[hostname]]\",network=\"[[network]]\"}",
-          "hide": true,
-          "legendFormat": "{{hostname}} Mem Free",
-          "refId": "B"
         }
       ],
       "thresholds": [],
@@ -1547,7 +1541,7 @@
       {
         "allValue": null,
         "current": {
-          "selected": false,
+          "selected": true,
           "text": "substrate",
           "value": "substrate"
         },
@@ -1575,6 +1569,7 @@
       {
         "allValue": null,
         "current": {
+          "selected": true,
           "text": "dev",
           "value": "dev"
         },
@@ -1601,34 +1596,9 @@
       {
         "allValue": null,
         "current": {
-          "text": "validator-a",
-          "value": "validator-a"
-        },
-        "datasource": "Prometheus",
-        "definition": "label_values(hostname)",
-        "hide": 0,
-        "includeAll": false,
-        "index": -1,
-        "label": null,
-        "multi": false,
-        "name": "hostname",
-        "options": [],
-        "query": "label_values(hostname)",
-        "refresh": 1,
-        "regex": "",
-        "skipUrlSync": false,
-        "sort": 0,
-        "tagValuesQuery": "",
-        "tags": [],
-        "tagsQuery": "",
-        "type": "query",
-        "useTags": false
-      },
-      {
-        "allValue": null,
-        "current": {
-          "text": "sentry-a:9615",
-          "value": "sentry-a:9615"
+          "selected": false,
+          "text": "validator-a:9615",
+          "value": "validator-a:9615"
         },
         "datasource": "Prometheus",
         "definition": "label_values(instance)",
@@ -1676,5 +1646,5 @@
   "variables": {
     "list": []
   },
-  "version": 9
+  "version": 2
 }
