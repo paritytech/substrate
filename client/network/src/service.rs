@@ -33,13 +33,14 @@ use crate::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
 	},
 	on_demand_layer::AlwaysBadChecker,
-	protocol::{self, event::Event, light_client_handler, sync::SyncState, PeerInfo, Protocol},
+	protocol::{self, event::Event, light_client_handler, LegacyConnectionKillError, sync::SyncState, PeerInfo, Protocol},
 	transport, ReputationChange,
 };
 use futures::prelude::*;
 use libp2p::{PeerId, Multiaddr};
-use libp2p::core::{ConnectedPoint, Executor, connection::{ConnectionError, PendingConnectionError}};
+use libp2p::core::{ConnectedPoint, Executor, connection::{ConnectionError, PendingConnectionError}, either::EitherError};
 use libp2p::kad::record;
+use libp2p::ping::handler::PingFailure;
 use libp2p::swarm::{NetworkBehaviour, SwarmBuilder, SwarmEvent, protocols_handler::NodeHandlerWrapperError};
 use log::{error, info, trace, warn};
 use parking_lot::Mutex;
@@ -871,7 +872,7 @@ impl Metrics {
 			connections: register(GaugeVec::new(
 				Opts::new(
 					"sub_libp2p_connections",
-					"Number of active libp2p connections"
+					"Number of established libp2p connections"
 				),
 				&["direction"]
 			)?, registry)?,
@@ -974,7 +975,7 @@ impl Metrics {
 			pending_connections_errors_total: register(CounterVec::new(
 				Opts::new(
 					"sub_libp2p_pending_connections_errors_total",
-					"Total number of node connection failures"
+					"Total number of pending connection errors"
 				),
 				&["reason"]
 			)?, registry)?,
@@ -1134,6 +1135,12 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 								metrics.connections_closed_total.with_label_values(&["transport-error"]).inc(),
 							ConnectionError::ConnectionLimit(_) =>
 								metrics.connections_closed_total.with_label_values(&["limit-reached"]).inc(),
+							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
+								EitherError::A(EitherError::B(EitherError::A(PingFailure::Timeout))))))) =>
+								metrics.connections_closed_total.with_label_values(&["ping-timeout"]).inc(),
+							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
+								EitherError::A(EitherError::A(EitherError::B(LegacyConnectionKillError))))))) =>
+								metrics.connections_closed_total.with_label_values(&["force-closed"]).inc(),
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(_)) =>
 								metrics.connections_closed_total.with_label_values(&["protocol-error"]).inc(),
 							ConnectionError::Handler(NodeHandlerWrapperError::KeepAliveTimeout) =>
