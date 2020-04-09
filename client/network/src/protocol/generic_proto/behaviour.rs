@@ -1193,10 +1193,10 @@ impl NetworkBehaviour for GenericProto {
 			}
 
 			NotifsHandlerOut::ProtocolError { error, .. } => {
-				warn!(target: "sub-libp2p",
+				debug!(target: "sub-libp2p",
 					"Handler({:?}) => Severe protocol error: {:?}",
 					source, error);
-				// A severe protocol error happens when we detect a "bad" peer, such as a per on
+				// A severe protocol error happens when we detect a "bad" peer, such as a peer on
 				// a different chain, or a peer that doesn't speak the same protocol(s). We
 				// decrease the peer's reputation, hence lowering the chances we try this peer
 				// again in the short term.
