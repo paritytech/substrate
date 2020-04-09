@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! This is part of the Substrate runtime.
+//! Batch/parallel verification.
 
 use sp_core::{ed25519, sr25519, crypto::Pair, traits::CloneableSpawn};
 use std::sync::{Arc, atomic::{AtomicBool, Ordering as AtomicOrdering}};
@@ -78,31 +78,39 @@ impl BatchVerifier {
 	}
 
 	/// Push ed25519 signature to verify.
+	///
+	/// Returns false if some of the pushed signatures before already failed the check
+	/// (in this case it won't verify anything else)
 	pub fn push_ed25519(
 		&mut self,
 		signature: ed25519::Signature,
 		pub_key: ed25519::Public,
 		message: Vec<u8>,
-	) {
-		if self.invalid.load(AtomicOrdering::Relaxed) { return; } // there is already invalid transaction encountered
-
+	) -> bool {
+		if self.invalid.load(AtomicOrdering::Relaxed) { return false; }
 		self.spawn_verification_task(move || ed25519::Pair::verify(&signature, &message, &pub_key));
+		true
 	}
 
 	/// Push sr25519 signature to verify.
+	///
+	/// Returns false if some of the pushed signatures before already failed the check.
+	/// (in this case it won't verify anything else)
 	pub fn push_sr25519(
 		&mut self,
 		signature: sr25519::Signature,
 		pub_key: sr25519::Public,
 		message: Vec<u8>,
-	) {
+	) -> bool {
+		if self.invalid.load(AtomicOrdering::Relaxed) { return false; }
 		self.sr25519_items.push(Sr25519BatchItem { signature, pub_key, message });
+		true
 	}
 
 	/// Verify all previously pushed signatures since last call and return
 	/// aggregated result.
 	pub fn verify_and_clear(&mut self) -> bool {
-		use parking_lot::{Mutex, Condvar};
+		use std::sync::{Mutex, Condvar};
 
 		let pending = std::mem::replace(&mut self.pending_tasks, vec![]);
 
@@ -112,19 +120,6 @@ impl BatchVerifier {
 			pending.len(),
 			self.sr25519_items.len(),
 		);
-
-		if pending.len() > 0 {
-			let pair = Arc::new((Mutex::new(()), Condvar::new()));
-			let pair_clone = pair.clone();
-			self.scheduler.spawn_obj(FutureObj::new(async move {
-				futures::future::join_all(pending).await;
-				pair_clone.1.notify_one();
-			}.boxed())).expect("Scheduler should not fail");
-
-			let (mtx, cond_var) = &*pair;
-			let mut mtx = mtx.lock();
-			cond_var.wait(&mut mtx);
-		}
 
 		let messages = self.sr25519_items.iter().map(|item| &item.message[..]).collect();
 		let signatures = self.sr25519_items.iter().map(|item| &item.signature).collect();
@@ -137,13 +132,26 @@ impl BatchVerifier {
 		}
 
 		self.sr25519_items.clear();
+		debug_assert_eq!(self.sr25519_items.len(), 0);
+
+		if pending.len() > 0 {
+			let pair = Arc::new((Mutex::new(()), Condvar::new()));
+			let pair_clone = pair.clone();
+
+			self.scheduler.spawn_obj(FutureObj::new(async move {
+				futures::future::join_all(pending).await;
+				pair_clone.1.notify_all();
+			}.boxed())).expect("Scheduler should not fail");
+
+			let (mtx, cond_var) = &*pair;
+			let mtx = mtx.lock().expect("failed locking in verify_and_clear");
+			let  _ = cond_var.wait(mtx).expect("failed waiting in verify_and_clear");
+		}
 
 		if self.invalid.load(AtomicOrdering::Relaxed) {
 			self.invalid.store(false, AtomicOrdering::Relaxed);
 			return false;
 		}
-
-		debug_assert_eq!(self.sr25519_items.len(), 0);
 
 		true
 	}

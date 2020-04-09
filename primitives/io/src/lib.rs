@@ -1151,7 +1151,7 @@ mod tests {
 	}
 
 	#[test]
-	fn long_sr25519_batching_works() {
+	fn long_sr25519_batching() {
 		let mut ext = BasicExternalities::with_tasks_executor();
 		ext.execute_with(|| {
 			let pair = sr25519::Pair::generate_with_phrase(None).0;
