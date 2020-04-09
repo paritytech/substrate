@@ -1602,8 +1602,8 @@
         "allValue": null,
         "current": {
           "selected": false,
-          "text": "substrate_",
-          "value": "substrate_"
+          "text": "substrate",
+          "value": "substrate"
         },
         "hide": 0,
         "includeAll": false,
@@ -1613,16 +1613,16 @@
         "options": [
           {
             "selected": true,
-            "text": "substrate_",
-            "value": "substrate_"
+            "text": "substrate",
+            "value": "substrate"
           },
           {
             "selected": false,
-            "text": "polkadot_",
-            "value": "polkadot_"
+            "text": "polkadot",
+            "value": "polkadot"
           }
         ],
-        "query": "substrate_, polkadot_",
+        "query": "substrate, polkadot",
         "skipUrlSync": false,
         "type": "custom"
       }
