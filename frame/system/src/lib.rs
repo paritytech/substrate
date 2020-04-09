@@ -1366,15 +1366,15 @@ impl<T> SignedExtension for ValidateUnsigned<T> where
 	type AccountId = T::AccountId;
 	type Call = <T as Trait>::Call;
 	type AdditionalSigned = ();
-	type DispatchInfo = DispatchInfo;
 	type Pre = ();
+
 	const IDENTIFIER: &'static str = "ValidateUnsigned";
 
 	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
 
 	fn pre_dispatch_unsigned(
 		call: &Self::Call,
-		_info: Self::DispatchInfo,
+		_info: &DispatchInfoOf<Self::Call>,
 		_len: usize,
 	) -> Result<Self::Pre, TransactionValidityError> {
 		<T as traits::ValidateUnsigned>::pre_dispatch(call)
@@ -1383,7 +1383,7 @@ impl<T> SignedExtension for ValidateUnsigned<T> where
 	fn validate_unsigned(
 		source: TransactionSource,
 		call: &Self::Call,
-		_info: Self::DispatchInfo,
+		_info: &DispatchInfoOf<Self::Call>,
 		_len: usize,
 	) -> TransactionValidity {
 		<T as traits::ValidateUnsigned>::validate_unsigned(source, call)
@@ -2024,21 +2024,13 @@ mod tests {
 			let len = 0_usize;
 
 			let priority = CheckWeight::<Test>(PhantomData)
-<<<<<<< HEAD
-				.validate(&1, source, CALL, normal, len)
-=======
-				.validate(&1, CALL, &normal, len)
->>>>>>> master
+				.validate(&1, source, CALL, &normal, len)
 				.unwrap()
 				.priority;
 			assert_eq!(priority, 100);
 
 			let priority = CheckWeight::<Test>(PhantomData)
-<<<<<<< HEAD
-				.validate(&1, source, CALL, op, len)
-=======
-				.validate(&1, CALL, &op, len)
->>>>>>> master
+				.validate(&1, source, CALL, &op, len)
 				.unwrap()
 				.priority;
 			assert_eq!(priority, u64::max_value());
@@ -2098,11 +2090,7 @@ mod tests {
 			System::set_block_number(17);
 			<BlockHash<Test>>::insert(16, H256::repeat_byte(1));
 
-<<<<<<< HEAD
-			assert_eq!(ext.validate(&1, source, CALL, normal, len).unwrap().longevity, 15);
-=======
-			assert_eq!(ext.validate(&1, CALL, &normal, len).unwrap().longevity, 15);
->>>>>>> master
+			assert_eq!(ext.validate(&1, source, CALL, &normal, len).unwrap().longevity, 15);
 		})
 	}
 

@@ -18,7 +18,7 @@
 //! stage.
 
 use crate::traits::{
-	self, Member, MaybeDisplay, SignedExtension, Dispatchable, DispatchInfoOf, ValidateUnsigned,
+	self, Member, MaybeDisplay, SignedExtension, Dispatchable, DispatchInfoOf,
 };
 use crate::transaction_validity::{TransactionValidity, TransactionSource};
 
@@ -97,6 +97,7 @@ mod tests {
 		type Origin = Option<AccountId>;
 		type Trait = ();
 		type PostInfo = ();
+		type Info = ();
 
 		fn dispatch(self, origin: Self::Origin) -> crate::DispatchResultWithInfo<Self::PostInfo> {
 			origin
@@ -114,7 +115,6 @@ mod tests {
 		type Call = Call;
 		type AdditionalSigned = ();
 		type Pre = ();
-		type DispatchInfo = ();
 
 		fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
 			Ok(())
@@ -122,7 +122,7 @@ mod tests {
 
 	}
 
-	type Extrinsic = CheckedExtrinsic<AccountId, Call, Extra>;
+	type Extrinsic = CheckedExtrinsic<AccountId, Call, (Extra, )>;
 
 	fn extrinsics() -> (Extrinsic, Extrinsic) {
 		let unsigned = Extrinsic {
@@ -143,9 +143,9 @@ mod tests {
 		is_applyable::<Extrinsic>();
 		let (signed, unsigned) = extrinsics();
 
-		let res = signed.apply(Default::default(), 1);
+		let res = signed.apply(&Default::default(), 1);
 		assert_eq!(res.unwrap().unwrap(), ());
-		let res = unsigned.apply(Default::default(), 1);
+		let res = unsigned.apply(&Default::default(), 1);
 		assert_eq!(res.unwrap_err(), InvalidTransaction::NoUnsignedValidator.into());
 	}
 
@@ -155,9 +155,9 @@ mod tests {
 		let (signed, unsigned) = extrinsics();
 		let source = TransactionSource::External;
 
-		let res = signed.validate(source, Default::default(), 1);
+		let res = signed.validate(source, &Default::default(), 1);
 		assert_eq!(res.unwrap(), ValidTransaction::default());
-		let res = unsigned.validate(source, Default::default(), 1);
+		let res = unsigned.validate(source, &Default::default(), 1);
 		assert_eq!(res.unwrap_err(), InvalidTransaction::NoUnsignedValidator.into());
 	}
 }
