@@ -50,13 +50,14 @@ use futures::prelude::*;
 use futures_timer::Delay;
 use libp2p::core::{connection::{ConnectionId, ListenerId}, ConnectedPoint, Multiaddr, PeerId, PublicKey};
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters, ProtocolsHandler};
+use libp2p::swarm::protocols_handler::multi::MultiHandler;
 use libp2p::kad::{Kademlia, KademliaConfig, KademliaEvent, Quorum, Record};
 use libp2p::kad::GetClosestPeersError;
 use libp2p::kad::handler::KademliaHandler;
 use libp2p::kad::QueryId;
 use libp2p::kad::record::{self, store::MemoryStore};
 #[cfg(not(target_os = "unknown"))]
-use libp2p::swarm::{protocols_handler::multi::MultiHandler, toggle::Toggle};
+use libp2p::swarm::toggle::Toggle;
 #[cfg(not(target_os = "unknown"))]
 use libp2p::mdns::{Mdns, MdnsEvent};
 use libp2p::multiaddr::Protocol;
