@@ -130,7 +130,7 @@ mod tests {
 			function: Call,
 		};
 		let signed = Extrinsic {
-			signed: Some((1, Extra)),
+			signed: Some((1, (Extra, ))),
 			function: Call,
 		};
 		(signed, unsigned)

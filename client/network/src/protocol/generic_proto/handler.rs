@@ -15,6 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 pub use self::group::{NotifsHandlerProto, NotifsHandler, NotifsHandlerIn, NotifsHandlerOut};
+pub use self::legacy::ConnectionKillError as LegacyConnectionKillError;
 
 mod group;
 mod legacy;
