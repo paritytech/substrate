@@ -300,7 +300,7 @@ where
 				.map_err(Error::EncodingProto)?;
 
 			self.network.put_value(
-				hash_authority_id(key.1.as_ref())?,
+				hash_authority_id(key.1.as_ref()),
 				signed_addresses,
 			);
 		}
@@ -323,7 +323,7 @@ where
 
 		for authority_id in authorities.iter() {
 			self.network
-				.get_value(&hash_authority_id(authority_id.as_ref())?);
+				.get_value(&hash_authority_id(authority_id.as_ref()));
 		}
 
 		Ok(())
@@ -408,8 +408,8 @@ where
 			self.addr_cache.retain_ids(&authorities);
 			authorities
 				.into_iter()
-				.map(|id| hash_authority_id(id.as_ref()).map(|h| (h, id)))
-				.collect::<Result<HashMap<_, _>>>()?
+				.map(|id| (hash_authority_id(id.as_ref()), id))
+				.collect::<HashMap<_, _>>()
 		};
 
 		// Check if the event origins from an authority in the current authority set.
@@ -586,10 +586,8 @@ where
 	}
 }
 
-fn hash_authority_id(id: &[u8]) -> Result<libp2p::kad::record::Key> {
-	libp2p::multihash::encode(libp2p::multihash::Hash::SHA2256, id)
-		.map(|k| libp2p::kad::record::Key::new(&k))
-		.map_err(Error::HashingAuthorityId)
+fn hash_authority_id(id: &[u8]) -> libp2p::kad::record::Key {
+	libp2p::kad::record::Key::new(&libp2p::multihash::Sha2_256::digest(id))
 }
 
 fn interval_at(start: Instant, duration: Duration) -> Interval {

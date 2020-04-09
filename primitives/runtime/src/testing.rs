@@ -21,7 +21,7 @@ use std::{fmt::Debug, ops::Deref, fmt, cell::RefCell};
 use crate::codec::{Codec, Encode, Decode};
 use crate::traits::{
 	self, Checkable, Applyable, BlakeTwo256, OpaqueKeys,
-	SignedExtension, Dispatchable,
+	SignedExtension, Dispatchable, DispatchInfoOf,
 };
 use crate::traits::ValidateUnsigned;
 use crate::{generic, KeyTypeId, ApplyExtrinsicResult};
@@ -345,20 +345,18 @@ impl<Call: Codec + Sync + Send, Extra> traits::Extrinsic for TestXt<Call, Extra>
 	}
 }
 
-impl<Origin, Call, Extra, Info> Applyable for TestXt<Call, Extra> where
+impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 	Call: 'static + Sized + Send + Sync + Clone + Eq + Codec + Debug + Dispatchable<Origin=Origin>,
-	Extra: SignedExtension<AccountId=u64, Call=Call, DispatchInfo=Info>,
+	Extra: SignedExtension<AccountId=u64, Call=Call>,
 	Origin: From<Option<u64>>,
-	Info: Clone,
 {
 	type Call = Call;
-	type DispatchInfo = Info;
 
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
 	fn validate<U: ValidateUnsigned<Call=Self::Call>>(
 		&self,
 		_source: TransactionSource,
-		_info: Self::DispatchInfo,
+		_info: &DispatchInfoOf<Self::Call>,
 		_len: usize,
 	) -> TransactionValidity {
 		Ok(Default::default())
@@ -368,7 +366,7 @@ impl<Origin, Call, Extra, Info> Applyable for TestXt<Call, Extra> where
 	/// index and sender.
 	fn apply<U: ValidateUnsigned<Call=Self::Call>>(
 		self,
-		info: Self::DispatchInfo,
+		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> ApplyExtrinsicResult {
 		let maybe_who = if let Some((who, extra)) = self.signature {

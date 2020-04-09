@@ -120,9 +120,9 @@ impl<
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>:
-		Applyable<DispatchInfo=DispatchInfo> +
+		Applyable +
 		GetDispatchInfo,
-	CallOf<Block::Extrinsic, Context>: Dispatchable,
+	CallOf<Block::Extrinsic, Context>: Dispatchable<Info=DispatchInfo>,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
 {
@@ -145,9 +145,9 @@ impl<
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>:
-		Applyable<DispatchInfo=DispatchInfo> +
+		Applyable +
 		GetDispatchInfo,
-	CallOf<Block::Extrinsic, Context>: Dispatchable,
+	CallOf<Block::Extrinsic, Context>: Dispatchable<Info=DispatchInfo>,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
 {
@@ -307,7 +307,7 @@ where
 
 		// Decode parameters and dispatch
 		let dispatch_info = xt.get_dispatch_info();
-		let r = Applyable::apply::<UnsignedValidator>(xt, dispatch_info, encoded_len)?;
+		let r = Applyable::apply::<UnsignedValidator>(xt, &dispatch_info, encoded_len)?;
 
 		<frame_system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32, dispatch_info);
 
@@ -348,7 +348,7 @@ where
 		let xt = uxt.check(&Default::default())?;
 
 		let dispatch_info = xt.get_dispatch_info();
-		xt.validate::<UnsignedValidator>(source, dispatch_info, encoded_len)
+		xt.validate::<UnsignedValidator>(source, &dispatch_info, encoded_len)
 	}
 
 	/// Start an offchain worker and generate extrinsics.
