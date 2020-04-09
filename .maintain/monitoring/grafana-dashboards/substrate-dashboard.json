@@ -16,7 +16,7 @@
   "editable": true,
   "gnetId": null,
   "graphTooltip": 0,
-  "iteration": 1586420949945,
+  "iteration": 1586423405539,
   "links": [
     {
       "icon": "external link",
@@ -1547,7 +1547,34 @@
       {
         "allValue": null,
         "current": {
-          "selected": true,
+          "selected": false,
+          "text": "substrate",
+          "value": "substrate"
+        },
+        "hide": 0,
+        "includeAll": false,
+        "label": null,
+        "multi": false,
+        "name": "metric_namespace",
+        "options": [
+          {
+            "selected": true,
+            "text": "substrate",
+            "value": "substrate"
+          },
+          {
+            "selected": false,
+            "text": "polkadot",
+            "value": "polkadot"
+          }
+        ],
+        "query": "substrate, polkadot",
+        "skipUrlSync": false,
+        "type": "custom"
+      },
+      {
+        "allValue": null,
+        "current": {
           "text": "dev",
           "value": "dev"
         },
@@ -1574,7 +1601,6 @@
       {
         "allValue": null,
         "current": {
-          "selected": true,
           "text": "validator-a",
           "value": "validator-a"
         },
@@ -1601,30 +1627,28 @@
       {
         "allValue": null,
         "current": {
-          "selected": false,
-          "text": "substrate",
-          "value": "substrate"
+          "text": "sentry-a:9615",
+          "value": "sentry-a:9615"
         },
+        "datasource": "Prometheus",
+        "definition": "label_values(instance)",
         "hide": 0,
         "includeAll": false,
+        "index": -1,
         "label": null,
         "multi": false,
-        "name": "metric_namespace",
-        "options": [
-          {
-            "selected": true,
-            "text": "substrate",
-            "value": "substrate"
-          },
-          {
-            "selected": false,
-            "text": "polkadot",
-            "value": "polkadot"
-          }
-        ],
-        "query": "substrate, polkadot",
+        "name": "instance",
+        "options": [],
+        "query": "label_values(instance)",
+        "refresh": 1,
+        "regex": "",
         "skipUrlSync": false,
-        "type": "custom"
+        "sort": 0,
+        "tagValuesQuery": "",
+        "tags": [],
+        "tagsQuery": "",
+        "type": "query",
+        "useTags": false
       }
     ]
   },
@@ -1652,5 +1676,5 @@
   "variables": {
     "list": []
   },
-  "version": 1
+  "version": 9
 }
