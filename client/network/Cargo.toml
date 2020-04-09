@@ -59,7 +59,7 @@ void = "1.0.2"
 zeroize = "1.0.0"
 
 [dependencies.libp2p]
-version = "0.17.0"
+version = "0.18.0"
 default-features = false
 features = ["websocket", "kad", "mdns", "ping", "identify", "mplex", "yamux", "noise"]
 
