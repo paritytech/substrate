@@ -41,7 +41,7 @@ use sp_consensus::block_import::{BlockImport, ImportResult};
 use sp_consensus::Error as ConsensusError;
 use sp_consensus::{BlockOrigin, ForkChoiceStrategy, BlockImportParams, BlockCheckParams, JustificationImport};
 use futures::prelude::*;
-use sc_network::{NetworkWorker, NetworkStateInfo, NetworkService, config::ProtocolId};
+use sc_network::{NetworkWorker, NetworkService, config::ProtocolId};
 use sc_network::config::{NetworkConfiguration, TransportConfig, BoxFinalityProofRequestBuilder};
 use libp2p::PeerId;
 use parking_lot::Mutex;
@@ -189,7 +189,7 @@ pub struct Peer<D> {
 impl<D> Peer<D> {
 	/// Get this peer ID.
 	pub fn id(&self) -> PeerId {
-		self.network.service().local_peer_id()
+		self.network.service().local_peer_id().clone()
 	}
 
 	/// Returns true if we're major syncing.
@@ -628,7 +628,7 @@ pub trait TestNetFactory: Sized {
 
 		self.mut_peers(|peers| {
 			for peer in peers.iter_mut() {
-				peer.network.add_known_address(network.service().local_peer_id(), listen_addr.clone());
+				peer.network.add_known_address(network.service().local_peer_id().clone(), listen_addr.clone());
 			}
 
 			let imported_blocks_stream = Box::pin(client.import_notification_stream().fuse());
@@ -704,7 +704,7 @@ pub trait TestNetFactory: Sized {
 
 		self.mut_peers(|peers| {
 			for peer in peers.iter_mut() {
-				peer.network.add_known_address(network.service().local_peer_id(), listen_addr.clone());
+				peer.network.add_known_address(network.service().local_peer_id().clone(), listen_addr.clone());
 			}
 
 			let imported_blocks_stream = Box::pin(client.import_notification_stream().fuse());

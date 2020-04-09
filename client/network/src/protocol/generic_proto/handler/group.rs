@@ -442,6 +442,38 @@ impl ProtocolsHandler for NotifsHandler {
 	) -> Poll<
 		ProtocolsHandlerEvent<Self::OutboundProtocol, Self::OutboundOpenInfo, Self::OutEvent, Self::Error>
 	> {
+		while let Poll::Ready(ev) = self.legacy.poll(cx) {
+			match ev {
+				ProtocolsHandlerEvent::OutboundSubstreamRequest { protocol, info: () } =>
+					return Poll::Ready(ProtocolsHandlerEvent::OutboundSubstreamRequest {
+						protocol: protocol.map_upgrade(EitherUpgrade::B),
+						info: None,
+					}),
+				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolOpen { endpoint, .. }) =>
+					return Poll::Ready(ProtocolsHandlerEvent::Custom(
+						NotifsHandlerOut::Open { endpoint }
+					)),
+				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolClosed { endpoint, reason }) =>
+					return Poll::Ready(ProtocolsHandlerEvent::Custom(
+						NotifsHandlerOut::Closed { endpoint, reason }
+					)),
+				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomMessage { message }) =>
+					return Poll::Ready(ProtocolsHandlerEvent::Custom(
+						NotifsHandlerOut::CustomMessage { message }
+					)),
+				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::Clogged { messages }) =>
+					return Poll::Ready(ProtocolsHandlerEvent::Custom(
+						NotifsHandlerOut::Clogged { messages }
+					)),
+				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::ProtocolError { is_severe, error }) =>
+					return Poll::Ready(ProtocolsHandlerEvent::Custom(
+						NotifsHandlerOut::ProtocolError { is_severe, error }
+					)),
+				ProtocolsHandlerEvent::Close(err) =>
+					return Poll::Ready(ProtocolsHandlerEvent::Close(EitherError::B(err))),
+			}
+		}
+
 		for (handler_num, handler) in self.in_handlers.iter_mut().enumerate() {
 			while let Poll::Ready(ev) = handler.poll(cx) {
 				match ev {
@@ -492,38 +524,6 @@ impl ProtocolsHandler for NotifsHandler {
 					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Closed) => {},
 					ProtocolsHandlerEvent::Custom(NotifsOutHandlerOut::Refused) => {},
 				}
-			}
-		}
-
-		while let Poll::Ready(ev) = self.legacy.poll(cx) {
-			match ev {
-				ProtocolsHandlerEvent::OutboundSubstreamRequest { protocol, info: () } =>
-					return Poll::Ready(ProtocolsHandlerEvent::OutboundSubstreamRequest {
-						protocol: protocol.map_upgrade(EitherUpgrade::B),
-						info: None,
-					}),
-				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolOpen { endpoint, .. }) =>
-					return Poll::Ready(ProtocolsHandlerEvent::Custom(
-						NotifsHandlerOut::Open { endpoint }
-					)),
-				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolClosed { endpoint, reason }) =>
-					return Poll::Ready(ProtocolsHandlerEvent::Custom(
-						NotifsHandlerOut::Closed { endpoint, reason }
-					)),
-				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomMessage { message }) =>
-					return Poll::Ready(ProtocolsHandlerEvent::Custom(
-						NotifsHandlerOut::CustomMessage { message }
-					)),
-				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::Clogged { messages }) =>
-					return Poll::Ready(ProtocolsHandlerEvent::Custom(
-						NotifsHandlerOut::Clogged { messages }
-					)),
-				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::ProtocolError { is_severe, error }) =>
-					return Poll::Ready(ProtocolsHandlerEvent::Custom(
-						NotifsHandlerOut::ProtocolError { is_severe, error }
-					)),
-				ProtocolsHandlerEvent::Close(err) =>
-					return Poll::Ready(ProtocolsHandlerEvent::Close(EitherError::B(err))),
 			}
 		}
 
