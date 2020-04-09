@@ -1124,6 +1124,7 @@ impl<T: Subtrait> frame_system::Trait for ElevatedTrait<T> {
 	type Event = ();
 	type BlockHashCount = T::BlockHashCount;
 	type MaximumBlockWeight = T::MaximumBlockWeight;
+	type DbWeight = ();
 	type MaximumBlockLength = T::MaximumBlockLength;
 	type AvailableBlockRatio = T::AvailableBlockRatio;
 	type Version = T::Version;
