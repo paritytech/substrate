@@ -59,6 +59,7 @@ pub use pallet_balances::Call as BalancesCall;
 pub use pallet_contracts::Gas;
 pub use frame_support::StorageValue;
 pub use pallet_staking::StakerStatus;
+use codec::Encode;
 
 /// Implementations of some helper traits passed into runtime modules as associated types.
 pub mod impls;
@@ -527,7 +528,6 @@ impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for R
 			frame_system::CheckNonce::<Runtime>::from(nonce),
 			frame_system::CheckWeight::<Runtime>::new(),
 			pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(tip),
-			Default::default(),
 			Default::default(),
 		);
 		let raw_payload = SignedPayload::new(call, extra).map_err(|e| {
