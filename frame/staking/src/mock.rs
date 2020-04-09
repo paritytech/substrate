@@ -501,10 +501,6 @@ pub type Session = pallet_session::Module<Test>;
 pub type Timestamp = pallet_timestamp::Module<Test>;
 pub type Staking = Module<Test>;
 
-pub fn active_era() -> EraIndex {
-	Staking::active_era().unwrap().index
-}
-
 pub fn current_era() -> EraIndex {
 	Staking::current_era().unwrap()
 }
