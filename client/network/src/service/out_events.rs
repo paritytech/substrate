@@ -105,7 +105,7 @@ impl fmt::Debug for Receiver {
 impl Drop for Receiver {
 	fn drop(&mut self) {
 		// Empty the list to properly decrease the stats.
-		while let Some(_) = self.next().now_or_never() {}
+		while let Some(Some(_)) = self.next().now_or_never() {}
 	}
 }
 
