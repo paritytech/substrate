@@ -284,7 +284,7 @@ pub enum DatabaseSettingsSrc {
 	Path {
 		/// Path to the database.
 		path: PathBuf,
-		/// Cache size in bytes.
+		/// Cache size in MiB.
 		cache_size: usize,
 	},
 
