@@ -1124,7 +1124,7 @@ mod tests {
 	}
 
 	fn intersects<T: PartialEq>(a: &[T], b: &[T]) -> bool {
-		for ae in a.iter().any(|e| b.contains(e))
+		a.iter().any(|e| b.contains(e))
 	}
 
 	fn ensure_members_sorted() {
@@ -1159,10 +1159,12 @@ mod tests {
 	fn pre_conditions() {
 		System::set_block_number(1);
 		ensure_members_sorted();
+		ensure_candidates_sorted();
 	}
 
 	fn post_conditions() {
 		ensure_members_sorted();
+		ensure_candidates_sorted();
 		ensure_member_candidates_runners_up_disjoint();
 		ensure_members_has_approval_stake();
 	}
