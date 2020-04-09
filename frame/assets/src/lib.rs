@@ -160,7 +160,8 @@ decl_module! {
 		/// 
 		/// # <weight>
 		/// - `O(1)`
-		/// - 3 storage mutations (codec `O(1)`).
+		/// - 1 storage mutation (codec `O(1)`).
+		/// - 2 storage writes (condec `O(1)`).
 		/// - One event.
 		/// # </weight>
 		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
@@ -206,7 +207,8 @@ decl_module! {
 		/// 
 		/// # <weight>
 		/// - `O(1)`
-		/// - 2 storage mutations (codec `O(1)`).
+		/// - 1 storage mutation (codec `O(1)`).
+		/// - 1 storage deletion (codec `O(1)`).
 		/// - One event.
 		/// # </weight>
 		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
