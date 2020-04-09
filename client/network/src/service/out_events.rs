@@ -228,7 +228,7 @@ impl Metrics {
 			},
 			Event::NotificationStreamClosed { engine_id, .. } => {
 				self.out_events_in
-					.with_label_values(&[&format!("notif-open-{:?}", engine_id)])
+					.with_label_values(&[&format!("notif-closed-{:?}", engine_id)])
 					.inc_by(num);
 			},
 			Event::NotificationsReceived { messages, .. } => {
@@ -258,7 +258,7 @@ impl Metrics {
 			},
 			Event::NotificationStreamClosed { engine_id, .. } => {
 				self.out_events_out
-					.with_label_values(&[&format!("notif-open-{:?}", engine_id)])
+					.with_label_values(&[&format!("notif-closed-{:?}", engine_id)])
 					.inc();
 			},
 			Event::NotificationsReceived { messages, .. } => {
