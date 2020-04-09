@@ -1124,12 +1124,7 @@ mod tests {
 	}
 
 	fn intersects<T: PartialEq>(a: &[T], b: &[T]) -> bool {
-		for ae in a.iter() {
-			if b.contains(ae) {
-				return true
-			}
-		}
-		false
+		for ae in a.iter().any(|e| b.contains(e))
 	}
 
 	fn ensure_members_sorted() {
