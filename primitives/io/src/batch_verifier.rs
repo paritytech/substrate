@@ -71,7 +71,7 @@ impl BatchVerifier {
 			}
 			if let Err(_) = sender.send(()) {
 				// sanity
-				log::warn!("Verification halted while result was pendign");
+				log::warn!("Verification halted while result was pending");
 				invalid_clone.store(true, AtomicOrdering::Relaxed);
 			}
 		}.boxed())).expect("Scheduler should not fail");
