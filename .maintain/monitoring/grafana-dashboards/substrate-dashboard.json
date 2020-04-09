@@ -80,7 +80,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "rate(substrate_block_height_number{status=\"finalized\",instance=\"[[instance]]\",network=\"[[network]]\"}[10m])/rate(substrate_block_height_number{status=\"finalized\",instance=\"[[instance]]\",network=\"[[network]]\"}[1m])",
+          "expr": "rate(substrate_block_height{status=\"finalized\",instance=\"[[instance]]\",network=\"[[network]]\"}[10m])/rate(substrate_block_height{status=\"finalized\",instance=\"[[instance]]\",network=\"[[network]]\"}[1m])",
           "intervalFactor": 1,
           "legendFormat": "rate[10m] / rate[1m]",
           "refId": "A"
@@ -260,7 +260,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "scalar(substrate_block_height_number{status=\"best\",instance=\"[[instance]]\",network=\"[[network]]\"})-scalar(substrate_block_height_number{status=\"finalized\",instance=\"[[instance]]\",network=\"[[network]]\"})",
+          "expr": "scalar(substrate_block_height{status=\"best\",instance=\"[[instance]]\",network=\"[[network]]\"})-scalar(substrate_block_height{status=\"finalized\",instance=\"[[instance]]\",network=\"[[network]]\"})",
           "intervalFactor": 2,
           "legendFormat": "[[hostname]]",
           "refId": "A"
@@ -351,7 +351,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "rate(substrate_block_height_number{status=\"finalized\",instance=\"[[instance]]\",network=\"[[network]]\"}[10m])*60",
+          "expr": "rate(substrate_block_height{status=\"finalized\",instance=\"[[instance]]\",network=\"[[network]]\"}[10m])*60",
           "intervalFactor": 10,
           "legendFormat": "{{hostname}}  Blocks / minute",
           "refId": "A"
@@ -441,7 +441,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "increase(substrate_block_height_number{instance=\"[[instance]]\",network=\"[[network]]\",status=~\"finalized|sync_target\"}[1m])",
+          "expr": "increase(substrate_block_height{instance=\"[[instance]]\",network=\"[[network]]\",status=~\"finalized|sync_target\"}[1m])",
           "intervalFactor": 5,
           "legendFormat": "{{status}}",
           "refId": "A"
@@ -530,7 +530,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "substrate_block_height_number{instance=\"[[instance]]\",network=\"[[network]]\",status=~\"finalized|sync_target\"}",
+          "expr": "substrate_block_height{instance=\"[[instance]]\",network=\"[[network]]\",status=~\"finalized|sync_target\"}",
           "legendFormat": "{{hostname}} {{status}}",
           "refId": "A"
         }
@@ -618,7 +618,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "substrate_block_height_number{status=\"best\",instance=\"[[instance]]\",network=\"[[network]]\"}",
+          "expr": "substrate_block_height{status=\"best\",instance=\"[[instance]]\",network=\"[[network]]\"}",
           "legendFormat": "{{hostname}}",
           "refId": "A"
         }
