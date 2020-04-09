@@ -152,6 +152,7 @@ runtime-benchmarks = [
 	"pallet-vesting/runtime-benchmarks",
 	"pallet-collective/runtime-benchmarks",
 	"pallet-offences-benchmarking",
+	"pallet-offences/runtime-benchmarks",
 	"pallet-session-benchmarking",
 ]
 
