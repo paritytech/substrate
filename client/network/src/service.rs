@@ -52,7 +52,7 @@ use sp_runtime::{
 	traits::{Block as BlockT, NumberFor},
 	ConsensusEngineId,
 };
-use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use std::{
 	borrow::Cow,
 	collections::{HashMap, HashSet},
@@ -60,15 +60,20 @@ use std::{
 	marker::PhantomData,
 	pin::Pin,
 	str,
-	sync::{atomic::{AtomicBool, AtomicUsize, Ordering}, Arc},
+	sync::{
+		atomic::{AtomicBool, AtomicUsize, Ordering},
+		Arc,
+	},
 	task::Poll,
 };
+
+#[cfg(test)]
+mod tests;
 
 /// Minimum Requirements for a Hash within Networking
 pub trait ExHashT: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static {}
 
-impl<T> ExHashT for T where
-	T: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static
+impl<T> ExHashT for T where T: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static
 {}
 
 /// Transaction pool interface
@@ -284,7 +289,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		)?;
 
 		// Build the swarm.
-		let (mut swarm, bandwidth): (Swarm::<B, H>, _) = {
+		let (mut swarm, bandwidth): (Swarm<B, H>, _) = {
 			let user_agent = format!(
 				"{} ({})",
 				params.network_config.client_version,
@@ -296,9 +301,14 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			};
 			let light_client_handler = {
 				let config = protocol::light_client_handler::Config::new(&params.protocol_id);
-				protocol::LightClientHandler::new(config, params.chain, checker, peerset_handle.clone())
+				protocol::LightClientHandler::new(
+					config,
+					params.chain,
+					checker,
+					peerset_handle.clone(),
+				)
 			};
-			let behaviour = futures::executor::block_on(Behaviour::new(
+			let mut behaviour = futures::executor::block_on(Behaviour::new(
 				protocol,
 				params.role,
 				user_agent,
@@ -316,6 +326,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				block_requests,
 				light_client_handler
 			));
+			for (engine_id, protocol_name) in &params.network_config.notifications_protocols {
+				behaviour.register_notifications_protocol(*engine_id, protocol_name.clone());
+			}
 			let (transport, bandwidth) = {
 				let (config_mem, config_wasm, flowctrl) = match params.network_config.transport {
 					TransportConfig::MemoryOnly => (true, None, false),
@@ -531,6 +544,11 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 }
 
 impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
+	/// Returns the local `PeerId`.
+	pub fn local_peer_id(&self) -> &PeerId {
+		&self.local_peer_id
+	}
+
 	/// Writes a message on an open notifications channel. Has no effect if the notifications
 	/// channel with this protocol name is closed.
 	///
