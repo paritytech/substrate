@@ -120,6 +120,7 @@ fn generate_chain_spec(
 	let chain_spec = chain_spec::ChainSpec::from_genesis(
 		"Custom",
 		"custom",
+		sc_chain_spec::ChainType::Live,
 		move || genesis_constructor(&authority_seeds, &endowed_accounts, &sudo_account),
 		vec![],
 		None,
