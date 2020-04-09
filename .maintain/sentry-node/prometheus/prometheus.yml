@@ -2,26 +2,14 @@ global:
   scrape_interval: 15s
 
 scrape_configs:
-  - job_name: 'validator-a'
-
+  - job_name: 'substrate_validator-a'
     static_configs:
       - targets: ['validator-a:9615']
         labels:
-          network: local
-          hostname: host
-
-  - job_name: 'sentry-a'
-
-    static_configs:
+          network: dev
       - targets: ['sentry-a:9615']
         labels:
-          network: local
-          hostname: host
-
-  - job_name: 'validator-b'
-
-    static_configs:
+          network: dev
       - targets: ['validator-b:9615']
         labels:
-          network: local
-          hostname: host
+          network: dev
