@@ -24,6 +24,7 @@ parking_lot = "0.10.0"
 sp-core = { version = "2.0.0-alpha.5", path = "../../primitives/core" }
 rand = "0.7.2"
 sp-runtime = { version = "2.0.0-alpha.5", path = "../../primitives/runtime" }
+sp-utils = { version = "2.0.0-alpha.5", path = "../../primitives/utils" }
 sc-network = { version = "0.8.0-alpha.5", path = "../network" }
 sc-keystore = { version = "2.0.0-alpha.5", path = "../keystore" }
 

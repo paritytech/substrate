@@ -152,6 +152,13 @@ decl_storage! {
 		/// Temporary value (cleared at block finalization) which is `Some`
 		/// if per-block initialization has already been called for current block.
 		Initialized get(fn initialized): Option<MaybeVrf>;
+
+		/// How late the current block is compared to its parent.
+		///
+		/// This entry is populated as part of block execution and is cleaned up
+		/// on block finalization. Querying this storage entry outside of block
+		/// execution context should always yield zero.
+		Lateness get(fn lateness): T::BlockNumber;
 	}
 	add_extra_genesis {
 		config(authorities): Vec<(AuthorityId, BabeAuthorityWeight)>;
@@ -190,6 +197,9 @@ decl_module! {
 			if let Some(Some(vrf_output)) = Initialized::take() {
 				Self::deposit_vrf_output(&vrf_output);
 			}
+
+			// remove temporary "environment" entry from storage
+			Lateness::<T>::kill();
 		}
 	}
 }
@@ -443,7 +453,15 @@ impl<T: Trait> Module<T> {
 				Self::deposit_consensus(ConsensusLog::NextEpochData(next))
 			}
 
-			CurrentSlot::put(digest.slot_number());
+			// the slot number of the current block being initialized
+			let current_slot = digest.slot_number();
+
+			// how many slots were skipped between current and last block
+			let lateness = current_slot.saturating_sub(CurrentSlot::get() + 1);
+			let lateness = T::BlockNumber::from(lateness as u32);
+
+			Lateness::<T>::put(lateness);
+			CurrentSlot::put(current_slot);
 
 			if let RawPreDigest::Primary(primary) = digest {
 				// place the VRF output into the `Initialized` storage item
@@ -495,6 +513,12 @@ impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
 impl<T: Trait> frame_support::traits::EstimateNextSessionRotation<T::BlockNumber> for Module<T> {
 	fn estimate_next_session_rotation(now: T::BlockNumber) -> Option<T::BlockNumber> {
 		Self::next_expected_epoch_change(now)
+	}
+}
+
+impl<T: Trait> frame_support::traits::Lateness<T::BlockNumber> for Module<T> {
+	fn lateness(&self) -> T::BlockNumber {
+		Self::lateness()
 	}
 }
 

@@ -104,10 +104,11 @@
 //! The **reward and slashing** procedure is the core of the Staking module, attempting to _embrace
 //! valid behavior_ while _punishing any misbehavior or lack of availability_.
 //!
-//! Reward must be claimed by stakers for each era before it gets too old by $HISTORY_DEPTH using
-//! `payout_nominator` and `payout_validator` calls.
+//! Rewards must be claimed for each era before it gets too old by `$HISTORY_DEPTH` using the
+//! `payout_stakers` call. Any account can call `payout_stakers`, which pays the reward to
+//! the validator as well as its nominators.
 //! Only the [`T::MaxNominatorRewardedPerValidator`] biggest stakers can claim their reward. This
-//! limit the i/o cost to compute nominators payout.
+//! is to limit the i/o cost to mutate storage for each nominator's account.
 //!
 //! Slashing can occur at any point in time, once misbehavior is reported. Once slashing is
 //! determined, a value is deducted from the balance of the validator and all the nominators who
@@ -278,7 +279,7 @@ use frame_support::{
 	dispatch::{IsSubType, DispatchResult},
 	traits::{
 		Currency, LockIdentifier, LockableCurrency, WithdrawReasons, OnUnbalanced, Imbalance, Get,
-		UnixTime, EstimateNextNewSession,
+		UnixTime, EstimateNextNewSession, EnsureOrigin,
 	}
 };
 use pallet_session::historical;
@@ -287,11 +288,11 @@ use sp_runtime::{
 	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, StaticLookup, CheckedSub, Saturating, SaturatedConversion, AtLeast32Bit,
-		EnsureOrigin, SignedExtension,
+		Dispatchable,
 	},
 	transaction_validity::{
 		TransactionValidityError, TransactionValidity, ValidTransaction, InvalidTransaction,
-		TransactionSource,
+		TransactionSource, TransactionPriority,
 	},
 };
 use sp_staking::{
@@ -313,6 +314,18 @@ const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 const STAKING_ID: LockIdentifier = *b"staking ";
 pub const MAX_UNLOCKING_CHUNKS: usize = 32;
 pub const MAX_NOMINATIONS: usize = <CompactAssignments as VotingLimit>::LIMIT;
+
+// syntactic sugar for logging
+#[cfg(feature = "std")]
+const LOG_TARGET: &'static str = "staking";
+macro_rules! log {
+	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
+		debug::native::$level!(
+			target: LOG_TARGET,
+			$patter $(, $values)*
+		)
+	};
+}
 
 /// Data type used to index nominators in the compact type
 pub type NominatorIndex = u32;
@@ -452,8 +465,9 @@ pub struct StakingLedger<AccountId, Balance: HasCompact> {
 	/// Any balance that is becoming free, which may eventually be transferred out
 	/// of the stash (assuming it doesn't get slashed first).
 	pub unlocking: Vec<UnlockChunk<Balance>>,
-	/// The latest and highest era which the staker has claimed reward for.
-	pub last_reward: Option<EraIndex>,
+	/// List of eras for which the stakers behind a validator have claimed rewards. Only updated
+	/// for validators.
+	pub claimed_rewards: Vec<EraIndex>,
 }
 
 impl<
@@ -478,7 +492,7 @@ impl<
 			total,
 			active: self.active,
 			unlocking,
-			last_reward: self.last_reward
+			claimed_rewards: self.claimed_rewards
 		}
 	}
 
@@ -581,10 +595,10 @@ pub struct Nominations<AccountId> {
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug)]
 pub struct IndividualExposure<AccountId, Balance: HasCompact> {
 	/// The stash account of the nominator in question.
-	who: AccountId,
+	pub who: AccountId,
 	/// Amount of funds exposed.
 	#[codec(compact)]
-	value: Balance,
+	pub value: Balance,
 }
 
 /// A snapshot of the stake backing a single validator in the system.
@@ -770,16 +784,22 @@ pub trait Trait: frame_system::Trait {
 	type ElectionLookahead: Get<Self::BlockNumber>;
 
 	/// The overarching call type.
-	type Call: From<Call<Self>> + IsSubType<Module<Self>, Self> + Clone;
+	type Call: Dispatchable + From<Call<Self>> + IsSubType<Module<Self>, Self> + Clone;
 
 	/// A transaction submitter.
 	type SubmitTransaction: SubmitUnsignedTransaction<Self, <Self as Trait>::Call>;
 
-	/// The maximum number of nominator rewarded for each validator.
+	/// The maximum number of nominators rewarded for each validator.
 	///
 	/// For each validator only the `$MaxNominatorRewardedPerValidator` biggest stakers can claim
 	/// their reward. This used to limit the i/o cost for the nominator payout.
 	type MaxNominatorRewardedPerValidator: Get<u32>;
+
+	/// A configuration for base priority of unsigned transactions.
+	///
+	/// This is exposed so that it can be tuned for particular runtime, when
+	/// multiple pallets send unsigned transactions.
+	type UnsignedPriority: Get<TransactionPriority>;
 }
 
 /// Mode of era-forcing.
@@ -818,13 +838,13 @@ impl Default for Releases {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Staking {
-		/// Number of era to keep in history.
+		/// Number of eras to keep in history.
 		///
-		/// Information is kept for eras in `[current_era - history_depth; current_era]
+		/// Information is kept for eras in `[current_era - history_depth; current_era]`.
 		///
-		/// Must be more than the number of era delayed by session otherwise.
-		/// i.e. active era must always be in history.
-		/// i.e. `active_era > current_era - history_depth` must be guaranteed.
+		/// Must be more than the number of eras delayed by session otherwise.
+		/// I.e. active era must always be in history.
+		/// I.e. `active_era > current_era - history_depth` must be guaranteed.
 		HistoryDepth get(fn history_depth) config(): u32 = 84;
 
 		/// The ideal number of staking participants.
@@ -860,7 +880,7 @@ decl_storage! {
 
 		/// The current era index.
 		///
-		/// This is the latest planned era, depending on how session module queues the validator
+		/// This is the latest planned era, depending on how the Session pallet queues the validator
 		/// set, it might be active or not.
 		pub CurrentEra get(fn current_era): Option<EraIndex>;
 
@@ -870,7 +890,7 @@ decl_storage! {
 		/// Validator set of this era must be equal to `SessionInterface::validators`.
 		pub ActiveEra get(fn active_era): Option<ActiveEraInfo>;
 
-		/// The session index at which the era start for the last `HISTORY_DEPTH` eras
+		/// The session index at which the era start for the last `HISTORY_DEPTH` eras.
 		pub ErasStartSessionIndex get(fn eras_start_session_index):
 			map hasher(twox_64_concat) EraIndex => Option<SessionIndex>;
 
@@ -886,7 +906,7 @@ decl_storage! {
 
 		/// Clipped Exposure of validator at era.
 		///
-		/// This is similar to [`ErasStakers`] but number of nominators exposed is reduce to the
+		/// This is similar to [`ErasStakers`] but number of nominators exposed is reduced to the
 		/// `T::MaxNominatorRewardedPerValidator` biggest stakers.
 		/// (Note: the field `total` and `own` of the exposure remains unchanged).
 		/// This is used to limit the i/o cost for the nominator payout.
@@ -899,7 +919,7 @@ decl_storage! {
 			double_map hasher(twox_64_concat) EraIndex, hasher(twox_64_concat) T::AccountId
 			=> Exposure<T::AccountId, BalanceOf<T>>;
 
-		/// Similarly to `ErasStakers` this holds the preferences of validators.
+		/// Similar to `ErasStakers`, this holds the preferences of validators.
 		///
 		/// This is keyed first by the era index to allow bulk deletion and then the stash account.
 		///
@@ -990,7 +1010,8 @@ decl_storage! {
 		/// solutions to be submitted.
 		pub EraElectionStatus get(fn era_election_status): ElectionStatus<T::BlockNumber>;
 
-		/// True if the current planned session is final.
+		/// True if the current **planned** session is final. Note that this does not take era
+		/// forcing into account.
 		pub IsCurrentSessionFinal get(fn is_current_session_final): bool = false;
 
 		/// True if network has been upgraded to this version.
@@ -998,6 +1019,9 @@ decl_storage! {
 		///
 		/// This is set to v3.0.0 for new networks.
 		StorageVersion build(|_: &GenesisConfig<T>| Releases::V3_0_0): Releases;
+
+		/// The era where we migrated from Lazy Payouts to Simple Payouts
+		MigrateEra: Option<EraIndex>;
 	}
 	add_extra_genesis {
 		config(stakers):
@@ -1035,7 +1059,7 @@ decl_storage! {
 
 decl_event!(
 	pub enum Event<T> where Balance = BalanceOf<T>, <T as frame_system::Trait>::AccountId {
-		/// The staker has been rewarded by this amount. AccountId is controller account.
+		/// The staker has been rewarded by this amount. `AccountId` is the stash account.
 		Reward(AccountId, Balance),
 		/// One validator (and its nominators) has been slashed by the given amount.
 		Slash(AccountId, Balance),
@@ -1088,6 +1112,8 @@ decl_error! {
 		InvalidNumberOfNominations,
 		/// Items are not sorted and unique.
 		NotSortedAndUnique,
+		/// Rewards for this era have already been claimed for this validator.
+		AlreadyClaimed,
 		/// The submitted result is received out of the open window.
 		PhragmenEarlySubmission,
 		/// The submitted result is not as good as the one stored on chain.
@@ -1115,6 +1141,8 @@ decl_error! {
 		PhragmenBogusEdge,
 		/// The claimed score does not match with the one computed from the data.
 		PhragmenBogusScore,
+		/// The call is not allowed at the given time due to restrictions of election period.
+		CallNotAllowed,
 	}
 }
 
@@ -1139,7 +1167,8 @@ decl_module! {
 			if
 				// if we don't have any ongoing offchain compute.
 				Self::era_election_status().is_closed() &&
-				Self::is_current_session_final()
+				// either current session final based on the plan, or we're forcing.
+				(Self::is_current_session_final() || Self::will_era_be_forced())
 			{
 				if let Some(next_session_change) = T::NextNewSession::estimate_next_new_session(now){
 					if let Some(remaining) = next_session_change.checked_sub(&now) {
@@ -1151,26 +1180,15 @@ decl_module! {
 								<EraElectionStatus<T>>::put(
 									ElectionStatus::<T::BlockNumber>::Open(now)
 								);
-								debug::native::info!(
-									target: "staking",
-									"Election window is Open({:?}). Snapshot created",
-									now,
-								);
+								log!(info, "💸 Election window is Open({:?}). Snapshot created", now);
 							} else {
-								debug::native::warn!(
-									target: "staking",
-									"Failed to create snapshot at {:?}. Election window will remain closed.",
-									now,
-								);
+								log!(warn, "💸 Failed to create snapshot at {:?}.", now);
 							}
 
 						}
 					}
 				} else {
-					debug::native::warn!(
-						target: "staking",
-						"estimate_next_new_session() failed to execute. Election status cannot be changed.",
-					);
+					log!(warn, "💸 Estimating next session change failed.");
 				}
 			}
 
@@ -1186,23 +1204,12 @@ decl_module! {
 			if Self::era_election_status().is_open_at(now) {
 				let offchain_status = set_check_offchain_execution_status::<T>(now);
 				if let Err(why) = offchain_status {
-					debug::native::warn!(
-						target: "staking",
-						"skipping offchain worker in open election window due to [{}]",
-						why,
-					);
+					log!(debug, "skipping offchain worker in open election window due to [{}]", why);
 				} else {
 					if let Err(e) = compute_offchain_election::<T>() {
-						debug::native::warn!(
-							target: "staking",
-							"Error in phragmen offchain worker: {:?}",
-							e,
-						);
+						log!(warn, "💸 Error in phragmen offchain worker: {:?}", e);
 					} else {
-						debug::native::debug!(
-							target: "staking",
-							"Executed offchain worker thread without errors. Transaction submitted to the pool.",
-						);
+						log!(debug, "Executed offchain worker thread without errors.");
 					}
 				}
 			}
@@ -1223,6 +1230,7 @@ decl_module! {
 			// For Kusama the type hasn't actually changed as Moment was u64 and was the number of
 			// millisecond since unix epoch.
 			StorageVersion::put(Releases::V3_0_0);
+			Self::migrate_last_reward_to_claimed_rewards();
 			0
 		}
 
@@ -1244,7 +1252,7 @@ decl_module! {
 		/// unless the `origin` falls below _existential deposit_ and gets removed as dust.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
-		fn bond(origin,
+		pub fn bond(origin,
 			controller: <T::Lookup as StaticLookup>::Source,
 			#[compact] value: BalanceOf<T>,
 			payee: RewardDestination,
@@ -1273,6 +1281,10 @@ decl_module! {
 
 			system::Module::<T>::inc_ref(&stash);
 
+			let current_era = CurrentEra::get().unwrap_or(0);
+			let history_depth = Self::history_depth();
+			let last_reward_era = current_era.saturating_sub(history_depth);
+
 			let stash_balance = T::Currency::free_balance(&stash);
 			let value = value.min(stash_balance);
 			Self::deposit_event(RawEvent::Bonded(stash.clone(), value));
@@ -1281,7 +1293,7 @@ decl_module! {
 				total: value,
 				active: value,
 				unlocking: vec![],
-				last_reward: Self::current_era(),
+				claimed_rewards: (last_reward_era..current_era).collect(),
 			};
 			Self::update_ledger(&controller, &item);
 		}
@@ -1293,7 +1305,8 @@ decl_module! {
 		/// Unlike [`bond`] or [`unbond`] this function does not impose any limitation on the amount
 		/// that can be added.
 		///
-		/// The dispatch origin for this call must be _Signed_ by the stash, not the controller.
+		/// The dispatch origin for this call must be _Signed_ by the stash, not the controller and
+		/// it can be only called when [`EraElectionStatus`] is `Closed`.
 		///
 		/// Emits `Bonded`.
 		///
@@ -1304,6 +1317,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		fn bond_extra(origin, #[compact] max_additional: BalanceOf<T>) {
+			ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
 			let stash = ensure_signed(origin)?;
 
 			let controller = Self::bonded(&stash).ok_or(Error::<T>::NotStash)?;
@@ -1332,6 +1346,7 @@ decl_module! {
 		/// to be called first to remove some of the chunks (if possible).
 		///
 		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
+		/// And, it can be only called when [`EraElectionStatus`] is `Closed`.
 		///
 		/// Emits `Unbonded`.
 		///
@@ -1348,6 +1363,7 @@ decl_module! {
 		/// </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(400_000)]
 		fn unbond(origin, #[compact] value: BalanceOf<T>) {
+			ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
 			let controller = ensure_signed(origin)?;
 			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			ensure!(
@@ -1380,6 +1396,7 @@ decl_module! {
 		/// whatever it wants.
 		///
 		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
+		/// And, it can be only called when [`EraElectionStatus`] is `Closed`.
 		///
 		/// Emits `Withdrawn`.
 		///
@@ -1394,6 +1411,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(400_000)]
 		fn withdraw_unbonded(origin) {
+			ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
 			let controller = ensure_signed(origin)?;
 			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let (stash, old_total) = (ledger.stash.clone(), ledger.total);
@@ -1427,6 +1445,7 @@ decl_module! {
 		/// Effects will be felt at the beginning of the next era.
 		///
 		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
+		/// And, it can be only called when [`EraElectionStatus`] is `Closed`.
 		///
 		/// # <weight>
 		/// - Independent of the arguments. Insignificant complexity.
@@ -1434,7 +1453,8 @@ decl_module! {
 		/// - Writes are limited to the `origin` account key.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(750_000)]
-		fn validate(origin, prefs: ValidatorPrefs) {
+		pub fn validate(origin, prefs: ValidatorPrefs) {
+			ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let stash = &ledger.stash;
@@ -1444,9 +1464,11 @@ decl_module! {
 
 		/// Declare the desire to nominate `targets` for the origin controller.
 		///
-		/// Effects will be felt at the beginning of the next era.
+		/// Effects will be felt at the beginning of the next era. This can only be called when
+		/// [`EraElectionStatus`] is `Closed`.
 		///
 		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
+		/// And, it can be only called when [`EraElectionStatus`] is `Closed`.
 		///
 		/// # <weight>
 		/// - The transaction's complexity is proportional to the size of `targets`,
@@ -1454,7 +1476,8 @@ decl_module! {
 		/// - Both the reads and writes follow a similar pattern.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(750_000)]
-		fn nominate(origin, targets: Vec<<T::Lookup as StaticLookup>::Source>) {
+		pub fn nominate(origin, targets: Vec<<T::Lookup as StaticLookup>::Source>) {
+			ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let stash = &ledger.stash;
@@ -1480,6 +1503,7 @@ decl_module! {
 		/// Effects will be felt at the beginning of the next era.
 		///
 		/// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
+		/// And, it can be only called when [`EraElectionStatus`] is `Closed`.
 		///
 		/// # <weight>
 		/// - Independent of the arguments. Insignificant complexity.
@@ -1488,6 +1512,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		fn chill(origin) {
+			ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			Self::chill_stash(&ledger.stash);
@@ -1538,8 +1563,6 @@ decl_module! {
 				}
 			}
 		}
-
-		// ----- Root calls.
 
 		/// The ideal number of validators.
 		#[weight = SimpleDispatchInfo::FixedNormal(5_000)]
@@ -1629,6 +1652,10 @@ decl_module! {
 			<Self as Store>::UnappliedSlashes::insert(&era, &unapplied);
 		}
 
+		/// **This extrinsic will be removed after `MigrationEra + HistoryDepth` has passed, giving
+		/// opportunity for users to claim all rewards before moving to Simple Payouts. After this
+		/// time, you should use `payout_stakers` instead.**
+		///
 		/// Make one nominator's payout for one era.
 		///
 		/// - `who` is the controller account of the nominator to pay out.
@@ -1659,10 +1686,14 @@ decl_module! {
 		fn payout_nominator(origin, era: EraIndex, validators: Vec<(T::AccountId, u32)>)
 			-> DispatchResult
 		{
-			let who = ensure_signed(origin)?;
-			Self::do_payout_nominator(who, era, validators)
+			let ctrl = ensure_signed(origin)?;
+			Self::do_payout_nominator(ctrl, era, validators)
 		}
 
+		/// **This extrinsic will be removed after `MigrationEra + HistoryDepth` has passed, giving
+		/// opportunity for users to claim all rewards before moving to Simple Payouts. After this
+		/// time, you should use `payout_stakers` instead.**
+		///
 		/// Make one validator's payout for one era.
 		///
 		/// - `who` is the controller account of the validator to pay out.
@@ -1680,11 +1711,36 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		fn payout_validator(origin, era: EraIndex) -> DispatchResult {
-			let who = ensure_signed(origin)?;
-			Self::do_payout_validator(who, era)
+			let ctrl = ensure_signed(origin)?;
+			Self::do_payout_validator(ctrl, era)
+		}
+
+		/// Pay out all the stakers behind a single validator for a single era.
+		///
+		/// - `validator_stash` is the stash account of the validator. Their nominators, up to
+		///   `T::MaxNominatorRewardedPerValidator`, will also receive their rewards.
+		/// - `era` may be any era between `[current_era - history_depth; current_era]`.
+		///
+		/// The origin of this call must be _Signed_. Any account can call this function, even if
+		/// it is not one of the stakers.
+		///
+		/// This can only be called when [`EraElectionStatus`] is `Closed`.
+		///
+		/// # <weight>
+		/// - Time complexity: at most O(MaxNominatorRewardedPerValidator).
+		/// - Contains a limited number of reads and writes.
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
+		fn payout_stakers(origin, validator_stash: T::AccountId, era: EraIndex) -> DispatchResult {
+			ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
+			ensure_signed(origin)?;
+			Self::do_payout_stakers(validator_stash, era)
 		}
 
 		/// Rebond a portion of the stash scheduled to be unlocked.
+		///
+		/// The dispatch origin must be signed by the controller, and it can be only called when
+		/// [`EraElectionStatus`] is `Closed`.
 		///
 		/// # <weight>
 		/// - Time complexity: O(1). Bounded by `MAX_UNLOCKING_CHUNKS`.
@@ -1692,12 +1748,10 @@ decl_module! {
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(500_000)]
 		fn rebond(origin, #[compact] value: BalanceOf<T>) {
+			ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
-			ensure!(
-				!ledger.unlocking.is_empty(),
-				Error::<T>::NoUnlockChunk,
-			);
+			ensure!(!ledger.unlocking.is_empty(), Error::<T>::NoUnlockChunk);
 
 			let ledger = ledger.rebond(value);
 			Self::update_ledger(&controller, &ledger);
@@ -1857,6 +1911,43 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
+	/// Migrate `last_reward` to `claimed_rewards`
+	pub fn migrate_last_reward_to_claimed_rewards() {
+		use frame_support::migration::{StorageIterator, put_storage_value};
+		// Migrate from `last_reward` to `claimed_rewards`.
+		// We will construct a vector from `current_era - history_depth` to `last_reward`
+		// for each validator and nominator.
+		//
+		// Old Staking Ledger
+		#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+		struct OldStakingLedger<AccountId, Balance: HasCompact> {
+			pub stash: AccountId,
+			#[codec(compact)]
+			pub total: Balance,
+			#[codec(compact)]
+			pub active: Balance,
+			pub unlocking: Vec<UnlockChunk<Balance>>,
+			pub last_reward: Option<EraIndex>,
+		}
+		// Current era and history depth
+		let current_era = Self::current_era().unwrap_or(0);
+		let history_depth = Self::history_depth();
+		let last_payout_era = current_era.saturating_sub(history_depth);
+		// Convert all ledgers to the new format.
+		for (hash, old_ledger) in StorageIterator::<OldStakingLedger<T::AccountId, BalanceOf<T>>>::new(b"Staking", b"Ledger").drain() {
+			let last_reward = old_ledger.last_reward.unwrap_or(0);
+			let new_ledger = StakingLedger {
+				stash: old_ledger.stash,
+				total: old_ledger.total,
+				active: old_ledger.active,
+				unlocking: old_ledger.unlocking,
+				claimed_rewards: (last_payout_era..=last_reward).collect(),
+			};
+			put_storage_value(b"Staking", b"Ledger", &hash, new_ledger);
+		}
+		MigrateEra::put(current_era);
+	}
+
 	/// The total balance that can be slashed from a stash account as of right now.
 	pub fn slashable_balance_of(stash: &T::AccountId) -> BalanceOf<T> {
 		Self::bonded(stash).and_then(Self::ledger).map(|l| l.active).unwrap_or_default()
@@ -1883,9 +1974,9 @@ impl<T: Trait> Module<T> {
 			num_validators > MAX_VALIDATORS ||
 			num_nominators.saturating_add(num_validators) > MAX_NOMINATORS
 		{
-			debug::native::warn!(
-				target: "staking",
-				"Snapshot size too big [{} <> {}][{} <> {}].",
+			log!(
+				warn,
+				"💸 Snapshot size too big [{} <> {}][{} <> {}].",
 				num_validators,
 				MAX_VALIDATORS,
 				num_nominators,
@@ -1908,7 +1999,7 @@ impl<T: Trait> Module<T> {
 		<SnapshotNominators<T>>::kill();
 	}
 
-	fn do_payout_nominator(who: T::AccountId, era: EraIndex, validators: Vec<(T::AccountId, u32)>)
+	fn do_payout_nominator(ctrl: T::AccountId, era: EraIndex, validators: Vec<(T::AccountId, u32)>)
 		-> DispatchResult
 	{
 		// validators len must not exceed `MAX_NOMINATIONS` to avoid querying more validator
@@ -1916,20 +2007,35 @@ impl<T: Trait> Module<T> {
 		if validators.len() > MAX_NOMINATIONS {
 			return Err(Error::<T>::InvalidNumberOfNominations.into());
 		}
+		// If migrate_era is not populated, then you should use `payout_stakers`
+		let migrate_era = MigrateEra::get().ok_or(Error::<T>::InvalidEraToReward)?;
+		// This payout mechanism will only work for eras before the migration.
+		// Subsequent payouts should use `payout_stakers`.
+		ensure!(era < migrate_era, Error::<T>::InvalidEraToReward);
+		let current_era = CurrentEra::get().ok_or(Error::<T>::InvalidEraToReward)?;
+		ensure!(era <= current_era, Error::<T>::InvalidEraToReward);
+		let history_depth = Self::history_depth();
+		ensure!(era >= current_era.saturating_sub(history_depth), Error::<T>::InvalidEraToReward);
 
 		// Note: if era has no reward to be claimed, era may be future. better not to update
 		// `nominator_ledger.last_reward` in this case.
 		let era_payout = <ErasValidatorReward<T>>::get(&era)
 			.ok_or_else(|| Error::<T>::InvalidEraToReward)?;
 
-		let mut nominator_ledger = <Ledger<T>>::get(&who).ok_or_else(|| Error::<T>::NotController)?;
+		let mut nominator_ledger = <Ledger<T>>::get(&ctrl).ok_or_else(|| Error::<T>::NotController)?;
 
-		if nominator_ledger.last_reward.map(|last_reward| last_reward >= era).unwrap_or(false) {
-			return Err(Error::<T>::InvalidEraToReward.into());
+		ensure!(
+			Self::era_election_status().is_closed() || Self::payee(&nominator_ledger.stash) != RewardDestination::Staked,
+			Error::<T>::CallNotAllowed,
+		);
+
+		nominator_ledger.claimed_rewards.retain(|&x| x >= current_era.saturating_sub(history_depth));
+		match nominator_ledger.claimed_rewards.binary_search(&era) {
+			Ok(_) => Err(Error::<T>::AlreadyClaimed)?,
+			Err(pos) => nominator_ledger.claimed_rewards.insert(pos, era),
 		}
 
-		nominator_ledger.last_reward = Some(era);
-		<Ledger<T>>::insert(&who, &nominator_ledger);
+		<Ledger<T>>::insert(&ctrl, &nominator_ledger);
 
 		let mut reward = Perbill::zero();
 		let era_reward_points = <ErasRewardPoints<T>>::get(&era);
@@ -1965,25 +2071,42 @@ impl<T: Trait> Module<T> {
 		}
 
 		if let Some(imbalance) = Self::make_payout(&nominator_ledger.stash, reward * era_payout) {
-			Self::deposit_event(RawEvent::Reward(who, imbalance.peek()));
+			Self::deposit_event(RawEvent::Reward(ctrl, imbalance.peek()));
 		}
 
 		Ok(())
 	}
 
-	fn do_payout_validator(who: T::AccountId, era: EraIndex) -> DispatchResult {
+	fn do_payout_validator(ctrl: T::AccountId, era: EraIndex) -> DispatchResult {
+		// If migrate_era is not populated, then you should use `payout_stakers`
+		let migrate_era = MigrateEra::get().ok_or(Error::<T>::InvalidEraToReward)?;
+		// This payout mechanism will only work for eras before the migration.
+		// Subsequent payouts should use `payout_stakers`.
+		ensure!(era < migrate_era, Error::<T>::InvalidEraToReward);
+		let current_era = CurrentEra::get().ok_or(Error::<T>::InvalidEraToReward)?;
+		ensure!(era <= current_era, Error::<T>::InvalidEraToReward);
+		let history_depth = Self::history_depth();
+		ensure!(era >= current_era.saturating_sub(history_depth), Error::<T>::InvalidEraToReward);
+
 		// Note: if era has no reward to be claimed, era may be future. better not to update
 		// `ledger.last_reward` in this case.
 		let era_payout = <ErasValidatorReward<T>>::get(&era)
 			.ok_or_else(|| Error::<T>::InvalidEraToReward)?;
 
-		let mut ledger = <Ledger<T>>::get(&who).ok_or_else(|| Error::<T>::NotController)?;
-		if ledger.last_reward.map(|last_reward| last_reward >= era).unwrap_or(false) {
-			return Err(Error::<T>::InvalidEraToReward.into());
+		let mut ledger = <Ledger<T>>::get(&ctrl).ok_or_else(|| Error::<T>::NotController)?;
+
+		ensure!(
+			Self::era_election_status().is_closed() || Self::payee(&ledger.stash) != RewardDestination::Staked,
+			Error::<T>::CallNotAllowed,
+		);
+
+		ledger.claimed_rewards.retain(|&x| x >= current_era.saturating_sub(history_depth));
+		match ledger.claimed_rewards.binary_search(&era) {
+			Ok(_) => Err(Error::<T>::AlreadyClaimed)?,
+			Err(pos) => ledger.claimed_rewards.insert(pos, era),
 		}
 
-		ledger.last_reward = Some(era);
-		<Ledger<T>>::insert(&who, &ledger);
+		<Ledger<T>>::insert(&ctrl, &ledger);
 
 		let era_reward_points = <ErasRewardPoints<T>>::get(&era);
 		let commission = Self::eras_validator_prefs(&era, &ledger.stash).commission;
@@ -2007,7 +2130,109 @@ impl<T: Trait> Module<T> {
 		);
 
 		if let Some(imbalance) = Self::make_payout(&ledger.stash, reward * era_payout) {
-			Self::deposit_event(RawEvent::Reward(who, imbalance.peek()));
+			Self::deposit_event(RawEvent::Reward(ctrl, imbalance.peek()));
+		}
+
+		Ok(())
+	}
+
+	fn do_payout_stakers(
+		validator_stash: T::AccountId,
+		era: EraIndex,
+	) -> DispatchResult {
+		// Validate input data
+		let current_era = CurrentEra::get().ok_or(Error::<T>::InvalidEraToReward)?;
+		ensure!(era <= current_era, Error::<T>::InvalidEraToReward);
+		let history_depth = Self::history_depth();
+		ensure!(era >= current_era.saturating_sub(history_depth), Error::<T>::InvalidEraToReward);
+
+		// If there was no migration, then this function is always valid.
+		if let Some(migrate_era) = MigrateEra::get() {
+			// This payout mechanism will only work for eras on and after the migration.
+			// Payouts before then should use `payout_nominator`/`payout_validator`.
+			ensure!(migrate_era <= era, Error::<T>::InvalidEraToReward);
+		}
+
+		// Note: if era has no reward to be claimed, era may be future. better not to update
+		// `ledger.claimed_rewards` in this case.
+		let era_payout = <ErasValidatorReward<T>>::get(&era)
+			.ok_or_else(|| Error::<T>::InvalidEraToReward)?;
+
+		let controller = Self::bonded(&validator_stash).ok_or(Error::<T>::NotStash)?;
+		let mut ledger = <Ledger<T>>::get(&controller).ok_or_else(|| Error::<T>::NotController)?;
+
+		ledger.claimed_rewards.retain(|&x| x >= current_era.saturating_sub(history_depth));
+		match ledger.claimed_rewards.binary_search(&era) {
+			Ok(_) => Err(Error::<T>::AlreadyClaimed)?,
+			Err(pos) => ledger.claimed_rewards.insert(pos, era),
+		}
+
+		let exposure = <ErasStakersClipped<T>>::get(&era, &ledger.stash);
+
+		/* Input data seems good, no errors allowed after this point */
+
+		<Ledger<T>>::insert(&controller, &ledger);
+
+		// Get Era reward points. It has TOTAL and INDIVIDUAL
+		// Find the fraction of the era reward that belongs to the validator
+		// Take that fraction of the eras rewards to split to nominator and validator
+		//
+		// Then look at the validator, figure out the proportion of their reward
+		// which goes to them and each of their nominators.
+
+		let era_reward_points = <ErasRewardPoints<T>>::get(&era);
+		let total_reward_points = era_reward_points.total;
+		let validator_reward_points = era_reward_points.individual.get(&ledger.stash)
+			.map(|points| *points)
+			.unwrap_or_else(|| Zero::zero());
+
+		// Nothing to do if they have no reward points.
+		if validator_reward_points.is_zero() { return Ok(())}
+
+		// This is the fraction of the total reward that the validator and the
+		// nominators will get.
+		let validator_total_reward_part = Perbill::from_rational_approximation(
+			validator_reward_points,
+			total_reward_points,
+		);
+
+		// This is how much validator + nominators are entitled to.
+		let validator_total_payout = validator_total_reward_part * era_payout;
+
+		let validator_prefs = Self::eras_validator_prefs(&era, &validator_stash);
+		// Validator first gets a cut off the top.
+		let validator_commission = validator_prefs.commission;
+		let validator_commission_payout = validator_commission * validator_total_payout;
+
+		let validator_leftover_payout = validator_total_payout - validator_commission_payout;
+		// Now let's calculate how this is split to the validator.
+		let validator_exposure_part = Perbill::from_rational_approximation(
+			exposure.own,
+			exposure.total,
+		);
+		let validator_staking_payout = validator_exposure_part * validator_leftover_payout;
+
+		// We can now make total validator payout:
+		if let Some(imbalance) = Self::make_payout(
+			&ledger.stash,
+			validator_staking_payout + validator_commission_payout
+		) {
+			Self::deposit_event(RawEvent::Reward(ledger.stash, imbalance.peek()));
+		}
+
+		// Lets now calculate how this is split to the nominators.
+		// Sort nominators by highest to lowest exposure, but only keep `max_nominator_payouts` of them.
+		for nominator in exposure.others.iter() {
+			let nominator_exposure_part = Perbill::from_rational_approximation(
+				nominator.value,
+				exposure.total,
+			);
+
+			let nominator_reward: BalanceOf<T> = nominator_exposure_part * validator_leftover_payout;
+			// We can now make nominator payout:
+			if let Some(imbalance) = Self::make_payout(&nominator.who, nominator_reward) {
+				Self::deposit_event(RawEvent::Reward(nominator.who.clone(), imbalance.peek()));
+			}
 		}
 
 		Ok(())
@@ -2171,11 +2396,7 @@ impl<T: Trait> Module<T> {
 			validator_at,
 		).map_err(|e| {
 			// log the error since it is not propagated into the runtime error.
-			debug::native::warn!(
-				target: "staking",
-				"un-compacting solution failed due to {:?}",
-				e,
-			);
+			log!(warn, "💸 un-compacting solution failed due to {:?}", e);
 			Error::<T>::PhragmenBogusCompact
 		})?;
 
@@ -2190,10 +2411,7 @@ impl<T: Trait> Module<T> {
 				// all of the indices must map to either a validator or a nominator. If this is ever
 				// not the case, then the locking system of staking is most likely faulty, or we
 				// have bigger problems.
-				debug::native::error!(
-					target: "staking",
-					"detected an error in the staking locking and snapshot."
-				);
+				log!(error, "💸 detected an error in the staking locking and snapshot.");
 				// abort.
 				return Err(Error::<T>::PhragmenBogusNominator);
 			}
@@ -2257,9 +2475,9 @@ impl<T: Trait> Module<T> {
 
 		// At last, alles Ok. Exposures and store the result.
 		let exposures = Self::collect_exposure(supports);
-		debug::native::info!(
-			target: "staking",
-			"A better solution (with compute {:?}) has been validated and stored on chain.",
+		log!(
+			info,
+			"💸 A better solution (with compute {:?}) has been validated and stored on chain.",
 			compute,
 		);
 
@@ -2440,9 +2658,9 @@ impl<T: Trait> Module<T> {
 			// emit event
 			Self::deposit_event(RawEvent::StakingElection(compute));
 
-			debug::native::info!(
-				target: "staking",
-				"new validator set of size {:?} has been elected via {:?} for era {:?}",
+			log!(
+				info,
+				"💸 new validator set of size {:?} has been elected via {:?} for era {:?}",
 				elected_stashes.len(),
 				compute,
 				current_era,
@@ -2678,6 +2896,23 @@ impl<T: Trait> Module<T> {
 			_ => ForceEra::put(Forcing::ForceNew),
 		}
 	}
+
+	fn will_era_be_forced() -> bool {
+		match ForceEra::get() {
+			Forcing::ForceAlways | Forcing::ForceNew => true,
+			Forcing::ForceNone | Forcing::NotForcing => false,
+		}
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	pub fn add_era_stakers(current_era: EraIndex, controller: T::AccountId, exposure: Exposure<T::AccountId, BalanceOf<T>>) {
+		<ErasStakers<T>>::insert(&current_era, &controller, &exposure);
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	pub fn put_election_status(status: ElectionStatus::<T::BlockNumber>) {
+		<EraElectionStatus<T>>::put(status);
+	}
 }
 
 /// In this implementation `new_session(session)` must be called before `end_session(session-1)`
@@ -2896,82 +3131,9 @@ impl<T, Reporter, Offender, R, O> ReportOffence<Reporter, Offender, O>
 	}
 }
 
-/// Disallows any transactions that change the election result to be submitted after the election
-/// window is open.
-#[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct LockStakingStatus<T>(sp_std::marker::PhantomData<T>);
-
-impl<T: Trait + Send + Sync> sp_std::fmt::Debug for LockStakingStatus<T> {
-	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		write!(f, "LockStakingStatus")
-	}
-}
-
-impl<T> LockStakingStatus<T> {
-	/// Create new `LockStakingStatus`.
-	pub fn new() -> Self {
-		Self(sp_std::marker::PhantomData)
-	}
-}
-
-impl<T> Default for LockStakingStatus<T> {
-	fn default() -> Self {
-		Self::new()
-	}
-}
-
-impl<T: Trait + Send + Sync> SignedExtension for LockStakingStatus<T> {
-	const IDENTIFIER: &'static str = "LockStakingStatus";
-	type AccountId = T::AccountId;
-	type Call = <T as Trait>::Call;
-	type AdditionalSigned = ();
-	type DispatchInfo = frame_support::weights::DispatchInfo;
-	type Pre = ();
-
-	fn additional_signed(&self) -> Result<(), TransactionValidityError> { Ok(()) }
-
-	fn validate(
-		&self,
-		_who: &Self::AccountId,
-		call: &Self::Call,
-		_info: Self::DispatchInfo,
-		_len: usize,
-	) -> TransactionValidity {
-		if let Some(inner_call) = call.is_sub_type() {
-			if let ElectionStatus::Open(_) = <Module<T>>::era_election_status() {
-				match inner_call {
-					Call::<T>::set_payee(..) |
-					Call::<T>::set_controller(..) |
-					Call::<T>::set_validator_count(..) |
-					Call::<T>::force_no_eras(..) |
-					Call::<T>::force_new_era(..) |
-					Call::<T>::set_invulnerables(..) |
-					Call::<T>::force_unstake(..) |
-					Call::<T>::force_new_era_always(..) |
-					Call::<T>::cancel_deferred_slash(..) |
-					Call::<T>::set_history_depth(..) |
-					Call::<T>::reap_stash(..) |
-					Call::<T>::submit_election_solution(..) |
-					Call::<T>::submit_election_solution_unsigned(..) => {
-						// These calls are allowed. Nothing.
-					}
-					_ => {
-						return Err(InvalidTransaction::Stale.into());
-					}
-				}
-			}
-		}
-
-		Ok(Default::default())
-	}
-}
-
 impl<T: Trait> From<Error<T>> for InvalidTransaction {
 	fn from(e: Error<T>) -> Self {
-		match e {
-			<Error<T>>::PhragmenEarlySubmission => InvalidTransaction::Future,
-			_ => InvalidTransaction::Custom(e.as_u8()),
-		}
+		InvalidTransaction::Custom(e.as_u8())
 	}
 }
 
@@ -2991,48 +3153,36 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 			match source {
 				TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ }
 				_ => {
-					debug::native::debug!(
-						target: "staking",
-						"rejecting unsigned transaction because it is not local/in-block."
-					);
+					log!(debug, "rejecting unsigned transaction because it is not local/in-block.");
 					return InvalidTransaction::Call.into();
 				}
 			}
 
 			if let Err(e) = Self::pre_dispatch_checks(*score, *era) {
-				debug::native::debug!(
-					target: "staking",
-					"validate unsigned failed due to {:?}.",
-					e,
-				);
-				let invalid: InvalidTransaction = e.into();
-				return invalid.into();
+				log!(debug, "validate unsigned pre dispatch checks failed due to {:?}.", e);
+				return InvalidTransaction::from(e).into();
 			}
 
-			debug::native::debug!(
-				target: "staking",
-				"Validated an unsigned transaction from the local node for era {}.",
-				era,
-			);
+			log!(debug, "validateUnsigned succeeded for a solution at era {}.", era);
 
-			Ok(ValidTransaction {
+			ValidTransaction::with_tag_prefix("StakingOffchain")
 				// The higher the score[0], the better a solution is.
-				priority: score[0].saturated_into(),
-				// no requires.
-				requires: vec![],
+				.priority(T::UnsignedPriority::get().saturating_add(score[0].saturated_into()))
 				// Defensive only. A single solution can exist in the pool per era. Each validator
 				// will run OCW at most once per era, hence there should never exist more than one
 				// transaction anyhow.
-				provides: vec![("StakingOffchain", era).encode()],
+				.and_provides(era)
 				// Note: this can be more accurate in the future. We do something like
 				// `era_end_block - current_block` but that is not needed now as we eagerly run
 				// offchain workers now and the above should be same as `T::ElectionLookahead`
 				// without the need to query more storage in the validation phase. If we randomize
 				// offchain worker, then we might re-consider this.
-				longevity: TryInto::<u64>::try_into(T::ElectionLookahead::get()).unwrap_or(DEFAULT_LONGEVITY),
+				.longevity(TryInto::<u64>::try_into(
+						T::ElectionLookahead::get()).unwrap_or(DEFAULT_LONGEVITY)
+				)
 				// We don't propagate this. This can never the validated at a remote node.
-				propagate: false,
-			})
+				.propagate(false)
+				.build()
 		} else {
 			InvalidTransaction::Call.into()
 		}
