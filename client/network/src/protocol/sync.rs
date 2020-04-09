@@ -184,7 +184,11 @@ pub enum PeerSyncState<B: BlockT> {
 	/// Available for sync requests.
 	Available,
 	/// Searching for ancestors the Peer has in common with us.
-	AncestorSearch(NumberFor<B>, AncestorSearchState<B>),
+	AncestorSearch {
+		start: NumberFor<B>,
+		current: NumberFor<B>,
+		state: AncestorSearchState<B>
+	},
 	/// Actively downloading new blocks, starting from the given Number.
 	DownloadingNew(NumberFor<B>),
 	/// Downloading a stale block with given Hash. Stale means that it is a
@@ -432,10 +436,11 @@ impl<B: BlockT> ChainSync<B> {
 					common_number: Zero::zero(),
 					best_hash,
 					best_number,
-					state: PeerSyncState::AncestorSearch(
-						common_best,
-						AncestorSearchState::ExponentialBackoff(One::one())
-					),
+					state: PeerSyncState::AncestorSearch {
+						current: common_best,
+						start: self.best_queued_number,
+						state: AncestorSearchState::ExponentialBackoff(One::one()),
+					},
 					recently_announced: Default::default()
 				});
 				self.is_idle = false;
@@ -508,7 +513,7 @@ impl<B: BlockT> ChainSync<B> {
 		self.is_idle = false;
 		for peer_id in &peers {
 			if let Some(peer) = self.peers.get_mut(peer_id) {
-				if let PeerSyncState::AncestorSearch(_, _) = peer.state {
+				if let PeerSyncState::AncestorSearch {..} = peer.state {
 					continue;
 				}
 
@@ -700,10 +705,10 @@ impl<B: BlockT> ChainSync<B> {
 								}
 							}).collect()
 						}
-						PeerSyncState::AncestorSearch(num, state) => {
-							let matching_hash = match (blocks.get(0), self.client.hash(*num)) {
+						PeerSyncState::AncestorSearch { current, start, state } => {
+							let matching_hash = match (blocks.get(0), self.client.hash(*current)) {
 								(Some(block), Ok(maybe_our_block_hash)) => {
-									trace!(target: "sync", "Got ancestry block #{} ({}) from peer {}", num, block.hash, who);
+									trace!(target: "sync", "Got ancestry block #{} ({}) from peer {}", current, block.hash, who);
 									maybe_our_block_hash.filter(|x| x == &block.hash)
 								},
 								(None, _) => {
@@ -715,15 +720,27 @@ impl<B: BlockT> ChainSync<B> {
 									return Err(BadPeer(who, rep::BLOCKCHAIN_READ_ERROR))
 								}
 							};
-							if matching_hash.is_some() && peer.common_number < *num {
-								peer.common_number = *num;
+							if matching_hash.is_some() {
+								if *start < self.best_queued_number && self.best_queued_number <= peer.best_number {
+									// We've made progress on this chain since the search was started.
+									// Opportunistically set common number to updated number
+									// instead of the one that started the search.
+									peer.common_number = self.best_queued_number;
+								}
+								else if peer.common_number < *current {
+									peer.common_number = *current;
+								}
 							}
-							if matching_hash.is_none() && num.is_zero() {
+							if matching_hash.is_none() && current.is_zero() {
 								trace!(target:"sync", "Ancestry search: genesis mismatch for peer {}", who);
 								return Err(BadPeer(who, rep::GENESIS_MISMATCH))
 							}
-							if let Some((next_state, next_num)) = handle_ancestor_search_state(state, *num, matching_hash.is_some()) {
-								peer.state = PeerSyncState::AncestorSearch(next_num, next_state);
+							if let Some((next_state, next_num)) = handle_ancestor_search_state(state, *current, matching_hash.is_some()) {
+								peer.state = PeerSyncState::AncestorSearch {
+									current: next_num,
+									start: *start,
+									state: next_state,
+								};
 								return Ok(OnBlockData::Request(who, ancestry_request::<B>(next_num)))
 							} else {
 								// Ancestry search is complete. Check if peer is on a stale fork unknown to us and
@@ -1043,7 +1060,7 @@ impl<B: BlockT> ChainSync<B> {
 			self.best_queued_hash = *hash;
 			// Update common blocks
 			for (n, peer) in self.peers.iter_mut() {
-				if let PeerSyncState::AncestorSearch(_, _) = peer.state {
+				if let PeerSyncState::AncestorSearch {..} = peer.state {
 					// Wait for ancestry search to complete first.
 					continue;
 				}
@@ -1103,7 +1120,7 @@ impl<B: BlockT> ChainSync<B> {
 			peer.best_number = number;
 			peer.best_hash = hash;
 		}
-		if let PeerSyncState::AncestorSearch(_, _) = peer.state {
+		if let PeerSyncState::AncestorSearch {..} = peer.state {
 			return OnBlockAnnounce::Nothing
 		}
 		// If the announced block is the best they have and is not ahead of us, our common number
