@@ -80,9 +80,15 @@ pub fn run() -> Result<()> {
 			runner.sync_run(|config| cmd.run::<Block, RuntimeApi, Executor>(config))
 		}
 		Some(Subcommand::Benchmark(cmd)) => {
-			let runner = cli.create_runner(cmd)?;
+			if cfg!(feature = "runtime-benchmarks") {
+				let runner = cli.create_runner(cmd)?;
 
-			runner.sync_run(|config| cmd.run::<Block, Executor>(config))
+				runner.sync_run(|config| cmd.run::<Block, Executor>(config))
+			} else {
+				println!("Benchmarking wasn't enabled when building the node. \
+				You can enable it with `--features runtime-benchmarks`.");
+				Ok(())
+			}
 		}
 		Some(Subcommand::Factory(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
