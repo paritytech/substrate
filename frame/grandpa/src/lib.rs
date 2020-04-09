@@ -85,6 +85,10 @@ pub trait Trait: frame_system::Trait {
 	/// The equivocation handling subsystem, defines methods to report an
 	/// offence (after the equivocation has been validated) and for submitting a
 	/// transaction to report an equivocation (from an offchain context).
+	/// NOTE: when enabling equivocation handling (i.e. this type isn't set to
+	/// `()`) you must add the `equivocation::ValidateEquivocationReport` signed
+	/// extension to the runtime's `SignedExtra` definition, otherwise
+	/// equivocation reports won't be properly validated.
 	type HandleEquivocation: HandleEquivocation<Self>;
 }
 
