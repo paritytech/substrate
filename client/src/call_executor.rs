@@ -27,13 +27,14 @@ use sc_executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
 use sp_externalities::Extensions;
 use sp_core::{NativeOrEncoded, NeverNativeValue, traits::CodeExecutor};
 use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
-use sc_client_api::{backend, call_executor::CallExecutor};
+use sc_client_api::{backend, call_executor::CallExecutor, CloneableSpawn};
 
 /// Call executor that executes methods locally, querying all required
 /// data from local backend.
 pub struct LocalCallExecutor<B, E> {
 	backend: Arc<B>,
 	executor: E,
+	spawn_handle: Box<dyn CloneableSpawn>,
 }
 
 impl<B, E> LocalCallExecutor<B, E> {
@@ -41,10 +42,12 @@ impl<B, E> LocalCallExecutor<B, E> {
 	pub fn new(
 		backend: Arc<B>,
 		executor: E,
+		spawn_handle: Box<dyn CloneableSpawn>,
 	) -> Self {
 		LocalCallExecutor {
 			backend,
 			executor,
+			spawn_handle,
 		}
 	}
 }
@@ -54,6 +57,7 @@ impl<B, E> Clone for LocalCallExecutor<B, E> where E: Clone {
 		LocalCallExecutor {
 			backend: self.backend.clone(),
 			executor: self.executor.clone(),
+			spawn_handle: self.spawn_handle.clone(),
 		}
 	}
 }
@@ -91,6 +95,7 @@ where
 			call_data,
 			extensions.unwrap_or_default(),
 			&state_runtime_code.runtime_code()?,
+			self.spawn_handle.clone(),
 		).execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
 			strategy.get_manager(),
 			None,
@@ -155,34 +160,38 @@ where
 					recorder.clone(),
 				);
 
-				StateMachine::new(
+				let changes = &mut *changes.borrow_mut();
+				let mut state_machine = StateMachine::new(
 					&backend,
 					changes_trie_state,
-					&mut *changes.borrow_mut(),
+					changes,
 					&self.executor,
 					method,
 					call_data,
 					extensions.unwrap_or_default(),
 					&runtime_code,
-				)
+					self.spawn_handle.clone(),
+				);
 				// TODO: https://github.com/paritytech/substrate/issues/4455
 				// .with_storage_transaction_cache(storage_transaction_cache.as_mut().map(|c| &mut **c))
-				.execute_using_consensus_failure_handler(execution_manager, native_call)
+				state_machine.execute_using_consensus_failure_handler(execution_manager, native_call)
 			},
 			None => {
 				let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
-				StateMachine::new(
+				let runtime_code = state_runtime_code.runtime_code()?;
+				let changes = &mut *changes.borrow_mut();
+				let mut state_machine = StateMachine::new(
 					&state,
 					changes_trie_state,
-					&mut *changes.borrow_mut(),
+					changes,
 					&self.executor,
 					method,
 					call_data,
 					extensions.unwrap_or_default(),
-					&state_runtime_code.runtime_code()?,
-				)
-				.with_storage_transaction_cache(storage_transaction_cache.as_mut().map(|c| &mut **c))
-				.execute_using_consensus_failure_handler(execution_manager, native_call)
+					&runtime_code,
+					self.spawn_handle.clone(),
+				).with_storage_transaction_cache(storage_transaction_cache.as_mut().map(|c| &mut **c));
+				state_machine.execute_using_consensus_failure_handler(execution_manager, native_call)
 			}
 		}.map_err(Into::into)
 	}
@@ -218,6 +227,7 @@ where
 			trie_state,
 			overlay,
 			&self.executor,
+			self.spawn_handle.clone(),
 			method,
 			call_data,
 			&sp_state_machine::backend::BackendRuntimeCode::new(trie_state).runtime_code()?,

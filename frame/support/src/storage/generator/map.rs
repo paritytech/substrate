@@ -17,8 +17,9 @@
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::*;
 use sp_std::borrow::Borrow;
-use codec::{FullCodec, FullEncode, Encode, EncodeLike, Ref, EncodeAppend};
-use crate::{storage::{self, unhashed}, hash::{StorageHasher, Twox128}, traits::Len};
+use codec::{FullCodec, FullEncode, Decode, Encode, EncodeLike, Ref, EncodeAppend};
+use crate::{storage::{self, unhashed}, traits::Len};
+use crate::hash::{StorageHasher, Twox128, ReversibleStorageHasher};
 
 /// Generator for `StorageMap` used by `decl_storage`.
 ///
@@ -44,6 +45,22 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	/// Storage prefix. Used for generating final key.
 	fn storage_prefix() -> &'static [u8];
 
+	/// The full prefix; just the hash of `module_prefix` concatenated to the hash of
+	/// `storage_prefix`.
+	fn prefix_hash() -> Vec<u8> {
+		let module_prefix_hashed = Twox128::hash(Self::module_prefix());
+		let storage_prefix_hashed = Twox128::hash(Self::storage_prefix());
+
+		let mut result = Vec::with_capacity(
+			module_prefix_hashed.len() + storage_prefix_hashed.len()
+		);
+
+		result.extend_from_slice(&module_prefix_hashed[..]);
+		result.extend_from_slice(&storage_prefix_hashed[..]);
+
+		result
+	}
+
 	/// Convert an optional value retrieved from storage to the type queried.
 	fn from_optional_value_to_query(v: Option<V>) -> Self::Query;
 
@@ -51,8 +68,7 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	fn from_query_to_optional_value(v: Self::Query) -> Option<V>;
 
 	/// Generate the full key used in top storage.
-	fn storage_map_final_key<KeyArg>(key: KeyArg) -> Vec<u8>
-	where
+	fn storage_map_final_key<KeyArg>(key: KeyArg) -> Vec<u8> where
 		KeyArg: EncodeLike<K>,
 	{
 		let module_prefix_hashed = Twox128::hash(Self::module_prefix());
@@ -68,6 +84,107 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 		final_key.extend_from_slice(key_hashed.as_ref());
 
 		final_key
+	}
+}
+
+/// Utility to iterate through items in a storage map.
+pub struct StorageMapIterator<K, V, Hasher> {
+	prefix: Vec<u8>,
+	previous_key: Vec<u8>,
+	drain: bool,
+	_phantom: ::sp_std::marker::PhantomData<(K, V, Hasher)>,
+}
+
+impl<
+	K: Decode + Sized,
+	V: Decode + Sized,
+	Hasher: ReversibleStorageHasher
+> Iterator for StorageMapIterator<K, V, Hasher> {
+	type Item = (K, V);
+
+	fn next(&mut self) -> Option<(K, V)> {
+		loop {
+			let maybe_next = sp_io::storage::next_key(&self.previous_key)
+				.filter(|n| n.starts_with(&self.prefix));
+			break match maybe_next {
+				Some(next) => {
+					self.previous_key = next;
+					match unhashed::get::<V>(&self.previous_key) {
+						Some(value) => {
+							if self.drain {
+								unhashed::kill(&self.previous_key)
+							}
+							let mut key_material = Hasher::reverse(&self.previous_key[self.prefix.len()..]);
+							match K::decode(&mut key_material) {
+								Ok(key) => Some((key, value)),
+								Err(_) => continue,
+							}
+						}
+						None => continue,
+					}
+				}
+				None => None,
+			}
+		}
+	}
+}
+
+impl<
+	K: FullCodec,
+	V: FullCodec,
+	G: StorageMap<K, V>,
+> storage::IterableStorageMap<K, V> for G where
+	G::Hasher: ReversibleStorageHasher
+{
+	type Iterator = StorageMapIterator<K, V, G::Hasher>;
+
+	/// Enumerate all elements in the map.
+	fn iter() -> Self::Iterator {
+		let prefix = G::prefix_hash();
+		Self::Iterator {
+			prefix: prefix.clone(),
+			previous_key: prefix,
+			drain: false,
+			_phantom: Default::default(),
+		}
+	}
+
+	/// Enumerate all elements in the map.
+	fn drain() -> Self::Iterator {
+		let prefix = G::prefix_hash();
+		Self::Iterator {
+			prefix: prefix.clone(),
+			previous_key: prefix,
+			drain: true,
+			_phantom: Default::default(),
+		}
+	}
+
+	fn translate<O: Decode, F: Fn(K, O) -> Option<V>>(f: F) {
+		let prefix = G::prefix_hash();
+		let mut previous_key = prefix.clone();
+		loop {
+			match sp_io::storage::next_key(&previous_key).filter(|n| n.starts_with(&prefix)) {
+				Some(next) => {
+					previous_key = next;
+					let maybe_value = unhashed::get::<O>(&previous_key);
+					match maybe_value {
+						Some(value) => {
+							let mut key_material = G::Hasher::reverse(&previous_key[prefix.len()..]);
+							match K::decode(&mut key_material) {
+								Ok(key) => match f(key, value) {
+									Some(new) => unhashed::put::<V>(&previous_key, &new),
+									None => unhashed::kill(&previous_key),
+								},
+								Err(_) => continue,
+							}
+						}
+						None => continue,
+					}
+				}
+				None => return,
+			}
+		}
 	}
 }
 
@@ -227,5 +344,27 @@ impl<K: FullEncode, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V>
 
 			Ok(len)
 		}
+	}
+
+	fn migrate_key<OldHasher: StorageHasher, KeyArg: EncodeLike<K>>(key: KeyArg) -> Option<V> {
+		let old_key = {
+			let module_prefix_hashed = Twox128::hash(Self::module_prefix());
+			let storage_prefix_hashed = Twox128::hash(Self::storage_prefix());
+			let key_hashed = key.borrow().using_encoded(OldHasher::hash);
+
+			let mut final_key = Vec::with_capacity(
+				module_prefix_hashed.len() + storage_prefix_hashed.len() + key_hashed.as_ref().len()
+			);
+
+			final_key.extend_from_slice(&module_prefix_hashed[..]);
+			final_key.extend_from_slice(&storage_prefix_hashed[..]);
+			final_key.extend_from_slice(key_hashed.as_ref());
+
+			final_key
+		};
+		unhashed::take(old_key.as_ref()).map(|value| {
+			unhashed::put(Self::storage_map_final_key(key).as_ref(), &value);
+			value
+		})
 	}
 }

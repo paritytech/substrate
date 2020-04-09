@@ -21,7 +21,6 @@ use std::{
 	result,
 };
 use log::{info, trace, warn};
-use futures::channel::mpsc;
 use parking_lot::{Mutex, RwLock};
 use codec::{Encode, Decode};
 use hash_db::Prefix;
@@ -76,8 +75,9 @@ pub use sc_client_api::{
 	},
 	execution_extensions::{ExecutionExtensions, ExecutionStrategies},
 	notifications::{StorageNotifications, StorageEventStream},
-	CallExecutor, ExecutorProvider, ProofProvider,
+	CallExecutor, ExecutorProvider, ProofProvider, CloneableSpawn,
 };
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sp_blockchain::Error;
 use prometheus_endpoint::Registry;
 
@@ -93,8 +93,8 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	backend: Arc<B>,
 	executor: E,
 	storage_notifications: Mutex<StorageNotifications<Block>>,
-	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<BlockImportNotification<Block>>>>,
-	finality_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<FinalityNotification<Block>>>>,
+	import_notification_sinks: Mutex<Vec<TracingUnboundedSender<BlockImportNotification<Block>>>>,
+	finality_notification_sinks: Mutex<Vec<TracingUnboundedSender<FinalityNotification<Block>>>>,
 	// holds the block hash currently being imported. TODO: replace this with block queue
 	importing_block: RwLock<Option<Block::Hash>>,
 	block_rules: BlockRules<Block>,
@@ -135,6 +135,7 @@ pub fn new_in_mem<E, Block, S, RA>(
 	genesis_storage: &S,
 	keystore: Option<sp_core::traits::BareCryptoStorePtr>,
 	prometheus_registry: Option<Registry>,
+	spawn_handle: Box<dyn CloneableSpawn>,
 ) -> sp_blockchain::Result<Client<
 	in_mem::Backend<Block>,
 	LocalCallExecutor<in_mem::Backend<Block>, E>,
@@ -145,7 +146,7 @@ pub fn new_in_mem<E, Block, S, RA>(
 	S: BuildStorage,
 	Block: BlockT,
 {
-	new_with_backend(Arc::new(in_mem::Backend::new()), executor, genesis_storage, keystore, prometheus_registry)
+	new_with_backend(Arc::new(in_mem::Backend::new()), executor, genesis_storage, keystore, spawn_handle, prometheus_registry)
 }
 
 /// Create a client with the explicitly provided backend.
@@ -155,6 +156,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 	executor: E,
 	build_genesis_storage: &S,
 	keystore: Option<sp_core::traits::BareCryptoStorePtr>,
+	spawn_handle: Box<dyn CloneableSpawn>,
 	prometheus_registry: Option<Registry>,
 ) -> sp_blockchain::Result<Client<B, LocalCallExecutor<B, E>, Block, RA>>
 	where
@@ -163,7 +165,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 		Block: BlockT,
 		B: backend::LocalBackend<Block> + 'static,
 {
-	let call_executor = LocalCallExecutor::new(backend.clone(), executor);
+	let call_executor = LocalCallExecutor::new(backend.clone(), executor, spawn_handle);
 	let extensions = ExecutionExtensions::new(Default::default(), keystore);
 	Client::new(
 		backend,
@@ -258,7 +260,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			backend.begin_state_operation(&mut op, BlockId::Hash(Default::default()))?;
 			let state_root = op.reset_storage(genesis_storage)?;
 			let genesis_block = genesis::construct_genesis_block::<Block>(state_root.into());
-			info!("Initializing Genesis block/state (state: {}, header-hash: {})",
+			info!("🔨 Initializing Genesis block/state (state: {}, header-hash: {})",
 				genesis_block.header().state_root(),
 				genesis_block.header().hash()
 			);
@@ -1124,7 +1126,13 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 
 		let state = self.state_at(id)?;
 		let header = self.prepare_environment_block(id)?;
-		prove_execution(state, header, &self.executor, method, call_data).map(|(r, p)| {
+		prove_execution(
+			state,
+			header,
+			&self.executor,
+			method,
+			call_data,
+		).map(|(r, p)| {
 			(r, StorageProof::merge(vec![p, code_proof]))
 		})
 	}
@@ -1756,13 +1764,13 @@ where
 {
 	/// Get block import event stream.
 	fn import_notification_stream(&self) -> ImportNotifications<Block> {
-		let (sink, stream) = mpsc::unbounded();
+		let (sink, stream) = tracing_unbounded("mpsc_import_notification_stream");
 		self.import_notification_sinks.lock().push(sink);
 		stream
 	}
 
 	fn finality_notification_stream(&self) -> FinalityNotifications<Block> {
-		let (sink, stream) = mpsc::unbounded();
+		let (sink, stream) = tracing_unbounded("mpsc_finality_notification_stream");
 		self.finality_notification_sinks.lock().push(sink);
 		stream
 	}
@@ -3016,7 +3024,7 @@ pub(crate) mod tests {
 				pruning: PruningMode::ArchiveAll,
 				source: DatabaseSettingsSrc::Path {
 					path: tmp.path().into(),
-					cache_size: None,
+					cache_size: 128,
 				}
 			},
 			u64::max_value(),
@@ -3218,7 +3226,7 @@ pub(crate) mod tests {
 					pruning: PruningMode::keep_blocks(1),
 					source: DatabaseSettingsSrc::Path {
 						path: tmp.path().into(),
-						cache_size: None,
+						cache_size: 128,
 					}
 				},
 				u64::max_value(),
@@ -3482,6 +3490,7 @@ pub(crate) mod tests {
 				&substrate_test_runtime_client::GenesisParameters::default().genesis_storage(),
 				None,
 				None,
+				sp_core::tasks::executor(),
 			)
 			.unwrap();
 

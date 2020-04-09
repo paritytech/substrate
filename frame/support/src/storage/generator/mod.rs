@@ -23,23 +23,20 @@
 //!
 //! This is internal api and is subject to change.
 
-mod linked_map;
 mod map;
 mod double_map;
 mod value;
 
-pub use linked_map::{StorageLinkedMap, Enumerator, Linkage, KeyFormat as LinkedMapKeyFormat};
 pub use map::StorageMap;
 pub use double_map::StorageDoubleMap;
 pub use value::StorageValue;
-
 
 #[cfg(test)]
 #[allow(dead_code)]
 mod tests {
 	use sp_io::TestExternalities;
-	use codec::{Encode, Decode};
-	use crate::storage::{unhashed, generator::{StorageValue, StorageLinkedMap}};
+	use codec::Encode;
+	use crate::storage::{unhashed, generator::StorageValue, IterableStorageMap};
 
 	struct Runtime {}
 	pub trait Trait {
@@ -56,16 +53,10 @@ mod tests {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 	}
 
-	#[derive(Encode, Decode, Clone, Debug, Eq, PartialEq)]
-	struct NumberNumber {
-		a: u32,
-		b: u32,
-	}
-
 	crate::decl_storage! {
 		trait Store for Module<T: Trait> as Runtime {
 			Value get(fn value) config(): (u64, u64);
-			NumberMap: linked_map hasher(blake2_256) NumberNumber => u64;
+			NumberMap: map hasher(identity) u32 => u64;
 		}
 	}
 
@@ -89,41 +80,25 @@ mod tests {
 	}
 
 	#[test]
-	fn linked_map_translate_works() {
-		use super::linked_map::{self, Enumerator, KeyFormat};
-
-		type Format = <NumberMap as StorageLinkedMap<NumberNumber, u64>>::KeyFormat;
-
+	fn map_translate_works() {
 		let t = GenesisConfig::default().build_storage().unwrap();
 		TestExternalities::new(t).execute_with(|| {
 			// start with a map of u32 -> u32.
 			for i in 0u32..100u32 {
-				let final_key = <Format as KeyFormat>::storage_linked_map_final_key(&i);
-
-				let linkage = linked_map::new_head_linkage::<_, u32, u32, Format>(&i);
-				unhashed::put(final_key.as_ref(), &(&i, linkage));
+				unhashed::put(&NumberMap::hashed_key_for(&i), &(i as u64));
 			}
 
-			let head = linked_map::read_head::<u32, Format>().unwrap();
-
 			assert_eq!(
-				Enumerator::<u32, u32, Format>::from_head(head).collect::<Vec<_>>(),
-				(0..100).rev().map(|x| (x, x)).collect::<Vec<_>>(),
+				NumberMap::iter().collect::<Vec<_>>(),
+				(0..100).map(|x| (x as u32, x as u64)).collect::<Vec<_>>(),
 			);
 
 			// do translation.
-			NumberMap::translate(
-				|k: u32| NumberNumber { a: k, b: k },
-				|v: u32| (v as u64) << 32 | v as u64,
-			).unwrap();
+			NumberMap::translate(|k: u32, v: u64| if k % 2 == 0 { Some((k as u64) << 32 | v) } else { None });
 
-			assert!(linked_map::read_head::<NumberNumber, Format>().is_some());
 			assert_eq!(
-				NumberMap::enumerate().collect::<Vec<_>>(),
-				(0..100u32).rev().map(|x| (
-					NumberNumber { a: x, b: x },
-					(x as u64) << 32 | x as u64,
-				)).collect::<Vec<_>>(),
+				NumberMap::iter().collect::<Vec<_>>(),
+				(0..50u32).map(|x| x * 2).map(|x| (x, (x as u64) << 32 | x as u64)).collect::<Vec<_>>(),
 			);
 		})
 	}

@@ -25,7 +25,7 @@ frame_support::decl_module! {
 
 frame_support::decl_storage! {
 	trait Store for Module<T: Trait> as Test {
-		pub AppendableDM config(t): double_map hasher(blake2_256) u32, hasher(blake2_256) T::BlockNumber => Vec<u32>;
+		pub AppendableDM config(t): double_map hasher(identity) u32, hasher(identity) T::BlockNumber => Vec<u32>;
 	}
 }
 

@@ -573,7 +573,6 @@ mod tests {
 	const CHILD_UUID_1: &[u8] = b"unique_id_1";
 	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(CHILD_UUID_1);
 
-
 	fn prepare_overlay_with_changes() -> OverlayedChanges {
 		OverlayedChanges {
 			prospective: vec![
@@ -588,6 +587,7 @@ mod tests {
 			].into_iter().collect(),
 			committed: Default::default(),
 			collect_extrinsics: true,
+			stats: Default::default(),
 		}
 	}
 

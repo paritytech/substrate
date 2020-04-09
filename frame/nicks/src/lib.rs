@@ -40,11 +40,11 @@
 
 use sp_std::prelude::*;
 use sp_runtime::{
-	traits::{StaticLookup, EnsureOrigin, Zero}
+	traits::{StaticLookup, Zero}
 };
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
-	traits::{Currency, ReservableCurrency, OnUnbalanced, Get},
+	traits::{Currency, EnsureOrigin, ReservableCurrency, OnUnbalanced, Get},
 	weights::SimpleDispatchInfo,
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
@@ -78,7 +78,7 @@ pub trait Trait: frame_system::Trait {
 decl_storage! {
 	trait Store for Module<T: Trait> as Nicks {
 		/// The lookup table for names.
-		NameOf: map hasher(blake2_256) T::AccountId => Option<(Vec<u8>, BalanceOf<T>)>;
+		NameOf: map hasher(twox_64_concat) T::AccountId => Option<(Vec<u8>, BalanceOf<T>)>;
 	}
 }
 
@@ -171,6 +171,7 @@ decl_module! {
 		/// - One storage read/write.
 		/// - One event.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(70_000)]
 		fn clear_name(origin) {
 			let sender = ensure_signed(origin)?;
 

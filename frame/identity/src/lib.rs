@@ -70,17 +70,15 @@ use sp_std::{fmt::Debug, ops::Add, iter::once};
 use enumflags2::BitFlags;
 use codec::{Encode, Decode};
 use sp_runtime::{DispatchResult, RuntimeDebug};
-use sp_runtime::traits::{StaticLookup, EnsureOrigin, Zero, AppendZerosInput};
+use sp_runtime::traits::{StaticLookup, Zero, AppendZerosInput};
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
-	traits::{Currency, ReservableCurrency, OnUnbalanced, Get, BalanceStatus},
+	traits::{Currency, ReservableCurrency, OnUnbalanced, Get, BalanceStatus, EnsureOrigin},
 	weights::SimpleDispatchInfo,
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 
-#[cfg(feature = "runtime-benchmarks")]
-pub mod benchmarking;
-mod migration;
+mod benchmarking;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
@@ -386,18 +384,18 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Identity {
 		/// Information that is pertinent to identify the entity behind an account.
 		pub IdentityOf get(fn identity):
-			map hasher(blake2_256) T::AccountId => Option<Registration<BalanceOf<T>>>;
+			map hasher(twox_64_concat) T::AccountId => Option<Registration<BalanceOf<T>>>;
 
 		/// The super-identity of an alternative "sub" identity together with its name, within that
 		/// context. If the account is not some other account's sub-identity, then just `None`.
 		pub SuperOf get(fn super_of):
-			map hasher(blake2_256) T::AccountId => Option<(T::AccountId, Data)>;
+			map hasher(blake2_128_concat) T::AccountId => Option<(T::AccountId, Data)>;
 
 		/// Alternative "sub" identities of this account.
 		///
 		/// The first item is the deposit, the second is a vector of the accounts.
 		pub SubsOf get(fn subs_of):
-			map hasher(blake2_256) T::AccountId => (BalanceOf<T>, Vec<T::AccountId>);
+			map hasher(twox_64_concat) T::AccountId => (BalanceOf<T>, Vec<T::AccountId>);
 
 		/// The set of registrars. Not expected to get very big as can only be added through a
 		/// special origin (likely a council motion).
@@ -874,10 +872,6 @@ decl_module! {
 
 			Self::deposit_event(RawEvent::IdentityKilled(target, deposit));
 		}
-
-		fn on_runtime_upgrade() {
-			migration::on_runtime_upgrade::<T>()
-		}
 	}
 }
 
@@ -983,7 +977,7 @@ mod tests {
 
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
-	fn new_test_ext() -> sp_io::TestExternalities {
+	pub fn new_test_ext() -> sp_io::TestExternalities {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		// We use default for brevity, but you can configure as desired if needed.
 		pallet_balances::GenesisConfig::<Test> {

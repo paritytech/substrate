@@ -200,6 +200,7 @@ fn record_proof_works() {
 		&backend,
 		&mut overlay,
 		&executor,
+		sp_core::tasks::executor(),
 		"Core_execute_block",
 		&block.encode(),
 		&runtime_code,

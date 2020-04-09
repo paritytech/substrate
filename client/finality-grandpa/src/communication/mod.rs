@@ -58,6 +58,7 @@ use gossip::{
 use sp_finality_grandpa::{
 	AuthorityPair, AuthorityId, AuthoritySignature, SetId as SetIdNumber, RoundNumber,
 };
+use sp_utils::mpsc::TracingUnboundedReceiver;
 
 pub mod gossip;
 mod periodic;
@@ -165,7 +166,7 @@ pub(crate) struct NetworkBridge<B: BlockT, N: Network<B>> {
 	// thus one has to wrap gossip_validator_report_stream with an `Arc` `Mutex`. Given that it is
 	// just an `UnboundedReceiver`, one could also switch to a multi-producer-*multi*-consumer
 	// channel implementation.
-	gossip_validator_report_stream: Arc<Mutex<mpsc::UnboundedReceiver<PeerReport>>>,
+	gossip_validator_report_stream: Arc<Mutex<TracingUnboundedReceiver<PeerReport>>>,
 }
 
 impl<B: BlockT, N: Network<B>> Unpin for NetworkBridge<B, N> {}
@@ -451,8 +452,9 @@ impl<B: BlockT, N: Network<B>> Future for NetworkBridge<B, N> {
 		}
 
 		match self.gossip_engine.lock().poll_unpin(cx) {
-			// The gossip engine future finished. We should do the same.
-			Poll::Ready(()) => return Poll::Ready(Ok(())),
+			Poll::Ready(()) => return Poll::Ready(
+				Err(Error::Network("Gossip engine future finished.".into()))
+			),
 			Poll::Pending => {},
 		}
 
@@ -474,12 +476,12 @@ fn incoming_global<B: BlockT>(
 		gossip_validator: &Arc<GossipValidator<B>>,
 		voters: &VoterSet<AuthorityId>,
 	| {
-		let precommits_signed_by: Vec<String> =
-			msg.message.auth_data.iter().map(move |(_, a)| {
-				format!("{}", a)
-			}).collect();
-
 		if voters.len() <= TELEMETRY_VOTERS_LIMIT {
+			let precommits_signed_by: Vec<String> =
+				msg.message.auth_data.iter().map(move |(_, a)| {
+					format!("{}", a)
+				}).collect();
+
 			telemetry!(CONSENSUS_INFO; "afg.received_commit";
 				"contains_precommits_signed_by" => ?precommits_signed_by,
 				"target_number" => ?msg.message.target_number.clone(),

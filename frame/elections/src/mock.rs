@@ -208,7 +208,7 @@ impl ExtBuilder {
 		VOTING_FEE.with(|v| *v.borrow_mut() = self.voting_fee);
 		PRESENT_SLASH_PER_VOTER.with(|v| *v.borrow_mut() = self.bad_presentation_punishment);
 		DECAY_RATIO.with(|v| *v.borrow_mut() = self.decay_ratio);
-		GenesisConfig {
+		let mut ext: sp_io::TestExternalities = GenesisConfig {
 			pallet_balances: Some(pallet_balances::GenesisConfig::<Test>{
 				balances: vec![
 					(1, 10 * self.balance_factor),
@@ -225,7 +225,9 @@ impl ExtBuilder {
 				presentation_duration: 2,
 				term_duration: 5,
 			}),
-		}.build_storage().unwrap().into()
+		}.build_storage().unwrap().into();
+		ext.execute_with(|| System::set_block_number(1));
+		ext
 	}
 }
 

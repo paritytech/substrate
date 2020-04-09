@@ -88,7 +88,7 @@ macro_rules! new_full_start {
 				import_setup = Some((block_import, grandpa_link, babe_link));
 				Ok(import_queue)
 			})?
-			.with_rpc_extensions(|builder| -> Result<RpcExtension, _> {
+			.with_rpc_extensions(|builder| -> std::result::Result<RpcExtension, _> {
 				let babe_link = import_setup.as_ref().map(|s| &s.2)
 					.expect("BabeLink is present for full services or set up failed; qed.");
 				let deps = node_rpc::FullDeps {
@@ -120,23 +120,16 @@ macro_rules! new_full {
 		use sc_client_api::ExecutorProvider;
 
 		let (
-			is_authority,
+			role,
 			force_authoring,
 			name,
 			disable_grandpa,
-			sentry_nodes,
 		) = (
-			$config.roles.is_authority(),
+			$config.role.clone(),
 			$config.force_authoring,
-			$config.name.clone(),
+			$config.network.node_name.clone(),
 			$config.disable_grandpa,
-			$config.network.sentry_nodes.clone(),
 		);
-
-		// sentry nodes announce themselves as authorities to the network
-		// and should run the same protocols authorities do, but it should
-		// never actively participate in any consensus process.
-		let participates_in_consensus = is_authority && !$config.sentry_mode;
 
 		let (builder, mut import_setup, inherent_data_providers) = new_full_start!($config);
 
@@ -153,7 +146,7 @@ macro_rules! new_full {
 
 		($with_startup_data)(&block_import, &babe_link);
 
-		if participates_in_consensus {
+		if let sc_service::config::Role::Authority { sentry_nodes } = &role {
 			let proposer = sc_basic_authorship::ProposerFactory::new(
 				service.client(),
 				service.transaction_pool()
@@ -190,7 +183,7 @@ macro_rules! new_full {
 			let authority_discovery = sc_authority_discovery::AuthorityDiscovery::new(
 				service.client(),
 				network,
-				sentry_nodes,
+				sentry_nodes.clone(),
 				service.keystore(),
 				dht_event_stream,
 				service.prometheus_registry(),
@@ -201,7 +194,7 @@ macro_rules! new_full {
 
 		// if the node isn't actively participating in consensus then it doesn't
 		// need a keystore, regardless of which protocol we use below.
-		let keystore = if participates_in_consensus {
+		let keystore = if role.is_authority() {
 			Some(service.keystore())
 		} else {
 			None
@@ -214,7 +207,7 @@ macro_rules! new_full {
 			name: Some(name),
 			observer_enabled: false,
 			keystore,
-			is_authority,
+			is_authority: role.is_network_authority(),
 		};
 
 		let enable_grandpa = !disable_grandpa;
@@ -397,6 +390,7 @@ mod tests {
 	use sc_service::AbstractService;
 	use crate::service::{new_full, new_light};
 	use sp_runtime::traits::IdentifyAccount;
+	use sp_transaction_pool::{MaintainedTransactionPool, ChainEvent};
 
 	type AccountPublic = <Signature as Verify>::Signer;
 
@@ -414,7 +408,21 @@ mod tests {
 		let dummy_runtime = ::tokio::runtime::Runtime::new().unwrap();
 		let block_factory = |service: &<Factory as service::ServiceFactory>::FullService| {
 			let block_id = BlockId::number(service.client().chain_info().best_number);
-			let parent_header = service.client().header(&block_id).unwrap().unwrap();
+			let parent_header = service.client().best_header(&block_id)
+				.expect("db error")
+				.expect("best block should exist");
+
+			futures::executor::block_on(
+				service.transaction_pool().maintain(
+					ChainEvent::NewBlock {
+						is_new_best: true,
+						id: block_id.clone(),
+						retracted: vec![],
+						header: parent_header,
+					},
+				)
+			);
+
 			let consensus_net = ConsensusNetwork::new(service.network(), service.client().clone());
 			let proposer_factory = consensus::ProposerFactory {
 				client: service.client().clone(),
@@ -464,6 +472,8 @@ mod tests {
 	}
 
 	#[test]
+	// It is "ignored", but the node-cli ignored tests are running on the CI.
+	// This can be run locally with `cargo test --release -p node-cli test_sync -- --ignored`.
 	#[ignore]
 	fn test_sync() {
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
@@ -504,17 +514,28 @@ mod tests {
 				let parent_header = service.client().header(&parent_id).unwrap().unwrap();
 				let parent_hash = parent_header.hash();
 				let parent_number = *parent_header.number();
+
+				futures::executor::block_on(
+					service.transaction_pool().maintain(
+						ChainEvent::NewBlock {
+							is_new_best: true,
+							id: parent_id.clone(),
+							retracted: vec![],
+							header: parent_header.clone(),
+						},
+					)
+				);
+
 				let mut proposer_factory = sc_basic_authorship::ProposerFactory::new(
 					service.client(),
 					service.transaction_pool()
 				);
 
-				let epoch = babe_link.epoch_changes().lock().epoch_for_child_of(
+				let epoch_descriptor = babe_link.epoch_changes().lock().epoch_descriptor_for_child_of(
 					descendent_query(&*service.client()),
 					&parent_hash,
 					parent_number,
 					slot_num,
-					|slot| babe_link.config().genesis_epoch(slot)
 				).unwrap().unwrap();
 
 				let mut digest = Digest::<H256>::default();
@@ -564,7 +585,7 @@ mod tests {
 				params.body = Some(new_body);
 				params.intermediates.insert(
 					Cow::from(INTERMEDIATE_KEY),
-					Box::new(BabeIntermediate { epoch }) as Box<dyn Any>,
+					Box::new(BabeIntermediate::<Block> { epoch_descriptor }) as Box<dyn Any>,
 				);
 				params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 

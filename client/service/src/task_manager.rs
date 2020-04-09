@@ -22,16 +22,18 @@ use exit_future::Signal;
 use log::{debug, error};
 use futures::{
 	Future, FutureExt, Stream,
-	future::select, channel::mpsc,
+	future::select,
 	compat::*,
 	task::{Spawn, FutureObj, SpawnError},
 };
+use sc_client_api::CloneableSpawn;
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
 
 /// Type alias for service task executor (usually runtime).
 pub type ServiceTaskExecutor = Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>;
 
 /// Type alias for the task scheduler.
-pub type TaskScheduler = mpsc::UnboundedSender<(Pin<Box<dyn Future<Output = ()> + Send>>, Cow<'static, str>)>;
+pub type TaskScheduler = TracingUnboundedSender<(Pin<Box<dyn Future<Output = ()> + Send>>, Cow<'static, str>)>;
 
 /// Helper struct to setup background tasks execution for service.
 pub struct TaskManagerBuilder {
@@ -43,14 +45,14 @@ pub struct TaskManagerBuilder {
 	/// Sender for futures that must be spawned as background tasks.
 	to_spawn_tx: TaskScheduler,
 	/// Receiver for futures that must be spawned as background tasks.
-	to_spawn_rx: mpsc::UnboundedReceiver<(Pin<Box<dyn Future<Output = ()> + Send>>, Cow<'static, str>)>,
+	to_spawn_rx: TracingUnboundedReceiver<(Pin<Box<dyn Future<Output = ()> + Send>>, Cow<'static, str>)>,
 }
 
 impl TaskManagerBuilder {
 	/// New asynchronous task manager setup.
 	pub fn new() -> Self {
 		let (signal, on_exit) = exit_future::signal();
-		let (to_spawn_tx, to_spawn_rx) = mpsc::unbounded();
+		let (to_spawn_tx, to_spawn_rx) = tracing_unbounded("mpsc_task_manager");
 		Self {
 			on_exit,
 			signal: Some(signal),
@@ -118,6 +120,12 @@ impl Spawn for SpawnTaskHandle {
 	}
 }
 
+impl sc_client_api::CloneableSpawn for SpawnTaskHandle {
+	fn clone(&self) -> Box<dyn CloneableSpawn> {
+		Box::new(Clone::clone(self))
+	}
+}
+
 type Boxed01Future01 = Box<dyn futures01::Future<Item = (), Error = ()> + Send + 'static>;
 
 impl futures01::future::Executor<Boxed01Future01> for SpawnTaskHandle {
@@ -137,7 +145,7 @@ pub struct TaskManager {
 	/// Sender for futures that must be spawned as background tasks.
 	to_spawn_tx: TaskScheduler,
 	/// Receiver for futures that must be spawned as background tasks.
-	to_spawn_rx: mpsc::UnboundedReceiver<(Pin<Box<dyn Future<Output = ()> + Send>>, Cow<'static, str>)>,
+	to_spawn_rx: TracingUnboundedReceiver<(Pin<Box<dyn Future<Output = ()> + Send>>, Cow<'static, str>)>,
 	/// How to spawn background tasks.
 	executor: ServiceTaskExecutor,
 }

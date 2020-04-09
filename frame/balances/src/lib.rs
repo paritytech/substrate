@@ -148,14 +148,10 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(test)]
-mod tests_local;
-#[cfg(test)]
-mod tests_composite;
-#[cfg(test)]
 #[macro_use]
 mod tests;
-#[cfg(feature = "runtime-benchmarks")]
+mod tests_local;
+mod tests_composite;
 mod benchmarking;
 
 use sp_std::prelude::*;
@@ -167,7 +163,7 @@ use frame_support::{
 		Currency, OnKilledAccount, OnUnbalanced, TryDrop, StoredMap,
 		WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 		Imbalance, SignedImbalance, ReservableCurrency, Get, ExistenceRequirement::KeepAlive,
-		ExistenceRequirement::AllowDeath, IsDeadAccount, BalanceStatus as Status
+		ExistenceRequirement::AllowDeath, IsDeadAccount, BalanceStatus as Status,
 	}
 };
 use sp_runtime::{
@@ -372,11 +368,11 @@ decl_storage! {
 		/// is ever zero, then the entry *MUST* be removed.
 		///
 		/// NOTE: This is only used in the case that this module is used to store balances.
-		pub Account: map hasher(blake2_256) T::AccountId => AccountData<T::Balance>;
+		pub Account: map hasher(blake2_128_concat) T::AccountId => AccountData<T::Balance>;
 
 		/// Any liquidity locks on some account balances.
 		/// NOTE: Should only be accessed when setting, changing and freeing a lock.
-		pub Locks get(fn locks): map hasher(blake2_256) T::AccountId => Vec<BalanceLock<T::Balance>>;
+		pub Locks get(fn locks): map hasher(blake2_128_concat) T::AccountId => Vec<BalanceLock<T::Balance>>;
 
 		/// Storage version of the pallet.
 		///

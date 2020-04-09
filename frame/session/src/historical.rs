@@ -56,22 +56,18 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Session {
 		/// Mapping from historical session indices to session-data root hash and validator count.
 		HistoricalSessions get(fn historical_root):
-			map hasher(blake2_256) SessionIndex => Option<(T::Hash, ValidatorCount)>;
+			map hasher(twox_64_concat) SessionIndex => Option<(T::Hash, ValidatorCount)>;
 		/// The range of historical sessions we store. [first, last)
 		StoredRange: Option<(SessionIndex, SessionIndex)>;
 		/// Deprecated.
 		CachedObsolete:
-			map hasher(blake2_256) SessionIndex
+			map hasher(twox_64_concat) SessionIndex
 			=> Option<Vec<(T::ValidatorId, T::FullIdentification)>>;
 	}
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn on_initialize(_n: T::BlockNumber) {
-			CachedObsolete::<T>::remove_all();
-		}
-	}
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 }
 
 impl<T: Trait> Module<T> {
@@ -314,12 +310,12 @@ impl<T: Trait, D: AsRef<[u8]>> frame_support::traits::KeyOwnerProofSystem<(KeyTy
 mod tests {
 	use super::*;
 	use sp_core::crypto::key_types::DUMMY;
-	use sp_runtime::{traits::OnInitialize, testing::UintAuthorityId};
+	use sp_runtime::testing::UintAuthorityId;
 	use crate::mock::{
 		NEXT_VALIDATORS, force_new_session,
 		set_next_validators, Test, System, Session,
 	};
-	use frame_support::traits::KeyOwnerProofSystem;
+	use frame_support::traits::{KeyOwnerProofSystem, OnInitialize};
 
 	type Historical = Module<Test>;
 

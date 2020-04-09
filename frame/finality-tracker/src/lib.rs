@@ -26,8 +26,6 @@ use frame_support::traits::Get;
 use frame_system::{ensure_none, Trait as SystemTrait};
 use sp_finality_tracker::{INHERENT_IDENTIFIER, FinalizedInherentData};
 
-mod migration;
-
 pub const DEFAULT_WINDOW_SIZE: u32 = 101;
 pub const DEFAULT_REPORT_LATENCY: u32 = 1000;
 
@@ -78,6 +76,7 @@ decl_module! {
 
 		/// Hint that the author of this block thinks the best finalized
 		/// block is the given number.
+		#[weight = frame_support::weights::SimpleDispatchInfo::FixedMandatory(10_000)]
 		fn final_hint(origin, #[compact] hint: T::BlockNumber) {
 			ensure_none(origin)?;
 			ensure!(!<Self as Store>::Update::exists(), Error::<T>::AlreadyUpdated);
@@ -90,10 +89,6 @@ decl_module! {
 
 		fn on_finalize() {
 			Self::update_hint(<Self as Store>::Update::take())
-		}
-
-		fn on_runtime_upgrade() {
-			migration::on_runtime_upgrade::<T>()
 		}
 	}
 }
@@ -213,9 +208,11 @@ mod tests {
 	use sp_core::H256;
 	use sp_runtime::{
 		testing::Header, Perbill,
-		traits::{BlakeTwo256, IdentityLookup, OnFinalize, Header as HeaderT},
+		traits::{BlakeTwo256, IdentityLookup, Header as HeaderT},
 	};
-	use frame_support::{assert_ok, impl_outer_origin, parameter_types, weights::Weight};
+	use frame_support::{
+		assert_ok, impl_outer_origin, parameter_types, weights::Weight, traits::OnFinalize
+	};
 	use frame_system as system;
 	use std::cell::RefCell;
 

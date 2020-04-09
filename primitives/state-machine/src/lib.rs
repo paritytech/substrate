@@ -18,7 +18,7 @@
 
 #![warn(missing_docs)]
 
-use std::{fmt, result, collections::HashMap, panic::UnwindSafe, marker::PhantomData};
+use std::{fmt, result, collections::HashMap, panic::UnwindSafe};
 use log::{warn, trace};
 use hash_db::Hasher;
 use codec::{Decode, Encode, Codec};
@@ -73,7 +73,8 @@ pub use trie_backend_essence::{TrieBackendStorage, Storage};
 pub use trie_backend::TrieBackend;
 pub use error::{Error, ExecutionError};
 pub use in_memory_backend::InMemory as InMemoryBackend;
-pub use stats::{UsageInfo, UsageUnit};
+pub use stats::{UsageInfo, UsageUnit, StateMachineStats};
+pub use sp_core::traits::CloneableSpawn;
 
 type CallResult<R, E> = Result<NativeOrEncoded<R>, E>;
 
@@ -188,9 +189,19 @@ pub struct StateMachine<'a, B, H, N, Exec>
 	overlay: &'a mut OverlayedChanges,
 	extensions: Extensions,
 	changes_trie_state: Option<ChangesTrieState<'a, H, N>>,
-	_marker: PhantomData<(H, N)>,
 	storage_transaction_cache: Option<&'a mut StorageTransactionCache<B::Transaction, H, N>>,
 	runtime_code: &'a RuntimeCode<'a>,
+	stats: StateMachineStats,
+}
+
+impl<'a, B, H, N, Exec> Drop for StateMachine<'a, B, H, N, Exec> where
+	H: Hasher,
+	B: Backend<H>,
+	N: ChangesTrieBlockNumber,
+{
+	fn drop(&mut self) {
+		self.backend.register_overlay_stats(&self.stats);
+	}
 }
 
 impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
@@ -210,8 +221,10 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 		call_data: &'a [u8],
 		mut extensions: Extensions,
 		runtime_code: &'a RuntimeCode,
+		spawn_handle: Box<dyn CloneableSpawn>,
 	) -> Self {
 		extensions.register(CallInWasmExt::new(exec.clone()));
+		extensions.register(sp_core::traits::TaskExecutorExt::new(spawn_handle));
 
 		Self {
 			backend,
@@ -221,9 +234,9 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 			extensions,
 			overlay,
 			changes_trie_state,
-			_marker: PhantomData,
 			storage_transaction_cache: None,
 			runtime_code,
+			stats: StateMachineStats::default(),
 		}
 	}
 
@@ -437,6 +450,7 @@ pub fn prove_execution<B, H, N, Exec>(
 	mut backend: B,
 	overlay: &mut OverlayedChanges,
 	exec: &Exec,
+	spawn_handle: Box<dyn CloneableSpawn>,
 	method: &str,
 	call_data: &[u8],
 	runtime_code: &RuntimeCode,
@@ -454,6 +468,7 @@ where
 		trie_backend,
 		overlay,
 		exec,
+		spawn_handle,
 		method,
 		call_data,
 		runtime_code,
@@ -473,6 +488,7 @@ pub fn prove_execution_on_trie_backend<S, H, N, Exec>(
 	trie_backend: &TrieBackend<S, H>,
 	overlay: &mut OverlayedChanges,
 	exec: &Exec,
+	spawn_handle: Box<dyn CloneableSpawn>,
 	method: &str,
 	call_data: &[u8],
 	runtime_code: &RuntimeCode,
@@ -494,6 +510,7 @@ where
 		call_data,
 		Extensions::default(),
 		runtime_code,
+		spawn_handle,
 	);
 
 	let result = sm.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
@@ -510,6 +527,7 @@ pub fn execution_proof_check<H, N, Exec>(
 	proof: StorageProof,
 	overlay: &mut OverlayedChanges,
 	exec: &Exec,
+	spawn_handle: Box<dyn CloneableSpawn>,
 	method: &str,
 	call_data: &[u8],
 	runtime_code: &RuntimeCode,
@@ -525,6 +543,7 @@ where
 		&trie_backend,
 		overlay,
 		exec,
+		spawn_handle,
 		method,
 		call_data,
 		runtime_code,
@@ -536,6 +555,7 @@ pub fn execution_proof_check_on_trie_backend<H, N, Exec>(
 	trie_backend: &TrieBackend<MemoryDB<H>, H>,
 	overlay: &mut OverlayedChanges,
 	exec: &Exec,
+	spawn_handle: Box<dyn CloneableSpawn>,
 	method: &str,
 	call_data: &[u8],
 	runtime_code: &RuntimeCode,
@@ -555,6 +575,7 @@ where
 		call_data,
 		Extensions::default(),
 		runtime_code,
+		spawn_handle,
 	);
 
 	sm.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
@@ -820,6 +841,7 @@ mod tests {
 			&[],
 			Default::default(),
 			&wasm_code,
+			sp_core::tasks::executor(),
 		);
 
 		assert_eq!(
@@ -849,6 +871,7 @@ mod tests {
 			&[],
 			Default::default(),
 			&wasm_code,
+			sp_core::tasks::executor(),
 		);
 
 		assert_eq!(state_machine.execute(ExecutionStrategy::NativeElseWasm).unwrap(), vec![66]);
@@ -875,6 +898,7 @@ mod tests {
 			&[],
 			Default::default(),
 			&wasm_code,
+			sp_core::tasks::executor(),
 		);
 
 		assert!(
@@ -905,6 +929,7 @@ mod tests {
 			remote_backend,
 			&mut Default::default(),
 			&executor,
+			sp_core::tasks::executor(),
 			"test",
 			&[],
 			&RuntimeCode::empty(),
@@ -916,6 +941,7 @@ mod tests {
 			remote_proof,
 			&mut Default::default(),
 			&executor,
+			sp_core::tasks::executor(),
 			"test",
 			&[],
 			&RuntimeCode::empty(),

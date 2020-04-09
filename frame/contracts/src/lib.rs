@@ -98,7 +98,6 @@ mod rent;
 
 #[cfg(test)]
 mod tests;
-mod migration;
 
 use crate::exec::ExecutionContext;
 use crate::account_db::{AccountDb, DirectAccountDb};
@@ -114,7 +113,10 @@ use sp_std::{prelude::*, marker::PhantomData, fmt::Debug};
 use codec::{Codec, Encode, Decode};
 use sp_io::hashing::blake2_256;
 use sp_runtime::{
-	traits::{Hash, StaticLookup, Zero, MaybeSerializeDeserialize, Member, SignedExtension},
+	traits::{
+		Hash, StaticLookup, Zero, MaybeSerializeDeserialize, Member, SignedExtension,
+		DispatchInfoOf,
+	},
 	transaction_validity::{
 		ValidTransaction, InvalidTransaction, TransactionValidity, TransactionValidityError,
 	},
@@ -124,9 +126,8 @@ use frame_support::dispatch::{DispatchResult, Dispatchable};
 use frame_support::{
 	Parameter, decl_module, decl_event, decl_storage, decl_error, storage::child,
 	parameter_types, IsSubType,
-	weights::DispatchInfo,
 };
-use frame_support::traits::{OnKilledAccount, OnUnbalanced, Currency, Get, Time, Randomness};
+use frame_support::traits::{OnUnbalanced, Currency, Get, Time, Randomness};
 use frame_system::{self as system, ensure_signed, RawOrigin, ensure_root};
 use sp_core::storage::well_known_keys::CHILD_STORAGE_KEY_PREFIX;
 use pallet_contracts_primitives::{RentProjection, ContractAccessError};
@@ -549,6 +550,7 @@ decl_module! {
 		/// Updates the schedule for metering contracts.
 		///
 		/// The schedule must have a greater version than the stored schedule.
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		pub fn update_schedule(origin, schedule: Schedule) -> DispatchResult {
 			ensure_root(origin)?;
 			if <Module<T>>::current_schedule().version >= schedule.version {
@@ -563,6 +565,7 @@ decl_module! {
 
 		/// Stores the given binary Wasm code into the chain's storage and returns its `codehash`.
 		/// You can instantiate contracts only with stored code.
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		pub fn put_code(
 			origin,
 			#[compact] gas_limit: Gas,
@@ -590,6 +593,7 @@ decl_module! {
 		/// * If the account is a regular account, any value will be transferred.
 		/// * If no account exists and the call value is not less than `existential_deposit`,
 		/// a regular account will be created and any value will be transferred.
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		pub fn call(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -615,6 +619,7 @@ decl_module! {
 		///   after the execution is saved as the `code` of the account. That code will be invoked
 		///   upon any call received by this account.
 		/// - The contract is initialized.
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		pub fn instantiate(
 			origin,
 			#[compact] endowment: BalanceOf<T>,
@@ -637,6 +642,7 @@ decl_module! {
 		///
 		/// If contract is not evicted as a result of this call, no actions are taken and
 		/// the sender is not eligible for the reward.
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn claim_surcharge(origin, dest: T::AccountId, aux_sender: Option<T::AccountId>) {
 			let origin = origin.into();
 			let (signed, rewarded) = match (origin, aux_sender) {
@@ -666,10 +672,6 @@ decl_module! {
 
 		fn on_finalize() {
 			GasSpent::kill();
-		}
-
-		fn on_runtime_upgrade() {
-			migration::on_runtime_upgrade::<T>()
 		}
 	}
 }
@@ -934,27 +936,15 @@ decl_storage! {
 		/// Current cost schedule for contracts.
 		CurrentSchedule get(fn current_schedule) config(): Schedule = Schedule::default();
 		/// A mapping from an original code hash to the original code, untouched by instrumentation.
-		pub PristineCode: map hasher(blake2_256) CodeHash<T> => Option<Vec<u8>>;
+		pub PristineCode: map hasher(identity) CodeHash<T> => Option<Vec<u8>>;
 		/// A mapping between an original code hash and instrumented wasm code, ready for execution.
-		pub CodeStorage: map hasher(blake2_256) CodeHash<T> => Option<wasm::PrefabWasmModule>;
+		pub CodeStorage: map hasher(identity) CodeHash<T> => Option<wasm::PrefabWasmModule>;
 		/// The subtrie counter.
 		pub AccountCounter: u64 = 0;
 		/// The code associated with a given account.
-		pub ContractInfoOf: map hasher(blake2_256) T::AccountId => Option<ContractInfo<T>>;
+		pub ContractInfoOf: map hasher(twox_64_concat) T::AccountId => Option<ContractInfo<T>>;
 		/// The price of one unit of gas.
 		GasPrice get(fn gas_price) config(): BalanceOf<T> = 1.into();
-	}
-}
-
-// TODO: this should be removed in favour of a self-destruct contract host function allowing the
-// contract to delete all storage and the `ContractInfoOf` key and transfer remaining balance to
-// some other account. As it stands, it's an economic insecurity on any smart-contract chain.
-// https://github.com/paritytech/substrate/issues/4952
-impl<T: Trait> OnKilledAccount<T::AccountId> for Module<T> {
-	fn on_killed_account(who: &T::AccountId) {
-		if let Some(ContractInfo::Alive(info)) = <ContractInfoOf<T>>::take(who) {
-			child::kill_storage(&info.trie_id, info.child_trie_unique_id());
-		}
 	}
 }
 
@@ -1103,7 +1093,6 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckBlockGasLimit<T> {
 	type AccountId = T::AccountId;
 	type Call = <T as Trait>::Call;
 	type AdditionalSigned = ();
-	type DispatchInfo = DispatchInfo;
 	type Pre = ();
 
 	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
@@ -1112,7 +1101,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckBlockGasLimit<T> {
 		&self,
 		_: &Self::AccountId,
 		call: &Self::Call,
-		_: Self::DispatchInfo,
+		_: &DispatchInfoOf<Self::Call>,
 		_: usize,
 	) -> TransactionValidity {
 		let call = match call.is_sub_type() {

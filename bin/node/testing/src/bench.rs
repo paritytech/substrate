@@ -186,7 +186,7 @@ impl BenchDb {
 			pruning: PruningMode::ArchiveAll,
 			source: sc_client_db::DatabaseSettingsSrc::Path {
 				path: dir.into(),
-				cache_size: None,
+				cache_size: 512,
 			},
 		};
 
@@ -197,6 +197,7 @@ impl BenchDb {
 			None,
 			None,
 			ExecutionExtensions::new(profile.into_execution_strategies(), None),
+			sp_core::tasks::executor(),
 			None,
 		).expect("Should not fail");
 
