@@ -100,7 +100,7 @@ impl Stream for Receiver {
 
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Event>> {
 		if let Some(ev) = ready!(Pin::new(&mut self.inner).poll_next(cx)) {
-			let metrics = self.metrics.lock();
+			let metrics = self.metrics.lock().clone();
 			if let Some(Some(metrics)) = metrics.as_ref().map(|m| &**m) {
 				decrease_metrics(metrics, &ev);
 			} else {
