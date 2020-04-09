@@ -669,7 +669,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "DS_PROMETHEUS",
+      "datasource": "Prometheus",
       "description": "",
       "fill": 1,
       "fillGradient": 0,
@@ -1550,7 +1550,7 @@
           "text": "kusama",
           "value": "kusama"
         },
-        "datasource": "DS_PROMETHEUS",
+        "datasource": "Prometheus",
         "definition": "label_values(network)",
         "hide": 0,
         "includeAll": false,
@@ -1576,7 +1576,7 @@
           "text": "kusama-validator-2",
           "value": "kusama-validator-2"
         },
-        "datasource": "DS_PROMETHEUS",
+        "datasource": "Prometheus",
         "definition": "label_values(hostname)",
         "hide": 0,
         "includeAll": false,
