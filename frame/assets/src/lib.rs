@@ -157,6 +157,12 @@ decl_module! {
 		/// Issue a new class of fungible assets. There are, and will only ever be, `total`
 		/// such assets and they'll all belong to the `origin` initially. It will have an
 		/// identifier `AssetId` instance: this will be specified in the `Issued` event.
+		/// 
+		/// # <weight>
+		/// - `O(1)`
+		/// - 3 storage mutations (codec `O(1)`).
+		/// - One event.
+		/// # </weight>
 		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn issue(origin, #[compact] total: T::Balance) {
 			let origin = ensure_signed(origin)?;
@@ -171,6 +177,13 @@ decl_module! {
 		}
 
 		/// Move some assets from one holder to another.
+		/// 
+		/// # <weight>
+		/// - `O(1)`
+		/// - 1 static lookup
+		/// - 2 storage mutations (codec `O(1)`).
+		/// - One event.
+		/// # </weight>
 		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn transfer(origin,
 			#[compact] id: T::AssetId,
@@ -190,6 +203,12 @@ decl_module! {
 		}
 
 		/// Destroy any assets of `id` owned by `origin`.
+		/// 
+		/// # <weight>
+		/// - `O(1)`
+		/// - 2 storage mutations (codec `O(1)`).
+		/// - One event.
+		/// # </weight>
 		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn destroy(origin, #[compact] id: T::AssetId) {
 			let origin = ensure_signed(origin)?;
