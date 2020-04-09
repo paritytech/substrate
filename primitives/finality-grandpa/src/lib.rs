@@ -498,10 +498,10 @@ sp_api::decl_runtime_apis! {
 		fn grandpa_authorities() -> AuthorityList;
 
 		/// Submits an extrinsic to report an equivocation. The caller must
-		/// provide the equivocation proof and an encoded key ownership proof
-		/// (the key ownership proof is generic). This method will sign the
-		/// extrinsic with any reporting keys available in the keystore and will
-		/// push the transaction to the pool.
+		/// provide the equivocation proof and a key ownership proof (should be
+		/// obtained using `generate_key_ownership_proof`). This method will
+		/// sign the extrinsic with any reporting keys available in the keystore
+		/// and will push the transaction to the pool.
 		/// Only useful in an offchain context.
 		#[skip_initialize_block]
 		fn submit_report_equivocation_extrinsic(
@@ -509,12 +509,13 @@ sp_api::decl_runtime_apis! {
 			key_owner_proof: OpaqueKeyOwnershipProof,
 		) -> Option<()>;
 
-		/// Generates a proof that the given session key is a part of the
-		/// current session. The generated proof can later on be validated with
-		/// the historical session module. Proofs of membership are useful e.g.
-		/// for validating misbehavior reports.
+		/// Generates a proof of key ownership for the given authority. An
+		/// example usage of this module is coupled with the session historical
+		/// module to prove that a given authority key is tied to a given
+		/// staking identity during a specific session. Proofs of key ownership
+		/// are necessary for submitting equivocation reports.
 		fn generate_key_ownership_proof(
-			authority_key: AuthorityId,
+			authority_id: AuthorityId,
 		) -> Option<OpaqueKeyOwnershipProof>;
 	}
 }

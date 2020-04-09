@@ -223,7 +223,7 @@ sp_api::mock_impl_runtime_apis! {
 		}
 
 		fn generate_key_ownership_proof(
-			_authority_key: AuthorityId,
+			_authority_id: AuthorityId,
 		) -> Option<OpaqueKeyOwnershipProof> {
 			None
 		}

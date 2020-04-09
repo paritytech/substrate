@@ -681,7 +681,7 @@ cfg_if! {
 				}
 
 				fn generate_key_ownership_proof(
-					_authority_key: sp_finality_grandpa::AuthorityId,
+					_authority_id: sp_finality_grandpa::AuthorityId,
 				) -> Option<sp_finality_grandpa::OpaqueKeyOwnershipProof> {
 					None
 				}

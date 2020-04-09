@@ -825,11 +825,11 @@ impl_runtime_apis! {
 		}
 
 		fn generate_key_ownership_proof(
-			session_key: fg_primitives::AuthorityId,
+			authority_id: fg_primitives::AuthorityId,
 		) -> Option<fg_primitives::OpaqueKeyOwnershipProof> {
 			use codec::Encode;
 
-			Historical::prove((fg_primitives::KEY_TYPE, session_key))
+			Historical::prove((fg_primitives::KEY_TYPE, authority_id))
 				.map(|p| p.encode())
 				.map(fg_primitives::OpaqueKeyOwnershipProof::new)
 		}
