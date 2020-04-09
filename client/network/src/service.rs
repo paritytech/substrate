@@ -378,16 +378,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			_marker: PhantomData,
 		});
 
-		let event_streams = out_events::OutChannels::new(metrics.as_ref().map(|metrics| {
-			out_events::Metrics {
-				out_events_dht_count: metrics.out_events_dht_count.clone(),
-				out_events_num_channels: metrics.out_events_num_channels.clone(),
-				out_events_notifications_closed_count: metrics.out_events_notifications_closed_count.clone(),
-				out_events_notifications_opened_count: metrics.out_events_notifications_opened_count.clone(),
-				out_events_notifications_sizes: metrics.out_events_notifications_sizes.clone(),
-			}
-		}));
-
 		Ok(NetworkWorker {
 			external_addresses,
 			num_connected,
@@ -397,7 +387,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			import_queue: params.import_queue,
 			from_worker,
 			light_client_rqs: params.on_demand.and_then(|od| od.extract_receiver()),
-			event_streams,
+			event_streams: out_events::OutChannels::new(params.metrics_registry.as_ref())?,
 			metrics,
 			boot_node_ids,
 		})
@@ -867,11 +857,6 @@ struct Metrics {
 	notifications_queues_size: HistogramVec,
 	notifications_sizes: HistogramVec,
 	opened_notification_streams: GaugeVec<U64>,
-	out_events_dht_count: Gauge<U64>,
-	out_events_num_channels: Gauge<U64>,
-	out_events_notifications_closed_count: GaugeVec<U64>,
-	out_events_notifications_opened_count: GaugeVec<U64>,
-	out_events_notifications_sizes: GaugeVec<U64>,
 	peers_count: Gauge<U64>,
 	peerset_num_discovered: Gauge<U64>,
 	peerset_num_requested: Gauge<U64>,
@@ -967,35 +952,6 @@ impl Metrics {
 				Opts::new(
 					"sub_libp2p_opened_notification_streams",
 					"Number of open notification substreams"
-				),
-				&["protocol"]
-			)?, registry)?,
-			out_events_dht_count: register(Gauge::new(
-				"sub_libp2p_out_events_dht_count",
-				"Number of DHT events currently pending in the channels that broadcast network events",
-			)?, registry)?,
-			out_events_num_channels: register(Gauge::new(
-				"sub_libp2p_out_events_num_channels",
-				"Number of internal active channels that broadcast network events",
-			)?, registry)?,
-			out_events_notifications_closed_count: register(GaugeVec::new(
-				Opts::new(
-					"sub_libp2p_out_events_notifications_closed_count",
-					"Number of notification substreams opened events pending in the channels that broadcast network events"
-				),
-				&["protocol"]
-			)?, registry)?,
-			out_events_notifications_opened_count: register(GaugeVec::new(
-				Opts::new(
-					"sub_libp2p_out_events_notifications_opened_count",
-					"Number of notification substreams opened events pending in the channels that broadcast network events"
-				),
-				&["protocol"]
-			)?, registry)?,
-			out_events_notifications_sizes: register(GaugeVec::new(
-				Opts::new(
-					"sub_libp2p_out_events_notifications_sizes",
-					"Total size of notification events pending in the channels that broadcast network events"
 				),
 				&["protocol"]
 			)?, registry)?,

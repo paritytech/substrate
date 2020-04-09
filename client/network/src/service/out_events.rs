@@ -35,7 +35,7 @@ use super::engine_id_to_string;
 
 use futures::{prelude::*, channel::mpsc, ready};
 use parking_lot::Mutex;
-use prometheus_endpoint::{Gauge, GaugeVec, U64};
+use prometheus_endpoint::{register, Gauge, GaugeVec, Opts, PrometheusError, Registry, U64};
 use std::{
 	convert::TryFrom as _,
 	fmt, pin::Pin, sync::Arc,
@@ -49,15 +49,6 @@ pub fn channel() -> (Sender, Receiver) {
 	let tx = Sender { inner: tx, metrics: metrics.clone() };
 	let rx = Receiver { inner: rx, metrics };
 	(tx, rx)
-}
-
-pub struct Metrics {
-	// This list is ordered alphabetically
-	pub out_events_dht_count: Gauge<U64>,
-	pub out_events_num_channels: Gauge<U64>,
-	pub out_events_notifications_closed_count: GaugeVec<U64>,
-	pub out_events_notifications_opened_count: GaugeVec<U64>,
-	pub out_events_notifications_sizes: GaugeVec<U64>,
 }
 
 /// Sending side of a channel.
@@ -136,11 +127,17 @@ pub struct OutChannels {
 
 impl OutChannels {
 	/// Creates a new empty collection of senders.
-	pub fn new(metrics: Option<Metrics>) -> Self {
-		OutChannels {
+	pub fn new(registry: Option<&Registry>) -> Result<Self, PrometheusError> {
+		let metrics = if let Some(registry) = registry {
+			Some(Metrics::register(registry)?)
+		} else {
+			None
+		};
+
+		Ok(OutChannels {
 			event_streams: Vec::new(),
 			metrics: Arc::new(metrics),
-		}
+		})
 	}
 
 	/// Adds a new [`Sender`] to the collection.
@@ -175,6 +172,51 @@ impl fmt::Debug for OutChannels {
 		f.debug_struct("OutChannels")
 			.field("num_channels", &self.event_streams.len())
 			.finish()
+	}
+}
+
+struct Metrics {
+	// This list is ordered alphabetically
+	out_events_dht_count: Gauge<U64>,
+	out_events_num_channels: Gauge<U64>,
+	out_events_notifications_closed_count: GaugeVec<U64>,
+	out_events_notifications_opened_count: GaugeVec<U64>,
+	out_events_notifications_sizes: GaugeVec<U64>,
+}
+
+impl Metrics {
+	fn register(registry: &Registry) -> Result<Self, PrometheusError> {
+		Ok(Self {
+			out_events_dht_count: register(Gauge::new(
+				"sub_libp2p_out_events_dht_count",
+				"Number of DHT events currently pending in the channels that broadcast network events",
+			)?, registry)?,
+			out_events_num_channels: register(Gauge::new(
+				"sub_libp2p_out_events_num_channels",
+				"Number of internal active channels that broadcast network events",
+			)?, registry)?,
+			out_events_notifications_closed_count: register(GaugeVec::new(
+				Opts::new(
+					"sub_libp2p_out_events_notifications_closed_count",
+					"Number of notification substreams opened events pending in the channels that broadcast network events"
+				),
+				&["protocol"]
+			)?, registry)?,
+			out_events_notifications_opened_count: register(GaugeVec::new(
+				Opts::new(
+					"sub_libp2p_out_events_notifications_opened_count",
+					"Number of notification substreams opened events pending in the channels that broadcast network events"
+				),
+				&["protocol"]
+			)?, registry)?,
+			out_events_notifications_sizes: register(GaugeVec::new(
+				Opts::new(
+					"sub_libp2p_out_events_notifications_sizes",
+					"Total size of notification events pending in the channels that broadcast network events"
+				),
+				&["protocol"]
+			)?, registry)?,
+		})
 	}
 }
 
