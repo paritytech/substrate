@@ -19,6 +19,9 @@
 #   - validator-a: localhost:9944
 #   - validator-b: localhost:9945
 #   - sentry-a: localhost:9946
+#   - grafana: localhost:3001
+#   - prometheus: localhost:9090
+
 
 version: "3.7"
 services:
@@ -163,10 +166,7 @@ services:
     volumes:
       - ./grafana/provisioning/:/etc/grafana/provisioning
       - ../monitoring/grafana-dashboards/:/etc/grafana/provisioning/dashboard-definitions
-    # env_file:
-    #   - ./grafana/config.monitoring
     restart: always
-
 
 networks:
   network-a:
