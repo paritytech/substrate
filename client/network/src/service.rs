@@ -378,6 +378,16 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			_marker: PhantomData,
 		});
 
+		let event_streams = out_events::OutChannels::new(metrics.as_ref().map(|metrics| {
+			out_events::Metrics {
+				out_events_dht_count: metrics.out_events_dht_count.clone(),
+				out_events_num_channels: metrics.out_events_num_channels.clone(),
+				out_events_notifications_closed_count: metrics.out_events_notifications_closed_count.clone(),
+				out_events_notifications_opened_count: metrics.out_events_notifications_opened_count.clone(),
+				out_events_notifications_sizes: metrics.out_events_notifications_sizes.clone(),
+			}
+		}));
+
 		Ok(NetworkWorker {
 			external_addresses,
 			num_connected,
@@ -387,7 +397,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			import_queue: params.import_queue,
 			from_worker,
 			light_client_rqs: params.on_demand.and_then(|od| od.extract_receiver()),
-			event_streams: out_events::OutChannels::new(),
+			event_streams,
 			metrics,
 			boot_node_ids,
 		})
@@ -1279,28 +1289,10 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 			metrics.network_per_sec_bytes.with_label_values(&["out"]).set(this.service.bandwidth.average_upload_per_sec());
 			metrics.is_major_syncing.set(is_major_syncing as u64);
 			metrics.kbuckets_num_nodes.set(this.network_service.num_kbuckets_entries() as u64);
-			metrics.out_events_num_channels.set(this.event_streams.len() as u64);
 			metrics.peers_count.set(num_connected_peers as u64);
 			metrics.peerset_num_discovered.set(this.network_service.user_protocol().num_discovered_peers() as u64);
 			metrics.peerset_num_requested.set(this.network_service.user_protocol().requested_peers().count() as u64);
 			metrics.pending_connections.set(Swarm::network_info(&this.network_service).num_connections_pending as u64);
-
-			{
-				let stats_lock = this.event_streams.lock_stats();
-				metrics.out_events_dht_count.set(stats_lock.dht_events);
-				for (protocol, num) in &stats_lock.notifications_closed_messages_count {
-					metrics.out_events_notifications_closed_count
-						.with_label_values(&[&engine_id_to_string(protocol)]).set(*num);
-				}
-				for (protocol, num) in &stats_lock.notifications_open_messages_count {
-					metrics.out_events_notifications_opened_count
-						.with_label_values(&[&engine_id_to_string(protocol)]).set(*num);
-				}
-				for (protocol, num) in &stats_lock.notifications_sizes_total {
-					metrics.out_events_notifications_sizes
-						.with_label_values(&[&engine_id_to_string(protocol)]).set(*num);
-				}
-			}
 		}
 
 		Poll::Pending
