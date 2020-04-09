@@ -914,7 +914,7 @@ impl NetworkBehaviour for GenericProto {
 				// in which case `CustomProtocolClosed` was already emitted.
 				let closed = open.is_empty();
 				open.retain(|c| c != conn);
-				if !closed {
+				if open.is_empty() && !closed {
 					debug!(target: "sub-libp2p", "External API <= Closed({})", peer_id);
 					let event = GenericProtoOut::CustomProtocolClosed {
 						peer_id: peer_id.clone(),
