@@ -71,9 +71,7 @@ impl fmt::Debug for Sender {
 }
 
 /// Receiving side of a channel.
-#[pin_project::pin_project]
 pub struct Receiver {
-	#[pin]
 	inner: mpsc::UnboundedReceiver<Event>,
 	/// Initially contains `None`, and will be set to a value once the corresponding [`Sender`]
 	/// is assigned to an instance of [`OutChannels`].
@@ -83,10 +81,9 @@ pub struct Receiver {
 impl Stream for Receiver {
 	type Item = Event;
 
-	fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Event>> {
-		let this = self.project();
-		if let Some(ev) = ready!(this.inner.poll_next(cx)) {
-			let stats = this.stats.lock();
+	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Event>> {
+		if let Some(ev) = ready!(Pin::new(&mut self.inner).poll_next(cx)) {
+			let stats = self.stats.lock();
 			if let Some(stats) = stats.as_ref() {
 				decrease_stats(&mut *stats.lock(), &ev);
 			} else {
@@ -102,6 +99,13 @@ impl Stream for Receiver {
 impl fmt::Debug for Receiver {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		f.debug_tuple("Receiver").finish()
+	}
+}
+
+impl Drop for Receiver {
+	fn drop(&mut self) {
+		// Empty the list to properly decrease the stats.
+		while let Some(_) = self.next().now_or_never() {}
 	}
 }
 
@@ -162,11 +166,16 @@ impl OutChannels {
 
 	/// Sends an event.
 	pub fn send(&mut self, event: Event) {
-		let mut stats = self.stats.lock();
-		self.event_streams.retain(move |sender| {
-			increase_stats(&mut stats, &event);
+		self.event_streams.retain(|sender| {
 			sender.inner.unbounded_send(event.clone()).is_ok()
 		});
+
+		// The number of elements remaining in `event_streams` corresponds to the number of times
+		// we have sent an element on the channel.
+		let mut stats = self.stats.lock();
+		for _ in 0..self.event_streams.len() {
+			increase_stats(&mut stats, &event);
+		}
 	}
 
 	/// Returns statistics about the content of the channel.
