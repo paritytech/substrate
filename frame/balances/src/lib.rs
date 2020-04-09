@@ -433,7 +433,7 @@ decl_module! {
 		///     check that the transfer will not kill the origin account.
 		///
 		/// # </weight>
-		#[weight = T::DbWeight::get() * (1, 24, 0, 1, 12, 0)]
+		#[weight = T::DbWeight::get() * (1, 1) + 200_000_000]
 		pub fn transfer(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -457,7 +457,7 @@ decl_module! {
 		/// - Independent of the arguments.
 		/// - Contains a limited number of reads and writes.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(400_000)]
+		#[weight = T::DbWeight::get() * (1, 1) + 100_000_000]
 		fn set_balance(
 			origin,
 			who: <T::Lookup as StaticLookup>::Source,
@@ -495,7 +495,11 @@ decl_module! {
 
 		/// Exactly as `transfer`, except the origin must be root and the source account may be
 		/// specified.
-		#[weight = SimpleDispatchInfo::FixedNormal(800_000)]
+		/// # <weight>
+		/// - Same as transfer, but additional read and write because the source account is
+		///   not assumed to be in the overlay.
+		/// # </weight>
+		#[weight = T::DbWeight::get() * (2, 2) + 200_000_000]
 		pub fn force_transfer(
 			origin,
 			source: <T::Lookup as StaticLookup>::Source,
@@ -514,7 +518,7 @@ decl_module! {
 		/// 99% of the time you want [`transfer`] instead.
 		///
 		/// [`transfer`]: struct.Module.html#method.transfer
-		#[weight = SimpleDispatchInfo::FixedNormal(800_000)]
+		#[weight = T::DbWeight::get() * (1, 1) + 150_000_000]
 		pub fn transfer_keep_alive(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -842,6 +846,7 @@ impl<T: Subtrait<I>, I: Instance> frame_system::Trait for ElevatedTrait<T, I> {
 	type Event = ();
 	type BlockHashCount = T::BlockHashCount;
 	type MaximumBlockWeight = T::MaximumBlockWeight;
+	type DbWeight = T::DbWeight;
 	type MaximumBlockLength = T::MaximumBlockLength;
 	type AvailableBlockRatio = T::AvailableBlockRatio;
 	type Version = T::Version;
