@@ -26,9 +26,9 @@
 //! trait.
 //! - You cannot directly send an event on a sender. Instead, you have to call
 //! [`OutChannels::push`] to associate the sender with the [`OutChannels`].
-//! - Push events by calling [`OutChannels::push`]. Events are cloned for each sender in the
+//! - Send events by calling [`OutChannels::send`]. Events are cloned for each sender in the
 //! collection.
-//! - Collect stats by calling [`OutChannels::stats`].
+//! - Collect stats by calling [`OutChannels::lock_stats`].
 //!
 
 use crate::Event;
