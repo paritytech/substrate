@@ -211,6 +211,12 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
+			fn database(&self) -> $crate::Result<::std::option::Option<$crate::Database>> {
+				match self {
+					$($enum::$variant(cmd) => cmd.database()),*
+				}
+			}
+
 			fn state_cache_size(&self) -> $crate::Result<usize> {
 				match self {
 					$($enum::$variant(cmd) => cmd.state_cache_size()),*

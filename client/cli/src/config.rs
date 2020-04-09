@@ -156,15 +156,23 @@ pub trait CliConfiguration: Sized {
 	/// Get the database backend variant.
 	///
 	/// By default this is retrieved from `ImportParams` if it is available. Otherwise its `None`.
-	fn database(&self) -> Option<Database> {
-		self.import_params().map(|x| x.database())
+	fn database(&self) -> Result<Option<Database>> {
+		Ok(self.import_params().map(|x| x.database()))
 	}
 
 	/// Get the database configuration.
 	///
 	/// By default this is retrieved from `SharedParams`
-	fn database_config(&self, base_path: &PathBuf, cache_size: usize, db: Database) -> Result<DatabaseConfig> {
-		Ok(self.shared_params().database_config(base_path, cache_size, db))
+	fn database_config(&self,
+		base_path: &PathBuf,
+		cache_size: usize,
+		databaseb: Database,
+	) -> Result<DatabaseConfig> {
+		Ok(self.shared_params().database_config(
+			base_path,
+			cache_size,
+			database,
+		))
 	}
 
 	/// Get the state cache size.

@@ -77,9 +77,9 @@ impl SharedParams {
 		&self,
 		base_path: &PathBuf,
 		cache_size: usize,
-		db: Database,
+		database: Database,
 	) -> DatabaseConfig {
-		match db {
+		match database {
 			Database::RocksDb => DatabaseConfig::RocksDb {
 				path: base_path.join("db"),
 				cache_size,
