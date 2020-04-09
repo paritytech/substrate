@@ -160,7 +160,7 @@ impl OutChannels {
 		});
 
 		// The number of elements remaining in `event_streams` corresponds to the number of times
-		// we have sent an element on the channel.
+		// we have sent an element on the channels.
 		if let Some(metrics) = &*self.metrics {
 			metrics.event_in(&event, self.event_streams.len() as u64);
 		}
