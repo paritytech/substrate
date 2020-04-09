@@ -26,7 +26,6 @@ use frame_support::{assert_ok, assert_err, assert_noop};
 #[test]
 fn params_should_work() {
 	ExtBuilder::default().build().execute_with(|| {
-		System::set_block_number(1);
 		assert_eq!(Elections::next_vote_from(1), 4);
 		assert_eq!(Elections::next_vote_from(4), 4);
 		assert_eq!(Elections::next_vote_from(5), 8);
@@ -408,8 +407,6 @@ fn voting_locking_stake_and_reserving_bond_works() {
 #[test]
 fn voting_without_any_candidate_count_should_not_work() {
 	ExtBuilder::default().build().execute_with(|| {
-		System::set_block_number(1);
-
 		assert_eq!(Elections::candidates().len(), 0);
 
 		assert_noop!(
@@ -422,8 +419,6 @@ fn voting_without_any_candidate_count_should_not_work() {
 #[test]
 fn voting_setting_an_approval_vote_count_more_than_candidate_count_should_not_work() {
 	ExtBuilder::default().build().execute_with(|| {
-		System::set_block_number(1);
-
 		assert_ok!(Elections::submit_candidacy(Origin::signed(5), 0));
 		assert_eq!(Elections::candidates().len(), 1);
 
@@ -437,8 +432,6 @@ fn voting_setting_an_approval_vote_count_more_than_candidate_count_should_not_wo
 #[test]
 fn voting_resubmitting_approvals_should_work() {
 	ExtBuilder::default().build().execute_with(|| {
-		System::set_block_number(1);
-
 		assert_ok!(Elections::submit_candidacy(Origin::signed(5), 0));
 		assert_ok!(Elections::set_approvals(Origin::signed(4), vec![true], 0, 0, 40));
 
@@ -456,8 +449,6 @@ fn voting_resubmitting_approvals_should_work() {
 #[test]
 fn voting_retracting_voter_should_work() {
 	ExtBuilder::default().build().execute_with(|| {
-		System::set_block_number(1);
-
 		assert_ok!(Elections::submit_candidacy(Origin::signed(5), 0));
 		assert_eq!(Elections::candidates().len(), 1);
 
@@ -501,7 +492,6 @@ fn voting_retracting_voter_should_work() {
 #[test]
 fn voting_invalid_retraction_index_should_not_work() {
 	ExtBuilder::default().build().execute_with(|| {
-		System::set_block_number(1);
 		assert_ok!(Elections::submit_candidacy(Origin::signed(3), 0));
 
 		assert_ok!(Elections::set_approvals(Origin::signed(1), vec![true], 0, 0, 10));
@@ -514,7 +504,6 @@ fn voting_invalid_retraction_index_should_not_work() {
 #[test]
 fn voting_overflow_retraction_index_should_not_work() {
 	ExtBuilder::default().build().execute_with(|| {
-		System::set_block_number(1);
 		assert_ok!(Elections::submit_candidacy(Origin::signed(3), 0));
 
 		assert_ok!(Elections::set_approvals(Origin::signed(1), vec![true], 0, 0, 10));
@@ -525,7 +514,6 @@ fn voting_overflow_retraction_index_should_not_work() {
 #[test]
 fn voting_non_voter_retraction_should_not_work() {
 	ExtBuilder::default().build().execute_with(|| {
-		System::set_block_number(1);
 		assert_ok!(Elections::submit_candidacy(Origin::signed(3), 0));
 
 		assert_ok!(Elections::set_approvals(Origin::signed(1), vec![true], 0, 0, 10));
@@ -740,7 +728,6 @@ fn retracting_inactive_voter_by_nonvoter_should_not_work() {
 #[test]
 fn candidacy_simple_candidate_submission_should_work() {
 	ExtBuilder::default().build().execute_with(|| {
-		System::set_block_number(1);
 		assert_eq!(Elections::candidates(), Vec::<u64>::new());
 		assert_eq!(Elections::candidate_reg_info(1), None);
 		assert_eq!(Elections::candidate_reg_info(2), None);
@@ -768,7 +755,6 @@ fn candidacy_submission_using_free_slot_should_work() {
 	let mut t = new_test_ext_with_candidate_holes();
 
 	t.execute_with(|| {
-		System::set_block_number(1);
 		assert_eq!(Elections::candidates(), vec![0, 0, 1]);
 
 		assert_ok!(Elections::submit_candidacy(Origin::signed(2), 1));
@@ -784,7 +770,6 @@ fn candidacy_submission_using_alternative_free_slot_should_work() {
 	let mut t = new_test_ext_with_candidate_holes();
 
 	t.execute_with(|| {
-		System::set_block_number(1);
 		assert_eq!(Elections::candidates(), vec![0, 0, 1]);
 
 		assert_ok!(Elections::submit_candidacy(Origin::signed(2), 0));
@@ -800,7 +785,6 @@ fn candidacy_submission_not_using_free_slot_should_not_work() {
 	let mut t = new_test_ext_with_candidate_holes();
 
 	t.execute_with(|| {
-		System::set_block_number(1);
 		assert_noop!(
 			Elections::submit_candidacy(Origin::signed(4), 3),
 			Error::<Test>::InvalidCandidateSlot
@@ -811,7 +795,6 @@ fn candidacy_submission_not_using_free_slot_should_not_work() {
 #[test]
 fn candidacy_bad_candidate_slot_submission_should_not_work() {
 	ExtBuilder::default().build().execute_with(|| {
-		System::set_block_number(1);
 		assert_eq!(Elections::candidates(), Vec::<u64>::new());
 		assert_noop!(
 			Elections::submit_candidacy(Origin::signed(1), 1),
@@ -823,7 +806,6 @@ fn candidacy_bad_candidate_slot_submission_should_not_work() {
 #[test]
 fn candidacy_non_free_candidate_slot_submission_should_not_work() {
 	ExtBuilder::default().build().execute_with(|| {
-		System::set_block_number(1);
 		assert_eq!(Elections::candidates(), Vec::<u64>::new());
 		assert_ok!(Elections::submit_candidacy(Origin::signed(1), 0));
 		assert_eq!(Elections::candidates(), vec![1]);
@@ -837,7 +819,6 @@ fn candidacy_non_free_candidate_slot_submission_should_not_work() {
 #[test]
 fn candidacy_dupe_candidate_submission_should_not_work() {
 	ExtBuilder::default().build().execute_with(|| {
-		System::set_block_number(1);
 		assert_eq!(Elections::candidates(), Vec::<u64>::new());
 		assert_ok!(Elections::submit_candidacy(Origin::signed(1), 0));
 		assert_eq!(Elections::candidates(), vec![1]);
@@ -851,7 +832,6 @@ fn candidacy_dupe_candidate_submission_should_not_work() {
 #[test]
 fn candidacy_poor_candidate_submission_should_not_work() {
 	ExtBuilder::default().build().execute_with(|| {
-		System::set_block_number(1);
 		assert_eq!(Elections::candidates(), Vec::<u64>::new());
 		assert_noop!(
 			Elections::submit_candidacy(Origin::signed(7), 0),
@@ -863,8 +843,6 @@ fn candidacy_poor_candidate_submission_should_not_work() {
 #[test]
 fn election_voting_should_work() {
 	ExtBuilder::default().build().execute_with(|| {
-		System::set_block_number(1);
-
 		assert_ok!(Elections::submit_candidacy(Origin::signed(5), 0));
 
 		assert_ok!(Elections::set_approvals(Origin::signed(1), vec![true], 0, 0, 10));
@@ -892,8 +870,6 @@ fn election_voting_should_work() {
 #[test]
 fn election_proxy_voting_should_work() {
 	ExtBuilder::default().build().execute_with(|| {
-		System::set_block_number(1);
-
 		assert_ok!(Elections::submit_candidacy(Origin::signed(5), 0));
 
 		<Proxy<Test>>::insert(11, 1);

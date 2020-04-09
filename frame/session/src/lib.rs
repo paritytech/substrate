@@ -102,14 +102,17 @@
 use sp_std::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
 use codec::Decode;
 use sp_runtime::{KeyTypeId, Perbill, RuntimeAppPublic, BoundToRuntimeAppPublic};
-use frame_support::weights::SimpleDispatchInfo;
-use sp_runtime::traits::{Convert, Zero, Member, OpaqueKeys};
+use sp_runtime::traits::{Convert, Zero, Member, OpaqueKeys, Saturating};
 use sp_staking::SessionIndex;
-use frame_support::{ensure, decl_module, decl_event, decl_storage, decl_error, ConsensusEngineId};
-use frame_support::{traits::{Get, FindAuthor, ValidatorRegistration}, Parameter};
-use frame_support::dispatch::{self, DispatchResult, DispatchError};
+use frame_support::{
+	ensure, decl_module, decl_event, decl_storage, decl_error, ConsensusEngineId, Parameter,
+	traits::{
+		Get, FindAuthor, ValidatorRegistration, EstimateNextSessionRotation, EstimateNextNewSession,
+	},
+	dispatch::{self, DispatchResult, DispatchError},
+	weights::{Weight, SimpleDispatchInfo, WeighData},
+};
 use frame_system::{self as system, ensure_signed};
-use frame_support::traits::MigrateAccount;
 
 #[cfg(test)]
 mod mock;
@@ -143,6 +146,29 @@ impl<
 	fn should_end_session(now: BlockNumber) -> bool {
 		let offset = Offset::get();
 		now >= offset && ((now - offset) % Period::get()).is_zero()
+	}
+}
+
+impl<
+	BlockNumber: Rem<Output=BlockNumber> + Sub<Output=BlockNumber> + Zero + PartialOrd + Saturating + Clone,
+	Period: Get<BlockNumber>,
+	Offset: Get<BlockNumber>,
+> EstimateNextSessionRotation<BlockNumber> for PeriodicSessions<Period, Offset> {
+	fn estimate_next_session_rotation(now: BlockNumber) -> Option<BlockNumber> {
+		let offset = Offset::get();
+		let period = Period::get();
+		Some(if now > offset {
+			let block_after_last_session = (now.clone() - offset) % period.clone();
+			if block_after_last_session > Zero::zero() {
+				now.saturating_add(
+					period.saturating_sub(block_after_last_session)
+				)
+			} else {
+				Zero::zero()
+			}
+		} else {
+			offset
+		})
 	}
 }
 
@@ -329,6 +355,11 @@ pub trait Trait: frame_system::Trait {
 	/// Indicator for when to end the session.
 	type ShouldEndSession: ShouldEndSession<Self::BlockNumber>;
 
+	/// Something that can predict the next session rotation. This should typically come from the
+	/// same logical unit that provides [`ShouldEndSession`], yet, it gives a best effort estimate.
+	/// It is helpful to implement [`EstimateNextNewSession`].
+	type NextSessionRotation: EstimateNextSessionRotation<Self::BlockNumber>;
+
 	/// Handler for managing new session.
 	type SessionManager: SessionManager<Self::ValidatorId>;
 
@@ -496,22 +527,12 @@ decl_module! {
 
 		/// Called when a block is initialized. Will rotate session if it is the last
 		/// block of the current session.
-		fn on_initialize(n: T::BlockNumber) {
+		fn on_initialize(n: T::BlockNumber) -> Weight {
 			if T::ShouldEndSession::should_end_session(n) {
 				Self::rotate_session();
 			}
-		}
-	}
-}
 
-impl<T: Trait> MigrateAccount<T::AccountId> for Module<T> {
-	fn migrate_account(a: &T::AccountId) {
-		if let Some(v) = T::ValidatorIdOf::convert(a.clone()) {
-			if let Some(keys) = NextKeys::<T>::migrate_key_from_blake(v) {
-				for id in T::Keys::key_ids() {
-					KeyOwner::<T>::migrate_key_from_blake((*id, keys.get_raw(*id)));
-				}
-			}
+			SimpleDispatchInfo::default().weigh_data(())
 		}
 	}
 }
@@ -742,5 +763,13 @@ impl<T: Trait, Inner: FindAuthor<u32>> FindAuthor<T::ValidatorId>
 
 		let validators = <Module<T>>::validators();
 		validators.get(i as usize).map(|k| k.clone())
+	}
+}
+
+impl<T: Trait> EstimateNextNewSession<T::BlockNumber> for Module<T> {
+	/// This session module always calls new_session and next_session at the same time, hence we
+	/// do a simple proxy and pass the function to next rotation.
+	fn estimate_next_new_session(now: T::BlockNumber) -> Option<T::BlockNumber> {
+		T::NextSessionRotation::estimate_next_session_rotation(now)
 	}
 }

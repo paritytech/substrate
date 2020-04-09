@@ -34,7 +34,7 @@ use sp_std::prelude::*;
 use codec::{self as codec, Encode, Decode};
 use frame_support::{decl_event, decl_storage, decl_module, decl_error, storage};
 use sp_runtime::{
-	DispatchResult, generic::{DigestItem, OpaqueDigestItemId}, traits::Zero, Perbill, PerThing,
+	DispatchResult, generic::{DigestItem, OpaqueDigestItemId}, traits::Zero, Perbill,
 };
 use sp_staking::{
 	SessionIndex,
@@ -151,13 +151,6 @@ decl_error! {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as GrandpaFinality {
-		/// DEPRECATED
-		///
-		/// This used to store the current authority set, which has been migrated to the well-known
-		/// GRANDPA_AUTHORITIES_KEY unhashed key.
-		#[cfg(feature = "migrate-authorities")]
-		pub(crate) Authorities get(fn authorities): AuthorityList;
-
 		/// State of the current authority set.
 		State get(fn state): StoredState<T::BlockNumber> = StoredState::Live;
 
@@ -184,15 +177,6 @@ decl_storage! {
 	}
 }
 
-mod migration {
-	use super::*;
-	pub fn migrate<T: Trait>() {
-		for i in 0..=CurrentSetId::get() {
-			SetIdSession::migrate_key_from_blake(i);
-		}
-	}
-}
-
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
@@ -200,18 +184,10 @@ decl_module! {
 		fn deposit_event() = default;
 
 		/// Report some misbehavior.
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn report_misbehavior(origin, _report: Vec<u8>) {
 			ensure_signed(origin)?;
 			// FIXME: https://github.com/paritytech/substrate/issues/1112
-		}
-
-		fn on_runtime_upgrade() {
-			migration::migrate::<T>();
-		}
-
-		fn on_initialize() {
-			#[cfg(feature = "migrate-authorities")]
-			Self::migrate_authorities();
 		}
 
 		fn on_finalize(block_number: T::BlockNumber) {
@@ -382,13 +358,6 @@ impl<T: Trait> Module<T> {
 				"Authorities are already initialized!"
 			);
 			Self::set_grandpa_authorities(authorities);
-		}
-	}
-
-	#[cfg(feature = "migrate-authorities")]
-	fn migrate_authorities() {
-		if Authorities::exists() {
-			Self::set_grandpa_authorities(&Authorities::take());
 		}
 	}
 }

@@ -163,6 +163,13 @@ pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 		keys: Vec<StorageKey>,
 	) -> FutureResult<Vec<StorageChangeSet<Block::Hash>>>;
 
+	/// Query storage entries (by key) starting at block hash given as the second parameter.
+	fn query_storage_at(
+		&self,
+		keys: Vec<StorageKey>,
+		at: Option<Block::Hash>
+	) -> FutureResult<Vec<StorageChangeSet<Block::Hash>>>;
+
 	/// New runtime version subscription
 	fn subscribe_runtime_version(
 		&self,
@@ -355,6 +362,14 @@ impl<Block, Client> StateApi<Block::Hash> for State<Block, Client>
 		to: Option<Block::Hash>
 	) -> FutureResult<Vec<StorageChangeSet<Block::Hash>>> {
 		self.backend.query_storage(from, to, keys)
+	}
+
+	fn query_storage_at(
+		&self,
+		keys: Vec<StorageKey>,
+		at: Option<Block::Hash>
+	) -> FutureResult<Vec<StorageChangeSet<Block::Hash>>> {
+		self.backend.query_storage_at(keys, at)
 	}
 
 	fn subscribe_storage(
