@@ -236,7 +236,7 @@ decl_module! {
 		/// - Creates a new storage entry, but is protected by a minimum transfer
 		///	   amount needed to succeed.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000_000)]
 		pub fn vested_transfer(
 			origin,
 			target: <T::Lookup as StaticLookup>::Source,

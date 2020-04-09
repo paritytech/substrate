@@ -191,7 +191,7 @@ decl_module! {
 		fn deposit_event() = default;
 
 		/// Deposit balance from currency/balances module into EVM.
-		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(10_000_000)]
 		fn deposit_balance(origin, value: BalanceOf<T>) {
 			let sender = ensure_signed(origin)?;
 
@@ -212,7 +212,7 @@ decl_module! {
 		}
 
 		/// Withdraw balance from EVM into currency/balances module.
-		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(10_000_000)]
 		fn withdraw_balance(origin, value: BalanceOf<T>) {
 			let sender = ensure_signed(origin)?;
 			let address = T::ConvertAccountId::convert_account_id(&sender);

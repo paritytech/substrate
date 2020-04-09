@@ -292,7 +292,7 @@ impl<T> PaysFee<T> for SimpleDispatchInfo {
 impl Default for SimpleDispatchInfo {
 	fn default() -> Self {
 		// Default weight of all transactions.
-		SimpleDispatchInfo::FixedNormal(10_000)
+		SimpleDispatchInfo::FixedNormal(10_000_000)
 	}
 }
 
