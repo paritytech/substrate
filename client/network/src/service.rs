@@ -1133,8 +1133,6 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						match cause {
 							ConnectionError::IO(_) =>
 								metrics.connections_closed_total.with_label_values(&["transport-error"]).inc(),
-							ConnectionError::ConnectionLimit(_) =>
-								metrics.connections_closed_total.with_label_values(&["limit-reached"]).inc(),
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
 								EitherError::A(EitherError::B(EitherError::A(PingFailure::Timeout))))))) =>
 								metrics.connections_closed_total.with_label_values(&["ping-timeout"]).inc(),
@@ -1180,6 +1178,8 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 
 					if let Some(metrics) = this.metrics.as_ref() {
 						match error {
+							PendingConnectionError::ConnectionLimit(_) =>
+								metrics.pending_connections_errors_total.with_label_values(&["limit-reached"]).inc(),
 							PendingConnectionError::InvalidPeerId =>
 								metrics.pending_connections_errors_total.with_label_values(&["invalid-peer-id"]).inc(),
 							PendingConnectionError::Transport(_) | PendingConnectionError::IO(_) =>
