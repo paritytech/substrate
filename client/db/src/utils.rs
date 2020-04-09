@@ -243,6 +243,15 @@ pub fn open_database<Block: BlockT>(
 
 			db_config.memory_budget = memory_budget;
 
+			log::trace!(
+				target: "db",
+				"Open database at {}, state column budget: {} MiB, others({}) column cache: {} MiB",
+				path,
+				state_col_budget,
+				NUM_COLUMNS,
+				other_col_budget,
+			);
+
 			Arc::new(Database::open(&db_config, &path).map_err(db_err)?)
 		},
 		#[cfg(not(any(feature = "kvdb-rocksdb", test)))]
