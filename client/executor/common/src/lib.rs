@@ -18,7 +18,6 @@
 
 #![warn(missing_docs)]
 
-pub mod error;
 pub mod sandbox;
-pub mod util;
+pub mod error;
 pub mod wasm_runtime;

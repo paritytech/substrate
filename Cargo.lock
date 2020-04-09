@@ -6251,7 +6251,6 @@ dependencies = [
  "derive_more",
  "log",
  "parity-scale-codec",
- "parity-wasm 0.41.0",
  "sp-allocator",
  "sp-core",
  "sp-runtime-interface",
@@ -6266,6 +6265,7 @@ version = "0.8.0-alpha.5"
 dependencies = [
  "log",
  "parity-scale-codec",
+ "parity-wasm 0.41.0",
  "sc-executor-common",
  "sp-allocator",
  "sp-core",
@@ -6279,8 +6279,6 @@ name = "sc-executor-wasmtime"
 version = "0.8.0-alpha.5"
 dependencies = [
  "assert_matches",
- "cranelift-codegen",
- "cranelift-wasm",
  "log",
  "parity-scale-codec",
  "parity-wasm 0.41.0",
@@ -6291,8 +6289,6 @@ dependencies = [
  "sp-runtime-interface",
  "sp-wasm-interface",
  "substrate-wasmtime",
- "substrate-wasmtime-runtime",
- "wasmtime-environ",
 ]
 
 [[package]]
