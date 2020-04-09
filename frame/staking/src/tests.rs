@@ -2902,7 +2902,6 @@ mod offchain_phragmen {
 	fn offchain_wont_work_if_snapshot_fails() {
 		ExtBuilder::default()
 			.offchain_phragmen_ext()
-			.election_lookahead(3)
 			.build()
 			.execute_with(|| {
 				run_to_block(12);
@@ -2932,16 +2931,14 @@ mod offchain_phragmen {
 			.execute_with(|| {
 				run_to_block(12);
 				assert!(Staking::snapshot_validators().is_some());
+				// given
 				assert_eq!(Staking::era_election_status(), ElectionStatus::Open(12));
 
-				let call = crate::Call::bond(999, 998, Default::default());
-				let outer: mock::Call = call.into();
-
-				let lock_staking: LockStakingStatus<Test> = Default::default();
-				assert_eq!(
-					lock_staking.validate(&10, &outer, &Default::default(), Default::default(),),
-					TransactionValidity::Err(InvalidTransaction::Stale.into()),
-				)
+				// chill et. al. are now not allowed.
+				assert_noop!(
+					Staking::chill(Origin::signed(10)),
+					Error::<Test>::CallNotAllowed,
+				);
 			})
 	}
 
