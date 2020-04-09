@@ -162,7 +162,7 @@ decl_module! {
 		/// - `O(1)`
 		/// - 1 storage mutation (codec `O(1)`).
 		/// - 2 storage writes (condec `O(1)`).
-		/// - One event.
+		/// - 1 event.
 		/// # </weight>
 		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn issue(origin, #[compact] total: T::Balance) {
@@ -183,7 +183,7 @@ decl_module! {
 		/// - `O(1)`
 		/// - 1 static lookup
 		/// - 2 storage mutations (codec `O(1)`).
-		/// - One event.
+		/// - 1 event.
 		/// # </weight>
 		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn transfer(origin,
@@ -209,7 +209,7 @@ decl_module! {
 		/// - `O(1)`
 		/// - 1 storage mutation (codec `O(1)`).
 		/// - 1 storage deletion (codec `O(1)`).
-		/// - One event.
+		/// - 1 event.
 		/// # </weight>
 		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn destroy(origin, #[compact] id: T::AssetId) {
