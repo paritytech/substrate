@@ -19,6 +19,7 @@ use std::{iter::FromIterator, sync::{Arc, Mutex}};
 use futures::channel::mpsc::channel;
 use futures::executor::block_on;
 use futures::future::poll_fn;
+use futures::poll;
 use libp2p::{kad, PeerId};
 
 use sp_api::{ProvideRuntimeApi, ApiRef};
@@ -345,4 +346,37 @@ fn handle_dht_events_with_value_found_should_call_set_priority_group() {
 	};
 
 	let _ = block_on(poll_fn(f));
+}
+
+#[test]
+fn terminate_when_event_stream_terminates() {
+	let (dht_event_tx, dht_event_rx) = channel(1000);
+	let network: Arc<TestNetwork> = Arc::new(Default::default());
+	let key_store = KeyStore::new();
+	let test_api = Arc::new(TestApi {
+		authorities: vec![],
+	});
+
+	let mut authority_discovery = AuthorityDiscovery::new(
+		test_api,
+		network.clone(),
+		vec![],
+		key_store,
+		dht_event_rx.boxed(),
+		None,
+	);
+
+	block_on(async {
+		assert_eq!(Poll::Pending, poll!(&mut authority_discovery));
+
+		// Simulate termination of the network through dropping the sender side of the dht event
+		// channel.
+		drop(dht_event_tx);
+
+		assert_eq!(
+			Poll::Ready(()), poll!(&mut authority_discovery),
+			"Expect the authority discovery module to terminate once the sending side of the dht \
+			event channel is terminated.",
+		);
+	});
 }

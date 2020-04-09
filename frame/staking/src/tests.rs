@@ -2873,6 +2873,27 @@ mod offchain_phragmen {
 	}
 
 	#[test]
+	fn offchain_election_flag_is_triggered_when_forcing() {
+		ExtBuilder::default()
+			.session_per_era(5)
+			.session_length(10)
+			.election_lookahead(3)
+			.build()
+			.execute_with(|| {
+				run_to_block(7);
+				assert_session_era!(0, 0);
+
+				run_to_block(12);
+				ForceEra::put(Forcing::ForceNew);
+				run_to_block(13);
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
+
+				run_to_block(17); // instead of 47
+				assert_eq!(Staking::era_election_status(), ElectionStatus::Open(17));
+			})
+	}
+
+	#[test]
 	fn election_on_chain_fallback_works() {
 		ExtBuilder::default().build().execute_with(|| {
 			start_session(1);
@@ -2902,7 +2923,6 @@ mod offchain_phragmen {
 	fn offchain_wont_work_if_snapshot_fails() {
 		ExtBuilder::default()
 			.offchain_phragmen_ext()
-			.election_lookahead(3)
 			.build()
 			.execute_with(|| {
 				run_to_block(12);
@@ -2932,16 +2952,14 @@ mod offchain_phragmen {
 			.execute_with(|| {
 				run_to_block(12);
 				assert!(Staking::snapshot_validators().is_some());
+				// given
 				assert_eq!(Staking::era_election_status(), ElectionStatus::Open(12));
 
-				let call = crate::Call::bond(999, 998, Default::default());
-				let outer: mock::Call = call.into();
-
-				let lock_staking: LockStakingStatus<Test> = Default::default();
-				assert_eq!(
-					lock_staking.validate(&10, &outer, &Default::default(), Default::default(),),
-					TransactionValidity::Err(InvalidTransaction::Stale.into()),
-				)
+				// chill et. al. are now not allowed.
+				assert_noop!(
+					Staking::chill(Origin::signed(10)),
+					Error::<Test>::CallNotAllowed,
+				);
 			})
 	}
 
