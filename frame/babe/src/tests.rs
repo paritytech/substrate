@@ -17,9 +17,10 @@
 //! Consensus extension module tests for BABE consensus.
 
 use super::*;
-use mock::{new_test_ext, Babe, System};
-use sp_runtime::{traits::OnFinalize, testing::{Digest, DigestItem}};
+use mock::*;
+use frame_support::traits::OnFinalize;
 use pallet_session::ShouldEndSession;
+use sp_consensus_vrf::schnorrkel::{RawVRFOutput, RawVRFProof};
 
 const EMPTY_RANDOMNESS: [u8; 32] = [
 	74, 25, 49, 128, 53, 97, 244, 49,
@@ -27,22 +28,6 @@ const EMPTY_RANDOMNESS: [u8; 32] = [
 	133, 49, 213, 228, 86, 161, 164, 127,
 	217, 153, 138, 37, 48, 192, 248, 0,
 ];
-
-fn make_pre_digest(
-	authority_index: sp_consensus_babe::AuthorityIndex,
-	slot_number: sp_consensus_babe::SlotNumber,
-	vrf_output: [u8; sp_consensus_babe::VRF_OUTPUT_LENGTH],
-	vrf_proof: [u8; sp_consensus_babe::VRF_PROOF_LENGTH],
-) -> Digest {
-	let digest_data = sp_consensus_babe::digests::RawPreDigest::Primary {
-		authority_index,
-		slot_number,
-		vrf_output,
-		vrf_proof,
-	};
-	let log = DigestItem::PreRuntime(sp_consensus_babe::BABE_ENGINE_ID, digest_data.encode());
-	Digest { logs: vec![log] }
-}
 
 #[test]
 fn empty_randomness_is_correct() {
@@ -70,12 +55,12 @@ fn check_module() {
 fn first_block_epoch_zero_start() {
 	new_test_ext(vec![0, 1, 2, 3]).execute_with(|| {
 		let genesis_slot = 100;
-		let first_vrf = [1; 32];
+		let first_vrf = RawVRFOutput([1; 32]);
 		let pre_digest = make_pre_digest(
 			0,
 			genesis_slot,
-			first_vrf,
-			[0xff; 64],
+			first_vrf.clone(),
+			RawVRFProof([0xff; 64]),
 		);
 
 		assert_eq!(Babe::genesis_slot(), 0);
@@ -126,5 +111,26 @@ fn authority_index() {
 		assert_eq!(
 			Babe::find_author((&[(BABE_ENGINE_ID, &[][..])]).into_iter().cloned()), None,
 			"Trivially invalid authorities are ignored")
+	})
+}
+
+#[test]
+fn can_predict_next_epoch_change() {
+	new_test_ext(vec![]).execute_with(|| {
+		assert_eq!(<Test as Trait>::EpochDuration::get(), 3);
+		// this sets the genesis slot to 6;
+		go_to_block(1, 6);
+		assert_eq!(Babe::genesis_slot(), 6);
+		assert_eq!(Babe::current_slot(), 6);
+		assert_eq!(Babe::epoch_index(), 0);
+
+		progress_to_block(5);
+
+		assert_eq!(Babe::epoch_index(), 5 / 3);
+		assert_eq!(Babe::current_slot(), 10);
+
+		// next epoch change will be at
+		assert_eq!(Babe::current_epoch_start(), 9); // next change will be 12, 2 slots from now
+		assert_eq!(Babe::next_expected_epoch_change(System::block_number()), Some(5 + 2));
 	})
 }

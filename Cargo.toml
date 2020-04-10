@@ -5,6 +5,7 @@ members = [
 	"bin/node-template/pallets/template",
 	"bin/sassafras-template/node",
 	"bin/sassafras-template/runtime",
+	"bin/node/bench",
 	"bin/node/cli",
 	"bin/node/executor",
 	"bin/node/primitives",
@@ -90,8 +91,10 @@ members = [
 	"frame/offences",
 	"frame/randomness-collective-flip",
 	"frame/recovery",
+	"frame/scheduler",
 	"frame/scored-pool",
 	"frame/session",
+	"frame/session/benchmarking",
 	"frame/society",
 	"frame/staking",
 	"frame/staking/reward-curve",
@@ -122,7 +125,9 @@ members = [
 	"primitives/consensus/common",
 	"primitives/consensus/pow",
 	"primitives/consensus/sassafras",
+	"primitives/consensus/vrf",
 	"primitives/core",
+	"primitives/chain-spec",
 	"primitives/debug-derive",
 	"primitives/storage",
 	"primitives/externalities",
@@ -133,10 +138,12 @@ members = [
 	"primitives/offchain",
 	"primitives/panic-handler",
 	"primitives/phragmen",
+	"primitives/phragmen/compact",
 	"primitives/rpc",
 	"primitives/runtime-interface",
 	"primitives/runtime-interface/proc-macro",
 	"primitives/runtime-interface/test-wasm",
+	"primitives/runtime-interface/test-wasm-deprecated",
 	"primitives/runtime-interface/test",
 	"primitives/serializer",
 	"primitives/session",
@@ -144,6 +151,7 @@ members = [
 	"primitives/api/proc-macro",
 	"primitives/api/test",
 	"primitives/arithmetic",
+	"primitives/arithmetic/fuzzer",
 	"primitives/io",
 	"primitives/runtime",
 	"primitives/sandbox",
@@ -155,6 +163,7 @@ members = [
 	"primitives/test-primitives",
 	"primitives/transaction-pool",
 	"primitives/trie",
+	"primitives/utils",
 	"primitives/wasm-interface",
 	"test-utils/client",
 	"test-utils/runtime",
@@ -172,6 +181,3 @@ members = [
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
-
-[patch.crates-io]
-schnorrkel = { git = "https://github.com/w3f/schnorrkel" }

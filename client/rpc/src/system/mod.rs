@@ -20,20 +20,21 @@
 mod tests;
 
 use futures::{future::BoxFuture, FutureExt, TryFutureExt};
-use futures::{channel::{mpsc, oneshot}, compat::Compat};
+use futures::{channel::oneshot, compat::Compat};
 use sc_rpc_api::Receiver;
+use sp_utils::mpsc::TracingUnboundedSender;
 use sp_runtime::traits::{self, Header as HeaderT};
 
 use self::error::Result;
 
 pub use sc_rpc_api::system::*;
-pub use self::helpers::{Properties, SystemInfo, Health, PeerInfo, NodeRole};
+pub use self::helpers::{SystemInfo, Health, PeerInfo, NodeRole};
 pub use self::gen_client::Client as SystemClient;
 
 /// System API implementation
 pub struct System<B: traits::Block> {
 	info: SystemInfo,
-	send_back: mpsc::UnboundedSender<Request<B>>,
+	send_back: TracingUnboundedSender<Request<B>>,
 }
 
 /// Request to be processed.
@@ -59,7 +60,7 @@ impl<B: traits::Block> System<B> {
 	/// reading from that channel and answering the requests.
 	pub fn new(
 		info: SystemInfo,
-		send_back: mpsc::UnboundedSender<Request<B>>,
+		send_back: TracingUnboundedSender<Request<B>>,
 	) -> Self {
 		System {
 			info,
@@ -81,7 +82,11 @@ impl<B: traits::Block> SystemApi<B::Hash, <B::Header as HeaderT>::Number> for Sy
 		Ok(self.info.chain_name.clone())
 	}
 
-	fn system_properties(&self) -> Result<Properties> {
+	fn system_type(&self) -> Result<sp_chain_spec::ChainType> {
+		Ok(self.info.chain_type.clone())
+	}
+
+	fn system_properties(&self) -> Result<sp_chain_spec::Properties> {
 		Ok(self.info.properties.clone())
 	}
 

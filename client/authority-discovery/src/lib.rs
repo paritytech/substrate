@@ -56,14 +56,13 @@ use futures_timer::Delay;
 
 use codec::{Decode, Encode};
 use error::{Error, Result};
-use libp2p::Multiaddr;
 use log::{debug, error, log_enabled, warn};
 use prometheus_endpoint::{Counter, CounterVec, Gauge, Opts, U64, register};
 use prost::Message;
 use sc_client_api::blockchain::HeaderBackend;
-use sc_network::{DhtEvent, ExHashT, NetworkStateInfo};
+use sc_network::{Multiaddr, config::MultiaddrWithPeerId, DhtEvent, ExHashT, NetworkStateInfo};
 use sp_authority_discovery::{AuthorityDiscoveryApi, AuthorityId, AuthoritySignature, AuthorityPair};
-use sp_core::crypto::{key_types, Pair};
+use sp_core::crypto::{key_types, CryptoTypePublicPair, Pair};
 use sp_core::traits::BareCryptoStorePtr;
 use sp_runtime::{traits::Block as BlockT, generic::BlockId};
 use sp_api::ProvideRuntimeApi;
@@ -187,7 +186,7 @@ where
 	pub fn new(
 		client: Arc<Client>,
 		network: Arc<Network>,
-		sentry_nodes: Vec<String>,
+		sentry_nodes: Vec<MultiaddrWithPeerId>,
 		key_store: BareCryptoStorePtr,
 		dht_event_rx: Pin<Box<dyn Stream<Item = DhtEvent> + Send>>,
 		prometheus_registry: Option<prometheus_endpoint::Registry>,
@@ -210,18 +209,7 @@ where
 		);
 
 		let sentry_nodes = if !sentry_nodes.is_empty() {
-			let addrs = sentry_nodes.into_iter().filter_map(|a| match a.parse() {
-				Ok(addr) => Some(addr),
-				Err(e) => {
-					error!(
-						target: "sub-authority-discovery",
-						"Failed to parse sentry node public address '{:?}', continuing anyways.", e,
-					);
-					None
-				}
-			}).collect::<Vec<Multiaddr>>();
-
-			Some(addrs)
+			Some(sentry_nodes.into_iter().map(|ma| ma.concat()).collect::<Vec<_>>())
 		} else {
 			None
 		};
@@ -283,19 +271,36 @@ where
 			.encode(&mut serialized_addresses)
 			.map_err(Error::EncodingProto)?;
 
-		for key in self.get_priv_keys_within_authority_set()?.into_iter() {
-			let signature = key.sign(&serialized_addresses);
+		let keys: Vec<CryptoTypePublicPair> = self.get_own_public_keys_within_authority_set()?
+			.into_iter()
+			.map(Into::into)
+			.collect();
 
+		let signatures = self.key_store
+			.read()
+			.sign_with_all(
+				key_types::AUTHORITY_DISCOVERY,
+				keys.clone(),
+				serialized_addresses.as_slice(),
+			)
+			.map_err(|_| Error::Signing)?;
+
+		for (sign_result, key) in signatures.iter().zip(keys) {
 			let mut signed_addresses = vec![];
+
+			// sign_with_all returns Result<Signature, Error> signature
+			// is generated for a public key that is supported.
+			// Verify that all signatures exist for all provided keys.
+			let signature = sign_result.as_ref().map_err(|_| Error::MissingSignature(key.clone()))?;
 			schema::SignedAuthorityAddresses {
 				addresses: serialized_addresses.clone(),
-				signature: signature.encode(),
+				signature: Encode::encode(&signature),
 			}
 			.encode(&mut signed_addresses)
 				.map_err(Error::EncodingProto)?;
 
 			self.network.put_value(
-				hash_authority_id(key.public().as_ref())?,
+				hash_authority_id(key.1.as_ref()),
 				signed_addresses,
 			);
 		}
@@ -318,7 +323,7 @@ where
 
 		for authority_id in authorities.iter() {
 			self.network
-				.get_value(&hash_authority_id(authority_id.as_ref())?);
+				.get_value(&hash_authority_id(authority_id.as_ref()));
 		}
 
 		Ok(())
@@ -403,8 +408,8 @@ where
 			self.addr_cache.retain_ids(&authorities);
 			authorities
 				.into_iter()
-				.map(|id| hash_authority_id(id.as_ref()).map(|h| (h, id)))
-				.collect::<Result<HashMap<_, _>>>()?
+				.map(|id| (hash_authority_id(id.as_ref()), id))
+				.collect::<HashMap<_, _>>()
 		};
 
 		// Check if the event origins from an authority in the current authority set.
@@ -444,21 +449,6 @@ where
 		}
 
 		Ok(())
-	}
-
-	/// Retrieve all local authority discovery private keys that are within the current authority
-	/// set.
-	fn get_priv_keys_within_authority_set(&mut self) -> Result<Vec<AuthorityPair>> {
-		let keys = self.get_own_public_keys_within_authority_set()?
-			.into_iter()
-			.map(std::convert::Into::into)
-			.filter_map(|pub_key| {
-				self.key_store.read().sr25519_key_pair(key_types::AUTHORITY_DISCOVERY, &pub_key)
-			})
-			.map(std::convert::Into::into)
-			.collect();
-
-		Ok(keys)
 	}
 
 	/// Retrieve our public keys within the current authority set.
@@ -596,10 +586,8 @@ where
 	}
 }
 
-fn hash_authority_id(id: &[u8]) -> Result<libp2p::kad::record::Key> {
-	libp2p::multihash::encode(libp2p::multihash::Hash::SHA2256, id)
-		.map(|k| libp2p::kad::record::Key::new(&k))
-		.map_err(Error::HashingAuthorityId)
+fn hash_authority_id(id: &[u8]) -> libp2p::kad::record::Key {
+	libp2p::kad::record::Key::new(&libp2p::multihash::Sha2_256::digest(id))
 }
 
 fn interval_at(start: Instant, duration: Duration) -> Interval {

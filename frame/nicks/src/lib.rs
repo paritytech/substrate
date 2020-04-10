@@ -40,11 +40,11 @@
 
 use sp_std::prelude::*;
 use sp_runtime::{
-	traits::{StaticLookup, EnsureOrigin, Zero}
+	traits::{StaticLookup, Zero}
 };
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
-	traits::{Currency, ReservableCurrency, OnUnbalanced, Get},
+	traits::{Currency, EnsureOrigin, ReservableCurrency, OnUnbalanced, Get},
 	weights::SimpleDispatchInfo,
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
@@ -171,6 +171,7 @@ decl_module! {
 		/// - One storage read/write.
 		/// - One event.
 		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedNormal(70_000)]
 		fn clear_name(origin) {
 			let sender = ensure_signed(origin)?;
 
@@ -286,7 +287,7 @@ mod tests {
 		type Version = ();
 		type ModuleToIndex = ();
 		type AccountData = pallet_balances::AccountData<u64>;
-		type MigrateAccount = (); type OnNewAccount = ();
+		type OnNewAccount = ();
 		type OnKilledAccount = ();
 	}
 	parameter_types! {

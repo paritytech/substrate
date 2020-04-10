@@ -16,6 +16,8 @@
 
 //! Balances pallet benchmarking.
 
+#![cfg(feature = "runtime-benchmarks")]
+
 use super::*;
 
 use frame_system::RawOrigin;
@@ -49,10 +51,13 @@ benchmarks! {
 		let _ = <Balances<T> as Currency<_>>::make_free_balance_be(&caller, balance);
 
 		// Transfer `e - 1` existential deposits + 1 unit, which guarantees to create one account, and reap this user.
-		let recipient = account("recipient", u, SEED);
-		let recipient_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(recipient);
+		let recipient: T::AccountId = account("recipient", u, SEED);
+		let recipient_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(recipient.clone());
 		let transfer_amount = existential_deposit.saturating_mul((e - 1).into()) + 1.into();
 	}: _(RawOrigin::Signed(caller), recipient_lookup, transfer_amount)
+	verify {
+		assert_eq!(Balances::<T>::free_balance(&recipient), transfer_amount);
+	}
 
 	// Benchmark `transfer` with the best possible condition:
 	// * Both accounts exist and will continue to exist.
@@ -116,4 +121,46 @@ benchmarks! {
 		let balance_amount = existential_deposit.saturating_mul(e.into());
 		let _ = <Balances<T> as Currency<_>>::make_free_balance_be(&user, balance_amount);
 	}: set_balance(RawOrigin::Root, user_lookup, 0.into(), 0.into())
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::tests_composite::{ExtBuilder, Test};
+	use frame_support::assert_ok;
+
+	#[test]
+	fn transfer() {
+		ExtBuilder::default().build().execute_with(|| {
+			assert_ok!(test_benchmark_transfer::<Test>());
+		});
+	}
+
+	#[test]
+	fn transfer_best_case() {
+		ExtBuilder::default().build().execute_with(|| {
+			assert_ok!(test_benchmark_transfer_best_case::<Test>());
+		});
+	}
+
+	#[test]
+	fn transfer_keep_alive() {
+		ExtBuilder::default().build().execute_with(|| {
+			assert_ok!(test_benchmark_transfer_keep_alive::<Test>());
+		});
+	}
+
+	#[test]
+	fn transfer_set_balance() {
+		ExtBuilder::default().build().execute_with(|| {
+			assert_ok!(test_benchmark_set_balance::<Test>());
+		});
+	}
+
+	#[test]
+	fn transfer_set_balance_killing() {
+		ExtBuilder::default().build().execute_with(|| {
+			assert_ok!(test_benchmark_set_balance_killing::<Test>());
+		});
+	}
 }

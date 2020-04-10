@@ -21,13 +21,13 @@ use std::{fmt::Debug, ops::Deref, fmt, cell::RefCell};
 use crate::codec::{Codec, Encode, Decode};
 use crate::traits::{
 	self, Checkable, Applyable, BlakeTwo256, OpaqueKeys,
-	SignedExtension, Dispatchable,
+	SignedExtension, Dispatchable, DispatchInfoOf,
 };
 use crate::traits::ValidateUnsigned;
 use crate::{generic, KeyTypeId, ApplyExtrinsicResult};
 pub use sp_core::{H256, sr25519};
 use sp_core::{crypto::{CryptoType, Dummy, key_types, Public}, U256};
-use crate::transaction_validity::{TransactionValidity, TransactionValidityError};
+use crate::transaction_validity::{TransactionValidity, TransactionValidityError, TransactionSource};
 
 /// Authority Id
 #[derive(Default, PartialEq, Eq, Clone, Encode, Decode, Debug, Hash, Serialize, Deserialize, PartialOrd, Ord)]
@@ -345,19 +345,18 @@ impl<Call: Codec + Sync + Send, Extra> traits::Extrinsic for TestXt<Call, Extra>
 	}
 }
 
-impl<Origin, Call, Extra, Info> Applyable for TestXt<Call, Extra> where
+impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 	Call: 'static + Sized + Send + Sync + Clone + Eq + Codec + Debug + Dispatchable<Origin=Origin>,
-	Extra: SignedExtension<AccountId=u64, Call=Call, DispatchInfo=Info>,
+	Extra: SignedExtension<AccountId=u64, Call=Call>,
 	Origin: From<Option<u64>>,
-	Info: Clone,
 {
 	type Call = Call;
-	type DispatchInfo = Info;
 
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
 	fn validate<U: ValidateUnsigned<Call=Self::Call>>(
 		&self,
-		_info: Self::DispatchInfo,
+		_source: TransactionSource,
+		_info: &DispatchInfoOf<Self::Call>,
 		_len: usize,
 	) -> TransactionValidity {
 		Ok(Default::default())
@@ -367,7 +366,7 @@ impl<Origin, Call, Extra, Info> Applyable for TestXt<Call, Extra> where
 	/// index and sender.
 	fn apply<U: ValidateUnsigned<Call=Self::Call>>(
 		self,
-		info: Self::DispatchInfo,
+		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> ApplyExtrinsicResult {
 		let maybe_who = if let Some((who, extra)) = self.signature {
@@ -378,6 +377,6 @@ impl<Origin, Call, Extra, Info> Applyable for TestXt<Call, Extra> where
 			None
 		};
 
-		Ok(self.call.dispatch(maybe_who.into()).map_err(Into::into))
+		Ok(self.call.dispatch(maybe_who.into()).map(|_| ()).map_err(|e| e.error))
 	}
 }
