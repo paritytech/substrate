@@ -26,8 +26,9 @@ use crate::{
 	}
 };
 
-/// An unsigned fixed point number. Can hold any value in the range [-9_223_372_036, 9_223_372_036]
-/// with fixed point accuracy of one billion.
+/// A signed fixed point number. Can hold any value in the range [-9_223_372_036, 9_223_372_036]
+/// with an additional fixed point accuracy of one billion. i.e. 9000000000.000000001 can be
+/// represented by Fixed64.
 #[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Fixed64(i64);
 
@@ -205,6 +206,10 @@ mod tests {
 		Fixed64::from_parts(i64::max_value())
 	}
 
+	fn min() -> Fixed64 {
+		Fixed64::from_parts(i64::min_value())
+	}
+
 	#[test]
 	fn fixed64_semantics() {
 		assert_eq!(Fixed64::from_rational(5, 2).0, 5 * 1_000_000_000 / 2);
@@ -214,6 +219,9 @@ mod tests {
 		// biggest value that can be created.
 		assert_ne!(max(), Fixed64::from_natural(9_223_372_036));
 		assert_eq!(max(), Fixed64::from_natural(9_223_372_037));
+		// smallest value that can be created.
+		assert_ne!(min(), Fixed64::from_natural(-9_223_372_036));
+		assert_eq!(min(), Fixed64::from_natural(-9_223_372_037));
 	}
 
 	#[test]
