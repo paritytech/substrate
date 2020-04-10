@@ -19,14 +19,17 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![forbid(unused_must_use, unsafe_code, unused_variables, unused_must_use)]
-#![deny(unused_imports)]
+
 pub use pallet_timestamp;
 
 use sp_std::{result, prelude::*};
-use frame_support::{decl_storage, decl_module, traits::{FindAuthor, Get, Randomness as RandomnessT}};
+use frame_support::{
+	decl_storage, decl_module, traits::{FindAuthor, Get, Randomness as RandomnessT},
+	weights::{Weight, SimpleDispatchInfo, WeighData},
+};
 use sp_timestamp::OnTimestampSet;
-use sp_runtime::{generic::DigestItem, ConsensusEngineId, Perbill, PerThing};
-use sp_runtime::traits::{IsMember, SaturatedConversion, Saturating, Hash};
+use sp_runtime::{generic::DigestItem, ConsensusEngineId, Perbill};
+use sp_runtime::traits::{IsMember, SaturatedConversion, Saturating, Hash, One};
 use sp_staking::{
 	SessionIndex,
 	offence::{Offence, Kind},

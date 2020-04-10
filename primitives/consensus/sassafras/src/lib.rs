@@ -22,9 +22,8 @@
 
 pub mod digests;
 pub mod inherents;
-mod vrf;
 
-pub use crate::vrf::{
+pub use sp_consensus_vrf::schnorrkel::{
 	VRF_PROOF_LENGTH, VRF_OUTPUT_LENGTH, RawVRFOutput, VRFOutput,
 	RawVRFProof, VRFProof, Randomness,
 };
@@ -81,7 +80,7 @@ pub type SassafrasAuthorityWeight = u64;
 pub type SassafrasBlockWeight = u32;
 
 /// An consensus log item for Sassafras.
-#[derive(Decode, Encode, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Decode, Encode, Clone, RuntimeDebug)]
 pub enum ConsensusLog {
 	/// The epoch has changed.
 	NextEpochData(digests::NextEpochDescriptor),
@@ -92,7 +91,7 @@ pub enum ConsensusLog {
 }
 
 /// Configuration data used by the Sassafras consensus engine.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
+#[derive(Clone, Encode, Decode, RuntimeDebug)]
 pub struct SassafrasConfiguration {
 	/// The slot duration in milliseconds for Sassafras.
 	pub slot_duration: u64,
