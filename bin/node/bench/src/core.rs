@@ -88,7 +88,7 @@ impl fmt::Display for BenchmarkOutput {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
 			f,
-			"({}: avg {}, w_avg {})",
+			"{}: avg {}, w_avg {}",
 			self.name,
 			NsFormatter(self.raw_average),
 			NsFormatter(self.average),

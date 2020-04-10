@@ -17,6 +17,7 @@
 //! Trie benchmark (integrated).
 
 use std::borrow::Cow;
+use node_primitives::Hash;
 use crate::{
 	core::{self, Path},
 	generator::generate_trie,
@@ -51,7 +52,9 @@ pub struct TrieBenchmarkDescription {
 }
 
 pub struct TrieBenchmark {
+	database: TempDatabase,
 	database_size: DatabaseSize,
+	root: Hash,
 }
 
 impl core::BenchmarkDescription for TrieBenchmarkDescription {
@@ -71,7 +74,17 @@ impl core::BenchmarkDescription for TrieBenchmarkDescription {
 	}
 
 	fn setup(self: Box<Self>) -> Box<dyn core::Benchmark> {
-		Box::new(TrieBenchmark { database_size: self.database_size })
+		let mut database = TempDatabase::new();
+		let root = generate_trie(
+			database.open(),
+			vec![(vec![0x01, 0x23, 0x45], vec![1u8])]
+		);
+
+		Box::new(TrieBenchmark {
+			database,
+			database_size: self.database_size,
+			root,
+		})
 	}
 
 	fn name(&self) -> Cow<'static, str> {
@@ -84,6 +97,8 @@ impl core::BenchmarkDescription for TrieBenchmarkDescription {
 
 impl core::Benchmark for TrieBenchmark {
 	fn run(&mut self) -> std::time::Duration {
-		unimplemented!()
+		let started = std::time::Instant::now();
+		let db = self.database.clone();
+		started.elapsed()
 	}
 }

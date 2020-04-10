@@ -3378,6 +3378,7 @@ dependencies = [
  "derive_more",
  "fs_extra",
  "hash-db",
+ "hex",
  "kvdb",
  "kvdb-rocksdb",
  "log",

@@ -26,3 +26,4 @@ sp-core = { version = "2.0.0-alpha.5", path = "../../../primitives/core" }
 hash-db = "0.15.2"
 tempfile = "3.1.0"
 fs_extra = "1"
+hex = "0.4.0"

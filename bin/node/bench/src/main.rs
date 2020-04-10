@@ -22,6 +22,7 @@ mod tempdb;
 
 use crate::core::run_benchmark;
 use import::{ImportBenchmarkDescription, SizeType};
+use trie::{TrieBenchmarkDescription, DatabaseSize};
 use node_testing::bench::{Profile, KeyTypes};
 use structopt::StructOpt;
 
@@ -71,6 +72,10 @@ fn main() {
 				key_types: KeyTypes::Sr25519,
 				size: *size,
 			},
+		size in [
+			DatabaseSize::Empty, DatabaseSize::Smallest, DatabaseSize::Small,
+			DatabaseSize::Medium, DatabaseSize::Large, DatabaseSize::Largest
+		] => TrieBenchmarkDescription { database_size: *size },
 	);
 
 	if opt.list {
