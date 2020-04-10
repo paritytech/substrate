@@ -294,7 +294,6 @@ mod tests {
 	fn fixed128_multiply_accumulate_works() {
 		saturating_mul_acc_test!(u64);
 		saturating_mul_acc_test!(u128);
-		saturating_mul_acc_test!(u128);
 	}
 
 	#[test]
