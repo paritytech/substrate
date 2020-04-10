@@ -67,6 +67,12 @@ pub trait BlockchainEvents<Block: BlockT> {
 	/// finalized block.
 	fn finality_notification_stream(&self) -> FinalityNotifications<Block>;
 
+	/// Get a stream of Grandpa justifications alongside the best block that's
+	/// been finalized with that justification.
+	///
+	/// Idk about the guarantees around the frequency of this yet
+	fn justification_notification_stream(&self) -> JustificationNotifications<Block>;
+
 	/// Get storage changes event stream.
 	///
 	/// Passing `None` as `filter_keys` subscribes to all storage changes.
@@ -255,6 +261,6 @@ pub struct FinalityNotification<Block: BlockT> {
 pub struct JustificationNotification<Block: BlockT> {
 	/// Highest finalized block header
 	pub header: Block::Header,
-
-	// Should contain a GrandpaJustification
+	/// A justification that the given header has been finalized
+	pub justification: Justification,
 }

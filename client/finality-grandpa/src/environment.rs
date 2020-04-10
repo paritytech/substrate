@@ -387,7 +387,6 @@ impl Metrics {
 	}
 }
 
-
 /// The environment we run GRANDPA in.
 pub(crate) struct Environment<Backend, Block: BlockT, C, N: NetworkT<Block>, SC, VR> {
 	pub(crate) client: Arc<C>,

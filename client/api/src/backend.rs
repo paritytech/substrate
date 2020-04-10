@@ -69,6 +69,17 @@ pub struct ImportSummary<Block: BlockT> {
 	pub retracted: Vec<Block::Hash>,
 }
 
+/// Summary of a Justification event.
+///
+/// Contains the most recently finalized block as well
+/// as a justification for its finalization.
+pub struct JustificationSummary<Block: BlockT> {
+	/// Most recently finalized header.
+	pub header: Block::Header,
+	/// A justification proving that the given block was finalized.
+	pub justification: Justification,
+}
+
 /// Import operation wrapper
 pub struct ClientImportOperation<Block: BlockT, B: Backend<Block>> {
 	/// DB Operation.
@@ -77,6 +88,8 @@ pub struct ClientImportOperation<Block: BlockT, B: Backend<Block>> {
 	pub notify_imported: Option<ImportSummary<Block>>,
 	/// A list of hashes of blocks that got finalized.
 	pub notify_finalized: Vec<Block::Hash>,
+	/// Best finalized block and accompanying justification.
+	pub notify_justified: Option<JustificationSummary<Block>>,
 }
 
 /// State of a new block.
