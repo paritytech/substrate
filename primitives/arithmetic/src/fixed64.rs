@@ -26,10 +26,8 @@ use crate::{
 	}
 };
 
-/// An signed fixed point number. Can represent any value in the range [-9.223372036, 9.223372036]
-/// with fixed point accuracy of nine decimal points.
-///
-/// This fixed point number is represented as an i64 divided by a billion.
+/// An unsigned fixed point number. Can hold any value in the range [-9_223_372_036, 9_223_372_036]
+/// with fixed point accuracy of one billion.
 #[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Fixed64(i64);
 
