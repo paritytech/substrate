@@ -18,7 +18,7 @@
 //!
 //! Note that these helpers should NOT be used with the actual crate tests, but are rather designed
 //! for when the module is being externally tested (i.e. fuzzing, benchmarking, e2e tests). Enabling
-//! this feature in the current crate's Cargo.toml will leak the all of this into a normal release
+//! this feature in the current crate's Cargo.toml will leak all of this into a normal release
 //! build. Just don't do it.
 
 use crate::*;
