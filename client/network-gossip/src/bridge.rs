@@ -49,9 +49,10 @@ impl<B: BlockT> GossipEngine<B> {
 
 		// We grab the event stream before registering the notifications protocol, otherwise we
 		// might miss events.
-		let network_event_stream = network.event_stream(Box::leak(format!("proto-{:?}", protocol_name).into_box_str()));
+		let protocol_name = protocol_name.into();
+		let network_event_stream = network.event_stream(Box::leak(format!("proto-{:?}", protocol_name).into_boxed_str()));
 
-		network.register_notifications_protocol(engine_id, protocol_name.into());
+		network.register_notifications_protocol(engine_id, protocol_name);
 		state_machine.register_validator(&mut network, engine_id, validator);
 
 		GossipEngine {
@@ -188,7 +189,7 @@ mod tests {
 	struct TestNetwork {}
 
 	impl<B: BlockT> Network<B> for Arc<TestNetwork> {
-		fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
+		fn event_stream(&self, _: &'static str) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
 			let (_tx, rx) = futures::channel::mpsc::channel(0);
 
 			// Return rx and drop tx. Thus the given channel will yield `Poll::Ready(None)` on first
