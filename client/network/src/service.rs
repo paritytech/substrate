@@ -575,9 +575,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// If this method is called multiple times, the events are duplicated.
 	///
 	/// The stream never ends (unless the `NetworkWorker` gets shut down).
-	pub fn event_stream(&self) -> impl Stream<Item = Event> {
+	pub fn event_stream(&self, name: &'static str) -> impl Stream<Item = Event> {
 		// Note: when transitioning to stable futures, remove the `Error` entirely
-		let (tx, rx) = out_events::channel();
+		let (tx, rx) = out_events::channel(name);
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::EventStream(tx));
 		rx
 	}
