@@ -3375,6 +3375,11 @@ dependencies = [
 name = "node-bench"
 version = "0.8.0-alpha.5"
 dependencies = [
+ "derive_more",
+ "fs_extra",
+ "hash-db",
+ "kvdb",
+ "kvdb-rocksdb",
  "log",
  "node-primitives",
  "node-testing",
@@ -3382,8 +3387,11 @@ dependencies = [
  "sc-client-api",
  "serde",
  "serde_json",
+ "sp-core",
  "sp-runtime",
+ "sp-trie",
  "structopt",
+ "tempfile",
 ]
 
 [[package]]

@@ -16,6 +16,9 @@
 
 #[macro_use] mod core;
 mod import;
+mod trie;
+mod generator;
+mod tempdb;
 
 use crate::core::run_benchmark;
 use import::{ImportBenchmarkDescription, SizeType};
