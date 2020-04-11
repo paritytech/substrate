@@ -190,7 +190,7 @@ pub enum PeerSyncState<B: BlockT> {
 	AncestorSearch {
 		start: NumberFor<B>,
 		current: NumberFor<B>,
-		state: AncestorSearchState<B>
+		state: AncestorSearchState<B>,
 	},
 	/// Actively downloading new blocks, starting from the given Number.
 	DownloadingNew(NumberFor<B>),
