@@ -38,7 +38,7 @@ use sp_staking::{
 use codec::{Encode, Decode};
 use sp_inherents::{InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 use sp_consensus_sassafras::{
-	SASSAFRAS_ENGINE_ID, ConsensusLog, SassafrasAuthorityWeight, SlotNumber,
+	SASSAFRAS_ENGINE_ID, RawConsensusLog, SassafrasAuthorityWeight, SlotNumber,
 	inherents::{INHERENT_IDENTIFIER, SassafrasInherentData},
 	digests::{NextEpochDescriptor, RawPreDigest},
 };
@@ -385,7 +385,7 @@ impl<T: Trait> Module<T> {
 			randomness: next_randomness,
 		};
 
-		Self::deposit_consensus(ConsensusLog::NextEpochData(next))
+		Self::deposit_consensus(RawConsensusLog::<schnorrkel::RawVRFProof>::NextEpochData(next))
 	}
 
 	// finds the start slot of the current epoch. only guaranteed to
@@ -450,7 +450,7 @@ impl<T: Trait> Module<T> {
 					randomness: Self::randomness(),
 				};
 
-				Self::deposit_consensus(ConsensusLog::NextEpochData(next))
+				Self::deposit_consensus(RawConsensusLog::<schnorrkel::RawVRFProof>::NextEpochData(next))
 			}
 
 			// the slot number of the current block being initialized
@@ -551,7 +551,7 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 	}
 
 	fn on_disabled(i: usize) {
-		Self::deposit_consensus(ConsensusLog::OnDisabled(i as u32))
+		Self::deposit_consensus(RawConsensusLog::<schnorrkel::RawVRFProof>::OnDisabled(i as u32))
 	}
 }
 

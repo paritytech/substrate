@@ -26,9 +26,10 @@ use sp_runtime::traits::Block as BlockT;
 use sp_consensus_sassafras::{
 	SlotNumber, AuthorityPair, SassafrasConfiguration, AuthorityId,
 	SassafrasAuthorityWeight, SASSAFRAS_ENGINE_ID,
-	VRFProof, SASSAFRAS_TICKET_VRF_PREFIX, VRFOutput,
+	SASSAFRAS_TICKET_VRF_PREFIX,
 	digests::{PreDigest, PrimaryPreDigest, SecondaryPreDigest},
 };
+use sp_consensus_vrf::schnorrkel::{VRFProof, VRFOutput};
 use sc_consensus_epochs::ViableEpochDescriptor;
 use sc_keystore::KeyStorePtr;
 use log::trace;

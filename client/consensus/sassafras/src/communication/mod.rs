@@ -3,7 +3,8 @@ mod network;
 use aead::Aead;
 use codec::{Encode, Decode};
 use futures::channel::mpsc::{UnboundedSender, UnboundedReceiver};
-use sp_consensus_sassafras::{SlotNumber, VRFProof, AuthorityId, AuthorityPair};
+use sp_consensus_sassafras::{SlotNumber, AuthorityId, AuthorityPair};
+use sp_consensus_vrf::schnorrkel::VRFProof;
 use sc_keystore::KeyStorePtr;
 use crate::PublishingSet;
 

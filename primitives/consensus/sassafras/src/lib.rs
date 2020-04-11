@@ -24,12 +24,12 @@ pub mod digests;
 pub mod inherents;
 
 pub use sp_consensus_vrf::schnorrkel::{
-	VRF_PROOF_LENGTH, VRF_OUTPUT_LENGTH, RANDOMNESS_LENGTH,
-	RawVRFOutput, VRFOutput, RawVRFProof, VRFProof, Randomness,
+	Randomness, VRF_PROOF_LENGTH, VRF_OUTPUT_LENGTH, RANDOMNESS_LENGTH,
 };
 
 use sp_std::vec::Vec;
 use sp_runtime::{ConsensusEngineId, RuntimeDebug};
+use sp_consensus_vrf::schnorrkel;
 use codec::{Encode, Decode};
 
 mod app {
@@ -79,19 +79,23 @@ pub type SassafrasAuthorityWeight = u64;
 /// The weight of a Sassafras block.
 pub type SassafrasBlockWeight = u32;
 
-/// An consensus log item for Sassafras.
+/// A consensus log item for Sassafras.
 #[derive(Decode, Encode, Clone, RuntimeDebug)]
-pub enum ConsensusLog {
+pub enum RawConsensusLog<VRFProof=schnorrkel::RawVRFProof> {
 	/// The epoch has changed.
 	NextEpochData(digests::NextEpochDescriptor),
 	/// Commitments to be included in the current block.
-	PostBlockData(digests::PostBlockDescriptor),
+	PostBlockData(digests::RawPostBlockDescriptor<VRFProof>),
 	/// Disable the authority with given index.
 	OnDisabled(AuthorityIndex),
 }
 
+/// A consensus log item suitable for std environment.
+#[cfg(feature = "std")]
+pub type ConsensusLog = RawConsensusLog<schnorrkel::VRFProof>;
+
 /// Configuration data used by the Sassafras consensus engine.
-#[derive(Clone, Encode, Decode, RuntimeDebug)]
+#[derive(Clone, Encode, Decode, RuntimeDebug, PartialEq, Eq)]
 pub struct SassafrasConfiguration {
 	/// The slot duration in milliseconds for Sassafras.
 	pub slot_duration: u64,

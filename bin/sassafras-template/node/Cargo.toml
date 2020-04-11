@@ -26,6 +26,7 @@ sc-consensus-sassafras = { path = "../../../client/consensus/sassafras" }
 sp-consensus-sassafras = { path = "../../../primitives/consensus/sassafras" }
 sp-consensus = { path = "../../../primitives/consensus/common" }
 sc-client = { path = "../../../client/" }
+sc-client-api = { version = "2.0.0-alpha.5", path = "../../../client/api" }
 sp-runtime = { path = "../../../primitives/runtime" }
 sc-basic-authorship = { path = "../../../client/basic-authorship" }
 grandpa = { package = "sc-finality-grandpa", path = "../../../client/finality-grandpa" }
@@ -33,5 +34,4 @@ grandpa-primitives = { package = "sp-finality-grandpa", path = "../../../primiti
 sassafras-template-runtime = { path = "../runtime" }
 
 [build-dependencies]
-vergen = "3.0.4"
-build-script-utils = { package = "substrate-build-script-utils", path = "../../../utils/build-script-utils" }
+substrate-build-script-utils = { version = "2.0.0-alpha.5", path = "../../../utils/build-script-utils" }

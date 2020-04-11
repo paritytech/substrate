@@ -18,13 +18,14 @@
 
 pub use sp_consensus_sassafras::{
 	SassafrasApi, ConsensusLog, SASSAFRAS_ENGINE_ID, SlotNumber, SassafrasConfiguration,
-	AuthorityId, AuthorityPair, AuthoritySignature, VRFOutput,
-	SassafrasAuthorityWeight, VRF_OUTPUT_LENGTH, VRFProof, Randomness,
+	AuthorityId, AuthorityPair, AuthoritySignature,
+	SassafrasAuthorityWeight, VRF_OUTPUT_LENGTH, Randomness,
 	digests::{
 		PreDigest, CompatibleDigestItem, NextEpochDescriptor, PostBlockDescriptor,
 		PrimaryPreDigest, SecondaryPreDigest,
 	},
 };
+pub use sp_consensus_vrf::schnorrkel::{VRFProof, VRFOutput};
 pub use sp_consensus::SyncOracle;
 
 use std::{
