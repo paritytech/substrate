@@ -66,6 +66,10 @@ pub struct RawSecondaryPreDigest<VRFProof=schnorrkel::RawVRFProof> {
 	pub commitments: Vec<VRFProof>,
 }
 
+#[cfg(feature = "std")]
+/// Sassafras secondary slot assignment pre-digest for std environment.
+pub type SecondaryPreDigest = RawSecondaryPreDigest<schnorrkel::VRFProof>;
+
 /// A Sassafras pre-digest. The validator pre-commit a VRF proof at `vrf_index`, and now reveal it
 /// as `vrf_output`.
 ///
