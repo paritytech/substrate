@@ -24,28 +24,42 @@ fn taylor_term(k: u32, y_num: u128, y_den: u128) -> u32 {
 	}
 }
 
-/// Return Per-million value.
+/// Performs a log2 operation using a rational fraction
+///
+/// result = log2(q/p) where q/p is bound to (0, 1]
+/// Where:
+/// * q represents the numerator of the rational fraction input
+/// * p represents the denominator of the rational fraction input
+/// * result represents a per-million output of log2
+///   note: because result is u32, and the output of any log function
+///         in interval (0, 1) is negative, the output represents the
+///         absolute per million value of log2 and should be treated as
+///         a negative number
 pub fn log2(p: u32, q: u32) -> u32 {
-	assert!(p >= q);
+	assert!(p >= q); // keep q/p bound to (0, 1]
 	assert!(p <= u32::max_value()/2);
 
 	// This restriction should not be mandatory. But function is only tested and used for this.
 	assert!(p <= 1_000_000);
 	assert!(q <= 1_000_000);
 
+	// log2(1) = 0
 	if p == q {
 		return 0
 	}
 
+	// find the power of 2 where q * 2^n <= p < q * 2^(n+1)
 	let mut n = 0u32;
 	while !(p >= pow2!(n) * q) || !(p < pow2!(n + 1) * q) {
 		n += 1;
+		assert!(n < 32); // cannot represent 2^32 in u32
 	}
 	assert!(p < pow2!(n + 1) * q);
 
 	let y_num: u32 = (p - pow2!(n) * q).try_into().unwrap();
 	let y_den: u32 = (p + pow2!(n) * q).try_into().unwrap();
 
+	// Loop through each Taylor series coefficient until it reaches 10^-6
 	let mut res = n * 1_000_000u32;
 	let mut k = 0;
 	loop {
