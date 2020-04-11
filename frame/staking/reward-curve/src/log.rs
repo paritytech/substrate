@@ -1,5 +1,22 @@
 use std::convert::TryInto;
 
+/// Returns the k_th per_million taylor term for a log2 function
+fn taylor_term(k: u32, y_num: u128, y_den: u128) -> u32 {
+	let _2_div_ln_2: u128 = 2_885_390u128;
+
+	if k == 0 {
+		(_2_div_ln_2 * (y_num).pow(1) / (y_den).pow(1)).try_into().unwrap()
+	} else {
+		let mut res = _2_div_ln_2 * (y_num).pow(3) / (y_den).pow(3);
+		for _ in 1..k {
+			res = res * (y_num).pow(2) / (y_den).pow(2);
+		}
+		res /= 2 * k as u128 + 1;
+
+		res.try_into().unwrap()
+	}
+}
+
 /// Return Per-million value.
 pub fn log2(p: u32, q: u32) -> u32 {
 	assert!(p >= q);
@@ -24,25 +41,10 @@ pub fn log2(p: u32, q: u32) -> u32 {
 
 	let _2_div_ln_2 = 2_885_390u32;
 
-	let taylor_term = |k: u32| -> u32 {
-		if k == 0 {
-			(_2_div_ln_2 as u128 * (y_num as u128).pow(1) / (y_den as u128).pow(1))
-				.try_into().unwrap()
-		} else {
-			let mut res = _2_div_ln_2 as u128 * (y_num as u128).pow(3) / (y_den as u128).pow(3);
-			for _ in 1..k {
-				res = res * (y_num as u128).pow(2) / (y_den as u128).pow(2);
-			}
-			res /= 2 * k as u128 + 1;
-
-			res.try_into().unwrap()
-		}
-	};
-
 	let mut res = n * 1_000_000u32;
 	let mut k = 0;
 	loop {
-		let term = taylor_term(k);
+		let term = taylor_term(k, y_num.into(), y_den.into());
 		if term == 0 {
 			break
 		}
