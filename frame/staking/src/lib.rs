@@ -1184,7 +1184,6 @@ decl_module! {
 							} else {
 								log!(warn, "💸 Failed to create snapshot at {:?}.", now);
 							}
-
 						}
 					}
 				} else {
