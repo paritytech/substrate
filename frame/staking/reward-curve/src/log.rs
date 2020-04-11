@@ -68,3 +68,43 @@ fn test_log() {
 		}
 	}
 }
+
+#[test]
+#[should_panic]
+fn test_log_p_must_be_greater_than_q() {
+	let p: u32 = 1_000;
+	let q: u32 = 1_001;
+	let _ = log2(p, q);
+}
+
+#[test]
+#[should_panic]
+fn test_log_p_upper_bound() {
+	let p: u32 = 1_000_001;
+	let q: u32 = 1_000_000;
+	let _ = log2(p, q);
+}
+
+#[test]
+#[should_panic]
+fn test_log_q_limit() {
+	let p: u32 = 1_000_000;
+	let q: u32 = 0;
+	let _ = log2(p, q);
+}
+
+#[test]
+fn test_log_of_one_boundary() {
+	let p: u32 = 1_000_000;
+	let q: u32 = 1_000_000;
+	assert_eq!(log2(p, q), 0);
+}
+
+#[test]
+fn test_log_of_smallest_fraction() {
+	let p: u32 = 1_000_000;
+	let q: u32 = 1;
+	let expected = 19_931_568;
+	let tolerance = 100;
+	assert!((log2(p, q) as i32 - expected as i32).abs() < tolerance);
+}
