@@ -24,8 +24,8 @@ pub mod digests;
 pub mod inherents;
 
 pub use sp_consensus_vrf::schnorrkel::{
-	VRF_PROOF_LENGTH, VRF_OUTPUT_LENGTH, RawVRFOutput, VRFOutput,
-	RawVRFProof, VRFProof, Randomness,
+	VRF_PROOF_LENGTH, VRF_OUTPUT_LENGTH, RANDOMNESS_LENGTH,
+	RawVRFOutput, VRFOutput, RawVRFProof, VRFProof, Randomness,
 };
 
 use sp_std::vec::Vec;

@@ -82,20 +82,20 @@ pub enum RawPreDigest<VRFOutput=schnorrkel::RawVRFOutput, VRFProof=schnorrkel::R
 /// A Sassafras pre-runtime digest for std.
 pub type PreDigest = RawPreDigest<schnorrkel::VRFOutput, schnorrkel::VRFProof>;
 
-impl PreDigest {
+impl<VRFOutput, VRFProof> RawPreDigest<VRFOutput, VRFProof> {
 	/// Returns the slot number of the pre digest.
 	pub fn authority_index(&self) -> AuthorityIndex {
 		match self {
-			PreDigest::Primary(p) => p.authority_index,
-			PreDigest::Secondary(s) => s.authority_index,
+			RawPreDigest::Primary(p) => p.authority_index,
+			RawPreDigest::Secondary(s) => s.authority_index,
 		}
 	}
 
 	/// Returns the slot number of the pre digest.
 	pub fn slot_number(&self) -> SlotNumber {
 		match self {
-			PreDigest::Primary(p) => p.slot_number,
-			PreDigest::Secondary(s) => s.slot_number,
+			RawPreDigest::Primary(p) => p.slot_number,
+			RawPreDigest::Secondary(s) => s.slot_number,
 		}
 	}
 
@@ -103,8 +103,8 @@ impl PreDigest {
 	/// of the chain.
 	pub fn added_weight(&self) -> super::SassafrasBlockWeight {
 		match self {
-			PreDigest::Primary(_) => 1,
-			PreDigest::Secondary(_) => 0,
+			RawPreDigest::Primary(_) => 1,
+			RawPreDigest::Secondary(_) => 0,
 		}
 	}
 }
