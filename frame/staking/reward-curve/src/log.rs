@@ -1,5 +1,12 @@
 use std::convert::TryInto;
 
+/// Simple u32 power of 2 function - simply uses a bit shift
+macro_rules! pow2 {
+	($n:expr) => {
+		1_u32 << $n
+	}
+}
+
 /// Returns the k_th per_million taylor term for a log2 function
 fn taylor_term(k: u32, y_num: u128, y_den: u128) -> u32 {
 	let _2_div_ln_2: u128 = 2_885_390u128;
@@ -31,15 +38,13 @@ pub fn log2(p: u32, q: u32) -> u32 {
 	}
 
 	let mut n = 0u32;
-	while !(p >= (1u32 << n)*q) || !(p < (1u32 << (n+1))*q) {
+	while !(p >= pow2!(n) * q) || !(p < pow2!(n + 1) * q) {
 		n += 1;
 	}
-	assert!(p < (1u32 << (n+1)) * q);
+	assert!(p < pow2!(n + 1) * q);
 
-	let y_num: u32 = (p - (1u32 << n) * q).try_into().unwrap();
-	let y_den: u32 = (p + (1u32 << n) * q).try_into().unwrap();
-
-	let _2_div_ln_2 = 2_885_390u32;
+	let y_num: u32 = (p - pow2!(n) * q).try_into().unwrap();
+	let y_den: u32 = (p + pow2!(n) * q).try_into().unwrap();
 
 	let mut res = n * 1_000_000u32;
 	let mut k = 0;
