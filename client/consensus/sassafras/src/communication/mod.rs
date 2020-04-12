@@ -6,11 +6,20 @@ use futures::channel::mpsc::{UnboundedSender, UnboundedReceiver};
 use sp_consensus_sassafras::{SlotNumber, AuthorityId, AuthorityPair};
 use sp_consensus_vrf::schnorrkel::VRFProof;
 use sc_keystore::KeyStorePtr;
+use log::trace;
 use crate::PublishingSet;
 
 pub use self::network::{
 	SASSAFRAS_ENGINE_ID, SASSAFRAS_PROTOCOL_NAME, GossipValidator, NetworkBridge,
 };
+
+mod cost {
+	use sc_network::ReputationChange as Rep;
+}
+
+mod benefit {
+	use sc_network::ReputationChange as Rep;
+}
 
 pub fn send_out(
 	sender: &UnboundedSender<(AuthorityId, [u8; 32], Vec<u8>)>,
@@ -29,7 +38,13 @@ pub fn send_out(
 			let receiver_id = set.authorities[pending.submit_authority_index as usize].0.clone();
 			let receiver_public = match schnorrkel::PublicKey::from_bytes(receiver_id.as_ref()) {
 				Ok(public) => public,
-				Err(_) => continue,
+				Err(_) => {
+					trace!(
+						target: "sassafras_communication",
+						"Sending out a pending message, but receiver id decoding failed, ignoring",
+					);
+					continue
+				},
 			};
 			let (ephemeral_key, aead) = receiver_public
 				.init_aead32_unauthenticated::<aes_gcm::Aes256Gcm>();
@@ -38,14 +53,30 @@ pub fn send_out(
 				&pending.vrf_proof.encode()[..],
 			) {
 				Ok(encrypted) => encrypted,
-				Err(_) => continue,
+				Err(_) => {
+					trace!(
+						target: "sassafras_communication",
+						"Sending out a pending message, but encrypting it failed, ignoring",
+					);
+					continue
+				},
 			};
 
 			match sender.unbounded_send((receiver_id, ephemeral_key.to_bytes(), encrypted)) {
 				Ok(()) => {
+					trace!(
+						target: "sassafras_communication",
+						"Successfully sent out a pending message.",
+					);
 					pending.submit_status = Some(slot_number);
 				},
-				Err(_) => break,
+				Err(_) => {
+					trace!(
+						target: "sassafras_communication",
+						"Sending out a pending message, but the channel signaled failure, breaking",
+					);
+					break
+				},
 			}
 		}
 	}
@@ -61,13 +92,25 @@ pub fn receive_in(
 	while let Ok(Some((receiver_id, ephemeral_key, encrypted))) = receiver.try_next() {
 		let receiver_pair = match keystore.key_pair::<AuthorityPair>(&receiver_id) {
 			Ok(pair) => pair,
-			Err(_) => continue,
+			Err(_) => {
+				trace!(
+					target: "sassafras_communication",
+					"Received an encypted message, but the key pair cannot be found, ignoring."
+				);
+				continue
+			},
 		};
 		let pair = crate::authorship::get_keypair(&receiver_pair);
 		let aead = pair.secret.aead32_unauthenticated::<aes_gcm::Aes256Gcm>(
 			&match schnorrkel::PublicKey::from_bytes(&ephemeral_key) {
 				Ok(key) => key,
-				Err(_) => continue,
+				Err(_) => {
+					trace!(
+						target: "sassafras_communication",
+						"Received an encrypted message, but the public key decoding failed, ignoring."
+					);
+					continue
+				},
 			}
 		);
 		let decrypted = match aead.decrypt(
@@ -75,13 +118,29 @@ pub fn receive_in(
 			&encrypted[..],
 		) {
 			Ok(decrypted) => decrypted,
-			Err(_) => continue,
+			Err(_) => {
+				trace!(
+					target: "sassafras_communication",
+					"Received an ecrypted message, but decrypting it failed, ignoring."
+				);
+				continue
+			},
 		};
 		let proof = match VRFProof::decode(&mut &decrypted[..]) {
 			Ok(proof) => proof,
-			Err(_) => continue,
+			Err(_) => {
+				trace!(
+					target: "sassafras_communication",
+					"Received an encrypted message, but the proof decoding failed, ignoring."
+				);
+				continue
+			},
 		};
 
+		trace!(
+			target: "sassafras_communication",
+			"Received an encrypted message and decoded it as proof {:?}", proof
+		);
 		set.disclosing.push(proof);
 	}
 }
