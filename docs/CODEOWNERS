@@ -34,8 +34,8 @@
 /primitives/core/src/sandbox.rs @pepyakin
 
 # Transaction pool
-/client/transaction-pool/ @tomusdrw @NikVolf
-/primitives/transaction-pool/ @tomusdrw @NikVolf
+/client/transaction-pool/ @NikVolf
+/primitives/transaction-pool/ @NikVolf
 
 # Offchain
 /client/offchain/ @tomusdrw
@@ -90,3 +90,7 @@
 
 # Prometheus endpoint
 /utils/prometheus/ @mxinden
+
+# CLI API
+/client/cli @cecton
+/client/cli-derive @cecton

@@ -107,13 +107,13 @@
 //! pub type MyChainSpec<G> = GenericChainSpec<G, Extension>;
 //! ```
 
-
 mod chain_spec;
 mod extension;
 
-pub use chain_spec::{ChainSpec as GenericChainSpec, Properties, NoExtension};
+pub use chain_spec::{ChainSpec as GenericChainSpec, NoExtension};
 pub use extension::{Group, Fork, Forks, Extension, GetExtension, get_extension};
 pub use sc_chain_spec_derive::{ChainSpecExtension, ChainSpecGroup};
+pub use sp_chain_spec::{Properties, ChainType};
 
 use serde::{Serialize, de::DeserializeOwned};
 use sp_runtime::BuildStorage;
@@ -124,12 +124,14 @@ use sc_telemetry::TelemetryEndpoints;
 pub trait RuntimeGenesis: Serialize + DeserializeOwned + BuildStorage {}
 impl<T: Serialize + DeserializeOwned + BuildStorage> RuntimeGenesis for T {}
 
-/// Common interface to `GenericChainSpec`
+/// Common interface of a chain specification.
 pub trait ChainSpec: BuildStorage + Send {
 	/// Spec name.
 	fn name(&self) -> &str;
 	/// Spec id.
 	fn id(&self) -> &str;
+	/// Type of the chain.
+	fn chain_type(&self) -> ChainType;
 	/// A list of bootnode addresses.
 	fn boot_nodes(&self) -> &[MultiaddrWithPeerId];
 	/// Telemetry endpoints (if any)

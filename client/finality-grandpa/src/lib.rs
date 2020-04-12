@@ -84,6 +84,23 @@ use std::time::Duration;
 use std::pin::Pin;
 use std::task::{Poll, Context};
 
+// utility logging macro that takes as first argument a conditional to
+// decide whether to log under debug or info level (useful to restrict
+// logging under initial sync).
+macro_rules! afg_log {
+	($condition:expr, $($msg: expr),+ $(,)?) => {
+		{
+			let log_level = if $condition {
+				log::Level::Debug
+			} else {
+				log::Level::Info
+			};
+
+			log::log!(target: "afg", log_level, $($msg),+);
+		}
+	};
+}
+
 mod authorities;
 mod aux_schema;
 mod communication;

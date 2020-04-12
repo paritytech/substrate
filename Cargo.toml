@@ -123,6 +123,7 @@ members = [
 	"primitives/consensus/pow",
 	"primitives/consensus/vrf",
 	"primitives/core",
+	"primitives/chain-spec",
 	"primitives/debug-derive",
 	"primitives/storage",
 	"primitives/externalities",
@@ -176,3 +177,4 @@ members = [
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
+
