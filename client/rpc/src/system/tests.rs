@@ -17,7 +17,7 @@
 use super::*;
 
 use sc_network::{self, PeerId};
-use sc_network::config::Roles;
+use sc_network::config::Role;
 use substrate_test_runtime_client::runtime::Block;
 use assert_matches::assert_matches;
 use futures::{prelude::*, channel::mpsc};
@@ -60,7 +60,7 @@ fn api<T: Into<Option<Status>>>(sync: T) -> System<Block> {
 					for _peer in 0..status.peers {
 						peers.push(PeerInfo {
 							peer_id: status.peer_id.to_base58(),
-							roles: format!("{:?}", Roles::FULL),
+							roles: format!("{}", Role::Full),
 							protocol_version: 1,
 							best_hash: Default::default(),
 							best_number: 1,
@@ -105,6 +105,7 @@ fn api<T: Into<Option<Status>>>(sync: T) -> System<Block> {
 		impl_version: "0.2.0".into(),
 		chain_name: "testchain".into(),
 		properties: Default::default(),
+		chain_type: Default::default(),
 	}, tx)
 }
 
@@ -117,7 +118,7 @@ fn wait_receiver<T>(rx: Receiver<T>) -> T {
 fn system_name_works() {
 	assert_eq!(
 		api(None).system_name().unwrap(),
-		"testclient".to_owned()
+		"testclient".to_owned(),
 	);
 }
 
@@ -125,7 +126,7 @@ fn system_name_works() {
 fn system_version_works() {
 	assert_eq!(
 		api(None).system_version().unwrap(),
-		"0.2.0".to_owned()
+		"0.2.0".to_owned(),
 	);
 }
 
@@ -133,7 +134,7 @@ fn system_version_works() {
 fn system_chain_works() {
 	assert_eq!(
 		api(None).system_chain().unwrap(),
-		"testchain".to_owned()
+		"testchain".to_owned(),
 	);
 }
 
@@ -141,7 +142,15 @@ fn system_chain_works() {
 fn system_properties_works() {
 	assert_eq!(
 		api(None).system_properties().unwrap(),
-		serde_json::map::Map::new()
+		serde_json::map::Map::new(),
+	);
+}
+
+#[test]
+fn system_type_works() {
+	assert_eq!(
+		api(None).system_type().unwrap(),
+		Default::default(),
 	);
 }
 

@@ -284,8 +284,8 @@ pub enum DatabaseSettingsSrc {
 	Path {
 		/// Path to the database.
 		path: PathBuf,
-		/// Cache size in bytes. If `None` default is used.
-		cache_size: Option<usize>,
+		/// Cache size in MiB.
+		cache_size: usize,
 	},
 
 	/// Use a custom already-open database.
@@ -425,6 +425,7 @@ impl<Block: BlockT> sc_client::blockchain::HeaderBackend<Block> for BlockchainDb
 			genesis_hash: meta.genesis_hash,
 			finalized_hash: meta.finalized_hash,
 			finalized_number: meta.finalized_number,
+			number_leaves: self.leaves.read().count(),
 		}
 	}
 

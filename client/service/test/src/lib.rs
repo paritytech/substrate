@@ -34,11 +34,11 @@ use sc_service::{
 	Configuration,
 	config::{DatabaseConfig, KeystoreConfig},
 	RuntimeGenesis,
-	Roles,
+	Role,
 	Error,
 };
-use sc_network::{multiaddr, Multiaddr, NetworkStateInfo};
-use sc_network::config::{NetworkConfiguration, TransportConfig, NodeKeyConfig, Secret, NonReservedPeerMode};
+use sc_network::{multiaddr, Multiaddr};
+use sc_network::config::{NetworkConfiguration, TransportConfig};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use sp_transaction_pool::TransactionPool;
 
@@ -134,7 +134,7 @@ where F: Send + 'static, L: Send +'static, U: Clone + Send + 'static
 fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'static + Send> (
 	index: usize,
 	spec: &GenericChainSpec<G, E>,
-	role: Roles,
+	role: Role,
 	task_executor: Arc<dyn Fn(Pin<Box<dyn futures::Future<Output = ()> + Send>>) + Send + Sync>,
 	key_seed: Option<String>,
 	base_port: u16,
@@ -143,58 +143,46 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 {
 	let root = root.path().join(format!("node-{}", index));
 
-	let config_path = Some(root.join("network"));
-	let net_config_path = config_path.clone();
+	let net_config_path = root.join("network");
 
-	let network_config = NetworkConfiguration {
-		config_path,
-		net_config_path,
-		listen_addresses: vec! [
-			iter::once(multiaddr::Protocol::Ip4(Ipv4Addr::new(127, 0, 0, 1)))
-				.chain(iter::once(multiaddr::Protocol::Tcp(base_port + index as u16)))
-				.collect()
-		],
-		public_addresses: vec![],
-		boot_nodes: vec![],
-		node_key: NodeKeyConfig::Ed25519(Secret::New),
-		in_peers: 50,
-		out_peers: 450,
-		reserved_nodes: vec![],
-		non_reserved_mode: NonReservedPeerMode::Accept,
-		sentry_nodes: vec![],
-		client_version: "network/test/0.1".to_owned(),
-		node_name: "unknown".to_owned(),
-		transport: TransportConfig::Normal {
-			enable_mdns: false,
-			allow_private_ipv4: true,
-			wasm_external_transport: None,
-			use_yamux_flow_control: true,
-		},
-		max_parallel_downloads: NetworkConfiguration::default().max_parallel_downloads,
+	let mut network_config = NetworkConfiguration::new(
+		format!("Node {}", index),
+		"network/test/0.1",
+		Default::default(), &net_config_path,
+	);
+
+	network_config.listen_addresses.push(
+		iter::once(multiaddr::Protocol::Ip4(Ipv4Addr::new(127, 0, 0, 1)))
+			.chain(iter::once(multiaddr::Protocol::Tcp(base_port + index as u16)))
+			.collect()
+	);
+
+	network_config.transport = TransportConfig::Normal {
+		enable_mdns: false,
+		allow_private_ipv4: true,
+		wasm_external_transport: None,
+		use_yamux_flow_control: true,
 	};
 
 	Configuration {
 		impl_name: "network-test-impl",
 		impl_version: "0.1",
-		impl_commit: "",
-		roles: role,
-		task_executor: Some(task_executor),
+		role,
+		task_executor,
 		transaction_pool: Default::default(),
 		network: network_config,
 		keystore: KeystoreConfig::Path {
 			path: root.join("key"),
 			password: None
 		},
-		config_dir: Some(root.clone()),
-		database: Some(DatabaseConfig::Path {
+		database: DatabaseConfig::Path {
 			path: root.join("db"),
-			cache_size: None
-		}),
+			cache_size: 128,
+		},
 		state_cache_size: 16777216,
 		state_cache_child_ratio: None,
 		pruning: Default::default(),
-		chain_spec: Some(Box::new((*spec).clone())),
-		name: format!("Node {}", index),
+		chain_spec: Box::new((*spec).clone()),
 		wasm_method: sc_service::config::WasmExecutionMethod::Interpreted,
 		execution_strategies: Default::default(),
 		rpc_http: None,
@@ -206,7 +194,6 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 		telemetry_external_transport: None,
 		default_heap_pages: None,
 		offchain_worker: false,
-		sentry_mode: false,
 		force_authoring: false,
 		disable_grandpa: false,
 		dev_key_seed: key_seed,
@@ -267,7 +254,7 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 			let node_config = node_config(
 				self.nodes,
 				&self.chain_spec,
-				Roles::AUTHORITY,
+				Role::Authority { sentry_nodes: Vec::new() },
 				task_executor,
 				Some(key),
 				self.base_port,
@@ -278,7 +265,7 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 			let service = SyncService::from(service);
 
 			executor.spawn(service.clone().map_err(|_| ()));
-			let addr = addr.with(multiaddr::Protocol::P2p(service.get().network().local_peer_id().into()));
+			let addr = addr.with(multiaddr::Protocol::P2p(service.get().network().local_peer_id().clone().into()));
 			self.authority_nodes.push((self.nodes, service, user_data, addr));
 			self.nodes += 1;
 		}
@@ -288,13 +275,13 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 				let executor = executor.clone();
 				Arc::new(move |fut: Pin<Box<dyn futures::Future<Output = ()> + Send>>| executor.spawn(fut.unit_error().compat()))
 			};
-			let node_config = node_config(self.nodes, &self.chain_spec, Roles::FULL, task_executor, None, self.base_port, &temp);
+			let node_config = node_config(self.nodes, &self.chain_spec, Role::Full, task_executor, None, self.base_port, &temp);
 			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
 			let (service, user_data) = full(node_config).expect("Error creating test node service");
 			let service = SyncService::from(service);
 
 			executor.spawn(service.clone().map_err(|_| ()));
-			let addr = addr.with(multiaddr::Protocol::P2p(service.get().network().local_peer_id().into()));
+			let addr = addr.with(multiaddr::Protocol::P2p(service.get().network().local_peer_id().clone().into()));
 			self.full_nodes.push((self.nodes, service, user_data, addr));
 			self.nodes += 1;
 		}
@@ -304,12 +291,12 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 				let executor = executor.clone();
 				Arc::new(move |fut: Pin<Box<dyn futures::Future<Output = ()> + Send>>| executor.spawn(fut.unit_error().compat()))
 			};
-			let node_config = node_config(self.nodes, &self.chain_spec, Roles::LIGHT, task_executor, None, self.base_port, &temp);
+			let node_config = node_config(self.nodes, &self.chain_spec, Role::Light, task_executor, None, self.base_port, &temp);
 			let addr = node_config.network.listen_addresses.iter().next().unwrap().clone();
 			let service = SyncService::from(light(node_config).expect("Error creating test node service"));
 
 			executor.spawn(service.clone().map_err(|_| ()));
-			let addr = addr.with(multiaddr::Protocol::P2p(service.get().network().local_peer_id().into()));
+			let addr = addr.with(multiaddr::Protocol::P2p(service.get().network().local_peer_id().clone().into()));
 			self.light_nodes.push((self.nodes, service, addr));
 			self.nodes += 1;
 		}

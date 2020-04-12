@@ -166,7 +166,7 @@
 use sp_std::prelude::*;
 use sp_runtime::{
 	DispatchResult, DispatchError, RuntimeDebug,
-	traits::{Zero, EnsureOrigin, Hash, Dispatchable, Saturating},
+	traits::{Zero, Hash, Dispatchable, Saturating},
 };
 use codec::{Ref, Encode, Decode};
 use frame_support::{
@@ -174,7 +174,7 @@ use frame_support::{
 	weights::{SimpleDispatchInfo, Weight, WeighData},
 	traits::{
 		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier, Get,
-		OnUnbalanced, BalanceStatus, schedule::Named as ScheduleNamed
+		OnUnbalanced, BalanceStatus, schedule::Named as ScheduleNamed, EnsureOrigin
 	}
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
