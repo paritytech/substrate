@@ -30,7 +30,6 @@
 use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
 use wasm_bindgen_futures::JsFuture;
 use wasm_bindgen::JsValue;
-use wasm_bindgen::prelude::wasm_bindgen;
 use jsonrpc_core::types::{MethodCall, Success, Version, Params, Id};
 use serde::de::DeserializeOwned;
 use futures_timer::Delay;
