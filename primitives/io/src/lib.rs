@@ -445,8 +445,7 @@ pub trait Crypto {
 					sig.clone(),
 					pub_key.clone(),
 					msg.to_vec(),
-				);
-				true
+				)
 			} else {
 				false
 			}
@@ -480,8 +479,7 @@ pub trait Crypto {
 					sig.clone(),
 					pub_key.clone(),
 					msg.to_vec(),
-				);
-				true
+				)
 			} else {
 				false
 			}
