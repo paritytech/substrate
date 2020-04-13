@@ -15,9 +15,9 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use codec::{Decode, Encode};
-use sp_core::U256;
-use sp_runtime::{
-	traits::{Bounded, Saturating, UniqueSaturatedInto},
+use primitive_types::U256;
+use crate::{
+	traits::{Bounded, Saturating, UniqueSaturatedInto, SaturatedConversion},
 	PerThing,
 };
 use sp_std::{
@@ -28,7 +28,6 @@ use sp_std::{
 
 #[cfg(feature = "std")]
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
-use sp_runtime::traits::SaturatedConversion;
 
 /// A signed fixed-point number.
 /// Can hold any value in the range [-170_141_183_460_469_231_731, 170_141_183_460_469_231_731]
@@ -235,6 +234,20 @@ impl Saturating for Fixed128 {
 			}
 		})
 	}
+
+	fn saturating_pow(self, exp: usize) -> Self {
+		let prev_pow_2 = exp.checked_next_power_of_two().map(|val| val / 2).unwrap_or(usize::max_value());
+		let count = prev_pow_2.trailing_zeros() as usize;
+		let mut val = self;
+		for _ in 0..count {
+			val = val.saturating_mul(val);
+		}
+		let remain = exp % count;
+		for _ in 0..remain {
+			val = val.saturating_mul(self)
+		}
+		val
+	}
 }
 
 impl Bounded for Fixed128 {
@@ -313,7 +326,7 @@ impl<'de> Deserialize<'de> for Fixed128 {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_runtime::{Perbill, Percent, Permill, Perquintill};
+	use crate::{Perbill, Percent, Permill, Perquintill};
 
 	fn max() -> Fixed128 {
 		Fixed128::max_value()
