@@ -129,6 +129,7 @@ mod tests {
 		TargetBlockFullness::get() * max()
 	}
 
+	// This is an error rate of 5 x 10 ^ -10 with Fixed128
 	const ERROR_RATE: Fixed128 = Fixed128::from_parts(500_000_000);
 
 	// poc reference implementation.
