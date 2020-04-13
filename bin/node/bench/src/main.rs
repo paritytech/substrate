@@ -19,6 +19,7 @@ mod import;
 mod trie;
 mod generator;
 mod tempdb;
+mod state_sizes;
 
 use crate::core::run_benchmark;
 use import::{ImportBenchmarkDescription, SizeType};
@@ -74,7 +75,7 @@ fn main() {
 			},
 		size in [
 			DatabaseSize::Empty, DatabaseSize::Smallest, DatabaseSize::Small,
-			DatabaseSize::Medium, DatabaseSize::Large, DatabaseSize::Largest
+			DatabaseSize::Medium, DatabaseSize::Large,
 		] => TrieBenchmarkDescription { database_size: *size },
 	);
 

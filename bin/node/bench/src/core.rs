@@ -68,12 +68,12 @@ impl fmt::Display for NsFormatter {
 			return write!(f, "{} ns", v)
 		}
 
-		if self.0 < 10_000 {
+		if self.0 < 100_000 {
 			return write!(f, "{:.1} µs", v as f64 / 1000.0)
 		}
 
 		if self.0 < 1_000_000 {
-			return write!(f, "{:.1} ms", v as f64 / 1_000_000.0)
+			return write!(f, "{:.2} ms", v as f64 / 1_000_000.0)
 		}
 
 		if self.0 < 100_000_000 {
