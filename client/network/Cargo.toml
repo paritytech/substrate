@@ -59,7 +59,7 @@ void = "1.0.2"
 zeroize = "1.0.0"
 
 [dependencies.libp2p]
-version = "0.17.0"
+version = "0.18.0"
 default-features = false
 features = ["websocket", "kad", "mdns", "ping", "identify", "mplex", "yamux", "noise"]
 
@@ -67,7 +67,7 @@ features = ["websocket", "kad", "mdns", "ping", "identify", "mplex", "yamux", "n
 async-std = "1.5"
 assert_matches = "1.3"
 env_logger = "0.7.0"
-libp2p = { version = "0.17.0", default-features = false, features = ["secio"] }
+libp2p = { version = "0.18.0", default-features = false, features = ["secio"] }
 quickcheck = "0.9.0"
 rand = "0.7.2"
 sp-keyring = { version = "2.0.0-alpha.5", path = "../../primitives/keyring" }
