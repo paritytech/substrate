@@ -193,15 +193,6 @@ fn should_submit_unsigned_transaction_on_chain() {
 	});
 }
 
-#[test]
-fn weights_work() {
-	// must have a default weight.
-	let default_call = <Call<Test>>::submit_price(10);
-	let info = default_call.get_dispatch_info();
-	// aka. `let info = <Call<Test> as GetDispatchInfo>::get_dispatch_info(&default_call);`
-	assert_eq!(info.weight, 10_000);
-}
-
 fn price_oracle_response(state: &mut testing::OffchainState) {
 	state.expect_request(0, testing::PendingRequest {
 		method: "GET".into(),
