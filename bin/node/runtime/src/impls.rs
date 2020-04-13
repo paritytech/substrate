@@ -344,6 +344,8 @@ mod tests {
 			run_with_system_weight(i, || {
 				let next = TargetedFeeAdjustment::<TargetBlockFullness>::convert(Fixed64::default());
 				let truth = fee_multiplier_update(i, Fixed64::default());
+				println!("Real:  {:?}", next);
+				println!("Truth: {:?}", truth);
 				assert_eq_error_rate!(truth.into_inner(), next.into_inner(), 5);
 			});
 		});

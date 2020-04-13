@@ -104,6 +104,10 @@ impl Fixed64 {
 			int.saturating_sub(excess)
 		}
 	}
+
+	pub fn is_negative(&self) -> bool {
+		self.0.is_negative()
+	}
 }
 
 impl Saturating for Fixed64 {
@@ -188,7 +192,13 @@ impl CheckedDiv for Fixed64 {
 impl sp_std::fmt::Debug for Fixed64 {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		write!(f, "Fixed64({},{})", self.0 / DIV, (self.0 % DIV) / 1000)
+		let integral = {
+			let int = self.0 / DIV;
+			let signum_for_zero = if int == 0 && self.is_negative() { "-" } else { "" };
+			format!("{}{}", signum_for_zero, int)
+		};
+		let fractional = format!("{:0>9}", (self.0 % DIV).abs());
+		write!(f, "Fixed64({}.{})", integral, fractional)
 	}
 
 	#[cfg(not(feature = "std"))]
