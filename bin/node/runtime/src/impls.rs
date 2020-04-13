@@ -340,15 +340,15 @@ mod tests {
 			100 * kb,
 			mb,
 			10 * mb,
-			Weight::max_value() / 2,
-			Weight::max_value(),
+			2147483647,
+			4294967295,
+			MaximumBlockWeight::get() / 2,
+			MaximumBlockWeight::get(),
 		].into_iter().for_each(|i| {
 			run_with_system_weight(i, || {
 				let next = TargetedFeeAdjustment::<TargetBlockFullness>::convert(Fixed128::default());
 				let truth = fee_multiplier_update(i, Fixed128::default());
-				println!("Next:  {:?}", next);
-				println!("Truth: {:?}", truth);
-				assert_eq_error_rate!(truth.deconstruct(), next.deconstruct(), 5_000_000_000i128);
+				assert_eq_error_rate!(truth.deconstruct(), next.deconstruct(), 500_000_000i128);
 			});
 		});
 
