@@ -42,6 +42,8 @@ mod utils;
 mod stats;
 #[cfg(any(feature = "kvdb-rocksdb", test))]
 mod parity_db;
+#[cfg(any(feature = "kvdb-rocksdb", test))]
+mod subdb;
 
 use std::sync::Arc;
 use std::path::{Path, PathBuf};

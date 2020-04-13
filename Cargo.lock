@@ -6006,6 +6006,7 @@ dependencies = [
 name = "sc-client-db"
 version = "0.8.0-alpha.5"
 dependencies = [
+ "blake2-rfc",
  "env_logger 0.7.1",
  "hash-db",
  "kvdb",
@@ -7430,7 +7431,7 @@ dependencies = [
 [[package]]
 name = "sp-database"
 version = "2.0.0-alpha.5"
-source = "git+https://github.com/paritytech/substrate?branch=gav-db-trait#49e197e9b288631ccbf4b0208a9e918e46282025"
+source = "git+https://github.com/paritytech/substrate?branch=gav-db-trait#14e319ad2a456297d3a167e3452a48cbbd540248"
 dependencies = [
  "kvdb",
  "parking_lot 0.10.0",
@@ -7927,7 +7928,7 @@ dependencies = [
 [[package]]
 name = "subdb"
 version = "0.1.0"
-source = "git+https://github.com/paritytech/subdb#49baf17fbfc0f324ec1597d2833f080b01b54d2f"
+source = "git+https://github.com/paritytech/subdb#c62a11801c80aa1d112ed9713368249c233e3b55"
 dependencies = [
  "blake2-rfc",
  "derive_more",
@@ -8907,7 +8908,7 @@ version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3bfd5b7557925ce778ff9b9ef90e3ade34c524b5ff10e239c69a42d546d2af56"
 dependencies = [
- "rand 0.7.3",
+ "rand 0.3.23",
 ]
 
 [[package]]

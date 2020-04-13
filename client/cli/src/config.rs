@@ -166,7 +166,7 @@ pub trait CliConfiguration: Sized {
 	fn database_config(&self,
 		base_path: &PathBuf,
 		cache_size: usize,
-		databaseb: Database,
+		database: Database,
 	) -> Result<DatabaseConfig> {
 		Ok(self.shared_params().database_config(
 			base_path,
@@ -392,7 +392,7 @@ pub trait CliConfiguration: Sized {
 		let net_config_dir = config_dir.join(DEFAULT_NETWORK_CONFIG_PATH);
 		let client_id = C::client_id();
 		let database_cache_size = self.database_cache_size()?.unwrap_or(128);
-		let database = self.database().unwrap_or(Database::RocksDb);
+		let database = self.database()?.unwrap_or(Database::RocksDb);
 		let node_key = self.node_key(&net_config_dir)?;
 		let role = self.role(is_dev)?;
 		let max_runtime_instances = self.max_runtime_instances()?.unwrap_or(8);
