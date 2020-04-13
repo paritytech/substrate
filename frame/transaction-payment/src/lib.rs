@@ -578,7 +578,7 @@ mod tests {
 			.execute_with(||
 		{
 			// all fees should be x1.5
-			NextFeeMultiplier::put(Fixed128::from_rational(1, 2));
+			NextFeeMultiplier::put(Fixed128::from_rational(1, NonZeroI128::new(2).unwrap()));
 			let len = 10;
 
 			assert!(
@@ -606,7 +606,7 @@ mod tests {
 			.execute_with(||
 		{
 			// all fees should be x1.5
-			NextFeeMultiplier::put(Fixed128::from_rational(1, 2));
+			NextFeeMultiplier::put(Fixed128::from_rational(1, NonZeroI128::new(2).unwrap()));
 
 			assert_eq!(
 				TransactionPayment::query_info(xt, len),
@@ -675,7 +675,7 @@ mod tests {
 			.execute_with(||
 		{
 			// Add a next fee multiplier
-			NextFeeMultiplier::put(Fixed128::from_rational(1, 2)); // = 1/2 = .5
+			NextFeeMultiplier::put(Fixed128::from_rational(1, NonZeroI128::new(2).unwrap())); // = 1/2 = .5
 			// Base fee is unaffected by multiplier
 			let dispatch_info = DispatchInfo {
 				weight: 0,
