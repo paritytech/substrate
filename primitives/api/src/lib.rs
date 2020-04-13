@@ -522,9 +522,10 @@ pub type ApiErrorFor<T, Block> = <<T as ProvideRuntimeApi<Block>>::Api as ApiErr
 decl_runtime_apis! {
 	/// The `Core` runtime api that every Substrate runtime needs to implement.
 	#[core_trait]
-	#[api_version(2)]
+	#[api_version(3)]
 	pub trait Core {
 		/// Returns the version of the runtime.
+		#[changed_in(3)]
 		fn version() -> RuntimeVersion;
 		/// Execute the given block.
 		#[skip_initialize_block]
