@@ -19,7 +19,7 @@
 //! The primary means of accessing the runtimes is through a cache which saves the reusable
 //! components of the runtime that are expensive to initialize.
 
-use std::sync::Arc;
+use std::{sync::Arc, convert::TryInto};
 use crate::error::{Error, WasmError};
 use parking_lot::Mutex;
 use codec::Decode;
@@ -29,6 +29,7 @@ use std::panic::AssertUnwindSafe;
 use sc_executor_common::wasm_runtime::{WasmModule, WasmInstance};
 
 use sp_wasm_interface::Function;
+use sp_core::blake2_128;
 
 /// Specification of different methods of executing the runtime Wasm code.
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
@@ -321,10 +322,20 @@ fn create_versioned_wasm_runtime(
 		).map_err(|_| WasmError::Instantiation("panic in call to get runtime version".into()))?
 	};
 	let version = match version_result {
-		Ok(version) => Some(RuntimeVersion::decode(&mut version.as_slice())
-			.map_err(|_|
-				WasmError::Instantiation("failed to decode \"Core_version\" result".into())
-			)?),
+		Ok(version) => {
+			let v: RuntimeVersion = sp_api::OldRuntimeVersion::decode(&mut version.as_slice())
+				.map_err(|_|
+					WasmError::Instantiation("failed to decode \"Core_version\" result".into())
+				)?.into();
+			Some(if v.has_api_with(&blake2_128(b"Core")[0..8].try_into().expect("Correct size; qed"), |v| v >= 3) {
+				sp_api::RuntimeVersion::decode(&mut version.as_slice())
+					.map_err(|_|
+						WasmError::Instantiation("failed to decode \"Core_version\" result".into())
+					)?
+			} else {
+				v
+			})
+		},
 		Err(_) => None,
 	};
 	#[cfg(not(target_os = "unknown"))]
