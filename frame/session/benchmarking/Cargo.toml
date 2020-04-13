@@ -13,8 +13,18 @@ sp-std = { version = "2.0.0-alpha.5", default-features = false, path = "../../..
 sp-runtime = { version = "2.0.0-alpha.5", default-features = false, path = "../../../primitives/runtime" }
 frame-system = { version = "2.0.0-alpha.5", default-features = false, path = "../../system" }
 frame-benchmarking = { version = "2.0.0-alpha.5", default-features = false, path = "../../benchmarking" }
+frame-support = { version = "2.0.0-alpha.5", default-features = false, path = "../../support" }
 pallet-staking = { version = "2.0.0-alpha.5", default-features = false, features = ["runtime-benchmarks"], path = "../../staking" }
 pallet-session = { version = "2.0.0-alpha.5", default-features = false, path = "../../session" }
+
+[dev-dependencies]
+serde = { version = "1.0.101" }
+codec = { package = "parity-scale-codec", version = "1.3.0", features = ["derive"] }
+sp-core = { version = "2.0.0-alpha.5", path = "../../../primitives/core" }
+pallet-staking-reward-curve = { version = "2.0.0-alpha.5", path = "../../staking/reward-curve" }
+sp-io ={ path = "../../../primitives/io", version = "2.0.0-alpha.5"}
+pallet-timestamp = { version = "2.0.0-alpha.5", path = "../../timestamp" }
+pallet-balances = { version = "2.0.0-alpha.5", path = "../../balances" }
 
 [features]
 default = ["std"]
@@ -23,6 +33,7 @@ std = [
 	"sp-runtime/std",
 	"frame-system/std",
 	"frame-benchmarking/std",
+	"frame-support/std",
 	"pallet-staking/std",
 	"pallet-session/std",
 ]

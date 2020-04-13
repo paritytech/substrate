@@ -14,16 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use crate::error;
+use crate::params::{BlockNumber, PruningParams, SharedParams};
+use crate::CliConfiguration;
+use sc_service::{Configuration, ServiceBuilderCommand};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::fmt::Debug;
 use structopt::StructOpt;
-use sc_service::{
-	Configuration, ServiceBuilderCommand, ChainSpec, Role,
-};
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
-
-use crate::error;
-use crate::VersionInfo;
-use crate::params::{BlockNumber, SharedParams, PruningParams};
 
 /// The `revert` command used revert the chain to a previous state.
 #[derive(Debug, StructOpt, Clone)]
@@ -43,11 +40,7 @@ pub struct RevertCmd {
 
 impl RevertCmd {
 	/// Run the revert command
-	pub fn run<B, BC, BB>(
-		self,
-		config: Configuration,
-		builder: B,
-	) -> error::Result<()>
+	pub fn run<B, BC, BB>(&self, config: Configuration, builder: B) -> error::Result<()>
 	where
 		B: FnOnce(Configuration) -> Result<BC, sc_service::error::Error>,
 		BC: ServiceBuilderCommand<Block = BB> + Unpin,
@@ -60,20 +53,14 @@ impl RevertCmd {
 
 		Ok(())
 	}
+}
 
-	/// Update and prepare a `Configuration` with command line parameters
-	pub fn update_config<F>(
-		&self,
-		mut config: &mut Configuration,
-		spec_factory: F,
-		version: &VersionInfo,
-	) -> error::Result<()> where
-		F: FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
-	{
-		self.shared_params.update_config(&mut config, spec_factory, version)?;
-		self.pruning_params.update_config(&mut config, &Role::Full, true)?;
-		config.use_in_memory_keystore()?;
+impl CliConfiguration for RevertCmd {
+	fn shared_params(&self) -> &SharedParams {
+		&self.shared_params
+	}
 
-		Ok(())
+	fn pruning_params(&self) -> Option<&PruningParams> {
+		Some(&self.pruning_params)
 	}
 }

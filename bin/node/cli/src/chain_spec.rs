@@ -27,7 +27,7 @@ use node_runtime::{
 };
 use node_runtime::Block;
 use node_runtime::constants::currency::*;
-use sc_service;
+use sc_service::ChainType;
 use hex_literal::hex;
 use sc_telemetry::TelemetryEndpoints;
 use grandpa_primitives::{AuthorityId as GrandpaId};
@@ -158,6 +158,7 @@ pub fn staging_testnet_config() -> ChainSpec {
 	ChainSpec::from_genesis(
 		"Staging Testnet",
 		"staging_testnet",
+		ChainType::Live,
 		staging_testnet_config_genesis,
 		boot_nodes,
 		Some(TelemetryEndpoints::new(vec![(STAGING_TELEMETRY_URL.to_string(), 0)])
@@ -183,7 +184,7 @@ pub fn get_account_id_from_seed<TPublic: Public>(seed: &str) -> AccountId where
 }
 
 /// Helper function to generate stash, controller and session key from seed
-pub fn get_authority_keys_from_seed(seed: &str) -> (
+pub fn authority_keys_from_seed(seed: &str) -> (
 	AccountId,
 	AccountId,
 	GrandpaId,
@@ -325,7 +326,7 @@ pub fn testnet_genesis(
 fn development_config_genesis() -> GenesisConfig {
 	testnet_genesis(
 		vec![
-			get_authority_keys_from_seed("Alice"),
+			authority_keys_from_seed("Alice"),
 		],
 		get_account_id_from_seed::<sr25519::Public>("Alice"),
 		None,
@@ -338,6 +339,7 @@ pub fn development_config() -> ChainSpec {
 	ChainSpec::from_genesis(
 		"Development",
 		"dev",
+		ChainType::Development,
 		development_config_genesis,
 		vec![],
 		None,
@@ -350,8 +352,8 @@ pub fn development_config() -> ChainSpec {
 fn local_testnet_genesis() -> GenesisConfig {
 	testnet_genesis(
 		vec![
-			get_authority_keys_from_seed("Alice"),
-			get_authority_keys_from_seed("Bob"),
+			authority_keys_from_seed("Alice"),
+			authority_keys_from_seed("Bob"),
 		],
 		get_account_id_from_seed::<sr25519::Public>("Alice"),
 		None,
@@ -364,6 +366,7 @@ pub fn local_testnet_config() -> ChainSpec {
 	ChainSpec::from_genesis(
 		"Local Testnet",
 		"local_testnet",
+		ChainType::Local,
 		local_testnet_genesis,
 		vec![],
 		None,
@@ -383,7 +386,7 @@ pub(crate) mod tests {
 	fn local_testnet_genesis_instant_single() -> GenesisConfig {
 		testnet_genesis(
 			vec![
-				get_authority_keys_from_seed("Alice"),
+				authority_keys_from_seed("Alice"),
 			],
 			get_account_id_from_seed::<sr25519::Public>("Alice"),
 			None,
@@ -396,6 +399,7 @@ pub(crate) mod tests {
 		ChainSpec::from_genesis(
 			"Integration Test",
 			"test",
+			ChainType::Development,
 			local_testnet_genesis_instant_single,
 			vec![],
 			None,
@@ -410,6 +414,7 @@ pub(crate) mod tests {
 		ChainSpec::from_genesis(
 			"Integration Test",
 			"test",
+			ChainType::Development,
 			local_testnet_genesis,
 			vec![],
 			None,
