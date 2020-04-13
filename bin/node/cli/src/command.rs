@@ -72,7 +72,11 @@ pub fn run() -> Result<()> {
 	match &cli.subcommand {
 		None => {
 			let runner = cli.create_runner(&cli.run)?;
-			runner.run_node(service::new_light, service::new_full)
+			runner.run_node(
+				service::new_light,
+				service::new_full,
+				node_runtime::VERSION
+			)
 		}
 		Some(Subcommand::Inspect(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
