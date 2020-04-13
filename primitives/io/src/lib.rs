@@ -626,7 +626,8 @@ impl SignatureBatching {
 	}
 
 	/// Verify all signatures submitted during the batching session.
-	pub fn verify(&self) -> bool {
+	#[must_use]
+	pub fn verify(self) -> bool {
 		crypto::finish_batch_verify()
 	}
 }

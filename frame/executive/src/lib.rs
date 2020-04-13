@@ -237,11 +237,11 @@ where
 		// any initial checks
 		Self::initial_checks(&block);
 
-		let batching = sp_io::SignatureBatching::start();
+		let batching_safeguard = sp_io::SignatureBatching::start();
 		// execute extrinsics
 		let (header, extrinsics) = block.deconstruct();
 		Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
-		if !batching.verify() {
+		if !sp_io::SignatureBatching::verify(batching_safeguard) {
 			panic!("Signature verification failed.");
 		}
 

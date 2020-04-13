@@ -109,6 +109,7 @@ impl BatchVerifier {
 
 	/// Verify all previously pushed signatures since last call and return
 	/// aggregated result.
+	#[must_use]
 	pub fn verify_and_clear(&mut self) -> bool {
 		use std::sync::{Mutex, Condvar};
 
