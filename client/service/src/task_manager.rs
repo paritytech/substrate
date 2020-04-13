@@ -138,6 +138,8 @@ impl SpawnTaskHandle {
 		// we could properly visualize on Prometheus situations where the spawning doesn't work.
 		if let Some(metrics) = &self.metrics {
 			metrics.tasks_started.with_label_values(&[name]).inc();
+			// We do a dummy increase in order for the task to show up in metrics.
+			metrics.tasks_ended.with_label_values(&[name]).inc_by(0);
 		}
 
 		let future = async move {
