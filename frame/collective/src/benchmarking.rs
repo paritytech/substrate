@@ -63,7 +63,6 @@ benchmarks_instance! {
 		Collective::<T, _>::set_members(SystemOrigin::Root.into(), old_members, prime.clone())?;
 
 	}: _(SystemOrigin::Root, new_members.clone(), prime)
-
 	verify {
 		new_members.sort();
 		assert_eq!(Collective::<T, _>::members(), new_members);
@@ -82,13 +81,14 @@ benchmarks_instance! {
 	propose {
 		let u in ...;
 
-		let caller1: T::AccountId = account("caller1", u, SEED);
-		let caller2: T::AccountId = account("caller2", u, SEED);
+		let caller: T::AccountId = account("caller", u, SEED);
 		let proposal: T::Proposal = Call::<T, I>::close(Default::default(), Default::default()).into();
 
-		Collective::<T, _>::set_members(SystemOrigin::Root.into(), vec![caller1.clone(), caller2.clone()], None)?;
+		Collective::<T, _>::set_members(SystemOrigin::Root.into(), vec![caller.clone()], None)?;
 
-	}: _(SystemOrigin::Signed(caller1), member_count, Box::new(proposal.into()))
+		let member_count = 0;
+
+	}: _(SystemOrigin::Signed(caller), member_count, Box::new(proposal.into()))
 
 	propose_else_branch {
 		let u in ...;
@@ -114,12 +114,11 @@ benchmarks_instance! {
 
 		let caller1: T::AccountId = account("caller1", u, SEED);
 		let caller2: T::AccountId = account("caller2", u, SEED);
-		let caller3: T::AccountId = account("caller3", u, SEED);
 
 		let proposal: Box<T::Proposal> = Box::new(Call::<T, I>::close(Default::default(), Default::default()).into());
 		let proposal_hash = T::Hashing::hash_of(&proposal);
 
-		Collective::<T, _>::set_members(SystemOrigin::Root.into(), vec![caller1.clone(), caller2.clone(), caller3.clone()], None)?;
+		Collective::<T, _>::set_members(SystemOrigin::Root.into(), vec![caller1.clone(), caller2.clone()], None)?;
 
 		let member_count = 3;
 		Collective::<T, _>::propose(SystemOrigin::Signed(caller1.clone()).into(), member_count, proposal)?;
@@ -134,12 +133,11 @@ benchmarks_instance! {
 
 		let caller1: T::AccountId = account("caller1", u, SEED);
 		let caller2: T::AccountId = account("caller2", u, SEED);
-		let caller3: T::AccountId = account("caller3", u, SEED);
 
 		let proposal: Box<T::Proposal> = Box::new(Call::<T, I>::close(Default::default(), Default::default()).into());
 		let proposal_hash = T::Hashing::hash_of(&proposal);
 
-		Collective::<T, _>::set_members(SystemOrigin::Root.into(), vec![caller1.clone(), caller2.clone(), caller3.clone()], None)?;
+		Collective::<T, _>::set_members(SystemOrigin::Root.into(), vec![caller1.clone(), caller2.clone()], None)?;
 
 		let member_count = 3;
 		Collective::<T, _>::propose(SystemOrigin::Signed(caller1.clone()).into(), member_count, proposal)?;
