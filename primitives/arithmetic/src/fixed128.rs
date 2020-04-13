@@ -18,11 +18,11 @@ use codec::{Decode, Encode};
 use primitive_types::U256;
 use crate::{
 	traits::{Bounded, Saturating, UniqueSaturatedInto, SaturatedConversion},
-	PerThing,
+	PerThing, Perquintill,
 };
 use sp_std::{
 	convert::{Into, TryFrom, TryInto},
-	fmt,
+	fmt, ops,
 	num::NonZeroI128,
 };
 
@@ -213,6 +213,41 @@ impl Fixed128 {
 
 	pub fn is_negative(&self) -> bool {
 		self.0.is_negative()
+	}
+
+	/// Performs a saturated multiply and accumulate by unsigned number.
+	///
+	/// Returns a saturated `int + (self * int)`.
+	pub fn saturated_multiply_accumulate<N>(self, int: N) -> N
+		where
+			N: TryFrom<u128> + From<u64> + UniqueSaturatedInto<u64> + Bounded + Clone + Saturating +
+			ops::Rem<N, Output=N> + ops::Div<N, Output=N> + ops::Mul<N, Output=N> +
+			ops::Add<N, Output=N>,
+	{
+		let div = DIV as u128;
+		let positive = self.0 > 0;
+		// safe to convert as absolute value.
+		let parts = self.0.checked_abs().map(|v| v as u128).unwrap_or(i128::max_value() as u128 + 1);
+
+
+		// will always fit.
+		let natural_parts = parts / div;
+		// might saturate.
+		let natural_parts: N = natural_parts.saturated_into();
+		// fractional parts can always fit into u64.
+		let perquintill_parts = (parts % div) as u64;
+
+		let n = int.clone().saturating_mul(natural_parts);
+		let p = Perquintill::from_parts(perquintill_parts) * int.clone();
+
+		// everything that needs to be either added or subtracted from the original weight.
+		let excess = n.saturating_add(p);
+
+		if positive {
+			int.saturating_add(excess)
+		} else {
+			int.saturating_sub(excess)
+		}
 	}
 }
 
