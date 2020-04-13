@@ -6600,6 +6600,7 @@ dependencies = [
  "parity-scale-codec",
  "parity-util-mem",
  "parking_lot 0.10.0",
+ "pin-project",
  "procfs",
  "sc-chain-spec",
  "sc-client",
