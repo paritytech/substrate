@@ -40,7 +40,7 @@ mod prometheus_future;
 pub type ServiceTaskExecutor = Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>;
 
 /// Type alias for the task scheduler.
-pub type TaskScheduler = TracingUnboundedSender<(Pin<Box<dyn Future<Output = ()> + Send>>, &'static str)>;
+pub type TaskScheduler = TracingUnboundedSender<Pin<Box<dyn Future<Output = ()> + Send>>>;
 
 /// Helper struct to setup background tasks execution for service.
 pub struct TaskManagerBuilder {
@@ -52,8 +52,7 @@ pub struct TaskManagerBuilder {
 	/// Sender for futures that must be spawned as background tasks.
 	to_spawn_tx: TaskScheduler,
 	/// Receiver for futures that must be spawned as background tasks.
-	/// Note: please read comment on [`SpawnTaskHandle::spawn`] for why this is a `&'static str`.
-	to_spawn_rx: TracingUnboundedReceiver<(Pin<Box<dyn Future<Output = ()> + Send>>, &'static str)>,
+	to_spawn_rx: TracingUnboundedReceiver<Pin<Box<dyn Future<Output = ()> + Send>>>,
 	/// Prometheus metrics where to report the stats about tasks.
 	metrics: Option<Metrics>,
 }
@@ -155,7 +154,7 @@ impl SpawnTaskHandle {
 			}
 		};
 
-		if self.sender.unbounded_send((Box::pin(future), name)).is_err() {
+		if self.sender.unbounded_send(Box::pin(future)).is_err() {
 			error!("Failed to send task to spawn over channel");
 		}
 	}
@@ -164,9 +163,8 @@ impl SpawnTaskHandle {
 impl Spawn for SpawnTaskHandle {
 	fn spawn_obj(&self, future: FutureObj<'static, ()>)
 	-> Result<(), SpawnError> {
-		let future = select(self.on_exit.clone(), future).map(drop);
-		self.sender.unbounded_send((Box::pin(future), From::from("unnamed")))
-			.map_err(|_| SpawnError::shutdown())
+		self.spawn("unamed", future);
+		Ok(())
 	}
 }
 
@@ -196,7 +194,7 @@ pub struct TaskManager {
 	to_spawn_tx: TaskScheduler,
 	/// Receiver for futures that must be spawned as background tasks.
 	/// Note: please read comment on [`SpawnTaskHandle::spawn`] for why this is a `&'static str`.
-	to_spawn_rx: TracingUnboundedReceiver<(Pin<Box<dyn Future<Output = ()> + Send>>, &'static str)>,
+	to_spawn_rx: TracingUnboundedReceiver<Pin<Box<dyn Future<Output = ()> + Send>>>,
 	/// How to spawn background tasks.
 	executor: ServiceTaskExecutor,
 	/// Prometheus metric where to report the polling times.
@@ -219,15 +217,10 @@ impl TaskManager {
 		}
 	}
 
-	/// Get sender where background/async tasks can be sent.
-	pub(super) fn scheduler(&self) -> TaskScheduler {
-		self.to_spawn_tx.clone()
-	}
-
 	/// Process background task receiver.
 	pub(super) fn process_receiver(&mut self, cx: &mut Context) {
-		while let Poll::Ready(Some((task_to_spawn, name))) = Pin::new(&mut self.to_spawn_rx).poll_next(cx) {
-			(self.executor)(Box::pin(futures_diagnose::diagnose(name, task_to_spawn)));
+		while let Poll::Ready(Some(task_to_spawn)) = Pin::new(&mut self.to_spawn_rx).poll_next(cx) {
+			(self.executor)(task_to_spawn);
 		}
 	}
 

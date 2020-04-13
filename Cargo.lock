@@ -6591,7 +6591,6 @@ dependencies = [
  "exit-future",
  "futures 0.1.29",
  "futures 0.3.4",
- "futures-diagnose",
  "futures-timer 3.0.2",
  "lazy_static",
  "log",
