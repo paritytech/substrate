@@ -307,6 +307,7 @@ impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T> whe
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use core::num::NonZeroI128;
 	use codec::Encode;
 	use frame_support::{
 		impl_outer_dispatch, impl_outer_origin, parameter_types,
