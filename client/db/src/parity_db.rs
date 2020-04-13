@@ -31,7 +31,7 @@ fn handle_err<T>(result: parity_db::Result<T>) -> T {
 
 /// Wrap RocksDb database into a trait object that implements `sp_database::Database`
 pub fn open<H: Clone>(path: &std::path::Path, num_columns: u32) -> parity_db::Result<std::sync::Arc<dyn Database<H>>> {
-	let db = parity_db::Db::open(path, num_columns as u8)?;
+	let db = parity_db::Db::with_columns(path, num_columns as u8)?;
 	Ok(std::sync::Arc::new(DbAdapter(db)))
 }
 
