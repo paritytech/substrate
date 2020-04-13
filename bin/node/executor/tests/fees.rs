@@ -188,6 +188,8 @@ fn transaction_fee_is_correct_ultimate() {
 		let weight_fee = LinearWeightToFee::<WeightFeeCoefficient>::convert(weight);
 
 		// we know that weight to fee multiplier is effect-less in block 1.
+		// current weight of transfer = 200_000_000
+		// 1_000_000_000 = 1 MILLICENT... thus
 		assert_eq!(weight_fee as Balance, MILLICENTS / 5);
 		balance_alice -= weight_fee;
 		balance_alice -= tip;
