@@ -51,7 +51,7 @@ impl Fixed128 {
 	}
 
 	/// Raw constructor. Equal to `parts / DIV`.
-	pub fn from_parts(parts: i128) -> Self {
+	pub const fn from_parts(parts: i128) -> Self {
 		Self(parts)
 	}
 
@@ -248,6 +248,26 @@ impl Fixed128 {
 		} else {
 			int.saturating_sub(excess)
 		}
+	}
+}
+
+/// Note that this is a standard, _potentially-panicking_, implementation. Use `Saturating` trait
+/// for safe addition.
+impl ops::Add for Fixed128 {
+	type Output = Self;
+
+	fn add(self, rhs: Self) -> Self::Output {
+		Self(self.0 + rhs.0)
+	}
+}
+
+/// Note that this is a standard, _potentially-panicking_, implementation. Use `Saturating` trait
+/// for safe subtraction.
+impl ops::Sub for Fixed128 {
+	type Output = Self;
+
+	fn sub(self, rhs: Self) -> Self::Output {
+		Self(self.0 - rhs.0)
 	}
 }
 

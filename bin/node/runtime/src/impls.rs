@@ -86,7 +86,7 @@ impl<T: Get<Perquintill>> Convert<Fixed128, Fixed128> for TargetedFeeAdjustment<
 		let v = Fixed128::from_rational(4, NonZeroI128::new(100_000).unwrap());
 		// 0.00004^2 = 16/10^10 ~= 2/10^9. Taking the future /2 into account, then it is just 1
 		// parts from a billionth.
-		let v_squared_2 = Fixed128::from_rational(1, NonZeroI128::new(1_000_000_000).unwrap());
+		let v_squared_2 = Fixed128::from_rational(1, NonZeroI128::new(800_000_000).unwrap());
 
 		let first_term = v.saturating_mul(diff);
 		// It is very unlikely that this will exist (in our poor perbill estimate) but we are giving
@@ -129,6 +129,8 @@ mod tests {
 		TargetBlockFullness::get() * max()
 	}
 
+	const ERROR_RATE: Fixed128 = Fixed128::from_parts(500_000_000);
+
 	// poc reference implementation.
 	fn fee_multiplier_update(block_weight: Weight, previous: Fixed128) -> Fixed128  {
 		let block_weight = block_weight as f64;
@@ -144,10 +146,6 @@ mod tests {
 		let fm = v * (s/m - ss/m) + v.powi(2) * (s/m - ss/m).powi(2) / 2.0;
 		let addition_fm = Fixed128::from_parts((fm * Fixed128::accuracy() as f64).round() as i128);
 		previous.saturating_add(addition_fm)
-	}
-
-	fn feemul(n: i128, d: NonZeroI128) -> Fixed128 {
-		Fixed128::from_rational(n, d)
 	}
 
 	fn run_with_system_weight<F>(w: Weight, assertions: F) where F: Fn() -> () {
@@ -248,31 +246,35 @@ mod tests {
 	fn stateless_weight_mul() {
 		run_with_system_weight(target() / 4, || {
 			// Light block. Fee is reduced a little.
-			assert_eq!(
+			assert_eq_error_rate!(
 				TargetedFeeAdjustment::<TargetBlockFullness>::convert(Fixed128::default()),
-				feemul(-7500, NonZeroI128::new(1_000_000_000).unwrap()),
+				Fixed128::from_rational(-7500, NonZeroI128::new(1_000_000_000).unwrap()),
+				ERROR_RATE,
 			);
 		});
 		run_with_system_weight(target() / 2, || {
 			// a bit more. Fee is decreased less, meaning that the fee increases as the block grows.
-			assert_eq!(
+			assert_eq_error_rate!(
 				TargetedFeeAdjustment::<TargetBlockFullness>::convert(Fixed128::default()),
-				feemul(-5000, NonZeroI128::new(1_000_000_000).unwrap()),
+				Fixed128::from_rational(-5000, NonZeroI128::new(1_000_000_000).unwrap()),
+				ERROR_RATE,
 			);
 
 		});
 		run_with_system_weight(target(), || {
 			// ideal. Original fee. No changes.
-			assert_eq!(
+			assert_eq_error_rate!(
 				TargetedFeeAdjustment::<TargetBlockFullness>::convert(Fixed128::default()),
-				feemul(0, NonZeroI128::new(1_000_000_000).unwrap()),
+				Fixed128::from_rational(0, NonZeroI128::new(1_000_000_000).unwrap()),
+				ERROR_RATE,
 			);
 		});
 		run_with_system_weight(target() * 2, || {
 			// // More than ideal. Fee is increased.
-			assert_eq!(
+			assert_eq_error_rate!(
 				TargetedFeeAdjustment::<TargetBlockFullness>::convert(Fixed128::default()),
-				feemul(10000, NonZeroI128::new(1_000_000_000).unwrap()),
+				Fixed128::from_rational(10000, NonZeroI128::new(1_000_000_000).unwrap()),
+				ERROR_RATE,
 			);
 		});
 	}
@@ -280,22 +282,26 @@ mod tests {
 	#[test]
 	fn stateful_weight_mul_grow_to_infinity() {
 		run_with_system_weight(target() * 2, || {
-			assert_eq!(
+			assert_eq_error_rate!(
 				TargetedFeeAdjustment::<TargetBlockFullness>::convert(Fixed128::default()),
-				feemul(10000, NonZeroI128::new(1_000_000_000).unwrap())
+				Fixed128::from_rational(10000, NonZeroI128::new(1_000_000_000).unwrap()),
+				ERROR_RATE,
 			);
-			assert_eq!(
-				TargetedFeeAdjustment::<TargetBlockFullness>::convert(feemul(10000, NonZeroI128::new(1_000_000_000).unwrap())),
-				feemul(20000, NonZeroI128::new(1_000_000_000).unwrap())
+			assert_eq_error_rate!(
+				TargetedFeeAdjustment::<TargetBlockFullness>::convert(Fixed128::from_rational(10000, NonZeroI128::new(1_000_000_000).unwrap())),
+				Fixed128::from_rational(20000, NonZeroI128::new(1_000_000_000).unwrap()),
+				ERROR_RATE,
 			);
-			assert_eq!(
-				TargetedFeeAdjustment::<TargetBlockFullness>::convert(feemul(20000, NonZeroI128::new(1_000_000_000).unwrap())),
-				feemul(30000, NonZeroI128::new(1_000_000_000).unwrap())
+			assert_eq_error_rate!(
+				TargetedFeeAdjustment::<TargetBlockFullness>::convert(Fixed128::from_rational(20000, NonZeroI128::new(1_000_000_000).unwrap())),
+				Fixed128::from_rational(30000, NonZeroI128::new(1_000_000_000).unwrap()),
+				ERROR_RATE,
 			);
 			// ...
-			assert_eq!(
-				TargetedFeeAdjustment::<TargetBlockFullness>::convert(feemul(1_000_000_000, NonZeroI128::new(1_000_000_000).unwrap())),
-				feemul(1_000_000_000 + 10000, NonZeroI128::new(1_000_000_000).unwrap())
+			assert_eq_error_rate!(
+				TargetedFeeAdjustment::<TargetBlockFullness>::convert(Fixed128::from_rational(1_000_000_000, NonZeroI128::new(1_000_000_000).unwrap())),
+				Fixed128::from_rational(1_000_000_000 + 10000, NonZeroI128::new(1_000_000_000).unwrap()),
+				ERROR_RATE,
 			);
 		});
 	}
@@ -303,22 +309,25 @@ mod tests {
 	#[test]
 	fn stateful_weight_mil_collapse_to_minus_one() {
 		run_with_system_weight(0, || {
-			assert_eq!(
+			assert_eq_error_rate!(
 				TargetedFeeAdjustment::<TargetBlockFullness>::convert(Fixed128::default()),
-				feemul(-10000, NonZeroI128::new(1_000_000_000).unwrap())
+				Fixed128::from_rational(-10000, NonZeroI128::new(1_000_000_000).unwrap()),
+				ERROR_RATE,
 			);
-			assert_eq!(
-				TargetedFeeAdjustment::<TargetBlockFullness>::convert(feemul(-10000, NonZeroI128::new(1_000_000_000).unwrap())),
-				feemul(-20000, NonZeroI128::new(1_000_000_000).unwrap())
+			assert_eq_error_rate!(
+				TargetedFeeAdjustment::<TargetBlockFullness>::convert(Fixed128::from_rational(-10000, NonZeroI128::new(1_000_000_000).unwrap())),
+				Fixed128::from_rational(-20000, NonZeroI128::new(1_000_000_000).unwrap()),
+				ERROR_RATE,
 			);
-			assert_eq!(
-				TargetedFeeAdjustment::<TargetBlockFullness>::convert(feemul(-20000, NonZeroI128::new(1_000_000_000).unwrap())),
-				feemul(-30000, NonZeroI128::new(1_000_000_000).unwrap())
+			assert_eq_error_rate!(
+				TargetedFeeAdjustment::<TargetBlockFullness>::convert(Fixed128::from_rational(-20000, NonZeroI128::new(1_000_000_000).unwrap())),
+				Fixed128::from_rational(-30000, NonZeroI128::new(1_000_000_000).unwrap()),
+				ERROR_RATE,
 			);
 			// ...
 			assert_eq!(
-				TargetedFeeAdjustment::<TargetBlockFullness>::convert(feemul(1_000_000_000 * -1, NonZeroI128::new(1_000_000_000).unwrap())),
-				feemul(-1_000_000_000, NonZeroI128::new(1_000_000_000).unwrap())
+				TargetedFeeAdjustment::<TargetBlockFullness>::convert(Fixed128::from_rational(MaximumBlockWeight::get() as i128 * -1, NonZeroI128::new(1_000_000_000).unwrap())),
+				Fixed128::from_natural(-1)
 			);
 		})
 	}
@@ -348,7 +357,7 @@ mod tests {
 			run_with_system_weight(i, || {
 				let next = TargetedFeeAdjustment::<TargetBlockFullness>::convert(Fixed128::default());
 				let truth = fee_multiplier_update(i, Fixed128::default());
-				assert_eq_error_rate!(truth.deconstruct(), next.deconstruct(), 500_000_000i128);
+				assert_eq_error_rate!(truth, next, ERROR_RATE);
 			});
 		});
 
