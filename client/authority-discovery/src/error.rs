@@ -40,17 +40,20 @@ pub enum Error {
 	MatchingHashedAuthorityIdWithAuthorityId,
 	/// Failed to set the authority discovery peerset priority group in the peerset module.
 	SettingPeersetPriorityGroup(String),
+	/// The sender side of the dht event stream has been closed likely due to the network
+	/// terminating.
+	DhtEventStreamTerminated,
 	/// Failed to encode a protobuf payload.
 	EncodingProto(prost::EncodeError),
 	/// Failed to decode a protobuf payload.
 	DecodingProto(prost::DecodeError),
-	/// Failed to encode or decode scale payload
+	/// Failed to encode or decode scale payload.
 	EncodingDecodingScale(codec::Error),
 	/// Failed to parse a libp2p multi address.
 	ParsingMultiaddress(libp2p::core::multiaddr::Error),
-	/// Failed to sign using a specific public key
+	/// Failed to sign using a specific public key.
 	MissingSignature(CryptoTypePublicPair),
-	/// Failed to sign using all public keys
+	/// Failed to sign using all public keys.
 	Signing,
 	/// Failed to register Prometheus metric.
 	Prometheus(prometheus_endpoint::PrometheusError),
