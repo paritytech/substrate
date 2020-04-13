@@ -51,7 +51,7 @@ impl Fixed128 {
 	}
 
 	/// Raw constructor. Equal to `parts / DIV`.
-	pub fn from_parts(parts: i128) -> Self {
+	pub const fn from_parts(parts: i128) -> Self {
 		Self(parts)
 	}
 
