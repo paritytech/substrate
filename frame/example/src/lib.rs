@@ -257,15 +257,16 @@ use sp_std::marker::PhantomData;
 use frame_support::{
 	dispatch::DispatchResult, decl_module, decl_storage, decl_event,
 	weights::{
-		SimpleDispatchInfo, DispatchInfo, DispatchClass, ClassifyDispatch, WeighData, Weight,
-		PaysFee,
+		SimpleDispatchInfo, DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee,
 	},
 };
 use sp_std::prelude::*;
 use frame_system::{self as system, ensure_signed, ensure_root};
 use codec::{Encode, Decode};
 use sp_runtime::{
-	traits::{SignedExtension, Bounded, SaturatedConversion},
+	traits::{
+		SignedExtension, Bounded, SaturatedConversion, DispatchInfoOf,
+	},
 	transaction_validity::{
 		ValidTransaction, TransactionValidityError, InvalidTransaction, TransactionValidity,
 	},
@@ -619,7 +620,6 @@ impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
 	// other pallets.
 	type Call = Call<T>;
 	type AdditionalSigned = ();
-	type DispatchInfo = DispatchInfo;
 	type Pre = ();
 
 	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
@@ -628,7 +628,7 @@ impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
 		&self,
 		_who: &Self::AccountId,
 		call: &Self::Call,
-		_info: Self::DispatchInfo,
+		_info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> TransactionValidity {
 		// if the transaction is too big, just drop it.
@@ -713,7 +713,7 @@ mod tests {
 	use super::*;
 
 	use frame_support::{
-		assert_ok, impl_outer_origin, parameter_types, weights::GetDispatchInfo,
+		assert_ok, impl_outer_origin, parameter_types, weights::{DispatchInfo, GetDispatchInfo},
 		traits::{OnInitialize, OnFinalize}
 	};
 	use sp_core::H256;
@@ -829,13 +829,13 @@ mod tests {
 			let info = DispatchInfo::default();
 
 			assert_eq!(
-				WatchDummy::<Test>(PhantomData).validate(&1, &call, info, 150)
+				WatchDummy::<Test>(PhantomData).validate(&1, &call, &info, 150)
 					.unwrap()
 					.priority,
 				Bounded::max_value(),
 			);
 			assert_eq!(
-				WatchDummy::<Test>(PhantomData).validate(&1, &call, info, 250),
+				WatchDummy::<Test>(PhantomData).validate(&1, &call, &info, 250),
 				InvalidTransaction::ExhaustsResources.into(),
 			);
 		})

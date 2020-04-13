@@ -233,6 +233,16 @@ pub fn open_database<Block: BlockT>(
 			}
 
 			db_config.memory_budget = memory_budget;
+
+			log::trace!(
+				target: "db",
+				"Open RocksDB database at {}, state column budget: {} MiB, others({}) column cache: {} MiB",
+				path,
+				state_col_budget,
+				NUM_COLUMNS,
+				other_col_budget,
+			);
+
 			let db = kvdb_rocksdb::Database::open(&db_config, &path)
 				.map_err(|err| sp_blockchain::Error::Backend(format!("{}", err)))?;
 			sp_database::as_database(db)

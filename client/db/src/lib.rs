@@ -289,7 +289,7 @@ pub enum DatabaseSettingsSrc {
 	RocksDb {
 		/// Path to the database.
 		path: PathBuf,
-		/// Cache size in bytes.
+		/// Cache size in MiB.
 		cache_size: usize,
 	},
 

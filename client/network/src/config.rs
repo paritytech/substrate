@@ -31,16 +31,23 @@ pub use crate::protocol::ProtocolConfig;
 
 use crate::service::ExHashT;
 
-use sp_consensus::{block_validation::BlockAnnounceValidator, import_queue::ImportQueue};
-use sp_runtime::traits::{Block as BlockT};
-use libp2p::identity::{Keypair, ed25519};
-use libp2p::wasm_ext;
-use libp2p::{PeerId, Multiaddr, multiaddr};
 use core::{fmt, iter};
-use std::{convert::TryFrom, future::Future, pin::Pin, str::FromStr};
-use std::{error::Error, fs, io::{self, Write}, net::Ipv4Addr, path::{Path, PathBuf}, sync::Arc};
-use zeroize::Zeroize;
+use libp2p::identity::{ed25519, Keypair};
+use libp2p::wasm_ext;
+use libp2p::{multiaddr, Multiaddr, PeerId};
 use prometheus_endpoint::Registry;
+use sp_consensus::{block_validation::BlockAnnounceValidator, import_queue::ImportQueue};
+use sp_runtime::{traits::Block as BlockT, ConsensusEngineId};
+use std::{borrow::Cow, convert::TryFrom, future::Future, pin::Pin, str::FromStr};
+use std::{
+	error::Error,
+	fs,
+	io::{self, Write},
+	net::Ipv4Addr,
+	path::{Path, PathBuf},
+	sync::Arc,
+};
+use zeroize::Zeroize;
 
 /// Network initialization parameters.
 pub struct Params<B: BlockT, H: ExHashT> {
@@ -317,6 +324,9 @@ pub struct NetworkConfiguration {
 	pub boot_nodes: Vec<MultiaddrWithPeerId>,
 	/// The node key configuration, which determines the node's network identity keypair.
 	pub node_key: NodeKeyConfig,
+	/// List of notifications protocols that the node supports. Must also include a
+	/// `ConsensusEngineId` for backwards-compatibility.
+	pub notifications_protocols: Vec<(ConsensusEngineId, Cow<'static, [u8]>)>,
 	/// Maximum allowed number of incoming connections.
 	pub in_peers: u32,
 	/// Number of outgoing connections we're trying to maintain.
@@ -349,6 +359,7 @@ impl NetworkConfiguration {
 			public_addresses: Vec::new(),
 			boot_nodes: Vec::new(),
 			node_key,
+			notifications_protocols: Vec::new(),
 			in_peers: 25,
 			out_peers: 75,
 			reserved_nodes: Vec::new(),

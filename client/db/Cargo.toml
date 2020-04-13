@@ -11,7 +11,6 @@ description = "Client backend that uses RocksDB database as storage."
 [dependencies]
 parking_lot = "0.10.0"
 log = "0.4.8"
-rand = "0.7"
 kvdb = "0.5.0"
 kvdb-rocksdb = { version = "0.7", optional = true }
 kvdb-memorydb = "0.5.0"

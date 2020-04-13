@@ -914,7 +914,7 @@ impl NetworkBehaviour for GenericProto {
 				// in which case `CustomProtocolClosed` was already emitted.
 				let closed = open.is_empty();
 				open.retain(|c| c != conn);
-				if !closed {
+				if open.is_empty() && !closed {
 					debug!(target: "sub-libp2p", "External API <= Closed({})", peer_id);
 					let event = GenericProtoOut::CustomProtocolClosed {
 						peer_id: peer_id.clone(),
@@ -1193,8 +1193,8 @@ impl NetworkBehaviour for GenericProto {
 			}
 
 			NotifsHandlerOut::ProtocolError { error, .. } => {
-				warn!(target: "sub-libp2p",
-					"💔 Handler({:?}) => Severe protocol error: {:?}",
+				debug!(target: "sub-libp2p",
+					"Handler({:?}) => Severe protocol error: {:?}",
 					source, error);
 				// A severe protocol error happens when we detect a "bad" peer, such as a peer on
 				// a different chain, or a peer that doesn't speak the same protocol(s). We

@@ -49,7 +49,7 @@ where
 		format!("{} (Browser)", name),
 		"unknown",
 		Default::default(),
-		&std::env::current_dir().expect("current directory must exist"),
+		&std::path::PathBuf::new(),
 	);
 	network.boot_nodes = chain_spec.boot_nodes().to_vec();
 	network.transport = TransportConfig::Normal {
