@@ -53,13 +53,13 @@ sp-inherents = { version = "2.0.0-alpha.5", path = "../../../primitives/inherent
 sp-keyring = { version = "2.0.0-alpha.5", path = "../../../primitives/keyring" }
 sp-io = { version = "2.0.0-alpha.5", path = "../../../primitives/io" }
 sp-consensus = { version = "0.8.0-alpha.5", path = "../../../primitives/consensus/common" }
+sp-transaction-pool = { version = "2.0.0-alpha.5", path = "../../../primitives/transaction-pool" }
 
 # client dependencies
 sc-client-api = { version = "2.0.0-alpha.5", path = "../../../client/api" }
 sc-client = { version = "0.8.0-alpha.5", path = "../../../client/" }
 sc-chain-spec = { version = "2.0.0-alpha.5", path = "../../../client/chain-spec" }
 sc-transaction-pool = { version = "2.0.0-alpha.5", path = "../../../client/transaction-pool" }
-sp-transaction-pool = { version = "2.0.0-alpha.5", path = "../../../primitives/transaction-pool" }
 sc-network = { version = "0.8.0-alpha.5", path = "../../../client/network" }
 sc-consensus-babe = { version = "0.8.0-alpha.5", path = "../../../client/consensus/babe" }
 grandpa = { version = "0.8.0-alpha.5", package = "sc-finality-grandpa", path = "../../../client/finality-grandpa" }
