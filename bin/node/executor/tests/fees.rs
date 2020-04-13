@@ -21,7 +21,7 @@ use frame_support::{
 	weights::GetDispatchInfo,
 };
 use sp_core::{NeverNativeValue, map, storage::Storage};
-use sp_runtime::{Fixed64, Perbill, traits::{Convert, BlakeTwo256}};
+use sp_runtime::{Fixed128, Perbill, traits::{Convert, BlakeTwo256}};
 use node_runtime::{
 	CheckedExtrinsic, Call, Runtime, Balances, TransactionPayment, TransactionBaseFee,
 	TransactionByteFee, WeightFeeCoefficient,
@@ -39,7 +39,7 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 	let mut t = new_test_ext(COMPACT_CODE, false);
 
 	// initial fee multiplier must be zero
-	let mut prev_multiplier = Fixed64::from_parts(0);
+	let mut prev_multiplier = Fixed128::from_parts(0);
 
 	t.execute_with(|| {
 		assert_eq!(TransactionPayment::next_fee_multiplier(), prev_multiplier);
@@ -189,8 +189,8 @@ fn transaction_fee_is_correct_ultimate() {
 
 		// we know that weight to fee multiplier is effect-less in block 1.
 		// current weight of transfer = 200_000_000
-		// 1_000_000_000 = 1 MILLICENT... thus
-		assert_eq!(weight_fee as Balance, MILLICENTS / 5);
+		// Linear weight to fee is 1:1 right now (1 weight = 1 unit of balance)
+		assert_eq!(weight_fee as Balance, 200_000_000);
 		balance_alice -= weight_fee;
 		balance_alice -= tip;
 

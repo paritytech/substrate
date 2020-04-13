@@ -24,7 +24,7 @@ use sp_core::{
 	NeverNativeValue, map, traits::Externalities, storage::{well_known_keys, Storage},
 };
 use sp_runtime::{
-	ApplyExtrinsicResult, Fixed64,
+	ApplyExtrinsicResult, Fixed128,
 	traits::{Hash as HashT, Convert, BlakeTwo256},
 	transaction_validity::InvalidTransaction,
 };
@@ -51,7 +51,7 @@ use self::common::{*, sign};
 pub const BLOATY_CODE: &[u8] = node_runtime::WASM_BINARY_BLOATY;
 
 /// Default transfer fee
-fn transfer_fee<E: Encode>(extrinsic: &E, fee_multiplier: Fixed64) -> Balance {
+fn transfer_fee<E: Encode>(extrinsic: &E, fee_multiplier: Fixed128) -> Balance {
 	let length_fee = TransactionByteFee::get() * (extrinsic.encode().len() as Balance);
 
 	let weight = default_transfer_call().get_dispatch_info().weight;
