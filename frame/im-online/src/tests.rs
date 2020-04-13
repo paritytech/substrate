@@ -174,7 +174,8 @@ fn late_heartbeat_should_fail() {
 	new_test_ext().execute_with(|| {
 		advance_session();
 		// given
-		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 3, 4, 5, 6]));		assert_eq!(Session::validators(), Vec::<u64>::new());
+		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 3, 4, 5, 6]));
+		assert_eq!(Session::validators(), Vec::<u64>::new());
 		// enact the change and buffer another one
 		advance_session();
 

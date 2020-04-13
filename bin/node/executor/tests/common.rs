@@ -28,7 +28,7 @@ use sp_runtime::{
 	ApplyExtrinsicResult,
 	MultiSigner,
 	MultiSignature,
-	traits::{Header as HeaderT, BlakeTwo256}
+	traits::{Header as HeaderT, BlakeTwo256},
 };
 use sc_executor::{NativeExecutor, WasmExecutionMethod};
 use sc_executor::error::Result;

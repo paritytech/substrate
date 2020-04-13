@@ -44,7 +44,7 @@ where
 {
 	pub fn submit_transaction(
 		call: <T as SendTransactionTypes<LocalCall>>::OverarchingCall,
-		signature: Option<<T::Extrinsic as ExtrinsicT>::SignaturePayload>
+		signature: Option<<T::Extrinsic as ExtrinsicT>::SignaturePayload>,
 	) -> Result<(), ()> {
 		let xt = T::Extrinsic::new(call.into(), signature).ok_or(())?;
 		sp_io::offchain::submit_transaction(xt.encode())
