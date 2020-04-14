@@ -1,13 +1,16 @@
 [package]
 description = "Gossiping for the Substrate network protocol"
 name = "sc-network-gossip"
-version = "0.8.0-alpha.5"
+version = "0.8.0-alpha.6"
 license = "GPL-3.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 documentation = "https://docs.rs/sc-network-gossip"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
 
 
 [dependencies]
@@ -16,13 +19,10 @@ futures-timer = "3.0.1"
 libp2p = { version = "0.18.0", default-features = false, features = ["websocket"] }
 log = "0.4.8"
 lru = "0.4.3"
-sc-network = { version = "0.8.0-alpha.5", path = "../network" }
-sp-runtime = { version = "2.0.0-alpha.5", path = "../../primitives/runtime" }
-sp-utils = { version = "2.0.0-alpha.5", path = "../../primitives/utils" }
+sc-network = { version = "0.8.0-alpha.6", path = "../network" }
+sp-runtime = { version = "2.0.0-alpha.6", path = "../../primitives/runtime" }
+sp-utils = { version = "2.0.0-alpha.6", path = "../../primitives/utils" }
 wasm-timer = "0.2"
 
 [dev-dependencies]
 substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../test-utils/runtime/client" }
-
-[package.metadata.docs.rs]
-targets = ["x86_64-unknown-linux-gnu"]
