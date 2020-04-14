@@ -62,6 +62,7 @@
 //!
 //! ```
 //! use frame_support::{decl_module, dispatch};
+//! use frame_support::weights::{SimpleDispatchInfo, MINIMUM_WEIGHT};
 //! # use pallet_timestamp as timestamp;
 //! use frame_system::{self as system, ensure_signed};
 //!
@@ -69,7 +70,7 @@
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		#[weight = frame_support::weights::SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
+//! 		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 //! 		pub fn get_time(origin) -> dispatch::DispatchResult {
 //! 			let _sender = ensure_signed(origin)?;
 //! 			let _now = <timestamp::Module<T>>::get();
