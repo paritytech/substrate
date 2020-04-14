@@ -885,7 +885,7 @@ impl Metrics {
 					"sub_libp2p_connections_closed_total",
 					"Total number of connections closed, by reason"
 				),
-				&["reason"]
+				&["direction", "reason"]
 			)?, registry)?,
 			import_queue_blocks_submitted: register(Counter::new(
 				"import_queue_blocks_submitted",
@@ -1124,19 +1124,24 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 				Poll::Ready(SwarmEvent::ConnectionClosed { peer_id, cause, endpoint, .. }) => {
 					trace!(target: "sub-libp2p", "Libp2p => Disconnected({:?}, {:?})", peer_id, cause);
 					if let Some(metrics) = this.metrics.as_ref() {
+						let dir = match endpoint {
+							ConnectedPoint::Dialer { .. } => "out",
+							ConnectedPoint::Listener { .. } => "in",
+						};
+
 						match cause {
 							ConnectionError::IO(_) =>
-								metrics.connections_closed_total.with_label_values(&["transport-error"]).inc(),
+								metrics.connections_closed_total.with_label_values(&[dir, "transport-error"]).inc(),
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
 								EitherError::A(EitherError::B(EitherError::A(PingFailure::Timeout))))))) =>
-								metrics.connections_closed_total.with_label_values(&["ping-timeout"]).inc(),
+								metrics.connections_closed_total.with_label_values(&[dir, "ping-timeout"]).inc(),
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
 								EitherError::A(EitherError::A(EitherError::B(LegacyConnectionKillError))))))) =>
-								metrics.connections_closed_total.with_label_values(&["force-closed"]).inc(),
+								metrics.connections_closed_total.with_label_values(&[dir, "force-closed"]).inc(),
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(_)) =>
-								metrics.connections_closed_total.with_label_values(&["protocol-error"]).inc(),
+								metrics.connections_closed_total.with_label_values(&[dir, "protocol-error"]).inc(),
 							ConnectionError::Handler(NodeHandlerWrapperError::KeepAliveTimeout) =>
-								metrics.connections_closed_total.with_label_values(&["keep-alive-timeout"]).inc(),
+								metrics.connections_closed_total.with_label_values(&[dir, "keep-alive-timeout"]).inc(),
 						}
 					}
 				},
