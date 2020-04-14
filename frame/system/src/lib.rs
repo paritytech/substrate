@@ -1925,8 +1925,9 @@ mod tests {
 			let pre = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &info, len).unwrap();
 			assert_eq!(AllExtrinsicsWeight::get().unwrap(), info.weight + 256);
 
-			assert!(CheckWeight::<Test>::post_dispatch(
-				pre, &info, &post_info, len, &Ok(())).is_ok()
+			assert!(
+				CheckWeight::<Test>::post_dispatch(pre, &info, &post_info, len, &Ok(()))
+				.is_ok()
 			);
 			assert_eq!(AllExtrinsicsWeight::get().unwrap(), post_info.actual_weight.unwrap() + 256);
 		})
