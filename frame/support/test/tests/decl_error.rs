@@ -18,6 +18,7 @@
 
 use sp_runtime::{generic, traits::{BlakeTwo256, Block as _, Verify}, DispatchError};
 use sp_core::{H256, sr25519};
+use frame_support::weights::{SimpleDispatchInfo, MINIMUM_WEIGHT};
 
 mod system;
 

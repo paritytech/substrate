@@ -2,7 +2,7 @@ macro_rules! reserved {
 	($($reserved:ident)*) => {
 		$(
 			mod $reserved {
-				pub use frame_support::dispatch;
+				pub use frame_support::{dispatch, weights::{SimpleDispatchInfo, MINIMUM_WEIGHT}};
 
 				pub trait Trait {
 					type Origin;
