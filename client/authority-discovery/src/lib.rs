@@ -262,10 +262,6 @@ where
 	}
 
 	fn request_addresses_of_others(&mut self) -> Result<()> {
-		if let Some(metrics) = &self.metrics {
-			metrics.request.inc();
-		}
-
 		let id = BlockId::hash(self.client.info().best_hash);
 
 		let authorities = self
@@ -275,6 +271,10 @@ where
 			.map_err(Error::CallingRuntime)?;
 
 		for authority_id in authorities.iter() {
+			if let Some(metrics) = &self.metrics {
+				metrics.request.inc();
+			}
+
 			self.network
 				.get_value(&hash_authority_id(authority_id.as_ref()));
 		}
@@ -581,14 +581,16 @@ impl Metrics {
 			amount_last_published: register(
 				Gauge::new(
 					"authority_discovery_amount_external_addresses_last_published",
-					"Number of external addresses published when authority discovery last published addresses ."
+					"Number of external addresses published when authority discovery last \
+					 published addresses."
 				)?,
 				registry,
 			)?,
 			request: register(
 				Counter::new(
-					"authority_discovery_times_requested_total",
-					"Number of times authority discovery has requested external addresses."
+					"authority_discovery_authority_addresses_requested_total",
+					"Number of times authority discovery has requested external addresses of a \
+					 single authority."
 				)?,
 				registry,
 			)?,
