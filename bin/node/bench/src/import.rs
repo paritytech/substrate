@@ -35,7 +35,7 @@ use node_primitives::Block;
 use sc_client_api::backend::Backend;
 use sp_runtime::generic::BlockId;
 
-use crate::core::{self, Path};
+use crate::core::{self, Path, Mode};
 
 #[derive(Clone, Copy, Debug)]
 pub enum SizeType { Small, Medium, Large }
@@ -106,7 +106,7 @@ impl core::BenchmarkDescription for ImportBenchmarkDescription {
 }
 
 impl core::Benchmark for ImportBenchmark {
-	fn run(&mut self) -> std::time::Duration {
+	fn run(&mut self, mode: Mode) -> std::time::Duration {
 		let mut context = self.database.create_context(self.profile);
 
 		let _ = context.client.runtime_version_at(&BlockId::Number(0))
@@ -116,6 +116,10 @@ impl core::Benchmark for ImportBenchmark {
 		let start = std::time::Instant::now();
 		context.import_block(self.block.clone());
 		let elapsed = start.elapsed();
+
+		if mode == Mode::Profile {
+			std::thread::park_timeout(std::time::Duration::from_secs(2));
+		}
 
 		log::info!(
 			target: "bench-logistics",
