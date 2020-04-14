@@ -178,7 +178,8 @@ impl<T: SigningTypes, C: AppCrypto<T::Public, T::Signature>, X> Signer<T, C, X> 
 
 	/// Check if there are any keys that could be used for signing.
 	pub fn can_sign(&self) -> bool {
-		return self.accounts.is_some() && self.accounts.as_ref().unwrap_or(&vec![]).len() > 0
+		return self.accounts.is_some() &&
+			self.accounts.as_ref().unwrap_or(&Vec::new()).len() > 0
 	}
 }
 
