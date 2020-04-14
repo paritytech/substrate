@@ -139,6 +139,21 @@ pub struct PostDispatchInfo {
 	pub actual_weight: Option<Weight>,
 }
 
+impl PostDispatchInfo {
+	/// Calculate how much (if any) weight was not used by the `Dispatchable`.
+	pub fn calc_unspent(&self, info: &DispatchInfo) -> Weight {
+		if let Some(actual_weight) = self.actual_weight {
+			if actual_weight >= info.weight {
+				0
+			} else {
+				info.weight - actual_weight
+			}
+		} else {
+			0
+		}
+	}
+}
+
 impl From<Option<Weight>> for PostDispatchInfo {
 	fn from(actual_weight: Option<Weight>) -> Self {
 		Self {
