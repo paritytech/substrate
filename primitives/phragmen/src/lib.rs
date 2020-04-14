@@ -659,7 +659,7 @@ pub fn equalize<AccountId>(
 			let StakedAssignment { who, distribution } =  assignment;
 			let diff = do_equalize(
 				who,
-				voter_budget.clone().into(), // TODO: well... budget need not to be mut
+				voter_budget,
 				distribution,
 				supports,
 				tolerance,
