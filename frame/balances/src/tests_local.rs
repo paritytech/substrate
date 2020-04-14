@@ -16,14 +16,20 @@
 
 //! Test utilities
 
-use sp_runtime::{Perbill, traits::{ConvertInto, IdentityLookup}, testing::Header};
+#![cfg(test)]
+
+use sp_runtime::{
+	Perbill,
+	traits::{ConvertInto, IdentityLookup},
+	testing::Header,
+};
 use sp_core::H256;
 use sp_io;
 use frame_support::{impl_outer_origin, parameter_types};
 use frame_support::traits::{Get, StorageMapShim};
 use frame_support::weights::{Weight, DispatchInfo};
 use std::cell::RefCell;
-use crate::{GenesisConfig, Module, Trait, decl_tests};
+use crate::{GenesisConfig, Module, Trait, decl_tests, tests::CallWithDispatchInfo};
 
 use frame_system as system;
 impl_outer_origin!{
@@ -52,7 +58,7 @@ impl frame_system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = ();
+	type Call = CallWithDispatchInfo;
 	type Hash = H256;
 	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;

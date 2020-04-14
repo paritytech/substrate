@@ -191,7 +191,8 @@ mod tests {
 			at: &BlockId<Block>,
 			extrinsic: <Block as traits::Block>::Extrinsic,
 		) -> Result<(), ()> {
-			futures::executor::block_on(self.0.submit_one(&at, extrinsic))
+			let source = sp_transaction_pool::TransactionSource::Local;
+			futures::executor::block_on(self.0.submit_one(&at, source, extrinsic))
 				.map(|_| ())
 				.map_err(|_| ())
 		}

@@ -17,13 +17,13 @@
 use crate::{Network, Validator};
 use crate::state_machine::{ConsensusGossip, TopicNotification, PERIODIC_MAINTENANCE_INTERVAL};
 
-use sc_network::message::generic::ConsensusMessage;
 use sc_network::{Event, ReputationChange};
 
-use futures::{prelude::*, channel::mpsc};
+use futures::prelude::*;
 use libp2p::PeerId;
 use sp_runtime::{traits::Block as BlockT, ConsensusEngineId};
 use std::{borrow::Cow, pin::Pin, sync::Arc, task::{Context, Poll}};
+use sp_utils::mpsc::TracingUnboundedReceiver;
 
 /// Wraps around an implementation of the `Network` crate and provides gossiping capabilities on
 /// top of it.
@@ -40,22 +40,18 @@ impl<B: BlockT> Unpin for GossipEngine<B> {}
 impl<B: BlockT> GossipEngine<B> {
 	/// Create a new instance.
 	pub fn new<N: Network<B> + Send + Clone + 'static>(
-		mut network: N,
+		network: N,
 		engine_id: ConsensusEngineId,
 		protocol_name: impl Into<Cow<'static, [u8]>>,
 		validator: Arc<dyn Validator<B>>,
 	) -> Self where B: 'static {
-		let mut state_machine = ConsensusGossip::new();
-
 		// We grab the event stream before registering the notifications protocol, otherwise we
 		// might miss events.
 		let network_event_stream = network.event_stream();
-
 		network.register_notifications_protocol(engine_id, protocol_name.into());
-		state_machine.register_validator(&mut network, engine_id, validator);
 
 		GossipEngine {
-			state_machine,
+			state_machine: ConsensusGossip::new(validator, engine_id),
 			network: Box::new(network),
 			periodic_maintenance_interval: futures_timer::Delay::new(PERIODIC_MAINTENANCE_INTERVAL),
 			network_event_stream,
@@ -77,11 +73,6 @@ impl<B: BlockT> GossipEngine<B> {
 		topic: B::Hash,
 		message: Vec<u8>,
 	) {
-		let message = ConsensusMessage {
-			engine_id: self.engine_id,
-			data: message,
-		};
-
 		self.state_machine.register_message(topic, message);
 	}
 
@@ -92,9 +83,9 @@ impl<B: BlockT> GossipEngine<B> {
 
 	/// Get data of valid, incoming messages for a topic (but might have expired meanwhile).
 	pub fn messages_for(&mut self, topic: B::Hash)
-		-> mpsc::UnboundedReceiver<TopicNotification>
+		-> TracingUnboundedReceiver<TopicNotification>
 	{
-		self.state_machine.messages_for(self.engine_id, topic)
+		self.state_machine.messages_for(topic)
 	}
 
 	/// Send all messages with given topic to a peer.
@@ -104,7 +95,7 @@ impl<B: BlockT> GossipEngine<B> {
 		topic: B::Hash,
 		force: bool
 	) {
-		self.state_machine.send_topic(&mut *self.network, who, topic, self.engine_id, force)
+		self.state_machine.send_topic(&mut *self.network, who, topic, force)
 	}
 
 	/// Multicast a message to all peers.
@@ -114,11 +105,6 @@ impl<B: BlockT> GossipEngine<B> {
 		message: Vec<u8>,
 		force: bool,
 	) {
-		let message = ConsensusMessage {
-			engine_id: self.engine_id,
-			data: message,
-		};
-
 		self.state_machine.multicast(&mut *self.network, topic, message, force)
 	}
 
@@ -126,10 +112,7 @@ impl<B: BlockT> GossipEngine<B> {
 	/// later on.
 	pub fn send_message(&mut self, who: Vec<sc_network::PeerId>, data: Vec<u8>) {
 		for who in &who {
-			self.state_machine.send_message(&mut *self.network, who, ConsensusMessage {
-				engine_id: self.engine_id,
-				data: data.clone(),
-			});
+			self.state_machine.send_message(&mut *self.network, who, data.clone());
 		}
 	}
 
@@ -151,11 +134,11 @@ impl<B: BlockT> Future for GossipEngine<B> {
 		loop {
 			match this.network_event_stream.poll_next_unpin(cx) {
 				Poll::Ready(Some(event)) => match event {
-					Event::NotificationStreamOpened { remote, engine_id: msg_engine_id, roles } => {
+					Event::NotificationStreamOpened { remote, engine_id: msg_engine_id, role } => {
 						if msg_engine_id != this.engine_id {
 							continue;
 						}
-						this.state_machine.new_peer(&mut *this.network, remote, roles);
+						this.state_machine.new_peer(&mut *this.network, remote, role);
 					}
 					Event::NotificationStreamClosed { remote, engine_id: msg_engine_id } => {
 						if msg_engine_id != this.engine_id {
@@ -170,9 +153,7 @@ impl<B: BlockT> Future for GossipEngine<B> {
 							remote,
 							messages.into_iter()
 								.filter_map(|(engine, data)| if engine == engine_id {
-									Some(ConsensusMessage {
-										engine_id: engine, data: data.to_vec(),
-									})
+									Some(data.to_vec())
 								} else { None })
 								.collect()
 						);

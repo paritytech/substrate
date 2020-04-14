@@ -16,7 +16,7 @@
 
 //! Implementation of the `insert` subcommand
 
-use crate::{error, VersionInfo, with_crypto_scheme, pair_from_suri};
+use crate::{error, with_crypto_scheme, pair_from_suri, CliConfiguration, KeystoreParams};
 use super::{SharedParams, get_password, read_uri};
 use structopt::StructOpt;
 use sp_core::{crypto::KeyTypeId, Bytes};
@@ -26,7 +26,6 @@ use hyper::rt;
 use sc_rpc::author::AuthorClient;
 use jsonrpc_core_client::transports::http;
 use serde::{de::DeserializeOwned, Serialize};
-use sc_service::{Configuration, ChainSpec};
 use cli_utils::{HashFor, RuntimeAdapter};
 
 /// The `insert` command
@@ -52,6 +51,10 @@ pub struct InsertCmd {
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
+	pub keystore_params: KeystoreParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
 	pub shared_params: SharedParams,
 }
 
@@ -63,7 +66,7 @@ impl InsertCmd {
 			HashFor<RA>: DeserializeOwned + Serialize + Send + Sync,
 	{
 		let suri = read_uri(self.suri)?;
-		let password = get_password(&self.shared_params)?;
+		let password = get_password(&self.keystore_params)?;
 
 		let public = with_crypto_scheme!(
 			self.shared_params.scheme,
@@ -89,19 +92,15 @@ impl InsertCmd {
 
 		Ok(())
 	}
+}
 
-	/// Update and prepare a `Configuration` with command line parameters
-	pub fn update_config<F>(
-		&self,
-		mut config: &mut Configuration,
-		spec_factory: F,
-		version: &VersionInfo,
-	) -> error::Result<()> where
-		F: FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
-	{
-		self.shared_params.update_config(&mut config, spec_factory, version)?;
+impl CliConfiguration for InsertCmd {
+	fn shared_params(&self) -> &SharedParams {
+		&self.shared_params
+	}
 
-		Ok(())
+	fn keystore_params(&self) -> Option<&KeystoreParams> {
+		Some(&self.keystore_params)
 	}
 }
 

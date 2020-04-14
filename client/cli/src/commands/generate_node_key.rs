@@ -16,11 +16,10 @@
 
 //! Implementation of the `generate-node-key` subcommand
 
-use crate::{error, SharedParams, VersionInfo};
+use crate::{error, SharedParams, CliConfiguration};
 use structopt::StructOpt;
 use std::{path::PathBuf, fs};
 use libp2p::identity::{ed25519 as libp2p_ed25519, PublicKey};
-use sc_service::{Configuration, ChainSpec};
 
 /// The `generate-node-key` command
 #[derive(Debug, StructOpt, Clone)]
@@ -53,18 +52,10 @@ impl GenerateNodeKeyCmd {
 
 		Ok(())
 	}
+}
 
-	/// Update and prepare a `Configuration` with command line parameters
-	pub fn update_config<F>(
-		&self,
-		mut config: &mut Configuration,
-		spec_factory: F,
-		version: &VersionInfo,
-	) -> error::Result<()> where
-		F: FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
-	{
-		self.shared_params.update_config(&mut config, spec_factory, version)?;
-
-		Ok(())
+impl CliConfiguration for GenerateNodeKeyCmd {
+	fn shared_params(&self) -> &SharedParams {
+		&self.shared_params
 	}
 }

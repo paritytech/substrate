@@ -14,12 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-mod runcmd;
-mod export_blocks_cmd;
 mod build_spec_cmd;
-mod import_blocks_cmd;
 mod check_block_cmd;
-mod revert_cmd;
+mod export_blocks_cmd;
+mod import_blocks_cmd;
 mod purge_chain_cmd;
 mod generate_node_key;
 mod generate;
@@ -31,43 +29,24 @@ mod transfer;
 mod verify;
 mod vanity;
 mod insert;
+mod revert_cmd;
+mod runcmd;
 #[cfg(test)]
 pub mod tests;
 
-use std::fmt::{Debug, Display};
-use std::str::FromStr;
+use std::fmt::Debug;
 use structopt::StructOpt;
-use parity_scale_codec::Codec;
-use sc_service::{Configuration, ServiceBuilderCommand, ChainSpec};
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
-
-use crate::error;
-use crate::VersionInfo;
 use crate::params::SharedParams;
 
-pub use crate::commands::utils::*;
-pub use crate::commands::runcmd::RunCmd;
-pub use crate::commands::export_blocks_cmd::ExportBlocksCmd;
-pub use crate::commands::build_spec_cmd::BuildSpecCmd;
-pub use crate::commands::import_blocks_cmd::ImportBlocksCmd;
-pub use crate::commands::check_block_cmd::CheckBlockCmd;
-pub use crate::commands::revert_cmd::RevertCmd;
-pub use crate::commands::purge_chain_cmd::PurgeChainCmd;
-pub use crate::commands::generate::GenerateCmd;
-pub use crate::commands::generate_node_key::GenerateNodeKeyCmd;
-pub use crate::commands::insert::InsertCmd;
-pub use crate::commands::sign::SignCmd;
-pub use crate::commands::sign_transaction::SignTransactionCmd;
-pub use crate::commands::transfer::TransferCmd;
-pub use crate::commands::vanity::VanityCmd;
-pub use crate::commands::verify::VerifyCmd;
-use std::convert::TryFrom;
-use sp_core::crypto::Ss58Codec;
-use cli_utils::{RuntimeAdapter, AccountIdFor, IndexFor, BalanceFor, CallFor, AddressFor};
+pub use self::{
+	build_spec_cmd::BuildSpecCmd, check_block_cmd::CheckBlockCmd, export_blocks_cmd::ExportBlocksCmd,
+	import_blocks_cmd::ImportBlocksCmd, purge_chain_cmd::PurgeChainCmd, generate::GenerateCmd,
+	generate_node_key::GenerateNodeKeyCmd, insert::InsertCmd, sign::SignCmd, vanity::VanityCmd,
+	sign_transaction::SignTransactionCmd, transfer::TransferCmd, verify::VerifyCmd, revert_cmd::RevertCmd,
+	runcmd::RunCmd, inspect::InspectCmd, utils::*
+};
+use cli_utils::{IndexFor, CallFor};
 
-
-/// default sub directory to store network config
-const DEFAULT_NETWORK_CONFIG_PATH : &'static str = "network";
 
 /// All core commands that are provided by default.
 ///
@@ -76,150 +55,381 @@ const DEFAULT_NETWORK_CONFIG_PATH : &'static str = "network";
 /// `Run` are exported as main executable parameters.
 #[derive(Debug, Clone, StructOpt)]
 pub enum Subcommand {
-	/// Build a spec.json file, outputing to stdout.
-	BuildSpec(build_spec_cmd::BuildSpecCmd),
+	/// Build a spec.json file, outputs to stdout.
+	BuildSpec(BuildSpecCmd),
 
 	/// Export blocks to a file.
-	ExportBlocks(export_blocks_cmd::ExportBlocksCmd),
+	ExportBlocks(ExportBlocksCmd),
 
 	/// Import blocks from file.
-	ImportBlocks(import_blocks_cmd::ImportBlocksCmd),
+	ImportBlocks(ImportBlocksCmd),
 
 	/// Validate a single block.
-	CheckBlock(check_block_cmd::CheckBlockCmd),
+	CheckBlock(CheckBlockCmd),
 
 	/// Revert chain to the previous state.
-	Revert(revert_cmd::RevertCmd),
+	Revert(RevertCmd),
 
 	/// Remove the whole chain data.
-	PurgeChain(purge_chain_cmd::PurgeChainCmd),
+	PurgeChain(PurgeChainCmd),
 
 	/// Generate a random node libp2p key, save it to file and print its peer ID
-	GenerateNodeKey(generate_node_key::GenerateNodeKeyCmd),
+	GenerateNodeKey(GenerateNodeKeyCmd),
 
 	/// Generate a random account
-	Generate(generate::GenerateCmd),
+	Generate(GenerateCmd),
 
 	/// Gets a public key and a SS58 address from the provided Secret URI
-	Inspect(inspect::InspectCmd),
+	Inspect(InspectCmd),
 
 	/// Insert a key to the keystore of a node.
-	Insert(insert::InsertCmd),
+	Insert(InsertCmd),
 
 	/// Sign a message, with a given (secret) key
-	Sign(sign::SignCmd),
+	Sign(SignCmd),
 
 	/// Sign transaction from encoded Call. Returns a signed and encoded UncheckedMortalCompactExtrinsic as hex.
-	SignTransaction(sign_transaction::SignTransactionCmd),
+	SignTransaction(SignTransactionCmd),
 
 	/// Author and sign a Node pallet_balances::Transfer transaction with a given (secret) key.
-	Transfer(transfer::TransferCmd),
+	Transfer(TransferCmd),
 
 	/// Verify a signature for a message, provided on STDIN, with a given (public or secret) key.
-	Verify(verify::VerifyCmd),
+	Verify(VerifyCmd),
 
 	/// Generate a seed that provides a vanity address.
-	Vanity(vanity::VanityCmd),
+	Vanity(VanityCmd),
 }
 
-impl Subcommand {
-	/// Get the shared parameters of a `CoreParams` command
-	pub fn get_shared_params(&self) -> &SharedParams {
-		use Subcommand::*;
+// TODO: move to config.rs?
+/// Macro that helps implement CliConfiguration on an enum of subcommand automatically
+///
+/// # Example
+///
+/// ```
+/// # #[macro_use] extern crate sc_cli;
+///
+/// # struct EmptyVariant {}
+///
+///	# impl sc_cli::CliConfiguration for EmptyVariant {
+///	#     fn shared_params(&self) -> &sc_cli::SharedParams { unimplemented!() }
+///	#     fn chain_id(&self, _: bool) -> sc_cli::Result<String> { Ok("test-chain-id".to_string()) }
+///	# }
+///
+/// # fn main() {
+/// enum Subcommand {
+///	    Variant1(EmptyVariant),
+///	    Variant2(EmptyVariant),
+///	}
+///
+/// substrate_cli_subcommands!(
+///     Subcommand => Variant1, Variant2
+/// );
+///
+/// # use sc_cli::CliConfiguration;
+/// # assert_eq!(Subcommand::Variant1(EmptyVariant {}).chain_id(false).unwrap(), "test-chain-id");
+///
+/// # }
+/// ```
+///
+/// Which will expand to:
+///
+/// ```ignore
+/// impl CliConfiguration for Subcommand {
+///	    fn base_path(&self) -> Result<Option<PathBuf>> {
+///	        match self {
+///	            Subcommand::Variant1(cmd) => cmd.base_path(),
+///	            Subcommand::Variant2(cmd) => cmd.base_path(),
+///	        }
+///	    }
+///
+///	    fn is_dev(&self) -> Result<bool> {
+///	        match self {
+///	            Subcommand::Variant1(cmd) => cmd.is_dev(),
+///	            Subcommand::Variant2(cmd) => cmd.is_dev(),
+///	        }
+///	    }
+///
+///     // ...
+/// }
+/// ```
+#[macro_export]
+macro_rules! substrate_cli_subcommands {
+	($enum:ident => $($variant:ident),*) => {
+		impl $crate::CliConfiguration for $enum {
+			fn shared_params(&self) -> &$crate::SharedParams {
+				match self {
+					$($enum::$variant(cmd) => cmd.shared_params()),*
+				}
+			}
 
-		match self {
-			BuildSpec(params) => &params.shared_params,
-			ExportBlocks(params) => &params.shared_params,
-			ImportBlocks(params) => &params.shared_params,
-			CheckBlock(params) => &params.shared_params,
-			Revert(params) => &params.shared_params,
-			PurgeChain(params) => &params.shared_params,
-			GenerateNodeKey(params) => &params.shared_params,
-			Generate(params) => &params.shared_params,
-			Inspect(params) => &params.shared_params,
-			Insert(params) => &params.shared_params,
-			Sign(params) => &params.shared_params,
-			SignTransaction(params) => &params.shared_params,
-			Transfer(params) => &params.shared_params,
-			Verify(params) => &params.shared_params,
-			Vanity(params) => &params.shared_params,
+			fn import_params(&self) -> Option<&$crate::ImportParams> {
+				match self {
+					$($enum::$variant(cmd) => cmd.import_params()),*
+				}
+			}
+
+			fn pruning_params(&self) -> Option<&$crate::PruningParams> {
+				match self {
+					$($enum::$variant(cmd) => cmd.pruning_params()),*
+				}
+			}
+
+			fn keystore_params(&self) -> Option<&$crate::KeystoreParams> {
+				match self {
+					$($enum::$variant(cmd) => cmd.keystore_params()),*
+				}
+			}
+
+			fn network_params(&self) -> Option<&$crate::NetworkParams> {
+				match self {
+					$($enum::$variant(cmd) => cmd.network_params()),*
+				}
+			}
+
+			fn base_path(&self) -> $crate::Result<::std::option::Option<::std::path::PathBuf>> {
+				match self {
+					$($enum::$variant(cmd) => cmd.base_path()),*
+				}
+			}
+
+			fn is_dev(&self) -> $crate::Result<bool> {
+				match self {
+					$($enum::$variant(cmd) => cmd.is_dev()),*
+				}
+			}
+
+			fn role(&self, is_dev: bool) -> $crate::Result<::sc_service::Role> {
+				match self {
+					$($enum::$variant(cmd) => cmd.role(is_dev)),*
+				}
+			}
+
+			fn transaction_pool(&self)
+			-> $crate::Result<::sc_service::config::TransactionPoolOptions> {
+				match self {
+					$($enum::$variant(cmd) => cmd.transaction_pool()),*
+				}
+			}
+
+			fn network_config(
+				&self,
+				chain_spec: &::std::boxed::Box<dyn ::sc_service::ChainSpec>,
+				is_dev: bool,
+				net_config_dir: &::std::path::PathBuf,
+				client_id: &str,
+				node_name: &str,
+				node_key: ::sc_service::config::NodeKeyConfig,
+			) -> $crate::Result<::sc_service::config::NetworkConfiguration> {
+				match self {
+					$(
+						$enum::$variant(cmd) => cmd.network_config(
+							chain_spec, is_dev, net_config_dir, client_id, node_name, node_key
+						)
+					),*
+				}
+			}
+
+			fn keystore_config(&self, base_path: &::std::path::PathBuf)
+			-> $crate::Result<::sc_service::config::KeystoreConfig> {
+				match self {
+					$($enum::$variant(cmd) => cmd.keystore_config(base_path)),*
+				}
+			}
+
+			fn database_cache_size(&self) -> $crate::Result<::std::option::Option<usize>> {
+				match self {
+					$($enum::$variant(cmd) => cmd.database_cache_size()),*
+				}
+			}
+
+			fn database_config(
+				&self,
+				base_path: &::std::path::PathBuf,
+				cache_size: usize,
+			) -> $crate::Result<::sc_service::config::DatabaseConfig> {
+				match self {
+					$($enum::$variant(cmd) => cmd.database_config(base_path, cache_size)),*
+				}
+			}
+
+			fn state_cache_size(&self) -> $crate::Result<usize> {
+				match self {
+					$($enum::$variant(cmd) => cmd.state_cache_size()),*
+				}
+			}
+
+			fn state_cache_child_ratio(&self) -> $crate::Result<::std::option::Option<usize>> {
+				match self {
+					$($enum::$variant(cmd) => cmd.state_cache_child_ratio()),*
+				}
+			}
+
+			fn pruning(&self, is_dev: bool, role: &::sc_service::Role)
+			-> $crate::Result<::sc_service::config::PruningMode> {
+				match self {
+					$($enum::$variant(cmd) => cmd.pruning(is_dev, role)),*
+				}
+			}
+
+			fn chain_id(&self, is_dev: bool) -> $crate::Result<String> {
+				match self {
+					$($enum::$variant(cmd) => cmd.chain_id(is_dev)),*
+				}
+			}
+
+			fn init<C: $crate::SubstrateCli>(&self) -> $crate::Result<()> {
+				match self {
+					$($enum::$variant(cmd) => cmd.init::<C>()),*
+				}
+			}
+
+			fn node_name(&self) -> $crate::Result<String> {
+				match self {
+					$($enum::$variant(cmd) => cmd.node_name()),*
+				}
+			}
+
+			fn wasm_method(&self) -> $crate::Result<::sc_service::config::WasmExecutionMethod> {
+				match self {
+					$($enum::$variant(cmd) => cmd.wasm_method()),*
+				}
+			}
+
+			fn execution_strategies(&self, is_dev: bool)
+			-> $crate::Result<::sc_service::config::ExecutionStrategies> {
+				match self {
+					$($enum::$variant(cmd) => cmd.execution_strategies(is_dev)),*
+				}
+			}
+
+			fn rpc_http(&self) -> $crate::Result<::std::option::Option<::std::net::SocketAddr>> {
+				match self {
+					$($enum::$variant(cmd) => cmd.rpc_http()),*
+				}
+			}
+
+			fn rpc_ws(&self) -> $crate::Result<::std::option::Option<::std::net::SocketAddr>> {
+				match self {
+					$($enum::$variant(cmd) => cmd.rpc_ws()),*
+				}
+			}
+
+			fn rpc_ws_max_connections(&self) -> $crate::Result<::std::option::Option<usize>> {
+				match self {
+					$($enum::$variant(cmd) => cmd.rpc_ws_max_connections()),*
+				}
+			}
+
+			fn rpc_cors(&self, is_dev: bool)
+			-> $crate::Result<::std::option::Option<::std::vec::Vec<String>>> {
+				match self {
+					$($enum::$variant(cmd) => cmd.rpc_cors(is_dev)),*
+				}
+			}
+
+			fn prometheus_config(&self)
+			-> $crate::Result<::std::option::Option<::sc_service::config::PrometheusConfig>> {
+				match self {
+					$($enum::$variant(cmd) => cmd.prometheus_config()),*
+				}
+			}
+
+			fn telemetry_endpoints(
+				&self,
+				chain_spec: &Box<dyn ::sc_service::ChainSpec>,
+			) -> $crate::Result<::std::option::Option<::sc_service::config::TelemetryEndpoints>> {
+				match self {
+					$($enum::$variant(cmd) => cmd.telemetry_endpoints(chain_spec)),*
+				}
+			}
+
+			fn telemetry_external_transport(&self)
+			-> $crate::Result<::std::option::Option<::sc_service::config::ExtTransport>> {
+				match self {
+					$($enum::$variant(cmd) => cmd.telemetry_external_transport()),*
+				}
+			}
+
+			fn default_heap_pages(&self) -> $crate::Result<::std::option::Option<u64>> {
+				match self {
+					$($enum::$variant(cmd) => cmd.default_heap_pages()),*
+				}
+			}
+
+			fn offchain_worker(&self, role: &::sc_service::Role) -> $crate::Result<bool> {
+				match self {
+					$($enum::$variant(cmd) => cmd.offchain_worker(role)),*
+				}
+			}
+
+			fn force_authoring(&self) -> $crate::Result<bool> {
+				match self {
+					$($enum::$variant(cmd) => cmd.force_authoring()),*
+				}
+			}
+
+			fn disable_grandpa(&self) -> $crate::Result<bool> {
+				match self {
+					$($enum::$variant(cmd) => cmd.disable_grandpa()),*
+				}
+			}
+
+			fn dev_key_seed(&self, is_dev: bool) -> $crate::Result<::std::option::Option<String>> {
+				match self {
+					$($enum::$variant(cmd) => cmd.dev_key_seed(is_dev)),*
+				}
+			}
+
+			fn tracing_targets(&self) -> $crate::Result<::std::option::Option<String>> {
+				match self {
+					$($enum::$variant(cmd) => cmd.tracing_targets()),*
+				}
+			}
+
+			fn tracing_receiver(&self) -> $crate::Result<::sc_service::TracingReceiver> {
+				match self {
+					$($enum::$variant(cmd) => cmd.tracing_receiver()),*
+				}
+			}
+
+			fn node_key(&self, net_config_dir: &::std::path::PathBuf)
+			-> $crate::Result<::sc_service::config::NodeKeyConfig> {
+				match self {
+					$($enum::$variant(cmd) => cmd.node_key(net_config_dir)),*
+				}
+			}
+
+			fn max_runtime_instances(&self) -> $crate::Result<::std::option::Option<usize>> {
+				match self {
+					$($enum::$variant(cmd) => cmd.max_runtime_instances()),*
+				}
+			}
+
+			fn log_filters(&self) -> $crate::Result<::std::option::Option<String>> {
+				match self {
+					$($enum::$variant(cmd) => cmd.log_filters()),*
+				}
+			}
 		}
-	}
-
-	/// Run any `CoreParams` command
-	pub fn run<RA, B, BC, Block>(
-		self,
-		config: Configuration,
-		builder: B,
-	) -> error::Result<()>
-	where
-		B: FnOnce(Configuration) -> Result<BC, sc_service::error::Error>,
-		BC: ServiceBuilderCommand<Block =Block> + Unpin,
-		Block: BlockT + Debug,
-		<<Block::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
-		Block::Hash: std::str::FromStr,
-		RA: RuntimeAdapter,
-		AccountIdFor<RA>: for<'a> TryFrom<&'a [u8], Error = ()> + Ss58Codec,
-		AddressFor<RA>: From<AccountIdFor<RA>>,
-		<IndexFor<RA> as FromStr>::Err: Display,
-		<BalanceFor<RA> as FromStr>::Err: Display,
-		CallFor<RA>: Codec,
-	{
-		match self {
-			Subcommand::BuildSpec(cmd) => cmd.run(config),
-			Subcommand::ExportBlocks(cmd) => cmd.run(config, builder),
-			Subcommand::ImportBlocks(cmd) => cmd.run(config, builder),
-			Subcommand::CheckBlock(cmd) => cmd.run(config, builder),
-			Subcommand::PurgeChain(cmd) => cmd.run(config),
-			Subcommand::Revert(cmd) => cmd.run(config, builder),
-			Subcommand::GenerateNodeKey(cmd) => cmd.run(),
-			Subcommand::Generate(cmd) => cmd.run(),
-			Subcommand::Inspect(cmd) => cmd.run(),
-			Subcommand::Sign(cmd) => cmd.run(),
-			Subcommand::Verify(cmd) => cmd.run(),
-			Subcommand::Vanity(cmd) => cmd.run(),
-			Subcommand::Transfer(cmd) => cmd.run::<RA>(),
-			Subcommand::SignTransaction(cmd) => cmd.run::<RA>(),
-			Subcommand::Insert(cmd) => cmd.run::<RA>(),
-		}
-	}
-
-	/// Update and prepare a `Configuration` with command line parameters
-	pub fn update_config<F>(
-		&self,
-		mut config: &mut Configuration,
-		spec_factory: F,
-		version: &VersionInfo,
-	) -> error::Result<()> where
-		F: FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
-	{
-		match self {
-			Subcommand::BuildSpec(cmd) => cmd.update_config(&mut config, spec_factory, version),
-			Subcommand::ExportBlocks(cmd) => cmd.update_config(&mut config, spec_factory, version),
-			Subcommand::ImportBlocks(cmd) => cmd.update_config(&mut config, spec_factory, version),
-			Subcommand::CheckBlock(cmd) => cmd.update_config(&mut config, spec_factory, version),
-			Subcommand::PurgeChain(cmd) => cmd.update_config(&mut config, spec_factory, version),
-			Subcommand::Revert(cmd) => cmd.update_config(&mut config, spec_factory, version),
-			Subcommand::GenerateNodeKey(cmd) => cmd.update_config(&mut config, spec_factory, version),
-			Subcommand::Generate(cmd) => cmd.update_config(&mut config, spec_factory, version),
-			Subcommand::Inspect(cmd) => cmd.update_config(&mut config, spec_factory, version),
-			Subcommand::Insert(cmd) => cmd.update_config(&mut config, spec_factory, version),
-			Subcommand::Sign(cmd) => cmd.update_config(&mut config, spec_factory, version),
-			Subcommand::SignTransaction(cmd) => cmd.update_config(&mut config, spec_factory, version),
-			Subcommand::Transfer(cmd) => cmd.update_config(&mut config, spec_factory, version),
-			Subcommand::Verify(cmd) => cmd.update_config(&mut config, spec_factory, version),
-			Subcommand::Vanity(cmd) => cmd.update_config(&mut config, spec_factory, version),
-		}
-	}
-
-	/// Initialize substrate. This must be done only once.
-	///
-	/// This method:
-	///
-	/// 1. Set the panic handler
-	/// 2. Raise the FD limit
-	/// 3. Initialize the logger
-	pub fn init(&self, version: &VersionInfo) -> error::Result<()> {
-		self.get_shared_params().init(version)
 	}
 }
+
+substrate_cli_subcommands!(
+	Subcommand =>
+	BuildSpec,
+	ExportBlocks,
+	ImportBlocks,
+	CheckBlock,
+	Revert,
+	PurgeChain,
+	GenerateNodeKey,
+	Generate,
+	Inspect,
+	Insert,
+	Sign,
+	SignTransaction,
+	Transfer,
+	Verify,
+	Vanity
+);

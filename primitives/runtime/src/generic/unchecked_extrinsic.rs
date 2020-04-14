@@ -357,7 +357,6 @@ mod tests {
 		type AccountId = u64;
 		type Call = ();
 		type AdditionalSigned = ();
-		type DispatchInfo = ();
 		type Pre = ();
 
 		fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }

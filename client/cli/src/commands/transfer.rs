@@ -17,14 +17,13 @@
 //! Implementation of the `transfer` subcommand
 
 use crate::{
-	error, create_extrinsic_for, get_password,
-	with_crypto_scheme, pair_from_suri, decode_hex, VersionInfo,
+	error, create_extrinsic_for, get_password, with_crypto_scheme,
+	pair_from_suri, decode_hex, CliConfiguration, KeystoreParams,
 };
 use super::SharedParams;
 use structopt::StructOpt;
 use std::{str::FromStr, fmt::Display};
 use parity_scale_codec::Encode;
-use sc_service::{Configuration, ChainSpec};
 use sp_runtime::MultiSigner;
 use std::convert::TryFrom;
 use sp_core::crypto::Ss58Codec;
@@ -55,6 +54,10 @@ pub struct TransferCmd {
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
+	pub keystore_params: KeystoreParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
 	pub shared_params: SharedParams,
 }
 
@@ -69,7 +72,7 @@ impl TransferCmd {
 			<IndexFor<RA> as FromStr>::Err: Display,
 			<BalanceFor<RA> as FromStr>::Err: Display,
 	{
-		let password = get_password(&self.shared_params)?;
+		let password = get_password(&self.keystore_params)?;
 		let nonce = IndexFor::<RA>::from_str(&self.index).map_err(|e| format!("{}", e))?;
 		let to = if let Ok(data_vec) = decode_hex(&self.to) {
 			AccountIdFor::<RA>::try_from(&data_vec)
@@ -91,19 +94,15 @@ impl TransferCmd {
 			)
 		)
 	}
+}
 
-	/// Update and prepare a `Configuration` with command line parameters
-	pub fn update_config<F>(
-		&self,
-		mut config: &mut Configuration,
-		spec_factory: F,
-		version: &VersionInfo,
-	) -> error::Result<()> where
-		F: FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
-	{
-		self.shared_params.update_config(&mut config, spec_factory, version)?;
+impl CliConfiguration for TransferCmd {
+	fn shared_params(&self) -> &SharedParams {
+		&self.shared_params
+	}
 
-		Ok(())
+	fn keystore_params(&self) -> Option<&KeystoreParams> {
+		Some(&self.keystore_params)
 	}
 }
 

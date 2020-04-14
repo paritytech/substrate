@@ -1,6 +1,6 @@
 [package]
 name = "sc-cli"
-version = "0.8.0-alpha.4"
+version = "0.8.0-alpha.5"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate CLI interface."
 edition = "2018"
@@ -20,7 +20,7 @@ ansi_term = "0.12.1"
 lazy_static = "1.4.0"
 app_dirs = "1.2.1"
 tokio = { version = "0.2.9", features = [ "signal", "rt-core", "rt-threaded" ] }
-futures = "0.3.1"
+futures = "0.3.4"
 fdlimit = "0.1.4"
 serde_json = "1.0.41"
 parity-scale-codec = "1.2.0"
@@ -35,6 +35,7 @@ tiny-bip39 = "0.6.2"
 libp2p = "0.15.0"
 hex-literal = "0.2.1"
 sc-informant = { version = "0.8.0-alpha.4", path = "../informant" }
+sp-utils = { version = "2.0.0-alpha.4", path = "../../primitives/utils" }
 sp-panic-handler = { version = "2.0.0-alpha.4", path = "../../primitives/panic-handler" }
 sc-client-api = { version = "2.0.0-alpha.4", path = "../api" }
 sp-blockchain = { version = "2.0.0-alpha.4", path = "../../primitives/blockchain" }
@@ -50,13 +51,16 @@ substrate-prometheus-endpoint = { path = "../../utils/prometheus" , version = "0
 sp-keyring = { version = "2.0.0-alpha.4", path = "../../primitives/keyring" }
 names = "0.11.0"
 structopt = "0.3.8"
-sc-tracing = { version = "2.0.0-alpha.4", path = "../tracing" }
+sc-tracing = { version = "2.0.0-alpha.5", path = "../tracing" }
 chrono = "0.4.10"
 parity-util-mem = { version = "0.6.0", default-features = false, features = ["primitive-types"] }
 cli-utils = { path = "../../utils/cli-utils" , version = "2.0.0-alpha.3" }
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
 rpassword = "4.0.1"
+
+[target.'cfg(target_family = "unix")'.dependencies]
+nix = "0.17.0"
 
 [dev-dependencies]
 tempfile = "3.1.0"
@@ -68,3 +72,6 @@ frame-system = { version = "2.0.0-alpha.4", path = "../../frame/system" }
 wasmtime = [
 	"sc-service/wasmtime",
 ]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

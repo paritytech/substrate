@@ -16,10 +16,9 @@
 
 //! Implementation of the `inspect` subcommand
 
-use crate::{error, VersionInfo, print_from_uri, with_crypto_scheme};
+use crate::{error, print_from_uri, with_crypto_scheme, CliConfiguration, KeystoreParams};
 use super::{SharedParams, get_password, read_uri};
 use structopt::StructOpt;
-use sc_service::{Configuration, ChainSpec};
 
 /// The `inspect` command
 #[derive(Debug, StructOpt, Clone)]
@@ -36,6 +35,10 @@ pub struct InspectCmd {
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
+	pub keystore_params: KeystoreParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
 	pub shared_params: SharedParams,
 }
 
@@ -43,7 +46,7 @@ impl InspectCmd {
 	/// Run the command
 	pub fn run(self) -> error::Result<()> {
 		let uri = read_uri(self.uri)?;
-		let pass = get_password(&self.shared_params).ok();
+		let pass = get_password(&self.keystore_params).ok();
 
 		with_crypto_scheme!(
 			self.shared_params.scheme,
@@ -57,19 +60,14 @@ impl InspectCmd {
 
 		Ok(())
 	}
-
-	/// Update and prepare a `Configuration` with command line parameters
-	pub fn update_config<F>(
-		&self,
-		mut config: &mut Configuration,
-		spec_factory: F,
-		version: &VersionInfo,
-	) -> error::Result<()> where
-		F: FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
-	{
-		self.shared_params.update_config(&mut config, spec_factory, version)?;
-
-		Ok(())
-	}
 }
 
+impl CliConfiguration for InspectCmd {
+	fn shared_params(&self) -> &SharedParams {
+		&self.shared_params
+	}
+
+	fn keystore_params(&self) -> Option<&KeystoreParams> {
+		Some(&self.keystore_params)
+	}
+}

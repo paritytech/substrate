@@ -24,10 +24,7 @@ use sp_runtime::{
 	traits::IdentifyAccount, MultiSigner,
 	generic::{UncheckedExtrinsic, SignedPayload},
 };
-use crate::{
-	SharedParams, arg_enums::{OutputType},
-	error::{self, Error},
-};
+use crate::{arg_enums::{OutputType}, error::{self, Error}, KeystoreParams};
 use parity_scale_codec::Encode;
 use serde_json::json;
 use cli_utils::{RuntimeAdapter, IndexFor};
@@ -38,7 +35,7 @@ pub type PublicFor<P> = <P as sp_core::Pair>::Public;
 pub type SeedFor<P> = <P as sp_core::Pair>::Seed;
 
 /// helper method to fetch password from `SharedParams` or read from stdin
-pub fn get_password(params: &SharedParams) -> error::Result<String> {
+pub fn get_password(params: &KeystoreParams) -> error::Result<String> {
 	let (password_interactive, password) = (params.password_interactive, params.password.as_ref());
 
 	let pass = if password_interactive {

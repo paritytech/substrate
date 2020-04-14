@@ -141,6 +141,7 @@ impl pallet_session::Trait for Runtime {
 	type Keys = UintAuthorityId;
 	type Event = ();
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
+	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
 }
 
 impl pallet_session::historical::Trait for Runtime {
@@ -159,6 +160,10 @@ impl pallet_authorship::Trait for Runtime {
 	type EventHandler = ImOnline;
 }
 
+parameter_types! {
+	pub const UnsignedPriority: u64 = 1 << 20;
+}
+
 impl Trait for Runtime {
 	type AuthorityId = UintAuthorityId;
 	type Event = ();
@@ -166,6 +171,7 @@ impl Trait for Runtime {
 	type SubmitTransaction = SubmitTransaction;
 	type ReportUnresponsiveness = OffenceHandler;
 	type SessionDuration = Period;
+	type UnsignedPriority = UnsignedPriority;
 }
 
 /// Im Online module.
@@ -174,7 +180,7 @@ pub type System = frame_system::Module<Runtime>;
 pub type Session = pallet_session::Module<Runtime>;
 
 pub fn advance_session() {
-	let now = System::block_number();
+	let now = System::block_number().max(1);
 	System::set_block_number(now + 1);
 	Session::rotate_session();
 	assert_eq!(Session::current_index(), (now / Period::get()) as u32);

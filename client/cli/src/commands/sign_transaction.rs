@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Implementation of the `sign-transaction` subcommand
-use crate::{error, VersionInfo, with_crypto_scheme};
+use crate::{error, with_crypto_scheme, CliConfiguration, KeystoreParams};
 use super::{
 	SharedParams, get_password,
 	IndexFor, CallFor, pair_from_suri, decode_hex, create_extrinsic_for,
@@ -23,7 +23,6 @@ use super::{
 use structopt::StructOpt;
 use parity_scale_codec::{Codec, Encode, Decode};
 use std::{str::FromStr, fmt::Display};
-use sc_service::{Configuration, ChainSpec};
 use sp_runtime::MultiSigner;
 use cli_utils::RuntimeAdapter;
 
@@ -50,6 +49,10 @@ pub struct SignTransactionCmd {
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
+	pub keystore_params: KeystoreParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
 	pub shared_params: SharedParams,
 }
 
@@ -69,27 +72,25 @@ impl SignTransactionCmd {
 			self.shared_params.scheme,
 			print_ext<RA>(
 				&self.suri,
-				&get_password(&self.shared_params)?,
+				&get_password(&self.keystore_params)?,
 				call,
 				nonce
 			)
 		)
 	}
+}
 
-	/// Update and prepare a `Configuration` with command line parameters
-	pub fn update_config<F>(
-		&self,
-		mut config: &mut Configuration,
-		spec_factory: F,
-		version: &VersionInfo,
-	) -> error::Result<()> where
-		F: FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
-	{
-		self.shared_params.update_config(&mut config, spec_factory, version)?;
 
-		Ok(())
+impl CliConfiguration for SignTransactionCmd {
+	fn shared_params(&self) -> &SharedParams {
+		&self.shared_params
+	}
+
+	fn keystore_params(&self) -> Option<&KeystoreParams> {
+		Some(&self.keystore_params)
 	}
 }
+
 
 fn print_ext<Pair, RA>(uri: &str, pass: &str, call: CallFor<RA>, nonce: IndexFor<RA>) -> error::Result<()>
 	where

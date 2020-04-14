@@ -16,14 +16,10 @@
 
 //! implementation of the `vanity` subcommand
 
-use crate::{
-	error, format_seed, SharedParams,
-	VersionInfo, print_from_uri, with_crypto_scheme,
-};
+use crate::{error, format_seed, SharedParams, print_from_uri, with_crypto_scheme, CliConfiguration};
 use sp_core::crypto::Ss58Codec;
 use structopt::StructOpt;
 use rand::{rngs::OsRng, RngCore};
-use sc_service::{Configuration, ChainSpec};
 use sp_runtime::traits::IdentifyAccount;
 
 /// The `vanity` command
@@ -62,19 +58,11 @@ impl VanityCmd {
 		);
 		Ok(())
 	}
+}
 
-	/// Update and prepare a `Configuration` with command line parameters
-	pub fn update_config<F>(
-		&self,
-		mut config: &mut Configuration,
-		spec_factory: F,
-		version: &VersionInfo,
-	) -> error::Result<()> where
-		F: FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
-	{
-		self.shared_params.update_config(&mut config, spec_factory, version)?;
-
-		Ok(())
+impl CliConfiguration for VanityCmd {
+	fn shared_params(&self) -> &SharedParams {
+		&self.shared_params
 	}
 }
 

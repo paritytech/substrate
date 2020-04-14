@@ -20,8 +20,7 @@ use super::{SharedParams, get_password};
 use crate::error::{self, Error};
 use bip39::{MnemonicType, Mnemonic, Language};
 use structopt::StructOpt;
-use crate::{VersionInfo, print_from_uri, with_crypto_scheme};
-use sc_service::{Configuration, ChainSpec};
+use crate::{print_from_uri, with_crypto_scheme, CliConfiguration, KeystoreParams};
 
 /// The `generate` command
 #[derive(Debug, StructOpt, Clone)]
@@ -33,13 +32,16 @@ pub struct GenerateCmd {
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
+	pub keystore_params: KeystoreParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
 	pub shared_params: SharedParams,
 }
 
 impl GenerateCmd {
 	/// Run the command
-	pub fn run(self) -> error::Result<()>
-	{
+	pub fn run(self) -> error::Result<()> {
 		let words = match self.words {
 			Some(words) => {
 				MnemonicType::for_word_count(words)
@@ -50,7 +52,7 @@ impl GenerateCmd {
 			None => MnemonicType::Words12,
 		};
 		let mnemonic = Mnemonic::new(words, Language::English);
-		let password = get_password(&self.shared_params)?;
+		let password = get_password(&self.keystore_params)?;
 		let maybe_network = self.shared_params.network;
 		let output = self.shared_params.output_type;
 
@@ -65,18 +67,14 @@ impl GenerateCmd {
 		);
 		Ok(())
 	}
+}
 
-	/// Update and prepare a `Configuration` with command line parameters
-	pub fn update_config<F>(
-		&self,
-		mut config: &mut Configuration,
-		spec_factory: F,
-		version: &VersionInfo,
-	) -> error::Result<()> where
-		F: FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
-	{
-		self.shared_params.update_config(&mut config, spec_factory, version)?;
+impl CliConfiguration for GenerateCmd {
+	fn shared_params(&self) -> &SharedParams {
+		&self.shared_params
+	}
 
-		Ok(())
+	fn keystore_params(&self) -> Option<&KeystoreParams> {
+		Some(&self.keystore_params)
 	}
 }

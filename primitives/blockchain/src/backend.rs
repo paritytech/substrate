@@ -254,6 +254,8 @@ pub struct Info<Block: BlockT> {
 	pub finalized_hash: Block::Hash,
 	/// Last finalized block number.
 	pub finalized_number: <<Block as BlockT>::Header as HeaderT>::Number,
+	/// Number of concurrent leave forks.
+	pub number_leaves: usize
 }
 
 /// Block status.

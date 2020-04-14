@@ -23,7 +23,7 @@ use sc_client_api::backend;
 use codec::Decode;
 use sp_consensus::{evaluation, Proposal, RecordProof};
 use sp_inherents::InherentData;
-use log::{error, info, debug, trace};
+use log::{error, info, debug, trace, warn};
 use sp_core::ExecutionContext;
 use sp_runtime::{
 	generic::BlockId,
@@ -34,7 +34,7 @@ use sc_telemetry::{telemetry, CONSENSUS_INFO};
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 use sp_api::{ProvideRuntimeApi, ApiExt};
 use futures::{executor, future, future::Either};
-use sp_blockchain::{HeaderBackend, ApplyExtrinsicFailed};
+use sp_blockchain::{HeaderBackend, ApplyExtrinsicFailed::Validity, Error::ApplyExtrinsicFailed};
 use std::marker::PhantomData;
 
 /// Proposer factory.
@@ -76,7 +76,7 @@ impl<B, Block, C, A> ProposerFactory<A, B, C>
 
 		let id = BlockId::hash(parent_hash);
 
-		info!("Starting consensus session on top of parent {:?}", parent_hash);
+		info!("🙌 Starting consensus session on top of parent {:?}", parent_hash);
 
 		let proposer = Proposer {
 			inner: Arc::new(ProposerInner {
@@ -196,14 +196,25 @@ impl<A, B, Block, C> ProposerInner<B, Block, C, A>
 
 		// We don't check the API versions any further here since the dispatch compatibility
 		// check should be enough.
-		for extrinsic in self.client.runtime_api()
+		for inherent in self.client.runtime_api()
 			.inherent_extrinsics_with_context(
 				&self.parent_id,
 				ExecutionContext::BlockConstruction,
 				inherent_data
 			)?
 		{
-			block_builder.push(extrinsic)?;
+			match block_builder.push(inherent) {
+				Err(ApplyExtrinsicFailed(Validity(e))) if e.exhausted_resources() =>
+					warn!("⚠️  Dropping non-mandatory inherent from overweight block."),
+				Err(ApplyExtrinsicFailed(Validity(e))) if e.was_mandatory() => {
+					error!("❌️ Mandatory inherent extrinsic returned error. Block cannot be produced.");
+					Err(ApplyExtrinsicFailed(Validity(e)))?
+				}
+				Err(e) => {
+					warn!("❗️ Inherent extrinsic returned unexpected error: {}. Dropping.", e);
+				}
+				Ok(_) => {}
+			}
 		}
 
 		// proceed with transactions
@@ -212,7 +223,7 @@ impl<A, B, Block, C> ProposerInner<B, Block, C, A>
 		let mut unqueue_invalid = Vec::new();
 		let pending_iterator = match executor::block_on(future::select(
 			self.transaction_pool.ready_at(self.parent_number),
-			futures_timer::Delay::new((deadline - (self.now)()) / 8),
+			futures_timer::Delay::new(deadline.saturating_duration_since((self.now)()) / 8),
 		)) {
 			Either::Left((iterator, _)) => iterator,
 			Either::Right(_) => {
@@ -241,7 +252,7 @@ impl<A, B, Block, C> ProposerInner<B, Block, C, A>
 				Ok(()) => {
 					debug!("[{:?}] Pushed to the block.", pending_tx_hash);
 				}
-				Err(sp_blockchain::Error::ApplyExtrinsicFailed(ApplyExtrinsicFailed::Validity(e)))
+				Err(ApplyExtrinsicFailed(Validity(e)))
 						if e.exhausted_resources() => {
 					if is_first {
 						debug!("[{:?}] Invalid transaction: FullBlock on empty block", pending_tx_hash);
@@ -277,7 +288,7 @@ impl<A, B, Block, C> ProposerInner<B, Block, C, A>
 
 		let (block, storage_changes, proof) = block_builder.build()?.into_inner();
 
-		info!("Prepared block for proposing at {} [hash: {:?}; parent_hash: {}; extrinsics ({}): [{}]]",
+		info!("🎁 Prepared block for proposing at {} [hash: {:?}; parent_hash: {}; extrinsics ({}): [{}]]",
 			block.header().number(),
 			<Block as BlockT>::Hash::from(block.header().hash()),
 			block.header().parent_hash(),
@@ -315,12 +326,14 @@ mod tests {
 		prelude::*,
 		runtime::{Extrinsic, Transfer},
 	};
-	use sp_transaction_pool::{ChainEvent, MaintainedTransactionPool};
+	use sp_transaction_pool::{ChainEvent, MaintainedTransactionPool, TransactionSource};
 	use sc_transaction_pool::{BasicPool, FullChainApi};
 	use sp_api::Core;
 	use backend::Backend;
 	use sp_blockchain::HeaderBackend;
 	use sp_runtime::traits::NumberFor;
+
+	const SOURCE: TransactionSource = TransactionSource::External;
 
 	fn extrinsic(nonce: u64) -> Extrinsic {
 		Transfer {
@@ -338,7 +351,7 @@ mod tests {
 			id: BlockId::Number(block_number.into()),
 			retracted: vec![],
 			is_new_best: true,
-			header: header,
+			header,
 		}
 	}
 
@@ -351,7 +364,7 @@ mod tests {
 		);
 
 		futures::executor::block_on(
-			txpool.submit_at(&BlockId::number(0), vec![extrinsic(0), extrinsic(1)])
+			txpool.submit_at(&BlockId::number(0), SOURCE, vec![extrinsic(0), extrinsic(1)])
 		).unwrap();
 
 		futures::executor::block_on(
@@ -392,6 +405,36 @@ mod tests {
 	}
 
 	#[test]
+	fn should_not_panic_when_deadline_is_reached() {
+		let client = Arc::new(substrate_test_runtime_client::new());
+		let txpool = Arc::new(
+			BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone()))).0
+		);
+
+		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone());
+
+		let cell = Mutex::new((false, time::Instant::now()));
+		let mut proposer = proposer_factory.init_with_now(
+			&client.header(&BlockId::number(0)).unwrap().unwrap(),
+			Box::new(move || {
+				let mut value = cell.lock();
+				if !value.0 {
+					value.0 = true;
+					return value.1;
+				}
+				let new = value.1 + time::Duration::from_secs(160);
+				*value = (true, new);
+				new
+			})
+		);
+
+		let deadline = time::Duration::from_secs(1);
+		futures::executor::block_on(
+			proposer.propose(Default::default(), Default::default(), deadline, RecordProof::No)
+		).map(|r| r.block).unwrap();
+	}
+
+	#[test]
 	fn proposed_storage_changes_should_match_execute_block_storage_changes() {
 		let (client, backend) = substrate_test_runtime_client::TestClientBuilder::new()
 			.build_with_backend();
@@ -403,7 +446,7 @@ mod tests {
 		let block_id = BlockId::Hash(genesis_hash);
 
 		futures::executor::block_on(
-			txpool.submit_at(&BlockId::number(0), vec![extrinsic(0)]),
+			txpool.submit_at(&BlockId::number(0), SOURCE, vec![extrinsic(0)]),
 		).unwrap();
 
 		futures::executor::block_on(
@@ -454,7 +497,7 @@ mod tests {
 		);
 
 		futures::executor::block_on(
-			txpool.submit_at(&BlockId::number(0), vec![
+			txpool.submit_at(&BlockId::number(0), SOURCE, vec![
 				extrinsic(0),
 				extrinsic(1),
 				Transfer {

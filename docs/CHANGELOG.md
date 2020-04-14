@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog].
 
 ## Unreleased
 
+### Changed
+
+* `sc_rpc::system::SystemInfo.impl_version` now returns the full version (2.0.0-alpha.2-b950f731c-x86_64-linux-gnu) instead of the short version (1.0.0) (#5271)
+
+## 2.0.0-alpha.4 -> 2.0.0-alpha.5
+
+Runtime
+-------
+
+* pallet-evm: configurable gasometer config (#5320)
+* Adds new event phase `Initialization` (#5302)
+
 ## 2.0.0-alpha.3 -> 2.0.0-alpha.4
 
 Runtime

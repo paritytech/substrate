@@ -17,12 +17,11 @@
 //! implementation of the `verify` subcommand
 
 use crate::{
-	read_message, decode_hex, read_uri,
-	error, SharedParams, VersionInfo, with_crypto_scheme,
+	read_message, decode_hex, read_uri, CliConfiguration,
+	error, SharedParams, with_crypto_scheme,
 };
 use sp_core::{Public, crypto::Ss58Codec};
 use structopt::StructOpt;
-use sc_service::{Configuration, ChainSpec};
 
 /// The `verify` command
 #[derive(Debug, StructOpt, Clone)]
@@ -72,21 +71,14 @@ impl VerifyCmd {
 			verify(sig_data, message, uri)
 		)
 	}
+}
 
-	/// Update and prepare a `Configuration` with command line parameters
-	pub fn update_config<F>(
-		&self,
-		mut config: &mut Configuration,
-		spec_factory: F,
-		version: &VersionInfo,
-	) -> error::Result<()> where
-		F: FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
-	{
-		self.shared_params.update_config(&mut config, spec_factory, version)?;
-
-		Ok(())
+impl CliConfiguration for VerifyCmd {
+	fn shared_params(&self) -> &SharedParams {
+		&self.shared_params
 	}
 }
+
 
 fn verify<Pair>(sig_data: Vec<u8>, message: Vec<u8>, uri: &str) -> error::Result<()>
 	where

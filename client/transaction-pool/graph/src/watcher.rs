@@ -16,18 +16,16 @@
 
 //! Extrinsics status updates.
 
-use futures::{
-	Stream,
-	channel::mpsc,
-};
+use futures::Stream;
 use sp_transaction_pool::TransactionStatus;
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
 
 /// Extrinsic watcher.
 ///
 /// Represents a stream of status updates for particular extrinsic.
 #[derive(Debug)]
 pub struct Watcher<H, BH> {
-	receiver: mpsc::UnboundedReceiver<TransactionStatus<H, BH>>,
+	receiver: TracingUnboundedReceiver<TransactionStatus<H, BH>>,
 	hash: H,
 }
 
@@ -48,7 +46,7 @@ impl<H, BH> Watcher<H, BH> {
 /// Sender part of the watcher. Exposed only for testing purposes.
 #[derive(Debug)]
 pub struct Sender<H, BH> {
-	receivers: Vec<mpsc::UnboundedSender<TransactionStatus<H, BH>>>,
+	receivers: Vec<TracingUnboundedSender<TransactionStatus<H, BH>>>,
 	is_finalized: bool,
 }
 
@@ -64,7 +62,7 @@ impl<H, BH> Default for Sender<H, BH> {
 impl<H: Clone, BH: Clone> Sender<H, BH> {
 	/// Add a new watcher to this sender object.
 	pub fn new_watcher(&mut self, hash: H) -> Watcher<H, BH> {
-		let (tx, receiver) = mpsc::unbounded();
+		let (tx, receiver) = tracing_unbounded("mpsc_txpool_watcher");
 		self.receivers.push(tx);
 		Watcher {
 			receiver,
