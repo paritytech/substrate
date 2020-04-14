@@ -1,4 +1,4 @@
-error: There doesn't exist the 'default' method (without `changed_in` attribute).
+error: There is no 'default' method with this name (without `changed_in` attribute).
 The 'default' method is used to call into the latest implementation.
   --> $DIR/changed_in_no_default_method.rs:15:6
    |
