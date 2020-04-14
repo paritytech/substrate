@@ -1,6 +1,6 @@
 [package]
 name = "sp-std"
-version = "2.0.0-alpha.5"
+version = "2.0.0-alpha.6"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
@@ -10,9 +10,9 @@ repository = "https://github.com/paritytech/substrate/"
 description = "Lowest-abstraction level for the Substrate runtime: just exports useful primitives from std or client/alloc to be used with any code that depends on the runtime."
 documentation = "https://docs.rs/sp-std"
 
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
 [features]
 default = ["std"]
 std = []
-
-[package.metadata.docs.rs]
-targets = ["x86_64-unknown-linux-gnu"]
