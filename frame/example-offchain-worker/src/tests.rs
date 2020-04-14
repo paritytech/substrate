@@ -89,7 +89,6 @@ impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Test
 	type Extrinsic = Extrinsic;
 }
 
-
 impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for Test where
 	Call<Test>: From<LocalCall>,
 {

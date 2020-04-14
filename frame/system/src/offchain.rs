@@ -15,6 +15,76 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Module helpers for off-chain calls.
+//!
+//! ## Overview
+//!
+//! This module provides transaction related helpers to:
+//! - Submit a raw unsigned transaction
+//! - Submit an unsigned transaction with a signed payload
+//! - Submit a signed transction.
+//!
+//! ## Usage
+//!
+//! ### Submit a raw unsigned transaction
+//!
+//! To submit a raw unsigned transaction, [`SubmitTransaction`](./struct.SubmitTransaction.html)
+//! can be used.
+//!
+//! ```rust
+//! SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call)
+//! ```
+//!
+//! ### Signing transactions
+//!
+//! To be able to use signing, the following trait should be implemented:
+//!
+//! - [`AppCrypto`](./trait.AppCrypto.html): where an application-specific key
+//!   is defined and can be used by this module's helpers for signing.
+//! - [`CreateSignedTransaction`](./trait.CreateSignedTransaction.html): where
+//!   the manner in which the transaction is constructed is defined.
+//!
+//! #### Submit an unsigned transaction with a signed payload
+//!
+//! Initially, a payload instance that implements the `SignedPayload` trait should be defined.
+//! If we take the [`PricePayload`](../../example-offchain-worker/struct.PricePayload.html)
+//! defined in the example-offchain-worker pallet, we see the following:
+//!
+//! ```rust
+//! #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+//! pub struct PricePayload<Public, BlockNumber> {
+//! 	block_number: BlockNumber,
+//! 	price: u32,
+//! 	public: Public,
+//! }
+//!
+//! impl<T: SigningTypes> SignedPayload<T> for PricePayload<T::Public, T::BlockNumber> {
+//! 	fn public(&self) -> T::Public {
+//! 		self.public.clone()
+//! 	}
+//! }
+//! ```
+//!
+//! An object from the defined payload can then be signed and submitted onchain.
+//!
+//! ```
+//! Signer::<T, T::AuthorityId>::all_accounts().send_unsigned_transaction(
+//! 	|account| PricePayload {
+//! 		price,
+//! 		block_number,
+//! 		public: account.public.clone()
+//! 	},
+//! 	|payload, signature| {
+//! 		Call::submit_price_unsigned_with_signed_payload(payload, signature)
+//! 	}
+//! )
+//! ```
+//!
+//! #### Submit a signed transaction
+//!
+//! ```
+//! Signer::<T, T::AuthorityId>::all_accounts().send_signed_transaction(
+//! 	|account| Call::submit_price(price)
+//! );
 
 use codec::Encode;
 use sp_std::convert::{TryInto, TryFrom};
@@ -42,6 +112,7 @@ impl<T, LocalCall> SubmitTransaction<T, LocalCall>
 where
 	T: SendTransactionTypes<LocalCall>,
 {
+	/// Submit transaction onchain by providing the call and an optional signature
 	pub fn submit_transaction(
 		call: <T as SendTransactionTypes<LocalCall>>::OverarchingCall,
 		signature: Option<<T::Extrinsic as ExtrinsicT>::SignaturePayload>,
@@ -50,6 +121,7 @@ where
 		sp_io::offchain::submit_transaction(xt.encode())
 	}
 
+	/// A convenience method to submit an unsigned transaction onchain.
 	pub fn submit_unsigned_transaction(
 		call: <T as SendTransactionTypes<LocalCall>>::OverarchingCall,
 	) -> Result<(), ()> {
@@ -64,7 +136,7 @@ where
 ///
 /// - All supported keys in the keystore
 /// - Any of the supported keys in the keystore
-/// - A list of provided keys
+/// - An intersection of in-keystore keys and the list of provided keys
 ///
 /// The signer is then able to:
 /// - Submit a unsigned transaction with a signed payload
@@ -84,14 +156,21 @@ impl<T: SigningTypes, C: AppCrypto<T::Public, T::Signature>, X> Default for Sign
 }
 
 impl<T: SigningTypes, C: AppCrypto<T::Public, T::Signature>, X> Signer<T, C, X> {
+	/// Use all available keys for signing.
 	pub fn all_accounts() -> Signer<T, C, ForAll> {
 		Default::default()
 	}
 
+	/// Use any of the available keys for signing.
 	pub fn any_account() -> Signer<T, C, ForAny> {
 		Default::default()
 	}
 
+	/// Use provided `accounts` for signing.
+	///
+	/// Note that not all keys will be necessarily used. The provided
+	/// vector of accounts will be intersected with the supported keys
+	/// in the keystore and the resulting list will be used for signing.
 	pub fn with_filter(mut self, accounts: Vec<T::Public>) -> Self {
 		self.accounts = Some(accounts);
 		self
@@ -290,6 +369,7 @@ pub struct Account<T: SigningTypes> {
 }
 
 impl<T: SigningTypes> Account<T> {
+	/// Create a new Account instance
 	pub fn new(index: usize, id: T::AccountId, public: T::Public) -> Self {
 		Self { index, id, public }
 	}
@@ -340,6 +420,7 @@ pub trait AppCrypto<Public, Signature> {
 		+ TryFrom<Signature>
 		+ Into<Signature>;
 
+	/// Sign payload with the private key to maps to the provided public key.
 	fn sign(payload: &[u8], public: Public) -> Option<Signature> {
 		let p: Self::GenericPublic = public.try_into().ok()?;
 		let x = Into::<Self::RuntimeAppPublic>::into(p);
@@ -351,6 +432,7 @@ pub trait AppCrypto<Public, Signature> {
 			.map(Into::into)
 	}
 
+	/// Verify signature against the provided public key.
 	fn verify(payload: &[u8], public: Public, signature: Signature) -> bool {
 		let p: Self::GenericPublic = match public.try_into() {
 			Ok(a) => a,
@@ -414,8 +496,18 @@ pub trait CreateSignedTransaction<LocalCall>: SendTransactionTypes<LocalCall> + 
 pub trait SignMessage<T: SigningTypes> {
 	type Result;
 
+	/// Sign message
+	///
+	/// Implementation of this method should return
+	/// a result containing the signature
 	fn sign_message(&self, message: &[u8]) -> Self::Result;
 
+	/// Sign payload
+	///
+	/// This method expects `f` to return a `SignedPayload`
+	/// object which is then used for signing.
+	///
+	/// Returns a result that contains the signature of the payload.
 	fn sign<TPayload, F>(&self, f: F) -> Self::Result where
 		F: Fn(&Account<T>) -> TPayload,
 		TPayload: SignedPayload<T>,
@@ -430,11 +522,23 @@ pub trait SendSignedTransaction<
 > {
 	type Result;
 
+	/// Send a signed onchain transaction
+	///
+	/// Calls `f` and expects a Call object to be returned.
+	/// The call object is then signed and submitted onchain.
+	///
+	/// Returns a result of the onchain submission.
 	fn send_signed_transaction(
 		&self,
 		f: impl Fn(&Account<T>) -> LocalCall,
 	) -> Self::Result;
 
+	/// Performs signing and submitting the transaction onchain.
+	///
+	/// This method can be used by implementations of `send_signed_transaction`
+	/// to actually sign and submit the signed transaction.
+	///
+	/// Returns a result of the onchain submittion.
 	fn submit_signed_transaction(
 		&self,
 		account: &Account<T>,
@@ -474,6 +578,11 @@ pub trait SendUnsignedTransaction<
 > {
 	type Result;
 
+	/// Send an unsigned transaction with a signed payload.
+	///
+	/// This method takes `f` and `f2` where:
+	/// - `f` is called and expected to return a `SignedPayload` object.
+	/// - `f2` is called with the SignedPayload returned by `f` and expected to return a Call object.
 	fn send_unsigned_transaction<TPayload, F>(
 		&self,
 		f: F,
@@ -483,6 +592,7 @@ pub trait SendUnsignedTransaction<
 		F: Fn(&Account<T>) -> TPayload,
 		TPayload: SignedPayload<T>;
 
+	/// Submits an unsigned transaction onchain.
 	fn submit_unsigned_transaction(
 		&self,
 		call: LocalCall
@@ -497,10 +607,16 @@ pub trait SendUnsignedTransaction<
 pub trait SignedPayload<T: SigningTypes>: Encode {
 	fn public(&self) -> T::Public;
 
+	/// Sign the payload using the implementor's provided public key.
+	///
+	/// Returns `Some(signature)` if public key is supported.
 	fn sign<C: AppCrypto<T::Public, T::Signature>>(&self) -> Option<T::Signature> {
 		self.using_encoded(|payload| C::sign(payload, self.public()))
 	}
 
+	/// Verify signature against payload.
+	///
+	/// Returns a bool indicating whether the signature is valid or not.
 	fn verify<C: AppCrypto<T::Public, T::Signature>>(&self, signature: T::Signature) -> bool {
 		self.using_encoded(|payload| C::verify(payload, self.public(), signature))
 	}
