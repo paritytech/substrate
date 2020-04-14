@@ -953,14 +953,14 @@ impl Metrics {
 				},
 				&["direction", "protocol"]
 			)?, registry)?,
-			notifications_streams_closed_total: register(GaugeVec::new(
+			notifications_streams_closed_total: register(CounterVec::new(
 				Opts::new(
 					"sub_libp2p_notifications_streams_closed_total",
 					"Total number of notification substreams that have been closed"
 				),
 				&["protocol"]
 			)?, registry)?,
-			notifications_streams_opened_total: register(GaugeVec::new(
+			notifications_streams_opened_total: register(CounterVec::new(
 				Opts::new(
 					"sub_libp2p_notifications_streams_opened_total",
 					"Total number of notification substreams that have been opened"
