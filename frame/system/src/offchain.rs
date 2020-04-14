@@ -471,7 +471,9 @@ pub trait SigningTypes: crate::Trait {
 
 /// A wrapper around the transaction and call types.
 pub trait SendTransactionTypes<LocalCall> {
+	/// The extrinsic type that this runtime submits onchain.
 	type Extrinsic: ExtrinsicT<Call=Self::OverarchingCall> + codec::Encode;
+	/// The runtime's call type.
 	type OverarchingCall: From<LocalCall>;
 }
 
