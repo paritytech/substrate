@@ -133,7 +133,7 @@ impl SpawnTaskHandle {
 		// Note that we increase the started counter here and not within the future. This way,
 		// we could properly visualize on Prometheus situations where the spawning doesn't work.
 		if let Some(metrics) = &self.metrics {
-			metrics.tasks_started.with_label_values(&[name]).inc();
+			metrics.tasks_spawned.with_label_values(&[name]).inc();
 			// We do a dummy increase in order for the task to show up in metrics.
 			metrics.tasks_ended.with_label_values(&[name]).inc_by(0);
 		}
@@ -242,7 +242,7 @@ struct Metrics {
 	// This list is ordered alphabetically
 	poll_duration: HistogramVec,
 	poll_start: CounterVec<U64>,
-	tasks_started: CounterVec<U64>,
+	tasks_spawned: CounterVec<U64>,
 	tasks_ended: CounterVec<U64>,
 }
 
@@ -267,9 +267,9 @@ impl Metrics {
 				),
 				&["task_name"]
 			)?, registry)?,
-			tasks_started: register(CounterVec::new(
+			tasks_spawned: register(CounterVec::new(
 				Opts::new(
-					"tasks_started_total",
+					"tasks_spawned_total",
 					"Total number of tasks that have been spawned on the Service"
 				),
 				&["task_name"]

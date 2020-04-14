@@ -53,13 +53,10 @@ where
 		let this = self.project();
 
 		this.poll_start.inc();
-		let before = Instant::now();
-		let outcome = Future::poll(this.inner, cx);
-		let after = Instant::now();
+		let _timer = this.poll_duration.start_timer();
+		Future::poll(this.inner, cx)
 
-		this.poll_duration.observe((after - before).as_secs_f64());
-
-		outcome
+		// `_timer` is dropped here and will observe the duration
 	}
 }
 
