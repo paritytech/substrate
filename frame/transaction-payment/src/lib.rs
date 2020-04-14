@@ -310,7 +310,7 @@ mod tests {
 	use codec::Encode;
 	use frame_support::{
 		impl_outer_dispatch, impl_outer_origin, parameter_types,
-		weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Weight},
+		weights::{DispatchClass, DispatchInfo, PostDispatchInfo, GetDispatchInfo, Weight},
 	};
 	use pallet_balances::Call as BalancesCall;
 	use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
@@ -482,6 +482,14 @@ mod tests {
 		DispatchInfo { weight: w, pays_fee: true, ..Default::default() }
 	}
 
+	fn post_info_from_weight(w: Weight) -> PostDispatchInfo {
+		PostDispatchInfo { actual_weight: Some(w), }
+	}
+
+	fn default_post_info() -> PostDispatchInfo {
+		PostDispatchInfo { actual_weight: None, }
+	}
+
 	#[test]
 	fn signed_extension_transaction_payment_work() {
 		ExtBuilder::default()
@@ -491,19 +499,29 @@ mod tests {
 			.execute_with(||
 		{
 			let len = 10;
+			let pre = ChargeTransactionPayment::<Runtime>::from(0)
+				.pre_dispatch(&1, CALL, &info_from_weight(5), len)
+				.unwrap();
+			assert_eq!(Balances::free_balance(1), 100 - 5 - 5 - 10);
+
 			assert!(
-				ChargeTransactionPayment::<Runtime>::from(0)
-					.pre_dispatch(&1, CALL, &info_from_weight(5), len)
+				ChargeTransactionPayment::<Runtime>
+					::post_dispatch(pre, &info_from_weight(5), &default_post_info(), len, &Ok(()))
 					.is_ok()
 			);
 			assert_eq!(Balances::free_balance(1), 100 - 5 - 5 - 10);
 
+			let pre = ChargeTransactionPayment::<Runtime>::from(5 /* tipped */)
+				.pre_dispatch(&2, CALL, &info_from_weight(100), len)
+				.unwrap();
+			assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 100 - 5);
+
 			assert!(
-				ChargeTransactionPayment::<Runtime>::from(5 /* tipped */)
-					.pre_dispatch(&2, CALL, &info_from_weight(3), len)
+				ChargeTransactionPayment::<Runtime>
+					::post_dispatch(pre, &info_from_weight(100), &post_info_from_weight(50), len, &Ok(()))
 					.is_ok()
 			);
-			assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 3 - 5);
+			assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 50 - 5);
 		});
 	}
 
@@ -720,6 +738,56 @@ mod tests {
 				),
 				<u64>::max_value()
 			);
+		});
+	}
+
+	#[test]
+	fn refund_does_not_recreate_account() {
+		ExtBuilder::default()
+			.balance_factor(10)
+			.base_fee(5)
+			.build()
+			.execute_with(||
+		{
+			let len = 10;
+			let pre = ChargeTransactionPayment::<Runtime>::from(5 /* tipped */)
+				.pre_dispatch(&2, CALL, &info_from_weight(100), len)
+				.unwrap();
+			assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 100 - 5);
+
+			// kill the account between pre and post dispatch
+			assert!(Balances::transfer(Some(2).into(), 3, Balances::free_balance(2)).is_ok());
+			assert_eq!(Balances::free_balance(2), 0);
+
+			assert!(
+				ChargeTransactionPayment::<Runtime>
+					::post_dispatch(pre, &info_from_weight(100), &post_info_from_weight(50), len, &Ok(()))
+					.is_ok()
+			);
+			assert_eq!(Balances::free_balance(2), 0);
+		});
+	}
+
+	#[test]
+	fn actual_weight_higher_than_max_refunds_nothing() {
+		ExtBuilder::default()
+			.balance_factor(10)
+			.base_fee(5)
+			.build()
+			.execute_with(||
+		{
+			let len = 10;
+			let pre = ChargeTransactionPayment::<Runtime>::from(5 /* tipped */)
+				.pre_dispatch(&2, CALL, &info_from_weight(100), len)
+				.unwrap();
+			assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 100 - 5);
+
+			assert!(
+				ChargeTransactionPayment::<Runtime>
+					::post_dispatch(pre, &info_from_weight(100), &post_info_from_weight(101), len, &Ok(()))
+					.is_ok()
+			);
+			assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 100 - 5);
 		});
 	}
 }
