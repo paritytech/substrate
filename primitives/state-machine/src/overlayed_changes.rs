@@ -504,7 +504,7 @@ impl OverlayedChanges {
 	/// Inserts the given key-value pair into the prospective change set.
 	///
 	/// `None` can be used to delete a value specified by the given key.
-	pub(crate) fn set_storage(&mut self, key: StorageKey, value: Option<StorageValue>) {
+	pub fn set_storage(&mut self, key: StorageKey, value: Option<StorageValue>) {
 		let size_write = value.as_ref().map(|x| x.len() as u64).unwrap_or(0);
 		self.stats.tally_write_overlay(size_write);
 		self.operation_from_last_gc += DEFAULT_GC_CONF.operation_cost(value.as_ref());
