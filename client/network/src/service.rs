@@ -845,7 +845,7 @@ pub struct NetworkWorker<B: BlockT + 'static, H: ExHashT> {
 
 struct Metrics {
 	// This list is ordered alphabetically
-	connections: GaugeVec<U64>,
+	connections_opened_total: CounterVec<U64>,
 	connections_closed_total: CounterVec<U64>,
 	import_queue_blocks_submitted: Counter<U64>,
 	import_queue_finality_proofs_submitted: Counter<U64>,
@@ -873,10 +873,10 @@ impl Metrics {
 	fn register(registry: &Registry) -> Result<Self, PrometheusError> {
 		Ok(Self {
 			// This list is ordered alphabetically
-			connections: register(GaugeVec::new(
+			connections_opened_total: register(CounterVec::new(
 				Opts::new(
-					"sub_libp2p_connections",
-					"Number of established libp2p connections"
+					"sub_libp2p_connections_opened_total",
+					"Total number of connections opened"
 				),
 				&["direction"]
 			)?, registry)?,
@@ -1115,21 +1115,15 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					if let Some(metrics) = this.metrics.as_ref() {
 						match endpoint {
 							ConnectedPoint::Dialer { .. } =>
-								metrics.connections.with_label_values(&["out"]).inc(),
+								metrics.connections_opened_total.with_label_values(&["out"]).inc(),
 							ConnectedPoint::Listener { .. } =>
-								metrics.connections.with_label_values(&["in"]).inc(),
+								metrics.connections_opened_total.with_label_values(&["in"]).inc(),
 						}
 					}
 				},
 				Poll::Ready(SwarmEvent::ConnectionClosed { peer_id, cause, endpoint, .. }) => {
 					trace!(target: "sub-libp2p", "Libp2p => Disconnected({:?}, {:?})", peer_id, cause);
 					if let Some(metrics) = this.metrics.as_ref() {
-						match endpoint {
-							ConnectedPoint::Dialer { .. } =>
-								metrics.connections.with_label_values(&["out"]).dec(),
-							ConnectedPoint::Listener { .. } =>
-								metrics.connections.with_label_values(&["in"]).dec(),
-						}
 						match cause {
 							ConnectionError::IO(_) =>
 								metrics.connections_closed_total.with_label_values(&["transport-error"]).inc(),
