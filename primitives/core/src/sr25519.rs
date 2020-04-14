@@ -618,7 +618,7 @@ pub fn verify_batch(
 	signatures: Vec<&Signature>,
 	pub_keys: Vec<&Public>,
 ) -> bool {
-	let mut sr_pub_keys = Vec::new();
+	let mut sr_pub_keys = Vec::with_capacity(pub_keys.len());
 	for pub_key in pub_keys {
 		match schnorrkel::PublicKey::from_bytes(pub_key.as_ref()) {
 			Ok(pk) => sr_pub_keys.push(pk),
@@ -626,7 +626,7 @@ pub fn verify_batch(
 		};
 	}
 
-	let mut sr_signatures = Vec::new();
+	let mut sr_signatures = Vec::with_capacity(signatures.len());
 	for signature in signatures {
 		match schnorrkel::Signature::from_bytes(signature.as_ref()) {
 			Ok(s) => sr_signatures.push(s),

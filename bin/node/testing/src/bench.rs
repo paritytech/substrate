@@ -143,7 +143,7 @@ impl BlockType {
 	}
 }
 
-/// Bench task executor.
+/// Benchmarking task executor.
 ///
 /// Uses multiple threads as the regular executable.
 #[derive(Debug, Clone)]
