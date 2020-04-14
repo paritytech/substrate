@@ -93,7 +93,7 @@ use sp_runtime::traits::{StaticLookup, Dispatchable};
 use frame_support::{
 	Parameter, decl_module, decl_event, decl_storage, decl_error, ensure,
 };
-use frame_support::weights::{MINIMUM_WEIGHT, GetDispatchInfo, FunctionOf};
+use frame_support::weights::{SimpleDispatchInfo, MINIMUM_WEIGHT, GetDispatchInfo, FunctionOf};
 use frame_system::{self as system, ensure_signed};
 
 pub trait Trait: frame_system::Trait {
