@@ -235,8 +235,7 @@ decl_module! {
 			origin,
 			price_payload: PricePayload<T::Public, T::BlockNumber>,
 			_signature: T::Signature,
-		) -> DispatchResult
-		{
+		) -> DispatchResult {
 			// This ensures that the function can only be called via unsigned transaction.
 			ensure_none(origin)?;
 			// Add the price to the on-chain list, but mark it as coming from an empty address.
@@ -446,12 +445,12 @@ impl<T: Trait> Module<T> {
 		// attack vectors. See validation logic docs for more details.
 		//
 		// Method 1: Unsigned transaction / Unsigned payload
-		let _result_raw: Result<(), &'static str> =
-			SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into())
-				.map_err(|()| "Unable to submit unsigned transaction.");
+		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into())
+			.map_err(|()| "Unable to submit unsigned transaction.")?;
 
 		// Method 2: Unsigned transction / signed payload
-		let _result_signed_payload = Signer::<T, T::AuthorityId>::all_accounts().send_unsigned_transaction(
+		// -- Sign using any account
+		let (_, result) = Signer::<T, T::AuthorityId>::any_account().send_unsigned_transaction(
 			|account| PricePayload {
 				price,
 				block_number,
@@ -460,8 +459,22 @@ impl<T: Trait> Module<T> {
 			|payload, signature| {
 				Call::submit_price_unsigned_with_signed_payload(payload, signature)
 			}
-		);
-
+		).ok_or("No local accounts accounts available.")?;
+		result.map_err(|()| "Unable to submit transaction")?;
+		// -- Sign using all accounts
+		Signer::<T, T::AuthorityId>::all_accounts().send_unsigned_transaction(
+			|account| PricePayload {
+				price,
+				block_number,
+				public: account.public.clone()
+			},
+			|payload, signature| {
+				Call::submit_price_unsigned_with_signed_payload(payload, signature)
+			}
+		).into_iter().fold(Ok(()), |last_res, (_, res)| {
+			if res.is_err() { return res; }
+			else { return last_res }
+		}).map_err(|()| "Unable to submit transaction")?;
 
 		Ok(())
 	}
