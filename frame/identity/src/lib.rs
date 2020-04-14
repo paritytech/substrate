@@ -74,7 +74,7 @@ use sp_runtime::traits::{StaticLookup, Zero, AppendZerosInput};
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
 	traits::{Currency, ReservableCurrency, OnUnbalanced, Get, BalanceStatus, EnsureOrigin},
-	weights::SimpleDispatchInfo,
+	weights::{SimpleDispatchInfo, MINIMUM_WEIGHT},
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 
@@ -474,7 +474,7 @@ decl_module! {
 		/// - One storage mutation (codec `O(R)`).
 		/// - One event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(10_000_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 		fn add_registrar(origin, account: T::AccountId) {
 			T::RegistrarOrigin::try_origin(origin)
 				.map(|_| ())

@@ -57,7 +57,7 @@ use frame_support::traits::{
 	Currency, LockableCurrency, VestingSchedule, WithdrawReason, LockIdentifier,
 	ExistenceRequirement, Get
 };
-use frame_support::weights::SimpleDispatchInfo;
+use frame_support::weights::{SimpleDispatchInfo, MINIMUM_WEIGHT};
 use frame_system::{self as system, ensure_signed};
 
 mod benchmarking;
@@ -194,7 +194,7 @@ decl_module! {
 		/// - One storage read (codec `O(1)`) and up to one removal.
 		/// - One event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(10_000_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 		fn vest(origin) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::update_lock(who)
@@ -216,7 +216,7 @@ decl_module! {
 		/// - One storage read (codec `O(1)`) and up to one removal.
 		/// - One event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(10_000_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 		fn vest_other(origin, target: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
 			ensure_signed(origin)?;
 			Self::update_lock(T::Lookup::lookup(target)?)

@@ -110,7 +110,7 @@ use frame_support::{
 		Get, FindAuthor, ValidatorRegistration, EstimateNextSessionRotation, EstimateNextNewSession,
 	},
 	dispatch::{self, DispatchResult, DispatchError},
-	weights::{Weight, SimpleDispatchInfo, WeighData},
+	weights::{Weight, MINIMUM_WEIGHT, SimpleDispatchInfo, WeighData},
 };
 use frame_system::{self as system, ensure_signed};
 
@@ -532,7 +532,7 @@ decl_module! {
 				Self::rotate_session();
 			}
 
-			SimpleDispatchInfo::FixedNormal(10_000_000).weigh_data(())
+			SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT).weigh_data(())
 		}
 	}
 }

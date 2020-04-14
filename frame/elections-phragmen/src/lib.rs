@@ -88,7 +88,7 @@ use sp_runtime::{
 };
 use frame_support::{
 	decl_storage, decl_event, ensure, decl_module, decl_error,
-	weights::{SimpleDispatchInfo, Weight, WeighData}, storage::{StorageMap, IterableStorageMap},
+	weights::{SimpleDispatchInfo, Weight, MINIMUM_WEIGHT, WeighData}, storage::{StorageMap, IterableStorageMap},
 	traits::{
 		Currency, Get, LockableCurrency, LockIdentifier, ReservableCurrency, WithdrawReasons,
 		ChangeMembers, OnUnbalanced, WithdrawReason, Contains, BalanceStatus, InitializeMembers,
@@ -267,7 +267,7 @@ decl_module! {
 		fn on_runtime_upgrade() -> Weight {
 			migration::migrate::<T>();
 
-			SimpleDispatchInfo::FixedNormal(10_000_000).weigh_data(())
+			SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT).weigh_data(())
 		}
 
 		const CandidacyBond: BalanceOf<T> = T::CandidacyBond::get();
@@ -336,7 +336,7 @@ decl_module! {
 		/// Reads: O(1)
 		/// Writes: O(1)
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(10_000_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 		fn remove_voter(origin) {
 			let who = ensure_signed(origin)?;
 
@@ -510,7 +510,7 @@ decl_module! {
 				print(e);
 			}
 
-			SimpleDispatchInfo::FixedNormal(10_000_000).weigh_data(())
+			SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT).weigh_data(())
 		}
 	}
 }

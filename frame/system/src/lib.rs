@@ -75,7 +75,7 @@
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		#[weight = SimpleDispatchInfo::FixedNormal(10_000_000)]
+//! 		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 //! 		pub fn system_module_example(origin) -> dispatch::DispatchResult {
 //! 			let _sender = ensure_signed(origin)?;
 //! 			let _extrinsic_count = <system::Module<T>>::extrinsic_count();
@@ -120,7 +120,7 @@ use frame_support::{
 		Contains, Get, ModuleToIndex, OnNewAccount, OnKilledAccount, IsDeadAccount, Happened,
 		StoredMap, EnsureOrigin,
 	},
-	weights::{Weight, RuntimeDbWeight, DispatchInfo, PostDispatchInfo, DispatchClass, SimpleDispatchInfo, FunctionOf}
+	weights::{Weight, MINIMUM_WEIGHT, RuntimeDbWeight, DispatchInfo, PostDispatchInfo, DispatchClass, SimpleDispatchInfo, FunctionOf}
 };
 use codec::{Encode, Decode, FullCodec, EncodeLike};
 
@@ -485,13 +485,13 @@ decl_module! {
 		}
 
 		/// Make some on-chain remark.
-		#[weight = SimpleDispatchInfo::FixedNormal(10_000_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 		fn remark(origin, _remark: Vec<u8>) {
 			ensure_signed(origin)?;
 		}
 
 		/// Set the number of pages in the WebAssembly environment's heap.
-		#[weight = SimpleDispatchInfo::FixedOperational(10_000_000)]
+		#[weight = SimpleDispatchInfo::FixedOperational(MINIMUM_WEIGHT)]
 		fn set_heap_pages(origin, pages: u64) {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::HEAP_PAGES, &pages.encode());
@@ -533,7 +533,7 @@ decl_module! {
 		}
 
 		/// Set some items of storage.
-		#[weight = SimpleDispatchInfo::FixedOperational(10_000_000)]
+		#[weight = SimpleDispatchInfo::FixedOperational(MINIMUM_WEIGHT)]
 		fn set_storage(origin, items: Vec<KeyValue>) {
 			ensure_root(origin)?;
 			for i in &items {
@@ -542,7 +542,7 @@ decl_module! {
 		}
 
 		/// Kill some items from storage.
-		#[weight = SimpleDispatchInfo::FixedOperational(10_000_000)]
+		#[weight = SimpleDispatchInfo::FixedOperational(MINIMUM_WEIGHT)]
 		fn kill_storage(origin, keys: Vec<Key>) {
 			ensure_root(origin)?;
 			for key in &keys {
@@ -551,7 +551,7 @@ decl_module! {
 		}
 
 		/// Kill all storage items with a key that starts with the given prefix.
-		#[weight = SimpleDispatchInfo::FixedOperational(10_000_000)]
+		#[weight = SimpleDispatchInfo::FixedOperational(MINIMUM_WEIGHT)]
 		fn kill_prefix(origin, prefix: Key) {
 			ensure_root(origin)?;
 			storage::unhashed::kill_prefix(&prefix);

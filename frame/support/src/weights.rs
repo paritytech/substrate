@@ -55,6 +55,9 @@ pub use sp_runtime::transaction_validity::TransactionPriority;
 /// machine: (TODO: DEFINE STANDARD MACHINE SPECIFICATIONS)
 pub type Weight = u64;
 
+/// The smallest total weight an extrinsic should have.
+pub const MINIMUM_WEIGHT: Weight = 10_000_000;
+
 /// Means of weighing some particular kind of data (`T`).
 pub trait WeighData<T> {
 	/// Weigh the data `T` given by `target`. When implementing this for a dispatchable, `T` will be

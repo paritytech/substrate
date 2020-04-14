@@ -98,7 +98,7 @@ use frame_support::traits::{
 use sp_runtime::{Permill, ModuleId, Percent, RuntimeDebug, traits::{
 	Zero, StaticLookup, AccountIdConversion, Saturating, Hash, BadOrigin
 }};
-use frame_support::weights::{Weight, WeighData, SimpleDispatchInfo};
+use frame_support::weights::{Weight, MINIMUM_WEIGHT, WeighData, SimpleDispatchInfo};
 use frame_support::traits::{Contains, EnsureOrigin};
 use codec::{Encode, Decode};
 use frame_system::{self as system, ensure_signed, ensure_root};
@@ -558,7 +558,7 @@ decl_module! {
 				Self::spend_funds();
 			}
 
-			SimpleDispatchInfo::FixedNormal(10_000_000).weigh_data(())
+			SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT).weigh_data(())
 		}
 	}
 }

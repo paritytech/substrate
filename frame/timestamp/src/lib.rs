@@ -69,7 +69,7 @@
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		#[weight = frame_support::weights::SimpleDispatchInfo::FixedNormal(10_000_000)]
+//! 		#[weight = frame_support::weights::SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 //! 		pub fn get_time(origin) -> dispatch::DispatchResult {
 //! 			let _sender = ensure_signed(origin)?;
 //! 			let _now = <timestamp::Module<T>>::get();
@@ -100,7 +100,7 @@ use frame_support::debug;
 use frame_support::{
 	Parameter, decl_storage, decl_module,
 	traits::{Time, UnixTime, Get},
-	weights::SimpleDispatchInfo,
+	weights::{SimpleDispatchInfo, MINIMUM_WEIGHT},
 };
 use sp_runtime::{
 	RuntimeString,
@@ -147,7 +147,7 @@ decl_module! {
 		/// `MinimumPeriod`.
 		///
 		/// The dispatch origin for this call must be `Inherent`.
-		#[weight = SimpleDispatchInfo::FixedMandatory(10_000_000)]
+		#[weight = SimpleDispatchInfo::FixedMandatory(MINIMUM_WEIGHT)]
 		fn set(origin, #[compact] now: T::Moment) {
 			ensure_none(origin)?;
 			assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");

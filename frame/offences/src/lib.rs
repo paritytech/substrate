@@ -27,7 +27,7 @@ mod tests;
 use sp_std::vec::Vec;
 use frame_support::{
 	decl_module, decl_event, decl_storage, Parameter, debug,
-	weights::{Weight, SimpleDispatchInfo, WeighData},
+	weights::{Weight, MINIMUM_WEIGHT, SimpleDispatchInfo, WeighData},
 };
 use sp_runtime::{traits::Hash, Perbill};
 use sp_staking::{
@@ -104,7 +104,7 @@ decl_module! {
 			ConcurrentReportsIndex::<T>::remove_all();
 			ReportsByKindIndex::remove_all();
 
-			SimpleDispatchInfo::FixedNormal(10_000_000).weigh_data(())
+			SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT).weigh_data(())
 		}
 
 		fn on_initialize(now: T::BlockNumber) -> Weight {
@@ -125,7 +125,7 @@ decl_module! {
 				})
 			}
 
-			SimpleDispatchInfo::FixedNormal(10_000_000).weigh_data(())
+			SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT).weigh_data(())
 		}
 	}
 }

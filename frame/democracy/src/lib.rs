@@ -171,7 +171,7 @@ use sp_runtime::{
 use codec::{Ref, Encode, Decode};
 use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error, ensure, Parameter,
-	weights::{SimpleDispatchInfo, Weight, WeighData},
+	weights::{SimpleDispatchInfo, Weight, MINIMUM_WEIGHT, WeighData},
 	traits::{
 		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier, Get,
 		OnUnbalanced, BalanceStatus, schedule::Named as ScheduleNamed, EnsureOrigin
@@ -528,7 +528,7 @@ decl_module! {
 		fn on_runtime_upgrade() -> Weight {
 			Self::migrate();
 
-			SimpleDispatchInfo::FixedNormal(10_000_000).weigh_data(())
+			SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT).weigh_data(())
 		}
 
 		/// Propose a sensitive action to be taken.
@@ -820,7 +820,7 @@ decl_module! {
 		/// # <weight>
 		/// - `O(1)`.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(10_000_000)]
+		#[weight = SimpleDispatchInfo::FixedOperational(MINIMUM_WEIGHT)]
 		fn cancel_referendum(origin, #[compact] ref_index: ReferendumIndex) {
 			ensure_root(origin)?;
 			Self::internal_cancel_referendum(ref_index);
@@ -836,7 +836,7 @@ decl_module! {
 		/// - One DB change.
 		/// - O(d) where d is the items in the dispatch queue.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(10_000_000)]
+		#[weight = SimpleDispatchInfo::FixedOperational(MINIMUM_WEIGHT)]
 		fn cancel_queued(origin, which: ReferendumIndex) {
 			ensure_root(origin)?;
 			T::Scheduler::cancel_named((DEMOCRACY_ID, which))
@@ -848,7 +848,7 @@ decl_module! {
 				sp_runtime::print(e);
 			}
 
-			SimpleDispatchInfo::FixedNormal(10_000_000).weigh_data(())
+			SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT).weigh_data(())
 		}
 
 		/// Specify a proxy that is already open to us. Called by the stash.
@@ -975,7 +975,7 @@ decl_module! {
 		/// - `O(1)`.
 		/// - One DB clear.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(10_000_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 		fn clear_public_proposals(origin) {
 			ensure_root(origin)?;
 
@@ -1066,7 +1066,7 @@ decl_module! {
 		/// # <weight>
 		/// - One DB clear.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(10_000_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 		fn reap_preimage(origin, proposal_hash: T::Hash) {
 			let who = ensure_signed(origin)?;
 			let (provider, deposit, since, expiry) = <Preimages<T>>::get(&proposal_hash)
@@ -1096,7 +1096,7 @@ decl_module! {
 		/// # <weight>
 		/// - `O(1)`.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(10_000_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 		fn unlock(origin, target: T::AccountId) {
 			ensure_signed(origin)?;
 			Self::update_lock(&target);
@@ -1154,7 +1154,7 @@ decl_module! {
 		/// # <weight>
 		/// - `O(R + log R)` where R is the number of referenda that `target` has voted on.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(10_000_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 		fn remove_vote(origin, index: ReferendumIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::try_remove_vote(&who, index, UnvoteScope::Any)
@@ -1176,7 +1176,7 @@ decl_module! {
 		/// # <weight>
 		/// - `O(R + log R)` where R is the number of referenda that `target` has voted on.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(10_000_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 		fn remove_other_vote(origin, target: T::AccountId, index: ReferendumIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let scope = if target == who { UnvoteScope::Any } else { UnvoteScope::OnlyExpired };
@@ -1251,7 +1251,7 @@ decl_module! {
 		/// # <weight>
 		/// - `O(R + log R)` where R is the number of referenda that `target` has voted on.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(10_000_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 		fn proxy_remove_vote(origin, index: ReferendumIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let target = Self::proxy(who).and_then(|a| a.as_active()).ok_or(Error::<T>::NotProxy)?;
