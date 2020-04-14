@@ -16,7 +16,6 @@
 use futures::prelude::*;
 use prometheus_endpoint::{Counter, Histogram, U64};
 use std::{fmt, pin::Pin, task::{Context, Poll}};
-use wasm_timer::Instant;
 
 /// Wraps around a `Future`. Report the polling duration to the `Histogram` and when the polling
 /// starts to the `Counter`.
