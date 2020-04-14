@@ -344,16 +344,16 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::pallet_treasury(pallet_treasury::RawEvent::Deposit(fees * 8 / 10)),
-				topics: vec![],
-			},
-			EventRecord {
-				phase: Phase::ApplyExtrinsic(1),
 				event: Event::pallet_balances(pallet_balances::RawEvent::Transfer(
 					alice().into(),
 					bob().into(),
 					69 * DOLLARS,
 				)),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(1),
+				event: Event::pallet_treasury(pallet_treasury::RawEvent::Deposit(fees * 8 / 10)),
 				topics: vec![],
 			},
 			EventRecord {
@@ -397,11 +397,6 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::pallet_treasury(pallet_treasury::RawEvent::Deposit(fees * 8 / 10)),
-				topics: vec![],
-			},
-			EventRecord {
-				phase: Phase::ApplyExtrinsic(1),
 				event: Event::pallet_balances(
 					pallet_balances::RawEvent::Transfer(
 						bob().into(),
@@ -413,14 +408,14 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 1000000, class: DispatchClass::Normal, pays_fee: true }
-				)),
+				event: Event::pallet_treasury(pallet_treasury::RawEvent::Deposit(fees * 8 / 10)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(2),
-				event: Event::pallet_treasury(pallet_treasury::RawEvent::Deposit(fees * 8 / 10)),
+				phase: Phase::ApplyExtrinsic(1),
+				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
+					DispatchInfo { weight: 1000000, class: DispatchClass::Normal, pays_fee: true }
+				)),
 				topics: vec![],
 			},
 			EventRecord {
@@ -432,6 +427,11 @@ fn full_native_block_import_works() {
 						15 * DOLLARS,
 					)
 				),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(2),
+				event: Event::pallet_treasury(pallet_treasury::RawEvent::Deposit(fees * 8 / 10)),
 				topics: vec![],
 			},
 			EventRecord {

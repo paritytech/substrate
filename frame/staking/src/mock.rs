@@ -42,25 +42,25 @@ const INIT_TIMESTAMP: u64 = 30_000;
 pub(crate) type AccountId = u64;
 pub(crate) type AccountIndex = u64;
 pub(crate) type BlockNumber = u64;
-pub(crate) type Balance = u64;
+pub(crate) type Balance = u128;
 
 /// Simple structure that exposes how u64 currency can be represented as... u64.
 pub struct CurrencyToVoteHandler;
-impl Convert<u64, u64> for CurrencyToVoteHandler {
-	fn convert(x: u64) -> u64 {
-		x
+impl Convert<Balance, u64> for CurrencyToVoteHandler {
+	fn convert(x: Balance) -> u64 {
+		x.saturated_into()
 	}
 }
-impl Convert<u128, u64> for CurrencyToVoteHandler {
-	fn convert(x: u128) -> u64 {
-		x.saturated_into()
+impl Convert<u128, Balance> for CurrencyToVoteHandler {
+	fn convert(x: u128) -> Balance {
+		x
 	}
 }
 
 thread_local! {
 	static SESSION: RefCell<(Vec<AccountId>, HashSet<AccountId>)> = RefCell::new(Default::default());
 	static SESSION_PER_ERA: RefCell<SessionIndex> = RefCell::new(3);
-	static EXISTENTIAL_DEPOSIT: RefCell<u64> = RefCell::new(0);
+	static EXISTENTIAL_DEPOSIT: RefCell<Balance> = RefCell::new(0);
 	static SLASH_DEFER_DURATION: RefCell<EraIndex> = RefCell::new(0);
 	static ELECTION_LOOKAHEAD: RefCell<BlockNumber> = RefCell::new(0);
 	static PERIOD: RefCell<BlockNumber> = RefCell::new(1);
@@ -104,8 +104,8 @@ pub fn is_disabled(controller: AccountId) -> bool {
 }
 
 pub struct ExistentialDeposit;
-impl Get<u64> for ExistentialDeposit {
-	fn get() -> u64 {
+impl Get<Balance> for ExistentialDeposit {
+	fn get() -> Balance {
 		EXISTENTIAL_DEPOSIT.with(|v| *v.borrow())
 	}
 }
@@ -172,8 +172,8 @@ impl_outer_event! {
 
 /// Author of block is always 11
 pub struct Author11;
-impl FindAuthor<u64> for Author11 {
-	fn find_author<'a, I>(_digests: I) -> Option<u64>
+impl FindAuthor<AccountId> for Author11 {
+	fn find_author<'a, I>(_digests: I) -> Option<AccountId>
 		where I: 'a + IntoIterator<Item = (frame_support::ConsensusEngineId, &'a [u8])>,
 	{
 		Some(11)
@@ -207,7 +207,7 @@ impl frame_system::Trait for Test {
 	type MaximumBlockLength = MaximumBlockLength;
 	type Version = ();
 	type ModuleToIndex = ();
-	type AccountData = pallet_balances::AccountData<u64>;
+	type AccountData = pallet_balances::AccountData<Balance>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 }
@@ -337,7 +337,7 @@ impl Default for ExtBuilder {
 }
 
 impl ExtBuilder {
-	pub fn existential_deposit(mut self, existential_deposit: u64) -> Self {
+	pub fn existential_deposit(mut self, existential_deposit: Balance) -> Self {
 		self.existential_deposit = existential_deposit;
 		self
 	}
@@ -369,7 +369,7 @@ impl ExtBuilder {
 		self.num_validators = Some(num_validators);
 		self
 	}
-	pub fn invulnerables(mut self, invulnerables: Vec<u64>) -> Self {
+	pub fn invulnerables(mut self, invulnerables: Vec<AccountId>) -> Self {
 		self.invulnerables = invulnerables;
 		self
 	}
@@ -415,7 +415,7 @@ impl ExtBuilder {
 
 		let num_validators = self.num_validators.unwrap_or(self.validator_count);
 		let validators = (0..num_validators)
-			.map(|x| ((x + 1) * 10 + 1) as u64)
+			.map(|x| ((x + 1) * 10 + 1) as AccountId)
 			.collect::<Vec<_>>();
 
 		let _ = pallet_balances::GenesisConfig::<Test> {
@@ -473,7 +473,7 @@ impl ExtBuilder {
 			keys: validators.iter().map(|x| (
 				*x,
 				*x,
-				SessionKeys { other: UintAuthorityId(*x) }
+				SessionKeys { other: UintAuthorityId(*x as u64) }
 			)).collect(),
 		}.assimilate_storage(&mut storage);
 
@@ -493,6 +493,11 @@ impl ExtBuilder {
 
 		ext
 	}
+	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
+		let mut ext = self.build();
+		ext.execute_with(test);
+		ext.execute_with(post_conditions);
+	}
 }
 
 pub type System = frame_system::Module<Test>;
@@ -501,61 +506,88 @@ pub type Session = pallet_session::Module<Test>;
 pub type Timestamp = pallet_timestamp::Module<Test>;
 pub type Staking = Module<Test>;
 
-pub fn active_era() -> EraIndex {
+fn post_conditions() {
+	check_nominators();
+	check_exposures();
+	check_ledgers();
+}
+
+pub(crate) fn active_era() -> EraIndex {
 	Staking::active_era().unwrap().index
 }
 
-pub fn check_exposure_all(era: EraIndex) {
-	ErasStakers::<Test>::iter_prefix(era).for_each(check_exposure)
+fn check_ledgers() {
+	// check the ledger of all stakers.
+	Bonded::<Test>::iter().for_each(|(_, ctrl)| assert_ledger_consistent(ctrl))
 }
 
-pub fn check_nominator_all(era: EraIndex) {
+fn check_exposures() {
+	// a check per validator to ensure the exposure struct is always sane.
+	let era = active_era();
+	ErasStakers::<Test>::iter_prefix(era).for_each(|expo| {
+		assert_eq!(
+			expo.total as u128,
+			expo.own as u128 + expo.others.iter().map(|e| e.value as u128).sum::<u128>(),
+			"wrong total exposure.",
+		);
+	})
+}
+
+fn check_nominators() {
+	// a check per nominator to ensure their entire stake is correctly distributed. Will only kick-
+	// in if the nomination was submitted before the current era.
+	let era = active_era();
 	<Nominators<Test>>::iter()
-		.for_each(|(acc, _)| check_nominator_exposure(era, acc));
+		.filter_map(|(nominator, nomination)|
+			if nomination.submitted_in > era {
+				Some(nominator)
+			} else {
+				None
+		})
+		.for_each(|nominator| {
+		// must be bonded.
+		assert_is_stash(nominator);
+		let mut sum = 0;
+		Session::validators()
+			.iter()
+			.map(|v| Staking::eras_stakers(era, v))
+			.for_each(|e| {
+				let individual = e.others.iter().filter(|e| e.who == nominator).collect::<Vec<_>>();
+				let len = individual.len();
+				match len {
+					0 => { /* not supporting this validator at all. */ },
+					1 => sum += individual[0].value,
+					_ => panic!("nominator cannot back a validator more than once."),
+				};
+			});
+
+		let nominator_stake = Staking::slashable_balance_of(&nominator);
+		// a nominator cannot over-spend.
+		assert!(
+			nominator_stake >= sum,
+			"failed: Nominator({}) stake({}) >= sum divided({})",
+			nominator,
+			nominator_stake,
+			sum,
+		);
+
+		let diff = nominator_stake - sum;
+		assert!(diff < 100);
+	});
 }
 
-/// Check for each selected validator: expo.total = Sum(expo.other) + expo.own
-pub fn check_exposure(expo: Exposure<AccountId, Balance>) {
-	assert_eq!(
-		expo.total as u128,
-		expo.own as u128 + expo.others.iter().map(|e| e.value as u128).sum::<u128>(),
-		"wrong total exposure",
-	);
-}
-
-/// Check that for each nominator: slashable_balance > sum(used_balance)
-/// Note: we might not consume all of a nominator's balance, but we MUST NOT over spend it.
-pub fn check_nominator_exposure(era: EraIndex, stash: AccountId) {
-	assert_is_stash(stash);
-	let mut sum = 0;
-	Session::validators()
-		.iter()
-		.map(|v| Staking::eras_stakers(era, v))
-		.for_each(|e| e.others.iter().filter(|i| i.who == stash).for_each(|i| sum += i.value));
-	let nominator_stake = Staking::slashable_balance_of(&stash);
-	// a nominator cannot over-spend.
-	assert!(
-		nominator_stake >= sum,
-		"failed: Nominator({}) stake({}) >= sum divided({})",
-		stash,
-		nominator_stake,
-		sum,
-	);
-}
-
-pub fn assert_is_stash(acc: AccountId) {
+fn assert_is_stash(acc: AccountId) {
 	assert!(Staking::bonded(&acc).is_some(), "Not a stash.");
 }
 
-pub fn assert_ledger_consistent(stash: AccountId) {
-	assert_is_stash(stash);
-	let ledger = Staking::ledger(stash - 1).unwrap();
-
+fn assert_ledger_consistent(ctrl: AccountId) {
+	// ensures ledger.total == ledger.active + sum(ledger.unlocking).
+	let ledger = Staking::ledger(ctrl).expect("Not a controller.");
 	let real_total: Balance = ledger.unlocking.iter().fold(ledger.active, |a, c| a + c.value);
 	assert_eq!(real_total, ledger.total);
 }
 
-pub fn bond_validator(stash: u64, ctrl: u64, val: u64) {
+pub(crate) fn bond_validator(stash: AccountId, ctrl: AccountId, val: Balance) {
 	let _ = Balances::make_free_balance_be(&stash, val);
 	let _ = Balances::make_free_balance_be(&ctrl, val);
 	assert_ok!(Staking::bond(
@@ -570,7 +602,12 @@ pub fn bond_validator(stash: u64, ctrl: u64, val: u64) {
 	));
 }
 
-pub fn bond_nominator(stash: u64, ctrl: u64, val: u64, target: Vec<u64>) {
+pub(crate) fn bond_nominator(
+	stash: AccountId,
+	ctrl: AccountId,
+	val: Balance,
+	target: Vec<AccountId>,
+) {
 	let _ = Balances::make_free_balance_be(&stash, val);
 	let _ = Balances::make_free_balance_be(&ctrl, val);
 	assert_ok!(Staking::bond(
@@ -582,7 +619,7 @@ pub fn bond_nominator(stash: u64, ctrl: u64, val: u64, target: Vec<u64>) {
 	assert_ok!(Staking::nominate(Origin::signed(ctrl), target));
 }
 
-pub fn run_to_block(n: BlockNumber) {
+pub(crate) fn run_to_block(n: BlockNumber) {
 	Staking::on_finalize(System::block_number());
 	for b in System::block_number() + 1..=n {
 		System::set_block_number(b);
@@ -594,12 +631,12 @@ pub fn run_to_block(n: BlockNumber) {
 	}
 }
 
-pub fn advance_session() {
+pub(crate) fn advance_session() {
 	let current_index = Session::current_index();
 	start_session(current_index + 1);
 }
 
-pub fn start_session(session_index: SessionIndex) {
+pub(crate) fn start_session(session_index: SessionIndex) {
 	assert_eq!(<Period as Get<BlockNumber>>::get(), 1, "start_session can only be used with session length 1.");
 	for i in Session::current_index()..session_index {
 		Staking::on_finalize(System::block_number());
@@ -612,12 +649,12 @@ pub fn start_session(session_index: SessionIndex) {
 	assert_eq!(Session::current_index(), session_index);
 }
 
-pub fn start_era(era_index: EraIndex) {
+pub(crate) fn start_era(era_index: EraIndex) {
 	start_session((era_index * <SessionsPerEra as Get<u32>>::get()).into());
 	assert_eq!(Staking::current_era().unwrap(), era_index);
 }
 
-pub fn current_total_payout_for_duration(duration: u64) -> u64 {
+pub(crate) fn current_total_payout_for_duration(duration: u64) -> Balance {
 	inflation::compute_total_payout(
 		<Test as Trait>::RewardCurve::get(),
 		Staking::eras_total_stake(Staking::active_era().unwrap().index),
@@ -626,7 +663,7 @@ pub fn current_total_payout_for_duration(duration: u64) -> u64 {
 	).0
 }
 
-pub fn reward_all_elected() {
+pub(crate) fn reward_all_elected() {
 	let rewards = <Test as Trait>::SessionInterface::validators()
 		.into_iter()
 		.map(|v| (v, 1));
@@ -634,14 +671,14 @@ pub fn reward_all_elected() {
 	<Module<Test>>::reward_by_ids(rewards)
 }
 
-pub fn validator_controllers() -> Vec<AccountId> {
+pub(crate) fn validator_controllers() -> Vec<AccountId> {
 	Session::validators()
 		.into_iter()
 		.map(|s| Staking::bonded(&s).expect("no controller for validator"))
 		.collect()
 }
 
-pub fn on_offence_in_era(
+pub(crate) fn on_offence_in_era(
 	offenders: &[OffenceDetails<
 		AccountId,
 		pallet_session::historical::IdentificationTuple<Test>,
@@ -671,7 +708,7 @@ pub fn on_offence_in_era(
 	}
 }
 
-pub fn on_offence_now(
+pub(crate) fn on_offence_now(
 	offenders: &[OffenceDetails<AccountId, pallet_session::historical::IdentificationTuple<Test>>],
 	slash_fraction: &[Perbill],
 ) {
@@ -681,7 +718,7 @@ pub fn on_offence_now(
 
 // winners will be chosen by simply their unweighted total backing stake. Nominator stake is
 // distributed evenly.
-pub fn horrible_phragmen_with_post_processing(
+pub(crate) fn horrible_phragmen_with_post_processing(
 	do_reduce: bool,
 ) -> (CompactAssignments, Vec<ValidatorIndex>, PhragmenScore) {
 	let mut backing_stake_of: BTreeMap<AccountId, Balance> = BTreeMap::new();
@@ -789,7 +826,7 @@ pub fn horrible_phragmen_with_post_processing(
 
 // Note: this should always logically reproduce [`offchain_election::prepare_submission`], yet we
 // cannot do it since we want to have `tweak` injected into the process.
-pub fn prepare_submission_with(
+pub(crate) fn prepare_submission_with(
 	do_reduce: bool,
 	tweak: impl FnOnce(&mut Vec<StakedAssignment<AccountId>>),
 ) -> (CompactAssignments, Vec<ValidatorIndex>, PhragmenScore) {
@@ -865,7 +902,7 @@ pub fn prepare_submission_with(
 }
 
 /// Make all validator and nominator request their payment
-pub fn make_all_reward_payment_before_migration(era: EraIndex) {
+pub(crate) fn make_all_reward_payment_before_migration(era: EraIndex) {
 	let validators_with_reward = ErasRewardPoints::<Test>::get(era).individual.keys()
 		.cloned()
 		.collect::<Vec<_>>();
@@ -897,7 +934,7 @@ pub fn make_all_reward_payment_before_migration(era: EraIndex) {
 }
 
 /// Make all validator and nominator request their payment
-pub fn make_all_reward_payment(era: EraIndex) {
+pub(crate) fn make_all_reward_payment(era: EraIndex) {
 	let validators_with_reward = ErasRewardPoints::<Test>::get(era).individual.keys()
 		.cloned()
 		.collect::<Vec<_>>();
