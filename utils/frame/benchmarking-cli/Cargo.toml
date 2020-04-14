@@ -1,6 +1,6 @@
 [package]
 name = "frame-benchmarking-cli"
-version = "2.0.0-alpha.5"
+version = "2.0.0-alpha.6"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
@@ -8,23 +8,23 @@ homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 description = "CLI for benchmarking FRAME"
 
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
 [dependencies]
-frame-benchmarking = { version = "2.0.0-alpha.5", path = "../../../frame/benchmarking" }
-sp-core = { version = "2.0.0-alpha.5", path = "../../../primitives/core" }
-sc-service = { version = "0.8.0-alpha.5", default-features = false, path = "../../../client/service" }
-sc-cli = { version = "0.8.0-alpha.5", path = "../../../client/cli" }
-sc-client = { version = "0.8.0-alpha.5", path = "../../../client" }
-sc-client-db = { version = "0.8.0-alpha.5", path = "../../../client/db" }
-sc-executor = { version = "0.8.0-alpha.5", path = "../../../client/executor" }
-sp-externalities = { version = "0.8.0-alpha.5", path = "../../../primitives/externalities" }
-sp-runtime = { version = "2.0.0-alpha.5", path = "../../../primitives/runtime" }
-sp-state-machine = { version = "0.8.0-alpha.5", path = "../../../primitives/state-machine" }
+frame-benchmarking = { version = "2.0.0-alpha.6", path = "../../../frame/benchmarking" }
+sp-core = { version = "2.0.0-alpha.6", path = "../../../primitives/core" }
+sc-service = { version = "0.8.0-alpha.6", default-features = false, path = "../../../client/service" }
+sc-cli = { version = "0.8.0-alpha.6", path = "../../../client/cli" }
+sc-client = { version = "0.8.0-alpha.6", path = "../../../client" }
+sc-client-db = { version = "0.8.0-alpha.6", path = "../../../client/db" }
+sc-executor = { version = "0.8.0-alpha.6", path = "../../../client/executor" }
+sp-externalities = { version = "0.8.0-alpha.6", path = "../../../primitives/externalities" }
+sp-runtime = { version = "2.0.0-alpha.6", path = "../../../primitives/runtime" }
+sp-state-machine = { version = "0.8.0-alpha.6", path = "../../../primitives/state-machine" }
 structopt = "0.3.8"
 codec = { version = "1.3.0", package = "parity-scale-codec" }
 
 [features]
 default = ["rocksdb"]
 rocksdb = ["sc-client-db/kvdb-rocksdb"]
-
-[package.metadata.docs.rs]
-targets = ["x86_64-unknown-linux-gnu"]

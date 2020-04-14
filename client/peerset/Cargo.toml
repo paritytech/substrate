@@ -3,23 +3,23 @@ description = "Connectivity manager based on reputation"
 homepage = "http://parity.io"
 license = "GPL-3.0"
 name = "sc-peerset"
-version = "2.0.0-alpha.5"
+version = "2.0.0-alpha.6"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 repository = "https://github.com/paritytech/substrate/"
 documentation = "https://docs.rs/sc-peerset"
 
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
 
 [dependencies]
 futures = "0.3.4"
 libp2p = { version = "0.18.0", default-features = false }
-sp-utils = { version = "2.0.0-alpha.5", path = "../../primitives/utils"}
+sp-utils = { version = "2.0.0-alpha.6", path = "../../primitives/utils"}
 log = "0.4.8"
 serde_json = "1.0.41"
 wasm-timer = "0.2"
 
 [dev-dependencies]
 rand = "0.7.2"
-
-[package.metadata.docs.rs]
-targets = ["x86_64-unknown-linux-gnu"]

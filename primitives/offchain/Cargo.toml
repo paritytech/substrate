@@ -1,16 +1,19 @@
 [package]
 description = "Substrate offchain workers primitives"
 name = "sp-offchain"
-version = "2.0.0-alpha.5"
+version = "2.0.0-alpha.6"
 license = "GPL-3.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
 [dependencies]
-sp-api = { version = "2.0.0-alpha.5", default-features = false, path = "../api" }
-sp-runtime = { version = "2.0.0-alpha.5", default-features = false, path = "../runtime" }
+sp-api = { version = "2.0.0-alpha.6", default-features = false, path = "../api" }
+sp-runtime = { version = "2.0.0-alpha.6", default-features = false, path = "../runtime" }
 
 [features]
 default = ["std"]
@@ -18,6 +21,3 @@ std = [
 	"sp-api/std",
 	"sp-runtime/std"
 ]
-
-[package.metadata.docs.rs]
-targets = ["x86_64-unknown-linux-gnu"]

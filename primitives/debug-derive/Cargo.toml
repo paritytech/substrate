@@ -1,6 +1,6 @@
 [package]
 name = "sp-debug-derive"
-version = "2.0.0-alpha.5"
+version = "2.0.0-alpha.6"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
@@ -8,6 +8,10 @@ homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 description = "Macros to derive runtime debug implementation."
 documentation = "https://docs.rs/sp-debug-derive"
+
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
 
 [lib]
 proc-macro = true
@@ -21,7 +25,3 @@ proc-macro2 = "1.0"
 std = []
 
 [dev-dependencies]
-
-
-[package.metadata.docs.rs]
-targets = ["x86_64-unknown-linux-gnu"]
