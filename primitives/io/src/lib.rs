@@ -1122,32 +1122,28 @@ mod tests {
 		let mut ext = BasicExternalities::with_tasks_executor();
 		ext.execute_with(|| {
 			let pair = sr25519::Pair::generate_with_phrase(None).0;
-			{
-				crypto::start_batch_verify();
-				for it in 0..70 {
-					let msg = format!("Schnorrkel {}!", it);
-					let signature = pair.sign(msg.as_bytes());
-					crypto::sr25519_verify(&signature, msg.as_bytes(), &pair.public());
-				}
-
-				// push invlaid
-				crypto::sr25519_verify(
-					&Default::default(),
-					&Vec::new(),
-					&Default::default(),
-				);
-				assert!(!crypto::finish_batch_verify());
+			crypto::start_batch_verify();
+			for it in 0..70 {
+				let msg = format!("Schnorrkel {}!", it);
+				let signature = pair.sign(msg.as_bytes());
+				crypto::sr25519_verify(&signature, msg.as_bytes(), &pair.public());
 			}
 
-			{
-				crypto::start_batch_verify();
-				for it in 0..70 {
-					let msg = format!("Schnorrkel {}!", it);
-					let signature = pair.sign(msg.as_bytes());
-					crypto::sr25519_verify(&signature, msg.as_bytes(), &pair.public());
-				}
-				assert!(crypto::finish_batch_verify());
+			// push invlaid
+			crypto::sr25519_verify(
+				&Default::default(),
+				&Vec::new(),
+				&Default::default(),
+			);
+			assert!(!crypto::finish_batch_verify());
+
+			crypto::start_batch_verify();
+			for it in 0..70 {
+				let msg = format!("Schnorrkel {}!", it);
+				let signature = pair.sign(msg.as_bytes());
+				crypto::sr25519_verify(&signature, msg.as_bytes(), &pair.public());
 			}
+			assert!(crypto::finish_batch_verify());
 		});
 	}
 
@@ -1156,85 +1152,80 @@ mod tests {
 		let mut ext = BasicExternalities::with_tasks_executor();
 		ext.execute_with(|| {
 			// invalid ed25519 signature
-			{
-
-				crypto::start_batch_verify();
-				crypto::ed25519_verify(
-					&Default::default(),
-					&Vec::new(),
-					&Default::default(),
-				);
-				assert!(!crypto::finish_batch_verify());
-			}
+			crypto::start_batch_verify();
+			crypto::ed25519_verify(
+				&Default::default(),
+				&Vec::new(),
+				&Default::default(),
+			);
+			assert!(!crypto::finish_batch_verify());
 
 			// 2 valid ed25519 signatures
-			{
-				crypto::start_batch_verify();
-				let pair = ed25519::Pair::generate_with_phrase(None).0;
-				let msg = b"Important message";
-				let signature = pair.sign(msg);
-				crypto::ed25519_verify(&signature, msg, &pair.public());
+			crypto::start_batch_verify();
+			
+			let pair = ed25519::Pair::generate_with_phrase(None).0;
+			let msg = b"Important message";
+			let signature = pair.sign(msg);
+			crypto::ed25519_verify(&signature, msg, &pair.public());
 
-				let pair = ed25519::Pair::generate_with_phrase(None).0;
-				let msg = b"Even more important message";
-				let signature = pair.sign(msg);
-				crypto::ed25519_verify(&signature, msg, &pair.public());
+			let pair = ed25519::Pair::generate_with_phrase(None).0;
+			let msg = b"Even more important message";
+			let signature = pair.sign(msg);
+			crypto::ed25519_verify(&signature, msg, &pair.public());
 
-				assert!(crypto::finish_batch_verify());
-			}
+			assert!(crypto::finish_batch_verify());
 
 			// 1 valid, 1 invalid ed25519 signature
-			{
-				crypto::start_batch_verify();
-				let pair = ed25519::Pair::generate_with_phrase(None).0;
-				let msg = b"Important message";
-				let signature = pair.sign(msg);
-				crypto::ed25519_verify(&signature, msg, &pair.public());
+			crypto::start_batch_verify();
 
-				crypto::ed25519_verify(
-					&Default::default(),
-					&Vec::new(),
-					&Default::default(),
-				);
-				assert!(!crypto::finish_batch_verify());
-			}
+			let pair = ed25519::Pair::generate_with_phrase(None).0;
+			let msg = b"Important message";
+			let signature = pair.sign(msg);
+			crypto::ed25519_verify(&signature, msg, &pair.public());
+
+			crypto::ed25519_verify(
+				&Default::default(),
+				&Vec::new(),
+				&Default::default(),
+			);
+
+			assert!(!crypto::finish_batch_verify());
 
 			// 1 valid ed25519, 2 valid sr25519
-			{
-				crypto::start_batch_verify();
-				let pair = ed25519::Pair::generate_with_phrase(None).0;
-				let msg = b"Ed25519 batching";
-				let signature = pair.sign(msg);
-				crypto::ed25519_verify(&signature, msg, &pair.public());
+			crypto::start_batch_verify();
 
-				let pair = sr25519::Pair::generate_with_phrase(None).0;
-				let msg = b"Schnorrkel rules";
-				let signature = pair.sign(msg);
-				crypto::sr25519_verify(&signature, msg, &pair.public());
+			let pair = ed25519::Pair::generate_with_phrase(None).0;
+			let msg = b"Ed25519 batching";
+			let signature = pair.sign(msg);
+			crypto::ed25519_verify(&signature, msg, &pair.public());
 
-				let pair = sr25519::Pair::generate_with_phrase(None).0;
-				let msg = b"Schnorrkel batches!";
-				let signature = pair.sign(msg);
-				crypto::sr25519_verify(&signature, msg, &pair.public());
-				assert!(crypto::finish_batch_verify());
-			}
+			let pair = sr25519::Pair::generate_with_phrase(None).0;
+			let msg = b"Schnorrkel rules";
+			let signature = pair.sign(msg);
+			crypto::sr25519_verify(&signature, msg, &pair.public());
 
+			let pair = sr25519::Pair::generate_with_phrase(None).0;
+			let msg = b"Schnorrkel batches!";
+			let signature = pair.sign(msg);
+			crypto::sr25519_verify(&signature, msg, &pair.public());
+
+			assert!(crypto::finish_batch_verify());
 
 			// 1 valid sr25519, 1 invalid sr25519
-			{
-				crypto::start_batch_verify();
-				let pair = sr25519::Pair::generate_with_phrase(None).0;
-				let msg = b"Schnorrkel!";
-				let signature = pair.sign(msg);
-				crypto::sr25519_verify(&signature, msg, &pair.public());
+			crypto::start_batch_verify();
 
-				crypto::sr25519_verify(
-					&Default::default(),
-					&Vec::new(),
-					&Default::default(),
-				);
-				assert!(!crypto::finish_batch_verify());
-			}
+			let pair = sr25519::Pair::generate_with_phrase(None).0;
+			let msg = b"Schnorrkcel!";
+			let signature = pair.sign(msg);
+			crypto::sr25519_verify(&signature, msg, &pair.public());
+
+			crypto::sr25519_verify(
+				&Default::default(),
+				&Vec::new(),
+				&Default::default(),
+			);
+
+			assert!(!crypto::finish_batch_verify());
 		});
 	}
 }
