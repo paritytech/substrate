@@ -844,7 +844,7 @@ mod tests {
 
 	#[test]
 	fn weights_work() {
-		// must have a default weight.
+		// must have a defined weight.
 		let default_call = <Call<Test>>::accumulate_dummy(10);
 		let info = default_call.get_dispatch_info();
 		// aka. `let info = <Call<Test> as GetDispatchInfo>::get_dispatch_info(&default_call);`
