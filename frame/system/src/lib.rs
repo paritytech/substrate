@@ -1933,7 +1933,7 @@ mod tests {
 	}
 
 	#[test]
-	fn signed_ext_check_weight_actual_weight_higher_than_max() {
+	fn signed_ext_check_weight_actual_weight_higher_than_max_is_capped() {
 		new_test_ext().execute_with(|| {
 			let info = DispatchInfo { weight: 512, ..Default::default() };
 			let post_info = PostDispatchInfo { actual_weight: Some(700), };
