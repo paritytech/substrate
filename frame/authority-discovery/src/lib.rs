@@ -121,6 +121,7 @@ mod tests {
 		type ValidatorId = AuthorityId;
 		type ValidatorIdOf = ConvertInto;
 		type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
+		type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
 	}
 
 	impl pallet_session::historical::Trait for Test {
@@ -158,7 +159,7 @@ mod tests {
 		type Version = ();
 		type ModuleToIndex = ();
 		type AccountData = ();
-		type MigrateAccount = (); type OnNewAccount = ();
+		type OnNewAccount = ();
 		type OnKilledAccount = ();
 	}
 

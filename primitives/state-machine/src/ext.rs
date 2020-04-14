@@ -617,6 +617,7 @@ mod tests {
 			operation_from_last_gc: 0,
 			not_eager_gc: false,
 			collect_extrinsics: true,
+			stats: Default::default(),
 		}
 	}
 

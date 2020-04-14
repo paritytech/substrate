@@ -22,6 +22,7 @@ use crate::{
 		NO_EXTRINSIC_INDEX, BlockNumber, build_changes_trie,
 		State as ChangesTrieState,
 	},
+	stats::StateMachineStats,
 };
 
 #[cfg(test)]
@@ -58,6 +59,8 @@ pub struct OverlayedChanges {
 	/// True if extrinsiscs stats must be collected.
 	/// True if extrinsics stats must be collected.
 	pub(crate) collect_extrinsics: bool,
+	/// Collect statistic on this execution.
+	pub(crate) stats: StateMachineStats,
 	/// Counter of number of operation between garbage collection.
 	/// Changing or deleting a value increment this counter by one.
 	/// An additional cost for data added is added for every n bytes of data.
@@ -439,6 +442,8 @@ impl OverlayedChanges {
 	pub fn storage_once(&self, key: &[u8]) -> Option<(Option<&[u8]>, bool)> {
 		if let Some(overlay_value) = self.changes.top.get(key) {
 			if let (Some(o_value), tail) = overlay_value.get(self.changes.states.as_ref()) {
+				let size_read = o_value.value.as_ref().map(|x| x.len() as u64).unwrap_or(0);
+				self.stats.tally_read_modified(size_read);
 				return Some((o_value.value.as_ref().map(|v| v.as_slice()), tail))
 			}
 		}
@@ -457,6 +462,8 @@ impl OverlayedChanges {
 		if let Some(map) = self.changes.children.get(storage_key) {
 			if let Some(overlay_value) = map.0.get(key) {
 				if let (Some(o_value), tail) = overlay_value.get(self.changes.states.as_ref()) {
+					let size_read = o_value.value.as_ref().map(|x| x.len() as u64).unwrap_or(0);
+					self.stats.tally_read_modified(size_read);
 					return Some((o_value.value.as_ref().map(|v| v.as_slice()), tail))
 				}
 			}
@@ -470,6 +477,8 @@ impl OverlayedChanges {
 	pub fn storage(&mut self, key: &[u8]) -> Option<Option<&[u8]>> {
 		if let Some(overlay_value) = self.changes.top.get_mut(key) {
 			if let Some(o_value) = overlay_value.get_mut(&self.changes.states) {
+				let size_read = o_value.value.value.as_ref().map(|x| x.len() as u64).unwrap_or(0);
+				self.stats.tally_read_modified(size_read);
 				return Some(o_value.value.value.as_ref().map(|v| v.as_slice()))
 			}
 		}
@@ -483,6 +492,8 @@ impl OverlayedChanges {
 		if let Some(map) = self.changes.children.get_mut(storage_key) {
 			if let Some(overlay_value) = map.0.get_mut(key) {
 				if let Some(o_value) = overlay_value.get_mut(&self.changes.states) {
+					let size_read = o_value.value.value.as_ref().map(|x| x.len() as u64).unwrap_or(0);
+					self.stats.tally_read_modified(size_read);
 					return Some(o_value.value.value.as_ref().map(|v| v.as_slice()))
 				}
 			}
@@ -493,7 +504,9 @@ impl OverlayedChanges {
 	/// Inserts the given key-value pair into the prospective change set.
 	///
 	/// `None` can be used to delete a value specified by the given key.
-	pub fn set_storage(&mut self, key: StorageKey, value: Option<StorageValue>) {
+	pub(crate) fn set_storage(&mut self, key: StorageKey, value: Option<StorageValue>) {
+		let size_write = value.as_ref().map(|x| x.len() as u64).unwrap_or(0);
+		self.stats.tally_write_overlay(size_write);
 		self.operation_from_last_gc += DEFAULT_GC_CONF.operation_cost(value.as_ref());
 		let extrinsic_index = self.extrinsic_index();
 		let entry = self.changes.top.entry(key).or_default();
@@ -515,6 +528,8 @@ impl OverlayedChanges {
 		key: StorageKey,
 		value: Option<StorageValue>,
 	) {
+		let size_write = value.as_ref().map(|x| x.len() as u64).unwrap_or(0);
+		self.stats.tally_write_overlay(size_write);
 		self.operation_from_last_gc += DEFAULT_GC_CONF.operation_cost(value.as_ref());
 		let extrinsic_index = self.extrinsic_index();
 		let map_entry = self.changes.children.entry(storage_key)
@@ -757,6 +772,7 @@ impl OverlayedChanges {
 			operation_from_last_gc: 0,
 			not_eager_gc: false,
 			collect_extrinsics,
+			stats: Default::default(),
 		};
 		committed.into_iter().for_each(|(k, v)| result.set_storage(k, v));
 		result.changes.commit_prospective();

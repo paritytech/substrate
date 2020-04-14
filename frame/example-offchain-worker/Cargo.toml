@@ -1,6 +1,6 @@
 [package]
 name = "pallet-example-offchain-worker"
-version = "2.0.0-alpha.3"
+version = "2.0.0-alpha.5"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Unlicense"
@@ -9,15 +9,15 @@ repository = "https://github.com/paritytech/substrate/"
 description = "FRAME example pallet for offchain worker"
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "1.2.0", default-features = false }
-frame-support = { version = "2.0.0-alpha.2", default-features = false, path = "../support" }
-frame-system = { version = "2.0.0-alpha.2", default-features = false, path = "../system" }
+codec = { package = "parity-scale-codec", version = "1.3.0", default-features = false }
+frame-support = { version = "2.0.0-alpha.5", default-features = false, path = "../support" }
+frame-system = { version = "2.0.0-alpha.5", default-features = false, path = "../system" }
 serde = { version = "1.0.101", optional = true }
-sp-core = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/core" }
-sp-io = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/std" }
-serde_json = { version = "1.0.46", default-features = false, features = ["alloc"] }
+sp-core = { version = "2.0.0-alpha.5", default-features = false, path = "../../primitives/core" }
+sp-io = { version = "2.0.0-alpha.5", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "2.0.0-alpha.5", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "2.0.0-alpha.5", default-features = false, path = "../../primitives/std" }
+lite-json = { version = "0.1", default-features = false }
 
 [features]
 default = ["std"]
@@ -26,8 +26,12 @@ std = [
 	"frame-support/std",
 	"frame-system/std",
 	"serde",
+	"lite-json/std",
 	"sp-core/std",
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-std/std",
 ]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

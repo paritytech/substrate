@@ -470,6 +470,7 @@ mod test {
 			operation_from_last_gc: 0,
 			not_eager_gc: false,
 			collect_extrinsics: true,
+			stats: Default::default(),
 		};
 		let config = Configuration { digest_interval: 4, digest_levels: 2 };
 

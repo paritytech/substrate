@@ -22,15 +22,15 @@ use sc_transaction_graph::{ChainApi, Pool, ExHash, NumberFor, ValidatedTransacti
 use sp_runtime::traits::{Zero, SaturatedConversion};
 use sp_runtime::generic::BlockId;
 use sp_runtime::transaction_validity::TransactionValidityError;
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
 
-use futures::{prelude::*, channel::mpsc, stream::unfold};
+use futures::prelude::*;
 use std::time::Duration;
-use futures_timer::Delay;
 
 #[cfg(not(test))]
 const BACKGROUND_REVALIDATION_INTERVAL: Duration = Duration::from_millis(200);
 #[cfg(test)]
-pub const BACKGROUND_REVALIDATION_INTERVAL: Duration = Duration::from_millis(5);
+pub const BACKGROUND_REVALIDATION_INTERVAL: Duration = Duration::from_millis(1);
 
 const BACKGROUND_REVALIDATION_BATCH_SIZE: usize = 20;
 
@@ -53,12 +53,6 @@ struct RevalidationWorker<Api: ChainApi> {
 
 impl<Api: ChainApi> Unpin for RevalidationWorker<Api> {}
 
-fn interval(duration: Duration) -> impl Stream<Item=()> + Unpin {
-	unfold((), move |_| {
-		Delay::new(duration).map(|_| Some(((), ())))
-	}).map(drop)
-}
-
 /// Revalidate batch of transaction.
 ///
 /// Each transaction is validated  against chain, and invalid are
@@ -78,7 +72,7 @@ async fn batch_revalidate<Api: ChainApi>(
 			None => continue,
 		};
 
-		match api.validate_transaction(&BlockId::Number(at), ext.data.clone()).await {
+		match api.validate_transaction(&BlockId::Number(at), ext.source, ext.data.clone()).await {
 			Ok(Err(TransactionValidityError::Invalid(err))) => {
 				log::debug!(target: "txpool", "[{:?}]: Revalidation: invalid {:?}", ext_hash, err);
 				invalid_hashes.push(ext_hash);
@@ -94,6 +88,7 @@ async fn batch_revalidate<Api: ChainApi>(
 					ValidatedTransaction::valid_at(
 						at.saturated_into::<u64>(),
 						ext_hash,
+						ext.source,
 						ext.data.clone(),
 						api.hash_and_length(&ext.data).1,
 						validity,
@@ -206,19 +201,33 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 	/// It does two things: periodically tries to process some transactions
 	/// from the queue and also accepts messages to enqueue some more
 	/// transactions from the pool.
-	pub async fn run(mut self, from_queue: mpsc::UnboundedReceiver<WorkerPayload<Api>>) {
-		let interval = interval(BACKGROUND_REVALIDATION_INTERVAL).fuse();
+	pub async fn run<R: intervalier::IntoStream>(
+		mut self,
+		from_queue: TracingUnboundedReceiver<WorkerPayload<Api>>,
+		interval: R,
+	) where R: Send, R::Guard: Send
+	{
+		let interval = interval.into_stream().fuse();
 		let from_queue = from_queue.fuse();
 		futures::pin_mut!(interval, from_queue);
 		let this = &mut self;
 
 		loop {
 			futures::select! {
-				_ = interval.next() => {
+				_guard = interval.next() => {
 					let next_batch = this.prepare_batch();
 					let batch_len = next_batch.len();
 
 					batch_revalidate(this.pool.clone(), this.api.clone(), this.best_block, next_batch).await;
+
+					#[cfg(test)]
+					{
+						use intervalier::Guard;
+						// only trigger test events if something was processed
+						if batch_len == 0 {
+							_guard.expect("Always some() in tests").skip();
+						}
+					}
 
 					if batch_len > 0 || this.len() > 0 {
 						log::debug!(
@@ -253,7 +262,7 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 pub struct RevalidationQueue<Api: ChainApi> {
 	pool: Arc<Pool<Api>>,
 	api: Arc<Api>,
-	background: Option<mpsc::UnboundedSender<WorkerPayload<Api>>>,
+	background: Option<TracingUnboundedSender<WorkerPayload<Api>>>,
 }
 
 impl<Api: ChainApi> RevalidationQueue<Api>
@@ -269,11 +278,14 @@ where
 		}
 	}
 
-	/// New revalidation queue with background worker.
-	pub fn new_background(api: Arc<Api>, pool: Arc<Pool<Api>>) ->
-		(Self, Pin<Box<dyn Future<Output=()> + Send>>)
+	pub fn new_with_interval<R: intervalier::IntoStream>(
+		api: Arc<Api>,
+		pool: Arc<Pool<Api>>,
+		interval: R,
+	) -> (Self, Pin<Box<dyn Future<Output=()> + Send>>)
+	where R: Send + 'static, R::Guard: Send
 	{
-		let (to_worker, from_queue) = mpsc::unbounded();
+		let (to_worker, from_queue) = tracing_unbounded("mpsc_revalidation_queue");
 
 		let worker = RevalidationWorker::new(api.clone(), pool.clone());
 
@@ -284,7 +296,25 @@ where
 				background: Some(to_worker),
 			};
 
-		(queue, worker.run(from_queue).boxed())
+		(queue, worker.run(from_queue, interval).boxed())
+	}
+
+	/// New revalidation queue with background worker.
+	pub fn new_background(api: Arc<Api>, pool: Arc<Pool<Api>>) ->
+		(Self, Pin<Box<dyn Future<Output=()> + Send>>)
+	{
+		Self::new_with_interval(api, pool, intervalier::Interval::new(BACKGROUND_REVALIDATION_INTERVAL))
+	}
+
+	/// New revalidation queue with background worker and test signal.
+	#[cfg(test)]
+	pub fn new_test(api: Arc<Api>, pool: Arc<Pool<Api>>) ->
+		(Self, Pin<Box<dyn Future<Output=()> + Send>>, intervalier::BackSignalControl)
+	{
+		let (interval, notifier) = intervalier::BackSignalInterval::new(BACKGROUND_REVALIDATION_INTERVAL);
+		let (queue, background) = Self::new_with_interval(api, pool, interval);
+
+		(queue, background, notifier)
 	}
 
 	/// Queue some transaction for later revalidation.
@@ -312,9 +342,9 @@ where
 
 #[cfg(test)]
 mod tests {
-
 	use super::*;
 	use sc_transaction_graph::Pool;
+	use sp_transaction_pool::TransactionSource;
 	use substrate_test_runtime_transaction_pool::{TestApi, uxt};
 	use futures::executor::block_on;
 	use substrate_test_runtime_client::{
@@ -334,7 +364,9 @@ mod tests {
 		let queue = Arc::new(RevalidationQueue::new(api.clone(), pool.clone()));
 
 		let uxt = uxt(Alice, 0);
-		let uxt_hash = block_on(pool.submit_one(&BlockId::number(0), uxt.clone())).expect("Should be valid");
+		let uxt_hash = block_on(
+			pool.submit_one(&BlockId::number(0), TransactionSource::External, uxt.clone())
+		).expect("Should be valid");
 
 		block_on(queue.revalidate_later(0, vec![uxt_hash]));
 

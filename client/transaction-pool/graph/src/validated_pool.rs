@@ -27,15 +27,15 @@ use crate::watcher::Watcher;
 use serde::Serialize;
 use log::{debug, warn};
 
-use futures::channel::mpsc;
 use parking_lot::{Mutex, RwLock};
 use sp_runtime::{
 	generic::BlockId,
 	traits::{self, SaturatedConversion},
-	transaction_validity::{TransactionTag as Tag, ValidTransaction},
+	transaction_validity::{TransactionTag as Tag, ValidTransaction, TransactionSource},
 };
 use sp_transaction_pool::{error, PoolStatus};
 use wasm_timer::Instant;
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 
 use crate::base_pool::PruneStatus;
 use crate::pool::{EventStream, Options, ChainApi, ExHash, ExtrinsicFor, TransactionFor};
@@ -58,6 +58,7 @@ impl<Hash, Ex, Error> ValidatedTransaction<Hash, Ex, Error> {
 	pub fn valid_at(
 		at: u64,
 		hash: Hash,
+		source: TransactionSource,
 		data: Ex,
 		bytes: usize,
 		validity: ValidTransaction,
@@ -66,6 +67,7 @@ impl<Hash, Ex, Error> ValidatedTransaction<Hash, Ex, Error> {
 			data,
 			bytes,
 			hash,
+			source,
 			priority: validity.priority,
 			requires: validity.requires,
 			provides: validity.provides,
@@ -93,7 +95,7 @@ pub struct ValidatedPool<B: ChainApi> {
 		ExHash<B>,
 		ExtrinsicFor<B>,
 	>>,
-	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<ExHash<B>>>>,
+	import_notification_sinks: Mutex<Vec<TracingUnboundedSender<ExHash<B>>>>,
 	rotator: PoolRotator<ExHash<B>>,
 }
 
@@ -502,7 +504,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 	/// Consumers of this stream should use the `ready` method to actually get the
 	/// pending transactions in the right order.
 	pub fn import_notification_stream(&self) -> EventStream<ExHash<B>> {
-		let (sink, stream) = mpsc::unbounded();
+		let (sink, stream) = tracing_unbounded("mpsc_import_notifications");
 		self.import_notification_sinks.lock().push(sink);
 		stream
 	}
@@ -545,7 +547,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 	}
 
 	/// Get an iterator for ready transactions ordered by priority
-	pub fn ready(&self) -> impl Iterator<Item=TransactionFor<B>> {
+	pub fn ready(&self) -> impl Iterator<Item=TransactionFor<B>> + Send {
 		self.pool.read().ready()
 	}
 

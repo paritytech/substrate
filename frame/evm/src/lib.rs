@@ -35,7 +35,7 @@ use sp_runtime::{
 	DispatchResult, traits::{UniqueSaturatedInto, AccountIdConversion, SaturatedConversion},
 };
 use sha3::{Digest, Keccak256};
-use evm::{ExitReason, ExitSucceed, ExitError};
+use evm::{ExitReason, ExitSucceed, ExitError, Config};
 use evm::executor::StackExecutor;
 use evm::backend::ApplyBackend;
 
@@ -116,6 +116,8 @@ impl Precompiles for () {
 	}
 }
 
+static ISTANBUL_CONFIG: Config = Config::istanbul();
+
 /// EVM module trait
 pub trait Trait: frame_system::Trait + pallet_timestamp::Trait {
 	/// Calculator for current gas price.
@@ -125,9 +127,14 @@ pub trait Trait: frame_system::Trait + pallet_timestamp::Trait {
 	/// Currency type for deposit and withdraw.
 	type Currency: Currency<Self::AccountId>;
 	/// The overarching event type.
-	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 	/// Precompiles associated with this EVM engine.
 	type Precompiles: Precompiles;
+
+	/// EVM config used in the module.
+	fn config() -> &'static Config {
+		&ISTANBUL_CONFIG
+	}
 }
 
 decl_storage! {
@@ -140,11 +147,17 @@ decl_storage! {
 
 decl_event! {
 	/// EVM events
-	pub enum Event {
+	pub enum Event<T> where
+		<T as frame_system::Trait>::AccountId,
+	{
 		/// Ethereum events from contracts.
 		Log(Log),
 		/// A contract has been created at given address.
 		Created(H160),
+		/// A deposit has been made at a given address.
+		BalanceDeposit(AccountId, H160, U256),
+		/// A withdrawal has been made from a given address.
+		BalanceWithdraw(AccountId, H160, U256),
 	}
 }
 
@@ -195,6 +208,7 @@ decl_module! {
 			Accounts::mutate(&address, |account| {
 				account.balance += bvalue;
 			});
+			Module::<T>::deposit_event(Event::<T>::BalanceDeposit(sender, address, bvalue));
 		}
 
 		/// Withdraw balance from EVM into currency/balances module.
@@ -218,6 +232,7 @@ decl_module! {
 			Accounts::insert(&address, account);
 
 			T::Currency::resolve_creating(&sender, imbalance);
+			Module::<T>::deposit_event(Event::<T>::BalanceWithdraw(sender, address, bvalue));
 		}
 
 		/// Issue an EVM call operation. This is similar to a message call transaction in Ethereum.
@@ -282,7 +297,7 @@ decl_module! {
 				},
 			)?;
 
-			Module::<T>::deposit_event(Event::Created(create_address));
+			Module::<T>::deposit_event(Event::<T>::Created(create_address));
 			Ok(())
 		}
 
@@ -320,7 +335,7 @@ decl_module! {
 				},
 			)?;
 
-			Module::<T>::deposit_event(Event::Created(create_address));
+			Module::<T>::deposit_event(Event::<T>::Created(create_address));
 			Ok(())
 		}
 	}
@@ -381,7 +396,7 @@ impl<T: Trait> Module<T> {
 		let mut executor = StackExecutor::new_with_precompile(
 			&backend,
 			gas_limit as usize,
-			&backend::GASOMETER_CONFIG,
+			T::config(),
 			T::Precompiles::execute,
 		);
 

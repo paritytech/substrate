@@ -161,9 +161,9 @@ use frame_support::{
 	decl_module, decl_event, decl_storage, decl_error, ensure,
 	Parameter, RuntimeDebug, weights::{GetDispatchInfo, SimpleDispatchInfo, FunctionOf},
 	traits::{Currency, ReservableCurrency, Get, BalanceStatus},
+	dispatch::PostDispatchInfo,
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
-use frame_support::traits::MigrateAccount;
 
 #[cfg(test)]
 mod mock;
@@ -179,7 +179,7 @@ pub trait Trait: frame_system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// The overarching call type.
-	type Call: Parameter + Dispatchable<Origin=Self::Origin> + GetDispatchInfo;
+	type Call: Parameter + Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo> + GetDispatchInfo;
 
 	/// The currency mechanism.
 	type Currency: ReservableCurrency<Self::AccountId>;
@@ -255,13 +255,6 @@ decl_storage! {
 		/// Map from the user who can access it to the recovered account.
 		pub Proxy get(fn proxy):
 			map hasher(blake2_128_concat) T::AccountId => Option<T::AccountId>;
-	}
-}
-
-impl<T: Trait> MigrateAccount<T::AccountId> for Module<T> {
-	fn migrate_account(a: &T::AccountId) {
-		Recoverable::<T>::migrate_key_from_blake(a);
-		Proxy::<T>::migrate_key_from_blake(a);
 	}
 }
 
@@ -356,6 +349,7 @@ decl_module! {
 			let target = Self::proxy(&who).ok_or(Error::<T>::NotAllowed)?;
 			ensure!(&target == &account, Error::<T>::NotAllowed);
 			call.dispatch(frame_system::RawOrigin::Signed(account).into())
+				.map(|_| ()).map_err(|e| e.error)
 		}
 
 		/// Allow ROOT to bypass the recovery process and set an a rescuer account
@@ -653,6 +647,7 @@ decl_module! {
 		/// # <weight>
 		/// - One storage mutation to check account is recovered by `who`. O(1)
 		/// # </weight>
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn cancel_recovered(origin, account: T::AccountId) {
 			let who = ensure_signed(origin)?;
 			// Check `who` is allowed to make a call on behalf of `account`

@@ -17,10 +17,11 @@
 //! Keystore (and session key management) for ed25519 based chains like Polkadot.
 
 #![warn(missing_docs)]
-
-use std::{collections::HashMap, path::PathBuf, fs::{self, File}, io::{self, Write}, sync::Arc};
+use std::{collections::{HashMap, HashSet}, path::PathBuf, fs::{self, File}, io::{self, Write}, sync::Arc};
 use sp_core::{
-	crypto::{KeyTypeId, Pair as PairT, Public, IsWrappedBy, Protected}, traits::BareCryptoStore,
+	crypto::{IsWrappedBy, CryptoTypePublicPair, KeyTypeId, Pair as PairT, Protected, Public},
+	traits::{BareCryptoStore, BareCryptoStoreError as TraitError},
+	Encode,
 };
 use sp_application_crypto::{AppKey, AppPublic, AppPair, ed25519, sr25519};
 use parking_lot::RwLock;
@@ -44,6 +45,12 @@ pub enum Error {
 	/// Invalid seed
 	#[display(fmt="Invalid seed")]
 	InvalidSeed,
+	/// Public key type is not supported
+	#[display(fmt="Key crypto type is not supported")]
+	KeyNotSupported(KeyTypeId),
+	/// Pair not found for public key and KeyTypeId
+	#[display(fmt="Pair not found for {} public key", "_0")]
+	PairNotFound(String),
 	/// Keystore unavailable
 	#[display(fmt="Keystore unavailable")]
 	Unavailable,
@@ -51,6 +58,21 @@ pub enum Error {
 
 /// Keystore Result
 pub type Result<T> = std::result::Result<T, Error>;
+
+impl From<Error> for TraitError {
+	fn from(error: Error) -> Self {
+		match error {
+			Error::KeyNotSupported(id) => TraitError::KeyNotSupported(id),
+			Error::PairNotFound(e) => TraitError::PairNotFound(e),
+			Error::InvalidSeed | Error::InvalidPhrase | Error::InvalidPassword => {
+				TraitError::ValidationError(error.to_string())
+			},
+			Error::Unavailable => TraitError::Unavailable,
+			Error::Io(e) => TraitError::Other(e.to_string()),
+			Error::Json(e) => TraitError::Other(e.to_string()),
+		}
+	}
+}
 
 impl std::error::Error for Error {
 	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
@@ -220,16 +242,35 @@ impl Store {
 		self.key_pair_by_type::<Pair::Generic>(IsWrappedBy::from_ref(public), Pair::ID).map(Into::into)
 	}
 
-	/// Get public keys of all stored keys that match the given key type.
-	pub fn public_keys_by_type<TPublic: Public>(&self, key_type: KeyTypeId) -> Result<Vec<TPublic>> {
-		let mut public_keys: Vec<TPublic> = self.additional.keys()
-			.filter_map(|(ty, public)| {
-				if *ty == key_type {
-					Some(TPublic::from_slice(public))
-				} else {
-					None
-				}
+	/// Get public keys of all stored keys that match the key type.
+	///
+	/// This will just use the type of the public key (a list of which to be returned) in order
+	/// to determine the key type. Unless you use a specialized application-type public key, then
+	/// this only give you keys registered under generic cryptography, and will not return keys
+	/// registered under the application type.
+	pub fn public_keys<Public: AppPublic>(&self) -> Result<Vec<Public>> {
+		self.raw_public_keys(Public::ID)
+			.map(|v| {
+				v.into_iter()
+				 .map(|k| Public::from_slice(k.as_slice()))
+				 .collect()
 			})
+	}
+
+	/// Returns the file path for the given public key and key type.
+	fn key_file_path(&self, public: &[u8], key_type: KeyTypeId) -> Option<PathBuf> {
+		let mut buf = self.path.as_ref()?.clone();
+		let key_type = hex::encode(key_type.0);
+		let key = hex::encode(public);
+		buf.push(key_type + key.as_str());
+		Some(buf)
+	}
+
+	/// Returns a list of raw public keys filtered by `KeyTypeId`
+	fn raw_public_keys(&self, id: KeyTypeId) -> Result<Vec<Vec<u8>>> {
+		let mut public_keys: Vec<Vec<u8>> = self.additional.keys()
+			.into_iter()
+    		.filter_map(|k| if k.0 == id { Some(k.1.clone()) } else { None })
 			.collect();
 
 		if let Some(path) = &self.path {
@@ -241,8 +282,10 @@ impl Store {
 				if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
 					match hex::decode(name) {
 						Ok(ref hex) if hex.len() > 4 => {
-							if &hex[0..4] != &key_type.0 { continue }
-							let public = TPublic::from_slice(&hex[4..]);
+							if &hex[0..4] != &id.0 {
+								continue;
+							}
+							let public = hex[4..].to_vec();
 							public_keys.push(public);
 						}
 						_ => continue,
@@ -253,69 +296,102 @@ impl Store {
 
 		Ok(public_keys)
 	}
-
-	/// Get public keys of all stored keys that match the key type.
-	///
-	/// This will just use the type of the public key (a list of which to be returned) in order
-	/// to determine the key type. Unless you use a specialized application-type public key, then
-	/// this only give you keys registered under generic cryptography, and will not return keys
-	/// registered under the application type.
-	pub fn public_keys<Public: AppPublic>(&self) -> Result<Vec<Public>> {
-		self.public_keys_by_type::<Public::Generic>(Public::ID)
-			.map(|v| v.into_iter().map(Into::into).collect())
-	}
-
-	/// Returns the file path for the given public key and key type.
-	fn key_file_path(&self, public: &[u8], key_type: KeyTypeId) -> Option<PathBuf> {
-		let mut buf = self.path.as_ref()?.clone();
-		let key_type = hex::encode(key_type.0);
-		let key = hex::encode(public);
-		buf.push(key_type + key.as_str());
-		Some(buf)
-	}
 }
 
 impl BareCryptoStore for Store {
+	fn keys(
+		&self,
+		id: KeyTypeId
+	) -> std::result::Result<Vec<CryptoTypePublicPair>, TraitError> {
+		let raw_keys = self.raw_public_keys(id)?;
+		Ok(raw_keys.into_iter()
+			.fold(Vec::new(), |mut v, k| {
+				v.push(CryptoTypePublicPair(sr25519::CRYPTO_ID, k.clone()));
+				v.push(CryptoTypePublicPair(ed25519::CRYPTO_ID, k.clone()));
+				v
+			}))
+	}
+
+	fn supported_keys(
+		&self,
+		id: KeyTypeId,
+		keys: Vec<CryptoTypePublicPair>
+	) -> std::result::Result<Vec<CryptoTypePublicPair>, TraitError> {
+		let all_keys = self.keys(id)?.into_iter().collect::<HashSet<_>>();
+		Ok(keys.into_iter()
+		   .filter(|key| all_keys.contains(key))
+		   .collect::<Vec<_>>())
+	}
+
+	fn sign_with(
+		&self,
+		id: KeyTypeId,
+		key: &CryptoTypePublicPair,
+		msg: &[u8],
+	) -> std::result::Result<Vec<u8>, TraitError> {
+		match key.0 {
+			ed25519::CRYPTO_ID => {
+				let pub_key = ed25519::Public::from_slice(key.1.as_slice());
+				let key_pair: ed25519::Pair = self
+					.key_pair_by_type::<ed25519::Pair>(&pub_key, id)
+					.map_err(|e| TraitError::from(e))?;
+				Ok(key_pair.sign(msg).encode())
+			}
+			sr25519::CRYPTO_ID => {
+				let pub_key = sr25519::Public::from_slice(key.1.as_slice());
+				let key_pair: sr25519::Pair = self
+					.key_pair_by_type::<sr25519::Pair>(&pub_key, id)
+					.map_err(|e| TraitError::from(e))?;
+				Ok(key_pair.sign(msg).encode())
+			}
+			_ => Err(TraitError::KeyNotSupported(id))
+		}
+	}
+
 	fn sr25519_public_keys(&self, key_type: KeyTypeId) -> Vec<sr25519::Public> {
-		self.public_keys_by_type::<sr25519::Public>(key_type).unwrap_or_default()
+		self.raw_public_keys(key_type)
+			.map(|v| {
+				v.into_iter()
+				 .map(|k| sr25519::Public::from_slice(k.as_slice()))
+				 .collect()
+			})
+    		.unwrap_or_default()
 	}
 
 	fn sr25519_generate_new(
 		&mut self,
 		id: KeyTypeId,
 		seed: Option<&str>,
-	) -> std::result::Result<sr25519::Public, String> {
+	) -> std::result::Result<sr25519::Public, TraitError> {
 		let pair = match seed {
 			Some(seed) => self.insert_ephemeral_from_seed_by_type::<sr25519::Pair>(seed, id),
 			None => self.generate_by_type::<sr25519::Pair>(id),
-		}.map_err(|e| e.to_string())?;
+		}.map_err(|e| -> TraitError { e.into() })?;
 
 		Ok(pair.public())
 	}
 
-	fn sr25519_key_pair(&self, id: KeyTypeId, pub_key: &sr25519::Public) -> Option<sr25519::Pair> {
-		self.key_pair_by_type::<sr25519::Pair>(pub_key, id).ok()
-	}
-
 	fn ed25519_public_keys(&self, key_type: KeyTypeId) -> Vec<ed25519::Public> {
-		self.public_keys_by_type::<ed25519::Public>(key_type).unwrap_or_default()
+		self.raw_public_keys(key_type)
+			.map(|v| {
+				v.into_iter()
+				 .map(|k| ed25519::Public::from_slice(k.as_slice()))
+				 .collect()
+			})
+    		.unwrap_or_default()
 	}
 
 	fn ed25519_generate_new(
 		&mut self,
 		id: KeyTypeId,
 		seed: Option<&str>,
-	) -> std::result::Result<ed25519::Public, String> {
+	) -> std::result::Result<ed25519::Public, TraitError> {
 		let pair = match seed {
 			Some(seed) => self.insert_ephemeral_from_seed_by_type::<ed25519::Pair>(seed, id),
 			None => self.generate_by_type::<ed25519::Pair>(id),
-		}.map_err(|e| e.to_string())?;
+		}.map_err(|e| -> TraitError { e.into() })?;
 
 		Ok(pair.public())
-	}
-
-	fn ed25519_key_pair(&self, id: KeyTypeId, pub_key: &ed25519::Public) -> Option<ed25519::Pair> {
-		self.key_pair_by_type::<ed25519::Pair>(pub_key, id).ok()
 	}
 
 	fn insert_unknown(&mut self, key_type: KeyTypeId, suri: &str, public: &[u8])
@@ -337,7 +413,7 @@ impl BareCryptoStore for Store {
 mod tests {
 	use super::*;
 	use tempfile::TempDir;
-	use sp_core::{testing::{SR25519}, crypto::{Ss58Codec}};
+	use sp_core::{testing::SR25519, crypto::Ss58Codec};
 
 	#[test]
 	fn basic_store() {
@@ -451,7 +527,7 @@ mod tests {
 		fs::write(file_name, "test").expect("Invalid file is written");
 
 		assert!(
-			store.read().public_keys_by_type::<sr25519::AppPublic>(SR25519).unwrap().is_empty(),
+			store.read().sr25519_public_keys(SR25519).is_empty(),
 		);
 	}
 }
