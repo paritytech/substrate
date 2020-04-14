@@ -262,7 +262,7 @@ mod tests {
 			let second_term = Fixed128::from_parts(12_500_000);
 			assert_eq!(
 				TargetedFeeAdjustment::<TargetBlockFullness>::convert(Fixed128::default()),
-				first_term + second_term
+				first_term + second_term,
 			);
 
 		});
