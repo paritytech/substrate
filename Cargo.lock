@@ -7523,6 +7523,7 @@ dependencies = [
  "sp-core",
  "sp-inherents",
  "sp-io",
+ "sp-state-machine",
  "sp-std",
 ]
 

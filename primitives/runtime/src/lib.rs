@@ -734,6 +734,39 @@ pub fn print(print: impl traits::Printable) {
 	print.print();
 }
 
+
+/// Batching session.
+///
+/// To be used in runtime only. Outside of runtime, just construct
+/// `BatchVerifier` directly.
+#[must_use = "`verify()` needs to be called to finish batch signature verification!"]
+pub struct SignatureBatching(bool);
+
+impl SignatureBatching {
+	/// Start new batching session.
+	pub fn start() -> Self {
+		sp_io::crypto::start_batch_verify();
+		SignatureBatching(false)
+	}
+
+	/// Verify all signatures submitted during the batching session.
+	#[must_use]
+	pub fn verify(mut self) -> bool {
+		self.0 = true;
+		sp_io::crypto::finish_batch_verify()
+	}
+}
+
+impl Drop for SignatureBatching {
+	fn drop(&mut self) {
+		// Sanity check. If user forgets to actually call `verify()`.
+		if !self.0 {
+			panic!("Signature verification has not been called before `SignatureBatching::drop`")
+		}
+	}
+}
+
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -780,5 +813,20 @@ mod tests {
 
 		let multi_signer = MultiSigner::from(pair.public());
 		assert!(multi_sig.verify(msg, &multi_signer.into_account()));
+	}
+
+
+	#[test]
+	#[should_panic(expected = "Signature verification has not been called")]
+	fn batching_still_finishes_when_not_called_directly() {
+		let mut ext = sp_state_machine::BasicExternalities::with_tasks_executor();
+		ext.execute_with(|| {
+			let _batching = SignatureBatching::start();
+			sp_io::crypto::sr25519_verify(
+				&Default::default(),
+				&Vec::new(),
+				&Default::default(),
+			);
+		});
 	}
 }

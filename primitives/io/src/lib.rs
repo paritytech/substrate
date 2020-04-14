@@ -610,35 +610,6 @@ pub trait Crypto {
 	}
 }
 
-/// Batching session.
-///
-/// To be used in runtime only. Outside of runtime, just construct
-/// `BatchVerifier` directly.
-pub struct SignatureBatching(());
-
-impl SignatureBatching {
-	/// Start new batching session.
-	pub fn start() -> Self {
-		crypto::start_batch_verify();
-		SignatureBatching(())
-	}
-
-	/// Verify all signatures submitted during the batching session.
-	#[must_use]
-	pub fn verify(self) -> bool {
-		crypto::finish_batch_verify()
-	}
-}
-
-impl Drop for SignatureBatching {
-	fn drop(&mut self) {
-		// Sanity check. If user forgets to actually call `verify()`.
-		if !crypto::finish_batch_verify() {
-			panic!("Signature verification failed when invoked in `Batching::drop`.")
-		}
-	}
-}
-
 /// Interface that provides functions for hashing with different algorithms.
 #[runtime_interface]
 pub trait Hashing {
@@ -1152,7 +1123,7 @@ mod tests {
 		ext.execute_with(|| {
 			let pair = sr25519::Pair::generate_with_phrase(None).0;
 			{
-				let batching = SignatureBatching::start();
+				crypto::start_batch_verify();
 				for it in 0..70 {
 					let msg = format!("Schnorrkel {}!", it);
 					let signature = pair.sign(msg.as_bytes());
@@ -1165,17 +1136,17 @@ mod tests {
 					&Vec::new(),
 					&Default::default(),
 				);
-				assert!(!batching.verify());
+				assert!(!crypto::finish_batch_verify());
 			}
 
 			{
-				let batching = SignatureBatching::start();
+				crypto::start_batch_verify();
 				for it in 0..70 {
 					let msg = format!("Schnorrkel {}!", it);
 					let signature = pair.sign(msg.as_bytes());
 					crypto::sr25519_verify(&signature, msg.as_bytes(), &pair.public());
 				}
-				assert!(batching.verify());
+				assert!(crypto::finish_batch_verify());
 			}
 		});
 	}
@@ -1187,18 +1158,18 @@ mod tests {
 			// invalid ed25519 signature
 			{
 
-				let batching = SignatureBatching::start();
+				crypto::start_batch_verify();
 				crypto::ed25519_verify(
 					&Default::default(),
 					&Vec::new(),
 					&Default::default(),
 				);
-				assert!(!batching.verify());
+				assert!(!crypto::finish_batch_verify());
 			}
 
 			// 2 valid ed25519 signatures
 			{
-				let batching = SignatureBatching::start();
+				crypto::start_batch_verify();
 				let pair = ed25519::Pair::generate_with_phrase(None).0;
 				let msg = b"Important message";
 				let signature = pair.sign(msg);
@@ -1209,12 +1180,12 @@ mod tests {
 				let signature = pair.sign(msg);
 				crypto::ed25519_verify(&signature, msg, &pair.public());
 
-				assert!(batching.verify());
+				assert!(crypto::finish_batch_verify());
 			}
 
 			// 1 valid, 1 invalid ed25519 signature
 			{
-				let batching = SignatureBatching::start();
+				crypto::start_batch_verify();
 				let pair = ed25519::Pair::generate_with_phrase(None).0;
 				let msg = b"Important message";
 				let signature = pair.sign(msg);
@@ -1225,12 +1196,12 @@ mod tests {
 					&Vec::new(),
 					&Default::default(),
 				);
-				assert!(!batching.verify());
+				assert!(!crypto::finish_batch_verify());
 			}
 
 			// 1 valid ed25519, 2 valid sr25519
 			{
-				let batching = SignatureBatching::start();
+				crypto::start_batch_verify();
 				let pair = ed25519::Pair::generate_with_phrase(None).0;
 				let msg = b"Ed25519 batching";
 				let signature = pair.sign(msg);
@@ -1245,13 +1216,13 @@ mod tests {
 				let msg = b"Schnorrkel batches!";
 				let signature = pair.sign(msg);
 				crypto::sr25519_verify(&signature, msg, &pair.public());
-				assert!(batching.verify());
+				assert!(crypto::finish_batch_verify());
 			}
 
 
 			// 1 valid sr25519, 1 invalid sr25519
 			{
-				let batching = SignatureBatching::start();
+				crypto::start_batch_verify();
 				let pair = sr25519::Pair::generate_with_phrase(None).0;
 				let msg = b"Schnorrkel!";
 				let signature = pair.sign(msg);
@@ -1262,22 +1233,8 @@ mod tests {
 					&Vec::new(),
 					&Default::default(),
 				);
-				assert!(!batching.verify());
+				assert!(!crypto::finish_batch_verify());
 			}
-		});
-	}
-
-	#[test]
-	#[should_panic(expected = "Signature verification failed")]
-	fn batching_still_finishes_when_not_called_directly() {
-		let mut ext = BasicExternalities::with_tasks_executor();
-		ext.execute_with(|| {
-			let _batching = SignatureBatching::start();
-			crypto::sr25519_verify(
-				&Default::default(),
-				&Vec::new(),
-				&Default::default(),
-			);
 		});
 	}
 }
