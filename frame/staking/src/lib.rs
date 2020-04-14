@@ -739,7 +739,7 @@ pub trait Trait: frame_system::Trait {
 	/// Convert a balance into a number used for election calculation. This must fit into a `u64`
 	/// but is allowed to be sensibly lossy. The `u64` is used to communicate with the
 	/// [`sp_phragmen`] crate which accepts u64 numbers and does operations in 128. Consequently,
-	/// the backward convert is used convert the u128s from phragmen back to a balance.
+	/// the backward convert is used convert the u128s from phragmen back to a [`BalanceOf`].
 	type CurrencyToVote: Convert<BalanceOf<Self>, VoteWeight> + Convert<u128, BalanceOf<Self>>;
 
 	/// Tokens have been minted and are unused for validator-reward.

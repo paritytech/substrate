@@ -710,15 +710,18 @@ impl<T: Trait> Module<T> {
 		let to_balance = |e: ExtendedBalance| -> BalanceOf<T> {
 			<T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(e)
 		};
+		let stake_of = |who: &T::AccountId| -> VoteWeight {
+			to_votes(Self::locked_stake_of(who))
+		};
 
 		let voters_and_votes = Voting::<T>::iter()
-			.map(|(voter, (stake, targets))| { (voter, stake, targets) })
+			.map(|(voter, (stake, targets))| { (voter, to_votes(stake), targets) })
 			.collect::<Vec<_>>();
 		let maybe_phragmen_result = sp_phragmen::elect::<T::AccountId, Perbill>(
 			num_to_elect,
 			0,
 			candidates,
-			voters_and_votes.iter().cloned().map(|(v, s, t)| (v, to_votes(s), t)).collect::<Vec<_>>(),
+			voters_and_votes.clone(),
 		);
 
 		if let Some(PhragmenResult { winners, assignments }) = maybe_phragmen_result {
@@ -740,9 +743,6 @@ impl<T: Trait> Module<T> {
 				.filter_map(|(m, a)| if a.is_zero() { None } else { Some(m) } )
 				.collect::<Vec<T::AccountId>>();
 
-			let stake_of = |who: &T::AccountId| -> u64 {
-				to_votes(Self::locked_stake_of(who))
-			};
 			let staked_assignments = sp_phragmen::assignment_ratio_to_staked(
 				assignments,
 				stake_of,
@@ -770,14 +770,16 @@ impl<T: Trait> Module<T> {
 			// save the members, sorted based on account id.
 			new_members.sort_by(|i, j| i.0.cmp(&j.0));
 
-			let mut prime_votes: Vec<_> = new_members.iter().map(|c| (&c.0, <BalanceOf<T>>::zero())).collect();
+			let mut prime_votes: Vec<_> = new_members.iter().map(|c| (&c.0, VoteWeight::zero())).collect();
 			for (_, stake, targets) in voters_and_votes.into_iter() {
 				for (votes, who) in targets.iter()
 					.enumerate()
 					.map(|(votes, who)| ((MAXIMUM_VOTE - votes) as u32, who))
 				{
 					if let Ok(i) = prime_votes.binary_search_by_key(&who, |k| k.0) {
-						prime_votes[i].1 += stake * votes.into();
+						// let () = stake;
+						// let () = votes;
+						prime_votes[i].1 += stake * votes as VoteWeight;
 					}
 				}
 			}

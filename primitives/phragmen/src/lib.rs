@@ -88,10 +88,8 @@ pub enum Error {
 	CompactInvalidIndex,
 }
 
-/// A type which is used in the API of this crate as a numeric weight of a vote, most of then the
-/// stake of the voter.
-///
-/// `sp_phragmen` uses this value and converts it to [`ExtendedBalance`] for computation.
+/// A type which is used in the API of this crate as a numeric weight of a vote, most often the
+/// stake of the voter. It is always converted to [`ExtendedBalance`] for computation.
 pub type VoteWeight = u64;
 
 /// A type in which performing operations on vote weights are safe.
