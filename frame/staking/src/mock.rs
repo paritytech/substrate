@@ -512,11 +512,6 @@ fn post_conditions() {
 	check_ledgers();
 }
 
-
-pub fn check_exposure_all(era: EraIndex) {
-	ErasStakers::<Test>::iter_prefix_values(era).for_each(check_exposure)
-}
-
 pub(crate) fn active_era() -> EraIndex {
 	Staking::active_era().unwrap().index
 }
@@ -529,7 +524,7 @@ fn check_ledgers() {
 fn check_exposures() {
 	// a check per validator to ensure the exposure struct is always sane.
 	let era = active_era();
-	ErasStakers::<Test>::iter_prefix(era).for_each(|expo| {
+	ErasStakers::<Test>::iter_prefix_values(era).for_each(|expo| {
 		assert_eq!(
 			expo.total as u128,
 			expo.own as u128 + expo.others.iter().map(|e| e.value as u128).sum::<u128>(),
