@@ -64,7 +64,7 @@ impl BatchVerifier {
 			if !f() {
 				invalid_clone.store(true, AtomicOrdering::Relaxed);
 			}
-			if let Err(_) = sender.send(()) {
+			if sender.send(()).is_err() {
 				// sanity
 				log::warn!("Verification halted while result was pending");
 				invalid_clone.store(true, AtomicOrdering::Relaxed);
@@ -136,7 +136,6 @@ impl BatchVerifier {
 		}
 
 		self.sr25519_items.clear();
-		debug_assert_eq!(self.sr25519_items.len(), 0);
 
 		if pending.len() > 0 {
 			let pair = Arc::new((Mutex::new(()), Condvar::new()));

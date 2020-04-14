@@ -426,7 +426,7 @@ pub trait Crypto {
 	///
 	/// Returns `true` when the verification is either successful or batched.
 	/// If no batching verification extension registered, this will return the result
-	/// of verification immeidately. If batchign verification extension is registered,
+	/// of verification immediately. If batching verification extension is registered
 	/// caller should call `crypto::finish_batch_verify` to actualy check all submitted
 	/// signatures.
 	fn ed25519_verify(
@@ -459,7 +459,7 @@ pub trait Crypto {
 	///
 	/// Returns `true` when the verification is either successful or batched.
 	/// If no batching verification extension registered, this will return the result
-	/// of verification immeidately. If batchign verification extension is registered,
+	/// of verification immediately. If batching verification extension is registered,
 	/// caller should call `crypto::finish_batch_verify` to actualy check all submitted
 	#[version(2)]
 	fn sr25519_verify(
@@ -491,19 +491,18 @@ pub trait Crypto {
 	/// Start verification extension.
 	fn start_batch_verify(&mut self) {
 		let scheduler = self.extension::<TaskExecutorExt>()
-			.expect("Task executor extension is required!")
+			.expect("No task executor associated with the current context!")
 			.0
 			.clone();
 
 		self.register_extension(VerificationExt(BatchVerifier::new(scheduler)))
-			.expect("Failed to register required extension: VerificationExt");
+			.expect("Failed to register required extension: `VerificationExt`");
 	}
 
-	/// Batch-verify signatures.
+	/// Finish batch-verification of signatures.
 	///
-	/// Verify all signatures which were previously pushed in batch.
-	/// Use `batch_push_ed25519`/`batch_push_sr25519` to push collection of signatures
-	/// to the host, and then use this function to verify them all at once.
+	/// Verify or wait for verification to finish for all signatures which were previously
+	/// deferred by `sr25519_verify`/`ed25519_verify`.
 	fn finish_batch_verify(&mut self) -> bool {
 		if self.extension::<VerificationExt>().is_none() {
 			// No verification extension - nothing to verify.
@@ -684,7 +683,6 @@ sp_externalities::decl_extension! {
 	/// The keystore extension to register/retrieve from the externalities.
 	pub struct VerificationExt(BatchVerifier);
 }
-
 
 /// Interface that provides functions to access the offchain functionality.
 #[runtime_interface]
