@@ -15,7 +15,7 @@ sp-runtime = { version = "2.0.0-alpha.5", default-features = false, path = "../r
 codec = { package = "parity-scale-codec", version = "1.3.0", default-features = false, features = ["derive"] }
 sp-inherents = { version = "2.0.0-alpha.5", default-features = false, path = "../inherents" }
 impl-trait-for-tuples = "0.1.3"
-wasm-timer = "0.2"
+wasm-timer = { version = "0.2", optional = true }
 
 [features]
 default = [ "std" ]
@@ -25,6 +25,7 @@ std = [
 	"sp-runtime/std",
 	"codec/std",
 	"sp-inherents/std",
+	"wasm-timer",
 ]
 
 [package.metadata.docs.rs]
