@@ -41,7 +41,7 @@
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		#[weight = SimpleDispatchInfo::default()]
+//! 		#[weight = SimpleDispatchInfo::FixedNormal(10_000_000)]
 //! 		pub fn random_module_example(origin) -> dispatch::DispatchResult {
 //! 			let _random_seed = <pallet_randomness_collective_flip::Module<T>>::random_seed();
 //! 			Ok(())
@@ -83,7 +83,7 @@ decl_module! {
 				values[index] = parent_hash;
 			});
 
-			SimpleDispatchInfo::default().weigh_data(())
+			SimpleDispatchInfo::FixedNormal(10_000_000).weigh_data(())
 		}
 	}
 }

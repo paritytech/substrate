@@ -184,7 +184,7 @@ decl_module! {
 		fn deposit_event() = default;
 
 		/// Report some misbehavior.
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = frame_support::weights::SimpleDispatchInfo::FixedNormal(10_000_000)]
 		fn report_misbehavior(origin, _report: Vec<u8>) {
 			ensure_signed(origin)?;
 			// FIXME: https://github.com/paritytech/substrate/issues/1112

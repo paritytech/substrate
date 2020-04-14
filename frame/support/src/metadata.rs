@@ -352,7 +352,7 @@ mod tests {
 			pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 				type Error = Error<T>;
 
-				#[weight = SimpleDispatchInfo::default()]
+				#[weight = SimpleDispatchInfo::FixedNormal(10_000_000)]
 				fn aux_0(_origin) -> DispatchResult { unreachable!() }
 			}
 		}

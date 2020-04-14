@@ -703,7 +703,7 @@ decl_module! {
 				print("Guru meditation");
 				print(e);
 			}
-			SimpleDispatchInfo::default().weigh_data(())
+			SimpleDispatchInfo::FixedNormal(10_000_000).weigh_data(())
 		}
 	}
 }

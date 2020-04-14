@@ -523,7 +523,7 @@ decl_module! {
 			// Anything that needs to be done at the start of the block.
 			// We don't do anything here.
 
-			SimpleDispatchInfo::default().weigh_data(())
+			SimpleDispatchInfo::FixedNormal(10_000_000).weigh_data(())
 		}
 
 		// The signature could also look like: `fn on_finalize()`

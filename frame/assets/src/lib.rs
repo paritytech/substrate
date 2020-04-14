@@ -157,7 +157,7 @@ decl_module! {
 		/// Issue a new class of fungible assets. There are, and will only ever be, `total`
 		/// such assets and they'll all belong to the `origin` initially. It will have an
 		/// identifier `AssetId` instance: this will be specified in the `Issued` event.
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = frame_support::weights::SimpleDispatchInfo::FixedNormal(10_000_000)]
 		fn issue(origin, #[compact] total: T::Balance) {
 			let origin = ensure_signed(origin)?;
 
@@ -171,7 +171,7 @@ decl_module! {
 		}
 
 		/// Move some assets from one holder to another.
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = frame_support::weights::SimpleDispatchInfo::FixedNormal(10_000_000)]
 		fn transfer(origin,
 			#[compact] id: T::AssetId,
 			target: <T::Lookup as StaticLookup>::Source,
@@ -190,7 +190,7 @@ decl_module! {
 		}
 
 		/// Destroy any assets of `id` owned by `origin`.
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = frame_support::weights::SimpleDispatchInfo::FixedNormal(10_000_000)]
 		fn destroy(origin, #[compact] id: T::AssetId) {
 			let origin = ensure_signed(origin)?;
 			let balance = <Balances<T>>::take((id, &origin));

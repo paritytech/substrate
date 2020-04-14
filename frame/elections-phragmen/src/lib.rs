@@ -267,7 +267,7 @@ decl_module! {
 		fn on_runtime_upgrade() -> Weight {
 			migration::migrate::<T>();
 
-			SimpleDispatchInfo::default().weigh_data(())
+			SimpleDispatchInfo::FixedNormal(10_000_000).weigh_data(())
 		}
 
 		const CandidacyBond: BalanceOf<T> = T::CandidacyBond::get();
@@ -510,7 +510,7 @@ decl_module! {
 				print(e);
 			}
 
-			SimpleDispatchInfo::default().weigh_data(())
+			SimpleDispatchInfo::FixedNormal(10_000_000).weigh_data(())
 		}
 	}
 }

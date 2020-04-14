@@ -58,7 +58,7 @@
 //!
 //! decl_module! {
 //!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+//! 		#[weight = frame_support::weights::SimpleDispatchInfo::FixedNormal(10_000_000)]
 //!         pub fn privileged_function(origin) -> dispatch::DispatchResult {
 //!             ensure_root(origin)?;
 //!
@@ -150,7 +150,7 @@ decl_module! {
 		/// - Limited storage reads.
 		/// - One DB change.
 		/// # </weight>
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = frame_support::weights::SimpleDispatchInfo::FixedNormal(10_000_000)]
 		fn set_key(origin, new: <T::Lookup as StaticLookup>::Source) {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;

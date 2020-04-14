@@ -303,13 +303,6 @@ impl<T> PaysFee<T> for SimpleDispatchInfo {
 	}
 }
 
-impl Default for SimpleDispatchInfo {
-	fn default() -> Self {
-		// Default weight of all transactions.
-		SimpleDispatchInfo::FixedNormal(10_000_000)
-	}
-}
-
 impl SimpleDispatchInfo {
 	/// An _additive zero_ variant of SimpleDispatchInfo.
 	pub fn zero() -> Self {

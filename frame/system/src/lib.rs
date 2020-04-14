@@ -75,7 +75,7 @@
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		#[weight = SimpleDispatchInfo::default()]
+//! 		#[weight = SimpleDispatchInfo::FixedNormal(10_000_000)]
 //! 		pub fn system_module_example(origin) -> dispatch::DispatchResult {
 //! 			let _sender = ensure_signed(origin)?;
 //! 			let _extrinsic_count = <system::Module<T>>::extrinsic_count();

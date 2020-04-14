@@ -69,7 +69,7 @@
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+//! 		#[weight = frame_support::weights::SimpleDispatchInfo::FixedNormal(10_000_000)]
 //! 		pub fn get_time(origin) -> dispatch::DispatchResult {
 //! 			let _sender = ensure_signed(origin)?;
 //! 			let _now = <timestamp::Module<T>>::get();

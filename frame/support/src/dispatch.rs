@@ -81,7 +81,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 ///
 /// 		// Private functions are dispatchable, but not available to other
 /// 		// FRAME pallets.
-/// 		#[weight = SimpleDispatchInfo::default()]
+/// 		#[weight = SimpleDispatchInfo::FixedNormal(10_000_000)]
 /// 		fn my_function(origin, var: u64) -> dispatch::DispatchResult {
 ///				// Your implementation
 ///				Ok(())
@@ -89,7 +89,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 ///
 ///			// Public functions are both dispatchable and available to other
 /// 		// FRAME pallets.
-/// 		#[weight = SimpleDispatchInfo::default()]
+/// 		#[weight = SimpleDispatchInfo::FixedNormal(10_000_000)]
 ///			pub fn my_public_function(origin) -> dispatch::DispatchResult {
 /// 			// Your implementation
 ///				Ok(())
@@ -121,13 +121,13 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # use frame_system::{self as system, Trait, ensure_signed};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-/// 		#[weight = SimpleDispatchInfo::default()]
+/// 		#[weight = SimpleDispatchInfo::FixedNormal(10_000_000)]
 /// 		fn my_long_function(origin) -> dispatch::DispatchResult {
 ///				// Your implementation
 /// 			Ok(())
 /// 		}
 ///
-/// 		#[weight = SimpleDispatchInfo::default()]
+/// 		#[weight = SimpleDispatchInfo::FixedNormal(10_000_000)]
 /// 		fn my_short_function(origin) {
 ///				// Your implementation
 /// 		}
@@ -186,7 +186,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # use frame_system::{self as system, Trait, ensure_signed, ensure_root};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-/// 		#[weight = SimpleDispatchInfo::default()]
+/// 		#[weight = SimpleDispatchInfo::FixedNormal(10_000_000)]
 ///			fn my_privileged_function(origin) -> dispatch::DispatchResult {
 /// 			ensure_root(origin)?;
 ///				// Your implementation
@@ -2112,22 +2112,22 @@ mod tests {
 	decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin, T::AccountId: From<u32> {
 			/// Hi, this is a comment.
-			#[weight = SimpleDispatchInfo::default()]
+			#[weight = SimpleDispatchInfo::FixedNormal(10_000_000)]
 			fn aux_0(_origin) -> DispatchResult { unreachable!() }
 
-			#[weight = SimpleDispatchInfo::default()]
+			#[weight = SimpleDispatchInfo::FixedNormal(10_000_000)]
 			fn aux_1(_origin, #[compact] _data: u32,) -> DispatchResult { unreachable!() }
 
-			#[weight = SimpleDispatchInfo::default()]
+			#[weight = SimpleDispatchInfo::FixedNormal(10_000_000)]
 			fn aux_2(_origin, _data: i32, _data2: String) -> DispatchResult { unreachable!() }
 
 			#[weight = SimpleDispatchInfo::FixedNormal(3)]
 			fn aux_3(_origin) -> DispatchResult { unreachable!() }
 
-			#[weight = SimpleDispatchInfo::default()]
+			#[weight = SimpleDispatchInfo::FixedNormal(10_000_000)]
 			fn aux_4(_origin, _data: i32) -> DispatchResult { unreachable!() }
 
-			#[weight = SimpleDispatchInfo::default()]
+			#[weight = SimpleDispatchInfo::FixedNormal(10_000_000)]
 			fn aux_5(_origin, _data: i32, #[compact] _data2: u32,) -> DispatchResult { unreachable!() }
 
 			#[weight = SimpleDispatchInfo::FixedOperational(5)]

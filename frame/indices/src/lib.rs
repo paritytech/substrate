@@ -102,7 +102,7 @@ decl_module! {
 		fn on_initialize() -> Weight {
 			Self::migrations();
 
-			SimpleDispatchInfo::default().weigh_data(())
+			SimpleDispatchInfo::FixedNormal(10_000_000).weigh_data(())
 		}
 
 		/// Assign an previously unassigned index.
@@ -121,7 +121,7 @@ decl_module! {
 		/// - One reserve operation.
 		/// - One event.
 		/// # </weight>
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = frame_support::weights::SimpleDispatchInfo::FixedNormal(10_000_000)]
 		fn claim(origin, index: T::AccountIndex) {
 			let who = ensure_signed(origin)?;
 
@@ -149,7 +149,7 @@ decl_module! {
 		/// - One transfer operation.
 		/// - One event.
 		/// # </weight>
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = frame_support::weights::SimpleDispatchInfo::FixedNormal(10_000_000)]
 		fn transfer(origin, new: T::AccountId, index: T::AccountIndex) {
 			let who = ensure_signed(origin)?;
 			ensure!(who != new, Error::<T>::NotTransfer);
@@ -180,7 +180,7 @@ decl_module! {
 		/// - One reserve operation.
 		/// - One event.
 		/// # </weight>
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = frame_support::weights::SimpleDispatchInfo::FixedNormal(10_000_000)]
 		fn free(origin, index: T::AccountIndex) {
 			let who = ensure_signed(origin)?;
 
@@ -209,7 +209,7 @@ decl_module! {
 		/// - Up to one reserve operation.
 		/// - One event.
 		/// # </weight>
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = frame_support::weights::SimpleDispatchInfo::FixedNormal(10_000_000)]
 		fn force_transfer(origin, new: T::AccountId, index: T::AccountIndex) {
 			ensure_root(origin)?;
 

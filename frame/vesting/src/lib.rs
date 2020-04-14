@@ -194,7 +194,7 @@ decl_module! {
 		/// - One storage read (codec `O(1)`) and up to one removal.
 		/// - One event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::default()]
+		#[weight = SimpleDispatchInfo::FixedNormal(10_000_000)]
 		fn vest(origin) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::update_lock(who)
@@ -216,7 +216,7 @@ decl_module! {
 		/// - One storage read (codec `O(1)`) and up to one removal.
 		/// - One event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::default()]
+		#[weight = SimpleDispatchInfo::FixedNormal(10_000_000)]
 		fn vest_other(origin, target: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
 			ensure_signed(origin)?;
 			Self::update_lock(T::Lookup::lookup(target)?)

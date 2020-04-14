@@ -50,7 +50,7 @@
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+//! 		#[weight = frame_support::weights::SimpleDispatchInfo::FixedNormal(10_000_000)]
 //! 		pub fn is_online(origin, authority_index: u32) -> dispatch::DispatchResult {
 //! 			let _sender = ensure_signed(origin)?;
 //! 			let _is_online = <im_online::Module<T>>::is_online(authority_index);
@@ -316,7 +316,7 @@ decl_module! {
 
 		fn deposit_event() = default;
 
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = frame_support::weights::SimpleDispatchInfo::FixedNormal(10_000_000)]
 		fn heartbeat(
 			origin,
 			heartbeat: Heartbeat<T::BlockNumber>,

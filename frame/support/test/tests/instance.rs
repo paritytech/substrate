@@ -55,7 +55,7 @@ mod module1 {
 
 			fn deposit_event() = default;
 
-			#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+			#[weight = frame_support::weights::SimpleDispatchInfo::FixedNormal(10_000_000)]
 			fn one(origin) {
 				system::ensure_root(origin)?;
 				Self::deposit_event(RawEvent::AnotherVariant(3));

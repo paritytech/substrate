@@ -197,7 +197,7 @@ decl_module! {
 
 			T::EventHandler::note_author(Self::author());
 
-			SimpleDispatchInfo::default().weigh_data(())
+			SimpleDispatchInfo::FixedNormal(10_000_000).weigh_data(())
 		}
 
 		fn on_finalize() {

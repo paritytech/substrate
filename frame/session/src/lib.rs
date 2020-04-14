@@ -532,7 +532,7 @@ decl_module! {
 				Self::rotate_session();
 			}
 
-			SimpleDispatchInfo::default().weigh_data(())
+			SimpleDispatchInfo::FixedNormal(10_000_000).weigh_data(())
 		}
 	}
 }
