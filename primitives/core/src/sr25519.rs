@@ -612,6 +612,10 @@ impl CryptoType for Pair {
 }
 
 /// Batch verification.
+///
+/// `messages`, `signatures` and `pub_keys` should all have equal length.
+///
+/// Returns `true` if all signatures are correct, `false` otherwise.
 #[cfg(feature = "std")]
 pub fn verify_batch(
 	messages: Vec<&[u8]>,
