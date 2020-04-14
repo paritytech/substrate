@@ -17,7 +17,7 @@
 use super::{CodeHash, Config, ContractAddressFor, Event, RawEvent, Trait,
 	TrieId, BalanceOf, ContractInfo};
 use crate::account_db::{AccountDb, DirectAccountDb, OverlayAccountDb};
-use crate::gas::{Gas, GasMeter, Token, approx_gas_for_balance};
+use crate::gas::{Gas, GasMeter, Token};
 use crate::rent;
 
 use sp_std::prelude::*;
@@ -203,6 +203,9 @@ pub trait Ext {
 	///
 	/// Returns `None` if the value doesn't exist.
 	fn get_runtime_storage(&self, key: &[u8]) -> Option<Vec<u8>>;
+
+	/// Returns the price of one weight.
+	fn get_weight_price(&self) -> BalanceOf<Self::T>;
 }
 
 /// Loader is a companion of the `Vm` trait. It loads an appropriate abstract
@@ -605,21 +608,19 @@ pub enum TransferFeeKind {
 
 #[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 #[derive(Copy, Clone)]
-pub struct TransferFeeToken<Balance> {
+pub struct TransferFeeToken {
 	kind: TransferFeeKind,
-	gas_price: Balance,
 }
 
-impl<T: Trait> Token<T> for TransferFeeToken<BalanceOf<T>> {
+impl<T: Trait> Token<T> for TransferFeeToken {
 	type Metadata = Config<T>;
 
 	#[inline]
 	fn calculate_amount(&self, metadata: &Config<T>) -> Gas {
-		let balance_fee = match self.kind {
-			TransferFeeKind::ContractInstantiate => metadata.contract_account_instantiate_fee,
-			TransferFeeKind::Transfer => return metadata.schedule.transfer_cost,
-		};
-		approx_gas_for_balance(self.gas_price, balance_fee)
+		match self.kind {
+			TransferFeeKind::ContractInstantiate => metadata.schedule.instantiate_cost,
+			TransferFeeKind::Transfer => metadata.schedule.transfer_cost,
+		}
 	}
 }
 
@@ -668,7 +669,6 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 		};
 		TransferFeeToken {
 			kind,
-			gas_price: gas_meter.gas_price(),
 		}
 	};
 
@@ -868,6 +868,13 @@ where
 	fn get_runtime_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		unhashed::get_raw(&key)
 	}
+
+	fn get_weight_price(&self) -> BalanceOf<Self::T> {
+		use pallet_transaction_payment::Module as Payment;
+		use sp_runtime::SaturatedConversion;
+		let price = Payment::<T>::weight_to_fee_with_adjustment::<u128>(1);
+		price.saturated_into()
+	}
 }
 
 /// These tests exercise the executive layer.
@@ -1003,7 +1010,7 @@ mod tests {
 	#[test]
 	fn it_works() {
 		let value = Default::default();
-		let mut gas_meter = GasMeter::<Test>::with_limit(10000, 1);
+		let mut gas_meter = GasMeter::<Test>::new(10000);
 		let data = vec![];
 
 		let vm = MockVm::new();
@@ -1044,7 +1051,7 @@ mod tests {
 			ctx.overlay.set_balance(&origin, 100);
 			ctx.overlay.set_balance(&dest, 0);
 
-			let mut gas_meter = GasMeter::<Test>::with_limit(1000, 1);
+			let mut gas_meter = GasMeter::<Test>::new(1000);
 
 			let result = ctx.call(dest, 0, &mut gas_meter, vec![]);
 			assert_matches!(result, Ok(_));
@@ -1064,7 +1071,7 @@ mod tests {
 
 			ctx.overlay.set_balance(&origin, 100);
 
-			let mut gas_meter = GasMeter::<Test>::with_limit(1000, 1);
+			let mut gas_meter = GasMeter::<Test>::new(1000);
 
 			let result = ctx.instantiate(1, &mut gas_meter, &code, vec![]);
 			assert_matches!(result, Ok(_));
@@ -1093,7 +1100,7 @@ mod tests {
 			let output = ctx.call(
 				dest,
 				55,
-				&mut GasMeter::<Test>::with_limit(1000, 1),
+				&mut GasMeter::<Test>::new(1000),
 				vec![],
 			).unwrap();
 
@@ -1126,7 +1133,7 @@ mod tests {
 			let output = ctx.call(
 				dest,
 				55,
-				&mut GasMeter::<Test>::with_limit(1000, 1),
+				&mut GasMeter::<Test>::new(1000),
 				vec![],
 			).unwrap();
 
@@ -1152,7 +1159,7 @@ mod tests {
 			ctx.overlay.set_balance(&origin, 100);
 			ctx.overlay.set_balance(&dest, 0);
 
-			let mut gas_meter = GasMeter::<Test>::with_limit(1000, 1);
+			let mut gas_meter = GasMeter::<Test>::new(1000);
 
 			let result = ctx.call(dest, 50, &mut gas_meter, vec![]);
 			assert_matches!(result, Ok(_));
@@ -1163,7 +1170,6 @@ mod tests {
 				ExecFeeToken::Call,
 				TransferFeeToken {
 					kind: TransferFeeKind::Transfer,
-					gas_price: 1u64
 				},
 			);
 		});
@@ -1178,7 +1184,7 @@ mod tests {
 			ctx.overlay.set_balance(&origin, 100);
 			ctx.overlay.set_balance(&dest, 15);
 
-			let mut gas_meter = GasMeter::<Test>::with_limit(1000, 1);
+			let mut gas_meter = GasMeter::<Test>::new(1000);
 
 			let result = ctx.call(dest, 50, &mut gas_meter, vec![]);
 			assert_matches!(result, Ok(_));
@@ -1189,7 +1195,6 @@ mod tests {
 				ExecFeeToken::Call,
 				TransferFeeToken {
 					kind: TransferFeeKind::Transfer,
-					gas_price: 1u64
 				},
 			);
 		});
@@ -1207,7 +1212,7 @@ mod tests {
 			ctx.overlay.set_balance(&origin, 100);
 			ctx.overlay.set_balance(&dest, 15);
 
-			let mut gas_meter = GasMeter::<Test>::with_limit(1000, 1);
+			let mut gas_meter = GasMeter::<Test>::new(1000);
 
 			let result = ctx.instantiate(50, &mut gas_meter, &code, vec![]);
 			assert_matches!(result, Ok(_));
@@ -1218,7 +1223,6 @@ mod tests {
 				ExecFeeToken::Instantiate,
 				TransferFeeToken {
 					kind: TransferFeeKind::ContractInstantiate,
-					gas_price: 1u64
 				},
 			);
 		});
@@ -1242,7 +1246,7 @@ mod tests {
 			let result = ctx.call(
 				dest,
 				100,
-				&mut GasMeter::<Test>::with_limit(1000, 1),
+				&mut GasMeter::<Test>::new(1000),
 				vec![],
 			);
 
@@ -1279,7 +1283,7 @@ mod tests {
 			let result = ctx.call(
 				dest,
 				0,
-				&mut GasMeter::<Test>::with_limit(1000, 1),
+				&mut GasMeter::<Test>::new(1000),
 				vec![],
 			);
 
@@ -1310,7 +1314,7 @@ mod tests {
 			let result = ctx.call(
 				dest,
 				0,
-				&mut GasMeter::<Test>::with_limit(1000, 1),
+				&mut GasMeter::<Test>::new(1000),
 				vec![],
 			);
 
@@ -1338,7 +1342,7 @@ mod tests {
 			let result = ctx.call(
 				BOB,
 				0,
-				&mut GasMeter::<Test>::with_limit(10000, 1),
+				&mut GasMeter::<Test>::new(10000),
 				vec![1, 2, 3, 4],
 			);
 			assert_matches!(result, Ok(_));
@@ -1363,7 +1367,7 @@ mod tests {
 
 			let result = ctx.instantiate(
 				1,
-				&mut GasMeter::<Test>::with_limit(10000, 1),
+				&mut GasMeter::<Test>::new(10000),
 				&input_data_ch,
 				vec![1, 2, 3, 4],
 			);
@@ -1413,7 +1417,7 @@ mod tests {
 			let result = ctx.call(
 				BOB,
 				value,
-				&mut GasMeter::<Test>::with_limit(100000, 1),
+				&mut GasMeter::<Test>::new(100000),
 				vec![],
 			);
 
@@ -1459,7 +1463,7 @@ mod tests {
 			let result = ctx.call(
 				dest,
 				0,
-				&mut GasMeter::<Test>::with_limit(10000, 1),
+				&mut GasMeter::<Test>::new(10000),
 				vec![],
 			);
 
@@ -1500,7 +1504,7 @@ mod tests {
 			let result = ctx.call(
 				BOB,
 				0,
-				&mut GasMeter::<Test>::with_limit(10000, 1),
+				&mut GasMeter::<Test>::new(10000),
 				vec![],
 			);
 
@@ -1522,7 +1526,7 @@ mod tests {
 			assert_matches!(
 				ctx.instantiate(
 					0, // <- zero endowment
-					&mut GasMeter::<Test>::with_limit(10000, 1),
+					&mut GasMeter::<Test>::new(10000),
 					&dummy_ch,
 					vec![],
 				),
@@ -1548,7 +1552,7 @@ mod tests {
 			let instantiated_contract_address = assert_matches!(
 				ctx.instantiate(
 					100,
-					&mut GasMeter::<Test>::with_limit(10000, 1),
+					&mut GasMeter::<Test>::new(10000),
 					&dummy_ch,
 					vec![],
 				),
@@ -1588,7 +1592,7 @@ mod tests {
 			let instantiated_contract_address = assert_matches!(
 				ctx.instantiate(
 					100,
-					&mut GasMeter::<Test>::with_limit(10000, 1),
+					&mut GasMeter::<Test>::new(10000),
 					&dummy_ch,
 					vec![],
 				),
@@ -1633,7 +1637,7 @@ mod tests {
 			ctx.overlay.instantiate_contract(&BOB, instantiator_ch).unwrap();
 
 			assert_matches!(
-				ctx.call(BOB, 20, &mut GasMeter::<Test>::with_limit(1000, 1), vec![]),
+				ctx.call(BOB, 20, &mut GasMeter::<Test>::new(1000), vec![]),
 				Ok(_)
 			);
 
@@ -1693,7 +1697,7 @@ mod tests {
 			ctx.overlay.instantiate_contract(&BOB, instantiator_ch).unwrap();
 
 			assert_matches!(
-				ctx.call(BOB, 20, &mut GasMeter::<Test>::with_limit(1000, 1), vec![]),
+				ctx.call(BOB, 20, &mut GasMeter::<Test>::new(1000), vec![]),
 				Ok(_)
 			);
 
@@ -1730,7 +1734,7 @@ mod tests {
 				assert_matches!(
 					ctx.instantiate(
 						100,
-						&mut GasMeter::<Test>::with_limit(10000, 1),
+						&mut GasMeter::<Test>::new(10000),
 						&terminate_ch,
 						vec![],
 					),
@@ -1766,7 +1770,7 @@ mod tests {
 
 			let result = ctx.instantiate(
 				1,
-				&mut GasMeter::<Test>::with_limit(10000, 1),
+				&mut GasMeter::<Test>::new(10000),
 				&rent_allowance_ch,
 				vec![],
 			);
