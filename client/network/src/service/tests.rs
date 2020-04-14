@@ -106,7 +106,7 @@ fn build_test_full_node(config: config::NetworkConfiguration)
 	.unwrap();
 
 	let service = worker.service().clone();
-	let event_stream = service.event_stream();
+	let event_stream = service.event_stream("test");
 
 	async_std::task::spawn(async move {
 		futures::pin_mut!(worker);
