@@ -860,7 +860,8 @@ struct Metrics {
 	network_per_sec_bytes: GaugeVec<U64>,
 	notifications_queues_size: HistogramVec,
 	notifications_sizes: HistogramVec,
-	opened_notification_streams: GaugeVec<U64>,
+	notifications_streams_closed_total: CounterVec<U64>,
+	notifications_streams_opened_total: CounterVec<U64>,
 	peers_count: Gauge<U64>,
 	peerset_num_discovered: Gauge<U64>,
 	peerset_num_requested: Gauge<U64>,
@@ -952,10 +953,17 @@ impl Metrics {
 				},
 				&["direction", "protocol"]
 			)?, registry)?,
-			opened_notification_streams: register(GaugeVec::new(
+			notifications_streams_closed_total: register(GaugeVec::new(
 				Opts::new(
-					"sub_libp2p_opened_notification_streams",
-					"Number of open notification substreams"
+					"sub_libp2p_notifications_streams_closed_total",
+					"Total number of notification substreams that have been closed"
+				),
+				&["protocol"]
+			)?, registry)?,
+			notifications_streams_opened_total: register(GaugeVec::new(
+				Opts::new(
+					"sub_libp2p_notifications_streams_opened_total",
+					"Total number of notification substreams that have been opened"
 				),
 				&["protocol"]
 			)?, registry)?,
@@ -988,10 +996,10 @@ impl Metrics {
 	fn update_with_network_event(&self, event: &Event) {
 		match event {
 			Event::NotificationStreamOpened { engine_id, .. } => {
-				self.opened_notification_streams.with_label_values(&[&engine_id_to_string(&engine_id)]).inc();
+				self.notifications_streams_opened_total.with_label_values(&[&engine_id_to_string(&engine_id)]).inc();
 			},
 			Event::NotificationStreamClosed { engine_id, .. } => {
-				self.opened_notification_streams.with_label_values(&[&engine_id_to_string(&engine_id)]).dec();
+				self.notifications_streams_closed_total.with_label_values(&[&engine_id_to_string(&engine_id)]).inc();
 			},
 			Event::NotificationsReceived { messages, .. } => {
 				for (engine_id, message) in messages {
