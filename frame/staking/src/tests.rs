@@ -1847,20 +1847,20 @@ fn era_is_always_same_length() {
 		let session_per_era = <SessionsPerEra as Get<SessionIndex>>::get();
 
 		mock::start_era(1);
-		assert_eq!(Staking::eras_start_session_index(active_era()).unwrap(), session_per_era);
+		assert_eq!(Staking::eras_start_session_index(current_era()).unwrap(), session_per_era);
 
 		mock::start_era(2);
-		assert_eq!(Staking::eras_start_session_index(active_era()).unwrap(), session_per_era * 2u32);
+		assert_eq!(Staking::eras_start_session_index(current_era()).unwrap(), session_per_era * 2u32);
 
 		let session = Session::current_index();
 		ForceEra::put(Forcing::ForceNew);
 		advance_session();
 		advance_session();
-		assert_eq!(Staking::active_era().unwrap().index, 3);
-		assert_eq!(Staking::eras_start_session_index(active_era()).unwrap(), session + 2);
+		assert_eq!(current_era(), 3);
+		assert_eq!(Staking::eras_start_session_index(current_era()).unwrap(), session + 2);
 
 		mock::start_era(4);
-		assert_eq!(Staking::eras_start_session_index(active_era()).unwrap(), session + 2u32 + session_per_era);
+		assert_eq!(Staking::eras_start_session_index(current_era()).unwrap(), session + 2u32 + session_per_era);
 	});
 }
 
@@ -2912,7 +2912,7 @@ mod offchain_phragmen {
 					winners,
 					compact,
 					score,
-					active_era(),
+					current_era(),
 				));
 
 				let queued_result = Staking::queued_elected().unwrap();
@@ -2955,7 +2955,7 @@ mod offchain_phragmen {
 					winners,
 					compact,
 					score,
-					active_era(),
+					current_era(),
 				));
 
 				let queued_result = Staking::queued_elected().unwrap();
@@ -3005,7 +3005,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenEarlySubmission,
 				);
@@ -3031,7 +3031,7 @@ mod offchain_phragmen {
 					winners,
 					compact,
 					score,
-					active_era(),
+					current_era(),
 				));
 
 				// a bad solution
@@ -3042,7 +3042,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenWeakSubmission,
 				);
@@ -3068,7 +3068,7 @@ mod offchain_phragmen {
 					winners,
 					compact,
 					score,
-					active_era(),
+					current_era(),
 				));
 
 				// a better solution
@@ -3078,7 +3078,7 @@ mod offchain_phragmen {
 					winners,
 					compact,
 					score,
-					active_era(),
+					current_era(),
 				));
 			})
 	}
@@ -3116,7 +3116,7 @@ mod offchain_phragmen {
 				TransactionValidity::Ok(ValidTransaction {
 					priority: (1 << 20) + 1125, // the proposed slot stake.
 					requires: vec![],
-					provides: vec![("StakingOffchain", active_era()).encode()],
+					provides: vec![("StakingOffchain", current_era()).encode()],
 					longevity: 3,
 					propagate: false,
 				})
@@ -3140,7 +3140,7 @@ mod offchain_phragmen {
 				winners,
 				compact,
 				score,
-				active_era(),
+				current_era(),
 			),);
 
 			// now run the offchain worker in the same chain state.
@@ -3191,7 +3191,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenBogusWinnerCount,
 				);
@@ -3222,7 +3222,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenBogusWinnerCount,
 				);
@@ -3251,7 +3251,7 @@ mod offchain_phragmen {
 					winners,
 					compact,
 					score,
-					active_era(),
+					current_era(),
 				),);
 			})
 	}
@@ -3282,7 +3282,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenBogusCompact,
 				);
@@ -3315,7 +3315,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenBogusCompact,
 				);
@@ -3347,7 +3347,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenBogusWinner,
 				);
@@ -3383,7 +3383,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenBogusEdge,
 				);
@@ -3419,7 +3419,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenBogusSelfVote,
 				);
@@ -3455,7 +3455,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenBogusSelfVote,
 				);
@@ -3490,7 +3490,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenBogusCompact,
 				);
@@ -3532,7 +3532,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenBogusNomination,
 				);
@@ -3560,7 +3560,7 @@ mod offchain_phragmen {
 				run_to_block(20);
 
 				// slash 10. This must happen outside of the election window.
-				let offender_expo = Staking::eras_stakers(active_era(), 11);
+				let offender_expo = Staking::eras_stakers(Staking::active_era().unwrap().index, 11);
 				on_offence_now(
 					&[OffenceDetails {
 						offender: (11, offender_expo.clone()),
@@ -3595,7 +3595,7 @@ mod offchain_phragmen {
 					winners,
 					compact,
 					score,
-					active_era(),
+					current_era(),
 				));
 
 				// a wrong solution.
@@ -3614,7 +3614,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenSlashedNomination,
 				);
@@ -3642,7 +3642,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenBogusScore,
 				);
@@ -3729,7 +3729,7 @@ mod offchain_phragmen {
 				run_to_block(12);
 				assert_eq!(Staking::era_election_status(), ElectionStatus::Open(12));
 
-				let offender_expo = Staking::eras_stakers(active_era(), 10);
+				let offender_expo = Staking::eras_stakers(Staking::active_era().unwrap().index, 10);
 
 				// panic from the impl in mock
 				on_offence_now(
@@ -3754,8 +3754,8 @@ fn slash_kicks_validators_not_nominators_and_disables_nominator_for_kicked_valid
 		assert_eq!(Balances::free_balance(101), 2000);
 
 		// 11 and 21 both have the support of 100
-		let exposure_11 = Staking::eras_stakers(active_era(), &11);
-		let exposure_21 = Staking::eras_stakers(active_era(), &21);
+		let exposure_11 = Staking::eras_stakers(Staking::active_era().unwrap().index, &11);
+		let exposure_21 = Staking::eras_stakers(Staking::active_era().unwrap().index, &21);
 
 		assert_eq!(exposure_11.total, 1000 + 125);
 		assert_eq!(exposure_21.total, 1000 + 375);
@@ -3795,8 +3795,8 @@ fn slash_kicks_validators_not_nominators_and_disables_nominator_for_kicked_valid
 		assert_ok!(Staking::validate(Origin::signed(10), Default::default()));
 
 		mock::start_era(2);
-		let exposure_11 = Staking::eras_stakers(active_era(), &11);
-		let exposure_21 = Staking::eras_stakers(active_era(), &21);
+		let exposure_11 = Staking::eras_stakers(Staking::active_era().unwrap().index, &11);
+		let exposure_21 = Staking::eras_stakers(Staking::active_era().unwrap().index, &21);
 
 		// 10 is re-elected, but without the support of 100
 		assert_eq!(exposure_11.total, 900);
@@ -3897,7 +3897,7 @@ fn zero_slash_keeps_nominators() {
 
 		assert_eq!(Balances::free_balance(11), 1000);
 
-		let exposure = Staking::eras_stakers(active_era(), 11);
+		let exposure = Staking::eras_stakers(Staking::active_era().unwrap().index, 11);
 		assert_eq!(Balances::free_balance(101), 2000);
 
 		on_offence_now(
