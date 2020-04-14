@@ -297,17 +297,17 @@ mod tests {
 			let second_term = Fixed128::from_rational(5, NonZeroI128::new(100_000_000_000).unwrap());
 
 			// We should see the fee in each of these tests increase by first_term + second_term in all cases.
-			let original = Fixed128::default(); // 0
+			let mut original = Fixed128::default(); // 0
 			assert_eq!(
 				TargetedFeeAdjustment::<TargetBlockFullness>::convert(original),
 				original + first_term + second_term,
 			);
-			let original = Fixed128::from_rational(1, NonZeroI128::new(100).unwrap());
+			original = Fixed128::from_rational(1, NonZeroI128::new(100).unwrap());
 			assert_eq!(
 				TargetedFeeAdjustment::<TargetBlockFullness>::convert(original),
 				original + first_term + second_term,
 			);
-			let original = Fixed128::from_rational(3, NonZeroI128::new(100).unwrap());
+			original = Fixed128::from_rational(3, NonZeroI128::new(100).unwrap());
 			assert_eq!(
 				TargetedFeeAdjustment::<TargetBlockFullness>::convert(original),
 				original + first_term + second_term,
