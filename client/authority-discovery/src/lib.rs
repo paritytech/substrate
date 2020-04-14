@@ -538,21 +538,19 @@ where
 			Ok(())
 		};
 
-		match inner() {
-			Ok(()) => {}
+		loop {
+			match inner() {
+				Ok(()) => return Poll::Pending,
 
-			// Handle fatal errors.
-			//
-			// Given that the network likely terminated authority discovery should do the same.
-			Err(Error::DhtEventStreamTerminated) => return Poll::Ready(()),
+				// Handle fatal errors.
+				//
+				// Given that the network likely terminated authority discovery should do the same.
+				Err(Error::DhtEventStreamTerminated) => return Poll::Ready(()),
 
-			// Handle non-fatal errors.
-			Err(e) => error!(target: "sub-authority-discovery", "Poll failure: {:?}", e),
-		};
-
-		// Return Poll::Pending as this is a long running task with the same lifetime as the node
-		// itself.
-		Poll::Pending
+				// Handle non-fatal errors.
+				Err(e) => error!(target: "sub-authority-discovery", "Poll failure: {:?}", e),
+			};
+		}
 	}
 }
 
