@@ -383,6 +383,13 @@ impl<T: Trait> Module<T> {
 	/// A helper function to fetch the price and send signed transaction.
 	fn fetch_price_and_send_signed() -> Result<(), &'static str> {
 		use frame_system::offchain::SendSignedTransaction;
+
+		let signer = Signer::<T, T::AuthorityId>::all_accounts();
+		if !signer.can_sign() {
+			return Err(
+				"No local accounts available. Consider adding one via `author_insertKey` RPC."
+			)?
+		}
 		// Make an external HTTP request to fetch the current price.
 		// Note this call will block until response is received.
 		let price = Self::fetch_price().map_err(|_| "Failed to fetch price")?;
@@ -391,7 +398,7 @@ impl<T: Trait> Module<T> {
 		// representing the call, we've just created.
 		// Submit signed will return a vector of results for all accounts that were found in the
 		// local keystore with expected `KEY_TYPE`.
-		let results = Signer::<T, T::AuthorityId>::all_accounts().send_signed_transaction(
+		let results = signer.send_signed_transaction(
 			|_account| {
 				// Received price is wrapped into a call to `submit_price` public function of this pallet.
 				// This means that the transaction, when executed, will simply call that function passing
