@@ -43,6 +43,8 @@ use std::{
 };
 
 /// Creates a new channel that can be associated to a [`OutChannels`].
+///
+/// The name is used in Prometheus reports.
 pub fn channel(name: &'static str) -> (Sender, Receiver) {
 	let (tx, rx) = mpsc::unbounded();
 	let metrics = Arc::new(Mutex::new(None));

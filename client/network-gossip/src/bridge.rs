@@ -188,7 +188,7 @@ mod tests {
 	struct TestNetwork {}
 
 	impl<B: BlockT> Network<B> for Arc<TestNetwork> {
-		fn event_stream(&self, _: &'static str) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
+		fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
 			let (_tx, rx) = futures::channel::mpsc::channel(0);
 
 			// Return rx and drop tx. Thus the given channel will yield `Poll::Ready(None)` on first

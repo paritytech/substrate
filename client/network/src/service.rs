@@ -575,6 +575,10 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// If this method is called multiple times, the events are duplicated.
 	///
 	/// The stream never ends (unless the `NetworkWorker` gets shut down).
+	///
+	/// The name passed is used to identify the channel in the Prometheus metrics. Note that the
+	/// parameter is a `&'static str`, and not a `String`, in order to avoid accidentally having
+	/// an unbounded set of Prometheus metrics, which would be quite bad in terms of memory
 	pub fn event_stream(&self, name: &'static str) -> impl Stream<Item = Event> {
 		// Note: when transitioning to stable futures, remove the `Error` entirely
 		let (tx, rx) = out_events::channel(name);
