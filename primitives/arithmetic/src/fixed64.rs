@@ -128,8 +128,7 @@ impl Saturating for Fixed64 {
 	}
 }
 
-/// Note that this is a standard, _potentially-panicking_, implementation. Use `Saturating` trait
-/// for safe addition.
+/// Use `Saturating` trait for safe addition.
 impl ops::Add for Fixed64 {
 	type Output = Self;
 
@@ -138,8 +137,7 @@ impl ops::Add for Fixed64 {
 	}
 }
 
-/// Note that this is a standard, _potentially-panicking_, implementation. Use `Saturating` trait
-/// for safe subtraction.
+/// Use `Saturating` trait for safe subtraction.
 impl ops::Sub for Fixed64 {
 	type Output = Self;
 
@@ -148,8 +146,7 @@ impl ops::Sub for Fixed64 {
 	}
 }
 
-/// Note that this is a standard, _potentially-panicking_, implementation. Use `CheckedDiv` trait
-/// for safe division.
+/// Use `CheckedDiv` trait for safe division.
 impl ops::Div for Fixed64 {
 	type Output = Self;
 
