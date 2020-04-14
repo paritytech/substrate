@@ -1096,7 +1096,7 @@ macro_rules! implement_per_thing {
 						<$type>::max_value(),
 						super::Rounding::Nearest,
 					),
-					(<$type>::max_value() - 1).into(),
+					<$upper_type>::from((<$type>::max_value() - 1)),
 				);
 				// (max % 2) * max / 2 == max / 2
 				assert_eq!(
