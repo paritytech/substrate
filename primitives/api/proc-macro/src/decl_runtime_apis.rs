@@ -915,7 +915,7 @@ impl CheckTraitDecl {
 			if changed.iter().filter(|c| c.is_none()).count() == 0 {
 				self.errors.push(Error::new(
 					f.span(),
-					"There doesn't exist the 'default' method (without `changed_in` attribute).\n\
+					"There is no 'default' method with this name (without `changed_in` attribute).\n\
 					 The 'default' method is used to call into the latest implementation.",
 				));
 			}
