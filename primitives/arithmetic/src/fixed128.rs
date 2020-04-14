@@ -291,17 +291,22 @@ impl Saturating for Fixed128 {
 	}
 
 	fn saturating_pow(self, exp: usize) -> Self {
-		let prev_pow_2 = exp.checked_next_power_of_two().map(|val| val / 2).unwrap_or(usize::max_value());
-		let count = prev_pow_2.trailing_zeros() as usize;
-		let mut val = self;
-		for _ in 0..count {
-			val = val.saturating_mul(val);
+		if exp == 0 {
+			return Self::from_natural(1);
 		}
-		let remain = exp % count;
-		for _ in 0..remain {
-			val = val.saturating_mul(self)
+
+		let exp = exp as u64;
+		let msb_pos = 64 - exp.leading_zeros();
+
+		let mut result = Self::from_natural(1);
+		let mut pow_val = self;
+		for i in 0..msb_pos {
+			if ((1 << i) & exp) > 0 {
+				result = result.saturating_mul(pow_val);
+			}
+			pow_val = pow_val.saturating_mul(pow_val);
 		}
-		val
+		result
 	}
 }
 
@@ -698,5 +703,28 @@ mod tests {
 
 		let zero = Fixed128::zero();
 		assert_eq!(format!("{:?}", zero), "Fixed128(0.000000000000000000)");
+	}
+
+	#[test]
+	fn saturating_pow_should_work() {
+		assert_eq!(Fixed128::from_natural(2).saturating_pow(0), Fixed128::from_natural(1));
+		assert_eq!(Fixed128::from_natural(2).saturating_pow(1), Fixed128::from_natural(2));
+		assert_eq!(Fixed128::from_natural(2).saturating_pow(2), Fixed128::from_natural(4));
+		assert_eq!(Fixed128::from_natural(2).saturating_pow(3), Fixed128::from_natural(8));
+		assert_eq!(Fixed128::from_natural(2).saturating_pow(50), Fixed128::from_natural(1125899906842624));
+
+		assert_eq!(Fixed128::from_natural(1).saturating_pow(1000), Fixed128::from_natural(1));
+		assert_eq!(Fixed128::from_natural(-1).saturating_pow(1000), Fixed128::from_natural(1));
+		assert_eq!(Fixed128::from_natural(-1).saturating_pow(1001), Fixed128::from_natural(-1));
+		assert_eq!(Fixed128::from_natural(1).saturating_pow(usize::max_value()), Fixed128::from_natural(1));
+		assert_eq!(Fixed128::from_natural(-1).saturating_pow(usize::max_value()), Fixed128::from_natural(-1));
+		assert_eq!(Fixed128::from_natural(-1).saturating_pow(usize::max_value() - 1), Fixed128::from_natural(1));
+
+		assert_eq!(Fixed128::from_natural(114209).saturating_pow(4), Fixed128::from_natural(170137997018538053761));
+		assert_eq!(Fixed128::from_natural(114209).saturating_pow(5), Fixed128::max_value());
+
+		assert_eq!(Fixed128::from_natural(1).saturating_pow(usize::max_value()), Fixed128::from_natural(1));
+		assert_eq!(Fixed128::from_natural(0).saturating_pow(usize::max_value()), Fixed128::from_natural(0));
+		assert_eq!(Fixed128::from_natural(2).saturating_pow(usize::max_value()), Fixed128::max_value());
 	}
 }
