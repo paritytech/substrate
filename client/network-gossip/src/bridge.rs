@@ -40,22 +40,18 @@ impl<B: BlockT> Unpin for GossipEngine<B> {}
 impl<B: BlockT> GossipEngine<B> {
 	/// Create a new instance.
 	pub fn new<N: Network<B> + Send + Clone + 'static>(
-		mut network: N,
+		network: N,
 		engine_id: ConsensusEngineId,
 		protocol_name: impl Into<Cow<'static, [u8]>>,
 		validator: Arc<dyn Validator<B>>,
 	) -> Self where B: 'static {
-		let mut state_machine = ConsensusGossip::new();
-
 		// We grab the event stream before registering the notifications protocol, otherwise we
 		// might miss events.
 		let network_event_stream = network.event_stream();
-
 		network.register_notifications_protocol(engine_id, protocol_name.into());
-		state_machine.register_validator(&mut network, engine_id, validator);
 
 		GossipEngine {
-			state_machine,
+			state_machine: ConsensusGossip::new(validator, engine_id),
 			network: Box::new(network),
 			periodic_maintenance_interval: futures_timer::Delay::new(PERIODIC_MAINTENANCE_INTERVAL),
 			network_event_stream,
@@ -77,7 +73,7 @@ impl<B: BlockT> GossipEngine<B> {
 		topic: B::Hash,
 		message: Vec<u8>,
 	) {
-		self.state_machine.register_message(topic, self.engine_id, message);
+		self.state_machine.register_message(topic, message);
 	}
 
 	/// Broadcast all messages with given topic.
@@ -89,7 +85,7 @@ impl<B: BlockT> GossipEngine<B> {
 	pub fn messages_for(&mut self, topic: B::Hash)
 		-> TracingUnboundedReceiver<TopicNotification>
 	{
-		self.state_machine.messages_for(self.engine_id, topic)
+		self.state_machine.messages_for(topic)
 	}
 
 	/// Send all messages with given topic to a peer.
@@ -99,7 +95,7 @@ impl<B: BlockT> GossipEngine<B> {
 		topic: B::Hash,
 		force: bool
 	) {
-		self.state_machine.send_topic(&mut *self.network, who, topic, self.engine_id, force)
+		self.state_machine.send_topic(&mut *self.network, who, topic, force)
 	}
 
 	/// Multicast a message to all peers.
@@ -109,14 +105,14 @@ impl<B: BlockT> GossipEngine<B> {
 		message: Vec<u8>,
 		force: bool,
 	) {
-		self.state_machine.multicast(&mut *self.network, topic, self.engine_id, message, force)
+		self.state_machine.multicast(&mut *self.network, topic, message, force)
 	}
 
 	/// Send addressed message to the given peers. The message is not kept or multicast
 	/// later on.
 	pub fn send_message(&mut self, who: Vec<sc_network::PeerId>, data: Vec<u8>) {
 		for who in &who {
-			self.state_machine.send_message(&mut *self.network, who, self.engine_id, data.clone());
+			self.state_machine.send_message(&mut *self.network, who, data.clone());
 		}
 	}
 
@@ -157,7 +153,7 @@ impl<B: BlockT> Future for GossipEngine<B> {
 							remote,
 							messages.into_iter()
 								.filter_map(|(engine, data)| if engine == engine_id {
-									Some((engine, data.to_vec()))
+									Some(data.to_vec())
 								} else { None })
 								.collect()
 						);
