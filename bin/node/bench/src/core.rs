@@ -48,7 +48,7 @@ pub trait BenchmarkDescription {
 }
 
 pub trait Benchmark {
-	fn run(&mut self) -> std::time::Duration;
+	fn run(&mut self, mode: Mode) -> std::time::Duration;
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -84,6 +84,23 @@ impl fmt::Display for NsFormatter {
 	}
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Mode {
+	Regular,
+	Profile,
+}
+
+impl std::str::FromStr for Mode {
+    type Err = &'static str;
+    fn from_str(day: &str) -> Result<Self, Self::Err> {
+        match day {
+            "regular" => Ok(Mode::Regular),
+            "profile" => Ok(Mode::Profile),
+            _ => Err("Could not parse mode"),
+        }
+    }
+}
+
 impl fmt::Display for BenchmarkOutput {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
@@ -96,13 +113,16 @@ impl fmt::Display for BenchmarkOutput {
     }
 }
 
-pub fn run_benchmark(benchmark: Box<dyn BenchmarkDescription>) -> BenchmarkOutput {
+pub fn run_benchmark(
+	benchmark: Box<dyn BenchmarkDescription>,
+	mode: Mode,
+) -> BenchmarkOutput {
 	let name = benchmark.name().to_owned();
 	let mut benchmark = benchmark.setup();
 
 	let mut durations: Vec<u128> = vec![];
 	for _ in 0..50 {
-		let duration = benchmark.run();
+		let duration = benchmark.run(mode);
 		durations.push(duration.as_nanos());
 	}
 

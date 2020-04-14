@@ -2327,7 +2327,7 @@ impl<T: Trait> Module<T> {
 		);
 
 		// check current era.
-		if let Some(current_era) = Self::active_era().map(|e| e.index) {
+		if let Some(current_era) = Self::current_era() {
 			ensure!(
 				current_era == era,
 				Error::<T>::PhragmenEarlySubmission,
