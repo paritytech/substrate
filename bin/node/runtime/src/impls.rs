@@ -97,7 +97,7 @@ impl<T: Get<Perquintill>> Convert<Fixed128, Fixed128> for TargetedFeeAdjustment<
 			let excess = first_term.saturating_add(second_term);
 			multiplier.saturating_add(excess)
 		} else {
-			// Proof: first_term > second_term. Safe subtraction.
+			// Defensive-only: first_term > second_term. Safe subtraction.
 			let negative = first_term.saturating_sub(second_term);
 			multiplier.saturating_sub(negative)
 				// despite the fact that apply_to saturates weight (final fee cannot go below 0)
