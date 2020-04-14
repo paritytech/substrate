@@ -66,11 +66,7 @@ impl TaskManagerBuilder {
 		let (signal, on_exit) = exit_future::signal();
 		let (to_spawn_tx, to_spawn_rx) = tracing_unbounded("mpsc_task_manager");
 
-		let metrics = if let Some(registry) = prometheus_registry {
-			Some(Metrics::register(registry)?)
-		} else {
-			None
-		};
+		let metrics = prometheus_registry.map(Metrics::register).transpose()?;
 
 		Ok(Self {
 			on_exit,
