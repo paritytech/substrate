@@ -68,7 +68,7 @@
 //! ### Example - Get extrinsic count and parent hash for the current block
 //!
 //! ```
-//! use frame_support::{decl_module, dispatch, weights::SimpleDispatchInfo};
+//! use frame_support::{decl_module, dispatch, weights::{SimpleDispatchInfo, MINIMUM_WEIGHT}};
 //! use frame_system::{self as system, ensure_signed};
 //!
 //! pub trait Trait: system::Trait {}
