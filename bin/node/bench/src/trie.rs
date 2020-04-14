@@ -25,28 +25,30 @@ use sp_state_machine::Backend as _;
 
 use node_primitives::Hash;
 
-pub const SAMPLE_SIZE: usize = 100;
-
 use crate::{
-	core::{self, Path},
+	core::{self, Mode, Path},
 	generator::generate_trie,
 	tempdb::TempDatabase,
 };
+
+pub const SAMPLE_SIZE: usize = 100;
 
 pub type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
 
 #[derive(Clone, Copy, Debug, derive_more::Display)]
 pub enum DatabaseSize {
-	#[display("empty")]
+	#[display(fmt = "empty")]
 	Empty,
-	#[display("smallest")]
+	#[display(fmt = "smallest")]
 	Smallest,
-	#[display("small")]
+	#[display(fmt = "small")]
 	Small,
-	#[display("medium")]
+	#[display(fmt = "medium")]
 	Medium,
-	#[display("large")]
+	#[display(fmt = "large")]
 	Large,
+	#[display(fmt = "largest")]
+	Largest,
 }
 
 lazy_static! {
@@ -62,7 +64,8 @@ impl DatabaseSize {
 			Self::Smallest => 1_000,
 			Self::Small => 10_000,
 			Self::Medium => 100_000,
-			Self::Large => 1_000_000,
+			Self::Large => 200_000,
+			Self::Largest => 1_000_000,
 		};
 
 		assert_eq!(val % SAMPLE_SIZE, 0);
@@ -85,15 +88,7 @@ pub struct TrieBenchmark {
 impl core::BenchmarkDescription for TrieBenchmarkDescription {
 	fn path(&self) -> Path {
 		let mut path = Path::new(&["trie"]);
-
-		match self.database_size {
-			DatabaseSize::Empty => path.push("empty"),
-			DatabaseSize::Smallest => path.push("smallest"),
-			DatabaseSize::Small => path.push("small"),
-			DatabaseSize::Medium => path.push("medium"),
-			DatabaseSize::Large => path.push("large"),
-		}
-
+		path.push(&format!("{}", self.database_size));
 		path
 	}
 
@@ -173,7 +168,7 @@ impl sp_state_machine::Storage<sp_core::Blake2Hasher> for Storage {
 }
 
 impl core::Benchmark for TrieBenchmark {
-	fn run(&mut self) -> std::time::Duration {
+	fn run(&mut self, mode: Mode) -> std::time::Duration {
 		let mut db = self.database.clone();
 		let storage: Arc<dyn sp_state_machine::Storage<sp_core::Blake2Hasher>> =
 		Arc::new(Storage(db.open()));
@@ -191,11 +186,21 @@ impl core::Benchmark for TrieBenchmark {
 			assert_eq!(&value, warmup_value);
 		}
 
+		if mode == Mode::Profile {
+			std::thread::park_timeout(std::time::Duration::from_secs(3));
+		}
+
 		let started = std::time::Instant::now();
 		for (key, _) in self.query_keys.iter() {
 			let _ = trie_backend.storage(&key[..]);
 		}
-		started.elapsed() / (SAMPLE_SIZE as u32)
+		let elapsed = started.elapsed();
+
+		if mode == Mode::Profile {
+			std::thread::park_timeout(std::time::Duration::from_secs(1));
+		}
+
+		elapsed / (SAMPLE_SIZE as u32)
 	}
 }
 
