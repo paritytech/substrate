@@ -66,79 +66,64 @@ use std::{cmp, collections::{HashMap, HashSet, VecDeque}, io, time::Duration};
 use std::task::{Context, Poll};
 use sp_core::hexdisplay::HexDisplay;
 
-/// Implementation of `NetworkBehaviour` that discovers the nodes on the network.
-pub struct DiscoveryBehaviour {
-	/// User-defined list of nodes and their addresses. Typically includes bootstrap nodes and
-	/// reserved nodes.
-	user_defined: Vec<(PeerId, Multiaddr)>,
-	/// Kademlia requests and answers.
-	kademlias: HashMap<ProtocolId, Kademlia<MemoryStore>>,
-	/// Discovers nodes on the local network.
-	#[cfg(not(target_os = "unknown"))]
-	mdns: Toggle<Mdns>,
-	/// Stream that fires when we need to perform the next random Kademlia query.
-	next_kad_random_query: Delay,
-	/// After `next_kad_random_query` triggers, the next one triggers after this duration.
-	duration_to_next_kad: Duration,
-	/// Discovered nodes to return.
-	discoveries: VecDeque<PeerId>,
-	/// Identity of our local node.
+/// `DiscoveryBehaviour` configuration.
+pub struct DiscoveryConfig {
 	local_peer_id: PeerId,
-	/// Number of nodes we're currently connected to.
-	num_connections: u64,
-	/// If false, `addresses_of_peer` won't return any private IPv4 address, except for the ones
-	/// stored in `user_defined`.
+	user_defined: Vec<(PeerId, Multiaddr)>,
 	allow_private_ipv4: bool,
-	/// Number of active connections over which we interrupt the discovery process.
 	discovery_only_if_under_num: u64,
+	enable_mdns: bool,
+	kademlias: HashMap<ProtocolId, Kademlia<MemoryStore>>
 }
 
-impl DiscoveryBehaviour {
-	/// Builds a new `DiscoveryBehaviour`.
-	///
-	/// `user_defined` is a list of known address for nodes that never expire.
-	pub async fn new(
-		local_public_key: PublicKey,
-		user_defined: Vec<(PeerId, Multiaddr)>,
-		enable_mdns: bool,
-		allow_private_ipv4: bool,
-		discovery_only_if_under_num: u64,
-	) -> Self {
-		if enable_mdns {
-			#[cfg(target_os = "unknown")]
-			warn!(target: "sub-libp2p", "mDNS is not available on this platform");
-		}
-
-		DiscoveryBehaviour {
-			user_defined,
-			kademlias: HashMap::new(),
-			next_kad_random_query: Delay::new(Duration::new(0, 0)),
-			duration_to_next_kad: Duration::from_secs(1),
-			discoveries: VecDeque::new(),
+impl DiscoveryConfig {
+	/// Crate a default configuration with the given public key.
+	pub fn new(local_public_key: PublicKey) -> Self {
+		DiscoveryConfig {
 			local_peer_id: local_public_key.into_peer_id(),
-			num_connections: 0,
-			allow_private_ipv4,
-			discovery_only_if_under_num,
-			#[cfg(not(target_os = "unknown"))]
-			mdns: if enable_mdns {
-				match Mdns::new() {
-					Ok(mdns) => Some(mdns).into(),
-					Err(err) => {
-						warn!(target: "sub-libp2p", "Failed to initialize mDNS: {:?}", err);
-						None.into()
-					}
-				}
-			} else {
-				None.into()
-			},
+			user_defined: Vec::new(),
+			allow_private_ipv4: true,
+			discovery_only_if_under_num: std::u64::MAX,
+			enable_mdns: false,
+			kademlias: HashMap::new()
 		}
 	}
 
-	/// Enable discovery for the given protocol.
-	pub fn add_discovery(&mut self, p: ProtocolId) {
+	/// Set the number of active connections at which we pause discovery.
+	pub fn discovery_limit(&mut self, limit: u64) -> &mut Self {
+		self.discovery_only_if_under_num = limit;
+		self
+	}
+
+	/// Set custom nodes which never expire, e.g. bootstrap or reserved nodes.
+	pub fn with_user_defined<I>(&mut self, user_defined: I) -> &mut Self
+	where
+		I: IntoIterator<Item = (PeerId, Multiaddr)>
+	{
+		self.user_defined.extend(user_defined);
+		self
+	}
+
+	/// Should private IPv4 addresses be reported?
+	pub fn allow_private_ipv4(&mut self, value: bool) -> &mut Self {
+		self.allow_private_ipv4 = value;
+		self
+	}
+
+	/// Should MDNS discovery be supported?
+	pub fn with_mdns(&mut self, value: bool) -> &mut Self {
+		if value && cfg!(target_os = "unknown") {
+			log::warn!(target: "sub-libp2p", "mDNS is not available on this platform")
+		}
+		self.enable_mdns = value;
+		self
+	}
+
+	/// Add discovery via Kademlia for the given protocol.
+	pub fn add_protocol(&mut self, p: ProtocolId) -> &mut Self {
 		if self.kademlias.contains_key(&p) {
 			warn!(target: "sub-libp2p", "Discovery already registered for protocol {:?}", p);
-			return
+			return self
 		}
 
 		let mut config = KademliaConfig::default();
@@ -168,8 +153,65 @@ impl DiscoveryBehaviour {
 		}
 
 		self.kademlias.insert(p, kad);
+		self
 	}
 
+	/// Create a `DiscoveryBehaviour` from this config.
+	pub fn finish(self) -> DiscoveryBehaviour {
+		DiscoveryBehaviour {
+			user_defined: self.user_defined,
+			kademlias: self.kademlias,
+			next_kad_random_query: Delay::new(Duration::new(0, 0)),
+			duration_to_next_kad: Duration::from_secs(1),
+			discoveries: VecDeque::new(),
+			local_peer_id: self.local_peer_id,
+			num_connections: 0,
+			allow_private_ipv4: self.allow_private_ipv4,
+			discovery_only_if_under_num: self.discovery_only_if_under_num,
+			#[cfg(not(target_os = "unknown"))]
+			mdns: if self.enable_mdns {
+				match Mdns::new() {
+					Ok(mdns) => Some(mdns).into(),
+					Err(err) => {
+						warn!(target: "sub-libp2p", "Failed to initialize mDNS: {:?}", err);
+						None.into()
+					}
+				}
+			} else {
+				None.into()
+			},
+		}
+	}
+}
+
+/// Implementation of `NetworkBehaviour` that discovers the nodes on the network.
+pub struct DiscoveryBehaviour {
+	/// User-defined list of nodes and their addresses. Typically includes bootstrap nodes and
+	/// reserved nodes.
+	user_defined: Vec<(PeerId, Multiaddr)>,
+	/// Kademlia requests and answers.
+	kademlias: HashMap<ProtocolId, Kademlia<MemoryStore>>,
+	/// Discovers nodes on the local network.
+	#[cfg(not(target_os = "unknown"))]
+	mdns: Toggle<Mdns>,
+	/// Stream that fires when we need to perform the next random Kademlia query.
+	next_kad_random_query: Delay,
+	/// After `next_kad_random_query` triggers, the next one triggers after this duration.
+	duration_to_next_kad: Duration,
+	/// Discovered nodes to return.
+	discoveries: VecDeque<PeerId>,
+	/// Identity of our local node.
+	local_peer_id: PeerId,
+	/// Number of nodes we're currently connected to.
+	num_connections: u64,
+	/// If false, `addresses_of_peer` won't return any private IPv4 address, except for the ones
+	/// stored in `user_defined`.
+	allow_private_ipv4: bool,
+	/// Number of active connections over which we interrupt the discovery process.
+	discovery_only_if_under_num: u64,
+}
+
+impl DiscoveryBehaviour {
 	/// Returns the list of nodes that we know exist in the network.
 	pub fn known_peers(&mut self) -> impl Iterator<Item = &PeerId> {
 		let mut set = HashSet::new();
@@ -613,7 +655,7 @@ mod tests {
 	use libp2p::core::upgrade::{InboundUpgradeExt, OutboundUpgradeExt};
 	use libp2p::swarm::Swarm;
 	use std::{collections::HashSet, task::Poll};
-	use super::{DiscoveryBehaviour, DiscoveryOut};
+	use super::{DiscoveryConfig, DiscoveryOut};
 
 	#[test]
 	fn discovery_working() {
@@ -642,14 +684,15 @@ mod tests {
 					upgrade::apply(stream, upgrade, endpoint, upgrade::Version::V1)
 				});
 
-			let mut behaviour = futures::executor::block_on({
-				let user_defined = user_defined.clone();
-				let keypair_public = keypair.public();
-				async move {
-					DiscoveryBehaviour::new(keypair_public, user_defined, false, true, 50).await
-				}
-			});
-			behaviour.add_discovery(ProtocolId::from(libp2p::kad::protocol::DEFAULT_PROTO_NAME));
+			let behaviour = {
+				let mut config = DiscoveryConfig::new(keypair.public());
+				config.with_user_defined(user_defined.clone())
+					.allow_private_ipv4(true)
+					.discovery_limit(50)
+					.add_protocol(ProtocolId::from(libp2p::kad::protocol::DEFAULT_PROTO_NAME));
+				config.finish()
+			};
+
 			let mut swarm = Swarm::new(transport, behaviour, keypair.public().into_peer_id());
 			let listen_addr: Multiaddr = format!("/memory/{}", rand::random::<u64>()).parse().unwrap();
 
