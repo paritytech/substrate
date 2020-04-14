@@ -21,7 +21,7 @@
 //!
 //! It is required that each extension implements the [`Extension`] trait.
 
-use std::{collections::HashMap, any::{Any, TypeId}, ops::DerefMut};
+use std::{collections::HashMap, collections::hash_map::Entry, any::{Any, TypeId}, ops::DerefMut};
 use crate::Error;
 
 /// Marker trait for types that should be registered as [`Externalities`](crate::Externalities) extension.
@@ -125,10 +125,10 @@ impl Extensions {
 
 	/// Register extension `ext`.
 	pub fn register_with_type_id(&mut self, type_id: TypeId, extension: Box<dyn Extension>) -> Result<(), Error> {
-		if self.extensions.contains_key(&type_id) {
-			return Err(Error::ExtensionAlreadyRegistered);
+		match self.extensions.entry(type_id) {
+			vacant @ Entry::Vacant(_) => { vacant.or_insert(extension); },
+			Entry::Occupied(_) => return Err(Error::ExtensionAlreadyRegistered),
 		}
-		self.extensions.insert(type_id, extension);
 		Ok(())
 	}
 
