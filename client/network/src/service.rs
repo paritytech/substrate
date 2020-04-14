@@ -850,7 +850,7 @@ struct Metrics {
 	import_queue_blocks_submitted: Counter<U64>,
 	import_queue_finality_proofs_submitted: Counter<U64>,
 	import_queue_justifications_submitted: Counter<U64>,
-	incoming_connections_errors_total: Counter<U64>,
+	incoming_connections_errors_total: CounterVec<U64>,
 	incoming_connections_total: Counter<U64>,
 	is_major_syncing: Gauge<U64>,
 	issued_light_requests: Counter<U64>,
@@ -900,9 +900,13 @@ impl Metrics {
 				"import_queue_justifications_submitted",
 				"Number of justifications submitted to the import queue.",
 			)?, registry)?,
-			incoming_connections_errors_total: register(Counter::new(
-				"sub_libp2p_incoming_connections_handshake_errors_total",
-				"Total number of incoming connections that have failed during the initial handshake"
+			incoming_connections_errors_total: register(CounterVec::new(
+				Opts::new(
+					"sub_libp2p_incoming_connections_handshake_errors_total",
+					"Total number of incoming connections that have failed during the \
+					initial handshake"
+				),
+				&["reason"]
 			)?, registry)?,
 			incoming_connections_total: register(Counter::new(
 				"sub_libp2p_incoming_connections_total",
@@ -1207,14 +1211,21 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					trace!(target: "sub-libp2p", "Libp2p => IncomingConnectionError({},{}): {}",
 						local_addr, send_back_addr, error);
 					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.incoming_connections_errors_total.inc();
+						let reason = match error {
+							PendingConnectionError::ConnectionLimit(_) => "limit-reached",
+							PendingConnectionError::InvalidPeerId => "invalid-peer-id",
+							PendingConnectionError::Transport(_) |
+							PendingConnectionError::IO(_) => "transport-error",
+						};
+
+						metrics.incoming_connections_errors_total.with_label_values(&[reason]).inc();
 					}
 				},
 				Poll::Ready(SwarmEvent::BannedPeer { peer_id, endpoint }) => {
 					trace!(target: "sub-libp2p", "Libp2p => BannedPeer({}). Connected via {:?}.",
 						peer_id, endpoint);
 					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.incoming_connections_errors_total.inc();
+						metrics.incoming_connections_errors_total.with_label_values(&["banned"]).inc();
 					}
 				},
 				Poll::Ready(SwarmEvent::UnknownPeerUnreachableAddr { address, error }) =>
