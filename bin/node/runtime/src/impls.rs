@@ -185,7 +185,7 @@ mod tests {
 			loop {
 				let next = TargetedFeeAdjustment::<TargetBlockFullness>::convert(fm);
 				fm = next;
-				if fm == Fixed128::from_rational(-1, NonZeroI128::new(1).unwrap()) { break; }
+				if fm == Fixed128::from_natural(-1) { break; }
 				iterations += 1;
 			}
 			println!("iteration {}, new fm = {:?}. Weight fee is now zero", iterations, fm);

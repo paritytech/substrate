@@ -37,7 +37,7 @@
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
-use core::ops::{Add, Mul};
+use core::ops::Mul;
 use codec::{Encode, Decode};
 use sp_arithmetic::traits::Bounded;
 use sp_runtime::{
@@ -421,39 +421,12 @@ pub struct RuntimeDbWeight {
 }
 
 impl Mul<(Weight, Weight)> for RuntimeDbWeight {
-	type Output = Self;
-
-	fn mul(self, rhs: (Weight, Weight)) -> Self::Output {
-		RuntimeDbWeight {
-			read: self.read.saturating_mul(rhs.0),
-			write: self.write.saturating_mul(rhs.1),
-		}
-	}
-}
-
-impl Add<Weight> for RuntimeDbWeight {
 	type Output = Weight;
 
-	fn add(self, rhs: Weight) -> Self::Output {
-		return self.weigh_data(()) + rhs
-	}
-}
-
-impl<T> WeighData<T> for RuntimeDbWeight {
-	fn weigh_data(&self, _: T) -> Weight {
-		return self.read.saturating_add(self.write)
-	}
-}
-
-impl<T> ClassifyDispatch<T> for RuntimeDbWeight {
-	fn classify_dispatch(&self, _: T) -> DispatchClass {
-		DispatchClass::Normal
-	}
-}
-
-impl<T> PaysFee<T> for RuntimeDbWeight {
-	fn pays_fee(&self, _: T) -> bool {
-		true
+	fn mul(self, rhs: (Weight, Weight)) -> Self::Output {
+		let read_weight = self.read.saturating_mul(rhs.0);
+		let write_weight = self.write.saturating_mul(rhs.1);
+		read_weight.saturating_add(write_weight)
 	}
 }
 
