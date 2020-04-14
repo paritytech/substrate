@@ -21,13 +21,6 @@ use std::sync::{Arc, atomic::{AtomicBool, Ordering as AtomicOrdering}};
 use futures::{future::FutureExt, task::FutureObj, channel::oneshot};
 
 #[derive(Debug, Clone)]
-struct Ed25519BatchItem {
-	signature: ed25519::Signature,
-	pub_key: ed25519::Public,
-	message: Vec<u8>,
-}
-
-#[derive(Debug, Clone)]
 struct Sr25519BatchItem {
 	signature: sr25519::Signature,
 	pub_key: sr25519::Public,
