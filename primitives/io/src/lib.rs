@@ -437,23 +437,22 @@ pub trait Crypto {
 		// TODO: see #5554, this is used outside of externalities context/runtime, thus this manual
 		// `with_externalities`.
 		//
-		// This `with_externalities(..)` block returns Some(true) if signature verification was successfully
-		// batched, everything else (Some(false)/None) means it was not batched.
-		if !sp_externalities::with_externalities(|mut instance| {
-			if let Some(extension) = instance.extension::<VerificationExt>() {
-				extension.push_ed25519(
+		// This `with_externalities(..)` block returns Some(Some(result)) if signature verification was successfully
+		// batched, everything else (Some(None)/None) means it was not batched and needs to be verified.
+		let evaluated = sp_externalities::with_externalities(|mut instance|
+			instance.extension::<VerificationExt>().map(
+				|extension| extension.push_ed25519(
 					sig.clone(),
 					pub_key.clone(),
 					msg.to_vec(),
 				)
-			} else {
-				false
-			}
-		}).unwrap_or(false) {
-			// So if for whatever reason batching is not active, we do regular verification.
-			return ed25519::Pair::verify(sig, msg, pub_key);
+			)
+		);
+
+		match evaluated {
+			Some(Some(val)) => val,
+			_ => ed25519::Pair::verify(sig, msg, pub_key),
 		}
-		true
 	}
 
 	/// Verify `sr25519` signature.
@@ -471,23 +470,22 @@ pub trait Crypto {
 		// TODO: see #5554, this is used outside of externalities context/runtime, thus this manual
 		// `with_externalities`.
 		//
-		// This `with_externalities(..)` block returns Some(true) if signature verification was successfully
-		// batched, everything else (Some(false)/None) means it was not batched.
-		if !sp_externalities::with_externalities(|mut instance| {
-			if let Some(extension) = instance.extension::<VerificationExt>() {
-				extension.push_sr25519(
+		// This `with_externalities(..)` block returns Some(Some(result)) if signature verification was successfully
+		// batched, everything else (Some(None)/None) means it was not batched and needs to be verified.
+		let evaluated = sp_externalities::with_externalities(|mut instance|
+			instance.extension::<VerificationExt>().map(
+				|extension| extension.push_sr25519(
 					sig.clone(),
 					pub_key.clone(),
 					msg.to_vec(),
 				)
-			} else {
-				false
-			}
-		}).unwrap_or(false) {
-			// So if for whatever reason batching is not active, we do regular verification.
-			return sr25519::Pair::verify(sig, msg, pub_key);
+			)
+		);
+
+		match evaluated {
+			Some(Some(val)) => val,
+			_ => sr25519::Pair::verify(sig, msg, pub_key),
 		}
-		true
 	}
 
 	/// Start verification extension.
@@ -516,7 +514,8 @@ pub trait Crypto {
 			.expect("No verification extension in current context!")
 			.verify_and_clear();
 
-		self.deregister_extension::<VerificationExt>();
+		self.deregister_extension::<VerificationExt>()
+			.expect("No verification extension in current context!");
 
 		result
 	}
@@ -1271,7 +1270,7 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic]
+	#[should_panic(expected = "Signature verification failed")]
 	fn batching_still_finishes_when_not_called_directly() {
 		let mut ext = BasicExternalities::with_tasks_executor();
 		ext.execute_with(|| {

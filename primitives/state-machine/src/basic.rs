@@ -320,8 +320,11 @@ impl sp_externalities::ExtensionStore for BasicExternalities {
 		self.extensions.register_with_type_id(type_id, extension)
 	}
 
-	fn deregister_extension_by_type_id(&mut self, type_id: TypeId) {
-		self.extensions.deregister(type_id).unwrap();
+	fn deregister_extension_by_type_id(&mut self, type_id: TypeId) -> Result<(), sp_externalities::Error> {
+		self.extensions
+			.deregister(type_id)
+			.ok_or(sp_externalities::Error::ExtensionIsNotRegistered(type_id))
+			.map(drop)
 	}
 }
 

@@ -103,6 +103,7 @@ std = [
 	"zeroize/alloc",
 	"futures",
 	"futures/thread-pool",
+	"libsecp256k1/std",
 ]
 
 # This feature enables all crypto primitives for `no_std` builds like microcontrollers

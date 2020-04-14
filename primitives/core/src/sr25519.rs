@@ -611,7 +611,6 @@ impl CryptoType for Pair {
 	type Pair = Pair;
 }
 
-
 /// Batch verification.
 #[cfg(feature = "std")]
 pub fn verify_batch(
@@ -639,15 +638,12 @@ pub fn verify_batch(
 		|msg| signing_context(SIGNING_CTX).bytes(msg)
 	).collect();
 
-	match schnorrkel::verify_batch(
+	schnorrkel::verify_batch(
 		&mut messages,
 		&sr_signatures,
 		&sr_pub_keys,
 		true,
-	) {
-		Ok(_) => true,
-		Err(_) => false,
-	}
+	).is_ok()
 }
 
 #[cfg(test)]

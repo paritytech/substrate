@@ -57,9 +57,11 @@ impl BatchVerifier {
 		}
 	}
 
-	fn spawn_verification_task(&mut self, f: impl FnOnce() -> bool + Send + 'static) {
+	fn spawn_verification_task(
+		&mut self, f: impl FnOnce() -> bool + Send + 'static,
+	) -> Result<(), ()> {
 		// there is already invalid transaction encountered
-		if self.invalid.load(AtomicOrdering::Relaxed) { return; }
+		if self.invalid.load(AtomicOrdering::Relaxed) { return Err(()); }
 
 		let invalid_clone = self.invalid.clone();
 		let (sender, receiver) = oneshot::channel();
@@ -74,7 +76,7 @@ impl BatchVerifier {
 				log::warn!("Verification halted while result was pending");
 				invalid_clone.store(true, AtomicOrdering::Relaxed);
 			}
-		}.boxed())).expect("Scheduler should not fail");
+		}.boxed())).map_err(drop)
 	}
 
 	/// Push ed25519 signature to verify.
@@ -88,7 +90,15 @@ impl BatchVerifier {
 		message: Vec<u8>,
 	) -> bool {
 		if self.invalid.load(AtomicOrdering::Relaxed) { return false; }
-		self.spawn_verification_task(move || ed25519::Pair::verify(&signature, &message, &pub_key));
+
+		if self.spawn_verification_task(move || ed25519::Pair::verify(&signature, &message, &pub_key)).is_err() {
+			log::debug!(
+				target: "runtime",
+				"Batch-verification returns false because failed to spawn background task.",
+			);
+
+			return false;
+		}
 		true
 	}
 
@@ -139,21 +149,23 @@ impl BatchVerifier {
 			let pair = Arc::new((Mutex::new(()), Condvar::new()));
 			let pair_clone = pair.clone();
 
-			self.scheduler.spawn_obj(FutureObj::new(async move {
+			if self.scheduler.spawn_obj(FutureObj::new(async move {
 				futures::future::join_all(pending).await;
 				pair_clone.1.notify_all();
-			}.boxed())).expect("Scheduler should not fail");
+			}.boxed())).is_err() {
+				log::debug!(
+					target: "runtime",
+					"Batch-verification returns false because failed to spawn background task.",
+				);
+
+				return false;
+			}
 
 			let (mtx, cond_var) = &*pair;
 			let mtx = mtx.lock().expect("failed locking in verify_and_clear");
 			let  _ = cond_var.wait(mtx).expect("failed waiting in verify_and_clear");
 		}
 
-		if self.invalid.load(AtomicOrdering::Relaxed) {
-			self.invalid.store(false, AtomicOrdering::Relaxed);
-			return false;
-		}
-
-		true
+		!self.invalid.swap(false, AtomicOrdering::Relaxed)
 	}
 }

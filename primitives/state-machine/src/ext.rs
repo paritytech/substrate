@@ -555,16 +555,20 @@ where
 		extension: Box<dyn Extension>,
 	) -> Result<(), sp_externalities::Error> {
 		if let Some(ref mut extensions) = self.extensions {
-			// TODO: error
 			extensions.register_with_type_id(type_id, extension)
 		} else {
 			Err(sp_externalities::Error::ExtensionsAreNotSupported)
 		}
 	}
 
-	fn deregister_extension_by_type_id(&mut self, type_id: TypeId) {
+	fn deregister_extension_by_type_id(&mut self, type_id: TypeId) -> Result<(), sp_externalities::Error> {
 		if let Some(ref mut extensions) = self.extensions {
-			extensions.deregister(type_id).unwrap();
+			match extensions.deregister(type_id) {
+				Some(_) => Ok(()),
+				None => Err(sp_externalities::Error::ExtensionIsNotRegistered(type_id))
+			}
+		} else {
+			Err(sp_externalities::Error::ExtensionsAreNotSupported)
 		}
 	}
 }
