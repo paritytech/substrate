@@ -575,7 +575,7 @@ decl_module! {
 		/// 
 		/// # <weight>
 		/// - `O(VK)` where `V` length of `keys` and `K` length of one key
-		/// - `V` storage deletions (codec `O(K)`).
+		/// - `V` storage deletions.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
 		fn kill_storage(origin, keys: Vec<Key>) {
@@ -601,8 +601,10 @@ decl_module! {
 		/// data is equal to its default value.
 		/// 
 		/// # <weight>
-		/// - `O(1)`
+		/// - `O(K)` with `K` being complexity of `on_killed_account`
 		/// - 1 storage read and deletion.
+		/// - 1 call to `on_killed_account` callback with unknown complexity `K`
+		/// - 1 event.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedOperational(25_000)]
 		fn suicide(origin) {
