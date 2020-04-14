@@ -433,7 +433,7 @@ decl_module! {
 		///     check that the transfer will not kill the origin account.
 		///
 		/// # </weight>
-		#[weight = T::DbWeight::get() * (1, 1) + 200_000_000]
+		#[weight = T::DbWeight::get().reads_writes(1, 1) + 200_000_000]
 		pub fn transfer(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -457,7 +457,7 @@ decl_module! {
 		/// - Independent of the arguments.
 		/// - Contains a limited number of reads and writes.
 		/// # </weight>
-		#[weight = T::DbWeight::get() * (1, 1) + 100_000_000]
+		#[weight = T::DbWeight::get().reads_writes(1, 1) + 100_000_000]
 		fn set_balance(
 			origin,
 			who: <T::Lookup as StaticLookup>::Source,
@@ -499,7 +499,7 @@ decl_module! {
 		/// - Same as transfer, but additional read and write because the source account is
 		///   not assumed to be in the overlay.
 		/// # </weight>
-		#[weight = T::DbWeight::get() * (2, 2) + 200_000_000]
+		#[weight = T::DbWeight::get().reads_writes(2, 2) + 200_000_000]
 		pub fn force_transfer(
 			origin,
 			source: <T::Lookup as StaticLookup>::Source,
@@ -518,7 +518,7 @@ decl_module! {
 		/// 99% of the time you want [`transfer`] instead.
 		///
 		/// [`transfer`]: struct.Module.html#method.transfer
-		#[weight = T::DbWeight::get() * (1, 1) + 150_000_000]
+		#[weight = T::DbWeight::get().reads_writes(1, 1) + 150_000_000]
 		pub fn transfer_keep_alive(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,

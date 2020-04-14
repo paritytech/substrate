@@ -37,7 +37,6 @@
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
-use core::ops::Mul;
 use codec::{Encode, Decode};
 use sp_arithmetic::traits::Bounded;
 use sp_runtime::{
@@ -420,12 +419,18 @@ pub struct RuntimeDbWeight {
 	pub write: Weight,
 }
 
-impl Mul<(Weight, Weight)> for RuntimeDbWeight {
-	type Output = Weight;
+impl RuntimeDbWeight {
+	pub fn reads(self, r: Weight) -> Weight {
+		self.read.saturating_mul(r)
+	}
 
-	fn mul(self, rhs: (Weight, Weight)) -> Self::Output {
-		let read_weight = self.read.saturating_mul(rhs.0);
-		let write_weight = self.write.saturating_mul(rhs.1);
+	pub fn writes(self, w: Weight) -> Weight {
+		self.write.saturating_mul(w)
+	}
+
+	pub fn reads_writes(self, r: Weight, w: Weight) -> Weight {
+		let read_weight = self.read.saturating_mul(r);
+		let write_weight = self.write.saturating_mul(w);
 		read_weight.saturating_add(write_weight)
 	}
 }
@@ -472,8 +477,11 @@ mod tests {
 			#[weight = FunctionOf(|_: (&u32, &u32)| 0, DispatchClass::Operational, true)]
 			fn f12(_origin, _a: u32, _eb: u32) { unimplemented!(); }
 
-			#[weight = T::DbWeight::get() * (3, 2) + 10_000]
+			#[weight = T::DbWeight::get().reads(3) + T::DbWeight::get().writes(2) + 10_000]
 			fn f2(_origin) { unimplemented!(); }
+
+			#[weight = T::DbWeight::get().reads_writes(6, 5) + 40_000]
+			fn f21(_origin) { unimplemented!(); }
 
 		}
 	}
@@ -486,6 +494,7 @@ mod tests {
 		assert_eq!(Call::<TraitImpl>::f12(10, 20).get_dispatch_info().weight, 0);
 		assert_eq!(Call::<TraitImpl>::f12(10, 20).get_dispatch_info().class, DispatchClass::Operational);
 		assert_eq!(Call::<TraitImpl>::f2().get_dispatch_info().weight, 12300);
+		assert_eq!(Call::<TraitImpl>::f21().get_dispatch_info().weight, 45600);
 		assert_eq!(Call::<TraitImpl>::f2().get_dispatch_info().class, DispatchClass::Normal);
 	}
 }
