@@ -49,10 +49,9 @@ impl<B: BlockT> GossipEngine<B> {
 
 		// We grab the event stream before registering the notifications protocol, otherwise we
 		// might miss events.
-		let protocol_name = protocol_name.into();
-		let network_event_stream = network.event_stream(Box::leak(format!("proto-{:?}", protocol_name).into_boxed_str()));
+		let network_event_stream = network.event_stream();
 
-		network.register_notifications_protocol(engine_id, protocol_name);
+		network.register_notifications_protocol(engine_id, protocol_name.into());
 		state_machine.register_validator(&mut network, engine_id, validator);
 
 		GossipEngine {
