@@ -7425,7 +7425,7 @@ dependencies = [
 [[package]]
 name = "sp-database"
 version = "2.0.0-alpha.5"
-source = "git+https://github.com/paritytech/substrate?branch=gav-db-trait#14e319ad2a456297d3a167e3452a48cbbd540248"
+source = "git+https://github.com/paritytech/substrate?branch=gav-db-trait#9404815700a840586fc8760a60180f4e1bf97ce4"
 dependencies = [
  "kvdb",
  "parking_lot 0.10.0",
@@ -7922,7 +7922,7 @@ dependencies = [
 [[package]]
 name = "subdb"
 version = "0.1.0"
-source = "git+https://github.com/paritytech/subdb#c62a11801c80aa1d112ed9713368249c233e3b55"
+source = "git+https://github.com/paritytech/subdb#353bd49a95e618641b552fe890b272f0feb6d752"
 dependencies = [
  "blake2-rfc",
  "derive_more",
@@ -8902,7 +8902,7 @@ version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3bfd5b7557925ce778ff9b9ef90e3ade34c524b5ff10e239c69a42d546d2af56"
 dependencies = [
- "rand 0.3.23",
+ "rand 0.5.6",
 ]
 
 [[package]]
