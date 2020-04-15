@@ -25,7 +25,7 @@ use sp_runtime::traits::{
 	StaticLookup, Member, LookupError, Zero, One, BlakeTwo256, Hash, Saturating, AtLeast32Bit
 };
 use frame_support::{Parameter, decl_module, decl_error, decl_event, decl_storage, ensure};
-use frame_support::weights::{Weight, MINIMUM_WEIGHT, SimpleDispatchInfo, WeighData};
+use frame_support::weights::{Weight, MINIMUM_WEIGHT, SimpleDispatchInfo};
 use frame_support::dispatch::DispatchResult;
 use frame_support::traits::{Currency, ReservableCurrency, Get, BalanceStatus::Reserved};
 use frame_support::storage::migration::take_storage_value;

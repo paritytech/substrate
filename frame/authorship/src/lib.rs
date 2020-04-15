@@ -27,7 +27,7 @@ use frame_support::traits::{FindAuthor, VerifySeal, Get};
 use codec::{Encode, Decode};
 use frame_system::ensure_none;
 use sp_runtime::traits::{Header as HeaderT, One, Zero};
-use frame_support::weights::{Weight, MINIMUM_WEIGHT, SimpleDispatchInfo, WeighData};
+use frame_support::weights::{Weight, MINIMUM_WEIGHT, SimpleDispatchInfo};
 use sp_inherents::{InherentIdentifier, ProvideInherent, InherentData};
 use sp_authorship::{INHERENT_IDENTIFIER, UnclesInherentData, InherentError};
 

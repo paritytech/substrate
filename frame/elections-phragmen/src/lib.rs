@@ -88,7 +88,7 @@ use sp_runtime::{
 };
 use frame_support::{
 	decl_storage, decl_event, ensure, decl_module, decl_error,
-	weights::{SimpleDispatchInfo, Weight, MINIMUM_WEIGHT, WeighData}, storage::{StorageMap, IterableStorageMap},
+	weights::{SimpleDispatchInfo, Weight, MINIMUM_WEIGHT}, storage::{StorageMap, IterableStorageMap},
 	traits::{
 		Currency, Get, LockableCurrency, LockIdentifier, ReservableCurrency, WithdrawReasons,
 		ChangeMembers, OnUnbalanced, WithdrawReason, Contains, BalanceStatus, InitializeMembers,

@@ -110,7 +110,7 @@ use frame_support::{
 		Get, FindAuthor, ValidatorRegistration, EstimateNextSessionRotation, EstimateNextNewSession,
 	},
 	dispatch::{self, DispatchResult, DispatchError},
-	weights::{Weight, MINIMUM_WEIGHT, SimpleDispatchInfo, WeighData},
+	weights::{Weight, MINIMUM_WEIGHT, SimpleDispatchInfo},
 };
 use frame_system::{self as system, ensure_signed};
 

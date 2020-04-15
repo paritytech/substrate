@@ -25,7 +25,7 @@ use pallet_timestamp;
 use sp_std::{result, prelude::*};
 use frame_support::{
 	decl_storage, decl_module, traits::{FindAuthor, Get, Randomness as RandomnessT},
-	weights::{Weight, MINIMUM_WEIGHT, SimpleDispatchInfo, WeighData},
+	weights::{Weight, MINIMUM_WEIGHT},
 };
 use sp_timestamp::OnTimestampSet;
 use sp_runtime::{generic::DigestItem, ConsensusEngineId, Perbill};

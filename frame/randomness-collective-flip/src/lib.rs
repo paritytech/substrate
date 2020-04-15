@@ -57,7 +57,7 @@ use sp_std::{prelude::*, convert::TryInto};
 use sp_runtime::traits::Hash;
 use frame_support::{
 	decl_module, decl_storage, traits::Randomness,
-	weights::{Weight, MINIMUM_WEIGHT, SimpleDispatchInfo, WeighData}
+	weights::{Weight, MINIMUM_WEIGHT}
 };
 use safe_mix::TripletMix;
 use codec::Encode;

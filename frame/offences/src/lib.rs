@@ -27,7 +27,7 @@ mod tests;
 use sp_std::vec::Vec;
 use frame_support::{
 	decl_module, decl_event, decl_storage, Parameter, debug,
-	weights::{Weight, MINIMUM_WEIGHT, SimpleDispatchInfo, WeighData},
+	weights::{Weight, MINIMUM_WEIGHT},
 };
 use sp_runtime::{traits::Hash, Perbill};
 use sp_staking::{

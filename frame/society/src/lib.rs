@@ -260,7 +260,7 @@ use sp_runtime::{Percent, ModuleId, RuntimeDebug,
 	}
 };
 use frame_support::{decl_error, decl_module, decl_storage, decl_event, ensure, dispatch::DispatchResult};
-use frame_support::weights::{SimpleDispatchInfo, Weight, MINIMUM_WEIGHT, WeighData};
+use frame_support::weights::{SimpleDispatchInfo, Weight, MINIMUM_WEIGHT};
 use frame_support::traits::{
 	Currency, ReservableCurrency, Randomness, Get, ChangeMembers, BalanceStatus,
 	ExistenceRequirement::AllowDeath, EnsureOrigin

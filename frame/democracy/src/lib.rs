@@ -171,7 +171,7 @@ use sp_runtime::{
 use codec::{Ref, Encode, Decode};
 use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error, ensure, Parameter,
-	weights::{SimpleDispatchInfo, Weight, MINIMUM_WEIGHT, WeighData},
+	weights::{SimpleDispatchInfo, Weight, MINIMUM_WEIGHT},
 	traits::{
 		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier, Get,
 		OnUnbalanced, BalanceStatus, schedule::Named as ScheduleNamed, EnsureOrigin
