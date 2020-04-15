@@ -6,9 +6,45 @@ The format is based on [Keep a Changelog].
 
 ## Unreleased
 
-### Changed
 
+## 2.0.0-alpha.5 -> 2.0.0-alpha.6
+
+
+Runtime
+-------
+
+* Unsigned Validation best practices (#5563)
+* Generate Unit Tests for Benchmarks (#5527)
+* Mandate weight annotation  (#5357)
+* Make Staking pallet using a proper Time module. (#4662)
+* Pass transaction source to validate_transaction (#5366)
+* on_initialize return weight consumed and default cost to default DispatchInfo instead of zero (#5382)
+
+Client
+------
+
+* Add new RPC method to get the chain type (#5576)
+* Reuse wasmtime instances, the PR (#5567)
+* Prometheus Metrics: Turn notifications_total counter into notifications_sizes histogram (#5535)
+* Make verbosity level mandatory with telemetry opt (#5057)
+* Additional Metrics collected and exposed via prometheus (#5414)
+* Switch to new light client protocol (#5472)
+* client/finality-grandpa: Instrument until-imported queue (#5438)
+* Batch benchmarks together with `*` notation. (#5436)
+* src/service/src/builder: Fix memory metric exposed in bytes not KiB (#5459)
+* Make transactions and block announces use notifications substre… (#5360)
+* Adds state_queryStorageAt (#5362)
+* Offchain Phragmén BREAKING. (#4517)
 * `sc_rpc::system::SystemInfo.impl_version` now returns the full version (2.0.0-alpha.2-b950f731c-x86_64-linux-gnu) instead of the short version (1.0.0) (#5271)
+
+API
+---
+
+* Unsigned Validation best practices (#5563)
+* Split the Roles in three types (#5520)
+* Pass transaction source to validate_transaction (#5366)
+* on_initialize return weight consumed and default cost to default DispatchInfo instead of zero (#5382)
+
 
 ## 2.0.0-alpha.4 -> 2.0.0-alpha.5
 
