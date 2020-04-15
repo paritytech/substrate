@@ -103,10 +103,15 @@ benchmarks! {
 			add_proposal::<T>(i)?;
 		}
 
+		assert_eq!(Democracy::<T>::public_props().len(), p as usize, "Proposals not created.");
+
 		let caller = funded_account::<T>("caller", 0);
 		let proposal_hash: T::Hash = T::Hashing::hash_of(&p);
 		let value = T::MinimumDeposit::get();
 	}: _(RawOrigin::Signed(caller), proposal_hash, value.into())
+	verify {
+		assert_eq!(Democracy::<T>::public_props().len(), (p + 1) as usize, "Proposals not created.");
+	}
 
 	second {
 		let s in 0 .. MAX_SECONDERS;
@@ -120,7 +125,13 @@ benchmarks! {
 			Democracy::<T>::second(RawOrigin::Signed(seconder).into(), 0)?;
 		}
 
+		let deposits = Democracy::<T>::deposit_of(0).ok_or("Proposal not created")?;
+		assert_eq!(deposits.1.len(), (s + 1) as usize, "Seconds not recorded");
 	}: _(RawOrigin::Signed(caller), 0)
+	verify {
+		let deposits = Democracy::<T>::deposit_of(0).ok_or("Proposal not created")?;
+		assert_eq!(deposits.1.len(), (s + 2) as usize, "`second` benchmark did not work");
+	}
 
 	vote {
 		let r in 1 .. MAX_REFERENDUMS;
@@ -136,6 +147,9 @@ benchmarks! {
 		let referendum_index = r - 1;
 
 	}: _(RawOrigin::Signed(caller), referendum_index, account_vote)
+	verify {
+
+	}
 
 	proxy_vote {
 		let r in 1 .. MAX_REFERENDUMS;
