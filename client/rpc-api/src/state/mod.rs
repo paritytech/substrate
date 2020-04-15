@@ -26,6 +26,7 @@ use sp_core::Bytes;
 use sp_core::storage::{StorageKey, StorageData, StorageChangeSet};
 use sp_version::RuntimeVersion;
 use self::error::FutureResult;
+use sp_api::StorageProof;
 
 pub use self::gen_client::Client as StateClient;
 
@@ -143,6 +144,10 @@ pub trait StateApi<Hash> {
 		keys: Vec<StorageKey>,
 		at: Option<Hash>,
 	) -> FutureResult<Vec<StorageChangeSet<Hash>>>;
+
+	/// Returns proof of storage entries at a specific block's state.
+	#[rpc(name = "state_getProof")]
+	fn proof(&self, keys: Vec<StorageKey>, hash: Hash) -> FutureResult<StorageProof>;
 
 	/// New runtime version subscription
 	#[pubsub(

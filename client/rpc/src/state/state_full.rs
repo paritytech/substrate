@@ -36,11 +36,11 @@ use sp_runtime::{
 	generic::BlockId, traits::{Block as BlockT, NumberFor, SaturatedConversion, CheckedSub},
 };
 
-use sp_api::{Metadata, ProvideRuntimeApi, CallApiAt};
+use sp_api::{Metadata, ProvideRuntimeApi, CallApiAt, StorageProof};
 
 use super::{StateBackend, error::{FutureResult, Error, Result}, client_err, child_resolution_error};
 use std::marker::PhantomData;
-use sc_client_api::{CallExecutor, StorageProvider, ExecutorProvider};
+use sc_client_api::{CallExecutor, StorageProvider, ExecutorProvider, ProofProvider};
 
 /// Ranges to query in state_queryStorage.
 struct QueryStorageRange<Block: BlockT> {
@@ -218,7 +218,7 @@ impl<BE, Block: BlockT, Client> FullState<BE, Block, Client>
 impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Client> where
 	Block: BlockT + 'static,
 	BE: Backend<Block> + 'static,
-	Client: ExecutorProvider<Block> + StorageProvider<Block, BE> + HeaderBackend<Block>
+	Client: ExecutorProvider<Block> + StorageProvider<Block, BE> + ProofProvider<Block> + HeaderBackend<Block>
 		+ HeaderMetadata<Block, Error = sp_blockchain::Error> + BlockchainEvents<Block>
 		+ CallApiAt<Block, Error = sp_blockchain::Error> + ProvideRuntimeApi<Block>
 		+ Send + Sync + 'static,
@@ -408,6 +408,16 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 	) -> FutureResult<Vec<StorageChangeSet<Block::Hash>>> {
 		let at = at.unwrap_or_else(|| self.client.info().best_hash);
 		self.query_storage(at, Some(at), keys)
+	}
+
+	fn proof(
+		&self,
+		block: Block::Hash,
+		keys: Vec<StorageKey>,
+	) -> FutureResult<StorageProof> {
+		Box::new(result(
+			self.client.read_proof(&BlockId::Hash(block), &mut keys.iter().map(|key| key.0.as_ref()))
+				.map_err(client_err)))
 	}
 
 	fn subscribe_runtime_version(

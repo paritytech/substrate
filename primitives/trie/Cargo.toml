@@ -17,6 +17,7 @@ name = "bench"
 harness = false
 
 [dependencies]
+serde = { version = "1.0.101", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "1.3.0", default-features = false }
 sp-std = { version = "2.0.0-dev", default-features = false, path = "../std" }
 hash-db = { version = "0.15.2", default-features = false }
@@ -35,6 +36,7 @@ sp-runtime = { version = "2.0.0-dev", path = "../runtime" }
 [features]
 default = ["std"]
 std = [
+	"serde/std",
 	"sp-std/std",
 	"codec/std",
 	"hash-db/std",
