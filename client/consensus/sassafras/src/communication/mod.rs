@@ -35,7 +35,9 @@ pub fn send_out(
 		}
 
 		if pending.submit_status.is_none() {
-			if set.proofs.contains(&pending.vrf_proof) {
+			if set.proofs.contains(&pending.vrf_proof) ||
+				set.disclosing.contains(&pending.vrf_proof)
+			{
 				pending.submit_status = Some(slot_number);
 				continue
 			}
@@ -141,6 +143,10 @@ pub fn receive_in(
 				continue
 			},
 		};
+
+		if set.proofs.contains(&proof) || set.disclosing.contains(&proof) {
+			continue
+		}
 
 		trace!(
 			target: "sassafras_communication",
