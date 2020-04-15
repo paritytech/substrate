@@ -15,6 +15,32 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! # Sassafras
+//!
+//! Sassafras consensus block production mechanism.
+//!
+//! ## Epoch procedure
+//!
+//! Each epoch maintains three different set of validators. The generating set, publishing set, and
+//! validating set.
+//!
+//! The process starts with generating set `GeneratingSet`. Each validator, locally, computes a set
+//! of `PendingProof`s via the `GeneratingSet::append_to_pending` function. No network communication
+//! or block processing happens with this generating set.
+//!
+//! In the second epoch, this `GeneratingSet` is converted into a publishing set `PublishingSet`. It
+//! consists of `pending` (the local `PendingProof` that were copied from `GeneratingSet`),
+//! `disclosing` (VRF proofs that the validator is planning to disclose, but have not yet made it on
+//! to blocks) and `proofs` (VRF proofs that made onto blocks). The validator first scans its
+//! `pending`, figuring out those proofs that has not yet been disclosed, encrypt that proof via
+//! another validator's public key, and transmit it via gossip. The other validator then decrypt the
+//! proof and adds it into `disclosing`. Finally, the validator scans its `disclosing`, and for
+//! those proofs that are not yet published, it pushes them as commitments onto blocks, during
+//! authorship. When a proof is on block, it's pushed into `proofs`.
+//!
+//! In the thrid epoch, the `PublishingSet` is converted into a validating set
+//! `ValidatingSet`. `proofs` are sorted using an inside-out order, and then associated with slot
+//! numbers. Upon a given slot number, a validator uses the VRF output in `pending` to finally
+//! construct the block, if a slot number matches.
 
 pub use sp_consensus_sassafras::{
 	SassafrasApi, ConsensusLog, SASSAFRAS_ENGINE_ID, SlotNumber, SassafrasConfiguration,
