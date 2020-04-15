@@ -1082,16 +1082,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dirs"
-version = "2.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13aea89a5c93364a98e9b37b2fa237effbb694d5cfe01c5b70941f7eb087d5e3"
-dependencies = [
- "cfg-if",
- "dirs-sys",
-]
-
-[[package]]
 name = "dirs-sys"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5058,16 +5048,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pretty_env_logger"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "926d36b9553851b8b0005f1275891b392ee4d2d833852c417ed025477350fb9d"
-dependencies = [
- "env_logger 0.7.1",
- "log",
-]
-
-[[package]]
 name = "primitive-types"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5933,7 +5913,7 @@ dependencies = [
  "sp-blockchain",
  "sp-consensus",
  "sp-core",
- "sp-database 2.0.0-dev",
+ "sp-database",
  "sp-externalities",
  "sp-inherents",
  "sp-keyring",
@@ -6008,12 +5988,11 @@ dependencies = [
  "sp-blockchain",
  "sp-consensus",
  "sp-core",
- "sp-database 2.0.0-dev",
+ "sp-database",
  "sp-keyring",
  "sp-runtime",
  "sp-state-machine",
  "sp-trie",
- "subdb",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "tempfile",
@@ -7034,17 +7013,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "simplelog"
-version = "0.7.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bcacac97349a890d437921dfb23cbec52ab5b4752551cb637df2721371acd467"
-dependencies = [
- "chrono",
- "log",
- "term",
-]
-
-[[package]]
 name = "slab"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7422,15 +7390,6 @@ dependencies = [
  "twox-hash",
  "wasmi",
  "zeroize",
-]
-
-[[package]]
-name = "sp-database"
-version = "2.0.0-alpha.5"
-source = "git+https://github.com/paritytech/substrate?branch=gav-db-trait#9404815700a840586fc8760a60180f4e1bf97ce4"
-dependencies = [
- "kvdb",
- "parking_lot 0.10.2",
 ]
 
 [[package]]
@@ -7922,26 +7881,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "subdb"
-version = "0.1.0"
-source = "git+https://github.com/paritytech/subdb#353bd49a95e618641b552fe890b272f0feb6d752"
-dependencies = [
- "blake2-rfc",
- "derive_more",
- "hash-db",
- "hex",
- "log",
- "memmap",
- "parity-scale-codec",
- "parking_lot 0.10.2",
- "pretty_env_logger",
- "simplelog",
- "smallvec 1.3.0",
- "sp-database 2.0.0-alpha.5",
- "twox-hash",
-]
-
-[[package]]
 name = "subkey"
 version = "2.0.0-dev"
 dependencies = [
@@ -8003,7 +7942,7 @@ dependencies = [
  "sc-informant",
  "sc-network",
  "sc-service",
- "sp-database 2.0.0-dev",
+ "sp-database",
  "wasm-bindgen",
  "wasm-bindgen-futures",
 ]
@@ -8356,16 +8295,6 @@ dependencies = [
  "rand 0.7.3",
  "redox_syscall",
  "remove_dir_all",
- "winapi 0.3.8",
-]
-
-[[package]]
-name = "term"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c0863a3345e70f61d613eab32ee046ccd1bcc5f9105fe402c61fcd0c13eeb8b5"
-dependencies = [
- "dirs",
  "winapi 0.3.8",
 ]
 
