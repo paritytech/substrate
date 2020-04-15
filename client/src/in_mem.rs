@@ -520,10 +520,9 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 			.map(|(_storage_key, child_content)|
 				(child_content.child_info, child_content.data.into_iter().map(|(k, v)| (k, Some(v)))));
 
-		let (root, transaction, _) = self.old_state.full_storage_root(
+		let (root, transaction) = self.old_state.full_storage_root(
 			storage.top.into_iter().map(|(k, v)| (k, Some(v))),
-			child_delta,
-			false,
+			child_delta
 		);
 
 		self.new_state = Some(InMemoryBackend::from(transaction));

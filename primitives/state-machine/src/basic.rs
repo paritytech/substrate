@@ -317,7 +317,7 @@ mod tests {
 			children_default: map![
 				child_info.storage_key().to_vec() => StorageChild {
 					data: map![	b"doe".to_vec() => b"reindeer".to_vec()	],
-					child_info: child_info.clone(),
+					child_info: child_info.to_owned(),
 				}
 			]
 		});

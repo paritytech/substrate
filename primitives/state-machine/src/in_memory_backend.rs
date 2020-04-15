@@ -23,9 +23,9 @@ use crate::{
 	stats::UsageInfo,
 };
 use std::{error, fmt, collections::{BTreeMap, HashMap}, marker::PhantomData, ops};
-use sp_core::{Hasher, InnerHasher};
+use hash_db::Hasher;
 use sp_trie::{
-	MemoryDB, empty_child_trie_root, TrieConfiguration, trie_types::Layout,
+	MemoryDB, child_trie_root, empty_child_trie_root, TrieConfiguration, trie_types::Layout,
 };
 use codec::Codec;
 use sp_core::storage::{ChildInfo, ChildType, Storage};
@@ -228,7 +228,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
-		<H as InnerHasher>::Out: Ord,
+		<H as Hasher>::Out: Ord,
 	{
 		let existing_pairs = self.inner.get(&None)
 			.into_iter()
@@ -263,7 +263,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 			.flat_map(|map| map.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
 
 		let transaction: Vec<_> = delta.into_iter().collect();
-		let root = Layout::<H>::trie_root(
+		let root = child_trie_root::<Layout<H>, _, _, _>(
 			existing_pairs.chain(transaction.iter().cloned())
 				.collect::<HashMap<_, _>>()
 				.into_iter()

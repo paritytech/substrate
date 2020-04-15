@@ -17,12 +17,12 @@
 //! State machine backends. These manage the code and storage of contracts.
 
 use log::warn;
-use sp_core::{Hasher, InnerHasher};
+use hash_db::Hasher;
 use codec::{Decode, Encode};
 
-use sp_core::{traits::RuntimeCode,
-	storage::{ChildInfo, ChildrenMap, well_known_keys, PrefixedStorageKey}};
+use sp_core::{traits::RuntimeCode, storage::{ChildInfo, well_known_keys}};
 use sp_trie::{TrieMut, MemoryDB, trie_types::TrieDBMut};
+
 use crate::{
 	trie_backend::TrieBackend,
 	trie_backend_essence::TrieBackendStorage,
@@ -170,9 +170,8 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	fn full_storage_root<I1, I2i, I2>(
 		&self,
 		delta: I1,
-		child_deltas: I2,
-		return_child_roots: bool,
-	) -> (H::Out, Self::Transaction, Vec<(PrefixedStorageKey, Option<H::Out>)>)
+		child_deltas: I2)
+	-> (H::Out, Self::Transaction)
 	where
 		I1: IntoIterator<Item=(StorageKey, Option<StorageValue>)>,
 		I2i: IntoIterator<Item=(StorageKey, Option<StorageValue>)>,
@@ -181,7 +180,6 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	{
 		let mut txs: Self::Transaction = Default::default();
 		let mut child_roots: Vec<_> = Default::default();
-		let mut result_child_roots: Vec<_> = Default::default();
 		// child first
 		for (child_info, child_delta) in child_deltas {
 			let (child_root, empty, child_txs) =
@@ -189,24 +187,16 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 			let prefixed_storage_key = child_info.prefixed_storage_key();
 			txs.consolidate(child_txs);
 			if empty {
-				if return_child_roots {
-					result_child_roots.push((prefixed_storage_key.clone(), None));
-				}
 				child_roots.push((prefixed_storage_key.into_inner(), None));
 			} else {
-				if return_child_roots {
-					child_roots.push((prefixed_storage_key.clone().into_inner(), Some(child_root.encode())));
-					result_child_roots.push((prefixed_storage_key, Some(child_root)));
-				} else {
-					child_roots.push((prefixed_storage_key.into_inner(), Some(child_root.encode())));
-				}
+				child_roots.push((prefixed_storage_key.into_inner(), Some(child_root.encode())));
 			}
 		}
 		let (root, parent_txs) = self.storage_root(
 			delta.into_iter().chain(child_roots.into_iter())
 		);
 		txs.consolidate(parent_txs);
-		(root, txs, result_child_roots)
+		(root, txs)
 	}
 
 	/// Register stats from overlay of state machine.
@@ -337,24 +327,6 @@ impl Consolidate for Vec<(
 	}
 }
 
-impl<V: Consolidate> Consolidate for ChildrenMap<V> {
-	fn consolidate(&mut self, other: Self) {
-		self.extend_with(other.into_iter(), Consolidate::consolidate)
-	}
-}
-
-impl<V: Consolidate> Consolidate for Option<V> {
-	fn consolidate(&mut self, other: Self) {
-		if let Some(v) = self.as_mut() {
-			if let Some(other) = other {
-				v.consolidate(other);
-			}
-		} else {
-			*self = other;
-		}
-	}
-}
-
 impl<H: Hasher, KF: sp_trie::KeyFunction<H>> Consolidate for sp_trie::GenericMemoryDB<H, KF> {
 	fn consolidate(&mut self, other: Self) {
 		sp_trie::GenericMemoryDB::consolidate(self, other)
@@ -367,7 +339,7 @@ pub(crate) fn insert_into_memory_db<H, I>(mdb: &mut MemoryDB<H>, input: I) -> Op
 		H: Hasher,
 		I: IntoIterator<Item=(StorageKey, StorageValue)>,
 {
-	let mut root = <H as InnerHasher>::Out::default();
+	let mut root = <H as Hasher>::Out::default();
 	{
 		let mut trie = TrieDBMut::<H>::new(mdb, &mut root);
 		for (key, value) in input {

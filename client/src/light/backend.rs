@@ -46,7 +46,7 @@ use sc_client_api::{
 	UsageInfo,
 };
 use crate::light::blockchain::Blockchain;
-use sp_core::Hasher;
+use hash_db::Hasher;
 
 const IN_MEMORY_EXPECT_PROOF: &str = "InMemory state backend has Void error type and always succeeds; qed";
 
@@ -326,7 +326,7 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 		}
 
 		let storage_update = InMemoryBackend::from(storage);
-		let (storage_root, _, _) = storage_update.full_storage_root(std::iter::empty(), child_delta, false);
+		let (storage_root, _) = storage_update.full_storage_root(std::iter::empty(), child_delta);
 		self.storage_update = Some(storage_update);
 
 		Ok(storage_root)

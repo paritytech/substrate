@@ -17,16 +17,14 @@
 //! Changes trie storage utilities.
 
 use std::collections::{BTreeMap, HashSet, HashMap};
-use hash_db::{Prefix, EMPTY_PREFIX};
-use sp_core::Hasher;
+use hash_db::{Hasher, Prefix, EMPTY_PREFIX};
 use sp_core::storage::PrefixedStorageKey;
-use sp_core::storage::ChildInfo;
 use sp_trie::DBValue;
 use sp_trie::MemoryDB;
 use parking_lot::RwLock;
 use crate::{
 	StorageKey,
-	trie_backend_essence::TrieBackendStorageRef,
+	trie_backend_essence::TrieBackendStorage,
 	changes_trie::{BuildCache, RootsStorage, Storage, AnchorBlockId, BlockNumber},
 };
 
@@ -190,12 +188,8 @@ impl<H: Hasher, Number: BlockNumber> Storage<H, Number> for InMemoryStorage<H, N
 		self.cache.with_changed_keys(root, functor)
 	}
 
-	fn get(
-		&self,
-		key: &H::Out,
-		prefix: Prefix,
-	) -> Result<Option<DBValue>, String> {
-		MemoryDB::<H>::get(&self.data.read().mdb, &ChildInfo::top_trie(), key, prefix)
+	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
+		MemoryDB::<H>::get(&self.data.read().mdb, key, prefix)
 	}
 }
 
@@ -205,20 +199,14 @@ impl<'a, H: Hasher, Number: BlockNumber> TrieBackendAdapter<'a, H, Number> {
 	}
 }
 
-impl<'a, H, Number> TrieBackendStorageRef<H> for TrieBackendAdapter<'a, H, Number>
+impl<'a, H, Number> TrieBackendStorage<H> for TrieBackendAdapter<'a, H, Number>
 	where
 		Number: BlockNumber,
 		H: Hasher,
 {
 	type Overlay = MemoryDB<H>;
 
-	fn get(
-		&self,
-		child_info: &ChildInfo,
-		key: &H::Out,
-		prefix: Prefix,
-	) -> Result<Option<DBValue>, String> {
-		debug_assert!(child_info.is_top_trie());
+	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		self.storage.get(key, prefix)
 	}
 }

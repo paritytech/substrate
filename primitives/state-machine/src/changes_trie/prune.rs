@@ -16,7 +16,7 @@
 
 //! Changes trie pruning-related functions.
 
-use sp_core::{Hasher, InnerHasher};
+use hash_db::Hasher;
 use sp_trie::Recorder;
 use log::warn;
 use num_traits::One;
@@ -65,11 +65,10 @@ pub fn prune<H: Hasher, Number: BlockNumber, F: FnMut(H::Out)>(
 			);
 			let child_prefix = ChildIndex::key_neutral_prefix(block.clone());
 			let mut children_roots = Vec::new();
-			let child_info = sp_core::storage::ChildInfo::top_trie();
-			trie_storage.for_key_values_with_prefix(&child_info, &child_prefix, |key, value| {
+			trie_storage.for_key_values_with_prefix(&child_prefix, |key, value| {
 				if let Ok(InputKey::ChildIndex::<Number>(_trie_key)) = Decode::decode(&mut &key[..]) {
 					if let Ok(value) = <Vec<u8>>::decode(&mut &value[..]) {
-						let mut trie_root = <H as InnerHasher>::Out::default();
+						let mut trie_root = <H as Hasher>::Out::default();
 						trie_root.as_mut().copy_from_slice(&value[..]);
 						children_roots.push(trie_root);
 					}
@@ -101,7 +100,7 @@ fn prune_trie<H: Hasher, Number: BlockNumber, F: FnMut(H::Out)>(
 			backend: &TrieBackendEssence::new(TrieBackendAdapter::new(storage), root),
 			proof_recorder: &mut proof_recorder,
 		};
-		trie.record_all_top_trie_keys();
+		trie.record_all_keys();
 	}
 
 	// all nodes of this changes trie should be pruned

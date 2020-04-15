@@ -58,10 +58,10 @@ use sp_blockchain::{
 use codec::{Decode, Encode};
 use hash_db::Prefix;
 use kvdb::{KeyValueDB, DBTransaction};
-use sp_trie::{MemoryDB, PrefixedMemoryDB};
+use sp_trie::{MemoryDB, PrefixedMemoryDB, prefixed_key};
 use parking_lot::RwLock;
 use sp_core::{ChangesTrieConfiguration, traits::CodeExecutor};
-use sp_core::storage::{well_known_keys, ChildInfo, ChildrenMap, ChildType};
+use sp_core::storage::{well_known_keys, ChildInfo};
 use sp_runtime::{
 	generic::BlockId, Justification, Storage,
 	BuildStorage,
@@ -526,7 +526,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for BlockchainDb<Block> {
 /// Database transaction
 pub struct BlockImportOperation<Block: BlockT> {
 	old_state: SyncingCachingState<RefTrackingState<Block>, Block>,
-	db_updates: ChildrenMap<PrefixedMemoryDB<HashFor<Block>>>,
+	db_updates: PrefixedMemoryDB<HashFor<Block>>,
 	storage_updates: StorageCollection,
 	child_storage_updates: ChildStorageCollection,
 	changes_trie_updates: MemoryDB<HashFor<Block>>,
@@ -581,10 +581,7 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 		// Currently cache isn't implemented on full nodes.
 	}
 
-	fn update_db_storage(
-		&mut self,
-		update: ChildrenMap<PrefixedMemoryDB<HashFor<Block>>>,
-	) -> ClientResult<()> {
+	fn update_db_storage(&mut self, update: PrefixedMemoryDB<HashFor<Block>>) -> ClientResult<()> {
 		self.db_updates = update;
 		Ok(())
 	}
@@ -604,7 +601,7 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 		));
 
 		let mut changes_trie_config: Option<ChangesTrieConfiguration> = None;
-		let (root, transaction, _) = self.old_state.full_storage_root(
+		let (root, transaction) = self.old_state.full_storage_root(
 			storage.top.into_iter().map(|(k, v)| {
 				if k == well_known_keys::CHANGES_TRIE_CONFIG {
 					changes_trie_config = Some(
@@ -614,8 +611,7 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 				}
 				(k, Some(v))
 			}),
-			child_delta,
-			false,
+			child_delta
 		);
 
 		self.db_updates = transaction;
@@ -672,15 +668,8 @@ struct StorageDb<Block: BlockT> {
 }
 
 impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Block> {
-	fn get(
-		&self,
-		child_info: &ChildInfo,
-		key: &Block::Hash,
-		prefix: Prefix,
-	) -> Result<Option<DBValue>, String> {
-		// Default child trie (those with strong unique id) are put
-		// directly into the same address space at state_db level.
-		let key = keyspace_and_prefixed_key(key.as_ref(), child_info.keyspace(), prefix);
+	fn get(&self, key: &Block::Hash, prefix: Prefix) -> Result<Option<DBValue>, String> {
+		let key = prefixed_key::<HashFor<Block>>(key, prefix);
 		self.state_db.get(&key, self)
 			.map_err(|e| format!("Database backend error: {:?}", e))
 	}
@@ -691,11 +680,7 @@ impl<Block: BlockT> sc_state_db::NodeDb for StorageDb<Block> {
 	type Key = [u8];
 
 	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		// note this implementation should ONLY be call from state_db,
-		// as it rely on the fact that we address a key that is already
-		// prefixed with keyspace
-		self.db.get(columns::STATE, key)
-			.map(|r| r.map(|v| v.to_vec()))
+		self.db.get(columns::STATE, key).map(|r| r.map(|v| v.to_vec()))
 	}
 }
 
@@ -711,12 +696,7 @@ impl<Block: BlockT> DbGenesisStorage<Block> {
 }
 
 impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for DbGenesisStorage<Block> {
-	fn get(
-		&self,
-		_trie: &ChildInfo,
-		_key: &Block::Hash,
-		_prefix: Prefix,
-	) -> Result<Option<DBValue>, String> {
+	fn get(&self, _key: &Block::Hash, _prefix: Prefix) -> Result<Option<DBValue>, String> {
 		Ok(None)
 	}
 }
@@ -1129,39 +1109,22 @@ impl<Block: BlockT> Backend<Block> {
 			}
 
 			let finalized = if operation.commit_state {
-				let mut state_db_changeset: sc_state_db::ChangeSet<Vec<u8>> = sc_state_db::ChangeSet::default();
+				let mut changeset: sc_state_db::ChangeSet<Vec<u8>> = sc_state_db::ChangeSet::default();
 				let mut ops: u64 = 0;
-				let mut bytes = 0;
+				let mut bytes: u64 = 0;
 				let mut removal: u64 = 0;
 				let mut bytes_removal: u64 = 0;
-				let mut keyspace = Keyspaced::new(&[]);
-				for (info, mut updates) in operation.db_updates.into_iter() {
-					// child info with strong unique id are using the same state-db with prefixed key
-					if info.child_type() != ChildType::ParentKeyId {
-						// Unhandled child kind
-						return Err(ClientError::Backend(format!(
-							"Data for {:?} without a backend implementation",
-							info.child_type(),
-						)));
-					}
-					keyspace.change_keyspace(info.keyspace());
-					for (key, (val, rc)) in updates.drain() {
-						let key = if info.is_top_trie() {
-							key
-						} else {
-							keyspace.prefix_key(key.as_slice()).to_vec()
-						};
-						if rc > 0 {
-							ops += 1;
-							bytes += key.len() as u64 + val.len() as u64;
+				for (key, (val, rc)) in operation.db_updates.drain() {
+					if rc > 0 {
+						ops += 1;
+						bytes += key.len() as u64 + val.len() as u64;
 
-							state_db_changeset.inserted.push((key, val.to_vec()));
-						} else if rc < 0 {
-							removal += 1;
-							bytes_removal += key.len() as u64;
+						changeset.inserted.push((key, val.to_vec()));
+					} else if rc < 0 {
+						removal += 1;
+						bytes_removal += key.len() as u64;
 
-							state_db_changeset.deleted.push(key);
-						}
+						changeset.deleted.push(key);
 					}
 				}
 				self.state_usage.tally_writes_nodes(ops, bytes);
@@ -1170,7 +1133,7 @@ impl<Block: BlockT> Backend<Block> {
 				let mut ops: u64 = 0;
 				let mut bytes: u64 = 0;
 				for (key, value) in operation.storage_updates.iter()
-					.chain(operation.child_storage_updates.iter().flat_map(|(_, s, _)| s.iter())) {
+					.chain(operation.child_storage_updates.iter().flat_map(|(_, s)| s.iter())) {
 						ops += 1;
 						bytes += key.len() as u64;
 						if let Some(v) = value.as_ref() {
@@ -1183,7 +1146,7 @@ impl<Block: BlockT> Backend<Block> {
 					&hash,
 					number_u64,
 					&pending_block.header.parent_hash(),
-					state_db_changeset,
+					changeset,
 				).map_err(|e: sc_state_db::Error<io::Error>|
 					sp_blockchain::Error::from(format!("State database error: {:?}", e))
 				)?;
@@ -1382,7 +1345,6 @@ impl<Block: BlockT> Backend<Block> {
 }
 
 fn apply_state_commit(transaction: &mut DBTransaction, commit: sc_state_db::CommitSet<Vec<u8>>) {
-	// state_db commit set is only for column STATE
 	for (key, val) in commit.data.inserted.into_iter() {
 		transaction.put(columns::STATE, &key[..], &val);
 	}
@@ -1434,7 +1396,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		Ok(BlockImportOperation {
 			pending_block: None,
 			old_state,
-			db_updates: Default::default(),
+			db_updates: PrefixedMemoryDB::default(),
 			storage_updates: Default::default(),
 			child_storage_updates: Default::default(),
 			changes_trie_config_update: None,
@@ -1712,7 +1674,6 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 				Ok(Some(header)) => {
 					sp_state_machine::Storage::get(
 						self.storage.as_ref(),
-						&ChildInfo::top_trie(),
 						&header.state_root(),
 						(&[], None),
 					).unwrap_or(None).is_some()
@@ -1730,47 +1691,6 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 }
 
 impl<Block: BlockT> sc_client_api::backend::LocalBackend<Block> for Backend<Block> {}
-
-/// Rules for storing a default child trie with unique id.
-struct Keyspaced {
-	keyspace_len: usize,
-	buffer: Vec<u8>,
-}
-
-impl Keyspaced {
-	fn new(keyspace: &[u8]) -> Self {
-		Keyspaced {
-			keyspace_len: keyspace.len(),
-			buffer: keyspace.to_vec(),
-		}
-	}
-
-	fn change_keyspace(&mut self, new_keyspace: &[u8]) {
-		self.keyspace_len = new_keyspace.len();
-		self.buffer.resize(new_keyspace.len(), 0);
-		self.buffer[..new_keyspace.len()].copy_from_slice(new_keyspace);
-	}
-
-	fn prefix_key(&mut self, key: &[u8]) -> &[u8] {
-		self.buffer.resize(self.keyspace_len + key.len(), 0);
-		self.buffer[self.keyspace_len..].copy_from_slice(key);
-		self.buffer.as_slice()
-	}
-}
-
-// Prefix key and add keyspace with a single vec alloc
-// Warning if memory_db `sp_trie::prefixed_key` implementation change, this function
-// will need change too.
-fn keyspace_and_prefixed_key(key: &[u8], keyspace: &[u8], prefix: Prefix) -> Vec<u8> {
-	let mut prefixed_key = Vec::with_capacity(key.len() + keyspace.len() + prefix.0.len() + 1);
-	prefixed_key.extend_from_slice(keyspace);
-	prefixed_key.extend_from_slice(prefix.0);
-	if let Some(last) = prefix.1 {
-		prefixed_key.push(last);
-	}
-	prefixed_key.extend_from_slice(key);
-	prefixed_key
-}
 
 #[cfg(test)]
 pub(crate) mod tests {
@@ -1900,9 +1820,6 @@ pub(crate) mod tests {
 	#[test]
 	fn set_state_data() {
 		let db = Backend::<Block>::new_test(2, 0);
-
-		let child_info = sp_core::storage::ChildInfo::new_default(b"key1");
-
 		let hash = {
 			let mut op = db.begin_operation().unwrap();
 			db.begin_state_operation(&mut op, BlockId::Hash(Default::default())).unwrap();
@@ -1919,28 +1836,16 @@ pub(crate) mod tests {
 				(vec![1, 2, 3], vec![9, 9, 9]),
 			];
 
-			let child_storage = vec![
-				(vec![2, 3, 5], Some(vec![4, 4, 6])),
-				(vec![2, 2, 3], Some(vec![7, 9, 9])),
-			];
-
-			header.state_root = op.old_state.full_storage_root(storage
+			header.state_root = op.old_state.storage_root(storage
 				.iter()
 				.cloned()
-				.map(|(x, y)| (x, Some(y))),
-				vec![(child_info.clone(), child_storage.clone())],
-				false,
+				.map(|(x, y)| (x, Some(y)))
 			).0.into();
 			let hash = header.hash();
 
-			let mut children_default = HashMap::default();
-			children_default.insert(child_info.storage_key().to_vec(), sp_core::storage::StorageChild {
-				child_info: child_info.clone(),
-				data: child_storage.iter().map(|(k, v)| (k.clone(), v.clone().unwrap())).collect(),
-			});
 			op.reset_storage(Storage {
 				top: storage.iter().cloned().collect(),
-				children_default,
+				children_default: Default::default(),
 			}).unwrap();
 			op.set_block_data(
 				header.clone(),
@@ -1956,10 +1861,6 @@ pub(crate) mod tests {
 			assert_eq!(state.storage(&[1, 3, 5]).unwrap(), Some(vec![2, 4, 6]));
 			assert_eq!(state.storage(&[1, 2, 3]).unwrap(), Some(vec![9, 9, 9]));
 			assert_eq!(state.storage(&[5, 5, 5]).unwrap(), None);
-			assert_eq!(
-				state.child_storage(&child_info, &[2, 3, 5]).unwrap(),
-				Some(vec![4, 4, 6]),
-			);
 
 			hash
 		};
@@ -1999,12 +1900,6 @@ pub(crate) mod tests {
 			assert_eq!(state.storage(&[1, 3, 5]).unwrap(), None);
 			assert_eq!(state.storage(&[1, 2, 3]).unwrap(), Some(vec![9, 9, 9]));
 			assert_eq!(state.storage(&[5, 5, 5]).unwrap(), Some(vec![4, 5, 6]));
-			assert_eq!(
-				state.child_storage(&child_info, &[2, 3, 5]).unwrap(),
-				Some(vec![4, 4, 6]),
-			);
-
-
 		}
 	}
 
@@ -2039,9 +1934,7 @@ pub(crate) mod tests {
 				children_default: Default::default(),
 			}).unwrap();
 
-			key = op.db_updates.entry(ChildInfo::top_trie())
-				.or_insert_with(Default::default)
-				.insert(EMPTY_PREFIX, b"hello");
+			key = op.db_updates.insert(EMPTY_PREFIX, b"hello");
 			op.set_block_data(
 				header,
 				Some(vec![]),
@@ -2077,14 +1970,8 @@ pub(crate) mod tests {
 			).0.into();
 			let hash = header.hash();
 
-			op.db_updates
-				.entry(ChildInfo::top_trie())
-				.or_insert_with(Default::default)
-				.insert(EMPTY_PREFIX, b"hello");
-			op.db_updates
-				.entry(ChildInfo::top_trie())
-				.or_insert_with(Default::default)
-				.remove(&key, EMPTY_PREFIX);
+			op.db_updates.insert(EMPTY_PREFIX, b"hello");
+			op.db_updates.remove(&key, EMPTY_PREFIX);
 			op.set_block_data(
 				header,
 				Some(vec![]),
@@ -2120,10 +2007,7 @@ pub(crate) mod tests {
 			).0.into();
 			let hash = header.hash();
 
-			op.db_updates
-				.entry(ChildInfo::top_trie())
-				.or_insert_with(Default::default)
-				.remove(&key, EMPTY_PREFIX);
+			op.db_updates.remove(&key, EMPTY_PREFIX);
 			op.set_block_data(
 				header,
 				Some(vec![]),

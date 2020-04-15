@@ -67,9 +67,7 @@ pub use self::prune::prune;
 
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
-use hash_db::Prefix;
-use sp_core::Hasher;
-use sp_core::storage::ChildInfo;
+use hash_db::{Hasher, Prefix};
 use num_traits::{One, Zero};
 use codec::{Decode, Encode};
 use sp_core;
@@ -162,26 +160,16 @@ pub trait Storage<H: Hasher, Number: BlockNumber>: RootsStorage<H, Number> {
 		functor: &mut dyn FnMut(&HashMap<Option<PrefixedStorageKey>, HashSet<StorageKey>>),
 	) -> bool;
 	/// Get a trie node.
-	fn get(
-		&self,
-		key: &H::Out,
-		prefix: Prefix,
-	) -> Result<Option<DBValue>, String>;
+	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String>;
 }
 
 /// Changes trie storage -> trie backend essence adapter.
 pub struct TrieBackendStorageAdapter<'a, H: Hasher, Number: BlockNumber>(pub &'a dyn Storage<H, Number>);
 
-impl<'a, H: Hasher, N: BlockNumber> crate::TrieBackendStorageRef<H> for TrieBackendStorageAdapter<'a, H, N> {
+impl<'a, H: Hasher, N: BlockNumber> crate::TrieBackendStorage<H> for TrieBackendStorageAdapter<'a, H, N> {
 	type Overlay = sp_trie::MemoryDB<H>;
 
-	fn get(
-		&self,
-		child_info: &ChildInfo,
-		key: &H::Out,
-		prefix: Prefix,
-	) -> Result<Option<DBValue>, String> {
-		debug_assert!(child_info.is_top_trie());
+	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		self.0.get(key, prefix)
 	}
 }

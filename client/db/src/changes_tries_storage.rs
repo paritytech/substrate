@@ -487,11 +487,7 @@ where
 		self.build_cache.read().with_changed_keys(root, functor)
 	}
 
-	fn get(
-		&self,
-		key: &Block::Hash,
-		_prefix: Prefix,
-	) -> Result<Option<DBValue>, String> {
+	fn get(&self, key: &Block::Hash, _prefix: Prefix) -> Result<Option<DBValue>, String> {
 		self.db.get(self.changes_tries_column, key.as_ref())
 			.map_err(|err| format!("{}", err))
 	}
@@ -705,10 +701,7 @@ mod tests {
 				.log(DigestItem::as_changes_trie_root)
 				.cloned();
 			match trie_root {
-				Some(trie_root) => backend.changes_tries_storage.get(
-					&trie_root,
-					EMPTY_PREFIX,
-				).unwrap().is_none(),
+				Some(trie_root) => backend.changes_tries_storage.get(&trie_root, EMPTY_PREFIX).unwrap().is_none(),
 				None => true,
 			}
 		};

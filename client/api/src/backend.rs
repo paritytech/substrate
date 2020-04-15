@@ -24,7 +24,7 @@ use sp_runtime::{generic::BlockId, Justification, Storage};
 use sp_runtime::traits::{Block as BlockT, NumberFor, HashFor};
 use sp_state_machine::{
 	ChangesTrieState, ChangesTrieStorage as StateChangesTrieStorage, ChangesTrieTransaction,
-	ChildStorageCollection, StorageCollection,
+	StorageCollection, ChildStorageCollection,
 };
 use sp_storage::{StorageData, StorageKey, PrefixedStorageKey, ChildInfo};
 use crate::{
