@@ -155,7 +155,7 @@ impl BatchVerifier {
 
 			let (mtx, cond_var) = &*pair;
 			let mtx = mtx.lock().expect("Locking can only fail when the mutex is poisoned; qed");
-			let  _ = cond_var.wait(mtx).expect("Waiting can only fail when the mutex waited on is poisoned; qed");
+			let _ = cond_var.wait(mtx).expect("Waiting can only fail when the mutex waited on is poisoned; qed");
 		}
 
 		!self.invalid.swap(false, AtomicOrdering::Relaxed)
