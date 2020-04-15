@@ -28,7 +28,7 @@ use sp_trie::{Trie, MemoryDB, PrefixedMemoryDB, DBValue,
 	TrieDBIterator, for_keys_in_trie};
 use sp_trie::trie_types::{TrieDB, TrieError, Layout};
 use crate::{backend::Consolidate, StorageKey, StorageValue};
-use sp_core::storage::{ChildInfo, ChildrenMap};
+use sp_core::storage::{ChildInfo, ChildrenMap, ChildrenProofMap};
 use codec::Encode;
 
 /// Patricia trie-based storage trait.
@@ -458,6 +458,7 @@ impl<H: Hasher> TrieBackendStorageRef<H> for MemoryDB<H> {
 	}
 }
 
+// TOOD EMCH try remove
 impl<H: Hasher> TrieBackendStorageRef<H> for ChildrenMap<MemoryDB<H>> {
 	type Overlay = MemoryDB<H>;
 
@@ -473,6 +474,21 @@ impl<H: Hasher> TrieBackendStorageRef<H> for ChildrenMap<MemoryDB<H>> {
 	}
 }
 
+impl<H: Hasher> TrieBackendStorageRef<H> for ChildrenProofMap<MemoryDB<H>> {
+	type Overlay = MemoryDB<H>;
+
+	fn get(
+		&self,
+		child_info: &ChildInfo,
+		key: &H::Out,
+		prefix: Prefix,
+	) -> Result<Option<DBValue>, String> {
+		let child_info_proof = child_info.proof_info();
+		Ok(self.deref().get(&child_info_proof).and_then(|s|
+			hash_db::HashDB::get(s, key, prefix)
+		))
+	}
+}
 
 #[cfg(test)]
 mod test {

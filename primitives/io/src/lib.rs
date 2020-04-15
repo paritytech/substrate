@@ -145,8 +145,9 @@ pub trait Storage {
 		self.next_storage_key(&key)
 	}
 
-
-	/// Deprecated, please use dedicated runtime apis.
+	/// Read child key.
+	///
+	/// Deprecated, please use dedicated runtime apis (`sp_io::default_child_storage::get`).
 	fn child_get(
 		&self,
 		storage_key: &[u8],
@@ -160,7 +161,9 @@ pub trait Storage {
 		self.child_storage(&child_info, key).map(|s| s.to_vec())
 	}
 
-	/// Deprecated, please use dedicated runtime apis.
+	/// Read child key.
+	///
+	/// Deprecated, please use dedicated runtime apis (`sp_io::default_child_storage::read`).
 	fn child_read(
 		&self,
 		storage_key: &[u8],
@@ -183,7 +186,9 @@ pub trait Storage {
 			})
 	}
 
-	/// Deprecated, please use dedicated runtime apis.
+	/// Set a child storage value.
+	///
+	/// Deprecated, please use dedicated runtime apis (`sp_io::default_child_storage::set`).
 	fn child_set(
 		&mut self,
 		storage_key: &[u8],
@@ -198,7 +203,9 @@ pub trait Storage {
 		self.set_child_storage(&child_info, key.to_vec(), value.to_vec());
 	}
 
-	/// Deprecated, please use dedicated runtime apis.
+	/// Remove child key value.
+	///
+	/// Deprecated, please use dedicated runtime apis (`sp_io::default_child_storage::clear`).
 	fn child_clear(
 		&mut self,
 		storage_key: &[u8],
@@ -212,7 +219,9 @@ pub trait Storage {
 		self.clear_child_storage(&child_info, key);
 	}
 
-	/// Deprecated, please use dedicated runtime apis.
+	/// Remove all child storage values.
+	///
+	/// Deprecated, please use dedicated runtime apis (`sp_io::default_child_storage::storage_kill`).
 	fn child_storage_kill(
 		&mut self,
 		storage_key: &[u8],
@@ -225,7 +234,9 @@ pub trait Storage {
 		self.kill_child_storage(&child_info);
 	}
 
-	/// Deprecated, please use dedicated runtime apis.
+	/// Check a child storage key.
+	///
+	/// Deprecated, please use dedicated runtime apis (`sp_io::default_child_storage::exists`).
 	fn child_exists(
 		&self,
 		storage_key: &[u8],
@@ -239,7 +250,9 @@ pub trait Storage {
 		self.exists_child_storage(&child_info, key)
 	}
 
-	/// Deprecated, please use dedicated runtime apis.
+	/// Clear child key by prefix.
+	///
+	/// Deprecated, please use dedicated runtime apis (`sp_io::default_child_storage::clear_prefix`).
 	fn child_clear_prefix(
 		&mut self,
 		storage_key: &[u8],
@@ -253,7 +266,9 @@ pub trait Storage {
 		self.clear_child_prefix(&child_info, prefix);
 	}
 
-	/// Deprecated, please use dedicated runtime apis.
+	/// Child trie root calcualation.
+	///
+	/// Deprecated, please use dedicated runtime apis (`sp_io::default_child_storage::clear_root`).
 	fn child_root(
 		&mut self,
 		storage_key: &[u8],
@@ -268,7 +283,9 @@ pub trait Storage {
 		self.child_storage_root(&child_info)
 	}
 
-	/// Deprecated, please use dedicated runtime apis.
+	/// Child storage key iteration.
+	///
+	/// Deprecated, please use dedicated runtime apis (`sp_io::default_child_storage::next_key`).
 	fn child_next_key(
 		&mut self,
 		storage_key: &[u8],
@@ -281,18 +298,17 @@ pub trait Storage {
 			.expect("Invalid child definition");
 		self.next_child_storage_key(&child_info, key)
 	}
-
 }
-
 
 /// Interface for accessing the child storage for default child trie,
 /// from within the runtime.
 #[runtime_interface]
 pub trait DefaultChildStorage {
-	/// `storage_key` is the unprefixed location of the root of the child trie in the parent trie.
+
+	/// Get a default child storage value for a given key.
 	///
-	/// This function specifically returns the data for `key` in the child storage or `None`
-	/// if the key can not be found.
+	/// Parameter `storage_key` is the unprefixed location of the root of the child trie in the parent trie.
+	/// Result is `None` if the value for `key` in the child storage can not be found.
 	fn get(
 		&self,
 		storage_key: &[u8],
@@ -302,6 +318,8 @@ pub trait DefaultChildStorage {
 		self.child_storage(&child_info, key).map(|s| s.to_vec())
 	}
 
+	/// Allocation efficient variant of `get`.
+	///
 	/// Get `key` from child storage, placing the value into `value_out` and return the number
 	/// of bytes that the entry in storage has beyond the offset or `None` if the storage entry
 	/// doesn't exist at all.
@@ -325,6 +343,8 @@ pub trait DefaultChildStorage {
 			})
 	}
 
+	/// Set a child storage value.
+	///
 	/// Set `key` to `value` in the child storage denoted by `storage_key`.
 	fn set(
 		&mut self,
@@ -336,7 +356,9 @@ pub trait DefaultChildStorage {
 		self.set_child_storage(&child_info, key.to_vec(), value.to_vec());
 	}
 
-	/// Clear the given child storage of the given `key` and its value.
+	/// Clear a child storage key.
+	///
+	/// For the default child storage at `storage_key`, clear value at `key`.
 	fn clear (
 		&mut self,
 		storage_key: &[u8],
@@ -347,6 +369,9 @@ pub trait DefaultChildStorage {
 	}
 
 	/// Clear an entire child storage.
+	///
+	/// If it exists, the child storage for `storage_key`
+	/// is removed.
 	fn storage_kill(
 		&mut self,
 		storage_key: &[u8],
@@ -355,7 +380,9 @@ pub trait DefaultChildStorage {
 		self.kill_child_storage(&child_info);
 	}
 
-	/// Check whether the given `key` exists in storage.
+	/// Check a child storage key.
+	///
+	/// Check whether the given `key` exists in default child defined at `storage_key`.
 	fn exists(
 		&self,
 		storage_key: &[u8],
@@ -365,6 +392,8 @@ pub trait DefaultChildStorage {
 		self.exists_child_storage(&child_info, key)
 	}
 
+	/// Clear child default key by prefix.
+	///
 	/// Clear the child storage of each key-value pair where the key starts with the given `prefix`.
 	fn clear_prefix(
 		&mut self,
@@ -375,8 +404,9 @@ pub trait DefaultChildStorage {
 		self.clear_child_prefix(&child_info, prefix);
 	}
 
-	/// "Commit" all existing operations and compute the resulting child storage root.
+	/// Default child root calculation.
 	///
+	/// "Commit" all existing operations and compute the resulting child storage root.
 	/// The hashing algorithm is defined by the `Block`.
 	///
 	/// Returns the SCALE encoded hash.
@@ -388,6 +418,8 @@ pub trait DefaultChildStorage {
 		self.child_storage_root(&child_info)
 	}
 
+	/// Child storage key iteration.
+	///
 	/// Get the next key in storage after the given one in lexicographic order in child storage.
 	fn next_key(
 		&mut self,

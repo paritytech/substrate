@@ -19,7 +19,7 @@ use log::{warn, debug};
 use sp_core::Hasher;
 use sp_trie::{Trie, delta_trie_root, empty_child_trie_root};
 use sp_trie::trie_types::{TrieDB, TrieError, Layout};
-use sp_core::storage::{ChildInfo, ChildType, ChildrenMap};
+use sp_core::storage::{ChildInfo, ChildInfoProof, ChildType, ChildrenMap, ChildrenProofMap};
 use codec::{Codec, Decode, Encode};
 use crate::{
 	StorageKey, StorageValue, Backend,
@@ -62,13 +62,13 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: Codec 
 	}
 
 	/// Get registered roots
-	pub fn extract_registered_roots(&self) -> Option<ChildrenMap<Vec<u8>>> {
+	pub fn extract_registered_roots(&self) -> Option<ChildrenProofMap<Vec<u8>>> {
 		if let Some(register_roots) = self.register_roots.as_ref() {
-			let mut dest = ChildrenMap::default();
-			dest.insert(ChildInfo::top_trie(), self.essence.root().encode());
+			let mut dest = ChildrenProofMap::default();
+			dest.insert(ChildInfoProof::top_trie(), self.essence.root().encode());
 			let read_lock = register_roots.read();
 			for (child_info, root) in read_lock.iter() {
-				dest.insert(child_info.clone(), root.encode());
+				dest.insert(child_info.proof_info(), root.encode());
 			}
 			Some(dest)
 		} else {

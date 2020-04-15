@@ -34,7 +34,7 @@ use crate::trie_backend_essence::{BackendStorageDBRef, TrieBackendEssence,
 use crate::{Error, ExecutionError, Backend};
 use std::collections::{HashMap, HashSet};
 use crate::DBValue;
-use sp_core::storage::{ChildInfo, ChildType, ChildrenMap};
+use sp_core::storage::{ChildInfo, ChildInfoProof, ChildType, ChildrenMap, ChildrenProofMap};
 
 /// Patricia trie-based backend specialized in get value proofs.
 pub struct ProvingBackendRecorder<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
@@ -112,9 +112,9 @@ pub enum StorageProof {
 	/// of nodes.
 	TopTrieCompact(ProofCompacted),*/
 	///	Fully descriped proof, it includes the child trie individual descriptions.
-	Full(ChildrenMap<ProofNodes>),
+	Full(ChildrenProofMap<ProofNodes>),
 	///	Fully descriped proof, compact encoded.
-	FullCompact(ChildrenMap<ProofCompacted>),
+	FullCompact(ChildrenProofMap<ProofCompacted>),
 }
 
 impl StorageProof {
@@ -132,8 +132,8 @@ impl StorageProof {
 	pub fn empty_for(kind: StorageProofKind) -> Self {
 		match kind {
 			StorageProofKind::Flatten => StorageProof::Flatten(Default::default()),
-			StorageProofKind::Full => StorageProof::Full(ChildrenMap::default()),
-			StorageProofKind::FullCompact => StorageProof::FullCompact(ChildrenMap::default()),
+			StorageProofKind::Full => StorageProof::Full(ChildrenProofMap::default()),
+			StorageProofKind::FullCompact => StorageProof::FullCompact(ChildrenProofMap::default()),
 		}
 	}
 
@@ -155,14 +155,19 @@ impl StorageProof {
 	}
 
 	/// This unpacks `FullCompact` to `Full` or do nothing.
-	pub fn unpack<H: Hasher>(self, with_roots: bool) -> Result<(Self, Option<ChildrenMap<Vec<u8>>>), String> 
+	/// TODO EMCH document and use case for with_roots to true?? (probably unpack -> merge -> pack
+	/// but no code for it here)
+	pub fn unpack<H: Hasher>(
+		self,
+		with_roots: bool,
+	) -> Result<(Self, Option<ChildrenProofMap<Vec<u8>>>), String>
 		where H::Out: Codec,
 	{
 		let map_e = |e| format!("Trie unpack error: {}", e);
 		if let StorageProof::FullCompact(children) = self {
-			let mut result = ChildrenMap::default();
+			let mut result = ChildrenProofMap::default();
 			let mut roots = if with_roots {
-				Some(ChildrenMap::default())
+				Some(ChildrenProofMap::default())
 			} else {
 				None
 			};
@@ -188,13 +193,13 @@ impl StorageProof {
 	}
 
 	/// This packs `Full` to `FullCompact`, using needed roots.
-	pub fn pack<H: Hasher>(self, roots: &ChildrenMap<Vec<u8>>) -> Result<Self, String> 
+	pub fn pack<H: Hasher>(self, roots: &ChildrenProofMap<Vec<u8>>) -> Result<Self, String>
 		where H::Out: Codec,
 	{
 		let map_e = |e| format!("Trie pack error: {}", e);
 	
 		if let StorageProof::Full(children) = self {
-			let mut result = ChildrenMap::default();
+			let mut result = ChildrenProofMap::default();
 			for (child_info, proof) in children {
 				match child_info.child_type() {
 					ChildType::ParentKeyId => {
@@ -276,11 +281,12 @@ pub fn merge_storage_proofs<H, I>(proofs: I) -> Result<StorageProof, String>
 		H::Out: Codec,
 {
 	let mut do_flatten = false;
-	let mut child_sets = ChildrenMap::<HashSet<Vec<u8>>>::default();
-	let mut unique_set = HashSet::<Vec<u8>>::default(); 
+	let mut child_sets = ChildrenProofMap::<HashSet<Vec<u8>>>::default();
+	let mut unique_set = HashSet::<Vec<u8>>::default();
 	// lookup for best encoding
 	for mut proof in proofs {
 		if let &StorageProof::FullCompact(..) = &proof {
+			// TODO EMCH pack back so set to true.
 			proof = proof.unpack::<H>(false)?.0;
 		}
 		let proof = proof;
@@ -310,7 +316,7 @@ pub fn merge_storage_proofs<H, I>(proofs: I) -> Result<StorageProof, String>
 	Ok(if do_flatten {
 		StorageProof::Flatten(unique_set.into_iter().collect())
 	} else {
-		let mut result = ChildrenMap::default();
+		let mut result = ChildrenProofMap::default();
 		for (child_info, set) in child_sets.into_iter() {
 			result.insert(child_info, set.into_iter().collect());
 		}
@@ -324,7 +330,7 @@ pub fn merge_flatten_storage_proofs<I>(proofs: I) -> Option<StorageProof>
 	where
 		I: IntoIterator<Item=StorageProof>,
 {
-	let mut unique_set = HashSet::<Vec<u8>>::default(); 
+	let mut unique_set = HashSet::<Vec<u8>>::default();
 	// lookup for best encoding
 	for proof in proofs {
 		if let StorageProof::Flatten(set) = proof {
@@ -490,13 +496,13 @@ impl<H: InnerHasher> ProofRecorder<H> {
 				StorageProof::Flatten(trie_nodes)
 			},
 			ProofRecorder::Full(rec) => {
-				let mut children = ChildrenMap::default();
+				let mut children = ChildrenProofMap::default();
 				for (child_info, set) in rec.read().iter() {
 					let trie_nodes: Vec<Vec<u8>> = set
 						.iter()
 						.filter_map(|(_k, v)| v.as_ref().map(|v| v.to_vec()))
 						.collect();
-					children.insert(child_info.clone(), trie_nodes);
+					children.insert(child_info.proof_info(), trie_nodes);
 				}
 				StorageProof::Full(children)
 			},
@@ -672,7 +678,7 @@ where
 pub fn create_proof_check_backend<H>(
 	root: H::Out,
 	proof: StorageProof,
-) -> Result<TrieBackend<ChildrenMap<MemoryDB<H>>, H>, Box<dyn Error>>
+) -> Result<TrieBackend<ChildrenProofMap<MemoryDB<H>>, H>, Box<dyn Error>>
 where
 	H: Hasher,
 	H::Out: Codec,
@@ -680,7 +686,7 @@ where
 	use std::ops::Deref;
 	let db = create_proof_check_backend_storage(proof)
 		.map_err(|e| Box::new(e) as Box<dyn Error>)?;
-	if db.deref().get(&ChildInfo::top_trie())
+	if db.deref().get(&ChildInfoProof::top_trie())
 		.map(|db| db.contains(&root, EMPTY_PREFIX))
 		.unwrap_or(false) {
 		Ok(TrieBackend::new_with_roots(db, root))
@@ -698,19 +704,19 @@ where
 /// somehow).
 pub fn create_proof_check_backend_storage<H>(
 	proof: StorageProof,
-) -> Result<ChildrenMap<MemoryDB<H>>, String>
+) -> Result<ChildrenProofMap<MemoryDB<H>>, String>
 where
 	H: Hasher,
 {
 	let map_e = |e| format!("Trie unpack error: {}", e);
-	let mut result = ChildrenMap::default();
+	let mut result = ChildrenProofMap::default();
 	match proof {
 		s@StorageProof::Flatten(..) => {
 			let mut db = MemoryDB::default();
 			for item in s.iter_nodes_flatten() {
 				db.insert(EMPTY_PREFIX, &item);
 			}
-			result.insert(ChildInfo::top_trie(), db);
+			result.insert(ChildInfoProof::top_trie(), db);
 		},
 		StorageProof::Full(children) => {
 			for (child_info, proof) in children.into_iter() {

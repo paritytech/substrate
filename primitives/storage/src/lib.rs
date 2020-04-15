@@ -161,6 +161,22 @@ pub mod well_known_keys {
 	}
 }
 
+/// Child information needed for proof construction.
+///
+/// It is similar to standard child information but can
+/// be a bit more lightweight as long term storage is not
+/// needed in proof.
+///
+/// One can also use this information to use different compaction
+/// strategy in a same proof.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Encode, Decode)]
+pub enum ChildInfoProof {
+	/// A child using the default trie layout, identified by its
+	/// unprefixed location in the first level trie.
+	/// Empty location is reserved for the top level trie of the proof.
+	Default(ChildTrieParentKeyId),
+}
+
 /// Information related to a child state.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Encode, Decode)]
 pub enum ChildInfo {
@@ -284,6 +300,36 @@ impl ChildInfo {
 			ChildInfo::ParentKeyId(..) => ChildType::ParentKeyId,
 		}
 	}
+
+	/// Get corresponding info for proof definition.
+	pub fn proof_info(&self) -> ChildInfoProof {
+		match self {
+			ChildInfo::ParentKeyId(parent) => ChildInfoProof::Default(parent.clone()),
+		}
+	}
+}
+
+impl ChildInfoProof {
+	/// Top trie defined as the unique crypto id trie with
+	/// 0 length unique id.
+	pub fn top_trie() -> Self {
+		ChildInfoProof::Default(ChildTrieParentKeyId { data: Vec::new() })
+	}
+
+	/// Top trie defined as the unique crypto id trie with
+	/// 0 length unique id.
+	pub fn is_top_trie(&self) -> bool {
+		match self {
+			ChildInfoProof::Default(ChildTrieParentKeyId { data }) => data.len() == 0,
+		}
+	}
+
+	/// Returns the type for this child info.
+	pub fn child_type(&self) -> ChildType {
+		match self {
+			ChildInfoProof::Default(..) => ChildType::ParentKeyId,
+		}
+	}
 }
 
 /// Type of child.
@@ -381,6 +427,12 @@ impl ChildTrieParentKeyId {
 /// A few utilities methods are defined.
 pub struct ChildrenMap<T>(pub BTreeMap<ChildInfo, T>);
 
+#[cfg(feature = "std")]
+#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
+/// Type for storing a map of child trie proof related information.
+/// A few utilities methods are defined.
+pub struct ChildrenProofMap<T>(pub BTreeMap<ChildInfoProof, T>);
+
 /// Type alias for storage of children related content.
 pub type ChildrenVec<T> = Vec<(ChildInfo, T)>;
 
@@ -460,6 +512,39 @@ impl<T> ChildrenMap<T> {
 impl<T> IntoIterator for ChildrenMap<T> {
 	type Item = (ChildInfo, T);
 	type IntoIter = sp_std::collections::btree_map::IntoIter<ChildInfo, T>;
+
+	fn into_iter(self) -> Self::IntoIter {
+		self.0.into_iter()
+	}
+}
+
+#[cfg(feature = "std")]
+impl<T> sp_std::ops::Deref for ChildrenProofMap<T> {
+	type Target = BTreeMap<ChildInfoProof, T>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+#[cfg(feature = "std")]
+impl<T> sp_std::ops::DerefMut for ChildrenProofMap<T> {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.0
+	}
+}
+
+#[cfg(feature = "std")]
+impl<T> sp_std::default::Default for ChildrenProofMap<T> {
+	fn default() -> Self {
+		ChildrenProofMap(BTreeMap::new())
+	}
+}
+
+#[cfg(feature = "std")]
+impl<T> IntoIterator for ChildrenProofMap<T> {
+	type Item = (ChildInfoProof, T);
+	type IntoIter = sp_std::collections::btree_map::IntoIter<ChildInfoProof, T>;
 
 	fn into_iter(self) -> Self::IntoIter {
 		self.0.into_iter()
