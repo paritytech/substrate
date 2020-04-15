@@ -27,7 +27,7 @@
 
 use crate::{
 	behaviour::{Behaviour, BehaviourOut},
-	config::{parse_addr, parse_str_addr, NonReservedPeerMode, Params, ProtocolId, Role, TransportConfig},
+	config::{parse_addr, parse_str_addr, NonReservedPeerMode, Params, Role, TransportConfig},
 	discovery::DiscoveryConfig,
 	error::Error,
 	network_state::{
@@ -316,6 +316,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				let mut config = DiscoveryConfig::new(local_public.clone());
 				config.with_user_defined(known_addresses);
 				config.discovery_limit(u64::from(params.network_config.out_peers) + 15);
+				config.add_protocol(params.protocol_id.clone());
 
 				match params.network_config.transport {
 					TransportConfig::MemoryOnly => {
@@ -328,9 +329,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 					}
 				}
 
-				// Temporary hack to stay backwards compatible until we migrated to one DHT per protocol.
-				config.add_protocol(ProtocolId::from(libp2p::kad::protocol::DEFAULT_PROTO_NAME));
-				config.add_protocol(params.protocol_id.clone());
 				config
 			};
 

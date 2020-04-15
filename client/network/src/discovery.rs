@@ -79,14 +79,22 @@ pub struct DiscoveryConfig {
 impl DiscoveryConfig {
 	/// Crate a default configuration with the given public key.
 	pub fn new(local_public_key: PublicKey) -> Self {
-		DiscoveryConfig {
+		let mut this = DiscoveryConfig {
 			local_peer_id: local_public_key.into_peer_id(),
 			user_defined: Vec::new(),
 			allow_private_ipv4: true,
 			discovery_only_if_under_num: std::u64::MAX,
 			enable_mdns: false,
 			kademlias: HashMap::new()
-		}
+		};
+
+		// Temporary hack to retain backwards compatibility.
+		// We should eventually remove the special handling of DEFAULT_PROTO_NAME.
+		let proto_id = ProtocolId::from(libp2p::kad::protocol::DEFAULT_PROTO_NAME);
+		let proto_name = Vec::from(proto_id.as_bytes());
+		this.add_kademlia(proto_id, proto_name);
+
+		this
 	}
 
 	/// Set the number of active connections at which we pause discovery.
@@ -100,7 +108,12 @@ impl DiscoveryConfig {
 	where
 		I: IntoIterator<Item = (PeerId, Multiaddr)>
 	{
-		self.user_defined.extend(user_defined);
+		for (peer_id, addr) in user_defined {
+			for kad in self.kademlias.values_mut() {
+				kad.add_address(&peer_id, addr.clone())
+			}
+			self.user_defined.push((peer_id, addr))
+		}
 		self
 	}
 
@@ -121,28 +134,26 @@ impl DiscoveryConfig {
 
 	/// Add discovery via Kademlia for the given protocol.
 	pub fn add_protocol(&mut self, p: ProtocolId) -> &mut Self {
-		if self.kademlias.contains_key(&p) {
-			warn!(target: "sub-libp2p", "Discovery already registered for protocol {:?}", p);
-			return self
+		// NB: If this protocol name derivation is changed, check if
+		// `DiscoveryBehaviour::new_handler` is still correct.
+		let proto_name = {
+			let mut v = vec![b'/'];
+			v.extend_from_slice(p.as_bytes());
+			v.extend_from_slice(b"/kad");
+			v
+		};
+
+		self.add_kademlia(p, proto_name);
+		self
+	}
+
+	fn add_kademlia(&mut self, id: ProtocolId, proto_name: Vec<u8>) {
+		if self.kademlias.contains_key(&id) {
+			warn!(target: "sub-libp2p", "Discovery already registered for protocol {:?}", id);
+			return
 		}
 
 		let mut config = KademliaConfig::default();
-
-		// NB: If the protocol name derivation below is changed, check if
-		// `DiscoveryBehaviour::new_handler` is still correct.
-		let proto_name =
-			if libp2p::kad::protocol::DEFAULT_PROTO_NAME == p.as_bytes() {
-				// Temporary hack to retain backwards compatibility. Once this version
-				// has been rolled out we should remove the special handling of
-				// DEFAULT_PROTO_NAME and work only with proper protocol IDs.
-				Vec::from(p.as_bytes())
-			} else {
-				let mut v = vec![b'/'];
-				v.extend_from_slice(p.as_bytes());
-				v.extend_from_slice(b"/kad");
-				v
-			};
-
 		config.set_protocol_name(proto_name);
 
 		let store = MemoryStore::new(self.local_peer_id.clone());
@@ -152,8 +163,7 @@ impl DiscoveryConfig {
 			kad.add_address(peer_id, addr.clone());
 		}
 
-		self.kademlias.insert(p, kad);
-		self
+		self.kademlias.insert(id, kad);
 	}
 
 	/// Create a `DiscoveryBehaviour` from this config.
@@ -646,7 +656,6 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
 #[cfg(test)]
 mod tests {
-	use crate::config::ProtocolId;
 	use futures::prelude::*;
 	use libp2p::identity::Keypair;
 	use libp2p::Multiaddr;
@@ -688,8 +697,7 @@ mod tests {
 				let mut config = DiscoveryConfig::new(keypair.public());
 				config.with_user_defined(user_defined.clone())
 					.allow_private_ipv4(true)
-					.discovery_limit(50)
-					.add_protocol(ProtocolId::from(libp2p::kad::protocol::DEFAULT_PROTO_NAME));
+					.discovery_limit(50);
 				config.finish()
 			};
 
