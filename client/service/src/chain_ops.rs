@@ -64,6 +64,7 @@ impl<
 		self,
 		input: impl Read + Seek + Send + 'static,
 		force: bool,
+		binary: bool,
 	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>> {
 		struct WaitLink {
 			imported_blocks: u64,
@@ -118,22 +119,32 @@ impl<
 			let count = match count {
 				Some(c) => c,
 				None => {
-					let c: u64 = match Decode::decode(&mut io_reader_input) {
-						Ok(c) => c,
-						Err(err) => {
-							let err = format!("Error reading file: {}", err);
-							return std::task::Poll::Ready(Err(From::from(err)));
-						},
-					};
-					info!("📦 Importing {} blocks", c);
-					count = Some(c);
-					c
+					if binary {
+						let c: u64 = match Decode::decode(&mut io_reader_input) {
+							Ok(c) => c,
+							Err(err) => {
+								let err = format!("Error reading file: {}", err);
+								return std::task::Poll::Ready(Err(From::from(err)));
+							},
+						};
+						info!("📦 Importing {} blocks from binary format", c);
+						count = Some(c);
+						c
+					} else {
+						info!("📦 Importing unknown number of blocks from JSON format");
+					}
 				}
 			};
 
 			// Read blocks from the input.
-			if read_block_count < count {
-				match SignedBlock::<Self::Block>::decode(&mut io_reader_input) {
+			if (binary && read_block_count < count) || (!binary) {
+				let block_result: Result<Self::Block, String>;
+				if binary {
+					block_result = SignedBlock::<Self::Block>::decode(&mut io_reader_input).map_err(|e| e.to_string());
+				} else {
+					block_result = serde_json::from_reader(io_reader_input).map_err(|e| e.to_string());
+				}
+				match block_result {
 					Ok(signed) => {
 						let (header, extrinsics) = signed.block.deconstruct();
 						let hash = header.hash();
