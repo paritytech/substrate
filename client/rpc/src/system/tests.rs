@@ -220,7 +220,7 @@ fn system_health() {
 #[test]
 fn system_local_peer_id_works() {
 	assert_eq!(
-		api(None).system_local_peer_id().unwrap(),
+		wait_receiver(api(None).system_local_peer_id()),
 		"QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV".to_owned(),
 	);
 }
@@ -228,7 +228,7 @@ fn system_local_peer_id_works() {
 #[test]
 fn system_local_listen_addresses_works() {
 	assert_eq!(
-		api(None).system_local_listen_addresses().unwrap(),
+		wait_receiver(api(None).system_local_listen_addresses()),
 		vec![
 			"/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV".to_string(),
 			"/ip4/127.0.0.1/tcp/30334/ws/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV".to_string(),
