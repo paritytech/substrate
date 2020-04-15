@@ -70,7 +70,7 @@ fn add_referendum<T: Trait>(n: u32) -> Result<ReferendumIndex, &'static str> {
 	Ok(referendum_index)
 }
 
-fn account_vote<T: Trait>() -> AccountVote<BalanceOf<T>> {
+fn account_vote<T: Trait>(b: BalanceOf<T>) -> AccountVote<BalanceOf<T>> {
 	let v = Vote {
 		aye: true,
 		conviction: Conviction::Locked1x,
@@ -78,18 +78,18 @@ fn account_vote<T: Trait>() -> AccountVote<BalanceOf<T>> {
 
 	AccountVote::Standard {
 		vote: v,
-		balance: BalanceOf::<T>::one(),
+		balance: b,
 	}
 }
 
-fn open_activate_proxy<T: Trait>(u: u32) -> Result<T::AccountId, &'static str> {
+fn open_activate_proxy<T: Trait>(u: u32) -> Result<(T::AccountId, T::AccountId), &'static str> {
 	let caller = funded_account::<T>("caller", u);
-	let proxy = funded_account::<T>("proxy", u);
+	let voter = funded_account::<T>("voter", u);
 
-	Democracy::<T>::open_proxy(RawOrigin::Signed(proxy.clone()).into(), caller.clone())?;
-	Democracy::<T>::activate_proxy(RawOrigin::Signed(caller).into(), proxy.clone())?;
+	Democracy::<T>::open_proxy(RawOrigin::Signed(caller.clone()).into(), voter.clone())?;
+	Democracy::<T>::activate_proxy(RawOrigin::Signed(voter.clone()).into(), caller.clone())?;
 
-	Ok(proxy)
+	Ok((caller, voter))
 }
 
 benchmarks! {
@@ -133,39 +133,96 @@ benchmarks! {
 		assert_eq!(deposits.1.len(), (s + 2) as usize, "`second` benchmark did not work");
 	}
 
-	vote {
+	vote_new {
 		let r in 1 .. MAX_REFERENDUMS;
 
 		let caller = funded_account::<T>("caller", 0);
-		let account_vote = account_vote::<T>();
+		let account_vote = account_vote::<T>(100.into());
 
+		// We need to create existing direct votes
 		for i in 0 .. r {
 			let ref_idx = add_referendum::<T>(i)?;
 			Democracy::<T>::vote(RawOrigin::Signed(caller.clone()).into(), ref_idx, account_vote.clone())?;
 		}
+		let votes = match VotingOf::<T>::get(&caller) {
+			Voting::Direct { votes, .. } => votes,
+			_ => return Err("Votes are not direct"),
+		};
+		assert_eq!(votes.len(), r as usize, "Votes were not recorded.");
 
-		let referendum_index = r - 1;
+		let referendum_index = add_referendum::<T>(r)?;
 
-	}: _(RawOrigin::Signed(caller), referendum_index, account_vote)
+	}: vote(RawOrigin::Signed(caller.clone()), referendum_index, account_vote)
 	verify {
-
+		let votes = match VotingOf::<T>::get(&caller) {
+			Voting::Direct { votes, .. } => votes,
+			_ => return Err("Votes are not direct"),
+		};
+		assert_eq!(votes.len(), (r + 1) as usize, "Vote was not recorded.");
 	}
 
+	vote_existing {
+		let r in 1 .. MAX_REFERENDUMS;
+
+		let caller = funded_account::<T>("caller", 0);
+		let account_vote = account_vote::<T>(100.into());
+
+		// We need to create existing direct votes
+		for i in 0 ..=r {
+			let ref_idx = add_referendum::<T>(i)?;
+			Democracy::<T>::vote(RawOrigin::Signed(caller.clone()).into(), ref_idx, account_vote.clone())?;
+		}
+		let votes = match VotingOf::<T>::get(&caller) {
+			Voting::Direct { votes, .. } => votes,
+			_ => return Err("Votes are not direct"),
+		};
+		assert_eq!(votes.len(), (r + 1) as usize, "Votes were not recorded.");
+
+		// Change vote from aye to nay
+		let nay = Vote { aye: false, conviction: Conviction::Locked1x };
+		let new_vote = AccountVote::Standard { vote: nay, balance: 1000.into() };
+		let referendum_index = Democracy::<T>::referendum_count() - 1;
+
+		// This tests when a user changes a vote
+	}: vote(RawOrigin::Signed(caller.clone()), referendum_index, new_vote)
+	verify {
+		let votes = match VotingOf::<T>::get(&caller) {
+			Voting::Direct { votes, .. } => votes,
+			_ => return Err("Votes are not direct"),
+		};
+		assert_eq!(votes.len(), (r + 1) as usize, "Vote was incorrectly added");
+		let referendum_info = Democracy::<T>::referendum_info(referendum_index)
+			.ok_or("referendum doesn't exist")?;
+		let tally =  match referendum_info {
+			ReferendumInfo::Ongoing(r) => r.tally,
+			_ => return Err("referendum not ongoing"),
+		};
+		assert_eq!(tally.nays, 1000.into(), "changed vote was not recorded");
+	}
+
+	// Note we don't include proxy_vote_existing as it is a bit redundant
 	proxy_vote {
 		let r in 1 .. MAX_REFERENDUMS;
 
-		let caller = funded_account::<T>("caller", r);
-		let proxy = open_activate_proxy::<T>(r)?;
-		let account_vote = account_vote::<T>();
+		let (caller, voter) = open_activate_proxy::<T>(0)?;
+		let account_vote = account_vote::<T>(100.into());
 
+		// Populate existing direct votes for the voter, they can vote on their own behalf
 		for i in 0 .. r {
 			let ref_idx = add_referendum::<T>(i)?;
-			Democracy::<T>::vote(RawOrigin::Signed(caller.clone()).into(), ref_idx, account_vote.clone())?;
+			Democracy::<T>::vote(RawOrigin::Signed(voter.clone()).into(), ref_idx, account_vote.clone())?;
 		}
 
-		let referendum_index = r - 1;
+		let referendum_index = add_referendum::<T>(r)?;
 
-	}: _(RawOrigin::Signed(proxy), referendum_index, account_vote)
+	}: _(RawOrigin::Signed(caller), referendum_index, account_vote)
+	verify {
+		let votes = match VotingOf::<T>::get(&voter) {
+			Voting::Direct { votes, .. } => votes,
+			_ => return Err("Votes are not direct"),
+		};
+		assert_eq!(votes.len(), (r + 1) as usize, "Vote was not recorded.");
+	}
 
 	emergency_cancel {
 		let u in 1 .. MAX_USERS;
@@ -278,17 +335,16 @@ benchmarks! {
 	close_proxy {
 		let u in 1 .. MAX_USERS;
 
-		let proxy = open_activate_proxy::<T>(u)?;
+		let (caller, _) = open_activate_proxy::<T>(u)?;
 
-	}: _(RawOrigin::Signed(proxy))
+	}: _(RawOrigin::Signed(caller))
 
 	deactivate_proxy {
 		let u in 1 .. MAX_USERS;
 
-		let caller = funded_account::<T>("caller", u);
-		let proxy = open_activate_proxy::<T>(u)?;
+		let (caller, voter) = open_activate_proxy::<T>(u)?;
 
-	}: _(RawOrigin::Signed(caller), proxy)
+	}: _(RawOrigin::Signed(voter), caller)
 
 	delegate {
 		let u in 1 .. MAX_USERS;
@@ -303,7 +359,7 @@ benchmarks! {
 		let r in 1 .. MAX_REFERENDUMS;
 
 		let other = funded_account::<T>("other", 0);
-		let account_vote = account_vote::<T>();
+		let account_vote = account_vote::<T>(100.into());
 
 		for i in 0 .. r {
 			let ref_idx = add_referendum::<T>(i)?;
@@ -387,7 +443,7 @@ benchmarks! {
 		let r in 1 .. MAX_REFERENDUMS;
 
 		let caller = funded_account::<T>("caller", 0);
-		let account_vote = account_vote::<T>();
+		let account_vote = account_vote::<T>(100.into());
 
 		for i in 0 .. r {
 			let ref_idx = add_referendum::<T>(i)?;
@@ -402,7 +458,7 @@ benchmarks! {
 		let r in 1 .. MAX_REFERENDUMS;
 
 		let other = funded_account::<T>("other", r);
-		let account_vote = account_vote::<T>();
+		let account_vote = account_vote::<T>(100.into());
 
 		for i in 0 .. r {
 			let ref_idx = add_referendum::<T>(i)?;
@@ -424,40 +480,40 @@ benchmarks! {
 		let u in 1 .. MAX_USERS;
 
 		let other: T::AccountId = account("other", u, SEED);
-		let proxy = open_activate_proxy::<T>(u)?;
+		let (caller, _) = open_activate_proxy::<T>(u)?;
 		let conviction = Conviction::Locked1x;
 		let balance = 1u32;
 
-	}: _(RawOrigin::Signed(proxy), other, conviction, balance.into())
+	}: _(RawOrigin::Signed(caller), other, conviction, balance.into())
 
 	proxy_undelegate {
 		let r in 1 .. MAX_REFERENDUMS;
 
 		let other = funded_account::<T>("other", 0);
-		let account_vote = account_vote::<T>();
+		let account_vote = account_vote::<T>(100.into());
 
 		for i in 0 .. r {
 			let ref_idx = add_referendum::<T>(i)?;
 			Democracy::<T>::vote(RawOrigin::Signed(other.clone()).into(), ref_idx, account_vote.clone())?;
 		}
 
-		let proxy = open_activate_proxy::<T>(r)?;
+		let (caller, _) = open_activate_proxy::<T>(r)?;
 		let conviction = Conviction::Locked1x;
 		let balance = 1u32;
-		Democracy::<T>::proxy_delegate(RawOrigin::Signed(proxy.clone()).into(), other, conviction, balance.into())?;
+		Democracy::<T>::proxy_delegate(RawOrigin::Signed(caller.clone()).into(), other, conviction, balance.into())?;
 
-	}: _(RawOrigin::Signed(proxy))
+	}: _(RawOrigin::Signed(caller))
 
 	proxy_remove_vote {
 		let u in 1 .. MAX_USERS;
 
 		let referendum_index = add_referendum::<T>(u)?;
-		let account_vote = account_vote::<T>();
-		let proxy = open_activate_proxy::<T>(u)?;
+		let account_vote = account_vote::<T>(100.into());
+		let (caller, _) = open_activate_proxy::<T>(u)?;
 
-		Democracy::<T>::proxy_vote(RawOrigin::Signed(proxy.clone()).into(), referendum_index, account_vote)?;
+		Democracy::<T>::proxy_vote(RawOrigin::Signed(caller.clone()).into(), referendum_index, account_vote)?;
 
-	}: _(RawOrigin::Signed(proxy), referendum_index)
+	}: _(RawOrigin::Signed(caller), referendum_index)
 }
 
 #[cfg(test)]
@@ -471,7 +527,8 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(test_benchmark_propose::<Test>());
 			assert_ok!(test_benchmark_second::<Test>());
-			assert_ok!(test_benchmark_vote::<Test>());
+			assert_ok!(test_benchmark_vote_new::<Test>());
+			assert_ok!(test_benchmark_vote_existing::<Test>());
 			assert_ok!(test_benchmark_proxy_vote::<Test>());
 			assert_ok!(test_benchmark_emergency_cancel::<Test>());
 			assert_ok!(test_benchmark_external_propose::<Test>());
