@@ -358,10 +358,7 @@ impl<T> Iterator for MapIterator<T> {
 					let raw_value = match unhashed::get_raw(&self.previous_key) {
 						Some(raw_value) => raw_value,
 						None => {
-							crate::debug::error!(
-								"next_key returned a key with no value at {:?}",
-								self.previous_key
-							);
+							frame_support::print("ERROR: next_key returned a key with no value in MapIterator");
 							continue
 						}
 					};
@@ -371,11 +368,8 @@ impl<T> Iterator for MapIterator<T> {
 					let raw_key_without_prefix = &self.previous_key[self.prefix.len()..];
 					let item = match (self.closure)(raw_key_without_prefix, &raw_value[..]) {
 						Ok(item) => item,
-						Err(e) => {
-							crate::debug::error!(
-								"(key, value) failed to decode at {:?}: {:?}",
-								self.previous_key, e
-							);
+						Err(_e) => {
+							frame_support::print("ERROR: (key, value) failed to decode in MapIterator");
 							continue
 						}
 					};
@@ -490,13 +484,15 @@ mod test_iterators {
 
 	fn key_before_prefix(mut prefix: Vec<u8>) -> Vec<u8> {
 		let last = prefix.iter_mut().last().unwrap();
-		*last = last.checked_sub(1).unwrap_or_else(|| unimplemented!());
+		assert!(*last != 0, "mock function not implemented for this prefix");
+		*last -= 1;
 		prefix
 	}
 
 	fn key_after_prefix(mut prefix: Vec<u8>) -> Vec<u8> {
 		let last = prefix.iter_mut().last().unwrap();
-		*last = last.checked_add(1).unwrap_or_else(|| unimplemented!());
+		assert!(*last != 255, "mock function not implemented for this prefix");
+		*last += 1;
 		prefix
 	}
 
