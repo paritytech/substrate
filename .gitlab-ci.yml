@@ -748,16 +748,16 @@ variables:
     - |
       if [ -n "${PROJECT_NAME}" ] && [[ ${CACHE_TYPE} == @("cargo"|"targets") ]] && [ -n "${BRANCH_NAME}" ] 
       then
-          if [ -d "./ci-cache/${PROJECT_NAME}/${CACHE_TYPE}/${BRANCH_NAME}/${JOB_NAME}" ]
+          if [ -d "/ci-cache/${PROJECT_NAME}/${CACHE_TYPE}/${BRANCH_NAME}/${JOB_NAME}" ]
           then
-              echo "Directory ./ci-cache/${PROJECT_NAME}/${CACHE_TYPE}/${BRANCH_NAME}/${JOB_NAME} exists.";
+              echo "Directory /ci-cache/${PROJECT_NAME}/${CACHE_TYPE}/${BRANCH_NAME}/${JOB_NAME} exists.";
               echo "Removing JOB cache.";
-          elif [ -d "./ci-cache/${PROJECT_NAME}/${CACHE_TYPE}/${BRANCH_NAME}" ]
+          elif [ -d "/ci-cache/${PROJECT_NAME}/${CACHE_TYPE}/${BRANCH_NAME}" ]
           then
-              echo "Directory ./ci-cache/${PROJECT_NAME}/${CACHE_TYPE}/${BRANCH_NAME} exists.";
+              echo "Directory /ci-cache/${PROJECT_NAME}/${CACHE_TYPE}/${BRANCH_NAME} exists.";
               echo "Removing BRANCH cache.";
           else
-              echo "Error 1: Directory ./ci-cache/${PROJECT_NAME}/${CACHE_TYPE}/${BRANCH_NAME} does not exist.";
+              echo "Error 1: Directory /ci-cache/${PROJECT_NAME}/${CACHE_TYPE}/${BRANCH_NAME} does not exist.";
               exit 1;
           fi
       else
