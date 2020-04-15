@@ -340,7 +340,7 @@ fn less_than_needed_candidates_works() {
 			// But the exposure is updated in a simple way. No external votes exists.
 			// This is purely self-vote.
 			assert!(
-				ErasStakers::<Test>::iter_prefix(Staking::active_era().unwrap().index)
+				ErasStakers::<Test>::iter_prefix_values(Staking::active_era().unwrap().index)
 					.all(|exposure| exposure.others.is_empty())
 			);
 		});
@@ -461,7 +461,7 @@ fn nominating_and_rewards_should_work() {
 			// ------ check the staked value of all parties.
 
 			// 30 and 40 are not chosen anymore
-			assert_eq!(ErasStakers::<Test>::iter_prefix(Staking::active_era().unwrap().index).count(), 2);
+			assert_eq!(ErasStakers::<Test>::iter_prefix_values(Staking::active_era().unwrap().index).count(), 2);
 			assert_eq!(
 				Staking::eras_stakers(Staking::active_era().unwrap().index, 11),
 				Exposure {

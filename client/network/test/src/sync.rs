@@ -339,13 +339,15 @@ fn syncs_all_forks() {
 	net.peer(0).push_blocks(2, false);
 	net.peer(1).push_blocks(2, false);
 
-	net.peer(0).push_blocks(2, true);
-	net.peer(1).push_blocks(4, false);
+	let b1 = net.peer(0).push_blocks(2, true);
+	let b2 = net.peer(1).push_blocks(4, false);
 
 	net.block_until_sync();
-	// Check that all peers have all of the blocks.
-	assert_eq!(9, net.peer(0).blocks_count());
-	assert_eq!(9, net.peer(1).blocks_count());
+	// Check that all peers have all of the branches.
+	assert!(net.peer(0).has_block(&b1));
+	assert!(net.peer(0).has_block(&b2));
+	assert!(net.peer(1).has_block(&b1));
+	assert!(net.peer(1).has_block(&b2));
 }
 
 #[test]
@@ -587,24 +589,11 @@ fn syncs_header_only_forks() {
 
 	net.peer(0).push_blocks(2, true);
 	let small_hash = net.peer(0).client().info().best_hash;
-	let small_number = net.peer(0).client().info().best_number;
 	net.peer(1).push_blocks(4, false);
 
 	net.block_until_sync();
 	// Peer 1 will sync the small fork even though common block state is missing
-	assert_eq!(9, net.peer(0).blocks_count());
-	assert_eq!(9, net.peer(1).blocks_count());
-
-	// Request explicit header-only sync request for the ancient fork.
-	let first_peer_id = net.peer(0).id();
-	net.peer(1).set_sync_fork_request(vec![first_peer_id], small_hash, small_number);
-	block_on(futures::future::poll_fn::<(), _>(|cx| {
-		net.poll(cx);
-		if net.peer(1).client().header(&BlockId::Hash(small_hash)).unwrap().is_none() {
-			return Poll::Pending
-		}
-		Poll::Ready(())
-	}));
+	assert!(net.peer(1).has_block(&small_hash));
 }
 
 #[test]
