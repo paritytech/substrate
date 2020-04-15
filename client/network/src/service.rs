@@ -937,7 +937,7 @@ impl Metrics {
 						"sub_libp2p_notifications_queues_size",
 						"Total size of all the notification queues"
 					),
-					buckets: vec![0.0, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0],
+					buckets: vec![0.0, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0, 511.0, 512.0],
 				},
 				&["protocol"]
 			)?, registry)?,
