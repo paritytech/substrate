@@ -184,7 +184,7 @@ impl BenchDb {
 			state_cache_size: 16*1024*1024,
 			state_cache_child_ratio: Some((0, 100)),
 			pruning: PruningMode::ArchiveAll,
-			source: sc_client_db::DatabaseSettingsSrc::Path {
+			source: sc_client_db::DatabaseSettingsSrc::RocksDb {
 				path: dir.into(),
 				cache_size: 512,
 			},
