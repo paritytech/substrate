@@ -18,10 +18,12 @@
 
 use std::collections::BTreeMap;
 use std::cmp::Reverse;
-use kvdb::{KeyValueDB, DBTransaction};
+use sp_database::{Database, Transaction};
 use sp_runtime::traits::AtLeast32Bit;
 use codec::{Encode, Decode};
 use sp_blockchain::{Error, Result};
+
+type DbHash = [u8; 32];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct LeafSetItem<H, N> {
@@ -59,7 +61,7 @@ impl<H, N: Ord> FinalizationDisplaced<H, N> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LeafSet<H, N> {
 	storage: BTreeMap<Reverse<N>, Vec<H>>,
-	pending_added: Vec<LeafSetItem<H, N>>,
+	pending_added: Vec<(H, N)>,
 	pending_removed: Vec<H>,
 }
 
@@ -77,21 +79,20 @@ impl<H, N> LeafSet<H, N> where
 	}
 
 	/// Read the leaf list from the DB, using given prefix for keys.
-	pub fn read_from_db(db: &dyn KeyValueDB, column: u32, prefix: &[u8]) -> Result<Self> {
+	pub fn read_from_db(db: &dyn Database<DbHash>, column: u32, prefix: &[u8]) -> Result<Self> {
 		let mut storage = BTreeMap::new();
 
-		for (key, value) in db.iter_from_prefix(column, prefix) {
-			if !key.starts_with(prefix) { break }
-			let raw_hash = &mut &key[prefix.len()..];
-			let hash = match Decode::decode(raw_hash) {
-				Ok(hash) => hash,
-				Err(_) => return Err(Error::Backend("Error decoding hash".into())),
-			};
-			let number = match Decode::decode(&mut &value[..]) {
-				Ok(number) => number,
-				Err(_) => return Err(Error::Backend("Error decoding number".into())),
-			};
-			storage.entry(Reverse(number)).or_insert_with(Vec::new).push(hash);
+		match db.get(column, prefix) {
+			Some(leaves) => {
+				let vals: Vec<_> = match Decode::decode(&mut leaves.as_ref()) {
+					Ok(vals) => vals,
+					Err(_) => return Err(Error::Backend("Error decoding leaves".into())),
+				};
+				for (number, hashes) in vals.into_iter() {
+					storage.insert(Reverse(number), hashes);
+				}
+			}
+			None => {},
 		}
 		Ok(Self {
 			storage,
@@ -124,7 +125,7 @@ impl<H, N> LeafSet<H, N> where
 		};
 
 		self.insert_leaf(Reverse(number.clone()), hash.clone());
-		self.pending_added.push(LeafSetItem { hash, number: Reverse(number) });
+		self.pending_added.push((hash, number));
 		displaced
 	}
 
@@ -185,7 +186,7 @@ impl<H, N> LeafSet<H, N> where
 		// this is an invariant of regular block import.
 		if !leaves_contains_best {
 			self.insert_leaf(best_number.clone(), best_hash.clone());
-			self.pending_added.push(LeafSetItem { hash: best_hash, number: best_number });
+			self.pending_added.push((best_hash, best_number.0));
 		}
 	}
 
@@ -201,18 +202,11 @@ impl<H, N> LeafSet<H, N> where
 	}
 
 	/// Write the leaf list to the database transaction.
-	pub fn prepare_transaction(&mut self, tx: &mut DBTransaction, column: u32, prefix: &[u8]) {
-		let mut buf = prefix.to_vec();
-		for LeafSetItem { hash, number } in self.pending_added.drain(..) {
-			hash.using_encoded(|s| buf.extend(s));
-			tx.put_vec(column, &buf[..], number.0.encode());
-			buf.truncate(prefix.len()); // reuse allocation.
-		}
-		for hash in self.pending_removed.drain(..) {
-			hash.using_encoded(|s| buf.extend(s));
-			tx.delete(column, &buf[..]);
-			buf.truncate(prefix.len()); // reuse allocation.
-		}
+	pub fn prepare_transaction(&mut self, tx: &mut Transaction<DbHash>, column: u32, prefix: &[u8]) {
+		let leaves: Vec<_> = self.storage.iter().map(|(n, h)| (n.0.clone(), h.clone())).collect();
+		tx.set_from_vec(column, prefix, leaves.encode());
+		self.pending_added.clear();
+		self.pending_removed.clear();
 	}
 
 	#[cfg(test)]
@@ -281,6 +275,7 @@ impl<'a, H: 'a, N: 'a> Drop for Undo<'a, H, N> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use std::sync::Arc;
 
 	#[test]
 	fn it_works() {
@@ -305,7 +300,7 @@ mod tests {
 	#[test]
 	fn flush_to_disk() {
 		const PREFIX: &[u8] = b"abcdefg";
-		let db = ::kvdb_memorydb::create(1);
+		let db = Arc::new(sp_database::MemDb::default());
 
 		let mut set = LeafSet::new();
 		set.import(0u32, 0u32, 0u32);
@@ -314,12 +309,12 @@ mod tests {
 		set.import(2_1, 2, 1_1);
 		set.import(3_1, 3, 2_1);
 
-		let mut tx = DBTransaction::new();
+		let mut tx = Transaction::new();
 
 		set.prepare_transaction(&mut tx, 0, PREFIX);
-		db.write(tx).unwrap();
+		db.commit(tx);
 
-		let set2 = LeafSet::read_from_db(&db, 0, PREFIX).unwrap();
+		let set2 = LeafSet::read_from_db(&*db, 0, PREFIX).unwrap();
 		assert_eq!(set, set2);
 	}
 
@@ -339,7 +334,7 @@ mod tests {
 	#[test]
 	fn finalization_consistent_with_disk() {
 		const PREFIX: &[u8] = b"prefix";
-		let db = ::kvdb_memorydb::create(1);
+		let db = Arc::new(sp_database::MemDb::default());
 
 		let mut set = LeafSet::new();
 		set.import(10_1u32, 10u32, 0u32);
@@ -349,21 +344,21 @@ mod tests {
 
 		assert!(set.contains(10, 10_1));
 
-		let mut tx = DBTransaction::new();
+		let mut tx = Transaction::new();
 		set.prepare_transaction(&mut tx, 0, PREFIX);
-		db.write(tx).unwrap();
+		db.commit(tx);
 
 		let _ = set.finalize_height(11);
-		let mut tx = DBTransaction::new();
+		let mut tx = Transaction::new();
 		set.prepare_transaction(&mut tx, 0, PREFIX);
-		db.write(tx).unwrap();
+		db.commit(tx);
 
 		assert!(set.contains(11, 11_1));
 		assert!(set.contains(11, 11_2));
 		assert!(set.contains(12, 12_1));
 		assert!(!set.contains(10, 10_1));
 
-		let set2 = LeafSet::read_from_db(&db, 0, PREFIX).unwrap();
+		let set2 = LeafSet::read_from_db(&*db, 0, PREFIX).unwrap();
 		assert_eq!(set, set2);
 	}
 

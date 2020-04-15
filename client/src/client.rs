@@ -3022,7 +3022,7 @@ pub(crate) mod tests {
 				state_cache_size: 1 << 20,
 				state_cache_child_ratio: None,
 				pruning: PruningMode::ArchiveAll,
-				source: DatabaseSettingsSrc::Path {
+				source: DatabaseSettingsSrc::RocksDb {
 					path: tmp.path().into(),
 					cache_size: 128,
 				}
@@ -3224,7 +3224,7 @@ pub(crate) mod tests {
 					state_cache_size: 1 << 20,
 					state_cache_child_ratio: None,
 					pruning: PruningMode::keep_blocks(1),
-					source: DatabaseSettingsSrc::Path {
+					source: DatabaseSettingsSrc::RocksDb {
 						path: tmp.path().into(),
 						cache_size: 128,
 					}

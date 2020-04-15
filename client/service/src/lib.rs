@@ -29,7 +29,7 @@ mod builder;
 mod status_sinks;
 mod task_manager;
 
-use std::{borrow::Cow, io, pin::Pin};
+use std::{io, pin::Pin};
 use std::marker::PhantomData;
 use std::net::SocketAddr;
 use std::collections::HashMap;
@@ -139,12 +139,18 @@ pub trait AbstractService: 'static + Future<Output = Result<(), Error>> +
 	fn telemetry(&self) -> Option<sc_telemetry::Telemetry>;
 
 	/// Spawns a task in the background that runs the future passed as parameter.
-	fn spawn_task(&self, name: impl Into<Cow<'static, str>>, task: impl Future<Output = ()> + Send + 'static);
+	///
+	/// Information about this task will be reported to Prometheus.
+	///
+	/// The task name is a `&'static str` as opposed to a `String`. The reason for that is that
+	/// in order to avoid memory consumption issues with the Prometheus metrics, the set of
+	/// possible task names has to be bounded.
+	fn spawn_task(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static);
 
 	/// Spawns a task in the background that runs the future passed as
 	/// parameter. The given task is considered essential, i.e. if it errors we
 	/// trigger a service exit.
-	fn spawn_essential_task(&self, name: impl Into<Cow<'static, str>>, task: impl Future<Output = ()> + Send + 'static);
+	fn spawn_essential_task(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static);
 
 	/// Returns a handle for spawning tasks.
 	fn spawn_task_handle(&self) -> SpawnTaskHandle;
@@ -220,11 +226,11 @@ where
 		self.keystore.clone()
 	}
 
-	fn spawn_task(&self, name: impl Into<Cow<'static, str>>, task: impl Future<Output = ()> + Send + 'static) {
+	fn spawn_task(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static) {
 		self.task_manager.spawn(name, task)
 	}
 
-	fn spawn_essential_task(&self, name: impl Into<Cow<'static, str>>, task: impl Future<Output = ()> + Send + 'static) {
+	fn spawn_essential_task(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static) {
 		let mut essential_failed = self.essential_failed_tx.clone();
 		let essential_task = std::panic::AssertUnwindSafe(task)
 			.catch_unwind()
@@ -312,8 +318,8 @@ impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Spawn for
 		&self,
 		future: FutureObj<'static, ()>
 	) -> Result<(), SpawnError> {
-		self.task_manager.scheduler().unbounded_send((Box::pin(future), From::from("unnamed")))
-			.map_err(|_| SpawnError::shutdown())
+		self.task_manager.spawn_handle().spawn("unnamed", future);
+		Ok(())
 	}
 }
 
