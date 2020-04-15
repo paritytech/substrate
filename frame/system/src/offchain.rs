@@ -86,6 +86,8 @@
 //! 	|account| Call::submit_price(price)
 //! );
 
+#![warn(missing_docs)]
+
 use codec::Encode;
 use sp_std::convert::{TryInto, TryFrom};
 use sp_std::prelude::Vec;
@@ -248,13 +250,13 @@ impl<T: SigningTypes, C: AppCrypto<T::Public, T::Signature>> Signer<T, C, ForAny
 }
 
 impl<T: SigningTypes, C: AppCrypto<T::Public, T::Signature>> SignMessage<T> for Signer<T, C, ForAll> {
-	type Result = Vec<(Account<T>, T::Signature)>;
+	type SignatureData = Vec<(Account<T>, T::Signature)>;
 
-	fn sign_message(&self, message: &[u8]) -> Self::Result {
+	fn sign_message(&self, message: &[u8]) -> Self::SignatureData {
 		self.for_all(|account| C::sign(message, account.public.clone()))
 	}
 
-	fn sign<TPayload, F>(&self, f: F) -> Self::Result where
+	fn sign<TPayload, F>(&self, f: F) -> Self::SignatureData where
 		F: Fn(&Account<T>) -> TPayload,
 		TPayload: SignedPayload<T>,
 	{
@@ -263,13 +265,13 @@ impl<T: SigningTypes, C: AppCrypto<T::Public, T::Signature>> SignMessage<T> for 
 }
 
 impl<T: SigningTypes, C: AppCrypto<T::Public, T::Signature>> SignMessage<T> for Signer<T, C, ForAny> {
-	type Result = Option<(Account<T>, T::Signature)>;
+	type SignatureData = Option<(Account<T>, T::Signature)>;
 
-	fn sign_message(&self, message: &[u8]) -> Self::Result {
+	fn sign_message(&self, message: &[u8]) -> Self::SignatureData {
 		self.for_any(|account| C::sign(message, account.public.clone()))
 	}
 
-	fn sign<TPayload, F>(&self, f: F) -> Self::Result where
+	fn sign<TPayload, F>(&self, f: F) -> Self::SignatureData where
 		F: Fn(&Account<T>) -> TPayload,
 		TPayload: SignedPayload<T>,
 	{
@@ -288,9 +290,9 @@ impl<
 		&self,
 		f: impl Fn(&Account<T>) -> LocalCall,
 	) -> Self::Result {
-			self.for_any(|account| {
+		self.for_any(|account| {
 			let call = f(account);
-			self.submit_signed_transaction(account, call)
+			self.send_single_signed_transaction(account, call)
 		})
 	}
 }
@@ -308,7 +310,7 @@ impl<
 	) -> Self::Result {
 		self.for_all(|account| {
 			let call = f(account);
-			self.submit_signed_transaction(account, call)
+			self.send_single_signed_transaction(account, call)
 		})
 	}
 }
@@ -327,7 +329,7 @@ impl<
 	) -> Self::Result
 	where
 		F: Fn(&Account<T>) -> TPayload,
-		TPayload: SignedPayload<T>, 
+		TPayload: SignedPayload<T>,
 	{
 		self.for_any(|account| {
 			let payload = f(account);
@@ -362,10 +364,13 @@ impl<
 	}
 }
 
-/// Account information used for signing payloads
+/// Details of an account for which a private key is contained in the keystore.
 pub struct Account<T: SigningTypes> {
+	/// Index on the provided list of accounts or list of all accounts.
 	pub index: usize,
+	/// Runtime-specific `AccountId`.
 	pub id: T::AccountId,
+	/// A runtime-specific `Public` key for that key pair.
 	pub public: T::Public,
 }
 
@@ -389,32 +394,43 @@ impl<T: SigningTypes> Clone for Account<T> where
 	}
 }
 
-/// App specific crypto trait that provides sign/verify
-/// abilities to offchain workers. Implementations of this
-/// trait should specify the app-specific public/signature
-/// types.
+/// App-specific crypto trait that provides sign/verify abilities to offchain workers.
+///
+/// Implementations of this trait should specify the app-specific public/signature types.
+/// This is merely a wrapper around an existing `RuntimeAppPublic` type, but with
+/// extra non-application-specific crypto type that is being wrapped (e.g. `sr25519`, `ed25519`).
+/// This is needed to later on convert into runtime-specific `Public` key, which might support
+/// multiple different crypto.
+/// The point of this trait is to be able to easily convert between `RuntimeAppPublic` and
+/// the wrapped crypto types.
+///
+/// TODO [#???] Potentially use `IsWrappedBy` types, or find some other way to make it easy to
+/// obtain unwrapped crypto (and wrap it back).
+///
+///	Example (pseudo-)implementation:
+/// ```
+///	// im-online specific crypto
+/// type RuntimeAppPublic = ImOnline(sr25519::Public);
+/// // wrapped "raw" crypto
+/// type GenericPublic = sr25519::Public;
+/// type GenericSignature = sr25519::Signature;
+///
+/// // runtime-specific public key
+/// type Public = MultiSigner: From<sr25519::Public>;
+/// type Signature = MulitSignature: From<sr25519::Signature>;
+/// ```
 pub trait AppCrypto<Public, Signature> {
+	/// A application-specific crypto.
 	type RuntimeAppPublic: RuntimeAppPublic;
-	// TODO [ToDr] The conversions are messy, clean them up.
-	//
-	// The idea would be to have some implementation for `RuntimeAppPublic`
-	// to convert to and from generic types.
-	// Maybe even a method like:
-	// impl RuntimeAppPublic {
-	//  fn into_public<T: From<Self::Generic>>(&self) -> T;
-	// }
-	// so an ability to convert the runtime app public into
-	// some type that is reachable from the inner (wrapped) generic
-	// crypto type.
-	// So example:
-	// ImOnline(sr25519) = RuntimeAppPublic
-	// sr25519 = Generic
-	// MutliSigner = From<sr25519>
+
+	/// A raw crypto public key wrapped by `RuntimeAppPublic`.
 	type GenericPublic:
 		From<Self::RuntimeAppPublic>
 		+ Into<Self::RuntimeAppPublic>
 		+ TryFrom<Public>
 		+ Into<Public>;
+
+	/// A matching raw crypto `Signature` type.
 	type GenericSignature:
 		From<<Self::RuntimeAppPublic as RuntimeAppPublic>::Signature>
 		+ Into<<Self::RuntimeAppPublic as RuntimeAppPublic>::Signature>
@@ -450,36 +466,50 @@ pub trait AppCrypto<Public, Signature> {
 
 		x.verify(&payload, &signature)
 	}
-
 }
 
-/// A wrapper around the types which are used for signing transactions.
-/// This trait should be implemented on the runtime.
+/// A wrapper around the types which are used for signing.
+///
+/// This trait adds extra bounds to `Public` and `Signature` types of the runtime
+/// that are necessary to use these types for signing.
+///
+///	TODO [#???] Could this be just `T::Signature as traits::Verify>::Signer`?
+/// Seems that this may cause issues with bounds resolution.
 pub trait SigningTypes: crate::Trait {
-	// TODO [ToDr] Could this be just `T::Signature as traits::Verify>::Signer`?
-	// Seems that this may cause issues with bounds resolution.
+	/// A public key that is capable of identifing `AccountId`s.
+	///
+	/// Usually that's either a raw crypto public key (e.g. `sr25519::Public`) or
+	/// an aggregate type for multiple crypto public keys, like `MulitSigner`.
 	type Public: Clone
 		+ PartialEq
 		+ IdentifyAccount<AccountId = Self::AccountId>
 		+ core::fmt::Debug
 		+ codec::Codec;
+
+	/// A matching `Signature` type.
 	type Signature: Clone
 		+ PartialEq
 		+ core::fmt::Debug
 		+ codec::Codec;
 }
 
-/// A wrapper around the transaction and call types.
+/// A definition of types required to submit transactions from within the runtime.
 pub trait SendTransactionTypes<LocalCall> {
-	/// The extrinsic type that this runtime submits onchain.
+	/// The extrinsic type expected by the runtime.
 	type Extrinsic: ExtrinsicT<Call=Self::OverarchingCall> + codec::Encode;
 	/// The runtime's call type.
+	///
+	/// This has additional bound to be able to be created from pallet-local `Call` types.
 	type OverarchingCall: From<LocalCall>;
 }
 
 /// Create signed transaction.
 ///
-/// Should be implemented by the runtime to sign transaction data
+/// This trait is meant to be implemented by the runtime and is responsible for constructing
+/// a payload to be signed and contained within the extrinsic.
+/// This will most likely include creation of `SignedExtra` (a set of `SignedExtensions`).
+/// Note that the result can be altered by inspecting the `Call` (for instance adjusting
+/// fees, or mortality depending on the `pallet` being called).
 pub trait CreateSignedTransaction<LocalCall>: SendTransactionTypes<LocalCall> + SigningTypes {
 	/// Attempt to create signed extrinsic data that encodes call from given account.
 	///
@@ -495,57 +525,56 @@ pub trait CreateSignedTransaction<LocalCall>: SendTransactionTypes<LocalCall> + 
 	) -> Option<(Self::OverarchingCall, <Self::Extrinsic as ExtrinsicT>::SignaturePayload)>;
 }
 
-/// Sign message payload
+/// A message signer.
 pub trait SignMessage<T: SigningTypes> {
-	type Result;
+	/// A signature data.
+	///
+	/// May contain account used for signing and the `Signature` itself.
+	type SignatureData;
 
-	/// Sign message
+	/// Sign a message.
 	///
 	/// Implementation of this method should return
-	/// a result containing the signature
-	fn sign_message(&self, message: &[u8]) -> Self::Result;
+	/// a result containing the signature.
+	fn sign_message(&self, message: &[u8]) -> Self::SignatureData;
 
-	/// Sign payload
+	/// Construct and sign given payload.
 	///
 	/// This method expects `f` to return a `SignedPayload`
 	/// object which is then used for signing.
-	///
-	/// Returns a result that contains the signature of the payload.
-	fn sign<TPayload, F>(&self, f: F) -> Self::Result where
+	fn sign<TPayload, F>(&self, f: F) -> Self::SignatureData where
 		F: Fn(&Account<T>) -> TPayload,
 		TPayload: SignedPayload<T>,
 		;
 }
 
-/// Submit a signed transaction onchain
+/// Submit a signed transaction to the transaction pool.
 pub trait SendSignedTransaction<
 	T: SigningTypes + CreateSignedTransaction<LocalCall>,
 	C: AppCrypto<T::Public, T::Signature>,
 	LocalCall
 > {
+	/// A submission result.
+	///
+	/// This should contain an indication of success and the account that was used for signing.
 	type Result;
 
-	/// Send a signed onchain transaction
+	/// Submit a signed transaction to the local pool.
 	///
-	/// Calls `f` and expects a Call object to be returned.
-	/// The call object is then signed and submitted onchain.
-	///
-	/// Returns a result of the onchain submission.
+	/// Given `f` closure will be called for every requested account and expects a `Call` object
+	/// to be returned.
+	/// The call is then wrapped into a transaction (see `#CreateSignedTransaction`), signed and
+	/// submitted to the pool.
 	fn send_signed_transaction(
 		&self,
 		f: impl Fn(&Account<T>) -> LocalCall,
 	) -> Self::Result;
 
-	/// Performs signing and submitting the transaction onchain.
-	///
-	/// This method can be used by implementations of `send_signed_transaction`
-	/// to actually sign and submit the signed transaction.
-	///
-	/// Returns a result of the onchain submittion.
-	fn submit_signed_transaction(
+	/// Wraps the call into transaction, signs using given account and submits to the pool.
+	fn send_single_signed_transaction(
 		&self,
 		account: &Account<T>,
-		call: LocalCall
+		call: LocalCall,
 	) -> Option<Result<(), ()>> {
 		let mut account_data = crate::Account::<T>::get(&account.id);
 		debug::native::debug!(
@@ -579,13 +608,17 @@ pub trait SendUnsignedTransaction<
 	T: SigningTypes + SendTransactionTypes<LocalCall>,
 	LocalCall,
 > {
+	/// A submission result.
+	///
+	/// Should contain the submission result and the account(s) that signed the payload.
 	type Result;
 
 	/// Send an unsigned transaction with a signed payload.
 	///
 	/// This method takes `f` and `f2` where:
-	/// - `f` is called and expected to return a `SignedPayload` object.
-	/// - `f2` is called with the SignedPayload returned by `f` and expected to return a Call object.
+	/// - `f` is called for every account and is expected to return a `SignedPayload` object.
+	/// - `f2` is then called with the `SignedPayload` returned by `f` and the signature and is
+	/// expected to return a `Call` object to be embedded into transaction.
 	fn send_unsigned_transaction<TPayload, F>(
 		&self,
 		f: F,
@@ -595,7 +628,7 @@ pub trait SendUnsignedTransaction<
 		F: Fn(&Account<T>) -> TPayload,
 		TPayload: SignedPayload<T>;
 
-	/// Submits an unsigned transaction onchain.
+	/// Submits an unsigned call to the transaction pool.
 	fn submit_unsigned_transaction(
 		&self,
 		call: LocalCall
@@ -605,9 +638,10 @@ pub trait SendUnsignedTransaction<
 	}
 }
 
-/// Utility trait to be implemented on payloads
-/// that should be signed and submitted onchain.
+/// Utility trait to be implemented on payloads that can be signed.
 pub trait SignedPayload<T: SigningTypes>: Encode {
+	/// Return a public key that is expected to have a matching key in the keystore,
+	/// which should be used to sign the payload.
 	fn public(&self) -> T::Public;
 
 	/// Sign the payload using the implementor's provided public key.
