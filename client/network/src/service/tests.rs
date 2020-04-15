@@ -80,7 +80,8 @@ fn build_test_full_node(config: config::NetworkConfiguration)
 		}
 	}
 
-	let spawner = |_fut| ();
+	let threads_pool = futures::executor::ThreadPool::new().unwrap();
+	let spawner = |future| threads_pool.spawn_ok(future);
 
 	let import_queue = Box::new(sp_consensus::import_queue::BasicQueue::new(
 		PassThroughVerifier(false),
