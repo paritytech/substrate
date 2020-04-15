@@ -148,7 +148,7 @@ cli = [
 	"node-transaction-factory",
 	"sc-cli",
 	"frame-benchmarking-cli",
-	"sc-service/rocksdb",
+	"sc-service/db",
 	"structopt",
 	"substrate-build-script-utils",
 ]
