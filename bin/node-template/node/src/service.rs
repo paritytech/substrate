@@ -39,7 +39,7 @@ macro_rules! new_full_start {
 				let pool_api = sc_transaction_pool::FullChainApi::new(client.clone());
 				Ok(sc_transaction_pool::BasicPool::new(config, std::sync::Arc::new(pool_api)))
 			})?
-			.with_import_queue(|_config, client, mut select_chain, _transaction_pool| {
+			.with_import_queue(|_config, client, mut select_chain, _transaction_pool, tasks_builder| {
 				let select_chain = select_chain.take()
 					.ok_or_else(|| sc_service::Error::SelectChainRequired)?;
 
@@ -50,13 +50,17 @@ macro_rules! new_full_start {
 					grandpa_block_import.clone(), client.clone(),
 				);
 
-				let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair>(
+				let spawn_handle = tasks_builder.spawn_handle();
+				let spawner = |future| spawn_handle.spawn("import-queue-worker", future);
+
+				let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair, _>(
 					sc_consensus_aura::slot_duration(&*client)?,
 					aura_block_import,
 					Some(Box::new(grandpa_block_import.clone())),
 					None,
 					client,
 					inherent_data_providers.clone(),
+					spawner,
 				)?;
 
 				import_setup = Some((grandpa_block_import, grandpa_link));
@@ -193,7 +197,7 @@ pub fn new_light(config: Configuration)
 			);
 			Ok(pool)
 		})?
-		.with_import_queue_and_fprb(|_config, client, backend, fetcher, _select_chain, _tx_pool| {
+		.with_import_queue_and_fprb(|_config, client, backend, fetcher, _select_chain, _tx_pool, tasks_builder| {
 			let fetch_checker = fetcher
 				.map(|fetcher| fetcher.checker().clone())
 				.ok_or_else(|| "Trying to start light import queue without active fetch checker")?;
@@ -207,13 +211,17 @@ pub fn new_light(config: Configuration)
 			let finality_proof_request_builder =
 				finality_proof_import.create_finality_proof_request_builder();
 
-			let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair>(
+			let spawn_handle = tasks_builder.spawn_handle();
+			let spawner = |future| spawn_handle.spawn("import-queue-worker", future);
+
+			let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair, _>(
 				sc_consensus_aura::slot_duration(&*client)?,
 				grandpa_block_import,
 				None,
 				Some(Box::new(finality_proof_import)),
 				client,
 				inherent_data_providers.clone(),
+				spawner,
 			)?;
 
 			Ok((import_queue, finality_proof_request_builder))

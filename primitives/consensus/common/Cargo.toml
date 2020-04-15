@@ -22,7 +22,6 @@ sp-inherents = { version = "2.0.0-dev", path = "../../inherents" }
 sp-state-machine = { version = "0.8.0-dev", path = "../../../primitives/state-machine" }
 futures = { version = "0.3.1", features = ["thread-pool"] }
 futures-timer = "3.0.1"
-futures-diagnose = "1.0"
 sp-std = { version = "2.0.0-dev", path = "../../std" }
 sp-version = { version = "2.0.0-dev", path = "../../version" }
 sp-runtime = { version = "2.0.0-dev", path = "../../runtime" }

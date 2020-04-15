@@ -427,7 +427,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 	/// Defines which import queue to use.
 	pub fn with_import_queue<UImpQu>(
 		self,
-		builder: impl FnOnce(&Configuration, Arc<TCl>, Option<TSc>, Arc<TExPool>)
+		builder: impl FnOnce(&Configuration, Arc<TCl>, Option<TSc>, Arc<TExPool>, &TaskManagerBuilder)
 			-> Result<UImpQu, Error>
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, UImpQu, TFprb, TFpp,
 			TExPool, TRpc, Backend>, Error>
@@ -436,7 +436,8 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			&self.config,
 			self.client.clone(),
 			self.select_chain.clone(),
-			self.transaction_pool.clone()
+			self.transaction_pool.clone(),
+			&self.tasks_builder,
 		)?;
 
 		Ok(ServiceBuilder {
@@ -526,6 +527,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			Option<TFchr>,
 			Option<TSc>,
 			Arc<TExPool>,
+			&TaskManagerBuilder,
 		) -> Result<(UImpQu, Option<UFprb>), Error>
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, UImpQu, UFprb, TFpp,
 		TExPool, TRpc, Backend>, Error>
@@ -536,7 +538,8 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			self.backend.clone(),
 			self.fetcher.clone(),
 			self.select_chain.clone(),
-			self.transaction_pool.clone()
+			self.transaction_pool.clone(),
+			&self.tasks_builder,
 		)?;
 
 		Ok(ServiceBuilder {
@@ -568,12 +571,13 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			Option<TFchr>,
 			Option<TSc>,
 			Arc<TExPool>,
+			&TaskManagerBuilder,
 		) -> Result<(UImpQu, UFprb), Error>
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, UImpQu, UFprb, TFpp,
 			TExPool, TRpc, Backend>, Error>
 	where TSc: Clone, TFchr: Clone {
-		self.with_import_queue_and_opt_fprb(|cfg, cl, b, f, sc, tx|
-			builder(cfg, cl, b, f, sc, tx)
+		self.with_import_queue_and_opt_fprb(|cfg, cl, b, f, sc, tx, tb|
+			builder(cfg, cl, b, f, sc, tx, tb)
 				.map(|(q, f)| (q, Some(f)))
 		)
 	}
