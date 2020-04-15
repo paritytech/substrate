@@ -182,6 +182,54 @@ fn should_submit_signed_transaction_on_chain() {
 
 #[test]
 fn should_submit_unsigned_transaction_on_chain() {
+	const PHRASE: &str = "news slush supreme milk chapter athlete soap sausage put clutch what kitten";
+	let (offchain, offchain_state) = testing::TestOffchainExt::new();
+	let (pool, pool_state) = testing::TestTransactionPoolExt::new();
+
+	let keystore = KeyStore::new();
+
+	keystore.write().sr25519_generate_new(
+		crate::crypto::Public::ID,
+		Some(&format!("{}/hunter1", PHRASE))
+	).unwrap();
+
+	let mut t = sp_io::TestExternalities::default();
+	t.register_extension(OffchainExt::new(offchain));
+	t.register_extension(TransactionPoolExt::new(pool));
+	t.register_extension(KeystoreExt(keystore.clone()));
+
+	price_oracle_response(&mut offchain_state.write());
+
+	let public_key = keystore.read()
+		.sr25519_public_keys(crate::crypto::Public::ID)
+		.get(0)
+		.unwrap()
+		.clone();
+
+	let price_payload = PricePayload {
+		block_number: 1,
+		price: 15523,
+		public: <Test as SigningTypes>::Public::from(public_key),
+	};
+
+	// let signature = price_payload.sign::<crypto::TestAuthId>().unwrap();
+	t.execute_with(|| {
+		let signature = <PricePayload<
+			<Test as SigningTypes>::Public,
+			<Test as frame_system::Trait>::BlockNumber
+		> as SignedPayload<Test>>::sign::<crypto::TestAuthId>(&price_payload).unwrap();
+		// when
+		Example::fetch_price_and_send_unsigned(1).unwrap();
+		// then
+		let tx = pool_state.write().transactions.pop().unwrap();
+		let tx = Extrinsic::decode(&mut &*tx).unwrap();
+		assert_eq!(tx.signature, None);
+		assert_eq!(tx.call, Call::submit_price_unsigned_with_signed_payload(price_payload, signature));
+	});
+}
+
+#[test]
+fn should_submit_raw_unsigned_transaction_on_chain() {
 	let (offchain, offchain_state) = testing::TestOffchainExt::new();
 	let (pool, pool_state) = testing::TestTransactionPoolExt::new();
 
@@ -196,7 +244,7 @@ fn should_submit_unsigned_transaction_on_chain() {
 
 	t.execute_with(|| {
 		// when
-		Example::fetch_price_and_send_unsigned(1).unwrap();
+		Example::fetch_price_and_send_raw_unsigned(1).unwrap();
 		// then
 		let tx = pool_state.write().transactions.pop().unwrap();
 		assert!(pool_state.read().transactions.is_empty());
