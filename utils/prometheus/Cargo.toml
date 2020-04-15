@@ -1,12 +1,15 @@
 [package]
 description = "Endpoint to expose Prometheus metrics"
 name = "substrate-prometheus-endpoint"
-version = "0.8.0-alpha.5"
+version = "0.8.0-alpha.6"
 license = "GPL-3.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 log = "0.4.8"
@@ -18,6 +21,3 @@ derive_more = "0.99"
 async-std = { version = "1.0.1", features = ["unstable"] }
 hyper = { version = "0.13.1", default-features = false, features = ["stream"] }
 tokio = "0.2"
-
-[package.metadata.docs.rs]
-targets = ["x86_64-unknown-linux-gnu"]
