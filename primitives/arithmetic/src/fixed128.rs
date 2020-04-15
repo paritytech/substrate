@@ -57,7 +57,8 @@ impl Fixed128 {
 
 	/// Creates self from a rational number. Equal to `n/d`.
 	///
-	/// Note that this might be lossy.
+	/// Note that this might be lossy. Only use this if you are sure that `n * DIV` can fit into an
+	/// i128.
 	pub fn from_rational<N: UniqueSaturatedInto<i128>>(n: N, d: NonZeroI128) -> Self {
 		let n = n.unique_saturated_into();
 		Self(n.saturating_mul(DIV.into()) / d.get())

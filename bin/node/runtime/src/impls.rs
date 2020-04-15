@@ -78,9 +78,12 @@ impl<T: Get<Perquintill>> Convert<Fixed128, Fixed128> for TargetedFeeAdjustment<
 		// determines if the first_term is positive
 		let positive = block_weight >= target_weight;
 		let diff_abs = block_weight.max(target_weight) - block_weight.min(target_weight);
-		// TODO: This is not always safe! Diff can be larger than what fits into i64
-		// It is safe as long as `block_weight` is less than `max_weight`
-		let diff = Fixed128::from_rational(diff_abs as i64, NonZeroI128::new(max_weight.max(1) as i128).unwrap());
+		// safe, diff_abs cannot exceed u64 and it can always be computed safely even with the lossy
+		// `Fixed128::from_rational`.
+		let diff = Fixed128::from_rational(
+			diff_abs as i128,
+			NonZeroI128::new(max_weight.max(1) as i128).unwrap(),
+		);
 		let diff_squared = diff.saturating_mul(diff);
 
 		// 0.00004 = 4/100_000 = 40_000/10^9
@@ -244,98 +247,87 @@ mod tests {
 		// This test will show that heavy blocks have a weight multiplier greater than 0
 		// and light blocks will have a weight multiplier less than 0.
 		run_with_system_weight(target() / 4, || {
-			// Target = 25%, Weight is Target / 4 = 6.25%, Diff = -18.75%, V = 4/10^5
-			// So first term is -75/10^7
-			let first_term = Fixed128::from_rational(-75, NonZeroI128::new(10_000_000).unwrap());
-			// Diff^2 = .03515625, V^2 = 8/10^10... So second_term = 28125/10^15
-			let second_term = Fixed128::from_parts(28_125_000);
+			// `fee_multiplier_update` is enough as it is the absolute truth value.
+			let next = TargetedFeeAdjustment::<TargetBlockFullness>::convert(Fixed128::default());
 			assert_eq!(
-				TargetedFeeAdjustment::<TargetBlockFullness>::convert(Fixed128::default()),
-				first_term + second_term,
+				next,
+				fee_multiplier_update(target() / 4 ,Fixed128::default())
 			);
 
 			// Light block. Fee is reduced a little.
-			let target_fee_adjustment = TargetedFeeAdjustment::<TargetBlockFullness>::convert(Fixed128::default());
-			assert!(target_fee_adjustment < Fixed128::zero())
+			assert!(next < Fixed128::zero())
 		});
 		run_with_system_weight(target() / 2, || {
-			// a bit more. Fee is decreased less, meaning that the fee increases as the block grows.
-			let target_fee_adjustment = TargetedFeeAdjustment::<TargetBlockFullness>::convert(Fixed128::default());
-			assert!(target_fee_adjustment < Fixed128::zero());
-			// -74/10^7 is greater than the target/4 fee adjustment, and this should be even bigger.
-			assert!(target_fee_adjustment > Fixed128::from_rational(-74, NonZeroI128::new(10_000_000).unwrap()))
+			let next = TargetedFeeAdjustment::<TargetBlockFullness>::convert(Fixed128::default());
+			assert_eq!(
+				next,
+				fee_multiplier_update(target() / 2 ,Fixed128::default())
+			);
+
+			// Light block. Fee is reduced a little.
+			assert!(next < Fixed128::zero())
 
 		});
 		run_with_system_weight(target(), || {
 			// ideal. Original fee. No changes.
-			let target_fee_adjustment = TargetedFeeAdjustment::<TargetBlockFullness>::convert(Fixed128::default());
-			assert_eq!(target_fee_adjustment, Fixed128::zero())
+			let next = TargetedFeeAdjustment::<TargetBlockFullness>::convert(Fixed128::default());
+			assert_eq!(next, Fixed128::zero())
 		});
 		run_with_system_weight(target() * 2, || {
 			// More than ideal. Fee is increased.
-			let target_fee_adjustment = TargetedFeeAdjustment::<TargetBlockFullness>::convert(Fixed128::default());
-			assert!(target_fee_adjustment > Fixed128::zero())
+			let next = TargetedFeeAdjustment::<TargetBlockFullness>::convert(Fixed128::default());
+			assert_eq!(
+				next,
+				fee_multiplier_update(target() * 2 ,Fixed128::default())
+			);
+
+			// Heavy block. Fee is increased a little.
+			assert!(next > Fixed128::zero())
 		});
 	}
 
 	#[test]
 	fn stateful_weight_mul_grow_to_infinity() {
 		run_with_system_weight(target() * 2, || {
-			// Target = 25%, Weight is Target * 2 = 50%, Diff = 25%, V = 4/10^5
-			// So first term is 1/10^5
-			let first_term = Fixed128::from_rational(1, NonZeroI128::new(100_000).unwrap());
-			// Diff^2 = .0625, V^2 = 8/10^10... So second_term = 5/10^11
-			let second_term = Fixed128::from_rational(5, NonZeroI128::new(100_000_000_000).unwrap());
+			let mut original = Fixed128::default();
+			let mut next = Fixed128::default();
 
-			// We should see the fee in each of these tests increase by first_term + second_term in all cases.
-			let mut original = Fixed128::default(); // 0
-			assert_eq!(
-				TargetedFeeAdjustment::<TargetBlockFullness>::convert(original),
-				original + first_term + second_term,
-			);
-			original = Fixed128::from_rational(1, NonZeroI128::new(100).unwrap());
-			assert_eq!(
-				TargetedFeeAdjustment::<TargetBlockFullness>::convert(original),
-				original + first_term + second_term,
-			);
-			original = Fixed128::from_rational(3, NonZeroI128::new(100).unwrap());
-			assert_eq!(
-				TargetedFeeAdjustment::<TargetBlockFullness>::convert(original),
-				original + first_term + second_term,
-			);
-			// ... keeps going up till infinity
-			assert_eq!(
-				TargetedFeeAdjustment::<TargetBlockFullness>::convert(Fixed128::from_natural(1)),
-				Fixed128::from_natural(1) + first_term + second_term
-			);
+			(0..1_000).for_each(|_| {
+				next = TargetedFeeAdjustment::<TargetBlockFullness>::convert(original);
+				assert_eq!(
+					next,
+					fee_multiplier_update(target() * 2, original),
+				);
+				// must always increase
+				assert!(next > original);
+				original = next;
+			});
 		});
 	}
 
 	#[test]
 	fn stateful_weight_mil_collapse_to_minus_one() {
 		run_with_system_weight(0, || {
-			// Target = 25%, Weight = 0%, Diff = -25%, V = 4/10^5
-			// So first term is -1/10^5
-			let first_term = Fixed128::from_rational(-1, NonZeroI128::new(100_000).unwrap());
-			// Diff^2 = .0625, V^2 = 8/10^10... So second_term = 5/10^11
-			let second_term = Fixed128::from_rational(5, NonZeroI128::new(100_000_000_000).unwrap());
+			let mut original = Fixed128::default(); // 0
+			let mut next;
 
-			// We should see the fee in each of these tests decrease by first_term - second_term until it hits -1.
-			let original = Fixed128::default(); // 0
+			// decreases
+			next = TargetedFeeAdjustment::<TargetBlockFullness>::convert(original);
 			assert_eq!(
-				TargetedFeeAdjustment::<TargetBlockFullness>::convert(original),
-				original + first_term + second_term,
+				next,
+				fee_multiplier_update(0, original),
 			);
-			let original = Fixed128::from_rational(-1, NonZeroI128::new(100).unwrap());
+			assert!(next < original);
+			original = next;
+
+			// keeps decreasing
+			next = TargetedFeeAdjustment::<TargetBlockFullness>::convert(original);
 			assert_eq!(
-				TargetedFeeAdjustment::<TargetBlockFullness>::convert(original),
-				original + first_term + second_term,
+				next,
+				fee_multiplier_update(0, original),
 			);
-			let original = Fixed128::from_rational(-3, NonZeroI128::new(100).unwrap());
-			assert_eq!(
-				TargetedFeeAdjustment::<TargetBlockFullness>::convert(original),
-				original + first_term + second_term,
-			);
+			assert!(next < original);
+
 			// ... stops going down at -1
 			assert_eq!(
 				TargetedFeeAdjustment::<TargetBlockFullness>::convert(Fixed128::from_natural(-1)),
@@ -365,9 +357,8 @@ mod tests {
 			4294967295,
 			MaximumBlockWeight::get() / 2,
 			MaximumBlockWeight::get(),
-			// TODO these are not safe
-			// Weight::max_value() / 2,
-			// Weight::max_value(),
+			Weight::max_value() / 2,
+			Weight::max_value(),
 		].into_iter().for_each(|i| {
 			run_with_system_weight(i, || {
 				let next = TargetedFeeAdjustment::<TargetBlockFullness>::convert(Fixed128::default());
