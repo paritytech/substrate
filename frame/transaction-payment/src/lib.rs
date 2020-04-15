@@ -40,7 +40,7 @@ use frame_support::{
 	dispatch::DispatchResult,
 };
 use sp_runtime::{
-	Fixed64,
+	Fixed64, FixedPointNumber,
 	transaction_validity::{
 		TransactionPriority, ValidTransaction, InvalidTransaction, TransactionValidityError,
 		TransactionValidity,

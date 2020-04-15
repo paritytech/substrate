@@ -19,10 +19,12 @@ use sp_std::{
 	convert::{TryFrom, TryInto},
 };
 use codec::{Encode, Decode};
+use primitive_types::U128;
 use crate::{
 	Perbill,
 	traits::{
-		SaturatedConversion, CheckedSub, CheckedAdd, CheckedDiv, Bounded, UniqueSaturatedInto, Saturating
+		SaturatedConversion, CheckedSub, CheckedAdd, CheckedMul, CheckedDiv,
+		Bounded, UniqueSaturatedInto, Saturating, FixedPointNumber
 	}
 };
 
@@ -31,71 +33,143 @@ use crate::{
 #[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Fixed64(i64);
 
-/// The accuracy of the `Fixed64` type.
-const DIV: i64 = 1_000_000_000;
+impl FixedPointNumber for Fixed64 {
+	type Inner = i64;
+	type Unsigned = u64;
+	type Oversized = i128;
+	type Perthing = Perbill;
 
-impl Fixed64 {
-	/// creates self from a natural number.
-	///
-	/// Note that this might be lossy.
-	pub fn from_natural(int: i64) -> Self {
-		Self(int.saturating_mul(DIV))
+	const DIV: i64 = 1_000_000_000;
+
+	fn from_integer(int: Self::Inner) -> Self {
+		Self(int.saturating_mul(Self::DIV))
 	}
 
-	/// Return the accuracy of the type. Given that this function returns the value `X`, it means
-	/// that an instance composed of `X` parts (`Fixed64::from_parts(X)`) is equal to `1`.
-	pub fn accuracy() -> i64 {
-		DIV
-	}
-
-	/// Consume self and return the inner value.
-	///
-	/// This should only be used for testing.
-	#[cfg(any(feature = "std", test))]
-	pub fn into_inner(self) -> i64 { self.0 }
-
-	/// Raw constructor. Equal to `parts / 1_000_000_000`.
-	pub fn from_parts(parts: i64) -> Self {
+	/// TODO: maybe rename to `from_bits` like in fixed crate.
+	fn from_parts(parts: Self::Inner) -> Self {
 		Self(parts)
 	}
 
-	/// creates self from a rational number. Equal to `n/d`.
-	///
-	/// Note that this might be lossy.
-	pub fn from_rational(n: i64, d: u64) -> Self {
+	fn from_rational<N: UniqueSaturatedInto<Self::Oversized>>(n: N, d: Self::Unsigned) -> Self {
+		let n = n.unique_saturated_into();
 		Self(
-			(i128::from(n).saturating_mul(i128::from(DIV)) / i128::from(d).max(1))
+			(n.saturating_mul(Self::Oversized::from(Self::DIV)) / Self::Oversized::from(d).max(1))
 				.try_into()
 				.unwrap_or_else(|_| Bounded::max_value())
 		)
 	}
 
-	/// Performs a saturated multiply and accumulate by unsigned number.
-	///
-	/// Returns a saturated `int + (self * int)`.
-	pub fn saturated_multiply_accumulate<N>(self, int: N) -> N
-		where
-			N: TryFrom<u64> + From<u32> + UniqueSaturatedInto<u32> + Bounded + Clone + Saturating +
-			ops::Rem<N, Output=N> + ops::Div<N, Output=N> + ops::Mul<N, Output=N> +
-			ops::Add<N, Output=N>,
+	fn deconstruct(self) -> Self::Inner {
+		self.0
+	}
+
+	fn checked_mul_int<N>(&self, other: &N) -> Option<N>
+	where
+		N: Copy + TryFrom<Self::Inner> + TryInto<Self::Inner>,
 	{
-		let div = DIV as u64;
+		N::try_into(*other).ok().and_then(|rhs| {
+			let mut lhs = self.0;
+			if lhs.is_negative() {
+				lhs = lhs.saturating_mul(-1);
+			}
+			let mut rhs: Self::Inner = rhs.saturated_into();
+			let signum = self.0.signum() * rhs.signum();
+			if rhs.is_negative() {
+				rhs = rhs.saturating_mul(-1);
+			}
+
+			U128::from(lhs)
+				.checked_mul(U128::from(rhs))
+				.and_then(|n| n.checked_div(U128::from(Self::DIV)))
+				.and_then(|n| TryInto::<Self::Inner>::try_into(n).ok())
+				.and_then(|n| TryInto::<N>::try_into(n * signum).ok())
+		})
+	}
+
+	fn checked_div_int<N>(&self, other: &N) -> Option<N>
+	where
+		N: Copy + TryFrom<Self::Inner> + TryInto<Self::Inner>,
+	{
+		N::try_into(*other)
+			.ok()
+			.and_then(|n| self.0.checked_div(n))
+			.and_then(|n| n.checked_div(Self::DIV))
+			.and_then(|n| TryInto::<N>::try_into(n).ok())
+	}
+
+	fn saturating_mul_int<N>(&self, other: &N) -> N
+	where
+		N: Copy + TryFrom<Self::Inner> + TryInto<Self::Inner> + Bounded,
+	{
+		self.checked_mul_int(other).unwrap_or_else(|| {
+			N::try_into(*other)
+				.map(|n| n.signum())
+				.map(|n| n * self.0.signum())
+				.map(|signum| {
+					if signum.is_negative() {
+						Bounded::min_value()
+					} else {
+						Bounded::max_value()
+					}
+				})
+				.unwrap_or(Bounded::max_value())
+		})
+	}
+
+	fn saturating_abs(&self) -> Self {
+		if self.0 == Self::Inner::min_value() {
+			return Self::max_value();
+		}
+
+		if self.0.is_negative() {
+			Self::from_parts(self.0 * -1)
+		} else {
+			*self
+		}
+	}
+
+	fn zero() -> Self {
+		Self(0)
+	}
+
+	fn is_zero(&self) -> bool {
+		self.0 == 0
+	}
+
+	fn one() -> Self {
+		Self(Self::DIV)
+	}
+
+	fn is_positive(&self) -> bool {
+		self.0.is_positive()
+	}
+
+	fn is_negative(&self) -> bool {
+		self.0.is_negative()
+	}
+
+	fn saturated_multiply_accumulate<N>(self, int: N) -> N
+		where
+			N: From<u32> + TryFrom<Self::Unsigned> + UniqueSaturatedInto<u32> +
+			Bounded + Copy + Saturating +
+			ops::Rem<N, Output=N> + ops::Div<N, Output=N> + ops::Mul<N, Output=N> +
+			ops::Add<N, Output=N> + Default + core::fmt::Debug
+	{
+		let div = Self::DIV as Self::Unsigned;
 		let positive = self.0 > 0;
 		// safe to convert as absolute value.
-		let parts = self.0.checked_abs().map(|v| v as u64).unwrap_or(i64::max_value() as u64 + 1);
+		let parts  = self.0.checked_abs().map(|v| v as Self::Unsigned)
+			.unwrap_or(Self::Inner::max_value() as Self::Unsigned + 1);
 
-
-		// will always fit.
 		let natural_parts = parts / div;
-		// might saturate.
 		let natural_parts: N = natural_parts.saturated_into();
-		// fractional parts can always fit into u32.
-		let perbill_parts = (parts % div) as u32;
 
-		let n = int.clone().saturating_mul(natural_parts);
-		let p = Perbill::from_parts(perbill_parts) * int.clone();
+		let fractional_parts = (parts % div) as u32;
 
-		// everything that needs to be either added or subtracted from the original weight.
+		let n = int.saturating_mul(natural_parts);
+		let p = Self::Perthing::from_parts(fractional_parts) * int;
+
+		// everything that needs to be either added or subtracted from the original `int`.
 		let excess = n.saturating_add(p);
 
 		if positive {
@@ -112,7 +186,7 @@ impl Saturating for Fixed64 {
 	}
 
 	fn saturating_mul(self, rhs: Self) -> Self {
-		Self(self.0.saturating_mul(rhs.0) / DIV)
+		Self(self.0.saturating_mul(rhs.0) / Self::DIV)
 	}
 
 	fn saturating_sub(self, rhs: Self) -> Self {
@@ -144,6 +218,16 @@ impl ops::Sub for Fixed64 {
 	}
 }
 
+/// Note that this is a standard, _potentially-panicking_, implementation. Use `Saturating` trait
+/// for safe subtraction.
+impl ops::Mul for Fixed64 {
+	type Output = Self;
+
+	fn mul(self, rhs: Self) -> Self::Output {
+		Self(self.0 * rhs.0)
+	}
+}
+
 /// Note that this is a standard, _potentially-panicking_, implementation. Use `CheckedDiv` trait
 /// for safe division.
 impl ops::Div for Fixed64 {
@@ -155,11 +239,11 @@ impl ops::Div for Fixed64 {
 			return Fixed64::from_parts( self.0 / zero);
 		}
 		let (n, d) = if rhs.0 < 0 {
-			(-self.0, rhs.0.abs() as u64)
+			(-self.0, rhs.0.abs())
 		} else {
-			(self.0, rhs.0 as u64)
+			(self.0, rhs.0)
 		};
-		Fixed64::from_rational(n, d)
+		Fixed64::from_rational(n, d as u64)
 	}
 }
 
@@ -185,10 +269,40 @@ impl CheckedDiv for Fixed64 {
 	}
 }
 
+impl CheckedMul for Fixed64 {
+	fn checked_mul(&self, rhs: &Self) -> Option<Self> {
+		let signum = self.0.signum() * rhs.0.signum();
+		let mut lhs = self.0;
+		if lhs.is_negative() {
+			lhs = lhs.saturating_mul(-1);
+		}
+		let mut rhs: i64 = rhs.0.saturated_into();
+		if rhs.is_negative() {
+			rhs = rhs.saturating_mul(-1);
+		}
+
+		U128::from(lhs)
+			.checked_mul(U128::from(rhs))
+			.and_then(|n| n.checked_div(U128::from(Self::DIV)))
+			.and_then(|n| TryInto::<i64>::try_into(n).ok())
+			.map(|n| Self(n * signum))
+	}
+}
+
+impl Bounded for Fixed64 {
+	fn min_value() -> Self {
+		Self(Bounded::min_value())
+	}
+
+	fn max_value() -> Self {
+		Self(Bounded::max_value())
+	}
+}
+
 impl sp_std::fmt::Debug for Fixed64 {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		write!(f, "Fixed64({},{})", self.0 / DIV, (self.0 % DIV) / 1000)
+		write!(f, "Fixed64({},{})", self.0 / Self::DIV, (self.0 % Self::DIV) / 1000)
 	}
 
 	#[cfg(not(feature = "std"))]
@@ -212,8 +326,8 @@ mod tests {
 		assert_eq!(Fixed64::from_rational(5, 0), Fixed64::from_rational(5, 1));
 
 		// biggest value that can be created.
-		assert_ne!(max(), Fixed64::from_natural(9_223_372_036));
-		assert_eq!(max(), Fixed64::from_natural(9_223_372_037));
+		assert_ne!(max(), Fixed64::from_integer(9_223_372_036));
+		assert_eq!(max(), Fixed64::from_integer(9_223_372_037));
 	}
 
 	#[test]
@@ -312,14 +426,14 @@ mod tests {
 	#[should_panic(expected = "attempt to divide by zero")]
 	fn div_zero() {
 		let a = Fixed64::from_rational(12, 10);
-		let b = Fixed64::from_natural(0);
+		let b = Fixed64::from_integer(0);
 		let _ = a / b;
 	}
 
 	#[test]
 	fn checked_div_zero() {
 		let a = Fixed64::from_rational(12, 10);
-		let b = Fixed64::from_natural(0);
+		let b = Fixed64::from_integer(0);
 		assert_eq!(a.checked_div(&b), None);
 	}
 

@@ -16,7 +16,7 @@
 
 //! Primitive traits for the runtime arithmetic.
 
-use sp_std::{self, convert::{TryFrom, TryInto}};
+use sp_std::{self, convert::{TryFrom, TryInto}, fmt::Debug};
 use codec::HasCompact;
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{
@@ -164,3 +164,92 @@ pub trait SaturatedConversion {
 	}
 }
 impl<T: Sized> SaturatedConversion for T {}
+
+pub trait FixedPointNumber:
+	Sized + Copy + Default
+	+ Saturating + Bounded
+	+ Eq + PartialEq + Ord + PartialOrd
+	+ CheckedSub + CheckedAdd + CheckedMul + CheckedDiv
+	+ Add + Sub + Div + Mul
+	+ Debug
+{
+	/// The underlying data type used for this fixed point number.
+	type Inner: Copy + Debug + One;
+
+	/// The unsigned version of inner.
+	type Unsigned;
+
+	/// The perthing used.
+	type Perthing;
+
+	/// A data type that should be used to work with values which may exceed the inner type.
+	type Oversized: Copy + Debug + One;
+
+	/// The accuracy of this fixed point number.
+	const DIV: Self::Inner;
+
+	/// Accuracy of this `Fixed` implementation.
+	fn accuracy() -> Self::Inner {
+		Self::DIV
+	}
+
+	/// Creates self from an integer number.
+	///
+	/// Note that this might be lossy.
+	fn from_integer(int: Self::Inner) ->Self;
+
+	/// Raw constructor. Equal to `parts / DIV`.
+	fn from_parts(parts: Self::Inner) -> Self;
+
+	/// Creates self from a rational number. Equal to `n / d`.
+	///
+	/// Note that this might be lossy.
+	fn from_rational<N: UniqueSaturatedInto<Self::Oversized>>(n: N, d: Self::Unsigned) -> Self;
+
+	/// Consume self and return the inner raw value.
+	///
+	/// Note this is a low level function, as the returned value is represented with accuracy.
+	fn deconstruct(self) -> Self::Inner;
+
+	/// Takes the reciprocal (inverse), `1 / self`.
+	fn reciprocal(&self) -> Option<Self> {
+		Self::from_integer(Self::Inner::one()).checked_div(self)
+	}
+
+	/// Checked multiplication for integer type `N`.
+	fn checked_mul_int<N: Copy + TryFrom<Self::Inner> + TryInto<Self::Inner>>(&self, other: &N) -> Option<N>;
+
+	/// Checked division for integer type `N`.
+	fn checked_div_int<N: Copy + TryFrom<Self::Inner> + TryInto<Self::Inner>>(&self, other: &N) -> Option<N>;
+
+	/// Saturating multiplication for integer type `N`.
+	fn saturating_mul_int<N: Copy + TryFrom<Self::Inner> + TryInto<Self::Inner> + Bounded>(&self, other: &N) -> N;
+
+	/// Saturating absolute value. Returning MAX if `parts == Inner::MIN` instead of overflowing.
+	fn saturating_abs(&self) -> Self;
+
+	/// Returns zero.
+	fn zero() -> Self;
+
+	/// Checks if the number is zero.
+	fn is_zero(&self) -> bool;
+
+	/// Returns one.
+	fn one() -> Self;
+
+	/// Checks if the number is positive.
+	fn is_positive(&self) -> bool;
+
+	/// Checks if the number is negative.
+	fn is_negative(&self) -> bool;
+
+	/// Performs a saturated multiplication and accumulate by unsigned number.
+	///
+	/// Returns a saturated `int + (self * int)`.
+	fn saturated_multiply_accumulate<
+		N: From<u32> + TryFrom<u64> + From<u32> + UniqueSaturatedInto<u32> +
+			Bounded + Copy + Saturating + 
+			Rem<N, Output=N> + Div<N, Output=N> +
+			Mul<N, Output=N> + Add<N, Output=N> + Default + core::fmt::Debug
+	>(self, int: N) -> N;
+}

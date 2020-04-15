@@ -154,7 +154,7 @@ impl Fixed128 {
 		})
 	}
 
-	/// Checked mul for int type `N`.
+	/// Saturated mul for int type `N`.
 	pub fn saturating_mul_int<N>(&self, other: &N) -> N
 	where
 		N: Copy + TryFrom<i128> + TryInto<i128> + Bounded,
