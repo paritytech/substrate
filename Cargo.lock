@@ -5905,6 +5905,7 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "parking_lot 0.10.2",
+ "rand 0.7.3",
  "sc-block-builder",
  "sc-client-api",
  "sc-executor",
