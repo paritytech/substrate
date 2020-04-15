@@ -71,7 +71,7 @@ use hash_db::{Hasher, Prefix};
 use num_traits::{One, Zero};
 use codec::{Decode, Encode};
 use sp_core;
-use sp_core::storage::PrefixedStorageKey;
+use sp_core::storage::{PrefixedStorageKey, ChildInfo};
 use sp_trie::{MemoryDB, DBValue, TrieMut};
 use sp_trie::trie_types::TrieDBMut;
 use crate::{
@@ -169,7 +169,7 @@ pub struct TrieBackendStorageAdapter<'a, H: Hasher, Number: BlockNumber>(pub &'a
 impl<'a, H: Hasher, N: BlockNumber> crate::TrieBackendStorage<H> for TrieBackendStorageAdapter<'a, H, N> {
 	type Overlay = sp_trie::MemoryDB<H>;
 
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
+	fn get(&self, child_info: &ChildInfo, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		self.0.get(key, prefix)
 	}
 }

@@ -352,6 +352,7 @@ impl<'a, S, H> ProvingBackendRecorder<'a, S, H>
 		let eph = Ephemeral::new(
 			self.backend.backend_storage(),
 			&mut read_overlay,
+			None,
 		);
 
 		let map_e = |e| format!("Trie lookup error: {}", e);
@@ -379,6 +380,7 @@ impl<'a, S, H> ProvingBackendRecorder<'a, S, H>
 		let eph = Ephemeral::new(
 			self.backend.backend_storage(),
 			&mut read_overlay,
+			Some(child_info),
 		);
 
 		let map_e = |e| format!("Trie lookup error: {}", e);
@@ -398,6 +400,7 @@ impl<'a, S, H> ProvingBackendRecorder<'a, S, H>
 		let eph = Ephemeral::new(
 			self.backend.backend_storage(),
 			&mut read_overlay,
+			None,
 		);
 
 		let mut iter = move || -> Result<(), Box<TrieError<H::Out>>> {
@@ -515,19 +518,17 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H>
 {
 	type Overlay = S::Overlay;
 
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
+	fn get(&self, child_info: &ChildInfo, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		match &self.proof_recorder {
 			ProofRecorder::Flat(rec) => {
 				if let Some(v) = rec.read().get(key) {
 					return Ok(v.clone());
 				}
-				let backend_value = self.backend.get(key, prefix)?;
+				let backend_value = self.backend.get(child_info, key, prefix)?;
 				rec.write().insert(key.clone(), backend_value.clone());
 				Ok(backend_value)
 			},
 			ProofRecorder::Full(rec) => {
-				unimplemented!()
-/*				// TODO need flattening -> use another struct Proof Recordertrie backend.
 				if let Some(v) = rec.read().get(child_info).and_then(|s| s.get(key)) {
 					return Ok(v.clone());
 				}
@@ -535,7 +536,7 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H>
 				rec.write().entry(child_info.clone())
 					.or_default()
 					.insert(key.clone(), backend_value.clone());
-				Ok(backend_value)*/
+				Ok(backend_value)
 			},
 		}
 	}

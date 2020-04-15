@@ -161,7 +161,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 
 	fn pairs(&self) -> Vec<(StorageKey, StorageValue)> {
 		let mut read_overlay = S::Overlay::default();
-		let eph = Ephemeral::new(self.essence.backend_storage(), &mut read_overlay);
+		let eph = Ephemeral::new(self.essence.backend_storage(), &mut read_overlay, None);
 
 		let collect_all = || -> Result<_, Box<TrieError<H::Out>>> {
 			let trie = TrieDB::<H>::new(&eph, self.essence.root())?;
@@ -185,7 +185,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 
 	fn keys(&self, prefix: &[u8]) -> Vec<StorageKey> {
 		let mut read_overlay = S::Overlay::default();
-		let eph = Ephemeral::new(self.essence.backend_storage(), &mut read_overlay);
+		let eph = Ephemeral::new(self.essence.backend_storage(), &mut read_overlay, None);
 
 		let collect_all = || -> Result<_, Box<TrieError<H::Out>>> {
 			let trie = TrieDB::<H>::new(&eph, self.essence.root())?;
@@ -213,6 +213,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 			let mut eph = Ephemeral::new(
 				self.essence.backend_storage(),
 				&mut write_overlay,
+				None,
 			);
 
 			match delta_trie_root::<Layout<H>, _, _, _, _>(&mut eph, root, delta) {
@@ -252,6 +253,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 			let mut eph = Ephemeral::new(
 				self.essence.backend_storage(),
 				&mut write_overlay,
+				Some(child_info),
 			);
 
 			match child_delta_trie_root::<Layout<H>, _, _, _, _, _>(

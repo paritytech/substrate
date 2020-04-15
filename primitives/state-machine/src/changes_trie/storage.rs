@@ -18,7 +18,7 @@
 
 use std::collections::{BTreeMap, HashSet, HashMap};
 use hash_db::{Hasher, Prefix, EMPTY_PREFIX};
-use sp_core::storage::PrefixedStorageKey;
+use sp_core::storage::{PrefixedStorageKey, ChildInfo};
 use sp_trie::DBValue;
 use sp_trie::MemoryDB;
 use parking_lot::RwLock;
@@ -189,7 +189,7 @@ impl<H: Hasher, Number: BlockNumber> Storage<H, Number> for InMemoryStorage<H, N
 	}
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
-		MemoryDB::<H>::get(&self.data.read().mdb, key, prefix)
+		MemoryDB::<H>::get(&self.data.read().mdb, &ChildInfo::top_trie(), key, prefix)
 	}
 }
 
@@ -206,7 +206,7 @@ impl<'a, H, Number> TrieBackendStorage<H> for TrieBackendAdapter<'a, H, Number>
 {
 	type Overlay = MemoryDB<H>;
 
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
+	fn get(&self, _child_info: &ChildInfo, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		self.storage.get(key, prefix)
 	}
 }
