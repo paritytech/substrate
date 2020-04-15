@@ -225,61 +225,85 @@ benchmarks! {
 	}
 
 	emergency_cancel {
-		let u in 1 .. MAX_USERS;
-
-		let referendum_index = add_referendum::<T>(u)?;
+		let r in 1 .. MAX_REFERENDUMS;
 		let origin = T::CancellationOrigin::successful_origin();
+
+		// Create and cancel a bunch of referendums
+		for i in 0 .. r {
+			let ref_idx = add_referendum::<T>(i)?;
+			let call = Call::<T>::emergency_cancel(ref_idx);
+			call.dispatch(origin.clone())?;
+		}
+
+		// Lets now measure one more
+		let referendum_index = add_referendum::<T>(r)?;
 		let call = Call::<T>::emergency_cancel(referendum_index);
-	}: {
-		let _ = call.dispatch(origin)?;
+		assert!(Democracy::<T>::referendum_status(referendum_index).is_ok());
+	}: { call.dispatch(origin)? }
+	verify {
+		// Referendum has been canceled
+		assert!(Democracy::<T>::referendum_status(referendum_index).is_err());
 	}
 
+	// Worst case scenario, we external propose a previously blacklisted proposal
 	external_propose {
-		let u in 1 .. MAX_USERS;
+		let p in 1 .. MAX_PROPOSALS;
 
 		let origin = T::ExternalOrigin::successful_origin();
-		let proposal_hash = T::Hashing::hash_of(&u);
+		let proposal_hash = T::Hashing::hash_of(&p);
+		// Add proposal to blacklist with block number 0
+		Blacklist::<T>::insert(
+			proposal_hash,
+			(T::BlockNumber::zero(), vec![T::AccountId::default()])
+		);
+
 		let call = Call::<T>::external_propose(proposal_hash);
-	}: {
-		let _ = call.dispatch(origin)?;
+	}: { call.dispatch(origin)? }
+	verify {
+		// External proposal created
+		ensure!(<NextExternal<T>>::exists(), "External proposal didn't work");
 	}
 
 	external_propose_majority {
-		let u in 1 .. MAX_USERS;
+		let p in 1 .. MAX_PROPOSALS;
 
 		let origin = T::ExternalMajorityOrigin::successful_origin();
-		let proposal_hash = T::Hashing::hash_of(&u);
+		let proposal_hash = T::Hashing::hash_of(&p);
 		let call = Call::<T>::external_propose_majority(proposal_hash);
-
-	}: {
-		let _ = call.dispatch(origin)?;
+	}: { call.dispatch(origin)? }
+	verify {
+		// External proposal created
+		ensure!(<NextExternal<T>>::exists(), "External proposal didn't work");
 	}
 
 	external_propose_default {
-		let u in 1 .. MAX_USERS;
+		let p in 1 .. MAX_PROPOSALS;
 
 		let origin = T::ExternalDefaultOrigin::successful_origin();
-		let proposal_hash = T::Hashing::hash_of(&u);
+		let proposal_hash = T::Hashing::hash_of(&p);
 		let call = Call::<T>::external_propose_default(proposal_hash);
-
-	}: {
-		let _ = call.dispatch(origin)?;
+	}: { call.dispatch(origin)? }
+	verify {
+		// External proposal created
+		ensure!(<NextExternal<T>>::exists(), "External proposal didn't work");
 	}
 
 	fast_track {
-		let u in 1 .. MAX_USERS;
+		let p in 1 .. MAX_PROPOSALS;
 
 		let origin_propose = T::ExternalDefaultOrigin::successful_origin();
-		let proposal_hash: T::Hash = T::Hashing::hash_of(&u);
+		let proposal_hash: T::Hash = T::Hashing::hash_of(&p);
 		Democracy::<T>::external_propose_default(origin_propose, proposal_hash.clone())?;
 
+		// NOTE: Instant origin may invoke a little bit more logic, but may not always succeed.
 		let origin_fast_track = T::FastTrackOrigin::successful_origin();
 		let voting_period = T::FastTrackVotingPeriod::get();
 		let delay = 0;
 		let call = Call::<T>::fast_track(proposal_hash, voting_period.into(), delay.into());
 
-	}: {
-		let _ = call.dispatch(origin_fast_track)?;
+	}: { call.dispatch(origin_fast_track)? }
+	verify {
+		assert_eq!(Democracy::<T>::referendum_count(), 1, "referendum not created")
 	}
 
 	veto_external {
@@ -295,33 +319,45 @@ benchmarks! {
 		for i in 0 .. v {
 			vetoers.push(account("vetoer", i, SEED));
 		}
+		vetoers.sort();
 		Blacklist::<T>::insert(proposal_hash, (T::BlockNumber::zero(), vetoers));
 
 		let call = Call::<T>::veto_external(proposal_hash);
 		let origin = T::VetoOrigin::successful_origin();
-	}: {
-		let _ = call.dispatch(origin)?;
+		ensure!(NextExternal::<T>::get().is_some(), "no external proposal");
+	}: { call.dispatch(origin)? }
+	verify {
+		assert!(NextExternal::<T>::get().is_none());
+		let (_, new_vetoers) = <Blacklist<T>>::get(&proposal_hash).ok_or("no blacklist")?;
+		assert_eq!(new_vetoers.len(), (v + 1) as usize, "vetoers not added");
 	}
 
 	cancel_referendum {
-		let u in 1 .. MAX_USERS;
-
-		let referendum_index = add_referendum::<T>(u)?;
+		let r in 0 .. MAX_REFERENDUMS;
+		// Should have no effect on the execution time.
+		for i in 0..r {
+			add_referendum::<T>(i)?;
+		}
+		let referendum_index = add_referendum::<T>(r)?;
 	}: _(RawOrigin::Root, referendum_index)
 
 	cancel_queued {
-		let u in 1 .. MAX_USERS;
-
-		let referendum_index = add_referendum::<T>(u)?;
+		let r in 1 .. MAX_REFERENDUMS;
+		// Should have no effect on the execution time.
+		for i in 0..r {
+			add_referendum::<T>(i)?;
+		}
+		let referendum_index = add_referendum::<T>(r)?;
 	}: _(RawOrigin::Root, referendum_index)
 
-	open_proxy {
-		let u in 1 .. MAX_USERS;
+	// on_initialize {
+	// 	// Create maturing referenda
 
-		let caller: T::AccountId = funded_account::<T>("caller", u);
-		let proxy: T::AccountId = funded_account::<T>("proxy", u);
+	// 	// one fork for launch public
 
-	}: _(RawOrigin::Signed(proxy), caller)
+	// 	// one fork for launch external
+
+	// }: { Democracy::<T>::on_initialize()}
 
 	activate_proxy {
 		let u in 1 .. MAX_USERS;
@@ -329,22 +365,26 @@ benchmarks! {
 		let caller: T::AccountId = funded_account::<T>("caller", u);
 		let proxy: T::AccountId = funded_account::<T>("proxy", u);
 		Democracy::<T>::open_proxy(RawOrigin::Signed(proxy.clone()).into(), caller.clone())?;
-
-	}: _(RawOrigin::Signed(caller), proxy)
+	}: _(RawOrigin::Signed(caller.clone()), proxy.clone())
+	verify {
+		assert_eq!(Democracy::<T>::proxy(proxy), Some(ProxyState::Active(caller)));
+	}
 
 	close_proxy {
 		let u in 1 .. MAX_USERS;
-
 		let (caller, _) = open_activate_proxy::<T>(u)?;
-
-	}: _(RawOrigin::Signed(caller))
+	}: _(RawOrigin::Signed(caller.clone()))
+	verify {
+		assert_eq!(Democracy::<T>::proxy(caller), None);
+	}
 
 	deactivate_proxy {
 		let u in 1 .. MAX_USERS;
-
 		let (caller, voter) = open_activate_proxy::<T>(u)?;
-
-	}: _(RawOrigin::Signed(voter), caller)
+	}: _(RawOrigin::Signed(voter.clone()), caller.clone())
+	verify {
+		assert_eq!(Democracy::<T>::proxy(caller), Some(ProxyState::Open(voter)));
+	}
 
 	delegate {
 		let u in 1 .. MAX_USERS;
@@ -438,6 +478,14 @@ benchmarks! {
 		let other = caller.clone();
 
 	}: _(RawOrigin::Signed(caller), other)
+
+	open_proxy {
+		let u in 1 .. MAX_USERS;
+
+		let caller: T::AccountId = funded_account::<T>("caller", u);
+		let proxy: T::AccountId = funded_account::<T>("proxy", u);
+
+	}: _(RawOrigin::Signed(proxy), caller)
 
 	remove_vote {
 		let r in 1 .. MAX_REFERENDUMS;
