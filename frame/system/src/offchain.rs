@@ -178,8 +178,46 @@ impl<T: SigningTypes, C: AppCrypto<T::Public, T::Signature>, X> Signer<T, C, X> 
 
 	/// Check if there are any keys that could be used for signing.
 	pub fn can_sign(&self) -> bool {
-		return self.accounts.is_some() &&
-			self.accounts.as_ref().unwrap_or(&Vec::new()).len() > 0
+		self.accounts_from_keys().len() > 0
+	}
+
+	/// Return a vector of the intersection between
+	/// all available accounts and the provided accounts
+	/// in `with_filter`. If no accounts are provided,
+	/// use all accounts by default.
+	fn accounts_from_keys(&self) -> Vec<Account<T>> {
+		let keystore_accounts = self.keystore_accounts();
+
+		if self.accounts.as_ref().unwrap_or(&Vec::new()).len() == 0 {
+			return keystore_accounts;
+		}
+
+		let mut intersecting_accounts = vec![];
+		if let Some(ref keys) = self.accounts {
+			for (index, key) in keys.iter().enumerate() {
+				let account_id = key.clone().into_account();
+				let account = Account::new(index, account_id, key.clone());
+				intersecting_accounts.push(account);
+			}
+		}
+		intersecting_accounts
+	}
+
+	fn keystore_accounts(&self) -> Vec<Account<T>> {
+		let mut accounts = vec![];
+		let runtime_keys = C::RuntimeAppPublic::all()
+			.into_iter()
+			.enumerate();
+
+		for (index, key) in runtime_keys {
+			let generic_public = C::GenericPublic::from(key);
+			let public = generic_public.into();
+			let account_id = public.clone().into_account();
+			let account = Account::new(index, account_id, public.clone());
+			accounts.push(account);
+		}
+
+		accounts
 	}
 }
 
@@ -188,29 +226,13 @@ impl<T: SigningTypes, C: AppCrypto<T::Public, T::Signature>> Signer<T, C, ForAll
 	fn for_all<F, R>(&self, f: F) -> Vec<(Account<T>, R)> where
 		F: Fn(&Account<T>) -> Option<R>,
 	{
-		if let Some(ref accounts) = self.accounts {
-			accounts
-				.iter()
-				.enumerate()
-				.filter_map(|(index, key)| {
-					let account_id = key.clone().into_account();
-					let account = Account::new(index, account_id, key.clone());
-					f(&account).map(|res| (account, res))
-				})
-				.collect()
-		} else {
-			C::RuntimeAppPublic::all()
-				.into_iter()
-				.enumerate()
-				.filter_map(|(index, key)| {
-					let generic_public = C::GenericPublic::from(key);
-					let public = generic_public.into();
-					let account_id = public.clone().into_account();
-					let account = Account::new(index, account_id, public.clone());
-					f(&account).map(|res| (account, res))
-				})
-				.collect()
-		}
+		let accounts = self.accounts_from_keys();
+		accounts
+			.into_iter()
+			.filter_map(|account| {
+				f(&account).map(|res| (account, res))
+			})
+			.collect()
 	}
 }
 
@@ -218,29 +240,11 @@ impl<T: SigningTypes, C: AppCrypto<T::Public, T::Signature>> Signer<T, C, ForAny
 	fn for_any<F, R>(&self, f: F) -> Option<(Account<T>, R)> where
 		F: Fn(&Account<T>) -> Option<R>,
 	{
-		if let Some(ref accounts) = self.accounts {
-			for (index, key) in accounts.iter().enumerate() {
-				let account_id = key.clone().into_account();
-				let account = Account::new(index, account_id, key.clone());
-				let res = f(&account);
-				if let Some(res) = res {
-					return Some((account, res));
-				}
-			}
-		} else {
-			let runtime_keys = C::RuntimeAppPublic::all()
-				.into_iter()
-				.enumerate();
-
-			for (index, key) in runtime_keys {
-				let generic_public = C::GenericPublic::from(key);
-				let public = generic_public.into();
-				let account_id = public.clone().into_account();
-				let account = Account::new(index, account_id, public.clone());
-				let res = f(&account);
-				if let Some(res) = res {
-					return Some((account, res));
-				}
+		let accounts = self.accounts_from_keys();
+		for account in accounts.into_iter() {
+			let res = f(&account);
+			if let Some(res) = res {
+				return Some((account, res));
 			}
 		}
 		None
