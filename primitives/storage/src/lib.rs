@@ -381,10 +381,10 @@ impl ChildTrieParentKeyId {
 /// A few utilities methods are defined.
 pub struct ChildrenMap<T>(pub BTreeMap<ChildInfo, T>);
 
-/// Type alias for storage of children related content. 
+/// Type alias for storage of children related content.
 pub type ChildrenVec<T> = Vec<(ChildInfo, T)>;
 
-/// Type alias for storage of children related content. 
+/// Type alias for storage of children related content.
 pub type ChildrenSlice<'a, T> = &'a [(ChildInfo, T)];
 
 #[cfg(feature = "std")]
