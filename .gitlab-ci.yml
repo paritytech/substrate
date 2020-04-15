@@ -746,24 +746,24 @@ variables:
       # - $JOB_NAME
   script:
     - |
-      if [ -n "${PROJECT_NAME}" ] && [ -n "${CACHE_TYPE}" ] && [ -n "${BRANCH_NAME}" ]
+      if [ -n "${PROJECT_NAME}" ] && [[ ${CACHE_TYPE} == @("cargo"|"targets") ]] && [ -n "${BRANCH_NAME}" ] 
       then
-          if [ -d "/ci-cache/${PROJECT_NAME}/${CACHE_TYPE}/${BRANCH_NAME}/${JOB_NAME}" ]
+          if [ -d "./ci-cache/${PROJECT_NAME}/${CACHE_TYPE}/${BRANCH_NAME}/${JOB_NAME}" ]
           then
-              echo "Purging JOB cache in /ci-cache/${PROJECT_NAME}/${CACHE_TYPE}/${BRANCH_NAME}/${JOB_NAME} .";
-              ls -l "/ci-cache/${PROJECT_NAME}/${CACHE_TYPE}/${BRANCH_NAME}";
-          elif [ -d "/ci-cache/${PROJECT_NAME}/${CACHE_TYPE}/${BRANCH_NAME}" ]
+              echo "Directory ./ci-cache/${PROJECT_NAME}/${CACHE_TYPE}/${BRANCH_NAME}/${JOB_NAME} exists.";
+              echo "Removing JOB cache.";
+          elif [ -d "./ci-cache/${PROJECT_NAME}/${CACHE_TYPE}/${BRANCH_NAME}" ]
           then
-              echo "Purging BRANCH cache in /ci-cache/${PROJECT_NAME}/${CACHE_TYPE}/${BRANCH_NAME} .";
-              ls -l "/ci-cache/${PROJECT_NAME}/${CACHE_TYPE}";
+              echo "Directory ./ci-cache/${PROJECT_NAME}/${CACHE_TYPE}/${BRANCH_NAME} exists.";
+              echo "Removing BRANCH cache.";
           else
-              echo "Error! Directory /ci-cache/${PROJECT_NAME}/${CACHE_TYPE}/${BRANCH_NAME} does not exist.";
+              echo "Error 1: Directory ./ci-cache/${PROJECT_NAME}/${CACHE_TYPE}/${BRANCH_NAME} does not exist.";
               exit 1;
           fi
       else
           echo "Please set necessary variables.";
           exit 1;
-      fi    
+      fi 
 
 purge_cache 2 8:
   <<:                              *purge_cache
