@@ -25,7 +25,6 @@ pub use self::generic::{
 	RemoteChangesRequest, RemoteChangesResponse,
 	FinalityProofRequest, FinalityProofResponse,
 	FromBlock, RemoteReadChildRequest, Roles,
-	RemoteReadChildRequestV6,
 };
 use sc_client_api::StorageProof;
 
@@ -39,17 +38,6 @@ pub type Message<B> = generic::Message<
 	<<B as BlockT>::Header as HeaderT>::Number,
 	<B as BlockT>::Extrinsic,
 >;
-
-/// Type alias for using the message type using block type parameters.
-///
-/// This could be removed as soon as MIN_VERSION switch to 7.
-pub type MessageV6<B> = generic::MessageV6<
-	<B as BlockT>::Header,
-	<B as BlockT>::Hash,
-	<<B as BlockT>::Header as HeaderT>::Number,
-	<B as BlockT>::Extrinsic,
->;
-
 
 /// Type alias for using the status type using block type parameters.
 pub type Status<B> = generic::Status<
@@ -249,49 +237,6 @@ pub mod generic {
 		Number(Number),
 	}
 
-	/// A protocol V6 network message, this is only for backward compatibility.
-	/// It should only be use when we fail to decode a message
-	/// with the latest encoding.
-	#[derive(Decode)]
-	pub enum MessageV6<Header, Hash, Number, Extrinsic> {
-		/// Status packet.
-		Status(Status<Hash, Number>),
-		/// Block request.
-		BlockRequest(BlockRequest<Hash, Number>),
-		/// Block response.
-		BlockResponse(BlockResponse<Header, Hash, Extrinsic>),
-		/// Block announce.
-		BlockAnnounce(BlockAnnounce<Header>),
-		/// Transactions.
-		Transactions(Transactions<Extrinsic>),
-		/// Consensus protocol message.
-		Consensus(ConsensusMessage),
-		/// Remote method call request.
-		RemoteCallRequest(RemoteCallRequest<Hash>),
-		/// Remote method call response.
-		RemoteCallResponse(RemoteCallResponse),
-		/// Remote storage read request.
-		RemoteReadRequest(RemoteReadRequest<Hash>),
-		/// Remote storage read response.
-		RemoteReadResponse(RemoteReadResponse),
-		/// Remote header request.
-		RemoteHeaderRequest(RemoteHeaderRequest<Number>),
-		/// Remote header response.
-		RemoteHeaderResponse(RemoteHeaderResponse<Header>),
-		/// Remote changes request.
-		RemoteChangesRequest(RemoteChangesRequest<Hash>),
-		/// Remote changes response.
-		RemoteChangesResponse(RemoteChangesResponse<Number, Hash>),
-		/// Remote child storage read request.
-		RemoteReadChildRequest(RemoteReadChildRequestV6<Hash>),
-		/// Finality proof request.
-		FinalityProofRequest(FinalityProofRequest<Hash>),
-		/// Finality proof response.
-		FinalityProofResponse(FinalityProofResponse<Hash>),
-		/// Batch of consensus protocol messages.
-		ConsensusBatch(Vec<ConsensusMessage>),
-	}
-
 	/// A network message.
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 	pub enum Message<Header, Hash, Number, Extrinsic> {
@@ -331,39 +276,6 @@ pub mod generic {
 		FinalityProofResponse(FinalityProofResponse<Hash>),
 		/// Batch of consensus protocol messages.
 		ConsensusBatch(Vec<ConsensusMessage>),
-	}
-
-	impl<Header, Hash, Number, Extrinsic> MessageV6<Header, Hash, Number, Extrinsic> {
-		/// Get matching latest protocol message for a protocol V6 message.
-		///
-		/// Note that this function expect that V6 message are only created
-		/// after a failed latest message decoding, so we do only convert for diverging
-		/// decoding path.
-		pub fn into_latest(self) -> Option<Message<Header, Hash, Number, Extrinsic>> {
-			match self {
-				MessageV6::RemoteReadChildRequest(RemoteReadChildRequestV6 {
-					id,
-					block,
-					storage_key,
-					child_info: _,
-					child_type,
-					keys,
-				}) => {
-					// V6 protocol only got implementation for child type 1.
-					if child_type != 1 {
-						None
-					} else {
-						Some(Message::RemoteReadChildRequest(RemoteReadChildRequest {
-							id,
-							block,
-							storage_key,
-							keys,
-						}))
-					}
-				},
-				_ => None,
-			}
-		}
 	}
 
 	impl<Header, Hash, Number, Extrinsic> Message<Header, Hash, Number, Extrinsic> {
@@ -552,24 +464,6 @@ pub mod generic {
 		pub id: RequestId,
 		/// Block at which to perform call.
 		pub block: H,
-		/// Storage key.
-		pub keys: Vec<Vec<u8>>,
-	}
-
-	#[derive(Decode)]
-	/// Backward compatibility remote storage read child request.
-	pub struct RemoteReadChildRequestV6<H> {
-		/// Unique request id.
-		pub id: RequestId,
-		/// Block at which to perform call.
-		pub block: H,
-		/// Child Storage key.
-		pub storage_key: Vec<u8>,
-		/// Child trie source information.
-		pub child_info: Vec<u8>,
-		/// Child type, its required to resolve `child_info`
-		/// content and choose child implementation.
-		pub child_type: u32,
 		/// Storage key.
 		pub keys: Vec<Vec<u8>>,
 	}

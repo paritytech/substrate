@@ -38,7 +38,7 @@ use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, NumberFor, One, Zero, CheckedSub
 };
 use sp_arithmetic::traits::SaturatedConversion;
-use message::{BlockAnnounce, Message, MessageV6};
+use message::{BlockAnnounce, Message};
 use message::generic::{Message as GenericMessage, ConsensusMessage, Roles};
 use prometheus_endpoint::{Registry, Gauge, GaugeVec, HistogramVec, PrometheusError, Opts, register, U64};
 use sync::{ChainSync, SyncState};
@@ -91,7 +91,7 @@ const MAX_KNOWN_BLOCKS: usize = 1024; // ~32kb per peer + LruHashSet overhead
 const MAX_KNOWN_EXTRINSICS: usize = 4096; // ~128kb per peer + overhead
 
 /// Current protocol version.
-pub(crate) const CURRENT_VERSION: u32 = 7;
+pub(crate) const CURRENT_VERSION: u32 = 6;
 /// Lowest version we support
 pub(crate) const MIN_VERSION: u32 = 3;
 
@@ -524,24 +524,12 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		data: BytesMut,
 	) -> CustomMessageOutcome<B> {
 
-		let input = &mut &data[..];
-		let decoded_result = <Message<B> as Decode>::decode(input);
-		let all_read = input.is_empty();
-		let message = match (all_read, decoded_result) {
-			(true, Ok(message)) => message,
-			(false, _) | (_, Err(_)) => match <MessageV6<B> as Decode>::decode(&mut &data[..]) {
-				Ok(message) => if let Some(message) = message.into_latest() {
-					message
-				} else {
-					debug!(target: "sync", "Couldn't call packet sent by {}: {:?}: {}", who, data, "Invalid input.");
-					self.peerset_handle.report_peer(who.clone(), rep::BAD_MESSAGE);
-					return CustomMessageOutcome::None;
-				},
-				Err(err) => {
-					debug!(target: "sync", "Couldn't decode packet sent by {}: {:?}: {}", who, data, err.what());
-					self.peerset_handle.report_peer(who.clone(), rep::BAD_MESSAGE);
-					return CustomMessageOutcome::None;
-				}
+		let message = match <Message<B> as Decode>::decode(&mut &data[..]) {
+			Ok(message) => message,
+			Err(err) => {
+				debug!(target: "sync", "Couldn't decode packet sent by {}: {:?}: {}", who, data, err.what());
+				self.peerset_handle.report_peer(who.clone(), rep::BAD_MESSAGE);
+				return CustomMessageOutcome::None;
 			}
 		};
 
