@@ -1,6 +1,6 @@
 [package]
 name = "sp-phragmen"
-version = "2.0.0-alpha.5"
+version = "2.0.0-alpha.6"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
@@ -8,17 +8,20 @@ homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 description = "Phragmen primitives"
 
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
 serde = { version = "1.0.101", optional = true, features = ["derive"] }
-sp-std = { version = "2.0.0-alpha.5", default-features = false, path = "../std" }
-sp-runtime = { version = "2.0.0-alpha.5", default-features = false, path = "../../primitives/runtime" }
-sp-phragmen-compact = { version = "2.0.0-alpha.4", path = "./compact" }
+sp-std = { version = "2.0.0-alpha.6", default-features = false, path = "../std" }
+sp-runtime = { version = "2.0.0-alpha.6", default-features = false, path = "../../primitives/runtime" }
+sp-phragmen-compact = { version = "2.0.0-dev.1", path = "./compact" }
 
 [dev-dependencies]
-substrate-test-utils = { version = "2.0.0-alpha.5", path = "../../test-utils" }
+substrate-test-utils = { version = "2.0.0-alpha.6", path = "../../test-utils" }
 rand = "0.7.3"
-sp-phragmen = { path = "." }
+sp-phragmen = { path = "." , version = "2.0.0-alpha.6"}
 
 [features]
 default = ["std"]
@@ -29,6 +32,3 @@ std = [
 	"sp-std/std",
 	"sp-runtime/std",
 ]
-
-[package.metadata.docs.rs]
-targets = ["x86_64-unknown-linux-gnu"]

@@ -1,6 +1,6 @@
 [package]
 name = "sc-executor-wasmtime"
-version = "0.8.0-alpha.5"
+version = "0.8.0-alpha.6"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
@@ -8,16 +8,19 @@ homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 description = "Defines a `WasmRuntime` that uses the Wasmtime JIT to execute."
 
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
 [dependencies]
 log = "0.4.8"
 scoped-tls = "1.0"
 parity-wasm = "0.41.0"
 codec = { package = "parity-scale-codec", version = "1.3.0" }
-sc-executor-common = { version = "0.8.0-alpha.5", path = "../common" }
-sp-wasm-interface = { version = "2.0.0-alpha.5", path = "../../../primitives/wasm-interface" }
-sp-runtime-interface = { version = "2.0.0-alpha.5", path = "../../../primitives/runtime-interface" }
-sp-core = { version = "2.0.0-alpha.5", path = "../../../primitives/core" }
-sp-allocator = { version = "2.0.0-alpha.5", path = "../../../primitives/allocator" }
+sc-executor-common = { version = "0.8.0-alpha.6", path = "../common" }
+sp-wasm-interface = { version = "2.0.0-alpha.6", path = "../../../primitives/wasm-interface" }
+sp-runtime-interface = { version = "2.0.0-alpha.6", path = "../../../primitives/runtime-interface" }
+sp-core = { version = "2.0.0-alpha.6", path = "../../../primitives/core" }
+sp-allocator = { version = "2.0.0-alpha.6", path = "../../../primitives/allocator" }
 wasmtime = { package = "substrate-wasmtime", version = "0.13.0-threadsafe.1" }
 wasmtime_runtime = { package = "substrate-wasmtime-runtime", version = "0.13.0-threadsafe.1" }
 wasmtime-environ = "0.12.0"
@@ -26,6 +29,3 @@ cranelift-codegen = "0.59.0"
 
 [dev-dependencies]
 assert_matches = "1.3.0"
-
-[package.metadata.docs.rs]
-targets = ["x86_64-unknown-linux-gnu"]

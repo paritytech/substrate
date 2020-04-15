@@ -1,12 +1,15 @@
 [package]
 name = "substrate-browser-utils"
-version = "0.8.0-alpha.5"
+version = "0.8.0-alpha.6"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Utilities for creating a browser light-client."
 edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 futures = "0.3"
@@ -19,10 +22,10 @@ js-sys = "0.3.34"
 wasm-bindgen = "0.2.57"
 wasm-bindgen-futures = "0.4.7"
 kvdb-web = "0.5"
-sc-informant = { version = "0.8.0-alpha.5", path = "../../client/informant" }
-sc-service = { version = "0.8.0-alpha.5", path = "../../client/service", default-features = false }
-sc-network = { path = "../../client/network", version = "0.8.0-alpha.5"}
-sc-chain-spec = { path = "../../client/chain-spec", version = "2.0.0-alpha.5"}
+sc-informant = { version = "0.8.0-alpha.6", path = "../../client/informant" }
+sc-service = { version = "0.8.0-alpha.6", path = "../../client/service", default-features = false }
+sc-network = { path = "../../client/network", version = "0.8.0-alpha.6"}
+sc-chain-spec = { path = "../../client/chain-spec", version = "2.0.0-alpha.6"}
 
 # Imported just for the `no_cc` feature
 clear_on_drop = { version = "0.2.3", features = ["no_cc"] }
@@ -31,6 +34,3 @@ rand6 = { package = "rand", version = "0.6", features = ["wasm-bindgen"] }
 rand = { version = "0.7", features = ["wasm-bindgen"] }
 futures-timer = { version = "3.0.1", features = ["wasm-bindgen"]}
 chrono = { version = "0.4", features = ["wasmbind"] }
-
-[package.metadata.docs.rs]
-targets = ["x86_64-unknown-linux-gnu"]
