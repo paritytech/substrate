@@ -190,35 +190,6 @@ impl ChildInfo {
 		}
 	}
 
-	/// Create child info from a prefixed storage key and a given type.
-	pub fn resolve_child_info(child_type: u32, storage_key: &[u8]) -> Option<Self> {
-		match ChildType::new(child_type) {
-			Some(ChildType::ParentKeyId) => {
-				Some(Self::new_default(storage_key))
-			},
-			None => None,
-		}
-	}
-
-	/// Returns a single byte vector containing packed child info content and its child info type.
-	/// This can be use as input for `resolve_child_info`.
-	pub fn info(&self) -> (&[u8], u32) {
-		match self {
-			ChildInfo::ParentKeyId(ChildTrieParentKeyId {
-				data,
-			}) => (data, ChildType::ParentKeyId as u32),
-		}
-	}
-
-	/// Owned variant of `info`.
-	pub fn into_info(self) -> (Vec<u8>, u32) {
-		match self {
-			ChildInfo::ParentKeyId(ChildTrieParentKeyId {
-				data,
-			}) => (data, ChildType::ParentKeyId as u32),
-		}
-	}
-
 	/// Returns byte sequence (keyspace) that can be use by underlying db to isolate keys.
 	/// This is a unique id of the child trie. The collision resistance of this value
 	/// depends on the type of child info use. For `ChildInfo::Default` it is and need to be.
