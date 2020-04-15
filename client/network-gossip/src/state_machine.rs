@@ -16,7 +16,7 @@
 
 use crate::{Network, MessageIntent, Validator, ValidatorContext, ValidationResult};
 
-use std::collections::{HashMap, HashSet, hash_map::Entry};
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::iter;
 use std::time;
@@ -24,7 +24,6 @@ use log::trace;
 use lru::LruCache;
 use libp2p::PeerId;
 use sp_runtime::traits::{Block as BlockT, Hash, HashFor};
-use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
 use sp_runtime::ConsensusEngineId;
 use sc_network::ObservedRole;
 use wasm_timer::Instant;
@@ -51,7 +50,7 @@ struct PeerConsensus<H> {
 }
 
 /// Topic stream message with sender.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TopicNotification {
 	/// Message data.
 	pub message: Vec<u8>,
@@ -147,7 +146,6 @@ fn propagate<'a, B: BlockT, I>(
 /// Consensus network protocol handler. Manages statements and candidate requests.
 pub struct ConsensusGossip<B: BlockT> {
 	peers: HashMap<PeerId, PeerConsensus<B::Hash>>,
-	live_message_sinks: HashMap<B::Hash, Vec<TracingUnboundedSender<TopicNotification>>>,
 	messages: Vec<MessageEntry<B>>,
 	known_messages: LruCache<B::Hash, ()>,
 	engine_id: ConsensusEngineId,
@@ -160,7 +158,6 @@ impl<B: BlockT> ConsensusGossip<B> {
 	pub fn new(validator: Arc<dyn Validator<B>>, engine_id: ConsensusEngineId) -> Self {
 		ConsensusGossip {
 			peers: HashMap::new(),
-			live_message_sinks: HashMap::new(),
 			messages: Default::default(),
 			known_messages: LruCache::new(KNOWN_MESSAGES_CACHE_SIZE),
 			engine_id,
@@ -256,11 +253,6 @@ impl<B: BlockT> ConsensusGossip<B> {
 	/// Prune old or no longer relevant consensus messages. Provide a predicate
 	/// for pruning, which returns `false` when the items with a given topic should be pruned.
 	pub fn collect_garbage(&mut self) {
-		self.live_message_sinks.retain(|_, sinks| {
-			sinks.retain(|sink| !sink.is_closed());
-			!sinks.is_empty()
-		});
-
 		let known_messages = &mut self.known_messages;
 		let before = self.messages.len();
 
@@ -278,33 +270,24 @@ impl<B: BlockT> ConsensusGossip<B> {
 		}
 	}
 
-	/// Get data of valid, incoming messages for a topic (but might have expired meanwhile)
-	pub fn messages_for(&mut self, topic: B::Hash)
-		-> TracingUnboundedReceiver<TopicNotification>
-	{
-		let (tx, rx) = tracing_unbounded("mpsc_gossip_messages_for");
-		for entry in self.messages.iter_mut().filter(|e| e.topic == topic) {
-			tx.unbounded_send(TopicNotification {
-					message: entry.message.clone(),
-					sender: entry.sender.clone(),
-				})
-				.expect("receiver known to be live; qed");
-		}
-
-		self.live_message_sinks.entry(topic).or_default().push(tx);
-
-		rx
+	/// Get valid incoming messages for a topic (but might have expired meanwhile).
+	pub fn messages_for(&mut self, topic: B::Hash) -> impl Iterator<Item = TopicNotification> + '_ {
+		self.messages.iter().filter(move |e| e.topic == topic).map(|entry| TopicNotification {
+			message: entry.message.clone(),
+			sender: entry.sender.clone(),
+		})
 	}
 
-	/// Handle an incoming message for topic by who via protocol. Discard message if topic already
-	/// known, the message is old, its source peers isn't a registered peer or the connection to
-	/// them is broken.
+	/// Register incoming messages and return the ones that are new and valid (according to a gossip
+	/// validator) and should thus be forwarded to the upper layers.
 	pub fn on_incoming(
 		&mut self,
 		network: &mut dyn Network<B>,
 		who: PeerId,
 		messages: Vec<Vec<u8>>,
-	) {
+	) -> Vec<(B::Hash, TopicNotification)> {
+		let mut to_forward = vec![];
+
 		if !messages.is_empty() {
 			trace!(target: "gossip", "Received {} messages from peer {}", messages.len(), who);
 		}
@@ -335,23 +318,19 @@ impl<B: BlockT> ConsensusGossip<B> {
 				network.report_peer(who.clone(), rep::GOSSIP_SUCCESS);
 				if let Some(ref mut peer) = self.peers.get_mut(&who) {
 					peer.known_messages.insert(message_hash);
-					if let Entry::Occupied(mut entry) = self.live_message_sinks.entry(topic) {
-						trace!(target: "gossip", "Pushing consensus message to sinks for {}.", topic);
-						entry.get_mut().retain(|sink| {
-							if let Err(e) = sink.unbounded_send(TopicNotification {
-								message: message.clone(),
-								sender: Some(who.clone())
-							}) {
-								trace!(target: "gossip", "Error broadcasting message notification: {:?}", e);
-							}
-							!sink.is_closed()
-						});
-						if entry.get().is_empty() {
-							entry.remove_entry();
-						}
-					}
+
+					to_forward.push((topic, TopicNotification {
+						message: message.clone(),
+						sender: Some(who.clone())
+					}));
+
 					if keep {
-						self.register_message_hashed(message_hash, topic, message, Some(who.clone()));
+						self.register_message_hashed(
+							message_hash,
+							topic,
+							message,
+							Some(who.clone()),
+						);
 					}
 				} else {
 					trace!(target:"gossip", "Ignored statement from unregistered peer {}", who);
@@ -361,6 +340,8 @@ impl<B: BlockT> ConsensusGossip<B> {
 				trace!(target:"gossip", "Discard message from peer {}", who);
 			}
 		}
+
+		to_forward
 	}
 
 	/// Send all messages with given topic to a peer.

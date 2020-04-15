@@ -21,9 +21,16 @@ use sc_network::{Event, ReputationChange};
 
 use futures::prelude::*;
 use libp2p::PeerId;
+use log::trace;
 use sp_runtime::{traits::Block as BlockT, ConsensusEngineId};
-use std::{borrow::Cow, pin::Pin, sync::Arc, task::{Context, Poll}};
-use sp_utils::mpsc::TracingUnboundedReceiver;
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
+use std::{
+	borrow::Cow,
+	collections::{HashMap, hash_map::Entry},
+	pin::Pin,
+	sync::Arc,
+	task::{Context, Poll},
+};
 
 /// Wraps around an implementation of the `Network` crate and provides gossiping capabilities on
 /// top of it.
@@ -31,8 +38,12 @@ pub struct GossipEngine<B: BlockT> {
 	state_machine: ConsensusGossip<B>,
 	network: Box<dyn Network<B> + Send>,
 	periodic_maintenance_interval: futures_timer::Delay,
-	network_event_stream: Pin<Box<dyn Stream<Item = Event> + Send>>,
 	engine_id: ConsensusEngineId,
+
+	/// Incoming events from the network.
+	network_event_stream: Pin<Box<dyn Stream<Item = Event> + Send>>,
+	/// Outgoing events to the consumer.
+	message_sinks: HashMap<B::Hash, Vec<TracingUnboundedSender<TopicNotification>>>,
 }
 
 impl<B: BlockT> Unpin for GossipEngine<B> {}
@@ -54,8 +65,10 @@ impl<B: BlockT> GossipEngine<B> {
 			state_machine: ConsensusGossip::new(validator, engine_id),
 			network: Box::new(network),
 			periodic_maintenance_interval: futures_timer::Delay::new(PERIODIC_MAINTENANCE_INTERVAL),
-			network_event_stream,
 			engine_id,
+
+			network_event_stream,
+			message_sinks: HashMap::new(),
 		}
 	}
 
@@ -85,7 +98,15 @@ impl<B: BlockT> GossipEngine<B> {
 	pub fn messages_for(&mut self, topic: B::Hash)
 		-> TracingUnboundedReceiver<TopicNotification>
 	{
-		self.state_machine.messages_for(topic)
+		let (tx, rx) = tracing_unbounded("mpsc_gossip_messages_for");
+
+		for notification in self.state_machine.messages_for(topic) {
+			tx.unbounded_send(notification).expect("receiver known to be live; qed");
+		}
+
+		self.message_sinks.entry(topic).or_default().push(tx);
+
+		rx
 	}
 
 	/// Send all messages with given topic to a peer.
@@ -147,16 +168,40 @@ impl<B: BlockT> Future for GossipEngine<B> {
 						this.state_machine.peer_disconnected(&mut *this.network, remote);
 					},
 					Event::NotificationsReceived { remote, messages } => {
-						let engine_id = this.engine_id.clone();
-						this.state_machine.on_incoming(
+						let messages = messages.into_iter().filter_map(|(engine, data)| {
+							if engine == this.engine_id {
+								Some(data.to_vec())
+							} else {
+								None
+							}
+						}).collect();
+
+						let to_forward = this.state_machine.on_incoming(
 							&mut *this.network,
 							remote,
-							messages.into_iter()
-								.filter_map(|(engine, data)| if engine == engine_id {
-									Some(data.to_vec())
-								} else { None })
-								.collect()
+							messages,
 						);
+
+						for (topic, notification) in to_forward.into_iter() {
+							if let Entry::Occupied(mut entry) = this.message_sinks.entry(topic) {
+								trace!(
+									target: "gossip",
+									"Pushing consensus message to sinks for {}.", topic,
+								);
+								entry.get_mut().retain(move |sink| {
+									if let Err(e) = sink.unbounded_send(notification.clone()) {
+										trace!(
+											target: "gossip",
+											"Error broadcasting message notification: {:?}", e,
+										);
+									}
+									!sink.is_closed()
+								});
+								if entry.get().is_empty() {
+									entry.remove_entry();
+								}
+							}
+						}
 					},
 					Event::Dht(_) => {}
 				}
@@ -169,6 +214,11 @@ impl<B: BlockT> Future for GossipEngine<B> {
 		while let Poll::Ready(()) = this.periodic_maintenance_interval.poll_unpin(cx) {
 			this.periodic_maintenance_interval.reset(PERIODIC_MAINTENANCE_INTERVAL);
 			this.state_machine.tick(&mut *this.network);
+
+			this.message_sinks.retain(|_, sinks| {
+				sinks.retain(|sink| !sink.is_closed());
+				!sinks.is_empty()
+			});
 		}
 
 		Poll::Pending
