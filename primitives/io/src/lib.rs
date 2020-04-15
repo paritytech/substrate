@@ -508,7 +508,7 @@ pub trait Crypto {
 	fn finish_batch_verify(&mut self) -> bool {
 		if self.extension::<VerificationExt>().is_none() {
 			// No verification extension - nothing to verify.
-			return panic!(
+			panic!(
 				"`finish_batch_verify` should is called without first calling `start_batch_verify`"
 			);
 		}
