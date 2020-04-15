@@ -845,8 +845,8 @@ pub struct NetworkWorker<B: BlockT + 'static, H: ExHashT> {
 
 struct Metrics {
 	// This list is ordered alphabetically
-	connections_opened_total: CounterVec<U64>,
 	connections_closed_total: CounterVec<U64>,
+	connections_opened_total: CounterVec<U64>,
 	import_queue_blocks_submitted: Counter<U64>,
 	import_queue_finality_proofs_submitted: Counter<U64>,
 	import_queue_justifications_submitted: Counter<U64>,
@@ -874,19 +874,19 @@ impl Metrics {
 	fn register(registry: &Registry) -> Result<Self, PrometheusError> {
 		Ok(Self {
 			// This list is ordered alphabetically
+			connections_closed_total: register(CounterVec::new(
+				Opts::new(
+					"sub_libp2p_connections_closed_total",
+					"Total number of connections closed, by reason and direction"
+				),
+				&["direction", "reason"]
+			)?, registry)?,
 			connections_opened_total: register(CounterVec::new(
 				Opts::new(
 					"sub_libp2p_connections_opened_total",
 					"Total number of connections opened"
 				),
 				&["direction"]
-			)?, registry)?,
-			connections_closed_total: register(CounterVec::new(
-				Opts::new(
-					"sub_libp2p_connections_closed_total",
-					"Total number of connections closed, by reason"
-				),
-				&["direction", "reason"]
 			)?, registry)?,
 			import_queue_blocks_submitted: register(Counter::new(
 				"import_queue_blocks_submitted",
