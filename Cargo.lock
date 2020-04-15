@@ -6306,7 +6306,7 @@ dependencies = [
  "num-rational",
  "num-traits 0.2.11",
  "parity-scale-codec",
- "parking_lot 0.10.0",
+ "parking_lot 0.10.2",
  "pdqselect",
  "rand 0.7.3",
  "sc-block-builder",

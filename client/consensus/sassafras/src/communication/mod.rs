@@ -35,6 +35,11 @@ pub fn send_out(
 		}
 
 		if pending.submit_status.is_none() {
+			if set.proofs.contains(&pending.vrf_proof) {
+				pending.submit_status = Some(slot_number);
+				continue
+			}
+
 			let receiver_id = set.authorities[pending.submit_authority_index as usize].0.clone();
 			let receiver_public = match schnorrkel::PublicKey::from_bytes(receiver_id.as_ref()) {
 				Ok(public) => public,
