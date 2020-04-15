@@ -387,32 +387,98 @@ benchmarks! {
 	}
 
 	delegate {
-		let u in 1 .. MAX_USERS;
+		let r in 1 .. MAX_REFERENDUMS;
 
-		let caller = funded_account::<T>("caller", u);
-		let d: T::AccountId = funded_account::<T>("delegate", u);
-		let balance = 1u32;
+		let initial_balance: BalanceOf<T> = 100.into();
+		let delegated_balance: BalanceOf<T> = 1000.into();
 
-	}: _(RawOrigin::Signed(caller), d.into(), Conviction::Locked1x, balance.into())
+		let caller = funded_account::<T>("caller", 0);
+		// Caller will initially delegate to `old_delegate`
+		let old_delegate: T::AccountId = funded_account::<T>("old_delegate", r);
+		Democracy::<T>::delegate(
+			RawOrigin::Signed(caller.clone()).into(),
+			old_delegate.clone(),
+			Conviction::Locked1x,
+			delegated_balance,
+		)?;
+		let (target, balance) = match VotingOf::<T>::get(&caller) {
+			Voting::Delegating { target, balance, .. } => (target, balance),
+			_ => return Err("Votes are not direct"),
+		};
+		assert_eq!(target, old_delegate, "delegation target didn't work");
+		assert_eq!(balance, delegated_balance, "delegation balance didn't work");
+		// Caller will now switch to `new_delegate`
+		let new_delegate: T::AccountId = funded_account::<T>("new_delegate", r);
+		let account_vote = account_vote::<T>(initial_balance);
+		// We need to create existing direct votes for the `new_delegate`
+		for i in 0..r {
+			let ref_idx = add_referendum::<T>(i)?;
+			Democracy::<T>::vote(RawOrigin::Signed(new_delegate.clone()).into(), ref_idx, account_vote.clone())?;
+		}
+		let votes = match VotingOf::<T>::get(&new_delegate) {
+			Voting::Direct { votes, .. } => votes,
+			_ => return Err("Votes are not direct"),
+		};
+		assert_eq!(votes.len(), r as usize, "Votes were not recorded.");
+	}: _(RawOrigin::Signed(caller.clone()), new_delegate.clone(), Conviction::Locked1x, delegated_balance)
+	verify {
+		let (target, balance) = match VotingOf::<T>::get(&caller) {
+			Voting::Delegating { target, balance, .. } => (target, balance),
+			_ => return Err("Votes are not direct"),
+		};
+		assert_eq!(target, new_delegate, "delegation target didn't work");
+		assert_eq!(balance, delegated_balance, "delegation balance didn't work");
+		let delegations = match VotingOf::<T>::get(&new_delegate) {
+			Voting::Direct { delegations, .. } => delegations,
+			_ => return Err("Votes are not direct"),
+		};
+		assert_eq!(delegations.capital, delegated_balance, "delegation was not recorded.");
+	}
 
 	undelegate {
 		let r in 1 .. MAX_REFERENDUMS;
 
-		let other = funded_account::<T>("other", 0);
-		let account_vote = account_vote::<T>(100.into());
+		let initial_balance: BalanceOf<T> = 100.into();
+		let delegated_balance: BalanceOf<T> = 1000.into();
 
-		for i in 0 .. r {
+		let caller = funded_account::<T>("caller", 0);
+		// Caller will delegate
+		let the_delegate: T::AccountId = funded_account::<T>("delegate", r);
+		Democracy::<T>::delegate(
+			RawOrigin::Signed(caller.clone()).into(),
+			the_delegate.clone(),
+			Conviction::Locked1x,
+			delegated_balance,
+		)?;
+		let (target, balance) = match VotingOf::<T>::get(&caller) {
+			Voting::Delegating { target, balance, .. } => (target, balance),
+			_ => return Err("Votes are not direct"),
+		};
+		assert_eq!(target, the_delegate, "delegation target didn't work");
+		assert_eq!(balance, delegated_balance, "delegation balance didn't work");
+		// We need to create votes direct votes for the `delegate`
+		let account_vote = account_vote::<T>(initial_balance);
+		for i in 0..r {
 			let ref_idx = add_referendum::<T>(i)?;
-			Democracy::<T>::vote(RawOrigin::Signed(other.clone()).into(), ref_idx, account_vote.clone())?;
+			Democracy::<T>::vote(
+				RawOrigin::Signed(the_delegate.clone()).into(),
+				ref_idx,
+				account_vote.clone()
+			)?;
 		}
-
-		let delegator = funded_account::<T>("delegator", r);
-		let conviction = Conviction::Locked1x;
-		let balance = 1u32;
-
-		Democracy::<T>::delegate(RawOrigin::Signed(delegator.clone()).into(), other.clone().into(), conviction, balance.into())?;
-
-	}: _(RawOrigin::Signed(delegator))
+		let votes = match VotingOf::<T>::get(&the_delegate) {
+			Voting::Direct { votes, .. } => votes,
+			_ => return Err("Votes are not direct"),
+		};
+		assert_eq!(votes.len(), r as usize, "Votes were not recorded.");
+	}: _(RawOrigin::Signed(caller.clone()))
+	verify {
+		// Voting should now be direct
+		match VotingOf::<T>::get(&caller) {
+			Voting::Direct { .. } => (),
+			_ => return Err("undelegation failed"),
+		}
+	}
 
 	clear_public_proposals {
 		let p in 0 .. MAX_PROPOSALS;
