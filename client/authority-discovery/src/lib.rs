@@ -335,8 +335,8 @@ where
 	///
 	/// Returns either:
 	///   - Poll::Pending when there are no more events to handle or
-	///   - Poll::Ready(Error) when a fatal error occurred.
-	fn handle_dht_events(&mut self, cx: &mut Context) -> Poll<Error>{
+	///   - Poll::Ready(()) when the dht event stream terminated.
+	fn handle_dht_events(&mut self, cx: &mut Context) -> Poll<()>{
 		loop {
 			match ready!(self.dht_event_rx.poll_next_unpin(cx)) {
 				Some(DhtEvent::ValueFound(v)) => {
@@ -389,9 +389,10 @@ where
 						"Failed to put hash '{:?}' on Dht.", hash
 					)
 				},
-				// The sender side of the dht event stream has been closed, likely due to the
-				// network terminating.
-				None => return Poll::Ready(Error::DhtEventStreamTerminated),
+				None => {
+					debug!(target: LOG_TARGET, "Dht event stream terminated.");
+					return Poll::Ready(());
+				},
 			}
 		}
 	}
@@ -523,13 +524,10 @@ where
 
 	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		// Process incoming events.
-		if let Poll::Ready(error) = self.handle_dht_events(cx) {
-			warn!(
-				target: LOG_TARGET,
-				"Failed to handle incoming Dht events: {:?}", error,
-			);
-			// `handle_dht_events` returns fatal errors only, thus the authority discovery should
-			// terminate.
+		if let Poll::Ready(()) = self.handle_dht_events(cx) {
+			// `handle_dht_events` returns `Poll::Ready(())` when the Dht event stream terminated.
+			// Termination of the Dht event stream implies that the underlying network terminated,
+			// thus authority discovery should terminate as well.
 			return Poll::Ready(());
 		}
 
