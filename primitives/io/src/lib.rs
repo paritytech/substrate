@@ -503,10 +503,14 @@ pub trait Crypto {
 	///
 	/// Verify or wait for verification to finish for all signatures which were previously
 	/// deferred by `sr25519_verify`/`ed25519_verify`.
+	///
+	/// Will panic if no `VerificationExt` is registered (`start_batch_verify` was not called).
 	fn finish_batch_verify(&mut self) -> bool {
 		if self.extension::<VerificationExt>().is_none() {
 			// No verification extension - nothing to verify.
-			return true;
+			return panic!(
+				"`finish_batch_verify` should is called without first calling `start_batch_verify`"
+			);
 		}
 
 		let result = self.extension::<VerificationExt>()
@@ -1162,7 +1166,7 @@ mod tests {
 
 			// 2 valid ed25519 signatures
 			crypto::start_batch_verify();
-			
+
 			let pair = ed25519::Pair::generate_with_phrase(None).0;
 			let msg = b"Important message";
 			let signature = pair.sign(msg);
