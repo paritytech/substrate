@@ -21,6 +21,7 @@ linked-hash-map = "0.5.2"
 hash-db = "0.15.2"
 parity-util-mem = { version = "0.6.0", default-features = false, features = ["std"] }
 codec = { package = "parity-scale-codec", version = "1.3.0", features = ["derive"] }
+blake2-rfc = "0.2.18"
 
 sc-client-api = { version = "2.0.0-dev", path = "../api" }
 sp-core = { version = "2.0.0-dev", path = "../../primitives/core" }
@@ -32,6 +33,9 @@ sc-state-db = { version = "0.8.0-dev", path = "../state-db" }
 sp-trie = { version = "2.0.0-dev", path = "../../primitives/trie" }
 sp-consensus = { version = "0.8.0-dev", path = "../../primitives/consensus/common" }
 sp-blockchain = { version = "2.0.0-dev", path = "../../primitives/blockchain" }
+sp-database = { version = "2.0.0-dev", path = "../../primitives/database" }
+parity-db = { version = "0.1", optional = true }
+subdb = { git = "https://github.com/paritytech/subdb", optional = true }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.8.0-dev", path = "../../utils/prometheus" }
 
 [dev-dependencies]
