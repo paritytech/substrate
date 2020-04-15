@@ -96,12 +96,12 @@ use sp_std::{
 };
 use frame_support::{
 	decl_module, decl_storage, decl_event, ensure, decl_error,
-	traits::{ChangeMembers, InitializeMembers, Currency, Get, ReservableCurrency},
+	traits::{EnsureOrigin, ChangeMembers, InitializeMembers, Currency, Get, ReservableCurrency},
 	weights::{Weight, SimpleDispatchInfo, WeighData},
 };
 use frame_system::{self as system, ensure_root, ensure_signed};
 use sp_runtime::{
-	traits::{EnsureOrigin, AtLeast32Bit, MaybeSerializeDeserialize, Zero, StaticLookup},
+	traits::{AtLeast32Bit, MaybeSerializeDeserialize, Zero, StaticLookup},
 };
 
 type BalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
@@ -191,8 +191,8 @@ decl_storage! {
 					<CandidateExists<T, I>>::insert(who, true);
 				});
 
-			/// Sorts the `Pool` by score in a descending order. Entities which
-			/// have a score of `None` are sorted to the beginning of the vec.
+			// Sorts the `Pool` by score in a descending order. Entities which
+			// have a score of `None` are sorted to the beginning of the vec.
 			pool.sort_by_key(|(_, maybe_score)|
 				Reverse(maybe_score.unwrap_or_default())
 			);

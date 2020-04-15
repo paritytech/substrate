@@ -16,7 +16,10 @@
 
 use futures_util::{FutureExt, future::Future};
 pub use prometheus::{
+	self,
 	Registry, Error as PrometheusError, Opts,
+	Histogram, HistogramOpts, HistogramVec,
+	exponential_buckets,
 	core::{
 		GenericGauge as Gauge, GenericCounter as Counter,
 		GenericGaugeVec as GaugeVec, GenericCounterVec as CounterVec,

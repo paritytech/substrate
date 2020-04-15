@@ -14,21 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+mod command;
+
+use sc_cli::{ExecutionStrategy, WasmExecutionMethod};
 use std::fmt::Debug;
-use sp_runtime::{traits::{Block as BlockT, Header as HeaderT, NumberFor}};
-use sc_client::StateMachine;
-use sc_cli::{ExecutionStrategy, WasmExecutionMethod, VersionInfo};
-use sc_client_db::BenchmarkingState;
-use sc_service::{Configuration, ChainSpec};
-use sc_executor::{NativeExecutor, NativeExecutionDispatch};
-use codec::{Encode, Decode};
-use frame_benchmarking::{BenchmarkBatch, Analysis};
-use sp_core::{
-	tasks,
-	traits::KeystoreExt,
-	testing::KeyStore,
-};
-use sp_externalities::Extensions;
 
 /// The `benchmark` command used to benchmark FRAME Pallets.
 #[derive(Debug, structopt::StructOpt, Clone)]
@@ -95,129 +84,4 @@ pub struct BenchmarkCmd {
 	/// Limit the memory the database cache can use.
 	#[structopt(long = "db-cache", value_name = "MiB", default_value = "128")]
 	pub database_cache_size: u32,
-}
-
-impl BenchmarkCmd {
-	/// Initialize
-	pub fn init(&self, version: &sc_cli::VersionInfo) -> sc_cli::Result<()> {
-		self.shared_params.init(version)
-	}
-
-	/// Runs the command and benchmarks the chain.
-	pub fn run<BB, ExecDispatch>(
-		self,
-		config: Configuration,
-	) -> sc_cli::Result<()>
-	where
-		BB: BlockT + Debug,
-		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
-		<BB as BlockT>::Hash: std::str::FromStr,
-		ExecDispatch: NativeExecutionDispatch + 'static,
-	{
-		let spec = config.chain_spec.expect("chain_spec is always Some");
-		let wasm_method = self.wasm_method.into();
-		let strategy = self.execution.unwrap_or(ExecutionStrategy::Native);
-
-		let genesis_storage = spec.build_storage()?;
-		let mut changes = Default::default();
-		let cache_size = Some(self.database_cache_size as usize);
-		let state = BenchmarkingState::<BB>::new(genesis_storage, cache_size)?;
-		let executor = NativeExecutor::<ExecDispatch>::new(
-			wasm_method,
-			None, // heap pages
-			2, // The runtime instances cache size.
-		);
-
-		let mut extensions = Extensions::default();
-		extensions.register(KeystoreExt(KeyStore::new()));
-
-		let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
-			&state,
-			None,
-			&mut changes,
-			&executor,
-			"Benchmark_dispatch_benchmark",
-			&(
-				&self.pallet,
-				&self.extrinsic,
-				self.lowest_range_values.clone(),
-				self.highest_range_values.clone(),
-				self.steps.clone(),
-				self.repeat,
-			).encode(),
-			extensions,
-			&sp_state_machine::backend::BackendRuntimeCode::new(&state).runtime_code()?,
-			tasks::executor(),
-		)
-		.execute(strategy.into())
-		.map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;
-
-		let results = <Result<Vec<BenchmarkBatch>, String> as Decode>::decode(&mut &result[..])
-			.map_err(|e| format!("Failed to decode benchmark results: {:?}", e))?;
-
-		match results {
-			Ok(batches) => for batch in batches.into_iter() {
-				// Print benchmark metadata
-				println!(
-					"Pallet: {:?}, Extrinsic: {:?}, Lowest values: {:?}, Highest values: {:?}, Steps: {:?}, Repeat: {:?}",
-					String::from_utf8(batch.pallet).expect("Encoded from String; qed"),
-					String::from_utf8(batch.benchmark).expect("Encoded from String; qed"),
-					self.lowest_range_values,
-					self.highest_range_values,
-					self.steps,
-					self.repeat,
-				);
-
-				if self.raw_data {
-					// Print the table header
-					batch.results[0].0.iter().for_each(|param| print!("{:?},", param.0));
-
-					print!("extrinsic_time,storage_root_time\n");
-					// Print the values
-					batch.results.iter().for_each(|result| {
-						let parameters = &result.0;
-						parameters.iter().for_each(|param| print!("{:?},", param.1));
-						// Print extrinsic time and storage root time
-						print!("{:?},{:?}\n", result.1, result.2);
-					});
-
-					print!("\n");
-				}
-
-				// Conduct analysis.
-				if !self.no_median_slopes {
-					if let Some(analysis) = Analysis::median_slopes(&batch.results) {
-						println!("Median Slopes Analysis\n========\n{}", analysis);
-					}
-				}
-				if !self.no_min_squares {
-					if let Some(analysis) = Analysis::min_squares_iqr(&batch.results) {
-						println!("Min Squares Analysis\n========\n{}", analysis);
-					}
-				}
-			},
-			Err(error) => eprintln!("Error: {:?}", error),
-		}
-
-		Ok(())
-	}
-
-	/// Update and prepare a `Configuration` with command line parameters
-	pub fn update_config(
-		&self,
-		mut config: &mut Configuration,
-		spec_factory: impl FnOnce(&str) -> Result<Box<dyn ChainSpec>, String>,
-		_version: &VersionInfo,
-	) -> sc_cli::Result<()>
-	{
-		// Configure chain spec.
-		let chain_key = self.shared_params.chain.clone().unwrap_or("dev".into());
-		let spec = spec_factory(&chain_key)?;
-		config.chain_spec = Some(spec);
-
-		// Make sure to configure keystore.
-		config.use_in_memory_keystore()?;
-
-		Ok(())
-	}
 }
