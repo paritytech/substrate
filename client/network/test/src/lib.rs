@@ -595,6 +595,7 @@ pub trait TestNetFactory: Sized {
 		let verifier = VerifierAdapter::new(Arc::new(Mutex::new(Box::new(verifier) as Box<_>)));
 
 		let spawner = |_fut| ();
+
 		let import_queue = Box::new(BasicQueue::new(
 			verifier.clone(),
 			Box::new(block_import.clone()),

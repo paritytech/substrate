@@ -84,6 +84,7 @@ fn async_import_queue_drops() {
 	// Perform this test multiple times since it exhibits non-deterministic behavior.
 	for _ in 0..100 {
 		let verifier = PassThroughVerifier(true);
+		let spawner = |_fut| (); // SCOTT
 		let queue = BasicQueue::new(verifier, Box::new(substrate_test_runtime_client::new()), None, None);
 		drop(queue);
 	}

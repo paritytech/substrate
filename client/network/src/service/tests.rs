@@ -80,11 +80,14 @@ fn build_test_full_node(config: config::NetworkConfiguration)
 		}
 	}
 
+	let spawner = |_fut| ();
+
 	let import_queue = Box::new(sp_consensus::import_queue::BasicQueue::new(
 		PassThroughVerifier(false),
 		Box::new(client.clone()),
 		None,
 		None,
+		spawner,
 	));
 
 	let worker = NetworkWorker::new(config::Params {
