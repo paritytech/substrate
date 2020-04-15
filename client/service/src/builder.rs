@@ -170,7 +170,10 @@ fn new_full_parts<TBl, TRtApi, TExecDisp>(
 		KeystoreConfig::InMemory => Keystore::new_in_memory(),
 	};
 
-	let tasks_builder = TaskManagerBuilder::new();
+	let tasks_builder = {
+		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
+		TaskManagerBuilder::new(registry)?
+	};
 
 	let executor = NativeExecutor::<TExecDisp>::new(
 		config.wasm_method,
@@ -280,7 +283,10 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 		(),
 		TLightBackend<TBl>,
 	>, Error> {
-		let tasks_builder = TaskManagerBuilder::new();
+		let tasks_builder = {
+			let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
+			TaskManagerBuilder::new(registry)?
+		};
 
 		let keystore = match &config.keystore {
 			KeystoreConfig::Path { path, password } => Keystore::open(
