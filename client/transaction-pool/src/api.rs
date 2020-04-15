@@ -89,12 +89,15 @@ impl<Client, Block> sc_transaction_graph::ChainApi for FullChainApi<Client, Bloc
 		let at = at.clone();
 
 		self.pool.spawn_ok(futures_diagnose::diagnose("validate-transaction", async move {
+			let time = std::time::Instant::now();
 			let runtime_api = client.runtime_api();
 			let has_v2 = runtime_api
 				.has_api_with::<dyn TaggedTransactionQueue<Self::Block, Error=()>, _>(
 					&at, |v| v >= 2,
 				)
 				.unwrap_or_default();
+			log::info!("ValidateTransaction: check version: {}ns", time.elapsed().as_nanos());
+			let time = std::time::Instant::now();
 			let res = if has_v2 {
 				runtime_api.validate_transaction(&at, source, uxt)
 			} else {
@@ -102,6 +105,7 @@ impl<Client, Block> sc_transaction_graph::ChainApi for FullChainApi<Client, Bloc
 				runtime_api.validate_transaction_before_version_2(&at, uxt)
 			};
 			let res = res.map_err(|e| Error::RuntimeApi(format!("{:?}", e)));
+			log::info!("ValidateTransaction: took: {}ns", time.elapsed().as_nanos());
 			if let Err(e) = tx.send(res) {
 				log::warn!("Unable to send a validate transaction result: {:?}", e);
 			}
