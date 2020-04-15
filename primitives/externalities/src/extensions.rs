@@ -126,10 +126,9 @@ impl Extensions {
 	/// Register extension `ext`.
 	pub fn register_with_type_id(&mut self, type_id: TypeId, extension: Box<dyn Extension>) -> Result<(), Error> {
 		match self.extensions.entry(type_id) {
-			vacant @ Entry::Vacant(_) => { vacant.or_insert(extension); },
-			Entry::Occupied(_) => return Err(Error::ExtensionAlreadyRegistered),
+			Entry::Vacant(vacant) => { vacant.insert(extension); Ok(()) },
+			Entry::Occupied(_) => Err(Error::ExtensionAlreadyRegistered),
 		}
-		Ok(())
 	}
 
 	/// Return a mutable reference to the requested extension.
