@@ -90,9 +90,7 @@ pub mod crypto {
 		app_crypto::{app_crypto, sr25519},
 		traits::Verify,
 	};
-	use sp_core::{
-		sr25519::Signature as Sr25519Signature,
-	};
+	use sp_core::sr25519::Signature as Sr25519Signature;
 	app_crypto!(sr25519, KEY_TYPE);
 
 	pub struct TestAuthId;
@@ -287,6 +285,7 @@ decl_module! {
 			let res = match should_send {
 				TransactionType::Signed => Self::fetch_price_and_send_signed(),
 				TransactionType::Unsigned => Self::fetch_price_and_send_unsigned(block_number),
+				TransactionType::Raw => Self::fetch_price_and_send_raw_unsigned(block_number),
 				TransactionType::None => Ok(()),
 			};
 			if let Err(e) = res {
@@ -299,6 +298,7 @@ decl_module! {
 enum TransactionType {
 	Signed,
 	Unsigned,
+	Raw,
 	None,
 }
 
@@ -361,12 +361,10 @@ impl<T: Trait> Module<T> {
 				// transactions in a row. If a strict order is desired, it's better to use
 				// the storage entry for that. (for instance store both block number and a flag
 				// indicating the type of next transaction to send).
-				let send_signed = block_number % 2.into() == Zero::zero();
-				if send_signed {
-					TransactionType::Signed
-				} else {
-					TransactionType::Unsigned
-				}
+				let transaction_type = block_number % 3.into();
+				if transaction_type == Zero::zero() { TransactionType::Signed }
+				else if transaction_type == T::BlockNumber::from(1) { TransactionType::Unsigned }
+				else { TransactionType::Raw }
 			},
 			// We are in the grace period, we should not send a transaction this time.
 			Err(RECENTLY_SENT) => TransactionType::None,
@@ -405,7 +403,7 @@ impl<T: Trait> Module<T> {
 				Call::submit_price(price)
 			}
 		);
-		// let results = T::SubmitSignedTransaction::submit_signed(call);
+
 		for (acc, res) in &results {
 			match res {
 				Ok(()) => debug::info!("[{:?}] Submitted price of {} cents", acc.id, price),
@@ -416,7 +414,39 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	/// A helper function to fetch the price and send unsigned transaction.
+	/// A helper function to fetch the price and send a raw unsigned transaction.
+	fn fetch_price_and_send_raw_unsigned(block_number: T::BlockNumber) -> Result<(), &'static str> {
+		// Make sure we don't fetch the price if unsigned transaction is going to be rejected
+		// anyway.
+		let next_unsigned_at = <NextUnsignedAt<T>>::get();
+		if next_unsigned_at > block_number {
+			return Err("Too early to send unsigned transaction")
+		}
+
+		// Make an external HTTP request to fetch the current price.
+		// Note this call will block until response is received.
+		let price = Self::fetch_price().map_err(|_| "Failed to fetch price")?;
+
+		// Received price is wrapped into a call to `submit_price_unsigned` public function of this
+		// pallet. This means that the transaction, when executed, will simply call that function
+		// passing `price` as an argument.
+		let call = Call::submit_price_unsigned(block_number, price);
+
+		// Now let's create a transaction out of this call and submit it to the pool.
+		// Here we showcase two ways to send an unsigned transaction / unsigned payload (raw)
+		//
+		// By default unsigned transactions are disallowed, so we need to whitelist this case
+		// by writing `UnsignedValidator`. Note that it's EXTREMELY important to carefuly
+		// implement unsigned validation logic, as any mistakes can lead to opening DoS or spam
+		// attack vectors. See validation logic docs for more details.
+		//
+		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into())
+			.map_err(|()| "Unable to submit unsigned transaction.")?;
+
+		Ok(())
+	}
+
+	/// A helper function to fetch the price, sign payload and send an unsigned transaction
 	fn fetch_price_and_send_unsigned(block_number: T::BlockNumber) -> Result<(), &'static str> {
 		// Make sure we don't fetch the price if unsigned transaction is going to be rejected
 		// anyway.
@@ -435,20 +465,10 @@ impl<T: Trait> Module<T> {
 		let call = Call::submit_price_unsigned(block_number, price);
 
 		// Now let's create a transaction out of this call and submit it to the pool.
-		// Here we showcase two ways to send a transaction:
-		// 1. An unsigned transaction / unsigned payload (raw)
-		// 2. An unsigned transaction with a signed payload
-		//
-		// By default unsigned transactions are disallowed, so we need to whitelist this case
-		// by writing `UnsignedValidator`. Note that it's EXTREMELY important to carefuly
-		// implement unsigned validation logic, as any mistakes can lead to opening DoS or spam
-		// attack vectors. See validation logic docs for more details.
-		//
-		// Method 1: Unsigned transaction / Unsigned payload
+		// Here we showcase two ways to send an unsigned transaction with a signed payload
 		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into())
 			.map_err(|()| "Unable to submit unsigned transaction.")?;
 
-		// Method 2: Unsigned transction / signed payload
 		// -- Sign using any account
 		let (_, result) = Signer::<T, T::AuthorityId>::any_account().send_unsigned_transaction(
 			|account| PricePayload {
@@ -461,20 +481,24 @@ impl<T: Trait> Module<T> {
 			}
 		).ok_or("No local accounts accounts available.")?;
 		result.map_err(|()| "Unable to submit transaction")?;
+
 		// -- Sign using all accounts
-		Signer::<T, T::AuthorityId>::all_accounts().send_unsigned_transaction(
-			|account| PricePayload {
-				price,
-				block_number,
-				public: account.public.clone()
-			},
-			|payload, signature| {
-				Call::submit_price_unsigned_with_signed_payload(payload, signature)
-			}
-		).into_iter().fold(Ok(()), |last_res, (_, res)| {
-			if res.is_err() { return res; }
-			else { return last_res }
-		}).map_err(|()| "Unable to submit transaction")?;
+		// let transaction_results = Signer::<T, T::AuthorityId>::all_accounts()
+		// 	.send_unsigned_transaction(
+		// 		|account| PricePayload {
+		// 			price,
+		// 			block_number,
+		// 			public: account.public.clone()
+		// 		},
+		// 		|payload, signature| {
+		// 			Call::submit_price_unsigned_with_signed_payload(payload, signature)
+		// 		}
+		// 	);
+		// for (_account_id, result) in transaction_results.into_iter() {
+		// 	if result.is_err() {
+		// 		return Err("Unable to submit transaction");
+		// 	}
+		// }
 
 		Ok(())
 	}
