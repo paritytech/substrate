@@ -532,7 +532,7 @@ decl_module! {
 				Self::rotate_session();
 			}
 
-			SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT).weigh_data(())
+			MINIMUM_WEIGHT
 		}
 	}
 }

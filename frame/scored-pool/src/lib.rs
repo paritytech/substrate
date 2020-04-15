@@ -253,7 +253,7 @@ decl_module! {
 				let pool = <Pool<T, I>>::get();
 				<Module<T, I>>::refresh_members(pool, ChangeReceiver::MembershipChanged);
 			}
-			SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT).weigh_data(())
+			MINIMUM_WEIGHT
 		}
 
 		/// Add `origin` to the pool of candidates.

@@ -184,7 +184,7 @@ decl_module! {
 		fn on_initialize(now: T::BlockNumber) -> Weight {
 			Self::do_initialize(now);
 
-			SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT).weigh_data(())
+			MINIMUM_WEIGHT
 		}
 
 		/// Block finalization

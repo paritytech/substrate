@@ -104,7 +104,7 @@ decl_module! {
 			ConcurrentReportsIndex::<T>::remove_all();
 			ReportsByKindIndex::remove_all();
 
-			SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT).weigh_data(())
+			MINIMUM_WEIGHT
 		}
 
 		fn on_initialize(now: T::BlockNumber) -> Weight {
@@ -125,7 +125,7 @@ decl_module! {
 				})
 			}
 
-			SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT).weigh_data(())
+			MINIMUM_WEIGHT
 		}
 	}
 }

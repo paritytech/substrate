@@ -528,7 +528,7 @@ decl_module! {
 		fn on_runtime_upgrade() -> Weight {
 			Self::migrate();
 
-			SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT).weigh_data(())
+			MINIMUM_WEIGHT
 		}
 
 		/// Propose a sensitive action to be taken.
@@ -848,7 +848,7 @@ decl_module! {
 				sp_runtime::print(e);
 			}
 
-			SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT).weigh_data(())
+			MINIMUM_WEIGHT
 		}
 
 		/// Specify a proxy that is already open to us. Called by the stash.

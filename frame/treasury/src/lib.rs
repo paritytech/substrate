@@ -558,7 +558,7 @@ decl_module! {
 				Self::spend_funds();
 			}
 
-			SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT).weigh_data(())
+			MINIMUM_WEIGHT
 		}
 	}
 }

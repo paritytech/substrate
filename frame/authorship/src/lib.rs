@@ -197,7 +197,7 @@ decl_module! {
 
 			T::EventHandler::note_author(Self::author());
 
-			SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT).weigh_data(())
+			MINIMUM_WEIGHT
 		}
 
 		fn on_finalize() {

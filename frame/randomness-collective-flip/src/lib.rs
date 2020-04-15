@@ -83,7 +83,7 @@ decl_module! {
 				values[index] = parent_hash;
 			});
 
-			SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT).weigh_data(())
+			MINIMUM_WEIGHT
 		}
 	}
 }

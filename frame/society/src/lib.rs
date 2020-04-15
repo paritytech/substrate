@@ -1046,7 +1046,7 @@ decl_module! {
 				Self::rotate_challenge(&mut members);
 			}
 
-			SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT).weigh_data(())
+			MINIMUM_WEIGHT
 		}
 	}
 }

@@ -524,7 +524,7 @@ decl_module! {
 			// Anything that needs to be done at the start of the block.
 			// We don't do anything here.
 
-			SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT).weigh_data(())
+			MINIMUM_WEIGHT
 		}
 
 		// The signature could also look like: `fn on_finalize()`

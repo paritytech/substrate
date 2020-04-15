@@ -102,7 +102,7 @@ decl_module! {
 		fn on_initialize() -> Weight {
 			Self::migrations();
 
-			SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT).weigh_data(())
+			MINIMUM_WEIGHT
 		}
 
 		/// Assign an previously unassigned index.
