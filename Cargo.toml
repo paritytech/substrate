@@ -60,7 +60,7 @@ members = [
 	"frame/aura",
 	"frame/authority-discovery",
 	"frame/authorship",
-	"frame/babe",
+	"frame/epoch-vrf",
 	"frame/balances",
 	"frame/benchmarking",
 	"frame/benchmark",
@@ -177,4 +177,3 @@ members = [
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
-

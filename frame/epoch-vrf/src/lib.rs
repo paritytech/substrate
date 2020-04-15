@@ -24,26 +24,26 @@ use pallet_timestamp;
 
 use sp_std::{result, prelude::*};
 use frame_support::{
-	decl_storage, decl_module, traits::{FindAuthor, Get, Randomness as RandomnessT},
+	decl_storage, decl_module, traits::{Get, Randomness as RandomnessT},
 	weights::{Weight, SimpleDispatchInfo, WeighData},
 };
 use sp_timestamp::OnTimestampSet;
-use sp_runtime::{generic::DigestItem, ConsensusEngineId, Perbill};
-use sp_runtime::traits::{IsMember, SaturatedConversion, Saturating, Hash, One};
+use sp_runtime::{Perbill, RuntimeAppPublic};
+use sp_runtime::traits::{
+	IsMember, SaturatedConversion, Saturating, CheckedSub, Hash, One, UniqueSaturatedInto,
+	CheckedAdd, MaybeDisplay, MaybeDebug,
+};
 use sp_staking::{
 	SessionIndex,
 	offence::{Offence, Kind},
 };
 
-use codec::{Encode, Decode};
+use codec::{Encode, EncodeLike, Decode};
 use sp_inherents::{InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
-use sp_consensus_babe::{
-	BABE_ENGINE_ID, ConsensusLog, BabeAuthorityWeight, SlotNumber,
-	inherents::{INHERENT_IDENTIFIER, BabeInherentData},
-	digests::{NextEpochDescriptor, RawPreDigest},
-};
-use sp_consensus_vrf::schnorrkel;
-pub use sp_consensus_babe::{AuthorityId, VRF_OUTPUT_LENGTH, RANDOMNESS_LENGTH, PUBLIC_KEY_LENGTH};
+use sp_consensus_vrf::schnorrkel::{self, VRF_OUTPUT_LENGTH};
+
+// TODO: Move those out of sp-consensus-babe.
+use sp_consensus_babe::inherents::{INHERENT_IDENTIFIER, BabeInherentData};
 
 #[cfg(all(feature = "std", test))]
 mod tests;
@@ -51,9 +51,20 @@ mod tests;
 #[cfg(all(feature = "std", test))]
 mod mock;
 
+/// Raw pre-digest for this block production engine.
+pub trait RawPreDigest {
+	/// Type of slot number.
+	type SlotNumber;
+
+	/// Primary VRF output.
+	fn vrf_output(&self) -> Option<schnorrkel::RawVRFOutput>;
+	/// Slot number.
+	fn slot_number(&self) -> Self::SlotNumber;
+}
+
 pub trait Trait: pallet_timestamp::Trait {
 	/// The amount of time, in slots, that each epoch should last.
-	type EpochDuration: Get<SlotNumber>;
+	type EpochDuration: Get<Self::SlotNumber>;
 
 	/// The expected average block time at which BABE should be creating
 	/// blocks. Since BABE is probabilistic it is not trivial to figure out
@@ -68,6 +79,32 @@ pub trait Trait: pallet_timestamp::Trait {
 	/// Typically, the `ExternalTrigger` type should be used. An internal trigger should only be used
 	/// when no other module is responsible for changing authority set.
 	type EpochChangeTrigger: EpochChangeTrigger;
+
+	/// Block production authority ID.
+	type AuthorityId: Default + RuntimeAppPublic + Encode + EncodeLike + Decode + Clone + Eq;
+
+	/// Block production authority weight.
+	type AuthorityWeight: One + Encode + EncodeLike + Decode + Clone;
+
+	/// Block production slot number.
+	type SlotNumber: Encode + EncodeLike + Decode + Clone + Copy + Default + Saturating +
+		CheckedSub + CheckedAdd + UniqueSaturatedInto<Self::BlockNumber> + Ord + One +
+		MaybeDisplay + MaybeDebug + UniqueSaturatedInto<u64>;
+
+	/// Type of raw pre-digest.
+	type RawPreDigest: RawPreDigest<SlotNumber=Self::SlotNumber>;
+
+	/// Find the raw pre-digest in current block.
+	fn find_raw_pre_digest() -> Option<Self::RawPreDigest>;
+
+	/// Deposit next epoch descriptor.
+	fn deposit_next_epoch_descriptor(
+		authorities: Vec<(Self::AuthorityId, Self::AuthorityWeight)>,
+		randomness: schnorrkel::Randomness,
+	);
+
+	/// Deposit disabled event.
+	fn deposit_disabled_event(i: u32);
 }
 
 /// Trigger an epoch change, if any should take place.
@@ -107,17 +144,17 @@ type MaybeVrf = Option<schnorrkel::RawVRFOutput>;
 decl_storage! {
 	trait Store for Module<T: Trait> as Babe {
 		/// Current epoch index.
-		pub EpochIndex get(fn epoch_index): u64;
+		pub EpochIndex get(fn epoch_index): T::SlotNumber;
 
 		/// Current epoch authorities.
-		pub Authorities get(fn authorities): Vec<(AuthorityId, BabeAuthorityWeight)>;
+		pub Authorities get(fn authorities): Vec<(T::AuthorityId, T::AuthorityWeight)>;
 
 		/// The slot at which the first epoch actually started. This is 0
 		/// until the first block of the chain.
-		pub GenesisSlot get(fn genesis_slot): u64;
+		pub GenesisSlot get(fn genesis_slot): T::SlotNumber;
 
 		/// Current slot number.
-		pub CurrentSlot get(fn current_slot): u64;
+		pub CurrentSlot get(fn current_slot): T::SlotNumber;
 
 		/// The epoch randomness for the *current* epoch.
 		///
@@ -161,7 +198,7 @@ decl_storage! {
 		Lateness get(fn lateness): T::BlockNumber;
 	}
 	add_extra_genesis {
-		config(authorities): Vec<(AuthorityId, BabeAuthorityWeight)>;
+		config(authorities): Vec<(T::AuthorityId, T::AuthorityWeight)>;
 		build(|config| Module::<T>::initialize_authorities(&config.authorities))
 	}
 }
@@ -171,7 +208,7 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		/// The number of **slots** that an epoch takes. We couple sessions to
 		/// epochs, i.e. we start a new session once the new epoch begins.
-		const EpochDuration: u64 = T::EpochDuration::get();
+		const EpochDuration: T::SlotNumber = T::EpochDuration::get();
 
 		/// The expected average block time at which BABE should be creating
 		/// blocks. Since BABE is probabilistic it is not trivial to figure out
@@ -214,26 +251,8 @@ impl<T: Trait> RandomnessT<<T as frame_system::Trait>::Hash> for Module<T> {
 	}
 }
 
-/// A BABE public key
-pub type BabeKey = [u8; PUBLIC_KEY_LENGTH];
-
-impl<T: Trait> FindAuthor<u32> for Module<T> {
-	fn find_author<'a, I>(digests: I) -> Option<u32> where
-		I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>
-	{
-		for (id, mut data) in digests.into_iter() {
-			if id == BABE_ENGINE_ID {
-				let pre_digest: RawPreDigest = RawPreDigest::decode(&mut data).ok()?;
-				return Some(pre_digest.authority_index())
-			}
-		}
-
-		return None;
-	}
-}
-
-impl<T: Trait> IsMember<AuthorityId> for Module<T> {
-	fn is_member(authority_id: &AuthorityId) -> bool {
+impl<T: Trait> IsMember<T::AuthorityId> for Module<T> {
+	fn is_member(authority_id: &T::AuthorityId) -> bool {
 		<Module<T>>::authorities()
 			.iter()
 			.any(|id| &id.0 == authority_id)
@@ -318,7 +337,7 @@ impl<T: Trait> Module<T> {
 		// the same randomness and validator set as signalled in the genesis,
 		// so we don't rotate the epoch.
 		now != One::one() && {
-			let diff = CurrentSlot::get().saturating_sub(Self::current_epoch_start());
+			let diff = <CurrentSlot<T>>::get().saturating_sub(Self::current_epoch_start());
 			diff >= T::EpochDuration::get()
 		}
 	}
@@ -337,10 +356,10 @@ impl<T: Trait> Module<T> {
 	pub fn next_expected_epoch_change(now: T::BlockNumber) -> Option<T::BlockNumber> {
 		let next_slot = Self::current_epoch_start().saturating_add(T::EpochDuration::get());
 		next_slot
-			.checked_sub(CurrentSlot::get())
+			.checked_sub(&<CurrentSlot<T>>::get())
 			.map(|slots_remaining| {
 				// This is a best effort guess. Drifts in the slot/block ratio will cause errors here.
-				let blocks_remaining: T::BlockNumber = slots_remaining.saturated_into();
+				let blocks_remaining = UniqueSaturatedInto::<T::BlockNumber>::unique_saturated_into(slots_remaining);
 				now.saturating_add(blocks_remaining)
 			})
 	}
@@ -351,24 +370,24 @@ impl<T: Trait> Module<T> {
 	/// Typically, this is not handled directly by the user, but by higher-level validator-set manager logic like
 	/// `pallet-session`.
 	pub fn enact_epoch_change(
-		authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
-		next_authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
+		authorities: Vec<(T::AuthorityId, T::AuthorityWeight)>,
+		next_authorities: Vec<(T::AuthorityId, T::AuthorityWeight)>,
 	) {
 		// PRECONDITION: caller has done initialization and is guaranteed
 		// by the session module to be called before this.
 		debug_assert!(Self::initialized().is_some());
 
 		// Update epoch index
-		let epoch_index = EpochIndex::get()
-			.checked_add(1)
+		let epoch_index = <EpochIndex<T>>::get()
+			.checked_add(&One::one())
 			.expect("epoch indices will never reach 2^64 before the death of the universe; qed");
 
-		EpochIndex::put(epoch_index);
-		Authorities::put(authorities);
+		<EpochIndex<T>>::put(epoch_index);
+		<Authorities<T>>::put(authorities);
 
 		// Update epoch randomness.
 		let next_epoch_index = epoch_index
-			.checked_add(1)
+			.checked_add(&One::one())
 			.expect("epoch indices will never reach 2^64 before the death of the universe; qed");
 
 		// Returns randomness for the current epoch and computes the *next*
@@ -380,24 +399,14 @@ impl<T: Trait> Module<T> {
 		// so that nodes can track changes.
 		let next_randomness = NextRandomness::get();
 
-		let next = NextEpochDescriptor {
-			authorities: next_authorities,
-			randomness: next_randomness,
-		};
-
-		Self::deposit_consensus(ConsensusLog::NextEpochData(next))
+		T::deposit_next_epoch_descriptor(next_authorities, next_randomness);
 	}
 
 	// finds the start slot of the current epoch. only guaranteed to
 	// give correct results after `do_initialize` of the first block
 	// in the chain (as its result is based off of `GenesisSlot`).
-	pub fn current_epoch_start() -> SlotNumber {
-		(EpochIndex::get() * T::EpochDuration::get()) + GenesisSlot::get()
-	}
-
-	fn deposit_consensus<U: Encode>(new: U) {
-		let log: DigestItem<T::Hash> = DigestItem::Consensus(BABE_ENGINE_ID, new.encode());
-		<frame_system::Module<T>>::deposit_log(log.into())
+	pub fn current_epoch_start() -> T::SlotNumber {
+		(<EpochIndex<T>>::get() * T::EpochDuration::get()) + <GenesisSlot<T>>::get()
 	}
 
 	fn deposit_vrf_output(vrf_output: &schnorrkel::RawVRFOutput) {
@@ -423,51 +432,36 @@ impl<T: Trait> Module<T> {
 			return;
 		}
 
-		let maybe_pre_digest: Option<RawPreDigest> = <frame_system::Module<T>>::digest()
-			.logs
-			.iter()
-			.filter_map(|s| s.as_pre_runtime())
-			.filter_map(|(id, mut data)| if id == BABE_ENGINE_ID {
-				RawPreDigest::decode(&mut data).ok()
-			} else {
-				None
-			})
-			.next();
+		let maybe_pre_digest: Option<T::RawPreDigest> = T::find_raw_pre_digest();
 
 		let maybe_vrf = maybe_pre_digest.and_then(|digest| {
 			// on the first non-zero block (i.e. block #1)
 			// this is where the first epoch (epoch #0) actually starts.
 			// we need to adjust internal storage accordingly.
-			if GenesisSlot::get() == 0 {
-				GenesisSlot::put(digest.slot_number());
-				debug_assert_ne!(GenesisSlot::get(), 0);
+			if <GenesisSlot<T>>::get() == Default::default() {
+				<GenesisSlot<T>>::put(digest.slot_number());
+				debug_assert_ne!(<GenesisSlot<T>>::get(), Default::default());
 
 				// deposit a log because this is the first block in epoch #0
 				// we use the same values as genesis because we haven't collected any
 				// randomness yet.
-				let next = NextEpochDescriptor {
-					authorities: Self::authorities(),
-					randomness: Self::randomness(),
-				};
-
-				Self::deposit_consensus(ConsensusLog::NextEpochData(next))
+				T::deposit_next_epoch_descriptor(Self::authorities(), Self::randomness());
 			}
 
 			// the slot number of the current block being initialized
 			let current_slot = digest.slot_number();
 
 			// how many slots were skipped between current and last block
-			let lateness = current_slot.saturating_sub(CurrentSlot::get() + 1);
-			let lateness = T::BlockNumber::from(lateness as u32);
+			let lateness = current_slot.saturating_sub(<CurrentSlot<T>>::get() + One::one());
 
-			Lateness::<T>::put(lateness);
-			CurrentSlot::put(current_slot);
+			Lateness::<T>::put(UniqueSaturatedInto::<T::BlockNumber>::unique_saturated_into(lateness));
+			CurrentSlot::<T>::put(current_slot);
 
-			if let RawPreDigest::Primary(primary) = digest {
+			if let Some(vrf_output) = digest.vrf_output() {
 				// place the VRF output into the `Initialized` storage item
 				// and it'll be put onto the under-construction randomness
 				// later, once we've decided which epoch this block is in.
-				Some(primary.vrf_output)
+				Some(vrf_output)
 			} else {
 				None
 			}
@@ -481,7 +475,7 @@ impl<T: Trait> Module<T> {
 
 	/// Call this function exactly once when an epoch changes, to update the
 	/// randomness. Returns the new randomness.
-	fn randomness_change_epoch(next_epoch_index: u64) -> schnorrkel::Randomness {
+	fn randomness_change_epoch(next_epoch_index: T::SlotNumber) -> schnorrkel::Randomness {
 		let this_randomness = NextRandomness::get();
 		let segment_idx: u32 = <SegmentIndex>::mutate(|s| sp_std::mem::replace(s, 0));
 
@@ -490,7 +484,7 @@ impl<T: Trait> Module<T> {
 
 		let next_randomness = compute_randomness(
 			this_randomness,
-			next_epoch_index,
+			next_epoch_index.saturated_into(),
 			(0..segment_idx).flat_map(|i| <UnderConstruction>::take(&i)),
 			Some(rho_size),
 		);
@@ -498,10 +492,10 @@ impl<T: Trait> Module<T> {
 		this_randomness
 	}
 
-	fn initialize_authorities(authorities: &[(AuthorityId, BabeAuthorityWeight)]) {
+	fn initialize_authorities(authorities: &[(T::AuthorityId, T::AuthorityWeight)]) {
 		if !authorities.is_empty() {
-			assert!(Authorities::get().is_empty(), "Authorities are already initialized!");
-			Authorities::put(authorities);
+			assert!(<Authorities<T>>::get().is_empty(), "Authorities are already initialized!");
+			<Authorities<T>>::put(authorities);
 		}
 	}
 }
@@ -523,35 +517,35 @@ impl<T: Trait> frame_support::traits::Lateness<T::BlockNumber> for Module<T> {
 }
 
 impl<T: Trait> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
-	type Public = AuthorityId;
+	type Public = T::AuthorityId;
 }
 
 impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
-	type Key = AuthorityId;
+	type Key = T::AuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(validators: I)
-		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
+		where I: Iterator<Item=(&'a T::AccountId, T::AuthorityId)>
 	{
-		let authorities = validators.map(|(_, k)| (k, 1)).collect::<Vec<_>>();
+		let authorities = validators.map(|(_, k)| (k, One::one())).collect::<Vec<_>>();
 		Self::initialize_authorities(&authorities);
 	}
 
 	fn on_new_session<'a, I: 'a>(_changed: bool, validators: I, queued_validators: I)
-		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
+		where I: Iterator<Item=(&'a T::AccountId, T::AuthorityId)>
 	{
 		let authorities = validators.map(|(_account, k)| {
-			(k, 1)
+			(k, One::one())
 		}).collect::<Vec<_>>();
 
 		let next_authorities = queued_validators.map(|(_account, k)| {
-			(k, 1)
+			(k, One::one())
 		}).collect::<Vec<_>>();
 
 		Self::enact_epoch_change(authorities, next_authorities)
 	}
 
 	fn on_disabled(i: usize) {
-		Self::deposit_consensus(ConsensusLog::OnDisabled(i as u32))
+		T::deposit_disabled_event(i as u32);
 	}
 }
 

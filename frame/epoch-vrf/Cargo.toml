@@ -1,12 +1,12 @@
 [package]
-name = "pallet-babe"
+name = "pallet-epoch-vrf"
 version = "2.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
-description = "Consensus extension module for BABE consensus. Collects on-chain randomness from VRF outputs and manages epoch transitions."
+description = "Consensus extension module for VRF-based consensus. Collects on-chain randomness from VRF outputs and manages epoch transitions."
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

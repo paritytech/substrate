@@ -422,6 +422,9 @@ sp_core::impl_maybe_marker!(
 	/// A type that implements Display when in std environment.
 	trait MaybeDisplay: Display;
 
+	/// A type that implements Debug when in std environment.
+	trait MaybeDebug: Debug;
+
 	/// A type that implements FromStr when in std environment.
 	trait MaybeFromStr: FromStr;
 

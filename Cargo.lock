@@ -3568,7 +3568,6 @@ dependencies = [
  "node-primitives",
  "pallet-authority-discovery",
  "pallet-authorship",
- "pallet-babe",
  "pallet-balances",
  "pallet-collective",
  "pallet-contracts",
@@ -3576,6 +3575,7 @@ dependencies = [
  "pallet-contracts-rpc-runtime-api",
  "pallet-democracy",
  "pallet-elections-phragmen",
+ "pallet-epoch-vrf",
  "pallet-finality-tracker",
  "pallet-grandpa",
  "pallet-identity",
@@ -3987,27 +3987,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-babe"
-version = "2.0.0-dev"
-dependencies = [
- "frame-support",
- "frame-system",
- "pallet-session",
- "pallet-timestamp",
- "parity-scale-codec",
- "serde",
- "sp-consensus-babe",
- "sp-consensus-vrf",
- "sp-core",
- "sp-inherents",
- "sp-io",
- "sp-runtime",
- "sp-staking",
- "sp-std",
- "sp-timestamp",
-]
-
-[[package]]
 name = "pallet-balances"
 version = "2.0.0-dev"
 dependencies = [
@@ -4170,6 +4149,27 @@ dependencies = [
  "sp-runtime",
  "sp-std",
  "substrate-test-utils",
+]
+
+[[package]]
+name = "pallet-epoch-vrf"
+version = "2.0.0-dev"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "pallet-session",
+ "pallet-timestamp",
+ "parity-scale-codec",
+ "serde",
+ "sp-consensus-babe",
+ "sp-consensus-vrf",
+ "sp-core",
+ "sp-inherents",
+ "sp-io",
+ "sp-runtime",
+ "sp-staking",
+ "sp-std",
+ "sp-timestamp",
 ]
 
 [[package]]
@@ -8037,7 +8037,7 @@ dependencies = [
  "frame-system-rpc-runtime-api",
  "log",
  "memory-db",
- "pallet-babe",
+ "pallet-epoch-vrf",
  "pallet-timestamp",
  "parity-scale-codec",
  "parity-util-mem",

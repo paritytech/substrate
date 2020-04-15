@@ -36,6 +36,9 @@ mod app {
 	app_crypto!(sr25519, BABE);
 }
 
+/// A BABE public key
+pub type BabeKey = [u8; PUBLIC_KEY_LENGTH];
+
 /// The prefix used by BABE for its VRF keys.
 pub const BABE_VRF_PREFIX: &[u8] = b"substrate-babe-vrf";
 
