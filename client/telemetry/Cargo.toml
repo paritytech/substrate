@@ -1,6 +1,6 @@
 [package]
 name = "sc-telemetry"
-version = "2.0.0-alpha.5"
+version = "2.0.0-alpha.6"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Telemetry utils"
 edition = "2018"
@@ -8,6 +8,9 @@ license = "GPL-3.0"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 documentation = "https://docs.rs/sc-telemetry"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
 
 
 [dependencies]
@@ -26,6 +29,3 @@ slog-json = { version = "2.3.0", features = ["nested-values"] }
 slog-scope = "4.1.2"
 take_mut = "0.2.2"
 void = "1.0.2"
-
-[package.metadata.docs.rs]
-targets = ["x86_64-unknown-linux-gnu"]
