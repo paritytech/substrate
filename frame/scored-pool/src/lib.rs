@@ -98,7 +98,7 @@ use sp_std::{
 use frame_support::{
 	decl_module, decl_storage, decl_event, ensure, decl_error,
 	traits::{EnsureOrigin, ChangeMembers, InitializeMembers, Currency, Get, ReservableCurrency},
-	weights::{Weight, MINIMUM_WEIGHT, SimpleDispatchInfo, WeighData},
+	weights::{Weight, MINIMUM_WEIGHT, SimpleDispatchInfo},
 };
 use frame_system::{self as system, ensure_root, ensure_signed};
 use sp_runtime::{

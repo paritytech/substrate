@@ -30,7 +30,7 @@ use sp_runtime::{
 };
 use frame_support::{
 	decl_storage, decl_event, ensure, decl_module, decl_error,
-	weights::{Weight, MINIMUM_WEIGHT, SimpleDispatchInfo, WeighData},
+	weights::{Weight, MINIMUM_WEIGHT, SimpleDispatchInfo},
 	traits::{
 		Currency, ExistenceRequirement, Get, LockableCurrency, LockIdentifier, BalanceStatus,
 		OnUnbalanced, ReservableCurrency, WithdrawReason, WithdrawReasons, ChangeMembers
