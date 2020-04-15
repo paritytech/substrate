@@ -247,25 +247,21 @@ pub fn open_database<Block: BlockT>(
 				.map_err(|err| sp_blockchain::Error::Backend(format!("{}", err)))?;
 			sp_database::as_database(db)
 		},
-		#[cfg(any(feature = "kvdb-rocksdb", test))]
+		#[cfg(feature = "subdb")]
 		DatabaseSettingsSrc::SubDb { path } => {
 			crate::subdb::open(&path, NUM_COLUMNS)
 				.map_err(|e| sp_blockchain::Error::Backend(format!("{:?}", e)))?
 		},
-		#[cfg(any(feature = "kvdb-rocksdb", test))]
+		#[cfg(feature = "parity-db")]
 		DatabaseSettingsSrc::ParityDb { path } => {
 			crate::parity_db::open(&path, NUM_COLUMNS)
 				.map_err(|e| sp_blockchain::Error::Backend(format!("{:?}", e)))?
 		},
-		#[cfg(not(any(feature = "kvdb-rocksdb", test)))]
-		DatabaseSettingsSrc::RocksDb { .. }
-		| DatabaseSettingsSrc::ParityDb { .. }
-		| DatabaseSettingsSrc::SubDb { .. } =>
-		{
+		DatabaseSettingsSrc::Custom(db) => db.clone(),
+		_ => {
 			let msg = "Trying to open a unsupported database".into();
 			return Err(sp_blockchain::Error::Backend(msg));
 		},
-		DatabaseSettingsSrc::Custom(db) => db.clone(),
 	};
 
 	check_database_type(&*db, db_type)?;

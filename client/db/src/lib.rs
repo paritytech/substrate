@@ -40,9 +40,9 @@ mod storage_cache;
 mod upgrade;
 mod utils;
 mod stats;
-#[cfg(any(feature = "kvdb-rocksdb", test))]
+#[cfg(feature = "parity-db")]
 mod parity_db;
-#[cfg(any(feature = "kvdb-rocksdb", test))]
+#[cfg(feature = "subdb")]
 mod subdb;
 
 use std::sync::Arc;
