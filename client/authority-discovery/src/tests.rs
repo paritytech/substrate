@@ -363,8 +363,8 @@ fn terminate_when_event_stream_terminates() {
 		test_api,
 		network.clone(),
 		vec![],
-		key_store,
 		dht_event_rx.boxed(),
+		Role::Authority(key_store),
 		None,
 	);
 
@@ -404,8 +404,8 @@ fn dont_stop_polling_when_error_is_returned() {
 		test_api,
 		network.clone(),
 		vec![],
-		key_store,
 		dht_event_rx.boxed(),
+		Role::Authority(key_store),
 		None,
 	);
 
