@@ -90,7 +90,7 @@ fn main() {
 			target_count = to_range(target_count, 50, 2000);
 			voter_count = to_range(voter_count, 50, 1000);
 			iterations = to_range(iterations, 1, 20);
-			to_elect = to_range(to_elect, 50, target_count);
+			to_elect = to_range(to_elect, 25, target_count);
 			edge_per_voter = to_range(edge_per_voter, 1, target_count);
 
 			println!("++ [{} / {} / {} / {}]", voter_count, target_count, to_elect, iterations);
@@ -110,9 +110,6 @@ fn main() {
 			let winners = to_without_backing(winners);
 			let mut support = build_support_map(winners.as_ref(), staked.as_ref()).0;
 
-			println!("Assignments = {:?}", &assignments);
-			println!("Initial support = {:?}", support);
-
 			let initial_score = evaluate_support(&support);
 			if initial_score[0] == 0 {
 				// such cases cannot be improved by reduce.
@@ -125,8 +122,6 @@ fn main() {
 				10,
 				iterations,
 			);
-
-			println!("Equalized support = {:?}", support);
 
 			let final_score = evaluate_support(&support);
 			if final_score[0] == initial_score[0] {
