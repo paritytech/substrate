@@ -404,7 +404,7 @@ impl<T: SigningTypes> Clone for Account<T> where
 /// The point of this trait is to be able to easily convert between `RuntimeAppPublic` and
 /// the wrapped crypto types.
 ///
-/// TODO [#???] Potentially use `IsWrappedBy` types, or find some other way to make it easy to
+/// TODO [#5662] Potentially use `IsWrappedBy` types, or find some other way to make it easy to
 /// obtain unwrapped crypto (and wrap it back).
 ///
 ///	Example (pseudo-)implementation:
@@ -473,7 +473,7 @@ pub trait AppCrypto<Public, Signature> {
 /// This trait adds extra bounds to `Public` and `Signature` types of the runtime
 /// that are necessary to use these types for signing.
 ///
-///	TODO [#???] Could this be just `T::Signature as traits::Verify>::Signer`?
+///	TODO [#5663] Could this be just `T::Signature as traits::Verify>::Signer`?
 /// Seems that this may cause issues with bounds resolution.
 pub trait SigningTypes: crate::Trait {
 	/// A public key that is capable of identifing `AccountId`s.
