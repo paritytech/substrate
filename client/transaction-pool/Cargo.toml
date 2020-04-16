@@ -18,15 +18,15 @@ futures = { version = "0.3.1", features = ["compat"] }
 futures-diagnose = "1.0"
 intervalier = "0.4.0"
 log = "0.4.8"
-parity-util-mem = { version = "0.6.0", default-features = false, features = ["primitive-types"] }
+parity-util-mem = { version = "0.6.1", default-features = false, features = ["primitive-types"] }
 parking_lot = "0.10.0"
 sc-client-api = { version = "2.0.0-dev", path = "../api" }
 sc-transaction-graph = { version = "2.0.0-dev", path = "./graph" }
 sp-api = { version = "2.0.0-dev", path = "../../primitives/api" }
-sp-blockchain = { version = "2.0.0-dev", path = "../../primitives/blockchain" }
 sp-core = { version = "2.0.0-dev", path = "../../primitives/core" }
 sp-runtime = { version = "2.0.0-dev", path = "../../primitives/runtime" }
 sp-transaction-pool = { version = "2.0.0-dev", path = "../../primitives/transaction-pool" }
+sp-blockchain = { version = "2.0.0-dev", path = "../../primitives/blockchain" }
 sp-utils = { version = "2.0.0-dev", path = "../../primitives/utils" }
 tracing = "0.1.10"
 wasm-timer = "0.2"

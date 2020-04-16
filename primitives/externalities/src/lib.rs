@@ -32,6 +32,17 @@ pub use extensions::{Extension, Extensions, ExtensionStore};
 mod extensions;
 mod scope_limited;
 
+/// Externalities error.
+#[derive(Debug)]
+pub enum Error {
+	/// Same extension cannot be registered twice.
+	ExtensionAlreadyRegistered,
+	/// Extensions are not supported.
+	ExtensionsAreNotSupported,
+	/// Extension `TypeId` is not registered.
+	ExtensionIsNotRegistered(TypeId),
+}
+
 /// The Substrate externalities.
 ///
 /// Provides access to the storage and to other registered extensions.
@@ -198,10 +209,29 @@ pub trait Externalities: ExtensionStore {
 pub trait ExternalitiesExt {
 	/// Tries to find a registered extension and returns a mutable reference.
 	fn extension<T: Any + Extension>(&mut self) -> Option<&mut T>;
+
+	/// Register extension `ext`.
+	///
+	/// Should return error if extension is already registered or extensions are not supported.
+	fn register_extension<T: Extension>(&mut self, ext: T) -> Result<(), Error>;
+
+	/// Deregister and drop extension of `T` type.
+	///
+	/// Should return error if extension of type `T` is not registered or
+	/// extensions are not supported.
+	fn deregister_extension<T: Extension>(&mut self) -> Result<(), Error>;
 }
 
 impl ExternalitiesExt for &mut dyn Externalities {
 	fn extension<T: Any + Extension>(&mut self) -> Option<&mut T> {
 		self.extension_by_type_id(TypeId::of::<T>()).and_then(Any::downcast_mut)
+	}
+
+	fn register_extension<T: Extension>(&mut self, ext: T) -> Result<(), Error> {
+		self.register_extension_with_type_id(TypeId::of::<T>(), Box::new(ext))
+	}
+
+	fn deregister_extension<T: Extension>(&mut self) -> Result<(), Error> {
+		self.deregister_extension_by_type_id(TypeId::of::<T>())
 	}
 }

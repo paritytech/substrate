@@ -81,12 +81,15 @@ impl IdentifyAccount for sp_core::ecdsa::Public {
 pub trait Verify {
 	/// Type of the signer.
 	type Signer: IdentifyAccount;
-	/// Verify a signature. Return `true` if signature is valid for the value.
+	/// Verify a signature.
+	///
+	/// Return `true` if signature is valid for the value.
 	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &<Self::Signer as IdentifyAccount>::AccountId) -> bool;
 }
 
 impl Verify for sp_core::ed25519::Signature {
 	type Signer = sp_core::ed25519::Public;
+
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &sp_core::ed25519::Public) -> bool {
 		sp_io::crypto::ed25519_verify(self, msg.get(), signer)
 	}
@@ -94,6 +97,7 @@ impl Verify for sp_core::ed25519::Signature {
 
 impl Verify for sp_core::sr25519::Signature {
 	type Signer = sp_core::sr25519::Public;
+
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &sp_core::sr25519::Public) -> bool {
 		sp_io::crypto::sr25519_verify(self, msg.get(), signer)
 	}
