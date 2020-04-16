@@ -493,9 +493,16 @@ benchmarks! {
 		// Num of bytes in encoded proposal
 		let b in 0 .. MAX_BYTES;
 
-		let caller = funded_account::<T>("caller", b);
+		let caller = funded_account::<T>("caller", 0);
 		let encoded_proposal = vec![0; b as usize];
-	}: _(RawOrigin::Signed(caller), encoded_proposal)
+	}: _(RawOrigin::Signed(caller), encoded_proposal.clone())
+	verify {
+		let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
+		match Preimages::<T>::get(proposal_hash) {
+			Some(PreimageStatus::Available { .. }) => (),
+			_ => return Err("preimage not available")
+		}
+	}
 
 	note_imminent_preimage {
 		// Num of bytes in encoded proposal
@@ -507,9 +514,16 @@ benchmarks! {
 		let block_number = T::BlockNumber::one();
 		Preimages::<T>::insert(&proposal_hash, PreimageStatus::Missing(block_number));
 
-		let caller = funded_account::<T>("caller", b);
+		let caller = funded_account::<T>("caller", 0);
 		let encoded_proposal = vec![0; b as usize];
-	}: _(RawOrigin::Signed(caller), encoded_proposal)
+	}: _(RawOrigin::Signed(caller), encoded_proposal.clone())
+	verify {
+		let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
+		match Preimages::<T>::get(proposal_hash) {
+			Some(PreimageStatus::Available { .. }) => (),
+			_ => return Err("preimage not available")
+		}
+	}
 
 	reap_preimage {
 		// Num of bytes in encoded proposal
@@ -518,32 +532,87 @@ benchmarks! {
 		let encoded_proposal = vec![0; b as usize];
 		let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
 
-		let caller = funded_account::<T>("caller", b);
-		Democracy::<T>::note_preimage(RawOrigin::Signed(caller.clone()).into(), encoded_proposal.clone())?;
+		let submitter = funded_account::<T>("submitter", b);
+		Democracy::<T>::note_preimage(RawOrigin::Signed(submitter.clone()).into(), encoded_proposal.clone())?;
 
 		// We need to set this otherwise we get `Early` error.
 		let block_number = T::VotingPeriod::get() + T::EnactmentPeriod::get() + T::BlockNumber::one();
 		System::<T>::set_block_number(block_number.into());
 
-	}: _(RawOrigin::Signed(caller), proposal_hash)
+		assert!(Preimages::<T>::contains_key(proposal_hash));
 
-	unlock {
-		let u in 1 .. MAX_USERS;
+		let caller = funded_account::<T>("caller", 0);
+	}: _(RawOrigin::Signed(caller), proposal_hash.clone())
+	verify {
+		let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
+		assert!(!Preimages::<T>::contains_key(proposal_hash));
+	}
 
-		let caller = funded_account::<T>("caller", u);
-		let locked_until = T::BlockNumber::zero();
-		Locks::<T>::insert(&caller, locked_until);
+	// Test when unlock will remove locks
+	unlock_remove {
+		let r in 1 .. MAX_REFERENDUMS;
 
-		T::Currency::extend_lock(
-			DEMOCRACY_ID,
-			&caller,
-			Bounded::max_value(),
-			WithdrawReason::Transfer.into()
-		);
+		let locker = funded_account::<T>("locker", 0);
+		// Populate votes so things are locked
+		let base_balance: BalanceOf<T> = 100.into();
+		let small_vote = account_vote::<T>(base_balance);
+		// Vote and immediately unvote
+		for i in 0 .. r {
+			let ref_idx = add_referendum::<T>(i)?;
+			Democracy::<T>::vote(RawOrigin::Signed(locker.clone()).into(), ref_idx, small_vote.clone())?;
+			Democracy::<T>::remove_vote(RawOrigin::Signed(locker.clone()).into(), ref_idx)?;
+		}
 
-		let other = caller.clone();
+		let caller = funded_account::<T>("caller", 0);
+	}: unlock(RawOrigin::Signed(caller), locker.clone())
+	verify {
+		// Note that we may want to add a `get_lock` api to actually verify
+		let voting = VotingOf::<T>::get(&locker);
+		assert_eq!(voting.locked_balance(), BalanceOf::<T>::zero());
+	}
 
-	}: _(RawOrigin::Signed(caller), other)
+	// Test when unlock will set a new value
+	unlock_set {
+		let r in 1 .. MAX_REFERENDUMS;
+
+		let locker = funded_account::<T>("locker", 0);
+		// Populate votes so things are locked
+		let base_balance: BalanceOf<T> = 100.into();
+		let small_vote = account_vote::<T>(base_balance);
+		for i in 0 .. r {
+			let ref_idx = add_referendum::<T>(i)?;
+			Democracy::<T>::vote(RawOrigin::Signed(locker.clone()).into(), ref_idx, small_vote.clone())?;
+		}
+
+		// Create a big vote so lock increases
+		let big_vote = account_vote::<T>(base_balance * 10.into());
+		let referendum_index = add_referendum::<T>(r)?;
+		Democracy::<T>::vote(RawOrigin::Signed(locker.clone()).into(), referendum_index, big_vote)?;
+
+		let votes = match VotingOf::<T>::get(&locker) {
+			Voting::Direct { votes, .. } => votes,
+			_ => return Err("Votes are not direct"),
+		};
+		assert_eq!(votes.len(), (r + 1) as usize, "Votes were not recorded.");
+
+		let voting = VotingOf::<T>::get(&locker);
+		assert_eq!(voting.locked_balance(), base_balance * 10.into());
+
+		Democracy::<T>::remove_vote(RawOrigin::Signed(locker.clone()).into(), referendum_index)?;
+
+		let caller = funded_account::<T>("caller", 0);
+	}: unlock(RawOrigin::Signed(caller), locker.clone())
+	verify {
+		let votes = match VotingOf::<T>::get(&locker) {
+			Voting::Direct { votes, .. } => votes,
+			_ => return Err("Votes are not direct"),
+		};
+		assert_eq!(votes.len(), r as usize, "Vote was not removed");
+
+		let voting = VotingOf::<T>::get(&locker);
+		// Note that we may want to add a `get_lock` api to actually verify
+		assert_eq!(voting.locked_balance(), base_balance);
+	}
 
 	open_proxy {
 		let u in 1 .. MAX_USERS;
@@ -564,9 +633,22 @@ benchmarks! {
 			Democracy::<T>::vote(RawOrigin::Signed(caller.clone()).into(), ref_idx, account_vote.clone())?;
 		}
 
+		let votes = match VotingOf::<T>::get(&caller) {
+			Voting::Direct { votes, .. } => votes,
+			_ => return Err("Votes are not direct"),
+		};
+		assert_eq!(votes.len(), r as usize, "Votes not created");
+
 		let referendum_index = r - 1;
 
-	}: _(RawOrigin::Signed(caller), referendum_index)
+	}: _(RawOrigin::Signed(caller.clone()), referendum_index)
+	verify {
+		let votes = match VotingOf::<T>::get(&caller) {
+			Voting::Direct { votes, .. } => votes,
+			_ => return Err("Votes are not direct"),
+		};
+		assert_eq!(votes.len(), (r - 1) as usize, "Vote was not removed");
+	}
 
 	remove_other_vote {
 		let r in 1 .. MAX_REFERENDUMS;
@@ -579,16 +661,29 @@ benchmarks! {
 			Democracy::<T>::vote(RawOrigin::Signed(other.clone()).into(), ref_idx, account_vote.clone())?;
 		}
 
+		let votes = match VotingOf::<T>::get(&other) {
+			Voting::Direct { votes, .. } => votes,
+			_ => return Err("Votes are not direct"),
+		};
+		assert_eq!(votes.len(), r as usize, "Votes not created");
+
 		let referendum_index = r - 1;
 		ReferendumInfoOf::<T>::insert(
 			referendum_index,
 			ReferendumInfo::Finished { end: T::BlockNumber::zero(), approved: true }
 		);
-		let caller = funded_account::<T>("caller", r);
+		let caller = funded_account::<T>("caller", 0);
 
 		System::<T>::set_block_number(T::EnactmentPeriod::get() * 10u32.into());
 
-	}: _(RawOrigin::Signed(caller), other, referendum_index)
+	}: _(RawOrigin::Signed(caller), other.clone(), referendum_index)
+	verify {
+		let votes = match VotingOf::<T>::get(&other) {
+			Voting::Direct { votes, .. } => votes,
+			_ => return Err("Votes are not direct"),
+		};
+		assert_eq!(votes.len(), (r - 1) as usize, "Vote was not removed");
+	}
 
 	proxy_delegate {
 		let u in 1 .. MAX_USERS;
@@ -662,7 +757,8 @@ mod tests {
 			assert_ok!(test_benchmark_note_preimage::<Test>());
 			assert_ok!(test_benchmark_note_imminent_preimage::<Test>());
 			assert_ok!(test_benchmark_reap_preimage::<Test>());
-			assert_ok!(test_benchmark_unlock::<Test>());
+			assert_ok!(test_benchmark_unlock_remove::<Test>());
+			assert_ok!(test_benchmark_unlock_set::<Test>());
 			assert_ok!(test_benchmark_remove_vote::<Test>());
 			assert_ok!(test_benchmark_remove_other_vote::<Test>());
 			assert_ok!(test_benchmark_proxy_delegate::<Test>());
