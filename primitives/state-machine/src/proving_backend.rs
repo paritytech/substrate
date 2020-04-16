@@ -48,12 +48,10 @@ pub struct ProvingBackendRecorder<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Has
 #[repr(u32)]
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum StorageProofKind {
-	/// The proof can be build by multiple child trie only if
-	/// they are of the same kind, that way we can store all
-	/// encoded node in the same container.
+	/// The proof can be build by multiple child trie only when
+	/// their query can be done on a single memory backend,
+	/// all encoded node can be stored in the same container.
 	Flatten,
-/*	/// Top trie proof only, in compact form.
-	TopTrieCompact,*/
 	/// Proofs split by child trie.
 	Full,
 	/// Compact form of proofs split by child trie.
@@ -88,6 +86,14 @@ pub enum CompactScheme {
 	/// calculated when reading the structue
 	/// of the trie.
 	TrieSkipHashes = 1,
+/*	/// Skip encoding of hashes and values,
+	/// we need to know them when when unpacking.
+	KnownQueryPlanAndValues = 2,
+	/// Skip encoding of hashes, this need knowing
+	/// the queried keys when unpacking, can be faster
+	/// than `TrieSkipHashes` but with similar packing
+	/// gain.
+	KnownQueryPlan = 3,*/
 }
 
 type ProofNodes = Vec<Vec<u8>>;
@@ -106,12 +112,14 @@ pub enum StorageProof {
 	/// container, no child trie information is provided, this works only for proof accessing
 	/// the same kind of child trie.
 	Flatten(ProofNodes),
-/*	/// If proof only cover a single trie, we compact the proof by ommitting some content
-	/// that can be rebuild on construction. For patricia merkle trie it will be hashes that
-	/// are not necessary between node, with indexing of the missing hash based on orders
-	/// of nodes.
-	TopTrieCompact(ProofCompacted),*/
-	///	Fully descriped proof, it includes the child trie individual descriptions.
+/* TODO EMCH implement as it will be default for trie skip hashes	/// Proof can address multiple child trie, but results in a single flatten
+	/// db backend.
+	FlattenCompact(Vec<ProofCompacted>),*/
+	///	Fully descriBed proof, it includes the child trie individual descriptions.
+	///	Currently Full variant are not of any use as we have only child trie that can use the same
+	///	memory db backend.
+	///	TODO EMCH consider removal: could be put back when needed, and probably
+	///	with a new StorageProof key that is the same for a flattenable kind.
 	Full(ChildrenProofMap<ProofNodes>),
 	///	Fully descriped proof, compact encoded.
 	FullCompact(ChildrenProofMap<ProofCompacted>),
