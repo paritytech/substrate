@@ -28,6 +28,7 @@
 use crate::{
 	behaviour::{Behaviour, BehaviourOut},
 	config::{parse_addr, parse_str_addr, NonReservedPeerMode, Params, Role, TransportConfig},
+	discovery::DiscoveryConfig,
 	error::Error,
 	network_state::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
@@ -310,24 +311,37 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 					peerset_handle.clone(),
 				)
 			};
-			let mut behaviour = futures::executor::block_on(Behaviour::new(
+
+			let discovery_config = {
+				let mut config = DiscoveryConfig::new(local_public.clone());
+				config.with_user_defined(known_addresses);
+				config.discovery_limit(u64::from(params.network_config.out_peers) + 15);
+				config.add_protocol(params.protocol_id.clone());
+
+				match params.network_config.transport {
+					TransportConfig::MemoryOnly => {
+						config.with_mdns(false);
+						config.allow_private_ipv4(false);
+					}
+					TransportConfig::Normal { enable_mdns, allow_private_ipv4, .. } => {
+						config.with_mdns(enable_mdns);
+						config.allow_private_ipv4(allow_private_ipv4);
+					}
+				}
+
+				config
+			};
+
+			let mut behaviour = Behaviour::new(
 				protocol,
 				params.role,
 				user_agent,
 				local_public,
-				known_addresses,
-				match params.network_config.transport {
-					TransportConfig::MemoryOnly => false,
-					TransportConfig::Normal { enable_mdns, .. } => enable_mdns,
-				},
-				match params.network_config.transport {
-					TransportConfig::MemoryOnly => false,
-					TransportConfig::Normal { allow_private_ipv4, .. } => allow_private_ipv4,
-				},
-				u64::from(params.network_config.out_peers) + 15,
 				block_requests,
-				light_client_handler
-			));
+				light_client_handler,
+				discovery_config
+			);
+
 			for (engine_id, protocol_name) in &params.network_config.notifications_protocols {
 				behaviour.register_notifications_protocol(*engine_id, protocol_name.clone());
 			}
