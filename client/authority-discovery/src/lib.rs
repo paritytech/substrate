@@ -552,7 +552,7 @@ where
 
 			if let Err(e) = self.request_addresses_of_others() {
 				error!(
-					target: "",
+					target: LOG_TARGET,
 					"Failed to request addresses of authorities: {:?}", e,
 				);
 			}
