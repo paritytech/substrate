@@ -410,7 +410,7 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 		self.query_storage(at, Some(at), keys)
 	}
 
-	fn proof(
+	fn read_proof(
 		&self,
 		block: Block::Hash,
 		keys: Vec<StorageKey>,

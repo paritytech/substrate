@@ -21,7 +21,6 @@ jsonrpc-derive = "14.0.3"
 jsonrpc-pubsub = "14.0.3"
 log = "0.4.8"
 parking_lot = "0.10.0"
-sp-api = { version = "2.0.0-dev", path = "../../primitives/api" }
 sp-core = { version = "2.0.0-dev", path = "../../primitives/core" }
 sp-version = { version = "2.0.0-dev", path = "../../primitives/version" }
 sp-runtime = { path = "../../primitives/runtime" , version = "2.0.0-dev"}
@@ -30,3 +29,4 @@ serde = { version = "1.0.101", features = ["derive"] }
 serde_json = "1.0.41"
 sp-transaction-pool = { version = "2.0.0-dev", path = "../../primitives/transaction-pool" }
 sp-rpc = { version = "2.0.0-dev", path = "../../primitives/rpc" }
+sp-trie = { version = "2.0.0-dev", path = "../../primitives/trie" }

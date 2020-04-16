@@ -14,8 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-#[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
 use sp_std::vec::Vec;
 use codec::{Encode, Decode};
 use hash_db::{Hasher, HashDB};
@@ -28,7 +26,7 @@ use hash_db::{Hasher, HashDB};
 /// the keys covered by the proof. Verifying the proof requires constructing the partial trie from
 /// the serialized nodes and performing the key lookups.
 #[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Hash, PartialOrd, Ord))]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize, Hash, PartialOrd, Ord))]
 pub struct StorageProof {
 	trie_nodes: Vec<Vec<u8>>,
 }

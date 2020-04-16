@@ -171,7 +171,7 @@ pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 	) -> FutureResult<Vec<StorageChangeSet<Block::Hash>>>;
 
 	/// Returns proof of storage entries at a specific block's state.
-	fn proof(
+	fn read_proof(
 		&self,
 		block: Block::Hash,
 		keys: Vec<StorageKey>,
@@ -379,8 +379,8 @@ impl<Block, Client> StateApi<Block::Hash> for State<Block, Client>
 		self.backend.query_storage_at(keys, at)
 	}
 
-	fn proof(&self, keys: Vec<StorageKey>, block: Block::Hash) -> FutureResult<StorageProof> {
-		self.backend.proof(block, keys)
+	fn read_proof(&self, keys: Vec<StorageKey>, block: Block::Hash) -> FutureResult<StorageProof> {
+		self.backend.read_proof(block, keys)
 	}
 
 	fn subscribe_storage(
