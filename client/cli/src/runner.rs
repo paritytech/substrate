@@ -80,7 +80,6 @@ where
 /// Build a tokio runtime with all features
 pub fn build_runtime() -> std::result::Result<tokio::runtime::Runtime, std::io::Error> {
 	tokio::runtime::Builder::new()
-		.thread_name("main-tokio-")
 		.threaded_scheduler()
 		.on_thread_start(||{
 			TOKIO_THREADS_ALIVE.inc();
@@ -134,8 +133,12 @@ impl<C: SubstrateCli> Runner<C> {
 
 	/// A helper function that runs an `AbstractService` with tokio and stops if the process receives
 	/// the signal `SIGTERM` or `SIGINT`.
-	pub fn run_node<FNL, FNF, SL, SF>(self, new_light: FNL, new_full: FNF) -> Result<()>
-	where
+	pub fn run_node<FNL, FNF, SL, SF>(
+		self,
+		new_light: FNL,
+		new_full: FNF,
+		runtime_version: sp_version::RuntimeVersion,
+	) -> Result<()> where
 		FNL: FnOnce(Configuration) -> sc_service::error::Result<SL>,
 		FNF: FnOnce(Configuration) -> sc_service::error::Result<SF>,
 		SL: AbstractService + Unpin,
@@ -152,6 +155,7 @@ impl<C: SubstrateCli> Runner<C> {
 		info!("📋 Chain specification: {}", self.config.chain_spec.name());
 		info!("🏷  Node name: {}", self.config.network.node_name);
 		info!("👤 Role: {}", self.config.display_role());
+		info!("⛓  Native runtime: {}", runtime_version);
 
 		match self.config.role {
 			Role::Light => self.run_service_until_exit(new_light),

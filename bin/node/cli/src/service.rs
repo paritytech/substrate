@@ -196,7 +196,7 @@ macro_rules! new_full {
 			}
 
 			let network = service.network();
-			let dht_event_stream = network.event_stream().filter_map(|e| async move { match e {
+			let dht_event_stream = network.event_stream("authority-discovery").filter_map(|e| async move { match e {
 				Event::Dht(e) => Some(e),
 				_ => None,
 			}}).boxed();
@@ -637,12 +637,11 @@ mod tests {
 					check_weight,
 					payment,
 					Default::default(),
-					Default::default(),
 				);
 				let raw_payload = SignedPayload::from_raw(
 					function,
 					extra,
-					(version, genesis_hash, genesis_hash, (), (), (), (), ())
+					(version, genesis_hash, genesis_hash, (), (), (), ())
 				);
 				let signature = raw_payload.using_encoded(|payload|	{
 					signer.sign(payload)
