@@ -18,7 +18,7 @@
 
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
 
-/// Transaction pool prometheus metrics.
+/// Transaction pool Prometheus metrics.
 pub struct Metrics {
 	pub validations_scheduled: Counter<U64>,
 	pub validations_finished: Counter<U64>,
