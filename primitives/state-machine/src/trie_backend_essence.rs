@@ -22,12 +22,12 @@ use std::sync::Arc;
 use std::marker::PhantomData;
 use log::{debug, warn};
 use hash_db::{self, Hasher, EMPTY_PREFIX, Prefix};
-use sp_trie::{Trie, MemoryDB, PrefixedMemoryDB, DBValue,
+use sp_trie::{Trie, MemoryDB, PrefixedMemoryDB, DBValue, ChildrenProofMap,
 	empty_child_trie_root, read_trie_value, read_child_trie_value,
 	for_keys_in_child_trie, KeySpacedDB, TrieDBIterator};
 use sp_trie::trie_types::{TrieDB, TrieError, Layout};
 use crate::{backend::Consolidate, StorageKey, StorageValue};
-use sp_core::storage::{ChildInfo, ChildrenProofMap, ChildrenMap};
+use sp_core::storage::{ChildInfo, ChildrenMap};
 use codec::{Decode, Encode};
 use parking_lot::RwLock;
 

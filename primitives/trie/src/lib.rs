@@ -36,7 +36,8 @@ pub use error::Error;
 pub use trie_stream::TrieStream;
 /// The Substrate format implementation of `NodeCodec`.
 pub use node_codec::NodeCodec;
-pub use storage_proof::StorageProof;
+pub use storage_proof::{StorageProof, create_proof_check_backend_storage,
+	create_flat_proof_check_backend_storage, ChildrenProofMap, StorageProofKind};
 /// Various re-exports from the `trie-db` crate.
 pub use trie_db::{
 	Trie, TrieMut, DBValue, Recorder, CError, Query, TrieLayout, TrieConfiguration, nibble_ops, TrieDBIterator,
@@ -316,7 +317,7 @@ pub fn record_all_keys<L: TrieConfiguration, DB>(
 }
 
 /// Pack proof.
-pub fn pack_proof<L: TrieConfiguration>(root: &TrieHash<L>, input: &[Vec<u8>])
+fn pack_proof<L: TrieConfiguration>(root: &TrieHash<L>, input: &[Vec<u8>])
 	-> Result<Vec<Vec<u8>>, Box<TrieError<L>>> {
 	let mut memory_db = MemoryDB::<<L as TrieLayout>::Hash>::default();
 	for i in input.as_ref() {
@@ -327,7 +328,7 @@ pub fn pack_proof<L: TrieConfiguration>(root: &TrieHash<L>, input: &[Vec<u8>])
 }
 
 /// Unpack packed proof.
-pub fn unpack_proof<L: TrieConfiguration>(input: &[Vec<u8>])
+fn unpack_proof<L: TrieConfiguration>(input: &[Vec<u8>])
 	-> Result<(TrieHash<L>, Vec<Vec<u8>>), Box<TrieError<L>>> {
 	let mut memory_db = MemoryDB::<<L as TrieLayout>::Hash>::default();
 	let root = trie_db::decode_compact::<L, _, _>(&mut memory_db, input)?;
@@ -336,7 +337,7 @@ pub fn unpack_proof<L: TrieConfiguration>(input: &[Vec<u8>])
 
 /// Unpack packed proof.
 /// This is faster than `unpack_proof`.
-pub fn unpack_proof_to_memdb<L: TrieConfiguration>(input: &[Vec<u8>])
+fn unpack_proof_to_memdb<L: TrieConfiguration>(input: &[Vec<u8>])
 	-> Result<(TrieHash<L>, MemoryDB::<<L as TrieLayout>::Hash>), Box<TrieError<L>>> {
 	let mut memory_db = MemoryDB::<<L as TrieLayout>::Hash>::default();
 	let root = trie_db::decode_compact::<L, _, _>(&mut memory_db, input)?;

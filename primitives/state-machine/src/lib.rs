@@ -23,7 +23,7 @@ use log::{warn, trace};
 use hash_db::Hasher;
 use codec::{Decode, Encode, Codec};
 use sp_core::{
-	storage::{ChildInfo, ChildrenProofMap}, NativeOrEncoded, NeverNativeValue,
+	storage::ChildInfo, NativeOrEncoded, NeverNativeValue,
 	traits::{CodeExecutor, CallInWasmExt, RuntimeCode}, hexdisplay::HexDisplay,
 };
 use overlayed_changes::OverlayedChangeSet;
@@ -42,7 +42,8 @@ mod trie_backend;
 mod trie_backend_essence;
 mod stats;
 
-pub use sp_trie::{trie_types::{Layout, TrieDBMut}, TrieMut, DBValue, MemoryDB};
+pub use sp_trie::{trie_types::{Layout, TrieDBMut}, TrieMut, DBValue, MemoryDB,
+	StorageProof, StorageProofKind, ChildrenProofMap};
 pub use testing::TestExternalities;
 pub use basic::BasicExternalities;
 pub use ext::Ext;
@@ -66,12 +67,8 @@ pub use overlayed_changes::{
 	OverlayedChanges, StorageChanges, StorageTransactionCache, StorageKey, StorageValue,
 	StorageCollection, ChildStorageCollection,
 };
-pub use proving_backend::{
-	create_proof_check_backend, create_proof_check_backend_storage, merge_storage_proofs,
-	ProofRecorder, ProvingBackend, ProvingBackendRecorder, StorageProof, StorageProofKind,
-	create_flat_proof_check_backend, create_flat_proof_check_backend_storage,
-	merge_flatten_storage_proofs,
-};
+pub use proving_backend::{ProofRecorder, ProvingBackend, ProvingBackendRecorder,
+	create_proof_check_backend, create_flat_proof_check_backend};
 pub use trie_backend_essence::{TrieBackendStorage, Storage};
 pub use trie_backend::TrieBackend;
 pub use error::{Error, ExecutionError};
@@ -706,7 +703,7 @@ where
 		let roots = trie_backend.extract_registered_roots();
 		if let Some(roots) = roots {
 			proof = proof.pack::<H>(&roots)
-				.map_err(|e| Box::new(e) as Box<dyn Error>)?;
+				.map_err(|e| Box::new(format!("{}", e)) as Box<dyn Error>)?;
 		}
 	}
 	Ok(proof)
@@ -738,7 +735,7 @@ where
 		let roots = trie_backend.extract_registered_roots();
 		if let Some(roots) = roots {
 			proof = proof.pack::<H>(&roots)
-				.map_err(|e| Box::new(e) as Box<dyn Error>)?;
+				.map_err(|e| Box::new(format!("{}", e)) as Box<dyn Error>)?;
 		}
 	}
 	Ok(proof)

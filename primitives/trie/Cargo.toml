@@ -19,6 +19,7 @@ harness = false
 [dependencies]
 codec = { package = "parity-scale-codec", version = "1.3.0", default-features = false }
 sp-std = { version = "2.0.0-alpha.6", default-features = false, path = "../std" }
+sp-storage = { version = "2.0.0-alpha.6", default-features = false, path = "../storage" }
 hash-db = { version = "0.15.2", default-features = false }
 trie-db = { version = "0.20.1", default-features = false }
 trie-root = { version = "0.16.0", default-features = false }
@@ -42,4 +43,5 @@ std = [
 	"trie-db/std",
 	"trie-root/std",
 	"sp-core/std",
+	"sp-storage/std",
 ]

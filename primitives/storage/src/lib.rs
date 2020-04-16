@@ -419,6 +419,7 @@ impl ChildTrieParentKeyId {
 		}
 	}
 }
+
 #[cfg(feature = "std")]
 #[derive(Clone, PartialEq, Eq, Debug)]
 /// Type for storing a map of child trie related information.
@@ -452,45 +453,6 @@ impl<T> sp_std::default::Default for ChildrenMap<T> {
 impl<T> IntoIterator for ChildrenMap<T> {
 	type Item = (ChildInfo, T);
 	type IntoIter = sp_std::collections::btree_map::IntoIter<ChildInfo, T>;
-
-	fn into_iter(self) -> Self::IntoIter {
-		self.0.into_iter()
-	}
-}
-
-#[cfg(feature = "std")]
-#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
-/// Type for storing a map of child trie proof related information.
-/// A few utilities methods are defined.
-pub struct ChildrenProofMap<T>(pub BTreeMap<ChildInfoProof, T>);
-
-#[cfg(feature = "std")]
-impl<T> sp_std::ops::Deref for ChildrenProofMap<T> {
-	type Target = BTreeMap<ChildInfoProof, T>;
-
-	fn deref(&self) -> &Self::Target {
-		&self.0
-	}
-}
-
-#[cfg(feature = "std")]
-impl<T> sp_std::ops::DerefMut for ChildrenProofMap<T> {
-	fn deref_mut(&mut self) -> &mut Self::Target {
-		&mut self.0
-	}
-}
-
-#[cfg(feature = "std")]
-impl<T> sp_std::default::Default for ChildrenProofMap<T> {
-	fn default() -> Self {
-		ChildrenProofMap(BTreeMap::new())
-	}
-}
-
-#[cfg(feature = "std")]
-impl<T> IntoIterator for ChildrenProofMap<T> {
-	type Item = (ChildInfoProof, T);
-	type IntoIter = sp_std::collections::btree_map::IntoIter<ChildInfoProof, T>;
 
 	fn into_iter(self) -> Self::IntoIter {
 		self.0.into_iter()

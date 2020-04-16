@@ -31,8 +31,9 @@ use sp_runtime::traits::{
 use sp_state_machine::{
 	ChangesTrieRootsStorage, ChangesTrieAnchorBlockId, ChangesTrieConfigurationRange,
 	InMemoryChangesTrieStorage, TrieBackend, read_proof_check, key_changes_proof_check_with_db,
-	create_flat_proof_check_backend_storage, read_child_proof_check, CloneableSpawn,
+	read_child_proof_check, CloneableSpawn,
 };
+use sp_trie::create_flat_proof_check_backend_storage;
 pub use sp_state_machine::StorageProof;
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
 
@@ -157,7 +158,8 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 			H::Out: Ord + codec::Codec,
 	{
 		// all the checks are sharing the same storage
-		let storage = create_flat_proof_check_backend_storage(remote_roots_proof)?;
+		let storage = create_flat_proof_check_backend_storage(remote_roots_proof)
+			.map_err(|e| format!("{}", e))?;
 
 		// remote_roots.keys() are sorted => we can use this to group changes tries roots
 		// that are belongs to the same CHT

@@ -7735,6 +7735,7 @@ dependencies = [
  "sp-core",
  "sp-runtime",
  "sp-std",
+ "sp-storage",
  "trie-bench",
  "trie-db",
  "trie-root",
