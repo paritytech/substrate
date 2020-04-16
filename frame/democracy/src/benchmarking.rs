@@ -350,7 +350,7 @@ benchmarks! {
 		let referendum_index = add_referendum::<T>(r)?;
 	}: _(RawOrigin::Root, referendum_index)
 
-	// on_initialize {
+	// TODO on_initialize {
 	// 	// Create maturing referenda
 
 	// 	// one fork for launch public
@@ -809,6 +809,8 @@ benchmarks! {
 		};
 		assert_eq!(votes.len(), (r - 1) as usize, "Vote was not removed");
 	}
+
+	// TODO enact_proposal
 }
 
 #[cfg(test)]
