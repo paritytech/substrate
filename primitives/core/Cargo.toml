@@ -47,6 +47,7 @@ sha2 = { version = "0.8.0", default-features = false, optional = true }
 hex = { version = "0.4", default-features = false, optional = true }
 twox-hash = { version = "1.5.0", default-features = false, optional = true }
 libsecp256k1 = { version = "0.3.2", default-features = false, features = ["hmac"], optional = true }
+merlin = { version = "2.0", default-features = false, optional = true }
 
 sp-runtime-interface = { version = "2.0.0-dev", default-features = false, path = "../runtime-interface" }
 
@@ -97,7 +98,6 @@ std = [
 	"schnorrkel/std",
 	"regex",
 	"num-traits/std",
-	"libsecp256k1/std",
 	"tiny-keccak",
 	"sp-debug-derive/std",
 	"sp-externalities",
@@ -106,6 +106,7 @@ std = [
 	"zeroize/alloc",
 	"futures",
 	"futures/thread-pool",
+	"libsecp256k1/std",
 ]
 
 # This feature enables all crypto primitives for `no_std` builds like microcontrollers
@@ -121,4 +122,5 @@ full_crypto = [
 	"twox-hash",
 	"libsecp256k1",
 	"sp-runtime-interface/disable_target_static_assertions",
+	"merlin",
 ]
