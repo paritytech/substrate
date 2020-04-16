@@ -384,7 +384,7 @@ impl NetworkConfiguration {
 			"test-node",
 			"test-client",
 			Default::default(),
-			Some(std::env::current_dir().expect("current directory must exist")),
+			None,
 		);
 
 		config.listen_addresses = vec![
@@ -402,7 +402,7 @@ impl NetworkConfiguration {
 			"test-node",
 			"test-client",
 			Default::default(),
-			Some(std::env::current_dir().expect("current directory must exist")),
+			None,
 		);
 
 		config.listen_addresses = vec![
