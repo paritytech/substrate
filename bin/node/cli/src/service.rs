@@ -177,7 +177,7 @@ macro_rules! new_full {
 		}
 
 		// Spawn authority discovery module.
-		if matches!(role, sc_service::config::Role::Authority{..} | sc_service::config::Role::Sentry{..}) {
+		if matches!(role, sc_service::config::Role::Authority {..} | sc_service::config::Role::Sentry {..}) {
 			let sentries;
 			let authority_discovery_role;
 

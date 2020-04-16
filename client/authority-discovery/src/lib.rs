@@ -42,8 +42,10 @@
 //!
 //!    4. Adds the retrieved external addresses as priority nodes to the peerset.
 //!
-//!
-//! When run as a sentry node step 1 is skipped and only step 2 is executed.
+//! When run as a sentry node, the authority discovery module does not
+//! publish any addresses to the DHT but still discovers validators and
+//! sentry nodes of validators, i.e. only step 2 (Discovers other authorities) 
+//! is executed.
 
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
@@ -251,7 +253,7 @@ where
 		let keys = AuthorityDiscovery::get_own_public_keys_within_authority_set(
 			&key_store,
 			&self.client,
-		)?.into_iter().map(Into::into).collect::<Vec<_> >();
+		)?.into_iter().map(Into::into).collect::<Vec<_>>();
 
 		let signatures = key_store.read()
 			.sign_with_all(
