@@ -68,14 +68,14 @@
 //! ### Example - Get extrinsic count and parent hash for the current block
 //!
 //! ```
-//! use frame_support::{decl_module, dispatch, weights::SimpleDispatchInfo};
+//! use frame_support::{decl_module, dispatch, weights::{SimpleDispatchInfo, MINIMUM_WEIGHT}};
 //! use frame_system::{self as system, ensure_signed};
 //!
 //! pub trait Trait: system::Trait {}
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		#[weight = SimpleDispatchInfo::default()]
+//! 		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 //! 		pub fn system_module_example(origin) -> dispatch::DispatchResult {
 //! 			let _sender = ensure_signed(origin)?;
 //! 			let _extrinsic_count = <system::Module<T>>::extrinsic_count();
@@ -120,7 +120,7 @@ use frame_support::{
 		Contains, Get, ModuleToIndex, OnNewAccount, OnKilledAccount, IsDeadAccount, Happened,
 		StoredMap, EnsureOrigin,
 	},
-	weights::{Weight, DispatchInfo, PostDispatchInfo, DispatchClass, SimpleDispatchInfo, FunctionOf}
+	weights::{Weight, MINIMUM_WEIGHT, RuntimeDbWeight, DispatchInfo, PostDispatchInfo, DispatchClass, SimpleDispatchInfo, FunctionOf}
 };
 use codec::{Encode, Decode, FullCodec, EncodeLike};
 
@@ -194,6 +194,9 @@ pub trait Trait: 'static + Eq + Clone {
 
 	/// The maximum weight of a block.
 	type MaximumBlockWeight: Get<Weight>;
+
+	/// The weight of runtime database operations the runtime can invoke.
+	type DbWeight: Get<RuntimeDbWeight>;
 
 	/// The maximum length of a block (in bytes).
 	type MaximumBlockLength: Get<u32>;
@@ -482,20 +485,20 @@ decl_module! {
 		}
 
 		/// Make some on-chain remark.
-		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 		fn remark(origin, _remark: Vec<u8>) {
 			ensure_signed(origin)?;
 		}
 
 		/// Set the number of pages in the WebAssembly environment's heap.
-		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
+		#[weight = SimpleDispatchInfo::FixedOperational(MINIMUM_WEIGHT)]
 		fn set_heap_pages(origin, pages: u64) {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::HEAP_PAGES, &pages.encode());
 		}
 
 		/// Set the new runtime code.
-		#[weight = SimpleDispatchInfo::FixedOperational(200_000)]
+		#[weight = SimpleDispatchInfo::FixedOperational(200_000_000)]
 		pub fn set_code(origin, code: Vec<u8>) {
 			Self::can_set_code(origin, &code)?;
 
@@ -504,7 +507,7 @@ decl_module! {
 		}
 
 		/// Set the new runtime code without doing any checks of the given `code`.
-		#[weight = SimpleDispatchInfo::FixedOperational(200_000)]
+		#[weight = SimpleDispatchInfo::FixedOperational(200_000_000)]
 		pub fn set_code_without_checks(origin, code: Vec<u8>) {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::CODE, &code);
@@ -512,7 +515,7 @@ decl_module! {
 		}
 
 		/// Set the new changes trie configuration.
-		#[weight = SimpleDispatchInfo::FixedOperational(20_000)]
+		#[weight = SimpleDispatchInfo::FixedOperational(20_000_000)]
 		pub fn set_changes_trie_config(origin, changes_trie_config: Option<ChangesTrieConfiguration>) {
 			ensure_root(origin)?;
 			match changes_trie_config.clone() {
@@ -530,7 +533,7 @@ decl_module! {
 		}
 
 		/// Set some items of storage.
-		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
+		#[weight = SimpleDispatchInfo::FixedOperational(MINIMUM_WEIGHT)]
 		fn set_storage(origin, items: Vec<KeyValue>) {
 			ensure_root(origin)?;
 			for i in &items {
@@ -539,7 +542,7 @@ decl_module! {
 		}
 
 		/// Kill some items from storage.
-		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
+		#[weight = SimpleDispatchInfo::FixedOperational(MINIMUM_WEIGHT)]
 		fn kill_storage(origin, keys: Vec<Key>) {
 			ensure_root(origin)?;
 			for key in &keys {
@@ -548,7 +551,7 @@ decl_module! {
 		}
 
 		/// Kill all storage items with a key that starts with the given prefix.
-		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
+		#[weight = SimpleDispatchInfo::FixedOperational(MINIMUM_WEIGHT)]
 		fn kill_prefix(origin, prefix: Key) {
 			ensure_root(origin)?;
 			storage::unhashed::kill_prefix(&prefix);
@@ -556,7 +559,7 @@ decl_module! {
 
 		/// Kill the sending account, assuming there are no references outstanding and the composite
 		/// data is equal to its default value.
-		#[weight = SimpleDispatchInfo::FixedOperational(25_000)]
+		#[weight = SimpleDispatchInfo::FixedOperational(25_000_000)]
 		fn suicide(origin) {
 			let who = ensure_signed(origin)?;
 			let account = Account::<T>::get(&who);
@@ -1652,6 +1655,7 @@ mod tests {
 		type Event = u16;
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
+		type DbWeight = ();
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = Version;

@@ -240,18 +240,29 @@ pub trait IterableStorageDoubleMap<
 	K2: FullCodec,
 	V: FullCodec
 >: StorageDoubleMap<K1, K2, V> {
-	/// The type that iterates over all `(key, value)`.
-	type Iterator: Iterator<Item = (K2, V)>;
+	/// The type that iterates over all `(key2, value)`.
+	type PrefixIterator: Iterator<Item = (K2, V)>;
+
+	/// The type that iterates over all `(key1, key2, value)`.
+	type Iterator: Iterator<Item = (K1, K2, V)>;
 
 	/// Enumerate all elements in the map with first key `k1` in no particular order. If you add or
 	/// remove values whose first key is `k1` to the map while doing this, you'll get undefined
 	/// results.
-	fn iter(k1: impl EncodeLike<K1>) -> Self::Iterator;
+	fn iter_prefix(k1: impl EncodeLike<K1>) -> Self::PrefixIterator;
 
 	/// Remove all elements from the map with first key `k1` and iterate through them in no
 	/// particular order. If you add elements with first key `k1` to the map while doing this,
 	/// you'll get undefined results.
-	fn drain(k1: impl EncodeLike<K1>) -> Self::Iterator;
+	fn drain_prefix(k1: impl EncodeLike<K1>) -> Self::PrefixIterator;
+
+	/// Enumerate all elements in the map in no particular order. If you add or remove values to
+	/// the map while doing this, you'll get undefined results.
+	fn iter() -> Self::Iterator;
+
+	/// Remove all elements from the map and iterate through them in no particular order. If you
+	/// add elements to the map while doing this, you'll get undefined results.
+	fn drain() -> Self::Iterator;
 
 	/// Translate the values of all elements by a function `f`, in the map in no particular order.
 	/// By returning `None` from `f` for an element, you'll remove it from the map.
@@ -310,7 +321,7 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 
 	fn remove_prefix<KArg1>(k1: KArg1) where KArg1: ?Sized + EncodeLike<K1>;
 
-	fn iter_prefix<KArg1>(k1: KArg1) -> PrefixIterator<V>
+	fn iter_prefix_values<KArg1>(k1: KArg1) -> PrefixIterator<V>
 		where KArg1: ?Sized + EncodeLike<K1>;
 
 	fn mutate<KArg1, KArg2, R, F>(k1: KArg1, k2: KArg2, f: F) -> R
