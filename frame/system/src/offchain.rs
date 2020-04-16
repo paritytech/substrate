@@ -408,7 +408,7 @@ impl<T: SigningTypes> Clone for Account<T> where
 /// obtain unwrapped crypto (and wrap it back).
 ///
 ///	Example (pseudo-)implementation:
-/// ```
+/// ```ignore
 ///	// im-online specific crypto
 /// type RuntimeAppPublic = ImOnline(sr25519::Public);
 /// // wrapped "raw" crypto
