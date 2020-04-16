@@ -28,6 +28,7 @@ sp-keyring = { version = "2.0.0-dev", path = "../primitives/keyring" }
 kvdb = "0.5.0"
 log = { version = "0.4.8" }
 parking_lot = "0.10.0"
+rand = "0.7.3"
 sp-core = { version = "2.0.0-dev", path = "../primitives/core" }
 sp-std = { version = "2.0.0-dev", path = "../primitives/std" }
 sp-version = { version = "2.0.0-dev", path = "../primitives/version" }
@@ -38,6 +39,7 @@ sp-blockchain = { version = "2.0.0-dev", path = "../primitives/blockchain" }
 sp-state-machine = { version = "0.8.0-dev", path = "../primitives/state-machine" }
 sc-telemetry = { version = "2.0.0-dev", path = "telemetry" }
 sp-trie = { version = "2.0.0-dev", path = "../primitives/trie" }
+sp-database = { version = "2.0.0-dev", path = "../primitives/database" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.8.0-dev", path = "../utils/prometheus" }
 tracing = "0.1.10"
 

@@ -28,6 +28,7 @@
 use crate::{
 	behaviour::{Behaviour, BehaviourOut},
 	config::{parse_addr, parse_str_addr, NonReservedPeerMode, Params, Role, TransportConfig},
+	discovery::DiscoveryConfig,
 	error::Error,
 	network_state::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
@@ -310,24 +311,37 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 					peerset_handle.clone(),
 				)
 			};
-			let mut behaviour = futures::executor::block_on(Behaviour::new(
+
+			let discovery_config = {
+				let mut config = DiscoveryConfig::new(local_public.clone());
+				config.with_user_defined(known_addresses);
+				config.discovery_limit(u64::from(params.network_config.out_peers) + 15);
+				config.add_protocol(params.protocol_id.clone());
+
+				match params.network_config.transport {
+					TransportConfig::MemoryOnly => {
+						config.with_mdns(false);
+						config.allow_private_ipv4(false);
+					}
+					TransportConfig::Normal { enable_mdns, allow_private_ipv4, .. } => {
+						config.with_mdns(enable_mdns);
+						config.allow_private_ipv4(allow_private_ipv4);
+					}
+				}
+
+				config
+			};
+
+			let mut behaviour = Behaviour::new(
 				protocol,
 				params.role,
 				user_agent,
 				local_public,
-				known_addresses,
-				match params.network_config.transport {
-					TransportConfig::MemoryOnly => false,
-					TransportConfig::Normal { enable_mdns, .. } => enable_mdns,
-				},
-				match params.network_config.transport {
-					TransportConfig::MemoryOnly => false,
-					TransportConfig::Normal { allow_private_ipv4, .. } => allow_private_ipv4,
-				},
-				u64::from(params.network_config.out_peers) + 15,
 				block_requests,
-				light_client_handler
-			));
+				light_client_handler,
+				discovery_config
+			);
+
 			for (engine_id, protocol_name) in &params.network_config.notifications_protocols {
 				behaviour.register_notifications_protocol(*engine_id, protocol_name.clone());
 			}
@@ -462,6 +476,18 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 	/// You must call this when a new block is finalized by the client.
 	pub fn on_block_finalized(&mut self, hash: B::Hash, header: B::Header) {
 		self.network_service.user_protocol_mut().on_block_finalized(hash, &header);
+	}
+
+	/// Returns the local `PeerId`.
+	pub fn local_peer_id(&self) -> &PeerId {
+		Swarm::<B, H>::local_peer_id(&self.network_service)
+	}
+
+	/// Returns the list of addresses we are listening on.
+	///
+	/// Does **NOT** include a trailing `/p2p/` with our `PeerId`.
+	pub fn listen_addresses(&self) -> impl Iterator<Item = &Multiaddr> {
+		Swarm::<B, H>::listeners(&self.network_service)
 	}
 
 	/// Get network state.
@@ -845,12 +871,12 @@ pub struct NetworkWorker<B: BlockT + 'static, H: ExHashT> {
 
 struct Metrics {
 	// This list is ordered alphabetically
-	connections: GaugeVec<U64>,
 	connections_closed_total: CounterVec<U64>,
+	connections_opened_total: CounterVec<U64>,
 	import_queue_blocks_submitted: Counter<U64>,
 	import_queue_finality_proofs_submitted: Counter<U64>,
 	import_queue_justifications_submitted: Counter<U64>,
-	incoming_connections_errors_total: Counter<U64>,
+	incoming_connections_errors_total: CounterVec<U64>,
 	incoming_connections_total: Counter<U64>,
 	is_major_syncing: Gauge<U64>,
 	issued_light_requests: Counter<U64>,
@@ -860,7 +886,8 @@ struct Metrics {
 	network_per_sec_bytes: GaugeVec<U64>,
 	notifications_queues_size: HistogramVec,
 	notifications_sizes: HistogramVec,
-	opened_notification_streams: GaugeVec<U64>,
+	notifications_streams_closed_total: CounterVec<U64>,
+	notifications_streams_opened_total: CounterVec<U64>,
 	peers_count: Gauge<U64>,
 	peerset_num_discovered: Gauge<U64>,
 	peerset_num_requested: Gauge<U64>,
@@ -873,19 +900,19 @@ impl Metrics {
 	fn register(registry: &Registry) -> Result<Self, PrometheusError> {
 		Ok(Self {
 			// This list is ordered alphabetically
-			connections: register(GaugeVec::new(
-				Opts::new(
-					"sub_libp2p_connections",
-					"Number of established libp2p connections"
-				),
-				&["direction"]
-			)?, registry)?,
 			connections_closed_total: register(CounterVec::new(
 				Opts::new(
 					"sub_libp2p_connections_closed_total",
-					"Total number of connections closed, by reason"
+					"Total number of connections closed, by reason and direction"
 				),
-				&["reason"]
+				&["direction", "reason"]
+			)?, registry)?,
+			connections_opened_total: register(CounterVec::new(
+				Opts::new(
+					"sub_libp2p_connections_opened_total",
+					"Total number of connections opened"
+				),
+				&["direction"]
 			)?, registry)?,
 			import_queue_blocks_submitted: register(Counter::new(
 				"import_queue_blocks_submitted",
@@ -899,9 +926,13 @@ impl Metrics {
 				"import_queue_justifications_submitted",
 				"Number of justifications submitted to the import queue.",
 			)?, registry)?,
-			incoming_connections_errors_total: register(Counter::new(
-				"sub_libp2p_incoming_connections_handshake_errors_total",
-				"Total number of incoming connections that have failed during the initial handshake"
+			incoming_connections_errors_total: register(CounterVec::new(
+				Opts::new(
+					"sub_libp2p_incoming_connections_handshake_errors_total",
+					"Total number of incoming connections that have failed during the \
+					initial handshake"
+				),
+				&["reason"]
 			)?, registry)?,
 			incoming_connections_total: register(Counter::new(
 				"sub_libp2p_incoming_connections_total",
@@ -937,7 +968,7 @@ impl Metrics {
 						"sub_libp2p_notifications_queues_size",
 						"Total size of all the notification queues"
 					),
-					buckets: vec![0.0, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0],
+					buckets: vec![0.0, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0, 511.0, 512.0],
 				},
 				&["protocol"]
 			)?, registry)?,
@@ -952,10 +983,17 @@ impl Metrics {
 				},
 				&["direction", "protocol"]
 			)?, registry)?,
-			opened_notification_streams: register(GaugeVec::new(
+			notifications_streams_closed_total: register(CounterVec::new(
 				Opts::new(
-					"sub_libp2p_opened_notification_streams",
-					"Number of open notification substreams"
+					"sub_libp2p_notifications_streams_closed_total",
+					"Total number of notification substreams that have been closed"
+				),
+				&["protocol"]
+			)?, registry)?,
+			notifications_streams_opened_total: register(CounterVec::new(
+				Opts::new(
+					"sub_libp2p_notifications_streams_opened_total",
+					"Total number of notification substreams that have been opened"
 				),
 				&["protocol"]
 			)?, registry)?,
@@ -988,10 +1026,10 @@ impl Metrics {
 	fn update_with_network_event(&self, event: &Event) {
 		match event {
 			Event::NotificationStreamOpened { engine_id, .. } => {
-				self.opened_notification_streams.with_label_values(&[&engine_id_to_string(&engine_id)]).inc();
+				self.notifications_streams_opened_total.with_label_values(&[&engine_id_to_string(&engine_id)]).inc();
 			},
 			Event::NotificationStreamClosed { engine_id, .. } => {
-				self.opened_notification_streams.with_label_values(&[&engine_id_to_string(&engine_id)]).dec();
+				self.notifications_streams_closed_total.with_label_values(&[&engine_id_to_string(&engine_id)]).inc();
 			},
 			Event::NotificationsReceived { messages, .. } => {
 				for (engine_id, message) in messages {
@@ -1115,34 +1153,33 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					if let Some(metrics) = this.metrics.as_ref() {
 						match endpoint {
 							ConnectedPoint::Dialer { .. } =>
-								metrics.connections.with_label_values(&["out"]).inc(),
+								metrics.connections_opened_total.with_label_values(&["out"]).inc(),
 							ConnectedPoint::Listener { .. } =>
-								metrics.connections.with_label_values(&["in"]).inc(),
+								metrics.connections_opened_total.with_label_values(&["in"]).inc(),
 						}
 					}
 				},
 				Poll::Ready(SwarmEvent::ConnectionClosed { peer_id, cause, endpoint, .. }) => {
 					trace!(target: "sub-libp2p", "Libp2p => Disconnected({:?}, {:?})", peer_id, cause);
 					if let Some(metrics) = this.metrics.as_ref() {
-						match endpoint {
-							ConnectedPoint::Dialer { .. } =>
-								metrics.connections.with_label_values(&["out"]).dec(),
-							ConnectedPoint::Listener { .. } =>
-								metrics.connections.with_label_values(&["in"]).dec(),
-						}
+						let dir = match endpoint {
+							ConnectedPoint::Dialer { .. } => "out",
+							ConnectedPoint::Listener { .. } => "in",
+						};
+
 						match cause {
 							ConnectionError::IO(_) =>
-								metrics.connections_closed_total.with_label_values(&["transport-error"]).inc(),
+								metrics.connections_closed_total.with_label_values(&[dir, "transport-error"]).inc(),
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
 								EitherError::A(EitherError::B(EitherError::A(PingFailure::Timeout))))))) =>
-								metrics.connections_closed_total.with_label_values(&["ping-timeout"]).inc(),
+								metrics.connections_closed_total.with_label_values(&[dir, "ping-timeout"]).inc(),
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
 								EitherError::A(EitherError::A(EitherError::B(LegacyConnectionKillError))))))) =>
-								metrics.connections_closed_total.with_label_values(&["force-closed"]).inc(),
+								metrics.connections_closed_total.with_label_values(&[dir, "force-closed"]).inc(),
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(_)) =>
-								metrics.connections_closed_total.with_label_values(&["protocol-error"]).inc(),
+								metrics.connections_closed_total.with_label_values(&[dir, "protocol-error"]).inc(),
 							ConnectionError::Handler(NodeHandlerWrapperError::KeepAliveTimeout) =>
-								metrics.connections_closed_total.with_label_values(&["keep-alive-timeout"]).inc(),
+								metrics.connections_closed_total.with_label_values(&[dir, "keep-alive-timeout"]).inc(),
 						}
 					}
 				},
@@ -1200,14 +1237,21 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					trace!(target: "sub-libp2p", "Libp2p => IncomingConnectionError({},{}): {}",
 						local_addr, send_back_addr, error);
 					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.incoming_connections_errors_total.inc();
+						let reason = match error {
+							PendingConnectionError::ConnectionLimit(_) => "limit-reached",
+							PendingConnectionError::InvalidPeerId => "invalid-peer-id",
+							PendingConnectionError::Transport(_) |
+							PendingConnectionError::IO(_) => "transport-error",
+						};
+
+						metrics.incoming_connections_errors_total.with_label_values(&[reason]).inc();
 					}
 				},
 				Poll::Ready(SwarmEvent::BannedPeer { peer_id, endpoint }) => {
 					trace!(target: "sub-libp2p", "Libp2p => BannedPeer({}). Connected via {:?}.",
 						peer_id, endpoint);
 					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.incoming_connections_errors_total.inc();
+						metrics.incoming_connections_errors_total.with_label_values(&["banned"]).inc();
 					}
 				},
 				Poll::Ready(SwarmEvent::UnknownPeerUnreachableAddr { address, error }) =>

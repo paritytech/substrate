@@ -1221,33 +1221,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ethbloom"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e7abcddbdd5db30aeed4deb586adc4824e6c247e2f7238d1187f752893f096b"
-dependencies = [
- "crunchy",
- "fixed-hash",
- "impl-rlp",
- "impl-serde 0.3.0",
- "tiny-keccak 2.0.2",
-]
-
-[[package]]
-name = "ethereum-types"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "964c23cdee0ca07d5be2a628b46d5c11a2134ce554a8c16d8dbc2db647e4fd4d"
-dependencies = [
- "ethbloom",
- "fixed-hash",
- "impl-rlp",
- "impl-serde 0.3.0",
- "primitive-types",
- "uint",
-]
-
-[[package]]
 name = "evm"
 version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3375,15 +3348,27 @@ dependencies = [
 name = "node-bench"
 version = "0.8.0-dev"
 dependencies = [
+ "derive_more",
+ "fs_extra",
+ "hash-db",
+ "hex",
+ "kvdb",
+ "kvdb-rocksdb",
+ "lazy_static",
  "log",
  "node-primitives",
  "node-testing",
+ "rand 0.7.3",
  "sc-cli",
  "sc-client-api",
  "serde",
  "serde_json",
+ "sp-core",
  "sp-runtime",
+ "sp-state-machine",
+ "sp-trie",
  "structopt",
+ "tempfile",
 ]
 
 [[package]]
@@ -4687,6 +4672,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "parity-db"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f4174d70be686b0d7cdee964b2d723e1461e28390c8804f01efc907d81043be9"
+dependencies = [
+ "blake2-rfc",
+ "libc",
+ "log",
+ "memmap",
+ "parking_lot 0.10.2",
+]
+
+[[package]]
 name = "parity-multiaddr"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4775,10 +4773,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e42755f26e5ea21a6a819d9e63cbd70713e9867a2b767ec2cc65ca7659532c5"
 dependencies = [
  "cfg-if",
- "ethereum-types",
- "hashbrown",
  "impl-trait-for-tuples",
- "lru",
  "parity-util-mem-derive",
  "parking_lot 0.10.2",
  "primitive-types",
@@ -4930,18 +4925,18 @@ dependencies = [
 
 [[package]]
 name = "pin-project"
-version = "0.4.8"
+version = "0.4.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7804a463a8d9572f13453c516a5faea534a2403d7ced2f0c7e100eeff072772c"
+checksum = "6f6a7f5eee6292c559c793430c55c00aea9d3b3d1905e855806ca4d7253426a2"
 dependencies = [
  "pin-project-internal",
 ]
 
 [[package]]
 name = "pin-project-internal"
-version = "0.4.8"
+version = "0.4.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "385322a45f2ecf3410c68d2a549a4a2685e8051d0f278e39743ff4e451cb9b3f"
+checksum = "8988430ce790d8682672117bc06dda364c0be32d3abd738234f19f3240bad99a"
 dependencies = [
  "proc-macro2",
  "quote 1.0.3",
@@ -5902,6 +5897,7 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "parking_lot 0.10.2",
+ "rand 0.7.3",
  "sc-block-builder",
  "sc-client-api",
  "sc-executor",
@@ -5910,6 +5906,7 @@ dependencies = [
  "sp-blockchain",
  "sp-consensus",
  "sp-core",
+ "sp-database",
  "sp-externalities",
  "sp-inherents",
  "sp-keyring",
@@ -5964,6 +5961,7 @@ dependencies = [
 name = "sc-client-db"
 version = "0.8.0-dev"
 dependencies = [
+ "blake2-rfc",
  "env_logger 0.7.1",
  "hash-db",
  "kvdb",
@@ -5971,6 +5969,7 @@ dependencies = [
  "kvdb-rocksdb",
  "linked-hash-map",
  "log",
+ "parity-db",
  "parity-scale-codec",
  "parity-util-mem",
  "parking_lot 0.10.2",
@@ -5982,6 +5981,7 @@ dependencies = [
  "sp-blockchain",
  "sp-consensus",
  "sp-core",
+ "sp-database",
  "sp-keyring",
  "sp-runtime",
  "sp-state-machine",
@@ -7386,6 +7386,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp-database"
+version = "2.0.0-dev"
+dependencies = [
+ "kvdb",
+ "parking_lot 0.10.2",
+]
+
+[[package]]
 name = "sp-debug-derive"
 version = "2.0.0-dev"
 dependencies = [
@@ -7938,6 +7946,7 @@ dependencies = [
  "sc-informant",
  "sc-network",
  "sc-service",
+ "sp-database",
  "wasm-bindgen",
  "wasm-bindgen-futures",
 ]
@@ -8254,9 +8263,9 @@ dependencies = [
 
 [[package]]
 name = "sysinfo"
-version = "0.12.0"
+version = "0.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ccb41798287e8e299a701b5560d886d6ca2c3e7115e9ea2cb68c123aec339b7"
+checksum = "5a0338198966bde7feb14b011a33d404a62a6e03b843352c71512a2a002634b7"
 dependencies = [
  "cfg-if",
  "doc-comment",

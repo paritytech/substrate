@@ -123,6 +123,7 @@ members = [
 	"primitives/consensus/vrf",
 	"primitives/core",
 	"primitives/chain-spec",
+	"primitives/database",
 	"primitives/debug-derive",
 	"primitives/storage",
 	"primitives/externalities",

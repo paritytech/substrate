@@ -50,7 +50,13 @@ use crate::dispatch::{DispatchErrorWithPostInfo, DispatchError};
 pub use sp_runtime::transaction_validity::TransactionPriority;
 
 /// Numeric range of a transaction weight.
-pub type Weight = u32;
+///
+/// FRAME assumes a weight of `1_000_000_000_000` equals 1 second of compute on a standard
+/// machine: (TODO: DEFINE STANDARD MACHINE SPECIFICATIONS)
+pub type Weight = u64;
+
+/// The smallest total weight an extrinsic should have.
+pub const MINIMUM_WEIGHT: Weight = 10_000_000;
 
 /// Means of weighing some particular kind of data (`T`).
 pub trait WeighData<T> {
@@ -103,6 +109,25 @@ pub enum DispatchClass {
 impl Default for DispatchClass {
 	fn default() -> Self {
 		DispatchClass::Normal
+	}
+}
+
+// Implement traits for raw Weight value
+impl<T> WeighData<T> for Weight {
+	fn weigh_data(&self, _: T) -> Weight {
+		return *self
+	}
+}
+
+impl<T> ClassifyDispatch<T> for Weight {
+	fn classify_dispatch(&self, _: T) -> DispatchClass {
+		DispatchClass::default()
+	}
+}
+
+impl<T> PaysFee<T> for Weight {
+	fn pays_fee(&self, _: T) -> bool {
+		true
 	}
 }
 
@@ -281,13 +306,6 @@ impl<T> PaysFee<T> for SimpleDispatchInfo {
 	}
 }
 
-impl Default for SimpleDispatchInfo {
-	fn default() -> Self {
-		// Default weight of all transactions.
-		SimpleDispatchInfo::FixedNormal(10_000)
-	}
-}
-
 impl SimpleDispatchInfo {
 	/// An _additive zero_ variant of SimpleDispatchInfo.
 	pub fn zero() -> Self {
@@ -390,24 +408,56 @@ impl<Call: Encode, Extra: Encode> GetDispatchInfo for sp_runtime::testing::TestX
 	}
 }
 
+/// The weight of database operations that the runtime can invoke.
+#[derive(Clone, Copy, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode)]
+pub struct RuntimeDbWeight {
+	pub read: Weight,
+	pub write: Weight,
+}
+
+impl RuntimeDbWeight {
+	pub fn reads(self, r: Weight) -> Weight {
+		self.read.saturating_mul(r)
+	}
+
+	pub fn writes(self, w: Weight) -> Weight {
+		self.write.saturating_mul(w)
+	}
+
+	pub fn reads_writes(self, r: Weight, w: Weight) -> Weight {
+		let read_weight = self.read.saturating_mul(r);
+		let write_weight = self.write.saturating_mul(w);
+		read_weight.saturating_add(write_weight)
+	}
+}
+
 #[cfg(test)]
 #[allow(dead_code)]
 mod tests {
-	use crate::decl_module;
+	use crate::{decl_module, parameter_types, traits::Get};
 	use super::*;
 
 	pub trait Trait {
 		type Origin;
 		type Balance;
 		type BlockNumber;
+		type DbWeight: Get<RuntimeDbWeight>;
 	}
 
 	pub struct TraitImpl {}
+
+	parameter_types! {
+		pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
+			read: 100,
+			write: 1000,
+		};
+	}
 
 	impl Trait for TraitImpl {
 		type Origin = u32;
 		type BlockNumber = u32;
 		type Balance = u32;
+		type DbWeight = DbWeight;
 	}
 
 	decl_module! {
@@ -417,18 +467,30 @@ mod tests {
 			fn f0(_origin) { unimplemented!(); }
 
 			// weight = a x 10 + b
-			#[weight = FunctionOf(|args: (&u32, &u32)| args.0 * 10 + args.1, DispatchClass::Normal, true)]
+			#[weight = FunctionOf(|args: (&u32, &u32)| (args.0 * 10 + args.1) as Weight, DispatchClass::Normal, true)]
 			fn f11(_origin, _a: u32, _eb: u32) { unimplemented!(); }
 
 			#[weight = FunctionOf(|_: (&u32, &u32)| 0, DispatchClass::Operational, true)]
 			fn f12(_origin, _a: u32, _eb: u32) { unimplemented!(); }
+
+			#[weight = T::DbWeight::get().reads(3) + T::DbWeight::get().writes(2) + 10_000]
+			fn f2(_origin) { unimplemented!(); }
+
+			#[weight = T::DbWeight::get().reads_writes(6, 5) + 40_000]
+			fn f21(_origin) { unimplemented!(); }
+
 		}
 	}
 
 	#[test]
 	fn weights_are_correct() {
+		assert_eq!(Call::<TraitImpl>::f0().get_dispatch_info().weight, 1000);
 		assert_eq!(Call::<TraitImpl>::f11(10, 20).get_dispatch_info().weight, 120);
 		assert_eq!(Call::<TraitImpl>::f11(10, 20).get_dispatch_info().class, DispatchClass::Normal);
-		assert_eq!(Call::<TraitImpl>::f0().get_dispatch_info().weight, 1000);
+		assert_eq!(Call::<TraitImpl>::f12(10, 20).get_dispatch_info().weight, 0);
+		assert_eq!(Call::<TraitImpl>::f12(10, 20).get_dispatch_info().class, DispatchClass::Operational);
+		assert_eq!(Call::<TraitImpl>::f2().get_dispatch_info().weight, 12300);
+		assert_eq!(Call::<TraitImpl>::f21().get_dispatch_info().weight, 45600);
+		assert_eq!(Call::<TraitImpl>::f2().get_dispatch_info().class, DispatchClass::Normal);
 	}
 }
