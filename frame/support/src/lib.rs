@@ -222,6 +222,37 @@ macro_rules! assert_ok {
 	}
 }
 
+/// Opens a new tracing span. A no-op in WASM.
+///
+/// The returned span can be later entered into using `tracing_span_enter`.
+#[macro_export]
+macro_rules! tracing_span {
+	($name:expr; $( $code:tt )*) => {
+		let span = $crate::if_tracing!(
+			$crate::tracing::span!($crate::tracing::Level::TRACE, $name)
+		,
+			()
+		);
+		let guard = $crate::if_tracing!(span.enter(), ());
+		$( $code )*
+
+		$crate::sp_std::mem::drop(guard);
+		$crate::sp_std::mem::drop(span);
+	}
+}
+
+#[macro_export]
+#[cfg(feature = "tracing")]
+macro_rules! if_tracing {
+	( $if:expr, $else:expr ) => {{ $if }}
+}
+
+#[macro_export]
+#[cfg(not(feature = "tracing"))]
+macro_rules! if_tracing {
+	( $if:expr, $else:expr ) => {{ $else }}
+}
+
 /// The void type - it cannot exist.
 // Oh rust, you crack me up...
 #[derive(Clone, Eq, PartialEq, RuntimeDebug)]

@@ -6744,6 +6744,7 @@ dependencies = [
  "sp-utils",
  "substrate-test-runtime-client",
  "substrate-test-runtime-transaction-pool",
+ "tracing",
  "wasm-timer",
 ]
 

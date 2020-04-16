@@ -344,25 +344,25 @@ where
 		source: TransactionSource,
 		uxt: Block::Extrinsic,
 	) -> TransactionValidity {
-		frame_support::debug::RuntimeLogger::init();
-		#[cfg(feature = "std")]
-		let time = std::time::Instant::now();
-		frame_support::debug::trace!("ValidateTransaction: start");
-		frame_support::debug::native::trace!("ValidateTransaction: start/native");
-		let encoded_len = uxt.using_encoded(|d| d.len());
-		frame_support::debug::trace!("ValidateTransaction: encoded");
-		frame_support::debug::native::trace!("ValidateTransaction: encoded ({} ns)", time.elapsed().as_nanos());
-		let xt = uxt.check(&Default::default())?;
-		frame_support::debug::trace!("ValidateTransaction: checked");
-		frame_support::debug::native::trace!("ValidateTransaction: checked ({} ns)", time.elapsed().as_nanos());
+		use frame_support::tracing_span;
 
-		let dispatch_info = xt.get_dispatch_info();
-		frame_support::debug::trace!("ValidateTransaction: dispatchinfo");
-		frame_support::debug::native::trace!("ValidateTransaction: dispatchinfo ({} ns)", time.elapsed().as_nanos());
-		let res = xt.validate::<UnsignedValidator>(source, &dispatch_info, encoded_len);
-		frame_support::debug::trace!("ValidateTransaction: done");
-		frame_support::debug::native::trace!("ValidateTransaction: done ({} ns)", time.elapsed().as_nanos());
-		res
+		tracing_span!{ "validate_transaction::using_encoded";
+			let encoded_len = uxt.using_encoded(|d| d.len());
+		};
+
+		tracing_span!{ "validate_transaction::check";
+			let xt = uxt.check(&Default::default())?;
+		};
+
+		tracing_span!{ "validate_transaction::dispatch_info";
+			let dispatch_info = xt.get_dispatch_info();
+		};
+
+		tracing_span!{ "validate_transaction::validate";
+			let result = xt.validate::<UnsignedValidator>(source, &dispatch_info, encoded_len);
+		};
+
+		result
 	}
 
 	/// Start an offchain worker and generate extrinsics.
