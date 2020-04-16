@@ -297,7 +297,7 @@ pub fn testnet_genesis(
 		pallet_sudo: Some(SudoConfig {
 			key: root_key,
 		}),
-		pallet_babe: Some(BabeConfig {
+		pallet_epoch_vrf: Some(BabeConfig {
 			authorities: vec![],
 		}),
 		pallet_im_online: Some(ImOnlineConfig {
