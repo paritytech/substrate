@@ -25,7 +25,7 @@ pub use crate::backend::{Account, Log, Vicinity, Backend};
 
 use sp_std::{vec::Vec, marker::PhantomData};
 use frame_support::{ensure, decl_module, decl_storage, decl_event, decl_error};
-use frame_support::weights::{Weight, DispatchClass, FunctionOf};
+use frame_support::weights::{Weight, MINIMUM_WEIGHT, DispatchClass, FunctionOf};
 use frame_support::traits::{Currency, WithdrawReason, ExistenceRequirement};
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::ModuleId;
@@ -191,7 +191,7 @@ decl_module! {
 		fn deposit_event() = default;
 
 		/// Deposit balance from currency/balances module into EVM.
-		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 		fn deposit_balance(origin, value: BalanceOf<T>) {
 			let sender = ensure_signed(origin)?;
 
@@ -212,7 +212,7 @@ decl_module! {
 		}
 
 		/// Withdraw balance from EVM into currency/balances module.
-		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 		fn withdraw_balance(origin, value: BalanceOf<T>) {
 			let sender = ensure_signed(origin)?;
 			let address = T::ConvertAccountId::convert_account_id(&sender);
@@ -236,7 +236,7 @@ decl_module! {
 		}
 
 		/// Issue an EVM call operation. This is similar to a message call transaction in Ethereum.
-		#[weight = FunctionOf(|(_, _, _, gas_limit, gas_price, _): (&H160, &Vec<u8>, &U256, &u32, &U256, &Option<U256>)| (*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit), DispatchClass::Normal, true)]
+		#[weight = FunctionOf(|(_, _, _, gas_limit, gas_price, _): (&H160, &Vec<u8>, &U256, &u32, &U256, &Option<U256>)| (*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit as Weight), DispatchClass::Normal, true)]
 		fn call(
 			origin,
 			target: H160,
@@ -267,7 +267,7 @@ decl_module! {
 
 		/// Issue an EVM create operation. This is similar to a contract creation transaction in
 		/// Ethereum.
-		#[weight = FunctionOf(|(_, _, gas_limit, gas_price, _): (&Vec<u8>, &U256, &u32, &U256, &Option<U256>)| (*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit), DispatchClass::Normal, true)]
+		#[weight = FunctionOf(|(_, _, gas_limit, gas_price, _): (&Vec<u8>, &U256, &u32, &U256, &Option<U256>)| (*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit as Weight), DispatchClass::Normal, true)]
 		fn create(
 			origin,
 			init: Vec<u8>,
@@ -302,7 +302,7 @@ decl_module! {
 		}
 
 		/// Issue an EVM create2 operation.
-		#[weight = FunctionOf(|(_, _, _, gas_limit, gas_price, _): (&Vec<u8>, &H256, &U256, &u32, &U256, &Option<U256>)| (*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit), DispatchClass::Normal, true)]
+		#[weight = FunctionOf(|(_, _, _, gas_limit, gas_price, _): (&Vec<u8>, &H256, &U256, &u32, &U256, &Option<U256>)| (*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit as Weight), DispatchClass::Normal, true)]
 		fn create2(
 			origin,
 			init: Vec<u8>,

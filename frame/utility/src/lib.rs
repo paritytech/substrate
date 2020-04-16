@@ -67,7 +67,7 @@ use sp_core::TypeId;
 use sp_io::hashing::blake2_256;
 use frame_support::{decl_module, decl_event, decl_error, decl_storage, Parameter, ensure, RuntimeDebug};
 use frame_support::{traits::{Get, ReservableCurrency, Currency},
-	weights::{GetDispatchInfo, DispatchClass,FunctionOf},
+	weights::{Weight, GetDispatchInfo, DispatchClass, FunctionOf},
 	dispatch::PostDispatchInfo,
 };
 use frame_system::{self as system, ensure_signed};
@@ -317,7 +317,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = FunctionOf(
 			|args: (&u16, &Vec<T::AccountId>, &Option<Timepoint<T::BlockNumber>>, &Box<<T as Trait>::Call>)| {
-				args.3.get_dispatch_info().weight + 10_000 * (args.1.len() as u32 + 1)
+				args.3.get_dispatch_info().weight + 10_000 * (args.1.len() as Weight + 1)
 			},
 			|args: (&u16, &Vec<T::AccountId>, &Option<Timepoint<T::BlockNumber>>, &Box<<T as Trait>::Call>)| {
 				args.3.get_dispatch_info().class
@@ -418,7 +418,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = FunctionOf(
 			|args: (&u16, &Vec<T::AccountId>, &Option<Timepoint<T::BlockNumber>>, &[u8; 32])| {
-				10_000 * (args.1.len() as u32 + 1)
+				10_000 * (args.1.len() as Weight + 1)
 			},
 			DispatchClass::Normal,
 			true
@@ -493,7 +493,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = FunctionOf(
 			|args: (&u16, &Vec<T::AccountId>, &Timepoint<T::BlockNumber>, &[u8; 32])| {
-				10_000 * (args.1.len() as u32 + 1)
+				10_000 * (args.1.len() as Weight + 1)
 			},
 			DispatchClass::Normal,
 			true
