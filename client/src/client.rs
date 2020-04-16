@@ -613,11 +613,20 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 		if let Ok(ImportResult::Imported(ref aux)) = result {
 			if aux.is_new_best {
-				telemetry!(SUBSTRATE_INFO; "block.import";
-					"height" => height,
-					"best" => ?hash,
-					"origin" => ?origin
-				);
+				use rand::Rng;
+				
+				// don't send telemetry block import events during initial sync for every
+				// block to avoid spamming the telemetry server, these events will be randomly
+				// sent at a rate of 1/10.
+				if origin != BlockOrigin::NetworkInitialSync ||
+					rand::thread_rng().gen_bool(0.1)
+				{
+					telemetry!(SUBSTRATE_INFO; "block.import";
+						"height" => height,
+						"best" => ?hash,
+						"origin" => ?origin
+					);
+				}
 			}
 		}
 
@@ -3022,7 +3031,7 @@ pub(crate) mod tests {
 				state_cache_size: 1 << 20,
 				state_cache_child_ratio: None,
 				pruning: PruningMode::ArchiveAll,
-				source: DatabaseSettingsSrc::Path {
+				source: DatabaseSettingsSrc::RocksDb {
 					path: tmp.path().into(),
 					cache_size: 128,
 				}
@@ -3224,7 +3233,7 @@ pub(crate) mod tests {
 					state_cache_size: 1 << 20,
 					state_cache_child_ratio: None,
 					pruning: PruningMode::keep_blocks(1),
-					source: DatabaseSettingsSrc::Path {
+					source: DatabaseSettingsSrc::RocksDb {
 						path: tmp.path().into(),
 						cache_size: 128,
 					}

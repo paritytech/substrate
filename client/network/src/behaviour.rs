@@ -16,7 +16,7 @@
 
 use crate::{
 	config::Role,
-	debug_info, discovery::DiscoveryBehaviour, discovery::DiscoveryOut,
+	debug_info, discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryOut},
 	Event, ObservedRole, DhtEvent, ExHashT,
 };
 use crate::protocol::{self, light_client_handler, message::Roles, CustomMessageOutcome, Protocol};
@@ -67,28 +67,19 @@ pub enum BehaviourOut<B: BlockT> {
 
 impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 	/// Builds a new `Behaviour`.
-	pub async fn new(
+	pub fn new(
 		substrate: Protocol<B, H>,
 		role: Role,
 		user_agent: String,
 		local_public_key: PublicKey,
-		known_addresses: Vec<(PeerId, Multiaddr)>,
-		enable_mdns: bool,
-		allow_private_ipv4: bool,
-		discovery_only_if_under_num: u64,
 		block_requests: protocol::BlockRequests<B>,
 		light_client_handler: protocol::LightClientHandler<B>,
+		disco_config: DiscoveryConfig,
 	) -> Self {
 		Behaviour {
 			substrate,
 			debug_info: debug_info::DebugInfoBehaviour::new(user_agent, local_public_key.clone()),
-			discovery: DiscoveryBehaviour::new(
-				local_public_key,
-				known_addresses,
-				enable_mdns,
-				allow_private_ipv4,
-				discovery_only_if_under_num,
-			).await,
+			discovery: disco_config.finish(),
 			block_requests,
 			light_client_handler,
 			events: Vec::new(),

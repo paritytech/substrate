@@ -28,6 +28,7 @@
 use crate::{
 	behaviour::{Behaviour, BehaviourOut},
 	config::{parse_addr, parse_str_addr, NonReservedPeerMode, Params, Role, TransportConfig},
+	discovery::DiscoveryConfig,
 	error::Error,
 	network_state::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
@@ -68,6 +69,7 @@ use std::{
 	task::Poll,
 };
 
+mod out_events;
 #[cfg(test)]
 mod tests;
 
@@ -309,24 +311,37 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 					peerset_handle.clone(),
 				)
 			};
-			let mut behaviour = futures::executor::block_on(Behaviour::new(
+
+			let discovery_config = {
+				let mut config = DiscoveryConfig::new(local_public.clone());
+				config.with_user_defined(known_addresses);
+				config.discovery_limit(u64::from(params.network_config.out_peers) + 15);
+				config.add_protocol(params.protocol_id.clone());
+
+				match params.network_config.transport {
+					TransportConfig::MemoryOnly => {
+						config.with_mdns(false);
+						config.allow_private_ipv4(false);
+					}
+					TransportConfig::Normal { enable_mdns, allow_private_ipv4, .. } => {
+						config.with_mdns(enable_mdns);
+						config.allow_private_ipv4(allow_private_ipv4);
+					}
+				}
+
+				config
+			};
+
+			let mut behaviour = Behaviour::new(
 				protocol,
 				params.role,
 				user_agent,
 				local_public,
-				known_addresses,
-				match params.network_config.transport {
-					TransportConfig::MemoryOnly => false,
-					TransportConfig::Normal { enable_mdns, .. } => enable_mdns,
-				},
-				match params.network_config.transport {
-					TransportConfig::MemoryOnly => false,
-					TransportConfig::Normal { allow_private_ipv4, .. } => allow_private_ipv4,
-				},
-				u64::from(params.network_config.out_peers) + 15,
 				block_requests,
-				light_client_handler
-			));
+				light_client_handler,
+				discovery_config
+			);
+
 			for (engine_id, protocol_name) in &params.network_config.notifications_protocols {
 				behaviour.register_notifications_protocol(*engine_id, protocol_name.clone());
 			}
@@ -386,7 +401,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			import_queue: params.import_queue,
 			from_worker,
 			light_client_rqs: params.on_demand.and_then(|od| od.extract_receiver()),
-			event_streams: Vec::new(),
+			event_streams: out_events::OutChannels::new(params.metrics_registry.as_ref())?,
 			metrics,
 			boot_node_ids,
 		})
@@ -574,9 +589,13 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// If this method is called multiple times, the events are duplicated.
 	///
 	/// The stream never ends (unless the `NetworkWorker` gets shut down).
-	pub fn event_stream(&self) -> impl Stream<Item = Event> {
+	///
+	/// The name passed is used to identify the channel in the Prometheus metrics. Note that the
+	/// parameter is a `&'static str`, and not a `String`, in order to avoid accidentally having
+	/// an unbounded set of Prometheus metrics, which would be quite bad in terms of memory
+	pub fn event_stream(&self, name: &'static str) -> impl Stream<Item = Event> {
 		// Note: when transitioning to stable futures, remove the `Error` entirely
-		let (tx, rx) = tracing_unbounded("mpsc_network_event_stream");
+		let (tx, rx) = out_events::channel(name);
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::EventStream(tx));
 		rx
 	}
@@ -796,7 +815,7 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 	PutValue(record::Key, Vec<u8>),
 	AddKnownAddress(PeerId, Multiaddr),
 	SyncFork(Vec<PeerId>, B::Hash, NumberFor<B>),
-	EventStream(TracingUnboundedSender<Event>),
+	EventStream(out_events::Sender),
 	WriteNotification {
 		message: Vec<u8>,
 		engine_id: ConsensusEngineId,
@@ -831,7 +850,7 @@ pub struct NetworkWorker<B: BlockT + 'static, H: ExHashT> {
 	/// Receiver for queries from the light client that must be processed.
 	light_client_rqs: Option<TracingUnboundedReceiver<light_client_handler::Request<B>>>,
 	/// Senders for events that happen on the network.
-	event_streams: Vec<TracingUnboundedSender<Event>>,
+	event_streams: out_events::OutChannels,
 	/// Prometheus network metrics.
 	metrics: Option<Metrics>,
 	/// The `PeerId`'s of all boot nodes.
@@ -855,7 +874,6 @@ struct Metrics {
 	network_per_sec_bytes: GaugeVec<U64>,
 	notifications_queues_size: HistogramVec,
 	notifications_sizes: HistogramVec,
-	num_event_stream_channels: Gauge<U64>,
 	opened_notification_streams: GaugeVec<U64>,
 	peers_count: Gauge<U64>,
 	peerset_num_discovered: Gauge<U64>,
@@ -933,7 +951,7 @@ impl Metrics {
 						"sub_libp2p_notifications_queues_size",
 						"Total size of all the notification queues"
 					),
-					buckets: vec![0.0, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0],
+					buckets: vec![0.0, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0, 511.0, 512.0],
 				},
 				&["protocol"]
 			)?, registry)?,
@@ -947,10 +965,6 @@ impl Metrics {
 						.expect("parameters are always valid values; qed"),
 				},
 				&["direction", "protocol"]
-			)?, registry)?,
-			num_event_stream_channels: register(Gauge::new(
-				"sub_libp2p_num_event_stream_channels",
-				"Number of internal active channels that broadcast network events",
 			)?, registry)?,
 			opened_notification_streams: register(GaugeVec::new(
 				Opts::new(
@@ -1105,10 +1119,10 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					}
 				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::Event(ev))) => {
-					this.event_streams.retain(|sender| sender.unbounded_send(ev.clone()).is_ok());
 					if let Some(metrics) = this.metrics.as_ref() {
 						metrics.update_with_network_event(&ev);
 					}
+					this.event_streams.send(ev);
 				},
 				Poll::Ready(SwarmEvent::ConnectionEstablished { peer_id, endpoint, .. }) => {
 					trace!(target: "sub-libp2p", "Libp2p => Connected({:?})", peer_id);
@@ -1133,8 +1147,6 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						match cause {
 							ConnectionError::IO(_) =>
 								metrics.connections_closed_total.with_label_values(&["transport-error"]).inc(),
-							ConnectionError::ConnectionLimit(_) =>
-								metrics.connections_closed_total.with_label_values(&["limit-reached"]).inc(),
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
 								EitherError::A(EitherError::B(EitherError::A(PingFailure::Timeout))))))) =>
 								metrics.connections_closed_total.with_label_values(&["ping-timeout"]).inc(),
@@ -1180,6 +1192,8 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 
 					if let Some(metrics) = this.metrics.as_ref() {
 						match error {
+							PendingConnectionError::ConnectionLimit(_) =>
+								metrics.pending_connections_errors_total.with_label_values(&["limit-reached"]).inc(),
 							PendingConnectionError::InvalidPeerId =>
 								metrics.pending_connections_errors_total.with_label_values(&["invalid-peer-id"]).inc(),
 							PendingConnectionError::Transport(_) | PendingConnectionError::IO(_) =>
@@ -1249,7 +1263,6 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 			metrics.network_per_sec_bytes.with_label_values(&["out"]).set(this.service.bandwidth.average_upload_per_sec());
 			metrics.is_major_syncing.set(is_major_syncing as u64);
 			metrics.kbuckets_num_nodes.set(this.network_service.num_kbuckets_entries() as u64);
-			metrics.num_event_stream_channels.set(this.event_streams.len() as u64);
 			metrics.peers_count.set(num_connected_peers as u64);
 			metrics.peerset_num_discovered.set(this.network_service.user_protocol().num_discovered_peers() as u64);
 			metrics.peerset_num_requested.set(this.network_service.user_protocol().requested_peers().count() as u64);
