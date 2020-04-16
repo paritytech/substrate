@@ -208,7 +208,7 @@ pub trait Contains<T: Ord> {
 	///
 	/// **Should be used for benchmarking only!!!**
 	#[cfg(feature = "runtime-benchmarks")]
-	fn add(t: &T) { unimplemented!() }
+	fn add(_t: &T) { unimplemented!() }
 }
 
 /// Determiner to say whether a given account is unused.
