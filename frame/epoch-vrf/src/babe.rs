@@ -1,5 +1,6 @@
 use codec::{Encode, Decode};
-use frame_support::traits::Get;
+use frame_support::{ConsensusEngineId, traits::{Get, FindAuthor}};
+use sp_std::marker::PhantomData;
 use sp_runtime::generic::DigestItem;
 use sp_consensus_babe::{SlotNumber, AuthorityId, BabeAuthorityWeight, ConsensusLog, BABE_ENGINE_ID};
 use sp_consensus_babe::digests::{RawPreDigest, NextEpochDescriptor};
@@ -83,5 +84,22 @@ impl RawPreDigestT for RawPreDigest {
 
 	fn slot_number(&self) -> SlotNumber {
 		self.slot_number()
+	}
+}
+
+pub struct BabeFindAuthor<T: BabeTrait>(PhantomData<T>);
+
+impl<T: BabeTrait> FindAuthor<u32> for BabeFindAuthor<T> {
+	fn find_author<'a, I>(digests: I) -> Option<u32> where
+		I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>
+	{
+		for (id, mut data) in digests.into_iter() {
+			if id == BABE_ENGINE_ID {
+				let pre_digest: RawPreDigest = RawPreDigest::decode(&mut data).ok()?;
+				return Some(pre_digest.authority_index())
+			}
+		}
+
+		return None;
 	}
 }
