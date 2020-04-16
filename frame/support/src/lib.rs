@@ -222,9 +222,10 @@ macro_rules! assert_ok {
 	}
 }
 
-/// Opens a new tracing span. A no-op in WASM.
+/// Runs given code within a tracing span, measuring it's execution time.
 ///
-/// The returned span can be later entered into using `tracing_span_enter`.
+/// Has effect only when running in native environment. In WASM, it simply inserts the
+/// code in-place, without any metrics added.
 #[macro_export]
 macro_rules! tracing_span {
 	($name:expr; $( $code:tt )*) => {
