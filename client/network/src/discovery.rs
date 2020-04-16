@@ -77,7 +77,7 @@ pub struct DiscoveryConfig {
 }
 
 impl DiscoveryConfig {
-	/// Crate a default configuration with the given public key.
+	/// Create a default configuration with the given public key.
 	pub fn new(local_public_key: PublicKey) -> Self {
 		let mut this = DiscoveryConfig {
 			local_peer_id: local_public_key.into_peer_id(),
@@ -276,8 +276,8 @@ impl DiscoveryBehaviour {
 	}
 
 	/// Returns the number of nodes that are in the Kademlia k-buckets.
-	pub fn num_kbuckets_entries(&mut self) -> usize {
-		self.known_peers().count()
+	pub fn num_kbuckets_entries(&mut self) -> impl ExactSizeIterator<Item = (&ProtocolId, usize)> {
+		self.kademlias.iter_mut().map(|(id, kad)| (id, kad.kbuckets_entries().count()))
 	}
 }
 

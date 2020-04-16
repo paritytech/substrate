@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{
-	config::Role,
+	config::{ProtocolId, Role},
 	debug_info, discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryOut},
 	Event, ObservedRole, DhtEvent, ExHashT,
 };
@@ -98,7 +98,7 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 	}
 
 	/// Returns the number of nodes that are in the Kademlia k-buckets.
-	pub fn num_kbuckets_entries(&mut self) -> usize {
+	pub fn num_kbuckets_entries(&mut self) -> impl ExactSizeIterator<Item = (&ProtocolId, usize)> {
 		self.discovery.num_kbuckets_entries()
 	}
 

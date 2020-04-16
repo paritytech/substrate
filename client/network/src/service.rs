@@ -868,7 +868,7 @@ struct Metrics {
 	incoming_connections_total: Counter<U64>,
 	is_major_syncing: Gauge<U64>,
 	issued_light_requests: Counter<U64>,
-	kbuckets_num_nodes: Gauge<U64>,
+	kbuckets_num_nodes: GaugeVec<U64>,
 	listeners_local_addresses: Gauge<U64>,
 	listeners_errors_total: Counter<U64>,
 	network_per_sec_bytes: GaugeVec<U64>,
@@ -928,8 +928,12 @@ impl Metrics {
 				"issued_light_requests",
 				"Number of light client requests that our node has issued.",
 			)?, registry)?,
-			kbuckets_num_nodes: register(Gauge::new(
-				"sub_libp2p_kbuckets_num_nodes", "Number of nodes in the Kademlia k-buckets"
+			kbuckets_num_nodes: register(GaugeVec::new(
+				Opts::new(
+					"sub_libp2p_kbuckets_num_nodes",
+					"Number of nodes in the Kademlia k-buckets"
+				),
+				&["protocol"]
 			)?, registry)?,
 			listeners_local_addresses: register(Gauge::new(
 				"sub_libp2p_listeners_local_addresses", "Number of local addresses we're listening on"
@@ -1002,15 +1006,15 @@ impl Metrics {
 	fn update_with_network_event(&self, event: &Event) {
 		match event {
 			Event::NotificationStreamOpened { engine_id, .. } => {
-				self.opened_notification_streams.with_label_values(&[&engine_id_to_string(&engine_id)]).inc();
+				self.opened_notification_streams.with_label_values(&[&maybe_utf8_bytes_to_string(engine_id)]).inc();
 			},
 			Event::NotificationStreamClosed { engine_id, .. } => {
-				self.opened_notification_streams.with_label_values(&[&engine_id_to_string(&engine_id)]).dec();
+				self.opened_notification_streams.with_label_values(&[&maybe_utf8_bytes_to_string(engine_id)]).dec();
 			},
 			Event::NotificationsReceived { messages, .. } => {
 				for (engine_id, message) in messages {
 					self.notifications_sizes
-						.with_label_values(&["in", &engine_id_to_string(&engine_id)])
+						.with_label_values(&["in", &maybe_utf8_bytes_to_string(engine_id)])
 						.observe(message.len() as f64);
 				}
 			},
@@ -1073,7 +1077,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 				ServiceToWorkerMsg::WriteNotification { message, engine_id, target } => {
 					if let Some(metrics) = this.metrics.as_ref() {
 						metrics.notifications_sizes
-							.with_label_values(&["out", &engine_id_to_string(&engine_id)])
+							.with_label_values(&["out", &maybe_utf8_bytes_to_string(&engine_id)])
 							.observe(message.len() as f64);
 					}
 					this.network_service.user_protocol_mut().write_notification(target, engine_id, message)
@@ -1262,7 +1266,10 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 			metrics.network_per_sec_bytes.with_label_values(&["in"]).set(this.service.bandwidth.average_download_per_sec());
 			metrics.network_per_sec_bytes.with_label_values(&["out"]).set(this.service.bandwidth.average_upload_per_sec());
 			metrics.is_major_syncing.set(is_major_syncing as u64);
-			metrics.kbuckets_num_nodes.set(this.network_service.num_kbuckets_entries() as u64);
+			for (proto, num_entries) in this.network_service.num_kbuckets_entries() {
+				let proto = maybe_utf8_bytes_to_string(proto.as_bytes());
+				metrics.kbuckets_num_nodes.with_label_values(&[&proto]).set(num_entries as u64);
+			}
 			metrics.peers_count.set(num_connected_peers as u64);
 			metrics.peerset_num_discovered.set(this.network_service.user_protocol().num_discovered_peers() as u64);
 			metrics.peerset_num_requested.set(this.network_service.user_protocol().requested_peers().count() as u64);
@@ -1276,8 +1283,10 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 impl<B: BlockT + 'static, H: ExHashT> Unpin for NetworkWorker<B, H> {
 }
 
-/// Turns a `ConsensusEngineId` into a representable string.
-fn engine_id_to_string(id: &ConsensusEngineId) -> Cow<str> {
+/// Turns bytes that are potentially UTF-8 into a reasonable representable string.
+///
+/// Meant to be used only for debugging or metrics-reporting purposes.
+fn maybe_utf8_bytes_to_string(id: &[u8]) -> Cow<str> {
 	if let Ok(s) = std::str::from_utf8(&id[..]) {
 		Cow::Borrowed(s)
 	} else {
