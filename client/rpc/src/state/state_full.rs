@@ -417,7 +417,8 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 	) -> FutureResult<StorageProof> {
 		Box::new(result(
 			self.client.read_proof(&BlockId::Hash(block), &mut keys.iter().map(|key| key.0.as_ref()))
-				.map_err(client_err)))
+				.map_err(client_err))
+			)
 	}
 
 	fn subscribe_runtime_version(
