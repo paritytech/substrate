@@ -21,8 +21,10 @@
 #![warn(unused_extern_crates)]
 
 mod api;
-pub mod error;
 mod revalidation;
+mod metrics;
+
+pub mod error;
 
 #[cfg(any(feature = "test-helpers", test))]
 pub mod testing;
@@ -46,6 +48,7 @@ use sp_transaction_pool::{
 use wasm_timer::Instant;
 
 use prometheus_endpoint::Registry as PrometheusRegistry;
+use crate::metrics::Metrics as PrometheusMetrics;
 
 type BoxedReadyIterator<Hash, Data> = Box<dyn Iterator<Item=Arc<sc_transaction_graph::base_pool::Transaction<Hash, Data>>> + Send>;
 
@@ -64,6 +67,7 @@ pub struct BasicPool<PoolApi, Block>
 	revalidation_strategy: Arc<Mutex<RevalidationStrategy<NumberFor<Block>>>>,
 	revalidation_queue: Arc<revalidation::RevalidationQueue<PoolApi>>,
 	ready_poll: Arc<Mutex<ReadyPoll<ReadyIteratorFor<PoolApi>, Block>>>,
+	metrics: Arc<Option<PrometheusMetrics>>,
 }
 
 struct ReadyPoll<T, Block: BlockT> {
@@ -149,7 +153,7 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 	pub fn new(
 		options: sc_transaction_graph::Options,
 		pool_api: Arc<PoolApi>,
-		prometheus: Option<PrometheusRegistry>,
+		prometheus: Option<&PrometheusRegistry>,
 	) -> (Self, Option<Pin<Box<dyn Future<Output=()> + Send>>>) {
 		Self::with_revalidation_type(options, pool_api, prometheus, RevalidationType::Full)
 	}
@@ -169,6 +173,7 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 				revalidation_queue: Arc::new(revalidation_queue),
 				revalidation_strategy: Arc::new(Mutex::new(RevalidationStrategy::Always)),
 				ready_poll: Default::default(),
+				metrics: Arc::new(None),
 			},
 			background_task,
 			notifier,
@@ -180,7 +185,7 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 	pub fn with_revalidation_type(
 		options: sc_transaction_graph::Options,
 		pool_api: Arc<PoolApi>,
-		prometheus: Option<PrometheusRegistry>,
+		prometheus: Option<&PrometheusRegistry>,
 		revalidation_type: RevalidationType,
 	) -> (Self, Option<Pin<Box<dyn Future<Output=()> + Send>>>) {
 		let pool = Arc::new(sc_transaction_graph::Pool::new(options, pool_api.clone()));
@@ -191,6 +196,16 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 				(queue, Some(background))
 			},
 		};
+
+		let metrics = Arc::new(
+			prometheus.and_then(|registry|
+				PrometheusMetrics::register(registry).map_err(|err| {
+					log::warn!("Failed to register prometheus metrics: {}", err);
+					()
+				}).ok()
+			)
+		);
+
 		(
 			BasicPool {
 				api: pool_api,
@@ -203,6 +218,7 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 					}
 				)),
 				ready_poll: Default::default(),
+				metrics,
 			},
 			background_task,
 		)
@@ -232,8 +248,20 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 	) -> PoolFuture<Vec<Result<TxHash<Self>, Self::Error>>, Self::Error> {
 		let pool = self.pool.clone();
 		let at = *at;
+
+		if let Some(metrics) = self.metrics.as_ref() {
+			metrics.validation_pending.add(xts.len() as u64);
+		}
+		let metrics = self.metrics.clone();
+
 		async move {
-			pool.submit_at(&at, source, xts, false).await
+			let tx_count = xts.len();
+			let res = pool.submit_at(&at, source, xts, false).await;
+			if let Some(metrics) = metrics.as_ref() {
+				metrics.validation_pending.sub(tx_count as u64);
+				metrics.total_validated.inc_by(tx_count as u64);
+			}
+			res
 		}.boxed()
 	}
 
@@ -245,8 +273,21 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 	) -> PoolFuture<TxHash<Self>, Self::Error> {
 		let pool = self.pool.clone();
 		let at = *at;
+
+		if let Some(metrics) = self.metrics.as_ref() {
+			metrics.validation_pending.inc();
+		}
+		let metrics = self.metrics.clone();
+
 		async move {
-			pool.submit_one(&at, source, xt).await
+			let res = pool.submit_one(&at, source, xt).await;
+
+			if let Some(metrics) = metrics.as_ref() {
+				metrics.validation_pending.dec();
+				metrics.total_validated.inc();
+			}
+			res
+
 		}.boxed()
 	}
 
@@ -259,10 +300,22 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 		let at = *at;
 		let pool = self.pool.clone();
 
+		if let Some(metrics) = self.metrics.as_ref() {
+			metrics.validation_pending.inc();
+		}
+		let metrics = self.metrics.clone();
+
 		async move {
-			pool.submit_and_watch(&at, source, xt)
+			let result = pool.submit_and_watch(&at, source, xt)
 				.map(|result| result.map(|watcher| Box::new(watcher.into_stream()) as _))
-				.await
+				.await;
+
+			if let Some(metrics) = metrics.as_ref() {
+				metrics.validation_pending.dec();
+				metrics.total_validated.inc();
+			}
+
+			result
 		}.boxed()
 	}
 
