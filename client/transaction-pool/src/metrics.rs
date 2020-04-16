@@ -16,29 +16,29 @@
 
 //! Transaction pool prometheus metrics.
 
-use prometheus_endpoint::{register, Counter, Gauge, PrometheusError, Registry, U64};
+use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
 
 /// Transaction pool prometheus metrics.
 pub struct Metrics {
-	pub validation_pending: Gauge<U64>,
-	pub total_validated: Counter<U64>,
+	pub validations_scheduled: Counter<U64>,
+	pub validations_finished: Counter<U64>,
 }
 
 
 impl Metrics {
 	pub fn register(registry: &Registry) -> Result<Self, PrometheusError> {
 		Ok(Self {
-			validation_pending: register(
-				Gauge::new(
-					"sub_txpool_validation_pending",
-					"Number of transactions scheduled for validation and not yet finished",
+			validations_scheduled: register(
+				Counter::new(
+					"sub_txpool_validations_issued",
+					"Total number of transactions scheduled for validation",
 				)?,
 				registry,
 			)?,
-			total_validated: register(
+			validations_finished: register(
 				Counter::new(
-					"sub_txpool_total_validated",
-					"Total number of validation requests performed",
+					"sub_txpool_validations_finished",
+					"Total number of transactions that finished validation",
 				)?,
 				registry,
 			)?,

@@ -250,7 +250,7 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 		let at = *at;
 
 		if let Some(metrics) = self.metrics.as_ref() {
-			metrics.validation_pending.add(xts.len() as u64);
+			metrics.validations_scheduled.inc_by(xts.len() as u64);
 		}
 		let metrics = self.metrics.clone();
 
@@ -258,8 +258,7 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 			let tx_count = xts.len();
 			let res = pool.submit_at(&at, source, xts, false).await;
 			if let Some(metrics) = metrics.as_ref() {
-				metrics.validation_pending.sub(tx_count as u64);
-				metrics.total_validated.inc_by(tx_count as u64);
+				metrics.validations_finished.inc_by(tx_count as u64);
 			}
 			res
 		}.boxed()
@@ -275,7 +274,7 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 		let at = *at;
 
 		if let Some(metrics) = self.metrics.as_ref() {
-			metrics.validation_pending.inc();
+			metrics.validations_scheduled.inc();
 		}
 		let metrics = self.metrics.clone();
 
@@ -283,8 +282,7 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 			let res = pool.submit_one(&at, source, xt).await;
 
 			if let Some(metrics) = metrics.as_ref() {
-				metrics.validation_pending.dec();
-				metrics.total_validated.inc();
+				metrics.validations_finished.inc();
 			}
 			res
 
@@ -301,7 +299,7 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 		let pool = self.pool.clone();
 
 		if let Some(metrics) = self.metrics.as_ref() {
-			metrics.validation_pending.inc();
+			metrics.validations_scheduled.inc();
 		}
 		let metrics = self.metrics.clone();
 
@@ -311,8 +309,7 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 				.await;
 
 			if let Some(metrics) = metrics.as_ref() {
-				metrics.validation_pending.dec();
-				metrics.total_validated.inc();
+				metrics.validations_finished.inc();
 			}
 
 			result
