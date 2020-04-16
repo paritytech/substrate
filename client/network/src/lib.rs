@@ -210,8 +210,8 @@
 //! notifications protocol.
 //!
 //! At the moment, for backwards-compatibility, notification protocols are tied to the legacy
-//! Substrate substream. Additionally, the handshake message is hardcoded to be a SCALE-encoded
-//! 8-bits integer representing the role of the node:
+//! Substrate substream. Additionally, the handshake message is hardcoded to be a single 8-bits
+//! integer representing the role of the node:
 //!
 //! - 1 for a full node.
 //! - 2 for a light node.
