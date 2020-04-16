@@ -64,11 +64,10 @@ use prost::Message;
 use sc_client_api::blockchain::HeaderBackend;
 use sc_network::{Multiaddr, config::MultiaddrWithPeerId, DhtEvent, ExHashT, NetworkStateInfo};
 use sp_authority_discovery::{AuthorityDiscoveryApi, AuthorityId, AuthoritySignature, AuthorityPair};
-use sp_core::crypto::{key_types, CryptoTypePublicPair, Pair};
+use sp_core::crypto::{key_types, Pair};
 use sp_core::traits::BareCryptoStorePtr;
 use sp_runtime::{traits::Block as BlockT, generic::BlockId};
 use sp_api::ProvideRuntimeApi;
-// TODO: Needed?
 use addr_cache::AddrCache;
 
 #[cfg(test)]
