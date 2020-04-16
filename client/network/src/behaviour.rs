@@ -61,7 +61,7 @@ pub enum BehaviourOut<B: BlockT> {
 	JustificationImport(Origin, B::Hash, NumberFor<B>, Justification),
 	FinalityProofImport(Origin, B::Hash, NumberFor<B>, Vec<u8>),
 	/// Started a random Kademlia discovery query.
-	RandomKademliaStarted,
+	RandomKademliaStarted(ProtocolId),
 	Event(Event),
 }
 
@@ -268,8 +268,10 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<DiscoveryOut>
 			DiscoveryOut::ValuePutFailed(key) => {
 				self.events.push(BehaviourOut::Event(Event::Dht(DhtEvent::ValuePutFailed(key))));
 			}
-			DiscoveryOut::RandomKademliaStarted => {
-				self.events.push(BehaviourOut::RandomKademliaStarted);
+			DiscoveryOut::RandomKademliaStarted(protocols) => {
+				for protocol in protocols {
+					self.events.push(BehaviourOut::RandomKademliaStarted(protocol));
+				}
 			}
 		}
 	}

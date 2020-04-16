@@ -307,8 +307,8 @@ pub enum DiscoveryOut {
 	/// Inserting a value into the DHT failed.
 	ValuePutFailed(record::Key),
 
-	/// Started a random Kademlia query.
-	RandomKademliaStarted,
+	/// Started a random Kademlia query for each DHT identified by the given `ProtocolId`s.
+	RandomKademliaStarted(Vec<ProtocolId>),
 }
 
 impl NetworkBehaviour for DiscoveryBehaviour {
@@ -515,7 +515,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 				Duration::from_secs(60));
 
 			if actually_started {
-				let ev = DiscoveryOut::RandomKademliaStarted;
+				let ev = DiscoveryOut::RandomKademliaStarted(self.kademlias.keys().cloned().collect());
 				return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
 			}
 		}

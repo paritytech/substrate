@@ -868,7 +868,7 @@ struct Metrics {
 	incoming_connections_total: Counter<U64>,
 	is_major_syncing: Gauge<U64>,
 	issued_light_requests: Counter<U64>,
-	kademalia_random_queries_total: Counter<U64>,
+	kademalia_random_queries_total: CounterVec<U64>,
 	kbuckets_num_nodes: GaugeVec<U64>,
 	listeners_local_addresses: Gauge<U64>,
 	listeners_errors_total: Counter<U64>,
@@ -928,8 +928,12 @@ impl Metrics {
 				"issued_light_requests",
 				"Number of light client requests that our node has issued.",
 			)?, registry)?,
-			kademalia_random_queries_total: register(Counter::new(
-				"sub_libp2p_kademalia_random_queries_total", "Number of random Kademlia queries started",
+			kademalia_random_queries_total: register(CounterVec::new(
+				Opts::new(
+					"sub_libp2p_kademalia_random_queries_total",
+					"Number of random Kademlia queries started"
+				),
+				&["protocol"]
 			)?, registry)?,
 			kbuckets_num_nodes: register(GaugeVec::new(
 				Opts::new(
@@ -1117,9 +1121,11 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					}
 					this.import_queue.import_finality_proof(origin, hash, nb, proof);
 				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RandomKademliaStarted)) => {
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RandomKademliaStarted(protocol))) => {
 					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.kademalia_random_queries_total.inc();
+						metrics.kademalia_random_queries_total
+							.with_label_values(&[&maybe_utf8_bytes_to_string(protocol.as_bytes())])
+							.inc();
 					}
 				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::Event(ev))) => {
