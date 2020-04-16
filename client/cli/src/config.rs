@@ -21,6 +21,7 @@ use crate::{
 	init_logger, ImportParams, KeystoreParams, NetworkParams, NodeKeyParams,
 	PruningParams, SharedParams, SubstrateCli,
 };
+use crate::arg_enums::Database;
 use app_dirs::{AppDataType, AppInfo};
 use names::{Generator, Name};
 use sc_service::config::{
@@ -152,11 +153,26 @@ pub trait CliConfiguration: Sized {
 			.unwrap_or(Default::default()))
 	}
 
+	/// Get the database backend variant.
+	///
+	/// By default this is retrieved from `ImportParams` if it is available. Otherwise its `None`.
+	fn database(&self) -> Result<Option<Database>> {
+		Ok(self.import_params().map(|x| x.database()))
+	}
+
 	/// Get the database configuration.
 	///
 	/// By default this is retrieved from `SharedParams`
-	fn database_config(&self, base_path: &PathBuf, cache_size: usize) -> Result<DatabaseConfig> {
-		Ok(self.shared_params().database_config(base_path, cache_size))
+	fn database_config(&self,
+		base_path: &PathBuf,
+		cache_size: usize,
+		database: Database,
+	) -> Result<DatabaseConfig> {
+		Ok(self.shared_params().database_config(
+			base_path,
+			cache_size,
+			database,
+		))
 	}
 
 	/// Get the state cache size.
@@ -376,6 +392,7 @@ pub trait CliConfiguration: Sized {
 		let net_config_dir = config_dir.join(DEFAULT_NETWORK_CONFIG_PATH);
 		let client_id = C::client_id();
 		let database_cache_size = self.database_cache_size()?.unwrap_or(128);
+		let database = self.database()?.unwrap_or(Database::RocksDb);
 		let node_key = self.node_key(&net_config_dir)?;
 		let role = self.role(is_dev)?;
 		let max_runtime_instances = self.max_runtime_instances()?.unwrap_or(8);
@@ -394,7 +411,7 @@ pub trait CliConfiguration: Sized {
 				node_key,
 			)?,
 			keystore: self.keystore_config(&config_dir)?,
-			database: self.database_config(&config_dir, database_cache_size)?,
+			database: self.database_config(&config_dir, database_cache_size, database)?,
 			state_cache_size: self.state_cache_size()?,
 			state_cache_child_ratio: self.state_cache_child_ratio()?,
 			pruning: self.pruning(is_dev, &role)?,

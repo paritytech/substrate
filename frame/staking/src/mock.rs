@@ -203,6 +203,7 @@ impl frame_system::Trait for Test {
 	type Event = MetaEvent;
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
+	type DbWeight = ();
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type MaximumBlockLength = MaximumBlockLength;
 	type Version = ();
@@ -528,7 +529,7 @@ fn check_ledgers() {
 fn check_exposures() {
 	// a check per validator to ensure the exposure struct is always sane.
 	let era = active_era();
-	ErasStakers::<Test>::iter_prefix(era).for_each(|expo| {
+	ErasStakers::<Test>::iter_prefix_values(era).for_each(|expo| {
 		assert_eq!(
 			expo.total as u128,
 			expo.own as u128 + expo.others.iter().map(|e| e.value as u128).sum::<u128>(),

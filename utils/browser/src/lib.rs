@@ -70,7 +70,7 @@ where
 			info!("Opening Indexed DB database '{}'...", name);
 			let db = kvdb_web::Database::open(name, 10).await?;
 
-			DatabaseConfig::Custom(Arc::new(db))
+			DatabaseConfig::Custom(sp_database::as_database(db))
 		},
 		keystore: KeystoreConfig::InMemory,
 		default_heap_pages: Default::default(),

@@ -35,13 +35,13 @@
 //! ### Example - Get random seed for the current block
 //!
 //! ```
-//! use frame_support::{decl_module, dispatch, traits::Randomness, weights::SimpleDispatchInfo};
+//! use frame_support::{decl_module, dispatch, traits::Randomness, weights::{SimpleDispatchInfo, MINIMUM_WEIGHT}};
 //!
 //! pub trait Trait: frame_system::Trait {}
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		#[weight = SimpleDispatchInfo::default()]
+//! 		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 //! 		pub fn random_module_example(origin) -> dispatch::DispatchResult {
 //! 			let _random_seed = <pallet_randomness_collective_flip::Module<T>>::random_seed();
 //! 			Ok(())
@@ -57,7 +57,7 @@ use sp_std::{prelude::*, convert::TryInto};
 use sp_runtime::traits::Hash;
 use frame_support::{
 	decl_module, decl_storage, traits::Randomness,
-	weights::{Weight, SimpleDispatchInfo, WeighData}
+	weights::{Weight, MINIMUM_WEIGHT}
 };
 use safe_mix::TripletMix;
 use codec::Encode;
@@ -83,7 +83,7 @@ decl_module! {
 				values[index] = parent_hash;
 			});
 
-			SimpleDispatchInfo::default().weigh_data(())
+			MINIMUM_WEIGHT
 		}
 	}
 }
@@ -195,6 +195,7 @@ mod tests {
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
+		type DbWeight = ();
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();
