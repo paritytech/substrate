@@ -284,7 +284,8 @@ decl_module! {
 			let should_send = Self::choose_transaction_type(block_number);
 			let res = match should_send {
 				TransactionType::Signed => Self::fetch_price_and_send_signed(),
-				TransactionType::Unsigned => Self::fetch_price_and_send_unsigned(block_number),
+				TransactionType::UnsignedForAny => Self::fetch_price_and_send_unsigned_for_any_account(block_number),
+				TransactionType::UnsignedForAll => Self::fetch_price_and_send_unsigned_for_all_accounts(block_number),
 				TransactionType::Raw => Self::fetch_price_and_send_raw_unsigned(block_number),
 				TransactionType::None => Ok(()),
 			};
@@ -297,7 +298,8 @@ decl_module! {
 
 enum TransactionType {
 	Signed,
-	Unsigned,
+	UnsignedForAny,
+	UnsignedForAll,
 	Raw,
 	None,
 }
@@ -363,7 +365,8 @@ impl<T: Trait> Module<T> {
 				// indicating the type of next transaction to send).
 				let transaction_type = block_number % 3.into();
 				if transaction_type == Zero::zero() { TransactionType::Signed }
-				else if transaction_type == T::BlockNumber::from(1) { TransactionType::Unsigned }
+				else if transaction_type == T::BlockNumber::from(1) { TransactionType::UnsignedForAny }
+				else if transaction_type == T::BlockNumber::from(2) { TransactionType::UnsignedForAll }
 				else { TransactionType::Raw }
 			},
 			// We are in the grace period, we should not send a transaction this time.
@@ -447,7 +450,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// A helper function to fetch the price, sign payload and send an unsigned transaction
-	fn fetch_price_and_send_unsigned(block_number: T::BlockNumber) -> Result<(), &'static str> {
+	fn fetch_price_and_send_unsigned_for_any_account(block_number: T::BlockNumber) -> Result<(), &'static str> {
 		// Make sure we don't fetch the price if unsigned transaction is going to be rejected
 		// anyway.
 		let next_unsigned_at = <NextUnsignedAt<T>>::get();
@@ -482,23 +485,49 @@ impl<T: Trait> Module<T> {
 		).ok_or("No local accounts accounts available.")?;
 		result.map_err(|()| "Unable to submit transaction")?;
 
+		Ok(())
+	}
+
+	/// A helper function to fetch the price, sign payload and send an unsigned transaction
+	fn fetch_price_and_send_unsigned_for_all_accounts(block_number: T::BlockNumber) -> Result<(), &'static str> {
+		// Make sure we don't fetch the price if unsigned transaction is going to be rejected
+		// anyway.
+		let next_unsigned_at = <NextUnsignedAt<T>>::get();
+		if next_unsigned_at > block_number {
+			return Err("Too early to send unsigned transaction")
+		}
+
+		// Make an external HTTP request to fetch the current price.
+		// Note this call will block until response is received.
+		let price = Self::fetch_price().map_err(|_| "Failed to fetch price")?;
+
+		// Received price is wrapped into a call to `submit_price_unsigned` public function of this
+		// pallet. This means that the transaction, when executed, will simply call that function
+		// passing `price` as an argument.
+		let call = Call::submit_price_unsigned(block_number, price);
+
+		// Now let's create a transaction out of this call and submit it to the pool.
+		// Here we showcase two ways to send an unsigned transaction with a signed payload
+		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into())
+			.map_err(|()| "Unable to submit unsigned transaction.")?;
+
 		// -- Sign using all accounts
-		// let transaction_results = Signer::<T, T::AuthorityId>::all_accounts()
-		// 	.send_unsigned_transaction(
-		// 		|account| PricePayload {
-		// 			price,
-		// 			block_number,
-		// 			public: account.public.clone()
-		// 		},
-		// 		|payload, signature| {
-		// 			Call::submit_price_unsigned_with_signed_payload(payload, signature)
-		// 		}
-		// 	);
-		// for (_account_id, result) in transaction_results.into_iter() {
-		// 	if result.is_err() {
-		// 		return Err("Unable to submit transaction");
-		// 	}
-		// }
+		let transaction_results = Signer::<T, T::AuthorityId>::all_accounts()
+			.send_unsigned_transaction(
+				|account| PricePayload {
+					price,
+					block_number,
+					public: account.public.clone()
+				},
+				|payload, signature| {
+					Call::submit_price_unsigned_with_signed_payload(payload, signature)
+				}
+			);
+		for (_account_id, result) in transaction_results.into_iter() {
+			if result.is_err() {
+				return Err("Unable to submit transaction");
+			}
+		}
 
 		Ok(())
 	}
