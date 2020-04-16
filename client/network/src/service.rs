@@ -184,7 +184,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 	pub fn new(params: Params<B, H>) -> Result<NetworkWorker<B, H>, Error> {
 		let (to_worker, from_worker) = tracing_unbounded("mpsc_network_worker");
 
-		fs::create_dir_all(&params.network_config.net_config_path)?;
+		if let Some(path) = params.network_config.net_config_path {
+			fs::create_dir_all(&path)?;
+		}
 
 		// List of multiaddresses that we know in the network.
 		let mut known_addresses = Vec::new();
