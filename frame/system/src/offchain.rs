@@ -91,7 +91,7 @@
 use codec::Encode;
 use sp_std::collections::btree_set::BTreeSet;
 use sp_std::convert::{TryInto, TryFrom};
-use sp_std::prelude::Vec;
+use sp_std::prelude::{Box, Vec};
 use sp_runtime::app_crypto::RuntimeAppPublic;
 use sp_runtime::traits::{Extrinsic as ExtrinsicT, IdentifyAccount, One};
 use frame_support::{debug, storage::StorageMap};
