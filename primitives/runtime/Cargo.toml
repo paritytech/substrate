@@ -32,6 +32,7 @@ hash256-std-hasher = { version = "0.15.2", default-features = false }
 [dev-dependencies]
 serde_json = "1.0.41"
 rand = "0.7.2"
+sp-state-machine = { version = "0.8.0-alpha.5", path = "../../primitives/state-machine" }
 
 [features]
 bench = []
