@@ -89,12 +89,12 @@
 #![warn(missing_docs)]
 
 use codec::Encode;
+use sp_std::collections::btree_set::BTreeSet;
 use sp_std::convert::{TryInto, TryFrom};
 use sp_std::prelude::Vec;
 use sp_runtime::app_crypto::RuntimeAppPublic;
 use sp_runtime::traits::{Extrinsic as ExtrinsicT, IdentifyAccount, One};
 use frame_support::{debug, storage::StorageMap};
-
 /// Marker struct used to flag using all supported keys to sign a payload.
 pub struct ForAll {}
 /// Marker struct used to flag using any of the supported keys to sign a payload.
@@ -187,27 +187,23 @@ impl<T: SigningTypes, C: AppCrypto<T::Public, T::Signature>, X> Signer<T, C, X> 
 	/// all available accounts and the provided accounts
 	/// in `with_filter`. If no accounts are provided,
 	/// use all accounts by default.
-	fn accounts_from_keys(&self) -> impl Iterator<Item = Account<T>> {
+	fn accounts_from_keys<'a>(&'a self) -> Box<dyn Iterator<Item = Account<T>> + 'a> {
 		let keystore_accounts = self.keystore_accounts();
+		match self.accounts {
+			None => Box::new(keystore_accounts),
+			Some(ref keys) =>  {
+				let keystore_lookup: BTreeSet<<T as SigningTypes>::Public> = keystore_accounts
+					.map(|account| account.public).collect();
 
-		if self.accounts.as_ref().unwrap_or(&Vec::new()).len() == 0 {
-			return keystore_accounts;
+				Box::new(keys.into_iter()
+					.enumerate()
+					.map(|(index, key)| {
+						let account_id = key.clone().into_account();
+						Account::new(index, account_id, key.clone())
+					})
+					.filter(move |account| keystore_lookup.contains(&account.public)))
+			}
 		}
-
-		let keystore_accounts: Vec<<T as SigningTypes>::Public> = keystore_accounts.map(|account| {
-			account.public
-		}).collect();
-
-		if let Some(ref keys) = self.accounts {
-			return keys.into_iter()
-				.enumerate()
-				.map(|(index, key)| {
-					let account_id = key.clone().into_account();
-					Account::new(index, account_id, key.clone())
-				})
-				.filter(|account| keystore_accounts.contains(account.public));
-		}
-		std::iter::empty::<Account<T>>()
 	}
 
 	fn keystore_accounts(&self) -> impl Iterator<Item = Account<T>> {
@@ -488,7 +484,8 @@ pub trait SigningTypes: crate::Trait {
 		+ PartialEq
 		+ IdentifyAccount<AccountId = Self::AccountId>
 		+ core::fmt::Debug
-		+ codec::Codec;
+		+ codec::Codec
+		+ Ord;
 
 	/// A matching `Signature` type.
 	type Signature: Clone
