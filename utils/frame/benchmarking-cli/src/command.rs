@@ -92,6 +92,9 @@ impl BenchmarkCmd {
 					self.repeat,
 				);
 
+				// Skip raw data + analysis if there are no results
+				if batch.results.len() == 0 { continue }
+
 				if self.raw_data {
 					// Print the table header
 					batch.results[0].0.iter().for_each(|param| print!("{:?},", param.0));
