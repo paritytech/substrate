@@ -280,12 +280,9 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 			}
 
 			fn record_proof(&mut self) {
-				// TODO should we use full and then use some packing Most certainly.
-				self.recorder = Some(#crate_::ProofRecorder::<Block>::Flat(Default::default()));
+				self.recorder = Some(#crate_::ProofRecorder::<Block>::Full(Default::default()));
 			}
 
-			// TODO should we make a storage kind configurable then
-			// we could pack full proof if needed
 			fn extract_proof(&mut self) -> Option<#crate_::StorageProof> {
 				self.recorder
 					.take()
