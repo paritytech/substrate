@@ -868,7 +868,9 @@ struct Metrics {
 	incoming_connections_total: Counter<U64>,
 	is_major_syncing: Gauge<U64>,
 	issued_light_requests: Counter<U64>,
-	kademalia_random_queries_total: CounterVec<U64>,
+	kademlia_random_queries_total: CounterVec<U64>,
+	kademlia_records_count: GaugeVec<U64>,
+	kademlia_records_sizes_total: GaugeVec<U64>,
 	kbuckets_num_nodes: GaugeVec<U64>,
 	listeners_local_addresses: Gauge<U64>,
 	listeners_errors_total: Counter<U64>,
@@ -928,10 +930,24 @@ impl Metrics {
 				"issued_light_requests",
 				"Number of light client requests that our node has issued.",
 			)?, registry)?,
-			kademalia_random_queries_total: register(CounterVec::new(
+			kademlia_random_queries_total: register(CounterVec::new(
 				Opts::new(
-					"sub_libp2p_kademalia_random_queries_total",
+					"sub_libp2p_kademlia_random_queries_total",
 					"Number of random Kademlia queries started"
+				),
+				&["protocol"]
+			)?, registry)?,
+			kademlia_records_count: register(GaugeVec::new(
+				Opts::new(
+					"sub_libp2p_kademlia_records_count",
+					"Number of records in the Kademlia records store"
+				),
+				&["protocol"]
+			)?, registry)?,
+			kademlia_records_sizes_total: register(GaugeVec::new(
+				Opts::new(
+					"sub_libp2p_kademlia_records_sizes_total",
+					"Total size of all the records in the Kademlia records store"
 				),
 				&["protocol"]
 			)?, registry)?,
@@ -1123,7 +1139,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RandomKademliaStarted(protocol))) => {
 					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.kademalia_random_queries_total
+						metrics.kademlia_random_queries_total
 							.with_label_values(&[&maybe_utf8_bytes_to_string(protocol.as_bytes())])
 							.inc();
 					}
@@ -1275,6 +1291,14 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 			for (proto, num_entries) in this.network_service.num_kbuckets_entries() {
 				let proto = maybe_utf8_bytes_to_string(proto.as_bytes());
 				metrics.kbuckets_num_nodes.with_label_values(&[&proto]).set(num_entries as u64);
+			}
+			for (proto, num_entries) in this.network_service.num_kademlia_records() {
+				let proto = maybe_utf8_bytes_to_string(proto.as_bytes());
+				metrics.kademlia_records_count.with_label_values(&[&proto]).set(num_entries as u64);
+			}
+			for (proto, num_entries) in this.network_service.kademlia_records_total_size() {
+				let proto = maybe_utf8_bytes_to_string(proto.as_bytes());
+				metrics.kademlia_records_sizes_total.with_label_values(&[&proto]).set(num_entries as u64);
 			}
 			metrics.peers_count.set(num_connected_peers as u64);
 			metrics.peerset_num_discovered.set(this.network_service.user_protocol().num_discovered_peers() as u64);

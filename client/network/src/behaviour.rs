@@ -102,6 +102,16 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 		self.discovery.num_kbuckets_entries()
 	}
 
+	/// Returns the number of records in the Kademlia record stores.
+	pub fn num_kademlia_records(&mut self) -> impl ExactSizeIterator<Item = (&ProtocolId, usize)> {
+		self.discovery.num_kademlia_records()
+	}
+
+	/// Returns the total size in bytes of all the records in the Kademlia record stores.
+	pub fn kademlia_records_total_size(&mut self) -> impl ExactSizeIterator<Item = (&ProtocolId, usize)> {
+		self.discovery.kademlia_records_total_size()
+	}
+
 	/// Borrows `self` and returns a struct giving access to the information about a node.
 	///
 	/// Returns `None` if we don't know anything about this node. Always returns `Some` for nodes
