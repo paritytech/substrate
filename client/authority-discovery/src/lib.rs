@@ -87,53 +87,6 @@ const LIBP2P_KADEMLIA_BOOTSTRAP_TIME: Duration = Duration::from_secs(30);
 /// discovery module.
 const AUTHORITIES_PRIORITY_GROUP_NAME: &'static str = "authorities";
 
-/// Prometheus metrics for an `AuthorityDiscovery`.
-#[derive(Clone)]
-pub(crate) struct Metrics {
-	publish: Counter<U64>,
-	amount_last_published: Gauge<U64>,
-	request: Counter<U64>,
-	dht_event_received: CounterVec<U64>,
-}
-
-impl Metrics {
-	pub(crate) fn register(registry: &prometheus_endpoint::Registry) -> Result<Self> {
-		Ok(Self {
-			publish: register(
-				Counter::new(
-					"authority_discovery_times_published_total",
-					"Number of times authority discovery has published external addresses."
-				)?,
-				registry,
-			)?,
-			amount_last_published: register(
-				Gauge::new(
-					"authority_discovery_amount_external_addresses_last_published",
-					"Number of external addresses published when authority discovery last published addresses ."
-				)?,
-				registry,
-			)?,
-			request: register(
-				Counter::new(
-					"authority_discovery_times_requested_total",
-					"Number of times authority discovery has requested external addresses."
-				)?,
-				registry,
-			)?,
-			dht_event_received: register(
-				CounterVec::new(
-					Opts::new(
-						"authority_discovery_dht_event_received",
-						"Number of dht events received by authority discovery."
-					),
-					&["name"],
-				)?,
-				registry,
-			)?,
-		})
-	}
-}
-
 /// An `AuthorityDiscovery` makes a given authority discoverable and discovers other authorities.
 pub struct AuthorityDiscovery<Client, Network, Block>
 where
@@ -309,10 +262,6 @@ where
 	}
 
 	fn request_addresses_of_others(&mut self) -> Result<()> {
-		if let Some(metrics) = &self.metrics {
-			metrics.request.inc();
-		}
-
 		let id = BlockId::hash(self.client.info().best_hash);
 
 		let authorities = self
@@ -322,6 +271,10 @@ where
 			.map_err(Error::CallingRuntime)?;
 
 		for authority_id in authorities.iter() {
+			if let Some(metrics) = &self.metrics {
+				metrics.request.inc();
+			}
+
 			self.network
 				.get_value(&hash_authority_id(authority_id.as_ref()));
 		}
@@ -604,4 +557,53 @@ fn interval_at(start: Instant, duration: Duration) -> Interval {
 	});
 
 	Box::new(stream)
+}
+
+/// Prometheus metrics for an `AuthorityDiscovery`.
+#[derive(Clone)]
+pub(crate) struct Metrics {
+	publish: Counter<U64>,
+	amount_last_published: Gauge<U64>,
+	request: Counter<U64>,
+	dht_event_received: CounterVec<U64>,
+}
+
+impl Metrics {
+	pub(crate) fn register(registry: &prometheus_endpoint::Registry) -> Result<Self> {
+		Ok(Self {
+			publish: register(
+				Counter::new(
+					"authority_discovery_times_published_total",
+					"Number of times authority discovery has published external addresses."
+				)?,
+				registry,
+			)?,
+			amount_last_published: register(
+				Gauge::new(
+					"authority_discovery_amount_external_addresses_last_published",
+					"Number of external addresses published when authority discovery last \
+					 published addresses."
+				)?,
+				registry,
+			)?,
+			request: register(
+				Counter::new(
+					"authority_discovery_authority_addresses_requested_total",
+					"Number of times authority discovery has requested external addresses of a \
+					 single authority."
+				)?,
+				registry,
+			)?,
+			dht_event_received: register(
+				CounterVec::new(
+					Opts::new(
+						"authority_discovery_dht_event_received",
+						"Number of dht events received by authority discovery."
+					),
+					&["name"],
+				)?,
+				registry,
+			)?,
+		})
+	}
 }
