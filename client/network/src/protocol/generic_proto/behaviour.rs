@@ -113,6 +113,8 @@ pub struct GenericProto {
 	legacy_protocol: RegisteredProtocol,
 
 	/// Notification protocols. Entries are only ever added and not removed.
+	/// Contains, for each protocol, the protocol name and the message to send as part of the
+	/// initial handshake.
 	notif_protocols: Vec<(Cow<'static, [u8]>, Vec<u8>)>,
 
 	/// Receiver for instructions about who to connect to or disconnect from.
