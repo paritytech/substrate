@@ -94,7 +94,8 @@ use sp_std::convert::{TryInto, TryFrom};
 use sp_std::prelude::{Box, Vec};
 use sp_runtime::app_crypto::RuntimeAppPublic;
 use sp_runtime::traits::{Extrinsic as ExtrinsicT, IdentifyAccount, One};
-use frame_support::{debug, storage::StorageMap};
+use frame_support::{debug, storage::StorageMap, RuntimeDebug};
+
 /// Marker struct used to flag using all supported keys to sign a payload.
 pub struct ForAll {}
 /// Marker struct used to flag using any of the supported keys to sign a payload.
@@ -143,6 +144,7 @@ where
 /// The signer is then able to:
 /// - Submit a unsigned transaction with a signed payload
 /// - Submit a signed transaction
+#[derive(RuntimeDebug)]
 pub struct Signer<T: SigningTypes, C: AppCrypto<T::Public, T::Signature>, X = ForAny> {
 	accounts: Option<Vec<T::Public>>,
 	_phantom: sp_std::marker::PhantomData<(X, C)>,
@@ -365,6 +367,7 @@ impl<
 }
 
 /// Details of an account for which a private key is contained in the keystore.
+#[derive(RuntimeDebug, PartialEq)]
 pub struct Account<T: SigningTypes> {
 	/// Index on the provided list of accounts or list of all accounts.
 	pub index: usize,
@@ -394,15 +397,15 @@ impl<T: SigningTypes> Clone for Account<T> where
 	}
 }
 
-/// App-specific crypto trait that provides sign/verify abilities to offchain workers.
+/// A type binding runtime-level `Public/Signature` pair with crypto wrapped by `RuntimeAppPublic`.
 ///
 /// Implementations of this trait should specify the app-specific public/signature types.
 /// This is merely a wrapper around an existing `RuntimeAppPublic` type, but with
 /// extra non-application-specific crypto type that is being wrapped (e.g. `sr25519`, `ed25519`).
 /// This is needed to later on convert into runtime-specific `Public` key, which might support
 /// multiple different crypto.
-/// The point of this trait is to be able to easily convert between `RuntimeAppPublic` and
-/// the wrapped crypto types.
+/// The point of this trait is to be able to easily convert between `RuntimeAppPublic`, the wrapped
+/// (generic = non application-specific) crypto types and the `Public` type required by the runtime.
 ///
 /// TODO [#5662] Potentially use `IsWrappedBy` types, or find some other way to make it easy to
 /// obtain unwrapped crypto (and wrap it back).
@@ -657,5 +660,86 @@ pub trait SignedPayload<T: SigningTypes>: Encode {
 	/// Returns a bool indicating whether the signature is valid or not.
 	fn verify<C: AppCrypto<T::Public, T::Signature>>(&self, signature: T::Signature) -> bool {
 		self.using_encoded(|payload| C::verify(payload, self.public(), signature))
+	}
+}
+
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::tests::{Test as TestRuntime, Call};
+	use sp_runtime::testing::{UintAuthorityId, TestSignature, TestXt};
+
+	impl SigningTypes for TestRuntime {
+		type Public = UintAuthorityId;
+		type Signature = TestSignature;
+	}
+
+	impl SendTransactionTypes<Call> for TestRuntime {
+		type Extrinsic = TestXt<Call, ()>;
+		type OverarchingCall = Call;
+	}
+
+	#[derive(codec::Encode, codec::Decode)]
+	struct SimplePayload {
+		pub public: UintAuthorityId,
+		pub data: Vec<u8>,
+	}
+
+	impl SignedPayload<TestRuntime> for SimplePayload {
+		fn public(&self) -> UintAuthorityId {
+			self.public.clone()
+		}
+	}
+
+	struct DummyAppCrypto;
+	// Bind together the `SigningTypes` with app-crypto and the wrapper types.
+	// here the implementation is pretty dummy, because we use the same type for
+	// both application-specific crypto and the runtime crypto, but in real-life
+	// runtimes it's going to use different types everywhere.
+	impl AppCrypto<UintAuthorityId, TestSignature> for DummyAppCrypto {
+		type RuntimeAppPublic = UintAuthorityId;
+		type GenericPublic = UintAuthorityId;
+		type GenericSignature = TestSignature;
+	}
+
+	#[test]
+	fn should_send_unsigned_with_signed_payload_with_all_accounts() {
+		// given
+		UintAuthorityId::set_all_keys(vec![0xf0, 0xf1, 0xf2]);
+
+		// when
+		let result = Signer::<TestRuntime, DummyAppCrypto>
+			::all_accounts()
+			.send_unsigned_transaction(
+				|account| SimplePayload {
+					data: vec![1, 2, 3],
+					public: account.public.clone()
+				},
+				|_payload, _signature| {
+					Call
+				}
+			);
+
+		// then
+		let mut res = result.into_iter();
+		assert_eq!(res.next(), Some((Account {
+			index: 0,
+			id: 0xf0,
+			public: 0xf0.into(),
+		}, Ok(()))));
+		assert_eq!(res.next(), Some((Account {
+			index: 1,
+			id: 0xf1,
+			public: 0xf1.into(),
+		}, Ok(()))));
+		assert_eq!(res.next(), Some((Account {
+			index: 2,
+			id: 0xf2,
+			public: 0xf2.into(),
+		}, Ok(()))));
+		assert_eq!(res.next(), None);
+
+		// TODO check txpool content
 	}
 }
