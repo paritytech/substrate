@@ -200,7 +200,7 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 		let metrics = Arc::new(
 			prometheus.and_then(|registry|
 				PrometheusMetrics::register(registry).map_err(|err| {
-					log::warn!("Failed to register prometheus metrics: {}", err);
+					log::warn!("Failed to register Prometheus metrics: {}", err);
 					()
 				}).ok()
 			)
