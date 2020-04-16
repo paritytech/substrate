@@ -339,8 +339,9 @@ impl ProtocolsHandler for NotifsHandler {
 					});
 				}
 				for num in self.pending_in.drain(..) {
+					let handshake_message = self.in_handlers[num].1.clone();
 					self.in_handlers[num].0
-						.inject_event(NotifsInHandlerIn::Accept(self.in_handlers[num].1.clone()));
+						.inject_event(NotifsInHandlerIn::Accept(handshake_message));
 				}
 			},
 			NotifsHandlerIn::Disable => {
