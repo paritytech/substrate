@@ -21,11 +21,10 @@
 use codec::{Encode, Decode};
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
-#[cfg(feature = "std")]
-use sp_std::collections::btree_map::BTreeMap;
 use sp_debug_derive::RuntimeDebug;
 
 use sp_std::vec::Vec;
+use sp_std::collections::btree_map::BTreeMap;
 use sp_std::ops::{Deref, DerefMut};
 use ref_cast::RefCast;
 
@@ -93,7 +92,7 @@ pub struct StorageData(
 /// Map of data to use in a storage, it is a collection of
 /// byte key and values.
 #[cfg(feature = "std")]
-pub type StorageMap = BTreeMap<Vec<u8>, Vec<u8>>;
+pub type StorageMap = std::collections::BTreeMap<Vec<u8>, Vec<u8>>;
 
 #[cfg(feature = "std")]
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -420,24 +419,11 @@ impl ChildTrieParentKeyId {
 		}
 	}
 }
-
 #[cfg(feature = "std")]
-#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 /// Type for storing a map of child trie related information.
 /// A few utilities methods are defined.
 pub struct ChildrenMap<T>(pub BTreeMap<ChildInfo, T>);
-
-#[cfg(feature = "std")]
-#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
-/// Type for storing a map of child trie proof related information.
-/// A few utilities methods are defined.
-pub struct ChildrenProofMap<T>(pub BTreeMap<ChildInfoProof, T>);
-
-/// Type alias for storage of children related content.
-pub type ChildrenVec<T> = Vec<(ChildInfo, T)>;
-
-/// Type alias for storage of children related content.
-pub type ChildrenSlice<'a, T> = &'a [(ChildInfo, T)];
 
 #[cfg(feature = "std")]
 impl<T> sp_std::ops::Deref for ChildrenMap<T> {
@@ -463,52 +449,6 @@ impl<T> sp_std::default::Default for ChildrenMap<T> {
 }
 
 #[cfg(feature = "std")]
-impl<T> ChildrenMap<T> {
-	/// Extend for `ChildrenMap` is usually about merging entries,
-	/// this method extends two maps, by applying a merge function
-	/// on each of its entries.
-	pub fn extend_with(
-		&mut self,
-		other: impl Iterator<Item = (ChildInfo, T)>,
-		merge: impl Fn(&mut T, T),
-	) {
-		use sp_std::collections::btree_map::Entry;
-		for (child_info, child_content) in other {
-			match self.0.entry(child_info) {
-				Entry::Occupied(mut entry) => {
-					merge(entry.get_mut(), child_content)
-				},
-				Entry::Vacant(entry) => {
-					entry.insert(child_content);
-				},
-			}
-		}
-	}
-
-	/// Extends two maps, by extending entries with the same key.
-	pub fn extend_replace(
-		&mut self,
-		other: impl Iterator<Item = (ChildInfo, T)>,
-	) {
-		self.0.extend(other)
-	}
-
-	/// Retains only the elements specified by the predicate.
-	pub fn retain(&mut self, mut f: impl FnMut(&ChildInfo, &mut T) -> bool) {
-		let mut to_del = Vec::new();
-		for (k, v) in self.0.iter_mut() {
-			if !f(k, v) {
-				// this clone can be avoid with unsafe code
-				to_del.push(k.clone());
-			}
-		}
-		for k in to_del {
-			self.0.remove(&k);
-		}
-	}
-}
-
-#[cfg(feature = "std")]
 impl<T> IntoIterator for ChildrenMap<T> {
 	type Item = (ChildInfo, T);
 	type IntoIter = sp_std::collections::btree_map::IntoIter<ChildInfo, T>;
@@ -517,6 +457,12 @@ impl<T> IntoIterator for ChildrenMap<T> {
 		self.0.into_iter()
 	}
 }
+
+#[cfg(feature = "std")]
+#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
+/// Type for storing a map of child trie proof related information.
+/// A few utilities methods are defined.
+pub struct ChildrenProofMap<T>(pub BTreeMap<ChildInfoProof, T>);
 
 #[cfg(feature = "std")]
 impl<T> sp_std::ops::Deref for ChildrenProofMap<T> {

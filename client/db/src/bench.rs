@@ -21,8 +21,8 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 
 use hash_db::{Prefix, Hasher};
-use sp_trie::MemoryDB;
-use sp_core::storage::{ChildInfo, ChildType};
+use sp_trie::{MemoryDB, prefixed_key};
+use sp_core::storage::ChildInfo;
 use sp_runtime::traits::{Block as BlockT, HashFor};
 use sp_runtime::Storage;
 use sp_state_machine::{DBValue, backend::Backend as StateBackend};
@@ -41,13 +41,8 @@ struct StorageDb<Block: BlockT> {
 }
 
 impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Block> {
-	fn get(
-		&self,
-		child_info: &ChildInfo,
-		key: &Block::Hash,
-		prefix: Prefix,
-	) -> Result<Option<DBValue>, String> {
-		let key = crate::keyspace_and_prefixed_key(key.as_ref(), child_info.keyspace(), prefix);
+	fn get(&self, key: &Block::Hash, prefix: Prefix) -> Result<Option<DBValue>, String> {
+		let key = prefixed_key::<HashFor<Block>>(key, prefix);
 		self.db.get(0, &key)
 			.map_err(|e| format!("Database backend error: {:?}", e))
 	}
@@ -86,24 +81,11 @@ impl<B: BlockT> BenchmarkingState<B> {
 			child_content.child_info,
 			child_content.data.into_iter().map(|(k, v)| (k, Some(v))),
 		));
-		let (root, transaction, _): (B::Hash, _, _) = state.state.borrow_mut().as_mut().unwrap().full_storage_root(
+		let (root, transaction): (B::Hash, _) = state.state.borrow_mut().as_mut().unwrap().full_storage_root(
 			genesis.top.into_iter().map(|(k, v)| (k, Some(v))),
 			child_delta,
-			false,
 		);
-		let mut keyspace = crate::Keyspaced::new(&[]);
-		for (info, mut updates) in transaction.clone().into_iter() {
-			keyspace.change_keyspace(info.keyspace());
-			for (key, rc_val) in updates.drain() {
-				let key = if info.is_top_trie() {
-					key
-				} else {
-					keyspace.prefix_key(key.as_slice()).to_vec()
-				};
-
-				state.genesis.insert(key, rc_val);
-			}
-		}
+		state.genesis = transaction.clone().drain();
 		state.genesis_root = root.clone();
 		state.commit(root, transaction)?;
 		state.record.take();
@@ -247,37 +229,20 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		None
 	}
 
-	fn commit(&self, storage_root: <HashFor<B> as Hasher>::Out, transaction: Self::Transaction)
+	fn commit(&self, storage_root: <HashFor<B> as Hasher>::Out, mut transaction: Self::Transaction)
 		-> Result<(), Self::Error>
 	{
 		if let Some(db) = self.db.take() {
 			let mut db_transaction = DBTransaction::new();
-			let mut keys = Vec::new();
-			let mut keyspace = crate::Keyspaced::new(&[]);
-			for (info, mut updates) in transaction.into_iter() {
-				// child info with strong unique id are using the same state-db with prefixed key
-				if info.child_type() != ChildType::ParentKeyId {
-					// Unhandled child kind
-					unimplemented!(
-						"Data for {:?} without a backend implementation",
-						info.child_type(),
-					);
+			let changes = transaction.drain();
+			let mut keys = Vec::with_capacity(changes.len());
+			for (key, (val, rc)) in changes {
+				if rc > 0 {
+					db_transaction.put(0, &key, &val);
+				} else if rc < 0 {
+					db_transaction.delete(0, &key);
 				}
-				keyspace.change_keyspace(info.keyspace());
-				for (key, (val, rc)) in updates.drain() {
-					let key = if info.is_top_trie() {
-						key
-					} else {
-						keyspace.prefix_key(key.as_slice()).to_vec()
-					};
-
-					if rc > 0 {
-						db_transaction.put(0, &key, &val);
-					} else if rc < 0 {
-						db_transaction.delete(0, &key);
-					}
-					keys.push(key);
-				}
+				keys.push(key);
 			}
 			self.record.set(keys);
 			db.write(db_transaction).map_err(|_| String::from("Error committing transaction"))?;

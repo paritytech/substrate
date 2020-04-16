@@ -381,7 +381,7 @@ impl<B: BlockT> CacheChanges<B> {
 			}
 			let mut modifications = HashSet::new();
 			let mut child_modifications = HashSet::new();
-			child_changes.into_iter().for_each(|(sk, changes, _ci)|
+			child_changes.into_iter().for_each(|(sk, changes)|
 				for (k, v) in changes.into_iter() {
 					let k = (sk.clone(), k);
 					if is_best {
@@ -1174,7 +1174,6 @@ mod tests {
 
 	#[test]
 	fn should_track_used_size_correctly() {
-		let child_info1 = ChildInfo::new_default(b"unique_id_1");
 		let root_parent = H256::random();
 		let shared = new_shared_cache::<Block>(109, ((109-36), 109));
 		let h0 = H256::random();
@@ -1202,7 +1201,7 @@ mod tests {
 			&[],
 			&[],
 			vec![],
-			vec![(s_key.clone(), vec![(key.clone(), Some(vec![1, 2]))], child_info1)],
+			vec![(s_key.clone(), vec![(key.clone(), Some(vec![1, 2]))])],
 			Some(h0),
 			Some(0),
 			true,

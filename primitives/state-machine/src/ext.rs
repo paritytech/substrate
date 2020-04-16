@@ -22,8 +22,8 @@ use crate::{
 	changes_trie::State as ChangesTrieState,
 };
 
+use hash_db::Hasher;
 use sp_core::{
-	Hasher,
 	storage::{well_known_keys::is_child_storage_key, ChildInfo},
 	traits::Externalities, hexdisplay::HexDisplay,
 };
@@ -184,9 +184,6 @@ where
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<StorageValue> {
-		if child_info.is_top_trie() {
-			return self.storage(key);
-		}
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		let result = self.overlay
 			.child_storage(child_info, key)
@@ -211,9 +208,6 @@ where
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<Vec<u8>> {
-		if child_info.is_top_trie() {
-			return self.storage_hash(key);
-		}
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		let result = self.overlay
 			.child_storage(child_info, key)
@@ -254,9 +248,6 @@ where
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> bool {
-		if child_info.is_top_trie() {
-			return self.exists_storage(key);
-		}
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
 
 		let result = match self.overlay.child_storage(child_info, key) {
@@ -295,9 +286,6 @@ where
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Option<StorageKey> {
-		if child_info.is_top_trie() {
-			return self.next_storage_key(key);
-		}
 		let next_backend_key = self.backend
 			.next_child_storage_key(child_info, key)
 			.expect(EXT_NOT_ALLOWED_TO_FAIL);
@@ -342,9 +330,6 @@ where
 		key: StorageKey,
 		value: Option<StorageValue>,
 	) {
-		if child_info.is_top_trie() {
-			return self.place_storage(key, value);
-		}
 		trace!(target: "state-trace", "{:04x}: PutChild({}) {}={:?}",
 			self.id,
 			HexDisplay::from(&child_info.storage_key()),
@@ -361,10 +346,6 @@ where
 		&mut self,
 		child_info: &ChildInfo,
 	) {
-		if child_info.is_top_trie() {
-			trace!(target: "state-trace", "Ignoring kill_child_storage on top trie");
-			return;
-		}
 		trace!(target: "state-trace", "{:04x}: KillChild({})",
 			self.id,
 			HexDisplay::from(&child_info.storage_key()),
@@ -401,10 +382,6 @@ where
 		child_info: &ChildInfo,
 		prefix: &[u8],
 	) {
-		if child_info.is_top_trie() {
-			return self.clear_prefix(prefix);
-		}
-
 		trace!(target: "state-trace", "{:04x}: ClearChildPrefix({}) {}",
 			self.id,
 			HexDisplay::from(&child_info.storage_key()),
@@ -446,22 +423,22 @@ where
 		let storage_key = child_info.storage_key();
 		let prefixed_storage_key = child_info.prefixed_storage_key();
 		if self.storage_transaction_cache.transaction_storage_root.is_some() {
-			let root = self.storage_transaction_cache.transaction_child_storage_root
-				.get(&prefixed_storage_key)
-				.map(|root| root.encode())
+			let root = self
+				.storage(prefixed_storage_key.as_slice())
+				.and_then(|k| Decode::decode(&mut &k[..]).ok())
 				.unwrap_or(
-					empty_child_trie_root::<Layout<H>>().encode()
+					empty_child_trie_root::<Layout<H>>()
 				);
 			trace!(target: "state-trace", "{:04x}: ChildRoot({}) (cached) {}",
 				self.id,
 				HexDisplay::from(&storage_key),
 				HexDisplay::from(&root.as_ref()),
 			);
-			root
+			root.encode()
 		} else {
 
 			if let Some(child_info) = self.overlay.default_child_info(storage_key).cloned() {
-				let (root, _is_empty, _) = {
+				let (root, is_empty, _) = {
 					let delta = self.overlay.committed.children_default.get(storage_key)
 						.into_iter()
 						.flat_map(|(map, _)| map.clone().into_iter().map(|(k, v)| (k, v.value)))
@@ -475,6 +452,16 @@ where
 				};
 
 				let root = root.encode();
+				// We store update in the overlay in order to be able to use 'self.storage_transaction'
+				// cache. This is brittle as it rely on Ext only querying the trie backend for
+				// storage root.
+				// A better design would be to manage 'child_storage_transaction' in a
+				// similar way as 'storage_transaction' but for each child trie.
+				if is_empty {
+					self.overlay.set_storage(prefixed_storage_key.into_inner(), None);
+				} else {
+					self.overlay.set_storage(prefixed_storage_key.into_inner(), Some(root.clone()));
+				}
 
 				trace!(target: "state-trace", "{:04x}: ChildRoot({}) {}",
 					self.id,
@@ -685,7 +672,6 @@ mod tests {
 
 	#[test]
 	fn next_child_storage_key_works() {
-
 		let child_info = ChildInfo::new_default(b"Child1");
 		let child_info = &child_info;
 
@@ -702,7 +688,7 @@ mod tests {
 						vec![20] => vec![20],
 						vec![40] => vec![40]
 					],
-					child_info: child_info.clone(),
+					child_info: child_info.to_owned(),
 				}
 			],
 		}.into();
@@ -732,8 +718,6 @@ mod tests {
 
 	#[test]
 	fn child_storage_works() {
-		use sp_core::InnerHasher;
-
 		let child_info = ChildInfo::new_default(b"Child1");
 		let child_info = &child_info;
 		let mut cache = StorageTransactionCache::default();
@@ -749,7 +733,7 @@ mod tests {
 						vec![20] => vec![20],
 						vec![30] => vec![40]
 					],
-					child_info: child_info.clone(),
+					child_info: child_info.to_owned(),
 				}
 			],
 		}.into();

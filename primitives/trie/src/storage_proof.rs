@@ -25,6 +25,7 @@ use hash_db::{Hasher, HashDB};
 /// The proof consists of the set of serialized nodes in the storage trie accessed when looking up
 /// the keys covered by the proof. Verifying the proof requires constructing the partial trie from
 /// the serialized nodes and performing the key lookups.
+/// TODO EMCH fuse with proving backend one.
 #[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 pub struct StorageProof {
 	trie_nodes: Vec<Vec<u8>>,

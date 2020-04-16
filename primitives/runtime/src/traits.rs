@@ -25,7 +25,7 @@ use std::fmt::Display;
 use std::str::FromStr;
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
-use sp_core::{self, InnerHasher, Hasher, TypeId, RuntimeDebug};
+use sp_core::{self, Hasher, TypeId, RuntimeDebug};
 use crate::codec::{Codec, Encode, Decode};
 use crate::transaction_validity::{
 	ValidTransaction, TransactionSource, TransactionValidity, TransactionValidityError,
@@ -322,20 +322,19 @@ impl<T:
 /// Abstraction around hashing
 // Stupid bug in the Rust compiler believes derived
 // traits must be fulfilled by all type parameters.
-pub trait Hash: 'static + MaybeSerializeDeserialize + Debug + Clone + Eq
-	+ PartialEq + InnerHasher<Out = <Self as Hash>::Output> + Hasher {
+pub trait Hash: 'static + MaybeSerializeDeserialize + Debug + Clone + Eq + PartialEq + Hasher<Out = <Self as Hash>::Output> {
 	/// The hash type produced.
 	type Output: Member + MaybeSerializeDeserialize + Debug + sp_std::hash::Hash
 		+ AsRef<[u8]> + AsMut<[u8]> + Copy + Default + Encode + Decode;
 
 	/// Produce the hash of some byte-slice.
 	fn hash(s: &[u8]) -> Self::Output {
-		<Self as InnerHasher>::hash(s)
+		<Self as Hasher>::hash(s)
 	}
 
 	/// Produce the hash of some codec-encodable value.
 	fn hash_of<S: Encode>(s: &S) -> Self::Output {
-		Encode::using_encoded(s, <Self as InnerHasher>::hash)
+		Encode::using_encoded(s, <Self as Hasher>::hash)
 	}
 
 	/// The ordered Patricia tree root of the given `input`.
@@ -350,7 +349,7 @@ pub trait Hash: 'static + MaybeSerializeDeserialize + Debug + Clone + Eq
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct BlakeTwo256;
 
-impl InnerHasher for BlakeTwo256 {
+impl Hasher for BlakeTwo256 {
 	type Out = sp_core::H256;
 	type StdHasher = hash256_std_hasher::Hash256StdHasher;
 	const LENGTH: usize = 32;
@@ -370,15 +369,6 @@ impl Hash for BlakeTwo256 {
 	fn ordered_trie_root(input: Vec<Vec<u8>>) -> Self::Output {
 		sp_io::trie::blake2_256_ordered_root(input)
 	}
-}
-
-impl Hasher for BlakeTwo256 {
-	const EMPTY_ROOT: &'static [u8] = &[
-		3, 23, 10, 46, 117, 151, 183, 183, 227, 216,
-		76, 5, 57, 29, 19, 154, 98, 177, 87, 231,
-		135, 134, 216, 192, 130, 242, 157, 207, 76, 17,
-		19, 20,
-	];
 }
 
 /// Something that can be checked for equality and printed out to a debug channel if bad.
@@ -1421,11 +1411,5 @@ mod tests {
 
 		assert!(signature.verify(msg, &pair.public()));
 		assert!(signature.verify(msg, &pair.public()));
-	}
-
-	#[test]
-	fn empty_root_const() {
-		let empty = <BlakeTwo256 as Hash>::hash(&[0u8]);
-		assert_eq!(BlakeTwo256::EMPTY_ROOT, empty.as_ref());
 	}
 }

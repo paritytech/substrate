@@ -19,7 +19,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::collections::btree_map::Entry;
 use codec::{Decode, Encode};
-use sp_core::{Hasher, InnerHasher};
+use hash_db::Hasher;
 use num_traits::One;
 use crate::{
 	StorageKey,
@@ -280,9 +280,6 @@ fn prepare_digest_input<'a, H, Number>(
 				return Ok((map, child_map));
 			}
 
-			// change trie content are all stored as top_trie (default child trie with empty keyspace)
-			let child_info = sp_core::storage::ChildInfo::top_trie();
-			let child_info = &child_info;
 			let mut children_roots = BTreeMap::<PrefixedStorageKey, _>::new();
 			{
 				let trie_storage = TrieBackendEssence::<_, H>::new(
@@ -290,21 +287,21 @@ fn prepare_digest_input<'a, H, Number>(
 					trie_root,
 				);
 
-				trie_storage.for_key_values_with_prefix(child_info, &child_prefix, |key, value|
+				trie_storage.for_key_values_with_prefix(&child_prefix, |key, value|
 					if let Ok(InputKey::ChildIndex::<Number>(trie_key)) = Decode::decode(&mut &key[..]) {
 						if let Ok(value) = <Vec<u8>>::decode(&mut &value[..]) {
-							let mut trie_root = <H as InnerHasher>::Out::default();
+							let mut trie_root = <H as Hasher>::Out::default();
 							trie_root.as_mut().copy_from_slice(&value[..]);
 							children_roots.insert(trie_key.storage_key, trie_root);
 						}
 					});
 
-				trie_storage.for_keys_with_prefix(child_info, &extrinsic_prefix, |key|
+				trie_storage.for_keys_with_prefix(&extrinsic_prefix, |key|
 					if let Ok(InputKey::ExtrinsicIndex::<Number>(trie_key)) = Decode::decode(&mut &key[..]) {
 						insert_to_map(&mut map, trie_key.key);
 					});
 
-				trie_storage.for_keys_with_prefix(child_info, &digest_prefix, |key|
+				trie_storage.for_keys_with_prefix(&digest_prefix, |key|
 					if let Ok(InputKey::DigestIndex::<Number>(trie_key)) = Decode::decode(&mut &key[..]) {
 						insert_to_map(&mut map, trie_key.key);
 					});
@@ -321,12 +318,12 @@ fn prepare_digest_input<'a, H, Number>(
 					crate::changes_trie::TrieBackendStorageAdapter(storage),
 					trie_root,
 				);
-				trie_storage.for_keys_with_prefix(child_info, &extrinsic_prefix, |key|
+				trie_storage.for_keys_with_prefix(&extrinsic_prefix, |key|
 					if let Ok(InputKey::ExtrinsicIndex::<Number>(trie_key)) = Decode::decode(&mut &key[..]) {
 						insert_to_map(&mut map, trie_key.key);
 					});
 
-				trie_storage.for_keys_with_prefix(child_info, &digest_prefix, |key|
+				trie_storage.for_keys_with_prefix(&digest_prefix, |key|
 					if let Ok(InputKey::DigestIndex::<Number>(trie_key)) = Decode::decode(&mut &key[..]) {
 						insert_to_map(&mut map, trie_key.key);
 					});
@@ -437,13 +434,13 @@ mod test {
 							value: Some(vec![200]),
 							extrinsics: Some(vec![0, 2].into_iter().collect())
 						})
-					].into_iter().collect(), child_info_1.clone())),
+					].into_iter().collect(), child_info_1.to_owned())),
 					(child_trie_key2, (vec![
 						(vec![100], OverlayedValue {
 							value: Some(vec![200]),
 							extrinsics: Some(vec![0, 2].into_iter().collect())
 						})
-					].into_iter().collect(), child_info_2)),
+					].into_iter().collect(), child_info_2.to_owned())),
 				].into_iter().collect()
 			},
 			committed: OverlayedChangeSet { top: vec![
@@ -466,7 +463,7 @@ mod test {
 							value: Some(vec![202]),
 							extrinsics: Some(vec![3].into_iter().collect())
 						})
-					].into_iter().collect(), child_info_1)),
+					].into_iter().collect(), child_info_1.to_owned())),
 				].into_iter().collect(),
 			},
 			collect_extrinsics: true,

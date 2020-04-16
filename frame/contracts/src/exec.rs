@@ -26,7 +26,6 @@ use frame_support::{
 	storage::unhashed, dispatch::DispatchError,
 	traits::{WithdrawReason, Currency, Time, Randomness},
 };
-use sp_core::storage::ChildInfo;
 
 pub type AccountIdOf<T> = <T as frame_system::Trait>::AccountId;
 pub type CallOf<T> = <T as Trait>::Call;
@@ -292,7 +291,7 @@ pub enum DeferredAction<T: Trait> {
 pub struct ExecutionContext<'a, T: Trait + 'a, V, L> {
 	pub caller: Option<&'a ExecutionContext<'a, T, V, L>>,
 	pub self_account: T::AccountId,
-	pub self_trie_info: Option<ChildInfo>,
+	pub self_trie_id: Option<TrieId>,
 	pub overlay: OverlayAccountDb<'a, T>,
 	pub depth: usize,
 	pub deferred: Vec<DeferredAction<T>>,
@@ -316,7 +315,7 @@ where
 	pub fn top_level(origin: T::AccountId, cfg: &'a Config<T>, vm: &'a V, loader: &'a L) -> Self {
 		ExecutionContext {
 			caller: None,
-			self_trie_info: None,
+			self_trie_id: None,
 			self_account: origin,
 			overlay: OverlayAccountDb::<T>::new(&DirectAccountDb),
 			depth: 0,
@@ -329,12 +328,12 @@ where
 		}
 	}
 
-	fn nested<'b, 'c: 'b>(&'c self, dest: T::AccountId, trie_info: Option<ChildInfo>)
+	fn nested<'b, 'c: 'b>(&'c self, dest: T::AccountId, trie_id: Option<TrieId>)
 		-> ExecutionContext<'b, T, V, L>
 	{
 		ExecutionContext {
 			caller: Some(self),
-			self_trie_info: trie_info,
+			self_trie_id: trie_id,
 			self_account: dest,
 			overlay: OverlayAccountDb::new(&self.overlay),
 			depth: self.depth + 1,
@@ -576,9 +575,7 @@ where
 		where F: FnOnce(&mut ExecutionContext<T, V, L>) -> ExecResult
 	{
 		let (output, change_set, deferred) = {
-			let mut nested = self.nested(dest, trie_id.map(|trie_id| {
-				crate::child_trie_info(&trie_id)
-			}));
+			let mut nested = self.nested(dest, trie_id);
 			let output = func(&mut nested)?;
 			(output, nested.overlay.into_change_set(), nested.deferred)
 		};
@@ -738,12 +735,7 @@ where
 	type T = T;
 
 	fn get_storage(&self, key: &StorageKey) -> Option<Vec<u8>> {
-		let trie_id = self.ctx.self_trie_info.as_ref();
-		self.ctx.overlay.get_storage(
-			&self.ctx.self_account,
-			trie_id,
-			key,
-		)
+		self.ctx.overlay.get_storage(&self.ctx.self_account, self.ctx.self_trie_id.as_ref(), key)
 	}
 
 	fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) -> Result<(), &'static str> {

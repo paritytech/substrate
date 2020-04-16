@@ -79,8 +79,7 @@ pub use changes_trie::{ChangesTrieConfiguration, ChangesTrieConfigurationRange};
 #[cfg(feature = "full_crypto")]
 pub use crypto::{DeriveJunction, Pair, Public};
 
-pub use hash_db::Hasher as InnerHasher;
-pub use hash_db::{Prefix, EMPTY_PREFIX};
+pub use hash_db::Hasher;
 #[cfg(feature = "std")]
 pub use self::hasher::blake2::Blake2Hasher;
 
@@ -356,35 +355,5 @@ macro_rules! impl_maybe_marker {
 			#[cfg(not(feature = "std"))]
 			impl<T> $trait_name for T {}
 		)+
-	}
-}
-
-/// Technical trait to avoid calculating empty root.
-/// This assumes (same wrong asumption as for hashdb trait),
-/// an empty node is `[0u8]`.
-pub trait Hasher: InnerHasher {
-	/// Value for an empty root node, this
-	/// is the hash of `[0u8]` value.
-	const EMPTY_ROOT: &'static [u8];
-}
-
-#[cfg(feature = "std")]
-impl Hasher for Blake2Hasher {
-	const EMPTY_ROOT: &'static [u8] = &[
-		3, 23, 10, 46, 117, 151, 183, 183, 227, 216,
-		76, 5, 57, 29, 19, 154, 98, 177, 87, 231,
-		135, 134, 216, 192, 130, 242, 157, 207, 76, 17,
-		19, 20,
-	];
-}
-
-#[cfg(test)]
-mod test {
-	use super::{Blake2Hasher, Hasher, InnerHasher};
-
-	#[test]
-	fn empty_root_const() {
-		let empty = Blake2Hasher::hash(&[0u8]);
-		assert_eq!(Blake2Hasher::EMPTY_ROOT, empty.as_ref());
 	}
 }

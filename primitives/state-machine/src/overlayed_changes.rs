@@ -29,10 +29,10 @@ use crate::{
 use std::iter::FromIterator;
 use std::collections::{HashMap, BTreeMap, BTreeSet};
 use codec::{Decode, Encode};
-use sp_core::storage::{well_known_keys::EXTRINSIC_INDEX, ChildInfo, PrefixedStorageKey};
+use sp_core::storage::{well_known_keys::EXTRINSIC_INDEX, ChildInfo};
 use std::{mem, ops};
 
-use sp_core::Hasher;
+use hash_db::Hasher;
 
 /// Storage key.
 pub type StorageKey = Vec<u8>;
@@ -44,7 +44,7 @@ pub type StorageValue = Vec<u8>;
 pub type StorageCollection = Vec<(StorageKey, Option<StorageValue>)>;
 
 /// In memory arrays of storage values for multiple child tries.
-pub type ChildStorageCollection = Vec<(StorageKey, StorageCollection, ChildInfo)>;
+pub type ChildStorageCollection = Vec<(StorageKey, StorageCollection)>;
 
 /// The overlayed changes to state to be queried on top of the backend.
 ///
@@ -133,8 +133,6 @@ pub struct StorageTransactionCache<Transaction, H: Hasher, N: BlockNumber> {
 	pub(crate) transaction: Option<Transaction>,
 	/// The storage root after applying the transaction.
 	pub(crate) transaction_storage_root: Option<H::Out>,
-	/// The storage child roots after applying the transaction.
-	pub(crate) transaction_child_storage_root: BTreeMap<PrefixedStorageKey, Option<H::Out>>,
 	/// Contains the changes trie transaction.
 	pub(crate) changes_trie_transaction: Option<Option<ChangesTrieTransaction<H, N>>>,
 	/// The storage root after applying the changes trie transaction.
@@ -153,7 +151,6 @@ impl<Transaction, H: Hasher, N: BlockNumber> Default for StorageTransactionCache
 		Self {
 			transaction: None,
 			transaction_storage_root: None,
-			transaction_child_storage_root: Default::default(),
 			changes_trie_transaction: None,
 			changes_trie_transaction_storage_root: None,
 		}
@@ -510,8 +507,7 @@ impl OverlayedChanges {
 
 		Ok(StorageChanges {
 			main_storage_changes: main_storage_changes.collect(),
-			child_storage_changes: child_storage_changes
-				.map(|(sk, it)| (sk, it.0.collect(), it.1)).collect(),
+			child_storage_changes: child_storage_changes.map(|(sk, it)| (sk, it.0.collect())).collect(),
 			transaction,
 			transaction_storage_root,
 			changes_trie_transaction,
@@ -574,11 +570,10 @@ impl OverlayedChanges {
 		let delta = self.committed.top.iter().map(|(k, v)| (k.clone(), v.value.clone()))
 			.chain(self.prospective.top.iter().map(|(k, v)| (k.clone(), v.value.clone())));
 
-		let (root, transaction, child_roots) = backend.full_storage_root(delta, child_delta_iter, true);
+		let (root, transaction) = backend.full_storage_root(delta, child_delta_iter);
 
 		cache.transaction = Some(transaction);
 		cache.transaction_storage_root = Some(root);
-		cache.transaction_child_storage_root = child_roots.into_iter().collect();
 
 		root
 	}

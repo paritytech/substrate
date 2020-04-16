@@ -398,11 +398,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				self.storage.with_cached_changed_keys(root, functor)
 			}
 
-			fn get(
-				&self,
-				key: &Block::Hash,
-				prefix: Prefix,
-			) -> Result<Option<DBValue>, String> {
+			fn get(&self, key: &Block::Hash, prefix: Prefix) -> Result<Option<DBValue>, String> {
 				self.storage.get(key, prefix)
 			}
 		}
@@ -957,7 +953,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 				.trigger(
 					&notify_import.hash,
 					storage_changes.0.into_iter(),
-					storage_changes.1.into_iter().map(|(sk, v, _ci)| (sk, v.into_iter())),
+					storage_changes.1.into_iter().map(|(sk, v)| (sk, v.into_iter())),
 				);
 		}
 

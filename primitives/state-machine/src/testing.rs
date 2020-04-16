@@ -18,7 +18,7 @@
 
 use std::any::{Any, TypeId};
 use codec::Decode;
-use sp_core::Hasher;
+use hash_db::Hasher;
 use crate::{
 	backend::Backend, OverlayedChanges, StorageTransactionCache, ext::Ext, InMemoryBackend,
 	StorageKey, StorageValue,

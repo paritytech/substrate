@@ -280,7 +280,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 			}
 
 			fn record_proof(&mut self) {
-				// TODO should we use full and then use some packing
+				// TODO should we use full and then use some packing Most certainly.
 				self.recorder = Some(#crate_::ProofRecorder::<Block>::Flat(Default::default()));
 			}
 

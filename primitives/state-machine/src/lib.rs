@@ -20,7 +20,7 @@
 
 use std::{fmt, result, collections::HashMap, panic::UnwindSafe};
 use log::{warn, trace};
-pub use sp_core::{Hasher, InnerHasher};
+use hash_db::Hasher;
 use codec::{Decode, Encode, Codec};
 use sp_core::{
 	storage::{ChildInfo, ChildrenProofMap}, NativeOrEncoded, NeverNativeValue,
@@ -72,7 +72,7 @@ pub use proving_backend::{
 	create_flat_proof_check_backend, create_flat_proof_check_backend_storage,
 	merge_flatten_storage_proofs,
 };
-pub use trie_backend_essence::{TrieBackendStorage, TrieBackendStorageRef, Storage};
+pub use trie_backend_essence::{TrieBackendStorage, Storage};
 pub use trie_backend::TrieBackend;
 pub use error::{Error, ExecutionError};
 pub use in_memory_backend::InMemory as InMemoryBackend;
@@ -87,7 +87,7 @@ pub type DefaultHandler<R, E> = fn(CallResult<R, E>, CallResult<R, E>) -> CallRe
 /// Type of changes trie transaction.
 pub type ChangesTrieTransaction<H, N> = (
 	MemoryDB<H>,
-	ChangesTrieCacheAction<<H as InnerHasher>::Out, N>,
+	ChangesTrieCacheAction<<H as Hasher>::Out, N>,
 );
 
 /// Strategy for executing a call into the runtime.
@@ -1256,5 +1256,40 @@ mod tests {
 			local_result2.into_iter().collect::<Vec<_>>(),
 			vec![(b"value2".to_vec(), None)],
 		);
+	}
+
+	#[test]
+	fn child_storage_uuid() {
+
+		let child_info_1 = ChildInfo::new_default(b"sub_test1");
+		let child_info_2 = ChildInfo::new_default(b"sub_test2");
+
+		use crate::trie_backend::tests::test_trie;
+		let mut overlay = OverlayedChanges::default();
+
+		let mut transaction = {
+			let backend = test_trie();
+			let mut cache = StorageTransactionCache::default();
+			let mut ext = Ext::new(
+				&mut overlay,
+				&mut cache,
+				&backend,
+				changes_trie::disabled_state::<_, u64>(),
+				None,
+			);
+			ext.set_child_storage(&child_info_1, b"abc".to_vec(), b"def".to_vec());
+			ext.set_child_storage(&child_info_2, b"abc".to_vec(), b"def".to_vec());
+			ext.storage_root();
+			cache.transaction.unwrap()
+		};
+		let mut duplicate = false;
+		for (k, (value, rc)) in transaction.drain().iter() {
+			// look for a key inserted twice: transaction rc is 2
+			if *rc == 2 {
+				duplicate = true;
+				println!("test duplicate for {:?} {:?}", k, value);
+			}
+		}
+		assert!(!duplicate);
 	}
 }

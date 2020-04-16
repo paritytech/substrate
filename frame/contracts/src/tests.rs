@@ -311,10 +311,6 @@ fn account_removal_does_not_remove_storage() {
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
 		let trie_id1 = <Test as Trait>::TrieIdGenerator::trie_id(&1);
 		let trie_id2 = <Test as Trait>::TrieIdGenerator::trie_id(&2);
-		let child_info1 = crate::child_trie_info(trie_id1.as_ref());
-		let child_info2 = crate::child_trie_info(trie_id2.as_ref());
-		let child_info1 = Some(&child_info1);
-		let child_info2 = Some(&child_info2);
 		let key1 = &[1; 32];
 		let key2 = &[2; 32];
 
@@ -363,20 +359,20 @@ fn account_removal_does_not_remove_storage() {
 		// Verify that no entries are removed.
 		{
 			assert_eq!(
-				<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &1, child_info1, key1),
+				<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &1, Some(&trie_id1), key1),
 				Some(b"1".to_vec())
 			);
 			assert_eq!(
-				<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &1, child_info1, key2),
+				<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &1, Some(&trie_id1), key2),
 				Some(b"2".to_vec())
 			);
 
 			assert_eq!(
-				<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &2, child_info2, key1),
+				<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &2, Some(&trie_id2), key1),
 				Some(b"3".to_vec())
 			);
 			assert_eq!(
-				<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &2, child_info2, key2),
+				<dyn AccountDb<Test>>::get_storage(&DirectAccountDb, &2, Some(&trie_id2), key2),
 				Some(b"4".to_vec())
 			);
 		}

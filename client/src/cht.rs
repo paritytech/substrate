@@ -23,6 +23,7 @@
 //! root has. A correct proof implies that the claimed block is identical to the one
 //! we discarded.
 
+use hash_db;
 use codec::Encode;
 use sp_trie;
 
@@ -86,7 +87,7 @@ pub fn compute_root<Header, Hasher, I>(
 ) -> ClientResult<Hasher::Out>
 	where
 		Header: HeaderT,
-		Hasher: sp_core::Hasher,
+		Hasher: hash_db::Hasher,
 		Hasher::Out: Ord,
 		I: IntoIterator<Item=ClientResult<Option<Header::Hash>>>,
 {
@@ -105,7 +106,7 @@ pub fn build_proof<Header, Hasher, BlocksI, HashesI>(
 ) -> ClientResult<StorageProof>
 	where
 		Header: HeaderT,
-		Hasher: sp_core::Hasher,
+		Hasher: hash_db::Hasher,
 		Hasher::Out: Ord + codec::Codec,
 		BlocksI: IntoIterator<Item=Header::Number>,
 		HashesI: IntoIterator<Item=ClientResult<Option<Header::Hash>>>,
@@ -134,7 +135,7 @@ pub fn check_proof<Header, Hasher>(
 ) -> ClientResult<()>
 	where
 		Header: HeaderT,
-		Hasher: sp_core::Hasher,
+		Hasher: hash_db::Hasher,
 		Hasher::Out: Ord + codec::Codec,
 {
 	do_check_proof::<Header, Hasher, _>(
@@ -163,7 +164,7 @@ pub fn check_proof_on_proving_backend<Header, Hasher>(
 ) -> ClientResult<()>
 	where
 		Header: HeaderT,
-		Hasher: sp_core::Hasher,
+		Hasher: hash_db::Hasher,
 		Hasher::Out: Ord + codec::Codec,
 {
 	do_check_proof::<Header, Hasher, _>(
@@ -187,7 +188,7 @@ fn do_check_proof<Header, Hasher, F>(
 ) -> ClientResult<()>
 	where
 		Header: HeaderT,
-		Hasher: sp_core::Hasher,
+		Hasher: hash_db::Hasher,
 		Hasher::Out: Ord,
 		F: FnOnce(Hasher::Out, &[u8]) -> ClientResult<Option<Vec<u8>>>,
 {

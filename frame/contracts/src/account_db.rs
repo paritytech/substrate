@@ -17,7 +17,7 @@
 //! Auxiliaries to help with managing partial changes to accounts state.
 
 use super::{
-	AliveContractInfo, BalanceOf, CodeHash, ContractInfo, ContractInfoOf, Trait,
+	AliveContractInfo, BalanceOf, CodeHash, ContractInfo, ContractInfoOf, Trait, TrieId,
 	TrieIdGenerator,
 };
 use crate::exec::StorageKey;
@@ -27,7 +27,7 @@ use sp_std::prelude::*;
 use sp_io::hashing::blake2_256;
 use sp_runtime::traits::{Bounded, Zero};
 use frame_support::traits::{Currency, Get, Imbalance, SignedImbalance};
-use frame_support::{storage::child, StorageMap, storage::child::ChildInfo};
+use frame_support::{storage::child, StorageMap};
 use frame_system;
 
 // Note: we don't provide Option<Contract> because we can't create
@@ -108,12 +108,7 @@ pub trait AccountDb<T: Trait> {
 	///
 	/// Trie id is None iff account doesn't have an associated trie id in <ContractInfoOf<T>>.
 	/// Because DirectAccountDb bypass the lookup for this association.
-	fn get_storage(
-		&self,
-		account: &T::AccountId,
-		trie_id: Option<&ChildInfo>,
-		location: &StorageKey
-	) -> Option<Vec<u8>>;
+	fn get_storage(&self, account: &T::AccountId, trie_id: Option<&TrieId>, location: &StorageKey) -> Option<Vec<u8>>;
 	/// If account has an alive contract then return the code hash associated.
 	fn get_code_hash(&self, account: &T::AccountId) -> Option<CodeHash<T>>;
 	/// If account has an alive contract then return the rent allowance associated.
@@ -130,10 +125,10 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 	fn get_storage(
 		&self,
 		_account: &T::AccountId,
-		trie_id: Option<&ChildInfo>,
+		trie_id: Option<&TrieId>,
 		location: &StorageKey
 	) -> Option<Vec<u8>> {
-		trie_id.and_then(|child_info| child::get_raw(child_info, &blake2_256(location)))
+		trie_id.and_then(|id| child::get_raw(&crate::child_trie_info(&id[..]), &blake2_256(location)))
 	}
 	fn get_code_hash(&self, account: &T::AccountId) -> Option<CodeHash<T>> {
 		<ContractInfoOf<T>>::get(account).and_then(|i| i.as_alive().map(|i| i.code_hash))
@@ -215,19 +210,18 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 					new_info.last_write = Some(<frame_system::Module<T>>::block_number());
 				}
 
-				let child_info = &new_info.child_trie_info();
 				for (k, v) in changed.storage.into_iter() {
 					if let Some(value) = child::get_raw(
-						child_info,
+						&new_info.child_trie_info(),
 						&blake2_256(&k),
 					) {
 						new_info.storage_size -= value.len() as u32;
 					}
 					if let Some(value) = v {
 						new_info.storage_size += value.len() as u32;
-						child::put_raw(child_info, &blake2_256(&k), &value[..]);
+						child::put_raw(&new_info.child_trie_info(), &blake2_256(&k), &value[..]);
 					} else {
-						child::kill(child_info, &blake2_256(&k));
+						child::kill(&new_info.child_trie_info(), &blake2_256(&k));
 					}
 				}
 
@@ -332,7 +326,7 @@ impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
 	fn get_storage(
 		&self,
 		account: &T::AccountId,
-		trie_id: Option<&ChildInfo>,
+		trie_id: Option<&TrieId>,
 		location: &StorageKey
 	) -> Option<Vec<u8>> {
 		self.local
