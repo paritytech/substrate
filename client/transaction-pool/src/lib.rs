@@ -201,7 +201,6 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 			prometheus.and_then(|registry|
 				PrometheusMetrics::register(registry).map_err(|err| {
 					log::warn!("Failed to register Prometheus metrics: {}", err);
-					()
 				}).ok()
 			)
 		);
