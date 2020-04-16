@@ -16,11 +16,13 @@
 
 //! Consensus extension module tests for BABE consensus.
 
-use super::*;
+use super::{*, babe::*};
 use mock::*;
-use frame_support::traits::OnFinalize;
+use sp_runtime::generic::DigestItem;
+use frame_support::traits::{OnFinalize, FindAuthor};
 use pallet_session::ShouldEndSession;
-use sp_consensus_vrf::schnorrkel::{RawVRFOutput, RawVRFProof};
+use sp_consensus_babe::BABE_ENGINE_ID;
+use sp_consensus_epoch_vrf::schnorrkel::{RawVRFOutput, RawVRFProof, RANDOMNESS_LENGTH};
 
 const EMPTY_RANDOMNESS: [u8; 32] = [
 	74, 25, 49, 128, 53, 97, 244, 49,
@@ -109,8 +111,12 @@ fn first_block_epoch_zero_start() {
 fn authority_index() {
 	new_test_ext(vec![0, 1, 2, 3]).execute_with(|| {
 		assert_eq!(
-			Babe::find_author((&[(BABE_ENGINE_ID, &[][..])]).into_iter().cloned()), None,
-			"Trivially invalid authorities are ignored")
+			BabeFindAuthor::<Test>::find_author(
+				(&[(BABE_ENGINE_ID, &[][..])]).into_iter().cloned()
+			),
+			None,
+			"Trivially invalid authorities are ignored"
+		)
 	})
 }
 

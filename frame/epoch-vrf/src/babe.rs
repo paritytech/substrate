@@ -1,6 +1,6 @@
+use sp_std::{prelude::*, marker::PhantomData};
 use codec::{Encode, Decode};
 use frame_support::{ConsensusEngineId, traits::{Get, FindAuthor}};
-use sp_std::marker::PhantomData;
 use sp_runtime::generic::DigestItem;
 use sp_consensus_babe::{SlotNumber, AuthorityId, BabeAuthorityWeight, ConsensusLog, BABE_ENGINE_ID};
 use sp_consensus_babe::digests::{RawPreDigest, NextEpochDescriptor};
@@ -58,7 +58,10 @@ impl<T: BabeTrait> Trait for T {
 			randomness: next_randomness,
 		};
 
-		let log: DigestItem<T::Hash> = DigestItem::Consensus(BABE_ENGINE_ID, next.encode());
+		let log: DigestItem<T::Hash> = DigestItem::Consensus(
+			BABE_ENGINE_ID,
+			ConsensusLog::NextEpochData(next).encode()
+		);
 		<frame_system::Module<T>>::deposit_log(log.into());
 	}
 

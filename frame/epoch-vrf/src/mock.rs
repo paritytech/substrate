@@ -17,7 +17,7 @@
 //! Test utilities
 
 use codec::Encode;
-use super::{Trait, Module, GenesisConfig, CurrentSlot};
+use super::{Module, GenesisConfig, CurrentSlot, babe::BabeTrait};
 use sp_runtime::{
 	Perbill, impl_opaque_keys,
 	testing::{Header, UintAuthorityId, Digest, DigestItem},
@@ -31,7 +31,7 @@ use frame_support::{
 };
 use sp_io;
 use sp_core::H256;
-use sp_consensus_vrf::schnorrkel::{RawVRFOutput, RawVRFProof};
+use sp_consensus_epoch_vrf::schnorrkel::{RawVRFOutput, RawVRFProof};
 
 impl_outer_origin!{
 	pub enum Origin for Test  where system = frame_system {}
@@ -100,7 +100,7 @@ impl pallet_timestamp::Trait for Test {
 	type MinimumPeriod = MinimumPeriod;
 }
 
-impl Trait for Test {
+impl BabeTrait for Test {
 	type EpochDuration = EpochDuration;
 	type ExpectedBlockTime = ExpectedBlockTime;
 	type EpochChangeTrigger = crate::ExternalTrigger;
@@ -108,9 +108,12 @@ impl Trait for Test {
 
 pub fn new_test_ext(authorities: Vec<DummyValidatorId>) -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	GenesisConfig {
-		authorities: authorities.into_iter().map(|a| (UintAuthorityId(a).to_public_key(), 1)).collect(),
-	}.assimilate_storage::<Test>(&mut t).unwrap();
+	GenesisConfig::<Test> {
+		authorities: authorities
+			.into_iter()
+			.map(|a| (UintAuthorityId(a).to_public_key(), 1))
+			.collect(),
+	}.assimilate_storage(&mut t).unwrap();
 	t.into()
 }
 
@@ -119,7 +122,7 @@ pub fn go_to_block(n: u64, s: u64) {
 	System::initialize(&n, &Default::default(), &Default::default(), &pre_digest, InitKind::Full);
 	System::set_block_number(n);
 	if s > 1 {
-		CurrentSlot::put(s);
+		CurrentSlot::<Test>::put(s);
 	}
 	// includes a call into `Babe::do_initialize`.
 	Session::on_initialize(n);
