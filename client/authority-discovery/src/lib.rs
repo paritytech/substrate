@@ -25,13 +25,11 @@
 //!
 //! 1. **Makes itself discoverable**
 //!
-//!    1. Retrieves its external addresses.
+//!    1. Retrieves its external addresses (including peer id) or the ones of its sentry nodes.
 //!
-//!    2. Adds its network peer id to the addresses.
+//!    2. Signs the above.
 //!
-//!    3. Signs the above.
-//!
-//!    4. Puts the signature and the addresses on the libp2p Kademlia DHT.
+//!    3. Puts the signature and the addresses on the libp2p Kademlia DHT.
 //!
 //!
 //! 2. **Discovers other authorities**
@@ -43,6 +41,12 @@
 //!    3. Validates the signatures of the retrieved key value pairs.
 //!
 //!    4. Adds the retrieved external addresses as priority nodes to the peerset.
+//!
+//! When run as a sentry node, the authority discovery module does not
+//! publish any addresses to the DHT but still discovers validators and
+//! sentry nodes of validators, i.e. only step 2 (Discovers other authorities)
+//! is executed.
+
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
 use std::marker::PhantomData;
@@ -62,7 +66,7 @@ use prost::Message;
 use sc_client_api::blockchain::HeaderBackend;
 use sc_network::{Multiaddr, config::MultiaddrWithPeerId, DhtEvent, ExHashT, NetworkStateInfo};
 use sp_authority_discovery::{AuthorityDiscoveryApi, AuthorityId, AuthoritySignature, AuthorityPair};
-use sp_core::crypto::{key_types, CryptoTypePublicPair, Pair};
+use sp_core::crypto::{key_types, Pair};
 use sp_core::traits::BareCryptoStorePtr;
 use sp_runtime::{traits::Block as BlockT, generic::BlockId};
 use sp_api::ProvideRuntimeApi;
@@ -89,6 +93,17 @@ const LIBP2P_KADEMLIA_BOOTSTRAP_TIME: Duration = Duration::from_secs(30);
 /// discovery module.
 const AUTHORITIES_PRIORITY_GROUP_NAME: &'static str = "authorities";
 
+/// Role an authority discovery module can run as.
+pub enum Role {
+	/// Actual authority as well as a reference to its key store.
+	Authority(BareCryptoStorePtr),
+	/// Sentry node that guards an authority.
+	///
+	/// No reference to its key store needed, as sentry nodes don't have an identity to sign
+	/// addresses with in the first place.
+	Sentry,
+}
+
 /// An `AuthorityDiscovery` makes a given authority discoverable and discovers other authorities.
 pub struct AuthorityDiscovery<Client, Network, Block>
 where
@@ -111,8 +126,6 @@ where
 	/// Channel we receive Dht events on.
 	dht_event_rx: Pin<Box<dyn Stream<Item = DhtEvent> + Send>>,
 
-	key_store: BareCryptoStorePtr,
-
 	/// Interval to be proactive, publishing own addresses.
 	publish_interval: Interval,
 	/// Interval on which to query for addresses of other authorities.
@@ -121,6 +134,8 @@ where
 	addr_cache: addr_cache::AddrCache<AuthorityId, Multiaddr>,
 
 	metrics: Option<Metrics>,
+
+	role: Role,
 
 	phantom: PhantomData<Block>,
 }
@@ -142,8 +157,8 @@ where
 		client: Arc<Client>,
 		network: Arc<Network>,
 		sentry_nodes: Vec<MultiaddrWithPeerId>,
-		key_store: BareCryptoStorePtr,
 		dht_event_rx: Pin<Box<dyn Stream<Item = DhtEvent> + Send>>,
+		role: Role,
 		prometheus_registry: Option<prometheus_endpoint::Registry>,
 	) -> Self {
 		// Kademlia's default time-to-live for Dht records is 36h, republishing records every 24h.
@@ -189,10 +204,10 @@ where
 			network,
 			sentry_nodes,
 			dht_event_rx,
-			key_store,
 			publish_interval,
 			query_interval,
 			addr_cache,
+			role,
 			metrics,
 			phantom: PhantomData,
 		}
@@ -200,6 +215,14 @@ where
 
 	/// Publish either our own or if specified the public addresses of our sentry nodes.
 	fn publish_ext_addresses(&mut self) -> Result<()> {
+		let key_store = match &self.role {
+			Role::Authority(key_store) => key_store,
+			// Only authority nodes can put addresses (their own or the ones of their sentry nodes)
+			// on the Dht. Sentry nodes don't have a known identity to authenticate such addresses,
+			// thus `publish_ext_addresses` becomes a no-op.
+			Role::Sentry => return Ok(()),
+		};
+
 		if let Some(metrics) = &self.metrics {
 			metrics.publish.inc()
 		}
@@ -226,13 +249,12 @@ where
 			.encode(&mut serialized_addresses)
 			.map_err(Error::EncodingProto)?;
 
-		let keys: Vec<CryptoTypePublicPair> = self.get_own_public_keys_within_authority_set()?
-			.into_iter()
-			.map(Into::into)
-			.collect();
+		let keys = AuthorityDiscovery::get_own_public_keys_within_authority_set(
+			&key_store,
+			&self.client,
+		)?.into_iter().map(Into::into).collect::<Vec<_>>();
 
-		let signatures = self.key_store
-			.read()
+		let signatures = key_store.read()
 			.sign_with_all(
 				key_types::AUTHORITY_DISCOVERY,
 				keys.clone(),
@@ -424,17 +446,17 @@ where
 	// one for the upcoming session. In addition it could be participating in the current authority
 	// set with two keys. The function does not return all of the local authority discovery public
 	// keys, but only the ones intersecting with the current authority set.
-	fn get_own_public_keys_within_authority_set(&mut self) -> Result<HashSet<AuthorityId>> {
-		let local_pub_keys = self.key_store
-			.read()
+	fn get_own_public_keys_within_authority_set(
+		key_store: &BareCryptoStorePtr,
+		client: &Client,
+	) -> Result<HashSet<AuthorityId>> {
+		let local_pub_keys = key_store.read()
 			.sr25519_public_keys(key_types::AUTHORITY_DISCOVERY)
 			.into_iter()
 			.collect::<HashSet<_>>();
 
-		let id = BlockId::hash(self.client.info().best_hash);
-		let current_authorities = self
-			.client
-			.runtime_api()
+		let id = BlockId::hash(client.info().best_hash);
+		let current_authorities = client.runtime_api()
 			.authorities(&id)
 			.map_err(Error::CallingRuntime)?
 			.into_iter()
@@ -458,7 +480,10 @@ where
 			"Applying priority group {:?} to peerset.", addresses,
 		);
 		self.network
-			.set_priority_group(AUTHORITIES_PRIORITY_GROUP_NAME.to_string(), addresses.into_iter().collect())
+			.set_priority_group(
+				AUTHORITIES_PRIORITY_GROUP_NAME.to_string(),
+				addresses.into_iter().collect(),
+			)
 			.map_err(Error::SettingPeersetPriorityGroup)?;
 
 		Ok(())
