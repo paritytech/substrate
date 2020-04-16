@@ -35,7 +35,7 @@ use super::engine_id_to_string;
 
 use futures::{prelude::*, channel::mpsc, ready};
 use parking_lot::Mutex;
-use prometheus_endpoint::{register, CounterVec, Gauge, Opts, PrometheusError, Registry, U64};
+use prometheus_endpoint::{register, CounterVec, GaugeVec, Opts, PrometheusError, Registry, U64};
 use std::{
 	convert::TryFrom as _,
 	fmt, pin::Pin, sync::Arc,
@@ -77,7 +77,7 @@ impl Drop for Sender {
 	fn drop(&mut self) {
 		let metrics = self.metrics.lock();
 		if let Some(Some(metrics)) = metrics.as_ref().map(|m| &**m) {
-			metrics.num_channels.dec();
+			metrics.num_channels.with_label_values(&[self.name]).dec();
 		}
 	}
 }
@@ -151,11 +151,12 @@ impl OutChannels {
 		debug_assert!(metrics.is_none());
 		*metrics = Some(self.metrics.clone());
 		drop(metrics);
-		self.event_streams.push(sender);
 
 		if let Some(metrics) = &*self.metrics {
-			metrics.num_channels.inc();
+			metrics.num_channels.with_label_values(&[sender.name]).inc();
 		}
+
+		self.event_streams.push(sender);
 	}
 
 	/// Sends an event.
@@ -184,7 +185,7 @@ struct Metrics {
 	// This list is ordered alphabetically
 	events_total: CounterVec<U64>,
 	notifications_sizes: CounterVec<U64>,
-	num_channels: Gauge<U64>,
+	num_channels: GaugeVec<U64>,
 }
 
 impl Metrics {
@@ -206,9 +207,12 @@ impl Metrics {
 				),
 				&["protocol", "action", "name"]
 			)?, registry)?,
-			num_channels: register(Gauge::new(
-				"sub_libp2p_out_events_num_channels",
-				"Number of internal active channels that broadcast network events",
+			num_channels: register(GaugeVec::new(
+				Opts::new(
+					"sub_libp2p_out_events_num_channels",
+					"Number of internal active channels that broadcast network events",
+				),
+				&["name"]
 			)?, registry)?,
 		})
 	}
