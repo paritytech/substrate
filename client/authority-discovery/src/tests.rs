@@ -216,8 +216,8 @@ fn new_registers_metrics() {
 		test_api,
 		network.clone(),
 		vec![],
-		key_store,
 		dht_event_rx.boxed(),
+		Role::Authority(key_store),
 		Some(registry.clone()),
 	);
 
@@ -241,8 +241,8 @@ fn publish_ext_addresses_puts_record_on_dht() {
 		test_api,
 		network.clone(),
 		vec![],
-		key_store,
 		dht_event_rx.boxed(),
+		Role::Authority(key_store),
 		None,
 	);
 
@@ -272,8 +272,8 @@ fn request_addresses_of_others_triggers_dht_get_query() {
 		test_api,
 		network.clone(),
 		vec![],
-		key_store,
 		dht_event_rx.boxed(),
+		Role::Authority(key_store),
 		None,
 	);
 
@@ -301,8 +301,8 @@ fn handle_dht_events_with_value_found_should_call_set_priority_group() {
 		test_api,
 		network.clone(),
 		vec![],
-		key_store,
 		dht_event_rx.boxed(),
+		Role::Authority(key_store),
 		None,
 	);
 
@@ -366,8 +366,8 @@ fn terminate_when_event_stream_terminates() {
 		test_api,
 		network.clone(),
 		vec![],
-		key_store,
 		dht_event_rx.boxed(),
+		Role::Authority(key_store),
 		None,
 	);
 
@@ -407,8 +407,8 @@ fn dont_stop_polling_when_error_is_returned() {
 		test_api,
 		network.clone(),
 		vec![],
-		key_store,
 		dht_event_rx.boxed(),
+		Role::Authority(key_store),
 		None,
 	);
 
