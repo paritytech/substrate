@@ -43,16 +43,17 @@ pub struct ProvingBackendRecorder<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Has
 /// Different kind of proof representation are allowed.
 /// This definition is used as input parameter when producing
 /// a storage proof.
-#[repr(u32)]
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum StorageProofKind {
 	/// The proof can be build by multiple child trie only when
 	/// their query can be done on a single memory backend,
 	/// all encoded node can be stored in the same container.
 	Flatten,
+	// FlattenCompact(CompactScheme),
 	/// Proofs split by child trie.
 	Full,
 	/// Compact form of proofs split by child trie.
+	/// TODO indicate compact scheme to use (BtreeMap?)
 	FullCompact,
 }
 
@@ -62,7 +63,7 @@ impl StorageProofKind {
 	pub fn is_flatten(&self) -> bool {
 		match self {
 			StorageProofKind::Flatten => true,
-			StorageProofKind::Full | StorageProofKind::FullCompact =>  false
+			StorageProofKind::Full | StorageProofKind::FullCompact => false,
 		}
 	}
 
@@ -71,7 +72,17 @@ impl StorageProofKind {
 	pub fn is_compact(&self) -> bool {
 		match self {
 			StorageProofKind::FullCompact => true,
-			StorageProofKind::Full | StorageProofKind::Flatten =>  false
+			StorageProofKind::Full | StorageProofKind::Flatten => false,
+		}
+	}
+
+	/// Indicate if we need all child trie information
+	/// to get register for producing the proof.
+	pub fn need_register_full(&self) -> bool {
+		match self {
+			StorageProofKind::Flatten => false,
+	//		StorageProofKind::FlattenCompact => true,
+			StorageProofKind::Full | StorageProofKind::FullCompact => true,
 		}
 	}
 }
@@ -196,6 +207,10 @@ impl StorageProof {
 		} else {
 			Ok((self, None))
 		}
+	}
+
+	pub fn kind(&self) -> StorageProofKind {
+		unimplemented!()
 	}
 
 	/// This packs `Full` to `FullCompact`, using needed roots.
@@ -489,14 +504,18 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 	}
 
 	/// Extracting the gathered unordered proof.
-	pub fn extract_proof(&self) -> Result<StorageProof, String> {
-		self.0.essence().backend_storage().proof_recorder.extract_proof()
+	pub fn extract_proof(&self, kind: &StorageProofKind) -> Result<StorageProof, String> {
+		self.0.essence().backend_storage().proof_recorder.extract_proof(kind)
 	}
 }
 
 impl<H: Hasher> ProofRecorder<H> {
 	/// Extracting the gathered unordered proof.
-	pub fn extract_proof(&self) -> Result<StorageProof, String> {
+	pub fn extract_proof(&self, kind: &StorageProofKind) -> Result<StorageProof, String> {
+		// TODO EMCH run the kind correctly
+		// flat -> can compress with query plan only and stay flat
+		// full -> can flatte
+		//			-> can compress (compress with query plan is better after being flattened)
 		Ok(match self {
 			ProofRecorder::Flat(rec) => {
 				let trie_nodes = rec
@@ -804,19 +823,25 @@ mod tests {
 	#[test]
 	fn proof_is_empty_until_value_is_read() {
 		let trie_backend = test_trie();
-		assert!(test_proving(&trie_backend, true).extract_proof().unwrap().is_empty());
-		assert!(test_proving(&trie_backend, false).extract_proof().unwrap().is_empty());
+		let kind = StorageProofKind::Flatten;
+		assert!(test_proving(&trie_backend, kind.is_flatten()).extract_proof(&kind).unwrap().is_empty());
+		let kind = StorageProofKind::Full;
+		assert!(test_proving(&trie_backend, kind.is_flatten()).extract_proof(&kind).unwrap().is_empty());
+		let kind = StorageProofKind::FullCompact;
+		assert!(test_proving(&trie_backend, kind.is_flatten()).extract_proof(&kind).unwrap().is_empty());
 	}
 
 	#[test]
 	fn proof_is_non_empty_after_value_is_read() {
 		let trie_backend = test_trie();
-		let backend = test_proving(&trie_backend, true);
+		let kind = StorageProofKind::Flatten;
+		let backend = test_proving(&trie_backend, kind.is_flatten());
 		assert_eq!(backend.storage(b"key").unwrap(), Some(b"value".to_vec()));
-		assert!(!backend.extract_proof().unwrap().is_empty());
-		let backend = test_proving(&trie_backend, false);
+		assert!(!backend.extract_proof(&kind).unwrap().is_empty());
+		let kind = StorageProofKind::Full;
+		let backend = test_proving(&trie_backend, kind.is_flatten());
 		assert_eq!(backend.storage(b"key").unwrap(), Some(b"value".to_vec()));
-		assert!(!backend.extract_proof().unwrap().is_empty());
+		assert!(!backend.extract_proof(&kind).unwrap().is_empty());
 	}
 
 	#[test]
@@ -859,17 +884,18 @@ mod tests {
 		assert_eq!(in_memory_root, trie_root);
 		(0..64).for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i]));
 
-		let test = |flat| {
-			let proving = ProvingBackend::new(trie, flat);
+		let test = |kind: StorageProofKind| {
+			let proving = ProvingBackend::new(trie, kind.is_flatten());
 			assert_eq!(proving.storage(&[42]).unwrap().unwrap(), vec![42]);
 
-			let proof = proving.extract_proof().unwrap();
+			let proof = proving.extract_proof(&kind).unwrap();
 
 			let proof_check = create_proof_check_backend::<BlakeTwo256>(in_memory_root.into(), proof).unwrap();
 			assert_eq!(proof_check.storage(&[42]).unwrap().unwrap(), vec![42]);
 		};
-		test(true);
-		test(false);
+		test(StorageProofKind::Flatten);
+		test(StorageProofKind::Full);
+		test(StorageProofKind::FullCompact);
 	}
 
 	#[test]
@@ -912,11 +938,12 @@ mod tests {
 			vec![i]
 		));
 
-		let test = |flat| {
+		let test = |kind: StorageProofKind| {
+			let flat = kind.is_flatten();
 			let proving = ProvingBackend::new(trie, flat);
 			assert_eq!(proving.storage(&[42]).unwrap().unwrap(), vec![42]);
 
-			let proof = proving.extract_proof().unwrap();
+			let proof = proving.extract_proof(&kind).unwrap();
 
 			let proof_check = create_proof_check_backend::<BlakeTwo256>(
 				in_memory_root.into(),
@@ -931,7 +958,7 @@ mod tests {
 			let proving = ProvingBackend::new(trie, flat);
 			assert_eq!(proving.child_storage(child_info_1, &[64]), Ok(Some(vec![64])));
 
-			let proof = proving.extract_proof().unwrap();
+			let proof = proving.extract_proof(&kind).unwrap();
 			if flat {
 				let proof_check = create_flat_proof_check_backend::<BlakeTwo256>(
 					in_memory_root.into(),
@@ -954,7 +981,8 @@ mod tests {
 				);
 			}
 		};
-		test(true);
-		test(false);
+		test(StorageProofKind::Flatten);
+		test(StorageProofKind::Full);
+		test(StorageProofKind::FullCompact);
 	}
 }

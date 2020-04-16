@@ -371,7 +371,7 @@ pub trait ApiExt<Block: BlockT>: ApiErrorExt {
 	) -> Result<bool, Self::Error> where Self: Sized;
 
 	/// Start recording all accessed trie nodes for generating proofs.
-	fn record_proof(&mut self);
+	fn record_proof(&mut self, kind: StorageProofKind);
 
 	/// Extract the recorded proof.
 	///
@@ -438,7 +438,7 @@ pub struct CallApiAtParams<'a, Block: BlockT, C, NC, Backend: StateBackend<HashF
 	/// The context this function is executed in.
 	pub context: ExecutionContext,
 	/// The optional proof recorder for recording storage accesses.
-	pub recorder: &'a Option<ProofRecorder<Block>>,
+	pub recorder: &'a Option<(ProofRecorder<Block>, StorageProofKind)>,
 }
 
 /// Something that can call into the an api at a given block.

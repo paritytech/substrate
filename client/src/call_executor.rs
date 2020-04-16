@@ -126,7 +126,7 @@ where
 		initialize_block: InitializeBlock<'a, Block>,
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
-		recorder: &Option<ProofRecorder<Block>>,
+		recorder: &Option<(ProofRecorder<Block>, StorageProofKind)>,
 		extensions: Option<Extensions>,
 	) -> Result<NativeOrEncoded<R>, sp_blockchain::Error> where ExecutionManager<EM>: Clone {
 		match initialize_block {
@@ -144,7 +144,7 @@ where
 		let mut state = self.backend.state_at(*at)?;
 
 		match recorder {
-			Some(recorder) => {
+			Some((recorder, _target_proof_kind)) => {
 				let trie_state = state.as_trie_backend()
 					.ok_or_else(||
 						Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof) as Box<dyn sp_state_machine::Error>

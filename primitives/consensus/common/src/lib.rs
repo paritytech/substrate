@@ -36,7 +36,8 @@ use sp_runtime::{
 };
 use futures::prelude::*;
 pub use sp_inherents::InherentData;
-
+use sp_state_machine::StorageProof;
+pub use sp_state_machine::StorageProofKind;
 pub mod block_validation;
 pub mod offline_tracker;
 pub mod error;
@@ -91,7 +92,7 @@ pub struct Proposal<Block: BlockT, Transaction> {
 	/// The block that was build.
 	pub block: Block,
 	/// Optional proof that was recorded while building the block.
-	pub proof: Option<sp_state_machine::StorageProof>,
+	pub proof: Option<StorageProof>,
 	/// The storage changes while building this block.
 	pub storage_changes: sp_state_machine::StorageChanges<Transaction, HashFor<Block>, NumberFor<Block>>,
 }
@@ -104,7 +105,7 @@ pub struct Proposal<Block: BlockT, Transaction> {
 #[derive(Copy, Clone, PartialEq)]
 pub enum RecordProof {
 	/// `Yes`, record a proof.
-	Yes,
+	Yes(StorageProofKind),
 	/// `No`, don't record any proof.
 	No,
 }
@@ -113,8 +114,31 @@ impl RecordProof {
 	/// Returns if `Self` == `Yes`.
 	pub fn yes(&self) -> bool {
 		match self {
-			Self::Yes => true,
+			Self::Yes(_) => true,
 			Self::No => false,
+		}
+	}
+
+	/// Returns storage proof kind.
+	pub fn kind(self) -> Option<StorageProofKind> {
+		match self {
+			Self::Yes(kind) => Some(kind),
+			Self::No => None,
+		}
+	}
+}
+
+impl From<StorageProofKind> for RecordProof {
+	fn from(val: StorageProofKind) -> Self {
+		Self::Yes(val)
+	}
+}
+
+impl From<Option<StorageProofKind>> for RecordProof {
+	fn from(val: Option<StorageProofKind>) -> Self {
+		match val {
+			Some(kind) => Self::Yes(kind),
+			None => Self::No,
 		}
 	}
 }
@@ -122,7 +146,8 @@ impl RecordProof {
 impl From<bool> for RecordProof {
 	fn from(val: bool) -> Self {
 		if val {
-			Self::Yes
+			// default to a flatten proof.
+			Self::Yes(StorageProofKind::Flatten)
 		} else {
 			Self::No
 		}

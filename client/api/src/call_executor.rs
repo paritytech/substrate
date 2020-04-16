@@ -23,6 +23,7 @@ use sp_runtime::{
 };
 use sp_state_machine::{
 	OverlayedChanges, ExecutionManager, ExecutionStrategy, StorageProof,
+	StorageProofKind,
 };
 use sc_executor::{RuntimeVersion, NativeVersion};
 use sp_externalities::Extensions;
@@ -90,7 +91,7 @@ pub trait CallExecutor<B: BlockT> {
 		initialize_block: InitializeBlock<'a, B>,
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
-		proof_recorder: &Option<ProofRecorder<B>>,
+		proof_recorder: &Option<(ProofRecorder<B>, StorageProofKind)>,
 		extensions: Option<Extensions>,
 	) -> sp_blockchain::Result<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone;
 

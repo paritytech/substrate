@@ -128,8 +128,8 @@ where
 
 		let mut api = api.runtime_api();
 
-		if record_proof.yes() {
-			api.record_proof();
+		if let Some(kind) = record_proof.kind() {
+			api.record_proof(kind);
 		}
 
 		let block_id = BlockId::Hash(parent_hash);
@@ -230,7 +230,7 @@ mod tests {
 			&client,
 			client.info().best_hash,
 			client.info().best_number,
-			RecordProof::Yes,
+			RecordProof::Yes(sp_api::StorageProofKind::Flatten),
 			Default::default(),
 			&*backend,
 		).unwrap().build().unwrap();

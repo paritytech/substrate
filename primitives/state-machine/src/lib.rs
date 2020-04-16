@@ -525,7 +525,7 @@ where
 		always_wasm(),
 		None,
 	)?;
-	let mut proof = sm.backend.extract_proof()
+	let mut proof = sm.backend.extract_proof(&kind)
 		.map_err(|e| Box::new(e) as Box<dyn Error>)?;
 	if kind.is_compact() {
 		let roots = trie_backend.extract_registered_roots();
@@ -707,7 +707,7 @@ where
 			.storage(key.as_ref())
 			.map_err(|e| Box::new(e) as Box<dyn Error>)?;
 	}
-	let mut proof = proving_backend.extract_proof()
+	let mut proof = proving_backend.extract_proof(&kind)
 		.map_err(|e| Box::new(e) as Box<dyn Error>)?;
 	if kind.is_compact() {
 		let roots = trie_backend.extract_registered_roots();
@@ -739,7 +739,7 @@ where
 			.child_storage(child_info, key.as_ref())
 			.map_err(|e| Box::new(e) as Box<dyn Error>)?;
 	}
-	let mut proof = proving_backend.extract_proof()
+	let mut proof = proving_backend.extract_proof(&kind)
 		.map_err(|e| Box::new(e) as Box<dyn Error>)?;
 	if kind.is_compact() {
 		let roots = trie_backend.extract_registered_roots();

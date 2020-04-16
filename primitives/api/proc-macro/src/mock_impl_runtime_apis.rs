@@ -94,7 +94,7 @@ fn implement_common_api_traits(
 				Ok(pred(A::VERSION))
 			}
 
-			fn record_proof(&mut self) {
+			fn record_proof(&mut self, _kind: #crate_::StorageProofKind) {
 				unimplemented!("`record_proof` not implemented for runtime api mocks")
 			}
 

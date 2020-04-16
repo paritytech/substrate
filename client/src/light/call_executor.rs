@@ -29,7 +29,7 @@ use sp_externalities::Extensions;
 use sp_state_machine::{
 	self, Backend as StateBackend, OverlayedChanges, ExecutionStrategy, create_proof_check_backend,
 	execution_proof_check_on_trie_backend, ExecutionManager, StorageProof, CloneableSpawn,
-	merge_storage_proofs,
+	merge_storage_proofs, StorageProofKind,
 };
 use hash_db::Hasher;
 
@@ -113,7 +113,7 @@ impl<Block, B, Local> CallExecutor<Block> for
 		initialize_block: InitializeBlock<'a, Block>,
 		_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
-		recorder: &Option<ProofRecorder<Block>>,
+		recorder: &Option<(ProofRecorder<Block>, StorageProofKind)>,
 		extensions: Option<Extensions>,
 	) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
 		// there's no actual way/need to specify native/wasm execution strategy on light node
@@ -348,7 +348,7 @@ mod tests {
 			_initialize_block: InitializeBlock<'a, Block>,
 			_execution_manager: ExecutionManager<EM>,
 			_native_call: Option<NC>,
-			_proof_recorder: &Option<ProofRecorder<Block>>,
+			_proof_recorder: &Option<(ProofRecorder<Block>, StorageProofKind)>,
 			_extensions: Option<Extensions>,
 		) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
 			unreachable!()
