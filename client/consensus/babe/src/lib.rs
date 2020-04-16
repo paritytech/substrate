@@ -91,7 +91,7 @@ use sp_consensus::{
 	ForkChoiceStrategy, BlockImportParams, BlockOrigin, Error as ConsensusError,
 	SelectChain, SlotData,
 };
-use sp_consensus_babe::inherents::BabeInherentData;
+use sp_consensus_epoch_vrf::inherents::SlotInherentData;
 use sp_timestamp::{TimestampInherentData, InherentType as TimestampInherent};
 use sp_consensus::import_queue::{Verifier, BasicQueue, CacheKeyId};
 use sc_client_api::{
@@ -620,7 +620,7 @@ impl SlotCompatible for TimeSource {
 	) -> Result<(TimestampInherent, u64, std::time::Duration), sp_consensus::Error> {
 		trace!(target: "babe", "extract timestamp");
 		data.timestamp_inherent_data()
-			.and_then(|t| data.babe_inherent_data().map(|a| (t, a)))
+			.and_then(|t| data.slot_inherent_data().map(|a| (t, a)))
 			.map_err(Into::into)
 			.map_err(sp_consensus::Error::InherentData)
 			.map(|(x, y)| (x, y, self.0.lock().0.take().unwrap_or_default()))
@@ -780,7 +780,7 @@ impl<Block, Client> Verifier<Block> for BabeVerifier<Block, Client> where
 				// to check that the internally-set timestamp in the inherents
 				// actually matches the slot set in the seal.
 				if let Some(inner_body) = body.take() {
-					inherent_data.babe_replace_inherent_data(slot_number);
+					inherent_data.slot_replace_inherent_data(slot_number);
 					let block = Block::new(pre_header.clone(), inner_body);
 
 					self.check_inherents(
@@ -831,9 +831,9 @@ fn register_babe_inherent_data_provider(
 	slot_duration: u64,
 ) -> Result<(), sp_consensus::Error> {
 	debug!(target: "babe", "Registering");
-	if !inherent_data_providers.has_provider(&sp_consensus_babe::inherents::INHERENT_IDENTIFIER) {
+	if !inherent_data_providers.has_provider(&sp_consensus_epoch_vrf::inherents::INHERENT_IDENTIFIER) {
 		inherent_data_providers
-			.register_provider(sp_consensus_babe::inherents::InherentDataProvider::new(slot_duration))
+			.register_provider(sp_consensus_epoch_vrf::inherents::InherentDataProvider::new(slot_duration))
 			.map_err(Into::into)
 			.map_err(sp_consensus::Error::InherentData)
 	} else {
@@ -1008,7 +1008,7 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 			};
 
 			log!(target: "babe",
-				log_level, 
+				log_level,
 				"👶 New epoch {} launching at block {} (block slot {} >= start slot {}).",
 				viable_epoch.as_ref().epoch_index,
 				hash,

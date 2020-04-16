@@ -127,8 +127,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to 0. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 240,
-	impl_version: 2,
+	spec_version: 241,
+	impl_version: 0,
 	apis: RUNTIME_API_VERSIONS,
 };
 
@@ -222,10 +222,10 @@ parameter_types! {
 	pub const ExpectedBlockTime: Moment = MILLISECS_PER_BLOCK;
 }
 
-impl pallet_babe::Trait for Runtime {
+impl pallet_epoch_vrf::babe::BabeTrait for Runtime {
 	type EpochDuration = EpochDuration;
 	type ExpectedBlockTime = ExpectedBlockTime;
-	type EpochChangeTrigger = pallet_babe::ExternalTrigger;
+	type EpochChangeTrigger = pallet_epoch_vrf::ExternalTrigger;
 }
 
 parameter_types! {
@@ -284,7 +284,7 @@ parameter_types! {
 }
 
 impl pallet_authorship::Trait for Runtime {
-	type FindAuthor = pallet_session::FindAccountFromAuthorIndex<Self, Babe>;
+	type FindAuthor = pallet_session::FindAccountFromAuthorIndex<Self, pallet_epoch_vrf::babe::BabeFindAuthor<Self>>;
 	type UncleGenerations = UncleGenerations;
 	type FilterUncle = ();
 	type EventHandler = (Staking, ImOnline);
@@ -661,7 +661,7 @@ construct_runtime!(
 	{
 		System: frame_system::{Module, Call, Config, Storage, Event<T>},
 		Utility: pallet_utility::{Module, Call, Storage, Event<T>},
-		Babe: pallet_babe::{Module, Call, Storage, Config, Inherent(Timestamp)},
+		Babe: pallet_epoch_vrf::{Module, Call, Storage, Config<T>, Inherent(Timestamp)},
 		Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
 		Authorship: pallet_authorship::{Module, Call, Storage, Inherent},
 		Indices: pallet_indices::{Module, Call, Storage, Config<T>, Event<T>},

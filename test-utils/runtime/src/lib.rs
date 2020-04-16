@@ -418,13 +418,13 @@ parameter_types! {
 	pub const ExpectedBlockTime: u64 = 10_000;
 }
 
-impl pallet_babe::Trait for Runtime {
+impl pallet_epoch_vrf::babe::BabeTrait for Runtime {
 	type EpochDuration = EpochDuration;
 	type ExpectedBlockTime = ExpectedBlockTime;
 	// there is no actual runtime in this test-runtime, so testing crates
 	// are manually adding the digests. normally in this situation you'd use
 	// pallet_babe::SameAuthoritiesForever.
-	type EpochChangeTrigger = pallet_babe::ExternalTrigger;
+	type EpochChangeTrigger = pallet_epoch_vrf::ExternalTrigger;
 }
 
 /// Adds one to the given input and returns the final result.
@@ -635,13 +635,13 @@ cfg_if! {
 						c: (3, 10),
 						genesis_authorities: system::authorities()
 							.into_iter().map(|x|(x, 1)).collect(),
-						randomness: <pallet_babe::Module<Runtime>>::randomness(),
+						randomness: <pallet_epoch_vrf::Module<Runtime>>::randomness(),
 						secondary_slots: true,
 					}
 				}
 
 				fn current_epoch_start() -> SlotNumber {
-					<pallet_babe::Module<Runtime>>::current_epoch_start()
+					<pallet_epoch_vrf::Module<Runtime>>::current_epoch_start()
 				}
 			}
 
@@ -829,13 +829,13 @@ cfg_if! {
 						c: (3, 10),
 						genesis_authorities: system::authorities()
 							.into_iter().map(|x|(x, 1)).collect(),
-						randomness: <pallet_babe::Module<Runtime>>::randomness(),
+						randomness: <pallet_epoch_vrf::Module<Runtime>>::randomness(),
 						secondary_slots: true,
 					}
 				}
 
 				fn current_epoch_start() -> SlotNumber {
-					<pallet_babe::Module<Runtime>>::current_epoch_start()
+					<pallet_epoch_vrf::Module<Runtime>>::current_epoch_start()
 				}
 			}
 

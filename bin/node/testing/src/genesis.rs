@@ -99,7 +99,7 @@ pub fn config_endowed(
 			current_schedule: Default::default(),
 			gas_price: 1 * MILLICENTS,
 		}),
-		pallet_babe: Some(Default::default()),
+		pallet_epoch_vrf: Some(Default::default()),
 		pallet_grandpa: Some(GrandpaConfig {
 			authorities: vec![],
 		}),
