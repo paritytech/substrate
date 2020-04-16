@@ -666,7 +666,7 @@ pub fn equalize<AccountId>(
 		}
 
 		i += 1;
-		if max_diff <= tolerance || i == iterations {
+		if max_diff <= tolerance || i >= iterations {
 			break i;
 		}
 	}
