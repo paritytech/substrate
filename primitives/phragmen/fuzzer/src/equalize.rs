@@ -19,6 +19,8 @@
 //! It ensures that any solution which gets equalized will lead into a better or equally scored
 //! one.
 
+mod common;
+use common::to_range;
 use honggfuzz::fuzz;
 use sp_phragmen::{
 	equalize, assignment_ratio_to_staked, build_support_map, to_without_backing, elect,
@@ -81,14 +83,6 @@ fn generate_random_phragmen_result(
 }
 
 fn main() {
-	let to_range = |x: usize, a: usize, b: usize| {
-		let collapsed = x % b;
-		if collapsed >= a {
-			collapsed
-		} else {
-			collapsed + a
-		}
-	};
 	loop {
 		fuzz!(|data: (usize, usize, usize, usize, usize, u64)| {
 			let (mut target_count, mut voter_count, mut iterations, mut edge_per_voter, mut to_elect, seed) = data;
