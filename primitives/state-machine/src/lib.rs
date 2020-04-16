@@ -525,15 +525,8 @@ where
 		always_wasm(),
 		None,
 	)?;
-	let mut proof = sm.backend.extract_proof(&kind)
+	let proof = proving_backend.extract_proof(&kind)
 		.map_err(|e| Box::new(e) as Box<dyn Error>)?;
-	if kind.is_compact() {
-		let roots = trie_backend.extract_registered_roots();
-		if let Some(roots) = roots {
-			proof = proof.pack::<H>(&roots)
-				.map_err(|e| Box::new(e) as Box<dyn Error>)?;
-		}
-	}
 	Ok((result.into_encoded(), proof))
 }
 

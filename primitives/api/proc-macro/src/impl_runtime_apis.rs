@@ -291,7 +291,9 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				self.recorder
 					.take()
 					.and_then(|(recorder, kind)| {
-						recorder.extract_proof(&kind).ok()
+						// TODO EMCH this will fail for compact as we need the register
+						// root
+						recorder.extract_proof(&kind, None).ok()
 					})
 			}
 

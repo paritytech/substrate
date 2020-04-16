@@ -52,7 +52,7 @@ pub(crate) fn prepare_input<'a, B, H, Number>(
 	where
 		B: Backend<H>,
 		H: Hasher + 'a,
-		H::Out: Encode,
+		H::Out: Decode + Encode,
 		Number: BlockNumber,
 {
 	let number = parent.number.clone() + One::one();
@@ -212,7 +212,7 @@ fn prepare_digest_input<'a, H, Number>(
 	), String>
 	where
 		H: Hasher,
-		H::Out: 'a + Encode,
+		H::Out: 'a + Decode + Encode,
 		Number: BlockNumber,
 {
 	let build_skewed_digest = config.end.as_ref() == Some(&block);
@@ -285,6 +285,7 @@ fn prepare_digest_input<'a, H, Number>(
 				let trie_storage = TrieBackendEssence::<_, H>::new(
 					crate::changes_trie::TrieBackendStorageAdapter(storage),
 					trie_root,
+					None,
 				);
 
 				trie_storage.for_key_values_with_prefix(&child_prefix, |key, value|
@@ -317,6 +318,7 @@ fn prepare_digest_input<'a, H, Number>(
 				let trie_storage = TrieBackendEssence::<_, H>::new(
 					crate::changes_trie::TrieBackendStorageAdapter(storage),
 					trie_root,
+					None,
 				);
 				trie_storage.for_keys_with_prefix(&extrinsic_prefix, |key|
 					if let Ok(InputKey::ExtrinsicIndex::<Number>(trie_key)) = Decode::decode(&mut &key[..]) {

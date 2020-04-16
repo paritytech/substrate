@@ -27,8 +27,9 @@ use sp_trie::{Trie, MemoryDB, PrefixedMemoryDB, DBValue,
 	for_keys_in_child_trie, KeySpacedDB, TrieDBIterator};
 use sp_trie::trie_types::{TrieDB, TrieError, Layout};
 use crate::{backend::Consolidate, StorageKey, StorageValue};
-use sp_core::storage::{ChildInfo, ChildrenProofMap};
-use codec::Encode;
+use sp_core::storage::{ChildInfo, ChildrenProofMap, ChildrenMap};
+use codec::{Decode, Encode};
+use parking_lot::RwLock;
 
 /// Patricia trie-based storage trait.
 pub trait Storage<H: Hasher>: Send + Sync {
@@ -40,14 +41,23 @@ pub trait Storage<H: Hasher>: Send + Sync {
 pub struct TrieBackendEssence<S: TrieBackendStorage<H>, H: Hasher> {
 	storage: S,
 	root: H::Out,
+	/// If defined, we store encoded visited roots for top_trie and child trie in this
+	/// map. It also act as a cache.
+	/// TODO EMCH switch to register encoded value (this assumes same hash out between child)
+	pub register_roots: Option<Arc<RwLock<ChildrenMap<Option<H::Out>>>>>,
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out: Encode {
+impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out: Decode + Encode {
 	/// Create new trie-based backend.
-	pub fn new(storage: S, root: H::Out) -> Self {
+	pub fn new(
+		storage: S,
+		root: H::Out,
+		register_roots: Option<Arc<RwLock<ChildrenMap<Option<H::Out>>>>>,
+	) -> Self {
 		TrieBackendEssence {
 			storage,
 			root,
+			register_roots,
 		}
 	}
 
@@ -73,8 +83,39 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 	}
 
 	/// Access the root of the child storage in its parent trie
-	fn child_root(&self, child_info: &ChildInfo) -> Result<Option<StorageValue>, String> {
-		self.storage(child_info.prefixed_storage_key().as_slice())
+	pub(crate) fn child_root_encoded(&self, child_info: &ChildInfo) -> Result<Option<StorageValue>, String> {
+		if let Some(cache) = self.register_roots.as_ref() {
+			if let Some(result) = cache.read().get(child_info) {
+				return Ok(result.map(|root| root.encode()));
+			}
+		}
+
+		let root: Option<StorageValue> = self.storage(&child_info.prefixed_storage_key()[..])?;
+
+		if let Some(cache) = self.register_roots.as_ref() {
+			let root = root.as_ref().and_then(|encoded_root| Decode::decode(&mut &encoded_root[..]).ok());
+			cache.write().insert(child_info.clone(), root);
+		}
+
+		Ok(root)
+	}
+
+	/// Access the root of the child storage in its parent trie
+	fn child_root(&self, child_info: &ChildInfo) -> Result<Option<H::Out>, String> {
+		if let Some(cache) = self.register_roots.as_ref() {
+			if let Some(result) = cache.read().get(child_info) {
+				return Ok(result.clone());
+			}
+		}
+
+		let root: Option<H::Out> = self.storage(&child_info.prefixed_storage_key()[..])?
+			.and_then(|encoded_root| Decode::decode(&mut &encoded_root[..]).ok());
+
+		if let Some(cache) = self.register_roots.as_ref() {
+			cache.write().insert(child_info.clone(), root);
+		}
+
+		Ok(root)
 	}
 
 	/// Return the next key in the child trie i.e. the minimum key that is strictly superior to
@@ -84,18 +125,10 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageKey>, String> {
-		let child_root = match self.child_root(child_info)? {
+		let hash = match self.child_root(child_info)? {
 			Some(child_root) => child_root,
 			None => return Ok(None),
 		};
-
-		let mut hash = H::Out::default();
-
-		if child_root.len() != hash.as_ref().len() {
-			return Err(format!("Invalid child storage hash at {:?}", child_info.storage_key()));
-		}
-		// note: child_root and hash must be same size, panics otherwise.
-		hash.as_mut().copy_from_slice(&child_root[..]);
 
 		self.next_storage_key_from_root(&hash, Some(child_info), key)
 	}
@@ -173,7 +206,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageValue>, String> {
-		let root = self.child_root(child_info)?
+		let root = self.child_root_encoded(child_info)?
 			.unwrap_or(empty_child_trie_root::<Layout<H>>().encode());
 
 		let mut read_overlay = S::Overlay::default();
@@ -196,7 +229,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		child_info: &ChildInfo,
 		f: F,
 	) {
-		let root = match self.child_root(child_info) {
+		let root = match self.child_root_encoded(child_info) {
 			Ok(v) => v.unwrap_or(empty_child_trie_root::<Layout<H>>().encode()),
 			Err(e) => {
 				debug!(target: "trie", "Error while iterating child storage: {}", e);
@@ -229,7 +262,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		prefix: &[u8],
 		mut f: F,
 	) {
-		let root_vec = match self.child_root(child_info) {
+		let root_vec = match self.child_root_encoded(child_info) {
 			Ok(v) => v.unwrap_or(empty_child_trie_root::<Layout<H>>().encode()),
 			Err(e) => {
 				debug!(target: "trie", "Error while iterating child storage: {}", e);
@@ -516,7 +549,7 @@ mod test {
 				.expect("insert failed");
 		};
 
-		let essence_1 = TrieBackendEssence::new(mdb, root_1);
+		let essence_1 = TrieBackendEssence::new(mdb, root_1, None);
 
 		assert_eq!(essence_1.next_storage_key(b"2"), Ok(Some(b"3".to_vec())));
 		assert_eq!(essence_1.next_storage_key(b"3"), Ok(Some(b"4".to_vec())));
@@ -525,7 +558,7 @@ mod test {
 		assert_eq!(essence_1.next_storage_key(b"6"), Ok(None));
 
 		let mdb = essence_1.into_storage();
-		let essence_2 = TrieBackendEssence::new(mdb, root_2);
+		let essence_2 = TrieBackendEssence::new(mdb, root_2, None);
 
 		assert_eq!(
 			essence_2.next_child_storage_key(child_info, b"2"), Ok(Some(b"3".to_vec()))

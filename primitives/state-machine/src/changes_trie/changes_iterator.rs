@@ -130,7 +130,7 @@ pub fn key_changes_proof_check<'a, H: Hasher, Number: BlockNumber>(
 	max: Number,
 	storage_key: Option<&PrefixedStorageKey>,
 	key: &[u8]
-) -> Result<Vec<(Number, u32)>, String> where H::Out: Encode {
+) -> Result<Vec<(Number, u32)>, String> where H::Out: Decode + Encode {
 	key_changes_proof_check_with_db(
 		config,
 		roots_storage,
@@ -153,7 +153,7 @@ pub fn key_changes_proof_check_with_db<'a, H: Hasher, Number: BlockNumber>(
 	max: Number,
 	storage_key: Option<&PrefixedStorageKey>,
 	key: &[u8]
-) -> Result<Vec<(Number, u32)>, String> where H::Out: Encode {
+) -> Result<Vec<(Number, u32)>, String> where H::Out: Decode + Encode {
 	// we can't query any roots before root
 	let max = ::std::cmp::min(max.clone(), end.number.clone());
 
@@ -318,13 +318,13 @@ pub struct DrilldownIterator<'a, H, Number>
 }
 
 impl<'a, H: Hasher, Number: BlockNumber> Iterator for DrilldownIterator<'a, H, Number>
-	where H::Out: Encode
+	where H::Out: Decode + Encode
 {
 	type Item = Result<(Number, u32), String>;
 
 	fn next(&mut self) -> Option<Self::Item> {
 		self.essence.next(|storage, root, key|
-			TrieBackendEssence::<_, H>::new(TrieBackendAdapter::new(storage), root).storage(key))
+			TrieBackendEssence::<_, H>::new(TrieBackendAdapter::new(storage), root, None).storage(key))
 	}
 }
 
@@ -368,7 +368,7 @@ impl<'a, H, Number> Iterator for ProvingDrilldownIterator<'a, H, Number>
 			.expect("only fails when already borrowed; storage() is non-reentrant; qed");
 		self.essence.next(|storage, root, key|
 			ProvingBackendRecorder::<_, H> {
-				backend: &TrieBackendEssence::new(TrieBackendAdapter::new(storage), root),
+				backend: &TrieBackendEssence::new(TrieBackendAdapter::new(storage), root, None),
 				proof_recorder,
 			}.storage(key))
 	}

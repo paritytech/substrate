@@ -230,7 +230,7 @@ pub fn build_changes_trie<'a, B: Backend<H>, H: Hasher, Number: BlockNumber>(
 	panic_on_storage_error: bool,
 ) -> Result<Option<(MemoryDB<H>, H::Out, CacheAction<H::Out, Number>)>, ()>
 	where
-		H::Out: Ord + 'static + Encode,
+		H::Out: Ord + 'static + Decode + Encode,
 {
 	/// Panics when `res.is_err() && panic`, otherwise it returns `Err(())` on an error.
 	fn maybe_panic<R, E: std::fmt::Debug>(

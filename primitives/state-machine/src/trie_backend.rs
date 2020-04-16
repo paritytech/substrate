@@ -20,7 +20,7 @@ use log::{warn, debug};
 use hash_db::Hasher;
 use sp_trie::{Trie, delta_trie_root, empty_child_trie_root, child_delta_trie_root};
 use sp_trie::trie_types::{TrieDB, TrieError, Layout};
-use sp_core::storage::{ChildInfo, ChildInfoProof, ChildType, ChildrenMap, ChildrenProofMap};
+use sp_core::storage::{ChildInfo, ChildInfoProof, ChildType, ChildrenProofMap};
 use codec::{Codec, Decode, Encode};
 use crate::{
 	StorageKey, StorageValue, Backend,
@@ -32,9 +32,6 @@ use parking_lot::RwLock;
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
 pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
 	essence: TrieBackendEssence<S, H>,
-	/// If defined, we store encoded visited roots for top_trie and child trie in this
-	/// map. It also act as a cache.
-	register_roots: Option<Arc<RwLock<ChildrenMap<Option<H::Out>>>>>,
 }
 
 impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: Codec {
@@ -42,28 +39,29 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: Codec 
 	/// TODO check if still used
 	pub fn new(storage: S, root: H::Out) -> Self {
 		TrieBackend {
-			essence: TrieBackendEssence::new(storage, root),
-			register_roots: None,
+			essence: TrieBackendEssence::new(storage, root, None),
 		}
 	}
 
 	/// Activate storage of roots (can be use
 	/// to pack proofs and does small caching of child trie root)).
 	pub fn new_with_roots(storage: S, root: H::Out) -> Self {
+		let register_roots = Some(Arc::new(RwLock::new(Default::default())));
 		TrieBackend {
-			essence: TrieBackendEssence::new(storage, root),
-			register_roots: Some(Arc::new(RwLock::new(Default::default()))),
+			essence: TrieBackendEssence::new(storage, root, register_roots),
 		}
 	}
 
 	/// Get registered roots
 	pub fn extract_registered_roots(&self) -> Option<ChildrenProofMap<Vec<u8>>> {
-		if let Some(register_roots) = self.register_roots.as_ref() {
+		if let Some(register_roots) = self.essence.register_roots.as_ref() {
 			let mut dest = ChildrenProofMap::default();
 			dest.insert(ChildInfoProof::top_trie(), self.essence.root().encode());
 			let read_lock = register_roots.read();
 			for (child_info, root) in read_lock.iter() {
-				dest.insert(child_info.proof_info(), root.encode());
+				if let Some(root) = root {
+					dest.insert(child_info.proof_info(), root.encode());
+				}
 			}
 			Some(dest)
 		} else {
@@ -234,8 +232,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		};
 
 		let mut write_overlay = S::Overlay::default();
-		let prefixed_storage_key = child_info.prefixed_storage_key();
-		let mut root = match self.storage(prefixed_storage_key.as_slice()) {
+		let mut root = match self.essence.child_root_encoded(child_info) {
 			Ok(value) =>
 				value.and_then(|r| Decode::decode(&mut &r[..]).ok()).unwrap_or(default_root.clone()),
 			Err(e) => {

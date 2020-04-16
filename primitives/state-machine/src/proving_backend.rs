@@ -209,10 +209,6 @@ impl StorageProof {
 		}
 	}
 
-	pub fn kind(&self) -> StorageProofKind {
-		unimplemented!()
-	}
-
 	/// This packs `Full` to `FullCompact`, using needed roots.
 	pub fn pack<H: Hasher>(self, roots: &ChildrenProofMap<Vec<u8>>) -> Result<Self, String>
 		where H::Out: Codec,
@@ -241,8 +237,6 @@ impl StorageProof {
 	/// This flatten `Full` to `Flatten`.
 	/// Note that if for some reason child proof were not
 	/// attached to the top trie, they will be lost.
-	/// Generally usage of Flatten kind or this function
-	/// when using child trie is not recommended.
 	pub fn flatten(self) -> Self {
 		if let StorageProof::Full(children) = self {
 			let mut result = Vec::new();
@@ -500,18 +494,34 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 			backend: essence.backend_storage(),
 			proof_recorder,
 		};
+		// TODO registering root can be disabled in most case:
+		// would simply need target proof as parameter (same thing for new
+		// function).
 		ProvingBackend(TrieBackend::new_with_roots(recorder, root))
 	}
 
 	/// Extracting the gathered unordered proof.
 	pub fn extract_proof(&self, kind: &StorageProofKind) -> Result<StorageProof, String> {
-		self.0.essence().backend_storage().proof_recorder.extract_proof(kind)
+		// TODO we actually check a given type of compaction.
+		let roots = if kind.is_compact() {
+			self.0.extract_registered_roots()
+		} else {
+			None
+		};
+		self.0.essence().backend_storage().proof_recorder.extract_proof(kind, roots)
 	}
 }
 
-impl<H: Hasher> ProofRecorder<H> {
+impl<H: Hasher> ProofRecorder<H>
+	where
+		H::Out: Codec,
+{
 	/// Extracting the gathered unordered proof.
-	pub fn extract_proof(&self, kind: &StorageProofKind) -> Result<StorageProof, String> {
+	pub fn extract_proof(
+		&self,
+		kind: &StorageProofKind,
+		registered_roots: Option<ChildrenProofMap<Vec<u8>>>,
+	) -> Result<StorageProof, String> {
 		// TODO EMCH run the kind correctly
 		// flat -> can compress with query plan only and stay flat
 		// full -> can flatte
@@ -523,7 +533,11 @@ impl<H: Hasher> ProofRecorder<H> {
 					.iter()
 					.filter_map(|(_k, v)| v.as_ref().map(|v| v.to_vec()))
 					.collect();
-				StorageProof::Flatten(trie_nodes)
+				match kind {
+					StorageProofKind::Flatten => StorageProof::Flatten(trie_nodes),
+// TODO flatten compact for a given set of keys work StorageProofKind::FlattenCompact => StorageProof::Flatten(trie_nodes),
+					_ => return Err("Invalid proof kind for a flat proof record".to_string()),
+				}
 			},
 			ProofRecorder::Full(rec) => {
 				let mut children = ChildrenProofMap::default();
@@ -534,7 +548,18 @@ impl<H: Hasher> ProofRecorder<H> {
 						.collect();
 					children.insert(child_info.proof_info(), trie_nodes);
 				}
-				StorageProof::Full(children)
+				let unpacked_full = StorageProof::Full(children);
+				match kind {
+					StorageProofKind::Flatten => unpacked_full.flatten(),
+					StorageProofKind::Full => unpacked_full,
+					StorageProofKind::FullCompact => {
+						if let Some(roots) = registered_roots {
+							unpacked_full.pack::<H>(&roots)?
+						} else {
+							return Err("Cannot compact without roots".to_string());
+						}
+					},
+				}
 			},
 		})
 	}
