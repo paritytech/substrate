@@ -59,6 +59,17 @@ pub trait SystemApi<Hash, Number> {
 	#[rpc(name = "system_health", returns = "Health")]
 	fn system_health(&self) -> Receiver<Health>;
 
+	/// Returns the base58-encoded PeerId of the node.
+	#[rpc(name = "system_localPeerId", returns = "String")]
+	fn system_local_peer_id(&self) -> Receiver<String>;
+
+	/// Returns the multiaddresses that the local node is listening on
+	///
+	/// The addresses include a trailing `/p2p/` with the local PeerId, and are thus suitable to
+	/// be passed to `system_addReservedPeer` or as a bootnode address for example.
+	#[rpc(name = "system_localListenAddresses", returns = "Vec<String>")]
+	fn system_local_listen_addresses(&self) -> Receiver<Vec<String>>;
+
 	/// Returns currently connected peers
 	#[rpc(name = "system_peers", returns = "Vec<PeerInfo<Hash, Number>>")]
 	fn system_peers(&self) -> Receiver<Vec<PeerInfo<Hash, Number>>>;

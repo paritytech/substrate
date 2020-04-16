@@ -478,6 +478,18 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		self.network_service.user_protocol_mut().on_block_finalized(hash, &header);
 	}
 
+	/// Returns the local `PeerId`.
+	pub fn local_peer_id(&self) -> &PeerId {
+		Swarm::<B, H>::local_peer_id(&self.network_service)
+	}
+
+	/// Returns the list of addresses we are listening on.
+	///
+	/// Does **NOT** include a trailing `/p2p/` with our `PeerId`.
+	pub fn listen_addresses(&self) -> impl Iterator<Item = &Multiaddr> {
+		Swarm::<B, H>::listeners(&self.network_service)
+	}
+
 	/// Get network state.
 	///
 	/// **Note**: Use this only for debugging. This API is unstable. There are warnings literally
