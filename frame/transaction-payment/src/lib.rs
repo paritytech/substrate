@@ -40,7 +40,7 @@ use frame_support::{
 	dispatch::DispatchResult,
 };
 use sp_runtime::{
-	Fixed64,
+	Fixed128,
 	transaction_validity::{
 		TransactionPriority, ValidTransaction, InvalidTransaction, TransactionValidityError,
 		TransactionValidity,
@@ -52,7 +52,7 @@ use sp_runtime::{
 };
 use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 
-type Multiplier = Fixed64;
+type Multiplier = Fixed128;
 type BalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> =
@@ -178,10 +178,10 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> where
 			let adjustable_fee = len_fee.saturating_add(weight_fee);
 			let targeted_fee_adjustment = NextFeeMultiplier::get();
 			// adjusted_fee = adjustable_fee + (adjustable_fee * targeted_fee_adjustment)
-			let adjusted_fee = targeted_fee_adjustment.saturated_multiply_accumulate(adjustable_fee);
+			let adjusted_fee = targeted_fee_adjustment.saturated_multiply_accumulate(adjustable_fee.saturated_into());
 
 			let base_fee = T::TransactionBaseFee::get();
-			base_fee.saturating_add(adjusted_fee).saturating_add(tip)
+			base_fee.saturating_add(adjusted_fee.saturated_into()).saturating_add(tip)
 		} else {
 			tip
 		}
@@ -307,6 +307,7 @@ impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T> whe
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use core::num::NonZeroI128;
 	use codec::Encode;
 	use frame_support::{
 		impl_outer_dispatch, impl_outer_origin, parameter_types,
@@ -360,6 +361,7 @@ mod tests {
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
+		type DbWeight = ();
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
@@ -595,7 +597,7 @@ mod tests {
 			.execute_with(||
 		{
 			// all fees should be x1.5
-			NextFeeMultiplier::put(Fixed64::from_rational(1, 2));
+			NextFeeMultiplier::put(Fixed128::from_rational(1, NonZeroI128::new(2).unwrap()));
 			let len = 10;
 
 			assert!(
@@ -623,7 +625,7 @@ mod tests {
 			.execute_with(||
 		{
 			// all fees should be x1.5
-			NextFeeMultiplier::put(Fixed64::from_rational(1, 2));
+			NextFeeMultiplier::put(Fixed128::from_rational(1, NonZeroI128::new(2).unwrap()));
 
 			assert_eq!(
 				TransactionPayment::query_info(xt, len),
@@ -652,7 +654,7 @@ mod tests {
 			.execute_with(||
 		{
 			// Next fee multiplier is zero
-			assert_eq!(NextFeeMultiplier::get(), Fixed64::from_natural(0));
+			assert_eq!(NextFeeMultiplier::get(), Fixed128::from_natural(0));
 
 			// Tip only, no fees works
 			let dispatch_info = DispatchInfo {
@@ -692,7 +694,7 @@ mod tests {
 			.execute_with(||
 		{
 			// Add a next fee multiplier
-			NextFeeMultiplier::put(Fixed64::from_rational(1, 2)); // = 1/2 = .5
+			NextFeeMultiplier::put(Fixed128::from_rational(1, NonZeroI128::new(2).unwrap())); // = 1/2 = .5
 			// Base fee is unaffected by multiplier
 			let dispatch_info = DispatchInfo {
 				weight: 0,
@@ -726,7 +728,7 @@ mod tests {
 		{
 			// Overflow is handled
 			let dispatch_info = DispatchInfo {
-				weight: <u32>::max_value(),
+				weight: Weight::max_value(),
 				class: DispatchClass::Operational,
 				pays_fee: true,
 			};
