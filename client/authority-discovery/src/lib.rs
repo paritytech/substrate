@@ -56,12 +56,11 @@ use futures_timer::Delay;
 
 use codec::{Decode, Encode};
 use error::{Error, Result};
-use libp2p::Multiaddr;
 use log::{debug, error, log_enabled, warn};
 use prometheus_endpoint::{Counter, CounterVec, Gauge, Opts, U64, register};
 use prost::Message;
 use sc_client_api::blockchain::HeaderBackend;
-use sc_network::{DhtEvent, ExHashT, NetworkStateInfo};
+use sc_network::{Multiaddr, config::MultiaddrWithPeerId, DhtEvent, ExHashT, NetworkStateInfo};
 use sp_authority_discovery::{AuthorityDiscoveryApi, AuthorityId, AuthoritySignature, AuthorityPair};
 use sp_core::crypto::{key_types, CryptoTypePublicPair, Pair};
 use sp_core::traits::BareCryptoStorePtr;
@@ -87,53 +86,6 @@ const LIBP2P_KADEMLIA_BOOTSTRAP_TIME: Duration = Duration::from_secs(30);
 /// Name of the Substrate peerset priority group for authorities discovered through the authority
 /// discovery module.
 const AUTHORITIES_PRIORITY_GROUP_NAME: &'static str = "authorities";
-
-/// Prometheus metrics for an `AuthorityDiscovery`.
-#[derive(Clone)]
-pub(crate) struct Metrics {
-	publish: Counter<U64>,
-	amount_last_published: Gauge<U64>,
-	request: Counter<U64>,
-	dht_event_received: CounterVec<U64>,
-}
-
-impl Metrics {
-	pub(crate) fn register(registry: &prometheus_endpoint::Registry) -> Result<Self> {
-		Ok(Self {
-			publish: register(
-				Counter::new(
-					"authority_discovery_times_published_total",
-					"Number of times authority discovery has published external addresses."
-				)?,
-				registry,
-			)?,
-			amount_last_published: register(
-				Gauge::new(
-					"authority_discovery_amount_external_addresses_last_published",
-					"Number of external addresses published when authority discovery last published addresses ."
-				)?,
-				registry,
-			)?,
-			request: register(
-				Counter::new(
-					"authority_discovery_times_requested_total",
-					"Number of times authority discovery has requested external addresses."
-				)?,
-				registry,
-			)?,
-			dht_event_received: register(
-				CounterVec::new(
-					Opts::new(
-						"authority_discovery_dht_event_received",
-						"Number of dht events received by authority discovery."
-					),
-					&["name"],
-				)?,
-				registry,
-			)?,
-		})
-	}
-}
 
 /// An `AuthorityDiscovery` makes a given authority discoverable and discovers other authorities.
 pub struct AuthorityDiscovery<Client, Network, Block>
@@ -187,7 +139,7 @@ where
 	pub fn new(
 		client: Arc<Client>,
 		network: Arc<Network>,
-		sentry_nodes: Vec<String>,
+		sentry_nodes: Vec<MultiaddrWithPeerId>,
 		key_store: BareCryptoStorePtr,
 		dht_event_rx: Pin<Box<dyn Stream<Item = DhtEvent> + Send>>,
 		prometheus_registry: Option<prometheus_endpoint::Registry>,
@@ -210,18 +162,7 @@ where
 		);
 
 		let sentry_nodes = if !sentry_nodes.is_empty() {
-			let addrs = sentry_nodes.into_iter().filter_map(|a| match a.parse() {
-				Ok(addr) => Some(addr),
-				Err(e) => {
-					error!(
-						target: "sub-authority-discovery",
-						"Failed to parse sentry node public address '{:?}', continuing anyways.", e,
-					);
-					None
-				}
-			}).collect::<Vec<Multiaddr>>();
-
-			Some(addrs)
+			Some(sentry_nodes.into_iter().map(|ma| ma.concat()).collect::<Vec<_>>())
 		} else {
 			None
 		};
@@ -312,7 +253,7 @@ where
 				.map_err(Error::EncodingProto)?;
 
 			self.network.put_value(
-				hash_authority_id(key.1.as_ref())?,
+				hash_authority_id(key.1.as_ref()),
 				signed_addresses,
 			);
 		}
@@ -321,10 +262,6 @@ where
 	}
 
 	fn request_addresses_of_others(&mut self) -> Result<()> {
-		if let Some(metrics) = &self.metrics {
-			metrics.request.inc();
-		}
-
 		let id = BlockId::hash(self.client.info().best_hash);
 
 		let authorities = self
@@ -334,17 +271,21 @@ where
 			.map_err(Error::CallingRuntime)?;
 
 		for authority_id in authorities.iter() {
+			if let Some(metrics) = &self.metrics {
+				metrics.request.inc();
+			}
+
 			self.network
-				.get_value(&hash_authority_id(authority_id.as_ref())?);
+				.get_value(&hash_authority_id(authority_id.as_ref()));
 		}
 
 		Ok(())
 	}
 
 	fn handle_dht_events(&mut self, cx: &mut Context) -> Result<()> {
-		while let Poll::Ready(Some(event)) = self.dht_event_rx.poll_next_unpin(cx) {
-			match event {
-				DhtEvent::ValueFound(v) => {
+		loop {
+			match self.dht_event_rx.poll_next_unpin(cx) {
+				Poll::Ready(Some(DhtEvent::ValueFound(v))) => {
 					if let Some(metrics) = &self.metrics {
 						metrics.dht_event_received.with_label_values(&["value_found"]).inc();
 					}
@@ -359,7 +300,7 @@ where
 
 					self.handle_dht_value_found_event(v)?;
 				}
-				DhtEvent::ValueNotFound(hash) => {
+				Poll::Ready(Some(DhtEvent::ValueNotFound(hash))) => {
 					if let Some(metrics) = &self.metrics {
 						metrics.dht_event_received.with_label_values(&["value_not_found"]).inc();
 					}
@@ -369,7 +310,7 @@ where
 						"Value for hash '{:?}' not found on Dht.", hash
 					)
 				},
-				DhtEvent::ValuePut(hash) => {
+				Poll::Ready(Some(DhtEvent::ValuePut(hash))) => {
 					if let Some(metrics) = &self.metrics {
 						metrics.dht_event_received.with_label_values(&["value_put"]).inc();
 					}
@@ -379,7 +320,7 @@ where
 						"Successfully put hash '{:?}' on Dht.", hash,
 					)
 				},
-				DhtEvent::ValuePutFailed(hash) => {
+				Poll::Ready(Some(DhtEvent::ValuePutFailed(hash))) => {
 					if let Some(metrics) = &self.metrics {
 						metrics.dht_event_received.with_label_values(&["value_put_failed"]).inc();
 					}
@@ -389,10 +330,12 @@ where
 						"Failed to put hash '{:?}' on Dht.", hash
 					)
 				},
+				// The sender side of the dht event stream has been closed, likely due to the
+				// network terminating.
+				Poll::Ready(None) => return Err(Error::DhtEventStreamTerminated),
+				Poll::Pending => return Ok(()),
 			}
 		}
-
-		Ok(())
 	}
 
 	fn handle_dht_value_found_event(
@@ -420,8 +363,8 @@ where
 			self.addr_cache.retain_ids(&authorities);
 			authorities
 				.into_iter()
-				.map(|id| hash_authority_id(id.as_ref()).map(|h| (h, id)))
-				.collect::<Result<HashMap<_, _>>>()?
+				.map(|id| (hash_authority_id(id.as_ref()), id))
+				.collect::<HashMap<_, _>>()
 		};
 
 		// Check if the event origins from an authority in the current authority set.
@@ -495,7 +438,6 @@ where
 	}
 
 	/// Update the peer set 'authority' priority group.
-	//
 	fn update_peer_set_priority_group(&self) -> Result<()> {
 		let addresses = self.addr_cache.get_subset();
 
@@ -549,14 +491,19 @@ where
 			Ok(())
 		};
 
-		match inner() {
-			Ok(()) => {}
-			Err(e) => error!(target: "sub-authority-discovery", "Poll failure: {:?}", e),
-		};
+		loop {
+			match inner() {
+				Ok(()) => return Poll::Pending,
 
-		// Make sure to always return NotReady as this is a long running task with the same lifetime
-		// as the node itself.
-		Poll::Pending
+				// Handle fatal errors.
+				//
+				// Given that the network likely terminated authority discovery should do the same.
+				Err(Error::DhtEventStreamTerminated) => return Poll::Ready(()),
+
+				// Handle non-fatal errors.
+				Err(e) => error!(target: "sub-authority-discovery", "Poll failure: {:?}", e),
+			};
+		}
 	}
 }
 
@@ -598,10 +545,8 @@ where
 	}
 }
 
-fn hash_authority_id(id: &[u8]) -> Result<libp2p::kad::record::Key> {
-	libp2p::multihash::encode(libp2p::multihash::Hash::SHA2256, id)
-		.map(|k| libp2p::kad::record::Key::new(&k))
-		.map_err(Error::HashingAuthorityId)
+fn hash_authority_id(id: &[u8]) -> libp2p::kad::record::Key {
+	libp2p::kad::record::Key::new(&libp2p::multihash::Sha2_256::digest(id))
 }
 
 fn interval_at(start: Instant, duration: Duration) -> Interval {
@@ -612,4 +557,53 @@ fn interval_at(start: Instant, duration: Duration) -> Interval {
 	});
 
 	Box::new(stream)
+}
+
+/// Prometheus metrics for an `AuthorityDiscovery`.
+#[derive(Clone)]
+pub(crate) struct Metrics {
+	publish: Counter<U64>,
+	amount_last_published: Gauge<U64>,
+	request: Counter<U64>,
+	dht_event_received: CounterVec<U64>,
+}
+
+impl Metrics {
+	pub(crate) fn register(registry: &prometheus_endpoint::Registry) -> Result<Self> {
+		Ok(Self {
+			publish: register(
+				Counter::new(
+					"authority_discovery_times_published_total",
+					"Number of times authority discovery has published external addresses."
+				)?,
+				registry,
+			)?,
+			amount_last_published: register(
+				Gauge::new(
+					"authority_discovery_amount_external_addresses_last_published",
+					"Number of external addresses published when authority discovery last \
+					 published addresses."
+				)?,
+				registry,
+			)?,
+			request: register(
+				Counter::new(
+					"authority_discovery_authority_addresses_requested_total",
+					"Number of times authority discovery has requested external addresses of a \
+					 single authority."
+				)?,
+				registry,
+			)?,
+			dht_event_received: register(
+				CounterVec::new(
+					Opts::new(
+						"authority_discovery_dht_event_received",
+						"Number of dht events received by authority discovery."
+					),
+					&["name"],
+				)?,
+				registry,
+			)?,
+		})
+	}
 }

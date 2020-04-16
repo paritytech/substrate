@@ -25,9 +25,8 @@ use serde::{Serialize, Deserialize};
 use sp_core::storage::{StorageKey, StorageData, ChildInfo, Storage, StorageChild};
 use sp_runtime::BuildStorage;
 use serde_json as json;
-use crate::RuntimeGenesis;
-use crate::extension::GetExtension;
-use sc_network::Multiaddr;
+use crate::{RuntimeGenesis, ChainType, extension::GetExtension, Properties};
+use sc_network::config::MultiaddrWithPeerId;
 use sc_telemetry::TelemetryEndpoints;
 
 enum GenesisSource<G> {
@@ -137,7 +136,9 @@ enum Genesis<G> {
 struct ClientSpec<E> {
 	name: String,
 	id: String,
-	boot_nodes: Vec<String>,
+	#[serde(default)]
+	chain_type: ChainType,
+	boot_nodes: Vec<MultiaddrWithPeerId>,
 	telemetry_endpoints: Option<TelemetryEndpoints>,
 	protocol_id: Option<String>,
 	properties: Option<Properties>,
@@ -148,9 +149,6 @@ struct ClientSpec<E> {
 	#[serde(skip_serializing)]
 	genesis: serde::de::IgnoredAny,
 }
-
-/// Arbitrary properties defined in chain spec as a JSON object
-pub type Properties = json::map::Map<String, json::Value>;
 
 /// A type denoting empty extensions.
 ///
@@ -174,7 +172,7 @@ impl<G, E: Clone> Clone for ChainSpec<G, E> {
 
 impl<G, E> ChainSpec<G, E> {
 	/// A list of bootnode addresses.
-	pub fn boot_nodes(&self) -> &[String] {
+	pub fn boot_nodes(&self) -> &[MultiaddrWithPeerId] {
 		&self.client_spec.boot_nodes
 	}
 
@@ -206,8 +204,8 @@ impl<G, E> ChainSpec<G, E> {
 	}
 
 	/// Add a bootnode to the list.
-	pub fn add_boot_node(&mut self, addr: Multiaddr) {
-		self.client_spec.boot_nodes.push(addr.to_string())
+	pub fn add_boot_node(&mut self, addr: MultiaddrWithPeerId) {
+		self.client_spec.boot_nodes.push(addr)
 	}
 
 	/// Returns a reference to defined chain spec extensions.
@@ -219,8 +217,9 @@ impl<G, E> ChainSpec<G, E> {
 	pub fn from_genesis<F: Fn() -> G + 'static + Send + Sync>(
 		name: &str,
 		id: &str,
+		chain_type: ChainType,
 		constructor: F,
-		boot_nodes: Vec<String>,
+		boot_nodes: Vec<MultiaddrWithPeerId>,
 		telemetry_endpoints: Option<TelemetryEndpoints>,
 		protocol_id: Option<&str>,
 		properties: Option<Properties>,
@@ -229,6 +228,7 @@ impl<G, E> ChainSpec<G, E> {
 		let client_spec = ClientSpec {
 			name: name.to_owned(),
 			id: id.to_owned(),
+			chain_type,
 			boot_nodes,
 			telemetry_endpoints,
 			protocol_id: protocol_id.map(str::to_owned),
@@ -242,6 +242,11 @@ impl<G, E> ChainSpec<G, E> {
 			client_spec,
 			genesis: GenesisSource::Factory(Arc::new(constructor)),
 		}
+	}
+
+	/// Type of the chain.
+	fn chain_type(&self) -> ChainType {
+		self.client_spec.chain_type.clone()
 	}
 }
 
@@ -320,7 +325,7 @@ where
 	G: RuntimeGenesis,
 	E: GetExtension + serde::Serialize + Clone + Send,
 {
-	fn boot_nodes(&self) -> &[String] {
+	fn boot_nodes(&self) -> &[MultiaddrWithPeerId] {
 		ChainSpec::boot_nodes(self)
 	}
 
@@ -330,6 +335,10 @@ where
 
 	fn id(&self) -> &str {
 		ChainSpec::id(self)
+	}
+
+	fn chain_type(&self) -> ChainType {
+		ChainSpec::chain_type(self)
 	}
 
 	fn telemetry_endpoints(&self) -> &Option<TelemetryEndpoints> {
@@ -344,7 +353,7 @@ where
 		ChainSpec::properties(self)
 	}
 
-	fn add_boot_node(&mut self, addr: Multiaddr) {
+	fn add_boot_node(&mut self, addr: MultiaddrWithPeerId) {
 		ChainSpec::add_boot_node(self, addr)
 	}
 
@@ -392,6 +401,7 @@ mod tests {
 		).unwrap();
 
 		assert_eq!(spec1.as_json(false), spec2.as_json(false));
+		assert_eq!(spec2.chain_type(), ChainType::Live)
 	}
 
 	#[derive(Debug, Serialize, Deserialize)]

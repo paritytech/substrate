@@ -40,11 +40,11 @@
 
 use sp_std::prelude::*;
 use sp_runtime::{
-	traits::{StaticLookup, EnsureOrigin, Zero}
+	traits::{StaticLookup, Zero}
 };
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
-	traits::{Currency, ReservableCurrency, OnUnbalanced, Get},
+	traits::{Currency, EnsureOrigin, ReservableCurrency, OnUnbalanced, Get},
 	weights::SimpleDispatchInfo,
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
@@ -141,7 +141,7 @@ decl_module! {
 		/// - One storage read/write.
 		/// - One event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(50_000_000)]
 		fn set_name(origin, name: Vec<u8>) {
 			let sender = ensure_signed(origin)?;
 
@@ -171,7 +171,7 @@ decl_module! {
 		/// - One storage read/write.
 		/// - One event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(70_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(70_000_000)]
 		fn clear_name(origin) {
 			let sender = ensure_signed(origin)?;
 
@@ -195,7 +195,7 @@ decl_module! {
 		/// - One storage read/write.
 		/// - One event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(70_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(70_000_000)]
 		fn kill_name(origin, target: <T::Lookup as StaticLookup>::Source) {
 			T::ForceOrigin::try_origin(origin)
 				.map(|_| ())
@@ -223,7 +223,7 @@ decl_module! {
 		/// - One storage read/write.
 		/// - One event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(70_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(70_000_000)]
 		fn force_name(origin, target: <T::Lookup as StaticLookup>::Source, name: Vec<u8>) {
 			T::ForceOrigin::try_origin(origin)
 				.map(|_| ())
@@ -282,6 +282,7 @@ mod tests {
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
+		type DbWeight = ();
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();

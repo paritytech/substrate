@@ -2,7 +2,7 @@ macro_rules! reserved {
 	($($reserved:ident)*) => {
 		$(
 			mod $reserved {
-				pub use frame_support::dispatch;
+				pub use frame_support::{dispatch, weights::{SimpleDispatchInfo, MINIMUM_WEIGHT}};
 
 				pub trait Trait {
 					type Origin;
@@ -19,7 +19,7 @@ macro_rules! reserved {
 
 				frame_support::decl_module! {
 					pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-						#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+						#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 						fn $reserved(_origin) -> dispatch::DispatchResult { unreachable!() }
 					}
 				}

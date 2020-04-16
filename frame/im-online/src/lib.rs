@@ -43,6 +43,7 @@
 //!
 //! ```
 //! use frame_support::{decl_module, dispatch};
+//! use frame_support::weights::{SimpleDispatchInfo, MINIMUM_WEIGHT};
 //! use frame_system::{self as system, ensure_signed};
 //! use pallet_im_online::{self as im_online};
 //!
@@ -50,7 +51,7 @@
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+//! 		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 //! 		pub fn is_online(origin, authority_index: u32) -> dispatch::DispatchResult {
 //! 			let _sender = ensure_signed(origin)?;
 //! 			let _is_online = <im_online::Module<T>>::is_online(authority_index);
@@ -94,6 +95,7 @@ use sp_staking::{
 use frame_support::{
 	decl_module, decl_event, decl_storage, Parameter, debug, decl_error,
 	traits::Get,
+	weights::{SimpleDispatchInfo, MINIMUM_WEIGHT},
 };
 use frame_system::{self as system, ensure_none};
 use frame_system::offchain::SubmitUnsignedTransaction;
@@ -247,6 +249,12 @@ pub trait Trait: frame_system::Trait + pallet_session::historical::Trait {
 			IdentificationTuple<Self>,
 			UnresponsivenessOffence<IdentificationTuple<Self>>,
 		>;
+
+	/// A configuration for base priority of unsigned transactions.
+	///
+	/// This is exposed so that it can be tuned for particular runtime, when
+	/// multiple pallets send unsigned transactions.
+	type UnsignedPriority: Get<TransactionPriority>;
 }
 
 decl_event!(
@@ -310,7 +318,7 @@ decl_module! {
 
 		fn deposit_event() = default;
 
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 		fn heartbeat(
 			origin,
 			heartbeat: Heartbeat<T::BlockNumber>,
@@ -658,13 +666,14 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 				return InvalidTransaction::BadProof.into();
 			}
 
-			Ok(ValidTransaction {
-				priority: TransactionPriority::max_value(),
-				requires: vec![],
-				provides: vec![(current_session, authority_id).encode()],
-				longevity: TryInto::<u64>::try_into(T::SessionDuration::get() / 2.into()).unwrap_or(64_u64),
-				propagate: true,
-			})
+			ValidTransaction::with_tag_prefix("ImOnline")
+				.priority(T::UnsignedPriority::get())
+				.and_provides((current_session, authority_id))
+				.longevity(TryInto::<u64>::try_into(
+					T::SessionDuration::get() / 2.into()
+				).unwrap_or(64_u64))
+				.propagate(true)
+				.build()
 		} else {
 			InvalidTransaction::Call.into()
 		}
@@ -679,11 +688,11 @@ pub struct UnresponsivenessOffence<Offender> {
 	///
 	/// It acts as a time measure for unresponsiveness reports and effectively will always point
 	/// at the end of the session.
-	session_index: SessionIndex,
+	pub session_index: SessionIndex,
 	/// The size of the validator set in current session/era.
-	validator_set_count: u32,
+	pub validator_set_count: u32,
 	/// Authorities that were unresponsive during the current era.
-	offenders: Vec<Offender>,
+	pub offenders: Vec<Offender>,
 }
 
 impl<Offender: Clone> Offence<Offender> for UnresponsivenessOffence<Offender> {
