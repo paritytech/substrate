@@ -177,23 +177,20 @@ macro_rules! new_full {
 		}
 
 		// Spawn authority discovery module.
-		if matches!(role, sc_service::config::Role::Authority {..} | sc_service::config::Role::Sentry {..}) {
-			let sentries;
-			let authority_discovery_role;
-
-			match role {
-				sc_service::config::Role::Authority { ref sentry_nodes } => {
-					sentries = sentry_nodes.clone();
-					authority_discovery_role = sc_authority_discovery::Role::Authority (
+		if matches!(role, sc_service::config::Role::Authority{..} | sc_service::config::Role::Sentry {..}) {
+			let (sentries, authority_discovery_role) = match role {
+				sc_service::config::Role::Authority { ref sentry_nodes } => (
+					sentry_nodes.clone(),
+					sc_authority_discovery::Role::Authority (
 						service.keystore(),
-					);
-				}
-				sc_service::config::Role::Sentry {..} => {
-					sentries = vec![];
-					authority_discovery_role = sc_authority_discovery::Role::Sentry;
-				}
+					),
+				),
+				sc_service::config::Role::Sentry {..} => (
+					vec![],
+					sc_authority_discovery::Role::Sentry,
+				),
 				_ => unreachable!("Due to outer matches! constraint; qed.")
-			}
+			};
 
 			let network = service.network();
 			let dht_event_stream = network.event_stream("authority-discovery").filter_map(|e| async move { match e {
