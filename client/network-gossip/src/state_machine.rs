@@ -270,7 +270,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 		}
 	}
 
-	/// Get valid incoming messages for a topic (but might have expired meanwhile).
+	/// Get valid messages received in the past for a topic (might have expired meanwhile).
 	pub fn messages_for(&mut self, topic: B::Hash) -> impl Iterator<Item = TopicNotification> + '_ {
 		self.messages.iter().filter(move |e| e.topic == topic).map(|entry| TopicNotification {
 			message: entry.message.clone(),
@@ -418,7 +418,6 @@ impl<B: BlockT> ConsensusGossip<B> {
 mod tests {
 	use std::sync::Arc;
 	use sp_runtime::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
-	use futures::executor::block_on_stream;
 
 	use super::*;
 
@@ -499,16 +498,18 @@ mod tests {
 	}
 
 	#[test]
-	fn message_stream_include_those_sent_before_asking_for_stream() {
+	fn message_stream_include_those_sent_before_asking() {
 		let mut consensus = ConsensusGossip::<Block>::new(Arc::new(AllowAll), [0, 0, 0, 0]);
 
+		// Register message.
 		let message = vec![4, 5, 6];
 		let topic = HashFor::<Block>::hash(&[1,2,3]);
-
 		consensus.register_message(topic, message.clone());
-		let mut stream = block_on_stream(consensus.messages_for(topic));
 
-		assert_eq!(stream.next(), Some(TopicNotification { message: message, sender: None }));
+		assert_eq!(
+			consensus.messages_for(topic).next(),
+			Some(TopicNotification { message: message, sender: None }),
+		);
 	}
 
 	#[test]
@@ -523,22 +524,6 @@ mod tests {
 		consensus.register_message(topic, msg_b);
 
 		assert_eq!(consensus.messages.len(), 2);
-	}
-
-	#[test]
-	fn can_keep_multiple_subscribers_per_topic() {
-		let mut consensus = ConsensusGossip::<Block>::new(Arc::new(AllowAll), [0, 0, 0, 0]);
-
-		let message = vec![4, 5, 6];
-		let topic = HashFor::<Block>::hash(&[1, 2, 3]);
-
-		consensus.register_message(topic, message.clone());
-
-		let mut stream1 = block_on_stream(consensus.messages_for(topic));
-		let mut stream2 = block_on_stream(consensus.messages_for(topic));
-
-		assert_eq!(stream1.next(), Some(TopicNotification { message: message.clone(), sender: None }));
-		assert_eq!(stream2.next(), Some(TopicNotification { message, sender: None }));
 	}
 
 	#[test]

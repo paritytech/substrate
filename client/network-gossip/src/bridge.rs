@@ -227,23 +227,34 @@ impl<B: BlockT> Future for GossipEngine<B> {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
+	use async_std::task::spawn;
 	use crate::{ValidationResult, ValidatorContext};
+	use futures::{channel::mpsc::{channel, Sender}, executor::block_on_stream};
+	use sc_network::ObservedRole;
+	use sp_runtime::{testing::H256, traits::{Block as BlockT, Hash}};
+	use std::sync::{Arc, Mutex};
 	use substrate_test_runtime_client::runtime::Block;
+	use super::*;
 
-	struct TestNetwork {}
+	#[derive(Clone, Default)]
+	struct TestNetwork {
+		inner: Arc<Mutex<TestNetworkInner>>,
+	}
 
-	impl<B: BlockT> Network<B> for Arc<TestNetwork> {
+	#[derive(Clone, Default)]
+	struct TestNetworkInner {
+		event_senders: Vec<Sender<Event>>,
+	}
+
+	impl<B: BlockT> Network<B> for TestNetwork {
 		fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
-			let (_tx, rx) = futures::channel::mpsc::channel(0);
+			let (tx, rx) = channel(100);
+			self.inner.lock().unwrap().event_senders.push(tx);
 
-			// Return rx and drop tx. Thus the given channel will yield `Poll::Ready(None)` on first
-			// poll.
 			Box::pin(rx)
 		}
 
 		fn report_peer(&self, _: PeerId, _: ReputationChange) {
-			unimplemented!();
 		}
 
 		fn disconnect_peer(&self, _: PeerId) {
@@ -261,16 +272,15 @@ mod tests {
 		}
 	}
 
-	struct TestValidator {}
-
-	impl<B: BlockT> Validator<B> for TestValidator {
+	struct AllowAll;
+	impl Validator<Block> for AllowAll {
 		fn validate(
 			&self,
-			_: &mut dyn ValidatorContext<B>,
-			_: &PeerId,
-			_: &[u8]
-		) -> ValidationResult<B::Hash> {
-			unimplemented!();
+			_context: &mut dyn ValidatorContext<Block>,
+			_sender: &PeerId,
+			_data: &[u8],
+		) -> ValidationResult<H256> {
+			ValidationResult::ProcessAndKeep(H256::default())
 		}
 	}
 
@@ -280,12 +290,16 @@ mod tests {
 	/// See https://github.com/paritytech/substrate/issues/5000 for details.
 	#[test]
 	fn returns_when_network_event_stream_closes() {
+		let network = TestNetwork::default();
 		let mut gossip_engine = GossipEngine::<Block>::new(
-			Arc::new(TestNetwork{}),
+			network.clone(),
 			[1, 2, 3, 4],
 			"my_protocol".as_bytes(),
-			Arc::new(TestValidator{}),
+			Arc::new(AllowAll{}),
 		);
+
+		// Drop network event stream sender side.
+		drop(network.inner.lock().unwrap().event_senders.pop());
 
 		futures::executor::block_on(futures::future::poll_fn(move |ctx| {
 			if let Poll::Pending = gossip_engine.poll_unpin(ctx) {
@@ -296,5 +310,73 @@ mod tests {
 			}
 			Poll::Ready(())
 		}))
+	}
+
+	#[test]
+	fn keeps_multiple_subscribers_per_topic_updated_with_both_old_and_new_messages() {
+		let topic = H256::default();
+		let engine_id = [1, 2, 3, 4];
+		let remote_peer = PeerId::random();
+		let network = TestNetwork::default();
+
+		let mut gossip_engine = GossipEngine::<Block>::new(
+			network.clone(),
+			engine_id.clone(),
+			"my_protocol".as_bytes(),
+			Arc::new(AllowAll{}),
+		);
+
+		let mut event_sender = network.inner.lock()
+			.unwrap()
+			.event_senders
+			.pop()
+			.unwrap();
+
+		// Register the remote peer.
+		event_sender.start_send(
+			Event::NotificationStreamOpened {
+				remote: remote_peer.clone(),
+				engine_id: engine_id.clone(),
+				role: ObservedRole::Authority,
+			}
+		).unwrap();
+
+		let messages = vec![vec![1], vec![2]];
+		let events = messages.iter().cloned().map(|m| {
+			Event::NotificationsReceived {
+				remote: remote_peer.clone(),
+				messages: vec![(engine_id, m.into())]
+			}
+		}).collect::<Vec<_>>();
+
+		// Send first event before subscribing.
+		event_sender.start_send(events[0].clone()).unwrap();
+
+		let mut subscribers = vec![];
+		for _ in 0..2 {
+			subscribers.push(gossip_engine.messages_for(topic));
+		}
+
+		// Send second event after subscribing.
+		event_sender.start_send(events[1].clone()).unwrap();
+
+		spawn(gossip_engine);
+
+		let mut subscribers = subscribers.into_iter()
+			.map(|s| block_on_stream(s))
+			.collect::<Vec<_>>();
+
+		// Expect each subscriber to receive both events.
+		for message in messages {
+			for subscriber in subscribers.iter_mut() {
+				assert_eq!(
+					subscriber.next(),
+					Some(TopicNotification {
+						message: message.clone(),
+						sender: Some(remote_peer.clone()),
+					}),
+				);
+			}
+		}
 	}
 }
