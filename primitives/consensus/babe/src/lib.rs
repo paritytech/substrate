@@ -20,9 +20,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub mod digests;
-pub mod inherents;
 
-pub use sp_consensus_vrf::schnorrkel::{
+pub use sp_consensus_epoch_vrf::schnorrkel::{
 	Randomness, VRF_PROOF_LENGTH, VRF_OUTPUT_LENGTH, RANDOMNESS_LENGTH
 };
 

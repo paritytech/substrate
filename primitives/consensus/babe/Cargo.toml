@@ -17,7 +17,7 @@ codec = { package = "parity-scale-codec", version = "1.3.0", default-features = 
 sp-std = { version = "2.0.0-dev", default-features = false, path = "../../std" }
 sp-api = { version = "2.0.0-dev", default-features = false, path = "../../api" }
 sp-consensus = { version = "0.8.0-dev", optional = true, path = "../common" }
-sp-consensus-vrf = { version = "0.8.0-dev", path = "../vrf", default-features = false }
+sp-consensus-epoch-vrf = { version = "0.8.0-dev", path = "../epoch-vrf", default-features = false }
 sp-inherents = { version = "2.0.0-dev", default-features = false, path = "../../inherents" }
 sp-runtime = { version = "2.0.0-dev", default-features = false, path = "../../runtime" }
 sp-timestamp = { version = "2.0.0-dev", default-features = false, path = "../../timestamp" }
@@ -30,7 +30,7 @@ std = [
 	"sp-std/std",
 	"sp-api/std",
 	"sp-consensus",
-	"sp-consensus-vrf/std",
+	"sp-consensus-epoch-vrf/std",
 	"sp-inherents/std",
 	"sp-runtime/std",
 	"sp-timestamp/std",

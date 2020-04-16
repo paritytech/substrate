@@ -4162,7 +4162,7 @@ dependencies = [
  "parity-scale-codec",
  "serde",
  "sp-consensus-babe",
- "sp-consensus-vrf",
+ "sp-consensus-epoch-vrf",
  "sp-core",
  "sp-inherents",
  "sp-io",
@@ -6075,7 +6075,7 @@ dependencies = [
  "sp-blockchain",
  "sp-consensus",
  "sp-consensus-babe",
- "sp-consensus-vrf",
+ "sp-consensus-epoch-vrf",
  "sp-core",
  "sp-inherents",
  "sp-io",
@@ -7320,7 +7320,20 @@ dependencies = [
  "sp-api",
  "sp-application-crypto",
  "sp-consensus",
- "sp-consensus-vrf",
+ "sp-consensus-epoch-vrf",
+ "sp-inherents",
+ "sp-runtime",
+ "sp-std",
+ "sp-timestamp",
+]
+
+[[package]]
+name = "sp-consensus-epoch-vrf"
+version = "0.8.0-dev"
+dependencies = [
+ "parity-scale-codec",
+ "schnorrkel",
+ "sp-core",
  "sp-inherents",
  "sp-runtime",
  "sp-std",
@@ -7333,17 +7346,6 @@ version = "0.8.0-dev"
 dependencies = [
  "parity-scale-codec",
  "sp-api",
- "sp-core",
- "sp-runtime",
- "sp-std",
-]
-
-[[package]]
-name = "sp-consensus-vrf"
-version = "0.8.0-dev"
-dependencies = [
- "parity-scale-codec",
- "schnorrkel",
  "sp-core",
  "sp-runtime",
  "sp-std",

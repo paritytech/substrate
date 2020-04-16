@@ -40,14 +40,12 @@ use sp_staking::{
 
 use codec::{Encode, EncodeLike, Decode};
 use sp_inherents::{InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
-use sp_consensus_vrf::schnorrkel::{self, VRF_OUTPUT_LENGTH};
+use sp_consensus_epoch_vrf::schnorrkel::{self, VRF_OUTPUT_LENGTH};
+use sp_consensus_epoch_vrf::inherents::{INHERENT_IDENTIFIER, SlotInherentData};
 
-// TODO: Move those out of sp-consensus-babe.
-use sp_consensus_babe::inherents::{INHERENT_IDENTIFIER, BabeInherentData};
-
+pub mod babe;
 #[cfg(all(feature = "std", test))]
 mod tests;
-
 #[cfg(all(feature = "std", test))]
 mod mock;
 
@@ -586,7 +584,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 		};
 
 		let timestamp_based_slot = (timestamp / Self::slot_duration()).saturated_into::<u64>();
-		let seal_slot = data.babe_inherent_data()?;
+		let seal_slot = data.slot_inherent_data()?;
 
 		if timestamp_based_slot == seal_slot {
 			Ok(())

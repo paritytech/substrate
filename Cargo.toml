@@ -120,7 +120,7 @@ members = [
 	"primitives/consensus/babe",
 	"primitives/consensus/common",
 	"primitives/consensus/pow",
-	"primitives/consensus/vrf",
+	"primitives/consensus/epoch-vrf",
 	"primitives/core",
 	"primitives/chain-spec",
 	"primitives/database",

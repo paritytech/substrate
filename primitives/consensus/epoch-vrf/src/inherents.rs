@@ -25,26 +25,26 @@ use sp_timestamp::TimestampInherentData;
 use codec::Decode;
 use sp_std::result::Result;
 
-/// The BABE inherent identifier.
+/// The Slot inherent identifier.
 pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"babeslot";
 
 /// The type of the BABE inherent.
 pub type InherentType = u64;
 /// Auxiliary trait to extract BABE inherent data.
-pub trait BabeInherentData {
-	/// Get BABE inherent data.
-	fn babe_inherent_data(&self) -> Result<InherentType, Error>;
-	/// Replace BABE inherent data.
-	fn babe_replace_inherent_data(&mut self, new: InherentType);
+pub trait SlotInherentData {
+	/// Get Slot inherent data.
+	fn slot_inherent_data(&self) -> Result<InherentType, Error>;
+	/// Replace Slot inherent data.
+	fn slot_replace_inherent_data(&mut self, new: InherentType);
 }
 
-impl BabeInherentData for InherentData {
-	fn babe_inherent_data(&self) -> Result<InherentType, Error> {
+impl SlotInherentData for InherentData {
+	fn slot_inherent_data(&self) -> Result<InherentType, Error> {
 		self.get_data(&INHERENT_IDENTIFIER)
-			.and_then(|r| r.ok_or_else(|| "BABE inherent data not found".into()))
+			.and_then(|r| r.ok_or_else(|| "Slot inherent data not found".into()))
 	}
 
-	fn babe_replace_inherent_data(&mut self, new: InherentType) {
+	fn slot_replace_inherent_data(&mut self, new: InherentType) {
 		self.replace_data(INHERENT_IDENTIFIER, &new);
 	}
 }
