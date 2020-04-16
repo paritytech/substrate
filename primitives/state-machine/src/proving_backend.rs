@@ -86,6 +86,14 @@ pub enum CompactScheme {
 	/// calculated when reading the structue
 	/// of the trie.
 	TrieSkipHashes = 1,
+/*	/// Skip encoding of hashes and values,
+	/// we need to know them when when unpacking.
+	KnownQueryPlanAndValues = 2,
+	/// Skip encoding of hashes, this need knowing
+	/// the queried keys when unpacking, can be faster
+	/// than `TrieSkipHashes` but with similar packing
+	/// gain.
+	KnownQueryPlan = 3,*/
 }
 
 type ProofNodes = Vec<Vec<u8>>;
@@ -104,12 +112,14 @@ pub enum StorageProof {
 	/// container, no child trie information is provided, this works only for proof accessing
 	/// the same kind of child trie.
 	Flatten(ProofNodes),
-/*	/// If proof only cover a single trie, we compact the proof by ommitting some content
-	/// that can be rebuild on construction. For patricia merkle trie it will be hashes that
-	/// are not necessary between node, with indexing of the missing hash based on orders
-	/// of nodes.
-	TopTrieCompact(ProofCompacted),*/
-	///	Fully descriped proof, it includes the child trie individual descriptions.
+/* TODO EMCH implement as it will be default for trie skip hashes	/// Proof can address multiple child trie, but results in a single flatten
+	/// db backend.
+	FlattenCompact(Vec<ProofCompacted>),*/
+	///	Fully descriBed proof, it includes the child trie individual descriptions.
+	///	Currently Full variant are not of any use as we have only child trie that can use the same
+	///	memory db backend.
+	///	TODO EMCH consider removal: could be put back when needed, and probably
+	///	with a new StorageProof key that is the same for a flattenable kind.
 	Full(ChildrenProofMap<ProofNodes>),
 	///	Fully descriped proof, compact encoded.
 	FullCompact(ChildrenProofMap<ProofCompacted>),
@@ -195,7 +205,7 @@ impl StorageProof {
 		where H::Out: Codec,
 	{
 		let map_e = |e| format!("Trie pack error: {}", e);
-	
+
 		if let StorageProof::Full(children) = self {
 			let mut result = ChildrenProofMap::default();
 			for (child_info, proof) in children {
@@ -672,14 +682,17 @@ where
 pub fn create_proof_check_backend<H>(
 	root: H::Out,
 	proof: StorageProof,
-) -> Result<TrieBackend<MemoryDB<H>, H>, Box<dyn Error>>
+) -> Result<TrieBackend<ChildrenProofMap<MemoryDB<H>>, H>, Box<dyn Error>>
 where
 	H: Hasher,
 	H::Out: Codec,
 {
+	use std::ops::Deref;
 	let db = create_proof_check_backend_storage(proof)
 		.map_err(|e| Box::new(e) as Box<dyn Error>)?;
-	if db.contains(&root, EMPTY_PREFIX) {
+	if db.deref().get(&ChildInfoProof::top_trie())
+		.map(|db| db.contains(&root, EMPTY_PREFIX))
+		.unwrap_or(false) {
 		Ok(TrieBackend::new_with_roots(db, root))
 	} else {
 		Err(Box::new(ExecutionError::InvalidProof))
@@ -690,47 +703,48 @@ where
 /// Currently child trie are all with same backend
 /// implementation, therefore using
 /// `create_flat_proof_check_backend_storage` is prefered.
-/// TODO consider removing this `ChildrenMap<MemoryDB<H>>`
-/// for now (still we do not merge unpack, that can be good
-/// somehow).
+/// TODO flat proof check is enough for now, do we want to
+/// maintain the full variant?
 pub fn create_proof_check_backend_storage<H>(
 	proof: StorageProof,
-) -> Result<MemoryDB<H>, String>
+) -> Result<ChildrenProofMap<MemoryDB<H>>, String>
 where
 	H: Hasher,
 {
 	let map_e = |e| format!("Trie unpack error: {}", e);
-	let mut db = MemoryDB::default();
+	let mut result = ChildrenProofMap::default();
 	match proof {
 		s@StorageProof::Flatten(..) => {
+			let mut db = MemoryDB::default();
 			for item in s.iter_nodes_flatten() {
 				db.insert(EMPTY_PREFIX, &item);
 			}
+			result.insert(ChildInfoProof::top_trie(), db);
 		},
 		StorageProof::Full(children) => {
-			for (_child_info, proof) in children.into_iter() {
+			for (child_info, proof) in children.into_iter() {
+				let mut db = MemoryDB::default();
 				for item in proof.into_iter() {
 					db.insert(EMPTY_PREFIX, &item);
 				}
+				result.insert(child_info, db);
 			}
 		},
-		// TODO EMCH it is rather interesting to notice that child_info in proof
-		// does not look useful.
 		StorageProof::FullCompact(children) => {
-			for (_child_info, (compact_scheme, proof)) in children.into_iter() {
+			for (child_info, (compact_scheme, proof)) in children.into_iter() {
 				match compact_scheme {
 					CompactScheme::TrieSkipHashes => {
-						for item in sp_trie::unpack_proof::<Layout<H>>(proof.as_slice())
-							.map_err(map_e)?
-							.1.into_iter() {
-							db.insert(EMPTY_PREFIX, &item);
-						}
+						// Note that this does check all hashes so using a trie backend
+						// for further check is not really good (could use a direct value backend).
+						let (_root, db) = sp_trie::unpack_proof_to_memdb::<Layout<H>>(proof.as_slice())
+								.map_err(map_e)?;
+						result.insert(child_info, db);
 					},
 				}
 			}
 		},
 	}
-	Ok(db)
+	Ok(result)
 }
 
 /// Create in-memory storage of proof check backend.
@@ -925,7 +939,7 @@ mod tests {
 					in_memory_root.into(),
 					proof
 				).unwrap();
-			
+
 				assert_eq!(
 					proof_check.child_storage(&child_info_1, &[64]).unwrap().unwrap(),
 					vec![64]
@@ -935,7 +949,7 @@ mod tests {
 					in_memory_root.into(),
 					proof
 				).unwrap();
-			
+
 				assert_eq!(
 					proof_check.child_storage(&child_info_1, &[64]).unwrap().unwrap(),
 					vec![64]

@@ -27,7 +27,7 @@ use sp_trie::{Trie, MemoryDB, PrefixedMemoryDB, DBValue,
 	for_keys_in_child_trie, KeySpacedDB, TrieDBIterator};
 use sp_trie::trie_types::{TrieDB, TrieError, Layout};
 use crate::{backend::Consolidate, StorageKey, StorageValue};
-use sp_core::storage::{ChildInfo, ChildrenMap, ChildrenProofMap};
+use sp_core::storage::{ChildInfo, ChildrenProofMap};
 use codec::Encode;
 
 /// Patricia trie-based storage trait.

@@ -32,9 +32,6 @@ use parking_lot::RwLock;
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
 pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
 	essence: TrieBackendEssence<S, H>,
-	// storing child_info of top trie even if it is in
-	// theory a bit useless (no heap alloc on empty vec).
-	top_trie: ChildInfo,
 	/// If defined, we store encoded visited roots for top_trie and child trie in this
 	/// map. It also act as a cache.
 	register_roots: Option<Arc<RwLock<ChildrenMap<Option<H::Out>>>>>,
@@ -46,7 +43,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: Codec 
 	pub fn new(storage: S, root: H::Out) -> Self {
 		TrieBackend {
 			essence: TrieBackendEssence::new(storage, root),
-			top_trie: ChildInfo::top_trie(),
 			register_roots: None,
 		}
 	}
@@ -56,7 +52,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: Codec 
 	pub fn new_with_roots(storage: S, root: H::Out) -> Self {
 		TrieBackend {
 			essence: TrieBackendEssence::new(storage, root),
-			top_trie: ChildInfo::top_trie(),
 			register_roots: Some(Arc::new(RwLock::new(Default::default()))),
 		}
 	}
