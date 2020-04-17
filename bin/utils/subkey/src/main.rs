@@ -522,7 +522,7 @@ where
 				.map_err(|_| Error::Static("Cannot convert argument to moduleid: argument should be 8-character string"))?;
 
 			let account_id: AccountId = ModuleId(id_fixed_array).into_account();
-			let v = maybe_network.unwrap_or(Ss58AddressFormat::SubstrateAccountDirect);
+			let v = maybe_network.unwrap_or(Ss58AddressFormat::SubstrateAccount);
 			
 			C::print_from_uri(&account_id.to_ss58check_with_version(v), password, maybe_network, output);
 		}
