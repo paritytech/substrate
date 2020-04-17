@@ -16,9 +16,14 @@
 
 #[macro_use] mod core;
 mod import;
+mod trie;
+mod generator;
+mod tempdb;
+mod state_sizes;
 
 use crate::core::{run_benchmark, Mode as BenchmarkMode};
 use import::{ImportBenchmarkDescription, SizeType};
+use trie::{TrieBenchmarkDescription, DatabaseSize};
 use node_testing::bench::{Profile, KeyTypes};
 use structopt::StructOpt;
 
@@ -77,6 +82,10 @@ fn main() {
 				key_types: KeyTypes::Sr25519,
 				size: *size,
 			},
+		size in [
+			DatabaseSize::Empty, DatabaseSize::Smallest, DatabaseSize::Small,
+			DatabaseSize::Medium, DatabaseSize::Large,
+		] => TrieBenchmarkDescription { database_size: *size },
 	);
 
 	if opt.list {
