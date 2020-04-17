@@ -14,328 +14,358 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{mem, pin::Pin, time::Duration, marker::PhantomData, sync::Arc};
 use futures::{prelude::*, task::Context, task::Poll};
 use futures_timer::Delay;
-use parking_lot::{Mutex, Condvar};
-use sp_runtime::{Justification, traits::{Block as BlockT, Header as HeaderT, NumberFor}};
-use sp_utils::mpsc::{TracingUnboundedSender, tracing_unbounded};
+use parking_lot::{Condvar, Mutex};
+use sp_runtime::{
+    traits::{Block as BlockT, Header as HeaderT, NumberFor},
+    Justification,
+};
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
+use std::{marker::PhantomData, mem, pin::Pin, sync::Arc, time::Duration};
 
 use crate::block_import::BlockOrigin;
 use crate::import_queue::{
-	BlockImportResult, BlockImportError, Verifier, BoxBlockImport, BoxFinalityProofImport,
-	BoxJustificationImport, ImportQueue, Link, Origin,
-	IncomingBlock, import_single_block,
-	buffered_link::{self, BufferedLinkSender, BufferedLinkReceiver}
+    buffered_link::{self, BufferedLinkReceiver, BufferedLinkSender},
+    import_single_block, BlockImportError, BlockImportResult, BoxBlockImport,
+    BoxFinalityProofImport, BoxJustificationImport, ImportQueue, IncomingBlock, Link, Origin,
+    Verifier,
 };
 
 /// Interface to a basic block import queue that is importing blocks sequentially in a separate
 /// task, with plugable verification.
 pub struct BasicQueue<B: BlockT, Transaction> {
-	/// Channel to send messages to the background task.
-	sender: TracingUnboundedSender<ToWorkerMsg<B>>,
-	/// Results coming from the worker task.
-	result_port: BufferedLinkReceiver<B>,
-	/// If it isn't possible to spawn the future in `future_to_spawn` (which is notably the case in
-	/// "no std" environment), we instead put it in `manual_poll`. It is then polled manually from
-	/// `poll_actions`.
-	manual_poll: Option<Pin<Box<dyn Future<Output = ()> + Send>>>,
-	/// A thread pool where the background worker is being run.
-	pool: Option<futures::executor::ThreadPool>,
-	pool_guard: Arc<(Mutex<usize>, Condvar)>,
-	_phantom: PhantomData<Transaction>,
+    /// Channel to send messages to the background task.
+    sender: TracingUnboundedSender<ToWorkerMsg<B>>,
+    /// Results coming from the worker task.
+    result_port: BufferedLinkReceiver<B>,
+    /// If it isn't possible to spawn the future in `future_to_spawn` (which is notably the case in
+    /// "no std" environment), we instead put it in `manual_poll`. It is then polled manually from
+    /// `poll_actions`.
+    manual_poll: Option<Pin<Box<dyn Future<Output = ()> + Send>>>,
+    /// A thread pool where the background worker is being run.
+    pool: Option<futures::executor::ThreadPool>,
+    pool_guard: Arc<(Mutex<usize>, Condvar)>,
+    _phantom: PhantomData<Transaction>,
 }
 
 impl<B: BlockT, Transaction> Drop for BasicQueue<B, Transaction> {
-	fn drop(&mut self) {
-		self.pool = None;
-		// Flush the queue and close the receiver to terminate the future.
-		self.sender.close_channel();
-		self.result_port.close();
+    fn drop(&mut self) {
+        self.pool = None;
+        // Flush the queue and close the receiver to terminate the future.
+        self.sender.close_channel();
+        self.result_port.close();
 
-		// Make sure all pool threads terminate.
-		// https://github.com/rust-lang/futures-rs/issues/1470
-		// https://github.com/rust-lang/futures-rs/issues/1349
-		let (ref mutex, ref condvar) = *self.pool_guard;
-		let mut lock = mutex.lock();
-		while *lock != 0 {
-			condvar.wait(&mut lock);
-		}
-	}
+        // Make sure all pool threads terminate.
+        // https://github.com/rust-lang/futures-rs/issues/1470
+        // https://github.com/rust-lang/futures-rs/issues/1349
+        let (ref mutex, ref condvar) = *self.pool_guard;
+        let mut lock = mutex.lock();
+        while *lock != 0 {
+            condvar.wait(&mut lock);
+        }
+    }
 }
 
 impl<B: BlockT, Transaction: Send + 'static> BasicQueue<B, Transaction> {
-	/// Instantiate a new basic queue, with given verifier.
-	///
-	/// This creates a background task, and calls `on_start` on the justification importer and
-	/// finality proof importer.
-	pub fn new<V: 'static + Verifier<B>>(
-		verifier: V,
-		block_import: BoxBlockImport<B, Transaction>,
-		justification_import: Option<BoxJustificationImport<B>>,
-		finality_proof_import: Option<BoxFinalityProofImport<B>>,
-	) -> Self {
-		let (result_sender, result_port) = buffered_link::buffered_link();
-		let (future, worker_sender) = BlockImportWorker::new(
-			result_sender,
-			verifier,
-			block_import,
-			justification_import,
-			finality_proof_import,
-		);
+    /// Instantiate a new basic queue, with given verifier.
+    ///
+    /// This creates a background task, and calls `on_start` on the justification importer and
+    /// finality proof importer.
+    pub fn new<V: 'static + Verifier<B>>(
+        verifier: V,
+        block_import: BoxBlockImport<B, Transaction>,
+        justification_import: Option<BoxJustificationImport<B>>,
+        finality_proof_import: Option<BoxFinalityProofImport<B>>,
+    ) -> Self {
+        let (result_sender, result_port) = buffered_link::buffered_link();
+        let (future, worker_sender) = BlockImportWorker::new(
+            result_sender,
+            verifier,
+            block_import,
+            justification_import,
+            finality_proof_import,
+        );
 
-		let guard = Arc::new((Mutex::new(0usize), Condvar::new()));
-		let guard_start = guard.clone();
-		let guard_end = guard.clone();
+        let guard = Arc::new((Mutex::new(0usize), Condvar::new()));
+        let guard_start = guard.clone();
+        let guard_end = guard.clone();
 
-		let mut pool = futures::executor::ThreadPool::builder()
-			.name_prefix("import-queue-worker-")
-			.pool_size(1)
-			.after_start(move |_| *guard_start.0.lock() += 1)
-			.before_stop(move |_| {
-				let (ref mutex, ref condvar) = *guard_end;
-				let mut lock = mutex.lock();
-				*lock -= 1;
-				if *lock == 0 {
-					condvar.notify_one();
-				}
-			})
-			.create()
-			.ok();
+        let mut pool = futures::executor::ThreadPool::builder()
+            .name_prefix("import-queue-worker-")
+            .pool_size(1)
+            .after_start(move |_| *guard_start.0.lock() += 1)
+            .before_stop(move |_| {
+                let (ref mutex, ref condvar) = *guard_end;
+                let mut lock = mutex.lock();
+                *lock -= 1;
+                if *lock == 0 {
+                    condvar.notify_one();
+                }
+            })
+            .create()
+            .ok();
 
-		let manual_poll;
-		if let Some(pool) = &mut pool {
-			pool.spawn_ok(futures_diagnose::diagnose("import-queue", future));
-			manual_poll = None;
-		} else {
-			manual_poll = Some(Box::pin(future) as Pin<Box<_>>);
-		}
+        let manual_poll;
+        if let Some(pool) = &mut pool {
+            pool.spawn_ok(futures_diagnose::diagnose("import-queue", future));
+            manual_poll = None;
+        } else {
+            manual_poll = Some(Box::pin(future) as Pin<Box<_>>);
+        }
 
-		Self {
-			sender: worker_sender,
-			result_port,
-			manual_poll,
-			pool,
-			pool_guard: guard,
-			_phantom: PhantomData,
-		}
-	}
+        Self {
+            sender: worker_sender,
+            result_port,
+            manual_poll,
+            pool,
+            pool_guard: guard,
+            _phantom: PhantomData,
+        }
+    }
 }
 
 impl<B: BlockT, Transaction: Send> ImportQueue<B> for BasicQueue<B, Transaction> {
-	fn import_blocks(&mut self, origin: BlockOrigin, blocks: Vec<IncomingBlock<B>>) {
-		if blocks.is_empty() {
-			return;
-		}
+    fn import_blocks(&mut self, origin: BlockOrigin, blocks: Vec<IncomingBlock<B>>) {
+        if blocks.is_empty() {
+            return;
+        }
 
-		trace!(target: "sync", "Scheduling {} blocks for import", blocks.len());
-		let _ = self.sender.unbounded_send(ToWorkerMsg::ImportBlocks(origin, blocks));
-	}
+        trace!(target: "sync", "Scheduling {} blocks for import", blocks.len());
+        let _ = self
+            .sender
+            .unbounded_send(ToWorkerMsg::ImportBlocks(origin, blocks));
+    }
 
-	fn import_justification(
-		&mut self,
-		who: Origin,
-		hash: B::Hash,
-		number: NumberFor<B>,
-		justification: Justification
-	) {
-		let _ = self.sender
-			.unbounded_send(
-				ToWorkerMsg::ImportJustification(who.clone(), hash, number, justification)
-			);
-	}
+    fn import_justification(
+        &mut self,
+        who: Origin,
+        hash: B::Hash,
+        number: NumberFor<B>,
+        justification: Justification,
+    ) {
+        let _ = self.sender.unbounded_send(ToWorkerMsg::ImportJustification(
+            who.clone(),
+            hash,
+            number,
+            justification,
+        ));
+    }
 
-	fn import_finality_proof(
-		&mut self,
-		who: Origin,
-		hash: B::Hash,
-		number: NumberFor<B>,
-		finality_proof: Vec<u8>,
-	) {
-		trace!(target: "sync", "Scheduling finality proof of {}/{} for import", number, hash);
-		let _ = self.sender
-			.unbounded_send(
-				ToWorkerMsg::ImportFinalityProof(who, hash, number, finality_proof)
-			);
-	}
+    fn import_finality_proof(
+        &mut self,
+        who: Origin,
+        hash: B::Hash,
+        number: NumberFor<B>,
+        finality_proof: Vec<u8>,
+    ) {
+        trace!(target: "sync", "Scheduling finality proof of {}/{} for import", number, hash);
+        let _ = self.sender.unbounded_send(ToWorkerMsg::ImportFinalityProof(
+            who,
+            hash,
+            number,
+            finality_proof,
+        ));
+    }
 
-	fn poll_actions(&mut self, cx: &mut Context, link: &mut dyn Link<B>) {
-		// As a backup mechanism, if we failed to spawn the `future_to_spawn`, we instead poll
-		// manually here.
-		if let Some(manual_poll) = self.manual_poll.as_mut() {
-			match Future::poll(Pin::new(manual_poll), cx) {
-				Poll::Pending => {}
-				_ => self.manual_poll = None,
-			}
-		}
+    fn poll_actions(&mut self, cx: &mut Context, link: &mut dyn Link<B>) {
+        // As a backup mechanism, if we failed to spawn the `future_to_spawn`, we instead poll
+        // manually here.
+        if let Some(manual_poll) = self.manual_poll.as_mut() {
+            match Future::poll(Pin::new(manual_poll), cx) {
+                Poll::Pending => {}
+                _ => self.manual_poll = None,
+            }
+        }
 
-		self.result_port.poll_actions(cx, link);
-	}
+        self.result_port.poll_actions(cx, link);
+    }
 }
 
 /// Message destinated to the background worker.
 #[derive(Debug)]
 enum ToWorkerMsg<B: BlockT> {
-	ImportBlocks(BlockOrigin, Vec<IncomingBlock<B>>),
-	ImportJustification(Origin, B::Hash, NumberFor<B>, Justification),
-	ImportFinalityProof(Origin, B::Hash, NumberFor<B>, Vec<u8>),
+    ImportBlocks(BlockOrigin, Vec<IncomingBlock<B>>),
+    ImportJustification(Origin, B::Hash, NumberFor<B>, Justification),
+    ImportFinalityProof(Origin, B::Hash, NumberFor<B>, Vec<u8>),
 }
 
 struct BlockImportWorker<B: BlockT, Transaction> {
-	result_sender: BufferedLinkSender<B>,
-	justification_import: Option<BoxJustificationImport<B>>,
-	finality_proof_import: Option<BoxFinalityProofImport<B>>,
-	delay_between_blocks: Duration,
-	_phantom: PhantomData<Transaction>,
+    result_sender: BufferedLinkSender<B>,
+    justification_import: Option<BoxJustificationImport<B>>,
+    finality_proof_import: Option<BoxFinalityProofImport<B>>,
+    delay_between_blocks: Duration,
+    _phantom: PhantomData<Transaction>,
 }
 
 impl<B: BlockT, Transaction: Send> BlockImportWorker<B, Transaction> {
-	fn new<V: 'static + Verifier<B>>(
-		result_sender: BufferedLinkSender<B>,
-		verifier: V,
-		block_import: BoxBlockImport<B, Transaction>,
-		justification_import: Option<BoxJustificationImport<B>>,
-		finality_proof_import: Option<BoxFinalityProofImport<B>>,
-	) -> (impl Future<Output = ()> + Send, TracingUnboundedSender<ToWorkerMsg<B>>) {
-		let (sender, mut port) = tracing_unbounded("mpsc_block_import_worker");
+    fn new<V: 'static + Verifier<B>>(
+        result_sender: BufferedLinkSender<B>,
+        verifier: V,
+        block_import: BoxBlockImport<B, Transaction>,
+        justification_import: Option<BoxJustificationImport<B>>,
+        finality_proof_import: Option<BoxFinalityProofImport<B>>,
+    ) -> (
+        impl Future<Output = ()> + Send,
+        TracingUnboundedSender<ToWorkerMsg<B>>,
+    ) {
+        let (sender, mut port) = tracing_unbounded("mpsc_block_import_worker");
 
-		let mut worker = BlockImportWorker {
-			result_sender,
-			justification_import,
-			finality_proof_import,
-			delay_between_blocks: Duration::new(0, 0),
-			_phantom: PhantomData,
-		};
+        let mut worker = BlockImportWorker {
+            result_sender,
+            justification_import,
+            finality_proof_import,
+            delay_between_blocks: Duration::new(0, 0),
+            _phantom: PhantomData,
+        };
 
-		// Let's initialize `justification_import` and `finality_proof_import`.
-		if let Some(justification_import) = worker.justification_import.as_mut() {
-			for (hash, number) in justification_import.on_start() {
-				worker.result_sender.request_justification(&hash, number);
-			}
-		}
-		if let Some(finality_proof_import) = worker.finality_proof_import.as_mut() {
-			for (hash, number) in finality_proof_import.on_start() {
-				worker.result_sender.request_finality_proof(&hash, number);
-			}
-		}
+        // Let's initialize `justification_import` and `finality_proof_import`.
+        if let Some(justification_import) = worker.justification_import.as_mut() {
+            for (hash, number) in justification_import.on_start() {
+                worker.result_sender.request_justification(&hash, number);
+            }
+        }
+        if let Some(finality_proof_import) = worker.finality_proof_import.as_mut() {
+            for (hash, number) in finality_proof_import.on_start() {
+                worker.result_sender.request_finality_proof(&hash, number);
+            }
+        }
 
-		// The future below has two possible states:
-		//
-		// - Currently importing many blocks, in which case `importing` is `Some` and contains a
-		//   `Future`, and `block_import` is `None`.
-		// - Something else, in which case `block_import` is `Some` and `importing` is None.
-		//
-		let mut block_import_verifier = Some((block_import, verifier));
-		let mut importing = None;
+        // The future below has two possible states:
+        //
+        // - Currently importing many blocks, in which case `importing` is `Some` and contains a
+        //   `Future`, and `block_import` is `None`.
+        // - Something else, in which case `block_import` is `Some` and `importing` is None.
+        //
+        let mut block_import_verifier = Some((block_import, verifier));
+        let mut importing = None;
 
-		let future = futures::future::poll_fn(move |cx| {
-			loop {
-				// If the results sender is closed, that means that the import queue is shutting
-				// down and we should end this future.
-				if worker.result_sender.is_closed() {
-					return Poll::Ready(())
-				}
+        let future = futures::future::poll_fn(move |cx| {
+            loop {
+                // If the results sender is closed, that means that the import queue is shutting
+                // down and we should end this future.
+                if worker.result_sender.is_closed() {
+                    return Poll::Ready(());
+                }
 
-				// If we are in the process of importing a bunch of block, let's resume this
-				// process before doing anything more.
-				if let Some(imp_fut) = importing.as_mut() {
-					match Future::poll(Pin::new(imp_fut), cx) {
-						Poll::Pending => return Poll::Pending,
-						Poll::Ready((bi, verif)) => {
-							block_import_verifier = Some((bi, verif));
-							importing = None;
-						},
-					}
-				}
+                // If we are in the process of importing a bunch of block, let's resume this
+                // process before doing anything more.
+                if let Some(imp_fut) = importing.as_mut() {
+                    match Future::poll(Pin::new(imp_fut), cx) {
+                        Poll::Pending => return Poll::Pending,
+                        Poll::Ready((bi, verif)) => {
+                            block_import_verifier = Some((bi, verif));
+                            importing = None;
+                        }
+                    }
+                }
 
-				debug_assert!(importing.is_none());
-				debug_assert!(block_import_verifier.is_some());
+                debug_assert!(importing.is_none());
+                debug_assert!(block_import_verifier.is_some());
 
-				// Grab the next action request sent to the import queue.
-				let msg = match Stream::poll_next(Pin::new(&mut port), cx) {
-					Poll::Ready(Some(msg)) => msg,
-					Poll::Ready(None) => return Poll::Ready(()),
-					Poll::Pending => return Poll::Pending,
-				};
+                // Grab the next action request sent to the import queue.
+                let msg = match Stream::poll_next(Pin::new(&mut port), cx) {
+                    Poll::Ready(Some(msg)) => msg,
+                    Poll::Ready(None) => return Poll::Ready(()),
+                    Poll::Pending => return Poll::Pending,
+                };
 
-				match msg {
-					ToWorkerMsg::ImportBlocks(origin, blocks) => {
-						// On blocks import request, we merely *start* the process and store
-						// a `Future` into `importing`.
-						let (bi, verif) = block_import_verifier.take()
-							.expect("block_import_verifier is always Some; qed");
-						importing = Some(worker.import_a_batch_of_blocks(bi, verif, origin, blocks));
-					},
-					ToWorkerMsg::ImportFinalityProof(who, hash, number, proof) => {
-						let (_, verif) = block_import_verifier.as_mut()
-							.expect("block_import_verifier is always Some; qed");
-						worker.import_finality_proof(verif, who, hash, number, proof);
-					},
-					ToWorkerMsg::ImportJustification(who, hash, number, justification) => {
-						worker.import_justification(who, hash, number, justification);
-					}
-				}
-			}
-		});
+                match msg {
+                    ToWorkerMsg::ImportBlocks(origin, blocks) => {
+                        // On blocks import request, we merely *start* the process and store
+                        // a `Future` into `importing`.
+                        let (bi, verif) = block_import_verifier
+                            .take()
+                            .expect("block_import_verifier is always Some; qed");
+                        importing =
+                            Some(worker.import_a_batch_of_blocks(bi, verif, origin, blocks));
+                    }
+                    ToWorkerMsg::ImportFinalityProof(who, hash, number, proof) => {
+                        let (_, verif) = block_import_verifier
+                            .as_mut()
+                            .expect("block_import_verifier is always Some; qed");
+                        worker.import_finality_proof(verif, who, hash, number, proof);
+                    }
+                    ToWorkerMsg::ImportJustification(who, hash, number, justification) => {
+                        worker.import_justification(who, hash, number, justification);
+                    }
+                }
+            }
+        });
 
-		(future, sender)
-	}
+        (future, sender)
+    }
 
-	/// Returns a `Future` that imports the given blocks and sends the results on
-	/// `self.result_sender`.
-	///
-	/// For lifetime reasons, the `BlockImport` implementation must be passed by value, and is
-	/// yielded back in the output once the import is finished.
-	fn import_a_batch_of_blocks<V: 'static + Verifier<B>>(
-		&mut self,
-		block_import: BoxBlockImport<B, Transaction>,
-		verifier: V,
-		origin: BlockOrigin,
-		blocks: Vec<IncomingBlock<B>>
-	) -> impl Future<Output = (BoxBlockImport<B, Transaction>, V)> {
-		let mut result_sender = self.result_sender.clone();
+    /// Returns a `Future` that imports the given blocks and sends the results on
+    /// `self.result_sender`.
+    ///
+    /// For lifetime reasons, the `BlockImport` implementation must be passed by value, and is
+    /// yielded back in the output once the import is finished.
+    fn import_a_batch_of_blocks<V: 'static + Verifier<B>>(
+        &mut self,
+        block_import: BoxBlockImport<B, Transaction>,
+        verifier: V,
+        origin: BlockOrigin,
+        blocks: Vec<IncomingBlock<B>>,
+    ) -> impl Future<Output = (BoxBlockImport<B, Transaction>, V)> {
+        let mut result_sender = self.result_sender.clone();
 
-		import_many_blocks(block_import, origin, blocks, verifier, self.delay_between_blocks)
-			.then(move |(imported, count, results, block_import, verifier)| {
-				result_sender.blocks_processed(imported, count, results);
-				future::ready((block_import, verifier))
-			})
-	}
+        import_many_blocks(
+            block_import,
+            origin,
+            blocks,
+            verifier,
+            self.delay_between_blocks,
+        )
+        .then(move |(imported, count, results, block_import, verifier)| {
+            result_sender.blocks_processed(imported, count, results);
+            future::ready((block_import, verifier))
+        })
+    }
 
-	fn import_finality_proof<V: 'static + Verifier<B>>(
-		&mut self,
-		verifier: &mut V,
-		who: Origin,
-		hash: B::Hash,
-		number: NumberFor<B>,
-		finality_proof: Vec<u8>
-	) {
-		let result = self.finality_proof_import.as_mut().map(|finality_proof_import| {
-			finality_proof_import.import_finality_proof(hash, number, finality_proof, verifier)
-				.map_err(|e| {
-					debug!(
+    fn import_finality_proof<V: 'static + Verifier<B>>(
+        &mut self,
+        verifier: &mut V,
+        who: Origin,
+        hash: B::Hash,
+        number: NumberFor<B>,
+        finality_proof: Vec<u8>,
+    ) {
+        let result = self
+            .finality_proof_import
+            .as_mut()
+            .map(|finality_proof_import| {
+                finality_proof_import
+                    .import_finality_proof(hash, number, finality_proof, verifier)
+                    .map_err(|e| {
+                        debug!(
 						"Finality proof import failed with {:?} for hash: {:?} number: {:?} coming from node: {:?}",
 						e,
 						hash,
 						number,
 						who,
 					);
-				})
-		}).unwrap_or(Err(()));
+                    })
+            })
+            .unwrap_or(Err(()));
 
-		trace!(target: "sync", "Imported finality proof for {}/{}", number, hash);
-		self.result_sender.finality_proof_imported(who, (hash, number), result);
-	}
+        trace!(target: "sync", "Imported finality proof for {}/{}", number, hash);
+        self.result_sender
+            .finality_proof_imported(who, (hash, number), result);
+    }
 
-	fn import_justification(
-		&mut self,
-		who: Origin,
-		hash: B::Hash,
-		number: NumberFor<B>,
-		justification: Justification
-	) {
-		let success = self.justification_import.as_mut().map(|justification_import| {
-			justification_import.import_justification(hash, number, justification)
+    fn import_justification(
+        &mut self,
+        who: Origin,
+        hash: B::Hash,
+        number: NumberFor<B>,
+        justification: Justification,
+    ) {
+        let success = self
+            .justification_import
+            .as_mut()
+            .map(|justification_import| {
+                justification_import.import_justification(hash, number, justification)
 				.map_err(|e| {
 					debug!(
 						target: "sync",
@@ -347,10 +377,12 @@ impl<B: BlockT, Transaction: Send> BlockImportWorker<B, Transaction> {
 					);
 					e
 				}).is_ok()
-		}).unwrap_or(false);
+            })
+            .unwrap_or(false);
 
-		self.result_sender.justification_imported(who, &hash, number, success);
-	}
+        self.result_sender
+            .justification_imported(who, &hash, number, success);
+    }
 }
 
 /// Import several blocks at once, returning import result for each block.
@@ -361,105 +393,110 @@ impl<B: BlockT, Transaction: Send> BlockImportWorker<B, Transaction> {
 /// The returned `Future` yields at every imported block, which makes the execution more
 /// fine-grained and making it possible to interrupt the process.
 fn import_many_blocks<B: BlockT, V: Verifier<B>, Transaction>(
-	import_handle: BoxBlockImport<B, Transaction>,
-	blocks_origin: BlockOrigin,
-	blocks: Vec<IncomingBlock<B>>,
-	verifier: V,
-	delay_between_blocks: Duration,
+    import_handle: BoxBlockImport<B, Transaction>,
+    blocks_origin: BlockOrigin,
+    blocks: Vec<IncomingBlock<B>>,
+    verifier: V,
+    delay_between_blocks: Duration,
 ) -> impl Future<
-	Output = (
-		usize,
-		usize,
-		Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash,)>,
-		BoxBlockImport<B, Transaction>,
-		V
-	)
->
-{
-	let count = blocks.len();
+    Output = (
+        usize,
+        usize,
+        Vec<(
+            Result<BlockImportResult<NumberFor<B>>, BlockImportError>,
+            B::Hash,
+        )>,
+        BoxBlockImport<B, Transaction>,
+        V,
+    ),
+> {
+    let count = blocks.len();
 
-	let blocks_range = match (
-		blocks.first().and_then(|b| b.header.as_ref().map(|h| h.number())),
-		blocks.last().and_then(|b| b.header.as_ref().map(|h| h.number())),
-	) {
-		(Some(first), Some(last)) if first != last => format!(" ({}..{})", first, last),
-		(Some(first), Some(_)) => format!(" ({})", first),
-		_ => Default::default(),
-	};
+    let blocks_range = match (
+        blocks
+            .first()
+            .and_then(|b| b.header.as_ref().map(|h| h.number())),
+        blocks
+            .last()
+            .and_then(|b| b.header.as_ref().map(|h| h.number())),
+    ) {
+        (Some(first), Some(last)) if first != last => format!(" ({}..{})", first, last),
+        (Some(first), Some(_)) => format!(" ({})", first),
+        _ => Default::default(),
+    };
 
-	trace!(target: "sync", "Starting import of {} blocks {}", count, blocks_range);
+    trace!(target: "sync", "Starting import of {} blocks {}", count, blocks_range);
 
-	let mut imported = 0;
-	let mut results = vec![];
-	let mut has_error = false;
-	let mut blocks = blocks.into_iter();
-	let mut import_handle = Some(import_handle);
-	let mut waiting = None;
-	let mut verifier = Some(verifier);
+    let mut imported = 0;
+    let mut results = vec![];
+    let mut has_error = false;
+    let mut blocks = blocks.into_iter();
+    let mut import_handle = Some(import_handle);
+    let mut waiting = None;
+    let mut verifier = Some(verifier);
 
-	// Blocks in the response/drain should be in ascending order.
+    // Blocks in the response/drain should be in ascending order.
 
-	future::poll_fn(move |cx| {
-		// Handle the optional timer that makes us wait before the next import.
-		if let Some(waiting) = &mut waiting {
-			match Future::poll(Pin::new(waiting), cx) {
-				Poll::Ready(_) => {},
-				Poll::Pending => return Poll::Pending,
-			}
-		}
-		waiting = None;
+    future::poll_fn(move |cx| {
+        // Handle the optional timer that makes us wait before the next import.
+        if let Some(waiting) = &mut waiting {
+            match Future::poll(Pin::new(waiting), cx) {
+                Poll::Ready(_) => {}
+                Poll::Pending => return Poll::Pending,
+            }
+        }
+        waiting = None;
 
-		// Is there any block left to import?
-		let block = match blocks.next() {
-			Some(b) => b,
-			None => {
-				// No block left to import, success!
-				let import_handle = import_handle.take()
-					.expect("Future polled again after it has finished");
-				let verifier = verifier.take()
-					.expect("Future polled again after it has finished");
-				let results = mem::replace(&mut results, Vec::new());
-				return Poll::Ready((imported, count, results, import_handle, verifier));
-			},
-		};
+        // Is there any block left to import?
+        let block = match blocks.next() {
+            Some(b) => b,
+            None => {
+                // No block left to import, success!
+                let import_handle = import_handle
+                    .take()
+                    .expect("Future polled again after it has finished");
+                let verifier = verifier
+                    .take()
+                    .expect("Future polled again after it has finished");
+                let results = mem::replace(&mut results, Vec::new());
+                return Poll::Ready((imported, count, results, import_handle, verifier));
+            }
+        };
 
-		// We extract the content of `import_handle` and `verifier` only when the future ends,
-		// therefore `import_handle` and `verifier` are always `Some` here. It is illegal to poll
-		// a `Future` again after it has ended.
-		let import_handle = import_handle.as_mut()
-			.expect("Future polled again after it has finished");
-		let verifier = verifier.as_mut()
-			.expect("Future polled again after it has finished");
+        // We extract the content of `import_handle` and `verifier` only when the future ends,
+        // therefore `import_handle` and `verifier` are always `Some` here. It is illegal to poll
+        // a `Future` again after it has ended.
+        let import_handle = import_handle
+            .as_mut()
+            .expect("Future polled again after it has finished");
+        let verifier = verifier
+            .as_mut()
+            .expect("Future polled again after it has finished");
 
-		let block_number = block.header.as_ref().map(|h| h.number().clone());
-		let block_hash = block.hash;
-		let import_result = if has_error {
-			Err(BlockImportError::Cancelled)
-		} else {
-			// The actual import.
-			import_single_block(
-				&mut **import_handle,
-				blocks_origin.clone(),
-				block,
-				verifier,
-			)
-		};
+        let block_number = block.header.as_ref().map(|h| h.number().clone());
+        let block_hash = block.hash;
+        let import_result = if has_error {
+            Err(BlockImportError::Cancelled)
+        } else {
+            // The actual import.
+            import_single_block(&mut **import_handle, blocks_origin.clone(), block, verifier)
+        };
 
-		if import_result.is_ok() {
-			trace!(target: "sync", "Block imported successfully {:?} ({})", block_number, block_hash);
-			imported += 1;
-		} else {
-			has_error = true;
-		}
+        if import_result.is_ok() {
+            trace!(target: "sync", "Block imported successfully {:?} ({})", block_number, block_hash);
+            imported += 1;
+        } else {
+            has_error = true;
+        }
 
-		results.push((import_result, block_hash));
+        results.push((import_result, block_hash));
 
-		// Notifies the current task again so that we re-execute this closure again for the next
-		// block.
-		if delay_between_blocks != Duration::new(0, 0) {
-			waiting = Some(Delay::new(delay_between_blocks));
-		}
-		cx.waker().wake_by_ref();
-		Poll::Pending
-	})
+        // Notifies the current task again so that we re-execute this closure again for the next
+        // block.
+        if delay_between_blocks != Duration::new(0, 0) {
+            waiting = Some(Delay::new(delay_between_blocks));
+        }
+        cx.waker().wake_by_ref();
+        Poll::Pending
+    })
 }

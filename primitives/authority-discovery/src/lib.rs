@@ -21,30 +21,27 @@
 use sp_std::vec::Vec;
 
 mod app {
-	use sp_application_crypto::{
-		CryptoTypePublicPair,
-		key_types::AUTHORITY_DISCOVERY,
-		Public as _,
-		app_crypto,
-		sr25519};
-	app_crypto!(sr25519, AUTHORITY_DISCOVERY);
+    use sp_application_crypto::{
+        app_crypto, key_types::AUTHORITY_DISCOVERY, sr25519, CryptoTypePublicPair, Public as _,
+    };
+    app_crypto!(sr25519, AUTHORITY_DISCOVERY);
 
-	impl From<Public> for CryptoTypePublicPair {
-		fn from(key: Public) -> Self {
-			(&key).into()
-		}
-	}
+    impl From<Public> for CryptoTypePublicPair {
+        fn from(key: Public) -> Self {
+            (&key).into()
+        }
+    }
 
-	impl From<&Public> for CryptoTypePublicPair {
-		fn from(key: &Public) -> Self {
-			CryptoTypePublicPair(sr25519::CRYPTO_ID, key.to_raw_vec())
-		}
-	}
+    impl From<&Public> for CryptoTypePublicPair {
+        fn from(key: &Public) -> Self {
+            CryptoTypePublicPair(sr25519::CRYPTO_ID, key.to_raw_vec())
+        }
+    }
 }
 
 sp_application_crypto::with_pair! {
-	/// An authority discovery authority keypair.
-	pub type AuthorityPair = app::Pair;
+    /// An authority discovery authority keypair.
+    pub type AuthorityPair = app::Pair;
 }
 
 /// An authority discovery authority identifier.
@@ -54,12 +51,12 @@ pub type AuthorityId = app::Public;
 pub type AuthoritySignature = app::Signature;
 
 sp_api::decl_runtime_apis! {
-	/// The authority discovery api.
-	///
-	/// This api is used by the `client/authority-discovery` module to retrieve identifiers
-	/// of the current authority set.
-	pub trait AuthorityDiscoveryApi {
-		/// Retrieve authority identifiers of the current authority set.
-		fn authorities() -> Vec<AuthorityId>;
-	}
+    /// The authority discovery api.
+    ///
+    /// This api is used by the `client/authority-discovery` module to retrieve identifiers
+    /// of the current authority set.
+    pub trait AuthorityDiscoveryApi {
+        /// Retrieve authority identifiers of the current authority set.
+        fn authorities() -> Vec<AuthorityId>;
+    }
 }

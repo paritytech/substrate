@@ -39,23 +39,23 @@ use structopt::StructOpt;
 /// `Run` are exported as main executable parameters.
 #[derive(Debug, Clone, StructOpt)]
 pub enum Subcommand {
-	/// Build a spec.json file, outputs to stdout.
-	BuildSpec(BuildSpecCmd),
+    /// Build a spec.json file, outputs to stdout.
+    BuildSpec(BuildSpecCmd),
 
-	/// Export blocks to a file.
-	ExportBlocks(ExportBlocksCmd),
+    /// Export blocks to a file.
+    ExportBlocks(ExportBlocksCmd),
 
-	/// Import blocks from file.
-	ImportBlocks(ImportBlocksCmd),
+    /// Import blocks from file.
+    ImportBlocks(ImportBlocksCmd),
 
-	/// Validate a single block.
-	CheckBlock(CheckBlockCmd),
+    /// Validate a single block.
+    CheckBlock(CheckBlockCmd),
 
-	/// Revert chain to the previous state.
-	Revert(RevertCmd),
+    /// Revert chain to the previous state.
+    Revert(RevertCmd),
 
-	/// Remove the whole chain data.
-	PurgeChain(PurgeChainCmd),
+    /// Remove the whole chain data.
+    PurgeChain(PurgeChainCmd),
 }
 
 // TODO: move to config.rs?

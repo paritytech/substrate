@@ -16,9 +16,9 @@
 
 #[test]
 fn reserved_keyword() {
-	// As trybuild is using `cargo check`, we don't need the real WASM binaries.
-	std::env::set_var("BUILD_DUMMY_WASM_BINARY", "1");
+    // As trybuild is using `cargo check`, we don't need the real WASM binaries.
+    std::env::set_var("BUILD_DUMMY_WASM_BINARY", "1");
 
-	let t = trybuild::TestCases::new();
-	t.compile_fail("tests/reserved_keyword/*.rs");
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/reserved_keyword/*.rs");
 }

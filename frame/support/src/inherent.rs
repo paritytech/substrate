@@ -15,12 +15,11 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 #[doc(hidden)]
-pub use crate::sp_std::vec::Vec;
-#[doc(hidden)]
 pub use crate::sp_runtime::traits::{Block as BlockT, Extrinsic};
 #[doc(hidden)]
-pub use sp_inherents::{InherentData, ProvideInherent, CheckInherentsResult, IsFatalError};
-
+pub use crate::sp_std::vec::Vec;
+#[doc(hidden)]
+pub use sp_inherents::{CheckInherentsResult, InherentData, IsFatalError, ProvideInherent};
 
 /// Implement the outer inherent.
 /// All given modules need to implement `ProvideInherent`.

@@ -18,21 +18,25 @@
 
 #![cfg(test)]
 
-use sp_runtime::{Perbill, DigestItem, traits::IdentityLookup, testing::{Header, UintAuthorityId}};
-use sp_io;
-use frame_support::{impl_outer_origin, impl_outer_event, parameter_types, weights::Weight};
+use crate::{AuthorityId, AuthorityList, ConsensusLog, GenesisConfig, Module, Trait};
+use codec::{Decode, Encode};
+use frame_support::{impl_outer_event, impl_outer_origin, parameter_types, weights::Weight};
 use sp_core::H256;
-use codec::{Encode, Decode};
-use crate::{AuthorityId, AuthorityList, GenesisConfig, Trait, Module, ConsensusLog};
 use sp_finality_grandpa::GRANDPA_ENGINE_ID;
+use sp_io;
+use sp_runtime::{
+    testing::{Header, UintAuthorityId},
+    traits::IdentityLookup,
+    DigestItem, Perbill,
+};
 
 use frame_system as system;
-impl_outer_origin!{
-	pub enum Origin for Test  where system = frame_system {}
+impl_outer_origin! {
+    pub enum Origin for Test  where system = frame_system {}
 }
 
 pub fn grandpa_log(log: ConsensusLog<u64>) -> DigestItem<H256> {
-	DigestItem::Consensus(GRANDPA_ENGINE_ID, log.encode())
+    DigestItem::Consensus(GRANDPA_ENGINE_ID, log.encode())
 }
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
@@ -40,60 +44,64 @@ pub fn grandpa_log(log: ConsensusLog<u64>) -> DigestItem<H256> {
 pub struct Test;
 
 impl Trait for Test {
-	type Event = TestEvent;
+    type Event = TestEvent;
 }
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: Weight = 1024;
-	pub const MaximumBlockLength: u32 = 2 * 1024;
-	pub const AvailableBlockRatio: Perbill = Perbill::one();
+    pub const BlockHashCount: u64 = 250;
+    pub const MaximumBlockWeight: Weight = 1024;
+    pub const MaximumBlockLength: u32 = 2 * 1024;
+    pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 impl frame_system::Trait for Test {
-	type Origin = Origin;
-	type Index = u64;
-	type BlockNumber = u64;
-	type Call = ();
-	type Hash = H256;
-	type Hashing = sp_runtime::traits::BlakeTwo256;
-	type AccountId = u64;
-	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
-	type Event = TestEvent;
-	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
-	type DbWeight = ();
-	type MaximumBlockLength = MaximumBlockLength;
-	type AvailableBlockRatio = AvailableBlockRatio;
-	type Version = ();
-	type ModuleToIndex = ();
-	type AccountData = ();
-	type OnNewAccount = ();
-	type OnKilledAccount = ();
+    type Origin = Origin;
+    type Index = u64;
+    type BlockNumber = u64;
+    type Call = ();
+    type Hash = H256;
+    type Hashing = sp_runtime::traits::BlakeTwo256;
+    type AccountId = u64;
+    type Lookup = IdentityLookup<Self::AccountId>;
+    type Header = Header;
+    type Event = TestEvent;
+    type BlockHashCount = BlockHashCount;
+    type MaximumBlockWeight = MaximumBlockWeight;
+    type DbWeight = ();
+    type MaximumBlockLength = MaximumBlockLength;
+    type AvailableBlockRatio = AvailableBlockRatio;
+    type Version = ();
+    type ModuleToIndex = ();
+    type AccountData = ();
+    type OnNewAccount = ();
+    type OnKilledAccount = ();
 }
 
 mod grandpa {
-	pub use crate::Event;
+    pub use crate::Event;
 }
 
-impl_outer_event!{
-	pub enum TestEvent for Test {
-		system<T>,
-		grandpa,
-	}
+impl_outer_event! {
+    pub enum TestEvent for Test {
+        system<T>,
+        grandpa,
+    }
 }
 
 pub fn to_authorities(vec: Vec<(u64, u64)>) -> AuthorityList {
-	vec.into_iter()
-		.map(|(id, weight)| (UintAuthorityId(id).to_public_key::<AuthorityId>(), weight))
-		.collect()
+    vec.into_iter()
+        .map(|(id, weight)| (UintAuthorityId(id).to_public_key::<AuthorityId>(), weight))
+        .collect()
 }
 
 pub fn new_test_ext(authorities: Vec<(u64, u64)>) -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	GenesisConfig {
-		authorities: to_authorities(authorities),
-	}.assimilate_storage::<Test>(&mut t).unwrap();
-	t.into()
+    let mut t = frame_system::GenesisConfig::default()
+        .build_storage::<Test>()
+        .unwrap();
+    GenesisConfig {
+        authorities: to_authorities(authorities),
+    }
+    .assimilate_storage::<Test>(&mut t)
+    .unwrap();
+    t.into()
 }
 
 pub type System = frame_system::Module<Test>;

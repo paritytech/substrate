@@ -16,18 +16,12 @@
 
 pub use self::collec::UpgradeCollec;
 pub use self::legacy::{
-	RegisteredProtocol,
-	RegisteredProtocolEvent,
-	RegisteredProtocolName,
-	RegisteredProtocolSubstream
+    RegisteredProtocol, RegisteredProtocolEvent, RegisteredProtocolName,
+    RegisteredProtocolSubstream,
 };
 pub use self::notifications::{
-	NotificationsIn,
-	NotificationsInSubstream,
-	NotificationsOut,
-	NotificationsOutSubstream,
-	NotificationsHandshakeError,
-	NotificationsOutError,
+    NotificationsHandshakeError, NotificationsIn, NotificationsInSubstream, NotificationsOut,
+    NotificationsOutError, NotificationsOutSubstream,
 };
 
 mod collec;

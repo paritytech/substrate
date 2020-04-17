@@ -24,9 +24,9 @@ mod errors;
 mod helpers;
 mod subscriptions;
 
+pub use helpers::Receiver;
 pub use jsonrpc_core::IoHandlerExtension as RpcExtension;
 pub use subscriptions::{Subscriptions, TaskExecutor};
-pub use helpers::Receiver;
 
 pub mod author;
 pub mod chain;

@@ -246,13 +246,13 @@ pub mod config;
 pub mod error;
 pub mod network_state;
 
-pub use service::{NetworkService, NetworkStateInfo, NetworkWorker, ExHashT, ReportHandle};
-pub use protocol::PeerInfo;
-pub use protocol::event::{Event, DhtEvent, ObservedRole};
-pub use protocol::sync::SyncState;
-pub use libp2p::{Multiaddr, PeerId};
 #[doc(inline)]
 pub use libp2p::multiaddr;
+pub use libp2p::{Multiaddr, PeerId};
+pub use protocol::event::{DhtEvent, Event, ObservedRole};
+pub use protocol::sync::SyncState;
+pub use protocol::PeerInfo;
+pub use service::{ExHashT, NetworkService, NetworkStateInfo, NetworkWorker, ReportHandle};
 
 pub use sc_peerset::ReputationChange;
 

@@ -96,9 +96,9 @@ macro_rules! unmarshall_then_body {
 #[inline(always)]
 pub fn constrain_closure<R, F>(f: F) -> F
 where
-	F: FnOnce() -> Result<R, sp_sandbox::HostError>,
+    F: FnOnce() -> Result<R, sp_sandbox::HostError>,
 {
-	f
+    f
 }
 
 #[macro_export]
@@ -193,131 +193,139 @@ macro_rules! define_env {
 
 #[cfg(test)]
 mod tests {
-	use parity_wasm::elements::FunctionType;
-	use parity_wasm::elements::ValueType;
-	use sp_runtime::traits::Zero;
-	use sp_sandbox::{ReturnValue, Value};
-	use crate::wasm::tests::MockExt;
-	use crate::wasm::Runtime;
-	use crate::exec::Ext;
-	use crate::gas::Gas;
+    use crate::exec::Ext;
+    use crate::gas::Gas;
+    use crate::wasm::tests::MockExt;
+    use crate::wasm::Runtime;
+    use parity_wasm::elements::FunctionType;
+    use parity_wasm::elements::ValueType;
+    use sp_runtime::traits::Zero;
+    use sp_sandbox::{ReturnValue, Value};
 
-	#[test]
-	fn macro_unmarshall_then_body_then_marshall_value_or_trap() {
-		fn test_value(
-			_ctx: &mut u32,
-			args: &[sp_sandbox::Value],
-		) -> Result<ReturnValue, sp_sandbox::HostError> {
-			let mut args = args.iter();
-			unmarshall_then_body_then_marshall!(
-				args,
-				_ctx,
-				(a: u32, b: u32) -> u32 => {
-					if b == 0 {
-						Err(sp_sandbox::HostError)
-					} else {
-						Ok(a / b)
-					}
-				}
-			)
-		}
+    #[test]
+    fn macro_unmarshall_then_body_then_marshall_value_or_trap() {
+        fn test_value(
+            _ctx: &mut u32,
+            args: &[sp_sandbox::Value],
+        ) -> Result<ReturnValue, sp_sandbox::HostError> {
+            let mut args = args.iter();
+            unmarshall_then_body_then_marshall!(
+                args,
+                _ctx,
+                (a: u32, b: u32) -> u32 => {
+                    if b == 0 {
+                        Err(sp_sandbox::HostError)
+                    } else {
+                        Ok(a / b)
+                    }
+                }
+            )
+        }
 
-		let ctx = &mut 0;
-		assert_eq!(
-			test_value(ctx, &[Value::I32(15), Value::I32(3)]).unwrap(),
-			ReturnValue::Value(Value::I32(5)),
-		);
-		assert!(test_value(ctx, &[Value::I32(15), Value::I32(0)]).is_err());
-	}
+        let ctx = &mut 0;
+        assert_eq!(
+            test_value(ctx, &[Value::I32(15), Value::I32(3)]).unwrap(),
+            ReturnValue::Value(Value::I32(5)),
+        );
+        assert!(test_value(ctx, &[Value::I32(15), Value::I32(0)]).is_err());
+    }
 
-	#[test]
-	fn macro_unmarshall_then_body_then_marshall_unit() {
-		fn test_unit(
-			ctx: &mut u32,
-			args: &[sp_sandbox::Value],
-		) -> Result<ReturnValue, sp_sandbox::HostError> {
-			let mut args = args.iter();
-			unmarshall_then_body_then_marshall!(
-				args,
-				ctx,
-				(a: u32, b: u32) => {
-					*ctx = a + b;
-					Ok(())
-				}
-			)
-		}
+    #[test]
+    fn macro_unmarshall_then_body_then_marshall_unit() {
+        fn test_unit(
+            ctx: &mut u32,
+            args: &[sp_sandbox::Value],
+        ) -> Result<ReturnValue, sp_sandbox::HostError> {
+            let mut args = args.iter();
+            unmarshall_then_body_then_marshall!(
+                args,
+                ctx,
+                (a: u32, b: u32) => {
+                    *ctx = a + b;
+                    Ok(())
+                }
+            )
+        }
 
-		let ctx = &mut 0;
-		let result = test_unit(ctx, &[Value::I32(2), Value::I32(3)]).unwrap();
-		assert_eq!(result, ReturnValue::Unit);
-		assert_eq!(*ctx, 5);
-	}
+        let ctx = &mut 0;
+        let result = test_unit(ctx, &[Value::I32(2), Value::I32(3)]).unwrap();
+        assert_eq!(result, ReturnValue::Unit);
+        assert_eq!(*ctx, 5);
+    }
 
-	#[test]
-	fn macro_define_func() {
-		define_func!( <E: Ext> ext_gas (_ctx, amount: u32) => {
-			let amount = Gas::from(amount);
-			if !amount.is_zero() {
-				Ok(())
-			} else {
-				Err(sp_sandbox::HostError)
-			}
-		});
-		let _f: fn(&mut Runtime<MockExt>, &[sp_sandbox::Value])
-			-> Result<sp_sandbox::ReturnValue, sp_sandbox::HostError> = ext_gas::<MockExt>;
-	}
+    #[test]
+    fn macro_define_func() {
+        define_func!( <E: Ext> ext_gas (_ctx, amount: u32) => {
+            let amount = Gas::from(amount);
+            if !amount.is_zero() {
+                Ok(())
+            } else {
+                Err(sp_sandbox::HostError)
+            }
+        });
+        let _f: fn(
+            &mut Runtime<MockExt>,
+            &[sp_sandbox::Value],
+        ) -> Result<sp_sandbox::ReturnValue, sp_sandbox::HostError> = ext_gas::<MockExt>;
+    }
 
-	#[test]
-	fn macro_gen_signature() {
-		assert_eq!(
-			gen_signature!((i32)),
-			FunctionType::new(vec![ValueType::I32], None),
-		);
+    #[test]
+    fn macro_gen_signature() {
+        assert_eq!(
+            gen_signature!((i32)),
+            FunctionType::new(vec![ValueType::I32], None),
+        );
 
-		assert_eq!(
-			gen_signature!( (i32, u32) -> u32 ),
-			FunctionType::new(vec![ValueType::I32, ValueType::I32], Some(ValueType::I32)),
-		);
-	}
+        assert_eq!(
+            gen_signature!( (i32, u32) -> u32 ),
+            FunctionType::new(vec![ValueType::I32, ValueType::I32], Some(ValueType::I32)),
+        );
+    }
 
-	#[test]
-	fn macro_unmarshall_then_body() {
-		let args = vec![Value::I32(5), Value::I32(3)];
-		let mut args = args.iter();
+    #[test]
+    fn macro_unmarshall_then_body() {
+        let args = vec![Value::I32(5), Value::I32(3)];
+        let mut args = args.iter();
 
-		let ctx: &mut u32 = &mut 0;
+        let ctx: &mut u32 = &mut 0;
 
-		let r = unmarshall_then_body!(
-			{
-				*ctx = a + b;
-				a * b
-			},
-			ctx,
-			args,
-			a: u32,
-			b: u32
-		);
+        let r = unmarshall_then_body!(
+            {
+                *ctx = a + b;
+                a * b
+            },
+            ctx,
+            args,
+            a: u32,
+            b: u32
+        );
 
-		assert_eq!(*ctx, 8);
-		assert_eq!(r, 15);
-	}
+        assert_eq!(*ctx, 8);
+        assert_eq!(r, 15);
+    }
 
-	#[test]
-	fn macro_define_env() {
-		use crate::wasm::env_def::ImportSatisfyCheck;
+    #[test]
+    fn macro_define_env() {
+        use crate::wasm::env_def::ImportSatisfyCheck;
 
-		define_env!(Env, <E: Ext>,
-			ext_gas( _ctx, amount: u32 ) => {
-				let amount = Gas::from(amount);
-				if !amount.is_zero() {
-					Ok(())
-				} else {
-					Err(sp_sandbox::HostError)
-				}
-			},
-		);
+        define_env!(Env, <E: Ext>,
+            ext_gas( _ctx, amount: u32 ) => {
+                let amount = Gas::from(amount);
+                if !amount.is_zero() {
+                    Ok(())
+                } else {
+                    Err(sp_sandbox::HostError)
+                }
+            },
+        );
 
-		assert!(Env::can_satisfy(b"ext_gas", &FunctionType::new(vec![ValueType::I32], None)));
-		assert!(!Env::can_satisfy(b"not_exists", &FunctionType::new(vec![], None)));
-	}
+        assert!(Env::can_satisfy(
+            b"ext_gas",
+            &FunctionType::new(vec![ValueType::I32], None)
+        ));
+        assert!(!Env::can_satisfy(
+            b"not_exists",
+            &FunctionType::new(vec![], None)
+        ));
+    }
 }

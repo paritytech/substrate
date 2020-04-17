@@ -23,17 +23,17 @@ pub mod digests;
 pub mod inherents;
 
 pub use sp_consensus_vrf::schnorrkel::{
-	Randomness, VRF_PROOF_LENGTH, VRF_OUTPUT_LENGTH, RANDOMNESS_LENGTH
+    Randomness, RANDOMNESS_LENGTH, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH,
 };
 
-use codec::{Encode, Decode};
-use sp_std::vec::Vec;
-use sp_runtime::{ConsensusEngineId, RuntimeDebug};
 use crate::digests::NextEpochDescriptor;
+use codec::{Decode, Encode};
+use sp_runtime::{ConsensusEngineId, RuntimeDebug};
+use sp_std::vec::Vec;
 
 mod app {
-	use sp_application_crypto::{app_crypto, key_types::BABE, sr25519};
-	app_crypto!(sr25519, BABE);
+    use sp_application_crypto::{app_crypto, key_types::BABE, sr25519};
+    app_crypto!(sr25519, BABE);
 }
 
 /// The prefix used by BABE for its VRF keys.
@@ -79,66 +79,66 @@ pub type BabeBlockWeight = u32;
 /// An consensus log item for BABE.
 #[derive(Decode, Encode, Clone, PartialEq, Eq)]
 pub enum ConsensusLog {
-	/// The epoch has changed. This provides information about the _next_
-	/// epoch - information about the _current_ epoch (i.e. the one we've just
-	/// entered) should already be available earlier in the chain.
-	#[codec(index = "1")]
-	NextEpochData(NextEpochDescriptor),
-	/// Disable the authority with given index.
-	#[codec(index = "2")]
-	OnDisabled(AuthorityIndex),
+    /// The epoch has changed. This provides information about the _next_
+    /// epoch - information about the _current_ epoch (i.e. the one we've just
+    /// entered) should already be available earlier in the chain.
+    #[codec(index = "1")]
+    NextEpochData(NextEpochDescriptor),
+    /// Disable the authority with given index.
+    #[codec(index = "2")]
+    OnDisabled(AuthorityIndex),
 }
 
 /// Configuration data used by the BABE consensus engine.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
 pub struct BabeConfiguration {
-	/// The slot duration in milliseconds for BABE. Currently, only
-	/// the value provided by this type at genesis will be used.
-	///
-	/// Dynamic slot duration may be supported in the future.
-	pub slot_duration: u64,
+    /// The slot duration in milliseconds for BABE. Currently, only
+    /// the value provided by this type at genesis will be used.
+    ///
+    /// Dynamic slot duration may be supported in the future.
+    pub slot_duration: u64,
 
-	/// The duration of epochs in slots.
-	pub epoch_length: SlotNumber,
+    /// The duration of epochs in slots.
+    pub epoch_length: SlotNumber,
 
-	/// A constant value that is used in the threshold calculation formula.
-	/// Expressed as a rational where the first member of the tuple is the
-	/// numerator and the second is the denominator. The rational should
-	/// represent a value between 0 and 1.
-	/// In the threshold formula calculation, `1 - c` represents the probability
-	/// of a slot being empty.
-	pub c: (u64, u64),
+    /// A constant value that is used in the threshold calculation formula.
+    /// Expressed as a rational where the first member of the tuple is the
+    /// numerator and the second is the denominator. The rational should
+    /// represent a value between 0 and 1.
+    /// In the threshold formula calculation, `1 - c` represents the probability
+    /// of a slot being empty.
+    pub c: (u64, u64),
 
-	/// The authorities for the genesis epoch.
-	pub genesis_authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
+    /// The authorities for the genesis epoch.
+    pub genesis_authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 
-	/// The randomness for the genesis epoch.
-	pub randomness: Randomness,
+    /// The randomness for the genesis epoch.
+    pub randomness: Randomness,
 
-	/// Whether this chain should run with secondary slots, which are assigned
-	/// in round-robin manner.
-	pub secondary_slots: bool,
+    /// Whether this chain should run with secondary slots, which are assigned
+    /// in round-robin manner.
+    pub secondary_slots: bool,
 }
 
 #[cfg(feature = "std")]
 impl sp_consensus::SlotData for BabeConfiguration {
-	fn slot_duration(&self) -> u64 {
-		self.slot_duration
-	}
+    fn slot_duration(&self) -> u64 {
+        self.slot_duration
+    }
 
-	const SLOT_KEY: &'static [u8] = b"babe_configuration";
+    const SLOT_KEY: &'static [u8] = b"babe_configuration";
 }
 
 sp_api::decl_runtime_apis! {
-	/// API necessary for block authorship with BABE.
-	pub trait BabeApi {
-		/// Return the configuration for BABE. Currently,
-		/// only the value provided by this type at genesis will be used.
-		///
-		/// Dynamic configuration may be supported in the future.
-		fn configuration() -> BabeConfiguration;
+    /// API necessary for block authorship with BABE.
+    pub trait BabeApi {
+        /// Return the configuration for BABE. Currently,
+        /// only the value provided by this type at genesis will be used.
+        ///
+        /// Dynamic configuration may be supported in the future.
+        fn configuration() -> BabeConfiguration;
 
-		/// Returns the slot number that started the current epoch.
-		fn current_epoch_start() -> SlotNumber;
-	}
+        /// Returns the slot number that started the current epoch.
+        fn current_epoch_start() -> SlotNumber;
+    }
 }

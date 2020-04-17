@@ -23,16 +23,16 @@
 pub const STORAGE_PREFIX: &[u8] = b"storage";
 
 sp_api::decl_runtime_apis! {
-	/// The offchain worker api.
-	#[api_version(2)]
-	pub trait OffchainWorkerApi {
-		/// Starts the off-chain task for given block number.
-		#[skip_initialize_block]
-		#[changed_in(2)]
-		fn offchain_worker(number: sp_runtime::traits::NumberFor<Block>);
+    /// The offchain worker api.
+    #[api_version(2)]
+    pub trait OffchainWorkerApi {
+        /// Starts the off-chain task for given block number.
+        #[skip_initialize_block]
+        #[changed_in(2)]
+        fn offchain_worker(number: sp_runtime::traits::NumberFor<Block>);
 
-		/// Starts the off-chain task for given block header.
-		#[skip_initialize_block]
-		fn offchain_worker(header: &Block::Header);
-	}
+        /// Starts the off-chain task for given block header.
+        #[skip_initialize_block]
+        fn offchain_worker(header: &Block::Header);
+    }
 }

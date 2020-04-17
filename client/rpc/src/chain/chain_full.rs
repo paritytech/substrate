@@ -16,63 +16,67 @@
 
 //! Blockchain API backend for full nodes.
 
-use std::sync::Arc;
 use rpc::futures::future::result;
+use std::sync::Arc;
 
+use sc_client_api::{BlockBackend, BlockchainEvents};
 use sc_rpc_api::Subscriptions;
-use sc_client_api::{BlockchainEvents, BlockBackend};
-use sp_runtime::{generic::{BlockId, SignedBlock}, traits::{Block as BlockT}};
+use sp_runtime::{
+    generic::{BlockId, SignedBlock},
+    traits::Block as BlockT,
+};
 
-use super::{ChainBackend, client_err, error::FutureResult};
-use std::marker::PhantomData;
+use super::{client_err, error::FutureResult, ChainBackend};
 use sp_blockchain::HeaderBackend;
+use std::marker::PhantomData;
 
 /// Blockchain API backend for full nodes. Reads all the data from local database.
 pub struct FullChain<Block: BlockT, Client> {
-	/// Substrate client.
-	client: Arc<Client>,
-	/// Current subscriptions.
-	subscriptions: Subscriptions,
-	/// phantom member to pin the block type
-	_phantom: PhantomData<Block>,
+    /// Substrate client.
+    client: Arc<Client>,
+    /// Current subscriptions.
+    subscriptions: Subscriptions,
+    /// phantom member to pin the block type
+    _phantom: PhantomData<Block>,
 }
 
 impl<Block: BlockT, Client> FullChain<Block, Client> {
-	/// Create new Chain API RPC handler.
-	pub fn new(client: Arc<Client>, subscriptions: Subscriptions) -> Self {
-		Self {
-			client,
-			subscriptions,
-			_phantom: PhantomData,
-		}
-	}
+    /// Create new Chain API RPC handler.
+    pub fn new(client: Arc<Client>, subscriptions: Subscriptions) -> Self {
+        Self {
+            client,
+            subscriptions,
+            _phantom: PhantomData,
+        }
+    }
 }
 
-impl<Block, Client> ChainBackend<Client, Block> for FullChain<Block, Client> where
-	Block: BlockT + 'static,
-	Client: BlockBackend<Block> + HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
+impl<Block, Client> ChainBackend<Client, Block> for FullChain<Block, Client>
+where
+    Block: BlockT + 'static,
+    Client: BlockBackend<Block> + HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 {
-	fn client(&self) -> &Arc<Client> {
-		&self.client
-	}
+    fn client(&self) -> &Arc<Client> {
+        &self.client
+    }
 
-	fn subscriptions(&self) -> &Subscriptions {
-		&self.subscriptions
-	}
+    fn subscriptions(&self) -> &Subscriptions {
+        &self.subscriptions
+    }
 
-	fn header(&self, hash: Option<Block::Hash>) -> FutureResult<Option<Block::Header>> {
-		Box::new(result(self.client
-			.header(BlockId::Hash(self.unwrap_or_best(hash)))
-			.map_err(client_err)
-		))
-	}
+    fn header(&self, hash: Option<Block::Hash>) -> FutureResult<Option<Block::Header>> {
+        Box::new(result(
+            self.client
+                .header(BlockId::Hash(self.unwrap_or_best(hash)))
+                .map_err(client_err),
+        ))
+    }
 
-	fn block(&self, hash: Option<Block::Hash>)
-		-> FutureResult<Option<SignedBlock<Block>>>
-	{
-		Box::new(result(self.client
-			.block(&BlockId::Hash(self.unwrap_or_best(hash)))
-			.map_err(client_err)
-		))
-	}
+    fn block(&self, hash: Option<Block::Hash>) -> FutureResult<Option<SignedBlock<Block>>> {
+        Box::new(result(
+            self.client
+                .block(&BlockId::Hash(self.unwrap_or_best(hash)))
+                .map_err(client_err),
+        ))
+    }
 }

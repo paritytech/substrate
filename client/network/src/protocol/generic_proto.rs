@@ -25,5 +25,5 @@ pub use self::handler::LegacyConnectionKillError;
 
 mod behaviour;
 mod handler;
-mod upgrade;
 mod tests;
+mod upgrade;

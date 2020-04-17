@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-pub use self::group::{NotifsHandlerProto, NotifsHandler, NotifsHandlerIn, NotifsHandlerOut};
+pub use self::group::{NotifsHandler, NotifsHandlerIn, NotifsHandlerOut, NotifsHandlerProto};
 pub use self::legacy::ConnectionKillError as LegacyConnectionKillError;
 
 mod group;

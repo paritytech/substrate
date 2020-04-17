@@ -22,55 +22,58 @@ use std::{hash::Hash, num::NonZeroUsize};
 /// In the limit, for each element inserted the oldest existing element will be removed.
 #[derive(Debug, Clone)]
 pub(crate) struct LruHashSet<T: Hash + Eq> {
-	set: LinkedHashSet<T>,
-	limit: NonZeroUsize
+    set: LinkedHashSet<T>,
+    limit: NonZeroUsize,
 }
 
 impl<T: Hash + Eq> LruHashSet<T> {
-	/// Create a new `LruHashSet` with the given (exclusive) limit.
-	pub(crate) fn new(limit: NonZeroUsize) -> Self {
-		Self { set: LinkedHashSet::new(), limit }
-	}
+    /// Create a new `LruHashSet` with the given (exclusive) limit.
+    pub(crate) fn new(limit: NonZeroUsize) -> Self {
+        Self {
+            set: LinkedHashSet::new(),
+            limit,
+        }
+    }
 
-	/// Insert element into the set.
-	///
-	/// Returns `true` if this is a new element to the set, `false` otherwise.
-	/// Maintains the limit of the set by removing the oldest entry if necessary.
-	/// Inserting the same element will update its LRU position.
-	pub(crate) fn insert(&mut self, e: T) -> bool {
-		if self.set.insert(e) {
-			if self.set.len() == usize::from(self.limit) {
-				self.set.pop_front(); // remove oldest entry
-			}
-			return true
-		}
-		false
-	}
+    /// Insert element into the set.
+    ///
+    /// Returns `true` if this is a new element to the set, `false` otherwise.
+    /// Maintains the limit of the set by removing the oldest entry if necessary.
+    /// Inserting the same element will update its LRU position.
+    pub(crate) fn insert(&mut self, e: T) -> bool {
+        if self.set.insert(e) {
+            if self.set.len() == usize::from(self.limit) {
+                self.set.pop_front(); // remove oldest entry
+            }
+            return true;
+        }
+        false
+    }
 }
 
 #[cfg(test)]
 mod tests {
-	use super::*;
+    use super::*;
 
-	#[test]
-	fn maintains_limit() {
-		let three = NonZeroUsize::new(3).unwrap();
-		let mut set = LruHashSet::<u8>::new(three);
+    #[test]
+    fn maintains_limit() {
+        let three = NonZeroUsize::new(3).unwrap();
+        let mut set = LruHashSet::<u8>::new(three);
 
-		// First element.
-		assert!(set.insert(1));
-		assert_eq!(vec![&1], set.set.iter().collect::<Vec<_>>());
+        // First element.
+        assert!(set.insert(1));
+        assert_eq!(vec![&1], set.set.iter().collect::<Vec<_>>());
 
-		// Second element.
-		assert!(set.insert(2));
-		assert_eq!(vec![&1, &2], set.set.iter().collect::<Vec<_>>());
+        // Second element.
+        assert!(set.insert(2));
+        assert_eq!(vec![&1, &2], set.set.iter().collect::<Vec<_>>());
 
-		// Inserting the same element updates its LRU position.
-		assert!(!set.insert(1));
-		assert_eq!(vec![&2, &1], set.set.iter().collect::<Vec<_>>());
+        // Inserting the same element updates its LRU position.
+        assert!(!set.insert(1));
+        assert_eq!(vec![&2, &1], set.set.iter().collect::<Vec<_>>());
 
-		// We reached the limit. The next element forces the oldest one out.
-		assert!(set.insert(3));
-		assert_eq!(vec![&1, &3], set.set.iter().collect::<Vec<_>>());
-	}
+        // We reached the limit. The next element forces the oldest one out.
+        assert!(set.insert(3));
+        assert_eq!(vec![&1, &3], set.set.iter().collect::<Vec<_>>());
+    }
 }

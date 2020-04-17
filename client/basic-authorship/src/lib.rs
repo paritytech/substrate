@@ -55,4 +55,4 @@
 
 mod basic_authorship;
 
-pub use crate::basic_authorship::{ProposerFactory, Proposer};
+pub use crate::basic_authorship::{Proposer, ProposerFactory};

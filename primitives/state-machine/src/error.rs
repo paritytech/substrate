@@ -15,7 +15,6 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 /// State Machine Errors
-
 use std::fmt;
 
 /// State Machine Error bound.
@@ -32,16 +31,18 @@ impl<T: 'static + fmt::Debug + fmt::Display + Send> Error for T {}
 /// and as a transition away from the pre-existing framework.
 #[derive(Debug, Eq, PartialEq)]
 pub enum ExecutionError {
-	/// Backend error.
-	Backend(String),
-	/// The entry `:code` doesn't exist in storage so there's no way we can execute anything.
-	CodeEntryDoesNotExist,
-	/// Backend is incompatible with execution proof generation process.
-	UnableToGenerateProof,
-	/// Invalid execution proof.
-	InvalidProof,
+    /// Backend error.
+    Backend(String),
+    /// The entry `:code` doesn't exist in storage so there's no way we can execute anything.
+    CodeEntryDoesNotExist,
+    /// Backend is incompatible with execution proof generation process.
+    UnableToGenerateProof,
+    /// Invalid execution proof.
+    InvalidProof,
 }
 
 impl fmt::Display for ExecutionError {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "Externalities Error") }
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Externalities Error")
+    }
 }

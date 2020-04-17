@@ -38,32 +38,32 @@ pub use crate::params::transaction_pool_params::*;
 pub struct BlockNumber(String);
 
 impl FromStr for BlockNumber {
-	type Err = String;
+    type Err = String;
 
-	fn from_str(block_number: &str) -> Result<Self, Self::Err> {
-		if block_number.chars().any(|d| !d.is_digit(10)) {
-			Err(format!(
-				"Invalid block number: {}, expected decimal formatted unsigned integer",
-				block_number,
-			))
-		} else {
-			Ok(Self(block_number.to_owned()))
-		}
-	}
+    fn from_str(block_number: &str) -> Result<Self, Self::Err> {
+        if block_number.chars().any(|d| !d.is_digit(10)) {
+            Err(format!(
+                "Invalid block number: {}, expected decimal formatted unsigned integer",
+                block_number,
+            ))
+        } else {
+            Ok(Self(block_number.to_owned()))
+        }
+    }
 }
 
 impl BlockNumber {
-	/// Wrapper on top of `std::str::parse<N>` but with `Error` as a `String`
-	///
-	/// See `https://doc.rust-lang.org/std/primitive.str.html#method.parse` for more elaborate
-	/// documentation.
-	pub fn parse<N>(&self) -> Result<N, String>
-	where
-		N: FromStr,
-		N::Err: std::fmt::Debug,
-	{
-		self.0
-			.parse()
-			.map_err(|e| format!("BlockNumber: {} parsing failed because of {:?}", self.0, e))
-	}
+    /// Wrapper on top of `std::str::parse<N>` but with `Error` as a `String`
+    ///
+    /// See `https://doc.rust-lang.org/std/primitive.str.html#method.parse` for more elaborate
+    /// documentation.
+    pub fn parse<N>(&self) -> Result<N, String>
+    where
+        N: FromStr,
+        N::Err: std::fmt::Debug,
+    {
+        self.0
+            .parse()
+            .map_err(|e| format!("BlockNumber: {} parsing failed because of {:?}", self.0, e))
+    }
 }

@@ -75,34 +75,33 @@
 //!
 
 #![warn(missing_docs)]
-#![recursion_limit="128"]
+#![recursion_limit = "128"]
 
-pub mod cht;
-pub mod in_mem;
-pub mod genesis;
-pub mod light;
-pub mod leaves;
-mod call_executor;
-mod client;
 mod block_rules;
+mod call_executor;
+pub mod cht;
+mod client;
+pub mod genesis;
+pub mod in_mem;
+pub mod leaves;
+pub mod light;
 
-pub use sc_client_api::{
-	blockchain,
-	blockchain::well_known_cache_keys,
-	blockchain::Info as ChainInfo,
-	notifications::{StorageEventStream, StorageChangeSet},
-	call_executor::CallExecutor,
-	utils,
-};
 pub use crate::{
-	call_executor::LocalCallExecutor,
-	client::{
-		new_with_backend,
-		new_in_mem,
-		BlockBackend, ImportNotifications, FinalityNotifications, BlockchainEvents, LockImportRun,
-		BlockImportNotification, Client, ClientInfo, ExecutionStrategies, FinalityNotification,
-		LongestChain, BlockOf, ProvideUncles, BadBlocks, ForkBlocks, apply_aux,
-	},
-	leaves::LeafSet,
+    call_executor::LocalCallExecutor,
+    client::{
+        apply_aux, new_in_mem, new_with_backend, BadBlocks, BlockBackend, BlockImportNotification,
+        BlockOf, BlockchainEvents, Client, ClientInfo, ExecutionStrategies, FinalityNotification,
+        FinalityNotifications, ForkBlocks, ImportNotifications, LockImportRun, LongestChain,
+        ProvideUncles,
+    },
+    leaves::LeafSet,
 };
-pub use sp_state_machine::{ExecutionStrategy, StorageProof, StateMachine};
+pub use sc_client_api::{
+    blockchain,
+    blockchain::well_known_cache_keys,
+    blockchain::Info as ChainInfo,
+    call_executor::CallExecutor,
+    notifications::{StorageChangeSet, StorageEventStream},
+    utils,
+};
+pub use sp_state_machine::{ExecutionStrategy, StateMachine, StorageProof};

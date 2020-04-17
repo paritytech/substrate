@@ -56,7 +56,9 @@
 
 pub use self::bridge::GossipEngine;
 pub use self::state_machine::TopicNotification;
-pub use self::validator::{DiscardAll, MessageIntent, Validator, ValidatorContext, ValidationResult};
+pub use self::validator::{
+    DiscardAll, MessageIntent, ValidationResult, Validator, ValidatorContext,
+};
 
 use futures::prelude::*;
 use sc_network::{Event, ExHashT, NetworkService, PeerId, ReputationChange};
@@ -69,60 +71,60 @@ mod validator;
 
 /// Abstraction over a network.
 pub trait Network<B: BlockT> {
-	/// Returns a stream of events representing what happens on the network.
-	fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>>;
+    /// Returns a stream of events representing what happens on the network.
+    fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>>;
 
-	/// Adjust the reputation of a node.
-	fn report_peer(&self, peer_id: PeerId, reputation: ReputationChange);
+    /// Adjust the reputation of a node.
+    fn report_peer(&self, peer_id: PeerId, reputation: ReputationChange);
 
-	/// Force-disconnect a peer.
-	fn disconnect_peer(&self, who: PeerId);
+    /// Force-disconnect a peer.
+    fn disconnect_peer(&self, who: PeerId);
 
-	/// Send a notification to a peer.
-	fn write_notification(&self, who: PeerId, engine_id: ConsensusEngineId, message: Vec<u8>);
+    /// Send a notification to a peer.
+    fn write_notification(&self, who: PeerId, engine_id: ConsensusEngineId, message: Vec<u8>);
 
-	/// Registers a notifications protocol.
-	///
-	/// See the documentation of [`NetworkService:register_notifications_protocol`] for more information.
-	fn register_notifications_protocol(
-		&self,
-		engine_id: ConsensusEngineId,
-		protocol_name: Cow<'static, [u8]>,
-	);
+    /// Registers a notifications protocol.
+    ///
+    /// See the documentation of [`NetworkService:register_notifications_protocol`] for more information.
+    fn register_notifications_protocol(
+        &self,
+        engine_id: ConsensusEngineId,
+        protocol_name: Cow<'static, [u8]>,
+    );
 
-	/// Notify everyone we're connected to that we have the given block.
-	///
-	/// Note: this method isn't strictly related to gossiping and should eventually be moved
-	/// somewhere else.
-	fn announce(&self, block: B::Hash, associated_data: Vec<u8>);
+    /// Notify everyone we're connected to that we have the given block.
+    ///
+    /// Note: this method isn't strictly related to gossiping and should eventually be moved
+    /// somewhere else.
+    fn announce(&self, block: B::Hash, associated_data: Vec<u8>);
 }
 
 impl<B: BlockT, H: ExHashT> Network<B> for Arc<NetworkService<B, H>> {
-	fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
-		Box::pin(NetworkService::event_stream(self, "network-gossip"))
-	}
+    fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
+        Box::pin(NetworkService::event_stream(self, "network-gossip"))
+    }
 
-	fn report_peer(&self, peer_id: PeerId, reputation: ReputationChange) {
-		NetworkService::report_peer(self, peer_id, reputation);
-	}
+    fn report_peer(&self, peer_id: PeerId, reputation: ReputationChange) {
+        NetworkService::report_peer(self, peer_id, reputation);
+    }
 
-	fn disconnect_peer(&self, who: PeerId) {
-		NetworkService::disconnect_peer(self, who)
-	}
+    fn disconnect_peer(&self, who: PeerId) {
+        NetworkService::disconnect_peer(self, who)
+    }
 
-	fn write_notification(&self, who: PeerId, engine_id: ConsensusEngineId, message: Vec<u8>) {
-		NetworkService::write_notification(self, who, engine_id, message)
-	}
+    fn write_notification(&self, who: PeerId, engine_id: ConsensusEngineId, message: Vec<u8>) {
+        NetworkService::write_notification(self, who, engine_id, message)
+    }
 
-	fn register_notifications_protocol(
-		&self,
-		engine_id: ConsensusEngineId,
-		protocol_name: Cow<'static, [u8]>,
-	) {
-		NetworkService::register_notifications_protocol(self, engine_id, protocol_name)
-	}
+    fn register_notifications_protocol(
+        &self,
+        engine_id: ConsensusEngineId,
+        protocol_name: Cow<'static, [u8]>,
+    ) {
+        NetworkService::register_notifications_protocol(self, engine_id, protocol_name)
+    }
 
-	fn announce(&self, block: B::Hash, associated_data: Vec<u8>) {
-		NetworkService::announce_block(self, block, associated_data)
-	}
+    fn announce(&self, block: B::Hash, associated_data: Vec<u8>) {
+        NetworkService::announce_block(self, block, associated_data)
+    }
 }

@@ -18,9 +18,9 @@
 
 use super::*;
 
-use frame_benchmarking::{benchmarks, account};
-use frame_support::traits::{Currency, Get, EnsureOrigin};
-use frame_system::{RawOrigin, Module as System, self};
+use frame_benchmarking::{account, benchmarks};
+use frame_support::traits::{Currency, EnsureOrigin, Get};
+use frame_system::{self, Module as System, RawOrigin};
 use sp_runtime::traits::{Bounded, One};
 
 use crate::Module as Democracy;
@@ -34,455 +34,450 @@ const MAX_VETOERS: u32 = 100;
 const MAX_BYTES: u32 = 16_384;
 
 fn funded_account<T: Trait>(name: &'static str, index: u32) -> T::AccountId {
-	let caller: T::AccountId = account(name, index, SEED);
-	T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
-	caller
+    let caller: T::AccountId = account(name, index, SEED);
+    T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+    caller
 }
 
 fn add_proposal<T: Trait>(n: u32) -> Result<T::Hash, &'static str> {
-	let other = funded_account::<T>("proposer", n);
-	let value = T::MinimumDeposit::get();
-	let proposal_hash: T::Hash = T::Hashing::hash_of(&n);
+    let other = funded_account::<T>("proposer", n);
+    let value = T::MinimumDeposit::get();
+    let proposal_hash: T::Hash = T::Hashing::hash_of(&n);
 
-	Democracy::<T>::propose(RawOrigin::Signed(other).into(), proposal_hash, value.into())?;
+    Democracy::<T>::propose(RawOrigin::Signed(other).into(), proposal_hash, value.into())?;
 
-	Ok(proposal_hash)
+    Ok(proposal_hash)
 }
 
 fn add_referendum<T: Trait>(n: u32) -> Result<ReferendumIndex, &'static str> {
-	let proposal_hash = add_proposal::<T>(n)?;
-	let vote_threshold = VoteThreshold::SimpleMajority;
+    let proposal_hash = add_proposal::<T>(n)?;
+    let vote_threshold = VoteThreshold::SimpleMajority;
 
-	Democracy::<T>::inject_referendum(
-		0.into(),
-		proposal_hash,
-		vote_threshold,
-		0.into(),
-	);
-	let referendum_index: ReferendumIndex = ReferendumCount::get() - 1;
-	let _ = T::Scheduler::schedule_named(
-		(DEMOCRACY_ID, referendum_index),
-		0.into(),
-		None,
-		63,
-		Call::enact_proposal(proposal_hash, referendum_index).into(),
-	);
-	Ok(referendum_index)
+    Democracy::<T>::inject_referendum(0.into(), proposal_hash, vote_threshold, 0.into());
+    let referendum_index: ReferendumIndex = ReferendumCount::get() - 1;
+    let _ = T::Scheduler::schedule_named(
+        (DEMOCRACY_ID, referendum_index),
+        0.into(),
+        None,
+        63,
+        Call::enact_proposal(proposal_hash, referendum_index).into(),
+    );
+    Ok(referendum_index)
 }
 
 fn account_vote<T: Trait>() -> AccountVote<BalanceOf<T>> {
-	let v = Vote {
-		aye: true,
-		conviction: Conviction::Locked1x,
-	};
+    let v = Vote {
+        aye: true,
+        conviction: Conviction::Locked1x,
+    };
 
-	AccountVote::Standard {
-		vote: v,
-		balance: BalanceOf::<T>::one(),
-	}
+    AccountVote::Standard {
+        vote: v,
+        balance: BalanceOf::<T>::one(),
+    }
 }
 
 fn open_activate_proxy<T: Trait>(u: u32) -> Result<T::AccountId, &'static str> {
-	let caller = funded_account::<T>("caller", u);
-	let proxy = funded_account::<T>("proxy", u);
+    let caller = funded_account::<T>("caller", u);
+    let proxy = funded_account::<T>("proxy", u);
 
-	Democracy::<T>::open_proxy(RawOrigin::Signed(proxy.clone()).into(), caller.clone())?;
-	Democracy::<T>::activate_proxy(RawOrigin::Signed(caller).into(), proxy.clone())?;
+    Democracy::<T>::open_proxy(RawOrigin::Signed(proxy.clone()).into(), caller.clone())?;
+    Democracy::<T>::activate_proxy(RawOrigin::Signed(caller).into(), proxy.clone())?;
 
-	Ok(proxy)
+    Ok(proxy)
 }
 
 benchmarks! {
-	_ { }
+    _ { }
 
-	propose {
-		let p in 1 .. MAX_PROPOSALS;
+    propose {
+        let p in 1 .. MAX_PROPOSALS;
 
-		// Add p proposals
-		for i in 0 .. p {
-			add_proposal::<T>(i)?;
-		}
+        // Add p proposals
+        for i in 0 .. p {
+            add_proposal::<T>(i)?;
+        }
 
-		let caller = funded_account::<T>("caller", 0);
-		let proposal_hash: T::Hash = T::Hashing::hash_of(&p);
-		let value = T::MinimumDeposit::get();
-	}: _(RawOrigin::Signed(caller), proposal_hash, value.into())
+        let caller = funded_account::<T>("caller", 0);
+        let proposal_hash: T::Hash = T::Hashing::hash_of(&p);
+        let value = T::MinimumDeposit::get();
+    }: _(RawOrigin::Signed(caller), proposal_hash, value.into())
 
-	second {
-		let s in 0 .. MAX_SECONDERS;
+    second {
+        let s in 0 .. MAX_SECONDERS;
 
-		let caller = funded_account::<T>("caller", 0);
-		let proposal_hash = add_proposal::<T>(s)?;
+        let caller = funded_account::<T>("caller", 0);
+        let proposal_hash = add_proposal::<T>(s)?;
 
-		// Create s existing "seconds"
-		for i in 0 .. s {
-			let seconder = funded_account::<T>("seconder", i);
-			Democracy::<T>::second(RawOrigin::Signed(seconder).into(), 0)?;
-		}
+        // Create s existing "seconds"
+        for i in 0 .. s {
+            let seconder = funded_account::<T>("seconder", i);
+            Democracy::<T>::second(RawOrigin::Signed(seconder).into(), 0)?;
+        }
 
-	}: _(RawOrigin::Signed(caller), 0)
+    }: _(RawOrigin::Signed(caller), 0)
 
-	vote {
-		let r in 1 .. MAX_REFERENDUMS;
+    vote {
+        let r in 1 .. MAX_REFERENDUMS;
 
-		let caller = funded_account::<T>("caller", 0);
-		let account_vote = account_vote::<T>();
+        let caller = funded_account::<T>("caller", 0);
+        let account_vote = account_vote::<T>();
 
-		for i in 0 .. r {
-			let ref_idx = add_referendum::<T>(i)?;
-			Democracy::<T>::vote(RawOrigin::Signed(caller.clone()).into(), ref_idx, account_vote.clone())?;
-		}
+        for i in 0 .. r {
+            let ref_idx = add_referendum::<T>(i)?;
+            Democracy::<T>::vote(RawOrigin::Signed(caller.clone()).into(), ref_idx, account_vote.clone())?;
+        }
 
-		let referendum_index = r - 1;
+        let referendum_index = r - 1;
 
-	}: _(RawOrigin::Signed(caller), referendum_index, account_vote)
+    }: _(RawOrigin::Signed(caller), referendum_index, account_vote)
 
-	proxy_vote {
-		let r in 1 .. MAX_REFERENDUMS;
+    proxy_vote {
+        let r in 1 .. MAX_REFERENDUMS;
 
-		let caller = funded_account::<T>("caller", r);
-		let proxy = open_activate_proxy::<T>(r)?;
-		let account_vote = account_vote::<T>();
+        let caller = funded_account::<T>("caller", r);
+        let proxy = open_activate_proxy::<T>(r)?;
+        let account_vote = account_vote::<T>();
 
-		for i in 0 .. r {
-			let ref_idx = add_referendum::<T>(i)?;
-			Democracy::<T>::vote(RawOrigin::Signed(caller.clone()).into(), ref_idx, account_vote.clone())?;
-		}
+        for i in 0 .. r {
+            let ref_idx = add_referendum::<T>(i)?;
+            Democracy::<T>::vote(RawOrigin::Signed(caller.clone()).into(), ref_idx, account_vote.clone())?;
+        }
 
-		let referendum_index = r - 1;
+        let referendum_index = r - 1;
 
-	}: _(RawOrigin::Signed(proxy), referendum_index, account_vote)
+    }: _(RawOrigin::Signed(proxy), referendum_index, account_vote)
 
-	emergency_cancel {
-		let u in 1 .. MAX_USERS;
+    emergency_cancel {
+        let u in 1 .. MAX_USERS;
 
-		let referendum_index = add_referendum::<T>(u)?;
-		let origin = T::CancellationOrigin::successful_origin();
-		let call = Call::<T>::emergency_cancel(referendum_index);
-	}: {
-		let _ = call.dispatch(origin)?;
-	}
+        let referendum_index = add_referendum::<T>(u)?;
+        let origin = T::CancellationOrigin::successful_origin();
+        let call = Call::<T>::emergency_cancel(referendum_index);
+    }: {
+        let _ = call.dispatch(origin)?;
+    }
 
-	external_propose {
-		let u in 1 .. MAX_USERS;
+    external_propose {
+        let u in 1 .. MAX_USERS;
 
-		let origin = T::ExternalOrigin::successful_origin();
-		let proposal_hash = T::Hashing::hash_of(&u);
-		let call = Call::<T>::external_propose(proposal_hash);
-	}: {
-		let _ = call.dispatch(origin)?;
-	}
+        let origin = T::ExternalOrigin::successful_origin();
+        let proposal_hash = T::Hashing::hash_of(&u);
+        let call = Call::<T>::external_propose(proposal_hash);
+    }: {
+        let _ = call.dispatch(origin)?;
+    }
 
-	external_propose_majority {
-		let u in 1 .. MAX_USERS;
+    external_propose_majority {
+        let u in 1 .. MAX_USERS;
 
-		let origin = T::ExternalMajorityOrigin::successful_origin();
-		let proposal_hash = T::Hashing::hash_of(&u);
-		let call = Call::<T>::external_propose_majority(proposal_hash);
+        let origin = T::ExternalMajorityOrigin::successful_origin();
+        let proposal_hash = T::Hashing::hash_of(&u);
+        let call = Call::<T>::external_propose_majority(proposal_hash);
 
-	}: {
-		let _ = call.dispatch(origin)?;
-	}
+    }: {
+        let _ = call.dispatch(origin)?;
+    }
 
-	external_propose_default {
-		let u in 1 .. MAX_USERS;
+    external_propose_default {
+        let u in 1 .. MAX_USERS;
 
-		let origin = T::ExternalDefaultOrigin::successful_origin();
-		let proposal_hash = T::Hashing::hash_of(&u);
-		let call = Call::<T>::external_propose_default(proposal_hash);
+        let origin = T::ExternalDefaultOrigin::successful_origin();
+        let proposal_hash = T::Hashing::hash_of(&u);
+        let call = Call::<T>::external_propose_default(proposal_hash);
 
-	}: {
-		let _ = call.dispatch(origin)?;
-	}
+    }: {
+        let _ = call.dispatch(origin)?;
+    }
 
-	fast_track {
-		let u in 1 .. MAX_USERS;
+    fast_track {
+        let u in 1 .. MAX_USERS;
 
-		let origin_propose = T::ExternalDefaultOrigin::successful_origin();
-		let proposal_hash: T::Hash = T::Hashing::hash_of(&u);
-		Democracy::<T>::external_propose_default(origin_propose, proposal_hash.clone())?;
+        let origin_propose = T::ExternalDefaultOrigin::successful_origin();
+        let proposal_hash: T::Hash = T::Hashing::hash_of(&u);
+        Democracy::<T>::external_propose_default(origin_propose, proposal_hash.clone())?;
 
-		let origin_fast_track = T::FastTrackOrigin::successful_origin();
-		let voting_period = T::FastTrackVotingPeriod::get();
-		let delay = 0;
-		let call = Call::<T>::fast_track(proposal_hash, voting_period.into(), delay.into());
+        let origin_fast_track = T::FastTrackOrigin::successful_origin();
+        let voting_period = T::FastTrackVotingPeriod::get();
+        let delay = 0;
+        let call = Call::<T>::fast_track(proposal_hash, voting_period.into(), delay.into());
 
-	}: {
-		let _ = call.dispatch(origin_fast_track)?;
-	}
+    }: {
+        let _ = call.dispatch(origin_fast_track)?;
+    }
 
-	veto_external {
-		// Existing veto-ers
-		let v in 0 .. MAX_VETOERS;
+    veto_external {
+        // Existing veto-ers
+        let v in 0 .. MAX_VETOERS;
 
-		let proposal_hash: T::Hash = T::Hashing::hash_of(&v);
+        let proposal_hash: T::Hash = T::Hashing::hash_of(&v);
 
-		let origin_propose = T::ExternalDefaultOrigin::successful_origin();
-		Democracy::<T>::external_propose_default(origin_propose, proposal_hash.clone())?;
+        let origin_propose = T::ExternalDefaultOrigin::successful_origin();
+        Democracy::<T>::external_propose_default(origin_propose, proposal_hash.clone())?;
 
-		let mut vetoers: Vec<T::AccountId> = Vec::new();
-		for i in 0 .. v {
-			vetoers.push(account("vetoer", i, SEED));
-		}
-		Blacklist::<T>::insert(proposal_hash, (T::BlockNumber::zero(), vetoers));
+        let mut vetoers: Vec<T::AccountId> = Vec::new();
+        for i in 0 .. v {
+            vetoers.push(account("vetoer", i, SEED));
+        }
+        Blacklist::<T>::insert(proposal_hash, (T::BlockNumber::zero(), vetoers));
 
-		let call = Call::<T>::veto_external(proposal_hash);
-		let origin = T::VetoOrigin::successful_origin();
-	}: {
-		let _ = call.dispatch(origin)?;
-	}
+        let call = Call::<T>::veto_external(proposal_hash);
+        let origin = T::VetoOrigin::successful_origin();
+    }: {
+        let _ = call.dispatch(origin)?;
+    }
 
-	cancel_referendum {
-		let u in 1 .. MAX_USERS;
+    cancel_referendum {
+        let u in 1 .. MAX_USERS;
 
-		let referendum_index = add_referendum::<T>(u)?;
-	}: _(RawOrigin::Root, referendum_index)
+        let referendum_index = add_referendum::<T>(u)?;
+    }: _(RawOrigin::Root, referendum_index)
 
-	cancel_queued {
-		let u in 1 .. MAX_USERS;
+    cancel_queued {
+        let u in 1 .. MAX_USERS;
 
-		let referendum_index = add_referendum::<T>(u)?;
-	}: _(RawOrigin::Root, referendum_index)
+        let referendum_index = add_referendum::<T>(u)?;
+    }: _(RawOrigin::Root, referendum_index)
 
-	open_proxy {
-		let u in 1 .. MAX_USERS;
+    open_proxy {
+        let u in 1 .. MAX_USERS;
 
-		let caller: T::AccountId = funded_account::<T>("caller", u);
-		let proxy: T::AccountId = funded_account::<T>("proxy", u);
+        let caller: T::AccountId = funded_account::<T>("caller", u);
+        let proxy: T::AccountId = funded_account::<T>("proxy", u);
 
-	}: _(RawOrigin::Signed(proxy), caller)
+    }: _(RawOrigin::Signed(proxy), caller)
 
-	activate_proxy {
-		let u in 1 .. MAX_USERS;
+    activate_proxy {
+        let u in 1 .. MAX_USERS;
 
-		let caller: T::AccountId = funded_account::<T>("caller", u);
-		let proxy: T::AccountId = funded_account::<T>("proxy", u);
-		Democracy::<T>::open_proxy(RawOrigin::Signed(proxy.clone()).into(), caller.clone())?;
+        let caller: T::AccountId = funded_account::<T>("caller", u);
+        let proxy: T::AccountId = funded_account::<T>("proxy", u);
+        Democracy::<T>::open_proxy(RawOrigin::Signed(proxy.clone()).into(), caller.clone())?;
 
-	}: _(RawOrigin::Signed(caller), proxy)
+    }: _(RawOrigin::Signed(caller), proxy)
 
-	close_proxy {
-		let u in 1 .. MAX_USERS;
+    close_proxy {
+        let u in 1 .. MAX_USERS;
 
-		let proxy = open_activate_proxy::<T>(u)?;
+        let proxy = open_activate_proxy::<T>(u)?;
 
-	}: _(RawOrigin::Signed(proxy))
+    }: _(RawOrigin::Signed(proxy))
 
-	deactivate_proxy {
-		let u in 1 .. MAX_USERS;
+    deactivate_proxy {
+        let u in 1 .. MAX_USERS;
 
-		let caller = funded_account::<T>("caller", u);
-		let proxy = open_activate_proxy::<T>(u)?;
+        let caller = funded_account::<T>("caller", u);
+        let proxy = open_activate_proxy::<T>(u)?;
 
-	}: _(RawOrigin::Signed(caller), proxy)
+    }: _(RawOrigin::Signed(caller), proxy)
 
-	delegate {
-		let u in 1 .. MAX_USERS;
+    delegate {
+        let u in 1 .. MAX_USERS;
 
-		let caller = funded_account::<T>("caller", u);
-		let d: T::AccountId = funded_account::<T>("delegate", u);
-		let balance = 1u32;
+        let caller = funded_account::<T>("caller", u);
+        let d: T::AccountId = funded_account::<T>("delegate", u);
+        let balance = 1u32;
 
-	}: _(RawOrigin::Signed(caller), d.into(), Conviction::Locked1x, balance.into())
+    }: _(RawOrigin::Signed(caller), d.into(), Conviction::Locked1x, balance.into())
 
-	undelegate {
-		let r in 1 .. MAX_REFERENDUMS;
+    undelegate {
+        let r in 1 .. MAX_REFERENDUMS;
 
-		let other = funded_account::<T>("other", 0);
-		let account_vote = account_vote::<T>();
+        let other = funded_account::<T>("other", 0);
+        let account_vote = account_vote::<T>();
 
-		for i in 0 .. r {
-			let ref_idx = add_referendum::<T>(i)?;
-			Democracy::<T>::vote(RawOrigin::Signed(other.clone()).into(), ref_idx, account_vote.clone())?;
-		}
+        for i in 0 .. r {
+            let ref_idx = add_referendum::<T>(i)?;
+            Democracy::<T>::vote(RawOrigin::Signed(other.clone()).into(), ref_idx, account_vote.clone())?;
+        }
 
-		let delegator = funded_account::<T>("delegator", r);
-		let conviction = Conviction::Locked1x;
-		let balance = 1u32;
+        let delegator = funded_account::<T>("delegator", r);
+        let conviction = Conviction::Locked1x;
+        let balance = 1u32;
 
-		Democracy::<T>::delegate(RawOrigin::Signed(delegator.clone()).into(), other.clone().into(), conviction, balance.into())?;
+        Democracy::<T>::delegate(RawOrigin::Signed(delegator.clone()).into(), other.clone().into(), conviction, balance.into())?;
 
-	}: _(RawOrigin::Signed(delegator))
+    }: _(RawOrigin::Signed(delegator))
 
-	clear_public_proposals {
-		let p in 0 .. MAX_PROPOSALS;
+    clear_public_proposals {
+        let p in 0 .. MAX_PROPOSALS;
 
-		for i in 0 .. p {
-			add_proposal::<T>(i)?;
-		}
+        for i in 0 .. p {
+            add_proposal::<T>(i)?;
+        }
 
-	}: _(RawOrigin::Root)
+    }: _(RawOrigin::Root)
 
-	note_preimage {
-		// Num of bytes in encoded proposal
-		let b in 0 .. MAX_BYTES;
+    note_preimage {
+        // Num of bytes in encoded proposal
+        let b in 0 .. MAX_BYTES;
 
-		let caller = funded_account::<T>("caller", b);
-		let encoded_proposal = vec![0; b as usize];
-	}: _(RawOrigin::Signed(caller), encoded_proposal)
+        let caller = funded_account::<T>("caller", b);
+        let encoded_proposal = vec![0; b as usize];
+    }: _(RawOrigin::Signed(caller), encoded_proposal)
 
-	note_imminent_preimage {
-		// Num of bytes in encoded proposal
-		let b in 0 .. MAX_BYTES;
+    note_imminent_preimage {
+        // Num of bytes in encoded proposal
+        let b in 0 .. MAX_BYTES;
 
-		// d + 1 to include the one we are testing
-		let encoded_proposal = vec![0; b as usize];
-		let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
-		let block_number = T::BlockNumber::one();
-		Preimages::<T>::insert(&proposal_hash, PreimageStatus::Missing(block_number));
+        // d + 1 to include the one we are testing
+        let encoded_proposal = vec![0; b as usize];
+        let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
+        let block_number = T::BlockNumber::one();
+        Preimages::<T>::insert(&proposal_hash, PreimageStatus::Missing(block_number));
 
-		let caller = funded_account::<T>("caller", b);
-		let encoded_proposal = vec![0; b as usize];
-	}: _(RawOrigin::Signed(caller), encoded_proposal)
+        let caller = funded_account::<T>("caller", b);
+        let encoded_proposal = vec![0; b as usize];
+    }: _(RawOrigin::Signed(caller), encoded_proposal)
 
-	reap_preimage {
-		// Num of bytes in encoded proposal
-		let b in 0 .. MAX_BYTES;
+    reap_preimage {
+        // Num of bytes in encoded proposal
+        let b in 0 .. MAX_BYTES;
 
-		let encoded_proposal = vec![0; b as usize];
-		let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
+        let encoded_proposal = vec![0; b as usize];
+        let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
 
-		let caller = funded_account::<T>("caller", b);
-		Democracy::<T>::note_preimage(RawOrigin::Signed(caller.clone()).into(), encoded_proposal.clone())?;
+        let caller = funded_account::<T>("caller", b);
+        Democracy::<T>::note_preimage(RawOrigin::Signed(caller.clone()).into(), encoded_proposal.clone())?;
 
-		// We need to set this otherwise we get `Early` error.
-		let block_number = T::VotingPeriod::get() + T::EnactmentPeriod::get() + T::BlockNumber::one();
-		System::<T>::set_block_number(block_number.into());
+        // We need to set this otherwise we get `Early` error.
+        let block_number = T::VotingPeriod::get() + T::EnactmentPeriod::get() + T::BlockNumber::one();
+        System::<T>::set_block_number(block_number.into());
 
-	}: _(RawOrigin::Signed(caller), proposal_hash)
+    }: _(RawOrigin::Signed(caller), proposal_hash)
 
-	unlock {
-		let u in 1 .. MAX_USERS;
+    unlock {
+        let u in 1 .. MAX_USERS;
 
-		let caller = funded_account::<T>("caller", u);
-		let locked_until = T::BlockNumber::zero();
-		Locks::<T>::insert(&caller, locked_until);
+        let caller = funded_account::<T>("caller", u);
+        let locked_until = T::BlockNumber::zero();
+        Locks::<T>::insert(&caller, locked_until);
 
-		T::Currency::extend_lock(
-			DEMOCRACY_ID,
-			&caller,
-			Bounded::max_value(),
-			WithdrawReason::Transfer.into()
-		);
+        T::Currency::extend_lock(
+            DEMOCRACY_ID,
+            &caller,
+            Bounded::max_value(),
+            WithdrawReason::Transfer.into()
+        );
 
-		let other = caller.clone();
+        let other = caller.clone();
 
-	}: _(RawOrigin::Signed(caller), other)
+    }: _(RawOrigin::Signed(caller), other)
 
-	remove_vote {
-		let r in 1 .. MAX_REFERENDUMS;
+    remove_vote {
+        let r in 1 .. MAX_REFERENDUMS;
 
-		let caller = funded_account::<T>("caller", 0);
-		let account_vote = account_vote::<T>();
+        let caller = funded_account::<T>("caller", 0);
+        let account_vote = account_vote::<T>();
 
-		for i in 0 .. r {
-			let ref_idx = add_referendum::<T>(i)?;
-			Democracy::<T>::vote(RawOrigin::Signed(caller.clone()).into(), ref_idx, account_vote.clone())?;
-		}
+        for i in 0 .. r {
+            let ref_idx = add_referendum::<T>(i)?;
+            Democracy::<T>::vote(RawOrigin::Signed(caller.clone()).into(), ref_idx, account_vote.clone())?;
+        }
 
-		let referendum_index = r - 1;
+        let referendum_index = r - 1;
 
-	}: _(RawOrigin::Signed(caller), referendum_index)
+    }: _(RawOrigin::Signed(caller), referendum_index)
 
-	remove_other_vote {
-		let r in 1 .. MAX_REFERENDUMS;
+    remove_other_vote {
+        let r in 1 .. MAX_REFERENDUMS;
 
-		let other = funded_account::<T>("other", r);
-		let account_vote = account_vote::<T>();
+        let other = funded_account::<T>("other", r);
+        let account_vote = account_vote::<T>();
 
-		for i in 0 .. r {
-			let ref_idx = add_referendum::<T>(i)?;
-			Democracy::<T>::vote(RawOrigin::Signed(other.clone()).into(), ref_idx, account_vote.clone())?;
-		}
+        for i in 0 .. r {
+            let ref_idx = add_referendum::<T>(i)?;
+            Democracy::<T>::vote(RawOrigin::Signed(other.clone()).into(), ref_idx, account_vote.clone())?;
+        }
 
-		let referendum_index = r - 1;
-		ReferendumInfoOf::<T>::insert(
-			referendum_index,
-			ReferendumInfo::Finished { end: T::BlockNumber::zero(), approved: true }
-		);
-		let caller = funded_account::<T>("caller", r);
+        let referendum_index = r - 1;
+        ReferendumInfoOf::<T>::insert(
+            referendum_index,
+            ReferendumInfo::Finished { end: T::BlockNumber::zero(), approved: true }
+        );
+        let caller = funded_account::<T>("caller", r);
 
-		System::<T>::set_block_number(T::EnactmentPeriod::get() * 10u32.into());
+        System::<T>::set_block_number(T::EnactmentPeriod::get() * 10u32.into());
 
-	}: _(RawOrigin::Signed(caller), other, referendum_index)
+    }: _(RawOrigin::Signed(caller), other, referendum_index)
 
-	proxy_delegate {
-		let u in 1 .. MAX_USERS;
+    proxy_delegate {
+        let u in 1 .. MAX_USERS;
 
-		let other: T::AccountId = account("other", u, SEED);
-		let proxy = open_activate_proxy::<T>(u)?;
-		let conviction = Conviction::Locked1x;
-		let balance = 1u32;
+        let other: T::AccountId = account("other", u, SEED);
+        let proxy = open_activate_proxy::<T>(u)?;
+        let conviction = Conviction::Locked1x;
+        let balance = 1u32;
 
-	}: _(RawOrigin::Signed(proxy), other, conviction, balance.into())
+    }: _(RawOrigin::Signed(proxy), other, conviction, balance.into())
 
-	proxy_undelegate {
-		let r in 1 .. MAX_REFERENDUMS;
+    proxy_undelegate {
+        let r in 1 .. MAX_REFERENDUMS;
 
-		let other = funded_account::<T>("other", 0);
-		let account_vote = account_vote::<T>();
+        let other = funded_account::<T>("other", 0);
+        let account_vote = account_vote::<T>();
 
-		for i in 0 .. r {
-			let ref_idx = add_referendum::<T>(i)?;
-			Democracy::<T>::vote(RawOrigin::Signed(other.clone()).into(), ref_idx, account_vote.clone())?;
-		}
+        for i in 0 .. r {
+            let ref_idx = add_referendum::<T>(i)?;
+            Democracy::<T>::vote(RawOrigin::Signed(other.clone()).into(), ref_idx, account_vote.clone())?;
+        }
 
-		let proxy = open_activate_proxy::<T>(r)?;
-		let conviction = Conviction::Locked1x;
-		let balance = 1u32;
-		Democracy::<T>::proxy_delegate(RawOrigin::Signed(proxy.clone()).into(), other, conviction, balance.into())?;
+        let proxy = open_activate_proxy::<T>(r)?;
+        let conviction = Conviction::Locked1x;
+        let balance = 1u32;
+        Democracy::<T>::proxy_delegate(RawOrigin::Signed(proxy.clone()).into(), other, conviction, balance.into())?;
 
-	}: _(RawOrigin::Signed(proxy))
+    }: _(RawOrigin::Signed(proxy))
 
-	proxy_remove_vote {
-		let u in 1 .. MAX_USERS;
+    proxy_remove_vote {
+        let u in 1 .. MAX_USERS;
 
-		let referendum_index = add_referendum::<T>(u)?;
-		let account_vote = account_vote::<T>();
-		let proxy = open_activate_proxy::<T>(u)?;
+        let referendum_index = add_referendum::<T>(u)?;
+        let account_vote = account_vote::<T>();
+        let proxy = open_activate_proxy::<T>(u)?;
 
-		Democracy::<T>::proxy_vote(RawOrigin::Signed(proxy.clone()).into(), referendum_index, account_vote)?;
+        Democracy::<T>::proxy_vote(RawOrigin::Signed(proxy.clone()).into(), referendum_index, account_vote)?;
 
-	}: _(RawOrigin::Signed(proxy), referendum_index)
+    }: _(RawOrigin::Signed(proxy), referendum_index)
 }
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use crate::tests::{new_test_ext, Test};
-	use frame_support::assert_ok;
+    use super::*;
+    use crate::tests::{new_test_ext, Test};
+    use frame_support::assert_ok;
 
-	#[test]
-	fn test_benchmarks() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_propose::<Test>());
-			assert_ok!(test_benchmark_second::<Test>());
-			assert_ok!(test_benchmark_vote::<Test>());
-			assert_ok!(test_benchmark_proxy_vote::<Test>());
-			assert_ok!(test_benchmark_emergency_cancel::<Test>());
-			assert_ok!(test_benchmark_external_propose::<Test>());
-			assert_ok!(test_benchmark_external_propose_majority::<Test>());
-			assert_ok!(test_benchmark_external_propose_default::<Test>());
-			assert_ok!(test_benchmark_fast_track::<Test>());
-			assert_ok!(test_benchmark_veto_external::<Test>());
-			assert_ok!(test_benchmark_cancel_referendum::<Test>());
-			assert_ok!(test_benchmark_cancel_queued::<Test>());
-			assert_ok!(test_benchmark_open_proxy::<Test>());
-			assert_ok!(test_benchmark_activate_proxy::<Test>());
-			assert_ok!(test_benchmark_close_proxy::<Test>());
-			assert_ok!(test_benchmark_deactivate_proxy::<Test>());
-			assert_ok!(test_benchmark_delegate::<Test>());
-			assert_ok!(test_benchmark_undelegate::<Test>());
-			assert_ok!(test_benchmark_clear_public_proposals::<Test>());
-			assert_ok!(test_benchmark_note_preimage::<Test>());
-			assert_ok!(test_benchmark_note_imminent_preimage::<Test>());
-			assert_ok!(test_benchmark_reap_preimage::<Test>());
-			assert_ok!(test_benchmark_unlock::<Test>());
-			assert_ok!(test_benchmark_remove_vote::<Test>());
-			assert_ok!(test_benchmark_remove_other_vote::<Test>());
-			assert_ok!(test_benchmark_proxy_delegate::<Test>());
-			assert_ok!(test_benchmark_proxy_undelegate::<Test>());
-			assert_ok!(test_benchmark_proxy_remove_vote::<Test>());
-		});
-	}
+    #[test]
+    fn test_benchmarks() {
+        new_test_ext().execute_with(|| {
+            assert_ok!(test_benchmark_propose::<Test>());
+            assert_ok!(test_benchmark_second::<Test>());
+            assert_ok!(test_benchmark_vote::<Test>());
+            assert_ok!(test_benchmark_proxy_vote::<Test>());
+            assert_ok!(test_benchmark_emergency_cancel::<Test>());
+            assert_ok!(test_benchmark_external_propose::<Test>());
+            assert_ok!(test_benchmark_external_propose_majority::<Test>());
+            assert_ok!(test_benchmark_external_propose_default::<Test>());
+            assert_ok!(test_benchmark_fast_track::<Test>());
+            assert_ok!(test_benchmark_veto_external::<Test>());
+            assert_ok!(test_benchmark_cancel_referendum::<Test>());
+            assert_ok!(test_benchmark_cancel_queued::<Test>());
+            assert_ok!(test_benchmark_open_proxy::<Test>());
+            assert_ok!(test_benchmark_activate_proxy::<Test>());
+            assert_ok!(test_benchmark_close_proxy::<Test>());
+            assert_ok!(test_benchmark_deactivate_proxy::<Test>());
+            assert_ok!(test_benchmark_delegate::<Test>());
+            assert_ok!(test_benchmark_undelegate::<Test>());
+            assert_ok!(test_benchmark_clear_public_proposals::<Test>());
+            assert_ok!(test_benchmark_note_preimage::<Test>());
+            assert_ok!(test_benchmark_note_imminent_preimage::<Test>());
+            assert_ok!(test_benchmark_reap_preimage::<Test>());
+            assert_ok!(test_benchmark_unlock::<Test>());
+            assert_ok!(test_benchmark_remove_vote::<Test>());
+            assert_ok!(test_benchmark_remove_other_vote::<Test>());
+            assert_ok!(test_benchmark_proxy_delegate::<Test>());
+            assert_ok!(test_benchmark_proxy_undelegate::<Test>());
+            assert_ok!(test_benchmark_proxy_remove_vote::<Test>());
+        });
+    }
 }

@@ -28,70 +28,66 @@ use structopt::StructOpt;
 /// The `check-block` command used to validate blocks.
 #[derive(Debug, StructOpt, Clone)]
 pub struct CheckBlockCmd {
-	/// Block hash or number
-	#[structopt(value_name = "HASH or NUMBER")]
-	pub input: String,
+    /// Block hash or number
+    #[structopt(value_name = "HASH or NUMBER")]
+    pub input: String,
 
-	/// The default number of 64KB pages to ever allocate for Wasm execution.
-	///
-	/// Don't alter this unless you know what you're doing.
-	#[structopt(long = "default-heap-pages", value_name = "COUNT")]
-	pub default_heap_pages: Option<u32>,
+    /// The default number of 64KB pages to ever allocate for Wasm execution.
+    ///
+    /// Don't alter this unless you know what you're doing.
+    #[structopt(long = "default-heap-pages", value_name = "COUNT")]
+    pub default_heap_pages: Option<u32>,
 
-	#[allow(missing_docs)]
-	#[structopt(flatten)]
-	pub shared_params: SharedParams,
+    #[allow(missing_docs)]
+    #[structopt(flatten)]
+    pub shared_params: SharedParams,
 
-	#[allow(missing_docs)]
-	#[structopt(flatten)]
-	pub import_params: ImportParams,
+    #[allow(missing_docs)]
+    #[structopt(flatten)]
+    pub import_params: ImportParams,
 }
 
 impl CheckBlockCmd {
-	/// Run the check-block command
-	pub async fn run<B, BC, BB>(
-		&self,
-		config: Configuration,
-		builder: B,
-	) -> error::Result<()>
-	where
-		B: FnOnce(Configuration) -> Result<BC, sc_service::error::Error>,
-		BC: ServiceBuilderCommand<Block = BB> + Unpin,
-		BB: sp_runtime::traits::Block + Debug,
-		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
-		<BB as BlockT>::Hash: std::str::FromStr,
-	{
-		let input = if self.input.starts_with("0x") {
-			&self.input[2..]
-		} else {
-			&self.input[..]
-		};
-		let block_id = match FromStr::from_str(input) {
-			Ok(hash) => BlockId::hash(hash),
-			Err(_) => match self.input.parse::<u32>() {
-				Ok(n) => BlockId::number((n as u32).into()),
-				Err(_) => {
-					return Err(error::Error::Input(
-						"Invalid hash or number specified".into(),
-					))
-				}
-			},
-		};
+    /// Run the check-block command
+    pub async fn run<B, BC, BB>(&self, config: Configuration, builder: B) -> error::Result<()>
+    where
+        B: FnOnce(Configuration) -> Result<BC, sc_service::error::Error>,
+        BC: ServiceBuilderCommand<Block = BB> + Unpin,
+        BB: sp_runtime::traits::Block + Debug,
+        <<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
+        <BB as BlockT>::Hash: std::str::FromStr,
+    {
+        let input = if self.input.starts_with("0x") {
+            &self.input[2..]
+        } else {
+            &self.input[..]
+        };
+        let block_id = match FromStr::from_str(input) {
+            Ok(hash) => BlockId::hash(hash),
+            Err(_) => match self.input.parse::<u32>() {
+                Ok(n) => BlockId::number((n as u32).into()),
+                Err(_) => {
+                    return Err(error::Error::Input(
+                        "Invalid hash or number specified".into(),
+                    ))
+                }
+            },
+        };
 
-		let start = std::time::Instant::now();
-		builder(config)?.check_block(block_id).await?;
-		println!("Completed in {} ms.", start.elapsed().as_millis());
+        let start = std::time::Instant::now();
+        builder(config)?.check_block(block_id).await?;
+        println!("Completed in {} ms.", start.elapsed().as_millis());
 
-		Ok(())
-	}
+        Ok(())
+    }
 }
 
 impl CliConfiguration for CheckBlockCmd {
-	fn shared_params(&self) -> &SharedParams {
-		&self.shared_params
-	}
+    fn shared_params(&self) -> &SharedParams {
+        &self.shared_params
+    }
 
-	fn import_params(&self) -> Option<&ImportParams> {
-		Some(&self.import_params)
-	}
+    fn import_params(&self) -> Option<&ImportParams> {
+        Some(&self.import_params)
+    }
 }

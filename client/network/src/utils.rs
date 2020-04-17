@@ -14,12 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::time::Duration;
-use futures::{FutureExt, Stream, StreamExt, stream::unfold};
+use futures::{stream::unfold, FutureExt, Stream, StreamExt};
 use futures_timer::Delay;
+use std::time::Duration;
 
-pub fn interval(duration: Duration) -> impl Stream<Item=()> + Unpin {
-	unfold((), move |_| {
-		Delay::new(duration).map(|_| Some(((), ())))
-	}).map(drop)
+pub fn interval(duration: Duration) -> impl Stream<Item = ()> + Unpin {
+    unfold((), move |_| Delay::new(duration).map(|_| Some(((), ())))).map(drop)
 }

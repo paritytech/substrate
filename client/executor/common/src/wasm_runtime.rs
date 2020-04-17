@@ -23,19 +23,19 @@ use sp_wasm_interface::Value;
 ///
 /// This can be implemented by an execution engine.
 pub trait WasmModule: Sync + Send {
-	/// Create a new instance.
-	fn new_instance(&self) -> Result<Box<dyn WasmInstance>, Error>;
+    /// Create a new instance.
+    fn new_instance(&self) -> Result<Box<dyn WasmInstance>, Error>;
 }
 
 /// A trait that defines an abstract wasm module instance.
 ///
 /// This can be implemented by an execution engine.
 pub trait WasmInstance: Send {
-	/// Call a method on this WASM instance and reset it afterwards.
-	/// Returns the encoded result on success.
-	fn call(&self, method: &str, data: &[u8]) -> Result<Vec<u8>, Error>;
+    /// Call a method on this WASM instance and reset it afterwards.
+    /// Returns the encoded result on success.
+    fn call(&self, method: &str, data: &[u8]) -> Result<Vec<u8>, Error>;
 
-	/// Get the value from a global with the given `name`.
-	/// This method is only suitable for getting immutable globals.
-	fn get_global_const(&self, name: &str) -> Result<Option<Value>, Error>;
+    /// Get the value from a global with the given `name`.
+    /// This method is only suitable for getting immutable globals.
+    fn get_global_const(&self, name: &str) -> Result<Option<Value>, Error>;
 }

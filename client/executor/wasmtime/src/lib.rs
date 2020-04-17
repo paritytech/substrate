@@ -15,12 +15,11 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 ///! Defines a `WasmRuntime` that uses the Wasmtime JIT to execute.
-
 mod host;
-mod runtime;
-mod state_holder;
 mod imports;
 mod instance_wrapper;
+mod runtime;
+mod state_holder;
 mod util;
 
 pub use runtime::create_runtime;

@@ -15,31 +15,33 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Verification for BABE headers.
-use sp_runtime::{traits::Header, traits::DigestItemFor};
-use sp_core::{Pair, Public};
-use sp_consensus_babe::{AuthoritySignature, SlotNumber, AuthorityPair, AuthorityId};
-use sp_consensus_babe::digests::{
-	PreDigest, PrimaryPreDigest, SecondaryPreDigest, CompatibleDigestItem
+use super::authorship::{
+    calculate_primary_threshold, check_primary_threshold, make_transcript, secondary_slot_author,
 };
-use sc_consensus_slots::CheckedHeader;
+use super::{babe_err, find_pre_digest, BlockT, Epoch, Error};
 use log::{debug, trace};
-use super::{find_pre_digest, babe_err, Epoch, BlockT, Error};
-use super::authorship::{make_transcript, calculate_primary_threshold, check_primary_threshold, secondary_slot_author};
+use sc_consensus_slots::CheckedHeader;
+use sp_consensus_babe::digests::{
+    CompatibleDigestItem, PreDigest, PrimaryPreDigest, SecondaryPreDigest,
+};
+use sp_consensus_babe::{AuthorityId, AuthorityPair, AuthoritySignature, SlotNumber};
+use sp_core::{Pair, Public};
+use sp_runtime::{traits::DigestItemFor, traits::Header};
 
 /// BABE verification parameters
 pub(super) struct VerificationParams<'a, B: 'a + BlockT> {
-	/// the header being verified.
-	pub(super) header: B::Header,
-	/// the pre-digest of the header being verified. this is optional - if prior
-	/// verification code had to read it, it can be included here to avoid duplicate
-	/// work.
-	pub(super) pre_digest: Option<PreDigest>,
-	/// the slot number of the current time.
-	pub(super) slot_now: SlotNumber,
-	/// epoch descriptor of the epoch this block _should_ be under, if it's valid.
-	pub(super) epoch: &'a Epoch,
-	/// genesis config of this BABE chain.
-	pub(super) config: &'a super::Config,
+    /// the header being verified.
+    pub(super) header: B::Header,
+    /// the pre-digest of the header being verified. this is optional - if prior
+    /// verification code had to read it, it can be included here to avoid duplicate
+    /// work.
+    pub(super) pre_digest: Option<PreDigest>,
+    /// the slot number of the current time.
+    pub(super) slot_now: SlotNumber,
+    /// epoch descriptor of the epoch this block _should_ be under, if it's valid.
+    pub(super) epoch: &'a Epoch,
+    /// genesis config of this BABE chain.
+    pub(super) config: &'a super::Config,
 }
 
 /// Check a header has been signed by the right key. If the slot is too far in
@@ -54,84 +56,76 @@ pub(super) struct VerificationParams<'a, B: 'a + BlockT> {
 /// The given header can either be from a primary or secondary slot assignment,
 /// with each having different validation logic.
 pub(super) fn check_header<B: BlockT + Sized>(
-	params: VerificationParams<B>,
-) -> Result<CheckedHeader<B::Header, VerifiedHeaderInfo<B>>, Error<B>> where
-	DigestItemFor<B>: CompatibleDigestItem,
+    params: VerificationParams<B>,
+) -> Result<CheckedHeader<B::Header, VerifiedHeaderInfo<B>>, Error<B>>
+where
+    DigestItemFor<B>: CompatibleDigestItem,
 {
-	let VerificationParams {
-		mut header,
-		pre_digest,
-		slot_now,
-		epoch,
-		config,
-	} = params;
+    let VerificationParams {
+        mut header,
+        pre_digest,
+        slot_now,
+        epoch,
+        config,
+    } = params;
 
-	let authorities = &epoch.authorities;
-	let pre_digest = pre_digest.map(Ok).unwrap_or_else(|| find_pre_digest::<B>(&header))?;
+    let authorities = &epoch.authorities;
+    let pre_digest = pre_digest
+        .map(Ok)
+        .unwrap_or_else(|| find_pre_digest::<B>(&header))?;
 
-	trace!(target: "babe", "Checking header");
-	let seal = match header.digest_mut().pop() {
-		Some(x) => x,
-		None => return Err(babe_err(Error::HeaderUnsealed(header.hash()))),
-	};
+    trace!(target: "babe", "Checking header");
+    let seal = match header.digest_mut().pop() {
+        Some(x) => x,
+        None => return Err(babe_err(Error::HeaderUnsealed(header.hash()))),
+    };
 
-	let sig = seal.as_babe_seal().ok_or_else(|| {
-		babe_err(Error::HeaderBadSeal(header.hash()))
-	})?;
+    let sig = seal
+        .as_babe_seal()
+        .ok_or_else(|| babe_err(Error::HeaderBadSeal(header.hash())))?;
 
-	// the pre-hash of the header doesn't include the seal
-	// and that's what we sign
-	let pre_hash = header.hash();
+    // the pre-hash of the header doesn't include the seal
+    // and that's what we sign
+    let pre_hash = header.hash();
 
-	if pre_digest.slot_number() > slot_now {
-		header.digest_mut().push(seal);
-		return Ok(CheckedHeader::Deferred(header, pre_digest.slot_number()));
-	}
+    if pre_digest.slot_number() > slot_now {
+        header.digest_mut().push(seal);
+        return Ok(CheckedHeader::Deferred(header, pre_digest.slot_number()));
+    }
 
-	let author = match authorities.get(pre_digest.authority_index() as usize) {
-		Some(author) => author.0.clone(),
-		None => return Err(babe_err(Error::SlotAuthorNotFound)),
-	};
+    let author = match authorities.get(pre_digest.authority_index() as usize) {
+        Some(author) => author.0.clone(),
+        None => return Err(babe_err(Error::SlotAuthorNotFound)),
+    };
 
-	match &pre_digest {
-		PreDigest::Primary(primary) => {
-			debug!(target: "babe", "Verifying Primary block");
+    match &pre_digest {
+        PreDigest::Primary(primary) => {
+            debug!(target: "babe", "Verifying Primary block");
 
-			check_primary_header::<B>(
-				pre_hash,
-				primary,
-				sig,
-				&epoch,
-				config.c,
-			)?;
-		},
-		PreDigest::Secondary(secondary) if config.secondary_slots => {
-			debug!(target: "babe", "Verifying Secondary block");
+            check_primary_header::<B>(pre_hash, primary, sig, &epoch, config.c)?;
+        }
+        PreDigest::Secondary(secondary) if config.secondary_slots => {
+            debug!(target: "babe", "Verifying Secondary block");
 
-			check_secondary_header::<B>(
-				pre_hash,
-				secondary,
-				sig,
-				&epoch,
-			)?;
-		},
-		_ => {
-			return Err(babe_err(Error::SecondarySlotAssignmentsDisabled));
-		}
-	}
+            check_secondary_header::<B>(pre_hash, secondary, sig, &epoch)?;
+        }
+        _ => {
+            return Err(babe_err(Error::SecondarySlotAssignmentsDisabled));
+        }
+    }
 
-	let info = VerifiedHeaderInfo {
-		pre_digest: CompatibleDigestItem::babe_pre_digest(pre_digest),
-		seal,
-		author,
-	};
-	Ok(CheckedHeader::Checked(header, info))
+    let info = VerifiedHeaderInfo {
+        pre_digest: CompatibleDigestItem::babe_pre_digest(pre_digest),
+        seal,
+        author,
+    };
+    Ok(CheckedHeader::Checked(header, info))
 }
 
 pub(super) struct VerifiedHeaderInfo<B: BlockT> {
-	pub(super) pre_digest: DigestItemFor<B>,
-	pub(super) seal: DigestItemFor<B>,
-	pub(super) author: AuthorityId,
+    pub(super) pre_digest: DigestItemFor<B>,
+    pub(super) seal: DigestItemFor<B>,
+    pub(super) author: AuthorityId,
 }
 
 /// Check a primary slot proposal header. We validate that the given header is
@@ -139,43 +133,40 @@ pub(super) struct VerifiedHeaderInfo<B: BlockT> {
 /// is valid. Additionally, the weight of this block must increase compared to
 /// its parent since it is a primary block.
 fn check_primary_header<B: BlockT + Sized>(
-	pre_hash: B::Hash,
-	pre_digest: &PrimaryPreDigest,
-	signature: AuthoritySignature,
-	epoch: &Epoch,
-	c: (u64, u64),
+    pre_hash: B::Hash,
+    pre_digest: &PrimaryPreDigest,
+    signature: AuthoritySignature,
+    epoch: &Epoch,
+    c: (u64, u64),
 ) -> Result<(), Error<B>> {
-	let author = &epoch.authorities[pre_digest.authority_index as usize].0;
+    let author = &epoch.authorities[pre_digest.authority_index as usize].0;
 
-	if AuthorityPair::verify(&signature, pre_hash, &author) {
-		let (inout, _) = {
-			let transcript = make_transcript(
-				&epoch.randomness,
-				pre_digest.slot_number,
-				epoch.epoch_index,
-			);
+    if AuthorityPair::verify(&signature, pre_hash, &author) {
+        let (inout, _) = {
+            let transcript =
+                make_transcript(&epoch.randomness, pre_digest.slot_number, epoch.epoch_index);
 
-			schnorrkel::PublicKey::from_bytes(author.as_slice()).and_then(|p| {
-				p.vrf_verify(transcript, &pre_digest.vrf_output, &pre_digest.vrf_proof)
-			}).map_err(|s| {
-				babe_err(Error::VRFVerificationFailed(s))
-			})?
-		};
+            schnorrkel::PublicKey::from_bytes(author.as_slice())
+                .and_then(|p| {
+                    p.vrf_verify(transcript, &pre_digest.vrf_output, &pre_digest.vrf_proof)
+                })
+                .map_err(|s| babe_err(Error::VRFVerificationFailed(s)))?
+        };
 
-		let threshold = calculate_primary_threshold(
-			c,
-			&epoch.authorities,
-			pre_digest.authority_index as usize,
-		);
+        let threshold =
+            calculate_primary_threshold(c, &epoch.authorities, pre_digest.authority_index as usize);
 
-		if !check_primary_threshold(&inout, threshold) {
-			return Err(babe_err(Error::VRFVerificationOfBlockFailed(author.clone(), threshold)));
-		}
+        if !check_primary_threshold(&inout, threshold) {
+            return Err(babe_err(Error::VRFVerificationOfBlockFailed(
+                author.clone(),
+                threshold,
+            )));
+        }
 
-		Ok(())
-	} else {
-		Err(babe_err(Error::BadSignature(pre_hash)))
-	}
+        Ok(())
+    } else {
+        Err(babe_err(Error::BadSignature(pre_hash)))
+    }
 }
 
 /// Check a secondary slot proposal header. We validate that the given header is
@@ -183,28 +174,29 @@ fn check_primary_header<B: BlockT + Sized>(
 /// of computing. Additionally, the weight of this block must stay the same
 /// compared to its parent since it is a secondary block.
 fn check_secondary_header<B: BlockT>(
-	pre_hash: B::Hash,
-	pre_digest: &SecondaryPreDigest,
-	signature: AuthoritySignature,
-	epoch: &Epoch,
+    pre_hash: B::Hash,
+    pre_digest: &SecondaryPreDigest,
+    signature: AuthoritySignature,
+    epoch: &Epoch,
 ) -> Result<(), Error<B>> {
-	// check the signature is valid under the expected authority and
-	// chain state.
-	let expected_author = secondary_slot_author(
-		pre_digest.slot_number,
-		&epoch.authorities,
-		epoch.randomness,
-	).ok_or_else(|| Error::NoSecondaryAuthorExpected)?;
+    // check the signature is valid under the expected authority and
+    // chain state.
+    let expected_author =
+        secondary_slot_author(pre_digest.slot_number, &epoch.authorities, epoch.randomness)
+            .ok_or_else(|| Error::NoSecondaryAuthorExpected)?;
 
-	let author = &epoch.authorities[pre_digest.authority_index as usize].0;
+    let author = &epoch.authorities[pre_digest.authority_index as usize].0;
 
-	if expected_author != author {
-		return Err(Error::InvalidAuthor(expected_author.clone(), author.clone()));
-	}
+    if expected_author != author {
+        return Err(Error::InvalidAuthor(
+            expected_author.clone(),
+            author.clone(),
+        ));
+    }
 
-	if AuthorityPair::verify(&signature, pre_hash.as_ref(), author) {
-		Ok(())
-	} else {
-		Err(Error::BadSignature(pre_hash))
-	}
+    if AuthorityPair::verify(&signature, pre_hash.as_ref(), author) {
+        Ok(())
+    } else {
+        Err(Error::BadSignature(pre_hash))
+    }
 }

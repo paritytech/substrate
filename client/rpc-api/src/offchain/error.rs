@@ -24,28 +24,28 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// Offchain RPC errors.
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
-	/// Unavailable storage kind error.
-	#[display(fmt="This storage kind is not available yet.")]
-	UnavailableStorageKind,
+    /// Unavailable storage kind error.
+    #[display(fmt = "This storage kind is not available yet.")]
+    UnavailableStorageKind,
 }
 
 impl std::error::Error for Error {
-	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-		None
-	}
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        None
+    }
 }
 
 /// Base error code for all offchain errors.
 const BASE_ERROR: i64 = 5000;
 
 impl From<Error> for rpc::Error {
-	fn from(e: Error) -> Self {
-		match e {
-			Error::UnavailableStorageKind => rpc::Error {
-				code: rpc::ErrorCode::ServerError(BASE_ERROR + 1),
-				message: "This storage kind is not available yet" .into(),
-				data: None,
-			},
-		}
-	}
+    fn from(e: Error) -> Self {
+        match e {
+            Error::UnavailableStorageKind => rpc::Error {
+                code: rpc::ErrorCode::ServerError(BASE_ERROR + 1),
+                message: "This storage kind is not available yet".into(),
+                data: None,
+            },
+        }
+    }
 }

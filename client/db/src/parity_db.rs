@@ -15,42 +15,45 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 /// A `Database` adapter for parity-db.
-
-use sp_database::{Database, Change, Transaction, ColumnId};
+use sp_database::{Change, ColumnId, Database, Transaction};
 
 struct DbAdapter(parity_db::Db);
 
 fn handle_err<T>(result: parity_db::Result<T>) -> T {
-	match result {
-		Ok(r) => r,
-		Err(e) =>  {
-			panic!("Critical database eror: {:?}", e);
-		}
-	}
+    match result {
+        Ok(r) => r,
+        Err(e) => {
+            panic!("Critical database eror: {:?}", e);
+        }
+    }
 }
 
 /// Wrap RocksDb database into a trait object that implements `sp_database::Database`
-pub fn open<H: Clone>(path: &std::path::Path, num_columns: u32) -> parity_db::Result<std::sync::Arc<dyn Database<H>>> {
-	let db = parity_db::Db::with_columns(path, num_columns as u8)?;
-	Ok(std::sync::Arc::new(DbAdapter(db)))
+pub fn open<H: Clone>(
+    path: &std::path::Path,
+    num_columns: u32,
+) -> parity_db::Result<std::sync::Arc<dyn Database<H>>> {
+    let db = parity_db::Db::with_columns(path, num_columns as u8)?;
+    Ok(std::sync::Arc::new(DbAdapter(db)))
 }
 
 impl<H: Clone> Database<H> for DbAdapter {
-	fn commit(&self, transaction: Transaction<H>) {
-		handle_err(self.0.commit(transaction.0.into_iter().map(|change|
-			match change {
-				Change::Set(col, key, value) => (col as u8, key, Some(value)),
-				Change::Remove(col, key) => (col as u8, key, None),
-				_ => unimplemented!(),
-			}))
-		);
-	}
+    fn commit(&self, transaction: Transaction<H>) {
+        handle_err(
+            self.0
+                .commit(transaction.0.into_iter().map(|change| match change {
+                    Change::Set(col, key, value) => (col as u8, key, Some(value)),
+                    Change::Remove(col, key) => (col as u8, key, None),
+                    _ => unimplemented!(),
+                })),
+        );
+    }
 
-	fn get(&self, col: ColumnId, key: &[u8]) -> Option<Vec<u8>> {
-		handle_err(self.0.get(col as u8, key))
-	}
+    fn get(&self, col: ColumnId, key: &[u8]) -> Option<Vec<u8>> {
+        handle_err(self.0.get(col as u8, key))
+    }
 
-	fn lookup(&self, _hash: &H) -> Option<Vec<u8>> {
-		unimplemented!();
-	}
+    fn lookup(&self, _hash: &H) -> Option<Vec<u8>> {
+        unimplemented!();
+    }
 }

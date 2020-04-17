@@ -22,45 +22,49 @@ use std::{error::Error, sync::Arc};
 
 /// A type which provides access to chain information.
 pub trait Chain<B: Block> {
-	/// Retrieve the status of the block denoted by the given [`BlockId`].
-	fn block_status(&self, id: &BlockId<B>) -> Result<BlockStatus, Box<dyn Error + Send>>;
+    /// Retrieve the status of the block denoted by the given [`BlockId`].
+    fn block_status(&self, id: &BlockId<B>) -> Result<BlockStatus, Box<dyn Error + Send>>;
 }
 
 impl<T: Chain<B>, B: Block> Chain<B> for Arc<T> {
-	fn block_status(&self, id: &BlockId<B>) -> Result<BlockStatus, Box<dyn Error + Send>> {
-		(&**self).block_status(id)
-	}
+    fn block_status(&self, id: &BlockId<B>) -> Result<BlockStatus, Box<dyn Error + Send>> {
+        (&**self).block_status(id)
+    }
 }
 
 /// Result of `BlockAnnounceValidator::validate`.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Validation {
-	/// Valid block announcement.
-	Success,
-	/// Invalid block announcement.
-	Failure,
+    /// Valid block announcement.
+    Success,
+    /// Invalid block announcement.
+    Failure,
 }
 
 /// Type which checks incoming block announcements.
 pub trait BlockAnnounceValidator<B: Block> {
-	/// Validate the announced header and its associated data.
-	fn validate(&mut self, header: &B::Header, data: &[u8]) -> Result<Validation, Box<dyn Error + Send>>;
+    /// Validate the announced header and its associated data.
+    fn validate(
+        &mut self,
+        header: &B::Header,
+        data: &[u8],
+    ) -> Result<Validation, Box<dyn Error + Send>>;
 }
 
 /// Default implementation of `BlockAnnounceValidator`.
 #[derive(Debug)]
 pub struct DefaultBlockAnnounceValidator<C> {
-	chain: C
+    chain: C,
 }
 
 impl<C> DefaultBlockAnnounceValidator<C> {
-	pub fn new(chain: C) -> Self {
-		Self { chain }
-	}
+    pub fn new(chain: C) -> Self {
+        Self { chain }
+    }
 }
 
 impl<B: Block, C: Chain<B>> BlockAnnounceValidator<B> for DefaultBlockAnnounceValidator<C> {
-	fn validate(&mut self, _h: &B::Header, _d: &[u8]) -> Result<Validation, Box<dyn Error + Send>> {
-		Ok(Validation::Success)
-	}
+    fn validate(&mut self, _h: &B::Header, _d: &[u8]) -> Result<Validation, Box<dyn Error + Send>> {
+        Ok(Validation::Success)
+    }
 }

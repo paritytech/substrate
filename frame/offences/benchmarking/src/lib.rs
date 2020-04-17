@@ -21,21 +21,24 @@
 use sp_std::prelude::*;
 use sp_std::vec;
 
-use frame_system::RawOrigin;
-use frame_benchmarking::{benchmarks, account};
+use frame_benchmarking::{account, benchmarks};
 use frame_support::traits::{Currency, OnInitialize};
+use frame_system::RawOrigin;
 
-use sp_runtime::{Perbill, traits::{Convert, StaticLookup}};
+use sp_runtime::{
+    traits::{Convert, StaticLookup},
+    Perbill,
+};
 use sp_staking::offence::ReportOffence;
 
-use pallet_im_online::{Trait as ImOnlineTrait, Module as ImOnline, UnresponsivenessOffence};
-use pallet_offences::{Trait as OffencesTrait, Module as Offences};
-use pallet_staking::{
-	Module as Staking, Trait as StakingTrait, RewardDestination, ValidatorPrefs,
-	Exposure, IndividualExposure, ElectionStatus
-};
+use pallet_im_online::{Module as ImOnline, Trait as ImOnlineTrait, UnresponsivenessOffence};
+use pallet_offences::{Module as Offences, Trait as OffencesTrait};
+use pallet_session::historical::{IdentificationTuple, Trait as HistoricalTrait};
 use pallet_session::Trait as SessionTrait;
-use pallet_session::historical::{Trait as HistoricalTrait, IdentificationTuple};
+use pallet_staking::{
+    ElectionStatus, Exposure, IndividualExposure, Module as Staking, RewardDestination,
+    Trait as StakingTrait, ValidatorPrefs,
+};
 
 const SEED: u32 = 0;
 
@@ -47,129 +50,149 @@ const MAX_DEFERRED_OFFENCES: u32 = 100;
 
 pub struct Module<T: Trait>(Offences<T>);
 
-pub trait Trait: SessionTrait + StakingTrait + OffencesTrait + ImOnlineTrait + HistoricalTrait {}
-
-fn create_offender<T: Trait>(n: u32, nominators: u32) -> Result<T::AccountId, &'static str> {
-	let stash: T::AccountId = account("stash", n, SEED);
-	let controller: T::AccountId = account("controller", n, SEED);
-	let controller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(controller.clone());
-	let reward_destination = RewardDestination::Staked;
-	let amount = T::Currency::minimum_balance();
-
-	Staking::<T>::bond(
-		RawOrigin::Signed(stash.clone()).into(),
-		controller_lookup.clone(),
-		amount.clone(),
-		reward_destination.clone(),
-	)?;
-
-	let validator_prefs = ValidatorPrefs {
-		commission: Perbill::from_percent(50),
-	};
-	Staking::<T>::validate(RawOrigin::Signed(controller.clone()).into(), validator_prefs)?;
-
-	let mut individual_exposures = vec![];
-
-	// Create n nominators
-	for i in 0 .. nominators {
-		let nominator_stash: T::AccountId = account("nominator stash", n * MAX_NOMINATORS + i, SEED);
-		let nominator_controller: T::AccountId = account("nominator controller", n * MAX_NOMINATORS + i, SEED);
-		let nominator_controller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(nominator_controller.clone());
-
-		Staking::<T>::bond(
-			RawOrigin::Signed(nominator_stash.clone()).into(),
-			nominator_controller_lookup.clone(),
-			amount,
-			reward_destination,
-		)?;
-
-		let selected_validators: Vec<<T::Lookup as StaticLookup>::Source> = vec![controller_lookup.clone()];
-		Staking::<T>::nominate(RawOrigin::Signed(nominator_controller.clone()).into(), selected_validators)?;
-
-		individual_exposures.push(IndividualExposure {
-			who: nominator_controller.clone(),
-			value: amount.clone(),
-		});
-	}
-
-	let exposure = Exposure {
-		total: amount.clone() * n.into(),
-		own: amount,
-		others: individual_exposures,
-	};
-	let current_era = 0u32;
-	Staking::<T>::add_era_stakers(current_era.into(), stash.clone().into(), exposure);
-
-	Ok(controller)
+pub trait Trait:
+    SessionTrait + StakingTrait + OffencesTrait + ImOnlineTrait + HistoricalTrait
+{
 }
 
-fn make_offenders<T: Trait>(num_offenders: u32, num_nominators: u32) -> Result<Vec<IdentificationTuple<T>>, &'static str> {
-	let mut offenders: Vec<T::AccountId> = vec![];
+fn create_offender<T: Trait>(n: u32, nominators: u32) -> Result<T::AccountId, &'static str> {
+    let stash: T::AccountId = account("stash", n, SEED);
+    let controller: T::AccountId = account("controller", n, SEED);
+    let controller_lookup: <T::Lookup as StaticLookup>::Source =
+        T::Lookup::unlookup(controller.clone());
+    let reward_destination = RewardDestination::Staked;
+    let amount = T::Currency::minimum_balance();
 
-	for i in 0 .. num_offenders {
-		let offender = create_offender::<T>(i, num_nominators)?;
-		offenders.push(offender);
-	}
+    Staking::<T>::bond(
+        RawOrigin::Signed(stash.clone()).into(),
+        controller_lookup.clone(),
+        amount.clone(),
+        reward_destination.clone(),
+    )?;
 
-	Ok(offenders.iter()
-		.map(|id|
-			<T as SessionTrait>::ValidatorIdOf::convert(id.clone())
-				.expect("failed to get validator id from account id"))
-		.map(|validator_id|
-			<T as HistoricalTrait>::FullIdentificationOf::convert(validator_id.clone())
-			.map(|full_id| (validator_id, full_id))
-			.expect("failed to convert validator id to full identification"))
-		.collect::<Vec<IdentificationTuple<T>>>())
+    let validator_prefs = ValidatorPrefs {
+        commission: Perbill::from_percent(50),
+    };
+    Staking::<T>::validate(
+        RawOrigin::Signed(controller.clone()).into(),
+        validator_prefs,
+    )?;
+
+    let mut individual_exposures = vec![];
+
+    // Create n nominators
+    for i in 0..nominators {
+        let nominator_stash: T::AccountId =
+            account("nominator stash", n * MAX_NOMINATORS + i, SEED);
+        let nominator_controller: T::AccountId =
+            account("nominator controller", n * MAX_NOMINATORS + i, SEED);
+        let nominator_controller_lookup: <T::Lookup as StaticLookup>::Source =
+            T::Lookup::unlookup(nominator_controller.clone());
+
+        Staking::<T>::bond(
+            RawOrigin::Signed(nominator_stash.clone()).into(),
+            nominator_controller_lookup.clone(),
+            amount,
+            reward_destination,
+        )?;
+
+        let selected_validators: Vec<<T::Lookup as StaticLookup>::Source> =
+            vec![controller_lookup.clone()];
+        Staking::<T>::nominate(
+            RawOrigin::Signed(nominator_controller.clone()).into(),
+            selected_validators,
+        )?;
+
+        individual_exposures.push(IndividualExposure {
+            who: nominator_controller.clone(),
+            value: amount.clone(),
+        });
+    }
+
+    let exposure = Exposure {
+        total: amount.clone() * n.into(),
+        own: amount,
+        others: individual_exposures,
+    };
+    let current_era = 0u32;
+    Staking::<T>::add_era_stakers(current_era.into(), stash.clone().into(), exposure);
+
+    Ok(controller)
+}
+
+fn make_offenders<T: Trait>(
+    num_offenders: u32,
+    num_nominators: u32,
+) -> Result<Vec<IdentificationTuple<T>>, &'static str> {
+    let mut offenders: Vec<T::AccountId> = vec![];
+
+    for i in 0..num_offenders {
+        let offender = create_offender::<T>(i, num_nominators)?;
+        offenders.push(offender);
+    }
+
+    Ok(offenders
+        .iter()
+        .map(|id| {
+            <T as SessionTrait>::ValidatorIdOf::convert(id.clone())
+                .expect("failed to get validator id from account id")
+        })
+        .map(|validator_id| {
+            <T as HistoricalTrait>::FullIdentificationOf::convert(validator_id.clone())
+                .map(|full_id| (validator_id, full_id))
+                .expect("failed to convert validator id to full identification")
+        })
+        .collect::<Vec<IdentificationTuple<T>>>())
 }
 
 benchmarks! {
-	_ {
-		let u in 1 .. MAX_USERS => ();
-		let r in 1 .. MAX_REPORTERS => ();
-		let o in 1 .. MAX_OFFENDERS => ();
-		let n in 1 .. MAX_NOMINATORS => ();
-		let d in 1 .. MAX_DEFERRED_OFFENCES => ();
-	}
+    _ {
+        let u in 1 .. MAX_USERS => ();
+        let r in 1 .. MAX_REPORTERS => ();
+        let o in 1 .. MAX_OFFENDERS => ();
+        let n in 1 .. MAX_NOMINATORS => ();
+        let d in 1 .. MAX_DEFERRED_OFFENCES => ();
+    }
 
-	report_offence {
-		let r in ...;
-		let o in ...;
-		let n in ...;
+    report_offence {
+        let r in ...;
+        let o in ...;
+        let n in ...;
 
-		let mut reporters = vec![];
+        let mut reporters = vec![];
 
-		for i in 0 .. r {
-			let reporter = account("reporter", i, SEED);
-			reporters.push(reporter);
-		}
-	
-		let offenders = make_offenders::<T>(o, n).expect("failed to create offenders");
-		let keys =  ImOnline::<T>::keys();
+        for i in 0 .. r {
+            let reporter = account("reporter", i, SEED);
+            reporters.push(reporter);
+        }
 
-		let offence = UnresponsivenessOffence {
-			session_index: 0,
-			validator_set_count: keys.len() as u32,
-			offenders,
-		};
+        let offenders = make_offenders::<T>(o, n).expect("failed to create offenders");
+        let keys =  ImOnline::<T>::keys();
 
-	}: {
-		let _ = <T as ImOnlineTrait>::ReportUnresponsiveness::report_offence(reporters, offence);
-	}
+        let offence = UnresponsivenessOffence {
+            session_index: 0,
+            validator_set_count: keys.len() as u32,
+            offenders,
+        };
 
-	on_initialize {
-		let d in ...;
+    }: {
+        let _ = <T as ImOnlineTrait>::ReportUnresponsiveness::report_offence(reporters, offence);
+    }
 
-		Staking::<T>::put_election_status(ElectionStatus::Closed);
+    on_initialize {
+        let d in ...;
 
-		let mut deferred_offences = vec![];
+        Staking::<T>::put_election_status(ElectionStatus::Closed);
 
-		for i in 0 .. d {
-			deferred_offences.push((vec![], vec![], 0u32));
-		}
+        let mut deferred_offences = vec![];
 
-		Offences::<T>::set_deferred_offences(deferred_offences);
+        for i in 0 .. d {
+            deferred_offences.push((vec![], vec![], 0u32));
+        }
 
-	}: {
-		Offences::<T>::on_initialize(u.into());
-	}
+        Offences::<T>::set_deferred_offences(deferred_offences);
+
+    }: {
+        Offences::<T>::on_initialize(u.into());
+    }
 }

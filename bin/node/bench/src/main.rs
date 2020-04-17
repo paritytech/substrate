@@ -14,100 +14,107 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-#[macro_use] mod core;
-mod import;
-mod trie;
+#[macro_use]
+mod core;
 mod generator;
-mod tempdb;
+mod import;
 mod state_sizes;
+mod tempdb;
+mod trie;
 
 use crate::core::{run_benchmark, Mode as BenchmarkMode};
 use import::{ImportBenchmarkDescription, SizeType};
-use trie::{TrieBenchmarkDescription, DatabaseSize};
-use node_testing::bench::{Profile, KeyTypes};
+use node_testing::bench::{KeyTypes, Profile};
 use structopt::StructOpt;
+use trie::{DatabaseSize, TrieBenchmarkDescription};
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "node-bench", about = "Node integration benchmarks")]
 struct Opt {
-	/// Show list of all available benchmarks.
-	///
-	/// Will output ("name", "path"). Benchmarks can then be filtered by path.
-	#[structopt(short, long)]
-	list: bool,
+    /// Show list of all available benchmarks.
+    ///
+    /// Will output ("name", "path"). Benchmarks can then be filtered by path.
+    #[structopt(short, long)]
+    list: bool,
 
-	/// Machine readable json output.
-	///
-	/// This also suppresses all regular output (except to stderr)
-	#[structopt(short, long)]
-	json: bool,
+    /// Machine readable json output.
+    ///
+    /// This also suppresses all regular output (except to stderr)
+    #[structopt(short, long)]
+    json: bool,
 
-	/// Filter benchmarks.
-	///
-	/// Run with `--list` for the hint of what to filter.
-	filter: Option<String>,
+    /// Filter benchmarks.
+    ///
+    /// Run with `--list` for the hint of what to filter.
+    filter: Option<String>,
 
-	/// Mode
-	///
-	/// "regular" for regular becnhmark
-	///
-	/// "profile" mode adds pauses between measurable runs,
-	/// so that actual interval can be selected in the profiler of choice.
-	#[structopt(short, long, default_value = "regular")]
-	mode: BenchmarkMode,
+    /// Mode
+    ///
+    /// "regular" for regular becnhmark
+    ///
+    /// "profile" mode adds pauses between measurable runs,
+    /// so that actual interval can be selected in the profiler of choice.
+    #[structopt(short, long, default_value = "regular")]
+    mode: BenchmarkMode,
 }
 
 fn main() {
-	let opt = Opt::from_args();
+    let opt = Opt::from_args();
 
-	if !opt.json {
-		sc_cli::init_logger("");
-	}
+    if !opt.json {
+        sc_cli::init_logger("");
+    }
 
-	let benchmarks = matrix!(
-		profile in [Profile::Wasm, Profile::Native] =>
-			ImportBenchmarkDescription {
-				profile: *profile,
-				key_types: KeyTypes::Sr25519,
-				size: SizeType::Medium,
-			},
-		ImportBenchmarkDescription {
-			profile: Profile::Native,
-			key_types: KeyTypes::Ed25519,
-			size: SizeType::Medium,
-		},
-		size in [SizeType::Small, SizeType::Large] =>
-			ImportBenchmarkDescription {
-				profile: Profile::Native,
-				key_types: KeyTypes::Sr25519,
-				size: *size,
-			},
-		size in [
-			DatabaseSize::Empty, DatabaseSize::Smallest, DatabaseSize::Small,
-			DatabaseSize::Medium, DatabaseSize::Large,
-		] => TrieBenchmarkDescription { database_size: *size },
-	);
+    let benchmarks = matrix!(
+        profile in [Profile::Wasm, Profile::Native] =>
+            ImportBenchmarkDescription {
+                profile: *profile,
+                key_types: KeyTypes::Sr25519,
+                size: SizeType::Medium,
+            },
+        ImportBenchmarkDescription {
+            profile: Profile::Native,
+            key_types: KeyTypes::Ed25519,
+            size: SizeType::Medium,
+        },
+        size in [SizeType::Small, SizeType::Large] =>
+            ImportBenchmarkDescription {
+                profile: Profile::Native,
+                key_types: KeyTypes::Sr25519,
+                size: *size,
+            },
+        size in [
+            DatabaseSize::Empty, DatabaseSize::Smallest, DatabaseSize::Small,
+            DatabaseSize::Medium, DatabaseSize::Large,
+        ] => TrieBenchmarkDescription { database_size: *size },
+    );
 
-	if opt.list {
-		for benchmark in benchmarks.iter() {
-			log::info!("{}: {}", benchmark.name(), benchmark.path().full())
-		}
-		return;
-	}
+    if opt.list {
+        for benchmark in benchmarks.iter() {
+            log::info!("{}: {}", benchmark.name(), benchmark.path().full())
+        }
+        return;
+    }
 
-	let mut results = Vec::new();
-	for benchmark in benchmarks {
-		if opt.filter.as_ref().map(|f| benchmark.path().has(f)).unwrap_or(true) {
-			log::info!("Starting {}", benchmark.name());
-			let result = run_benchmark(benchmark, opt.mode);
-			log::info!("{}", result);
+    let mut results = Vec::new();
+    for benchmark in benchmarks {
+        if opt
+            .filter
+            .as_ref()
+            .map(|f| benchmark.path().has(f))
+            .unwrap_or(true)
+        {
+            log::info!("Starting {}", benchmark.name());
+            let result = run_benchmark(benchmark, opt.mode);
+            log::info!("{}", result);
 
-			results.push(result);
-		}
-	}
+            results.push(result);
+        }
+    }
 
-	if opt.json {
-		let json_result: String = serde_json::to_string(&results).expect("Failed to construct json");
-		println!("{}", json_result);
-	}
+    if opt.json {
+        let json_result: String =
+            serde_json::to_string(&results).expect("Failed to construct json");
+        println!("{}", json_result);
+    }
 }

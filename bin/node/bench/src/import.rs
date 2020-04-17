@@ -30,111 +30,116 @@
 
 use std::borrow::Cow;
 
-use node_testing::bench::{BenchDb, Profile, BlockType, KeyTypes};
 use node_primitives::Block;
+use node_testing::bench::{BenchDb, BlockType, KeyTypes, Profile};
 use sc_client_api::backend::Backend;
 use sp_runtime::generic::BlockId;
 
-use crate::core::{self, Path, Mode};
+use crate::core::{self, Mode, Path};
 
 #[derive(Clone, Copy, Debug)]
-pub enum SizeType { Small, Medium, Large }
+pub enum SizeType {
+    Small,
+    Medium,
+    Large,
+}
 
 impl SizeType {
-	fn transactions(&self) -> usize {
-		match self {
-			SizeType::Small => 10,
-			SizeType::Medium => 100,
-			SizeType::Large => 500,
-		}
-	}
+    fn transactions(&self) -> usize {
+        match self {
+            SizeType::Small => 10,
+            SizeType::Medium => 100,
+            SizeType::Large => 500,
+        }
+    }
 }
 
 pub struct ImportBenchmarkDescription {
-	pub profile: Profile,
-	pub key_types: KeyTypes,
-	pub size: SizeType,
+    pub profile: Profile,
+    pub key_types: KeyTypes,
+    pub size: SizeType,
 }
 
 pub struct ImportBenchmark {
-	profile: Profile,
-	database: BenchDb,
-	block: Block,
+    profile: Profile,
+    database: BenchDb,
+    block: Block,
 }
 
 impl core::BenchmarkDescription for ImportBenchmarkDescription {
-	fn path(&self) -> Path {
+    fn path(&self) -> Path {
+        let mut path = Path::new(&["node", "import"]);
 
-		let mut path = Path::new(&["node", "import"]);
+        match self.profile {
+            Profile::Wasm => path.push("wasm"),
+            Profile::Native => path.push("native"),
+        }
 
-		match self.profile {
-			Profile::Wasm => path.push("wasm"),
-			Profile::Native => path.push("native"),
-		}
+        match self.key_types {
+            KeyTypes::Sr25519 => path.push("sr25519"),
+            KeyTypes::Ed25519 => path.push("ed25519"),
+        }
 
-		match self.key_types {
-			KeyTypes::Sr25519 => path.push("sr25519"),
-			KeyTypes::Ed25519 => path.push("ed25519"),
-		}
+        match self.size {
+            SizeType::Small => path.push("small"),
+            SizeType::Medium => path.push("medium"),
+            SizeType::Large => path.push("large"),
+        }
 
-		match self.size {
-			SizeType::Small => path.push("small"),
-			SizeType::Medium => path.push("medium"),
-			SizeType::Large => path.push("large"),
-		}
+        path
+    }
 
-		path
-	}
+    fn setup(self: Box<Self>) -> Box<dyn core::Benchmark> {
+        let profile = self.profile;
+        let mut bench_db = BenchDb::with_key_types(self.size.transactions(), self.key_types);
+        let block = bench_db.generate_block(BlockType::RandomTransfers(self.size.transactions()));
+        Box::new(ImportBenchmark {
+            database: bench_db,
+            block,
+            profile,
+        })
+    }
 
-	fn setup(self: Box<Self>) -> Box<dyn core::Benchmark> {
-		let profile = self.profile;
-		let mut bench_db = BenchDb::with_key_types(self.size.transactions(), self.key_types);
-		let block = bench_db.generate_block(BlockType::RandomTransfers(self.size.transactions()));
-		Box::new(ImportBenchmark {
-			database: bench_db,
-			block,
-			profile,
-		})
-	}
-
-	fn name(&self) -> Cow<'static, str> {
-		match self.profile {
-			Profile::Wasm => "Import benchmark (random transfers, wasm)".into(),
-			Profile::Native => "Import benchmark (random transfers, native)".into(),
-		}
-	}
+    fn name(&self) -> Cow<'static, str> {
+        match self.profile {
+            Profile::Wasm => "Import benchmark (random transfers, wasm)".into(),
+            Profile::Native => "Import benchmark (random transfers, native)".into(),
+        }
+    }
 }
 
 impl core::Benchmark for ImportBenchmark {
-	fn run(&mut self, mode: Mode) -> std::time::Duration {
-		let mut context = self.database.create_context(self.profile);
+    fn run(&mut self, mode: Mode) -> std::time::Duration {
+        let mut context = self.database.create_context(self.profile);
 
-		let _ = context.client.runtime_version_at(&BlockId::Number(0))
-			.expect("Failed to get runtime version")
-			.spec_version;
+        let _ = context
+            .client
+            .runtime_version_at(&BlockId::Number(0))
+            .expect("Failed to get runtime version")
+            .spec_version;
 
-		let start = std::time::Instant::now();
-		context.import_block(self.block.clone());
-		let elapsed = start.elapsed();
+        let start = std::time::Instant::now();
+        context.import_block(self.block.clone());
+        let elapsed = start.elapsed();
 
-		if mode == Mode::Profile {
-			std::thread::park_timeout(std::time::Duration::from_secs(2));
-		}
+        if mode == Mode::Profile {
+            std::thread::park_timeout(std::time::Duration::from_secs(2));
+        }
 
-		log::info!(
-			target: "bench-logistics",
-			"imported block with {} tx, took: {:#?}",
-			self.block.extrinsics.len(),
-			elapsed,
-		);
+        log::info!(
+            target: "bench-logistics",
+            "imported block with {} tx, took: {:#?}",
+            self.block.extrinsics.len(),
+            elapsed,
+        );
 
-		log::info!(
-			target: "bench-logistics",
-			"usage info: {}",
-			context.backend.usage_info()
-				.expect("RocksDB backend always provides usage info!"),
-		);
+        log::info!(
+            target: "bench-logistics",
+            "usage info: {}",
+            context.backend.usage_info()
+                .expect("RocksDB backend always provides usage info!"),
+        );
 
-		elapsed
-	}
+        elapsed
+    }
 }

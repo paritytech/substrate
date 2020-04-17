@@ -26,59 +26,59 @@ use structopt::StructOpt;
 /// The `purge-chain` command used to remove the whole chain.
 #[derive(Debug, StructOpt, Clone)]
 pub struct PurgeChainCmd {
-	/// Skip interactive prompt by answering yes automatically.
-	#[structopt(short = "y")]
-	pub yes: bool,
+    /// Skip interactive prompt by answering yes automatically.
+    #[structopt(short = "y")]
+    pub yes: bool,
 
-	#[allow(missing_docs)]
-	#[structopt(flatten)]
-	pub shared_params: SharedParams,
+    #[allow(missing_docs)]
+    #[structopt(flatten)]
+    pub shared_params: SharedParams,
 }
 
 impl PurgeChainCmd {
-	/// Run the purge command
-	pub fn run(&self, config: Configuration) -> error::Result<()> {
-		let db_path = match &config.database {
-			DatabaseConfig::RocksDb { path, .. } => path,
-			_ => {
-				eprintln!("Cannot purge custom database implementation");
-				return Ok(());
-			}
-		};
+    /// Run the purge command
+    pub fn run(&self, config: Configuration) -> error::Result<()> {
+        let db_path = match &config.database {
+            DatabaseConfig::RocksDb { path, .. } => path,
+            _ => {
+                eprintln!("Cannot purge custom database implementation");
+                return Ok(());
+            }
+        };
 
-		if !self.yes {
-			print!("Are you sure to remove {:?}? [y/N]: ", &db_path);
-			io::stdout().flush().expect("failed to flush stdout");
+        if !self.yes {
+            print!("Are you sure to remove {:?}? [y/N]: ", &db_path);
+            io::stdout().flush().expect("failed to flush stdout");
 
-			let mut input = String::new();
-			io::stdin().read_line(&mut input)?;
-			let input = input.trim();
+            let mut input = String::new();
+            io::stdin().read_line(&mut input)?;
+            let input = input.trim();
 
-			match input.chars().nth(0) {
-				Some('y') | Some('Y') => {},
-				_ => {
-					println!("Aborted");
-					return Ok(());
-				},
-			}
-		}
+            match input.chars().nth(0) {
+                Some('y') | Some('Y') => {}
+                _ => {
+                    println!("Aborted");
+                    return Ok(());
+                }
+            }
+        }
 
-		match fs::remove_dir_all(&db_path) {
-			Ok(_) => {
-				println!("{:?} removed.", &db_path);
-				Ok(())
-			},
-			Err(ref err) if err.kind() == io::ErrorKind::NotFound => {
-				eprintln!("{:?} did not exist.", &db_path);
-				Ok(())
-			},
-			Err(err) => Result::Err(err.into()),
-		}
-	}
+        match fs::remove_dir_all(&db_path) {
+            Ok(_) => {
+                println!("{:?} removed.", &db_path);
+                Ok(())
+            }
+            Err(ref err) if err.kind() == io::ErrorKind::NotFound => {
+                eprintln!("{:?} did not exist.", &db_path);
+                Ok(())
+            }
+            Err(err) => Result::Err(err.into()),
+        }
+    }
 }
 
 impl CliConfiguration for PurgeChainCmd {
-	fn shared_params(&self) -> &SharedParams {
-		&self.shared_params
-	}
+    fn shared_params(&self) -> &SharedParams {
+        &self.shared_params
+    }
 }

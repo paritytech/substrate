@@ -28,46 +28,46 @@ pub type FutureResult<T> = Box<dyn rpc::futures::Future<Item = T, Error = Error>
 /// Author RPC errors.
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
-	/// Client error.
-	#[display(fmt="Client error: {}", _0)]
-	#[from(ignore)]
-	Client(Box<dyn std::error::Error + Send>),
-	/// Transaction pool error,
-	#[display(fmt="Transaction pool error: {}", _0)]
-	Pool(sp_transaction_pool::error::Error),
-	/// Verification error
-	#[display(fmt="Extrinsic verification error: {}", _0)]
-	#[from(ignore)]
-	Verification(Box<dyn std::error::Error + Send>),
-	/// Incorrect extrinsic format.
-	#[display(fmt="Invalid extrinsic format: {}", _0)]
-	BadFormat(codec::Error),
-	/// Incorrect seed phrase.
-	#[display(fmt="Invalid seed phrase/SURI")]
-	BadSeedPhrase,
-	/// Key type ID has an unknown format.
-	#[display(fmt="Invalid key type ID format (should be of length four)")]
-	BadKeyType,
-	/// Key type ID has some unsupported crypto.
-	#[display(fmt="The crypto of key type ID is unknown")]
-	UnsupportedKeyType,
-	/// Some random issue with the key store. Shouldn't happen.
-	#[display(fmt="The key store is unavailable")]
-	KeyStoreUnavailable,
-	/// Invalid session keys encoding.
-	#[display(fmt="Session keys are not encoded correctly")]
-	InvalidSessionKeys,
+    /// Client error.
+    #[display(fmt = "Client error: {}", _0)]
+    #[from(ignore)]
+    Client(Box<dyn std::error::Error + Send>),
+    /// Transaction pool error,
+    #[display(fmt = "Transaction pool error: {}", _0)]
+    Pool(sp_transaction_pool::error::Error),
+    /// Verification error
+    #[display(fmt = "Extrinsic verification error: {}", _0)]
+    #[from(ignore)]
+    Verification(Box<dyn std::error::Error + Send>),
+    /// Incorrect extrinsic format.
+    #[display(fmt = "Invalid extrinsic format: {}", _0)]
+    BadFormat(codec::Error),
+    /// Incorrect seed phrase.
+    #[display(fmt = "Invalid seed phrase/SURI")]
+    BadSeedPhrase,
+    /// Key type ID has an unknown format.
+    #[display(fmt = "Invalid key type ID format (should be of length four)")]
+    BadKeyType,
+    /// Key type ID has some unsupported crypto.
+    #[display(fmt = "The crypto of key type ID is unknown")]
+    UnsupportedKeyType,
+    /// Some random issue with the key store. Shouldn't happen.
+    #[display(fmt = "The key store is unavailable")]
+    KeyStoreUnavailable,
+    /// Invalid session keys encoding.
+    #[display(fmt = "Session keys are not encoded correctly")]
+    InvalidSessionKeys,
 }
 
 impl std::error::Error for Error {
-	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-		match self {
-			Error::Client(ref err) => Some(&**err),
-			Error::Pool(ref err) => Some(err),
-			Error::Verification(ref err) => Some(&**err),
-			_ => None,
-		}
-	}
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Error::Client(ref err) => Some(&**err),
+            Error::Pool(ref err) => Some(err),
+            Error::Verification(ref err) => Some(&**err),
+            _ => None,
+        }
+    }
 }
 
 /// Base code for all authorship errors.
@@ -95,10 +95,10 @@ const POOL_IMMEDIATELY_DROPPED: i64 = POOL_INVALID_TX + 6;
 const UNSUPPORTED_KEY_TYPE: i64 = POOL_INVALID_TX + 7;
 
 impl From<Error> for rpc::Error {
-	fn from(e: Error) -> Self {
-		use sp_transaction_pool::error::{Error as PoolError};
+    fn from(e: Error) -> Self {
+        use sp_transaction_pool::error::Error as PoolError;
 
-		match e {
+        match e {
 			Error::BadFormat(e) => rpc::Error {
 				code: rpc::ErrorCode::ServerError(BAD_FORMAT),
 				message: format!("Extrinsic has invalid format: {}", e).into(),
@@ -154,5 +154,5 @@ impl From<Error> for rpc::Error {
 			},
 			e => errors::internal(e),
 		}
-	}
+    }
 }
