@@ -110,7 +110,7 @@ pub trait CliConfiguration: Sized {
 		&self,
 		chain_spec: &Box<dyn ChainSpec>,
 		is_dev: bool,
-		net_config_dir: &PathBuf,
+		net_config_dir: PathBuf,
 		client_id: &str,
 		node_name: &str,
 		node_key: NodeKeyConfig,
@@ -119,7 +119,7 @@ pub trait CliConfiguration: Sized {
 			network_params.network_config(
 				chain_spec,
 				is_dev,
-				net_config_dir,
+				Some(net_config_dir),
 				client_id,
 				node_name,
 				node_key,
@@ -129,7 +129,7 @@ pub trait CliConfiguration: Sized {
 				node_name,
 				client_id,
 				node_key,
-				net_config_dir,
+				Some(net_config_dir),
 			)
 		})
 	}
@@ -405,7 +405,7 @@ pub trait CliConfiguration: Sized {
 			network: self.network_config(
 				&chain_spec,
 				is_dev,
-				&net_config_dir,
+				net_config_dir,
 				client_id.as_str(),
 				self.node_name()?.as_str(),
 				node_key,
