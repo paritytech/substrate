@@ -19,7 +19,7 @@
 use log::{warn, debug};
 use hash_db::Hasher;
 use sp_trie::{Trie, delta_trie_root, empty_child_trie_root, child_delta_trie_root,
-	ChildrenProofMap};
+	ChildrenProofMap, AdditionalInfoForProcessing};
 use sp_trie::trie_types::{TrieDB, TrieError, Layout};
 use sp_core::storage::{ChildInfo, ChildInfoProof, ChildType};
 use codec::{Codec, Decode, Encode};
@@ -54,7 +54,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: Codec 
 	}
 
 	/// Get registered roots
-	pub fn extract_registered_roots(&self) -> Option<ChildrenProofMap<Vec<u8>>> {
+	pub fn extract_registered_roots(&self) -> Option<AdditionalInfoForProcessing> {
 		if let Some(register_roots) = self.essence.register_roots.as_ref() {
 			let mut dest = ChildrenProofMap::default();
 			dest.insert(ChildInfoProof::top_trie(), self.essence.root().encode());
@@ -64,7 +64,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: Codec 
 					dest.insert(child_info.proof_info(), root.encode());
 				}
 			}
-			Some(dest)
+			Some(AdditionalInfoForProcessing::ChildTrieRoots(dest))
 		} else {
 			None
 		}

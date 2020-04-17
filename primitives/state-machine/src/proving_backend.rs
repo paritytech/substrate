@@ -23,7 +23,8 @@ use log::debug;
 use hash_db::{Hasher, HashDB, EMPTY_PREFIX, Prefix};
 use sp_trie::{
 	MemoryDB, empty_child_trie_root, read_trie_value_with, read_child_trie_value_with,
-	record_all_keys, StorageProofKind, StorageProof,
+	record_all_keys, StorageProofKind, StorageProof, AdditionalInfoForProcessingKind,
+	AdditionalInfoForProcessing,
 };
 pub use sp_trie::{Recorder, ChildrenProofMap};
 pub use sp_trie::trie_types::{Layout, TrieError};
@@ -157,11 +158,11 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 	where H::Out: Codec
 {
 	/// Create new proving backend.
-	pub fn new(backend: &'a TrieBackend<S, H>, flatten: bool) -> Self {
-		let proof_recorder = if flatten {
-			ProofRecorder::Flat(Default::default())
-		} else {
+	pub fn new(backend: &'a TrieBackend<S, H>, full: bool) -> Self {
+		let proof_recorder = if full {
 			ProofRecorder::Full(Default::default())
+		} else {
+			ProofRecorder::Flat(Default::default())
 		};
 		Self::new_with_recorder(backend, proof_recorder)
 	}
@@ -177,7 +178,7 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 			backend: essence.backend_storage(),
 			proof_recorder,
 		};
-		// TODO registering root can be disabled in most case:
+		// TODO EMCH registering root can be disabled in most case:
 		// would simply need target proof as parameter (same thing for new
 		// function).
 		ProvingBackend(TrieBackend::new_with_roots(recorder, root))
@@ -185,11 +186,11 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 
 	/// Extracting the gathered unordered proof.
 	pub fn extract_proof(&self, kind: &StorageProofKind) -> Result<StorageProof, String> {
-		// TODO we actually check a given type of compaction.
-		let roots = if kind.is_compact() {
-			self.0.extract_registered_roots()
-		} else {
-			None
+		let roots = match kind.need_additional_info_to_produce() {
+			Some(AdditionalInfoForProcessingKind::ChildTrieRoots) => {
+				self.0.extract_registered_roots()
+			},
+			_ => None,
 		};
 		self.0.essence().backend_storage().proof_recorder.extract_proof(kind, roots)
 	}
@@ -203,7 +204,7 @@ impl<H: Hasher> ProofRecorder<H>
 	pub fn extract_proof(
 		&self,
 		kind: &StorageProofKind,
-		registered_roots: Option<ChildrenProofMap<Vec<u8>>>,
+		additional_infos: Option<AdditionalInfoForProcessing>,
 	) -> Result<StorageProof, String> {
 		// TODO EMCH logic should be in sp_trie
 		Ok(match self {
@@ -215,12 +216,13 @@ impl<H: Hasher> ProofRecorder<H>
 					.collect();
 				match kind {
 					StorageProofKind::Flatten => StorageProof::Flatten(trie_nodes),
-// TODO flatten compact for a given set of keys work StorageProofKind::FlattenCompact => StorageProof::Flatten(trie_nodes),
 					_ => return Err("Invalid proof kind for a flat proof record".to_string()),
 				}
 			},
 			ProofRecorder::Full(rec) => {
 				let mut children = ChildrenProofMap::default();
+				// TODO EMCH logic should be in sp_trie and not build the
+				// intermediate full proof (especially for flattened one).
 				for (child_info, set) in rec.read().iter() {
 					let trie_nodes: Vec<Vec<u8>> = set
 						.iter()
@@ -229,17 +231,15 @@ impl<H: Hasher> ProofRecorder<H>
 					children.insert(child_info.proof_info(), trie_nodes);
 				}
 				let unpacked_full = StorageProof::Full(children);
+
 				match kind {
 					StorageProofKind::Flatten => unpacked_full.flatten(),
 					StorageProofKind::Full => unpacked_full,
-					StorageProofKind::FullCompact => {
-						if let Some(roots) = registered_roots {
-							unpacked_full.pack::<H>(&roots)
-								.map_err(|e| format!("{}", e))?
-						} else {
-							return Err("Cannot compact without roots".to_string());
-						}
-					},
+					StorageProofKind::KnownQueryPlanAndValues
+					| StorageProofKind::TrieSkipHashesFull => unpacked_full.pack::<H>(&additional_infos)
+								.map_err(|e| format!("{}", e))?,
+					StorageProofKind::TrieSkipHashes => unpacked_full.pack::<H>(&additional_infos)
+								.map_err(|e| format!("{}", e))?.flatten(), // TODO EMCH I need to assert it is actually flatten (debug it), got strange non failing test on proof_recorded_and_checked_with_child (when was failing of flatten version
 				}
 			},
 		})
@@ -433,31 +433,33 @@ mod tests {
 
 	fn test_proving<'a>(
 		trie_backend: &'a TrieBackend<PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256>,
-		flat: bool,
+		full: bool,
 	) -> ProvingBackend<'a, PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256> {
-		ProvingBackend::new(trie_backend, flat)
+		ProvingBackend::new(trie_backend, full)
 	}
 
 	#[test]
 	fn proof_is_empty_until_value_is_read() {
 		let trie_backend = test_trie();
 		let kind = StorageProofKind::Flatten;
-		assert!(test_proving(&trie_backend, kind.is_flatten()).extract_proof(&kind).unwrap().is_empty());
+		assert!(test_proving(&trie_backend, kind.need_register_full()).extract_proof(&kind).unwrap().is_empty());
 		let kind = StorageProofKind::Full;
-		assert!(test_proving(&trie_backend, kind.is_flatten()).extract_proof(&kind).unwrap().is_empty());
-		let kind = StorageProofKind::FullCompact;
-		assert!(test_proving(&trie_backend, kind.is_flatten()).extract_proof(&kind).unwrap().is_empty());
+		assert!(test_proving(&trie_backend, kind.need_register_full()).extract_proof(&kind).unwrap().is_empty());
+		let kind = StorageProofKind::TrieSkipHashesFull;
+		assert!(test_proving(&trie_backend, kind.need_register_full()).extract_proof(&kind).unwrap().is_empty());
+		let kind = StorageProofKind::TrieSkipHashes;
+		assert!(test_proving(&trie_backend, kind.need_register_full()).extract_proof(&kind).unwrap().is_empty());
 	}
 
 	#[test]
 	fn proof_is_non_empty_after_value_is_read() {
 		let trie_backend = test_trie();
 		let kind = StorageProofKind::Flatten;
-		let backend = test_proving(&trie_backend, kind.is_flatten());
+		let backend = test_proving(&trie_backend, kind.need_register_full());
 		assert_eq!(backend.storage(b"key").unwrap(), Some(b"value".to_vec()));
 		assert!(!backend.extract_proof(&kind).unwrap().is_empty());
 		let kind = StorageProofKind::Full;
-		let backend = test_proving(&trie_backend, kind.is_flatten());
+		let backend = test_proving(&trie_backend, kind.need_register_full());
 		assert_eq!(backend.storage(b"key").unwrap(), Some(b"value".to_vec()));
 		assert!(!backend.extract_proof(&kind).unwrap().is_empty());
 	}
@@ -503,7 +505,7 @@ mod tests {
 		(0..64).for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i]));
 
 		let test = |kind: StorageProofKind| {
-			let proving = ProvingBackend::new(trie, kind.is_flatten());
+			let proving = ProvingBackend::new(trie, kind.need_register_full());
 			assert_eq!(proving.storage(&[42]).unwrap().unwrap(), vec![42]);
 
 			let proof = proving.extract_proof(&kind).unwrap();
@@ -513,7 +515,8 @@ mod tests {
 		};
 		test(StorageProofKind::Flatten);
 		test(StorageProofKind::Full);
-		test(StorageProofKind::FullCompact);
+		test(StorageProofKind::TrieSkipHashesFull);
+		test(StorageProofKind::TrieSkipHashes);
 	}
 
 	#[test]
@@ -557,8 +560,8 @@ mod tests {
 		));
 
 		let test = |kind: StorageProofKind| {
-			let flat = kind.is_flatten();
-			let proving = ProvingBackend::new(trie, flat);
+			let full = kind.need_register_full();
+			let proving = ProvingBackend::new(trie, full);
 			assert_eq!(proving.storage(&[42]).unwrap().unwrap(), vec![42]);
 
 			let proof = proving.extract_proof(&kind).unwrap();
@@ -573,12 +576,12 @@ mod tests {
 			assert_eq!(proof_check.storage(&[41]).unwrap().unwrap(), vec![41]);
 			assert_eq!(proof_check.storage(&[64]).unwrap(), None);
 
-			let proving = ProvingBackend::new(trie, flat);
+			let proving = ProvingBackend::new(trie, full);
 			assert_eq!(proving.child_storage(child_info_1, &[64]), Ok(Some(vec![64])));
 
 			let proof = proving.extract_proof(&kind).unwrap();
-			if flat {
-				let proof_check = create_flat_proof_check_backend::<BlakeTwo256>(
+			if kind.need_check_full().unwrap() {
+				let proof_check = create_proof_check_backend::<BlakeTwo256>(
 					in_memory_root.into(),
 					proof
 				).unwrap();
@@ -588,7 +591,7 @@ mod tests {
 					vec![64]
 				);
 			} else {
-				let proof_check = create_proof_check_backend::<BlakeTwo256>(
+				let proof_check = create_flat_proof_check_backend::<BlakeTwo256>(
 					in_memory_root.into(),
 					proof
 				).unwrap();
@@ -601,6 +604,7 @@ mod tests {
 		};
 		test(StorageProofKind::Flatten);
 		test(StorageProofKind::Full);
-		test(StorageProofKind::FullCompact);
+		test(StorageProofKind::TrieSkipHashesFull);
+		test(StorageProofKind::TrieSkipHashes);
 	}
 }

@@ -115,6 +115,9 @@ pub enum AdditionalInfoForProcessingKind {
 	ChildTrieRoots,
 
 	/// `AdditionalInfoForProcessing::QueryPlanWithValues` kind.
+	QueryPlanNoValues,
+
+	/// `AdditionalInfoForProcessing::QueryPlanWithValues` kind.
 	QueryPlanWithValues,
 }
 
@@ -123,7 +126,7 @@ impl StorageProofKind {
 	/// encoded nodes.
 	pub fn need_additional_info_to_produce(&self) -> Option<AdditionalInfoForProcessingKind> {
 		match self {
-			StorageProofKind::KnownQueryPlanAndValues => Some(AdditionalInfoForProcessingKind::QueryPlanWithValues),
+			StorageProofKind::KnownQueryPlanAndValues => Some(AdditionalInfoForProcessingKind::QueryPlanNoValues),
 			StorageProofKind::TrieSkipHashes
 				| StorageProofKind::TrieSkipHashesFull => Some(AdditionalInfoForProcessingKind::ChildTrieRoots),
 			StorageProofKind::Full
@@ -153,7 +156,7 @@ impl StorageProofKind {
 		}
 	}
 
-	/// Indicate if we need to record proof with splitted child trie information
+	/// Indicates if we need to record proof with splitted child trie information
 	/// or can simply record on a single collection.
 	pub fn need_register_full(&self) -> bool {
 		match self {
@@ -162,6 +165,18 @@ impl StorageProofKind {
 				| StorageProofKind::KnownQueryPlanAndValues
 				| StorageProofKind::TrieSkipHashes
 				| StorageProofKind::TrieSkipHashesFull => true,
+		}
+	}
+
+	/// Indicates if we can execute proof over a backend,
+	/// and if so, if the backend need to be full.
+	pub fn need_check_full(&self) -> Option<bool> {
+		match self {
+			StorageProofKind::Flatten
+				| StorageProofKind::TrieSkipHashes => Some(false),
+			StorageProofKind::Full
+				| StorageProofKind::TrieSkipHashesFull => Some(true),
+			StorageProofKind::KnownQueryPlanAndValues => None,
 		}
 	}
 }
@@ -277,6 +292,7 @@ impl<'a> Encode for LegacyEncodeAdapter<'a> {
 	}
 }
 
+#[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 /// Decode variant of `LegacyEncodeAdapter`.
 pub struct LegacyDecodeAdapter(pub StorageProof);
 
@@ -735,7 +751,7 @@ fn legacy_proof_codec() {
 	let proof = StorageProof::Flatten(content.clone());
 	let encoded_proof = proof.encode();
 
-	assert_eq!(Decode::decode(&mut &encoded_proof[..]).unwrap(), proof);
+	assert_eq!(StorageProof::decode(&mut &encoded_proof[..]).unwrap(), proof);
 	// test encoded minus first bytes equal to storage proof
 	assert_eq!(&encoded_legacy[..], &encoded_proof[1..]);
 
@@ -744,6 +760,6 @@ fn legacy_proof_codec() {
 	assert_eq!(encoded_adapter[0], 0);
 	assert_eq!(&encoded_adapter[1..], &encoded_proof[..]);
 	let adapter_proof = LegacyDecodeAdapter(proof);
-	assert_eq!(Decode::decode(&mut &encoded_legacy[..]).unwrap(), adapter_proof);
-	assert_eq!(Decode::decode(&mut &encoded_adapter[..]).unwrap(), adapter_proof);
+	assert_eq!(LegacyDecodeAdapter::decode(&mut &encoded_legacy[..]).unwrap(), adapter_proof);
+	assert_eq!(LegacyDecodeAdapter::decode(&mut &encoded_adapter[..]).unwrap(), adapter_proof);
 }

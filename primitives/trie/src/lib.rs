@@ -38,7 +38,7 @@ pub use trie_stream::TrieStream;
 pub use node_codec::NodeCodec;
 pub use storage_proof::{StorageProof, create_proof_check_backend_storage,
 	LegacyStorageProof, create_flat_proof_check_backend_storage, ChildrenProofMap,
-	StorageProofKind};
+	StorageProofKind, AdditionalInfoForProcessing, AdditionalInfoForProcessingKind};
 /// Various re-exports from the `trie-db` crate.
 pub use trie_db::{
 	Trie, TrieMut, DBValue, Recorder, CError, Query, TrieLayout, TrieConfiguration,

@@ -43,7 +43,7 @@ mod trie_backend_essence;
 mod stats;
 
 pub use sp_trie::{trie_types::{Layout, TrieDBMut}, TrieMut, DBValue, MemoryDB,
-	StorageProof, StorageProofKind, ChildrenProofMap};
+	StorageProof, StorageProofKind, ChildrenProofMap, AdditionalInfoForProcessingKind};
 pub use testing::TestExternalities;
 pub use basic::BasicExternalities;
 pub use ext::Ext;
@@ -503,7 +503,10 @@ where
 	Exec: CodeExecutor + 'static + Clone,
 	N: crate::changes_trie::BlockNumber,
 {
-	let proving_backend = proving_backend::ProvingBackend::new(trie_backend, kind.is_flatten());
+	let proving_backend = proving_backend::ProvingBackend::new(
+		trie_backend,
+		kind.need_register_full(),
+	);
 	let mut sm = StateMachine::<_, H, N, Exec>::new(
 		&proving_backend,
 		None,
@@ -544,29 +547,34 @@ where
 	H::Out: Ord + 'static + codec::Codec,
 	N: crate::changes_trie::BlockNumber,
 {
-	let use_flat = proof_uses_flat(&proof);
-	if use_flat {
-		let trie_backend = create_flat_proof_check_backend::<H>(root.into(), proof)?;
-		execution_flat_proof_check_on_trie_backend::<_, N, _>(
-			&trie_backend,
-			overlay,
-			exec,
-			spawn_handle,
-			method,
-			call_data,
-			runtime_code,
-		)
-	} else {
-		let trie_backend = create_proof_check_backend::<H>(root.into(), proof)?;
-		execution_proof_check_on_trie_backend::<_, N, _>(
-			&trie_backend,
-			overlay,
-			exec,
-			spawn_handle,
-			method,
-			call_data,
-			runtime_code,
-		)
+	match proof.kind().need_check_full() {
+		Some(true) => {
+			let trie_backend = create_proof_check_backend::<H>(root.into(), proof)?;
+			execution_proof_check_on_trie_backend::<_, N, _>(
+				&trie_backend,
+				overlay,
+				exec,
+				spawn_handle,
+				method,
+				call_data,
+				runtime_code,
+			)
+		},
+		Some(false) => {
+			let trie_backend = create_flat_proof_check_backend::<H>(root.into(), proof)?;
+			execution_flat_proof_check_on_trie_backend::<_, N, _>(
+				&trie_backend,
+				overlay,
+				exec,
+				spawn_handle,
+				method,
+				call_data,
+				runtime_code,
+			)
+		},
+		None => {
+			return Err(Box::new("This kind of proof need to use a verify method"));
+		},
 	}
 }
 
@@ -691,22 +699,29 @@ where
 	I: IntoIterator,
 	I::Item: AsRef<[u8]>,
 {
-	let proving_backend = proving_backend::ProvingBackend::<_, H>::new(trie_backend, kind.is_flatten());
+	let proving_backend = proving_backend::ProvingBackend::<_, H>::new(
+		trie_backend,
+		kind.need_register_full(),
+	);
 	for key in keys.into_iter() {
 		proving_backend
 			.storage(key.as_ref())
 			.map_err(|e| Box::new(e) as Box<dyn Error>)?;
 	}
-	let mut proof = proving_backend.extract_proof(&kind)
+	let proof = proving_backend.extract_proof(&kind)
 		.map_err(|e| Box::new(e) as Box<dyn Error>)?;
-	if kind.is_compact() {
-		let roots = trie_backend.extract_registered_roots();
-		if let Some(roots) = roots {
-			proof = proof.pack::<H>(&roots)
-				.map_err(|e| Box::new(format!("{}", e)) as Box<dyn Error>)?;
-		}
-	}
-	Ok(proof)
+	let infos = match kind.need_additional_info_to_produce() {
+		Some(AdditionalInfoForProcessingKind::ChildTrieRoots) => {
+			trie_backend.extract_registered_roots()
+		},
+		Some(AdditionalInfoForProcessingKind::QueryPlanNoValues) => {
+			unimplemented!("TODO from keys, do not care about memory copy at first")
+		},
+		Some(_) => return Err(Box::new("Cannot produce required info for proof")),
+		None => None,
+	};
+	Ok(proof.pack::<H>(&infos)
+		.map_err(|e| Box::new(format!("{}", e)) as Box<dyn Error>)?)
 }
 
 /// Generate storage read proof on pre-created trie backend.
@@ -723,37 +738,26 @@ where
 	I: IntoIterator,
 	I::Item: AsRef<[u8]>,
 {
-	let proving_backend = proving_backend::ProvingBackend::<_, H>::new(trie_backend, kind.is_flatten());
+	let proving_backend = proving_backend::ProvingBackend::<_, H>::new(trie_backend, kind.need_register_full());
 	for key in keys.into_iter() {
 		proving_backend
 			.child_storage(child_info, key.as_ref())
 			.map_err(|e| Box::new(e) as Box<dyn Error>)?;
 	}
-	let mut proof = proving_backend.extract_proof(&kind)
+	let proof = proving_backend.extract_proof(&kind)
 		.map_err(|e| Box::new(e) as Box<dyn Error>)?;
-	if kind.is_compact() {
-		let roots = trie_backend.extract_registered_roots();
-		if let Some(roots) = roots {
-			proof = proof.pack::<H>(&roots)
-				.map_err(|e| Box::new(format!("{}", e)) as Box<dyn Error>)?;
-		}
-	}
-	Ok(proof)
-}
-
-// Note that this is not directly in StorageKind as
-// it is implementation specific choice.
-fn proof_uses_flat(proof: &StorageProof) -> bool {
-	match proof {
-		StorageProof::Flatten(..) => true,
-		// there is currently no gain (same implementation
-		// for all trie backends) in not running on a flatten
-		// memorydb
-		StorageProof::Full(..) => true,
-		// unpack creates by nature splitted memory db, there
-		// is no need to merge them.
-		StorageProof::FullCompact(..) => false,
-	}
+	let infos = match kind.need_additional_info_to_produce() {
+		Some(AdditionalInfoForProcessingKind::ChildTrieRoots) => {
+			trie_backend.extract_registered_roots()
+		},
+		Some(AdditionalInfoForProcessingKind::QueryPlanNoValues) => {
+			unimplemented!("TODO from keys, do not care about memory copy at first, warn to include child root fetch")
+		},
+		Some(_) => return Err(Box::new("Cannot produce required info for proof")),
+		None => None,
+	};
+	Ok(proof.pack::<H>(&infos)
+		.map_err(|e| Box::new(format!("{}", e)) as Box<dyn Error>)?)
 }
 
 /// Check storage read proof, generated by `prove_read` call.
@@ -770,20 +774,25 @@ where
 	I: IntoIterator,
 	I::Item: AsRef<[u8]>,
 {
-	let use_flat = proof_uses_flat(&proof);
 	let mut result = HashMap::new();
-	if use_flat {
-		let proving_backend = create_flat_proof_check_backend::<H>(root, proof)?;
-		for key in keys.into_iter() {
-			let value = read_proof_check_on_flat_proving_backend(&proving_backend, key.as_ref())?;
-			result.insert(key.as_ref().to_vec(), value);
-		}
-	} else {
-		let proving_backend = create_proof_check_backend::<H>(root, proof)?;
-		for key in keys.into_iter() {
-			let value = read_proof_check_on_proving_backend(&proving_backend, key.as_ref())?;
-			result.insert(key.as_ref().to_vec(), value);
-		}
+	match proof.kind().need_check_full() {
+		Some(true) => {
+			let proving_backend = create_proof_check_backend::<H>(root, proof)?;
+			for key in keys.into_iter() {
+				let value = read_proof_check_on_proving_backend(&proving_backend, key.as_ref())?;
+				result.insert(key.as_ref().to_vec(), value);
+			}
+		},
+		Some(false) => {
+			let proving_backend = create_flat_proof_check_backend::<H>(root, proof)?;
+			for key in keys.into_iter() {
+				let value = read_proof_check_on_flat_proving_backend(&proving_backend, key.as_ref())?;
+				result.insert(key.as_ref().to_vec(), value);
+			}
+		},
+		None => {
+			return Err(Box::new("This kind of proof need to use a verify method"));
+		},
 	}
 	Ok(result)
 }
@@ -801,28 +810,33 @@ where
 	I: IntoIterator,
 	I::Item: AsRef<[u8]>,
 {
-	let use_flat = proof_uses_flat(&proof);
 	let mut result = HashMap::new();
-	if use_flat {
-		let proving_backend = create_flat_proof_check_backend::<H>(root, proof)?;
-		for key in keys.into_iter() {
-			let value = read_child_proof_check_on_flat_proving_backend(
-				&proving_backend,
-				child_info,
-				key.as_ref(),
-			)?;
-			result.insert(key.as_ref().to_vec(), value);
-		}
-	} else {
-		let proving_backend = create_proof_check_backend::<H>(root, proof)?;
-		for key in keys.into_iter() {
-			let value = read_child_proof_check_on_proving_backend(
-				&proving_backend,
-				child_info,
-				key.as_ref(),
-			)?;
-			result.insert(key.as_ref().to_vec(), value);
-		}
+	match proof.kind().need_check_full() {
+		Some(true) => {
+			let proving_backend = create_proof_check_backend::<H>(root, proof)?;
+			for key in keys.into_iter() {
+				let value = read_child_proof_check_on_proving_backend(
+					&proving_backend,
+					child_info,
+					key.as_ref(),
+				)?;
+				result.insert(key.as_ref().to_vec(), value);
+			}
+		},
+		Some(false) => {
+			let proving_backend = create_flat_proof_check_backend::<H>(root, proof)?;
+			for key in keys.into_iter() {
+				let value = read_child_proof_check_on_flat_proving_backend(
+					&proving_backend,
+					child_info,
+					key.as_ref(),
+				)?;
+				result.insert(key.as_ref().to_vec(), value);
+			}
+		},
+		None => {
+			return Err(Box::new("This kind of proof need to use a verify method"));
+		},
 	}
 	Ok(result)
 }
@@ -1054,7 +1068,8 @@ mod tests {
 	fn prove_execution_and_proof_check_works() {
 		prove_execution_and_proof_check_works_inner(StorageProofKind::Flatten);
 		prove_execution_and_proof_check_works_inner(StorageProofKind::Full);
-		prove_execution_and_proof_check_works_inner(StorageProofKind::FullCompact);
+		prove_execution_and_proof_check_works_inner(StorageProofKind::TrieSkipHashesFull);
+		prove_execution_and_proof_check_works_inner(StorageProofKind::TrieSkipHashes);
 	}
 
 	fn prove_execution_and_proof_check_works_inner(kind: StorageProofKind) {
@@ -1189,7 +1204,8 @@ mod tests {
 	fn prove_read_and_proof_check_works() {
 		prove_read_and_proof_check_works_inner(StorageProofKind::Full);
 		prove_read_and_proof_check_works_inner(StorageProofKind::Flatten);
-		prove_read_and_proof_check_works_inner(StorageProofKind::FullCompact);
+		prove_read_and_proof_check_works_inner(StorageProofKind::TrieSkipHashesFull);
+		prove_read_and_proof_check_works_inner(StorageProofKind::TrieSkipHashes);
 	}
 
 	fn prove_read_and_proof_check_works_inner(kind: StorageProofKind) {

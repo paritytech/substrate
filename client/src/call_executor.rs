@@ -223,8 +223,7 @@ where
 		method: &str,
 		call_data: &[u8]
 	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error> {
-		// TODO this switch execution proof to full compact, should we move the choice to
-		// caller??
+		// TODO Should we make proof kind a parameter?
 		sp_state_machine::prove_execution_on_trie_backend::<_, _, NumberFor<Block>, _>(
 			trie_state,
 			overlay,
@@ -232,7 +231,7 @@ where
 			self.spawn_handle.clone(),
 			method,
 			call_data,
-			StorageProofKind::FullCompact,
+			StorageProofKind::TrieSkipHashes,
 			&sp_state_machine::backend::BackendRuntimeCode::new(trie_state).runtime_code()?,
 		)
 		.map_err(Into::into)
