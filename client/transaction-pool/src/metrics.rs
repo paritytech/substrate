@@ -16,14 +16,36 @@
 
 //! Transaction pool Prometheus metrics.
 
+use std::sync::Arc;
+
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
+
+#[derive(Clone, Default)]
+pub struct MetricsLink(Arc<Option<Metrics>>);
+
+impl MetricsLink {
+	pub fn new(registry: Option<&Registry>) -> Self {
+		Self(Arc::new(
+			registry.and_then(|registry|
+				Metrics::register(registry)
+					.map_err(|err| { log::warn!("Failed to register prometheus metrics: {}", err); })
+					.ok()
+			)
+		))
+	}
+
+	pub fn report(&self, do_this: impl FnOnce(&Metrics)) {
+		if let Some(metrics) = self.0.as_ref() {
+			do_this(metrics);
+		}
+	}
+}
 
 /// Transaction pool Prometheus metrics.
 pub struct Metrics {
 	pub validations_scheduled: Counter<U64>,
 	pub validations_finished: Counter<U64>,
 }
-
 
 impl Metrics {
 	pub fn register(registry: &Registry) -> Result<Self, PrometheusError> {

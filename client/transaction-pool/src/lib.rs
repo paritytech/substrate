@@ -48,7 +48,7 @@ use sp_transaction_pool::{
 use wasm_timer::Instant;
 
 use prometheus_endpoint::Registry as PrometheusRegistry;
-use crate::metrics::Metrics as PrometheusMetrics;
+use crate::metrics::MetricsLink as PrometheusMetrics;
 
 type BoxedReadyIterator<Hash, Data> = Box<dyn Iterator<Item=Arc<sc_transaction_graph::base_pool::Transaction<Hash, Data>>> + Send>;
 
@@ -67,7 +67,7 @@ pub struct BasicPool<PoolApi, Block>
 	revalidation_strategy: Arc<Mutex<RevalidationStrategy<NumberFor<Block>>>>,
 	revalidation_queue: Arc<revalidation::RevalidationQueue<PoolApi>>,
 	ready_poll: Arc<Mutex<ReadyPoll<ReadyIteratorFor<PoolApi>, Block>>>,
-	metrics: Arc<Option<PrometheusMetrics>>,
+	metrics: PrometheusMetrics,
 }
 
 struct ReadyPoll<T, Block: BlockT> {
@@ -173,7 +173,7 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 				revalidation_queue: Arc::new(revalidation_queue),
 				revalidation_strategy: Arc::new(Mutex::new(RevalidationStrategy::Always)),
 				ready_poll: Default::default(),
-				metrics: Arc::new(None),
+				metrics: Default::default(),
 			},
 			background_task,
 			notifier,
@@ -197,15 +197,6 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 			},
 		};
 
-		let metrics = Arc::new(
-			prometheus.and_then(|registry|
-				PrometheusMetrics::register(registry).map_err(|err| {
-					log::warn!("Failed to register prometheus metrics: {}", err);
-					()
-				}).ok()
-			)
-		);
-
 		(
 			BasicPool {
 				api: pool_api,
@@ -218,7 +209,7 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 					}
 				)),
 				ready_poll: Default::default(),
-				metrics,
+				metrics: PrometheusMetrics::new(prometheus),
 			},
 			background_task,
 		)
@@ -249,17 +240,13 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 		let pool = self.pool.clone();
 		let at = *at;
 
-		if let Some(metrics) = self.metrics.as_ref() {
-			metrics.validations_scheduled.inc_by(xts.len() as u64);
-		}
-		let metrics = self.metrics.clone();
+		self.metrics.report(|metrics| metrics.validations_scheduled.inc_by(xts.len() as u64));
 
+		let metrics = self.metrics.clone();
 		async move {
 			let tx_count = xts.len();
 			let res = pool.submit_at(&at, source, xts, false).await;
-			if let Some(metrics) = metrics.as_ref() {
-				metrics.validations_finished.inc_by(tx_count as u64);
-			}
+			metrics.report(|metrics| metrics.validations_finished.inc_by(tx_count as u64));
 			res
 		}.boxed()
 	}
@@ -273,17 +260,13 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 		let pool = self.pool.clone();
 		let at = *at;
 
-		if let Some(metrics) = self.metrics.as_ref() {
-			metrics.validations_scheduled.inc();
-		}
-		let metrics = self.metrics.clone();
+		self.metrics.report(|metrics| metrics.validations_scheduled.inc());
 
+		let metrics = self.metrics.clone();
 		async move {
 			let res = pool.submit_one(&at, source, xt).await;
 
-			if let Some(metrics) = metrics.as_ref() {
-				metrics.validations_finished.inc();
-			}
+			metrics.report(|metrics| metrics.validations_finished.inc());
 			res
 
 		}.boxed()
@@ -298,19 +281,15 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 		let at = *at;
 		let pool = self.pool.clone();
 
-		if let Some(metrics) = self.metrics.as_ref() {
-			metrics.validations_scheduled.inc();
-		}
-		let metrics = self.metrics.clone();
+		self.metrics.report(|metrics| metrics.validations_scheduled.inc());
 
+		let metrics = self.metrics.clone();
 		async move {
 			let result = pool.submit_and_watch(&at, source, xt)
 				.map(|result| result.map(|watcher| Box::new(watcher.into_stream()) as _))
 				.await;
 
-			if let Some(metrics) = metrics.as_ref() {
-				metrics.validations_finished.inc();
-			}
+			metrics.report(|metrics| metrics.validations_finished.inc());
 
 			result
 		}.boxed()
