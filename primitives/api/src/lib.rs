@@ -113,7 +113,9 @@ use std::{panic::UnwindSafe, cell::RefCell};
 /// change is highlighted with the `#[changed_in(2)]` attribute above a method. A method that is
 /// tagged with this attribute is callable by the name `METHOD_before_version_VERSION`. This
 /// method will only support calling into wasm, trying to call into native will fail (change the
-/// spec version!). Such a method also does not need to be implemented in the runtime.
+/// spec version!). Such a method also does not need to be implemented in the runtime. It is
+/// required that there exist the "default" of the method without the `#[changed_in(_)]` attribute,
+/// this method will be used to call the current default implementation.
 ///
 /// ```rust
 /// sp_api::decl_runtime_apis! {

@@ -36,22 +36,23 @@ use codec::{Encode, Decode};
 use frame_support::{
 	decl_storage, decl_module,
 	traits::{Currency, Get, OnUnbalanced, ExistenceRequirement, WithdrawReason, Imbalance},
-	weights::{Weight, DispatchInfo, GetDispatchInfo},
+	weights::{Weight, DispatchInfo, PostDispatchInfo, GetDispatchInfo},
+	dispatch::DispatchResult,
 };
 use sp_runtime::{
-	Fixed64,
+	Fixed128,
 	transaction_validity::{
 		TransactionPriority, ValidTransaction, InvalidTransaction, TransactionValidityError,
 		TransactionValidity,
 	},
 	traits::{
 		Zero, Saturating, SignedExtension, SaturatedConversion, Convert, Dispatchable,
-		DispatchInfoOf,
+		DispatchInfoOf, PostDispatchInfoOf,
 	},
 };
 use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 
-type Multiplier = Fixed64;
+type Multiplier = Fixed128;
 type BalanceOf<T> =
 	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> =
@@ -98,11 +99,25 @@ decl_module! {
 				*fm = T::FeeMultiplierUpdate::convert(*fm)
 			});
 		}
+
+		fn on_runtime_upgrade() -> Weight {
+			// TODO: Remove this code after on-chain upgrade from u32 to u64 weights
+			use sp_runtime::Fixed64;
+			use frame_support::migration::take_storage_value;
+			if let Some(old_next_fee_multiplier) = take_storage_value::<Fixed64>(b"TransactionPayment", b"NextFeeMultiplier", &[]) {
+				let raw_multiplier = old_next_fee_multiplier.into_inner() as i128;
+				// Fixed64 used 10^9 precision, where Fixed128 uses 10^18, so we need to add 9 zeros.
+				let new_raw_multiplier: i128 = raw_multiplier.saturating_mul(1_000_000_000);
+				let new_next_fee_multiplier: Fixed128 = Fixed128::from_parts(new_raw_multiplier);
+				NextFeeMultiplier::put(new_next_fee_multiplier);
+			}
+			0
+		}
 	}
 }
 
 impl<T: Trait> Module<T> where
-	T::Call: Dispatchable<Info=DispatchInfo>,
+	T::Call: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>,
 {
 	/// Query the data that we know about the fee of a given `call`.
 	///
@@ -140,7 +155,8 @@ impl<T: Trait> Module<T> where
 pub struct ChargeTransactionPayment<T: Trait + Send + Sync>(#[codec(compact)] BalanceOf<T>);
 
 impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> where
-	T::Call: Dispatchable<Info=DispatchInfo>,
+	T::Call: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>,
+	BalanceOf<T>: Send + Sync,
 {
 	/// utility constructor. Used only in client/factory code.
 	pub fn from(fee: BalanceOf<T>) -> Self {
@@ -165,33 +181,59 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> where
 		len: u32,
 		info: &DispatchInfoOf<T::Call>,
 		tip: BalanceOf<T>,
-	) -> BalanceOf<T>
-	where
-		BalanceOf<T>: Sync + Send,
-	{
+	) -> BalanceOf<T> {
 		if info.pays_fee {
 			let len = <BalanceOf<T>>::from(len);
 			let per_byte = T::TransactionByteFee::get();
 			let len_fee = per_byte.saturating_mul(len);
-
-			let weight_fee = {
-				// cap the weight to the maximum defined in runtime, otherwise it will be the
-				// `Bounded` maximum of its data type, which is not desired.
-				let capped_weight = info.weight
-					.min(<T as frame_system::Trait>::MaximumBlockWeight::get());
-				T::WeightToFee::convert(capped_weight)
-			};
+			let weight_fee = Self::compute_weight_fee(info.weight);
 
 			// the adjustable part of the fee
 			let adjustable_fee = len_fee.saturating_add(weight_fee);
 			let targeted_fee_adjustment = NextFeeMultiplier::get();
 			// adjusted_fee = adjustable_fee + (adjustable_fee * targeted_fee_adjustment)
-			let adjusted_fee = targeted_fee_adjustment.saturated_multiply_accumulate(adjustable_fee);
+			let adjusted_fee = targeted_fee_adjustment.saturated_multiply_accumulate(adjustable_fee.saturated_into());
 
 			let base_fee = T::TransactionBaseFee::get();
-			base_fee.saturating_add(adjusted_fee).saturating_add(tip)
+			base_fee.saturating_add(adjusted_fee.saturated_into()).saturating_add(tip)
 		} else {
 			tip
+		}
+	}
+
+	fn compute_weight_fee(weight: Weight) -> BalanceOf<T> {
+		// cap the weight to the maximum defined in runtime, otherwise it will be the
+		// `Bounded` maximum of its data type, which is not desired.
+		let capped_weight = weight.min(<T as frame_system::Trait>::MaximumBlockWeight::get());
+		T::WeightToFee::convert(capped_weight)
+	}
+
+	fn withdraw_fee(
+		&self,
+		who: &T::AccountId,
+		info: &DispatchInfoOf<T::Call>,
+		len: usize,
+	) -> Result<(BalanceOf<T>, Option<NegativeImbalanceOf<T>>), TransactionValidityError> {
+		let tip = self.0;
+		let fee = Self::compute_fee(len as u32, info, tip);
+
+		// Only mess with balances if fee is not zero.
+		if fee.is_zero() {
+			return Ok((fee, None));
+		}
+
+		match T::Currency::withdraw(
+			who,
+			fee,
+			if tip.is_zero() {
+				WithdrawReason::TransactionPayment.into()
+			} else {
+				WithdrawReason::TransactionPayment | WithdrawReason::Tip
+			},
+			ExistenceRequirement::KeepAlive,
+		) {
+			Ok(imbalance) => Ok((fee, Some(imbalance))),
+			Err(_) => Err(InvalidTransaction::Payment.into()),
 		}
 	}
 }
@@ -209,13 +251,13 @@ impl<T: Trait + Send + Sync> sp_std::fmt::Debug for ChargeTransactionPayment<T> 
 
 impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T> where
 	BalanceOf<T>: Send + Sync,
-	T::Call: Dispatchable<Info=DispatchInfo>,
+	T::Call: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>,
 {
 	const IDENTIFIER: &'static str = "ChargeTransactionPayment";
 	type AccountId = T::AccountId;
 	type Call = T::Call;
 	type AdditionalSigned = ();
-	type Pre = ();
+	type Pre = (BalanceOf<T>, Self::AccountId, Option<NegativeImbalanceOf<T>>);
 	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
 
 	fn validate(
@@ -225,28 +267,7 @@ impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T> whe
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> TransactionValidity {
-		// pay any fees.
-		let tip = self.0;
-		let fee = Self::compute_fee(len as u32, info, tip);
-		// Only mess with balances if fee is not zero.
-		if !fee.is_zero() {
-			let imbalance = match T::Currency::withdraw(
-				who,
-				fee,
-				if tip.is_zero() {
-					WithdrawReason::TransactionPayment.into()
-				} else {
-					WithdrawReason::TransactionPayment | WithdrawReason::Tip
-				},
-				ExistenceRequirement::KeepAlive,
-			) {
-				Ok(imbalance) => imbalance,
-				Err(_) => return InvalidTransaction::Payment.into(),
-			};
-			let imbalances = imbalance.split(tip);
-			T::OnTransactionPayment::on_unbalanceds(Some(imbalances.0).into_iter()
-				.chain(Some(imbalances.1)));
-		}
+		let (fee, _) = self.withdraw_fee(who, info, len)?;
 
 		let mut r = ValidTransaction::default();
 		// NOTE: we probably want to maximize the _fee (of any type) per weight unit_ here, which
@@ -254,15 +275,57 @@ impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T> whe
 		r.priority = fee.saturated_into::<TransactionPriority>();
 		Ok(r)
 	}
+
+	fn pre_dispatch(
+		self,
+		who: &Self::AccountId,
+		_call: &Self::Call,
+		info: &DispatchInfoOf<Self::Call>,
+		len: usize
+	) -> Result<Self::Pre, TransactionValidityError> {
+		let (_, imbalance) = self.withdraw_fee(who, info, len)?;
+		Ok((self.0, who.clone(), imbalance))
+	}
+
+	fn post_dispatch(
+		pre: Self::Pre,
+		info: &DispatchInfoOf<Self::Call>,
+		post_info: &PostDispatchInfoOf<Self::Call>,
+		_len: usize,
+		_result: &DispatchResult,
+	) -> Result<(), TransactionValidityError> {
+		let (tip, who, imbalance) = pre;
+		if let Some(payed) = imbalance {
+			let refund = Self::compute_weight_fee(post_info.calc_unspent(info));
+			let actual_payment = match T::Currency::deposit_into_existing(&who, refund) {
+				Ok(refund_imbalance) => {
+					// The refund cannot be larger than the up front payed max weight.
+					// `PostDispatchInfo::calc_unspent` guards against such a case.
+					match payed.offset(refund_imbalance) {
+						Ok(actual_payment) => actual_payment,
+						Err(_) => return Err(InvalidTransaction::Payment.into()),
+					}
+				}
+				// We do not recreate the account using the refund. The up front payment
+				// is gone in that case.
+				Err(_) => payed,
+			};
+			let imbalances = actual_payment.split(tip);
+			T::OnTransactionPayment::on_unbalanceds(Some(imbalances.0).into_iter()
+				.chain(Some(imbalances.1)));
+		}
+		Ok(())
+	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use core::num::NonZeroI128;
 	use codec::Encode;
 	use frame_support::{
 		impl_outer_dispatch, impl_outer_origin, parameter_types,
-		weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Weight},
+		weights::{DispatchClass, DispatchInfo, PostDispatchInfo, GetDispatchInfo, Weight},
 	};
 	use pallet_balances::Call as BalancesCall;
 	use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
@@ -312,6 +375,7 @@ mod tests {
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
+		type DbWeight = ();
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
@@ -434,6 +498,14 @@ mod tests {
 		DispatchInfo { weight: w, pays_fee: true, ..Default::default() }
 	}
 
+	fn post_info_from_weight(w: Weight) -> PostDispatchInfo {
+		PostDispatchInfo { actual_weight: Some(w), }
+	}
+
+	fn default_post_info() -> PostDispatchInfo {
+		PostDispatchInfo { actual_weight: None, }
+	}
+
 	#[test]
 	fn signed_extension_transaction_payment_work() {
 		ExtBuilder::default()
@@ -443,19 +515,29 @@ mod tests {
 			.execute_with(||
 		{
 			let len = 10;
+			let pre = ChargeTransactionPayment::<Runtime>::from(0)
+				.pre_dispatch(&1, CALL, &info_from_weight(5), len)
+				.unwrap();
+			assert_eq!(Balances::free_balance(1), 100 - 5 - 5 - 10);
+
 			assert!(
-				ChargeTransactionPayment::<Runtime>::from(0)
-					.pre_dispatch(&1, CALL, &info_from_weight(5), len)
+				ChargeTransactionPayment::<Runtime>
+					::post_dispatch(pre, &info_from_weight(5), &default_post_info(), len, &Ok(()))
 					.is_ok()
 			);
 			assert_eq!(Balances::free_balance(1), 100 - 5 - 5 - 10);
 
+			let pre = ChargeTransactionPayment::<Runtime>::from(5 /* tipped */)
+				.pre_dispatch(&2, CALL, &info_from_weight(100), len)
+				.unwrap();
+			assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 100 - 5);
+
 			assert!(
-				ChargeTransactionPayment::<Runtime>::from(5 /* tipped */)
-					.pre_dispatch(&2, CALL, &info_from_weight(3), len)
+				ChargeTransactionPayment::<Runtime>
+					::post_dispatch(pre, &info_from_weight(100), &post_info_from_weight(50), len, &Ok(()))
 					.is_ok()
 			);
-			assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 3 - 5);
+			assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 50 - 5);
 		});
 	}
 
@@ -529,7 +611,7 @@ mod tests {
 			.execute_with(||
 		{
 			// all fees should be x1.5
-			NextFeeMultiplier::put(Fixed64::from_rational(1, 2));
+			NextFeeMultiplier::put(Fixed128::from_rational(1, NonZeroI128::new(2).unwrap()));
 			let len = 10;
 
 			assert!(
@@ -557,7 +639,7 @@ mod tests {
 			.execute_with(||
 		{
 			// all fees should be x1.5
-			NextFeeMultiplier::put(Fixed64::from_rational(1, 2));
+			NextFeeMultiplier::put(Fixed128::from_rational(1, NonZeroI128::new(2).unwrap()));
 
 			assert_eq!(
 				TransactionPayment::query_info(xt, len),
@@ -586,7 +668,7 @@ mod tests {
 			.execute_with(||
 		{
 			// Next fee multiplier is zero
-			assert_eq!(NextFeeMultiplier::get(), Fixed64::from_natural(0));
+			assert_eq!(NextFeeMultiplier::get(), Fixed128::from_natural(0));
 
 			// Tip only, no fees works
 			let dispatch_info = DispatchInfo {
@@ -626,7 +708,7 @@ mod tests {
 			.execute_with(||
 		{
 			// Add a next fee multiplier
-			NextFeeMultiplier::put(Fixed64::from_rational(1, 2)); // = 1/2 = .5
+			NextFeeMultiplier::put(Fixed128::from_rational(1, NonZeroI128::new(2).unwrap())); // = 1/2 = .5
 			// Base fee is unaffected by multiplier
 			let dispatch_info = DispatchInfo {
 				weight: 0,
@@ -660,7 +742,7 @@ mod tests {
 		{
 			// Overflow is handled
 			let dispatch_info = DispatchInfo {
-				weight: <u32>::max_value(),
+				weight: Weight::max_value(),
 				class: DispatchClass::Operational,
 				pays_fee: true,
 			};
@@ -672,6 +754,90 @@ mod tests {
 				),
 				<u64>::max_value()
 			);
+		});
+	}
+
+	#[test]
+	fn refund_does_not_recreate_account() {
+		ExtBuilder::default()
+			.balance_factor(10)
+			.base_fee(5)
+			.build()
+			.execute_with(||
+		{
+			let len = 10;
+			let pre = ChargeTransactionPayment::<Runtime>::from(5 /* tipped */)
+				.pre_dispatch(&2, CALL, &info_from_weight(100), len)
+				.unwrap();
+			assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 100 - 5);
+
+			// kill the account between pre and post dispatch
+			assert!(Balances::transfer(Some(2).into(), 3, Balances::free_balance(2)).is_ok());
+			assert_eq!(Balances::free_balance(2), 0);
+
+			assert!(
+				ChargeTransactionPayment::<Runtime>
+					::post_dispatch(pre, &info_from_weight(100), &post_info_from_weight(50), len, &Ok(()))
+					.is_ok()
+			);
+			assert_eq!(Balances::free_balance(2), 0);
+		});
+	}
+
+	#[test]
+	fn actual_weight_higher_than_max_refunds_nothing() {
+		ExtBuilder::default()
+			.balance_factor(10)
+			.base_fee(5)
+			.build()
+			.execute_with(||
+		{
+			let len = 10;
+			let pre = ChargeTransactionPayment::<Runtime>::from(5 /* tipped */)
+				.pre_dispatch(&2, CALL, &info_from_weight(100), len)
+				.unwrap();
+			assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 100 - 5);
+
+			assert!(
+				ChargeTransactionPayment::<Runtime>
+					::post_dispatch(pre, &info_from_weight(100), &post_info_from_weight(101), len, &Ok(()))
+					.is_ok()
+			);
+			assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 100 - 5);
+		});
+	}
+
+	// TODO Remove after u32 to u64 weights upgrade
+	#[test]
+	fn upgrade_to_fixed128_works() {
+		// TODO You can remove this from dev-dependencies after removing this test
+		use sp_storage::Storage;
+		use sp_runtime::Fixed64;
+		use frame_support::storage::generator::StorageValue;
+		use frame_support::traits::OnRuntimeUpgrade;
+		use core::num::NonZeroI128;
+
+		let mut s = Storage::default();
+
+		let original_multiplier = Fixed64::from_rational(1, 2);
+
+		let data = vec![
+			(
+				NextFeeMultiplier::storage_value_final_key().to_vec(),
+				original_multiplier.encode().to_vec()
+			),
+		];
+
+		s.top = data.into_iter().collect();
+
+		sp_io::TestExternalities::new(s).execute_with(|| {
+			let old_value = NextFeeMultiplier::get();
+			assert!(old_value != Fixed128::from_rational(1, NonZeroI128::new(2).unwrap()));
+
+			// Convert Fixed64(.5) to Fixed128(.5)
+			TransactionPayment::on_runtime_upgrade();
+			let new_value = NextFeeMultiplier::get();
+			assert_eq!(new_value, Fixed128::from_rational(1, NonZeroI128::new(2).unwrap()));
 		});
 	}
 }

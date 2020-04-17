@@ -133,6 +133,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::{Parameter, decl_module, decl_event, decl_storage, decl_error, ensure};
+use frame_support::weights::{SimpleDispatchInfo, MINIMUM_WEIGHT};
 use sp_runtime::traits::{Member, AtLeast32Bit, Zero, StaticLookup};
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::traits::One;
@@ -164,7 +165,7 @@ decl_module! {
 		/// - 2 storage writes (condec `O(1)`).
 		/// - 1 event.
 		/// # </weight>
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 		fn issue(origin, #[compact] total: T::Balance) {
 			let origin = ensure_signed(origin)?;
 
@@ -185,7 +186,7 @@ decl_module! {
 		/// - 2 storage mutations (codec `O(1)`).
 		/// - 1 event.
 		/// # </weight>
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 		fn transfer(origin,
 			#[compact] id: T::AssetId,
 			target: <T::Lookup as StaticLookup>::Source,
@@ -211,7 +212,7 @@ decl_module! {
 		/// - 1 storage deletion (codec `O(1)`).
 		/// - 1 event.
 		/// # </weight>
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 		fn destroy(origin, #[compact] id: T::AssetId) {
 			let origin = ensure_signed(origin)?;
 			let balance = <Balances<T>>::take((id, &origin));
@@ -313,6 +314,7 @@ mod tests {
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
+		type DbWeight = ();
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();

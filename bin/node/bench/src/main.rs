@@ -16,9 +16,14 @@
 
 #[macro_use] mod core;
 mod import;
+mod trie;
+mod generator;
+mod tempdb;
+mod state_sizes;
 
-use crate::core::run_benchmark;
+use crate::core::{run_benchmark, Mode as BenchmarkMode};
 use import::{ImportBenchmarkDescription, SizeType};
+use trie::{TrieBenchmarkDescription, DatabaseSize};
 use node_testing::bench::{Profile, KeyTypes};
 use structopt::StructOpt;
 
@@ -41,6 +46,15 @@ struct Opt {
 	///
 	/// Run with `--list` for the hint of what to filter.
 	filter: Option<String>,
+
+	/// Mode
+	///
+	/// "regular" for regular becnhmark
+	///
+	/// "profile" mode adds pauses between measurable runs,
+	/// so that actual interval can be selected in the profiler of choice.
+	#[structopt(short, long, default_value = "regular")]
+	mode: BenchmarkMode,
 }
 
 fn main() {
@@ -68,6 +82,10 @@ fn main() {
 				key_types: KeyTypes::Sr25519,
 				size: *size,
 			},
+		size in [
+			DatabaseSize::Empty, DatabaseSize::Smallest, DatabaseSize::Small,
+			DatabaseSize::Medium, DatabaseSize::Large,
+		] => TrieBenchmarkDescription { database_size: *size },
 	);
 
 	if opt.list {
@@ -81,7 +99,7 @@ fn main() {
 	for benchmark in benchmarks {
 		if opt.filter.as_ref().map(|f| benchmark.path().has(f)).unwrap_or(true) {
 			log::info!("Starting {}", benchmark.name());
-			let result = run_benchmark(benchmark);
+			let result = run_benchmark(benchmark, opt.mode);
 			log::info!("{}", result);
 
 			results.push(result);
