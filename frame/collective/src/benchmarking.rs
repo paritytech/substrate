@@ -21,6 +21,7 @@ use super::*;
 use frame_system::RawOrigin as SystemOrigin;
 //use frame_system::{EventRecord, Phase};
 use frame_benchmarking::{benchmarks_instance, account};
+use sp_runtime::traits::Bounded;
 
 use frame_system::Module as System;
 use crate::Module as Collective;
@@ -150,13 +151,13 @@ benchmarks_instance! {
 		// Add previous proposals.
 		for i in 0 .. p {
 			// Proposals should be different so that different proposal hashes are generated
-			let proposal: T::Proposal = frame_system::Call::<T>::remark(i.encode().to_vec()).into();
+			let proposal: T::Proposal = frame_system::Call::<T>::remark(vec![i as u8; b as usize]).into();
 			Collective::<T, _>::propose(SystemOrigin::Signed(caller.clone()).into(), threshold, Box::new(proposal))?;
 		}
 
 		assert_eq!(Collective::<T, _>::proposals().len(), p as usize);
 
-		let proposal: T::Proposal = frame_system::Call::<T>::remark(vec![1; b as usize]).into();
+		let proposal: T::Proposal = frame_system::Call::<T>::remark(vec![p as u8; b as usize]).into();
 
 	}: propose(SystemOrigin::Signed(caller), threshold, Box::new(proposal.clone()))
 	verify {
@@ -188,7 +189,7 @@ benchmarks_instance! {
 		let mut last_hash = T::Hash::default();
 		for i in 0 .. p {
 			// Proposals should be different so that different proposal hashes are generated
-			let proposal: T::Proposal = frame_system::Call::<T>::remark(i.encode().to_vec()).into();
+			let proposal: T::Proposal = frame_system::Call::<T>::remark(vec![i as u8; b as usize]).into();
 			Collective::<T, _>::propose(SystemOrigin::Signed(caller.clone()).into(), threshold, Box::new(proposal.clone()))?;
 			last_hash = T::Hashing::hash_of(&proposal);
 		}
@@ -218,6 +219,7 @@ benchmarks_instance! {
 	vote_disapproved {
 		let m in 2 .. MAX_MEMBERS;
 		let p in 1 .. MAX_PROPOSALS;
+		let b in 1 .. MAX_BYTES;
 
 		// Construct `members`.
 		let mut members = vec![];
@@ -237,7 +239,7 @@ benchmarks_instance! {
 		let mut last_hash = T::Hash::default();
 		for i in 0 .. p {
 			// Proposals should be different so that different proposal hashes are generated
-			let proposal: T::Proposal = frame_system::Call::<T>::remark(i.encode().to_vec()).into();
+			let proposal: T::Proposal = frame_system::Call::<T>::remark(vec![i as u8; b as usize]).into();
 			Collective::<T, _>::propose(SystemOrigin::Signed(caller.clone()).into(), threshold, Box::new(proposal.clone()))?;
 			last_hash = T::Hashing::hash_of(&proposal);
 		}
@@ -264,6 +266,7 @@ benchmarks_instance! {
 	vote_approved {
 		let m in 2 .. MAX_MEMBERS;
 		let p in 1 .. MAX_PROPOSALS;
+		let b in 1 .. MAX_BYTES;
 
 		// Construct `members`.
 		let mut members = vec![];
@@ -283,7 +286,7 @@ benchmarks_instance! {
 		let mut last_hash = T::Hash::default();
 		for i in 0 .. p {
 			// Proposals should be different so that different proposal hashes are generated
-			let proposal: T::Proposal = frame_system::Call::<T>::remark(i.encode().to_vec()).into();
+			let proposal: T::Proposal = frame_system::Call::<T>::remark(vec![i as u8; b as usize]).into();
 			Collective::<T, _>::propose(SystemOrigin::Signed(caller.clone()).into(), threshold, Box::new(proposal.clone()))?;
 			last_hash = T::Hashing::hash_of(&proposal);
 		}
@@ -313,28 +316,100 @@ benchmarks_instance! {
 		assert_eq!(Collective::<T, _>::proposals().len(), (p - 1) as usize);
 	}
 
-	close {
-		let m in 1 .. MAX_MEMBERS;
+	close_disapproved {
+		let m in 2 .. MAX_MEMBERS;
 		let p in 1 .. MAX_PROPOSALS;
+		let b in 1 .. MAX_BYTES;
+
+		// Construct `members`.
+		let mut members = vec![];
+		for i in 0 .. m {
+			let member = account("member", i, SEED);
+			members.push(member);
+		}
+		let caller: T::AccountId = account("caller", 0, SEED);
+		members.push(caller.clone());
+
+		Collective::<T, _>::set_members(SystemOrigin::Root.into(), members.clone(), Some(caller.clone()))?;
+
+		// Threshold is one less than total members so that two nays will disapprove the vote
+		let threshold = m;
+
+		// Add proposals
+		let mut last_hash = T::Hash::default();
+		for i in 0 .. p {
+			// Proposals should be different so that different proposal hashes are generated
+			let proposal: T::Proposal = frame_system::Call::<T>::remark(vec![i as u8; b as usize]).into();
+			Collective::<T, _>::propose(SystemOrigin::Signed(caller.clone()).into(), threshold, Box::new(proposal.clone()))?;
+			last_hash = T::Hashing::hash_of(&proposal);
+		}
+
+		// Have everyone vote aye on last proposal, while keeping it from passing
+		// A few abstainers will be the nay votes needed to fail the vote
+		for j in 2 .. m {
+			let voter = &members[j as usize];
+			let approve = true;
+			Collective::<T, _>::vote(SystemOrigin::Signed(voter.clone()).into(), last_hash.clone(), p - 1, approve)?;
+		}
+
+		// caller is prime, prime votes nay
+		Collective::<T, _>::vote(SystemOrigin::Signed(caller.clone()).into(), last_hash.clone(), p - 1, false)?;
+
+		System::<T>::set_block_number(T::BlockNumber::max_value());
+		assert_eq!(Collective::<T, _>::proposals().len(), p as usize);
+
+		// Prime nay will close it as disapproved
+	}: close(SystemOrigin::Signed(caller), last_hash, p - 1)
+	verify {
+		assert_eq!(Collective::<T, _>::proposals().len(), (p - 1) as usize);
+	}
 
 
-		let caller1: T::AccountId = account("caller1", u, SEED);
-		let caller2: T::AccountId = account("caller2", u, SEED);
+	close_approved {
+		let m in 2 .. MAX_MEMBERS;
+		let p in 1 .. MAX_PROPOSALS;
+		let b in 1 .. MAX_BYTES;
 
-		let proposal: Box<T::Proposal> = Box::new(Call::<T, I>::close(Default::default(), Default::default()).into());
-		let proposal_hash = T::Hashing::hash_of(&proposal);
+		// Construct `members`.
+		let mut members = vec![];
+		for i in 0 .. m {
+			let member = account("member", i, SEED);
+			members.push(member);
+		}
+		let caller: T::AccountId = account("caller", 0, SEED);
+		members.push(caller.clone());
 
-		Collective::<T, _>::set_members(SystemOrigin::Root.into(), members, None)?;
-		let member_count = 2;
-		Collective::<T, _>::propose(SystemOrigin::Signed(caller1.clone()).into(), member_count, proposal)?;
+		Collective::<T, _>::set_members(SystemOrigin::Root.into(), members.clone(), Some(caller.clone()))?;
 
-		let index = 0;
-		let approve = true;
+		// Threshold is two, so any two ayes will pass the vote
+		let threshold = 2;
 
-		let vote_end = T::MotionDuration::get() + 1u32.into();
-		System::<T>::set_block_number(vote_end);
+		// Add proposals
+		let mut last_hash = T::Hash::default();
+		for i in 0 .. p {
+			// Proposals should be different so that different proposal hashes are generated
+			let proposal: T::Proposal = frame_system::Call::<T>::remark(vec![i as u8; b as usize]).into();
+			Collective::<T, _>::propose(SystemOrigin::Signed(caller.clone()).into(), threshold, Box::new(proposal.clone()))?;
+			last_hash = T::Hashing::hash_of(&proposal);
+		}
 
-	}: _(SystemOrigin::Signed(caller2), proposal_hash, index)
+		// Have everyone vote nay on last proposal, while keeping it from failing
+		// A few abstainers will be the aye votes needed to pass the vote
+		for j in 2 .. m {
+			let voter = &members[j as usize];
+			let approve = false;
+			Collective::<T, _>::vote(SystemOrigin::Signed(voter.clone()).into(), last_hash.clone(), p - 1, approve)?;
+		}
+
+		// caller is prime, prime already votes aye by creating the proposal
+		System::<T>::set_block_number(T::BlockNumber::max_value());
+		assert_eq!(Collective::<T, _>::proposals().len(), p as usize);
+
+		// Prime aye will close it as approved
+	}: close(SystemOrigin::Signed(caller), last_hash, p - 1)
+	verify {
+		assert_eq!(Collective::<T, _>::proposals().len(), (p - 1) as usize);
+	}
 }
 
 #[cfg(test)]
@@ -353,9 +428,8 @@ mod tests {
 			assert_ok!(test_benchmark_vote_insert::<Test>());
 			assert_ok!(test_benchmark_vote_disapproved::<Test>());
 			assert_ok!(test_benchmark_vote_approved::<Test>());
-			// assert_ok!(test_benchmark_vote_not_approve::<Test>());
-			// assert_ok!(test_benchmark_vote_approved::<Test>());
-			// assert_ok!(test_benchmark_close::<Test>());
+			assert_ok!(test_benchmark_close_disapproved::<Test>());
+			assert_ok!(test_benchmark_close_approved::<Test>());
 		});
 	}
 }
