@@ -16,9 +16,9 @@
 
 //! Tests for the communication portion of the GRANDPA crate.
 
-use futures::channel::mpsc;
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use futures::prelude::*;
-use sc_network::{Event as NetworkEvent, PeerId, config::Roles};
+use sc_network::{Event as NetworkEvent, ObservedRole, PeerId};
 use sc_network_test::{Block, Hash};
 use sc_network_gossip::Validator;
 use std::sync::Arc;
@@ -33,7 +33,7 @@ use super::{AuthorityId, VoterSet, Round, SetId};
 
 #[derive(Debug)]
 pub(crate) enum Event {
-	EventStream(mpsc::UnboundedSender<NetworkEvent>),
+	EventStream(TracingUnboundedSender<NetworkEvent>),
 	WriteNotification(sc_network::PeerId, Vec<u8>),
 	Report(sc_network::PeerId, sc_network::ReputationChange),
 	Announce(Hash),
@@ -41,12 +41,12 @@ pub(crate) enum Event {
 
 #[derive(Clone)]
 pub(crate) struct TestNetwork {
-	sender: mpsc::UnboundedSender<Event>,
+	sender: TracingUnboundedSender<Event>,
 }
 
 impl sc_network_gossip::Network<Block> for TestNetwork {
 	fn event_stream(&self) -> Pin<Box<dyn Stream<Item = NetworkEvent> + Send>> {
-		let (tx, rx) = mpsc::unbounded();
+		let (tx, rx) = tracing_unbounded("test");
 		let _ = self.sender.unbounded_send(Event::EventStream(tx));
 		Box::pin(rx)
 	}
@@ -97,7 +97,7 @@ impl sc_network_gossip::ValidatorContext<Block> for TestNetwork {
 pub(crate) struct Tester {
 	pub(crate) net_handle: super::NetworkBridge<Block, TestNetwork>,
 	gossip_validator: Arc<GossipValidator<Block>>,
-	pub(crate) events: mpsc::UnboundedReceiver<Event>,
+	pub(crate) events: TracingUnboundedReceiver<Event>,
 }
 
 impl Tester {
@@ -161,7 +161,7 @@ pub(crate) fn make_test_network() -> (
 	impl Future<Output = Tester>,
 	TestNetwork,
 ) {
-	let (tx, rx) = mpsc::unbounded();
+	let (tx, rx) = tracing_unbounded("test");
 	let net = TestNetwork { sender: tx };
 
 	#[derive(Clone)]
@@ -256,7 +256,7 @@ fn good_commit_leads_to_relay() {
 	let test = make_test_network().0
 		.then(move |tester| {
 			// register a peer.
-			tester.gossip_validator.new_peer(&mut NoopContext, &id, sc_network::config::Roles::FULL);
+			tester.gossip_validator.new_peer(&mut NoopContext, &id, ObservedRole::Full);
 			future::ready((tester, id))
 		})
 		.then(move |(tester, id)| {
@@ -284,7 +284,7 @@ fn good_commit_leads_to_relay() {
 					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
 						remote: sender_id.clone(),
 						engine_id: GRANDPA_ENGINE_ID,
-						roles: Roles::FULL,
+						role: ObservedRole::Full,
 					});
 
 					let _ = sender.unbounded_send(NetworkEvent::NotificationsReceived {
@@ -297,7 +297,7 @@ fn good_commit_leads_to_relay() {
 					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
 						remote: receiver_id.clone(),
 						engine_id: GRANDPA_ENGINE_ID,
-						roles: Roles::FULL,
+						role: ObservedRole::Full,
 					});
 
 					// Announce its local set has being on the current set id through a neighbor
@@ -404,7 +404,7 @@ fn bad_commit_leads_to_report() {
 	let test = make_test_network().0
 		.map(move |tester| {
 			// register a peer.
-			tester.gossip_validator.new_peer(&mut NoopContext, &id, sc_network::config::Roles::FULL);
+			tester.gossip_validator.new_peer(&mut NoopContext, &id, ObservedRole::Full);
 			(tester, id)
 		})
 		.then(move |(tester, id)| {
@@ -431,7 +431,7 @@ fn bad_commit_leads_to_report() {
 					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
 						remote: sender_id.clone(),
 						engine_id: GRANDPA_ENGINE_ID,
-						roles: Roles::FULL,
+						role: ObservedRole::Full,
 					});
 					let _ = sender.unbounded_send(NetworkEvent::NotificationsReceived {
 						remote: sender_id.clone(),
@@ -482,7 +482,7 @@ fn peer_with_higher_view_leads_to_catch_up_request() {
 	let test = tester
 		.map(move |tester| {
 			// register a peer with authority role.
-			tester.gossip_validator.new_peer(&mut NoopContext, &id, sc_network::config::Roles::AUTHORITY);
+			tester.gossip_validator.new_peer(&mut NoopContext, &id, ObservedRole::Authority);
 			(tester, id)
 		})
 		.then(move |(tester, id)| {

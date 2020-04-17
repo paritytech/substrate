@@ -31,7 +31,7 @@ pub use sc_transaction_graph as txpool;
 pub use crate::api::{FullChainApi, LightChainApi};
 
 use std::{collections::HashMap, sync::Arc, pin::Pin};
-use futures::{Future, FutureExt, future::ready, channel::oneshot};
+use futures::{prelude::*, future::ready, channel::oneshot};
 use parking_lot::Mutex;
 
 use sp_runtime::{
@@ -41,6 +41,7 @@ use sp_runtime::{
 use sp_transaction_pool::{
 	TransactionPool, PoolStatus, ImportNotificationStream, TxHash, TransactionFor,
 	TransactionStatusStreamFor, MaintainedTransactionPool, PoolFuture, ChainEvent,
+	TransactionSource,
 };
 use wasm_timer::Instant;
 
@@ -150,6 +151,27 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 		Self::with_revalidation_type(options, pool_api, RevalidationType::Full)
 	}
 
+	/// Create new basic transaction pool with provided api, for tests.
+	#[cfg(test)]
+	pub fn new_test(
+		pool_api: Arc<PoolApi>,
+	) -> (Self, Pin<Box<dyn Future<Output=()> + Send>>, intervalier::BackSignalControl) {
+		let pool = Arc::new(sc_transaction_graph::Pool::new(Default::default(), pool_api.clone()));
+		let (revalidation_queue, background_task, notifier) =
+			revalidation::RevalidationQueue::new_test(pool_api.clone(), pool.clone());
+		(
+			BasicPool {
+				api: pool_api,
+				pool,
+				revalidation_queue: Arc::new(revalidation_queue),
+				revalidation_strategy: Arc::new(Mutex::new(RevalidationStrategy::Always)),
+				ready_poll: Default::default(),
+			},
+			background_task,
+			notifier,
+		)
+	}
+
 	/// Create new basic transaction pool with provided api and custom
 	/// revalidation type.
 	pub fn with_revalidation_type(
@@ -201,37 +223,40 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 	fn submit_at(
 		&self,
 		at: &BlockId<Self::Block>,
+		source: TransactionSource,
 		xts: Vec<TransactionFor<Self>>,
 	) -> PoolFuture<Vec<Result<TxHash<Self>, Self::Error>>, Self::Error> {
 		let pool = self.pool.clone();
 		let at = *at;
 		async move {
-			pool.submit_at(&at, xts, false).await
+			pool.submit_at(&at, source, xts, false).await
 		}.boxed()
 	}
 
 	fn submit_one(
 		&self,
 		at: &BlockId<Self::Block>,
+		source: TransactionSource,
 		xt: TransactionFor<Self>,
 	) -> PoolFuture<TxHash<Self>, Self::Error> {
 		let pool = self.pool.clone();
 		let at = *at;
 		async move {
-			pool.submit_one(&at, xt).await
+			pool.submit_one(&at, source, xt).await
 		}.boxed()
 	}
 
 	fn submit_and_watch(
 		&self,
 		at: &BlockId<Self::Block>,
+		source: TransactionSource,
 		xt: TransactionFor<Self>,
 	) -> PoolFuture<Box<TransactionStatusStreamFor<Self>>, Self::Error> {
 		let at = *at;
 		let pool = self.pool.clone();
 
 		async move {
-			pool.submit_and_watch(&at, xt)
+			pool.submit_and_watch(&at, source, xt)
 				.map(|result| result.map(|watcher| Box::new(watcher.into_stream()) as _))
 				.await
 		}.boxed()
@@ -437,7 +462,14 @@ impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 
 							resubmit_transactions.extend(block_transactions);
 						}
-						if let Err(e) = pool.submit_at(&id, resubmit_transactions, true).await {
+						if let Err(e) = pool.submit_at(
+							&id,
+							// These transactions are coming from retracted blocks, we should
+							// simply consider them external.
+							TransactionSource::External,
+							resubmit_transactions,
+							true
+						).await {
 							log::debug!(
 								target: "txpool",
 								"[{:?}] Error re-submitting transactions: {:?}", id, e

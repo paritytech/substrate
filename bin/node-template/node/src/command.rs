@@ -14,36 +14,68 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
-use sc_cli::VersionInfo;
-use crate::service;
 use crate::chain_spec;
 use crate::cli::Cli;
+use crate::service;
+use sc_cli::SubstrateCli;
+use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
+
+impl SubstrateCli for Cli {
+	fn impl_name() -> &'static str {
+		"Substrate Node"
+	}
+
+	fn impl_version() -> &'static str {
+		env!("SUBSTRATE_CLI_IMPL_VERSION")
+	}
+
+	fn description() -> &'static str {
+		env!("CARGO_PKG_DESCRIPTION")
+	}
+
+	fn author() -> &'static str {
+		env!("CARGO_PKG_AUTHORS")
+	}
+
+	fn support_url() -> &'static str {
+		"support.anonymous.an"
+	}
+
+	fn copyright_start_year() -> i32 {
+		2017
+	}
+
+	fn executable_name() -> &'static str {
+		env!("CARGO_PKG_NAME")
+	}
+
+	fn load_spec(&self, id: &str) -> Result<Box<dyn sc_service::ChainSpec>, String> {
+		Ok(match id {
+			"dev" => Box::new(chain_spec::development_config()),
+			"" | "local" => Box::new(chain_spec::local_testnet_config()),
+			path => Box::new(chain_spec::ChainSpec::from_json_file(
+				std::path::PathBuf::from(path),
+			)?),
+		})
+	}
+}
 
 /// Parse and run command line arguments
-pub fn run(version: VersionInfo) -> sc_cli::Result<()> {
-	let opt = sc_cli::from_args::<Cli>(&version);
+pub fn run() -> sc_cli::Result<()> {
+	let cli = Cli::from_args();
 
-	let mut config = sc_service::Configuration::from_version(&version);
-
-	match opt.subcommand {
+	match &cli.subcommand {
 		Some(subcommand) => {
-			subcommand.init(&version)?;
-			subcommand.update_config(&mut config, chain_spec::load_spec, &version)?;
-			subcommand.run(
-				config,
-				|config: _| Ok(new_full_start!(config).0),
-			)
-		},
+			let runner = cli.create_runner(subcommand)?;
+			runner.run_subcommand(subcommand, |config| Ok(new_full_start!(config).0))
+		}
 		None => {
-			opt.run.init(&version)?;
-			opt.run.update_config(&mut config, chain_spec::load_spec, &version)?;
-			opt.run.run(
-				config,
+			let runner = cli.create_runner(&cli.run)?;
+			runner.run_node(
 				service::new_light,
 				service::new_full,
-				&version,
+				node_template_runtime::VERSION
 			)
-		},
+		}
 	}
 }

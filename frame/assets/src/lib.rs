@@ -159,6 +159,7 @@ decl_module! {
 		/// identifier `AssetId` instance: this will be specified in the `Issued` event.
 		///
 		/// `O(1)`
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn issue(origin, #[compact] total: T::Balance) {
 			let origin = ensure_signed(origin)?;
 
@@ -174,6 +175,7 @@ decl_module! {
 		/// Move some assets from one holder to another.
 		///
 		/// `O(1)`
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn transfer(origin,
 			#[compact] id: T::AssetId,
 			target: <T::Lookup as StaticLookup>::Source,
@@ -194,6 +196,7 @@ decl_module! {
 		/// Destroy any assets of `id` owned by `origin`.
 		///
 		/// `O(1)`.
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn destroy(origin, #[compact] id: T::AssetId) {
 			let origin = ensure_signed(origin)?;
 			let balance = <Balances<T>>::take((id, &origin));

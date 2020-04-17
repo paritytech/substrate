@@ -60,7 +60,12 @@ pub trait StorageHasher: 'static {
 }
 
 /// Hasher to use to hash keys to insert to storage.
+///
+/// Reversible hasher store the encoded key after the hash part.
 pub trait ReversibleStorageHasher: StorageHasher {
+	/// Split the hash part out of the input.
+	///
+	/// I.e. for input `&[hash ++ key ++ some]` returns `&[key ++ some]`
 	fn reverse(x: &[u8]) -> &[u8];
 }
 
@@ -92,6 +97,10 @@ impl StorageHasher for Twox64Concat {
 }
 impl ReversibleStorageHasher for Twox64Concat {
 	fn reverse(x: &[u8]) -> &[u8] {
+		if x.len() < 8 {
+			crate::debug::error!("Invalid reverse: hash length too short");
+			return &[]
+		}
 		&x[8..]
 	}
 }
@@ -110,6 +119,10 @@ impl StorageHasher for Blake2_128Concat {
 }
 impl ReversibleStorageHasher for Blake2_128Concat {
 	fn reverse(x: &[u8]) -> &[u8] {
+		if x.len() < 16 {
+			crate::debug::error!("Invalid reverse: hash length too short");
+			return &[]
+		}
 		&x[16..]
 	}
 }

@@ -34,7 +34,7 @@ use sp_std::prelude::*;
 use codec::{self as codec, Encode, Decode};
 use frame_support::{decl_event, decl_storage, decl_module, decl_error, storage};
 use sp_runtime::{
-	DispatchResult, generic::{DigestItem, OpaqueDigestItemId}, traits::Zero, Perbill, PerThing,
+	DispatchResult, generic::{DigestItem, OpaqueDigestItemId}, traits::Zero, Perbill,
 };
 use sp_staking::{
 	SessionIndex,
@@ -186,6 +186,7 @@ decl_module! {
 		/// Report some misbehavior.
 		///
 		/// O(1).
+		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
 		fn report_misbehavior(origin, _report: Vec<u8>) {
 			ensure_signed(origin)?;
 			// FIXME: https://github.com/paritytech/substrate/issues/1112

@@ -22,16 +22,14 @@ use std::{
 	sync::Arc,
 	pin::Pin,
 };
-use futures::{
-	Future, Stream,
-	channel::mpsc,
-};
+use futures::{Future, Stream,};
 use serde::{Deserialize, Serialize};
+use sp_utils::mpsc;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Member, NumberFor},
 	transaction_validity::{
-		TransactionLongevity, TransactionPriority, TransactionTag,
+		TransactionLongevity, TransactionPriority, TransactionTag, TransactionSource,
 	},
 };
 
@@ -132,7 +130,7 @@ pub enum TransactionStatus<Hash, BlockHash> {
 pub type TransactionStatusStream<Hash, BlockHash> = dyn Stream<Item=TransactionStatus<Hash, BlockHash>> + Send + Unpin;
 
 /// The import notification event stream.
-pub type ImportNotificationStream<H> = mpsc::UnboundedReceiver<H>;
+pub type ImportNotificationStream<H> = mpsc::TracingUnboundedReceiver<H>;
 
 /// Transaction hash type for a pool.
 pub type TxHash<P> = <P as TransactionPool>::Hash;
@@ -192,6 +190,7 @@ pub trait TransactionPool: Send + Sync {
 	fn submit_at(
 		&self,
 		at: &BlockId<Self::Block>,
+		source: TransactionSource,
 		xts: Vec<TransactionFor<Self>>,
 	) -> PoolFuture<Vec<Result<TxHash<Self>, Self::Error>>, Self::Error>;
 
@@ -199,6 +198,7 @@ pub trait TransactionPool: Send + Sync {
 	fn submit_one(
 		&self,
 		at: &BlockId<Self::Block>,
+		source: TransactionSource,
 		xt: TransactionFor<Self>,
 	) -> PoolFuture<TxHash<Self>, Self::Error>;
 
@@ -206,6 +206,7 @@ pub trait TransactionPool: Send + Sync {
 	fn submit_and_watch(
 		&self,
 		at: &BlockId<Self::Block>,
+		source: TransactionSource,
 		xt: TransactionFor<Self>,
 	) -> PoolFuture<Box<TransactionStatusStreamFor<Self>>, Self::Error>;
 
@@ -299,7 +300,9 @@ impl<TPool: TransactionPool> OffchainSubmitTransaction<TPool::Block> for TPool {
 			extrinsic
 		);
 
-		let result = futures::executor::block_on(self.submit_one(&at, extrinsic));
+		let result = futures::executor::block_on(self.submit_one(
+				&at, TransactionSource::Local, extrinsic,
+		));
 
 		result.map(|_| ())
 			.map_err(|e| log::warn!(

@@ -338,13 +338,8 @@ fn full_native_block_import_works() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
 				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 10000, class: DispatchClass::Operational, pays_fee: true }
+					DispatchInfo { weight: 10000, class: DispatchClass::Mandatory, pays_fee: true }
 				)),
-				topics: vec![],
-			},
-			EventRecord {
-				phase: Phase::ApplyExtrinsic(1),
-				event: Event::pallet_treasury(pallet_treasury::RawEvent::Deposit(fees * 8 / 10)),
 				topics: vec![],
 			},
 			EventRecord {
@@ -354,6 +349,11 @@ fn full_native_block_import_works() {
 					bob().into(),
 					69 * DOLLARS,
 				)),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(1),
+				event: Event::pallet_treasury(pallet_treasury::RawEvent::Deposit(fees * 8 / 10)),
 				topics: vec![],
 			},
 			EventRecord {
@@ -391,13 +391,8 @@ fn full_native_block_import_works() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
 				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 10000, class: DispatchClass::Operational, pays_fee: true }
+					DispatchInfo { weight: 10000, class: DispatchClass::Mandatory, pays_fee: true }
 				)),
-				topics: vec![],
-			},
-			EventRecord {
-				phase: Phase::ApplyExtrinsic(1),
-				event: Event::pallet_treasury(pallet_treasury::RawEvent::Deposit(fees * 8 / 10)),
 				topics: vec![],
 			},
 			EventRecord {
@@ -413,14 +408,14 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 1000000, class: DispatchClass::Normal, pays_fee: true }
-				)),
+				event: Event::pallet_treasury(pallet_treasury::RawEvent::Deposit(fees * 8 / 10)),
 				topics: vec![],
 			},
 			EventRecord {
-				phase: Phase::ApplyExtrinsic(2),
-				event: Event::pallet_treasury(pallet_treasury::RawEvent::Deposit(fees * 8 / 10)),
+				phase: Phase::ApplyExtrinsic(1),
+				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
+					DispatchInfo { weight: 1000000, class: DispatchClass::Normal, pays_fee: true }
+				)),
 				topics: vec![],
 			},
 			EventRecord {
@@ -432,6 +427,11 @@ fn full_native_block_import_works() {
 						15 * DOLLARS,
 					)
 				),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(2),
+				event: Event::pallet_treasury(pallet_treasury::RawEvent::Deposit(fees * 8 / 10)),
 				topics: vec![],
 			},
 			EventRecord {

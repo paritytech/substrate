@@ -125,7 +125,7 @@ impl<
 							return std::task::Poll::Ready(Err(From::from(err)));
 						},
 					};
-					info!("Importing {} blocks", c);
+					info!("📦 Importing {} blocks", c);
 					count = Some(c);
 					c
 				}
@@ -185,7 +185,7 @@ impl<
 			}
 
 			if link.imported_blocks >= count {
-				info!("Imported {} blocks. Best: #{}", read_block_count, client.chain_info().best_number);
+				info!("🎉 Imported {} blocks. Best: #{}", read_block_count, client.chain_info().best_number);
 				return std::task::Poll::Ready(Ok(()));
 
 			} else {

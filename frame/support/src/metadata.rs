@@ -256,9 +256,8 @@ mod tests {
 	struct TestExtension;
 	impl sp_runtime::traits::SignedExtension for TestExtension {
 		type AccountId = u32;
-		type Call = u32;
+		type Call = ();
 		type AdditionalSigned = u32;
-		type DispatchInfo = ();
 		type Pre = ();
 		const IDENTIFIER: &'static str = "testextension";
 		fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
@@ -270,9 +269,8 @@ mod tests {
 	struct TestExtension2;
 	impl sp_runtime::traits::SignedExtension for TestExtension2 {
 		type AccountId = u32;
-		type Call = u32;
+		type Call = ();
 		type AdditionalSigned = u32;
-		type DispatchInfo = ();
 		type Pre = ();
 		const IDENTIFIER: &'static str = "testextension2";
 		fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
@@ -336,6 +334,7 @@ mod tests {
 
 	mod event_module {
 		use crate::dispatch::DispatchResult;
+		use crate::weights::SimpleDispatchInfo;
 
 		pub trait Trait: super::system::Trait {
 			type Balance;
@@ -353,6 +352,7 @@ mod tests {
 			pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 				type Error = Error<T>;
 
+				#[weight = SimpleDispatchInfo::default()]
 				fn aux_0(_origin) -> DispatchResult { unreachable!() }
 			}
 		}

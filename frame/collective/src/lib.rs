@@ -39,14 +39,17 @@
 use sp_std::{prelude::*, result};
 use sp_core::u32_trait::Value as U32;
 use sp_runtime::RuntimeDebug;
-use sp_runtime::traits::{Hash, EnsureOrigin};
+use sp_runtime::traits::Hash;
 use frame_support::weights::SimpleDispatchInfo;
 use frame_support::{
 	dispatch::{Dispatchable, Parameter}, codec::{Encode, Decode},
-	traits::{Get, ChangeMembers, InitializeMembers}, decl_module, decl_event,
+	traits::{Get, ChangeMembers, InitializeMembers, EnsureOrigin}, decl_module, decl_event,
 	decl_storage, decl_error, ensure,
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
+
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
 
 /// Simple index type for proposal counting.
 pub type ProposalIndex = u32;
@@ -57,12 +60,12 @@ pub type ProposalIndex = u32;
 /// vote exactly once, therefore also the number of votes for any given motion.
 pub type MemberCount = u32;
 
-pub trait Trait<I=DefaultInstance>: frame_system::Trait {
+pub trait Trait<I: Instance=DefaultInstance>: frame_system::Trait {
 	/// The outer origin type.
 	type Origin: From<RawOrigin<Self::AccountId, I>>;
 
 	/// The outer call dispatch type.
-	type Proposal: Parameter + Dispatchable<Origin=<Self as Trait<I>>::Origin>;
+	type Proposal: Parameter + Dispatchable<Origin=<Self as Trait<I>>::Origin> + From<Call<Self, I>>;
 
 	/// The outer event type.
 	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Trait>::Event>;
@@ -442,7 +445,7 @@ where
 pub struct EnsureMember<AccountId, I=DefaultInstance>(sp_std::marker::PhantomData<(AccountId, I)>);
 impl<
 	O: Into<Result<RawOrigin<AccountId, I>, O>> + From<RawOrigin<AccountId, I>>,
-	AccountId,
+	AccountId: Default,
 	I,
 > EnsureOrigin<O> for EnsureMember<AccountId, I> {
 	type Success = AccountId;
@@ -451,6 +454,11 @@ impl<
 			RawOrigin::Member(id) => Ok(id),
 			r => Err(O::from(r)),
 		})
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> O {
+		O::from(RawOrigin::Member(Default::default()))
 	}
 }
 
@@ -467,6 +475,11 @@ impl<
 			RawOrigin::Members(n, m) if n >= N::VALUE => Ok((n, m)),
 			r => Err(O::from(r)),
 		})
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> O {
+		O::from(RawOrigin::Members(N::VALUE, N::VALUE))
 	}
 }
 
@@ -487,6 +500,11 @@ impl<
 			r => Err(O::from(r)),
 		})
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> O {
+		O::from(RawOrigin::Members(1u32, 0u32))
+	}
 }
 
 pub struct EnsureProportionAtLeast<N: U32, D: U32, AccountId, I=DefaultInstance>(
@@ -505,6 +523,11 @@ impl<
 			RawOrigin::Members(n, m) if n * D::VALUE >= N::VALUE * m => Ok(()),
 			r => Err(O::from(r)),
 		})
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> O {
+		O::from(RawOrigin::Members(0u32, 0u32))
 	}
 }
 
@@ -577,20 +600,21 @@ mod tests {
 		}
 	);
 
-	fn make_ext() -> sp_io::TestExternalities {
-		GenesisConfig {
+	pub fn new_test_ext() -> sp_io::TestExternalities {
+		let mut ext: sp_io::TestExternalities = GenesisConfig {
 			collective_Instance1: Some(collective::GenesisConfig {
 				members: vec![1, 2, 3],
 				phantom: Default::default(),
 			}),
 			collective: None,
-		}.build_storage().unwrap().into()
+		}.build_storage().unwrap().into();
+		ext.execute_with(|| System::set_block_number(1));
+		ext
 	}
 
 	#[test]
 	fn motions_basic_environment_works() {
-		make_ext().execute_with(|| {
-			System::set_block_number(1);
+		new_test_ext().execute_with(|| {
 			assert_eq!(Collective::members(), vec![1, 2, 3]);
 			assert_eq!(Collective::proposals(), Vec::<H256>::new());
 		});
@@ -602,8 +626,7 @@ mod tests {
 
 	#[test]
 	fn close_works() {
-		make_ext().execute_with(|| {
-			System::set_block_number(1);
+		new_test_ext().execute_with(|| {
 			let proposal = make_proposal(42);
 			let hash = BlakeTwo256::hash_of(&proposal);
 
@@ -631,8 +654,7 @@ mod tests {
 
 	#[test]
 	fn close_with_prime_works() {
-		make_ext().execute_with(|| {
-			System::set_block_number(1);
+		new_test_ext().execute_with(|| {
 			let proposal = make_proposal(42);
 			let hash = BlakeTwo256::hash_of(&proposal);
 			assert_ok!(Collective::set_members(Origin::ROOT, vec![1, 2, 3], Some(3)));
@@ -655,8 +677,7 @@ mod tests {
 
 	#[test]
 	fn close_with_voting_prime_works() {
-		make_ext().execute_with(|| {
-			System::set_block_number(1);
+		new_test_ext().execute_with(|| {
 			let proposal = make_proposal(42);
 			let hash = BlakeTwo256::hash_of(&proposal);
 			assert_ok!(Collective::set_members(Origin::ROOT, vec![1, 2, 3], Some(1)));
@@ -680,8 +701,7 @@ mod tests {
 
 	#[test]
 	fn removal_of_old_voters_votes_works() {
-		make_ext().execute_with(|| {
-			System::set_block_number(1);
+		new_test_ext().execute_with(|| {
 			let proposal = make_proposal(42);
 			let hash = BlakeTwo256::hash_of(&proposal);
 			let end = 4;
@@ -715,8 +735,7 @@ mod tests {
 
 	#[test]
 	fn removal_of_old_voters_votes_works_with_set_members() {
-		make_ext().execute_with(|| {
-			System::set_block_number(1);
+		new_test_ext().execute_with(|| {
 			let proposal = make_proposal(42);
 			let hash = BlakeTwo256::hash_of(&proposal);
 			let end = 4;
@@ -750,8 +769,7 @@ mod tests {
 
 	#[test]
 	fn propose_works() {
-		make_ext().execute_with(|| {
-			System::set_block_number(1);
+		new_test_ext().execute_with(|| {
 			let proposal = make_proposal(42);
 			let hash = proposal.blake2_256().into();
 			let end = 4;
@@ -780,8 +798,7 @@ mod tests {
 
 	#[test]
 	fn motions_ignoring_non_collective_proposals_works() {
-		make_ext().execute_with(|| {
-			System::set_block_number(1);
+		new_test_ext().execute_with(|| {
 			let proposal = make_proposal(42);
 			assert_noop!(
 				Collective::propose(Origin::signed(42), 3, Box::new(proposal.clone())),
@@ -792,8 +809,7 @@ mod tests {
 
 	#[test]
 	fn motions_ignoring_non_collective_votes_works() {
-		make_ext().execute_with(|| {
-			System::set_block_number(1);
+		new_test_ext().execute_with(|| {
 			let proposal = make_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
 			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
@@ -806,7 +822,7 @@ mod tests {
 
 	#[test]
 	fn motions_ignoring_bad_index_collective_vote_works() {
-		make_ext().execute_with(|| {
+		new_test_ext().execute_with(|| {
 			System::set_block_number(3);
 			let proposal = make_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
@@ -820,8 +836,7 @@ mod tests {
 
 	#[test]
 	fn motions_revoting_works() {
-		make_ext().execute_with(|| {
-			System::set_block_number(1);
+		new_test_ext().execute_with(|| {
 			let proposal = make_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
 			let end = 4;
@@ -872,8 +887,7 @@ mod tests {
 
 	#[test]
 	fn motions_reproposing_disapproved_works() {
-		make_ext().execute_with(|| {
-			System::set_block_number(1);
+		new_test_ext().execute_with(|| {
 			let proposal = make_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
 			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
@@ -886,8 +900,7 @@ mod tests {
 
 	#[test]
 	fn motions_disapproval_works() {
-		make_ext().execute_with(|| {
-			System::set_block_number(1);
+		new_test_ext().execute_with(|| {
 			let proposal = make_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
 			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
@@ -929,8 +942,7 @@ mod tests {
 
 	#[test]
 	fn motions_approval_works() {
-		make_ext().execute_with(|| {
-			System::set_block_number(1);
+		new_test_ext().execute_with(|| {
 			let proposal = make_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
 			assert_ok!(Collective::propose(Origin::signed(1), 2, Box::new(proposal.clone())));

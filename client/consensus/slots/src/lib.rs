@@ -258,10 +258,10 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			Box::new(futures::future::select(proposing, delay).map(move |v| match v {
 				futures::future::Either::Left((b, _)) => b.map(|b| (b, claim)),
 				futures::future::Either::Right(_) => {
-					info!("Discarding proposal for slot {}; block production took too long", slot_number);
+					info!("⌛️ Discarding proposal for slot {}; block production took too long", slot_number);
 					// If the node was compiled with debug, tell the user to use release optimizations.
 					#[cfg(build_type="debug")]
-					info!("Recompile your node in `--release` mode to mitigate this problem.");
+					info!("👉 Recompile your node in `--release` mode to mitigate this problem.");
 					telemetry!(CONSENSUS_INFO; "slots.discarding_proposal_took_too_long";
 						"slot" => slot_number,
 					);
@@ -289,7 +289,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			);
 
 			info!(
-				"Pre-sealed block for proposal at {}. Hash now {:?}, previously {:?}.",
+				"🔖 Pre-sealed block for proposal at {}. Hash now {:?}, previously {:?}.",
 				header_num,
 				block_import_params.post_hash(),
 				header_hash,
@@ -466,7 +466,7 @@ impl<T: Clone> SlotDuration<T> {
 					cb(client.runtime_api(), &BlockId::number(Zero::zero()))?;
 
 				info!(
-					"Loaded block-time = {:?} milliseconds from genesis on first-launch",
+					"⏱  Loaded block-time = {:?} milliseconds from genesis on first-launch",
 					genesis_slot_duration
 				);
 
