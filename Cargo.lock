@@ -6218,6 +6218,7 @@ dependencies = [
  "sc-executor-wasmi",
  "sc-executor-wasmtime",
  "sc-runtime-test",
+ "sp-api",
  "sp-core",
  "sp-externalities",
  "sp-io",

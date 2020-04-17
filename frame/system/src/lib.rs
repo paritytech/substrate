@@ -1672,6 +1672,7 @@ mod tests {
 			spec_version: 1,
 			impl_version: 1,
 			apis: sp_version::create_apis_vec!([]),
+			transaction_version: 1,
 		};
 	}
 
