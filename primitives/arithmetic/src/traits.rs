@@ -179,6 +179,9 @@ pub trait FixedPointNumber:
 	/// The unsigned version of inner.
 	type Unsigned;
 
+	/// The next unsigned.
+	type NextUnsigned;
+
 	/// The perthing used.
 	type Perthing;
 
@@ -199,6 +202,7 @@ pub trait FixedPointNumber:
 	fn from_integer(int: Self::Inner) ->Self;
 
 	/// Raw constructor. Equal to `parts / DIV`.
+	/// TODO: maybe rename to `from_bits` like in fixed crate.
 	fn from_parts(parts: Self::Inner) -> Self;
 
 	/// Creates self from a rational number. Equal to `n / d`.
@@ -247,7 +251,7 @@ pub trait FixedPointNumber:
 	///
 	/// Returns a saturated `int + (self * int)`.
 	fn saturated_multiply_accumulate<
-		N: From<u32> + TryFrom<u64> + From<u32> + UniqueSaturatedInto<u32> +
+		N: From<Self::Unsigned> + TryFrom<Self::Unsigned> + From<u32> + UniqueSaturatedInto<u32> +
 			Bounded + Copy + Saturating + 
 			Rem<N, Output=N> + Div<N, Output=N> +
 			Mul<N, Output=N> + Add<N, Output=N> + Default + core::fmt::Debug
