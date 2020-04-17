@@ -47,7 +47,7 @@ use node_runtime::{
 	AccountId,
 	Signature,
 };
-use sp_core::{ExecutionContext, blake2_256};
+use sp_core::{ExecutionContext, blake2_256, traits::CloneableSpawn};
 use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder;
 use sp_inherents::InherentData;
@@ -57,6 +57,7 @@ use sc_client_api::{
 };
 use sp_core::{Pair, Public, sr25519, ed25519};
 use sc_block_builder::BlockBuilderProvider;
+use futures::{executor, task};
 
 /// Keyring full of accounts for benching.
 ///
@@ -142,6 +143,36 @@ impl BlockType {
 	}
 }
 
+/// Benchmarking task executor.
+///
+/// Uses multiple threads as the regular executable.
+#[derive(Debug, Clone)]
+pub struct TaskExecutor {
+	pool: executor::ThreadPool,
+}
+
+impl TaskExecutor {
+	fn new() -> Self {
+		Self {
+			pool: executor::ThreadPool::new()
+				.expect("Failed to create task executor")
+		}
+	}
+}
+
+impl task::Spawn for TaskExecutor {
+	fn spawn_obj(&self, future: task::FutureObj<'static, ()>)
+	-> Result<(), task::SpawnError> {
+		self.pool.spawn_obj(future)
+	}
+}
+
+impl CloneableSpawn for TaskExecutor {
+	fn clone(&self) -> Box<dyn CloneableSpawn> {
+		Box::new(Clone::clone(self))
+	}
+}
+
 impl BenchDb {
 	/// New immutable benchmarking database.
 	///
@@ -168,8 +199,8 @@ impl BenchDb {
 	/// and keep it there until struct is dropped.
 	///
 	/// You can `clone` this database or you can `create_context` from it
-	/// (which also do `clone`) to run actual operation against new database
-	/// which will be identical to this.
+	/// (which also does `clone`) to run actual operation against new database
+	/// which will be identical to the original.
 	pub fn new(keyring_length: usize) -> Self {
 		Self::with_key_types(keyring_length, KeyTypes::Sr25519)
 	}
@@ -197,7 +228,7 @@ impl BenchDb {
 			None,
 			None,
 			ExecutionExtensions::new(profile.into_execution_strategies(), None),
-			sp_core::tasks::executor(),
+			Box::new(TaskExecutor::new()),
 			None,
 		).expect("Should not fail");
 

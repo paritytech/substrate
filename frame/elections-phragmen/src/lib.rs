@@ -94,7 +94,7 @@ use frame_support::{
 		ChangeMembers, OnUnbalanced, WithdrawReason, Contains, BalanceStatus, InitializeMembers,
 	}
 };
-use sp_phragmen::{build_support_map, ExtendedBalance};
+use sp_phragmen::{build_support_map, ExtendedBalance, VoteWeight, PhragmenResult};
 use frame_system::{self as system, ensure_signed, ensure_root};
 
 const MODULE_ID: LockIdentifier = *b"phrelect";
@@ -123,7 +123,7 @@ pub trait Trait: frame_system::Trait {
 
 	/// Convert a balance into a number used for election calculation.
 	/// This must fit into a `u64` but is allowed to be sensibly lossy.
-	type CurrencyToVote: Convert<BalanceOf<Self>, u64> + Convert<u128, BalanceOf<Self>>;
+	type CurrencyToVote: Convert<BalanceOf<Self>, VoteWeight> + Convert<ExtendedBalance, BalanceOf<Self>>;
 
 	/// How much should be locked up in order to submit one's candidacy.
 	type CandidacyBond: Get<BalanceOf<Self>>;
@@ -703,17 +703,28 @@ impl<T: Trait> Module<T> {
 		// previous runners_up are also always candidates for the next round.
 		candidates.append(&mut Self::runners_up_ids());
 
+		// helper closures to deal with balance/stake.
+		let to_votes = |b: BalanceOf<T>| -> VoteWeight {
+			<T::CurrencyToVote as Convert<BalanceOf<T>, VoteWeight>>::convert(b)
+		};
+		let to_balance = |e: ExtendedBalance| -> BalanceOf<T> {
+			<T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(e)
+		};
+		let stake_of = |who: &T::AccountId| -> VoteWeight {
+			to_votes(Self::locked_stake_of(who))
+		};
+
 		let voters_and_votes = Voting::<T>::iter()
-			.map(|(voter, (stake, targets))| { (voter, stake, targets) })
+			.map(|(voter, (stake, targets))| { (voter, to_votes(stake), targets) })
 			.collect::<Vec<_>>();
-		let maybe_phragmen_result = sp_phragmen::elect::<_, _, T::CurrencyToVote, Perbill>(
+		let maybe_phragmen_result = sp_phragmen::elect::<T::AccountId, Perbill>(
 			num_to_elect,
 			0,
 			candidates,
 			voters_and_votes.clone(),
 		);
 
-		if let Some(phragmen_result) = maybe_phragmen_result {
+		if let Some(PhragmenResult { winners, assignments }) = maybe_phragmen_result {
 			let old_members_ids = <Members<T>>::take().into_iter()
 				.map(|(m, _)| m)
 				.collect::<Vec<T::AccountId>>();
@@ -726,26 +737,19 @@ impl<T: Trait> Module<T> {
 			// vote are still considered by phragmen and when good candidates are scarce, then these
 			// cheap ones might get elected. We might actually want to remove the filter and allow
 			// zero-voted candidates to also make it to the membership set.
-			let new_set_with_approval = phragmen_result.winners;
+			let new_set_with_approval = winners;
 			let new_set = new_set_with_approval
 				.into_iter()
 				.filter_map(|(m, a)| if a.is_zero() { None } else { Some(m) } )
 				.collect::<Vec<T::AccountId>>();
 
-			let stake_of = |who: &T::AccountId| -> ExtendedBalance {
-				<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(
-					Self::locked_stake_of(who)
-				) as ExtendedBalance
-			};
 			let staked_assignments = sp_phragmen::assignment_ratio_to_staked(
-				phragmen_result.assignments,
+				assignments,
 				stake_of,
 			);
 
 			let (support_map, _) = build_support_map::<T::AccountId>(&new_set, &staked_assignments);
 
-			let to_balance = |e: ExtendedBalance|
-				<T::CurrencyToVote as Convert<ExtendedBalance, BalanceOf<T>>>::convert(e);
 			let new_set_with_stake = new_set
 				.into_iter()
 				.map(|ref m| {
@@ -766,14 +770,14 @@ impl<T: Trait> Module<T> {
 			// save the members, sorted based on account id.
 			new_members.sort_by(|i, j| i.0.cmp(&j.0));
 
-			let mut prime_votes: Vec<_> = new_members.iter().map(|c| (&c.0, BalanceOf::<T>::zero())).collect();
+			let mut prime_votes: Vec<_> = new_members.iter().map(|c| (&c.0, VoteWeight::zero())).collect();
 			for (_, stake, targets) in voters_and_votes.into_iter() {
 				for (votes, who) in targets.iter()
 					.enumerate()
 					.map(|(votes, who)| ((MAXIMUM_VOTE - votes) as u32, who))
 				{
 					if let Ok(i) = prime_votes.binary_search_by_key(&who, |k| k.0) {
-						prime_votes[i].1 += stake * votes.into();
+						prime_votes[i].1 += stake * votes as VoteWeight;
 					}
 				}
 			}

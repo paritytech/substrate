@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{
-	config::Role,
+	config::{ProtocolId, Role},
 	debug_info, discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryOut},
 	Event, ObservedRole, DhtEvent, ExHashT,
 };
@@ -61,7 +61,7 @@ pub enum BehaviourOut<B: BlockT> {
 	JustificationImport(Origin, B::Hash, NumberFor<B>, Justification),
 	FinalityProofImport(Origin, B::Hash, NumberFor<B>, Vec<u8>),
 	/// Started a random Kademlia discovery query.
-	RandomKademliaStarted,
+	RandomKademliaStarted(ProtocolId),
 	Event(Event),
 }
 
@@ -98,8 +98,18 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 	}
 
 	/// Returns the number of nodes that are in the Kademlia k-buckets.
-	pub fn num_kbuckets_entries(&mut self) -> usize {
+	pub fn num_kbuckets_entries(&mut self) -> impl ExactSizeIterator<Item = (&ProtocolId, usize)> {
 		self.discovery.num_kbuckets_entries()
+	}
+
+	/// Returns the number of records in the Kademlia record stores.
+	pub fn num_kademlia_records(&mut self) -> impl ExactSizeIterator<Item = (&ProtocolId, usize)> {
+		self.discovery.num_kademlia_records()
+	}
+
+	/// Returns the total size in bytes of all the records in the Kademlia record stores.
+	pub fn kademlia_records_total_size(&mut self) -> impl ExactSizeIterator<Item = (&ProtocolId, usize)> {
+		self.discovery.kademlia_records_total_size()
 	}
 
 	/// Borrows `self` and returns a struct giving access to the information about a node.
@@ -268,8 +278,10 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<DiscoveryOut>
 			DiscoveryOut::ValuePutFailed(key) => {
 				self.events.push(BehaviourOut::Event(Event::Dht(DhtEvent::ValuePutFailed(key))));
 			}
-			DiscoveryOut::RandomKademliaStarted => {
-				self.events.push(BehaviourOut::RandomKademliaStarted);
+			DiscoveryOut::RandomKademliaStarted(protocols) => {
+				for protocol in protocols {
+					self.events.push(BehaviourOut::RandomKademliaStarted(protocol));
+				}
 			}
 		}
 	}
