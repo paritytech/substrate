@@ -251,7 +251,7 @@ pub trait FixedPointNumber:
 	///
 	/// Returns a saturated `int + (self * int)`.
 	fn saturated_multiply_accumulate<
-		N: From<Self::Unsigned> + TryFrom<Self::Unsigned> + From<u32> + UniqueSaturatedInto<u32> +
+		N: From<u32> + TryFrom<Self::Unsigned> + From<u32> + UniqueSaturatedInto<u32> +
 			Bounded + Copy + Saturating + 
 			Rem<N, Output=N> + Div<N, Output=N> +
 			Mul<N, Output=N> + Add<N, Output=N> + Default + core::fmt::Debug

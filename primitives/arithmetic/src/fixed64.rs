@@ -36,6 +36,7 @@ pub struct Fixed64(i64);
 impl FixedPointNumber for Fixed64 {
 	type Inner = i64;
 	type Unsigned = u64;
+	type NextUnsigned = U128;
 	type Oversized = i128;
 	type Perthing = Perbill;
 
@@ -45,7 +46,6 @@ impl FixedPointNumber for Fixed64 {
 		Self(int.saturating_mul(Self::DIV))
 	}
 
-	/// TODO: maybe rename to `from_bits` like in fixed crate.
 	fn from_parts(parts: Self::Inner) -> Self {
 		Self(parts)
 	}
@@ -78,9 +78,9 @@ impl FixedPointNumber for Fixed64 {
 				rhs = rhs.saturating_mul(-1);
 			}
 
-			U128::from(lhs)
-				.checked_mul(U128::from(rhs))
-				.and_then(|n| n.checked_div(U128::from(Self::DIV)))
+			Self::NextUnsigned::from(lhs)
+				.checked_mul(Self::NextUnsigned::from(rhs))
+				.and_then(|n| n.checked_div(Self::NextUnsigned::from(Self::DIV)))
 				.and_then(|n| TryInto::<Self::Inner>::try_into(n).ok())
 				.and_then(|n| TryInto::<N>::try_into(n * signum).ok())
 		})
@@ -236,14 +236,14 @@ impl ops::Div for Fixed64 {
 	fn div(self, rhs: Self) -> Self::Output {
 		if rhs.0 == 0 {
 			let zero = 0;
-			return Fixed64::from_parts( self.0 / zero);
+			return Self::from_parts( self.0 / zero);
 		}
 		let (n, d) = if rhs.0 < 0 {
 			(-self.0, rhs.0.abs())
 		} else {
 			(self.0, rhs.0)
 		};
-		Fixed64::from_rational(n, d as u64)
+		Self::from_rational(n, d as u64)
 	}
 }
 
@@ -276,15 +276,15 @@ impl CheckedMul for Fixed64 {
 		if lhs.is_negative() {
 			lhs = lhs.saturating_mul(-1);
 		}
-		let mut rhs: i64 = rhs.0.saturated_into();
+		let mut rhs: <Self as FixedPointNumber>::Inner = rhs.0.saturated_into();
 		if rhs.is_negative() {
 			rhs = rhs.saturating_mul(-1);
 		}
 
-		U128::from(lhs)
-			.checked_mul(U128::from(rhs))
-			.and_then(|n| n.checked_div(U128::from(Self::DIV)))
-			.and_then(|n| TryInto::<i64>::try_into(n).ok())
+		<Self as FixedPointNumber>::NextUnsigned::from(lhs)
+			.checked_mul(<Self as FixedPointNumber>::NextUnsigned::from(rhs))
+			.and_then(|n| n.checked_div(<Self as FixedPointNumber>::NextUnsigned::from(Self::DIV)))
+			.and_then(|n| TryInto::<<Self as FixedPointNumber>::Inner>::try_into(n).ok())
 			.map(|n| Self(n * signum))
 	}
 }
