@@ -520,7 +520,6 @@ decl_module! {
 		/// - One storage mutation (codec-read `O(X' + J)`, codec-write `O(X + J)`).
 		/// - One event.
 		/// # </weight>
-		// #[weight =  + SimpleDispatchInfo::FixedNormal(50_000_000)]
 		#[weight = FunctionOf(
 			|(info,): (&IdentityInfo,)| {
 				T::DbWeight::get().reads_writes(2, 2)
