@@ -173,7 +173,7 @@ macro_rules! substrate_cli_subcommands {
 				&self,
 				chain_spec: &::std::boxed::Box<dyn ::sc_service::ChainSpec>,
 				is_dev: bool,
-				net_config_dir: &::std::path::PathBuf,
+				net_config_dir: ::std::path::PathBuf,
 				client_id: &str,
 				node_name: &str,
 				node_key: ::sc_service::config::NodeKeyConfig,

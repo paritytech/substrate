@@ -134,6 +134,7 @@ members = [
 	"primitives/offchain",
 	"primitives/panic-handler",
 	"primitives/phragmen",
+	"primitives/phragmen/fuzzer",
 	"primitives/phragmen/compact",
 	"primitives/rpc",
 	"primitives/runtime-interface",

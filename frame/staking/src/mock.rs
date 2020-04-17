@@ -33,6 +33,7 @@ use frame_system::offchain::TransactionSubmitter;
 use sp_io;
 use sp_phragmen::{
 	build_support_map, evaluate_support, reduce, ExtendedBalance, StakedAssignment, PhragmenScore,
+	VoteWeight,
 };
 use crate::*;
 
@@ -846,10 +847,10 @@ pub(crate) fn prepare_submission_with(
 	} = Staking::do_phragmen::<OffchainAccuracy>().unwrap();
 	let winners = winners.into_iter().map(|(w, _)| w).collect::<Vec<AccountId>>();
 
-	let stake_of = |who: &AccountId| -> ExtendedBalance {
-		<CurrencyToVoteHandler as Convert<Balance, u64>>::convert(
+	let stake_of = |who: &AccountId| -> VoteWeight {
+		<CurrencyToVoteHandler as Convert<Balance, VoteWeight>>::convert(
 			Staking::slashable_balance_of(&who)
-		) as ExtendedBalance
+		)
 	};
 	let mut staked = sp_phragmen::assignment_ratio_to_staked(assignments, stake_of);
 
@@ -888,7 +889,7 @@ pub(crate) fn prepare_submission_with(
 	let score = {
 		let staked = sp_phragmen::assignment_ratio_to_staked(
 			assignments_reduced.clone(),
-			Staking::slashable_balance_of_extended,
+			Staking::slashable_balance_of_vote_weight,
 		);
 
 		let (support_map, _) = build_support_map::<AccountId>(
