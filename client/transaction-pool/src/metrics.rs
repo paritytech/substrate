@@ -52,7 +52,7 @@ impl Metrics {
 		Ok(Self {
 			validations_scheduled: register(
 				Counter::new(
-					"sub_txpool_validations_issued",
+					"sub_txpool_validations_scheduled",
 					"Total number of transactions scheduled for validation",
 				)?,
 				registry,
