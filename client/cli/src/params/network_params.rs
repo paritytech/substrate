@@ -108,9 +108,6 @@ impl NetworkParams {
 				Multiaddr::empty()
 					.with(Protocol::Ip4([0, 0, 0, 0].into()))
 					.with(Protocol::Tcp(port)),
-				Multiaddr::empty()
-					.with(Protocol::Ip6([0, 0, 0, 0, 0, 0, 0, 0].into()))
-					.with(Protocol::Tcp(port)),
 			]
 		} else {
 			self.listen_addr.clone()
