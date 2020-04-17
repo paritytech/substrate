@@ -19,7 +19,7 @@
 use super::*;
 
 use frame_system::RawOrigin as SystemOrigin;
-//use frame_system::{EventRecord, Phase};
+use frame_system::{EventRecord, Phase};
 use frame_benchmarking::{benchmarks_instance, account};
 use sp_runtime::traits::Bounded;
 
@@ -90,14 +90,24 @@ benchmarks_instance! {
 		// Within the trait bounds, this is about the best we can do...
 		assert_eq!(events.len(), 1);
 
+		use frame_system::Event;
+
+		let EventRecord { event, .. } = &events[0];
+
+		println!("{:?}", event);
+
 		// let event_record = EventRecord {
 		// 	phase: Phase::Initialization,
-		// 	event: Event::collective_Instance1(RawEvent::MemberExecuted(
-
+		// 	event: <T as frame_system::Trait>::Event::_Instance1(RawEvent::MemberExecuted(
+		// 		proposal_hash,
+		// 		// Note the `remark` dispatch fails due to mis-match origin
+		// 		//but that is ok for benchmarking
+		// 		false,
 		// 	)),
 		// 	topics: vec![],
-		// }
-		// Note the `remark` dispatch fails due to mis-match origin, but that is ok for benchmarking
+		// };
+
+		// assert_eq!(events[0], event_record);
 	}
 
 	// This tests when execution would happen immediately after proposal
