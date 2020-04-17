@@ -216,8 +216,8 @@ fn new_registers_metrics() {
 		test_api,
 		network.clone(),
 		vec![],
-		key_store,
 		dht_event_rx.boxed(),
+		Role::Authority(key_store),
 		Some(registry.clone()),
 	);
 
@@ -241,8 +241,8 @@ fn publish_ext_addresses_puts_record_on_dht() {
 		test_api,
 		network.clone(),
 		vec![],
-		key_store,
 		dht_event_rx.boxed(),
+		Role::Authority(key_store),
 		None,
 	);
 
@@ -272,8 +272,8 @@ fn request_addresses_of_others_triggers_dht_get_query() {
 		test_api,
 		network.clone(),
 		vec![],
-		key_store,
 		dht_event_rx.boxed(),
+		Role::Authority(key_store),
 		None,
 	);
 
@@ -286,6 +286,7 @@ fn request_addresses_of_others_triggers_dht_get_query() {
 #[test]
 fn handle_dht_events_with_value_found_should_call_set_priority_group() {
 	let _ = ::env_logger::try_init();
+
 	// Create authority discovery.
 
 	let (mut dht_event_tx, dht_event_rx) = channel(1000);
@@ -300,8 +301,8 @@ fn handle_dht_events_with_value_found_should_call_set_priority_group() {
 		test_api,
 		network.clone(),
 		vec![],
-		key_store,
 		dht_event_rx.boxed(),
+		Role::Authority(key_store),
 		None,
 	);
 
@@ -331,7 +332,9 @@ fn handle_dht_events_with_value_found_should_call_set_priority_group() {
 
 	// Make authority discovery handle the event.
 	let f = |cx: &mut Context<'_>| -> Poll<()> {
-		authority_discovery.handle_dht_events(cx).unwrap();
+		if let Poll::Ready(e) = authority_discovery.handle_dht_events(cx) {
+			panic!("Unexpected error: {:?}", e);
+		}
 
 		// Expect authority discovery to set the priority set.
 		assert_eq!(network.set_priority_group_call.lock().unwrap().len(), 1);
@@ -363,8 +366,8 @@ fn terminate_when_event_stream_terminates() {
 		test_api,
 		network.clone(),
 		vec![],
-		key_store,
 		dht_event_rx.boxed(),
+		Role::Authority(key_store),
 		None,
 	);
 
@@ -404,8 +407,8 @@ fn dont_stop_polling_when_error_is_returned() {
 		test_api,
 		network.clone(),
 		vec![],
-		key_store,
 		dht_event_rx.boxed(),
+		Role::Authority(key_store),
 		None,
 	);
 
@@ -439,15 +442,16 @@ fn dont_stop_polling_when_error_is_returned() {
 			// Now we call `await` and give the control to the authority discovery future.
 			assert_eq!(Some(Event::Processed), discovery_update_rx.next().await);
 
-			// Drop the event rx to stop the authority discovery. If it was polled correctly, it should
-			// end properly.
+			// Drop the event rx to stop the authority discovery. If it was polled correctly, it
+			// should end properly.
 			drop(dht_event_tx);
 
 			assert!(
 				discovery_update_rx.collect::<Vec<Event>>()
 					.await
 					.into_iter()
-					.any(|evt| evt == Event::End), "The authority should have ended",
+					.any(|evt| evt == Event::End),
+				"The authority discovery should have ended",
 			);
 		}
 	);

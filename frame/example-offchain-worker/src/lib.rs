@@ -44,7 +44,7 @@ use frame_support::{
 	debug,
 	dispatch::DispatchResult, decl_module, decl_storage, decl_event,
 	traits::Get,
-	weights::SimpleDispatchInfo,
+	weights::{SimpleDispatchInfo, MINIMUM_WEIGHT},
 };
 use frame_system::{self as system, ensure_signed, ensure_none, offchain};
 use sp_core::crypto::KeyTypeId;
@@ -157,7 +157,7 @@ decl_module! {
 		/// working and receives (and provides) meaningful data.
 		/// This example is not focused on correctness of the oracle itself, but rather its
 		/// purpose is to showcase offchain worker capabilities.
-		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 		pub fn submit_price(origin, price: u32) -> DispatchResult {
 			// Retrieve sender of the transaction.
 			let who = ensure_signed(origin)?;
@@ -182,7 +182,7 @@ decl_module! {
 		///
 		/// This example is not focused on correctness of the oracle itself, but rather its
 		/// purpose is to showcase offchain worker capabilities.
-		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 		pub fn submit_price_unsigned(origin, _block_number: T::BlockNumber, price: u32)
 			-> DispatchResult
 		{

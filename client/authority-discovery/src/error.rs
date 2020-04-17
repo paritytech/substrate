@@ -40,9 +40,6 @@ pub enum Error {
 	MatchingHashedAuthorityIdWithAuthorityId,
 	/// Failed to set the authority discovery peerset priority group in the peerset module.
 	SettingPeersetPriorityGroup(String),
-	/// The sender side of the dht event stream has been closed likely due to the network
-	/// terminating.
-	DhtEventStreamTerminated,
 	/// Failed to encode a protobuf payload.
 	EncodingProto(prost::EncodeError),
 	/// Failed to decode a protobuf payload.
