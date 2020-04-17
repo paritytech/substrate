@@ -22,12 +22,12 @@
 //! Run `cargo doc --package pallet-example-offchain-worker --open` to view this module's
 //! documentation.
 //!
-//! - \[`pallet_example_offchain_worker::Trait`](./trait.Trait.html)
-//! - \[`Call`](./enum.Call.html)
-//! - \[`Module`](./struct.Module.html)
+//! - [`pallet_example_offchain_worker::Trait`](./trait.Trait.html)
+//! - [`Call`](./enum.Call.html)
+//! - [`Module`](./struct.Module.html)
 //!
 //!
-//! \## Overview
+//! ## Overview
 //!
 //! In this example we are going to build a very simplistic, naive and definitely NOT
 //! production-ready oracle for BTC/USD price.
