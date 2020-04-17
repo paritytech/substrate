@@ -18,6 +18,7 @@ frame-system = { version = "2.0.0-dev", default-features = false, path = "../sys
 serde = { version = "1.0.101", optional = true }
 sp-runtime = { version = "2.0.0-dev", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "2.0.0-dev", default-features = false, path = "../../primitives/std" }
+sp-io = { version = "2.0.0-dev", default-features = false, path = "../../primitives/io" }
 
 [dev-dependencies]
 hex-literal = "0.2.1"

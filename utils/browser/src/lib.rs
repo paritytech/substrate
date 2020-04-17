@@ -49,7 +49,7 @@ where
 		format!("{} (Browser)", name),
 		"unknown",
 		Default::default(),
-		&std::path::PathBuf::new(),
+		None,
 	);
 	network.boot_nodes = chain_spec.boot_nodes().to_vec();
 	network.transport = TransportConfig::Normal {

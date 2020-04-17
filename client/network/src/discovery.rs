@@ -55,7 +55,7 @@ use libp2p::kad::{Kademlia, KademliaConfig, KademliaEvent, Quorum, Record};
 use libp2p::kad::GetClosestPeersError;
 use libp2p::kad::handler::KademliaHandler;
 use libp2p::kad::QueryId;
-use libp2p::kad::record::{self, store::MemoryStore};
+use libp2p::kad::record::{self, store::{MemoryStore, RecordStore}};
 #[cfg(not(target_os = "unknown"))]
 use libp2p::swarm::toggle::Toggle;
 #[cfg(not(target_os = "unknown"))]
@@ -77,7 +77,7 @@ pub struct DiscoveryConfig {
 }
 
 impl DiscoveryConfig {
-	/// Crate a default configuration with the given public key.
+	/// Create a default configuration with the given public key.
 	pub fn new(local_public_key: PublicKey) -> Self {
 		let mut this = DiscoveryConfig {
 			local_peer_id: local_public_key.into_peer_id(),
@@ -276,8 +276,27 @@ impl DiscoveryBehaviour {
 	}
 
 	/// Returns the number of nodes that are in the Kademlia k-buckets.
-	pub fn num_kbuckets_entries(&mut self) -> usize {
-		self.known_peers().count()
+	pub fn num_kbuckets_entries(&mut self) -> impl ExactSizeIterator<Item = (&ProtocolId, usize)> {
+		self.kademlias.iter_mut().map(|(id, kad)| (id, kad.kbuckets_entries().count()))
+	}
+
+	/// Returns the number of records in the Kademlia record stores.
+	pub fn num_kademlia_records(&mut self) -> impl ExactSizeIterator<Item = (&ProtocolId, usize)> {
+		// Note that this code is ok only because we use a `MemoryStore`.
+		self.kademlias.iter_mut().map(|(id, kad)| {
+			let num = kad.store_mut().records().count();
+			(id, num)
+		})
+	}
+
+	/// Returns the total size in bytes of all the records in the Kademlia record stores.
+	pub fn kademlia_records_total_size(&mut self) -> impl ExactSizeIterator<Item = (&ProtocolId, usize)> {
+		// Note that this code is ok only because we use a `MemoryStore`. If the records were
+		// for example stored on disk, this would load every single one of them every single time.
+		self.kademlias.iter_mut().map(|(id, kad)| {
+			let size = kad.store_mut().records().fold(0, |tot, rec| tot + rec.value.len());
+			(id, size)
+		})
 	}
 }
 
@@ -307,8 +326,8 @@ pub enum DiscoveryOut {
 	/// Inserting a value into the DHT failed.
 	ValuePutFailed(record::Key),
 
-	/// Started a random Kademlia query.
-	RandomKademliaStarted,
+	/// Started a random Kademlia query for each DHT identified by the given `ProtocolId`s.
+	RandomKademliaStarted(Vec<ProtocolId>),
 }
 
 impl NetworkBehaviour for DiscoveryBehaviour {
@@ -515,7 +534,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 				Duration::from_secs(60));
 
 			if actually_started {
-				let ev = DiscoveryOut::RandomKademliaStarted;
+				let ev = DiscoveryOut::RandomKademliaStarted(self.kademlias.keys().cloned().collect());
 				return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
 			}
 		}

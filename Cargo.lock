@@ -3348,15 +3348,27 @@ dependencies = [
 name = "node-bench"
 version = "0.8.0-dev"
 dependencies = [
+ "derive_more",
+ "fs_extra",
+ "hash-db",
+ "hex",
+ "kvdb",
+ "kvdb-rocksdb",
+ "lazy_static",
  "log",
  "node-primitives",
  "node-testing",
+ "rand 0.7.3",
  "sc-cli",
  "sc-client-api",
  "serde",
  "serde_json",
+ "sp-core",
  "sp-runtime",
+ "sp-state-machine",
+ "sp-trie",
  "structopt",
+ "tempfile",
 ]
 
 [[package]]
@@ -3660,6 +3672,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "fs_extra",
+ "futures 0.3.4",
  "log",
  "node-executor",
  "node-primitives",
@@ -4576,6 +4589,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
+ "sp-storage",
 ]
 
 [[package]]
@@ -4756,9 +4770,9 @@ checksum = "aa9777aa91b8ad9dd5aaa04a9b6bcb02c7f1deb952fca5a66034d5e63afc5c6f"
 
 [[package]]
 name = "parity-util-mem"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e42755f26e5ea21a6a819d9e63cbd70713e9867a2b767ec2cc65ca7659532c5"
+checksum = "2c6e2583649a3ca84894d1d71da249abcfda54d5aca24733d72ca10d0f02361c"
 dependencies = [
  "cfg-if",
  "impl-trait-for-tuples",
@@ -5283,7 +5297,7 @@ dependencies = [
  "rand_isaac",
  "rand_jitter",
  "rand_os",
- "rand_pcg",
+ "rand_pcg 0.1.2",
  "rand_xorshift",
  "winapi 0.3.8",
 ]
@@ -5299,6 +5313,7 @@ dependencies = [
  "rand_chacha 0.2.2",
  "rand_core 0.5.1",
  "rand_hc 0.2.0",
+ "rand_pcg 0.2.1",
 ]
 
 [[package]]
@@ -5406,6 +5421,15 @@ checksum = "abf9b09b01790cfe0364f52bf32995ea3c39f4d2dd011eac241d2914146d0b44"
 dependencies = [
  "autocfg 0.1.7",
  "rand_core 0.4.2",
+]
+
+[[package]]
+name = "rand_pcg"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16abd0c1b639e9eb4d7c50c0b8100b0d0f849be2349829c740fe8e6eb4816429"
+dependencies = [
+ "rand_core 0.5.1",
 ]
 
 [[package]]
@@ -6194,6 +6218,7 @@ dependencies = [
  "sc-executor-wasmi",
  "sc-executor-wasmtime",
  "sc-runtime-test",
+ "sp-api",
  "sp-core",
  "sp-externalities",
  "sp-io",
@@ -6742,8 +6767,10 @@ dependencies = [
  "sp-runtime",
  "sp-transaction-pool",
  "sp-utils",
+ "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "substrate-test-runtime-transaction-pool",
+ "tracing",
  "wasm-timer",
 ]
 
@@ -7337,6 +7364,7 @@ dependencies = [
  "lazy_static",
  "libsecp256k1",
  "log",
+ "merlin",
  "num-traits 0.2.11",
  "parity-scale-codec",
  "parity-util-mem",
@@ -7425,10 +7453,12 @@ dependencies = [
 name = "sp-io"
 version = "2.0.0-dev"
 dependencies = [
+ "futures 0.3.4",
  "hash-db",
  "libsecp256k1",
  "log",
  "parity-scale-codec",
+ "parking_lot 0.10.2",
  "sp-core",
  "sp-externalities",
  "sp-runtime-interface",
@@ -7489,6 +7519,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp-phragmen-fuzzer"
+version = "2.0.0-alpha.5"
+dependencies = [
+ "honggfuzz",
+ "rand 0.7.3",
+ "sp-phragmen",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "sp-rpc"
 version = "2.0.0-dev"
 dependencies = [
@@ -7515,6 +7556,7 @@ dependencies = [
  "sp-core",
  "sp-inherents",
  "sp-io",
+ "sp-state-machine",
  "sp-std",
 ]
 
@@ -8230,9 +8272,9 @@ dependencies = [
 
 [[package]]
 name = "sysinfo"
-version = "0.12.0"
+version = "0.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ccb41798287e8e299a701b5560d886d6ca2c3e7115e9ea2cb68c123aec339b7"
+checksum = "5a0338198966bde7feb14b011a33d404a62a6e03b843352c71512a2a002634b7"
 dependencies = [
  "cfg-if",
  "doc-comment",
