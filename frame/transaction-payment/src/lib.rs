@@ -141,26 +141,10 @@ impl<T: Trait> Module<T> where
 		// a very very little potential gain in the future.
 		let dispatch_info = <Extrinsic as GetDispatchInfo>::get_dispatch_info(&unchecked_extrinsic);
 
-		let partial_fee =
-			<ChargeTransactionPayment<T>>::compute_fee(len, &dispatch_info, 0u32.into());
+		let partial_fee = Self::compute_fee(len, &dispatch_info, 0u32.into());
 		let DispatchInfo { weight, class, .. } = dispatch_info;
 
 		RuntimeDispatchInfo { weight, class, partial_fee }
-	}
-}
-
-/// Require the transactor pay for themselves and maybe include a tip to gain additional priority
-/// in the queue.
-#[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct ChargeTransactionPayment<T: Trait + Send + Sync>(#[codec(compact)] BalanceOf<T>);
-
-impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> where
-	T::Call: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>,
-	BalanceOf<T>: Send + Sync,
-{
-	/// utility constructor. Used only in client/factory code.
-	pub fn from(fee: BalanceOf<T>) -> Self {
-		Self(fee)
 	}
 
 	/// Compute the final fee value for a particular transaction.
@@ -186,12 +170,11 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> where
 			let len = <BalanceOf<T>>::from(len);
 			let per_byte = T::TransactionByteFee::get();
 			let len_fee = per_byte.saturating_mul(len);
-			let weight_fee = Self::compute_weight_fee(info.weight);
+			let unadjusted_weight_fee = Self::weight_to_fee(info.weight);
 
 			// the adjustable part of the fee
-			let adjustable_fee = len_fee.saturating_add(weight_fee);
+			let adjustable_fee = len_fee.saturating_add(unadjusted_weight_fee);
 			let targeted_fee_adjustment = NextFeeMultiplier::get();
-			// adjusted_fee = adjustable_fee + (adjustable_fee * targeted_fee_adjustment)
 			let adjusted_fee = targeted_fee_adjustment.saturated_multiply_accumulate(adjustable_fee.saturated_into());
 
 			let base_fee = T::TransactionBaseFee::get();
@@ -201,11 +184,38 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> where
 		}
 	}
 
-	fn compute_weight_fee(weight: Weight) -> BalanceOf<T> {
+	/// Compute the fee for the specified weight.
+	///
+	/// This fee is already adjusted by the per block fee adjustment factor and is therefore
+	/// the share that the weight contributes to the overall fee of a transaction.
+	pub fn weight_to_fee_with_adjustment(weight: Weight) -> BalanceOf<T> where
+		BalanceOf<T>: From<u64>
+	{
+		NextFeeMultiplier::get().saturated_multiply_accumulate(
+			Self::weight_to_fee(weight)
+		)
+	}
+
+	fn weight_to_fee(weight: Weight) -> BalanceOf<T> {
 		// cap the weight to the maximum defined in runtime, otherwise it will be the
 		// `Bounded` maximum of its data type, which is not desired.
 		let capped_weight = weight.min(<T as frame_system::Trait>::MaximumBlockWeight::get());
 		T::WeightToFee::convert(capped_weight)
+	}
+}
+
+/// Require the transactor pay for themselves and maybe include a tip to gain additional priority
+/// in the queue.
+#[derive(Encode, Decode, Clone, Eq, PartialEq)]
+pub struct ChargeTransactionPayment<T: Trait + Send + Sync>(#[codec(compact)] BalanceOf<T>);
+
+impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> where
+	T::Call: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>,
+	BalanceOf<T>: Send + Sync,
+{
+	/// utility constructor. Used only in client/factory code.
+	pub fn from(fee: BalanceOf<T>) -> Self {
+		Self(fee)
 	}
 
 	fn withdraw_fee(
@@ -215,7 +225,7 @@ impl<T: Trait + Send + Sync> ChargeTransactionPayment<T> where
 		len: usize,
 	) -> Result<(BalanceOf<T>, Option<NegativeImbalanceOf<T>>), TransactionValidityError> {
 		let tip = self.0;
-		let fee = Self::compute_fee(len as u32, info, tip);
+		let fee = Module::<T>::compute_fee(len as u32, info, tip);
 
 		// Only mess with balances if fee is not zero.
 		if fee.is_zero() {
@@ -250,7 +260,7 @@ impl<T: Trait + Send + Sync> sp_std::fmt::Debug for ChargeTransactionPayment<T> 
 }
 
 impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T> where
-	BalanceOf<T>: Send + Sync,
+	BalanceOf<T>: Send + Sync + From<u64>,
 	T::Call: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>,
 {
 	const IDENTIFIER: &'static str = "ChargeTransactionPayment";
@@ -296,7 +306,7 @@ impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T> whe
 	) -> Result<(), TransactionValidityError> {
 		let (tip, who, imbalance) = pre;
 		if let Some(payed) = imbalance {
-			let refund = Self::compute_weight_fee(post_info.calc_unspent(info));
+			let refund = Module::<T>::weight_to_fee_with_adjustment(post_info.calc_unspent(info));
 			let actual_payment = match T::Currency::deposit_into_existing(&who, refund) {
 				Ok(refund_imbalance) => {
 					// The refund cannot be larger than the up front payed max weight.
@@ -542,6 +552,33 @@ mod tests {
 	}
 
 	#[test]
+	fn signed_extension_transaction_payment_multiplied_refund_works() {
+		ExtBuilder::default()
+			.balance_factor(10)
+			.base_fee(5)
+			.build()
+			.execute_with(||
+		{
+			let len = 10;
+			NextFeeMultiplier::put(Fixed128::from_rational(1, NonZeroI128::new(2).unwrap()));
+
+			let pre = ChargeTransactionPayment::<Runtime>::from(5 /* tipped */)
+				.pre_dispatch(&2, CALL, &info_from_weight(100), len)
+				.unwrap();
+			// 5 base fee, 3/2 * 10 byte fee, 3/2 * 100 weight fee, 5 tip 
+			assert_eq!(Balances::free_balance(2), 200 - 5 - 15 - 150 - 5);
+
+			assert!(
+				ChargeTransactionPayment::<Runtime>
+					::post_dispatch(pre, &info_from_weight(100), &post_info_from_weight(50), len, &Ok(()))
+					.is_ok()
+			);
+			// 75 (3/2 of the returned 50 units of weight ) is refunded
+			assert_eq!(Balances::free_balance(2), 200 - 5 - 15 - 75 - 5);
+		});
+	}
+
+	#[test]
 	fn signed_extension_transaction_payment_is_bounded() {
 		ExtBuilder::default()
 			.balance_factor(1000)
@@ -676,25 +713,25 @@ mod tests {
 				class: DispatchClass::Operational,
 				pays_fee: false,
 			};
-			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(0, &dispatch_info, 10), 10);
+			assert_eq!(Module::<Runtime>::compute_fee(0, &dispatch_info, 10), 10);
 			// No tip, only base fee works
 			let dispatch_info = DispatchInfo {
 				weight: 0,
 				class: DispatchClass::Operational,
 				pays_fee: true,
 			};
-			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(0, &dispatch_info, 0), 100);
+			assert_eq!(Module::<Runtime>::compute_fee(0, &dispatch_info, 0), 100);
 			// Tip + base fee works
-			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(0, &dispatch_info, 69), 169);
+			assert_eq!(Module::<Runtime>::compute_fee(0, &dispatch_info, 69), 169);
 			// Len (byte fee) + base fee works
-			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(42, &dispatch_info, 0), 520);
+			assert_eq!(Module::<Runtime>::compute_fee(42, &dispatch_info, 0), 520);
 			// Weight fee + base fee works
 			let dispatch_info = DispatchInfo {
 				weight: 1000,
 				class: DispatchClass::Operational,
 				pays_fee: true,
 			};
-			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(0, &dispatch_info, 0), 1100);
+			assert_eq!(Module::<Runtime>::compute_fee(0, &dispatch_info, 0), 1100);
 		});
 	}
 
@@ -715,7 +752,7 @@ mod tests {
 				class: DispatchClass::Operational,
 				pays_fee: true,
 			};
-			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(0, &dispatch_info, 0), 100);
+			assert_eq!(Module::<Runtime>::compute_fee(0, &dispatch_info, 0), 100);
 
 			// Everything works together :)
 			let dispatch_info = DispatchInfo {
@@ -727,7 +764,7 @@ mod tests {
 			// adjustable fee = (123 * 1) + (456 * 10) = 4683
 			// adjusted fee = (4683 * .5) + 4683 = 7024.5 -> 7024
 			// final fee = 100 + 7024 + 789 tip = 7913
-			assert_eq!(ChargeTransactionPayment::<Runtime>::compute_fee(456, &dispatch_info, 789), 7913);
+			assert_eq!(Module::<Runtime>::compute_fee(456, &dispatch_info, 789), 7913);
 		});
 	}
 
@@ -747,7 +784,7 @@ mod tests {
 				pays_fee: true,
 			};
 			assert_eq!(
-				ChargeTransactionPayment::<Runtime>::compute_fee(
+				Module::<Runtime>::compute_fee(
 					<u32>::max_value(),
 					&dispatch_info,
 					<u64>::max_value()
