@@ -74,14 +74,14 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # #[macro_use]
 /// # extern crate frame_support;
 /// # use frame_support::dispatch;
-/// # use frame_support::weights::SimpleDispatchInfo;
+/// # use frame_support::weights::{SimpleDispatchInfo, MINIMUM_WEIGHT};
 /// # use frame_system::{self as system, Trait, ensure_signed};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 ///
 /// 		// Private functions are dispatchable, but not available to other
 /// 		// FRAME pallets.
-/// 		#[weight = SimpleDispatchInfo::default()]
+/// 		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 /// 		fn my_function(origin, var: u64) -> dispatch::DispatchResult {
 ///				// Your implementation
 ///				Ok(())
@@ -89,7 +89,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 ///
 ///			// Public functions are both dispatchable and available to other
 /// 		// FRAME pallets.
-/// 		#[weight = SimpleDispatchInfo::default()]
+/// 		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 ///			pub fn my_public_function(origin) -> dispatch::DispatchResult {
 /// 			// Your implementation
 ///				Ok(())
@@ -117,17 +117,17 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # #[macro_use]
 /// # extern crate frame_support;
 /// # use frame_support::dispatch;
-/// # use frame_support::weights::SimpleDispatchInfo;
+/// # use frame_support::weights::{SimpleDispatchInfo, MINIMUM_WEIGHT};
 /// # use frame_system::{self as system, Trait, ensure_signed};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-/// 		#[weight = SimpleDispatchInfo::default()]
+/// 		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 /// 		fn my_long_function(origin) -> dispatch::DispatchResult {
 ///				// Your implementation
 /// 			Ok(())
 /// 		}
 ///
-/// 		#[weight = SimpleDispatchInfo::default()]
+/// 		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 /// 		fn my_short_function(origin) {
 ///				// Your implementation
 /// 		}
@@ -182,11 +182,11 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # #[macro_use]
 /// # extern crate frame_support;
 /// # use frame_support::dispatch;
-/// # use frame_support::weights::SimpleDispatchInfo;
+/// # use frame_support::weights::{SimpleDispatchInfo, MINIMUM_WEIGHT};
 /// # use frame_system::{self as system, Trait, ensure_signed, ensure_root};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-/// 		#[weight = SimpleDispatchInfo::default()]
+/// 		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 ///			fn my_privileged_function(origin) -> dispatch::DispatchResult {
 /// 			ensure_root(origin)?;
 ///				// Your implementation
@@ -2086,7 +2086,7 @@ macro_rules! __check_reserved_fn_name {
 #[allow(dead_code)]
 mod tests {
 	use super::*;
-	use crate::weights::{DispatchInfo, DispatchClass};
+	use crate::weights::{MINIMUM_WEIGHT, DispatchInfo, DispatchClass};
 	use crate::traits::{
 		CallMetadata, GetCallMetadata, GetCallName, OnInitialize, OnFinalize, OnRuntimeUpgrade
 	};
@@ -2112,22 +2112,22 @@ mod tests {
 	decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin, T::AccountId: From<u32> {
 			/// Hi, this is a comment.
-			#[weight = SimpleDispatchInfo::default()]
+			#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 			fn aux_0(_origin) -> DispatchResult { unreachable!() }
 
-			#[weight = SimpleDispatchInfo::default()]
+			#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 			fn aux_1(_origin, #[compact] _data: u32,) -> DispatchResult { unreachable!() }
 
-			#[weight = SimpleDispatchInfo::default()]
+			#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 			fn aux_2(_origin, _data: i32, _data2: String) -> DispatchResult { unreachable!() }
 
 			#[weight = SimpleDispatchInfo::FixedNormal(3)]
 			fn aux_3(_origin) -> DispatchResult { unreachable!() }
 
-			#[weight = SimpleDispatchInfo::default()]
+			#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 			fn aux_4(_origin, _data: i32) -> DispatchResult { unreachable!() }
 
-			#[weight = SimpleDispatchInfo::default()]
+			#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 			fn aux_5(_origin, _data: i32, #[compact] _data2: u32,) -> DispatchResult { unreachable!() }
 
 			#[weight = SimpleDispatchInfo::FixedOperational(5)]
@@ -2290,11 +2290,6 @@ mod tests {
 		assert_eq!(
 			Call::<TraitImpl>::operational().get_dispatch_info(),
 			DispatchInfo { weight: 5, class: DispatchClass::Operational, pays_fee: true },
-		);
-		// default weight.
-		assert_eq!(
-			Call::<TraitImpl>::aux_0().get_dispatch_info(),
-			DispatchInfo { weight: 10_000, class: DispatchClass::Normal, pays_fee: true },
 		);
 		// custom basic
 		assert_eq!(

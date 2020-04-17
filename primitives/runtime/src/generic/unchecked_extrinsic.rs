@@ -24,7 +24,8 @@ use crate::{
 		self, Member, MaybeDisplay, SignedExtension, Checkable, Extrinsic, ExtrinsicMetadata,
 		IdentifyAccount,
 	},
-	generic::CheckedExtrinsic, transaction_validity::{TransactionValidityError, InvalidTransaction},
+	generic::CheckedExtrinsic,
+	transaction_validity::{TransactionValidityError, InvalidTransaction},
 };
 
 const TRANSACTION_VERSION: u8 = 4;
@@ -125,9 +126,7 @@ where
 			Some((signed, signature, extra)) => {
 				let signed = lookup.lookup(signed)?;
 				let raw_payload = SignedPayload::new(self.function, extra)?;
-				if !raw_payload.using_encoded(|payload| {
-					signature.verify(payload, &signed)
-				}) {
+				if !raw_payload.using_encoded(|payload| signature.verify(payload, &signed)) {
 					return Err(InvalidTransaction::BadProof.into())
 				}
 
