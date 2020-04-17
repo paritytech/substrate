@@ -23,6 +23,7 @@
 mod storage;
 mod construct_runtime;
 
+extern crate proc_macro;
 use proc_macro::TokenStream;
 
 /// Declares strongly-typed wrappers around codec-compatible types in storage.
