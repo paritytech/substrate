@@ -297,6 +297,7 @@ where
 		encoded_len: usize,
 		to_note: Option<Vec<u8>>,
 	) -> ApplyExtrinsicResult {
+		let span_id = sp_io::profiling::register_span(module_path!(), "apply_extrinsic_with_len");
 		// Verify that the signature is good.
 		let xt = uxt.check(&Default::default())?;
 
@@ -314,7 +315,7 @@ where
 		let r = Applyable::apply::<UnsignedValidator>(xt, &dispatch_info, encoded_len)?;
 
 		<frame_system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32, dispatch_info);
-
+		sp_io::profiling::exit_span(span_id);
 		Ok(r)
 	}
 

@@ -136,6 +136,7 @@ members = [
 	"primitives/phragmen",
 	"primitives/phragmen/fuzzer",
 	"primitives/phragmen/compact",
+	"primitives/profiler",
 	"primitives/rpc",
 	"primitives/runtime-interface",
 	"primitives/runtime-interface/proc-macro",
