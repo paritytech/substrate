@@ -3125,6 +3125,49 @@ mod offchain_phragmen {
 	}
 
 	#[test]
+	fn offchain_worker_runs_with_equalise() {
+		// Offchain worker equalises based on the number provided by randomness. See the difference
+		// in the priority, which comes from the computed score.
+		let mut ext = ExtBuilder::default()
+			.offchain_phragmen_ext()
+			.validator_count(2)
+			.offchain_iterations(2)
+			.build();
+		let state = offchainify(&mut ext);
+		ext.execute_with(|| {
+			run_to_block(12);
+
+			// local key 11 is in the elected set.
+			assert_eq_uvec!(Session::validators(), vec![11, 21]);
+			assert_eq!(state.read().transactions.len(), 0);
+			Staking::offchain_worker(12);
+			assert_eq!(state.read().transactions.len(), 1);
+
+			let encoded = state.read().transactions[0].clone();
+			let extrinsic: Extrinsic = Decode::decode(&mut &*encoded).unwrap();
+
+			let call = extrinsic.call;
+			let inner = match call {
+				mock::Call::Staking(inner) => inner,
+			};
+
+			assert_eq!(
+				<Staking as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
+					TransactionSource::Local,
+					&inner,
+				),
+				TransactionValidity::Ok(ValidTransaction {
+					priority: 1250, // the proposed slot stake.
+					requires: vec![],
+					provides: vec![("StakingOffchain", active_era()).encode()],
+					longevity: 3,
+					propagate: false,
+				})
+			)
+		})
+	}
+
+	#[test]
 	fn mediocre_submission_from_authority_is_early_rejected() {
 		let mut ext = ExtBuilder::default()
 			.offchain_phragmen_ext()

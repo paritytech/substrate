@@ -17,6 +17,7 @@
 //! Test utilities
 
 use std::{collections::{HashSet, HashMap}, cell::RefCell};
+use codec::Encode;
 use sp_runtime::Perbill;
 use sp_runtime::curve::PiecewiseLinear;
 use sp_runtime::traits::{IdentityLookup, Convert, SaturatedConversion, Zero};
@@ -65,6 +66,7 @@ thread_local! {
 	static SLASH_DEFER_DURATION: RefCell<EraIndex> = RefCell::new(0);
 	static ELECTION_LOOKAHEAD: RefCell<BlockNumber> = RefCell::new(0);
 	static PERIOD: RefCell<BlockNumber> = RefCell::new(1);
+	static ITERATIONS: RefCell<u32> = RefCell::new(0);
 }
 
 /// Another session handler struct to test on_disabled.
@@ -92,6 +94,15 @@ impl pallet_session::OneSessionHandler<AccountId> for OtherSessionHandler {
 			let value = d.0[validator_index];
 			d.1.insert(value);
 		})
+	}
+}
+
+pub struct StaticRandomness;
+impl frame_support::traits::Randomness<H256> for StaticRandomness {
+	fn random(_subject: &[u8]) -> H256 {
+		let mut static_value = ITERATIONS.with(|v| *v.borrow()).encode();
+		static_value.resize_with(32, || 0u8);
+		H256::from_slice(&static_value)
 	}
 }
 
@@ -275,6 +286,7 @@ parameter_types! {
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &I_NPOS;
 	pub const MaxNominatorRewardedPerValidator: u32 = 64;
 	pub const UnsignedPriority: u64 = 1 << 20;
+	pub const MaxIterations: u32 = 5;
 }
 
 impl Trait for Test {
@@ -295,6 +307,8 @@ impl Trait for Test {
 	type ElectionLookahead = ElectionLookahead;
 	type Call = Call;
 	type SubmitTransaction = SubmitTransaction;
+	type Randomness = StaticRandomness;
+	type MaxIterations = MaxIterations;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type UnsignedPriority = UnsignedPriority;
 }
@@ -316,6 +330,7 @@ pub struct ExtBuilder {
 	num_validators: Option<u32>,
 	invulnerables: Vec<AccountId>,
 	has_stakers: bool,
+	offchain_iterations: u32,
 }
 
 impl Default for ExtBuilder {
@@ -334,6 +349,7 @@ impl Default for ExtBuilder {
 			num_validators: None,
 			invulnerables: vec![],
 			has_stakers: true,
+			offchain_iterations: 0,
 		}
 	}
 }
@@ -391,6 +407,10 @@ impl ExtBuilder {
 		self.has_stakers = has;
 		self
 	}
+	pub fn offchain_iterations(mut self, iterations: u32) -> Self {
+		self.offchain_iterations = iterations;
+		self
+	}
 	pub fn offchain_phragmen_ext(self) -> Self {
 		self.session_per_era(4)
 			.session_length(5)
@@ -402,6 +422,7 @@ impl ExtBuilder {
 		SESSION_PER_ERA.with(|v| *v.borrow_mut() = self.session_per_era);
 		ELECTION_LOOKAHEAD.with(|v| *v.borrow_mut() = self.election_lookahead);
 		PERIOD.with(|v| *v.borrow_mut() = self.session_length);
+		ITERATIONS.with(|v| *v.borrow_mut() = self.offchain_iterations);
 	}
 	pub fn build(self) -> sp_io::TestExternalities {
 		let _ = env_logger::try_init();

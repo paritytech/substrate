@@ -280,7 +280,7 @@ use frame_support::{
 	dispatch::{IsSubType, DispatchResult},
 	traits::{
 		Currency, LockIdentifier, LockableCurrency, WithdrawReasons, OnUnbalanced, Imbalance, Get,
-		UnixTime, EstimateNextNewSession, EnsureOrigin,
+		UnixTime, EstimateNextNewSession, Randomness, EnsureOrigin,
 	}
 };
 use pallet_session::historical;
@@ -355,7 +355,7 @@ generate_compact_solution_type!(pub GenericCompactAssignments, 16);
 #[derive(Encode, Decode, RuntimeDebug)]
 pub struct ActiveEraInfo {
 	/// Index of era.
-	index: EraIndex,
+	pub index: EraIndex,
 	/// Moment of start expresed as millisecond from `$UNIX_EPOCH`.
 	///
 	/// Start can be none if start hasn't been set for the era yet,
@@ -789,7 +789,13 @@ pub trait Trait: frame_system::Trait {
 	/// A transaction submitter.
 	type SubmitTransaction: SubmitUnsignedTransaction<Self, <Self as Trait>::Call>;
 
-	/// The maximum number of nominators rewarded for each validator.
+	/// Something that can provide randomness
+	type Randomness: Randomness<Self::Hash>;
+
+	/// Maximum number of equalise iterations to run in the offchain submission
+	type MaxIterations: Get<u32>;
+
+	/// The maximum number of nominator rewarded for each validator.
 	///
 	/// For each validator only the `$MaxNominatorRewardedPerValidator` biggest stakers can claim
 	/// their reward. This used to limit the i/o cost for the nominator payout.
