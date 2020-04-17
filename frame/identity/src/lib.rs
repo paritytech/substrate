@@ -477,7 +477,7 @@ decl_module! {
 		#[weight = FunctionOf(
 			|(_, &old_count): (&T::AccountId, &u32)| {
 				T::DbWeight::get().reads_writes(1, 1)
-				+ 500_000 * (old_count as u64)
+				+ 500_000 * (old_count as Weight)
 			},
 			DispatchClass::Normal,
 			true
