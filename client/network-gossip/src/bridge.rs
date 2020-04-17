@@ -231,7 +231,7 @@ mod tests {
 	use crate::{ValidationResult, ValidatorContext};
 	use futures::{channel::mpsc::{channel, Sender}, executor::block_on_stream};
 	use sc_network::ObservedRole;
-	use sp_runtime::{testing::H256, traits::{Block as BlockT, Hash}};
+	use sp_runtime::{testing::H256, traits::{Block as BlockT}};
 	use std::sync::{Arc, Mutex};
 	use substrate_test_runtime_client::runtime::Block;
 	use super::*;
