@@ -387,9 +387,9 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 				}
 			}
 			if has_entry {
-				trace!(target: "sub-libp2p", "Addresses of {:?}: none (peer in k-buckets)");
+				trace!(target: "sub-libp2p", "Addresses of {:?}: none (peer in k-buckets)", peer_id);
 			} else {
-				trace!(target: "sub-libp2p", "Addresses of {:?}: none (peer not in k-buckets)");
+				trace!(target: "sub-libp2p", "Addresses of {:?}: none (peer not in k-buckets)", peer_id);
 			}
 		}
 
