@@ -415,7 +415,7 @@ fn finalization() {
 	let xt = uxt(Alice, 209);
 	let api = TestApi::with_alice_nonce(209);
 	api.push_block(1, vec![]);
-	let (pool, _background) = BasicPool::new(Default::default(), api.into());
+	let (pool, _background, _) = BasicPool::new_test(api.into());
 	let watcher = block_on(
 		pool.submit_and_watch(&BlockId::number(1), SOURCE, xt.clone())
 	).expect("1. Imported");
@@ -446,7 +446,7 @@ fn fork_aware_finalization() {
 	// starting block A1 (last finalized.)
 	api.push_block(1, vec![]);
 
-	let (pool, _background) = BasicPool::new(Default::default(), api.into());
+	let (pool, _background, _) = BasicPool::new_test(api.into());
 	let mut canon_watchers = vec![];
 
 	let from_alice = uxt(Alice, 1);
@@ -677,7 +677,7 @@ fn should_not_accept_old_signatures() {
 
 	let client = Arc::new(substrate_test_runtime_client::new());
 	let pool = Arc::new(
-		BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client))).0
+		BasicPool::new_test(Arc::new(FullChainApi::new(client))).0
 	);
 
 	let transfer = Transfer {
