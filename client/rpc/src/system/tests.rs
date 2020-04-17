@@ -55,6 +55,15 @@ fn api<T: Into<Option<Status>>>(sync: T) -> System<Block> {
 						should_have_peers,
 					});
 				},
+				Request::LocalPeerId(sender) => {
+					let _ = sender.send("QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV".to_string());
+				},
+				Request::LocalListenAddresses(sender) => {
+					let _ = sender.send(vec![
+						"/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV".to_string(),
+						"/ip4/127.0.0.1/tcp/30334/ws/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV".to_string(),
+					]);
+				},
 				Request::Peers(sender) => {
 					let mut peers = vec![];
 					for _peer in 0..status.peers {
@@ -205,6 +214,25 @@ fn system_health() {
 			is_syncing: false,
 			should_have_peers: false,
 		}
+	);
+}
+
+#[test]
+fn system_local_peer_id_works() {
+	assert_eq!(
+		wait_receiver(api(None).system_local_peer_id()),
+		"QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV".to_owned(),
+	);
+}
+
+#[test]
+fn system_local_listen_addresses_works() {
+	assert_eq!(
+		wait_receiver(api(None).system_local_listen_addresses()),
+		vec![
+			"/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV".to_string(),
+			"/ip4/127.0.0.1/tcp/30334/ws/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV".to_string(),
+		]
 	);
 }
 

@@ -20,7 +20,7 @@ use futures::executor::block_on;
 use txpool::{self, Pool};
 use sp_runtime::{
 	generic::BlockId,
-	transaction_validity::{ValidTransaction, InvalidTransaction, TransactionSource},
+	transaction_validity::{ValidTransaction, TransactionSource, InvalidTransaction},
 };
 use substrate_test_runtime_client::{
 	runtime::{Block, Hash, Index, Header, Extrinsic, Transfer},
@@ -263,7 +263,6 @@ fn should_not_retain_invalid_hashes_from_retracted() {
 	let event = block_event_with_retracted(1, vec![retracted_hash]);
 
 	block_on(pool.maintain(event));
-	// maintenance is in background
 	block_on(notifier.next());
 
 	assert_eq!(pool.status().ready, 0);
@@ -701,6 +700,6 @@ fn should_not_accept_old_signatures() {
 		Err(error::Error::Pool(
 			sp_transaction_pool::error::Error::InvalidTransaction(InvalidTransaction::BadProof)
 		)),
-		"Should be invalid transactiono with bad proof",
+		"Should be invalid transaction with bad proof",
 	);
 }
