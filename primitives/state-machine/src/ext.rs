@@ -28,7 +28,7 @@ use sp_core::{
 	traits::Externalities, hexdisplay::HexDisplay,
 };
 use sp_trie::{trie_types::Layout, default_child_trie_root};
-use sp_externalities::Extensions;
+use sp_externalities::{Extensions, Extension};
 use codec::{Decode, Encode};
 
 use std::{error, fmt, any::{Any, TypeId}};
@@ -547,6 +547,29 @@ where
 {
 	fn extension_by_type_id(&mut self, type_id: TypeId) -> Option<&mut dyn Any> {
 		self.extensions.as_mut().and_then(|exts| exts.get_mut(type_id))
+	}
+
+	fn register_extension_with_type_id(
+		&mut self,
+		type_id: TypeId,
+		extension: Box<dyn Extension>,
+	) -> Result<(), sp_externalities::Error> {
+		if let Some(ref mut extensions) = self.extensions {
+			extensions.register_with_type_id(type_id, extension)
+		} else {
+			Err(sp_externalities::Error::ExtensionsAreNotSupported)
+		}
+	}
+
+	fn deregister_extension_by_type_id(&mut self, type_id: TypeId) -> Result<(), sp_externalities::Error> {
+		if let Some(ref mut extensions) = self.extensions {
+			match extensions.deregister(type_id) {
+				Some(_) => Ok(()),
+				None => Err(sp_externalities::Error::ExtensionIsNotRegistered(type_id))
+			}
+		} else {
+			Err(sp_externalities::Error::ExtensionsAreNotSupported)
+		}
 	}
 }
 
