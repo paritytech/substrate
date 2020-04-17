@@ -220,10 +220,6 @@ impl<T: Trait> RandomnessT<<T as frame_system::Trait>::Hash> for Module<T> {
 	///   Require them to reveal the value to determine the final result, hashing it with the
 	///   output of this random function. This reduces the ability of a cabal of block producers
 	///   from conspiring against individuals.
-	///
-	/// WARNING: Hashing the result of this function will remove any low-influence properties it has
-	/// and mean that all bits of the resulting value are entirely manipulatable by the author of
-	/// the parent block, who can determine the value of `parent_hash`.
 	fn random(subject: &[u8]) -> T::Hash {
 		let mut subject = subject.to_vec();
 		subject.reserve(VRF_OUTPUT_LENGTH);
