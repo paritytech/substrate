@@ -348,11 +348,25 @@ where
 		source: TransactionSource,
 		uxt: Block::Extrinsic,
 	) -> TransactionValidity {
-		let encoded_len = uxt.using_encoded(|d| d.len());
-		let xt = uxt.check(&Default::default())?;
+		use frame_support::tracing_span;
 
-		let dispatch_info = xt.get_dispatch_info();
-		xt.validate::<UnsignedValidator>(source, &dispatch_info, encoded_len)
+		tracing_span!{ "validate_transaction::using_encoded";
+			let encoded_len = uxt.using_encoded(|d| d.len());
+		};
+
+		tracing_span!{ "validate_transaction::check";
+			let xt = uxt.check(&Default::default())?;
+		};
+
+		tracing_span!{ "validate_transaction::dispatch_info";
+			let dispatch_info = xt.get_dispatch_info();
+		};
+
+		tracing_span!{ "validate_transaction::validate";
+			let result = xt.validate::<UnsignedValidator>(source, &dispatch_info, encoded_len);
+		};
+
+		result
 	}
 
 	/// Start an offchain worker and generate extrinsics.
