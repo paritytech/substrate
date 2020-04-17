@@ -29,4 +29,3 @@ serde = { version = "1.0.101", features = ["derive"] }
 serde_json = "1.0.41"
 sp-transaction-pool = { version = "2.0.0-dev", path = "../../primitives/transaction-pool" }
 sp-rpc = { version = "2.0.0-dev", path = "../../primitives/rpc" }
-sp-trie = { version = "2.0.0-dev", path = "../../primitives/trie" }

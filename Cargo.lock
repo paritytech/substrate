@@ -6571,7 +6571,6 @@ dependencies = [
  "sp-rpc",
  "sp-runtime",
  "sp-transaction-pool",
- "sp-trie",
  "sp-version",
 ]
 
@@ -7736,7 +7735,6 @@ dependencies = [
  "hex-literal",
  "memory-db",
  "parity-scale-codec",
- "serde",
  "sp-core",
  "sp-runtime",
  "sp-std",

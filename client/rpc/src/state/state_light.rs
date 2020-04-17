@@ -52,7 +52,6 @@ use sp_core::{
 };
 use sp_version::RuntimeVersion;
 use sp_runtime::{generic::BlockId, traits::{Block as BlockT, HashFor}};
-use sp_api::StorageProof;
 
 use super::{StateBackend, error::{FutureResult, Error}, client_err};
 
@@ -344,7 +343,7 @@ impl<Block, F, Client> StateBackend<Block, Client> for LightState<Block, F, Clie
 		&self,
 		_block: Option<Block::Hash>,
 		_keys: Vec<StorageKey>,
-	) -> FutureResult<StorageProof> {
+	) -> FutureResult<Vec<Bytes>> {
 		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
 	}
 

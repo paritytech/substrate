@@ -36,7 +36,7 @@ use sp_runtime::{
 	generic::BlockId, traits::{Block as BlockT, NumberFor, SaturatedConversion, CheckedSub},
 };
 
-use sp_api::{Metadata, ProvideRuntimeApi, CallApiAt, StorageProof};
+use sp_api::{Metadata, ProvideRuntimeApi, CallApiAt};
 
 use super::{StateBackend, error::{FutureResult, Error, Result}, client_err, child_resolution_error};
 use std::marker::PhantomData;
@@ -414,11 +414,19 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 		&self,
 		block: Option<Block::Hash>,
 		keys: Vec<StorageKey>,
-	) -> FutureResult<StorageProof> {
+	) -> FutureResult<Vec<Bytes>> {
 		Box::new(result(
 			self.block_or_best(block)
-				.and_then(|block| self.client.read_proof(&BlockId::Hash(block), &mut keys.iter().map(|key| key.0.as_ref())))
-				.map_err(client_err)))
+				.and_then(|block| {
+					self.client
+						.read_proof(
+							&BlockId::Hash(block),
+							&mut keys.iter().map(|key| key.0.as_ref()),
+						)
+						.map(|proof| proof.iter_nodes().map(|node| node.into()).collect())
+				})
+				.map_err(client_err),
+		))
 	}
 
 	fn subscribe_runtime_version(

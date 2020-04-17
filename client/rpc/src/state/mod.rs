@@ -32,7 +32,7 @@ use sp_core::{Bytes, storage::{StorageKey, StorageData, StorageChangeSet}};
 use sp_version::RuntimeVersion;
 use sp_runtime::traits::Block as BlockT;
 
-use sp_api::{Metadata, ProvideRuntimeApi, CallApiAt, StorageProof};
+use sp_api::{Metadata, ProvideRuntimeApi, CallApiAt};
 
 use self::error::{Error, FutureResult};
 
@@ -175,7 +175,7 @@ pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 		&self,
 		block: Option<Block::Hash>,
 		keys: Vec<StorageKey>,
-	) -> FutureResult<StorageProof>;
+	) -> FutureResult<Vec<Bytes>>;
 
 	/// New runtime version subscription
 	fn subscribe_runtime_version(
@@ -379,7 +379,7 @@ impl<Block, Client> StateApi<Block::Hash> for State<Block, Client>
 		self.backend.query_storage_at(keys, at)
 	}
 
-	fn read_proof(&self, keys: Vec<StorageKey>, block: Option<Block::Hash>) -> FutureResult<StorageProof> {
+	fn read_proof(&self, keys: Vec<StorageKey>, block: Option<Block::Hash>) -> FutureResult<Vec<Bytes>> {
 		self.backend.read_proof(block, keys)
 	}
 
