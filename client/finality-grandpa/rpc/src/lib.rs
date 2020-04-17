@@ -52,7 +52,6 @@ pub trait GrandpaApi {
 }
 
 pub struct GrandpaRpcHandler<Hash, Block> {
-    // WIP: pass AuthorityId as type parameter
     shared_voter_state: SharedVoterState<AuthorityId>,
     shared_authority_set: SharedAuthoritySet<Hash, Block>,
 }
