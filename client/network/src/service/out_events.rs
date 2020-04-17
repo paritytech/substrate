@@ -31,7 +31,7 @@
 //!
 
 use crate::Event;
-use super::engine_id_to_string;
+use super::maybe_utf8_bytes_to_string;
 
 use futures::{prelude::*, channel::mpsc, ready};
 use parking_lot::Mutex;
@@ -240,7 +240,7 @@ impl Metrics {
 						.with_label_values(&[&format!("notif-{:?}", engine_id), "sent", name])
 						.inc_by(num);
 					self.notifications_sizes
-						.with_label_values(&[&engine_id_to_string(engine_id), "sent", name])
+						.with_label_values(&[&maybe_utf8_bytes_to_string(engine_id), "sent", name])
 						.inc_by(num.saturating_mul(u64::try_from(message.len()).unwrap_or(u64::max_value())));
 				}
 			},
@@ -270,7 +270,7 @@ impl Metrics {
 						.with_label_values(&[&format!("notif-{:?}", engine_id), "received", name])
 						.inc();
 					self.notifications_sizes
-						.with_label_values(&[&engine_id_to_string(engine_id), "received", name])
+						.with_label_values(&[&maybe_utf8_bytes_to_string(engine_id), "received", name])
 						.inc_by(u64::try_from(message.len()).unwrap_or(u64::max_value()));
 				}
 			},
