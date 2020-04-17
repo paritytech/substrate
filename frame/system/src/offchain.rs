@@ -25,14 +25,13 @@
 //!
 //! ## Usage
 //!
+//! Please refer to [`example-offchain-worker`](../../example-offchain-worker/index.html) for
+//! a concrete example usage of this crate.
+//!
 //! ### Submit a raw unsigned transaction
 //!
 //! To submit a raw unsigned transaction, [`SubmitTransaction`](./struct.SubmitTransaction.html)
 //! can be used.
-//!
-//! ```rust
-//! SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call)
-//! ```
 //!
 //! ### Signing transactions
 //!
@@ -46,45 +45,14 @@
 //! #### Submit an unsigned transaction with a signed payload
 //!
 //! Initially, a payload instance that implements the `SignedPayload` trait should be defined.
-//! If we take the [`PricePayload`](../../example-offchain-worker/struct.PricePayload.html)
-//! defined in the example-offchain-worker pallet, we see the following:
+//! See [`PricePayload`](../../example-offchain-worker/struct.PricePayload.html)
 //!
-//! ```rust
-//! #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-//! pub struct PricePayload<Public, BlockNumber> {
-//! 	block_number: BlockNumber,
-//! 	price: u32,
-//! 	public: Public,
-//! }
-//!
-//! impl<T: SigningTypes> SignedPayload<T> for PricePayload<T::Public, T::BlockNumber> {
-//! 	fn public(&self) -> T::Public {
-//! 		self.public.clone()
-//! 	}
-//! }
-//! ```
-//!
-//! An object from the defined payload can then be signed and submitted onchain.
-//!
-//! ```
-//! Signer::<T, T::AuthorityId>::all_accounts().send_unsigned_transaction(
-//! 	|account| PricePayload {
-//! 		price,
-//! 		block_number,
-//! 		public: account.public.clone()
-//! 	},
-//! 	|payload, signature| {
-//! 		Call::submit_price_unsigned_with_signed_payload(payload, signature)
-//! 	}
-//! )
-//! ```
+//! The payload type that is defined defined can then be signed and submitted onchain.
 //!
 //! #### Submit a signed transaction
 //!
-//! ```
-//! Signer::<T, T::AuthorityId>::all_accounts().send_signed_transaction(
-//! 	|account| Call::submit_price(price)
-//! );
+//! [`Signer`](./struct.Signer.html) can be used to sign/verify payloads
+//!
 
 #![warn(missing_docs)]
 
