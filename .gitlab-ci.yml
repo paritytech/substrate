@@ -548,46 +548,6 @@ publish-s3-doc:
     - aws s3 ls s3://${BUCKET}/${PREFIX}/
         --human-readable --summarize
 
-
-publish-gh-doc:
-  stage:                           publish
-  image:                           parity/tools:latest
-  allow_failure:                   true
-  dependencies:
-    - build-rust-doc-release
-  cache:                           {}
-  <<:                              *build-only
-  <<:                              *kubernetes-build
-  variables:
-    GIT_STRATEGY:                  none
-    GITHUB_API:                    "https://api.github.com"
-  script:
-    - test -r ./crate-docs/index.html || (
-        echo "./crate-docs/index.html not present, build:rust:doc:release job not complete";
-        exit 1
-      )
-    - test "${GITHUB_USER}" -a "${GITHUB_EMAIL}" -a "${GITHUB_TOKEN}" || (
-        echo "environment variables for github insufficient";
-        exit 1
-      )
-    - |
-      cat > ${HOME}/.gitconfig <<EOC
-      [user]
-      name = "${GITHUB_USER}"
-      email = "${GITHUB_EMAIL}"
-
-      [url "https://${GITHUB_USER}:${GITHUB_TOKEN}@github.com/"]
-      insteadOf = "https://github.com/"
-      EOC
-    - unset GITHUB_TOKEN
-    - git clone --depth 1 https://github.com/substrate-developer-hub/rustdocs.git
-    - rsync -ax --delete ./crate-docs/ ./rustdocs/${CI_COMMIT_REF_NAME}/
-    - cd ./rustdocs; git add .
-    - git commit -m "update rustdoc ${CI_COMMIT_REF_NAME}"
-    - git push origin master 2>&1 | sed -r "s|(${GITHUB_USER}):[a-f0-9]+@|\1:REDACTED@|g"
-  after_script:
-    - rm -vrf ${HOME}/.gitconfig
-
 publish-draft-release:
   stage:                           publish
   image:                           parity/tools:latest
