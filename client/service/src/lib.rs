@@ -373,6 +373,17 @@ fn build_network_future<
 						should_have_peers,
 					});
 				},
+				sc_rpc::system::Request::LocalPeerId(sender) => {
+					let _ = sender.send(network.local_peer_id().to_base58());
+				},
+				sc_rpc::system::Request::LocalListenAddresses(sender) => {
+					let peer_id = network.local_peer_id().clone().into();
+					let p2p_proto_suffix = sc_network::multiaddr::Protocol::P2p(peer_id);
+					let addresses = network.listen_addresses()
+						.map(|addr| addr.clone().with(p2p_proto_suffix.clone()).to_string())
+						.collect();
+					let _ = sender.send(addresses);
+				},
 				sc_rpc::system::Request::Peers(sender) => {
 					let _ = sender.send(network.peers_debug_info().into_iter().map(|(peer_id, p)|
 						sc_rpc::system::PeerInfo {
@@ -685,6 +696,7 @@ mod tests {
 		let pool = Arc::new(BasicPool::new(
 			Default::default(),
 			Arc::new(FullChainApi::new(client.clone())),
+			None,
 		).0);
 		let source = sp_runtime::transaction_validity::TransactionSource::External;
 		let best = longest_chain.best_chain().unwrap();

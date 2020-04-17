@@ -18,11 +18,11 @@ use codec::{Decode, Encode};
 use primitive_types::U256;
 use crate::{
 	traits::{Bounded, Saturating, UniqueSaturatedInto, SaturatedConversion},
-	PerThing,
+	PerThing, Perquintill,
 };
 use sp_std::{
 	convert::{Into, TryFrom, TryInto},
-	fmt,
+	fmt, ops,
 	num::NonZeroI128,
 };
 
@@ -57,7 +57,8 @@ impl Fixed128 {
 
 	/// Creates self from a rational number. Equal to `n/d`.
 	///
-	/// Note that this might be lossy.
+	/// Note that this might be lossy. Only use this if you are sure that `n * DIV` can fit into an
+	/// i128.
 	pub fn from_rational<N: UniqueSaturatedInto<i128>>(n: N, d: NonZeroI128) -> Self {
 		let n = n.unique_saturated_into();
 		Self(n.saturating_mul(DIV.into()) / d.get())
@@ -213,6 +214,61 @@ impl Fixed128 {
 
 	pub fn is_negative(&self) -> bool {
 		self.0.is_negative()
+	}
+
+	/// Performs a saturated multiply and accumulate by unsigned number.
+	///
+	/// Returns a saturated `int + (self * int)`.
+	pub fn saturated_multiply_accumulate<N>(self, int: N) -> N
+		where
+			N: TryFrom<u128> + From<u64> + UniqueSaturatedInto<u64> + Bounded + Clone + Saturating +
+			ops::Rem<N, Output=N> + ops::Div<N, Output=N> + ops::Mul<N, Output=N> +
+			ops::Add<N, Output=N>,
+	{
+		let div = DIV as u128;
+		let positive = self.0 > 0;
+		// safe to convert as absolute value.
+		let parts = self.0.checked_abs().map(|v| v as u128).unwrap_or(i128::max_value() as u128 + 1);
+
+
+		// will always fit.
+		let natural_parts = parts / div;
+		// might saturate.
+		let natural_parts: N = natural_parts.saturated_into();
+		// fractional parts can always fit into u64.
+		let perquintill_parts = (parts % div) as u64;
+
+		let n = int.clone().saturating_mul(natural_parts);
+		let p = Perquintill::from_parts(perquintill_parts) * int.clone();
+
+		// everything that needs to be either added or subtracted from the original weight.
+		let excess = n.saturating_add(p);
+
+		if positive {
+			int.saturating_add(excess)
+		} else {
+			int.saturating_sub(excess)
+		}
+	}
+}
+
+/// Note that this is a standard, _potentially-panicking_, implementation. Use `Saturating` trait
+/// for safe addition.
+impl ops::Add for Fixed128 {
+	type Output = Self;
+
+	fn add(self, rhs: Self) -> Self::Output {
+		Self(self.0 + rhs.0)
+	}
+}
+
+/// Note that this is a standard, _potentially-panicking_, implementation. Use `Saturating` trait
+/// for safe subtraction.
+impl ops::Sub for Fixed128 {
+	type Output = Self;
+
+	fn sub(self, rhs: Self) -> Self::Output {
+		Self(self.0 - rhs.0)
 	}
 }
 

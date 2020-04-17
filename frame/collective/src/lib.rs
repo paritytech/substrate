@@ -192,7 +192,7 @@ decl_module! {
 		/// O(n log n) compute, where n is the number of new members.  One storage access of size
 		/// O(n + m) where m is the number of old members.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(100_000)]
+		#[weight = SimpleDispatchInfo::FixedOperational(100_000_000)]
 		fn set_members(origin, new_members: Vec<T::AccountId>, prime: Option<T::AccountId>) {
 			ensure_root(origin)?;
 			let mut new_members = new_members;
@@ -209,7 +209,7 @@ decl_module! {
 		/// # <weight>
 		/// - One storage access of size linear in number of members
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(100_000)]
+		#[weight = SimpleDispatchInfo::FixedOperational(100_000_000)]
 		fn execute(origin, proposal: Box<<T as Trait<I>>::Proposal>) {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_member(&who), Error::<T, I>::NotMember);
@@ -224,7 +224,7 @@ decl_module! {
 		/// - One storage access of size linear in number of members.
 		/// - Argument `threshold` has bearing on weight.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(5_000_000)]
+		#[weight = SimpleDispatchInfo::FixedOperational(5_000_000_000)]
 		fn propose(origin, #[compact] threshold: MemberCount, proposal: Box<<T as Trait<I>>::Proposal>) {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_member(&who), Error::<T, I>::NotMember);
@@ -255,7 +255,7 @@ decl_module! {
 		/// - Storage read of size proportional to number of members.
 		/// - Will be slightly heavier if the proposal is approved / disapproved after the vote.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(200_000)]
+		#[weight = SimpleDispatchInfo::FixedOperational(200_000_000)]
 		fn vote(origin, proposal: T::Hash, #[compact] index: ProposalIndex, approve: bool) {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_member(&who), Error::<T, I>::NotMember);
@@ -314,7 +314,7 @@ decl_module! {
 		///   - `M` is number of members,
 		///   - `P` is number of active proposals,
 		///   - `L` is the encoded length of `proposal` preimage.
-		#[weight = SimpleDispatchInfo::FixedOperational(200_000)]
+		#[weight = SimpleDispatchInfo::FixedOperational(200_000_000)]
 		fn close(origin, proposal: T::Hash, #[compact] index: ProposalIndex) {
 			let _ = ensure_signed(origin)?;
 
@@ -564,6 +564,7 @@ mod tests {
 		type Event = Event;
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
+		type DbWeight = ();
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();

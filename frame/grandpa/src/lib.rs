@@ -33,6 +33,7 @@ pub use sp_finality_grandpa as fg_primitives;
 use sp_std::prelude::*;
 use codec::{self as codec, Encode, Decode};
 use frame_support::{decl_event, decl_storage, decl_module, decl_error, storage};
+use frame_support::weights::{SimpleDispatchInfo, MINIMUM_WEIGHT};
 use sp_runtime::{
 	DispatchResult, generic::{DigestItem, OpaqueDigestItemId}, traits::Zero, Perbill,
 };
@@ -186,7 +187,7 @@ decl_module! {
 		/// Report some misbehavior.
 		///
 		/// O(1).
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 		fn report_misbehavior(origin, _report: Vec<u8>) {
 			ensure_signed(origin)?;
 			// FIXME: https://github.com/paritytech/substrate/issues/1112

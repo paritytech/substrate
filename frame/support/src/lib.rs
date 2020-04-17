@@ -222,6 +222,38 @@ macro_rules! assert_ok {
 	}
 }
 
+/// Runs given code within a tracing span, measuring it's execution time.
+///
+/// Has effect only when running in native environment. In WASM, it simply inserts the
+/// code in-place, without any metrics added.
+#[macro_export]
+macro_rules! tracing_span {
+	($name:expr; $( $code:tt )*) => {
+		let span = $crate::if_tracing!(
+			$crate::tracing::span!($crate::tracing::Level::TRACE, $name)
+		,
+			()
+		);
+		let guard = $crate::if_tracing!(span.enter(), ());
+		$( $code )*
+
+		$crate::sp_std::mem::drop(guard);
+		$crate::sp_std::mem::drop(span);
+	}
+}
+
+#[macro_export]
+#[cfg(feature = "tracing")]
+macro_rules! if_tracing {
+	( $if:expr, $else:expr ) => {{ $if }}
+}
+
+#[macro_export]
+#[cfg(not(feature = "tracing"))]
+macro_rules! if_tracing {
+	( $if:expr, $else:expr ) => {{ $else }}
+}
+
 /// The void type - it cannot exist.
 // Oh rust, you crack me up...
 #[derive(Clone, Eq, PartialEq, RuntimeDebug)]

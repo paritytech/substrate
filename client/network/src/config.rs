@@ -315,7 +315,7 @@ impl From<multiaddr::Error> for ParseErr {
 #[derive(Clone, Debug)]
 pub struct NetworkConfiguration {
 	/// Directory path to store network-specific configuration. None means nothing will be saved.
-	pub net_config_path: PathBuf,
+	pub net_config_path: Option<PathBuf>,
 	/// Multiaddresses to listen for incoming connections.
 	pub listen_addresses: Vec<Multiaddr>,
 	/// Multiaddresses to advertise. Detected automatically if empty.
@@ -351,10 +351,10 @@ impl NetworkConfiguration {
 		node_name: SN,
 		client_version: SV,
 		node_key: NodeKeyConfig,
-		net_config_path: &PathBuf,
+		net_config_path: Option<PathBuf>,
 	) -> Self {
 		NetworkConfiguration {
-			net_config_path: net_config_path.clone(),
+			net_config_path,
 			listen_addresses: Vec::new(),
 			public_addresses: Vec::new(),
 			boot_nodes: Vec::new(),
@@ -384,7 +384,7 @@ impl NetworkConfiguration {
 			"test-node",
 			"test-client",
 			Default::default(),
-			&std::env::current_dir().expect("current directory must exist"),
+			None,
 		);
 
 		config.listen_addresses = vec![
@@ -402,7 +402,7 @@ impl NetworkConfiguration {
 			"test-node",
 			"test-client",
 			Default::default(),
-			&std::env::current_dir().expect("current directory must exist"),
+			None,
 		);
 
 		config.listen_addresses = vec![
