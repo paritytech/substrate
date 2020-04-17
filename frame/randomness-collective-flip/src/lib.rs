@@ -19,7 +19,8 @@
 //! The Randomness Collective Flip module provides a [`random`](./struct.Module.html#method.random)
 //! function that generates low-influence random values based on the block hashes from the previous
 //! `81` blocks. Low-influence randomness can be useful when defending against relatively weak
-//! adversaries.
+//! adversaries. Using this pallet as a randomness source is advisable primarily in low-security
+//! situations like testing. 
 //!
 //! ## Public Functions
 //!
