@@ -24,6 +24,7 @@ sp-panic-handler = { version = "2.0.0-dev", path = "../../primitives/panic-handl
 wasmi = "0.6.2"
 parity-wasm = "0.41.0"
 lazy_static = "1.4.0"
+sp-api = { version = "2.0.0-dev", path = "../../primitives/api" }
 sp-wasm-interface = { version = "2.0.0-dev", path = "../../primitives/wasm-interface" }
 sp-runtime-interface = { version = "2.0.0-dev", path = "../../primitives/runtime-interface" }
 sp-externalities = { version = "0.8.0-dev", path = "../../primitives/externalities" }
