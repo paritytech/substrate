@@ -35,7 +35,7 @@ pub use frame_metadata::{ModuleErrorMetadata, ErrorMetadata, DecodeDifferent};
 ///
 /// ```
 /// # use frame_support::{decl_error, decl_module};
-/// # use frame_support::weights::{SimpleDispatchInfo, MINIMUM_WEIGHT};
+/// # use frame_support::weights::MINIMUM_WEIGHT;
 /// decl_error! {
 ///     /// Errors that can occur in my module.
 ///     pub enum MyError for Module<T: Trait> {
@@ -55,7 +55,7 @@ pub use frame_metadata::{ModuleErrorMetadata, ErrorMetadata, DecodeDifferent};
 ///     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 ///         type Error = MyError<T>;
 ///
-/// 		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
+/// 		#[weight = MINIMUM_WEIGHT]
 ///         fn do_something(origin) -> frame_support::dispatch::DispatchResult {
 ///             Err(MyError::<T>::YouAreNotCoolEnough.into())
 ///         }
