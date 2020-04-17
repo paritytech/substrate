@@ -74,7 +74,7 @@ use sp_runtime::traits::{StaticLookup, Zero, AppendZerosInput};
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
 	traits::{Currency, ReservableCurrency, OnUnbalanced, Get, BalanceStatus, EnsureOrigin},
-	weights::{SimpleDispatchInfo, MINIMUM_WEIGHT},
+	weights::{SimpleDispatchInfo, FunctionOf, DispatchClass},
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 
@@ -474,18 +474,28 @@ decl_module! {
 		/// - One storage mutation (codec `O(R)`).
 		/// - One event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
-		fn add_registrar(origin, account: T::AccountId) {
+		#[weight = FunctionOf(
+			|(_, &old_count): (&T::AccountId, &u32)| {
+				T::DbWeight::get().reads_writes(1, 1)
+				+ 500_000 * (old_count as u64)
+			},
+			DispatchClass::Normal,
+			true
+		)]
+		fn add_registrar(origin, account: T::AccountId, old_registrar_count: u32) -> DispatchResult {
 			T::RegistrarOrigin::try_origin(origin)
 				.map(|_| ())
 				.or_else(ensure_root)?;
+			let mut registrars = Self::registrars();
+			ensure!(registrars.len() as u32 <= old_registrar_count, "invalid count");
 
-			let i = <Registrars<T>>::mutate(|r| {
-				r.push(Some(RegistrarInfo { account, fee: Zero::zero(), fields: Default::default() }));
-				(r.len() - 1) as RegistrarIndex
-			});
+			registrars.push(Some(RegistrarInfo { account, fee: Zero::zero(), fields: Default::default() }));
+			let i = (registrars.len() - 1) as RegistrarIndex;
+			<Registrars<T>>::put(registrars);
 
 			Self::deposit_event(RawEvent::RegistrarAdded(i));
+
+			Ok(())
 		}
 
 		/// Set an account's identity information and reserve the appropriate deposit.
@@ -1015,7 +1025,7 @@ mod tests {
 	#[test]
 	fn adding_registrar_should_work() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
+			assert_ok!(Identity::add_registrar(Origin::signed(1), 3, 0));
 			assert_ok!(Identity::set_fee(Origin::signed(3), 0, 10));
 			let fields = IdentityFields(IdentityField::Display | IdentityField::Legal);
 			assert_ok!(Identity::set_fields(Origin::signed(3), 0, fields));
@@ -1028,7 +1038,7 @@ mod tests {
 	#[test]
 	fn registration_should_work() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
+			assert_ok!(Identity::add_registrar(Origin::signed(1), 3, 0));
 			assert_ok!(Identity::set_fee(Origin::signed(3), 0, 10));
 			let mut three_fields = ten();
 			three_fields.additional.push(Default::default());
@@ -1055,7 +1065,7 @@ mod tests {
 				Error::<Test>::InvalidIndex
 			);
 
-			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
+			assert_ok!(Identity::add_registrar(Origin::signed(1), 3, 0));
 			assert_noop!(
 				Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable),
 				Error::<Test>::InvalidTarget
@@ -1079,7 +1089,7 @@ mod tests {
 	#[test]
 	fn clearing_judgement_should_work() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
+			assert_ok!(Identity::add_registrar(Origin::signed(1), 3, 0));
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
 			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable));
 			assert_ok!(Identity::clear_identity(Origin::signed(10)));
@@ -1165,7 +1175,7 @@ mod tests {
 	#[test]
 	fn cancelling_requested_judgement_should_work() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
+			assert_ok!(Identity::add_registrar(Origin::signed(1), 3, 0));
 			assert_ok!(Identity::set_fee(Origin::signed(3), 0, 10));
 			assert_noop!(Identity::cancel_request(Origin::signed(10), 0), Error::<Test>::NoIdentity);
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
@@ -1182,7 +1192,7 @@ mod tests {
 	#[test]
 	fn requesting_judgement_should_work() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
+			assert_ok!(Identity::add_registrar(Origin::signed(1), 3, 0));
 			assert_ok!(Identity::set_fee(Origin::signed(3), 0, 10));
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
 			assert_noop!(Identity::request_judgement(Origin::signed(10), 0, 9), Error::<Test>::FeeChanged);
@@ -1200,7 +1210,7 @@ mod tests {
 			assert_noop!(Identity::request_judgement(Origin::signed(10), 0, 10), Error::<Test>::StickyJudgement);
 
 			// Requesting from a second registrar still works.
-			assert_ok!(Identity::add_registrar(Origin::signed(1), 4));
+			assert_ok!(Identity::add_registrar(Origin::signed(1), 4, 1));
 			assert_ok!(Identity::request_judgement(Origin::signed(10), 1, 10));
 
 			// Re-requesting after the judgement has been reduced works.
@@ -1212,7 +1222,7 @@ mod tests {
 	#[test]
 	fn field_deposit_should_work() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
+			assert_ok!(Identity::add_registrar(Origin::signed(1), 3, 0));
 			assert_ok!(Identity::set_fee(Origin::signed(3), 0, 10));
 			assert_ok!(Identity::set_identity(Origin::signed(10), IdentityInfo {
 				additional: vec![
@@ -1227,7 +1237,7 @@ mod tests {
 	#[test]
 	fn setting_account_id_should_work() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
+			assert_ok!(Identity::add_registrar(Origin::signed(1), 3, 0));
 			// account 4 cannot change the first registrar's identity since it's owned by 3.
 			assert_noop!(Identity::set_account_id(Origin::signed(4), 0, 3), Error::<Test>::InvalidIndex);
 			// account 3 can, because that's the registrar's current account.
