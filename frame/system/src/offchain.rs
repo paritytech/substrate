@@ -667,7 +667,9 @@ pub trait SignedPayload<T: SigningTypes>: Encode {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use codec::Decode;
 	use crate::tests::{Test as TestRuntime, Call};
+	use sp_core::offchain::{testing, TransactionPoolExt};
 	use sp_runtime::testing::{UintAuthorityId, TestSignature, TestXt};
 
 	impl SigningTypes for TestRuntime {
@@ -675,8 +677,10 @@ mod tests {
 		type Signature = TestSignature;
 	}
 
+	type Extrinsic = TestXt<Call, ()>;
+
 	impl SendTransactionTypes<Call> for TestRuntime {
-		type Extrinsic = TestXt<Call, ()>;
+		type Extrinsic = Extrinsic;
 		type OverarchingCall = Call;
 	}
 
@@ -703,43 +707,172 @@ mod tests {
 		type GenericSignature = TestSignature;
 	}
 
+	fn assert_account(
+		next: Option<(Account<TestRuntime>, Result<(), ()>)>,
+		index: usize,
+		id: u64,
+	) {
+		assert_eq!(next, Some((Account {
+			index,
+			id,
+			public: id.into(),
+		}, Ok(()))));
+	}
+
 	#[test]
 	fn should_send_unsigned_with_signed_payload_with_all_accounts() {
+		let (pool, pool_state) = testing::TestTransactionPoolExt::new();
+
+		let mut t = sp_io::TestExternalities::default();
+		t.register_extension(TransactionPoolExt::new(pool));
+
 		// given
 		UintAuthorityId::set_all_keys(vec![0xf0, 0xf1, 0xf2]);
 
-		// when
-		let result = Signer::<TestRuntime, DummyAppCrypto>
-			::all_accounts()
-			.send_unsigned_transaction(
-				|account| SimplePayload {
-					data: vec![1, 2, 3],
-					public: account.public.clone()
-				},
-				|_payload, _signature| {
-					Call
-				}
-			);
+		t.execute_with(|| {
+			// when
+			let result = Signer::<TestRuntime, DummyAppCrypto>
+				::all_accounts()
+				.send_unsigned_transaction(
+					|account| SimplePayload {
+						data: vec![1, 2, 3],
+						public: account.public.clone()
+					},
+					|_payload, _signature| {
+						Call
+					}
+				);
 
-		// then
-		let mut res = result.into_iter();
-		assert_eq!(res.next(), Some((Account {
-			index: 0,
-			id: 0xf0,
-			public: 0xf0.into(),
-		}, Ok(()))));
-		assert_eq!(res.next(), Some((Account {
-			index: 1,
-			id: 0xf1,
-			public: 0xf1.into(),
-		}, Ok(()))));
-		assert_eq!(res.next(), Some((Account {
-			index: 2,
-			id: 0xf2,
-			public: 0xf2.into(),
-		}, Ok(()))));
-		assert_eq!(res.next(), None);
+			// then
+			let mut res = result.into_iter();
+			assert_account(res.next(), 0, 0xf0);
+			assert_account(res.next(), 1, 0xf1);
+			assert_account(res.next(), 2, 0xf2);
+			assert_eq!(res.next(), None);
 
-		// TODO check txpool content
+			// check the transaction pool content:
+			let tx1 = pool_state.write().transactions.pop().unwrap();
+			let _tx2 = pool_state.write().transactions.pop().unwrap();
+			let _tx3 = pool_state.write().transactions.pop().unwrap();
+			assert!(pool_state.read().transactions.is_empty());
+			let tx1 = Extrinsic::decode(&mut &*tx1).unwrap();
+			assert_eq!(tx1.signature, None);
+		});
 	}
+
+	#[test]
+	fn should_send_unsigned_with_signed_payload_with_any_account() {
+		let (pool, pool_state) = testing::TestTransactionPoolExt::new();
+
+		let mut t = sp_io::TestExternalities::default();
+		t.register_extension(TransactionPoolExt::new(pool));
+
+		// given
+		UintAuthorityId::set_all_keys(vec![0xf0, 0xf1, 0xf2]);
+
+		t.execute_with(|| {
+			// when
+			let result = Signer::<TestRuntime, DummyAppCrypto>
+				::any_account()
+				.send_unsigned_transaction(
+					|account| SimplePayload {
+						data: vec![1, 2, 3],
+						public: account.public.clone()
+					},
+					|_payload, _signature| {
+						Call
+					}
+				);
+
+			// then
+			let mut res = result.into_iter();
+			assert_account(res.next(), 0, 0xf0);
+			assert_eq!(res.next(), None);
+
+			// check the transaction pool content:
+			let tx1 = pool_state.write().transactions.pop().unwrap();
+			assert!(pool_state.read().transactions.is_empty());
+			let tx1 = Extrinsic::decode(&mut &*tx1).unwrap();
+			assert_eq!(tx1.signature, None);
+		});
+	}
+
+	#[test]
+	fn should_send_unsigned_with_signed_payload_with_all_account_and_filter() {
+		let (pool, pool_state) = testing::TestTransactionPoolExt::new();
+
+		let mut t = sp_io::TestExternalities::default();
+		t.register_extension(TransactionPoolExt::new(pool));
+
+		// given
+		UintAuthorityId::set_all_keys(vec![0xf0, 0xf1, 0xf2]);
+
+		t.execute_with(|| {
+			// when
+			let result = Signer::<TestRuntime, DummyAppCrypto>
+				::all_accounts()
+				.with_filter(vec![0xf2.into(), 0xf1.into()])
+				.send_unsigned_transaction(
+					|account| SimplePayload {
+						data: vec![1, 2, 3],
+						public: account.public.clone()
+					},
+					|_payload, _signature| {
+						Call
+					}
+				);
+
+			// then
+			let mut res = result.into_iter();
+			assert_account(res.next(), 0, 0xf2);
+			assert_account(res.next(), 1, 0xf1);
+			assert_eq!(res.next(), None);
+
+			// check the transaction pool content:
+			let tx1 = pool_state.write().transactions.pop().unwrap();
+			let _tx2 = pool_state.write().transactions.pop().unwrap();
+			assert!(pool_state.read().transactions.is_empty());
+			let tx1 = Extrinsic::decode(&mut &*tx1).unwrap();
+			assert_eq!(tx1.signature, None);
+		});
+	}
+
+	#[test]
+	fn should_send_unsigned_with_signed_payload_with_any_account_and_filter() {
+		let (pool, pool_state) = testing::TestTransactionPoolExt::new();
+
+		let mut t = sp_io::TestExternalities::default();
+		t.register_extension(TransactionPoolExt::new(pool));
+
+		// given
+		UintAuthorityId::set_all_keys(vec![0xf0, 0xf1, 0xf2]);
+
+		t.execute_with(|| {
+			// when
+			let result = Signer::<TestRuntime, DummyAppCrypto>
+				::any_account()
+				.with_filter(vec![0xf2.into(), 0xf1.into()])
+				.send_unsigned_transaction(
+					|account| SimplePayload {
+						data: vec![1, 2, 3],
+						public: account.public.clone()
+					},
+					|_payload, _signature| {
+						Call
+					}
+				);
+
+			// then
+			let mut res = result.into_iter();
+			assert_account(res.next(), 0, 0xf2);
+			assert_eq!(res.next(), None);
+
+			// check the transaction pool content:
+			let tx1 = pool_state.write().transactions.pop().unwrap();
+			assert!(pool_state.read().transactions.is_empty());
+			let tx1 = Extrinsic::decode(&mut &*tx1).unwrap();
+			assert_eq!(tx1.signature, None);
+		});
+	}
+
 }
