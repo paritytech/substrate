@@ -147,7 +147,7 @@ pub trait StateApi<Hash> {
 
 	/// Returns proof of storage entries at a specific block's state.
 	#[rpc(name = "state_getReadProof")]
-	fn read_proof(&self, keys: Vec<StorageKey>, hash: Hash) -> FutureResult<StorageProof>;
+	fn read_proof(&self, keys: Vec<StorageKey>, hash: Option<Hash>) -> FutureResult<StorageProof>;
 
 	/// New runtime version subscription
 	#[pubsub(

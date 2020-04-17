@@ -173,7 +173,7 @@ pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 	/// Returns proof of storage entries at a specific block's state.
 	fn read_proof(
 		&self,
-		block: Block::Hash,
+		block: Option<Block::Hash>,
 		keys: Vec<StorageKey>,
 	) -> FutureResult<StorageProof>;
 
@@ -379,7 +379,7 @@ impl<Block, Client> StateApi<Block::Hash> for State<Block, Client>
 		self.backend.query_storage_at(keys, at)
 	}
 
-	fn read_proof(&self, keys: Vec<StorageKey>, block: Block::Hash) -> FutureResult<StorageProof> {
+	fn read_proof(&self, keys: Vec<StorageKey>, block: Option<Block::Hash>) -> FutureResult<StorageProof> {
 		self.backend.read_proof(block, keys)
 	}
 

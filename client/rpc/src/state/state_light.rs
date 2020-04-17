@@ -342,7 +342,7 @@ impl<Block, F, Client> StateBackend<Block, Client> for LightState<Block, F, Clie
 
 	fn read_proof(
 		&self,
-		_block: Block::Hash,
+		_block: Option<Block::Hash>,
 		_keys: Vec<StorageKey>,
 	) -> FutureResult<StorageProof> {
 		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))

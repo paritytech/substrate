@@ -412,13 +412,13 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 
 	fn read_proof(
 		&self,
-		block: Block::Hash,
+		block: Option<Block::Hash>,
 		keys: Vec<StorageKey>,
 	) -> FutureResult<StorageProof> {
 		Box::new(result(
-			self.client.read_proof(&BlockId::Hash(block), &mut keys.iter().map(|key| key.0.as_ref()))
-				.map_err(client_err))
-			)
+			self.block_or_best(block)
+				.and_then(|block| self.client.read_proof(&BlockId::Hash(block), &mut keys.iter().map(|key| key.0.as_ref())))
+				.map_err(client_err)))
 	}
 
 	fn subscribe_runtime_version(
