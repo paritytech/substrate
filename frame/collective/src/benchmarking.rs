@@ -96,18 +96,18 @@ benchmarks_instance! {
 
 		println!("{:?}", event);
 
-		// let event_record = EventRecord {
-		// 	phase: Phase::Initialization,
-		// 	event: <T as frame_system::Trait>::Event::_Instance1(RawEvent::MemberExecuted(
-		// 		proposal_hash,
-		// 		// Note the `remark` dispatch fails due to mis-match origin
-		// 		//but that is ok for benchmarking
-		// 		false,
-		// 	)),
-		// 	topics: vec![],
-		// };
+		let event_record = EventRecord {
+			phase: Phase::Initialization,
+			event: <T as frame_system::Trait>::Event::collective_Instance1(RawEvent::MemberExecuted(
+				proposal_hash,
+				// Note the `remark` dispatch fails due to mis-match origin
+				//but that is ok for benchmarking
+				false,
+			)),
+			topics: vec![],
+		};
 
-		// assert_eq!(events[0], event_record);
+		assert_eq!(events[0], event_record);
 	}
 
 	// This tests when execution would happen immediately after proposal
