@@ -54,6 +54,12 @@ pub struct ValidateEquivocationReport<T>(sp_std::marker::PhantomData<T>);
 
 impl<T> Default for ValidateEquivocationReport<T> {
 	fn default() -> ValidateEquivocationReport<T> {
+		ValidateEquivocationReport::new()
+	}
+}
+
+impl<T> ValidateEquivocationReport<T> {
+	pub fn new() -> ValidateEquivocationReport<T> {
 		ValidateEquivocationReport(Default::default())
 	}
 }
