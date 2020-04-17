@@ -308,7 +308,7 @@ use frame_system::{
 };
 use sp_phragmen::{
 	ExtendedBalance, Assignment, PhragmenScore, PhragmenResult, build_support_map, evaluate_support,
-	elect, generate_compact_solution_type, is_score_better, VotingLimit, SupportMap,
+	elect, generate_compact_solution_type, is_score_better, VotingLimit, SupportMap, VoteWeight,
 };
 
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
@@ -737,12 +737,11 @@ pub trait Trait: frame_system::Trait {
 	/// is not used.
 	type UnixTime: UnixTime;
 
-	/// Convert a balance into a number used for election calculation.
-	/// This must fit into a `u64` but is allowed to be sensibly lossy.
-	/// TODO: #1377
-	/// The backward convert should be removed as the new Phragmen API returns ratio.
-	/// The post-processing needs it but will be moved to off-chain. TODO: #2908
-	type CurrencyToVote: Convert<BalanceOf<Self>, u64> + Convert<u128, BalanceOf<Self>>;
+	/// Convert a balance into a number used for election calculation. This must fit into a `u64`
+	/// but is allowed to be sensibly lossy. The `u64` is used to communicate with the
+	/// [`sp_phragmen`] crate which accepts u64 numbers and does operations in 128. Consequently,
+	/// the backward convert is used convert the u128s from phragmen back to a [`BalanceOf`].
+	type CurrencyToVote: Convert<BalanceOf<Self>, VoteWeight> + Convert<u128, BalanceOf<Self>>;
 
 	/// Tokens have been minted and are unused for validator-reward.
 	type RewardRemainder: OnUnbalanced<NegativeImbalanceOf<Self>>;
@@ -1853,7 +1852,7 @@ decl_module! {
 		/// - Memory: O(n + m) reads to map index to `AccountId` for un-compact.
 		///
 		/// - Storage: O(e) accountid reads from `Nomination` to read correct nominations.
-		/// - Storage: O(e) calls into `slashable_balance_of_extended` to convert ratio to staked.
+		/// - Storage: O(e) calls into `slashable_balance_of_vote_weight` to convert ratio to staked.
 		///
 		/// - Memory: build_support_map. O(e).
 		/// - Memory: evaluate_support: O(E).
@@ -1953,11 +1952,11 @@ impl<T: Trait> Module<T> {
 		Self::bonded(stash).and_then(Self::ledger).map(|l| l.active).unwrap_or_default()
 	}
 
-	/// internal impl of [`slashable_balance_of`] that returns [`ExtendedBalance`].
-	fn slashable_balance_of_extended(stash: &T::AccountId) -> ExtendedBalance {
-		<T::CurrencyToVote as Convert<BalanceOf<T>, u64>>::convert(
+	/// internal impl of [`slashable_balance_of`] that returns [`VoteWeight`].
+	fn slashable_balance_of_vote_weight(stash: &T::AccountId) -> VoteWeight {
+		<T::CurrencyToVote as Convert<BalanceOf<T>, VoteWeight>>::convert(
 			Self::slashable_balance_of(stash)
-		) as ExtendedBalance
+		)
 	}
 
 	/// Dump the list of validators and nominators into vectors and keep them on-chain.
@@ -2456,7 +2455,7 @@ impl<T: Trait> Module<T> {
 		// convert into staked assignments.
 		let staked_assignments = sp_phragmen::assignment_ratio_to_staked(
 			assignments,
-			Self::slashable_balance_of_extended,
+			Self::slashable_balance_of_vote_weight,
 		);
 
 		// build the support map thereof in order to evaluate.
@@ -2711,7 +2710,7 @@ impl<T: Trait> Module<T> {
 
 			let staked_assignments = sp_phragmen::assignment_ratio_to_staked(
 				assignments,
-				Self::slashable_balance_of_extended,
+				Self::slashable_balance_of_vote_weight,
 			);
 
 			let (supports, _) = build_support_map::<T::AccountId>(
@@ -2747,11 +2746,11 @@ impl<T: Trait> Module<T> {
 	///
 	/// No storage item is updated.
 	fn do_phragmen<Accuracy: PerThing>() -> Option<PhragmenResult<T::AccountId, Accuracy>> {
-		let mut all_nominators: Vec<(T::AccountId, BalanceOf<T>, Vec<T::AccountId>)> = Vec::new();
+		let mut all_nominators: Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> = Vec::new();
 		let mut all_validators = Vec::new();
 		for (validator, _) in <Validators<T>>::iter() {
 			// append self vote
-			let self_vote = (validator.clone(), Self::slashable_balance_of(&validator), vec![validator.clone()]);
+			let self_vote = (validator.clone(), Self::slashable_balance_of_vote_weight(&validator), vec![validator.clone()]);
 			all_nominators.push(self_vote);
 			all_validators.push(validator);
 		}
@@ -2771,11 +2770,11 @@ impl<T: Trait> Module<T> {
 			(nominator, targets)
 		});
 		all_nominators.extend(nominator_votes.map(|(n, ns)| {
-			let s = Self::slashable_balance_of(&n);
+			let s = Self::slashable_balance_of_vote_weight(&n);
 			(n, s, ns)
 		}));
 
-		elect::<_, _, T::CurrencyToVote, Accuracy>(
+		elect::<_, Accuracy>(
 			Self::validator_count() as usize,
 			Self::minimum_validator_count().max(1) as usize,
 			all_validators,
