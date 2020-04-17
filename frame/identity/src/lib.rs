@@ -74,7 +74,7 @@ use sp_runtime::traits::{StaticLookup, Zero, AppendZerosInput};
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
 	traits::{Currency, ReservableCurrency, OnUnbalanced, Get, BalanceStatus, EnsureOrigin},
-	weights::{SimpleDispatchInfo, FunctionOf, DispatchClass},
+	weights::{SimpleDispatchInfo, FunctionOf, DispatchClass, Weight},
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 
@@ -82,6 +82,9 @@ mod benchmarking;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
+
+/// Upper bound for the amount of registrars expected.
+const MAX_REGISTRARS: u32 = 20;
 
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
@@ -477,7 +480,7 @@ decl_module! {
 		#[weight = FunctionOf(
 			|(_, &old_count): (&T::AccountId, &u32)| {
 				T::DbWeight::get().reads_writes(1, 1)
-				+ 500_000 * (old_count as Weight)
+				+ 500_000 * (old_count as Weight) // R
 			},
 			DispatchClass::Normal,
 			true
@@ -503,20 +506,30 @@ decl_module! {
 		/// If the account already has identity information, the deposit is taken as part payment
 		/// for the new deposit.
 		///
-		/// The dispatch origin for this call must be _Signed_ and the sender must have a registered
-		/// identity.
+		/// The dispatch origin for this call must be _Signed_.
 		///
 		/// - `info`: The identity information.
 		///
 		/// Emits `IdentitySet` if successful.
 		///
 		/// # <weight>
-		/// - `O(X + X' + R)` where `X` additional-field-count (deposit-bounded and code-bounded).
+		/// - `O(X + X' + J)`
+		///   - where `X` additional-field-count (deposit-bounded and code-bounded)
+		///   - where `J` judgements-count (registrar-count-bounded)
 		/// - At most two balance operations.
-		/// - One storage mutation (codec-read `O(X' + R)`, codec-write `O(X + R)`).
+		/// - One storage mutation (codec-read `O(X' + J)`, codec-write `O(X + J)`).
 		/// - One event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000_000)]
+		// #[weight =  + SimpleDispatchInfo::FixedNormal(50_000_000)]
+		#[weight = FunctionOf(
+			|(info,): (&IdentityInfo,)| {
+				T::DbWeight::get().reads_writes(2, 2)
+				+ 500_000 * (info.additional.len() as Weight) // X
+				+ 500_000 * (MAX_REGISTRARS as Weight) // J
+			},
+			DispatchClass::Normal,
+			true
+		)]
 		fn set_identity(origin, info: IdentityInfo) {
 			let sender = ensure_signed(origin)?;
 			let extra_fields = info.additional.len() as u32;
