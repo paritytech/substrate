@@ -33,6 +33,7 @@ use frame_system::offchain::TransactionSubmitter;
 use sp_io;
 use sp_phragmen::{
 	build_support_map, evaluate_support, reduce, ExtendedBalance, StakedAssignment, PhragmenScore,
+	VoteWeight,
 };
 use crate::*;
 
@@ -203,6 +204,7 @@ impl frame_system::Trait for Test {
 	type Event = MetaEvent;
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
+	type DbWeight = ();
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type MaximumBlockLength = MaximumBlockLength;
 	type Version = ();
@@ -528,7 +530,7 @@ fn check_ledgers() {
 fn check_exposures() {
 	// a check per validator to ensure the exposure struct is always sane.
 	let era = active_era();
-	ErasStakers::<Test>::iter_prefix(era).for_each(|expo| {
+	ErasStakers::<Test>::iter_prefix_values(era).for_each(|expo| {
 		assert_eq!(
 			expo.total as u128,
 			expo.own as u128 + expo.others.iter().map(|e| e.value as u128).sum::<u128>(),
@@ -845,10 +847,10 @@ pub(crate) fn prepare_submission_with(
 	} = Staking::do_phragmen::<OffchainAccuracy>().unwrap();
 	let winners = winners.into_iter().map(|(w, _)| w).collect::<Vec<AccountId>>();
 
-	let stake_of = |who: &AccountId| -> ExtendedBalance {
-		<CurrencyToVoteHandler as Convert<Balance, u64>>::convert(
+	let stake_of = |who: &AccountId| -> VoteWeight {
+		<CurrencyToVoteHandler as Convert<Balance, VoteWeight>>::convert(
 			Staking::slashable_balance_of(&who)
-		) as ExtendedBalance
+		)
 	};
 	let mut staked = sp_phragmen::assignment_ratio_to_staked(assignments, stake_of);
 
@@ -887,7 +889,7 @@ pub(crate) fn prepare_submission_with(
 	let score = {
 		let staked = sp_phragmen::assignment_ratio_to_staked(
 			assignments_reduced.clone(),
-			Staking::slashable_balance_of_extended,
+			Staking::slashable_balance_of_vote_weight,
 		);
 
 		let (support_map, _) = build_support_map::<AccountId>(

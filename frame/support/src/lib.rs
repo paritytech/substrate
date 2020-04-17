@@ -32,6 +32,7 @@ pub use serde;
 pub use sp_std;
 #[doc(hidden)]
 pub use codec;
+use codec::{Decode, Encode};
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub use once_cell;
@@ -68,7 +69,7 @@ pub mod weights;
 
 pub use self::hash::{
 	Twox256, Twox128, Blake2_256, Blake2_128, Identity, Twox64Concat, Blake2_128Concat, Hashable,
-	StorageHasher
+	StorageHasher, ReversibleStorageHasher
 };
 pub use self::storage::{
 	StorageValue, StorageMap, StorageDoubleMap, StoragePrefixedMap, IterableStorageMap,
@@ -222,7 +223,37 @@ macro_rules! assert_ok {
 	}
 }
 
-use codec::{Decode, Encode};
+/// Runs given code within a tracing span, measuring it's execution time.
+///
+/// Has effect only when running in native environment. In WASM, it simply inserts the
+/// code in-place, without any metrics added.
+#[macro_export]
+macro_rules! tracing_span {
+	($name:expr; $( $code:tt )*) => {
+		let span = $crate::if_tracing!(
+			$crate::tracing::span!($crate::tracing::Level::TRACE, $name)
+		,
+			()
+		);
+		let guard = $crate::if_tracing!(span.enter(), ());
+		$( $code )*
+
+		$crate::sp_std::mem::drop(guard);
+		$crate::sp_std::mem::drop(span);
+	}
+}
+
+#[macro_export]
+#[cfg(feature = "tracing")]
+macro_rules! if_tracing {
+	( $if:expr, $else:expr ) => {{ $if }}
+}
+
+#[macro_export]
+#[cfg(not(feature = "tracing"))]
+macro_rules! if_tracing {
+	( $if:expr, $else:expr ) => {{ $else }}
+}
 
 /// The void type - it cannot exist.
 // Oh rust, you crack me up...
