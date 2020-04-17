@@ -80,7 +80,6 @@ where
 /// Build a tokio runtime with all features
 pub fn build_runtime() -> std::result::Result<tokio::runtime::Runtime, std::io::Error> {
 	tokio::runtime::Builder::new()
-		.thread_name("main-tokio-")
 		.threaded_scheduler()
 		.on_thread_start(||{
 			TOKIO_THREADS_ALIVE.inc();
