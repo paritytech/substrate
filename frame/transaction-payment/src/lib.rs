@@ -170,12 +170,11 @@ impl<T: Trait> Module<T> where
 			let len = <BalanceOf<T>>::from(len);
 			let per_byte = T::TransactionByteFee::get();
 			let len_fee = per_byte.saturating_mul(len);
-			let weight_fee = Self::compute_unadjusted_weight_fee(info.weight);
+			let unadjusted_weight_fee = Self::weight_to_fee(info.weight);
 
 			// the adjustable part of the fee
-			let adjustable_fee = len_fee.saturating_add(weight_fee);
+			let adjustable_fee = len_fee.saturating_add(unadjusted_weight_fee);
 			let targeted_fee_adjustment = NextFeeMultiplier::get();
-			// adjusted_fee = adjustable_fee + (adjustable_fee * targeted_fee_adjustment)
 			let adjusted_fee = targeted_fee_adjustment.saturated_multiply_accumulate(adjustable_fee.saturated_into());
 
 			let base_fee = T::TransactionBaseFee::get();
@@ -189,15 +188,15 @@ impl<T: Trait> Module<T> where
 	///
 	/// This fee is already adjusted by the per block fee adjustment factor and is therefore
 	/// the share that the weight contributes to the overall fee of a transaction.
-	pub fn compute_weight_fee(weight: Weight) -> BalanceOf<T> where
+	pub fn weight_to_fee_with_adjustment(weight: Weight) -> BalanceOf<T> where
 		BalanceOf<T>: From<u64>
 	{
 		NextFeeMultiplier::get().saturated_multiply_accumulate(
-			Self::compute_unadjusted_weight_fee(weight)
+			Self::weight_to_fee(weight)
 		)
 	}
 
-	fn compute_unadjusted_weight_fee(weight: Weight) -> BalanceOf<T> {
+	fn weight_to_fee(weight: Weight) -> BalanceOf<T> {
 		// cap the weight to the maximum defined in runtime, otherwise it will be the
 		// `Bounded` maximum of its data type, which is not desired.
 		let capped_weight = weight.min(<T as frame_system::Trait>::MaximumBlockWeight::get());
@@ -307,7 +306,7 @@ impl<T: Trait + Send + Sync> SignedExtension for ChargeTransactionPayment<T> whe
 	) -> Result<(), TransactionValidityError> {
 		let (tip, who, imbalance) = pre;
 		if let Some(payed) = imbalance {
-			let refund = Module::<T>::compute_weight_fee(post_info.calc_unspent(info));
+			let refund = Module::<T>::weight_to_fee_with_adjustment(post_info.calc_unspent(info));
 			let actual_payment = match T::Currency::deposit_into_existing(&who, refund) {
 				Ok(refund_imbalance) => {
 					// The refund cannot be larger than the up front payed max weight.
@@ -566,6 +565,7 @@ mod tests {
 			let pre = ChargeTransactionPayment::<Runtime>::from(5 /* tipped */)
 				.pre_dispatch(&2, CALL, &info_from_weight(100), len)
 				.unwrap();
+			// 5 base fee, 3/2 * 10 byte fee, 3/2 * 100 weight fee, 5 tip 
 			assert_eq!(Balances::free_balance(2), 200 - 5 - 15 - 150 - 5);
 
 			assert!(
@@ -573,6 +573,7 @@ mod tests {
 					::post_dispatch(pre, &info_from_weight(100), &post_info_from_weight(50), len, &Ok(()))
 					.is_ok()
 			);
+			// 75 (3/2 of the returned 50 units of weight ) is refunded
 			assert_eq!(Balances::free_balance(2), 200 - 5 - 15 - 75 - 5);
 		});
 	}
