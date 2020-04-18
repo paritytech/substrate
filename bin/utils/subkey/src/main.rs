@@ -37,6 +37,7 @@ use sp_runtime::{
     generic::Era,
     traits::{IdentifyAccount, Verify},
 };
+use sp_runtime::{traits::{AccountIdConversion, IdentifyAccount, Verify}, generic::Era, ModuleId};
 use std::{
     convert::{TryFrom, TryInto},
     fmt, fs,
@@ -374,6 +375,11 @@ fn get_app<'a, 'b>(usage: &'a str) -> App<'a, 'b> {
 					<key-type> 'Key type, examples: \"gran\", or \"imon\" '
 					[node-url] 'Node JSON-RPC endpoint, default \"http:://localhost:9933\"'
 				"),
+			SubCommand::with_name("moduleid")
+				.about("Inspect a module ID address")
+				.args_from_usage("
+					<id> 'The module ID used to derive the account'
+				")
 		])
 }
 
@@ -433,6 +439,7 @@ where
     SignatureOf<C>: SignatureT,
     PublicOf<C>: PublicT,
 {
+<<<<<<< HEAD
     let password_interactive = matches.is_present("password-interactive");
     let password = matches.value_of("password");
 
@@ -577,6 +584,154 @@ where
     }
 
     Ok(())
+=======
+	let password_interactive = matches.is_present("password-interactive");
+	let password = matches.value_of("password");
+
+	let password = if password.is_some() && password_interactive {
+		return static_err("`--password` given and `--password-interactive` selected!");
+	} else if password_interactive {
+		Some(
+			rpassword::read_password_from_tty(Some("Key password: "))?
+		)
+	} else {
+		password.map(Into::into)
+	};
+	let password = password.as_ref().map(String::as_str);
+
+	let maybe_network: Option<Ss58AddressFormat> = match matches.value_of("network").map(|network| {
+		network
+			.try_into()
+			.map_err(|_| Error::Static("Invalid network name. See --help for available networks."))
+	}) {
+		Some(Err(e)) => return Err(e),
+		Some(Ok(v)) => Some(v),
+		None => None,
+	 };
+
+	if let Some(network) = maybe_network {
+		set_default_ss58_version(network);
+	}
+
+	let output: OutputType = match matches.value_of("output").map(TryInto::try_into) {
+		Some(Err(_)) => return Err(Error::Static("Invalid output name. See --help for available outputs.")),
+		Some(Ok(v)) => v,
+		None => OutputType::Text,
+	 };
+
+	match matches.subcommand() {
+		("generate", Some(matches)) => {
+			let mnemonic = generate_mnemonic(matches)?;
+			C::print_from_uri(mnemonic.phrase(), password, maybe_network, output);
+		}
+		("generate-node-key", Some(matches)) => {
+			let file = matches.value_of("file").ok_or(Error::Static("Output file name is required"))?;
+
+			let keypair = libp2p_ed25519::Keypair::generate();
+			let secret = keypair.secret();
+			let peer_id = PublicKey::Ed25519(keypair.public()).into_peer_id();
+
+			fs::write(file, secret.as_ref())?;
+
+			println!("{}", peer_id);
+		}
+		("inspect", Some(matches)) => {
+			C::print_from_uri(&get_uri("uri", &matches)?, password, maybe_network, output);
+		}
+		("sign", Some(matches)) => {
+			let suri = get_uri("suri", &matches)?;
+			let should_decode = matches.is_present("hex");
+
+			let message = read_message_from_stdin(should_decode)?;
+			let signature = do_sign::<C>(&suri, message, password)?;
+			println!("{}", signature);
+		}
+		("verify", Some(matches)) => {
+			let uri = get_uri("uri", &matches)?;
+			let should_decode = matches.is_present("hex");
+
+			let message = read_message_from_stdin(should_decode)?;
+			let is_valid_signature = do_verify::<C>(matches, &uri, message)?;
+			if is_valid_signature {
+				println!("Signature verifies correctly.");
+			} else {
+				return static_err("Signature invalid.");
+			}
+		}
+		("vanity", Some(matches)) => {
+			let desired: String = matches
+				.value_of("pattern")
+				.map(str::to_string)
+				.unwrap_or_default();
+			let result = vanity::generate_key::<C>(&desired)?;
+			let formated_seed = format_seed::<C>(result.seed);
+			C::print_from_uri(&formated_seed, None, maybe_network, output);
+		}
+		("transfer", Some(matches)) => {
+			let signer = read_pair::<C>(matches.value_of("from"), password)?;
+			let index = read_required_parameter::<Index>(matches, "index")?;
+			let genesis_hash = read_genesis_hash(matches)?;
+
+			let to: AccountId = read_account_id(matches.value_of("to"));
+			let amount = read_required_parameter::<Balance>(matches, "amount")?;
+			let function = Call::Balances(BalancesCall::transfer(to.into(), amount));
+
+			let extrinsic = create_extrinsic::<C>(function, index, signer, genesis_hash);
+
+			print_extrinsic(extrinsic);
+		}
+		("sign-transaction", Some(matches)) => {
+			let signer = read_pair::<C>(matches.value_of("suri"), password)?;
+			let index = read_required_parameter::<Index>(matches, "nonce")?;
+			let genesis_hash = read_genesis_hash(matches)?;
+
+			let call = matches.value_of("call").expect("call is required; qed");
+			let function: Call = hex::decode(&call)
+				.ok()
+				.and_then(|x| Decode::decode(&mut &x[..]).ok())
+				.unwrap();
+
+			let extrinsic = create_extrinsic::<C>(function, index, signer, genesis_hash);
+
+			print_extrinsic(extrinsic);
+		}
+		("insert", Some(matches)) => {
+			let suri = get_uri("suri", &matches)?;
+			let pair = read_pair::<C>(Some(&suri), password)?;
+			let node_url = matches.value_of("node-url").unwrap_or("http://localhost:9933");
+			let key_type = matches.value_of("key-type").ok_or(Error::Static("Key type id is required"))?;
+
+			// Just checking
+			let _key_type_id = sp_core::crypto::KeyTypeId::try_from(key_type)
+				.map_err(|_| Error::Static("Cannot convert argument to keytype: argument should be 4-character string"))?;
+
+			let rpc = rpc::RpcClient::new(node_url.to_string());
+
+			rpc.insert_key(
+				key_type.to_string(),
+				suri,
+				sp_core::Bytes(pair.public().as_ref().to_vec()),
+			);
+		}
+		("moduleid", Some(matches)) => {
+			let id = get_uri("id", &matches)?;
+			if id.len() != 8 {
+				Err("a module id must be a string of 8 characters")?
+			}
+
+			let id_fixed_array: [u8; 8] = id.as_bytes().try_into()
+				.map_err(|_| Error::Static("Cannot convert argument to moduleid: argument should be 8-character string"))?;
+
+			let account_id: AccountId = ModuleId(id_fixed_array).into_account();
+			let v = maybe_network.unwrap_or(Ss58AddressFormat::SubstrateAccount);
+			
+			C::print_from_uri(&account_id.to_ss58check_with_version(v), password, maybe_network, output);
+		}
+		_ => print_usage(&matches),
+	}
+
+	Ok(())
+>>>>>>> upstream/master
 }
 
 /// Creates a new randomly generated mnemonic phrase.
