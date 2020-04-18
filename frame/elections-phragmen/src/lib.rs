@@ -106,8 +106,8 @@ type NegativeImbalanceOf<T> =
 
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.c
-    type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
-    
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+	
 	type ModuleId: Get<LockIdentifier>;
 
 	/// The currency that people are electing with.
@@ -274,7 +274,7 @@ decl_module! {
 		const VotingBond: BalanceOf<T> = T::VotingBond::get();
 		const DesiredMembers: u32 = T::DesiredMembers::get();
 		const DesiredRunnersUp: u32 = T::DesiredRunnersUp::get();
-        const TermDuration: T::BlockNumber = T::TermDuration::get();
+		const TermDuration: T::BlockNumber = T::TermDuration::get();
 		const ModuleId: LockIdentifier  = T::ModuleId::get();
 
 		/// Vote for a set of candidates for the upcoming round of election.
@@ -924,7 +924,7 @@ mod tests {
 
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;
-    }
+	}
 
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
@@ -1019,11 +1019,11 @@ mod tests {
 		fn convert(x: u128) -> u64 {
 			x as u64
 		}
-    }
-    
-    parameter_types!{
+	}
+
+	parameter_types!{
 		pub const ElectionsPhragmenModuleId: LockIdentifier = *b"phrelect";
-    }
+	}
 
 	impl Trait for Test {
 		type ModuleId = ElectionsPhragmenModuleId;
