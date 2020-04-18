@@ -97,8 +97,6 @@ use frame_support::{
 use sp_phragmen::{build_support_map, ExtendedBalance, VoteWeight, PhragmenResult};
 use frame_system::{self as system, ensure_signed, ensure_root};
 
-// const MODULE_ID: LockIdentifier = *b"phrelect";
-
 /// The maximum votes allowed per voter.
 pub const MAXIMUM_VOTE: usize = 16;
 
@@ -323,7 +321,6 @@ decl_module! {
 
 			// lock
 			T::Currency::set_lock(
-                // MODULE_ID,
                 T::ModuleId::get(),
 				&who,
 				locked_balance,
@@ -653,7 +650,6 @@ impl<T: Trait> Module<T> {
 	fn do_remove_voter(who: &T::AccountId, unreserve: bool) {
 		// remove storage and lock.
 		Voting::<T>::remove(who);
-		// T::Currency::remove_lock(MODULE_ID, who);
 		T::Currency::remove_lock(T::ModuleId::get(), who);
 
 		if unreserve {
@@ -1134,7 +1130,6 @@ mod tests {
 
 	fn has_lock(who: &u64) -> u64 {
 		let lock = Balances::locks(who)[0].clone();
-		// assert_eq!(lock.id, MODULE_ID);
 		assert_eq!(lock.id, *b"phrelect"); // TODO REVIEW if this is ok test
 		lock.amount
 	}

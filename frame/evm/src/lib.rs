@@ -39,8 +39,6 @@ use evm::{ExitReason, ExitSucceed, ExitError, Config};
 use evm::executor::StackExecutor;
 use evm::backend::ApplyBackend;
 
-// const MODULE_ID: ModuleId = ModuleId(*b"py/ethvm");
-
 /// Type alias for currency balance.
 pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 
@@ -351,7 +349,6 @@ impl<T: Trait> Module<T> {
 	/// This actually does computation. If you need to keep using it, then make sure you cache the
 	/// value and only call this once.
 	pub fn account_id() -> T::AccountId {
-        // MODULE_ID.into_account()
         T::ModuleId::get().into_account()
 	}
 

@@ -126,8 +126,6 @@ pub enum CellStatus {
 	Hole,
 }
 
-// const MODULE_ID: LockIdentifier = *b"py/elect";
-
 /// Number of voters grouped in one chunk.
 pub const VOTER_SET_SIZE: usize = 64;
 /// NUmber of approvals grouped in one chunk.
@@ -498,7 +496,6 @@ decl_module! {
 			);
 
 			T::Currency::remove_lock(
-                // MODULE_ID,
                 T::ModuleId::get(),
 				if valid { &who } else { &reporter }
 			);
@@ -537,7 +534,6 @@ decl_module! {
 
 			Self::remove_voter(&who, index);
 			T::Currency::unreserve(&who, T::VotingBond::get());
-            // T::Currency::remove_lock(MODULE_ID, &who);
             T::Currency::remove_lock(T::ModuleId::get(), &who);
 		}
 
@@ -898,7 +894,6 @@ impl<T: Trait> Module<T> {
 		}
 
 		T::Currency::set_lock(
-            // MODULE_ID,
             T::ModuleId::get(),
 			&who,
 			locked_balance,

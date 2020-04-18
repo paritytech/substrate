@@ -269,8 +269,6 @@ use frame_system::{self as system, ensure_signed, ensure_root};
 
 type BalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 
-// const MODULE_ID: ModuleId = ModuleId(*b"py/socie");
-
 /// The module's configuration trait.
 pub trait Trait<I=DefaultInstance>: system::Trait {
 	/// The overarching event type.
@@ -1576,7 +1574,6 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// This actually does computation. If you need to keep using it, then make sure you cache the
 	/// value and only call this once.
 	pub fn account_id() -> T::AccountId {
-        // MODULE_ID.into_account()
         T::ModuleId::get().into_account()
 	}
 
@@ -1585,7 +1582,6 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// This actually does computation. If you need to keep using it, then make sure you cache the
 	/// value and only call this once.
 	pub fn payouts() -> T::AccountId {
-        // MODULE_ID.into_sub_account(b"payouts")
         T::ModuleId::get().into_sub_account(b"payouts")
 	}
 

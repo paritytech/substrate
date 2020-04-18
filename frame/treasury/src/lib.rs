@@ -113,9 +113,6 @@ type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trai
 type PositiveImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::PositiveImbalance;
 type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
-/// The treasury's module id, used for deriving its sovereign account ID.
-// const MODULE_ID: ModuleId = ModuleId(*b"py/trsry");
-
 pub trait Trait: frame_system::Trait {
     /// The treasury's module id, used for deriving its sovereign account ID.
     type ModuleId: Get<ModuleId>;
@@ -580,7 +577,6 @@ impl<T: Trait> Module<T> {
 	/// This actually does computation. If you need to keep using it, then make sure you cache the
 	/// value and only call this once.
 	pub fn account_id() -> T::AccountId {
-        // MODULE_ID.into_account()
         T::ModuleId::get().into_account()
 	}
 
