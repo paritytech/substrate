@@ -24,7 +24,7 @@ use sp_std::prelude::*;
 use frame_support::{
 	construct_runtime, parameter_types, debug,
 	weights::Weight,
-	traits::{Currency, Randomness, OnUnbalanced, Imbalance},
+	traits::{Currency, Randomness, OnUnbalanced, Imbalance, LockIdentifier},
 };
 use sp_core::u32_trait::{_1, _2, _3, _4};
 pub use node_primitives::{AccountId, Signature};
@@ -428,10 +428,12 @@ parameter_types! {
 	pub const VotingBond: Balance = 1 * DOLLARS;
 	pub const TermDuration: BlockNumber = 7 * DAYS;
 	pub const DesiredMembers: u32 = 13;
-	pub const DesiredRunnersUp: u32 = 7;
+    pub const DesiredRunnersUp: u32 = 7;
+    pub const ElectionsPhragmenModuleId: LockIdentifier = *b"phrelect";
 }
 
 impl pallet_elections_phragmen::Trait for Runtime {
+    type ModuleId = ElectionsPhragmenModuleId;
 	type Event = Event;
 	type Currency = Balances;
 	type ChangeMembers = Council;
