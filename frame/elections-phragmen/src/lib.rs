@@ -107,7 +107,7 @@ type NegativeImbalanceOf<T> =
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.c
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
-	
+
 	type ModuleId: Get<LockIdentifier>;
 
 	/// The currency that people are electing with.
@@ -1130,7 +1130,7 @@ mod tests {
 
 	fn has_lock(who: &u64) -> u64 {
 		let lock = Balances::locks(who)[0].clone();
-		assert_eq!(lock.id, *b"phrelect"); // TODO REVIEW if this is ok test
+		assert_eq!(lock.id, *b"phrelect");
 		lock.amount
 	}
 
