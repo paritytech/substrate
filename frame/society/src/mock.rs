@@ -54,8 +54,8 @@ parameter_types! {
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 
-    pub const ExistentialDeposit: u64 = 1;
-    pub const SocietyModuleId: ModuleId = ModuleId(*b"py/socie");
+	pub const ExistentialDeposit: u64 = 1;
+	pub const SocietyModuleId: ModuleId = ModuleId(*b"py/socie");
 }
 
 ord_parameter_types! {
