@@ -19,7 +19,7 @@
 use super::*;
 
 use frame_system::RawOrigin as SystemOrigin;
-//use frame_system::{EventRecord, Phase};
+use frame_system::EventRecord;
 use frame_benchmarking::{benchmarks_instance, account};
 use sp_runtime::traits::Bounded;
 
@@ -30,7 +30,15 @@ const SEED: u32 = 0;
 
 const MAX_MEMBERS: u32 = 1000;
 const MAX_PROPOSALS: u32 = 100;
-const MAX_BYTES: u32 = 16_384;
+const MAX_BYTES: u32 = 1_024;
+
+fn assert_last_event<T: Trait<I>, I: Instance>(generic_event: <T as Trait<I>>::Event) {
+	let events = System::<T>::events();
+	let system_event: <T as frame_system::Trait>::Event = generic_event.into();
+	// compare to the last event record
+	let EventRecord { event, .. } = &events[events.len() - 1];
+	assert_eq!(event, &system_event);
+}
 
 benchmarks_instance! {
 	_{ }
@@ -86,18 +94,8 @@ benchmarks_instance! {
 	}: _(SystemOrigin::Signed(caller), Box::new(proposal.clone()))
 	verify {
 		let proposal_hash = T::Hashing::hash_of(&proposal);
-		let events = System::<T>::events();
-		// Within the trait bounds, this is about the best we can do...
-		assert_eq!(events.len(), 1);
-
-		// let event_record = EventRecord {
-		// 	phase: Phase::Initialization,
-		// 	event: Event::collective_Instance1(RawEvent::MemberExecuted(
-
-		// 	)),
-		// 	topics: vec![],
-		// }
-		// Note the `remark` dispatch fails due to mis-match origin, but that is ok for benchmarking
+		// Note that execution fails due to mis-matched origin
+		assert_last_event::<T, I>(RawEvent::MemberExecuted(proposal_hash, false).into());
 	}
 
 	// This tests when execution would happen immediately after proposal
@@ -123,10 +121,8 @@ benchmarks_instance! {
 	}: propose(SystemOrigin::Signed(caller), threshold, Box::new(proposal.clone()))
 	verify {
 		let proposal_hash = T::Hashing::hash_of(&proposal);
-		let events = System::<T>::events();
-		// Within the trait bounds, this is about the best we can do...
-		assert_eq!(events.len(), 1);
-		// Note the `remark` dispatch fails due to mis-match origin, but that is ok for benchmarking
+		// Note that execution fails due to mis-matched origin
+		assert_last_event::<T, I>(RawEvent::Executed(proposal_hash, false).into());
 	}
 
 	// This tests when proposal is created and queued as "proposed"
@@ -159,11 +155,12 @@ benchmarks_instance! {
 
 		let proposal: T::Proposal = frame_system::Call::<T>::remark(vec![p as u8; b as usize]).into();
 
-	}: propose(SystemOrigin::Signed(caller), threshold, Box::new(proposal.clone()))
+	}: propose(SystemOrigin::Signed(caller.clone()), threshold, Box::new(proposal.clone()))
 	verify {
 		// New proposal is recorded
-		let proposal_hash = T::Hashing::hash_of(&proposal);
 		assert_eq!(Collective::<T, _>::proposals().len(), (p + 1) as usize);
+		let proposal_hash = T::Hashing::hash_of(&proposal);
+		assert_last_event::<T, I>(RawEvent::Proposed(caller, p, proposal_hash, threshold).into());
 	}
 
 	vote_insert {
@@ -261,6 +258,7 @@ benchmarks_instance! {
 	verify {
 		// The last proposal is removed.
 		assert_eq!(Collective::<T, _>::proposals().len(), (p - 1) as usize);
+		assert_last_event::<T, I>(RawEvent::Disapproved(last_hash).into());
 	}
 
 	vote_approved {
@@ -314,6 +312,7 @@ benchmarks_instance! {
 	verify {
 		// The last proposal is removed.
 		assert_eq!(Collective::<T, _>::proposals().len(), (p - 1) as usize);
+		assert_last_event::<T, I>(RawEvent::Executed(last_hash, false).into());
 	}
 
 	close_disapproved {
@@ -362,6 +361,7 @@ benchmarks_instance! {
 	}: close(SystemOrigin::Signed(caller), last_hash, p - 1)
 	verify {
 		assert_eq!(Collective::<T, _>::proposals().len(), (p - 1) as usize);
+		assert_last_event::<T, I>(RawEvent::Disapproved(last_hash).into());
 	}
 
 
@@ -409,6 +409,7 @@ benchmarks_instance! {
 	}: close(SystemOrigin::Signed(caller), last_hash, p - 1)
 	verify {
 		assert_eq!(Collective::<T, _>::proposals().len(), (p - 1) as usize);
+		assert_last_event::<T, I>(RawEvent::Executed(last_hash, false).into());
 	}
 }
 
