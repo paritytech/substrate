@@ -631,7 +631,8 @@ parameter_types! {
 	pub const RotationPeriod: BlockNumber = 80 * HOURS;
 	pub const PeriodSpend: Balance = 500 * DOLLARS;
 	pub const MaxLockDuration: BlockNumber = 36 * 30 * DAYS;
-	pub const ChallengePeriod: BlockNumber = 7 * DAYS;
+    pub const ChallengePeriod: BlockNumber = 7 * DAYS;
+    pub const SocietyModuleId: ModuleId = ModuleId(*b"py/socie");
 }
 
 impl pallet_society::Trait for Runtime {
@@ -647,7 +648,8 @@ impl pallet_society::Trait for Runtime {
 	type MaxLockDuration = MaxLockDuration;
 	type FounderSetOrigin = pallet_collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>;
 	type SuspensionJudgementOrigin = pallet_society::EnsureFounder<Runtime>;
-	type ChallengePeriod = ChallengePeriod;
+    type ChallengePeriod = ChallengePeriod;
+    type ModuleId = SocietyModuleId;
 }
 
 parameter_types! {
