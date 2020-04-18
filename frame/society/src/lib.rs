@@ -275,7 +275,7 @@ pub trait Trait<I=DefaultInstance>: system::Trait {
     type Event: From<Event<Self, I>> + Into<<Self as system::Trait>::Event>;
     
     /// The societies's module id
-    type ModuleId: Get<ModuleId>;
+	type ModuleId: Get<ModuleId>;
 
 	/// The currency type used for bidding.
 	type Currency: ReservableCurrency<Self::AccountId>;
@@ -493,7 +493,7 @@ decl_module! {
         const ChallengePeriod: T::BlockNumber = T::ChallengePeriod::get();
         
         /// The societies's module id
-        const ModuleId: ModuleId = T::ModuleId::get();
+		const ModuleId: ModuleId = T::ModuleId::get();
 
 		// Used for handling module events.
 		fn deposit_event() = default;
@@ -1574,7 +1574,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// This actually does computation. If you need to keep using it, then make sure you cache the
 	/// value and only call this once.
 	pub fn account_id() -> T::AccountId {
-        T::ModuleId::get().into_account()
+		T::ModuleId::get().into_account()
 	}
 
 	/// The account ID of the payouts pot. This is where payouts are made from.
@@ -1582,7 +1582,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// This actually does computation. If you need to keep using it, then make sure you cache the
 	/// value and only call this once.
 	pub fn payouts() -> T::AccountId {
-        T::ModuleId::get().into_sub_account(b"payouts")
+		T::ModuleId::get().into_sub_account(b"payouts")
 	}
 
 	/// Return the duration of the lock, in blocks, with the given number of members.

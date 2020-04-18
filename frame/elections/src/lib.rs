@@ -145,7 +145,7 @@ type ApprovalFlag = u32;
 const APPROVAL_FLAG_LEN: usize = 32;
 
 pub trait Trait: frame_system::Trait {
-    type ModuleId: Get<LockIdentifier>;
+	type ModuleId: Get<LockIdentifier>;
 
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
@@ -379,7 +379,7 @@ decl_module! {
 		/// The chunk size of the approval vector.
         const APPROVAL_SET_SIZE: u32 = APPROVAL_SET_SIZE as u32;
         
-        const MouduleId: LockIdentifier  = T::ModuleId::get();
+        const MouduleId: LockIdentifier = T::ModuleId::get();
 
 		fn deposit_event() = default;
 
@@ -496,7 +496,7 @@ decl_module! {
 			);
 
 			T::Currency::remove_lock(
-                T::ModuleId::get(),
+            	T::ModuleId::get(),
 				if valid { &who } else { &reporter }
 			);
 
@@ -894,7 +894,7 @@ impl<T: Trait> Module<T> {
 		}
 
 		T::Currency::set_lock(
-            T::ModuleId::get(),
+        	T::ModuleId::get(),
 			&who,
 			locked_balance,
 			WithdrawReasons::all(),

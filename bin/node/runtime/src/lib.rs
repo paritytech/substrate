@@ -428,12 +428,12 @@ parameter_types! {
 	pub const VotingBond: Balance = 1 * DOLLARS;
 	pub const TermDuration: BlockNumber = 7 * DAYS;
 	pub const DesiredMembers: u32 = 13;
-    pub const DesiredRunnersUp: u32 = 7;
-    pub const ElectionsPhragmenModuleId: LockIdentifier = *b"phrelect";
+	pub const DesiredRunnersUp: u32 = 7;
+	pub const ElectionsPhragmenModuleId: LockIdentifier = *b"phrelect";
 }
 
 impl pallet_elections_phragmen::Trait for Runtime {
-    type ModuleId = ElectionsPhragmenModuleId;
+	type ModuleId = ElectionsPhragmenModuleId;
 	type Event = Event;
 	type Currency = Balances;
 	type ChangeMembers = Council;
@@ -483,7 +483,7 @@ parameter_types! {
 	pub const TipFindersFee: Percent = Percent::from_percent(20);
 	pub const TipReportDepositBase: Balance = 1 * DOLLARS;
     pub const TipReportDepositPerByte: Balance = 1 * CENTS;
-    pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
+	pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
 }
 
 impl pallet_treasury::Trait for Runtime {
@@ -501,7 +501,7 @@ impl pallet_treasury::Trait for Runtime {
 	type ProposalBondMinimum = ProposalBondMinimum;
 	type SpendPeriod = SpendPeriod;
     type Burn = Burn;
-    type ModuleId = TreasuryModuleId;
+	type ModuleId = TreasuryModuleId;
 }
 
 parameter_types! {
@@ -631,8 +631,8 @@ parameter_types! {
 	pub const RotationPeriod: BlockNumber = 80 * HOURS;
 	pub const PeriodSpend: Balance = 500 * DOLLARS;
 	pub const MaxLockDuration: BlockNumber = 36 * 30 * DAYS;
-    pub const ChallengePeriod: BlockNumber = 7 * DAYS;
-    pub const SocietyModuleId: ModuleId = ModuleId(*b"py/socie");
+	pub const ChallengePeriod: BlockNumber = 7 * DAYS;
+	pub const SocietyModuleId: ModuleId = ModuleId(*b"py/socie");
 }
 
 impl pallet_society::Trait for Runtime {
@@ -648,8 +648,8 @@ impl pallet_society::Trait for Runtime {
 	type MaxLockDuration = MaxLockDuration;
 	type FounderSetOrigin = pallet_collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>;
 	type SuspensionJudgementOrigin = pallet_society::EnsureFounder<Runtime>;
-    type ChallengePeriod = ChallengePeriod;
-    type ModuleId = SocietyModuleId;
+	type ChallengePeriod = ChallengePeriod;
+	type ModuleId = SocietyModuleId;
 }
 
 parameter_types! {

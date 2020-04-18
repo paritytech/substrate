@@ -107,8 +107,8 @@ impl Trait for Test {
 	type MaxLockDuration = MaxLockDuration;
 	type FounderSetOrigin = EnsureSignedBy<FounderSetAccount, u128>;
 	type SuspensionJudgementOrigin = EnsureSignedBy<SuspensionJudgementSetAccount, u128>;
-    type ChallengePeriod = ChallengePeriod;
-    type ModuleId = SocietyModuleId;
+	type ChallengePeriod = ChallengePeriod;
+	type ModuleId = SocietyModuleId;
 }
 
 pub type Society = Module<Test>;

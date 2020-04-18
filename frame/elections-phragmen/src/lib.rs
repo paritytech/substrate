@@ -108,7 +108,7 @@ pub trait Trait: frame_system::Trait {
 	/// The overarching event type.c
     type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
     
-    type ModuleId: Get<LockIdentifier>;
+	type ModuleId: Get<LockIdentifier>;
 
 	/// The currency that people are electing with.
 	type Currency:
@@ -275,7 +275,7 @@ decl_module! {
 		const DesiredMembers: u32 = T::DesiredMembers::get();
 		const DesiredRunnersUp: u32 = T::DesiredRunnersUp::get();
         const TermDuration: T::BlockNumber = T::TermDuration::get();
-        const ModuleId: LockIdentifier  = T::ModuleId::get();
+		const ModuleId: LockIdentifier  = T::ModuleId::get();
 
 		/// Vote for a set of candidates for the upcoming round of election.
 		///
@@ -321,7 +321,7 @@ decl_module! {
 
 			// lock
 			T::Currency::set_lock(
-                T::ModuleId::get(),
+			T::ModuleId::get(),
 				&who,
 				locked_balance,
 				WithdrawReasons::except(WithdrawReason::TransactionPayment),
@@ -1022,11 +1022,11 @@ mod tests {
     }
     
     parameter_types!{
-        pub const ElectionsPhragmenModuleId: LockIdentifier = *b"phrelect";
+		pub const ElectionsPhragmenModuleId: LockIdentifier = *b"phrelect";
     }
 
 	impl Trait for Test {
-        type ModuleId = ElectionsPhragmenModuleId;
+		type ModuleId = ElectionsPhragmenModuleId;
 		type Event = Event;
 		type Currency = Balances;
 		type CurrencyToVote = CurrencyToVoteHandler;

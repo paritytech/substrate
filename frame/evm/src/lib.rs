@@ -119,7 +119,7 @@ static ISTANBUL_CONFIG: Config = Config::istanbul();
 /// EVM module trait
 pub trait Trait: frame_system::Trait + pallet_timestamp::Trait {
     /// The EVM's module id
-    type ModuleId: Get<ModuleId>;
+	type ModuleId: Get<ModuleId>;
 	/// Calculator for current gas price.
 	type FeeCalculator: FeeCalculator;
 	/// Convert account ID to H160;
@@ -189,8 +189,8 @@ decl_module! {
 		type Error = Error<T>;
 
         fn deposit_event() = default;
-        
-        const MouduleId: ModuleId = T::ModuleId::get();
+		
+		const MouduleId: ModuleId = T::ModuleId::get();
 
 		/// Deposit balance from currency/balances module into EVM.
 		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
@@ -349,7 +349,7 @@ impl<T: Trait> Module<T> {
 	/// This actually does computation. If you need to keep using it, then make sure you cache the
 	/// value and only call this once.
 	pub fn account_id() -> T::AccountId {
-        T::ModuleId::get().into_account()
+		T::ModuleId::get().into_account()
 	}
 
 	/// Check whether an account is empty.
