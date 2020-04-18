@@ -37,7 +37,7 @@ use sp_runtime::traits::{
 	Block as BlockT, DigestFor, Header as HeaderT, NumberFor, Zero,
 };
 
-use crate::{Error, CommandOrError, NewAuthoritySet, VoterCommand};
+use crate::{Error, CommandOrError, NewAuthoritySet, VoterCommand, SharedFinalitySubscribers};
 use crate::authorities::{AuthoritySet, SharedAuthoritySet, DelayKind, PendingChange};
 use crate::consensus_changes::SharedConsensusChanges;
 use crate::environment::finalize_block;
@@ -60,6 +60,7 @@ pub struct GrandpaBlockImport<Backend, Block: BlockT, Client, SC> {
 	send_voter_commands: TracingUnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
 	consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 	authority_set_hard_forks: HashMap<Block::Hash, PendingChange<Block::Hash, NumberFor<Block>>>,
+	finality_subscribers: Option<SharedFinalitySubscribers<Block>>,
 	_phantom: PhantomData<Backend>,
 }
 
@@ -74,6 +75,7 @@ impl<Backend, Block: BlockT, Client, SC: Clone> Clone for
 			send_voter_commands: self.send_voter_commands.clone(),
 			consensus_changes: self.consensus_changes.clone(),
 			authority_set_hard_forks: self.authority_set_hard_forks.clone(),
+			finality_subscribers: self.finality_subscribers.clone(),
 			_phantom: PhantomData,
 		}
 	}
@@ -558,6 +560,7 @@ impl<Backend, Block: BlockT, Client, SC> GrandpaBlockImport<Backend, Block, Clie
 		send_voter_commands: TracingUnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
 		consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 		authority_set_hard_forks: Vec<(SetId, PendingChange<Block::Hash, NumberFor<Block>>)>,
+		finality_subscribers: Option<SharedFinalitySubscribers<Block>>,
 	) -> GrandpaBlockImport<Backend, Block, Client, SC> {
 		// check for and apply any forced authority set hard fork that applies
 		// to the *current* authority set.
@@ -601,6 +604,7 @@ impl<Backend, Block: BlockT, Client, SC> GrandpaBlockImport<Backend, Block, Clie
 			send_voter_commands,
 			consensus_changes,
 			authority_set_hard_forks,
+			finality_subscribers,
 			_phantom: PhantomData,
 		}
 	}
@@ -646,6 +650,7 @@ where
 			number,
 			justification.into(),
 			initial_sync,
+			self.finality_subscribers,
 		);
 
 		match result {

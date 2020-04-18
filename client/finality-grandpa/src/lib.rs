@@ -69,7 +69,7 @@ use sc_keystore::KeyStorePtr;
 use sp_inherents::InherentDataProviders;
 use sp_consensus::{SelectChain, BlockImport};
 use sp_core::Pair;
-use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sc_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG};
 use serde_json;
 
@@ -521,6 +521,7 @@ where
 			voter_commands_tx,
 			persistent_data.consensus_changes.clone(),
 			authority_set_hard_forks,
+			finality_subscribers.clone(),
 		),
 		LinkHalf {
 			client,
@@ -604,6 +605,20 @@ fn register_finality_tracker_inherent_data_provider<Block: BlockT, Client>(
 	}
 }
 
+/// Justification for a finalized block.
+pub struct JustificationNotification<Block: BlockT> {
+	/// Highest finalized block header
+	pub header: Block::Header,
+	/// An encoded justification proving that the given header has been finalized
+	pub justification: Vec<u8>,
+}
+
+// TODO: Figure out where to best have these types
+type FinalitySubscriber<T> = TracingUnboundedSender<JustificationNotification<T>>;
+pub type FinalitySubscribers<T> = Vec<FinalitySubscriber<T>>;
+
+pub type SharedFinalitySubscribers<T> = Arc<FinalitySubscribers<T>>;
+
 /// Parameters used to run Grandpa.
 pub struct GrandpaParams<Block: BlockT, C, N, SC, VR> {
 	/// Configuration for the GRANDPA service.
@@ -620,6 +635,8 @@ pub struct GrandpaParams<Block: BlockT, C, N, SC, VR> {
 	pub voting_rule: VR,
 	/// The prometheus metrics registry.
 	pub prometheus_registry: Option<prometheus_endpoint::Registry>,
+	/// A list of subscribers to block justifications
+	pub finality_subscribers: Option<SharedFinalitySubscribers<Block>>,
 }
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
@@ -644,6 +661,7 @@ pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR>(
 		telemetry_on_connect,
 		voting_rule,
 		prometheus_registry,
+		finality_subscribers,
 	} = grandpa_params;
 
 	// NOTE: we have recently removed `run_grandpa_observer` from the public
@@ -704,6 +722,7 @@ pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR>(
 		persistent_data,
 		voter_commands_rx,
 		prometheus_registry,
+		finality_subscribers,
 	);
 
 	let voter_work = voter_work
@@ -761,6 +780,7 @@ where
 		persistent_data: PersistentData<Block>,
 		voter_commands_rx: TracingUnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
 		prometheus_registry: Option<prometheus_endpoint::Registry>,
+		finality_subscribers: Option<SharedFinalitySubscribers<Block>>,
 	) -> Self {
 		let metrics = match prometheus_registry.as_ref().map(Metrics::register) {
 			Some(Ok(metrics)) => Some(metrics),
@@ -784,6 +804,7 @@ where
 			consensus_changes: persistent_data.consensus_changes.clone(),
 			voter_set_state: persistent_data.set_state.clone(),
 			metrics: metrics.as_ref().map(|m| m.environment.clone()),
+			finality_subscribers: finality_subscribers.clone(),
 			_phantom: PhantomData,
 		});
 
@@ -907,6 +928,7 @@ where
 					network: self.env.network.clone(),
 					voting_rule: self.env.voting_rule.clone(),
 					metrics: self.env.metrics.clone(),
+					finality_subscribers: self.env.finality_subscribers.clone(),
 					_phantom: PhantomData,
 				});
 

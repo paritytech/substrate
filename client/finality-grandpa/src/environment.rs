@@ -44,6 +44,7 @@ use sc_telemetry::{telemetry, CONSENSUS_INFO};
 use crate::{
 	CommandOrError, Commit, Config, Error, Precommit, Prevote,
 	PrimaryPropose, SignedMessage, NewAuthoritySet, VoterCommand,
+	SharedFinalitySubscribers, JustificationNotification,
 };
 
 use sp_consensus::SelectChain;
@@ -400,6 +401,7 @@ pub(crate) struct Environment<Backend, Block: BlockT, C, N: NetworkT<Block>, SC,
 	pub(crate) voter_set_state: SharedVoterSetState<Block>,
 	pub(crate) voting_rule: VR,
 	pub(crate) metrics: Option<Metrics>,
+	pub(crate) finality_subscribers: Option<SharedFinalitySubscribers<Block>>,
 	pub(crate) _phantom: PhantomData<Backend>,
 }
 
@@ -911,6 +913,7 @@ where
 			number,
 			(round, commit).into(),
 			false,
+			self.finality_subscribers,
 		)
 	}
 
@@ -971,6 +974,7 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 	number: NumberFor<Block>,
 	justification_or_commit: JustificationOrCommit<Block>,
 	initial_sync: bool,
+	finality_subscribers: Option<SharedFinalitySubscribers<Block>>,
 ) -> Result<(), CommandOrError<Block::Hash, NumberFor<Block>>> where
 	Block:  BlockT,
 	BE: Backend<Block>,
@@ -982,6 +986,7 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 	let mut authority_set = authority_set.inner().write();
 
 	let status = client.info();
+
 	if number <= status.finalized_number && client.hash(number)? == Some(hash) {
 		// This can happen after a forced change (triggered by the finality tracker when finality is stalled), since
 		// the voter will be restarted at the median last finalized block, which can be lower than the local best
@@ -1075,6 +1080,23 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 				}
 			},
 		};
+
+		if let Some(subscribers) = finality_subscribers {
+			// Q: We `finalized()` this at L37, so can I be sure
+			// that it's fine to unwrap here?
+			if let Some(justification) = justification {
+				let header = client.header(BlockId::Hash(hash))?
+					.expect("");
+				let notification = JustificationNotification {
+					header,
+					justification,
+				};
+
+				for s in subscribers.iter() {
+					s.unbounded_send(notification);
+				}
+			}
+		}
 
 		debug!(target: "afg", "Finalizing blocks up to ({:?}, {})", number, hash);
 

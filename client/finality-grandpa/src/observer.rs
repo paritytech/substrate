@@ -125,6 +125,7 @@ fn grandpa_observer<BE, Block: BlockT, Client, S, F>(
 				finalized_number,
 				(round, commit).into(),
 				false,
+				None, // TODO: Should I include the finality_subscribers here?
 			) {
 				Ok(_) => {},
 				Err(e) => return future::err(e),
