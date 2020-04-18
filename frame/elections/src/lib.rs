@@ -33,7 +33,7 @@ use frame_support::{
 	weights::{Weight, MINIMUM_WEIGHT, SimpleDispatchInfo},
 	traits::{
 		Currency, ExistenceRequirement, Get, LockableCurrency, LockIdentifier, BalanceStatus,
-		OnUnbalanced, ReservableCurrency, WithdrawReason, WithdrawReasons, ChangeMembers
+        OnUnbalanced, ReservableCurrency, WithdrawReason, WithdrawReasons, ChangeMembers,
 	}
 };
 use codec::{Encode, Decode};
@@ -126,7 +126,7 @@ pub enum CellStatus {
 	Hole,
 }
 
-const MODULE_ID: LockIdentifier = *b"py/elect";
+// const MODULE_ID: LockIdentifier = *b"py/elect";
 
 /// Number of voters grouped in one chunk.
 pub const VOTER_SET_SIZE: usize = 64;
@@ -147,6 +147,8 @@ type ApprovalFlag = u32;
 const APPROVAL_FLAG_LEN: usize = 32;
 
 pub trait Trait: frame_system::Trait {
+    type ModuleId: Get<LockIdentifier>;
+
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// The currency that people are electing with.
@@ -377,7 +379,9 @@ decl_module! {
 		/// The chunk size of the voter vector.
 		const VOTER_SET_SIZE: u32 = VOTER_SET_SIZE as u32;
 		/// The chunk size of the approval vector.
-		const APPROVAL_SET_SIZE: u32 = APPROVAL_SET_SIZE as u32;
+        const APPROVAL_SET_SIZE: u32 = APPROVAL_SET_SIZE as u32;
+        
+        const MouduleId: LockIdentifier  = T::ModuleId::get();
 
 		fn deposit_event() = default;
 
@@ -494,7 +498,8 @@ decl_module! {
 			);
 
 			T::Currency::remove_lock(
-				MODULE_ID,
+                // MODULE_ID,
+                T::ModuleId::get(),
 				if valid { &who } else { &reporter }
 			);
 
@@ -532,7 +537,8 @@ decl_module! {
 
 			Self::remove_voter(&who, index);
 			T::Currency::unreserve(&who, T::VotingBond::get());
-			T::Currency::remove_lock(MODULE_ID, &who);
+            // T::Currency::remove_lock(MODULE_ID, &who);
+            T::Currency::remove_lock(T::ModuleId::get(), &who);
 		}
 
 		/// Submit oneself for candidacy.
@@ -892,11 +898,12 @@ impl<T: Trait> Module<T> {
 		}
 
 		T::Currency::set_lock(
-			MODULE_ID,
+            // MODULE_ID,
+            T::ModuleId::get(),
 			&who,
 			locked_balance,
 			WithdrawReasons::all(),
-		);
+        );
 
 		<VoterInfoOf<T>>::insert(
 			&who,
