@@ -757,17 +757,14 @@ where
             Some(StorageKey(request.storage_key.clone()))
         };
 
-        let proof = match self.chain.key_changes_proof(
-            first,
-            last,
-            min,
-            max,
-            storage_key.as_ref(),
-            &key,
-        ) {
-            Ok(proof) => proof,
-            Err(error) => {
-                log::trace!(
+        let proof =
+            match self
+                .chain
+                .key_changes_proof(first, last, min, max, storage_key.as_ref(), &key)
+            {
+                Ok(proof) => proof,
+                Err(error) => {
+                    log::trace!(
                     "remote changes proof request from {} for key {} ({:?}..{:?}) failed with: {}",
                     peer,
                     if let Some(sk) = storage_key {
@@ -780,14 +777,14 @@ where
                     error
                 );
 
-                fetcher::ChangesProof::<B::Header> {
-                    max_block: Zero::zero(),
-                    proof: Vec::new(),
-                    roots: BTreeMap::new(),
-                    roots_proof: StorageProof::empty(),
+                    fetcher::ChangesProof::<B::Header> {
+                        max_block: Zero::zero(),
+                        proof: Vec::new(),
+                        roots: BTreeMap::new(),
+                        roots_proof: StorageProof::empty(),
+                    }
                 }
-            }
-        };
+            };
 
         let response = {
             let r = api::v1::light::RemoteChangesResponse {
