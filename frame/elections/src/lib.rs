@@ -33,7 +33,7 @@ use frame_support::{
 	weights::{Weight, MINIMUM_WEIGHT, SimpleDispatchInfo},
 	traits::{
 		Currency, ExistenceRequirement, Get, LockableCurrency, LockIdentifier, BalanceStatus,
-        OnUnbalanced, ReservableCurrency, WithdrawReason, WithdrawReasons, ChangeMembers,
+		OnUnbalanced, ReservableCurrency, WithdrawReason, WithdrawReasons, ChangeMembers,
 	}
 };
 use codec::{Encode, Decode};
@@ -377,9 +377,9 @@ decl_module! {
 		/// The chunk size of the voter vector.
 		const VOTER_SET_SIZE: u32 = VOTER_SET_SIZE as u32;
 		/// The chunk size of the approval vector.
-        const APPROVAL_SET_SIZE: u32 = APPROVAL_SET_SIZE as u32;
-        
-        const MouduleId: LockIdentifier = T::ModuleId::get();
+		const APPROVAL_SET_SIZE: u32 = APPROVAL_SET_SIZE as u32;
+
+		const MouduleId: LockIdentifier = T::ModuleId::get();
 
 		fn deposit_event() = default;
 
@@ -496,7 +496,7 @@ decl_module! {
 			);
 
 			T::Currency::remove_lock(
-            	T::ModuleId::get(),
+				T::ModuleId::get(),
 				if valid { &who } else { &reporter }
 			);
 
@@ -534,7 +534,7 @@ decl_module! {
 
 			Self::remove_voter(&who, index);
 			T::Currency::unreserve(&who, T::VotingBond::get());
-            T::Currency::remove_lock(T::ModuleId::get(), &who);
+			T::Currency::remove_lock(T::ModuleId::get(), &who);
 		}
 
 		/// Submit oneself for candidacy.
@@ -894,11 +894,11 @@ impl<T: Trait> Module<T> {
 		}
 
 		T::Currency::set_lock(
-        	T::ModuleId::get(),
+			T::ModuleId::get(),
 			&who,
 			locked_balance,
 			WithdrawReasons::all(),
-        );
+		);
 
 		<VoterInfoOf<T>>::insert(
 			&who,

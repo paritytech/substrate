@@ -118,7 +118,7 @@ static ISTANBUL_CONFIG: Config = Config::istanbul();
 
 /// EVM module trait
 pub trait Trait: frame_system::Trait + pallet_timestamp::Trait {
-    /// The EVM's module id
+	/// The EVM's module id
 	type ModuleId: Get<ModuleId>;
 	/// Calculator for current gas price.
 	type FeeCalculator: FeeCalculator;
@@ -188,7 +188,7 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
-        fn deposit_event() = default;
+		fn deposit_event() = default;
 		
 		const MouduleId: ModuleId = T::ModuleId::get();
 
