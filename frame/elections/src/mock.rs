@@ -21,7 +21,7 @@
 use crate as elections;
 use frame_support::{
     assert_ok, parameter_types,
-    traits::{ChangeMembers, Currency, Get},
+    traits::{ChangeMembers, Currency, Get, LockIdentifier},
     weights::Weight,
     StorageMap, StorageValue,
 };
@@ -132,6 +132,10 @@ impl ChangeMembers<u64> for TestChangeMembers {
     }
 }
 
+parameter_types!{
+    pub const ElectionModuleId: LockIdentifier = *b"py/elect"; 
+}
+
 impl elections::Trait for Test {
     type Event = Event;
     type Currency = Balances;
@@ -149,6 +153,7 @@ impl elections::Trait for Test {
     type InactiveGracePeriod = InactiveGracePeriod;
     type VotingPeriod = VotingPeriod;
     type DecayRatio = DecayRatio;
+    type ModuleId = ElectionModuleId;
 }
 
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;

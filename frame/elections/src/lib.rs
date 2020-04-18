@@ -36,7 +36,7 @@ use frame_system::{self as system, ensure_root, ensure_signed};
 use sp_runtime::{
     print,
     traits::{One, Saturating, StaticLookup, Zero},
-    DispatchResult, RuntimeDebug,
+    DispatchResult, RuntimeDebug, ModuleId,
 };
 use sp_std::prelude::*;
 
@@ -127,7 +127,6 @@ pub enum CellStatus {
     Hole,
 }
 
-const MODULE_ID: LockIdentifier = *b"py/elect";
 
 /// Number of voters grouped in one chunk.
 pub const VOTER_SET_SIZE: usize = 64;
@@ -148,8 +147,12 @@ type ApprovalFlag = u32;
 /// Number of approval flags that can fit into [`ApprovalFlag`] type.
 const APPROVAL_FLAG_LEN: usize = 32;
 
+const MODULE_ID: LockIdentifier = *b"py/elect";
+
 pub trait Trait: frame_system::Trait {
     type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+
+    type ModuleId: Get<LockIdentifier>;
 
     /// The currency that people are electing with.
     type Currency: LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>
@@ -380,6 +383,8 @@ decl_module! {
         /// The chunk size of the approval vector.
         const APPROVAL_SET_SIZE: u32 = APPROVAL_SET_SIZE as u32;
 
+        const MouduleId: LockIdentifier  = T::ModuleId::get();
+
         fn deposit_event() = default;
 
         /// Set candidate approvals. Approval slots stay valid as long as candidates in those slots
@@ -495,7 +500,8 @@ decl_module! {
             );
 
             T::Currency::remove_lock(
-                MODULE_ID,
+                // MODULE_ID,
+                T::ModuleId::get(),
                 if valid { &who } else { &reporter }
             );
 
@@ -533,7 +539,8 @@ decl_module! {
 
             Self::remove_voter(&who, index);
             T::Currency::unreserve(&who, T::VotingBond::get());
-            T::Currency::remove_lock(MODULE_ID, &who);
+            // T::Currency::remove_lock(MODULE_ID, &who);
+            T::Currency::remove_lock(T::ModuleId::get(), &who);
         }
 
         /// Submit oneself for candidacy.
@@ -894,7 +901,8 @@ impl<T: Trait> Module<T> {
             VoterCount::mutate(|c| *c = *c + 1);
         }
 
-        T::Currency::set_lock(MODULE_ID, &who, locked_balance, WithdrawReasons::all());
+        // T::Currency::set_lock(MODULE_ID, &who, locked_balance, WithdrawReasons::all());
+        T::Currency::set_lock(T::ModuleId::get(), &who, locked_balance, WithdrawReasons::all());
 
         <VoterInfoOf<T>>::insert(
             &who,
