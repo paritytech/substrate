@@ -95,9 +95,12 @@ use frame_support::traits::{
 	Currency, Get, Imbalance, OnUnbalanced, ExistenceRequirement::KeepAlive,
 	ReservableCurrency, WithdrawReason
 };
-use sp_runtime::{Permill, ModuleId, Percent, RuntimeDebug, traits::{
-	Zero, StaticLookup, AccountIdConversion, Saturating, Hash, BadOrigin
-}};
+use sp_runtime::{
+    Permill, ModuleId, Percent, RuntimeDebug,
+    traits::{
+        Zero, StaticLookup, AccountIdConversion, Saturating, Hash, BadOrigin,
+    }
+};
 use frame_support::weights::{Weight, MINIMUM_WEIGHT, SimpleDispatchInfo};
 use frame_support::traits::{Contains, EnsureOrigin};
 use codec::{Encode, Decode};
@@ -111,9 +114,12 @@ type PositiveImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_sy
 type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
 /// The treasury's module id, used for deriving its sovereign account ID.
-const MODULE_ID: ModuleId = ModuleId(*b"py/trsry");
+// const MODULE_ID: ModuleId = ModuleId(*b"py/trsry");
 
 pub trait Trait: frame_system::Trait {
+    /// The treasury's module id, used for deriving its sovereign account ID.
+    type ModuleId: Get<ModuleId>;
+
 	/// The staking balance.
 	type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
 
@@ -312,7 +318,10 @@ decl_module! {
 		const TipReportDepositBase: BalanceOf<T> = T::TipReportDepositBase::get();
 
 		/// The amount held on deposit per byte within the tip report reason.
-		const TipReportDepositPerByte: BalanceOf<T> = T::TipReportDepositPerByte::get();
+        const TipReportDepositPerByte: BalanceOf<T> = T::TipReportDepositPerByte::get();
+        
+        /// The treasury's module id, used for deriving its sovereign account ID.
+        const MouduleId: ModuleId = T::ModuleId::get();
 
 		type Error = Error<T>;
 
@@ -571,7 +580,8 @@ impl<T: Trait> Module<T> {
 	/// This actually does computation. If you need to keep using it, then make sure you cache the
 	/// value and only call this once.
 	pub fn account_id() -> T::AccountId {
-		MODULE_ID.into_account()
+        // MODULE_ID.into_account()
+        T::ModuleId::get().into_account()
 	}
 
 	/// The needed bond for a proposal whose spend is `value`.
