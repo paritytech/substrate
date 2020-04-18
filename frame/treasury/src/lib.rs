@@ -321,7 +321,7 @@ decl_module! {
         const TipReportDepositPerByte: BalanceOf<T> = T::TipReportDepositPerByte::get();
         
         /// The treasury's module id, used for deriving its sovereign account ID.
-        const MouduleId: ModuleId = T::ModuleId::get();
+        const ModuleId: ModuleId = T::ModuleId::get();
 
 		type Error = Error<T>;
 
