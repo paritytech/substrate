@@ -150,7 +150,11 @@ decl_module! {
 								Lookup::<T>::remove(id);
 							}
 						}
-						Self::deposit_event(RawEvent::Dispatched((now, index), maybe_id, r));
+						Self::deposit_event(RawEvent::Dispatched(
+							(now, index),
+							maybe_id,
+							r.map(|_| ()).map_err(|e| e.error)
+						));
 						result = cumulative_weight;
 						None
 					} else {
@@ -344,6 +348,7 @@ mod tests {
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
+		type DbWeight = ();
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();

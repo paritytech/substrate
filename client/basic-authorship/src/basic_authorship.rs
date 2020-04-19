@@ -23,7 +23,7 @@ use sc_client_api::backend;
 use codec::Decode;
 use sp_consensus::{evaluation, Proposal, RecordProof};
 use sp_inherents::InherentData;
-use log::{error, info, debug, trace};
+use log::{error, info, debug, trace, warn};
 use sp_core::ExecutionContext;
 use sp_runtime::{
 	generic::BlockId,
@@ -34,7 +34,7 @@ use sc_telemetry::{telemetry, CONSENSUS_INFO};
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 use sp_api::{ProvideRuntimeApi, ApiExt};
 use futures::{executor, future, future::Either};
-use sp_blockchain::{HeaderBackend, ApplyExtrinsicFailed};
+use sp_blockchain::{HeaderBackend, ApplyExtrinsicFailed::Validity, Error::ApplyExtrinsicFailed};
 use std::marker::PhantomData;
 
 /// Proposer factory.
@@ -196,14 +196,25 @@ impl<A, B, Block, C> ProposerInner<B, Block, C, A>
 
 		// We don't check the API versions any further here since the dispatch compatibility
 		// check should be enough.
-		for extrinsic in self.client.runtime_api()
+		for inherent in self.client.runtime_api()
 			.inherent_extrinsics_with_context(
 				&self.parent_id,
 				ExecutionContext::BlockConstruction,
 				inherent_data
 			)?
 		{
-			block_builder.push(extrinsic)?;
+			match block_builder.push(inherent) {
+				Err(ApplyExtrinsicFailed(Validity(e))) if e.exhausted_resources() =>
+					warn!("⚠️  Dropping non-mandatory inherent from overweight block."),
+				Err(ApplyExtrinsicFailed(Validity(e))) if e.was_mandatory() => {
+					error!("❌️ Mandatory inherent extrinsic returned error. Block cannot be produced.");
+					Err(ApplyExtrinsicFailed(Validity(e)))?
+				}
+				Err(e) => {
+					warn!("❗️ Inherent extrinsic returned unexpected error: {}. Dropping.", e);
+				}
+				Ok(_) => {}
+			}
 		}
 
 		// proceed with transactions
@@ -241,7 +252,7 @@ impl<A, B, Block, C> ProposerInner<B, Block, C, A>
 				Ok(()) => {
 					debug!("[{:?}] Pushed to the block.", pending_tx_hash);
 				}
-				Err(sp_blockchain::Error::ApplyExtrinsicFailed(ApplyExtrinsicFailed::Validity(e)))
+				Err(ApplyExtrinsicFailed(Validity(e)))
 						if e.exhausted_resources() => {
 					if is_first {
 						debug!("[{:?}] Invalid transaction: FullBlock on empty block", pending_tx_hash);
@@ -349,7 +360,11 @@ mod tests {
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let txpool = Arc::new(
-			BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone()))).0
+			BasicPool::new(
+				Default::default(),
+				Arc::new(FullChainApi::new(client.clone())),
+				None,
+			).0
 		);
 
 		futures::executor::block_on(
@@ -397,7 +412,11 @@ mod tests {
 	fn should_not_panic_when_deadline_is_reached() {
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let txpool = Arc::new(
-			BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone()))).0
+			BasicPool::new(
+				Default::default(),
+				Arc::new(FullChainApi::new(client.clone())),
+				None,
+			).0
 		);
 
 		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone());
@@ -429,8 +448,13 @@ mod tests {
 			.build_with_backend();
 		let client = Arc::new(client);
 		let txpool = Arc::new(
-			BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone()))).0
+			BasicPool::new(
+				Default::default(),
+				Arc::new(FullChainApi::new(client.clone())),
+				None,
+			).0
 		);
+
 		let genesis_hash = client.info().best_hash;
 		let block_id = BlockId::Hash(genesis_hash);
 
@@ -482,7 +506,11 @@ mod tests {
 		// given
 		let mut client = Arc::new(substrate_test_runtime_client::new());
 		let txpool = Arc::new(
-			BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone()))).0
+			BasicPool::new(
+				Default::default(),
+				Arc::new(FullChainApi::new(client.clone())),
+				None,
+			).0
 		);
 
 		futures::executor::block_on(

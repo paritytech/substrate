@@ -19,7 +19,7 @@ use crate::*;
 use codec::Decode;
 use frame_support::{
 	assert_ok, impl_outer_origin, parameter_types,
-	weights::{GetDispatchInfo, Weight},
+	weights::Weight,
 };
 use sp_core::{
 	H256,
@@ -61,6 +61,7 @@ impl frame_system::Trait for Test {
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
+	type DbWeight = ();
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
@@ -94,6 +95,7 @@ impl frame_system::offchain::CreateTransaction<Test, Extrinsic> for Test {
 parameter_types! {
 	pub const GracePeriod: u64 = 5;
 	pub const UnsignedInterval: u64 = 128;
+	pub const UnsignedPriority: u64 = 1 << 20;
 }
 
 impl Trait for Test {
@@ -103,6 +105,7 @@ impl Trait for Test {
 	type SubmitUnsignedTransaction = SubmitTransaction;
 	type GracePeriod = GracePeriod;
 	type UnsignedInterval = UnsignedInterval;
+	type UnsignedPriority = UnsignedPriority;
 }
 
 type Example = Module<Test>;
@@ -188,15 +191,6 @@ fn should_submit_unsigned_transaction_on_chain() {
 		assert_eq!(tx.signature, None);
 		assert_eq!(tx.call, Call::submit_price_unsigned(1, 15523));
 	});
-}
-
-#[test]
-fn weights_work() {
-	// must have a default weight.
-	let default_call = <Call<Test>>::submit_price(10);
-	let info = default_call.get_dispatch_info();
-	// aka. `let info = <Call<Test> as GetDispatchInfo>::get_dispatch_info(&default_call);`
-	assert_eq!(info.weight, 10_000);
 }
 
 fn price_oracle_response(state: &mut testing::OffchainState) {

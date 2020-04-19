@@ -17,7 +17,7 @@
 //! Primitives for the runtime modules.
 
 use sp_std::prelude::*;
-use sp_std::{self, result, marker::PhantomData, convert::{TryFrom, TryInto}, fmt::Debug};
+use sp_std::{self, marker::PhantomData, convert::{TryFrom, TryInto}, fmt::Debug};
 use sp_io;
 #[cfg(feature = "std")]
 use std::fmt::Display;
@@ -39,6 +39,7 @@ pub use sp_arithmetic::traits::{
 };
 use sp_application_crypto::AppKey;
 use impl_trait_for_tuples::impl_for_tuples;
+use crate::DispatchResult;
 
 /// A lazy value.
 pub trait Lazy<T: ?Sized> {
@@ -80,12 +81,15 @@ impl IdentifyAccount for sp_core::ecdsa::Public {
 pub trait Verify {
 	/// Type of the signer.
 	type Signer: IdentifyAccount;
-	/// Verify a signature. Return `true` if signature is valid for the value.
+	/// Verify a signature.
+	///
+	/// Return `true` if signature is valid for the value.
 	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &<Self::Signer as IdentifyAccount>::AccountId) -> bool;
 }
 
 impl Verify for sp_core::ed25519::Signature {
 	type Signer = sp_core::ed25519::Public;
+
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &sp_core::ed25519::Public) -> bool {
 		sp_io::crypto::ed25519_verify(self, msg.get(), signer)
 	}
@@ -93,6 +97,7 @@ impl Verify for sp_core::ed25519::Signature {
 
 impl Verify for sp_core::sr25519::Signature {
 	type Signer = sp_core::sr25519::Public;
+
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &sp_core::sr25519::Public) -> bool {
 		sp_io::crypto::sr25519_verify(self, msg.get(), signer)
 	}
@@ -145,24 +150,6 @@ impl From<BadOrigin> for &'static str {
 	fn from(_: BadOrigin) -> &'static str {
 		"Bad origin"
 	}
-}
-
-/// Some sort of check on the origin is performed by this object.
-pub trait EnsureOrigin<OuterOrigin> {
-	/// A return type.
-	type Success;
-	/// Perform the origin check.
-	fn ensure_origin(o: OuterOrigin) -> result::Result<Self::Success, BadOrigin> {
-		Self::try_origin(o).map_err(|_| BadOrigin)
-	}
-	/// Perform the origin check.
-	fn try_origin(o: OuterOrigin) -> result::Result<Self::Success, OuterOrigin>;
-
-	/// Returns an outer origin capable of passing `try_origin` check.
-	/// 
-	/// ** Should be used for benchmarking only!!! **
-	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> OuterOrigin;
 }
 
 /// An error that indicates that a lookup failed.
@@ -642,8 +629,30 @@ pub trait Dispatchable {
 	type Origin;
 	/// ...
 	type Trait;
-	/// Actually dispatch this call and result the result of it.
-	fn dispatch(self, origin: Self::Origin) -> crate::DispatchResult;
+	/// An opaque set of information attached to the transaction. This could be constructed anywhere
+	/// down the line in a runtime. The current Substrate runtime uses a struct with the same name
+	/// to represent the dispatch class and weight.
+	type Info;
+	/// Additional information that is returned by `dispatch`. Can be used to supply the caller
+	/// with information about a `Dispatchable` that is ownly known post dispatch.
+	type PostInfo: Eq + PartialEq + Clone + Copy + Encode + Decode + Printable;
+	/// Actually dispatch this call and return the result of it.
+	fn dispatch(self, origin: Self::Origin) -> crate::DispatchResultWithInfo<Self::PostInfo>;
+}
+
+/// Shortcut to reference the `Info` type of a `Dispatchable`.
+pub type DispatchInfoOf<T> = <T as Dispatchable>::Info;
+/// Shortcut to reference the `PostInfo` type of a `Dispatchable`.
+pub type PostDispatchInfoOf<T> = <T as Dispatchable>::PostInfo;
+
+impl Dispatchable for () {
+	type Origin = ();
+	type Trait = ();
+	type Info = ();
+	type PostInfo = ();
+	fn dispatch(self, _origin: Self::Origin) -> crate::DispatchResultWithInfo<Self::PostInfo> {
+		panic!("This implemention should not be used for actual dispatch.");
+	}
 }
 
 /// Means by which a transaction may be extended. This type embodies both the data and the logic
@@ -659,7 +668,7 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 	type AccountId;
 
 	/// The type which encodes the call to be dispatched.
-	type Call;
+	type Call: Dispatchable;
 
 	/// Any additional data that will go into the signed payload. This may be created dynamically
 	/// from the transaction using the `additional_signed` function.
@@ -667,11 +676,6 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 
 	/// The type that encodes information that can be passed from pre_dispatch to post-dispatch.
 	type Pre: Default;
-
-	/// An opaque set of information attached to the transaction. This could be constructed anywhere
-	/// down the line in a runtime. The current Substrate runtime uses a struct with the same name
-	/// to represent the dispatch class and weight.
-	type DispatchInfo: Clone;
 
 	/// Construct any additional data that should be in the signed payload of the transaction. Can
 	/// also perform any pre-signature-verification checks and return an error if needed.
@@ -690,7 +694,7 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 		&self,
 		_who: &Self::AccountId,
 		_call: &Self::Call,
-		_info: Self::DispatchInfo,
+		_info: &DispatchInfoOf<Self::Call>,
 		_len: usize,
 	) -> TransactionValidity {
 		Ok(ValidTransaction::default())
@@ -708,7 +712,7 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 		self,
 		who: &Self::AccountId,
 		call: &Self::Call,
-		info: Self::DispatchInfo,
+		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> Result<Self::Pre, TransactionValidityError> {
 		self.validate(who, call, info.clone(), len)
@@ -726,7 +730,7 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 	/// Make sure to perform the same checks in `pre_dispatch_unsigned` function.
 	fn validate_unsigned(
 		_call: &Self::Call,
-		_info: Self::DispatchInfo,
+		_info: &DispatchInfoOf<Self::Call>,
 		_len: usize,
 	) -> TransactionValidity {
 		Ok(ValidTransaction::default())
@@ -742,7 +746,7 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 	/// perform the same validation as in `validate_unsigned`.
 	fn pre_dispatch_unsigned(
 		call: &Self::Call,
-		info: Self::DispatchInfo,
+		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> Result<Self::Pre, TransactionValidityError> {
 		Self::validate_unsigned(call, info.clone(), len)
@@ -750,8 +754,28 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 			.map_err(Into::into)
 	}
 
-	/// Do any post-flight stuff for a transaction.
-	fn post_dispatch(_pre: Self::Pre, _info: Self::DispatchInfo, _len: usize) { }
+	/// Do any post-flight stuff for an extrinsic.
+	///
+	/// This gets given the `DispatchResult` `_result` from the extrinsic and can, if desired,
+	/// introduce a `TransactionValidityError`, causing the block to become invalid for including
+	/// it.
+	///
+	/// WARNING: It is dangerous to return an error here. To do so will fundamentally invalidate the
+	/// transaction and any block that it is included in, causing the block author to not be
+	/// compensated for their work in validating the transaction or producing the block so far.
+	///
+	/// It can only be used safely when you *know* that the extrinsic is one that can only be
+	/// introduced by the current block author; generally this implies that it is an inherent and
+	/// will come from either an offchain-worker or via `InherentData`.
+	fn post_dispatch(
+		_pre: Self::Pre,
+		_info: &DispatchInfoOf<Self::Call>,
+		_post_info: &PostDispatchInfoOf<Self::Call>,
+		_len: usize,
+		_result: &DispatchResult,
+	) -> Result<(), TransactionValidityError> {
+		Ok(())
+	}
 
 	/// Returns the list of unique identifier for this signed extension.
 	///
@@ -766,11 +790,10 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 }
 
 #[impl_for_tuples(1, 12)]
-impl<AccountId, Call, Info: Clone> SignedExtension for Tuple {
-	for_tuples!( where #( Tuple: SignedExtension<AccountId=AccountId, Call=Call, DispatchInfo=Info> )* );
+impl<AccountId, Call: Dispatchable> SignedExtension for Tuple {
+	for_tuples!( where #( Tuple: SignedExtension<AccountId=AccountId, Call=Call,> )* );
 	type AccountId = AccountId;
 	type Call = Call;
-	type DispatchInfo = Info;
 	const IDENTIFIER: &'static str = "You should call `identifier()`!";
 	for_tuples!( type AdditionalSigned = ( #( Tuple::AdditionalSigned ),* ); );
 	for_tuples!( type Pre = ( #( Tuple::Pre ),* ); );
@@ -783,44 +806,47 @@ impl<AccountId, Call, Info: Clone> SignedExtension for Tuple {
 		&self,
 		who: &Self::AccountId,
 		call: &Self::Call,
-		info: Self::DispatchInfo,
+		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> TransactionValidity {
 		let valid = ValidTransaction::default();
-		for_tuples!( #( let valid = valid.combine_with(Tuple.validate(who, call, info.clone(), len)?); )* );
+		for_tuples!( #( let valid = valid.combine_with(Tuple.validate(who, call, info, len)?); )* );
 		Ok(valid)
 	}
 
-	fn pre_dispatch(self, who: &Self::AccountId, call: &Self::Call, info: Self::DispatchInfo, len: usize)
+	fn pre_dispatch(self, who: &Self::AccountId, call: &Self::Call, info: &DispatchInfoOf<Self::Call>, len: usize)
 		-> Result<Self::Pre, TransactionValidityError>
 	{
-		Ok(for_tuples!( ( #( Tuple.pre_dispatch(who, call, info.clone(), len)? ),* ) ))
+		Ok(for_tuples!( ( #( Tuple.pre_dispatch(who, call, info, len)? ),* ) ))
 	}
 
 	fn validate_unsigned(
 		call: &Self::Call,
-		info: Self::DispatchInfo,
+		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> TransactionValidity {
 		let valid = ValidTransaction::default();
-		for_tuples!( #( let valid = valid.combine_with(Tuple::validate_unsigned(call, info.clone(), len)?); )* );
+		for_tuples!( #( let valid = valid.combine_with(Tuple::validate_unsigned(call, info, len)?); )* );
 		Ok(valid)
 	}
 
 	fn pre_dispatch_unsigned(
 		call: &Self::Call,
-		info: Self::DispatchInfo,
+		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> Result<Self::Pre, TransactionValidityError> {
-		Ok(for_tuples!( ( #( Tuple::pre_dispatch_unsigned(call, info.clone(), len)? ),* ) ))
+		Ok(for_tuples!( ( #( Tuple::pre_dispatch_unsigned(call, info, len)? ),* ) ))
 	}
 
 	fn post_dispatch(
 		pre: Self::Pre,
-		info: Self::DispatchInfo,
+		info: &DispatchInfoOf<Self::Call>,
+		post_info: &PostDispatchInfoOf<Self::Call>,
 		len: usize,
-	) {
-		for_tuples!( #( Tuple::post_dispatch(pre.Tuple, info.clone(), len); )* )
+		result: &DispatchResult,
+	) -> Result<(), TransactionValidityError> {
+		for_tuples!( #( Tuple::post_dispatch(pre.Tuple, info, post_info, len, result)?; )* );
+		Ok(())
 	}
 
 	fn identifier() -> Vec<&'static str> {
@@ -837,7 +863,6 @@ impl SignedExtension for () {
 	type AdditionalSigned = ();
 	type Call = ();
 	type Pre = ();
-	type DispatchInfo = ();
 	const IDENTIFIER: &'static str = "UnitSignedExtension";
 	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
 }
@@ -850,16 +875,13 @@ impl SignedExtension for () {
 /// each piece of attributable information to be disambiguated.
 pub trait Applyable: Sized + Send + Sync {
 	/// Type by which we can dispatch. Restricts the `UnsignedValidator` type.
-	type Call;
-
-	/// An opaque set of information attached to the transaction.
-	type DispatchInfo: Clone;
+	type Call: Dispatchable;
 
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
 	fn validate<V: ValidateUnsigned<Call=Self::Call>>(
 		&self,
 		source: TransactionSource,
-		info: Self::DispatchInfo,
+		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> TransactionValidity;
 
@@ -867,7 +889,7 @@ pub trait Applyable: Sized + Send + Sync {
 	/// index and sender.
 	fn apply<V: ValidateUnsigned<Call=Self::Call>>(
 		self,
-		info: Self::DispatchInfo,
+		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> crate::ApplyExtrinsicResult;
 }
@@ -1263,6 +1285,12 @@ impl Printable for bool {
 		} else {
 			"false".print()
 		}
+	}
+}
+
+impl Printable for () {
+	fn print(&self) {
+		"()".print()
 	}
 }
 

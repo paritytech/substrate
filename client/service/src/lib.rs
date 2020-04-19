@@ -24,11 +24,12 @@ pub mod config;
 pub mod chain_ops;
 pub mod error;
 
+mod metrics;
 mod builder;
 mod status_sinks;
 mod task_manager;
 
-use std::{borrow::Cow, io, pin::Pin};
+use std::{io, pin::Pin};
 use std::marker::PhantomData;
 use std::net::SocketAddr;
 use std::collections::HashMap;
@@ -40,7 +41,6 @@ use parking_lot::Mutex;
 use sc_client::Client;
 use futures::{
 	Future, FutureExt, Stream, StreamExt,
-	channel::mpsc,
 	compat::*,
 	sink::SinkExt,
 	task::{Spawn, FutureObj, SpawnError},
@@ -51,6 +51,7 @@ use codec::{Encode, Decode};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{NumberFor, Block as BlockT};
 use parity_util_mem::MallocSizeOf;
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver,  TracingUnboundedSender};
 
 pub use self::error::Error;
 pub use self::builder::{
@@ -58,9 +59,10 @@ pub use self::builder::{
 	ServiceBuilder, ServiceBuilderCommand, TFullClient, TLightClient, TFullBackend, TLightBackend,
 	TFullCallExecutor, TLightCallExecutor,
 };
-pub use config::{Configuration, Roles, PruningMode, DatabaseConfig};
+pub use config::{Configuration, Role, PruningMode, DatabaseConfig};
 pub use sc_chain_spec::{
-	ChainSpec, GenericChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension
+	ChainSpec, GenericChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension,
+	NoExtension, ChainType,
 };
 pub use sp_transaction_pool::{TransactionPool, InPoolTransaction, error::IntoPoolError};
 pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
@@ -71,6 +73,7 @@ pub use sc_executor::NativeExecutionDispatch;
 pub use std::{ops::Deref, result::Result, sync::Arc};
 #[doc(hidden)]
 pub use sc_network::config::{FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
+pub use sc_tracing::TracingReceiver;
 pub use task_manager::{TaskManagerBuilder, SpawnTaskHandle};
 use task_manager::TaskManager;
 
@@ -98,13 +101,13 @@ pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 	transaction_pool: Arc<TTxPool>,
 	/// Send a signal when a spawned essential task has concluded. The next time
 	/// the service future is polled it should complete with an error.
-	essential_failed_tx: mpsc::UnboundedSender<()>,
+	essential_failed_tx: TracingUnboundedSender<()>,
 	/// A receiver for spawned essential-tasks concluding.
-	essential_failed_rx: mpsc::UnboundedReceiver<()>,
+	essential_failed_rx: TracingUnboundedReceiver<()>,
 	rpc_handlers: sc_rpc_server::RpcHandler<sc_rpc::Metadata>,
 	_rpc: Box<dyn std::any::Any + Send + Sync>,
 	_telemetry: Option<sc_telemetry::Telemetry>,
-	_telemetry_on_connect_sinks: Arc<Mutex<Vec<futures::channel::mpsc::UnboundedSender<()>>>>,
+	_telemetry_on_connect_sinks: Arc<Mutex<Vec<TracingUnboundedSender<()>>>>,
 	_offchain_workers: Option<Arc<TOc>>,
 	keystore: sc_keystore::KeyStorePtr,
 	marker: PhantomData<TBl>,
@@ -130,18 +133,24 @@ pub trait AbstractService: 'static + Future<Output = Result<(), Error>> +
 	type TransactionPool: TransactionPool<Block = Self::Block> + MallocSizeOfWasm;
 
 	/// Get event stream for telemetry connection established events.
-	fn telemetry_on_connect_stream(&self) -> futures::channel::mpsc::UnboundedReceiver<()>;
+	fn telemetry_on_connect_stream(&self) -> TracingUnboundedReceiver<()>;
 
 	/// return a shared instance of Telemetry (if enabled)
 	fn telemetry(&self) -> Option<sc_telemetry::Telemetry>;
 
 	/// Spawns a task in the background that runs the future passed as parameter.
-	fn spawn_task(&self, name: impl Into<Cow<'static, str>>, task: impl Future<Output = ()> + Send + 'static);
+	///
+	/// Information about this task will be reported to Prometheus.
+	///
+	/// The task name is a `&'static str` as opposed to a `String`. The reason for that is that
+	/// in order to avoid memory consumption issues with the Prometheus metrics, the set of
+	/// possible task names has to be bounded.
+	fn spawn_task(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static);
 
 	/// Spawns a task in the background that runs the future passed as
 	/// parameter. The given task is considered essential, i.e. if it errors we
 	/// trigger a service exit.
-	fn spawn_essential_task(&self, name: impl Into<Cow<'static, str>>, task: impl Future<Output = ()> + Send + 'static);
+	fn spawn_essential_task(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static);
 
 	/// Returns a handle for spawning tasks.
 	fn spawn_task_handle(&self) -> SpawnTaskHandle;
@@ -171,7 +180,7 @@ pub trait AbstractService: 'static + Future<Output = Result<(), Error>> +
 		-> Arc<NetworkService<Self::Block, <Self::Block as BlockT>::Hash>>;
 
 	/// Returns a receiver that periodically receives a status of the network.
-	fn network_status(&self, interval: Duration) -> mpsc::UnboundedReceiver<(NetworkStatus<Self::Block>, NetworkState)>;
+	fn network_status(&self, interval: Duration) -> TracingUnboundedReceiver<(NetworkStatus<Self::Block>, NetworkState)>;
 
 	/// Get shared transaction pool instance.
 	fn transaction_pool(&self) -> Arc<Self::TransactionPool>;
@@ -203,8 +212,8 @@ where
 	type SelectChain = TSc;
 	type TransactionPool = TExPool;
 
-	fn telemetry_on_connect_stream(&self) -> futures::channel::mpsc::UnboundedReceiver<()> {
-		let (sink, stream) = futures::channel::mpsc::unbounded();
+	fn telemetry_on_connect_stream(&self) -> TracingUnboundedReceiver<()> {
+		let (sink, stream) = tracing_unbounded("mpsc_telemetry_on_connect");
 		self._telemetry_on_connect_sinks.lock().push(sink);
 		stream
 	}
@@ -217,11 +226,11 @@ where
 		self.keystore.clone()
 	}
 
-	fn spawn_task(&self, name: impl Into<Cow<'static, str>>, task: impl Future<Output = ()> + Send + 'static) {
+	fn spawn_task(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static) {
 		self.task_manager.spawn(name, task)
 	}
 
-	fn spawn_essential_task(&self, name: impl Into<Cow<'static, str>>, task: impl Future<Output = ()> + Send + 'static) {
+	fn spawn_essential_task(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static) {
 		let mut essential_failed = self.essential_failed_tx.clone();
 		let essential_task = std::panic::AssertUnwindSafe(task)
 			.catch_unwind()
@@ -259,8 +268,8 @@ where
 		self.network.clone()
 	}
 
-	fn network_status(&self, interval: Duration) -> mpsc::UnboundedReceiver<(NetworkStatus<Self::Block>, NetworkState)> {
-		let (sink, stream) = mpsc::unbounded();
+	fn network_status(&self, interval: Duration) -> TracingUnboundedReceiver<(NetworkStatus<Self::Block>, NetworkState)> {
+		let (sink, stream) = tracing_unbounded("mpsc_network_status");
 		self.network_status_sinks.lock().push(interval, sink);
 		stream
 	}
@@ -309,8 +318,8 @@ impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Spawn for
 		&self,
 		future: FutureObj<'static, ()>
 	) -> Result<(), SpawnError> {
-		self.task_manager.scheduler().unbounded_send((Box::pin(future), From::from("unnamed")))
-			.map_err(|_| SpawnError::shutdown())
+		self.task_manager.spawn_handle().spawn("unnamed", future);
+		Ok(())
 	}
 }
 
@@ -322,11 +331,11 @@ fn build_network_future<
 	C: sc_client::BlockchainEvents<B>,
 	H: sc_network::ExHashT
 > (
-	roles: Roles,
+	role: Role,
 	mut network: sc_network::NetworkWorker<B, H>,
 	client: Arc<C>,
 	status_sinks: Arc<Mutex<status_sinks::StatusSinks<(NetworkStatus<B>, NetworkState)>>>,
-	mut rpc_rx: mpsc::UnboundedReceiver<sc_rpc::system::Request<B>>,
+	mut rpc_rx: TracingUnboundedReceiver<sc_rpc::system::Request<B>>,
 	should_have_peers: bool,
 	announce_imported_blocks: bool,
 ) -> impl Future<Output = ()> {
@@ -364,6 +373,17 @@ fn build_network_future<
 						should_have_peers,
 					});
 				},
+				sc_rpc::system::Request::LocalPeerId(sender) => {
+					let _ = sender.send(network.local_peer_id().to_base58());
+				},
+				sc_rpc::system::Request::LocalListenAddresses(sender) => {
+					let peer_id = network.local_peer_id().clone().into();
+					let p2p_proto_suffix = sc_network::multiaddr::Protocol::P2p(peer_id);
+					let addresses = network.listen_addresses()
+						.map(|addr| addr.clone().with(p2p_proto_suffix.clone()).to_string())
+						.collect();
+					let _ = sender.send(addresses);
+				},
 				sc_rpc::system::Request::Peers(sender) => {
 					let _ = sender.send(network.peers_debug_info().into_iter().map(|(peer_id, p)|
 						sc_rpc::system::PeerInfo {
@@ -399,17 +419,14 @@ fn build_network_future<
 				sc_rpc::system::Request::NodeRoles(sender) => {
 					use sc_rpc::system::NodeRole;
 
-					let node_roles = (0 .. 8)
-						.filter(|&bit_number| (roles.bits() >> bit_number) & 1 == 1)
-						.map(|bit_number| match Roles::from_bits(1 << bit_number) {
-							Some(Roles::AUTHORITY) => NodeRole::Authority,
-							Some(Roles::LIGHT) => NodeRole::LightClient,
-							Some(Roles::FULL) => NodeRole::Full,
-							_ => NodeRole::UnknownRole(bit_number),
-						})
-						.collect();
+					let node_role = match role {
+						Role::Authority { .. } => NodeRole::Authority,
+						Role::Light => NodeRole::LightClient,
+						Role::Full => NodeRole::Full,
+						Role::Sentry { .. } => NodeRole::Sentry,
+					};
 
-					let _ = sender.send(node_roles);
+					let _ = sender.send(vec![node_role]);
 				}
 			};
 		}
@@ -679,6 +696,7 @@ mod tests {
 		let pool = Arc::new(BasicPool::new(
 			Default::default(),
 			Arc::new(FullChainApi::new(client.clone())),
+			None,
 		).0);
 		let source = sp_runtime::transaction_validity::TransactionSource::External;
 		let best = longest_chain.best_chain().unwrap();

@@ -42,7 +42,8 @@ pub use sp_core::storage::{Storage, StorageChild};
 
 use sp_std::prelude::*;
 use sp_std::convert::TryFrom;
-use sp_core::{crypto, ed25519, sr25519, ecdsa, hash::{H256, H512}};
+use sp_core::{crypto::{self, Public}, ed25519, sr25519, ecdsa, hash::{H256, H512}};
+
 use codec::{Encode, Decode};
 
 pub mod curve;
@@ -69,8 +70,8 @@ pub use sp_core::RuntimeDebug;
 
 /// Re-export top-level arithmetic stuff.
 pub use sp_arithmetic::{
-	Perquintill, Perbill, Permill, Percent, PerU16, Rational128, Fixed64, PerThing,
-	traits::SaturatedConversion,
+	Perquintill, Perbill, Permill, Percent, PerU16, Rational128, Fixed64, Fixed128,
+	PerThing, traits::SaturatedConversion,
 };
 /// Re-export 128 bit helpers.
 pub use sp_arithmetic::helpers_128bit;
@@ -299,7 +300,6 @@ impl std::fmt::Display for MultiSigner {
 impl Verify for MultiSignature {
 	type Signer = MultiSigner;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &AccountId32) -> bool {
-		use sp_core::crypto::Public;
 		match (self, signer) {
 			(MultiSignature::Ed25519(ref sig), who) => sig.verify(msg, &ed25519::Public::from_slice(who.as_ref())),
 			(MultiSignature::Sr25519(ref sig), who) => sig.verify(msg, &sr25519::Public::from_slice(who.as_ref())),
@@ -324,7 +324,6 @@ pub struct AnySignature(H512);
 impl Verify for AnySignature {
 	type Signer = sr25519::Public;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &sr25519::Public) -> bool {
-		use sp_core::crypto::Public;
 		let msg = msg.get();
 		sr25519::Signature::try_from(self.0.as_fixed_bytes().as_ref())
 			.map(|s| s.verify(msg, signer))
@@ -353,9 +352,14 @@ impl From<DispatchError> for DispatchOutcome {
 	}
 }
 
-/// Result of a module function call; either nothing (functions are only called for "side effects")
-/// or an error message.
+/// This is the legacy return type of `Dispatchable`. It is still exposed for compatibilty
+/// reasons. The new return type is `DispatchResultWithInfo`.
+/// FRAME runtimes should use frame_support::dispatch::DispatchResult
 pub type DispatchResult = sp_std::result::Result<(), DispatchError>;
+
+/// Return type of a `Dispatchable` which contains the `DispatchResult` and additional information
+/// about the `Dispatchable` that is only known post dispatch.
+pub type DispatchResultWithInfo<T> = sp_std::result::Result<T, DispatchErrorWithPostInfo<T>>;
 
 /// Reason why a dispatch call failed
 #[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, RuntimeDebug)]
@@ -379,6 +383,18 @@ pub enum DispatchError {
 	},
 }
 
+/// Result of a `Dispatchable` which contains the `DispatchResult` and additional information
+/// about the `Dispatchable` that is only known post dispatch.
+#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, RuntimeDebug)]
+pub struct DispatchErrorWithPostInfo<Info> where
+	Info: Eq + PartialEq + Clone + Copy + Encode + Decode + traits::Printable
+{
+	/// Addditional information about the `Dispatchable` which is only known post dispatch.
+	pub post_info: Info,
+	/// The actual `DispatchResult` indicating whether the dispatch was succesfull.
+	pub error: DispatchError,
+}
+
 impl DispatchError {
 	/// Return the same error but without the attached message.
 	pub fn stripped(self) -> Self {
@@ -386,6 +402,18 @@ impl DispatchError {
 			DispatchError::Module { index, error, message: Some(_) }
 				=> DispatchError::Module { index, error, message: None },
 			m => m,
+		}
+	}
+}
+
+impl<T, E> From<E> for DispatchErrorWithPostInfo<T> where
+	T: Eq + PartialEq + Clone + Copy + Encode + Decode + traits::Printable + Default,
+	E: Into<DispatchError>
+{
+	fn from(error: E) -> Self {
+		Self {
+			post_info: Default::default(),
+			error: error.into(),
 		}
 	}
 }
@@ -419,6 +447,14 @@ impl From<DispatchError> for &'static str {
 	}
 }
 
+impl<T> From<DispatchErrorWithPostInfo<T>> for &'static str where
+	T: Eq + PartialEq + Clone + Copy + Encode + Decode + traits::Printable
+{
+	fn from(err: DispatchErrorWithPostInfo<T>) -> &'static str {
+		err.error.into()
+	}
+}
+
 impl traits::Printable for DispatchError {
 	fn print(&self) {
 		"DispatchError".print();
@@ -434,6 +470,16 @@ impl traits::Printable for DispatchError {
 				}
 			}
 		}
+	}
+}
+
+impl<T> traits::Printable for DispatchErrorWithPostInfo<T> where
+	T: Eq + PartialEq + Clone + Copy + Encode + Decode + traits::Printable
+{
+	fn print(&self) {
+		self.error.print();
+		"PostInfo: ".print();
+		self.post_info.print();
 	}
 }
 
@@ -688,6 +734,39 @@ pub fn print(print: impl traits::Printable) {
 	print.print();
 }
 
+
+/// Batching session.
+///
+/// To be used in runtime only. Outside of runtime, just construct
+/// `BatchVerifier` directly.
+#[must_use = "`verify()` needs to be called to finish batch signature verification!"]
+pub struct SignatureBatching(bool);
+
+impl SignatureBatching {
+	/// Start new batching session.
+	pub fn start() -> Self {
+		sp_io::crypto::start_batch_verify();
+		SignatureBatching(false)
+	}
+
+	/// Verify all signatures submitted during the batching session.
+	#[must_use]
+	pub fn verify(mut self) -> bool {
+		self.0 = true;
+		sp_io::crypto::finish_batch_verify()
+	}
+}
+
+impl Drop for SignatureBatching {
+	fn drop(&mut self) {
+		// Sanity check. If user forgets to actually call `verify()`.
+		if !self.0 {
+			panic!("Signature verification has not been called before `SignatureBatching::drop`")
+		}
+	}
+}
+
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -734,5 +813,20 @@ mod tests {
 
 		let multi_signer = MultiSigner::from(pair.public());
 		assert!(multi_sig.verify(msg, &multi_signer.into_account()));
+	}
+
+
+	#[test]
+	#[should_panic(expected = "Signature verification has not been called")]
+	fn batching_still_finishes_when_not_called_directly() {
+		let mut ext = sp_state_machine::BasicExternalities::with_tasks_executor();
+		ext.execute_with(|| {
+			let _batching = SignatureBatching::start();
+			sp_io::crypto::sr25519_verify(
+				&Default::default(),
+				&Vec::new(),
+				&Default::default(),
+			);
+		});
 	}
 }

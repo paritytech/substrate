@@ -3,6 +3,7 @@ members = [
 	"bin/node-template/node",
 	"bin/node-template/runtime",
 	"bin/node-template/pallets/template",
+	"bin/node/bench",
 	"bin/node/cli",
 	"bin/node/executor",
 	"bin/node/primitives",
@@ -121,6 +122,8 @@ members = [
 	"primitives/consensus/pow",
 	"primitives/consensus/vrf",
 	"primitives/core",
+	"primitives/chain-spec",
+	"primitives/database",
 	"primitives/debug-derive",
 	"primitives/storage",
 	"primitives/externalities",
@@ -131,6 +134,7 @@ members = [
 	"primitives/offchain",
 	"primitives/panic-handler",
 	"primitives/phragmen",
+	"primitives/phragmen/fuzzer",
 	"primitives/phragmen/compact",
 	"primitives/rpc",
 	"primitives/runtime-interface",
@@ -156,6 +160,7 @@ members = [
 	"primitives/test-primitives",
 	"primitives/transaction-pool",
 	"primitives/trie",
+	"primitives/utils",
 	"primitives/wasm-interface",
 	"test-utils/client",
 	"test-utils/runtime",
@@ -173,3 +178,4 @@ members = [
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
+

@@ -68,7 +68,7 @@ pub mod weights;
 
 pub use self::hash::{
 	Twox256, Twox128, Blake2_256, Blake2_128, Identity, Twox64Concat, Blake2_128Concat, Hashable,
-	StorageHasher
+	StorageHasher, ReversibleStorageHasher
 };
 pub use self::storage::{
 	StorageValue, StorageMap, StorageDoubleMap, StoragePrefixedMap, IterableStorageMap,
@@ -140,6 +140,8 @@ macro_rules! ord_parameter_types {
 			fn contains(t: &$type) -> bool { &$value == t }
 			fn sorted_members() -> $crate::sp_std::prelude::Vec<$type> { vec![$value] }
 			fn count() -> usize { 1 }
+			#[cfg(feature = "runtime-benchmarks")]
+			fn add(_: &$type) {}
 		}
 	}
 }
@@ -209,11 +211,47 @@ macro_rules! assert_err {
 #[cfg(feature = "std")]
 macro_rules! assert_ok {
 	( $x:expr $(,)? ) => {
-		assert_eq!($x, Ok(()));
+		let is = $x;
+		match is {
+			Ok(_) => (),
+			_ => assert!(false, "Expected Ok(_). Got {:#?}", is),
+		}
 	};
 	( $x:expr, $y:expr $(,)? ) => {
 		assert_eq!($x, Ok($y));
 	}
+}
+
+/// Runs given code within a tracing span, measuring it's execution time.
+///
+/// Has effect only when running in native environment. In WASM, it simply inserts the
+/// code in-place, without any metrics added.
+#[macro_export]
+macro_rules! tracing_span {
+	($name:expr; $( $code:tt )*) => {
+		let span = $crate::if_tracing!(
+			$crate::tracing::span!($crate::tracing::Level::TRACE, $name)
+		,
+			()
+		);
+		let guard = $crate::if_tracing!(span.enter(), ());
+		$( $code )*
+
+		$crate::sp_std::mem::drop(guard);
+		$crate::sp_std::mem::drop(span);
+	}
+}
+
+#[macro_export]
+#[cfg(feature = "tracing")]
+macro_rules! if_tracing {
+	( $if:expr, $else:expr ) => {{ $if }}
+}
+
+#[macro_export]
+#[cfg(not(feature = "tracing"))]
+macro_rules! if_tracing {
+	( $if:expr, $else:expr ) => {{ $else }}
 }
 
 /// The void type - it cannot exist.

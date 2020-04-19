@@ -72,7 +72,7 @@ pub struct NotifsInHandler {
 }
 
 /// Event that can be received by a `NotifsInHandler`.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum NotifsInHandlerIn {
 	/// Can be sent back as a response to an `OpenRequest`. Contains the status message to send
 	/// to the remote.

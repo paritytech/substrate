@@ -114,6 +114,7 @@ impl frame_system::Trait for Runtime {
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
+	type DbWeight = ();
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
@@ -160,6 +161,10 @@ impl pallet_authorship::Trait for Runtime {
 	type EventHandler = ImOnline;
 }
 
+parameter_types! {
+	pub const UnsignedPriority: u64 = 1 << 20;
+}
+
 impl Trait for Runtime {
 	type AuthorityId = UintAuthorityId;
 	type Event = ();
@@ -167,6 +172,7 @@ impl Trait for Runtime {
 	type SubmitTransaction = SubmitTransaction;
 	type ReportUnresponsiveness = OffenceHandler;
 	type SessionDuration = Period;
+	type UnsignedPriority = UnsignedPriority;
 }
 
 /// Im Online module.

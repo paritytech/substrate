@@ -14,6 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Fuzzing for the reduce algorithm.
+//!
+//! It that reduce always return a new set og edges in which the bound is kept (`edges_after <= m +
+//! n,`) and the result must effectively be the same, meaning that the same support map should be
+//! computable from both.
+//!
 //! # Running
 //!
 //! Run with `cargo hfuzz run reduce`. `honggfuzz`.
@@ -24,8 +30,11 @@
 //! `cargo hfuzz run-debug reduce hfuzz_workspace/reduce/*.fuzz`.
 
 use honggfuzz::fuzz;
+
+mod common;
+use common::to_range;
 use sp_phragmen::{StakedAssignment, ExtendedBalance, build_support_map, reduce};
-use rand::{self, Rng};
+use rand::{self, Rng, SeedableRng, RngCore};
 
 type Balance = u128;
 type AccountId = u64;
@@ -35,15 +44,20 @@ const KSM: Balance = 1_000_000_000_000;
 
 fn main() {
 	loop {
-		fuzz!(|_data: _| {
-	 		let (assignments, winners) = generate_random_phragmen_assignment(
-	 			rr(100, 1000),
-	 			rr(100, 2000),
-	 			8,
-	 			8,
-	 		);
+		fuzz!(|data: (usize, usize, u64)| {
+			let (mut voter_count, mut target_count, seed) = data;
+			let rng = rand::rngs::SmallRng::seed_from_u64(seed);
+			target_count = to_range(target_count, 100, 1000);
+			voter_count = to_range(voter_count, 100, 2000);
+			let (assignments, winners) = generate_random_phragmen_assignment(
+				voter_count,
+				target_count,
+				8,
+				8,
+				rng
+			);
 			reduce_and_compare(&assignments, &winners);
-	 	});
+		});
 	}
 }
 
@@ -52,13 +66,10 @@ fn generate_random_phragmen_assignment(
 	target_count: usize,
 	avg_edge_per_voter: usize,
 	edge_per_voter_var: usize,
+	mut rng: impl RngCore,
 ) -> (Vec<StakedAssignment<AccountId>>, Vec<AccountId>) {
-	// random in range of (a, b)
-	let rr_128 = |a: u128, b: u128| -> u128 { rand::thread_rng().gen_range(a, b) };
-
 	// prefix to distinguish the voter and target account ranges.
 	let target_prefix = 1_000_000;
-	// let target_prefix = 1000;
 	assert!(voter_count < target_prefix);
 
 	let mut assignments = Vec::with_capacity(voter_count as usize);
@@ -70,17 +81,17 @@ fn generate_random_phragmen_assignment(
 
 	(1..=voter_count).for_each(|acc| {
 		let mut targets_to_chose_from = all_targets.clone();
-		let targets_to_chose = if edge_per_voter_var > 0 { rr(
+		let targets_to_chose = if edge_per_voter_var > 0 { rng.gen_range(
 			avg_edge_per_voter - edge_per_voter_var,
 			avg_edge_per_voter + edge_per_voter_var,
 		) } else { avg_edge_per_voter };
 
 		let distribution = (0..targets_to_chose).map(|_| {
-			let target = targets_to_chose_from.remove(rr(0, targets_to_chose_from.len()));
+			let target = targets_to_chose_from.remove(rng.gen_range(0, targets_to_chose_from.len()));
 			if winners.iter().find(|w| **w == target).is_none() {
 				winners.push(target.clone());
 			}
-			(target, rr_128(1 * KSM, 100 * KSM))
+			(target, rng.gen_range(1 * KSM, 100 * KSM))
 		}).collect::<Vec<(AccountId, ExtendedBalance)>>();
 
 		assignments.push(StakedAssignment {
@@ -138,8 +149,4 @@ fn assignment_len(assignments: &[StakedAssignment<AccountId>]) -> u32 {
 	let mut counter = 0;
 	assignments.iter().for_each(|x| x.distribution.iter().for_each(|_| counter += 1));
 	counter
-}
-
-fn rr(a: usize, b: usize) -> usize {
-	rand::thread_rng().gen_range(a, b)
 }

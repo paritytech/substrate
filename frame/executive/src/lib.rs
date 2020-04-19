@@ -120,9 +120,9 @@ impl<
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>:
-		Applyable<DispatchInfo=DispatchInfo> +
+		Applyable +
 		GetDispatchInfo,
-	CallOf<Block::Extrinsic, Context>: Dispatchable,
+	CallOf<Block::Extrinsic, Context>: Dispatchable<Info=DispatchInfo>,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
 {
@@ -145,9 +145,9 @@ impl<
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>:
-		Applyable<DispatchInfo=DispatchInfo> +
+		Applyable +
 		GetDispatchInfo,
-	CallOf<Block::Extrinsic, Context>: Dispatchable,
+	CallOf<Block::Extrinsic, Context>: Dispatchable<Info=DispatchInfo>,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call=CallOf<Block::Extrinsic, Context>>,
 {
@@ -237,9 +237,13 @@ where
 		// any initial checks
 		Self::initial_checks(&block);
 
+		let batching_safeguard = sp_runtime::SignatureBatching::start();
 		// execute extrinsics
 		let (header, extrinsics) = block.deconstruct();
 		Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
+		if !sp_runtime::SignatureBatching::verify(batching_safeguard) {
+			panic!("Signature verification failed.");
+		}
 
 		// any final checks
 		Self::final_checks(&header);
@@ -307,7 +311,7 @@ where
 
 		// Decode parameters and dispatch
 		let dispatch_info = xt.get_dispatch_info();
-		let r = Applyable::apply::<UnsignedValidator>(xt, dispatch_info, encoded_len)?;
+		let r = Applyable::apply::<UnsignedValidator>(xt, &dispatch_info, encoded_len)?;
 
 		<frame_system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32, dispatch_info);
 
@@ -344,11 +348,25 @@ where
 		source: TransactionSource,
 		uxt: Block::Extrinsic,
 	) -> TransactionValidity {
-		let encoded_len = uxt.using_encoded(|d| d.len());
-		let xt = uxt.check(&Default::default())?;
+		use frame_support::tracing_span;
 
-		let dispatch_info = xt.get_dispatch_info();
-		xt.validate::<UnsignedValidator>(source, dispatch_info, encoded_len)
+		tracing_span!{ "validate_transaction::using_encoded";
+			let encoded_len = uxt.using_encoded(|d| d.len());
+		};
+
+		tracing_span!{ "validate_transaction::check";
+			let xt = uxt.check(&Default::default())?;
+		};
+
+		tracing_span!{ "validate_transaction::dispatch_info";
+			let dispatch_info = xt.get_dispatch_info();
+		};
+
+		tracing_span!{ "validate_transaction::validate";
+			let result = xt.validate::<UnsignedValidator>(source, &dispatch_info, encoded_len);
+		};
+
+		result
 	}
 
 	/// Start an offchain worker and generate extrinsics.
@@ -476,6 +494,7 @@ mod tests {
 		type Event = MetaEvent;
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
+		type DbWeight = ();
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = RuntimeVersion;
@@ -543,7 +562,7 @@ mod tests {
 		frame_system::CheckEra<Runtime>,
 		frame_system::CheckNonce<Runtime>,
 		frame_system::CheckWeight<Runtime>,
-		pallet_transaction_payment::ChargeTransactionPayment<Runtime>
+		pallet_transaction_payment::ChargeTransactionPayment<Runtime>,
 	);
 	type AllModules = (System, Balances, Custom);
 	type TestXt = sp_runtime::testing::TestXt<Call, SignedExtra>;

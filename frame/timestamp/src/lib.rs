@@ -62,6 +62,7 @@
 //!
 //! ```
 //! use frame_support::{decl_module, dispatch};
+//! use frame_support::weights::{SimpleDispatchInfo, MINIMUM_WEIGHT};
 //! # use pallet_timestamp as timestamp;
 //! use frame_system::{self as system, ensure_signed};
 //!
@@ -69,7 +70,7 @@
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+//! 		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 //! 		pub fn get_time(origin) -> dispatch::DispatchResult {
 //! 			let _sender = ensure_signed(origin)?;
 //! 			let _now = <timestamp::Module<T>>::get();
@@ -95,10 +96,12 @@ mod benchmarking;
 
 use sp_std::{result, cmp};
 use sp_inherents::{ProvideInherent, InherentData, InherentIdentifier};
+#[cfg(feature = "std")]
+use frame_support::debug;
 use frame_support::{
-	Parameter, decl_storage, decl_module, debug,
+	Parameter, decl_storage, decl_module,
 	traits::{Time, UnixTime, Get},
-	weights::SimpleDispatchInfo,
+	weights::{SimpleDispatchInfo, MINIMUM_WEIGHT},
 };
 use sp_runtime::{
 	RuntimeString,
@@ -145,7 +148,7 @@ decl_module! {
 		/// `MinimumPeriod`.
 		///
 		/// The dispatch origin for this call must be `Inherent`.
-		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
+		#[weight = SimpleDispatchInfo::FixedMandatory(MINIMUM_WEIGHT)]
 		fn set(origin, #[compact] now: T::Moment) {
 			ensure_none(origin)?;
 			assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
@@ -269,6 +272,11 @@ mod tests {
 	use sp_core::H256;
 	use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 
+	pub fn new_test_ext() -> TestExternalities {
+		let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		TestExternalities::new(t)
+	}
+
 	impl_outer_origin! {
 		pub enum Origin for Test  where system = frame_system {}
 	}
@@ -294,6 +302,7 @@ mod tests {
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
+		type DbWeight = ();
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();
@@ -314,8 +323,7 @@ mod tests {
 
 	#[test]
 	fn timestamp_works() {
-		let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		TestExternalities::new(t).execute_with(|| {
+		new_test_ext().execute_with(|| {
 			Timestamp::set_timestamp(42);
 			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::NONE));
 			assert_eq!(Timestamp::now(), 69);
@@ -325,8 +333,7 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Timestamp must be updated only once in the block")]
 	fn double_timestamp_should_fail() {
-		let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		TestExternalities::new(t).execute_with(|| {
+		new_test_ext().execute_with(|| {
 			Timestamp::set_timestamp(42);
 			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::NONE));
 			let _ = Timestamp::dispatch(Call::set(70), Origin::NONE);
@@ -336,8 +343,7 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Timestamp must increment by at least <MinimumPeriod> between sequential blocks")]
 	fn block_period_minimum_enforced() {
-		let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		TestExternalities::new(t).execute_with(|| {
+		new_test_ext().execute_with(|| {
 			Timestamp::set_timestamp(42);
 			let _ = Timestamp::dispatch(Call::set(46), Origin::NONE);
 		});
