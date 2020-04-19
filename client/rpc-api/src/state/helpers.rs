@@ -25,6 +25,6 @@ use serde::{Serialize, Deserialize};
 pub struct ReadProof<Hash> {
 	/// Block hash used to generate the proof
 	pub at: Hash,
-	/// A proof used to prove than storage entries are included in the storage trie
+	/// A proof used to prove that storage entries are included in the storage trie
 	pub proof: Vec<Bytes>,
 }
