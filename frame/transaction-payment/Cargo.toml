@@ -23,6 +23,7 @@ pallet-transaction-payment-rpc-runtime-api = { version = "2.0.0-dev", default-fe
 sp-io = { version = "2.0.0-dev", path = "../../primitives/io" }
 sp-core = { version = "2.0.0-dev", path = "../../primitives/core" }
 pallet-balances = { version = "2.0.0-dev", path = "../balances" }
+sp-storage = { version = "2.0.0-dev", path = "../../primitives/storage" }
 
 [features]
 default = ["std"]
