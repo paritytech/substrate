@@ -14,18 +14,21 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Mock file for offences benchmarking.
+//! Mock file for session benchmarking.
 
 #![cfg(test)]
 
 use super::*;
-use frame_support::parameter_types;
-use frame_system as system;
+use frame_support::{Hashable, assert_ok, assert_noop, parameter_types, weights::Weight};
+use frame_system::{self as system, EventRecord, Phase};
+use sp_core::H256;
 use sp_runtime::{
-	SaturatedConversion,
-	traits::{IdentityLookup, Block as BlockT},
-	testing::{Header, UintAuthorityId},
+	Perbill, traits::{BlakeTwo256, IdentityLookup, Block as BlockT}, testing::Header,
+	BuildStorage,
 };
+use crate as collective;
+use sp_runtime::testing::{UintAuthorityId, TestXt};
+use sp_runtime::SaturatedConversion;
 
 
 type AccountId = u64;
