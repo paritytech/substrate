@@ -34,7 +34,7 @@ use pallet_im_online::{Trait as ImOnlineTrait, Module as ImOnline, Unresponsiven
 use pallet_offences::{Trait as OffencesTrait, Module as Offences};
 use pallet_staking::{
 	Module as Staking, Trait as StakingTrait, RewardDestination, ValidatorPrefs,
-	Exposure, IndividualExposure, ElectionStatus
+	Exposure, IndividualExposure, ElectionStatus, MAX_NOMINATIONS,
 };
 use pallet_session::Trait as SessionTrait;
 use pallet_session::historical::{Trait as HistoricalTrait, IdentificationTuple};
@@ -152,7 +152,11 @@ benchmarks! {
 	}
 
 	on_initialize {
+		let n in 1 .. MAX_NOMINATIONS as u32;
 		let d in 1 .. MAX_DEFERRED_OFFENCES;
+
+
+		pallet_staking::benchmarking::create_validator_with_nominators::<T>(n, MAX_NOMINATIONS as u32)?;
 
 		Staking::<T>::put_election_status(ElectionStatus::Closed);
 
@@ -178,7 +182,7 @@ mod tests {
 	#[test]
 	fn test_benchmarks() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_report_offence::<Test>());
+			//assert_ok!(test_benchmark_report_offence::<Test>());
 			assert_ok!(test_benchmark_on_initialize::<Test>());
 		});
 	}
