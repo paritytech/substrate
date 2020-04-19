@@ -268,7 +268,7 @@ impl INPoS {
 		}
 	}
 
-	// calculates x_ideal from:
+	// calculates x from:
 	// y = i_0 + (i_ideal * x_ideal - i_0) * 2^((x_ideal - x)/d)
 	// See web3 docs for the details
 	fn compute_opposite_after_x_ideal(&self, y: u32) -> u32 {
