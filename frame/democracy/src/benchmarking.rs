@@ -19,7 +19,7 @@
 use super::*;
 
 use frame_benchmarking::{benchmarks, account};
-use frame_support::traits::{Currency, Get, EnsureOrigin};
+use frame_support::traits::{Currency, Get, EnsureOrigin, OnInitialize};
 use frame_system::{RawOrigin, Module as System, self};
 use sp_runtime::traits::{Bounded, One};
 
@@ -54,7 +54,7 @@ fn add_referendum<T: Trait>(n: u32) -> Result<ReferendumIndex, &'static str> {
 	let vote_threshold = VoteThreshold::SimpleMajority;
 
 	Democracy::<T>::inject_referendum(
-		0.into(),
+		T::LaunchPeriod::get(),
 		proposal_hash,
 		vote_threshold,
 		0.into(),
@@ -350,14 +350,74 @@ benchmarks! {
 		let referendum_index = add_referendum::<T>(r)?;
 	}: _(RawOrigin::Root, referendum_index)
 
-	// TODO on_initialize {
-	// 	// Create maturing referenda
+	// Note that we have a separate benchmark for `launch_next`
+	on_initialize_external {
+		let r in 0 .. MAX_REFERENDUMS;
 
-	// 	// one fork for launch public
+		for i in 0..r {
+			add_referendum::<T>(i)?;
+		}
 
-	// 	// one fork for launch external
+		assert_eq!(Democracy::<T>::referendum_count(), r, "referenda not created");
 
-	// }: { Democracy::<T>::on_initialize()}
+		// Launch external
+		LastTabledWasExternal::put(false);
+
+		let origin = T::ExternalMajorityOrigin::successful_origin();
+		let proposal_hash = T::Hashing::hash_of(&r);
+		let call = Call::<T>::external_propose_majority(proposal_hash);
+		call.dispatch(origin)?;
+		// External proposal created
+		ensure!(<NextExternal<T>>::exists(), "External proposal didn't work");
+
+		let block_number = T::LaunchPeriod::get();
+
+	}: { Democracy::<T>::on_initialize(block_number) }
+	verify {
+		// One extra because of next external
+		assert_eq!(Democracy::<T>::referendum_count(), r + 1, "referenda not created");
+		ensure!(!<NextExternal<T>>::exists(), "External wasn't taken");
+
+		// All but the new next external should be finished
+		for i in 0 .. r {
+			if let Some(value) = ReferendumInfoOf::<T>::get(i) {
+				match value {
+					ReferendumInfo::Finished { .. } => (),
+					ReferendumInfo::Ongoing(_) => return Err("Referendum was not finished"),
+				}
+			}
+		}
+	}
+
+	on_initialize_public {
+		let r in 1 .. MAX_REFERENDUMS;
+
+		for i in 0..r {
+			add_referendum::<T>(i)?;
+		}
+
+		assert_eq!(Democracy::<T>::referendum_count(), r, "referenda not created");
+
+		// Launch public
+		LastTabledWasExternal::put(true);
+
+		let block_number = T::LaunchPeriod::get();
+
+	}: { Democracy::<T>::on_initialize(block_number) }
+	verify {
+		// One extra because of next public
+		assert_eq!(Democracy::<T>::referendum_count(), r + 1, "referenda not created");
+
+		// All should be finished
+		for i in 0 .. r {
+			if let Some(value) = ReferendumInfoOf::<T>::get(i) {
+				match value {
+					ReferendumInfo::Finished { .. } => (),
+					ReferendumInfo::Ongoing(_) => return Err("Referendum was not finished"),
+				}
+			}
+		}
+	}
 
 	activate_proxy {
 		let u in 1 .. MAX_USERS;
@@ -835,6 +895,8 @@ mod tests {
 			assert_ok!(test_benchmark_veto_external::<Test>());
 			assert_ok!(test_benchmark_cancel_referendum::<Test>());
 			assert_ok!(test_benchmark_cancel_queued::<Test>());
+			assert_ok!(test_benchmark_on_initialize_external::<Test>());
+			assert_ok!(test_benchmark_on_initialize_public::<Test>());
 			assert_ok!(test_benchmark_open_proxy::<Test>());
 			assert_ok!(test_benchmark_activate_proxy::<Test>());
 			assert_ok!(test_benchmark_close_proxy::<Test>());
