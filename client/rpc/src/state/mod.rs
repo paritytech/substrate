@@ -26,7 +26,7 @@ use std::sync::Arc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use rpc::{Result as RpcResult, futures::{Future, future::result}};
 
-use sc_rpc_api::Subscriptions;
+use sc_rpc_api::{Subscriptions, state::ReadProof};
 use sc_client::{light::{blockchain::RemoteBlockchain, fetcher::Fetcher}};
 use sp_core::{Bytes, storage::{StorageKey, StorageData, StorageChangeSet}};
 use sp_version::RuntimeVersion;
@@ -175,7 +175,7 @@ pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 		&self,
 		block: Option<Block::Hash>,
 		keys: Vec<StorageKey>,
-	) -> FutureResult<Vec<Bytes>>;
+	) -> FutureResult<ReadProof<Block::Hash>>;
 
 	/// New runtime version subscription
 	fn subscribe_runtime_version(
@@ -379,7 +379,7 @@ impl<Block, Client> StateApi<Block::Hash> for State<Block, Client>
 		self.backend.query_storage_at(keys, at)
 	}
 
-	fn read_proof(&self, keys: Vec<StorageKey>, block: Option<Block::Hash>) -> FutureResult<Vec<Bytes>> {
+	fn read_proof(&self, keys: Vec<StorageKey>, block: Option<Block::Hash>) -> FutureResult<ReadProof<Block::Hash>> {
 		self.backend.read_proof(block, keys)
 	}
 

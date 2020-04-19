@@ -24,7 +24,7 @@ use log::warn;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use rpc::{Result as RpcResult, futures::{stream, Future, Sink, Stream, future::result}};
 
-use sc_rpc_api::Subscriptions;
+use sc_rpc_api::{Subscriptions, state::ReadProof};
 use sc_client_api::backend::Backend;
 use sp_blockchain::{Result as ClientResult, Error as ClientError, HeaderMetadata, CachedHeaderMetadata, HeaderBackend};
 use sc_client::BlockchainEvents;
@@ -414,7 +414,7 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 		&self,
 		block: Option<Block::Hash>,
 		keys: Vec<StorageKey>,
-	) -> FutureResult<Vec<Bytes>> {
+	) -> FutureResult<ReadProof<Block::Hash>> {
 		Box::new(result(
 			self.block_or_best(block)
 				.and_then(|block| {
@@ -424,6 +424,7 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 							&mut keys.iter().map(|key| key.0.as_ref()),
 						)
 						.map(|proof| proof.iter_nodes().map(|node| node.into()).collect())
+						.map(|proof| ReadProof { at: block, proof })
 				})
 				.map_err(client_err),
 		))
