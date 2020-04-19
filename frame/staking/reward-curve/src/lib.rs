@@ -275,7 +275,7 @@ impl INPoS {
 		if y == self.i_0 {
 			return u32::max_value();
 		}
-		// Note: the log term calculated here represents a negative per_million value
+		// Note: the log term calculated here represents a per_million value
 		let log = log2(self.i_ideal_times_x_ideal - self.i_0, y - self.i_0);
 
 		let term: u32 = ((self.d as u64 * log as u64) / 1_000_000).try_into().unwrap();
