@@ -174,7 +174,7 @@ pub enum AllowedSlots {
 	PrimarySlots,
 	/// Allow primary and secondary slots, but disallow secondary VRF slots.
 	PrimaryAndSecondarySlots,
-	/// Allow primary and secondary slots. Enable secondary VRF slots after slot number.
+	/// Allow primary and secondary VRF slots.
 	PrimaryAndSecondaryVRFSlots,
 }
 
