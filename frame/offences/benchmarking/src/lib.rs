@@ -18,6 +18,8 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+mod mock;
+
 use sp_std::prelude::*;
 use sp_std::vec;
 
@@ -39,7 +41,6 @@ use pallet_session::historical::{Trait as HistoricalTrait, IdentificationTuple};
 
 const SEED: u32 = 0;
 
-const MAX_USERS: u32 = 1000;
 const MAX_REPORTERS: u32 = 100;
 const MAX_OFFENDERS: u32 = 100;
 const MAX_NOMINATORS: u32 = 100;
@@ -123,26 +124,20 @@ fn make_offenders<T: Trait>(num_offenders: u32, num_nominators: u32) -> Result<V
 }
 
 benchmarks! {
-	_ {
-		let u in 1 .. MAX_USERS => ();
-		let r in 1 .. MAX_REPORTERS => ();
-		let o in 1 .. MAX_OFFENDERS => ();
-		let n in 1 .. MAX_NOMINATORS => ();
-		let d in 1 .. MAX_DEFERRED_OFFENCES => ();
-	}
+	_ { }
 
 	report_offence {
-		let r in ...;
-		let o in ...;
-		let n in ...;
+		let r in 1 .. MAX_REPORTERS;
+		let o in 1 .. MAX_OFFENDERS;
+		let n in 1 .. MAX_NOMINATORS;
 
+		// Make r reporters
 		let mut reporters = vec![];
-
 		for i in 0 .. r {
 			let reporter = account("reporter", i, SEED);
 			reporters.push(reporter);
 		}
-	
+
 		let offenders = make_offenders::<T>(o, n).expect("failed to create offenders");
 		let keys =  ImOnline::<T>::keys();
 
@@ -157,7 +152,7 @@ benchmarks! {
 	}
 
 	on_initialize {
-		let d in ...;
+		let d in 1 .. MAX_DEFERRED_OFFENCES;
 
 		Staking::<T>::put_election_status(ElectionStatus::Closed);
 
@@ -170,6 +165,21 @@ benchmarks! {
 		Offences::<T>::set_deferred_offences(deferred_offences);
 
 	}: {
-		Offences::<T>::on_initialize(u.into());
+		Offences::<T>::on_initialize(0.into());
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::mock::{new_test_ext, Test};
+	use frame_support::assert_ok;
+
+	#[test]
+	fn test_benchmarks() {
+		new_test_ext().execute_with(|| {
+			assert_ok!(test_benchmark_report_offence::<Test>());
+			assert_ok!(test_benchmark_on_initialize::<Test>());
+		});
 	}
 }
