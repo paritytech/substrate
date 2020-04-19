@@ -14,47 +14,27 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Mock file for session benchmarks.
+//! Mock file for session benchmarking.
 
 #![cfg(test)]
 
-use sp_runtime::traits::{Convert, SaturatedConversion, IdentityLookup};
-use frame_support::{impl_outer_origin, impl_outer_dispatch, parameter_types};
+use super::*;
+use frame_support::{Hashable, assert_ok, assert_noop, parameter_types, weights::Weight};
+use frame_system::{self as system, EventRecord, Phase};
+use sp_core::H256;
+use sp_runtime::{
+	Perbill, traits::{BlakeTwo256, IdentityLookup, Block as BlockT}, testing::Header,
+	BuildStorage,
+};
+use crate as collective;
+use sp_runtime::testing::{UintAuthorityId, TestXt};
+use sp_runtime::SaturatedConversion;
+
 
 type AccountId = u64;
 type AccountIndex = u32;
 type BlockNumber = u64;
 type Balance = u64;
-
-type System = frame_system::Module<Test>;
-type Balances = pallet_balances::Module<Test>;
-type Staking = pallet_staking::Module<Test>;
-type Session = pallet_session::Module<Test>;
-
-impl_outer_origin! {
-	pub enum Origin for Test  where system = frame_system {}
-}
-
-impl_outer_dispatch! {
-	pub enum Call for Test where origin: Origin {
-		pallet_staking::Staking,
-	}
-}
-
-pub struct CurrencyToVoteHandler;
-impl Convert<u64, u64> for CurrencyToVoteHandler {
-	fn convert(x: u64) -> u64 {
-		x
-	}
-}
-impl Convert<u128, u64> for CurrencyToVoteHandler {
-	fn convert(x: u128) -> u64 {
-		x.saturated_into()
-	}
-}
-
-#[derive(Clone, Eq, PartialEq, Debug)]
-pub struct Test;
 
 impl frame_system::Trait for Test {
 	type Origin = Origin;
@@ -123,11 +103,16 @@ impl pallet_session::SessionHandler<AccountId> for TestSessionHandler {
 	fn on_disabled(_: usize) {}
 }
 
+parameter_types! {
+	pub const Period: u64 = 1;
+	pub const Offset: u64 = 0;
+}
+
 impl pallet_session::Trait for Test {
 	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Test, Staking>;
 	type Keys = SessionKeys;
-	type ShouldEndSession = pallet_session::PeriodicSessions<(), ()>;
-	type NextSessionRotation = pallet_session::PeriodicSessions<(), ()>;
+	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
+	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
 	type SessionHandler = TestSessionHandler;
 	type Event = ();
 	type ValidatorId = AccountId;
@@ -157,6 +142,18 @@ type SubmitTransaction = frame_system::offchain::TransactionSubmitter<
 	Extrinsic,
 >;
 
+pub struct CurrencyToVoteHandler;
+impl Convert<u64, u64> for CurrencyToVoteHandler {
+	fn convert(x: u64) -> u64 {
+		x
+	}
+}
+impl Convert<u128, u64> for CurrencyToVoteHandler {
+	fn convert(x: u128) -> u64 {
+		x.saturated_into()
+	}
+}
+
 impl pallet_staking::Trait for Test {
 	type Currency = Balances;
 	type UnixTime = pallet_timestamp::Module<Self>;
@@ -179,7 +176,41 @@ impl pallet_staking::Trait for Test {
 	type UnsignedPriority = UnsignedPriority;
 }
 
+impl pallet_im_online::Trait for Test {
+	type AuthorityId = UintAuthorityId;
+	type Event = ();
+	type Call = Call;
+	type SubmitTransaction = SubmitTransaction;
+	type SessionDuration = Period;
+	type ReportUnresponsiveness = Offences;
+	type UnsignedPriority = UnsignedPriority;
+}
+
+impl pallet_offences::Trait for Test {
+	type Event = ();
+	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
+	type OnOffenceHandler = Staking;
+}
+
 impl crate::Trait for Test {}
+
+pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
+pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
+
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic
+	{
+		System: system::{Module, Call, Event<T>},
+		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
+		Staking: pallet_staking::{Module, Call, Config<T>, Storage, Event<T>, ValidateUnsigned},
+		Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
+		ImOnline: pallet_im_online::{Module, Call, Storage, Event<T>, ValidateUnsigned, Config<T>},
+		Offences: pallet_offences::{Module, Call, Storage, Event},
+	}
+);
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
