@@ -26,17 +26,13 @@ fn taylor_term(k: u32, y_num: u128, y_den: u128) -> u32 {
 
 /// Performs a log2 operation using a rational fraction
 ///
-/// result = log2(q/p) where q/p is bound to (0, 1]
+/// result = log2(p/q) where p/q is bound to [1, 1_000_000]
 /// Where:
 /// * q represents the numerator of the rational fraction input
 /// * p represents the denominator of the rational fraction input
 /// * result represents a per-million output of log2
-///   note: because result is u32, and the output of any log function
-///         in interval (0, 1) is negative, the output represents the
-///         absolute per million value of log2 and should be treated as
-///         a negative number
 pub fn log2(p: u32, q: u32) -> u32 {
-	assert!(p >= q); // keep q/p bound to (0, 1]
+	assert!(p >= q); // keep p/q bound to [1, inf)
 	assert!(p <= u32::max_value()/2);
 
 	// This restriction should not be mandatory. But function is only tested and used for this.
@@ -122,7 +118,7 @@ fn test_log_of_one_boundary() {
 }
 
 #[test]
-fn test_log_of_smallest_fraction() {
+fn test_log_of_largest_input() {
 	let p: u32 = 1_000_000;
 	let q: u32 = 1;
 	let expected = 19_931_568;
