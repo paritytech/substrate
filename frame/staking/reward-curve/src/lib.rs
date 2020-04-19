@@ -280,8 +280,6 @@ impl INPoS {
 
 		let term: u32 = ((self.d as u64 * log as u64) / 1_000_000).try_into().unwrap();
 
-		// Normally this would be x_ideal - term, but term represents a negative value
-		// because log represents a negative fraction
 		self.x_ideal + term
 	}
 }
