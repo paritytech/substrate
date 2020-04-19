@@ -23,8 +23,9 @@ extern crate self as frame_support;
 
 #[macro_use]
 extern crate bitmask;
-#[cfg(feature = "std")]
-pub extern crate tracing;
+
+#[doc(hidden)]
+pub use sp_tracing;
 
 #[cfg(feature = "std")]
 pub use serde;
@@ -220,38 +221,6 @@ macro_rules! assert_ok {
 	( $x:expr, $y:expr $(,)? ) => {
 		assert_eq!($x, Ok($y));
 	}
-}
-
-/// Runs given code within a tracing span, measuring it's execution time.
-///
-/// Has effect only when running in native environment. In WASM, it simply inserts the
-/// code in-place, without any metrics added.
-#[macro_export]
-macro_rules! tracing_span {
-	($name:expr; $( $code:tt )*) => {
-		let span = $crate::if_tracing!(
-			$crate::tracing::span!($crate::tracing::Level::TRACE, $name)
-		,
-			()
-		);
-		let guard = $crate::if_tracing!(span.enter(), ());
-		$( $code )*
-
-		$crate::sp_std::mem::drop(guard);
-		$crate::sp_std::mem::drop(span);
-	}
-}
-
-#[macro_export]
-#[cfg(feature = "tracing")]
-macro_rules! if_tracing {
-	( $if:expr, $else:expr ) => {{ $if }}
-}
-
-#[macro_export]
-#[cfg(not(feature = "tracing"))]
-macro_rules! if_tracing {
-	( $if:expr, $else:expr ) => {{ $else }}
 }
 
 /// The void type - it cannot exist.
