@@ -18,7 +18,7 @@ use sp_std::collections::btree_map::BTreeMap;
 use sp_std::collections::btree_set::BTreeSet;
 use sp_std::vec::Vec;
 use sp_std::convert::TryInto;
-use codec::{Codec, Encode, Decode, Input, Output};
+use codec::{Codec, Encode, Decode, Input as CodecInput, Output as CodecOutput};
 use hash_db::{Hasher, HashDB, EMPTY_PREFIX};
 use crate::{MemoryDB, Layout};
 use sp_storage::{ChildInfoProof, ChildType};
@@ -65,10 +65,8 @@ pub enum StorageProofKind {
 	/// Kind for `StorageProof::TrieSkipHashesFull`.
 	TrieSkipHashesFull = 126,
 
-//	/// Kind for `StorageProof::KnownQueryPlan`.
-//	TODO + add comment test only because I do not know
-//	a case where it is better than trieskiphashes usage.
-//	KnownQueryPlan = 127,
+	/// Kind for `StorageProof::KnownQueryPlan`.
+	KnownQueryPlan = 127,
 }
 
 impl StorageProofKind {
@@ -106,8 +104,10 @@ impl StorageProofKind {
 /// Additional information needed for packing or unpacking.
 /// These do not need to be part of the proof but are required
 /// when using the proof.
-/// TODO change to input & add None variant
-pub enum AdditionalInfoForProcessing {
+pub enum Input {
+	/// Proof is self contained.
+	None,
+
 	/// Contains trie roots used during proof processing.
 	ChildTrieRoots(ChildrenProofMap<Vec<u8>>),
 
@@ -116,68 +116,79 @@ pub enum AdditionalInfoForProcessing {
 	QueryPlanWithValues(ChildrenProofMap<(Vec<u8>, Vec<(Vec<u8>, Option<Vec<u8>>)>)>),
 }
 
-/// Kind for designing an `AdditionalInfoForProcessing` variant.
-/// TODO change to output
-pub enum AdditionalInfoForProcessingKind {
-	/// `AdditionalInfoForProcessing::ChildTrieRoots` kind.
+/// Kind for designing an `Input` variant.
+pub enum InputKind {
+	/// `Input::None` kind.
+	None,
+
+	/// `Input::ChildTrieRoots` kind.
 	ChildTrieRoots,
 
-	/// `AdditionalInfoForProcessing::QueryPlanWithValues` kind.
+	/// `Input::QueryPlanWithValues` kind.
 	QueryPlanNoValues,
 
-	/// `AdditionalInfoForProcessing::QueryPlanWithValues` kind.
+	/// `Input::QueryPlanWithValues` kind.
 	QueryPlanWithValues,
 }
 
 /// Content produced on proof verification.
-pub enum AdditionalInfoFromProcessing {
+pub enum Output {
 	/// Proof only verify to success or failure.
 	None,
+
+	/// Contains key and values queried during the proof processing.
+	QueryPlanWithValues(ChildrenProofMap<Vec<(Vec<u8>, Option<Vec<u8>>)>>),
 }
 
-/// Kind for designing an `AdditionalInfoFromProcessing` variant.
-pub enum AdditionalInfoFromProcessingKind {
-	/// `AdditionalInfoFromProcessing::None` kind.
+/// Kind for designing an `Output` variant.
+pub enum OutputKind {
+	/// `Output::None` kind.
 	None,
+
+	/// `Output::QueryPlanWithValues` kind.
+	QueryPlanWithValues,
 }
 
 impl StorageProofKind {
 	/// Some proof variants requires more than just the collected
 	/// encoded nodes.
-	pub fn need_additional_info_to_produce(&self) -> Option<AdditionalInfoForProcessingKind> {
+	pub fn processing_input_kind(&self) -> InputKind {
 		match self {
-			StorageProofKind::KnownQueryPlanAndValues => Some(AdditionalInfoForProcessingKind::QueryPlanNoValues),
+			StorageProofKind::KnownQueryPlanAndValues => InputKind::QueryPlanNoValues,
+				| StorageProofKind::KnownQueryPlan => InputKind::QueryPlanNoValues,
 			StorageProofKind::TrieSkipHashes
-				| StorageProofKind::TrieSkipHashesFull => Some(AdditionalInfoForProcessingKind::ChildTrieRoots),
+				| StorageProofKind::TrieSkipHashesFull => InputKind::ChildTrieRoots,
 			StorageProofKind::Full
-				| StorageProofKind::Flatten => None,
+				| StorageProofKind::Flatten => InputKind::None,
 		}
 	}
 
 	/// Same as `need_additional_info_to_produce` but for reading.
-	pub fn need_additional_info_to_read(&self) -> Option<AdditionalInfoForProcessingKind> {
+	pub fn verify_input_kind(&self) -> InputKind {
 		match self {
-			StorageProofKind::KnownQueryPlanAndValues => Some(AdditionalInfoForProcessingKind::QueryPlanWithValues),
+			StorageProofKind::KnownQueryPlan => InputKind::QueryPlanNoValues,
+			StorageProofKind::KnownQueryPlanAndValues => InputKind::QueryPlanWithValues,
 			StorageProofKind::TrieSkipHashes
 				| StorageProofKind::TrieSkipHashesFull
 				| StorageProofKind::Full
-				| StorageProofKind::Flatten => None,
+				| StorageProofKind::Flatten => InputKind::None,
 		}
 	}
 
 	/// Some proof variants requires more than just the collected
 	/// encoded nodes.
-	pub fn produce_additional_info(&self) -> AdditionalInfoFromProcessingKind {
+	pub fn produce_additional_info(&self) -> OutputKind {
 		match self {
-//			StorageProofKind::KnownQueryPlan => unimplemented!(),//TODO
-			_ => AdditionalInfoFromProcessingKind::None,
+			StorageProofKind::KnownQueryPlan => OutputKind::QueryPlanWithValues,
+			_ => OutputKind::None,
 		}
 	}
 
 	/// Some proof can get unpack into another proof representation.
 	pub fn can_unpack(&self) -> bool {
 		match self {
-			StorageProofKind::KnownQueryPlanAndValues => false,
+			StorageProofKind::KnownQueryPlanAndValues
+				| StorageProofKind::KnownQueryPlan => false,
 			StorageProofKind::TrieSkipHashes
 				| StorageProofKind::TrieSkipHashesFull => true,
 			StorageProofKind::Full
@@ -191,29 +202,31 @@ impl StorageProofKind {
 		match self {
 			StorageProofKind::Flatten => false,
 			StorageProofKind::Full
+				| StorageProofKind::KnownQueryPlan
 				| StorageProofKind::KnownQueryPlanAndValues
 				| StorageProofKind::TrieSkipHashes
 				| StorageProofKind::TrieSkipHashesFull => true,
 		}
 	}
 
-	/// Indicates if we can execute proof over a backend,
+	/// Indicates if we should execute proof over a backend,
 	/// and if so, if the backend need to be full.
-	pub fn need_check_full(&self) -> Option<bool> {
+	pub fn use_full_partial_db(&self) -> Option<bool> {
 		match self {
 			StorageProofKind::Flatten
 				| StorageProofKind::TrieSkipHashes => Some(false),
 			StorageProofKind::Full
 				| StorageProofKind::TrieSkipHashesFull => Some(true),
-			StorageProofKind::KnownQueryPlanAndValues => None,
+			StorageProofKind::KnownQueryPlanAndValues
+				| StorageProofKind::KnownQueryPlan => None,
 		}
 	}
 
 	/// Proof that should be use with `verify` method.
 	pub fn can_use_verify(&self) -> bool {
 		match self {
-//			StorageProofKind::KnownQueryPlan => true,
-			StorageProofKind::KnownQueryPlanAndValues => true,
+			StorageProofKind::KnownQueryPlanAndValues
+				| StorageProofKind::KnownQueryPlan => true,
 			_ => false,
 		}
 	}
@@ -224,7 +237,8 @@ impl StorageProofKind {
 	/// failure is related to an unsupported capability.
 	pub fn can_use_as_partial_db(&self) -> bool {
 		match self {
-			StorageProofKind::KnownQueryPlanAndValues => false,
+			StorageProofKind::KnownQueryPlanAndValues
+				| StorageProofKind::KnownQueryPlan => false,
 			_ => true,
 		}
 	}
@@ -279,6 +293,12 @@ pub enum StorageProof {
 	// Following variants are only for testing, they still can be use but
 	// decoding is not implemented.
 
+	/// This acts as `KnownQueryPlanAndValues` but without value.
+	/// Values are therefore store in the proof and can be retrieved
+	/// after succesfully checking the proof.
+	///	This is mainly provided for test purpose and extensibility.
+	KnownQueryPlan(ChildrenProofMap<ProofCompacted>),
+
 	///	Fully described proof, it includes the child trie individual description and split its
 	///	content by child trie.
 	///	Currently Full variant is unused as all our child trie kind can share a same memory db
@@ -307,7 +327,7 @@ impl LegacyStorageProof {
 }
 
 impl Decode for StorageProof {
-	fn decode<I: Input>(value: &mut I) -> CodecResult<Self> {
+	fn decode<I: CodecInput>(value: &mut I) -> CodecResult<Self> {
 		let kind = value.read_byte()?;
 		Ok(match StorageProofKind::read_from_byte(kind)
 			.ok_or_else(|| codec::Error::from("Invalid storage kind"))? {
@@ -315,6 +335,8 @@ impl Decode for StorageProof {
 				StorageProofKind::TrieSkipHashes => StorageProof::TrieSkipHashes(Decode::decode(value)?),
 				StorageProofKind::KnownQueryPlanAndValues
 					=> StorageProof::KnownQueryPlanAndValues(Decode::decode(value)?),
+				StorageProofKind::KnownQueryPlan
+					=> StorageProof::KnownQueryPlan(Decode::decode(value)?),
 				StorageProofKind::Full => StorageProof::Full(Decode::decode(value)?),
 				StorageProofKind::TrieSkipHashesFull
 					=> StorageProof::TrieSkipHashesFull(Decode::decode(value)?),
@@ -323,12 +345,13 @@ impl Decode for StorageProof {
 }
 
 impl Encode for StorageProof {
-	fn encode_to<T: Output>(&self, dest: &mut T) {
+	fn encode_to<T: CodecOutput>(&self, dest: &mut T) {
 		(self.kind() as u8).encode_to(dest);
 		match self {
 			StorageProof::Flatten(p) => p.encode_to(dest),
 			StorageProof::TrieSkipHashes(p) => p.encode_to(dest),
 			StorageProof::KnownQueryPlanAndValues(p) => p.encode_to(dest),
+			StorageProof::KnownQueryPlan(p) => p.encode_to(dest),
 			StorageProof::Full(p) => p.encode_to(dest),
 			StorageProof::TrieSkipHashesFull(p) => p.encode_to(dest),
 		}
@@ -343,7 +366,7 @@ impl Encode for StorageProof {
 pub struct LegacyEncodeAdapter<'a>(pub &'a StorageProof);
 
 impl<'a> Encode for LegacyEncodeAdapter<'a> {
-	fn encode_to<T: Output>(&self, dest: &mut T) {
+	fn encode_to<T: CodecOutput>(&self, dest: &mut T) {
 		0u8.encode_to(dest);
 		self.0.encode_to(dest);
 	}
@@ -356,7 +379,7 @@ pub struct LegacyDecodeAdapter(pub StorageProof);
 /// Allow read ahead on input.
 pub struct InputRevertReadAhead<'a, I>(pub &'a mut &'a [u8], pub &'a mut I);
 
-impl<'a, I: Input> Input for InputRevertReadAhead<'a, I> {
+impl<'a, I: CodecInput> CodecInput for InputRevertReadAhead<'a, I> {
 	fn remaining_len(&mut self) -> CodecResult<Option<usize>> {
 		Ok(self.1.remaining_len()?.map(|l| l + self.0.len()))
 	}
@@ -389,7 +412,7 @@ impl<'a, I: Input> Input for InputRevertReadAhead<'a, I> {
 }
 
 impl Decode for LegacyDecodeAdapter {
-	fn decode<I: Input>(value: &mut I) -> CodecResult<Self> {
+	fn decode<I: CodecInput>(value: &mut I) -> CodecResult<Self> {
 		let legacy = value.read_byte()?;
 		Ok(if legacy == 0 {
 			LegacyDecodeAdapter(Decode::decode(value)?)
@@ -419,6 +442,7 @@ impl StorageProof {
 			StorageProofKind::Full => StorageProof::Full(ChildrenProofMap::default()),
 			StorageProofKind::TrieSkipHashesFull => StorageProof::TrieSkipHashesFull(ChildrenProofMap::default()),
 			StorageProofKind::KnownQueryPlanAndValues => StorageProof::KnownQueryPlanAndValues(ChildrenProofMap::default()),
+			StorageProofKind::KnownQueryPlan => StorageProof::KnownQueryPlan(ChildrenProofMap::default()),
 			StorageProofKind::TrieSkipHashes => StorageProof::TrieSkipHashes(Default::default()),
 		}
 	}
@@ -429,6 +453,7 @@ impl StorageProof {
 			StorageProof::Flatten(data) => data.is_empty(),
 			StorageProof::Full(data) => data.is_empty(),
 			StorageProof::KnownQueryPlanAndValues(data) => data.is_empty(),
+			StorageProof::KnownQueryPlan(data) => data.is_empty(),
 			StorageProof::TrieSkipHashes(data) => data.is_empty(),
 			StorageProof::TrieSkipHashesFull(data) => data.is_empty(),
 		}
@@ -491,7 +516,7 @@ impl StorageProof {
 	/// verification (`StorageProofKind::can_use_verify`).
 	pub fn verify<H: Hasher>(
 		self,
-		_additional_content: &Option<AdditionalInfoForProcessing>,
+		_additional_content: &Input,
 	) -> Result<Option<bool>, H>
 		where H::Out: Codec,
 	{
@@ -501,14 +526,14 @@ impl StorageProof {
 	/// This packs when possible.
 	pub fn pack<H: Hasher>(
 		self,
-		additional_content: &Option<AdditionalInfoForProcessing>,
+		additional_content: &Input,
 	) -> Result<Self, H>
 		where H::Out: Codec,
 	{
 		Ok(match self {
 			StorageProof::Full(children) => {
 				match additional_content {
-					Some(AdditionalInfoForProcessing::ChildTrieRoots(roots)) => {
+					Input::ChildTrieRoots(roots) => {
 						let mut result = ChildrenProofMap::default();
 						for (child_info, proof) in children {
 							match child_info.child_type() {
@@ -516,8 +541,6 @@ impl StorageProof {
 									let root = roots.get(&child_info)
 										.and_then(|r| Decode::decode(&mut &r[..]).ok())
 										.ok_or_else(|| missing_pack_input::<H>())?;
-									// TODO EMCH pack directly from recorded memory db -> have a pack_proof returning
-									// directly memory db?? seems wrong??
 									let trie_nodes = crate::pack_proof::<Layout<H>>(&root, &proof[..])?;
 									result.insert(child_info.clone(), trie_nodes);
 								}
@@ -525,33 +548,47 @@ impl StorageProof {
 						}
 						StorageProof::TrieSkipHashesFull(result)
 					},
-					Some(AdditionalInfoForProcessing::QueryPlanWithValues(_plan)) => {
+					Input::QueryPlanWithValues(_plan) => {
 						unimplemented!("TODO pack query plan mode")
 					},
-					None => StorageProof::Full(children),
+					Input::None => StorageProof::Full(children),
 				}
 			},
 			s => s,
 		})
 	}
 
-	/// This flatten `Full` to `Flatten`.
+	/// This flatten some children expanded proof to their
+	/// non expanded counterpart when possible.
 	/// Note that if for some reason child proof were not
 	/// attached to the top trie, they will be lost.
 	pub fn flatten(self) -> Self {
-		if let StorageProof::Full(children) = self {
-			let mut result = Vec::new();
-			children.into_iter().for_each(|(child_info, proof)| {
-				match child_info.child_type() {
-					ChildType::ParentKeyId => {
-						// this can get merged with top, since it is proof we do not use prefix
-						result.extend(proof);
+		match self {
+			StorageProof::Full(children) => {
+				let mut result = Vec::new();
+				children.into_iter().for_each(|(child_info, proof)| {
+					match child_info.child_type() {
+						ChildType::ParentKeyId => {
+							// this can get merged with top, since it is proof we do not use prefix
+							result.extend(proof);
+						}
 					}
-				}
-			});
-			StorageProof::Flatten(result)
-		} else {
-			self
+				});
+				StorageProof::Flatten(result)
+			},
+			StorageProof::TrieSkipHashesFull(children) => {
+				let mut result = Vec::new();
+				children.into_iter().for_each(|(child_info, proof)| {
+					match child_info.child_type() {
+						ChildType::ParentKeyId => {
+							result.push(proof);
+						}
+					}
+				});
+
+				StorageProof::TrieSkipHashes(result)
+			},
+			_ => self,
 		}
 	}
 
@@ -582,7 +619,8 @@ impl StorageProof {
 				&StorageProof::TrieSkipHashes(..) => {
 					proof = proof.unpack::<H>(false)?.0;
 				},
-				&StorageProof::KnownQueryPlanAndValues(..) => {
+				&StorageProof::KnownQueryPlanAndValues(..)
+					| &StorageProof::KnownQueryPlan(..) => {
 					return Err(impossible_merge_for_proof::<H>());
 				},
 				_ => (),
@@ -592,6 +630,7 @@ impl StorageProof {
 				StorageProof::TrieSkipHashesFull(..)
 					| StorageProof::TrieSkipHashes(..)
 					| StorageProof::KnownQueryPlanAndValues(..)
+					| StorageProof::KnownQueryPlan(..)
 					=> unreachable!("Unpacked or early return earlier"),
 				StorageProof::Flatten(proof) => {
 					if !do_flatten {
@@ -631,6 +670,7 @@ impl StorageProof {
 			StorageProof::Flatten(_) => StorageProofKind::Flatten,
 			StorageProof::TrieSkipHashes(_) => StorageProofKind::TrieSkipHashes,
 			StorageProof::KnownQueryPlanAndValues(_) => StorageProofKind::KnownQueryPlanAndValues,
+			StorageProof::KnownQueryPlan(_) => StorageProofKind::KnownQueryPlan,
 			StorageProof::Full(_) => StorageProofKind::Full,
 			StorageProof::TrieSkipHashesFull(_) => StorageProofKind::TrieSkipHashesFull,
 		}
@@ -672,6 +712,9 @@ impl StorageProof {
 				result.insert(ChildInfoProof::top_trie(), db);
 			},
 			StorageProof::KnownQueryPlanAndValues(_children) => {
+				return Err(impossible_backend_build::<H>());
+			},
+			StorageProof::KnownQueryPlan(_children) => {
 				return Err(impossible_backend_build::<H>());
 			},
 		}
@@ -723,6 +766,9 @@ impl StorageProof {
 				}
 			},
 			StorageProof::KnownQueryPlanAndValues(_children) => {
+				return Err(impossible_backend_build::<H>());
+			},
+			StorageProof::KnownQueryPlan(_children) => {
 				return Err(impossible_backend_build::<H>());
 			},
 		}

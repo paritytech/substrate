@@ -293,7 +293,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 					.and_then(|(recorder, kind)| {
 						// TODO EMCH this will fail for compact as we need the register
 						// root
-						recorder.extract_proof(&kind, None).ok()
+						recorder.extract_proof(&kind, #crate_::ProofInput::None).ok()
 					})
 			}
 

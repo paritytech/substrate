@@ -23,8 +23,7 @@ use log::debug;
 use hash_db::{Hasher, HashDB, EMPTY_PREFIX, Prefix};
 use sp_trie::{
 	MemoryDB, empty_child_trie_root, read_trie_value_with, read_child_trie_value_with,
-	record_all_keys, StorageProofKind, StorageProof, AdditionalInfoForProcessingKind,
-	AdditionalInfoForProcessing,
+	record_all_keys, StorageProofKind, StorageProof, ProofInputKind, ProofInput,
 };
 pub use sp_trie::{Recorder, ChildrenProofMap};
 pub use sp_trie::trie_types::{Layout, TrieError};
@@ -186,11 +185,11 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 
 	/// Extracting the gathered unordered proof.
 	pub fn extract_proof(&self, kind: &StorageProofKind) -> Result<StorageProof, String> {
-		let roots = match kind.need_additional_info_to_produce() {
-			Some(AdditionalInfoForProcessingKind::ChildTrieRoots) => {
+		let roots = match kind.processing_input_kind() {
+			ProofInputKind::ChildTrieRoots => {
 				self.0.extract_registered_roots()
 			},
-			_ => None,
+			_ => ProofInput::None,
 		};
 		self.0.essence().backend_storage().proof_recorder.extract_proof(kind, roots)
 	}
@@ -204,7 +203,7 @@ impl<H: Hasher> ProofRecorder<H>
 	pub fn extract_proof(
 		&self,
 		kind: &StorageProofKind,
-		additional_infos: Option<AdditionalInfoForProcessing>,
+		input: ProofInput,
 	) -> Result<StorageProof, String> {
 		// TODO EMCH logic should be in sp_trie
 		Ok(match self {
@@ -236,10 +235,11 @@ impl<H: Hasher> ProofRecorder<H>
 					StorageProofKind::Flatten => unpacked_full.flatten(),
 					StorageProofKind::Full => unpacked_full,
 					StorageProofKind::KnownQueryPlanAndValues
-					| StorageProofKind::TrieSkipHashesFull => unpacked_full.pack::<H>(&additional_infos)
+					| StorageProofKind::KnownQueryPlan
+					| StorageProofKind::TrieSkipHashesFull => unpacked_full.pack::<H>(&input)
 								.map_err(|e| format!("{}", e))?,
-					StorageProofKind::TrieSkipHashes => unpacked_full.pack::<H>(&additional_infos)
-								.map_err(|e| format!("{}", e))?.flatten(), // TODO EMCH I need to assert it is actually flatten (debug it), got strange non failing test on proof_recorded_and_checked_with_child (when was failing of flatten version
+					StorageProofKind::TrieSkipHashes => unpacked_full.pack::<H>(&input)
+								.map_err(|e| format!("{}", e))?.flatten(),
 				}
 			},
 		})
@@ -580,7 +580,7 @@ mod tests {
 			assert_eq!(proving.child_storage(child_info_1, &[64]), Ok(Some(vec![64])));
 
 			let proof = proving.extract_proof(&kind).unwrap();
-			if kind.need_check_full().unwrap() {
+			if kind.use_full_partial_db().unwrap() {
 				let proof_check = create_proof_check_backend::<BlakeTwo256>(
 					in_memory_root.into(),
 					proof

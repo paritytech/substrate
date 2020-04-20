@@ -43,7 +43,7 @@ mod trie_backend_essence;
 mod stats;
 
 pub use sp_trie::{trie_types::{Layout, TrieDBMut}, TrieMut, DBValue, MemoryDB,
-	StorageProof, StorageProofKind, ChildrenProofMap, AdditionalInfoForProcessingKind};
+	StorageProof, StorageProofKind, ChildrenProofMap, ProofInput, ProofInputKind};
 pub use testing::TestExternalities;
 pub use basic::BasicExternalities;
 pub use ext::Ext;
@@ -547,7 +547,7 @@ where
 	H::Out: Ord + 'static + codec::Codec,
 	N: crate::changes_trie::BlockNumber,
 {
-	match proof.kind().need_check_full() {
+	match proof.kind().use_full_partial_db() {
 		Some(true) => {
 			let trie_backend = create_proof_check_backend::<H>(root.into(), proof)?;
 			execution_proof_check_on_trie_backend::<_, N, _>(
@@ -710,15 +710,15 @@ where
 	}
 	let proof = proving_backend.extract_proof(&kind)
 		.map_err(|e| Box::new(e) as Box<dyn Error>)?;
-	let infos = match kind.need_additional_info_to_produce() {
-		Some(AdditionalInfoForProcessingKind::ChildTrieRoots) => {
+	let infos = match kind.processing_input_kind() {
+		ProofInputKind::ChildTrieRoots => {
 			trie_backend.extract_registered_roots()
 		},
-		Some(AdditionalInfoForProcessingKind::QueryPlanNoValues) => {
+		ProofInputKind::QueryPlanNoValues => {
 			unimplemented!("TODO from keys, do not care about memory copy at first")
 		},
-		Some(_) => return Err(Box::new("Cannot produce required info for proof")),
-		None => None,
+		ProofInputKind::None => ProofInput::None,
+		_ => return Err(Box::new("Cannot produce required info for proof")),
 	};
 	Ok(proof.pack::<H>(&infos)
 		.map_err(|e| Box::new(format!("{}", e)) as Box<dyn Error>)?)
@@ -746,15 +746,15 @@ where
 	}
 	let proof = proving_backend.extract_proof(&kind)
 		.map_err(|e| Box::new(e) as Box<dyn Error>)?;
-	let infos = match kind.need_additional_info_to_produce() {
-		Some(AdditionalInfoForProcessingKind::ChildTrieRoots) => {
+	let infos = match kind.processing_input_kind() {
+		ProofInputKind::ChildTrieRoots => {
 			trie_backend.extract_registered_roots()
 		},
-		Some(AdditionalInfoForProcessingKind::QueryPlanNoValues) => {
+		ProofInputKind::QueryPlanNoValues => {
 			unimplemented!("TODO from keys, do not care about memory copy at first, warn to include child root fetch")
 		},
-		Some(_) => return Err(Box::new("Cannot produce required info for proof")),
-		None => None,
+		ProofInputKind::None => ProofInput::None,
+		_ => return Err(Box::new("Cannot produce required info for proof")),
 	};
 	Ok(proof.pack::<H>(&infos)
 		.map_err(|e| Box::new(format!("{}", e)) as Box<dyn Error>)?)
@@ -775,7 +775,7 @@ where
 	I::Item: AsRef<[u8]>,
 {
 	let mut result = HashMap::new();
-	match proof.kind().need_check_full() {
+	match proof.kind().use_full_partial_db() {
 		Some(true) => {
 			let proving_backend = create_proof_check_backend::<H>(root, proof)?;
 			for key in keys.into_iter() {
@@ -811,7 +811,7 @@ where
 	I::Item: AsRef<[u8]>,
 {
 	let mut result = HashMap::new();
-	match proof.kind().need_check_full() {
+	match proof.kind().use_full_partial_db() {
 		Some(true) => {
 			let proving_backend = create_proof_check_backend::<H>(root, proof)?;
 			for key in keys.into_iter() {
