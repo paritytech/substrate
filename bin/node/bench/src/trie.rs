@@ -51,8 +51,8 @@ pub enum DatabaseSize {
 	Medium,
 	#[display(fmt = "large")]
 	Large,
-	#[display(fmt = "largest")]
-	Largest,
+	#[display(fmt = "huge")]
+	Huge,
 }
 
 lazy_static! {
@@ -69,7 +69,7 @@ impl DatabaseSize {
 			Self::Small => 10_000,
 			Self::Medium => 100_000,
 			Self::Large => 200_000,
-			Self::Largest => 1_000_000,
+			Self::Huge => 1_000_000,
 		};
 
 		assert_eq!(val % SAMPLE_SIZE, 0);

@@ -85,14 +85,14 @@ fn main() {
 			},
 		size in [
 			DatabaseSize::Empty, DatabaseSize::Smallest, DatabaseSize::Small,
-			DatabaseSize::Medium, DatabaseSize::Large,
+			DatabaseSize::Medium, DatabaseSize::Large, DatabaseSize::Huge,
 		] => TrieReadBenchmarkDescription { database_size: *size },
 		size in [
 			DatabaseSize::Empty, DatabaseSize::Smallest, DatabaseSize::Small,
-			DatabaseSize::Medium, DatabaseSize::Large,
+			DatabaseSize::Medium, DatabaseSize::Large, DatabaseSize::Huge,
 		] => TrieWriteBenchmarkDescription { database_size: *size },
 	);
-
+	
 	if opt.list {
 		for benchmark in benchmarks.iter() {
 			log::info!("{}: {}", benchmark.name(), benchmark.path().full())
