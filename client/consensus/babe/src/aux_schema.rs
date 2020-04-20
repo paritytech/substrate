@@ -136,7 +136,7 @@ pub(crate) fn load_block_weight<H: Encode, B: AuxStore>(
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::Epoch;
+	use crate::{Epoch, migration::EpochV0};
 	use fork_tree::ForkTree;
 	use substrate_test_runtime_client;
 	use sp_core::H256;
@@ -148,16 +148,12 @@ mod test {
 
 	#[test]
 	fn load_decode_from_v0_epoch_changes() {
-		let epoch = Epoch {
+		let epoch = EpochV0 {
 			start_slot: 0,
 			authorities: vec![],
 			randomness: [0; 32],
 			epoch_index: 1,
 			duration: 100,
-			config: BabeEpochConfiguration {
-				c: (3, 10),
-				secondary_slots: true,
-			},
 		};
 		let client = substrate_test_runtime_client::new();
 		let mut v0_tree = ForkTree::<H256, NumberFor<TestBlock>, _>::new();
@@ -170,7 +166,7 @@ mod test {
 
 		client.insert_aux(
 			&[(BABE_EPOCH_CHANGES_KEY,
-			   &EpochChangesForV0::<TestBlock, Epoch>::from_raw(v0_tree).encode()[..])],
+			   &EpochChangesForV0::<TestBlock, EpochV0>::from_raw(v0_tree).encode()[..])],
 			&[],
 		).unwrap();
 
