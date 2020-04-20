@@ -1453,6 +1453,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
+ "sp-tracing",
  "sp-version",
 ]
 
@@ -1488,7 +1489,7 @@ dependencies = [
  "sp-runtime",
  "sp-state-machine",
  "sp-std",
- "tracing",
+ "sp-tracing",
 ]
 
 [[package]]
@@ -6765,12 +6766,12 @@ dependencies = [
  "sp-core",
  "sp-keyring",
  "sp-runtime",
+ "sp-tracing",
  "sp-transaction-pool",
  "sp-utils",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "substrate-test-runtime-transaction-pool",
- "tracing",
  "wasm-timer",
 ]
 
@@ -7574,6 +7575,7 @@ dependencies = [
  "sp-runtime-interface-test-wasm",
  "sp-state-machine",
  "sp-std",
+ "sp-tracing",
  "sp-wasm-interface",
  "static_assertions",
  "trybuild",
@@ -7601,6 +7603,7 @@ dependencies = [
  "sp-runtime-interface-test-wasm",
  "sp-runtime-interface-test-wasm-deprecated",
  "sp-state-machine",
+ "tracing",
 ]
 
 [[package]]
@@ -7723,6 +7726,13 @@ dependencies = [
  "sp-runtime",
  "sp-std",
  "wasm-timer",
+]
+
+[[package]]
+name = "sp-tracing"
+version = "2.0.0-dev"
+dependencies = [
+ "tracing",
 ]
 
 [[package]]

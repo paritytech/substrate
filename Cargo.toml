@@ -159,6 +159,7 @@ members = [
 	"primitives/timestamp",
 	"primitives/test-primitives",
 	"primitives/transaction-pool",
+	"primitives/tracing",
 	"primitives/trie",
 	"primitives/utils",
 	"primitives/wasm-interface",
