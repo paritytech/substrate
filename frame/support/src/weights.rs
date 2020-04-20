@@ -102,7 +102,14 @@
 //! }
 //! # fn main() {}
 //! ```
+//! FRAME assumes a weight of `1_000_000_000_000` equals 1 second of compute on a standard machine.
 //!
+//! Latest machine specification used to benchmark are:
+//! - Digital Ocean: ubuntu-s-2vcpu-4gb-ams3-01
+//! - 2x Intel(R) Xeon(R) CPU E5-2650 v4 @ 2.20GHz
+//! - 4GB RAM
+//! - Ubuntu 19.10 (GNU/Linux 5.3.0-18-generic x86_64)
+//! - rustc 1.42.0 (b8cedc004 2020-03-09)
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
@@ -118,9 +125,6 @@ use crate::dispatch::{DispatchErrorWithPostInfo, DispatchError};
 pub use sp_runtime::transaction_validity::TransactionPriority;
 
 /// Numeric range of a transaction weight.
-///
-/// FRAME assumes a weight of `1_000_000_000_000` equals 1 second of compute on a standard
-/// machine: (TODO: DEFINE STANDARD MACHINE SPECIFICATIONS)
 pub type Weight = u64;
 
 /// The smallest total weight an extrinsic should have.
@@ -248,7 +252,7 @@ impl sp_runtime::traits::Printable for PostDispatchInfo {
 }
 
 /// Allows easy conversion from `DispatchError` to `DispatchErrorWithPostInfo` for dispatchables
-/// that want to return a custom a posteriori weight on error.
+/// that want to return a custom a posterior weight on error.
 pub trait WithPostDispatchInfo {
 	/// Call this on your modules custom errors type in order to return a custom weight on error.
 	///
