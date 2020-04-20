@@ -15,6 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use codec::{Decode, Encode};
+use num_traits::Signed;
 use crate::{
 	helpers_128bit::multiply_by_rational,
 	traits::{
@@ -82,9 +83,9 @@ impl FixedPointNumber for Fixed128 {
 				rhs = rhs.saturating_mul(-1);
 			}
 
-			(lhs as <Self as FixedPointNumber>::Unsigned)
-				.checked_mul(rhs as <Self as FixedPointNumber>::Unsigned)
-				.and_then(|n| n.checked_div(Self::DIV as <Self as FixedPointNumber>::Unsigned))
+			(lhs as Self::Unsigned)
+				.checked_mul(rhs as Self::Unsigned)
+				.and_then(|n| n.checked_div(Self::DIV as Self::Unsigned))
 				.and_then(|n| TryInto::<Self::Inner>::try_into(n).ok())
 				.and_then(|n| TryInto::<N>::try_into(n * signum).ok())
 		})
@@ -103,20 +104,15 @@ impl FixedPointNumber for Fixed128 {
 
 	fn saturating_mul_int<N>(&self, other: &N) -> N
 	where
-		N: Copy + TryFrom<Self::Inner> + TryInto<Self::Inner> + Bounded,
+		N: Copy + TryFrom<Self::Inner> + TryInto<Self::Inner> + Bounded + Signed,
 	{
 		self.checked_mul_int(other).unwrap_or_else(|| {
-			N::try_into(*other)
-				.map(|n| n.signum())
-				.map(|n| n * self.0.signum())
-				.map(|signum| {
-					if signum.is_negative() {
-						Bounded::min_value()
-					} else {
-						Bounded::max_value()
-					}
-				})
-				.unwrap_or(Bounded::max_value())
+			let signum = other.signum().saturated_into() * self.0.signum();
+			if signum.is_negative() {
+				Bounded::min_value()
+			} else {
+				Bounded::max_value()
+			}
 		})
 	}
 
@@ -485,13 +481,15 @@ mod tests {
 
 	#[test]
 	fn saturating_mul_should_work() {
-		let a = Fixed128::from_integer(-1);
-		assert_eq!(min().saturating_mul(a), max());
+		let a = Fixed128::from_integer(10);
+		assert_eq!(min().saturating_mul(a), min());
+		assert_eq!(max().saturating_mul(a), max());
 
-		assert_eq!(Fixed128::from_integer(125).saturating_mul(a).into_inner(), -125 * Fixed128::DIV);
+		let b = Fixed128::from_integer(-1);
+		assert_eq!(Fixed128::from_integer(125).saturating_mul(b).into_inner(), -125 * Fixed128::DIV);
 
-		let a = Fixed128::from_rational(1, 5);
-		assert_eq!(Fixed128::from_integer(125).saturating_mul(a).into_inner(), 25 * Fixed128::DIV);
+		let c = Fixed128::from_rational(1, 5);
+		assert_eq!(Fixed128::from_integer(125).saturating_mul(c).into_inner(), 25 * Fixed128::DIV);
 	}
 
 	#[test]

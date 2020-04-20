@@ -21,7 +21,7 @@ use codec::HasCompact;
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{
 	Zero, One, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv,
-	CheckedShl, CheckedShr, checked_pow
+	CheckedShl, CheckedShr, checked_pow, Signed
 };
 use sp_std::ops::{
 	Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
@@ -224,7 +224,7 @@ pub trait FixedPointNumber:
 	fn checked_div_int<N: Copy + TryFrom<Self::Inner> + TryInto<Self::Inner>>(&self, other: &N) -> Option<N>;
 
 	/// Saturating multiplication for integer type `N`.
-	fn saturating_mul_int<N: Copy + TryFrom<Self::Inner> + TryInto<Self::Inner> + Bounded>(&self, other: &N) -> N;
+	fn saturating_mul_int<N: Copy + TryFrom<Self::Inner> + TryInto<Self::Inner> + Bounded + Signed>(&self, other: &N) -> N;
 
 	/// Saturating absolute value. Returning MAX if `parts == Inner::MIN` instead of overflowing.
 	fn saturating_abs(&self) -> Self;

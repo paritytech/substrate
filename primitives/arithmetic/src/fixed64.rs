@@ -19,6 +19,7 @@ use sp_std::{
 	convert::{TryFrom, TryInto},
 };
 use codec::{Encode, Decode};
+use num_traits::Signed;
 use crate::{
 	helpers_128bit::multiply_by_rational,
 	Perbill,
@@ -98,20 +99,15 @@ impl FixedPointNumber for Fixed64 {
 
 	fn saturating_mul_int<N>(&self, other: &N) -> N
 	where
-		N: Copy + TryFrom<Self::Inner> + TryInto<Self::Inner> + Bounded,
+		N: Copy + TryFrom<Self::Inner> + TryInto<Self::Inner> + Bounded + Signed,
 	{
 		self.checked_mul_int(other).unwrap_or_else(|| {
-			N::try_into(*other)
-				.map(|n| n.signum())
-				.map(|n| n * self.0.signum())
-				.map(|signum| {
-					if signum.is_negative() {
-						Bounded::min_value()
-					} else {
-						Bounded::max_value()
-					}
-				})
-				.unwrap_or(Bounded::max_value())
+			let signum = other.signum().saturated_into() * self.0.signum();
+			if signum.is_negative() {
+				Bounded::min_value()
+			} else {
+				Bounded::max_value()
+			}
 		})
 	}
 
@@ -338,18 +334,119 @@ mod tests {
 	use super::*;
 
 	fn max() -> Fixed64 {
-		Fixed64::from_parts(i64::max_value())
+		Fixed64::max_value()
+	}
+
+	fn min() -> Fixed64 {
+		Fixed64::min_value()
 	}
 
 	#[test]
 	fn fixed64_semantics() {
-		assert_eq!(Fixed64::from_rational(5, 2).0, 5 * 1_000_000_000 / 2);
-		assert_eq!(Fixed64::from_rational(5, 2), Fixed64::from_rational(10, 4));
-		assert_eq!(Fixed64::from_rational(5, 0), Fixed64::from_rational(5, 1));
+		let a = Fixed64::from_rational(5, 2);
+		let b = Fixed64::from_rational(10, 4);
+		assert_eq!(a.0, 5 * Fixed64::DIV / 2);
+		assert_eq!(a, b);
+
+		let a = Fixed64::from_rational(-5, 1);
+		assert_eq!(a, Fixed64::from_integer(-5));
 
 		// biggest value that can be created.
 		assert_ne!(max(), Fixed64::from_integer(9_223_372_036));
 		assert_eq!(max(), Fixed64::from_integer(9_223_372_037));
+		
+		// the smallest value that can be created.
+		assert_ne!(min(), Fixed64::from_integer(-9_223_372_036));
+		assert_eq!(min(), Fixed64::from_integer(-9_223_372_037));
+	}
+
+	#[test]
+	fn fixed64_operation() {
+		let a = Fixed64::from_integer(2);
+		let b = Fixed64::from_integer(1);
+		assert_eq!(a.checked_add(&b), Some(Fixed64::from_integer(1 + 2)));
+		assert_eq!(a.checked_sub(&b), Some(Fixed64::from_integer(2 - 1)));
+		assert_eq!(a.checked_mul(&b), Some(Fixed64::from_integer(1 * 2)));
+		assert_eq!(
+			a.checked_div(&b),
+			Some(Fixed64::from_rational(2, 1))
+		);
+
+		let a = Fixed64::from_rational(5, 2);
+		let b = Fixed64::from_rational(3, 2);
+		assert_eq!(
+			a.checked_add(&b),
+			Some(Fixed64::from_rational(8, 2))
+		);
+		assert_eq!(
+			a.checked_sub(&b),
+			Some(Fixed64::from_rational(2, 2))
+		);
+		assert_eq!(
+			a.checked_mul(&b),
+			Some(Fixed64::from_rational(15, 4))
+		);
+		assert_eq!(
+			a.checked_div(&b),
+			Some(Fixed64::from_rational(10, 6))
+		);
+
+		let a = Fixed64::from_integer(120);
+		assert_eq!(a.checked_div_int(&2i32), Some(60));
+
+		let a = Fixed64::from_rational(20, 1);
+		assert_eq!(a.checked_div_int(&2i32), Some(10));
+
+		let a = Fixed64::from_integer(120);
+		assert_eq!(a.checked_mul_int(&2i32), Some(240));
+
+		let a = Fixed64::from_rational(1, 2);
+		assert_eq!(a.checked_mul_int(&20i32), Some(10));
+
+		let a = Fixed64::from_rational(-1, 2);
+		assert_eq!(a.checked_mul_int(&20i32), Some(-10));
+	}
+
+	#[test]
+	fn saturating_mul_should_work() {
+		let a = Fixed64::from_integer(10);
+		assert_eq!(min().saturating_mul(a), min());
+		assert_eq!(max().saturating_mul(a), max());
+
+		let b = Fixed64::from_integer(-1);
+		assert_eq!(Fixed64::from_integer(125).saturating_mul(b).into_inner(), -125 * Fixed64::DIV);
+
+		let c = Fixed64::from_rational(1, 5);
+		assert_eq!(Fixed64::from_integer(125).saturating_mul(c).into_inner(), 25 * Fixed64::DIV);
+	}
+
+	#[test]
+	fn saturating_mul_int_works() {
+		let a = Fixed64::from_rational(10, 1);
+		assert_eq!(a.saturating_mul_int(&i32::max_value()), i32::max_value());
+
+		let a = Fixed64::from_rational(-10, 1);
+		assert_eq!(a.saturating_mul_int(&i32::max_value()), i32::min_value());
+
+		let a = Fixed64::from_rational(3, 1);
+		assert_eq!(a.saturating_mul_int(&100i8), i8::max_value());
+
+		let a = Fixed64::from_rational(10, 1);
+		assert_eq!(a.saturating_mul_int(&123i128), 1230);
+
+		let a = Fixed64::from_rational(-10, 1);
+		assert_eq!(a.saturating_mul_int(&123i128), -1230);
+
+		assert_eq!(max().saturating_mul_int(&2i128), 18_446_744_073);
+		assert_eq!(min().saturating_mul_int(&2i128), -18_446_744_073);
+
+		assert_eq!(max().saturating_mul_int(&i64::min_value()), i64::min_value());
+		assert_eq!(min().saturating_mul_int(&i64::max_value()), i64::min_value());
+		assert_eq!(min().saturating_mul_int(&i64::min_value()), i64::max_value());
+
+		assert_eq!(max().saturating_mul_int(&i128::min_value()), i128::min_value());
+		assert_eq!(min().saturating_mul_int(&i128::max_value()), i128::min_value());
+		assert_eq!(min().saturating_mul_int(&i128::min_value()), i128::max_value());
 	}
 
 	#[test]
