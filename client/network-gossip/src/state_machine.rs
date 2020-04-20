@@ -308,36 +308,40 @@ impl<B: BlockT> ConsensusGossip<B> {
 				validator.validate(&mut context, &who, &message)
 			};
 
-			let validation_result = match validation {
-				ValidationResult::ProcessAndKeep(topic) => Some((topic, true)),
-				ValidationResult::ProcessAndDiscard(topic) => Some((topic, false)),
-				ValidationResult::Discard => None,
+			let (topic, keep) = match validation {
+				ValidationResult::ProcessAndKeep(topic) => (topic, true),
+				ValidationResult::ProcessAndDiscard(topic) => (topic, false),
+				ValidationResult::Discard => {
+					trace!(target:"gossip", "Discard message from peer {}", who);
+					continue;
+				},
 			};
 
-			if let Some((topic, keep)) = validation_result {
-				network.report_peer(who.clone(), rep::GOSSIP_SUCCESS);
-				if let Some(ref mut peer) = self.peers.get_mut(&who) {
-					peer.known_messages.insert(message_hash);
+			network.report_peer(who.clone(), rep::GOSSIP_SUCCESS);
 
-					to_forward.push((topic, TopicNotification {
-						message: message.clone(),
-						sender: Some(who.clone())
-					}));
-
-					if keep {
-						self.register_message_hashed(
-							message_hash,
-							topic,
-							message,
-							Some(who.clone()),
-						);
-					}
-				} else {
+			let peer = match self.peers.get_mut(&who) {
+				Some(peer) => peer,
+				None => {
 					trace!(target:"gossip", "Ignored statement from unregistered peer {}", who);
 					network.report_peer(who.clone(), rep::UNREGISTERED_TOPIC);
+					continue;
 				}
-			} else {
-				trace!(target:"gossip", "Discard message from peer {}", who);
+			};
+
+			peer.known_messages.insert(message_hash);
+
+			to_forward.push((topic, TopicNotification {
+				message: message.clone(),
+				sender: Some(who.clone())
+			}));
+
+			if keep {
+				self.register_message_hashed(
+					message_hash,
+					topic,
+					message,
+					Some(who.clone()),
+				);
 			}
 		}
 
