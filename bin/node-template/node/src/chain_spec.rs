@@ -3,10 +3,10 @@ use node_template_runtime::{
 	AccountId, AuraConfig, BalancesConfig, GenesisConfig, GrandpaConfig,
 	SudoConfig, SystemConfig, WASM_BINARY, Signature
 };
-use sp_consensus_aura::sr25519::{AuthorityId as AuraId};
-use sp_finality_grandpa::{AuthorityId as GrandpaId};
-use sc_service;
+use sp_consensus_aura::sr25519::AuthorityId as AuraId;
+use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{Verify, IdentifyAccount};
+use sc_service::ChainType;
 
 // Note this is the URL for the telemetry server
 //const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
@@ -42,6 +42,7 @@ pub fn development_config() -> ChainSpec {
 	ChainSpec::from_genesis(
 		"Development",
 		"dev",
+		ChainType::Development,
 		|| testnet_genesis(
 			vec![
 				authority_keys_from_seed("Alice"),
@@ -67,6 +68,7 @@ pub fn local_testnet_config() -> ChainSpec {
 	ChainSpec::from_genesis(
 		"Local Testnet",
 		"local_testnet",
+		ChainType::Local,
 		|| testnet_genesis(
 			vec![
 				authority_keys_from_seed("Alice"),

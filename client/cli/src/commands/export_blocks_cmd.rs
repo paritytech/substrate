@@ -74,7 +74,7 @@ impl ExportBlocksCmd {
 		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
 		<BB as BlockT>::Hash: std::str::FromStr,
 	{
-		if let DatabaseConfig::Path { ref path, .. } = &config.database {
+		if let DatabaseConfig::RocksDb { ref path, .. } = &config.database {
 			info!("DB path: {}", path.display());
 		}
 

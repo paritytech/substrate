@@ -117,7 +117,7 @@ pub trait Saturating {
 	/// Saturating multiply. Compute `self * rhs`, saturating at the numeric bounds instead of
 	/// overflowing.
 	fn saturating_mul(self, rhs: Self) -> Self;
-	
+
 	/// Saturating exponentiation. Compute `self.pow(exp)`, saturating at the numeric bounds
 	/// instead of overflowing.
 	fn saturating_pow(self, exp: usize) -> Self;
