@@ -277,11 +277,26 @@ parameter_types! {
 	pub const UnsignedPriority: u64 = 1 << 20;
 }
 
+thread_local! {
+	pub static REWARD_REMAINDER_UNBALANCED: RefCell<u128> = RefCell::new(0);
+}
+
+pub struct RewardRemainderMock;
+
+impl OnUnbalanced<NegativeImbalanceOf<Test>> for RewardRemainderMock {
+	fn on_nonzero_unbalanced(amount: NegativeImbalanceOf<Test>) {
+		REWARD_REMAINDER_UNBALANCED.with(|v| {
+			*v.borrow_mut() += amount.peek();
+		});
+		drop(amount);
+	}
+}
+
 impl Trait for Test {
 	type Currency = Balances;
 	type UnixTime = Timestamp;
 	type CurrencyToVote = CurrencyToVoteHandler;
-	type RewardRemainder = ();
+	type RewardRemainder = RewardRemainderMock;
 	type Event = MetaEvent;
 	type Slash = ();
 	type Reward = ();
@@ -975,4 +990,14 @@ macro_rules! assert_session_era {
 			$era,
 		);
 	};
+}
+
+pub(crate) fn staking_events() -> Vec<Event<Test>> {
+	System::events().into_iter().map(|r| r.event).filter_map(|e| {
+		if let MetaEvent::staking(inner) = e {
+			Some(inner)
+		} else {
+			None
+		}
+	}).collect()
 }
