@@ -184,7 +184,7 @@ pub enum AllowedSlots {
 
 impl AllowedSlots {
 	/// Whether plain secondary slots are allowed.
-	pub fn is_secondary_slots_allowed(&self) -> bool {
+	pub fn is_secondary_plain_slots_allowed(&self) -> bool {
 		*self == Self::PrimaryAndSecondaryPlainSlots
 	}
 

@@ -172,14 +172,14 @@ pub fn claim_slot(
 ) -> Option<(PreDigest, AuthorityPair)> {
 	claim_primary_slot(slot_number, epoch, epoch.config.c, keystore)
 		.or_else(|| {
-			if config.allowed_slots.is_secondary_plain_slots_allowed() ||
-				config.allowed_slots.is_secondary_vrf_slots_allowed()
+			if epoch.config.allowed_slots.is_secondary_plain_slots_allowed() ||
+				epoch.config.allowed_slots.is_secondary_vrf_slots_allowed()
 			{
 				claim_secondary_slot(
 					slot_number,
 					&epoch,
 					keystore,
-					config.allowed_slots.is_secondary_vrf_slots_allowed(),
+					epoch.config.allowed_slots.is_secondary_vrf_slots_allowed(),
 				)
 			} else {
 				None

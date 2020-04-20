@@ -507,7 +507,7 @@ fn can_author_block() {
 		duration: 100,
 		config: BabeEpochConfiguration {
 			c: (3, 10),
-			secondary_slots: true,
+			allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 		},
 	};
 

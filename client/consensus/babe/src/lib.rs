@@ -189,7 +189,7 @@ impl Epoch {
 			randomness: genesis_config.randomness.clone(),
 			config: BabeEpochConfiguration {
 				c: genesis_config.c,
-				secondary_slots: genesis_config.secondary_slots,
+				allowed_slots: genesis_config.allowed_slots,
 			},
 		}
 	}
