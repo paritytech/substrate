@@ -476,11 +476,13 @@ decl_module! {
 		/// - `O(R)` where `R` registrar-count (governance-bounded).
 		/// - One storage mutation (codec `O(R)`).
 		/// - One event.
+		/// - Benchmark: 78.71 + R * 0.965 µs (min square analysis)
 		/// # </weight>
 		#[weight = FunctionOf(
 			|(_, &old_count): (&T::AccountId, &u32)| {
 				T::DbWeight::get().reads_writes(1, 1)
-				+ 500_000 * (old_count as Weight) // R
+				+ 78_710_00 // constant
+				+ 965_000 * (old_count as Weight) // R
 			},
 			DispatchClass::Normal,
 			true
@@ -519,13 +521,15 @@ decl_module! {
 		/// - At most two balance operations.
 		/// - One storage mutation (codec-read `O(X' + J)`, codec-write `O(X + J)`).
 		/// - One event.
+		/// - Benchmark: 136.6 + J * 0.62 + X * 2.62 µs (min square analysis)
 		/// # </weight>
 		#[weight = FunctionOf(
 			|(info,): (&IdentityInfo,)| {
 				T::DbWeight::get().reads_writes(1, 1)
 				+ T::DbWeight::get().reads_writes(1, 1) // balance ops
-				+ 500_000 * (info.additional.len() as Weight) // X
-				+ 500_000 * (MAX_REGISTRARS as Weight) // J
+				+ 136_600_000 // constant
+				+ 2_622_000 * (info.additional.len() as Weight) // X
+				+ 624_000 * (MAX_REGISTRARS as Weight) // J
 			},
 			DispatchClass::Normal,
 			true
@@ -576,6 +580,7 @@ decl_module! {
 		/// - At most one balance operations.
 		/// - At most O(P + S + 1) storage mutations; codec complexity `O(S)`);
 		///   one storage-exists.
+		/// - Benchmark: 24.03 + P * 3.37 + S * 4.76 µs (min square analysis)
 		/// # </weight>
 		#[weight = FunctionOf(
 			|(subs, &old_subs_count): (&Vec<(T::AccountId, Data)>, &u32)| {
@@ -584,7 +589,9 @@ decl_module! {
 				+ db.reads_writes(1, 1) // balance ops
 				+ db.writes(old_subs_count.into()) // P old DB deletions
 				+ db.writes(subs.len() as u64 + 1) // S + 1 new DB writes
-				+ 500_000 * (subs.len() + 1 + old_subs_count as usize) as Weight // P + S + 1
+				+ 24_030_000 // constant
+				+ 3_374_000 * old_subs_count as Weight // P
+				+ 4_762_000 * subs.len() as Weight // S
 			},
 			DispatchClass::Normal,
 			true
