@@ -249,6 +249,13 @@ pub trait CliConfiguration: Sized {
 		Ok(Default::default())
 	}
 
+	/// Returns `Ok(true) if potentially unsafe RPC is to be exposed.
+	///
+	/// By default this is `false`.
+	fn unsafe_rpc_expose(&self) -> Result<bool> {
+		Ok(Default::default())
+	}
+
 	/// Get the RPC websockets maximum connections (`None` if unlimited).
 	///
 	/// By default this is `None`.
@@ -419,6 +426,7 @@ pub trait CliConfiguration: Sized {
 			execution_strategies: self.execution_strategies(is_dev)?,
 			rpc_http: self.rpc_http()?,
 			rpc_ws: self.rpc_ws()?,
+			unsafe_rpc_expose: self.unsafe_rpc_expose()?,
 			rpc_ws_max_connections: self.rpc_ws_max_connections()?,
 			rpc_cors: self.rpc_cors(is_dev)?,
 			prometheus_config: self.prometheus_config()?,

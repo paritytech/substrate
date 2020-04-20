@@ -31,7 +31,7 @@ use sp_core::{
 	crypto::{set_default_ss58_version, Ss58AddressFormat, Ss58Codec},
 	ed25519, sr25519, ecdsa, Pair, Public, H256, hexdisplay::HexDisplay,
 };
-use sp_runtime::{traits::{IdentifyAccount, Verify}, generic::Era};
+use sp_runtime::{traits::{AccountIdConversion, IdentifyAccount, Verify}, generic::Era, ModuleId};
 use std::{
 	convert::{TryInto, TryFrom}, io::{stdin, Read}, str::FromStr, path::PathBuf, fs, fmt,
 };
@@ -318,6 +318,11 @@ fn get_app<'a, 'b>(usage: &'a str) -> App<'a, 'b> {
 					<key-type> 'Key type, examples: \"gran\", or \"imon\" '
 					[node-url] 'Node JSON-RPC endpoint, default \"http:://localhost:9933\"'
 				"),
+			SubCommand::with_name("moduleid")
+				.about("Inspect a module ID address")
+				.args_from_usage("
+					<id> 'The module ID used to derive the account'
+				")
 		])
 }
 
@@ -506,6 +511,20 @@ where
 				suri,
 				sp_core::Bytes(pair.public().as_ref().to_vec()),
 			);
+		}
+		("moduleid", Some(matches)) => {
+			let id = get_uri("id", &matches)?;
+			if id.len() != 8 {
+				Err("a module id must be a string of 8 characters")?
+			}
+
+			let id_fixed_array: [u8; 8] = id.as_bytes().try_into()
+				.map_err(|_| Error::Static("Cannot convert argument to moduleid: argument should be 8-character string"))?;
+
+			let account_id: AccountId = ModuleId(id_fixed_array).into_account();
+			let v = maybe_network.unwrap_or(Ss58AddressFormat::SubstrateAccount);
+			
+			C::print_from_uri(&account_id.to_ss58check_with_version(v), password, maybe_network, output);
 		}
 		_ => print_usage(&matches),
 	}

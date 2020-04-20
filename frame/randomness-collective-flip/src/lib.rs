@@ -19,7 +19,8 @@
 //! The Randomness Collective Flip module provides a [`random`](./struct.Module.html#method.random)
 //! function that generates low-influence random values based on the block hashes from the previous
 //! `81` blocks. Low-influence randomness can be useful when defending against relatively weak
-//! adversaries.
+//! adversaries. Using this pallet as a randomness source is advisable primarily in low-security
+//! situations like testing. 
 //!
 //! ## Public Functions
 //!
@@ -43,7 +44,7 @@
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 //! 		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 //! 		pub fn random_module_example(origin) -> dispatch::DispatchResult {
-//! 			let _random_seed = <pallet_randomness_collective_flip::Module<T>>::random_seed();
+//! 			let _random_value = <pallet_randomness_collective_flip::Module<T>>::random(&b"my context"[..]);
 //! 			Ok(())
 //! 		}
 //! 	}
@@ -98,39 +99,12 @@ decl_storage! {
 }
 
 impl<T: Trait> Randomness<T::Hash> for Module<T> {
-	/// Get a low-influence "random" value.
-	///
-	/// Being a deterministic block chain, real randomness is difficult to come by. This gives you
-	/// something that approximates it. `subject` is a context identifier and allows you to get a
-	/// different result to other callers of this function; use it like
-	/// `random(&b"my context"[..])`. This is initially implemented through a low-influence
-	/// "triplet mix" convolution of previous block hash values. In the future it will be generated
-	/// from a secure verifiable random function (VRF).
-	///
-	/// ### Security Notes
-	///
 	/// This randomness uses a low-influence function, drawing upon the block hashes from the
 	/// previous 81 blocks. Its result for any given subject will be known far in advance by anyone
 	/// observing the chain. Any block producer has significant influence over their block hashes
 	/// bounded only by their computational resources. Our low-influence function reduces the actual
 	/// block producer's influence over the randomness, but increases the influence of small
 	/// colluding groups of recent block producers.
-	///
-	/// Some BABE blocks have VRF outputs where the block producer has exactly one bit of influence,
-	/// either they make the block or they do not make the block and thus someone else makes the
-	/// next block. Yet, this randomness is not fresh in all BABE blocks.
-	///
-	/// If that is an insufficient security guarantee then two things can be used to improve this
-	/// randomness:
-	///
-	/// - Name, in advance, the block number whose random value will be used; ensure your module
-	///   retains a buffer of previous random values for its subject and then index into these in
-	///   order to obviate the ability of your user to look up the parent hash and choose when to
-	///   transact based upon it.
-	/// - Require your user to first commit to an additional value by first posting its hash.
-	///   Require them to reveal the value to determine the final result, hashing it with the
-	///   output of this random function. This reduces the ability of a cabal of block producers
-	///   from conspiring against individuals.
 	///
 	/// WARNING: Hashing the result of this function will remove any low-influence properties it has
 	/// and mean that all bits of the resulting value are entirely manipulatable by the author of

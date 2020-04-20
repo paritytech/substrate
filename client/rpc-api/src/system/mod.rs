@@ -72,14 +72,16 @@ pub trait SystemApi<Hash, Number> {
 
 	/// Returns currently connected peers
 	#[rpc(name = "system_peers", returns = "Vec<PeerInfo<Hash, Number>>")]
-	fn system_peers(&self) -> Receiver<Vec<PeerInfo<Hash, Number>>>;
+	fn system_peers(&self)
+		-> Compat<BoxFuture<'static, jsonrpc_core::Result<Vec<PeerInfo<Hash, Number>>>>>;
 
 	/// Returns current state of the network.
 	///
 	/// **Warning**: This API is not stable.
 	// TODO: make this stable and move structs https://github.com/paritytech/substrate/issues/1890
 	#[rpc(name = "system_networkState", returns = "jsonrpc_core::Value")]
-	fn system_network_state(&self) -> Receiver<jsonrpc_core::Value>;
+	fn system_network_state(&self)
+		-> Compat<BoxFuture<'static, jsonrpc_core::Result<jsonrpc_core::Value>>>;
 
 	/// Adds a reserved peer. Returns the empty string or an error. The string
 	/// parameter should encode a `p2p` multiaddr.

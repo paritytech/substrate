@@ -14,8 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::config::ProtocolId;
-use crate::utils::interval;
+use crate::{
+	ExHashT,
+	chain::{Client, FinalityProofProvider},
+	config::{BoxFinalityProofRequestBuilder, ProtocolId, TransactionPool},
+	error,
+	utils::interval
+};
+
 use bytes::{Bytes, BytesMut};
 use futures::prelude::*;
 use generic_proto::{GenericProto, GenericProtoOut};
@@ -24,7 +30,7 @@ use libp2p::core::{ConnectedPoint, connection::{ConnectionId, ListenerId}};
 use libp2p::swarm::{ProtocolsHandler, IntoProtocolsHandler};
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use sp_core::{
-	storage::{StorageKey, ChildInfo},
+	storage::{StorageKey, PrefixedStorageKey, ChildInfo, ChildType},
 	hexdisplay::HexDisplay
 };
 use sp_consensus::{
@@ -42,17 +48,13 @@ use message::{BlockAnnounce, Message};
 use message::generic::{Message as GenericMessage, ConsensusMessage, Roles};
 use prometheus_endpoint::{Registry, Gauge, GaugeVec, HistogramVec, PrometheusError, Opts, register, U64};
 use sync::{ChainSync, SyncState};
-use crate::service::{TransactionPool, ExHashT};
-use crate::config::BoxFinalityProofRequestBuilder;
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use std::fmt::Write;
 use std::{cmp, io, num::NonZeroUsize, pin::Pin, task::Poll, time};
 use log::{log, Level, trace, debug, warn, error};
-use crate::chain::{Client, FinalityProofProvider};
 use sc_client_api::{ChangesProof, StorageProof};
-use crate::error;
 use util::LruHashSet;
 use wasm_timer::Instant;
 
@@ -1520,37 +1522,28 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 		trace!(target: "sync", "Remote read child request {} from {} ({} {} at {})",
 			request.id, who, HexDisplay::from(&request.storage_key), keys_str(), request.block);
-		let proof = if let Some(child_info) = ChildInfo::resolve_child_info(request.child_type, &request.child_info[..]) {
-			match self.context_data.chain.read_child_proof(
-				&BlockId::Hash(request.block),
-				&request.storage_key,
-				child_info,
-				&mut request.keys.iter().map(AsRef::as_ref),
-			) {
-				Ok(proof) => proof,
-				Err(error) => {
-					trace!(target: "sync", "Remote read child request {} from {} ({} {} at {}) failed with: {}",
-						request.id,
-						who,
-						HexDisplay::from(&request.storage_key),
-						keys_str(),
-						request.block,
-						error
-					);
-					StorageProof::empty()
-				}
+		let prefixed_key = PrefixedStorageKey::new_ref(&request.storage_key);
+		let child_info = match ChildType::from_prefixed_key(prefixed_key) {
+			Some((ChildType::ParentKeyId, storage_key)) => Ok(ChildInfo::new_default(storage_key)),
+			None => Err("Invalid child storage key".into()),
+		};
+		let proof = match child_info.and_then(|child_info| self.context_data.chain.read_child_proof(
+			&BlockId::Hash(request.block),
+			&child_info,
+			&mut request.keys.iter().map(AsRef::as_ref),
+		)) {
+			Ok(proof) => proof,
+			Err(error) => {
+				trace!(target: "sync", "Remote read child request {} from {} ({} {} at {}) failed with: {}",
+					request.id,
+					who,
+					HexDisplay::from(&request.storage_key),
+					keys_str(),
+					request.block,
+					error
+				);
+				StorageProof::empty()
 			}
-		} else {
-			trace!(target: "sync", "Remote read child request {} from {} ({} {} at {}) failed with: {}",
-				request.id,
-				who,
-				HexDisplay::from(&request.storage_key),
-				keys_str(),
-				request.block,
-				"invalid child info and type",
-			);
-
-			StorageProof::empty()
 		};
 		self.send_message(
 			&who,
@@ -1608,14 +1601,16 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			request.first,
 			request.last
 		);
-		let storage_key = request.storage_key.map(|sk| StorageKey(sk));
 		let key = StorageKey(request.key);
+		let prefixed_key =  request.storage_key.as_ref()
+			.map(|storage_key| PrefixedStorageKey::new_ref(storage_key));
+		let (first, last, min, max) = (request.first, request.last, request.min, request.max);
 		let proof = match self.context_data.chain.key_changes_proof(
-			request.first,
-			request.last,
-			request.min,
-			request.max,
-			storage_key.as_ref(),
+			first,
+			last,
+			min,
+			max,
+			prefixed_key,
 			&key,
 		) {
 			Ok(proof) => proof,
@@ -1623,8 +1618,8 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				trace!(target: "sync", "Remote changes proof request {} from {} for key {} ({}..{}) failed with: {}",
 					request.id,
 					who,
-					if let Some(sk) = storage_key {
-						format!("{} : {}", HexDisplay::from(&sk.0), HexDisplay::from(&key.0))
+					if let Some(sk) = request.storage_key.as_ref() {
+						format!("{} : {}", HexDisplay::from(sk), HexDisplay::from(&key.0))
 					} else {
 						HexDisplay::from(&key.0).to_string()
 					},
