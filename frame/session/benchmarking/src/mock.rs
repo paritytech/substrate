@@ -69,6 +69,7 @@ impl frame_system::Trait for Test {
 	type Event = ();
 	type BlockHashCount = ();
 	type MaximumBlockWeight = ();
+	type DbWeight = ();
 	type AvailableBlockRatio = ();
 	type MaximumBlockLength = ();
 	type Version = ();
@@ -146,6 +147,7 @@ pallet_staking_reward_curve::build! {
 parameter_types! {
 	pub const RewardCurve: &'static sp_runtime::curve::PiecewiseLinear<'static> = &I_NPOS;
 	pub const MaxNominatorRewardedPerValidator: u32 = 64;
+	pub const UnsignedPriority: u64 = 1 << 20;
 }
 
 pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
@@ -174,6 +176,7 @@ impl pallet_staking::Trait for Test {
 	type Call = Call;
 	type SubmitTransaction = SubmitTransaction;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
+	type UnsignedPriority = UnsignedPriority;
 }
 
 impl crate::Trait for Test {}

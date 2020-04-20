@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use platforms::*;
-use std::process::Command;
+use std::{borrow::Cow, process::Command};
 
 /// Generate the `cargo:` key output
 pub fn generate_cargo_keys() {
@@ -23,15 +23,22 @@ pub fn generate_cargo_keys() {
 		.args(&["rev-parse", "--short", "HEAD"])
 		.output();
 
-	match output {
+	let commit = match output {
 		Ok(o) if o.status.success() => {
 			let sha = String::from_utf8_lossy(&o.stdout).trim().to_owned();
-
-			println!("cargo:rustc-env=SUBSTRATE_CLI_IMPL_VERSION={}", get_version(sha.as_str()))
+			Cow::from(sha)
 		}
-		Ok(o) => eprintln!("cargo:warning=Git command failed with status: {}", o.status),
-		Err(err) => eprintln!("cargo:warning=Failed to execute git command: {}", err),
-	}
+		Ok(o) => {
+			println!("cargo:warning=Git command failed with status: {}", o.status);
+			Cow::from("unknown-commit")
+		},
+		Err(err) => {
+			println!("cargo:warning=Failed to execute git command: {}", err);
+			Cow::from("unknown-commit")
+		},
+	};
+
+	println!("cargo:rustc-env=SUBSTRATE_CLI_IMPL_VERSION={}", get_version(&commit))
 }
 
 fn get_platform() -> String {

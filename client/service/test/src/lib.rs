@@ -37,7 +37,7 @@ use sc_service::{
 	Role,
 	Error,
 };
-use sc_network::{multiaddr, Multiaddr, NetworkStateInfo};
+use sc_network::{multiaddr, Multiaddr};
 use sc_network::config::{NetworkConfiguration, TransportConfig};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use sp_transaction_pool::TransactionPool;
@@ -143,12 +143,11 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 {
 	let root = root.path().join(format!("node-{}", index));
 
-	let net_config_path = root.join("network");
-
 	let mut network_config = NetworkConfiguration::new(
 		format!("Node {}", index),
 		"network/test/0.1",
-		Default::default(), &net_config_path,
+		Default::default(),
+		None,
 	);
 
 	network_config.listen_addresses.push(
@@ -175,7 +174,7 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 			path: root.join("key"),
 			password: None
 		},
-		database: DatabaseConfig::Path {
+		database: DatabaseConfig::RocksDb {
 			path: root.join("db"),
 			cache_size: 128,
 		},
@@ -185,6 +184,7 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 		chain_spec: Box::new((*spec).clone()),
 		wasm_method: sc_service::config::WasmExecutionMethod::Interpreted,
 		execution_strategies: Default::default(),
+		unsafe_rpc_expose: false,
 		rpc_http: None,
 		rpc_ws: None,
 		rpc_ws_max_connections: None,
@@ -265,7 +265,7 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 			let service = SyncService::from(service);
 
 			executor.spawn(service.clone().map_err(|_| ()));
-			let addr = addr.with(multiaddr::Protocol::P2p(service.get().network().local_peer_id().into()));
+			let addr = addr.with(multiaddr::Protocol::P2p(service.get().network().local_peer_id().clone().into()));
 			self.authority_nodes.push((self.nodes, service, user_data, addr));
 			self.nodes += 1;
 		}
@@ -281,7 +281,7 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 			let service = SyncService::from(service);
 
 			executor.spawn(service.clone().map_err(|_| ()));
-			let addr = addr.with(multiaddr::Protocol::P2p(service.get().network().local_peer_id().into()));
+			let addr = addr.with(multiaddr::Protocol::P2p(service.get().network().local_peer_id().clone().into()));
 			self.full_nodes.push((self.nodes, service, user_data, addr));
 			self.nodes += 1;
 		}
@@ -296,7 +296,7 @@ impl<G, E, F, L, U> TestNet<G, E, F, L, U> where
 			let service = SyncService::from(light(node_config).expect("Error creating test node service"));
 
 			executor.spawn(service.clone().map_err(|_| ()));
-			let addr = addr.with(multiaddr::Protocol::P2p(service.get().network().local_peer_id().into()));
+			let addr = addr.with(multiaddr::Protocol::P2p(service.get().network().local_peer_id().clone().into()));
 			self.light_nodes.push((self.nodes, service, addr));
 			self.nodes += 1;
 		}

@@ -16,7 +16,8 @@
 
 use std::{env, fs, fs::File, io, io::Read, path::PathBuf};
 
-/// Make sure the calling `build.rs` script is rerun when `.git/HEAD` changed.
+/// Make sure the calling `build.rs` script is rerun when `.git/HEAD` or the ref of `.git/HEAD`
+/// changed.
 ///
 /// The file is searched from the `CARGO_MANIFEST_DIR` upwards. If the file can not be found,
 /// a warning is generated.
@@ -69,7 +70,7 @@ fn get_git_paths(path: &PathBuf) -> Result<Option<Vec<PathBuf>>, io::Error> {
 
 			if ref_vec.len() == 2 {
 				let current_head_file = ref_vec[1];
-				let git_refs_path = PathBuf::from(".git").join(current_head_file);
+				let git_refs_path = git_dir_or_file.join(current_head_file);
 
 				Ok(Some(vec![git_head_path, git_refs_path]))
 			} else {

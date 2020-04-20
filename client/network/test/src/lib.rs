@@ -32,6 +32,7 @@ use sp_blockchain::{
 use sc_client_api::{BlockchainEvents, BlockImportNotification, FinalityNotifications, ImportNotifications, FinalityNotification, backend::{TransactionFor, AuxStore, Backend, Finalizer}, BlockBackend};
 use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
 use sc_client::LongestChain;
+use sc_client::blockchain::HeaderBackend;
 use sc_network::config::Role;
 use sp_consensus::block_validation::DefaultBlockAnnounceValidator;
 use sp_consensus::import_queue::{
@@ -41,7 +42,7 @@ use sp_consensus::block_import::{BlockImport, ImportResult};
 use sp_consensus::Error as ConsensusError;
 use sp_consensus::{BlockOrigin, ForkChoiceStrategy, BlockImportParams, BlockCheckParams, JustificationImport};
 use futures::prelude::*;
-use sc_network::{NetworkWorker, NetworkStateInfo, NetworkService, config::ProtocolId};
+use sc_network::{NetworkWorker, NetworkService, config::ProtocolId};
 use sc_network::config::{NetworkConfiguration, TransportConfig, BoxFinalityProofRequestBuilder};
 use libp2p::PeerId;
 use parking_lot::Mutex;
@@ -189,7 +190,7 @@ pub struct Peer<D> {
 impl<D> Peer<D> {
 	/// Get this peer ID.
 	pub fn id(&self) -> PeerId {
-		self.network.service().local_peer_id()
+		self.network.service().local_peer_id().clone()
 	}
 
 	/// Returns true if we're major syncing.
@@ -359,13 +360,9 @@ impl<D> Peer<D> {
 
 	/// Test helper to compare the blockchain state of multiple (networked)
 	/// clients.
-	/// Potentially costly, as it creates in-memory copies of both blockchains in order
-	/// to compare them. If you have easier/softer checks that are sufficient, e.g.
-	/// by using .info(), you should probably use it instead of this.
 	pub fn blockchain_canon_equals(&self, other: &Self) -> bool {
 		if let (Some(mine), Some(others)) = (self.backend.clone(), other.backend.clone()) {
-			mine.as_in_memory().blockchain()
-				.canon_equals_to(others.as_in_memory().blockchain())
+			mine.blockchain().info().best_hash == others.blockchain().info().best_hash
 		} else {
 			false
 		}
@@ -374,13 +371,19 @@ impl<D> Peer<D> {
 	/// Count the total number of imported blocks.
 	pub fn blocks_count(&self) -> u64 {
 		self.backend.as_ref().map(
-			|backend| backend.blocks_count()
+			|backend| backend.blockchain().info().best_number
 		).unwrap_or(0)
 	}
 
 	/// Return a collection of block hashes that failed verification
 	pub fn failed_verifications(&self) -> HashMap<<Block as BlockT>::Hash, String> {
 		self.verifier.failed_verifications.lock().clone()
+	}
+
+	pub fn has_block(&self, hash: &H256) -> bool {
+		self.backend.as_ref().map(
+			|backend| backend.blockchain().header(BlockId::hash(*hash)).unwrap().is_some()
+		).unwrap_or(false)
 	}
 }
 
@@ -604,7 +607,7 @@ pub trait TestNetFactory: Sized {
 			"test-node",
 			"test-client",
 			Default::default(),
-			&std::env::current_dir().expect("current directory must exist"),
+			None,
 		);
 		network_config.transport = TransportConfig::MemoryOnly;
 		network_config.listen_addresses = vec![listen_addr.clone()];
@@ -628,7 +631,7 @@ pub trait TestNetFactory: Sized {
 
 		self.mut_peers(|peers| {
 			for peer in peers.iter_mut() {
-				peer.network.add_known_address(network.service().local_peer_id(), listen_addr.clone());
+				peer.network.add_known_address(network.service().local_peer_id().clone(), listen_addr.clone());
 			}
 
 			let imported_blocks_stream = Box::pin(client.import_notification_stream().fuse());
@@ -680,7 +683,7 @@ pub trait TestNetFactory: Sized {
 			"test-node",
 			"test-client",
 			Default::default(),
-			&std::env::current_dir().expect("current directory must exist"),
+			None,
 		);
 		network_config.transport = TransportConfig::MemoryOnly;
 		network_config.listen_addresses = vec![listen_addr.clone()];
@@ -704,7 +707,7 @@ pub trait TestNetFactory: Sized {
 
 		self.mut_peers(|peers| {
 			for peer in peers.iter_mut() {
-				peer.network.add_known_address(network.service().local_peer_id(), listen_addr.clone());
+				peer.network.add_known_address(network.service().local_peer_id().clone(), listen_addr.clone());
 			}
 
 			let imported_blocks_stream = Box::pin(client.import_notification_stream().fuse());

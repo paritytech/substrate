@@ -53,7 +53,7 @@ pub use sp_runtime::{
 		Block as BlockT, GetNodeBlockType, GetRuntimeBlockType, HashFor, NumberFor,
 		Header as HeaderT, Hash as HashT,
 	},
-	generic::BlockId, transaction_validity::TransactionValidity,
+	generic::BlockId, transaction_validity::TransactionValidity, RuntimeString,
 };
 #[doc(hidden)]
 pub use sp_core::{offchain, ExecutionContext};
@@ -113,7 +113,9 @@ use std::{panic::UnwindSafe, cell::RefCell};
 /// change is highlighted with the `#[changed_in(2)]` attribute above a method. A method that is
 /// tagged with this attribute is callable by the name `METHOD_before_version_VERSION`. This
 /// method will only support calling into wasm, trying to call into native will fail (change the
-/// spec version!). Such a method also does not need to be implemented in the runtime.
+/// spec version!). Such a method also does not need to be implemented in the runtime. It is
+/// required that there exist the "default" of the method without the `#[changed_in(_)]` attribute,
+/// this method will be used to call the current default implementation.
 ///
 /// ```rust
 /// sp_api::decl_runtime_apis! {
@@ -222,6 +224,7 @@ pub use sp_api_proc_macro::decl_runtime_apis;
 ///     impl_version: 0,
 ///     // Here we are exposing the runtime api versions.
 ///     apis: RUNTIME_API_VERSIONS,
+///     transaction_version: 1,
 /// };
 ///
 /// # fn main() {}
@@ -518,13 +521,53 @@ pub trait RuntimeApiInfo {
 #[cfg(feature = "std")]
 pub type ApiErrorFor<T, Block> = <<T as ProvideRuntimeApi<Block>>::Api as ApiErrorExt>::Error;
 
+#[derive(codec::Encode, codec::Decode)]
+pub struct OldRuntimeVersion {
+	pub spec_name: RuntimeString,
+	pub impl_name: RuntimeString,
+	pub authoring_version: u32,
+	pub spec_version: u32,
+	pub impl_version: u32,
+	pub apis: ApisVec,
+}
+
+impl From<OldRuntimeVersion> for RuntimeVersion {
+	fn from(x: OldRuntimeVersion) -> Self {
+		Self {
+			spec_name: x.spec_name,
+			impl_name: x.impl_name,
+			authoring_version: x.authoring_version,
+			spec_version: x.spec_version,
+			impl_version: x.impl_version,
+			apis: x.apis,
+			transaction_version: 1,
+		}
+	}
+}
+
+impl From<RuntimeVersion> for OldRuntimeVersion {
+	fn from(x: RuntimeVersion) -> Self {
+		Self {
+			spec_name: x.spec_name,
+			impl_name: x.impl_name,
+			authoring_version: x.authoring_version,
+			spec_version: x.spec_version,
+			impl_version: x.impl_version,
+			apis: x.apis,
+		}
+	}
+}
+
 decl_runtime_apis! {
 	/// The `Core` runtime api that every Substrate runtime needs to implement.
 	#[core_trait]
-	#[api_version(2)]
+	#[api_version(3)]
 	pub trait Core {
 		/// Returns the version of the runtime.
 		fn version() -> RuntimeVersion;
+		/// Returns the version of the runtime.
+		#[changed_in(3)]
+		fn version() -> OldRuntimeVersion;
 		/// Execute the given block.
 		#[skip_initialize_block]
 		fn execute_block(block: Block);

@@ -23,8 +23,9 @@ extern crate self as frame_support;
 
 #[macro_use]
 extern crate bitmask;
-#[cfg(feature = "std")]
-pub extern crate tracing;
+
+#[doc(hidden)]
+pub use sp_tracing;
 
 #[cfg(feature = "std")]
 pub use serde;
@@ -68,7 +69,7 @@ pub mod weights;
 
 pub use self::hash::{
 	Twox256, Twox128, Blake2_256, Blake2_128, Identity, Twox64Concat, Blake2_128Concat, Hashable,
-	StorageHasher
+	StorageHasher, ReversibleStorageHasher
 };
 pub use self::storage::{
 	StorageValue, StorageMap, StorageDoubleMap, StoragePrefixedMap, IterableStorageMap,
@@ -76,6 +77,10 @@ pub use self::storage::{
 };
 pub use self::dispatch::{Parameter, Callable, IsSubType};
 pub use sp_runtime::{self, ConsensusEngineId, print, traits::Printable};
+
+/// A type that cannot be instantiated.
+#[derive(Debug)]
+pub enum Never {}
 
 /// Macro for easily creating a new implementation of the `Get` trait. Use similarly to
 /// how you would declare a `const`:
