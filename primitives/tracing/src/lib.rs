@@ -64,7 +64,7 @@ macro_rules! tracing_span {
 macro_rules! enter_span {
 	( $name:expr ) => {
 		let __tracing_span__ = $crate::if_tracing!(
-			$crate::tracing::span!($crate::tracing::Level::INFO, $name)
+			$crate::tracing::span!($crate::tracing::Level::TRACE, $name)
 		);
 		let __tracing_guard__ = $crate::if_tracing!(__tracing_span__.enter());
 	}
