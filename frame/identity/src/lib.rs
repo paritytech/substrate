@@ -69,7 +69,7 @@ use sp_std::prelude::*;
 use sp_std::{fmt::Debug, ops::Add, iter::once};
 use enumflags2::BitFlags;
 use codec::{Encode, Decode};
-use sp_runtime::{DispatchResult, RuntimeDebug};
+use sp_runtime::{DispatchError, DispatchResult, RuntimeDebug};
 use sp_runtime::traits::{StaticLookup, Zero, AppendZerosInput};
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
@@ -491,12 +491,12 @@ decl_module! {
 			T::RegistrarOrigin::try_origin(origin)
 				.map(|_| ())
 				.or_else(ensure_root)?;
-			let mut registrars = Self::registrars();
-			ensure!(registrars.len() as u32 <= old_registrar_count, "invalid count");
 
-			registrars.push(Some(RegistrarInfo { account, fee: Zero::zero(), fields: Default::default() }));
-			let i = (registrars.len() - 1) as RegistrarIndex;
-			<Registrars<T>>::put(registrars);
+			let i = <Registrars<T>>::try_mutate(|registrars| -> Result<RegistrarIndex, DispatchError> {
+				ensure!(registrars.len() as u32 <= old_registrar_count, "invalid count");
+				registrars.push(Some(RegistrarInfo { account, fee: Zero::zero(), fields: Default::default() }));
+				Ok((registrars.len() - 1) as RegistrarIndex)
+			})?;
 
 			Self::deposit_event(RawEvent::RegistrarAdded(i));
 
