@@ -20,6 +20,7 @@ use sp_std::{
 };
 use codec::{Encode, Decode};
 use crate::{
+	helpers_128bit::multiply_by_rational,
 	Perbill,
 	traits::{
 		SaturatedConversion, CheckedSub, CheckedAdd, CheckedMul, CheckedDiv,
@@ -184,7 +185,13 @@ impl Saturating for Fixed64 {
 	}
 
 	fn saturating_mul(self, rhs: Self) -> Self {
-		Self(self.0.saturating_mul(rhs.0) / Self::DIV)
+		self.checked_mul(&rhs).unwrap_or_else(|| {
+			if (self.0.signum() * rhs.0.signum()).is_negative() {
+				Bounded::min_value()
+			} else {
+				Bounded::max_value()
+			}
+		})
 	}
 
 	fn saturating_sub(self, rhs: Self) -> Self {
@@ -192,7 +199,22 @@ impl Saturating for Fixed64 {
 	}
 
 	fn saturating_pow(self, exp: usize) -> Self {
-		Self(self.0.saturating_pow(exp as u32))
+		if exp == 0 {
+			return Self::from_integer(1);
+		}
+
+		let exp = exp as u64;
+		let msb_pos = 64 - exp.leading_zeros();
+
+		let mut result = Self::from_integer(1);
+		let mut pow_val = self;
+		for i in 0..msb_pos {
+			if ((1 << i) & exp) > 0 {
+				result = result.saturating_mul(pow_val);
+			}
+			pow_val = pow_val.saturating_mul(pow_val);
+		}
+		result
 	}
 }
 
@@ -267,17 +289,17 @@ impl CheckedMul for Fixed64 {
 	fn checked_mul(&self, rhs: &Self) -> Option<Self> {
 		let signum = self.0.signum() * rhs.0.signum();
 		let mut lhs = self.0;
+
 		if lhs.is_negative() {
 			lhs = lhs.saturating_mul(-1);
 		}
-		let mut rhs: <Self as FixedPointNumber>::Inner = rhs.0.saturated_into();
+		let mut rhs = rhs.0;
 		if rhs.is_negative() {
 			rhs = rhs.saturating_mul(-1);
 		}
 
-		(lhs as <Self as FixedPointNumber>::Unsigned)
-			.checked_mul(rhs as <Self as FixedPointNumber>::Unsigned)
-			.and_then(|n| n.checked_div(Self::DIV as <Self as FixedPointNumber>::Unsigned))
+		multiply_by_rational(lhs as u128, rhs as u128, <Self as FixedPointNumber>::DIV as u128)
+			.ok()
 			.and_then(|n| TryInto::<<Self as FixedPointNumber>::Inner>::try_into(n).ok())
 			.map(|n| Self(n * signum))
 	}
@@ -442,5 +464,31 @@ mod tests {
 		let a = Fixed64::from_rational(12, 10);
 		let b = Fixed64::from_rational(1, 100);
 		assert_eq!(a.checked_div(&b), Some(Fixed64::from_rational(120, 1)));
+	}
+
+	#[test]
+	fn saturating_pow_should_work() {
+		assert_eq!(Fixed64::from_integer(2).saturating_pow(0), Fixed64::from_integer(1));
+		assert_eq!(Fixed64::from_integer(2).saturating_pow(1), Fixed64::from_integer(2));
+		assert_eq!(Fixed64::from_integer(2).saturating_pow(2), Fixed64::from_integer(4));
+		assert_eq!(Fixed64::from_integer(2).saturating_pow(3), Fixed64::from_integer(8));
+		assert_eq!(Fixed64::from_integer(2).saturating_pow(33), Fixed64::from_integer(8589934592));
+
+		// Saturating.
+		assert_eq!(Fixed64::from_integer(2).saturating_pow(49), Fixed64::from_integer(562949953421312));
+
+		assert_eq!(Fixed64::from_integer(1).saturating_pow(1000), Fixed64::from_integer(1));
+		assert_eq!(Fixed64::from_integer(-1).saturating_pow(1000), Fixed64::from_integer(1));
+		assert_eq!(Fixed64::from_integer(-1).saturating_pow(1001), Fixed64::from_integer(-1));
+		assert_eq!(Fixed64::from_integer(1).saturating_pow(usize::max_value()), Fixed64::from_integer(1));
+		assert_eq!(Fixed64::from_integer(-1).saturating_pow(usize::max_value()), Fixed64::from_integer(-1));
+		assert_eq!(Fixed64::from_integer(-1).saturating_pow(usize::max_value() - 1), Fixed64::from_integer(1));
+
+		assert_eq!(Fixed64::from_integer(114209).saturating_pow(3), Fixed64::from_integer(1489707440031329));
+		assert_eq!(Fixed64::from_integer(114209).saturating_pow(4), Fixed64::max_value());
+
+		assert_eq!(Fixed64::from_integer(1).saturating_pow(usize::max_value()), Fixed64::from_integer(1));
+		assert_eq!(Fixed64::from_integer(0).saturating_pow(usize::max_value()), Fixed64::from_integer(0));
+		assert_eq!(Fixed64::from_integer(2).saturating_pow(usize::max_value()), Fixed64::max_value());
 	}
 }

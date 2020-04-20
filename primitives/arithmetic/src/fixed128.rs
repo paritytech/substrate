@@ -16,6 +16,7 @@
 
 use codec::{Decode, Encode};
 use crate::{
+	helpers_128bit::multiply_by_rational,
 	traits::{
 		Bounded, Saturating, UniqueSaturatedInto, SaturatedConversion, FixedPointNumber,
 		CheckedAdd, CheckedSub, CheckedMul, CheckedDiv
@@ -77,7 +78,7 @@ impl FixedPointNumber for Fixed128 {
 			}
 			let mut rhs: Self::Inner = rhs.saturated_into();
 			let signum = self.0.signum() * rhs.signum();
-	 		if rhs.is_negative() {
+			if rhs.is_negative() {
 				rhs = rhs.saturating_mul(-1);
 			}
 
@@ -314,17 +315,17 @@ impl CheckedMul for Fixed128 {
 	fn checked_mul(&self, rhs: &Self) -> Option<Self> {
 		let signum = self.0.signum() * rhs.0.signum();
 		let mut lhs = self.0;
+
 		if lhs.is_negative() {
 			lhs = lhs.saturating_mul(-1);
 		}
-		let mut rhs: <Self as FixedPointNumber>::Inner = rhs.0.saturated_into();
+		let mut rhs = rhs.0;
 		if rhs.is_negative() {
 			rhs = rhs.saturating_mul(-1);
 		}
 
-		(lhs as <Self as FixedPointNumber>::Unsigned)
-			.checked_mul(rhs as <Self as FixedPointNumber>::Unsigned)
-			.and_then(|n| n.checked_div(<Self as FixedPointNumber>::DIV as <Self as FixedPointNumber>::Unsigned))
+		multiply_by_rational(lhs as u128, rhs as u128, <Self as FixedPointNumber>::DIV as u128)
+			.ok()
 			.and_then(|n| TryInto::<<Self as FixedPointNumber>::Inner>::try_into(n).ok())
 			.map(|n| Self(n * signum))
 	}
@@ -729,6 +730,9 @@ mod tests {
 		assert_eq!(Fixed128::from_integer(2).saturating_pow(2), Fixed128::from_integer(4));
 		assert_eq!(Fixed128::from_integer(2).saturating_pow(3), Fixed128::from_integer(8));
 		assert_eq!(Fixed128::from_integer(2).saturating_pow(50), Fixed128::from_integer(1125899906842624));
+
+		// Saturating.
+		assert_eq!(Fixed128::from_integer(2).saturating_pow(68), Fixed128::from_integer(295147905179352825856));
 
 		assert_eq!(Fixed128::from_integer(1).saturating_pow(1000), Fixed128::from_integer(1));
 		assert_eq!(Fixed128::from_integer(-1).saturating_pow(1000), Fixed128::from_integer(1));
