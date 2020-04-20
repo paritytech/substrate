@@ -89,7 +89,7 @@ macro_rules! decl_error {
 			#[doc(hidden)]
 			__Ignore(
 				$crate::sp_std::marker::PhantomData<($generic, $( $inst_generic)?)>,
-				$crate::dispatch::Never,
+				$crate::Never,
 			),
 			$(
 				$( #[doc = $doc_attr] )*

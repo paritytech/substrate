@@ -930,7 +930,7 @@ impl<T: Trait> Module<T> {
 				<Number<T>>::hashed_key().to_vec() => T::BlockNumber::one().encode(),
 				<ParentHash<T>>::hashed_key().to_vec() => [69u8; 32].encode()
 			],
-			children: map![],
+			children_default: map![],
 		})
 	}
 

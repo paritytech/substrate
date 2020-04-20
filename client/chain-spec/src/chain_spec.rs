@@ -74,17 +74,14 @@ impl<G: RuntimeGenesis, E> BuildStorage for ChainSpec<G, E> {
 	fn build_storage(&self) -> Result<Storage, String> {
 		match self.genesis.resolve()? {
 			Genesis::Runtime(gc) => gc.build_storage(),
-			Genesis::Raw(RawGenesis { top: map, children: children_map }) => Ok(Storage {
+			Genesis::Raw(RawGenesis { top: map, children_default: children_map }) => Ok(Storage {
 				top: map.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
-				children: children_map.into_iter().map(|(sk, child_content)| {
-					let child_info = ChildInfo::resolve_child_info(
-						child_content.child_type,
-						child_content.child_info.as_slice(),
-					).expect("chain spec contains correct content").to_owned();
+				children_default: children_map.into_iter().map(|(storage_key, child_content)| {
+					let child_info = ChildInfo::new_default(storage_key.0.as_slice());
 					(
-						sk.0,
+						storage_key.0,
 						StorageChild {
-							data: child_content.data.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
+							data: child_content.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
 							child_info,
 						},
 					)
@@ -106,19 +103,10 @@ type GenesisStorage = HashMap<StorageKey, StorageData>;
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
-struct ChildRawStorage {
-	data: GenesisStorage,
-	child_info: Vec<u8>,
-	child_type: u32,
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[serde(deny_unknown_fields)]
 /// Storage content for genesis block.
 struct RawGenesis {
 	top: GenesisStorage,
-	children: HashMap<StorageKey, ChildRawStorage>,
+	children_default: HashMap<StorageKey, GenesisStorage>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -291,23 +279,16 @@ impl<G: RuntimeGenesis, E: serde::Serialize + Clone> ChainSpec<G, E> {
 				let top = storage.top.into_iter()
 					.map(|(k, v)| (StorageKey(k), StorageData(v)))
 					.collect();
-				let children = storage.children.into_iter()
-					.map(|(sk, child)| {
-						let info = child.child_info.as_ref();
-						let (info, ci_type) = info.info();
-						(
-							StorageKey(sk),
-							ChildRawStorage {
-								data: child.data.into_iter()
-									.map(|(k, v)| (StorageKey(k), StorageData(v)))
-									.collect(),
-								child_info: info.to_vec(),
-								child_type: ci_type,
-							},
-					)})
+				let children_default = storage.children_default.into_iter()
+					.map(|(sk, child)| (
+						StorageKey(sk),
+						child.data.into_iter()
+							.map(|(k, v)| (StorageKey(k), StorageData(v)))
+							.collect(),
+					))
 					.collect();
 
-				Genesis::Raw(RawGenesis { top, children })
+				Genesis::Raw(RawGenesis { top, children_default })
 			},
 			(_, genesis) => genesis,
 		};
