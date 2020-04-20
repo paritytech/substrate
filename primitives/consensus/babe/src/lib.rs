@@ -129,7 +129,7 @@ impl From<BabeConfigurationV1> for BabeConfiguration {
 			genesis_authorities: v1.genesis_authorities,
 			randomness: v1.randomness,
 			allowed_slots: if v1.secondary_slots {
-				AllowedSlots::PrimaryAndSecondarySlots
+				AllowedSlots::PrimaryAndSecondaryPlainSlots
 			} else {
 				AllowedSlots::PrimarySlots
 			},
@@ -172,8 +172,8 @@ pub struct BabeConfiguration {
 pub enum AllowedSlots {
 	/// Only allow primary slots.
 	PrimarySlots,
-	/// Allow primary and secondary slots, but disallow secondary VRF slots.
-	PrimaryAndSecondarySlots,
+	/// Allow primary and secondary plain slots.
+	PrimaryAndSecondaryPlainSlots,
 	/// Allow primary and secondary VRF slots.
 	PrimaryAndSecondaryVRFSlots,
 }
@@ -181,7 +181,7 @@ pub enum AllowedSlots {
 impl AllowedSlots {
 	/// Whether plain secondary slots are allowed.
 	pub fn is_secondary_slots_allowed(&self) -> bool {
-		*self == Self::PrimaryAndSecondarySlots
+		*self == Self::PrimaryAndSecondaryPlainSlots
 	}
 
 	/// Whether VRF secondary slots are allowed.

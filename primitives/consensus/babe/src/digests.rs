@@ -65,7 +65,7 @@ impl TryFrom<RawPrimaryPreDigest> for PrimaryPreDigest {
 
 /// BABE secondary slot assignment pre-digest.
 #[derive(Clone, RuntimeDebug, Encode, Decode)]
-pub struct SecondaryPreDigest {
+pub struct SecondaryPlainPreDigest {
 	/// Authority index
 	///
 	/// This is not strictly-speaking necessary, since the secondary slots
@@ -118,7 +118,7 @@ pub enum RawPreDigest<VRFOutput=schnorrkel::RawVRFOutput, VRFProof=schnorrkel::R
 	Primary(RawPrimaryPreDigest<VRFOutput, VRFProof>),
 	/// A secondary deterministic slot assignment.
 	#[codec(index = "2")]
-	Secondary(SecondaryPreDigest),
+	SecondaryPlain(SecondaryPlainPreDigest),
 	/// A secondary deterministic slot assignment with VRF outputs.
 	#[codec(index = "3")]
 	SecondaryVRF(RawSecondaryVRFPreDigest<VRFOutput, VRFProof>),
@@ -133,7 +133,7 @@ impl<VRFOutput, VRFProof> RawPreDigest<VRFOutput, VRFProof> {
 	pub fn authority_index(&self) -> AuthorityIndex {
 		match self {
 			RawPreDigest::Primary(primary) => primary.authority_index,
-			RawPreDigest::Secondary(secondary) => secondary.authority_index,
+			RawPreDigest::SecondaryPlain(secondary) => secondary.authority_index,
 			RawPreDigest::SecondaryVRF(secondary) => secondary.authority_index,
 		}
 	}
@@ -142,7 +142,7 @@ impl<VRFOutput, VRFProof> RawPreDigest<VRFOutput, VRFProof> {
 	pub fn slot_number(&self) -> SlotNumber {
 		match self {
 			RawPreDigest::Primary(primary) => primary.slot_number,
-			RawPreDigest::Secondary(secondary) => secondary.slot_number,
+			RawPreDigest::SecondaryPlain(secondary) => secondary.slot_number,
 			RawPreDigest::SecondaryVRF(secondary) => secondary.slot_number,
 		}
 	}
@@ -152,7 +152,7 @@ impl<VRFOutput, VRFProof> RawPreDigest<VRFOutput, VRFProof> {
 	pub fn added_weight(&self) -> crate::BabeBlockWeight {
 		match self {
 			RawPreDigest::Primary(_) => 1,
-			RawPreDigest::Secondary(_) | RawPreDigest::SecondaryVRF(_) => 0,
+			RawPreDigest::SecondaryPlain(_) | RawPreDigest::SecondaryVRF(_) => 0,
 		}
 	}
 }
@@ -164,7 +164,7 @@ impl TryFrom<RawPreDigest> for PreDigest {
 	fn try_from(raw: RawPreDigest) -> Result<PreDigest, SignatureError> {
 		Ok(match raw {
 			RawPreDigest::Primary(primary) => PreDigest::Primary(primary.try_into()?),
-			RawPreDigest::Secondary(secondary) => PreDigest::Secondary(secondary),
+			RawPreDigest::SecondaryPlain(secondary) => PreDigest::SecondaryPlain(secondary),
 			RawPreDigest::SecondaryVRF(secondary) => PreDigest::SecondaryVRF(secondary.try_into()?),
 		})
 	}
