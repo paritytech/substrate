@@ -179,14 +179,11 @@ pub trait FixedPointNumber:
 	/// The unsigned version of inner.
 	type Unsigned;
 
-	/// The next unsigned.
-	type NextUnsigned;
+	/// The previous unsigned.
+	type PrevUnsigned;
 
 	/// The perthing used.
 	type Perthing;
-
-	/// A data type that should be used to work with values which may exceed the inner type.
-	type Oversized: Copy + Debug + One;
 
 	/// The accuracy of this fixed point number.
 	const DIV: Self::Inner;
@@ -208,12 +205,12 @@ pub trait FixedPointNumber:
 	/// Creates self from a rational number. Equal to `n / d`.
 	///
 	/// Note that this might be lossy.
-	fn from_rational<N: UniqueSaturatedInto<Self::Oversized>>(n: N, d: Self::Unsigned) -> Self;
+	fn from_rational<N: UniqueSaturatedInto<Self::Inner>>(n: N, d: Self::Inner) -> Self;
 
 	/// Consume self and return the inner raw value.
 	///
 	/// Note this is a low level function, as the returned value is represented with accuracy.
-	fn deconstruct(self) -> Self::Inner;
+	fn into_inner(self) -> Self::Inner;
 
 	/// Takes the reciprocal (inverse), `1 / self`.
 	fn reciprocal(&self) -> Option<Self> {
@@ -251,7 +248,7 @@ pub trait FixedPointNumber:
 	///
 	/// Returns a saturated `int + (self * int)`.
 	fn saturated_multiply_accumulate<
-		N: From<u32> + TryFrom<Self::Unsigned> + From<u32> + UniqueSaturatedInto<u32> +
+		N: From<Self::PrevUnsigned> + TryFrom<Self::Unsigned> + UniqueSaturatedInto<Self::PrevUnsigned> +
 			Bounded + Copy + Saturating + 
 			Rem<N, Output=N> + Div<N, Output=N> +
 			Mul<N, Output=N> + Add<N, Output=N> + Default + core::fmt::Debug

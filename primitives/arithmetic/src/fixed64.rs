@@ -19,7 +19,6 @@ use sp_std::{
 	convert::{TryFrom, TryInto},
 };
 use codec::{Encode, Decode};
-use primitive_types::U128;
 use crate::{
 	Perbill,
 	traits::{
@@ -35,9 +34,8 @@ pub struct Fixed64(i64);
 
 impl FixedPointNumber for Fixed64 {
 	type Inner = i64;
+	type PrevUnsigned = u32;
 	type Unsigned = u64;
-	type NextUnsigned = U128;
-	type Oversized = i128;
 	type Perthing = Perbill;
 
 	const DIV: i64 = 1_000_000_000;
@@ -50,16 +48,16 @@ impl FixedPointNumber for Fixed64 {
 		Self(parts)
 	}
 
-	fn from_rational<N: UniqueSaturatedInto<Self::Oversized>>(n: N, d: Self::Unsigned) -> Self {
+	fn from_rational<N: UniqueSaturatedInto<Self::Inner>>(n: N, d: Self::Inner) -> Self {
 		let n = n.unique_saturated_into();
 		Self(
-			(n.saturating_mul(Self::Oversized::from(Self::DIV)) / Self::Oversized::from(d).max(1))
+			(n.saturating_mul(Self::DIV) / d.max(1))
 				.try_into()
 				.unwrap_or_else(|_| Bounded::max_value())
 		)
 	}
 
-	fn deconstruct(self) -> Self::Inner {
+	fn into_inner(self) -> Self::Inner {
 		self.0
 	}
 
@@ -78,9 +76,9 @@ impl FixedPointNumber for Fixed64 {
 				rhs = rhs.saturating_mul(-1);
 			}
 
-			Self::NextUnsigned::from(lhs)
-				.checked_mul(Self::NextUnsigned::from(rhs))
-				.and_then(|n| n.checked_div(Self::NextUnsigned::from(Self::DIV)))
+			(lhs as Self::Unsigned)
+				.checked_mul(rhs as Self::Unsigned)
+				.and_then(|n| n.checked_div(Self::DIV as Self::Unsigned))
 				.and_then(|n| TryInto::<Self::Inner>::try_into(n).ok())
 				.and_then(|n| TryInto::<N>::try_into(n * signum).ok())
 		})
@@ -150,7 +148,7 @@ impl FixedPointNumber for Fixed64 {
 
 	fn saturated_multiply_accumulate<N>(self, int: N) -> N
 		where
-			N: From<u32> + TryFrom<Self::Unsigned> + UniqueSaturatedInto<u32> +
+			N: From<Self::PrevUnsigned> + TryFrom<Self::Unsigned> + UniqueSaturatedInto<Self::PrevUnsigned> +
 			Bounded + Copy + Saturating +
 			ops::Rem<N, Output=N> + ops::Div<N, Output=N> + ops::Mul<N, Output=N> +
 			ops::Add<N, Output=N> + Default + core::fmt::Debug
@@ -177,10 +175,6 @@ impl FixedPointNumber for Fixed64 {
 		} else {
 			int.saturating_sub(excess)
 		}
-	}
-
-	pub fn is_negative(&self) -> bool {
-		self.0.is_negative()
 	}
 }
 
@@ -243,7 +237,7 @@ impl ops::Div for Fixed64 {
 		} else {
 			(self.0, rhs.0)
 		};
-		Self::from_rational(n, d as u64)
+		Self::from_rational(n, d)
 	}
 }
 
@@ -281,9 +275,9 @@ impl CheckedMul for Fixed64 {
 			rhs = rhs.saturating_mul(-1);
 		}
 
-		<Self as FixedPointNumber>::NextUnsigned::from(lhs)
-			.checked_mul(<Self as FixedPointNumber>::NextUnsigned::from(rhs))
-			.and_then(|n| n.checked_div(<Self as FixedPointNumber>::NextUnsigned::from(Self::DIV)))
+		(lhs as <Self as FixedPointNumber>::Unsigned)
+			.checked_mul(rhs as <Self as FixedPointNumber>::Unsigned)
+			.and_then(|n| n.checked_div(Self::DIV as <Self as FixedPointNumber>::Unsigned))
 			.and_then(|n| TryInto::<<Self as FixedPointNumber>::Inner>::try_into(n).ok())
 			.map(|n| Self(n * signum))
 	}

@@ -15,16 +15,16 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use codec::{Decode, Encode};
-use primitive_types::U256;
 use crate::{
-	traits::{Bounded, Saturating, UniqueSaturatedInto, SaturatedConversion, FixedPointNumber},
+	traits::{
+		Bounded, Saturating, UniqueSaturatedInto, SaturatedConversion, FixedPointNumber,
+		CheckedAdd, CheckedSub, CheckedMul, CheckedDiv
+	},
 	PerThing, Perquintill,
 };
 use sp_std::{
-	ops,
 	convert::{Into, TryFrom, TryInto},
 	fmt, ops,
-	num::NonZeroI128,
 };
 
 #[cfg(feature = "std")]
@@ -38,10 +38,9 @@ pub struct Fixed128(i128);
 
 
 impl FixedPointNumber for Fixed128 {
-	type Inner = i128; 
-	type Unsigned = u64;
-	type NextUnsigned = U256;
-	type Oversized = i128;
+	type Inner = i128;
+	type PrevUnsigned = u64;
+	type Unsigned = u128;
 	type Perthing = Perquintill;
 
 	const DIV: i128 = 1_000_000_000_000_000_000;
@@ -54,16 +53,16 @@ impl FixedPointNumber for Fixed128 {
 		Self(parts)
 	}
 
-	fn from_rational<N: UniqueSaturatedInto<Self::Oversized>>(n: N, d: Self::Unsigned) -> Self {
+	fn from_rational<N: UniqueSaturatedInto<Self::Inner>>(n: N, d: Self::Inner) -> Self {
 		let n = n.unique_saturated_into();
 		Self(
-			(n.saturating_mul(Self::Oversized::from(Self::DIV)) / Self::Oversized::from(d).max(1))
+			(n.saturating_mul(Self::DIV) / d.max(1))
 				.try_into()
 				.unwrap_or_else(|_| Bounded::max_value())
 		)
 	}
 
-	fn deconstruct(self) -> Self::Inner {
+	fn into_inner(self) -> Self::Inner {
 		self.0
 	}
 
@@ -82,9 +81,9 @@ impl FixedPointNumber for Fixed128 {
 				rhs = rhs.saturating_mul(-1);
 			}
 
-			Self::NextUnsigned::from(lhs)
-				.checked_mul(Self::NextUnsigned::from(rhs))
-				.and_then(|n| n.checked_div(Self::NextUnsigned::from(Self::DIV)))
+			(lhs as <Self as FixedPointNumber>::Unsigned)
+				.checked_mul(rhs as <Self as FixedPointNumber>::Unsigned)
+				.and_then(|n| n.checked_div(Self::DIV as <Self as FixedPointNumber>::Unsigned))
 				.and_then(|n| TryInto::<Self::Inner>::try_into(n).ok())
 				.and_then(|n| TryInto::<N>::try_into(n * signum).ok())
 		})
@@ -154,7 +153,7 @@ impl FixedPointNumber for Fixed128 {
 
 	fn saturated_multiply_accumulate<N>(self, int: N) -> N
 	where
-		N: From<u32> + TryFrom<Self::Unsigned> + UniqueSaturatedInto<u32> +
+		N: From<u64> + TryFrom<u128> + UniqueSaturatedInto<u64> +
 		Bounded + Copy + Saturating +
 		ops::Rem<N, Output=N> + ops::Div<N, Output=N> + ops::Mul<N, Output=N> +
 		ops::Add<N, Output=N> + Default + core::fmt::Debug
@@ -168,7 +167,7 @@ impl FixedPointNumber for Fixed128 {
 		let natural_parts = parts / div;
 		let natural_parts: N = natural_parts.saturated_into();
 
-		let fractional_parts = (parts % div) as u32;
+		let fractional_parts = (parts % div) as u64;
 
 		let n = int.saturating_mul(natural_parts);
 		let p = Self::Perthing::from_parts(fractional_parts) * int;
@@ -261,14 +260,14 @@ impl ops::Div for Fixed128 {
 	fn div(self, rhs: Self) -> Self::Output {
 		if rhs.0 == 0 {
 			let zero = 0;
-			return Self::from_parts( self.0 / zero);
+			return Self::from_parts(self.0 / zero);
 		}
 		let (n, d) = if rhs.0 < 0 {
 			(-self.0, rhs.0.abs())
 		} else {
 			(self.0, rhs.0)
 		};
-		Self::from_rational(n, d as u64)
+		Self::from_rational(n, d)
 	}
 }
 
@@ -294,18 +293,18 @@ impl CheckedDiv for Fixed128 {
 		}
 
 		let signum = self.0.signum() / rhs.0.signum();
-		let mut lhs: i128 = self.0;
+		let mut lhs: <Self as FixedPointNumber>::Inner = self.0;
 		if lhs.is_negative() {
 			lhs = lhs.saturating_mul(-1);
 		}
-		let mut rhs: i128 = rhs.0.saturated_into();
+		let mut rhs: <Self as FixedPointNumber>::Inner = rhs.0.saturated_into();
 		if rhs.is_negative() {
 			rhs = rhs.saturating_mul(-1);
 		}
 
-		<Self as FixedPointNumber>::NextUnsigned::from(lhs)
-			.checked_mul(<Self as FixedPointNumber>::NextUnsigned::from(<Self as FixedPointNumber>::DIV))
-			.and_then(|n| n.checked_div(<Self as FixedPointNumber>::NextUnsigned::from(rhs)))
+		(lhs as <Self as FixedPointNumber>::Unsigned)
+			.checked_mul(<Self as FixedPointNumber>::DIV as <Self as FixedPointNumber>::Unsigned)
+			.and_then(|n| n.checked_div(rhs as <Self as FixedPointNumber>::Unsigned))
 			.and_then(|n| TryInto::<<Self as FixedPointNumber>::Inner>::try_into(n).ok())
 			.map(|n| Self(n * signum))
 	}
@@ -323,9 +322,9 @@ impl CheckedMul for Fixed128 {
 			rhs = rhs.saturating_mul(-1);
 		}
 
-		<Self as FixedPointNumber>::NextUnsigned::from(lhs)
-			.checked_mul(<Self as FixedPointNumber>::NextUnsigned::from(rhs))
-			.and_then(|n| n.checked_div(<Self as FixedPointNumber>::NextUnsigned::from(<Self as FixedPointNumber>::DIV)))
+		(lhs as <Self as FixedPointNumber>::Unsigned)
+			.checked_mul(rhs as <Self as FixedPointNumber>::Unsigned)
+			.and_then(|n| n.checked_div(<Self as FixedPointNumber>::DIV as <Self as FixedPointNumber>::Unsigned))
 			.and_then(|n| TryInto::<<Self as FixedPointNumber>::Inner>::try_into(n).ok())
 			.map(|n| Self(n * signum))
 	}
@@ -361,7 +360,7 @@ impl fmt::Debug for Fixed128 {
 
 impl<P: PerThing> From<P> for Fixed128 {
 	fn from(val: P) -> Self {
-		let accuracy = P::ACCURACY.saturated_into().max(1) as <Self as FixedPointNumber>::Unsigned;
+		let accuracy = P::ACCURACY.saturated_into().max(1) as <Self as FixedPointNumber>::Inner;
 		let value = val.deconstruct().saturated_into() as <Self as FixedPointNumber>::Inner;
 		Fixed128::from_rational(value, accuracy)
 	}
