@@ -42,7 +42,7 @@ variables:
   CARGO_UNLEASH_PKG_DEF:           "--skip node node-* pallet-template pallet-example pallet-example-* subkey chain-spec-builder sp-arithmetic-fuzzer"
   CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER: "wasm-bindgen-test-runner"
   WASM_BINDGEN_TEST_TIMEOUT:                  60
-  CHROMEDRIVER_ARGS:                          "--log-level=INFO --whitelisted-ips"
+  CHROMEDRIVER_ARGS:                          "--log-level=INFO --whitelisted-ips=127.0.0.1"
 
 
 .collect-artifacts:                &collect-artifacts
