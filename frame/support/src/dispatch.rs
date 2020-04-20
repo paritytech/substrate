@@ -46,10 +46,6 @@ pub type DispatchResult = Result<(), sp_runtime::DispatchError>;
 pub type DispatchErrorWithPostInfo =
 	sp_runtime::DispatchErrorWithPostInfo<crate::weights::PostDispatchInfo>;
 
-
-/// A type that cannot be instantiated.
-pub enum Never {}
-
 /// Serializable version of Dispatchable.
 /// This value can be used as a "function" in an extrinsic.
 pub trait Callable<T> {
@@ -1316,7 +1312,7 @@ macro_rules! decl_module {
 		{
 			#[doc(hidden)]
 			#[codec(skip)]
-			__PhantomItem($crate::sp_std::marker::PhantomData<($trait_instance, $($instance)?)>, $crate::dispatch::Never),
+			__PhantomItem($crate::sp_std::marker::PhantomData<($trait_instance, $($instance)?)>, $crate::Never),
 			$( $generated_variants )*
 		}
 	};
