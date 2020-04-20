@@ -124,8 +124,8 @@ pub struct BabeGenesisConfigurationV1 {
 	pub secondary_slots: bool,
 }
 
-impl From<BabeConfigurationV1> for BabeGenesisConfiguration {
-	fn from(v1: BabeConfigurationV1) -> Self {
+impl From<BabeGenesisConfigurationV1> for BabeGenesisConfiguration {
+	fn from(v1: BabeGenesisConfigurationV1) -> Self {
 		Self {
 			slot_duration: v1.slot_duration,
 			epoch_length: v1.epoch_length,
@@ -228,7 +228,7 @@ sp_api::decl_runtime_apis! {
 
 		/// Return the configuration for BABE. Version 1.
 		#[changed_in(2)]
-		fn configuration() -> BabeConfigurationV1;
+		fn configuration() -> BabeGenesisConfigurationV1;
 
 		/// Returns the slot number that started the current epoch.
 		fn current_epoch_start() -> SlotNumber;
