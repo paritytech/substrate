@@ -7575,6 +7575,7 @@ dependencies = [
  "sp-runtime-interface-test-wasm",
  "sp-state-machine",
  "sp-std",
+ "sp-tracing",
  "sp-wasm-interface",
  "static_assertions",
  "trybuild",
@@ -7602,6 +7603,7 @@ dependencies = [
  "sp-runtime-interface-test-wasm",
  "sp-runtime-interface-test-wasm-deprecated",
  "sp-state-machine",
+ "tracing",
 ]
 
 [[package]]
