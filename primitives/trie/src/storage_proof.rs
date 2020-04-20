@@ -79,13 +79,10 @@ pub enum StorageProofKind {
 	/// Testing only indices
 
 	/// Kind for `StorageProof::Full`.
-	Full = 125,
+	Full = 126,
 
 	/// Kind for `StorageProof::TrieSkipHashesFull`.
-	TrieSkipHashesFull = 126,
-
-	/// Kind for `StorageProof::KnownQueryPlan`.
-	KnownQueryPlan = 127,
+	TrieSkipHashesFull = 127,
 }
 
 impl StorageProofKind {
@@ -154,31 +151,12 @@ pub enum InputKind {
 	QueryPlanWithValues,
 }
 
-/// Content produced on proof verification.
-pub enum Output {
-	/// Proof only verify to success or failure.
-	None,
-
-	/// Contains key and values queried during the proof processing.
-	QueryPlanWithValues(ChildrenProofMap<Vec<(Vec<u8>, Option<Vec<u8>>)>>),
-}
-
-/// Kind for designing an `Output` variant.
-pub enum OutputKind {
-	/// `Output::None` kind.
-	None,
-
-	/// `Output::QueryPlanWithValues` kind.
-	QueryPlanWithValues,
-}
-
 impl StorageProofKind {
 	/// Some proof variants requires more than just the collected
 	/// encoded nodes.
 	pub fn processing_input_kind(&self) -> InputKind {
 		match self {
 			StorageProofKind::KnownQueryPlanAndValues => InputKind::QueryPlan,
-				| StorageProofKind::KnownQueryPlan => InputKind::QueryPlan,
 			StorageProofKind::TrieSkipHashes
 				| StorageProofKind::TrieSkipHashesFull => InputKind::ChildTrieRoots,
 			StorageProofKind::Full
@@ -189,7 +167,6 @@ impl StorageProofKind {
 	/// Same as `need_additional_info_to_produce` but for reading.
 	pub fn verify_input_kind(&self) -> InputKind {
 		match self {
-			StorageProofKind::KnownQueryPlan => InputKind::QueryPlan,
 			StorageProofKind::KnownQueryPlanAndValues => InputKind::QueryPlanWithValues,
 			StorageProofKind::TrieSkipHashes
 				| StorageProofKind::TrieSkipHashesFull
@@ -198,20 +175,10 @@ impl StorageProofKind {
 		}
 	}
 
-	/// Some proof variants requires more than just the collected
-	/// encoded nodes.
-	pub fn produce_additional_info(&self) -> OutputKind {
-		match self {
-			StorageProofKind::KnownQueryPlan => OutputKind::QueryPlanWithValues,
-			_ => OutputKind::None,
-		}
-	}
-
 	/// Some proof can get unpack into another proof representation.
 	pub fn can_unpack(&self) -> bool {
 		match self {
-			StorageProofKind::KnownQueryPlanAndValues
-				| StorageProofKind::KnownQueryPlan => false,
+			StorageProofKind::KnownQueryPlanAndValues => false,
 			StorageProofKind::TrieSkipHashes
 				| StorageProofKind::TrieSkipHashesFull => true,
 			StorageProofKind::Full
@@ -225,7 +192,6 @@ impl StorageProofKind {
 		match self {
 			StorageProofKind::Flatten => false,
 			StorageProofKind::Full
-				| StorageProofKind::KnownQueryPlan
 				| StorageProofKind::KnownQueryPlanAndValues
 				| StorageProofKind::TrieSkipHashes
 				| StorageProofKind::TrieSkipHashesFull => true,
@@ -240,16 +206,14 @@ impl StorageProofKind {
 				| StorageProofKind::TrieSkipHashes => Some(false),
 			StorageProofKind::Full
 				| StorageProofKind::TrieSkipHashesFull => Some(true),
-			StorageProofKind::KnownQueryPlanAndValues
-				| StorageProofKind::KnownQueryPlan => None,
+			StorageProofKind::KnownQueryPlanAndValues => None,
 		}
 	}
 
 	/// Proof that should be use with `verify` method.
 	pub fn can_use_verify(&self) -> bool {
 		match self {
-			StorageProofKind::KnownQueryPlanAndValues
-				| StorageProofKind::KnownQueryPlan => true,
+			StorageProofKind::KnownQueryPlanAndValues => true,
 			_ => false,
 		}
 	}
@@ -260,8 +224,7 @@ impl StorageProofKind {
 	/// failure is related to an unsupported capability.
 	pub fn can_use_as_partial_db(&self) -> bool {
 		match self {
-			StorageProofKind::KnownQueryPlanAndValues
-				| StorageProofKind::KnownQueryPlan => false,
+			StorageProofKind::KnownQueryPlanAndValues => false,
 			_ => true,
 		}
 	}
@@ -316,12 +279,6 @@ pub enum StorageProof {
 	// Following variants are only for testing, they still can be use but
 	// decoding is not implemented.
 
-	/// This acts as `KnownQueryPlanAndValues` but without value.
-	/// Values are therefore store in the proof and can be retrieved
-	/// after succesfully checking the proof.
-	///	This is mainly provided for test purpose and extensibility.
-	KnownQueryPlan(ChildrenProofMap<ProofCompacted>),
-
 	///	Fully described proof, it includes the child trie individual description and split its
 	///	content by child trie.
 	///	Currently Full variant is unused as all our child trie kind can share a same memory db
@@ -358,8 +315,6 @@ impl Decode for StorageProof {
 				StorageProofKind::TrieSkipHashes => StorageProof::TrieSkipHashes(Decode::decode(value)?),
 				StorageProofKind::KnownQueryPlanAndValues
 					=> StorageProof::KnownQueryPlanAndValues(Decode::decode(value)?),
-				StorageProofKind::KnownQueryPlan
-					=> StorageProof::KnownQueryPlan(Decode::decode(value)?),
 				StorageProofKind::Full => StorageProof::Full(Decode::decode(value)?),
 				StorageProofKind::TrieSkipHashesFull
 					=> StorageProof::TrieSkipHashesFull(Decode::decode(value)?),
@@ -374,7 +329,6 @@ impl Encode for StorageProof {
 			StorageProof::Flatten(p) => p.encode_to(dest),
 			StorageProof::TrieSkipHashes(p) => p.encode_to(dest),
 			StorageProof::KnownQueryPlanAndValues(p) => p.encode_to(dest),
-			StorageProof::KnownQueryPlan(p) => p.encode_to(dest),
 			StorageProof::Full(p) => p.encode_to(dest),
 			StorageProof::TrieSkipHashesFull(p) => p.encode_to(dest),
 		}
@@ -465,7 +419,6 @@ impl StorageProof {
 			StorageProofKind::Full => StorageProof::Full(ChildrenProofMap::default()),
 			StorageProofKind::TrieSkipHashesFull => StorageProof::TrieSkipHashesFull(ChildrenProofMap::default()),
 			StorageProofKind::KnownQueryPlanAndValues => StorageProof::KnownQueryPlanAndValues(ChildrenProofMap::default()),
-			StorageProofKind::KnownQueryPlan => StorageProof::KnownQueryPlan(ChildrenProofMap::default()),
 			StorageProofKind::TrieSkipHashes => StorageProof::TrieSkipHashes(Default::default()),
 		}
 	}
@@ -476,7 +429,6 @@ impl StorageProof {
 			StorageProof::Flatten(data) => data.is_empty(),
 			StorageProof::Full(data) => data.is_empty(),
 			StorageProof::KnownQueryPlanAndValues(data) => data.is_empty(),
-			StorageProof::KnownQueryPlan(data) => data.is_empty(),
 			StorageProof::TrieSkipHashes(data) => data.is_empty(),
 			StorageProof::TrieSkipHashesFull(data) => data.is_empty(),
 		}
@@ -527,13 +479,10 @@ impl StorageProof {
 	pub fn verify<H: Hasher>(
 		self,
 		input: &Input,
-	) -> Result<Option<(bool, Output)>, H>
+	) -> Result<Option<bool>, H>
 		where H::Out: Codec,
 	{
 		match self {
-			StorageProof::KnownQueryPlan(..) => {
-				unimplemented!("there is no such mode actually");
-			},
 			StorageProof::KnownQueryPlanAndValues(proof_children) => {
 				if let Input::QueryPlanWithValues(input_children) = input {
 					let mut root_hash = H::Out::default();
@@ -541,7 +490,7 @@ impl StorageProof {
 						if let Some((root, input)) = input_children.get(child_info) {
 							// Layout h is the only supported one at the time being
 							if root.len() != root_hash.as_ref().len() {
-								return Ok(Some((false, Output::None)));
+								return Ok(Some(false));
 							}
 							root_hash.as_mut().copy_from_slice(&root[..]);
 							if let Err(_) = trie_db::proof::verify_proof::<Layout<H>, _, _, _>(
@@ -549,13 +498,13 @@ impl StorageProof {
 								&nodes[..],
 								input.iter(),
 							) {
-								return Ok(Some((false, Output::None)));
+								return Ok(Some(false));
 							}
 						} else {
 							return Err(missing_verify_input::<H>());
 						}
 					}
-					Ok(Some((true, Output::None)))
+					Ok(Some(true))
 				} else {
 					Err(missing_verify_input::<H>())
 				}
@@ -629,7 +578,6 @@ impl StorageProof {
 					return Err(missing_pack_input::<H>());
 				}
 			},
-			StorageProofKind::KnownQueryPlan => unimplemented!("Actually do not exists"),
 			StorageProofKind::KnownQueryPlanAndValues => {
 				if let Input::QueryPlan(input_children) = input {
 					let mut result = ChildrenProofMap::default();
@@ -709,8 +657,7 @@ impl StorageProof {
 				&StorageProof::TrieSkipHashes(..) => {
 					proof = proof.trie_skip_unpack::<H>()?;
 				},
-				&StorageProof::KnownQueryPlanAndValues(..)
-					| &StorageProof::KnownQueryPlan(..) => {
+				&StorageProof::KnownQueryPlanAndValues(..) => {
 					return Err(impossible_merge_for_proof::<H>());
 				},
 				_ => (),
@@ -720,7 +667,6 @@ impl StorageProof {
 				StorageProof::TrieSkipHashesFull(..)
 					| StorageProof::TrieSkipHashes(..)
 					| StorageProof::KnownQueryPlanAndValues(..)
-					| StorageProof::KnownQueryPlan(..)
 					=> unreachable!("Unpacked or early return earlier"),
 				StorageProof::Flatten(proof) => {
 					if !do_flatten {
@@ -760,7 +706,6 @@ impl StorageProof {
 			StorageProof::Flatten(_) => StorageProofKind::Flatten,
 			StorageProof::TrieSkipHashes(_) => StorageProofKind::TrieSkipHashes,
 			StorageProof::KnownQueryPlanAndValues(_) => StorageProofKind::KnownQueryPlanAndValues,
-			StorageProof::KnownQueryPlan(_) => StorageProofKind::KnownQueryPlan,
 			StorageProof::Full(_) => StorageProofKind::Full,
 			StorageProof::TrieSkipHashesFull(_) => StorageProofKind::TrieSkipHashesFull,
 		}
@@ -802,9 +747,6 @@ impl StorageProof {
 				result.insert(ChildInfoProof::top_trie(), db);
 			},
 			StorageProof::KnownQueryPlanAndValues(_children) => {
-				return Err(impossible_backend_build::<H>());
-			},
-			StorageProof::KnownQueryPlan(_children) => {
 				return Err(impossible_backend_build::<H>());
 			},
 		}
@@ -856,9 +798,6 @@ impl StorageProof {
 				}
 			},
 			StorageProof::KnownQueryPlanAndValues(_children) => {
-				return Err(impossible_backend_build::<H>());
-			},
-			StorageProof::KnownQueryPlan(_children) => {
 				return Err(impossible_backend_build::<H>());
 			},
 		}
