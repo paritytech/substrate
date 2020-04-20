@@ -375,9 +375,10 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 			list.extend(list_to_filter);
 		}
 
-		trace!(target: "sub-libp2p", "Addresses of {:?} are {:?}", peer_id, list);
+		if !list.is_empty() {
+			trace!(target: "sub-libp2p", "Addresses of {:?}: {:?}", peer_id, list);
 
-		if list.is_empty() {
+		} else {
 			let mut has_entry = false;
 			for k in self.kademlias.values_mut() {
 				if k.kbuckets_entries().any(|p| p == peer_id) {
@@ -386,15 +387,12 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 				}
 			}
 			if has_entry {
-				debug!(target: "sub-libp2p",
-					"Requested dialing to {:?} (peer in k-buckets), and no address was found",
-					peer_id);
+				trace!(target: "sub-libp2p", "Addresses of {:?}: none (peer in k-buckets)", peer_id);
 			} else {
-				debug!(target: "sub-libp2p",
-					"Requested dialing to {:?} (peer not in k-buckets), and no address was found",
-					peer_id);
+				trace!(target: "sub-libp2p", "Addresses of {:?}: none (peer not in k-buckets)", peer_id);
 			}
 		}
+
 		list
 	}
 

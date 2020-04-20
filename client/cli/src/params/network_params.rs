@@ -96,7 +96,7 @@ impl NetworkParams {
 		&self,
 		chain_spec: &Box<dyn ChainSpec>,
 		is_dev: bool,
-		net_config_path: &PathBuf,
+		net_config_path: Option<PathBuf>,
 		client_id: &str,
 		node_name: &str,
 		node_key: NodeKeyConfig,
@@ -108,9 +108,6 @@ impl NetworkParams {
 				Multiaddr::empty()
 					.with(Protocol::Ip4([0, 0, 0, 0].into()))
 					.with(Protocol::Tcp(port)),
-				Multiaddr::empty()
-					.with(Protocol::Ip6([0, 0, 0, 0, 0, 0, 0, 0].into()))
-					.with(Protocol::Tcp(port)),
 			]
 		} else {
 			self.listen_addr.clone()
@@ -121,7 +118,7 @@ impl NetworkParams {
 
 		NetworkConfiguration {
 			boot_nodes,
-			net_config_path: net_config_path.clone(),
+			net_config_path,
 			reserved_nodes: self.reserved_nodes.clone(),
 			non_reserved_mode: if self.reserved_only {
 				NonReservedPeerMode::Deny
