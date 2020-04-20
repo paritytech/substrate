@@ -26,6 +26,7 @@
 //! which is then processed by [`NetworkWorker::poll`].
 
 use crate::{
+	ExHashT, NetworkStateInfo,
 	behaviour::{Behaviour, BehaviourOut},
 	config::{parse_addr, parse_str_addr, NonReservedPeerMode, Params, Role, TransportConfig},
 	discovery::DiscoveryConfig,
@@ -57,7 +58,7 @@ use sp_runtime::{
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use std::{
 	borrow::Cow,
-	collections::{HashMap, HashSet},
+	collections::HashSet,
 	fs, io,
 	marker::PhantomData,
 	pin::Pin,
@@ -72,86 +73,6 @@ use std::{
 mod out_events;
 #[cfg(test)]
 mod tests;
-
-/// Minimum Requirements for a Hash within Networking
-pub trait ExHashT: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static {}
-
-impl<T> ExHashT for T where T: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static
-{}
-
-/// Transaction pool interface
-pub trait TransactionPool<H: ExHashT, B: BlockT>: Send + Sync {
-	/// Get transactions from the pool that are ready to be propagated.
-	fn transactions(&self) -> Vec<(H, B::Extrinsic)>;
-	/// Get hash of transaction.
-	fn hash_of(&self, transaction: &B::Extrinsic) -> H;
-	/// Import a transaction into the pool.
-	///
-	/// Peer reputation is changed by reputation_change if transaction is accepted by the pool.
-	fn import(
-		&self,
-		report_handle: ReportHandle,
-		who: PeerId,
-		reputation_change_good: ReputationChange,
-		reputation_change_bad: ReputationChange,
-		transaction: B::Extrinsic,
-	);
-	/// Notify the pool about transactions broadcast.
-	fn on_broadcasted(&self, propagations: HashMap<H, Vec<String>>);
-	/// Get transaction by hash.
-	fn transaction(&self, hash: &H) -> Option<B::Extrinsic>;
-}
-
-/// Dummy implementation of the [`TransactionPool`] trait for a transaction pool that is always
-/// empty and discards all incoming transactions.
-///
-/// Requires the "hash" type to implement the `Default` trait.
-///
-/// Useful for testing purposes.
-pub struct EmptyTransactionPool;
-
-impl<H: ExHashT + Default, B: BlockT> TransactionPool<H, B> for EmptyTransactionPool {
-	fn transactions(&self) -> Vec<(H, B::Extrinsic)> {
-		Vec::new()
-	}
-
-	fn hash_of(&self, _transaction: &B::Extrinsic) -> H {
-		Default::default()
-	}
-
-	fn import(
-		&self,
-		_report_handle: ReportHandle,
-		_who: PeerId,
-		_rep_change_good: ReputationChange,
-		_rep_change_bad: ReputationChange,
-		_transaction: B::Extrinsic
-	) {}
-
-	fn on_broadcasted(&self, _: HashMap<H, Vec<String>>) {}
-
-	fn transaction(&self, _h: &H) -> Option<B::Extrinsic> { None }
-}
-
-/// A cloneable handle for reporting cost/benefits of peers.
-#[derive(Clone)]
-pub struct ReportHandle {
-	inner: PeersetHandle, // wraps it so we don't have to worry about breaking API.
-}
-
-impl From<PeersetHandle> for ReportHandle {
-	fn from(peerset_handle: PeersetHandle) -> Self {
-		ReportHandle { inner: peerset_handle }
-	}
-}
-
-impl ReportHandle {
-	/// Report a given peer as either beneficial (+) or costly (-) according to the
-	/// given scalar.
-	pub fn report_peer(&self, who: PeerId, cost_benefit: ReputationChange) {
-		self.inner.report_peer(who, cost_benefit);
-	}
-}
 
 /// Substrate network service. Handles network IO and manages connectivity.
 pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
@@ -790,15 +711,6 @@ impl<'a, B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle
 	fn is_offline(&mut self) -> bool {
 		self.num_connected.load(Ordering::Relaxed) == 0
 	}
-}
-
-/// Trait for providing information about the local network state
-pub trait NetworkStateInfo {
-	/// Returns the local external addresses.
-	fn external_addresses(&self) -> Vec<Multiaddr>;
-
-	/// Returns the local Peer ID.
-	fn local_peer_id(&self) -> PeerId;
 }
 
 impl<B, H> NetworkStateInfo for NetworkService<B, H>

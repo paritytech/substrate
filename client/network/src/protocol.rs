@@ -14,8 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::config::ProtocolId;
-use crate::utils::interval;
+use crate::{
+	ExHashT,
+	chain::{Client, FinalityProofProvider},
+	config::{BoxFinalityProofRequestBuilder, ProtocolId, TransactionPool},
+	error,
+	utils::interval
+};
+
 use bytes::{Bytes, BytesMut};
 use futures::prelude::*;
 use generic_proto::{GenericProto, GenericProtoOut};
@@ -42,17 +48,13 @@ use message::{BlockAnnounce, Message};
 use message::generic::{Message as GenericMessage, ConsensusMessage, Roles};
 use prometheus_endpoint::{Registry, Gauge, GaugeVec, HistogramVec, PrometheusError, Opts, register, U64};
 use sync::{ChainSync, SyncState};
-use crate::service::{TransactionPool, ExHashT};
-use crate::config::BoxFinalityProofRequestBuilder;
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use std::fmt::Write;
 use std::{cmp, io, num::NonZeroUsize, pin::Pin, task::Poll, time};
 use log::{log, Level, trace, debug, warn, error};
-use crate::chain::{Client, FinalityProofProvider};
 use sc_client_api::{ChangesProof, StorageProof};
-use crate::error;
 use util::LruHashSet;
 use wasm_timer::Instant;
 
