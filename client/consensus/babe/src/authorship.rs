@@ -19,7 +19,7 @@
 use merlin::Transcript;
 use sp_consensus_babe::{
 	AuthorityId, BabeAuthorityWeight, BABE_ENGINE_ID, BABE_VRF_PREFIX,
-	SlotNumber, AuthorityPair, BabeConfiguration
+	SlotNumber, AuthorityPair,
 };
 use sp_consensus_babe::digests::{
 	PreDigest, PrimaryPreDigest, SecondaryPlainPreDigest, SecondaryVRFPreDigest,
@@ -168,12 +168,11 @@ fn claim_secondary_slot(
 pub fn claim_slot(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
-	config: &BabeConfiguration,
 	keystore: &KeyStorePtr,
 ) -> Option<(PreDigest, AuthorityPair)> {
-	claim_primary_slot(slot_number, epoch, config.c, keystore)
+	claim_primary_slot(slot_number, epoch, epoch.config.c, keystore)
 		.or_else(|| {
-			if config.allowed_slots.is_secondary_slots_allowed() ||
+			if config.allowed_slots.is_secondary_plain_slots_allowed() ||
 				config.allowed_slots.is_secondary_vrf_slots_allowed()
 			{
 				claim_secondary_slot(
