@@ -40,6 +40,9 @@ variables:
   # FIXME set to release
   CARGO_UNLEASH_INSTALL_PARAMS:    "--version 1.0.0-alpha.10"
   CARGO_UNLEASH_PKG_DEF:           "--skip node node-* pallet-template pallet-example pallet-example-* subkey chain-spec-builder sp-arithmetic-fuzzer"
+  CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER: "wasm-bindgen-test-runner"
+  WASM_BINDGEN_TEST_TIMEOUT:                  120
+  CHROMEDRIVER_ARGS:                          "--log-level=INFO --whitelisted-ips=127.0.0.1"
 
 
 .collect-artifacts:                &collect-artifacts
@@ -312,7 +315,6 @@ test-linux-stable-int:
     paths:
       - ${CI_COMMIT_SHORT_SHA}_int_failure.log
 
-
 check-web-wasm:
   stage:                           test
   <<:                              *docker-env
@@ -353,6 +355,15 @@ test-full-crypto-feature:
 
 
 #### stage:                        build
+
+test-browser-node:
+  stage:                           build
+  <<:                              *docker-env
+  needs:
+    - job:                         check-web-wasm
+      artifacts:                   false
+  script:
+    - cargo +nightly test --target wasm32-unknown-unknown -p node-browser-testing -Z features=itarget
 
 build-linux-substrate:             &build-binary
   stage:                           build
