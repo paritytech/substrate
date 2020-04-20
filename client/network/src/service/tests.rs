@@ -95,7 +95,7 @@ fn build_test_full_node(config: config::NetworkConfiguration)
 		finality_proof_provider: None,
 		finality_proof_request_builder: None,
 		on_demand: None,
-		transaction_pool: Arc::new(crate::service::EmptyTransactionPool),
+		transaction_pool: Arc::new(crate::config::EmptyTransactionPool),
 		protocol_id: config::ProtocolId::from(&b"/test-protocol-name"[..]),
 		import_queue,
 		block_announce_validator: Box::new(

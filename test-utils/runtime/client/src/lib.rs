@@ -123,11 +123,12 @@ impl substrate_test_client::GenesisInit for GenesisParameters {
 
 		let mut storage = self.genesis_config().genesis_map();
 
-		let child_roots = storage.children.iter().map(|(sk, child_content)| {
+		let child_roots = storage.children_default.iter().map(|(_sk, child_content)| {
 			let state_root = <<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
 				child_content.data.clone().into_iter().collect()
 			);
-			(sk.clone(), state_root.encode())
+			let prefixed_storage_key = child_content.child_info.prefixed_storage_key();
+			(prefixed_storage_key.into_inner(), state_root.encode())
 		});
 		let state_root = <<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
 			storage.top.clone().into_iter().chain(child_roots).collect()
@@ -192,22 +193,21 @@ pub trait TestClientBuilderExt<B>: Sized {
 	/// # Panics
 	///
 	/// Panics if the key is empty.
-	fn add_extra_child_storage<SK: Into<Vec<u8>>, K: Into<Vec<u8>>, V: Into<Vec<u8>>>(
+	fn add_extra_child_storage<K: Into<Vec<u8>>, V: Into<Vec<u8>>>(
 		mut self,
-		storage_key: SK,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: K,
 		value: V,
 	) -> Self {
-		let storage_key = storage_key.into();
+		let storage_key = child_info.storage_key().to_vec();
 		let key = key.into();
 		assert!(!storage_key.is_empty());
 		assert!(!key.is_empty());
-		self.genesis_init_mut().extra_storage.children
+		self.genesis_init_mut().extra_storage.children_default
 			.entry(storage_key)
 			.or_insert_with(|| StorageChild {
 				data: Default::default(),
-				child_info: child_info.to_owned(),
+				child_info: child_info.clone(),
 			}).data.insert(key, value.into());
 		self
 	}
@@ -311,7 +311,10 @@ impl Fetcher<substrate_test_runtime::Block> for LightFetcher {
 		unimplemented!()
 	}
 
-	fn remote_read_child(&self, _: RemoteReadChildRequest<substrate_test_runtime::Header>) -> Self::RemoteReadResult {
+	fn remote_read_child(
+		&self,
+		_: RemoteReadChildRequest<substrate_test_runtime::Header>,
+	) -> Self::RemoteReadResult {
 		unimplemented!()
 	}
 
