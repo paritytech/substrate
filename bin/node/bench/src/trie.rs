@@ -110,7 +110,6 @@ impl core::BenchmarkDescription for TrieReadBenchmarkDescription {
 	fn setup(self: Box<Self>) -> Box<dyn core::Benchmark> {
 		let mut database = TempDatabase::new();
 
-		// TODO: make seedable
 		let mut rng = rand::thread_rng();
 		let warmup_prefix = KUSAMA_STATE_DISTRIBUTION.key(&mut rng);
 
@@ -221,7 +220,6 @@ impl core::BenchmarkDescription for TrieWriteBenchmarkDescription {
 	fn setup(self: Box<Self>) -> Box<dyn core::Benchmark> {
 		let mut database = TempDatabase::new();
 
-		// TODO: make seedable
 		let mut rng = rand::thread_rng();
 		let warmup_prefix = KUSAMA_STATE_DISTRIBUTION.key(&mut rng);
 
