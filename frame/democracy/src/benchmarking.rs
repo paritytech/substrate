@@ -20,7 +20,8 @@ use super::*;
 
 use frame_benchmarking::{benchmarks, account};
 use frame_support::traits::{Currency, Get, EnsureOrigin, OnInitialize};
-use frame_system::{RawOrigin, Module as System, self};
+use frame_support::assert_err;
+use frame_system::{RawOrigin, Module as System, self, EventRecord};
 use sp_runtime::traits::{Bounded, One};
 
 use crate::Module as Democracy;
@@ -32,6 +33,15 @@ const MAX_PROPOSALS: u32 = 100;
 const MAX_SECONDERS: u32 = 100;
 const MAX_VETOERS: u32 = 100;
 const MAX_BYTES: u32 = 16_384;
+
+fn assert_last_event<T: Trait>(generic_event: <T as Trait>::Event) {
+	let events = System::<T>::events();
+	let system_event: <T as frame_system::Trait>::Event = generic_event.into();
+	// compare to the last event record
+	let EventRecord { event, .. } = &events[events.len() - 1];
+	println!("EVENT {:?}, system {:?}", event, system_event);
+	assert_eq!(event, &system_event);
+}
 
 fn funded_account<T: Trait>(name: &'static str, index: u32) -> T::AccountId {
 	let caller: T::AccountId = account(name, index, SEED);
@@ -554,7 +564,7 @@ benchmarks! {
 		let b in 0 .. MAX_BYTES;
 
 		let caller = funded_account::<T>("caller", 0);
-		let encoded_proposal = vec![0; b as usize];
+		let encoded_proposal = vec![1; b as usize];
 	}: _(RawOrigin::Signed(caller), encoded_proposal.clone())
 	verify {
 		let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
@@ -569,13 +579,13 @@ benchmarks! {
 		let b in 0 .. MAX_BYTES;
 
 		// d + 1 to include the one we are testing
-		let encoded_proposal = vec![0; b as usize];
+		let encoded_proposal = vec![1; b as usize];
 		let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
 		let block_number = T::BlockNumber::one();
 		Preimages::<T>::insert(&proposal_hash, PreimageStatus::Missing(block_number));
 
 		let caller = funded_account::<T>("caller", 0);
-		let encoded_proposal = vec![0; b as usize];
+		let encoded_proposal = vec![1; b as usize];
 	}: _(RawOrigin::Signed(caller), encoded_proposal.clone())
 	verify {
 		let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
@@ -589,7 +599,7 @@ benchmarks! {
 		// Num of bytes in encoded proposal
 		let b in 0 .. MAX_BYTES;
 
-		let encoded_proposal = vec![0; b as usize];
+		let encoded_proposal = vec![1; b as usize];
 		let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
 
 		let submitter = funded_account::<T>("submitter", b);
@@ -870,7 +880,47 @@ benchmarks! {
 		assert_eq!(votes.len(), (r - 1) as usize, "Vote was not removed");
 	}
 
-	// TODO enact_proposal
+	enact_proposal_execute {
+		// Num of bytes in encoded proposal
+		let b in 0 .. MAX_BYTES;
+
+		let proposer = funded_account::<T>("proposer", 0);
+		let raw_call = Call::note_preimage(vec![1; b as usize]);
+		let generic_call: T::Proposal = raw_call.into();
+		let encoded_proposal = generic_call.encode();
+		let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
+		Democracy::<T>::note_preimage(RawOrigin::Signed(proposer).into(), encoded_proposal)?;
+
+		match Preimages::<T>::get(proposal_hash) {
+			Some(PreimageStatus::Available { .. }) => (),
+			_ => return Err("preimage not available")
+		}
+	}: enact_proposal(RawOrigin::Root, proposal_hash, 0)
+	verify {
+		// Fails due to mismatched origin
+		assert_last_event::<T>(RawEvent::Executed(0, false).into());
+	}
+
+	enact_proposal_slash {
+		// Num of bytes in encoded proposal
+		let b in 0 .. MAX_BYTES;
+
+		let proposer = funded_account::<T>("proposer", 0);
+		// Random invalid bytes
+		let encoded_proposal = vec![200; b as usize];
+		let proposal_hash = T::Hashing::hash(&encoded_proposal[..]);
+		Democracy::<T>::note_preimage(RawOrigin::Signed(proposer).into(), encoded_proposal)?;
+
+		match Preimages::<T>::get(proposal_hash) {
+			Some(PreimageStatus::Available { .. }) => (),
+			_ => return Err("preimage not available")
+		}
+	}: {
+		assert_err!(
+			Democracy::<T>::enact_proposal(RawOrigin::Root.into(), proposal_hash, 0),
+			Error::<T>::PreimageInvalid
+		);
+	}
 }
 
 #[cfg(test)]
@@ -914,6 +964,8 @@ mod tests {
 			assert_ok!(test_benchmark_proxy_delegate::<Test>());
 			assert_ok!(test_benchmark_proxy_undelegate::<Test>());
 			assert_ok!(test_benchmark_proxy_remove_vote::<Test>());
+			assert_ok!(test_benchmark_enact_proposal_execute::<Test>());
+			assert_ok!(test_benchmark_enact_proposal_slash::<Test>());
 		});
 	}
 }
