@@ -49,6 +49,11 @@
 //!
 //! `blake2_256(epoch_randomness ++ slot_number) % authorities_len`.
 //!
+//! The secondary slots supports either a `SecondaryPlain` or `SecondaryVRF`
+//! variant. Comparing with `SecondaryPlain` variant, the `SecondaryVRF` variant
+//! generates an additional VRF output. The output is not included in beacon
+//! randomness, but can be consumed by parachains.
+//!
 //! The fork choice rule is weight-based, where weight equals the number of
 //! primary blocks in the chain. We will pick the heaviest chain (more primary
 //! blocks) and will go with the longest one in case of a tie.
@@ -1027,7 +1032,7 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 			};
 
 			log!(target: "babe",
-				log_level, 
+				log_level,
 				"👶 New epoch {} launching at block {} (block slot {} >= start slot {}).",
 				viable_epoch.as_ref().epoch_index,
 				hash,
