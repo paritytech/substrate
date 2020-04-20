@@ -273,9 +273,10 @@ impl CheckedAdd for Fixed64 {
 
 impl CheckedDiv for Fixed64 {
 	fn checked_div(&self, rhs: &Self) -> Option<Self> {
-		if rhs.0.signum() == 0 {
+		if rhs.0.signum() == 0 || (*self == Self::min_value() && *rhs == Self::from_integer(-1)){
 			return None;
 		}
+
 		if self.0 == 0 {
 			return Some(*self);
 		}
@@ -285,6 +286,7 @@ impl CheckedDiv for Fixed64 {
 		if lhs.is_negative() {
 			lhs = lhs.saturating_mul(-1);
 		}
+
 		let mut rhs = rhs.0;
 		if rhs.is_negative() {
 			rhs = rhs.saturating_mul(-1);
