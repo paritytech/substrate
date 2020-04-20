@@ -88,6 +88,12 @@ pub struct NetworkParams {
 	/// Experimental feature flag.
 	#[structopt(long = "use-yamux-flow-control")]
 	pub use_yamux_flow_control: bool,
+
+	/// Allow non-global IP addresses and domain names to be added to the DHT.
+	///
+	/// By default this option is true for `--dev` and false otherwise.
+	#[structopt(long)]
+	pub allow_non_global_addresses_in_dht: bool,
 }
 
 impl NetworkParams {
@@ -140,6 +146,7 @@ impl NetworkParams {
 				use_yamux_flow_control: self.use_yamux_flow_control,
 			},
 			max_parallel_downloads: self.max_parallel_downloads,
+			allow_non_globals_in_dht: self.allow_non_global_addresses_in_dht || is_dev
 		}
 	}
 }
