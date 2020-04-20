@@ -19,11 +19,20 @@ use sp_std::collections::btree_set::BTreeSet;
 use sp_std::vec::Vec;
 use sp_std::convert::TryInto;
 use codec::{Codec, Encode, Decode, Input as CodecInput, Output as CodecOutput};
-use hash_db::{Hasher, HashDB, EMPTY_PREFIX};
+use hash_db::{Hasher, HashDB, HashDBRef, EMPTY_PREFIX};
 use crate::{MemoryDB, Layout};
-use sp_storage::{ChildInfoProof, ChildType};
+use sp_storage::{ChildInfoProof, ChildType, ChildrenMap};
 use crate::TrieError;
-
+use trie_db::DBValue;
+// we are not using std as this use in no_std is
+// only allowed here because it is already use in
+// no_std use of trie_db.
+#[cfg(not(feature = "std"))]
+use hashbrown::HashMap;
+	
+#[cfg(feature = "std")]
+use std::collections::HashMap;
+	
 type Result<T, H> = sp_std::result::Result<T, sp_std::boxed::Box<TrieError<Layout<H>>>>;
 type CodecResult<T> = sp_std::result::Result<T, codec::Error>;
 
@@ -114,6 +123,10 @@ pub enum Input {
 	/// Contains trie roots used during proof processing.
 	/// Contains key and values queried during the proof processing.
 	QueryPlanWithValues(ChildrenProofMap<(Vec<u8>, Vec<(Vec<u8>, Option<Vec<u8>>)>)>),
+
+	/// Contains trie roots used during proof processing.
+	/// Contains keys queried during the proof processing.
+	QueryPlan(ChildrenProofMap<(Vec<u8>, Vec<Vec<u8>>)>),
 }
 
 /// Kind for designing an `Input` variant.
@@ -124,8 +137,8 @@ pub enum InputKind {
 	/// `Input::ChildTrieRoots` kind.
 	ChildTrieRoots,
 
-	/// `Input::QueryPlanWithValues` kind.
-	QueryPlanNoValues,
+	/// `Input::QueryPlan` kind.
+	QueryPlan,
 
 	/// `Input::QueryPlanWithValues` kind.
 	QueryPlanWithValues,
@@ -154,8 +167,8 @@ impl StorageProofKind {
 	/// encoded nodes.
 	pub fn processing_input_kind(&self) -> InputKind {
 		match self {
-			StorageProofKind::KnownQueryPlanAndValues => InputKind::QueryPlanNoValues,
-				| StorageProofKind::KnownQueryPlan => InputKind::QueryPlanNoValues,
+			StorageProofKind::KnownQueryPlanAndValues => InputKind::QueryPlan,
+				| StorageProofKind::KnownQueryPlan => InputKind::QueryPlan,
 			StorageProofKind::TrieSkipHashes
 				| StorageProofKind::TrieSkipHashesFull => InputKind::ChildTrieRoots,
 			StorageProofKind::Full
@@ -166,7 +179,7 @@ impl StorageProofKind {
 	/// Same as `need_additional_info_to_produce` but for reading.
 	pub fn verify_input_kind(&self) -> InputKind {
 		match self {
-			StorageProofKind::KnownQueryPlan => InputKind::QueryPlanNoValues,
+			StorageProofKind::KnownQueryPlan => InputKind::QueryPlan,
 			StorageProofKind::KnownQueryPlanAndValues => InputKind::QueryPlanWithValues,
 			StorageProofKind::TrieSkipHashes
 				| StorageProofKind::TrieSkipHashesFull
@@ -468,36 +481,24 @@ impl StorageProof {
 	}
 
 	/// This unpacks `TrieSkipHashesFull` to `Full` or do nothing.
-	/// TODO EMCH document and use case for with_roots to true?? (probably unpack -> merge -> pack
-	/// but no code for it here)
-	/// TODO consider making this private!! (pack to)
-	pub fn unpack<H: Hasher>(
+	fn unpack<H: Hasher>(
 		self,
-		with_roots: bool,
-	) -> Result<(Self, Option<ChildrenProofMap<Vec<u8>>>), H>
+	) -> Result<Self, H>
 		where H::Out: Codec,
 	{
-		let mut roots = if with_roots {
-			Some(ChildrenProofMap::default())
-		} else {
-			None
-		};
 		match self {
 			StorageProof::TrieSkipHashesFull(children) => {
 				let mut result = ChildrenProofMap::default();
 				for (child_info, proof) in children {
 					match child_info.child_type() {
 						ChildType::ParentKeyId => {
-							// Note that unpack does fill a memory db and on verification we will
-							// probalby switch this proof to a memory db to, so the function to produce
-							// the backend should not use this primitive.
-							let (root, unpacked_proof) = crate::unpack_proof::<Layout<H>>(proof.as_slice())?;
-							roots.as_mut().map(|roots| roots.insert(child_info.clone(), root.encode()));
+							// Note that we could return roots from unpacking.
+							let (_root, unpacked_proof) = crate::unpack_proof::<Layout<H>>(proof.as_slice())?;
 							result.insert(child_info, unpacked_proof);
 						}
 					}
 				}
-				Ok((StorageProof::Full(result), roots))
+				Ok(StorageProof::Full(result))
 			},
 			StorageProof::TrieSkipHashes(children) => {
 				let mut result = ProofNodes::default();
@@ -506,9 +507,9 @@ impl StorageProof {
 					result.extend(unpacked_proof);
 				}
 
-				Ok((StorageProof::Flatten(result), None))
+				Ok(StorageProof::Flatten(result))
 			},
-			s => Ok((s, None)),
+			s => Ok(s),
 		}
 	}
 
@@ -523,38 +524,95 @@ impl StorageProof {
 		unimplemented!("TODO run the validation of the query plan one")
 	}
 
-	/// This packs when possible.
-	pub fn pack<H: Hasher>(
-		self,
-		additional_content: &Input,
+	/// This produce the proof from collected information.
+	pub fn extract_proof<H: Hasher>(
+		collected: &ChildrenMap<RecordMapTrieNodes<H>>,
+		kind: StorageProofKind,
+		input: &Input,
 	) -> Result<Self, H>
 		where H::Out: Codec,
 	{
-		Ok(match self {
-			StorageProof::Full(children) => {
-				match additional_content {
-					Input::ChildTrieRoots(roots) => {
-						let mut result = ChildrenProofMap::default();
-						for (child_info, proof) in children {
-							match child_info.child_type() {
-								ChildType::ParentKeyId => {
-									let root = roots.get(&child_info)
-										.and_then(|r| Decode::decode(&mut &r[..]).ok())
-										.ok_or_else(|| missing_pack_input::<H>())?;
-									let trie_nodes = crate::pack_proof::<Layout<H>>(&root, &proof[..])?;
-									result.insert(child_info.clone(), trie_nodes);
-								}
-							}
+		Ok(match kind {
+			StorageProofKind::Flatten => {
+				let mut result = Vec::new();
+				collected.iter().for_each(|(child_info, proof)| {
+					match child_info.child_type() {
+						ChildType::ParentKeyId => {
+							// this can get merged with top, we do not use key prefix
+							result.extend(proof.0.clone()
+								.drain()
+								.filter_map(|(_k, v)| v)
+							);
 						}
-						StorageProof::TrieSkipHashesFull(result)
-					},
-					Input::QueryPlanWithValues(_plan) => {
-						unimplemented!("TODO pack query plan mode")
-					},
-					Input::None => StorageProof::Full(children),
+					}
+				});
+				StorageProof::Flatten(result)
+			},
+			StorageProofKind::Full => {
+				let mut result = ChildrenProofMap::default();
+				for (child_info, set) in collected.iter() {
+					let trie_nodes: Vec<Vec<u8>> = set
+						.iter()
+						.filter_map(|(_k, v)| v.as_ref().map(|v| v.to_vec()))
+						.collect();
+					result.insert(child_info.proof_info(), trie_nodes);
+				}
+				StorageProof::Full(result)
+			},
+			StorageProofKind::TrieSkipHashesFull => {
+				if let Input::ChildTrieRoots(roots) = input {
+					let mut result = ChildrenProofMap::default();
+					for (child_info, set) in collected.iter() {
+						let root = roots.get(&child_info.proof_info())
+							.and_then(|r| Decode::decode(&mut &r[..]).ok())
+							.ok_or_else(|| missing_pack_input::<H>())?;
+						let trie_nodes = crate::pack_proof_from_collected::<Layout<H>>(&root, set)?;
+						result.insert(child_info.proof_info(), trie_nodes);
+					}
+					StorageProof::TrieSkipHashesFull(result)
+				} else {
+					return Err(missing_pack_input::<H>());
 				}
 			},
-			s => s,
+			StorageProofKind::TrieSkipHashes => {
+				if let Input::ChildTrieRoots(roots) = input {
+					let mut result = Vec::default();
+					for (child_info, set) in collected.iter() {
+						let root = roots.get(&child_info.proof_info())
+							.and_then(|r| Decode::decode(&mut &r[..]).ok())
+							.ok_or_else(|| missing_pack_input::<H>())?;
+						let trie_nodes = crate::pack_proof_from_collected::<Layout<H>>(&root, set)?;
+						result.push(trie_nodes);
+					}
+					StorageProof::TrieSkipHashes(result)
+				} else {
+					return Err(missing_pack_input::<H>());
+				}
+			},
+			StorageProofKind::KnownQueryPlanAndValues
+			| StorageProofKind::KnownQueryPlan => {
+				unimplemented!("TODO pack query plan mode")
+			},
+		})
+	}
+
+	/// This produce the proof from collected information on a flat backend.
+	pub fn extract_proof_from_flat<H: Hasher>(
+		collected: &RecordMapTrieNodes<H>,
+		kind: StorageProofKind,
+		_input: &Input,
+	) -> Result<Self, H>
+		where H::Out: Codec,
+	{
+		Ok(match kind {
+			StorageProofKind::Flatten => {
+				let trie_nodes = collected
+					.iter()
+					.filter_map(|(_k, v)| v.as_ref().map(|v| v.to_vec()))
+					.collect();
+				StorageProof::Flatten(trie_nodes)
+			},
+			_ => return Err(impossible_backend_build::<H>()),
 		})
 	}
 
@@ -614,10 +672,10 @@ impl StorageProof {
 			// unpack
 			match &proof {
 				&StorageProof::TrieSkipHashesFull(..) => {
-					proof = proof.unpack::<H>(false)?.0;
+					proof = proof.unpack::<H>()?;
 				},
 				&StorageProof::TrieSkipHashes(..) => {
-					proof = proof.unpack::<H>(false)?.0;
+					proof = proof.unpack::<H>()?;
 				},
 				&StorageProof::KnownQueryPlanAndValues(..)
 					| &StorageProof::KnownQueryPlan(..) => {
@@ -850,6 +908,42 @@ impl<T> IntoIterator for ChildrenProofMap<T> {
 
 	fn into_iter(self) -> Self::IntoIter {
 		self.0.into_iter()
+	}
+}
+
+
+/// Container recording trie nodes.
+#[derive(Clone)]
+pub struct RecordMapTrieNodes<H: Hasher>(HashMap<H::Out, Option<DBValue>>);
+
+impl<H: Hasher> sp_std::default::Default for RecordMapTrieNodes<H> {
+	fn default() -> Self {
+		RecordMapTrieNodes(Default::default())
+	}
+}
+
+
+impl<H: Hasher> sp_std::ops::Deref for RecordMapTrieNodes<H> {
+	type Target = HashMap<H::Out, Option<DBValue>>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+impl<H: Hasher> sp_std::ops::DerefMut for RecordMapTrieNodes<H> {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.0
+	}
+}
+
+impl<H: Hasher> HashDBRef<H, DBValue> for RecordMapTrieNodes<H> {
+	fn get(&self, key: &H::Out, _prefix: hash_db::Prefix) -> Option<DBValue> {
+		self.0.get(key).and_then(Clone::clone)
+	}
+
+	fn contains(&self, key: &H::Out, _prefix: hash_db::Prefix) -> bool {
+		self.0.get(key).map(Option::is_some).unwrap_or(false)
 	}
 }
 

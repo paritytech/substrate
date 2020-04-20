@@ -7729,6 +7729,7 @@ version = "2.0.0-alpha.6"
 dependencies = [
  "criterion 0.2.11",
  "hash-db",
+ "hashbrown",
  "hex-literal",
  "memory-db",
  "parity-scale-codec",

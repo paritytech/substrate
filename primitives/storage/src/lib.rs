@@ -420,13 +420,11 @@ impl ChildTrieParentKeyId {
 	}
 }
 
-#[cfg(feature = "std")]
 #[derive(Clone, PartialEq, Eq, Debug)]
 /// Type for storing a map of child trie related information.
 /// A few utilities methods are defined.
 pub struct ChildrenMap<T>(pub BTreeMap<ChildInfo, T>);
 
-#[cfg(feature = "std")]
 impl<T> sp_std::ops::Deref for ChildrenMap<T> {
 	type Target = BTreeMap<ChildInfo, T>;
 
@@ -435,21 +433,18 @@ impl<T> sp_std::ops::Deref for ChildrenMap<T> {
 	}
 }
 
-#[cfg(feature = "std")]
 impl<T> sp_std::ops::DerefMut for ChildrenMap<T> {
 	fn deref_mut(&mut self) -> &mut Self::Target {
 		&mut self.0
 	}
 }
 
-#[cfg(feature = "std")]
 impl<T> sp_std::default::Default for ChildrenMap<T> {
 	fn default() -> Self {
 		ChildrenMap(BTreeMap::new())
 	}
 }
 
-#[cfg(feature = "std")]
 impl<T> IntoIterator for ChildrenMap<T> {
 	type Item = (ChildInfo, T);
 	type IntoIter = sp_std::collections::btree_map::IntoIter<ChildInfo, T>;

@@ -24,13 +24,13 @@ use hash_db::{Hasher, HashDB, EMPTY_PREFIX, Prefix};
 use sp_trie::{
 	MemoryDB, empty_child_trie_root, read_trie_value_with, read_child_trie_value_with,
 	record_all_keys, StorageProofKind, StorageProof, ProofInputKind, ProofInput,
+	RecordMapTrieNodes,
 };
 pub use sp_trie::{Recorder, ChildrenProofMap};
 pub use sp_trie::trie_types::{Layout, TrieError};
 use crate::trie_backend::TrieBackend;
 use crate::trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
 use crate::{Error, ExecutionError, Backend};
-use std::collections::HashMap;
 use crate::DBValue;
 use sp_core::storage::{ChildInfo, ChildInfoProof, ChildrenMap};
 
@@ -120,9 +120,9 @@ pub enum ProofRecorder<H: Hasher> {
 	// root of each child is added to be able to pack.
 	/// Proof keep a separation between child trie content, this is usually useless,
 	/// but when we use proof compression we want this separation.
-	Full(Arc<RwLock<ChildrenMap<HashMap<<H as Hasher>::Out, Option<DBValue>>>>>),
+	Full(Arc<RwLock<ChildrenMap<RecordMapTrieNodes<H>>>>),
 	/// Single level of storage for all recoded nodes.
-	Flat(Arc<RwLock<HashMap<<H as Hasher>::Out, Option<DBValue>>>>),
+	Flat(Arc<RwLock<RecordMapTrieNodes<H>>>),
 }
 
 impl<H: Hasher> Default for ProofRecorder<H> {
@@ -184,7 +184,7 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 	}
 
 	/// Extracting the gathered unordered proof.
-	pub fn extract_proof(&self, kind: &StorageProofKind) -> Result<StorageProof, String> {
+	pub fn extract_proof(&self, kind: StorageProofKind) -> Result<StorageProof, String> {
 		let roots = match kind.processing_input_kind() {
 			ProofInputKind::ChildTrieRoots => {
 				self.0.extract_registered_roots()
@@ -202,46 +202,20 @@ impl<H: Hasher> ProofRecorder<H>
 	/// Extracting the gathered unordered proof.
 	pub fn extract_proof(
 		&self,
-		kind: &StorageProofKind,
+		kind: StorageProofKind,
 		input: ProofInput,
 	) -> Result<StorageProof, String> {
-		// TODO EMCH logic should be in sp_trie
 		Ok(match self {
-			ProofRecorder::Flat(rec) => {
-				let trie_nodes = rec
-					.read()
-					.iter()
-					.filter_map(|(_k, v)| v.as_ref().map(|v| v.to_vec()))
-					.collect();
-				match kind {
-					StorageProofKind::Flatten => StorageProof::Flatten(trie_nodes),
-					_ => return Err("Invalid proof kind for a flat proof record".to_string()),
-				}
-			},
-			ProofRecorder::Full(rec) => {
-				let mut children = ChildrenProofMap::default();
-				// TODO EMCH logic should be in sp_trie and not build the
-				// intermediate full proof (especially for flattened one).
-				for (child_info, set) in rec.read().iter() {
-					let trie_nodes: Vec<Vec<u8>> = set
-						.iter()
-						.filter_map(|(_k, v)| v.as_ref().map(|v| v.to_vec()))
-						.collect();
-					children.insert(child_info.proof_info(), trie_nodes);
-				}
-				let unpacked_full = StorageProof::Full(children);
-
-				match kind {
-					StorageProofKind::Flatten => unpacked_full.flatten(),
-					StorageProofKind::Full => unpacked_full,
-					StorageProofKind::KnownQueryPlanAndValues
-					| StorageProofKind::KnownQueryPlan
-					| StorageProofKind::TrieSkipHashesFull => unpacked_full.pack::<H>(&input)
-								.map_err(|e| format!("{}", e))?,
-					StorageProofKind::TrieSkipHashes => unpacked_full.pack::<H>(&input)
-								.map_err(|e| format!("{}", e))?.flatten(),
-				}
-			},
+			ProofRecorder::Flat(rec) => StorageProof::extract_proof_from_flat(
+				&*rec.read(),
+				kind,
+				&input,
+			).map_err(|e| format!("{}", e))?,
+			ProofRecorder::Full(rec) => StorageProof::extract_proof(
+				&*rec.read(),
+				kind,
+				&input,
+			).map_err(|e| format!("{}", e))?,
 		})
 	}
 }
@@ -442,13 +416,13 @@ mod tests {
 	fn proof_is_empty_until_value_is_read() {
 		let trie_backend = test_trie();
 		let kind = StorageProofKind::Flatten;
-		assert!(test_proving(&trie_backend, kind.need_register_full()).extract_proof(&kind).unwrap().is_empty());
+		assert!(test_proving(&trie_backend, kind.need_register_full()).extract_proof(kind).unwrap().is_empty());
 		let kind = StorageProofKind::Full;
-		assert!(test_proving(&trie_backend, kind.need_register_full()).extract_proof(&kind).unwrap().is_empty());
+		assert!(test_proving(&trie_backend, kind.need_register_full()).extract_proof(kind).unwrap().is_empty());
 		let kind = StorageProofKind::TrieSkipHashesFull;
-		assert!(test_proving(&trie_backend, kind.need_register_full()).extract_proof(&kind).unwrap().is_empty());
+		assert!(test_proving(&trie_backend, kind.need_register_full()).extract_proof(kind).unwrap().is_empty());
 		let kind = StorageProofKind::TrieSkipHashes;
-		assert!(test_proving(&trie_backend, kind.need_register_full()).extract_proof(&kind).unwrap().is_empty());
+		assert!(test_proving(&trie_backend, kind.need_register_full()).extract_proof(kind).unwrap().is_empty());
 	}
 
 	#[test]
@@ -457,11 +431,11 @@ mod tests {
 		let kind = StorageProofKind::Flatten;
 		let backend = test_proving(&trie_backend, kind.need_register_full());
 		assert_eq!(backend.storage(b"key").unwrap(), Some(b"value".to_vec()));
-		assert!(!backend.extract_proof(&kind).unwrap().is_empty());
+		assert!(!backend.extract_proof(kind).unwrap().is_empty());
 		let kind = StorageProofKind::Full;
 		let backend = test_proving(&trie_backend, kind.need_register_full());
 		assert_eq!(backend.storage(b"key").unwrap(), Some(b"value".to_vec()));
-		assert!(!backend.extract_proof(&kind).unwrap().is_empty());
+		assert!(!backend.extract_proof(kind).unwrap().is_empty());
 	}
 
 	#[test]
@@ -508,7 +482,7 @@ mod tests {
 			let proving = ProvingBackend::new(trie, kind.need_register_full());
 			assert_eq!(proving.storage(&[42]).unwrap().unwrap(), vec![42]);
 
-			let proof = proving.extract_proof(&kind).unwrap();
+			let proof = proving.extract_proof(kind).unwrap();
 
 			let proof_check = create_proof_check_backend::<BlakeTwo256>(in_memory_root.into(), proof).unwrap();
 			assert_eq!(proof_check.storage(&[42]).unwrap().unwrap(), vec![42]);
@@ -564,7 +538,7 @@ mod tests {
 			let proving = ProvingBackend::new(trie, full);
 			assert_eq!(proving.storage(&[42]).unwrap().unwrap(), vec![42]);
 
-			let proof = proving.extract_proof(&kind).unwrap();
+			let proof = proving.extract_proof(kind).unwrap();
 
 			let proof_check = create_proof_check_backend::<BlakeTwo256>(
 				in_memory_root.into(),
@@ -579,7 +553,7 @@ mod tests {
 			let proving = ProvingBackend::new(trie, full);
 			assert_eq!(proving.child_storage(child_info_1, &[64]), Ok(Some(vec![64])));
 
-			let proof = proving.extract_proof(&kind).unwrap();
+			let proof = proving.extract_proof(kind).unwrap();
 			if kind.use_full_partial_db().unwrap() {
 				let proof_check = create_proof_check_backend::<BlakeTwo256>(
 					in_memory_root.into(),

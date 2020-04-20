@@ -38,7 +38,7 @@ pub use trie_stream::TrieStream;
 pub use node_codec::NodeCodec;
 pub use storage_proof::{StorageProof, LegacyStorageProof, ChildrenProofMap,
 	StorageProofKind, Input as ProofInput, InputKind as ProofInputKind, Output as ProofOutput,
-	OutputKind as ProofOutputKind};
+	OutputKind as ProofOutputKind, RecordMapTrieNodes};
 /// Various re-exports from the `trie-db` crate.
 pub use trie_db::{
 	Trie, TrieMut, DBValue, Recorder, CError, Query, TrieLayout, TrieConfiguration,
@@ -318,14 +318,12 @@ pub fn record_all_keys<L: TrieConfiguration, DB>(
 	Ok(())
 }
 
-/// Pack proof.
-fn pack_proof<L: TrieConfiguration>(root: &TrieHash<L>, input: &[Vec<u8>])
-	-> Result<Vec<Vec<u8>>, Box<TrieError<L>>> {
-	let mut memory_db = MemoryDB::<<L as TrieLayout>::Hash>::default();
-	for i in input.as_ref() {
-		memory_db.insert(EMPTY_PREFIX, i.as_ref());
-	}
-	let trie = TrieDB::<L>::new(&memory_db, root)?;
+/// Pack proof from memdb.
+fn pack_proof_from_collected<L: TrieConfiguration>(
+	root: &TrieHash<L>,
+	input: &dyn hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
+) -> Result<Vec<Vec<u8>>, Box<TrieError<L>>> {
+	let trie = TrieDB::<L>::new(input, root)?;
 	trie_db::encode_compact(&trie)
 }
 
