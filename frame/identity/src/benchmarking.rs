@@ -40,7 +40,7 @@ fn account<T: Trait>(name: &'static str, index: u32) -> T::AccountId {
 fn add_registrars<T: Trait>(r: u32) -> Result<(), &'static str> {
 	for i in 0..r {
 		let _ = T::Currency::make_free_balance_be(&account::<T>("registrar", i), BalanceOf::<T>::max_value());
-		Identity::<T>::add_registrar(RawOrigin::Root.into(), account::<T>("registrar", i))?;
+		Identity::<T>::add_registrar(RawOrigin::Root.into(), account::<T>("registrar", i), i)?;
 		Identity::<T>::set_fee(RawOrigin::Signed(account::<T>("registrar", i)).into(), i.into(), 10.into())?;
 		let fields = IdentityFields(
 			IdentityField::Display | IdentityField::Legal | IdentityField::Web | IdentityField::Riot
@@ -54,8 +54,8 @@ fn add_registrars<T: Trait>(r: u32) -> Result<(), &'static str> {
 }
 
 // Adds `s` sub-accounts to the identity of `who`. Each wil have 32 bytes of raw data added to it.
-// This additionally returns the vector of sub-accounts to it can be modified if needed.
-fn add_sub_accounts<T: Trait>(who: &T::AccountId, s: u32) -> Result<Vec<(T::AccountId, Data)>, &'static str> {
+// This additionally returns the vector of sub-accounts so it can be modified if needed.
+fn add_sub_accounts<T: Trait>(who: &T::AccountId, s: u32, old_subs_count: u32) -> Result<Vec<(T::AccountId, Data)>, &'static str> {
 	let mut subs = Vec::new();
 	let who_origin = RawOrigin::Signed(who.clone());
 	let data = Data::Raw(vec![0; 32]);
@@ -70,7 +70,7 @@ fn add_sub_accounts<T: Trait>(who: &T::AccountId, s: u32) -> Result<Vec<(T::Acco
 	let info = create_identity_info::<T>(1);
 	Identity::<T>::set_identity(who_origin.clone().into(), info)?;
 
-	Identity::<T>::set_subs(who_origin.into(), subs.clone())?;
+	Identity::<T>::set_subs(who_origin.into(), subs.clone(), old_subs_count)?;
 
 	return Ok(subs)
 }
@@ -102,7 +102,7 @@ benchmarks! {
 		let s in 1 .. T::MaxSubAccounts::get() => {
 			// Give them s many sub accounts
 			let caller = account::<T>("caller", 0);
-			let _ = add_sub_accounts::<T>(&caller, s)?;
+			let _ = add_sub_accounts::<T>(&caller, s, s - 1)?;
 		};
 		let x in 1 .. T::MaxAdditionalFields::get() => {
 			// Create their main identity with x additional fields
@@ -115,7 +115,7 @@ benchmarks! {
 
 	add_registrar {
 		let r in ...;
-	}: _(RawOrigin::Root, account::<T>("registrar", r + 1))
+	}: _(RawOrigin::Root, account::<T>("registrar", r + 1), r)
 
 	set_identity {
 		let r in ...;
@@ -147,7 +147,7 @@ benchmarks! {
 		};
 	}: _(
 		RawOrigin::Signed(caller),
-		create_identity_info::<T>(x)
+		create_identity_info::<T>(x),
 	)
 
 	set_subs {
@@ -155,7 +155,7 @@ benchmarks! {
 
 		// Give them s many sub accounts.
 		let s in 1 .. T::MaxSubAccounts::get() - 1 => {
-			let _ = add_sub_accounts::<T>(&caller, s)?;
+			let _ = add_sub_accounts::<T>(&caller, s, s - 1)?;
 		};
 
 		let mut subs = Module::<T>::subs(&caller);
@@ -164,7 +164,7 @@ benchmarks! {
 		let data = Data::Raw(vec![0; 32]);
 		subs.push((account::<T>("sub", s + 1), data));
 
-	}: _(RawOrigin::Signed(caller), subs)
+	}: _(RawOrigin::Signed(caller), subs, subs.len() as u32 - 1)
 
 	clear_identity {
 		let caller = account::<T>("caller", 0);
@@ -212,7 +212,7 @@ benchmarks! {
 
 		let r in ...;
 
-		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone())?;
+		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone(), 0)?;
 	}: _(RawOrigin::Signed(caller), r, 10.into())
 
 	set_account_id {
@@ -221,7 +221,7 @@ benchmarks! {
 
 		let r in ...;
 
-		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone())?;
+		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone(), 0)?;
 	}: _(RawOrigin::Signed(caller), r, account::<T>("new", 0))
 
 	set_fields {
@@ -230,7 +230,7 @@ benchmarks! {
 
 		let r in ...;
 
-		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone())?;
+		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone(), 0)?;
 		let fields = IdentityFields(
 			IdentityField::Display | IdentityField::Legal | IdentityField::Web | IdentityField::Riot
 			| IdentityField::Email | IdentityField::PgpFingerprint | IdentityField::Image | IdentityField::Twitter
@@ -254,7 +254,7 @@ benchmarks! {
 			Identity::<T>::set_identity(user_origin.clone(), info)?;
 		};
 
-		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone())?;
+		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone(), 0)?;
 		Identity::<T>::request_judgement(user_origin.clone(), r, 10.into())?;
 	}: _(RawOrigin::Signed(caller), r, user_lookup, Judgement::Reasonable)
 
