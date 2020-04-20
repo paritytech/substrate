@@ -787,8 +787,12 @@ pub trait TestNetFactory: Sized {
 		self.mut_peers(|peers| {
 			for peer in peers {
 				trace!(target: "sync", "-- Polling {}", peer.id());
-				if let Poll::Ready(res) = Pin::new(&mut peer.network).poll(cx) {
-					res.unwrap();
+				loop {
+					let net_poll_future = peer.network.next_action();
+					futures::pin_mut!(net_poll_future);
+					if let Poll::Pending = net_poll_future.poll(cx) {
+						break;
+					}
 				}
 				trace!(target: "sync", "-- Polling complete {}", peer.id());
 

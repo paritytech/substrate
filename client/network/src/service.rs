@@ -49,7 +49,6 @@ use prometheus_endpoint::{
 	register, Counter, CounterVec, Gauge, GaugeVec, HistogramOpts, HistogramVec, Opts, PrometheusError, Registry, U64,
 };
 use sc_peerset::PeersetHandle;
-use sp_consensus::import_queue::{BlockImportError, BlockImportResult, ImportQueue, Link};
 use sp_runtime::{
 	traits::{Block as BlockT, NumberFor},
 	ConsensusEngineId,
@@ -58,7 +57,7 @@ use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnbound
 use std::{
 	borrow::Cow,
 	collections::{HashMap, HashSet},
-	fs, io,
+	fs,
 	marker::PhantomData,
 	pin::Pin,
 	str,
@@ -66,9 +65,9 @@ use std::{
 		atomic::{AtomicBool, AtomicUsize, Ordering},
 		Arc,
 	},
-	task::Poll,
 };
 
+mod import_queue;
 mod out_events;
 #[cfg(test)]
 mod tests;
@@ -182,7 +181,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 	/// for the network processing to advance. From it, you can extract a `NetworkService` using
 	/// `worker.service()`. The `NetworkService` can be shared through the codebase.
 	pub fn new(params: Params<B, H>) -> Result<NetworkWorker<B, H>, Error> {
-		let (to_worker, from_worker) = tracing_unbounded("mpsc_network_worker");
+		let (to_worker, from_service) = tracing_unbounded("mpsc_network_worker");
 
 		if let Some(path) = params.network_config.net_config_path {
 			fs::create_dir_all(&path)?;
@@ -400,8 +399,8 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			is_major_syncing,
 			network_service: swarm,
 			service,
-			import_queue: params.import_queue,
-			from_worker,
+			import_queue: From::from(params.import_queue),
+			from_service,
 			light_client_rqs: params.on_demand.and_then(|od| od.extract_receiver()),
 			event_streams: out_events::OutChannels::new(params.metrics_registry.as_ref())?,
 			metrics,
@@ -858,9 +857,9 @@ pub struct NetworkWorker<B: BlockT + 'static, H: ExHashT> {
 	/// The *actual* network.
 	network_service: Swarm<B, H>,
 	/// The import queue that was passed as initialization.
-	import_queue: Box<dyn ImportQueue<B>>,
+	import_queue: import_queue::SmartImportQueue<B>,
 	/// Messages from the `NetworkService` and that must be processed.
-	from_worker: TracingUnboundedReceiver<ServiceToWorkerMsg<B, H>>,
+	from_service: TracingUnboundedReceiver<ServiceToWorkerMsg<B, H>>,
 	/// Receiver for queries from the light client that must be processed.
 	light_client_rqs: Option<TracingUnboundedReceiver<light_client_handler::Request<B>>>,
 	/// Senders for events that happen on the network.
@@ -1071,280 +1070,312 @@ impl Metrics {
 	}
 }
 
-impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
-	type Output = Result<(), io::Error>;
-
-	fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context) -> Poll<Self::Output> {
-		let this = &mut *self;
-
-		// Poll the import queue for actions to perform.
-		this.import_queue.poll_actions(cx, &mut NetworkLink {
-			protocol: &mut this.network_service,
-		});
-
+impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
+	/// Performs one action on the network, then returns.
+	pub async fn next_action(&mut self) {
 		// Check for new incoming light client requests.
-		if let Some(light_client_rqs) = this.light_client_rqs.as_mut() {
-			while let Poll::Ready(Some(rq)) = light_client_rqs.poll_next_unpin(cx) {
-				// This can error if there are too many queued requests already.
-				if this.network_service.light_client_request(rq).is_err() {
-					log::warn!("Couldn't start light client request: too many pending requests");
+		let next_light_client_rq = if let Some(light_client_rqs) = self.light_client_rqs.as_mut() {
+			light_client_rqs.next().left_future()
+		} else {
+			future::pending().right_future()
+		};
+
+		// Next message from the service, or an "infinite loop" if the service is closed.
+		let next_worker_msg = {
+			let from_service = &mut self.from_service;
+			async move {
+				if let Some(msg) = from_service.next().await {
+					msg
+				} else {
+					loop {
+						futures::pending!()
+					}
 				}
-				if let Some(metrics) = this.metrics.as_ref() {
-					metrics.issued_light_requests.inc();
+			}
+		};
+
+		futures::select!{
+			msg = next_worker_msg.fuse() => {
+				match msg {
+					ServiceToWorkerMsg::AnnounceBlock(hash, data) =>
+						self.network_service.user_protocol_mut().announce_block(hash, data),
+					ServiceToWorkerMsg::RequestJustification(hash, number) =>
+						self.network_service.user_protocol_mut().request_justification(&hash, number),
+					ServiceToWorkerMsg::PropagateExtrinsic(hash) =>
+						self.network_service.user_protocol_mut().propagate_extrinsic(&hash),
+					ServiceToWorkerMsg::PropagateExtrinsics =>
+						self.network_service.user_protocol_mut().propagate_extrinsics(),
+					ServiceToWorkerMsg::GetValue(key) =>
+						self.network_service.get_value(&key),
+					ServiceToWorkerMsg::PutValue(key, value) =>
+						self.network_service.put_value(key, value),
+					ServiceToWorkerMsg::AddKnownAddress(peer_id, addr) =>
+						self.network_service.add_known_address(peer_id, addr),
+					ServiceToWorkerMsg::SyncFork(peer_ids, hash, number) =>
+						self.network_service.user_protocol_mut().set_sync_fork_request(peer_ids, &hash, number),
+					ServiceToWorkerMsg::EventStream(sender) =>
+						self.event_streams.push(sender),
+					ServiceToWorkerMsg::WriteNotification { message, engine_id, target } => {
+						if let Some(metrics) = self.metrics.as_ref() {
+							metrics.notifications_sizes
+								.with_label_values(&["out", &maybe_utf8_bytes_to_string(&engine_id)])
+								.observe(message.len() as f64);
+						}
+						self.network_service.user_protocol_mut().write_notification(target, engine_id, message)
+					},
+					ServiceToWorkerMsg::RegisterNotifProtocol { engine_id, protocol_name } => {
+						self.network_service
+							.register_notifications_protocol(engine_id, protocol_name);
+					},
+					ServiceToWorkerMsg::DisconnectPeer(who) =>
+						self.network_service.user_protocol_mut().disconnect_peer(&who),
 				}
+			},
+
+			action = self.import_queue.next_action().fuse() => {
+				match action {
+					import_queue::ImportQueueAction::BlocksProcessed { imported, count, results } => {
+						self.network_service.user_protocol_mut().blocks_processed(imported, count, results)
+					}
+					import_queue::ImportQueueAction::JustificationImported { who, hash, number, success } => {
+						self.network_service.user_protocol_mut().justification_import_result(hash.clone(), number, success);
+						if !success {
+							info!("💔 Invalid justification provided by {} for #{}", who, hash);
+							self.network_service.user_protocol_mut().disconnect_peer(&who);
+							self.network_service.user_protocol_mut().report_peer(who, ReputationChange::new_fatal("Invalid justification"));
+						}
+					}
+					import_queue::ImportQueueAction::RequestJustification { hash, number } => {
+						self.network_service.user_protocol_mut().request_justification(&hash, number)
+					}
+					import_queue::ImportQueueAction::RequestFinalityProof { hash, number } => {
+						self.network_service.user_protocol_mut().request_finality_proof(&hash, number)
+					}
+					import_queue::ImportQueueAction::FinalityProofImported { who, request_block, finalization_result } => {
+						let success = finalization_result.is_ok();
+						self.network_service.user_protocol_mut().finality_proof_import_result(request_block, finalization_result);
+						if !success {
+							info!("💔 Invalid finality proof provided by {} for #{}", who, request_block.0);
+							self.network_service.user_protocol_mut().disconnect_peer(&who);
+							self.network_service.user_protocol_mut().report_peer(who, ReputationChange::new_fatal("Invalid finality proof"));
+						}
+					}
+				}
+			},
+
+			rq = next_light_client_rq.fuse() => {
+				if let Some(rq) = rq {
+					// This can error if there are too many queued requests already.
+					if self.network_service.light_client_request(rq).is_err() {
+						log::warn!("Couldn't start light client request: too many pending requests");
+					}
+					if let Some(metrics) = self.metrics.as_ref() {
+						metrics.issued_light_requests.inc();
+					}
+				}
+			}
+
+			next_event = self.network_service.next_event().fuse() => {
+				match next_event {
+					SwarmEvent::Behaviour(BehaviourOut::BlockImport(origin, blocks)) => {
+						if let Some(metrics) = self.metrics.as_ref() {
+							metrics.import_queue_blocks_submitted.inc();
+						}
+						self.import_queue.import_blocks(origin, blocks);
+					},
+					SwarmEvent::Behaviour(BehaviourOut::JustificationImport(origin, hash, nb, justification)) => {
+						if let Some(metrics) = self.metrics.as_ref() {
+							metrics.import_queue_justifications_submitted.inc();
+						}
+						self.import_queue.import_justification(origin, hash, nb, justification);
+					},
+					SwarmEvent::Behaviour(BehaviourOut::FinalityProofImport(origin, hash, nb, proof)) => {
+						if let Some(metrics) = self.metrics.as_ref() {
+							metrics.import_queue_finality_proofs_submitted.inc();
+						}
+						self.import_queue.import_finality_proof(origin, hash, nb, proof);
+					},
+					SwarmEvent::Behaviour(BehaviourOut::RandomKademliaStarted(protocol)) => {
+						if let Some(metrics) = self.metrics.as_ref() {
+							metrics.kademlia_random_queries_total
+								.with_label_values(&[&maybe_utf8_bytes_to_string(protocol.as_bytes())])
+								.inc();
+						}
+					},
+					SwarmEvent::Behaviour(BehaviourOut::Event(ev)) => {
+						if let Some(metrics) = self.metrics.as_ref() {
+							metrics.update_with_network_event(&ev);
+						}
+						self.event_streams.send(ev);
+					},
+					SwarmEvent::ConnectionEstablished { peer_id, endpoint, .. } => {
+						trace!(target: "sub-libp2p", "Libp2p => Connected({:?})", peer_id);
+						if let Some(metrics) = self.metrics.as_ref() {
+							match endpoint {
+								ConnectedPoint::Dialer { .. } =>
+									metrics.connections_opened_total.with_label_values(&["out"]).inc(),
+								ConnectedPoint::Listener { .. } =>
+									metrics.connections_opened_total.with_label_values(&["in"]).inc(),
+							}
+						}
+					},
+					SwarmEvent::ConnectionClosed { peer_id, cause, endpoint, .. } => {
+						trace!(target: "sub-libp2p", "Libp2p => Disconnected({:?}, {:?})", peer_id, cause);
+						if let Some(metrics) = self.metrics.as_ref() {
+							let dir = match endpoint {
+								ConnectedPoint::Dialer { .. } => "out",
+								ConnectedPoint::Listener { .. } => "in",
+							};
+
+							match cause {
+								ConnectionError::IO(_) =>
+									metrics.connections_closed_total.with_label_values(&[dir, "transport-error"]).inc(),
+								ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
+									EitherError::A(EitherError::B(EitherError::A(PingFailure::Timeout))))))) =>
+									metrics.connections_closed_total.with_label_values(&[dir, "ping-timeout"]).inc(),
+								ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
+									EitherError::A(EitherError::A(EitherError::B(LegacyConnectionKillError))))))) =>
+									metrics.connections_closed_total.with_label_values(&[dir, "force-closed"]).inc(),
+								ConnectionError::Handler(NodeHandlerWrapperError::Handler(_)) =>
+									metrics.connections_closed_total.with_label_values(&[dir, "protocol-error"]).inc(),
+								ConnectionError::Handler(NodeHandlerWrapperError::KeepAliveTimeout) =>
+									metrics.connections_closed_total.with_label_values(&[dir, "keep-alive-timeout"]).inc(),
+							}
+						}
+					},
+					SwarmEvent::NewListenAddr(addr) => {
+						trace!(target: "sub-libp2p", "Libp2p => NewListenAddr({})", addr);
+						if let Some(metrics) = self.metrics.as_ref() {
+							metrics.listeners_local_addresses.inc();
+						}
+					},
+					SwarmEvent::ExpiredListenAddr(addr) => {
+						trace!(target: "sub-libp2p", "Libp2p => ExpiredListenAddr({})", addr);
+						if let Some(metrics) = self.metrics.as_ref() {
+							metrics.listeners_local_addresses.dec();
+						}
+					},
+					SwarmEvent::UnreachableAddr { peer_id, address, error, .. } => {
+						trace!(
+							target: "sub-libp2p", "Libp2p => Failed to reach {:?} through {:?}: {}",
+							peer_id,
+							address,
+							error,
+						);
+
+						if self.boot_node_ids.contains(&peer_id) {
+							if let PendingConnectionError::InvalidPeerId = error {
+								error!(
+									"💔 Invalid peer ID from bootnode, expected `{}` at address `{}`.",
+									peer_id,
+									address,
+								);
+							}
+						}
+
+						if let Some(metrics) = self.metrics.as_ref() {
+							match error {
+								PendingConnectionError::ConnectionLimit(_) =>
+									metrics.pending_connections_errors_total
+										.with_label_values(&["limit-reached"]).inc(),
+								PendingConnectionError::InvalidPeerId =>
+									metrics.pending_connections_errors_total
+										.with_label_values(&["invalid-peer-id"]).inc(),
+								PendingConnectionError::Transport(_) | PendingConnectionError::IO(_) =>
+									metrics.pending_connections_errors_total
+										.with_label_values(&["transport-error"]).inc(),
+							}
+						}
+					}
+					SwarmEvent::Dialing(peer_id) =>
+						trace!(target: "sub-libp2p", "Libp2p => Dialing({:?})", peer_id),
+					SwarmEvent::IncomingConnection { local_addr, send_back_addr } => {
+						trace!(target: "sub-libp2p", "Libp2p => IncomingConnection({},{}))",
+							local_addr, send_back_addr);
+						if let Some(metrics) = self.metrics.as_ref() {
+							metrics.incoming_connections_total.inc();
+						}
+					},
+					SwarmEvent::IncomingConnectionError { local_addr, send_back_addr, error } => {
+						trace!(target: "sub-libp2p", "Libp2p => IncomingConnectionError({},{}): {}",
+							local_addr, send_back_addr, error);
+						if let Some(metrics) = self.metrics.as_ref() {
+							let reason = match error {
+								PendingConnectionError::ConnectionLimit(_) => "limit-reached",
+								PendingConnectionError::InvalidPeerId => "invalid-peer-id",
+								PendingConnectionError::Transport(_) |
+								PendingConnectionError::IO(_) => "transport-error",
+							};
+
+							metrics.incoming_connections_errors_total.with_label_values(&[reason]).inc();
+						}
+					},
+					SwarmEvent::BannedPeer { peer_id, endpoint } => {
+						trace!(target: "sub-libp2p", "Libp2p => BannedPeer({}). Connected via {:?}.",
+							peer_id, endpoint);
+						if let Some(metrics) = self.metrics.as_ref() {
+							metrics.incoming_connections_errors_total.with_label_values(&["banned"]).inc();
+						}
+					},
+					SwarmEvent::UnknownPeerUnreachableAddr { address, error } =>
+						trace!(target: "sub-libp2p", "Libp2p => UnknownPeerUnreachableAddr({}): {}",
+							address, error),
+					SwarmEvent::ListenerClosed { reason, addresses } => {
+						warn!(target: "sub-libp2p", "Libp2p => ListenerClosed: {:?}", reason);
+						if let Some(metrics) = self.metrics.as_ref() {
+							metrics.listeners_local_addresses.sub(addresses.len() as u64);
+						}
+					},
+					SwarmEvent::ListenerError { error } => {
+						trace!(target: "sub-libp2p", "Libp2p => ListenerError: {}", error);
+						if let Some(metrics) = self.metrics.as_ref() {
+							metrics.listeners_errors_total.inc();
+						}
+					},
+				};
 			}
 		}
 
-		loop {
-			// Process the next message coming from the `NetworkService`.
-			let msg = match this.from_worker.poll_next_unpin(cx) {
-				Poll::Ready(Some(msg)) => msg,
-				Poll::Ready(None) => return Poll::Ready(Ok(())),
-				Poll::Pending => break,
-			};
-
-			match msg {
-				ServiceToWorkerMsg::AnnounceBlock(hash, data) =>
-					this.network_service.user_protocol_mut().announce_block(hash, data),
-				ServiceToWorkerMsg::RequestJustification(hash, number) =>
-					this.network_service.user_protocol_mut().request_justification(&hash, number),
-				ServiceToWorkerMsg::PropagateExtrinsic(hash) =>
-					this.network_service.user_protocol_mut().propagate_extrinsic(&hash),
-				ServiceToWorkerMsg::PropagateExtrinsics =>
-					this.network_service.user_protocol_mut().propagate_extrinsics(),
-				ServiceToWorkerMsg::GetValue(key) =>
-					this.network_service.get_value(&key),
-				ServiceToWorkerMsg::PutValue(key, value) =>
-					this.network_service.put_value(key, value),
-				ServiceToWorkerMsg::AddKnownAddress(peer_id, addr) =>
-					this.network_service.add_known_address(peer_id, addr),
-				ServiceToWorkerMsg::SyncFork(peer_ids, hash, number) =>
-					this.network_service.user_protocol_mut().set_sync_fork_request(peer_ids, &hash, number),
-				ServiceToWorkerMsg::EventStream(sender) =>
-					this.event_streams.push(sender),
-				ServiceToWorkerMsg::WriteNotification { message, engine_id, target } => {
-					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.notifications_sizes
-							.with_label_values(&["out", &maybe_utf8_bytes_to_string(&engine_id)])
-							.observe(message.len() as f64);
-					}
-					this.network_service.user_protocol_mut().write_notification(target, engine_id, message)
-				},
-				ServiceToWorkerMsg::RegisterNotifProtocol { engine_id, protocol_name } => {
-					this.network_service
-						.register_notifications_protocol(engine_id, protocol_name);
-				},
-				ServiceToWorkerMsg::DisconnectPeer(who) =>
-					this.network_service.user_protocol_mut().disconnect_peer(&who),
-			}
-		}
-
-		loop {
-			// Process the next action coming from the network.
-			let next_event = this.network_service.next_event();
-			futures::pin_mut!(next_event);
-			let poll_value = next_event.poll_unpin(cx);
-
-			match poll_value {
-				Poll::Pending => break,
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::BlockImport(origin, blocks))) => {
-					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.import_queue_blocks_submitted.inc();
-					}
-					this.import_queue.import_blocks(origin, blocks);
-				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::JustificationImport(origin, hash, nb, justification))) => {
-					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.import_queue_justifications_submitted.inc();
-					}
-					this.import_queue.import_justification(origin, hash, nb, justification);
-				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::FinalityProofImport(origin, hash, nb, proof))) => {
-					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.import_queue_finality_proofs_submitted.inc();
-					}
-					this.import_queue.import_finality_proof(origin, hash, nb, proof);
-				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RandomKademliaStarted(protocol))) => {
-					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.kademlia_random_queries_total
-							.with_label_values(&[&maybe_utf8_bytes_to_string(protocol.as_bytes())])
-							.inc();
-					}
-				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::Event(ev))) => {
-					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.update_with_network_event(&ev);
-					}
-					this.event_streams.send(ev);
-				},
-				Poll::Ready(SwarmEvent::ConnectionEstablished { peer_id, endpoint, .. }) => {
-					trace!(target: "sub-libp2p", "Libp2p => Connected({:?})", peer_id);
-					if let Some(metrics) = this.metrics.as_ref() {
-						match endpoint {
-							ConnectedPoint::Dialer { .. } =>
-								metrics.connections_opened_total.with_label_values(&["out"]).inc(),
-							ConnectedPoint::Listener { .. } =>
-								metrics.connections_opened_total.with_label_values(&["in"]).inc(),
-						}
-					}
-				},
-				Poll::Ready(SwarmEvent::ConnectionClosed { peer_id, cause, endpoint, .. }) => {
-					trace!(target: "sub-libp2p", "Libp2p => Disconnected({:?}, {:?})", peer_id, cause);
-					if let Some(metrics) = this.metrics.as_ref() {
-						let dir = match endpoint {
-							ConnectedPoint::Dialer { .. } => "out",
-							ConnectedPoint::Listener { .. } => "in",
-						};
-
-						match cause {
-							ConnectionError::IO(_) =>
-								metrics.connections_closed_total.with_label_values(&[dir, "transport-error"]).inc(),
-							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::B(EitherError::A(PingFailure::Timeout))))))) =>
-								metrics.connections_closed_total.with_label_values(&[dir, "ping-timeout"]).inc(),
-							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::A(EitherError::B(LegacyConnectionKillError))))))) =>
-								metrics.connections_closed_total.with_label_values(&[dir, "force-closed"]).inc(),
-							ConnectionError::Handler(NodeHandlerWrapperError::Handler(_)) =>
-								metrics.connections_closed_total.with_label_values(&[dir, "protocol-error"]).inc(),
-							ConnectionError::Handler(NodeHandlerWrapperError::KeepAliveTimeout) =>
-								metrics.connections_closed_total.with_label_values(&[dir, "keep-alive-timeout"]).inc(),
-						}
-					}
-				},
-				Poll::Ready(SwarmEvent::NewListenAddr(addr)) => {
-					trace!(target: "sub-libp2p", "Libp2p => NewListenAddr({})", addr);
-					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.listeners_local_addresses.inc();
-					}
-				},
-				Poll::Ready(SwarmEvent::ExpiredListenAddr(addr)) => {
-					trace!(target: "sub-libp2p", "Libp2p => ExpiredListenAddr({})", addr);
-					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.listeners_local_addresses.dec();
-					}
-				},
-				Poll::Ready(SwarmEvent::UnreachableAddr { peer_id, address, error, .. }) => {
-					trace!(
-						target: "sub-libp2p", "Libp2p => Failed to reach {:?} through {:?}: {}",
-						peer_id,
-						address,
-						error,
-					);
-
-					if this.boot_node_ids.contains(&peer_id) {
-						if let PendingConnectionError::InvalidPeerId = error {
-							error!(
-								"💔 Invalid peer ID from bootnode, expected `{}` at address `{}`.",
-								peer_id,
-								address,
-							);
-						}
-					}
-
-					if let Some(metrics) = this.metrics.as_ref() {
-						match error {
-							PendingConnectionError::ConnectionLimit(_) =>
-								metrics.pending_connections_errors_total.with_label_values(&["limit-reached"]).inc(),
-							PendingConnectionError::InvalidPeerId =>
-								metrics.pending_connections_errors_total.with_label_values(&["invalid-peer-id"]).inc(),
-							PendingConnectionError::Transport(_) | PendingConnectionError::IO(_) =>
-								metrics.pending_connections_errors_total.with_label_values(&["transport-error"]).inc(),
-						}
-					}
-				}
-				Poll::Ready(SwarmEvent::Dialing(peer_id)) =>
-					trace!(target: "sub-libp2p", "Libp2p => Dialing({:?})", peer_id),
-				Poll::Ready(SwarmEvent::IncomingConnection { local_addr, send_back_addr }) => {
-					trace!(target: "sub-libp2p", "Libp2p => IncomingConnection({},{}))",
-						local_addr, send_back_addr);
-					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.incoming_connections_total.inc();
-					}
-				},
-				Poll::Ready(SwarmEvent::IncomingConnectionError { local_addr, send_back_addr, error }) => {
-					trace!(target: "sub-libp2p", "Libp2p => IncomingConnectionError({},{}): {}",
-						local_addr, send_back_addr, error);
-					if let Some(metrics) = this.metrics.as_ref() {
-						let reason = match error {
-							PendingConnectionError::ConnectionLimit(_) => "limit-reached",
-							PendingConnectionError::InvalidPeerId => "invalid-peer-id",
-							PendingConnectionError::Transport(_) |
-							PendingConnectionError::IO(_) => "transport-error",
-						};
-
-						metrics.incoming_connections_errors_total.with_label_values(&[reason]).inc();
-					}
-				},
-				Poll::Ready(SwarmEvent::BannedPeer { peer_id, endpoint }) => {
-					trace!(target: "sub-libp2p", "Libp2p => BannedPeer({}). Connected via {:?}.",
-						peer_id, endpoint);
-					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.incoming_connections_errors_total.with_label_values(&["banned"]).inc();
-					}
-				},
-				Poll::Ready(SwarmEvent::UnknownPeerUnreachableAddr { address, error }) =>
-					trace!(target: "sub-libp2p", "Libp2p => UnknownPeerUnreachableAddr({}): {}",
-						address, error),
-				Poll::Ready(SwarmEvent::ListenerClosed { reason, addresses }) => {
-					warn!(target: "sub-libp2p", "Libp2p => ListenerClosed: {:?}", reason);
-					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.listeners_local_addresses.sub(addresses.len() as u64);
-					}
-				},
-				Poll::Ready(SwarmEvent::ListenerError { error }) => {
-					trace!(target: "sub-libp2p", "Libp2p => ListenerError: {}", error);
-					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.listeners_errors_total.inc();
-					}
-				},
-			};
-		}
-
-		let num_connected_peers = this.network_service.user_protocol_mut().num_connected_peers();
+		let num_connected_peers = self.network_service.user_protocol_mut().num_connected_peers();
 
 		// Update the variables shared with the `NetworkService`.
-		this.num_connected.store(num_connected_peers, Ordering::Relaxed);
+		self.num_connected.store(num_connected_peers, Ordering::Relaxed);
 		{
-			let external_addresses = Swarm::<B, H>::external_addresses(&this.network_service).cloned().collect();
-			*this.external_addresses.lock() = external_addresses;
+			let external_addresses = Swarm::<B, H>::external_addresses(&self.network_service).cloned().collect();
+			*self.external_addresses.lock() = external_addresses;
 		}
 
-		let is_major_syncing = match this.network_service.user_protocol_mut().sync_state() {
+		let is_major_syncing = match self.network_service.user_protocol_mut().sync_state() {
 			SyncState::Idle => false,
 			SyncState::Downloading => true,
 		};
 
-		this.is_major_syncing.store(is_major_syncing, Ordering::Relaxed);
+		self.is_major_syncing.store(is_major_syncing, Ordering::Relaxed);
 
-		if let Some(metrics) = this.metrics.as_ref() {
-			metrics.network_per_sec_bytes.with_label_values(&["in"]).set(this.service.bandwidth.average_download_per_sec());
-			metrics.network_per_sec_bytes.with_label_values(&["out"]).set(this.service.bandwidth.average_upload_per_sec());
+		if let Some(metrics) = self.metrics.as_ref() {
+			metrics.network_per_sec_bytes.with_label_values(&["in"])
+				.set(self.service.bandwidth.average_download_per_sec());
+			metrics.network_per_sec_bytes.with_label_values(&["out"])
+				.set(self.service.bandwidth.average_upload_per_sec());
 			metrics.is_major_syncing.set(is_major_syncing as u64);
-			for (proto, num_entries) in this.network_service.num_kbuckets_entries() {
+			for (proto, num_entries) in self.network_service.num_kbuckets_entries() {
 				let proto = maybe_utf8_bytes_to_string(proto.as_bytes());
 				metrics.kbuckets_num_nodes.with_label_values(&[&proto]).set(num_entries as u64);
 			}
-			for (proto, num_entries) in this.network_service.num_kademlia_records() {
+			for (proto, num_entries) in self.network_service.num_kademlia_records() {
 				let proto = maybe_utf8_bytes_to_string(proto.as_bytes());
 				metrics.kademlia_records_count.with_label_values(&[&proto]).set(num_entries as u64);
 			}
-			for (proto, num_entries) in this.network_service.kademlia_records_total_size() {
+			for (proto, num_entries) in self.network_service.kademlia_records_total_size() {
 				let proto = maybe_utf8_bytes_to_string(proto.as_bytes());
 				metrics.kademlia_records_sizes_total.with_label_values(&[&proto]).set(num_entries as u64);
 			}
 			metrics.peers_count.set(num_connected_peers as u64);
-			metrics.peerset_num_discovered.set(this.network_service.user_protocol().num_discovered_peers() as u64);
-			metrics.peerset_num_requested.set(this.network_service.user_protocol().requested_peers().count() as u64);
-			metrics.pending_connections.set(Swarm::network_info(&this.network_service).num_connections_pending as u64);
+			metrics.peerset_num_discovered.set(self.network_service.user_protocol().num_discovered_peers() as u64);
+			metrics.peerset_num_requested.set(self.network_service.user_protocol().requested_peers().count() as u64);
+			metrics.pending_connections.set(Swarm::network_info(&self.network_service).num_connections_pending as u64);
 		}
-
-		Poll::Pending
 	}
-}
-
-impl<B: BlockT + 'static, H: ExHashT> Unpin for NetworkWorker<B, H> {
 }
 
 /// Turns bytes that are potentially UTF-8 into a reasonable representable string.
@@ -1360,47 +1391,3 @@ fn maybe_utf8_bytes_to_string(id: &[u8]) -> Cow<str> {
 
 /// The libp2p swarm, customized for our needs.
 type Swarm<B, H> = libp2p::swarm::Swarm<Behaviour<B, H>>;
-
-// Implementation of `import_queue::Link` trait using the available local variables.
-struct NetworkLink<'a, B: BlockT, H: ExHashT> {
-	protocol: &'a mut Swarm<B, H>,
-}
-
-impl<'a, B: BlockT, H: ExHashT> Link<B> for NetworkLink<'a, B, H> {
-	fn blocks_processed(
-		&mut self,
-		imported: usize,
-		count: usize,
-		results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>
-	) {
-		self.protocol.user_protocol_mut().blocks_processed(imported, count, results)
-	}
-	fn justification_imported(&mut self, who: PeerId, hash: &B::Hash, number: NumberFor<B>, success: bool) {
-		self.protocol.user_protocol_mut().justification_import_result(hash.clone(), number, success);
-		if !success {
-			info!("💔 Invalid justification provided by {} for #{}", who, hash);
-			self.protocol.user_protocol_mut().disconnect_peer(&who);
-			self.protocol.user_protocol_mut().report_peer(who, ReputationChange::new_fatal("Invalid justification"));
-		}
-	}
-	fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-		self.protocol.user_protocol_mut().request_justification(hash, number)
-	}
-	fn request_finality_proof(&mut self, hash: &B::Hash, number: NumberFor<B>) {
-		self.protocol.user_protocol_mut().request_finality_proof(hash, number)
-	}
-	fn finality_proof_imported(
-		&mut self,
-		who: PeerId,
-		request_block: (B::Hash, NumberFor<B>),
-		finalization_result: Result<(B::Hash, NumberFor<B>), ()>,
-	) {
-		let success = finalization_result.is_ok();
-		self.protocol.user_protocol_mut().finality_proof_import_result(request_block, finalization_result);
-		if !success {
-			info!("💔 Invalid finality proof provided by {} for #{}", who, request_block.0);
-			self.protocol.user_protocol_mut().disconnect_peer(&who);
-			self.protocol.user_protocol_mut().report_peer(who, ReputationChange::new_fatal("Invalid finality proof"));
-		}
-	}
-}

@@ -830,7 +830,7 @@ ServiceBuilder<
 		let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
 		let network_mut = sc_network::NetworkWorker::new(network_params)?;
 		let network = network_mut.service().clone();
-		let network_status_sinks = Arc::new(Mutex::new(status_sinks::StatusSinks::new()));
+		let network_status_sinks = Arc::new(status_sinks::StatusSinks::new());
 
 		let offchain_storage = backend.offchain_storage();
 		let offchain_workers = match (config.offchain_worker, offchain_storage.clone()) {
@@ -967,7 +967,7 @@ ServiceBuilder<
 		let transaction_pool_ = transaction_pool.clone();
 		let client_ = client.clone();
 		let (state_tx, state_rx) = tracing_unbounded::<(NetworkStatus<_>, NetworkState)>("mpsc_netstat1");
-		network_status_sinks.lock().push(std::time::Duration::from_millis(5000), state_tx);
+		network_status_sinks.push(std::time::Duration::from_millis(5000), state_tx);
 		let tel_task = state_rx.for_each(move |(net_status, _)| {
 			let info = client_.usage_info();
 			metrics_service.tick(
@@ -985,7 +985,7 @@ ServiceBuilder<
 
 		// Periodically send the network state to the telemetry.
 		let (netstat_tx, netstat_rx) = tracing_unbounded::<(NetworkStatus<_>, NetworkState)>("mpsc_netstat2");
-		network_status_sinks.lock().push(std::time::Duration::from_secs(30), netstat_tx);
+		network_status_sinks.push(std::time::Duration::from_secs(30), netstat_tx);
 		let tel_task_2 = netstat_rx.for_each(move |(_, network_state)| {
 			telemetry!(
 				SUBSTRATE_INFO;
