@@ -503,7 +503,6 @@ sp_api::decl_runtime_apis! {
 		/// sign the extrinsic with any reporting keys available in the keystore
 		/// and will push the transaction to the pool.
 		/// Only useful in an offchain context.
-		#[skip_initialize_block]
 		fn submit_report_equivocation_extrinsic(
 			equivocation_proof: EquivocationProof<Block::Hash, NumberFor<Block>>,
 			key_owner_proof: OpaqueKeyOwnershipProof,
