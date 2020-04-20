@@ -40,7 +40,7 @@ pub use self::client_ext::{ClientExt, ClientBlockImportExt};
 
 use std::sync::Arc;
 use std::collections::HashMap;
-use sp_core::storage::{well_known_keys, ChildInfo};
+use sp_core::storage::ChildInfo;
 use sp_runtime::traits::{Block as BlockT, BlakeTwo256};
 use sc_client::LocalCallExecutor;
 
@@ -66,6 +66,8 @@ impl GenesisInit for () {
 pub struct TestClientBuilder<Block: BlockT, Executor, Backend, G: GenesisInit> {
 	execution_strategies: ExecutionStrategies,
 	genesis_init: G,
+	/// The key is an unprefixed storage key, this only contains
+	/// default child trie content.
 	child_storage_extension: HashMap<Vec<u8>, StorageChild>,
 	backend: Arc<Backend>,
 	_executor: std::marker::PhantomData<Executor>,
@@ -129,17 +131,17 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 	/// Extend child storage
 	pub fn add_child_storage(
 		mut self,
+		child_info: &ChildInfo,
 		key: impl AsRef<[u8]>,
-		child_key: impl AsRef<[u8]>,
-		child_info: ChildInfo,
 		value: impl AsRef<[u8]>,
 	) -> Self {
-		let entry = self.child_storage_extension.entry(key.as_ref().to_vec())
+		let storage_key = child_info.storage_key();
+		let entry = self.child_storage_extension.entry(storage_key.to_vec())
 			.or_insert_with(|| StorageChild {
 				data: Default::default(),
-				child_info: child_info.to_owned(),
+				child_info: child_info.clone(),
 			});
-		entry.data.insert(child_key.as_ref().to_vec(), value.as_ref().to_vec());
+		entry.data.insert(key.as_ref().to_vec(), value.as_ref().to_vec());
 		self
 	}
 
@@ -189,8 +191,8 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 
 			// Add some child storage keys.
 			for (key, child_content) in self.child_storage_extension {
-				storage.children.insert(
-					well_known_keys::CHILD_STORAGE_KEY_PREFIX.iter().cloned().chain(key).collect(),
+				storage.children_default.insert(
+					key,
 					StorageChild {
 						data: child_content.data.into_iter().collect(),
 						child_info: child_content.child_info,

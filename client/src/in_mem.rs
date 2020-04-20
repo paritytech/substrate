@@ -516,9 +516,9 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 	fn reset_storage(&mut self, storage: Storage) -> sp_blockchain::Result<Block::Hash> {
 		check_genesis_storage(&storage)?;
 
-		let child_delta = storage.children.into_iter()
-			.map(|(storage_key, child_content)|
-				(storage_key, child_content.data.into_iter().map(|(k, v)| (k, Some(v))), child_content.child_info));
+		let child_delta = storage.children_default.into_iter()
+			.map(|(_storage_key, child_content)|
+				(child_content.child_info, child_content.data.into_iter().map(|(k, v)| (k, Some(v)))));
 
 		let (root, transaction) = self.old_state.full_storage_root(
 			storage.top.into_iter().map(|(k, v)| (k, Some(v))),
@@ -725,8 +725,9 @@ pub fn check_genesis_storage(storage: &Storage) -> sp_blockchain::Result<()> {
 		return Err(sp_blockchain::Error::GenesisInvalid.into());
 	}
 
-	if storage.children.keys().any(|child_key| !well_known_keys::is_child_storage_key(&child_key)) {
-		return Err(sp_blockchain::Error::GenesisInvalid.into());
+	if storage.children_default.keys()
+		.any(|child_key| !well_known_keys::is_child_storage_key(&child_key)) {
+			return Err(sp_blockchain::Error::GenesisInvalid.into());
 	}
 
 	Ok(())

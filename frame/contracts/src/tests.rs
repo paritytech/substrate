@@ -200,10 +200,7 @@ impl TrieIdGenerator<u64> for DummyTrieIdGenerator {
 			*v
 		});
 
-		// TODO: see https://github.com/paritytech/substrate/issues/2325
 		let mut res = vec![];
-		res.extend_from_slice(well_known_keys::CHILD_STORAGE_KEY_PREFIX);
-		res.extend_from_slice(b"default:");
 		res.extend_from_slice(&new_seed.to_le_bytes());
 		res.extend_from_slice(&account_id.to_le_bytes());
 		res

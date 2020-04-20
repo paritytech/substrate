@@ -373,7 +373,7 @@ mod tests {
 						vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 					}
 				],
-				children: map![],
+				children_default: map![],
 			},
 		)
 	}

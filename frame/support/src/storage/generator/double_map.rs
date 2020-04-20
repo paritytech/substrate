@@ -17,7 +17,7 @@
 use sp_std::prelude::*;
 use sp_std::borrow::Borrow;
 use codec::{Ref, FullCodec, FullEncode, Decode, Encode, EncodeLike, EncodeAppend};
-use crate::{storage::{self, unhashed}, traits::Len};
+use crate::{storage::{self, unhashed}, traits::Len, Never};
 use crate::hash::{StorageHasher, Twox128, ReversibleStorageHasher};
 
 /// Generator for `StorageDoubleMap` used by `decl_storage`.
@@ -224,13 +224,23 @@ impl<K1, K2, V, G> storage::StorageDoubleMap<K1, K2, V> for G where
 		KArg2: EncodeLike<K2>,
 		F: FnOnce(&mut Self::Query) -> R,
 	{
+		Self::try_mutate(k1, k2, |v| Ok::<R, Never>(f(v))).expect("`Never` can not be constructed; qed")
+	}
+
+	fn try_mutate<KArg1, KArg2, R, E, F>(k1: KArg1, k2: KArg2, f: F) -> Result<R, E> where
+		KArg1: EncodeLike<K1>,
+		KArg2: EncodeLike<K2>,
+		F: FnOnce(&mut Self::Query) -> Result<R, E>,
+	{
 		let final_key = Self::storage_double_map_final_key(k1, k2);
 		let mut val = G::from_optional_value_to_query(unhashed::get(final_key.as_ref()));
 
 		let ret = f(&mut val);
-		match G::from_query_to_optional_value(val) {
-			Some(ref val) => unhashed::put(final_key.as_ref(), val),
-			None => unhashed::kill(final_key.as_ref()),
+		if ret.is_ok() {
+			match G::from_query_to_optional_value(val) {
+				Some(ref val) => unhashed::put(final_key.as_ref(), val),
+				None => unhashed::kill(final_key.as_ref()),
+			}
 		}
 		ret
 	}
