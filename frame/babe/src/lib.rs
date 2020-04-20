@@ -205,6 +205,21 @@ decl_module! {
 }
 
 impl<T: Trait> RandomnessT<<T as frame_system::Trait>::Hash> for Module<T> {
+	/// Some BABE blocks have VRF outputs where the block producer has exactly one bit of influence,
+	/// either they make the block or they do not make the block and thus someone else makes the
+	/// next block. Yet, this randomness is not fresh in all BABE blocks.
+	///
+	/// If that is an insufficient security guarantee then two things can be used to improve this
+	/// randomness:
+	///
+	/// - Name, in advance, the block number whose random value will be used; ensure your module
+	///   retains a buffer of previous random values for its subject and then index into these in
+	///   order to obviate the ability of your user to look up the parent hash and choose when to
+	///   transact based upon it.
+	/// - Require your user to first commit to an additional value by first posting its hash.
+	///   Require them to reveal the value to determine the final result, hashing it with the
+	///   output of this random function. This reduces the ability of a cabal of block producers
+	///   from conspiring against individuals.
 	fn random(subject: &[u8]) -> T::Hash {
 		let mut subject = subject.to_vec();
 		subject.reserve(VRF_OUTPUT_LENGTH);
