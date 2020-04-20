@@ -36,9 +36,9 @@ pub use error::Error;
 pub use trie_stream::TrieStream;
 /// The Substrate format implementation of `NodeCodec`.
 pub use node_codec::NodeCodec;
-pub use storage_proof::{StorageProof, create_proof_check_backend_storage,
-	LegacyStorageProof, create_flat_proof_check_backend_storage, ChildrenProofMap,
-	StorageProofKind, AdditionalInfoForProcessing, AdditionalInfoForProcessingKind};
+pub use storage_proof::{StorageProof, LegacyStorageProof, ChildrenProofMap,
+	StorageProofKind, AdditionalInfoForProcessing, AdditionalInfoForProcessingKind,
+	AdditionalInfoFromProcessing};
 /// Various re-exports from the `trie-db` crate.
 pub use trie_db::{
 	Trie, TrieMut, DBValue, Recorder, CError, Query, TrieLayout, TrieConfiguration,

@@ -392,7 +392,7 @@ where
 	H: Hasher,
 	H::Out: Codec,
 {
-	let db = sp_trie::create_flat_proof_check_backend_storage(proof)
+	let db = proof.as_partial_flat_db()
 		.map_err(|e| Box::new(format!("{}", e)) as Box<dyn Error>)?;
 	if db.contains(&root, EMPTY_PREFIX) {
 		Ok(TrieBackend::new_with_roots(db, root))
@@ -411,7 +411,7 @@ where
 	H::Out: Codec,
 {
 	use std::ops::Deref;
-	let db = sp_trie::create_proof_check_backend_storage(proof)
+	let db = proof.as_partial_db()
 		.map_err(|e| Box::new(format!("{}", e)) as Box<dyn Error>)?;
 	if db.deref().get(&ChildInfoProof::top_trie())
 		.map(|db| db.contains(&root, EMPTY_PREFIX))

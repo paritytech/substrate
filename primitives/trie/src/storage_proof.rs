@@ -17,6 +17,7 @@
 use sp_std::collections::btree_map::BTreeMap;
 use sp_std::collections::btree_set::BTreeSet;
 use sp_std::vec::Vec;
+use sp_std::convert::TryInto;
 use codec::{Codec, Encode, Decode, Input, Output};
 use hash_db::{Hasher, HashDB, EMPTY_PREFIX};
 use crate::{MemoryDB, Layout};
@@ -59,10 +60,15 @@ pub enum StorageProofKind {
 	/// Testing only indices
 
 	/// Kind for `StorageProof::Full`.
-	Full = 126,
+	Full = 125,
 
 	/// Kind for `StorageProof::TrieSkipHashesFull`.
-	TrieSkipHashesFull = 127,
+	TrieSkipHashesFull = 126,
+
+//	/// Kind for `StorageProof::KnownQueryPlan`.
+//	TODO + add comment test only because I do not know
+//	a case where it is better than trieskiphashes usage.
+//	KnownQueryPlan = 127,
 }
 
 impl StorageProofKind {
@@ -100,6 +106,7 @@ impl StorageProofKind {
 /// Additional information needed for packing or unpacking.
 /// These do not need to be part of the proof but are required
 /// when using the proof.
+/// TODO change to input & add None variant
 pub enum AdditionalInfoForProcessing {
 	/// Contains trie roots used during proof processing.
 	ChildTrieRoots(ChildrenProofMap<Vec<u8>>),
@@ -110,6 +117,7 @@ pub enum AdditionalInfoForProcessing {
 }
 
 /// Kind for designing an `AdditionalInfoForProcessing` variant.
+/// TODO change to output
 pub enum AdditionalInfoForProcessingKind {
 	/// `AdditionalInfoForProcessing::ChildTrieRoots` kind.
 	ChildTrieRoots,
@@ -119,6 +127,18 @@ pub enum AdditionalInfoForProcessingKind {
 
 	/// `AdditionalInfoForProcessing::QueryPlanWithValues` kind.
 	QueryPlanWithValues,
+}
+
+/// Content produced on proof verification.
+pub enum AdditionalInfoFromProcessing {
+	/// Proof only verify to success or failure.
+	None,
+}
+
+/// Kind for designing an `AdditionalInfoFromProcessing` variant.
+pub enum AdditionalInfoFromProcessingKind {
+	/// `AdditionalInfoFromProcessing::None` kind.
+	None,
 }
 
 impl StorageProofKind {
@@ -142,6 +162,15 @@ impl StorageProofKind {
 				| StorageProofKind::TrieSkipHashesFull
 				| StorageProofKind::Full
 				| StorageProofKind::Flatten => None,
+		}
+	}
+
+	/// Some proof variants requires more than just the collected
+	/// encoded nodes.
+	pub fn produce_additional_info(&self) -> AdditionalInfoFromProcessingKind {
+		match self {
+//			StorageProofKind::KnownQueryPlan => unimplemented!(),//TODO
+			_ => AdditionalInfoFromProcessingKind::None,
 		}
 	}
 
@@ -178,6 +207,34 @@ impl StorageProofKind {
 				| StorageProofKind::TrieSkipHashesFull => Some(true),
 			StorageProofKind::KnownQueryPlanAndValues => None,
 		}
+	}
+
+	/// Proof that should be use with `verify` method.
+	pub fn can_use_verify(&self) -> bool {
+		match self {
+//			StorageProofKind::KnownQueryPlan => true,
+			StorageProofKind::KnownQueryPlanAndValues => true,
+			_ => false,
+		}
+	}
+
+	/// Can be use as a db backend for proof check and
+	/// result fetch.
+	/// If false `StorageProof` `as_partial_db` method
+	/// failure is related to an unsupported capability.
+	pub fn can_use_as_partial_db(&self) -> bool {
+		match self {
+			StorageProofKind::KnownQueryPlanAndValues => false,
+			_ => true,
+		}
+	}
+
+	/// Can be use as a db backend without child trie
+	/// distinction.
+	/// If false `StorageProof` `as_partial_flat_db` method
+	/// failure is related to an unsupported capability.
+	pub fn can_use_as_flat_partial_db(&self) -> bool {
+		self.can_use_as_partial_db()
 	}
 }
 
@@ -388,6 +445,7 @@ impl StorageProof {
 	/// This unpacks `TrieSkipHashesFull` to `Full` or do nothing.
 	/// TODO EMCH document and use case for with_roots to true?? (probably unpack -> merge -> pack
 	/// but no code for it here)
+	/// TODO consider making this private!! (pack to)
 	pub fn unpack<H: Hasher>(
 		self,
 		with_roots: bool,
@@ -429,9 +487,9 @@ impl StorageProof {
 		}
 	}
 
-	/// This run proof validation when the proof only expect
-	/// validation.
-	pub fn validate<H: Hasher>(
+	/// This run proof validation when the proof allows immediate
+	/// verification (`StorageProofKind::can_use_verify`).
+	pub fn verify<H: Hasher>(
 		self,
 		_additional_content: &Option<AdditionalInfoForProcessing>,
 	) -> Result<Option<bool>, H>
@@ -439,7 +497,7 @@ impl StorageProof {
 	{
 		unimplemented!("TODO run the validation of the query plan one")
 	}
-	
+
 	/// This packs when possible.
 	pub fn pack<H: Hasher>(
 		self,
@@ -577,6 +635,99 @@ impl StorageProof {
 			StorageProof::TrieSkipHashesFull(_) => StorageProofKind::TrieSkipHashesFull,
 		}
 	}
+
+	/// Create in-memory storage of proof check backend.
+	/// Currently child trie are all with same backend
+	/// implementation, therefore using
+	/// `as_partial_flat_db` is prefered.
+	pub fn as_partial_db<H>(self) -> Result<ChildrenProofMap<MemoryDB<H>>, H>
+	where
+		H: Hasher,
+	{
+		let mut result = ChildrenProofMap::default();
+		match self {
+			s@StorageProof::Flatten(..) => {
+				let db = s.as_partial_flat_db::<H>()?;
+				result.insert(ChildInfoProof::top_trie(), db);
+			},
+			StorageProof::Full(children) => {
+				for (child_info, proof) in children.into_iter() {
+					let mut db = MemoryDB::default();
+					for item in proof.into_iter() {
+						db.insert(EMPTY_PREFIX, &item);
+					}
+					result.insert(child_info, db);
+				}
+			},
+			StorageProof::TrieSkipHashesFull(children) => {
+				for (child_info, proof) in children.into_iter() {
+					// Note that this does check all hashes so using a trie backend
+					// for further check is not really good (could use a direct value backend).
+					let (_root, db) = crate::unpack_proof_to_memdb::<Layout<H>>(proof.as_slice())?;
+					result.insert(child_info, db);
+				}
+			},
+			s@StorageProof::TrieSkipHashes(..) => {
+				let db = s.as_partial_flat_db::<H>()?;
+				result.insert(ChildInfoProof::top_trie(), db);
+			},
+			StorageProof::KnownQueryPlanAndValues(_children) => {
+				return Err(impossible_backend_build::<H>());
+			},
+		}
+		Ok(result)
+	}
+
+	/// Create in-memory storage of proof check backend.
+	pub fn as_partial_flat_db<H>(self) -> Result<MemoryDB<H>, H>
+	where
+		H: Hasher,
+	{
+		let mut db = MemoryDB::default();
+		let mut db_empty = true;
+		match self {
+			s@StorageProof::Flatten(..) => {
+				for item in s.iter_nodes_flatten() {
+					db.insert(EMPTY_PREFIX, &item[..]);
+				}
+			},
+			StorageProof::Full(children) => {
+				for (_child_info, proof) in children.into_iter() {
+					for item in proof.into_iter() {
+						db.insert(EMPTY_PREFIX, &item);
+					}
+				}
+			},
+			StorageProof::TrieSkipHashesFull(children) => {
+				for (_child_info, proof) in children.into_iter() {
+					// Note that this does check all hashes so using a trie backend
+					// for further check is not really good (could use a direct value backend).
+					let (_root, child_db) = crate::unpack_proof_to_memdb::<Layout<H>>(proof.as_slice())?;
+					if db_empty {
+						db_empty = false;
+						db = child_db;
+					} else {
+						db.consolidate(child_db);
+					}
+				}
+			},
+			StorageProof::TrieSkipHashes(children) => {
+				for proof in children.into_iter() {
+					let (_root, child_db) = crate::unpack_proof_to_memdb::<Layout<H>>(proof.as_slice())?;
+					if db_empty {
+						db_empty = false;
+						db = child_db;
+					} else {
+						db.consolidate(child_db);
+					}
+				}
+			},
+			StorageProof::KnownQueryPlanAndValues(_children) => {
+				return Err(impossible_backend_build::<H>());
+			},
+		}
+		Ok(db)
+	}
 }
 
 /// An iterator over trie nodes constructed from a storage proof. The nodes are not guaranteed to
@@ -606,105 +757,20 @@ impl Iterator for StorageProofNodeIterator {
 	}
 }
 
-// TODO EMCH use tryfrom instead of those two create.
+impl<H: Hasher> TryInto<MemoryDB<H>> for StorageProof {
+	type Error = sp_std::boxed::Box<TrieError<Layout<H>>>;
 
-/// Create in-memory storage of proof check backend.
-/// Currently child trie are all with same backend
-/// implementation, therefore using
-/// `create_flat_proof_check_backend_storage` is prefered.
-/// TODO flat proof check is enough for now, do we want to
-/// maintain the full variant?
-pub fn create_proof_check_backend_storage<H>(
-	proof: StorageProof,
-) -> Result<ChildrenProofMap<MemoryDB<H>>, H>
-where
-	H: Hasher,
-{
-	let mut result = ChildrenProofMap::default();
-	match proof {
-		s@StorageProof::Flatten(..) => {
-			let db = create_flat_proof_check_backend_storage::<H>(s)?;
-			result.insert(ChildInfoProof::top_trie(), db);
-		},
-		StorageProof::Full(children) => {
-			for (child_info, proof) in children.into_iter() {
-				let mut db = MemoryDB::default();
-				for item in proof.into_iter() {
-					db.insert(EMPTY_PREFIX, &item);
-				}
-				result.insert(child_info, db);
-			}
-		},
-		StorageProof::TrieSkipHashesFull(children) => {
-			for (child_info, proof) in children.into_iter() {
-				// Note that this does check all hashes so using a trie backend
-				// for further check is not really good (could use a direct value backend).
-				let (_root, db) = crate::unpack_proof_to_memdb::<Layout<H>>(proof.as_slice())?;
-				result.insert(child_info, db);
-			}
-		},
-		s@StorageProof::TrieSkipHashes(..) => {
-			let db = create_flat_proof_check_backend_storage::<H>(s)?;
-			result.insert(ChildInfoProof::top_trie(), db);
-		},
-		StorageProof::KnownQueryPlanAndValues(_children) => {
-			return Err(impossible_backend_build::<H>());
-		},
+	fn try_into(self) -> Result<MemoryDB<H>, H> {
+		self.as_partial_flat_db()
 	}
-	Ok(result)
 }
 
-/// Create in-memory storage of proof check backend.
-pub fn create_flat_proof_check_backend_storage<H>(
-	proof: StorageProof,
-) -> Result<MemoryDB<H>, H>
-where
-	H: Hasher,
-{
-	let mut db = MemoryDB::default();
-	let mut db_empty = true;
-	match proof {
-		s@StorageProof::Flatten(..) => {
-			for item in s.iter_nodes_flatten() {
-				db.insert(EMPTY_PREFIX, &item);
-			}
-		},
-		StorageProof::Full(children) => {
-			for (_child_info, proof) in children.into_iter() {
-				for item in proof.into_iter() {
-					db.insert(EMPTY_PREFIX, &item);
-				}
-			}
-		},
-		StorageProof::TrieSkipHashesFull(children) => {
-			for (_child_info, proof) in children.into_iter() {
-				// Note that this does check all hashes so using a trie backend
-				// for further check is not really good (could use a direct value backend).
-				let (_root, child_db) = crate::unpack_proof_to_memdb::<Layout<H>>(proof.as_slice())?;
-				if db_empty {
-					db_empty = false;
-					db = child_db;
-				} else {
-					db.consolidate(child_db);
-				}
-			}
-		},
-		StorageProof::TrieSkipHashes(children) => {
-			for proof in children.into_iter() {
-				let (_root, child_db) = crate::unpack_proof_to_memdb::<Layout<H>>(proof.as_slice())?;
-				if db_empty {
-					db_empty = false;
-					db = child_db;
-				} else {
-					db.consolidate(child_db);
-				}
-			}
-		},
-		StorageProof::KnownQueryPlanAndValues(_children) => {
-			return Err(impossible_backend_build::<H>());
-		},
+impl<H: Hasher> TryInto<ChildrenProofMap<MemoryDB<H>>> for StorageProof {
+	type Error = sp_std::boxed::Box<TrieError<Layout<H>>>;
+
+	fn try_into(self) -> Result<ChildrenProofMap<MemoryDB<H>>, H> {
+		self.as_partial_db()
 	}
-	Ok(db)
 }
 
 #[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
