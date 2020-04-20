@@ -273,11 +273,27 @@ impl CheckedAdd for Fixed64 {
 
 impl CheckedDiv for Fixed64 {
 	fn checked_div(&self, rhs: &Self) -> Option<Self> {
-		if rhs.0 == 0 {
-			None
-		} else {
-			Some(*self / *rhs)
+		if rhs.0.signum() == 0 {
+			return None;
 		}
+		if self.0 == 0 {
+			return Some(*self);
+		}
+
+		let signum = self.0.signum() / rhs.0.signum();
+		let mut lhs = self.0;
+		if lhs.is_negative() {
+			lhs = lhs.saturating_mul(-1);
+		}
+		let mut rhs = rhs.0;
+		if rhs.is_negative() {
+			rhs = rhs.saturating_mul(-1);
+		}
+
+		multiply_by_rational(lhs as u128, <Self as FixedPointNumber>::DIV as u128, rhs as u128)
+			.ok()
+			.and_then(|n| TryInto::<<Self as FixedPointNumber>::Inner>::try_into(n).ok())
+			.map(|n| Self(n * signum))
 	}
 }
 
@@ -352,12 +368,10 @@ mod tests {
 		assert_eq!(a, Fixed64::from_integer(-5));
 
 		// biggest value that can be created.
-		assert_ne!(max(), Fixed64::from_integer(9_223_372_036));
-		assert_eq!(max(), Fixed64::from_integer(9_223_372_037));
-		
+		assert_eq!(max(), Fixed64::from_parts(9_223_372_036_854_775_807));
+
 		// the smallest value that can be created.
-		assert_ne!(min(), Fixed64::from_integer(-9_223_372_036));
-		assert_eq!(min(), Fixed64::from_integer(-9_223_372_037));
+		assert_eq!(min(), Fixed64::from_parts(-9_223_372_036_854_775_808));
 	}
 
 	#[test]
@@ -447,6 +461,40 @@ mod tests {
 		assert_eq!(max().saturating_mul_int(&i128::min_value()), i128::min_value());
 		assert_eq!(min().saturating_mul_int(&i128::max_value()), i128::min_value());
 		assert_eq!(min().saturating_mul_int(&i128::min_value()), i128::max_value());
+	}
+
+	#[test]
+	fn zero_works() {
+		assert_eq!(Fixed64::zero(), Fixed64::from_integer(0));
+	}
+
+	#[test]
+	fn is_zero_works() {
+		assert!(Fixed64::zero().is_zero());
+		assert!(!Fixed64::from_integer(1).is_zero());
+	}
+
+	#[test]
+	fn checked_div_with_zero_should_be_none() {
+		let a = Fixed64::from_integer(1);
+		let b = Fixed64::from_integer(0);
+
+		assert_eq!(a.checked_div(&b), None);
+		assert_eq!(b.checked_div(&a), Some(b));
+
+		let c = Fixed64::from_integer(-1);
+
+		assert_eq!((Fixed64::min_value() + Fixed64::from_rational(1, Fixed64::accuracy())).checked_div(&c), Some(Fixed64::max_value()));
+		assert_eq!(Fixed64::min_value().checked_div(&c), None);
+		assert_eq!((Fixed64::one()).checked_div(&Fixed64::zero()), None);
+	}
+
+	#[test]
+	fn checked_div_int_with_zero_should_be_none() {
+		let a = Fixed64::from_integer(1);
+		assert_eq!(a.checked_div_int(&0i32), None);
+		let a = Fixed64::from_integer(0);
+		assert_eq!(a.checked_div_int(&1i32), Some(0));
 	}
 
 	#[test]

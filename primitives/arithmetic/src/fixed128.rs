@@ -510,11 +510,14 @@ mod tests {
 		assert_eq!(a.saturating_mul_int(&123i128), -1230);
 
 		assert_eq!(max().saturating_mul_int(&2i128), 340_282_366_920_938_463_463);
+		assert_eq!(min().saturating_mul_int(&2i128), -340_282_366_920_938_463_463);
+
+		assert_eq!(max().saturating_mul_int(&i64::min_value()), i64::min_value());
+		assert_eq!(min().saturating_mul_int(&i64::max_value()), i64::min_value());
+		assert_eq!(min().saturating_mul_int(&i64::min_value()), i64::max_value());
 
 		assert_eq!(max().saturating_mul_int(&i128::min_value()), i128::min_value());
-
 		assert_eq!(min().saturating_mul_int(&i128::max_value()), i128::min_value());
-
 		assert_eq!(min().saturating_mul_int(&i128::min_value()), i128::max_value());
 	}
 
