@@ -108,8 +108,8 @@ benchmarks! {
 	// These are the common parameters along with their instancing.
 	_ {
 		let r in 1 .. MAX_REGISTRARS => add_registrars::<T>(r)?;
-		// extra parameter for the set_subs bench
-		let o in 1 .. T::MaxSubAccounts::get() => ();
+		// extra parameter for the set_subs bench for previous sub accounts
+		let p in 1 .. T::MaxSubAccounts::get() => ();
 		let s in 1 .. T::MaxSubAccounts::get() => {
 			// Give them s many sub accounts
 			let caller = account::<T>("caller", 0);
@@ -165,14 +165,14 @@ benchmarks! {
 		let caller = account::<T>("caller", 0);
 
 		// Give them o many previous sub accounts.
-		let o in 1 .. T::MaxSubAccounts::get() => {
-			let _ = add_sub_accounts::<T>(&caller, o, 0)?;
+		let p in 1 .. T::MaxSubAccounts::get() => {
+			let _ = add_sub_accounts::<T>(&caller, p, 0)?;
 		};
 		// Create a new subs vec with s sub accounts
 		let s in 1 .. T::MaxSubAccounts::get() => ();
 		let subs = create_sub_accounts::<T>(&caller, s)?;
 
-	}: _(RawOrigin::Signed(caller), subs, o)
+	}: _(RawOrigin::Signed(caller), subs, p)
 
 	clear_identity {
 		let caller = account::<T>("caller", 0);
