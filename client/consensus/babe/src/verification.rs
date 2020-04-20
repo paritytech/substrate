@@ -19,7 +19,7 @@ use sp_runtime::{traits::Header, traits::DigestItemFor};
 use sp_core::{Pair, Public};
 use sp_consensus_babe::{AuthoritySignature, SlotNumber, AuthorityPair, AuthorityId};
 use sp_consensus_babe::digests::{
-	PreDigest, PrimaryPreDigest, SecondaryPreDigest, SecondaryVRFPreDigest,
+	PreDigest, PrimaryPreDigest, SecondaryPlainPreDigest, SecondaryVRFPreDigest,
 	CompatibleDigestItem
 };
 use sc_consensus_slots::CheckedHeader;
@@ -106,10 +106,10 @@ pub(super) fn check_header<B: BlockT + Sized>(
 				config.c,
 			)?;
 		},
-		PreDigest::Secondary(secondary) if config.allowed_slots.is_secondary_slots_allowed() => {
-			debug!(target: "babe", "Verifying Secondary block");
+		PreDigest::SecondaryPlain(secondary) if config.allowed_slots.is_secondary_slots_allowed() => {
+			debug!(target: "babe", "Verifying Secondary plain block");
 
-			check_secondary_header::<B>(
+			check_secondary_plain_header::<B>(
 				pre_hash,
 				secondary,
 				sig,
@@ -193,9 +193,9 @@ fn check_primary_header<B: BlockT + Sized>(
 /// properly signed by the expected authority, which we have a deterministic way
 /// of computing. Additionally, the weight of this block must stay the same
 /// compared to its parent since it is a secondary block.
-fn check_secondary_header<B: BlockT>(
+fn check_secondary_plain_header<B: BlockT>(
 	pre_hash: B::Hash,
-	pre_digest: &SecondaryPreDigest,
+	pre_digest: &SecondaryPlainPreDigest,
 	signature: AuthoritySignature,
 	epoch: &Epoch,
 ) -> Result<(), Error<B>> {

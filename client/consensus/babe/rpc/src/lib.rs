@@ -123,7 +123,7 @@ impl<B, C, SC> BabeApi for BabeRPCHandler<B, C, SC>
 						PreDigest::Primary { .. } => {
 							claims.entry(key.public()).or_default().primary.push(slot_number);
 						}
-						PreDigest::Secondary { .. } => {
+						PreDigest::SecondaryPlain { .. } => {
 							claims.entry(key.public()).or_default().secondary.push(slot_number);
 						}
 						PreDigest::SecondaryVRF { .. } => {

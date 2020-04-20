@@ -22,7 +22,7 @@ use sp_consensus_babe::{
 	SlotNumber, AuthorityPair, BabeConfiguration
 };
 use sp_consensus_babe::digests::{
-	PreDigest, PrimaryPreDigest, SecondaryPreDigest, SecondaryVRFPreDigest,
+	PreDigest, PrimaryPreDigest, SecondaryPlainPreDigest, SecondaryVRFPreDigest,
 };
 use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
 use sp_core::{U256, blake2_256};
@@ -148,7 +148,7 @@ fn claim_secondary_slot(
 					authority_index: authority_index as u32,
 				})
 			} else {
-				PreDigest::Secondary(SecondaryPreDigest {
+				PreDigest::SecondaryPlain(SecondaryPlainPreDigest {
 					slot_number,
 					authority_index: authority_index as u32,
 				})

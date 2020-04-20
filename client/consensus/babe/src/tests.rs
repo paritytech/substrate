@@ -513,7 +513,7 @@ fn can_author_block() {
 		c: (3, 10),
 		genesis_authorities: Vec::new(),
 		randomness: [0; 32],
-		allowed_slots: AllowedSlots::PrimaryAndSecondarySlots,
+		allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 	};
 
 	// with secondary slots enabled it should never be empty
@@ -553,7 +553,7 @@ fn propose_and_import_block<Transaction>(
 	let pre_digest = sp_runtime::generic::Digest {
 		logs: vec![
 			Item::babe_pre_digest(
-				PreDigest::Secondary(SecondaryPreDigest {
+				PreDigest::SecondaryPlain(SecondaryPlainPreDigest {
 					authority_index: 0,
 					slot_number,
 				}),
