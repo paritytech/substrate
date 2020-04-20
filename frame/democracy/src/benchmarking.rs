@@ -20,7 +20,6 @@ use super::*;
 
 use frame_benchmarking::{benchmarks, account};
 use frame_support::traits::{Currency, Get, EnsureOrigin, OnInitialize};
-use frame_support::assert_err;
 use frame_system::{RawOrigin, Module as System, self, EventRecord};
 use sp_runtime::traits::{Bounded, One};
 
@@ -39,7 +38,6 @@ fn assert_last_event<T: Trait>(generic_event: <T as Trait>::Event) {
 	let system_event: <T as frame_system::Trait>::Event = generic_event.into();
 	// compare to the last event record
 	let EventRecord { event, .. } = &events[events.len() - 1];
-	println!("EVENT {:?}, system {:?}", event, system_event);
 	assert_eq!(event, &system_event);
 }
 
@@ -916,9 +914,9 @@ benchmarks! {
 			_ => return Err("preimage not available")
 		}
 	}: {
-		assert_err!(
+		assert_eq!(
 			Democracy::<T>::enact_proposal(RawOrigin::Root.into(), proposal_hash, 0),
-			Error::<T>::PreimageInvalid
+			Err(Error::<T>::PreimageInvalid.into())
 		);
 	}
 }
