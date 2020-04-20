@@ -24,8 +24,8 @@ pub use frame_metadata::{
 	ModuleConstantMetadata, DefaultByte, DefaultByteGetter, ModuleErrorMetadata, ErrorMetadata
 };
 pub use crate::weights::{
-	GetDispatchInfo, DispatchInfo, WeighData, ClassifyDispatch, TransactionPriority, Weight,
-	PaysFee, PostDispatchInfo, WithPostDispatchInfo,
+	SimpleDispatchInfo, GetDispatchInfo, DispatchInfo, WeighData, ClassifyDispatch,
+	TransactionPriority, Weight, PaysFee, PostDispatchInfo, WithPostDispatchInfo,
 };
 pub use sp_runtime::{traits::Dispatchable, DispatchError};
 pub use crate::traits::{CallMetadata, GetCallMetadata, GetCallName};
@@ -74,14 +74,14 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # #[macro_use]
 /// # extern crate frame_support;
 /// # use frame_support::dispatch;
-/// # use frame_support::weights::MINIMUM_WEIGHT;
+/// # use frame_support::weights::{SimpleDispatchInfo, MINIMUM_WEIGHT};
 /// # use frame_system::{self as system, Trait, ensure_signed};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 ///
 /// 		// Private functions are dispatchable, but not available to other
 /// 		// FRAME pallets.
-/// 		#[weight = MINIMUM_WEIGHT]
+/// 		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 /// 		fn my_function(origin, var: u64) -> dispatch::DispatchResult {
 ///				// Your implementation
 ///				Ok(())
@@ -89,7 +89,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 ///
 ///			// Public functions are both dispatchable and available to other
 /// 		// FRAME pallets.
-/// 		#[weight = MINIMUM_WEIGHT]
+/// 		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 ///			pub fn my_public_function(origin) -> dispatch::DispatchResult {
 /// 			// Your implementation
 ///				Ok(())
@@ -117,17 +117,17 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # #[macro_use]
 /// # extern crate frame_support;
 /// # use frame_support::dispatch;
-/// # use frame_support::weights::MINIMUM_WEIGHT;
+/// # use frame_support::weights::{SimpleDispatchInfo, MINIMUM_WEIGHT};
 /// # use frame_system::{self as system, Trait, ensure_signed};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-/// 		#[weight = MINIMUM_WEIGHT]
+/// 		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 /// 		fn my_long_function(origin) -> dispatch::DispatchResult {
 ///				// Your implementation
 /// 			Ok(())
 /// 		}
 ///
-/// 		#[weight = MINIMUM_WEIGHT]
+/// 		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 /// 		fn my_short_function(origin) {
 ///				// Your implementation
 /// 		}
@@ -153,10 +153,11 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # #[macro_use]
 /// # extern crate frame_support;
 /// # use frame_support::dispatch::{DispatchResultWithPostInfo, WithPostDispatchInfo};
+/// # use frame_support::weights::SimpleDispatchInfo;
 /// # use frame_system::{self as system, Trait, ensure_signed};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-/// 		#[weight = 1_000_000]
+/// 		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
 /// 		fn my_long_function(origin, do_expensive_calc: bool) -> DispatchResultWithPostInfo {
 /// 			ensure_signed(origin).map_err(|e| e.with_weight(100_000))?;
 /// 			if do_expensive_calc {
@@ -181,11 +182,11 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug {}
 /// # #[macro_use]
 /// # extern crate frame_support;
 /// # use frame_support::dispatch;
-/// # use frame_support::weights::MINIMUM_WEIGHT;
+/// # use frame_support::weights::{SimpleDispatchInfo, MINIMUM_WEIGHT};
 /// # use frame_system::{self as system, Trait, ensure_signed, ensure_root};
 /// decl_module! {
 /// 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-/// 		#[weight = MINIMUM_WEIGHT]
+/// 		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 ///			fn my_privileged_function(origin) -> dispatch::DispatchResult {
 /// 			ensure_root(origin)?;
 ///				// Your implementation
@@ -2111,25 +2112,25 @@ mod tests {
 	decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin, T::AccountId: From<u32> {
 			/// Hi, this is a comment.
-			#[weight = MINIMUM_WEIGHT]
+			#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 			fn aux_0(_origin) -> DispatchResult { unreachable!() }
 
-			#[weight = MINIMUM_WEIGHT]
+			#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 			fn aux_1(_origin, #[compact] _data: u32,) -> DispatchResult { unreachable!() }
 
-			#[weight = MINIMUM_WEIGHT]
+			#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 			fn aux_2(_origin, _data: i32, _data2: String) -> DispatchResult { unreachable!() }
 
-			#[weight = 3]
+			#[weight = SimpleDispatchInfo::FixedNormal(3)]
 			fn aux_3(_origin) -> DispatchResult { unreachable!() }
 
-			#[weight = MINIMUM_WEIGHT]
+			#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 			fn aux_4(_origin, _data: i32) -> DispatchResult { unreachable!() }
 
-			#[weight = MINIMUM_WEIGHT]
+			#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 			fn aux_5(_origin, _data: i32, #[compact] _data2: u32,) -> DispatchResult { unreachable!() }
 
-			#[weight = (5, DispatchClass::Operational)]
+			#[weight = SimpleDispatchInfo::FixedOperational(5)]
 			fn operational(_origin) { unreachable!() }
 
 			fn on_initialize(n: T::BlockNumber,) -> Weight { if n.into() == 42 { panic!("on_initialize") } 7 }

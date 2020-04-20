@@ -416,22 +416,22 @@ mod tests {
 	use hex_literal::hex;
 
 	mod custom {
-		use frame_support::weights::Weight;
+		use frame_support::weights::{SimpleDispatchInfo, Weight};
 
 		pub trait Trait: frame_system::Trait {}
 
 		frame_support::decl_module! {
 			pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-				#[weight = 100]
+				#[weight = SimpleDispatchInfo::FixedNormal(100)]
 				fn some_function(origin) {
 					// NOTE: does not make any different.
 					let _ = frame_system::ensure_signed(origin);
 				}
-				#[weight = (200, frame_support::weights::DispatchClass::Operational)]
+				#[weight = SimpleDispatchInfo::FixedOperational(200)]
 				fn some_root_operation(origin) {
 					let _ = frame_system::ensure_root(origin);
 				}
-				#[weight = 0]
+				#[weight = SimpleDispatchInfo::InsecureFreeNormal]
 				fn some_unsigned_message(origin) {
 					let _ = frame_system::ensure_none(origin);
 				}

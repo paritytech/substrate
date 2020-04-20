@@ -24,7 +24,7 @@ use sp_std::prelude::*;
 use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::{H256, Header}};
 use frame_support::{
 	dispatch::DispatchResult,
-	weights::MINIMUM_WEIGHT,
+	weights::{SimpleDispatchInfo, MINIMUM_WEIGHT},
 	decl_module, decl_storage, impl_outer_origin, assert_ok, assert_err, ensure
 };
 use frame_system::{RawOrigin, ensure_signed, ensure_none};
@@ -37,14 +37,14 @@ decl_storage! {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		#[weight = MINIMUM_WEIGHT]
+		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 		fn set_value(origin, n: u32) -> DispatchResult {
 			let _sender = ensure_signed(origin)?;
 			Value::put(n);
 			Ok(())
 		}
 
-		#[weight = MINIMUM_WEIGHT]
+		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 		fn dummy(origin, _n: u32) -> DispatchResult {
 			let _sender = ensure_none(origin)?;
 			Ok(())

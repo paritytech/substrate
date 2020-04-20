@@ -35,13 +35,13 @@
 //! ### Example - Get random seed for the current block
 //!
 //! ```
-//! use frame_support::{decl_module, dispatch, traits::Randomness, weights::MINIMUM_WEIGHT};
+//! use frame_support::{decl_module, dispatch, traits::Randomness, weights::{SimpleDispatchInfo, MINIMUM_WEIGHT}};
 //!
 //! pub trait Trait: frame_system::Trait {}
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		#[weight = MINIMUM_WEIGHT]
+//! 		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 //! 		pub fn random_module_example(origin) -> dispatch::DispatchResult {
 //! 			let _random_seed = <pallet_randomness_collective_flip::Module<T>>::random_seed();
 //! 			Ok(())
