@@ -5537,6 +5537,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "ref-cast"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "077f197a31bfe7e4169145f9eca08d32705c6c6126c139c26793acdf163ac3ef"
+dependencies = [
+ "ref-cast-impl",
+]
+
+[[package]]
+name = "ref-cast-impl"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c36eb52b69b87c9e3a07387f476c88fd0dba9a1713b38e56617ed66b45392c1f"
+dependencies = [
+ "proc-macro2",
+ "quote 1.0.3",
+ "syn 1.0.17",
+]
+
+[[package]]
 name = "regex"
 version = "1.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7715,6 +7735,7 @@ name = "sp-storage"
 version = "2.0.0-dev"
 dependencies = [
  "impl-serde 0.2.3",
+ "ref-cast",
  "serde",
  "sp-debug-derive",
  "sp-std",

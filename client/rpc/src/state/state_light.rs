@@ -48,17 +48,19 @@ use sc_client::{
 	},
 };
 use sp_core::{
-	Bytes, OpaqueMetadata, storage::{StorageKey, StorageData, StorageChangeSet},
+	Bytes, OpaqueMetadata,
+	storage::{StorageKey, PrefixedStorageKey, StorageData, StorageChangeSet},
 };
 use sp_version::RuntimeVersion;
 use sp_runtime::{generic::BlockId, traits::{Block as BlockT, HashFor}};
 
-use super::{StateBackend, error::{FutureResult, Error}, client_err};
+use super::{StateBackend, ChildStateBackend, error::{FutureResult, Error}, client_err};
 
 /// Storage data map of storage keys => (optional) storage value.
 type StorageMap = HashMap<StorageKey, Option<StorageData>>;
 
 /// State API backend for light nodes.
+#[derive(Clone)]
 pub struct LightState<Block: BlockT, F: Fetcher<Block>, Client> {
 	client: Arc<Client>,
 	subscriptions: Subscriptions,
@@ -233,69 +235,7 @@ impl<Block, F, Client> StateBackend<Block, Client> for LightState<Block, F, Clie
 		block: Option<Block::Hash>,
 		key: StorageKey,
 	) -> FutureResult<Option<Block::Hash>> {
-		Box::new(self
-			.storage(block, key)
-			.and_then(|maybe_storage|
-				result(Ok(maybe_storage.map(|storage| HashFor::<Block>::hash(&storage.0))))
-			)
-		)
-	}
-
-	fn child_storage_keys(
-		&self,
-		_block: Option<Block::Hash>,
-		_child_storage_key: StorageKey,
-		_child_info: StorageKey,
-		_child_type: u32,
-		_prefix: StorageKey,
-	) -> FutureResult<Vec<StorageKey>> {
-		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
-	}
-
-	fn child_storage(
-		&self,
-		block: Option<Block::Hash>,
-		child_storage_key: StorageKey,
-		child_info: StorageKey,
-		child_type: u32,
-		key: StorageKey,
-	) -> FutureResult<Option<StorageData>> {
-		let block = self.block_or_best(block);
-		let fetcher = self.fetcher.clone();
-		let child_storage = resolve_header(&*self.remote_blockchain, &*self.fetcher, block)
-			.then(move |result| match result {
-				Ok(header) => Either::Left(fetcher.remote_read_child(RemoteReadChildRequest {
-					block,
-					header,
-					storage_key: child_storage_key.0,
-					child_info: child_info.0,
-					child_type,
-					keys: vec![key.0.clone()],
-					retry_count: Default::default(),
-				}).then(move |result| ready(result
-					.map(|mut data| data
-						.remove(&key.0)
-						.expect("successful result has entry for all keys; qed")
-						.map(StorageData)
-					)
-					.map_err(client_err)
-				))),
-				Err(error) => Either::Right(ready(Err(error))),
-			});
-
-		Box::new(child_storage.boxed().compat())
-	}
-
-	fn child_storage_hash(
-		&self,
-		block: Option<Block::Hash>,
-		child_storage_key: StorageKey,
-		child_info: StorageKey,
-		child_type: u32,
-		key: StorageKey,
-	) -> FutureResult<Option<Block::Hash>> {
-		Box::new(self
-			.child_storage(block, child_storage_key, child_info, child_type, key)
+		Box::new(StateBackend::storage(self, block, key)
 			.and_then(|maybe_storage|
 				result(Ok(maybe_storage.map(|storage| HashFor::<Block>::hash(&storage.0))))
 			)
@@ -515,6 +455,65 @@ impl<Block, F, Client> StateBackend<Block, Client> for LightState<Block, F, Clie
 		id: SubscriptionId,
 	) -> RpcResult<bool> {
 		Ok(self.subscriptions.cancel(id))
+	}
+}
+
+impl<Block, F, Client> ChildStateBackend<Block, Client> for LightState<Block, F, Client>
+	where
+		Block: BlockT,
+		Client: BlockchainEvents<Block> + HeaderBackend<Block> + Send + Sync + 'static,
+		F: Fetcher<Block> + 'static
+{
+	fn storage_keys(
+		&self,
+		_block: Option<Block::Hash>,
+		_storage_key: PrefixedStorageKey,
+		_prefix: StorageKey,
+	) -> FutureResult<Vec<StorageKey>> {
+		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
+	}
+
+	fn storage(
+		&self,
+		block: Option<Block::Hash>,
+		storage_key: PrefixedStorageKey,
+		key: StorageKey,
+	) -> FutureResult<Option<StorageData>> {
+		let block = self.block_or_best(block);
+		let fetcher = self.fetcher.clone();
+		let child_storage = resolve_header(&*self.remote_blockchain, &*self.fetcher, block)
+			.then(move |result| match result {
+				Ok(header) => Either::Left(fetcher.remote_read_child(RemoteReadChildRequest {
+					block,
+					header,
+					storage_key,
+					keys: vec![key.0.clone()],
+					retry_count: Default::default(),
+				}).then(move |result| ready(result
+					.map(|mut data| data
+						.remove(&key.0)
+						.expect("successful result has entry for all keys; qed")
+						.map(StorageData)
+					)
+					.map_err(client_err)
+				))),
+				Err(error) => Either::Right(ready(Err(error))),
+			});
+
+		Box::new(child_storage.boxed().compat())
+	}
+
+	fn storage_hash(
+		&self,
+		block: Option<Block::Hash>,
+		storage_key: PrefixedStorageKey,
+		key: StorageKey,
+	) -> FutureResult<Option<Block::Hash>> {
+		Box::new(ChildStateBackend::storage(self, block, storage_key, key)
+			.and_then(|maybe_storage|
+				result(Ok(maybe_storage.map(|storage| HashFor::<Block>::hash(&storage.0))))
+			)
+		)
 	}
 }
 

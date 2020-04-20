@@ -136,15 +136,15 @@ impl BuildStorage for sp_core::storage::Storage {
 		storage: &mut sp_core::storage::Storage,
 	)-> Result<(), String> {
 		storage.top.extend(self.top.iter().map(|(k, v)| (k.clone(), v.clone())));
-		for (k, other_map) in self.children.iter() {
+		for (k, other_map) in self.children_default.iter() {
 			let k = k.clone();
-			if let Some(map) = storage.children.get_mut(&k) {
+			if let Some(map) = storage.children_default.get_mut(&k) {
 				map.data.extend(other_map.data.iter().map(|(k, v)| (k.clone(), v.clone())));
-				if !map.child_info.try_update(other_map.child_info.as_ref()) {
+				if !map.child_info.try_update(&other_map.child_info) {
 					return Err("Incompatible child info update".to_string());
 				}
 			} else {
-				storage.children.insert(k, other_map.clone());
+				storage.children_default.insert(k, other_map.clone());
 			}
 		}
 		Ok(())

@@ -1015,7 +1015,7 @@ ServiceBuilder<
 
 			let subscriptions = sc_rpc::Subscriptions::new(Arc::new(tasks_builder.spawn_handle()));
 
-			let (chain, state) = if let (Some(remote_backend), Some(on_demand)) =
+			let (chain, state, child_state) = if let (Some(remote_backend), Some(on_demand)) =
 				(remote_backend.as_ref(), on_demand.as_ref()) {
 				// Light clients
 				let chain = sc_rpc::chain::new_light(
@@ -1024,19 +1024,19 @@ ServiceBuilder<
 					remote_backend.clone(),
 					on_demand.clone()
 				);
-				let state = sc_rpc::state::new_light(
+				let (state, child_state) = sc_rpc::state::new_light(
 					client.clone(),
 					subscriptions.clone(),
 					remote_backend.clone(),
 					on_demand.clone()
 				);
-				(chain, state)
+				(chain, state, child_state)
 
 			} else {
 				// Full nodes
 				let chain = sc_rpc::chain::new_full(client.clone(), subscriptions.clone());
-				let state = sc_rpc::state::new_full(client.clone(), subscriptions.clone());
-				(chain, state)
+				let (state, child_state) = sc_rpc::state::new_full(client.clone(), subscriptions.clone());
+				(chain, state, child_state)
 			};
 
 			let author = sc_rpc::author::Author::new(
@@ -1059,6 +1059,7 @@ ServiceBuilder<
 
 			sc_rpc_server::rpc_handler((
 				state::StateApi::to_delegate(state),
+				state::ChildStateApi::to_delegate(child_state),
 				chain::ChainApi::to_delegate(chain),
 				maybe_offchain_rpc,
 				author::AuthorApi::to_delegate(author),
