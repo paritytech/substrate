@@ -114,6 +114,19 @@ impl<T: FullCodec, G: StorageValue<T>> storage::StorageValue<T> for G {
 		ret
 	}
 
+	fn try_mutate<R, E, F: FnOnce(&mut G::Query) -> Result<R, E>>(f: F) -> Result<R, E> {
+		let mut val = G::get();
+
+		let ret = f(&mut val);
+		if ret.is_ok() {
+			match G::from_query_to_optional_value(val) {
+				Some(ref val) => G::put(val),
+				None => G::kill(),
+			}
+		}
+		ret
+	}
+
 	fn take() -> G::Query {
 		let key = Self::storage_value_final_key();
 		let value = unhashed::get(&key);

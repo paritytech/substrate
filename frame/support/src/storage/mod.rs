@@ -80,6 +80,9 @@ pub trait StorageValue<T: FullCodec> {
 	/// Mutate the value
 	fn mutate<R, F: FnOnce(&mut Self::Query) -> R>(f: F) -> R;
 
+	/// Mutate the value if closure returns `Ok`
+	fn try_mutate<R, E, F: FnOnce(&mut Self::Query) -> Result<R, E>>(f: F) -> Result<R, E>;
+
 	/// Clear the storage value.
 	fn kill();
 
@@ -329,6 +332,12 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>,
 		F: FnOnce(&mut Self::Query) -> R;
+
+	fn try_mutate<KArg1, KArg2, R, E, F>(k1: KArg1, k2: KArg2, f: F) -> Result<R, E>
+	where
+		KArg1: EncodeLike<K1>,
+		KArg2: EncodeLike<K2>,
+		F: FnOnce(&mut Self::Query) -> Result<R, E>;
 
 	fn append<Items, Item, EncodeLikeItem, KArg1, KArg2>(
 		k1: KArg1,
