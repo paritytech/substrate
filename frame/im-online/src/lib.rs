@@ -574,6 +574,11 @@ impl<T: Trait> Module<T> {
 			Keys::<T>::put(keys);
 		}
 	}
+
+	#[cfg(test)]
+	fn set_keys(keys: Vec<T::AuthorityId>) {
+		Keys::<T>::put(&keys)
+	}
 }
 
 impl<T: Trait> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
