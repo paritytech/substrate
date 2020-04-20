@@ -101,7 +101,7 @@ use frame_support::debug;
 use frame_support::{
 	Parameter, decl_storage, decl_module,
 	traits::{Time, UnixTime, Get},
-	weights::MINIMUM_WEIGHT,
+	weights::{MINIMUM_WEIGHT, DispatchClass},
 };
 use sp_runtime::{
 	RuntimeString,
@@ -148,7 +148,7 @@ decl_module! {
 		/// `MinimumPeriod`.
 		///
 		/// The dispatch origin for this call must be `Inherent`.
-		#[weight = (MINIMUM_WEIGHT, frame_support::weights::DispatchClass::Mandatory)]
+		#[weight = (MINIMUM_WEIGHT, DispatchClass::Mandatory)]
 		fn set(origin, #[compact] now: T::Moment) {
 			ensure_none(origin)?;
 			assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");

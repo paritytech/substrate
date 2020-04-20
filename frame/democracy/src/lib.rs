@@ -171,7 +171,7 @@ use sp_runtime::{
 use codec::{Ref, Encode, Decode};
 use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error, ensure, Parameter,
-	weights::{Weight, MINIMUM_WEIGHT},
+	weights::{Weight, MINIMUM_WEIGHT, DispatchClass},
 	traits::{
 		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier, Get,
 		OnUnbalanced, BalanceStatus, schedule::Named as ScheduleNamed, EnsureOrigin
@@ -641,7 +641,7 @@ decl_module! {
 		/// # <weight>
 		/// - `O(1)`.
 		/// # </weight>
-		#[weight = (500_000_000, frame_support::weights::DispatchClass::Operational)]
+		#[weight = (500_000_000, DispatchClass::Operational)]
 		fn emergency_cancel(origin, ref_index: ReferendumIndex) {
 			T::CancellationOrigin::ensure_origin(origin)?;
 
@@ -820,7 +820,7 @@ decl_module! {
 		/// # <weight>
 		/// - `O(1)`.
 		/// # </weight>
-		#[weight = (MINIMUM_WEIGHT, frame_support::weights::DispatchClass::Operational)]
+		#[weight = (MINIMUM_WEIGHT, DispatchClass::Operational)]
 		fn cancel_referendum(origin, #[compact] ref_index: ReferendumIndex) {
 			ensure_root(origin)?;
 			Self::internal_cancel_referendum(ref_index);
@@ -836,7 +836,7 @@ decl_module! {
 		/// - One DB change.
 		/// - O(d) where d is the items in the dispatch queue.
 		/// # </weight>
-		#[weight = (MINIMUM_WEIGHT, frame_support::weights::DispatchClass::Operational)]
+		#[weight = (MINIMUM_WEIGHT, DispatchClass::Operational)]
 		fn cancel_queued(origin, which: ReferendumIndex) {
 			ensure_root(origin)?;
 			T::Scheduler::cancel_named((DEMOCRACY_ID, which))

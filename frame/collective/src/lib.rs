@@ -44,6 +44,7 @@ use frame_support::{
 	dispatch::{Dispatchable, Parameter}, codec::{Encode, Decode},
 	traits::{Get, ChangeMembers, InitializeMembers, EnsureOrigin}, decl_module, decl_event,
 	decl_storage, decl_error, ensure,
+	weights::DispatchClass,
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 
@@ -186,7 +187,7 @@ decl_module! {
 		/// - `prime`: The prime member whose vote sets the default.
 		///
 		/// Requires root origin.
-		#[weight = (100_000_000, frame_support::weights::DispatchClass::Operational)]
+		#[weight = (100_000_000, DispatchClass::Operational)]
 		fn set_members(origin, new_members: Vec<T::AccountId>, prime: Option<T::AccountId>) {
 			ensure_root(origin)?;
 			let mut new_members = new_members;
@@ -199,7 +200,7 @@ decl_module! {
 		/// Dispatch a proposal from a member using the `Member` origin.
 		///
 		/// Origin must be a member of the collective.
-		#[weight = (100_000_000, frame_support::weights::DispatchClass::Operational)]
+		#[weight = (100_000_000, DispatchClass::Operational)]
 		fn execute(origin, proposal: Box<<T as Trait<I>>::Proposal>) {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_member(&who), Error::<T, I>::NotMember);
@@ -213,7 +214,7 @@ decl_module! {
 		/// - Bounded storage reads and writes.
 		/// - Argument `threshold` has bearing on weight.
 		/// # </weight>
-		#[weight = (5_000_000_000, frame_support::weights::DispatchClass::Operational)]
+		#[weight = (5_000_000_000, DispatchClass::Operational)]
 		fn propose(origin, #[compact] threshold: MemberCount, proposal: Box<<T as Trait<I>>::Proposal>) {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_member(&who), Error::<T, I>::NotMember);
@@ -243,7 +244,7 @@ decl_module! {
 		/// - Bounded storage read and writes.
 		/// - Will be slightly heavier if the proposal is approved / disapproved after the vote.
 		/// # </weight>
-		#[weight = (200_000_000, frame_support::weights::DispatchClass::Operational)]
+		#[weight = (200_000_000, DispatchClass::Operational)]
 		fn vote(origin, proposal: T::Hash, #[compact] index: ProposalIndex, approve: bool) {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_member(&who), Error::<T, I>::NotMember);
@@ -302,7 +303,7 @@ decl_module! {
 		///   - `M` is number of members,
 		///   - `P` is number of active proposals,
 		///   - `L` is the encoded length of `proposal` preimage.
-		#[weight = (200_000_000, frame_support::weights::DispatchClass::Operational)]
+		#[weight = (200_000_000, DispatchClass::Operational)]
 		fn close(origin, proposal: T::Hash, #[compact] index: ProposalIndex) {
 			let _ = ensure_signed(origin)?;
 

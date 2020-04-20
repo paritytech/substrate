@@ -175,7 +175,7 @@ pub enum DispatchClass {
 
 impl Default for DispatchClass {
 	fn default() -> Self {
-		DispatchClass::Normal
+		Self::Normal
 	}
 }
 
@@ -280,7 +280,7 @@ impl<T> WeighData<T> for Weight {
 
 impl<T> ClassifyDispatch<T> for Weight {
 	fn classify_dispatch(&self, _: T) -> DispatchClass {
-		DispatchClass::default()
+		DispatchClass::Normal
 	}
 }
 

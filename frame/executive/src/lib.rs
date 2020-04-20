@@ -416,7 +416,7 @@ mod tests {
 	use hex_literal::hex;
 
 	mod custom {
-		use frame_support::weights::Weight;
+		use frame_support::weights::{Weight, DispatchClass};
 
 		pub trait Trait: frame_system::Trait {}
 
@@ -427,7 +427,7 @@ mod tests {
 					// NOTE: does not make any different.
 					let _ = frame_system::ensure_signed(origin);
 				}
-				#[weight = (200, frame_support::weights::DispatchClass::Operational)]
+				#[weight = (200, DispatchClass::Operational)]
 				fn some_root_operation(origin) {
 					let _ = frame_system::ensure_root(origin);
 				}

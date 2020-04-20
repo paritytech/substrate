@@ -275,7 +275,7 @@ use sp_std::{
 use codec::{HasCompact, Encode, Decode};
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error, debug,
-	weights::{MINIMUM_WEIGHT, Weight},
+	weights::{MINIMUM_WEIGHT, Weight, DispatchClass},
 	storage::IterableStorageMap,
 	dispatch::{IsSubType, DispatchResult},
 	traits::{
@@ -1759,7 +1759,7 @@ decl_module! {
 		/// Set history_depth value.
 		///
 		/// Origin must be root.
-		#[weight = (500_000_000, frame_support::weights::DispatchClass::Operational)]
+		#[weight = (500_000_000, DispatchClass::Operational)]
 		fn set_history_depth(origin, #[compact] new_history_depth: EraIndex) {
 			ensure_root(origin)?;
 			if let Some(current_era) = Self::current_era() {

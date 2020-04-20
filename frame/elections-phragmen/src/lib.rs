@@ -88,7 +88,8 @@ use sp_runtime::{
 };
 use frame_support::{
 	decl_storage, decl_event, ensure, decl_module, decl_error,
-	weights::{Weight, MINIMUM_WEIGHT}, storage::{StorageMap, IterableStorageMap},
+	weights::{Weight, MINIMUM_WEIGHT, DispatchClass},
+	storage::{StorageMap, IterableStorageMap},
 	traits::{
 		Currency, Get, LockableCurrency, LockIdentifier, ReservableCurrency, WithdrawReasons,
 		ChangeMembers, OnUnbalanced, WithdrawReason, Contains, BalanceStatus, InitializeMembers,
@@ -428,7 +429,7 @@ decl_module! {
 		/// - `origin` is a current member. In this case, the bond is unreserved and origin is
 		///   removed as a member, consequently not being a candidate for the next round anymore.
 		///   Similar to [`remove_voter`], if replacement runners exists, they are immediately used.
-		#[weight = (2_000_000_000, frame_support::weights::DispatchClass::Operational)]
+		#[weight = (2_000_000_000, DispatchClass::Operational)]
 		fn renounce_candidacy(origin) {
 			let who = ensure_signed(origin)?;
 
@@ -487,7 +488,7 @@ decl_module! {
 		/// Reads: O(do_phragmen)
 		/// Writes: O(do_phragmen)
 		/// # </weight>
-		#[weight = (2_000_000_000, frame_support::weights::DispatchClass::Operational)]
+		#[weight = (2_000_000_000, DispatchClass::Operational)]
 		fn remove_member(origin, who: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
 			ensure_root(origin)?;
 			let who = T::Lookup::lookup(who)?;

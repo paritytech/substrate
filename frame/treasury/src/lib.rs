@@ -98,7 +98,7 @@ use frame_support::traits::{
 use sp_runtime::{Permill, ModuleId, Percent, RuntimeDebug, traits::{
 	Zero, StaticLookup, AccountIdConversion, Saturating, Hash, BadOrigin
 }};
-use frame_support::weights::{Weight, MINIMUM_WEIGHT};
+use frame_support::weights::{Weight, MINIMUM_WEIGHT, DispatchClass};
 use frame_support::traits::{Contains, EnsureOrigin};
 use codec::{Encode, Decode};
 use frame_system::{self as system, ensure_signed, ensure_root};
@@ -354,7 +354,7 @@ decl_module! {
 		/// - Limited storage reads.
 		/// - One DB clear.
 		/// # </weight>
-		#[weight = (100_000_000, frame_support::weights::DispatchClass::Operational)]
+		#[weight = (100_000_000, DispatchClass::Operational)]
 		fn reject_proposal(origin, #[compact] proposal_id: ProposalIndex) {
 			T::RejectOrigin::try_origin(origin)
 				.map(|_| ())
@@ -376,7 +376,7 @@ decl_module! {
 		/// - Limited storage reads.
 		/// - One DB change.
 		/// # </weight>
-		#[weight = (100_000_000, frame_support::weights::DispatchClass::Operational)]
+		#[weight = (100_000_000, DispatchClass::Operational)]
 		fn approve_proposal(origin, #[compact] proposal_id: ProposalIndex) {
 			T::ApproveOrigin::try_origin(origin)
 				.map(|_| ())
