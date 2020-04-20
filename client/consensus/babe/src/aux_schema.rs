@@ -136,12 +136,12 @@ pub(crate) fn load_block_weight<H: Encode, B: AuxStore>(
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::{Epoch, migration::EpochV0};
+	use crate::migration::EpochV0;
 	use fork_tree::ForkTree;
 	use substrate_test_runtime_client;
 	use sp_core::H256;
 	use sp_runtime::traits::NumberFor;
-	use sp_consensus_babe::{BabeEpochConfiguration, BabeGenesisConfiguration};
+	use sp_consensus_babe::BabeGenesisConfiguration;
 	use sc_consensus_epochs::{PersistedEpoch, PersistedEpochHeader, EpochHeader};
 	use sp_consensus::Error as ConsensusError;
 	use sc_network_test::Block as TestBlock;
