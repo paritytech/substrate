@@ -416,9 +416,10 @@ impl<B: BlockT> ConsensusGossip<B> {
 
 #[cfg(test)]
 mod tests {
-	use std::sync::Arc;
+	use futures::prelude::*;
+	use sc_network::{Event, ReputationChange};
 	use sp_runtime::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
-
+	use std::{borrow::Cow, pin::Pin, sync::{Arc, Mutex}};
 	use super::*;
 
 	type Block = RawBlock<ExtrinsicWrapper<u64>>;
@@ -445,6 +446,52 @@ mod tests {
 			_data: &[u8],
 		) -> ValidationResult<H256> {
 			ValidationResult::ProcessAndKeep(H256::default())
+		}
+	}
+
+	struct DiscardAll;
+	impl Validator<Block> for DiscardAll{
+		fn validate(
+			&self,
+			_context: &mut dyn ValidatorContext<Block>,
+			_sender: &PeerId,
+			_data: &[u8],
+		) -> ValidationResult<H256> {
+			ValidationResult::Discard
+		}
+	}
+
+	#[derive(Clone, Default)]
+	struct NoOpNetwork {
+		inner: Arc<Mutex<NoOpNetworkInner>>,
+	}
+
+	#[derive(Clone, Default)]
+	struct NoOpNetworkInner {
+		peer_reports: Vec<(PeerId, ReputationChange)>,
+	}
+
+	impl<B: BlockT> Network<B> for NoOpNetwork {
+		fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
+			unimplemented!();
+		}
+
+		fn report_peer(&self, peer_id: PeerId, reputation_change: ReputationChange) {
+			self.inner.lock().unwrap().peer_reports.push((peer_id, reputation_change));
+		}
+
+		fn disconnect_peer(&self, _: PeerId) {
+			unimplemented!();
+		}
+
+		fn write_notification(&self, _: PeerId, _: ConsensusEngineId, _: Vec<u8>) {
+			unimplemented!();
+		}
+
+		fn register_notifications_protocol(&self, _: ConsensusEngineId, _: Cow<'static, [u8]>) {}
+
+		fn announce(&self, _: B::Hash, _: Vec<u8>) {
+			unimplemented!();
 		}
 	}
 
@@ -528,42 +575,9 @@ mod tests {
 
 	#[test]
 	fn peer_is_removed_on_disconnect() {
-		struct TestNetwork;
-		impl Network<Block> for TestNetwork {
-			fn event_stream(
-				&self,
-			) -> std::pin::Pin<Box<dyn futures::Stream<Item = crate::Event> + Send>> {
-				unimplemented!("Not required in tests")
-			}
-
-			fn report_peer(&self, _: PeerId, _: crate::ReputationChange) {
-				unimplemented!("Not required in tests")
-			}
-
-			fn disconnect_peer(&self, _: PeerId) {
-				unimplemented!("Not required in tests")
-			}
-
-			fn write_notification(&self, _: PeerId, _: crate::ConsensusEngineId, _: Vec<u8>) {
-				unimplemented!("Not required in tests")
-			}
-
-			fn register_notifications_protocol(
-				&self,
-				_: ConsensusEngineId,
-				_: std::borrow::Cow<'static, [u8]>,
-			) {
-				unimplemented!("Not required in tests")
-			}
-
-			fn announce(&self, _: H256, _: Vec<u8>) {
-				unimplemented!("Not required in tests")
-			}
-		}
-
 		let mut consensus = ConsensusGossip::<Block>::new(Arc::new(AllowAll), [0, 0, 0, 0]);
 
-		let mut network = TestNetwork;
+		let mut network = NoOpNetwork::default();
 
 		let peer_id = PeerId::random();
 		consensus.new_peer(&mut network, peer_id.clone(), ObservedRole::Full);
@@ -571,5 +585,53 @@ mod tests {
 
 		consensus.peer_disconnected(&mut network, peer_id.clone());
 		assert!(!consensus.peers.contains_key(&peer_id));
+	}
+
+	#[test]
+	fn on_incoming_ignores_discarded_messages() {
+		let to_forward = ConsensusGossip::<Block>::new(
+			Arc::new(DiscardAll),
+			[0, 0, 0, 0],
+		).on_incoming(
+			&mut NoOpNetwork::default(),
+			PeerId::random(),
+			vec![vec![1, 2, 3]],
+		);
+
+		assert!(
+			to_forward.is_empty(),
+			"Expected `on_incoming` to ignore discarded message but got {:?}", to_forward,
+		);
+	}
+
+	#[test]
+	fn on_incoming_ignores_unregistered_peer() {
+		let mut network = NoOpNetwork::default();
+		let remote = PeerId::random();
+
+		let to_forward = ConsensusGossip::<Block>::new(
+			Arc::new(AllowAll),
+			[0, 0, 0, 0],
+		).on_incoming(
+			&mut network,
+			// Unregistered peer.
+			remote.clone(),
+			vec![vec![1, 2, 3]],
+		);
+
+		assert!(
+			to_forward.is_empty(),
+			"Expected `on_incoming` to ignore message from unregistered peer but got {:?}",
+			to_forward,
+		);
+
+		assert_eq!(
+			vec![
+				(remote.clone(), rep::GOSSIP_SUCCESS),
+				(remote, rep::UNREGISTERED_TOPIC),
+			],
+			network.inner.lock().unwrap().peer_reports,
+			"Expected `ConsensusGossip` to report message from unregistered peer."
+		);
 	}
 }
