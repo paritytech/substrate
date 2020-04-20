@@ -480,8 +480,7 @@ impl StorageProof {
 		StorageProofNodeIterator::new(self)
 	}
 
-	/// This unpacks `TrieSkipHashesFull` to `Full` or do nothing.
-	fn unpack<H: Hasher>(
+	fn trie_skip_unpack<H: Hasher>(
 		self,
 	) -> Result<Self, H>
 		where H::Out: Codec,
@@ -616,40 +615,6 @@ impl StorageProof {
 		})
 	}
 
-	/// This flatten some children expanded proof to their
-	/// non expanded counterpart when possible.
-	/// Note that if for some reason child proof were not
-	/// attached to the top trie, they will be lost.
-	pub fn flatten(self) -> Self {
-		match self {
-			StorageProof::Full(children) => {
-				let mut result = Vec::new();
-				children.into_iter().for_each(|(child_info, proof)| {
-					match child_info.child_type() {
-						ChildType::ParentKeyId => {
-							// this can get merged with top, since it is proof we do not use prefix
-							result.extend(proof);
-						}
-					}
-				});
-				StorageProof::Flatten(result)
-			},
-			StorageProof::TrieSkipHashesFull(children) => {
-				let mut result = Vec::new();
-				children.into_iter().for_each(|(child_info, proof)| {
-					match child_info.child_type() {
-						ChildType::ParentKeyId => {
-							result.push(proof);
-						}
-					}
-				});
-
-				StorageProof::TrieSkipHashes(result)
-			},
-			_ => self,
-		}
-	}
-
 	/// Merges multiple storage proofs covering potentially different sets of keys into one proof
 	/// covering all keys. The merged proof output may be smaller than the aggregate size of the input
 	/// proofs due to deduplication of trie nodes.
@@ -672,10 +637,10 @@ impl StorageProof {
 			// unpack
 			match &proof {
 				&StorageProof::TrieSkipHashesFull(..) => {
-					proof = proof.unpack::<H>()?;
+					proof = proof.trie_skip_unpack::<H>()?;
 				},
 				&StorageProof::TrieSkipHashes(..) => {
-					proof = proof.unpack::<H>()?;
+					proof = proof.trie_skip_unpack::<H>()?;
 				},
 				&StorageProof::KnownQueryPlanAndValues(..)
 					| &StorageProof::KnownQueryPlan(..) => {
