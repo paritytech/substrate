@@ -80,6 +80,9 @@ pub trait StorageValue<T: FullCodec> {
 	/// Mutate the value
 	fn mutate<R, F: FnOnce(&mut Self::Query) -> R>(f: F) -> R;
 
+	/// Mutate the value if closure returns `Ok`
+	fn try_mutate<R, E, F: FnOnce(&mut Self::Query) -> Result<R, E>>(f: F) -> Result<R, E>;
+
 	/// Clear the storage value.
 	fn kill();
 
@@ -280,21 +283,25 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 	/// The type that get/take returns.
 	type Query;
 
+	/// Get the storage key used to fetch a value corresponding to a specific key.
 	fn hashed_key_for<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Vec<u8>
 	where
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>;
 
+	/// Does the value (explicitly) exist in storage?
 	fn contains_key<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> bool
 	where
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>;
 
+	/// Load the value associated with the given key from the double map.
 	fn get<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Self::Query
 	where
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>;
 
+	/// Take a value from storage, removing it afterwards.
 	fn take<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Self::Query
 	where
 		KArg1: EncodeLike<K1>,
@@ -308,28 +315,43 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		YKArg1: EncodeLike<K1>,
 		YKArg2: EncodeLike<K2>;
 
+	/// Store a value to be associated with the given keys from the double map.
 	fn insert<KArg1, KArg2, VArg>(k1: KArg1, k2: KArg2, val: VArg)
 	where
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>,
 		VArg: EncodeLike<V>;
 
+	/// Remove the value under the given keys.
 	fn remove<KArg1, KArg2>(k1: KArg1, k2: KArg2)
 	where
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>;
 
+	/// Remove all values under the first key.
 	fn remove_prefix<KArg1>(k1: KArg1) where KArg1: ?Sized + EncodeLike<K1>;
 
+	/// Iterate over values that share the first key.
 	fn iter_prefix_values<KArg1>(k1: KArg1) -> PrefixIterator<V>
 		where KArg1: ?Sized + EncodeLike<K1>;
 
+	/// Mutate the value under the given keys.
 	fn mutate<KArg1, KArg2, R, F>(k1: KArg1, k2: KArg2, f: F) -> R
 	where
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>,
 		F: FnOnce(&mut Self::Query) -> R;
 
+	/// Mutate the value under the given keys when the closure returns `Ok`.
+	fn try_mutate<KArg1, KArg2, R, E, F>(k1: KArg1, k2: KArg2, f: F) -> Result<R, E>
+	where
+		KArg1: EncodeLike<K1>,
+		KArg2: EncodeLike<K2>,
+		F: FnOnce(&mut Self::Query) -> Result<R, E>;
+
+	/// Append the given item to the value in the storage.
+	///
+	/// `V` is required to implement `codec::EncodeAppend`.
 	fn append<Items, Item, EncodeLikeItem, KArg1, KArg2>(
 		k1: KArg1,
 		k2: KArg2,
@@ -344,6 +366,10 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		Items: IntoIterator<Item=EncodeLikeItem>,
 		Items::IntoIter: ExactSizeIterator;
 
+	/// Safely append the given items to the value in the storage. If a codec error occurs, then the
+	/// old (presumably corrupt) value is replaced with the given `items`.
+	///
+	/// `V` is required to implement `codec::EncodeAppend`.
 	fn append_or_insert<Items, Item, EncodeLikeItem, KArg1, KArg2>(
 		k1: KArg1,
 		k2: KArg2,

@@ -17,7 +17,6 @@
 use crate::chain_spec::ChainSpec;
 use log::info;
 use wasm_bindgen::prelude::*;
-use sc_service::Configuration;
 use browser_utils::{
 	Client,
 	browser_configuration, set_console_error_panic_hook, init_console_log,

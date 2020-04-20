@@ -246,7 +246,7 @@ pub mod config;
 pub mod error;
 pub mod network_state;
 
-pub use service::{NetworkService, NetworkStateInfo, NetworkWorker, ExHashT, ReportHandle};
+pub use service::{NetworkService, NetworkWorker};
 pub use protocol::PeerInfo;
 pub use protocol::event::{Event, DhtEvent, ObservedRole};
 pub use protocol::sync::SyncState;
@@ -264,3 +264,38 @@ pub use sc_peerset::ReputationChange;
 /// case of (possibly repeated) simultaneous dialing attempts between
 /// two peers, the per-peer connection limit is not set to 1 but 2.
 const MAX_CONNECTIONS_PER_PEER: usize = 2;
+
+/// Minimum Requirements for a Hash within Networking
+pub trait ExHashT: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static {}
+
+impl<T> ExHashT for T where T: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static
+{}
+
+/// A cloneable handle for reporting cost/benefits of peers.
+#[derive(Clone)]
+pub struct ReportHandle {
+	inner: sc_peerset::PeersetHandle, // wraps it so we don't have to worry about breaking API.
+}
+
+impl From<sc_peerset::PeersetHandle> for ReportHandle {
+	fn from(peerset_handle: sc_peerset::PeersetHandle) -> Self {
+		ReportHandle { inner: peerset_handle }
+	}
+}
+
+impl ReportHandle {
+	/// Report a given peer as either beneficial (+) or costly (-) according to the
+	/// given scalar.
+	pub fn report_peer(&self, who: PeerId, cost_benefit: ReputationChange) {
+		self.inner.report_peer(who, cost_benefit);
+	}
+}
+
+/// Trait for providing information about the local network state
+pub trait NetworkStateInfo {
+	/// Returns the local external addresses.
+	fn external_addresses(&self) -> Vec<Multiaddr>;
+
+	/// Returns the local Peer ID.
+	fn local_peer_id(&self) -> PeerId;
+}
