@@ -49,7 +49,7 @@ where
 		format!("{} (Browser)", name),
 		"unknown",
 		Default::default(),
-		&std::env::current_dir().expect("current directory must exist"),
+		None,
 	);
 	network.boot_nodes = chain_spec.boot_nodes().to_vec();
 	network.transport = TransportConfig::Normal {
@@ -70,7 +70,7 @@ where
 			info!("Opening Indexed DB database '{}'...", name);
 			let db = kvdb_web::Database::open(name, 10).await?;
 
-			DatabaseConfig::Custom(Arc::new(db))
+			DatabaseConfig::Custom(sp_database::as_database(db))
 		},
 		keystore: KeystoreConfig::InMemory,
 		default_heap_pages: Default::default(),

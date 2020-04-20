@@ -1261,7 +1261,7 @@ fn doesnt_import_blocks_that_revert_finality() {
 			state_cache_size: 1 << 20,
 			state_cache_child_ratio: None,
 			pruning: PruningMode::ArchiveAll,
-			source: DatabaseSettingsSrc::Path {
+			source: DatabaseSettingsSrc::RocksDb {
 				path: tmp.path().into(),
 				cache_size: 1024,
 			},
@@ -1462,7 +1462,7 @@ fn returns_status_for_pruned_blocks() {
 			state_cache_size: 1 << 20,
 			state_cache_child_ratio: None,
 			pruning: PruningMode::keep_blocks(1),
-			source: DatabaseSettingsSrc::Path {
+			source: DatabaseSettingsSrc::RocksDb {
 				path: tmp.path().into(),
 				cache_size: 1024,
 			},

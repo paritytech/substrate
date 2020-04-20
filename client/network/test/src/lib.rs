@@ -27,7 +27,9 @@ use libp2p::build_multiaddr;
 use log::trace;
 use sc_network::config::FinalityProofProvider;
 use sp_blockchain::{
-	Result as ClientResult, well_known_cache_keys::{self, Id as CacheKeyId}, Info as BlockchainInfo,
+	HeaderBackend, Result as ClientResult,
+	well_known_cache_keys::{self, Id as CacheKeyId},
+	Info as BlockchainInfo,
 };
 use sc_client_api::{
 	BlockchainEvents, BlockImportNotification, FinalityNotifications, ImportNotifications, FinalityNotification,
@@ -369,13 +371,9 @@ impl<D> Peer<D> {
 
 	/// Test helper to compare the blockchain state of multiple (networked)
 	/// clients.
-	/// Potentially costly, as it creates in-memory copies of both blockchains in order
-	/// to compare them. If you have easier/softer checks that are sufficient, e.g.
-	/// by using .info(), you should probably use it instead of this.
 	pub fn blockchain_canon_equals(&self, other: &Self) -> bool {
 		if let (Some(mine), Some(others)) = (self.backend.clone(), other.backend.clone()) {
-			mine.as_in_memory().blockchain()
-				.canon_equals_to(others.as_in_memory().blockchain())
+			mine.blockchain().info().best_hash == others.blockchain().info().best_hash
 		} else {
 			false
 		}
@@ -384,13 +382,19 @@ impl<D> Peer<D> {
 	/// Count the total number of imported blocks.
 	pub fn blocks_count(&self) -> u64 {
 		self.backend.as_ref().map(
-			|backend| backend.blocks_count()
+			|backend| backend.blockchain().info().best_number
 		).unwrap_or(0)
 	}
 
 	/// Return a collection of block hashes that failed verification
 	pub fn failed_verifications(&self) -> HashMap<<Block as BlockT>::Hash, String> {
 		self.verifier.failed_verifications.lock().clone()
+	}
+
+	pub fn has_block(&self, hash: &H256) -> bool {
+		self.backend.as_ref().map(
+			|backend| backend.blockchain().header(BlockId::hash(*hash)).unwrap().is_some()
+		).unwrap_or(false)
 	}
 }
 
@@ -614,7 +618,7 @@ pub trait TestNetFactory: Sized {
 			"test-node",
 			"test-client",
 			Default::default(),
-			&std::env::current_dir().expect("current directory must exist"),
+			None,
 		);
 		network_config.transport = TransportConfig::MemoryOnly;
 		network_config.listen_addresses = vec![listen_addr.clone()];
@@ -690,7 +694,7 @@ pub trait TestNetFactory: Sized {
 			"test-node",
 			"test-client",
 			Default::default(),
-			&std::env::current_dir().expect("current directory must exist"),
+			None,
 		);
 		network_config.transport = TransportConfig::MemoryOnly;
 		network_config.listen_addresses = vec![listen_addr.clone()];

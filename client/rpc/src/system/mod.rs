@@ -28,7 +28,7 @@ use sp_runtime::traits::{self, Header as HeaderT};
 use self::error::Result;
 
 pub use sc_rpc_api::system::*;
-pub use self::helpers::{Properties, SystemInfo, Health, PeerInfo, NodeRole};
+pub use self::helpers::{SystemInfo, Health, PeerInfo, NodeRole};
 pub use self::gen_client::Client as SystemClient;
 
 /// System API implementation
@@ -41,6 +41,11 @@ pub struct System<B: traits::Block> {
 pub enum Request<B: traits::Block> {
 	/// Must return the health of the network.
 	Health(oneshot::Sender<Health>),
+	/// Must return the base58-encoded local `PeerId`.
+	LocalPeerId(oneshot::Sender<String>),
+	/// Must return the string representation of the addresses we listen on, including the
+	/// trailing `/p2p/`.
+	LocalListenAddresses(oneshot::Sender<Vec<String>>),
 	/// Must return information about the peers we are connected to.
 	Peers(oneshot::Sender<Vec<PeerInfo<B::Hash, <B::Header as HeaderT>::Number>>>),
 	/// Must return the state of the network.
@@ -82,13 +87,29 @@ impl<B: traits::Block> SystemApi<B::Hash, <B::Header as HeaderT>::Number> for Sy
 		Ok(self.info.chain_name.clone())
 	}
 
-	fn system_properties(&self) -> Result<Properties> {
+	fn system_type(&self) -> Result<sp_chain_spec::ChainType> {
+		Ok(self.info.chain_type.clone())
+	}
+
+	fn system_properties(&self) -> Result<sp_chain_spec::Properties> {
 		Ok(self.info.properties.clone())
 	}
 
 	fn system_health(&self) -> Receiver<Health> {
 		let (tx, rx) = oneshot::channel();
 		let _ = self.send_back.unbounded_send(Request::Health(tx));
+		Receiver(Compat::new(rx))
+	}
+
+	fn system_local_peer_id(&self) -> Receiver<String> {
+		let (tx, rx) = oneshot::channel();
+		let _ = self.send_back.unbounded_send(Request::LocalPeerId(tx));
+		Receiver(Compat::new(rx))
+	}
+
+	fn system_local_listen_addresses(&self) -> Receiver<Vec<String>> {
+		let (tx, rx) = oneshot::channel();
+		let _ = self.send_back.unbounded_send(Request::LocalListenAddresses(tx));
 		Receiver(Compat::new(rx))
 	}
 

@@ -17,7 +17,7 @@
 use crate::{Service, NetworkStatus, NetworkState, error::Error, DEFAULT_PROTOCOL_ID, MallocSizeOfWasm};
 use crate::{TaskManagerBuilder, start_rpc_servers, build_network_future, TransactionPoolAdapter};
 use crate::status_sinks;
-use crate::config::{Configuration, DatabaseConfig, KeystoreConfig, PrometheusConfig};
+use crate::config::{Configuration, KeystoreConfig, PrometheusConfig};
 use crate::metrics::MetricsService;
 use sc_client_api::{
 	self, BlockchainEvents, backend::RemoteBackend, light::RemoteBlockchain, execution_extensions::ExtensionsFactory,
@@ -172,7 +172,10 @@ fn new_full_parts<TBl, TRtApi, TExecDisp>(
 		KeystoreConfig::InMemory => Keystore::new_in_memory(),
 	};
 
-	let tasks_builder = TaskManagerBuilder::new();
+	let tasks_builder = {
+		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
+		TaskManagerBuilder::new(registry)?
+	};
 
 	let executor = NativeExecutor::<TExecDisp>::new(
 		config.wasm_method,
@@ -195,15 +198,7 @@ fn new_full_parts<TBl, TRtApi, TExecDisp>(
 			state_cache_child_ratio:
 			config.state_cache_child_ratio.map(|v| (v, 100)),
 			pruning: config.pruning.clone(),
-			source: match &config.database {
-				DatabaseConfig::Path { path, cache_size } =>
-					sc_client_db::DatabaseSettingsSrc::Path {
-						path: path.clone(),
-						cache_size: *cache_size,
-					},
-				DatabaseConfig::Custom(db) =>
-					sc_client_db::DatabaseSettingsSrc::Custom(db.clone()),
-			},
+			source: config.database.clone(),
 		};
 
 		let extensions = sc_client_api::execution_extensions::ExecutionExtensions::new(
@@ -326,7 +321,10 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 		(),
 		TLightBackend<TBl>,
 	>, Error> {
-		let tasks_builder = TaskManagerBuilder::new();
+		let tasks_builder = {
+			let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
+			TaskManagerBuilder::new(registry)?
+		};
 
 		let keystore = match &config.keystore {
 			KeystoreConfig::Path { path, password } => Keystore::open(
@@ -348,15 +346,7 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 				state_cache_child_ratio:
 					config.state_cache_child_ratio.map(|v| (v, 100)),
 				pruning: config.pruning.clone(),
-				source: match &config.database {
-					DatabaseConfig::Path { path, cache_size } =>
-						sc_client_db::DatabaseSettingsSrc::Path {
-							path: path.clone(),
-							cache_size: *cache_size,
-						},
-					DatabaseConfig::Custom(db) =>
-						sc_client_db::DatabaseSettingsSrc::Custom(db.clone()),
-				},
+				source: config.database.clone(),
 			};
 			sc_client_db::light::LightStorage::new(db_settings)?
 		};
@@ -641,6 +631,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			sc_transaction_pool::txpool::Options,
 			Arc<TCl>,
 			Option<TFchr>,
+			Option<&Registry>,
 		) -> Result<(UExPool, Option<BackgroundTask>), Error>
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
 		UExPool, TRpc, Backend>, Error>
@@ -649,6 +640,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			self.config.transaction_pool.clone(),
 			self.client.clone(),
 			self.fetcher.clone(),
+			self.config.prometheus_config.as_ref().map(|config| &config.registry),
 		)?;
 
 		if let Some(background_task) = background_task{
@@ -1062,6 +1054,7 @@ ServiceBuilder<
 				impl_name: config.impl_name.into(),
 				impl_version: config.impl_version.into(),
 				properties: chain_spec.properties().clone(),
+				chain_type: chain_spec.chain_type().clone(),
 			};
 
 			let subscriptions = sc_rpc::Subscriptions::new(Arc::new(tasks_builder.spawn_handle()));

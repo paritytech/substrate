@@ -15,7 +15,8 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Service configuration.
-pub use sc_client_db::{kvdb::KeyValueDB, PruningMode};
+
+pub use sc_client_db::{Database, PruningMode, DatabaseSettingsSrc as DatabaseConfig};
 pub use sc_network::Multiaddr;
 pub use sc_network::config::{ExtTransport, MultiaddrWithPeerId, NetworkConfiguration, Role, NodeKeyConfig};
 pub use sc_executor::WasmExecutionMethod;
@@ -121,21 +122,6 @@ impl KeystoreConfig {
 			Self::InMemory => None,
 		}
 	}
-}
-
-/// Configuration of the database of the client.
-#[derive(Clone)]
-pub enum DatabaseConfig {
-	/// Database file at a specific path. Recommended for most uses.
-	Path {
-		/// Path to the database.
-		path: PathBuf,
-		/// Cache Size for internal database in MiB
-		cache_size: usize,
-	},
-
-	/// A custom implementation of an already-open database.
-	Custom(Arc<dyn KeyValueDB>),
 }
 
 /// Configuration of the Prometheus endpoint.

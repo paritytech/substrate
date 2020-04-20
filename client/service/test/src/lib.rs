@@ -146,12 +146,11 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 {
 	let root = root.path().join(format!("node-{}", index));
 
-	let net_config_path = root.join("network");
-
 	let mut network_config = NetworkConfiguration::new(
 		format!("Node {}", index),
 		"network/test/0.1",
-		Default::default(), &net_config_path,
+		Default::default(),
+		None,
 	);
 
 	network_config.listen_addresses.push(
@@ -178,7 +177,7 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 			path: root.join("key"),
 			password: None
 		},
-		database: DatabaseConfig::Path {
+		database: DatabaseConfig::RocksDb {
 			path: root.join("db"),
 			cache_size: 128,
 		},
