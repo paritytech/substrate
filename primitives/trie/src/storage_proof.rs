@@ -41,6 +41,16 @@ fn missing_pack_input<H: Hasher>() -> sp_std::boxed::Box<TrieError<Layout<H>>> {
 	sp_std::boxed::Box::new(TrieError::<Layout<H>>::IncompleteDatabase(Default::default()))
 }
 
+fn missing_collected_input<H: Hasher>() -> sp_std::boxed::Box<TrieError<Layout<H>>> {
+	// TODO better error in trie db crate eg Packing error
+	sp_std::boxed::Box::new(TrieError::<Layout<H>>::IncompleteDatabase(Default::default()))
+}
+
+fn missing_verify_input<H: Hasher>() -> sp_std::boxed::Box<TrieError<Layout<H>>> {
+	// TODO better error in trie db crate eg Packing error
+	sp_std::boxed::Box::new(TrieError::<Layout<H>>::IncompleteDatabase(Default::default()))
+}
+
 fn impossible_merge_for_proof<H: Hasher>() -> sp_std::boxed::Box<TrieError<Layout<H>>> {
 	// TODO better error in trie db crate eg Packing error
 	sp_std::boxed::Box::new(TrieError::<Layout<H>>::IncompleteDatabase(Default::default()))
@@ -516,11 +526,42 @@ impl StorageProof {
 	/// verification (`StorageProofKind::can_use_verify`).
 	pub fn verify<H: Hasher>(
 		self,
-		_additional_content: &Input,
-	) -> Result<Option<bool>, H>
+		input: &Input,
+	) -> Result<Option<(bool, Output)>, H>
 		where H::Out: Codec,
 	{
-		unimplemented!("TODO run the validation of the query plan one")
+		match self {
+			StorageProof::KnownQueryPlan(..) => {
+				unimplemented!("there is no such mode actually");
+			},
+			StorageProof::KnownQueryPlanAndValues(proof_children) => {
+				if let Input::QueryPlanWithValues(input_children) = input {
+					let mut root_hash = H::Out::default();
+					for (child_info, nodes) in proof_children.iter() {
+						if let Some((root, input)) = input_children.get(child_info) {
+							// Layout h is the only supported one at the time being
+							if root.len() != root_hash.as_ref().len() {
+								return Ok(Some((false, Output::None)));
+							}
+							root_hash.as_mut().copy_from_slice(&root[..]);
+							if let Err(_) = trie_db::proof::verify_proof::<Layout<H>, _, _, _>(
+								&root_hash,
+								&nodes[..],
+								input.iter(),
+							) {
+								return Ok(Some((false, Output::None)));
+							}
+						} else {
+							return Err(missing_verify_input::<H>());
+						}
+					}
+					Ok(Some((true, Output::None)))
+				} else {
+					Err(missing_verify_input::<H>())
+				}
+			},
+			_ => Ok(None),
+		}
 	}
 
 	/// This produce the proof from collected information.
@@ -588,9 +629,35 @@ impl StorageProof {
 					return Err(missing_pack_input::<H>());
 				}
 			},
-			StorageProofKind::KnownQueryPlanAndValues
-			| StorageProofKind::KnownQueryPlan => {
-				unimplemented!("TODO pack query plan mode")
+			StorageProofKind::KnownQueryPlan => unimplemented!("Actually do not exists"),
+			StorageProofKind::KnownQueryPlanAndValues => {
+				if let Input::QueryPlan(input_children) = input {
+					let mut result = ChildrenProofMap::default();
+					let mut count_input = input_children.len();
+					let mut root_hash = H::Out::default();
+					for (child_info, set) in collected.iter() {
+						let child_info_proof = child_info.proof_info();
+						if let Some((root, keys)) = input_children.get(&child_info_proof) {
+							count_input -= 1;
+							// Layout h is the only supported one at the time being
+							if root.len() != root_hash.as_ref().len() {
+								return Err(missing_pack_input::<H>());
+							}
+							root_hash.as_mut().copy_from_slice(&root[..]);
+							let trie = <trie_db::TrieDB<Layout<H>>>::new(set, &root_hash)?;
+							let compacted = trie_db::proof::generate_proof(&trie, keys)?;
+							result.insert(child_info_proof, compacted);
+						} else {
+							return Err(missing_pack_input::<H>());
+						}
+					}
+					if count_input > 0 {
+						return Err(missing_collected_input::<H>());
+					}
+					StorageProof::KnownQueryPlanAndValues(result)
+				} else {
+					return Err(missing_pack_input::<H>());
+				}
 			},
 		})
 	}
