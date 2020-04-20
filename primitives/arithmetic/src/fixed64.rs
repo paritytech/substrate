@@ -163,7 +163,7 @@ impl FixedPointNumber for Fixed64 {
 		let natural_parts = parts / div;
 		let natural_parts: N = natural_parts.saturated_into();
 
-		let fractional_parts = (parts % div) as u32;
+		let fractional_parts = (parts % div) as Self::PrevUnsigned;
 
 		let n = int.saturating_mul(natural_parts);
 		let p = Self::Perthing::from_parts(fractional_parts) * int;

@@ -154,7 +154,7 @@ impl FixedPointNumber for Fixed128 {
 
 	fn saturated_multiply_accumulate<N>(self, int: N) -> N
 	where
-		N: From<u64> + TryFrom<u128> + UniqueSaturatedInto<u64> +
+		N: From<Self::PrevUnsigned> + TryFrom<Self::Unsigned> + UniqueSaturatedInto<Self::PrevUnsigned> +
 		Bounded + Copy + Saturating +
 		ops::Rem<N, Output=N> + ops::Div<N, Output=N> + ops::Mul<N, Output=N> +
 		ops::Add<N, Output=N> + Default + core::fmt::Debug
@@ -168,7 +168,7 @@ impl FixedPointNumber for Fixed128 {
 		let natural_parts = parts / div;
 		let natural_parts: N = natural_parts.saturated_into();
 
-		let fractional_parts = (parts % div) as u64;
+		let fractional_parts = (parts % div) as Self::PrevUnsigned;
 
 		let n = int.saturating_mul(natural_parts);
 		let p = Self::Perthing::from_parts(fractional_parts) * int;
