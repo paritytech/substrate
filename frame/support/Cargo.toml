@@ -19,6 +19,7 @@ frame-metadata = { version = "11.0.0-dev", default-features = false, path = "../
 sp-std = { version = "2.0.0-dev", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "2.0.0-dev", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "2.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-tracing = { version = "2.0.0-dev", default-features = false, path = "../../primitives/tracing" }
 sp-core = { version = "2.0.0-dev", default-features = false, path = "../../primitives/core" }
 sp-arithmetic = { version = "2.0.0-dev", default-features = false, path = "../../primitives/arithmetic" }
 sp-inherents = { version = "2.0.0-dev", default-features = false, path = "../../primitives/inherents" }
@@ -28,7 +29,6 @@ once_cell = { version = "1", default-features = false, optional = true }
 sp-state-machine = { version = "0.8.0-dev", optional = true, path = "../../primitives/state-machine" }
 bitmask = { version = "0.5.0", default-features = false }
 impl-trait-for-tuples = "0.1.3"
-tracing = { version = "0.1.10", optional = true }
 
 [dev-dependencies]
 pretty_assertions = "0.6.1"
@@ -37,7 +37,6 @@ frame-system = { version = "2.0.0-dev", path = "../system" }
 [features]
 default = ["std"]
 std = [
-	"tracing",
 	"once_cell",
 	"bitmask/std",
 	"serde",
@@ -45,6 +44,7 @@ std = [
 	"codec/std",
 	"sp-std/std",
 	"sp-runtime/std",
+	"sp-tracing/std",
 	"sp-arithmetic/std",
 	"frame-metadata/std",
 	"sp-inherents/std",
