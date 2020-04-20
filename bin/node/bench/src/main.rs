@@ -17,6 +17,7 @@
 #[macro_use] mod core;
 mod import;
 mod trie;
+mod simple_trie;
 mod generator;
 mod tempdb;
 mod state_sizes;

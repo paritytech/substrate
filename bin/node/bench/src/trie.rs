@@ -33,7 +33,8 @@ use crate::{
 
 pub const SAMPLE_SIZE: usize = 100;
 
-pub type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
+pub type KeyValue = (Vec<u8>, Vec<u8>);
+pub type KeyValues = Vec<KeyValue>;
 
 #[derive(Clone, Copy, Debug, derive_more::Display)]
 pub enum DatabaseSize {
@@ -171,7 +172,7 @@ impl core::Benchmark for TrieBenchmark {
 	fn run(&mut self, mode: Mode) -> std::time::Duration {
 		let mut db = self.database.clone();
 		let storage: Arc<dyn sp_state_machine::Storage<sp_core::Blake2Hasher>> =
-		Arc::new(Storage(db.open()));
+			Arc::new(Storage(db.open()));
 
 		let trie_backend = sp_state_machine::TrieBackend::new(
 			storage,
