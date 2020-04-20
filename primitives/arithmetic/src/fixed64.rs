@@ -178,6 +178,10 @@ impl FixedPointNumber for Fixed64 {
 			int.saturating_sub(excess)
 		}
 	}
+
+	pub fn is_negative(&self) -> bool {
+		self.0.is_negative()
+	}
 }
 
 impl Saturating for Fixed64 {
@@ -198,8 +202,7 @@ impl Saturating for Fixed64 {
 	}
 }
 
-/// Note that this is a standard, _potentially-panicking_, implementation. Use `Saturating` trait
-/// for safe addition.
+/// Use `Saturating` trait for safe addition.
 impl ops::Add for Fixed64 {
 	type Output = Self;
 
@@ -208,8 +211,7 @@ impl ops::Add for Fixed64 {
 	}
 }
 
-/// Note that this is a standard, _potentially-panicking_, implementation. Use `Saturating` trait
-/// for safe subtraction.
+/// Use `Saturating` trait for safe subtraction.
 impl ops::Sub for Fixed64 {
 	type Output = Self;
 
@@ -218,8 +220,7 @@ impl ops::Sub for Fixed64 {
 	}
 }
 
-/// Note that this is a standard, _potentially-panicking_, implementation. Use `Saturating` trait
-/// for safe subtraction.
+/// Use `CheckedMul` trait for safe multiplication.
 impl ops::Mul for Fixed64 {
 	type Output = Self;
 
@@ -228,8 +229,7 @@ impl ops::Mul for Fixed64 {
 	}
 }
 
-/// Note that this is a standard, _potentially-panicking_, implementation. Use `CheckedDiv` trait
-/// for safe division.
+/// Use `CheckedDiv` trait for safe division.
 impl ops::Div for Fixed64 {
 	type Output = Self;
 
@@ -302,7 +302,13 @@ impl Bounded for Fixed64 {
 impl sp_std::fmt::Debug for Fixed64 {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		write!(f, "Fixed64({},{})", self.0 / Self::DIV, (self.0 % Self::DIV) / 1000)
+		let integral = {
+			let int = self.0 / Self::DIV;
+			let signum_for_zero = if int == 0 && self.is_negative() { "-" } else { "" };
+			format!("{}{}", signum_for_zero, int)
+		};
+		let fractional = format!("{:0>9}", (self.0 % Self::DIV).abs());
+		write!(f, "Fixed64({}.{})", integral, fractional)
 	}
 
 	#[cfg(not(feature = "std"))]

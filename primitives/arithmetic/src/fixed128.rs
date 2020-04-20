@@ -17,17 +17,14 @@
 use codec::{Decode, Encode};
 use primitive_types::U256;
 use crate::{
-	Perbill,
-	traits::{
-		CheckedSub, CheckedAdd, CheckedMul, CheckedDiv,
-		Bounded, Saturating, UniqueSaturatedInto, SaturatedConversion, FixedPointNumber
-	},
-	PerThing,
+	traits::{Bounded, Saturating, UniqueSaturatedInto, SaturatedConversion, FixedPointNumber},
+	PerThing, Perquintill,
 };
 use sp_std::{
 	ops,
 	convert::{Into, TryFrom, TryInto},
-	fmt,
+	fmt, ops,
+	num::NonZeroI128,
 };
 
 #[cfg(feature = "std")]
@@ -45,7 +42,7 @@ impl FixedPointNumber for Fixed128 {
 	type Unsigned = u64;
 	type NextUnsigned = U256;
 	type Oversized = i128;
-	type Perthing = Perbill;
+	type Perthing = Perquintill;
 
 	const DIV: i128 = 1_000_000_000_000_000_000;
 
