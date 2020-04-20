@@ -232,6 +232,7 @@ where
 
 	/// Actually execute all transitions for `block`.
 	pub fn execute_block(block: Block) {
+		let span_id2 = sp_io::profiling::register_span(module_path!(), "execute_block");
 		Self::initialize_block(block.header());
 
 		// any initial checks
@@ -247,6 +248,7 @@ where
 
 		// any final checks
 		Self::final_checks(&header);
+		sp_io::profiling::exit_span(span_id2);
 	}
 
 	/// Execute given extrinsics and take care of post-extrinsics book-keeping.
@@ -297,7 +299,7 @@ where
 		encoded_len: usize,
 		to_note: Option<Vec<u8>>,
 	) -> ApplyExtrinsicResult {
-		let span_id = sp_io::profiling::register_span(module_path!(), "apply_extrinsic_with_len");
+//		let span_id = sp_io::profiling::register_span(module_path!(), "apply_extrinsic_with_len");
 		// Verify that the signature is good.
 		let xt = uxt.check(&Default::default())?;
 
@@ -315,7 +317,7 @@ where
 		let r = Applyable::apply::<UnsignedValidator>(xt, &dispatch_info, encoded_len)?;
 
 		<frame_system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32, dispatch_info);
-		sp_io::profiling::exit_span(span_id);
+//		sp_io::profiling::exit_span(span_id);
 		Ok(r)
 	}
 

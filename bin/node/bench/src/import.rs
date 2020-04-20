@@ -121,19 +121,19 @@ impl core::Benchmark for ImportBenchmark {
 			std::thread::park_timeout(std::time::Duration::from_secs(2));
 		}
 
-		log::info!(
-			target: "bench-logistics",
-			"imported block with {} tx, took: {:#?}",
-			self.block.extrinsics.len(),
-			elapsed,
-		);
-
-		log::info!(
-			target: "bench-logistics",
-			"usage info: {}",
-			context.backend.usage_info()
-				.expect("RocksDB backend always provides usage info!"),
-		);
+//		log::info!(
+//			target: "bench-logistics",
+//			"imported block with {} tx, took: {:#?}",
+//			self.block.extrinsics.len(),
+//			elapsed,
+//		);
+//
+//		log::info!(
+//			target: "bench-logistics",
+//			"usage info: {}",
+//			context.backend.usage_info()
+//				.expect("RocksDB backend always provides usage info!"),
+//		);
 
 		elapsed
 	}

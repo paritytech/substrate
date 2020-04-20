@@ -41,16 +41,16 @@ pub fn config_endowed(
 ) -> GenesisConfig {
 
 	let mut endowed = vec![
-		(alice(), 111 * DOLLARS),
-		(bob(), 100 * DOLLARS),
+		(alice(), 100_000_000 * DOLLARS),
+		(bob(), 100_000_000 * DOLLARS),
 		(charlie(), 100_000_000 * DOLLARS),
-		(dave(), 111 * DOLLARS),
-		(eve(), 101 * DOLLARS),
-		(ferdie(), 100 * DOLLARS),
+		(dave(), 100_000_000 * DOLLARS),
+		(eve(), 100_000_000 * DOLLARS),
+		(ferdie(), 100_000_000 * DOLLARS),
 	];
 
 	endowed.extend(
-		extra_endowed.into_iter().map(|endowed| (endowed, 100*DOLLARS))
+		extra_endowed.into_iter().map(|endowed| (endowed, 100_000_000*DOLLARS))
 	);
 
 	GenesisConfig {

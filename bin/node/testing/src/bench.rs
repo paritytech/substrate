@@ -44,6 +44,7 @@ use node_runtime::{
 	UncheckedExtrinsic,
 	MinimumPeriod,
 	BalancesCall,
+	SystemCall,
 	AccountId,
 	Signature,
 };
@@ -276,24 +277,20 @@ impl BenchDb {
 
 		let mut iteration = 0;
 		let start = std::time::Instant::now();
-		for _ in 0..block_type.transactions() {
+		let qty: usize = std::env::var("TX_PER_BLOCK").unwrap().parse().unwrap();
+//		for _ in 0..block_type.transactions() {
+		for _ in 0..qty {
 
-			let sender = self.keyring.at(iteration);
+			let sender = self.keyring.at(iteration % 100);
 			let receiver = get_account_id_from_seed::<sr25519::Public>(
 				&format!("random-user//{}", iteration)
 			);
-
+			let nonce: u32 = iteration as u32 / 100;
 			let signed = self.keyring.sign(
 				CheckedExtrinsic {
-					signed: Some((sender, signed_extra(0, node_runtime::ExistentialDeposit::get() + 1))),
-					function: Call::Balances(
-						BalancesCall::transfer(
-							pallet_indices::address::Address::Id(receiver),
-							match block_type {
-								BlockType::RandomTransfers(_) => node_runtime::ExistentialDeposit::get() + 1,
-								BlockType::RandomTransfersReaping(_) => 100*DOLLARS - node_runtime::ExistentialDeposit::get() - 1,
-							}
-						)
+					signed: Some((sender, signed_extra(nonce, node_runtime::ExistentialDeposit::get() + 1))),
+					function: Call::System(
+						SystemCall::remark(Vec::new())
 					),
 				},
 				version,

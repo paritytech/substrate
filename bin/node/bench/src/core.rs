@@ -121,7 +121,7 @@ pub fn run_benchmark(
 	let mut benchmark = benchmark.setup();
 
 	let mut durations: Vec<u128> = vec![];
-	for _ in 0..50 {
+	for _ in 0..10 {
 		let duration = benchmark.run(mode);
 		durations.push(duration.as_nanos());
 	}
