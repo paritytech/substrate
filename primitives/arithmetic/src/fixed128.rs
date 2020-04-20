@@ -487,10 +487,10 @@ mod tests {
 		let a = Fixed128::from_integer(-1);
 		assert_eq!(min().saturating_mul(a), max());
 
-		assert_eq!(Fixed128::from_integer(125).saturating_mul(a).deconstruct(), -125 * Fixed128::DIV);
+		assert_eq!(Fixed128::from_integer(125).saturating_mul(a).into_inner(), -125 * Fixed128::DIV);
 
 		let a = Fixed128::from_rational(1, 5);
-		assert_eq!(Fixed128::from_integer(125).saturating_mul(a).deconstruct(), 25 * Fixed128::DIV);
+		assert_eq!(Fixed128::from_integer(125).saturating_mul(a).into_inner(), 25 * Fixed128::DIV);
 	}
 
 	#[test]
@@ -627,16 +627,16 @@ mod tests {
 	#[test]
 	fn perthing_into_fixed_i128() {
 		let ten_percent_percent: Fixed128 = Percent::from_percent(10).into();
-		assert_eq!(ten_percent_percent.deconstruct(), Fixed128::DIV / 10);
+		assert_eq!(ten_percent_percent.into_inner(), Fixed128::DIV / 10);
 
 		let ten_percent_permill: Fixed128 = Permill::from_percent(10).into();
-		assert_eq!(ten_percent_permill.deconstruct(), Fixed128::DIV / 10);
+		assert_eq!(ten_percent_permill.into_inner(), Fixed128::DIV / 10);
 
 		let ten_percent_perbill: Fixed128 = Perbill::from_percent(10).into();
-		assert_eq!(ten_percent_perbill.deconstruct(), Fixed128::DIV / 10);
+		assert_eq!(ten_percent_perbill.into_inner(), Fixed128::DIV / 10);
 
 		let ten_percent_perquintill: Fixed128 = Perquintill::from_percent(10).into();
-		assert_eq!(ten_percent_perquintill.deconstruct(), Fixed128::DIV / 10);
+		assert_eq!(ten_percent_perquintill.into_inner(), Fixed128::DIV / 10);
 	}
 
 	#[test]
