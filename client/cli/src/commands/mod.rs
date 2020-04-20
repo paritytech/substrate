@@ -279,6 +279,12 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
+			fn unsafe_rpc_expose(&self) -> $crate::Result<bool> {
+				match self {
+					$($enum::$variant(cmd) => cmd.unsafe_rpc_expose()),*
+				}
+			}
+
 			fn rpc_ws_max_connections(&self) -> $crate::Result<::std::option::Option<usize>> {
 				match self {
 					$($enum::$variant(cmd) => cmd.rpc_ws_max_connections()),*

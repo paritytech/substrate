@@ -23,6 +23,7 @@ use std::marker::PhantomData;
 use hash_db::{HashDB, Hasher, EMPTY_PREFIX};
 use codec::{Decode, Encode};
 use sp_core::{convert_hash, traits::CodeExecutor};
+use sp_core::storage::{ChildInfo, ChildType};
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor,
 	AtLeast32Bit, CheckedConversion,
@@ -135,7 +136,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>> LightDataChecker<E, H, B, S> {
 					number: request.last_block.0,
 				},
 				remote_max_block,
-				request.storage_key.as_ref().map(Vec::as_slice),
+				request.storage_key.as_ref(),
 				&request.key)
 			.map_err(|err| ClientError::ChangesTrieAccessFailed(err))?;
 			result.extend(result_range);
@@ -242,10 +243,14 @@ impl<E, Block, H, S> FetchChecker<Block> for LightDataChecker<E, H, Block, S>
 		request: &RemoteReadChildRequest<Block::Header>,
 		remote_proof: StorageProof,
 	) -> ClientResult<HashMap<Vec<u8>, Option<Vec<u8>>>> {
+		let child_info = match ChildType::from_prefixed_key(&request.storage_key) {
+			Some((ChildType::ParentKeyId, storage_key)) => ChildInfo::new_default(storage_key),
+			None => return Err("Invalid child type".into()),
+		};
 		read_child_proof_check::<H, _>(
 			convert_hash(request.header.state_root()),
 			remote_proof,
-			&request.storage_key,
+			&child_info,
 			request.keys.iter(),
 		).map_err(Into::into)
 	}

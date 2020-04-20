@@ -301,7 +301,7 @@ fn new_test_ext() -> sp_io::TestExternalities {
 fn storage_instance_independence() {
 	let mut storage = sp_core::storage::Storage {
 		top: std::collections::BTreeMap::new(),
-		children: std::collections::HashMap::new()
+		children_default: std::collections::HashMap::new()
 	};
 	sp_state_machine::BasicExternalities::execute_with_storage(&mut storage, || {
 		module2::Value::<Runtime>::put(0);

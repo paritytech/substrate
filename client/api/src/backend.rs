@@ -26,7 +26,7 @@ use sp_state_machine::{
 	ChangesTrieState, ChangesTrieStorage as StateChangesTrieStorage, ChangesTrieTransaction,
 	StorageCollection, ChildStorageCollection,
 };
-use sp_storage::{StorageData, StorageKey, ChildInfo};
+use sp_storage::{StorageData, StorageKey, PrefixedStorageKey, ChildInfo};
 use crate::{
 	blockchain::{
 		Backend as BlockchainBackend, well_known_cache_keys
@@ -299,6 +299,7 @@ impl<'a, State, Block> Iterator for KeyIterator<'a, State, Block> where
 		Some(StorageKey(next_key))
 	}
 }
+
 /// Provides acess to storage primitives
 pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 	/// Given a `BlockId` and a key, return the value under the key in that block.
@@ -329,8 +330,7 @@ pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 	fn child_storage(
 		&self,
 		id: &BlockId<Block>,
-		storage_key: &StorageKey,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &StorageKey
 	) -> sp_blockchain::Result<Option<StorageData>>;
 
@@ -338,8 +338,7 @@ pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 	fn child_storage_keys(
 		&self,
 		id: &BlockId<Block>,
-		child_storage_key: &StorageKey,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key_prefix: &StorageKey
 	) -> sp_blockchain::Result<Vec<StorageKey>>;
 
@@ -347,8 +346,7 @@ pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 	fn child_storage_hash(
 		&self,
 		id: &BlockId<Block>,
-		storage_key: &StorageKey,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &StorageKey
 	) -> sp_blockchain::Result<Option<Block::Hash>>;
 
@@ -370,7 +368,7 @@ pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 		&self,
 		first: NumberFor<Block>,
 		last: BlockId<Block>,
-		storage_key: Option<&StorageKey>,
+		storage_key: Option<&PrefixedStorageKey>,
 		key: &StorageKey
 	) -> sp_blockchain::Result<Vec<(NumberFor<Block>, u32)>>;
 }

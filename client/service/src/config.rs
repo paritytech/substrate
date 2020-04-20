@@ -59,6 +59,8 @@ pub struct Configuration {
 	pub wasm_method: WasmExecutionMethod,
 	/// Execution strategies.
 	pub execution_strategies: ExecutionStrategies,
+	/// Whether potentially unsafe RPC is considered safe to be exposed.
+	pub unsafe_rpc_expose: bool,
 	/// RPC over HTTP binding address. `None` if disabled.
 	pub rpc_http: Option<SocketAddr>,
 	/// RPC over Websockets binding address. `None` if disabled.

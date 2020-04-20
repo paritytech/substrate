@@ -24,7 +24,7 @@ use parking_lot::RwLock;
 use codec::{Decode, Encode};
 
 use sp_core::ChangesTrieConfiguration;
-use sp_core::storage::{well_known_keys, ChildInfo, OwnedChildInfo};
+use sp_core::storage::{well_known_keys, ChildInfo};
 use sp_core::offchain::storage::InMemOffchainStorage;
 use sp_state_machine::{
 	Backend as StateBackend, TrieBackend, InMemoryBackend, ChangesTrieTransaction,
@@ -312,17 +312,17 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 		self.changes_trie_config_update = Some(changes_trie_config);
 
 		// this is only called when genesis block is imported => shouldn't be performance bottleneck
-		let mut storage: HashMap<Option<(Vec<u8>, OwnedChildInfo)>, _> = HashMap::new();
+		let mut storage: HashMap<Option<ChildInfo>, _> = HashMap::new();
 		storage.insert(None, input.top);
 
 		// create a list of children keys to re-compute roots for
-		let child_delta = input.children.iter()
-			.map(|(storage_key, storage_child)| (storage_key.clone(), None, storage_child.child_info.clone()))
+		let child_delta = input.children_default.iter()
+			.map(|(_storage_key, storage_child)| (storage_child.child_info.clone(), None))
 			.collect::<Vec<_>>();
 
 		// make sure to persist the child storage
-		for (child_key, storage_child) in input.children {
-			storage.insert(Some((child_key, storage_child.child_info)), storage_child.data);
+		for (_child_key, storage_child) in input.children_default {
+			storage.insert(Some(storage_child.child_info), storage_child.data);
 		}
 
 		let storage_update = InMemoryBackend::from(storage);
@@ -386,13 +386,12 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 
 	fn child_storage(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> ClientResult<Option<Vec<u8>>> {
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) =>
-				Ok(state.child_storage(storage_key, child_info, key).expect(IN_MEMORY_EXPECT_PROOF)),
+				Ok(state.child_storage(child_info, key).expect(IN_MEMORY_EXPECT_PROOF)),
 			GenesisOrUnavailableState::Unavailable => Err(ClientError::NotAvailableOnLightClient),
 		}
 	}
@@ -407,13 +406,12 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 
 	fn next_child_storage_key(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) => Ok(
-				state.next_child_storage_key(storage_key, child_info, key)
+				state.next_child_storage_key(child_info, key)
 					.expect(IN_MEMORY_EXPECT_PROOF)
 			),
 			GenesisOrUnavailableState::Unavailable => Err(ClientError::NotAvailableOnLightClient),
@@ -436,27 +434,25 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 
 	fn for_keys_in_child_storage<A: FnMut(&[u8])>(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		action: A,
 	) {
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) =>
-				state.for_keys_in_child_storage(storage_key, child_info, action),
+				state.for_keys_in_child_storage(child_info, action),
 			GenesisOrUnavailableState::Unavailable => (),
 		}
 	}
 
 	fn for_child_keys_with_prefix<A: FnMut(&[u8])>(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		prefix: &[u8],
 		action: A,
 	) {
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) =>
-				state.for_child_keys_with_prefix(storage_key, child_info, prefix, action),
+				state.for_child_keys_with_prefix(child_info, prefix, action),
 			GenesisOrUnavailableState::Unavailable => (),
 		}
 	}
@@ -474,8 +470,7 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 
 	fn child_storage_root<I>(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		delta: I,
 	) -> (H::Out, bool, Self::Transaction)
 	where
@@ -483,7 +478,7 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 	{
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) => {
-				let (root, is_equal, _) = state.child_storage_root(storage_key, child_info, delta);
+				let (root, is_equal, _) = state.child_storage_root(child_info, delta);
 				(root, is_equal, Default::default())
 			},
 			GenesisOrUnavailableState::Unavailable =>
