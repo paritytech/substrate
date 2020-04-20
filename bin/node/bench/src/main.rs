@@ -24,7 +24,7 @@ mod state_sizes;
 
 use crate::core::{run_benchmark, Mode as BenchmarkMode};
 use import::{ImportBenchmarkDescription, SizeType};
-use trie::{TrieBenchmarkDescription, DatabaseSize};
+use trie::{TrieReadBenchmarkDescription, TrieWriteBenchmarkDescription, DatabaseSize};
 use node_testing::bench::{Profile, KeyTypes};
 use structopt::StructOpt;
 
@@ -86,7 +86,11 @@ fn main() {
 		size in [
 			DatabaseSize::Empty, DatabaseSize::Smallest, DatabaseSize::Small,
 			DatabaseSize::Medium, DatabaseSize::Large,
-		] => TrieBenchmarkDescription { database_size: *size },
+		] => TrieReadBenchmarkDescription { database_size: *size },
+		size in [
+			DatabaseSize::Empty, DatabaseSize::Smallest, DatabaseSize::Small,
+			DatabaseSize::Medium, DatabaseSize::Large,
+		] => TrieWriteBenchmarkDescription { database_size: *size },
 	);
 
 	if opt.list {
