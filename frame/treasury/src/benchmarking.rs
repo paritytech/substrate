@@ -107,7 +107,6 @@ fn create_approved_proposals<T: Trait>(n: u32) -> Result<(), &'static str> {
 }
 
 const MAX_BYTES: u32 = 16384;
-const MAX_TIPPERS: u32 = 100;
 
 benchmarks! {
 	_ { }
@@ -158,13 +157,13 @@ benchmarks! {
 
 	tip_new {
 		let r in 0 .. MAX_BYTES;
-		let t in 1 .. MAX_TIPPERS;
+		let t in 1 .. MAX_TIPPERS_COUNT;
 
 		let (caller, reason, beneficiary, value) = setup_tip::<T>(r, t)?;
 	}: _(RawOrigin::Signed(caller), reason, beneficiary, value)
 
 	tip {
-		let t in 1 .. MAX_TIPPERS;
+		let t in 1 .. MAX_TIPPERS_COUNT;
 		let (member, reason, beneficiary, value) = setup_tip::<T>(0, t)?;
 		let value = T::Currency::minimum_balance().saturating_mul(100.into());
 		Treasury::<T>::tip_new(
@@ -181,7 +180,7 @@ benchmarks! {
 	}: _(RawOrigin::Signed(caller), hash, value)
 
 	close_tip {
-		let t in 1 .. MAX_TIPPERS;
+		let t in 1 .. MAX_TIPPERS_COUNT;
 
 		// Make sure pot is funded
 		let pot_account = Treasury::<T>::account_id();
