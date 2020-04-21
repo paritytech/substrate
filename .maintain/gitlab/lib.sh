@@ -91,3 +91,114 @@ structure_message() {
 send_message() {
 curl -XPOST -d "$1" "https://matrix.parity.io/_matrix/client/r0/rooms/$2/send/m.room.message?access_token=$3"
 }
+
+
+# highlight output in gitlab job logs
+boldprint () { printf "|\n| \033[1m${@}\033[0m\n|\n" ; }
+boldcat () { printf "|\n"; while read l; do printf "| \033[1m${l}\033[0m\n"; done; printf "|\n" ; }
+
+
+# find polkadot companion pr
+# either do this on the description of the current pull request or figure out 
+# the master branches last pull request and start from there
+# substrate pr no: 1234
+# prnonly: optional -- return pr no only
+companion_pr() {
+
+  prno="${1}"
+
+  print_ref () {
+    if [ "${2}" = "prnonly" ]
+    then
+      print "${1}"
+    else
+      print "pull/${1}/head"
+    fi
+  }
+
+ 
+  github_api_substrate_pull_url="${api_base}/paritytech/substrate/pulls"
+  # use github api v3 in order to access the data without authentication
+  github_header="Accept: application/vnd.github.v3+json" 
+
+
+  pr_data_file="$(mktemp)"
+  # get the last reference to a pr in polkadot
+  curl -sSL -H "${github_header}" -o "${pr_data_file}" \
+    "${github_api_substrate_pull_url}/${prno}"
+
+  pr_body="$(sed -n -r 's/^[[:space:]]+"body": (".*")[^"]+$/\1/p' "${pr_data_file}")"
+  pr_ref="$(grep -Po '"ref"\s*:\s*"\K(?!master)[^"]*' "${pr_data_file}")"
+  rm -f "${pr_data_file}"
+
+  # check for explicit statement first
+  companion="$(echo "${pr_body}" | sed -n -r \
+      -e 's;^.*polkadot companion: paritytech/polkadot#([0-9]+).*$;\1;p' \
+      -e 's;^.*polkadot companion: https://github.com/paritytech/polkadot/pull/([0-9]+).*$;\1;p' \
+    | tail -n 1)"
+
+
+  test "${companion}" && print_ref "${companion}" "${2}" && return
+
+
+  # then check for polkadot pr mentionings
+  companion="$(echo "${pr_body}" | sed -n -r \
+    -e 's;^.*paritytech/polkadot/#([0-9]+).*$;\1;p' \
+    -e 's;^.*https://github.com/paritytech/polkadot/pull/([0-9]+).*$;\1;p' \
+    | tail -n 1)"
+
+  test "${companion}" && print_ref "${companion}" "${2}" && return
+  test "${2}" = "prnonly" && return 1
+
+  # last resort check if there is a polkadot pr with the same branch name
+  if curl -sSL -H "${github_header}" \
+    "${api_base}/paritytech/polkadot/git/ref/heads/${pr_ref}" \
+    | grep -q "\"refs/heads/${pr_ref}\""
+
+    print "heads/${pr_ref}"
+  fi
+}
+
+
+# check the status of a pull request - needs to be
+# mergable and approved
+# polkadot companion pr no: 1234
+check_mergeability() {
+  
+  github_api_polkadot_pull_url="${api_base}/paritytech/polkadot/pulls"
+  # use github api v3 in order to access the data without authentication
+  github_header="Accept: application/vnd.github.v3+json" 
+
+  companion="${1}"
+  
+
+  curl -H "${github_header}" -sS -o companion_pr.json \
+    ${github_api_polkadot_pull_url}/${companion} 
+  
+  if jq -e .merged < companion_pr.json >/dev/null
+  then
+    boldprint "polkadot pr #${companion} already merged"
+    return 0
+  fi
+  
+  if jq -e '.mergeable' < companion_pr.json >/dev/null
+  then
+    boldprint "polkadot pr #${companion} mergeable"
+  else
+    boldprint "polkadot pr #${companion} not mergeable"
+    return 1
+  fi
+  
+  curl -H "${github_header}" -sS -o companion_pr_reviews.json \
+    ${github_api_polkadot_pull_url}/${companion}/reviews 
+  
+  if [ -n "$(jq -r -e '.[].state | select(. == "CHANGES_REQUESTED")' < companion_pr_reviews.json)" ] && \
+    [ -z "$(jq -r -e '.[].state | select(. == "APPROVED")' < companion_pr_reviews.json)" ]
+  then
+    boldprint "polkadot pr #${companion} not APPROVED"
+    return 1
+  fi
+  
+  boldprint "polkadot pr #${pr_companion} state APPROVED"
+  return 0
+}
