@@ -691,6 +691,7 @@ decl_module! {
 		/// ```nocompile
 		/// Self::registrars().get(reg_index).unwrap().fee
 		/// ```
+		/// 
 		/// - `additional_fields_count`: The number of additional fields on the identity info. This
 		///     should be auto-populated as:
 		///
@@ -756,6 +757,12 @@ decl_module! {
 		/// registered identity.
 		///
 		/// - `reg_index`: The index of the registrar whose judgement is no longer requested.
+		/// - `additional_fields_count`: The number of additional fields on the identity info. This
+		///     should be auto-populated as:
+		///
+		/// ```nocompile
+		/// Self::identity(account_id).unwrap().info.additional.len()
+		/// ```
 		///
 		/// Emits `JudgementUnrequested` if successful.
 		///
@@ -764,11 +771,23 @@ decl_module! {
 		/// - One balance-reserve operation.
 		/// - One storage mutation `O(R + X)`.
 		/// - One event.
+		/// - Benchmark: 135.3 + R * 0.574 + X * 3.394 µs (min square analysis)
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000_000)]
-		fn cancel_request(origin, reg_index: RegistrarIndex) {
+		#[weight = FunctionOf(
+			|(_, &fields_count): (&RegistrarIndex, &u32)| {
+				T::DbWeight::get().reads_writes(1, 1)
+				+ T::DbWeight::get().reads_writes(1, 1) // balance ops
+				+ 135_300_000 // constant
+				+ 574_000 * ASSUMED_MAX_REGISTRARS as Weight // R
+				+ 3_394_000 * fields_count as Weight // X
+			},
+			DispatchClass::Normal,
+			true
+		)]
+		fn cancel_request(origin, reg_index: RegistrarIndex, additional_fields_count: u32) {
 			let sender = ensure_signed(origin)?;
 			let mut id = <IdentityOf<T>>::get(&sender).ok_or(Error::<T>::NoIdentity)?;
+			ensure!(id.info.additional.len() <= additional_fields_count as usize, "invalid count");
 
 			let pos = id.judgements.binary_search_by_key(&reg_index, |x| x.0)
 				.map_err(|_| Error::<T>::NotFound)?;
