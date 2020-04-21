@@ -127,7 +127,7 @@ use import::GrandpaBlockImport;
 use until_imported::UntilGlobalMessageBlocksImported;
 use communication::{NetworkBridge, Network as NetworkT};
 use sp_finality_grandpa::{AuthorityList, AuthorityPair, AuthoritySignature, SetId};
-use crate::finality_proof::FinalityProofSubscription;
+use crate::finality_proof::{FinalityProofSubscription, SharedFinalityNotifiers};
 
 // Re-export these two because it's just so damn convenient.
 pub use sp_finality_grandpa::{AuthorityId, ScheduledChange};
@@ -522,7 +522,7 @@ where
 			voter_commands_tx,
 			persistent_data.consensus_changes.clone(),
 			authority_set_hard_forks,
-			finality_subscribers.clone(),
+			None, //finality_notifiers.clone(), // TODO: Figure out how to get subs here
 		),
 		LinkHalf {
 			client,
@@ -622,7 +622,7 @@ pub struct GrandpaParams<Block: BlockT, C, N, SC, VR> {
 	pub voting_rule: VR,
 	/// The prometheus metrics registry.
 	pub prometheus_registry: Option<prometheus_endpoint::Registry>,
-	/// A list of subscribers to block justifications -> TODO: Update
+	/// A subscription to new block justifications
 	pub finality_subscription: Option<FinalityProofSubscription<Block>>,
 }
 
@@ -700,6 +700,12 @@ pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR>(
 		future::Either::Right(future::pending())
 	};
 
+	let finality_notifiers = if let Some(s) = finality_subscription {
+		Some(s.notifiers())
+	} else {
+		None
+	};
+
 	let voter_work = VoterWork::new(
 		client,
 		config,
@@ -709,7 +715,7 @@ pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR>(
 		persistent_data,
 		voter_commands_rx,
 		prometheus_registry,
-		finality_subscribers,
+		finality_notifiers,
 	);
 
 	let voter_work = voter_work
@@ -767,7 +773,7 @@ where
 		persistent_data: PersistentData<Block>,
 		voter_commands_rx: TracingUnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
 		prometheus_registry: Option<prometheus_endpoint::Registry>,
-		finality_subscription: Option<FinalityProofSubscription<Block>>,
+		finality_notifiers: Option<SharedFinalityNotifiers<Block>>,
 	) -> Self {
 		let metrics = match prometheus_registry.as_ref().map(Metrics::register) {
 			Some(Ok(metrics)) => Some(metrics),
@@ -791,7 +797,7 @@ where
 			consensus_changes: persistent_data.consensus_changes.clone(),
 			voter_set_state: persistent_data.set_state.clone(),
 			metrics: metrics.as_ref().map(|m| m.environment.clone()),
-			finality_subscribers: finality_subscription.subscribers(),
+			finality_notifiers,
 			_phantom: PhantomData,
 		});
 
@@ -915,7 +921,7 @@ where
 					network: self.env.network.clone(),
 					voting_rule: self.env.voting_rule.clone(),
 					metrics: self.env.metrics.clone(),
-					finality_subscribers: self.env.finality_subscribers.clone(),
+					finality_notifiers: self.env.finality_notifiers.clone(),
 					_phantom: PhantomData,
 				});
 

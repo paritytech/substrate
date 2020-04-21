@@ -253,7 +253,7 @@ macro_rules! new_full {
 				telemetry_on_connect: Some(service.telemetry_on_connect_stream()),
 				voting_rule: grandpa::VotingRulesBuilder::default().build(),
 				prometheus_registry: service.prometheus_registry(),
-				finality_subscribers: finality_proof_subscription.subscribers(), // Or I can pass a ref to the struct
+				finality_subscribers: Some(finality_proof_subscription),
 			};
 
 			// the GRANDPA voter task is considered infallible, i.e.

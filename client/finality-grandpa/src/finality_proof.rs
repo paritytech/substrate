@@ -36,6 +36,7 @@
 
 use std::sync::Arc;
 use log::{trace, warn};
+use parking_lot::RwLock;
 
 use sp_blockchain::{Backend as BlockchainBackend, Error as ClientError, Result as ClientResult};
 use sc_client_api::{
@@ -148,6 +149,7 @@ impl<Block: BlockT> AuthoritySetForFinalityChecker<Block> for Arc<dyn FetchCheck
 
 
 /// Justification for a finalized block.
+#[derive(Clone)]
 pub struct JustificationNotification<Block: BlockT> {
 	/// Highest finalized block header
 	pub header: Block::Header,
@@ -156,38 +158,40 @@ pub struct JustificationNotification<Block: BlockT> {
 }
 
 type JustificationStream<Block> = TracingUnboundedReceiver<JustificationNotification<Block>>;
-type FinalitySubscriber<T> = TracingUnboundedSender<JustificationNotification<T>>;
-type SharedFinalitySubscribers<T> = Arc<Vec<FinalitySubscriber<T>>>;
+pub type SharedFinalitySubscribers<T> = Arc<RwLock<Vec<JustificationStream<T>>>>;
+
+type FinalityNotifier<T> = TracingUnboundedSender<JustificationNotification<T>>;
+pub type SharedFinalityNotifiers<T> = Arc<RwLock<Vec<FinalityNotifier<T>>>>;
 
 pub struct FinalityProofSubscription<Block: BlockT> {
-	subscribers: SharedFinalitySubscribers<Block>,
+	notifiers: SharedFinalityNotifiers<Block>,
 }
 
 impl<Block: BlockT> FinalityProofSubscription<Block> {
 	pub fn new() -> Self {
 		Self {
-			subscribers: Arc::new(vec![]),
+			notifiers: Arc::new(RwLock::new(vec![])),
 		}
 	}
 
-	pub fn subscribers(&self) -> SharedFinalitySubscribers<Block> {
-		self.subscribers.clone()
+	pub fn notifiers(&self) -> SharedFinalityNotifiers<Block> {
+		self.notifiers.clone()
 	}
 
+	// Will notify subsribers (receivers)
 	pub fn notify(&self, notification: JustificationNotification<Block>) {
 		// TODO: Look at `notify_justified()` in `client`
-		for s in self.subscribers.iter() {
-			s.unbounded_send(notification);
+		for s in self.notifiers.read().iter() {
+			s.unbounded_send(notification.clone());
 		}
 
 		todo!()
 	}
 
-	// This could also be called "subscribe()"
 	pub fn stream(&self) -> JustificationStream<Block> {
 		// TODO: I only want one channel to be created per instance
 		let (sink, stream) = tracing_unbounded("mpsc_justification_notification_stream");
-		self.subscribers.push(sink);
+		self.notifiers.write().push(sink);
 		stream
 	}
 }
