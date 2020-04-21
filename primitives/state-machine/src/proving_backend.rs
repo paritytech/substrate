@@ -157,19 +157,20 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 	where H::Out: Codec
 {
 	/// Create new proving backend.
-	pub fn new(backend: &'a TrieBackend<S, H>, full: bool) -> Self {
-		let proof_recorder = if full {
+	pub fn new(backend: &'a TrieBackend<S, H>, kind: StorageProofKind) -> Self {
+		let proof_recorder = if kind.need_register_full() {
 			ProofRecorder::Full(Default::default())
 		} else {
 			ProofRecorder::Flat(Default::default())
 		};
-		Self::new_with_recorder(backend, proof_recorder)
+		Self::new_with_recorder(backend, proof_recorder, kind)
 	}
 
 	/// Create new proving backend with the given recorder.
 	pub fn new_with_recorder(
 		backend: &'a TrieBackend<S, H>,
 		proof_recorder: ProofRecorder<H>,
+		proof_kind: StorageProofKind,
 	) -> Self {
 		let essence = backend.essence();
 		let root = essence.root().clone();
@@ -177,10 +178,11 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 			backend: essence.backend_storage(),
 			proof_recorder,
 		};
-		// TODO EMCH registering root can be disabled in most case:
-		// would simply need target proof as parameter (same thing for new
-		// function).
-		ProvingBackend(TrieBackend::new_with_roots(recorder, root))
+		if let ProofInputKind::ChildTrieRoots = proof_kind.processing_input_kind() {
+			ProvingBackend(TrieBackend::new_with_roots(recorder, root))
+		} else {
+			ProvingBackend(TrieBackend::new(recorder, root))
+		}
 	}
 
 	/// Extracting the gathered unordered proof.
@@ -369,7 +371,7 @@ where
 	let db = proof.as_partial_flat_db()
 		.map_err(|e| Box::new(format!("{}", e)) as Box<dyn Error>)?;
 	if db.contains(&root, EMPTY_PREFIX) {
-		Ok(TrieBackend::new_with_roots(db, root))
+		Ok(TrieBackend::new(db, root))
 	} else {
 		Err(Box::new(ExecutionError::InvalidProof))
 	}
@@ -390,7 +392,7 @@ where
 	if db.deref().get(&ChildInfoProof::top_trie())
 		.map(|db| db.contains(&root, EMPTY_PREFIX))
 		.unwrap_or(false) {
-		Ok(TrieBackend::new_with_roots(db, root))
+		Ok(TrieBackend::new(db, root))
 	} else {
 		Err(Box::new(ExecutionError::InvalidProof))
 	}
@@ -407,33 +409,33 @@ mod tests {
 
 	fn test_proving<'a>(
 		trie_backend: &'a TrieBackend<PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256>,
-		full: bool,
+		kind: StorageProofKind,
 	) -> ProvingBackend<'a, PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256> {
-		ProvingBackend::new(trie_backend, full)
+		ProvingBackend::new(trie_backend, kind)
 	}
 
 	#[test]
 	fn proof_is_empty_until_value_is_read() {
 		let trie_backend = test_trie();
 		let kind = StorageProofKind::Flatten;
-		assert!(test_proving(&trie_backend, kind.need_register_full()).extract_proof(kind).unwrap().is_empty());
+		assert!(test_proving(&trie_backend, kind).extract_proof(kind).unwrap().is_empty());
 		let kind = StorageProofKind::Full;
-		assert!(test_proving(&trie_backend, kind.need_register_full()).extract_proof(kind).unwrap().is_empty());
+		assert!(test_proving(&trie_backend, kind).extract_proof(kind).unwrap().is_empty());
 		let kind = StorageProofKind::TrieSkipHashesFull;
-		assert!(test_proving(&trie_backend, kind.need_register_full()).extract_proof(kind).unwrap().is_empty());
+		assert!(test_proving(&trie_backend, kind).extract_proof(kind).unwrap().is_empty());
 		let kind = StorageProofKind::TrieSkipHashes;
-		assert!(test_proving(&trie_backend, kind.need_register_full()).extract_proof(kind).unwrap().is_empty());
+		assert!(test_proving(&trie_backend, kind).extract_proof(kind).unwrap().is_empty());
 	}
 
 	#[test]
 	fn proof_is_non_empty_after_value_is_read() {
 		let trie_backend = test_trie();
 		let kind = StorageProofKind::Flatten;
-		let backend = test_proving(&trie_backend, kind.need_register_full());
+		let backend = test_proving(&trie_backend, kind);
 		assert_eq!(backend.storage(b"key").unwrap(), Some(b"value".to_vec()));
 		assert!(!backend.extract_proof(kind).unwrap().is_empty());
 		let kind = StorageProofKind::Full;
-		let backend = test_proving(&trie_backend, kind.need_register_full());
+		let backend = test_proving(&trie_backend, kind);
 		assert_eq!(backend.storage(b"key").unwrap(), Some(b"value".to_vec()));
 		assert!(!backend.extract_proof(kind).unwrap().is_empty());
 	}
@@ -450,9 +452,9 @@ mod tests {
 
 	#[test]
 	fn passes_through_backend_calls() {
-		let test = |flat| {
+		let test = |proof_kind| {
 			let trie_backend = test_trie();
-			let proving_backend = test_proving(&trie_backend, flat);
+			let proving_backend = test_proving(&trie_backend, proof_kind);
 			assert_eq!(trie_backend.storage(b"key").unwrap(), proving_backend.storage(b"key").unwrap());
 			assert_eq!(trie_backend.pairs(), proving_backend.pairs());
 
@@ -461,8 +463,8 @@ mod tests {
 			assert_eq!(trie_root, proving_root);
 			assert_eq!(trie_mdb.drain(), proving_mdb.drain());
 		};
-		test(true);
-		test(false);
+		test(StorageProofKind::Flatten);
+		test(StorageProofKind::Full);
 	}
 
 	#[test]
@@ -479,7 +481,7 @@ mod tests {
 		(0..64).for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i]));
 
 		let test = |kind: StorageProofKind| {
-			let proving = ProvingBackend::new(trie, kind.need_register_full());
+			let proving = ProvingBackend::new(trie, kind);
 			assert_eq!(proving.storage(&[42]).unwrap().unwrap(), vec![42]);
 
 			let proof = proving.extract_proof(kind).unwrap();
@@ -534,8 +536,7 @@ mod tests {
 		));
 
 		let test = |kind: StorageProofKind| {
-			let full = kind.need_register_full();
-			let proving = ProvingBackend::new(trie, full);
+			let proving = ProvingBackend::new(trie, kind);
 			assert_eq!(proving.storage(&[42]).unwrap().unwrap(), vec![42]);
 
 			let proof = proving.extract_proof(kind).unwrap();
@@ -550,7 +551,7 @@ mod tests {
 			assert_eq!(proof_check.storage(&[41]).unwrap().unwrap(), vec![41]);
 			assert_eq!(proof_check.storage(&[64]).unwrap(), None);
 
-			let proving = ProvingBackend::new(trie, full);
+			let proving = ProvingBackend::new(trie, kind);
 			assert_eq!(proving.child_storage(child_info_1, &[64]), Ok(Some(vec![64])));
 
 			let proof = proving.extract_proof(kind).unwrap();

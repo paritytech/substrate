@@ -37,7 +37,6 @@ pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
 
 impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: Codec {
 	/// Create new trie-based backend.
-	/// TODO check if still used
 	pub fn new(storage: S, root: H::Out) -> Self {
 		TrieBackend {
 			essence: TrieBackendEssence::new(storage, root, None),

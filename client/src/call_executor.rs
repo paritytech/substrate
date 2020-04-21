@@ -144,7 +144,7 @@ where
 		let mut state = self.backend.state_at(*at)?;
 
 		match recorder {
-			Some((recorder, _target_proof_kind)) => {
+			Some((recorder, target_proof_kind)) => {
 				let trie_state = state.as_trie_backend()
 					.ok_or_else(||
 						Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof) as Box<dyn sp_state_machine::Error>
@@ -158,6 +158,7 @@ where
 				let backend = sp_state_machine::ProvingBackend::new_with_recorder(
 					trie_state,
 					recorder.clone(),
+					target_proof_kind,
 				);
 
 				let changes = &mut *changes.borrow_mut();

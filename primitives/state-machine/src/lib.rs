@@ -505,7 +505,7 @@ where
 {
 	let proving_backend = proving_backend::ProvingBackend::new(
 		trie_backend,
-		kind.need_register_full(),
+		kind,
 	);
 	let mut sm = StateMachine::<_, H, N, Exec>::new(
 		&proving_backend,
@@ -699,7 +699,7 @@ where
 {
 	let proving_backend = proving_backend::ProvingBackend::<_, H>::new(
 		trie_backend,
-		kind.need_register_full(),
+		kind,
 	);
 	for key in keys.into_iter() {
 		proving_backend
@@ -724,7 +724,7 @@ where
 	I: IntoIterator,
 	I::Item: AsRef<[u8]>,
 {
-	let proving_backend = proving_backend::ProvingBackend::<_, H>::new(trie_backend, kind.need_register_full());
+	let proving_backend = proving_backend::ProvingBackend::<_, H>::new(trie_backend, kind);
 	for key in keys.into_iter() {
 		proving_backend
 			.child_storage(child_info, key.as_ref())
