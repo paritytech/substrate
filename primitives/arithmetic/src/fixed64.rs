@@ -424,6 +424,31 @@ mod tests {
 	}
 
 	#[test]
+	fn checked_mul_should_work() {
+		let a = Fixed64::from_integer(2);
+		assert_eq!(min().checked_mul(&a), None);
+		assert_eq!(max().checked_mul(&a), None);
+	}
+
+	#[test]
+	fn checked_mul_int_should_work() {
+		let a = Fixed64::from_integer(2);
+		let b = Fixed64::from_integer(-1);
+
+		assert_eq!(min().checked_mul_int(&2i8), None);
+		assert_eq!(max().checked_mul_int(&2i8), None);
+
+		assert_eq!(b.checked_mul_int(&i8::min_value()), None);
+		assert_eq!(a.checked_mul_int(&i8::max_value()), None);
+		assert_eq!(a.checked_mul_int(&i8::min_value()), None);
+
+		let neg_result = (i64::min_value() as i128 * 2i128) / Fixed64::DIV as i128;
+		let pos_result = (i64::max_value() as i128 * 2i128) / Fixed64::DIV as i128;
+		assert_eq!(min().checked_mul_int(&2i128), Some(neg_result));
+		assert_eq!(max().checked_mul_int(&2i128), Some(pos_result));
+	}
+
+	#[test]
 	fn saturating_mul_should_work() {
 		let a = Fixed64::from_integer(10);
 		assert_eq!(min().saturating_mul(a), min());
