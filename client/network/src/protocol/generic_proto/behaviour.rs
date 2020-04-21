@@ -201,7 +201,21 @@ enum PeerState {
 }
 
 impl PeerState {
-	/// True if there exists an established connection to tbe peer
+	/// True if there exists any established connection to the peer.
+	fn is_connected(&self) -> bool {
+		match self {
+			PeerState::Disabled { .. } |
+			PeerState::DisabledPendingEnable { .. } |
+			PeerState::Enabled { .. } |
+			PeerState::PendingRequest { .. } |
+			PeerState::Requested |
+			PeerState::Incoming { .. } => true,
+			PeerState::Poisoned |
+			PeerState::Banned { .. } => false,
+		}
+	}
+
+	/// True if there exists an established connection to the peer
 	/// that is open for custom protocol traffic.
 	fn is_open(&self) -> bool {
 		self.get_open().is_some()
@@ -354,7 +368,7 @@ impl GenericProto {
 		}
 
 		// Send an event to all the peers we're connected to, updating the handshake message.
-		for (peer_id, _) in self.peers.iter().filter(|(_, state)| state.is_open()) {
+		for (peer_id, _) in self.peers.iter().filter(|(_, state)| state.is_connected()) {
 			self.events.push(NetworkBehaviourAction::NotifyHandler {
 				peer_id: peer_id.clone(),
 				handler: NotifyHandler::All,
