@@ -25,8 +25,8 @@ use serde::{Serialize, Deserialize};
 use sp_core::storage::{StorageKey, StorageData, ChildInfo, Storage, StorageChild};
 use sp_runtime::BuildStorage;
 use serde_json as json;
-use crate::RuntimeGenesis;
-use sc_network::Multiaddr;
+use crate::{RuntimeGenesis, ChainType, extension::GetExtension, Properties};
+use sc_network::config::MultiaddrWithPeerId;
 use sc_telemetry::TelemetryEndpoints;
 
 enum GenesisSource<G> {
@@ -74,17 +74,14 @@ impl<G: RuntimeGenesis, E> BuildStorage for ChainSpec<G, E> {
 	fn build_storage(&self) -> Result<Storage, String> {
 		match self.genesis.resolve()? {
 			Genesis::Runtime(gc) => gc.build_storage(),
-			Genesis::Raw(RawGenesis { top: map, children: children_map }) => Ok(Storage {
+			Genesis::Raw(RawGenesis { top: map, children_default: children_map }) => Ok(Storage {
 				top: map.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
-				children: children_map.into_iter().map(|(sk, child_content)| {
-					let child_info = ChildInfo::resolve_child_info(
-						child_content.child_type,
-						child_content.child_info.as_slice(),
-					).expect("chain spec contains correct content").to_owned();
+				children_default: children_map.into_iter().map(|(storage_key, child_content)| {
+					let child_info = ChildInfo::new_default(storage_key.0.as_slice());
 					(
-						sk.0,
+						storage_key.0,
 						StorageChild {
-							data: child_content.data.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
+							data: child_content.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
 							child_info,
 						},
 					)
@@ -106,19 +103,10 @@ type GenesisStorage = HashMap<StorageKey, StorageData>;
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
-struct ChildRawStorage {
-	data: GenesisStorage,
-	child_info: Vec<u8>,
-	child_type: u32,
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[serde(deny_unknown_fields)]
 /// Storage content for genesis block.
 struct RawGenesis {
-	pub top: GenesisStorage,
-	pub children: HashMap<StorageKey, ChildRawStorage>,
+	top: GenesisStorage,
+	children_default: HashMap<StorageKey, GenesisStorage>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -134,22 +122,21 @@ enum Genesis<G> {
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 struct ClientSpec<E> {
-	pub name: String,
-	pub id: String,
-	pub boot_nodes: Vec<String>,
-	pub telemetry_endpoints: Option<TelemetryEndpoints>,
-	pub protocol_id: Option<String>,
-	pub properties: Option<Properties>,
+	name: String,
+	id: String,
+	#[serde(default)]
+	chain_type: ChainType,
+	boot_nodes: Vec<MultiaddrWithPeerId>,
+	telemetry_endpoints: Option<TelemetryEndpoints>,
+	protocol_id: Option<String>,
+	properties: Option<Properties>,
 	#[serde(flatten)]
-	pub extensions: E,
+	extensions: E,
 	// Never used, left only for backward compatibility.
 	consensus_engine: (),
 	#[serde(skip_serializing)]
 	genesis: serde::de::IgnoredAny,
 }
-
-/// Arbitrary properties defined in chain spec as a JSON object
-pub type Properties = json::map::Map<String, json::Value>;
 
 /// A type denoting empty extensions.
 ///
@@ -173,7 +160,7 @@ impl<G, E: Clone> Clone for ChainSpec<G, E> {
 
 impl<G, E> ChainSpec<G, E> {
 	/// A list of bootnode addresses.
-	pub fn boot_nodes(&self) -> &[String] {
+	pub fn boot_nodes(&self) -> &[MultiaddrWithPeerId] {
 		&self.client_spec.boot_nodes
 	}
 
@@ -205,8 +192,8 @@ impl<G, E> ChainSpec<G, E> {
 	}
 
 	/// Add a bootnode to the list.
-	pub fn add_boot_node(&mut self, addr: Multiaddr) {
-		self.client_spec.boot_nodes.push(addr.to_string())
+	pub fn add_boot_node(&mut self, addr: MultiaddrWithPeerId) {
+		self.client_spec.boot_nodes.push(addr)
 	}
 
 	/// Returns a reference to defined chain spec extensions.
@@ -218,8 +205,9 @@ impl<G, E> ChainSpec<G, E> {
 	pub fn from_genesis<F: Fn() -> G + 'static + Send + Sync>(
 		name: &str,
 		id: &str,
+		chain_type: ChainType,
 		constructor: F,
-		boot_nodes: Vec<String>,
+		boot_nodes: Vec<MultiaddrWithPeerId>,
 		telemetry_endpoints: Option<TelemetryEndpoints>,
 		protocol_id: Option<&str>,
 		properties: Option<Properties>,
@@ -228,6 +216,7 @@ impl<G, E> ChainSpec<G, E> {
 		let client_spec = ClientSpec {
 			name: name.to_owned(),
 			id: id.to_owned(),
+			chain_type,
 			boot_nodes,
 			telemetry_endpoints,
 			protocol_id: protocol_id.map(str::to_owned),
@@ -241,6 +230,11 @@ impl<G, E> ChainSpec<G, E> {
 			client_spec,
 			genesis: GenesisSource::Factory(Arc::new(constructor)),
 		}
+	}
+
+	/// Type of the chain.
+	fn chain_type(&self) -> ChainType {
+		self.client_spec.chain_type.clone()
 	}
 }
 
@@ -269,9 +263,9 @@ impl<G, E: serde::de::DeserializeOwned> ChainSpec<G, E> {
 	}
 }
 
-impl<G: RuntimeGenesis, E: serde::Serialize> ChainSpec<G, E> {
+impl<G: RuntimeGenesis, E: serde::Serialize + Clone> ChainSpec<G, E> {
 	/// Dump to json string.
-	pub fn to_json(self, raw: bool) -> Result<String, String> {
+	pub fn as_json(&self, raw: bool) -> Result<String, String> {
 		#[derive(Serialize, Deserialize)]
 		struct Container<G, E> {
 			#[serde(flatten)]
@@ -285,32 +279,75 @@ impl<G: RuntimeGenesis, E: serde::Serialize> ChainSpec<G, E> {
 				let top = storage.top.into_iter()
 					.map(|(k, v)| (StorageKey(k), StorageData(v)))
 					.collect();
-				let children = storage.children.into_iter()
-					.map(|(sk, child)| {
-						let info = child.child_info.as_ref();
-						let (info, ci_type) = info.info();
-						(
-							StorageKey(sk),
-							ChildRawStorage {
-								data: child.data.into_iter()
-									.map(|(k, v)| (StorageKey(k), StorageData(v)))
-									.collect(),
-								child_info: info.to_vec(),
-								child_type: ci_type,
-							},
-					)})
+				let children_default = storage.children_default.into_iter()
+					.map(|(sk, child)| (
+						StorageKey(sk),
+						child.data.into_iter()
+							.map(|(k, v)| (StorageKey(k), StorageData(v)))
+							.collect(),
+					))
 					.collect();
 
-				Genesis::Raw(RawGenesis { top, children })
+				Genesis::Raw(RawGenesis { top, children_default })
 			},
 			(_, genesis) => genesis,
 		};
 		let container = Container {
-			client_spec: self.client_spec,
+			client_spec: self.client_spec.clone(),
 			genesis,
 		};
 		json::to_string_pretty(&container)
 			.map_err(|e| format!("Error generating spec json: {}", e))
+	}
+}
+
+impl<G, E> crate::ChainSpec for ChainSpec<G, E>
+where
+	G: RuntimeGenesis,
+	E: GetExtension + serde::Serialize + Clone + Send,
+{
+	fn boot_nodes(&self) -> &[MultiaddrWithPeerId] {
+		ChainSpec::boot_nodes(self)
+	}
+
+	fn name(&self) -> &str {
+		ChainSpec::name(self)
+	}
+
+	fn id(&self) -> &str {
+		ChainSpec::id(self)
+	}
+
+	fn chain_type(&self) -> ChainType {
+		ChainSpec::chain_type(self)
+	}
+
+	fn telemetry_endpoints(&self) -> &Option<TelemetryEndpoints> {
+		ChainSpec::telemetry_endpoints(self)
+	}
+
+	fn protocol_id(&self) -> Option<&str> {
+		ChainSpec::protocol_id(self)
+	}
+
+	fn properties(&self) -> Properties {
+		ChainSpec::properties(self)
+	}
+
+	fn add_boot_node(&mut self, addr: MultiaddrWithPeerId) {
+		ChainSpec::add_boot_node(self, addr)
+	}
+
+	fn extensions(&self) -> &dyn GetExtension {
+		ChainSpec::extensions(self) as &dyn GetExtension
+	}
+
+	fn as_json(&self, raw: bool) -> Result<String, String> {
+		ChainSpec::as_json(self, raw)
+	}
+
+	fn as_storage_builder(&self) -> &dyn BuildStorage {
+		self
 	}
 }
 
@@ -344,7 +381,8 @@ mod tests {
 			PathBuf::from("./res/chain_spec.json")
 		).unwrap();
 
-		assert_eq!(spec1.to_json(false), spec2.to_json(false));
+		assert_eq!(spec1.as_json(false), spec2.as_json(false));
+		assert_eq!(spec2.chain_type(), ChainType::Live)
 	}
 
 	#[derive(Debug, Serialize, Deserialize)]

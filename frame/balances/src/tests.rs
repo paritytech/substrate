@@ -16,16 +16,33 @@
 
 //! Macro for creating the tests for the module.
 
+#![cfg(test)]
+
+#[derive(Debug)]
+pub struct CallWithDispatchInfo;
+impl sp_runtime::traits::Dispatchable for CallWithDispatchInfo {
+	type Origin = ();
+	type Trait = ();
+	type Info = frame_support::weights::DispatchInfo;
+	type PostInfo = frame_support::weights::PostDispatchInfo;
+	fn dispatch(self, _origin: Self::Origin)
+		-> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
+			panic!("Do not use dummy implementation for dispatch.");
+	}
+}
+
 #[macro_export]
 macro_rules! decl_tests {
 	($test:ty, $ext_builder:ty, $existential_deposit:expr) => {
 
 		use crate::*;
-		use sp_runtime::{Fixed64, traits::{SignedExtension, BadOrigin}};
+		use sp_runtime::{Fixed128, traits::{SignedExtension, BadOrigin}};
 		use frame_support::{
 			assert_noop, assert_ok, assert_err,
-			traits::{LockableCurrency, LockIdentifier, WithdrawReason, WithdrawReasons,
-				Currency, ReservableCurrency, ExistenceRequirement::AllowDeath}
+			traits::{
+				LockableCurrency, LockIdentifier, WithdrawReason, WithdrawReasons,
+				Currency, ReservableCurrency, ExistenceRequirement::AllowDeath, StoredMap
+			}
 		};
 		use pallet_transaction_payment::ChargeTransactionPayment;
 		use frame_system::RawOrigin;
@@ -36,7 +53,7 @@ macro_rules! decl_tests {
 		pub type System = frame_system::Module<$test>;
 		pub type Balances = Module<$test>;
 
-		pub const CALL: &<$test as frame_system::Trait>::Call = &();
+		pub const CALL: &<$test as frame_system::Trait>::Call = &$crate::tests::CallWithDispatchInfo;
 
 		/// create a transaction info struct from weight. Handy to avoid building the whole struct.
 		pub fn info_from_weight(w: Weight) -> DispatchInfo {
@@ -52,6 +69,15 @@ macro_rules! decl_tests {
 					<Balances as Currency<_>>::transfer(&1, &2, 5, AllowDeath),
 					Error::<$test, _>::LiquidityRestrictions
 				);
+			});
+		}
+
+		#[test]
+		fn account_should_be_reaped() {
+			<$ext_builder>::default().existential_deposit(1).monied(true).build().execute_with(|| {
+				assert_eq!(Balances::free_balance(1), 10);
+				assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 10, AllowDeath));
+				assert!(!<<Test as Trait>::AccountStore as StoredMap<u64, AccountData<u64>>>::is_explicit(&1));
 			});
 		}
 
@@ -127,7 +153,7 @@ macro_rules! decl_tests {
 				.monied(true)
 				.build()
 				.execute_with(|| {
-					pallet_transaction_payment::NextFeeMultiplier::put(Fixed64::from_natural(1));
+					pallet_transaction_payment::NextFeeMultiplier::put(Fixed128::from_natural(1));
 					Balances::set_lock(ID_1, &1, 10, WithdrawReason::Reserve.into());
 					assert_noop!(
 						<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath),
@@ -141,14 +167,14 @@ macro_rules! decl_tests {
 						ChargeTransactionPayment::from(1),
 						&1,
 						CALL,
-						info_from_weight(1),
+						&info_from_weight(1),
 						1,
 					).is_err());
 					assert!(<ChargeTransactionPayment<$test> as SignedExtension>::pre_dispatch(
 						ChargeTransactionPayment::from(0),
 						&1,
 						CALL,
-						info_from_weight(1),
+						&info_from_weight(1),
 						1,
 					).is_ok());
 
@@ -159,14 +185,14 @@ macro_rules! decl_tests {
 						ChargeTransactionPayment::from(1),
 						&1,
 						CALL,
-						info_from_weight(1),
+						&info_from_weight(1),
 						1,
 					).is_err());
 					assert!(<ChargeTransactionPayment<$test> as SignedExtension>::pre_dispatch(
 						ChargeTransactionPayment::from(0),
 						&1,
 						CALL,
-						info_from_weight(1),
+						&info_from_weight(1),
 						1,
 					).is_err());
 				});

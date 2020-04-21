@@ -128,7 +128,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 		trie_id: Option<&TrieId>,
 		location: &StorageKey
 	) -> Option<Vec<u8>> {
-		trie_id.and_then(|id| child::get_raw(id, crate::trie_unique_id(&id[..]), &blake2_256(location)))
+		trie_id.and_then(|id| child::get_raw(&crate::child_trie_info(&id[..]), &blake2_256(location)))
 	}
 	fn get_code_hash(&self, account: &T::AccountId) -> Option<CodeHash<T>> {
 		<ContractInfoOf<T>>::get(account).and_then(|i| i.as_alive().map(|i| i.code_hash))
@@ -146,16 +146,8 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 		let mut total_imbalance = SignedImbalance::zero();
 		for (address, changed) in s.into_iter() {
 			if let Some(balance) = changed.balance() {
-				let existed  = !T::Currency::total_balance(&address).is_zero();
 				let imbalance = T::Currency::make_free_balance_be(&address, balance);
-				let exists  = !T::Currency::total_balance(&address).is_zero();
 				total_imbalance = total_imbalance.merge(imbalance);
-				if existed && !exists {
-					// Account killed. This will ultimately lead to calling `OnReapAccount` callback
-					// which will make removal of CodeHashOf and AccountStorage for this account.
-					// In order to avoid writing over the deleted properties we `continue` here.
-					continue;
-				}
 			}
 
 			if changed.code_hash().is_some()
@@ -175,13 +167,13 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 					(false, Some(info), _) => info,
 					// Existing contract is being removed.
 					(true, Some(info), None) => {
-						child::kill_storage(&info.trie_id, info.child_trie_unique_id());
+						child::kill_storage(&info.child_trie_info());
 						<ContractInfoOf<T>>::remove(&address);
 						continue;
 					}
 					// Existing contract is being replaced by a new one.
 					(true, Some(info), Some(code_hash)) => {
-						child::kill_storage(&info.trie_id, info.child_trie_unique_id());
+						child::kill_storage(&info.child_trie_info());
 						AliveContractInfo::<T> {
 							code_hash,
 							storage_size: T::StorageSizeOffset::get(),
@@ -220,17 +212,16 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 
 				for (k, v) in changed.storage.into_iter() {
 					if let Some(value) = child::get_raw(
-						&new_info.trie_id[..],
-						new_info.child_trie_unique_id(),
+						&new_info.child_trie_info(),
 						&blake2_256(&k),
 					) {
 						new_info.storage_size -= value.len() as u32;
 					}
 					if let Some(value) = v {
 						new_info.storage_size += value.len() as u32;
-						child::put_raw(&new_info.trie_id[..], new_info.child_trie_unique_id(), &blake2_256(&k), &value[..]);
+						child::put_raw(&new_info.child_trie_info(), &blake2_256(&k), &value[..]);
 					} else {
-						child::kill(&new_info.trie_id[..], new_info.child_trie_unique_id(), &blake2_256(&k));
+						child::kill(&new_info.child_trie_info(), &blake2_256(&k));
 					}
 				}
 

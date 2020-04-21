@@ -1,16 +1,17 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-/// A runtime module template with necessary imports
+/// A FRAME pallet template with necessary imports
 
 /// Feel free to remove or edit this file as needed.
 /// If you change the name of this file, make sure to update its references in runtime/src/lib.rs
 /// If you remove this file, you can remove those references
 
-/// For more guidance on Substrate modules, see the example module
+/// For more guidance on Substrate FRAME, see the example pallet
 /// https://github.com/paritytech/substrate/blob/master/frame/example/src/lib.rs
 
 use frame_support::{decl_module, decl_storage, decl_event, decl_error, dispatch};
-use system::ensure_signed;
+use frame_support::weights::{SimpleDispatchInfo, MINIMUM_WEIGHT};
+use frame_system::{self as system, ensure_signed};
 
 #[cfg(test)]
 mod mock;
@@ -28,6 +29,9 @@ pub trait Trait: system::Trait {
 
 // This pallet's storage items.
 decl_storage! {
+	// It is important to update your storage name so that your pallet's
+	// storage items are isolated from other pallets.
+	// ---------------------------------vvvvvvvvvvvvvv
 	trait Store for Module<T: Trait> as TemplateModule {
 		// Just a dummy storage item.
 		// Here we are declaring a StorageValue, `Something` as a Option<u32>
@@ -72,6 +76,7 @@ decl_module! {
 		/// Just a dummy entry point.
 		/// function that can be called by the external world as an extrinsics call
 		/// takes a parameter of the type `AccountId`, stores it, and emits an event
+		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 		pub fn do_something(origin, something: u32) -> dispatch::DispatchResult {
 			// Check it was signed and get the signer. See also: ensure_root and ensure_none
 			let who = ensure_signed(origin)?;
@@ -87,6 +92,7 @@ decl_module! {
 
 		/// Another dummy entry point.
 		/// takes no parameters, attempts to increment storage value, and possibly throws an error
+		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 		pub fn cause_error(origin) -> dispatch::DispatchResult {
 			// Check it was signed and get the signer. See also: ensure_root and ensure_none
 			let _who = ensure_signed(origin)?;

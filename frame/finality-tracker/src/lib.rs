@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! SRML module that tracks the last finalized block, as perceived by block authors.
+//! FRAME Pallet that tracks the last finalized block, as perceived by block authors.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -23,6 +23,7 @@ use sp_runtime::traits::{One, Zero, SaturatedConversion};
 use sp_std::{prelude::*, result, cmp, vec};
 use frame_support::{decl_module, decl_storage, decl_error, ensure};
 use frame_support::traits::Get;
+use frame_support::weights::{SimpleDispatchInfo, MINIMUM_WEIGHT};
 use frame_system::{ensure_none, Trait as SystemTrait};
 use sp_finality_tracker::{INHERENT_IDENTIFIER, FinalizedInherentData};
 
@@ -40,7 +41,7 @@ pub trait Trait: SystemTrait {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Timestamp {
+	trait Store for Module<T: Trait> as FinalityTracker {
 		/// Recent hints.
 		RecentHints get(fn recent_hints) build(|_| vec![T::BlockNumber::zero()]): Vec<T::BlockNumber>;
 		/// Ordered recent hints.
@@ -76,6 +77,7 @@ decl_module! {
 
 		/// Hint that the author of this block thinks the best finalized
 		/// block is the given number.
+		#[weight = SimpleDispatchInfo::FixedMandatory(MINIMUM_WEIGHT)]
 		fn final_hint(origin, #[compact] hint: T::BlockNumber) {
 			ensure_none(origin)?;
 			ensure!(!<Self as Store>::Update::exists(), Error::<T>::AlreadyUpdated);
@@ -207,9 +209,11 @@ mod tests {
 	use sp_core::H256;
 	use sp_runtime::{
 		testing::Header, Perbill,
-		traits::{BlakeTwo256, IdentityLookup, OnFinalize, Header as HeaderT},
+		traits::{BlakeTwo256, IdentityLookup, Header as HeaderT},
 	};
-	use frame_support::{assert_ok, impl_outer_origin, parameter_types, weights::Weight};
+	use frame_support::{
+		assert_ok, impl_outer_origin, parameter_types, weights::Weight, traits::OnFinalize
+	};
 	use frame_system as system;
 	use std::cell::RefCell;
 
@@ -257,13 +261,14 @@ mod tests {
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
+		type DbWeight = ();
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();
 		type ModuleToIndex = ();
 		type AccountData = ();
 		type OnNewAccount = ();
-		type OnReapAccount = ();
+		type OnKilledAccount = ();
 	}
 	parameter_types! {
 		pub const WindowSize: u64 = 11;

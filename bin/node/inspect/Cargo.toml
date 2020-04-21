@@ -1,0 +1,23 @@
+[package]
+name = "node-inspect"
+version = "0.8.0-dev"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+license = "GPL-3.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "1.3.0" }
+derive_more = "0.99"
+log = "0.4.8"
+sc-cli = { version = "0.8.0-dev", path = "../../../client/cli" }
+sc-client-api = { version = "2.0.0-dev", path = "../../../client/api" }
+sc-service = { version = "0.8.0-dev", default-features = false, path = "../../../client/service" }
+sp-blockchain = { version = "2.0.0-dev", path = "../../../primitives/blockchain" }
+sp-core = { version = "2.0.0-dev", path = "../../../primitives/core" }
+sp-runtime = { version = "2.0.0-dev", path = "../../../primitives/runtime" }
+structopt = "0.3.8"

@@ -25,7 +25,7 @@ pub mod system;
 use sp_std::{prelude::*, marker::PhantomData};
 use codec::{Encode, Decode, Input, Error};
 
-use sp_core::{Blake2Hasher, OpaqueMetadata, RuntimeDebug, ChangesTrieConfiguration};
+use sp_core::{OpaqueMetadata, RuntimeDebug, ChangesTrieConfiguration};
 use sp_application_crypto::{ed25519, sr25519, RuntimeAppPublic};
 use trie_db::{TrieMut, Trie};
 use sp_trie::PrefixedMemoryDB;
@@ -36,6 +36,7 @@ use sp_runtime::{
 	ApplyExtrinsicResult, create_runtime_str, Perbill, impl_opaque_keys,
 	transaction_validity::{
 		TransactionValidity, ValidTransaction, TransactionValidityError, InvalidTransaction,
+		TransactionSource,
 	},
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
@@ -43,13 +44,12 @@ use sp_runtime::{
 	},
 };
 use sp_version::RuntimeVersion;
-pub use sp_core::{hash::H256};
+pub use sp_core::hash::H256;
 #[cfg(any(feature = "std", test))]
 use sp_version::NativeVersion;
-use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
+use frame_support::{impl_outer_origin, parameter_types, weights::{Weight, RuntimeDbWeight}};
 use sp_inherents::{CheckInherentsResult, InherentData};
 use cfg_if::cfg_if;
-use sp_core::storage::ChildType;
 
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
 pub use sp_consensus_babe::{AuthorityId, SlotNumber};
@@ -64,12 +64,10 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("test"),
 	impl_name: create_runtime_str!("parity-test"),
 	authoring_version: 1,
-	spec_version: 1,
-	#[cfg(feature = "std")]
-	impl_version: 1,
-	#[cfg(not(feature = "std"))]
+	spec_version: 2,
 	impl_version: 2,
 	apis: RUNTIME_API_VERSIONS,
+	transaction_version: 1,
 };
 
 fn version() -> RuntimeVersion {
@@ -100,7 +98,25 @@ impl Transfer {
 	pub fn into_signed_tx(self) -> Extrinsic {
 		let signature = sp_keyring::AccountKeyring::from_public(&self.from)
 			.expect("Creates keyring from public key.").sign(&self.encode()).into();
-		Extrinsic::Transfer(self, signature)
+		Extrinsic::Transfer {
+			transfer: self,
+			signature,
+			exhaust_resources_when_not_first: false,
+		}
+	}
+
+	/// Convert into a signed extrinsic, which will only end up included in the block
+	/// if it's the first transaction. Otherwise it will cause `ResourceExhaustion` error
+	/// which should be considered as block being full.
+	#[cfg(feature = "std")]
+	pub fn into_resources_exhausting_tx(self) -> Extrinsic {
+		let signature = sp_keyring::AccountKeyring::from_public(&self.from)
+			.expect("Creates keyring from public key.").sign(&self.encode()).into();
+		Extrinsic::Transfer {
+			transfer: self,
+			signature,
+			exhaust_resources_when_not_first: true,
+		}
 	}
 }
 
@@ -108,7 +124,11 @@ impl Transfer {
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
 pub enum Extrinsic {
 	AuthoritiesChange(Vec<AuthorityId>),
-	Transfer(Transfer, AccountSignature),
+	Transfer {
+		transfer: Transfer,
+		signature: AccountSignature,
+		exhaust_resources_when_not_first: bool,
+	},
 	IncludeData(Vec<u8>),
 	StorageChange(Vec<u8>, Option<Vec<u8>>),
 	ChangesTrieConfigUpdate(Option<ChangesTrieConfiguration>),
@@ -129,9 +149,9 @@ impl BlindCheckable for Extrinsic {
 	fn check(self) -> Result<Self, TransactionValidityError> {
 		match self {
 			Extrinsic::AuthoritiesChange(new_auth) => Ok(Extrinsic::AuthoritiesChange(new_auth)),
-			Extrinsic::Transfer(transfer, signature) => {
+			Extrinsic::Transfer { transfer, signature, exhaust_resources_when_not_first } => {
 				if sp_runtime::verify_encoded_lazy(&signature, &transfer, &transfer.from) {
-					Ok(Extrinsic::Transfer(transfer, signature))
+					Ok(Extrinsic::Transfer { transfer, signature, exhaust_resources_when_not_first })
 				} else {
 					Err(InvalidTransaction::BadProof.into())
 				}
@@ -161,10 +181,20 @@ impl ExtrinsicT for Extrinsic {
 	}
 }
 
+impl sp_runtime::traits::Dispatchable for Extrinsic {
+	type Origin = ();
+	type Trait = ();
+	type Info = ();
+	type PostInfo = ();
+	fn dispatch(self, _origin: Self::Origin) -> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
+		panic!("This implemention should not be used for actual dispatch.");
+	}
+}
+
 impl Extrinsic {
 	pub fn transfer(&self) -> &Transfer {
 		match self {
-			Extrinsic::Transfer(ref transfer, _) => transfer,
+			Extrinsic::Transfer { ref transfer, .. } => transfer,
 			_ => panic!("cannot convert to transfer ref"),
 		}
 	}
@@ -350,6 +380,10 @@ parameter_types! {
 	pub const BlockHashCount: BlockNumber = 250;
 	pub const MinimumPeriod: u64 = 5;
 	pub const MaximumBlockWeight: Weight = 4 * 1024 * 1024;
+	pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
+		read: 100,
+		write: 1000,
+	};
 	pub const MaximumBlockLength: u32 = 4 * 1024 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 }
@@ -367,13 +401,14 @@ impl frame_system::Trait for Runtime {
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
+	type DbWeight = ();
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
 	type ModuleToIndex = ();
 	type AccountData = ();
 	type OnNewAccount = ();
-	type OnReapAccount = ();
+	type OnKilledAccount = ();
 }
 
 impl pallet_timestamp::Trait for Runtime {
@@ -418,7 +453,7 @@ fn code_using_trie() -> u64 {
 	let mut root = sp_std::default::Default::default();
 	let _ = {
 		let v = &pairs;
-		let mut t = TrieDBMut::<Blake2Hasher>::new(&mut mdb, &mut root);
+		let mut t = TrieDBMut::<BlakeTwo256>::new(&mut mdb, &mut root);
 		for i in 0..v.len() {
 			let key: &[u8]= &v[i].0;
 			let val: &[u8] = &v[i].1;
@@ -429,7 +464,7 @@ fn code_using_trie() -> u64 {
 		t
 	};
 
-	if let Ok(trie) = TrieDB::<Blake2Hasher>::new(&mdb, &root) {
+	if let Ok(trie) = TrieDB::<BlakeTwo256>::new(&mdb, &root) {
 		if let Ok(iter) = trie.iter() {
 			let mut iter_pairs = Vec::new();
 			for pair in iter {
@@ -473,7 +508,10 @@ cfg_if! {
 			}
 
 			impl sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block> for Runtime {
-				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
+				fn validate_transaction(
+					_source: TransactionSource,
+					utx: <Block as BlockT>::Extrinsic,
+				) -> TransactionValidity {
 					if let Extrinsic::IncludeData(data) = utx {
 						return Ok(ValidTransaction {
 							priority: data.len() as u64,
@@ -660,7 +698,10 @@ cfg_if! {
 			}
 
 			impl sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block> for Runtime {
-				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
+				fn validate_transaction(
+					_source: TransactionSource,
+					utx: <Block as BlockT>::Extrinsic,
+				) -> TransactionValidity {
 					if let Extrinsic::IncludeData(data) = utx {
 						return Ok(ValidTransaction{
 							priority: data.len() as u64,
@@ -881,22 +922,17 @@ fn test_read_storage() {
 }
 
 fn test_read_child_storage() {
-	const CHILD_KEY: &[u8] = b":child_storage:default:read_child_storage";
-	const UNIQUE_ID: &[u8] = b":unique_id";
+	const STORAGE_KEY: &[u8] = b"unique_id_1";
 	const KEY: &[u8] = b":read_child_storage";
-	sp_io::storage::child_set(
-		CHILD_KEY,
-		UNIQUE_ID,
-		ChildType::CryptoUniqueId as u32,
+	sp_io::default_child_storage::set(
+		STORAGE_KEY,
 		KEY,
 		b"test",
 	);
 
 	let mut v = [0u8; 4];
-	let r = sp_io::storage::child_read(
-		CHILD_KEY,
-		UNIQUE_ID,
-		ChildType::CryptoUniqueId as u32,
+	let r = sp_io::default_child_storage::read(
+		STORAGE_KEY,
 		KEY,
 		&mut v,
 		0,
@@ -905,10 +941,8 @@ fn test_read_child_storage() {
 	assert_eq!(&v, b"test");
 
 	let mut v = [0u8; 4];
-	let r = sp_io::storage::child_read(
-		CHILD_KEY,
-		UNIQUE_ID,
-		ChildType::CryptoUniqueId as u32,
+	let r = sp_io::default_child_storage::read(
+		STORAGE_KEY,
 		KEY,
 		&mut v,
 		8,
@@ -930,6 +964,7 @@ mod tests {
 	use sp_core::storage::well_known_keys::HEAP_PAGES;
 	use sp_state_machine::ExecutionStrategy;
 	use codec::Encode;
+	use sc_block_builder::BlockBuilderProvider;
 
 	#[test]
 	fn heap_pages_is_respected() {

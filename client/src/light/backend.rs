@@ -24,14 +24,14 @@ use parking_lot::RwLock;
 use codec::{Decode, Encode};
 
 use sp_core::ChangesTrieConfiguration;
-use sp_core::storage::{well_known_keys, ChildInfo, OwnedChildInfo};
+use sp_core::storage::{well_known_keys, ChildInfo};
 use sp_core::offchain::storage::InMemOffchainStorage;
 use sp_state_machine::{
 	Backend as StateBackend, TrieBackend, InMemoryBackend, ChangesTrieTransaction,
 	StorageCollection, ChildStorageCollection,
 };
 use sp_runtime::{generic::BlockId, Justification, Storage};
-use sp_runtime::traits::{Block as BlockT, NumberFor, Zero, Header, HasherFor};
+use sp_runtime::traits::{Block as BlockT, NumberFor, Zero, Header, HashFor};
 use crate::in_mem::check_genesis_storage;
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use sc_client_api::{
@@ -65,7 +65,7 @@ pub struct ImportOperation<Block: BlockT, S> {
 	aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	finalized_blocks: Vec<BlockId<Block>>,
 	set_head: Option<BlockId<Block>>,
-	storage_update: Option<InMemoryBackend<HasherFor<Block>>>,
+	storage_update: Option<InMemoryBackend<HashFor<Block>>>,
 	changes_trie_config_update: Option<Option<ChangesTrieConfiguration>>,
 	_phantom: std::marker::PhantomData<S>,
 }
@@ -111,7 +111,7 @@ impl<S: AuxStore, H: Hasher> AuxStore for Backend<S, H> {
 	}
 }
 
-impl<S, Block> ClientBackend<Block> for Backend<S, HasherFor<Block>>
+impl<S, Block> ClientBackend<Block> for Backend<S, HashFor<Block>>
 	where
 		Block: BlockT,
 		S: BlockchainStorage<Block>,
@@ -119,7 +119,7 @@ impl<S, Block> ClientBackend<Block> for Backend<S, HasherFor<Block>>
 {
 	type BlockImportOperation = ImportOperation<Block, S>;
 	type Blockchain = Blockchain<S>;
-	type State = GenesisOrUnavailableState<HasherFor<Block>>;
+	type State = GenesisOrUnavailableState<HashFor<Block>>;
 	type OffchainStorage = InMemOffchainStorage;
 
 	fn begin_operation(&self) -> ClientResult<Self::BlockImportOperation> {
@@ -172,9 +172,9 @@ impl<S, Block> ClientBackend<Block> for Backend<S, HasherFor<Block>>
 				match maybe_val {
 					Some(val) => self.blockchain.storage().insert_aux(
 						&[(&key[..], &val[..])],
-						::std::iter::empty(),
+						std::iter::empty(),
 					)?,
-					None => self.blockchain.storage().insert_aux(::std::iter::empty(), &[&key[..]])?,
+					None => self.blockchain.storage().insert_aux(std::iter::empty(), &[&key[..]])?,
 				}
 			}
 		}
@@ -238,7 +238,7 @@ impl<S, Block> ClientBackend<Block> for Backend<S, HasherFor<Block>>
 	}
 }
 
-impl<S, Block> RemoteBackend<Block> for Backend<S, HasherFor<Block>>
+impl<S, Block> RemoteBackend<Block> for Backend<S, HashFor<Block>>
 where
 	Block: BlockT,
 	S: BlockchainStorage<Block> + 'static,
@@ -262,7 +262,7 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 		S: BlockchainStorage<Block>,
 		Block::Hash: Ord,
 {
-	type State = GenesisOrUnavailableState<HasherFor<Block>>;
+	type State = GenesisOrUnavailableState<HashFor<Block>>;
 
 	fn state(&self) -> ClientResult<Option<&Self::State>> {
 		// None means 'locally-stateless' backend
@@ -287,7 +287,7 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 
 	fn update_db_storage(
 		&mut self,
-		_update: <Self::State as StateBackend<HasherFor<Block>>>::Transaction,
+		_update: <Self::State as StateBackend<HashFor<Block>>>::Transaction,
 	) -> ClientResult<()> {
 		// we're not storing anything locally => ignore changes
 		Ok(())
@@ -295,7 +295,7 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 
 	fn update_changes_trie(
 		&mut self,
-		_update: ChangesTrieTransaction<HasherFor<Block>, NumberFor<Block>>,
+		_update: ChangesTrieTransaction<HashFor<Block>, NumberFor<Block>>,
 	) -> ClientResult<()> {
 		// we're not storing anything locally => ignore changes
 		Ok(())
@@ -312,17 +312,17 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 		self.changes_trie_config_update = Some(changes_trie_config);
 
 		// this is only called when genesis block is imported => shouldn't be performance bottleneck
-		let mut storage: HashMap<Option<(Vec<u8>, OwnedChildInfo)>, _> = HashMap::new();
+		let mut storage: HashMap<Option<ChildInfo>, _> = HashMap::new();
 		storage.insert(None, input.top);
 
 		// create a list of children keys to re-compute roots for
-		let child_delta = input.children.iter()
-			.map(|(storage_key, storage_child)| (storage_key.clone(), None, storage_child.child_info.clone()))
+		let child_delta = input.children_default.iter()
+			.map(|(_storage_key, storage_child)| (storage_child.child_info.clone(), None))
 			.collect::<Vec<_>>();
 
 		// make sure to persist the child storage
-		for (child_key, storage_child) in input.children {
-			storage.insert(Some((child_key, storage_child.child_info)), storage_child.data);
+		for (_child_key, storage_child) in input.children_default {
+			storage.insert(Some(storage_child.child_info), storage_child.data);
 		}
 
 		let storage_update = InMemoryBackend::from(storage);
@@ -386,13 +386,12 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 
 	fn child_storage(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> ClientResult<Option<Vec<u8>>> {
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) =>
-				Ok(state.child_storage(storage_key, child_info, key).expect(IN_MEMORY_EXPECT_PROOF)),
+				Ok(state.child_storage(child_info, key).expect(IN_MEMORY_EXPECT_PROOF)),
 			GenesisOrUnavailableState::Unavailable => Err(ClientError::NotAvailableOnLightClient),
 		}
 	}
@@ -407,13 +406,12 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 
 	fn next_child_storage_key(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) => Ok(
-				state.next_child_storage_key(storage_key, child_info, key)
+				state.next_child_storage_key(child_info, key)
 					.expect(IN_MEMORY_EXPECT_PROOF)
 			),
 			GenesisOrUnavailableState::Unavailable => Err(ClientError::NotAvailableOnLightClient),
@@ -436,27 +434,25 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 
 	fn for_keys_in_child_storage<A: FnMut(&[u8])>(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		action: A,
 	) {
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) =>
-				state.for_keys_in_child_storage(storage_key, child_info, action),
+				state.for_keys_in_child_storage(child_info, action),
 			GenesisOrUnavailableState::Unavailable => (),
 		}
 	}
 
 	fn for_child_keys_with_prefix<A: FnMut(&[u8])>(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		prefix: &[u8],
 		action: A,
 	) {
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) =>
-				state.for_child_keys_with_prefix(storage_key, child_info, prefix, action),
+				state.for_child_keys_with_prefix(child_info, prefix, action),
 			GenesisOrUnavailableState::Unavailable => (),
 		}
 	}
@@ -474,8 +470,7 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 
 	fn child_storage_root<I>(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		delta: I,
 	) -> (H::Out, bool, Self::Transaction)
 	where
@@ -483,7 +478,7 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 	{
 		match *self {
 			GenesisOrUnavailableState::Genesis(ref state) => {
-				let (root, is_equal, _) = state.child_storage_root(storage_key, child_info, delta);
+				let (root, is_equal, _) = state.child_storage_root(child_info, delta);
 				(root, is_equal, Default::default())
 			},
 			GenesisOrUnavailableState::Unavailable =>
@@ -505,6 +500,12 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		}
 	}
 
+	fn register_overlay_stats(&mut self, _stats: &sp_state_machine::StateMachineStats) { }
+
+	fn usage_info(&self) -> sp_state_machine::UsageInfo {
+		sp_state_machine::UsageInfo::empty()
+	}
+
 	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {
 		match self {
 			GenesisOrUnavailableState::Genesis(ref mut state) => state.as_trie_backend(),
@@ -515,10 +516,10 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 
 #[cfg(test)]
 mod tests {
-	use sp_core::Blake2Hasher;
 	use substrate_test_runtime_client::{self, runtime::Block};
 	use sc_client_api::backend::NewBlockState;
 	use crate::light::blockchain::tests::{DummyBlockchain, DummyStorage};
+	use sp_runtime::traits::BlakeTwo256;
 	use super::*;
 
 	#[test]
@@ -526,7 +527,9 @@ mod tests {
 		let def = Default::default();
 		let header0 = substrate_test_runtime_client::runtime::Header::new(0, def, def, def, Default::default());
 
-		let backend: Backend<_, Blake2Hasher> = Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())));
+		let backend: Backend<_, BlakeTwo256> = Backend::new(
+			Arc::new(DummyBlockchain::new(DummyStorage::new())),
+		);
 		let mut op = backend.begin_operation().unwrap();
 		op.set_block_data(header0, None, None, NewBlockState::Final).unwrap();
 		op.reset_storage(Default::default()).unwrap();
@@ -540,7 +543,9 @@ mod tests {
 
 	#[test]
 	fn unavailable_state_is_created_when_genesis_state_is_unavailable() {
-		let backend: Backend<_, Blake2Hasher> = Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())));
+		let backend: Backend<_, BlakeTwo256> = Backend::new(
+			Arc::new(DummyBlockchain::new(DummyStorage::new())),
+		);
 
 		match backend.state_at(BlockId::Number(0)).unwrap() {
 			GenesisOrUnavailableState::Unavailable => (),

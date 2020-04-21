@@ -31,7 +31,7 @@ use sp_core::{
 	crypto::{set_default_ss58_version, Ss58AddressFormat, Ss58Codec},
 	ed25519, sr25519, ecdsa, Pair, Public, H256, hexdisplay::HexDisplay,
 };
-use sp_runtime::{traits::{IdentifyAccount, Verify}, generic::Era};
+use sp_runtime::{traits::{AccountIdConversion, IdentifyAccount, Verify}, generic::Era, ModuleId};
 use std::{
 	convert::{TryInto, TryFrom}, io::{stdin, Read}, str::FromStr, path::PathBuf, fs, fmt,
 };
@@ -79,13 +79,15 @@ trait Crypto: Sized {
 	) where
 		<Self::Pair as Pair>::Public: PublicT,
 	{
+		let v = network_override.unwrap_or_default();
 		if let Ok((pair, seed)) = Self::Pair::from_phrase(uri, password) {
 			let public_key = Self::public_from_pair(&pair);
-			
+
 			match output {
 				OutputType::Json => {
 					let json = json!({
 						"secretPhrase": uri,
+						"networkId": String::from(v),
 						"secretSeed": format_seed::<Self>(seed),
 						"publicKey": format_public_key::<Self>(public_key.clone()),
 						"accountId": format_account_id::<Self>(public_key),
@@ -95,11 +97,13 @@ trait Crypto: Sized {
 				},
 				OutputType::Text => {
 					println!("Secret phrase `{}` is account:\n  \
-						Secret seed:      {}\n  \
-						Public key (hex): {}\n  \
-						Account ID:       {}\n  \
-						SS58 Address:     {}",
+						Network ID/version: {}\n  \
+						Secret seed:        {}\n  \
+						Public key (hex):   {}\n  \
+						Account ID:         {}\n  \
+						SS58 Address:       {}",
 						uri,
+						String::from(v),
 						format_seed::<Self>(seed),
 						format_public_key::<Self>(public_key.clone()),
 						format_account_id::<Self>(public_key),
@@ -114,6 +118,7 @@ trait Crypto: Sized {
 				OutputType::Json => {
 					let json = json!({
 						"secretKeyUri": uri,
+						"networkId": String::from(v),
 						"secretSeed": if let Some(seed) = seed { format_seed::<Self>(seed) } else { "n/a".into() },
 						"publicKey": format_public_key::<Self>(public_key.clone()),
 						"accountId": format_account_id::<Self>(public_key),
@@ -123,11 +128,13 @@ trait Crypto: Sized {
 				},
 				OutputType::Text => {
 					println!("Secret Key URI `{}` is account:\n  \
-						Secret seed:      {}\n  \
-						Public key (hex): {}\n  \
-						Account ID:       {}\n  \
-						SS58 Address:     {}",
+						Network ID/version: {}\n  \
+						Secret seed:        {}\n  \
+						Public key (hex):   {}\n  \
+						Account ID:         {}\n  \
+						SS58 Address:       {}",
 						uri,
+						String::from(v),
 						if let Some(seed) = seed { format_seed::<Self>(seed) } else { "n/a".into() },
 						format_public_key::<Self>(public_key.clone()),
 						format_account_id::<Self>(public_key),
@@ -135,7 +142,6 @@ trait Crypto: Sized {
 					);
 				},
 			}
-			
 		} else if let Ok((public_key, v)) =
 			<Self::Pair as Pair>::Public::from_string_with_version(uri)
 		{
@@ -167,7 +173,7 @@ trait Crypto: Sized {
 				},
 			}
 		} else {
-			println!("Invalid phrase/URI given");
+			eprintln!("Invalid phrase/URI given");
 		}
 	}
 }
@@ -312,6 +318,11 @@ fn get_app<'a, 'b>(usage: &'a str) -> App<'a, 'b> {
 					<key-type> 'Key type, examples: \"gran\", or \"imon\" '
 					[node-url] 'Node JSON-RPC endpoint, default \"http:://localhost:9933\"'
 				"),
+			SubCommand::with_name("moduleid")
+				.about("Inspect a module ID address")
+				.args_from_usage("
+					<id> 'The module ID used to derive the account'
+				")
 		])
 }
 
@@ -501,6 +512,20 @@ where
 				sp_core::Bytes(pair.public().as_ref().to_vec()),
 			);
 		}
+		("moduleid", Some(matches)) => {
+			let id = get_uri("id", &matches)?;
+			if id.len() != 8 {
+				Err("a module id must be a string of 8 characters")?
+			}
+
+			let id_fixed_array: [u8; 8] = id.as_bytes().try_into()
+				.map_err(|_| Error::Static("Cannot convert argument to moduleid: argument should be 8-character string"))?;
+
+			let account_id: AccountId = ModuleId(id_fixed_array).into_account();
+			let v = maybe_network.unwrap_or(Ss58AddressFormat::SubstrateAccount);
+			
+			C::print_from_uri(&account_id.to_ss58check_with_version(v), password, maybe_network, output);
+		}
 		_ => print_usage(&matches),
 	}
 
@@ -649,7 +674,7 @@ fn read_pair<C: Crypto>(
 }
 
 fn format_signature<C: Crypto>(signature: &SignatureOf<C>) -> String {
-	format!("{}", hex::encode(signature))
+	format!("{}", HexDisplay::from(&signature.as_ref()))
 }
 
 fn format_seed<C: Crypto>(seed: SeedOf<C>) -> String {
@@ -712,7 +737,7 @@ fn create_extrinsic<C: Crypto>(
 }
 
 fn print_extrinsic(extrinsic: UncheckedExtrinsic) {
-	println!("0x{}", hex::encode(&extrinsic.encode()));
+	println!("0x{}", HexDisplay::from(&extrinsic.encode()));
 }
 
 fn print_usage(matches: &ArgMatches) {

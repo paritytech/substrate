@@ -242,7 +242,7 @@ pub trait Cache<Block: BlockT>: Send + Sync {
 }
 
 /// Blockchain info
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Info<Block: BlockT> {
 	/// Best block hash.
 	pub best_hash: Block::Hash,
@@ -254,6 +254,8 @@ pub struct Info<Block: BlockT> {
 	pub finalized_hash: Block::Hash,
 	/// Last finalized block number.
 	pub finalized_number: <<Block as BlockT>::Header as HeaderT>::Number,
+	/// Number of concurrent leave forks.
+	pub number_leaves: usize
 }
 
 /// Block status.

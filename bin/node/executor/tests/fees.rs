@@ -20,18 +20,12 @@ use frame_support::{
 	traits::Currency,
 	weights::GetDispatchInfo,
 };
-use sp_core::{
-	Blake2Hasher, NeverNativeValue, map,
-	storage::Storage,
-};
-use sp_runtime::{
-	Fixed64,
-	traits::Convert,
-};
+use sp_core::{NeverNativeValue, map, storage::Storage};
+use sp_runtime::{Fixed128, Perbill, traits::{Convert, BlakeTwo256}};
 use node_runtime::{
-	CheckedExtrinsic, Call, Runtime, Balances,
-	TransactionPayment, TransactionBaseFee, TransactionByteFee,
-	WeightFeeCoefficient, constants::currency::*,
+	CheckedExtrinsic, Call, Runtime, Balances, TransactionPayment, TransactionBaseFee,
+	TransactionByteFee, WeightFeeCoefficient,
+	constants::currency::*,
 };
 use node_runtime::impls::LinearWeightToFee;
 use node_primitives::Balance;
@@ -45,7 +39,7 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 	let mut t = new_test_ext(COMPACT_CODE, false);
 
 	// initial fee multiplier must be zero
-	let mut prev_multiplier = Fixed64::from_parts(0);
+	let mut prev_multiplier = Fixed128::from_parts(0);
 
 	t.execute_with(|| {
 		assert_eq!(TransactionPayment::next_fee_multiplier(), prev_multiplier);
@@ -60,12 +54,12 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 		GENESIS_HASH.into(),
 		vec![
 			CheckedExtrinsic {
-			signed: None,
-			function: Call::Timestamp(pallet_timestamp::Call::set(42 * 1000)),
+				signed: None,
+				function: Call::Timestamp(pallet_timestamp::Call::set(42 * 1000)),
 			},
 			CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(0, 0))),
-				function: Call::System(frame_system::Call::fill_block()),
+				function: Call::System(frame_system::Call::fill_block(Perbill::from_percent(90))),
 			}
 		]
 	);
@@ -77,8 +71,8 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 		block1.1.clone(),
 		vec![
 			CheckedExtrinsic {
-			signed: None,
-			function: Call::Timestamp(pallet_timestamp::Call::set(52 * 1000)),
+				signed: None,
+				function: Call::Timestamp(pallet_timestamp::Call::set(52 * 1000)),
 			},
 			CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(1, 0))),
@@ -87,7 +81,11 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 		]
 	);
 
-	println!("++ Block 1 size: {} / Block 2 size {}", block1.0.encode().len(), block2.0.encode().len());
+	println!(
+		"++ Block 1 size: {} / Block 2 size {}",
+		block1.0.encode().len(),
+		block2.0.encode().len(),
+	);
 
 	// execute a big block.
 	executor_call::<NeverNativeValue, fn() -> _>(
@@ -132,20 +130,20 @@ fn transaction_fee_is_correct_ultimate() {
 	//   - 1 MILLICENTS in substrate node.
 	//   - 1 milli-dot based on current polkadot runtime.
 	// (this baed on assigning 0.1 CENT to the cheapest tx with `weight = 100`)
-	let mut t = TestExternalities::<Blake2Hasher>::new_with_code(COMPACT_CODE, Storage {
+	let mut t = TestExternalities::<BlakeTwo256>::new_with_code(COMPACT_CODE, Storage {
 		top: map![
 			<frame_system::Account<Runtime>>::hashed_key_for(alice()) => {
-				(0u32, 100 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS).encode()
+				(0u32, 0u8, 100 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS).encode()
 			},
 			<frame_system::Account<Runtime>>::hashed_key_for(bob()) => {
-				(0u32, 10 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS).encode()
+				(0u32, 0u8, 10 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS).encode()
 			},
 			<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec() => {
 				(110 * DOLLARS).encode()
 			},
 			<frame_system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
 		],
-		children: map![],
+		children_default: map![],
 	});
 
 	let tip = 1_000_000;
@@ -190,7 +188,9 @@ fn transaction_fee_is_correct_ultimate() {
 		let weight_fee = LinearWeightToFee::<WeightFeeCoefficient>::convert(weight);
 
 		// we know that weight to fee multiplier is effect-less in block 1.
-		assert_eq!(weight_fee as Balance, MILLICENTS);
+		// current weight of transfer = 200_000_000
+		// Linear weight to fee is 1:1 right now (1 weight = 1 unit of balance)
+		assert_eq!(weight_fee, weight as Balance);
 		balance_alice -= weight_fee;
 		balance_alice -= tip;
 

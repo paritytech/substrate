@@ -277,6 +277,7 @@ pub enum StorageHasher {
 	Twox128,
 	Twox256,
 	Twox64Concat,
+	Identity,
 }
 
 /// A storage entry type.
@@ -288,7 +289,8 @@ pub enum StorageEntryType {
 		hasher: StorageHasher,
 		key: DecodeDifferentStr,
 		value: DecodeDifferentStr,
-		is_linked: bool,
+		// is_linked flag previously, unused now to keep backwards compat
+		unused: bool,
 	},
 	DoubleMap {
 		hasher: StorageHasher,

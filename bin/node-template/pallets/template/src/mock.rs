@@ -6,14 +6,15 @@ use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
 use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup}, testing::Header, Perbill,
 };
+use frame_system as system;
 
 impl_outer_origin! {
 	pub enum Origin for Test {}
 }
 
-// For testing the module, we construct most of a mock runtime. This means
+// For testing the pallet, we construct most of a mock runtime. This means
 // first constructing a configuration type (`Test`) which `impl`s each of the
-// configuration traits of modules we want to use.
+// configuration traits of pallets we want to use.
 #[derive(Clone, Eq, PartialEq)]
 pub struct Test;
 parameter_types! {
@@ -35,13 +36,14 @@ impl system::Trait for Test {
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
+	type DbWeight = ();
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
 	type ModuleToIndex = ();
 	type AccountData = ();
 	type OnNewAccount = ();
-	type OnReapAccount = ();
+	type OnKilledAccount = ();
 }
 impl Trait for Test {
 	type Event = ();

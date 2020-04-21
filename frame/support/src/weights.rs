@@ -37,20 +37,26 @@
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
-use impl_trait_for_tuples::impl_for_tuples;
 use codec::{Encode, Decode};
-use sp_arithmetic::traits::{Bounded, Zero};
+use sp_arithmetic::traits::Bounded;
 use sp_runtime::{
 	RuntimeDebug,
 	traits::SignedExtension,
 	generic::{CheckedExtrinsic, UncheckedExtrinsic},
 };
+use crate::dispatch::{DispatchErrorWithPostInfo, DispatchError};
 
 /// Re-export priority as type
 pub use sp_runtime::transaction_validity::TransactionPriority;
 
 /// Numeric range of a transaction weight.
-pub type Weight = u32;
+///
+/// FRAME assumes a weight of `1_000_000_000_000` equals 1 second of compute on a standard
+/// machine: (TODO: DEFINE STANDARD MACHINE SPECIFICATIONS)
+pub type Weight = u64;
+
+/// The smallest total weight an extrinsic should have.
+pub const MINIMUM_WEIGHT: Weight = 10_000_000;
 
 /// Means of weighing some particular kind of data (`T`).
 pub trait WeighData<T> {
@@ -67,40 +73,11 @@ pub trait ClassifyDispatch<T> {
 	fn classify_dispatch(&self, target: T) -> DispatchClass;
 }
 
-/// Means of determining the weight of a block's life cycle hooks: `on_initialize`, `on_finalize` and
-/// such.
-pub trait WeighBlock<BlockNumber> {
-	/// Return the weight of the block's on_initialize hook.
-	fn on_initialize(_: BlockNumber) -> Weight { Zero::zero() }
-	/// Return the weight of the block's on_finalize hook.
-	fn on_finalize(_: BlockNumber) -> Weight { Zero::zero() }
-}
-
 /// Indicates if dispatch function should pay fees or not.
 /// If set to false, the block resource limits are applied, yet no fee is deducted.
 pub trait PaysFee<T> {
 	fn pays_fee(&self, _target: T) -> bool {
 		true
-	}
-}
-
-/// Maybe I can do something to remove the duplicate code here.
-#[impl_for_tuples(30)]
-impl<BlockNumber: Copy> WeighBlock<BlockNumber> for SingleModule {
-	fn on_initialize(n: BlockNumber) -> Weight {
-		let mut accumulated_weight: Weight = Zero::zero();
-		for_tuples!(
-			#( accumulated_weight = accumulated_weight.saturating_add(SingleModule::on_initialize(n)); )*
-		);
-		accumulated_weight
-	}
-
-	fn on_finalize(n: BlockNumber) -> Weight {
-		let mut accumulated_weight: Weight = Zero::zero();
-		for_tuples!(
-			#( accumulated_weight = accumulated_weight.saturating_add(SingleModule::on_finalize(n)); )*
-		);
-		accumulated_weight
 	}
 }
 
@@ -114,11 +91,43 @@ pub enum DispatchClass {
 	Normal,
 	/// An operational dispatch.
 	Operational,
+	/// A mandatory dispatch. These kinds of dispatch are always included regardless of their
+	/// weight, therefore it is critical that they are separately validated to ensure that a
+	/// malicious validator cannot craft a valid but impossibly heavy block. Usually this just means
+	/// ensuring that the extrinsic can only be included once and that it is always very light.
+	///
+	/// Do *NOT* use it for extrinsics that can be heavy.
+	///
+	/// The only real use case for this is inherent extrinsics that are required to execute in a
+	/// block for the block to be valid, and it solves the issue in the case that the block
+	/// initialization is sufficiently heavy to mean that those inherents do not fit into the
+	/// block. Essentially, we assume that in these exceptional circumstances, it is better to
+	/// allow an overweight block to be created than to not allow any block at all to be created.
+	Mandatory,
 }
 
 impl Default for DispatchClass {
 	fn default() -> Self {
 		DispatchClass::Normal
+	}
+}
+
+// Implement traits for raw Weight value
+impl<T> WeighData<T> for Weight {
+	fn weigh_data(&self, _: T) -> Weight {
+		return *self
+	}
+}
+
+impl<T> ClassifyDispatch<T> for Weight {
+	fn classify_dispatch(&self, _: T) -> DispatchClass {
+		DispatchClass::default()
+	}
+}
+
+impl<T> PaysFee<T> for Weight {
+	fn pays_fee(&self, _: T) -> bool {
+		true
 	}
 }
 
@@ -131,6 +140,8 @@ impl From<SimpleDispatchInfo> for DispatchClass {
 			SimpleDispatchInfo::FixedNormal(_) => DispatchClass::Normal,
 			SimpleDispatchInfo::MaxNormal => DispatchClass::Normal,
 			SimpleDispatchInfo::InsecureFreeNormal => DispatchClass::Normal,
+
+			SimpleDispatchInfo::FixedMandatory(_) => DispatchClass::Mandatory,
 		}
 	}
 }
@@ -144,6 +155,79 @@ pub struct DispatchInfo {
 	pub class: DispatchClass,
 	/// Does this transaction pay fees.
 	pub pays_fee: bool,
+}
+
+/// Weight information that is only available post dispatch.
+#[derive(Clone, Copy, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode)]
+pub struct PostDispatchInfo {
+	/// Actual weight consumed by a call or `None` which stands for the worst case static weight.
+	pub actual_weight: Option<Weight>,
+}
+
+impl PostDispatchInfo {
+	/// Calculate how much (if any) weight was not used by the `Dispatchable`.
+	pub fn calc_unspent(&self, info: &DispatchInfo) -> Weight {
+		if let Some(actual_weight) = self.actual_weight {
+			if actual_weight >= info.weight {
+				0
+			} else {
+				info.weight - actual_weight
+			}
+		} else {
+			0
+		}
+	}
+}
+
+impl From<Option<Weight>> for PostDispatchInfo {
+	fn from(actual_weight: Option<Weight>) -> Self {
+		Self {
+			actual_weight,
+		}
+	}
+}
+
+impl From<()> for PostDispatchInfo {
+	fn from(_: ()) -> Self {
+		Self {
+			actual_weight: None,
+		}
+	}
+}
+
+impl sp_runtime::traits::Printable for PostDispatchInfo {
+	fn print(&self) {
+		"actual_weight=".print();
+		match self.actual_weight {
+			Some(weight) => weight.print(),
+			None => "max-weight".print(),
+		}
+	}
+}
+
+/// Allows easy conversion from `DispatchError` to `DispatchErrorWithPostInfo` for dispatchables
+/// that want to return a custom a posteriori weight on error.
+pub trait WithPostDispatchInfo {
+	/// Call this on your modules custom errors type in order to return a custom weight on error.
+	///
+	/// # Example
+	///
+	/// ```ignore
+	/// let who = ensure_signed(origin).map_err(|e| e.with_weight(100))?;
+	/// ensure!(who == me, Error::<T>::NotMe.with_weight(200_000));
+	/// ```
+	fn with_weight(self, actual_weight: Weight) -> DispatchErrorWithPostInfo;
+}
+
+impl<T> WithPostDispatchInfo for T where
+	T: Into<DispatchError>
+{
+	fn with_weight(self, actual_weight: Weight) -> DispatchErrorWithPostInfo {
+		DispatchErrorWithPostInfo {
+			post_info: PostDispatchInfo { actual_weight: Some(actual_weight) },
+			error: self.into(),
+		}
+	}
 }
 
 /// A `Dispatchable` function (aka transaction) that can carry some static information along with
@@ -183,6 +267,11 @@ pub enum SimpleDispatchInfo {
 	FixedOperational(Weight),
 	/// An operational dispatch with the maximum weight.
 	MaxOperational,
+	/// A mandatory dispatch with fixed weight.
+	///
+	/// NOTE: Signed transactions may not (directly) dispatch this kind of a call, so the other
+	/// attributes concerning transactability (e.g. priority, fee paying) are moot.
+	FixedMandatory(Weight),
 }
 
 impl<T> WeighData<T> for SimpleDispatchInfo {
@@ -191,9 +280,9 @@ impl<T> WeighData<T> for SimpleDispatchInfo {
 			SimpleDispatchInfo::FixedNormal(w) => *w,
 			SimpleDispatchInfo::MaxNormal => Bounded::max_value(),
 			SimpleDispatchInfo::InsecureFreeNormal => Bounded::min_value(),
-
 			SimpleDispatchInfo::FixedOperational(w) => *w,
 			SimpleDispatchInfo::MaxOperational => Bounded::max_value(),
+			SimpleDispatchInfo::FixedMandatory(w) => *w,
 		}
 	}
 }
@@ -210,17 +299,10 @@ impl<T> PaysFee<T> for SimpleDispatchInfo {
 			SimpleDispatchInfo::FixedNormal(_) => true,
 			SimpleDispatchInfo::MaxNormal => true,
 			SimpleDispatchInfo::InsecureFreeNormal => true,
-
 			SimpleDispatchInfo::FixedOperational(_) => true,
 			SimpleDispatchInfo::MaxOperational => true,
+			SimpleDispatchInfo::FixedMandatory(_) => true,
 		}
-	}
-}
-
-impl Default for SimpleDispatchInfo {
-	fn default() -> Self {
-		// Default weight of all transactions.
-		SimpleDispatchInfo::FixedNormal(10_000)
 	}
 }
 
@@ -326,24 +408,56 @@ impl<Call: Encode, Extra: Encode> GetDispatchInfo for sp_runtime::testing::TestX
 	}
 }
 
+/// The weight of database operations that the runtime can invoke.
+#[derive(Clone, Copy, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode)]
+pub struct RuntimeDbWeight {
+	pub read: Weight,
+	pub write: Weight,
+}
+
+impl RuntimeDbWeight {
+	pub fn reads(self, r: Weight) -> Weight {
+		self.read.saturating_mul(r)
+	}
+
+	pub fn writes(self, w: Weight) -> Weight {
+		self.write.saturating_mul(w)
+	}
+
+	pub fn reads_writes(self, r: Weight, w: Weight) -> Weight {
+		let read_weight = self.read.saturating_mul(r);
+		let write_weight = self.write.saturating_mul(w);
+		read_weight.saturating_add(write_weight)
+	}
+}
+
 #[cfg(test)]
 #[allow(dead_code)]
 mod tests {
-	use crate::decl_module;
+	use crate::{decl_module, parameter_types, traits::Get};
 	use super::*;
 
 	pub trait Trait {
 		type Origin;
 		type Balance;
 		type BlockNumber;
+		type DbWeight: Get<RuntimeDbWeight>;
 	}
 
 	pub struct TraitImpl {}
+
+	parameter_types! {
+		pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
+			read: 100,
+			write: 1000,
+		};
+	}
 
 	impl Trait for TraitImpl {
 		type Origin = u32;
 		type BlockNumber = u32;
 		type Balance = u32;
+		type DbWeight = DbWeight;
 	}
 
 	decl_module! {
@@ -353,18 +467,30 @@ mod tests {
 			fn f0(_origin) { unimplemented!(); }
 
 			// weight = a x 10 + b
-			#[weight = FunctionOf(|args: (&u32, &u32)| args.0 * 10 + args.1, DispatchClass::Normal, true)]
+			#[weight = FunctionOf(|args: (&u32, &u32)| (args.0 * 10 + args.1) as Weight, DispatchClass::Normal, true)]
 			fn f11(_origin, _a: u32, _eb: u32) { unimplemented!(); }
 
 			#[weight = FunctionOf(|_: (&u32, &u32)| 0, DispatchClass::Operational, true)]
 			fn f12(_origin, _a: u32, _eb: u32) { unimplemented!(); }
+
+			#[weight = T::DbWeight::get().reads(3) + T::DbWeight::get().writes(2) + 10_000]
+			fn f2(_origin) { unimplemented!(); }
+
+			#[weight = T::DbWeight::get().reads_writes(6, 5) + 40_000]
+			fn f21(_origin) { unimplemented!(); }
+
 		}
 	}
 
 	#[test]
 	fn weights_are_correct() {
+		assert_eq!(Call::<TraitImpl>::f0().get_dispatch_info().weight, 1000);
 		assert_eq!(Call::<TraitImpl>::f11(10, 20).get_dispatch_info().weight, 120);
 		assert_eq!(Call::<TraitImpl>::f11(10, 20).get_dispatch_info().class, DispatchClass::Normal);
-		assert_eq!(Call::<TraitImpl>::f0().get_dispatch_info().weight, 1000);
+		assert_eq!(Call::<TraitImpl>::f12(10, 20).get_dispatch_info().weight, 0);
+		assert_eq!(Call::<TraitImpl>::f12(10, 20).get_dispatch_info().class, DispatchClass::Operational);
+		assert_eq!(Call::<TraitImpl>::f2().get_dispatch_info().weight, 12300);
+		assert_eq!(Call::<TraitImpl>::f21().get_dispatch_info().weight, 45600);
+		assert_eq!(Call::<TraitImpl>::f2().get_dispatch_info().class, DispatchClass::Normal);
 	}
 }

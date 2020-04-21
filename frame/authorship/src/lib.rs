@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Authorship tracking for SRML runtimes.
+//! Authorship tracking for FRAME runtimes.
 //!
 //! This tracks the current author of the block and recent uncles.
 
@@ -27,7 +27,7 @@ use frame_support::traits::{FindAuthor, VerifySeal, Get};
 use codec::{Encode, Decode};
 use frame_system::ensure_none;
 use sp_runtime::traits::{Header as HeaderT, One, Zero};
-use frame_support::weights::SimpleDispatchInfo;
+use frame_support::weights::{Weight, MINIMUM_WEIGHT, SimpleDispatchInfo};
 use sp_inherents::{InherentIdentifier, ProvideInherent, InherentData};
 use sp_authorship::{INHERENT_IDENTIFIER, UnclesInherentData, InherentError};
 
@@ -185,7 +185,7 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
-		fn on_initialize(now: T::BlockNumber) {
+		fn on_initialize(now: T::BlockNumber) -> Weight {
 			let uncle_generations = T::UncleGenerations::get();
 			// prune uncles that are older than the allowed number of generations.
 			if uncle_generations <= now {
@@ -196,6 +196,8 @@ decl_module! {
 			<Self as Store>::DidSetUncles::put(false);
 
 			T::EventHandler::note_author(Self::author());
+
+			MINIMUM_WEIGHT
 		}
 
 		fn on_finalize() {
@@ -205,7 +207,7 @@ decl_module! {
 		}
 
 		/// Provide a set of uncles.
-		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
+		#[weight = SimpleDispatchInfo::FixedMandatory(MINIMUM_WEIGHT)]
 		fn set_uncles(origin, new_uncles: Vec<T::Header>) -> dispatch::DispatchResult {
 			ensure_none(origin)?;
 			ensure!(new_uncles.len() <= MAX_UNCLES, Error::<T>::TooManyUncles);
@@ -427,13 +429,14 @@ mod tests {
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
+		type DbWeight = ();
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();
 		type ModuleToIndex = ();
 		type AccountData = ();
 		type OnNewAccount = ();
-		type OnReapAccount = ();
+		type OnKilledAccount = ();
 	}
 
 	parameter_types! {

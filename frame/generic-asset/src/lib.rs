@@ -108,11 +108,11 @@
 //!
 //! ### Usage
 //!
-//! The following examples show how to use the Generic Asset module in your custom module.
+//! The following examples show how to use the Generic Asset Pallet in your custom pallet.
 //!
-//! ### Examples from the frame module
+//! ### Examples from the FRAME pallet
 //!
-//! The Fees module uses the `Currency` trait to handle fee charge/refund, and its types inherit from `Currency`:
+//! The Fees Pallet uses the `Currency` trait to handle fee charge/refund, and its types inherit from `Currency`:
 //!
 //! ```
 //! use frame_support::{
@@ -148,7 +148,7 @@
 //!
 //! ## Genesis config
 //!
-//! The Generic Asset module depends on the [`GenesisConfig`](./struct.GenesisConfig.html).
+//! The Generic Asset Pallet depends on the [`GenesisConfig`](./struct.GenesisConfig.html).
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -164,6 +164,7 @@ use sp_std::prelude::*;
 use sp_std::{cmp, result, fmt::Debug};
 use frame_support::{
 	decl_event, decl_module, decl_storage, ensure, decl_error,
+	weights::{SimpleDispatchInfo, MINIMUM_WEIGHT},
 	traits::{
 		Currency, ExistenceRequirement, Imbalance, LockIdentifier, LockableCurrency, ReservableCurrency,
 		SignedImbalance, WithdrawReason, WithdrawReasons, TryDrop, BalanceStatus,
@@ -360,12 +361,14 @@ decl_module! {
 		fn deposit_event() = default;
 
 		/// Create a new kind of asset.
+		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 		fn create(origin, options: AssetOptions<T::Balance, T::AccountId>) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			Self::create_asset(None, Some(origin), options)
 		}
 
 		/// Transfer some liquid free balance to another account.
+		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 		pub fn transfer(origin, #[compact] asset_id: T::AssetId, to: T::AccountId, #[compact] amount: T::Balance) {
 			let origin = ensure_signed(origin)?;
 			ensure!(!amount.is_zero(), Error::<T>::ZeroAmount);
@@ -375,6 +378,7 @@ decl_module! {
 		/// Updates permission for a given `asset_id` and an account.
 		///
 		/// The `origin` must have `update` permission.
+		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 		fn update_permission(
 			origin,
 			#[compact] asset_id: T::AssetId,
@@ -397,6 +401,7 @@ decl_module! {
 
 		/// Mints an asset, increases its total issuance.
 		/// The origin must have `mint` permissions.
+		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 		fn mint(origin, #[compact] asset_id: T::AssetId, to: T::AccountId, amount: T::Balance) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::mint_free(&asset_id, &who, &to, &amount)?;
@@ -406,6 +411,7 @@ decl_module! {
 
 		/// Burns an asset, decreases its total issuance.
 		/// The `origin` must have `burn` permissions.
+		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 		fn burn(origin, #[compact] asset_id: T::AssetId, to: T::AccountId, amount: T::Balance) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::burn_free(&asset_id, &who, &to, &amount)?;
@@ -415,6 +421,7 @@ decl_module! {
 
 		/// Can be used to create reserved tokens.
 		/// Requires Root call.
+		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 		fn create_reserved(
 			origin,
 			asset_id: T::AssetId,
@@ -439,26 +446,26 @@ decl_storage! {
 		pub TotalIssuance get(fn total_issuance) build(|config: &GenesisConfig<T>| {
 			let issuance = config.initial_balance * (config.endowed_accounts.len() as u32).into();
 			config.assets.iter().map(|id| (id.clone(), issuance)).collect::<Vec<_>>()
-		}): map hasher(blake2_256) T::AssetId => T::Balance;
+		}): map hasher(twox_64_concat) T::AssetId => T::Balance;
 
 		/// The free balance of a given asset under an account.
 		pub FreeBalance:
-			double_map hasher(blake2_256) T::AssetId, hasher(twox_128) T::AccountId => T::Balance;
+			double_map hasher(twox_64_concat) T::AssetId, hasher(blake2_128_concat) T::AccountId => T::Balance;
 
 		/// The reserved balance of a given asset under an account.
 		pub ReservedBalance:
-			double_map hasher(blake2_256) T::AssetId, hasher(twox_128) T::AccountId => T::Balance;
+			double_map hasher(twox_64_concat) T::AssetId, hasher(blake2_128_concat) T::AccountId => T::Balance;
 
 		/// Next available ID for user-created asset.
 		pub NextAssetId get(fn next_asset_id) config(): T::AssetId;
 
 		/// Permission options for a given asset.
 		pub Permissions get(fn get_permission):
-			map hasher(blake2_256) T::AssetId => PermissionVersions<T::AccountId>;
+			map hasher(twox_64_concat) T::AssetId => PermissionVersions<T::AccountId>;
 
 		/// Any liquidity locks on some account balances.
 		pub Locks get(fn locks):
-			map hasher(blake2_256) T::AccountId => Vec<BalanceLock<T::Balance>>;
+			map hasher(blake2_128_concat) T::AccountId => Vec<BalanceLock<T::Balance>>;
 
 		/// The identity of the asset which is the one that is designated for the chain's staking system.
 		pub StakingAssetId get(fn staking_asset_id) config(): T::AssetId;
@@ -1092,7 +1099,7 @@ mod imbalances {
 // types (basically for charging fees).
 // This should eventually be refactored so that the two type items that do
 // depend on the Imbalance type (TransactionPayment, DustRemoval)
-// are placed in their own SRML module.
+// are placed in their own pallet.
 struct ElevatedTrait<T: Subtrait>(T);
 impl<T: Subtrait> Clone for ElevatedTrait<T> {
 	fn clone(&self) -> Self {
@@ -1118,13 +1125,14 @@ impl<T: Subtrait> frame_system::Trait for ElevatedTrait<T> {
 	type Event = ();
 	type BlockHashCount = T::BlockHashCount;
 	type MaximumBlockWeight = T::MaximumBlockWeight;
+	type DbWeight = ();
 	type MaximumBlockLength = T::MaximumBlockLength;
 	type AvailableBlockRatio = T::AvailableBlockRatio;
 	type Version = T::Version;
 	type ModuleToIndex = ();
 	type AccountData = ();
 	type OnNewAccount = ();
-	type OnReapAccount = ();
+	type OnKilledAccount = ();
 }
 impl<T: Subtrait> Trait for ElevatedTrait<T> {
 	type Balance = T::Balance;

@@ -1,0 +1,19 @@
+[package]
+name = "sp-utils"
+version = "2.0.0-dev"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+license = "GPL-3.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+description = "I/O for Substrate runtimes"
+
+[dependencies]
+futures = "0.3.4"
+futures-core = "0.3.4"
+lazy_static = "1.4.0"
+prometheus = "0.8.0"
+
+[features]
+default = ["metered"]
+metered = []

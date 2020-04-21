@@ -14,18 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use sc_cli::{SharedParams, ImportParams, RunCmd};
+use sc_cli::{ImportParams, RunCmd, SharedParams};
 use structopt::StructOpt;
 
-#[allow(missing_docs)]
+/// An overarching CLI command definition.
 #[derive(Clone, Debug, StructOpt)]
-#[structopt(settings = &[
-	structopt::clap::AppSettings::GlobalVersion,
-	structopt::clap::AppSettings::ArgsNegateSubcommands,
-	structopt::clap::AppSettings::SubcommandsNegateReqs,
-])]
 pub struct Cli {
-	#[allow(missing_docs)]
+	/// Possible subcommand with parameters.
 	#[structopt(subcommand)]
 	pub subcommand: Option<Subcommand>,
 	#[allow(missing_docs)]
@@ -33,10 +28,10 @@ pub struct Cli {
 	pub run: RunCmd,
 }
 
-#[allow(missing_docs)]
+/// Possible subcommands of the main binary.
 #[derive(Clone, Debug, StructOpt)]
 pub enum Subcommand {
-	#[allow(missing_docs)]
+	/// A set of base subcommands handled by `sc_cli`.
 	#[structopt(flatten)]
 	Base(sc_cli::Subcommand),
 	/// The custom factory subcommmand for manufacturing transactions.
@@ -46,6 +41,17 @@ pub enum Subcommand {
 		Only supported for development or local testnet."
 	)]
 	Factory(FactoryCmd),
+
+	/// The custom inspect subcommmand for decoding blocks and extrinsics.
+	#[structopt(
+		name = "inspect",
+		about = "Decode given block or extrinsic using current native runtime."
+	)]
+	Inspect(node_inspect::cli::InspectCmd),
+
+	/// The custom benchmark subcommmand benchmarking runtime pallets.
+	#[structopt(name = "benchmark", about = "Benchmark runtime pallets.")]
+	Benchmark(frame_benchmarking_cli::BenchmarkCmd),
 }
 
 /// The `factory` command used to generate transactions.
@@ -53,11 +59,11 @@ pub enum Subcommand {
 #[derive(Debug, StructOpt, Clone)]
 pub struct FactoryCmd {
 	/// Number of blocks to generate.
-	#[structopt(long="blocks", default_value = "1")]
+	#[structopt(long = "blocks", default_value = "1")]
 	pub blocks: u32,
 
 	/// Number of transactions to push per block.
-	#[structopt(long="transactions", default_value = "8")]
+	#[structopt(long = "transactions", default_value = "8")]
 	pub transactions: u32,
 
 	#[allow(missing_docs)]

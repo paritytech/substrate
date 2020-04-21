@@ -169,6 +169,7 @@ mod tests {
 	use substrate_test_runtime_client::runtime::Block;
 	use sc_transaction_pool::{BasicPool, FullChainApi};
 	use sp_transaction_pool::{TransactionPool, InPoolTransaction};
+	use sc_client_api::ExecutorProvider;
 
 	struct MockNetworkStateInfo();
 
@@ -190,7 +191,8 @@ mod tests {
 			at: &BlockId<Block>,
 			extrinsic: <Block as traits::Block>::Extrinsic,
 		) -> Result<(), ()> {
-			futures::executor::block_on(self.0.submit_one(&at, extrinsic))
+			let source = sp_transaction_pool::TransactionSource::Local;
+			futures::executor::block_on(self.0.submit_one(&at, source, extrinsic))
 				.map(|_| ())
 				.map_err(|_| ())
 		}
@@ -204,6 +206,7 @@ mod tests {
 		let pool = Arc::new(TestPool(BasicPool::new(
 			Default::default(),
 			Arc::new(FullChainApi::new(client.clone())),
+			None,
 		).0));
 		client.execution_extensions()
 			.register_transaction_pool(Arc::downgrade(&pool.clone()) as _);

@@ -36,9 +36,12 @@ use crate::{hashing::blake2_256, crypto::{Pair as TraitPair, DeriveJunction, Sec
 use crate::crypto::Ss58Codec;
 #[cfg(feature = "std")]
 use serde::{de, Serializer, Serialize, Deserializer, Deserialize};
-use crate::crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive};
+use crate::crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive, CryptoTypeId};
 #[cfg(feature = "full_crypto")]
 use secp256k1::{PublicKey, SecretKey};
+
+/// An identifier used to match public keys against ecdsa keys
+pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"ecds");
 
 /// A secret seed (which is bytewise essentially equivalent to a SecretKey).
 ///
@@ -92,6 +95,17 @@ impl Public {
 	pub fn from_raw(data: [u8; 33]) -> Self {
 		Self(data)
 	}
+
+	/// Create a new instance from the given full public key.
+	///
+	/// This will convert the full public key into the compressed format.
+	#[cfg(feature = "std")]
+	pub fn from_full(full: &[u8]) -> Result<Self, ()> {
+		secp256k1::PublicKey::parse_slice(full, None)
+			.map(|k| k.serialize_compressed())
+			.map(Self)
+			.map_err(|_| ())
+	}
 }
 
 impl TraitPublic for Public {
@@ -133,10 +147,8 @@ impl sp_std::convert::TryFrom<&[u8]> for Public {
 		if data.len() == 33 {
 			Ok(Self::from_slice(data))
 		} else {
-			secp256k1::PublicKey::parse_slice(data, None)
-				.map(|k| k.serialize_compressed())
-				.map(Self)
-				.map_err(|_| ())
+
+			Err(())
 		}
 	}
 }
@@ -544,7 +556,7 @@ mod test {
 		let public = pair.public();
 		assert_eq!(
 			public,
-			Public::try_from(
+			Public::from_full(
 				&hex!("8db55b05db86c0b1786ca49f095d76344c9e6056b2f02701a7e7f3c20aabfd913ebbe148dd17c56551a52952371071a6c604b3f3abe8f2c8fa742158ea6dd7d4")[..],
 			).unwrap(),
 		);
@@ -564,7 +576,7 @@ mod test {
 		let public = pair.public();
 		assert_eq!(
 			public,
-			Public::try_from(
+			Public::from_full(
 				&hex!("8db55b05db86c0b1786ca49f095d76344c9e6056b2f02701a7e7f3c20aabfd913ebbe148dd17c56551a52952371071a6c604b3f3abe8f2c8fa742158ea6dd7d4")[..],
 			).unwrap(),
 		);
@@ -591,7 +603,7 @@ mod test {
 		let public = pair.public();
 		assert_eq!(
 			public,
-			Public::try_from(
+			Public::from_full(
 				&hex!("5676109c54b9a16d271abeb4954316a40a32bcce023ac14c8e26e958aa68fba995840f3de562156558efbfdac3f16af0065e5f66795f4dd8262a228ef8c6d813")[..],
 			).unwrap(),
 		);

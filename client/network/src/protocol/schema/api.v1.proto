@@ -14,31 +14,27 @@ enum Direction {
 
 // Request block data from a peer.
 message BlockRequest {
-	// Unique request id.
-	uint64 id = 1;
 	// Bits of block data to request.
-	uint32 fields = 2;
+	uint32 fields = 1;
 	// Start from this block.
 	oneof from_block {
 		// Start with given hash.
-		bytes hash = 3;
+		bytes hash = 2;
 		// Start with given block number.
-		bytes number = 4;
+		bytes number = 3;
 	}
 	// End at this block. An implementation defined maximum is used when unspecified.
-	bytes to_block = 5; // optional
+	bytes to_block = 4; // optional
 	// Sequence direction.
-	Direction direction = 6;
+	Direction direction = 5;
 	// Maximum number of blocks to return. An implementation defined maximum is used when unspecified.
-	uint32 max_blocks = 7; // optional
+	uint32 max_blocks = 6; // optional
 }
 
 // Response to `BlockRequest`
 message BlockResponse {
-	// Id of a request this response was made for.
-	uint64 id = 1;
 	// Block data for the requested sequence.
-	repeated BlockData blocks = 2;
+	repeated BlockData blocks = 1;
 }
 
 // Block data sent in the response.

@@ -1,0 +1,36 @@
+[package]
+name = "pallet-benchmark"
+version = "2.0.0-dev"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+license = "GPL-3.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+description = "Patterns to benchmark in a FRAME runtime."
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+serde = { version = "1.0.101", optional = true }
+codec = { package = "parity-scale-codec", version = "1.0.0", default-features = false, features = ["derive"] }
+sp-std = { version = "2.0.0-dev", default-features = false, path = "../../primitives/std" }
+sp-io = { version = "2.0.0-dev", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "2.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+frame-support = { version = "2.0.0-dev", default-features = false, path = "../support" }
+frame-system = { version = "2.0.0-dev", default-features = false, path = "../system" }
+frame-benchmarking = { version = "2.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
+
+[features]
+default = ["std"]
+std = [
+	"serde",
+	"codec/std",
+	"sp-std/std",
+	"sp-io/std",
+	"sp-runtime/std",
+	"frame-support/std",
+	"frame-system/std",
+	"frame-benchmarking/std",
+]
+runtime-benchmarks = ["frame-benchmarking"]

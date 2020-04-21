@@ -34,9 +34,9 @@ impl_outer_origin! {
 	pub enum Origin for Test where system = frame_system {}
 }
 
-// For testing the module, we construct most of a mock runtime. This means
+// For testing the pallet, we construct most of a mock runtime. This means
 // first constructing a configuration type (`Test`) which `impl`s each of the
-// configuration traits of modules we want to use.
+// configuration traits of pallets we want to use.
 #[derive(Clone, Eq, PartialEq)]
 pub struct Test;
 parameter_types! {
@@ -57,6 +57,7 @@ impl frame_system::Trait for Test {
 	type Header = Header;
 	type Event = TestEvent;
 	type MaximumBlockWeight = MaximumBlockWeight;
+	type DbWeight = ();
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type BlockHashCount = BlockHashCount;
@@ -64,7 +65,7 @@ impl frame_system::Trait for Test {
 	type ModuleToIndex = ();
 	type AccountData = ();
 	type OnNewAccount = ();
-	type OnReapAccount = ();
+	type OnKilledAccount = ();
 }
 
 impl Trait for Test {
@@ -127,16 +128,17 @@ impl ExtBuilder {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
 		GenesisConfig::<Test> {
-				assets: vec![self.asset_id],
-				endowed_accounts: self.accounts,
-				initial_balance: self.initial_balance,
-				next_asset_id: self.next_asset_id,
-				staking_asset_id: 16000,
-				spending_asset_id: 16001,
-			}
-			.assimilate_storage(&mut t).unwrap();
+			assets: vec![self.asset_id],
+			endowed_accounts: self.accounts,
+			initial_balance: self.initial_balance,
+			next_asset_id: self.next_asset_id,
+			staking_asset_id: 16000,
+			spending_asset_id: 16001,
+		}.assimilate_storage(&mut t).unwrap();
 
-		t.into()
+		let mut ext = sp_io::TestExternalities::new(t);
+		ext.execute_with(|| System::set_block_number(1));
+		ext
 	}
 }
 

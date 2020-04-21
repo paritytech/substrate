@@ -19,97 +19,37 @@
 use crate::error;
 use crate::builder::{ServiceBuilderCommand, ServiceBuilder};
 use crate::error::Error;
-use sc_chain_spec::{ChainSpec, RuntimeGenesis, Extension};
+use sc_chain_spec::ChainSpec;
 use log::{warn, info};
 use futures::{future, prelude::*};
-use sp_runtime::{
-	BuildStorage, BenchmarkResults,
-	traits::{
-		Block as BlockT, NumberFor, One, Zero, Header, SaturatedConversion
-	}
+use sp_runtime::traits::{
+	Block as BlockT, NumberFor, One, Zero, Header, SaturatedConversion
 };
 use sp_runtime::generic::{BlockId, SignedBlock};
 use codec::{Decode, Encode, IoReader};
-use sc_client::{Client, ExecutionStrategy, StateMachine, LocalCallExecutor};
-#[cfg(feature = "rocksdb")]
-use sc_client_db::BenchmarkingState;
-use sp_consensus::import_queue::{IncomingBlock, Link, BlockImportError, BlockImportResult, ImportQueue};
-use sp_consensus::BlockOrigin;
-use sc_executor::{NativeExecutor, NativeExecutionDispatch, WasmExecutionMethod};
+use sc_client::{Client, LocalCallExecutor};
+use sp_consensus::{
+	BlockOrigin,
+	import_queue::{IncomingBlock, Link, BlockImportError, BlockImportResult, ImportQueue},
+};
+use sc_executor::{NativeExecutor, NativeExecutionDispatch};
 
 use std::{io::{Read, Write, Seek}, pin::Pin};
-
-use sc_network::message;
+use sc_client_api::BlockBackend;
 
 /// Build a chain spec json
-pub fn build_spec<G, E>(spec: ChainSpec<G, E>, raw: bool) -> error::Result<String> where
-	G: RuntimeGenesis,
-	E: Extension,
-{
-	Ok(spec.to_json(raw)?)
+pub fn build_spec(spec: &dyn ChainSpec, raw: bool) -> error::Result<String> {
+	Ok(spec.as_json(raw)?)
 }
-
-/// Run runtime benchmarks.
-#[cfg(feature = "rocksdb")]
-pub fn benchmark_runtime<TBl, TExecDisp, G, E> (
-	spec: ChainSpec<G, E>,
-	strategy: ExecutionStrategy,
-	wasm_method: WasmExecutionMethod,
-	pallet: String,
-	extrinsic: String,
-	steps: u32,
-	repeat: u32,
-) -> error::Result<()> where
-	TBl: BlockT,
-	TExecDisp: NativeExecutionDispatch + 'static,
-	G: RuntimeGenesis,
-	E: Extension,
-{
-	let genesis_storage = spec.build_storage()?;
-	let mut changes = Default::default();
-	let state = BenchmarkingState::<TBl>::new(genesis_storage)?;
-	let executor = NativeExecutor::<TExecDisp>::new(
-		wasm_method,
-		None, // heap pages
-	);
-	let result = StateMachine::<_, _, NumberFor<TBl>, _>::new(
-		&state,
-		None,
-		&mut changes,
-		&executor,
-		"Benchmark_dispatch_benchmark",
-		&(&pallet, &extrinsic, steps, repeat).encode(),
-		Default::default(),
-	).execute(strategy).map_err(|e| format!("Error executing runtime benchmark: {:?}", e))?;
-	let results = <Option<Vec<BenchmarkResults>> as Decode>::decode(&mut &result[..]).unwrap_or(None);
-	if let Some(results) = results {
-		// Print benchmark metadata
-		println!("Pallet: {:?}, Extrinsic: {:?}, Steps: {:?}, Repeat: {:?}", pallet, extrinsic, steps, repeat);
-		// Print the table header
-		results[0].0.iter().for_each(|param| print!("{:?},", param.0));
-		print!("time\n");
-		// Print the values
-		results.iter().for_each(|result| {
-			let parameters = &result.0;
-			parameters.iter().for_each(|param| print!("{:?},", param.1));
-			print!("{:?}\n", result.1);
-		});
-		info!("Done.");
-	} else {
-		info!("No Results.");
-	}
-	Ok(())
-}
-
 
 impl<
-	TBl, TRtApi, TGen, TCSExt, TBackend,
-	TExecDisp, TFchr, TSc, TImpQu, TFprb, TFpp, TNetP,
+	TBl, TRtApi, TBackend,
+	TExecDisp, TFchr, TSc, TImpQu, TFprb, TFpp,
 	TExPool, TRpc, Backend
 > ServiceBuilderCommand for ServiceBuilder<
-	TBl, TRtApi, TGen, TCSExt,
+	TBl, TRtApi,
 	Client<TBackend, LocalCallExecutor<TBackend, NativeExecutor<TExecDisp>>, TBl, TRtApi>,
-	TFchr, TSc, TImpQu, TFprb, TFpp, TNetP, TExPool, TRpc, Backend
+	TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend
 > where
 	TBl: BlockT,
 	TBackend: 'static + sc_client_api::backend::Backend<TBl> + Send,
@@ -185,7 +125,7 @@ impl<
 							return std::task::Poll::Ready(Err(From::from(err)));
 						},
 					};
-					info!("Importing {} blocks", c);
+					info!("📦 Importing {} blocks", c);
 					count = Some(c);
 					c
 				}
@@ -197,21 +137,13 @@ impl<
 					Ok(signed) => {
 						let (header, extrinsics) = signed.block.deconstruct();
 						let hash = header.hash();
-						let block  = message::BlockData::<Self::Block> {
-							hash,
-							justification: signed.justification,
-							header: Some(header),
-							body: Some(extrinsics),
-							receipt: None,
-							message_queue: None
-						};
 						// import queue handles verification and importing it into the client
 						queue.import_blocks(BlockOrigin::File, vec![
 							IncomingBlock::<Self::Block> {
-								hash: block.hash,
-								header: block.header,
-								body: block.body,
-								justification: block.justification,
+								hash,
+								header: Some(header),
+								body: Some(extrinsics),
+								justification: signed.justification,
 								origin: None,
 								allow_missing_state: false,
 								import_existing: force,
@@ -253,7 +185,7 @@ impl<
 			}
 
 			if link.imported_blocks >= count {
-				info!("Imported {} blocks. Best: #{}", read_block_count, client.chain_info().best_number);
+				info!("🎉 Imported {} blocks. Best: #{}", read_block_count, client.chain_info().best_number);
 				return std::task::Poll::Ready(Ok(()));
 
 			} else {
@@ -269,7 +201,7 @@ impl<
 		mut output: impl Write + 'static,
 		from: NumberFor<TBl>,
 		to: Option<NumberFor<TBl>>,
-		json: bool
+		binary: bool
 	) -> Pin<Box<dyn Future<Output = Result<(), Error>>>> {
 		let client = self.client;
 		let mut block = from;
@@ -296,7 +228,7 @@ impl<
 
 			if !wrote_header {
 				info!("Exporting blocks from #{} to #{}", block, last);
-				if !json {
+				if binary {
 					let last_: u64 = last.saturated_into::<u64>();
 					let block_: u64 = block.saturated_into::<u64>();
 					let len: u64 = last_ - block_ + 1;
@@ -307,13 +239,13 @@ impl<
 
 			match client.block(&BlockId::number(block))? {
 				Some(block) => {
-					if json {
+					if binary {
+						output.write_all(&block.encode())?;
+					} else {
 						serde_json::to_writer(&mut output, &block)
 							.map_err(|e| format!("Error writing JSON: {}", e))?;
-						} else {
-							output.write_all(&block.encode())?;
 					}
-				},
+			},
 				// Reached end of the chain.
 				None => return std::task::Poll::Ready(Ok(())),
 			}

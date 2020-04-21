@@ -70,15 +70,15 @@ use sp_std::{fmt::Debug, ops::Add, iter::once};
 use enumflags2::BitFlags;
 use codec::{Encode, Decode};
 use sp_runtime::{DispatchResult, RuntimeDebug};
-use sp_runtime::traits::{StaticLookup, EnsureOrigin, Zero, AppendZerosInput};
+use sp_runtime::traits::{StaticLookup, Zero, AppendZerosInput};
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
-	traits::{Currency, ReservableCurrency, OnUnbalanced, Get, BalanceStatus},
-	weights::SimpleDispatchInfo,
+	traits::{Currency, ReservableCurrency, OnUnbalanced, Get, BalanceStatus, EnsureOrigin},
+	weights::{SimpleDispatchInfo, MINIMUM_WEIGHT},
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 
-pub mod benchmarking;
+mod benchmarking;
 
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
@@ -381,21 +381,21 @@ pub struct RegistrarInfo<
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Sudo {
+	trait Store for Module<T: Trait> as Identity {
 		/// Information that is pertinent to identify the entity behind an account.
 		pub IdentityOf get(fn identity):
-			map hasher(blake2_256) T::AccountId => Option<Registration<BalanceOf<T>>>;
+			map hasher(twox_64_concat) T::AccountId => Option<Registration<BalanceOf<T>>>;
 
 		/// The super-identity of an alternative "sub" identity together with its name, within that
 		/// context. If the account is not some other account's sub-identity, then just `None`.
 		pub SuperOf get(fn super_of):
-			map hasher(blake2_256) T::AccountId => Option<(T::AccountId, Data)>;
+			map hasher(blake2_128_concat) T::AccountId => Option<(T::AccountId, Data)>;
 
 		/// Alternative "sub" identities of this account.
 		///
 		/// The first item is the deposit, the second is a vector of the accounts.
-		pub SubsOf get(fn subs):
-			map hasher(blake2_256) T::AccountId => (BalanceOf<T>, Vec<T::AccountId>);
+		pub SubsOf get(fn subs_of):
+			map hasher(twox_64_concat) T::AccountId => (BalanceOf<T>, Vec<T::AccountId>);
 
 		/// The set of registrars. Not expected to get very big as can only be added through a
 		/// special origin (likely a council motion).
@@ -474,7 +474,7 @@ decl_module! {
 		/// - One storage mutation (codec `O(R)`).
 		/// - One event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 		fn add_registrar(origin, account: T::AccountId) {
 			T::RegistrarOrigin::try_origin(origin)
 				.map(|_| ())
@@ -506,7 +506,7 @@ decl_module! {
 		/// - One storage mutation (codec-read `O(X' + R)`, codec-write `O(X + R)`).
 		/// - One event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(50_000_000)]
 		fn set_identity(origin, info: IdentityInfo) {
 			let sender = ensure_signed(origin)?;
 			let extra_fields = info.additional.len() as u32;
@@ -552,7 +552,7 @@ decl_module! {
 		/// - At most O(2 * S + 1) storage mutations; codec complexity `O(1 * S + S * 1)`);
 		///   one storage-exists.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(50_000_000)]
 		fn set_subs(origin, subs: Vec<(T::AccountId, Data)>) {
 			let sender = ensure_signed(origin)?;
 			ensure!(<IdentityOf<T>>::contains_key(&sender), Error::<T>::NotFound);
@@ -599,7 +599,7 @@ decl_module! {
 		/// - `S + 2` storage deletions.
 		/// - One event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(50_000_000)]
 		fn clear_identity(origin) {
 			let sender = ensure_signed(origin)?;
 
@@ -638,7 +638,7 @@ decl_module! {
 		/// - Storage: 1 read `O(R)`, 1 mutate `O(X + R)`.
 		/// - One event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(50_000_000)]
 		fn request_judgement(origin,
 			#[compact] reg_index: RegistrarIndex,
 			#[compact] max_fee: BalanceOf<T>,
@@ -684,7 +684,7 @@ decl_module! {
 		/// - One storage mutation `O(R + X)`.
 		/// - One event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(50_000_000)]
 		fn cancel_request(origin, reg_index: RegistrarIndex) {
 			let sender = ensure_signed(origin)?;
 			let mut id = <IdentityOf<T>>::get(&sender).ok_or(Error::<T>::NoIdentity)?;
@@ -715,7 +715,7 @@ decl_module! {
 		/// - `O(R)`.
 		/// - One storage mutation `O(R)`.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(50_000_000)]
 		fn set_fee(origin,
 			#[compact] index: RegistrarIndex,
 			#[compact] fee: BalanceOf<T>,
@@ -742,7 +742,7 @@ decl_module! {
 		/// - `O(R)`.
 		/// - One storage mutation `O(R)`.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(50_000_000)]
 		fn set_account_id(origin,
 			#[compact] index: RegistrarIndex,
 			new: T::AccountId,
@@ -769,7 +769,7 @@ decl_module! {
 		/// - `O(R)`.
 		/// - One storage mutation `O(R)`.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(50_000_000)]
 		fn set_fields(origin,
 			#[compact] index: RegistrarIndex,
 			fields: IdentityFields,
@@ -803,7 +803,7 @@ decl_module! {
 		/// - Storage: 1 read `O(R)`, 1 mutate `O(R + X)`.
 		/// - One event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(50_000_000)]
 		fn provide_judgement(origin,
 			#[compact] reg_index: RegistrarIndex,
 			target: <T::Lookup as StaticLookup>::Source,
@@ -852,7 +852,7 @@ decl_module! {
 		/// - `S + 2` storage mutations.
 		/// - One event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(100_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(100_000_000)]
 		fn kill_identity(origin, target: <T::Lookup as StaticLookup>::Source) {
 			T::ForceOrigin::try_origin(origin)
 				.map(|_| ())
@@ -872,6 +872,16 @@ decl_module! {
 
 			Self::deposit_event(RawEvent::IdentityKilled(target, deposit));
 		}
+	}
+}
+
+impl<T: Trait> Module<T> {
+	/// Get the subs of an account.
+	pub fn subs(who: &T::AccountId) -> Vec<(T::AccountId, Data)> {
+		SubsOf::<T>::get(who).1
+			.into_iter()
+			.filter_map(|a| SuperOf::<T>::get(&a).map(|x| (a, x.1)))
+			.collect()
 	}
 }
 
@@ -896,9 +906,9 @@ mod tests {
 		pub enum Origin for Test  where system = frame_system {}
 	}
 
-	// For testing the module, we construct most of a mock runtime. This means
+	// For testing the pallet, we construct most of a mock runtime. This means
 	// first constructing a configuration type (`Test`) which `impl`s each of the
-	// configuration traits of modules we want to use.
+	// configuration traits of pallets we want to use.
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
 	parameter_types! {
@@ -920,13 +930,14 @@ mod tests {
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
+		type DbWeight = ();
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
 		type ModuleToIndex = ();
 		type AccountData = pallet_balances::AccountData<u64>;
 		type OnNewAccount = ();
-		type OnReapAccount = Balances;
+		type OnKilledAccount = ();
 	}
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;
@@ -967,7 +978,7 @@ mod tests {
 
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
-	fn new_test_ext() -> sp_io::TestExternalities {
+	pub fn new_test_ext() -> sp_io::TestExternalities {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		// We use default for brevity, but you can configure as desired if needed.
 		pallet_balances::GenesisConfig::<Test> {
@@ -1097,14 +1108,14 @@ mod tests {
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
 			assert_ok!(Identity::set_subs(Origin::signed(10), subs.clone()));
 			assert_eq!(Balances::free_balance(10), 80);
-			assert_eq!(Identity::subs(10), (10, vec![20]));
+			assert_eq!(Identity::subs_of(10), (10, vec![20]));
 			assert_eq!(Identity::super_of(20), Some((10, Data::Raw(vec![40; 1]))));
 
 			// push another item and re-set it.
 			subs.push((30, Data::Raw(vec![50; 1])));
 			assert_ok!(Identity::set_subs(Origin::signed(10), subs.clone()));
 			assert_eq!(Balances::free_balance(10), 70);
-			assert_eq!(Identity::subs(10), (20, vec![20, 30]));
+			assert_eq!(Identity::subs_of(10), (20, vec![20, 30]));
 			assert_eq!(Identity::super_of(20), Some((10, Data::Raw(vec![40; 1]))));
 			assert_eq!(Identity::super_of(30), Some((10, Data::Raw(vec![50; 1]))));
 
@@ -1112,7 +1123,7 @@ mod tests {
 			subs[0] = (40, Data::Raw(vec![60; 1]));
 			assert_ok!(Identity::set_subs(Origin::signed(10), subs.clone()));
 			assert_eq!(Balances::free_balance(10), 70); // no change in the balance
-			assert_eq!(Identity::subs(10), (20, vec![40, 30]));
+			assert_eq!(Identity::subs_of(10), (20, vec![40, 30]));
 			assert_eq!(Identity::super_of(20), None);
 			assert_eq!(Identity::super_of(30), Some((10, Data::Raw(vec![50; 1]))));
 			assert_eq!(Identity::super_of(40), Some((10, Data::Raw(vec![60; 1]))));
@@ -1120,7 +1131,7 @@ mod tests {
 			// clear
 			assert_ok!(Identity::set_subs(Origin::signed(10), vec![]));
 			assert_eq!(Balances::free_balance(10), 90);
-			assert_eq!(Identity::subs(10), (0, vec![]));
+			assert_eq!(Identity::subs_of(10), (0, vec![]));
 			assert_eq!(Identity::super_of(30), None);
 			assert_eq!(Identity::super_of(40), None);
 

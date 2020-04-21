@@ -17,14 +17,14 @@
 //! # System Module
 //!
 //! The System module provides low-level access to core types and cross-cutting utilities.
-//! It acts as the base layer for other SRML modules to interact with the Substrate framework components.
+//! It acts as the base layer for other pallets to interact with the Substrate framework components.
 //!
 //! - [`system::Trait`](./trait.Trait.html)
 //!
 //! ## Overview
 //!
 //! The System module defines the core data types used in a Substrate runtime.
-//! It also provides several utility functions (see [`Module`](./struct.Module.html)) for other runtime modules.
+//! It also provides several utility functions (see [`Module`](./struct.Module.html)) for other FRAME pallets.
 //!
 //! In addition, it manages the storage items for extrinsics data, indexes, event records, and digest items,
 //! among other things that support the execution of the current block.
@@ -44,7 +44,7 @@
 //!
 //! ### Signed Extensions
 //!
-//! The system module defines the following extensions:
+//! The System module defines the following extensions:
 //!
 //!   - [`CheckWeight`]: Checks the weight and length of the block and ensure that it does not
 //!     exceed the limits.
@@ -68,13 +68,14 @@
 //! ### Example - Get extrinsic count and parent hash for the current block
 //!
 //! ```
-//! use frame_support::{decl_module, dispatch};
+//! use frame_support::{decl_module, dispatch, weights::{SimpleDispatchInfo, MINIMUM_WEIGHT}};
 //! use frame_system::{self as system, ensure_signed};
 //!
 //! pub trait Trait: system::Trait {}
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//! 		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 //! 		pub fn system_module_example(origin) -> dispatch::DispatchResult {
 //! 			let _sender = ensure_signed(origin)?;
 //! 			let _extrinsic_count = <system::Module<T>>::extrinsic_count();
@@ -93,11 +94,12 @@ use serde::Serialize;
 use sp_std::prelude::*;
 #[cfg(any(feature = "std", test))]
 use sp_std::map;
+use sp_std::convert::Infallible;
 use sp_std::marker::PhantomData;
 use sp_std::fmt::Debug;
 use sp_version::RuntimeVersion;
 use sp_runtime::{
-	RuntimeDebug, Perbill, DispatchOutcome, DispatchError,
+	RuntimeDebug, Perbill, DispatchOutcome, DispatchError, DispatchResult,
 	generic::{self, Era},
 	transaction_validity::{
 		ValidTransaction, TransactionPriority, TransactionLongevity, TransactionValidityError,
@@ -105,19 +107,20 @@ use sp_runtime::{
 	},
 	traits::{
 		self, CheckEqual, AtLeast32Bit, Zero, SignedExtension, Lookup, LookupError,
-		SimpleBitOps, Hash, Member, MaybeDisplay, EnsureOrigin, BadOrigin, SaturatedConversion,
+		SimpleBitOps, Hash, Member, MaybeDisplay, BadOrigin, SaturatedConversion,
 		MaybeSerialize, MaybeSerializeDeserialize, MaybeMallocSizeOf, StaticLookup, One, Bounded,
+		Dispatchable, DispatchInfoOf, PostDispatchInfoOf,
 	},
 };
 
 use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
 use frame_support::{
-	decl_module, decl_event, decl_storage, decl_error, storage, Parameter,
+	decl_module, decl_event, decl_storage, decl_error, storage, Parameter, ensure, debug,
 	traits::{
-		Contains, Get, ModuleToIndex, OnNewAccount, OnReapAccount, IsDeadAccount, Happened,
-		StoredMap
+		Contains, Get, ModuleToIndex, OnNewAccount, OnKilledAccount, IsDeadAccount, Happened,
+		StoredMap, EnsureOrigin,
 	},
-	weights::{Weight, DispatchInfo, DispatchClass, SimpleDispatchInfo},
+	weights::{Weight, MINIMUM_WEIGHT, RuntimeDbWeight, DispatchInfo, PostDispatchInfo, DispatchClass, SimpleDispatchInfo, FunctionOf}
 };
 use codec::{Encode, Decode, FullCodec, EncodeLike};
 
@@ -144,7 +147,7 @@ pub trait Trait: 'static + Eq + Clone {
 		+ Clone;
 
 	/// The aggregated `Call` type.
-	type Call: Debug;
+	type Call: Dispatchable + Debug;
 
 	/// Account index (aka nonce) type. This stores the number of previous transactions associated
 	/// with a sender account.
@@ -192,6 +195,9 @@ pub trait Trait: 'static + Eq + Clone {
 	/// The maximum weight of a block.
 	type MaximumBlockWeight: Get<Weight>;
 
+	/// The weight of runtime database operations the runtime can invoke.
+	type DbWeight: Get<RuntimeDbWeight>;
+
 	/// The maximum length of a block (in bytes).
 	type MaximumBlockLength: Get<u32>;
 
@@ -219,7 +225,7 @@ pub trait Trait: 'static + Eq + Clone {
 	/// A function that is invoked when an account has been determined to be dead.
 	///
 	/// All resources should be cleaned up associated with the given account.
-	type OnReapAccount: OnReapAccount<Self::AccountId>;
+	type OnKilledAccount: OnKilledAccount<Self::AccountId>;
 }
 
 pub type DigestOf<T> = generic::Digest<<T as Trait>::Hash>;
@@ -234,8 +240,16 @@ pub type KeyValue = (Vec<u8>, Vec<u8>);
 pub enum Phase {
 	/// Applying an extrinsic.
 	ApplyExtrinsic(u32),
-	/// The end.
+	/// Finalizing the block.
 	Finalization,
+	/// Initializing the block.
+	Initialization,
+}
+
+impl Default for Phase {
+	fn default() -> Self {
+		Self::Initialization
+	}
 }
 
 /// Record of an event happening.
@@ -290,13 +304,54 @@ fn hash69<T: AsMut<[u8]> + Default>() -> T {
 /// which can't contain more than `u32::max_value()` items.
 type EventIndex = u32;
 
+/// Type used to encode the number of references an account has.
+pub type RefCount = u8;
+
+/// Information of an account.
+#[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode)]
+pub struct AccountInfo<Index, AccountData> {
+	/// The number of transactions this account has sent.
+	pub nonce: Index,
+	/// The number of other modules that currently depend on this account's existence. The account
+	/// cannot be reaped until this is zero.
+	pub refcount: RefCount,
+	/// The additional data that belongs to this account. Used to store the balance(s) in a lot of
+	/// chains.
+	pub data: AccountData,
+}
+
+/// Stores the `spec_version` and `spec_name` of when the last runtime upgrade
+/// happened.
+#[derive(sp_runtime::RuntimeDebug, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(PartialEq))]
+pub struct LastRuntimeUpgradeInfo {
+	pub spec_version: codec::Compact<u32>,
+	pub spec_name: sp_runtime::RuntimeString,
+}
+
+impl LastRuntimeUpgradeInfo {
+	/// Returns if the runtime was upgraded in comparison of `self` and `current`.
+	///
+	/// Checks if either the `spec_version` increased or the `spec_name` changed.
+	pub fn was_upgraded(&self, current: &sp_version::RuntimeVersion) -> bool {
+		current.spec_version > self.spec_version.0 || current.spec_name != self.spec_name
+	}
+}
+
+impl From<sp_version::RuntimeVersion> for LastRuntimeUpgradeInfo {
+	fn from(version: sp_version::RuntimeVersion) -> Self {
+		Self {
+			spec_version: version.spec_version.into(),
+			spec_name: version.spec_name,
+		}
+	}
+}
+
 decl_storage! {
 	trait Store for Module<T: Trait> as System {
 		/// The full account information for a particular account ID.
-		// TODO: should be hasher(twox64_concat) - will need staged migration
-		// TODO: should not including T::Index (the nonce)
-		// https://github.com/paritytech/substrate/issues/4917
-		pub Account get(fn account): map hasher(blake2_256) T::AccountId => (T::Index, T::AccountData);
+		pub Account get(fn account):
+			map hasher(blake2_128_concat) T::AccountId => AccountInfo<T::Index, T::AccountData>;
 
 		/// Total extrinsics count for the current block.
 		ExtrinsicCount: Option<u32>;
@@ -308,16 +363,14 @@ decl_storage! {
 		AllExtrinsicsLen: Option<u32>;
 
 		/// Map of block numbers to block hashes.
-		// TODO: should be hasher(twox64_concat) - will need one-off migration
-		// https://github.com/paritytech/substrate/issues/4917
 		pub BlockHash get(fn block_hash) build(|_| vec![(T::BlockNumber::zero(), hash69())]):
-			map hasher(blake2_256) T::BlockNumber => T::Hash;
+			map hasher(twox_64_concat) T::BlockNumber => T::Hash;
 
 		/// Extrinsics data for the current block (maps an extrinsic's index to its data).
 		ExtrinsicData get(fn extrinsic_data): map hasher(twox_64_concat) u32 => Vec<u8>;
 
 		/// The current block number being processed. Set by `execute_block`.
-		Number get(fn block_number) build(|_| 1.into()): T::BlockNumber;
+		Number get(fn block_number): T::BlockNumber;
 
 		/// Hash of the previous block.
 		ParentHash get(fn parent_hash) build(|_| hash69()): T::Hash;
@@ -349,7 +402,13 @@ decl_storage! {
 		/// The value has the type `(T::BlockNumber, EventIndex)` because if we used only just
 		/// the `EventIndex` then in case if the topic has the same contents on the next block
 		/// no notification will be triggered thus the event might be lost.
-		EventTopics get(fn event_topics): map hasher(blake2_256) T::Hash => Vec<(T::BlockNumber, EventIndex)>;
+		EventTopics get(fn event_topics): map hasher(blake2_128_concat) T::Hash => Vec<(T::BlockNumber, EventIndex)>;
+
+		/// Stores the `spec_version` and `spec_name` of when the last runtime upgrade happened.
+		pub LastRuntimeUpgrade build(|_| Some(LastRuntimeUpgradeInfo::from(T::Version::get()))): Option<LastRuntimeUpgradeInfo>;
+
+		/// The execution phase of the block.
+		ExecutionPhase: Option<Phase>;
 	}
 	add_extra_genesis {
 		config(changes_trie_config): Option<ChangesTrieConfiguration>;
@@ -384,7 +443,7 @@ decl_event!(
 		/// A new account was created.
 		NewAccount(AccountId),
 		/// An account was reaped.
-		ReapedAccount(AccountId),
+		KilledAccount(AccountId),
 	}
 );
 
@@ -396,17 +455,16 @@ decl_error! {
 		InvalidSpecName,
 		/// The specification version is not allowed to decrease between the current runtime
 		/// and the new runtime.
-		SpecVersionNotAllowedToDecrease,
-		/// The implementation version is not allowed to decrease between the current runtime
-		/// and the new runtime.
-		ImplVersionNotAllowedToDecrease,
-		/// The specification or the implementation version need to increase between the
-		/// current runtime and the new runtime.
-		SpecOrImplVersionNeedToIncrease,
+		SpecVersionNeedsToIncrease,
 		/// Failed to extract the runtime version from the new runtime.
 		///
 		/// Either calling `Core_version` or decoding `RuntimeVersion` failed.
 		FailedToExtractRuntimeVersion,
+
+		/// Suicide called when the account has non-default composite data.
+		NonDefaultComposite,
+		/// There is a non-zero reference count preventing the account from being purged.
+		NonZeroRefCount,
 	}
 }
 
@@ -414,57 +472,42 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
-		/// A big dispatch that will disallow any other transaction to be included.
+		/// A dispatch that will fill the block weight up to the given ratio.
 		// TODO: This should only be available for testing, rather than in general usage, but
 		// that's not possible at present (since it's within the decl_module macro).
-		#[weight = SimpleDispatchInfo::MaxOperational]
-		fn fill_block(origin) {
+		#[weight = FunctionOf(
+			|(ratio,): (&Perbill,)| *ratio * T::MaximumBlockWeight::get(),
+			DispatchClass::Operational,
+			true,
+		)]
+		fn fill_block(origin, _ratio: Perbill) {
 			ensure_root(origin)?;
 		}
 
 		/// Make some on-chain remark.
-		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
 		fn remark(origin, _remark: Vec<u8>) {
 			ensure_signed(origin)?;
 		}
 
 		/// Set the number of pages in the WebAssembly environment's heap.
-		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
+		#[weight = SimpleDispatchInfo::FixedOperational(MINIMUM_WEIGHT)]
 		fn set_heap_pages(origin, pages: u64) {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::HEAP_PAGES, &pages.encode());
 		}
 
 		/// Set the new runtime code.
-		#[weight = SimpleDispatchInfo::FixedOperational(200_000)]
+		#[weight = SimpleDispatchInfo::FixedOperational(200_000_000)]
 		pub fn set_code(origin, code: Vec<u8>) {
-			ensure_root(origin)?;
-
-			let current_version = T::Version::get();
-			let new_version = sp_io::misc::runtime_version(&code)
-				.and_then(|v| RuntimeVersion::decode(&mut &v[..]).ok())
-				.ok_or_else(|| Error::<T>::FailedToExtractRuntimeVersion)?;
-
-			if new_version.spec_name != current_version.spec_name {
-				Err(Error::<T>::InvalidSpecName)?
-			}
-
-			if new_version.spec_version < current_version.spec_version {
-				Err(Error::<T>::SpecVersionNotAllowedToDecrease)?
-			} else if new_version.spec_version == current_version.spec_version {
-				if new_version.impl_version < current_version.impl_version {
-					Err(Error::<T>::ImplVersionNotAllowedToDecrease)?
-				} else if new_version.impl_version == current_version.impl_version {
-					Err(Error::<T>::SpecOrImplVersionNeedToIncrease)?
-				}
-			}
+			Self::can_set_code(origin, &code)?;
 
 			storage::unhashed::put_raw(well_known_keys::CODE, &code);
 			Self::deposit_event(RawEvent::CodeUpdated);
 		}
 
 		/// Set the new runtime code without doing any checks of the given `code`.
-		#[weight = SimpleDispatchInfo::FixedOperational(200_000)]
+		#[weight = SimpleDispatchInfo::FixedOperational(200_000_000)]
 		pub fn set_code_without_checks(origin, code: Vec<u8>) {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::CODE, &code);
@@ -472,7 +515,7 @@ decl_module! {
 		}
 
 		/// Set the new changes trie configuration.
-		#[weight = SimpleDispatchInfo::FixedOperational(20_000)]
+		#[weight = SimpleDispatchInfo::FixedOperational(20_000_000)]
 		pub fn set_changes_trie_config(origin, changes_trie_config: Option<ChangesTrieConfiguration>) {
 			ensure_root(origin)?;
 			match changes_trie_config.clone() {
@@ -490,7 +533,7 @@ decl_module! {
 		}
 
 		/// Set some items of storage.
-		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
+		#[weight = SimpleDispatchInfo::FixedOperational(MINIMUM_WEIGHT)]
 		fn set_storage(origin, items: Vec<KeyValue>) {
 			ensure_root(origin)?;
 			for i in &items {
@@ -499,7 +542,7 @@ decl_module! {
 		}
 
 		/// Kill some items from storage.
-		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
+		#[weight = SimpleDispatchInfo::FixedOperational(MINIMUM_WEIGHT)]
 		fn kill_storage(origin, keys: Vec<Key>) {
 			ensure_root(origin)?;
 			for key in &keys {
@@ -508,10 +551,21 @@ decl_module! {
 		}
 
 		/// Kill all storage items with a key that starts with the given prefix.
-		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
+		#[weight = SimpleDispatchInfo::FixedOperational(MINIMUM_WEIGHT)]
 		fn kill_prefix(origin, prefix: Key) {
 			ensure_root(origin)?;
 			storage::unhashed::kill_prefix(&prefix);
+		}
+
+		/// Kill the sending account, assuming there are no references outstanding and the composite
+		/// data is equal to its default value.
+		#[weight = SimpleDispatchInfo::FixedOperational(25_000_000)]
+		fn suicide(origin) {
+			let who = ensure_signed(origin)?;
+			let account = Account::<T>::get(&who);
+			ensure!(account.refcount == 0, Error::<T>::NonZeroRefCount);
+			ensure!(account.data == T::AccountData::default(), Error::<T>::NonDefaultComposite);
+			Account::<T>::remove(who);
 		}
 	}
 }
@@ -528,12 +582,17 @@ impl<
 			r => Err(O::from(r)),
 		})
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> O {
+		O::from(RawOrigin::Root)
+	}
 }
 
 pub struct EnsureSigned<AccountId>(sp_std::marker::PhantomData<AccountId>);
 impl<
 	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
-	AccountId,
+	AccountId: Default,
 > EnsureOrigin<O> for EnsureSigned<AccountId> {
 	type Success = AccountId;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
@@ -542,13 +601,18 @@ impl<
 			r => Err(O::from(r)),
 		})
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> O {
+		O::from(RawOrigin::Signed(Default::default()))
+	}
 }
 
 pub struct EnsureSignedBy<Who, AccountId>(sp_std::marker::PhantomData<(Who, AccountId)>);
 impl<
 	O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
 	Who: Contains<AccountId>,
-	AccountId: PartialEq + Clone + Ord,
+	AccountId: PartialEq + Clone + Ord + Default,
 > EnsureOrigin<O> for EnsureSignedBy<Who, AccountId> {
 	type Success = AccountId;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
@@ -556,6 +620,16 @@ impl<
 			RawOrigin::Signed(ref who) if Who::contains(who) => Ok(who.clone()),
 			r => Err(O::from(r)),
 		})
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> O {
+		let members = Who::sorted_members();
+		let first_member = match members.get(0) {
+			Some(account) => account.clone(),
+			None => Default::default(),
+		};
+		O::from(RawOrigin::Signed(first_member.clone()))
 	}
 }
 
@@ -571,6 +645,11 @@ impl<
 			r => Err(O::from(r)),
 		})
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> O {
+		O::from(RawOrigin::None)
+	}
 }
 
 pub struct EnsureNever<T>(sp_std::marker::PhantomData<T>);
@@ -578,6 +657,11 @@ impl<O, T> EnsureOrigin<O> for EnsureNever<T> {
 	type Success = T;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		Err(o)
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> O {
+		unimplemented!()
 	}
 }
 
@@ -633,20 +717,50 @@ impl Default for InitKind {
 	}
 }
 
+/// Reference status; can be either referenced or unreferenced.
+pub enum RefStatus {
+	Referenced,
+	Unreferenced,
+}
+
 impl<T: Trait> Module<T> {
 	/// Deposits an event into this block's event record.
 	pub fn deposit_event(event: impl Into<T::Event>) {
 		Self::deposit_event_indexed(&[], event.into());
 	}
 
-		/// Deposits an event into this block's event record adding this event
+	/// Increment the reference counter on an account.
+	pub fn inc_ref(who: &T::AccountId) {
+		Account::<T>::mutate(who, |a| a.refcount = a.refcount.saturating_add(1));
+	}
+
+	/// Decrement the reference counter on an account. This *MUST* only be done once for every time
+	/// you called `inc_ref` on `who`.
+	pub fn dec_ref(who: &T::AccountId) {
+		Account::<T>::mutate(who, |a| a.refcount = a.refcount.saturating_sub(1));
+	}
+
+	/// The number of outstanding references for the account `who`.
+	pub fn refs(who: &T::AccountId) -> RefCount {
+		Account::<T>::get(who).refcount
+	}
+
+	/// True if the account has no outstanding references.
+	pub fn allow_death(who: &T::AccountId) -> bool {
+		Account::<T>::get(who).refcount == 0
+	}
+
+	/// Deposits an event into this block's event record adding this event
 	/// to the corresponding topic indexes.
 	///
 	/// This will update storage entries that correspond to the specified topics.
 	/// It is expected that light-clients could subscribe to this topics.
 	pub fn deposit_event_indexed(topics: &[T::Hash], event: T::Event) {
-		let extrinsic_index = Self::extrinsic_index();
-		let phase = extrinsic_index.map_or(Phase::Finalization, |c| Phase::ApplyExtrinsic(c));
+		let block_number = Self::block_number();
+		// Don't populate events on genesis.
+		if block_number.is_zero() { return }
+
+		let phase = ExecutionPhase::get().unwrap_or_default();
 		let event = EventRecord {
 			phase,
 			event,
@@ -678,10 +792,9 @@ impl<T: Trait> Module<T> {
 			return;
 		}
 
-		let block_no = Self::block_number();
 		for topic in topics {
 			// The same applies here.
-			if <EventTopics<T>>::append(topic, &[(block_no, event_idx)]).is_err() {
+			if <EventTopics<T>>::append(topic, &[(block_number, event_idx)]).is_err() {
 				return;
 			}
 		}
@@ -738,6 +851,7 @@ impl<T: Trait> Module<T> {
 		kind: InitKind,
 	) {
 		// populate environment
+		ExecutionPhase::put(Phase::Initialization);
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
 		<Number<T>>::put(number);
 		<Digest<T>>::put(digest);
@@ -754,6 +868,7 @@ impl<T: Trait> Module<T> {
 
 	/// Remove temporary "environment" entries in storage.
 	pub fn finalize() -> T::Header {
+		ExecutionPhase::kill();
 		ExtrinsicCount::kill();
 		AllExtrinsicsWeight::kill();
 		AllExtrinsicsLen::kill();
@@ -815,13 +930,13 @@ impl<T: Trait> Module<T> {
 				<Number<T>>::hashed_key().to_vec() => T::BlockNumber::one().encode(),
 				<ParentHash<T>>::hashed_key().to_vec() => [69u8; 32].encode()
 			],
-			children: map![],
+			children_default: map![],
 		})
 	}
 
 	/// Set the block number to something in particular. Can be used as an alternative to
 	/// `initialize` for tests that don't need to bother with the other environment entries.
-	#[cfg(any(feature = "std", test))]
+	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
 	pub fn set_block_number(n: T::BlockNumber) {
 		<Number<T>>::put(n);
 	}
@@ -851,12 +966,12 @@ impl<T: Trait> Module<T> {
 
 	/// Retrieve the account transaction counter from storage.
 	pub fn account_nonce(who: impl EncodeLike<T::AccountId>) -> T::Index {
-		Account::<T>::get(who).0
+		Account::<T>::get(who).nonce
 	}
 
 	/// Increment a particular account's nonce by 1.
 	pub fn inc_account_nonce(who: impl EncodeLike<T::AccountId>) {
-		Account::<T>::mutate(who, |a| a.0 += T::Index::one());
+		Account::<T>::mutate(who, |a| a.nonce += T::Index::one());
 	}
 
 	/// Note what the extrinsic data of the current extrinsic index is. If this
@@ -884,6 +999,7 @@ impl<T: Trait> Module<T> {
 		let next_extrinsic_index = Self::extrinsic_index().unwrap_or_default() + 1u32;
 
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &next_extrinsic_index);
+		ExecutionPhase::put(Phase::ApplyExtrinsic(next_extrinsic_index));
 	}
 
 	/// To be called immediately after `note_applied_extrinsic` of the last extrinsic of the block
@@ -892,6 +1008,13 @@ impl<T: Trait> Module<T> {
 		let extrinsic_index: u32 = storage::unhashed::take(well_known_keys::EXTRINSIC_INDEX)
 			.unwrap_or_default();
 		ExtrinsicCount::put(extrinsic_index);
+		ExecutionPhase::put(Phase::Finalization);
+	}
+
+	/// To be called immediately after finishing the initialization of the block
+	/// (e.g., called `on_initialize` for all modules).
+	pub fn note_finished_initialize() {
+		ExecutionPhase::put(Phase::ApplyExtrinsic(0))
 	}
 
 	/// Remove all extrinsic data and save the extrinsics trie root.
@@ -908,18 +1031,54 @@ impl<T: Trait> Module<T> {
 		Self::deposit_event(RawEvent::NewAccount(who));
 	}
 
-	/// Kill the account and reap any related information.
-	pub fn kill_account(who: T::AccountId) {
-		if Account::<T>::contains_key(&who) {
-			Account::<T>::remove(&who);
-			Self::on_killed_account(who);
+	/// Do anything that needs to be done after an account has been killed.
+	fn on_killed_account(who: T::AccountId) {
+		T::OnKilledAccount::on_killed_account(&who);
+		Self::deposit_event(RawEvent::KilledAccount(who));
+	}
+
+	/// Remove an account from storage. This should only be done when its refs are zero or you'll
+	/// get storage leaks in other modules. Nonetheless we assume that the calling logic knows best.
+	///
+	/// This is a no-op if the account doesn't already exist. If it does then it will ensure
+	/// cleanups (those in `on_killed_account`) take place.
+	fn kill_account(who: &T::AccountId) {
+		if Account::<T>::contains_key(who) {
+			let account = Account::<T>::take(who);
+			if account.refcount > 0 {
+				debug::debug!(
+					target: "system",
+					"WARNING: Referenced account deleted. This is probably a bug."
+				);
+			}
+			Module::<T>::on_killed_account(who.clone());
 		}
 	}
 
-	/// Do anything that needs to be done after an account has been killed.
-	fn on_killed_account(who: T::AccountId) {
-		T::OnReapAccount::on_reap_account(&who);
-		Self::deposit_event(RawEvent::ReapedAccount(who));
+	/// Determine whether or not it is possible to update the code.
+	///
+	/// This function has no side effects and is idempotent, but is fairly
+	/// heavy. It is automatically called by `set_code`; in most cases,
+	/// a direct call to `set_code` is preferable. It is useful to call
+	/// `can_set_code` when it is desirable to perform the appropriate
+	/// runtime checks without actually changing the code yet.
+	pub fn can_set_code(origin: T::Origin, code: &[u8]) -> Result<(), sp_runtime::DispatchError> {
+		ensure_root(origin)?;
+
+		let current_version = T::Version::get();
+		let new_version = sp_io::misc::runtime_version(&code)
+			.and_then(|v| RuntimeVersion::decode(&mut &v[..]).ok())
+			.ok_or_else(|| Error::<T>::FailedToExtractRuntimeVersion)?;
+
+		if new_version.spec_name != current_version.spec_name {
+			Err(Error::<T>::InvalidSpecName)?
+		}
+
+		if new_version.spec_version <= current_version.spec_version {
+			Err(Error::<T>::SpecVersionNeedsToIncrease)?
+		}
+
+		Ok(())
 	}
 }
 
@@ -935,7 +1094,7 @@ impl<T: Trait> Happened<T::AccountId> for CallOnCreatedAccount<T> {
 pub struct CallKillAccount<T>(PhantomData<T>);
 impl<T: Trait> Happened<T::AccountId> for CallKillAccount<T> {
 	fn happened(who: &T::AccountId) {
-		Module::<T>::kill_account(who.clone());
+		Module::<T>::kill_account(who)
 	}
 }
 
@@ -944,53 +1103,45 @@ impl<T: Trait> Happened<T::AccountId> for CallKillAccount<T> {
 // Anything more complex will need more sophisticated logic.
 impl<T: Trait> StoredMap<T::AccountId, T::AccountData> for Module<T> {
 	fn get(k: &T::AccountId) -> T::AccountData {
-		Account::<T>::get(k).1
+		Account::<T>::get(k).data
 	}
 	fn is_explicit(k: &T::AccountId) -> bool {
 		Account::<T>::contains_key(k)
 	}
-	fn insert(k: &T::AccountId, t: T::AccountData) {
+	fn insert(k: &T::AccountId, data: T::AccountData) {
 		let existed = Account::<T>::contains_key(k);
-		Account::<T>::insert(k, (T::Index::default(), t));
+		Account::<T>::mutate(k, |a| a.data = data);
 		if !existed {
 			Self::on_created_account(k.clone());
 		}
 	}
 	fn remove(k: &T::AccountId) {
-		if Account::<T>::contains_key(&k) {
-			Self::kill_account(k.clone());
-		}
+		Self::kill_account(k)
 	}
 	fn mutate<R>(k: &T::AccountId, f: impl FnOnce(&mut T::AccountData) -> R) -> R {
 		let existed = Account::<T>::contains_key(k);
-		let r = Account::<T>::mutate(k, |a| f(&mut a.1));
+		let r = Account::<T>::mutate(k, |a| f(&mut a.data));
 		if !existed {
 			Self::on_created_account(k.clone());
 		}
 		r
 	}
 	fn mutate_exists<R>(k: &T::AccountId, f: impl FnOnce(&mut Option<T::AccountData>) -> R) -> R {
-		let (existed, exists, r) = Account::<T>::mutate_exists(k, |maybe_value| {
-			let existed = maybe_value.is_some();
-			let (maybe_nonce, mut maybe_extra) = split_inner(maybe_value.take(), |v| v);
-			let r = f(&mut maybe_extra);
-			*maybe_value = maybe_extra.map(|extra| (maybe_nonce.unwrap_or_default(), extra));
-			(existed, maybe_value.is_some(), r)
-		});
-		if !existed && exists {
-			Self::on_created_account(k.clone());
-		} else if existed && !exists {
-			Self::on_killed_account(k.clone());
-		}
-		r
+		Self::try_mutate_exists(k, |x| -> Result<R, Infallible> { Ok(f(x)) }).expect("Infallible; qed")
 	}
 	fn try_mutate_exists<R, E>(k: &T::AccountId, f: impl FnOnce(&mut Option<T::AccountData>) -> Result<R, E>) -> Result<R, E> {
 		Account::<T>::try_mutate_exists(k, |maybe_value| {
 			let existed = maybe_value.is_some();
-			let (maybe_nonce, mut maybe_extra) = split_inner(maybe_value.take(), |v| v);
-			f(&mut maybe_extra).map(|v| {
-				*maybe_value = maybe_extra.map(|extra| (maybe_nonce.unwrap_or_default(), extra));
-				(existed, maybe_value.is_some(), v)
+			let (maybe_prefix, mut maybe_data) = split_inner(
+				maybe_value.take(),
+				|account| ((account.nonce, account.refcount), account.data)
+			);
+			f(&mut maybe_data).map(|result| {
+				*maybe_value = maybe_data.map(|data| {
+					let (nonce, refcount) = maybe_prefix.unwrap_or_default();
+					AccountInfo { nonce, refcount, data }
+				});
+				(existed, maybe_value.is_some(), result)
 			})
 		}).map(|(existed, exists, v)| {
 			if !existed && exists {
@@ -1020,13 +1171,16 @@ pub fn split_inner<T, R, S>(option: Option<T>, splitter: impl FnOnce(T) -> (R, S
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct CheckWeight<T: Trait + Send + Sync>(PhantomData<T>);
 
-impl<T: Trait + Send + Sync> CheckWeight<T> {
+impl<T: Trait + Send + Sync> CheckWeight<T> where
+	T::Call: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>
+{
 	/// Get the quota ratio of each dispatch class type. This indicates that all operational
 	/// dispatches can use the full capacity of any resource, while user-triggered ones can consume
 	/// a portion.
 	fn get_dispatch_limit_ratio(class: DispatchClass) -> Perbill {
 		match class {
-			DispatchClass::Operational => <Perbill as sp_runtime::PerThing>::one(),
+			DispatchClass::Operational | DispatchClass::Mandatory
+				=> <Perbill as sp_runtime::PerThing>::one(),
 			DispatchClass::Normal => T::AvailableBlockRatio::get(),
 		}
 	}
@@ -1035,14 +1189,14 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 	///
 	/// Upon successes, it returns the new block weight as a `Result`.
 	fn check_weight(
-		info: <Self as SignedExtension>::DispatchInfo,
+		info: &DispatchInfoOf<T::Call>,
 	) -> Result<Weight, TransactionValidityError> {
 		let current_weight = Module::<T>::all_extrinsics_weight();
 		let maximum_weight = T::MaximumBlockWeight::get();
 		let limit = Self::get_dispatch_limit_ratio(info.class) * maximum_weight;
 		let added_weight = info.weight.min(limit);
 		let next_weight = current_weight.saturating_add(added_weight);
-		if next_weight > limit {
+		if next_weight > limit && info.class != DispatchClass::Mandatory {
 			Err(InvalidTransaction::ExhaustsResources.into())
 		} else {
 			Ok(next_weight)
@@ -1053,7 +1207,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 	///
 	/// Upon successes, it returns the new block length as a `Result`.
 	fn check_block_length(
-		info: <Self as SignedExtension>::DispatchInfo,
+		info: &DispatchInfoOf<T::Call>,
 		len: usize,
 	) -> Result<u32, TransactionValidityError> {
 		let current_len = Module::<T>::all_extrinsics_len();
@@ -1069,10 +1223,12 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 	}
 
 	/// get the priority of an extrinsic denoted by `info`.
-	fn get_priority(info: <Self as SignedExtension>::DispatchInfo) -> TransactionPriority {
+	fn get_priority(info: &DispatchInfoOf<T::Call>) -> TransactionPriority {
 		match info.class {
 			DispatchClass::Normal => info.weight.into(),
-			DispatchClass::Operational => Bounded::max_value()
+			DispatchClass::Operational => Bounded::max_value(),
+			// Mandatory extrinsics are only for inherents; never transactions.
+			DispatchClass::Mandatory => Bounded::min_value(),
 		}
 	}
 
@@ -1080,13 +1236,42 @@ impl<T: Trait + Send + Sync> CheckWeight<T> {
 	pub fn new() -> Self {
 		Self(PhantomData)
 	}
+
+	/// Do the pre-dispatch checks. This can be applied to both signed and unsigned.
+	///
+	/// It checks and notes the new weight and length.
+	fn do_pre_dispatch(
+		info: &DispatchInfoOf<T::Call>,
+		len: usize,
+	) -> Result<(), TransactionValidityError> {
+		let next_len = Self::check_block_length(info, len)?;
+		let next_weight = Self::check_weight(info)?;
+		AllExtrinsicsLen::put(next_len);
+		AllExtrinsicsWeight::put(next_weight);
+		Ok(())
+	}
+
+	/// Do the validate checks. This can be applied to both signed and unsigned.
+	///
+	/// It only checks that the block weight and length limit will not exceed.
+	fn do_validate(
+		info: &DispatchInfoOf<T::Call>,
+		len: usize,
+	) -> TransactionValidity {
+		// ignore the next weight and length. If they return `Ok`, then it is below the limit.
+		let _ = Self::check_block_length(info, len)?;
+		let _ = Self::check_weight(info)?;
+
+		Ok(ValidTransaction { priority: Self::get_priority(info), ..Default::default() })
+	}
 }
 
-impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
+impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> where
+	T::Call: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>
+{
 	type AccountId = T::AccountId;
 	type Call = T::Call;
 	type AdditionalSigned = ();
-	type DispatchInfo = DispatchInfo;
 	type Pre = ();
 	const IDENTIFIER: &'static str = "CheckWeight";
 
@@ -1096,35 +1281,66 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckWeight<T> {
 		self,
 		_who: &Self::AccountId,
 		_call: &Self::Call,
-		info: Self::DispatchInfo,
+		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> Result<(), TransactionValidityError> {
-		let next_len = Self::check_block_length(info, len)?;
-		AllExtrinsicsLen::put(next_len);
-		let next_weight = Self::check_weight(info)?;
-		AllExtrinsicsWeight::put(next_weight);
-		Ok(())
+		if info.class == DispatchClass::Mandatory {
+			Err(InvalidTransaction::MandatoryDispatch)?
+		}
+		Self::do_pre_dispatch(info, len)
 	}
 
 	fn validate(
 		&self,
 		_who: &Self::AccountId,
 		_call: &Self::Call,
-		info: Self::DispatchInfo,
+		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> TransactionValidity {
-		// There is no point in writing to storage here since changes are discarded. This basically
-		// discards any transaction which is bigger than the length or weight limit **alone**, which
-		// is a guarantee that it will fail in the pre-dispatch phase.
-		if let Err(e) = Self::check_block_length(info, len) {
-			return Err(e);
+		if info.class == DispatchClass::Mandatory {
+			Err(InvalidTransaction::MandatoryDispatch)?
+		}
+		Self::do_validate(info, len)
+	}
+
+	fn pre_dispatch_unsigned(
+		_call: &Self::Call,
+		info: &DispatchInfoOf<Self::Call>,
+		len: usize,
+	) -> Result<(), TransactionValidityError> {
+		Self::do_pre_dispatch(info, len)
+	}
+
+	fn validate_unsigned(
+		_call: &Self::Call,
+		info: &DispatchInfoOf<Self::Call>,
+		len: usize,
+	) -> TransactionValidity {
+		Self::do_validate(info, len)
+	}
+
+	fn post_dispatch(
+		_pre: Self::Pre,
+		info: &DispatchInfoOf<Self::Call>,
+		post_info: &PostDispatchInfoOf<Self::Call>,
+		_len: usize,
+		result: &DispatchResult,
+	) -> Result<(), TransactionValidityError> {
+		// Since mandatory dispatched do not get validated for being overweight, we are sensitive
+		// to them actually being useful. Block producers are thus not allowed to include mandatory
+		// extrinsics that result in error.
+		if info.class == DispatchClass::Mandatory && result.is_err() {
+			Err(InvalidTransaction::BadMandatory)?
 		}
 
-		if let Err(e) = Self::check_weight(info) {
-			return Err(e);
+		let unspent = post_info.calc_unspent(info);
+		if unspent > 0 {
+			AllExtrinsicsWeight::mutate(|weight| {
+				*weight = weight.map(|w| w.saturating_sub(unspent));
+			})
 		}
 
-		Ok(ValidTransaction { priority: Self::get_priority(info), ..Default::default() })
+		Ok(())
 	}
 }
 
@@ -1154,7 +1370,7 @@ impl<T: Trait> CheckNonce<T> {
 impl<T: Trait> Debug for CheckNonce<T> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		self.0.fmt(f)
+		write!(f, "CheckNonce({})", self.0)
 	}
 
 	#[cfg(not(feature = "std"))]
@@ -1163,11 +1379,12 @@ impl<T: Trait> Debug for CheckNonce<T> {
 	}
 }
 
-impl<T: Trait> SignedExtension for CheckNonce<T> {
+impl<T: Trait> SignedExtension for CheckNonce<T> where
+	T::Call: Dispatchable<Info=DispatchInfo>
+{
 	type AccountId = T::AccountId;
 	type Call = T::Call;
 	type AdditionalSigned = ();
-	type DispatchInfo = DispatchInfo;
 	type Pre = ();
 	const IDENTIFIER: &'static str = "CheckNonce";
 
@@ -1177,20 +1394,21 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 		self,
 		who: &Self::AccountId,
 		_call: &Self::Call,
-		_info: Self::DispatchInfo,
+		_info: &DispatchInfoOf<Self::Call>,
 		_len: usize,
 	) -> Result<(), TransactionValidityError> {
-		let (expected, extra) = Account::<T>::get(who);
-		if self.0 != expected {
+		let mut account = Account::<T>::get(who);
+		if self.0 != account.nonce {
 			return Err(
-				if self.0 < expected {
+				if self.0 < account.nonce {
 					InvalidTransaction::Stale
 				} else {
 					InvalidTransaction::Future
 				}.into()
 			)
 		}
-		Account::<T>::insert(who, (expected + T::Index::one(), extra));
+		account.nonce += T::Index::one();
+		Account::<T>::insert(who, account);
 		Ok(())
 	}
 
@@ -1198,17 +1416,17 @@ impl<T: Trait> SignedExtension for CheckNonce<T> {
 		&self,
 		who: &Self::AccountId,
 		_call: &Self::Call,
-		info: Self::DispatchInfo,
+		info: &DispatchInfoOf<Self::Call>,
 		_len: usize,
 	) -> TransactionValidity {
 		// check index
-		let (expected, _extra) = Account::<T>::get(who);
-		if self.0 < expected {
+		let account = Account::<T>::get(who);
+		if self.0 < account.nonce {
 			return InvalidTransaction::Stale.into()
 		}
 
 		let provides = vec![Encode::encode(&(who, self.0))];
-		let requires = if expected < self.0 {
+		let requires = if account.nonce < self.0 {
 			vec![Encode::encode(&(who, self.0 - One::one()))]
 		} else {
 			vec![]
@@ -1232,19 +1450,19 @@ impl<T: Trait> IsDeadAccount<T::AccountId> for Module<T> {
 
 /// Check for transaction mortality.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
-pub struct CheckEra<T: Trait + Send + Sync>((Era, sp_std::marker::PhantomData<T>));
+pub struct CheckEra<T: Trait + Send + Sync>(Era, sp_std::marker::PhantomData<T>);
 
 impl<T: Trait + Send + Sync> CheckEra<T> {
 	/// utility constructor. Used only in client/factory code.
 	pub fn from(era: Era) -> Self {
-		Self((era, sp_std::marker::PhantomData))
+		Self(era, sp_std::marker::PhantomData)
 	}
 }
 
 impl<T: Trait + Send + Sync> Debug for CheckEra<T> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		self.0.fmt(f)
+		write!(f, "CheckEra({:?})", self.0)
 	}
 
 	#[cfg(not(feature = "std"))]
@@ -1257,7 +1475,6 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 	type AccountId = T::AccountId;
 	type Call = T::Call;
 	type AdditionalSigned = T::Hash;
-	type DispatchInfo = DispatchInfo;
 	type Pre = ();
 	const IDENTIFIER: &'static str = "CheckEra";
 
@@ -1265,11 +1482,11 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 		&self,
 		_who: &Self::AccountId,
 		_call: &Self::Call,
-		_info: Self::DispatchInfo,
+		_info: &DispatchInfoOf<Self::Call>,
 		_len: usize,
 	) -> TransactionValidity {
 		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
-		let valid_till = (self.0).0.death(current_u64);
+		let valid_till = self.0.death(current_u64);
 		Ok(ValidTransaction {
 			longevity: valid_till.saturating_sub(current_u64),
 			..Default::default()
@@ -1278,7 +1495,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckEra<T> {
 
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
 		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
-		let n = (self.0).0.birth(current_u64).saturated_into::<T::BlockNumber>();
+		let n = self.0.birth(current_u64).saturated_into::<T::BlockNumber>();
 		if !<BlockHash<T>>::contains_key(n) {
 			Err(InvalidTransaction::AncientBirthBlock.into())
 		} else {
@@ -1314,7 +1531,6 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckGenesis<T> {
 	type AccountId = T::AccountId;
 	type Call = <T as Trait>::Call;
 	type AdditionalSigned = T::Hash;
-	type DispatchInfo = DispatchInfo;
 	type Pre = ();
 	const IDENTIFIER: &'static str = "CheckGenesis";
 
@@ -1350,7 +1566,6 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckVersion<T> {
 	type AccountId = T::AccountId;
 	type Call = <T as Trait>::Call;
 	type AdditionalSigned = u32;
-	type DispatchInfo = DispatchInfo;
 	type Pre = ();
 	const IDENTIFIER: &'static str = "CheckVersion";
 
@@ -1378,6 +1593,7 @@ impl<T: Trait> Lookup for ChainContext<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use sp_std::cell::RefCell;
 	use sp_core::H256;
 	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header, DispatchError};
 	use frame_support::{impl_outer_origin, parameter_types};
@@ -1401,12 +1617,35 @@ mod tests {
 			spec_version: 1,
 			impl_version: 1,
 			apis: sp_version::create_apis_vec!([]),
+			transaction_version: 1,
 		};
+	}
+
+	thread_local!{
+		pub static KILLED: RefCell<Vec<u64>> = RefCell::new(vec![]);
+	}
+
+	pub struct RecordKilled;
+	impl OnKilledAccount<u64> for RecordKilled {
+		fn on_killed_account(who: &u64) { KILLED.with(|r| r.borrow_mut().push(*who)) }
+	}
+
+	#[derive(Debug)]
+	pub struct Call {}
+	impl Dispatchable for Call {
+		type Origin = ();
+		type Trait = ();
+		type Info = DispatchInfo;
+		type PostInfo = PostDispatchInfo;
+		fn dispatch(self, _origin: Self::Origin)
+			-> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
+				panic!("Do not use dummy implementation for dispatch.");
+		}
 	}
 
 	impl Trait for Test {
 		type Origin = Origin;
-		type Call = ();
+		type Call = Call;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
@@ -1417,13 +1656,14 @@ mod tests {
 		type Event = u16;
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
+		type DbWeight = ();
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = Version;
 		type ModuleToIndex = ();
-		type AccountData = ();
+		type AccountData = u32;
 		type OnNewAccount = ();
-		type OnReapAccount = ();
+		type OnKilledAccount = RecordKilled;
 	}
 
 	impl From<Event<Test>> for u16 {
@@ -1439,7 +1679,7 @@ mod tests {
 
 	type System = Module<Test>;
 
-	const CALL: &<Test as Trait>::Call = &();
+	const CALL: &<Test as Trait>::Call = &Call {};
 
 	fn new_test_ext() -> sp_io::TestExternalities {
 		GenesisConfig::default().build_storage::<Test>().unwrap().into()
@@ -1458,6 +1698,27 @@ mod tests {
 		let o = Origin::from(RawOrigin::<u64>::Signed(1u64));
 		let x: Result<RawOrigin<u64>, Origin> = o.into();
 		assert_eq!(x, Ok(RawOrigin::<u64>::Signed(1u64)));
+	}
+
+	#[test]
+	fn stored_map_works() {
+		new_test_ext().execute_with(|| {
+			System::insert(&0, 42);
+			assert!(System::allow_death(&0));
+
+			System::inc_ref(&0);
+			assert!(!System::allow_death(&0));
+
+			System::insert(&0, 69);
+			assert!(!System::allow_death(&0));
+
+			System::dec_ref(&0);
+			assert!(System::allow_death(&0));
+
+			assert!(KILLED.with(|r| r.borrow().is_empty()));
+			System::kill_account(&0);
+			assert_eq!(KILLED.with(|r| r.borrow().clone()), vec![0u64]);
+		});
 	}
 
 	#[test]
@@ -1491,6 +1752,8 @@ mod tests {
 				&Default::default(),
 				InitKind::Full,
 			);
+			System::deposit_event(32u16);
+			System::note_finished_initialize();
 			System::deposit_event(42u16);
 			System::note_applied_extrinsic(&Ok(()), 0, Default::default());
 			System::note_applied_extrinsic(&Err(DispatchError::BadOrigin), 0, Default::default());
@@ -1500,6 +1763,7 @@ mod tests {
 			assert_eq!(
 				System::events(),
 				vec![
+					EventRecord { phase: Phase::Initialization, event: 32u16, topics: vec![] },
 					EventRecord { phase: Phase::ApplyExtrinsic(0), event: 42u16, topics: vec![] },
 					EventRecord { phase: Phase::ApplyExtrinsic(0), event: 100u16, topics: vec![] },
 					EventRecord { phase: Phase::ApplyExtrinsic(1), event: 101u16, topics: vec![] },
@@ -1612,18 +1876,18 @@ mod tests {
 	#[test]
 	fn signed_ext_check_nonce_works() {
 		new_test_ext().execute_with(|| {
-			Account::<Test>::insert(1, (1, ()));
+			Account::<Test>::insert(1, AccountInfo { nonce: 1, refcount: 0, data: 0 });
 			let info = DispatchInfo::default();
 			let len = 0_usize;
 			// stale
-			assert!(CheckNonce::<Test>(0).validate(&1, CALL, info, len).is_err());
-			assert!(CheckNonce::<Test>(0).pre_dispatch(&1, CALL, info, len).is_err());
+			assert!(CheckNonce::<Test>(0).validate(&1, CALL, &info, len).is_err());
+			assert!(CheckNonce::<Test>(0).pre_dispatch(&1, CALL, &info, len).is_err());
 			// correct
-			assert!(CheckNonce::<Test>(1).validate(&1, CALL, info, len).is_ok());
-			assert!(CheckNonce::<Test>(1).pre_dispatch(&1, CALL, info, len).is_ok());
+			assert!(CheckNonce::<Test>(1).validate(&1, CALL, &info, len).is_ok());
+			assert!(CheckNonce::<Test>(1).pre_dispatch(&1, CALL, &info, len).is_ok());
 			// future
-			assert!(CheckNonce::<Test>(5).validate(&1, CALL, info, len).is_ok());
-			assert!(CheckNonce::<Test>(5).pre_dispatch(&1, CALL, info, len).is_err());
+			assert!(CheckNonce::<Test>(5).validate(&1, CALL, &info, len).is_ok());
+			assert!(CheckNonce::<Test>(5).pre_dispatch(&1, CALL, &info, len).is_err());
 		})
 	}
 
@@ -1648,9 +1912,49 @@ mod tests {
 				if f { assert!(r.is_err()) } else { assert!(r.is_ok()) }
 			};
 
-			reset_check_weight(small, false, 0);
-			reset_check_weight(medium, false, 0);
-			reset_check_weight(big, true, 1);
+			reset_check_weight(&small, false, 0);
+			reset_check_weight(&medium, false, 0);
+			reset_check_weight(&big, true, 1);
+		})
+	}
+
+	#[test]
+	fn signed_ext_check_weight_refund_works() {
+		new_test_ext().execute_with(|| {
+			let info = DispatchInfo { weight: 512, ..Default::default() };
+			let post_info = PostDispatchInfo { actual_weight: Some(128), };
+			let len = 0_usize;
+
+			AllExtrinsicsWeight::put(256);
+
+			let pre = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &info, len).unwrap();
+			assert_eq!(AllExtrinsicsWeight::get().unwrap(), info.weight + 256);
+
+			assert!(
+				CheckWeight::<Test>::post_dispatch(pre, &info, &post_info, len, &Ok(()))
+				.is_ok()
+			);
+			assert_eq!(AllExtrinsicsWeight::get().unwrap(), post_info.actual_weight.unwrap() + 256);
+		})
+	}
+
+	#[test]
+	fn signed_ext_check_weight_actual_weight_higher_than_max_is_capped() {
+		new_test_ext().execute_with(|| {
+			let info = DispatchInfo { weight: 512, ..Default::default() };
+			let post_info = PostDispatchInfo { actual_weight: Some(700), };
+			let len = 0_usize;
+
+			AllExtrinsicsWeight::put(128);
+
+			let pre = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &info, len).unwrap();
+			assert_eq!(AllExtrinsicsWeight::get().unwrap(), info.weight + 128);
+
+			assert!(
+				CheckWeight::<Test>::post_dispatch(pre, &info, &post_info, len, &Ok(()))
+				.is_ok()
+			);
+			assert_eq!(AllExtrinsicsWeight::get().unwrap(), info.weight + 128);
 		})
 	}
 
@@ -1661,7 +1965,7 @@ mod tests {
 			let len = 0_usize;
 
 			assert_eq!(System::all_extrinsics_weight(), 0);
-			let r = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, free, len);
+			let r = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &free, len);
 			assert!(r.is_ok());
 			assert_eq!(System::all_extrinsics_weight(), 0);
 		})
@@ -1675,7 +1979,7 @@ mod tests {
 			let normal_limit = normal_weight_limit();
 
 			assert_eq!(System::all_extrinsics_weight(), 0);
-			let r = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, max, len);
+			let r = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &max, len);
 			assert!(r.is_ok());
 			assert_eq!(System::all_extrinsics_weight(), normal_limit);
 		})
@@ -1692,15 +1996,15 @@ mod tests {
 			// given almost full block
 			AllExtrinsicsWeight::put(normal_limit);
 			// will not fit.
-			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, normal, len).is_err());
+			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &normal, len).is_err());
 			// will fit.
-			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, op, len).is_ok());
+			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &op, len).is_ok());
 
 			// likewise for length limit.
 			let len = 100_usize;
 			AllExtrinsicsLen::put(normal_length_limit());
-			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, normal, len).is_err());
-			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, op, len).is_ok());
+			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &normal, len).is_err());
+			assert!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &op, len).is_ok());
 		})
 	}
 
@@ -1712,13 +2016,13 @@ mod tests {
 			let len = 0_usize;
 
 			let priority = CheckWeight::<Test>(PhantomData)
-				.validate(&1, CALL, normal, len)
+				.validate(&1, CALL, &normal, len)
 				.unwrap()
 				.priority;
 			assert_eq!(priority, 100);
 
 			let priority = CheckWeight::<Test>(PhantomData)
-				.validate(&1, CALL, op, len)
+				.validate(&1, CALL, &op, len)
 				.unwrap()
 				.priority;
 			assert_eq!(priority, u64::max_value());
@@ -1736,16 +2040,16 @@ mod tests {
 				if f { assert!(r.is_err()) } else { assert!(r.is_ok()) }
 			};
 
-			reset_check_weight(normal, normal_limit - 1, false);
-			reset_check_weight(normal, normal_limit, false);
-			reset_check_weight(normal, normal_limit + 1, true);
+			reset_check_weight(&normal, normal_limit - 1, false);
+			reset_check_weight(&normal, normal_limit, false);
+			reset_check_weight(&normal, normal_limit + 1, true);
 
 			// Operational ones don't have this limit.
 			let op = DispatchInfo { weight: 0, class: DispatchClass::Operational, pays_fee: true };
-			reset_check_weight(op, normal_limit, false);
-			reset_check_weight(op, normal_limit + 100, false);
-			reset_check_weight(op, 1024, false);
-			reset_check_weight(op, 1025, true);
+			reset_check_weight(&op, normal_limit, false);
+			reset_check_weight(&op, normal_limit + 100, false);
+			reset_check_weight(&op, 1024, false);
+			reset_check_weight(&op, 1025, true);
 		})
 	}
 
@@ -1777,7 +2081,7 @@ mod tests {
 			System::set_block_number(17);
 			<BlockHash<Test>>::insert(16, H256::repeat_byte(1));
 
-			assert_eq!(ext.validate(&1, CALL, normal, len).unwrap().longevity, 15);
+			assert_eq!(ext.validate(&1, CALL, &normal, len).unwrap().longevity, 15);
 		})
 	}
 
@@ -1790,6 +2094,7 @@ mod tests {
 			fn call_in_wasm(
 				&self,
 				_: &[u8],
+				_: Option<Vec<u8>>,
 				_: &str,
 				_: &[u8],
 				_: &mut dyn sp_externalities::Externalities,
@@ -1799,12 +2104,12 @@ mod tests {
 		}
 
 		let test_data = vec![
-			("test", 1, 2, Ok(())),
-			("test", 1, 1, Err(Error::<Test>::SpecOrImplVersionNeedToIncrease)),
+			("test", 1, 2, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
+			("test", 1, 1, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
 			("test2", 1, 1, Err(Error::<Test>::InvalidSpecName)),
 			("test", 2, 1, Ok(())),
-			("test", 0, 1, Err(Error::<Test>::SpecVersionNotAllowedToDecrease)),
-			("test", 1, 0, Err(Error::<Test>::ImplVersionNotAllowedToDecrease)),
+			("test", 0, 1, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
+			("test", 1, 0, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
 		];
 
 		for (spec_name, spec_version, impl_version, expected) in test_data.into_iter() {
@@ -1835,6 +2140,7 @@ mod tests {
 		let mut ext = new_test_ext();
 		ext.register_extension(sp_core::traits::CallInWasmExt::new(executor));
 		ext.execute_with(|| {
+			System::set_block_number(1);
 			System::set_code(
 				RawOrigin::Root.into(),
 				substrate_test_runtime_client::runtime::WASM_BINARY.to_vec(),
@@ -1842,8 +2148,38 @@ mod tests {
 
 			assert_eq!(
 				System::events(),
-				vec![EventRecord { phase: Phase::ApplyExtrinsic(0), event: 102u16, topics: vec![] }],
+				vec![EventRecord { phase: Phase::Initialization, event: 102u16, topics: vec![] }],
 			);
+		});
+	}
+
+	#[test]
+	fn runtime_upgraded_with_set_storage() {
+		let executor = substrate_test_runtime_client::new_native_executor();
+		let mut ext = new_test_ext();
+		ext.register_extension(sp_core::traits::CallInWasmExt::new(executor));
+		ext.execute_with(|| {
+			System::set_storage(
+				RawOrigin::Root.into(),
+				vec![(
+					well_known_keys::CODE.to_vec(),
+					substrate_test_runtime_client::runtime::WASM_BINARY.to_vec()
+				)],
+			).unwrap();
+		});
+	}
+
+	#[test]
+	fn events_not_emitted_during_genesis() {
+		new_test_ext().execute_with(|| {
+			// Block Number is zero at genesis
+			assert!(System::block_number().is_zero());
+			System::on_created_account(Default::default());
+			assert!(System::events().is_empty());
+			// Events will be emitted starting on block 1
+			System::set_block_number(1);
+			System::on_created_account(Default::default());
+			assert!(System::events().len() == 1);
 		});
 	}
 }

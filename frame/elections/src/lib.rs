@@ -30,7 +30,7 @@ use sp_runtime::{
 };
 use frame_support::{
 	decl_storage, decl_event, ensure, decl_module, decl_error,
-	weights::SimpleDispatchInfo,
+	weights::{Weight, MINIMUM_WEIGHT, SimpleDispatchInfo},
 	traits::{
 		Currency, ExistenceRequirement, Get, LockableCurrency, LockIdentifier, BalanceStatus,
 		OnUnbalanced, ReservableCurrency, WithdrawReason, WithdrawReasons, ChangeMembers
@@ -209,7 +209,7 @@ pub trait Trait: frame_system::Trait {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Council {
+	trait Store for Module<T: Trait> as Elections {
 		// ---- parameters
 
 		/// How long to give each top candidate to present themselves after the vote ends.
@@ -236,16 +236,16 @@ decl_storage! {
 		// [`all_approvals_of`]. Furthermore, each vector of scalars is chunked with the cap of
 		// `APPROVAL_SET_SIZE`.
 		pub ApprovalsOf get(fn approvals_of):
-			map hasher(blake2_256) (T::AccountId, SetIndex) => Vec<ApprovalFlag>;
+			map hasher(twox_64_concat) (T::AccountId, SetIndex) => Vec<ApprovalFlag>;
 		/// The vote index and list slot that the candidate `who` was registered or `None` if they
 		/// are not currently registered.
 		pub RegisterInfoOf get(fn candidate_reg_info):
-			map hasher(blake2_256) T::AccountId => Option<(VoteIndex, u32)>;
+			map hasher(twox_64_concat) T::AccountId => Option<(VoteIndex, u32)>;
 		/// Basic information about a voter.
 		pub VoterInfoOf get(fn voter_info):
-			map hasher(blake2_256) T::AccountId => Option<VoterInfo<BalanceOf<T>>>;
+			map hasher(twox_64_concat) T::AccountId => Option<VoterInfo<BalanceOf<T>>>;
 		/// The present voter list (chunked and capped at [`VOTER_SET_SIZE`]).
-		pub Voters get(fn voters): map hasher(blake2_256) SetIndex => Vec<Option<T::AccountId>>;
+		pub Voters get(fn voters): map hasher(twox_64_concat) SetIndex => Vec<Option<T::AccountId>>;
 		/// the next free set to store a voter in. This will keep growing.
 		pub NextVoterSet get(fn next_nonfull_voter_set): SetIndex = 0;
 		/// Current number of Voters.
@@ -266,7 +266,7 @@ decl_storage! {
 
 		/// Who is able to vote for whom. Value is the fund-holding account, key is the
 		/// vote-transaction-sending account.
-		pub Proxy get(fn proxy): map hasher(blake2_256) T::AccountId => Option<T::AccountId>;
+		pub Proxy get(fn proxy): map hasher(blake2_128_concat) T::AccountId => Option<T::AccountId>;
 	}
 }
 
@@ -405,7 +405,7 @@ decl_module! {
 		/// - Two extra DB entries, one DB change.
 		/// - Argument `votes` is limited in length to number of candidates.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(2_500_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(2_500_000_000)]
 		fn set_approvals(
 			origin,
 			votes: Vec<bool>,
@@ -423,7 +423,7 @@ decl_module! {
 		/// # <weight>
 		/// - Same as `set_approvals` with one additional storage read.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(2_500_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(2_500_000_000)]
 		fn proxy_set_approvals(origin,
 			votes: Vec<bool>,
 			#[compact] index: VoteIndex,
@@ -446,7 +446,7 @@ decl_module! {
 		/// - O(1).
 		/// - Two fewer DB entries, one DB change.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(2_500_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(2_500_000_000)]
 		fn reap_inactive_voter(
 			origin,
 			#[compact] reporter_index: u32,
@@ -520,7 +520,7 @@ decl_module! {
 		/// - O(1).
 		/// - Two fewer DB entries, one DB change.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(1_250_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(1_250_000_000)]
 		fn retract_voter(origin, #[compact] index: u32) {
 			let who = ensure_signed(origin)?;
 
@@ -548,7 +548,7 @@ decl_module! {
 		/// - Independent of input.
 		/// - Three DB changes.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(2_500_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(2_500_000_000)]
 		fn submit_candidacy(origin, #[compact] slot: u32) {
 			let who = ensure_signed(origin)?;
 
@@ -585,7 +585,7 @@ decl_module! {
 		/// - O(voters) compute.
 		/// - One DB change.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(10_000_000)]
+		#[weight = SimpleDispatchInfo::FixedNormal(10_000_000_000)]
 		fn present_winner(
 			origin,
 			candidate: <T::Lookup as StaticLookup>::Source,
@@ -659,7 +659,7 @@ decl_module! {
 		/// Set the desired member count; if lower than the current count, then seats will not be up
 		/// election when they expire. If more, then a new vote will be started if one is not
 		/// already in progress.
-		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
+		#[weight = SimpleDispatchInfo::FixedOperational(MINIMUM_WEIGHT)]
 		fn set_desired_seats(origin, #[compact] count: u32) {
 			ensure_root(origin)?;
 			DesiredSeats::put(count);
@@ -669,7 +669,7 @@ decl_module! {
 		///
 		/// Note: A tally should happen instantly (if not already in a presentation
 		/// period) to fill the seat if removal means that the desired members are not met.
-		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
+		#[weight = SimpleDispatchInfo::FixedOperational(MINIMUM_WEIGHT)]
 		fn remove_member(origin, who: <T::Lookup as StaticLookup>::Source) {
 			ensure_root(origin)?;
 			let who = T::Lookup::lookup(who)?;
@@ -684,7 +684,7 @@ decl_module! {
 
 		/// Set the presentation duration. If there is currently a vote being presented for, will
 		/// invoke `finalize_vote`.
-		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
+		#[weight = SimpleDispatchInfo::FixedOperational(MINIMUM_WEIGHT)]
 		fn set_presentation_duration(origin, #[compact] count: T::BlockNumber) {
 			ensure_root(origin)?;
 			<PresentationDuration<T>>::put(count);
@@ -692,17 +692,18 @@ decl_module! {
 
 		/// Set the presentation duration. If there is current a vote being presented for, will
 		/// invoke `finalize_vote`.
-		#[weight = SimpleDispatchInfo::FixedOperational(10_000)]
+		#[weight = SimpleDispatchInfo::FixedOperational(MINIMUM_WEIGHT)]
 		fn set_term_duration(origin, #[compact] count: T::BlockNumber) {
 			ensure_root(origin)?;
 			<TermDuration<T>>::put(count);
 		}
 
-		fn on_initialize(n: T::BlockNumber) {
+		fn on_initialize(n: T::BlockNumber) -> Weight {
 			if let Err(e) = Self::end_block(n) {
 				print("Guru meditation");
 				print(e);
 			}
+			MINIMUM_WEIGHT
 		}
 	}
 }
