@@ -102,7 +102,7 @@ impl ProvideInherentData for InherentDataProvider {
 
 				// WESTEND HOTFIX: mutate timestamp to make it revert back in time and have slots
 				// happen at 3x their speed from then until we have caught up with the present time.
-				const REVIVE_TIMESTAMP: u64 = 1587510000000; // 2020-04-21T23:00:00.000Z
+				const REVIVE_TIMESTAMP: u64 = 1587501000000; // 2020-04-21T20:30:00.000Z
 				const FORK_TIMESTAMP: u64 = 1587493548000; // 2020-04-21T18:25:48.000Z
 				const WARP_FACTOR: u64 = 3;
 
