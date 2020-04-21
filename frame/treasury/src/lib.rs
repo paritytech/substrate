@@ -480,7 +480,7 @@ decl_module! {
 		/// - One event.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(150_000_000)]
-		fn tip_new(origin, reason: Vec<u8>, who: T::AccountId, tip_value: BalanceOf<T>) {
+		fn tip_new(origin, reason: Vec<u8>, who: T::AccountId, #[compact] tip_value: BalanceOf<T>) {
 			let tipper = ensure_signed(origin)?;
 			ensure!(T::Tippers::contains(&tipper), BadOrigin);
 			let reason_hash = T::Hashing::hash(&reason[..]);
@@ -514,7 +514,7 @@ decl_module! {
 		/// - Up to one event.
 		/// # </weight>
 		#[weight = SimpleDispatchInfo::FixedNormal(50_000_000)]
-		fn tip(origin, hash: T::Hash, tip_value: BalanceOf<T>) {
+		fn tip(origin, hash: T::Hash, #[compact] tip_value: BalanceOf<T>) {
 			let tipper = ensure_signed(origin)?;
 			ensure!(T::Tippers::contains(&tipper), BadOrigin);
 
