@@ -44,6 +44,10 @@ impl FixedPointNumber for Fixed64 {
 
 	const DIV: i64 = 1_000_000_000;
 
+	fn from_inner(inner: Self::Inner) -> Self {
+		Self(inner)
+	}
+
 	fn from_integer(int: Self::Inner) -> Self {
 		Self(int.saturating_mul(Self::DIV))
 	}
@@ -52,11 +56,11 @@ impl FixedPointNumber for Fixed64 {
 		int.checked_mul(Self::DIV).map(|inner| Self(inner))
 	}
 
-	fn from_inner(inner: Self::Inner) -> Self {
-		Self(inner)
+	fn from_rational<N: UniqueSaturatedInto<Self::Inner>>(n: N, d: Self::Inner) -> Self {
+		Self((n.unique_saturated_into() * Self::DIV) / d)
 	}
 
-	fn from_rational<N: TryInto<Self::Inner>>(n: N, d: Self::Inner) -> Option<Self> {
+	fn checked_from_rational<N: TryInto<Self::Inner>>(n: N, d: Self::Inner) -> Option<Self> {
 		if d == 0 {
 			return None
 		}
@@ -170,7 +174,7 @@ impl FixedPointNumber for Fixed64 {
 		let fractional_parts = (parts % div) as Self::PrevUnsigned;
 
 		let n = int.saturating_mul(natural_parts);
-		let p = Self::Perthing::from_inner(fractional_parts) * int;
+		let p = Self::Perthing::from_parts(fractional_parts) * int;
 
 		// everything that needs to be either added or subtracted from the original `int`.
 		let excess = n.saturating_add(p);
@@ -350,7 +354,7 @@ impl<P: PerThing> From<P> for Fixed64 {
 	fn from(p: P) -> Self {
 		let accuracy = P::ACCURACY.saturated_into() as <Self as FixedPointNumber>::Inner;
 		let value = p.deconstruct().saturated_into() as <Self as FixedPointNumber>::Inner;
-		Fixed64::from_rational(value, accuracy).unwrap_or(Fixed64::max_value())
+		Fixed64::checked_from_rational(value, accuracy).unwrap_or(Fixed64::max_value())
 	}
 }
 
@@ -416,12 +420,12 @@ mod tests {
 
 	#[test]
 	fn fixed64_semantics() {
-		let a = Fixed64::from_rational(5, 2).unwrap();
-		let b = Fixed64::from_rational(10, 4).unwrap();
+		let a = Fixed64::checked_from_rational(5, 2).unwrap();
+		let b = Fixed64::checked_from_rational(10, 4).unwrap();
 		assert_eq!(a.0, 5 * Fixed64::DIV / 2);
 		assert_eq!(a, b);
 
-		let a = Fixed64::from_rational(-5, 1).unwrap();
+		let a = Fixed64::checked_from_rational(-5, 1).unwrap();
 		assert_eq!(a, Fixed64::from_integer(-5));
 
 		// biggest value that can be created.
@@ -434,7 +438,7 @@ mod tests {
 
 	#[test]
 	fn from_rational_works() {
-		let a = Fixed64::from_rational(100_000_000_000_000_000i64, 1_000_000_000_000_000_000i64);
+		let a = Fixed64::checked_from_rational(100_000_000_000_000_000i64, 1_000_000_000_000_000_000i64);
 		assert_eq!(a, None);
 	}
 
@@ -447,41 +451,41 @@ mod tests {
 		assert_eq!(a.checked_mul(&b), Some(Fixed64::from_integer(1 * 2)));
 		assert_eq!(
 			a.checked_div(&b),
-			Some(Fixed64::from_rational(2, 1).unwrap())
+			Some(Fixed64::checked_from_rational(2, 1).unwrap())
 		);
 
-		let a = Fixed64::from_rational(5, 2).unwrap();
-		let b = Fixed64::from_rational(3, 2).unwrap();
+		let a = Fixed64::checked_from_rational(5, 2).unwrap();
+		let b = Fixed64::checked_from_rational(3, 2).unwrap();
 		assert_eq!(
 			a.checked_add(&b),
-			Some(Fixed64::from_rational(8, 2).unwrap())
+			Some(Fixed64::checked_from_rational(8, 2).unwrap())
 		);
 		assert_eq!(
 			a.checked_sub(&b),
-			Some(Fixed64::from_rational(2, 2).unwrap())
+			Some(Fixed64::checked_from_rational(2, 2).unwrap())
 		);
 		assert_eq!(
 			a.checked_mul(&b),
-			Some(Fixed64::from_rational(15, 4).unwrap())
+			Some(Fixed64::checked_from_rational(15, 4).unwrap())
 		);
 		assert_eq!(
 			a.checked_div(&b),
-			Some(Fixed64::from_rational(10, 6).unwrap())
+			Some(Fixed64::checked_from_rational(10, 6).unwrap())
 		);
 
 		let a = Fixed64::from_integer(120);
 		assert_eq!(a.checked_div_int(&2i32), Some(60));
 
-		let a = Fixed64::from_rational(20, 1).unwrap();
+		let a = Fixed64::checked_from_rational(20, 1).unwrap();
 		assert_eq!(a.checked_div_int(&2i32), Some(10));
 
 		let a = Fixed64::from_integer(120);
 		assert_eq!(a.checked_mul_int(&2i32), Some(240));
 
-		let a = Fixed64::from_rational(1, 2).unwrap();
+		let a = Fixed64::checked_from_rational(1, 2).unwrap();
 		assert_eq!(a.checked_mul_int(&20i32), Some(10));
 
-		let a = Fixed64::from_rational(-1, 2).unwrap();
+		let a = Fixed64::checked_from_rational(-1, 2).unwrap();
 		assert_eq!(a.checked_mul_int(&20i32), Some(-10));
 	}
 
@@ -519,25 +523,25 @@ mod tests {
 		let b = Fixed64::from_integer(-1);
 		assert_eq!(Fixed64::from_integer(125).saturating_mul(b).into_inner(), -125 * Fixed64::DIV);
 
-		let c = Fixed64::from_rational(1, 5).unwrap();
+		let c = Fixed64::checked_from_rational(1, 5).unwrap();
 		assert_eq!(Fixed64::from_integer(125).saturating_mul(c).into_inner(), 25 * Fixed64::DIV);
 	}
 
 	#[test]
 	fn saturating_mul_int_works() {
-		let a = Fixed64::from_rational(10, 1).unwrap();
+		let a = Fixed64::checked_from_rational(10, 1).unwrap();
 		assert_eq!(a.saturating_mul_int(&i32::max_value()), i32::max_value());
 
-		let a = Fixed64::from_rational(-10, 1).unwrap();
+		let a = Fixed64::checked_from_rational(-10, 1).unwrap();
 		assert_eq!(a.saturating_mul_int(&i32::max_value()), i32::min_value());
 
-		let a = Fixed64::from_rational(3, 1).unwrap();
+		let a = Fixed64::checked_from_rational(3, 1).unwrap();
 		assert_eq!(a.saturating_mul_int(&100i8), i8::max_value());
 
-		let a = Fixed64::from_rational(10, 1).unwrap();
+		let a = Fixed64::checked_from_rational(10, 1).unwrap();
 		assert_eq!(a.saturating_mul_int(&123i128), 1230);
 
-		let a = Fixed64::from_rational(-10, 1).unwrap();
+		let a = Fixed64::checked_from_rational(-10, 1).unwrap();
 		assert_eq!(a.saturating_mul_int(&123i128), -1230);
 
 		assert_eq!(max().saturating_mul_int(&2i128), 18_446_744_073);
@@ -573,7 +577,7 @@ mod tests {
 
 		let c = Fixed64::from_integer(-1);
 
-		assert_eq!((Fixed64::min_value() + Fixed64::from_rational(1, Fixed64::accuracy()).unwrap()).checked_div(&c), Some(Fixed64::max_value()));
+		assert_eq!((Fixed64::min_value() + Fixed64::checked_from_rational(1, Fixed64::accuracy()).unwrap()).checked_div(&c), Some(Fixed64::max_value()));
 		assert_eq!(Fixed64::min_value().checked_div(&c), None);
 		assert_eq!((Fixed64::one()).checked_div(&Fixed64::zero()), None);
 	}
@@ -607,7 +611,7 @@ mod tests {
 		assert_eq!(a.checked_add(&b), None);
 
 		let a = Fixed64::max_value();
-		let b = Fixed64::from_rational(2, 1).unwrap();
+		let b = Fixed64::checked_from_rational(2, 1).unwrap();
 		assert_eq!(a.checked_mul(&b), None);
 
 		let a = Fixed64::from_integer(255);
@@ -651,7 +655,7 @@ mod tests {
 		assert_eq!(result, 256);
 
 		// 10 / -5 = -2
-		let a = Fixed64::from_rational(20, 2).unwrap();
+		let a = Fixed64::checked_from_rational(20, 2).unwrap();
 		let result = a.checked_div_int(&-5i128).unwrap();
 		assert_eq!(result, -2);
 
@@ -674,13 +678,13 @@ mod tests {
 
 	#[test]
 	fn serialize_deserialize_should_work() {
-		let two_point_five = Fixed64::from_rational(5, 2).unwrap();
+		let two_point_five = Fixed64::checked_from_rational(5, 2).unwrap();
 		let serialized = serde_json::to_string(&two_point_five).unwrap();
 		assert_eq!(serialized, "\"2500000000\"");
 		let deserialized: Fixed64 = serde_json::from_str(&serialized).unwrap();
 		assert_eq!(deserialized, two_point_five);
 
-		let minus_two_point_five = Fixed64::from_rational(-5, 2).unwrap();
+		let minus_two_point_five = Fixed64::checked_from_rational(-5, 2).unwrap();
 		let serialized = serde_json::to_string(&minus_two_point_five).unwrap();
 		assert_eq!(serialized, "\"-2500000000\"");
 		let deserialized: Fixed64 = serde_json::from_str(&serialized).unwrap();
@@ -735,19 +739,19 @@ mod tests {
 		let a = Fixed64::from_integer(2);
 		assert_eq!(
 			a.reciprocal(),
-			Some(Fixed64::from_rational(1, 2).unwrap())
+			Some(Fixed64::checked_from_rational(1, 2).unwrap())
 		);
 
 		let a = Fixed64::from_integer(2);
 		assert_eq!(a.reciprocal().unwrap().checked_mul_int(&4i32), Some(2i32));
 
-		let a = Fixed64::from_rational(1, 2).unwrap();
+		let a = Fixed64::checked_from_rational(1, 2).unwrap();
 		assert_eq!(a.reciprocal().unwrap().checked_mul(&a), Some(Fixed64::from_integer(1)));
 
 		let a = Fixed64::from_integer(0);
 		assert_eq!(a.reciprocal(), None);
 
-		let a = Fixed64::from_rational(-1, 2).unwrap();
+		let a = Fixed64::checked_from_rational(-1, 2).unwrap();
 		assert_eq!(a.reciprocal(), Some(Fixed64::from_integer(-2)));
 	}
 
@@ -756,7 +760,7 @@ mod tests {
 		let test_set = vec![0u32, 1, 10, 1000, 1_000_000_000];
 
 		// negative (1/2)
-		let mut fm = Fixed64::from_rational(-1, 2).unwrap();
+		let mut fm = Fixed64::checked_from_rational(-1, 2).unwrap();
 		test_set.clone().into_iter().for_each(|i| {
 			assert_eq!(fm.saturated_multiply_accumulate(i) as i32, i as i32 - i as i32 / 2);
 		});
@@ -768,13 +772,13 @@ mod tests {
 		});
 
 		// i.5 multiplier
-		fm = Fixed64::from_rational(1, 2).unwrap();
+		fm = Fixed64::checked_from_rational(1, 2).unwrap();
 		test_set.clone().into_iter().for_each(|i| {
 			assert_eq!(fm.saturated_multiply_accumulate(i), i * 3 / 2);
 		});
 
 		// dual multiplier
-		fm = Fixed64::from_rational(1, 1).unwrap();
+		fm = Fixed64::checked_from_rational(1, 1).unwrap();
 		test_set.clone().into_iter().for_each(|i| {
 			assert_eq!(fm.saturated_multiply_accumulate(i), i * 2);
 		});
@@ -783,19 +787,19 @@ mod tests {
 	macro_rules! saturating_mul_acc_test {
 		($num_type:tt) => {
 			assert_eq!(
-				Fixed64::from_rational(100, 1).unwrap().saturated_multiply_accumulate(10 as $num_type),
+				Fixed64::checked_from_rational(100, 1).unwrap().saturated_multiply_accumulate(10 as $num_type),
 				1010,
 			);
 			assert_eq!(
-				Fixed64::from_rational(100, 2).unwrap().saturated_multiply_accumulate(10 as $num_type),
+				Fixed64::checked_from_rational(100, 2).unwrap().saturated_multiply_accumulate(10 as $num_type),
 				510,
 			);
 			assert_eq!(
-				Fixed64::from_rational(100, 3).unwrap().saturated_multiply_accumulate(0 as $num_type),
+				Fixed64::checked_from_rational(100, 3).unwrap().saturated_multiply_accumulate(0 as $num_type),
 				0,
 			);
 			assert_eq!(
-				Fixed64::from_rational(5, 1).unwrap().saturated_multiply_accumulate($num_type::max_value()),
+				Fixed64::checked_from_rational(5, 1).unwrap().saturated_multiply_accumulate($num_type::max_value()),
 				$num_type::max_value()
 			);
 			assert_eq!(
@@ -814,56 +818,56 @@ mod tests {
 
 	#[test]
 	fn div_works() {
-		let a = Fixed64::from_rational(12, 10).unwrap();
-		let b = Fixed64::from_rational(10, 1).unwrap();
+		let a = Fixed64::checked_from_rational(12, 10).unwrap();
+		let b = Fixed64::checked_from_rational(10, 1).unwrap();
 		println!("{:?} {:?}", a, b);
-		assert_eq!(a / b, Fixed64::from_rational(12, 100).unwrap());
+		assert_eq!(a / b, Fixed64::checked_from_rational(12, 100).unwrap());
 
-		let a = Fixed64::from_rational(12, 10).unwrap();
-		let b = Fixed64::from_rational(1, 100).unwrap();
-		assert_eq!(a / b, Fixed64::from_rational(120, 1).unwrap());
+		let a = Fixed64::checked_from_rational(12, 10).unwrap();
+		let b = Fixed64::checked_from_rational(1, 100).unwrap();
+		assert_eq!(a / b, Fixed64::checked_from_rational(120, 1).unwrap());
 
-		let a = Fixed64::from_rational(12, 100).unwrap();
-		let b = Fixed64::from_rational(10, 1).unwrap();
-		assert_eq!(a / b, Fixed64::from_rational(12, 1000).unwrap());
+		let a = Fixed64::checked_from_rational(12, 100).unwrap();
+		let b = Fixed64::checked_from_rational(10, 1).unwrap();
+		assert_eq!(a / b, Fixed64::checked_from_rational(12, 1000).unwrap());
 
-		let a = Fixed64::from_rational(12, 100).unwrap();
-		let b = Fixed64::from_rational(1, 100).unwrap();
-		assert_eq!(a / b, Fixed64::from_rational(12, 1).unwrap());
+		let a = Fixed64::checked_from_rational(12, 100).unwrap();
+		let b = Fixed64::checked_from_rational(1, 100).unwrap();
+		assert_eq!(a / b, Fixed64::checked_from_rational(12, 1).unwrap());
 
-		let a = Fixed64::from_rational(-12, 10).unwrap();
-		let b = Fixed64::from_rational(10, 1).unwrap();
-		assert_eq!(a / b, Fixed64::from_rational(-12, 100).unwrap());
+		let a = Fixed64::checked_from_rational(-12, 10).unwrap();
+		let b = Fixed64::checked_from_rational(10, 1).unwrap();
+		assert_eq!(a / b, Fixed64::checked_from_rational(-12, 100).unwrap());
 
-		let a = Fixed64::from_rational(12, 10).unwrap();
-		let b = Fixed64::from_rational(-10, 1).unwrap();
-		assert_eq!(a / b, Fixed64::from_rational(-12, 100).unwrap());
+		let a = Fixed64::checked_from_rational(12, 10).unwrap();
+		let b = Fixed64::checked_from_rational(-10, 1).unwrap();
+		assert_eq!(a / b, Fixed64::checked_from_rational(-12, 100).unwrap());
 
-		let a = Fixed64::from_rational(-12, 10).unwrap();
-		let b = Fixed64::from_rational(-10, 1).unwrap();
-		assert_eq!(a / b, Fixed64::from_rational(12, 100).unwrap());
+		let a = Fixed64::checked_from_rational(-12, 10).unwrap();
+		let b = Fixed64::checked_from_rational(-10, 1).unwrap();
+		assert_eq!(a / b, Fixed64::checked_from_rational(12, 100).unwrap());
 	}
 
 	#[test]
 	#[should_panic(expected = "attempt to divide by zero")]
 	fn div_zero() {
-		let a = Fixed64::from_rational(12, 10).unwrap();
+		let a = Fixed64::checked_from_rational(12, 10).unwrap();
 		let b = Fixed64::from_integer(0);
 		let _ = a / b;
 	}
 
 	#[test]
 	fn checked_div_zero() {
-		let a = Fixed64::from_rational(12, 10).unwrap();
+		let a = Fixed64::checked_from_rational(12, 10).unwrap();
 		let b = Fixed64::from_integer(0);
 		assert_eq!(a.checked_div(&b), None);
 	}
 
 	#[test]
 	fn checked_div_non_zero() {
-		let a = Fixed64::from_rational(12, 10).unwrap();
-		let b = Fixed64::from_rational(1, 100).unwrap();
-		assert_eq!(a.checked_div(&b), Some(Fixed64::from_rational(120, 1).unwrap()));
+		let a = Fixed64::checked_from_rational(12, 10).unwrap();
+		let b = Fixed64::checked_from_rational(1, 100).unwrap();
+		assert_eq!(a.checked_div(&b), Some(Fixed64::checked_from_rational(120, 1).unwrap()));
 	}
 
 	#[test]

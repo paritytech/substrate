@@ -193,22 +193,25 @@ pub trait FixedPointNumber:
 		Self::DIV
 	}
 
+	/// Raw constructor. Equal to `parts / DIV`.
+	fn from_inner(inner: Self::Inner) -> Self;
+
+	/// Consume self and return the inner raw value.
+	fn into_inner(self) -> Self::Inner;
+
 	/// Creates self from an integer number.
 	fn from_integer(int: Self::Inner) -> Self;
 
 	/// Creates self from an integer number.
 	fn checked_from_integer(int: Self::Inner) -> Option<Self>;
 
-	/// Raw constructor. Equal to `parts / DIV`.
-	fn from_inner(inner: Self::Inner) -> Self;
+	/// Creates self from a rational number. Equal to `n / d`.
+	///
+	/// Use `checked_from_rational` for a safe version.
+	fn from_rational<N: UniqueSaturatedInto<Self::Inner>>(n: N, d: Self::Inner) -> Self;
 
 	/// Creates self from a rational number. Equal to `n / d`.
-	fn from_rational<N: TryInto<Self::Inner>>(n: N, d: Self::Inner) -> Option<Self>;
-
-	/// Consume self and return the inner raw value.
-	///
-	/// Note this is a low level function, as the returned value is represented with accuracy.
-	fn into_inner(self) -> Self::Inner;
+	fn checked_from_rational<N: TryInto<Self::Inner>>(n: N, d: Self::Inner) -> Option<Self>;
 
 	/// Takes the reciprocal (inverse), `1 / self`.
 	fn reciprocal(&self) -> Option<Self> {

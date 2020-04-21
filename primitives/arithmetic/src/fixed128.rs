@@ -59,7 +59,11 @@ impl FixedPointNumber for Fixed128 {
 		Self(parts)
 	}
 
-	fn from_rational<N: TryInto<Self::Inner>>(n: N, d: Self::Inner) -> Option<Self> {
+	fn from_rational<N: UniqueSaturatedInto<Self::Inner>>(n: N, d: Self::Inner) -> Self {
+		Self((n.unique_saturated_into() * Self::DIV) / d)
+	}
+
+	fn checked_from_rational<N: TryInto<Self::Inner>>(n: N, d: Self::Inner) -> Option<Self> {
 		if d == 0 {
 			return None
 		}
@@ -173,7 +177,7 @@ impl FixedPointNumber for Fixed128 {
 		let fractional_parts = (parts % div) as Self::PrevUnsigned;
 
 		let n = int.saturating_mul(natural_parts);
-		let p = Self::Perthing::from_inner(fractional_parts) * int;
+		let p = Self::Perthing::from_parts(fractional_parts) * int;
 
 		// everything that needs to be either added or subtracted from the original `int`.
 		let excess = n.saturating_add(p);
@@ -356,7 +360,7 @@ impl<P: PerThing> From<P> for Fixed128 {
 	fn from(p: P) -> Self {
 		let accuracy = P::ACCURACY.saturated_into() as <Self as FixedPointNumber>::Inner;
 		let value = p.deconstruct().saturated_into() as <Self as FixedPointNumber>::Inner;
-		Fixed128::from_rational(value, accuracy).unwrap_or(Fixed128::max_value())
+		Fixed128::checked_from_rational(value, accuracy).unwrap_or(Fixed128::max_value())
 	}
 }
 
@@ -412,12 +416,12 @@ mod tests {
 
 	#[test]
 	fn fixed128_semantics() {
-		let a = Fixed128::from_rational(5, 2).unwrap();
-		let b = Fixed128::from_rational(10, 4).unwrap();
+		let a = Fixed128::checked_from_rational(5, 2).unwrap();
+		let b = Fixed128::checked_from_rational(10, 4).unwrap();
 		assert_eq!(a.0, 5 * Fixed128::DIV / 2);
 		assert_eq!(a, b);
 
-		let a = Fixed128::from_rational(-5, 1).unwrap();
+		let a = Fixed128::checked_from_rational(-5, 1).unwrap();
 		assert_eq!(a, Fixed128::from_integer(-5));
 
 		// biggest value that can be created.
@@ -438,41 +442,41 @@ mod tests {
 		assert_eq!(a.checked_mul(&b), Some(Fixed128::from_integer(1 * 2)));
 		assert_eq!(
 			a.checked_div(&b),
-			Some(Fixed128::from_rational(2, 1).unwrap())
+			Some(Fixed128::checked_from_rational(2, 1).unwrap())
 		);
 
-		let a = Fixed128::from_rational(5, 2).unwrap();
-		let b = Fixed128::from_rational(3, 2).unwrap();
+		let a = Fixed128::checked_from_rational(5, 2).unwrap();
+		let b = Fixed128::checked_from_rational(3, 2).unwrap();
 		assert_eq!(
 			a.checked_add(&b),
-			Some(Fixed128::from_rational(8, 2).unwrap())
+			Some(Fixed128::checked_from_rational(8, 2).unwrap())
 		);
 		assert_eq!(
 			a.checked_sub(&b),
-			Some(Fixed128::from_rational(2, 2).unwrap())
+			Some(Fixed128::checked_from_rational(2, 2).unwrap())
 		);
 		assert_eq!(
 			a.checked_mul(&b),
-			Some(Fixed128::from_rational(15, 4).unwrap())
+			Some(Fixed128::checked_from_rational(15, 4).unwrap())
 		);
 		assert_eq!(
 			a.checked_div(&b),
-			Some(Fixed128::from_rational(10, 6).unwrap())
+			Some(Fixed128::checked_from_rational(10, 6).unwrap())
 		);
 
 		let a = Fixed128::from_integer(120);
 		assert_eq!(a.checked_div_int(&2i32), Some(60));
 
-		let a = Fixed128::from_rational(20, 1).unwrap();
+		let a = Fixed128::checked_from_rational(20, 1).unwrap();
 		assert_eq!(a.checked_div_int(&2i32), Some(10));
 
 		let a = Fixed128::from_integer(120);
 		assert_eq!(a.checked_mul_int(&2i32), Some(240));
 
-		let a = Fixed128::from_rational(1, 2).unwrap();
+		let a = Fixed128::checked_from_rational(1, 2).unwrap();
 		assert_eq!(a.checked_mul_int(&20i32), Some(10));
 
-		let a = Fixed128::from_rational(-1, 2).unwrap();
+		let a = Fixed128::checked_from_rational(-1, 2).unwrap();
 		assert_eq!(a.checked_mul_int(&20i32), Some(-10));
 	}
 
@@ -485,25 +489,25 @@ mod tests {
 		let b = Fixed128::from_integer(-1);
 		assert_eq!(Fixed128::from_integer(125).saturating_mul(b).into_inner(), -125 * Fixed128::DIV);
 
-		let c = Fixed128::from_rational(1, 5).unwrap();
+		let c = Fixed128::checked_from_rational(1, 5).unwrap();
 		assert_eq!(Fixed128::from_integer(125).saturating_mul(c).into_inner(), 25 * Fixed128::DIV);
 	}
 
 	#[test]
 	fn saturating_mul_int_works() {
-		let a = Fixed128::from_rational(10, 1).unwrap();
+		let a = Fixed128::checked_from_rational(10, 1).unwrap();
 		assert_eq!(a.saturating_mul_int(&i32::max_value()), i32::max_value());
 
-		let a = Fixed128::from_rational(-10, 1).unwrap();
+		let a = Fixed128::checked_from_rational(-10, 1).unwrap();
 		assert_eq!(a.saturating_mul_int(&i32::max_value()), i32::min_value());
 
-		let a = Fixed128::from_rational(3, 1).unwrap();
+		let a = Fixed128::checked_from_rational(3, 1).unwrap();
 		assert_eq!(a.saturating_mul_int(&100i8), i8::max_value());
 
-		let a = Fixed128::from_rational(10, 1).unwrap();
+		let a = Fixed128::checked_from_rational(10, 1).unwrap();
 		assert_eq!(a.saturating_mul_int(&123i128), 1230);
 
-		let a = Fixed128::from_rational(-10, 1).unwrap();
+		let a = Fixed128::checked_from_rational(-10, 1).unwrap();
 		assert_eq!(a.saturating_mul_int(&123i128), -1230);
 
 		assert_eq!(max().saturating_mul_int(&2i128), 340_282_366_920_938_463_463);
@@ -566,7 +570,7 @@ mod tests {
 		assert_eq!(a.checked_add(&b), None);
 
 		let a = Fixed128::max_value();
-		let b = Fixed128::from_rational(2, 1).unwrap();
+		let b = Fixed128::checked_from_rational(2, 1).unwrap();
 		assert_eq!(a.checked_mul(&b), None);
 
 		let a = Fixed128::from_integer(255);
@@ -610,7 +614,7 @@ mod tests {
 		assert_eq!(result, 256);
 
 		// 10 / -5 = -2
-		let a = Fixed128::from_rational(20, 2).unwrap();
+		let a = Fixed128::checked_from_rational(20, 2).unwrap();
 		let result = a.checked_div_int(&-5i128).unwrap();
 		assert_eq!(result, -2);
 
@@ -643,37 +647,37 @@ mod tests {
 		let a = Fixed128::from_integer(2);
 		assert_eq!(
 			a.reciprocal(),
-			Some(Fixed128::from_rational(1, 2).unwrap())
+			Some(Fixed128::checked_from_rational(1, 2).unwrap())
 		);
 
 		let a = Fixed128::from_integer(2);
 		assert_eq!(a.reciprocal().unwrap().checked_mul_int(&4i32), Some(2i32));
 
-		let a = Fixed128::from_rational(100, 121).unwrap();
+		let a = Fixed128::checked_from_rational(100, 121).unwrap();
 		assert_eq!(
 			a.reciprocal(),
-			Some(Fixed128::from_rational(121, 100).unwrap())
+			Some(Fixed128::checked_from_rational(121, 100).unwrap())
 		);
 
-		let a = Fixed128::from_rational(1, 2).unwrap();
+		let a = Fixed128::checked_from_rational(1, 2).unwrap();
 		assert_eq!(a.reciprocal().unwrap().checked_mul(&a), Some(Fixed128::from_integer(1)));
 
 		let a = Fixed128::from_integer(0);
 		assert_eq!(a.reciprocal(), None);
 
-		let a = Fixed128::from_rational(-1, 2).unwrap();
+		let a = Fixed128::checked_from_rational(-1, 2).unwrap();
 		assert_eq!(a.reciprocal(), Some(Fixed128::from_integer(-2)));
 	}
 
 	#[test]
 	fn serialize_deserialize_should_work() {
-		let two_point_five = Fixed128::from_rational(5, 2).unwrap();
+		let two_point_five = Fixed128::checked_from_rational(5, 2).unwrap();
 		let serialized = serde_json::to_string(&two_point_five).unwrap();
 		assert_eq!(serialized, "\"2500000000000000000\"");
 		let deserialized: Fixed128 = serde_json::from_str(&serialized).unwrap();
 		assert_eq!(deserialized, two_point_five);
 
-		let minus_two_point_five = Fixed128::from_rational(-5, 2).unwrap();
+		let minus_two_point_five = Fixed128::checked_from_rational(-5, 2).unwrap();
 		let serialized = serde_json::to_string(&minus_two_point_five).unwrap();
 		assert_eq!(serialized, "\"-2500000000000000000\"");
 		let deserialized: Fixed128 = serde_json::from_str(&serialized).unwrap();
