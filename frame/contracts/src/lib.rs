@@ -936,24 +936,27 @@ pub struct Schedule {
 	pub max_subject_len: u32,
 }
 
+// This is 500 (2 instruction per nano second on 2GHZ) * 1000x slowdown through wasmi
+const WASM_INSTRUCTION_COST: Gas = 500_000;
+
 impl Default for Schedule {
 	fn default() -> Schedule {
 		Schedule {
 			version: 0,
-			put_code_per_byte_cost: 1,
-			grow_mem_cost: 1,
-			regular_op_cost: 1,
-			return_data_per_byte_cost: 1,
-			event_data_per_byte_cost: 1,
-			event_per_topic_cost: 1,
-			event_base_cost: 1,
-			call_base_cost: 135,
-			dispatch_base_cost: 135,
-			instantiate_base_cost: 175,
-			sandbox_data_read_cost: 1,
-			sandbox_data_write_cost: 1,
-			transfer_cost: 100,
-			instantiate_cost: 200,
+			put_code_per_byte_cost: WASM_INSTRUCTION_COST,
+			grow_mem_cost: WASM_INSTRUCTION_COST,
+			regular_op_cost: WASM_INSTRUCTION_COST,
+			return_data_per_byte_cost: WASM_INSTRUCTION_COST,
+			event_data_per_byte_cost: WASM_INSTRUCTION_COST,
+			event_per_topic_cost: WASM_INSTRUCTION_COST,
+			event_base_cost: WASM_INSTRUCTION_COST,
+			call_base_cost: 135 * WASM_INSTRUCTION_COST,
+			dispatch_base_cost: 135 * WASM_INSTRUCTION_COST,
+			instantiate_base_cost: 175 * WASM_INSTRUCTION_COST,
+			sandbox_data_read_cost: WASM_INSTRUCTION_COST,
+			sandbox_data_write_cost: WASM_INSTRUCTION_COST,
+			transfer_cost: 100 * WASM_INSTRUCTION_COST,
+			instantiate_cost: 200 * WASM_INSTRUCTION_COST,
 			max_event_topics: 4,
 			max_stack_height: 64 * 1024,
 			max_memory_pages: 16,
