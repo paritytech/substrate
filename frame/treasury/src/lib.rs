@@ -43,6 +43,10 @@
 //! countdown period, the median of all declared tips is paid to the reported beneficiary, along
 //! with any finders fee, in case of a public (and bonded) original report.
 //!
+//! ### Bounty
+//!
+//! TODO
+//!
 //! ### Terminology
 //!
 //! - **Proposal:** A suggestion to allocate funds from the pot to a beneficiary.
@@ -63,6 +67,9 @@
 //! - **Finders Fee:** Some proportion of the tip amount that is paid to the reporter of the tip,
 //!   rather than the main beneficiary.
 //!
+//! Bounty:
+//! - TODO
+//!
 //! ## Interface
 //!
 //! ### Dispatchable Functions
@@ -81,6 +88,9 @@
 //! - `tip` - Declare or redeclare an amount to tip for a particular reason.
 //! - `close_tip` - Close and pay out a tip.
 //!
+//! Bounty protocol:
+//! - TODO
+//!
 //! ## GenesisConfig
 //!
 //! The Treasury module depends on the [`GenesisConfig`](./struct.GenesisConfig.html).
@@ -92,7 +102,7 @@ use serde::{Serialize, Deserialize};
 use sp_std::prelude::*;
 use frame_support::{decl_module, decl_storage, decl_event, ensure, print, decl_error, Parameter};
 use frame_support::traits::{
-	Currency, Get, Imbalance, OnUnbalanced, ExistenceRequirement::KeepAlive,
+	Currency, Get, Imbalance, OnUnbalanced, ExistenceRequirement::{KeepAlive, AllowDeath},
 	ReservableCurrency, WithdrawReason
 };
 use sp_runtime::{Permill, ModuleId, Percent, RuntimeDebug, traits::{
@@ -112,6 +122,9 @@ type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_sy
 
 /// The treasury's module id, used for deriving its sovereign account ID.
 const MODULE_ID: ModuleId = ModuleId(*b"py/trsry");
+
+/// Maximum acceptable reason length.
+const MAX_SENSIBLE_REASON_LENGTH: usize = 16384;
 
 pub trait Trait: frame_system::Trait {
 	/// The staking balance.
@@ -156,6 +169,15 @@ pub trait Trait: frame_system::Trait {
 
 	/// Percentage of spare funds (if any) that are burnt per spend period.
 	type Burn: Get<Permill>;
+
+	/// The amount held on deposit for placing a bounty proposal.
+	type BountyDepositBase: Get<BalanceOf<Self>>;
+
+	/// The amount held on deposit per byte within bounty description.
+	type BountyDepositPerByte: Get<BalanceOf<Self>>;
+
+	/// The delay period for which a bounty beneficiary need to wait before claim the payout.
+	type BountyDepositPayoutDelay: Get<Self::BlockNumber>;
 }
 
 /// An index of a proposal. Just a `u32`.
@@ -198,6 +220,32 @@ pub struct OpenTip<
 	tips: Vec<(AccountId, Balance)>,
 }
 
+/// An index of a bounty. Just a `u32`.
+pub type BountyIndex = u32;
+
+/// A bounty proposal.
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct Bounty<AccountId, Balance> {
+	/// The account proposing it.
+	proposer: AccountId,
+	/// The account manages this bounty.
+	curator: AccountId,
+	/// The (total) amount that should be paid if the bounty is rewarded.
+	value: Balance,
+	/// The amount held on deposit (reserved) for making this proposal.
+	bond: Balance,
+	/// The description of this bounty.
+	description: Vec<u8>,
+}
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
+pub enum BountyStatus {
+	Proposed,
+	Approved,
+	Active,
+	PendingPayout,
+}
+
 decl_storage! {
 	trait Store for Module<T: Trait> as Treasury {
 		/// Number of proposals that have been made.
@@ -221,6 +269,25 @@ decl_storage! {
 		/// Simple preimage lookup from the reason's hash to the original data. Again, has an
 		/// insecure enumerable hash since the key is guaranteed to be the result of a secure hash.
 		pub Reasons get(fn reasons): map hasher(identity) T::Hash => Option<Vec<u8>>;
+
+		/// Number of bounty proposals that have been made.
+		pub BountyCount get(fn bounty_count): BountyIndex;
+
+		/// Bounties that have been made.
+		pub Bounties get(fn bounties):
+			map hasher(twox_64_concat) BountyIndex
+			=> Option<Bounty<T::AccountId, BalanceOf<T>>>;
+
+		/// The status of each bounty.
+		pub BountyStatuses get(fn bounty_statuses):
+			map hasher(twox_64_concat) BountyIndex => Option<BountyStatus>;
+
+		/// The bounty beneficiary and the block the fund can be claimed
+		pub BountyBeneficiary get(fn bounty_beneficiary):
+			map hasher(twox_64_concat) BountyIndex => Option<(T::AccountId, T::BlockNumber)>;
+
+		/// Bounty indices that have been approved but not yet funded.
+		pub BountyApprovals get(fn bounty_approvals): Vec<BountyIndex>;
 	}
 	add_extra_genesis {
 		build(|_config| {
@@ -262,6 +329,16 @@ decl_event!(
 		TipClosed(Hash, AccountId, Balance),
 		/// A tip suggestion has been retracted.
 		TipRetracted(Hash),
+		/// New bounty proposal.
+		BountyProposed(BountyIndex),
+		/// A bounty proposal was rejected; funds were slashed.
+		BountyRejected(BountyIndex, Balance),
+		/// A bounty proposal is funded and become active.
+		BountyBecomeActive(BountyIndex),
+		/// A bounty is awarded to a beneficiary.
+		BountyAwarded(BountyIndex, AccountId),
+		/// A bounty is claimed by beneficiary.
+		BountyClaimed(BountyIndex, Balance, AccountId),
 	}
 );
 
@@ -284,6 +361,10 @@ decl_error! {
 		StillOpen,
 		/// The tip cannot be claimed/closed because it's still in the countdown period.
 		Premature,
+		/// The bounty status is unexpected.
+		UnexpectedStatus,
+		/// Require bounty curator.
+		RequireCurator,
 	}
 }
 
@@ -313,6 +394,15 @@ decl_module! {
 
 		/// The amount held on deposit per byte within the tip report reason.
 		const TipReportDepositPerByte: BalanceOf<T> = T::TipReportDepositPerByte::get();
+
+		/// The amount held on deposit for placing a bounty proposal.
+		const BountyDepositBase: BalanceOf<T> = T::BountyDepositBase::get();
+
+		/// The amount held on deposit per byte within bounty description.
+		const BountyDepositPerByte: BalanceOf<T> = T::BountyDepositPerByte::get();
+
+		/// The delay period for which a bounty beneficiary need to wait before claim the payout.
+		const BountyDepositPayoutDelay: T::BlockNumber = T::BountyDepositPayoutDelay::get();
 
 		type Error = Error<T>;
 
@@ -409,7 +499,6 @@ decl_module! {
 		fn report_awesome(origin, reason: Vec<u8>, who: T::AccountId) {
 			let finder = ensure_signed(origin)?;
 
-			const MAX_SENSIBLE_REASON_LENGTH: usize = 16384;
 			ensure!(reason.len() <= MAX_SENSIBLE_REASON_LENGTH, Error::<T>::ReasonTooBig);
 
 			let reason_hash = T::Hashing::hash(&reason[..]);
@@ -552,6 +641,118 @@ decl_module! {
 			Self::payout_tip(hash, tip);
 		}
 
+		#[weight = SimpleDispatchInfo::FixedNormal(150_000_000)]
+		fn propose_bounty(
+			origin,
+			curator: <T::Lookup as StaticLookup>::Source,
+			#[compact] value: BalanceOf<T>,
+			description: Vec<u8>,
+		) {
+			let proposer = ensure_signed(origin)?;
+			let curator = T::Lookup::lookup(curator)?;
+
+			ensure!(description.len() <= MAX_SENSIBLE_REASON_LENGTH, Error::<T>::ReasonTooBig);
+
+			let bond = T::BountyDepositBase::get()
+				+ T::BountyDepositPerByte::get() * (description.len() as u32).into();
+			T::Currency::reserve(&proposer, bond)
+				.map_err(|_| Error::<T>::InsufficientProposersBalance)?;
+
+			let index = Self::bounty_count();
+			BountyCount::put(index + 1);
+
+			let bounty = Bounty {
+				proposer, curator, value, bond, description
+			};
+
+			Bounties::<T>::insert(index, &bounty);
+			BountyStatuses::insert(index, BountyStatus::Proposed);
+
+			Self::deposit_event(RawEvent::BountyProposed(index));
+		}
+
+		/// Reject a bounty proposal. The original deposit will be slashed.
+		///
+		/// # <weight>
+		/// - O(1).
+		/// - Limited storage reads.
+		/// - Two DB clear.
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedOperational(100_000_000)]
+		fn reject_bounty(origin, #[compact] bounty_id: BountyIndex) {
+			T::RejectOrigin::try_origin(origin)
+				.map(|_| ())
+				.or_else(ensure_root)?;
+
+			ensure!(Self::bounty_statuses(bounty_id) == Some(BountyStatus::Proposed), Error::<T>::UnexpectedStatus);
+			let bounty = <Bounties<T>>::take(&bounty_id).ok_or(Error::<T>::InvalidProposalIndex)?;
+
+			BountyStatuses::remove(bounty_id);
+
+			let value = bounty.bond;
+			let imbalance = T::Currency::slash_reserved(&bounty.proposer, value).0;
+			T::ProposalRejection::on_unbalanced(imbalance);
+
+			Self::deposit_event(Event::<T>::BountyRejected(bounty_id, value));
+		}
+
+		/// Approve a bounty proposal. At a later time, the bounty will be funded and become active
+		/// and the original deposit will be returned.
+		///
+		/// # <weight>
+		/// - O(1).
+		/// - Limited storage reads.
+		/// - One DB change.
+		/// # </weight>
+		#[weight = SimpleDispatchInfo::FixedOperational(100_000_000)]
+		fn approve_bounty(origin, #[compact] bounty_id: ProposalIndex) {
+			T::ApproveOrigin::try_origin(origin)
+				.map(|_| ())
+				.or_else(ensure_root)?;
+
+			ensure!(<Bounties<T>>::contains_key(bounty_id), Error::<T>::InvalidProposalIndex);
+			ensure!(Self::bounty_statuses(bounty_id) == Some(BountyStatus::Proposed), Error::<T>::UnexpectedStatus);
+			BountyStatuses::insert(bounty_id, BountyStatus::Approved);
+		}
+
+		#[weight = SimpleDispatchInfo::FixedOperational(100_000_000)]
+		fn award_bounty(origin, #[compact] bounty_id: ProposalIndex, beneficiary: <T::Lookup as StaticLookup>::Source) {
+			let curator = ensure_signed(origin)?;
+			let beneficiary = T::Lookup::lookup(beneficiary)?;
+
+			ensure!(Self::bounty_statuses(bounty_id) == Some(BountyStatus::Active), Error::<T>::UnexpectedStatus);
+
+			let bounty = Self::bounties(bounty_id).ok_or(Error::<T>::InvalidProposalIndex)?;
+			ensure!(bounty.curator == curator, Error::<T>::RequireCurator);
+
+			BountyStatuses::insert(bounty_id, BountyStatus::PendingPayout);
+			BountyBeneficiary::<T>::insert(bounty_id, (&beneficiary, system::Module::<T>::block_number() + T::BountyDepositPayoutDelay::get()));
+
+			Bounties::<T>::remove(bounty_id); // no longer needed
+
+			Self::deposit_event(Event::<T>::BountyAwarded(bounty_id, beneficiary));
+		}
+
+		#[weight = SimpleDispatchInfo::FixedOperational(100_000_000)]
+		fn claim_bounty(origin, #[compact] bounty_id: ProposalIndex) {
+			let _ = ensure_signed(origin)?;
+
+			ensure!(Self::bounty_statuses(bounty_id) == Some(BountyStatus::PendingPayout), Error::<T>::UnexpectedStatus);
+			let (beneficiary, released) = Self::bounty_beneficiary(bounty_id)
+				.ok_or(Error::<T>::InvalidProposalIndex)?; // this should not fail
+
+			ensure!(system::Module::<T>::block_number() >= released, Error::<T>::Premature);
+
+			let bounty_account = Self::bounty_account_id(bounty_id);
+			let balance = T::Currency::free_balance(&bounty_account);
+			let _ = T::Currency::transfer(&bounty_account, &beneficiary, balance, AllowDeath); // should not fail
+
+			BountyStatuses::remove(bounty_id);
+			BountyBeneficiary::<T>::remove(bounty_id);
+
+			Self::deposit_event(Event::<T>::BountyClaimed(bounty_id, balance, beneficiary));
+		}
+
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			// Check to see if we should spend some funds!
 			if (n % T::SpendPeriod::get()).is_zero() {
@@ -572,6 +773,11 @@ impl<T: Trait> Module<T> {
 	/// value and only call this once.
 	pub fn account_id() -> T::AccountId {
 		MODULE_ID.into_account()
+	}
+
+	/// The account ID of a bounty account
+	pub fn bounty_account_id(id: BountyIndex) -> T::AccountId {
+		MODULE_ID.into_sub_account(("bounty", id))
 	}
 
 	/// The needed bond for a proposal whose spend is `value`.
@@ -654,6 +860,7 @@ impl<T: Trait> Module<T> {
 	fn spend_funds() {
 		let mut budget_remaining = Self::pot();
 		Self::deposit_event(RawEvent::Spending(budget_remaining));
+		let account_id = Self::account_id();
 
 		let mut missed_any = false;
 		let mut imbalance = <PositiveImbalanceOf<T>>::zero();
@@ -683,6 +890,32 @@ impl<T: Trait> Module<T> {
 			});
 		});
 
+		BountyApprovals::mutate(|v| {
+			v.retain(|&index| {
+				// Should always be true, but shouldn't panic if false or we're screwed.
+				if let Some(bounty) = Self::bounties(index) {
+					if bounty.value <= budget_remaining {
+						budget_remaining -= bounty.value;
+						BountyStatuses::insert(index, BountyStatus::Active);
+
+						// return their deposit.
+						let _ = T::Currency::unreserve(&bounty.proposer, bounty.bond);
+
+						// fund the bounty account
+						imbalance.subsume(T::Currency::deposit_creating(&Self::bounty_account_id(index), bounty.value));
+
+						Self::deposit_event(RawEvent::BountyBecomeActive(index));
+						false
+					} else {
+						missed_any = true;
+						true
+					}
+				} else {
+					false
+				}
+			});
+		});
+
 		if !missed_any {
 			// burn some proportion of the remaining budget if we run a surplus.
 			let burn = (T::Burn::get() * budget_remaining).min(budget_remaining);
@@ -696,7 +929,7 @@ impl<T: Trait> Module<T> {
 		// Thus we can't spend more than account free balance minus ED;
 		// Thus account is kept alive; qed;
 		if let Err(problem) = T::Currency::settle(
-			&Self::account_id(),
+			&account_id,
 			imbalance,
 			WithdrawReason::Transfer.into(),
 			KeepAlive
