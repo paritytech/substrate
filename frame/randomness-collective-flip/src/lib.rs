@@ -20,7 +20,7 @@
 //! function that generates low-influence random values based on the block hashes from the previous
 //! `81` blocks. Low-influence randomness can be useful when defending against relatively weak
 //! adversaries. Using this pallet as a randomness source is advisable primarily in low-security
-//! situations like testing. 
+//! situations like testing.
 //!
 //! ## Public Functions
 //!
@@ -170,6 +170,8 @@ mod tests {
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type DbWeight = ();
+		type BlockExecutionWeight = ();
+		type ExtrinsicBaseWeight = ();
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();

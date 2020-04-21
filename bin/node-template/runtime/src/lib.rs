@@ -155,6 +155,8 @@ impl system::Trait for Runtime {
 	type MaximumBlockWeight = MaximumBlockWeight;
 	/// The weight of database operations that the runtime can invoke.
 	type DbWeight = ();
+	type BlockExecutionWeight = ();
+	type ExtrinsicBaseWeight = ();
 	/// Maximum size of all encoded transactions (in bytes) that are allowed in one block.
 	type MaximumBlockLength = MaximumBlockLength;
 	/// Portion of the block weight that is available to all normal transactions.

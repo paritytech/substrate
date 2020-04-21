@@ -386,6 +386,8 @@ mod tests {
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type DbWeight = ();
+		type BlockExecutionWeight = ();
+		type ExtrinsicBaseWeight = ();
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
@@ -565,7 +567,7 @@ mod tests {
 			let pre = ChargeTransactionPayment::<Runtime>::from(5 /* tipped */)
 				.pre_dispatch(&2, CALL, &info_from_weight(100), len)
 				.unwrap();
-			// 5 base fee, 3/2 * 10 byte fee, 3/2 * 100 weight fee, 5 tip 
+			// 5 base fee, 3/2 * 10 byte fee, 3/2 * 100 weight fee, 5 tip
 			assert_eq!(Balances::free_balance(2), 200 - 5 - 15 - 150 - 5);
 
 			assert!(

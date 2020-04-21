@@ -491,8 +491,8 @@ mod tests {
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type DbWeight = ();
-	type BlockExecutionWeight = ();
-	type ExtrinsicBaseWeight = ();
+		type BlockExecutionWeight = ();
+		type ExtrinsicBaseWeight = ();
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = RuntimeVersion;
