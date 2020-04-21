@@ -25,7 +25,7 @@ use codec::Encode as _;
 use libp2p::NetworkBehaviour;
 use libp2p::core::{Multiaddr, PeerId, PublicKey};
 use libp2p::kad::record;
-use libp2p::swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters};
+use libp2p::swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters, toggle::Toggle};
 use log::debug;
 use sp_consensus::{BlockOrigin, import_queue::{IncomingBlock, Origin}};
 use sp_runtime::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId, Justification};
@@ -46,7 +46,7 @@ pub struct Behaviour<B: BlockT, H: ExHashT> {
 	/// Block request handling.
 	block_requests: protocol::BlockRequests<B>,
 	/// Finality proof request handling.
-	finality_proof_requests: protocol::FinalityProofRequests<B>,
+	finality_proof_requests: Toggle<protocol::FinalityProofRequests<B>>,
 	/// Light client request handling.
 	light_client_handler: protocol::LightClientHandler<B>,
 
@@ -77,7 +77,7 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 		user_agent: String,
 		local_public_key: PublicKey,
 		block_requests: protocol::BlockRequests<B>,
-		finality_proof_requests: protocol::FinalityProofRequests<B>,
+		finality_proof_requests: Option<protocol::FinalityProofRequests<B>>,
 		light_client_handler: protocol::LightClientHandler<B>,
 		disco_config: DiscoveryConfig,
 	) -> Self {
@@ -86,7 +86,7 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 			debug_info: debug_info::DebugInfoBehaviour::new(user_agent, local_public_key.clone()),
 			discovery: disco_config.finish(),
 			block_requests,
-			finality_proof_requests,
+			finality_proof_requests: From::from(finality_proof_requests),
 			light_client_handler,
 			events: Vec::new(),
 			role,

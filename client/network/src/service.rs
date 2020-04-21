@@ -225,9 +225,11 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				let config = protocol::block_requests::Config::new(&params.protocol_id);
 				protocol::BlockRequests::new(config, params.chain.clone())
 			};
-			let finality_proof_requests = {
+			let finality_proof_requests = if let Some(pb) = &params.finality_proof_provider {
 				let config = protocol::finality_requests::Config::new(&params.protocol_id);
-				protocol::FinalityProofRequests::new(config, params.finality_proof_provider.clone())
+				Some(protocol::FinalityProofRequests::new(config, pb.clone()))
+			} else {
+				None
 			};
 			let light_client_handler = {
 				let config = protocol::light_client_handler::Config::new(&params.protocol_id);

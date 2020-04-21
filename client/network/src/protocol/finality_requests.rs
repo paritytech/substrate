@@ -115,7 +115,7 @@ pub struct FinalityProofRequests<B: Block> {
 	/// This behaviour's configuration.
 	config: Config,
 	/// How to construct finality proofs.
-	finality_proof_provider: Option<Arc<dyn FinalityProofProvider<B>>>,
+	finality_proof_provider: Arc<dyn FinalityProofProvider<B>>,
 	/// Futures sending back the finality proof request responses.
 	outgoing: FuturesUnordered<BoxFuture<'static, ()>>,
 }
@@ -125,7 +125,7 @@ where
 	B: Block,
 {
 	/// Initializes the behaviour.
-	pub fn new(cfg: Config, finality_proof_provider: Option<Arc<dyn FinalityProofProvider<B>>>) -> Self {
+	pub fn new(cfg: Config, finality_proof_provider: Arc<dyn FinalityProofProvider<B>>) -> Self {
 		FinalityProofRequests {
 			config: cfg,
 			finality_proof_provider,
@@ -141,10 +141,8 @@ where
 
 		log::trace!(target: "sync", "Finality proof request from {} for {}", peer, block_hash);
 
-		let provider = self.finality_proof_provider.as_ref()
-			.ok_or_else(|| String::from("Finality provider is not configured"))?;
-
-		let finality_proof = provider.prove_finality(block_hash, &request.request)?
+		let finality_proof = self.finality_proof_provider
+			.prove_finality(block_hash, &request.request)?
 			.unwrap_or(Vec::new());
 		// Note that an empty Vec is sent if no proof is available.
 
