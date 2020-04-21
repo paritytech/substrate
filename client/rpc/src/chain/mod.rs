@@ -175,40 +175,18 @@ trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
 	}
 
 	/// Subscribe to finality events.
+	///
+	/// Informs subscribers about blocks with have beeen explicitly finalized
+	/// by Grandpa and thus contain a justification.
 	fn subscribe_finality(
 		&self,
 		metadata: crate::metadata::Metadata,
-		subscriber: Subscriber<Block::Header>
+		subscriber: Subscriber<JustificationNotification<Block>>
 	) {
-		let block_stream = match self.client().finality_notification_stream() {
-			Ok(stream) => stream,
-			Err(e) => {
-				todo!();
-			}
-		};
+		// TODO: Figure out how to get access to channel here
+		let justification_stream = self.grandpa_subscription().justification_notification_stream();
 
-		let justification_stream = match self.client().justification_notification_stream() {
-			Ok(stream) => stream,
-			Err(e) => {
-				todo!();
-			}
-		};
-
-		self.subscriptions().add(subscriber, |sink|{
-			let header = self.client().header(BlockId::Hash(self.client().info().finalized_hash))
-				.map_err(client_err)
-				.and_then(|header| {
-					header.ok_or_else(|| "Best header missing.".to_owned().into())
-				})
-				.map_err(Into::into);
-
-			// How do I know that the right header is matched to the right justification?
-			// Should we be doing any filtering here?
-			// Probably depends on what we end up getting from the justification_stream
-			let stream = block_stream.zip(justification_stream);
-
-			// stream::iter_result(vec![Ok(version)])
-			// .chain(stream)
+		self.subscriptions().add(subscriber, |sink| {
 			sink
 				.sink_map_err(|e| warn!("Error sending notifications: {:?}", e))
 				.send_all(stream)
