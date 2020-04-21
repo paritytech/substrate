@@ -683,6 +683,48 @@ mod tests {
 
 
 	#[test]
+	fn saturating_abs_should_work() {
+		// normal
+		assert_eq!(Fixed64::from_parts(1).saturating_abs(), Fixed64::from_parts(1));
+		assert_eq!(Fixed64::from_parts(-1).saturating_abs(), Fixed64::from_parts(1));
+
+		// saturating
+		assert_eq!(Fixed64::min_value().saturating_abs(), Fixed64::max_value());
+	}
+
+	#[test]
+	fn is_positive_negative_should_work() {
+		let positive = Fixed64::from_parts(1);
+		assert!(positive.is_positive());
+		assert!(!positive.is_negative());
+
+		let negative = Fixed64::from_parts(-1);
+		assert!(!negative.is_positive());
+		assert!(negative.is_negative());
+
+		let zero = Fixed64::zero();
+		assert!(!zero.is_positive());
+		assert!(!zero.is_negative());
+	}
+
+	#[test]
+	fn fmt_should_work() {
+		let positive = Fixed64::from_parts(1000000000000000001);
+		assert_eq!(format!("{:?}", positive), "Fixed64(1000000000.000000001)");
+		let negative = Fixed64::from_parts(-1000000000000000001);
+		assert_eq!(format!("{:?}", negative), "Fixed64(-1000000000.000000001)");
+
+		let positive_fractional = Fixed64::from_parts(1);
+		assert_eq!(format!("{:?}", positive_fractional), "Fixed64(0.000000001)");
+		let negative_fractional = Fixed64::from_parts(-1);
+		assert_eq!(format!("{:?}", negative_fractional), "Fixed64(-0.000000001)");
+
+		let zero = Fixed64::zero();
+		assert_eq!(format!("{:?}", zero), "Fixed64(0.000000000)");
+	}
+
+
+	#[test]
 	fn recip_should_work() {
 		let a = Fixed64::from_integer(2);
 		assert_eq!(
