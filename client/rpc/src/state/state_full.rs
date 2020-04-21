@@ -24,7 +24,7 @@ use log::warn;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use rpc::{Result as RpcResult, futures::{stream, Future, Sink, Stream, future::result}};
 
-use sc_rpc_api::Subscriptions;
+use sc_rpc_api::{Subscriptions, state::ReadProof};
 use sc_client_api::backend::Backend;
 use sp_blockchain::{Result as ClientResult, Error as ClientError, HeaderMetadata, CachedHeaderMetadata, HeaderBackend};
 use sc_client::BlockchainEvents;
@@ -41,7 +41,7 @@ use sp_api::{Metadata, ProvideRuntimeApi, CallApiAt};
 
 use super::{StateBackend, ChildStateBackend, error::{FutureResult, Error, Result}, client_err};
 use std::marker::PhantomData;
-use sc_client_api::{CallExecutor, StorageProvider, ExecutorProvider};
+use sc_client_api::{CallExecutor, StorageProvider, ExecutorProvider, ProofProvider};
 
 /// Ranges to query in state_queryStorage.
 struct QueryStorageRange<Block: BlockT> {
@@ -219,7 +219,7 @@ impl<BE, Block: BlockT, Client> FullState<BE, Block, Client>
 impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Client> where
 	Block: BlockT + 'static,
 	BE: Backend<Block> + 'static,
-	Client: ExecutorProvider<Block> + StorageProvider<Block, BE> + HeaderBackend<Block>
+	Client: ExecutorProvider<Block> + StorageProvider<Block, BE> + ProofProvider<Block> + HeaderBackend<Block>
 		+ HeaderMetadata<Block, Error = sp_blockchain::Error> + BlockchainEvents<Block>
 		+ CallApiAt<Block, Error = sp_blockchain::Error> + ProvideRuntimeApi<Block>
 		+ Send + Sync + 'static,
@@ -349,6 +349,26 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 	) -> FutureResult<Vec<StorageChangeSet<Block::Hash>>> {
 		let at = at.unwrap_or_else(|| self.client.info().best_hash);
 		self.query_storage(at, Some(at), keys)
+	}
+
+	fn read_proof(
+		&self,
+		block: Option<Block::Hash>,
+		keys: Vec<StorageKey>,
+	) -> FutureResult<ReadProof<Block::Hash>> {
+		Box::new(result(
+			self.block_or_best(block)
+				.and_then(|block| {
+					self.client
+						.read_proof(
+							&BlockId::Hash(block),
+							&mut keys.iter().map(|key| key.0.as_ref()),
+						)
+						.map(|proof| proof.iter_nodes().map(|node| node.into()).collect())
+						.map(|proof| ReadProof { at: block, proof })
+				})
+				.map_err(client_err),
+		))
 	}
 
 	fn subscribe_runtime_version(
