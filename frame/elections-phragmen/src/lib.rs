@@ -1131,7 +1131,7 @@ mod tests {
 
 	fn has_lock(who: &u64) -> u64 {
 		let lock = Balances::locks(who)[0].clone();
-		assert_eq!(lock.id, *b"phrelect");
+		assert_eq!(lock.id, ElectionsPhragmenModuleId::get());
 		lock.amount
 	}
 
