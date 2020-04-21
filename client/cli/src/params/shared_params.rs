@@ -22,7 +22,9 @@ use crate::arg_enums::Database;
 /// Shared parameters used by all `CoreParams`.
 #[derive(Debug, StructOpt, Clone)]
 pub struct SharedParams {
-	/// Specify the chain specification (one of <chain_name>, dev, <chain_name>-dev, <chain_name>-local, or <chain_name>-staging where <chain_name> is polkadot, kusama, westend, etc...)
+	/// Specify the chain specification (one of <chain_name>, dev,
+	/// <chain_name>-dev, <chain_name>-local, or <chain_name>-staging
+	/// where <chain_name> is one of polkadot, kusama, westend, etc...).
 	#[structopt(long = "chain", value_name = "CHAIN_SPEC")]
 	pub chain: Option<String>,
 
