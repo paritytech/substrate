@@ -298,3 +298,20 @@ pub fn get_runtime_interface<'a>(trait_def: &'a ItemTrait)
 
 	Ok(RuntimeInterface { items: functions })
 }
+
+/// Returns a cfg attribute for wasm or non-wasm code block, considering if it supports native no-std..
+pub fn generate_cfg_attr(for_wasm: bool, native_nostd: bool) -> TokenStream {
+	if native_nostd {
+		if for_wasm {
+			quote!( #[cfg(all(not(feature = "std"), not(feature = "native-nostd")))] )
+		} else {
+			quote!( #[cfg(any(feature = "std", feature = "native-nostd"))] )
+		}
+	} else {
+		if for_wasm {
+			quote!( #[cfg(not(feature = "std"))] )
+		} else {
+			quote!( #[cfg(feature = "std")] )
+		}
+	}
+}

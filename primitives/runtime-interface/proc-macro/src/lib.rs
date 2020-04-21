@@ -31,15 +31,48 @@ mod pass_by;
 mod runtime_interface;
 mod utils;
 
+use syn::Result;
+use syn::parse::{Parse, ParseStream};
+
+enum Attrs {
+	WasmOnly,
+	NativeNoStd,
+	Normal
+}
+
+impl Parse for Attrs {
+	fn parse(input: ParseStream) -> Result<Self> {
+		if input.is_empty() {
+			return Ok(Attrs::Normal);
+		}
+		let lookahead = input.lookahead1();
+		if lookahead.peek(runtime_interface::keywords::wasm_only) {
+			input.parse::<runtime_interface::keywords::wasm_only>()?;
+			Ok(Attrs::WasmOnly)
+		} else if lookahead.peek(runtime_interface::keywords::native_nostd) {
+			input.parse::<runtime_interface::keywords::native_nostd>()?;
+			Ok(Attrs::NativeNoStd)
+		} else {
+			Err(lookahead.error())
+		}
+	}
+}
+
 #[proc_macro_attribute]
 pub fn runtime_interface(
 	attrs: proc_macro::TokenStream,
 	input: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
 	let trait_def = parse_macro_input!(input as ItemTrait);
-	let wasm_only = parse_macro_input!(attrs as Option<runtime_interface::keywords::wasm_only>);
+	let attrs_def = parse_macro_input!(attrs as Attrs);
 
-	runtime_interface::runtime_interface_impl(trait_def, wasm_only.is_some())
+	let (is_wasm_only, allow_native_nostd) = match attrs_def {
+		Attrs::WasmOnly => (true, false),
+		Attrs::NativeNoStd => (false, true),
+		Attrs::Normal => (false, false)
+	};
+
+	runtime_interface::runtime_interface_impl(trait_def, is_wasm_only, allow_native_nostd)
 		.unwrap_or_else(|e| e.to_compile_error())
 		.into()
 }

@@ -31,6 +31,7 @@
 use crate::utils::{
 	generate_crate_access, create_exchangeable_host_function_ident, get_function_arguments,
 	get_function_argument_names, get_runtime_interface, create_function_ident_with_version,
+	generate_cfg_attr,
 };
 
 use syn::{
@@ -45,7 +46,7 @@ use std::iter;
 
 /// Generate one bare function per trait method. The name of the bare function is equal to the name
 /// of the trait method.
-pub fn generate(trait_def: &ItemTrait, is_wasm_only: bool) -> Result<TokenStream> {
+pub fn generate(trait_def: &ItemTrait, is_wasm_only: bool, allow_native_nostd: bool) -> Result<TokenStream> {
 	let trait_name = &trait_def.ident;
 	let runtime_interface = get_runtime_interface(trait_def)?;
 
@@ -54,7 +55,7 @@ pub fn generate(trait_def: &ItemTrait, is_wasm_only: bool) -> Result<TokenStream
 		.try_fold(
 			TokenStream::new(),
 			|mut t, (latest_version, method)| {
-				t.extend(function_for_method(method, latest_version, is_wasm_only)?);
+				t.extend(function_for_method(method, latest_version, is_wasm_only, allow_native_nostd)?);
 				Ok(t)
 			}
 		);
@@ -62,7 +63,7 @@ pub fn generate(trait_def: &ItemTrait, is_wasm_only: bool) -> Result<TokenStream
 	// earlier versions compatibility dispatch (only std variant)
 	let result: Result<TokenStream> = runtime_interface.all_versions().try_fold(token_stream?, |mut t, (version, method)|
 	{
-		t.extend(function_std_impl(trait_name, method, version, is_wasm_only)?);
+		t.extend(function_std_impl(trait_name, method, version, is_wasm_only, allow_native_nostd)?);
 		Ok(t)
 	});
 
@@ -74,14 +75,15 @@ fn function_for_method(
 	method: &TraitItemMethod,
 	latest_version: u32,
 	is_wasm_only: bool,
+	allow_native_nostd: bool,
 ) -> Result<TokenStream> {
 	let std_impl = if !is_wasm_only {
-		function_std_latest_impl(method, latest_version)?
+		function_std_latest_impl(method, latest_version, allow_native_nostd)?
 	} else {
 		quote!()
 	};
 
-	let no_std_impl = function_no_std_impl(method)?;
+	let no_std_impl = function_no_std_impl(method, allow_native_nostd)?;
 
 	Ok(
 		quote! {
@@ -93,17 +95,18 @@ fn function_for_method(
 }
 
 /// Generates the bare function implementation for `cfg(not(feature = "std"))`.
-fn function_no_std_impl(method: &TraitItemMethod) -> Result<TokenStream> {
+fn function_no_std_impl(method: &TraitItemMethod, allow_native_nostd: bool) -> Result<TokenStream> {
 	let function_name = &method.sig.ident;
 	let host_function_name = create_exchangeable_host_function_ident(&method.sig.ident);
 	let args = get_function_arguments(&method.sig);
 	let arg_names = get_function_argument_names(&method.sig);
 	let return_value = &method.sig.output;
 	let attrs = method.attrs.iter().filter(|a| !a.path.is_ident("version"));
+	let cfg_attr = generate_cfg_attr(true, allow_native_nostd);
 
 	Ok(
 		quote! {
-			#[cfg(not(feature = "std"))]
+			#cfg_attr
 			#( #attrs )*
 			pub fn #function_name( #( #args, )* ) #return_value {
 				// Call the host function
@@ -119,6 +122,7 @@ fn function_no_std_impl(method: &TraitItemMethod) -> Result<TokenStream> {
 fn function_std_latest_impl(
 	method: &TraitItemMethod,
 	latest_version: u32,
+	allow_native_nostd: bool,
 ) -> Result<TokenStream> {
 	let function_name = &method.sig.ident;
 	let args = get_function_arguments(&method.sig).map(FnArg::Typed);
@@ -126,9 +130,10 @@ fn function_std_latest_impl(
 	let return_value = &method.sig.output;
 	let attrs = method.attrs.iter().filter(|a| !a.path.is_ident("version"));
 	let latest_function_name = create_function_ident_with_version(&method.sig.ident, latest_version);
+	let cfg_attr = generate_cfg_attr(false, allow_native_nostd);
 
 	Ok(quote_spanned! { method.span() =>
-		#[cfg(feature = "std")]
+		#cfg_attr
 		#( #attrs )*
 		pub fn #function_name( #( #args, )* ) #return_value {
 			#latest_function_name(
@@ -144,6 +149,7 @@ fn function_std_impl(
 	method: &TraitItemMethod,
 	version: u32,
 	is_wasm_only: bool,
+	allow_native_nostd: bool,
 ) -> Result<TokenStream> {
 	let function_name = create_function_ident_with_version(&method.sig.ident, version);
 	let function_name_str = function_name.to_string();
@@ -167,10 +173,11 @@ fn function_std_impl(
 	let attrs = method.attrs.iter().filter(|a| !a.path.is_ident("version"));
 	// Don't make the function public accessible when this is a wasm only interface.
 	let call_to_trait = generate_call_to_trait(trait_name, method, version, is_wasm_only);
+	let cfg_attr = generate_cfg_attr(false, allow_native_nostd);
 
 	Ok(
 		quote_spanned! { method.span() =>
-			#[cfg(feature = "std")]
+			#cfg_attr
 			#( #attrs )*
 			fn #function_name( #( #args, )* ) #return_value {
 				#crate_::sp_tracing::enter_span!(#function_name_str);

@@ -564,7 +564,7 @@ pub trait Crypto {
 }
 
 /// Interface that provides functions for hashing with different algorithms.
-#[runtime_interface]
+#[runtime_interface(native_nostd)]
 pub trait Hashing {
 	/// Conduct a 256-bit Keccak hash.
 	fn keccak_256(data: &[u8]) -> [u8; 32] {

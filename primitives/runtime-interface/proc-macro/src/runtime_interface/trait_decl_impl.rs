@@ -22,6 +22,7 @@ use crate::utils::{
 	get_function_argument_types_without_ref,
 	get_runtime_interface,
 	create_function_ident_with_version,
+	generate_cfg_attr,
 };
 
 use syn::{
@@ -35,8 +36,8 @@ use quote::quote;
 
 /// Process the given trait definition, by checking that the definition is valid, fold it to the
 /// essential definition and implement this essential definition for `dyn Externalities`.
-pub fn process(trait_def: &ItemTrait, is_wasm_only: bool) -> Result<TokenStream> {
-	let impl_trait = impl_trait_for_externalities(trait_def, is_wasm_only)?;
+pub fn process(trait_def: &ItemTrait, is_wasm_only: bool, allow_native_nostd: bool) -> Result<TokenStream> {
+	let impl_trait = impl_trait_for_externalities(trait_def, is_wasm_only, allow_native_nostd)?;
 	let essential_trait_def = declare_essential_trait(trait_def)?;
 
 	Ok(
@@ -154,7 +155,8 @@ fn declare_essential_trait(trait_def: &ItemTrait) -> Result<TokenStream> {
 }
 
 /// Implements the given trait definition for `dyn Externalities`.
-fn impl_trait_for_externalities(trait_def: &ItemTrait, is_wasm_only: bool) -> Result<TokenStream> {
+fn impl_trait_for_externalities(trait_def: &ItemTrait, is_wasm_only: bool, allow_native_nostd: bool)
+-> Result<TokenStream> {
 	let trait_ = &trait_def.ident;
 	let crate_ = generate_crate_access();
 	let interface = get_runtime_interface(trait_def)?;
@@ -171,9 +173,11 @@ fn impl_trait_for_externalities(trait_def: &ItemTrait, is_wasm_only: bool) -> Re
 		quote!( &mut dyn #crate_::Externalities )
 	};
 
+	let cfg_attr = generate_cfg_attr(false, allow_native_nostd);
+
 	Ok(
 		quote! {
-			#[cfg(feature = "std")]
+			#cfg_attr
 			impl #trait_ for #impl_type {
 				#( #methods )*
 			}

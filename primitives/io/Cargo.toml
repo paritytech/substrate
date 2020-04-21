@@ -53,3 +53,5 @@ std = [
 disable_panic_handler = []
 disable_oom = []
 disable_allocator = []
+
+native-nostd = []

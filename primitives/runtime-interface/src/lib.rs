@@ -290,6 +290,8 @@ pub use sp_runtime_interface_proc_macro::runtime_interface;
 pub use sp_externalities::{
 	set_and_run_with_externalities, with_externalities, Externalities, ExternalitiesExt, ExtensionStore,
 };
+#[cfg(not(feature = "std"))]
+pub trait Externalities {}
 
 #[doc(hidden)]
 pub use codec;
