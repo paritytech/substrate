@@ -199,13 +199,10 @@ pub trait FixedPointNumber:
 	fn from_integer(int: Self::Inner) ->Self;
 
 	/// Raw constructor. Equal to `parts / DIV`.
-	/// TODO: maybe rename to `from_bits` like in fixed crate.
 	fn from_parts(parts: Self::Inner) -> Self;
 
 	/// Creates self from a rational number. Equal to `n / d`.
-	///
-	/// Note that this might be lossy.
-	fn from_rational<N: UniqueSaturatedInto<Self::Inner>>(n: N, d: Self::Inner) -> Self;
+	fn from_rational<N: TryInto<Self::Inner>>(n: N, d: Self::Inner) -> Option<Self>;
 
 	/// Consume self and return the inner raw value.
 	///
