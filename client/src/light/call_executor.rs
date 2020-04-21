@@ -192,6 +192,7 @@ pub fn prove_execution<Block, S, E>(
 				Box<dyn sp_state_machine::Error>
 		)?;
 
+	let (merge_kind, prefer_full) = kind.mergeable_kind();
 	// prepare execution environment + record preparation proof
 	let mut changes = Default::default();
 	let (_, init_proof) = executor.prove_at_trie_state(
@@ -199,7 +200,7 @@ pub fn prove_execution<Block, S, E>(
 		&mut changes,
 		"Core_initialize_block",
 		&header.encode(),
-		kind,
+		merge_kind,
 	)?;
 
 	// execute method + record execution proof
@@ -208,15 +209,12 @@ pub fn prove_execution<Block, S, E>(
 		&mut changes,
 		method,
 		call_data,
-		kind,
+		merge_kind,
 	)?;
-	// TODO EMCH this is actually not allowing compaction (would need to pack both input): merge
-	// current approach is probably a bit naive. -> could do if prove_at_trie_state would
-	// also return proof input (not packing would be good to) -> maybe a test variant with
-	// input in proof -> that way merge is possible.
-	//  => make a mapping on kind to best possible merge strategy.
-	let total_proof = StorageProof::merge::<HashFor<Block>, _>(vec![init_proof, exec_proof])
-		.map_err(|e| format!("{}", e))?;
+	let total_proof = StorageProof::merge::<HashFor<Block>, _>(
+		vec![init_proof, exec_proof],
+		prefer_full,
+	).map_err(|e| format!("{}", e))?;
 
 	Ok((result, total_proof))
 }

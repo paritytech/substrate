@@ -474,7 +474,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			Ok(())
 		}, ())?;
 
-		Ok(StorageProof::merge::<HashFor<Block>, _>(proofs)
+		Ok(StorageProof::merge::<HashFor<Block>, _>(proofs, false)
 			.map_err(|e| format!("{}", e))?)
 	}
 
@@ -1118,6 +1118,7 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 		call_data: &[u8],
 		kind: StorageProofKind,
 	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
+		let (merge_kind, prefer_full) = kind.mergeable_kind();
 		// Make sure we include the `:code` and `:heap_pages` in the execution proof to be
 		// backwards compatible.
 		//
@@ -1125,7 +1126,7 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 		let code_proof = self.read_proof(
 			id,
 			&mut [well_known_keys::CODE, well_known_keys::HEAP_PAGES].iter().map(|v| *v),
-			kind,
+			merge_kind,
 		)?;
 
 		let state = self.state_at(id)?;
@@ -1136,10 +1137,9 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 			&self.executor,
 			method,
 			call_data,
-			kind,
+			merge_kind,
 		).and_then(|(r, p)| {
-			// TODO EMCH kind mappnig for mergeable proof type
-			Ok((r, StorageProof::merge::<HashFor<Block>, _>(vec![p, code_proof])
+			Ok((r, StorageProof::merge::<HashFor<Block>, _>(vec![p, code_proof], prefer_full)
 				.map_err(|e| format!("{}", e))?))
 		})
 	}
