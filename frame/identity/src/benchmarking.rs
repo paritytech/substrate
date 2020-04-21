@@ -27,9 +27,6 @@ use sp_runtime::traits::Bounded;
 
 use crate::Module as Identity;
 
-// The maximum number of identity registrars we will test.
-const MAX_REGISTRARS: u32 = 50;
-
 // Support Functions
 fn account<T: Trait>(name: &'static str, index: u32) -> T::AccountId {
 	let entropy = (name, index).using_encoded(blake2_256);
@@ -107,7 +104,7 @@ fn create_identity_info<T: Trait>(num_fields: u32) -> IdentityInfo {
 benchmarks! {
 	// These are the common parameters along with their instancing.
 	_ {
-		let r in 1 .. MAX_REGISTRARS => add_registrars::<T>(r)?;
+		let r in 1 .. T::MaxRegistrars::get() => add_registrars::<T>(r)?;
 		// extra parameter for the set_subs bench for previous sub accounts
 		let p in 1 .. T::MaxSubAccounts::get() => ();
 		let s in 1 .. T::MaxSubAccounts::get() => {

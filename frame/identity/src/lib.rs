@@ -83,9 +83,6 @@ mod benchmarking;
 type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
-/// Upper bound for the amount of registrars expected.
-const ASSUMED_MAX_REGISTRARS: u32 = 20;
-
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
@@ -110,6 +107,10 @@ pub trait Trait: frame_system::Trait {
 	/// Maximum number of additional fields that may be stored in an ID. Needed to bound the I/O
 	/// required to access an identity, but can be pretty high.
 	type MaxAdditionalFields: Get<u32>;
+
+	/// Maxmimum number of registrars allowed in the system. Needed to bound the complexity
+	/// of, e.g., updating judgements.
+	type MaxRegistrars: Get<u32>;
 
 	/// What to do with slashed funds.
 	type Slashed: OnUnbalanced<NegativeImbalanceOf<Self>>;
@@ -529,7 +530,7 @@ decl_module! {
 				+ T::DbWeight::get().reads_writes(1, 1) // balance ops
 				+ 136_600_000 // constant
 				+ 2_622_000 * (info.additional.len() as Weight) // X
-				+ 624_000 * (ASSUMED_MAX_REGISTRARS as Weight) // J
+				+ 624_000 * (T::MaxRegistrars::get() as Weight) // J
 			},
 			DispatchClass::Normal,
 			true
@@ -654,7 +655,7 @@ decl_module! {
 			|(&subs_count,): (&u32,)| {
 				T::DbWeight::get().writes(subs_count as Weight + 2) // S + 2 deletions
 				+ 152_300_000 // constant
-				+ 306_000 * ASSUMED_MAX_REGISTRARS as Weight // R
+				+ 306_000 * T::MaxRegistrars::get() as Weight // R
 				+ 4_967_000 * subs_count as Weight // S
 				+ 1_697_000 * T::MaxAdditionalFields::get() as Weight // X
 			},
@@ -713,7 +714,7 @@ decl_module! {
 				T::DbWeight::get().reads_writes(2, 1)
 				+ T::DbWeight::get().reads_writes(1, 1) // balance ops
 				+ 154_000_000 // constant
-				+ 932_000 * ASSUMED_MAX_REGISTRARS as Weight // R
+				+ 932_000 * T::MaxRegistrars::get() as Weight // R
 				+ 3_302_000 * fields_count as Weight // X
 			},
 			DispatchClass::Normal,
@@ -778,7 +779,7 @@ decl_module! {
 				T::DbWeight::get().reads_writes(1, 1)
 				+ T::DbWeight::get().reads_writes(1, 1) // balance ops
 				+ 135_300_000 // constant
-				+ 574_000 * ASSUMED_MAX_REGISTRARS as Weight // R
+				+ 574_000 * T::MaxRegistrars::get() as Weight // R
 				+ 3_394_000 * fields_count as Weight // X
 			},
 			DispatchClass::Normal,
@@ -817,7 +818,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = T::DbWeight::get().reads_writes(1, 1)
 			+ 30_000_000 // constant
-			+ 700_000 * ASSUMED_MAX_REGISTRARS as Weight // R
+			+ 700_000 * T::MaxRegistrars::get() as Weight // R
 		]
 		fn set_fee(origin,
 			#[compact] index: RegistrarIndex,
@@ -847,7 +848,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = T::DbWeight::get().reads_writes(1, 1)
 			+ 30_000_000 // constant
-			+ 700_000 * ASSUMED_MAX_REGISTRARS as Weight // R
+			+ 700_000 * T::MaxRegistrars::get() as Weight // R
 		]
 		fn set_account_id(origin,
 			#[compact] index: RegistrarIndex,
@@ -877,7 +878,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = T::DbWeight::get().reads_writes(1, 1)
 			+ 30_000_000 // constant
-			+ 700_000 * ASSUMED_MAX_REGISTRARS as Weight // R
+			+ 700_000 * T::MaxRegistrars::get() as Weight // R
 		]
 		fn set_fields(origin,
 			#[compact] index: RegistrarIndex,
@@ -917,7 +918,7 @@ decl_module! {
 				T::DbWeight::get().reads_writes(2, 1)
 				+ T::DbWeight::get().reads_writes(1, 1) // balance ops
 				+ 154_000_000 // constant
-				+ 932_000 * ASSUMED_MAX_REGISTRARS as Weight // R
+				+ 932_000 * T::MaxRegistrars::get() as Weight // R
 				+ 3_302_000 * fields_count as Weight // X
 			},
 			DispatchClass::Normal,
@@ -1076,6 +1077,7 @@ mod tests {
 		pub const SubAccountDeposit: u64 = 10;
 		pub const MaxSubAccounts: u32 = 2;
 		pub const MaxAdditionalFields: u32 = 2;
+		pub const MaxRegistrars: u32 = 20;
 	}
 	ord_parameter_types! {
 		pub const One: u64 = 1;
@@ -1090,6 +1092,7 @@ mod tests {
 		type SubAccountDeposit = SubAccountDeposit;
 		type MaxSubAccounts = MaxSubAccounts;
 		type MaxAdditionalFields = MaxAdditionalFields;
+		type MaxRegistrars = MaxRegistrars;
 		type RegistrarOrigin = EnsureSignedBy<One, u64>;
 		type ForceOrigin = EnsureSignedBy<Two, u64>;
 	}
