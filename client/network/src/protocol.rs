@@ -51,7 +51,7 @@ use std::fmt::Write;
 use std::{cmp, io, num::NonZeroUsize, pin::Pin, task::Poll, time};
 use log::{log, Level, trace, debug, warn, error};
 use crate::chain::{Client, FinalityProofProvider};
-use sc_client_api::{ChangesProof, StorageProof};
+use sc_client_api::{ChangesProof, StorageProof, StorageProofKind};
 use crate::error;
 use util::LruHashSet;
 use wasm_timer::Instant;
@@ -1342,10 +1342,12 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			request.method,
 			request.block
 		);
+		// TODO EMCH consider switching this to compact
 		let proof = match self.context_data.chain.execution_proof(
 			&BlockId::Hash(request.block),
 			&request.method,
 			&request.data,
+			StorageProofKind::Flatten,
 		) {
 			Ok((_, proof)) => proof,
 			Err(error) => {
@@ -1366,7 +1368,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			None,
 			GenericMessage::RemoteCallResponse(message::RemoteCallResponse {
 				id: request.id,
-				proof,
+				proof: proof.legacy().expect("Flatten was use above"),
 			}),
 		);
 	}
@@ -1471,9 +1473,11 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 		trace!(target: "sync", "Remote read request {} from {} ({} at {})",
 			request.id, who, keys_str(), request.block);
+		// TODO EMCH consider switching this to compact
 		let proof = match self.context_data.chain.read_proof(
 			&BlockId::Hash(request.block),
-			&mut request.keys.iter().map(AsRef::as_ref)
+			&mut request.keys.iter().map(AsRef::as_ref),
+			StorageProofKind::Flatten,
 		) {
 			Ok(proof) => proof,
 			Err(error) => {
@@ -1492,7 +1496,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			None,
 			GenericMessage::RemoteReadResponse(message::RemoteReadResponse {
 				id: request.id,
-				proof,
+				proof: proof.legacy().expect("Flatten was use above"),
 			}),
 		);
 	}
@@ -1525,10 +1529,12 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			Some((ChildType::ParentKeyId, storage_key)) => Ok(ChildInfo::new_default(storage_key)),
 			None => Err("Invalid child storage key".into()),
 		};
+		// TODO EMCH consider switching this to compact
 		let proof = match child_info.and_then(|child_info| self.context_data.chain.read_child_proof(
 			&BlockId::Hash(request.block),
 			&child_info,
 			&mut request.keys.iter().map(AsRef::as_ref),
+			StorageProofKind::Flatten,
 		)) {
 			Ok(proof) => proof,
 			Err(error) => {
@@ -1548,7 +1554,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			None,
 			GenericMessage::RemoteReadResponse(message::RemoteReadResponse {
 				id: request.id,
-				proof,
+				proof: proof.legacy().expect("Flatten was use above"),
 			}),
 		);
 	}
@@ -1578,7 +1584,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			GenericMessage::RemoteHeaderResponse(message::RemoteHeaderResponse {
 				id: request.id,
 				header,
-				proof,
+				proof: proof.legacy().expect("header_proof is a flatten proof"),
 			}),
 		);
 	}
@@ -1641,7 +1647,8 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				max: proof.max_block,
 				proof: proof.proof,
 				roots: proof.roots.into_iter().collect(),
-				roots_proof: proof.roots_proof,
+				roots_proof: proof.roots_proof.legacy()
+					.expect("Change roots is flatten"),
 			}),
 		);
 	}

@@ -34,7 +34,8 @@ pub use light::*;
 pub use notifications::*;
 pub use proof_provider::*;
 
-pub use sp_state_machine::{StorageProof, ExecutionStrategy, CloneableSpawn};
+pub use sp_state_machine::{LegacyStorageProof, StorageProof,
+	StorageProofKind, ExecutionStrategy, CloneableSpawn};
 
 /// Utility methods for the client.
 pub mod utils {

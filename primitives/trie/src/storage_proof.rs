@@ -344,6 +344,11 @@ impl LegacyStorageProof {
 	pub fn new(trie_nodes: Vec<Vec<u8>>) -> Self {
 		LegacyStorageProof { trie_nodes }
 	}
+
+	/// Convert to a `StorageProof`.
+	pub fn to_storage_proof(self) -> StorageProof {
+		StorageProof::Flatten(self.trie_nodes)
+	}
 }
 
 impl Decode for StorageProof {
@@ -837,6 +842,15 @@ impl StorageProof {
 			},
 		}
 		Ok(db)
+	}
+
+	/// Cast a flatten proof to a legacy one.
+	pub fn legacy(self) -> Result<LegacyStorageProof> {
+		if let StorageProof::Flatten(trie_nodes) = self {
+			Ok(LegacyStorageProof{ trie_nodes })
+		} else {
+			Err(error("Cannot use as legacy proof"))
+		}
 	}
 }
 

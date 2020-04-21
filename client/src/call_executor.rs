@@ -222,9 +222,9 @@ where
 		trie_state: &sp_state_machine::TrieBackend<S, HashFor<Block>>,
 		overlay: &mut OverlayedChanges,
 		method: &str,
-		call_data: &[u8]
+		call_data: &[u8],
+		kind: StorageProofKind,
 	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error> {
-		// TODO Should we make proof kind a parameter?
 		sp_state_machine::prove_execution_on_trie_backend::<_, _, NumberFor<Block>, _>(
 			trie_state,
 			overlay,
@@ -232,7 +232,7 @@ where
 			self.spawn_handle.clone(),
 			method,
 			call_data,
-			StorageProofKind::TrieSkipHashes,
+			kind,
 			&sp_state_machine::backend::BackendRuntimeCode::new(trie_state).runtime_code()?,
 		)
 		.map_err(Into::into)

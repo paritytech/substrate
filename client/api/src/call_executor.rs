@@ -108,14 +108,15 @@ pub trait CallExecutor<B: BlockT> {
 		mut state: S,
 		overlay: &mut OverlayedChanges,
 		method: &str,
-		call_data: &[u8]
+		call_data: &[u8],
+		kind: StorageProofKind,
 	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error> {
 		let trie_state = state.as_trie_backend()
 			.ok_or_else(||
 				Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof)
 					as Box<dyn sp_state_machine::Error>
 			)?;
-		self.prove_at_trie_state(trie_state, overlay, method, call_data)
+		self.prove_at_trie_state(trie_state, overlay, method, call_data, kind)
 	}
 
 	/// Execute a call to a contract on top of given trie state, gathering execution proof.
@@ -126,7 +127,8 @@ pub trait CallExecutor<B: BlockT> {
 		trie_state: &sp_state_machine::TrieBackend<S, HashFor<B>>,
 		overlay: &mut OverlayedChanges,
 		method: &str,
-		call_data: &[u8]
+		call_data: &[u8],
+		kind: StorageProofKind,
 	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error>;
 
 	/// Get runtime version if supported.

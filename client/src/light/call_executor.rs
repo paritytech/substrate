@@ -159,6 +159,7 @@ impl<Block, B, Local> CallExecutor<Block> for
 		_changes: &mut OverlayedChanges,
 		_method: &str,
 		_call_data: &[u8],
+		_kind: StorageProofKind,
 	) -> ClientResult<(Vec<u8>, StorageProof)> {
 		Err(ClientError::NotAvailableOnLightClient)
 	}
@@ -178,6 +179,7 @@ pub fn prove_execution<Block, S, E>(
 	executor: &E,
 	method: &str,
 	call_data: &[u8],
+	kind: StorageProofKind,
 ) -> ClientResult<(Vec<u8>, StorageProof)>
 	where
 		Block: BlockT,
@@ -197,6 +199,7 @@ pub fn prove_execution<Block, S, E>(
 		&mut changes,
 		"Core_initialize_block",
 		&header.encode(),
+		kind,
 	)?;
 
 	// execute method + record execution proof
@@ -205,7 +208,13 @@ pub fn prove_execution<Block, S, E>(
 		&mut changes,
 		method,
 		call_data,
+		kind,
 	)?;
+	// TODO EMCH this is actually not allowing compaction (would need to pack both input): merge
+	// current approach is probably a bit naive. -> could do if prove_at_trie_state would
+	// also return proof input (not packing would be good to) -> maybe a test variant with
+	// input in proof -> that way merge is possible.
+	//  => make a mapping on kind to best possible merge strategy.
 	let total_proof = StorageProof::merge::<HashFor<Block>, _>(vec![init_proof, exec_proof])
 		.map_err(|e| format!("{}", e))?;
 
@@ -364,7 +373,8 @@ mod tests {
 			_trie_state: &sp_state_machine::TrieBackend<S, HashFor<Block>>,
 			_overlay: &mut OverlayedChanges,
 			_method: &str,
-			_call_data: &[u8]
+			_call_data: &[u8],
+			_kind: StorageProofKind,
 		) -> Result<(Vec<u8>, StorageProof), ClientError> {
 			unreachable!()
 		}
@@ -380,7 +390,11 @@ mod tests {
 
 	#[test]
 	fn execution_proof_is_generated_and_checked() {
-		fn execute(remote_client: &TestClient, at: u64, method: &'static str) -> (Vec<u8>, Vec<u8>) {
+		fn execute(
+			remote_client: &TestClient,
+			at: u64, method: &'static str,
+			kind: StorageProofKind,
+		) -> (Vec<u8>, Vec<u8>) {
 			let remote_block_id = BlockId::Number(at);
 			let remote_header = remote_client.header(&remote_block_id).unwrap().unwrap();
 
@@ -388,7 +402,8 @@ mod tests {
 			let (remote_result, remote_execution_proof) = remote_client.execution_proof(
 				&remote_block_id,
 				method,
-				&[]
+				&[],
+				kind,
 			).unwrap();
 
 			// check remote execution proof locally
@@ -408,7 +423,12 @@ mod tests {
 			(remote_result, local_result)
 		}
 
-		fn execute_with_proof_failure(remote_client: &TestClient, at: u64, method: &'static str) {
+		fn execute_with_proof_failure(
+			remote_client: &TestClient,
+			at: u64,
+			method: &'static str,
+			kind: StorageProofKind,
+		) {
 			let remote_block_id = BlockId::Number(at);
 			let remote_header = remote_client.header(&remote_block_id).unwrap().unwrap();
 
@@ -416,7 +436,8 @@ mod tests {
 			let (_, remote_execution_proof) = remote_client.execution_proof(
 				&remote_block_id,
 				method,
-				&[]
+				&[],
+				kind,
 			).unwrap();
 
 			// check remote execution proof locally
@@ -457,28 +478,38 @@ mod tests {
 			).unwrap();
 		}
 
-		// check method that doesn't requires environment
-		let (remote, local) = execute(&remote_client, 0, "Core_version");
-		assert_eq!(remote, local);
+		let kinds = [
+			StorageProofKind::Flatten,
+			/* TODO EMCH currently remote is static to legacy so flatten only
+			StorageProofKind::TrieSkipHashes,
+			StorageProofKind::KnownQueryPlanAndValues,
+			*/
+		];
 
-		let (remote, local) = execute(&remote_client, 2, "Core_version");
-		assert_eq!(remote, local);
+		for kind in &kinds {
+			// check method that doesn't requires environment
+			let (remote, local) = execute(&remote_client, 0, "Core_version", *kind);
+			assert_eq!(remote, local);
 
-		// check method that requires environment
-		let (_, block) = execute(&remote_client, 0, "BlockBuilder_finalize_block");
-		let local_block: Header = Decode::decode(&mut &block[..]).unwrap();
-		assert_eq!(local_block.number, 1);
+			let (remote, local) = execute(&remote_client, 2, "Core_version", *kind);
+			assert_eq!(remote, local);
 
-		let (_, block) = execute(&remote_client, 2, "BlockBuilder_finalize_block");
-		let local_block: Header = Decode::decode(&mut &block[..]).unwrap();
-		assert_eq!(local_block.number, 3);
+			// check method that requires environment
+			let (_, block) = execute(&remote_client, 0, "BlockBuilder_finalize_block", *kind);
+			let local_block: Header = Decode::decode(&mut &block[..]).unwrap();
+			assert_eq!(local_block.number, 1);
 
-		// check that proof check doesn't panic even if proof is incorrect AND no panic handler is set
-		execute_with_proof_failure(&remote_client, 2, "Core_version");
+			let (_, block) = execute(&remote_client, 2, "BlockBuilder_finalize_block", *kind);
+			let local_block: Header = Decode::decode(&mut &block[..]).unwrap();
+			assert_eq!(local_block.number, 3);
 
-		// check that proof check doesn't panic even if proof is incorrect AND panic handler is set
-		sp_panic_handler::set("TEST", "1.2.3");
-		execute_with_proof_failure(&remote_client, 2, "Core_version");
+			// check that proof check doesn't panic even if proof is incorrect AND no panic handler is set
+			execute_with_proof_failure(&remote_client, 2, "Core_version", *kind);
+
+			// check that proof check doesn't panic even if proof is incorrect AND panic handler is set
+			sp_panic_handler::set("TEST", "1.2.3");
+			execute_with_proof_failure(&remote_client, 2, "Core_version", *kind);
+		}
 	}
 
 	#[test]

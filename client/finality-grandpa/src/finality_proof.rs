@@ -39,7 +39,7 @@ use log::{trace, warn};
 
 use sp_blockchain::{Backend as BlockchainBackend, Error as ClientError, Result as ClientResult};
 use sc_client_api::{
-	backend::Backend, StorageProof,
+	backend::Backend, StorageProof, StorageProofKind, LegacyStorageProof,
 	light::{FetchChecker, RemoteReadRequest},
 	StorageProvider, ProofProvider,
 };
@@ -95,7 +95,7 @@ impl<BE, Block: BlockT> AuthoritySetForFinalityProver<Block> for Arc<dyn Storage
 	}
 
 	fn prove_authorities(&self, block: &BlockId<Block>) -> ClientResult<StorageProof> {
-		self.read_proof(block, &mut std::iter::once(GRANDPA_AUTHORITIES_KEY))
+		self.read_proof(block, &mut std::iter::once(GRANDPA_AUTHORITIES_KEY), StorageProofKind::Flatten)
 	}
 }
 
@@ -226,7 +226,7 @@ struct FinalityProofFragment<Header: HeaderT> {
 	/// The set of headers in the range (U; F] that we believe are unknown to the caller. Ordered.
 	pub unknown_headers: Vec<Header>,
 	/// Optional proof of execution of GRANDPA::authorities() at the `block`.
-	pub authorities_proof: Option<StorageProof>,
+	pub authorities_proof: Option<LegacyStorageProof>,
 }
 
 /// Proof of finality is the ordered set of finality fragments, where:
@@ -331,7 +331,8 @@ pub(crate) fn prove_finality<Block: BlockT, B: BlockchainBackend<Block>, J>(
 			let new_authorities = authorities_provider.authorities(&current_id)?;
 			let new_authorities_proof = if current_authorities != new_authorities {
 				current_authorities = new_authorities;
-				Some(authorities_provider.prove_authorities(&current_id)?)
+				Some(authorities_provider.prove_authorities(&current_id)?
+					.legacy().expect("Flatten proof used"))
 			} else {
 				None
 			};
@@ -528,7 +529,7 @@ fn check_finality_proof_fragment<Block: BlockT, B, J>(
 		current_authorities = authorities_provider.check_authorities_proof(
 			proof_fragment.block,
 			header,
-			new_authorities_proof,
+			new_authorities_proof.to_storage_proof(),
 		)?;
 
 		current_set_id = current_set_id + 1;
@@ -866,14 +867,14 @@ pub(crate) mod tests {
 				block: header(5).hash(),
 				justification: just5,
 				unknown_headers: Vec::new(),
-				authorities_proof: Some(StorageProof::Flatten(vec![vec![50]])),
+				authorities_proof: Some(LegacyStorageProof::new(vec![vec![50]])),
 			},
 			// last fragment provides justification for #7 && unknown#7
 			FinalityProofFragment {
 				block: header(7).hash(),
 				justification: just7.clone(),
 				unknown_headers: vec![header(7)],
-				authorities_proof: Some(StorageProof::Flatten(vec![vec![70]])),
+				authorities_proof: Some(LegacyStorageProof::new(vec![vec![70]])),
 			},
 		]);
 
@@ -948,7 +949,7 @@ pub(crate) mod tests {
 				block: header(4).hash(),
 				justification: TestJustification((0, authorities.clone()), vec![7]).encode(),
 				unknown_headers: vec![header(4)],
-				authorities_proof: Some(StorageProof::Flatten(vec![vec![42]])),
+				authorities_proof: Some(LegacyStorageProof::new(vec![vec![42]])),
 			}, FinalityProofFragment {
 				block: header(5).hash(),
 				justification: TestJustification((0, authorities), vec![8]).encode(),
@@ -998,7 +999,7 @@ pub(crate) mod tests {
 				block: header(2).hash(),
 				justification: TestJustification((1, initial_authorities.clone()), vec![7]).encode(),
 				unknown_headers: Vec::new(),
-				authorities_proof: Some(StorageProof::Flatten(vec![vec![42]])),
+				authorities_proof: Some(LegacyStorageProof::new(vec![vec![42]])),
 			}, FinalityProofFragment {
 				block: header(4).hash(),
 				justification: TestJustification((2, next_authorities.clone()), vec![8]).encode(),

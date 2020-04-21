@@ -18,7 +18,7 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT},
 };
-use crate::{StorageProof, ChangesProof};
+use crate::{StorageProof, ChangesProof, StorageProofKind};
 use sp_storage::{ChildInfo, StorageKey, PrefixedStorageKey};
 
 /// Interface for providing block proving utilities.
@@ -28,6 +28,7 @@ pub trait ProofProvider<Block: BlockT> {
 		&self,
 		id: &BlockId<Block>,
 		keys: &mut dyn Iterator<Item=&[u8]>,
+		kind: StorageProofKind,
 	) -> sp_blockchain::Result<StorageProof>;
 
 	/// Reads child storage value at a given block + storage_key + key, returning
@@ -37,6 +38,7 @@ pub trait ProofProvider<Block: BlockT> {
 		id: &BlockId<Block>,
 		child_info: &ChildInfo,
 		keys: &mut dyn Iterator<Item=&[u8]>,
+		kind: StorageProofKind,
 	) -> sp_blockchain::Result<StorageProof>;
 
 	/// Execute a call to a contract on top of state in a block of given hash
@@ -48,7 +50,9 @@ pub trait ProofProvider<Block: BlockT> {
 		id: &BlockId<Block>,
 		method: &str,
 		call_data: &[u8],
+		kind: StorageProofKind,
 	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)>;
+
 	/// Reads given header and generates CHT-based header proof.
 	fn header_proof(&self, id: &BlockId<Block>) -> sp_blockchain::Result<(Block::Header, StorageProof)>;
 

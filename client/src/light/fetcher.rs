@@ -361,10 +361,19 @@ pub mod tests {
 	use sp_core::{blake2_256, ChangesTrieConfiguration, H256};
 	use sp_core::storage::{well_known_keys, StorageKey, ChildInfo};
 	use sp_runtime::{generic::BlockId, traits::BlakeTwo256};
-	use sp_state_machine::Backend;
+	use sp_state_machine::{Backend, StorageProofKind};
 	use super::*;
 	use sc_client_api::{StorageProvider, ProofProvider};
 	use sc_block_builder::BlockBuilderProvider;
+
+	// TODO see what can be use in this context
+	const KINDS: [StorageProofKind; 5] = [
+		StorageProofKind::Flatten,
+		StorageProofKind::Full,
+		StorageProofKind::TrieSkipHashes,
+		StorageProofKind::TrieSkipHashesFull,
+		StorageProofKind::KnownQueryPlanAndValues,
+	];
 
 	type TestChecker = LightDataChecker<
 		NativeExecutor<substrate_test_runtime_client::LocalExecutor>,
@@ -377,7 +386,8 @@ pub mod tests {
 		NativeExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
 	}
 
-	fn prepare_for_read_proof_check() -> (TestChecker, Header, StorageProof, u32) {
+	fn prepare_for_read_proof_check(kind: StorageProofKind)
+		-> (TestChecker, Header, StorageProof, u32) {
 		// prepare remote client
 		let remote_client = substrate_test_runtime_client::new();
 		let remote_block_id = BlockId::Number(0);
@@ -393,6 +403,7 @@ pub mod tests {
 		let remote_read_proof = remote_client.read_proof(
 			&remote_block_id,
 			&mut std::iter::once(well_known_keys::HEAP_PAGES),
+			kind,
 		).unwrap();
 
 		// check remote read proof locally
@@ -412,7 +423,8 @@ pub mod tests {
 		(local_checker, remote_block_header, remote_read_proof, heap_pages)
 	}
 
-	fn prepare_for_read_child_proof_check() -> (TestChecker, Header, StorageProof, Vec<u8>) {
+	fn prepare_for_read_child_proof_check(kind: StorageProofKind)
+		-> (TestChecker, Header, StorageProof, Vec<u8>) {
 		use substrate_test_runtime_client::DefaultTestClientBuilderExt;
 		use substrate_test_runtime_client::TestClientBuilderExt;
 		let child_info = ChildInfo::new_default(b"child1");
@@ -441,6 +453,7 @@ pub mod tests {
 			&remote_block_id,
 			child_info,
 			&mut std::iter::once("key1".as_bytes()),
+			kind,
 		).unwrap();
 
 		// check locally
@@ -502,34 +515,45 @@ pub mod tests {
 
 	#[test]
 	fn storage_read_proof_is_generated_and_checked() {
-		let (local_checker, remote_block_header, remote_read_proof, heap_pages) = prepare_for_read_proof_check();
-		assert_eq!((&local_checker as &dyn FetchChecker<Block>).check_read_proof(&RemoteReadRequest::<Header> {
-			block: remote_block_header.hash(),
-			header: remote_block_header,
-			keys: vec![well_known_keys::HEAP_PAGES.to_vec()],
-			retry_count: None,
-		}, remote_read_proof).unwrap().remove(well_known_keys::HEAP_PAGES).unwrap().unwrap()[0], heap_pages as u8);
+		for kind in &KINDS {
+			let (
+				local_checker,
+				remote_block_header,
+				remote_read_proof,
+				heap_pages,
+			) = prepare_for_read_proof_check(*kind);
+			assert_eq!((&local_checker as &dyn FetchChecker<Block>)
+				.check_read_proof(&RemoteReadRequest::<Header> {
+				block: remote_block_header.hash(),
+				header: remote_block_header,
+				keys: vec![well_known_keys::HEAP_PAGES.to_vec()],
+				retry_count: None,
+			}, remote_read_proof).unwrap()
+				.remove(well_known_keys::HEAP_PAGES).unwrap().unwrap()[0], heap_pages as u8);
+		}
 	}
 
 	#[test]
 	fn storage_child_read_proof_is_generated_and_checked() {
 		let child_info = ChildInfo::new_default(&b"child1"[..]);
-		let (
-			local_checker,
-			remote_block_header,
-			remote_read_proof,
-			result,
-		) = prepare_for_read_child_proof_check();
-		assert_eq!((&local_checker as &dyn FetchChecker<Block>).check_read_child_proof(
-			&RemoteReadChildRequest::<Header> {
-				block: remote_block_header.hash(),
-				header: remote_block_header,
-				storage_key: child_info.prefixed_storage_key(),
-				keys: vec![b"key1".to_vec()],
-				retry_count: None,
-			},
-			remote_read_proof
-		).unwrap().remove(b"key1".as_ref()).unwrap().unwrap(), result);
+		for kind in &KINDS {
+			let (
+				local_checker,
+				remote_block_header,
+				remote_read_proof,
+				result,
+			) = prepare_for_read_child_proof_check(*kind);
+			assert_eq!((&local_checker as &dyn FetchChecker<Block>).check_read_child_proof(
+				&RemoteReadChildRequest::<Header> {
+					block: remote_block_header.hash(),
+					header: remote_block_header,
+					storage_key: child_info.prefixed_storage_key(),
+					keys: vec![b"key1".to_vec()],
+					retry_count: None,
+				},
+				remote_read_proof
+			).unwrap().remove(b"key1".as_ref()).unwrap().unwrap(), result);
+		}
 	}
 
 	#[test]

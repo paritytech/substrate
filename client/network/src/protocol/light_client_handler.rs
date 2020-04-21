@@ -55,7 +55,7 @@ use libp2p::{
 use nohash_hasher::IntMap;
 use prost::Message;
 use sc_client::light::fetcher;
-use sc_client_api::StorageProof;
+use sc_client_api::{StorageProof, StorageProofKind};
 use sc_peerset::ReputationChange;
 use sp_core::{
 	storage::{ChildInfo, ChildType,StorageKey, PrefixedStorageKey},
@@ -539,7 +539,13 @@ where
 
 		let block = Decode::decode(&mut request.block.as_ref())?;
 
-		let proof = match self.chain.execution_proof(&BlockId::Hash(block), &request.method, &request.data) {
+		// TODO EMCH consider new version with compact
+		let proof = match self.chain.execution_proof(
+			&BlockId::Hash(block),
+			&request.method,
+			&request.data,
+			StorageProofKind::Flatten,
+		) {
 			Ok((_, proof)) => proof,
 			Err(e) => {
 				log::trace!("remote call request from {} ({} at {:?}) failed with: {}",
@@ -578,7 +584,12 @@ where
 
 		let block = Decode::decode(&mut request.block.as_ref())?;
 
-		let proof = match self.chain.read_proof(&BlockId::Hash(block), &mut request.keys.iter().map(AsRef::as_ref)) {
+		// TODO EMCH consider new version with compact
+		let proof = match self.chain.read_proof(
+			&BlockId::Hash(block),
+			&mut request.keys.iter().map(AsRef::as_ref),
+			StorageProofKind::Flatten,
+		) {
 			Ok(proof) => proof,
 			Err(error) => {
 				log::trace!("remote read request from {} ({} at {:?}) failed with: {}",
@@ -622,10 +633,12 @@ where
 			Some((ChildType::ParentKeyId, storage_key)) => Ok(ChildInfo::new_default(storage_key)),
 			None => Err("Invalid child storage key".into()),
 		};
+		// TODO EMCH consider new version with compact
 		let proof = match child_info.and_then(|child_info| self.chain.read_child_proof(
 			&BlockId::Hash(block),
 			&child_info,
-			&mut request.keys.iter().map(AsRef::as_ref)
+			&mut request.keys.iter().map(AsRef::as_ref),
+			StorageProofKind::Flatten,
 		)) {
 			Ok(proof) => proof,
 			Err(error) => {

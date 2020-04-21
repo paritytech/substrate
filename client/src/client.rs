@@ -1092,11 +1092,10 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 		&self,
 		id: &BlockId<Block>,
 		keys: &mut dyn Iterator<Item=&[u8]>,
+		kind: StorageProofKind,
 	) -> sp_blockchain::Result<StorageProof> {
-		// TODO keep flatten proof here?? or move choice to caller?
-		// TODO EMCH this should be parametereized fo client
 		self.state_at(id)
-			.and_then(|state| prove_read(state, keys, StorageProofKind::Flatten)
+			.and_then(|state| prove_read(state, keys, kind)
 				.map_err(Into::into))
 	}
 
@@ -1105,10 +1104,10 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 		id: &BlockId<Block>,
 		child_info: &ChildInfo,
 		keys: &mut dyn Iterator<Item=&[u8]>,
+		kind: StorageProofKind,
 	) -> sp_blockchain::Result<StorageProof> {
-		// TODO EMCH this should be parametereized fo client
 		self.state_at(id)
-			.and_then(|state| prove_child_read(state, child_info, keys, StorageProofKind::Flatten)
+			.and_then(|state| prove_child_read(state, child_info, keys, kind)
 				.map_err(Into::into))
 	}
 
@@ -1116,7 +1115,8 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 		&self,
 		id: &BlockId<Block>,
 		method: &str,
-		call_data: &[u8]
+		call_data: &[u8],
+		kind: StorageProofKind,
 	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
 		// Make sure we include the `:code` and `:heap_pages` in the execution proof to be
 		// backwards compatible.
@@ -1125,6 +1125,7 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 		let code_proof = self.read_proof(
 			id,
 			&mut [well_known_keys::CODE, well_known_keys::HEAP_PAGES].iter().map(|v| *v),
+			kind,
 		)?;
 
 		let state = self.state_at(id)?;
@@ -1135,8 +1136,9 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 			&self.executor,
 			method,
 			call_data,
+			kind,
 		).and_then(|(r, p)| {
-			// TODO EMCH using flatten??
+			// TODO EMCH kind mappnig for mergeable proof type
 			Ok((r, StorageProof::merge::<HashFor<Block>, _>(vec![p, code_proof])
 				.map_err(|e| format!("{}", e))?))
 		})
