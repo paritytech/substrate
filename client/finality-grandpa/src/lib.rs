@@ -127,6 +127,7 @@ use import::GrandpaBlockImport;
 use until_imported::UntilGlobalMessageBlocksImported;
 use communication::{NetworkBridge, Network as NetworkT};
 use sp_finality_grandpa::{AuthorityList, AuthorityPair, AuthoritySignature, SetId};
+use crate::finality_proof::FinalityProofSubscription;
 
 // Re-export these two because it's just so damn convenient.
 pub use sp_finality_grandpa::{AuthorityId, ScheduledChange};
@@ -605,20 +606,6 @@ fn register_finality_tracker_inherent_data_provider<Block: BlockT, Client>(
 	}
 }
 
-/// Justification for a finalized block.
-pub struct JustificationNotification<Block: BlockT> {
-	/// Highest finalized block header
-	pub header: Block::Header,
-	/// An encoded justification proving that the given header has been finalized
-	pub justification: Vec<u8>,
-}
-
-// TODO: Figure out where to best have these types
-type FinalitySubscriber<T> = TracingUnboundedSender<JustificationNotification<T>>;
-pub type FinalitySubscribers<T> = Vec<FinalitySubscriber<T>>;
-
-pub type SharedFinalitySubscribers<T> = Arc<FinalitySubscribers<T>>;
-
 /// Parameters used to run Grandpa.
 pub struct GrandpaParams<Block: BlockT, C, N, SC, VR> {
 	/// Configuration for the GRANDPA service.
@@ -635,8 +622,8 @@ pub struct GrandpaParams<Block: BlockT, C, N, SC, VR> {
 	pub voting_rule: VR,
 	/// The prometheus metrics registry.
 	pub prometheus_registry: Option<prometheus_endpoint::Registry>,
-	/// A list of subscribers to block justifications
-	pub finality_subscribers: Option<SharedFinalitySubscribers<Block>>,
+	/// A list of subscribers to block justifications -> TODO: Update
+	pub finality_subscription: Option<FinalityProofSubscription<Block>>,
 }
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
@@ -661,7 +648,7 @@ pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR>(
 		telemetry_on_connect,
 		voting_rule,
 		prometheus_registry,
-		finality_subscribers,
+		finality_subscription,
 	} = grandpa_params;
 
 	// NOTE: we have recently removed `run_grandpa_observer` from the public
@@ -780,7 +767,7 @@ where
 		persistent_data: PersistentData<Block>,
 		voter_commands_rx: TracingUnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
 		prometheus_registry: Option<prometheus_endpoint::Registry>,
-		finality_subscribers: Option<SharedFinalitySubscribers<Block>>,
+		finality_subscription: Option<FinalityProofSubscription<Block>>,
 	) -> Self {
 		let metrics = match prometheus_registry.as_ref().map(Metrics::register) {
 			Some(Ok(metrics)) => Some(metrics),
@@ -804,7 +791,7 @@ where
 			consensus_changes: persistent_data.consensus_changes.clone(),
 			voter_set_state: persistent_data.set_state.clone(),
 			metrics: metrics.as_ref().map(|m| m.environment.clone()),
-			finality_subscribers: finality_subscribers.clone(),
+			finality_subscribers: finality_subscription.subscribers(),
 			_phantom: PhantomData,
 		});
 

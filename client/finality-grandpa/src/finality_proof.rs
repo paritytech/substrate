@@ -52,6 +52,7 @@ use sp_runtime::{
 use sp_core::storage::StorageKey;
 use sc_telemetry::{telemetry, CONSENSUS_INFO};
 use sp_finality_grandpa::{AuthorityId, AuthorityList, VersionedAuthorityList, GRANDPA_AUTHORITIES_KEY};
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
 
 use crate::justification::GrandpaJustification;
 
@@ -142,6 +143,52 @@ impl<Block: BlockT> AuthoritySetForFinalityChecker<Block> for Arc<dyn FetchCheck
 					.map(|versioned| versioned.into())
 					.ok_or(ClientError::InvalidAuthoritiesSet)
 			})
+	}
+}
+
+
+/// Justification for a finalized block.
+pub struct JustificationNotification<Block: BlockT> {
+	/// Highest finalized block header
+	pub header: Block::Header,
+	/// An encoded justification proving that the given header has been finalized
+	pub justification: Vec<u8>,
+}
+
+type JustificationStream<Block> = TracingUnboundedReceiver<JustificationNotification<Block>>;
+type FinalitySubscriber<T> = TracingUnboundedSender<JustificationNotification<T>>;
+type SharedFinalitySubscribers<T> = Arc<Vec<FinalitySubscriber<T>>>;
+
+pub struct FinalityProofSubscription<Block: BlockT> {
+	subscribers: SharedFinalitySubscribers<Block>,
+}
+
+impl<Block: BlockT> FinalityProofSubscription<Block> {
+	pub fn new() -> Self {
+		Self {
+			subscribers: Arc::new(vec![]),
+		}
+	}
+
+	pub fn subscribers(&self) -> SharedFinalitySubscribers<Block> {
+		self.subscribers.clone()
+	}
+
+	pub fn notify(&self, notification: JustificationNotification<Block>) {
+		// TODO: Look at `notify_justified()` in `client`
+		for s in self.subscribers.iter() {
+			s.unbounded_send(notification);
+		}
+
+		todo!()
+	}
+
+	// This could also be called "subscribe()"
+	pub fn stream(&self) -> JustificationStream<Block> {
+		// TODO: I only want one channel to be created per instance
+		let (sink, stream) = tracing_unbounded("mpsc_justification_notification_stream");
+		self.subscribers.push(sink);
+		stream
 	}
 }
 
