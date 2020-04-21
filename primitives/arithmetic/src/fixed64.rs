@@ -239,7 +239,7 @@ impl ops::Mul for Fixed64 {
 	type Output = Self;
 
 	fn mul(self, rhs: Self) -> Self::Output {
-		Self(self.0 * rhs.0)
+		Self((self.0 * rhs.0) / Self::DIV)
 	}
 }
 
@@ -359,6 +359,14 @@ mod tests {
 
 	fn min() -> Fixed64 {
 		Fixed64::min_value()
+	}
+
+	#[test]
+	fn mul_works() {
+		let a = Fixed64::from_integer(1);
+		let b = Fixed64::from_integer(2);
+		let c = a * b;
+		assert_eq!(c, b);
 	}
 
 	#[test]
@@ -621,6 +629,27 @@ mod tests {
 		// let ten_percent_perquintill: Fixed64 = Perquintill::from_percent(10).try_into().unwrap();
 		// println!("ten {:?}", ten_percent_perquintill);
 		// assert_eq!(ten_percent_perquintill.into_inner(), Fixed64::DIV / 10);
+	}
+
+	#[test]
+	fn recip_should_work() {
+		let a = Fixed64::from_integer(2);
+		assert_eq!(
+			a.reciprocal(),
+			Some(Fixed64::from_rational(1, 2).unwrap())
+		);
+
+		let a = Fixed64::from_integer(2);
+		assert_eq!(a.reciprocal().unwrap().checked_mul_int(&4i32), Some(2i32));
+
+		let a = Fixed64::from_rational(1, 2).unwrap();
+		assert_eq!(a.reciprocal().unwrap().checked_mul(&a), Some(Fixed64::from_integer(1)));
+
+		let a = Fixed64::from_integer(0);
+		assert_eq!(a.reciprocal(), None);
+
+		let a = Fixed64::from_rational(-1, 2).unwrap();
+		assert_eq!(a.reciprocal(), Some(Fixed64::from_integer(-2)));
 	}
 
 	#[test]
