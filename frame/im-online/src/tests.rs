@@ -61,15 +61,15 @@ fn should_report_offline_validators() {
 		let block = 1;
 		System::set_block_number(block);
 		// buffer new validators
-		Session::rotate_session();
+		advance_session();
 		// enact the change and buffer another one
 		let validators = vec![1, 2, 3, 4, 5, 6];
 		VALIDATORS.with(|l| *l.borrow_mut() = Some(validators.clone()));
-		Session::rotate_session();
+		advance_session();
 
 		// when
 		// we end current session and start the next one
-		Session::rotate_session();
+		advance_session();
 
 		// then
 		let offences = OFFENCES.with(|l| l.replace(vec![]));
@@ -89,7 +89,7 @@ fn should_report_offline_validators() {
 		for (idx, v) in validators.into_iter().take(4).enumerate() {
 			let _ = heartbeat(block, 3, idx as u32, v.into()).unwrap();
 		}
-		Session::rotate_session();
+		advance_session();
 
 		// then
 		let offences = OFFENCES.with(|l| l.replace(vec![]));
@@ -174,7 +174,7 @@ fn late_heartbeat_should_fail() {
 	new_test_ext().execute_with(|| {
 		advance_session();
 		// given
-		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 4, 4, 5, 6]));
+		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 3, 4, 5, 6]));
 		assert_eq!(Session::validators(), Vec::<u64>::new());
 		// enact the change and buffer another one
 		advance_session();
@@ -315,7 +315,7 @@ fn should_not_send_a_report_if_already_online() {
 		ImOnline::note_uncle(3, 0);
 
 		// when
-		UintAuthorityId::set_all_keys(vec![0]); // all authorities use pallet_session key 0
+		UintAuthorityId::set_all_keys(vec![1, 2, 3]);
 		// we expect error, since the authority is already online.
 		let mut res = ImOnline::send_heartbeats(4).unwrap();
 		assert_eq!(res.next().unwrap().unwrap(), ());

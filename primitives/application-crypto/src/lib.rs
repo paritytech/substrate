@@ -25,7 +25,7 @@ pub use sp_core::{self, crypto::{CryptoType, CryptoTypePublicPair, Public, Deriv
 #[doc(hidden)]
 #[cfg(feature = "full_crypto")]
 pub use sp_core::crypto::{SecretStringError, DeriveJunction, Ss58Codec, Pair};
-pub use sp_core::crypto::{CryptoTypeId, KeyTypeId, key_types};
+pub use sp_core::crypto::{KeyTypeId, key_types};
 
 #[doc(hidden)]
 pub use codec;
