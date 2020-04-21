@@ -213,14 +213,14 @@ benchmarks! {
 		let x in ...;
 
 		Identity::<T>::request_judgement(caller_origin, r - 1, 10.into(), x)?;
-	}: _(RawOrigin::Signed(caller), r - 1)
+	}: _(RawOrigin::Signed(caller), r - 1, x)
 
 	set_fee {
 		let caller = account::<T>("caller", 0);
 
 		let r in ...;
 
-		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone(), 0)?;
+		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone(), r)?;
 	}: _(RawOrigin::Signed(caller), r, 10.into())
 
 	set_account_id {
@@ -229,7 +229,7 @@ benchmarks! {
 
 		let r in ...;
 
-		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone(), 0)?;
+		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone(), r)?;
 	}: _(RawOrigin::Signed(caller), r, account::<T>("new", 0))
 
 	set_fields {
@@ -238,7 +238,7 @@ benchmarks! {
 
 		let r in ...;
 
-		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone(), 0)?;
+		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone(), r)?;
 		let fields = IdentityFields(
 			IdentityField::Display | IdentityField::Legal | IdentityField::Web | IdentityField::Riot
 			| IdentityField::Email | IdentityField::PgpFingerprint | IdentityField::Image | IdentityField::Twitter
@@ -262,7 +262,7 @@ benchmarks! {
 			Identity::<T>::set_identity(user_origin.clone(), info)?;
 		};
 
-		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone(), 0)?;
+		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone(), r)?;
 		Identity::<T>::request_judgement(user_origin.clone(), r, 10.into(), x)?;
 	}: _(RawOrigin::Signed(caller), r, user_lookup, Judgement::Reasonable)
 
