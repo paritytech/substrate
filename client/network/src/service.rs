@@ -1148,7 +1148,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					if this.boot_node_ids.contains(&peer_id) {
 						if let PendingConnectionError::InvalidPeerId = error {
 							error!(
-								"💔 Invalid peer ID from bootnode, expected `{}` at address `{}`.",
+								"💔 Invalid peer ID from bootnode, unexpected `{}` at address `{}`.",
 								peer_id,
 								address,
 							);
