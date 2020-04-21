@@ -815,7 +815,10 @@ decl_module! {
 		/// - `O(R)`.
 		/// - One storage mutation `O(R)`.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000_000)]
+		#[weight = T::DbWeight::get().reads_writes(1, 1)
+			+ 30_000_000 // constant
+			+ 700_000 * ASSUMED_MAX_REGISTRARS as Weight // R
+		]
 		fn set_fee(origin,
 			#[compact] index: RegistrarIndex,
 			#[compact] fee: BalanceOf<T>,
@@ -842,7 +845,10 @@ decl_module! {
 		/// - `O(R)`.
 		/// - One storage mutation `O(R)`.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000_000)]
+		#[weight = T::DbWeight::get().reads_writes(1, 1)
+			+ 30_000_000 // constant
+			+ 700_000 * ASSUMED_MAX_REGISTRARS as Weight // R
+		]
 		fn set_account_id(origin,
 			#[compact] index: RegistrarIndex,
 			new: T::AccountId,
@@ -869,7 +875,10 @@ decl_module! {
 		/// - `O(R)`.
 		/// - One storage mutation `O(R)`.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000_000)]
+		#[weight = T::DbWeight::get().reads_writes(1, 1)
+			+ 30_000_000 // constant
+			+ 700_000 * ASSUMED_MAX_REGISTRARS as Weight // R
+		]
 		fn set_fields(origin,
 			#[compact] index: RegistrarIndex,
 			fields: IdentityFields,
