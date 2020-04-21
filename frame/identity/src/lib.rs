@@ -455,6 +455,8 @@ decl_error! {
 		InvalidTarget,
 		/// Too many additional fields.
 		TooManyFields,
+		/// Maximum amount of registrars reached. Cannot add any more.
+		TooManyRegistrars,
 }
 }
 
@@ -495,6 +497,7 @@ decl_module! {
 
 			let i = <Registrars<T>>::try_mutate(|registrars| -> Result<RegistrarIndex, DispatchError> {
 				ensure!(registrars.len() as u32 <= old_registrar_count, "invalid count");
+				ensure!((registrars.len() as u32) < T::MaxRegistrars::get(), Error::<T>::TooManyRegistrars);
 				registrars.push(Some(RegistrarInfo { account, fee: Zero::zero(), fields: Default::default() }));
 				Ok((registrars.len() - 1) as RegistrarIndex)
 			})?;
@@ -1146,6 +1149,20 @@ mod tests {
 			assert_eq!(Identity::registrars(), vec![
 				Some(RegistrarInfo { account: 3, fee: 10, fields })
 			]);
+		});
+	}
+
+	#[test]
+	fn amount_of_registrars_is_limited() {
+		new_test_ext().execute_with(|| {
+			for i in 1..MaxRegistrars::get() + 1 {
+				assert_ok!(Identity::add_registrar(Origin::signed(1), i as u64, i - 1));
+			}
+			let last_registrar = MaxRegistrars::get() as u64 + 1;
+			assert_noop!(
+				Identity::add_registrar(Origin::signed(1), last_registrar, MaxRegistrars::get()), 
+				Error::<Test>::TooManyRegistrars
+			);
 		});
 	}
 

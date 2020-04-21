@@ -122,7 +122,7 @@ benchmarks! {
 	}
 
 	add_registrar {
-		let r in ...;
+		let r in 1 .. T::MaxRegistrars::get() - 1 => add_registrars::<T>(r)?;
 	}: _(RawOrigin::Root, account::<T>("registrar", r + 1), r)
 
 	set_identity {
@@ -217,7 +217,7 @@ benchmarks! {
 	set_fee {
 		let caller = account::<T>("caller", 0);
 
-		let r in ...;
+		let r in 1 .. T::MaxRegistrars::get() - 1 => add_registrars::<T>(r)?;
 
 		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone(), r)?;
 	}: _(RawOrigin::Signed(caller), r, 10.into())
@@ -226,7 +226,7 @@ benchmarks! {
 		let caller = account::<T>("caller", 0);
 		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
-		let r in ...;
+		let r in 1 .. T::MaxRegistrars::get() - 1 => add_registrars::<T>(r)?;
 
 		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone(), r)?;
 	}: _(RawOrigin::Signed(caller), r, account::<T>("new", 0))
@@ -235,7 +235,7 @@ benchmarks! {
 		let caller = account::<T>("caller", 0);
 		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
-		let r in ...;
+		let r in 1 .. T::MaxRegistrars::get() - 1 => add_registrars::<T>(r)?;
 
 		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone(), r)?;
 		let fields = IdentityFields(
@@ -254,7 +254,7 @@ benchmarks! {
 		let caller = account::<T>("caller", 0);
 		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
-		let r in ...;
+		let r in 1 .. T::MaxRegistrars::get() - 1 => add_registrars::<T>(r)?;
 		// For this x, it's the user identity that gts the fields, not the caller.
 		let x in _ .. _ => {
 			let info = create_identity_info::<T>(x);
