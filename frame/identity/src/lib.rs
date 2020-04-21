@@ -1269,15 +1269,15 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Identity::add_registrar(Origin::signed(1), 3, 0));
 			assert_ok!(Identity::set_fee(Origin::signed(3), 0, 10));
-			assert_noop!(Identity::cancel_request(Origin::signed(10), 0), Error::<Test>::NoIdentity);
+			assert_noop!(Identity::cancel_request(Origin::signed(10), 0, 0), Error::<Test>::NoIdentity);
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
 			assert_ok!(Identity::request_judgement(Origin::signed(10), 0, 10, 0));
-			assert_ok!(Identity::cancel_request(Origin::signed(10), 0));
+			assert_ok!(Identity::cancel_request(Origin::signed(10), 0, 0));
 			assert_eq!(Balances::free_balance(10), 90);
-			assert_noop!(Identity::cancel_request(Origin::signed(10), 0), Error::<Test>::NotFound);
+			assert_noop!(Identity::cancel_request(Origin::signed(10), 0, 0), Error::<Test>::NotFound);
 
 			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable));
-			assert_noop!(Identity::cancel_request(Origin::signed(10), 0), Error::<Test>::JudgementGiven);
+			assert_noop!(Identity::cancel_request(Origin::signed(10), 0, 0), Error::<Test>::JudgementGiven);
 		});
 	}
 
