@@ -126,7 +126,7 @@ impl<'a, T> ReadySinkEvent<'a, T> {
 			if sender.unbounded_send(element).is_ok() {
 				let _ = self.sinks.entries_tx.unbounded_send(YieldAfter {
 					// Note that since there's a small delay between the moment a task is
-					// waken up and the moment it is polled, the period is actually not
+					// woken up and the moment it is polled, the period is actually not
 					// `interval` but `interval + <delay>`. We ignore this problem in
 					// practice.
 					delay: Delay::new(self.interval),
