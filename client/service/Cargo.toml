@@ -19,7 +19,7 @@ db = ["sc-client-db/kvdb-rocksdb", "sc-client-db/parity-db"]
 wasmtime = [
 	"sc-executor/wasmtime",
 ]
-# exposes the client.
+# exposes the client type
 test-helpers = []
 
 [dependencies]
@@ -64,6 +64,7 @@ sp-transaction-pool = { version = "2.0.0-dev", path = "../../primitives/transact
 sc-rpc-server = { version = "2.0.0-dev", path = "../rpc-servers" }
 sc-rpc = { version = "2.0.0-dev", path = "../rpc" }
 sc-block-builder = { version = "0.8.0-dev", path = "../block-builder" }
+sp-block-builder = { version = "2.0.0-dev", path = "../../primitives/block-builder" }
 
 sc-telemetry = { version = "2.0.0-dev", path = "../telemetry" }
 sc-offchain = { version = "2.0.0-dev", path = "../offchain" }
