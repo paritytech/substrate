@@ -402,9 +402,11 @@ mod tests {
 		];
 		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
 		let mut in_memory = in_memory.update(contents);
+		let child_storage_keys = vec![(own1.clone(), CHILD_INFO_1.to_owned()),
+			(own2.clone(), CHILD_INFO_2.to_owned())];
 		let in_memory_root = in_memory.full_storage_root::<_, Vec<_>, _>(
 			::std::iter::empty(),
-			in_memory.child_storage_keys().map(|k|(k.0.to_vec(), Vec::new(), k.1.to_owned()))
+			child_storage_keys.into_iter().map(|k|(k.0.to_vec(), Vec::new(), k.1.to_owned()))
 		).0;
 		(0..64).for_each(|i| assert_eq!(
 			in_memory.storage(&[i]).unwrap().unwrap(),

@@ -55,9 +55,19 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		&self.storage
 	}
 
+	/// Get backend storage reference.
+	pub fn backend_storage_mut(&mut self) -> &mut S {
+		&mut self.storage
+	}
+
 	/// Get trie root.
 	pub fn root(&self) -> &H::Out {
 		&self.root
+	}
+
+	/// Set trie root. This is useful for testing.
+	pub fn set_root(&mut self, root: H::Out) {
+		self.root = root;
 	}
 
 	/// Consumes self and returns underlying storage.
