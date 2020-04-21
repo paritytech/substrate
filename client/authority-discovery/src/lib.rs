@@ -475,6 +475,10 @@ where
 	fn update_peer_set_priority_group(&self) -> Result<()> {
 		let addresses = self.addr_cache.get_subset();
 
+		if let Some(metrics) = &self.metrics {
+			metrics.priority_group_size.set(addresses.len().try_into().unwrap_or(std::u64::MAX));
+		}
+
 		debug!(
 			target: LOG_TARGET,
 			"Applying priority group {:?} to peerset.", addresses,
@@ -599,6 +603,7 @@ pub(crate) struct Metrics {
 	amount_last_published: Gauge<U64>,
 	request: Counter<U64>,
 	dht_event_received: CounterVec<U64>,
+	priority_group_size: Gauge<U64>,
 }
 
 impl Metrics {
@@ -634,6 +639,13 @@ impl Metrics {
 						"Number of dht events received by authority discovery."
 					),
 					&["name"],
+				)?,
+				registry,
+			)?,
+			priority_group_size: register(
+				Gauge::new(
+					"authority_discovery_priority_group_size",
+					"Number of addresses passed to the peer set as a priority group."
 				)?,
 				registry,
 			)?,
