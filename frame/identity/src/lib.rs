@@ -912,11 +912,22 @@ decl_module! {
 		/// - Storage: 1 read `O(R)`, 1 mutate `O(R + X)`.
 		/// - One event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000_000)]
+		#[weight = FunctionOf(
+			|(_, _, _, &fields_count): (&RegistrarIndex, &<T::Lookup as StaticLookup>::Source, &Judgement<BalanceOf<T>>, &u32)| {
+				T::DbWeight::get().reads_writes(2, 1)
+				+ T::DbWeight::get().reads_writes(1, 1) // balance ops
+				+ 154_000_000 // constant
+				+ 932_000 * ASSUMED_MAX_REGISTRARS as Weight // R
+				+ 3_302_000 * fields_count as Weight // X
+			},
+			DispatchClass::Normal,
+			true
+		)]
 		fn provide_judgement(origin,
 			#[compact] reg_index: RegistrarIndex,
 			target: <T::Lookup as StaticLookup>::Source,
 			judgement: Judgement<BalanceOf<T>>,
+			additional_fields_count: u32,
 		) {
 			let sender = ensure_signed(origin)?;
 			let target = T::Lookup::lookup(target)?;
@@ -927,6 +938,7 @@ decl_module! {
 				.and_then(|r| if r.account == sender { Some(r) } else { None })
 				.ok_or(Error::<T>::InvalidIndex)?;
 			let mut id = <IdentityOf<T>>::get(&target).ok_or(Error::<T>::InvalidTarget)?;
+			ensure!(id.info.additional.len() <= additional_fields_count as usize, "invalid count");
 
 			let item = (reg_index, judgement);
 			match id.judgements.binary_search_by_key(&reg_index, |x| x.0) {
@@ -1160,27 +1172,27 @@ mod tests {
 	fn uninvited_judgement_should_work() {
 		new_test_ext().execute_with(|| {
 			assert_noop!(
-				Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable),
+				Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable, 0),
 				Error::<Test>::InvalidIndex
 			);
 
 			assert_ok!(Identity::add_registrar(Origin::signed(1), 3, 0));
 			assert_noop!(
-				Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable),
+				Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable, 0),
 				Error::<Test>::InvalidTarget
 			);
 
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
 			assert_noop!(
-				Identity::provide_judgement(Origin::signed(10), 0, 10, Judgement::Reasonable),
+				Identity::provide_judgement(Origin::signed(10), 0, 10, Judgement::Reasonable, 0),
 				Error::<Test>::InvalidIndex
 			);
 			assert_noop!(
-				Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::FeePaid(1)),
+				Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::FeePaid(1), 0),
 				Error::<Test>::InvalidJudgement
 			);
 
-			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable));
+			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable, 0));
 			assert_eq!(Identity::identity(10).unwrap().judgements, vec![(0, Judgement::Reasonable)]);
 		});
 	}
@@ -1190,7 +1202,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Identity::add_registrar(Origin::signed(1), 3, 0));
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
-			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable));
+			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable, 0));
 			assert_ok!(Identity::clear_identity(Origin::signed(10), 0));
 			assert_eq!(Identity::identity(10), None);
 		});
@@ -1285,7 +1297,7 @@ mod tests {
 			assert_eq!(Balances::free_balance(10), 90);
 			assert_noop!(Identity::cancel_request(Origin::signed(10), 0, 0), Error::<Test>::NotFound);
 
-			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable));
+			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable, 0));
 			assert_noop!(Identity::cancel_request(Origin::signed(10), 0, 0), Error::<Test>::JudgementGiven);
 		});
 	}
@@ -1303,7 +1315,7 @@ mod tests {
 
 			// Re-requesting won't work as we already paid.
 			assert_noop!(Identity::request_judgement(Origin::signed(10), 0, 10, 0), Error::<Test>::StickyJudgement);
-			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Erroneous));
+			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Erroneous, 0));
 			// Registrar got their payment now.
 			assert_eq!(Balances::free_balance(3), 20);
 
@@ -1315,7 +1327,7 @@ mod tests {
 			assert_ok!(Identity::request_judgement(Origin::signed(10), 1, 10, 0));
 
 			// Re-requesting after the judgement has been reduced works.
-			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::OutOfDate));
+			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::OutOfDate, 0));
 			assert_ok!(Identity::request_judgement(Origin::signed(10), 0, 10, 0));
 		});
 	}
