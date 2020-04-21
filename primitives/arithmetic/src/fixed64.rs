@@ -28,6 +28,8 @@ use crate::{
 		Bounded, UniqueSaturatedInto, Saturating, FixedPointNumber
 	}
 };
+#[cfg(feature = "std")]
+use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 
 /// An unsigned fixed point number. Can hold any value in the range [-9_223_372_036, 9_223_372_036]
 /// with fixed point accuracy of one billion.
@@ -348,6 +350,43 @@ impl<P: PerThing> From<P> for Fixed64 {
 	}
 }
 
+#[cfg(feature = "std")]
+impl Fixed64 {
+	fn i64_str(&self) -> String {
+		format!("{}", &self.0)
+	}
+
+	fn try_from_i64_str(s: &str) -> Result<Self, &'static str> {
+		let parts: i64 = s.parse().map_err(|_| "invalid string input")?;
+		Ok(Self::from_parts(parts))
+	}
+}
+
+// Manual impl `Serialize` as serde_json does not support i128.
+// TODO: remove impl if issue https://github.com/serde-rs/json/issues/548 fixed.
+#[cfg(feature = "std")]
+impl Serialize for Fixed64 {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		serializer.serialize_str(&self.i64_str())
+	}
+}
+
+// Manual impl `Serialize` as serde_json does not support i128.
+// TODO: remove impl if issue https://github.com/serde-rs/json/issues/548 fixed.
+#[cfg(feature = "std")]
+impl<'de> Deserialize<'de> for Fixed64 {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		let s = String::deserialize(deserializer)?;
+		Fixed64::try_from_i64_str(&s).map_err(|err_str| de::Error::custom(err_str))
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -626,6 +665,22 @@ mod tests {
 		let ten_percent_perbill: Fixed64 = Perbill::from_percent(10).into();
 		assert_eq!(ten_percent_perbill.into_inner(), Fixed64::DIV / 10);
 	}
+
+	#[test]
+	fn serialize_deserialize_should_work() {
+		let two_point_five = Fixed64::from_rational(5, 2).unwrap();
+		let serialized = serde_json::to_string(&two_point_five).unwrap();
+		assert_eq!(serialized, "\"2500000000\"");
+		let deserialized: Fixed64 = serde_json::from_str(&serialized).unwrap();
+		assert_eq!(deserialized, two_point_five);
+
+		let minus_two_point_five = Fixed64::from_rational(-5, 2).unwrap();
+		let serialized = serde_json::to_string(&minus_two_point_five).unwrap();
+		assert_eq!(serialized, "\"-2500000000\"");
+		let deserialized: Fixed64 = serde_json::from_str(&serialized).unwrap();
+		assert_eq!(deserialized, minus_two_point_five);
+	}
+
 
 	#[test]
 	fn recip_should_work() {
