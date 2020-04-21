@@ -74,7 +74,7 @@ pub use std::{ops::Deref, result::Result, sync::Arc};
 #[doc(hidden)]
 pub use sc_network::config::{FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
 pub use sc_tracing::TracingReceiver;
-pub use task_manager::{SpawnTaskHandle};
+pub use task_manager::SpawnTaskHandle;
 use task_manager::TaskManager;
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
