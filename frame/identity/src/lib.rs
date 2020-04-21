@@ -818,10 +818,11 @@ decl_module! {
 		/// # <weight>
 		/// - `O(R)`.
 		/// - One storage mutation `O(R)`.
+		/// - Benchmark: 23.81 + R * 0.774 µs (min square analysis)
 		/// # </weight>
 		#[weight = T::DbWeight::get().reads_writes(1, 1)
-			+ 30_000_000 // constant
-			+ 700_000 * T::MaxRegistrars::get() as Weight // R
+			+ 23_810_000 // constant
+			+ 774_000 * T::MaxRegistrars::get() as Weight // R
 		]
 		fn set_fee(origin,
 			#[compact] index: RegistrarIndex,
@@ -848,10 +849,11 @@ decl_module! {
 		/// # <weight>
 		/// - `O(R)`.
 		/// - One storage mutation `O(R)`.
+		/// - Benchmark: 24.59 + R * 0.832 µs (min square analysis)
 		/// # </weight>
 		#[weight = T::DbWeight::get().reads_writes(1, 1)
-			+ 30_000_000 // constant
-			+ 700_000 * T::MaxRegistrars::get() as Weight // R
+			+ 24_590_000 // constant
+			+ 832_000 * T::MaxRegistrars::get() as Weight // R
 		]
 		fn set_account_id(origin,
 			#[compact] index: RegistrarIndex,
@@ -878,10 +880,11 @@ decl_module! {
 		/// # <weight>
 		/// - `O(R)`.
 		/// - One storage mutation `O(R)`.
+		/// - Benchmark: 22.85 + R * 0.853 µs (min square analysis)
 		/// # </weight>
 		#[weight = T::DbWeight::get().reads_writes(1, 1)
-			+ 30_000_000 // constant
-			+ 700_000 * T::MaxRegistrars::get() as Weight // R
+			+ 22_850_000 // constant
+			+ 853_000 * T::MaxRegistrars::get() as Weight // R
 		]
 		fn set_fields(origin,
 			#[compact] index: RegistrarIndex,
@@ -915,14 +918,15 @@ decl_module! {
 		/// - Up to one account-lookup operation.
 		/// - Storage: 1 read `O(R)`, 1 mutate `O(R + X)`.
 		/// - One event.
+		/// - Benchmark: 110.7 + R * 1.066 + X * 3.402 µs (min square analysis)
 		/// # </weight>
 		#[weight = FunctionOf(
 			|(_, _, _, &fields_count): (&RegistrarIndex, &<T::Lookup as StaticLookup>::Source, &Judgement<BalanceOf<T>>, &u32)| {
 				T::DbWeight::get().reads_writes(2, 1)
 				+ T::DbWeight::get().reads_writes(1, 1) // balance ops
-				+ 154_000_000 // constant
-				+ 932_000 * T::MaxRegistrars::get() as Weight // R
-				+ 3_302_000 * fields_count as Weight // X
+				+ 110_700_000 // constant
+				+ 1_066_000 * T::MaxRegistrars::get() as Weight // R
+				+ 3_402_000 * fields_count as Weight // X
 			},
 			DispatchClass::Normal,
 			true
@@ -976,9 +980,21 @@ decl_module! {
 		/// - One balance-reserve operation.
 		/// - `S + 2` storage mutations.
 		/// - One event.
+		/// - Benchmark: 167.4 + R * 1.107 + S * 5.343 + X * 2.294 µs (min square analysis)
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(100_000_000)]
-		fn kill_identity(origin, target: <T::Lookup as StaticLookup>::Source) {
+		#[weight = FunctionOf(
+			|(_, &subs_count): (&<T::Lookup as StaticLookup>::Source, &u32)| {
+				T::DbWeight::get().reads_writes(subs_count as Weight + 1, subs_count as Weight + 1)
+				+ T::DbWeight::get().reads_writes(1, 1) // balance ops
+				+ 167_400_000 // constant
+				+ 1_107_000 * T::MaxRegistrars::get() as Weight // R
+				+ 5_343_000 * subs_count as Weight // S
+				+ 2_294_000 * T::MaxAdditionalFields::get() as Weight // X
+			},
+			DispatchClass::Normal,
+			true
+		)]
+		fn kill_identity(origin, target: <T::Lookup as StaticLookup>::Source, subs_count: u32) {
 			T::ForceOrigin::try_origin(origin)
 				.map(|_| ())
 				.or_else(ensure_root)?;
@@ -987,6 +1003,7 @@ decl_module! {
 			let target = T::Lookup::lookup(target)?;
 			// Grab their deposit (and check that they have one).
 			let (subs_deposit, sub_ids) = <SubsOf<T>>::take(&target);
+			ensure!(sub_ids.len() <= subs_count as usize, "invalid count");
 			let deposit = <IdentityOf<T>>::take(&target).ok_or(Error::<T>::NotNamed)?.total_deposit()
 				+ subs_deposit;
 			for sub in sub_ids.iter() {
@@ -1232,11 +1249,11 @@ mod tests {
 	fn killing_slashing_should_work() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
-			assert_noop!(Identity::kill_identity(Origin::signed(1), 10), BadOrigin);
-			assert_ok!(Identity::kill_identity(Origin::signed(2), 10));
+			assert_noop!(Identity::kill_identity(Origin::signed(1), 10, 0), BadOrigin);
+			assert_ok!(Identity::kill_identity(Origin::signed(2), 10, 0));
 			assert_eq!(Identity::identity(10), None);
 			assert_eq!(Balances::free_balance(10), 90);
-			assert_noop!(Identity::kill_identity(Origin::signed(2), 10), Error::<Test>::NotNamed);
+			assert_noop!(Identity::kill_identity(Origin::signed(2), 10, 0), Error::<Test>::NotNamed);
 		});
 	}
 
@@ -1299,7 +1316,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
 			assert_ok!(Identity::set_subs(Origin::signed(10), vec![(20, Data::Raw(vec![40; 1]))], 0));
-			assert_ok!(Identity::kill_identity(Origin::ROOT, 10));
+			assert_ok!(Identity::kill_identity(Origin::ROOT, 10, 1));
 			assert_eq!(Balances::free_balance(10), 80);
 			assert!(Identity::super_of(20).is_none());
 		});

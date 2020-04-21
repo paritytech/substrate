@@ -286,7 +286,7 @@ benchmarks! {
 				x
 			)?;
 		}
-	}: _(RawOrigin::Root, caller_lookup)
+	}: _(RawOrigin::Root, caller_lookup, s)
 }
 
 #[cfg(test)]
