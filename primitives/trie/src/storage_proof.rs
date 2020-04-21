@@ -340,6 +340,11 @@ pub struct LegacyStorageProof {
 }
 
 impl LegacyStorageProof {
+	/// Create a empty proof.
+	pub fn empty() -> Self {
+		LegacyStorageProof { trie_nodes: Default::default() }
+	}
+
 	/// Create a proof from encoded trie nodes.
 	pub fn new(trie_nodes: Vec<Vec<u8>>) -> Self {
 		LegacyStorageProof { trie_nodes }
@@ -452,9 +457,8 @@ impl StorageProof {
 	/// An empty proof is capable of only proving trivial statements (ie. that an empty set of
 	/// key-value pairs exist in storage).
 	pub fn empty() -> Self {
-		// we default to full as it can be reduce to flatten when reducing
-		// flatten to full is not possible without making asumption over the content.
-		Self::empty_for(StorageProofKind::Full)
+		// we default to flatten for compatibility
+		Self::empty_for(StorageProofKind::Flatten)
 	}
 
 	/// Returns a new empty proof of a given kind.

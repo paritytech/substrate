@@ -367,12 +367,12 @@ pub mod tests {
 	use sc_block_builder::BlockBuilderProvider;
 
 	// TODO see what can be use in this context
-	const KINDS: [StorageProofKind; 5] = [
+	const KINDS: [StorageProofKind; 4] = [
 		StorageProofKind::Flatten,
 		StorageProofKind::Full,
 		StorageProofKind::TrieSkipHashes,
 		StorageProofKind::TrieSkipHashesFull,
-		StorageProofKind::KnownQueryPlanAndValues,
+		//StorageProofKind::KnownQueryPlanAndValues, // this is currently unsupported
 	];
 
 	type TestChecker = LightDataChecker<
