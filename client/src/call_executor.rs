@@ -158,7 +158,7 @@ where
 				let backend = sp_state_machine::ProvingBackend::new_with_recorder(
 					trie_state,
 					recorder.clone(),
-					target_proof_kind,
+					*target_proof_kind,
 				);
 
 				let changes = &mut *changes.borrow_mut();
