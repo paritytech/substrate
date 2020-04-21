@@ -51,5 +51,8 @@ message BlockData {
 	bytes message_queue = 5; // optional
 	// Justification if requested.
 	bytes justification = 6; // optional
+	// True if justification should be treated as present be empty.
+	// This hack is unfortunately necessary because of shortcomings in the protobuf format.
+	bool is_empty_justification = 7; // optional, false if absent
 }
 

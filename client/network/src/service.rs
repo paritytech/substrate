@@ -211,6 +211,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			params.block_announce_validator,
 			params.metrics_registry.as_ref(),
 			boot_node_ids.clone(),
+			params.network_config.use_new_block_requests_protocol,
 			metrics.as_ref().map(|m| m.notifications_queues_size.clone()),
 		)?;
 
@@ -225,11 +226,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				let config = protocol::block_requests::Config::new(&params.protocol_id);
 				protocol::BlockRequests::new(config, params.chain.clone())
 			};
-			let finality_proof_requests = if let Some(pb) = &params.finality_proof_provider {
+			let finality_proof_requests = {
 				let config = protocol::finality_requests::Config::new(&params.protocol_id);
-				Some(protocol::FinalityProofRequests::new(config, pb.clone()))
-			} else {
-				None
+				protocol::FinalityProofRequests::new(config, params.finality_proof_provider.clone())
 			};
 			let light_client_handler = {
 				let config = protocol::light_client_handler::Config::new(&params.protocol_id);
