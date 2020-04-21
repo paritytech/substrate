@@ -22,7 +22,6 @@ use codec::{Codec, Encode, Decode, Input as CodecInput, Output as CodecOutput};
 use hash_db::{Hasher, HashDB, HashDBRef, EMPTY_PREFIX};
 use crate::{MemoryDB, Layout};
 use sp_storage::{ChildInfoProof, ChildType, ChildrenMap};
-use crate::TrieError;
 use trie_db::DBValue;
 // we are not using std as this use in no_std is
 // only allowed here because it is already use in
@@ -33,32 +32,73 @@ use hashbrown::HashMap;
 #[cfg(feature = "std")]
 use std::collections::HashMap;
 	
-type Result<T, H> = sp_std::result::Result<T, sp_std::boxed::Box<TrieError<Layout<H>>>>;
+type Result<T> = sp_std::result::Result<T, Error>;
 type CodecResult<T> = sp_std::result::Result<T, codec::Error>;
 
-fn missing_pack_input<H: Hasher>() -> sp_std::boxed::Box<TrieError<Layout<H>>> {
-	// TODO better error in trie db crate eg Packing error
-	sp_std::boxed::Box::new(TrieError::<Layout<H>>::IncompleteDatabase(Default::default()))
+#[cfg(feature = "std")]
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub enum Error {
+	/// Error produce by storage proof logic.
+	/// It is formatted in std to simplify type.
+	Trie(String),
+	/// Error produce by trie manipulation.
+	Proof(&'static str),
 }
 
-fn missing_collected_input<H: Hasher>() -> sp_std::boxed::Box<TrieError<Layout<H>>> {
-	// TODO better error in trie db crate eg Packing error
-	sp_std::boxed::Box::new(TrieError::<Layout<H>>::IncompleteDatabase(Default::default()))
+#[cfg(not(feature = "std"))]
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub enum Error {
+	/// Error produce by storage proof logic.
+	Trie,
+	/// Error produce by trie manipulation.
+	Proof,
 }
 
-fn missing_verify_input<H: Hasher>() -> sp_std::boxed::Box<TrieError<Layout<H>>> {
-	// TODO better error in trie db crate eg Packing error
-	sp_std::boxed::Box::new(TrieError::<Layout<H>>::IncompleteDatabase(Default::default()))
+#[cfg(feature = "std")]
+impl<E: sp_std::fmt::Display> sp_std::convert::From<sp_std::boxed::Box<E>> for Error {
+	fn from(e: sp_std::boxed::Box<E>) -> Self {
+		// currently only trie error is build from box
+		Error::Trie(format!("{}", e))
+	}
 }
 
-fn impossible_merge_for_proof<H: Hasher>() -> sp_std::boxed::Box<TrieError<Layout<H>>> {
-	// TODO better error in trie db crate eg Packing error
-	sp_std::boxed::Box::new(TrieError::<Layout<H>>::IncompleteDatabase(Default::default()))
+#[cfg(feature = "std")]
+impl sp_std::fmt::Display for Error {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+		match self {
+			Error::Trie(msg) => write!(f, "Proof error trie: {}", msg),
+			Error::Proof(msg) => write!(f, "Proof error: {}", msg),
+		}
+	}
 }
 
-fn impossible_backend_build<H: Hasher>() -> sp_std::boxed::Box<TrieError<Layout<H>>> {
-	// TODO better error in trie db crate eg Packing error
-	sp_std::boxed::Box::new(TrieError::<Layout<H>>::IncompleteDatabase(Default::default()))
+#[cfg(not(feature = "std"))]
+impl<E> sp_std::convert::From<sp_std::boxed::Box<E>> for Error {
+	fn from(_e: sp_std::boxed::Box<E>) -> Self {
+		Error::Trie
+	}
+}
+
+#[cfg(feature = "std")]
+const fn error(message: &'static str) -> Error {
+	Error::Proof(message)
+}
+
+#[cfg(not(feature = "std"))]
+const fn error(_message: &'static str) -> Error {
+	Error::Proof
+}
+
+const fn missing_pack_input() -> Error {
+	error("Packing input missing for proof")
+}
+
+const fn missing_verify_input() -> Error {
+	error("Input missing for proof verification")
+}
+
+const fn no_partial_db_support() -> Error {
+	error("Partial db not supported for this proof")
 }
 
 /// Different kind of proof representation are allowed.
@@ -444,7 +484,7 @@ impl StorageProof {
 
 	fn trie_skip_unpack<H: Hasher>(
 		self,
-	) -> Result<Self, H>
+	) -> Result<Self>
 		where H::Out: Codec,
 	{
 		match self {
@@ -479,7 +519,7 @@ impl StorageProof {
 	pub fn verify<H: Hasher>(
 		self,
 		input: &Input,
-	) -> Result<Option<bool>, H>
+	) -> Result<Option<bool>>
 		where H::Out: Codec,
 	{
 		match self {
@@ -501,12 +541,12 @@ impl StorageProof {
 								return Ok(Some(false));
 							}
 						} else {
-							return Err(missing_verify_input::<H>());
+							return Err(missing_verify_input());
 						}
 					}
 					Ok(Some(true))
 				} else {
-					Err(missing_verify_input::<H>())
+					Err(missing_verify_input())
 				}
 			},
 			_ => Ok(None),
@@ -518,7 +558,7 @@ impl StorageProof {
 		collected: &ChildrenMap<RecordMapTrieNodes<H>>,
 		kind: StorageProofKind,
 		input: &Input,
-	) -> Result<Self, H>
+	) -> Result<Self>
 		where H::Out: Codec,
 	{
 		Ok(match kind {
@@ -554,13 +594,13 @@ impl StorageProof {
 					for (child_info, set) in collected.iter() {
 						let root = roots.get(&child_info.proof_info())
 							.and_then(|r| Decode::decode(&mut &r[..]).ok())
-							.ok_or_else(|| missing_pack_input::<H>())?;
+							.ok_or_else(|| missing_pack_input())?;
 						let trie_nodes = crate::pack_proof_from_collected::<Layout<H>>(&root, set)?;
 						result.insert(child_info.proof_info(), trie_nodes);
 					}
 					StorageProof::TrieSkipHashesFull(result)
 				} else {
-					return Err(missing_pack_input::<H>());
+					return Err(missing_pack_input());
 				}
 			},
 			StorageProofKind::TrieSkipHashes => {
@@ -569,42 +609,37 @@ impl StorageProof {
 					for (child_info, set) in collected.iter() {
 						let root = roots.get(&child_info.proof_info())
 							.and_then(|r| Decode::decode(&mut &r[..]).ok())
-							.ok_or_else(|| missing_pack_input::<H>())?;
+							.ok_or_else(|| missing_pack_input())?;
 						let trie_nodes = crate::pack_proof_from_collected::<Layout<H>>(&root, set)?;
 						result.push(trie_nodes);
 					}
 					StorageProof::TrieSkipHashes(result)
 				} else {
-					return Err(missing_pack_input::<H>());
+					return Err(missing_pack_input());
 				}
 			},
 			StorageProofKind::KnownQueryPlanAndValues => {
 				if let Input::QueryPlan(input_children) = input {
 					let mut result = ChildrenProofMap::default();
-					let mut count_input = input_children.len();
 					let mut root_hash = H::Out::default();
 					for (child_info, set) in collected.iter() {
 						let child_info_proof = child_info.proof_info();
 						if let Some((root, keys)) = input_children.get(&child_info_proof) {
-							count_input -= 1;
 							// Layout h is the only supported one at the time being
 							if root.len() != root_hash.as_ref().len() {
-								return Err(missing_pack_input::<H>());
+								return Err(missing_pack_input());
 							}
 							root_hash.as_mut().copy_from_slice(&root[..]);
 							let trie = <trie_db::TrieDB<Layout<H>>>::new(set, &root_hash)?;
 							let compacted = trie_db::proof::generate_proof(&trie, keys)?;
 							result.insert(child_info_proof, compacted);
 						} else {
-							return Err(missing_pack_input::<H>());
+							return Err(missing_pack_input());
 						}
-					}
-					if count_input > 0 {
-						return Err(missing_collected_input::<H>());
 					}
 					StorageProof::KnownQueryPlanAndValues(result)
 				} else {
-					return Err(missing_pack_input::<H>());
+					return Err(missing_pack_input());
 				}
 			},
 		})
@@ -615,7 +650,7 @@ impl StorageProof {
 		collected: &RecordMapTrieNodes<H>,
 		kind: StorageProofKind,
 		_input: &Input,
-	) -> Result<Self, H>
+	) -> Result<Self>
 		where H::Out: Codec,
 	{
 		Ok(match kind {
@@ -626,7 +661,7 @@ impl StorageProof {
 					.collect();
 				StorageProof::Flatten(trie_nodes)
 			},
-			_ => return Err(impossible_backend_build::<H>()),
+			_ => return Err(no_partial_db_support()),
 		})
 	}
 
@@ -638,7 +673,7 @@ impl StorageProof {
 	/// The function cannot pack back proof as it does not have reference to additional information
 	/// needed. So for this the additional information need to be merged separately and the result
 	/// of this merge be packed with it afterward.
-	pub fn merge<H, I>(proofs: I) -> Result<StorageProof, H>
+	pub fn merge<H, I>(proofs: I) -> Result<StorageProof>
 		where
 			I: IntoIterator<Item=StorageProof>,
 			H: Hasher,
@@ -658,7 +693,7 @@ impl StorageProof {
 					proof = proof.trie_skip_unpack::<H>()?;
 				},
 				&StorageProof::KnownQueryPlanAndValues(..) => {
-					return Err(impossible_merge_for_proof::<H>());
+					return Err(error("Proof incompatibility for merging"));
 				},
 				_ => (),
 			}
@@ -715,7 +750,7 @@ impl StorageProof {
 	/// Currently child trie are all with same backend
 	/// implementation, therefore using
 	/// `as_partial_flat_db` is prefered.
-	pub fn as_partial_db<H>(self) -> Result<ChildrenProofMap<MemoryDB<H>>, H>
+	pub fn as_partial_db<H>(self) -> Result<ChildrenProofMap<MemoryDB<H>>>
 	where
 		H: Hasher,
 	{
@@ -747,14 +782,14 @@ impl StorageProof {
 				result.insert(ChildInfoProof::top_trie(), db);
 			},
 			StorageProof::KnownQueryPlanAndValues(_children) => {
-				return Err(impossible_backend_build::<H>());
+				return Err(no_partial_db_support());
 			},
 		}
 		Ok(result)
 	}
 
 	/// Create in-memory storage of proof check backend.
-	pub fn as_partial_flat_db<H>(self) -> Result<MemoryDB<H>, H>
+	pub fn as_partial_flat_db<H>(self) -> Result<MemoryDB<H>>
 	where
 		H: Hasher,
 	{
@@ -798,7 +833,7 @@ impl StorageProof {
 				}
 			},
 			StorageProof::KnownQueryPlanAndValues(_children) => {
-				return Err(impossible_backend_build::<H>());
+				return Err(no_partial_db_support());
 			},
 		}
 		Ok(db)
@@ -833,17 +868,17 @@ impl Iterator for StorageProofNodeIterator {
 }
 
 impl<H: Hasher> TryInto<MemoryDB<H>> for StorageProof {
-	type Error = sp_std::boxed::Box<TrieError<Layout<H>>>;
+	type Error = Error;
 
-	fn try_into(self) -> Result<MemoryDB<H>, H> {
+	fn try_into(self) -> Result<MemoryDB<H>> {
 		self.as_partial_flat_db()
 	}
 }
 
 impl<H: Hasher> TryInto<ChildrenProofMap<MemoryDB<H>>> for StorageProof {
-	type Error = sp_std::boxed::Box<TrieError<Layout<H>>>;
+	type Error = Error;
 
-	fn try_into(self) -> Result<ChildrenProofMap<MemoryDB<H>>, H> {
+	fn try_into(self) -> Result<ChildrenProofMap<MemoryDB<H>>> {
 		self.as_partial_db()
 	}
 }
