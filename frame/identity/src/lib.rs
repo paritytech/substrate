@@ -572,6 +572,7 @@ decl_module! {
 		/// identity.
 		///
 		/// - `subs`: The identity's sub-accounts.
+		/// - `old_subs_count`: This is the number of previous sub accounts associated with the identity.
 		///
 		/// # <weight>
 		/// - `O(P + S)`
@@ -634,6 +635,8 @@ decl_module! {
 		///
 		/// The dispatch origin for this call must be _Signed_ and the sender must have a registered
 		/// identity.
+		/// 
+		/// - `subs_count`: This is the number of sub accounts associated with the identity to clear.
 		///
 		/// Emits `IdentityCleared` if successful.
 		///
@@ -686,7 +689,13 @@ decl_module! {
 		/// - `max_fee`: The maximum fee that may be paid. This should just be auto-populated as:
 		///
 		/// ```nocompile
-		/// Self::registrars(reg_index).unwrap().fee
+		/// Self::registrars().get(reg_index).unwrap().fee
+		/// ```
+		/// - `additional_fields_count`: The number of additional fields on the identity info. This
+		///     should be auto-populated as:
+		///
+		/// ```nocompile
+		/// Self::identity(account_id).unwrap().info.additional.len()
 		/// ```
 		///
 		/// Emits `JudgementRequested` if successful.
@@ -703,7 +712,7 @@ decl_module! {
 				T::DbWeight::get().reads_writes(2, 1)
 				+ T::DbWeight::get().reads_writes(1, 1) // balance ops
 				+ 154_000_000 // constant
-				+ 932_000 * ASSUMED_MAX_REGISTRARS as Weight// R
+				+ 932_000 * ASSUMED_MAX_REGISTRARS as Weight // R
 				+ 3_302_000 * fields_count as Weight // X
 			},
 			DispatchClass::Normal,
@@ -712,7 +721,7 @@ decl_module! {
 		fn request_judgement(origin,
 			#[compact] reg_index: RegistrarIndex,
 			#[compact] max_fee: BalanceOf<T>,
-			fields_count: u32,
+			additional_fields_count: u32,
 		) {
 			let sender = ensure_signed(origin)?;
 			let registrars = <Registrars<T>>::get();
@@ -720,7 +729,7 @@ decl_module! {
 				.ok_or(Error::<T>::EmptyIndex)?;
 			ensure!(max_fee >= registrar.fee, Error::<T>::FeeChanged);
 			let mut id = <IdentityOf<T>>::get(&sender).ok_or(Error::<T>::NoIdentity)?;
-			ensure!(id.info.additional.len() <= fields_count as usize, "invalid count");
+			ensure!(id.info.additional.len() <= additional_fields_count as usize, "invalid count");
 
 			let item = (reg_index, Judgement::FeePaid(registrar.fee));
 			match id.judgements.binary_search_by_key(&reg_index, |x| x.0) {
