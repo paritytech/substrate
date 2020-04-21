@@ -58,10 +58,12 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: Codec 
 		if let Some(register_roots) = self.essence.register_roots.as_ref() {
 			let mut dest = ChildrenProofMap::default();
 			dest.insert(ChildInfoProof::top_trie(), self.essence.root().encode());
-			let read_lock = register_roots.read();
-			for (child_info, root) in read_lock.iter() {
+			let roots = {
+				std::mem::replace(&mut *register_roots.write(), Default::default())
+			};
+			for (child_info, root) in roots.into_iter() {
 				if let Some(root) = root {
-					dest.insert(child_info.proof_info(), root.encode());
+					dest.insert(child_info.proof_info(), root);
 				}
 			}
 			ProofInput::ChildTrieRoots(dest)
