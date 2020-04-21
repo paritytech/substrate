@@ -338,6 +338,34 @@ impl GenericProto {
 		self.notif_protocols.push((protocol_name.into(), handshake_msg.into()));
 	}
 
+	/// Modifies the handshake of the given notifications protocol.
+	///
+	/// Has no effect if the protocol is unknown.
+	pub fn set_notif_protocol_handshake(
+		&mut self,
+		protocol_name: &[u8],
+		handshake_message: impl Into<Vec<u8>>
+	) {
+		let handshake_message = handshake_message.into();
+		if let Some(protocol) = self.notif_protocols.iter_mut().find(|(name, _)| name == &protocol_name) {
+			protocol.1 = handshake_message.clone();
+		} else {
+			return;
+		}
+
+		// Send an event to all the peers we're connected to, updating the handshake message.
+		for (peer_id, _) in self.peers.iter().filter(|(_, state)| state.is_open()) {
+			self.events.push(NetworkBehaviourAction::NotifyHandler {
+				peer_id: peer_id.clone(),
+				handler: NotifyHandler::All,
+				event: NotifsHandlerIn::UpdateHandshake {
+					protocol_name: Cow::Owned(protocol_name.to_owned()),
+					handshake_message: handshake_message.clone(),
+				},
+			});
+		}
+	}
+
 	/// Returns the number of discovered nodes that we keep in memory.
 	pub fn num_discovered_peers(&self) -> usize {
 		self.peerset.num_discovered_peers()
