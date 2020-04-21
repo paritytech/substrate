@@ -26,6 +26,7 @@ use sp_trie::MemoryDB;
 use sc_client_api::backend::PrunableStateChangesTrieStorage;
 use sp_blockchain::{well_known_cache_keys, Cache as BlockchainCache};
 use sp_core::{ChangesTrieConfiguration, ChangesTrieConfigurationRange, convert_hash};
+use sp_core::storage::PrefixedStorageKey;
 use sp_database::Transaction;
 use sp_runtime::traits::{
 	Block as BlockT, Header as HeaderT, HashFor, NumberFor, One, Zero, CheckedSub,
@@ -482,7 +483,7 @@ where
 	fn with_cached_changed_keys(
 		&self,
 		root: &Block::Hash,
-		functor: &mut dyn FnMut(&HashMap<Option<Vec<u8>>, HashSet<Vec<u8>>>),
+		functor: &mut dyn FnMut(&HashMap<Option<PrefixedStorageKey>, HashSet<Vec<u8>>>),
 	) -> bool {
 		self.build_cache.read().with_changed_keys(root, functor)
 	}

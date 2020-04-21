@@ -27,7 +27,7 @@ use sp_trie::{
 	trie_types::TrieDBMut,
 };
 use codec::Codec;
-use sp_core::storage::{OwnedChildInfo, Storage};
+use sp_core::storage::{ChildInfo, Storage};
 
 /// Insert input pairs into memory db.
 fn insert_into_memory_db<H, I>(mut root: H::Out, mdb: &mut MemoryDB<H>, input: I) -> H::Out
@@ -75,7 +75,7 @@ where
 {
 	/// Copy the state, with applied updates
 	pub fn update<
-		T: IntoIterator<Item = (Option<(StorageKey, OwnedChildInfo)>, StorageCollection)>
+		T: IntoIterator<Item = (Option<ChildInfo>, StorageCollection)>
 	>(
 		&self,
 		changes: T,
@@ -87,7 +87,7 @@ where
 
 	/// Insert values into backend trie.
 	pub fn insert<
-		T: IntoIterator<Item = (Option<(StorageKey, OwnedChildInfo)>, StorageCollection)>
+		T: IntoIterator<Item = (Option<ChildInfo>, StorageCollection)>
 	>(
 		&mut self,
 		changes: T,
@@ -96,19 +96,15 @@ where
 		let mut root_map = None;
 		let root = self.root().clone();
 		for (child_info, map) in changes {
-			if let Some((storage_key, _child_info)) = child_info.as_ref() {
-				// no need to use child_info at this point because we use a MemoryDB for
-				// proof (with PrefixedMemoryDB it would be needed).
-				let ch = insert_into_memory_db::<H, _>(
-					root,
-					self.backend_storage_mut(),
-					map.clone().into_iter()
-				);
-				new_child_roots.push((storage_key.clone(), Some(ch.as_ref().into())));
+			if let Some(child_info) = child_info.as_ref() {
+				let prefix_storage_key = child_info.prefixed_storage_key();
+				let ch = insert_into_memory_db::<H, _>(root, self.backend_storage_mut(), map.clone().into_iter());
+				new_child_roots.push((prefix_storage_key.into_inner(), Some(ch.as_ref().into())));
 			} else {
 				root_map = Some(map);
 			}
 		}
+
 		let root = match root_map {
 			Some(map) => insert_into_memory_db::<H, _>(
 				root,
@@ -155,12 +151,12 @@ where
 	}
 }
 
-impl<H: Hasher> From<HashMap<Option<(StorageKey, OwnedChildInfo)>, BTreeMap<StorageKey, StorageValue>>>
+impl<H: Hasher> From<HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>>>
 	for TrieBackend<MemoryDB<H>, H>
 where
 	H::Out: Codec + Ord,
 {
-	fn from(inner: HashMap<Option<(StorageKey, OwnedChildInfo)>, BTreeMap<StorageKey, StorageValue>>) -> Self {
+	fn from(inner: HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>>) -> Self {
 		let mut backend = new_in_mem();
 		backend.insert(inner.into_iter().map(|(k, m)| (k, m.into_iter().map(|(k, v)| (k, Some(v))).collect())));
 		backend
@@ -172,8 +168,8 @@ where
 	H::Out: Codec + Ord,
 {
 	fn from(inners: Storage) -> Self {
-		let mut inner: HashMap<Option<(StorageKey, OwnedChildInfo)>, BTreeMap<StorageKey, StorageValue>>
-			= inners.children.into_iter().map(|(k, c)| (Some((k, c.child_info)), c.data)).collect();
+		let mut inner: HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>>
+			= inners.children_default.into_iter().map(|(_k, c)| (Some(c.child_info), c.data)).collect();
 		inner.insert(None, inners.top);
 		inner.into()
 	}
@@ -190,15 +186,15 @@ where
 	}
 }
 
-impl<H: Hasher> From<Vec<(Option<(StorageKey, OwnedChildInfo)>, StorageCollection)>>
+impl<H: Hasher> From<Vec<(Option<ChildInfo>, StorageCollection)>>
 	for TrieBackend<MemoryDB<H>, H>
 where
 	H::Out: Codec + Ord,
 {
 	fn from(
-		inner: Vec<(Option<(StorageKey, OwnedChildInfo)>, StorageCollection)>,
+		inner: Vec<(Option<ChildInfo>, StorageCollection)>,
 	) -> Self {
-		let mut expanded: HashMap<Option<(StorageKey, OwnedChildInfo)>, BTreeMap<StorageKey, StorageValue>>
+		let mut expanded: HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>>
 			= HashMap::new();
 		for (child_info, key_values) in inner {
 			let entry = expanded.entry(child_info).or_default();
@@ -222,16 +218,18 @@ mod tests {
 	#[test]
 	fn in_memory_with_child_trie_only() {
 		let storage = new_in_mem::<BlakeTwo256>();
-		let child_info = OwnedChildInfo::new_default(b"unique_id_1".to_vec());
+		let child_info = ChildInfo::new_default(b"1");
+		let child_info = &child_info;
 		let mut storage = storage.update(
 			vec![(
-				Some((b"1".to_vec(), child_info.clone())),
+				Some(child_info.clone()),
 				vec![(b"2".to_vec(), Some(b"3".to_vec()))]
 			)]
 		);
 		let trie_backend = storage.as_trie_backend().unwrap();
-		assert_eq!(trie_backend.child_storage(b"1", child_info.as_ref(), b"2").unwrap(),
+		assert_eq!(trie_backend.child_storage(child_info, b"2").unwrap(),
 			Some(b"3".to_vec()));
-		assert!(trie_backend.storage(b"1").unwrap().is_some());
+		let storage_key = child_info.prefixed_storage_key();
+		assert!(trie_backend.storage(storage_key.as_slice()).unwrap().is_some());
 	}
 }

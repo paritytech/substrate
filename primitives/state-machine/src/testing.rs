@@ -93,7 +93,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 		overlay.set_collect_extrinsics(changes_trie_config.is_some());
 
 		assert!(storage.top.keys().all(|key| !is_child_storage_key(key)));
-		assert!(storage.children.keys().all(|key| is_child_storage_key(key)));
+		assert!(storage.children_default.keys().all(|key| is_child_storage_key(key)));
 
 		storage.top.insert(HEAP_PAGES.to_vec(), 8u64.encode());
 		storage.top.insert(CODE.to_vec(), code.to_vec());
@@ -133,11 +133,11 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 			.map(|(k, v)| (k, v.value)).collect();
 		let mut transaction = vec![(None, top)];
 
-		self.overlay.committed.children.clone().into_iter()
-			.chain(self.overlay.prospective.children.clone().into_iter())
-			.for_each(|(keyspace, (map, child_info))| {
+		self.overlay.committed.children_default.clone().into_iter()
+			.chain(self.overlay.prospective.children_default.clone().into_iter())
+			.for_each(|(_storage_key, (map, child_info))| {
 				transaction.push((
-					Some((keyspace, child_info)),
+					Some(child_info),
 					map.into_iter()
 						.map(|(k, v)| (k, v.value))
 						.collect::<Vec<_>>(),

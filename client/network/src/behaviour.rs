@@ -20,6 +20,8 @@ use crate::{
 	Event, ObservedRole, DhtEvent, ExHashT,
 };
 use crate::protocol::{self, light_client_handler, message::Roles, CustomMessageOutcome, Protocol};
+
+use codec::Encode as _;
 use libp2p::NetworkBehaviour;
 use libp2p::core::{Multiaddr, PeerId, PublicKey};
 use libp2p::kad::record;
@@ -135,7 +137,11 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 		engine_id: ConsensusEngineId,
 		protocol_name: impl Into<Cow<'static, [u8]>>,
 	) {
-		let list = self.substrate.register_notifications_protocol(engine_id, protocol_name);
+		// This is the message that we will send to the remote as part of the initial handshake.
+		// At the moment, we force this to be an encoded `Roles`.
+		let handshake_message = Roles::from(&self.role).encode();
+
+		let list = self.substrate.register_notifications_protocol(engine_id, protocol_name, handshake_message);
 		for (remote, roles) in list {
 			let role = reported_roles_to_observed_role(&self.role, remote, roles);
 			let ev = Event::NotificationStreamOpened {

@@ -32,6 +32,7 @@ use crate::{
 		input::{InputKey, InputPair, DigestIndex, ExtrinsicIndex, ChildIndex},
 	},
 };
+use sp_core::storage::{ChildInfo, ChildType, PrefixedStorageKey};
 
 /// Prepare input pairs for building a changes trie of given block.
 ///
@@ -105,19 +106,19 @@ fn prepare_extrinsics_input<'a, B, H, Number>(
 		Number: BlockNumber,
 {
 
-	let mut children_keys = BTreeSet::<StorageKey>::new();
+	let mut children_info = BTreeSet::<ChildInfo>::new();
 	let mut children_result = BTreeMap::new();
-	for (storage_key, _) in changes.prospective.children.iter()
-		.chain(changes.committed.children.iter()) {
-		children_keys.insert(storage_key.clone());
+	for (_storage_key, (_map, child_info)) in changes.prospective.children_default.iter()
+		.chain(changes.committed.children_default.iter()) {
+		children_info.insert(child_info.clone());
 	}
-	for storage_key in children_keys {
+	for child_info in children_info {
 		let child_index = ChildIndex::<Number> {
 			block: block.clone(),
-			storage_key: storage_key.clone(),
+			storage_key: child_info.prefixed_storage_key(),
 		};
 
-		let iter = prepare_extrinsics_input_inner(backend, block, changes, Some(storage_key))?;
+		let iter = prepare_extrinsics_input_inner(backend, block, changes, Some(child_info))?;
 		children_result.insert(child_index, iter);
 	}
 
@@ -130,22 +131,22 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 	backend: &'a B,
 	block: &Number,
 	changes: &'a OverlayedChanges,
-	storage_key: Option<StorageKey>,
+	child_info: Option<ChildInfo>,
 ) -> Result<impl Iterator<Item=InputPair<Number>> + 'a, String>
 	where
 		B: Backend<H>,
 		H: Hasher,
 		Number: BlockNumber,
 {
-	let (committed, prospective, child_info) = if let Some(sk) = storage_key.as_ref() {
-		let child_info = changes.child_info(sk).cloned();
-		(
-			changes.committed.children.get(sk).map(|c| &c.0),
-			changes.prospective.children.get(sk).map(|c| &c.0),
-			child_info,
-		)
+	let (committed, prospective) = if let Some(child_info) = child_info.as_ref() {
+		match child_info.child_type() {
+			ChildType::ParentKeyId => (
+				changes.committed.children_default.get(child_info.storage_key()).map(|c| &c.0),
+				changes.prospective.children_default.get(child_info.storage_key()).map(|c| &c.0),
+			),
+		}
 	} else {
-		(Some(&changes.committed.top), Some(&changes.prospective.top), None)
+		(Some(&changes.committed.top), Some(&changes.prospective.top))
 	};
 	committed.iter().flat_map(|c| c.iter())
 		.chain(prospective.iter().flat_map(|c| c.iter()))
@@ -155,13 +156,11 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 				Entry::Vacant(entry) => {
 					// ignore temporary values (values that have null value at the end of operation
 					// AND are not in storage at the beginning of operation
-					if let Some(sk) = storage_key.as_ref() {
-						if !changes.child_storage(sk, k).map(|v| v.is_some()).unwrap_or_default() {
-							if let Some(child_info) = child_info.as_ref() {
-								if !backend.exists_child_storage(sk, child_info.as_ref(), k)
-									.map_err(|e| format!("{}", e))? {
-									return Ok(map);
-								}
+					if let Some(child_info) = child_info.as_ref() {
+						if !changes.child_storage(child_info, k).map(|v| v.is_some()).unwrap_or_default() {
+							if !backend.exists_child_storage(&child_info, k)
+								.map_err(|e| format!("{}", e))? {
+								return Ok(map);
 							}
 						}
 					} else {
@@ -281,7 +280,7 @@ fn prepare_digest_input<'a, H, Number>(
 				return Ok((map, child_map));
 			}
 
-			let mut children_roots = BTreeMap::<StorageKey, _>::new();
+			let mut children_roots = BTreeMap::<PrefixedStorageKey, _>::new();
 			{
 				let trie_storage = TrieBackendEssence::<_, H>::new(
 					crate::changes_trie::TrieBackendStorageAdapter(storage),
@@ -344,15 +343,11 @@ mod test {
 	use codec::Encode;
 	use sp_core::Blake2Hasher;
 	use sp_core::storage::well_known_keys::EXTRINSIC_INDEX;
-	use sp_core::storage::ChildInfo;
 	use crate::InMemoryBackend;
 	use crate::changes_trie::{RootsStorage, Configuration, storage::InMemoryStorage};
 	use crate::changes_trie::build_cache::{IncompleteCacheAction, IncompleteCachedBuildData};
 	use crate::overlayed_changes::{OverlayedValue, OverlayedChangeSet};
 	use super::*;
-
-	const CHILD_INFO_1: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_1");
-	const CHILD_INFO_2: ChildInfo<'static> = ChildInfo::new_default(b"unique_id_2");
 
 	fn prepare_for_build(zero: u64) -> (
 		InMemoryBackend<Blake2Hasher>,
@@ -360,6 +355,8 @@ mod test {
 		OverlayedChanges,
 		Configuration,
 	) {
+		let child_info_1 = ChildInfo::new_default(b"storage_key1");
+		let child_info_2 = ChildInfo::new_default(b"storage_key2");
 		let backend: InMemoryBackend<_> = vec![
 			(vec![100], vec![255]),
 			(vec![101], vec![255]),
@@ -368,8 +365,9 @@ mod test {
 			(vec![104], vec![255]),
 			(vec![105], vec![255]),
 		].into_iter().collect::<std::collections::BTreeMap<_, _>>().into();
-		let child_trie_key1 = b"1".to_vec();
-		let child_trie_key2 = b"2".to_vec();
+		let prefixed_child_trie_key1 = child_info_1.prefixed_storage_key();
+		let child_trie_key1 = child_info_1.storage_key().to_vec();
+		let child_trie_key2 = child_info_2.storage_key().to_vec();
 		let storage = InMemoryStorage::with_inputs(vec![
 			(zero + 1, vec![
 				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 1, key: vec![100] }, vec![1, 3]),
@@ -403,7 +401,7 @@ mod test {
 			]),
 			(zero + 9, Vec::new()), (zero + 10, Vec::new()), (zero + 11, Vec::new()), (zero + 12, Vec::new()),
 			(zero + 13, Vec::new()), (zero + 14, Vec::new()), (zero + 15, Vec::new()),
-		], vec![(child_trie_key1.clone(), vec![
+		], vec![(prefixed_child_trie_key1.clone(), vec![
 				(zero + 1, vec![
 					InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 1, key: vec![100] }, vec![1, 3]),
 					InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 1, key: vec![101] }, vec![0, 2]),
@@ -430,19 +428,19 @@ mod test {
 					extrinsics: Some(vec![0, 1].into_iter().collect())
 				}),
 			].into_iter().collect(),
-				children: vec![
+				children_default: vec![
 					(child_trie_key1.clone(), (vec![
 						(vec![100], OverlayedValue {
 							value: Some(vec![200]),
 							extrinsics: Some(vec![0, 2].into_iter().collect())
 						})
-					].into_iter().collect(), CHILD_INFO_1.to_owned())),
+					].into_iter().collect(), child_info_1.to_owned())),
 					(child_trie_key2, (vec![
 						(vec![100], OverlayedValue {
 							value: Some(vec![200]),
 							extrinsics: Some(vec![0, 2].into_iter().collect())
 						})
-					].into_iter().collect(), CHILD_INFO_2.to_owned())),
+					].into_iter().collect(), child_info_2.to_owned())),
 				].into_iter().collect()
 			},
 			committed: OverlayedChangeSet { top: vec![
@@ -459,13 +457,13 @@ mod test {
 					extrinsics: Some(vec![1].into_iter().collect())
 				}),
 			].into_iter().collect(),
-				children: vec![
+				children_default: vec![
 					(child_trie_key1, (vec![
 						(vec![100], OverlayedValue {
 							value: Some(vec![202]),
 							extrinsics: Some(vec![3].into_iter().collect())
 						})
-					].into_iter().collect(), CHILD_INFO_1.to_owned())),
+					].into_iter().collect(), child_info_1.to_owned())),
 				].into_iter().collect(),
 			},
 			collect_extrinsics: true,
@@ -487,6 +485,8 @@ mod test {
 	#[test]
 	fn build_changes_trie_nodes_on_non_digest_block() {
 		fn test_with_zero(zero: u64) {
+			let child_trie_key1 = ChildInfo::new_default(b"storage_key1").prefixed_storage_key();
+			let child_trie_key2 = ChildInfo::new_default(b"storage_key2").prefixed_storage_key();
 			let (backend, storage, changes, config) = prepare_for_build(zero);
 			let parent = AnchorBlockId { hash: Default::default(), number: zero + 4 };
 			let changes_trie_nodes = prepare_input(
@@ -503,11 +503,11 @@ mod test {
 			]);
 			assert_eq!(changes_trie_nodes.1.into_iter()
 				.map(|(k,v)| (k, v.collect::<Vec<_>>())).collect::<Vec<_>>(), vec![
-				(ChildIndex { block: zero + 5u64, storage_key: b"1".to_vec() },
+				(ChildIndex { block: zero + 5u64, storage_key: child_trie_key1 },
 					vec![
 						InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 5u64, key: vec![100] }, vec![0, 2, 3]),
 					]),
-				(ChildIndex { block: zero + 5, storage_key: b"2".to_vec() },
+				(ChildIndex { block: zero + 5, storage_key: child_trie_key2 },
 					vec![
 						InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 5, key: vec![100] }, vec![0, 2]),
 					]),
@@ -523,6 +523,8 @@ mod test {
 	#[test]
 	fn build_changes_trie_nodes_on_digest_block_l1() {
 		fn test_with_zero(zero: u64) {
+			let child_trie_key1 = ChildInfo::new_default(b"storage_key1").prefixed_storage_key();
+			let child_trie_key2 = ChildInfo::new_default(b"storage_key2").prefixed_storage_key();
 			let (backend, storage, changes, config) = prepare_for_build(zero);
 			let parent = AnchorBlockId { hash: Default::default(), number: zero + 3 };
 			let changes_trie_nodes = prepare_input(
@@ -544,7 +546,7 @@ mod test {
 			]);
 			assert_eq!(changes_trie_nodes.1.into_iter()
 				.map(|(k,v)| (k, v.collect::<Vec<_>>())).collect::<Vec<_>>(), vec![
-				(ChildIndex { block: zero + 4u64, storage_key: b"1".to_vec() },
+				(ChildIndex { block: zero + 4u64, storage_key: child_trie_key1.clone() },
 					vec![
 						InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 4u64, key: vec![100] }, vec![0, 2, 3]),
 
@@ -553,7 +555,7 @@ mod test {
 						InputPair::DigestIndex(DigestIndex { block: zero + 4, key: vec![102] }, vec![zero + 2]),
 						InputPair::DigestIndex(DigestIndex { block: zero + 4, key: vec![105] }, vec![zero + 1]),
 					]),
-				(ChildIndex { block: zero + 4, storage_key: b"2".to_vec() },
+				(ChildIndex { block: zero + 4, storage_key: child_trie_key2.clone() },
 					vec![
 						InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 4, key: vec![100] }, vec![0, 2]),
 					]),
@@ -568,6 +570,8 @@ mod test {
 	#[test]
 	fn build_changes_trie_nodes_on_digest_block_l2() {
 		fn test_with_zero(zero: u64) {
+			let child_trie_key1 = ChildInfo::new_default(b"storage_key1").prefixed_storage_key();
+			let child_trie_key2 = ChildInfo::new_default(b"storage_key2").prefixed_storage_key();
 			let (backend, storage, changes, config) = prepare_for_build(zero);
 			let parent = AnchorBlockId { hash: Default::default(), number: zero + 15 };
 			let changes_trie_nodes = prepare_input(
@@ -590,13 +594,13 @@ mod test {
 			]);
 			assert_eq!(changes_trie_nodes.1.into_iter()
 				.map(|(k,v)| (k, v.collect::<Vec<_>>())).collect::<Vec<_>>(), vec![
-				(ChildIndex { block: zero + 16u64, storage_key: b"1".to_vec() },
+				(ChildIndex { block: zero + 16u64, storage_key: child_trie_key1.clone() },
 					vec![
 						InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 16u64, key: vec![100] }, vec![0, 2, 3]),
 
 						InputPair::DigestIndex(DigestIndex { block: zero + 16, key: vec![102] }, vec![zero + 4]),
 					]),
-				(ChildIndex { block: zero + 16, storage_key: b"2".to_vec() },
+				(ChildIndex { block: zero + 16, storage_key: child_trie_key2.clone() },
 					vec![
 						InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 16, key: vec![100] }, vec![0, 2]),
 					]),
@@ -657,6 +661,8 @@ mod test {
 	#[test]
 	fn build_changes_trie_nodes_ignores_temporary_storage_values() {
 		fn test_with_zero(zero: u64) {
+			let child_trie_key1 = ChildInfo::new_default(b"storage_key1").prefixed_storage_key();
+			let child_trie_key2 = ChildInfo::new_default(b"storage_key2").prefixed_storage_key();
 			let (backend, storage, mut changes, config) = prepare_for_build(zero);
 
 			// 110: missing from backend, set to None in overlay
@@ -685,7 +691,7 @@ mod test {
 			]);
 			assert_eq!(changes_trie_nodes.1.into_iter()
 				.map(|(k,v)| (k, v.collect::<Vec<_>>())).collect::<Vec<_>>(), vec![
-				(ChildIndex { block: zero + 4u64, storage_key: b"1".to_vec() },
+				(ChildIndex { block: zero + 4u64, storage_key: child_trie_key1.clone() },
 					vec![
 						InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 4u64, key: vec![100] }, vec![0, 2, 3]),
 
@@ -694,7 +700,7 @@ mod test {
 						InputPair::DigestIndex(DigestIndex { block: zero + 4, key: vec![102] }, vec![zero + 2]),
 						InputPair::DigestIndex(DigestIndex { block: zero + 4, key: vec![105] }, vec![zero + 1]),
 					]),
-				(ChildIndex { block: zero + 4, storage_key: b"2".to_vec() },
+				(ChildIndex { block: zero + 4, storage_key: child_trie_key2.clone() },
 					vec![
 						InputPair::ExtrinsicIndex(ExtrinsicIndex { block: zero + 4, key: vec![100] }, vec![0, 2]),
 					]),
@@ -709,6 +715,8 @@ mod test {
 
 	#[test]
 	fn cache_is_used_when_changes_trie_is_built() {
+		let child_trie_key1 = ChildInfo::new_default(b"storage_key1").prefixed_storage_key();
+		let child_trie_key2 = ChildInfo::new_default(b"storage_key2").prefixed_storage_key();
 		let (backend, mut storage, changes, config) = prepare_for_build(0);
 		let parent = AnchorBlockId { hash: Default::default(), number: 15 };
 
@@ -728,8 +736,8 @@ mod test {
 		let cached_data4 = IncompleteCacheAction::CacheBuildData(IncompleteCachedBuildData::new())
 			.set_digest_input_blocks(vec![1, 2, 3])
 			.insert(None, vec![vec![100], vec![102]].into_iter().collect())
-			.insert(Some(b"1".to_vec()), vec![vec![103], vec![104]].into_iter().collect())
-			.insert(Some(b"2".to_vec()), vec![vec![105], vec![106]].into_iter().collect())
+			.insert(Some(child_trie_key1.clone()), vec![vec![103], vec![104]].into_iter().collect())
+			.insert(Some(child_trie_key2.clone()), vec![vec![105], vec![106]].into_iter().collect())
 			.complete(4, &trie_root4);
 		storage.cache_mut().perform(cached_data4);
 
@@ -755,7 +763,10 @@ mod test {
 			.map(|(k, i)| (k, i.collect::<Vec<_>>()))
 			.collect::<BTreeMap<_, _>>();
 		assert_eq!(
-			child_changes_tries_nodes.get(&ChildIndex { block: 16u64, storage_key: b"1".to_vec() }).unwrap(),
+			child_changes_tries_nodes.get(&ChildIndex {
+				block: 16u64,
+				storage_key: child_trie_key1.clone(),
+			}).unwrap(),
 			&vec![
 				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 16u64, key: vec![100] }, vec![0, 2, 3]),
 
@@ -764,7 +775,7 @@ mod test {
 			],
 		);
 		assert_eq!(
-			child_changes_tries_nodes.get(&ChildIndex { block: 16u64, storage_key: b"2".to_vec() }).unwrap(),
+			child_changes_tries_nodes.get(&ChildIndex { block: 16u64, storage_key: child_trie_key2.clone() }).unwrap(),
 			&vec![
 				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 16u64, key: vec![100] }, vec![0, 2]),
 

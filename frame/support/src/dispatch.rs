@@ -46,10 +46,6 @@ pub type DispatchResult = Result<(), sp_runtime::DispatchError>;
 pub type DispatchErrorWithPostInfo =
 	sp_runtime::DispatchErrorWithPostInfo<crate::weights::PostDispatchInfo>;
 
-
-/// A type that cannot be instantiated.
-pub enum Never {}
-
 /// Serializable version of Dispatchable.
 /// This value can be used as a "function" in an extrinsic.
 pub trait Callable<T> {
@@ -1030,12 +1026,7 @@ macro_rules! decl_module {
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_initialize(_block_number_not_used: $trait_instance::BlockNumber) -> $return {
-				use $crate::sp_std::if_std;
-				if_std! {
-					use $crate::tracing;
-					let span = tracing::span!(tracing::Level::DEBUG, "on_initialize");
-					let _enter = span.enter();
-				}
+				$crate::sp_tracing::enter_span!("on_initialize");
 				{ $( $impl )* }
 			}
 		}
@@ -1051,12 +1042,7 @@ macro_rules! decl_module {
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_initialize($param: $param_ty) -> $return {
-				use $crate::sp_std::if_std;
-				if_std! {
-					use $crate::tracing;
-					let span = tracing::span!(tracing::Level::DEBUG, "on_initialize");
-					let _enter = span.enter();
-				}
+				$crate::sp_tracing::enter_span!("on_initialize");
 				{ $( $impl )* }
 			}
 		}
@@ -1082,12 +1068,7 @@ macro_rules! decl_module {
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_runtime_upgrade() -> $return {
-				use $crate::sp_std::if_std;
-				if_std! {
-					use $crate::tracing;
-					let span = tracing::span!(tracing::Level::DEBUG, "on_runtime_upgrade");
-					let _enter = span.enter();
-				}
+				$crate::sp_tracing::enter_span!("on_runtime_upgrade");
 				{ $( $impl )* }
 			}
 		}
@@ -1114,12 +1095,7 @@ macro_rules! decl_module {
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_finalize(_block_number_not_used: $trait_instance::BlockNumber) {
-				use $crate::sp_std::if_std;
-				if_std! {
-					use $crate::tracing;
-					let span = tracing::span!(tracing::Level::DEBUG, "on_finalize");
-					let _enter = span.enter();
-				}
+				$crate::sp_tracing::enter_span!("on_finalize");
 				{ $( $impl )* }
 			}
 		}
@@ -1135,12 +1111,7 @@ macro_rules! decl_module {
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn on_finalize($param: $param_ty) {
-				use $crate::sp_std::if_std;
-				if_std! {
-					use $crate::tracing;
-					let span = tracing::span!(tracing::Level::DEBUG, "on_finalize");
-					let _enter = span.enter();
-				}
+				$crate::sp_tracing::enter_span!("on_finalize");
 				{ $( $impl )* }
 			}
 		}
@@ -1209,15 +1180,9 @@ macro_rules! decl_module {
 		$vis fn $name(
 			$origin: $origin_ty $(, $param: $param_ty )*
 		) -> $crate::dispatch::DispatchResult {
-			$crate::sp_std::if_std! {
-				use $crate::tracing;
-				let span = tracing::span!(tracing::Level::DEBUG, stringify!($name));
-				let _enter = span.enter();
-			}
-			{
-				{ $( $impl )* }
-				Ok(())
-			}
+			$crate::sp_tracing::enter_span!(stringify!($name));
+			{ $( $impl )* }
+			Ok(())
 		}
 	};
 
@@ -1234,13 +1199,8 @@ macro_rules! decl_module {
 	) => {
 		$(#[doc = $doc_attr])*
 		$vis fn $name($origin: $origin_ty $(, $param: $param_ty )* ) -> $result {
-			use $crate::sp_std::if_std;
-			if_std! {
-				use $crate::tracing;
-				let span = tracing::span!(tracing::Level::DEBUG, stringify!($name));
-				let _enter = span.enter();
-			}
-			{ $( $impl )* }
+			$crate::sp_tracing::enter_span!(stringify!($name));
+			$( $impl )*
 		}
 	};
 
@@ -1352,7 +1312,7 @@ macro_rules! decl_module {
 		{
 			#[doc(hidden)]
 			#[codec(skip)]
-			__PhantomItem($crate::sp_std::marker::PhantomData<($trait_instance, $($instance)?)>, $crate::dispatch::Never),
+			__PhantomItem($crate::sp_std::marker::PhantomData<($trait_instance, $($instance)?)>, $crate::Never),
 			$( $generated_variants )*
 		}
 	};
