@@ -490,6 +490,16 @@ decl_module! {
 			ensure_signed(origin)?;
 		}
 
+		/// A noop
+		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
+		fn ensure_signed(origin) {
+			ensure_signed(origin)?;
+		}
+
+//		/// A noop with ensure_signed
+//		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
+//		fn noop() {}
+
 		/// Set the number of pages in the WebAssembly environment's heap.
 		#[weight = SimpleDispatchInfo::FixedOperational(MINIMUM_WEIGHT)]
 		fn set_heap_pages(origin, pages: u64) {

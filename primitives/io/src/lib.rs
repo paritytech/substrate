@@ -287,9 +287,9 @@ pub trait Storage {
 	///
 	/// Returns the SCALE encoded hash.
 	fn root(&mut self) -> Vec<u8> {
-		let id = PROFILER.lock().create_span("Storage".to_string(), "storage_root".to_string());
+//		let id = PROFILER.lock().create_span("Storage".to_string(), "storage_root".to_string());
 		let res = self.storage_root();
-		PROFILER.lock().exit_span(id);
+//		PROFILER.lock().exit_span(id);
 		res
 	}
 
@@ -316,10 +316,10 @@ pub trait Storage {
 	/// Returns an `Some(_)` which holds the SCALE encoded hash or `None` when
 	/// changes trie is disabled.
 	fn changes_root(&mut self, parent_hash: &[u8]) -> Option<Vec<u8>> {
-		let id = PROFILER.lock().create_span("Storage".to_string(), "changes_root".to_string());
+//		let id = PROFILER.lock().create_span("Storage".to_string(), "changes_root".to_string());
 		let res = self.storage_changes_root(parent_hash)
 			.expect("Invalid `parent_hash` given to `changes_root`.");
-		PROFILER.lock().exit_span(id);
+//		PROFILER.lock().exit_span(id);
 		res
 	}
 

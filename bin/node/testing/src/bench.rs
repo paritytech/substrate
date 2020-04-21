@@ -281,16 +281,17 @@ impl BenchDb {
 //		for _ in 0..block_type.transactions() {
 		for _ in 0..qty {
 
-			let sender = self.keyring.at(iteration % 100);
+			let sender = self.keyring.at(iteration);
 			let receiver = get_account_id_from_seed::<sr25519::Public>(
 				&format!("random-user//{}", iteration)
 			);
-			let nonce: u32 = iteration as u32 / 100;
+//			let nonce: u32 = iteration as u32 / 100;
+			let nonce: u32 = 0;
 			let signed = self.keyring.sign(
 				CheckedExtrinsic {
 					signed: Some((sender, signed_extra(nonce, node_runtime::ExistentialDeposit::get() + 1))),
 					function: Call::System(
-						SystemCall::remark(Vec::new())
+						SystemCall::ensure_signed()
 					),
 				},
 				version,
@@ -355,7 +356,7 @@ impl BenchKeyring {
 	pub fn new(length: usize, key_types: KeyTypes) -> Self {
 		let mut accounts = BTreeMap::new();
 
-		for n in 0..length {
+		for n in 0..2000 {
 			let seed = format!("//endowed-user/{}", n);
 			let (account_id, pair) = match key_types {
 				KeyTypes::Sr25519 => {
