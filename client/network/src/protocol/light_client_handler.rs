@@ -539,12 +539,11 @@ where
 
 		let block = Decode::decode(&mut request.block.as_ref())?;
 
-		// TODO EMCH consider new version with compact
 		let proof = match self.chain.execution_proof(
 			&BlockId::Hash(block),
 			&request.method,
 			&request.data,
-			StorageProofKind::Flatten,
+			StorageProofKind::TrieSkipHashes,
 		) {
 			Ok((_, proof)) => proof,
 			Err(e) => {
@@ -584,11 +583,10 @@ where
 
 		let block = Decode::decode(&mut request.block.as_ref())?;
 
-		// TODO EMCH consider new version with compact
 		let proof = match self.chain.read_proof(
 			&BlockId::Hash(block),
 			&mut request.keys.iter().map(AsRef::as_ref),
-			StorageProofKind::Flatten,
+			StorageProofKind::TrieSkipHashes,
 		) {
 			Ok(proof) => proof,
 			Err(error) => {
@@ -633,12 +631,11 @@ where
 			Some((ChildType::ParentKeyId, storage_key)) => Ok(ChildInfo::new_default(storage_key)),
 			None => Err("Invalid child storage key".into()),
 		};
-		// TODO EMCH consider new version with compact
 		let proof = match child_info.and_then(|child_info| self.chain.read_child_proof(
 			&BlockId::Hash(block),
 			&child_info,
 			&mut request.keys.iter().map(AsRef::as_ref),
-			StorageProofKind::Flatten,
+			StorageProofKind::TrieSkipHashes,
 		)) {
 			Ok(proof) => proof,
 			Err(error) => {

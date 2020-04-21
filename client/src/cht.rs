@@ -121,8 +121,7 @@ pub fn build_proof<Header, Hasher, BlocksI, HashesI>(
 	prove_read_on_trie_backend(
 		trie_storage,
 		blocks.into_iter().map(|number| encode_cht_key(number)),
-		// TODO consider Flatten compact here?
-		StorageProofKind::Flatten,
+		StorageProofKind::TrieSkipHashes,
 	).map_err(ClientError::Execution)
 }
 
