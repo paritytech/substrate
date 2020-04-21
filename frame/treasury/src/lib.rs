@@ -128,7 +128,7 @@ pub trait Trait: frame_system::Trait {
 	type RejectOrigin: EnsureOrigin<Self::Origin>;
 
 	/// Origin from which tippers must come.
-	/// The lenght must be less then [`MAX_TIPPERS_COUNT`](./constant.MAX_TIPPERS_COUNT.html).
+	/// The lenght must be less than [`MAX_TIPPERS_COUNT`](./constant.MAX_TIPPERS_COUNT.html).
 	/// Its cost it expected to be same as if it was stored sorted in a storage value.
 	type Tippers: Contains<Self::AccountId>;
 
@@ -586,6 +586,7 @@ decl_module! {
 		/// - Db reads and writes: `Approvals`, `pot account data`
 		/// - Db reads and writes per approval:
 		///   `Proposals`, `proposer account data`, `beneficiary account data`
+		/// - The weight is overestimated if some approvals got missed.
 		/// # </weight>
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			// Check to see if we should spend some funds!
