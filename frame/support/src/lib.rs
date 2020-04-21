@@ -271,7 +271,7 @@ mod tests {
 				map hasher(identity) T::BlockNumber => T::BlockNumber;
 			pub GenericData2 get(fn generic_data2):
 				map hasher(blake2_128_concat) T::BlockNumber => Option<T::BlockNumber>;
-			pub GetterNoFnKeyword get(no_fn): Option<u32>;
+			pub GetterNoFnKeyword get(fn no_fn): Option<u32>;
 
 			pub DataDM config(test_config) build(|_| vec![(15u32, 16u32, 42u64)]):
 				double_map hasher(twox_64_concat) u32, hasher(blake2_128_concat) u32 => u64;
