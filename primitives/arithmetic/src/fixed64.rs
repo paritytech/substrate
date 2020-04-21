@@ -340,13 +340,13 @@ impl sp_std::fmt::Debug for Fixed64 {
 	}
 }
 
-// impl<P: PerThing> TryFrom<P> for Fixed64 {
-// 	fn try_from(p: P) -> Option<Self> {
-// 		let accuracy = P::ACCURACY;
-// 		let value = p.deconstruct();
-// 		Fixed64::from_rational(value, accuracy)
-// 	}
-// }
+impl<P: PerThing> From<P> for Fixed64 {
+	fn from(p: P) -> Self {
+		let accuracy = P::ACCURACY.saturated_into() as <Self as FixedPointNumber>::Inner;
+		let value = p.deconstruct().saturated_into() as <Self as FixedPointNumber>::Inner;
+		Fixed64::from_rational(value, accuracy).unwrap_or(Fixed64::max_value())
+	}
+}
 
 #[cfg(test)]
 mod tests {
@@ -617,18 +617,14 @@ mod tests {
 
 	#[test]
 	fn perthing_into_fixed() {
-		// let ten_percent_percent: Fixed64 = Percent::from_percent(10).into();
-		// assert_eq!(ten_percent_percent.into_inner(), Fixed64::DIV / 10);
+		let ten_percent_percent: Fixed64 = Percent::from_percent(10).try_into().unwrap();
+		assert_eq!(ten_percent_percent.into_inner(), Fixed64::DIV / 10);
 
-		// let ten_percent_permill: Fixed64 = Permill::from_percent(10).into();
-		// assert_eq!(ten_percent_permill.into_inner(), Fixed64::DIV / 10);
+		let ten_percent_permill: Fixed64 = Permill::from_percent(10).into();
+		assert_eq!(ten_percent_permill.into_inner(), Fixed64::DIV / 10);
 
-		// let ten_percent_perbill: Fixed64 = Perbill::from_percent(10).into();
-		// assert_eq!(ten_percent_perbill.into_inner(), Fixed64::DIV / 10);
-
-		// let ten_percent_perquintill: Fixed64 = Perquintill::from_percent(10).try_into().unwrap();
-		// println!("ten {:?}", ten_percent_perquintill);
-		// assert_eq!(ten_percent_perquintill.into_inner(), Fixed64::DIV / 10);
+		let ten_percent_perbill: Fixed64 = Perbill::from_percent(10).into();
+		assert_eq!(ten_percent_perbill.into_inner(), Fixed64::DIV / 10);
 	}
 
 	#[test]

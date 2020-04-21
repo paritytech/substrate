@@ -348,13 +348,13 @@ impl fmt::Debug for Fixed128 {
 	}
 }
 
-// impl<P: PerThing> From<P> for Fixed128 {
-// 	fn from(val: P) -> Self {
-// 		let accuracy = P::ACCURACY.saturated_into().max(1) as <Self as FixedPointNumber>::Inner;
-// 		let value = val.deconstruct().saturated_into() as <Self as FixedPointNumber>::Inner;
-// 		Fixed128::from_rational(value, accuracy)
-// 	}
-// }
+impl<P: PerThing> From<P> for Fixed128 {
+	fn from(p: P) -> Self {
+		let accuracy = P::ACCURACY.saturated_into() as <Self as FixedPointNumber>::Inner;
+		let value = p.deconstruct().saturated_into() as <Self as FixedPointNumber>::Inner;
+		Fixed128::from_rational(value, accuracy).unwrap_or(Fixed128::max_value())
+	}
+}
 
 #[cfg(feature = "std")]
 impl Fixed128 {
@@ -619,20 +619,20 @@ mod tests {
 		assert_eq!(result, -170_141_183_460_469_231_730);
 	}
 
-	// #[test]
-	// fn perthing_into_fixed_i128() {
-	// 	let ten_percent_percent: Fixed128 = Percent::from_percent(10).into();
-	// 	assert_eq!(ten_percent_percent.into_inner(), Fixed128::DIV / 10);
+	#[test]
+	fn perthing_into_fixed_i128() {
+		let ten_percent_percent: Fixed128 = Percent::from_percent(10).into();
+		assert_eq!(ten_percent_percent.into_inner(), Fixed128::DIV / 10);
 
-	// 	let ten_percent_permill: Fixed128 = Permill::from_percent(10).into();
-	// 	assert_eq!(ten_percent_permill.into_inner(), Fixed128::DIV / 10);
+		let ten_percent_permill: Fixed128 = Permill::from_percent(10).into();
+		assert_eq!(ten_percent_permill.into_inner(), Fixed128::DIV / 10);
 
-	// 	let ten_percent_perbill: Fixed128 = Perbill::from_percent(10).into();
-	// 	assert_eq!(ten_percent_perbill.into_inner(), Fixed128::DIV / 10);
+		let ten_percent_perbill: Fixed128 = Perbill::from_percent(10).into();
+		assert_eq!(ten_percent_perbill.into_inner(), Fixed128::DIV / 10);
 
-	// 	let ten_percent_perquintill: Fixed128 = Perquintill::from_percent(10).into();
-	// 	assert_eq!(ten_percent_perquintill.into_inner(), Fixed128::DIV / 10);
-	// }
+		let ten_percent_perquintill: Fixed128 = Perquintill::from_percent(10).into();
+		assert_eq!(ten_percent_perquintill.into_inner(), Fixed128::DIV / 10);
+	}
 
 	#[test]
 	fn recip_should_work() {
