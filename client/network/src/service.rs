@@ -225,6 +225,10 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				let config = protocol::block_requests::Config::new(&params.protocol_id);
 				protocol::BlockRequests::new(config, params.chain.clone())
 			};
+			let finality_proof_requests = {
+				let config = protocol::finality_requests::Config::new(&params.protocol_id);
+				protocol::FinalityProofRequests::new(config, params.finality_proof_provider.clone())
+			};
 			let light_client_handler = {
 				let config = protocol::light_client_handler::Config::new(&params.protocol_id);
 				protocol::LightClientHandler::new(
@@ -261,6 +265,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				user_agent,
 				local_public,
 				block_requests,
+				finality_proof_requests,
 				light_client_handler,
 				discovery_config
 			);
@@ -1113,10 +1118,12 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 							ConnectionError::IO(_) =>
 								metrics.connections_closed_total.with_label_values(&[dir, "transport-error"]).inc(),
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::B(EitherError::A(PingFailure::Timeout))))))) =>
+								EitherError::A(EitherError::A(EitherError::B(
+								EitherError::A(PingFailure::Timeout)))))))) =>
 								metrics.connections_closed_total.with_label_values(&[dir, "ping-timeout"]).inc(),
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::A(EitherError::B(LegacyConnectionKillError))))))) =>
+								EitherError::A(EitherError::A(EitherError::A(
+								EitherError::B(LegacyConnectionKillError)))))))) =>
 								metrics.connections_closed_total.with_label_values(&[dir, "force-closed"]).inc(),
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(_)) =>
 								metrics.connections_closed_total.with_label_values(&[dir, "protocol-error"]).inc(),
