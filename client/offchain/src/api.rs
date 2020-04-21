@@ -14,6 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+mod timestamp;
+
+#[cfg(not(target_os = "unknown"))]
+mod http;
+
+#[cfg(target_os = "unknown")]
+mod http_dummy;
+
 use std::{
 	str::FromStr,
 	sync::Arc,
@@ -32,15 +40,11 @@ use sp_core::offchain::{
 };
 pub use sp_offchain::STORAGE_PREFIX;
 
-#[cfg(not(target_os = "unknown"))]
-mod http;
-
 #[cfg(target_os = "unknown")]
 use http_dummy as http;
-#[cfg(target_os = "unknown")]
-mod http_dummy;
 
-mod timestamp;
+#[cfg(target_os = "unknown")]
+use tee_dummy as tee;
 
 /// Asynchronous offchain API.
 ///

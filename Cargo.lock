@@ -290,9 +290,9 @@ checksum = "b41b7ea54a0c9d92199de89e20e58d49f02f8e699814ef3fdf266f6f748d15c7"
 
 [[package]]
 name = "base64"
-version = "0.12.0"
+version = "0.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d5ca2cd0adc3f48f9e9ea5a6bbdf9ccc0bfade884847e484d452414c7ccffb3"
+checksum = "e223af0dc48c96d4f8342ec01a4974f139df863896b316681efd36742f22cc67"
 
 [[package]]
 name = "bincode"
@@ -3536,6 +3536,7 @@ dependencies = [
  "pallet-scheduler",
  "pallet-session",
  "pallet-session-benchmarking",
+ "pallet-sgx-hello-world",
  "pallet-society",
  "pallet-staking",
  "pallet-staking-reward-curve",
@@ -4463,6 +4464,22 @@ dependencies = [
  "pallet-staking",
  "pallet-staking-reward-curve",
  "pallet-timestamp",
+ "parity-scale-codec",
+ "serde",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-sgx-hello-world"
+version = "2.0.0-dev"
+dependencies = [
+ "base64 0.12.2",
+ "frame-support",
+ "frame-system",
+ "lite-json",
  "parity-scale-codec",
  "serde",
  "sp-core",
@@ -9450,7 +9467,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed54fd9d64dfeeee7c285fd126174a6b5e6d4efc7e5a1566fdb635e60ff6a74e"
 dependencies = [
  "anyhow",
- "base64 0.12.0",
+ "base64 0.12.2",
  "bincode",
  "cranelift-codegen",
  "cranelift-entity",
