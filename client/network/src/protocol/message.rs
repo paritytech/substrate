@@ -26,10 +26,7 @@ pub use self::generic::{
 	FinalityProofRequest, FinalityProofResponse,
 	FromBlock, RemoteReadChildRequest, Roles,
 };
-// TODO EMCH consider breaking change new api with actual new Storage proof.
-// would need request or static choice. Or use adapter to put proof in legacy
-// format.
-use sc_client_api::LegacyStorageProof as StorageProof;
+use sc_client_api::StorageProof;
 
 /// A unique ID of a request.
 pub type RequestId = u64;

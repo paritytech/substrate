@@ -478,10 +478,8 @@ mod tests {
 
 		let kinds = [
 			StorageProofKind::Flatten,
-			/* TODO EMCH currently remote is static to legacy so flatten only
 			StorageProofKind::TrieSkipHashes,
-			StorageProofKind::KnownQueryPlanAndValues,
-			*/
+			//StorageProofKind::KnownQueryPlanAndValues,
 		];
 
 		for kind in &kinds {

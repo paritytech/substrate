@@ -43,8 +43,7 @@ mod trie_backend_essence;
 mod stats;
 
 pub use sp_trie::{trie_types::{Layout, TrieDBMut}, TrieMut, DBValue, MemoryDB,
-	StorageProof, StorageProofKind, ChildrenProofMap, ProofInput, ProofInputKind,
-	LegacyStorageProof};
+	StorageProof, StorageProofKind, ChildrenProofMap, ProofInput, ProofInputKind};
 pub use testing::TestExternalities;
 pub use basic::BasicExternalities;
 pub use ext::Ext;
