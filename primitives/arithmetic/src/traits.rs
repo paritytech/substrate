@@ -194,12 +194,13 @@ pub trait FixedPointNumber:
 	}
 
 	/// Creates self from an integer number.
-	///
-	/// Note that this might be lossy.
-	fn from_integer(int: Self::Inner) ->Self;
+	fn from_integer(int: Self::Inner) -> Self;
+
+	/// Creates self from an integer number.
+	fn checked_from_integer(int: Self::Inner) -> Option<Self>;
 
 	/// Raw constructor. Equal to `parts / DIV`.
-	fn from_parts(parts: Self::Inner) -> Self;
+	fn from_inner(inner: Self::Inner) -> Self;
 
 	/// Creates self from a rational number. Equal to `n / d`.
 	fn from_rational<N: TryInto<Self::Inner>>(n: N, d: Self::Inner) -> Option<Self>;

@@ -51,7 +51,11 @@ impl FixedPointNumber for Fixed128 {
 		Self(int.saturating_mul(Self::DIV))
 	}
 
-	fn from_parts(parts: Self::Inner) -> Self {
+	fn checked_from_integer(int: Self::Inner) -> Option<Self> {
+		int.checked_mul(Self::DIV).map(|inner| Self(inner))
+	}
+
+	fn from_inner(parts: Self::Inner) -> Self {
 		Self(parts)
 	}
 
@@ -124,7 +128,7 @@ impl FixedPointNumber for Fixed128 {
 		}
 
 		if self.0.is_negative() {
-			Self::from_parts(self.0 * -1)
+			Self::from_inner(self.0 * -1)
 		} else {
 			*self
 		}
@@ -169,7 +173,7 @@ impl FixedPointNumber for Fixed128 {
 		let fractional_parts = (parts % div) as Self::PrevUnsigned;
 
 		let n = int.saturating_mul(natural_parts);
-		let p = Self::Perthing::from_parts(fractional_parts) * int;
+		let p = Self::Perthing::from_inner(fractional_parts) * int;
 
 		// everything that needs to be either added or subtracted from the original `int`.
 		let excess = n.saturating_add(p);
@@ -364,7 +368,7 @@ impl Fixed128 {
 
 	fn try_from_i128_str(s: &str) -> Result<Self, &'static str> {
 		let parts: i128 = s.parse().map_err(|_| "invalid string input")?;
-		Ok(Self::from_parts(parts))
+		Ok(Self::from_inner(parts))
 	}
 }
 
@@ -544,7 +548,7 @@ mod tests {
 	#[test]
 	fn checked_div_with_zero_dividend_should_be_zero() {
 		let a = Fixed128::zero();
-		let b = Fixed128::from_parts(1);
+		let b = Fixed128::from_inner(1);
 
 		assert_eq!(a.checked_div(&b), Some(Fixed128::zero()));
 	}
@@ -557,8 +561,8 @@ mod tests {
 
 	#[test]
 	fn over_flow_should_be_none() {
-		let a = Fixed128::from_parts(i128::max_value() - 1);
-		let b = Fixed128::from_parts(2);
+		let a = Fixed128::from_inner(i128::max_value() - 1);
+		let b = Fixed128::from_inner(2);
 		assert_eq!(a.checked_add(&b), None);
 
 		let a = Fixed128::max_value();
@@ -679,8 +683,8 @@ mod tests {
 	#[test]
 	fn saturating_abs_should_work() {
 		// normal
-		assert_eq!(Fixed128::from_parts(1).saturating_abs(), Fixed128::from_parts(1));
-		assert_eq!(Fixed128::from_parts(-1).saturating_abs(), Fixed128::from_parts(1));
+		assert_eq!(Fixed128::from_inner(1).saturating_abs(), Fixed128::from_inner(1));
+		assert_eq!(Fixed128::from_inner(-1).saturating_abs(), Fixed128::from_inner(1));
 
 		// saturating
 		assert_eq!(Fixed128::min_value().saturating_abs(), Fixed128::max_value());
@@ -688,11 +692,11 @@ mod tests {
 
 	#[test]
 	fn is_positive_negative_should_work() {
-		let positive = Fixed128::from_parts(1);
+		let positive = Fixed128::from_inner(1);
 		assert!(positive.is_positive());
 		assert!(!positive.is_negative());
 
-		let negative = Fixed128::from_parts(-1);
+		let negative = Fixed128::from_inner(-1);
 		assert!(!negative.is_positive());
 		assert!(negative.is_negative());
 
@@ -703,14 +707,14 @@ mod tests {
 
 	#[test]
 	fn fmt_should_work() {
-		let positive = Fixed128::from_parts(1000000000000000001);
+		let positive = Fixed128::from_inner(1000000000000000001);
 		assert_eq!(format!("{:?}", positive), "Fixed128(1.000000000000000001)");
-		let negative = Fixed128::from_parts(-1000000000000000001);
+		let negative = Fixed128::from_inner(-1000000000000000001);
 		assert_eq!(format!("{:?}", negative), "Fixed128(-1.000000000000000001)");
 
-		let positive_fractional = Fixed128::from_parts(1);
+		let positive_fractional = Fixed128::from_inner(1);
 		assert_eq!(format!("{:?}", positive_fractional), "Fixed128(0.000000000000000001)");
-		let negative_fractional = Fixed128::from_parts(-1);
+		let negative_fractional = Fixed128::from_inner(-1);
 		assert_eq!(format!("{:?}", negative_fractional), "Fixed128(-0.000000000000000001)");
 
 		let zero = Fixed128::zero();

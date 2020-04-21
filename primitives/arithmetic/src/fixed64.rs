@@ -48,8 +48,12 @@ impl FixedPointNumber for Fixed64 {
 		Self(int.saturating_mul(Self::DIV))
 	}
 
-	fn from_parts(parts: Self::Inner) -> Self {
-		Self(parts)
+	fn checked_from_integer(int: Self::Inner) -> Option<Self> {
+		int.checked_mul(Self::DIV).map(|inner| Self(inner))
+	}
+
+	fn from_inner(inner: Self::Inner) -> Self {
+		Self(inner)
 	}
 
 	fn from_rational<N: TryInto<Self::Inner>>(n: N, d: Self::Inner) -> Option<Self> {
@@ -121,7 +125,7 @@ impl FixedPointNumber for Fixed64 {
 		}
 
 		if self.0.is_negative() {
-			Self::from_parts(self.0 * -1)
+			Self::from_inner(self.0 * -1)
 		} else {
 			*self
 		}
@@ -166,7 +170,7 @@ impl FixedPointNumber for Fixed64 {
 		let fractional_parts = (parts % div) as Self::PrevUnsigned;
 
 		let n = int.saturating_mul(natural_parts);
-		let p = Self::Perthing::from_parts(fractional_parts) * int;
+		let p = Self::Perthing::from_inner(fractional_parts) * int;
 
 		// everything that needs to be either added or subtracted from the original `int`.
 		let excess = n.saturating_add(p);
@@ -358,7 +362,7 @@ impl Fixed64 {
 
 	fn try_from_i64_str(s: &str) -> Result<Self, &'static str> {
 		let parts: i64 = s.parse().map_err(|_| "invalid string input")?;
-		Ok(Self::from_parts(parts))
+		Ok(Self::from_inner(parts))
 	}
 }
 
@@ -400,6 +404,8 @@ mod tests {
 		Fixed64::min_value()
 	}
 
+
+
 	#[test]
 	fn mul_works() {
 		let a = Fixed64::from_integer(1);
@@ -419,10 +425,10 @@ mod tests {
 		assert_eq!(a, Fixed64::from_integer(-5));
 
 		// biggest value that can be created.
-		assert_eq!(max(), Fixed64::from_parts(9_223_372_036_854_775_807));
+		assert_eq!(max(), Fixed64::from_inner(9_223_372_036_854_775_807));
 
 		// the smallest value that can be created.
-		assert_eq!(min(), Fixed64::from_parts(-9_223_372_036_854_775_808));
+		assert_eq!(min(), Fixed64::from_inner(-9_223_372_036_854_775_808));
 	}
 
 
@@ -583,7 +589,7 @@ mod tests {
 	#[test]
 	fn checked_div_with_zero_dividend_should_be_zero() {
 		let a = Fixed64::zero();
-		let b = Fixed64::from_parts(1);
+		let b = Fixed64::from_inner(1);
 
 		assert_eq!(a.checked_div(&b), Some(Fixed64::zero()));
 	}
@@ -596,8 +602,8 @@ mod tests {
 
 	#[test]
 	fn over_flow_should_be_none() {
-		let a = Fixed64::from_parts(i64::max_value() - 1);
-		let b = Fixed64::from_parts(2);
+		let a = Fixed64::from_inner(i64::max_value() - 1);
+		let b = Fixed64::from_inner(2);
 		assert_eq!(a.checked_add(&b), None);
 
 		let a = Fixed64::max_value();
@@ -685,8 +691,8 @@ mod tests {
 	#[test]
 	fn saturating_abs_should_work() {
 		// normal
-		assert_eq!(Fixed64::from_parts(1).saturating_abs(), Fixed64::from_parts(1));
-		assert_eq!(Fixed64::from_parts(-1).saturating_abs(), Fixed64::from_parts(1));
+		assert_eq!(Fixed64::from_inner(1).saturating_abs(), Fixed64::from_inner(1));
+		assert_eq!(Fixed64::from_inner(-1).saturating_abs(), Fixed64::from_inner(1));
 
 		// saturating
 		assert_eq!(Fixed64::min_value().saturating_abs(), Fixed64::max_value());
@@ -694,11 +700,11 @@ mod tests {
 
 	#[test]
 	fn is_positive_negative_should_work() {
-		let positive = Fixed64::from_parts(1);
+		let positive = Fixed64::from_inner(1);
 		assert!(positive.is_positive());
 		assert!(!positive.is_negative());
 
-		let negative = Fixed64::from_parts(-1);
+		let negative = Fixed64::from_inner(-1);
 		assert!(!negative.is_positive());
 		assert!(negative.is_negative());
 
@@ -709,14 +715,14 @@ mod tests {
 
 	#[test]
 	fn fmt_should_work() {
-		let positive = Fixed64::from_parts(1000000000000000001);
+		let positive = Fixed64::from_inner(1000000000000000001);
 		assert_eq!(format!("{:?}", positive), "Fixed64(1000000000.000000001)");
-		let negative = Fixed64::from_parts(-1000000000000000001);
+		let negative = Fixed64::from_inner(-1000000000000000001);
 		assert_eq!(format!("{:?}", negative), "Fixed64(-1000000000.000000001)");
 
-		let positive_fractional = Fixed64::from_parts(1);
+		let positive_fractional = Fixed64::from_inner(1);
 		assert_eq!(format!("{:?}", positive_fractional), "Fixed64(0.000000001)");
-		let negative_fractional = Fixed64::from_parts(-1);
+		let negative_fractional = Fixed64::from_inner(-1);
 		assert_eq!(format!("{:?}", negative_fractional), "Fixed64(-0.000000001)");
 
 		let zero = Fixed64::zero();
@@ -756,7 +762,7 @@ mod tests {
 		});
 
 		// unit (1) multiplier
-		fm = Fixed64::from_parts(0);
+		fm = Fixed64::from_inner(0);
 		test_set.clone().into_iter().for_each(|i| {
 			assert_eq!(fm.saturated_multiply_accumulate(i), i);
 		});
