@@ -322,7 +322,7 @@ decl_module! {
 
 			// lock
 			T::Currency::set_lock(
-			T::ModuleId::get(),
+				T::ModuleId::get(),
 				&who,
 				locked_balance,
 				WithdrawReasons::except(WithdrawReason::TransactionPayment),
