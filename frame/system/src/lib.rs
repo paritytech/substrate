@@ -198,6 +198,12 @@ pub trait Trait: 'static + Eq + Clone {
 	/// The weight of runtime database operations the runtime can invoke.
 	type DbWeight: Get<RuntimeDbWeight>;
 
+	/// The base weight of executing a block, independent of the transactions in the block.
+	type BlockExecutionWeight: Get<Weight>;
+
+	/// The base weight of an Extrinsic in the block, independent of the of extrinsic being executed.
+	type ExtrinsicBaseWeight: Get<Weight>;
+
 	/// The maximum length of a block (in bytes).
 	type MaximumBlockLength: Get<u32>;
 
@@ -1194,7 +1200,10 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 		let current_weight = Module::<T>::all_extrinsics_weight();
 		let maximum_weight = T::MaximumBlockWeight::get();
 		let limit = Self::get_dispatch_limit_ratio(info.class) * maximum_weight;
-		let added_weight = info.weight.min(limit);
+		let extrinsic_weight = info.weight + T::ExtrinsicBaseWeight::get();
+		// TODO: Verify this line is sane, seems to be bad.
+		let added_weight = extrinsic_weight.min(limit);
+		// TODO: Should be checked add I think.
 		let next_weight = current_weight.saturating_add(added_weight);
 		if next_weight > limit && info.class != DispatchClass::Mandatory {
 			Err(InvalidTransaction::ExhaustsResources.into())
@@ -1657,6 +1666,8 @@ mod tests {
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type DbWeight = ();
+	type BlockExecutionWeight = ();
+	type ExtrinsicBaseWeight = ();
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = Version;

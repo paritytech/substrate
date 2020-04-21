@@ -192,8 +192,9 @@ where
 			frame_system::InitKind::Full,
 		);
 		<frame_system::Module<System> as OnInitialize<System::BlockNumber>>::on_initialize(*block_number);
-		let weight = <AllModules as OnInitialize<System::BlockNumber>>::on_initialize(*block_number);
-		<frame_system::Module<System>>::register_extra_weight_unchecked(weight);
+		let mut weight = <AllModules as OnInitialize<System::BlockNumber>>::on_initialize(*block_number);
+		weight = weight.saturating_add(<System::BlockExecutionWeight as frame_support::traits::Get<_>>::get());
+		<frame_system::Module::<System>>::register_extra_weight_unchecked(weight);
 
 		frame_system::Module::<System>::note_finished_initialize();
 	}
@@ -490,6 +491,8 @@ mod tests {
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type DbWeight = ();
+	type BlockExecutionWeight = ();
+	type ExtrinsicBaseWeight = ();
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = RuntimeVersion;
