@@ -228,7 +228,7 @@ decl_module! {
 			Ok(())
 		}
 
-		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
+		#[weight = MINIMUM_WEIGHT]
 		pub fn submit_price_unsigned_with_signed_payload(
 			origin,
 			price_payload: PricePayload<T::Public, T::BlockNumber>,
