@@ -1591,7 +1591,7 @@ impl<T: Trait> Lookup for ChainContext<T> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
 	use super::*;
 	use sp_std::cell::RefCell;
 	use sp_core::H256;
@@ -1602,7 +1602,7 @@ mod tests {
 		pub enum Origin for Test where system = super {}
 	}
 
-	#[derive(Clone, Eq, PartialEq)]
+	#[derive(Clone, Eq, PartialEq, Debug)]
 	pub struct Test;
 
 	parameter_types! {
@@ -1630,8 +1630,9 @@ mod tests {
 		fn on_killed_account(who: &u64) { KILLED.with(|r| r.borrow_mut().push(*who)) }
 	}
 
-	#[derive(Debug)]
-	pub struct Call {}
+	#[derive(Debug, codec::Encode, codec::Decode)]
+	pub struct Call;
+
 	impl Dispatchable for Call {
 		type Origin = ();
 		type Trait = ();
@@ -1679,7 +1680,7 @@ mod tests {
 
 	type System = Module<Test>;
 
-	const CALL: &<Test as Trait>::Call = &Call {};
+	const CALL: &<Test as Trait>::Call = &Call;
 
 	fn new_test_ext() -> sp_io::TestExternalities {
 		GenesisConfig::default().build_storage::<Test>().unwrap().into()
