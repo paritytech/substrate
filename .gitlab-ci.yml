@@ -39,7 +39,7 @@ variables:
   CARGO_TARGET_DIR:                "/ci-cache/${CI_PROJECT_NAME}/targets/${CI_COMMIT_REF_NAME}/${CI_JOB_NAME}"
   REGISTRY:                        registry.parity.io/parity/infrastructure/scripts
   # SCCACHE_DIR:                     "/ci-cache/${CI_PROJECT_NAME}/sccache"
-  # CARGO_INCREMENTAL:               0
+  CARGO_INCREMENTAL:               0
   CI_SERVER_NAME:                  "GitLab CI"
   DOCKER_OS:                       "debian:stretch"
   ARCH:                            "x86_64"
