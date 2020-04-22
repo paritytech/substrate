@@ -126,6 +126,7 @@ fn should_deposit_event() {
 		// when
 		Offences::report_offence(vec![], offence).unwrap();
 
+		System::finalize();
 		// then
 		assert_eq!(
 			System::events(),
@@ -159,6 +160,8 @@ fn doesnt_deposit_event_for_dups() {
 		// when
 		// report for the second time
 		assert_eq!(Offences::report_offence(vec![], offence), Err(OffenceError::DuplicateReport));
+
+		System::finalize();
 
 		// then
 		// there is only one event.
@@ -227,6 +230,9 @@ fn should_queue_and_resubmit_rejected_offence() {
 		};
 		Offences::report_offence(vec![], offence).unwrap();
 		assert_eq!(Offences::deferred_offences().len(), 1);
+
+		System::finalize();
+
 		// event also indicates unapplied.
 		assert_eq!(
 			System::events(),

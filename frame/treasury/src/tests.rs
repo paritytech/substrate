@@ -218,6 +218,16 @@ fn report_awesome_from_beneficiary_and_tip_works() {
 	});
 }
 
+fn last_treasury_event() -> RawEvent<u64, u64, H256> {
+	System::finalize();
+	System::events().into_iter().map(|r| r.event)
+		.filter_map(|e| {
+			if let Event::treasury(inner) = e { Some(inner) } else { None }
+		})
+		.last()
+		.expect("There should be event")
+}
+
 #[test]
 fn close_tip_works() {
 	new_test_ext().execute_with(|| {
@@ -231,28 +241,18 @@ fn close_tip_works() {
 		let h = tip_hash();
 
 		assert_eq!(
-			System::events().into_iter().map(|r| r.event)
-				.filter_map(|e| {
-					if let Event::treasury(inner) = e { Some(inner) } else { None }
-				})
-				.last()
-				.unwrap(),
+			last_treasury_event(),
 			RawEvent::NewTip(h),
 		);
 
-		assert_ok!(Treasury::tip(Origin::signed(11), h.clone(), 10));
+		assert_ok!(Treasury::tip(Origin::signed(11), h, 10));
 
 		assert_noop!(Treasury::close_tip(Origin::signed(0), h.into()), Error::<Test>::StillOpen);
 
-		assert_ok!(Treasury::tip(Origin::signed(12), h.clone(), 10));
+		assert_ok!(Treasury::tip(Origin::signed(12), h, 10));
 
 		assert_eq!(
-			System::events().into_iter().map(|r| r.event)
-				.filter_map(|e| {
-					if let Event::treasury(inner) = e { Some(inner) } else { None }
-				})
-				.last()
-				.unwrap(),
+			last_treasury_event(),
 			RawEvent::TipClosing(h),
 		);
 
@@ -264,12 +264,7 @@ fn close_tip_works() {
 		assert_eq!(Balances::free_balance(3), 10);
 
 		assert_eq!(
-			System::events().into_iter().map(|r| r.event)
-				.filter_map(|e| {
-					if let Event::treasury(inner) = e { Some(inner) } else { None }
-				})
-				.last()
-				.unwrap(),
+			last_treasury_event(),
 			RawEvent::TipClosed(h, 3, 10),
 		);
 
