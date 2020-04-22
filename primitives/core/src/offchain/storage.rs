@@ -162,7 +162,7 @@ use std::collections::hash_map;
 
 /// Iterate by reference over the prepared offchain worker storage changes.
 pub struct OffchainOverlayedChangesIter<'i> {
-	inner: Option<hash_map::Iter<'i,Vec<u8>,OffchainOverlayedChange>>,
+	inner: Option<hash_map::Iter<'i, Vec<u8>, OffchainOverlayedChange>>,
 }
 
 impl<'i> Iterator for OffchainOverlayedChangesIter<'i> {
