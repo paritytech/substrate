@@ -39,6 +39,12 @@ macro_rules! implement_fixed {
 		#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 		pub struct $name($inner_type);
 
+		impl From<$inner_type> for $name {
+			fn from(n: $inner_type) -> Self {
+				Self(n.saturating_mul(Self::DIV))
+			}
+		}
+
 		impl FixedPointNumber for $name {
 			type Inner = $inner_type;
 			type Unsigned = $unsigned_type;
@@ -392,6 +398,110 @@ macro_rules! implement_fixed {
 			{
 				let s = String::deserialize(deserializer)?;
 				$name::try_from_str(&s).map_err(|err_str| de::Error::custom(err_str))
+			}
+		}
+
+		#[cfg(test)]
+		mod tests {
+			use super::*;
+			use crate::{Perbill, Percent, Permill, Perquintill};
+
+			fn max() -> $name {
+				$name::max_value()
+			}
+
+			fn min() -> $name {
+				$name::min_value()
+			}
+
+			#[test]
+			fn from_integer_works() {
+				let inner_max = <$name as FixedPointNumber>::Inner::max_value();
+				let inner_min = <$name as FixedPointNumber>::Inner::min_value();
+				let accuracy = $name::accuracy();
+
+				// Cases where integer fits.
+				let a = $name::from_integer(42);
+				assert_eq!(a.into_inner(), 42 * accuracy);
+
+				let a = $name::from_integer(-42);
+				assert_eq!(a.into_inner(), -42 * accuracy);
+
+				// Max/min integers that fit.
+				let a = $name::from_integer(inner_max / accuracy);
+				assert_eq!(a.into_inner(), (inner_max / accuracy) * accuracy);
+
+				let a = $name::from_integer(inner_min / accuracy);
+				assert_eq!(a.into_inner(), (inner_min / accuracy) * accuracy);
+
+				// Cases where integer doesn't fit, so it saturates.
+				let a = $name::from_integer(inner_max / accuracy + 1);
+				assert_eq!(a.into_inner(), inner_max);
+
+				let a = $name::from_integer(inner_min / accuracy - 1);
+				assert_eq!(a.into_inner(), inner_min);
+			}
+
+			#[test]
+			fn checked_from_integer_works() {
+				let inner_max = <$name as FixedPointNumber>::Inner::max_value();
+				let inner_min = <$name as FixedPointNumber>::Inner::min_value();
+				let accuracy = $name::accuracy();
+
+				// Cases where integer fits.
+				let a = $name::checked_from_integer(42)
+					.expect("42 * accuracy <= inner_max; qed");
+				assert_eq!(a.into_inner(), 42 * accuracy);
+
+				let a = $name::checked_from_integer(-42)
+					.expect("-42 * accuracy >= inner_min; qed");
+				assert_eq!(a.into_inner(), -42 * accuracy);
+
+				// Max/min integers that fit.
+				let a = $name::checked_from_integer(inner_max / accuracy)
+					.expect("(inner_max / accuracy) * accuracy <= inner_max; qed");
+				assert_eq!(a.into_inner(), (inner_max / accuracy) * accuracy);
+
+				let a = $name::checked_from_integer(inner_min / accuracy)
+					.expect("(inner_min / accuracy) * accuracy <= inner_min; qed");
+				assert_eq!(a.into_inner(), (inner_min / accuracy) * accuracy);
+
+				// Cases where integer doesn't fit, so it returns `None`.
+				let a = $name::checked_from_integer(inner_max / accuracy + 1);
+				assert_eq!(a, None);
+
+				let a = $name::checked_from_integer(inner_min / accuracy - 1);
+				assert_eq!(a, None);
+			}
+
+			#[test]
+			fn from_inner_works() {
+				let inner_max = <$name as FixedPointNumber>::Inner::max_value();
+				let inner_min = <$name as FixedPointNumber>::Inner::min_value();
+
+				assert_eq!(max(), $name::from_inner(inner_max));
+				assert_eq!(min(), $name::from_inner(inner_min));
+			}
+
+			#[test]
+			fn from_rational_works() {
+				let a = $name::from_rational(5, 2);
+				let b = $name::from_rational(-5, 2);
+				let c = $name::from_rational(5, -2);
+				let d = $name::from_rational(-5, -2);
+
+				assert_eq!(a.saturating_mul_int(10), 25.into());
+				assert_eq!(b.saturating_mul_int(10),-25.into());
+				assert_eq!(c.saturating_mul_int(10), -25.into());
+				assert_eq!(d.saturating_mul_int(10), 25.into());
+			}
+
+			#[test]
+			fn mul_works() {
+				let a = $name::from_integer(1);
+				let b = $name::from_integer(2);
+				let c = a * b;
+				assert_eq!(c, b);
 			}
 		}
 	}

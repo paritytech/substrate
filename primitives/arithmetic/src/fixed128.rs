@@ -409,353 +409,353 @@ implement_fixed!(
 // 	}
 // }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::{Perbill, Percent, Permill, Perquintill};
-
-	fn max() -> Fixed128 {
-		Fixed128::max_value()
-	}
-
-	fn min() -> Fixed128 {
-		Fixed128::min_value()
-	}
-
-	#[test]
-	fn fixed128_semantics() {
-		let a = Fixed128::checked_from_rational(5, 2).unwrap();
-		let b = Fixed128::checked_from_rational(10, 4).unwrap();
-		assert_eq!(a.0, 5 * Fixed128::DIV / 2);
-		assert_eq!(a, b);
-
-		let a = Fixed128::checked_from_rational(-5, 1).unwrap();
-		assert_eq!(a, Fixed128::from_integer(-5));
-
-		// biggest value that can be created.
-		assert_ne!(max(), Fixed128::from_integer(170_141_183_460_469_231_731));
-		assert_eq!(max(), Fixed128::from_integer(170_141_183_460_469_231_732));
-
-		// the smallest value that can be created.
-		assert_ne!(min(), Fixed128::from_integer(-170_141_183_460_469_231_731));
-		assert_eq!(min(), Fixed128::from_integer(-170_141_183_460_469_231_732));
-	}
-
-	#[test]
-	fn fixed128_operation() {
-		let a = Fixed128::from_integer(2);
-		let b = Fixed128::from_integer(1);
-		assert_eq!(a.checked_add(&b), Some(Fixed128::from_integer(1 + 2)));
-		assert_eq!(a.checked_sub(&b), Some(Fixed128::from_integer(2 - 1)));
-		assert_eq!(a.checked_mul(&b), Some(Fixed128::from_integer(1 * 2)));
-		assert_eq!(
-			a.checked_div(&b),
-			Some(Fixed128::checked_from_rational(2, 1).unwrap())
-		);
-
-		let a = Fixed128::checked_from_rational(5, 2).unwrap();
-		let b = Fixed128::checked_from_rational(3, 2).unwrap();
-		assert_eq!(
-			a.checked_add(&b),
-			Some(Fixed128::checked_from_rational(8, 2).unwrap())
-		);
-		assert_eq!(
-			a.checked_sub(&b),
-			Some(Fixed128::checked_from_rational(2, 2).unwrap())
-		);
-		assert_eq!(
-			a.checked_mul(&b),
-			Some(Fixed128::checked_from_rational(15, 4).unwrap())
-		);
-		assert_eq!(
-			a.checked_div(&b),
-			Some(Fixed128::checked_from_rational(10, 6).unwrap())
-		);
-
-		let a = Fixed128::from_integer(120);
-		assert_eq!(a.checked_div_int(&2i32), Some(60));
-
-		let a = Fixed128::checked_from_rational(20, 1).unwrap();
-		assert_eq!(a.checked_div_int(&2i32), Some(10));
-
-		let a = Fixed128::from_integer(120);
-		assert_eq!(a.checked_mul_int(&2i32), Some(240));
-
-		let a = Fixed128::checked_from_rational(1, 2).unwrap();
-		assert_eq!(a.checked_mul_int(&20i32), Some(10));
-
-		let a = Fixed128::checked_from_rational(-1, 2).unwrap();
-		assert_eq!(a.checked_mul_int(&20i32), Some(-10));
-	}
-
-	#[test]
-	fn saturating_mul_should_work() {
-		let a = Fixed128::from_integer(10);
-		assert_eq!(min().saturating_mul(a), min());
-		assert_eq!(max().saturating_mul(a), max());
-
-		let b = Fixed128::from_integer(-1);
-		assert_eq!(Fixed128::from_integer(125).saturating_mul(b).into_inner(), -125 * Fixed128::DIV);
-
-		let c = Fixed128::checked_from_rational(1, 5).unwrap();
-		assert_eq!(Fixed128::from_integer(125).saturating_mul(c).into_inner(), 25 * Fixed128::DIV);
-	}
-
-	#[test]
-	fn saturating_mul_int_works() {
-		let a = Fixed128::checked_from_rational(10, 1).unwrap();
-		assert_eq!(a.saturating_mul_int(&i32::max_value()), i32::max_value());
-
-		let a = Fixed128::checked_from_rational(-10, 1).unwrap();
-		assert_eq!(a.saturating_mul_int(&i32::max_value()), i32::min_value());
-
-		let a = Fixed128::checked_from_rational(3, 1).unwrap();
-		assert_eq!(a.saturating_mul_int(&100i8), i8::max_value());
-
-		let a = Fixed128::checked_from_rational(10, 1).unwrap();
-		assert_eq!(a.saturating_mul_int(&123i128), 1230);
-
-		let a = Fixed128::checked_from_rational(-10, 1).unwrap();
-		assert_eq!(a.saturating_mul_int(&123i128), -1230);
-
-		assert_eq!(max().saturating_mul_int(&2i128), 340_282_366_920_938_463_463);
-		assert_eq!(min().saturating_mul_int(&2i128), -340_282_366_920_938_463_463);
-
-		assert_eq!(max().saturating_mul_int(&i64::min_value()), i64::min_value());
-		assert_eq!(min().saturating_mul_int(&i64::max_value()), i64::min_value());
-		assert_eq!(min().saturating_mul_int(&i64::min_value()), i64::max_value());
-
-		assert_eq!(max().saturating_mul_int(&i128::min_value()), i128::min_value());
-		assert_eq!(min().saturating_mul_int(&i128::max_value()), i128::min_value());
-		assert_eq!(min().saturating_mul_int(&i128::min_value()), i128::max_value());
-	}
-
-	#[test]
-	fn zero_works() {
-		assert_eq!(Fixed128::zero(), Fixed128::from_integer(0));
-	}
-
-	#[test]
-	fn is_zero_works() {
-		assert!(Fixed128::zero().is_zero());
-		assert!(!Fixed128::from_integer(1).is_zero());
-	}
-
-	#[test]
-	fn checked_div_with_zero_should_be_none() {
-		let a = Fixed128::from_integer(1);
-		let b = Fixed128::from_integer(0);
-		assert_eq!(a.checked_div(&b), None);
-		assert_eq!(b.checked_div(&a), Some(b));
-	}
-
-	#[test]
-	fn checked_div_int_with_zero_should_be_none() {
-		let a = Fixed128::from_integer(1);
-		assert_eq!(a.checked_div_int(&0i32), None);
-		let a = Fixed128::from_integer(0);
-		assert_eq!(a.checked_div_int(&1i32), Some(0));
-	}
-
-	#[test]
-	fn checked_div_with_zero_dividend_should_be_zero() {
-		let a = Fixed128::zero();
-		let b = Fixed128::from_inner(1);
-
-		assert_eq!(a.checked_div(&b), Some(Fixed128::zero()));
-	}
-
-	#[test]
-	fn under_flow_should_be_none() {
-		let b = Fixed128::from_integer(1);
-		assert_eq!(min().checked_sub(&b), None);
-	}
-
-	#[test]
-	fn over_flow_should_be_none() {
-		let a = Fixed128::from_inner(i128::max_value() - 1);
-		let b = Fixed128::from_inner(2);
-		assert_eq!(a.checked_add(&b), None);
-
-		let a = Fixed128::max_value();
-		let b = Fixed128::checked_from_rational(2, 1).unwrap();
-		assert_eq!(a.checked_mul(&b), None);
-
-		let a = Fixed128::from_integer(255);
-		let b = 2u8;
-		assert_eq!(a.checked_mul_int(&b), None);
-
-		let a = Fixed128::from_integer(256);
-		let b = 1u8;
-		assert_eq!(a.checked_div_int(&b), None);
-
-		let a = Fixed128::from_integer(256);
-		let b = -1i8;
-		assert_eq!(a.checked_div_int(&b), None);
-	}
-
-	#[test]
-	fn checked_div_int_should_work() {
-		// 256 / 10 = 25 (25.6 as int = 25)
-		let a = Fixed128::from_integer(256);
-		let result = a.checked_div_int(&10i128).unwrap();
-		assert_eq!(result, 25);
-
-		// 256 / 100 = 2 (2.56 as int = 2)
-		let a = Fixed128::from_integer(256);
-		let result = a.checked_div_int(&100i128).unwrap();
-		assert_eq!(result, 2);
-
-		// 256 / 1000 = 0 (0.256 as int = 0)
-		let a = Fixed128::from_integer(256);
-		let result = a.checked_div_int(&1000i128).unwrap();
-		assert_eq!(result, 0);
-
-		// 256 / -1 = -256
-		let a = Fixed128::from_integer(256);
-		let result = a.checked_div_int(&-1i128).unwrap();
-		assert_eq!(result, -256);
-
-		// -256 / -1 = 256
-		let a = Fixed128::from_integer(-256);
-		let result = a.checked_div_int(&-1i128).unwrap();
-		assert_eq!(result, 256);
-
-		// 10 / -5 = -2
-		let a = Fixed128::checked_from_rational(20, 2).unwrap();
-		let result = a.checked_div_int(&-5i128).unwrap();
-		assert_eq!(result, -2);
-
-		// -170_141_183_460_469_231_731 / -2 = 85_070_591_730_234_615_865
-		let result = min().checked_div_int(&-2i128).unwrap();
-		assert_eq!(result, 85_070_591_730_234_615_865);
-
-		// 85_070_591_730_234_615_865 * -2 = -170_141_183_460_469_231_730
-		let result = Fixed128::from_integer(result).checked_mul_int(&-2i128).unwrap();
-		assert_eq!(result, -170_141_183_460_469_231_730);
-	}
-
-	#[test]
-	fn perthing_into_fixed_i128() {
-		let ten_percent_percent: Fixed128 = Percent::from_percent(10).into();
-		assert_eq!(ten_percent_percent.into_inner(), Fixed128::DIV / 10);
-
-		let ten_percent_permill: Fixed128 = Permill::from_percent(10).into();
-		assert_eq!(ten_percent_permill.into_inner(), Fixed128::DIV / 10);
-
-		let ten_percent_perbill: Fixed128 = Perbill::from_percent(10).into();
-		assert_eq!(ten_percent_perbill.into_inner(), Fixed128::DIV / 10);
-
-		let ten_percent_perquintill: Fixed128 = Perquintill::from_percent(10).into();
-		assert_eq!(ten_percent_perquintill.into_inner(), Fixed128::DIV / 10);
-	}
-
-	#[test]
-	fn recip_should_work() {
-		let a = Fixed128::from_integer(2);
-		assert_eq!(
-			a.reciprocal(),
-			Some(Fixed128::checked_from_rational(1, 2).unwrap())
-		);
-
-		let a = Fixed128::from_integer(2);
-		assert_eq!(a.reciprocal().unwrap().checked_mul_int(&4i32), Some(2i32));
-
-		let a = Fixed128::checked_from_rational(100, 121).unwrap();
-		assert_eq!(
-			a.reciprocal(),
-			Some(Fixed128::checked_from_rational(121, 100).unwrap())
-		);
-
-		let a = Fixed128::checked_from_rational(1, 2).unwrap();
-		assert_eq!(a.reciprocal().unwrap().checked_mul(&a), Some(Fixed128::from_integer(1)));
-
-		let a = Fixed128::from_integer(0);
-		assert_eq!(a.reciprocal(), None);
-
-		let a = Fixed128::checked_from_rational(-1, 2).unwrap();
-		assert_eq!(a.reciprocal(), Some(Fixed128::from_integer(-2)));
-	}
-
-	#[test]
-	fn serialize_deserialize_should_work() {
-		let two_point_five = Fixed128::checked_from_rational(5, 2).unwrap();
-		let serialized = serde_json::to_string(&two_point_five).unwrap();
-		assert_eq!(serialized, "\"2500000000000000000\"");
-		let deserialized: Fixed128 = serde_json::from_str(&serialized).unwrap();
-		assert_eq!(deserialized, two_point_five);
-
-		let minus_two_point_five = Fixed128::checked_from_rational(-5, 2).unwrap();
-		let serialized = serde_json::to_string(&minus_two_point_five).unwrap();
-		assert_eq!(serialized, "\"-2500000000000000000\"");
-		let deserialized: Fixed128 = serde_json::from_str(&serialized).unwrap();
-		assert_eq!(deserialized, minus_two_point_five);
-	}
-
-	#[test]
-	fn saturating_abs_should_work() {
-		// normal
-		assert_eq!(Fixed128::from_inner(1).saturating_abs(), Fixed128::from_inner(1));
-		assert_eq!(Fixed128::from_inner(-1).saturating_abs(), Fixed128::from_inner(1));
-
-		// saturating
-		assert_eq!(Fixed128::min_value().saturating_abs(), Fixed128::max_value());
-	}
-
-	#[test]
-	fn is_positive_negative_should_work() {
-		let positive = Fixed128::from_inner(1);
-		assert!(positive.is_positive());
-		assert!(!positive.is_negative());
-
-		let negative = Fixed128::from_inner(-1);
-		assert!(!negative.is_positive());
-		assert!(negative.is_negative());
-
-		let zero = Fixed128::zero();
-		assert!(!zero.is_positive());
-		assert!(!zero.is_negative());
-	}
-
-	#[test]
-	fn fmt_should_work() {
-		let positive = Fixed128::from_inner(1000000000000000001);
-		assert_eq!(format!("{:?}", positive), "Fixed128(1.000000000000000001)");
-		let negative = Fixed128::from_inner(-1000000000000000001);
-		assert_eq!(format!("{:?}", negative), "Fixed128(-1.000000000000000001)");
-
-		let positive_fractional = Fixed128::from_inner(1);
-		assert_eq!(format!("{:?}", positive_fractional), "Fixed128(0.000000000000000001)");
-		let negative_fractional = Fixed128::from_inner(-1);
-		assert_eq!(format!("{:?}", negative_fractional), "Fixed128(-0.000000000000000001)");
-
-		let zero = Fixed128::zero();
-		assert_eq!(format!("{:?}", zero), "Fixed128(0.000000000000000000)");
-	}
-
-	#[test]
-	fn saturating_pow_should_work() {
-		assert_eq!(Fixed128::from_integer(2).saturating_pow(0), Fixed128::from_integer(1));
-		assert_eq!(Fixed128::from_integer(2).saturating_pow(1), Fixed128::from_integer(2));
-		assert_eq!(Fixed128::from_integer(2).saturating_pow(2), Fixed128::from_integer(4));
-		assert_eq!(Fixed128::from_integer(2).saturating_pow(3), Fixed128::from_integer(8));
-		assert_eq!(Fixed128::from_integer(2).saturating_pow(50), Fixed128::from_integer(1125899906842624));
-
-		// Saturating.
-		assert_eq!(Fixed128::from_integer(2).saturating_pow(68), Fixed128::from_integer(295147905179352825856));
-
-		assert_eq!(Fixed128::from_integer(1).saturating_pow(1000), Fixed128::from_integer(1));
-		assert_eq!(Fixed128::from_integer(-1).saturating_pow(1000), Fixed128::from_integer(1));
-		assert_eq!(Fixed128::from_integer(-1).saturating_pow(1001), Fixed128::from_integer(-1));
-		assert_eq!(Fixed128::from_integer(1).saturating_pow(usize::max_value()), Fixed128::from_integer(1));
-		assert_eq!(Fixed128::from_integer(-1).saturating_pow(usize::max_value()), Fixed128::from_integer(-1));
-		assert_eq!(Fixed128::from_integer(-1).saturating_pow(usize::max_value() - 1), Fixed128::from_integer(1));
-
-		assert_eq!(Fixed128::from_integer(114209).saturating_pow(4), Fixed128::from_integer(170137997018538053761));
-		assert_eq!(Fixed128::from_integer(114209).saturating_pow(5), Fixed128::max_value());
-
-		assert_eq!(Fixed128::from_integer(1).saturating_pow(usize::max_value()), Fixed128::from_integer(1));
-		assert_eq!(Fixed128::from_integer(0).saturating_pow(usize::max_value()), Fixed128::from_integer(0));
-		assert_eq!(Fixed128::from_integer(2).saturating_pow(usize::max_value()), Fixed128::max_value());
-	}
-}
+// #[cfg(test)]
+// mod tests {
+// 	use super::*;
+// 	use crate::{Perbill, Percent, Permill, Perquintill};
+
+// 	fn max() -> Fixed128 {
+// 		Fixed128::max_value()
+// 	}
+
+// 	fn min() -> Fixed128 {
+// 		Fixed128::min_value()
+// 	}
+
+// 	#[test]
+// 	fn fixed128_semantics() {
+// 		let a = Fixed128::checked_from_rational(5, 2).unwrap();
+// 		let b = Fixed128::checked_from_rational(10, 4).unwrap();
+// 		assert_eq!(a.0, 5 * Fixed128::DIV / 2);
+// 		assert_eq!(a, b);
+
+// 		let a = Fixed128::checked_from_rational(-5, 1).unwrap();
+// 		assert_eq!(a, Fixed128::from_integer(-5));
+
+// 		// biggest value that can be created.
+// 		assert_ne!(max(), Fixed128::from_integer(170_141_183_460_469_231_731));
+// 		assert_eq!(max(), Fixed128::from_integer(170_141_183_460_469_231_732));
+
+// 		// the smallest value that can be created.
+// 		assert_ne!(min(), Fixed128::from_integer(-170_141_183_460_469_231_731));
+// 		assert_eq!(min(), Fixed128::from_integer(-170_141_183_460_469_231_732));
+// 	}
+
+// 	#[test]
+// 	fn fixed128_operation() {
+// 		let a = Fixed128::from_integer(2);
+// 		let b = Fixed128::from_integer(1);
+// 		assert_eq!(a.checked_add(&b), Some(Fixed128::from_integer(1 + 2)));
+// 		assert_eq!(a.checked_sub(&b), Some(Fixed128::from_integer(2 - 1)));
+// 		assert_eq!(a.checked_mul(&b), Some(Fixed128::from_integer(1 * 2)));
+// 		assert_eq!(
+// 			a.checked_div(&b),
+// 			Some(Fixed128::checked_from_rational(2, 1).unwrap())
+// 		);
+
+// 		let a = Fixed128::checked_from_rational(5, 2).unwrap();
+// 		let b = Fixed128::checked_from_rational(3, 2).unwrap();
+// 		assert_eq!(
+// 			a.checked_add(&b),
+// 			Some(Fixed128::checked_from_rational(8, 2).unwrap())
+// 		);
+// 		assert_eq!(
+// 			a.checked_sub(&b),
+// 			Some(Fixed128::checked_from_rational(2, 2).unwrap())
+// 		);
+// 		assert_eq!(
+// 			a.checked_mul(&b),
+// 			Some(Fixed128::checked_from_rational(15, 4).unwrap())
+// 		);
+// 		assert_eq!(
+// 			a.checked_div(&b),
+// 			Some(Fixed128::checked_from_rational(10, 6).unwrap())
+// 		);
+
+// 		let a = Fixed128::from_integer(120);
+// 		assert_eq!(a.checked_div_int(&2i32), Some(60));
+
+// 		let a = Fixed128::checked_from_rational(20, 1).unwrap();
+// 		assert_eq!(a.checked_div_int(&2i32), Some(10));
+
+// 		let a = Fixed128::from_integer(120);
+// 		assert_eq!(a.checked_mul_int(&2i32), Some(240));
+
+// 		let a = Fixed128::checked_from_rational(1, 2).unwrap();
+// 		assert_eq!(a.checked_mul_int(&20i32), Some(10));
+
+// 		let a = Fixed128::checked_from_rational(-1, 2).unwrap();
+// 		assert_eq!(a.checked_mul_int(&20i32), Some(-10));
+// 	}
+
+// 	#[test]
+// 	fn saturating_mul_should_work() {
+// 		let a = Fixed128::from_integer(10);
+// 		assert_eq!(min().saturating_mul(a), min());
+// 		assert_eq!(max().saturating_mul(a), max());
+
+// 		let b = Fixed128::from_integer(-1);
+// 		assert_eq!(Fixed128::from_integer(125).saturating_mul(b).into_inner(), -125 * Fixed128::DIV);
+
+// 		let c = Fixed128::checked_from_rational(1, 5).unwrap();
+// 		assert_eq!(Fixed128::from_integer(125).saturating_mul(c).into_inner(), 25 * Fixed128::DIV);
+// 	}
+
+// 	#[test]
+// 	fn saturating_mul_int_works() {
+// 		let a = Fixed128::checked_from_rational(10, 1).unwrap();
+// 		assert_eq!(a.saturating_mul_int(&i32::max_value()), i32::max_value());
+
+// 		let a = Fixed128::checked_from_rational(-10, 1).unwrap();
+// 		assert_eq!(a.saturating_mul_int(&i32::max_value()), i32::min_value());
+
+// 		let a = Fixed128::checked_from_rational(3, 1).unwrap();
+// 		assert_eq!(a.saturating_mul_int(&100i8), i8::max_value());
+
+// 		let a = Fixed128::checked_from_rational(10, 1).unwrap();
+// 		assert_eq!(a.saturating_mul_int(&123i128), 1230);
+
+// 		let a = Fixed128::checked_from_rational(-10, 1).unwrap();
+// 		assert_eq!(a.saturating_mul_int(&123i128), -1230);
+
+// 		assert_eq!(max().saturating_mul_int(&2i128), 340_282_366_920_938_463_463);
+// 		assert_eq!(min().saturating_mul_int(&2i128), -340_282_366_920_938_463_463);
+
+// 		assert_eq!(max().saturating_mul_int(&i64::min_value()), i64::min_value());
+// 		assert_eq!(min().saturating_mul_int(&i64::max_value()), i64::min_value());
+// 		assert_eq!(min().saturating_mul_int(&i64::min_value()), i64::max_value());
+
+// 		assert_eq!(max().saturating_mul_int(&i128::min_value()), i128::min_value());
+// 		assert_eq!(min().saturating_mul_int(&i128::max_value()), i128::min_value());
+// 		assert_eq!(min().saturating_mul_int(&i128::min_value()), i128::max_value());
+// 	}
+
+// 	#[test]
+// 	fn zero_works() {
+// 		assert_eq!(Fixed128::zero(), Fixed128::from_integer(0));
+// 	}
+
+// 	#[test]
+// 	fn is_zero_works() {
+// 		assert!(Fixed128::zero().is_zero());
+// 		assert!(!Fixed128::from_integer(1).is_zero());
+// 	}
+
+// 	#[test]
+// 	fn checked_div_with_zero_should_be_none() {
+// 		let a = Fixed128::from_integer(1);
+// 		let b = Fixed128::from_integer(0);
+// 		assert_eq!(a.checked_div(&b), None);
+// 		assert_eq!(b.checked_div(&a), Some(b));
+// 	}
+
+// 	#[test]
+// 	fn checked_div_int_with_zero_should_be_none() {
+// 		let a = Fixed128::from_integer(1);
+// 		assert_eq!(a.checked_div_int(&0i32), None);
+// 		let a = Fixed128::from_integer(0);
+// 		assert_eq!(a.checked_div_int(&1i32), Some(0));
+// 	}
+
+// 	#[test]
+// 	fn checked_div_with_zero_dividend_should_be_zero() {
+// 		let a = Fixed128::zero();
+// 		let b = Fixed128::from_inner(1);
+
+// 		assert_eq!(a.checked_div(&b), Some(Fixed128::zero()));
+// 	}
+
+// 	#[test]
+// 	fn under_flow_should_be_none() {
+// 		let b = Fixed128::from_integer(1);
+// 		assert_eq!(min().checked_sub(&b), None);
+// 	}
+
+// 	#[test]
+// 	fn over_flow_should_be_none() {
+// 		let a = Fixed128::from_inner(i128::max_value() - 1);
+// 		let b = Fixed128::from_inner(2);
+// 		assert_eq!(a.checked_add(&b), None);
+
+// 		let a = Fixed128::max_value();
+// 		let b = Fixed128::checked_from_rational(2, 1).unwrap();
+// 		assert_eq!(a.checked_mul(&b), None);
+
+// 		let a = Fixed128::from_integer(255);
+// 		let b = 2u8;
+// 		assert_eq!(a.checked_mul_int(&b), None);
+
+// 		let a = Fixed128::from_integer(256);
+// 		let b = 1u8;
+// 		assert_eq!(a.checked_div_int(&b), None);
+
+// 		let a = Fixed128::from_integer(256);
+// 		let b = -1i8;
+// 		assert_eq!(a.checked_div_int(&b), None);
+// 	}
+
+// 	#[test]
+// 	fn checked_div_int_should_work() {
+// 		// 256 / 10 = 25 (25.6 as int = 25)
+// 		let a = Fixed128::from_integer(256);
+// 		let result = a.checked_div_int(&10i128).unwrap();
+// 		assert_eq!(result, 25);
+
+// 		// 256 / 100 = 2 (2.56 as int = 2)
+// 		let a = Fixed128::from_integer(256);
+// 		let result = a.checked_div_int(&100i128).unwrap();
+// 		assert_eq!(result, 2);
+
+// 		// 256 / 1000 = 0 (0.256 as int = 0)
+// 		let a = Fixed128::from_integer(256);
+// 		let result = a.checked_div_int(&1000i128).unwrap();
+// 		assert_eq!(result, 0);
+
+// 		// 256 / -1 = -256
+// 		let a = Fixed128::from_integer(256);
+// 		let result = a.checked_div_int(&-1i128).unwrap();
+// 		assert_eq!(result, -256);
+
+// 		// -256 / -1 = 256
+// 		let a = Fixed128::from_integer(-256);
+// 		let result = a.checked_div_int(&-1i128).unwrap();
+// 		assert_eq!(result, 256);
+
+// 		// 10 / -5 = -2
+// 		let a = Fixed128::checked_from_rational(20, 2).unwrap();
+// 		let result = a.checked_div_int(&-5i128).unwrap();
+// 		assert_eq!(result, -2);
+
+// 		// -170_141_183_460_469_231_731 / -2 = 85_070_591_730_234_615_865
+// 		let result = min().checked_div_int(&-2i128).unwrap();
+// 		assert_eq!(result, 85_070_591_730_234_615_865);
+
+// 		// 85_070_591_730_234_615_865 * -2 = -170_141_183_460_469_231_730
+// 		let result = Fixed128::from_integer(result).checked_mul_int(&-2i128).unwrap();
+// 		assert_eq!(result, -170_141_183_460_469_231_730);
+// 	}
+
+// 	#[test]
+// 	fn perthing_into_fixed_i128() {
+// 		let ten_percent_percent: Fixed128 = Percent::from_percent(10).into();
+// 		assert_eq!(ten_percent_percent.into_inner(), Fixed128::DIV / 10);
+
+// 		let ten_percent_permill: Fixed128 = Permill::from_percent(10).into();
+// 		assert_eq!(ten_percent_permill.into_inner(), Fixed128::DIV / 10);
+
+// 		let ten_percent_perbill: Fixed128 = Perbill::from_percent(10).into();
+// 		assert_eq!(ten_percent_perbill.into_inner(), Fixed128::DIV / 10);
+
+// 		let ten_percent_perquintill: Fixed128 = Perquintill::from_percent(10).into();
+// 		assert_eq!(ten_percent_perquintill.into_inner(), Fixed128::DIV / 10);
+// 	}
+
+// 	#[test]
+// 	fn recip_should_work() {
+// 		let a = Fixed128::from_integer(2);
+// 		assert_eq!(
+// 			a.reciprocal(),
+// 			Some(Fixed128::checked_from_rational(1, 2).unwrap())
+// 		);
+
+// 		let a = Fixed128::from_integer(2);
+// 		assert_eq!(a.reciprocal().unwrap().checked_mul_int(&4i32), Some(2i32));
+
+// 		let a = Fixed128::checked_from_rational(100, 121).unwrap();
+// 		assert_eq!(
+// 			a.reciprocal(),
+// 			Some(Fixed128::checked_from_rational(121, 100).unwrap())
+// 		);
+
+// 		let a = Fixed128::checked_from_rational(1, 2).unwrap();
+// 		assert_eq!(a.reciprocal().unwrap().checked_mul(&a), Some(Fixed128::from_integer(1)));
+
+// 		let a = Fixed128::from_integer(0);
+// 		assert_eq!(a.reciprocal(), None);
+
+// 		let a = Fixed128::checked_from_rational(-1, 2).unwrap();
+// 		assert_eq!(a.reciprocal(), Some(Fixed128::from_integer(-2)));
+// 	}
+
+// 	#[test]
+// 	fn serialize_deserialize_should_work() {
+// 		let two_point_five = Fixed128::checked_from_rational(5, 2).unwrap();
+// 		let serialized = serde_json::to_string(&two_point_five).unwrap();
+// 		assert_eq!(serialized, "\"2500000000000000000\"");
+// 		let deserialized: Fixed128 = serde_json::from_str(&serialized).unwrap();
+// 		assert_eq!(deserialized, two_point_five);
+
+// 		let minus_two_point_five = Fixed128::checked_from_rational(-5, 2).unwrap();
+// 		let serialized = serde_json::to_string(&minus_two_point_five).unwrap();
+// 		assert_eq!(serialized, "\"-2500000000000000000\"");
+// 		let deserialized: Fixed128 = serde_json::from_str(&serialized).unwrap();
+// 		assert_eq!(deserialized, minus_two_point_five);
+// 	}
+
+// 	#[test]
+// 	fn saturating_abs_should_work() {
+// 		// normal
+// 		assert_eq!(Fixed128::from_inner(1).saturating_abs(), Fixed128::from_inner(1));
+// 		assert_eq!(Fixed128::from_inner(-1).saturating_abs(), Fixed128::from_inner(1));
+
+// 		// saturating
+// 		assert_eq!(Fixed128::min_value().saturating_abs(), Fixed128::max_value());
+// 	}
+
+// 	#[test]
+// 	fn is_positive_negative_should_work() {
+// 		let positive = Fixed128::from_inner(1);
+// 		assert!(positive.is_positive());
+// 		assert!(!positive.is_negative());
+
+// 		let negative = Fixed128::from_inner(-1);
+// 		assert!(!negative.is_positive());
+// 		assert!(negative.is_negative());
+
+// 		let zero = Fixed128::zero();
+// 		assert!(!zero.is_positive());
+// 		assert!(!zero.is_negative());
+// 	}
+
+// 	#[test]
+// 	fn fmt_should_work() {
+// 		let positive = Fixed128::from_inner(1000000000000000001);
+// 		assert_eq!(format!("{:?}", positive), "Fixed128(1.000000000000000001)");
+// 		let negative = Fixed128::from_inner(-1000000000000000001);
+// 		assert_eq!(format!("{:?}", negative), "Fixed128(-1.000000000000000001)");
+
+// 		let positive_fractional = Fixed128::from_inner(1);
+// 		assert_eq!(format!("{:?}", positive_fractional), "Fixed128(0.000000000000000001)");
+// 		let negative_fractional = Fixed128::from_inner(-1);
+// 		assert_eq!(format!("{:?}", negative_fractional), "Fixed128(-0.000000000000000001)");
+
+// 		let zero = Fixed128::zero();
+// 		assert_eq!(format!("{:?}", zero), "Fixed128(0.000000000000000000)");
+// 	}
+
+// 	#[test]
+// 	fn saturating_pow_should_work() {
+// 		assert_eq!(Fixed128::from_integer(2).saturating_pow(0), Fixed128::from_integer(1));
+// 		assert_eq!(Fixed128::from_integer(2).saturating_pow(1), Fixed128::from_integer(2));
+// 		assert_eq!(Fixed128::from_integer(2).saturating_pow(2), Fixed128::from_integer(4));
+// 		assert_eq!(Fixed128::from_integer(2).saturating_pow(3), Fixed128::from_integer(8));
+// 		assert_eq!(Fixed128::from_integer(2).saturating_pow(50), Fixed128::from_integer(1125899906842624));
+
+// 		// Saturating.
+// 		assert_eq!(Fixed128::from_integer(2).saturating_pow(68), Fixed128::from_integer(295147905179352825856));
+
+// 		assert_eq!(Fixed128::from_integer(1).saturating_pow(1000), Fixed128::from_integer(1));
+// 		assert_eq!(Fixed128::from_integer(-1).saturating_pow(1000), Fixed128::from_integer(1));
+// 		assert_eq!(Fixed128::from_integer(-1).saturating_pow(1001), Fixed128::from_integer(-1));
+// 		assert_eq!(Fixed128::from_integer(1).saturating_pow(usize::max_value()), Fixed128::from_integer(1));
+// 		assert_eq!(Fixed128::from_integer(-1).saturating_pow(usize::max_value()), Fixed128::from_integer(-1));
+// 		assert_eq!(Fixed128::from_integer(-1).saturating_pow(usize::max_value() - 1), Fixed128::from_integer(1));
+
+// 		assert_eq!(Fixed128::from_integer(114209).saturating_pow(4), Fixed128::from_integer(170137997018538053761));
+// 		assert_eq!(Fixed128::from_integer(114209).saturating_pow(5), Fixed128::max_value());
+
+// 		assert_eq!(Fixed128::from_integer(1).saturating_pow(usize::max_value()), Fixed128::from_integer(1));
+// 		assert_eq!(Fixed128::from_integer(0).saturating_pow(usize::max_value()), Fixed128::from_integer(0));
+// 		assert_eq!(Fixed128::from_integer(2).saturating_pow(usize::max_value()), Fixed128::max_value());
+// 	}
+// }
