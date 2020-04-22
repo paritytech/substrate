@@ -457,11 +457,11 @@ fn offchain_index(wasm_method: WasmExecutionMethod) {
 	let (offchain, _state) = testing::TestOffchainExt::new();
 	ext.register_extension(OffchainExt::new(offchain));
 	call_in_wasm(
-			"test_offchain_index_set",
-			&[0],
-			wasm_method,
-			&mut ext.ext(),
-		).unwrap();
+		"test_offchain_index_set",
+		&[0],
+		wasm_method,
+		&mut ext.ext(),
+	).unwrap();
 
 	use sp_core::offchain::storage::OffchainOverlayedChange;
 	assert_eq!(
