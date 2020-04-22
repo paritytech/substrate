@@ -53,7 +53,7 @@ sp-keyring = { version = "2.0.0-dev", path = "../../../primitives/keyring" }
 sc-executor = { version = "0.8.0-dev", path = "../../executor" }
 sc-network = { version = "0.8.0-dev", path = "../../network" }
 sc-network-test = { version = "0.8.0-dev", path = "../../network/test" }
-sc-service = { version = "0.8.0-dev", path = "../../service" }
+sc-service = { version = "0.8.0-dev", default-features = false, path = "../../service" }
 substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../../test-utils/runtime/client" }
 sc-block-builder = { version = "0.8.0-dev", path = "../../block-builder" }
 env_logger = "0.7.0"

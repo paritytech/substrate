@@ -22,5 +22,5 @@ sp-api = { version = "2.0.0-dev", path = "../../../primitives/api" }
 sp-blockchain = { version = "2.0.0-dev", path = "../../../primitives/blockchain" }
 codec = { package = "parity-scale-codec", version = "1.3.0" }
 sc-client-api = { version = "2.0.0-dev", path = "../../../client/api" }
-sc-service = { version = "0.8.0-dev", path = "../../../client/service" }
+sc-service = { version = "0.8.0-dev", default-features = false, path = "../../../client/service" }
 futures = "0.3.4"
