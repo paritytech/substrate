@@ -37,7 +37,7 @@ fn account<T: Trait>(name: &'static str, index: u32) -> T::AccountId {
 fn add_registrars<T: Trait>(r: u32) -> Result<(), &'static str> {
 	for i in 0..r {
 		let _ = T::Currency::make_free_balance_be(&account::<T>("registrar", i), BalanceOf::<T>::max_value());
-		Identity::<T>::add_registrar(RawOrigin::Root.into(), account::<T>("registrar", i), i)?;
+		Identity::<T>::add_registrar(RawOrigin::Root.into(), account::<T>("registrar", i))?;
 		Identity::<T>::set_fee(RawOrigin::Signed(account::<T>("registrar", i)).into(), i.into(), 10.into())?;
 		let fields = IdentityFields(
 			IdentityField::Display | IdentityField::Legal | IdentityField::Web | IdentityField::Riot
@@ -123,7 +123,7 @@ benchmarks! {
 
 	add_registrar {
 		let r in 1 .. T::MaxRegistrars::get() - 1 => add_registrars::<T>(r)?;
-	}: _(RawOrigin::Root, account::<T>("registrar", r + 1), r)
+	}: _(RawOrigin::Root, account::<T>("registrar", r + 1))
 
 	set_identity {
 		let r in ...;
@@ -219,7 +219,7 @@ benchmarks! {
 
 		let r in 1 .. T::MaxRegistrars::get() - 1 => add_registrars::<T>(r)?;
 
-		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone(), r)?;
+		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone())?;
 	}: _(RawOrigin::Signed(caller), r, 10.into())
 
 	set_account_id {
@@ -228,7 +228,7 @@ benchmarks! {
 
 		let r in 1 .. T::MaxRegistrars::get() - 1 => add_registrars::<T>(r)?;
 
-		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone(), r)?;
+		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone())?;
 	}: _(RawOrigin::Signed(caller), r, account::<T>("new", 0))
 
 	set_fields {
@@ -237,7 +237,7 @@ benchmarks! {
 
 		let r in 1 .. T::MaxRegistrars::get() - 1 => add_registrars::<T>(r)?;
 
-		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone(), r)?;
+		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone())?;
 		let fields = IdentityFields(
 			IdentityField::Display | IdentityField::Legal | IdentityField::Web | IdentityField::Riot
 			| IdentityField::Email | IdentityField::PgpFingerprint | IdentityField::Image | IdentityField::Twitter
@@ -261,7 +261,7 @@ benchmarks! {
 			Identity::<T>::set_identity(user_origin.clone(), info)?;
 		};
 
-		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone(), r)?;
+		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone())?;
 		Identity::<T>::request_judgement(user_origin.clone(), r, 10.into(), x)?;
 	}: _(RawOrigin::Signed(caller), r, user_lookup, Judgement::Reasonable, x)
 

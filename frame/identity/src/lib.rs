@@ -73,8 +73,9 @@ use sp_runtime::{DispatchError, DispatchResult, RuntimeDebug};
 use sp_runtime::traits::{StaticLookup, Zero, AppendZerosInput};
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
+	dispatch::DispatchResultWithPostInfo,
 	traits::{Currency, ReservableCurrency, OnUnbalanced, Get, BalanceStatus, EnsureOrigin},
-	weights::{SimpleDispatchInfo, FunctionOf, DispatchClass, Weight},
+	weights::{DispatchClass, FunctionOf, Weight},
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 
@@ -460,6 +461,26 @@ decl_error! {
 }
 }
 
+/// Functions for calcuating the weight of dispatchables.
+mod weight_for {
+	use frame_support::weights::{RuntimeDbWeight, Weight};
+
+	/// Weight calculation for `clear_identity`.
+	pub(crate) fn clear_identity(
+		db: RuntimeDbWeight,
+		subs: impl Into<Weight> + Copy,
+		judgements: impl Into<Weight>,
+		extra_fields: impl Into<Weight>) -> Weight
+	{
+		db.reads_writes(2, subs.into() + 2) // S + 2 deletions
+			+ db.reads_writes(1, 1) // balance ops
+			+ 160_000_000 // constant
+			+ 500_000 * judgements.into() // R
+			+ 5_400_000 * subs.into() // S
+			+ 2_000_000 * extra_fields.into() // X
+	}
+}
+
 decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what it's working on.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
@@ -476,35 +497,31 @@ decl_module! {
 		/// Emits `RegistrarAdded` if successful.
 		///
 		/// # <weight>
-		/// - `O(R)` where `R` registrar-count (governance-bounded).
+		/// - `O(R)` where `R` registrar-count (governance-bounded and code-bounded).
 		/// - One storage mutation (codec `O(R)`).
 		/// - One event.
-		/// - Benchmark: 78.71 + R * 0.965 µs (min square analysis)
+		/// - Benchmarks:
+		///   - 78.71 + R * 0.965 µs (min squares analysis)
+		///   - 94.28 + R * 0.991 µs (min squares analysis)
 		/// # </weight>
-		#[weight = FunctionOf(
-			|(_, &old_count): (&T::AccountId, &u32)| {
-				T::DbWeight::get().reads_writes(1, 1)
-				+ 78_710_000 // constant
-				+ 965_000 * (old_count as Weight) // R
-			},
-			DispatchClass::Normal,
-			true
-		)]
-		fn add_registrar(origin, account: T::AccountId, old_registrar_count: u32) -> DispatchResult {
+		#[weight = T::DbWeight::get().reads_writes(1, 1)
+			+ 100_000_000 // constant
+			+ 1_000_000 * T::MaxRegistrars::get() as Weight // R
+		]
+		fn add_registrar(origin, account: T::AccountId) -> DispatchResultWithPostInfo {
 			T::RegistrarOrigin::try_origin(origin)
 				.map(|_| ())
 				.or_else(ensure_root)?;
 
-			let i = <Registrars<T>>::try_mutate(|registrars| -> Result<RegistrarIndex, DispatchError> {
-				ensure!(registrars.len() as u32 <= old_registrar_count, "invalid count");
+			let (i, registrar_count) = <Registrars<T>>::try_mutate(|registrars| -> Result<(RegistrarIndex, usize), DispatchError> {
 				ensure!((registrars.len() as u32) < T::MaxRegistrars::get(), Error::<T>::TooManyRegistrars);
 				registrars.push(Some(RegistrarInfo { account, fee: Zero::zero(), fields: Default::default() }));
-				Ok((registrars.len() - 1) as RegistrarIndex)
+				Ok(((registrars.len() - 1) as RegistrarIndex, registrars.len()))
 			})?;
 
 			Self::deposit_event(RawEvent::RegistrarAdded(i));
 
-			Ok(())
+			Ok(Some(100_000_000 + 1_000_000 * registrar_count as Weight).into())
 		}
 
 		/// Set an account's identity information and reserve the appropriate deposit.
@@ -519,32 +536,29 @@ decl_module! {
 		/// Emits `IdentitySet` if successful.
 		///
 		/// # <weight>
-		/// - `O(X + X' + J)`
+		/// - `O(X + X' + R)`
 		///   - where `X` additional-field-count (deposit-bounded and code-bounded)
-		///   - where `J` judgements-count (registrar-count-bounded)
-		/// - At most two balance operations.
-		/// - One storage mutation (codec-read `O(X' + J)`, codec-write `O(X + J)`).
+		///   - where `R` judgements-count (registrar-count-bounded)
+		/// - One balance reserve operation.
+		/// - One storage mutation (codec-read `O(X' + R)`, codec-write `O(X + R)`).
 		/// - One event.
-		/// - Benchmark: 136.6 + J * 0.62 + X * 2.62 µs (min square analysis)
+		/// - Benchmark: 
+		///   - 136.6 + R * 0.62 + X * 2.62 µs (min squares analysis)
+		///   - 146.2 + R * 0.372 + X * 2.98 µs (min squares analysis)
 		/// # </weight>
-		#[weight = FunctionOf(
-			|(info,): (&IdentityInfo,)| {
-				T::DbWeight::get().reads_writes(1, 1)
-				+ T::DbWeight::get().reads_writes(1, 1) // balance ops
-				+ 136_600_000 // constant
-				+ 2_622_000 * (info.additional.len() as Weight) // X
-				+ 624_000 * (T::MaxRegistrars::get() as Weight) // J
-			},
-			DispatchClass::Normal,
-			true
-		)]
-		fn set_identity(origin, info: IdentityInfo) {
+		#[weight =  T::DbWeight::get().reads_writes(1, 1)
+			+ T::DbWeight::get().reads_writes(1, 1) // balance ops
+			+ 150_000_000 // constant
+			+ 3_000_000 * (info.additional.len() as Weight) // X
+			+ 700_000 * (T::MaxRegistrars::get() as Weight) // R
+		]
+		fn set_identity(origin, info: IdentityInfo) -> DispatchResultWithPostInfo {
 			let sender = ensure_signed(origin)?;
 			let extra_fields = info.additional.len() as u32;
 			ensure!(extra_fields <= T::MaxAdditionalFields::get(), Error::<T>::TooManyFields);
 			let fd = <BalanceOf<T>>::from(extra_fields) * T::FieldDeposit::get();
 
-			let mut id = match <IdentityOf<T>>::get(&sender) {
+			let mut id  = match <IdentityOf<T>>::get(&sender) {
 				Some(mut id) => {
 					// Only keep non-positive judgements.
 					id.judgements.retain(|j| j.1.is_sticky());
@@ -563,8 +577,11 @@ decl_module! {
 				let _ = T::Currency::unreserve(&sender, old_deposit - id.deposit);
 			}
 
+			let judgements = id.judgements.len();
 			<IdentityOf<T>>::insert(&sender, id);
 			Self::deposit_event(RawEvent::IdentitySet(sender));
+
+			Ok(Some(150_000_000 + 3_000_000 * extra_fields as Weight + 700_000 * judgements as Weight).into())
 		}
 
 		/// Set the sub-accounts of the sender.
@@ -583,24 +600,23 @@ decl_module! {
 		///   - where `P` old-subs-count (hard- and deposit-bounded).
 		///   - where `S` subs-count (hard- and deposit-bounded).
 		/// - At most one balance operations.
-		/// - At most O(P + S + 1) storage mutations; codec complexity `O(S)`);
-		///   one storage-exists.
-		/// - Benchmark: 115.2 + P * 5.11 + S * 6.67 µs (min square analysis)
+		/// - DB:
+		///   - `P + S` storage mutations (codec complexity `O(1)`)
+		///   - One storage read (codec complexity `O(P)`).
+		///   - One storage write (codec complexity `O(S)`).
+		///   - One storage-exists (`IdentityOf::contains_key`).
+		/// - Benchmark: 
+		///   - 115.2 + P * 5.11 + S * 6.67 µs (min squares analysis)
+		///   - 121 + P * 4.852 + S * 7.111 µs (min squares analysis)
 		/// # </weight>
-		#[weight = FunctionOf(
-			|(subs, &old_subs_count): (&Vec<(T::AccountId, Data)>, &u32)| {
-				let db = T::DbWeight::get();
-				db.reads(1) // storage-exists
-				+ db.reads_writes(1, 1) // balance ops
-				+ db.writes(old_subs_count.into()) // P old DB deletions
-				+ db.writes(subs.len() as u64 + 1) // S + 1 new DB writes
-				+ 115_200_000 // constant
-				+ 5_118_000 * old_subs_count as Weight // P
-				+ 6_676_000 * subs.len() as Weight // S
-			},
-			DispatchClass::Normal,
-			true
-		)]
+		#[weight = T::DbWeight::get().reads(1) // storage-exists
+				+ T::DbWeight::get().reads_writes(1, 1) // balance ops
+				+ T::DbWeight::get().reads_writes(1, (*old_subs_count).into()) // P old DB deletions
+				+ T::DbWeight::get().writes(subs.len() as u64 + 1) // S + 1 new DB writes
+				+ 130_000_000 // constant
+				+ 5_200_000 * (*old_subs_count) as Weight // P
+				+ 7_300_000 * subs.len() as Weight // S
+		]
 		fn set_subs(origin, subs: Vec<(T::AccountId, Data)>, old_subs_count: u32) {
 			let sender = ensure_signed(origin)?;
 			ensure!(<IdentityOf<T>>::contains_key(&sender), Error::<T>::NotFound);
@@ -650,27 +666,24 @@ decl_module! {
 		///   - where `S` subs-count (hard- and deposit-bounded).
 		///   - where `X` additional-field-count (deposit-bounded and code-bounded).
 		/// - One balance-unreserve operation.
-		/// - `S + 2` storage deletions.
+		/// - `2` storage reads and `S + 2` storage deletions.
 		/// - One event.
-		/// - Benchmark: 152.3 + R * 0.306 + S * 4.967 + X * 1.697 µs (min square analysis)
+		/// - Benchmarks: 
+		///   - 152.3 + R * 0.306 + S * 4.967 + X * 1.697 µs (min squares analysis)
+		///   - 139.5 + R * 0.466 + S * 5.304 + X * 1.895 µs (min squares analysis)
 		/// # </weight>
-		#[weight = FunctionOf(
-			|(&subs_count,): (&u32,)| {
-				T::DbWeight::get().writes(subs_count as Weight + 2) // S + 2 deletions
-				+ 152_300_000 // constant
-				+ 306_000 * T::MaxRegistrars::get() as Weight // R
-				+ 4_967_000 * subs_count as Weight // S
-				+ 1_697_000 * T::MaxAdditionalFields::get() as Weight // X
-			},
-			DispatchClass::Normal,
-			true
+		#[weight = weight_for::clear_identity(
+			T::DbWeight::get(),
+			T::MaxSubAccounts::get(), // S
+			T::MaxRegistrars::get(), // R
+			T::MaxAdditionalFields::get() // X
 		)]
-		fn clear_identity(origin, subs_count: u32) {
+		fn clear_identity(origin) -> DispatchResultWithPostInfo {
 			let sender = ensure_signed(origin)?;
 
 			let (subs_deposit, sub_ids) = <SubsOf<T>>::take(&sender);
-			ensure!(sub_ids.len() <= subs_count as usize, "invalid count");
-			let deposit = <IdentityOf<T>>::take(&sender).ok_or(Error::<T>::NotNamed)?.total_deposit()
+			let id = <IdentityOf<T>>::take(&sender).ok_or(Error::<T>::NotNamed)?;
+			let deposit = id.total_deposit()
 				+ subs_deposit;
 			for sub in sub_ids.iter() {
 				<SuperOf<T>>::remove(sub);
@@ -679,6 +692,13 @@ decl_module! {
 			let _ = T::Currency::unreserve(&sender, deposit.clone());
 
 			Self::deposit_event(RawEvent::IdentityCleared(sender, deposit));
+
+			Ok(Some(weight_for::clear_identity(
+				T::DbWeight::get(),
+				sub_ids.len() as Weight,
+				id.judgements.len() as Weight,
+				id.info.additional.len() as Weight
+			)).into())
 		}
 
 		/// Request a judgement from a registrar.
@@ -710,7 +730,7 @@ decl_module! {
 		/// - One balance-reserve operation.
 		/// - Storage: 1 read `O(R)`, 1 mutate `O(X + R)`.
 		/// - One event.
-		/// - Benchmark: 154 + R * 0.932 + X * 3.302 µs (min square analysis)
+		/// - Benchmark: 154 + R * 0.932 + X * 3.302 µs (min squares analysis)
 		/// # </weight>
 		#[weight = FunctionOf(
 			|(_, _, &fields_count): (&RegistrarIndex, &BalanceOf<T>, &u32)| {
@@ -775,7 +795,7 @@ decl_module! {
 		/// - One balance-reserve operation.
 		/// - One storage mutation `O(R + X)`.
 		/// - One event.
-		/// - Benchmark: 135.3 + R * 0.574 + X * 3.394 µs (min square analysis)
+		/// - Benchmark: 135.3 + R * 0.574 + X * 3.394 µs (min squares analysis)
 		/// # </weight>
 		#[weight = FunctionOf(
 			|(_, &fields_count): (&RegistrarIndex, &u32)| {
@@ -818,7 +838,7 @@ decl_module! {
 		/// # <weight>
 		/// - `O(R)`.
 		/// - One storage mutation `O(R)`.
-		/// - Benchmark: 23.81 + R * 0.774 µs (min square analysis)
+		/// - Benchmark: 23.81 + R * 0.774 µs (min squares analysis)
 		/// # </weight>
 		#[weight = T::DbWeight::get().reads_writes(1, 1)
 			+ 23_810_000 // constant
@@ -849,7 +869,7 @@ decl_module! {
 		/// # <weight>
 		/// - `O(R)`.
 		/// - One storage mutation `O(R)`.
-		/// - Benchmark: 24.59 + R * 0.832 µs (min square analysis)
+		/// - Benchmark: 24.59 + R * 0.832 µs (min squares analysis)
 		/// # </weight>
 		#[weight = T::DbWeight::get().reads_writes(1, 1)
 			+ 24_590_000 // constant
@@ -880,7 +900,7 @@ decl_module! {
 		/// # <weight>
 		/// - `O(R)`.
 		/// - One storage mutation `O(R)`.
-		/// - Benchmark: 22.85 + R * 0.853 µs (min square analysis)
+		/// - Benchmark: 22.85 + R * 0.853 µs (min squares analysis)
 		/// # </weight>
 		#[weight = T::DbWeight::get().reads_writes(1, 1)
 			+ 22_850_000 // constant
@@ -918,7 +938,7 @@ decl_module! {
 		/// - Up to one account-lookup operation.
 		/// - Storage: 1 read `O(R)`, 1 mutate `O(R + X)`.
 		/// - One event.
-		/// - Benchmark: 110.7 + R * 1.066 + X * 3.402 µs (min square analysis)
+		/// - Benchmark: 110.7 + R * 1.066 + X * 3.402 µs (min squares analysis)
 		/// # </weight>
 		#[weight = FunctionOf(
 			|(_, _, _, &fields_count): (&RegistrarIndex, &<T::Lookup as StaticLookup>::Source, &Judgement<BalanceOf<T>>, &u32)| {
@@ -980,7 +1000,7 @@ decl_module! {
 		/// - One balance-reserve operation.
 		/// - `S + 2` storage mutations.
 		/// - One event.
-		/// - Benchmark: 167.4 + R * 1.107 + S * 5.343 + X * 2.294 µs (min square analysis)
+		/// - Benchmark: 167.4 + R * 1.107 + S * 5.343 + X * 2.294 µs (min squares analysis)
 		/// # </weight>
 		#[weight = FunctionOf(
 			|(_, &subs_count): (&<T::Lookup as StaticLookup>::Source, &u32)| {
@@ -1159,7 +1179,7 @@ mod tests {
 	#[test]
 	fn adding_registrar_should_work() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(Identity::add_registrar(Origin::signed(1), 3, 0));
+			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
 			assert_ok!(Identity::set_fee(Origin::signed(3), 0, 10));
 			let fields = IdentityFields(IdentityField::Display | IdentityField::Legal);
 			assert_ok!(Identity::set_fields(Origin::signed(3), 0, fields));
@@ -1173,11 +1193,11 @@ mod tests {
 	fn amount_of_registrars_is_limited() {
 		new_test_ext().execute_with(|| {
 			for i in 1..MaxRegistrars::get() + 1 {
-				assert_ok!(Identity::add_registrar(Origin::signed(1), i as u64, i - 1));
+				assert_ok!(Identity::add_registrar(Origin::signed(1), i as u64));
 			}
 			let last_registrar = MaxRegistrars::get() as u64 + 1;
 			assert_noop!(
-				Identity::add_registrar(Origin::signed(1), last_registrar, MaxRegistrars::get()), 
+				Identity::add_registrar(Origin::signed(1), last_registrar), 
 				Error::<Test>::TooManyRegistrars
 			);
 		});
@@ -1186,7 +1206,7 @@ mod tests {
 	#[test]
 	fn registration_should_work() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(Identity::add_registrar(Origin::signed(1), 3, 0));
+			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
 			assert_ok!(Identity::set_fee(Origin::signed(3), 0, 10));
 			let mut three_fields = ten();
 			three_fields.additional.push(Default::default());
@@ -1213,7 +1233,7 @@ mod tests {
 				Error::<Test>::InvalidIndex
 			);
 
-			assert_ok!(Identity::add_registrar(Origin::signed(1), 3, 0));
+			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
 			assert_noop!(
 				Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable, 0),
 				Error::<Test>::InvalidTarget
@@ -1237,7 +1257,7 @@ mod tests {
 	#[test]
 	fn clearing_judgement_should_work() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(Identity::add_registrar(Origin::signed(1), 3, 0));
+			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
 			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable, 0));
 			assert_ok!(Identity::clear_identity(Origin::signed(10), 0));
@@ -1325,7 +1345,7 @@ mod tests {
 	#[test]
 	fn cancelling_requested_judgement_should_work() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(Identity::add_registrar(Origin::signed(1), 3, 0));
+			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
 			assert_ok!(Identity::set_fee(Origin::signed(3), 0, 10));
 			assert_noop!(Identity::cancel_request(Origin::signed(10), 0, 0), Error::<Test>::NoIdentity);
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
@@ -1342,7 +1362,7 @@ mod tests {
 	#[test]
 	fn requesting_judgement_should_work() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(Identity::add_registrar(Origin::signed(1), 3, 0));
+			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
 			assert_ok!(Identity::set_fee(Origin::signed(3), 0, 10));
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
 			assert_noop!(Identity::request_judgement(Origin::signed(10), 0, 9, 0), Error::<Test>::FeeChanged);
@@ -1360,7 +1380,7 @@ mod tests {
 			assert_noop!(Identity::request_judgement(Origin::signed(10), 0, 10, 0), Error::<Test>::StickyJudgement);
 
 			// Requesting from a second registrar still works.
-			assert_ok!(Identity::add_registrar(Origin::signed(1), 4, 1));
+			assert_ok!(Identity::add_registrar(Origin::signed(1), 4));
 			assert_ok!(Identity::request_judgement(Origin::signed(10), 1, 10, 0));
 
 			// Re-requesting after the judgement has been reduced works.
@@ -1372,7 +1392,7 @@ mod tests {
 	#[test]
 	fn field_deposit_should_work() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(Identity::add_registrar(Origin::signed(1), 3, 0));
+			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
 			assert_ok!(Identity::set_fee(Origin::signed(3), 0, 10));
 			assert_ok!(Identity::set_identity(Origin::signed(10), IdentityInfo {
 				additional: vec![
@@ -1387,7 +1407,7 @@ mod tests {
 	#[test]
 	fn setting_account_id_should_work() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(Identity::add_registrar(Origin::signed(1), 3, 0));
+			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
 			// account 4 cannot change the first registrar's identity since it's owned by 3.
 			assert_noop!(Identity::set_account_id(Origin::signed(4), 0, 3), Error::<Test>::InvalidIndex);
 			// account 3 can, because that's the registrar's current account.
