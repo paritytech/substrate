@@ -110,7 +110,7 @@ use frame_support::{
 		Get, FindAuthor, ValidatorRegistration, EstimateNextSessionRotation, EstimateNextNewSession,
 	},
 	dispatch::{self, DispatchResult, DispatchError},
-	weights::{Weight, MINIMUM_WEIGHT, SimpleDispatchInfo},
+	weights::{Weight, MINIMUM_WEIGHT},
 };
 use frame_system::{self as system, ensure_signed};
 
@@ -498,7 +498,7 @@ decl_module! {
 		/// - Increases system account refs by one on success iff there were previously no keys set.
 		///   In this case, purge_keys will need to be called before the account can be removed.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(150_000_000)]
+		#[weight = 150_000_000]
 		pub fn set_keys(origin, keys: T::Keys, proof: Vec<u8>) -> dispatch::DispatchResult {
 			let who = ensure_signed(origin)?;
 
@@ -519,7 +519,7 @@ decl_module! {
 		/// - Removes N + 1 DB entries.
 		/// - Reduces system account refs by one on success.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(150_000_000)]
+		#[weight = 150_000_000]
 		pub fn purge_keys(origin) {
 			let who = ensure_signed(origin)?;
 			Self::do_purge_keys(&who)?;
