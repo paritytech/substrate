@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{Service, NetworkStatus, NetworkState, error::Error, DEFAULT_PROTOCOL_ID, MallocSizeOfWasm};
-use crate::{start_rpc_servers, build_network_future, TransactionPoolAdapter, TaskManager};
+use crate::{start_rpc_servers, build_network_future, TransactionPoolAdapter, TaskManager, SpawnTaskHandle};
 use crate::status_sinks;
 use crate::config::{Configuration, KeystoreConfig, PrometheusConfig};
 use crate::metrics::MetricsService;
@@ -429,7 +429,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 	/// Defines which import queue to use.
 	pub fn with_import_queue<UImpQu>(
 		self,
-		builder: impl FnOnce(&Configuration, Arc<TCl>, Option<TSc>, Arc<TExPool>, &TaskManager)
+		builder: impl FnOnce(&Configuration, Arc<TCl>, Option<TSc>, Arc<TExPool>, &SpawnTaskHandle)
 			-> Result<UImpQu, Error>
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, UImpQu, TFprb, TFpp,
 			TExPool, TRpc, Backend>, Error>
@@ -439,7 +439,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			self.client.clone(),
 			self.select_chain.clone(),
 			self.transaction_pool.clone(),
-			&self.task_manager,
+			&self.task_manager.spawn_handle(),
 		)?;
 
 		Ok(ServiceBuilder {
@@ -529,7 +529,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			Option<TFchr>,
 			Option<TSc>,
 			Arc<TExPool>,
-			&TaskManager,
+			&SpawnTaskHandle,
 		) -> Result<(UImpQu, Option<UFprb>), Error>
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, UImpQu, UFprb, TFpp,
 		TExPool, TRpc, Backend>, Error>
@@ -541,7 +541,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			self.fetcher.clone(),
 			self.select_chain.clone(),
 			self.transaction_pool.clone(),
-			&self.task_manager,
+			&self.task_manager.spawn_handle(),
 		)?;
 
 		Ok(ServiceBuilder {
@@ -573,7 +573,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			Option<TFchr>,
 			Option<TSc>,
 			Arc<TExPool>,
-			&TaskManager,
+			&SpawnTaskHandle,
 		) -> Result<(UImpQu, UFprb), Error>
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, UImpQu, UFprb, TFpp,
 			TExPool, TRpc, Backend>, Error>
