@@ -1981,7 +1981,7 @@ pub(crate) mod tests {
 			let pre = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &info, len).unwrap();
 			assert_eq!(
 				AllExtrinsicsWeight::get().unwrap(),
-				info.weight + 256 + <Test as Trait>::ExtrinsicBaseWeight::get()
+				info.weight + 256 + <Test as Trait>::ExtrinsicBaseWeight::get(),
 			);
 
 			assert!(
@@ -1990,7 +1990,7 @@ pub(crate) mod tests {
 			);
 			assert_eq!(
 				AllExtrinsicsWeight::get().unwrap(),
-				post_info.actual_weight.unwrap() + 256 + <Test as Trait>::ExtrinsicBaseWeight::get()
+				post_info.actual_weight.unwrap() + 256 + <Test as Trait>::ExtrinsicBaseWeight::get(),
 			);
 		})
 	}
@@ -2007,7 +2007,7 @@ pub(crate) mod tests {
 			let pre = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &info, len).unwrap();
 			assert_eq!(
 				AllExtrinsicsWeight::get().unwrap(),
-				info.weight + 128 + <Test as Trait>::ExtrinsicBaseWeight::get()
+				info.weight + 128 + <Test as Trait>::ExtrinsicBaseWeight::get(),
 			);
 
 			assert!(
@@ -2016,7 +2016,7 @@ pub(crate) mod tests {
 			);
 			assert_eq!(
 				AllExtrinsicsWeight::get().unwrap(),
-				info.weight + 128 + <Test as Trait>::ExtrinsicBaseWeight::get()
+				info.weight + 128 + <Test as Trait>::ExtrinsicBaseWeight::get(),
 			);
 		})
 	}

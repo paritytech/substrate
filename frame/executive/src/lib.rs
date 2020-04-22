@@ -745,7 +745,7 @@ mod tests {
 			// default weight for `TestXt` == encoded length.
 			assert_eq!(
 				<frame_system::Module<Runtime>>::all_extrinsics_weight(),
-				3 * (len as Weight + <Runtime as frame_system::Trait>::ExtrinsicBaseWeight::get())
+				3 * (len as Weight + <Runtime as frame_system::Trait>::ExtrinsicBaseWeight::get()),
 			);
 			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_len(), 3 * len);
 
