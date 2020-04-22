@@ -412,31 +412,7 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> hash_db::HashDB<H, DBValue>
 	for Ephemeral<'a, S, H>
 {
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
-		hash_db::HashDBRef::get(self, key, prefix)
-	}
-
-	fn contains(&self, key: &H::Out, prefix: Prefix) -> bool {
-		hash_db::HashDBRef::contains(self, key, prefix)
-	}
-
-	fn insert(&mut self, prefix: Prefix, value: &[u8]) -> H::Out {
-		hash_db::HashDB::insert(self.overlay, prefix, value)
-	}
-
-	fn emplace(&mut self, key: H::Out, prefix: Prefix, value: DBValue) {
-		hash_db::HashDB::emplace(self.overlay, key, prefix, value)
-	}
-
-	fn remove(&mut self, key: &H::Out, prefix: Prefix) {
-		hash_db::HashDB::remove(self.overlay, key, prefix)
-	}
-}
-
-impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> hash_db::HashDBRef<H, DBValue>
-	for Ephemeral<'a, S, H>
-{
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
-		if let Some(val) = hash_db::HashDBRef::get(self.overlay, key, prefix) {
+		if let Some(val) = hash_db::HashDB::get(self.overlay, key, prefix) {
 			Some(val)
 		} else {
 			let top;
@@ -457,12 +433,36 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> hash_db::HashDBRef<H, DBValue
 	}
 
 	fn contains(&self, key: &H::Out, prefix: Prefix) -> bool {
-		hash_db::HashDBRef::get(self, key, prefix).is_some()
+		hash_db::HashDB::get(self, key, prefix).is_some()
+	}
+
+	fn insert(&mut self, prefix: Prefix, value: &[u8]) -> H::Out {
+		hash_db::HashDB::insert(self.overlay, prefix, value)
+	}
+
+	fn emplace(&mut self, key: H::Out, prefix: Prefix, value: DBValue) {
+		hash_db::HashDB::emplace(self.overlay, key, prefix, value)
+	}
+
+	fn remove(&mut self, key: &H::Out, prefix: Prefix) {
+		hash_db::HashDB::remove(self.overlay, key, prefix)
+	}
+}
+
+impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> hash_db::HashDBRef<H, DBValue>
+	for Ephemeral<'a, S, H>
+{
+	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
+		hash_db::HashDB::get(self, key, prefix)
+	}
+
+	fn contains(&self, key: &H::Out, prefix: Prefix) -> bool {
+		hash_db::HashDB::contains(self, key, prefix)
 	}
 }
 
 /// Key-value pairs storage that is used by trie backend essence.
-pub trait TrieBackendStorage<H: Hasher> {
+pub trait TrieBackendStorage<H: Hasher>: Send + Sync {
 	/// Type of in-memory overlay.
 	type Overlay: hash_db::HashDB<H, DBValue> + Default + Consolidate;
 	/// Get the value stored at key.

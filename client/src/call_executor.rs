@@ -225,7 +225,7 @@ where
 			.map_err(|e| sp_blockchain::Error::VersionInvalid(format!("{:?}", e)).into())
 	}
 
-	fn prove_at_trie_state<S: sp_state_machine::TrieBackendStorageRef<HashFor<Block>>>(
+	fn prove_at_trie_state<S: sp_state_machine::TrieBackendStorage<HashFor<Block>>>(
 		&self,
 		trie_state: &sp_state_machine::TrieBackend<S, HashFor<Block>>,
 		overlay: &mut OverlayedChanges,
