@@ -74,7 +74,7 @@ pub use std::{ops::Deref, result::Result, sync::Arc};
 #[doc(hidden)]
 pub use sc_network::config::{FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
 pub use sc_tracing::TracingReceiver;
-pub use task_manager::{TaskManagerBuilder, SpawnTaskHandle};
+pub use task_manager::SpawnTaskHandle;
 use task_manager::TaskManager;
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
@@ -303,8 +303,6 @@ impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Future for
 				return Poll::Ready(Err(Error::Other("Essential task failed.".into())));
 			}
 		}
-
-		this.task_manager.process_receiver(cx);
 
 		// The service future never ends.
 		Poll::Pending
