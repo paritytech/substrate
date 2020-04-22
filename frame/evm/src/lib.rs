@@ -26,7 +26,7 @@ pub use crate::backend::{Account, Log, Vicinity, Backend};
 use sp_std::{vec::Vec, marker::PhantomData};
 use frame_support::{ensure, decl_module, decl_storage, decl_event, decl_error};
 use frame_support::weights::{Weight, MINIMUM_WEIGHT, DispatchClass, FunctionOf, Pays};
-use frame_support::traits::{Currency, WithdrawReason, ExistenceRequirement};
+use frame_support::traits::{Currency, WithdrawReason, ExistenceRequirement, Get};
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::ModuleId;
 use sp_core::{U256, H256, H160, Hasher};
