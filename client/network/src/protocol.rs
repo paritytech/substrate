@@ -303,6 +303,31 @@ impl Default for ProtocolConfig {
 	}
 }
 
+/// Handshake sent when we open a block announces substream.
+#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+struct BlockAnnouncesHandshake<B: BlockT> {
+	/// Roles of the node.
+	roles: Roles,
+	/// Best block number.
+	best_number: NumberFor<B>,
+	/// Best block hash.
+	best_hash: B::Hash,
+	/// Genesis block hash.
+	genesis_hash: B::Hash,
+}
+
+impl<B: BlockT> BlockAnnouncesHandshake<B> {
+	fn build(protocol_config: &ProtocolConfig, chain: &Arc<dyn Client<B>>) -> Self {
+		let info = chain.info();
+		BlockAnnouncesHandshake {
+			genesis_hash: info.genesis_hash,
+			roles: protocol_config.roles.into(),
+			best_number: info.best_number,
+			best_hash: info.best_hash,
+		}
+	}
+}
+
 /// Fallback mechanism to use to send a notification if no substream is open.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Fallback {
@@ -369,7 +394,10 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			proto.extend(b"/block-announces/1");
 			proto
 		});
-		behaviour.register_notif_protocol(block_announces_protocol.clone(), Vec::new());
+		behaviour.register_notif_protocol(
+			block_announces_protocol.clone(),
+			BlockAnnouncesHandshake::build(&config, &chain).encode()
+		);
 		legacy_equiv_by_name.insert(block_announces_protocol.clone(), Fallback::BlockAnnounce);
 
 		let protocol = Protocol {
@@ -1325,6 +1353,10 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	pub fn on_block_imported(&mut self, header: &B::Header, is_best: bool) {
 		if is_best {
 			self.sync.update_chain_info(header);
+			self.behaviour.set_notif_protocol_handshake(
+				&self.block_announces_protocol,
+				BlockAnnouncesHandshake::build(&self.config, &self.context_data.chain).encode()
+			);
 		}
 	}
 
