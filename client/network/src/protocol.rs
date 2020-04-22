@@ -62,6 +62,9 @@ use wasm_timer::Instant;
 pub mod api {
 	pub mod v1 {
 		include!(concat!(env!("OUT_DIR"), "/api.v1.rs"));
+		pub mod finality {
+			include!(concat!(env!("OUT_DIR"), "/api.v1.finality.rs"));
+		}
 		pub mod light {
 			include!(concat!(env!("OUT_DIR"), "/api.v1.light.rs"));
 		}
@@ -72,12 +75,14 @@ mod generic_proto;
 mod util;
 
 pub mod block_requests;
+pub mod finality_requests;
 pub mod message;
 pub mod event;
 pub mod light_client_handler;
 pub mod sync;
 
 pub use block_requests::BlockRequests;
+pub use finality_requests::FinalityProofRequests;
 pub use light_client_handler::LightClientHandler;
 pub use generic_proto::LegacyConnectionKillError;
 
