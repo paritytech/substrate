@@ -9,6 +9,8 @@
 stages:
   - test
 
+variables:
+  GIT_DEPTH: 1
 
 
 
@@ -24,6 +26,6 @@ deploy-chaos-example:
   environment:
     name:                          parity-chaosnet
   script:
-    - kubectl cluster-info
+    - kubectl -n substrate-ci get pod
 
 
