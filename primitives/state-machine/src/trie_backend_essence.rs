@@ -29,7 +29,7 @@ use sp_trie::trie_types::{TrieDB, TrieError, Layout};
 use crate::{backend::Consolidate, StorageKey, StorageValue};
 use sp_core::storage::{ChildInfo, ChildrenMap};
 use codec::{Decode, Encode};
-use parking_lot::RwLock;
+use std::cell::RefCell;
 
 /// Patricia trie-based storage trait.
 pub trait Storage<H: Hasher>: Send + Sync {
@@ -43,7 +43,7 @@ pub struct TrieBackendEssence<S: TrieBackendStorage<H>, H: Hasher> {
 	root: H::Out,
 	/// If defined, we store encoded visited roots for top_trie and child trie in this
 	/// map. It also act as a cache.
-	pub register_roots: Option<Arc<RwLock<ChildrenMap<Option<StorageValue>>>>>,
+	pub register_roots: Option<RefCell<ChildrenMap<Option<StorageValue>>>>,
 }
 
 impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out: Decode + Encode {
@@ -51,7 +51,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 	pub fn new(
 		storage: S,
 		root: H::Out,
-		register_roots: Option<Arc<RwLock<ChildrenMap<Option<StorageValue>>>>>,
+		register_roots: Option<RefCell<ChildrenMap<Option<StorageValue>>>>,
 	) -> Self {
 		TrieBackendEssence {
 			storage,
@@ -84,7 +84,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 	/// Access the root of the child storage in its parent trie
 	pub(crate) fn child_root_encoded(&self, child_info: &ChildInfo) -> Result<Option<StorageValue>, String> {
 		if let Some(cache) = self.register_roots.as_ref() {
-			if let Some(result) = cache.read().get(child_info) {
+			if let Some(result) = cache.borrow().get(child_info) {
 				return Ok(result.clone());
 			}
 		}
@@ -92,7 +92,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		let root: Option<StorageValue> = self.storage(&child_info.prefixed_storage_key()[..])?;
 
 		if let Some(cache) = self.register_roots.as_ref() {
-			cache.write().insert(child_info.clone(), root.clone());
+			cache.borrow_mut().insert(child_info.clone(), root.clone());
 		}
 
 		Ok(root)
@@ -101,7 +101,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 	/// Access the root of the child storage in its parent trie
 	fn child_root(&self, child_info: &ChildInfo) -> Result<Option<H::Out>, String> {
 		if let Some(cache) = self.register_roots.as_ref() {
-			if let Some(root) = cache.read().get(child_info) {
+			if let Some(root) = cache.borrow().get(child_info) {
 				let root = root.as_ref()
 					.and_then(|encoded_root| Decode::decode(&mut &encoded_root[..]).ok());
 				return Ok(root);
@@ -110,7 +110,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 
 		let encoded_root = self.storage(&child_info.prefixed_storage_key()[..])?;
 		if let Some(cache) = self.register_roots.as_ref() {
-			cache.write().insert(child_info.clone(), encoded_root.clone());
+			cache.borrow_mut().insert(child_info.clone(), encoded_root.clone());
 		}
 
 		let root: Option<H::Out> = encoded_root
