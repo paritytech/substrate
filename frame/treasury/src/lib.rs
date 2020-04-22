@@ -330,7 +330,7 @@ decl_module! {
 		/// - DbReads: `ProposalCount`, `sender account`
 		/// - DbWrites: `ProposalCount`, `Proposals`, `sender account`
 		/// # </weight>
-		#[weight = 114_700_000 + T::DbWeight::get().reads_writes(1, 2)]
+		#[weight = 120_000_000 + T::DbWeight::get().reads_writes(1, 2)]
 		fn propose_spend(
 			origin,
 			#[compact] value: BalanceOf<T>,
@@ -357,7 +357,7 @@ decl_module! {
 		/// - DbReads: `Proposals`, `rejected proposer account`
 		/// - DbWrites: `Proposals`, `rejected proposer account`
 		/// # </weight>
-		#[weight = 125_800_000 + T::DbWeight::get().reads_writes(2, 2)]
+		#[weight = 130_000_000 + T::DbWeight::get().reads_writes(2, 2)]
 		fn reject_proposal(origin, #[compact] proposal_id: ProposalIndex) {
 			T::RejectOrigin::try_origin(origin)
 				.map(|_| ())
@@ -379,7 +379,7 @@ decl_module! {
 		/// - DbReads: `Proposals`, `Approvals`
 		/// - DbWrite: `Approvals`
 		/// # </weight>
-		#[weight = 33_610_000 + T::DbWeight::get().reads_writes(2, 1)]
+		#[weight = 34_000_000 + T::DbWeight::get().reads_writes(2, 1)]
 		fn approve_proposal(origin, #[compact] proposal_id: ProposalIndex) {
 			T::ApproveOrigin::try_origin(origin)
 				.map(|_| ())
@@ -408,7 +408,7 @@ decl_module! {
 		/// - DbReads: `Reasons`, `Tips`, `who account data`
 		/// - DbWrites: `Tips`, `who account data`
 		/// # </weight>
-		#[weight = 138_400_000 + 4_000 * reason.len() as Weight + T::DbWeight::get().reads_writes(3, 2)]
+		#[weight = 140_000_000 + 4_000 * reason.len() as Weight + T::DbWeight::get().reads_writes(3, 2)]
 		fn report_awesome(origin, reason: Vec<u8>, who: T::AccountId) {
 			let finder = ensure_signed(origin)?;
 
@@ -450,7 +450,7 @@ decl_module! {
 		/// - DbReads: `Tips`, `sender account data`
 		/// - DbWrites: `Reasons`, `Tips`, `sender account data`
 		/// # </weight>
-		#[weight = 115_700_000 + T::DbWeight::get().reads_writes(1, 2)]
+		#[weight = 120_000_000 + T::DbWeight::get().reads_writes(1, 2)]
 		fn retract_tip(origin, hash: T::Hash) {
 			let who = ensure_signed(origin)?;
 			let tip = Tips::<T>::get(&hash).ok_or(Error::<T>::UnknownTip)?;
@@ -528,7 +528,7 @@ decl_module! {
 		/// - DbReads: `Tippers`, `Tips`
 		/// - DbWrites: `Tips`
 		/// # </weight>
-		#[weight = 68_000_000 + 1_900_000 * T::Tippers::count_upper_bound() as Weight
+		#[weight = 68_000_000 + 2_000_000 * T::Tippers::count_upper_bound() as Weight
 			+ T::DbWeight::get().reads_writes(2, 1)]
 		fn tip(origin, hash: T::Hash, tip_value: BalanceOf<T>) {
 			let tipper = ensure_signed(origin)?;
@@ -558,7 +558,7 @@ decl_module! {
 		/// - DbReads: `Tips`, `Tippers`, `tip finder`
 		/// - DbWrites: `Reasons`, `Tips`, `Tippers`, `tip finder`
 		/// # </weight>
-		#[weight = 210_000_000 + 1_100_000 * T::Tippers::count_upper_bound() as Weight
+		#[weight = 220_000_000 + 1_100_000 * T::Tippers::count_upper_bound() as Weight
 			+ T::DbWeight::get().reads_writes(3, 3)]
 		fn close_tip(origin, hash: T::Hash) {
 			ensure_signed(origin)?;
@@ -584,7 +584,7 @@ decl_module! {
 			if (n % T::SpendPeriod::get()).is_zero() {
 				let approvals_len = Self::spend_funds();
 
-				265_000_000 * approvals_len
+				270_000_000 * approvals_len
 					+ T::DbWeight::get().reads_writes(2 + approvals_len * 3, 2 + approvals_len * 3)
 			} else {
 				0
