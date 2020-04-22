@@ -118,6 +118,9 @@ parameter_types! {
 	pub const TipFindersFee: Percent = Percent::from_percent(20);
 	pub const TipReportDepositBase: u64 = 1;
 	pub const TipReportDepositPerByte: u64 = 1;
+	pub const BountyDepositBase: u64 = 10;
+	pub const BountyDepositPerByte: u64 = 2;
+	pub const BountyDepositPayoutDelay: u64 = 3;
 }
 impl Trait for Test {
 	type Currency = pallet_balances::Module<Test>;
@@ -134,6 +137,9 @@ impl Trait for Test {
 	type ProposalBondMinimum = ProposalBondMinimum;
 	type SpendPeriod = SpendPeriod;
 	type Burn = Burn;
+	type BountyDepositBase = BountyDepositBase;
+	type BountyDepositPerByte = BountyDepositPerByte;
+	type BountyDepositPayoutDelay = BountyDepositPayoutDelay;
 }
 type System = frame_system::Module<Test>;
 type Balances = pallet_balances::Module<Test>;
