@@ -214,21 +214,21 @@ pub trait FixedPointNumber:
 	fn checked_from_rational<N: TryInto<Self::Inner>>(n: N, d: Self::Inner) -> Option<Self>;
 
 	/// Takes the reciprocal (inverse), `1 / self`.
-	fn reciprocal(&self) -> Option<Self> {
-		Self::from_integer(Self::Inner::one()).checked_div(self)
+	fn reciprocal(self) -> Option<Self> {
+		Self::from_integer(Self::Inner::one()).checked_div(&self)
 	}
 
 	/// Checked multiplication for integer type `N`.
-	fn checked_mul_int<N: Copy + TryFrom<Self::Inner> + TryInto<Self::Inner>>(&self, other: &N) -> Option<N>;
+	fn checked_mul_int<N: Copy + TryFrom<Self::Inner> + TryInto<Self::Inner>>(self, other: N) -> Option<N>;
 
 	/// Checked division for integer type `N`.
-	fn checked_div_int<N: Copy + TryFrom<Self::Inner> + TryInto<Self::Inner>>(&self, other: &N) -> Option<N>;
+	fn checked_div_int<N: Copy + TryFrom<Self::Inner> + TryInto<Self::Inner>>(self, other: N) -> Option<N>;
 
 	/// Saturating multiplication for integer type `N`.
-	fn saturating_mul_int<N: Copy + TryFrom<Self::Inner> + TryInto<Self::Inner> + Bounded + Signed>(&self, other: &N) -> N;
+	fn saturating_mul_int<N: Copy + TryFrom<Self::Inner> + TryInto<Self::Inner> + Bounded + Signed>(self, other: N) -> N;
 
 	/// Saturating absolute value. Returning MAX if `parts == Inner::MIN` instead of overflowing.
-	fn saturating_abs(&self) -> Self;
+	fn saturating_abs(self) -> Self;
 
 	/// Returns zero.
 	fn zero() -> Self;
@@ -240,10 +240,10 @@ pub trait FixedPointNumber:
 	fn one() -> Self;
 
 	/// Checks if the number is positive.
-	fn is_positive(&self) -> bool;
+	fn is_positive(self) -> bool;
 
 	/// Checks if the number is negative.
-	fn is_negative(&self) -> bool;
+	fn is_negative(self) -> bool;
 
 	/// Performs a saturated multiplication and accumulate by unsigned number.
 	///

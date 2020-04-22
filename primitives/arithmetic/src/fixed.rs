@@ -84,11 +84,11 @@ macro_rules! implement_fixed {
 				self.0
 			}
 		
-			fn checked_mul_int<N>(&self, other: &N) -> Option<N>
+			fn checked_mul_int<N>(self, other: N) -> Option<N>
 			where
 				N: Copy + TryFrom<Self::Inner> + TryInto<Self::Inner>,
 			{
-				N::try_into(*other).ok().and_then(|rhs| {
+				N::try_into(other).ok().and_then(|rhs| {
 					let mut lhs = self.0;
 					if lhs.is_negative() {
 						lhs = lhs.saturating_mul(-1);
@@ -107,23 +107,23 @@ macro_rules! implement_fixed {
 				})
 			}
 		
-			fn checked_div_int<N>(&self, other: &N) -> Option<N>
+			fn checked_div_int<N>(self, other: N) -> Option<N>
 			where
 				N: Copy + TryFrom<Self::Inner> + TryInto<Self::Inner>,
 			{
-				N::try_into(*other)
+				N::try_into(other)
 					.ok()
 					.and_then(|n| self.0.checked_div(n))
 					.and_then(|n| n.checked_div(Self::DIV))
 					.and_then(|n| TryInto::<N>::try_into(n).ok())
 			}
 		
-			fn saturating_mul_int<N>(&self, other: &N) -> N
+			fn saturating_mul_int<N>(self, other: N) -> N
 			where
 				N: Copy + TryFrom<Self::Inner> + TryInto<Self::Inner> + Bounded + Signed,
 			{
+				let signum = other.signum().saturated_into() * self.0.signum();
 				self.checked_mul_int(other).unwrap_or_else(|| {
-					let signum = other.signum().saturated_into() * self.0.signum();
 					if signum.is_negative() {
 						Bounded::min_value()
 					} else {
@@ -132,7 +132,7 @@ macro_rules! implement_fixed {
 				})
 			}
 		
-			fn saturating_abs(&self) -> Self {
+			fn saturating_abs(self) -> Self {
 				if self.0 == Self::Inner::min_value() {
 					return Self::max_value();
 				}
@@ -140,7 +140,7 @@ macro_rules! implement_fixed {
 				if self.0.is_negative() {
 					Self::from_inner(self.0 * -1)
 				} else {
-					*self
+					self
 				}
 			}
 		
@@ -156,11 +156,11 @@ macro_rules! implement_fixed {
 				Self(Self::DIV)
 			}
 		
-			fn is_positive(&self) -> bool {
+			fn is_positive(self) -> bool {
 				self.0.is_positive()
 			}
 		
-			fn is_negative(&self) -> bool {
+			fn is_negative(self) -> bool {
 				self.0.is_negative()
 			}
 		
@@ -490,10 +490,10 @@ macro_rules! implement_fixed {
 				let c = $name::from_rational(5, -2);
 				let d = $name::from_rational(-5, -2);
 
-				assert_eq!(a.saturating_mul_int(10), 25.into());
-				assert_eq!(b.saturating_mul_int(10),-25.into());
-				assert_eq!(c.saturating_mul_int(10), -25.into());
-				assert_eq!(d.saturating_mul_int(10), 25.into());
+				assert_eq!(a.saturating_mul_int(10), 25);
+				assert_eq!(b.saturating_mul_int(10),-25);
+				assert_eq!(c.saturating_mul_int(10), -25);
+				assert_eq!(d.saturating_mul_int(10), 25);
 			}
 
 			#[test]
