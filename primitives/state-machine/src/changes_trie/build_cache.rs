@@ -19,6 +19,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::StorageKey;
+use sp_core::storage::PrefixedStorageKey;
 
 /// Changes trie build cache.
 ///
@@ -38,7 +39,7 @@ pub struct BuildCache<H, N> {
 	/// The `Option<Vec<u8>>` in inner `HashMap` stands for the child storage key.
 	/// If it is `None`, then the `HashSet` contains keys changed in top-level storage.
 	/// If it is `Some`, then the `HashSet` contains keys changed in child storage, identified by the key.
-	changed_keys: HashMap<H, HashMap<Option<StorageKey>, HashSet<StorageKey>>>,
+	changed_keys: HashMap<H, HashMap<Option<PrefixedStorageKey>, HashSet<StorageKey>>>,
 }
 
 /// The action to perform when block-with-changes-trie is imported.
@@ -56,7 +57,7 @@ pub struct CachedBuildData<H, N> {
 	block: N,
 	trie_root: H,
 	digest_input_blocks: Vec<N>,
-	changed_keys: HashMap<Option<StorageKey>, HashSet<StorageKey>>,
+	changed_keys: HashMap<Option<PrefixedStorageKey>, HashSet<StorageKey>>,
 }
 
 /// The action to perform when block-with-changes-trie is imported.
@@ -72,7 +73,7 @@ pub(crate) enum IncompleteCacheAction<N> {
 #[derive(Debug, PartialEq)]
 pub(crate) struct IncompleteCachedBuildData<N> {
 	digest_input_blocks: Vec<N>,
-	changed_keys: HashMap<Option<StorageKey>, HashSet<StorageKey>>,
+	changed_keys: HashMap<Option<PrefixedStorageKey>, HashSet<StorageKey>>,
 }
 
 impl<H, N> BuildCache<H, N>
@@ -89,7 +90,7 @@ impl<H, N> BuildCache<H, N>
 	}
 
 	/// Get cached changed keys for changes trie with given root.
-	pub fn get(&self, root: &H) -> Option<&HashMap<Option<StorageKey>, HashSet<StorageKey>>> {
+	pub fn get(&self, root: &H) -> Option<&HashMap<Option<PrefixedStorageKey>, HashSet<StorageKey>>> {
 		self.changed_keys.get(&root)
 	}
 
@@ -98,7 +99,7 @@ impl<H, N> BuildCache<H, N>
 	pub fn with_changed_keys(
 		&self,
 		root: &H,
-		functor: &mut dyn FnMut(&HashMap<Option<StorageKey>, HashSet<StorageKey>>),
+		functor: &mut dyn FnMut(&HashMap<Option<PrefixedStorageKey>, HashSet<StorageKey>>),
 	) -> bool {
 		match self.changed_keys.get(&root) {
 			Some(changed_keys) => {
@@ -164,7 +165,7 @@ impl<N> IncompleteCacheAction<N> {
 	/// Insert changed keys of given storage into cached data.
 	pub(crate) fn insert(
 		self,
-		storage_key: Option<StorageKey>,
+		storage_key: Option<PrefixedStorageKey>,
 		changed_keys: HashSet<StorageKey>,
 	) -> Self {
 		match self {
@@ -200,7 +201,7 @@ impl<N> IncompleteCachedBuildData<N> {
 
 	fn insert(
 		mut self,
-		storage_key: Option<StorageKey>,
+		storage_key: Option<PrefixedStorageKey>,
 		changed_keys: HashSet<StorageKey>,
 	) -> Self {
 		self.changed_keys.insert(storage_key, changed_keys);

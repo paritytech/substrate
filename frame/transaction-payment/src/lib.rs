@@ -36,7 +36,7 @@ use codec::{Encode, Decode};
 use frame_support::{
 	decl_storage, decl_module,
 	traits::{Currency, Get, OnUnbalanced, ExistenceRequirement, WithdrawReason, Imbalance},
-	weights::{Weight, DispatchInfo, PostDispatchInfo, GetDispatchInfo},
+	weights::{Weight, DispatchInfo, PostDispatchInfo, GetDispatchInfo, Pays},
 	dispatch::DispatchResult,
 };
 use sp_runtime::{
@@ -166,7 +166,7 @@ impl<T: Trait> Module<T> where
 		info: &DispatchInfoOf<T::Call>,
 		tip: BalanceOf<T>,
 	) -> BalanceOf<T> {
-		if info.pays_fee {
+		if info.pays_fee == Pays::Yes {
 			let len = <BalanceOf<T>>::from(len);
 			let per_byte = T::TransactionByteFee::get();
 			let len_fee = per_byte.saturating_mul(len);
@@ -505,7 +505,8 @@ mod tests {
 
 	/// create a transaction info struct from weight. Handy to avoid building the whole struct.
 	pub fn info_from_weight(w: Weight) -> DispatchInfo {
-		DispatchInfo { weight: w, pays_fee: true, ..Default::default() }
+		// pays: yes -- class: normal
+		DispatchInfo { weight: w, ..Default::default() }
 	}
 
 	fn post_info_from_weight(w: Weight) -> PostDispatchInfo {
@@ -565,7 +566,7 @@ mod tests {
 			let pre = ChargeTransactionPayment::<Runtime>::from(5 /* tipped */)
 				.pre_dispatch(&2, CALL, &info_from_weight(100), len)
 				.unwrap();
-			// 5 base fee, 3/2 * 10 byte fee, 3/2 * 100 weight fee, 5 tip 
+			// 5 base fee, 3/2 * 10 byte fee, 3/2 * 100 weight fee, 5 tip
 			assert_eq!(Balances::free_balance(2), 200 - 5 - 15 - 150 - 5);
 
 			assert!(
@@ -617,7 +618,7 @@ mod tests {
 			let operational_transaction = DispatchInfo {
 				weight: 0,
 				class: DispatchClass::Operational,
-				pays_fee: false,
+				pays_fee: Pays::No,
 			};
 			assert!(
 				ChargeTransactionPayment::<Runtime>::from(0)
@@ -629,7 +630,7 @@ mod tests {
 			let free_transaction = DispatchInfo {
 				weight: 0,
 				class: DispatchClass::Normal,
-				pays_fee: true,
+				pays_fee: Pays::Yes,
 			};
 			assert!(
 				ChargeTransactionPayment::<Runtime>::from(0)
@@ -711,14 +712,14 @@ mod tests {
 			let dispatch_info = DispatchInfo {
 				weight: 0,
 				class: DispatchClass::Operational,
-				pays_fee: false,
+				pays_fee: Pays::No,
 			};
 			assert_eq!(Module::<Runtime>::compute_fee(0, &dispatch_info, 10), 10);
 			// No tip, only base fee works
 			let dispatch_info = DispatchInfo {
 				weight: 0,
 				class: DispatchClass::Operational,
-				pays_fee: true,
+				pays_fee: Pays::Yes,
 			};
 			assert_eq!(Module::<Runtime>::compute_fee(0, &dispatch_info, 0), 100);
 			// Tip + base fee works
@@ -729,7 +730,7 @@ mod tests {
 			let dispatch_info = DispatchInfo {
 				weight: 1000,
 				class: DispatchClass::Operational,
-				pays_fee: true,
+				pays_fee: Pays::Yes,
 			};
 			assert_eq!(Module::<Runtime>::compute_fee(0, &dispatch_info, 0), 1100);
 		});
@@ -750,7 +751,7 @@ mod tests {
 			let dispatch_info = DispatchInfo {
 				weight: 0,
 				class: DispatchClass::Operational,
-				pays_fee: true,
+				pays_fee: Pays::Yes,
 			};
 			assert_eq!(Module::<Runtime>::compute_fee(0, &dispatch_info, 0), 100);
 
@@ -758,7 +759,7 @@ mod tests {
 			let dispatch_info = DispatchInfo {
 				weight: 123,
 				class: DispatchClass::Operational,
-				pays_fee: true,
+				pays_fee: Pays::Yes,
 			};
 			// 123 weight, 456 length, 100 base
 			// adjustable fee = (123 * 1) + (456 * 10) = 4683
@@ -781,7 +782,7 @@ mod tests {
 			let dispatch_info = DispatchInfo {
 				weight: Weight::max_value(),
 				class: DispatchClass::Operational,
-				pays_fee: true,
+				pays_fee: Pays::Yes,
 			};
 			assert_eq!(
 				Module::<Runtime>::compute_fee(

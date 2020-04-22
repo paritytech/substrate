@@ -67,7 +67,7 @@ use sp_core::TypeId;
 use sp_io::hashing::blake2_256;
 use frame_support::{decl_module, decl_event, decl_error, decl_storage, Parameter, ensure, RuntimeDebug};
 use frame_support::{traits::{Get, ReservableCurrency, Currency},
-	weights::{Weight, GetDispatchInfo, DispatchClass, FunctionOf},
+	weights::{Weight, GetDispatchInfo, DispatchClass, FunctionOf, Pays},
 	dispatch::PostDispatchInfo,
 };
 use frame_system::{self as system, ensure_signed};
@@ -242,7 +242,7 @@ decl_module! {
 					DispatchClass::Normal
 				}
 			},
-			true
+			Pays::Yes,
 		)]
 		fn batch(origin, calls: Vec<<T as Trait>::Call>) {
 			for (index, call) in calls.into_iter().enumerate() {
@@ -265,7 +265,7 @@ decl_module! {
 		#[weight = FunctionOf(
 			|args: (&u16, &Box<<T as Trait>::Call>)| args.1.get_dispatch_info().weight + 10_000,
 			|args: (&u16, &Box<<T as Trait>::Call>)| args.1.get_dispatch_info().class,
-			true
+			Pays::Yes,
 		)]
 		fn as_sub(origin, index: u16, call: Box<<T as Trait>::Call>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -322,7 +322,7 @@ decl_module! {
 			|args: (&u16, &Vec<T::AccountId>, &Option<Timepoint<T::BlockNumber>>, &Box<<T as Trait>::Call>)| {
 				args.3.get_dispatch_info().class
 			},
-			true
+			Pays::Yes,
 		)]
 		fn as_multi(origin,
 			threshold: u16,
@@ -421,7 +421,7 @@ decl_module! {
 				10_000 * (args.1.len() as Weight + 1)
 			},
 			DispatchClass::Normal,
-			true
+			Pays::Yes,
 		)]
 		fn approve_as_multi(origin,
 			threshold: u16,
@@ -496,7 +496,7 @@ decl_module! {
 				10_000 * (args.1.len() as Weight + 1)
 			},
 			DispatchClass::Normal,
-			true
+			Pays::Yes,
 		)]
 		fn cancel_as_multi(origin,
 			threshold: u16,

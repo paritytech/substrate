@@ -57,14 +57,11 @@
 /primitives/consensus/pow/ @sorpaas
 
 # Contracts
-/frame/contracts/ @pepyakin @thiolliere
+/frame/contracts/ @pepyakin
 /frame/contracts/src/wasm/runtime.rs @Robbepop
 
 # EVM
 /frame/evm/ @sorpaas
-
-# Inflation points
-/frame/staking/src/inflation.rs @thiolliere
 
 # NPoS and Governance and Phragmén
 /frame/staking/ @kianenigma
@@ -73,7 +70,7 @@
 /primitives/phragmen/ @kianenigma
 
 # Fixed point arithmetic
-/primitives/sp-arithmetic/ @kianenigma @thiolliere
+/primitives/sp-arithmetic/ @kianenigma
 
 # End to end testing of substrate node
 /bin/node/executor/ @kianenigma
@@ -82,7 +79,7 @@
 /frame/support/src/weights.rs @kianenigma
 
 # Support crates
-/frame/support/ @thiolliere @kianenigma
+/frame/support/ @kianenigma
 
 # Authority discovery
 /client/authority-discovery/ @mxinden
