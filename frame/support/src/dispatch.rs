@@ -2045,7 +2045,7 @@ macro_rules! __check_reserved_fn_name {
 #[allow(dead_code)]
 mod tests {
 	use super::*;
-	use crate::weights::{MINIMUM_WEIGHT, DispatchInfo, DispatchClass};
+	use crate::weights::{MINIMUM_WEIGHT, DispatchInfo, DispatchClass, Pays};
 	use crate::traits::{
 		CallMetadata, GetCallMetadata, GetCallName, OnInitialize, OnFinalize, OnRuntimeUpgrade
 	};
@@ -2248,12 +2248,12 @@ mod tests {
 		// operational.
 		assert_eq!(
 			Call::<TraitImpl>::operational().get_dispatch_info(),
-			DispatchInfo { weight: 5, class: DispatchClass::Operational, pays_fee: true },
+			DispatchInfo { weight: 5, class: DispatchClass::Operational, pays_fee: Pays::Yes },
 		);
 		// custom basic
 		assert_eq!(
 			Call::<TraitImpl>::aux_3().get_dispatch_info(),
-			DispatchInfo { weight: 3, class: DispatchClass::Normal, pays_fee: true },
+			DispatchInfo { weight: 3, class: DispatchClass::Normal, pays_fee: Pays::Yes },
 		);
 	}
 

@@ -256,7 +256,7 @@
 use sp_std::marker::PhantomData;
 use frame_support::{
 	dispatch::DispatchResult, decl_module, decl_storage, decl_event,
-	weights::{DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee, MINIMUM_WEIGHT},
+	weights::{DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee, MINIMUM_WEIGHT, Pays},
 };
 use sp_std::prelude::*;
 use frame_system::{self as system, ensure_signed, ensure_root};
@@ -305,8 +305,8 @@ impl<T: pallet_balances::Trait> ClassifyDispatch<(&BalanceOf<T>,)> for WeightFor
 }
 
 impl<T: pallet_balances::Trait> PaysFee<(&BalanceOf<T>,)> for WeightForSetDummy<T> {
-	fn pays_fee(&self, _target: (&BalanceOf<T>,)) -> bool {
-		true
+	fn pays_fee(&self, _target: (&BalanceOf<T>,)) -> Pays {
+		Pays::Yes
 	}
 }
 
