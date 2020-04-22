@@ -403,18 +403,18 @@ where
 		appended: Vec<u8>,
 	) {
 		self.accumulators.entry(key.to_vec())
-			.and_modify(|val| val.push(appended.clone()))
-			.or_insert_with(|| vec![appended]);
+			.or_default()
+			.push(appended);
 	}
 
 	fn storage_accumulator_commit(
 		&mut self,
 		key: &[u8],
-	) -> u64 {
+	) -> u32 {
 		let (number_of_values, concatenated) =
 			self.accumulators.remove(key).map(
 				|values| {
-					let mut encoded = codec::Compact(values.len() as u64).encode();
+					let mut encoded = codec::Compact(values.len() as u32).encode();
 					for value in values.iter() {
 						encoded.extend(value);
 					}
@@ -422,7 +422,7 @@ where
 				})
 				.unwrap_or_default();
 
-		let number_of_values = number_of_values as u64;
+		let number_of_values = number_of_values as u32;
 
 		self.place_storage(
 			key.to_vec(),

@@ -782,11 +782,11 @@ impl<T: Trait> Module<T> {
 			old_event_count
 		};
 
-		/// We use accumulator api here to avoid bringing all events every time we push a
-		/// new one.
-		///
-		/// Not that because of that System::events() won't return these events until
-		/// they are commited in System::finalize().
+		// We use accumulator api here to avoid bringing all events every time we push a
+		// new one.
+		//
+		// Note that because of that System::events() won't return these events until
+		// they are commited in System::finalize().
 		let encoded_event = event.encode();
 		sp_io::storage::accumulator_push(&Events::<T>::storage_value_final_key()[..], &encoded_event);
 

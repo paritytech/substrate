@@ -155,7 +155,7 @@ pub trait Storage {
 	///
 	/// Returns number of keys that were present in the
 	/// accumulator.
-	fn accumulator_commit(&mut self, key: &[u8]) -> u64 {
+	fn accumulator_commit(&mut self, key: &[u8]) -> u32 {
 		self.storage_accumulator_commit(key)
 	}
 }

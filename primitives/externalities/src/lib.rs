@@ -169,7 +169,7 @@ pub trait Externalities: ExtensionStore {
 	fn storage_accumulator_commit(
 		&mut self,
 		key: &[u8],
-	) -> u64;
+	) -> u32;
 
 	/// Get the identity of the chain.
 	fn chain_id(&self) -> u64;
