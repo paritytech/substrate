@@ -44,10 +44,10 @@
 //!
 //! ## Example
 //!
-//! ```
+//! ```no_run
 //! use std::sync::Arc;
 //! use sc_client_api::in_mem::Backend;
-//! use crate::client::{Client, LocalCallExecutor};
+//! use client::{Client, LocalCallExecutor};
 //! use sp_runtime::Storage;
 //! use sc_executor::{NativeExecutor, WasmExecutionMethod};
 //!
