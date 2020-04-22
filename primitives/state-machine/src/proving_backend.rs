@@ -16,11 +16,10 @@
 
 //! Proving state machine backend.
 
-use std::sync::Arc;
-use parking_lot::RwLock;
+use std::cell::RefCell;
 use codec::{Decode, Codec};
 use log::debug;
-use hash_db::{Hasher, HashDB, EMPTY_PREFIX, Prefix};
+use hash_db::{Hasher, HashDBRef, EMPTY_PREFIX, Prefix};
 use sp_trie::{
 	MemoryDB, empty_child_trie_root, read_trie_value_with, read_child_trie_value_with,
 	record_all_keys, StorageProofKind, StorageProof, ProofInputKind, ProofInput,
@@ -120,9 +119,9 @@ pub enum ProofRecorder<H: Hasher> {
 	// root of each child is added to be able to pack.
 	/// Proof keep a separation between child trie content, this is usually useless,
 	/// but when we use proof compression we want this separation.
-	Full(Arc<RwLock<ChildrenMap<RecordMapTrieNodes<H>>>>),
+	Full(RefCell<ChildrenMap<RecordMapTrieNodes<H>>>),
 	/// Single level of storage for all recoded nodes.
-	Flat(Arc<RwLock<RecordMapTrieNodes<H>>>),
+	Flat(RefCell<RecordMapTrieNodes<H>>),
 }
 
 impl<H: Hasher> Default for ProofRecorder<H> {
@@ -131,16 +130,19 @@ impl<H: Hasher> Default for ProofRecorder<H> {
 		ProofRecorder::Flat(Default::default())
 	}
 }
-
-impl<H: Hasher> Clone for ProofRecorder<H> {
+/*
+impl<H: Hasher> Clone for ProofRecorder<H>
+	where
+		H::Out: Clone,
+{
 	fn clone(&self) -> Self {
 		match self {
-			ProofRecorder::Full(a) => ProofRecorder::Full(a.clone()),
-			ProofRecorder::Flat(a) => ProofRecorder::Flat(a.clone()),
+			ProofRecorder::Full(a) => ProofRecorder::Full(RefCell::new((*a.borrow()).clone())),
+			ProofRecorder::Flat(a) => ProofRecorder::Flat(RefCell::new(a.borrow().clone())),
 		}
 	}
 }
-
+*/
 /// Patricia trie-based backend which also tracks all touched storage trie values.
 /// These can be sent to remote node and used as a proof of execution.
 pub struct ProvingBackend<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
@@ -219,10 +221,11 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 	/// Drop the backend, but keep the state to use it again afterward
 	pub fn recording_state(mut self) -> Result<(ProofRecorder<H>, ProofInput), String> {
 		self.update_input()?;
-		Ok((
-			self.trie_backend.essence().backend_storage().proof_recorder.clone(),
-			self.previous_input
-		))
+		let proof_recorder = self.trie_backend
+			.into_essence()
+			.into_storage()
+			.proof_recorder;
+		Ok((proof_recorder, self.previous_input))
 	}
 }
 
@@ -238,12 +241,12 @@ impl<H: Hasher> ProofRecorder<H>
 	) -> Result<StorageProof, String> {
 		Ok(match self {
 			ProofRecorder::Flat(rec) => StorageProof::extract_proof_from_flat(
-				&*rec.read(),
+				&*rec.borrow(),
 				kind,
 				&input,
 			).map_err(|e| format!("{}", e))?,
 			ProofRecorder::Full(rec) => StorageProof::extract_proof(
-				&*rec.read(),
+				&*rec.borrow(),
 				kind,
 				&input,
 			).map_err(|e| format!("{}", e))?,
@@ -259,19 +262,19 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H>
 	fn get(&self, child_info: &ChildInfo, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		match &self.proof_recorder {
 			ProofRecorder::Flat(rec) => {
-				if let Some(v) = rec.read().get(key) {
+				if let Some(v) = (**rec.borrow()).get(key) {
 					return Ok(v.clone());
 				}
 				let backend_value = self.backend.get(child_info, key, prefix)?;
-				rec.write().insert(key.clone(), backend_value.clone());
+				rec.borrow_mut().insert(key.clone(), backend_value.clone());
 				Ok(backend_value)
 			},
 			ProofRecorder::Full(rec) => {
-				if let Some(v) = rec.read().get(child_info).and_then(|s| s.get(key)) {
+				if let Some(v) = rec.borrow().get(child_info).and_then(|s| (**s).get(key)) {
 					return Ok(v.clone());
 				}
 				let backend_value = self.backend.get(child_info, key, prefix)?;
-				rec.write().entry(child_info.clone())
+				rec.borrow_mut().entry(child_info.clone())
 					.or_default()
 					.insert(key.clone(), backend_value.clone());
 				Ok(backend_value)

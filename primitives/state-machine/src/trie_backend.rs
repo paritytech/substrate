@@ -23,10 +23,9 @@ use sp_trie::{Trie, delta_trie_root, empty_child_trie_root, child_delta_trie_roo
 use sp_trie::trie_types::{TrieDB, TrieError, Layout};
 use sp_core::storage::{ChildInfo, ChildInfoProof, ChildType};
 use codec::{Codec, Decode, Encode};
-use crate::{
-	StorageKey, StorageValue, Backend,
-	trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral},
-};
+use crate::{StorageKey, StorageValue, Backend};
+use crate::trie_backend_essence::{TrieBackendEssence, TrieBackendStorage,
+	Ephemeral};
 use std::cell::RefCell;
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
@@ -73,6 +72,11 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: Codec 
 	/// Get backend essence reference.
 	pub fn essence(&self) -> &TrieBackendEssence<S, H> {
 		&self.essence
+	}
+
+	/// Extracte essence
+	pub fn into_essence(self) -> TrieBackendEssence<S, H> {
+		self.essence
 	}
 
 	/// Get backend storage reference.
