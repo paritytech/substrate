@@ -123,7 +123,7 @@ pub struct TaskManager {
 impl TaskManager {
  	/// If a Prometheus registry is passed, it will be used to report statistics about the
  	/// service tasks.
-	pub(super) fn new(
+	pub fn new(
 		executor: ServiceTaskExecutor,
 		prometheus_registry: Option<&Registry>
 	) -> Result<Self, PrometheusError> {
@@ -142,11 +142,11 @@ impl TaskManager {
 	/// Spawn background/async task, which will be aware on exit signal.
 	///
 	/// See also the documentation of [`SpawnTaskHandler::spawn`].
-	pub(super) fn spawn(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static) {
+	pub fn spawn(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static) {
 		self.spawn_handle().spawn(name, task)
 	}
 
-	pub(super) fn spawn_handle(&self) -> SpawnTaskHandle {
+	pub fn spawn_handle(&self) -> SpawnTaskHandle {
 		SpawnTaskHandle {
 			on_exit: self.on_exit.clone(),
 			executor: self.executor.clone(),
@@ -155,7 +155,7 @@ impl TaskManager {
 	}
 
 	/// Clone on exit signal.
-	pub(super) fn on_exit(&self) -> exit_future::Exit {
+	pub fn on_exit(&self) -> exit_future::Exit {
 		self.on_exit.clone()
 	}
 }

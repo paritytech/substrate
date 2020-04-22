@@ -60,7 +60,7 @@ macro_rules! new_full_start {
 				let pool_api = sc_transaction_pool::FullChainApi::new(client.clone());
 				Ok(sc_transaction_pool::BasicPool::new(config, std::sync::Arc::new(pool_api), prometheus_registry))
 			})?
-			.with_import_queue(|_config, client, mut select_chain, _transaction_pool, tasks_builder| {
+			.with_import_queue(|_config, client, mut select_chain, _transaction_pool, task_manager| {
 				let select_chain = select_chain.take()
 					.ok_or_else(|| sc_service::Error::SelectChainRequired)?;
 				let (grandpa_block_import, grandpa_link) = grandpa::block_import(
@@ -76,8 +76,7 @@ macro_rules! new_full_start {
 					client.clone(),
 				)?;
 
-				let spawn_handle = tasks_builder.spawn_handle();
-				let spawner = |future| spawn_handle.spawn("import-queue-worker", future);
+				let spawner = |future| task_manager.spawn("import-queue-worker", future);
 
 				let import_queue = sc_consensus_babe::import_queue(
 					babe_link.clone(),
@@ -325,7 +324,7 @@ pub fn new_light(config: Configuration)
 			);
 			Ok(pool)
 		})?
-		.with_import_queue_and_fprb(|_config, client, backend, fetcher, _select_chain, _tx_pool, tasks_builder| {
+		.with_import_queue_and_fprb(|_config, client, backend, fetcher, _select_chain, _tx_pool, task_manager| {
 			let fetch_checker = fetcher
 				.map(|fetcher| fetcher.checker().clone())
 				.ok_or_else(|| "Trying to start light import queue without active fetch checker")?;
@@ -346,8 +345,7 @@ pub fn new_light(config: Configuration)
 				client.clone(),
 			)?;
 
-			let spawn_handle = tasks_builder.spawn_handle();
-			let spawner = |future| spawn_handle.spawn("import-queue-worker", future);
+			let spawner = |future| task_manager.spawn("import-queue-worker", future);
 
 			let import_queue = sc_consensus_babe::import_queue(
 				babe_link,

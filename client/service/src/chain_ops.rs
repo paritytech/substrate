@@ -114,6 +114,7 @@ impl<
 		// This makes it possible either to interleave other operations in-between the block imports,
 		// or to stop the operation completely.
 		let import = future::poll_fn(move |cx| {
+			dbg!("import");
 			// Start by reading the number of blocks if not done so already.
 			let count = match count {
 				Some(c) => c,
@@ -190,6 +191,7 @@ impl<
 
 			} else {
 				// Polling the import queue will re-schedule the task when ready.
+				dbg!("PENDING");
 				return std::task::Poll::Pending;
 			}
 		});
