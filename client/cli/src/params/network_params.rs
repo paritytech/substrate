@@ -87,7 +87,7 @@ pub struct NetworkParams {
 
 	/// Disable the yamux flow control. This option will be removed in the future once there is
 	/// enough confidence that this feature is properly working.
-	#[structopt(long = "no-yamux-flow-control")]
+	#[structopt(long)]
 	pub no_yamux_flow_control: bool,
 }
 
