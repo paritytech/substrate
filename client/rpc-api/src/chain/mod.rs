@@ -114,7 +114,7 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 	#[pubsub(
 		subscription = "grandpa_finality",
 		subscribe,
-		name = "grandpa_subscribeToFinality",
+		name = "grandpa_subscribeJustifications",
 	)]
 	fn subscribe_finality(&self, metadata: Self::Metadata, subscriber: Subscriber<Header>);
 
