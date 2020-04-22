@@ -1233,10 +1233,6 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 				.ok_or(InvalidTransaction::ExhaustsResources)?;
 			let next_weight = current_weight.checked_add(extrinsic_weight)
 				.ok_or(InvalidTransaction::ExhaustsResources)?;
-
-			#[cfg(test)]
-			println!("{:?} >? {:?}", next_weight, limit);
-
 			if next_weight > limit {
 				Err(InvalidTransaction::ExhaustsResources.into())
 			} else {
