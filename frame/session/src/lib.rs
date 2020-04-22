@@ -110,7 +110,7 @@ use frame_support::{
 		Get, FindAuthor, ValidatorRegistration, EstimateNextSessionRotation, EstimateNextNewSession,
 	},
 	dispatch::{self, DispatchResult, DispatchError},
-	weights::{Weight, MINIMUM_WEIGHT},
+	weights::Weight,
 };
 use frame_system::{self as system, ensure_signed};
 
@@ -532,7 +532,7 @@ decl_module! {
 				Self::rotate_session();
 			}
 
-			MINIMUM_WEIGHT
+			0
 		}
 	}
 }

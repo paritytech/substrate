@@ -150,7 +150,7 @@
 //!
 //! ```
 //! use frame_support::{decl_module, dispatch};
-//! use frame_support::weights::MINIMUM_WEIGHT;
+//!
 //! use frame_system::{self as system, ensure_signed};
 //! use pallet_staking::{self as staking};
 //!
@@ -159,7 +159,7 @@
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 //!			/// Reward a validator.
-//! 		#[weight = MINIMUM_WEIGHT]
+//! 		#[weight = 0]
 //! 		pub fn reward_myself(origin) -> dispatch::DispatchResult {
 //! 			let reported = ensure_signed(origin)?;
 //! 			<staking::Module<T>>::reward_by_ids(vec![(reported, 10)]);
@@ -291,7 +291,7 @@ use sp_std::{
 use codec::{HasCompact, Encode, Decode};
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error, debug,
-	weights::{MINIMUM_WEIGHT, Weight, DispatchClass},
+	weights::{Weight, DispatchClass},
 	storage::IterableStorageMap,
 	dispatch::{IsSubType, DispatchResult},
 	traits::{
@@ -1619,7 +1619,7 @@ decl_module! {
 		}
 
 		/// Force a current staker to become completely unstaked, immediately.
-		#[weight = MINIMUM_WEIGHT]
+		#[weight = 0]
 		fn force_unstake(origin, stash: T::AccountId) {
 			ensure_root(origin)?;
 
@@ -1799,7 +1799,7 @@ decl_module! {
 		/// This can be called from any origin.
 		///
 		/// - `stash`: The stash account to reap. Its balance must be zero.
-		#[weight = MINIMUM_WEIGHT]
+		#[weight = 0]
 		fn reap_stash(_origin, stash: T::AccountId) {
 			ensure!(T::Currency::total_balance(&stash).is_zero(), Error::<T>::FundedTarget);
 			Self::kill_stash(&stash)?;

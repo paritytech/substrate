@@ -256,7 +256,7 @@
 use sp_std::marker::PhantomData;
 use frame_support::{
 	dispatch::DispatchResult, decl_module, decl_storage, decl_event,
-	weights::{DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee, MINIMUM_WEIGHT, Pays},
+	weights::{DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee, Pays},
 };
 use sp_std::prelude::*;
 use frame_system::{self as system, ensure_signed, ensure_root};
@@ -466,7 +466,7 @@ decl_module! {
 		// weight (a numeric representation of pure execution time and difficulty) of the
 		// transaction and the latter demonstrates the [`DispatchClass`] of the call. A higher
 		// weight means a larger transaction (less of which can be placed in a single block).
-		#[weight = MINIMUM_WEIGHT]
+		#[weight = 0]
 		fn accumulate_dummy(origin, increase_by: T::Balance) -> DispatchResult {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let _sender = ensure_signed(origin)?;
@@ -520,7 +520,7 @@ decl_module! {
 			// Anything that needs to be done at the start of the block.
 			// We don't do anything here.
 
-			MINIMUM_WEIGHT
+			0
 		}
 
 		// The signature could also look like: `fn on_finalize()`

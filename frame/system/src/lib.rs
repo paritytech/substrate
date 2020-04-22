@@ -68,14 +68,14 @@
 //! ### Example - Get extrinsic count and parent hash for the current block
 //!
 //! ```
-//! use frame_support::{decl_module, dispatch, weights::MINIMUM_WEIGHT};
+//! use frame_support::{decl_module, dispatch};
 //! use frame_system::{self as system, ensure_signed};
 //!
 //! pub trait Trait: system::Trait {}
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		#[weight = MINIMUM_WEIGHT]
+//! 		#[weight = 0]
 //! 		pub fn system_module_example(origin) -> dispatch::DispatchResult {
 //! 			let _sender = ensure_signed(origin)?;
 //! 			let _extrinsic_count = <system::Module<T>>::extrinsic_count();
@@ -121,7 +121,7 @@ use frame_support::{
 		StoredMap, EnsureOrigin,
 	},
 	weights::{
-		Weight, MINIMUM_WEIGHT, RuntimeDbWeight, DispatchInfo, PostDispatchInfo, DispatchClass,
+		Weight, RuntimeDbWeight, DispatchInfo, PostDispatchInfo, DispatchClass,
 		FunctionOf, Pays,
 	}
 };
@@ -500,13 +500,13 @@ decl_module! {
 		}
 
 		/// Make some on-chain remark.
-		#[weight = MINIMUM_WEIGHT]
+		#[weight = 0]
 		fn remark(origin, _remark: Vec<u8>) {
 			ensure_signed(origin)?;
 		}
 
 		/// Set the number of pages in the WebAssembly environment's heap.
-		#[weight = (MINIMUM_WEIGHT, DispatchClass::Operational)]
+		#[weight = (0, DispatchClass::Operational)]
 		fn set_heap_pages(origin, pages: u64) {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::HEAP_PAGES, &pages.encode());
@@ -548,7 +548,7 @@ decl_module! {
 		}
 
 		/// Set some items of storage.
-		#[weight = (MINIMUM_WEIGHT, DispatchClass::Operational)]
+		#[weight = (0, DispatchClass::Operational)]
 		fn set_storage(origin, items: Vec<KeyValue>) {
 			ensure_root(origin)?;
 			for i in &items {
@@ -557,7 +557,7 @@ decl_module! {
 		}
 
 		/// Kill some items from storage.
-		#[weight = (MINIMUM_WEIGHT, DispatchClass::Operational)]
+		#[weight = (0, DispatchClass::Operational)]
 		fn kill_storage(origin, keys: Vec<Key>) {
 			ensure_root(origin)?;
 			for key in &keys {
@@ -566,7 +566,7 @@ decl_module! {
 		}
 
 		/// Kill all storage items with a key that starts with the given prefix.
-		#[weight = (MINIMUM_WEIGHT, DispatchClass::Operational)]
+		#[weight = (0, DispatchClass::Operational)]
 		fn kill_prefix(origin, prefix: Key) {
 			ensure_root(origin)?;
 			storage::unhashed::kill_prefix(&prefix);
