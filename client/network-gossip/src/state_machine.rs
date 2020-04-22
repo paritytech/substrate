@@ -20,7 +20,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::iter;
 use std::time;
-use log::trace;
+use log::{error, trace};
 use lru::LruCache;
 use libp2p::PeerId;
 use sp_runtime::traits::{Block as BlockT, Hash, HashFor};
@@ -41,8 +41,6 @@ mod rep {
 	pub const GOSSIP_SUCCESS: Rep = Rep::new(1 << 4, "Successfull gossip");
 	/// Reputation change when a peer sends us a gossip message that we already knew about.
 	pub const DUPLICATE_GOSSIP: Rep = Rep::new(-(1 << 2), "Duplicate gossip");
-	/// Reputation change when a peer sends a message from a topic it isn't registered on.
-	pub const UNREGISTERED_TOPIC: Rep = Rep::new(-(1 << 10), "Unregistered gossip message topic");
 }
 
 struct PeerConsensus<H> {
@@ -320,8 +318,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 			let peer = match self.peers.get_mut(&who) {
 				Some(peer) => peer,
 				None => {
-					trace!(target:"gossip", "Ignored statement from unregistered peer {}", who);
-					network.report_peer(who.clone(), rep::UNREGISTERED_TOPIC);
+					error!(target:"gossip", "Got message from unregistered peer {}", who);
 					continue;
 				}
 			};
@@ -625,12 +622,6 @@ mod tests {
 			to_forward.is_empty(),
 			"Expected `on_incoming` to ignore message from unregistered peer but got {:?}",
 			to_forward,
-		);
-
-		assert_eq!(
-			vec![(remote, rep::UNREGISTERED_TOPIC)],
-			network.inner.lock().unwrap().peer_reports,
-			"Expected `ConsensusGossip` to report message from unregistered peer."
 		);
 	}
 }
