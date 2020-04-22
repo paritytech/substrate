@@ -1968,11 +1968,13 @@ pub(crate) mod tests {
 	#[test]
 	fn signed_ext_check_weight_refund_works() {
 		new_test_ext().execute_with(|| {
-			let info = DispatchInfo { weight: 500, ..Default::default() };
+			// This is half of the max block weight
+			let info = DispatchInfo { weight: 512, ..Default::default() };
 			let post_info = PostDispatchInfo { actual_weight: Some(128), };
 			let len = 0_usize;
 
-			AllExtrinsicsWeight::put(256);
+			// We allow 75% for normal transaction, so we put 25% - extrinsic base weight
+			AllExtrinsicsWeight::put(256 - <Test as Trait>::ExtrinsicBaseWeight::get());
 
 			let pre = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &info, len).unwrap();
 			assert_eq!(
