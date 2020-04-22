@@ -317,8 +317,6 @@ impl<B: BlockT> ConsensusGossip<B> {
 				},
 			};
 
-			network.report_peer(who.clone(), rep::GOSSIP_SUCCESS);
-
 			let peer = match self.peers.get_mut(&who) {
 				Some(peer) => peer,
 				None => {
@@ -328,8 +326,8 @@ impl<B: BlockT> ConsensusGossip<B> {
 				}
 			};
 
+			network.report_peer(who.clone(), rep::GOSSIP_SUCCESS);
 			peer.known_messages.insert(message_hash);
-
 			to_forward.push((topic, TopicNotification {
 				message: message.clone(),
 				sender: Some(who.clone())
@@ -630,10 +628,7 @@ mod tests {
 		);
 
 		assert_eq!(
-			vec![
-				(remote.clone(), rep::GOSSIP_SUCCESS),
-				(remote, rep::UNREGISTERED_TOPIC),
-			],
+			vec![(remote, rep::UNREGISTERED_TOPIC)],
 			network.inner.lock().unwrap().peer_reports,
 			"Expected `ConsensusGossip` to report message from unregistered peer."
 		);
