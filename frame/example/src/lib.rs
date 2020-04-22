@@ -847,7 +847,7 @@ mod tests {
 		let default_call = <Call<Test>>::accumulate_dummy(10);
 		let info = default_call.get_dispatch_info();
 		// aka. `let info = <Call<Test> as GetDispatchInfo>::get_dispatch_info(&default_call);`
-		assert_eq!(info.weight, 10_000_000);
+		assert_eq!(info.weight, 0);
 
 		// must have a custom weight of `100 * arg = 2000`
 		let custom_call = <Call<Test>>::set_dummy(20);
