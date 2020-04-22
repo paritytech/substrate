@@ -188,9 +188,9 @@ impl<T: Trait> GasMeter<T> {
 		self.gas_left
 	}
 
-	// Turn this GasMeter into a DispatchResult that contains the actually used gas
+	/// Turn this GasMeter into a DispatchResult that contains the actually used gas.
 	pub fn into_dispatch_result<R, E>(self, result: Result<R, E>) -> DispatchResultWithPostInfo where
-		E: Into<DispatchError>
+		E: Into<DispatchError>,
 	{
 		let post_info = PostDispatchInfo {
 			actual_weight: Some(self.gas_spent()),

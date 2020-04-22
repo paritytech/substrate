@@ -154,7 +154,7 @@ pub enum RuntimeToken {
 	/// The given number of bytes is read from the sandbox memory and
 	/// is returned as the return data buffer of the call.
 	ReturnData(u32),
-	// Dispatched a call with the given weight.
+	/// Dispatched a call with the given weight.
 	DispatchWithWeight(Gas),
 	/// (topic_count, data_bytes): A buffer of the given size is posted as an event indexed with the
 	/// given number of topics.

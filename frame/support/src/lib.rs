@@ -204,7 +204,7 @@ macro_rules! assert_err {
 	}
 }
 
-/// Assert an expression returns an error specified
+/// Assert an expression returns an error specified.
 ///
 /// This can be used on`DispatchResultWithPostInfo` when the post info should
 /// be ignored.
