@@ -481,6 +481,9 @@ parameter_types! {
 	pub const TipFindersFee: Percent = Percent::from_percent(20);
 	pub const TipReportDepositBase: Balance = 1 * DOLLARS;
 	pub const TipReportDepositPerByte: Balance = 1 * CENTS;
+	pub const BountyDepositBase: Balance = 1 * DOLLARS;
+	pub const BountyDepositPerByte: Balance = 1 * CENTS;
+	pub const BountyDepositPayoutDelay: BlockNumber = 1 * DAYS;
 }
 
 impl pallet_treasury::Trait for Runtime {
@@ -498,6 +501,9 @@ impl pallet_treasury::Trait for Runtime {
 	type ProposalBondMinimum = ProposalBondMinimum;
 	type SpendPeriod = SpendPeriod;
 	type Burn = Burn;
+	type BountyDepositBase = BountyDepositBase;
+	type BountyDepositPerByte = BountyDepositPerByte;
+	type BountyDepositPayoutDelay = BountyDepositPayoutDelay;
 }
 
 parameter_types! {
