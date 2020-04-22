@@ -536,3 +536,68 @@ pub fn slot_lenience_linear(parent_slot: u64, slot_info: &SlotInfo) -> Option<Du
 		Some(Duration::from_millis(slot_lenience * slot_info.duration))
 	}
 }
+
+#[cfg(test)]
+mod test {
+	use std::time::{Duration, Instant};
+
+	const SLOT_DURATION: Duration = Duration::from_millis(6000);
+
+	fn slot(n: u64) -> super::slots::SlotInfo {
+		super::slots::SlotInfo {
+			number: n,
+			last_number: n - 1,
+			duration: SLOT_DURATION.as_millis() as u64,
+			timestamp: Default::default(),
+			inherent_data: Default::default(),
+			ends_at: Instant::now(),
+		}
+	}
+
+	#[test]
+	fn linear_slot_lenience() {
+		// if no slots are skipped there should be no lenience
+		assert_eq!(super::slot_lenience_linear(1, &slot(2)), None);
+
+		// otherwise the lenience is incremented linearly with
+		// the number of skipped slots.
+		for n in 3..=22 {
+			assert_eq!(
+				super::slot_lenience_linear(1, &slot(n)),
+				Some(SLOT_DURATION * (n - 2) as u32),
+			);
+		}
+
+		// but we cap it to a maximum of 20 slots
+		assert_eq!(
+			super::slot_lenience_linear(1, &slot(23)),
+			Some(SLOT_DURATION * 20),
+		);
+	}
+
+	#[test]
+	fn exponential_slot_lenience() {
+		// if no slots are skipped there should be no lenience
+		assert_eq!(super::slot_lenience_exponential(1, &slot(2)), None);
+
+		// otherwise the lenience is incremented linearly with
+		// the number of skipped slots.
+		for n in 3..=17 {
+			assert_eq!(
+				super::slot_lenience_exponential(1, &slot(n)),
+				Some(SLOT_DURATION * 2u32.pow((n / 2 - 1) as u32)),
+			);
+		}
+
+		// but we cap it to a maximum of 14 slots
+		assert_eq!(
+			super::slot_lenience_exponential(1, &slot(18)),
+			Some(SLOT_DURATION * 2u32.pow(7)),
+		);
+
+		assert_eq!(
+			super::slot_lenience_exponential(1, &slot(19)),
+			Some(SLOT_DURATION * 2u32.pow(7)),
+		);
+	}
+}
