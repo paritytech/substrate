@@ -20,13 +20,13 @@ use crate::state_machine::{ConsensusGossip, TopicNotification, PERIODIC_MAINTENA
 use sc_network::{Event, ReputationChange};
 
 use futures::prelude::*;
+use futures::channel::mpsc::{channel, Sender, Receiver};
 use libp2p::PeerId;
 use log::trace;
 use sp_runtime::{traits::Block as BlockT, ConsensusEngineId};
-use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
 use std::{
 	borrow::Cow,
-	collections::{HashMap, hash_map::Entry},
+	collections::{HashMap, VecDeque},
 	pin::Pin,
 	sync::Arc,
 	task::{Context, Poll},
@@ -43,7 +43,23 @@ pub struct GossipEngine<B: BlockT> {
 	/// Incoming events from the network.
 	network_event_stream: Pin<Box<dyn Stream<Item = Event> + Send>>,
 	/// Outgoing events to the consumer.
-	message_sinks: HashMap<B::Hash, Vec<TracingUnboundedSender<TopicNotification>>>,
+	message_sinks: HashMap<B::Hash, Vec<Sender<TopicNotification>>>,
+	/// Buffered messages (see [`ForwardingState`]).
+	forwarding_state: ForwardingState<B>,
+}
+
+/// A gossip engine receives messages from the network via the `network_event_stream` and forwards
+/// them to upper layers via the `message sinks`. In the scenario where messages have been received
+/// from the network but a subscribed message sink is not yet ready to receive the messages, the
+/// messages are buffered. To model this process a gossip engine can be in two states.
+enum ForwardingState<B: BlockT> {
+	/// The gossip engine is currently not forwarding any messages and will poll the network for
+	/// more messages to forward.
+	Idle,
+	/// The gossip engine is in the progress of forwarding messages and thus will not poll the
+	/// network for more messages until it has send all current messages into the subscribed message
+	/// sinks.
+	Busy(VecDeque<(B::Hash, TopicNotification)>),
 }
 
 impl<B: BlockT> Unpin for GossipEngine<B> {}
@@ -69,6 +85,7 @@ impl<B: BlockT> GossipEngine<B> {
 
 			network_event_stream,
 			message_sinks: HashMap::new(),
+			forwarding_state: ForwardingState::Idle,
 		}
 	}
 
@@ -96,12 +113,19 @@ impl<B: BlockT> GossipEngine<B> {
 
 	/// Get data of valid, incoming messages for a topic (but might have expired meanwhile).
 	pub fn messages_for(&mut self, topic: B::Hash)
-		-> TracingUnboundedReceiver<TopicNotification>
+		-> Receiver<TopicNotification>
 	{
-		let (tx, rx) = tracing_unbounded("mpsc_gossip_messages_for");
+		let past_messages = self.state_machine.messages_for(topic).collect::<Vec<_>>();
+		// The channel length is not critical for correctness. By the implementation of `channel`
+		// each sender is guaranteed a single buffer slot, making it a non-rendezvous channel and
+		// thus preventing direct dead-locks. A minimum channel length of 10 is an estimate based on
+		// the fact that despite `NotificationsReceived` having a `Vec` of messages, it only ever
+		// contains a single message.
+		let (mut tx, rx) = channel(usize::max(past_messages.len(), 10));
 
-		for notification in self.state_machine.messages_for(topic) {
-			tx.unbounded_send(notification).expect("receiver known to be live; qed");
+		for notification in past_messages{
+			tx.try_send(notification)
+				.expect("receiver known to be live, and buffer size known to suffice; qed");
 		}
 
 		self.message_sinks.entry(topic).or_default().push(tx);
@@ -152,64 +176,105 @@ impl<B: BlockT> Future for GossipEngine<B> {
 	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		let this = &mut *self;
 
-		loop {
-			match this.network_event_stream.poll_next_unpin(cx) {
-				Poll::Ready(Some(event)) => match event {
-					Event::NotificationStreamOpened { remote, engine_id: msg_engine_id, role } => {
-						if msg_engine_id != this.engine_id {
-							continue;
-						}
-						this.state_machine.new_peer(&mut *this.network, remote, role);
-					}
-					Event::NotificationStreamClosed { remote, engine_id: msg_engine_id } => {
-						if msg_engine_id != this.engine_id {
-							continue;
-						}
-						this.state_machine.peer_disconnected(&mut *this.network, remote);
-					},
-					Event::NotificationsReceived { remote, messages } => {
-						let messages = messages.into_iter().filter_map(|(engine, data)| {
-							if engine == this.engine_id {
-								Some(data.to_vec())
-							} else {
-								None
-							}
-						}).collect();
-
-						let to_forward = this.state_machine.on_incoming(
-							&mut *this.network,
-							remote,
-							messages,
-						);
-
-						for (topic, notification) in to_forward {
-							if let Entry::Occupied(mut entry) = this.message_sinks.entry(topic) {
-								trace!(
-									target: "gossip",
-									"Pushing consensus message to sinks for {}.", topic,
-								);
-								entry.get_mut().retain(move |sink| {
-									if let Err(e) = sink.unbounded_send(notification.clone()) {
-										trace!(
-											target: "gossip",
-											"Error broadcasting message notification: {:?}", e,
-										);
-									}
-									!sink.is_closed()
-								});
-								if entry.get().is_empty() {
-									entry.remove_entry();
+		'outer: loop {
+			match &mut this.forwarding_state {
+				ForwardingState::Idle => {
+					match this.network_event_stream.poll_next_unpin(cx) {
+						Poll::Ready(Some(event)) => match event {
+							Event::NotificationStreamOpened { remote, engine_id, role } => {
+								if engine_id != this.engine_id {
+									continue;
 								}
+								this.state_machine.new_peer(&mut *this.network, remote, role);
+							}
+							Event::NotificationStreamClosed { remote, engine_id } => {
+								if engine_id != this.engine_id {
+									continue;
+								}
+								this.state_machine.peer_disconnected(&mut *this.network, remote);
+							},
+							Event::NotificationsReceived { remote, messages } => {
+								let messages = messages.into_iter().filter_map(|(engine, data)| {
+									if engine == this.engine_id {
+										Some(data.to_vec())
+									} else {
+										None
+									}
+								}).collect();
+
+								let to_forward = this.state_machine.on_incoming(
+									&mut *this.network,
+									remote,
+									messages,
+								);
+
+								this.forwarding_state = ForwardingState::Busy(to_forward.into());
+							},
+							Event::Dht(_) => {}
+						}
+						// The network event stream closed. Do the same for [`GossipValidator`].
+						Poll::Ready(None) => return Poll::Ready(()),
+						Poll::Pending => break,
+					}
+				}
+				ForwardingState::Busy(to_forward) => {
+					let (topic, notification) = match to_forward.pop_front() {
+						Some(n) => n,
+						None => {
+							this.forwarding_state = ForwardingState::Idle;
+							continue;
+						}
+					};
+
+					let sinks = match this.message_sinks.get_mut(&topic) {
+						Some(sinks) => sinks,
+						None => {
+							continue;
+						},
+					};
+
+					// Make sure all sinks for the given topic are ready.
+					for sink in sinks.iter_mut() {
+						match sink.poll_ready(cx) {
+							Poll::Ready(Ok(())) => {},
+							// Receiver has been dropped. Ignore for now, filtered out in (1).
+							Poll::Ready(Err(_)) => {},
+							Poll::Pending => {
+								// Push back onto queue for later.
+								to_forward.push_front((topic, notification));
+								break 'outer;
 							}
 						}
-					},
-					Event::Dht(_) => {}
+					}
+
+					// Filter out all closed sinks.
+					sinks.retain(|sink| !sink.is_closed()); // (1)
+
+					if sinks.is_empty() {
+						this.message_sinks.remove(&topic);
+						continue;
+					}
+
+					trace!(
+						target: "gossip",
+						"Pushing consensus message to sinks for {}.", topic,
+					);
+
+					// Send the notification on each sink.
+					for sink in sinks {
+						match sink.start_send(notification.clone()) {
+							Ok(()) => {},
+							Err(e) if e.is_full() => unreachable!(
+								"Previously ensured that all sinks are ready; qed.",
+							),
+							// Receiver got dropped. Will be removed in next iteration (See (1)).
+							Err(_) => {},
+						}
+					}
 				}
-				// The network event stream closed. Do the same for [`GossipValidator`].
-				Poll::Ready(None) => return Poll::Ready(()),
-				Poll::Pending => break,
 			}
 		}
+
 
 		while let Poll::Ready(()) = this.periodic_maintenance_interval.poll_unpin(cx) {
 			this.periodic_maintenance_interval.reset(PERIODIC_MAINTENANCE_INTERVAL);
