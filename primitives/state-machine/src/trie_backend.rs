@@ -27,7 +27,7 @@ use crate::{
 	StorageKey, StorageValue, Backend,
 	trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral},
 };
-use std::cell::RefCell;
+use parking_lot::RwLock;
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
 pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
@@ -45,7 +45,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: Codec 
 	/// Activate storage of roots (can be use
 	/// to pack proofs and does small caching of child trie root)).
 	pub fn new_with_roots(storage: S, root: H::Out) -> Self {
-		let register_roots = Some(RefCell::new(Default::default()));
+		let register_roots = Some(RwLock::new(Default::default()));
 		TrieBackend {
 			essence: TrieBackendEssence::new(storage, root, register_roots),
 		}
@@ -57,7 +57,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: Codec 
 			let mut dest = ChildrenProofMap::default();
 			dest.insert(ChildInfoProof::top_trie(), self.essence.root().encode());
 			let roots = {
-				std::mem::replace(&mut *register_roots.borrow_mut(), Default::default())
+				std::mem::replace(&mut *register_roots.write(), Default::default())
 			};
 			for (child_info, root) in roots.into_iter() {
 				if let Some(root) = root {
