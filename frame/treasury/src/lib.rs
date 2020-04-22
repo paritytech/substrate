@@ -333,7 +333,11 @@ decl_module! {
 		/// - DbReads: `ProposalCount`, `sender account`
 		/// - DbWrites: `ProposalCount`, `Proposals`, `sender account`
 		/// # </weight>
+<<<<<<< HEAD
 		#[weight = 114_700_000 + T::DbWeight::get().reads_writes(1, 2)]
+=======
+		#[weight = 500_000_000]
+>>>>>>> origin/master
 		fn propose_spend(
 			origin,
 			#[compact] value: BalanceOf<T>,
@@ -360,7 +364,11 @@ decl_module! {
 		/// - DbReads: `Proposals`, `rejected proposer account`
 		/// - DbWrites: `Proposals`, `rejected proposer account`
 		/// # </weight>
+<<<<<<< HEAD
 		#[weight = 125_800_000 + T::DbWeight::get().reads_writes(2, 2)]
+=======
+		#[weight = (100_000_000, DispatchClass::Operational)]
+>>>>>>> origin/master
 		fn reject_proposal(origin, #[compact] proposal_id: ProposalIndex) {
 			T::RejectOrigin::try_origin(origin)
 				.map(|_| ())
@@ -382,7 +390,11 @@ decl_module! {
 		/// - DbReads: `Proposals`, `Approvals`
 		/// - DbWrite: `Approvals`
 		/// # </weight>
+<<<<<<< HEAD
 		#[weight = 33_610_000 + T::DbWeight::get().reads_writes(2, 1)]
+=======
+		#[weight = (100_000_000, DispatchClass::Operational)]
+>>>>>>> origin/master
 		fn approve_proposal(origin, #[compact] proposal_id: ProposalIndex) {
 			T::ApproveOrigin::try_origin(origin)
 				.map(|_| ())
@@ -411,7 +423,11 @@ decl_module! {
 		/// - DbReads: `Reasons`, `Tips`, `who account data`
 		/// - DbWrites: `Tips`, `who account data`
 		/// # </weight>
+<<<<<<< HEAD
 		#[weight = 138_400_000 + 4_000 * reason.len() as u64 + T::DbWeight::get().reads_writes(3, 2)]
+=======
+		#[weight = 100_000_000]
+>>>>>>> origin/master
 		fn report_awesome(origin, reason: Vec<u8>, who: T::AccountId) {
 			let finder = ensure_signed(origin)?;
 
