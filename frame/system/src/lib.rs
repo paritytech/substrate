@@ -1200,7 +1200,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 		let current_weight = Module::<T>::all_extrinsics_weight();
 		let maximum_weight = T::MaximumBlockWeight::get();
 		let limit = Self::get_dispatch_limit_ratio(info.class) * maximum_weight;
-		let extrinsic_weight = info.weight + T::ExtrinsicBaseWeight::get();
+		let extrinsic_weight = info.weight.checked_add(T::ExtrinsicBaseWeight::get()).ok_or(InvalidTransaction::ExhaustsResources)?;
 		// TODO: Verify this line is sane, seems to be bad.
 		let added_weight = extrinsic_weight.min(limit);
 		// TODO: Should be checked add I think.
@@ -1605,7 +1605,7 @@ mod tests {
 	use sp_std::cell::RefCell;
 	use sp_core::H256;
 	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header, DispatchError};
-	use frame_support::{impl_outer_origin, parameter_types};
+	use frame_support::{impl_outer_origin, parameter_types, assert_err};
 
 	impl_outer_origin! {
 		pub enum Origin for Test where system = super {}
@@ -1627,6 +1627,12 @@ mod tests {
 			impl_version: 1,
 			apis: sp_version::create_apis_vec!([]),
 			transaction_version: 1,
+		};
+		pub const BlockExecutionWeight: Weight = 10;
+		pub const ExtrinsicBaseWeight: Weight = 5;
+		pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
+			read: 10,
+			write: 100,
 		};
 	}
 
@@ -1665,9 +1671,9 @@ mod tests {
 		type Event = u16;
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
-		type DbWeight = ();
-		type BlockExecutionWeight = ();
-		type ExtrinsicBaseWeight = ();
+		type DbWeight = DbWeight;
+		type BlockExecutionWeight = BlockExecutionWeight;
+		type ExtrinsicBaseWeight = ExtrinsicBaseWeight;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = Version;
@@ -1932,20 +1938,26 @@ mod tests {
 	#[test]
 	fn signed_ext_check_weight_refund_works() {
 		new_test_ext().execute_with(|| {
-			let info = DispatchInfo { weight: 512, ..Default::default() };
+			let info = DispatchInfo { weight: 500, ..Default::default() };
 			let post_info = PostDispatchInfo { actual_weight: Some(128), };
 			let len = 0_usize;
 
 			AllExtrinsicsWeight::put(256);
 
 			let pre = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &info, len).unwrap();
-			assert_eq!(AllExtrinsicsWeight::get().unwrap(), info.weight + 256);
+			assert_eq!(
+				AllExtrinsicsWeight::get().unwrap(),
+				info.weight + 256 + <Test as Trait>::ExtrinsicBaseWeight::get()
+			);
 
 			assert!(
 				CheckWeight::<Test>::post_dispatch(pre, &info, &post_info, len, &Ok(()))
 				.is_ok()
 			);
-			assert_eq!(AllExtrinsicsWeight::get().unwrap(), post_info.actual_weight.unwrap() + 256);
+			assert_eq!(
+				AllExtrinsicsWeight::get().unwrap(),
+				post_info.actual_weight.unwrap() + 256 + <Test as Trait>::ExtrinsicBaseWeight::get()
+			);
 		})
 	}
 
@@ -1959,18 +1971,24 @@ mod tests {
 			AllExtrinsicsWeight::put(128);
 
 			let pre = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &info, len).unwrap();
-			assert_eq!(AllExtrinsicsWeight::get().unwrap(), info.weight + 128);
+			assert_eq!(
+				AllExtrinsicsWeight::get().unwrap(),
+				info.weight + 128 + <Test as Trait>::ExtrinsicBaseWeight::get()
+			);
 
 			assert!(
 				CheckWeight::<Test>::post_dispatch(pre, &info, &post_info, len, &Ok(()))
 				.is_ok()
 			);
-			assert_eq!(AllExtrinsicsWeight::get().unwrap(), info.weight + 128);
+			assert_eq!(
+				AllExtrinsicsWeight::get().unwrap(),
+				info.weight + 128 + <Test as Trait>::ExtrinsicBaseWeight::get()
+			);
 		})
 	}
 
 	#[test]
-	fn signed_ext_check_weight_fee_works() {
+	fn zero_weight_extrinsic_still_has_base_weight() {
 		new_test_ext().execute_with(|| {
 			let free = DispatchInfo { weight: 0, ..Default::default() };
 			let len = 0_usize;
@@ -1978,21 +1996,19 @@ mod tests {
 			assert_eq!(System::all_extrinsics_weight(), 0);
 			let r = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &free, len);
 			assert!(r.is_ok());
-			assert_eq!(System::all_extrinsics_weight(), 0);
+			assert_eq!(System::all_extrinsics_weight(), <Test as Trait>::ExtrinsicBaseWeight::get());
 		})
 	}
 
 	#[test]
-	fn signed_ext_check_weight_max_works() {
+	fn weight_larger_than_max_block_weight_errors() {
 		new_test_ext().execute_with(|| {
 			let max = DispatchInfo { weight: Weight::max_value(), ..Default::default() };
 			let len = 0_usize;
-			let normal_limit = normal_weight_limit();
 
 			assert_eq!(System::all_extrinsics_weight(), 0);
 			let r = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &max, len);
-			assert!(r.is_ok());
-			assert_eq!(System::all_extrinsics_weight(), normal_limit);
+			assert_err!(r, InvalidTransaction::ExhaustsResources);
 		})
 	}
 

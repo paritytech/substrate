@@ -404,7 +404,7 @@ mod tests {
 	};
 	use frame_support::{
 		impl_outer_event, impl_outer_origin, parameter_types, impl_outer_dispatch,
-		weights::Weight,
+		weights::{Weight, RuntimeDbWeight},
 		traits::{Currency, LockIdentifier, LockableCurrency, WithdrawReasons, WithdrawReason},
 	};
 	use frame_system::{self as system, Call as SystemCall, ChainContext, LastRuntimeUpgradeInfo};
@@ -427,7 +427,7 @@ mod tests {
 				fn some_root_operation(origin) {
 					let _ = frame_system::ensure_root(origin);
 				}
-				#[weight = SimpleDispatchInfo::InsecureFreeNormal]
+				#[weight = SimpleDispatchInfo::FixedNormal(0)]
 				fn some_unsigned_message(origin) {
 					let _ = frame_system::ensure_none(origin);
 				}
@@ -476,6 +476,12 @@ mod tests {
 		pub const MaximumBlockWeight: Weight = 1024;
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
+		pub const BlockExecutionWeight: Weight = 10;
+		pub const ExtrinsicBaseWeight: Weight = 5;
+		pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
+			read: 10,
+			write: 100,
+		};
 	}
 	impl frame_system::Trait for Runtime {
 		type Origin = Origin;
@@ -490,9 +496,9 @@ mod tests {
 		type Event = MetaEvent;
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
-		type DbWeight = ();
-		type BlockExecutionWeight = ();
-		type ExtrinsicBaseWeight = ();
+		type DbWeight = DbWeight;
+		type BlockExecutionWeight = BlockExecutionWeight;
+		type ExtrinsicBaseWeight = ExtrinsicBaseWeight;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = RuntimeVersion;
@@ -686,8 +692,10 @@ mod tests {
 		let xt = TestXt::new(Call::Balances(BalancesCall::transfer(33, 0)), sign_extra(1, 0, 0));
 		let encoded = xt.encode();
 		let encoded_len = encoded.len() as Weight;
-		let limit = AvailableBlockRatio::get() * MaximumBlockWeight::get() - 175;
-		let num_to_exhaust_block = limit / encoded_len;
+		// Block execution weight + on_initialize weight
+		let base_block_weight = 175 + <Runtime as frame_system::Trait>::BlockExecutionWeight::get();
+		let limit = AvailableBlockRatio::get() * MaximumBlockWeight::get() - base_block_weight;
+		let num_to_exhaust_block = limit / (encoded_len + 5);
 		t.execute_with(|| {
 			Executive::initialize_block(&Header::new(
 				1,
@@ -696,8 +704,8 @@ mod tests {
 				[69u8; 32].into(),
 				Digest::default(),
 			));
-			// Initial block weight form the custom module.
-			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_weight(), 175);
+			// Base block execution weight + `on_initialize` weight from the custom module.
+			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_weight(), base_block_weight);
 
 			for nonce in 0..=num_to_exhaust_block {
 				let xt = TestXt::new(
@@ -708,7 +716,8 @@ mod tests {
 					assert!(res.is_ok());
 					assert_eq!(
 						<frame_system::Module<Runtime>>::all_extrinsics_weight(),
-						encoded_len * (nonce + 1) + 175,
+						//--------------------- on_initialize + block_execution + extrinsic_base weight
+						(encoded_len + 5) * (nonce + 1) + base_block_weight,
 					);
 					assert_eq!(<frame_system::Module<Runtime>>::extrinsic_index(), Some(nonce as u32 + 1));
 				} else {
@@ -734,7 +743,10 @@ mod tests {
 			assert!(Executive::apply_extrinsic(x2.clone()).unwrap().is_ok());
 
 			// default weight for `TestXt` == encoded length.
-			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_weight(), (3 * len) as Weight);
+			assert_eq!(
+				<frame_system::Module<Runtime>>::all_extrinsics_weight(),
+				3 * (len as Weight + <Runtime as frame_system::Trait>::ExtrinsicBaseWeight::get())
+			);
 			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_len(), 3 * len);
 
 			let _ = <frame_system::Module<Runtime>>::finalize();
@@ -806,9 +818,10 @@ mod tests {
 		new_test_ext(1).execute_with(|| {
 
 			Executive::initialize_block(&Header::new_from_number(1));
-			// NOTE: might need updates over time if system and balance introduce new weights. For
-			// now only accounts for the custom module.
-			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_weight(), 150 + 25);
+			// NOTE: might need updates over time if new weights are introduced.
+			// For now it only accounts for the base block execution weight and
+			// the `on_initialize` weight defined in the custom test module.
+			assert_eq!(<frame_system::Module<Runtime>>::all_extrinsics_weight(), 175 + 10);
 		})
 	}
 
