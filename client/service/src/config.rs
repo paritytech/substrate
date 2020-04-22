@@ -130,7 +130,7 @@ impl KeystoreConfig {
 pub struct OffchainWorkerConfig {
 	/// If this is allowed.
 	pub enabled: bool,
-	/// allow writes from the runtime to the offchain worker database
+	/// allow writes from the runtime to the offchain worker database.
 	pub indexing_enabled: bool,
 }
 
