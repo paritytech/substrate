@@ -52,7 +52,6 @@
 //!
 //! ```
 //! use frame_support::{decl_module, dispatch};
-//!
 //! use frame_system::{self as system, ensure_root};
 //!
 //! pub trait Trait: frame_system::Trait {}

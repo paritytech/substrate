@@ -43,7 +43,6 @@
 //!
 //! ```
 //! use frame_support::{decl_module, dispatch};
-//!
 //! use frame_system::{self as system, ensure_signed};
 //! use pallet_im_online::{self as im_online};
 //!

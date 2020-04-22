@@ -21,7 +21,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::{decl_module, decl_storage, decl_event, decl_error};
-
 use frame_support::traits::Currency;
 use frame_system::{self as system, ensure_signed};
 use codec::{Encode, Decode};
