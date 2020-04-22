@@ -29,7 +29,6 @@ use frame_support::weights::{Weight, MINIMUM_WEIGHT, DispatchClass, FunctionOf};
 use frame_support::traits::{Currency, WithdrawReason, ExistenceRequirement};
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::ModuleId;
-use frame_support::weights::SimpleDispatchInfo;
 use sp_core::{U256, H256, H160, Hasher};
 use sp_runtime::{
 	DispatchResult, traits::{UniqueSaturatedInto, AccountIdConversion, SaturatedConversion},
@@ -191,7 +190,7 @@ decl_module! {
 		fn deposit_event() = default;
 
 		/// Deposit balance from currency/balances module into EVM.
-		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
+		#[weight = MINIMUM_WEIGHT]
 		fn deposit_balance(origin, value: BalanceOf<T>) {
 			let sender = ensure_signed(origin)?;
 
@@ -212,7 +211,7 @@ decl_module! {
 		}
 
 		/// Withdraw balance from EVM into currency/balances module.
-		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
+		#[weight = MINIMUM_WEIGHT]
 		fn withdraw_balance(origin, value: BalanceOf<T>) {
 			let sender = ensure_signed(origin)?;
 			let address = T::ConvertAccountId::convert_account_id(&sender);
