@@ -65,7 +65,7 @@ impl frame_system::Trait for Test {
 	type Call = ();
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
-	type AccountId = u64;
+	type AccountId = u128; // u64 is not enough to hold bytes used to generate bounty account
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
@@ -91,17 +91,17 @@ impl pallet_balances::Trait for Test {
 	type AccountStore = System;
 }
 thread_local! {
-	static TEN_TO_FOURTEEN: RefCell<Vec<u64>> = RefCell::new(vec![10,11,12,13,14]);
+	static TEN_TO_FOURTEEN: RefCell<Vec<u128>> = RefCell::new(vec![10,11,12,13,14]);
 }
 pub struct TenToFourteen;
-impl Contains<u64> for TenToFourteen {
-	fn sorted_members() -> Vec<u64> {
+impl Contains<u128> for TenToFourteen {
+	fn sorted_members() -> Vec<u128> {
 		TEN_TO_FOURTEEN.with(|v| {
 			v.borrow().clone()
 		})
 	}
 	#[cfg(feature = "runtime-benchmarks")]
-	fn add(new: &u64) {
+	fn add(new: &u128) {
 		TEN_TO_FOURTEEN.with(|v| {
 			let mut members = v.borrow_mut();
 			members.push(*new);
@@ -118,14 +118,14 @@ parameter_types! {
 	pub const TipFindersFee: Percent = Percent::from_percent(20);
 	pub const TipReportDepositBase: u64 = 1;
 	pub const TipReportDepositPerByte: u64 = 1;
-	pub const BountyDepositBase: u64 = 10;
+	pub const BountyDepositBase: u64 = 80;
 	pub const BountyDepositPerByte: u64 = 2;
 	pub const BountyDepositPayoutDelay: u64 = 3;
 }
 impl Trait for Test {
 	type Currency = pallet_balances::Module<Test>;
-	type ApproveOrigin = frame_system::EnsureRoot<u64>;
-	type RejectOrigin = frame_system::EnsureRoot<u64>;
+	type ApproveOrigin = frame_system::EnsureRoot<u128>;
+	type RejectOrigin = frame_system::EnsureRoot<u128>;
 	type Tippers = TenToFourteen;
 	type TipCountdown = TipCountdown;
 	type TipFindersFee = TipFindersFee;
@@ -155,7 +155,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	t.into()
 }
 
-fn last_event() -> RawEvent<u64, u64, H256> {
+fn last_event() -> RawEvent<u64, u128, H256> {
 	System::events().into_iter().map(|r| r.event)
 		.filter_map(|e| {
 			if let Event::treasury(inner) = e { Some(inner) } else { None }
@@ -522,3 +522,126 @@ fn inexistent_account_works() {
 		assert_eq!(Balances::free_balance(3), 99); // Balance of `3` has changed
 	});
 }
+
+#[test]
+fn propose_bounty_works() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+
+		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		assert_eq!(Treasury::pot(), 100);
+
+		assert_noop!(
+			Treasury::propose_bounty(Origin::signed(1), 1, 10, b"1234567890".to_vec()),
+			Error::<Test>::InsufficientProposersBalance
+		);
+
+		assert_ok!(Treasury::propose_bounty(Origin::signed(0), 1, 10, b"12345".to_vec()));
+
+		assert_eq!(last_event(), RawEvent::BountyProposed(0));
+
+		let deposit: u64 = 80 + 5 * 2;
+		assert_eq!(Balances::reserved_balance(0), deposit);
+		assert_eq!(Balances::free_balance(0), 100 - deposit);
+
+		assert_eq!(Treasury::bounties(0).unwrap(), Bounty {
+			proposer: 0,
+			curator: 1,
+			value: 10,
+			bond: deposit,
+			description: b"12345".to_vec(),
+		});
+
+		assert_eq!(Treasury::bounty_statuses(0).unwrap(), BountyStatus::Proposed);
+
+		assert_eq!(Treasury::bounty_count(), 1);
+	});
+}
+
+#[test]
+fn reject_bounty_works() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		assert_ok!(Treasury::propose_bounty(Origin::signed(0), 1, 10, b"12345".to_vec()));
+
+		assert_ok!(Treasury::reject_bounty(Origin::ROOT, 0));
+
+		let deposit: u64 = 80 + 5 * 2;
+
+		assert_eq!(last_event(), RawEvent::BountyRejected(0, deposit));
+
+		assert_eq!(Balances::reserved_balance(0), 0);
+		assert_eq!(Balances::free_balance(0), 100 - deposit);
+
+		assert_eq!(Treasury::bounties(0), None);
+
+		assert_eq!(Treasury::bounty_statuses(0), None);
+	});
+}
+
+#[test]
+fn approve_bounty_works() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		assert_ok!(Treasury::propose_bounty(Origin::signed(0), 1, 50, b"12345".to_vec()));
+
+		assert_ok!(Treasury::approve_bounty(Origin::ROOT, 0));
+
+		assert_eq!(Treasury::bounty_statuses(0).unwrap(), BountyStatus::Approved);
+		assert_eq!(Treasury::bounty_approvals(), vec![0]);
+
+		assert_noop!(Treasury::reject_bounty(Origin::ROOT, 0), Error::<Test>::UnexpectedStatus);
+
+		let deposit: u64 = 80 + 5 * 2;
+		// deposit not return yet
+		assert_eq!(Balances::reserved_balance(0), deposit);
+		assert_eq!(Balances::free_balance(0), 100 - deposit);
+
+		<Treasury as OnInitialize<u64>>::on_initialize(2);
+
+		// return deposit
+		assert_eq!(Balances::reserved_balance(0), 0);
+		assert_eq!(Balances::free_balance(0), 100);
+
+		assert_eq!(Treasury::bounty_statuses(0).unwrap(), BountyStatus::Active);
+		assert_eq!(Treasury::pot(), 100 - 50 - 25); // burn 25
+		assert_eq!(Balances::free_balance(Treasury::bounty_account_id(0)), 50);
+	});
+}
+
+#[test]
+fn award_and_claim_bounty_works() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		assert_ok!(Treasury::propose_bounty(Origin::signed(0), 1, 50, b"12345".to_vec()));
+
+		assert_ok!(Treasury::approve_bounty(Origin::ROOT, 0));
+
+		assert_noop!(Treasury::award_bounty(Origin::signed(1), 0, 3), Error::<Test>::UnexpectedStatus);
+
+		System::set_block_number(2);
+		<Treasury as OnInitialize<u64>>::on_initialize(2);
+
+		assert_ok!(Treasury::award_bounty(Origin::signed(1), 0, 3));
+
+		assert_eq!(Treasury::bounty_statuses(0).unwrap(), BountyStatus::PendingPayout);
+		assert_eq!(Treasury::bounties(0), None);
+		assert_eq!(Treasury::bounty_beneficiary(0).unwrap(), (3, 5));
+
+		assert_noop!(Treasury::claim_bounty(Origin::signed(1), 0), Error::<Test>::Premature);
+
+		System::set_block_number(5);
+		<Treasury as OnInitialize<u64>>::on_initialize(5);
+
+		assert_ok!(Treasury::claim_bounty(Origin::signed(1), 0));
+
+		assert_eq!(last_event(), RawEvent::BountyClaimed(0, 50, 3));
+
+		assert_eq!(Balances::free_balance(3), 50);
+		assert_eq!(Balances::free_balance(Treasury::bounty_account_id(0)), 0);
+	});
+}
+

@@ -713,6 +713,7 @@ decl_module! {
 			ensure!(<Bounties<T>>::contains_key(bounty_id), Error::<T>::InvalidProposalIndex);
 			ensure!(Self::bounty_statuses(bounty_id) == Some(BountyStatus::Proposed), Error::<T>::UnexpectedStatus);
 			BountyStatuses::insert(bounty_id, BountyStatus::Approved);
+			BountyApprovals::mutate(|v| v.push(bounty_id));
 		}
 
 		#[weight = SimpleDispatchInfo::FixedOperational(100_000_000)]
@@ -735,7 +736,7 @@ decl_module! {
 
 		#[weight = SimpleDispatchInfo::FixedOperational(100_000_000)]
 		fn claim_bounty(origin, #[compact] bounty_id: ProposalIndex) {
-			let _ = ensure_signed(origin)?;
+			let _ = ensure_signed(origin)?; // anyone can trigger claim
 
 			ensure!(Self::bounty_statuses(bounty_id) == Some(BountyStatus::PendingPayout), Error::<T>::UnexpectedStatus);
 			let (beneficiary, released) = Self::bounty_beneficiary(bounty_id)
