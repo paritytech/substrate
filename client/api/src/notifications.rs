@@ -25,6 +25,7 @@ use fnv::{FnvHashSet, FnvHashMap};
 use sp_core::storage::{StorageKey, StorageData};
 use sp_runtime::traits::Block as BlockT;
 use sp_utils::mpsc::{TracingUnboundedSender, TracingUnboundedReceiver, tracing_unbounded};
+use prometheus_endpoint::{Registry, GaugeVec, Opts, U64, register};
 
 /// Storage change set
 #[derive(Debug)]
@@ -71,9 +72,12 @@ pub type StorageEventStream<H> = TracingUnboundedReceiver<(H, StorageChangeSet)>
 
 type SubscriberId = u64;
 
+type SubscribersGauge = GaugeVec<U64>;
+
 /// Manages storage listeners.
 #[derive(Debug)]
 pub struct StorageNotifications<Block: BlockT> {
+	metrics: Option<SubscribersGauge>,
 	next_id: SubscriberId,
 	wildcard_listeners: FnvHashSet<SubscriberId>,
 	listeners: HashMap<StorageKey, FnvHashSet<SubscriberId>>,
@@ -88,9 +92,23 @@ pub struct StorageNotifications<Block: BlockT> {
 	)>,
 }
 
-impl<Block: BlockT> Default for StorageNotifications<Block> {
-	fn default() -> Self {
+impl<Block: BlockT> StorageNotifications<Block> {
+	/// Initialize a new StorageNotifications
+	/// optionally pass a prometheus registry to send subscriber metrics to
+	pub fn new(prometheus_registry: Option<Registry>) -> Self {
+		let metrics = prometheus_registry.and_then(|r|
+			GaugeVec::new(
+				Opts::new(
+					"storage_notification_subscribers",
+					"Number of subscribers in storage notification sytem"
+				),
+				&["action"], //added | removed
+			).and_then(|g| register(g, &r))
+			.ok()
+		);
+
 		StorageNotifications {
+			metrics,
 			next_id: Default::default(),
 			wildcard_listeners: Default::default(),
 			listeners: Default::default(),
@@ -98,9 +116,6 @@ impl<Block: BlockT> Default for StorageNotifications<Block> {
 			sinks: Default::default(),
 		}
 	}
-}
-
-impl<Block: BlockT> StorageNotifications<Block> {
 	/// Trigger notification to all listeners.
 	///
 	/// Note the changes are going to be filtered by listener's filter key.
@@ -113,6 +128,7 @@ impl<Block: BlockT> StorageNotifications<Block> {
 			Item=(Vec<u8>, impl Iterator<Item=(Vec<u8>, Option<Vec<u8>>)>)
 		>,
 	) {
+
 		let has_wildcard = !self.wildcard_listeners.is_empty();
 
 		// early exit if no listeners
@@ -229,7 +245,6 @@ impl<Block: BlockT> StorageNotifications<Block> {
 
 	fn remove_subscriber(&mut self, subscriber: SubscriberId) {
 		if let Some((_, filters, child_filters)) = self.sinks.remove(&subscriber) {
-			// FIXME: add metrics to count items in internal system
 			Self::remove_subscriber_from(
 				&subscriber,
 				&filters,
@@ -252,6 +267,9 @@ impl<Block: BlockT> StorageNotifications<Block> {
 						}
 					}
 				}
+			}
+			if let Some(m) = self.metrics.as_ref() {
+				m.with_label_values(&[&"removed"]).inc();
 			}
 		}
 	}
@@ -286,7 +304,6 @@ impl<Block: BlockT> StorageNotifications<Block> {
 	) -> StorageEventStream<Block::Hash> {
 		self.next_id += 1;
 		let current_id = self.next_id;
-		// FIXME add metrics to count active subscribers
 
 		// add subscriber for every key
 		let keys = Self::listen_from(
@@ -314,6 +331,11 @@ impl<Block: BlockT> StorageNotifications<Block> {
 		// insert sink
 		let (tx, rx) = tracing_unbounded("mpsc_storage_notification_items");
 		self.sinks.insert(current_id, (tx, keys, child_keys));
+
+		if let Some(m) = self.metrics.as_ref() {
+			m.with_label_values(&[&"added"]).inc();
+		}
+
 		rx
 	}
 }
