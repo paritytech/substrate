@@ -93,7 +93,7 @@ variables:
 
 #### stage:                        test
 
-check-runtime:
+.check-runtime:
   stage:                           test
   image:                           parity/tools:latest
   <<:                              *kubernetes-build
@@ -107,7 +107,7 @@ check-runtime:
   interruptible:                   true
   allow_failure:                   true
 
-check-signed-tag:
+.check-signed-tag:
   stage:                           test
   image:                           parity/tools:latest
   <<:                              *kubernetes-build
@@ -118,7 +118,7 @@ check-signed-tag:
     - ./.maintain/gitlab/check_signed.sh
   allow_failure:                   false
 
-check-line-width:
+.check-line-width:
   stage:                           test
   image:                           parity/tools:latest
   <<:                              *kubernetes-build
@@ -132,7 +132,7 @@ check-line-width:
 
 
 
-check-polkadot-companion-build:
+.check-polkadot-companion-build:
   stage:                           build
   <<:                              *docker-env
   script:
@@ -141,7 +141,7 @@ check-polkadot-companion-build:
   allow_failure:                   true
 
 
-cargo-audit:
+.cargo-audit:
   stage:                           test
   <<:                              *docker-env
   except:
@@ -150,7 +150,7 @@ cargo-audit:
     - cargo audit
   allow_failure:                   true
 
-cargo-deny:
+.cargo-deny:
   stage:                           test
   <<:                              *docker-env
   script:
@@ -165,7 +165,7 @@ cargo-deny:
     paths:
       - deny.log
 
-cargo-check-benches:
+.cargo-check-benches:
   stage:                           test
   <<:                              *docker-env
   script:
@@ -173,7 +173,7 @@ cargo-check-benches:
     - sccache -s
 
 
-cargo-check-subkey:
+.cargo-check-subkey:
   stage:                           test
   <<:                              *docker-env
   except:
@@ -184,7 +184,7 @@ cargo-check-subkey:
     - sccache -s
 
 
-test-linux-stable:                 &test-linux
+.test-linux-stable:                 &test-linux
   stage:                           test
   <<:                              *docker-env
   variables:
@@ -207,7 +207,7 @@ test-linux-stable:                 &test-linux
         echo "___No warnings___";
       fi
 
-test-dependency-rules:
+.test-dependency-rules:
   stage:                           test
   <<:                              *docker-env
   except:
@@ -216,7 +216,7 @@ test-dependency-rules:
   script:
     - .maintain/ensure-deps.sh
 
-unleash-check:
+.unleash-check:
   stage:                           test
   <<:                              *docker-env
   only:
@@ -226,7 +226,7 @@ unleash-check:
     - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
     - cargo unleash check ${CARGO_UNLEASH_PKG_DEF}
 
-test-frame-staking:
+.test-frame-staking:
   stage:                           test
   <<:                              *docker-env
   variables:
@@ -242,7 +242,7 @@ test-frame-staking:
     - WASM_BUILD_NO_COLOR=1 time cargo test --release --verbose --no-default-features --features std
     - sccache -s
 
-test-frame-examples-compile-to-wasm:
+.test-frame-examples-compile-to-wasm:
   stage:                           test
   <<:                              *docker-env
   variables:
@@ -260,7 +260,7 @@ test-frame-examples-compile-to-wasm:
     - cargo +nightly build --target=wasm32-unknown-unknown --no-default-features
     - sccache -s
 
-test-wasmtime:
+.test-wasmtime:
   stage:                           test
   <<:                              *docker-env
   variables:
@@ -276,7 +276,7 @@ test-wasmtime:
     - WASM_BUILD_NO_COLOR=1 time cargo test --release --verbose --features wasmtime
     - sccache -s
 
-test-runtime-benchmarks:
+.test-runtime-benchmarks:
   stage:                           test
   <<:                              *docker-env
   variables:
@@ -292,7 +292,7 @@ test-runtime-benchmarks:
     - WASM_BUILD_NO_COLOR=1 time cargo test --release --verbose --features runtime-benchmarks
     - sccache -s
 
-test-linux-stable-int:
+.test-linux-stable-int:
   <<:                              *test-linux
   except:
     refs:
@@ -315,7 +315,7 @@ test-linux-stable-int:
     paths:
       - ${CI_COMMIT_SHORT_SHA}_int_failure.log
 
-check-web-wasm:
+.check-web-wasm:
   stage:                           test
   <<:                              *docker-env
   except:
@@ -335,7 +335,7 @@ check-web-wasm:
     - time cargo +nightly build --manifest-path=bin/node/cli/Cargo.toml --no-default-features --features "browser" --target=wasm32-unknown-unknown -Z features=itarget
     - sccache -s
 
-test-full-crypto-feature:
+.test-full-crypto-feature:
   stage:                           test
   <<:                              *docker-env
   variables:
@@ -356,7 +356,7 @@ test-full-crypto-feature:
 
 #### stage:                        build
 
-test-browser-node:
+.test-browser-node:
   stage:                           build
   <<:                              *docker-env
   needs:
@@ -365,7 +365,7 @@ test-browser-node:
   script:
     - cargo +nightly test --target wasm32-unknown-unknown -p node-browser-testing -Z features=itarget
 
-build-linux-substrate:             &build-binary
+.build-linux-substrate:             &build-binary
   stage:                           build
   <<:                              *collect-artifacts
   <<:                              *docker-env
@@ -392,7 +392,7 @@ build-linux-substrate:             &build-binary
     - cp -r .maintain/docker/substrate.Dockerfile ./artifacts/substrate/
     - sccache -s
 
-build-linux-subkey:
+.build-linux-subkey:
   <<:                              *build-binary
   before_script:
     - mkdir -p ./artifacts/subkey
@@ -409,7 +409,7 @@ build-linux-subkey:
     - cp -r .maintain/docker/subkey.Dockerfile ./artifacts/subkey/
     - sccache -s
 
-build-rust-doc-release:
+.build-rust-doc-release:
   stage:                           build
   <<:                              *docker-env
   allow_failure:                   true
@@ -427,7 +427,7 @@ build-rust-doc-release:
     - echo "<meta http-equiv=refresh content=0;url=sc_service/index.html>" > ./crate-docs/index.html
     - sccache -s
 
-check-polkadot-companion-status:
+.check-polkadot-companion-status:
   stage:                           post-build-test
   image:                           parity/tools:latest
   <<:                              *kubernetes-build
@@ -438,7 +438,7 @@ check-polkadot-companion-status:
 
 
 
-trigger-contracts-ci:
+.trigger-contracts-ci:
   stage:                           publish
   needs:
     - job:                         build-linux-substrate
@@ -480,7 +480,7 @@ trigger-contracts-ci:
     - docker push $CONTAINER_IMAGE:$VERSION
     - docker push $CONTAINER_IMAGE:latest
 
-publish-docker-substrate:
+.publish-docker-substrate:
   stage:                           publish
   <<:                              *publish-docker-release
   # collect VERSION artifact here to pass it on to kubernetes
@@ -499,7 +499,7 @@ publish-docker-substrate:
     # only VERSION information is needed for the deployment
     - find ./artifacts/ -depth -not -name VERSION -type f -delete
 
-publish-docker-subkey:
+.publish-docker-subkey:
   stage:                           publish
   <<:                              *publish-docker-release
   dependencies:
@@ -514,7 +514,7 @@ publish-docker-subkey:
   after_script:
     - docker logout
 
-publish-s3-release:
+.publish-s3-release:
   stage:                           publish
   <<:                              *build-only
   <<:                              *kubernetes-build
@@ -535,7 +535,7 @@ publish-s3-release:
         --recursive --human-readable --summarize
 
 
-publish-s3-doc:
+.publish-s3-doc:
   stage:                           publish
   image:                           parity/awscli:latest
   allow_failure:                   true
@@ -559,7 +559,7 @@ publish-s3-doc:
     - aws s3 ls s3://${BUCKET}/${PREFIX}/
         --human-readable --summarize
 
-publish-draft-release:
+.publish-draft-release:
   stage:                           publish
   image:                           parity/tools:latest
   only:
@@ -570,7 +570,7 @@ publish-draft-release:
   interruptible:                   true
   allow_failure:                   true
 
-publish-to-crates-io:
+.publish-to-crates-io:
   stage:                           publish
   <<:                              *docker-env
   only:
@@ -581,6 +581,23 @@ publish-to-crates-io:
     - cargo unleash em-dragons --no-check ${CARGO_UNLEASH_PKG_DEF}
   interruptible:                   true
   allow_failure:                   true
+
+
+
+deploy-chaos-example:
+  stage:                           test
+  when:                            manual
+  image:                           parity/kubetools:latest
+  only:
+    - /^[0-9]+$/                   # PRs
+  tags:
+    # this is the runner that is used to run this job
+    - kubernetes-parity-build
+  environment:
+    name:                          parity-chaosnet
+  script:
+    - kubectl cluster-info
+
 
 .deploy-template:                  &deploy
   stage:                           kubernetes
