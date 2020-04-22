@@ -104,15 +104,14 @@ impl<
 		let mut read_block_count = 0;
 		let mut link = WaitLink::new();
 
+		// Importing blocks is implemented as a future, because we want the operation to be
+		// interruptible.
+		//
+		// Every time we read a block from the input or import a bunch of blocks from the import
+		// queue, the `Future` re-schedules itself and returns `Poll::Pending`.
+		// This makes it possible either to interleave other operations in-between the block imports,
+		// or to stop the operation completely.
 		let import = future::poll_fn(move |cx| {
-			// Importing blocks is implemented as a future, because we want the operation to be
-			// interruptible.
-			//
-			// Every time we read a block from the input or import a bunch of blocks from the import
-			// queue, the `Future` re-schedules itself and returns `Poll::Pending`.
-			// This makes it possible either to interleave other operations in-between the block imports,
-			// or to stop the operation completely.
-
 			let client = &self.client;
 			let queue = &mut self.import_queue;
 
