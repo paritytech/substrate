@@ -159,7 +159,7 @@ pub fn get_storage_value<T: Decode + Sized>(module: &[u8], item: &[u8], hash: &[
 	frame_support::storage::unhashed::get::<T>(&key)
 }
 
-/// Get a particular value in storage by the `module`, the map's `item` name and the key `hash`.
+/// Take a particular value in storage by the `module`, the map's `item` name and the key `hash`.
 pub fn take_storage_value<T: Decode + Sized>(module: &[u8], item: &[u8], hash: &[u8]) -> Option<T> {
 	let mut key = vec![0u8; 32 + hash.len()];
 	key[0..16].copy_from_slice(&Twox128::hash(module));

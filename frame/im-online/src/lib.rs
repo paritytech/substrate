@@ -43,6 +43,7 @@
 //!
 //! ```
 //! use frame_support::{decl_module, dispatch};
+//! use frame_support::weights::MINIMUM_WEIGHT;
 //! use frame_system::{self as system, ensure_signed};
 //! use pallet_im_online::{self as im_online};
 //!
@@ -50,7 +51,7 @@
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+//! 		#[weight = MINIMUM_WEIGHT]
 //! 		pub fn is_online(origin, authority_index: u32) -> dispatch::DispatchResult {
 //! 			let _sender = ensure_signed(origin)?;
 //! 			let _is_online = <im_online::Module<T>>::is_online(authority_index);
@@ -94,9 +95,13 @@ use sp_staking::{
 use frame_support::{
 	decl_module, decl_event, decl_storage, Parameter, debug, decl_error,
 	traits::Get,
+	weights::MINIMUM_WEIGHT,
 };
 use frame_system::{self as system, ensure_none};
-use frame_system::offchain::SubmitUnsignedTransaction;
+use frame_system::offchain::{
+	SendTransactionTypes,
+	SubmitTransaction,
+};
 
 pub mod sr25519 {
 	mod app_sr25519 {
@@ -219,18 +224,12 @@ pub struct Heartbeat<BlockNumber>
 	pub authority_index: AuthIndex,
 }
 
-pub trait Trait: frame_system::Trait + pallet_session::historical::Trait {
+pub trait Trait: SendTransactionTypes<Call<Self>> + pallet_session::historical::Trait {
 	/// The identifier type for an authority.
 	type AuthorityId: Member + Parameter + RuntimeAppPublic + Default + Ord;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
-
-	/// A dispatchable call type.
-	type Call: From<Call<Self>>;
-
-	/// A transaction submitter.
-	type SubmitTransaction: SubmitUnsignedTransaction<Self, <Self as Trait>::Call>;
 
 	/// An expected duration of the session.
 	///
@@ -316,7 +315,7 @@ decl_module! {
 
 		fn deposit_event() = default;
 
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = MINIMUM_WEIGHT]
 		fn heartbeat(
 			origin,
 			heartbeat: Heartbeat<T::BlockNumber>,
@@ -442,6 +441,7 @@ impl<T: Trait> Module<T> {
 		}
 
 		let session_index = <pallet_session::Module<T>>::current_index();
+
 		Ok(Self::local_authority_keys()
 			.map(move |(authority_index, key)|
 				Self::send_single_heartbeat(authority_index, key, session_index, block_number)
@@ -465,7 +465,9 @@ impl<T: Trait> Module<T> {
 				session_index,
 				authority_index,
 			};
+
 			let signature = key.sign(&heartbeat_data.encode()).ok_or(OffchainErr::FailedSigning)?;
+
 			Ok(Call::heartbeat(heartbeat_data, signature))
 		};
 
@@ -490,7 +492,7 @@ impl<T: Trait> Module<T> {
 					call,
 				);
 
-				T::SubmitTransaction::submit_unsigned(call)
+				SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into())
 					.map_err(|_| OffchainErr::SubmitTransaction)?;
 
 				Ok(())
@@ -499,9 +501,18 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn local_authority_keys() -> impl Iterator<Item=(u32, T::AuthorityId)> {
-		// we run only when a local authority key is configured
+		// on-chain storage
+		//
+		// At index `idx`:
+		// 1. A (ImOnline) public key to be used by a validator at index `idx` to send im-online
+		//          heartbeats.
 		let authorities = Keys::<T>::get();
+
+		// local keystore
+		//
+		// All `ImOnline` public (+private) keys currently in the local keystore.
 		let mut local_keys = T::AuthorityId::all();
+
 		local_keys.sort();
 
 		authorities.into_iter()
@@ -562,6 +573,11 @@ impl<T: Trait> Module<T> {
 			assert!(Keys::<T>::get().is_empty(), "Keys are already initialized!");
 			Keys::<T>::put(keys);
 		}
+	}
+
+	#[cfg(test)]
+	fn set_keys(keys: Vec<T::AuthorityId>) {
+		Keys::<T>::put(&keys)
 	}
 }
 

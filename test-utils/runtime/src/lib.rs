@@ -47,10 +47,9 @@ use sp_version::RuntimeVersion;
 pub use sp_core::hash::H256;
 #[cfg(any(feature = "std", test))]
 use sp_version::NativeVersion;
-use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
+use frame_support::{impl_outer_origin, parameter_types, weights::{Weight, RuntimeDbWeight}};
 use sp_inherents::{CheckInherentsResult, InherentData};
 use cfg_if::cfg_if;
-use sp_core::storage::ChildType;
 
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
 pub use sp_consensus_babe::{AuthorityId, SlotNumber};
@@ -68,6 +67,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_version: 2,
 	impl_version: 2,
 	apis: RUNTIME_API_VERSIONS,
+	transaction_version: 1,
 };
 
 fn version() -> RuntimeVersion {
@@ -380,6 +380,10 @@ parameter_types! {
 	pub const BlockHashCount: BlockNumber = 250;
 	pub const MinimumPeriod: u64 = 5;
 	pub const MaximumBlockWeight: Weight = 4 * 1024 * 1024;
+	pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
+		read: 100,
+		write: 1000,
+	};
 	pub const MaximumBlockLength: u32 = 4 * 1024 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 }
@@ -397,6 +401,7 @@ impl frame_system::Trait for Runtime {
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
+	type DbWeight = ();
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
@@ -917,22 +922,17 @@ fn test_read_storage() {
 }
 
 fn test_read_child_storage() {
-	const CHILD_KEY: &[u8] = b":child_storage:default:read_child_storage";
-	const UNIQUE_ID: &[u8] = b":unique_id";
+	const STORAGE_KEY: &[u8] = b"unique_id_1";
 	const KEY: &[u8] = b":read_child_storage";
-	sp_io::storage::child_set(
-		CHILD_KEY,
-		UNIQUE_ID,
-		ChildType::CryptoUniqueId as u32,
+	sp_io::default_child_storage::set(
+		STORAGE_KEY,
 		KEY,
 		b"test",
 	);
 
 	let mut v = [0u8; 4];
-	let r = sp_io::storage::child_read(
-		CHILD_KEY,
-		UNIQUE_ID,
-		ChildType::CryptoUniqueId as u32,
+	let r = sp_io::default_child_storage::read(
+		STORAGE_KEY,
 		KEY,
 		&mut v,
 		0,
@@ -941,10 +941,8 @@ fn test_read_child_storage() {
 	assert_eq!(&v, b"test");
 
 	let mut v = [0u8; 4];
-	let r = sp_io::storage::child_read(
-		CHILD_KEY,
-		UNIQUE_ID,
-		ChildType::CryptoUniqueId as u32,
+	let r = sp_io::default_child_storage::read(
+		STORAGE_KEY,
 		KEY,
 		&mut v,
 		8,

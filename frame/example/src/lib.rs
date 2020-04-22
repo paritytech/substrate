@@ -256,9 +256,7 @@
 use sp_std::marker::PhantomData;
 use frame_support::{
 	dispatch::DispatchResult, decl_module, decl_storage, decl_event,
-	weights::{
-		SimpleDispatchInfo, DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee,
-	},
+	weights::{DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee, MINIMUM_WEIGHT},
 };
 use sp_std::prelude::*;
 use frame_system::{self as system, ensure_signed, ensure_root};
@@ -468,7 +466,7 @@ decl_module! {
 		// weight (a numeric representation of pure execution time and difficulty) of the
 		// transaction and the latter demonstrates the [`DispatchClass`] of the call. A higher
 		// weight means a larger transaction (less of which can be placed in a single block).
-		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
+		#[weight = MINIMUM_WEIGHT]
 		fn accumulate_dummy(origin, increase_by: T::Balance) -> DispatchResult {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let _sender = ensure_signed(origin)?;
@@ -517,13 +515,12 @@ decl_module! {
 
 		// The signature could also look like: `fn on_initialize()`.
 		// This function could also very well have a weight annotation, similar to any other. The
-		// only difference being that if it is not annotated, the default is
-		// `SimpleDispatchInfo::zero()`, which resolves into no weight.
+		// only difference is that it mut be returned, not annotated.
 		fn on_initialize(_n: T::BlockNumber) -> Weight {
 			// Anything that needs to be done at the start of the block.
 			// We don't do anything here.
 
-			SimpleDispatchInfo::default().weigh_data(())
+			MINIMUM_WEIGHT
 		}
 
 		// The signature could also look like: `fn on_finalize()`
@@ -753,6 +750,7 @@ mod tests {
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
+		type DbWeight = ();
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
@@ -843,11 +841,11 @@ mod tests {
 
 	#[test]
 	fn weights_work() {
-		// must have a default weight.
+		// must have a defined weight.
 		let default_call = <Call<Test>>::accumulate_dummy(10);
 		let info = default_call.get_dispatch_info();
 		// aka. `let info = <Call<Test> as GetDispatchInfo>::get_dispatch_info(&default_call);`
-		assert_eq!(info.weight, 10_000);
+		assert_eq!(info.weight, 10_000_000);
 
 		// must have a custom weight of `100 * arg = 2000`
 		let custom_call = <Call<Test>>::set_dummy(20);

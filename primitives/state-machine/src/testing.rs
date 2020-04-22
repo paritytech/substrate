@@ -80,6 +80,11 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 		Self::new_with_code(&[], storage)
 	}
 
+	/// New empty test externalities.
+	pub fn new_empty() -> Self {
+		Self::new_with_code(&[], Storage::default())
+	}
+
 	/// Create a new instance of `TestExternalities` with code and storage.
 	pub fn new_with_code(code: &[u8], mut storage: Storage) -> Self {
 		let mut overlay = OverlayedChanges::default();
@@ -88,17 +93,20 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 		overlay.set_collect_extrinsics(changes_trie_config.is_some());
 
 		assert!(storage.top.keys().all(|key| !is_child_storage_key(key)));
-		assert!(storage.children.keys().all(|key| is_child_storage_key(key)));
+		assert!(storage.children_default.keys().all(|key| is_child_storage_key(key)));
 
 		storage.top.insert(HEAP_PAGES.to_vec(), 8u64.encode());
 		storage.top.insert(CODE.to_vec(), code.to_vec());
 
+		let mut extensions = Extensions::default();
+		extensions.register(sp_core::traits::TaskExecutorExt(sp_core::tasks::executor()));
+
 		TestExternalities {
 			overlay,
 			changes_trie_config,
+			extensions,
 			changes_trie_storage: ChangesTrieInMemoryStorage::new(),
 			backend: storage.into(),
-			extensions: Default::default(),
 			storage_transaction_cache: Default::default(),
 		}
 	}
@@ -125,11 +133,11 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 			.map(|(k, v)| (k, v.value)).collect();
 		let mut transaction = vec![(None, top)];
 
-		self.overlay.committed.children.clone().into_iter()
-			.chain(self.overlay.prospective.children.clone().into_iter())
-			.for_each(|(keyspace, (map, child_info))| {
+		self.overlay.committed.children_default.clone().into_iter()
+			.chain(self.overlay.prospective.children_default.clone().into_iter())
+			.for_each(|(_storage_key, (map, child_info))| {
 				transaction.push((
-					Some((keyspace, child_info)),
+					Some(child_info),
 					map.into_iter()
 						.map(|(k, v)| (k, v.value))
 						.collect::<Vec<_>>(),
@@ -190,6 +198,21 @@ impl<H, N> sp_externalities::ExtensionStore for TestExternalities<H, N> where
 {
 	fn extension_by_type_id(&mut self, type_id: TypeId) -> Option<&mut dyn Any> {
 		self.extensions.get_mut(type_id)
+	}
+
+	fn register_extension_with_type_id(
+		&mut self,
+		type_id: TypeId,
+		extension: Box<dyn Extension>,
+	) -> Result<(), sp_externalities::Error> {
+		self.extensions.register_with_type_id(type_id, extension)
+	}
+
+	fn deregister_extension_by_type_id(&mut self, type_id: TypeId) -> Result<(), sp_externalities::Error> {
+		self.extensions
+			.deregister(type_id)
+			.expect("There should be an extension we try to remove in TestExternalities");
+		Ok(())
 	}
 }
 

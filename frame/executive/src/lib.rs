@@ -237,9 +237,13 @@ where
 		// any initial checks
 		Self::initial_checks(&block);
 
+		let batching_safeguard = sp_runtime::SignatureBatching::start();
 		// execute extrinsics
 		let (header, extrinsics) = block.deconstruct();
 		Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
+		if !sp_runtime::SignatureBatching::verify(batching_safeguard) {
+			panic!("Signature verification failed.");
+		}
 
 		// any final checks
 		Self::final_checks(&header);
@@ -344,11 +348,20 @@ where
 		source: TransactionSource,
 		uxt: Block::Extrinsic,
 	) -> TransactionValidity {
-		let encoded_len = uxt.using_encoded(|d| d.len());
-		let xt = uxt.check(&Default::default())?;
+		use sp_tracing::tracing_span;
 
-		let dispatch_info = xt.get_dispatch_info();
-		xt.validate::<UnsignedValidator>(source, &dispatch_info, encoded_len)
+		sp_tracing::enter_span!("validate_transaction");
+
+		let encoded_len = tracing_span!{ "using_encoded"; uxt.using_encoded(|d| d.len()) };
+
+		let xt = tracing_span!{ "check"; uxt.check(&Default::default())? };
+
+		let dispatch_info = tracing_span!{ "dispatch_info"; xt.get_dispatch_info() };
+
+		tracing_span! {
+			"validate";
+			xt.validate::<UnsignedValidator>(source, &dispatch_info, encoded_len)
+		}
 	}
 
 	/// Start an offchain worker and generate extrinsics.
@@ -398,22 +411,22 @@ mod tests {
 	use hex_literal::hex;
 
 	mod custom {
-		use frame_support::weights::{SimpleDispatchInfo, Weight};
+		use frame_support::weights::{Weight, DispatchClass};
 
 		pub trait Trait: frame_system::Trait {}
 
 		frame_support::decl_module! {
 			pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-				#[weight = SimpleDispatchInfo::FixedNormal(100)]
+				#[weight = 100]
 				fn some_function(origin) {
 					// NOTE: does not make any different.
 					let _ = frame_system::ensure_signed(origin);
 				}
-				#[weight = SimpleDispatchInfo::FixedOperational(200)]
+				#[weight = (200, DispatchClass::Operational)]
 				fn some_root_operation(origin) {
 					let _ = frame_system::ensure_root(origin);
 				}
-				#[weight = SimpleDispatchInfo::InsecureFreeNormal]
+				#[weight = 0]
 				fn some_unsigned_message(origin) {
 					let _ = frame_system::ensure_none(origin);
 				}
@@ -476,6 +489,7 @@ mod tests {
 		type Event = MetaEvent;
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
+		type DbWeight = ();
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = RuntimeVersion;

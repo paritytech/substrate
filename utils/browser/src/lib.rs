@@ -49,7 +49,7 @@ where
 		format!("{} (Browser)", name),
 		"unknown",
 		Default::default(),
-		&std::path::PathBuf::new(),
+		None,
 	);
 	network.boot_nodes = chain_spec.boot_nodes().to_vec();
 	network.transport = TransportConfig::Normal {
@@ -86,6 +86,7 @@ where
 		rpc_cors: Default::default(),
 		rpc_http: Default::default(),
 		rpc_ws: Default::default(),
+		unsafe_rpc_expose: false,
 		rpc_ws_max_connections: Default::default(),
 		state_cache_child_ratio: Default::default(),
 		state_cache_size: Default::default(),

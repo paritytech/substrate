@@ -19,7 +19,7 @@
 use crate::{
 	Call, CompactAssignments, Module, NominatorIndex, OffchainAccuracy, Trait, ValidatorIndex,
 };
-use frame_system::offchain::SubmitUnsignedTransaction;
+use frame_system::offchain::SubmitTransaction;
 use sp_phragmen::{
 	build_support_map, evaluate_support, reduce, Assignment, ExtendedBalance, PhragmenResult,
 	PhragmenScore,
@@ -117,14 +117,14 @@ pub(crate) fn compute_offchain_election<T: Trait>() -> Result<(), OffchainElecti
 	let current_era = <Module<T>>::current_era().unwrap_or_default();
 
 	// send it.
-	let call: <T as Trait>::Call = Call::submit_election_solution_unsigned(
+	let call = Call::submit_election_solution_unsigned(
 		winners,
 		compact,
 		score,
 		current_era,
 	).into();
 
-	T::SubmitTransaction::submit_unsigned(call)
+	SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call)
 		.map_err(|_| OffchainElectionError::PoolSubmissionFailed)
 }
 
@@ -167,7 +167,7 @@ pub fn prepare_submission<T: Trait>(
 	// convert into absolute value and to obtain the reduced version.
 	let mut staked = sp_phragmen::assignment_ratio_to_staked(
 		assignments,
-		<Module<T>>::slashable_balance_of_extended,
+		<Module<T>>::slashable_balance_of_vote_weight,
 	);
 
 	if do_reduce {
@@ -188,7 +188,7 @@ pub fn prepare_submission<T: Trait>(
 	let score = {
 		let staked = sp_phragmen::assignment_ratio_to_staked(
 			low_accuracy_assignment.clone(),
-			<Module<T>>::slashable_balance_of_extended,
+			<Module<T>>::slashable_balance_of_vote_weight,
 		);
 
 		let (support_map, _) = build_support_map::<T::AccountId>(&winners, &staked);
