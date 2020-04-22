@@ -3,7 +3,6 @@ error: Error type can not change between runtime apis
    |
 23 |         type Error = u64;
    |         ^^^^
-
 error[E0277]: the trait bound `u32: std::convert::From<std::string::String>` is not satisfied
   --> $DIR/mock_only_one_error_type.rs:15:1
    |
@@ -23,5 +22,5 @@ error[E0277]: the trait bound `u32: std::convert::From<std::string::String>` is 
              <u32 as std::convert::From<bool>>
              <u32 as std::convert::From<char>>
              <u32 as std::convert::From<h2::frame::reason::Reason>>
-             <u32 as std::convert::From<h2::frame::stream_id::StreamId>>
+             <u32 as std::convert::From<h2::frame::reason::Reason>>
            and 18 others
