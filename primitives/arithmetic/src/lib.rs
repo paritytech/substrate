@@ -38,6 +38,7 @@ pub mod traits;
 mod per_things;
 mod fixed64;
 mod fixed128;
+mod fixed;
 mod rational128;
 
 pub use fixed64::Fixed64;

@@ -82,7 +82,7 @@ pub trait Trait: frame_system::Trait {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as TransactionPayment {
-		pub NextFeeMultiplier get(fn next_fee_multiplier): Multiplier = Multiplier::from_parts(0);
+		pub NextFeeMultiplier get(fn next_fee_multiplier): Multiplier = Multiplier::from_inner(0);
 	}
 }
 
@@ -108,7 +108,7 @@ decl_module! {
 				let raw_multiplier = old_next_fee_multiplier.into_inner() as i128;
 				// Fixed64 used 10^9 precision, where Fixed128 uses 10^18, so we need to add 9 zeros.
 				let new_raw_multiplier: i128 = raw_multiplier.saturating_mul(1_000_000_000);
-				let new_next_fee_multiplier: Fixed128 = Fixed128::from_parts(new_raw_multiplier);
+				let new_next_fee_multiplier: Fixed128 = Fixed128::from_inner(new_raw_multiplier);
 				NextFeeMultiplier::put(new_next_fee_multiplier);
 			}
 			0
