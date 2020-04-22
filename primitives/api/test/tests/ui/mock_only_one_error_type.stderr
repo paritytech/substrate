@@ -1,4 +1,4 @@
-error: Error type can not change between runtime apis
+ error: Error type can not change between runtime apis
   --> $DIR/mock_only_one_error_type.rs:23:3
    |
 23 |         type Error = u64;
