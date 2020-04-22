@@ -74,7 +74,7 @@ use sp_runtime::traits::{StaticLookup, Zero, AppendZerosInput};
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
 	traits::{Currency, ReservableCurrency, OnUnbalanced, Get, BalanceStatus, EnsureOrigin},
-	weights::{SimpleDispatchInfo, MINIMUM_WEIGHT},
+	weights::MINIMUM_WEIGHT,
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 
@@ -474,7 +474,7 @@ decl_module! {
 		/// - One storage mutation (codec `O(R)`).
 		/// - One event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
+		#[weight = MINIMUM_WEIGHT]
 		fn add_registrar(origin, account: T::AccountId) {
 			T::RegistrarOrigin::try_origin(origin)
 				.map(|_| ())
@@ -506,7 +506,7 @@ decl_module! {
 		/// - One storage mutation (codec-read `O(X' + R)`, codec-write `O(X + R)`).
 		/// - One event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000_000)]
+		#[weight = 50_000_000]
 		fn set_identity(origin, info: IdentityInfo) {
 			let sender = ensure_signed(origin)?;
 			let extra_fields = info.additional.len() as u32;
@@ -552,7 +552,7 @@ decl_module! {
 		/// - At most O(2 * S + 1) storage mutations; codec complexity `O(1 * S + S * 1)`);
 		///   one storage-exists.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000_000)]
+		#[weight = 50_000_000]
 		fn set_subs(origin, subs: Vec<(T::AccountId, Data)>) {
 			let sender = ensure_signed(origin)?;
 			ensure!(<IdentityOf<T>>::contains_key(&sender), Error::<T>::NotFound);
@@ -599,7 +599,7 @@ decl_module! {
 		/// - `S + 2` storage deletions.
 		/// - One event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000_000)]
+		#[weight = 50_000_000]
 		fn clear_identity(origin) {
 			let sender = ensure_signed(origin)?;
 
@@ -638,7 +638,7 @@ decl_module! {
 		/// - Storage: 1 read `O(R)`, 1 mutate `O(X + R)`.
 		/// - One event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000_000)]
+		#[weight = 50_000_000]
 		fn request_judgement(origin,
 			#[compact] reg_index: RegistrarIndex,
 			#[compact] max_fee: BalanceOf<T>,
@@ -684,7 +684,7 @@ decl_module! {
 		/// - One storage mutation `O(R + X)`.
 		/// - One event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000_000)]
+		#[weight = 50_000_000]
 		fn cancel_request(origin, reg_index: RegistrarIndex) {
 			let sender = ensure_signed(origin)?;
 			let mut id = <IdentityOf<T>>::get(&sender).ok_or(Error::<T>::NoIdentity)?;
@@ -715,7 +715,7 @@ decl_module! {
 		/// - `O(R)`.
 		/// - One storage mutation `O(R)`.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000_000)]
+		#[weight = 50_000_000]
 		fn set_fee(origin,
 			#[compact] index: RegistrarIndex,
 			#[compact] fee: BalanceOf<T>,
@@ -742,7 +742,7 @@ decl_module! {
 		/// - `O(R)`.
 		/// - One storage mutation `O(R)`.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000_000)]
+		#[weight = 50_000_000]
 		fn set_account_id(origin,
 			#[compact] index: RegistrarIndex,
 			new: T::AccountId,
@@ -769,7 +769,7 @@ decl_module! {
 		/// - `O(R)`.
 		/// - One storage mutation `O(R)`.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000_000)]
+		#[weight = 50_000_000]
 		fn set_fields(origin,
 			#[compact] index: RegistrarIndex,
 			fields: IdentityFields,
@@ -803,7 +803,7 @@ decl_module! {
 		/// - Storage: 1 read `O(R)`, 1 mutate `O(R + X)`.
 		/// - One event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000_000)]
+		#[weight = 50_000_000]
 		fn provide_judgement(origin,
 			#[compact] reg_index: RegistrarIndex,
 			target: <T::Lookup as StaticLookup>::Source,
@@ -852,7 +852,7 @@ decl_module! {
 		/// - `S + 2` storage mutations.
 		/// - One event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(100_000_000)]
+		#[weight = 100_000_000]
 		fn kill_identity(origin, target: <T::Lookup as StaticLookup>::Source) {
 			T::ForceOrigin::try_origin(origin)
 				.map(|_| ())
