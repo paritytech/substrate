@@ -27,7 +27,7 @@ use frame_support::traits::{FindAuthor, VerifySeal, Get};
 use codec::{Encode, Decode};
 use frame_system::ensure_none;
 use sp_runtime::traits::{Header as HeaderT, One, Zero};
-use frame_support::weights::{Weight, MINIMUM_WEIGHT, SimpleDispatchInfo};
+use frame_support::weights::{Weight, MINIMUM_WEIGHT, DispatchClass};
 use sp_inherents::{InherentIdentifier, ProvideInherent, InherentData};
 use sp_authorship::{INHERENT_IDENTIFIER, UnclesInherentData, InherentError};
 
@@ -207,7 +207,7 @@ decl_module! {
 		}
 
 		/// Provide a set of uncles.
-		#[weight = SimpleDispatchInfo::FixedMandatory(MINIMUM_WEIGHT)]
+		#[weight = (MINIMUM_WEIGHT, DispatchClass::Mandatory)]
 		fn set_uncles(origin, new_uncles: Vec<T::Header>) -> dispatch::DispatchResult {
 			ensure_none(origin)?;
 			ensure!(new_uncles.len() <= MAX_UNCLES, Error::<T>::TooManyUncles);

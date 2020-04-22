@@ -57,7 +57,7 @@ use frame_support::traits::{
 	Currency, LockableCurrency, VestingSchedule, WithdrawReason, LockIdentifier,
 	ExistenceRequirement, Get
 };
-use frame_support::weights::{SimpleDispatchInfo, MINIMUM_WEIGHT};
+use frame_support::weights::MINIMUM_WEIGHT;
 use frame_system::{self as system, ensure_signed};
 
 mod benchmarking;
@@ -194,7 +194,7 @@ decl_module! {
 		/// - One storage read (codec `O(1)`) and up to one removal.
 		/// - One event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
+		#[weight = MINIMUM_WEIGHT]
 		fn vest(origin) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::update_lock(who)
@@ -216,7 +216,7 @@ decl_module! {
 		/// - One storage read (codec `O(1)`) and up to one removal.
 		/// - One event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
+		#[weight = MINIMUM_WEIGHT]
 		fn vest_other(origin, target: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
 			ensure_signed(origin)?;
 			Self::update_lock(T::Lookup::lookup(target)?)
@@ -236,7 +236,7 @@ decl_module! {
 		/// - Creates a new storage entry, but is protected by a minimum transfer
 		///	   amount needed to succeed.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000_000)]
+		#[weight = 1_000_000_000]
 		pub fn vested_transfer(
 			origin,
 			target: <T::Lookup as StaticLookup>::Source,

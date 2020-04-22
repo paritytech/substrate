@@ -182,15 +182,36 @@ impl From<ed25519::Signature> for MultiSignature {
 	}
 }
 
+impl TryFrom<MultiSignature> for ed25519::Signature {
+	type Error = ();
+	fn try_from(m: MultiSignature) -> Result<Self, Self::Error> {
+		if let MultiSignature::Ed25519(x) = m { Ok(x) } else { Err(()) }
+	}
+}
+
 impl From<sr25519::Signature> for MultiSignature {
 	fn from(x: sr25519::Signature) -> Self {
 		MultiSignature::Sr25519(x)
 	}
 }
 
+impl TryFrom<MultiSignature> for sr25519::Signature {
+	type Error = ();
+	fn try_from(m: MultiSignature) -> Result<Self, Self::Error> {
+		if let MultiSignature::Sr25519(x) = m { Ok(x) } else { Err(()) }
+	}
+}
+
 impl From<ecdsa::Signature> for MultiSignature {
 	fn from(x: ecdsa::Signature) -> Self {
 		MultiSignature::Ecdsa(x)
+	}
+}
+
+impl TryFrom<MultiSignature> for ecdsa::Signature {
+	type Error = ();
+	fn try_from(m: MultiSignature) -> Result<Self, Self::Error> {
+		if let MultiSignature::Ecdsa(x) = m { Ok(x) } else { Err(()) }
 	}
 }
 

@@ -88,7 +88,8 @@ use sp_runtime::{
 };
 use frame_support::{
 	decl_storage, decl_event, ensure, decl_module, decl_error,
-	weights::{SimpleDispatchInfo, Weight, MINIMUM_WEIGHT}, storage::{StorageMap, IterableStorageMap},
+	weights::{Weight, MINIMUM_WEIGHT, DispatchClass},
+	storage::{StorageMap, IterableStorageMap},
 	traits::{
 		Currency, Get, LockableCurrency, LockIdentifier, ReservableCurrency, WithdrawReasons,
 		ChangeMembers, OnUnbalanced, WithdrawReason, Contains, BalanceStatus, InitializeMembers,
@@ -291,7 +292,7 @@ decl_module! {
 		/// Reads: O(1)
 		/// Writes: O(V) given `V` votes. V is bounded by 16.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(100_000_000)]
+		#[weight = 100_000_000]
 		fn vote(origin, votes: Vec<T::AccountId>, #[compact] value: BalanceOf<T>) {
 			let who = ensure_signed(origin)?;
 
@@ -336,7 +337,7 @@ decl_module! {
 		/// Reads: O(1)
 		/// Writes: O(1)
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
+		#[weight = MINIMUM_WEIGHT]
 		fn remove_voter(origin) {
 			let who = ensure_signed(origin)?;
 
@@ -358,7 +359,7 @@ decl_module! {
 		/// Reads: O(NLogM) given M current candidates and N votes for `target`.
 		/// Writes: O(1)
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000_000)]
+		#[weight = 1_000_000_000]
 		fn report_defunct_voter(origin, target: <T::Lookup as StaticLookup>::Source) {
 			let reporter = ensure_signed(origin)?;
 			let target = T::Lookup::lookup(target)?;
@@ -401,7 +402,7 @@ decl_module! {
 		/// Reads: O(LogN) Given N candidates.
 		/// Writes: O(1)
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(500_000_000)]
+		#[weight = 500_000_000]
 		fn submit_candidacy(origin) {
 			let who = ensure_signed(origin)?;
 
@@ -428,7 +429,7 @@ decl_module! {
 		/// - `origin` is a current member. In this case, the bond is unreserved and origin is
 		///   removed as a member, consequently not being a candidate for the next round anymore.
 		///   Similar to [`remove_voter`], if replacement runners exists, they are immediately used.
-		#[weight = SimpleDispatchInfo::FixedOperational(2_000_000_000)]
+		#[weight = (2_000_000_000, DispatchClass::Operational)]
 		fn renounce_candidacy(origin) {
 			let who = ensure_signed(origin)?;
 
@@ -487,7 +488,7 @@ decl_module! {
 		/// Reads: O(do_phragmen)
 		/// Writes: O(do_phragmen)
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(2_000_000_000)]
+		#[weight = (2_000_000_000, DispatchClass::Operational)]
 		fn remove_member(origin, who: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
 			ensure_root(origin)?;
 			let who = T::Lookup::lookup(who)?;
