@@ -208,11 +208,7 @@ impl<B, E, Block, RA> LockImportRun<Block, B> for Client<B, E, Block, RA>
 
 			let r = f(&mut op)?;
 
-			let ClientImportOperation {
-				op,
-				notify_imported,
-				notify_finalized,
-			} = op;
+			let ClientImportOperation { op, notify_imported, notify_finalized } = op;
 			self.backend.commit_operation(op)?;
 
 			self.notify_finalized(notify_finalized)?;
@@ -618,7 +614,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		if let Ok(ImportResult::Imported(ref aux)) = result {
 			if aux.is_new_best {
 				use rand::Rng;
-
+				
 				// don't send telemetry block import events during initial sync for every
 				// block to avoid spamming the telemetry server, these events will be randomly
 				// sent at a rate of 1/10.
@@ -888,7 +884,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		}
 
 		assert_eq!(enacted.last().map(|e| e.hash), Some(block));
-		operation.op.mark_finalized(BlockId::Hash(block), justification.clone())?;
+		operation.op.mark_finalized(BlockId::Hash(block), justification)?;
 
 		if notify {
 			// sometimes when syncing, tons of blocks can be finalized at once.
