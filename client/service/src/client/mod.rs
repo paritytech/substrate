@@ -41,39 +41,6 @@
 //! Additionally, the fourth generic parameter of the `Client` is a marker type representing
 //! the ways in which the runtime can interface with the outside. Any code that builds a `Client`
 //! is responsible for putting the right marker.
-//!
-//! ## Example
-//!
-//! ```no_run
-//! use std::sync::Arc;
-//! use sc_client_api::in_mem::Backend;
-//! use client::{Client, LocalCallExecutor};
-//! use sp_runtime::Storage;
-//! use sc_executor::{NativeExecutor, WasmExecutionMethod};
-//!
-//! // In this example, we're using the `Block` and `RuntimeApi` types from the
-//! // `substrate-test-runtime-client` crate. These types are automatically generated when
-//! // compiling a runtime. In a typical use-case, these types would have been to be generated
-//! // from your runtime.
-//! use substrate_test_runtime_client::{LocalExecutor, runtime::Block, runtime::RuntimeApi};
-//!
-//! let backend = Arc::new(Backend::<Block>::new());
-//! let client = Client::<_, _, _, RuntimeApi>::new(
-//! 	backend.clone(),
-//! 	LocalCallExecutor::new(
-//! 		backend.clone(),
-//! 		NativeExecutor::<LocalExecutor>::new(WasmExecutionMethod::Interpreted, None, 8),
-//!         sp_core::tasks::executor(),
-//!		),
-//! 	// This parameter provides the storage for the chain genesis.
-//! 	&<Storage>::default(),
-//! 	Default::default(),
-//! 	Default::default(),
-//! 	Default::default(),
-//!		None,
-//! );
-//! ```
-//!
 
 pub mod genesis;
 pub mod light;
