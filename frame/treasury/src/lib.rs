@@ -641,7 +641,7 @@ decl_module! {
 			Self::payout_tip(hash, tip);
 		}
 
-		#[weight = SimpleDispatchInfo::FixedNormal(150_000_000)]
+		#[weight = 150_000_000]
 		fn propose_bounty(
 			origin,
 			curator: <T::Lookup as StaticLookup>::Source,
@@ -678,7 +678,7 @@ decl_module! {
 		/// - Limited storage reads.
 		/// - Two DB clear.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(100_000_000)]
+		#[weight = 100_000_000]
 		fn reject_bounty(origin, #[compact] bounty_id: BountyIndex) {
 			T::RejectOrigin::try_origin(origin)
 				.map(|_| ())
@@ -704,7 +704,7 @@ decl_module! {
 		/// - Limited storage reads.
 		/// - One DB change.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(100_000_000)]
+		#[weight = 100_000_000]
 		fn approve_bounty(origin, #[compact] bounty_id: ProposalIndex) {
 			T::ApproveOrigin::try_origin(origin)
 				.map(|_| ())
@@ -716,7 +716,7 @@ decl_module! {
 			BountyApprovals::mutate(|v| v.push(bounty_id));
 		}
 
-		#[weight = SimpleDispatchInfo::FixedOperational(100_000_000)]
+		#[weight = 100_000_000]
 		fn award_bounty(origin, #[compact] bounty_id: ProposalIndex, beneficiary: <T::Lookup as StaticLookup>::Source) {
 			let curator = ensure_signed(origin)?;
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
@@ -734,7 +734,7 @@ decl_module! {
 			Self::deposit_event(Event::<T>::BountyAwarded(bounty_id, beneficiary));
 		}
 
-		#[weight = SimpleDispatchInfo::FixedOperational(100_000_000)]
+		#[weight = 100_000_000]
 		fn claim_bounty(origin, #[compact] bounty_id: ProposalIndex) {
 			let _ = ensure_signed(origin)?; // anyone can trigger claim
 
