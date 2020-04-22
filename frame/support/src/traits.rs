@@ -190,9 +190,7 @@ impl<T: Default> Get<T> for () {
 	fn get() -> T { T::default() }
 }
 
-/// A trait for querying whether a type can be said to statically "contain" a value. Similar
-/// in nature to `Get`, except it is designed to be lazy rather than active (you can't ask it to
-/// enumerate all values that it contains) and work for multiple values rather than just one.
+/// A trait for querying whether a type can be said to "contain" a value.
 pub trait Contains<T: Ord> {
 	/// Return `true` if this "contains" the given value `t`.
 	fn contains(t: &T) -> bool { Self::sorted_members().binary_search(t).is_ok() }
@@ -209,6 +207,13 @@ pub trait Contains<T: Ord> {
 	/// **Should be used for benchmarking only!!!**
 	#[cfg(feature = "runtime-benchmarks")]
 	fn add(t: &T) { unimplemented!() }
+}
+
+/// A trait for querying an upper bound on the number of element in a type that implements
+/// `Contains`.
+pub trait ContainsCountUpperBound {
+	/// An upper bound for the number of element contained.
+	fn count_upper_bound() -> usize;
 }
 
 /// Determiner to say whether a given account is unused.

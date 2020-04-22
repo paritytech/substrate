@@ -91,7 +91,6 @@
 use serde::{Serialize, Deserialize};
 use sp_std::prelude::*;
 use frame_support::{decl_module, decl_storage, decl_event, ensure, print, decl_error, Parameter};
-use frame_support::dispatch::DispatchResultWithPostInfo;
 use frame_support::traits::{
 	Currency, Get, Imbalance, OnUnbalanced, ExistenceRequirement::KeepAlive,
 	ReservableCurrency, WithdrawReason
@@ -100,7 +99,7 @@ use sp_runtime::{Permill, ModuleId, Percent, RuntimeDebug, traits::{
 	Zero, StaticLookup, AccountIdConversion, Saturating, Hash, BadOrigin
 }};
 use frame_support::weights::Weight;
-use frame_support::traits::{Contains, EnsureOrigin};
+use frame_support::traits::{Contains, ContainsCountUpperBound, EnsureOrigin};
 use codec::{Encode, Decode};
 use frame_system::{self as system, ensure_signed, ensure_root};
 
@@ -128,9 +127,10 @@ pub trait Trait: frame_system::Trait {
 	type RejectOrigin: EnsureOrigin<Self::Origin>;
 
 	/// Origin from which tippers must come.
-	/// The lenght must be less than [`MAX_TIPPERS_COUNT`](./constant.MAX_TIPPERS_COUNT.html).
-	/// Its cost it expected to be same as if it was stored sorted in a storage value.
-	type Tippers: Contains<Self::AccountId>;
+	///
+	/// `ContainsCountUpperBound::count_upper_bound` must be cost free.
+	/// (i.e. no storage read or heavy decoding)
+	type Tippers: Contains<Self::AccountId> + ContainsCountUpperBound;
 
 	/// The period for which a tip remains open after is has achieved threshold tippers.
 	type TipCountdown: Get<Self::BlockNumber>;
@@ -333,11 +333,7 @@ decl_module! {
 		/// - DbReads: `ProposalCount`, `sender account`
 		/// - DbWrites: `ProposalCount`, `Proposals`, `sender account`
 		/// # </weight>
-<<<<<<< HEAD
 		#[weight = 114_700_000 + T::DbWeight::get().reads_writes(1, 2)]
-=======
-		#[weight = 500_000_000]
->>>>>>> origin/master
 		fn propose_spend(
 			origin,
 			#[compact] value: BalanceOf<T>,
@@ -364,11 +360,7 @@ decl_module! {
 		/// - DbReads: `Proposals`, `rejected proposer account`
 		/// - DbWrites: `Proposals`, `rejected proposer account`
 		/// # </weight>
-<<<<<<< HEAD
 		#[weight = 125_800_000 + T::DbWeight::get().reads_writes(2, 2)]
-=======
-		#[weight = (100_000_000, DispatchClass::Operational)]
->>>>>>> origin/master
 		fn reject_proposal(origin, #[compact] proposal_id: ProposalIndex) {
 			T::RejectOrigin::try_origin(origin)
 				.map(|_| ())
@@ -390,11 +382,7 @@ decl_module! {
 		/// - DbReads: `Proposals`, `Approvals`
 		/// - DbWrite: `Approvals`
 		/// # </weight>
-<<<<<<< HEAD
 		#[weight = 33_610_000 + T::DbWeight::get().reads_writes(2, 1)]
-=======
-		#[weight = (100_000_000, DispatchClass::Operational)]
->>>>>>> origin/master
 		fn approve_proposal(origin, #[compact] proposal_id: ProposalIndex) {
 			T::ApproveOrigin::try_origin(origin)
 				.map(|_| ())
@@ -423,11 +411,7 @@ decl_module! {
 		/// - DbReads: `Reasons`, `Tips`, `who account data`
 		/// - DbWrites: `Tips`, `who account data`
 		/// # </weight>
-<<<<<<< HEAD
 		#[weight = 138_400_000 + 4_000 * reason.len() as u64 + T::DbWeight::get().reads_writes(3, 2)]
-=======
-		#[weight = 100_000_000]
->>>>>>> origin/master
 		fn report_awesome(origin, reason: Vec<u8>, who: T::AccountId) {
 			let finder = ensure_signed(origin)?;
 
@@ -498,18 +482,17 @@ decl_module! {
 		/// # <weight>
 		/// - Complexity: `O(R + T)` where `R` length of `reason`, `T` is the number of tippers.
 		///   - `O(T)`: decoding `Tipper` vec of length `T`
-		///     `T` is less than `MAX_TIPPERS_COUNT`, it is charged as maximum and then refund.
+		///     `T` is charged as upper bound given by `ContainsCountUpperBound`.
 		///     The actual cost depends on the implementation of `T::Tippers`.
 		///   - `O(R)`: hashing and encoding of reason of length `R`
 		/// - DbReads: `Tippers`, `Reasons`
 		/// - DbWrites: `Reasons`, `Tips`
 		/// # </weight>
-		#[weight = 107_700_000 + 4_000 * reason.len() as u64 + 481_000 * MAX_TIPPERS_COUNT
+		#[weight = 107_700_000
+			+ 4_000 * reason.len() as u64
+			+ 481_000 * T::Tippers::count_upper_bound() as u64
 			+ T::DbWeight::get().reads_writes(2, 2)]
-		fn tip_new(origin, reason: Vec<u8>, who: T::AccountId, tip_value: BalanceOf<T>)
-			-> DispatchResultWithPostInfo
-		{
-			// NOTE: we don't refund in case of error because checking cost too much.
+		fn tip_new(origin, reason: Vec<u8>, who: T::AccountId, tip_value: BalanceOf<T>) {
 			let tipper = ensure_signed(origin)?;
 			ensure!(T::Tippers::contains(&tipper), BadOrigin);
 			let reason_hash = T::Hashing::hash(&reason[..]);
@@ -521,8 +504,6 @@ decl_module! {
 			let tips = vec![(tipper, tip_value)];
 			let tip = OpenTip { reason: reason_hash, who, finder: None, closes: None, tips };
 			Tips::<T>::insert(&hash, tip);
-
-			Ok(Some(MAX_TIPPERS_COUNT.saturating_sub(T::Tippers::count() as u64) * 481_000).into())
 		}
 
 		/// Declare a tip value for an already-open tip.
@@ -542,7 +523,7 @@ decl_module! {
 		/// # <weight>
 		/// - Complexity: `O(T)` where `T` is the number of tippers.
 		///   decoding `Tipper` vec of length `T`, insert tip and check closing,
-		///   `T` is less than `MAX_TIPPERS_COUNT`, it is charged as maximum and then refund.
+		///   `T` is charged as upper bound given by `ContainsCountUpperBound`.
 		///   The actual cost depends on the implementation of `T::Tippers`.
 		///
 		///   Actually weight could be lower as it depends on how many tips are in `OpenTip` but it
@@ -550,9 +531,9 @@ decl_module! {
 		/// - DbReads: `Tippers`, `Tips`
 		/// - DbWrites: `Tips`
 		/// # </weight>
-		#[weight = 67_730_000 + 1_912_000 * MAX_TIPPERS_COUNT + T::DbWeight::get().reads_writes(2, 1)]
-		fn tip(origin, hash: T::Hash, tip_value: BalanceOf<T>) -> DispatchResultWithPostInfo {
-			// NOTE: we don't refund in case of error because checking cost too much.
+		#[weight = 67_730_000 + 1_912_000 * T::Tippers::count_upper_bound() as u64
+			+ T::DbWeight::get().reads_writes(2, 1)]
+		fn tip(origin, hash: T::Hash, tip_value: BalanceOf<T>) {
 			let tipper = ensure_signed(origin)?;
 			ensure!(T::Tippers::contains(&tipper), BadOrigin);
 
@@ -561,8 +542,6 @@ decl_module! {
 				Self::deposit_event(RawEvent::TipClosing(hash.clone()));
 			}
 			Tips::<T>::insert(&hash, tip);
-
-			Ok(Some(MAX_TIPPERS_COUNT.saturating_sub(T::Tippers::count() as u64) * 1_912_000).into())
 		}
 
 		/// Close and payout a tip.
@@ -577,13 +556,14 @@ decl_module! {
 		/// # <weight>
 		/// - Complexity: `O(T)` where `T` is the number of tippers.
 		///   decoding `Tipper` vec of length `T`.
-		///   `T` is less than `MAX_TIPPERS_COUNT`, it is charged as maximum and then refund.
+		///   `T` is charged as upper bound given by `ContainsCountUpperBound`.
 		///   The actual cost depends on the implementation of `T::Tippers`.
 		/// - DbReads: `Tips`, `Tippers`, `tip finder`
 		/// - DbWrites: `Reasons`, `Tips`, `Tippers`, `tip finder`
 		/// # </weight>
-		#[weight = 211_000_000 + 1_094_000 * MAX_TIPPERS_COUNT + T::DbWeight::get().reads_writes(3, 3)]
-		fn close_tip(origin, hash: T::Hash) -> DispatchResultWithPostInfo {
+		#[weight = 211_000_000 + 1_094_000 * T::Tippers::count_upper_bound() as u64
+			+ T::DbWeight::get().reads_writes(3, 3)]
+		fn close_tip(origin, hash: T::Hash) {
 			ensure_signed(origin)?;
 
 			let tip = Tips::<T>::get(hash).ok_or(Error::<T>::UnknownTip)?;
@@ -593,8 +573,6 @@ decl_module! {
 			Reasons::<T>::remove(&tip.reason);
 			Tips::<T>::remove(hash);
 			Self::payout_tip(hash, tip);
-
-			Ok(Some(MAX_TIPPERS_COUNT.saturating_sub(T::Tippers::count() as u64) * 1_094_000).into())
 		}
 
 		/// # <weight>

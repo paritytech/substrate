@@ -93,6 +93,7 @@ use frame_support::{
 	traits::{
 		Currency, Get, LockableCurrency, LockIdentifier, ReservableCurrency, WithdrawReasons,
 		ChangeMembers, OnUnbalanced, WithdrawReason, Contains, BalanceStatus, InitializeMembers,
+		ContainsCountUpperBound,
 	}
 };
 use sp_phragmen::{build_support_map, ExtendedBalance, VoteWeight, PhragmenResult};
@@ -875,6 +876,13 @@ impl<T: Trait> Contains<T::AccountId> for Module<T> {
 				Err(pos) => members.insert(pos, (who.clone(), BalanceOf::<T>::default())),
 			}
 		})
+	}
+}
+
+/// Implementation uses a parameter type so calling is cost-free.
+impl<T: Trait> ContainsCountUpperBound for Module<T> {
+	fn count_upper_bound() -> usize {
+		Self::desired_members() as usize
 	}
 }
 
