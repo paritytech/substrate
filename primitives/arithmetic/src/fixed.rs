@@ -56,7 +56,11 @@ macro_rules! implement_fixed {
 			fn from_inner(inner: Self::Inner) -> Self {
 				Self(inner)
 			}
-		
+
+			fn into_inner(self) -> Self::Inner {
+				self.0
+			}
+
 			fn from_integer(int: Self::Inner) -> Self {
 				Self(int.saturating_mul(Self::DIV))
 			}
@@ -89,32 +93,39 @@ macro_rules! implement_fixed {
 						}
 					)
 			}
-		
-			fn into_inner(self) -> Self::Inner {
-				self.0
-			}
-		
+
 			fn checked_mul_int<N>(self, other: N) -> Option<N>
 			where
-				N: Copy + TryFrom<Self::Inner> + TryInto<Self::Inner>,
+				N: Copy + TryFrom<i128> + UniqueSaturatedInto<i128>,
 			{
-				N::try_into(other).ok().and_then(|rhs| {
+					let mut rhs: i128 = other.unique_saturated_into();
+					let mut signum = self.0.signum() as i128 * rhs.signum();
 					let mut lhs = self.0;
+
 					if lhs.is_negative() {
 						lhs = lhs.saturating_mul(-1);
 					}
-					let mut rhs: Self::Inner = rhs.saturated_into();
-					let signum = self.0.signum() * rhs.signum();
+
 					if rhs.is_negative() {
 						rhs = rhs.saturating_mul(-1);
 					}
-		
-					(lhs as Self::Unsigned)
-						.checked_mul(rhs as Self::Unsigned)
-						.and_then(|n| n.checked_div(Self::DIV as Self::Unsigned))
-						.and_then(|n| TryInto::<Self::Inner>::try_into(n).ok())
-						.and_then(|n| TryInto::<N>::try_into(n * signum).ok())
-				})
+
+					if let Ok(r) = multiply_by_rational(lhs as u128, rhs as u128, Self::DIV as u128) {
+						let r: i128 = r.unique_saturated_into();
+						let r = r.saturating_mul(signum);
+						r.try_into().ok()
+					} else {
+						None
+					}
+						// .ok()
+						// .and_then(|n| TryInto::<N>::try_into(n.unique_saturated_into().saturating_mul(signum)).ok())
+
+						// (lhs as Self::Unsigned)
+					// 	.checked_mul(rhs as Self::Unsigned)
+					// 	.and_then(|n| n.checked_div(Self::DIV as Self::Unsigned))
+					// 	.and_then(|n| TryInto::<Self::Inner>::try_into(n).ok())
+					// 	.and_then(|n| TryInto::<N>::try_into(n * signum).ok())
+				// })
 			}
 		
 			fn checked_div_int<N>(self, other: N) -> Option<N>
@@ -130,9 +141,9 @@ macro_rules! implement_fixed {
 		
 			fn saturating_mul_int<N>(self, other: N) -> N
 			where
-				N: Copy + TryFrom<Self::Inner> + TryInto<Self::Inner> + Bounded + Signed,
+				N: Copy + TryFrom<i128> + UniqueSaturatedInto<i128> + Bounded,
 			{
-				let signum = other.signum().saturated_into() * self.0.signum();
+				let signum = other.saturated_into().signum() * self.0.signum() as i128;
 				self.checked_mul_int(other).unwrap_or_else(|| {
 					if signum.is_negative() {
 						Bounded::min_value()
@@ -550,6 +561,18 @@ macro_rules! implement_fixed {
 
 				assert_eq!(t.into_inner(), inner_max / 3);
 				assert_eq!(u.into_inner(), -inner_max / 3);
+			}
+
+			#[test]
+			fn checked_mul_int_works() {
+				let a = $name::from_rational(1, 2);
+				let b = $name::from_rational(-1, 2);
+				let c = $name::from_integer(255);
+
+				// assert_eq!(a.checked_mul_int(42i32), Some(21));
+				assert_eq!(a.checked_mul_int(u128::max_value()), Some(u128::max_value() / 2));
+				// assert_eq!(b.checked_mul_int(42i32), Some(-21));
+				// assert_eq!(c.checked_mul_int(2u8), None);
 			}
 
 			#[test]

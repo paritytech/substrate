@@ -20,7 +20,7 @@ use crate::{
 	helpers_128bit::multiply_by_rational,
 	traits::{
 		Bounded, Saturating, UniqueSaturatedInto, SaturatedConversion, FixedPointNumber,
-		CheckedAdd, CheckedSub, CheckedMul, CheckedDiv
+		CheckedAdd, CheckedSub, CheckedMul, CheckedDiv, BaseArithmetic
 	},
 	PerThing, Perquintill,
 	implement_fixed

@@ -25,7 +25,7 @@ use crate::{
 	PerThing, Perbill,
 	traits::{
 		SaturatedConversion, CheckedSub, CheckedAdd, CheckedMul, CheckedDiv,
-		Bounded, UniqueSaturatedInto, Saturating, FixedPointNumber
+		Bounded, UniqueSaturatedInto, Saturating, FixedPointNumber, BaseArithmetic
 	},
 	implement_fixed
 };

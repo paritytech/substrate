@@ -210,19 +210,24 @@ pub trait FixedPointNumber:
 	/// Assumes d != 0 (returns 0 in this case).
 	fn from_rational<N: UniqueSaturatedInto<Self::Inner>>(n: N, d: Self::Inner) -> Self;
 
-	/// Takes the reciprocal (inverse), `1 / self`.
-	fn reciprocal(self) -> Option<Self> {
-		Self::from_integer(Self::Inner::one()).checked_div(&self)
-	}
-
 	/// Checked multiplication for integer type `N`.
-	fn checked_mul_int<N: Copy + TryFrom<Self::Inner> + TryInto<Self::Inner>>(self, other: N) -> Option<N>;
+	fn checked_mul_int<N: Copy + TryFrom<i128> + UniqueSaturatedInto<i128>>(self, other: N) -> Option<N>;
 
 	/// Checked division for integer type `N`.
 	fn checked_div_int<N: Copy + TryFrom<Self::Inner> + TryInto<Self::Inner>>(self, other: N) -> Option<N>;
 
 	/// Saturating multiplication for integer type `N`.
-	fn saturating_mul_int<N: Copy + TryFrom<Self::Inner> + TryInto<Self::Inner> + Bounded + Signed>(self, other: N) -> N;
+	fn saturating_mul_int<N: Copy + TryFrom<i128> + UniqueSaturatedInto<i128> + Bounded>(self, other: N) -> N;
+
+	/// Performs a saturated multiplication and accumulate by unsigned number.
+	///
+	/// Returns a saturated `int + (self * int)`.
+	fn saturated_multiply_accumulate<
+		N: From<Self::PrevUnsigned> + TryFrom<Self::Unsigned> + UniqueSaturatedInto<Self::PrevUnsigned> +
+			Bounded + Copy + Saturating + 
+			Rem<N, Output=N> + Div<N, Output=N> +
+			Mul<N, Output=N> + Add<N, Output=N> + Default + core::fmt::Debug
+	>(self, int: N) -> N;
 
 	/// Saturating absolute value. Returning MAX if `parts == Inner::MIN` instead of overflowing.
 	fn saturating_abs(self) -> Self;
@@ -242,13 +247,8 @@ pub trait FixedPointNumber:
 	/// Checks if the number is negative.
 	fn is_negative(self) -> bool;
 
-	/// Performs a saturated multiplication and accumulate by unsigned number.
-	///
-	/// Returns a saturated `int + (self * int)`.
-	fn saturated_multiply_accumulate<
-		N: From<Self::PrevUnsigned> + TryFrom<Self::Unsigned> + UniqueSaturatedInto<Self::PrevUnsigned> +
-			Bounded + Copy + Saturating + 
-			Rem<N, Output=N> + Div<N, Output=N> +
-			Mul<N, Output=N> + Add<N, Output=N> + Default + core::fmt::Debug
-	>(self, int: N) -> N;
+	/// Takes the reciprocal (inverse), `1 / self`.
+	fn reciprocal(self) -> Option<Self> {
+		Self::from_integer(Self::Inner::one()).checked_div(&self)
+	}	
 }
