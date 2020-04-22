@@ -271,8 +271,6 @@ mod tests {
 				map hasher(identity) T::BlockNumber => T::BlockNumber;
 			pub GenericData2 get(fn generic_data2):
 				map hasher(blake2_128_concat) T::BlockNumber => Option<T::BlockNumber>;
-			pub GetterNoFnKeyword get(no_fn): Option<u32>;
-
 			pub DataDM config(test_config) build(|_| vec![(15u32, 16u32, 42u64)]):
 				double_map hasher(twox_64_concat) u32, hasher(blake2_128_concat) u32 => u64;
 			pub GenericDataDM:
@@ -555,15 +553,6 @@ mod tests {
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructGenericData2(PhantomData::<Test>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
-				},
-				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("GetterNoFnKeyword"),
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Plain(DecodeDifferent::Encode("u32")),
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructGetterNoFnKeyword(PhantomData::<Test>))
 					),
 					documentation: DecodeDifferent::Encode(&[]),
 				},

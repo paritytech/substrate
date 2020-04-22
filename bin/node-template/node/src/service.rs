@@ -26,6 +26,8 @@ native_executor_instance!(
 macro_rules! new_full_start {
 	($config:expr) => {{
 		use std::sync::Arc;
+		use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
+		
 		let mut import_setup = None;
 		let inherent_data_providers = sp_inherents::InherentDataProviders::new();
 
