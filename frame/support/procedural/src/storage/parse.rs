@@ -166,7 +166,7 @@ struct DeclStorageLine {
 
 #[derive(Parse, ToTokens, Debug)]
 struct DeclStorageGetterBody {
-	fn_keyword: Option<Token![fn]>,
+	fn_keyword: Token![fn],
 	ident: Ident,
 }
 
