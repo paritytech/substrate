@@ -754,8 +754,10 @@ impl<T: Trait> Module<T> {
 	/// to the corresponding topic indexes.
 	///
 	/// This will update storage entries that correspond to the specified topics.
-	/// It is expected that light-clients could subscribe to this topics.
+	/// It is expected that light-clients could subscribe to these topics.
 	pub fn deposit_event_indexed(topics: &[T::Hash], event: T::Event) {
+		use frame_support::storage::generator::StorageValue;
+
 		let block_number = Self::block_number();
 		// Don't populate events on genesis.
 		if block_number.is_zero() { return }
@@ -780,17 +782,13 @@ impl<T: Trait> Module<T> {
 			old_event_count
 		};
 
-		// Appending can only fail if `Events<T>` can not be decoded or
-		// when we try to insert more than `u32::max_value()` events.
-		//
-		// We perform early return if we've reached the maximum capacity of the event list,
-		// so `Events<T>` seems to be corrupted. Also, this has happened after the start of execution
-		// (since the event list is cleared at the block initialization).
-		if <Events<T>>::append([event].iter()).is_err() {
-			// The most sensible thing to do here is to just ignore this event and wait until the
-			// new block.
-			return;
-		}
+		/// We use accumulator api here to avoid bringing all events every time we push a
+		/// new one.
+		///
+		/// Not that because of that System::events() won't return these events until
+		/// they are commited in System::finalize().
+		let encoded_event = event.encode();
+		sp_io::storage::accumulator_push(&Events::<T>::storage_value_final_key()[..], &encoded_event);
 
 		for topic in topics {
 			// The same applies here.
@@ -868,6 +866,8 @@ impl<T: Trait> Module<T> {
 
 	/// Remove temporary "environment" entries in storage.
 	pub fn finalize() -> T::Header {
+		use frame_support::storage::generator::StorageValue;
+
 		ExecutionPhase::kill();
 		ExtrinsicCount::kill();
 		AllExtrinsicsWeight::kill();
@@ -888,6 +888,8 @@ impl<T: Trait> Module<T> {
 				<BlockHash<T>>::remove(to_remove);
 			}
 		}
+
+		sp_io::storage::accumulator_commit(&Events::<T>::storage_value_final_key()[..]);
 
 		let storage_root = T::Hash::decode(&mut &sp_io::storage::root()[..])
 			.expect("Node is configured to use the same hash; qed");
@@ -2146,6 +2148,7 @@ pub(crate) mod tests {
 				RawOrigin::Root.into(),
 				substrate_test_runtime_client::runtime::WASM_BINARY.to_vec(),
 			).unwrap();
+			System::finalize();
 
 			assert_eq!(
 				System::events(),
@@ -2176,10 +2179,12 @@ pub(crate) mod tests {
 			// Block Number is zero at genesis
 			assert!(System::block_number().is_zero());
 			System::on_created_account(Default::default());
+			System::finalize();
 			assert!(System::events().is_empty());
 			// Events will be emitted starting on block 1
 			System::set_block_number(1);
 			System::on_created_account(Default::default());
+			System::finalize();
 			assert!(System::events().len() == 1);
 		});
 	}

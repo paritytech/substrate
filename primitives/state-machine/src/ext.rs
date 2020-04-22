@@ -31,7 +31,7 @@ use sp_trie::{trie_types::Layout, empty_child_trie_root};
 use sp_externalities::{Extensions, Extension};
 use codec::{Decode, Encode};
 
-use std::{error, fmt, any::{Any, TypeId}};
+use std::{error, fmt, any::{Any, TypeId}, collections::HashMap};
 use log::{warn, trace};
 
 const EXT_NOT_ALLOWED_TO_FAIL: &str = "Externalities not allowed to fail within runtime";
@@ -86,6 +86,8 @@ pub struct Ext<'a, H, N, B>
 	_phantom: std::marker::PhantomData<N>,
 	/// Extensions registered with this instance.
 	extensions: Option<&'a mut Extensions>,
+	/// Storage accumulators for each key.
+	accumulators: HashMap<Vec<u8>, Vec<Vec<u8>>>,
 }
 
 impl<'a, H, N, B> Ext<'a, H, N, B>
@@ -112,6 +114,7 @@ where
 			id: rand::random(),
 			_phantom: Default::default(),
 			extensions,
+			accumulators: Default::default(),
 		}
 	}
 
@@ -132,8 +135,6 @@ where
 	N: crate::changes_trie::BlockNumber,
 {
 	pub fn storage_pairs(&self) -> Vec<(StorageKey, StorageValue)> {
-		use std::collections::HashMap;
-
 		self.backend.pairs().iter()
 			.map(|&(ref k, ref v)| (k.to_vec(), Some(v.to_vec())))
 			.chain(self.overlay.committed.top.clone().into_iter().map(|(k, v)| (k, v.value)))
@@ -394,6 +395,41 @@ where
 		self.backend.for_child_keys_with_prefix(child_info, prefix, |key| {
 			self.overlay.set_child_storage(child_info, key.to_vec(), None);
 		});
+	}
+
+	fn storage_accumulator_push(
+		&mut self,
+		key: &[u8],
+		appended: Vec<u8>,
+	) {
+		self.accumulators.entry(key.to_vec())
+			.and_modify(|val| val.push(appended.clone()))
+			.or_insert_with(|| vec![appended]);
+	}
+
+	fn storage_accumulator_commit(
+		&mut self,
+		key: &[u8],
+	) -> u64 {
+		let (number_of_values, concatenated) =
+			self.accumulators.remove(key).map(
+				|values| {
+					let mut encoded = codec::Compact(values.len() as u64).encode();
+					for value in values.iter() {
+						encoded.extend(value);
+					}
+					(values.len(), encoded)
+				})
+				.unwrap_or_default();
+
+		let number_of_values = number_of_values as u64;
+
+		self.place_storage(
+			key.to_vec(),
+			Some(concatenated),
+		);
+
+		number_of_values
 	}
 
 	fn chain_id(&self) -> u64 {

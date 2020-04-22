@@ -17,7 +17,7 @@
 //! Basic implementation for Externalities.
 
 use std::{
-	collections::BTreeMap, any::{TypeId, Any}, iter::FromIterator, ops::Bound
+	collections::{BTreeMap, HashMap}, any::{TypeId, Any}, iter::FromIterator, ops::Bound
 };
 use crate::{Backend, InMemoryBackend, StorageKey, StorageValue};
 use hash_db::Hasher;
@@ -39,12 +39,17 @@ use sp_externalities::Extensions;
 pub struct BasicExternalities {
 	inner: Storage,
 	extensions: Extensions,
+	accumulators: HashMap<Vec<u8>, Vec<Vec<u8>>>,
 }
 
 impl BasicExternalities {
 	/// Create a new instance of `BasicExternalities`
 	pub fn new(inner: Storage) -> Self {
-		BasicExternalities { inner, extensions: Default::default() }
+		BasicExternalities {
+			inner,
+			extensions: Default::default(),
+			accumulators: Default::default(),
+		}
 	}
 
 	/// New basic externalities with empty storage.
@@ -59,6 +64,7 @@ impl BasicExternalities {
 
 		Self {
 			inner: Storage::default(),
+			accumulators: Default::default(),
 			extensions,
 		}
 	}
@@ -86,6 +92,7 @@ impl BasicExternalities {
 				children_default: std::mem::replace(&mut storage.children_default, Default::default()),
 			},
 			extensions: Default::default(),
+			accumulators: Default::default(),
 		};
 
 		let r = ext.execute_with(f);
@@ -135,6 +142,7 @@ impl From<BTreeMap<StorageKey, StorageValue>> for BasicExternalities {
 				children_default: Default::default(),
 			},
 			extensions: Default::default(),
+			accumulators: Default::default(),
 		}
 	}
 }
@@ -290,6 +298,41 @@ impl Externalities for BasicExternalities {
 		} else {
 			empty_child_trie_root::<Layout<Blake2Hasher>>()
 		}.encode()
+	}
+
+	fn storage_accumulator_push(
+		&mut self,
+		key: &[u8],
+		appended: Vec<u8>,
+	) {
+		self.accumulators.entry(key.to_vec())
+			.and_modify(|val| val.push(appended.clone()))
+			.or_insert_with(|| vec![appended]);
+	}
+
+	fn storage_accumulator_commit(
+		&mut self,
+		key: &[u8],
+	) -> u64 {
+		let (number_of_values, concatenated) =
+			self.accumulators.remove(key).map(
+				|values| {
+					let mut encoded = codec::Compact(values.len() as u64).encode();
+					for value in values.iter() {
+						encoded.extend(value);
+					}
+					(values.len(), encoded)
+				})
+				.unwrap_or_default();
+
+		let number_of_values = number_of_values as u64;
+
+		self.place_storage(
+			key.to_vec(),
+			Some(concatenated),
+		);
+
+		number_of_values
 	}
 
 	fn storage_changes_root(&mut self, _parent: &[u8]) -> Result<Option<Vec<u8>>, ()> {

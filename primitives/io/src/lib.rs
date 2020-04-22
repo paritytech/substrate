@@ -142,6 +142,22 @@ pub trait Storage {
 	fn next_key(&mut self, key: &[u8]) -> Option<Vec<u8>> {
 		self.next_storage_key(&key)
 	}
+
+	/// Push new entry to the storage accumulator.
+	fn accumulator_push(&mut self, key: &[u8], appended: &[u8]) {
+		self.storage_accumulator_push(key, appended.to_vec())
+	}
+
+	/// Commit storage accumulator.
+	///
+	/// Commits accumulator with given `key` to the
+	/// actual storage and clears it.
+	///
+	/// Returns number of keys that were present in the
+	/// accumulator.
+	fn accumulator_commit(&mut self, key: &[u8]) -> u64 {
+		self.storage_accumulator_commit(key)
+	}
 }
 
 /// Interface for accessing the child storage for default child trie,
