@@ -830,6 +830,23 @@ impl<T: Trait> Module<T> {
 		AllExtrinsicsWeight::get().unwrap_or_default()
 	}
 
+	/// Get the quota ratio of each dispatch class type. This indicates that all operational and mandatory
+	/// dispatches can use the full capacity of any resource, while user-triggered ones can consume
+	/// a portion.
+	pub fn get_dispatch_limit_ratio(class: DispatchClass) -> Perbill {
+		match class {
+			DispatchClass::Operational | DispatchClass::Mandatory
+				=> <Perbill as sp_runtime::PerThing>::one(),
+			DispatchClass::Normal => T::AvailableBlockRatio::get(),
+		}
+	}
+
+	/// The maximum weight of an allowable extrinsic. Only one of these could exist in a block.
+	pub fn max_extrinsic_weight(class: DispatchClass) -> Weight {
+		let limit = Self::get_dispatch_limit_ratio(class) * T::MaximumBlockWeight::get();
+		limit - (T::BlockExecutionWeight::get() + T::ExtrinsicBaseWeight::get())
+	}
+
 	pub fn all_extrinsics_len() -> u32 {
 		AllExtrinsicsLen::get().unwrap_or_default()
 	}
@@ -1189,15 +1206,11 @@ pub struct CheckWeight<T: Trait + Send + Sync>(PhantomData<T>);
 impl<T: Trait + Send + Sync> CheckWeight<T> where
 	T::Call: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>
 {
-	/// Get the quota ratio of each dispatch class type. This indicates that all operational
+	/// Get the quota ratio of each dispatch class type. This indicates that all operational and mandatory
 	/// dispatches can use the full capacity of any resource, while user-triggered ones can consume
 	/// a portion.
 	fn get_dispatch_limit_ratio(class: DispatchClass) -> Perbill {
-		match class {
-			DispatchClass::Operational | DispatchClass::Mandatory
-				=> <Perbill as sp_runtime::PerThing>::one(),
-			DispatchClass::Normal => T::AvailableBlockRatio::get(),
-		}
+		Module::<T>::get_dispatch_limit_ratio(class)
 	}
 
 	/// Checks if the current extrinsic can fit into the block with respect to block weight limits.
@@ -1621,7 +1634,7 @@ pub(crate) mod tests {
 	use sp_std::cell::RefCell;
 	use sp_core::H256;
 	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header, DispatchError};
-	use frame_support::{impl_outer_origin, parameter_types, assert_err};
+	use frame_support::{impl_outer_origin, parameter_types, assert_ok, assert_err};
 
 	impl_outer_origin! {
 		pub enum Origin for Test where system = super {}
@@ -2018,15 +2031,19 @@ pub(crate) mod tests {
 	}
 
 	#[test]
-	fn weight_larger_than_max_block_weight_errors() {
+	fn max_extrinsic_weight_is_allowed_but_nothing_more() {
 		new_test_ext().execute_with(|| {
-			let max = DispatchInfo { weight: Weight::max_value(), ..Default::default() };
+			let one = DispatchInfo { weight: 1, ..Default::default() };
+			let max = DispatchInfo { weight: System::max_extrinsic_weight(DispatchClass::Normal), ..Default::default() };
 			let len = 0_usize;
 
 			assert_eq!(System::all_extrinsics_weight(), 0);
-			let r = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &max, len);
-			assert_err!(r, InvalidTransaction::ExhaustsResources);
-		})
+			assert_ok!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &max, len));
+			assert_err!(
+				CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &one, len),
+				InvalidTransaction::ExhaustsResources,
+			);
+		});
 	}
 
 	#[test]
