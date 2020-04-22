@@ -408,7 +408,7 @@ decl_module! {
 		/// - DbReads: `Reasons`, `Tips`, `who account data`
 		/// - DbWrites: `Tips`, `who account data`
 		/// # </weight>
-		#[weight = 138_400_000 + 4_000 * reason.len() as u64 + T::DbWeight::get().reads_writes(3, 2)]
+		#[weight = 138_400_000 + 4_000 * reason.len() as Weight + T::DbWeight::get().reads_writes(3, 2)]
 		fn report_awesome(origin, reason: Vec<u8>, who: T::AccountId) {
 			let finder = ensure_signed(origin)?;
 
@@ -486,8 +486,8 @@ decl_module! {
 		/// - DbWrites: `Reasons`, `Tips`
 		/// # </weight>
 		#[weight = 110_000_000
-			+ 4_000 * reason.len() as u64
-			+ 480_000 * T::Tippers::count_upper_bound() as u64
+			+ 4_000 * reason.len() as Weight
+			+ 480_000 * T::Tippers::count_upper_bound() as Weight
 			+ T::DbWeight::get().reads_writes(2, 2)]
 		fn tip_new(origin, reason: Vec<u8>, who: T::AccountId, tip_value: BalanceOf<T>) {
 			let tipper = ensure_signed(origin)?;
@@ -528,7 +528,7 @@ decl_module! {
 		/// - DbReads: `Tippers`, `Tips`
 		/// - DbWrites: `Tips`
 		/// # </weight>
-		#[weight = 68_000_000 + 1_900_000 * T::Tippers::count_upper_bound() as u64
+		#[weight = 68_000_000 + 1_900_000 * T::Tippers::count_upper_bound() as Weight
 			+ T::DbWeight::get().reads_writes(2, 1)]
 		fn tip(origin, hash: T::Hash, tip_value: BalanceOf<T>) {
 			let tipper = ensure_signed(origin)?;
@@ -558,7 +558,7 @@ decl_module! {
 		/// - DbReads: `Tips`, `Tippers`, `tip finder`
 		/// - DbWrites: `Reasons`, `Tips`, `Tippers`, `tip finder`
 		/// # </weight>
-		#[weight = 210_000_000 + 1_100_000 * T::Tippers::count_upper_bound() as u64
+		#[weight = 210_000_000 + 1_100_000 * T::Tippers::count_upper_bound() as Weight
 			+ T::DbWeight::get().reads_writes(3, 3)]
 		fn close_tip(origin, hash: T::Hash) {
 			ensure_signed(origin)?;
@@ -584,7 +584,7 @@ decl_module! {
 			if (n % T::SpendPeriod::get()).is_zero() {
 				let approvals_len = Self::spend_funds();
 
-				260_000_000 * approvals_len
+				265_000_000 * approvals_len
 					+ T::DbWeight::get().reads_writes(2 + approvals_len * 3, 2 + approvals_len * 3)
 			} else {
 				0
