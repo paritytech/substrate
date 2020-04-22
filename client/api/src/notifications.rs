@@ -218,6 +218,7 @@ impl<Block: BlockT> StorageNotifications<Block> {
 
 	fn remove_subscriber(&mut self, subscriber: SubscriberId) {
 		if let Some((_, filters, child_filters)) = self.sinks.remove(&subscriber) {
+			// FIXME: add metrics to count items in internal system
 			Self::remove_subscriber_from(
 				&subscriber,
 				&filters,
@@ -274,6 +275,7 @@ impl<Block: BlockT> StorageNotifications<Block> {
 	) -> StorageEventStream<Block::Hash> {
 		self.next_id += 1;
 		let current_id = self.next_id;
+		// FIXME add metrics to count active subscribers
 
 		// add subscriber for every key
 		let keys = Self::listen_from(
