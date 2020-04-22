@@ -100,7 +100,7 @@
 //!
 //! ```
 //! # use frame_system::{self as system, Trait};
-//! # use frame_support::weights::{DispatchClass, FunctionOf};
+//! # use frame_support::weights::{DispatchClass, FunctionOf, Pays};
 //! frame_support::decl_module! {
 //!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 //!         #[weight = FunctionOf(
