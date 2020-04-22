@@ -747,6 +747,7 @@ mod tests {
 				let mut config = DiscoveryConfig::new(keypair.public());
 				config.with_user_defined(user_defined.clone())
 					.allow_private_ipv4(true)
+					.allow_non_globals_in_dht(true)
 					.discovery_limit(50);
 				config.finish()
 			};
