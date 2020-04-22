@@ -113,9 +113,6 @@ type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_sy
 /// The treasury's module id, used for deriving its sovereign account ID.
 const MODULE_ID: ModuleId = ModuleId(*b"py/trsry");
 
-/// The maximum size of tippers, this is used to compute weight, the exceeding will be refund.
-pub const MAX_TIPPERS_COUNT: u64 = 1000;
-
 pub trait Trait: frame_system::Trait {
 	/// The staking balance.
 	type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
@@ -129,7 +126,7 @@ pub trait Trait: frame_system::Trait {
 	/// Origin from which tippers must come.
 	///
 	/// `ContainsCountUpperBound::count_upper_bound` must be cost free.
-	/// (i.e. no storage read or heavy decoding)
+	/// (i.e. no storage read or heavy operation)
 	type Tippers: Contains<Self::AccountId> + ContainsCountUpperBound;
 
 	/// The period for which a tip remains open after is has achieved threshold tippers.
