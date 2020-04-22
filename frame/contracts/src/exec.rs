@@ -896,6 +896,7 @@ mod tests {
 	use crate::{
 		account_db::AccountDb, gas::GasMeter, tests::{ExtBuilder, Test},
 		exec::{ExecReturnValue, ExecError, STATUS_SUCCESS}, CodeHash, Config,
+		gas::Gas,
 	};
 	use std::{cell::RefCell, rc::Rc, collections::HashMap, marker::PhantomData};
 	use assert_matches::assert_matches;
@@ -904,6 +905,8 @@ mod tests {
 	const ALICE: u64 = 1;
 	const BOB: u64 = 2;
 	const CHARLIE: u64 = 3;
+
+	const GAS_LIMIT: Gas = 10_000_000_000;
 
 	impl<'a, T, V, L> ExecutionContext<'a, T, V, L>
 		where T: crate::Trait
@@ -1010,7 +1013,7 @@ mod tests {
 	#[test]
 	fn it_works() {
 		let value = Default::default();
-		let mut gas_meter = GasMeter::<Test>::new(10000);
+		let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 		let data = vec![];
 
 		let vm = MockVm::new();
@@ -1051,7 +1054,7 @@ mod tests {
 			ctx.overlay.set_balance(&origin, 100);
 			ctx.overlay.set_balance(&dest, 0);
 
-			let mut gas_meter = GasMeter::<Test>::new(1000);
+			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 
 			let result = ctx.call(dest, 0, &mut gas_meter, vec![]);
 			assert_matches!(result, Ok(_));
@@ -1071,7 +1074,7 @@ mod tests {
 
 			ctx.overlay.set_balance(&origin, 100);
 
-			let mut gas_meter = GasMeter::<Test>::new(1000);
+			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 
 			let result = ctx.instantiate(1, &mut gas_meter, &code, vec![]);
 			assert_matches!(result, Ok(_));
@@ -1100,7 +1103,7 @@ mod tests {
 			let output = ctx.call(
 				dest,
 				55,
-				&mut GasMeter::<Test>::new(1000),
+				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				vec![],
 			).unwrap();
 
@@ -1133,7 +1136,7 @@ mod tests {
 			let output = ctx.call(
 				dest,
 				55,
-				&mut GasMeter::<Test>::new(1000),
+				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				vec![],
 			).unwrap();
 
@@ -1159,7 +1162,7 @@ mod tests {
 			ctx.overlay.set_balance(&origin, 100);
 			ctx.overlay.set_balance(&dest, 0);
 
-			let mut gas_meter = GasMeter::<Test>::new(1000);
+			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 
 			let result = ctx.call(dest, 50, &mut gas_meter, vec![]);
 			assert_matches!(result, Ok(_));
@@ -1184,7 +1187,7 @@ mod tests {
 			ctx.overlay.set_balance(&origin, 100);
 			ctx.overlay.set_balance(&dest, 15);
 
-			let mut gas_meter = GasMeter::<Test>::new(1000);
+			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 
 			let result = ctx.call(dest, 50, &mut gas_meter, vec![]);
 			assert_matches!(result, Ok(_));
@@ -1212,7 +1215,7 @@ mod tests {
 			ctx.overlay.set_balance(&origin, 100);
 			ctx.overlay.set_balance(&dest, 15);
 
-			let mut gas_meter = GasMeter::<Test>::new(1000);
+			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 
 			let result = ctx.instantiate(50, &mut gas_meter, &code, vec![]);
 			assert_matches!(result, Ok(_));
@@ -1246,7 +1249,7 @@ mod tests {
 			let result = ctx.call(
 				dest,
 				100,
-				&mut GasMeter::<Test>::new(1000),
+				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				vec![],
 			);
 
@@ -1283,7 +1286,7 @@ mod tests {
 			let result = ctx.call(
 				dest,
 				0,
-				&mut GasMeter::<Test>::new(1000),
+				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				vec![],
 			);
 
@@ -1314,7 +1317,7 @@ mod tests {
 			let result = ctx.call(
 				dest,
 				0,
-				&mut GasMeter::<Test>::new(1000),
+				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				vec![],
 			);
 
@@ -1342,7 +1345,7 @@ mod tests {
 			let result = ctx.call(
 				BOB,
 				0,
-				&mut GasMeter::<Test>::new(10000),
+				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				vec![1, 2, 3, 4],
 			);
 			assert_matches!(result, Ok(_));
@@ -1367,7 +1370,7 @@ mod tests {
 
 			let result = ctx.instantiate(
 				1,
-				&mut GasMeter::<Test>::new(10000),
+				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				&input_data_ch,
 				vec![1, 2, 3, 4],
 			);
@@ -1417,7 +1420,7 @@ mod tests {
 			let result = ctx.call(
 				BOB,
 				value,
-				&mut GasMeter::<Test>::new(100000),
+				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				vec![],
 			);
 
@@ -1463,7 +1466,7 @@ mod tests {
 			let result = ctx.call(
 				dest,
 				0,
-				&mut GasMeter::<Test>::new(10000),
+				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				vec![],
 			);
 
@@ -1504,7 +1507,7 @@ mod tests {
 			let result = ctx.call(
 				BOB,
 				0,
-				&mut GasMeter::<Test>::new(10000),
+				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				vec![],
 			);
 
@@ -1526,7 +1529,7 @@ mod tests {
 			assert_matches!(
 				ctx.instantiate(
 					0, // <- zero endowment
-					&mut GasMeter::<Test>::new(10000),
+					&mut GasMeter::<Test>::new(GAS_LIMIT),
 					&dummy_ch,
 					vec![],
 				),
@@ -1552,7 +1555,7 @@ mod tests {
 			let instantiated_contract_address = assert_matches!(
 				ctx.instantiate(
 					100,
-					&mut GasMeter::<Test>::new(10000),
+					&mut GasMeter::<Test>::new(GAS_LIMIT),
 					&dummy_ch,
 					vec![],
 				),
@@ -1592,7 +1595,7 @@ mod tests {
 			let instantiated_contract_address = assert_matches!(
 				ctx.instantiate(
 					100,
-					&mut GasMeter::<Test>::new(10000),
+					&mut GasMeter::<Test>::new(GAS_LIMIT),
 					&dummy_ch,
 					vec![],
 				),
@@ -1637,7 +1640,7 @@ mod tests {
 			ctx.overlay.instantiate_contract(&BOB, instantiator_ch).unwrap();
 
 			assert_matches!(
-				ctx.call(BOB, 20, &mut GasMeter::<Test>::new(1000), vec![]),
+				ctx.call(BOB, 20, &mut GasMeter::<Test>::new(GAS_LIMIT), vec![]),
 				Ok(_)
 			);
 
@@ -1697,7 +1700,7 @@ mod tests {
 			ctx.overlay.instantiate_contract(&BOB, instantiator_ch).unwrap();
 
 			assert_matches!(
-				ctx.call(BOB, 20, &mut GasMeter::<Test>::new(1000), vec![]),
+				ctx.call(BOB, 20, &mut GasMeter::<Test>::new(GAS_LIMIT), vec![]),
 				Ok(_)
 			);
 
@@ -1734,7 +1737,7 @@ mod tests {
 				assert_matches!(
 					ctx.instantiate(
 						100,
-						&mut GasMeter::<Test>::new(10000),
+						&mut GasMeter::<Test>::new(GAS_LIMIT),
 						&terminate_ch,
 						vec![],
 					),
@@ -1770,7 +1773,7 @@ mod tests {
 
 			let result = ctx.instantiate(
 				1,
-				&mut GasMeter::<Test>::new(10000),
+				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				&rent_allowance_ch,
 				vec![],
 			);

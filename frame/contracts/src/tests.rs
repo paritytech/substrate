@@ -23,6 +23,7 @@ use crate::{
 	BalanceOf, ComputeDispatchFee, ContractAddressFor, ContractInfo, ContractInfoOf, GenesisConfig,
 	Module, RawAliveContractInfo, RawEvent, Trait, TrieId, TrieIdFromParentCounter, Schedule,
 	TrieIdGenerator, account_db::{AccountDb, DirectAccountDb, OverlayAccountDb},
+	gas::Gas,
 };
 use assert_matches::assert_matches;
 use hex_literal::*;
@@ -214,6 +215,8 @@ const BOB: u64 = 2;
 const CHARLIE: u64 = 3;
 const DJANGO: u64 = 4;
 
+const GAS_LIMIT: Gas = 10_000_000_000;
+
 pub struct ExtBuilder {
 	existential_deposit: u64,
 }
@@ -268,10 +271,10 @@ fn returns_base_call_cost() {
 		Balances::deposit_creating(&ALICE, 100_000_000);
 
 		assert_eq!(
-			Contracts::call(Origin::signed(ALICE), BOB, 0, 100_000, Vec::new()),
+			Contracts::call(Origin::signed(ALICE), BOB, 0, GAS_LIMIT, Vec::new()),
 			Ok(
 				PostDispatchInfo {
-					actual_weight: Some(135),
+					actual_weight: Some(67500000),
 				}
 			)
 		);
@@ -359,13 +362,13 @@ fn instantiate_and_call_and_deposit_event() {
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
 		Balances::deposit_creating(&ALICE, 1_000_000);
 
-		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), GAS_LIMIT, wasm));
 
 		// Check at the end to get hash on error easily
 		let creation = Contracts::instantiate(
 			Origin::signed(ALICE),
 			100,
-			100_000,
+			GAS_LIMIT,
 			code_hash.into(),
 			vec![],
 		);
@@ -433,7 +436,7 @@ fn dispatch_call() {
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		Balances::deposit_creating(&ALICE, 1_000_000);
 
-		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), GAS_LIMIT, wasm));
 
 		// Let's keep this assert even though it's redundant. If you ever need to update the
 		// wasm source this test will fail and will show you the actual hash.
@@ -458,7 +461,7 @@ fn dispatch_call() {
 		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
 			100,
-			100_000,
+			GAS_LIMIT,
 			code_hash.into(),
 			vec![],
 		));
@@ -467,7 +470,7 @@ fn dispatch_call() {
 			Origin::signed(ALICE),
 			BOB, // newly created account
 			0,
-			1_000_000_000_000,
+			GAS_LIMIT,
 			vec![],
 		));
 
@@ -554,7 +557,7 @@ fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		Balances::deposit_creating(&ALICE, 1_000_000);
 
-		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), GAS_LIMIT, wasm));
 
 		// Let's keep this assert even though it's redundant. If you ever need to update the
 		// wasm source this test will fail and will show you the actual hash.
@@ -579,7 +582,7 @@ fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
 		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
 			100,
-			100_000,
+			GAS_LIMIT,
 			code_hash.into(),
 			vec![],
 		));
@@ -591,7 +594,7 @@ fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
 				Origin::signed(ALICE),
 				BOB, // newly created account
 				0,
-				1_000_000_000_000,
+				GAS_LIMIT,
 				vec![],
 			),
 			"contract trapped during execution"
@@ -650,12 +653,12 @@ fn run_out_of_gas() {
 		.execute_with(|| {
 			Balances::deposit_creating(&ALICE, 1_000_000);
 
-			assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
+			assert_ok!(Contracts::put_code(Origin::signed(ALICE), GAS_LIMIT, wasm));
 
 			assert_ok!(Contracts::instantiate(
 				Origin::signed(ALICE),
 				100,
-				100_000,
+				GAS_LIMIT,
 				code_hash.into(),
 				vec![],
 			));
@@ -667,7 +670,7 @@ fn run_out_of_gas() {
 					Origin::signed(ALICE),
 					BOB, // newly created account
 					0,
-					1000,
+					67_500_000,
 					vec![],
 				),
 				"ran out of gas during contract execution"
@@ -696,7 +699,7 @@ fn test_set_rent_code_and_hash() {
 
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), GAS_LIMIT, wasm));
 
 		// If you ever need to update the wasm source this test will fail
 		// and will show you the actual hash.
@@ -728,21 +731,21 @@ fn storage_size() {
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		// Create
 		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), GAS_LIMIT, wasm));
 		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
 			30_000,
-			100_000, code_hash.into(),
+			GAS_LIMIT, code_hash.into(),
 			<Test as pallet_balances::Trait>::Balance::from(1_000u32).encode() // rent allowance
 		));
 		let bob_contract = ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
 		assert_eq!(bob_contract.storage_size, <Test as Trait>::StorageSizeOffset::get() + 4);
 
-		assert_ok!(Contracts::call(Origin::signed(ALICE), BOB, 0, 100_000, call::set_storage_4_byte()));
+		assert_ok!(Contracts::call(Origin::signed(ALICE), BOB, 0, GAS_LIMIT, call::set_storage_4_byte()));
 		let bob_contract = ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
 		assert_eq!(bob_contract.storage_size, <Test as Trait>::StorageSizeOffset::get() + 4 + 4);
 
-		assert_ok!(Contracts::call(Origin::signed(ALICE), BOB, 0, 100_000, call::remove_storage_4_byte()));
+		assert_ok!(Contracts::call(Origin::signed(ALICE), BOB, 0, GAS_LIMIT, call::remove_storage_4_byte()));
 		let bob_contract = ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
 		assert_eq!(bob_contract.storage_size, <Test as Trait>::StorageSizeOffset::get() + 4);
 	});
@@ -765,11 +768,11 @@ fn deduct_blocks() {
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		// Create
 		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), GAS_LIMIT, wasm));
 		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
 			30_000,
-			100_000, code_hash.into(),
+			GAS_LIMIT, code_hash.into(),
 			<Test as pallet_balances::Trait>::Balance::from(1_000u32).encode() // rent allowance
 		));
 
@@ -781,7 +784,7 @@ fn deduct_blocks() {
 		initialize_block(5);
 
 		// Trigger rent through call
-		assert_ok!(Contracts::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
+		assert_ok!(Contracts::call(Origin::signed(ALICE), BOB, 0, GAS_LIMIT, call::null()));
 
 		// Check result
 		let rent = (8 + 4 - 3) // storage size = size_offset + deploy_set_storage - deposit_offset
@@ -796,7 +799,7 @@ fn deduct_blocks() {
 		initialize_block(12);
 
 		// Trigger rent through call
-		assert_ok!(Contracts::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
+		assert_ok!(Contracts::call(Origin::signed(ALICE), BOB, 0, GAS_LIMIT, call::null()));
 
 		// Check result
 		let rent_2 = (8 + 4 - 2) // storage size = size_offset + deploy_set_storage - deposit_offset
@@ -808,7 +811,7 @@ fn deduct_blocks() {
 		assert_eq!(Balances::free_balance(BOB), 30_000 - rent - rent_2);
 
 		// Second call on same block should have no effect on rent
-		assert_ok!(Contracts::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
+		assert_ok!(Contracts::call(Origin::signed(ALICE), BOB, 0, GAS_LIMIT, call::null()));
 
 		let bob_contract = ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap();
 		assert_eq!(bob_contract.rent_allowance, 1_000 - rent - rent_2);
@@ -821,7 +824,7 @@ fn deduct_blocks() {
 fn call_contract_removals() {
 	removals(|| {
 		// Call on already-removed account might fail, and this is fine.
-		Contracts::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null());
+		Contracts::call(Origin::signed(ALICE), BOB, 0, GAS_LIMIT, call::null());
 		true
 	});
 }
@@ -859,11 +862,11 @@ fn claim_surcharge(blocks: u64, trigger_call: impl Fn() -> bool, removes: bool) 
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		// Create
 		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), GAS_LIMIT, wasm));
 		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
 			100,
-			100_000, code_hash.into(),
+			GAS_LIMIT, code_hash.into(),
 			<Test as pallet_balances::Trait>::Balance::from(1_000u32).encode() // rent allowance
 		));
 
@@ -892,11 +895,11 @@ fn removals(trigger_call: impl Fn() -> bool) {
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		// Create
 		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm.clone()));
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), GAS_LIMIT, wasm.clone()));
 		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
 			100,
-			100_000, code_hash.into(),
+			GAS_LIMIT, code_hash.into(),
 			<Test as pallet_balances::Trait>::Balance::from(1_000u32).encode() // rent allowance
 		));
 
@@ -928,11 +931,11 @@ fn removals(trigger_call: impl Fn() -> bool) {
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		// Create
 		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm.clone()));
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), GAS_LIMIT, wasm.clone()));
 		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
 			1_000,
-			100_000, code_hash.into(),
+			GAS_LIMIT, code_hash.into(),
 			<Test as pallet_balances::Trait>::Balance::from(100u32).encode() // rent allowance
 		));
 
@@ -963,11 +966,11 @@ fn removals(trigger_call: impl Fn() -> bool) {
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		// Create
 		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm.clone()));
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), GAS_LIMIT, wasm.clone()));
 		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
 			50+Balances::minimum_balance(),
-			100_000, code_hash.into(),
+			GAS_LIMIT, code_hash.into(),
 			<Test as pallet_balances::Trait>::Balance::from(1_000u32).encode() // rent allowance
 		));
 
@@ -977,7 +980,7 @@ fn removals(trigger_call: impl Fn() -> bool) {
 		assert_eq!(Balances::free_balance(BOB), 50 + Balances::minimum_balance());
 
 		// Transfer funds
-		assert_ok!(Contracts::call(Origin::signed(ALICE), BOB, 0, 100_000_000_000, call::transfer()));
+		assert_ok!(Contracts::call(Origin::signed(ALICE), BOB, 0, GAS_LIMIT, call::transfer()));
 		assert_eq!(ContractInfoOf::<Test>::get(BOB).unwrap().get_alive().unwrap().rent_allowance, 1_000);
 		assert_eq!(Balances::free_balance(BOB), Balances::minimum_balance());
 
@@ -1007,23 +1010,23 @@ fn call_removed_contract() {
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		// Create
 		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm.clone()));
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), GAS_LIMIT, wasm.clone()));
 		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
 			100,
-			100_000, code_hash.into(),
+			GAS_LIMIT, code_hash.into(),
 			<Test as pallet_balances::Trait>::Balance::from(1_000u32).encode() // rent allowance
 		));
 
 		// Calling contract should succeed.
-		assert_ok!(Contracts::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
+		assert_ok!(Contracts::call(Origin::signed(ALICE), BOB, 0, GAS_LIMIT, call::null()));
 
 		// Advance blocks
 		initialize_block(10);
 
 		// Calling contract should remove contract and fail.
 		assert_err_ignore_postinfo!(
-			Contracts::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()),
+			Contracts::call(Origin::signed(ALICE), BOB, 0, GAS_LIMIT, call::null()),
 			"contract has been evicted"
 		);
 		// Calling a contract that is about to evict shall emit an event.
@@ -1037,7 +1040,7 @@ fn call_removed_contract() {
 
 		// Subsequent contract calls should also fail.
 		assert_err_ignore_postinfo!(
-			Contracts::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()),
+			Contracts::call(Origin::signed(ALICE), BOB, 0, GAS_LIMIT, call::null()),
 			"contract has been evicted"
 		);
 	})
@@ -1051,11 +1054,11 @@ fn default_rent_allowance_on_instantiate() {
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		// Create
 		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), GAS_LIMIT, wasm));
 		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
 			30_000,
-			100_000,
+			GAS_LIMIT,
 			code_hash.into(),
 			vec![],
 		));
@@ -1068,7 +1071,7 @@ fn default_rent_allowance_on_instantiate() {
 		initialize_block(5);
 
 		// Trigger rent through call
-		assert_ok!(Contracts::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()));
+		assert_ok!(Contracts::call(Origin::signed(ALICE), BOB, 0, GAS_LIMIT, call::null()));
 
 		// Check contract is still alive
 		let bob_contract = ContractInfoOf::<Test>::get(BOB).unwrap().get_alive();
@@ -1104,8 +1107,8 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, restoration_wasm));
-		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, set_rent_wasm));
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), GAS_LIMIT, restoration_wasm));
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), GAS_LIMIT, set_rent_wasm));
 
 		// If you ever need to update the wasm source this test will fail
 		// and will show you the actual hash.
@@ -1137,7 +1140,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
 			30_000,
-			100_000,
+			GAS_LIMIT,
 			set_rent_code_hash.into(),
 			<Test as pallet_balances::Trait>::Balance::from(0u32).encode()
 		));
@@ -1150,7 +1153,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 		if test_different_storage {
 			assert_ok!(Contracts::call(
 				Origin::signed(ALICE),
-				BOB, 0, 100_000,
+				BOB, 0, GAS_LIMIT,
 				call::set_storage_4_byte())
 			);
 		}
@@ -1164,7 +1167,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 		// Call `BOB`, which makes it pay rent. Since the rent allowance is set to 0
 		// we expect that it will get removed leaving tombstone.
 		assert_err_ignore_postinfo!(
-			Contracts::call(Origin::signed(ALICE), BOB, 0, 100_000, call::null()),
+			Contracts::call(Origin::signed(ALICE), BOB, 0, GAS_LIMIT, call::null()),
 			"contract has been evicted"
 		);
 		assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
@@ -1186,7 +1189,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 		assert_ok!(Contracts::instantiate(
 			Origin::signed(CHARLIE),
 			30_000,
-			100_000,
+			GAS_LIMIT,
 			restoration_code_hash.into(),
 			<Test as pallet_balances::Trait>::Balance::from(0u32).encode()
 		));
@@ -1206,7 +1209,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 			Origin::signed(ALICE),
 			DJANGO,
 			0,
-			100_000,
+			GAS_LIMIT,
 			vec![],
 		));
 
@@ -1320,11 +1323,11 @@ fn storage_max_value_limit() {
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		// Create
 		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), GAS_LIMIT, wasm));
 		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
 			30_000,
-			100_000,
+			GAS_LIMIT,
 			code_hash.into(),
 			vec![],
 		));
@@ -1338,7 +1341,7 @@ fn storage_max_value_limit() {
 			Origin::signed(ALICE),
 			BOB,
 			0,
-			100_000,
+			GAS_LIMIT,
 			Encode::encode(&self::MaxValueSize::get()),
 		));
 
@@ -1348,7 +1351,7 @@ fn storage_max_value_limit() {
 				Origin::signed(ALICE),
 				BOB,
 				0,
-				100_000,
+				GAS_LIMIT,
 				Encode::encode(&(self::MaxValueSize::get() + 1)),
 			),
 			"contract trapped during execution"
@@ -1366,13 +1369,13 @@ fn deploy_and_call_other_contract() {
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		// Create
 		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, callee_wasm));
-		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, caller_wasm));
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), GAS_LIMIT, callee_wasm));
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), GAS_LIMIT, caller_wasm));
 
 		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
 			100_000,
-			100_000,
+			GAS_LIMIT,
 			caller_code_hash.into(),
 			vec![],
 		));
@@ -1383,7 +1386,7 @@ fn deploy_and_call_other_contract() {
 			Origin::signed(ALICE),
 			BOB,
 			0,
-			200_000,
+			GAS_LIMIT,
 			callee_code_hash.as_ref().to_vec(),
 		));
 	});
@@ -1394,13 +1397,13 @@ fn cannot_self_destruct_through_draning() {
 	let (wasm, code_hash) = compile_module::<Test>(&load_wasm("drain.wat")).unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), GAS_LIMIT, wasm));
 
 		// Instantiate the BOB contract.
 		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
 			100_000,
-			100_000,
+			GAS_LIMIT,
 			code_hash.into(),
 			vec![],
 		));
@@ -1418,7 +1421,7 @@ fn cannot_self_destruct_through_draning() {
 				Origin::signed(ALICE),
 				BOB,
 				0,
-				100_000,
+				GAS_LIMIT,
 				vec![],
 			),
 			"contract trapped during execution"
@@ -1432,13 +1435,13 @@ fn cannot_self_destruct_while_live() {
 		.unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), GAS_LIMIT, wasm));
 
 		// Instantiate the BOB contract.
 		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
 			100_000,
-			100_000,
+			GAS_LIMIT,
 			code_hash.into(),
 			vec![],
 		));
@@ -1456,7 +1459,7 @@ fn cannot_self_destruct_while_live() {
 				Origin::signed(ALICE),
 				BOB,
 				0,
-				100_000,
+				GAS_LIMIT,
 				vec![0],
 			),
 			"contract trapped during execution"
@@ -1476,13 +1479,13 @@ fn self_destruct_works() {
 		.unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), GAS_LIMIT, wasm));
 
 		// Instantiate the BOB contract.
 		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
 			100_000,
-			100_000,
+			GAS_LIMIT,
 			code_hash.into(),
 			vec![],
 		));
@@ -1499,7 +1502,7 @@ fn self_destruct_works() {
 				Origin::signed(ALICE),
 				BOB,
 				0,
-				100_000,
+				GAS_LIMIT,
 				vec![],
 			),
 			Ok(_)
@@ -1525,15 +1528,15 @@ fn destroy_contract_and_transfer_funds() {
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		// Create
 		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, callee_wasm));
-		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, caller_wasm));
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), GAS_LIMIT, callee_wasm));
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), GAS_LIMIT, caller_wasm));
 
 		// This deploys the BOB contract, which in turn deploys the CHARLIE contract during
 		// construction.
 		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
 			200_000,
-			100_000,
+			GAS_LIMIT,
 			caller_code_hash.into(),
 			callee_code_hash.as_ref().to_vec(),
 		));
@@ -1549,7 +1552,7 @@ fn destroy_contract_and_transfer_funds() {
 			Origin::signed(ALICE),
 			BOB,
 			0,
-			100_000,
+			GAS_LIMIT,
 			CHARLIE.encode(),
 		));
 
@@ -1564,7 +1567,7 @@ fn cannot_self_destruct_in_constructor() {
 		compile_module::<Test>(&load_wasm("self_destructing_constructor.wat")).unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), GAS_LIMIT, wasm));
 
 		// Fail to instantiate the BOB because the call that is issued in the deploy
 		// function exhausts all balances which puts it below the existential deposit.
@@ -1572,7 +1575,7 @@ fn cannot_self_destruct_in_constructor() {
 			Contracts::instantiate(
 				Origin::signed(ALICE),
 				100_000,
-				100_000,
+				GAS_LIMIT,
 				code_hash.into(),
 				vec![],
 			),
@@ -1592,11 +1595,11 @@ fn get_runtime_storage() {
 			0x14144020u32.to_le_bytes().to_vec().as_ref()
 		);
 
-		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), GAS_LIMIT, wasm));
 		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
 			100,
-			100_000,
+			GAS_LIMIT,
 			code_hash.into(),
 			vec![],
 		));
@@ -1604,7 +1607,7 @@ fn get_runtime_storage() {
 			Origin::signed(ALICE),
 			BOB,
 			0,
-			100_000,
+			GAS_LIMIT,
 			vec![],
 		));
 	});
@@ -1616,13 +1619,13 @@ fn crypto_hashes() {
 
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		Balances::deposit_creating(&ALICE, 1_000_000);
-		assert_ok!(Contracts::put_code(Origin::signed(ALICE), 100_000, wasm));
+		assert_ok!(Contracts::put_code(Origin::signed(ALICE), GAS_LIMIT, wasm));
 
 		// Instantiate the CRYPTO_HASHES contract.
 		assert_ok!(Contracts::instantiate(
 			Origin::signed(ALICE),
 			100_000,
-			100_000,
+			GAS_LIMIT,
 			code_hash.into(),
 			vec![],
 		));
@@ -1651,7 +1654,7 @@ fn crypto_hashes() {
 				ALICE,
 				BOB,
 				0,
-				100_000,
+				GAS_LIMIT,
 				params,
 			).unwrap();
 			assert_eq!(result.status, 0);
