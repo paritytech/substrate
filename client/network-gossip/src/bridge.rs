@@ -294,9 +294,12 @@ impl<B: BlockT> Future for GossipEngine<B> {
 mod tests {
 	use async_std::task::spawn;
 	use crate::{ValidationResult, ValidatorContext};
-	use futures::{channel::mpsc::{channel, Sender}, executor::block_on_stream};
+	use futures::{channel::mpsc::{unbounded, UnboundedSender}, executor::{block_on, block_on_stream}, future::poll_fn};
+	use quickcheck::{Arbitrary, Gen, QuickCheck};
+	use rand::Rng;
 	use sc_network::ObservedRole;
 	use sp_runtime::{testing::H256, traits::{Block as BlockT}};
+	use std::convert::TryInto;
 	use std::sync::{Arc, Mutex};
 	use substrate_test_runtime_client::runtime::Block;
 	use super::*;
@@ -308,12 +311,12 @@ mod tests {
 
 	#[derive(Clone, Default)]
 	struct TestNetworkInner {
-		event_senders: Vec<Sender<Event>>,
+		event_senders: Vec<UnboundedSender<Event>>,
 	}
 
 	impl<B: BlockT> Network<B> for TestNetwork {
 		fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
-			let (tx, rx) = channel(100);
+			let (tx, rx) = unbounded();
 			self.inner.lock().unwrap().event_senders.push(tx);
 
 			Box::pin(rx)
@@ -366,7 +369,7 @@ mod tests {
 		// Drop network event stream sender side.
 		drop(network.inner.lock().unwrap().event_senders.pop());
 
-		futures::executor::block_on(futures::future::poll_fn(move |ctx| {
+		block_on(poll_fn(move |ctx| {
 			if let Poll::Pending = gossip_engine.poll_unpin(ctx) {
 				panic!(
 					"Expected gossip engine to finish on first poll, given that \
@@ -404,7 +407,7 @@ mod tests {
 				engine_id: engine_id.clone(),
 				role: ObservedRole::Authority,
 			}
-		).unwrap();
+		).expect("Event stream is unbounded; qed.");
 
 		let messages = vec![vec![1], vec![2]];
 		let events = messages.iter().cloned().map(|m| {
@@ -415,7 +418,7 @@ mod tests {
 		}).collect::<Vec<_>>();
 
 		// Send first event before subscribing.
-		event_sender.start_send(events[0].clone()).unwrap();
+		event_sender.start_send(events[0].clone()).expect("Event stream is unbounded; qed.");
 
 		let mut subscribers = vec![];
 		for _ in 0..2 {
@@ -423,7 +426,7 @@ mod tests {
 		}
 
 		// Send second event after subscribing.
-		event_sender.start_send(events[1].clone()).unwrap();
+		event_sender.start_send(events[1].clone()).expect("Event stream is unbounded; qed.");
 
 		spawn(gossip_engine);
 
@@ -443,5 +446,203 @@ mod tests {
 				);
 			}
 		}
+	}
+
+	#[test]
+	fn forwarding_to_different_size_and_topic_channels() {
+		#[derive(Clone, Debug)]
+		struct ChannelLengthAndTopic{
+			length: usize,
+			topic: H256,
+		}
+
+		impl Arbitrary for ChannelLengthAndTopic {
+			fn arbitrary<G: Gen>(g: &mut G) -> Self {
+				Self {
+					length: g.gen_range(0, 100),
+					// Make sure channel topics and message topics overlap by choosing a small
+					// range.
+					topic: H256::from_low_u64_ne(g.gen_range(0, 10)),
+				}
+			}
+		}
+
+		#[derive(Clone, Debug)]
+		struct Message {
+			topic: H256,
+		}
+
+		impl Arbitrary for Message{
+			fn arbitrary<G: Gen>(g: &mut G) -> Self {
+				Self {
+					// Make sure channel topics and message topics overlap by choosing a small
+					// range.
+					topic: H256::from_low_u64_ne(g.gen_range(0, 10)),
+				}
+			}
+		}
+
+		/// Validator that always returns `ProcessAndKeep` interpreting the first 32 bytes of data
+		/// as the message topic.
+		struct TestValidator;
+
+		impl Validator<Block> for TestValidator {
+			fn validate(
+				&self,
+				_context: &mut dyn ValidatorContext<Block>,
+				_sender: &PeerId,
+				data: &[u8],
+			) -> ValidationResult<H256> {
+				ValidationResult::ProcessAndKeep(H256::from_slice(&data[0..32]))
+			}
+		}
+
+		fn prop(channels: Vec<ChannelLengthAndTopic>, notifications: Vec<Vec<Message>>) {
+			let engine_id = [1, 2, 3, 4];
+			let remote_peer = PeerId::random();
+			let network = TestNetwork::default();
+
+			let num_channels_per_topic = channels.iter()
+				.fold(HashMap::new(), |mut acc, ChannelLengthAndTopic { topic, .. }| {
+					acc.entry(topic).and_modify(|e| *e += 1).or_insert(1);
+					acc
+				});
+
+			let expected_msgs_per_topic_all_chan = notifications.iter()
+				.fold(HashMap::new(), |mut acc, messages| {
+					for message in messages {
+						acc.entry(message.topic).and_modify(|e| *e += 1).or_insert(1);
+					}
+					acc
+				})
+				.into_iter()
+				// Messages are cloned for each channel with the corresponding topic, thus multiply
+				// with the amount of channels per topic. If there is no channel for a given topic,
+				// don't expect any messages for the topic to be received.
+				.map(|(topic, num)| (topic, num_channels_per_topic.get(&topic).unwrap_or(&0) * num))
+				.collect::<HashMap<H256, _>>();
+
+			let mut gossip_engine = GossipEngine::<Block>::new(
+				network.clone(),
+				engine_id.clone(),
+				"my_protocol".as_bytes(),
+				Arc::new(TestValidator{}),
+			);
+
+			// Create channels.
+			let (txs, mut rxs) = channels.iter()
+				.map(|ChannelLengthAndTopic { length, topic }| {
+					(topic.clone(), channel(*length))
+				})
+				.fold((vec![], vec![]), |mut acc, (topic, (tx, rx))| {
+					acc.0.push((topic, tx)); acc.1.push((topic, rx));
+					acc
+				});
+
+			// Insert sender sides into `gossip_engine`.
+			for (topic, tx) in txs {
+				match gossip_engine.message_sinks.get_mut(&topic) {
+					Some(entry) =>  entry.push(tx),
+					None => {gossip_engine.message_sinks.insert(topic, vec![tx]);},
+				}
+			}
+
+
+			let mut event_sender = network.inner.lock()
+				.unwrap()
+				.event_senders
+				.pop()
+				.unwrap();
+
+			// Register the remote peer.
+			event_sender.start_send(
+				Event::NotificationStreamOpened {
+					remote: remote_peer.clone(),
+					engine_id: engine_id.clone(),
+					role: ObservedRole::Authority,
+				}
+			).expect("Event stream is unbounded; qed.");
+
+			// Send messages into the network event stream.
+			for (i_notification, messages) in notifications.iter().enumerate() {
+				let messages = messages.into_iter().enumerate()
+					.map(|(i_message, Message { topic })| {
+						// Embed the topic in the first 256 bytes of the message to be extracted by
+						// the [`TestValidator`] later on.
+						let mut message = topic.as_bytes().to_vec();
+
+						// Make sure the message is unique via `i_notification` and `i_message` to
+						// ensure [`ConsensusBridge`] does not deduplicate it.
+						message.push(i_notification.try_into().unwrap());
+						message.push(i_message.try_into().unwrap());
+
+						(engine_id, message.into())
+					}).collect();
+
+				event_sender.start_send(Event::NotificationsReceived {
+					remote: remote_peer.clone(),
+					messages,
+				}).expect("Event stream is unbounded; qed.");
+			}
+
+			let mut received_msgs_per_topic_all_chan = HashMap::<H256, _>::new();
+
+			// Poll both gossip engine and each receiver and track the amount of received messages.
+			block_on(poll_fn(|cx| {
+				loop {
+					if let Poll::Ready(()) = gossip_engine.poll_unpin(cx) {
+						unreachable!(
+							"Event stream sender side is not dropped, thus gossip engine does not \
+							 terminate",
+						);
+					}
+
+					let mut progress = false;
+
+					for (topic, rx) in rxs.iter_mut() {
+						match rx.poll_next_unpin(cx) {
+							Poll::Ready(Some(_)) => {
+								progress = true;
+								received_msgs_per_topic_all_chan.entry(*topic)
+									.and_modify(|e| *e += 1)
+									.or_insert(1);
+							},
+							Poll::Ready(None) => unreachable!(
+								"Sender side of channel is never dropped",
+							),
+							Poll::Pending => {},
+						}
+					}
+
+					if !progress {
+						break;
+					}
+				}
+				Poll::Ready(())
+			}));
+
+			// Compare amount of expected messages with amount of received messages.
+			for (expected_topic, expected_num) in expected_msgs_per_topic_all_chan.iter() {
+				assert_eq!(
+					received_msgs_per_topic_all_chan.get(&expected_topic).unwrap_or(&0),
+					expected_num,
+				);
+			}
+			for (received_topic, received_num) in expected_msgs_per_topic_all_chan.iter() {
+				assert_eq!(
+					expected_msgs_per_topic_all_chan.get(&received_topic).unwrap_or(&0),
+					received_num,
+				);
+			}
+		}
+
+		// Past regressions.
+		prop(vec![], vec![vec![Message{ topic: H256::default()}]]);
+		prop(
+			vec![ChannelLengthAndTopic {length: 71, topic: H256::default()}],
+			vec![vec![Message{ topic: H256::default()}]],
+		);
+
+		QuickCheck::new().quickcheck(prop as fn(_, _))
 	}
 }
