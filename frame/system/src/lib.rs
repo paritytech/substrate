@@ -120,7 +120,10 @@ use frame_support::{
 		Contains, Get, ModuleToIndex, OnNewAccount, OnKilledAccount, IsDeadAccount, Happened,
 		StoredMap, EnsureOrigin,
 	},
-	weights::{Weight, MINIMUM_WEIGHT, RuntimeDbWeight, DispatchInfo, PostDispatchInfo, DispatchClass, FunctionOf}
+	weights::{
+		Weight, MINIMUM_WEIGHT, RuntimeDbWeight, DispatchInfo, PostDispatchInfo, DispatchClass,
+		FunctionOf, Pays,
+	}
 };
 use codec::{Encode, Decode, FullCodec, EncodeLike};
 
@@ -472,13 +475,19 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
+		/// The maximum weight of a block.
+		const MaximumBlockWeight: Weight = T::MaximumBlockWeight::get();
+
+		/// The maximum length of a block (in bytes).
+		const MaximumBlockLength: u32 = T::MaximumBlockLength::get();
+
 		/// A dispatch that will fill the block weight up to the given ratio.
 		// TODO: This should only be available for testing, rather than in general usage, but
 		// that's not possible at present (since it's within the decl_module macro).
 		#[weight = FunctionOf(
 			|(ratio,): (&Perbill,)| *ratio * T::MaximumBlockWeight::get(),
 			DispatchClass::Operational,
-			true,
+			Pays::Yes,
 		)]
 		fn fill_block(origin, _ratio: Perbill) {
 			ensure_root(origin)?;
@@ -1990,7 +1999,7 @@ pub(crate) mod tests {
 	fn signed_ext_check_weight_works_operational_tx() {
 		new_test_ext().execute_with(|| {
 			let normal = DispatchInfo { weight: 100, ..Default::default() };
-			let op = DispatchInfo { weight: 100, class: DispatchClass::Operational, pays_fee: true };
+			let op = DispatchInfo { weight: 100, class: DispatchClass::Operational, pays_fee: Pays::Yes };
 			let len = 0_usize;
 			let normal_limit = normal_weight_limit();
 
@@ -2012,8 +2021,8 @@ pub(crate) mod tests {
 	#[test]
 	fn signed_ext_check_weight_priority_works() {
 		new_test_ext().execute_with(|| {
-			let normal = DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: true };
-			let op = DispatchInfo { weight: 100, class: DispatchClass::Operational, pays_fee: true };
+			let normal = DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: Pays::Yes };
+			let op = DispatchInfo { weight: 100, class: DispatchClass::Operational, pays_fee: Pays::Yes };
 			let len = 0_usize;
 
 			let priority = CheckWeight::<Test>(PhantomData)
@@ -2046,7 +2055,7 @@ pub(crate) mod tests {
 			reset_check_weight(&normal, normal_limit + 1, true);
 
 			// Operational ones don't have this limit.
-			let op = DispatchInfo { weight: 0, class: DispatchClass::Operational, pays_fee: true };
+			let op = DispatchInfo { weight: 0, class: DispatchClass::Operational, pays_fee: Pays::Yes };
 			reset_check_weight(&op, normal_limit, false);
 			reset_check_weight(&op, normal_limit + 100, false);
 			reset_check_weight(&op, 1024, false);
@@ -2073,7 +2082,7 @@ pub(crate) mod tests {
 	#[test]
 	fn signed_ext_check_era_should_change_longevity() {
 		new_test_ext().execute_with(|| {
-			let normal = DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: true };
+			let normal = DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: Pays::Yes };
 			let len = 0_usize;
 			let ext = (
 				CheckWeight::<Test>(PhantomData),

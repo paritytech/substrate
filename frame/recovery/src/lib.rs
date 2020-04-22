@@ -159,7 +159,7 @@ use codec::{Encode, Decode};
 
 use frame_support::{
 	decl_module, decl_event, decl_storage, decl_error, ensure,
-	Parameter, RuntimeDebug, weights::{MINIMUM_WEIGHT, GetDispatchInfo, FunctionOf},
+	Parameter, RuntimeDebug, weights::{MINIMUM_WEIGHT, GetDispatchInfo, FunctionOf, Pays},
 	traits::{Currency, ReservableCurrency, Get, BalanceStatus},
 	dispatch::PostDispatchInfo,
 };
@@ -338,7 +338,7 @@ decl_module! {
 		#[weight = FunctionOf(
 			|args: (&T::AccountId, &Box<<T as Trait>::Call>)| args.1.get_dispatch_info().weight + 10_000,
 			|args: (&T::AccountId, &Box<<T as Trait>::Call>)| args.1.get_dispatch_info().class,
-			true
+			Pays::Yes,
 		)]
 		fn as_recovered(origin,
 			account: T::AccountId,

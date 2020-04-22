@@ -35,7 +35,7 @@
 //! configuration:
 //!
 //! 1. Define only weight, **in which case `ClassifyDispatch` will be `Normal` and `PaysFee` will be
-//!    `true`**.
+//!    `Yes`**.
 //!
 //! ```
 //! # use frame_system::{self as system, Trait};
@@ -48,7 +48,7 @@
 //! # fn main() {}
 //! ```
 //!
-//! 2. Define weight and class, **in which case `PaysFee` would be `true`**.
+//! 2.1 Define weight and class, **in which case `PaysFee` would be `Yes`**.
 //!
 //! ```
 //! # use frame_system::{self as system, Trait};
@@ -62,14 +62,28 @@
 //! # fn main() {}
 //! ```
 //!
+//! 2.2 Define weight and `PaysFee`, **in which case `ClassifyDispatch` would be `Normal`**.
+//!
+//! ```
+//! # use frame_system::{self as system, Trait};
+//! # use frame_support::weights::Pays;
+//! frame_support::decl_module! {
+//!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//!         #[weight = (1000, Pays::No)]
+//!         fn dispatching(origin) { unimplemented!() }
+//!     }
+//! }
+//! # fn main() {}
+//! ```
+//!
 //! 3. Define all 3 parameters.
 //!
 //! ```
 //! # use frame_system::{self as system, Trait};
-//! # use frame_support::weights::DispatchClass;
+//! # use frame_support::weights::{DispatchClass, Pays};
 //! frame_support::decl_module! {
 //!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//!         #[weight = (1000, DispatchClass::Operational, false)]
+//!         #[weight = (1000, DispatchClass::Operational, Pays::No)]
 //!         fn dispatching(origin) { unimplemented!() }
 //!     }
 //! }
@@ -86,7 +100,7 @@
 //!
 //! ```
 //! # use frame_system::{self as system, Trait};
-//! # use frame_support::weights::{DispatchClass, FunctionOf};
+//! # use frame_support::weights::{DispatchClass, FunctionOf, Pays};
 //! frame_support::decl_module! {
 //!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 //!         #[weight = FunctionOf(
@@ -95,7 +109,7 @@
 //! 			// class, fixed.
 //! 			DispatchClass::Operational,
 //! 			// pays fee, function.
-//! 			|args: (&u32, &u64)| *args.0 > 1000,
+//! 			|args: (&u32, &u64)| if *args.0 > 1000 { Pays::Yes } else { Pays::No },
 //! 		)]
 //!         fn dispatching(origin, a: u32, b: u64) { unimplemented!() }
 //!     }
@@ -146,10 +160,23 @@ pub trait ClassifyDispatch<T> {
 }
 
 /// Indicates if dispatch function should pay fees or not.
-/// If set to false, the block resource limits are applied, yet no fee is deducted.
+/// If set to `Pays::No`, the block resource limits are applied, yet no fee is deducted.
 pub trait PaysFee<T> {
-	fn pays_fee(&self, _target: T) -> bool {
-		true
+	fn pays_fee(&self, _target: T) -> Pays;
+}
+
+/// Explicit enum to denote if a transaction pays fee or not.
+#[derive(Clone, Copy, Eq, PartialEq, RuntimeDebug, Encode, Decode)]
+pub enum Pays {
+	/// Transactor will pay related fees.
+	Yes,
+	/// Transactor will NOT pay related fees.
+	No,
+}
+
+impl Default for Pays {
+	fn default() -> Self {
+		Self::Yes
 	}
 }
 
@@ -191,7 +218,7 @@ pub struct DispatchInfo {
 	/// Class of this transaction.
 	pub class: DispatchClass,
 	/// Does this transaction pay fees.
-	pub pays_fee: bool,
+	pub pays_fee: Pays,
 }
 
 /// A `Dispatchable` function (aka transaction) that can carry some static information along with
@@ -289,25 +316,25 @@ impl<T> ClassifyDispatch<T> for Weight {
 }
 
 impl<T> PaysFee<T> for Weight {
-	fn pays_fee(&self, _: T) -> bool {
-		true
+	fn pays_fee(&self, _: T) -> Pays {
+		Pays::Yes
 	}
 }
 
-impl<T> WeighData<T> for (Weight, DispatchClass, bool) {
+impl<T> WeighData<T> for (Weight, DispatchClass, Pays) {
 	fn weigh_data(&self, _: T) -> Weight {
 		return self.0
 	}
 }
 
-impl<T> ClassifyDispatch<T> for (Weight, DispatchClass, bool) {
+impl<T> ClassifyDispatch<T> for (Weight, DispatchClass, Pays) {
 	fn classify_dispatch(&self, _: T) -> DispatchClass {
 		self.1
 	}
 }
 
-impl<T> PaysFee<T> for (Weight, DispatchClass, bool) {
-	fn pays_fee(&self, _: T) -> bool {
+impl<T> PaysFee<T> for (Weight, DispatchClass, Pays) {
+	fn pays_fee(&self, _: T) -> Pays {
 		self.2
 	}
 }
@@ -325,25 +352,25 @@ impl<T> ClassifyDispatch<T> for (Weight, DispatchClass) {
 }
 
 impl<T> PaysFee<T> for (Weight, DispatchClass) {
-	fn pays_fee(&self, _: T) -> bool {
-		true
+	fn pays_fee(&self, _: T) -> Pays {
+		Pays::Yes
 	}
 }
 
-impl<T> WeighData<T> for (Weight, bool) {
+impl<T> WeighData<T> for (Weight, Pays) {
 	fn weigh_data(&self, _: T) -> Weight {
 		return self.0
 	}
 }
 
-impl<T> ClassifyDispatch<T> for (Weight, bool) {
+impl<T> ClassifyDispatch<T> for (Weight, Pays) {
 	fn classify_dispatch(&self, _: T) -> DispatchClass {
 		DispatchClass::Normal
 	}
 }
 
-impl<T> PaysFee<T> for (Weight, bool) {
-	fn pays_fee(&self, _: T) -> bool {
+impl<T> PaysFee<T> for (Weight, Pays) {
+	fn pays_fee(&self, _: T) -> Pays {
 		self.1
 	}
 }
@@ -355,8 +382,8 @@ impl<T> PaysFee<T> for (Weight, bool) {
 ///   argument list as the dispatched, wrapped in a tuple.
 /// - `CD`: a raw `DispatchClass` value or a closure that returns a `DispatchClass`
 ///   with the same argument list as the dispatched, wrapped in a tuple.
-/// - `PF`: a `bool` for whether this dispatch pays fee or not or a closure that
-///   returns a bool with the same argument list as the dispatched, wrapped in a tuple.
+/// - `PF`: a `Pays` variant for whether this dispatch pays fee or not or a closure that
+///   returns a `Pays` variant with the same argument list as the dispatched, wrapped in a tuple.
 pub struct FunctionOf<WD, CD, PF>(pub WD, pub CD, pub PF);
 
 // `WeighData` as a raw value
@@ -392,17 +419,17 @@ impl<Args, WD, CD, PF> ClassifyDispatch<Args> for FunctionOf<WD, CD, PF> where
 }
 
 // `PaysFee` as a raw value
-impl<Args, WD, CD> PaysFee<Args> for FunctionOf<WD, CD, bool> {
-	fn pays_fee(&self, _: Args) -> bool {
+impl<Args, WD, CD> PaysFee<Args> for FunctionOf<WD, CD, Pays> {
+	fn pays_fee(&self, _: Args) -> Pays {
 		self.2
 	}
 }
 
 // `PaysFee` as a closure
 impl<Args, WD, CD, PF> PaysFee<Args> for FunctionOf<WD, CD, PF> where
-	PF : Fn(Args) -> bool
+	PF : Fn(Args) -> Pays
 {
-	fn pays_fee(&self, args: Args) -> bool {
+	fn pays_fee(&self, args: Args) -> Pays {
 		(self.2)(args)
 	}
 }
@@ -437,7 +464,7 @@ impl<Call: Encode, Extra: Encode> GetDispatchInfo for sp_runtime::testing::TestX
 		// for testing: weight == size.
 		DispatchInfo {
 			weight: self.encode().len() as _,
-			pays_fee: true,
+			pays_fee: Pays::Yes,
 			..Default::default()
 		}
 	}
@@ -504,14 +531,17 @@ mod tests {
 			#[weight = (1000, DispatchClass::Mandatory)]
 			fn f01(_origin) { unimplemented!(); }
 
-			#[weight = (1000, DispatchClass::Operational, false)]
+			#[weight = (1000, Pays::No)]
 			fn f02(_origin) { unimplemented!(); }
 
+			#[weight = (1000, DispatchClass::Operational, Pays::No)]
+			fn f03(_origin) { unimplemented!(); }
+
 			// weight = a x 10 + b
-			#[weight = FunctionOf(|args: (&u32, &u32)| (args.0 * 10 + args.1) as Weight, DispatchClass::Normal, true)]
+			#[weight = FunctionOf(|args: (&u32, &u32)| (args.0 * 10 + args.1) as Weight, DispatchClass::Normal, Pays::Yes)]
 			fn f11(_origin, _a: u32, _eb: u32) { unimplemented!(); }
 
-			#[weight = FunctionOf(|_: (&u32, &u32)| 0, DispatchClass::Operational, true)]
+			#[weight = FunctionOf(|_: (&u32, &u32)| 0, DispatchClass::Operational, Pays::Yes)]
 			fn f12(_origin, _a: u32, _eb: u32) { unimplemented!(); }
 
 			#[weight = T::DbWeight::get().reads(3) + T::DbWeight::get().writes(2) + 10_000]
@@ -529,19 +559,25 @@ mod tests {
 		let info = Call::<TraitImpl>::f00().get_dispatch_info();
 		assert_eq!(info.weight, 1000);
 		assert_eq!(info.class, DispatchClass::Normal);
-		assert_eq!(info.pays_fee, true);
+		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// #[weight = (1000, DispatchClass::Mandatory)]
 		let info = Call::<TraitImpl>::f01().get_dispatch_info();
 		assert_eq!(info.weight, 1000);
 		assert_eq!(info.class, DispatchClass::Mandatory);
-		assert_eq!(info.pays_fee, true);
+		assert_eq!(info.pays_fee, Pays::Yes);
 
-		// #[weight = (1000, DispatchClass::Operational, false)]
+		// #[weight = (1000, Pays::No)]
 		let info = Call::<TraitImpl>::f02().get_dispatch_info();
 		assert_eq!(info.weight, 1000);
+		assert_eq!(info.class, DispatchClass::Normal);
+		assert_eq!(info.pays_fee, Pays::No);
+
+		// #[weight = (1000, DispatchClass::Operational, Pays::No)]
+		let info = Call::<TraitImpl>::f03().get_dispatch_info();
+		assert_eq!(info.weight, 1000);
 		assert_eq!(info.class, DispatchClass::Operational);
-		assert_eq!(info.pays_fee, false);
+		assert_eq!(info.pays_fee, Pays::No);
 
 		assert_eq!(Call::<TraitImpl>::f11(10, 20).get_dispatch_info().weight, 120);
 		assert_eq!(Call::<TraitImpl>::f11(10, 20).get_dispatch_info().class, DispatchClass::Normal);
