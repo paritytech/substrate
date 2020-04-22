@@ -580,8 +580,7 @@ mod test {
 		// if no slots are skipped there should be no lenience
 		assert_eq!(super::slot_lenience_exponential(1, &slot(2)), None);
 
-		// otherwise the lenience is incremented linearly with
-		// the number of skipped slots.
+		// otherwise the lenience is incremented exponentially every two slots
 		for n in 3..=17 {
 			assert_eq!(
 				super::slot_lenience_exponential(1, &slot(n)),
