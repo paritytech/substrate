@@ -122,7 +122,7 @@ pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 	#[pubsub(
 		subscription = "grandpa_finality",
 		unsubscribe,
-		name = "grandpa_subscribeToFinality",
+		name = "grandpa_unsubscribeJustifications",
 	)]
 	fn unsubscribe_finality(
 		&self,
