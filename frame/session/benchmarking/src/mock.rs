@@ -151,11 +151,13 @@ parameter_types! {
 }
 
 pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
-type SubmitTransaction = frame_system::offchain::TransactionSubmitter<
-	sp_runtime::testing::UintAuthorityId,
-	Test,
-	Extrinsic,
->;
+
+impl<C> frame_system::offchain::SendTransactionTypes<C> for Test where
+	Call: From<C>,
+{
+	type OverarchingCall = Call;
+	type Extrinsic = Extrinsic;
+}
 
 impl pallet_staking::Trait for Test {
 	type Currency = Balances;
@@ -174,7 +176,6 @@ impl pallet_staking::Trait for Test {
 	type NextNewSession = Session;
 	type ElectionLookahead = ();
 	type Call = Call;
-	type SubmitTransaction = SubmitTransaction;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type UnsignedPriority = UnsignedPriority;
 }
