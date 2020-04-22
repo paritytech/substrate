@@ -5,6 +5,15 @@ metadata:
   labels:
     app: kuard
 spec:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: cloud.google.com/gke-nodepool
+            operator: In
+            values:
+            - substrate-pool
   replicas: 1
   selector:
     matchLabels:
