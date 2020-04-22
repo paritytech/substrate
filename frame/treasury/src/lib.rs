@@ -326,8 +326,8 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - Complexity: O(1)
-		/// - DbReads: `ProposalCount`, `sender account`
-		/// - DbWrites: `ProposalCount`, `Proposals`, `sender account`
+		/// - DbReads: `ProposalCount`, `origin account`
+		/// - DbWrites: `ProposalCount`, `Proposals`, `origin account`
 		/// # </weight>
 		#[weight = 120_000_000 + T::DbWeight::get().reads_writes(1, 2)]
 		fn propose_spend(
@@ -446,8 +446,8 @@ decl_module! {
 		/// # <weight>
 		/// - Complexity: `O(1)`
 		///   - Depends on the length of `T::Hash` which is fixed.
-		/// - DbReads: `Tips`, `sender account data`
-		/// - DbWrites: `Reasons`, `Tips`, `sender account data`
+		/// - DbReads: `Tips`, `origin account`
+		/// - DbWrites: `Reasons`, `Tips`, `origin account`
 		/// # </weight>
 		#[weight = 120_000_000 + T::DbWeight::get().reads_writes(1, 2)]
 		fn retract_tip(origin, hash: T::Hash) {
