@@ -75,6 +75,17 @@ variables:
     #       echo "_____No such target dir, proceeding from scratch_____";
     #   fi
     - sccache -s
+  after_script:
+    - echo "_____ Clean target dir _____"
+    - cd ./target/release/
+    - ls -a
+    - for binary in $(find . -maxdepth 1 -type f ! -size 0 -exec grep -IL . "{}" \; | cut -c 3- )
+        do
+          rm -rf $binary
+        done
+    - find ./target/{debug,release} -maxdepth 1 -type f -delete;
+    - rm -f  ./target/.rustc_info.json;
+    - rm -rf ./target/{debug,release}/{deps,.fingerprint}/
   only:
     - master
     - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
