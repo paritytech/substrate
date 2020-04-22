@@ -16,7 +16,6 @@ variables:
 
 deploy-chaos-example:
   stage:                           test
-  when:                            manual
   image:                           parity/kubetools:latest
   only:
     - /^[0-9]+$/                   # PRs
@@ -26,6 +25,9 @@ deploy-chaos-example:
   environment:
     name:                          parity-chaosnet
   script:
-    - kubectl -n substrate-ci get pod
+    - echo "# substrate ci namespace ${KUBE_NAMESPACE}"
+    - kubectl get pod
+    - kubectl apply -f .maintain/kubernetes/kuard.yml
+    - kubectl rollout status deployment/kuard-deployment
 
 
