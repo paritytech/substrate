@@ -155,6 +155,15 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	t.into()
 }
 
+fn last_event() -> RawEvent<u64, u64, H256> {
+	System::events().into_iter().map(|r| r.event)
+		.filter_map(|e| {
+			if let Event::treasury(inner) = e { Some(inner) } else { None }
+		})
+		.last()
+		.unwrap()
+}
+
 #[test]
 fn genesis_config_works() {
 	new_test_ext().execute_with(|| {
@@ -236,15 +245,7 @@ fn close_tip_works() {
 
 		let h = tip_hash();
 
-		assert_eq!(
-			System::events().into_iter().map(|r| r.event)
-				.filter_map(|e| {
-					if let Event::treasury(inner) = e { Some(inner) } else { None }
-				})
-				.last()
-				.unwrap(),
-			RawEvent::NewTip(h),
-		);
+		assert_eq!(last_event(), RawEvent::NewTip(h));
 
 		assert_ok!(Treasury::tip(Origin::signed(11), h.clone(), 10));
 
@@ -252,15 +253,7 @@ fn close_tip_works() {
 
 		assert_ok!(Treasury::tip(Origin::signed(12), h.clone(), 10));
 
-		assert_eq!(
-			System::events().into_iter().map(|r| r.event)
-				.filter_map(|e| {
-					if let Event::treasury(inner) = e { Some(inner) } else { None }
-				})
-				.last()
-				.unwrap(),
-			RawEvent::TipClosing(h),
-		);
+		assert_eq!(last_event(), RawEvent::TipClosing(h));
 
 		assert_noop!(Treasury::close_tip(Origin::signed(0), h.into()), Error::<Test>::Premature);
 
@@ -269,15 +262,7 @@ fn close_tip_works() {
 		assert_ok!(Treasury::close_tip(Origin::signed(0), h.into()));
 		assert_eq!(Balances::free_balance(3), 10);
 
-		assert_eq!(
-			System::events().into_iter().map(|r| r.event)
-				.filter_map(|e| {
-					if let Event::treasury(inner) = e { Some(inner) } else { None }
-				})
-				.last()
-				.unwrap(),
-			RawEvent::TipClosed(h, 3, 10),
-		);
+		assert_eq!(last_event(), RawEvent::TipClosed(h, 3, 10));
 
 		assert_noop!(Treasury::close_tip(Origin::signed(100), h.into()), Error::<Test>::UnknownTip);
 	});
