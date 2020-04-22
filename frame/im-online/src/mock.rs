@@ -27,7 +27,6 @@ use sp_runtime::testing::{Header, UintAuthorityId, TestXt};
 use sp_runtime::traits::{IdentityLookup, BlakeTwo256, ConvertInto};
 use sp_core::H256;
 use frame_support::{impl_outer_origin, impl_outer_dispatch, parameter_types, weights::Weight};
-
 use frame_system as system;
 impl_outer_origin!{
 	pub enum Origin for Runtime {}
@@ -40,7 +39,11 @@ impl_outer_dispatch! {
 }
 
 thread_local! {
-	pub static VALIDATORS: RefCell<Option<Vec<u64>>> = RefCell::new(Some(vec![1, 2, 3]));
+	pub static VALIDATORS: RefCell<Option<Vec<u64>>> = RefCell::new(Some(vec![
+		1,
+		2,
+		3,
+	]));
 }
 
 pub struct TestSessionManager;
@@ -68,7 +71,6 @@ impl pallet_session::historical::SessionManager<u64, u64> for TestSessionManager
 
 /// An extrinsic type used for tests.
 pub type Extrinsic = TestXt<Call, ()>;
-type SubmitTransaction = frame_system::offchain::TransactionSubmitter<(), Call, Extrinsic>;
 type IdentificationTuple = (u64, u64);
 type Offence = crate::UnresponsivenessOffence<IdentificationTuple>;
 
@@ -89,7 +91,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	let t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 	t.into()
 }
-
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Runtime;
@@ -168,11 +169,16 @@ parameter_types! {
 impl Trait for Runtime {
 	type AuthorityId = UintAuthorityId;
 	type Event = ();
-	type Call = Call;
-	type SubmitTransaction = SubmitTransaction;
 	type ReportUnresponsiveness = OffenceHandler;
 	type SessionDuration = Period;
 	type UnsignedPriority = UnsignedPriority;
+}
+
+impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime where
+	Call: From<LocalCall>,
+{
+	type OverarchingCall = Call;
+	type Extrinsic = Extrinsic;
 }
 
 /// Im Online module.
@@ -184,5 +190,7 @@ pub fn advance_session() {
 	let now = System::block_number().max(1);
 	System::set_block_number(now + 1);
 	Session::rotate_session();
+	let keys = Session::validators().into_iter().map(UintAuthorityId).collect();
+	ImOnline::set_keys(keys);
 	assert_eq!(Session::current_index(), (now / Period::get()) as u32);
 }

@@ -15,10 +15,21 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use codec::{Encode, Decode};
+use frame_system::offchain::AppCrypto;
 use frame_support::Hashable;
 use sp_state_machine::TestExternalities as CoreTestExternalities;
-use sp_core::{NeverNativeValue, NativeOrEncoded, traits::{CodeExecutor, RuntimeCode}};
-use sp_runtime::{ApplyExtrinsicResult, traits::{Header as HeaderT, BlakeTwo256}};
+use sp_core::{
+	NeverNativeValue, NativeOrEncoded,
+	crypto::KeyTypeId,
+	sr25519::Signature,
+	traits::{CodeExecutor, RuntimeCode},
+};
+use sp_runtime::{
+	ApplyExtrinsicResult,
+	MultiSigner,
+	MultiSignature,
+	traits::{Header as HeaderT, BlakeTwo256},
+};
 use sc_executor::{NativeExecutor, WasmExecutionMethod};
 use sc_executor::error::Result;
 
@@ -30,6 +41,25 @@ use node_runtime::{
 use node_primitives::{Hash, BlockNumber};
 use node_testing::keyring::*;
 use sp_externalities::Externalities;
+
+pub const TEST_KEY_TYPE_ID: KeyTypeId = KeyTypeId(*b"test");
+
+pub mod sr25519 {
+	mod app_sr25519 {
+		use sp_application_crypto::{app_crypto, sr25519};
+		use super::super::TEST_KEY_TYPE_ID;
+		app_crypto!(sr25519, TEST_KEY_TYPE_ID);
+	}
+
+	pub type AuthorityId = app_sr25519::Public;
+}
+
+pub struct TestAuthorityId;
+impl AppCrypto<MultiSigner, MultiSignature> for TestAuthorityId {
+	type RuntimeAppPublic = sr25519::AuthorityId;
+	type GenericSignature = Signature;
+	type GenericPublic = sp_core::sr25519::Public;
+}
 
 /// The wasm runtime code.
 ///

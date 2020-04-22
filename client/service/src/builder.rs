@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{Service, NetworkStatus, NetworkState, error::Error, DEFAULT_PROTOCOL_ID, MallocSizeOfWasm};
-use crate::{TaskManagerBuilder, start_rpc_servers, build_network_future, TransactionPoolAdapter};
+use crate::{start_rpc_servers, build_network_future, TransactionPoolAdapter, TaskManager};
 use crate::status_sinks;
 use crate::config::{Configuration, KeystoreConfig, PrometheusConfig, OffchainWorkerConfig};
 use crate::metrics::MetricsService;
@@ -81,7 +81,7 @@ pub struct ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
 	config: Configuration,
 	pub (crate) client: Arc<TCl>,
 	backend: Arc<Backend>,
-	tasks_builder: TaskManagerBuilder,
+	task_manager: TaskManager,
 	keystore: Arc<RwLock<Keystore>>,
 	fetcher: Option<TFchr>,
 	select_chain: Option<TSc>,
@@ -145,7 +145,7 @@ type TFullParts<TBl, TRtApi, TExecDisp> = (
 	TFullClient<TBl, TRtApi, TExecDisp>,
 	Arc<TFullBackend<TBl>>,
 	Arc<RwLock<sc_keystore::Store>>,
-	TaskManagerBuilder,
+	TaskManager,
 );
 
 /// Creates a new full client for the given config.
@@ -172,9 +172,9 @@ fn new_full_parts<TBl, TRtApi, TExecDisp>(
 		KeystoreConfig::InMemory => Keystore::new_in_memory(),
 	};
 
-	let tasks_builder = {
+	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
-		TaskManagerBuilder::new(registry)?
+		TaskManager::new(config.task_executor.clone(), registry)?
 	};
 
 	let executor = NativeExecutor::<TExecDisp>::new(
@@ -213,7 +213,7 @@ fn new_full_parts<TBl, TRtApi, TExecDisp>(
 			fork_blocks,
 			bad_blocks,
 			extensions,
-			Box::new(tasks_builder.spawn_handle()),
+			Box::new(task_manager.spawn_handle()),
 			config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 			ClientConfig {
 				offchain_worker_enabled : config.offchain_worker.enabled ,
@@ -222,7 +222,7 @@ fn new_full_parts<TBl, TRtApi, TExecDisp>(
 		)?
 	};
 
-	Ok((client, backend, keystore, tasks_builder))
+	Ok((client, backend, keystore, task_manager))
 }
 
 impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
@@ -242,7 +242,7 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 		(),
 		TFullBackend<TBl>,
 	>, Error> {
-		let (client, backend, keystore, tasks_builder) = new_full_parts(&config)?;
+		let (client, backend, keystore, task_manager) = new_full_parts(&config)?;
 
 		let client = Arc::new(client);
 
@@ -251,7 +251,7 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 			client,
 			backend,
 			keystore,
-			tasks_builder,
+			task_manager,
 			fetcher: None,
 			select_chain: None,
 			import_queue: (),
@@ -281,9 +281,9 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 		(),
 		TLightBackend<TBl>,
 	>, Error> {
-		let tasks_builder = {
+		let task_manager = {
 			let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
-			TaskManagerBuilder::new(registry)?
+			TaskManager::new(config.task_executor.clone(), registry)?
 		};
 
 		let keystore = match &config.keystore {
@@ -315,7 +315,7 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 			sc_client::light::new_fetch_checker::<_, TBl, _>(
 				light_blockchain.clone(),
 				executor.clone(),
-				Box::new(tasks_builder.spawn_handle()),
+				Box::new(task_manager.spawn_handle()),
 			),
 		);
 		let fetcher = Arc::new(sc_network::config::OnDemand::new(fetch_checker));
@@ -325,7 +325,7 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 			backend.clone(),
 			config.chain_spec.as_storage_builder(),
 			executor,
-			Box::new(tasks_builder.spawn_handle()),
+			Box::new(task_manager.spawn_handle()),
 			config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 		)?);
 
@@ -333,7 +333,7 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 			config,
 			client,
 			backend,
-			tasks_builder,
+			task_manager,
 			keystore,
 			fetcher: Some(fetcher.clone()),
 			select_chain: None,
@@ -406,7 +406,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			config: self.config,
 			client: self.client,
 			backend: self.backend,
-			tasks_builder: self.tasks_builder,
+			task_manager: self.task_manager,
 			keystore: self.keystore,
 			fetcher: self.fetcher,
 			select_chain,
@@ -449,7 +449,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			config: self.config,
 			client: self.client,
 			backend: self.backend,
-			tasks_builder: self.tasks_builder,
+			task_manager: self.task_manager,
 			keystore: self.keystore,
 			fetcher: self.fetcher,
 			select_chain: self.select_chain,
@@ -487,7 +487,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			config: self.config,
 			client: self.client,
 			backend: self.backend,
-			tasks_builder: self.tasks_builder,
+			task_manager: self.task_manager,
 			keystore: self.keystore,
 			fetcher: self.fetcher,
 			select_chain: self.select_chain,
@@ -549,7 +549,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			config: self.config,
 			client: self.client,
 			backend: self.backend,
-			tasks_builder: self.tasks_builder,
+			task_manager: self.task_manager,
 			keystore: self.keystore,
 			fetcher: self.fetcher,
 			select_chain: self.select_chain,
@@ -610,7 +610,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 		Ok(ServiceBuilder {
 			config: self.config,
 			client: self.client,
-			tasks_builder: self.tasks_builder,
+			task_manager: self.task_manager,
 			backend: self.backend,
 			keystore: self.keystore,
 			fetcher: self.fetcher,
@@ -639,7 +639,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			config: self.config,
 			client: self.client,
 			backend: self.backend,
-			tasks_builder: self.tasks_builder,
+			task_manager: self.task_manager,
 			keystore: self.keystore,
 			fetcher: self.fetcher,
 			select_chain: self.select_chain,
@@ -749,7 +749,7 @@ ServiceBuilder<
 			marker: _,
 			mut config,
 			client,
-			tasks_builder,
+			task_manager,
 			fetcher: on_demand,
 			backend,
 			keystore,
@@ -793,7 +793,7 @@ ServiceBuilder<
 			imports_external_transactions: !matches!(config.role, Role::Light),
 			pool: transaction_pool.clone(),
 			client: client.clone(),
-			executor: tasks_builder.spawn_handle(),
+			executor: task_manager.spawn_handle(),
 		});
 
 		let protocol_id = {
@@ -815,7 +815,7 @@ ServiceBuilder<
 		let network_params = sc_network::config::Params {
 			role: config.role.clone(),
 			executor: {
-				let spawn_handle = tasks_builder.spawn_handle();
+				let spawn_handle = task_manager.spawn_handle();
 				Some(Box::new(move |fut| {
 					spawn_handle.spawn("libp2p-node", fut);
 				}))
@@ -849,7 +849,7 @@ ServiceBuilder<
 			_ => None,
 		};
 
-		let spawn_handle = tasks_builder.spawn_handle();
+		let spawn_handle = task_manager.spawn_handle();
 
 		// Spawn background tasks which were stacked during the
 		// service building.
@@ -861,7 +861,7 @@ ServiceBuilder<
 			// block notifications
 			let txpool = Arc::downgrade(&transaction_pool);
 			let offchain = offchain_workers.as_ref().map(Arc::downgrade);
-			let notifications_spawn_handle = tasks_builder.spawn_handle();
+			let notifications_spawn_handle = task_manager.spawn_handle();
 			let network_state_info: Arc<dyn NetworkStateInfo + Send + Sync> = network.clone();
 			let is_validator = config.role.is_authority();
 
@@ -1017,7 +1017,7 @@ ServiceBuilder<
 				chain_type: chain_spec.chain_type().clone(),
 			};
 
-			let subscriptions = sc_rpc::Subscriptions::new(Arc::new(tasks_builder.spawn_handle()));
+			let subscriptions = sc_rpc::Subscriptions::new(Arc::new(task_manager.spawn_handle()));
 
 			let (chain, state, child_state) = if let (Some(remote_backend), Some(on_demand)) =
 				(remote_backend.as_ref(), on_demand.as_ref()) {
@@ -1149,7 +1149,7 @@ ServiceBuilder<
 
 		Ok(Service {
 			client,
-			task_manager: tasks_builder.into_task_manager(config.task_executor),
+			task_manager,
 			network,
 			network_status_sinks,
 			select_chain,
