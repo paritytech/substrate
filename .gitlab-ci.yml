@@ -30,6 +30,9 @@ deploy-chaos-example:
     - kubectl apply -f .maintain/kubernetes/kuard.yml
     - kubectl rollout status deployment/kuard-deployment
     - kubectl get all
+    - kubectl port-forward svc/kuard-service 8080:80 &
+    - curl -sS localhost:8080
+    - echo "waiting for 10 min before shutting down"
     - sleep 600
     - kubectl delete -f .maintain/kubernetes/kuard.yml
 
