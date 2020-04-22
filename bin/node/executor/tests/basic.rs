@@ -338,7 +338,7 @@ fn full_native_block_import_works() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
 				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 10_000_000, class: DispatchClass::Mandatory, ..Default::default() }
+					DispatchInfo { weight: 0, class: DispatchClass::Mandatory, ..Default::default() }
 				)),
 				topics: vec![],
 			},
@@ -391,7 +391,7 @@ fn full_native_block_import_works() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
 				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 10_000_000, class: DispatchClass::Mandatory, pays_fee: Pays::Yes }
+					DispatchInfo { weight: 0, class: DispatchClass::Mandatory, pays_fee: Pays::Yes }
 				)),
 				topics: vec![],
 			},
