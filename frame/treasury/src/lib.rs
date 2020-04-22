@@ -488,9 +488,9 @@ decl_module! {
 		/// - DbReads: `Tippers`, `Reasons`
 		/// - DbWrites: `Reasons`, `Tips`
 		/// # </weight>
-		#[weight = 107_700_000
+		#[weight = 110_000_000
 			+ 4_000 * reason.len() as u64
-			+ 481_000 * T::Tippers::count_upper_bound() as u64
+			+ 480_000 * T::Tippers::count_upper_bound() as u64
 			+ T::DbWeight::get().reads_writes(2, 2)]
 		fn tip_new(origin, reason: Vec<u8>, who: T::AccountId, tip_value: BalanceOf<T>) {
 			let tipper = ensure_signed(origin)?;
@@ -531,7 +531,7 @@ decl_module! {
 		/// - DbReads: `Tippers`, `Tips`
 		/// - DbWrites: `Tips`
 		/// # </weight>
-		#[weight = 67_730_000 + 1_912_000 * T::Tippers::count_upper_bound() as u64
+		#[weight = 68_000_000 + 1_900_000 * T::Tippers::count_upper_bound() as u64
 			+ T::DbWeight::get().reads_writes(2, 1)]
 		fn tip(origin, hash: T::Hash, tip_value: BalanceOf<T>) {
 			let tipper = ensure_signed(origin)?;
@@ -561,7 +561,7 @@ decl_module! {
 		/// - DbReads: `Tips`, `Tippers`, `tip finder`
 		/// - DbWrites: `Reasons`, `Tips`, `Tippers`, `tip finder`
 		/// # </weight>
-		#[weight = 211_000_000 + 1_094_000 * T::Tippers::count_upper_bound() as u64
+		#[weight = 210_000_000 + 1_100_000 * T::Tippers::count_upper_bound() as u64
 			+ T::DbWeight::get().reads_writes(3, 3)]
 		fn close_tip(origin, hash: T::Hash) {
 			ensure_signed(origin)?;
@@ -587,7 +587,7 @@ decl_module! {
 			if (n % T::SpendPeriod::get()).is_zero() {
 				let approvals_len = Self::spend_funds();
 
-				263_500_000 * approvals_len
+				260_000_000 * approvals_len
 					+ T::DbWeight::get().reads_writes(2 + approvals_len * 3, 2 + approvals_len * 3)
 			} else {
 				0
