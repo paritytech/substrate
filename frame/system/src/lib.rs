@@ -1979,7 +1979,7 @@ pub(crate) mod tests {
 			let pre = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &info, len).unwrap();
 			assert_eq!(
 				AllExtrinsicsWeight::get().unwrap(),
-				info.weight + 256 + <Test as Trait>::ExtrinsicBaseWeight::get(),
+				info.weight + 256,
 			);
 
 			assert!(
@@ -1988,7 +1988,7 @@ pub(crate) mod tests {
 			);
 			assert_eq!(
 				AllExtrinsicsWeight::get().unwrap(),
-				post_info.actual_weight.unwrap() + 256 + <Test as Trait>::ExtrinsicBaseWeight::get(),
+				post_info.actual_weight.unwrap() + 256,
 			);
 		})
 	}
@@ -2049,6 +2049,8 @@ pub(crate) mod tests {
 				CheckWeight::<Test>::do_pre_dispatch(&one, len),
 				InvalidTransaction::ExhaustsResources,
 			);
+			// Weight should be 75% of 1024 (max block weight)
+			assert_eq!(System::all_extrinsics_weight(), 768);
 		});
 
 		// Dispatch Class Operational
@@ -2074,6 +2076,8 @@ pub(crate) mod tests {
 				CheckWeight::<Test>::do_pre_dispatch(&one, len),
 				InvalidTransaction::ExhaustsResources,
 			);
+			// Weight should be 100% of max block weight
+			assert_eq!(System::all_extrinsics_weight(), <Test as Trait>::MaximumBlockWeight::get());
 		});
 	}
 
