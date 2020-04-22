@@ -402,18 +402,18 @@ impl<AccountId: PartialEq, Balance> BidKind<AccountId, Balance> {
 decl_storage! {
 	trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Society {
 		/// The first member.
-		pub Founder get(founder) build(|config: &GenesisConfig<T, I>| config.members.first().cloned()):
+		pub Founder get(fn founder) build(|config: &GenesisConfig<T, I>| config.members.first().cloned()):
 			Option<T::AccountId>;
 
 		/// A hash of the rules of this society concerning membership. Can only be set once and
 		/// only by the founder.
-		pub Rules get(rules): Option<T::Hash>;
+		pub Rules get(fn rules): Option<T::Hash>;
 
 		/// The current set of candidates; bidders that are attempting to become members.
-		pub Candidates get(candidates): Vec<Bid<T::AccountId, BalanceOf<T, I>>>;
+		pub Candidates get(fn candidates): Vec<Bid<T::AccountId, BalanceOf<T, I>>>;
 
 		/// The set of suspended candidates.
-		pub SuspendedCandidates get(suspended_candidate):
+		pub SuspendedCandidates get(fn suspended_candidate):
 			map hasher(twox_64_concat) T::AccountId
 			=> Option<(BalanceOf<T, I>, BidKind<T::AccountId, BalanceOf<T, I>>)>;
 
@@ -421,7 +421,7 @@ decl_storage! {
 		pub Pot get(fn pot) config(): BalanceOf<T, I>;
 
 		/// The most primary from the most recently approved members.
-		pub Head get(head) build(|config: &GenesisConfig<T, I>| config.members.first().cloned()):
+		pub Head get(fn head) build(|config: &GenesisConfig<T, I>| config.members.first().cloned()):
 			Option<T::AccountId>;
 
 		/// The current set of members, ordered.
