@@ -207,11 +207,8 @@ pub trait FixedPointNumber:
 
 	/// Creates self from a rational number. Equal to `n / d`.
 	///
-	/// Use `checked_from_rational` for a safe version.
+	/// Assumes d != 0 (returns 0 in this case).
 	fn from_rational<N: UniqueSaturatedInto<Self::Inner>>(n: N, d: Self::Inner) -> Self;
-
-	/// Creates self from a rational number. Equal to `n / d`.
-	fn checked_from_rational<N: TryInto<Self::Inner>>(n: N, d: Self::Inner) -> Option<Self>;
 
 	/// Takes the reciprocal (inverse), `1 / self`.
 	fn reciprocal(self) -> Option<Self> {
