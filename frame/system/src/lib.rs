@@ -1200,15 +1200,22 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 		let current_weight = Module::<T>::all_extrinsics_weight();
 		let maximum_weight = T::MaximumBlockWeight::get();
 		let limit = Self::get_dispatch_limit_ratio(info.class) * maximum_weight;
-		let extrinsic_weight = info.weight.checked_add(T::ExtrinsicBaseWeight::get()).ok_or(InvalidTransaction::ExhaustsResources)?;
-		// TODO: Verify this line is sane, seems to be bad.
-		let added_weight = extrinsic_weight.min(limit);
-		// TODO: Should be checked add I think.
-		let next_weight = current_weight.saturating_add(added_weight);
-		if next_weight > limit && info.class != DispatchClass::Mandatory {
-			Err(InvalidTransaction::ExhaustsResources.into())
-		} else {
+		if info.class == DispatchClass::Mandatory {
+			// If we have a dispatch that must be included in the block, we will do everything to
+			// make sure we do not return an error here.
+			let extrinsic_weight = info.weight.saturating_add(T::ExtrinsicBaseWeight::get());
+			let next_weight = current_weight.saturating_add(extrinsic_weight);
 			Ok(next_weight)
+		} else {
+			let extrinsic_weight = info.weight.checked_add(T::ExtrinsicBaseWeight::get())
+				.ok_or(InvalidTransaction::ExhaustsResources)?;
+			let next_weight = current_weight.checked_add(extrinsic_weight)
+				.ok_or(InvalidTransaction::ExhaustsResources)?;
+			if next_weight > limit {
+				Err(InvalidTransaction::ExhaustsResources.into())
+			} else {
+				Ok(next_weight)
+			}
 		}
 	}
 
@@ -1915,11 +1922,11 @@ pub(crate) mod tests {
 			let normal_limit = normal_weight_limit();
 			let small = DispatchInfo { weight: 100, ..Default::default() };
 			let medium = DispatchInfo {
-				weight: normal_limit - 1,
+				weight: normal_limit - <Test as Trait>::ExtrinsicBaseWeight::get(),
 				..Default::default()
 			};
 			let big = DispatchInfo {
-				weight: normal_limit + 1,
+				weight: normal_limit - <Test as Trait>::ExtrinsicBaseWeight::get() + 1,
 				..Default::default()
 			};
 			let len = 0_usize;
