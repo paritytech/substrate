@@ -64,13 +64,12 @@ use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 pub use sc_client_api::{
 	backend::{
 		self, BlockImportOperation, PrunableStateChangesTrieStorage,
-		ClientImportOperation, Finalizer, ImportSummary, JustificationSummary, NewBlockState,
+		ClientImportOperation, Finalizer, ImportSummary, NewBlockState,
 		changes_tries_state_at_block, StorageProvider,
 		LockImportRun,
 	},
 	client::{
 		ImportNotifications, FinalityNotification, FinalityNotifications, BlockImportNotification,
-		JustificationNotification, JustificationNotifications,
 		ClientInfo, BlockchainEvents, BlockBackend, ProvideUncles, BadBlocks, ForkBlocks,
 		BlockOf,
 	},
@@ -96,7 +95,6 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	storage_notifications: Mutex<StorageNotifications<Block>>,
 	import_notification_sinks: Mutex<Vec<TracingUnboundedSender<BlockImportNotification<Block>>>>,
 	finality_notification_sinks: Mutex<Vec<TracingUnboundedSender<FinalityNotification<Block>>>>,
-	justification_notification_sinks: Mutex<Vec<TracingUnboundedSender<JustificationNotification<Block>>>>,
 	// holds the block hash currently being imported. TODO: replace this with block queue
 	importing_block: RwLock<Option<Block::Hash>>,
 	block_rules: BlockRules<Block>,
@@ -206,7 +204,6 @@ impl<B, E, Block, RA> LockImportRun<Block, B> for Client<B, E, Block, RA>
 				op: self.backend.begin_operation()?,
 				notify_imported: None,
 				notify_finalized: Vec::new(),
-				notify_justified: None,
 			};
 
 			let r = f(&mut op)?;
@@ -215,14 +212,11 @@ impl<B, E, Block, RA> LockImportRun<Block, B> for Client<B, E, Block, RA>
 				op,
 				notify_imported,
 				notify_finalized,
-				notify_justified,
 			} = op;
 			self.backend.commit_operation(op)?;
 
-			// Q: Does the order of these matter?
 			self.notify_finalized(notify_finalized)?;
 			self.notify_imported(notify_imported)?;
-			self.notify_justified(notify_justified)?;
 
 			Ok(r)
 		};
@@ -289,7 +283,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			storage_notifications: Default::default(),
 			import_notification_sinks: Default::default(),
 			finality_notification_sinks: Default::default(),
-			justification_notification_sinks: Default::default(),
 			importing_block: Default::default(),
 			block_rules: BlockRules::new(fork_blocks, bad_blocks),
 			execution_extensions,
@@ -625,7 +618,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		if let Ok(ImportResult::Imported(ref aux)) = result {
 			if aux.is_new_best {
 				use rand::Rng;
-				
+
 				// don't send telemetry block import events during initial sync for every
 				// block to avoid spamming the telemetry server, these events will be randomly
 				// sent at a rate of 1/10.
@@ -906,19 +899,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			for finalized in &enacted[start..] {
 				operation.notify_finalized.push(finalized.hash);
 			}
-
-			// Only want to notify if a block was "explicitly" finalized
-			// instead of one that was implicitly finlized
-			if let Some(justification) = justification {
-				// TODO: Check that this expect() holds true
-				let header = self.header(&BlockId::Hash(block))?
-					.expect("header already known to exist in DB because it is indicated in the tree route; qed");
-				operation.notify_justified = Some(JustificationSummary {
-					header,
-					justification,
-				});
-			}
-
 		}
 
 		Ok(())
@@ -999,34 +979,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		};
 
 		self.import_notification_sinks.lock()
-			.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
-
-		Ok(())
-	}
-
-	fn notify_justified(
-		&self,
-		notify_justified: Option<JustificationSummary<Block>>,
-	) -> sp_blockchain::Result<()> {
-		let notify_justified = match notify_justified {
-			Some(notify_justified) => notify_justified,
-			None => {
-				// Clean up unused justification notification
-				// Is this neccesary though?
-				self.justification_notification_sinks
-					.lock()
-					.retain(|sink| !sink.is_closed());
-
-				return Ok(());
-			}
-		};
-
-		let notification = JustificationNotification::<Block> {
-			header: notify_justified.header,
-			justification: notify_justified.justification,
-		};
-
-		self.justification_notification_sinks.lock()
 			.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
 
 		Ok(())
@@ -1826,12 +1778,6 @@ where
 	fn finality_notification_stream(&self) -> FinalityNotifications<Block> {
 		let (sink, stream) = tracing_unbounded("mpsc_finality_notification_stream");
 		self.finality_notification_sinks.lock().push(sink);
-		stream
-	}
-
-	fn justification_notification_stream(&self) -> JustificationNotifications<Block> {
-		let (sink, stream) = tracing_unbounded("mpsc_justification_notification_stream");
-		self.justification_notification_sinks.lock().push(sink);
 		stream
 	}
 

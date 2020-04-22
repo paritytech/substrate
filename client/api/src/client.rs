@@ -36,9 +36,6 @@ pub type ImportNotifications<Block> = TracingUnboundedReceiver<BlockImportNotifi
 /// A stream of block finality notifications.
 pub type FinalityNotifications<Block> = TracingUnboundedReceiver<FinalityNotification<Block>>;
 
-/// A stream of Grandpa Justification notifications.
-pub type JustificationNotifications<Block> = TracingUnboundedReceiver<JustificationNotification<Block>>;
-
 /// Expected hashes of blocks at given heights.
 ///
 /// This may be used as chain spec extension to set trusted checkpoints, i.e.
@@ -66,12 +63,6 @@ pub trait BlockchainEvents<Block: BlockT> {
 	/// Get a stream of finality notifications. Not guaranteed to be fired for every
 	/// finalized block.
 	fn finality_notification_stream(&self) -> FinalityNotifications<Block>;
-
-	/// Get a stream of Grandpa justifications alongside the best block that's
-	/// been finalized with that justification.
-	///
-	/// Idk about the guarantees around the frequency of this yet
-	fn justification_notification_stream(&self) -> JustificationNotifications<Block>;
 
 	/// Get storage changes event stream.
 	///
@@ -254,13 +245,4 @@ pub struct FinalityNotification<Block: BlockT> {
 	pub hash: Block::Hash,
 	/// Imported block header.
 	pub header: Block::Header,
-}
-
-/// Justification for a finalized block.
-#[derive(Clone, Debug)]
-pub struct JustificationNotification<Block: BlockT> {
-	/// Highest finalized block header
-	pub header: Block::Header,
-	/// A justification that the given header has been finalized
-	pub justification: Justification,
 }
