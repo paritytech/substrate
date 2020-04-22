@@ -414,7 +414,7 @@ fn full_native_block_import_works() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
 				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 200_000_000, class: DispatchClass::Normal, pays_fee: Pays::Yes }
+					DispatchInfo { weight: 200_000_000, ..Default::default() }
 				)),
 				topics: vec![],
 			},
