@@ -484,6 +484,15 @@ decl_module! {
 		/// The maximum weight of a block.
 		const MaximumBlockWeight: Weight = T::MaximumBlockWeight::get();
 
+		/// The weight of runtime database operations the runtime can invoke.
+		const DbWeight: RuntimeDbWeight = T::DbWeight::get();
+
+		/// The base weight of executing a block, independent of the transactions in the block.
+		const BlockExecutionWeight: Weight = T::BlockExecutionWeight::get();
+
+		/// The base weight of an Extrinsic in the block, independent of the of extrinsic being executed.
+		const ExtrinsicBaseWeight: Weight = T::ExtrinsicBaseWeight::get();
+
 		/// The maximum length of a block (in bytes).
 		const MaximumBlockLength: u32 = T::MaximumBlockLength::get();
 
