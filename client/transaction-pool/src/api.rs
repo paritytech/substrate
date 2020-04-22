@@ -89,17 +89,17 @@ impl<Client, Block> sc_transaction_graph::ChainApi for FullChainApi<Client, Bloc
 		let at = at.clone();
 
 		self.pool.spawn_ok(futures_diagnose::diagnose("validate-transaction", async move {
-			let span = tracing::span!(tracing::Level::DEBUG, "validate_transaction::check_version");
-			let guard = span.enter();
+			sp_tracing::enter_span!("validate_transaction");
 			let runtime_api = client.runtime_api();
-			let has_v2 = runtime_api
+			let has_v2 = sp_tracing::tracing_span! { "check_version";
+				runtime_api
 				.has_api_with::<dyn TaggedTransactionQueue<Self::Block, Error=()>, _>(
 					&at, |v| v >= 2,
 				)
-				.unwrap_or_default();
-			std::mem::drop(guard);
-			let span = tracing::span!(tracing::Level::DEBUG, "validate_transaction");
-			let _guard = span.enter();
+				.unwrap_or_default()
+			};
+
+			sp_tracing::enter_span!("runtime::validate_transaction");
 			let res = if has_v2 {
 				runtime_api.validate_transaction(&at, source, uxt)
 			} else {

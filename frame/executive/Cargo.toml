@@ -17,6 +17,7 @@ frame-support = { version = "2.0.0-dev", default-features = false, path = "../su
 frame-system = { version = "2.0.0-dev", default-features = false, path = "../system" }
 serde = { version = "1.0.101", optional = true }
 sp-runtime = { version = "2.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-tracing = { version = "2.0.0-dev", default-features = false, path = "../../primitives/tracing" }
 sp-std = { version = "2.0.0-dev", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "2.0.0-dev", default-features = false, path = "../../primitives/io" }
 
@@ -37,5 +38,6 @@ std = [
 	"frame-system/std",
 	"serde",
 	"sp-runtime/std",
+	"sp-tracing/std",
 	"sp-std/std",
 ]

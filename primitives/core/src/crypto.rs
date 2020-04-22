@@ -455,6 +455,8 @@ ss58_address_format!(
 		(10, "acala", "Acala mainnet, standard account (*25519).")
 	LaminarAccount =>
 		(11, "laminar", "Laminar mainnet, standard account (*25519).")
+	PolymathAccount =>
+		(12, "polymath", "Polymath network, standard account (*25519).")
 	KulupuAccount =>
 		(16, "kulupu", "Kulupu mainnet, standard account (*25519).")
 	DarwiniaAccount =>
