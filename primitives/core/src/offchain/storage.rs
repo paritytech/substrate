@@ -127,7 +127,7 @@ impl OffchainOverlayedChanges {
 	}
 
 	/// Drain all elements of changeset.
-	pub fn drain<'a,'d>(&'a mut self) -> OffchainOverlayedChangesDrain<'d> where 'a: 'd {
+	pub fn drain<'a, 'd>(&'a mut self) -> OffchainOverlayedChangesDrain<'d> where 'a: 'd {
 		OffchainOverlayedChangesDrain::new(self)
 	}
 
