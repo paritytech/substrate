@@ -23,7 +23,7 @@ sp-state-machine = { version = "0.8.0-dev", path = "../../../primitives/state-ma
 sp-externalities = { version = "0.8.0-dev", path = "../../../primitives/externalities" }
 sp-trie = { version = "2.0.0-dev", path = "../../../primitives/trie" }
 sp-storage = { version = "2.0.0-dev", path = "../../../primitives/storage" }
-sc-client-db = { version = "0.8.0-dev", path = "../../db" }
+sc-client-db = { version = "0.8.0-dev", default-features = false, path = "../../db" }
 futures = { version = "0.3.1", features = ["compat"] }
 sc-service = { version = "0.8.0-dev", default-features = false, features = ["test-helpers"], path = "../../service" }
 sc-network = { version = "0.8.0-dev", path = "../../network" }
