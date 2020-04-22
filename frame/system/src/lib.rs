@@ -1233,6 +1233,10 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 				.ok_or(InvalidTransaction::ExhaustsResources)?;
 			let next_weight = current_weight.checked_add(extrinsic_weight)
 				.ok_or(InvalidTransaction::ExhaustsResources)?;
+
+			#[cfg(test)]
+			println!("{:?} >? {:?}", next_weight, limit);
+
 			if next_weight > limit {
 				Err(InvalidTransaction::ExhaustsResources.into())
 			} else {
@@ -1633,7 +1637,7 @@ pub(crate) mod tests {
 	use super::*;
 	use sp_std::cell::RefCell;
 	use sp_core::H256;
-	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header, DispatchError};
+	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup, SignedExtension}, testing::Header, DispatchError};
 	use frame_support::{impl_outer_origin, parameter_types, assert_ok, assert_err};
 
 	impl_outer_origin! {
@@ -2032,17 +2036,66 @@ pub(crate) mod tests {
 
 	#[test]
 	fn max_extrinsic_weight_is_allowed_but_nothing_more() {
+		// Dispatch Class Normal
 		new_test_ext().execute_with(|| {
+			// Start the test by injecting the `BlockExecutionWeight`
+			System::register_extra_weight_unchecked(<Test as Trait>::BlockExecutionWeight::get());
+			assert_eq!(System::all_extrinsics_weight(), 10);
+
 			let one = DispatchInfo { weight: 1, ..Default::default() };
 			let max = DispatchInfo { weight: System::max_extrinsic_weight(DispatchClass::Normal), ..Default::default() };
 			let len = 0_usize;
 
-			assert_eq!(System::all_extrinsics_weight(), 0);
-			assert_ok!(CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &max, len));
+			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&max, len));
 			assert_err!(
-				CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &one, len),
+				CheckWeight::<Test>::do_pre_dispatch(&one, len),
 				InvalidTransaction::ExhaustsResources,
 			);
+		});
+
+		// Dispatch Class Operational
+		new_test_ext().execute_with(|| {
+			// Start the test by injecting the `BlockExecutionWeight`
+			System::register_extra_weight_unchecked(<Test as Trait>::BlockExecutionWeight::get());
+			assert_eq!(System::all_extrinsics_weight(), 10);
+
+			let one = DispatchInfo {
+				weight: 1,
+				class: DispatchClass::Operational,
+				..Default::default()
+			};
+			let max = DispatchInfo {
+				weight: System::max_extrinsic_weight(DispatchClass::Operational),
+				class: DispatchClass::Operational,
+				..Default::default()
+			};
+			let len = 0_usize;
+
+			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&max, len));
+			assert_err!(
+				CheckWeight::<Test>::do_pre_dispatch(&one, len),
+				InvalidTransaction::ExhaustsResources,
+			);
+		});
+	}
+
+	#[test]
+	fn mandatory_extrinsic_doesnt_care_about_limits() {
+		new_test_ext().execute_with(|| {
+			// Start the test by injecting the `BlockExecutionWeight`
+			System::register_extra_weight_unchecked(<Test as Trait>::BlockExecutionWeight::get());
+			assert_eq!(System::all_extrinsics_weight(), 10);
+
+			let max = DispatchInfo {
+				weight: Weight::max_value(),
+				class: DispatchClass::Mandatory,
+				..Default::default()
+			};
+			let len = 0_usize;
+
+			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&max, len));
+			assert_eq!(System::all_extrinsics_weight(), Weight::max_value());
+			assert!(System::all_extrinsics_weight() > <Test as Trait>::MaximumBlockWeight::get());
 		});
 	}
 
