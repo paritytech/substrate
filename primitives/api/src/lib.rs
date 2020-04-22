@@ -379,7 +379,7 @@ pub trait ApiExt<Block: BlockT>: ApiErrorExt {
 	/// This stops the proof recording.
 	///
 	/// If `record_proof` was not called before, this will return `None`.
-	fn extract_proof(&mut self) -> Option<StorageProof>;
+	fn extract_proof(&mut self, input: ProofInput) -> Option<StorageProof>;
 
 	/// Convert the api object into the storage changes that were done while executing runtime
 	/// api functions.
@@ -439,7 +439,7 @@ pub struct CallApiAtParams<'a, Block: BlockT, C, NC, Backend: StateBackend<HashF
 	/// The context this function is executed in.
 	pub context: ExecutionContext,
 	/// The optional proof recorder for recording storage accesses.
-	pub recorder: &'a Option<(ProofRecorder<Block>, StorageProofKind)>,
+	pub recorder: Option<&'a RefCell<RuntimeApiProofRecorder<Block>>>,
 }
 
 /// Something that can call into the an api at a given block.
@@ -515,6 +515,15 @@ pub trait RuntimeApiInfo {
 	const ID: [u8; 8];
 	/// The version of the runtime api.
 	const VERSION: u32;
+}
+
+/// Inner struct for storage of proof management.
+/// TODO consider renaming to ProofRecorder (if type alias is not use)
+#[cfg(feature = "std")]
+pub struct RuntimeApiProofRecorder<Block: BlockT> {
+	pub recorder: ProofRecorder<Block>,
+	pub kind: StorageProofKind,
+	pub input: ProofInput,
 }
 
 /// Extracts the `Api::Error` for a type that provides a runtime api.

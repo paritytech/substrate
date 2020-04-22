@@ -210,7 +210,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 			storage_transaction_cache: std::cell::RefCell<
 				#crate_::StorageTransactionCache<Block, C::StateBackend>
 			>,
-			recorder: Option<(#crate_::ProofRecorder<Block>, #crate_::StorageProofKind)>,
+			recorder: Option<std::cell::RefCell<#crate_::RuntimeApiProofRecorder<Block>>>,
 		}
 
 		// `RuntimeApi` itself is not threadsafe. However, an instance is only available in a
@@ -280,20 +280,25 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 			}
 
 			fn record_proof(&mut self, kind: #crate_::StorageProofKind) {
-				if kind.need_register_full() {
-					self.recorder = Some((#crate_::ProofRecorder::<Block>::Full(Default::default()), kind));
+				let recorder = if kind.need_register_full() {
+					#crate_::ProofRecorder::<Block>::Full(Default::default())
 				} else {
-					self.recorder = Some((#crate_::ProofRecorder::<Block>::Flat(Default::default()), kind));
-				}
+					#crate_::ProofRecorder::<Block>::Flat(Default::default())
+				};
+				self.recorder = Some(std::cell::RefCell::new(#crate_::RuntimeApiProofRecorder {
+					recorder,
+					kind,
+					input: #crate_::ProofInput::None,
+				}))
 			}
 
-			fn extract_proof(&mut self) -> Option<#crate_::StorageProof> {
+			fn extract_proof(&mut self, input: #crate_::ProofInput) -> Option<#crate_::StorageProof> {
 				self.recorder
 					.take()
-					.and_then(|(recorder, kind)| {
-						// TODO EMCH this will fail for compact as we need the register
-						// root
-						recorder.extract_proof(kind, #crate_::ProofInput::None).ok()
+					.and_then(|recorder| {
+						let #crate_::RuntimeApiProofRecorder{ recorder, kind, input } = &mut *recorder.borrow_mut();
+						let input = std::mem::replace(input, #crate_::ProofInput::None);
+						recorder.extract_proof(*kind, input).ok()
 					})
 			}
 
@@ -357,7 +362,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 					&std::cell::RefCell<#crate_::OverlayedChanges>,
 					&std::cell::RefCell<#crate_::StorageTransactionCache<Block, C::StateBackend>>,
 					&std::cell::RefCell<Option<#crate_::BlockId<Block>>>,
-					&Option<(#crate_::ProofRecorder<Block>, #crate_::StorageProofKind)>,
+					Option<&std::cell::RefCell<#crate_::RuntimeApiProofRecorder<Block>>>,
 				) -> std::result::Result<#crate_::NativeOrEncoded<R>, E>,
 				E,
 			>(
@@ -370,7 +375,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 					&self.changes,
 					&self.storage_transaction_cache,
 					&self.initialized_block,
-					&self.recorder,
+					self.recorder.as_ref(),
 				);
 
 				self.commit_on_ok(&res);

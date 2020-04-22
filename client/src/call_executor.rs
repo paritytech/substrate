@@ -21,12 +21,12 @@ use sp_runtime::{
 };
 use sp_state_machine::{
 	self, OverlayedChanges, Ext, ExecutionManager, StateMachine, ExecutionStrategy,
-	backend::Backend as _, StorageProof, StorageProofKind,
+	backend::Backend as _, StorageProof, StorageProofKind, ProofInput,
 };
 use sc_executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
 use sp_externalities::Extensions;
 use sp_core::{NativeOrEncoded, NeverNativeValue, traits::CodeExecutor};
-use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
+use sp_api::{RuntimeApiProofRecorder, InitializeBlock, StorageTransactionCache};
 use sc_client_api::{backend, call_executor::CallExecutor, CloneableSpawn};
 
 /// Call executor that executes methods locally, querying all required
@@ -126,7 +126,7 @@ where
 		initialize_block: InitializeBlock<'a, Block>,
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
-		recorder: &Option<(ProofRecorder<Block>, StorageProofKind)>,
+		recorder: Option<&RefCell<RuntimeApiProofRecorder<Block>>>,
 		extensions: Option<Extensions>,
 	) -> Result<NativeOrEncoded<R>, sp_blockchain::Error> where ExecutionManager<EM>: Clone {
 		match initialize_block {
@@ -144,7 +144,8 @@ where
 		let mut state = self.backend.state_at(*at)?;
 
 		match recorder {
-			Some((recorder, target_proof_kind)) => {
+			Some(recorder) => {
+				let RuntimeApiProofRecorder{ recorder, kind, input} = &mut *recorder.borrow_mut();
 				let trie_state = state.as_trie_backend()
 					.ok_or_else(||
 						Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof) as Box<dyn sp_state_machine::Error>
@@ -155,27 +156,34 @@ where
 				// recorder.
 				let runtime_code = state_runtime_code.runtime_code()?;
 
+				let input_backend = std::mem::replace(input, ProofInput::None);
 				let backend = sp_state_machine::ProvingBackend::new_with_recorder(
 					trie_state,
 					recorder.clone(),
-					*target_proof_kind,
+					*kind,
+					input_backend,
 				);
-
-				let changes = &mut *changes.borrow_mut();
-				let mut state_machine = StateMachine::new(
-					&backend,
-					changes_trie_state,
-					changes,
-					&self.executor,
-					method,
-					call_data,
-					extensions.unwrap_or_default(),
-					&runtime_code,
-					self.spawn_handle.clone(),
-				);
-				// TODO: https://github.com/paritytech/substrate/issues/4455
-				// .with_storage_transaction_cache(storage_transaction_cache.as_mut().map(|c| &mut **c))
-				state_machine.execute_using_consensus_failure_handler(execution_manager, native_call)
+				let result = {
+					let changes = &mut *changes.borrow_mut();
+					let mut state_machine = StateMachine::new(
+						&backend,
+						changes_trie_state,
+						changes,
+						&self.executor,
+						method,
+						call_data,
+						extensions.unwrap_or_default(),
+						&runtime_code,
+						self.spawn_handle.clone(),
+					);
+					// TODO: https://github.com/paritytech/substrate/issues/4455
+					// .with_storage_transaction_cache(storage_transaction_cache.as_mut().map(|c| &mut **c))
+					state_machine.execute_using_consensus_failure_handler(execution_manager, native_call)
+				};
+				let (recorder_state, input_state) = backend.recording_state()?;
+				*recorder = recorder_state;
+				*input = input_state;
+				result
 			},
 			None => {
 				let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);

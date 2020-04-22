@@ -33,7 +33,7 @@ use sp_state_machine::{
 };
 use hash_db::Hasher;
 
-use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
+use sp_api::{RuntimeApiProofRecorder, InitializeBlock, StorageTransactionCache};
 
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
 
@@ -113,7 +113,7 @@ impl<Block, B, Local> CallExecutor<Block> for
 		initialize_block: InitializeBlock<'a, Block>,
 		_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
-		recorder: &Option<(ProofRecorder<Block>, StorageProofKind)>,
+		recorder: Option<&RefCell<RuntimeApiProofRecorder<Block>>>,
 		extensions: Option<Extensions>,
 	) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
 		// there's no actual way/need to specify native/wasm execution strategy on light node
@@ -192,7 +192,7 @@ pub fn prove_execution<Block, S, E>(
 				Box<dyn sp_state_machine::Error>
 		)?;
 
-	let (merge_kind, prefer_full) = kind.mergeable_kind();
+	let (merge_kind, prefer_full, recurse) = kind.mergeable_kind();
 	// prepare execution environment + record preparation proof
 	let mut changes = Default::default();
 	let (_, init_proof) = executor.prove_at_trie_state(
@@ -214,6 +214,7 @@ pub fn prove_execution<Block, S, E>(
 	let total_proof = StorageProof::merge::<HashFor<Block>, _>(
 		vec![init_proof, exec_proof],
 		prefer_full,
+		recurse,
 	).map_err(|e| format!("{}", e))?;
 
 	Ok((result, total_proof))
@@ -356,7 +357,7 @@ mod tests {
 			_initialize_block: InitializeBlock<'a, Block>,
 			_execution_manager: ExecutionManager<EM>,
 			_native_call: Option<NC>,
-			_proof_recorder: &Option<(ProofRecorder<Block>, StorageProofKind)>,
+			_proof_recorder: Option<&RefCell<RuntimeApiProofRecorder<Block>>>,
 			_extensions: Option<Extensions>,
 		) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
 			unreachable!()

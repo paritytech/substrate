@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-use sp_std::collections::btree_map::BTreeMap;
+use sp_std::collections::{btree_map::BTreeMap, btree_map};
 use sp_std::collections::btree_set::BTreeSet;
 use sp_std::vec::Vec;
 use sp_std::convert::TryInto;
@@ -170,6 +170,7 @@ impl StorageProofKind {
 	}
 }
 
+#[derive(Clone)]
 /// Additional information needed for packing or unpacking.
 /// These do not need to be part of the proof but are required
 /// when using the proof.
@@ -187,6 +188,46 @@ pub enum Input {
 	/// Contains trie roots used during proof processing.
 	/// Contains keys queried during the proof processing.
 	QueryPlan(ChildrenProofMap<(Vec<u8>, Vec<Vec<u8>>)>),
+}
+
+impl Input {
+	#[must_use]
+	/// Update input with new content.
+	/// Return false on failure.
+	/// Fail when the content differs, except for `None` input
+	/// that is always reassignable.
+	///
+	/// Not that currently all query plan input are not mergeable
+	/// even if it could in the future.
+	pub fn consolidate(&mut self, other: Self) -> bool {
+		match self {
+			Input::None => {
+				*self = other;
+			},
+			Input::ChildTrieRoots(children) => {
+				match other {
+					Input::None => (),
+					Input::ChildTrieRoots(children_other) => {
+						for (child_info, root) in children_other {
+							match children.entry(child_info) {
+								btree_map::Entry::Occupied(v) => if v.get() != &root {
+									return false;
+								},
+								btree_map::Entry::Vacant(v) => {
+									v.insert(root);
+								},
+							}
+						}
+					},
+					Input::QueryPlan(..) => return false,
+					Input::QueryPlanWithValues(..) => return false,
+				}
+			},
+			Input::QueryPlan(..) => return false,
+			Input::QueryPlanWithValues(..) => return false,
+		}
+		true
+	}
 }
 
 /// Kind for designing an `Input` variant.
@@ -296,12 +337,14 @@ impl StorageProofKind {
 	}
 
 	/// Return the best kind to use for merging later, and
-	/// wether the merge should produce full proof.
-	pub fn mergeable_kind(&self) -> (Self, bool) {
+	/// wether the merge should produce full proof, and if
+	/// we are recursing.
+	pub fn mergeable_kind(&self) -> (Self, bool, bool) {
 		match self {
-			StorageProofKind::TrieSkipHashes => (StorageProofKind::TrieSkipHashesForMerge, false),
-			StorageProofKind::TrieSkipHashesFull => (StorageProofKind::TrieSkipHashesForMerge, true),
-			s => (*s, s.use_full_partial_db().unwrap_or(false))
+			StorageProofKind::TrieSkipHashes => (StorageProofKind::TrieSkipHashesForMerge, false, false),
+			StorageProofKind::TrieSkipHashesFull => (StorageProofKind::TrieSkipHashesForMerge, true, false),
+			StorageProofKind::TrieSkipHashesForMerge => (StorageProofKind::TrieSkipHashesForMerge, true, true),
+			s => (*s, s.use_full_partial_db().unwrap_or(false), false)
 		}
 	}
 }
@@ -644,8 +687,7 @@ impl StorageProof {
 					let mut result = ChildrenProofMap::default();
 					for (child_info, set) in collected.iter() {
 						let root = roots.get(&child_info.proof_info())
-							.and_then(|r| Decode::decode(&mut &r[..]).ok())
-							.ok_or_else(|| missing_pack_input())?;
+							.ok_or_else(|| missing_pack_input())?.clone();
 						let trie_nodes: HashMap<_, _> = set
 							.iter()
 							.filter_map(|(k, v)| v.as_ref().map(|v| (k.encode(), v.to_vec())))
@@ -742,7 +784,7 @@ impl StorageProof {
 	/// The function cannot pack back proof as it does not have reference to additional information
 	/// needed. So for this the additional information need to be merged separately and the result
 	/// of this merge be packed with it afterward.
-	pub fn merge<H, I>(proofs: I, prefer_full: bool) -> Result<StorageProof>
+	pub fn merge<H, I>(proofs: I, prefer_full: bool, recurse: bool) -> Result<StorageProof>
 		where
 			I: IntoIterator<Item=StorageProof>,
 			H: Hasher,
@@ -818,6 +860,9 @@ impl StorageProof {
 			}
 		}
 		if let Some(children) = packable_child_sets {
+			if recurse {
+				return Ok(StorageProof::TrieSkipHashesForMerge(children))
+			}
 			if prefer_full {
 				let mut result = ChildrenProofMap::default();
 				for (child_info, (set, root)) in children.into_iter() {

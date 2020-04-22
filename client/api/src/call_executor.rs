@@ -29,7 +29,7 @@ use sc_executor::{RuntimeVersion, NativeVersion};
 use sp_externalities::Extensions;
 use sp_core::NativeOrEncoded;
 
-use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
+use sp_api::{RuntimeApiProofRecorder, InitializeBlock, StorageTransactionCache};
 use crate::execution_extensions::ExecutionExtensions;
 
 /// Executor Provider
@@ -91,7 +91,7 @@ pub trait CallExecutor<B: BlockT> {
 		initialize_block: InitializeBlock<'a, B>,
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
-		proof_recorder: &Option<(ProofRecorder<B>, StorageProofKind)>,
+		proof_recorder: Option<&RefCell<RuntimeApiProofRecorder<B>>>,
 		extensions: Option<Extensions>,
 	) -> sp_blockchain::Result<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone;
 

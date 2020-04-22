@@ -503,27 +503,29 @@ where
 	Exec: CodeExecutor + 'static + Clone,
 	N: crate::changes_trie::BlockNumber,
 {
-	let proving_backend = proving_backend::ProvingBackend::new(
+	let mut proving_backend = proving_backend::ProvingBackend::new(
 		trie_backend,
 		kind,
 	);
-	let mut sm = StateMachine::<_, H, N, Exec>::new(
-		&proving_backend,
-		None,
-		overlay,
-		exec,
-		method,
-		call_data,
-		Extensions::default(),
-		runtime_code,
-		spawn_handle,
-	);
+	let result = {
+		let mut sm = StateMachine::<_, H, N, Exec>::new(
+			&proving_backend,
+			None,
+			overlay,
+			exec,
+			method,
+			call_data,
+			Extensions::default(),
+			runtime_code,
+			spawn_handle,
+		);
 
-	let result = sm.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
-		always_wasm(),
-		None,
-	)?;
-	let proof = proving_backend.extract_proof(kind)
+		sm.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
+			always_wasm(),
+			None,
+		)?
+	};
+	let proof = proving_backend.extract_proof()
 		.map_err(|e| Box::new(e) as Box<dyn Error>)?;
 	Ok((result.into_encoded(), proof))
 }
@@ -696,7 +698,7 @@ where
 	I: IntoIterator,
 	I::Item: AsRef<[u8]>,
 {
-	let proving_backend = proving_backend::ProvingBackend::<_, H>::new(
+	let mut proving_backend = proving_backend::ProvingBackend::<_, H>::new(
 		trie_backend,
 		kind,
 	);
@@ -705,7 +707,7 @@ where
 			.storage(key.as_ref())
 			.map_err(|e| Box::new(e) as Box<dyn Error>)?;
 	}
-	Ok(proving_backend.extract_proof(kind)
+	Ok(proving_backend.extract_proof()
 		.map_err(|e| Box::new(e) as Box<dyn Error>)?)
 }
 
@@ -723,13 +725,13 @@ where
 	I: IntoIterator,
 	I::Item: AsRef<[u8]>,
 {
-	let proving_backend = proving_backend::ProvingBackend::<_, H>::new(trie_backend, kind);
+	let mut proving_backend = proving_backend::ProvingBackend::<_, H>::new(trie_backend, kind);
 	for key in keys.into_iter() {
 		proving_backend
 			.child_storage(child_info, key.as_ref())
 			.map_err(|e| Box::new(e) as Box<dyn Error>)?;
 	}
-	Ok(proving_backend.extract_proof(kind)
+	Ok(proving_backend.extract_proof()
 		.map_err(|e| Box::new(e) as Box<dyn Error>)?)
 }
 

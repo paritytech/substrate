@@ -143,14 +143,16 @@ impl<H: Hasher> Clone for ProofRecorder<H> {
 
 /// Patricia trie-based backend which also tracks all touched storage trie values.
 /// These can be sent to remote node and used as a proof of execution.
-pub struct ProvingBackend<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> (
-	TrieBackend<ProofRecorderBackend<'a, S, H>, H>,
-);
+pub struct ProvingBackend<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
+	trie_backend: TrieBackend<ProofRecorderBackend<'a, S, H>, H>,
+	previous_input: ProofInput, // TODO consider &'a mut previous_input
+	proof_kind: StorageProofKind,
+}
 
 /// Trie backend storage with its proof recorder.
 pub struct ProofRecorderBackend<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
 	backend: &'a S,
-	proof_recorder: ProofRecorder<H>,
+	proof_recorder: ProofRecorder<H>, // TODO if removing rwlock, consider &'a mut
 }
 
 impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
@@ -163,7 +165,7 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 		} else {
 			ProofRecorder::Flat(Default::default())
 		};
-		Self::new_with_recorder(backend, proof_recorder, kind)
+		Self::new_with_recorder(backend, proof_recorder, kind, ProofInput::None)
 	}
 
 	/// Create new proving backend with the given recorder.
@@ -171,6 +173,7 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 		backend: &'a TrieBackend<S, H>,
 		proof_recorder: ProofRecorder<H>,
 		proof_kind: StorageProofKind,
+		previous_input: ProofInput,
 	) -> Self {
 		let essence = backend.essence();
 		let root = essence.root().clone();
@@ -178,22 +181,48 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 			backend: essence.backend_storage(),
 			proof_recorder,
 		};
-		if let ProofInputKind::ChildTrieRoots = proof_kind.processing_input_kind() {
-			ProvingBackend(TrieBackend::new_with_roots(recorder, root))
+		let trie_backend = if let ProofInputKind::ChildTrieRoots = proof_kind.processing_input_kind() {
+			TrieBackend::new_with_roots(recorder, root)
 		} else {
-			ProvingBackend(TrieBackend::new(recorder, root))
+			TrieBackend::new(recorder, root)
+		};
+		ProvingBackend {
+			trie_backend,
+			previous_input,
+			proof_kind,
 		}
 	}
 
 	/// Extracting the gathered unordered proof.
-	pub fn extract_proof(&self, kind: StorageProofKind) -> Result<StorageProof, String> {
-		let roots = match kind.processing_input_kind() {
+	/// TODO remove or make it consiming: here it is doable to get
+	/// intermediate proof, not sure if of any use.
+	pub fn extract_proof(&mut self) -> Result<StorageProof, String> {
+		self.update_input()?;
+		self.trie_backend.essence().backend_storage().proof_recorder
+			.extract_proof(self.proof_kind, self.previous_input.clone())
+	}
+
+	fn update_input(&mut self) -> Result<(), String> {
+		let input = match self.proof_kind.processing_input_kind() {
 			ProofInputKind::ChildTrieRoots => {
-				self.0.extract_registered_roots()
+				self.trie_backend.extract_registered_roots()
 			},
 			_ => ProofInput::None,
 		};
-		self.0.essence().backend_storage().proof_recorder.extract_proof(kind, roots)
+		if !self.previous_input.consolidate(input) {
+			Err("Incompatible inputs".to_string())
+		} else {
+			Ok(())
+		}
+	}
+
+	/// Drop the backend, but keep the state to use it again afterward
+	pub fn recording_state(mut self) -> Result<(ProofRecorder<H>, ProofInput), String> {
+		self.update_input()?;
+		Ok((
+			self.trie_backend.essence().backend_storage().proof_recorder.clone(),
+			self.previous_input
+		))
 	}
 }
 
@@ -201,7 +230,7 @@ impl<H: Hasher> ProofRecorder<H>
 	where
 		H::Out: Codec,
 {
-	/// Extracting the gathered unordered proof.
+	/// Extracts the gathered unordered proof.
 	pub fn extract_proof(
 		&self,
 		kind: StorageProofKind,
@@ -270,7 +299,7 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 	type TrieBackendStorage = S;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.0.storage(key)
+		self.trie_backend.storage(key)
 	}
 
 	fn child_storage(
@@ -278,7 +307,7 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.0.child_storage(child_info, key)
+		self.trie_backend.child_storage(child_info, key)
 	}
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
@@ -286,11 +315,11 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		child_info: &ChildInfo,
 		f: F,
 	) {
-		self.0.for_keys_in_child_storage(child_info, f)
+		self.trie_backend.for_keys_in_child_storage(child_info, f)
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.0.next_storage_key(key)
+		self.trie_backend.next_storage_key(key)
 	}
 
 	fn next_child_storage_key(
@@ -298,15 +327,15 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.0.next_child_storage_key(child_info, key)
+		self.trie_backend.next_child_storage_key(child_info, key)
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
-		self.0.for_keys_with_prefix(prefix, f)
+		self.trie_backend.for_keys_with_prefix(prefix, f)
 	}
 
 	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
-		self.0.for_key_values_with_prefix(prefix, f)
+		self.trie_backend.for_key_values_with_prefix(prefix, f)
 	}
 
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
@@ -315,15 +344,15 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		prefix: &[u8],
 		f: F,
 	) {
-		self.0.for_child_keys_with_prefix( child_info, prefix, f)
+		self.trie_backend.for_child_keys_with_prefix( child_info, prefix, f)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		self.0.pairs()
+		self.trie_backend.pairs()
 	}
 
 	fn keys(&self, prefix: &[u8]) -> Vec<Vec<u8>> {
-		self.0.keys(prefix)
+		self.trie_backend.keys(prefix)
 	}
 
 	fn child_keys(
@@ -331,13 +360,13 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		child_info: &ChildInfo,
 		prefix: &[u8],
 	) -> Vec<Vec<u8>> {
-		self.0.child_keys(child_info, prefix)
+		self.trie_backend.child_keys(child_info, prefix)
 	}
 
 	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
-		self.0.storage_root(delta)
+		self.trie_backend.storage_root(delta)
 	}
 
 	fn child_storage_root<I>(
@@ -349,13 +378,13 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord
 	{
-		self.0.child_storage_root(child_info, delta)
+		self.trie_backend.child_storage_root(child_info, delta)
 	}
 
 	fn register_overlay_stats(&mut self, _stats: &crate::stats::StateMachineStats) { }
 
 	fn usage_info(&self) -> crate::stats::UsageInfo {
-		self.0.usage_info()
+		self.trie_backend.usage_info()
 	}
 }
 
@@ -418,26 +447,26 @@ mod tests {
 	fn proof_is_empty_until_value_is_read() {
 		let trie_backend = test_trie();
 		let kind = StorageProofKind::Flatten;
-		assert!(test_proving(&trie_backend, kind).extract_proof(kind).unwrap().is_empty());
+		assert!(test_proving(&trie_backend, kind).extract_proof().unwrap().is_empty());
 		let kind = StorageProofKind::Full;
-		assert!(test_proving(&trie_backend, kind).extract_proof(kind).unwrap().is_empty());
+		assert!(test_proving(&trie_backend, kind).extract_proof().unwrap().is_empty());
 		let kind = StorageProofKind::TrieSkipHashesFull;
-		assert!(test_proving(&trie_backend, kind).extract_proof(kind).unwrap().is_empty());
+		assert!(test_proving(&trie_backend, kind).extract_proof().unwrap().is_empty());
 		let kind = StorageProofKind::TrieSkipHashes;
-		assert!(test_proving(&trie_backend, kind).extract_proof(kind).unwrap().is_empty());
+		assert!(test_proving(&trie_backend, kind).extract_proof().unwrap().is_empty());
 	}
 
 	#[test]
 	fn proof_is_non_empty_after_value_is_read() {
 		let trie_backend = test_trie();
 		let kind = StorageProofKind::Flatten;
-		let backend = test_proving(&trie_backend, kind);
+		let mut backend = test_proving(&trie_backend, kind);
 		assert_eq!(backend.storage(b"key").unwrap(), Some(b"value".to_vec()));
-		assert!(!backend.extract_proof(kind).unwrap().is_empty());
+		assert!(!backend.extract_proof().unwrap().is_empty());
 		let kind = StorageProofKind::Full;
-		let backend = test_proving(&trie_backend, kind);
+		let mut backend = test_proving(&trie_backend, kind);
 		assert_eq!(backend.storage(b"key").unwrap(), Some(b"value".to_vec()));
-		assert!(!backend.extract_proof(kind).unwrap().is_empty());
+		assert!(!backend.extract_proof().unwrap().is_empty());
 	}
 
 	#[test]
@@ -481,10 +510,10 @@ mod tests {
 		(0..64).for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i]));
 
 		let test = |kind: StorageProofKind| {
-			let proving = ProvingBackend::new(trie, kind);
+			let mut proving = ProvingBackend::new(trie, kind);
 			assert_eq!(proving.storage(&[42]).unwrap().unwrap(), vec![42]);
 
-			let proof = proving.extract_proof(kind).unwrap();
+			let proof = proving.extract_proof().unwrap();
 
 			let proof_check = create_proof_check_backend::<BlakeTwo256>(in_memory_root.into(), proof).unwrap();
 			assert_eq!(proof_check.storage(&[42]).unwrap().unwrap(), vec![42]);
@@ -536,10 +565,10 @@ mod tests {
 		));
 
 		let test = |kind: StorageProofKind| {
-			let proving = ProvingBackend::new(trie, kind);
+			let mut proving = ProvingBackend::new(trie, kind);
 			assert_eq!(proving.storage(&[42]).unwrap().unwrap(), vec![42]);
 
-			let proof = proving.extract_proof(kind).unwrap();
+			let proof = proving.extract_proof().unwrap();
 
 			let proof_check = create_proof_check_backend::<BlakeTwo256>(
 				in_memory_root.into(),
@@ -551,10 +580,10 @@ mod tests {
 			assert_eq!(proof_check.storage(&[41]).unwrap().unwrap(), vec![41]);
 			assert_eq!(proof_check.storage(&[64]).unwrap(), None);
 
-			let proving = ProvingBackend::new(trie, kind);
+			let mut proving = ProvingBackend::new(trie, kind);
 			assert_eq!(proving.child_storage(child_info_1, &[64]), Ok(Some(vec![64])));
 
-			let proof = proving.extract_proof(kind).unwrap();
+			let proof = proving.extract_proof().unwrap();
 			if kind.use_full_partial_db().unwrap() {
 				let proof_check = create_proof_check_backend::<BlakeTwo256>(
 					in_memory_root.into(),
