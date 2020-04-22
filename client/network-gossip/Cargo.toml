@@ -25,4 +25,5 @@ sp-utils = { version = "2.0.0-dev", path = "../../primitives/utils" }
 wasm-timer = "0.2"
 
 [dev-dependencies]
+async-std = "1.5"
 substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../test-utils/runtime/client" }
