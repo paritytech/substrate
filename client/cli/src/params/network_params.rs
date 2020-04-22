@@ -85,9 +85,8 @@ pub struct NetworkParams {
 	#[structopt(flatten)]
 	pub node_key_params: NodeKeyParams,
 
-	/// Disable the yamux flow control. Enable this if the networking seems broken. This option
-	/// will be removed in the future once there is enough confidence that this feature is
-	/// properly working.
+	/// Disable the yamux flow control. This option will be removed in the future once there is
+	/// enough confidence that this feature is properly working.
 	#[structopt(long = "no-yamux-flow-control")]
 	pub no_yamux_flow_control: bool,
 }
