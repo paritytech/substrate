@@ -469,23 +469,21 @@ decl_module! {
 		/// Stores the given binary Wasm code into the chain's storage and returns its `codehash`.
 		/// You can instantiate contracts only with stored code.
 		#[weight = FunctionOf(
-			|args: (&Weight, &Vec<u8>)| args.0 + MINIMUM_WEIGHT,
+			|args: (&Vec<u8>,)| Module::<T>::calc_code_put_costs(args.0) + MINIMUM_WEIGHT,
 			DispatchClass::Normal,
 			Pays::Yes
 		)]
 		pub fn put_code(
 			origin,
-			#[compact] gas_limit: Gas,
 			code: Vec<u8>
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			ensure_signed(origin)?;
-			let mut gas_meter = GasMeter::new(gas_limit);
 			let schedule = <Module<T>>::current_schedule();
-			let result = wasm::save_code::<T>(code, &mut gas_meter, &schedule);
+			let result = wasm::save_code::<T>(code, &schedule);
 			if let Ok(code_hash) = result {
 				Self::deposit_event(RawEvent::CodeStored(code_hash));
 			}
-			gas_meter.into_dispatch_result(result)
+			result.map(|_| ()).map_err(Into::into)
 		}
 
 		/// Makes a call to an account, optionally transferring some balance.
@@ -631,6 +629,10 @@ impl<T: Trait> Module<T> {
 }
 
 impl<T: Trait> Module<T> {
+	fn calc_code_put_costs(code: &Vec<u8>) -> Gas {
+		<Module<T>>::current_schedule().put_code_per_byte_cost.saturating_mul(code.len() as Gas)
+	}
+
 	fn execute_wasm(
 		origin: T::AccountId,
 		gas_meter: &mut GasMeter<T>,

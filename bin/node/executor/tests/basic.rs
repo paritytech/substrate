@@ -606,7 +606,7 @@ fn deploying_wasm_contract_should_work() {
 			CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(0, 0))),
 				function: Call::Contracts(
-					pallet_contracts::Call::put_code::<Runtime>(500_000_000, transfer_code)
+					pallet_contracts::Call::put_code::<Runtime>(transfer_code)
 				),
 			},
 			CheckedExtrinsic {
