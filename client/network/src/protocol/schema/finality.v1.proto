@@ -1,0 +1,19 @@
+// Schema definition for finality proof request/responses.
+
+syntax = "proto3";
+
+package api.v1.finality;
+
+// Request a finality proof from a peer.
+message FinalityProofRequest {
+	// SCALE-encoded hash of the block to request.
+	bytes block_hash = 1;
+	// Opaque chain-specific additional request data.
+	bytes request = 2;
+}
+
+// Response to a finality proof request.
+message FinalityProofResponse {
+	// Opaque chain-specific finality proof. Empty if no such proof exists.
+	bytes proof = 1; // optional
+}
