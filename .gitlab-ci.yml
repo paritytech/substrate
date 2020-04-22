@@ -29,5 +29,8 @@ deploy-chaos-example:
     - kubectl get pod
     - kubectl apply -f .maintain/kubernetes/kuard.yml
     - kubectl rollout status deployment/kuard-deployment
+    - kubectl get all
+    - sleep 600
+    - kubectl delete -f .maintain/kubernetes/kuard.yml
 
 
