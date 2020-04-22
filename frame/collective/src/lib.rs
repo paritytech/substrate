@@ -631,6 +631,7 @@ mod tests {
 
 			System::set_block_number(4);
 			assert_ok!(Collective::close(Origin::signed(4), hash.clone(), 0));
+			System::finalize();
 
 			let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
 			assert_eq!(System::events(), vec![
@@ -654,6 +655,7 @@ mod tests {
 
 			System::set_block_number(4);
 			assert_ok!(Collective::close(Origin::signed(4), hash.clone(), 0));
+			System::finalize();
 
 			let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
 			assert_eq!(System::events(), vec![
@@ -677,6 +679,8 @@ mod tests {
 
 			System::set_block_number(4);
 			assert_ok!(Collective::close(Origin::signed(4), hash.clone(), 0));
+
+			System::finalize();
 
 			let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
 			assert_eq!(System::events(), vec![
@@ -771,6 +775,8 @@ mod tests {
 				Some(Votes { index: 0, threshold: 3, ayes: vec![1], nays: vec![], end })
 			);
 
+			System::finalize();
+
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::Initialization,
@@ -849,6 +855,8 @@ mod tests {
 				Error::<Test, Instance1>::DuplicateVote,
 			);
 
+			System::finalize();
+
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::Initialization,
@@ -896,6 +904,8 @@ mod tests {
 			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, false));
 
+			System::finalize();
+
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::Initialization,
@@ -937,6 +947,8 @@ mod tests {
 			let hash: H256 = proposal.blake2_256().into();
 			assert_ok!(Collective::propose(Origin::signed(1), 2, Box::new(proposal.clone())));
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
+
+			System::finalize();
 
 			assert_eq!(System::events(), vec![
 				EventRecord {

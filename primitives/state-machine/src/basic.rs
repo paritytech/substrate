@@ -327,10 +327,13 @@ impl Externalities for BasicExternalities {
 
 		let number_of_values = number_of_values as u32;
 
-		self.place_storage(
-			key.to_vec(),
-			Some(concatenated),
-		);
+		// only set storage if anything was accumulated.
+		if number_of_values > 0 {
+			self.place_storage(
+				key.to_vec(),
+				Some(concatenated),
+			);
+		}
 
 		number_of_values
 	}
