@@ -137,7 +137,8 @@ mod tests {
 	#[test]
 	fn prune_works() {
 		fn prepare_storage() -> InMemoryStorage<BlakeTwo256, u64> {
-			let child_key = ChildIndex { block: 67u64, storage_key: b"1".to_vec() }.encode();
+			let child_info = sp_core::storage::ChildInfo::new_default(&b"1"[..]);
+			let child_key = ChildIndex { block: 67u64, storage_key: child_info.prefixed_storage_key() }.encode();
 			let mut mdb1 = MemoryDB::<BlakeTwo256>::default();
 			let root1 = insert_into_memory_db::<BlakeTwo256, _>(
 				&mut mdb1, vec![(vec![10], vec![20])]).unwrap();

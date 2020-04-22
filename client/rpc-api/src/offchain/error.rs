@@ -27,11 +27,16 @@ pub enum Error {
 	/// Unavailable storage kind error.
 	#[display(fmt="This storage kind is not available yet.")]
 	UnavailableStorageKind,
+	/// Call to an unsafe RPC was denied.
+	UnsafeRpcCalled(crate::policy::UnsafeRpcError),
 }
 
 impl std::error::Error for Error {
 	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-		None
+		match self {
+			Self::UnsafeRpcCalled(err) => Some(err),
+			_ => None,
+		}
 	}
 }
 
@@ -46,6 +51,7 @@ impl From<Error> for rpc::Error {
 				message: "This storage kind is not available yet" .into(),
 				data: None,
 			},
+			Error::UnsafeRpcCalled(e) => e.into(),
 		}
 	}
 }

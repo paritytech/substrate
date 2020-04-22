@@ -35,7 +35,7 @@ use sp_runtime::{
 use frame_support::{
 	assert_ok, assert_err, impl_outer_dispatch, impl_outer_event, impl_outer_origin, parameter_types,
 	storage::child, StorageMap, StorageValue, traits::{Currency, Get},
-	weights::{DispatchInfo, DispatchClass, Weight},
+	weights::{DispatchInfo, DispatchClass, Weight, Pays},
 };
 use std::{cell::RefCell, sync::atomic::{AtomicUsize, Ordering}};
 use sp_core::storage::well_known_keys;
@@ -200,10 +200,7 @@ impl TrieIdGenerator<u64> for DummyTrieIdGenerator {
 			*v
 		});
 
-		// TODO: see https://github.com/paritytech/substrate/issues/2325
 		let mut res = vec![];
-		res.extend_from_slice(well_known_keys::CHILD_STORAGE_KEY_PREFIX);
-		res.extend_from_slice(b"default:");
 		res.extend_from_slice(&new_seed.to_le_bytes());
 		res.extend_from_slice(&account_id.to_le_bytes());
 		res
@@ -1633,7 +1630,7 @@ fn cannot_self_destruct_in_constructor() {
 #[test]
 fn check_block_gas_limit_works() {
 	ExtBuilder::default().block_gas_limit(50).build().execute_with(|| {
-		let info = DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: true };
+		let info = DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: Pays::Yes };
 		let check = CheckBlockGasLimit::<Test>(Default::default());
 		let call: Call = crate::Call::put_code(1000, vec![]).into();
 
