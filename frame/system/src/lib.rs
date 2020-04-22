@@ -848,6 +848,8 @@ impl<T: Trait> Module<T> {
 		digest: &DigestOf<T>,
 		kind: InitKind,
 	) {
+		use frame_support::storage::generator::StorageValue;
+
 		// populate environment
 		ExecutionPhase::put(Phase::Initialization);
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
@@ -858,6 +860,7 @@ impl<T: Trait> Module<T> {
 		<ExtrinsicsRoot<T>>::put(txs_root);
 
 		if let InitKind::Full = kind {
+			sp_io::storage::accumulator_commit(&Events::<T>::storage_value_final_key()[..]);
 			<Events<T>>::kill();
 			EventCount::kill();
 			<EventTopics<T>>::remove_all();
