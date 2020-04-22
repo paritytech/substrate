@@ -110,7 +110,7 @@ use frame_support::{
 		Get, FindAuthor, ValidatorRegistration, EstimateNextSessionRotation, EstimateNextNewSession,
 	},
 	dispatch::{self, DispatchResult, DispatchError},
-	weights::{Weight, MINIMUM_WEIGHT},
+	weights::Weight,
 };
 use frame_system::{self as system, ensure_signed};
 
@@ -503,8 +503,8 @@ decl_module! {
 		/// - DbWrites per key id: `KeyOwner`
 		/// # </weight>
 		#[weight = 200_000_000
-			+ T::DbWeight::get().reads(2 + T::Keys::key_ids().len())
-			+ T::DbWeight::get().writes(1 + T::Keys::key_ids().len())]
+			+ T::DbWeight::get().reads(2 + T::Keys::key_ids().len() as Weight)
+			+ T::DbWeight::get().writes(1 + T::Keys::key_ids().len() as Weight)]
 		pub fn set_keys(origin, keys: T::Keys, proof: Vec<u8>) -> dispatch::DispatchResult {
 			let who = ensure_signed(origin)?;
 
@@ -527,7 +527,8 @@ decl_module! {
 		/// - DbWrites: `NextKeys`, `origin account`
 		/// - DbWrites per key id: `KeyOwnder`
 		/// # </weight>
-		#[weight = 120_000_000 + T::DbWieght::get().reads_writes(2, 1 + T::Keys::key_ids().len())]
+		#[weight = 120_000_000
+			+ T::DbWeight::get().reads_writes(2, 1 + T::Keys::key_ids().len() as Weight)]
 		pub fn purge_keys(origin) {
 			let who = ensure_signed(origin)?;
 			Self::do_purge_keys(&who)?;
@@ -538,9 +539,10 @@ decl_module! {
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			if T::ShouldEndSession::should_end_session(n) {
 				Self::rotate_session();
+				Weight::max_value()
+			} else {
+				0
 			}
-
-			MINIMUM_WEIGHT
 		}
 	}
 }
