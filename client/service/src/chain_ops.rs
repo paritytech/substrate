@@ -56,12 +56,13 @@ impl<
 	TExecDisp: 'static + NativeExecutionDispatch,
 	TImpQu: 'static + ImportQueue<TBl>,
 	TRtApi: 'static + Send + Sync,
+	Self: Send + 'static,
 {
 	type Block = TBl;
 	type NativeDispatch = TExecDisp;
 
 	fn import_blocks(
-		self,
+		mut self,
 		input: impl Read + Seek + Send + 'static,
 		force: bool,
 	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>> {
@@ -98,22 +99,23 @@ impl<
 			}
 		}
 
-		let client = self.client;
-		let mut queue = self.import_queue;
-
 		let mut io_reader_input = IoReader(input);
 		let mut count = None::<u64>;
 		let mut read_block_count = 0;
 		let mut link = WaitLink::new();
 
-		// Importing blocks is implemented as a future, because we want the operation to be
-		// interruptible.
-		//
-		// Every time we read a block from the input or import a bunch of blocks from the import
-		// queue, the `Future` re-schedules itself and returns `Poll::Pending`.
-		// This makes it possible either to interleave other operations in-between the block imports,
-		// or to stop the operation completely.
 		let import = future::poll_fn(move |cx| {
+			// Importing blocks is implemented as a future, because we want the operation to be
+			// interruptible.
+			//
+			// Every time we read a block from the input or import a bunch of blocks from the import
+			// queue, the `Future` re-schedules itself and returns `Poll::Pending`.
+			// This makes it possible either to interleave other operations in-between the block imports,
+			// or to stop the operation completely.
+
+			let client = &self.client;
+			let queue = &mut self.import_queue;
+
 			// Start by reading the number of blocks if not done so already.
 			let count = match count {
 				Some(c) => c,
