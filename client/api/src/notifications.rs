@@ -169,21 +169,32 @@ impl<Block: BlockT> StorageNotifications<Block> {
 		let changes = Arc::new(changes);
 		let child_changes = Arc::new(child_changes);
 		// Trigger the events
-		for subscriber in subscribers {
-			let should_remove = {
-				let &(ref sink, ref filter, ref child_filters) = self.sinks.get(&subscriber)
-					.expect("subscribers returned from self.listeners are always in self.sinks; qed");
-				sink.unbounded_send((hash.clone(), StorageChangeSet {
-					changes: changes.clone(),
-					child_changes: child_changes.clone(),
-					filter: filter.clone(),
-					child_filters: child_filters.clone(),
-				})).is_err()
-			};
 
-			if should_remove {
-				self.remove_subscriber(subscriber);
-			}
+		let to_remove = self.sinks
+			.iter()
+			.filter_map(|(subscriber, &(ref sink, ref filter, ref child_filters))| {
+				let should_remove = {
+					if subscribers.contains(subscriber) {
+						sink.unbounded_send((hash.clone(), StorageChangeSet {
+							changes: changes.clone(),
+							child_changes: child_changes.clone(),
+							filter: filter.clone(),
+							child_filters: child_filters.clone(),
+						})).is_err()
+					} else {
+						sink.is_closed()
+					}
+				};
+
+				if should_remove {
+					Some(subscriber.clone())
+				} else {
+					None
+				}
+			}).collect::<Vec<_>>();
+
+		for sub_id in to_remove {
+			self.remove_subscriber(sub_id);
 		}
 	}
 
