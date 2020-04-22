@@ -483,3 +483,56 @@ impl<T: Clone> SlotDuration<T> {
 		self.0.clone()
 	}
 }
+
+/// Calculate a slot duration lenience based on the number of missed slots from current
+/// to parent. If the number of skipped slots is greated than 0 this method will apply
+/// an exponential backoff of at most `2^7 * slot_duration`, if no slots were skipped
+/// this method will return `None.`
+pub fn slot_lenience_exponential(parent_slot: u64, slot_info: &SlotInfo) -> Option<Duration> {
+	// never give more than 2^this times the lenience.
+	const BACKOFF_CAP: u64 = 7;
+
+	// how many slots it takes before we double the lenience.
+	const BACKOFF_STEP: u64 = 2;
+
+	// we allow a lenience of the number of slots since the head of the
+	// chain was produced, minus 1 (since there is always a difference of at least 1)
+	//
+	// exponential back-off.
+	// in normal cases we only attempt to issue blocks up to the end of the slot.
+	// when the chain has been stalled for a few slots, we give more lenience.
+	let skipped_slots = slot_info.number.saturating_sub(parent_slot + 1);
+
+	if skipped_slots == 0 {
+		None
+	} else {
+		let slot_lenience = skipped_slots / BACKOFF_STEP;
+		let slot_lenience = std::cmp::min(slot_lenience, BACKOFF_CAP);
+		let slot_lenience = 1 << slot_lenience;
+		Some(Duration::from_millis(slot_lenience * slot_info.duration))
+	}
+}
+
+/// Calculate a slot duration lenience based on the number of missed slots from current
+/// to parent. If the number of skipped slots is greated than 0 this method will apply
+/// a linear backoff of at most `20 * slot_duration`, if no slots were skipped
+/// this method will return `None.`
+pub fn slot_lenience_linear(parent_slot: u64, slot_info: &SlotInfo) -> Option<Duration> {
+	// never give more than 20 times more lenience.
+	const BACKOFF_CAP: u64 = 20;
+
+	// we allow a lenience of the number of slots since the head of the
+	// chain was produced, minus 1 (since there is always a difference of at least 1)
+	//
+	// linear back-off.
+	// in normal cases we only attempt to issue blocks up to the end of the slot.
+	// when the chain has been stalled for a few slots, we give more lenience.
+	let skipped_slots = slot_info.number.saturating_sub(parent_slot + 1);
+
+	if skipped_slots == 0 {
+		None
+	} else {
+		let slot_lenience = std::cmp::min(skipped_slots, BACKOFF_CAP);
+		Some(Duration::from_millis(slot_lenience * slot_info.duration))
+	}
+}
