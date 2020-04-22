@@ -1127,6 +1127,7 @@ fn update_permission_should_raise_event() {
 				asset_id,
 				permissions.clone()
 			));
+			System::finalize();
 
 			let expected_event = TestEvent::generic_asset(
 				RawEvent::PermissionUpdated(asset_id, permissions.clone()),
@@ -1164,9 +1165,9 @@ fn mint_should_raise_event() {
 					permissions: permissions.clone(),
 				},
 			));
-
 			// Act
 			assert_ok!(GenericAsset::mint(Origin::signed(origin), asset_id, to, amount));
+			System::finalize();
 
 			let expected_event = TestEvent::generic_asset(RawEvent::Minted(asset_id, to, amount));
 
@@ -1205,6 +1206,7 @@ fn burn_should_raise_event() {
 
 			// Act
 			assert_ok!(GenericAsset::burn(Origin::signed(origin), asset_id, origin, amount));
+			System::finalize();
 
 			let expected_event = TestEvent::generic_asset(RawEvent::Burned(asset_id, origin, amount));
 
