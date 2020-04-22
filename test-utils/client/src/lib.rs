@@ -214,6 +214,7 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 				self.keystore.clone(),
 			),
 			None,
+			sc_client::ClientConfig::default(),
 		).expect("Creates new client");
 
 		let longest_chain = sc_client::LongestChain::new(self.backend);
@@ -248,7 +249,7 @@ impl<Block: BlockT, E, Backend, G: GenesisInit> TestClientBuilder<
 		let executor = executor.into().unwrap_or_else(||
 			NativeExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
 		);
-		let executor = LocalCallExecutor::new(self.backend.clone(), executor, tasks_executor());
+		let executor = LocalCallExecutor::new(self.backend.clone(), executor, tasks_executor(), Default::default());
 
 		self.build_with_executor(executor)
 	}

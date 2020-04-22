@@ -44,6 +44,7 @@ impl BenchmarkCmd {
 
 		let genesis_storage = spec.build_storage()?;
 		let mut changes = Default::default();
+		let mut offchain_changes = Default::default();
 		let cache_size = Some(self.database_cache_size as usize);
 		let state = BenchmarkingState::<BB>::new(genesis_storage, cache_size)?;
 		let executor = NativeExecutor::<ExecDispatch>::new(
@@ -59,6 +60,7 @@ impl BenchmarkCmd {
 			&state,
 			None,
 			&mut changes,
+			&mut offchain_changes,
 			&executor,
 			"Benchmark_dispatch_benchmark",
 			&(
