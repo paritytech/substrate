@@ -211,7 +211,9 @@ pub trait Contains<T: Ord> {
 
 /// A trait for querying bound for the length of an implementation of `Contains`
 pub trait ContainsLengthBound {
+	/// Minimum number of elements contained
 	fn min_len() -> usize;
+	/// Maximum number of elements contained
 	fn max_len() -> usize;
 }
 
