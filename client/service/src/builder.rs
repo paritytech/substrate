@@ -21,7 +21,7 @@ use crate::config::{Configuration, KeystoreConfig, PrometheusConfig};
 use crate::metrics::MetricsService;
 use sc_client_api::{
 	self, BlockchainEvents, backend::RemoteBackend, light::RemoteBlockchain, execution_extensions::ExtensionsFactory,
-	ExecutorProvider, CallExecutor, ForkBlocks, BadBlocks, CloneableSpawn,
+	ExecutorProvider, CallExecutor, ForkBlocks, BadBlocks, CloneableSpawn, UsageProvider,
 };
 use crate::client::Client;
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};

@@ -81,11 +81,12 @@ pub use sc_tracing::TracingReceiver;
 pub use task_manager::{TaskManagerBuilder, SpawnTaskHandle};
 use task_manager::TaskManager;
 use sp_blockchain::{HeaderBackend, HeaderMetadata, ProvideCache};
-use sp_api::{ProvideRuntimeApi, CallApiAt, ApiExt, ConstructRuntimeApi, Core, ApiErrorExt};
+use sp_api::{ProvideRuntimeApi, CallApiAt, ApiExt, ConstructRuntimeApi, ApiErrorExt};
 use sc_client_api::{
 	LockImportRun, Backend as BackendT, ProofProvider, ProvideUncles,
 	StorageProvider, ExecutorProvider, Finalizer, AuxStore, Backend,
 	BlockBackend, BlockchainEvents, CallExecutor, TransactionFor,
+	UsageProvider,
 };
 use sc_block_builder::BlockBuilderProvider;
 use sp_consensus::{block_validation::Chain, BlockImport};
@@ -144,8 +145,9 @@ pub trait AbstractService: Future<Output = Result<(), Error>> + Send + Unpin + S
 	type SelectChain: sp_consensus::SelectChain<Self::Block>;
 	/// Transaction pool.
 	type TransactionPool: TransactionPool<Block = Self::Block> + MallocSizeOfWasm;
-	/// The generic Client type, todo: link to docs of each trait.
-	type Client: HeaderBackend<Self::Block>
+	/// The generic Client type
+	type Client:
+		HeaderBackend<Self::Block>
 		+ ProvideRuntimeApi<
 			Self::Block,
 			Api = <Self::RuntimeApi as ConstructRuntimeApi<Self::Block, Self::Client>>::RuntimeApi
@@ -173,6 +175,7 @@ pub trait AbstractService: Future<Output = Result<(), Error>> + Send + Unpin + S
 		+ Finalizer<Self::Block, Self::Backend>
 		+ BlockchainEvents<Self::Block>
 		+ BlockBackend<Self::Block>
+		+ UsageProvider<Self::Block>
 		+ AuxStore;
 
 	/// Get event stream for telemetry connection established events.

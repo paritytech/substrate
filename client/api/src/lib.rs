@@ -41,6 +41,13 @@ pub use longest_chain::LongestChain;
 
 pub use sp_state_machine::{StorageProof, ExecutionStrategy, CloneableSpawn};
 
+/// Usage Information Provider interface
+///
+pub trait UsageProvider<Block: sp_runtime::traits::Block> {
+	/// Get usage info about current client.
+	fn usage_info(&self) -> ClientInfo<Block>;
+}
+
 /// Utility methods for the client.
 pub mod utils {
 	use sp_blockchain::{HeaderBackend, HeaderMetadata, Error};

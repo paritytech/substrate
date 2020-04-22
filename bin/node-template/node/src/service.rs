@@ -68,9 +68,7 @@ macro_rules! new_full_start {
 }
 
 /// Builds a new service for a full client.
-pub fn new_full(config: Configuration)
-	-> Result<impl AbstractService, ServiceError>
-{
+pub fn new_full(config: Configuration) -> Result<impl AbstractService, ServiceError> {
 	let role = config.role.clone();
 	let force_authoring = config.force_authoring;
 	let name = config.network.node_name.clone();
@@ -173,9 +171,7 @@ pub fn new_full(config: Configuration)
 }
 
 /// Builds a new service for a light client.
-pub fn new_light(config: Configuration)
-	-> Result<impl AbstractService, ServiceError>
-{
+pub fn new_light(config: Configuration) -> Result<impl AbstractService, ServiceError> {
 	let inherent_data_providers = InherentDataProviders::new();
 
 	ServiceBuilder::new_light::<Block, RuntimeApi, Executor>(config)?

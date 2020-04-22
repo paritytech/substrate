@@ -61,23 +61,16 @@ use sp_api::{
 	CallApiAtParams,
 };
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
-use sc_client_api::{
-	backend::{
-		self, BlockImportOperation, PrunableStateChangesTrieStorage,
-		ClientImportOperation, Finalizer, ImportSummary, NewBlockState,
-		changes_tries_state_at_block, StorageProvider,
-		LockImportRun, apply_aux,
-	},
-	client::{
-		ImportNotifications, FinalityNotification, FinalityNotifications, BlockImportNotification,
-		ClientInfo, BlockchainEvents, BlockBackend, ProvideUncles, BadBlocks, ForkBlocks,
-		BlockOf,
-	},
-	execution_extensions::ExecutionExtensions,
-	notifications::{StorageNotifications, StorageEventStream},
-	KeyIterator, CallExecutor, ExecutorProvider, ProofProvider, CloneableSpawn,
-	cht, in_mem,
-};
+use sc_client_api::{backend::{
+	self, BlockImportOperation, PrunableStateChangesTrieStorage,
+	ClientImportOperation, Finalizer, ImportSummary, NewBlockState,
+	changes_tries_state_at_block, StorageProvider,
+	LockImportRun, apply_aux,
+}, client::{
+	ImportNotifications, FinalityNotification, FinalityNotifications, BlockImportNotification,
+	ClientInfo, BlockchainEvents, BlockBackend, ProvideUncles, BadBlocks, ForkBlocks,
+	BlockOf,
+}, execution_extensions::ExecutionExtensions, notifications::{StorageNotifications, StorageEventStream}, KeyIterator, CallExecutor, ExecutorProvider, ProofProvider, CloneableSpawn, cht, in_mem, UsageProvider};
 use sp_utils::mpsc::tracing_unbounded;
 use sp_blockchain::Error;
 use prometheus_endpoint::Registry;
@@ -1021,14 +1014,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Ok(self.backend.revert(n, true)?)
 	}
 
-	/// Get usage info about current client.
-	pub fn usage_info(&self) -> ClientInfo<Block> {
-		ClientInfo {
-			chain: self.chain_info(),
-			usage: self.backend.usage_info(),
-		}
-	}
-
 	/// Get blockchain info.
 	pub fn chain_info(&self) -> blockchain::Info<Block> {
 		self.backend.blockchain().info()
@@ -1109,6 +1094,20 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			parent_header.hash(),
 			Default::default(),
 		))
+	}
+}
+
+impl<B, E, Block, RA> UsageProvider<Block> for Client<B, E, Block, RA> where
+	B: backend::Backend<Block>,
+	E: CallExecutor<Block>,
+	Block: BlockT,
+{
+	/// Get usage info about current client.
+	fn usage_info(&self) -> ClientInfo<Block> {
+		ClientInfo {
+			chain: self.chain_info(),
+			usage: self.backend.usage_info(),
+		}
 	}
 }
 
