@@ -147,7 +147,7 @@ impl<T: Trait> GasMeter<T> {
 	// This can be used after dispatching a runtime call to refund gas that was not
 	// used by the dispatchable.
 	pub fn refund(&mut self, gas: Gas) {
-		self.gas_left = (self.gas_left + gas).max(self.gas_limit);
+		self.gas_left = self.gas_left.saturating_add(gas).max(self.gas_limit);
 	}
 
 	/// Allocate some amount of gas and perform some work with
