@@ -938,7 +938,9 @@ pub struct Schedule {
 	pub max_subject_len: u32,
 }
 
-// This is 500 (2 instruction per nano second on 2GHZ) * 1000x slowdown through wasmi
+// 500 (2 instructions per nano second on 2GHZ) * 1000x slowdown through wasmi
+// This is a wild guess and should be viewed as a rough estimation.
+// Proper benchmarks are needed before this value and its derivatives can be used in production.
 const WASM_INSTRUCTION_COST: Gas = 500_000;
 
 impl Default for Schedule {
