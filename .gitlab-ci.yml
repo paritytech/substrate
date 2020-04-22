@@ -32,11 +32,11 @@ deploy-chaos-example:
     - kubectl get all
     - kubectl get pods -o wide --sort-by="{.spec.nodeName}"
     - kubectl port-forward svc/kuard-service 8080:80 &
-    - sleep 5
+    - sleep 10
     - curl -sS localhost:8080
     - kill %1
     - echo "waiting for 10 min before shutting down"
-    - sleep 600
+    - sleep 590
     - kubectl delete -f .maintain/kubernetes/kuard.yml
 
 
