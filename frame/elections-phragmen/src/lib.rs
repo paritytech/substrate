@@ -93,7 +93,7 @@ use frame_support::{
 	traits::{
 		Currency, Get, LockableCurrency, LockIdentifier, ReservableCurrency, WithdrawReasons,
 		ChangeMembers, OnUnbalanced, WithdrawReason, Contains, BalanceStatus, InitializeMembers,
-		ContainsCountUpperBound,
+		ContainsLengthBound,
 	}
 };
 use sp_phragmen::{build_support_map, ExtendedBalance, VoteWeight, PhragmenResult};
@@ -879,9 +879,11 @@ impl<T: Trait> Contains<T::AccountId> for Module<T> {
 	}
 }
 
-/// Implementation uses a parameter type so calling is cost-free.
-impl<T: Trait> ContainsCountUpperBound for Module<T> {
-	fn count_upper_bound() -> usize {
+impl<T: Trait> ContainsLengthBound for Module<T> {
+	fn min_len() -> usize { 0 }
+
+	/// Implementation uses a parameter type so calling is cost-free.
+	fn max_len() -> usize {
 		Self::desired_members() as usize
 	}
 }

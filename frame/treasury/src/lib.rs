@@ -99,7 +99,7 @@ use sp_runtime::{Permill, ModuleId, Percent, RuntimeDebug, traits::{
 	Zero, StaticLookup, AccountIdConversion, Saturating, Hash, BadOrigin
 }};
 use frame_support::weights::Weight;
-use frame_support::traits::{Contains, ContainsCountUpperBound, EnsureOrigin};
+use frame_support::traits::{Contains, ContainsLengthBound, EnsureOrigin};
 use codec::{Encode, Decode};
 use frame_system::{self as system, ensure_signed, ensure_root};
 
@@ -125,9 +125,8 @@ pub trait Trait: frame_system::Trait {
 
 	/// Origin from which tippers must come.
 	///
-	/// `ContainsCountUpperBound::count_upper_bound` must be cost free.
-	/// (i.e. no storage read or heavy operation)
-	type Tippers: Contains<Self::AccountId> + ContainsCountUpperBound;
+	/// `ContainsLengthBound::max_len` must be cost free (i.e. no storage read or heavy operation).
+	type Tippers: Contains<Self::AccountId> + ContainsLengthBound;
 
 	/// The period for which a tip remains open after is has achieved threshold tippers.
 	type TipCountdown: Get<Self::BlockNumber>;
@@ -479,7 +478,7 @@ decl_module! {
 		/// # <weight>
 		/// - Complexity: `O(R + T)` where `R` length of `reason`, `T` is the number of tippers.
 		///   - `O(T)`: decoding `Tipper` vec of length `T`
-		///     `T` is charged as upper bound given by `ContainsCountUpperBound`.
+		///     `T` is charged as upper bound given by `ContainsLengthBound`.
 		///     The actual cost depends on the implementation of `T::Tippers`.
 		///   - `O(R)`: hashing and encoding of reason of length `R`
 		/// - DbReads: `Tippers`, `Reasons`
@@ -487,7 +486,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = 110_000_000
 			+ 4_000 * reason.len() as Weight
-			+ 480_000 * T::Tippers::count_upper_bound() as Weight
+			+ 480_000 * T::Tippers::max_len() as Weight
 			+ T::DbWeight::get().reads_writes(2, 2)]
 		fn tip_new(origin, reason: Vec<u8>, who: T::AccountId, tip_value: BalanceOf<T>) {
 			let tipper = ensure_signed(origin)?;
@@ -520,7 +519,7 @@ decl_module! {
 		/// # <weight>
 		/// - Complexity: `O(T)` where `T` is the number of tippers.
 		///   decoding `Tipper` vec of length `T`, insert tip and check closing,
-		///   `T` is charged as upper bound given by `ContainsCountUpperBound`.
+		///   `T` is charged as upper bound given by `ContainsLengthBound`.
 		///   The actual cost depends on the implementation of `T::Tippers`.
 		///
 		///   Actually weight could be lower as it depends on how many tips are in `OpenTip` but it
@@ -528,7 +527,7 @@ decl_module! {
 		/// - DbReads: `Tippers`, `Tips`
 		/// - DbWrites: `Tips`
 		/// # </weight>
-		#[weight = 68_000_000 + 2_000_000 * T::Tippers::count_upper_bound() as Weight
+		#[weight = 68_000_000 + 2_000_000 * T::Tippers::max_len() as Weight
 			+ T::DbWeight::get().reads_writes(2, 1)]
 		fn tip(origin, hash: T::Hash, tip_value: BalanceOf<T>) {
 			let tipper = ensure_signed(origin)?;
@@ -553,12 +552,12 @@ decl_module! {
 		/// # <weight>
 		/// - Complexity: `O(T)` where `T` is the number of tippers.
 		///   decoding `Tipper` vec of length `T`.
-		///   `T` is charged as upper bound given by `ContainsCountUpperBound`.
+		///   `T` is charged as upper bound given by `ContainsLengthBound`.
 		///   The actual cost depends on the implementation of `T::Tippers`.
 		/// - DbReads: `Tips`, `Tippers`, `tip finder`
 		/// - DbWrites: `Reasons`, `Tips`, `Tippers`, `tip finder`
 		/// # </weight>
-		#[weight = 220_000_000 + 1_100_000 * T::Tippers::count_upper_bound() as Weight
+		#[weight = 220_000_000 + 1_100_000 * T::Tippers::max_len() as Weight
 			+ T::DbWeight::get().reads_writes(3, 3)]
 		fn close_tip(origin, hash: T::Hash) {
 			ensure_signed(origin)?;

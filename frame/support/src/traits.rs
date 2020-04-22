@@ -209,11 +209,10 @@ pub trait Contains<T: Ord> {
 	fn add(t: &T) { unimplemented!() }
 }
 
-/// A trait for querying an upper bound on the number of element in a type that implements
-/// `Contains`.
-pub trait ContainsCountUpperBound {
-	/// An upper bound for the number of element contained.
-	fn count_upper_bound() -> usize;
+/// A trait for querying bound for the length of an implementation of `Contains`
+pub trait ContainsLengthBound {
+	fn min_len() -> usize;
+	fn max_len() -> usize;
 }
 
 /// Determiner to say whether a given account is unused.
