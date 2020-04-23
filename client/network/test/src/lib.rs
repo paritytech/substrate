@@ -611,6 +611,7 @@ pub trait TestNetFactory: Sized {
 		);
 		network_config.transport = TransportConfig::MemoryOnly;
 		network_config.listen_addresses = vec![listen_addr.clone()];
+		network_config.allow_non_globals_in_dht = true;
 
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: Role::Full,
@@ -687,6 +688,7 @@ pub trait TestNetFactory: Sized {
 		);
 		network_config.transport = TransportConfig::MemoryOnly;
 		network_config.listen_addresses = vec![listen_addr.clone()];
+		network_config.allow_non_globals_in_dht = true;
 
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: Role::Light,
