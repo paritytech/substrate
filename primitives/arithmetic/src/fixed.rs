@@ -96,7 +96,7 @@ macro_rules! implement_fixed {
 
 			fn checked_mul_int<N>(self, other: N) -> Option<N>
 			where
-				N: Copy + TryFrom<i128> + UniqueSaturatedInto<i128> + Bounded,
+				N: Copy + TryFrom<i128> + UniqueSaturatedInto<i128>,
 			{
 				let rhs: i128 = other.unique_saturated_into();
 				let lhs: i128 = self.0.unique_saturated_into();
@@ -133,12 +133,13 @@ macro_rules! implement_fixed {
 		
 			fn checked_div_int<N>(self, other: N) -> Option<N>
 			where
-				N: Copy + TryFrom<Self::Inner> + TryInto<Self::Inner>,
+				N: Copy + TryFrom<i128> + UniqueSaturatedInto<i128>,
 			{
-				N::try_into(other)
-					.ok()
-					.and_then(|n| self.0.checked_div(n))
-					.and_then(|n| n.checked_div(Self::DIV))
+				let lhs: i128 = self.0.unique_saturated_into();
+				let rhs: i128 = other.unique_saturated_into();
+
+				lhs.checked_div(rhs)
+					.and_then(|inner| inner.checked_div(Self::DIV.into()))
 					.and_then(|n| TryInto::<N>::try_into(n).ok())
 			}
 		
@@ -541,7 +542,10 @@ macro_rules! implement_fixed {
 
 				let v = $name::from_rational(inner_min, 3 * accuracy);
 				let w = $name::from_rational(inner_min, accuracy / -3);
-				let y = $name::from_rational(inner_min, accuracy / 3);
+				let x = $name::from_rational(inner_min, accuracy / 3);
+
+				let y = $name::from_rational(1, accuracy);
+				let z = $name::from_rational(1, -accuracy);
 
 				assert_eq!(a.saturating_mul_int(10), 25);
 				assert_eq!(b.saturating_mul_int(10),-25);
@@ -571,7 +575,16 @@ macro_rules! implement_fixed {
 
 				assert_eq!(v.into_inner(), inner_min / 3);
 				assert_eq!(w.into_inner(), inner_max);
-				assert_eq!(y.into_inner(), inner_min);
+				assert_eq!(x.into_inner(), inner_min);
+
+				assert_eq!(y.into_inner(), 1);
+				assert_eq!(z.into_inner(), -1);
+
+				let a = $name::from_rational(1, accuracy + 1);
+				let b = $name::from_rational(1, -accuracy - 1);
+
+				assert_eq!(a.into_inner(), 0);
+				assert_eq!(b.into_inner(), 0);
 			}
 
 			#[test]
@@ -593,6 +606,30 @@ macro_rules! implement_fixed {
 				assert_eq!(a.checked_mul_int(i128::max_value()), Some(i128::max_value() / 2));
 				assert_eq!(a.checked_mul_int(u64::max_value()), Some(u64::max_value() / 2));
 				assert_eq!(a.checked_mul_int(i128::min_value()), Some(i128::min_value() / 2));
+			}
+
+			#[test]
+			fn checked_div_int_works() {
+				let inner_max = <$name as FixedPointNumber>::Inner::max_value();
+				let inner_min = <$name as FixedPointNumber>::Inner::min_value();
+				let accuracy = $name::accuracy();
+
+				let a = $name::from_inner(inner_max);
+				let b = $name::from_inner(inner_min);
+
+				assert_eq!(a.checked_div_int(i128::max_value()), Some(0));
+				assert_eq!(a.checked_div_int(2), Some(inner_max / (2 * accuracy)));
+				assert_eq!(a.checked_div_int(inner_max / accuracy), Some(1));
+
+				assert_eq!(a.checked_div_int(-2), Some(-inner_max / (2 * accuracy)));
+				assert_eq!(a.checked_div_int(inner_max / -accuracy), Some(-1));
+
+				assert_eq!(b.checked_div_int(i128::min_value()), Some(0));
+				assert_eq!(b.checked_div_int(2), Some(inner_min / (2 * accuracy)));
+				assert_eq!(b.checked_div_int(inner_min / accuracy), Some(1));
+
+				assert_eq!(b.checked_div_int(-2), Some(-(inner_min / (2 * accuracy))));
+				assert_eq!(b.checked_div_int(-(inner_min / accuracy)), Some(-1));
 			}
 
 			#[test]

@@ -211,10 +211,10 @@ pub trait FixedPointNumber:
 	fn from_rational<N: UniqueSaturatedInto<Self::Inner>>(n: N, d: Self::Inner) -> Self;
 
 	/// Checked multiplication for integer type `N`.
-	fn checked_mul_int<N: Copy + TryFrom<i128> + UniqueSaturatedInto<i128> + Bounded>(self, other: N) -> Option<N>;
+	fn checked_mul_int<N: Copy + TryFrom<i128> + UniqueSaturatedInto<i128>>(self, other: N) -> Option<N>;
 
 	/// Checked division for integer type `N`.
-	fn checked_div_int<N: Copy + TryFrom<Self::Inner> + TryInto<Self::Inner>>(self, other: N) -> Option<N>;
+	fn checked_div_int<N: Copy + TryFrom<i128> + UniqueSaturatedInto<i128>>(self, other: N) -> Option<N>;
 
 	/// Saturating multiplication for integer type `N`.
 	fn saturating_mul_int<N: Copy + TryFrom<i128> + UniqueSaturatedInto<i128> + Bounded>(self, other: N) -> N;
