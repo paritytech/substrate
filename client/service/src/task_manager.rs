@@ -15,13 +15,12 @@
 
 use std::{
 	pin::Pin,
-	result::Result, sync::Arc,
-	task::{Poll, Context},
+	result::Result, sync::Arc
 };
 use exit_future::Signal;
-use log::{debug, error};
+use log::{debug};
 use futures::{
-	Future, FutureExt, Stream,
+	Future, FutureExt,
 	future::select,
 	compat::*,
 	task::{Spawn, FutureObj, SpawnError},
@@ -32,88 +31,17 @@ use prometheus_endpoint::{
 	CounterVec, HistogramOpts, HistogramVec, Opts, Registry, U64
 };
 use sc_client_api::CloneableSpawn;
-use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
 
 mod prometheus_future;
 
 /// Type alias for service task executor (usually runtime).
 pub type ServiceTaskExecutor = Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>;
 
-/// Type alias for the task scheduler.
-pub type TaskScheduler = TracingUnboundedSender<Pin<Box<dyn Future<Output = ()> + Send>>>;
-
-/// Helper struct to setup background tasks execution for service.
-pub struct TaskManagerBuilder {
-	/// A future that resolves when the service has exited, this is useful to
-	/// make sure any internally spawned futures stop when the service does.
-	on_exit: exit_future::Exit,
-	/// A signal that makes the exit future above resolve, fired on service drop.
-	signal: Option<Signal>,
-	/// Sender for futures that must be spawned as background tasks.
-	to_spawn_tx: TaskScheduler,
-	/// Receiver for futures that must be spawned as background tasks.
-	to_spawn_rx: TracingUnboundedReceiver<Pin<Box<dyn Future<Output = ()> + Send>>>,
-	/// Prometheus metrics where to report the stats about tasks.
-	metrics: Option<Metrics>,
-}
-
-impl TaskManagerBuilder {
-	/// New asynchronous task manager setup.
-	///
-	/// If a Prometheus registry is passed, it will be used to report statistics about the
-	/// service tasks.
-	pub fn new(prometheus_registry: Option<&Registry>) -> Result<Self, PrometheusError> {
-		let (signal, on_exit) = exit_future::signal();
-		let (to_spawn_tx, to_spawn_rx) = tracing_unbounded("mpsc_task_manager");
-
-		let metrics = prometheus_registry.map(Metrics::register).transpose()?;
-
-		Ok(Self {
-			on_exit,
-			signal: Some(signal),
-			to_spawn_tx,
-			to_spawn_rx,
-			metrics,
-		})
-	}
-
-	/// Get spawn handle.
-	///
-	/// Tasks spawned through this handle will get scheduled once
-	/// service is up and running.
-	pub fn spawn_handle(&self) -> SpawnTaskHandle {
-		SpawnTaskHandle {
-			on_exit: self.on_exit.clone(),
-			sender: self.to_spawn_tx.clone(),
-			metrics: self.metrics.clone(),
-		}
-	}
-
-	/// Convert into actual task manager from initial setup.
-	pub(crate) fn into_task_manager(self, executor: ServiceTaskExecutor) -> TaskManager {
-		let TaskManagerBuilder {
-			on_exit,
-			signal,
-			to_spawn_rx,
-			to_spawn_tx,
-			metrics,
-		} = self;
-		TaskManager {
-			on_exit,
-			signal,
-			to_spawn_tx,
-			to_spawn_rx,
-			executor,
-			metrics,
-		}
-	}
-}
-
 /// An handle for spawning tasks in the service.
 #[derive(Clone)]
 pub struct SpawnTaskHandle {
-	sender: TaskScheduler,
 	on_exit: exit_future::Exit,
+	executor: ServiceTaskExecutor,
 	metrics: Option<Metrics>,
 }
 
@@ -152,9 +80,7 @@ impl SpawnTaskHandle {
 			}
 		};
 
-		if self.sender.unbounded_send(Box::pin(future)).is_err() {
-			error!("Failed to send task to spawn over channel");
-		}
+		(self.executor)(Box::pin(future));
 	}
 }
 
@@ -188,11 +114,6 @@ pub struct TaskManager {
 	on_exit: exit_future::Exit,
 	/// A signal that makes the exit future above resolve, fired on service drop.
 	signal: Option<Signal>,
-	/// Sender for futures that must be spawned as background tasks.
-	to_spawn_tx: TaskScheduler,
-	/// Receiver for futures that must be spawned as background tasks.
-	/// Note: please read comment on [`SpawnTaskHandle::spawn`] for why this is a `&'static str`.
-	to_spawn_rx: TracingUnboundedReceiver<Pin<Box<dyn Future<Output = ()> + Send>>>,
 	/// How to spawn background tasks.
 	executor: ServiceTaskExecutor,
 	/// Prometheus metric where to report the polling times.
@@ -200,6 +121,24 @@ pub struct TaskManager {
 }
 
 impl TaskManager {
+ 	/// If a Prometheus registry is passed, it will be used to report statistics about the
+ 	/// service tasks.
+	pub(super) fn new(
+		executor: ServiceTaskExecutor,
+		prometheus_registry: Option<&Registry>
+	) -> Result<Self, PrometheusError> {
+		let (signal, on_exit) = exit_future::signal();
+
+		let metrics = prometheus_registry.map(Metrics::register).transpose()?;
+
+		Ok(Self {
+			on_exit,
+			signal: Some(signal),
+			executor,
+			metrics,
+		})
+	}
+
 	/// Spawn background/async task, which will be aware on exit signal.
 	///
 	/// See also the documentation of [`SpawnTaskHandler::spawn`].
@@ -210,15 +149,8 @@ impl TaskManager {
 	pub(super) fn spawn_handle(&self) -> SpawnTaskHandle {
 		SpawnTaskHandle {
 			on_exit: self.on_exit.clone(),
-			sender: self.to_spawn_tx.clone(),
+			executor: self.executor.clone(),
 			metrics: self.metrics.clone(),
-		}
-	}
-
-	/// Process background task receiver.
-	pub(super) fn process_receiver(&mut self, cx: &mut Context) {
-		while let Poll::Ready(Some(task_to_spawn)) = Pin::new(&mut self.to_spawn_rx).poll_next(cx) {
-			(self.executor)(task_to_spawn);
 		}
 	}
 

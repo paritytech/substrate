@@ -25,7 +25,7 @@ use sp_runtime::traits::{
 	StaticLookup, Member, LookupError, Zero, One, BlakeTwo256, Hash, Saturating, AtLeast32Bit
 };
 use frame_support::{Parameter, decl_module, decl_error, decl_event, decl_storage, ensure};
-use frame_support::weights::{Weight, MINIMUM_WEIGHT, SimpleDispatchInfo};
+use frame_support::weights::{Weight, MINIMUM_WEIGHT};
 use frame_support::dispatch::DispatchResult;
 use frame_support::traits::{Currency, ReservableCurrency, Get, BalanceStatus::Reserved};
 use frame_support::storage::migration::take_storage_value;
@@ -121,7 +121,7 @@ decl_module! {
 		/// - One reserve operation.
 		/// - One event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
+		#[weight = MINIMUM_WEIGHT]
 		fn claim(origin, index: T::AccountIndex) {
 			let who = ensure_signed(origin)?;
 
@@ -149,7 +149,7 @@ decl_module! {
 		/// - One transfer operation.
 		/// - One event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
+		#[weight = MINIMUM_WEIGHT]
 		fn transfer(origin, new: T::AccountId, index: T::AccountIndex) {
 			let who = ensure_signed(origin)?;
 			ensure!(who != new, Error::<T>::NotTransfer);
@@ -180,7 +180,7 @@ decl_module! {
 		/// - One reserve operation.
 		/// - One event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
+		#[weight = MINIMUM_WEIGHT]
 		fn free(origin, index: T::AccountIndex) {
 			let who = ensure_signed(origin)?;
 
@@ -209,7 +209,7 @@ decl_module! {
 		/// - Up to one reserve operation.
 		/// - One event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
+		#[weight = MINIMUM_WEIGHT]
 		fn force_transfer(origin, new: T::AccountId, index: T::AccountIndex) {
 			ensure_root(origin)?;
 
