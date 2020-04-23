@@ -867,10 +867,14 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
+	/// Update pending storage changes, if any.
+	pub fn update_accumulators() {
+		use frame_support::storage::generator::StorageValue;
+		sp_io::storage::accumulator_commit(&Events::<T>::storage_value_final_key()[..]);
+	}
+
 	/// Remove temporary "environment" entries in storage.
 	pub fn finalize() -> T::Header {
-		use frame_support::storage::generator::StorageValue;
-
 		ExecutionPhase::kill();
 		ExtrinsicCount::kill();
 		AllExtrinsicsWeight::kill();
@@ -892,7 +896,7 @@ impl<T: Trait> Module<T> {
 			}
 		}
 
-		sp_io::storage::accumulator_commit(&Events::<T>::storage_value_final_key()[..]);
+		Self::update_accumulators();
 
 		let storage_root = T::Hash::decode(&mut &sp_io::storage::root()[..])
 			.expect("Node is configured to use the same hash; qed");
