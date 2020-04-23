@@ -54,13 +54,7 @@ use std::sync::Arc;
 use std::fmt::Write;
 use std::{cmp, io, num::NonZeroUsize, pin::Pin, task::Poll, time};
 use log::{log, Level, trace, debug, warn, error};
-<<<<<<< HEAD
-use crate::chain::{Client, FinalityProofProvider};
 use sc_client_api::{ChangesProof, StorageProof, StorageProofKind};
-use crate::error;
-=======
-use sc_client_api::{ChangesProof, StorageProof};
->>>>>>> master
 use util::LruHashSet;
 use wasm_timer::Instant;
 
@@ -1577,10 +1571,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			&BlockId::Hash(request.block),
 			&child_info,
 			&mut request.keys.iter().map(AsRef::as_ref),
-<<<<<<< HEAD
 			StorageProofKind::TrieSkipHashes,
-=======
->>>>>>> master
 		)) {
 			Ok(proof) => proof,
 			Err(error) => {

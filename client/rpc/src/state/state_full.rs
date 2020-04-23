@@ -41,7 +41,7 @@ use sp_api::{Metadata, ProvideRuntimeApi, CallApiAt};
 
 use super::{StateBackend, ChildStateBackend, error::{FutureResult, Error, Result}, client_err};
 use std::marker::PhantomData;
-use sc_client_api::{CallExecutor, StorageProvider, ExecutorProvider, ProofProvider};
+use sc_client_api::{CallExecutor, StorageProvider, ExecutorProvider, ProofProvider, StorageProofKind};
 
 /// Ranges to query in state_queryStorage.
 struct QueryStorageRange<Block: BlockT> {
@@ -363,8 +363,10 @@ impl<BE, Block, Client> StateBackend<Block, Client> for FullState<BE, Block, Cli
 						.read_proof(
 							&BlockId::Hash(block),
 							&mut keys.iter().map(|key| key.0.as_ref()),
+							StorageProofKind::Flatten,
 						)
-						.map(|proof| proof.iter_nodes().map(|node| node.into()).collect())
+						// A new version of this rpc could return a proof with skiped hashes.
+						.map(|proof| proof.iter_nodes_flatten().map(|node| node.into()).collect())
 						.map(|proof| ReadProof { at: block, proof })
 				})
 				.map_err(client_err),
