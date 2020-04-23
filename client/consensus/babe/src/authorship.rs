@@ -47,7 +47,7 @@ pub(super) fn calculate_primary_threshold(
 		authorities[authority_index].1 as f64 /
 		authorities.iter().map(|(_, weight)| weight).sum::<u64>() as f64;
 
-	assert!(theta > 0, "authority with weight 0.");
+	assert!(theta > 0.0, "authority with weight 0.");
 
 	let p = BigRational::from_float(1f64 - (1f64 - c).powf(theta)).expect(
 		"returns None when the given value is not finite; \
@@ -56,7 +56,7 @@ pub(super) fn calculate_primary_threshold(
 		 theta represents the validator's relative weight defined in (0, 1]; \
 		 powf will always return values in (0, 1] given both the \
 		 base and exponent are in that domain; \
-		 qed.";
+		 qed.",
 	);
 
 	let numer = p.numer().to_biguint().expect(
@@ -73,7 +73,13 @@ pub(super) fn calculate_primary_threshold(
 		 qed."
 	);
 
-	((BigUint::one() << 128) * numer / denom).to_u128()
+	((BigUint::one() << 128) * numer / denom).to_u128().expect(
+		"returns None if the underlying value cannot be represented with 128 bits; \
+		 we start with 1 << 128 which is one unit more than can be represented with 128 bits; \
+		 we multiple by p which is defined in [0, 1); \
+		 the result must be lower than 1 << 128 and representable with 128 bits; \
+		 qed.",
+	)
 }
 
 /// Returns true if the given VRF output is lower than the given threshold,
