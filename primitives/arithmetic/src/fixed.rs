@@ -153,8 +153,8 @@ macro_rules! implement_fixed {
 			where
 				N: Copy + TryFrom<i128> + UniqueSaturatedInto<i128> + Bounded,
 			{
-				let signum = other.saturated_into().signum() * self.0.signum() as i128;
 				self.checked_mul_int(other).unwrap_or_else(|| {
+					let signum = other.saturated_into().signum() * self.0.signum() as i128;
 					if signum.is_negative() {
 						Bounded::min_value()
 					} else {
@@ -197,7 +197,7 @@ macro_rules! implement_fixed {
 				let div = Self::DIV as Self::Unsigned;
 				let positive = self.0 > 0;
 				// safe to convert as absolute value.
-				let parts  = self.0.checked_abs().map(|v| v as Self::Unsigned)
+				let parts = self.0.checked_abs().map(|v| v as Self::Unsigned)
 					.unwrap_or(Self::Inner::max_value() as Self::Unsigned + 1);
 
 				let natural_parts = parts / div;
