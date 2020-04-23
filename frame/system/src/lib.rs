@@ -2118,6 +2118,7 @@ pub(crate) mod tests {
 				_: &str,
 				_: &[u8],
 				_: &mut dyn sp_externalities::Externalities,
+				_: sp_core::traits::MissingHostFunctions,
 			) -> Result<Vec<u8>, String> {
 				Ok(self.0.clone())
 			}
