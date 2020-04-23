@@ -3368,7 +3368,6 @@ dependencies = [
  "rand 0.7.3",
  "sc-cli",
  "sc-client-api",
- "sc-executor-wasmtime",
  "serde",
  "serde_json",
  "sp-core",
