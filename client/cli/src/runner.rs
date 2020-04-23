@@ -116,15 +116,15 @@ impl<C: SubstrateCli> Runner<C> {
 	/// Create a new runtime with the command provided in argument
 	pub fn new<T: CliConfiguration>(cli: &C, command: &T) -> Result<Runner<C>> {
 		let tokio_runtime = build_runtime()?;
+		let runtime_handle = tokio_runtime.handle().clone();
 
 		let task_executor = {
-			let runtime_handle = tokio_runtime.handle().clone();
 			Arc::new(move |fut, task_type| {
 				match task_type {
 					TaskType::Async => { runtime_handle.spawn(fut); }
 					TaskType::Blocking => {
 						runtime_handle.spawn( async move {
-							tokio::task::spawn_blocking(|| fut)
+							tokio::task::spawn_blocking(move || futures::executor::block_on(fut))
 						});
 					}
 				}
