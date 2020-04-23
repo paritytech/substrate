@@ -47,14 +47,33 @@ pub(super) fn calculate_primary_threshold(
 		authorities[authority_index].1 as f64 /
 		authorities.iter().map(|(_, weight)| weight).sum::<u64>() as f64;
 
-	let calc = || {
-		let p = BigRational::from_float(1f64 - (1f64 - c).powf(theta))?;
-		let numer = p.numer().to_biguint()?;
-		let denom = p.denom().to_biguint()?;
-		((BigUint::one() << 128) * numer / denom).to_u128()
-	};
+	assert!(theta > 0, "authority with weight 0.");
 
-	calc().unwrap_or(u128::max_value())
+	let p = BigRational::from_float(1f64 - (1f64 - c).powf(theta)).expect(
+		"returns None when the given value is not finite; \
+		 c is a configuration parameter defined in (0, 1]; \
+		 theta must be > 0 if the given authority's weight is > 0; \
+		 theta represents the validator's relative weight defined in (0, 1]; \
+		 powf will always return values in (0, 1] given both the \
+		 base and exponent are in that domain; \
+		 qed.";
+	);
+
+	let numer = p.numer().to_biguint().expect(
+		"returns None when the given value is negative; \
+		 p is defined as `1 - n` where n is defined in (0, 1];
+			 p must be a value in (0, 1]; \
+			 qed."
+	);
+
+	let denom = p.denom().to_biguint().expect(
+		"returns None when the given value is negative; \
+		 p is defined as `1 - n` where n is defined in (0, 1];
+			 p must be a value in (0, 1]; \
+			 qed."
+	);
+
+	((BigUint::one() << 128) * numer / denom).to_u128()
 }
 
 /// Returns true if the given VRF output is lower than the given threshold,
