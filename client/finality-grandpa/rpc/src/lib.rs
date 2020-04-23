@@ -53,13 +53,13 @@ pub trait GrandpaApi {
 }
 
 pub struct GrandpaRpcHandler<Hash, Block> {
-    shared_voter_state: SharedVoterState<AuthorityId>,
+    shared_voter_state: SharedVoterState,
     shared_authority_set: SharedAuthoritySet<Hash, Block>,
 }
 
 impl<Hash, Block> GrandpaRpcHandler<Hash, Block> {
     pub fn new(
-        shared_voter_state: SharedVoterState<AuthorityId>,
+        shared_voter_state: SharedVoterState,
         shared_authority_set: SharedAuthoritySet<Hash, Block>,
     ) -> Self {
         Self {
@@ -131,7 +131,7 @@ pub struct ReportedRoundStates {
 
 impl ReportedRoundStates {
     pub fn from<Hash, Block>(
-        voter_state: &SharedVoterState<AuthorityId>,
+        voter_state: &SharedVoterState,
         authority_set: &SharedAuthoritySet<Hash, Block>,
     ) -> Result<Self, Error>
     where

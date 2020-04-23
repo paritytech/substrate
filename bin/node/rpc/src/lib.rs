@@ -42,7 +42,7 @@ use sp_consensus_babe::BabeApi;
 use sc_consensus_epochs::SharedEpochChanges;
 use sc_consensus_babe::{Config, Epoch};
 use sc_consensus_babe_rpc::BabeRPCHandler;
-use sc_finality_grandpa::{SharedVoterState, AuthorityId, SharedAuthoritySet};
+use sc_finality_grandpa::{SharedVoterState, SharedAuthoritySet};
 use sc_finality_grandpa_rpc::GrandpaRpcHandler;
 
 /// Light client extra dependencies.
@@ -70,7 +70,7 @@ pub struct BabeDeps {
 /// Extra dependencies for GRANDPA
 pub struct GrandpaDeps {
 	/// Voting round info.
-	pub shared_voter_state: SharedVoterState<AuthorityId>,
+	pub shared_voter_state: SharedVoterState,
 	/// Authority set info.
 	pub shared_authority_set: SharedAuthoritySet<Hash, BlockNumber>,
 }

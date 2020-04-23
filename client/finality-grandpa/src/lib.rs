@@ -207,7 +207,7 @@ type CommunicationOutH<Block, H> = finality_grandpa::voter::CommunicationOut<
 >;
 
 // WIP: convert to struct
-pub type SharedVoterState<Id> = Arc<RwLock<Option<Box<dyn voter::VoterState<Id> + Sync + Send>>>>;
+pub type SharedVoterState = Arc<RwLock<Option<Box<dyn voter::VoterState<AuthorityId> + Sync + Send>>>>;
 
 /// Configuration for the GRANDPA service.
 #[derive(Clone)]
@@ -633,7 +633,7 @@ pub struct GrandpaParams<Block: BlockT, C, N, SC, VR> {
 	/// The prometheus metrics registry.
 	pub prometheus_registry: Option<prometheus_endpoint::Registry>,
 	/// The voter state is exposed at an RPC endpoint.
-	pub shared_voter_state: SharedVoterState<AuthorityId>,
+	pub shared_voter_state: SharedVoterState,
 }
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
@@ -750,7 +750,7 @@ impl Metrics {
 #[must_use]
 struct VoterWork<B, Block: BlockT, C, N: NetworkT<Block>, SC, VR> {
 	voter: Pin<Box<dyn Future<Output = Result<(), CommandOrError<Block::Hash, NumberFor<Block>>>> + Send>>,
-	shared_voter_state: SharedVoterState<AuthorityId>,
+	shared_voter_state: SharedVoterState,
 	env: Arc<Environment<B, Block, C, N, SC, VR>>,
 	voter_commands_rx: TracingUnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
 	network: NetworkBridge<Block, N>,
@@ -778,7 +778,7 @@ where
 		persistent_data: PersistentData<Block>,
 		voter_commands_rx: TracingUnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
 		prometheus_registry: Option<prometheus_endpoint::Registry>,
-		shared_voter_state: SharedVoterState<AuthorityId>
+		shared_voter_state: SharedVoterState,
 	) -> Self {
 		let metrics = match prometheus_registry.as_ref().map(Metrics::register) {
 			Some(Ok(metrics)) => Some(metrics),
