@@ -67,7 +67,7 @@ pub trait CliConfiguration: Sized {
 		None
 	}
 
-	/// Get the OffchainWorkerParams for this object
+	/// Get a reference to `OffchainWorkerParams` for this object.
 	fn offchain_worker_params(&self) -> Option<&OffchainWorkerParams> {
 		None
 	}
