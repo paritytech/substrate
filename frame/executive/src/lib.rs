@@ -399,7 +399,7 @@ mod tests {
 	use sp_core::H256;
 	use sp_runtime::{
 		generic::Era, Perbill, DispatchError, testing::{Digest, Header, Block},
-		traits::{Header as HeaderT, BlakeTwo256, IdentityLookup, ConvertInto},
+		traits::{Header as HeaderT, BlakeTwo256, IdentityLookup, Convert, ConvertInto},
 		transaction_validity::{InvalidTransaction, UnknownTransaction, TransactionValidityError},
 	};
 	use frame_support::{
@@ -503,15 +503,17 @@ mod tests {
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = RuntimeVersion;
 		type ModuleToIndex = ();
-		type AccountData = pallet_balances::AccountData<u64>;
+		type AccountData = pallet_balances::AccountData<Balance>;
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
 	}
+
+	type Balance = u64;
 	parameter_types! {
-		pub const ExistentialDeposit: u64 = 1;
+		pub const ExistentialDeposit: Balance = 1;
 	}
 	impl pallet_balances::Trait for Runtime {
-		type Balance = u64;
+		type Balance = Balance;
 		type Event = MetaEvent;
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
@@ -519,7 +521,7 @@ mod tests {
 	}
 
 	parameter_types! {
-		pub const TransactionByteFee: u64 = 0;
+		pub const TransactionByteFee: Balance = 0;
 	}
 	impl pallet_transaction_payment::Trait for Runtime {
 		type Currency = Balances;
@@ -570,7 +572,7 @@ mod tests {
 	type TestXt = sp_runtime::testing::TestXt<Call, SignedExtra>;
 	type Executive = super::Executive<Runtime, Block<TestXt>, ChainContext<Runtime>, Runtime, AllModules>;
 
-	fn extra(nonce: u64, fee: u64) -> SignedExtra {
+	fn extra(nonce: u64, fee: Balance) -> SignedExtra {
 		(
 			frame_system::CheckEra::from(Era::Immortal),
 			frame_system::CheckNonce::from(nonce),
@@ -579,7 +581,7 @@ mod tests {
 		)
 	}
 
-	fn sign_extra(who: u64, nonce: u64, fee: u64) -> Option<(u64, SignedExtra)> {
+	fn sign_extra(who: u64, nonce: u64, fee: Balance) -> Option<(u64, SignedExtra)> {
 		Some((who, extra(nonce, fee)))
 	}
 
@@ -590,7 +592,8 @@ mod tests {
 			balances: vec![(1, 211)],
 		}.assimilate_storage(&mut t).unwrap();
 		let xt = TestXt::new(Call::Balances(BalancesCall::transfer(2, 69)), sign_extra(1, 0, 0));
-		let weight = xt.get_dispatch_info().weight as u64;
+		let weight = xt.get_dispatch_info().weight + <Runtime as frame_system::Trait>::ExtrinsicBaseWeight::get();
+		let fee: Balance = <Runtime as pallet_transaction_payment::Trait>::WeightToFee::convert(weight);
 		let mut t = sp_io::TestExternalities::new(t);
 		t.execute_with(|| {
 			Executive::initialize_block(&Header::new(
@@ -602,12 +605,12 @@ mod tests {
 			));
 			let r = Executive::apply_extrinsic(xt);
 			assert!(r.is_ok());
-			assert_eq!(<pallet_balances::Module<Runtime>>::total_balance(&1), 142 - 10 - weight);
+			assert_eq!(<pallet_balances::Module<Runtime>>::total_balance(&1), 142 - fee);
 			assert_eq!(<pallet_balances::Module<Runtime>>::total_balance(&2), 69);
 		});
 	}
 
-	fn new_test_ext(balance_factor: u64) -> sp_io::TestExternalities {
+	fn new_test_ext(balance_factor: Balance) -> sp_io::TestExternalities {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 		pallet_balances::GenesisConfig::<Runtime> {
 			balances: vec![(1, 111 * balance_factor)],
@@ -774,7 +777,7 @@ mod tests {
 		let execute_with_lock = |lock: WithdrawReasons| {
 			let mut t = new_test_ext(1);
 			t.execute_with(|| {
-				<pallet_balances::Module<Runtime> as LockableCurrency<u64>>::set_lock(
+				<pallet_balances::Module<Runtime> as LockableCurrency<Balance>>::set_lock(
 					id,
 					&1,
 					110,
@@ -784,7 +787,9 @@ mod tests {
 					Call::System(SystemCall::remark(vec![1u8])),
 					sign_extra(1, 0, 0),
 				);
-				let weight = xt.get_dispatch_info().weight as u64;
+				let weight = xt.get_dispatch_info().weight
+					+ <Runtime as frame_system::Trait>::ExtrinsicBaseWeight::get();
+				let fee: Balance = <Runtime as pallet_transaction_payment::Trait>::WeightToFee::convert(weight);
 				Executive::initialize_block(&Header::new(
 					1,
 					H256::default(),
@@ -796,7 +801,7 @@ mod tests {
 				if lock == WithdrawReasons::except(WithdrawReason::TransactionPayment) {
 					assert!(Executive::apply_extrinsic(xt).unwrap().is_ok());
 					// tx fee has been deducted.
-					assert_eq!(<pallet_balances::Module<Runtime>>::total_balance(&1), 111 - 10 - weight);
+					assert_eq!(<pallet_balances::Module<Runtime>>::total_balance(&1), 111 - fee);
 				} else {
 					assert_eq!(
 						Executive::apply_extrinsic(xt),
