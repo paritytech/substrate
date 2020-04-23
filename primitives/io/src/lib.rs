@@ -602,7 +602,7 @@ pub trait Hashing {
 	}
 }
 
-/// Interface that provides functions to access the offchain database access.
+/// Interface that provides functions to access the Offchain DB.
 #[runtime_interface]
 pub trait OffchainIndex {
 	/// Write a key value pair to the Offchain DB database in a buffered fashion.
