@@ -40,8 +40,14 @@ macro_rules! implement_fixed {
 		pub struct $name($inner_type);
 
 		impl From<$inner_type> for $name {
-			fn from(n: $inner_type) -> Self {
-				Self(n.saturating_mul(Self::DIV))
+			fn from(int: $inner_type) -> Self {
+				$name::from_integer(int)
+			}
+		}
+
+		impl From<($inner_type, $inner_type)> for $name {
+			fn from(r: ($inner_type, $inner_type)) -> Self {
+				$name::from_rational(r.0, r.1)
 			}
 		}
 
@@ -158,12 +164,8 @@ macro_rules! implement_fixed {
 			}
 
 			fn saturating_abs(self) -> Self {
-				if self.0 == Self::Inner::min_value() {
-					return Self::max_value();
-				}
-
 				if self.0.is_negative() {
-					Self::from_inner(self.0 * -1)
+					Self::from_inner(self.0.saturating_mul(-1)) 
 				} else {
 					self
 				}
@@ -676,6 +678,18 @@ macro_rules! implement_fixed {
 
 				assert_eq!(d.saturating_mul_int(i8::max_value()), -i8::max_value());
 				assert_eq!(d.saturating_mul_int(i8::min_value()), i8::max_value());
+			}
+
+			#[test]
+			fn saturating_abs_works() {
+				let inner_max = <$name as FixedPointNumber>::Inner::max_value();
+				let inner_min = <$name as FixedPointNumber>::Inner::min_value();
+				let accuracy = $name::accuracy();
+
+				assert_eq!($name::from_inner(inner_min).saturating_abs(), $name::max_value());
+				assert_eq!($name::from_inner(inner_max).saturating_abs(), $name::max_value());
+				assert_eq!($name::zero().saturating_abs(), 0.into());
+				assert_eq!($name::from_rational(-1, 2).saturating_abs(), (1, 2).into());
 			}
 
 			#[test]
