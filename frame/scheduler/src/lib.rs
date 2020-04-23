@@ -250,7 +250,7 @@ mod tests {
 	use frame_support::{
 		impl_outer_event, impl_outer_origin, impl_outer_dispatch, parameter_types, assert_ok,
 		traits::{OnInitialize, OnFinalize, schedule::{Anon, Named}},
-		weights::{DispatchClass, FunctionOf}
+		weights::{DispatchClass, FunctionOf, Pays}
 	};
 	use sp_core::H256;
 	// The testing primitives are very useful for avoiding having to work with signatures
@@ -293,7 +293,7 @@ mod tests {
 				#[weight = FunctionOf(
 					|args: (&u32, &Weight)| *args.1,
 					|_: (&u32, &Weight)| DispatchClass::Normal,
-					true
+					Pays::Yes,
 				)]
 				fn log(origin, i: u32, weight: Weight) {
 					ensure_root(origin)?;

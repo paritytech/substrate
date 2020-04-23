@@ -708,7 +708,6 @@ mod tests {
 
 	#[test]
 	fn next_child_storage_key_works() {
-
 		let child_info = ChildInfo::new_default(b"Child1");
 		let child_info = &child_info;
 
