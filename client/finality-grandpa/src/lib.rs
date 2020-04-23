@@ -633,7 +633,6 @@ pub struct GrandpaParams<Block: BlockT, C, N, SC, VR> {
 	/// The prometheus metrics registry.
 	pub prometheus_registry: Option<prometheus_endpoint::Registry>,
 	/// The voter state is exposed at an RPC endpoint.
-	// WIP: should we use Environment::Id istead of AuthorityId?
 	pub shared_voter_state: SharedVoterState<AuthorityId>,
 }
 
