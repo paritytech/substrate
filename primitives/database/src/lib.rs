@@ -32,6 +32,7 @@ pub enum Change<H> {
 	Remove(ColumnId, Vec<u8>),
 	Store(H, Vec<u8>),
 	Release(H),
+	DeleteChild(ColumnId, ChildBatchRemove<H>),
 }
 
 /// An alteration to the database that references the data.
@@ -40,12 +41,27 @@ pub enum ChangeRef<'a, H> {
 	Remove(ColumnId, &'a [u8]),
 	Store(H, &'a [u8]),
 	Release(H),
+	DeleteChild(ColumnId, ChildBatchRemove<H>),
 }
 
 /// A series of changes to the database that can be committed atomically. They do not take effect
 /// until passed into `Database::commit`.
 #[derive(Default, Clone)]
 pub struct Transaction<H>(pub Vec<Change<H>>);
+
+/// Removing child trie got different
+/// implementation depending on database
+/// capability.
+#[derive(Clone)]
+pub struct ChildBatchRemove<H> {
+	/// For database without key iteration
+	/// we delete by parsing the whole trie.
+	pub root: H,
+
+	/// Database that allows iteration can only
+	/// delete all key using this keyspace.
+	pub keyspace: Vec<u8>,
+}
 
 impl<H> Transaction<H> {
 	/// Create a new transaction to be prepared and committed atomically.
@@ -76,6 +92,10 @@ impl<H> Transaction<H> {
 	pub fn release(&mut self, hash: H) {
 		self.0.push(Change::Release(hash))
 	}
+	/// Set the value of `key` in `col` to `value`, replacing anything that is there currently.
+	pub fn delete_child(&mut self, col: ColumnId, child: ChildBatchRemove<H>) {
+		self.0.push(Change::DeleteChild(col, child))
+	}
 }
 
 pub trait Database<H: Clone>: Send + Sync {
@@ -88,6 +108,7 @@ pub trait Database<H: Clone>: Send + Sync {
 				Change::Remove(col, key) => self.remove(col, &key),
 				Change::Store(hash, preimage) => self.store(&hash, &preimage),
 				Change::Release(hash) => self.release(&hash),
+				Change::DeleteChild(col, child) => self.delete_child(col, child.clone()),
 			}
 		}
 	}
@@ -102,6 +123,7 @@ pub trait Database<H: Clone>: Send + Sync {
 				ChangeRef::Remove(col, key) => tx.remove(col, key),
 				ChangeRef::Store(hash, preimage) => tx.store(hash, preimage),
 				ChangeRef::Release(hash) => tx.release(hash),
+				ChangeRef::DeleteChild(col, child) => tx.delete_child(col, child.clone()),
 			}
 		}
 		self.commit(tx);
@@ -160,6 +182,12 @@ pub trait Database<H: Clone>: Send + Sync {
 	fn release(&self, hash: &H) {
 		let mut t = Transaction::new();
 		t.release(hash.clone());
+		self.commit(t);
+	}
+	/// Set the value of `key` in `col` to `value`, replacing anything that is there currently.
+	fn delete_child(&self, col: ColumnId, child: ChildBatchRemove<H>) {
+		let mut t = Transaction::new();
+		t.delete_child(col, child);
 		self.commit(t);
 	}
 }

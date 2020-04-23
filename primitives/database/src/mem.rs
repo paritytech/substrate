@@ -36,6 +36,7 @@ impl<H> Database<H> for MemDb<H>
 				Change::Remove(col, key) => { s.0.entry(col).or_default().remove(&key); },
 				Change::Store(hash, preimage) => { s.1.insert(hash, preimage); },
 				Change::Release(hash) => { s.1.remove(&hash); },
+				Change::DeleteChild(col, child) => { unimplemented!("TODO EMCH") },
 			}
 		}
 	}

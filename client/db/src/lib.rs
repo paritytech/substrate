@@ -1352,7 +1352,11 @@ fn apply_state_commit(transaction: &mut Transaction<DbHash>, commit: sc_state_db
 		transaction.remove(columns::STATE, &key[..]);
 	}
 	for keyspace in commit.data.deleted_child.into_iter() {
-		transaction.delete_prefix(columns::STATE, &keyspace[..]);
+		let child_remove = sp_database::ChildBatchRemove {
+			root: Default::default(), // TODO EMCH change the commit set to contain childbatchremove
+			keyspace,
+		};
+		transaction.delete_child(columns::STATE, child_remove);
 	}
 	for (key, val) in commit.meta.inserted.into_iter() {
 		transaction.set_from_vec(columns::STATE_META, &key[..], val);
@@ -1361,7 +1365,7 @@ fn apply_state_commit(transaction: &mut Transaction<DbHash>, commit: sc_state_db
 		transaction.remove(columns::STATE_META, &key[..]);
 	}
 	for keyspace in commit.meta.deleted_child.into_iter() {
-		transaction.delete_prefix(columns::STATE_META, &keyspace[..]);
+		unimplemented!("TODO remove meta deleted child");
 	}
 }
 
@@ -1908,11 +1912,11 @@ pub(crate) mod tests {
 			assert_eq!(backend.storage.db.get(
 				columns::STATE,
 				&sp_trie::prefixed_key::<BlakeTwo256>(&key[0], EMPTY_PREFIX)
-			).unwrap().unwrap(), &b"hello1"[..]);
+			).unwrap(), &b"hello1"[..]);
 			assert_eq!(backend.storage.db.get(
 				columns::STATE,
 				&sp_trie::prefixed_key::<BlakeTwo256>(&key[3], (storage_key, None))
-			).unwrap().unwrap(), &b"hello1"[..]);
+			).unwrap(), &b"hello1"[..]);
 			hash
 		};
 
@@ -1952,11 +1956,11 @@ pub(crate) mod tests {
 			assert_eq!(backend.storage.db.get(
 				columns::STATE,
 				&sp_trie::prefixed_key::<BlakeTwo256>(&key[0], EMPTY_PREFIX)
-			).unwrap().unwrap(), &b"hello1"[..]);
+			).unwrap(), &b"hello1"[..]);
 			assert_eq!(backend.storage.db.get(
 				columns::STATE,
 				&sp_trie::prefixed_key::<BlakeTwo256>(&key[3], (storage_key, None))
-			).unwrap().unwrap(), &b"hello1"[..]);
+			).unwrap(), &b"hello1"[..]);
 			hash
 		};
 
@@ -1992,11 +1996,11 @@ pub(crate) mod tests {
 			assert_eq!(backend.storage.db.get(
 				columns::STATE,
 				&sp_trie::prefixed_key::<BlakeTwo256>(&key[0], EMPTY_PREFIX)
-			).unwrap().unwrap(), &b"hello1"[..]);
+			).unwrap(), &b"hello1"[..]);
 			assert_eq!(backend.storage.db.get(
 				columns::STATE,
 				&sp_trie::prefixed_key::<BlakeTwo256>(&key[3], (storage_key, None))
-			).unwrap().unwrap(), &b"hello1"[..]);
+			).unwrap(), &b"hello1"[..]);
 			hash
 		};
 
@@ -2031,15 +2035,15 @@ pub(crate) mod tests {
 		assert_eq!(backend.storage.db.get(
 			columns::STATE,
 			&sp_trie::prefixed_key::<BlakeTwo256>(&key[0], EMPTY_PREFIX)
-		).unwrap().unwrap(), &b"hello1"[..]);
+		).unwrap(), &b"hello1"[..]);
 		assert!(backend.storage.db.get(
 			columns::STATE,
 			&sp_trie::prefixed_key::<BlakeTwo256>(&key[3], (storage_key, None))
-		).unwrap().is_none());
+		).is_none());
 		assert!(backend.storage.db.get(
 			columns::STATE,
 			&sp_trie::prefixed_key::<BlakeTwo256>(&key[4], (storage_key, None))
-		).unwrap().is_none());
+		).is_none());
 	}
 
 	#[test]
