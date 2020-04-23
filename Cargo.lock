@@ -1529,6 +1529,7 @@ dependencies = [
  "frame-support",
  "parity-scale-codec",
  "pretty_assertions",
+ "rustversion",
  "serde",
  "sp-core",
  "sp-inherents",
@@ -2282,6 +2283,12 @@ checksum = "b2b3ea6ff95e175473f8ffe6a7eb7c00d054240321b84c57051175fe3c1e075e"
 dependencies = [
  "libc",
 ]
+
+[[package]]
+name = "ip_network"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2ee15951c035f79eddbef745611ec962f63f4558f1dadf98ab723cc603487c6f"
 
 [[package]]
 name = "ipnet"
@@ -5537,6 +5544,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "ref-cast"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "077f197a31bfe7e4169145f9eca08d32705c6c6126c139c26793acdf163ac3ef"
+dependencies = [
+ "ref-cast-impl",
+]
+
+[[package]]
+name = "ref-cast-impl"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c36eb52b69b87c9e3a07387f476c88fd0dba9a1713b38e56617ed66b45392c1f"
+dependencies = [
+ "proc-macro2",
+ "quote 1.0.3",
+ "syn 1.0.17",
+]
+
+[[package]]
 name = "regex"
 version = "1.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5975,6 +6002,7 @@ dependencies = [
  "sp-trie",
  "sp-utils",
  "sp-version",
+ "substrate-prometheus-endpoint",
 ]
 
 [[package]]
@@ -6397,6 +6425,7 @@ dependencies = [
  "futures-timer 3.0.2",
  "futures_codec",
  "hex",
+ "ip_network",
  "libp2p",
  "linked-hash-map",
  "linked_hash_set",
@@ -6443,6 +6472,7 @@ dependencies = [
 name = "sc-network-gossip"
 version = "0.8.0-dev"
 dependencies = [
+ "async-std",
  "futures 0.3.4",
  "futures-timer 3.0.2",
  "libp2p",
@@ -7614,6 +7644,7 @@ name = "sp-runtime-interface-test"
 version = "2.0.0-dev"
 dependencies = [
  "sc-executor",
+ "sp-core",
  "sp-io",
  "sp-runtime",
  "sp-runtime-interface",
@@ -7715,6 +7746,7 @@ name = "sp-storage"
 version = "2.0.0-dev"
 dependencies = [
  "impl-serde 0.2.3",
+ "ref-cast",
  "serde",
  "sp-debug-derive",
  "sp-std",

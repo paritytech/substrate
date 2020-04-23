@@ -34,4 +34,5 @@ pub mod author;
 pub mod chain;
 pub mod offchain;
 pub mod state;
+pub mod child_state;
 pub mod system;

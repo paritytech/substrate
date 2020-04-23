@@ -69,7 +69,7 @@ decl_storage! {
 
 		/// Deferred reports that have been rejected by the offence handler and need to be submitted
 		/// at a later time.
-		DeferredOffences get(deferred_offences): Vec<DeferredOffenceOf<T>>;
+		DeferredOffences get(fn deferred_offences): Vec<DeferredOffenceOf<T>>;
 
 		/// A vector of reports of the same kind that happened at the same time slot.
 		ConcurrentReportsIndex:

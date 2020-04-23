@@ -67,13 +67,9 @@ message RemoteReadResponse {
 message RemoteReadChildRequest {
 	// Block at which to perform call.
 	bytes block = 2;
-	// Child Storage key.
+	// Child Storage key, this is relative
+	// to the child type storage location.
 	bytes storage_key = 3;
-	// Child trie source information.
-	bytes child_info = 4;
-	/// Child type, its required to resolve `child_info`
-	/// content and choose child implementation.
-	uint32 child_type = 5;
 	// Storage keys.
 	repeated bytes keys = 6;
 }
