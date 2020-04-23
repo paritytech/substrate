@@ -168,27 +168,27 @@ macro_rules! implement_fixed {
 					self
 				}
 			}
-		
+
 			fn zero() -> Self {
 				Self(0)
 			}
-		
+
 			fn is_zero(&self) -> bool {
 				self.0 == 0
 			}
-		
+
 			fn one() -> Self {
 				Self(Self::DIV)
 			}
-		
+
 			fn is_positive(self) -> bool {
 				self.0.is_positive()
 			}
-		
+
 			fn is_negative(self) -> bool {
 				self.0.is_negative()
 			}
-		
+
 			fn saturated_multiply_accumulate<N>(self, int: N) -> N
 				where
 					N: From<Self::PrevUnsigned> + TryFrom<Self::Unsigned> + UniqueSaturatedInto<Self::PrevUnsigned> +
@@ -201,18 +201,18 @@ macro_rules! implement_fixed {
 				// safe to convert as absolute value.
 				let parts  = self.0.checked_abs().map(|v| v as Self::Unsigned)
 					.unwrap_or(Self::Inner::max_value() as Self::Unsigned + 1);
-		
+
 				let natural_parts = parts / div;
 				let natural_parts: N = natural_parts.saturated_into();
-		
+
 				let fractional_parts = (parts % div) as Self::PrevUnsigned;
-		
+
 				let n = int.saturating_mul(natural_parts);
 				let p = Self::Perthing::from_parts(fractional_parts) * int;
-		
+
 				// everything that needs to be either added or subtracted from the original `int`.
 				let excess = n.saturating_add(p);
-		
+
 				if positive {
 					int.saturating_add(excess)
 				} else {
@@ -616,10 +616,13 @@ macro_rules! implement_fixed {
 
 				let a = $name::from_inner(inner_max);
 				let b = $name::from_inner(inner_min);
+				let c = $name::zero();
+				let d = $name::one();
 
 				assert_eq!(a.checked_div_int(i128::max_value()), Some(0));
 				assert_eq!(a.checked_div_int(2), Some(inner_max / (2 * accuracy)));
 				assert_eq!(a.checked_div_int(inner_max / accuracy), Some(1));
+				assert_eq!(a.checked_div_int(1i8), None);
 
 				assert_eq!(a.checked_div_int(-2), Some(-inner_max / (2 * accuracy)));
 				assert_eq!(a.checked_div_int(inner_max / -accuracy), Some(-1));
@@ -627,9 +630,25 @@ macro_rules! implement_fixed {
 				assert_eq!(b.checked_div_int(i128::min_value()), Some(0));
 				assert_eq!(b.checked_div_int(2), Some(inner_min / (2 * accuracy)));
 				assert_eq!(b.checked_div_int(inner_min / accuracy), Some(1));
+				assert_eq!(b.checked_div_int(1i8), None);
 
 				assert_eq!(b.checked_div_int(-2), Some(-(inner_min / (2 * accuracy))));
 				assert_eq!(b.checked_div_int(-(inner_min / accuracy)), Some(-1));
+
+				assert_eq!(c.checked_div_int(1), Some(0));
+				assert_eq!(c.checked_div_int(i128::max_value()), Some(0));
+				assert_eq!(c.checked_div_int(i128::min_value()), Some(0));
+				assert_eq!(c.checked_div_int(1i8), Some(0));
+
+				assert_eq!(d.checked_div_int(1), Some(1));
+				assert_eq!(d.checked_div_int(i32::max_value()), Some(0));
+				assert_eq!(d.checked_div_int(i32::min_value()), Some(0));
+				assert_eq!(d.checked_div_int(1i8), Some(1));
+
+				assert_eq!(a.checked_div_int(0), None);
+				assert_eq!(b.checked_div_int(0), None);
+				assert_eq!(c.checked_div_int(0), None);
+				assert_eq!(d.checked_div_int(0), None);
 			}
 
 			#[test]
