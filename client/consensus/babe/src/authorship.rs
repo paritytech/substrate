@@ -62,14 +62,14 @@ pub(super) fn calculate_primary_threshold(
 	let numer = p.numer().to_biguint().expect(
 		"returns None when the given value is negative; \
 		 p is defined as `1 - n` where n is defined in (0, 1]; \
-		 p must be a value in (0, 1]; \
+		 p must be a value in [0, 1); \
 		 qed."
 	);
 
 	let denom = p.denom().to_biguint().expect(
 		"returns None when the given value is negative; \
 		 p is defined as `1 - n` where n is defined in (0, 1]; \
-		 p must be a value in (0, 1]; \
+		 p must be a value in [0, 1); \
 		 qed."
 	);
 
