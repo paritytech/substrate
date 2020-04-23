@@ -114,6 +114,15 @@ impl<E: fmt::Debug> fmt::Debug for Error<E> {
 	}
 }
 
+/// A set of key value data changes.
+#[derive(Default, Debug, Clone)]
+pub struct MetaChangeSet {
+	/// Inserted values.
+	pub inserted: Vec<(Vec<u8>, DBValue)>,
+	/// Deleted values.
+	pub deleted: Vec<Vec<u8>>,
+}
+
 /// A set of state node changes.
 #[derive(Default, Debug, Clone)]
 pub struct ChangeSet<H: Hash> {
@@ -132,7 +141,7 @@ pub struct CommitSet<H: Hash> {
 	/// State node changes.
 	pub data: ChangeSet<H>,
 	/// Metadata changes.
-	pub meta: ChangeSet<Vec<u8>>,
+	pub meta: MetaChangeSet,
 }
 
 /// Pruning constraints. If none are specified pruning is
@@ -249,7 +258,7 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf> StateDbSync<Block
 		parent_hash: &BlockHash,
 		mut changeset: ChangeSet<Key>,
 	) -> Result<CommitSet<Key>, Error<E>> {
-		let mut meta = ChangeSet::default();
+		let mut meta = MetaChangeSet::default();
 		if number == 0 {
 			// Save pruning mode when writing first block.
 			meta.inserted.push((to_meta_key(PRUNING_MODE, &()), self.mode.id().into()));

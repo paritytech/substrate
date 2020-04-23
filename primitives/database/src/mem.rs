@@ -20,10 +20,13 @@ use std::collections::HashMap;
 use crate::{Database, Transaction, ColumnId, Change};
 use parking_lot::RwLock;
 
+type InnerMemDb<H> = RwLock<(HashMap<ColumnId, HashMap<Vec<u8>, Vec<u8>>>, HashMap<H, Vec<u8>>)>;
 #[derive(Default)]
 /// This implements `Database` as an in-memory hash map. `commit` is not atomic.
-pub struct MemDb<H: Clone + Send + Sync + Eq + PartialEq + Default + std::hash::Hash>
-	(RwLock<(HashMap<ColumnId, HashMap<Vec<u8>, Vec<u8>>>, HashMap<H, Vec<u8>>)>);
+pub struct MemDb<H: Clone + Send + Sync + Eq + PartialEq + Default + std::hash::Hash> (
+	InnerMemDb<H>,
+	fn(&H, 
+);
 
 impl<H> Database<H> for MemDb<H>
 	where H: Clone + Send + Sync + Eq + PartialEq + Default + std::hash::Hash
@@ -36,7 +39,17 @@ impl<H> Database<H> for MemDb<H>
 				Change::Remove(col, key) => { s.0.entry(col).or_default().remove(&key); },
 				Change::Store(hash, preimage) => { s.1.insert(hash, preimage); },
 				Change::Release(hash) => { s.1.remove(&hash); },
-				Change::DeleteChild(col, child) => { unimplemented!("TODO EMCH") },
+				Change::DeleteChild(col, child) => {
+					let trie = sp_trie::for_keys_in_trie::<sp_trie::Layout<H>, _, _> (
+						self,
+						&child.root,
+						|key: &[u8]| {
+							self.remove(col, key)
+						},
+					).map_err(|_e| {
+						// ignoring
+					});
+				},
 			}
 		}
 	}
@@ -66,4 +79,3 @@ impl<H> MemDb<H>
 		s.0.get(&col).map(|c| c.len()).unwrap_or(0)
 	}
 }
-

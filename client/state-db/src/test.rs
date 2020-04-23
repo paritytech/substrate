@@ -18,7 +18,7 @@
 
 use std::collections::HashMap;
 use sp_core::H256;
-use crate::{DBValue, ChangeSet, CommitSet, MetaDb, NodeDb};
+use crate::{DBValue, ChangeSet, MetaChangeSet, CommitSet, MetaDb, NodeDb};
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct TestDb {
@@ -77,7 +77,7 @@ pub fn make_changeset(inserted: &[u64], deleted: &[u64]) -> ChangeSet<H256> {
 pub fn make_commit(inserted: &[u64], deleted: &[u64]) -> CommitSet<H256> {
 	CommitSet {
 		data: make_changeset(inserted, deleted),
-		meta: ChangeSet::default(),
+		meta: MetaChangeSet::default(),
 	}
 }
 

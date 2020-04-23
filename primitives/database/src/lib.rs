@@ -99,8 +99,10 @@ impl<H> Transaction<H> {
 }
 
 pub trait Database<H: Clone>: Send + Sync {
+
 	/// Commit the `transaction` to the database atomically. Any further calls to `get` or `lookup`
 	/// will reflect the new state.
+	/// A call back for manual child deletion is provided.
 	fn commit(&self, transaction: Transaction<H>) {
 		for change in transaction.0.into_iter() {
 			match change {
@@ -184,6 +186,7 @@ pub trait Database<H: Clone>: Send + Sync {
 		t.release(hash.clone());
 		self.commit(t);
 	}
+
 	/// Set the value of `key` in `col` to `value`, replacing anything that is there currently.
 	fn delete_child(&self, col: ColumnId, child: ChildBatchRemove<H>) {
 		let mut t = Transaction::new();
@@ -212,4 +215,14 @@ pub fn with_lookup<R, H: Clone>(db: &dyn Database<H>, hash: &H, mut f: impl FnMu
 	let mut adapter = |k: &_| { result = Some(f(k)); };
 	db.with_lookup(hash, &mut adapter);
 	result
+}
+
+/// Iterate on key of a state.
+pub trait ForKeys<H> {
+	/// Reset context.
+	fn init(&mut self, col: ColumnId, root: H);
+	/// Keys to delete, note that we return an iterator to be able to delete at the same
+	/// time as parsing.
+	/// Thus parsing should only access elements once.
+	fn next_key(&mut self) -> Option<Vec<u8>>;
 }

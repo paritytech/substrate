@@ -43,6 +43,7 @@ impl<D: KeyValueDB, H: Clone> Database<H> for DbAdapter<D> {
 			match change {
 				Change::Set(col, key, value) => tx.put_vec(col, &key, value),
 				Change::Remove(col, key) => tx.delete(col, &key),
+				Change::DeleteChild(col, child) => tx.delete_prefix(col, child.keyspace.as_slice()),
 				_ => unimplemented!(),
 			}
 		}

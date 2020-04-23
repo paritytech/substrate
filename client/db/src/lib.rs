@@ -1364,9 +1364,6 @@ fn apply_state_commit(transaction: &mut Transaction<DbHash>, commit: sc_state_db
 	for key in commit.meta.deleted.into_iter() {
 		transaction.remove(columns::STATE_META, &key[..]);
 	}
-	for keyspace in commit.meta.deleted_child.into_iter() {
-		unimplemented!("TODO remove meta deleted child");
-	}
 }
 
 impl<Block> sc_client_api::backend::AuxStore for Backend<Block> where Block: BlockT {
