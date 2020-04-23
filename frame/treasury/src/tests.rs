@@ -244,6 +244,7 @@ fn close_tip_works() {
 			last_treasury_event(),
 			RawEvent::NewTip(h),
 		);
+		System::set_block_number(1);
 
 		assert_ok!(Treasury::tip(Origin::signed(11), h, 10));
 
@@ -255,6 +256,8 @@ fn close_tip_works() {
 			last_treasury_event(),
 			RawEvent::TipClosing(h),
 		);
+
+		System::set_block_number(1);
 
 		assert_noop!(Treasury::close_tip(Origin::signed(0), h.into()), Error::<Test>::Premature);
 
