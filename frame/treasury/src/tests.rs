@@ -173,7 +173,7 @@ fn genesis_config_works() {
 }
 
 fn tip_hash() -> H256 {
-	BlakeTwo256::hash_of(&(BlakeTwo256::hash(b"awesome.dot"), 3u64))
+	BlakeTwo256::hash_of(&(BlakeTwo256::hash(b"awesome.dot"), 3u128))
 }
 
 #[test]
@@ -222,7 +222,7 @@ fn report_awesome_from_beneficiary_and_tip_works() {
 		assert_ok!(Treasury::report_awesome(Origin::signed(0), b"awesome.dot".to_vec(), 0));
 		assert_eq!(Balances::reserved_balance(0), 12);
 		assert_eq!(Balances::free_balance(0), 88);
-		let h = BlakeTwo256::hash_of(&(BlakeTwo256::hash(b"awesome.dot"), 0u64));
+		let h = BlakeTwo256::hash_of(&(BlakeTwo256::hash(b"awesome.dot"), 0u128));
 		assert_ok!(Treasury::tip(Origin::signed(10), h.clone(), 10));
 		assert_ok!(Treasury::tip(Origin::signed(11), h.clone(), 10));
 		assert_ok!(Treasury::tip(Origin::signed(12), h.clone(), 10));

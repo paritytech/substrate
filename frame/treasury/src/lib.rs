@@ -603,7 +603,7 @@ decl_module! {
 		/// - Up to one event.
 		/// # </weight>
 		#[weight = 50_000_000]
-		fn tip(origin, hash: T::Hash,  #[compact] tip_value: BalanceOf<T>) {
+		fn tip(origin, hash: T::Hash, #[compact] tip_value: BalanceOf<T>) {
 			let tipper = ensure_signed(origin)?;
 			ensure!(T::Tippers::contains(&tipper), BadOrigin);
 
