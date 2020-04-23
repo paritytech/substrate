@@ -182,7 +182,7 @@ impl<B: BlockT> Future for GossipEngine<B> {
 							messages,
 						);
 
-						for (topic, notification) in to_forward.into_iter() {
+						for (topic, notification) in to_forward {
 							if let Entry::Occupied(mut entry) = this.message_sinks.entry(topic) {
 								trace!(
 									target: "gossip",
