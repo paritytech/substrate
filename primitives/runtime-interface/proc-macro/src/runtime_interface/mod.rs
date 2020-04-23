@@ -30,9 +30,35 @@ mod trait_decl_impl;
 
 /// Custom keywords supported by the `runtime_interface` attribute.
 pub mod keywords {
+	use syn::{Result, parse::{Parse, ParseStream}};
+
 	// Custom keyword `wasm_only` that can be given as attribute to [`runtime_interface`].
 	syn::custom_keyword!(wasm_only);
 	syn::custom_keyword!(native_nostd);
+
+	pub enum Attrs {
+		WasmOnly,
+		NativeNoStd,
+		Normal
+	}
+
+	impl Parse for Attrs {
+		fn parse(input: ParseStream) -> Result<Self> {
+			if input.is_empty() {
+				return Ok(Attrs::Normal);
+			}
+			let lookahead = input.lookahead1();
+			if lookahead.peek(wasm_only) {
+				input.parse::<wasm_only>()?;
+				Ok(Attrs::WasmOnly)
+			} else if lookahead.peek(native_nostd) {
+				input.parse::<native_nostd>()?;
+				Ok(Attrs::NativeNoStd)
+			} else {
+				Err(lookahead.error())
+			}
+		}
+	}
 }
 
 /// Implementation of the `runtime_interface` attribute.

@@ -31,38 +31,12 @@ mod pass_by;
 mod runtime_interface;
 mod utils;
 
-use syn::Result;
-use syn::parse::{Parse, ParseStream};
-
-enum Attrs {
-	WasmOnly,
-	NativeNoStd,
-	Normal
-}
-
-impl Parse for Attrs {
-	fn parse(input: ParseStream) -> Result<Self> {
-		if input.is_empty() {
-			return Ok(Attrs::Normal);
-		}
-		let lookahead = input.lookahead1();
-		if lookahead.peek(runtime_interface::keywords::wasm_only) {
-			input.parse::<runtime_interface::keywords::wasm_only>()?;
-			Ok(Attrs::WasmOnly)
-		} else if lookahead.peek(runtime_interface::keywords::native_nostd) {
-			input.parse::<runtime_interface::keywords::native_nostd>()?;
-			Ok(Attrs::NativeNoStd)
-		} else {
-			Err(lookahead.error())
-		}
-	}
-}
-
 #[proc_macro_attribute]
 pub fn runtime_interface(
 	attrs: proc_macro::TokenStream,
 	input: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
+	use runtime_interface::keywords::Attrs;
 	let trait_def = parse_macro_input!(input as ItemTrait);
 	let attrs_def = parse_macro_input!(attrs as Attrs);
 
