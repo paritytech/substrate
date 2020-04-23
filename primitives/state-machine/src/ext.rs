@@ -87,7 +87,7 @@ pub struct Ext<'a, H, N, B>
 	/// Extensions registered with this instance.
 	extensions: Option<&'a mut Extensions>,
 	/// Storage accumulators for each key.
-	accumulators: HashMap<Vec<u8>, Vec<Vec<u8>>>,
+	accumulators: HashMap<Vec<u8>, StorageAccumulator>,
 }
 
 impl<'a, H, N, B> Ext<'a, H, N, B>
@@ -404,35 +404,27 @@ where
 	) {
 		self.accumulators.entry(key.to_vec())
 			.or_default()
-			.push(appended);
+			.append(appended);
 	}
 
 	fn storage_accumulator_commit(
 		&mut self,
 		key: &[u8],
 	) -> u32 {
-		let (number_of_values, concatenated) =
-			self.accumulators.remove(key).map(
-				|values| {
-					let mut encoded = codec::Compact(values.len() as u32).encode();
-					for value in values.iter() {
-						encoded.extend(value);
-					}
-					(values.len(), encoded)
-				})
-				.unwrap_or_default();
+		let accumulator = self.accumulators.remove(key).unwrap_or_default();
+		let accumulated = if accumulator.len() == 0 {
+			// don't update anything if none accumulated
+			return 0;
+		} else {
+			accumulator.len()
+		};
 
-		let number_of_values = number_of_values as u32;
+		self.place_storage(
+			key.to_vec(),
+			Some(accumulator.merge_with_storage(self.storage(key).unwrap_or_default()))
+		);
 
-		// only set storage if anything was accumulated.
-		if number_of_values > 0 {
-			self.place_storage(
-				key.to_vec(),
-				Some(concatenated),
-			);
-		}
-
-		number_of_values
+		accumulated
 	}
 
 	fn chain_id(&self) -> u64 {
@@ -602,6 +594,45 @@ where
 		} else {
 			Err(sp_externalities::Error::ExtensionsAreNotSupported)
 		}
+	}
+}
+
+#[derive(Debug, Default)]
+pub struct StorageAccumulator(Vec<Vec<u8>>);
+
+impl StorageAccumulator {
+	pub fn append(&mut self, value: Vec<u8>) {
+		self.0.push(value)
+	}
+
+	pub fn merge_with_storage(self, previous_value: Vec<u8>) -> Vec<u8> {
+		let (storage_length, storage_data) = if !previous_value.is_empty() {
+			let stream = &mut &previous_value[..];
+			// TODO: panic? propagate error? who will handle?
+			let storage_length: u32 = codec::Compact::<u32>::decode(stream).ok()
+				.map(From::from).unwrap_or_default();
+
+			(storage_length, *stream)
+		} else {
+			if self.len() == 0 {
+				return vec![]
+			} else {
+				(0, &[][..])
+			}
+		};
+
+		let final_length = storage_length + self.len();
+		let mut final_storage_value = codec::Compact(final_length).encode();
+		final_storage_value.extend(storage_data);
+		for value in self.0 {
+			final_storage_value.extend(value)
+		}
+
+		final_storage_value
+	}
+
+	pub fn len(&self) -> u32 {
+		self.0.len() as u32
 	}
 }
 
@@ -776,6 +807,37 @@ mod tests {
 
 		// next_overlay exist but next_backend doesn't exist
 		assert_eq!(ext.next_child_storage_key(child_info, &[40]), Some(vec![50]));
+	}
+
+	#[test]
+	fn accumulator_works() {
+		#[derive(codec::Encode, codec::Decode)]
+		struct Member {
+			order: u64,
+			param: u8,
+		}
+
+		let mut accumulator = StorageAccumulator::default();
+		accumulator.append(Member { order: 6, param: 1 }.encode());
+
+		let mut storage_value = Vec::new();
+		storage_value = accumulator.merge_with_storage(storage_value);
+
+		let members = Vec::<Member>::decode(&mut &storage_value[..]).expect("decode failed");
+		assert_eq!(members.len(), 1);
+		assert_eq!(members[0].order, 6);
+		assert_eq!(members[0].param, 1);
+
+		let mut accumulator = StorageAccumulator::default();
+		accumulator.append(Member { order: 7, param: 122 }.encode());
+		storage_value = accumulator.merge_with_storage(storage_value);
+
+		let members = Vec::<Member>::decode(&mut &storage_value[..]).expect("decode failed");
+		assert_eq!(members.len(), 2);
+		assert_eq!(members[0].order, 6);
+		assert_eq!(members[0].param, 1);
+		assert_eq!(members[1].order, 7);
+		assert_eq!(members[1].param, 122);
 	}
 
 	#[test]

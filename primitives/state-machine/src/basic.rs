@@ -19,7 +19,7 @@
 use std::{
 	collections::{BTreeMap, HashMap}, any::{TypeId, Any}, iter::FromIterator, ops::Bound
 };
-use crate::{Backend, InMemoryBackend, StorageKey, StorageValue};
+use crate::{Backend, InMemoryBackend, StorageKey, StorageValue, ext::StorageAccumulator};
 use hash_db::Hasher;
 use sp_trie::{TrieConfiguration, empty_child_trie_root};
 use sp_trie::trie_types::Layout;
@@ -39,7 +39,7 @@ use sp_externalities::Extensions;
 pub struct BasicExternalities {
 	inner: Storage,
 	extensions: Extensions,
-	accumulators: HashMap<Vec<u8>, Vec<Vec<u8>>>,
+	accumulators: HashMap<Vec<u8>, StorageAccumulator>,
 }
 
 impl BasicExternalities {
@@ -307,35 +307,26 @@ impl Externalities for BasicExternalities {
 	) {
 		self.accumulators.entry(key.to_vec())
 			.or_default()
-			.push(appended);
+			.append(appended);
 	}
 
 	fn storage_accumulator_commit(
 		&mut self,
 		key: &[u8],
 	) -> u32 {
-		let (number_of_values, concatenated) =
-			self.accumulators.remove(key).map(
-				|values| {
-					let mut encoded = codec::Compact(values.len() as u32).encode();
-					for value in values.iter() {
-						encoded.extend(value);
-					}
-					(values.len(), encoded)
-				})
-				.unwrap_or_default();
+		let accumulator = self.accumulators.remove(key).unwrap_or_default();
+		let accumulated = if accumulator.len() == 0 {
+			return 0;
+		} else {
+			accumulator.len()
+		};
 
-		let number_of_values = number_of_values as u32;
+		self.place_storage(
+			key.to_vec(),
+			Some(accumulator.merge_with_storage(self.storage(key).unwrap_or_default()))
+		);
 
-		// only set storage if anything was accumulated.
-		if number_of_values > 0 {
-			self.place_storage(
-				key.to_vec(),
-				Some(concatenated),
-			);
-		}
-
-		number_of_values
+		accumulated
 	}
 
 	fn storage_changes_root(&mut self, _parent: &[u8]) -> Result<Option<Vec<u8>>, ()> {
