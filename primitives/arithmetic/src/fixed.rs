@@ -64,11 +64,11 @@ macro_rules! implement_fixed {
 			fn from_integer(int: Self::Inner) -> Self {
 				Self(int.saturating_mul(Self::DIV))
 			}
-		
+
 			fn checked_from_integer(int: Self::Inner) -> Option<Self> {
 				int.checked_mul(Self::DIV).map(|inner| Self(inner))
 			}
-		
+
 			fn from_rational<N: UniqueSaturatedInto<Self::Inner>>(n: N, d: Self::Inner) -> Self {
 				let n = n.unique_saturated_into();
 
@@ -76,7 +76,7 @@ macro_rules! implement_fixed {
 					// Handle wrong result when in addition n is inner::min().
 					return Self(n)
 				}
-	
+
 				let signum = n.signum() * d.signum();
 				let n = if n.is_negative() { n.saturating_mul(-1) } else { n };
 				let d = if d.is_negative() { d.saturating_mul(-1) } else { d };
@@ -130,7 +130,7 @@ macro_rules! implement_fixed {
 					.map(|r: i128| r.saturating_mul(signum))
 					.and_then(|r| r.try_into().ok())
 			}
-		
+
 			fn checked_div_int<N>(self, other: N) -> Option<N>
 			where
 				N: Copy + TryFrom<i128> + UniqueSaturatedInto<i128>,
@@ -142,7 +142,7 @@ macro_rules! implement_fixed {
 					.and_then(|inner| inner.checked_div(Self::DIV.into()))
 					.and_then(|n| TryInto::<N>::try_into(n).ok())
 			}
-		
+
 			fn saturating_mul_int<N>(self, other: N) -> N
 			where
 				N: Copy + TryFrom<i128> + UniqueSaturatedInto<i128> + Bounded,
@@ -156,12 +156,12 @@ macro_rules! implement_fixed {
 					}
 				})
 			}
-		
+
 			fn saturating_abs(self) -> Self {
 				if self.0 == Self::Inner::min_value() {
 					return Self::max_value();
 				}
-		
+
 				if self.0.is_negative() {
 					Self::from_inner(self.0 * -1)
 				} else {
