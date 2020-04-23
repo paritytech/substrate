@@ -306,7 +306,7 @@ pub trait CliConfiguration: Sized {
 		Ok(Default::default())
 	}
 
-	/// Returns a offchain worker config wrapped in `Ok(_)`
+	/// Returns an offchain worker config wrapped in `Ok(_)`
 	///
 	/// By default offchain workers are disabled.
 	fn offchain_worker(&self, role: &Role) -> Result<OffchainWorkerConfig> {
