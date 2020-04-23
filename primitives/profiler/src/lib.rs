@@ -10,8 +10,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::SystemTime;
 use parking_lot::Mutex;
 
+const MAX_SPAN_STACK_LEN: usize = 1000;
+
 pub trait Profiler: Send {
-	fn create_span(&mut self, target: String, name: String) -> u64;
+	fn create_span(&mut self, target: &str, name: &str) -> u64;
 
 	fn exit_span(&mut self, id: u64);
 }
@@ -38,27 +40,34 @@ enum SpanPhase {
 rental! {
 	pub mod rent_span {
 
-		 #[rental]
-		pub struct SpanGuard {
+		#[rental]
+		pub struct SpanAndGuard {
 			span: Box<tracing::Span>,
-			guard: Box<tracing::span::Entered<'span>>,
+			guard: tracing::span::Entered<'span>,
 		}
 	}
 }
 
+#[derive(Default)]
 pub struct TracingProfiler {
 	next_id: AtomicU64,
-	spans: Vec<(u64, Pin<Box<rent_span::SpanGuard>>)>,
+	spans: Vec<(u64, rent_span::SpanAndGuard)>,
+}
+
+impl TracingProfiler {
+	pub fn new() -> TracingProfiler {
+		TracingProfiler::default()
+	}
 }
 
 impl Profiler for TracingProfiler {
-	fn create_span(&mut self, target: String, name: String) -> u64 {
+	fn create_span(&mut self, target: &str, name: &str) -> u64 {
 		let id = self.next_id.fetch_add(1, Ordering::Relaxed);
 		macro_rules! span_dispatch {
 			($($target:tt,$name:tt;)*) => {
-				match (target.as_str(), name.as_str()) {
+				match (target, name) {
 					$(
-						($target, $name) => Some(tracing::debug_span!($target, $name)),
+						($target, $name) => Some(tracing::span!(target: $target, tracing::Level::INFO, $name, sp_profiler_ok = true)),
 					)*
 					_ => {
 						log::warn!("Trying to profile span target: {}, name: {} that is not registered",
@@ -69,40 +78,53 @@ impl Profiler for TracingProfiler {
 				}
 			}
 		};
-
 		/// Register spans here
 		let span_opt: Option<tracing::Span> = span_dispatch! {
 			"frame_executive","execute_block";
 			"pallet_balances","transfer";
+			"sp_io::storage","changes_root";
+			"sp_io::storage","storage_root";
+			"pallet_session","on_initialize";
 		};
 		if let Some(span) = span_opt {
-			if let Ok(mut sg) = rent_span::SpanGuard::try_new(
+			let sg = rent_span::SpanAndGuard::new(
 				Box::new(span),
-				|span| {
-					let e: tracing::span::Entered = span.enter();
-					let b: Box<tracing::span::Entered> = Box::new(e);
-					Ok(b)
-				}
-			) {
-//				sg.guard = sg.span.enter();
-				let mut boxed = Box::pin(sg);
-				self.spans.push((id, boxed));
-			}
+				|span| span.enter(),
+			);
+			self.spans.push((id, sg));
+		}
+		if self.spans.len() > MAX_SPAN_STACK_LEN {
+			log::warn!("MAX_SPAN_STACK_LEN exceeded, removing oldest span, recording `sp_profiler_ok = false`");
+			let mut sg = self.spans.remove(0);
+			sg.1.rent_all_mut(|s| {s.span.record("sp_profiler_ok", &false);});
 		}
 		id
 	}
 
 	fn exit_span(&mut self, id: u64) {
-		match self.spans.pop() {
-			Some(sg) => {
-				// if id > sg.id it means the span is not registered, so we ignore the exit
-				if id > sg.0 {
-					self.spans.push(sg);
-				} else {
-					drop(sg);
+		loop {
+			match self.spans.pop() {
+				Some(mut sg) => {
+					// if id > sg.id it means the span is not registered, so we ignore the exit
+					if id > sg.0 {
+						self.spans.push(sg);
+						return;
+					} else {
+						if sg.0 > id {
+							// Did not receive the matching exit_span call due to early exit from calling scope
+							// mark as not ok to use for profiling
+							// (overall time is from this span's start until the parent span's exit)
+							sg.1.rent_all_mut(|s| {s.span.record("sp_profiler_ok", &false);});
+						} else {
+							return;
+						}
+					}
+				}
+				None => {
+					log::debug!("Span id: {} not found, list empty", id);
+					return;
 				}
 			}
-			None => log::warn!("Span id: {} not found", id)
 		}
 	}
 }
@@ -172,19 +194,19 @@ fn timestamp() -> u64 {
 
 impl Drop for FileProfiler {
 	fn drop(&mut self) {
-		if let Err(_) = self.join_handle.take().expect("We only drop once, so has to be Some").join() {
+		if let Err(_) = self.join_handle.take().expect("We only drop once, so must be Some").join() {
 			eprintln!("Unable to join() on receiver thread");
 		};
 	}
 }
 
 impl Profiler for FileProfiler {
-	fn create_span(&mut self, target: String, name: String) -> u64 {
+	fn create_span(&mut self, target: &str, name: &str) -> u64 {
 		let id = self.next_id.fetch_add(1, Ordering::Relaxed);
 		let span_datum = EnterSpan {
 			id,
-			target,
-			name,
+			target: target.to_owned(),
+			name: name.to_owned(),
 			time: timestamp(),
 		};
 		if let Err(e) = self.sender.send(SpanPhase::Enter(span_datum)) {
@@ -219,12 +241,12 @@ impl BasicProfiler {
 }
 
 impl Profiler for BasicProfiler {
-	fn create_span(&mut self, target: String, name: String) -> u64 {
+	fn create_span(&mut self, target: &str, name: &str) -> u64 {
 		let id = self.next_id.fetch_add(1, Ordering::Relaxed);
 		let span_datum = EnterSpan {
 			id,
-			target,
-			name,
+			target: target.to_owned(),
+			name: name.to_owned(),
 			time: timestamp(),
 		};
 		self.span_data.lock().insert(id, span_datum);

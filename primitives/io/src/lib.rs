@@ -72,9 +72,10 @@ use parking_lot::Mutex;
 use sp_profiler::Profiler;
 #[cfg(feature = "std")]
 lazy_static! {
-	static ref PROFILER: Mutex<Box<dyn sp_profiler::Profiler>> = match std::env::var("SP_PROFILER") {
+	static ref PROFILER: Mutex<Box<dyn sp_profiler::Profiler>> = match dbg!(std::env::var("SP_PROFILER")) {
 		Ok(v) => match v.to_lowercase().as_ref() {
-			"async" => Mutex::new(Box::new(sp_profiler::AsyncProfiler::new(std::env::var("SP_PROFILER_FILENAME").unwrap_or("profiling_data.csv".to_string())))),
+			"file" => Mutex::new(Box::new(sp_profiler::FileProfiler::new(std::env::var("SP_PROFILER_FILENAME").unwrap_or("profiling_data.csv".to_string())))),
+			"tracing" => Mutex::new(Box::new(sp_profiler::TracingProfiler::new())),
 			_ => Mutex::new(Box::new(sp_profiler::BasicProfiler::new())),
 		},
 		_ => Mutex::new(Box::new(sp_profiler::BasicProfiler::new())),
@@ -287,9 +288,9 @@ pub trait Storage {
 	///
 	/// Returns the SCALE encoded hash.
 	fn root(&mut self) -> Vec<u8> {
-//		let id = PROFILER.lock().create_span("Storage".to_string(), "storage_root".to_string());
+		let id = PROFILER.lock().create_span(module_path!(), "storage_root");
 		let res = self.storage_root();
-//		PROFILER.lock().exit_span(id);
+		PROFILER.lock().exit_span(id);
 		res
 	}
 
@@ -316,10 +317,10 @@ pub trait Storage {
 	/// Returns an `Some(_)` which holds the SCALE encoded hash or `None` when
 	/// changes trie is disabled.
 	fn changes_root(&mut self, parent_hash: &[u8]) -> Option<Vec<u8>> {
-//		let id = PROFILER.lock().create_span("Storage".to_string(), "changes_root".to_string());
+		let id = PROFILER.lock().create_span(module_path!(), "changes_root");
 		let res = self.storage_changes_root(parent_hash)
 			.expect("Invalid `parent_hash` given to `changes_root`.");
-//		PROFILER.lock().exit_span(id);
+		PROFILER.lock().exit_span(id);
 		res
 	}
 
@@ -903,12 +904,7 @@ pub trait Logging {
 #[runtime_interface]
 pub trait Profiling {
 	fn register_span(target: &str, name: &str) -> u64 {
-		PROFILER.lock().create_span(target.into(), name.into())
-	}
-
-
-	fn register_span_u64(target: &str, name: &str, u: u64) -> u64 {
-		register_span(target, &format!("{}:{}", name, u))
+		PROFILER.lock().create_span(target, name)
 	}
 
 	fn exit_span(id: u64) {
