@@ -548,9 +548,9 @@ decl_module! {
 		/// Set the new changes trie configuration.
 		/// 
 		/// # <weight>
-		/// - `O(L)` where `L` complexity of `deposit_log`
+		/// - `O(D)` where `D` length of `Digest`
 		/// - 1 storage write or delete (codec `O(1)`).
-		/// - 1 call to `deposit_log`: `O(L)` (which is `O(D)` for the length of `Digest`)
+		/// - 1 call to `deposit_log`: `O(D)` (which depends on the length of `Digest`)
 		/// # </weight>
 		#[weight = (20_000_000, DispatchClass::Operational)]
 		pub fn set_changes_trie_config(origin, changes_trie_config: Option<ChangesTrieConfiguration>) {
