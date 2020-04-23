@@ -539,6 +539,10 @@ macro_rules! implement_fixed {
 				let t = $name::from_rational(inner_max, 3 * accuracy);
 				let u = $name::from_rational(inner_max, -3 * accuracy);
 
+				let v = $name::from_rational(inner_min, 3 * accuracy);
+				let w = $name::from_rational(inner_min, accuracy / -3);
+				let y = $name::from_rational(inner_min, accuracy / 3);
+
 				assert_eq!(a.saturating_mul_int(10), 25);
 				assert_eq!(b.saturating_mul_int(10),-25);
 				assert_eq!(c.saturating_mul_int(10), -25);
@@ -564,6 +568,10 @@ macro_rules! implement_fixed {
 
 				assert_eq!(t.into_inner(), inner_max / 3);
 				assert_eq!(u.into_inner(), -inner_max / 3);
+
+				assert_eq!(v.into_inner(), inner_min / 3);
+				assert_eq!(w.into_inner(), inner_max);
+				assert_eq!(y.into_inner(), inner_min);
 			}
 
 			#[test]
@@ -579,12 +587,12 @@ macro_rules! implement_fixed {
 				assert_eq!(b.checked_mul_int(i128::max_value()), Some(i128::max_value() / -2));
 				assert_eq!(b.checked_mul_int(i128::min_value()), Some(i128::min_value() / -2));
 
-				// assert_eq!(c.checked_mul_int(i128::max_value()), None);
-				// assert_eq!(c.checked_mul_int(i128::min_value()), None);
+				assert_eq!(c.checked_mul_int(i128::max_value()), None);
+				assert_eq!(c.checked_mul_int(i128::min_value()), None);
 
-				// assert_eq!(a.checked_mul_int(i128::max_value()), Some(i128::max_value() / 2));
-				// assert_eq!(a.checked_mul_int(u64::max_value()), Some(u64::max_value() / 2));
-				// assert_eq!(a.checked_mul_int(i128::min_value()), Some(i128::min_value() / 2));
+				assert_eq!(a.checked_mul_int(i128::max_value()), Some(i128::max_value() / 2));
+				assert_eq!(a.checked_mul_int(u64::max_value()), Some(u64::max_value() / 2));
+				assert_eq!(a.checked_mul_int(i128::min_value()), Some(i128::min_value() / 2));
 			}
 
 			#[test]
