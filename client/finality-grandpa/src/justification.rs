@@ -88,7 +88,7 @@ impl<Block: BlockT> GrandpaJustification<Block> {
 
 	/// Decode a GRANDPA justification and validate the commit and the votes'
 	/// ancestry proofs finalize the given block.
-	pub(crate) fn decode_and_verify_finalizes(
+	pub fn decode_and_verify_finalizes(
 		encoded: &[u8],
 		finalized_target: (Block::Hash, NumberFor<Block>),
 		set_id: u64,
