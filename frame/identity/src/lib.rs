@@ -1219,9 +1219,9 @@ mod tests {
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
 			assert_eq!(Identity::identity(10).unwrap().info, ten());
 			assert_eq!(Balances::free_balance(10), 90);
-			assert_ok!(Identity::clear_identity(Origin::signed(10), 0));
+			assert_ok!(Identity::clear_identity(Origin::signed(10)));
 			assert_eq!(Balances::free_balance(10), 100);
-			assert_noop!(Identity::clear_identity(Origin::signed(10), 0), Error::<Test>::NotNamed);
+			assert_noop!(Identity::clear_identity(Origin::signed(10)), Error::<Test>::NotNamed);
 		});
 	}
 
@@ -1260,7 +1260,7 @@ mod tests {
 			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
 			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable, 0));
-			assert_ok!(Identity::clear_identity(Origin::signed(10), 0));
+			assert_ok!(Identity::clear_identity(Origin::signed(10)));
 			assert_eq!(Identity::identity(10), None);
 		});
 	}
@@ -1325,7 +1325,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
 			assert_ok!(Identity::set_subs(Origin::signed(10), vec![(20, Data::Raw(vec![40; 1]))], 0));
-			assert_ok!(Identity::clear_identity(Origin::signed(10), 1));
+			assert_ok!(Identity::clear_identity(Origin::signed(10)));
 			assert_eq!(Balances::free_balance(10), 100);
 			assert!(Identity::super_of(20).is_none());
 		});

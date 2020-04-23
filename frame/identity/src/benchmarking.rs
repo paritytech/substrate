@@ -193,7 +193,7 @@ benchmarks! {
 				x
 			)?;
 		}
-	}: _(RawOrigin::Signed(caller), s)
+	}: _(RawOrigin::Signed(caller))
 
 	request_judgement {
 		let caller = account::<T>("caller", 0);
