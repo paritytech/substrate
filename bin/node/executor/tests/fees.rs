@@ -25,7 +25,7 @@ use sp_runtime::{Fixed128, Perbill, traits::{Convert, BlakeTwo256}};
 use node_runtime::{
 	CheckedExtrinsic, Call, Runtime, Balances, TransactionPayment,
 	TransactionByteFee, WeightFeeCoefficient,
-	constants::currency::*,
+	constants::currency::*, ExtrinsicBaseWeight,
 };
 use node_runtime::impls::LinearWeightToFee;
 use node_primitives::Balance;
@@ -180,6 +180,9 @@ fn transaction_fee_is_correct_ultimate() {
 		// - Creation-fee of bob's account.
 		let mut balance_alice = (100 - 69) * DOLLARS;
 
+		let base_weight = ExtrinsicBaseWeight::get();
+		let base_fee = LinearWeightToFee::<WeightFeeCoefficient>::convert(base_weight);
+
 		let length_fee = TransactionByteFee::get() * (xt.clone().encode().len() as Balance);
 		balance_alice -= length_fee;
 
@@ -190,6 +193,7 @@ fn transaction_fee_is_correct_ultimate() {
 		// current weight of transfer = 200_000_000
 		// Linear weight to fee is 1:1 right now (1 weight = 1 unit of balance)
 		assert_eq!(weight_fee, weight as Balance);
+		balance_alice -= base_fee;
 		balance_alice -= weight_fee;
 		balance_alice -= tip;
 
