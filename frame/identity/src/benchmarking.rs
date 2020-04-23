@@ -72,11 +72,11 @@ fn create_sub_accounts<T: Trait>(who: &T::AccountId, s: u32) -> Result<Vec<(T::A
 
 // Adds `s` sub-accounts to the identity of `who`. Each will have 32 bytes of raw data added to it.
 // This additionally returns the vector of sub-accounts so it can be modified if needed.
-fn add_sub_accounts<T: Trait>(who: &T::AccountId, s: u32, old_subs_count: u32) -> Result<Vec<(T::AccountId, Data)>, &'static str> {
+fn add_sub_accounts<T: Trait>(who: &T::AccountId, s: u32) -> Result<Vec<(T::AccountId, Data)>, &'static str> {
 	let who_origin = RawOrigin::Signed(who.clone());
 	let subs = create_sub_accounts::<T>(who, s)?;
 
-	Identity::<T>::set_subs(who_origin.into(), subs.clone(), old_subs_count)?;
+	Identity::<T>::set_subs(who_origin.into(), subs.clone())?;
 
 	Ok(subs)
 }
@@ -110,7 +110,7 @@ benchmarks! {
 		let s in 1 .. T::MaxSubAccounts::get() => {
 			// Give them s many sub accounts
 			let caller = account::<T>("caller", 0);
-			let _ = add_sub_accounts::<T>(&caller, s, s - 1)?;
+			let _ = add_sub_accounts::<T>(&caller, s)?;
 		};
 		let x in 1 .. T::MaxAdditionalFields::get() => {
 			// Create their main identity with x additional fields
@@ -163,13 +163,13 @@ benchmarks! {
 
 		// Give them o many previous sub accounts.
 		let p in 1 .. T::MaxSubAccounts::get() => {
-			let _ = add_sub_accounts::<T>(&caller, p, 0)?;
+			let _ = add_sub_accounts::<T>(&caller, p)?;
 		};
 		// Create a new subs vec with s sub accounts
 		let s in 1 .. T::MaxSubAccounts::get() => ();
 		let subs = create_sub_accounts::<T>(&caller, s)?;
 
-	}: _(RawOrigin::Signed(caller), subs, p)
+	}: _(RawOrigin::Signed(caller), subs)
 
 	clear_identity {
 		let caller = account::<T>("caller", 0);

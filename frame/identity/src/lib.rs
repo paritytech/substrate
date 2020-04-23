@@ -478,6 +478,21 @@ mod weight_for {
 			+ 3_000_000 * extra_fields.into() // X
 	}
 
+	/// Weight calculation for `set_subs`.
+	pub(crate) fn set_subs(
+		db: RuntimeDbWeight,
+		old_subs: impl Into<Weight> + Copy,
+		subs: impl Into<Weight> + Copy
+	) -> Weight {
+		db.reads(1) // storage-exists
+			+ db.reads_writes(1, 1) // balance ops
+			+ db.reads_writes(1, old_subs.into()) // P old DB deletions
+			+ db.writes(subs.into() + 1) // S + 1 new DB writes
+			+ 130_000_000 // constant
+			+ 5_200_000 * old_subs.into() // P
+			+ 7_300_000 * subs.into() // S
+	}
+
 	/// Weight calculation for `clear_identity`.
 	pub(crate) fn clear_identity(
 		db: RuntimeDbWeight,
@@ -519,6 +534,7 @@ mod weight_for {
 			+ 3_600_000 * extra_fields.into() // X
 	}
 
+	/// Weight calculation for `provide_judgement`.
 	pub(crate) fn provide_judgement(
 		db: RuntimeDbWeight,
 		judgements: impl Into<Weight>,
@@ -530,6 +546,7 @@ mod weight_for {
 			+ 3_500_000 * extra_fields.into()// X
 	}
 
+	/// Weight calculation for `kill_identity`.
 	pub(crate) fn kill_identity(
 		db: RuntimeDbWeight,
 		judgements: impl Into<Weight>,
@@ -607,7 +624,7 @@ decl_module! {
 		/// - One balance reserve operation.
 		/// - One storage mutation (codec-read `O(X' + R)`, codec-write `O(X + R)`).
 		/// - One event.
-		/// - Benchmark: 
+		/// - Benchmarks: 
 		///   - 136.6 + R * 0.62 + X * 2.62 µs (min squares analysis)
 		///   - 146.2 + R * 0.372 + X * 2.98 µs (min squares analysis)
 		/// # </weight>
@@ -669,25 +686,21 @@ decl_module! {
 		///   - One storage read (codec complexity `O(P)`).
 		///   - One storage write (codec complexity `O(S)`).
 		///   - One storage-exists (`IdentityOf::contains_key`).
-		/// - Benchmark: 
+		/// - Benchmarks: 
 		///   - 115.2 + P * 5.11 + S * 6.67 µs (min squares analysis)
 		///   - 121 + P * 4.852 + S * 7.111 µs (min squares analysis)
 		/// # </weight>
-		#[weight = T::DbWeight::get().reads(1) // storage-exists
-				+ T::DbWeight::get().reads_writes(1, 1) // balance ops
-				+ T::DbWeight::get().reads_writes(1, (*old_subs_count).into()) // P old DB deletions
-				+ T::DbWeight::get().writes(subs.len() as u64 + 1) // S + 1 new DB writes
-				+ 130_000_000 // constant
-				+ 5_200_000 * (*old_subs_count) as Weight // P
-				+ 7_300_000 * subs.len() as Weight // S
-		]
-		fn set_subs(origin, subs: Vec<(T::AccountId, Data)>, old_subs_count: u32) {
+		#[weight = weight_for::set_subs(
+			T::DbWeight::get(),
+			T::MaxSubAccounts::get(), // P
+			subs.len() as Weight // S
+		)]
+		fn set_subs(origin, subs: Vec<(T::AccountId, Data)>) -> DispatchResultWithPostInfo {
 			let sender = ensure_signed(origin)?;
 			ensure!(<IdentityOf<T>>::contains_key(&sender), Error::<T>::NotFound);
 			ensure!(subs.len() <= T::MaxSubAccounts::get() as usize, Error::<T>::TooManySubAccounts);
 
 			let (old_deposit, old_ids) = <SubsOf<T>>::get(&sender);
-			ensure!(old_ids.len() <= old_subs_count as usize, "invalid count");
 			let new_deposit = T::SubAccountDeposit::get() * <BalanceOf<T>>::from(subs.len() as u32);
 
 			if old_deposit < new_deposit {
@@ -705,12 +718,19 @@ decl_module! {
 				<SuperOf<T>>::insert(&id, (sender.clone(), name));
 				id
 			}).collect::<Vec<_>>();
+			let new_subs = ids.len() as Weight;
 
 			if ids.is_empty() {
 				<SubsOf<T>>::remove(&sender);
 			} else {
 				<SubsOf<T>>::insert(&sender, (new_deposit, ids));
 			}
+
+			Ok(Some(weight_for::set_subs(
+				T::DbWeight::get(),
+				old_ids.len() as Weight, // P
+				new_subs // S
+			)).into())
 		}
 
 		/// Clear an account's identity info and all sub-accounts and return all deposits.
@@ -1327,27 +1347,25 @@ mod tests {
 	fn setting_subaccounts_should_work() {
 		new_test_ext().execute_with(|| {
 			let mut subs = vec![(20, Data::Raw(vec![40; 1]))];
-			assert_noop!(Identity::set_subs(Origin::signed(10), subs.clone(), 0), Error::<Test>::NotFound);
+			assert_noop!(Identity::set_subs(Origin::signed(10), subs.clone()), Error::<Test>::NotFound);
 
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
-			assert_ok!(Identity::set_subs(Origin::signed(10), subs.clone(), 0));
+			assert_ok!(Identity::set_subs(Origin::signed(10), subs.clone()));
 			assert_eq!(Balances::free_balance(10), 80);
 			assert_eq!(Identity::subs_of(10), (10, vec![20]));
 			assert_eq!(Identity::super_of(20), Some((10, Data::Raw(vec![40; 1]))));
 
 			// push another item and re-set it.
-			let prev_length = subs.len();
 			subs.push((30, Data::Raw(vec![50; 1])));
-			assert_ok!(Identity::set_subs(Origin::signed(10), subs.clone(), prev_length as u32));
+			assert_ok!(Identity::set_subs(Origin::signed(10), subs.clone()));
 			assert_eq!(Balances::free_balance(10), 70);
 			assert_eq!(Identity::subs_of(10), (20, vec![20, 30]));
 			assert_eq!(Identity::super_of(20), Some((10, Data::Raw(vec![40; 1]))));
 			assert_eq!(Identity::super_of(30), Some((10, Data::Raw(vec![50; 1]))));
 
 			// switch out one of the items and re-set.
-			let prev_length = subs.len();
 			subs[0] = (40, Data::Raw(vec![60; 1]));
-			assert_ok!(Identity::set_subs(Origin::signed(10), subs.clone(), prev_length as u32));
+			assert_ok!(Identity::set_subs(Origin::signed(10), subs.clone()));
 			assert_eq!(Balances::free_balance(10), 70); // no change in the balance
 			assert_eq!(Identity::subs_of(10), (20, vec![40, 30]));
 			assert_eq!(Identity::super_of(20), None);
@@ -1355,14 +1373,14 @@ mod tests {
 			assert_eq!(Identity::super_of(40), Some((10, Data::Raw(vec![60; 1]))));
 
 			// clear
-			assert_ok!(Identity::set_subs(Origin::signed(10), vec![], prev_length as u32));
+			assert_ok!(Identity::set_subs(Origin::signed(10), vec![]));
 			assert_eq!(Balances::free_balance(10), 90);
 			assert_eq!(Identity::subs_of(10), (0, vec![]));
 			assert_eq!(Identity::super_of(30), None);
 			assert_eq!(Identity::super_of(40), None);
 
 			subs.push((20, Data::Raw(vec![40; 1])));
-			assert_noop!(Identity::set_subs(Origin::signed(10), subs.clone(), 0), Error::<Test>::TooManySubAccounts);
+			assert_noop!(Identity::set_subs(Origin::signed(10), subs.clone()), Error::<Test>::TooManySubAccounts);
 		});
 	}
 
@@ -1370,7 +1388,7 @@ mod tests {
 	fn clearing_account_should_remove_subaccounts_and_refund() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
-			assert_ok!(Identity::set_subs(Origin::signed(10), vec![(20, Data::Raw(vec![40; 1]))], 0));
+			assert_ok!(Identity::set_subs(Origin::signed(10), vec![(20, Data::Raw(vec![40; 1]))]));
 			assert_ok!(Identity::clear_identity(Origin::signed(10)));
 			assert_eq!(Balances::free_balance(10), 100);
 			assert!(Identity::super_of(20).is_none());
@@ -1381,7 +1399,7 @@ mod tests {
 	fn killing_account_should_remove_subaccounts_and_not_refund() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
-			assert_ok!(Identity::set_subs(Origin::signed(10), vec![(20, Data::Raw(vec![40; 1]))], 0));
+			assert_ok!(Identity::set_subs(Origin::signed(10), vec![(20, Data::Raw(vec![40; 1]))]));
 			assert_ok!(Identity::kill_identity(Origin::ROOT, 10));
 			assert_eq!(Balances::free_balance(10), 80);
 			assert!(Identity::super_of(20).is_none());
