@@ -1738,7 +1738,10 @@ pub(crate) mod tests {
 	const CALL: &<Test as Trait>::Call = &Call;
 
 	fn new_test_ext() -> sp_io::TestExternalities {
-		GenesisConfig::default().build_storage::<Test>().unwrap().into()
+		let mut ext: sp_io::TestExternalities = GenesisConfig::default().build_storage::<Test>().unwrap().into();
+		// Add to each test the initial weight of a block
+		ext.execute_with(|| System::register_extra_weight_unchecked(<Test as Trait>::BlockExecutionWeight::get()));
+		ext
 	}
 
 	fn normal_weight_limit() -> Weight {
@@ -2034,10 +2037,14 @@ pub(crate) mod tests {
 			let free = DispatchInfo { weight: 0, ..Default::default() };
 			let len = 0_usize;
 
-			assert_eq!(System::all_extrinsics_weight(), 0);
+			// Initial weight from `BlockExecutionWeight`
+			assert_eq!(System::all_extrinsics_weight(), <Test as Trait>::BlockExecutionWeight::get());
 			let r = CheckWeight::<Test>(PhantomData).pre_dispatch(&1, CALL, &free, len);
 			assert!(r.is_ok());
-			assert_eq!(System::all_extrinsics_weight(), <Test as Trait>::ExtrinsicBaseWeight::get());
+			assert_eq!(
+				System::all_extrinsics_weight(),
+				<Test as Trait>::ExtrinsicBaseWeight::get() + <Test as Trait>::BlockExecutionWeight::get()
+			);
 		})
 	}
 
@@ -2045,10 +2052,6 @@ pub(crate) mod tests {
 	fn max_extrinsic_weight_is_allowed_but_nothing_more() {
 		// Dispatch Class Normal
 		new_test_ext().execute_with(|| {
-			// Start the test by injecting the `BlockExecutionWeight`
-			System::register_extra_weight_unchecked(<Test as Trait>::BlockExecutionWeight::get());
-			assert_eq!(System::all_extrinsics_weight(), 10);
-
 			let one = DispatchInfo { weight: 1, ..Default::default() };
 			let max = DispatchInfo { weight: System::max_extrinsic_weight(DispatchClass::Normal), ..Default::default() };
 			let len = 0_usize;
@@ -2064,10 +2067,6 @@ pub(crate) mod tests {
 
 		// Dispatch Class Operational
 		new_test_ext().execute_with(|| {
-			// Start the test by injecting the `BlockExecutionWeight`
-			System::register_extra_weight_unchecked(<Test as Trait>::BlockExecutionWeight::get());
-			assert_eq!(System::all_extrinsics_weight(), 10);
-
 			let one = DispatchInfo {
 				weight: 1,
 				class: DispatchClass::Operational,
@@ -2093,10 +2092,6 @@ pub(crate) mod tests {
 	#[test]
 	fn mandatory_extrinsic_doesnt_care_about_limits() {
 		new_test_ext().execute_with(|| {
-			// Start the test by injecting the `BlockExecutionWeight`
-			System::register_extra_weight_unchecked(<Test as Trait>::BlockExecutionWeight::get());
-			assert_eq!(System::all_extrinsics_weight(), 10);
-
 			let max = DispatchInfo {
 				weight: Weight::max_value(),
 				class: DispatchClass::Mandatory,
@@ -2113,10 +2108,6 @@ pub(crate) mod tests {
 	#[test]
 	fn full_block_with_normal_and_operational() {
 		new_test_ext().execute_with(|| {
-			// Start the test by injecting the `BlockExecutionWeight`
-			System::register_extra_weight_unchecked(<Test as Trait>::BlockExecutionWeight::get());
-			assert_eq!(System::all_extrinsics_weight(), 10);
-
 			// Max block is 1024
 			// Max normal is 768 (75%)
 			// 10 is taken for block execution weight
