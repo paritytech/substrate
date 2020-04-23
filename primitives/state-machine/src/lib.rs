@@ -72,7 +72,7 @@ pub use proving_backend::{
 pub use trie_backend_essence::{TrieBackendStorage, Storage};
 pub use trie_backend::TrieBackend;
 pub use error::{Error, ExecutionError};
-pub use in_memory_backend::InMemory as InMemoryBackend;
+pub use in_memory_backend::new_in_mem;
 pub use stats::{UsageInfo, UsageUnit, StateMachineStats};
 pub use sp_core::traits::CloneableSpawn;
 
@@ -86,6 +86,9 @@ pub type ChangesTrieTransaction<H, N> = (
 	MemoryDB<H>,
 	ChangesTrieCacheAction<<H as Hasher>::Out, N>,
 );
+
+/// Trie backend with in-memory storage.
+pub type InMemoryBackend<H> = TrieBackend<MemoryDB<H>, H>;
 
 /// Strategy for executing a call into the runtime.
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -1001,7 +1004,7 @@ mod tests {
 	fn set_child_storage_works() {
 		let child_info = ChildInfo::new_default(b"sub1");
 		let child_info = &child_info;
-		let mut state = InMemoryBackend::<BlakeTwo256>::default();
+		let mut state = new_in_mem::<BlakeTwo256>();
 		let backend = state.as_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges::default();
 		let mut cache = StorageTransactionCache::default();

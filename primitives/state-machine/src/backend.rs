@@ -16,12 +16,9 @@
 
 //! State machine backends. These manage the code and storage of contracts.
 
-use log::warn;
 use hash_db::Hasher;
 use codec::{Decode, Encode};
-
 use sp_core::{traits::RuntimeCode, storage::{ChildInfo, well_known_keys}};
-use sp_trie::{TrieMut, MemoryDB, trie_types::TrieDBMut};
 
 use crate::{
 	trie_backend::TrieBackend,
@@ -334,17 +331,20 @@ impl<H: Hasher, KF: sp_trie::KeyFunction<H>> Consolidate for sp_trie::GenericMem
 }
 
 /// Insert input pairs into memory db.
-pub(crate) fn insert_into_memory_db<H, I>(mdb: &mut MemoryDB<H>, input: I) -> Option<H::Out>
+#[cfg(test)]
+pub(crate) fn insert_into_memory_db<H, I>(mdb: &mut sp_trie::MemoryDB<H>, input: I) -> Option<H::Out>
 	where
 		H: Hasher,
 		I: IntoIterator<Item=(StorageKey, StorageValue)>,
 {
+	use sp_trie::{TrieMut, trie_types::TrieDBMut};
+
 	let mut root = <H as Hasher>::Out::default();
 	{
 		let mut trie = TrieDBMut::<H>::new(mdb, &mut root);
 		for (key, value) in input {
 			if let Err(e) = trie.insert(&key, &value) {
-				warn!(target: "trie", "Failed to write to trie: {}", e);
+				log::warn!(target: "trie", "Failed to write to trie: {}", e);
 				return None;
 			}
 		}
