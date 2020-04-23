@@ -484,7 +484,7 @@ mod weight_for {
 		old_subs: impl Into<Weight> + Copy,
 		subs: impl Into<Weight> + Copy
 	) -> Weight {
-		db.reads(1) // storage-exists
+		db.reads(1) // storage-exists (`IdentityOf::contains_key`)
 			+ db.reads_writes(1, 1) // balance ops
 			+ db.reads_writes(1, old_subs.into()) // P old DB deletions
 			+ db.writes(subs.into() + 1) // S + 1 new DB writes
