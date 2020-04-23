@@ -492,6 +492,19 @@ mod weight_for {
 			+ 950_000 * judgements.into() // R
 			+ 3_400_000 * extra_fields.into() // X
 	}
+
+	/// Weight calculation for `cancel_request`.
+	pub(crate) fn cancel_request(
+		db: RuntimeDbWeight,
+		judgements: impl Into<Weight>,
+		extra_fields: impl Into<Weight>) -> Weight
+	{
+		db.reads_writes(1, 1)
+			+ db.reads_writes(1, 1) // balance ops
+			+ 150_000_000 // constant
+			+ 600_000 * judgements.into() // R
+			+ 3_600_000 * extra_fields.into() // X
+	}
 }
 
 decl_module! {
@@ -806,23 +819,18 @@ decl_module! {
 		/// - One balance-reserve operation.
 		/// - One storage mutation `O(R + X)`.
 		/// - One event.
-		/// - Benchmark: 135.3 + R * 0.574 + X * 3.394 µs (min squares analysis)
+		/// - Benchmarks:
+		///   - 135.3 + R * 0.574 + X * 3.394 µs (min squares analysis)
+		///   - 144.3 + R * 0.316 + X * 3.53 µs (min squares analysis)
 		/// # </weight>
-		#[weight = FunctionOf(
-			|(_, &fields_count): (&RegistrarIndex, &u32)| {
-				T::DbWeight::get().reads_writes(1, 1)
-				+ T::DbWeight::get().reads_writes(1, 1) // balance ops
-				+ 135_300_000 // constant
-				+ 574_000 * T::MaxRegistrars::get() as Weight // R
-				+ 3_394_000 * fields_count as Weight // X
-			},
-			DispatchClass::Normal,
-			true
+		#[weight = weight_for::cancel_request(
+			T::DbWeight::get(),
+			T::MaxRegistrars::get(), // R
+			T::MaxAdditionalFields::get() // X
 		)]
-		fn cancel_request(origin, reg_index: RegistrarIndex, additional_fields_count: u32) {
+		fn cancel_request(origin, reg_index: RegistrarIndex) -> DispatchResultWithPostInfo {
 			let sender = ensure_signed(origin)?;
 			let mut id = <IdentityOf<T>>::get(&sender).ok_or(Error::<T>::NoIdentity)?;
-			ensure!(id.info.additional.len() <= additional_fields_count as usize, "invalid count");
 
 			let pos = id.judgements.binary_search_by_key(&reg_index, |x| x.0)
 				.map_err(|_| Error::<T>::NotFound)?;
@@ -833,9 +841,13 @@ decl_module! {
 			};
 
 			let _ = T::Currency::unreserve(&sender, fee);
+			let judgements = id.judgements.len() as Weight;
+			let extra_fields = id.info.additional.len() as Weight;
 			<IdentityOf<T>>::insert(&sender, id);
 
 			Self::deposit_event(RawEvent::JudgementUnrequested(sender, reg_index));
+
+			Ok(Some(weight_for::request_judgement(T::DbWeight::get(), judgements, extra_fields)).into())
 		}
 
 		/// Set the fee required for a judgement to be requested from a registrar.
@@ -1358,15 +1370,15 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
 			assert_ok!(Identity::set_fee(Origin::signed(3), 0, 10));
-			assert_noop!(Identity::cancel_request(Origin::signed(10), 0, 0), Error::<Test>::NoIdentity);
+			assert_noop!(Identity::cancel_request(Origin::signed(10), 0), Error::<Test>::NoIdentity);
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
 			assert_ok!(Identity::request_judgement(Origin::signed(10), 0, 10));
-			assert_ok!(Identity::cancel_request(Origin::signed(10), 0, 0));
+			assert_ok!(Identity::cancel_request(Origin::signed(10), 0));
 			assert_eq!(Balances::free_balance(10), 90);
-			assert_noop!(Identity::cancel_request(Origin::signed(10), 0, 0), Error::<Test>::NotFound);
+			assert_noop!(Identity::cancel_request(Origin::signed(10), 0), Error::<Test>::NotFound);
 
 			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable, 0));
-			assert_noop!(Identity::cancel_request(Origin::signed(10), 0, 0), Error::<Test>::JudgementGiven);
+			assert_noop!(Identity::cancel_request(Origin::signed(10), 0), Error::<Test>::JudgementGiven);
 		});
 	}
 

@@ -212,7 +212,7 @@ benchmarks! {
 		let x in ...;
 
 		Identity::<T>::request_judgement(caller_origin, r - 1, 10.into())?;
-	}: _(RawOrigin::Signed(caller), r - 1, x)
+	}: _(RawOrigin::Signed(caller), r - 1)
 
 	set_fee {
 		let caller = account::<T>("caller", 0);
