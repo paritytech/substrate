@@ -519,13 +519,11 @@ mod tests {
 	}
 
 	parameter_types! {
-		pub const TransactionBaseFee: u64 = 10;
 		pub const TransactionByteFee: u64 = 0;
 	}
 	impl pallet_transaction_payment::Trait for Runtime {
 		type Currency = Balances;
 		type OnTransactionPayment = ();
-		type TransactionBaseFee = TransactionBaseFee;
 		type TransactionByteFee = TransactionByteFee;
 		type WeightToFee = ConvertInto;
 		type FeeMultiplierUpdate = ();

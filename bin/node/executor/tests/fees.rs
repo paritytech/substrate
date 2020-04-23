@@ -23,7 +23,7 @@ use frame_support::{
 use sp_core::{NeverNativeValue, map, storage::Storage};
 use sp_runtime::{Fixed128, Perbill, traits::{Convert, BlakeTwo256}};
 use node_runtime::{
-	CheckedExtrinsic, Call, Runtime, Balances, TransactionPayment, TransactionBaseFee,
+	CheckedExtrinsic, Call, Runtime, Balances, TransactionPayment,
 	TransactionByteFee, WeightFeeCoefficient,
 	constants::currency::*,
 };
@@ -173,15 +173,14 @@ fn transaction_fee_is_correct_ultimate() {
 	t.execute_with(|| {
 		assert_eq!(Balances::total_balance(&bob()), (10 + 69) * DOLLARS);
 		// Components deducted from alice's balances:
+		// - Base fee
 		// - Weight fee
 		// - Length fee
 		// - Tip
 		// - Creation-fee of bob's account.
 		let mut balance_alice = (100 - 69) * DOLLARS;
 
-		let length_fee = TransactionBaseFee::get() +
-			TransactionByteFee::get() *
-			(xt.clone().encode().len() as Balance);
+		let length_fee = TransactionByteFee::get() * (xt.clone().encode().len() as Balance);
 		balance_alice -= length_fee;
 
 		let weight = default_transfer_call().get_dispatch_info().weight;

@@ -79,13 +79,11 @@ impl frame_system::Trait for Test {
 	type OnKilledAccount = Module<Test>;
 }
 parameter_types! {
-	pub const TransactionBaseFee: u64 = 0;
 	pub const TransactionByteFee: u64 = 1;
 }
 impl pallet_transaction_payment::Trait for Test {
 	type Currency = Module<Test>;
 	type OnTransactionPayment = ();
-	type TransactionBaseFee = TransactionBaseFee;
 	type TransactionByteFee = TransactionByteFee;
 	type WeightToFee = ConvertInto;
 	type FeeMultiplierUpdate = ();
