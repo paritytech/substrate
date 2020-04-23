@@ -811,6 +811,7 @@ mod tests {
 			_: &str,
 			_: &[u8],
 			_: &mut dyn Externalities,
+			_: sp_core::traits::MissingHostFunctions,
 		) -> std::result::Result<Vec<u8>, String> {
 			unimplemented!("Not required in tests.")
 		}
