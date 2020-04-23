@@ -23,6 +23,7 @@ use sp_runtime::traits::{One, Zero, SaturatedConversion};
 use sp_std::{prelude::*, result, cmp, vec};
 use frame_support::{decl_module, decl_storage, decl_error, ensure};
 use frame_support::traits::Get;
+use frame_support::weights::{SimpleDispatchInfo, MINIMUM_WEIGHT};
 use frame_system::{ensure_none, Trait as SystemTrait};
 use sp_finality_tracker::{INHERENT_IDENTIFIER, FinalizedInherentData};
 
@@ -76,7 +77,7 @@ decl_module! {
 
 		/// Hint that the author of this block thinks the best finalized
 		/// block is the given number.
-		#[weight = frame_support::weights::SimpleDispatchInfo::FixedMandatory(10_000)]
+		#[weight = SimpleDispatchInfo::FixedMandatory(MINIMUM_WEIGHT)]
 		fn final_hint(origin, #[compact] hint: T::BlockNumber) {
 			ensure_none(origin)?;
 			ensure!(!<Self as Store>::Update::exists(), Error::<T>::AlreadyUpdated);
@@ -260,6 +261,7 @@ mod tests {
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
+		type DbWeight = ();
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();

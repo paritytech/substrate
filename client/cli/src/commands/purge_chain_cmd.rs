@@ -39,7 +39,7 @@ impl PurgeChainCmd {
 	/// Run the purge command
 	pub fn run(&self, config: Configuration) -> error::Result<()> {
 		let db_path = match &config.database {
-			DatabaseConfig::Path { path, .. } => path,
+			DatabaseConfig::RocksDb { path, .. } => path,
 			_ => {
 				eprintln!("Cannot purge custom database implementation");
 				return Ok(());

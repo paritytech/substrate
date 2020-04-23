@@ -360,7 +360,11 @@ mod tests {
 		// given
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let txpool = Arc::new(
-			BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone()))).0
+			BasicPool::new(
+				Default::default(),
+				Arc::new(FullChainApi::new(client.clone())),
+				None,
+			).0
 		);
 
 		futures::executor::block_on(
@@ -408,7 +412,11 @@ mod tests {
 	fn should_not_panic_when_deadline_is_reached() {
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let txpool = Arc::new(
-			BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone()))).0
+			BasicPool::new(
+				Default::default(),
+				Arc::new(FullChainApi::new(client.clone())),
+				None,
+			).0
 		);
 
 		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone());
@@ -440,8 +448,13 @@ mod tests {
 			.build_with_backend();
 		let client = Arc::new(client);
 		let txpool = Arc::new(
-			BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone()))).0
+			BasicPool::new(
+				Default::default(),
+				Arc::new(FullChainApi::new(client.clone())),
+				None,
+			).0
 		);
+
 		let genesis_hash = client.info().best_hash;
 		let block_id = BlockId::Hash(genesis_hash);
 
@@ -493,7 +506,11 @@ mod tests {
 		// given
 		let mut client = Arc::new(substrate_test_runtime_client::new());
 		let txpool = Arc::new(
-			BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone()))).0
+			BasicPool::new(
+				Default::default(),
+				Arc::new(FullChainApi::new(client.clone())),
+				None,
+			).0
 		);
 
 		futures::executor::block_on(
