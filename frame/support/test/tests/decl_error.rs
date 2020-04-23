@@ -18,7 +18,7 @@
 
 use sp_runtime::{generic, traits::{BlakeTwo256, Block as _, Verify}, DispatchError};
 use sp_core::{H256, sr25519};
-use frame_support::weights::{SimpleDispatchInfo, MINIMUM_WEIGHT};
+use frame_support::weights::MINIMUM_WEIGHT;
 
 mod system;
 
@@ -33,7 +33,7 @@ mod module1 {
 		pub struct Module<T: Trait<I>, I: Instance = DefaultInstance> for enum Call
 			where origin: <T as system::Trait>::Origin
 		{
-			#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
+			#[weight = MINIMUM_WEIGHT]
 			pub fn fail(_origin) -> frame_support::dispatch::DispatchResult {
 				Err(Error::<T, I>::Something.into())
 			}
@@ -60,7 +60,7 @@ mod module2 {
 		pub struct Module<T: Trait> for enum Call
 			where origin: <T as system::Trait>::Origin
 		{
-			#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
+			#[weight = MINIMUM_WEIGHT]
 			pub fn fail(_origin) -> frame_support::dispatch::DispatchResult {
 				Err(Error::<T>::Something.into())
 			}

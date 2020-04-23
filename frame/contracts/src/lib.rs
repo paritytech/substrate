@@ -123,7 +123,7 @@ use sp_runtime::{
 	RuntimeDebug,
 };
 use frame_support::dispatch::{DispatchResult, Dispatchable};
-use frame_support::weights::{SimpleDispatchInfo, MINIMUM_WEIGHT};
+use frame_support::weights::MINIMUM_WEIGHT;
 use frame_support::{
 	Parameter, decl_module, decl_event, decl_storage, decl_error,
 	parameter_types, IsSubType, storage::child::{self, ChildInfo},
@@ -539,7 +539,7 @@ decl_module! {
 		/// Updates the schedule for metering contracts.
 		///
 		/// The schedule must have a greater version than the stored schedule.
-		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
+		#[weight = MINIMUM_WEIGHT]
 		pub fn update_schedule(origin, schedule: Schedule) -> DispatchResult {
 			ensure_root(origin)?;
 			if <Module<T>>::current_schedule().version >= schedule.version {
@@ -554,7 +554,7 @@ decl_module! {
 
 		/// Stores the given binary Wasm code into the chain's storage and returns its `codehash`.
 		/// You can instantiate contracts only with stored code.
-		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
+		#[weight = MINIMUM_WEIGHT]
 		pub fn put_code(
 			origin,
 			#[compact] gas_limit: Gas,
@@ -582,7 +582,7 @@ decl_module! {
 		/// * If the account is a regular account, any value will be transferred.
 		/// * If no account exists and the call value is not less than `existential_deposit`,
 		/// a regular account will be created and any value will be transferred.
-		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
+		#[weight = MINIMUM_WEIGHT]
 		pub fn call(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -608,7 +608,7 @@ decl_module! {
 		///   after the execution is saved as the `code` of the account. That code will be invoked
 		///   upon any call received by this account.
 		/// - The contract is initialized.
-		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
+		#[weight = MINIMUM_WEIGHT]
 		pub fn instantiate(
 			origin,
 			#[compact] endowment: BalanceOf<T>,
@@ -631,7 +631,7 @@ decl_module! {
 		///
 		/// If contract is not evicted as a result of this call, no actions are taken and
 		/// the sender is not eligible for the reward.
-		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
+		#[weight = MINIMUM_WEIGHT]
 		fn claim_surcharge(origin, dest: T::AccountId, aux_sender: Option<T::AccountId>) {
 			let origin = origin.into();
 			let (signed, rewarded) = match (origin, aux_sender) {
