@@ -14,8 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use criterion::{Criterion, Throughput, BenchmarkId, criterion_group, criterion_main};
+use criterion::{Criterion, Throughput, BenchmarkId, criterion_group, criterion_main, black_box};
 use sp_arithmetic::biguint::{BigUint, Single};
+use sp_arithmetic::{Fixed128, traits::FixedPointNumber};
+use num_traits::Bounded;
 use rand::Rng;
 
 fn random_big_uint(size: usize) -> BigUint {
@@ -72,9 +74,20 @@ fn bench_division(c: &mut Criterion) {
 	}
 }
 
+fn bench_checked_mul_int(c: &mut Criterion) {
+	let x = Fixed128::max_value();
+	c.bench_function("checked_mul_int", |b| b.iter(|| x.checked_mul_int(black_box(20u64))));
+}
+
+fn bench_saturated_multiply_accumulate(c: &mut Criterion) {
+	let x = Fixed128::max_value();
+	c.bench_function("saturated_multiply_accumulate", |b| b.iter(|| x.saturated_multiply_accumulate(black_box(20u64))));
+}
+
 criterion_group!{
 	name = benches;
 	config = Criterion::default();
-	targets = bench_addition, bench_subtraction, bench_multiplication, bench_division
+	targets = bench_addition, bench_subtraction, bench_multiplication, bench_division,
+		bench_checked_mul_int, bench_saturated_multiply_accumulate
 }
 criterion_main!(benches);

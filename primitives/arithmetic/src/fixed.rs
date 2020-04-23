@@ -109,8 +109,8 @@ macro_rules! implement_fixed {
 
 				let signum = lhs.signum() * rhs.signum();
 
-				let mut ulhs: u128 = 0;
-				let mut urhs: u128 = 0;
+				let mut ulhs: u128;
+				let mut urhs: u128;
 
 				if lhs.is_negative() {
 					ulhs = lhs.saturating_mul(-1) as u128;
