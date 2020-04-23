@@ -148,8 +148,7 @@ benchmarks! {
 					RawOrigin::Signed(account::<T>("registrar", i)).into(),
 					i,
 					caller_lookup.clone(),
-					Judgement::Reasonable,
-					x
+					Judgement::Reasonable
 				)?;
 			}
 			caller
@@ -189,8 +188,7 @@ benchmarks! {
 				RawOrigin::Signed(account::<T>("registrar", i)).into(),
 				i,
 				caller_lookup.clone(),
-				Judgement::Reasonable,
-				x
+				Judgement::Reasonable
 			)?;
 		}
 	}: _(RawOrigin::Signed(caller))
@@ -263,7 +261,7 @@ benchmarks! {
 
 		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone())?;
 		Identity::<T>::request_judgement(user_origin.clone(), r, 10.into())?;
-	}: _(RawOrigin::Signed(caller), r, user_lookup, Judgement::Reasonable, x)
+	}: _(RawOrigin::Signed(caller), r, user_lookup, Judgement::Reasonable)
 
 	kill_identity {
 		let caller = account::<T>("caller", 0);
@@ -282,11 +280,10 @@ benchmarks! {
 				RawOrigin::Signed(account::<T>("registrar", i)).into(),
 				i,
 				caller_lookup.clone(),
-				Judgement::Reasonable,
-				x
+				Judgement::Reasonable
 			)?;
 		}
-	}: _(RawOrigin::Root, caller_lookup, s)
+	}: _(RawOrigin::Root, caller_lookup)
 }
 
 #[cfg(test)]

@@ -75,7 +75,7 @@ use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
 	dispatch::DispatchResultWithPostInfo,
 	traits::{Currency, ReservableCurrency, OnUnbalanced, Get, BalanceStatus, EnsureOrigin},
-	weights::{DispatchClass, FunctionOf, Weight},
+	weights::Weight,
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 
@@ -465,13 +465,26 @@ decl_error! {
 mod weight_for {
 	use frame_support::weights::{RuntimeDbWeight, Weight};
 
+	/// Weight calculation for `set_identity`.
+	pub(crate) fn set_identity(
+		db: RuntimeDbWeight,
+		judgements: impl Into<Weight>,
+		extra_fields: impl Into<Weight>
+	) -> Weight {
+		db.reads_writes(1, 1)
+			+ db.reads_writes(1, 1) // balance ops
+			+ 150_000_000 // constant
+			+ 700_000 * judgements.into() // R
+			+ 3_000_000 * extra_fields.into() // X
+	}
+
 	/// Weight calculation for `clear_identity`.
 	pub(crate) fn clear_identity(
 		db: RuntimeDbWeight,
-		subs: impl Into<Weight> + Copy,
 		judgements: impl Into<Weight>,
-		extra_fields: impl Into<Weight>) -> Weight
-	{
+		subs: impl Into<Weight> + Copy,
+		extra_fields: impl Into<Weight>
+	) -> Weight {
 		db.reads_writes(2, subs.into() + 2) // S + 2 deletions
 			+ db.reads_writes(1, 1) // balance ops
 			+ 160_000_000 // constant
@@ -484,8 +497,8 @@ mod weight_for {
 	pub(crate) fn request_judgement(
 		db: RuntimeDbWeight,
 		judgements: impl Into<Weight>,
-		extra_fields: impl Into<Weight>) -> Weight
-	{
+		extra_fields: impl Into<Weight>
+	) -> Weight {
 		db.reads_writes(2, 1)
 			+ db.reads_writes(1, 1) // balance ops
 			+ 180_000_000 // constant
@@ -497,13 +510,38 @@ mod weight_for {
 	pub(crate) fn cancel_request(
 		db: RuntimeDbWeight,
 		judgements: impl Into<Weight>,
-		extra_fields: impl Into<Weight>) -> Weight
-	{
+		extra_fields: impl Into<Weight>
+	) -> Weight {
 		db.reads_writes(1, 1)
 			+ db.reads_writes(1, 1) // balance ops
 			+ 150_000_000 // constant
 			+ 600_000 * judgements.into() // R
 			+ 3_600_000 * extra_fields.into() // X
+	}
+
+	pub(crate) fn provide_judgement(
+		db: RuntimeDbWeight,
+		judgements: impl Into<Weight>,
+		extra_fields: impl Into<Weight>
+	) -> Weight {
+		db.reads_writes(2, 1)
+			+ 120_000_000 // constant
+			+ 1_100_000 * judgements.into() // R
+			+ 3_500_000 * extra_fields.into()// X
+	}
+
+	pub(crate) fn kill_identity(
+		db: RuntimeDbWeight,
+		judgements: impl Into<Weight>,
+		subs: impl Into<Weight> + Copy,
+		extra_fields: impl Into<Weight>
+	) -> Weight {
+		db.reads_writes(3, subs.into() + 3) // 2 `take`s + S deletions
+			+ db.reads_writes(1, 1) // balance ops
+			+ 170_000_000 // constant
+			+ 1_200_000 * judgements.into() // R
+			+ 5_400_000 * subs.into() // S
+			+ 2_300_000 * extra_fields.into() // X
 	}
 }
 
@@ -531,7 +569,7 @@ decl_module! {
 		///   - 94.28 + R * 0.991 µs (min squares analysis)
 		/// # </weight>
 		#[weight = T::DbWeight::get().reads_writes(1, 1)
-			+ 100_000_000 // constant
+			+ 95_000_000 // constant
 			+ 1_000_000 * T::MaxRegistrars::get() as Weight // R
 		]
 		fn add_registrar(origin, account: T::AccountId) -> DispatchResultWithPostInfo {
@@ -547,7 +585,8 @@ decl_module! {
 
 			Self::deposit_event(RawEvent::RegistrarAdded(i));
 
-			Ok(Some(100_000_000 + 1_000_000 * registrar_count as Weight).into())
+			Ok(Some(T::DbWeight::get().reads_writes(1, 1)
+				+ 100_000_000 + 1_000_000 * registrar_count as Weight).into())
 		}
 
 		/// Set an account's identity information and reserve the appropriate deposit.
@@ -572,12 +611,11 @@ decl_module! {
 		///   - 136.6 + R * 0.62 + X * 2.62 µs (min squares analysis)
 		///   - 146.2 + R * 0.372 + X * 2.98 µs (min squares analysis)
 		/// # </weight>
-		#[weight =  T::DbWeight::get().reads_writes(1, 1)
-			+ T::DbWeight::get().reads_writes(1, 1) // balance ops
-			+ 150_000_000 // constant
-			+ 3_000_000 * (info.additional.len() as Weight) // X
-			+ 700_000 * (T::MaxRegistrars::get() as Weight) // R
-		]
+		#[weight =  weight_for::set_identity(
+			T::DbWeight::get(),
+			T::MaxRegistrars::get(), // R
+			T::MaxAdditionalFields::get() // X
+		)]
 		fn set_identity(origin, info: IdentityInfo) -> DispatchResultWithPostInfo {
 			let sender = ensure_signed(origin)?;
 			let extra_fields = info.additional.len() as u32;
@@ -603,11 +641,11 @@ decl_module! {
 				let _ = T::Currency::unreserve(&sender, old_deposit - id.deposit);
 			}
 
-			let judgements = id.judgements.len();
+			let judgements = id.judgements.len() as Weight;
 			<IdentityOf<T>>::insert(&sender, id);
 			Self::deposit_event(RawEvent::IdentitySet(sender));
 
-			Ok(Some(150_000_000 + 3_000_000 * extra_fields as Weight + 700_000 * judgements as Weight).into())
+			Ok(Some(weight_for::set_identity(T::DbWeight::get(), extra_fields as Weight, judgements)).into())
 		}
 
 		/// Set the sub-accounts of the sender.
@@ -700,8 +738,8 @@ decl_module! {
 		/// # </weight>
 		#[weight = weight_for::clear_identity(
 			T::DbWeight::get(),
-			T::MaxSubAccounts::get(), // S
 			T::MaxRegistrars::get(), // R
+			T::MaxSubAccounts::get(), // S
 			T::MaxAdditionalFields::get() // X
 		)]
 		fn clear_identity(origin) -> DispatchResultWithPostInfo {
@@ -721,8 +759,8 @@ decl_module! {
 
 			Ok(Some(weight_for::clear_identity(
 				T::DbWeight::get(),
-				sub_ids.len() as Weight, // S
 				id.judgements.len() as Weight, // R
+				sub_ids.len() as Weight, // S
 				id.info.additional.len() as Weight // X
 			)).into())
 		}
@@ -740,13 +778,6 @@ decl_module! {
 		///
 		/// ```nocompile
 		/// Self::registrars().get(reg_index).unwrap().fee
-		/// ```
-		/// 
-		/// - `additional_fields_count`: The number of additional fields on the identity info. This
-		///     should be auto-populated as:
-		///
-		/// ```nocompile
-		/// Self::identity(account_id).unwrap().info.additional.len()
 		/// ```
 		///
 		/// Emits `JudgementRequested` if successful.
@@ -805,12 +836,6 @@ decl_module! {
 		/// registered identity.
 		///
 		/// - `reg_index`: The index of the registrar whose judgement is no longer requested.
-		/// - `additional_fields_count`: The number of additional fields on the identity info. This
-		///     should be auto-populated as:
-		///
-		/// ```nocompile
-		/// Self::identity(account_id).unwrap().info.additional.len()
-		/// ```
 		///
 		/// Emits `JudgementUnrequested` if successful.
 		///
@@ -861,11 +886,12 @@ decl_module! {
 		/// # <weight>
 		/// - `O(R)`.
 		/// - One storage mutation `O(R)`.
-		/// - Benchmark: 23.81 + R * 0.774 µs (min squares analysis)
+		/// - Benchmarks:
+		///   - 23.81 + R * 0.774 µs (min squares analysis)
 		/// # </weight>
 		#[weight = T::DbWeight::get().reads_writes(1, 1)
-			+ 23_810_000 // constant
-			+ 774_000 * T::MaxRegistrars::get() as Weight // R
+			+ 24_000_000 // constant
+			+ 780_000 * T::MaxRegistrars::get() as Weight // R
 		]
 		fn set_fee(origin,
 			#[compact] index: RegistrarIndex,
@@ -895,8 +921,8 @@ decl_module! {
 		/// - Benchmark: 24.59 + R * 0.832 µs (min squares analysis)
 		/// # </weight>
 		#[weight = T::DbWeight::get().reads_writes(1, 1)
-			+ 24_590_000 // constant
-			+ 832_000 * T::MaxRegistrars::get() as Weight // R
+			+ 25_000_000 // constant
+			+ 850_000 * T::MaxRegistrars::get() as Weight // R
 		]
 		fn set_account_id(origin,
 			#[compact] index: RegistrarIndex,
@@ -926,8 +952,8 @@ decl_module! {
 		/// - Benchmark: 22.85 + R * 0.853 µs (min squares analysis)
 		/// # </weight>
 		#[weight = T::DbWeight::get().reads_writes(1, 1)
-			+ 22_850_000 // constant
-			+ 853_000 * T::MaxRegistrars::get() as Weight // R
+			+ 23_000_000 // constant
+			+ 860_000 * T::MaxRegistrars::get() as Weight // R
 		]
 		fn set_fields(origin,
 			#[compact] index: RegistrarIndex,
@@ -963,23 +989,16 @@ decl_module! {
 		/// - One event.
 		/// - Benchmark: 110.7 + R * 1.066 + X * 3.402 µs (min squares analysis)
 		/// # </weight>
-		#[weight = FunctionOf(
-			|(_, _, _, &fields_count): (&RegistrarIndex, &<T::Lookup as StaticLookup>::Source, &Judgement<BalanceOf<T>>, &u32)| {
-				T::DbWeight::get().reads_writes(2, 1)
-				+ T::DbWeight::get().reads_writes(1, 1) // balance ops
-				+ 110_700_000 // constant
-				+ 1_066_000 * T::MaxRegistrars::get() as Weight // R
-				+ 3_402_000 * fields_count as Weight // X
-			},
-			DispatchClass::Normal,
-			true
+		#[weight = weight_for::provide_judgement(
+			T::DbWeight::get(),
+			T::MaxRegistrars::get(), // R
+			T::MaxAdditionalFields::get() // X
 		)]
 		fn provide_judgement(origin,
 			#[compact] reg_index: RegistrarIndex,
 			target: <T::Lookup as StaticLookup>::Source,
 			judgement: Judgement<BalanceOf<T>>,
-			additional_fields_count: u32,
-		) {
+		) -> DispatchResultWithPostInfo {
 			let sender = ensure_signed(origin)?;
 			let target = T::Lookup::lookup(target)?;
 			ensure!(!judgement.has_deposit(), Error::<T>::InvalidJudgement);
@@ -989,7 +1008,6 @@ decl_module! {
 				.and_then(|r| if r.account == sender { Some(r) } else { None })
 				.ok_or(Error::<T>::InvalidIndex)?;
 			let mut id = <IdentityOf<T>>::get(&target).ok_or(Error::<T>::InvalidTarget)?;
-			ensure!(id.info.additional.len() <= additional_fields_count as usize, "invalid count");
 
 			let item = (reg_index, judgement);
 			match id.judgements.binary_search_by_key(&reg_index, |x| x.0) {
@@ -1001,8 +1019,13 @@ decl_module! {
 				}
 				Err(position) => id.judgements.insert(position, item),
 			}
+
+			let judgements = id.judgements.len() as Weight;
+			let extra_fields = id.info.additional.len() as Weight;
 			<IdentityOf<T>>::insert(&target, id);
 			Self::deposit_event(RawEvent::JudgementGiven(target, reg_index));
+
+			Ok(Some(weight_for::provide_judgement(T::DbWeight::get(), judgements, extra_fields)).into())
 		}
 
 		/// Remove an account's identity and sub-account information and slash the deposits.
@@ -1025,19 +1048,13 @@ decl_module! {
 		/// - One event.
 		/// - Benchmark: 167.4 + R * 1.107 + S * 5.343 + X * 2.294 µs (min squares analysis)
 		/// # </weight>
-		#[weight = FunctionOf(
-			|(_, &subs_count): (&<T::Lookup as StaticLookup>::Source, &u32)| {
-				T::DbWeight::get().reads_writes(subs_count as Weight + 1, subs_count as Weight + 1)
-				+ T::DbWeight::get().reads_writes(1, 1) // balance ops
-				+ 167_400_000 // constant
-				+ 1_107_000 * T::MaxRegistrars::get() as Weight // R
-				+ 5_343_000 * subs_count as Weight // S
-				+ 2_294_000 * T::MaxAdditionalFields::get() as Weight // X
-			},
-			DispatchClass::Normal,
-			true
+		#[weight = weight_for::kill_identity(
+			T::DbWeight::get(),
+			T::MaxRegistrars::get(), // R
+			T::MaxSubAccounts::get(), // S
+			T::MaxAdditionalFields::get() // X
 		)]
-		fn kill_identity(origin, target: <T::Lookup as StaticLookup>::Source, subs_count: u32) {
+		fn kill_identity(origin, target: <T::Lookup as StaticLookup>::Source) -> DispatchResultWithPostInfo {
 			T::ForceOrigin::try_origin(origin)
 				.map(|_| ())
 				.or_else(ensure_root)?;
@@ -1046,9 +1063,8 @@ decl_module! {
 			let target = T::Lookup::lookup(target)?;
 			// Grab their deposit (and check that they have one).
 			let (subs_deposit, sub_ids) = <SubsOf<T>>::take(&target);
-			ensure!(sub_ids.len() <= subs_count as usize, "invalid count");
-			let deposit = <IdentityOf<T>>::take(&target).ok_or(Error::<T>::NotNamed)?.total_deposit()
-				+ subs_deposit;
+			let id = <IdentityOf<T>>::take(&target).ok_or(Error::<T>::NotNamed)?;
+			let deposit = id.total_deposit() + subs_deposit;
 			for sub in sub_ids.iter() {
 				<SuperOf<T>>::remove(sub);
 			}
@@ -1056,6 +1072,13 @@ decl_module! {
 			T::Slashed::on_unbalanced(T::Currency::slash_reserved(&target, deposit).0);
 
 			Self::deposit_event(RawEvent::IdentityKilled(target, deposit));
+
+			Ok(Some(weight_for::kill_identity(
+				T::DbWeight::get(),
+				id.judgements.len() as Weight, // R
+				sub_ids.len() as Weight, // S
+				id.info.additional.len() as Weight // X
+			)).into())
 		}
 	}
 }
@@ -1252,27 +1275,27 @@ mod tests {
 	fn uninvited_judgement_should_work() {
 		new_test_ext().execute_with(|| {
 			assert_noop!(
-				Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable, 0),
+				Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable),
 				Error::<Test>::InvalidIndex
 			);
 
 			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
 			assert_noop!(
-				Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable, 0),
+				Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable),
 				Error::<Test>::InvalidTarget
 			);
 
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
 			assert_noop!(
-				Identity::provide_judgement(Origin::signed(10), 0, 10, Judgement::Reasonable, 0),
+				Identity::provide_judgement(Origin::signed(10), 0, 10, Judgement::Reasonable),
 				Error::<Test>::InvalidIndex
 			);
 			assert_noop!(
-				Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::FeePaid(1), 0),
+				Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::FeePaid(1)),
 				Error::<Test>::InvalidJudgement
 			);
 
-			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable, 0));
+			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable));
 			assert_eq!(Identity::identity(10).unwrap().judgements, vec![(0, Judgement::Reasonable)]);
 		});
 	}
@@ -1282,7 +1305,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
-			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable, 0));
+			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable));
 			assert_ok!(Identity::clear_identity(Origin::signed(10)));
 			assert_eq!(Identity::identity(10), None);
 		});
@@ -1292,11 +1315,11 @@ mod tests {
 	fn killing_slashing_should_work() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
-			assert_noop!(Identity::kill_identity(Origin::signed(1), 10, 0), BadOrigin);
-			assert_ok!(Identity::kill_identity(Origin::signed(2), 10, 0));
+			assert_noop!(Identity::kill_identity(Origin::signed(1), 10), BadOrigin);
+			assert_ok!(Identity::kill_identity(Origin::signed(2), 10));
 			assert_eq!(Identity::identity(10), None);
 			assert_eq!(Balances::free_balance(10), 90);
-			assert_noop!(Identity::kill_identity(Origin::signed(2), 10, 0), Error::<Test>::NotNamed);
+			assert_noop!(Identity::kill_identity(Origin::signed(2), 10), Error::<Test>::NotNamed);
 		});
 	}
 
@@ -1359,7 +1382,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
 			assert_ok!(Identity::set_subs(Origin::signed(10), vec![(20, Data::Raw(vec![40; 1]))], 0));
-			assert_ok!(Identity::kill_identity(Origin::ROOT, 10, 1));
+			assert_ok!(Identity::kill_identity(Origin::ROOT, 10));
 			assert_eq!(Balances::free_balance(10), 80);
 			assert!(Identity::super_of(20).is_none());
 		});
@@ -1377,7 +1400,7 @@ mod tests {
 			assert_eq!(Balances::free_balance(10), 90);
 			assert_noop!(Identity::cancel_request(Origin::signed(10), 0), Error::<Test>::NotFound);
 
-			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable, 0));
+			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable));
 			assert_noop!(Identity::cancel_request(Origin::signed(10), 0), Error::<Test>::JudgementGiven);
 		});
 	}
@@ -1395,7 +1418,7 @@ mod tests {
 
 			// Re-requesting won't work as we already paid.
 			assert_noop!(Identity::request_judgement(Origin::signed(10), 0, 10), Error::<Test>::StickyJudgement);
-			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Erroneous, 0));
+			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Erroneous));
 			// Registrar got their payment now.
 			assert_eq!(Balances::free_balance(3), 20);
 
@@ -1407,7 +1430,7 @@ mod tests {
 			assert_ok!(Identity::request_judgement(Origin::signed(10), 1, 10));
 
 			// Re-requesting after the judgement has been reduced works.
-			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::OutOfDate, 0));
+			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::OutOfDate));
 			assert_ok!(Identity::request_judgement(Origin::signed(10), 0, 10));
 		});
 	}
