@@ -164,11 +164,7 @@ macro_rules! implement_fixed {
 			}
 
 			fn saturating_abs(self) -> Self {
-				if self.0.is_negative() {
-					Self::from_inner(self.0.saturating_mul(-1)) 
-				} else {
-					self
-				}
+				Self(self.0.checked_abs().unwrap_or(Self::Inner::max_value()))
 			}
 
 			fn zero() -> Self {
