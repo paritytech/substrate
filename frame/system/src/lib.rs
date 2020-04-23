@@ -2111,6 +2111,34 @@ pub(crate) mod tests {
 	}
 
 	#[test]
+	fn full_block_with_normal_and_operational() {
+		new_test_ext().execute_with(|| {
+			// Start the test by injecting the `BlockExecutionWeight`
+			System::register_extra_weight_unchecked(<Test as Trait>::BlockExecutionWeight::get());
+			assert_eq!(System::all_extrinsics_weight(), 10);
+
+			// Max block is 1024
+			// Max normal is 768 (75%)
+			// 10 is taken for block execution weight
+			// So normal extrinsic can be 758 weight (-5 for base extrinsic weight)
+			// And Operational can be 256 to produce a full block (-5 for base)
+
+			assert_eq!(System::max_extrinsic_weight(DispatchClass::Normal), 753);
+
+			let max_normal = DispatchInfo { weight: 753, ..Default::default() };
+			let rest_operational = DispatchInfo { weight: 251, class: DispatchClass::Operational, ..Default::default() };
+
+			let len = 0_usize;
+
+			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&max_normal, len));
+			assert_eq!(System::all_extrinsics_weight(), 768);
+			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&rest_operational, len));
+			assert_eq!(<Test as Trait>::MaximumBlockWeight::get(), 1024);
+			assert_eq!(System::all_extrinsics_weight(), <Test as Trait>::MaximumBlockWeight::get());
+		});
+	}
+
+	#[test]
 	fn signed_ext_check_weight_works_operational_tx() {
 		new_test_ext().execute_with(|| {
 			let normal = DispatchInfo { weight: 100, ..Default::default() };
