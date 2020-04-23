@@ -29,7 +29,7 @@ use crate::{
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
 pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
-	essence: TrieBackendEssence<S, H>,
+	pub (crate) essence: TrieBackendEssence<S, H>,
 }
 
 impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: Codec {
@@ -48,6 +48,11 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: Codec 
 	/// Get backend storage reference.
 	pub fn backend_storage(&self) -> &S {
 		self.essence.backend_storage()
+	}
+
+	/// Get backend storage reference.
+	pub fn backend_storage_mut(&mut self) -> &mut S {
+		self.essence.backend_storage_mut()
 	}
 
 	/// Get trie root.
@@ -179,6 +184,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 				&mut write_overlay,
 			);
 
+			let delta: Vec<_> = delta.into_iter().collect();
 			match delta_trie_root::<Layout<H>, _, _, _, _>(&mut eph, root, delta) {
 				Ok(ret) => root = ret,
 				Err(e) => warn!(target: "trie", "Failed to write to trie: {}", e),
@@ -242,6 +248,10 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 
 	fn usage_info(&self) -> crate::UsageInfo {
 		crate::UsageInfo::empty()
+	}
+
+	fn wipe(&self) -> Result<(), Self::Error> {
+		Ok(())
 	}
 }
 
