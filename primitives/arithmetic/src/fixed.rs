@@ -96,36 +96,39 @@ macro_rules! implement_fixed {
 
 			fn checked_mul_int<N>(self, other: N) -> Option<N>
 			where
-				N: Copy + TryFrom<i128> + UniqueSaturatedInto<i128>,
+				N: Copy + TryFrom<i128> + UniqueSaturatedInto<i128> + Bounded,
 			{
-					let mut rhs: i128 = other.unique_saturated_into();
-					let mut signum = self.0.signum() as i128 * rhs.signum();
-					let mut lhs = self.0;
+				let rhs: i128 = other.unique_saturated_into();
+				let lhs: i128 = self.0.unique_saturated_into();
 
-					if lhs.is_negative() {
-						lhs = lhs.saturating_mul(-1);
+				let signum = lhs.signum() * rhs.signum();
+
+				let mut ulhs: u128 = 0;
+				let mut urhs: u128 = 0;
+
+				if lhs.is_negative() {
+					ulhs = lhs.saturating_mul(-1) as u128;
+					if lhs == i128::min_value() {
+						ulhs += 1;
 					}
+				} else {
+					ulhs = lhs as u128;
+				}
 
-					if rhs.is_negative() {
-						rhs = rhs.saturating_mul(-1);
+				if rhs.is_negative() {
+					urhs = rhs.saturating_mul(-1) as u128;
+					if rhs == i128::min_value() {
+						urhs += 1;
 					}
+				} else {
+					urhs = rhs as u128;
+				}
 
-					if let Ok(r) = multiply_by_rational(lhs as u128, rhs as u128, Self::DIV as u128) {
-						let r: i128 = r.unique_saturated_into();
-						let r = r.saturating_mul(signum);
-						r.try_into().ok()
-					} else {
-						None
-					}
-						// .ok()
-						// .and_then(|n| TryInto::<N>::try_into(n.unique_saturated_into().saturating_mul(signum)).ok())
-
-						// (lhs as Self::Unsigned)
-					// 	.checked_mul(rhs as Self::Unsigned)
-					// 	.and_then(|n| n.checked_div(Self::DIV as Self::Unsigned))
-					// 	.and_then(|n| TryInto::<Self::Inner>::try_into(n).ok())
-					// 	.and_then(|n| TryInto::<N>::try_into(n * signum).ok())
-				// })
+				multiply_by_rational(ulhs, urhs, Self::DIV as u128)
+					.ok()
+					.map(|r| r.unique_saturated_into())
+					.map(|r: i128| r.saturating_mul(signum))
+					.and_then(|r| r.try_into().ok())
 			}
 		
 			fn checked_div_int<N>(self, other: N) -> Option<N>
@@ -566,13 +569,22 @@ macro_rules! implement_fixed {
 			#[test]
 			fn checked_mul_int_works() {
 				let a = $name::from_rational(1, 2);
-				let b = $name::from_rational(-1, 2);
+				let b = $name::from_rational(1, -2);
 				let c = $name::from_integer(255);
 
-				// assert_eq!(a.checked_mul_int(42i32), Some(21));
-				assert_eq!(a.checked_mul_int(u128::max_value()), Some(u128::max_value() / 2));
-				// assert_eq!(b.checked_mul_int(42i32), Some(-21));
-				// assert_eq!(c.checked_mul_int(2u8), None);
+				assert_eq!(a.checked_mul_int(42i32), Some(21));
+				assert_eq!(b.checked_mul_int(42i32), Some(-21));
+				assert_eq!(c.checked_mul_int(2u8), None);
+
+				assert_eq!(b.checked_mul_int(i128::max_value()), Some(i128::max_value() / -2));
+				assert_eq!(b.checked_mul_int(i128::min_value()), Some(i128::min_value() / -2));
+
+				// assert_eq!(c.checked_mul_int(i128::max_value()), None);
+				// assert_eq!(c.checked_mul_int(i128::min_value()), None);
+
+				// assert_eq!(a.checked_mul_int(i128::max_value()), Some(i128::max_value() / 2));
+				// assert_eq!(a.checked_mul_int(u64::max_value()), Some(u64::max_value() / 2));
+				// assert_eq!(a.checked_mul_int(i128::min_value()), Some(i128::min_value() / 2));
 			}
 
 			#[test]
