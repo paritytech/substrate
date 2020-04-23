@@ -22,7 +22,7 @@ use sc_network_test::{
 	Block, Hash, TestNetFactory, BlockImportAdapter, Peer,
 	PeersClient, PassThroughVerifier, PeersFullClient,
 };
-use sc_network::config::{ProtocolConfig, Roles, BoxFinalityProofRequestBuilder};
+use sc_network::config::{ProtocolConfig, BoxFinalityProofRequestBuilder};
 use parking_lot::Mutex;
 use futures_timer::Delay;
 use tokio::runtime::{Runtime, Handle};
@@ -74,9 +74,8 @@ impl GrandpaTestNet {
 			peers: Vec::with_capacity(n_peers),
 			test_config,
 		};
-		let config = Self::default_config();
 		for _ in 0..n_peers {
-			net.add_full_peer(&config);
+			net.add_full_peer();
 		}
 		net
 	}
@@ -95,10 +94,8 @@ impl TestNetFactory for GrandpaTestNet {
 	}
 
 	fn default_config() -> ProtocolConfig {
-		// the authority role ensures gossip hits all nodes here.
-		let mut config = ProtocolConfig::default();
-		config.roles = Roles::AUTHORITY;
-		config
+		// This is unused.
+		ProtocolConfig::default()
 	}
 
 	fn make_verifier(
@@ -996,7 +993,7 @@ fn voter_persists_its_votes() {
 	use std::iter::FromIterator;
 	use std::sync::atomic::{AtomicUsize, Ordering};
 	use futures::future;
-	use futures::channel::mpsc;
+	use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 
 	let _ = env_logger::try_init();
 	let mut runtime = Runtime::new().unwrap();
@@ -1021,7 +1018,7 @@ fn voter_persists_its_votes() {
 
 	// channel between the voter and the main controller.
 	// sending a message on the `voter_tx` restarts the voter.
-	let (voter_tx, voter_rx) = mpsc::unbounded::<()>();
+	let (voter_tx, voter_rx) = tracing_unbounded::<()>("");
 
 	let mut keystore_paths = Vec::new();
 
@@ -1034,7 +1031,7 @@ fn voter_persists_its_votes() {
 
 		struct ResettableVoter {
 			voter: Pin<Box<dyn Future<Output = ()> + Send + Unpin>>,
-			voter_rx: mpsc::UnboundedReceiver<()>,
+			voter_rx: TracingUnboundedReceiver<()>,
 			net: Arc<Mutex<GrandpaTestNet>>,
 			client: PeersClient,
 			keystore: KeyStorePtr,
@@ -1303,7 +1300,7 @@ fn finality_proof_is_fetched_by_light_client_when_consensus_data_changes() {
 
 	let peers = &[Ed25519Keyring::Alice];
 	let mut net = GrandpaTestNet::new(TestApi::new(make_ids(peers)), 1);
-	net.add_light_peer(&GrandpaTestNet::default_config());
+	net.add_light_peer();
 
 	// import block#1 WITH consensus data change. Light client ignores justification
 	// && instead fetches finality proof for block #1
@@ -1380,7 +1377,7 @@ fn empty_finality_proof_is_returned_to_light_client_when_authority_set_is_differ
 	run_to_completion(&mut runtime, 11, net.clone(), peers_a);
 
 	// request finalization by light client
-	net.lock().add_light_peer(&GrandpaTestNet::default_config());
+	net.lock().add_light_peer();
 	net.lock().block_until_sync();
 
 	// check block, finalized on light client

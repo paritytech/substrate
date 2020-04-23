@@ -146,6 +146,7 @@ fn function_std_impl(
 	is_wasm_only: bool,
 ) -> Result<TokenStream> {
 	let function_name = create_function_ident_with_version(&method.sig.ident, version);
+	let function_name_str = function_name.to_string();
 
 	let crate_ = generate_crate_access();
 	let args = get_function_arguments(&method.sig).map(FnArg::Typed).chain(
@@ -172,6 +173,7 @@ fn function_std_impl(
 			#[cfg(feature = "std")]
 			#( #attrs )*
 			fn #function_name( #( #args, )* ) #return_value {
+				#crate_::sp_tracing::enter_span!(#function_name_str);
 				#call_to_trait
 			}
 		}

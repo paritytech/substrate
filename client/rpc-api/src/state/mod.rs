@@ -17,6 +17,7 @@
 //! Substrate state API.
 
 pub mod error;
+pub mod helpers;
 
 use jsonrpc_core::Result as RpcResult;
 use jsonrpc_core::futures::Future;
@@ -28,6 +29,7 @@ use sp_version::RuntimeVersion;
 use self::error::FutureResult;
 
 pub use self::gen_client::Client as StateClient;
+pub use self::helpers::ReadProof;
 
 /// Substrate state API
 #[rpc]
@@ -99,6 +101,10 @@ pub trait StateApi<Hash> {
 		keys: Vec<StorageKey>,
 		at: Option<Hash>,
 	) -> FutureResult<Vec<StorageChangeSet<Hash>>>;
+
+	/// Returns proof of storage entries at a specific block's state.
+	#[rpc(name = "state_getReadProof")]
+	fn read_proof(&self, keys: Vec<StorageKey>, hash: Option<Hash>) -> FutureResult<ReadProof<Hash>>;
 
 	/// New runtime version subscription
 	#[pubsub(

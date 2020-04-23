@@ -38,7 +38,7 @@ use rpc::{
 	futures::stream::Stream,
 };
 
-use sc_rpc_api::Subscriptions;
+use sc_rpc_api::{Subscriptions, state::ReadProof};
 use sp_blockchain::{Error as ClientError, HeaderBackend};
 use sc_client::{
 	BlockchainEvents,
@@ -276,6 +276,14 @@ impl<Block, F, Client> StateBackend<Block, Client> for LightState<Block, F, Clie
 		_keys: Vec<StorageKey>,
 		_at: Option<Block::Hash>
 	) -> FutureResult<Vec<StorageChangeSet<Block::Hash>>> {
+		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
+	}
+
+	fn read_proof(
+		&self,
+		_block: Option<Block::Hash>,
+		_keys: Vec<StorageKey>,
+	) -> FutureResult<ReadProof<Block::Hash>> {
 		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
 	}
 

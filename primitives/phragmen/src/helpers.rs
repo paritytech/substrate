@@ -16,7 +16,7 @@
 
 //! Helper methods for phragmen.
 
-use crate::{Assignment, ExtendedBalance, IdentifierT, StakedAssignment};
+use crate::{Assignment, ExtendedBalance, VoteWeight, IdentifierT, StakedAssignment, WithApprovalOf};
 use sp_runtime::PerThing;
 use sp_std::prelude::*;
 
@@ -26,7 +26,7 @@ pub fn assignment_ratio_to_staked<A: IdentifierT, T: PerThing, FS>(
 	stake_of: FS,
 ) -> Vec<StakedAssignment<A>>
 where
-	for<'r> FS: Fn(&'r A) -> ExtendedBalance,
+	for<'r> FS: Fn(&'r A) -> VoteWeight,
 	T: sp_std::ops::Mul<ExtendedBalance, Output = ExtendedBalance>,
 	ExtendedBalance: From<<T as PerThing>::Inner>,
 {
@@ -34,30 +34,34 @@ where
 		.into_iter()
 		.map(|a| {
 			let stake = stake_of(&a.who);
-			a.into_staked(stake, true)
+			a.into_staked(stake.into(), true)
 		})
 		.collect()
 }
 
 /// Converts a vector of staked assignments into ones with ratio values.
 pub fn assignment_staked_to_ratio<A: IdentifierT, T: PerThing>(
-	ratio: Vec<StakedAssignment<A>>,
+	staked: Vec<StakedAssignment<A>>,
 ) -> Vec<Assignment<A, T>>
 where
 	ExtendedBalance: From<<T as PerThing>::Inner>,
 {
-	ratio.into_iter().map(|a| a.into_assignment(true)).collect()
+	staked.into_iter().map(|a| a.into_assignment(true)).collect()
+}
+
+/// consumes a vector of winners with backing stake to just winners.
+pub fn to_without_backing<A: IdentifierT>(winners: Vec<WithApprovalOf<A>>) -> Vec<A> {
+	winners.into_iter().map(|(who, _)| who).collect::<Vec<A>>()
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::ExtendedBalance;
 	use sp_runtime::Perbill;
 
 	#[test]
 	fn into_staked_works() {
-		let ratio = vec![
+		let assignments = vec![
 			Assignment {
 				who: 1u32,
 				distribution: vec![
@@ -74,8 +78,8 @@ mod tests {
 			},
 		];
 
-		let stake_of = |_: &u32| -> ExtendedBalance { 100u128 };
-		let staked = assignment_ratio_to_staked(ratio, stake_of);
+		let stake_of = |_: &u32| -> VoteWeight { 100 };
+		let staked = assignment_ratio_to_staked(assignments, stake_of);
 
 		assert_eq!(
 			staked,

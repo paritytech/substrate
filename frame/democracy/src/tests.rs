@@ -80,6 +80,7 @@ impl frame_system::Trait for Test {
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
+	type DbWeight = ();
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
@@ -126,6 +127,8 @@ impl Contains<u64> for OneToFive {
 	fn sorted_members() -> Vec<u64> {
 		vec![1, 2, 3, 4, 5]
 	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn add(_m: &u64) {}
 }
 thread_local! {
 	static PREIMAGE_BYTE_DEPOSIT: RefCell<u64> = RefCell::new(0);
@@ -162,7 +165,7 @@ impl super::Trait for Test {
 	type Scheduler = Scheduler;
 }
 
-fn new_test_ext() -> sp_io::TestExternalities {
+pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	pallet_balances::GenesisConfig::<Test>{
 		balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],
