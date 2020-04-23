@@ -479,6 +479,19 @@ mod weight_for {
 			+ 5_400_000 * subs.into() // S
 			+ 2_000_000 * extra_fields.into() // X
 	}
+
+	/// Weight calculation for `request_judgement`.
+	pub(crate) fn request_judgement(
+		db: RuntimeDbWeight,
+		judgements: impl Into<Weight>,
+		extra_fields: impl Into<Weight>) -> Weight
+	{
+		db.reads_writes(2, 1)
+			+ db.reads_writes(1, 1) // balance ops
+			+ 180_000_000 // constant
+			+ 950_000 * judgements.into() // R
+			+ 3_400_000 * extra_fields.into() // X
+	}
 }
 
 decl_module! {
@@ -695,9 +708,9 @@ decl_module! {
 
 			Ok(Some(weight_for::clear_identity(
 				T::DbWeight::get(),
-				sub_ids.len() as Weight,
-				id.judgements.len() as Weight,
-				id.info.additional.len() as Weight
+				sub_ids.len() as Weight, // S
+				id.judgements.len() as Weight, // R
+				id.info.additional.len() as Weight // X
 			)).into())
 		}
 
@@ -730,31 +743,25 @@ decl_module! {
 		/// - One balance-reserve operation.
 		/// - Storage: 1 read `O(R)`, 1 mutate `O(X + R)`.
 		/// - One event.
-		/// - Benchmark: 154 + R * 0.932 + X * 3.302 µs (min squares analysis)
+		/// - Benchmarks:
+		///   - 154 + R * 0.932 + X * 3.302 µs (min squares analysis)
+		///   - 172.9 + R * 0.69 + X * 3.304 µs (min squares analysis)
 		/// # </weight>
-		#[weight = FunctionOf(
-			|(_, _, &fields_count): (&RegistrarIndex, &BalanceOf<T>, &u32)| {
-				T::DbWeight::get().reads_writes(2, 1)
-				+ T::DbWeight::get().reads_writes(1, 1) // balance ops
-				+ 154_000_000 // constant
-				+ 932_000 * T::MaxRegistrars::get() as Weight // R
-				+ 3_302_000 * fields_count as Weight // X
-			},
-			DispatchClass::Normal,
-			true
+		#[weight = weight_for::request_judgement(
+			T::DbWeight::get(),
+			T::MaxRegistrars::get(), // R
+			T::MaxAdditionalFields::get() // X
 		)]
 		fn request_judgement(origin,
 			#[compact] reg_index: RegistrarIndex,
 			#[compact] max_fee: BalanceOf<T>,
-			additional_fields_count: u32,
-		) {
+		) -> DispatchResultWithPostInfo {
 			let sender = ensure_signed(origin)?;
 			let registrars = <Registrars<T>>::get();
 			let registrar = registrars.get(reg_index as usize).and_then(Option::as_ref)
 				.ok_or(Error::<T>::EmptyIndex)?;
 			ensure!(max_fee >= registrar.fee, Error::<T>::FeeChanged);
 			let mut id = <IdentityOf<T>>::get(&sender).ok_or(Error::<T>::NoIdentity)?;
-			ensure!(id.info.additional.len() <= additional_fields_count as usize, "invalid count");
 
 			let item = (reg_index, Judgement::FeePaid(registrar.fee));
 			match id.judgements.binary_search_by_key(&reg_index, |x| x.0) {
@@ -768,9 +775,13 @@ decl_module! {
 
 			T::Currency::reserve(&sender, registrar.fee)?;
 
+			let judgements = id.judgements.len() as Weight;
+			let extra_fields = id.info.additional.len() as Weight;
 			<IdentityOf<T>>::insert(&sender, id);
 
 			Self::deposit_event(RawEvent::JudgementRequested(sender, reg_index));
+
+			Ok(Some(weight_for::request_judgement(T::DbWeight::get(), judgements, extra_fields)).into())
 		}
 
 		/// Cancel a previous request.
@@ -1349,7 +1360,7 @@ mod tests {
 			assert_ok!(Identity::set_fee(Origin::signed(3), 0, 10));
 			assert_noop!(Identity::cancel_request(Origin::signed(10), 0, 0), Error::<Test>::NoIdentity);
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
-			assert_ok!(Identity::request_judgement(Origin::signed(10), 0, 10, 0));
+			assert_ok!(Identity::request_judgement(Origin::signed(10), 0, 10));
 			assert_ok!(Identity::cancel_request(Origin::signed(10), 0, 0));
 			assert_eq!(Balances::free_balance(10), 90);
 			assert_noop!(Identity::cancel_request(Origin::signed(10), 0, 0), Error::<Test>::NotFound);
@@ -1365,27 +1376,27 @@ mod tests {
 			assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
 			assert_ok!(Identity::set_fee(Origin::signed(3), 0, 10));
 			assert_ok!(Identity::set_identity(Origin::signed(10), ten()));
-			assert_noop!(Identity::request_judgement(Origin::signed(10), 0, 9, 0), Error::<Test>::FeeChanged);
-			assert_ok!(Identity::request_judgement(Origin::signed(10), 0, 10, 0));
+			assert_noop!(Identity::request_judgement(Origin::signed(10), 0, 9), Error::<Test>::FeeChanged);
+			assert_ok!(Identity::request_judgement(Origin::signed(10), 0, 10));
 			// 10 for the judgement request, 10 for the identity.
 			assert_eq!(Balances::free_balance(10), 80);
 
 			// Re-requesting won't work as we already paid.
-			assert_noop!(Identity::request_judgement(Origin::signed(10), 0, 10, 0), Error::<Test>::StickyJudgement);
+			assert_noop!(Identity::request_judgement(Origin::signed(10), 0, 10), Error::<Test>::StickyJudgement);
 			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Erroneous, 0));
 			// Registrar got their payment now.
 			assert_eq!(Balances::free_balance(3), 20);
 
 			// Re-requesting still won't work as it's erroneous.
-			assert_noop!(Identity::request_judgement(Origin::signed(10), 0, 10, 0), Error::<Test>::StickyJudgement);
+			assert_noop!(Identity::request_judgement(Origin::signed(10), 0, 10), Error::<Test>::StickyJudgement);
 
 			// Requesting from a second registrar still works.
 			assert_ok!(Identity::add_registrar(Origin::signed(1), 4));
-			assert_ok!(Identity::request_judgement(Origin::signed(10), 1, 10, 0));
+			assert_ok!(Identity::request_judgement(Origin::signed(10), 1, 10));
 
 			// Re-requesting after the judgement has been reduced works.
 			assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::OutOfDate, 0));
-			assert_ok!(Identity::request_judgement(Origin::signed(10), 0, 10, 0));
+			assert_ok!(Identity::request_judgement(Origin::signed(10), 0, 10));
 		});
 	}
 

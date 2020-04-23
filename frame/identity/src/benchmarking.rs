@@ -143,7 +143,7 @@ benchmarks! {
 
 			// User requests judgement from all the registrars, and they approve
 			for i in 0..r {
-				Identity::<T>::request_judgement(caller_origin.clone(), i, 10.into(), x)?;
+				Identity::<T>::request_judgement(caller_origin.clone(), i, 10.into())?;
 				Identity::<T>::provide_judgement(
 					RawOrigin::Signed(account::<T>("registrar", i)).into(),
 					i,
@@ -184,7 +184,7 @@ benchmarks! {
 
 		// User requests judgement from all the registrars, and they approve
 		for i in 0..r {
-			Identity::<T>::request_judgement(caller_origin.clone(), i, 10.into(), x)?;
+			Identity::<T>::request_judgement(caller_origin.clone(), i, 10.into())?;
 			Identity::<T>::provide_judgement(
 				RawOrigin::Signed(account::<T>("registrar", i)).into(),
 				i,
@@ -201,7 +201,7 @@ benchmarks! {
 
 		let r in ...;
 		let x in ...;
-	}: _(RawOrigin::Signed(caller), r - 1, 10.into(), x)
+	}: _(RawOrigin::Signed(caller), r - 1, 10.into())
 
 	cancel_request {
 		let caller = account::<T>("caller", 0);
@@ -211,7 +211,7 @@ benchmarks! {
 		let r in ...;
 		let x in ...;
 
-		Identity::<T>::request_judgement(caller_origin, r - 1, 10.into(), x)?;
+		Identity::<T>::request_judgement(caller_origin, r - 1, 10.into())?;
 	}: _(RawOrigin::Signed(caller), r - 1, x)
 
 	set_fee {
@@ -262,7 +262,7 @@ benchmarks! {
 		};
 
 		Identity::<T>::add_registrar(RawOrigin::Root.into(), caller.clone())?;
-		Identity::<T>::request_judgement(user_origin.clone(), r, 10.into(), x)?;
+		Identity::<T>::request_judgement(user_origin.clone(), r, 10.into())?;
 	}: _(RawOrigin::Signed(caller), r, user_lookup, Judgement::Reasonable, x)
 
 	kill_identity {
@@ -277,7 +277,7 @@ benchmarks! {
 
 		// User requests judgement from all the registrars, and they approve
 		for i in 0..r {
-			Identity::<T>::request_judgement(caller_origin.clone(), i, 10.into(), x)?;
+			Identity::<T>::request_judgement(caller_origin.clone(), i, 10.into())?;
 			Identity::<T>::provide_judgement(
 				RawOrigin::Signed(account::<T>("registrar", i)).into(),
 				i,
