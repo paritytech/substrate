@@ -161,7 +161,7 @@ benchmarks! {
 	set_subs {
 		let caller = account::<T>("caller", 0);
 
-		// Give them o many previous sub accounts.
+		// Give them p many previous sub accounts.
 		let p in 1 .. T::MaxSubAccounts::get() => {
 			let _ = add_sub_accounts::<T>(&caller, p)?;
 		};

@@ -639,7 +639,7 @@ decl_module! {
 			ensure!(extra_fields <= T::MaxAdditionalFields::get(), Error::<T>::TooManyFields);
 			let fd = <BalanceOf<T>>::from(extra_fields) * T::FieldDeposit::get();
 
-			let mut id  = match <IdentityOf<T>>::get(&sender) {
+			let mut id = match <IdentityOf<T>>::get(&sender) {
 				Some(mut id) => {
 					// Only keep non-positive judgements.
 					id.judgements.retain(|j| j.1.is_sticky());
@@ -662,7 +662,11 @@ decl_module! {
 			<IdentityOf<T>>::insert(&sender, id);
 			Self::deposit_event(RawEvent::IdentitySet(sender));
 
-			Ok(Some(weight_for::set_identity(T::DbWeight::get(), extra_fields as Weight, judgements)).into())
+			Ok(Some(weight_for::set_identity(
+				T::DbWeight::get(),
+				judgements, // R
+				extra_fields as Weight // X
+			)).into())
 		}
 
 		/// Set the sub-accounts of the sender.
@@ -673,8 +677,7 @@ decl_module! {
 		/// The dispatch origin for this call must be _Signed_ and the sender must have a registered
 		/// identity.
 		///
-		/// - `subs`: The identity's sub-accounts.
-		/// - `old_subs_count`: This is the number of previous sub accounts associated with the identity.
+		/// - `subs`: The identity's (new) sub-accounts.
 		///
 		/// # <weight>
 		/// - `O(P + S)`
@@ -739,8 +742,6 @@ decl_module! {
 		///
 		/// The dispatch origin for this call must be _Signed_ and the sender must have a registered
 		/// identity.
-		/// 
-		/// - `subs_count`: This is the number of sub accounts associated with the identity to clear.
 		///
 		/// Emits `IdentityCleared` if successful.
 		///
