@@ -187,29 +187,3 @@ where
         Box::new(future.map_err(jsonrpc_core::Error::from).compat())
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use jsonrpc_core::IoHandler;
-    use std::sync::Arc;
-    use substrate_test_runtime_client::{
-        DefaultTestClientBuilderExt, TestClientBuilder, TestClientBuilderExt,
-    };
-
-    #[test]
-    fn round_state() {
-        let builder = TestClientBuilder::new();
-        let client = builder.build();
-        let client = Arc::new(client);
-
-        let handler = GrandpaRpcHandler {};
-        let mut io = IoHandler::new();
-        io.extend_with(GrandpaApi::to_delegate(handler));
-
-        let request = r#"{"jsonrpc":"2.0","method":"grandpa_roundState","params":[],"id":1}"#;
-        let response = r#"{"jsonrpc":"2.0","result":"Hello world","id":1}"#;
-
-        assert_eq!(Some(response.into()), io.handle_request_sync(request));
-    }
-}
