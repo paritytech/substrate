@@ -445,9 +445,9 @@ fn build_network_future<
 		});
 
 		// Main network polling.
-		if let Poll::Ready(Ok(())) = Pin::new(&mut network).poll(cx).map_err(|err| {
-			warn!(target: "service", "Error in network: {:?}", err);
-		}) {
+		let next_network_action = network.next_action();
+		futures::pin_mut!(next_network_action);
+		if let Poll::Ready(()) = next_network_action.poll(cx) {
 			return Poll::Ready(());
 		}
 

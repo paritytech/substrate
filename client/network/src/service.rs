@@ -59,7 +59,7 @@ use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnbound
 use std::{
 	borrow::Cow,
 	collections::HashSet,
-	fs, io,
+	fs,
 	marker::PhantomData,
 	pin::Pin,
 	str,
@@ -991,10 +991,17 @@ impl Metrics {
 	}
 }
 
-impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
-	type Output = Result<(), io::Error>;
+impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
+	/// Performs one action on the network, then returns.
+	///
+	/// The returned future is designed to be freely cancellable.
+	pub async fn next_action(&mut self) {
+		future::poll_fn(move |cx| Pin::new(&mut *self).poll(cx)).await
+	}
 
-	fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context) -> Poll<Self::Output> {
+	/// Implementation of `next_action`. Note that this is not an implementation of `Future` but
+	/// a regular method.
+	fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context) -> Poll<()> {
 		let this = &mut *self;
 
 		// Poll the import queue for actions to perform.
@@ -1019,7 +1026,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 			// Process the next message coming from the `NetworkService`.
 			let msg = match this.from_worker.poll_next_unpin(cx) {
 				Poll::Ready(Some(msg)) => msg,
-				Poll::Ready(None) => return Poll::Ready(Ok(())),
+				Poll::Ready(None) => return Poll::Ready(()),
 				Poll::Pending => break,
 			};
 

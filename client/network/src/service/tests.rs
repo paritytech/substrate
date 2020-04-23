@@ -87,7 +87,7 @@ fn build_test_full_node(config: config::NetworkConfiguration)
 		None,
 	));
 
-	let worker = NetworkWorker::new(config::Params {
+	let mut worker = NetworkWorker::new(config::Params {
 		role: config::Role::Full,
 		executor: None,
 		network_config: config,
@@ -109,8 +109,9 @@ fn build_test_full_node(config: config::NetworkConfiguration)
 	let event_stream = service.event_stream("test");
 
 	async_std::task::spawn(async move {
-		futures::pin_mut!(worker);
-		let _ = worker.await;
+		loop {
+			worker.next_action().await;
+		}
 	});
 
 	(service, event_stream)
