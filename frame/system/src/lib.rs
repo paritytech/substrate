@@ -1232,8 +1232,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 		let maximum_weight = T::MaximumBlockWeight::get();
 		let limit = Self::get_dispatch_limit_ratio(info.class) * maximum_weight;
 		if info.class == DispatchClass::Mandatory {
-			// If we have a dispatch that must be included in the block, we will do everything to
-			// make sure we do not return an error here.
+			// If we have a dispatch that must be included in the block, it ignores all the limits. 
 			let extrinsic_weight = info.weight.saturating_add(T::ExtrinsicBaseWeight::get());
 			let next_weight = current_weight.saturating_add(extrinsic_weight);
 			Ok(next_weight)
