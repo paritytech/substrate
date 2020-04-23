@@ -208,8 +208,8 @@ benchmarks! {
 		assert_eq!(tally.nays, 1000.into(), "changed vote was not recorded");
 	}
 
-	// Note we don't include proxy_vote_existing as it is a bit redundant
-	proxy_vote {
+	// Basically copy paste of `vote_new`
+	proxy_vote_new {
 		let r in 1 .. MAX_REFERENDUMS;
 
 		let (caller, voter) = open_activate_proxy::<T>(0)?;
@@ -223,13 +223,53 @@ benchmarks! {
 
 		let referendum_index = add_referendum::<T>(r)?;
 
-	}: _(RawOrigin::Signed(caller), referendum_index, account_vote)
+	}: proxy_vote(RawOrigin::Signed(caller), referendum_index, account_vote)
 	verify {
 		let votes = match VotingOf::<T>::get(&voter) {
 			Voting::Direct { votes, .. } => votes,
 			_ => return Err("Votes are not direct"),
 		};
 		assert_eq!(votes.len(), (r + 1) as usize, "Vote was not recorded.");
+	}
+
+	// Basically copy paste of `vote_existing`
+	proxy_vote_existing {
+		let r in 1 .. MAX_REFERENDUMS;
+
+		let (caller, voter) = open_activate_proxy::<T>(0)?;
+		let account_vote = account_vote::<T>(100.into());
+
+		// We need to create existing direct votes
+		for i in 0 ..=r {
+			let ref_idx = add_referendum::<T>(i)?;
+			Democracy::<T>::vote(RawOrigin::Signed(voter.clone()).into(), ref_idx, account_vote.clone())?;
+		}
+		let votes = match VotingOf::<T>::get(&voter) {
+			Voting::Direct { votes, .. } => votes,
+			_ => return Err("Votes are not direct"),
+		};
+		assert_eq!(votes.len(), (r + 1) as usize, "Votes were not recorded.");
+
+		// Change vote from aye to nay
+		let nay = Vote { aye: false, conviction: Conviction::Locked1x };
+		let new_vote = AccountVote::Standard { vote: nay, balance: 1000.into() };
+		let referendum_index = Democracy::<T>::referendum_count() - 1;
+
+		// This tests when a user changes a vote
+	}: proxy_vote(RawOrigin::Signed(caller.clone()), referendum_index, new_vote)
+	verify {
+		let votes = match VotingOf::<T>::get(&voter) {
+			Voting::Direct { votes, .. } => votes,
+			_ => return Err("Votes are not direct"),
+		};
+		assert_eq!(votes.len(), (r + 1) as usize, "Vote was incorrectly added");
+		let referendum_info = Democracy::<T>::referendum_info(referendum_index)
+			.ok_or("referendum doesn't exist")?;
+		let tally =  match referendum_info {
+			ReferendumInfo::Ongoing(r) => r.tally,
+			_ => return Err("referendum not ongoing"),
+		};
+		assert_eq!(tally.nays, 1000.into(), "changed vote was not recorded");
 	}
 
 	emergency_cancel {
@@ -934,7 +974,8 @@ mod tests {
 			assert_ok!(test_benchmark_second::<Test>());
 			assert_ok!(test_benchmark_vote_new::<Test>());
 			assert_ok!(test_benchmark_vote_existing::<Test>());
-			assert_ok!(test_benchmark_proxy_vote::<Test>());
+			assert_ok!(test_benchmark_proxy_vote_new::<Test>());
+			assert_ok!(test_benchmark_proxy_vote_existing::<Test>());
 			assert_ok!(test_benchmark_emergency_cancel::<Test>());
 			assert_ok!(test_benchmark_external_propose::<Test>());
 			assert_ok!(test_benchmark_external_propose_majority::<Test>());
