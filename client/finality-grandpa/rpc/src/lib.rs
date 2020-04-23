@@ -25,6 +25,8 @@ use log::warn;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, fmt::Debug};
 
+const NOT_READY_ERROR_CODE: i64 = 1;
+
 type FutureResult<T> =
     Box<dyn jsonrpc_core::futures::Future<Item = T, Error = jsonrpc_core::Error> + Send>;
 
@@ -38,8 +40,7 @@ impl From<Error> for jsonrpc_core::Error {
     fn from(error: Error) -> Self {
         jsonrpc_core::Error {
             message: format!("{}", error).into(),
-            // WIP: what error code should we use?
-            code: jsonrpc_core::ErrorCode::ServerError(1234),
+            code: jsonrpc_core::ErrorCode::ServerError(NOT_READY_ERROR_CODE),
             data: None,
         }
     }
