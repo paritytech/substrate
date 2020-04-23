@@ -350,12 +350,6 @@ test-full-crypto-feature:
     - time cargo +nightly build --verbose --no-default-features --features full_crypto
     - sccache -s
 
-test-macos-stable:
-  <<:                              *test-linux
-  allow_failure:                   true
-  tags:
-    - osx
-
 cargo-check-macos:
   stage:                           test
   <<:                              *docker-env
@@ -411,11 +405,6 @@ build-linux-subkey:                &build-subkey
           tee ./artifacts/subkey/VERSION;
     - sha256sum ./artifacts/subkey/subkey | tee ./artifacts/subkey/subkey.sha256
     - sccache -s
-
-build-macos-substrate:
-  <<:                              *build-binary
-  tags:
-    - osx
 
 build-macos-subkey:
   <<:                              *build-subkey
