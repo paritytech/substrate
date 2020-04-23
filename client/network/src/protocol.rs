@@ -14,8 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::config::ProtocolId;
-use crate::utils::interval;
+use crate::{
+	ExHashT,
+	chain::{Client, FinalityProofProvider},
+	config::{BoxFinalityProofRequestBuilder, ProtocolId, TransactionPool},
+	error,
+	utils::interval
+};
+
 use bytes::{Bytes, BytesMut};
 use futures::prelude::*;
 use generic_proto::{GenericProto, GenericProtoOut};
@@ -24,7 +30,7 @@ use libp2p::core::{ConnectedPoint, connection::{ConnectionId, ListenerId}};
 use libp2p::swarm::{ProtocolsHandler, IntoProtocolsHandler};
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use sp_core::{
-	storage::{StorageKey, ChildInfo},
+	storage::{StorageKey, PrefixedStorageKey, ChildInfo, ChildType},
 	hexdisplay::HexDisplay
 };
 use sp_consensus::{
@@ -42,17 +48,13 @@ use message::{BlockAnnounce, Message};
 use message::generic::{Message as GenericMessage, ConsensusMessage, Roles};
 use prometheus_endpoint::{Registry, Gauge, GaugeVec, HistogramVec, PrometheusError, Opts, register, U64};
 use sync::{ChainSync, SyncState};
-use crate::service::{TransactionPool, ExHashT};
-use crate::config::BoxFinalityProofRequestBuilder;
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use std::fmt::Write;
 use std::{cmp, io, num::NonZeroUsize, pin::Pin, task::Poll, time};
 use log::{log, Level, trace, debug, warn, error};
-use crate::chain::{Client, FinalityProofProvider};
 use sc_client_api::{ChangesProof, StorageProof};
-use crate::error;
 use util::LruHashSet;
 use wasm_timer::Instant;
 
@@ -60,6 +62,9 @@ use wasm_timer::Instant;
 pub mod api {
 	pub mod v1 {
 		include!(concat!(env!("OUT_DIR"), "/api.v1.rs"));
+		pub mod finality {
+			include!(concat!(env!("OUT_DIR"), "/api.v1.finality.rs"));
+		}
 		pub mod light {
 			include!(concat!(env!("OUT_DIR"), "/api.v1.light.rs"));
 		}
@@ -70,12 +75,14 @@ mod generic_proto;
 mod util;
 
 pub mod block_requests;
+pub mod finality_requests;
 pub mod message;
 pub mod event;
 pub mod light_client_handler;
 pub mod sync;
 
 pub use block_requests::BlockRequests;
+pub use finality_requests::FinalityProofRequests;
 pub use light_client_handler::LightClientHandler;
 pub use generic_proto::LegacyConnectionKillError;
 
@@ -301,6 +308,31 @@ impl Default for ProtocolConfig {
 	}
 }
 
+/// Handshake sent when we open a block announces substream.
+#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+struct BlockAnnouncesHandshake<B: BlockT> {
+	/// Roles of the node.
+	roles: Roles,
+	/// Best block number.
+	best_number: NumberFor<B>,
+	/// Best block hash.
+	best_hash: B::Hash,
+	/// Genesis block hash.
+	genesis_hash: B::Hash,
+}
+
+impl<B: BlockT> BlockAnnouncesHandshake<B> {
+	fn build(protocol_config: &ProtocolConfig, chain: &Arc<dyn Client<B>>) -> Self {
+		let info = chain.info();
+		BlockAnnouncesHandshake {
+			genesis_hash: info.genesis_hash,
+			roles: protocol_config.roles.into(),
+			best_number: info.best_number,
+			best_hash: info.best_hash,
+		}
+	}
+}
+
 /// Fallback mechanism to use to send a notification if no substream is open.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Fallback {
@@ -367,7 +399,10 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			proto.extend(b"/block-announces/1");
 			proto
 		});
-		behaviour.register_notif_protocol(block_announces_protocol.clone(), Vec::new());
+		behaviour.register_notif_protocol(
+			block_announces_protocol.clone(),
+			BlockAnnouncesHandshake::build(&config, &chain).encode()
+		);
 		legacy_equiv_by_name.insert(block_announces_protocol.clone(), Fallback::BlockAnnounce);
 
 		let protocol = Protocol {
@@ -1041,12 +1076,13 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		&'a mut self,
 		engine_id: ConsensusEngineId,
 		protocol_name: impl Into<Cow<'static, [u8]>>,
+		handshake_message: Vec<u8>,
 	) -> impl ExactSizeIterator<Item = (&'a PeerId, Roles)> + 'a {
 		let protocol_name = protocol_name.into();
 		if self.protocol_name_by_engine.insert(engine_id, protocol_name.clone()).is_some() {
 			error!(target: "sub-libp2p", "Notifications protocol already registered: {:?}", protocol_name);
 		} else {
-			self.behaviour.register_notif_protocol(protocol_name.clone(), Vec::new());
+			self.behaviour.register_notif_protocol(protocol_name.clone(), handshake_message);
 			self.legacy_equiv_by_name.insert(protocol_name, Fallback::Consensus(engine_id));
 		}
 
@@ -1322,6 +1358,10 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	pub fn on_block_imported(&mut self, header: &B::Header, is_best: bool) {
 		if is_best {
 			self.sync.update_chain_info(header);
+			self.behaviour.set_notif_protocol_handshake(
+				&self.block_announces_protocol,
+				BlockAnnouncesHandshake::build(&self.config, &self.context_data.chain).encode()
+			);
 		}
 	}
 
@@ -1520,37 +1560,28 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 		trace!(target: "sync", "Remote read child request {} from {} ({} {} at {})",
 			request.id, who, HexDisplay::from(&request.storage_key), keys_str(), request.block);
-		let proof = if let Some(child_info) = ChildInfo::resolve_child_info(request.child_type, &request.child_info[..]) {
-			match self.context_data.chain.read_child_proof(
-				&BlockId::Hash(request.block),
-				&request.storage_key,
-				child_info,
-				&mut request.keys.iter().map(AsRef::as_ref),
-			) {
-				Ok(proof) => proof,
-				Err(error) => {
-					trace!(target: "sync", "Remote read child request {} from {} ({} {} at {}) failed with: {}",
-						request.id,
-						who,
-						HexDisplay::from(&request.storage_key),
-						keys_str(),
-						request.block,
-						error
-					);
-					StorageProof::empty()
-				}
+		let prefixed_key = PrefixedStorageKey::new_ref(&request.storage_key);
+		let child_info = match ChildType::from_prefixed_key(prefixed_key) {
+			Some((ChildType::ParentKeyId, storage_key)) => Ok(ChildInfo::new_default(storage_key)),
+			None => Err("Invalid child storage key".into()),
+		};
+		let proof = match child_info.and_then(|child_info| self.context_data.chain.read_child_proof(
+			&BlockId::Hash(request.block),
+			&child_info,
+			&mut request.keys.iter().map(AsRef::as_ref),
+		)) {
+			Ok(proof) => proof,
+			Err(error) => {
+				trace!(target: "sync", "Remote read child request {} from {} ({} {} at {}) failed with: {}",
+					request.id,
+					who,
+					HexDisplay::from(&request.storage_key),
+					keys_str(),
+					request.block,
+					error
+				);
+				StorageProof::empty()
 			}
-		} else {
-			trace!(target: "sync", "Remote read child request {} from {} ({} {} at {}) failed with: {}",
-				request.id,
-				who,
-				HexDisplay::from(&request.storage_key),
-				keys_str(),
-				request.block,
-				"invalid child info and type",
-			);
-
-			StorageProof::empty()
 		};
 		self.send_message(
 			&who,
@@ -1608,14 +1639,16 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			request.first,
 			request.last
 		);
-		let storage_key = request.storage_key.map(|sk| StorageKey(sk));
 		let key = StorageKey(request.key);
+		let prefixed_key =  request.storage_key.as_ref()
+			.map(|storage_key| PrefixedStorageKey::new_ref(storage_key));
+		let (first, last, min, max) = (request.first, request.last, request.min, request.max);
 		let proof = match self.context_data.chain.key_changes_proof(
-			request.first,
-			request.last,
-			request.min,
-			request.max,
-			storage_key.as_ref(),
+			first,
+			last,
+			min,
+			max,
+			prefixed_key,
 			&key,
 		) {
 			Ok(proof) => proof,
@@ -1623,8 +1656,8 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				trace!(target: "sync", "Remote changes proof request {} from {} for key {} ({}..{}) failed with: {}",
 					request.id,
 					who,
-					if let Some(sk) = storage_key {
-						format!("{} : {}", HexDisplay::from(&sk.0), HexDisplay::from(&key.0))
+					if let Some(sk) = request.storage_key.as_ref() {
+						format!("{} : {}", HexDisplay::from(sk), HexDisplay::from(&key.0))
 					} else {
 						HexDisplay::from(&key.0).to_string()
 					},
