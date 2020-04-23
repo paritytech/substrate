@@ -348,25 +348,20 @@ where
 		source: TransactionSource,
 		uxt: Block::Extrinsic,
 	) -> TransactionValidity {
-		use frame_support::tracing_span;
+		use sp_tracing::tracing_span;
 
-		tracing_span!{ "validate_transaction::using_encoded";
-			let encoded_len = uxt.using_encoded(|d| d.len());
-		};
+		sp_tracing::enter_span!("validate_transaction");
 
-		tracing_span!{ "validate_transaction::check";
-			let xt = uxt.check(&Default::default())?;
-		};
+		let encoded_len = tracing_span!{ "using_encoded"; uxt.using_encoded(|d| d.len()) };
 
-		tracing_span!{ "validate_transaction::dispatch_info";
-			let dispatch_info = xt.get_dispatch_info();
-		};
+		let xt = tracing_span!{ "check"; uxt.check(&Default::default())? };
 
-		tracing_span!{ "validate_transaction::validate";
-			let result = xt.validate::<UnsignedValidator>(source, &dispatch_info, encoded_len);
-		};
+		let dispatch_info = tracing_span!{ "dispatch_info"; xt.get_dispatch_info() };
 
-		result
+		tracing_span! {
+			"validate";
+			xt.validate::<UnsignedValidator>(source, &dispatch_info, encoded_len)
+		}
 	}
 
 	/// Start an offchain worker and generate extrinsics.
@@ -416,22 +411,22 @@ mod tests {
 	use hex_literal::hex;
 
 	mod custom {
-		use frame_support::weights::{SimpleDispatchInfo, Weight};
+		use frame_support::weights::{Weight, DispatchClass};
 
 		pub trait Trait: frame_system::Trait {}
 
 		frame_support::decl_module! {
 			pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-				#[weight = SimpleDispatchInfo::FixedNormal(100)]
+				#[weight = 100]
 				fn some_function(origin) {
 					// NOTE: does not make any different.
 					let _ = frame_system::ensure_signed(origin);
 				}
-				#[weight = SimpleDispatchInfo::FixedOperational(200)]
+				#[weight = (200, DispatchClass::Operational)]
 				fn some_root_operation(origin) {
 					let _ = frame_system::ensure_root(origin);
 				}
-				#[weight = SimpleDispatchInfo::InsecureFreeNormal]
+				#[weight = 0]
 				fn some_unsigned_message(origin) {
 					let _ = frame_system::ensure_none(origin);
 				}

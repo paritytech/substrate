@@ -110,7 +110,7 @@ pub trait CliConfiguration: Sized {
 		&self,
 		chain_spec: &Box<dyn ChainSpec>,
 		is_dev: bool,
-		net_config_dir: &PathBuf,
+		net_config_dir: PathBuf,
 		client_id: &str,
 		node_name: &str,
 		node_key: NodeKeyConfig,
@@ -119,7 +119,7 @@ pub trait CliConfiguration: Sized {
 			network_params.network_config(
 				chain_spec,
 				is_dev,
-				net_config_dir,
+				Some(net_config_dir),
 				client_id,
 				node_name,
 				node_key,
@@ -129,7 +129,7 @@ pub trait CliConfiguration: Sized {
 				node_name,
 				client_id,
 				node_key,
-				net_config_dir,
+				Some(net_config_dir),
 			)
 		})
 	}
@@ -246,6 +246,13 @@ pub trait CliConfiguration: Sized {
 	///
 	/// By default this is `None`.
 	fn rpc_ws(&self) -> Result<Option<SocketAddr>> {
+		Ok(Default::default())
+	}
+
+	/// Returns `Ok(true) if potentially unsafe RPC is to be exposed.
+	///
+	/// By default this is `false`.
+	fn unsafe_rpc_expose(&self) -> Result<bool> {
 		Ok(Default::default())
 	}
 
@@ -405,7 +412,7 @@ pub trait CliConfiguration: Sized {
 			network: self.network_config(
 				&chain_spec,
 				is_dev,
-				&net_config_dir,
+				net_config_dir,
 				client_id.as_str(),
 				self.node_name()?.as_str(),
 				node_key,
@@ -419,6 +426,7 @@ pub trait CliConfiguration: Sized {
 			execution_strategies: self.execution_strategies(is_dev)?,
 			rpc_http: self.rpc_http()?,
 			rpc_ws: self.rpc_ws()?,
+			unsafe_rpc_expose: self.unsafe_rpc_expose()?,
 			rpc_ws_max_connections: self.rpc_ws_max_connections()?,
 			rpc_cors: self.rpc_cors(is_dev)?,
 			prometheus_config: self.prometheus_config()?,

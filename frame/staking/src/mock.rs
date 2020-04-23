@@ -29,7 +29,6 @@ use frame_support::{
 	traits::{Currency, Get, FindAuthor, OnFinalize, OnInitialize},
 	weights::Weight,
 };
-use frame_system::offchain::TransactionSubmitter;
 use sp_io;
 use sp_phragmen::{
 	build_support_map, evaluate_support, reduce, ExtendedBalance, StakedAssignment, PhragmenScore,
@@ -277,11 +276,26 @@ parameter_types! {
 	pub const UnsignedPriority: u64 = 1 << 20;
 }
 
+thread_local! {
+	pub static REWARD_REMAINDER_UNBALANCED: RefCell<u128> = RefCell::new(0);
+}
+
+pub struct RewardRemainderMock;
+
+impl OnUnbalanced<NegativeImbalanceOf<Test>> for RewardRemainderMock {
+	fn on_nonzero_unbalanced(amount: NegativeImbalanceOf<Test>) {
+		REWARD_REMAINDER_UNBALANCED.with(|v| {
+			*v.borrow_mut() += amount.peek();
+		});
+		drop(amount);
+	}
+}
+
 impl Trait for Test {
 	type Currency = Balances;
 	type UnixTime = Timestamp;
 	type CurrencyToVote = CurrencyToVoteHandler;
-	type RewardRemainder = ();
+	type RewardRemainder = RewardRemainderMock;
 	type Event = MetaEvent;
 	type Slash = ();
 	type Reward = ();
@@ -294,13 +308,18 @@ impl Trait for Test {
 	type NextNewSession = Session;
 	type ElectionLookahead = ElectionLookahead;
 	type Call = Call;
-	type SubmitTransaction = SubmitTransaction;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type UnsignedPriority = UnsignedPriority;
 }
 
+impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Test where
+	Call: From<LocalCall>,
+{
+	type OverarchingCall = Call;
+	type Extrinsic = Extrinsic;
+}
+
 pub type Extrinsic = TestXt<Call, ()>;
-type SubmitTransaction = TransactionSubmitter<(), Test, Extrinsic>;
 
 pub struct ExtBuilder {
 	session_length: BlockNumber,
@@ -975,4 +994,14 @@ macro_rules! assert_session_era {
 			$era,
 		);
 	};
+}
+
+pub(crate) fn staking_events() -> Vec<Event<Test>> {
+	System::events().into_iter().map(|r| r.event).filter_map(|e| {
+		if let MetaEvent::staking(inner) = e {
+			Some(inner)
+		} else {
+			None
+		}
+	}).collect()
 }
