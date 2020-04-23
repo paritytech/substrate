@@ -45,7 +45,7 @@ pub struct OffchainWorkerParams {
 	)]
 	pub enabled: OffchainWorkerEnabled,
 
-	/// Allow access to offchain workers indexing API
+	/// Enable Offchain Indexing API, which allows block import to write to Offchain DB.
 	///
 	/// Enables a runtime to write directly to a offchain workers
 	/// DB during block import.
