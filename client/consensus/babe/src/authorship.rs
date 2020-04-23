@@ -75,9 +75,9 @@ pub(super) fn calculate_primary_threshold(
 
 	((BigUint::one() << 128) * numer / denom).to_u128().expect(
 		"returns None if the underlying value cannot be represented with 128 bits; \
-		 we start with 1 << 128 which is one unit more than can be represented with 128 bits; \
+		 we start with 2^128 which is one more than can be represented with 128 bits; \
 		 we multiple by p which is defined in [0, 1); \
-		 the result must be lower than 1 << 128 and representable with 128 bits; \
+		 the result must be lower than 2^128 by at least one and thus representable with 128 bits; \
 		 qed.",
 	)
 }
