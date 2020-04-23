@@ -483,10 +483,12 @@ fn rpc_interface(
 	}
 
 	if is_external || is_unsafe_external {
-		log::warn!(
-			"It isn't safe to expose RPC publicly without a proxy server that filters \
-		available set of RPC methods."
-		);
+		if rpc_methods == RpcMethods::Unsafe {
+			log::warn!(
+				"It isn't safe to expose RPC publicly without a proxy server that filters \
+			available set of RPC methods."
+			);
+		}
 
 		Ok(Ipv4Addr::UNSPECIFIED.into())
 	} else {
