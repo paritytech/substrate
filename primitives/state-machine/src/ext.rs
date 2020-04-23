@@ -75,7 +75,7 @@ pub struct Ext<'a, H, N, B>
 {
 	/// The overlayed changes to write to.
 	overlay: &'a mut OverlayedChanges,
-	/// The overlayed changes destined for the offchain worker database.
+	/// The overlayed changes destined for the Offchain DB.
 	offchain_overlay: &'a mut OffchainOverlayedChanges,
 	/// The storage backend to read from.
 	backend: &'a B,
