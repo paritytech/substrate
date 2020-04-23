@@ -89,6 +89,12 @@ pub struct NetworkParams {
 	/// enough confidence that this feature is properly working.
 	#[structopt(long)]
 	pub no_yamux_flow_control: bool,
+
+	/// Enable peer discovery on local networks.
+	///
+	/// By default this option is true for `--dev` and false otherwise.
+	#[structopt(long)]
+	pub discover_local: bool,
 }
 
 impl NetworkParams {
@@ -141,6 +147,7 @@ impl NetworkParams {
 				use_yamux_flow_control: !self.no_yamux_flow_control,
 			},
 			max_parallel_downloads: self.max_parallel_downloads,
+			allow_non_globals_in_dht: self.discover_local || is_dev
 		}
 	}
 }

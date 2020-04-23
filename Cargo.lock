@@ -2284,6 +2284,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "ip_network"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2ee15951c035f79eddbef745611ec962f63f4558f1dadf98ab723cc603487c6f"
+
+[[package]]
 name = "ipnet"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5995,6 +6001,7 @@ dependencies = [
  "sp-trie",
  "sp-utils",
  "sp-version",
+ "substrate-prometheus-endpoint",
 ]
 
 [[package]]
@@ -6417,6 +6424,7 @@ dependencies = [
  "futures-timer 3.0.2",
  "futures_codec",
  "hex",
+ "ip_network",
  "libp2p",
  "linked-hash-map",
  "linked_hash_set",
