@@ -190,9 +190,7 @@ macro_rules! implement_fixed {
 			fn saturated_multiply_accumulate<N>(self, int: N) -> N
 				where
 					N: From<Self::PrevUnsigned> + TryFrom<Self::Unsigned> + UniqueSaturatedInto<Self::PrevUnsigned> +
-					Bounded + Copy + Saturating +
-					ops::Rem<N, Output=N> + ops::Div<N, Output=N> + ops::Mul<N, Output=N> +
-					ops::Add<N, Output=N> + Default + core::fmt::Debug
+					Copy + BaseArithmetic
 			{
 				let div = Self::DIV as Self::Unsigned;
 				let positive = self.0 > 0;
@@ -686,6 +684,16 @@ macro_rules! implement_fixed {
 				assert_eq!($name::from_inner(inner_max).saturating_abs(), $name::max_value());
 				assert_eq!($name::zero().saturating_abs(), 0.into());
 				assert_eq!($name::from_rational(-1, 2).saturating_abs(), (1, 2).into());
+			}
+
+			#[test]
+			fn saturating_mul_int_acc_works() {
+				let inner_max = <$name as FixedPointNumber>::Inner::max_value();
+				let inner_min = <$name as FixedPointNumber>::Inner::min_value();
+				let accuracy = $name::accuracy();
+
+				println!("acc {:?} inner_max {:?}", accuracy, inner_max);
+				assert_eq!($name::zero().saturated_multiply_accumulate(accuracy as u64), accuracy as u64);
 			}
 
 			#[test]

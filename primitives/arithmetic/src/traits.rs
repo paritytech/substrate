@@ -224,9 +224,7 @@ pub trait FixedPointNumber:
 	/// Returns a saturated `int + (self * int)`.
 	fn saturated_multiply_accumulate<
 		N: From<Self::PrevUnsigned> + TryFrom<Self::Unsigned> + UniqueSaturatedInto<Self::PrevUnsigned> +
-			Bounded + Copy + Saturating + 
-			Rem<N, Output=N> + Div<N, Output=N> +
-			Mul<N, Output=N> + Add<N, Output=N> + Default + core::fmt::Debug
+			Copy + BaseArithmetic
 	>(self, int: N) -> N;
 
 	/// Saturating absolute value. Returning MAX if `parts == Inner::MIN` instead of overflowing.
