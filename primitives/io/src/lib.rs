@@ -610,7 +610,7 @@ pub trait OffchainIndex {
 		self.set_offchain_storage(key, Some(value));
 	}
 
-	/// Remove a key and its associated value from the offchain worker database.
+	/// Remove a key and its associated value from the Offchain DB.
 	fn clear(&mut self, key: &[u8]) {
 		self.set_offchain_storage(key, None);
 	}
