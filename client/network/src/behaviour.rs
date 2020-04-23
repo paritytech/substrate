@@ -20,10 +20,12 @@ use crate::{
 	Event, ObservedRole, DhtEvent, ExHashT,
 };
 use crate::protocol::{self, light_client_handler, message::Roles, CustomMessageOutcome, Protocol};
+
+use codec::Encode as _;
 use libp2p::NetworkBehaviour;
 use libp2p::core::{Multiaddr, PeerId, PublicKey};
 use libp2p::kad::record;
-use libp2p::swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters};
+use libp2p::swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters, toggle::Toggle};
 use log::debug;
 use sp_consensus::{BlockOrigin, import_queue::{IncomingBlock, Origin}};
 use sp_runtime::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId, Justification};
@@ -43,6 +45,8 @@ pub struct Behaviour<B: BlockT, H: ExHashT> {
 	discovery: DiscoveryBehaviour,
 	/// Block request handling.
 	block_requests: protocol::BlockRequests<B>,
+	/// Finality proof request handling.
+	finality_proof_requests: Toggle<protocol::FinalityProofRequests<B>>,
 	/// Light client request handling.
 	light_client_handler: protocol::LightClientHandler<B>,
 
@@ -73,6 +77,7 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 		user_agent: String,
 		local_public_key: PublicKey,
 		block_requests: protocol::BlockRequests<B>,
+		finality_proof_requests: Option<protocol::FinalityProofRequests<B>>,
 		light_client_handler: protocol::LightClientHandler<B>,
 		disco_config: DiscoveryConfig,
 	) -> Self {
@@ -81,6 +86,7 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 			debug_info: debug_info::DebugInfoBehaviour::new(user_agent, local_public_key.clone()),
 			discovery: disco_config.finish(),
 			block_requests,
+			finality_proof_requests: From::from(finality_proof_requests),
 			light_client_handler,
 			events: Vec::new(),
 			role,
@@ -135,7 +141,11 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 		engine_id: ConsensusEngineId,
 		protocol_name: impl Into<Cow<'static, [u8]>>,
 	) {
-		let list = self.substrate.register_notifications_protocol(engine_id, protocol_name);
+		// This is the message that we will send to the remote as part of the initial handshake.
+		// At the moment, we force this to be an encoded `Roles`.
+		let handshake_message = Roles::from(&self.role).encode();
+
+		let list = self.substrate.register_notifications_protocol(engine_id, protocol_name, handshake_message);
 		for (remote, roles) in list {
 			let role = reported_roles_to_observed_role(&self.role, remote, roles);
 			let ev = Event::NotificationStreamOpened {

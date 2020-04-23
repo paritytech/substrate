@@ -92,7 +92,7 @@ pub struct StorageData(
 /// Map of data to use in a storage, it is a collection of
 /// byte key and values.
 #[cfg(feature = "std")]
-pub type StorageMap = std::collections::BTreeMap<Vec<u8>, Vec<u8>>;
+pub type StorageMap = BTreeMap<Vec<u8>, Vec<u8>>;
 
 #[cfg(feature = "std")]
 #[derive(Debug, PartialEq, Eq, Clone)]

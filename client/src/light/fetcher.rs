@@ -366,7 +366,6 @@ pub mod tests {
 	use sc_client_api::{StorageProvider, ProofProvider};
 	use sc_block_builder::BlockBuilderProvider;
 
-	// TODO see what can be use in this context
 	const KINDS: [StorageProofKind; 4] = [
 		StorageProofKind::Flatten,
 		StorageProofKind::Full,

@@ -634,7 +634,7 @@ where
 		let proof = match child_info.and_then(|child_info| self.chain.read_child_proof(
 			&BlockId::Hash(block),
 			&child_info,
-			&mut request.keys.iter().map(AsRef::as_ref),
+			&mut request.keys.iter().map(AsRef::as_ref)
 			StorageProofKind::TrieSkipHashes,
 		)) {
 			Ok(proof) => proof,

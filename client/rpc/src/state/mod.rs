@@ -26,7 +26,7 @@ use std::sync::Arc;
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use rpc::{Result as RpcResult, futures::{Future, future::result}};
 
-use sc_rpc_api::Subscriptions;
+use sc_rpc_api::{Subscriptions, state::ReadProof};
 use sc_client::{light::{blockchain::RemoteBlockchain, fetcher::Fetcher}};
 use sp_core::{Bytes, storage::{StorageKey, PrefixedStorageKey, StorageData, StorageChangeSet}};
 use sp_version::RuntimeVersion;
@@ -38,7 +38,7 @@ use self::error::{Error, FutureResult};
 
 pub use sc_rpc_api::state::*;
 pub use sc_rpc_api::child_state::*;
-use sc_client_api::{ExecutorProvider, StorageProvider, BlockchainEvents, Backend};
+use sc_client_api::{ExecutorProvider, StorageProvider, BlockchainEvents, Backend, ProofProvider};
 use sp_blockchain::{HeaderMetadata, HeaderBackend};
 
 const STORAGE_KEYS_PAGED_MAX_COUNT: u32 = 1000;
@@ -128,6 +128,13 @@ pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 		at: Option<Block::Hash>
 	) -> FutureResult<Vec<StorageChangeSet<Block::Hash>>>;
 
+	/// Returns proof of storage entries at a specific block's state.
+	fn read_proof(
+		&self,
+		block: Option<Block::Hash>,
+		keys: Vec<StorageKey>,
+	) -> FutureResult<ReadProof<Block::Hash>>;
+
 	/// New runtime version subscription
 	fn subscribe_runtime_version(
 		&self,
@@ -166,7 +173,7 @@ pub fn new_full<BE, Block: BlockT, Client>(
 	where
 		Block: BlockT + 'static,
 		BE: Backend<Block> + 'static,
-		Client: ExecutorProvider<Block> + StorageProvider<Block, BE> + HeaderBackend<Block>
+		Client: ExecutorProvider<Block> + StorageProvider<Block, BE> + ProofProvider<Block> + HeaderBackend<Block>
 			+ HeaderMetadata<Block, Error = sp_blockchain::Error> + BlockchainEvents<Block>
 			+ CallApiAt<Block, Error = sp_blockchain::Error>
 			+ ProvideRuntimeApi<Block> + Send + Sync + 'static,
@@ -292,6 +299,10 @@ impl<Block, Client> StateApi<Block::Hash> for State<Block, Client>
 		at: Option<Block::Hash>
 	) -> FutureResult<Vec<StorageChangeSet<Block::Hash>>> {
 		self.backend.query_storage_at(keys, at)
+	}
+
+	fn read_proof(&self, keys: Vec<StorageKey>, block: Option<Block::Hash>) -> FutureResult<ReadProof<Block::Hash>> {
+		self.backend.read_proof(block, keys)
 	}
 
 	fn subscribe_storage(

@@ -89,7 +89,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 			}
 		}
 
-		let root: Option<StorageValue> = self.storage(&child_info.prefixed_storage_key()[..])?;
+		let root: Option<StorageValue> = self.storage(child_info.prefixed_storage_key().as_slice())?;
 
 		if let Some(cache) = self.register_roots.as_ref() {
 			cache.write().insert(child_info.clone(), root.clone());
@@ -108,7 +108,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 			}
 		}
 
-		let encoded_root = self.storage(&child_info.prefixed_storage_key()[..])?;
+		let encoded_root = self.storage(child_info.prefixed_storage_key().as_slice())?;
 		if let Some(cache) = self.register_roots.as_ref() {
 			cache.write().insert(child_info.clone(), encoded_root.clone());
 		}

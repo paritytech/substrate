@@ -1184,7 +1184,6 @@ mod tests {
 	}
 
 	fn prove_read_and_proof_check_works_inner(kind: StorageProofKind) {
-
 		let child_info = ChildInfo::new_default(b"sub1");
 		let child_info = &child_info;
 		// fetch read proof from 'remote' full node
