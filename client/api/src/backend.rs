@@ -148,7 +148,7 @@ pub trait BlockImportOperation<Block: BlockT> {
 		child_update: ChildStorageCollection,
 	) -> sp_blockchain::Result<()>;
 
-	/// Set offchain storage changes.
+	/// Write offchain storage changes to the database.
 	fn update_offchain_storage(
 		&mut self,
 		_offchain_update: OffchainOverlayedChanges,
