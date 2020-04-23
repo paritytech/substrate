@@ -25,7 +25,7 @@ use fnv::{FnvHashSet, FnvHashMap};
 use sp_core::storage::{StorageKey, StorageData};
 use sp_runtime::traits::Block as BlockT;
 use sp_utils::mpsc::{TracingUnboundedSender, TracingUnboundedReceiver, tracing_unbounded};
-use prometheus_endpoint::{Registry, GaugeVec, Opts, U64, register};
+use prometheus_endpoint::{Registry, CounterVec, Opts, U64, register};
 
 /// Storage change set
 #[derive(Debug)]
@@ -72,7 +72,7 @@ pub type StorageEventStream<H> = TracingUnboundedReceiver<(H, StorageChangeSet)>
 
 type SubscriberId = u64;
 
-type SubscribersGauge = GaugeVec<U64>;
+type SubscribersGauge = CounterVec<U64>;
 
 /// Manages storage listeners.
 #[derive(Debug)]
@@ -92,12 +92,25 @@ pub struct StorageNotifications<Block: BlockT> {
 	)>,
 }
 
+impl<Block: BlockT> Default for StorageNotifications<Block> {
+	fn default() -> Self {
+		Self {
+			metrics: Default::default(),
+			next_id: Default::default(),
+			wildcard_listeners: Default::default(),
+			listeners: Default::default(),
+			child_listeners: Default::default(),
+			sinks: Default::default(),
+		}
+	}
+}
+
 impl<Block: BlockT> StorageNotifications<Block> {
 	/// Initialize a new StorageNotifications
 	/// optionally pass a prometheus registry to send subscriber metrics to
 	pub fn new(prometheus_registry: Option<Registry>) -> Self {
 		let metrics = prometheus_registry.and_then(|r|
-			GaugeVec::new(
+			CounterVec::new(
 				Opts::new(
 					"storage_notification_subscribers",
 					"Number of subscribers in storage notification sytem"
