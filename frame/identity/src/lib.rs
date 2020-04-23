@@ -603,7 +603,7 @@ decl_module! {
 			Self::deposit_event(RawEvent::RegistrarAdded(i));
 
 			Ok(Some(T::DbWeight::get().reads_writes(1, 1)
-				+ 100_000_000 + 1_000_000 * registrar_count as Weight).into())
+				+ 95_000_000 + 1_000_000 * registrar_count as Weight).into())
 		}
 
 		/// Set an account's identity information and reserve the appropriate deposit.
