@@ -605,7 +605,7 @@ pub trait Hashing {
 /// Interface that provides functions to access the offchain database access.
 #[runtime_interface]
 pub trait OffchainIndex {
-	/// Write a key value pair to the offchain worker database in a buffered fashion.
+	/// Write a key value pair to the Offchain DB database in a buffered fashion.
 	fn set(&mut self, key: &[u8], value: &[u8]) {
 		self.set_offchain_storage(key, Some(value));
 	}
