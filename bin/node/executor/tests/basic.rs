@@ -18,7 +18,7 @@ use codec::{Encode, Decode, Joiner};
 use frame_support::{
 	StorageValue, StorageMap,
 	traits::Currency,
-	weights::{GetDispatchInfo, DispatchInfo, DispatchClass},
+	weights::{GetDispatchInfo, DispatchInfo, DispatchClass, Pays},
 };
 use sp_core::{
 	NeverNativeValue, map, traits::Externalities, storage::{well_known_keys, Storage},
@@ -338,7 +338,7 @@ fn full_native_block_import_works() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
 				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 10_000_000, class: DispatchClass::Mandatory, pays_fee: true }
+					DispatchInfo { weight: 10_000_000, class: DispatchClass::Mandatory, ..Default::default() }
 				)),
 				topics: vec![],
 			},
@@ -359,7 +359,7 @@ fn full_native_block_import_works() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
 				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 200_000_000, class: DispatchClass::Normal, pays_fee: true }
+					DispatchInfo { weight: 460_000_000, ..Default::default() }
 				)),
 				topics: vec![],
 			},
@@ -391,7 +391,7 @@ fn full_native_block_import_works() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
 				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 10_000_000, class: DispatchClass::Mandatory, pays_fee: true }
+					DispatchInfo { weight: 10_000_000, class: DispatchClass::Mandatory, pays_fee: Pays::Yes }
 				)),
 				topics: vec![],
 			},
@@ -414,7 +414,7 @@ fn full_native_block_import_works() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
 				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 200_000_000, class: DispatchClass::Normal, pays_fee: true }
+					DispatchInfo { weight: 460_000_000, ..Default::default() }
 				)),
 				topics: vec![],
 			},
@@ -437,7 +437,7 @@ fn full_native_block_import_works() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(2),
 				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 200_000_000, class: DispatchClass::Normal, pays_fee: true }
+					DispatchInfo { weight: 460_000_000, ..Default::default() }
 				)),
 				topics: vec![],
 			},
