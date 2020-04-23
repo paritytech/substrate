@@ -252,7 +252,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		fork_blocks: ForkBlocks<Block>,
 		bad_blocks: BadBlocks<Block>,
 		execution_extensions: ExecutionExtensions<Block>,
-		_prometheus_registry: Option<Registry>,
+		prometheus_registry: Option<Registry>,
 	) -> sp_blockchain::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
 			let genesis_storage = build_genesis_storage.build_storage()?;
@@ -276,7 +276,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		Ok(Client {
 			backend,
 			executor,
-			storage_notifications: Default::default(),
+			storage_notifications: Mutex::new(StorageNotifications::new(prometheus_registry)),
 			import_notification_sinks: Default::default(),
 			finality_notification_sinks: Default::default(),
 			importing_block: Default::default(),
