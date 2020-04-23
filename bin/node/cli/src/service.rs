@@ -76,7 +76,7 @@ macro_rules! new_full_start {
 					client.clone(),
 				)?;
 
-				let spawner = |future| spawn_task_handle.spawn("import-queue-worker", future);
+				let spawner = |future| spawn_task_handle.spawn_blocking("import-queue-worker", future);
 
 				let import_queue = sc_consensus_babe::import_queue(
 					babe_link.clone(),
@@ -345,7 +345,7 @@ pub fn new_light(config: Configuration)
 				client.clone(),
 			)?;
 
-			let spawner = |future| spawn_task_handle.spawn("import-queue-worker", future);
+			let spawner = |future| spawn_task_handle.spawn_blocking("import-queue-worker", future);
 
 			let import_queue = sc_consensus_babe::import_queue(
 				babe_link,

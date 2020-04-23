@@ -23,7 +23,7 @@ use futures::pin_mut;
 use futures::select;
 use futures::{future, future::FutureExt, Future};
 use log::info;
-use sc_service::{AbstractService, Configuration, Role, ServiceBuilderCommand};
+use sc_service::{AbstractService, Configuration, Role, ServiceBuilderCommand, TaskType};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
 use std::fmt::Debug;
@@ -119,8 +119,15 @@ impl<C: SubstrateCli> Runner<C> {
 
 		let task_executor = {
 			let runtime_handle = tokio_runtime.handle().clone();
-			Arc::new(move |fut| {
-				runtime_handle.spawn(fut);
+			Arc::new(move |fut, task_type| {
+				match task_type {
+					TaskType::Async => { runtime_handle.spawn(fut); }
+					TaskType::Blocking => {
+						runtime_handle.spawn( async move {
+							tokio::task::spawn_blocking(|| fut)
+						});
+					}
+				}
 			})
 		};
 

@@ -27,7 +27,7 @@ use names::{Generator, Name};
 use sc_service::config::{
 	Configuration, DatabaseConfig, ExecutionStrategies, ExtTransport, KeystoreConfig,
 	NetworkConfiguration, NodeKeyConfig, PrometheusConfig, PruningMode, Role, TelemetryEndpoints,
-	TransactionPoolOptions, WasmExecutionMethod,
+	TransactionPoolOptions, WasmExecutionMethod, TaskType,
 };
 use sc_service::{ChainSpec, TracingReceiver};
 use std::future::Future;
@@ -377,7 +377,7 @@ pub trait CliConfiguration: Sized {
 	fn create_configuration<C: SubstrateCli>(
 		&self,
 		cli: &C,
-		task_executor: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>,
+		task_executor: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>, TaskType) + Send + Sync>,
 	) -> Result<Configuration> {
 		let is_dev = self.is_dev()?;
 		let chain_id = self.chain_id(is_dev)?;

@@ -38,7 +38,7 @@ pub struct Configuration {
 	/// Node role.
 	pub role: Role,
 	/// How to spawn background tasks. Mandatory, otherwise creating a `Service` will error.
-	pub task_executor: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>,
+	pub task_executor: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>, TaskType) + Send + Sync>,
 	/// Extrinsic pool configuration.
 	pub transaction_pool: TransactionPoolOptions,
 	/// Network configuration.
@@ -100,6 +100,15 @@ pub struct Configuration {
 	pub max_runtime_instances: usize,
 	/// Announce block automatically after they have been imported
 	pub announce_block: bool,
+}
+
+#[derive(PartialEq)]
+/// Type for tasks spawned by the executor.
+pub enum TaskType {
+	/// Async type.
+	Async,
+	/// Blocking type.
+	Blocking,
 }
 
 /// Configuration of the client keystore.

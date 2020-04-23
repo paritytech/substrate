@@ -31,11 +31,12 @@ use prometheus_endpoint::{
 	CounterVec, HistogramOpts, HistogramVec, Opts, Registry, U64
 };
 use sc_client_api::CloneableSpawn;
+use crate::config::TaskType;
 
 mod prometheus_future;
 
 /// Type alias for service task executor (usually runtime).
-pub type ServiceTaskExecutor = Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>;
+pub type ServiceTaskExecutor = Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>, TaskType) + Send + Sync>;
 
 /// An handle for spawning tasks in the service.
 #[derive(Clone)]
@@ -80,7 +81,34 @@ impl SpawnTaskHandle {
 			}
 		};
 
-		(self.executor)(Box::pin(future));
+		(self.executor)(Box::pin(future), TaskType::Async);
+	}
+
+	/// Spawns the blocking task with the given name. See also `spawn`.
+	pub fn spawn_blocking(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static) {
+		let on_exit = self.on_exit.clone();
+		let metrics = self.metrics.clone();
+
+		if let Some(metrics) = &self.metrics {
+			metrics.tasks_spawned.with_label_values(&[name]).inc();
+			metrics.tasks_ended.with_label_values(&[name]).inc_by(0);
+		}
+
+		let future = async move {
+			if let Some(metrics) = metrics {
+				let poll_duration = metrics.poll_duration.with_label_values(&[name]);
+				let poll_start = metrics.poll_start.with_label_values(&[name]);
+				let task = prometheus_future::with_poll_durations(poll_duration, poll_start, task);
+				futures::pin_mut!(task);
+				let _ = select(on_exit, task).await;
+				metrics.tasks_ended.with_label_values(&[name]).inc();
+			} else {
+				futures::pin_mut!(task);
+				let _ = select(on_exit, task).await;
+			}
+		};
+
+		(self.executor)(Box::pin(future), TaskType::Blocking);
 	}
 }
 

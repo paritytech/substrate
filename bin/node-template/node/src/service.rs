@@ -52,7 +52,7 @@ macro_rules! new_full_start {
 					grandpa_block_import.clone(), client.clone(),
 				);
 
-				let spawner = |future| spawn_task_handle.spawn("import-queue-worker", future);
+				let spawner = |future| spawn_task_handle.spawn_blocking("import-queue-worker", future);
 
 				let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair, _>(
 					sc_consensus_aura::slot_duration(&*client)?,
@@ -212,7 +212,7 @@ pub fn new_light(config: Configuration)
 			let finality_proof_request_builder =
 				finality_proof_import.create_finality_proof_request_builder();
 
-			let spawner = |future| spawn_task_handle.spawn("import-queue-worker", future);
+			let spawner = |future| spawn_task_handle.spawn_blocking("import-queue-worker", future);
 
 			let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair, _>(
 				sc_consensus_aura::slot_duration(&*client)?,
