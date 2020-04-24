@@ -80,7 +80,6 @@ pub fn new_full(config: Configuration)
 	let force_authoring = config.force_authoring;
 	let name = config.network.node_name.clone();
 	let disable_grandpa = config.disable_grandpa;
-	let shared_voter_state = SharedVoterState::new(None);
 
 	let (builder, mut import_setup, inherent_data_providers) = new_full_start!(config);
 
@@ -159,7 +158,7 @@ pub fn new_full(config: Configuration)
 			telemetry_on_connect: Some(service.telemetry_on_connect_stream()),
 			voting_rule: sc_finality_grandpa::VotingRulesBuilder::default().build(),
 			prometheus_registry: service.prometheus_registry(),
-			shared_voter_state,
+			shared_voter_state: SharedVoterState::new(None),
 		};
 
 		// the GRANDPA voter task is considered infallible, i.e.

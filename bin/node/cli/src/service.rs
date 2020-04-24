@@ -51,8 +51,8 @@ macro_rules! new_full_start {
 		use std::sync::Arc;
 		type RpcExtension = jsonrpc_core::IoHandler<sc_rpc::Metadata>;
 		let mut import_setup = None;
+		let mut rpc_setup = None;
 		let inherent_data_providers = sp_inherents::InherentDataProviders::new();
-		let shared_voter_state = SharedVoterState::new(None);
 
 		let builder = sc_service::ServiceBuilder::new_full::<
 			node_primitives::Block, node_runtime::RuntimeApi, node_executor::Executor
@@ -98,6 +98,7 @@ macro_rules! new_full_start {
 				let grandpa_link = import_setup.as_ref().map(|s| &s.1)
 					.expect("GRANDPA LinkHalf is present for full services or set up failed; qed.");
 				let shared_authority_set = grandpa_link.shared_authority_set();
+				let shared_voter_state = SharedVoterState::new(None);
 				let deps = node_rpc::FullDeps {
 					client: builder.client().clone(),
 					pool: builder.pool(),
@@ -113,10 +114,11 @@ macro_rules! new_full_start {
 						shared_authority_set: shared_authority_set.clone(),
 					}
 				};
+				rpc_setup = Some((shared_voter_state));
 				Ok(node_rpc::create_full(deps))
 			})?;
 
-		(builder, import_setup, inherent_data_providers, shared_voter_state)
+		(builder, import_setup, inherent_data_providers, rpc_setup)
 	}}
 }
 
@@ -142,7 +144,7 @@ macro_rules! new_full {
 			$config.disable_grandpa,
 		);
 
-		let (builder, mut import_setup, inherent_data_providers, shared_voter_state)
+		let (builder, mut import_setup, inherent_data_providers, mut rpc_setup)
 			= new_full_start!($config);
 
 		let service = builder
@@ -155,6 +157,9 @@ macro_rules! new_full {
 
 		let (block_import, grandpa_link, babe_link) = import_setup.take()
 				.expect("Link Half and Block Import are present for Full Services or setup failed before. qed");
+
+		let shared_voter_state = rpc_setup.take()
+				.expect("The SharedVoterSetup is present for Full Services or setup failed before. qed");
 
 		($with_startup_data)(&block_import, &babe_link);
 
