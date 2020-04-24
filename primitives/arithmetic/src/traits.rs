@@ -227,7 +227,12 @@ pub trait FixedPointNumber:
 	fn checked_div_int<N: Copy + TryFrom<i128> + UniqueSaturatedInto<i128>>(self, other: N) -> Option<N>;
 
 	/// Saturating multiplication for integer type `N`.
-	fn saturating_mul_int<N: Copy + TryFrom<i128> + UniqueSaturatedInto<i128> + Bounded>(self, other: N) -> N;
+	fn saturating_mul_int<
+		N: TryFrom<i128> + UniqueSaturatedInto<i128> +
+		Copy + Bounded + Saturating +
+		Rem<N, Output=N> + Div<N, Output=N> + Mul<N, Output=N> +
+		Add<N, Output=N>,
+	>(self, other: N) -> N;
 
 	/// Performs a saturated multiplication and accumulate by unsigned number.
 	///
