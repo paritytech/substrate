@@ -230,6 +230,7 @@ impl BenchDb {
 			ExecutionExtensions::new(profile.into_execution_strategies(), None),
 			Box::new(TaskExecutor::new()),
 			None,
+			Default::default(),
 		).expect("Should not fail");
 
 		(client, backend)

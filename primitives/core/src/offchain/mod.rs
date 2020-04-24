@@ -28,6 +28,9 @@ pub mod storage;
 #[cfg(feature = "std")]
 pub mod testing;
 
+/// Local storage prefix used by the Offchain Worker API to
+pub const STORAGE_PREFIX : &'static [u8] = b"storage";
+
 /// Offchain workers local storage.
 pub trait OffchainStorage: Clone + Send + Sync {
 	/// Persist a value in storage under given key and prefix.
@@ -482,8 +485,8 @@ pub trait Externalities: Send {
 		buffer: &mut [u8],
 		deadline: Option<Timestamp>
 	) -> Result<usize, HttpError>;
-
 }
+
 impl<T: Externalities + ?Sized> Externalities for Box<T> {
 	fn is_validator(&self) -> bool {
 		(& **self).is_validator()
@@ -557,6 +560,7 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		(&mut **self).http_response_read_body(request_id, buffer, deadline)
 	}
 }
+
 /// An `OffchainExternalities` implementation with limited capabilities.
 pub struct LimitedExternalities<T> {
 	capabilities: Capabilities,

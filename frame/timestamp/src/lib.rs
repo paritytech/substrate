@@ -148,6 +148,12 @@ decl_module! {
 		/// `MinimumPeriod`.
 		///
 		/// The dispatch origin for this call must be `Inherent`.
+		/// 
+		/// # <weight>
+		/// - `O(T)` where `T` complexity of `on_timestamp_set`
+		/// - 2 storage mutations (codec `O(1)`).
+		/// - 1 event handler `on_timestamp_set` `O(T)`.
+		/// # </weight>
 		#[weight = (MINIMUM_WEIGHT, DispatchClass::Mandatory)]
 		fn set(origin, #[compact] now: T::Moment) {
 			ensure_none(origin)?;
@@ -162,6 +168,10 @@ decl_module! {
 			<T::OnTimestampSet as OnTimestampSet<_>>::on_timestamp_set(now);
 		}
 
+		/// # <weight>
+		/// - `O(1)`
+		/// - 1 storage deletion (codec `O(1)`).
+		/// # </weight>
 		fn on_finalize() {
 			assert!(<Self as Store>::DidUpdate::take(), "Timestamp must be updated once in the block");
 		}

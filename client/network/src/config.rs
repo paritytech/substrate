@@ -398,6 +398,11 @@ pub struct NetworkConfiguration {
 	pub transport: TransportConfig,
 	/// Maximum number of peers to ask the same blocks in parallel.
 	pub max_parallel_downloads: u32,
+	/// Should we insert non-global addresses into the DHT?
+	pub allow_non_globals_in_dht: bool,
+	/// If true, uses the `/<chainid>/block-requests/<version>` experimental protocol rather than
+	/// the legacy substream. This option is meant to be hard-wired to `true` in the future.
+	pub use_new_block_requests_protocol: bool,
 }
 
 impl NetworkConfiguration {
@@ -428,6 +433,8 @@ impl NetworkConfiguration {
 				use_yamux_flow_control: false,
 			},
 			max_parallel_downloads: 5,
+			allow_non_globals_in_dht: false,
+			use_new_block_requests_protocol: true,
 		}
 	}
 }
@@ -448,6 +455,7 @@ impl NetworkConfiguration {
 				.collect()
 		];
 
+		config.allow_non_globals_in_dht = true;
 		config
 	}
 
@@ -466,6 +474,7 @@ impl NetworkConfiguration {
 				.collect()
 		];
 
+		config.allow_non_globals_in_dht = true;
 		config
 	}
 }
