@@ -90,6 +90,9 @@ mod rep {
 	/// Reputation change for peers which send us a known bad block.
 	pub const BAD_BLOCK: Rep = Rep::new(-(1 << 29), "Bad block");
 
+	/// Peer did not provide us with advertised block data.
+	pub const NO_BLOCK: Rep = Rep::new(-(1 << 29), "No requested block data");
+
 	/// Reputation change for peers which send us a known block.
 	pub const KNOWN_BLOCK: Rep = Rep::new(-(1 << 29), "Duplicate block");
 
@@ -696,6 +699,10 @@ impl<B: BlockT> ChainSync<B> {
 						}
 						PeerSyncState::DownloadingStale(_) => {
 							peer.state = PeerSyncState::Available;
+							if blocks.is_empty() {
+								debug!(target: "sync", "Empty block response from {}", who);
+								return Err(BadPeer(who, rep::NO_BLOCK));
+							}
 							blocks.into_iter().map(|b| {
 								IncomingBlock {
 									hash: b.hash,
