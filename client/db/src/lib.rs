@@ -50,6 +50,7 @@ use std::path::{Path, PathBuf};
 use std::io;
 use std::collections::HashMap;
 
+
 use sc_client_api::{
 	ForkBlocks, UsageInfo, MemoryInfo, BadBlocks, IoInfo, MemorySize, CloneableSpawn,
 	execution_extensions::ExecutionExtensions,
@@ -65,6 +66,7 @@ use sp_trie::{MemoryDB, PrefixedMemoryDB, prefixed_key};
 use sp_database::Transaction;
 use parking_lot::RwLock;
 use sp_core::{ChangesTrieConfiguration, traits::CodeExecutor};
+use sp_core::offchain::storage::{OffchainOverlayedChange,OffchainOverlayedChanges};
 use sp_core::storage::{well_known_keys, ChildInfo};
 use sp_runtime::{
 	generic::BlockId, Justification, Storage,
@@ -324,6 +326,7 @@ pub fn new_client<E, Block, RA>(
 	execution_extensions: ExecutionExtensions<Block>,
 	spawn_handle: Box<dyn CloneableSpawn>,
 	prometheus_registry: Option<Registry>,
+	config: sc_client::ClientConfig,
 ) -> Result<(
 		sc_client::Client<
 			Backend<Block>,
@@ -340,7 +343,7 @@ pub fn new_client<E, Block, RA>(
 		E: CodeExecutor + RuntimeInfo,
 {
 	let backend = Arc::new(Backend::new(settings, CANONICALIZATION_DELAY)?);
-	let executor = sc_client::LocalCallExecutor::new(backend.clone(), executor, spawn_handle);
+	let executor = sc_client::LocalCallExecutor::new(backend.clone(), executor, spawn_handle, config.clone());
 	Ok((
 		sc_client::Client::new(
 			backend.clone(),
@@ -350,6 +353,7 @@ pub fn new_client<E, Block, RA>(
 			bad_blocks,
 			execution_extensions,
 			prometheus_registry,
+			config,
 		)?,
 		backend,
 	))
@@ -558,6 +562,7 @@ pub struct BlockImportOperation<Block: BlockT> {
 	db_updates: PrefixedMemoryDB<HashFor<Block>>,
 	storage_updates: StorageCollection,
 	child_storage_updates: ChildStorageCollection,
+	offchain_storage_updates: OffchainOverlayedChanges,
 	changes_trie_updates: MemoryDB<HashFor<Block>>,
 	changes_trie_build_cache_update: Option<ChangesTrieCacheAction<Block::Hash, NumberFor<Block>>>,
 	changes_trie_config_update: Option<Option<ChangesTrieConfiguration>>,
@@ -569,6 +574,15 @@ pub struct BlockImportOperation<Block: BlockT> {
 }
 
 impl<Block: BlockT> BlockImportOperation<Block> {
+	fn apply_offchain(&mut self, transaction: &mut Transaction<DbHash>) {
+		for (key, value_operation) in self.offchain_storage_updates.drain() {
+			match value_operation {
+				OffchainOverlayedChange::SetValue(val) => transaction.set_from_vec(columns::OFFCHAIN, &key, val),
+				OffchainOverlayedChange::Remove => transaction.remove(columns::OFFCHAIN, &key),
+			}
+		}
+	}
+
 	fn apply_aux(&mut self, transaction: &mut Transaction<DbHash>) {
 		for (key, maybe_val) in self.aux_ops.drain(..) {
 			match maybe_val {
@@ -672,6 +686,14 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 	) -> ClientResult<()> {
 		self.storage_updates = update;
 		self.child_storage_updates = child_update;
+		Ok(())
+	}
+
+	fn update_offchain_storage(
+		&mut self,
+		offchain_update: OffchainOverlayedChanges,
+	) -> ClientResult<()> {
+		self.offchain_storage_updates = offchain_update;
 		Ok(())
 	}
 
@@ -1017,6 +1039,7 @@ impl<Block: BlockT> Backend<Block> {
 		let mut finalization_displaced_leaves = None;
 
 		operation.apply_aux(&mut transaction);
+		operation.apply_offchain(&mut transaction);
 
 		let mut meta_updates = Vec::with_capacity(operation.finalized_blocks.len());
 		let mut last_finalized_hash = self.blockchain.meta.read().finalized_hash;
@@ -1360,6 +1383,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 			db_updates: PrefixedMemoryDB::default(),
 			storage_updates: Default::default(),
 			child_storage_updates: Default::default(),
+			offchain_storage_updates: Default::default(),
 			changes_trie_config_update: None,
 			changes_trie_updates: MemoryDB::default(),
 			changes_trie_build_cache_update: None,
