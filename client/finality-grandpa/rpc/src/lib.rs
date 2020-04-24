@@ -137,10 +137,8 @@ impl ReportedRoundStates {
         Hash: Debug + Clone + Eq + Send + Sync + 'static,
         Block: BlockNumberOps + Send + Sync + 'static,
     {
-        let voter_state = voter_state
-            .read()
-            .as_ref()
-            .map(|vs| vs.voter_state())
+		let voter_state = voter_state
+			.voter_state()
             .ok_or(Error::EndpointNotReady)?;
 
         let current_voters: HashSet<AuthorityId> = authority_set

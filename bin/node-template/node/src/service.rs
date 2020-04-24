@@ -2,7 +2,6 @@
 
 use std::sync::Arc;
 use std::time::Duration;
-use parking_lot::RwLock;
 use sc_client::LongestChain;
 use sc_client_api::ExecutorProvider;
 use node_template_runtime::{self, opaque::Block, RuntimeApi};
@@ -11,7 +10,9 @@ use sp_inherents::InherentDataProviders;
 use sc_executor::native_executor_instance;
 pub use sc_executor::NativeExecutor;
 use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
-use sc_finality_grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider, StorageAndProofProvider};
+use sc_finality_grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider,
+	StorageAndProofProvider, SharedVoterState,
+};
 
 // Our native executor instance.
 native_executor_instance!(
@@ -28,7 +29,7 @@ macro_rules! new_full_start {
 	($config:expr) => {{
 		use std::sync::Arc;
 		use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
-		
+
 		let mut import_setup = None;
 		let inherent_data_providers = sp_inherents::InherentDataProviders::new();
 
@@ -79,7 +80,7 @@ pub fn new_full(config: Configuration)
 	let force_authoring = config.force_authoring;
 	let name = config.network.node_name.clone();
 	let disable_grandpa = config.disable_grandpa;
-	let shared_voter_state = Arc::new(RwLock::new(None));
+	let shared_voter_state = SharedVoterState::new(None);
 
 	let (builder, mut import_setup, inherent_data_providers) = new_full_start!(config);
 

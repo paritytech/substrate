@@ -22,7 +22,10 @@ use std::sync::Arc;
 
 use sc_consensus_babe;
 use sc_client::{self, LongestChain};
-use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider, StorageAndProofProvider};
+use grandpa::{
+	self, FinalityProofProvider as GrandpaFinalityProofProvider, StorageAndProofProvider,
+	SharedVoterState,
+};
 use node_executor;
 use node_primitives::Block;
 use node_runtime::RuntimeApi;
@@ -49,7 +52,7 @@ macro_rules! new_full_start {
 		type RpcExtension = jsonrpc_core::IoHandler<sc_rpc::Metadata>;
 		let mut import_setup = None;
 		let inherent_data_providers = sp_inherents::InherentDataProviders::new();
-		let shared_voter_state = Arc::new(parking_lot::RwLock::new(None));
+		let shared_voter_state = SharedVoterState::new(None);
 
 		let builder = sc_service::ServiceBuilder::new_full::<
 			node_primitives::Block, node_runtime::RuntimeApi, node_executor::Executor
@@ -106,7 +109,7 @@ macro_rules! new_full_start {
 						shared_epoch_changes: sc_consensus_babe::BabeLink::epoch_changes(babe_link).clone()
 					},
 					grandpa: node_rpc::GrandpaDeps {
-						shared_voter_state: Arc::clone(&shared_voter_state),
+						shared_voter_state: shared_voter_state.clone(),
 						shared_authority_set: shared_authority_set.clone(),
 					}
 				};
@@ -418,6 +421,7 @@ mod tests {
 	use crate::service::{new_full, new_light};
 	use sp_runtime::traits::IdentifyAccount;
 	use sp_transaction_pool::{MaintainedTransactionPool, ChainEvent};
+	use grandpa::SharedVoterState;
 
 	type AccountPublic = <Signature as Verify>::Signer;
 

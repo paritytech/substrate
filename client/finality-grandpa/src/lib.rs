@@ -206,10 +206,33 @@ type CommunicationOutH<Block, H> = finality_grandpa::voter::CommunicationOut<
 	AuthorityId,
 >;
 
-// WIP: convert to struct
-pub type SharedVoterState = Arc<RwLock<Option<Box<dyn voter::VoterState<AuthorityId> + Sync + Send>>>>;
+/// Shared voter state for quering.
+pub struct SharedVoterState {
+	inner: Arc<RwLock<Option<Box<dyn voter::VoterState<AuthorityId> + Sync + Send>>>>,
+}
 
-/// Configuration for the GRANDPA service.
+impl SharedVoterState {
+	pub fn new(voter_state: Option<Box<dyn voter::VoterState<AuthorityId> + Sync + Send>>) -> Self {
+		Self { inner: Arc::new(RwLock::new(voter_state)) }
+	}
+
+	fn reset(&self, voter_state: Box<dyn voter::VoterState<AuthorityId> + Sync + Send>) {
+		let mut shared_voter_state = self.inner.write();
+		*shared_voter_state = Some(voter_state);
+	}
+
+	pub fn voter_state(&self) -> Option<voter::report::VoterState<AuthorityId>> {
+		self.inner.read().as_ref().map(|vs| vs.voter_state())
+	}
+}
+
+impl Clone for SharedVoterState {
+	fn clone(&self) -> Self {
+		SharedVoterState { inner: self.inner.clone() }
+	}
+}
+
+/// Configuration for the GRANDPA service
 #[derive(Clone)]
 pub struct Config {
 	/// The expected duration for a message to be gossiped across the network.
@@ -878,8 +901,7 @@ where
 				);
 
 				// Repoint shared_voter_state so that the RPC endpoint can query the state
-				let mut shared_voter_state = self.shared_voter_state.write();
-				*shared_voter_state = Some(voter.voter_state());
+				self.shared_voter_state.reset(voter.voter_state());
 
 				self.voter = Box::pin(voter);
 			},
