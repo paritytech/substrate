@@ -12,7 +12,7 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
 //! The Substrate runtime. This can be compiled with ``#[no_std]`, ready for Wasm.
 
@@ -24,7 +24,7 @@ use sp_std::prelude::*;
 use frame_support::{
 	construct_runtime, parameter_types, debug,
 	weights::{Weight, RuntimeDbWeight},
-	traits::{Currency, Randomness, OnUnbalanced, Imbalance},
+	traits::{Currency, Randomness, OnUnbalanced, Imbalance, LockIdentifier},
 };
 use sp_core::u32_trait::{_1, _2, _3, _4};
 pub use node_primitives::{AccountId, Signature};
@@ -32,7 +32,7 @@ use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
 use sp_api::impl_runtime_apis;
 use sp_runtime::{
 	Permill, Perbill, Perquintill, Percent, ApplyExtrinsicResult,
-	impl_opaque_keys, generic, create_runtime_str,
+	impl_opaque_keys, generic, create_runtime_str, ModuleId,
 };
 use sp_runtime::curve::PiecewiseLinear;
 use sp_runtime::transaction_validity::{TransactionValidity, TransactionSource, TransactionPriority};
@@ -387,9 +387,11 @@ parameter_types! {
 	pub const TermDuration: BlockNumber = 7 * DAYS;
 	pub const DesiredMembers: u32 = 13;
 	pub const DesiredRunnersUp: u32 = 7;
+	pub const ElectionsPhragmenModuleId: LockIdentifier = *b"phrelect";
 }
 
 impl pallet_elections_phragmen::Trait for Runtime {
+	type ModuleId = ElectionsPhragmenModuleId;
 	type Event = Event;
 	type Currency = Balances;
 	type ChangeMembers = Council;
@@ -439,6 +441,7 @@ parameter_types! {
 	pub const TipFindersFee: Percent = Percent::from_percent(20);
 	pub const TipReportDepositBase: Balance = 1 * DOLLARS;
 	pub const TipReportDepositPerByte: Balance = 1 * CENTS;
+	pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
 }
 
 impl pallet_treasury::Trait for Runtime {
@@ -456,6 +459,7 @@ impl pallet_treasury::Trait for Runtime {
 	type ProposalBondMinimum = ProposalBondMinimum;
 	type SpendPeriod = SpendPeriod;
 	type Burn = Burn;
+	type ModuleId = TreasuryModuleId;
 }
 
 parameter_types! {
@@ -625,6 +629,7 @@ parameter_types! {
 	pub const PeriodSpend: Balance = 500 * DOLLARS;
 	pub const MaxLockDuration: BlockNumber = 36 * 30 * DAYS;
 	pub const ChallengePeriod: BlockNumber = 7 * DAYS;
+	pub const SocietyModuleId: ModuleId = ModuleId(*b"py/socie");
 }
 
 impl pallet_society::Trait for Runtime {
@@ -641,6 +646,7 @@ impl pallet_society::Trait for Runtime {
 	type FounderSetOrigin = pallet_collective::EnsureProportionMoreThan<_1, _2, AccountId, CouncilCollective>;
 	type SuspensionJudgementOrigin = pallet_society::EnsureFounder<Runtime>;
 	type ChallengePeriod = ChallengePeriod;
+	type ModuleId = SocietyModuleId;
 }
 
 parameter_types! {

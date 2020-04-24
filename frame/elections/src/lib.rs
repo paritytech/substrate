@@ -33,7 +33,7 @@ use frame_support::{
 	weights::{Weight, MINIMUM_WEIGHT, DispatchClass},
 	traits::{
 		Currency, ExistenceRequirement, Get, LockableCurrency, LockIdentifier, BalanceStatus,
-		OnUnbalanced, ReservableCurrency, WithdrawReason, WithdrawReasons, ChangeMembers
+		OnUnbalanced, ReservableCurrency, WithdrawReason, WithdrawReasons, ChangeMembers,
 	}
 };
 use codec::{Encode, Decode};
@@ -126,8 +126,6 @@ pub enum CellStatus {
 	Hole,
 }
 
-const MODULE_ID: LockIdentifier = *b"py/elect";
-
 /// Number of voters grouped in one chunk.
 pub const VOTER_SET_SIZE: usize = 64;
 /// NUmber of approvals grouped in one chunk.
@@ -148,6 +146,9 @@ const APPROVAL_FLAG_LEN: usize = 32;
 
 pub trait Trait: frame_system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+
+	/// Identifier for the elections pallet's lock
+	type ModuleId: Get<LockIdentifier>;
 
 	/// The currency that people are electing with.
 	type Currency:
@@ -379,6 +380,8 @@ decl_module! {
 		/// The chunk size of the approval vector.
 		const APPROVAL_SET_SIZE: u32 = APPROVAL_SET_SIZE as u32;
 
+		const ModuleId: LockIdentifier = T::ModuleId::get();
+
 		fn deposit_event() = default;
 
 		/// Set candidate approvals. Approval slots stay valid as long as candidates in those slots
@@ -494,7 +497,7 @@ decl_module! {
 			);
 
 			T::Currency::remove_lock(
-				MODULE_ID,
+				T::ModuleId::get(),
 				if valid { &who } else { &reporter }
 			);
 
@@ -532,7 +535,7 @@ decl_module! {
 
 			Self::remove_voter(&who, index);
 			T::Currency::unreserve(&who, T::VotingBond::get());
-			T::Currency::remove_lock(MODULE_ID, &who);
+			T::Currency::remove_lock(T::ModuleId::get(), &who);
 		}
 
 		/// Submit oneself for candidacy.
@@ -892,7 +895,7 @@ impl<T: Trait> Module<T> {
 		}
 
 		T::Currency::set_lock(
-			MODULE_ID,
+			T::ModuleId::get(),
 			&who,
 			locked_balance,
 			WithdrawReasons::all(),
