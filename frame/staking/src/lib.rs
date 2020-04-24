@@ -1246,8 +1246,12 @@ decl_module! {
 		fn on_runtime_upgrade() -> Weight {
 			// For Kusama the type hasn't actually changed as Moment was u64 and was the number of
 			// millisecond since unix epoch.
-			StorageVersion::put(Releases::V3_0_0);
-			Self::migrate_last_reward_to_claimed_rewards();
+			StorageVersion::mutate(|v| {
+				if matches!(v, Releases::V2_0_0) {
+					Self::migrate_last_reward_to_claimed_rewards();
+				}
+				*v = Releases::V3_0_0;
+			});
 			0
 		}
 
