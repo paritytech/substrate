@@ -102,12 +102,12 @@ pub struct Configuration {
 	pub announce_block: bool,
 }
 
-#[derive(PartialEq)]
 /// Type for tasks spawned by the executor.
+#[derive(PartialEq)]
 pub enum TaskType {
-	/// Async type.
+	/// Regular non-blocking futures. Polling the task is expected to be a lightweight operation.
 	Async,
-	/// Blocking type.
+	/// The task might perform a lot of expensive CPU operations and/or call `thread::sleep`.
 	Blocking,
 }
 
