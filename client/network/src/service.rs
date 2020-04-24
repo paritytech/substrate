@@ -246,6 +246,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				config.with_user_defined(known_addresses);
 				config.discovery_limit(u64::from(params.network_config.out_peers) + 15);
 				config.add_protocol(params.protocol_id.clone());
+				config.allow_non_globals_in_dht(params.network_config.allow_non_globals_in_dht);
 
 				match params.network_config.transport {
 					TransportConfig::MemoryOnly => {
@@ -1157,9 +1158,9 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					if this.boot_node_ids.contains(&peer_id) {
 						if let PendingConnectionError::InvalidPeerId = error {
 							error!(
-								"💔 Invalid peer ID from bootnode, expected `{}` at address `{}`.",
-								peer_id,
+								"💔 The bootnode you want to connect to at `{}` provided a different peer ID than the one you expect: `{}`.",
 								address,
+								peer_id,
 							);
 						}
 					}

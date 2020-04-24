@@ -292,7 +292,6 @@ pub fn testnet_genesis(
 				enable_println, // this should only be enabled on development chains
 				..Default::default()
 			},
-			gas_price: 1 * MILLICENTS,
 		}),
 		pallet_sudo: Some(SudoConfig {
 			key: root_key,

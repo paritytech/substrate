@@ -23,7 +23,7 @@
 use sp_std::prelude::*;
 use frame_support::{
 	construct_runtime, parameter_types, debug,
-	weights::Weight,
+	weights::{Weight, RuntimeDbWeight},
 	traits::{Currency, Randomness, OnUnbalanced, Imbalance, LockIdentifier},
 };
 use sp_core::u32_trait::{_1, _2, _3, _4};
@@ -72,7 +72,6 @@ use constants::{time::*, currency::*};
 // Make the WASM binary available.
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
-
 
 /// Runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
@@ -123,6 +122,10 @@ parameter_types! {
 	pub const MaximumBlockLength: u32 = 5 * 1024 * 1024;
 	pub const Version: RuntimeVersion = VERSION;
 	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
+	pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
+		read: 60_000_000, // ~0.06 ms = ~60 µs
+		write: 200_000_000, // ~0.2 ms = 200 µs
+	};
 }
 
 impl frame_system::Trait for Runtime {
@@ -138,7 +141,7 @@ impl frame_system::Trait for Runtime {
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
-	type DbWeight = ();
+	type DbWeight = DbWeight;
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = Version;
@@ -460,9 +463,6 @@ impl pallet_treasury::Trait for Runtime {
 }
 
 parameter_types! {
-	pub const ContractTransactionBaseFee: Balance = 1 * CENTS;
-	pub const ContractTransactionByteFee: Balance = 10 * MILLICENTS;
-	pub const ContractFee: Balance = 1 * CENTS;
 	pub const TombstoneDeposit: Balance = 1 * DOLLARS;
 	pub const RentByteFee: Balance = 1 * DOLLARS;
 	pub const RentDepositOffset: Balance = 1000 * DOLLARS;
@@ -470,15 +470,12 @@ parameter_types! {
 }
 
 impl pallet_contracts::Trait for Runtime {
-	type Currency = Balances;
 	type Time = Timestamp;
 	type Randomness = RandomnessCollectiveFlip;
 	type Call = Call;
 	type Event = Event;
 	type DetermineContractAddress = pallet_contracts::SimpleAddressDeterminer<Runtime>;
-	type ComputeDispatchFee = pallet_contracts::DefaultDispatchFeeComputor<Runtime>;
 	type TrieIdGenerator = pallet_contracts::TrieIdFromParentCounter<Runtime>;
-	type GasPayment = ();
 	type RentPayment = ();
 	type SignedClaimHandicap = pallet_contracts::DefaultSignedClaimHandicap;
 	type TombstoneDeposit = TombstoneDeposit;
@@ -486,14 +483,8 @@ impl pallet_contracts::Trait for Runtime {
 	type RentByteFee = RentByteFee;
 	type RentDepositOffset = RentDepositOffset;
 	type SurchargeReward = SurchargeReward;
-	type TransactionBaseFee = ContractTransactionBaseFee;
-	type TransactionByteFee = ContractTransactionByteFee;
-	type ContractFee = ContractFee;
-	type CallBaseFee = pallet_contracts::DefaultCallBaseFee;
-	type InstantiateBaseFee = pallet_contracts::DefaultInstantiateBaseFee;
 	type MaxDepth = pallet_contracts::DefaultMaxDepth;
 	type MaxValueSize = pallet_contracts::DefaultMaxValueSize;
-	type BlockGasLimit = pallet_contracts::DefaultBlockGasLimit;
 }
 
 impl pallet_sudo::Trait for Runtime {
@@ -536,7 +527,6 @@ impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for R
 			frame_system::CheckNonce::<Runtime>::from(nonce),
 			frame_system::CheckWeight::<Runtime>::new(),
 			pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(tip),
-			Default::default(),
 		);
 		let raw_payload = SignedPayload::new(call, extra).map_err(|e| {
 			debug::warn!("Unable to create signed payload: {:?}", e);
@@ -694,7 +684,7 @@ construct_runtime!(
 		FinalityTracker: pallet_finality_tracker::{Module, Call, Inherent},
 		Grandpa: pallet_grandpa::{Module, Call, Storage, Config, Event},
 		Treasury: pallet_treasury::{Module, Call, Storage, Config, Event<T>},
-		Contracts: pallet_contracts::{Module, Call, Config<T>, Storage, Event<T>},
+		Contracts: pallet_contracts::{Module, Call, Config, Storage, Event<T>},
 		Sudo: pallet_sudo::{Module, Call, Config<T>, Storage, Event<T>},
 		ImOnline: pallet_im_online::{Module, Call, Storage, Event<T>, ValidateUnsigned, Config<T>},
 		AuthorityDiscovery: pallet_authority_discovery::{Module, Call, Config},
@@ -726,7 +716,6 @@ pub type SignedExtra = (
 	frame_system::CheckNonce<Runtime>,
 	frame_system::CheckWeight<Runtime>,
 	pallet_transaction_payment::ChargeTransactionPayment<Runtime>,
-	pallet_contracts::CheckBlockGasLimit<Runtime>,
 );
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Call, Signature, SignedExtra>;
