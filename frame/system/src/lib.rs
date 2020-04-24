@@ -115,7 +115,8 @@ use sp_runtime::{
 
 use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
 use frame_support::{
-	decl_module, decl_event, decl_storage, decl_error, storage, Parameter, ensure, debug,
+	decl_module, decl_event, decl_storage, decl_error, Parameter, ensure, debug,
+	storage::{self, generator::StorageValue},
 	traits::{
 		Contains, Get, ModuleToIndex, OnNewAccount, OnKilledAccount, IsDeadAccount, Happened,
 		StoredMap, EnsureOrigin,
@@ -125,6 +126,7 @@ use frame_support::{
 		FunctionOf, Pays,
 	}
 };
+
 use codec::{Encode, Decode, FullCodec, EncodeLike};
 
 #[cfg(any(feature = "std", test))]
@@ -385,7 +387,7 @@ decl_storage! {
 		Digest get(fn digest): DigestOf<T>;
 
 		/// Events deposited for the current block.
-		Events get(fn events): Vec<EventRecord<T::Event, T::Hash>>;
+		Events: Vec<EventRecord<T::Event, T::Hash>>;
 
 		/// The number of events in the `Events<T>` list.
 		EventCount get(fn event_count): EventIndex;
@@ -765,8 +767,6 @@ impl<T: Trait> Module<T> {
 	/// This will update storage entries that correspond to the specified topics.
 	/// It is expected that light-clients could subscribe to these topics.
 	pub fn deposit_event_indexed(topics: &[T::Hash], event: T::Event) {
-		use frame_support::storage::generator::StorageValue;
-
 		let block_number = Self::block_number();
 		// Don't populate events on genesis.
 		if block_number.is_zero() { return }
@@ -794,7 +794,7 @@ impl<T: Trait> Module<T> {
 		// We use accumulator api here to avoid bringing all events every time we push a
 		// new one.
 		//
-		// Note that because of that System::events() won't return these events until
+		// Note that because of that <Events<T>>::get() won't return these events until
 		// they are commited in System::finalize().
 		let encoded_event = event.encode();
 		sp_io::storage::accumulator_push(&Events::<T>::storage_value_final_key()[..], &encoded_event);
@@ -857,8 +857,6 @@ impl<T: Trait> Module<T> {
 		digest: &DigestOf<T>,
 		kind: InitKind,
 	) {
-		use frame_support::storage::generator::StorageValue;
-
 		// populate environment
 		ExecutionPhase::put(Phase::Initialization);
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
@@ -878,8 +876,16 @@ impl<T: Trait> Module<T> {
 
 	/// Update pending storage changes, if any.
 	pub fn update_accumulators() {
-		use frame_support::storage::generator::StorageValue;
 		sp_io::storage::accumulator_commit(&Events::<T>::storage_value_final_key()[..]);
+	}
+
+	/// Collect events for the current block.
+	///
+	/// This should not be used for anything but tests. Using it for anything else
+	/// will impact performance in a very bad way.
+	pub fn collect_events() -> Vec<EventRecord<T::Event, T::Hash>> {
+		sp_io::storage::accumulator_commit(&Events::<T>::storage_value_final_key()[..]);
+		<Events<T>>::get()
 	}
 
 	/// Remove temporary "environment" entries in storage.
@@ -1753,9 +1759,8 @@ pub(crate) mod tests {
 			);
 			System::note_finished_extrinsics();
 			System::deposit_event(1u16);
-			System::finalize();
 			assert_eq!(
-				System::events(),
+				System::collect_events(),
 				vec![
 					EventRecord {
 						phase: Phase::Finalization,
@@ -1779,9 +1784,8 @@ pub(crate) mod tests {
 			System::note_applied_extrinsic(&Err(DispatchError::BadOrigin), 0, Default::default());
 			System::note_finished_extrinsics();
 			System::deposit_event(3u16);
-			System::finalize();
 			assert_eq!(
-				System::events(),
+				System::collect_events(),
 				vec![
 					EventRecord { phase: Phase::Initialization, event: 32u16, topics: vec![] },
 					EventRecord { phase: Phase::ApplyExtrinsic(0), event: 42u16, topics: vec![] },
@@ -1818,11 +1822,9 @@ pub(crate) mod tests {
 			System::deposit_event_indexed(&topics[0..1], 2u16);
 			System::deposit_event_indexed(&topics[1..2], 3u16);
 
-			System::finalize();
-
 			// Check that topics are reflected in the event record.
 			assert_eq!(
-				System::events(),
+				System::collect_events(),
 				vec![
 					EventRecord {
 						phase: Phase::Finalization,
@@ -2166,10 +2168,9 @@ pub(crate) mod tests {
 				RawOrigin::Root.into(),
 				substrate_test_runtime_client::runtime::WASM_BINARY.to_vec(),
 			).unwrap();
-			System::finalize();
 
 			assert_eq!(
-				System::events(),
+				System::collect_events(),
 				vec![EventRecord { phase: Phase::Initialization, event: 102u16, topics: vec![] }],
 			);
 		});
@@ -2197,13 +2198,11 @@ pub(crate) mod tests {
 			// Block Number is zero at genesis
 			assert!(System::block_number().is_zero());
 			System::on_created_account(Default::default());
-			System::finalize();
-			assert!(System::events().is_empty());
+			assert!(System::collect_events().is_empty());
 			// Events will be emitted starting on block 1
 			System::set_block_number(1);
 			System::on_created_account(Default::default());
-			System::finalize();
-			assert!(System::events().len() == 1);
+			assert!(System::collect_events().len() == 1);
 		});
 	}
 }

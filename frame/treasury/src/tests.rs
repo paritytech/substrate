@@ -219,8 +219,7 @@ fn report_awesome_from_beneficiary_and_tip_works() {
 }
 
 fn last_treasury_event() -> RawEvent<u64, u64, H256> {
-	System::finalize();
-	System::events().into_iter().map(|r| r.event)
+	System::collect_events().into_iter().map(|r| r.event)
 		.filter_map(|e| {
 			if let Event::treasury(inner) = e { Some(inner) } else { None }
 		})

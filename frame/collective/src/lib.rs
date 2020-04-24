@@ -631,10 +631,9 @@ mod tests {
 
 			System::set_block_number(4);
 			assert_ok!(Collective::close(Origin::signed(4), hash.clone(), 0));
-			System::finalize();
 
 			let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
-			assert_eq!(System::events(), vec![
+			assert_eq!(System::collect_events(), vec![
 				record(Event::collective_Instance1(RawEvent::Proposed(1, 0, hash.clone(), 3))),
 				record(Event::collective_Instance1(RawEvent::Voted(2, hash.clone(), true, 2, 0))),
 				record(Event::collective_Instance1(RawEvent::Closed(hash.clone(), 2, 1))),
@@ -655,10 +654,9 @@ mod tests {
 
 			System::set_block_number(4);
 			assert_ok!(Collective::close(Origin::signed(4), hash.clone(), 0));
-			System::finalize();
 
 			let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
-			assert_eq!(System::events(), vec![
+			assert_eq!(System::collect_events(), vec![
 				record(Event::collective_Instance1(RawEvent::Proposed(1, 0, hash.clone(), 3))),
 				record(Event::collective_Instance1(RawEvent::Voted(2, hash.clone(), true, 2, 0))),
 				record(Event::collective_Instance1(RawEvent::Closed(hash.clone(), 2, 1))),
@@ -680,10 +678,8 @@ mod tests {
 			System::set_block_number(4);
 			assert_ok!(Collective::close(Origin::signed(4), hash.clone(), 0));
 
-			System::finalize();
-
 			let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
-			assert_eq!(System::events(), vec![
+			assert_eq!(System::collect_events(), vec![
 				record(Event::collective_Instance1(RawEvent::Proposed(1, 0, hash.clone(), 3))),
 				record(Event::collective_Instance1(RawEvent::Voted(2, hash.clone(), true, 2, 0))),
 				record(Event::collective_Instance1(RawEvent::Closed(hash.clone(), 3, 0))),
@@ -775,9 +771,7 @@ mod tests {
 				Some(Votes { index: 0, threshold: 3, ayes: vec![1], nays: vec![], end })
 			);
 
-			System::finalize();
-
-			assert_eq!(System::events(), vec![
+			assert_eq!(System::collect_events(), vec![
 				EventRecord {
 					phase: Phase::Initialization,
 					event: Event::collective_Instance1(RawEvent::Proposed(
@@ -855,9 +849,7 @@ mod tests {
 				Error::<Test, Instance1>::DuplicateVote,
 			);
 
-			System::finalize();
-
-			assert_eq!(System::events(), vec![
+			assert_eq!(System::collect_events(), vec![
 				EventRecord {
 					phase: Phase::Initialization,
 					event: Event::collective_Instance1(RawEvent::Proposed(
@@ -904,9 +896,7 @@ mod tests {
 			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, false));
 
-			System::finalize();
-
-			assert_eq!(System::events(), vec![
+			assert_eq!(System::collect_events(), vec![
 				EventRecord {
 					phase: Phase::Initialization,
 					event: Event::collective_Instance1(
@@ -948,9 +938,7 @@ mod tests {
 			assert_ok!(Collective::propose(Origin::signed(1), 2, Box::new(proposal.clone())));
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
 
-			System::finalize();
-
-			assert_eq!(System::events(), vec![
+			assert_eq!(System::collect_events(), vec![
 				EventRecord {
 					phase: Phase::Initialization,
 					event: Event::collective_Instance1(RawEvent::Proposed(

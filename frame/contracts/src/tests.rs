@@ -294,8 +294,7 @@ fn compile_module<T>(wabt_module: &str)
 }
 
 fn assert_events(events: Vec<EventRecord<MetaEvent, H256>>) {
-	System::finalize();
-	assert_eq!(System::events(), events);
+	assert_eq!(System::collect_events(), events);
 }
 
 // Perform a simple transfer to a non-existent account supplying way more gas than needed.
