@@ -723,6 +723,9 @@ macro_rules! impl_benchmark {
 					let steps = steps.get(idx).cloned().unwrap_or(prev_steps);
 					prev_steps = steps;
 
+					// Skip this loop if steps is zero
+					if steps == 0 { continue }
+
 					let lowest = lowest_range_values.get(idx).cloned().unwrap_or(*low);
 					let highest = highest_range_values.get(idx).cloned().unwrap_or(*high);
 
@@ -827,6 +830,9 @@ macro_rules! impl_benchmark {
 					// Get the number of steps for this component.
 					let steps = steps.get(idx).cloned().unwrap_or(prev_steps);
 					prev_steps = steps;
+
+					// Skip this loop if steps is zero
+					if steps == 0 { continue }
 
 					let lowest = lowest_range_values.get(idx).cloned().unwrap_or(*low);
 					let highest = highest_range_values.get(idx).cloned().unwrap_or(*high);
@@ -1036,7 +1042,7 @@ macro_rules! add_benchmark {
 							&steps[..],
 							repeat,
 						)?,
-						pallet: pallet.to_vec(),
+						pallet: $name.to_vec(),
 						benchmark: benchmark.to_vec(),
 					});
 				}
@@ -1049,7 +1055,7 @@ macro_rules! add_benchmark {
 						&steps[..],
 						repeat,
 					)?,
-					pallet: pallet.to_vec(),
+					pallet: $name.to_vec(),
 					benchmark: benchmark.clone(),
 				});
 			}
