@@ -131,6 +131,84 @@ pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 
 impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Unpin for Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {}
 
+/// Client super trait, use this instead of the concrete Client type.
+pub trait ClientProvider<Block, Backend, Executor, Runtime>:
+	HeaderBackend<Block>
+	+ ProvideRuntimeApi<
+		Block,
+		Api = <Runtime as ConstructRuntimeApi<Block, Self>>::RuntimeApi
+	>
+	+ LockImportRun<Block, Backend>
+	+ ProofProvider<Block>
+	+ BlockBuilderProvider<Backend, Block, Self>
+	+ ProvideUncles<Block>
+	+ StorageProvider<Block, Backend>
+	+ Chain<Block>
+	+ HeaderMetadata<Block, Error = sp_blockchain::Error>
+	+ ExecutorProvider<Block, Executor = Executor>
+	+ ProvideCache<Block>
+	+ BlockIdTo<Block, Error = sp_blockchain::Error>
+	+ CallApiAt<
+		Block,
+		Error = sp_blockchain::Error,
+		StateBackend = <Backend as BackendT<Block>>::State
+	>
+	+ BlockImport<
+		Block,
+		Error = sp_consensus::Error,
+		Transaction = TransactionFor<Backend, Block>
+	>
+	+ Finalizer<Block, Backend>
+	+ BlockchainEvents<Block>
+	+ BlockBackend<Block>
+	+ UsageProvider<Block>
+	+ AuxStore
+		where
+			Block: BlockT,
+			Backend: 'static + BackendT<Block>,
+			Executor: 'static + CallExecutor<Block> + Send + Sync + Clone,
+			Runtime: ConstructRuntimeApi<Block, Self> + Send + Sync,
+
+{}
+
+impl<Block, Backend, Executor, Runtime, Client> ClientProvider<Block, Backend, Executor, Runtime> for Client
+	where
+		Block: BlockT,
+		Backend: 'static + BackendT<Block>,
+		Executor: 'static + CallExecutor<Block> + Send + Sync + Clone,
+		Runtime: ConstructRuntimeApi<Block, Client> + Send + Sync,
+		Client: HeaderBackend<Block>
+		+ ProvideRuntimeApi<
+			Block,
+			Api = <Runtime as ConstructRuntimeApi<Block, Self>>::RuntimeApi
+		>
+		+ LockImportRun<Block, Backend>
+		+ ProofProvider<Block>
+		+ BlockBuilderProvider<Backend, Block, Self>
+		+ ProvideUncles<Block>
+		+ StorageProvider<Block, Backend>
+		+ Chain<Block>
+		+ HeaderMetadata<Block, Error = sp_blockchain::Error>
+		+ ExecutorProvider<Block, Executor = Executor>
+		+ ProvideCache<Block>
+		+ BlockIdTo<Block, Error = sp_blockchain::Error>
+		+ CallApiAt<
+			Block,
+			Error = sp_blockchain::Error,
+			StateBackend = <Backend as BackendT<Block>>::State
+		>
+		+ BlockImport<
+			Block,
+			Error = sp_consensus::Error,
+			Transaction = TransactionFor<Backend, Block>
+		>
+		+ Finalizer<Block, Backend>
+		+ BlockchainEvents<Block>
+		+ BlockBackend<Block>
+		+ UsageProvider<Block>
+		+ AuxStore
+{}
+
 /// Abstraction over a Substrate service.
 pub trait AbstractService: Future<Output = Result<(), Error>> + Send + Unpin + Spawn + 'static {
 	/// Type of block of this chain.
@@ -146,37 +224,7 @@ pub trait AbstractService: Future<Output = Result<(), Error>> + Send + Unpin + S
 	/// Transaction pool.
 	type TransactionPool: TransactionPool<Block = Self::Block> + MallocSizeOfWasm;
 	/// The generic Client type
-	type Client:
-		HeaderBackend<Self::Block>
-		+ ProvideRuntimeApi<
-			Self::Block,
-			Api = <Self::RuntimeApi as ConstructRuntimeApi<Self::Block, Self::Client>>::RuntimeApi
-		>
-		+ LockImportRun<Self::Block, Self::Backend>
-		+ ProofProvider<Self::Block>
-		+ BlockBuilderProvider<Self::Backend, Self::Block, Self::Client>
-		+ ProvideUncles<Self::Block>
-		+ StorageProvider<Self::Block, Self::Backend>
-		+ Chain<Self::Block>
-		+ HeaderMetadata<Self::Block, Error = sp_blockchain::Error>
-		+ ExecutorProvider<Self::Block, Executor = Self::CallExecutor>
-		+ ProvideCache<Self::Block>
-		+ BlockIdTo<Self::Block, Error = sp_blockchain::Error>
-		+ CallApiAt<
-			Self::Block,
-			Error = sp_blockchain::Error,
-			StateBackend = <Self::Backend as Backend<Self::Block>>::State
-		>
-		+ BlockImport<
-			Self::Block,
-			Error = sp_consensus::Error,
-			Transaction = TransactionFor<Self::Backend, Self::Block>
-		>
-		+ Finalizer<Self::Block, Self::Backend>
-		+ BlockchainEvents<Self::Block>
-		+ BlockBackend<Self::Block>
-		+ UsageProvider<Self::Block>
-		+ AuxStore;
+	type Client: ClientProvider<Self::Block, Self::Backend, Self::CallExecutor, Self::RuntimeApi>;
 
 	/// Get event stream for telemetry connection established events.
 	fn telemetry_on_connect_stream(&self) -> TracingUnboundedReceiver<()>;
