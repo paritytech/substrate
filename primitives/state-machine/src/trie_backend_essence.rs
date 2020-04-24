@@ -39,6 +39,7 @@ pub trait Storage<H: Hasher>: Send + Sync {
 pub struct TrieBackendEssence<S: TrieBackendStorage<H>, H: Hasher> {
 	storage: S,
 	root: H::Out,
+	empty: H::Out,
 }
 
 impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out: Encode {
@@ -47,6 +48,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		TrieBackendEssence {
 			storage,
 			root,
+			empty: H::hash(&[0u8]),
 		}
 	}
 
@@ -374,6 +376,9 @@ impl<S: TrieBackendStorage<H>, H: Hasher> hash_db::HashDB<H, DBValue>
 	for TrieBackendEssence<S, H>
 {
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
+		if *key == self.empty {
+			return Some([0u8].to_vec())
+		}
 		match self.storage.get(&key, prefix) {
 			Ok(x) => x,
 			Err(e) => {
