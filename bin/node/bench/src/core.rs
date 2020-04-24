@@ -58,7 +58,7 @@ pub struct BenchmarkOutput {
 	average: u64,
 }
 
-struct NsFormatter(u64);
+pub struct NsFormatter(pub u64);
 
 impl fmt::Display for NsFormatter {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -121,7 +121,7 @@ pub fn run_benchmark(
 	let mut benchmark = benchmark.setup();
 
 	let mut durations: Vec<u128> = vec![];
-	for _ in 0..10 {
+	for _ in 0..50 {
 		let duration = benchmark.run(mode);
 		durations.push(duration.as_nanos());
 	}
