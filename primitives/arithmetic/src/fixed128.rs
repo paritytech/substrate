@@ -17,7 +17,7 @@
 use codec::{Decode, Encode};
 use num_traits::Signed;
 use crate::{
-	helpers_128bit::multiply_by_rational,
+	helpers_128bit::{multiply_by_rational, multiply},
 	traits::{
 		Bounded, Saturating, UniqueSaturatedInto, SaturatedConversion, FixedPointNumber,
 		CheckedAdd, CheckedSub, CheckedMul, CheckedDiv, BaseArithmetic
@@ -39,7 +39,7 @@ implement_fixed!(
 	u128,
 	u64,
 	Perquintill,
-	1_000_000_000_000_000_000,
+	60, // Bits used for fractional part, accuracy of 2^60.
 	18,
 );
 

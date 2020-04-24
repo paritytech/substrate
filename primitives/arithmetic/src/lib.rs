@@ -16,6 +16,7 @@
 
 //! Minimal fixed point arithmetic primitives and types for runtime.
 
+#![feature(const_int_pow)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 /// Copied from `sp-runtime` and documented there.

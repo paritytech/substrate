@@ -174,7 +174,7 @@ pub trait FixedPointNumber:
 	+ Debug
 {
 	/// The underlying data type used for this fixed point number.
-	type Inner: Copy + Debug + One;
+	type Inner: Copy + Debug + One + From<i64>;
 
 	/// The unsigned version of inner.
 	type Unsigned;
@@ -186,11 +186,16 @@ pub trait FixedPointNumber:
 	type Perthing;
 
 	/// The accuracy of this fixed point number.
-	const DIV: Self::Inner;
+	const BITS: u32;
+
+	/// Accuracy of this `Fixed` implementation.
+	fn num_bits() -> u32 {
+		Self::BITS
+	}
 
 	/// Accuracy of this `Fixed` implementation.
 	fn accuracy() -> Self::Inner {
-		Self::DIV
+		2i64.pow(Self::BITS).into()
 	}
 
 	/// Raw constructor. Equal to `parts / DIV`.
@@ -212,7 +217,7 @@ pub trait FixedPointNumber:
 
 	/// Checked multiplication for integer type `N`.
 	fn checked_mul_int<
-		N: From<Self::PrevUnsigned> + TryFrom<Self::Unsigned> + UniqueSaturatedInto<Self::PrevUnsigned> +
+		N: TryFrom<i128> + UniqueSaturatedInto<i128> +
 		Copy + Bounded + Saturating +
 		Rem<N, Output=N> + Div<N, Output=N> + Mul<N, Output=N> +
 		Add<N, Output=N>,
@@ -228,7 +233,7 @@ pub trait FixedPointNumber:
 	///
 	/// Returns a saturated `int + (self * int)`.
 	fn saturated_multiply_accumulate<
-		N: From<Self::PrevUnsigned> + TryFrom<Self::Unsigned> + UniqueSaturatedInto<Self::PrevUnsigned> +
+		N: TryFrom<i128> + UniqueSaturatedInto<i128> +
 			Copy + Bounded + Saturating +
 			Rem<N, Output=N> + Div<N, Output=N> + Mul<N, Output=N> +
 			Add<N, Output=N>,
