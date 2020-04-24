@@ -21,7 +21,6 @@ use sc_finality_grandpa::{voter, AuthorityId, SharedAuthoritySet, SharedVoterSta
 
 use futures::{FutureExt, TryFutureExt};
 use jsonrpc_derive::rpc;
-use log::warn;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, fmt::Debug};
 
@@ -151,11 +150,6 @@ impl ReportedRoundStates {
             .map(|p| p.0.clone())
             .collect();
 
-        let set_id = voter_state.best_round.0;
-        if voter_state.best_round.0 != authority_set.set_id() {
-            warn!("Set ID from AuthoritySet does not match VoterState?")
-        }
-
         let best = {
             let (round, round_state) = voter_state.best_round;
             RoundState::from(round, &round_state, &current_voters)
@@ -168,7 +162,7 @@ impl ReportedRoundStates {
             .collect();
 
         Ok(Self {
-            set_id,
+            set_id: authority_set.set_id(),
             best,
             background,
         })
