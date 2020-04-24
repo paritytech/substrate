@@ -19,7 +19,7 @@
 use std::sync::Arc;
 use std::collections::HashMap;
 use sp_core::ChangesTrieConfigurationRange;
-use sp_core::offchain::OffchainStorage;
+use sp_core::offchain::{OffchainStorage,storage::OffchainOverlayedChanges};
 use sp_runtime::{generic::BlockId, Justification, Storage};
 use sp_runtime::traits::{Block as BlockT, NumberFor, HashFor};
 use sp_state_machine::{
@@ -147,6 +147,14 @@ pub trait BlockImportOperation<Block: BlockT> {
 		update: StorageCollection,
 		child_update: ChildStorageCollection,
 	) -> sp_blockchain::Result<()>;
+
+	/// Write offchain storage changes to the database.
+	fn update_offchain_storage(
+		&mut self,
+		_offchain_update: OffchainOverlayedChanges,
+	) -> sp_blockchain::Result<()> {
+		 Ok(())
+	}
 
 	/// Inject changes trie data into the database.
 	fn update_changes_trie(
