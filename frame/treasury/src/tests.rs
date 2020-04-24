@@ -26,7 +26,7 @@ use frame_support::{
 };
 use sp_core::H256;
 use sp_runtime::{
-	Perbill,
+	Perbill, ModuleId,
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup, BadOrigin},
 };
@@ -118,8 +118,10 @@ parameter_types! {
 	pub const TipFindersFee: Percent = Percent::from_percent(20);
 	pub const TipReportDepositBase: u64 = 1;
 	pub const TipReportDepositPerByte: u64 = 1;
+	pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
 }
 impl Trait for Test {
+	type ModuleId = TreasuryModuleId;
 	type Currency = pallet_balances::Module<Test>;
 	type ApproveOrigin = frame_system::EnsureRoot<u64>;
 	type RejectOrigin = frame_system::EnsureRoot<u64>;
