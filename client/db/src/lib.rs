@@ -1116,8 +1116,7 @@ impl<Block: BlockT> Backend<Block> {
 						bytes += key.len() as u64 + val.len() as u64;
 						if rc == 1 {
 							changeset.inserted.push((key, val.to_vec()));
-						}
-						else {
+						} else {
 							changeset.inserted.push((key.clone(), val.to_vec()));
 							for _ in 0 .. rc - 1 {
 								changeset.inserted.push((key.clone(), Default::default()));
