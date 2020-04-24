@@ -903,13 +903,13 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, b"democracy", Democracy);
 			add_benchmark!(params, batches, b"identity", Identity);
 			add_benchmark!(params, batches, b"im-online", ImOnline);
+			add_benchmark!(params, batches, b"offences", OffencesBench::<Runtime>);
 			add_benchmark!(params, batches, b"session", SessionBench::<Runtime>);
 			add_benchmark!(params, batches, b"staking", Staking);
 			add_benchmark!(params, batches, b"timestamp", Timestamp);
 			add_benchmark!(params, batches, b"treasury", Treasury);
 			add_benchmark!(params, batches, b"utility", Utility);
 			add_benchmark!(params, batches, b"vesting", Vesting);
-			add_benchmark!(params, batches, b"offences", OffencesBench::<Runtime>);
 
 			if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
 			Ok(batches)
