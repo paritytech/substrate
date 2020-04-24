@@ -992,9 +992,11 @@ impl Metrics {
 }
 
 impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
-	/// Performs one action on the network, then returns.
+	/// Perform all the networking tasks.
 	///
-	/// The returned future is designed to be freely cancellable.
+	/// **Important**: At the moment, the returned `Future` only finishes if the networking as
+	/// a whole finished. In the future, however, it might finish more often. You **must** call
+	/// this method in a loop.
 	pub async fn next_action(&mut self) {
 		future::poll_fn(move |cx| Pin::new(&mut *self).poll(cx)).await
 	}
