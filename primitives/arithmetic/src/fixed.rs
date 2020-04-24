@@ -111,7 +111,7 @@ macro_rules! implement_fixed {
 
 				let rhs: i128 = int.unique_saturated_into();
 				let lhs: i128 = self.0.unique_saturated_into();
-				let signum = rhs * lhs;
+				let signum = rhs.signum() * lhs.signum();
 
 				let lhs = lhs.checked_abs().map(|v| v as u128)
 					.unwrap_or(i128::max_value() as u128 + 1);
