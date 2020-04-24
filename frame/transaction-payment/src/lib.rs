@@ -47,7 +47,7 @@ use sp_runtime::{
 	},
 	traits::{
 		Zero, Saturating, SignedExtension, SaturatedConversion, Convert, Dispatchable,
-		DispatchInfoOf, PostDispatchInfoOf,
+		DispatchInfoOf, PostDispatchInfoOf, UniqueSaturatedFrom, UniqueSaturatedInto,
 	},
 };
 use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
@@ -116,9 +116,7 @@ decl_module! {
 	}
 }
 
-impl<T: Trait> Module<T> where
-	T::Call: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>,
-{
+impl<T: Trait> Module<T> {
 	/// Query the data that we know about the fee of a given `call`.
 	///
 	/// As this module is not and cannot be aware of the internals of a signed extension, it only
@@ -133,6 +131,7 @@ impl<T: Trait> Module<T> where
 	where
 		T: Send + Sync,
 		BalanceOf<T>: Send + Sync,
+		T::Call: Dispatchable<Info=DispatchInfo>,
 	{
 		// NOTE: we can actually make it understand `ChargeTransactionPayment`, but would be some
 		// hassle for sure. We have to make it aware of the index of `ChargeTransactionPayment` in
@@ -165,7 +164,9 @@ impl<T: Trait> Module<T> where
 		len: u32,
 		info: &DispatchInfoOf<T::Call>,
 		tip: BalanceOf<T>,
-	) -> BalanceOf<T> {
+	) -> BalanceOf<T> where
+		T::Call: Dispatchable<Info=DispatchInfo>,
+	{
 		if info.pays_fee == Pays::Yes {
 			let len = <BalanceOf<T>>::from(len);
 			let per_byte = T::TransactionByteFee::get();
@@ -188,11 +189,12 @@ impl<T: Trait> Module<T> where
 	///
 	/// This fee is already adjusted by the per block fee adjustment factor and is therefore
 	/// the share that the weight contributes to the overall fee of a transaction.
-	pub fn weight_to_fee_with_adjustment(weight: Weight) -> BalanceOf<T> where
-		BalanceOf<T>: From<u64>
+	pub fn weight_to_fee_with_adjustment<Balance>(weight: Weight) -> Balance where
+		Balance: UniqueSaturatedFrom<u128>
 	{
-		NextFeeMultiplier::get().saturated_multiply_accumulate(
-			Self::weight_to_fee(weight)
+		let fee = UniqueSaturatedInto::<u128>::unique_saturated_into(Self::weight_to_fee(weight));
+		UniqueSaturatedFrom::unique_saturated_from(
+			NextFeeMultiplier::get().saturated_multiply_accumulate(fee)
 		)
 	}
 
