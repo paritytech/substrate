@@ -494,7 +494,7 @@ where
 			self.changes_trie_state.as_ref(),
 			Decode::decode(&mut &parent_hash[..]).map_err(|e|
 				trace!(
-					target: "storage",
+					target: "state",
 					"Failed to decode changes root parent hash: {}",
 					e,
 				)
