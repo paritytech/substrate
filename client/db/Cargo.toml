@@ -34,7 +34,7 @@ sp-trie = { version = "2.0.0-dev", path = "../../primitives/trie" }
 sp-consensus = { version = "0.8.0-dev", path = "../../primitives/consensus/common" }
 sp-blockchain = { version = "2.0.0-dev", path = "../../primitives/blockchain" }
 sp-database = { version = "2.0.0-dev", path = "../../primitives/database" }
-parity-db = { version = "0.1", optional = true }
+parity-db = { version = "0.1.2", optional = true }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.8.0-dev", path = "../../utils/prometheus" }
 
 [dev-dependencies]
