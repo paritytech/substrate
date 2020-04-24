@@ -33,7 +33,7 @@ use sp_consensus_vrf::schnorrkel::{VRFProof, VRFOutput};
 use sc_consensus_epochs::ViableEpochDescriptor;
 use sc_keystore::KeyStorePtr;
 use log::trace;
-use super::{Epoch, GeneratingSet, PendingProof};
+use super::{Epoch, GeneratingSet, PendingVRF};
 
 /// Calculates the primary selection threshold for a given authority, taking
 /// into account `c` (`1 - c` represents the probability of a slot being empty).
@@ -183,7 +183,7 @@ impl GeneratingSet {
 						check_primary_threshold(inout, threshold)
 					})
 				{
-					self.pending.push(PendingProof::new(
+					self.pending.push(PendingVRF::new(
 						attempt,
 						authority_index as u32,
 						self.authorities.len() as u32,

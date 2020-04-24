@@ -110,9 +110,9 @@ mod authorship;
 mod utils;
 mod communication;
 
-/// Information about a local pending proof.
+/// Information about a local pending VRF.
 #[derive(Debug, Clone, Encode, Decode)]
-pub struct PendingProof {
+pub struct PendingVRF {
 	/// Attempt integer number.
 	pub attempt: u64,
 	/// Validator index.
@@ -127,7 +127,7 @@ pub struct PendingProof {
 	pub submit_authority_index: u32,
 }
 
-impl PendingProof {
+impl PendingVRF {
 	/// Create a new pending proof.
 	pub fn new(
 		attempt: u64,
@@ -157,8 +157,8 @@ pub struct GeneratingSet {
 	pub authorities: Vec<(AuthorityId, SassafrasAuthorityWeight)>,
 	/// Randomness for this epoch.
 	pub randomness: Randomness,
-	/// Local pending proofs collected.
-	pub pending: Vec<PendingProof>,
+	/// Local pending VRFs collected.
+	pub pending: Vec<PendingVRF>,
 }
 
 impl GeneratingSet {
@@ -186,8 +186,8 @@ pub struct PublishingSet {
 	pub outputs: Vec<VRFOutput>,
 	/// Disclosing outputs.
 	pub disclosing: Vec<VRFOutput>,
-	/// Local pending proofs collected.
-	pub pending: Vec<PendingProof>,
+	/// Local pending VRFs collected.
+	pub pending: Vec<PendingVRF>,
 }
 
 impl PublishingSet {
@@ -217,8 +217,8 @@ pub struct ValidatingSet {
 	pub randomness: Randomness,
 	/// Outputs as ordered by slot numbers.
 	pub outputs: Vec<(SlotNumber, VRFOutput)>,
-	/// Pending local proofs.
-	pub pending: Vec<PendingProof>,
+	/// Pending local VRFs.
+	pub pending: Vec<PendingVRF>,
 }
 
 impl ValidatingSet {
