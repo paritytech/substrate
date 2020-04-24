@@ -18,7 +18,7 @@
 
 #[cfg(feature = "std")]
 use super::{BABE_ENGINE_ID, AuthoritySignature};
-use super::{AuthorityId, AuthorityIndex, SlotNumber, BabeAuthorityWeight};
+use super::{AuthorityId, AuthorityIndex, SlotNumber, BabeAuthorityWeight, BabeEpochConfiguration};
 #[cfg(feature = "std")]
 use sp_runtime::{DigestItem, generic::OpaqueDigestItemId};
 #[cfg(feature = "std")]
@@ -135,7 +135,7 @@ impl TryFrom<RawPreDigest> for PreDigest {
 
 /// Information about the next epoch. This is broadcast in the first block
 /// of the epoch.
-#[derive(Decode, Encode, Default, PartialEq, Eq, Clone, RuntimeDebug)]
+#[derive(Decode, Encode, PartialEq, Eq, Clone, RuntimeDebug)]
 pub struct NextEpochDescriptor {
 	/// The authorities.
 	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
@@ -143,6 +143,10 @@ pub struct NextEpochDescriptor {
 	/// The value of randomness to use for the slot-assignment.
 	pub randomness: Randomness,
 }
+
+/// Information about the next epoch config, if changed. This is broadcast in the first
+/// block of the epoch, and applies using the same rules as `NextEpochDescriptor`.
+pub type NextConfigDescriptor = BabeEpochConfiguration;
 
 /// A digest item which is usable with BABE consensus.
 #[cfg(feature = "std")]
@@ -159,8 +163,11 @@ pub trait CompatibleDigestItem: Sized {
 	/// If this item is a BABE signature, return the signature.
 	fn as_babe_seal(&self) -> Option<AuthoritySignature>;
 
-	/// If this item is a BABE epoch, return it.
+	/// If this item is a BABE epoch descriptor, return it.
 	fn as_next_epoch_descriptor(&self) -> Option<NextEpochDescriptor>;
+
+	/// If this item is a BABE config descriptor, return it.
+	fn as_next_config_descriptor(&self) -> Option<NextConfigDescriptor>;
 }
 
 #[cfg(feature = "std")]
@@ -187,6 +194,14 @@ impl<Hash> CompatibleDigestItem for DigestItem<Hash> where
 		self.try_to(OpaqueDigestItemId::Consensus(&BABE_ENGINE_ID))
 			.and_then(|x: super::ConsensusLog| match x {
 				super::ConsensusLog::NextEpochData(n) => Some(n),
+				_ => None,
+			})
+	}
+
+	fn as_next_config_descriptor(&self) -> Option<NextConfigDescriptor> {
+		self.try_to(OpaqueDigestItemId::Consensus(&BABE_ENGINE_ID))
+			.and_then(|x: super::ConsensusLog| match x {
+				super::ConsensusLog::NextConfigData(n) => Some(n),
 				_ => None,
 			})
 	}

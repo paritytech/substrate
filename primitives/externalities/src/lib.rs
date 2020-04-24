@@ -47,6 +47,9 @@ pub enum Error {
 ///
 /// Provides access to the storage and to other registered extensions.
 pub trait Externalities: ExtensionStore {
+	/// Write a key value pair to the offchain storage database.
+	fn set_offchain_storage(&mut self, key: &[u8], value: Option<&[u8]>);
+
 	/// Read runtime storage.
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>>;
 

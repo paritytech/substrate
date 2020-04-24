@@ -633,8 +633,8 @@ cfg_if! {
 			}
 
 			impl sp_consensus_babe::BabeApi<Block> for Runtime {
-				fn configuration() -> sp_consensus_babe::BabeConfiguration {
-					sp_consensus_babe::BabeConfiguration {
+				fn configuration() -> sp_consensus_babe::BabeGenesisConfiguration {
+					sp_consensus_babe::BabeGenesisConfiguration {
 						slot_duration: 1000,
 						epoch_length: EpochDuration::get(),
 						c: (3, 10),
@@ -827,8 +827,8 @@ cfg_if! {
 			}
 
 			impl sp_consensus_babe::BabeApi<Block> for Runtime {
-				fn configuration() -> sp_consensus_babe::BabeConfiguration {
-					sp_consensus_babe::BabeConfiguration {
+				fn configuration() -> sp_consensus_babe::BabeGenesisConfiguration {
+					sp_consensus_babe::BabeGenesisConfiguration {
 						slot_duration: 1000,
 						epoch_length: EpochDuration::get(),
 						c: (3, 10),
