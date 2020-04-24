@@ -156,7 +156,7 @@ pub type IdentificationTuple<T> = (<T as crate::Trait>::ValidatorId, <T as Trait
 
 /// a trie instance for checking and generating proofs.
 pub struct ProvingTrie<T: Trait> {
-	db: MemoryDB<T::Hashing>,
+	db: MemoryDB<T::Hashing>, //@note an equiv impl
 	root: T::Hash,
 }
 
@@ -215,6 +215,7 @@ impl<T: Trait> ProvingTrie<T> {
 	}
 
 	/// Prove the full verification data for a given key and key ID.
+	//@note prove that something did something wrong
 	pub fn prove(&self, key_id: KeyTypeId, key_data: &[u8]) -> Option<Vec<Vec<u8>>> {
 		let trie = TrieDB::new(&self.db, &self.root).ok()?;
 		let mut recorder = Recorder::new();
@@ -260,6 +261,9 @@ impl<T: Trait, D: AsRef<[u8]>> frame_support::traits::KeyOwnerProofSystem<(KeyTy
 	type IdentificationTuple = IdentificationTuple<T>;
 
 	fn prove(key: (KeyTypeId, D)) -> Option<Self::Proof> {
+		//@note must take a context containing the index as paramter
+		// rather than depending on the current one since this func might
+		// be called at a later point of time
 		let session = <SessionModule<T>>::current_index();
 		let validators = <SessionModule<T>>::validators()
 			.into_iter()
@@ -285,6 +289,9 @@ impl<T: Trait, D: AsRef<[u8]>> frame_support::traits::KeyOwnerProofSystem<(KeyTy
 	fn check_proof(key: (KeyTypeId, D), proof: Self::Proof) -> Option<IdentificationTuple<T>> {
 		let (id, data) = key;
 
+		//@note must take a context containing the index as paramter
+		// rather than depending on the current one since this func might
+		// be called at a later point of time
 		if proof.session == <SessionModule<T>>::current_index() {
 			<SessionModule<T>>::key_owner(id, data.as_ref()).and_then(|owner| {
 				T::FullIdentificationOf::convert(owner.clone()).and_then(move |id| {

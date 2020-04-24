@@ -111,7 +111,7 @@ pub trait Database<H: Clone>: Send + Sync {
 	/// Retrieve the value previously stored against `key` or `None` if
 	/// `key` is not currently in the database.
 	fn get(&self, col: ColumnId, key: &[u8]) -> Option<Vec<u8>>;
-	
+
 	/// Call `f` with the value previously stored against `key`.
 	///
 	/// This may be faster than `get` since it doesn't allocate.
@@ -119,7 +119,7 @@ pub trait Database<H: Clone>: Send + Sync {
 	fn with_get(&self, col: ColumnId, key: &[u8], f: &mut dyn FnMut(&[u8])) {
 		self.get(col, key).map(|v| f(&v));
 	}
-	
+
 	/// Set the value of `key` in `col` to `value`, replacing anything that is there currently.
 	fn set(&self, col: ColumnId, key: &[u8], value: &[u8]) {
 		let mut t = Transaction::new();
@@ -136,7 +136,7 @@ pub trait Database<H: Clone>: Send + Sync {
 	/// Retrieve the first preimage previously `store`d for `hash` or `None` if no preimage is
 	/// currently stored.
 	fn lookup(&self, hash: &H) -> Option<Vec<u8>>;
-	
+
 	/// Call `f` with the preimage stored for `hash` and return the result, or `None` if no preimage
 	/// is currently stored.
 	///
@@ -145,7 +145,7 @@ pub trait Database<H: Clone>: Send + Sync {
 	fn with_lookup(&self, hash: &H, f: &mut dyn FnMut(&[u8])) {
 		self.lookup(hash).map(|v| f(&v));
 	}
-	
+
 	/// Store the `preimage` of `hash` into the database, so that it may be looked up later with
 	/// `Database::lookup`. This may be called multiple times, but `Database::lookup` but subsequent
 	/// calls will ignore `preimage` and simply increase the number of references on `hash`.
@@ -154,7 +154,7 @@ pub trait Database<H: Clone>: Send + Sync {
 		t.store(hash.clone(), preimage);
 		self.commit(t);
 	}
-	
+
 	/// Release the preimage of `hash` from the database. An equal number of these to the number of
 	/// corresponding `store`s must have been given before it is legal for `Database::lookup` to
 	/// be unable to provide the preimage.
