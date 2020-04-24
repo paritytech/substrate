@@ -132,7 +132,12 @@ pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Unpin for Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {}
 
 /// Client super trait, use this instead of the concrete Client type.
-pub trait ClientProvider<Block, Backend, Executor, Runtime>:
+pub trait ClientProvider<
+	Block: BlockT,
+	Backend: BackendT<Block>,
+	Executor: CallExecutor<Block>,
+	Runtime: ConstructRuntimeApi<Block, Self>,
+>:
 	HeaderBackend<Block>
 	+ ProvideRuntimeApi<
 		Block,
@@ -163,50 +168,46 @@ pub trait ClientProvider<Block, Backend, Executor, Runtime>:
 	+ BlockBackend<Block>
 	+ UsageProvider<Block>
 	+ AuxStore
-		where
-			Block: BlockT,
-			Backend: 'static + BackendT<Block>,
-			Executor: 'static + CallExecutor<Block> + Send + Sync + Clone,
-			Runtime: ConstructRuntimeApi<Block, Self> + Send + Sync,
-
 {}
 
-impl<Block, Backend, Executor, Runtime, Client> ClientProvider<Block, Backend, Executor, Runtime> for Client
+impl<Block, Backend, Executor, Runtime> ClientProvider<Block, Backend, Executor, Runtime>
+	for
+		Client<Backend, Executor, Block, Runtime>
 	where
 		Block: BlockT,
-		Backend: 'static + BackendT<Block>,
-		Executor: 'static + CallExecutor<Block> + Send + Sync + Clone,
-		Runtime: ConstructRuntimeApi<Block, Client> + Send + Sync,
-		Client: HeaderBackend<Block>
-		+ ProvideRuntimeApi<
-			Block,
-			Api = <Runtime as ConstructRuntimeApi<Block, Self>>::RuntimeApi
-		>
-		+ LockImportRun<Block, Backend>
-		+ ProofProvider<Block>
-		+ BlockBuilderProvider<Backend, Block, Self>
-		+ ProvideUncles<Block>
-		+ StorageProvider<Block, Backend>
-		+ Chain<Block>
-		+ HeaderMetadata<Block, Error = sp_blockchain::Error>
-		+ ExecutorProvider<Block, Executor = Executor>
-		+ ProvideCache<Block>
-		+ BlockIdTo<Block, Error = sp_blockchain::Error>
-		+ CallApiAt<
-			Block,
-			Error = sp_blockchain::Error,
-			StateBackend = <Backend as BackendT<Block>>::State
-		>
-		+ BlockImport<
-			Block,
-			Error = sp_consensus::Error,
-			Transaction = TransactionFor<Backend, Block>
-		>
-		+ Finalizer<Block, Backend>
-		+ BlockchainEvents<Block>
-		+ BlockBackend<Block>
-		+ UsageProvider<Block>
-		+ AuxStore
+		Backend: BackendT<Block>,
+		Executor: CallExecutor<Block>,
+		Runtime: ConstructRuntimeApi<Block, Self>,
+		Self: HeaderBackend<Block>
+			+ ProvideRuntimeApi<
+				Block,
+				Api = <Runtime as ConstructRuntimeApi<Block, Self>>::RuntimeApi
+			>
+			+ LockImportRun<Block, Backend>
+			+ ProofProvider<Block>
+			+ BlockBuilderProvider<Backend, Block, Self>
+			+ ProvideUncles<Block>
+			+ StorageProvider<Block, Backend>
+			+ Chain<Block>
+			+ HeaderMetadata<Block, Error = sp_blockchain::Error>
+			+ ExecutorProvider<Block, Executor = Executor>
+			+ ProvideCache<Block>
+			+ BlockIdTo<Block, Error = sp_blockchain::Error>
+			+ CallApiAt<
+				Block,
+				Error = sp_blockchain::Error,
+				StateBackend = <Backend as BackendT<Block>>::State
+			>
+			+ BlockImport<
+				Block,
+				Error = sp_consensus::Error,
+				Transaction = TransactionFor<Backend, Block>
+			>
+			+ Finalizer<Block, Backend>
+			+ BlockchainEvents<Block>
+			+ BlockBackend<Block>
+			+ UsageProvider<Block>
+			+ AuxStore
 {}
 
 /// Abstraction over a Substrate service.
