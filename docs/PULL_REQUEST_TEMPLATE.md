@@ -9,7 +9,7 @@ Before you submitting, please check that:
 - [ ] You labeled the PR with appropriate labels if you have permissions to do so.
 - [ ] You mentioned a related issue if this PR related to it, e.g. `Fixes #228` or `Related #1337`.
 - [ ] You asked any particular reviewers to review. If you aren't sure, start with GH suggestions.
-- [ ] Your PR adheres [the style guide](https://github.com/paritytech/polkadot/wiki/Style-Guide)
+- [ ] Your PR adheres [the style guide](https://wiki.parity.io/Substrate-Style-Guide)
   - In particular, mind the maximal line length.
   - There is no commented code checked in unless necessary.
   - Any panickers have a proof or removed.

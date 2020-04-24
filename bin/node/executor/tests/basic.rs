@@ -359,7 +359,7 @@ fn full_native_block_import_works() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
 				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 200_000_000, ..Default::default() }
+					DispatchInfo { weight: 460_000_000, ..Default::default() }
 				)),
 				topics: vec![],
 			},
@@ -414,7 +414,7 @@ fn full_native_block_import_works() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
 				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 200_000_000, ..Default::default() }
+					DispatchInfo { weight: 460_000_000, ..Default::default() }
 				)),
 				topics: vec![],
 			},
@@ -437,7 +437,7 @@ fn full_native_block_import_works() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(2),
 				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 200_000_000, ..Default::default() }
+					DispatchInfo { weight: 460_000_000, ..Default::default() }
 				)),
 				topics: vec![],
 			},
@@ -606,13 +606,18 @@ fn deploying_wasm_contract_should_work() {
 			CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(0, 0))),
 				function: Call::Contracts(
-					pallet_contracts::Call::put_code::<Runtime>(10_000, transfer_code)
+					pallet_contracts::Call::put_code::<Runtime>(transfer_code)
 				),
 			},
 			CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(1, 0))),
 				function: Call::Contracts(
-					pallet_contracts::Call::instantiate::<Runtime>(1 * DOLLARS, 10_000, transfer_ch, Vec::new())
+					pallet_contracts::Call::instantiate::<Runtime>(
+						1 * DOLLARS,
+						500_000_000,
+						transfer_ch,
+						Vec::new()
+					)
 				),
 			},
 			CheckedExtrinsic {
@@ -621,7 +626,7 @@ fn deploying_wasm_contract_should_work() {
 					pallet_contracts::Call::call::<Runtime>(
 						pallet_indices::address::Address::Id(addr.clone()),
 						10,
-						10_000,
+						500_000_000,
 						vec![0x00, 0x01, 0x02, 0x03]
 					)
 				),

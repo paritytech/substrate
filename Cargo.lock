@@ -1529,6 +1529,7 @@ dependencies = [
  "frame-support",
  "parity-scale-codec",
  "pretty_assertions",
+ "rustversion",
  "serde",
  "sp-core",
  "sp-inherents",
@@ -4076,6 +4077,7 @@ dependencies = [
  "pallet-contracts-primitives",
  "pallet-randomness-collective-flip",
  "pallet-timestamp",
+ "pallet-transaction-payment",
  "parity-scale-codec",
  "parity-wasm 0.41.0",
  "pwasm-utils",
@@ -6001,6 +6003,7 @@ dependencies = [
  "sp-trie",
  "sp-utils",
  "sp-version",
+ "substrate-prometheus-endpoint",
 ]
 
 [[package]]
@@ -7642,6 +7645,7 @@ name = "sp-runtime-interface-test"
 version = "2.0.0-dev"
 dependencies = [
  "sc-executor",
+ "sp-core",
  "sp-io",
  "sp-runtime",
  "sp-runtime-interface",

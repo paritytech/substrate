@@ -58,7 +58,7 @@ pub struct BenchmarkOutput {
 	average: u64,
 }
 
-struct NsFormatter(u64);
+pub struct NsFormatter(pub u64);
 
 impl fmt::Display for NsFormatter {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
