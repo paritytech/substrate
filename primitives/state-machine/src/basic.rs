@@ -322,7 +322,7 @@ impl Externalities for BasicExternalities {
 
 		self.place_storage(
 			key.to_vec(),
-			Some(accumulator.merge_with_storage(self.storage(key).unwrap_or_default()))
+			Some(accumulator.merge_with_storage(self.storage(key).unwrap_or_default())),
 		);
 
 		accumulated
