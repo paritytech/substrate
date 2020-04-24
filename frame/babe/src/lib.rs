@@ -38,7 +38,7 @@ use sp_staking::{
 use codec::{Encode, Decode};
 use sp_inherents::{InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 use sp_consensus_babe::{
-	BABE_ENGINE_ID, ConsensusLog, BabeAuthorityWeight, SlotNumber,
+	BABE_ENGINE_ID, ConsensusLog, BabeAuthorityWeight, SlotNumber, BabeEpochConfiguration,
 	inherents::{INHERENT_IDENTIFIER, BabeInherentData},
 	digests::{NextEpochDescriptor, RawPreDigest},
 };
@@ -133,6 +133,9 @@ decl_storage! {
 		// array size because the metadata API currently doesn't resolve the
 		// variable to its underlying value.
 		pub Randomness get(fn randomness): schnorrkel::Randomness;
+
+		/// Next epoch configuration, if changed.
+		NextEpochConfig: Option<BabeEpochConfiguration>;
 
 		/// Next epoch randomness.
 		NextRandomness: schnorrkel::Randomness;
@@ -360,6 +363,14 @@ impl<T: Trait> Module<T> {
 			})
 	}
 
+	/// Plan an epoch config change. The epoch config change is recorded and will be enacted on the
+	/// next call to `enact_epoch_change`. The config will be activated one epoch after.
+	pub fn plan_config_change(
+		config: BabeEpochConfiguration,
+	) {
+		NextEpochConfig::put(config);
+	}
+
 	/// DANGEROUS: Enact an epoch change. Should be done on every block where `should_epoch_change` has returned `true`,
 	/// and the caller is the only caller of this function.
 	///
@@ -395,12 +406,15 @@ impl<T: Trait> Module<T> {
 		// so that nodes can track changes.
 		let next_randomness = NextRandomness::get();
 
-		let next = NextEpochDescriptor {
+		let next_epoch = NextEpochDescriptor {
 			authorities: next_authorities,
 			randomness: next_randomness,
 		};
+		Self::deposit_consensus(ConsensusLog::NextEpochData(next_epoch));
 
-		Self::deposit_consensus(ConsensusLog::NextEpochData(next))
+		if let Some(next_config) = NextEpochConfig::take() {
+			Self::deposit_consensus(ConsensusLog::NextConfigData(next_config));
+		}
 	}
 
 	// finds the start slot of the current epoch. only guaranteed to
