@@ -17,7 +17,7 @@
 //! Testing utilities.
 
 use serde::{Serialize, Serializer, Deserialize, de::Error as DeError, Deserializer};
-use std::{fmt::Debug, ops::Deref, fmt, cell::RefCell};
+use std::{fmt::{self, Debug}, ops::Deref, cell::RefCell};
 use crate::codec::{Codec, Encode, Decode};
 use crate::traits::{
 	self, Checkable, Applyable, BlakeTwo256, OpaqueKeys,
@@ -29,7 +29,12 @@ pub use sp_core::{H256, sr25519};
 use sp_core::{crypto::{CryptoType, Dummy, key_types, Public}, U256};
 use crate::transaction_validity::{TransactionValidity, TransactionValidityError, TransactionSource};
 
-/// Authority Id
+/// A dummy type which can be used instead of regular cryptographic primitives.
+///
+/// 1. Wraps a `u64` `AccountId` and is able to `IdentifyAccount`.
+/// 2. Can be converted to any `Public` key.
+/// 3. Implements `RuntimeAppPublic` so it can be used instead of regular application-specific
+///    crypto.
 #[derive(Default, PartialEq, Eq, Clone, Encode, Decode, Debug, Hash, Serialize, Deserialize, PartialOrd, Ord)]
 pub struct UintAuthorityId(pub u64);
 
@@ -82,7 +87,7 @@ impl UintAuthorityId {
 impl sp_application_crypto::RuntimeAppPublic for UintAuthorityId {
 	const ID: KeyTypeId = key_types::DUMMY;
 
-	type Signature = u64;
+	type Signature = TestSignature;
 
 	fn all() -> Vec<Self> {
 		ALL_KEYS.with(|l| l.borrow().clone())
@@ -94,25 +99,11 @@ impl sp_application_crypto::RuntimeAppPublic for UintAuthorityId {
 	}
 
 	fn sign<M: AsRef<[u8]>>(&self, msg: &M) -> Option<Self::Signature> {
-		let mut signature = [0u8; 8];
-		msg.as_ref().iter()
-			.chain(std::iter::repeat(&42u8))
-			.take(8)
-			.enumerate()
-			.for_each(|(i, v)| { signature[i] = *v; });
-
-		Some(u64::from_le_bytes(signature))
+		Some(TestSignature(self.0, msg.as_ref().to_vec()))
 	}
 
 	fn verify<M: AsRef<[u8]>>(&self, msg: &M, signature: &Self::Signature) -> bool {
-		let mut msg_signature = [0u8; 8];
-		msg.as_ref().iter()
-			.chain(std::iter::repeat(&42))
-			.take(8)
-			.enumerate()
-			.for_each(|(i, v)| { msg_signature[i] = *v; });
-
-		u64::from_le_bytes(msg_signature) == *signature
+		traits::Verify::verify(signature, msg.as_ref(), &self.0)
 	}
 
 	fn to_raw_vec(&self) -> Vec<u8> {
@@ -138,6 +129,26 @@ impl OpaqueKeys for UintAuthorityId {
 
 impl crate::BoundToRuntimeAppPublic for UintAuthorityId {
 	type Public = Self;
+}
+
+impl traits::IdentifyAccount for UintAuthorityId {
+	type AccountId = u64;
+
+	fn into_account(self) -> Self::AccountId {
+		self.0
+	}
+}
+
+/// A dummy signature type, to match `UintAuthorityId`.
+#[derive(Eq, PartialEq, Clone, Debug, Hash, Serialize, Deserialize, Encode, Decode)]
+pub struct TestSignature(pub u64, pub Vec<u8>);
+
+impl traits::Verify for TestSignature {
+	type Signer = UintAuthorityId;
+
+	fn verify<L: traits::Lazy<[u8]>>(&self, mut msg: L, signer: &u64) -> bool {
+		signer == &self.0 && msg.get() == &self.1[..]
+	}
 }
 
 /// Digest item
@@ -332,6 +343,7 @@ impl<Call: Codec + Sync + Send, Context, Extra> Checkable<Context> for TestXt<Ca
 	type Checked = Self;
 	fn check(self, _: &Context) -> Result<Self::Checked, TransactionValidityError> { Ok(self) }
 }
+
 impl<Call: Codec + Sync + Send, Extra> traits::Extrinsic for TestXt<Call, Extra> {
 	type Call = Call;
 	type SignaturePayload = (u64, Extra);

@@ -44,7 +44,6 @@ use node_runtime::{
 	UncheckedExtrinsic,
 	MinimumPeriod,
 	BalancesCall,
-	SystemCall,
 	AccountId,
 	Signature,
 };
@@ -277,21 +276,24 @@ impl BenchDb {
 
 		let mut iteration = 0;
 		let start = std::time::Instant::now();
-		let qty: usize = std::env::var("TX_PER_BLOCK").unwrap().parse().unwrap();
-//		for _ in 0..block_type.transactions() {
-		for _ in 0..qty {
+		for _ in 0..block_type.transactions() {
 
 			let sender = self.keyring.at(iteration);
 			let receiver = get_account_id_from_seed::<sr25519::Public>(
 				&format!("random-user//{}", iteration)
 			);
-//			let nonce: u32 = iteration as u32 / 100;
-			let nonce: u32 = 0;
+
 			let signed = self.keyring.sign(
 				CheckedExtrinsic {
-					signed: Some((sender, signed_extra(nonce, node_runtime::ExistentialDeposit::get() + 1))),
-					function: Call::System(
-						SystemCall::ensure_signed()
+					signed: Some((sender, signed_extra(0, node_runtime::ExistentialDeposit::get() + 1))),
+					function: Call::Balances(
+						BalancesCall::transfer(
+							pallet_indices::address::Address::Id(receiver),
+							match block_type {
+								BlockType::RandomTransfers(_) => node_runtime::ExistentialDeposit::get() + 1,
+								BlockType::RandomTransfersReaping(_) => 100*DOLLARS - node_runtime::ExistentialDeposit::get() - 1,
+							}
+						)
 					),
 				},
 				version,
@@ -356,7 +358,7 @@ impl BenchKeyring {
 	pub fn new(length: usize, key_types: KeyTypes) -> Self {
 		let mut accounts = BTreeMap::new();
 
-		for n in 0..2000 {
+		for n in 0..length {
 			let seed = format!("//endowed-user/{}", n);
 			let (account_id, pair) = match key_types {
 				KeyTypes::Sr25519 => {

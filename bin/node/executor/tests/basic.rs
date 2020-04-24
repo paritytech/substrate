@@ -18,7 +18,7 @@ use codec::{Encode, Decode, Joiner};
 use frame_support::{
 	StorageValue, StorageMap,
 	traits::Currency,
-	weights::{GetDispatchInfo, DispatchInfo, DispatchClass},
+	weights::{GetDispatchInfo, DispatchInfo, DispatchClass, Pays},
 };
 use sp_core::{
 	NeverNativeValue, map, traits::Externalities, storage::{well_known_keys, Storage},
@@ -170,7 +170,7 @@ fn panic_execution_with_foreign_code_gives_error() {
 				vec![0u8; 32]
 			}
 		],
-		children: map![],
+		children_default: map![],
 	});
 
 	let r = executor_call::<NeverNativeValue, fn() -> _>(
@@ -206,7 +206,7 @@ fn bad_extrinsic_with_native_equivalent_code_gives_error() {
 				vec![0u8; 32]
 			}
 		],
-		children: map![],
+		children_default: map![],
 	});
 
 	let r = executor_call::<NeverNativeValue, fn() -> _>(
@@ -240,7 +240,7 @@ fn successful_execution_with_native_equivalent_code_gives_ok() {
 			},
 			<frame_system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
 		],
-		children: map![],
+		children_default: map![],
 	});
 
 	let r = executor_call::<NeverNativeValue, fn() -> _>(
@@ -282,7 +282,7 @@ fn successful_execution_with_foreign_code_gives_ok() {
 			},
 			<frame_system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
 		],
-		children: map![],
+		children_default: map![],
 	});
 
 	let r = executor_call::<NeverNativeValue, fn() -> _>(
@@ -338,7 +338,7 @@ fn full_native_block_import_works() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
 				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 10_000_000, class: DispatchClass::Mandatory, pays_fee: true }
+					DispatchInfo { weight: 10_000_000, class: DispatchClass::Mandatory, ..Default::default() }
 				)),
 				topics: vec![],
 			},
@@ -359,7 +359,7 @@ fn full_native_block_import_works() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
 				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 200_000_000, class: DispatchClass::Normal, pays_fee: true }
+					DispatchInfo { weight: 460_000_000, ..Default::default() }
 				)),
 				topics: vec![],
 			},
@@ -391,7 +391,7 @@ fn full_native_block_import_works() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
 				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 10_000_000, class: DispatchClass::Mandatory, pays_fee: true }
+					DispatchInfo { weight: 10_000_000, class: DispatchClass::Mandatory, pays_fee: Pays::Yes }
 				)),
 				topics: vec![],
 			},
@@ -414,7 +414,7 @@ fn full_native_block_import_works() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
 				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 200_000_000, class: DispatchClass::Normal, pays_fee: true }
+					DispatchInfo { weight: 460_000_000, ..Default::default() }
 				)),
 				topics: vec![],
 			},
@@ -437,7 +437,7 @@ fn full_native_block_import_works() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(2),
 				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 200_000_000, class: DispatchClass::Normal, pays_fee: true }
+					DispatchInfo { weight: 460_000_000, ..Default::default() }
 				)),
 				topics: vec![],
 			},
@@ -606,13 +606,18 @@ fn deploying_wasm_contract_should_work() {
 			CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(0, 0))),
 				function: Call::Contracts(
-					pallet_contracts::Call::put_code::<Runtime>(10_000, transfer_code)
+					pallet_contracts::Call::put_code::<Runtime>(transfer_code)
 				),
 			},
 			CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(1, 0))),
 				function: Call::Contracts(
-					pallet_contracts::Call::instantiate::<Runtime>(1 * DOLLARS, 10_000, transfer_ch, Vec::new())
+					pallet_contracts::Call::instantiate::<Runtime>(
+						1 * DOLLARS,
+						500_000_000,
+						transfer_ch,
+						Vec::new()
+					)
 				),
 			},
 			CheckedExtrinsic {
@@ -621,7 +626,7 @@ fn deploying_wasm_contract_should_work() {
 					pallet_contracts::Call::call::<Runtime>(
 						pallet_indices::address::Address::Id(addr.clone()),
 						10,
-						10_000,
+						500_000_000,
 						vec![0x00, 0x01, 0x02, 0x03]
 					)
 				),
@@ -704,7 +709,7 @@ fn panic_execution_gives_error() {
 			},
 			<frame_system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
 		],
-		children: map![],
+		children_default: map![],
 	});
 
 	let r = executor_call::<NeverNativeValue, fn() -> _>(
@@ -738,7 +743,7 @@ fn successful_execution_gives_ok() {
 			},
 			<frame_system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
 		],
-		children: map![],
+		children_default: map![],
 	});
 
 	let r = executor_call::<NeverNativeValue, fn() -> _>(

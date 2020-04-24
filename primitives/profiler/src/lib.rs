@@ -1,21 +1,21 @@
 #[macro_use]
 extern crate rental;
 
-use std::pin::Pin;
-use std::marker::PhantomPinned;
-use std::ptr::NonNull;
-use std::collections::HashMap;
 use std::thread::JoinHandle;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::SystemTime;
 use parking_lot::Mutex;
+use std::collections::{HashMap, BTreeMap};
+use tracing::{span, field, Level};
 
-const MAX_SPAN_STACK_LEN: usize = 1000;
+const MAX_SPAN_STACK_LEN: usize = 100;
 
+///
 pub trait Profiler: Send {
 	fn create_span(&mut self, target: &str, name: &str) -> u64;
 
 	fn exit_span(&mut self, id: u64);
+
+	fn record_info(&mut self, id: u64, info: &str) {}
 }
 
 #[derive(Debug)]
@@ -48,10 +48,12 @@ rental! {
 	}
 }
 
+/// Requires a tracing::Subscriber to process span traces,
+/// this is available when running with client (and relevant cli params)
 #[derive(Default)]
 pub struct TracingProfiler {
 	next_id: AtomicU64,
-	spans: Vec<(u64, rent_span::SpanAndGuard)>,
+	spans: BTreeMap<u64, rent_span::SpanAndGuard>,
 }
 
 impl TracingProfiler {
@@ -60,6 +62,7 @@ impl TracingProfiler {
 	}
 }
 
+/// For spans to be recorded they must be registered in the `span_dispatch` macro call below
 impl Profiler for TracingProfiler {
 	fn create_span(&mut self, target: &str, name: &str) -> u64 {
 		let id = self.next_id.fetch_add(1, Ordering::Relaxed);
@@ -67,7 +70,7 @@ impl Profiler for TracingProfiler {
 			($($target:tt,$name:tt;)*) => {
 				match (target, name) {
 					$(
-						($target, $name) => Some(tracing::span!(target: $target, tracing::Level::INFO, $name, sp_profiler_ok = true)),
+						($target, $name) => Some(span!(target: $target, Level::INFO, $name, sp_profiler_ok = true, info = field::Empty)),
 					)*
 					_ => {
 						log::warn!("Trying to profile span target: {}, name: {} that is not registered",
@@ -78,45 +81,39 @@ impl Profiler for TracingProfiler {
 				}
 			}
 		};
-		/// Register spans here
+		// Register spans here
 		let span_opt: Option<tracing::Span> = span_dispatch! {
 			"frame_executive","execute_block";
-			"pallet_balances","transfer";
-			"sp_io::storage","changes_root";
-			"sp_io::storage","storage_root";
-			"pallet_session","on_initialize";
+			"frame_executive","apply_extrinsic_with_len";
+			"sp_io::storage","root";
 		};
 		if let Some(span) = span_opt {
 			let sg = rent_span::SpanAndGuard::new(
 				Box::new(span),
 				|span| span.enter(),
 			);
-			self.spans.push((id, sg));
+			self.spans.insert(id, sg);
 		}
 		if self.spans.len() > MAX_SPAN_STACK_LEN {
 			log::warn!("MAX_SPAN_STACK_LEN exceeded, removing oldest span, recording `sp_profiler_ok = false`");
-			let mut sg = self.spans.remove(0);
-			sg.1.rent_all_mut(|s| {s.span.record("sp_profiler_ok", &false);});
+			let key = self.spans.keys().next().expect("Spans.len() > MAX_SPAN_STACK_LEN so must have at least one key").clone();
+			let mut sg = self.spans.remove(&key).expect("Just got the key so must be in the map");
+			sg.rent_all_mut(|s| {s.span.record("sp_profiler_ok", &false);});
 		}
 		id
 	}
 
 	fn exit_span(&mut self, id: u64) {
 		loop {
-			match self.spans.pop() {
+			match self.spans.remove(&id) {
 				Some(mut sg) => {
-					// if id > sg.id it means the span is not registered, so we ignore the exit
-					if id > sg.0 {
-						self.spans.push(sg);
-						return;
-					} else {
-						if sg.0 > id {
-							// Did not receive the matching exit_span call due to early exit from calling scope
-							// mark as not ok to use for profiling
-							// (overall time is from this span's start until the parent span's exit)
-							sg.1.rent_all_mut(|s| {s.span.record("sp_profiler_ok", &false);});
-						} else {
-							return;
+					// Find any outstanding spans where we did not receive the matching exit_span
+					// due to early exit from calling scope, mark as not ok to use for profiling.
+					// (overall time is from this span's start until the parent span's exit)
+					let lost_span_ids: Vec<_> = self.spans.iter().filter(|t| t.0 > &id).map(|t| t.0).cloned().collect();
+					for lost_span_id in lost_span_ids {
+						if let Some(mut sg) = self.spans.remove(&lost_span_id) {
+							sg.rent_all_mut(|s| {s.span.record("sp_profiler_ok", &false);});
 						}
 					}
 				}
@@ -127,8 +124,15 @@ impl Profiler for TracingProfiler {
 			}
 		}
 	}
+
+	fn record_info(&mut self, id: u64, info: &str) {
+		if let Some(mut sg) = self.spans.get_mut(&id) {
+			sg.rent_all_mut(|s| { s.span.record("info", &info); });
+		}
+	}
 }
 
+/// Implementation that writes output to file
 pub struct FileProfiler {
 	next_id: AtomicU64,
 	sender: crossbeam::channel::Sender<SpanPhase>,
@@ -186,12 +190,6 @@ impl FileProfiler {
 	}
 }
 
-fn timestamp() -> u64 {
-	use std::{convert::{TryFrom, TryInto}, time::SystemTime};
-	let now = SystemTime::now();
-	now.duration_since(SystemTime::UNIX_EPOCH).unwrap().as_nanos().try_into().unwrap()
-}
-
 impl Drop for FileProfiler {
 	fn drop(&mut self) {
 		if let Err(_) = self.join_handle.take().expect("We only drop once, so must be Some").join() {
@@ -226,6 +224,8 @@ impl Profiler for FileProfiler {
 /// Profiler that immediately emits results to stdout when
 /// a span is exited. In the format of:
 /// `{target},{name},{time(ns)}`
+///
+/// Intended for use in short-running tests and benchmarks
 pub struct BasicProfiler {
 	next_id: AtomicU64,
 	span_data: Mutex<HashMap<u64, EnterSpan>>,
@@ -263,4 +263,10 @@ impl Profiler for BasicProfiler {
 				 time
 		);
 	}
+}
+
+fn timestamp() -> u64 {
+	use std::{convert::TryInto, time::SystemTime};
+	let now = SystemTime::now();
+	now.duration_since(SystemTime::UNIX_EPOCH).unwrap().as_nanos().try_into().unwrap()
 }

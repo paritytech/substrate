@@ -143,7 +143,7 @@ fn transaction_fee_is_correct_ultimate() {
 			},
 			<frame_system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
 		],
-		children: map![],
+		children_default: map![],
 	});
 
 	let tip = 1_000_000;

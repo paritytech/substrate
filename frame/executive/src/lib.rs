@@ -232,7 +232,7 @@ where
 
 	/// Actually execute all transitions for `block`.
 	pub fn execute_block(block: Block) {
-		let span_id2 = sp_io::profiling::register_span(module_path!(), "execute_block");
+		let span_id2 = sp_io::profiling::enter_span(module_path!(), "execute_block");
 		Self::initialize_block(block.header());
 
 		// any initial checks
@@ -299,7 +299,7 @@ where
 		encoded_len: usize,
 		to_note: Option<Vec<u8>>,
 	) -> ApplyExtrinsicResult {
-//		let span_id = sp_io::profiling::register_span(module_path!(), "apply_extrinsic_with_len");
+		let span_id = sp_io::profiling::enter_span(module_path!(), "apply_extrinsic_with_len");
 		// Verify that the signature is good.
 		let xt = uxt.check(&Default::default())?;
 
@@ -314,10 +314,11 @@ where
 
 		// Decode parameters and dispatch
 		let dispatch_info = xt.get_dispatch_info();
+		sp_io::profiling::record_info_u64(span_id, "weight", &dispatch_info.weight as &u64);
 		let r = Applyable::apply::<UnsignedValidator>(xt, &dispatch_info, encoded_len)?;
 
 		<frame_system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32, dispatch_info);
-//		sp_io::profiling::exit_span(span_id);
+		sp_io::profiling::exit_span(span_id);
 		Ok(r)
 	}
 
@@ -351,25 +352,20 @@ where
 		source: TransactionSource,
 		uxt: Block::Extrinsic,
 	) -> TransactionValidity {
-		use frame_support::tracing_span;
+		use sp_tracing::tracing_span;
 
-		tracing_span!{ "validate_transaction::using_encoded";
-			let encoded_len = uxt.using_encoded(|d| d.len());
-		};
+		sp_tracing::enter_span!("validate_transaction");
 
-		tracing_span!{ "validate_transaction::check";
-			let xt = uxt.check(&Default::default())?;
-		};
+		let encoded_len = tracing_span!{ "using_encoded"; uxt.using_encoded(|d| d.len()) };
 
-		tracing_span!{ "validate_transaction::dispatch_info";
-			let dispatch_info = xt.get_dispatch_info();
-		};
+		let xt = tracing_span!{ "check"; uxt.check(&Default::default())? };
 
-		tracing_span!{ "validate_transaction::validate";
-			let result = xt.validate::<UnsignedValidator>(source, &dispatch_info, encoded_len);
-		};
+		let dispatch_info = tracing_span!{ "dispatch_info"; xt.get_dispatch_info() };
 
-		result
+		tracing_span! {
+			"validate";
+			xt.validate::<UnsignedValidator>(source, &dispatch_info, encoded_len)
+		}
 	}
 
 	/// Start an offchain worker and generate extrinsics.
@@ -419,22 +415,22 @@ mod tests {
 	use hex_literal::hex;
 
 	mod custom {
-		use frame_support::weights::{SimpleDispatchInfo, Weight};
+		use frame_support::weights::{Weight, DispatchClass};
 
 		pub trait Trait: frame_system::Trait {}
 
 		frame_support::decl_module! {
 			pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-				#[weight = SimpleDispatchInfo::FixedNormal(100)]
+				#[weight = 100]
 				fn some_function(origin) {
 					// NOTE: does not make any different.
 					let _ = frame_system::ensure_signed(origin);
 				}
-				#[weight = SimpleDispatchInfo::FixedOperational(200)]
+				#[weight = (200, DispatchClass::Operational)]
 				fn some_root_operation(origin) {
 					let _ = frame_system::ensure_root(origin);
 				}
-				#[weight = SimpleDispatchInfo::InsecureFreeNormal]
+				#[weight = 0]
 				fn some_unsigned_message(origin) {
 					let _ = frame_system::ensure_none(origin);
 				}
@@ -623,7 +619,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("489ae9b57a19bb4733a264dc64bbcae9b140a904657a681ed3bb5fbbe8cf412b").into(),
+					state_root: hex!("409fb5a14aeb8b8c59258b503396a56dee45a0ee28a78de3e622db957425e275").into(),
 					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![], },
 				},
