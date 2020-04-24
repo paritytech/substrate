@@ -18,5 +18,6 @@ sp-runtime-interface-test-wasm = { version = "2.0.0-dev", path = "../test-wasm" 
 sp-runtime-interface-test-wasm-deprecated = { version = "2.0.0-dev", path = "../test-wasm-deprecated" }
 sp-state-machine = { version = "0.8.0-dev", path = "../../../primitives/state-machine" }
 sp-runtime = { version = "2.0.0-dev", path = "../../runtime" }
+sp-core = { version = "2.0.0-dev", path = "../../core" }
 sp-io = { version = "2.0.0-dev", path = "../../io" }
 tracing = "0.1.13"
