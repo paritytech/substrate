@@ -218,7 +218,6 @@ impl pallet_balances::Trait for Runtime {
 }
 
 parameter_types! {
-	pub const TransactionBaseFee: Balance = 1 * CENTS;
 	pub const TransactionByteFee: Balance = 10 * MILLICENTS;
 	// In the Substrate node, a weight of 10_000_000 (smallest non-zero weight)
 	// is mapped to 10_000_000 units of fees, hence:
@@ -230,7 +229,6 @@ parameter_types! {
 impl pallet_transaction_payment::Trait for Runtime {
 	type Currency = Balances;
 	type OnTransactionPayment = DealWithFees;
-	type TransactionBaseFee = TransactionBaseFee;
 	type TransactionByteFee = TransactionByteFee;
 	type WeightToFee = LinearWeightToFee<WeightFeeCoefficient>;
 	type FeeMultiplierUpdate = TargetedFeeAdjustment<TargetBlockFullness>;
