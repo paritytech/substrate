@@ -95,6 +95,11 @@ pub struct NetworkParams {
 	/// By default this option is true for `--dev` and false otherwise.
 	#[structopt(long)]
 	pub discover_local: bool,
+
+	/// Use the legacy "pre-mainnet-launch" networking protocol. Enable if things seem broken.
+	/// This option will be removed in the future.
+	#[structopt(long)]
+	pub legacy_network_protocol: bool,
 }
 
 impl NetworkParams {
@@ -147,7 +152,8 @@ impl NetworkParams {
 				use_yamux_flow_control: !self.no_yamux_flow_control,
 			},
 			max_parallel_downloads: self.max_parallel_downloads,
-			allow_non_globals_in_dht: self.discover_local || is_dev
+			allow_non_globals_in_dht: self.discover_local || is_dev,
+			use_new_block_requests_protocol: !self.legacy_network_protocol,
 		}
 	}
 }

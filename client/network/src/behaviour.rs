@@ -19,13 +19,16 @@ use crate::{
 	debug_info, discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryOut},
 	Event, ObservedRole, DhtEvent, ExHashT,
 };
-use crate::protocol::{self, light_client_handler, message::Roles, CustomMessageOutcome, Protocol};
+use crate::protocol::{
+	self, block_requests, light_client_handler, finality_requests,
+	message::{self, Roles}, CustomMessageOutcome, Protocol
+};
 
 use codec::Encode as _;
 use libp2p::NetworkBehaviour;
 use libp2p::core::{Multiaddr, PeerId, PublicKey};
 use libp2p::kad::record;
-use libp2p::swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters, toggle::Toggle};
+use libp2p::swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters};
 use log::debug;
 use sp_consensus::{BlockOrigin, import_queue::{IncomingBlock, Origin}};
 use sp_runtime::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId, Justification};
@@ -46,7 +49,7 @@ pub struct Behaviour<B: BlockT, H: ExHashT> {
 	/// Block request handling.
 	block_requests: protocol::BlockRequests<B>,
 	/// Finality proof request handling.
-	finality_proof_requests: Toggle<protocol::FinalityProofRequests<B>>,
+	finality_proof_requests: protocol::FinalityProofRequests<B>,
 	/// Light client request handling.
 	light_client_handler: protocol::LightClientHandler<B>,
 
@@ -77,7 +80,7 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 		user_agent: String,
 		local_public_key: PublicKey,
 		block_requests: protocol::BlockRequests<B>,
-		finality_proof_requests: Option<protocol::FinalityProofRequests<B>>,
+		finality_proof_requests: protocol::FinalityProofRequests<B>,
 		light_client_handler: protocol::LightClientHandler<B>,
 		disco_config: DiscoveryConfig,
 	) -> Self {
@@ -86,7 +89,7 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 			debug_info: debug_info::DebugInfoBehaviour::new(user_agent, local_public_key.clone()),
 			discovery: disco_config.finish(),
 			block_requests,
-			finality_proof_requests: From::from(finality_proof_requests),
+			finality_proof_requests,
 			light_client_handler,
 			events: Vec::new(),
 			role,
@@ -216,6 +219,12 @@ Behaviour<B, H> {
 				self.events.push(BehaviourOut::JustificationImport(origin, hash, nb, justification)),
 			CustomMessageOutcome::FinalityProofImport(origin, hash, nb, proof) =>
 				self.events.push(BehaviourOut::FinalityProofImport(origin, hash, nb, proof)),
+			CustomMessageOutcome::BlockRequest { target, request } => {
+				self.block_requests.send_request(&target, request);
+			},
+			CustomMessageOutcome::FinalityProofRequest { target, block_hash, request } => {
+				self.finality_proof_requests.send_request(&target, block_hash, request);
+			},
 			CustomMessageOutcome::NotificationStreamOpened { remote, protocols, roles } => {
 				let role = reported_roles_to_observed_role(&self.role, &remote, roles);
 				for engine_id in protocols {
@@ -241,6 +250,37 @@ Behaviour<B, H> {
 				self.light_client_handler.update_best_block(&peer_id, number);
 			}
 			CustomMessageOutcome::None => {}
+		}
+	}
+}
+
+impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<block_requests::Event<B>> for Behaviour<B, H> {
+	fn inject_event(&mut self, event: block_requests::Event<B>) {
+		match event {
+			block_requests::Event::Response { peer, original_request, response } => {
+				let ev = self.substrate.on_block_response(peer, original_request, response);
+				self.inject_event(ev);
+			}
+		}
+	}
+}
+
+impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<finality_requests::Event<B>> for Behaviour<B, H> {
+	fn inject_event(&mut self, event: finality_requests::Event<B>) {
+		match event {
+			finality_requests::Event::Response { peer, block_hash, proof } => {
+				let response = message::FinalityProofResponse {
+					id: 0,
+					block: block_hash,
+					proof: if !proof.is_empty() {
+						Some(proof)
+					} else {
+						None
+					},
+				};
+				let ev = self.substrate.on_finality_proof_response(peer, response);
+				self.inject_event(ev);
+			}
 		}
 	}
 }
