@@ -17,16 +17,30 @@
 //! In-memory implementation of `Database`
 
 use std::collections::HashMap;
-use crate::{Database, Transaction, ColumnId, Change};
+use crate::{Database, DatabaseRef, Transaction, ColumnId, Change};
 use parking_lot::RwLock;
+use parking_lot::Mutex;
 
 type InnerMemDb<H> = RwLock<(HashMap<ColumnId, HashMap<Vec<u8>, Vec<u8>>>, HashMap<H, Vec<u8>>)>;
-#[derive(Default)]
 /// This implements `Database` as an in-memory hash map. `commit` is not atomic.
 pub struct MemDb<H: Clone + Send + Sync + Eq + PartialEq + Default + std::hash::Hash> (
 	InnerMemDb<H>,
-	fn(&H, 
+	Mutex<Box<dyn crate::StateCursor<InnerMemDb<H>>>>, 
 );
+
+impl<H> Default for MemDb<H>
+	where
+		H: Clone + Send + Sync + Eq + PartialEq + Default + std::hash::Hash,
+{
+	// Memdb is very unlikely to use its state cursor
+	// so its default implementation is using the dummy cursor.
+	fn default() -> Self {
+		MemDb(
+			InnerMemDb::default(),
+			Mutex::new(Box::new(crate::DummyStateCursor)),
+		)
+	}
+}
 
 impl<H> Database<H> for MemDb<H>
 	where H: Clone + Send + Sync + Eq + PartialEq + Default + std::hash::Hash
@@ -40,23 +54,22 @@ impl<H> Database<H> for MemDb<H>
 				Change::Store(hash, preimage) => { s.1.insert(hash, preimage); },
 				Change::Release(hash) => { s.1.remove(&hash); },
 				Change::DeleteChild(col, child) => {
-					let trie = sp_trie::for_keys_in_trie::<sp_trie::Layout<H>, _, _> (
-						self,
-						&child.root,
-						|key: &[u8]| {
-							self.remove(col, key)
-						},
-					).map_err(|_e| {
-						// ignoring
-					});
+					let mut cursor = self.1.lock();
+					cursor.init(&self.0, col, child.encoded_root);
+					loop {
+						if let Some(key) = cursor.next_key() {
+							self.remove(col, key.as_slice())
+						} else {
+							break;
+						}
+					}
 				},
 			}
 		}
 	}
 
 	fn get(&self, col: ColumnId, key: &[u8]) -> Option<Vec<u8>> {
-		let s = self.0.read();
-		s.0.get(&col).and_then(|c| c.get(key).cloned())
+		self.0.get(col, key)
 	}
 
 	fn lookup(&self, hash: &H) -> Option<Vec<u8>> {
@@ -69,13 +82,20 @@ impl<H> MemDb<H>
 	where H: Clone + Send + Sync + Eq + PartialEq + Default + std::hash::Hash
 {
 	/// Create a new instance
-	pub fn new() -> Self {
-		MemDb::default()
+	pub fn new<C: crate::StateCursor<InnerMemDb<H>> + 'static>(c: C) -> Self {
+		MemDb(Default::default(), Mutex::new(Box::new(c)))
 	}
 
 	/// Count number of values in a column
 	pub fn count(&self, col: ColumnId) -> usize {
 		let s = self.0.read();
 		s.0.get(&col).map(|c| c.len()).unwrap_or(0)
+	}
+}
+
+impl<H> DatabaseRef for InnerMemDb<H> {
+	fn get(&self, col: ColumnId, key: &[u8]) -> Option<Vec<u8>> {
+		let s = self.read();
+		s.0.get(&col).and_then(|c| c.get(key).cloned())
 	}
 }

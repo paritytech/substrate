@@ -32,7 +32,7 @@ pub enum Change<H> {
 	Remove(ColumnId, Vec<u8>),
 	Store(H, Vec<u8>),
 	Release(H),
-	DeleteChild(ColumnId, ChildBatchRemove<H>),
+	DeleteChild(ColumnId, ChildBatchRemove),
 }
 
 /// An alteration to the database that references the data.
@@ -41,7 +41,7 @@ pub enum ChangeRef<'a, H> {
 	Remove(ColumnId, &'a [u8]),
 	Store(H, &'a [u8]),
 	Release(H),
-	DeleteChild(ColumnId, ChildBatchRemove<H>),
+	DeleteChild(ColumnId, ChildBatchRemove),
 }
 
 /// A series of changes to the database that can be committed atomically. They do not take effect
@@ -53,10 +53,10 @@ pub struct Transaction<H>(pub Vec<Change<H>>);
 /// implementation depending on database
 /// capability.
 #[derive(Clone)]
-pub struct ChildBatchRemove<H> {
+pub struct ChildBatchRemove {
 	/// For database without key iteration
 	/// we delete by parsing the whole trie.
-	pub root: H,
+	pub encoded_root: Vec<u8>,
 
 	/// Database that allows iteration can only
 	/// delete all key using this keyspace.
@@ -93,7 +93,7 @@ impl<H> Transaction<H> {
 		self.0.push(Change::Release(hash))
 	}
 	/// Set the value of `key` in `col` to `value`, replacing anything that is there currently.
-	pub fn delete_child(&mut self, col: ColumnId, child: ChildBatchRemove<H>) {
+	pub fn delete_child(&mut self, col: ColumnId, child: ChildBatchRemove) {
 		self.0.push(Change::DeleteChild(col, child))
 	}
 }
@@ -188,7 +188,7 @@ pub trait Database<H: Clone>: Send + Sync {
 	}
 
 	/// Set the value of `key` in `col` to `value`, replacing anything that is there currently.
-	fn delete_child(&self, col: ColumnId, child: ChildBatchRemove<H>) {
+	fn delete_child(&self, col: ColumnId, child: ChildBatchRemove) {
 		let mut t = Transaction::new();
 		t.delete_child(col, child);
 		self.commit(t);
@@ -217,12 +217,31 @@ pub fn with_lookup<R, H: Clone>(db: &dyn Database<H>, hash: &H, mut f: impl FnMu
 	result
 }
 
+/// To use with state cursor for querying only.
+pub trait DatabaseRef {
+	/// Retrieve the value previously stored against `key` or `None` if
+	/// `key` is not currently in the database.
+	fn get(&self, col: ColumnId, key: &[u8]) -> Option<Vec<u8>>;
+}
+	
 /// Iterate on key of a state.
-pub trait ForKeys<H> {
-	/// Reset context.
-	fn init(&mut self, col: ColumnId, root: H);
-	/// Keys to delete, note that we return an iterator to be able to delete at the same
-	/// time as parsing.
-	/// Thus parsing should only access elements once.
+pub trait StateCursor<DB>: Send + Sync {
+	/// Define context and clear previous usage state.
+	fn init(&mut self, db: &DB, col: ColumnId, encoded_root: Vec<u8>);
+	/// Ordered iteration on all state keys.
+	/// This can be use to delete in a streaming way, so
+	/// the inner iteration need to query only once its element or
+	/// buffer its results (allows delete element when and iterating
+	/// at the same time).
 	fn next_key(&mut self) -> Option<Vec<u8>>;
+}
+
+/// Dummy implementation of state cursor for case
+/// where the cursor is not needed.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct DummyStateCursor;
+
+impl<DB> StateCursor<DB> for DummyStateCursor {
+	fn init(&mut self, _db: &DB, _col: ColumnId, _root: Vec<u8>) { }
+	fn next_key(&mut self) -> Option<Vec<u8>> { None }
 }
