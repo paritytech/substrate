@@ -182,10 +182,10 @@ pub struct PublishingSet {
 	pub authorities: Vec<(AuthorityId, SassafrasAuthorityWeight)>,
 	/// Randomness for this epoch.
 	pub randomness: Randomness,
-	/// Proofs of all VRFs collected.
-	pub proofs: Vec<VRFProof>,
-	/// Disclosing proofs.
-	pub disclosing: Vec<VRFProof>,
+	/// Outputs of all VRFs collected.
+	pub outputs: Vec<VRFOutput>,
+	/// Disclosing outputs.
+	pub disclosing: Vec<VRFOutput>,
 	/// Local pending proofs collected.
 	pub pending: Vec<PendingProof>,
 }
@@ -215,8 +215,8 @@ pub struct ValidatingSet {
 	pub authorities: Vec<(AuthorityId, SassafrasAuthorityWeight)>,
 	/// Randomness for this epoch.
 	pub randomness: Randomness,
-	/// Proofs as ordered by slot numbers.
-	pub proofs: Vec<(SlotNumber, VRFProof)>,
+	/// Outputs as ordered by slot numbers.
+	pub outputs: Vec<(SlotNumber, VRFOutput)>,
 	/// Pending local proofs.
 	pub pending: Vec<PendingProof>,
 }
@@ -250,8 +250,8 @@ impl EpochT for Epoch {
 
 	fn increment(&self, descriptor: NextEpochDescriptor) -> Epoch {
 		let start_slot = self.validating.start_slot + self.validating.duration;
-		let sortition_proofs = utils::sortition(
-			&self.publishing.proofs,
+		let sortition_outputs = utils::sortition(
+			&self.publishing.outputs,
 			self.validating.duration as usize
 		);
 
@@ -266,7 +266,7 @@ impl EpochT for Epoch {
 				epoch_index: self.generating.epoch_index,
 				authorities: self.generating.authorities.clone(),
 				randomness: self.generating.randomness,
-				proofs: Vec::new(),
+				outputs: Vec::new(),
 				pending: self.generating.pending.clone(),
 				disclosing: Vec::new(),
 			},
@@ -276,7 +276,7 @@ impl EpochT for Epoch {
 				epoch_index: self.publishing.epoch_index,
 				authorities: self.publishing.authorities.clone(),
 				randomness: self.publishing.randomness,
-				proofs: sortition_proofs
+				outputs: sortition_outputs
 					.into_iter()
 					.enumerate()
 					.map(|(i, p)| (start_slot + i as u64, p))
@@ -400,7 +400,7 @@ impl Config {
 			},
 			publishing: PublishingSet {
 				epoch_index: 1,
-				proofs: Vec::new(),
+				outputs: Vec::new(),
 				authorities: self.genesis_authorities.clone(),
 				randomness: self.randomness.clone(),
 				pending: Vec::new(),
@@ -410,7 +410,7 @@ impl Config {
 				start_slot: slot_number,
 				duration: self.epoch_length,
 				epoch_index: 0,
-				proofs: Vec::new(),
+				outputs: Vec::new(),
 				authorities: self.genesis_authorities.clone(),
 				randomness: self.randomness.clone(),
 				pending: Vec::new(),
@@ -1266,9 +1266,9 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for SassafrasBlockImport<B, E, 
 				let epoch = viable_epoch.as_mut();
 
 				trace!(target: "sassafras", "Importing commitments of length: {}", commitments.len());
-				for proof in commitments {
-					if epoch.publishing.proofs.iter().position(|p| *p == proof).is_none() {
-						epoch.publishing.proofs.push(proof);
+				for output in commitments {
+					if epoch.publishing.outputs.iter().position(|o| *o == output).is_none() {
+						epoch.publishing.outputs.push(output);
 					}
 				}
 			},
@@ -1276,9 +1276,9 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for SassafrasBlockImport<B, E, 
 				let epoch = viable_epoch.as_mut();
 
 				trace!(target: "sassafras", "Importing commitments of length: {}", commitments.len());
-				for proof in commitments {
-					if epoch.publishing.proofs.iter().position(|p| *p == proof).is_none() {
-						epoch.publishing.proofs.push(proof);
+				for output in commitments {
+					if epoch.publishing.outputs.iter().position(|o| *o == output).is_none() {
+						epoch.publishing.outputs.push(output);
 					}
 				}
 			},
@@ -1287,9 +1287,9 @@ impl<B, E, Block, I, RA, PRA> BlockImport<Block> for SassafrasBlockImport<B, E, 
 		if let Some(post_block_descriptor) = post_block_digest {
 			let epoch = viable_epoch.as_mut();
 
-			for proof in post_block_descriptor.commitments {
-				if epoch.publishing.proofs.iter().position(|p| *p == proof).is_none() {
-					epoch.publishing.proofs.push(proof);
+			for output in post_block_descriptor.commitments {
+				if epoch.publishing.outputs.iter().position(|o| *o == output).is_none() {
+					epoch.publishing.outputs.push(output);
 				}
 			}
 		}

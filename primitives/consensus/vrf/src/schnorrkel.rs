@@ -72,6 +72,20 @@ impl DerefMut for VRFOutput {
 }
 
 #[cfg(feature = "std")]
+impl PartialOrd for VRFOutput {
+	fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+		self.0.as_bytes().partial_cmp(other.0.as_bytes())
+	}
+}
+
+#[cfg(feature = "std")]
+impl Ord for VRFOutput {
+	fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+		self.0.as_bytes().cmp(other.0.as_bytes())
+	}
+}
+
+#[cfg(feature = "std")]
 impl Encode for VRFOutput {
 	fn encode(&self) -> Vec<u8> {
 		self.0.as_bytes().encode()

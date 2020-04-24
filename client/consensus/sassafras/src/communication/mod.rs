@@ -4,7 +4,7 @@ use aead::Aead;
 use codec::{Encode, Decode};
 use futures::channel::mpsc::{UnboundedSender, UnboundedReceiver};
 use sp_consensus_sassafras::{SlotNumber, AuthorityId, AuthorityPair};
-use sp_consensus_vrf::schnorrkel::VRFProof;
+use sp_consensus_vrf::schnorrkel::VRFOutput;
 use sc_keystore::KeyStorePtr;
 use log::trace;
 use crate::PublishingSet;
@@ -35,8 +35,8 @@ pub fn send_out(
 		}
 
 		if pending.submit_status.is_none() {
-			if set.proofs.contains(&pending.vrf_proof) ||
-				set.disclosing.contains(&pending.vrf_proof)
+			if set.outputs.contains(&pending.vrf_output) ||
+				set.disclosing.contains(&pending.vrf_output)
 			{
 				pending.submit_status = Some(slot_number);
 				continue
@@ -57,7 +57,7 @@ pub fn send_out(
 				.init_aead32_unauthenticated::<aes_gcm::Aes256Gcm>();
 			let encrypted = match aead.encrypt(
 				&Default::default(),
-				&pending.vrf_proof.encode()[..],
+				&pending.vrf_output.encode()[..],
 			) {
 				Ok(encrypted) => encrypted,
 				Err(_) => {
@@ -133,8 +133,8 @@ pub fn receive_in(
 				continue
 			},
 		};
-		let proof = match VRFProof::decode(&mut &decrypted[..]) {
-			Ok(proof) => proof,
+		let output = match VRFOutput::decode(&mut &decrypted[..]) {
+			Ok(output) => output,
 			Err(_) => {
 				trace!(
 					target: "sassafras_communication",
@@ -144,14 +144,14 @@ pub fn receive_in(
 			},
 		};
 
-		if set.proofs.contains(&proof) || set.disclosing.contains(&proof) {
+		if set.outputs.contains(&output) || set.disclosing.contains(&output) {
 			continue
 		}
 
 		trace!(
 			target: "sassafras_communication",
-			"Received an encrypted message and decoded it as proof {:?}", proof
+			"Received an encrypted message and decoded it as output {:?}", output
 		);
-		set.disclosing.push(proof);
+		set.disclosing.push(output);
 	}
 }

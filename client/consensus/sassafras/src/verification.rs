@@ -139,8 +139,8 @@ fn check_primary_header<B: BlockT + Sized>(
 	signature: AuthoritySignature,
 	epoch: &Epoch,
 ) -> Result<(), Error<B>> {
-	let ticket_vrf_proof = epoch.validating.proofs.iter()
-		.find(|p| p.0 == pre_digest.slot_number)
+	let ticket_vrf_output = epoch.validating.outputs.iter()
+		.find(|o| o.0 == pre_digest.slot_number)
 		.ok_or_else(|| Error::ProofNotFound)?
 		.1
 		.clone();
@@ -160,8 +160,8 @@ fn check_primary_header<B: BlockT + Sized>(
 		schnorrkel::PublicKey::from_bytes(author.as_slice()).and_then(|p| {
 			p.vrf_verify(
 				ticket_transcript,
-				&pre_digest.ticket_vrf_output,
-				&ticket_vrf_proof,
+				&ticket_vrf_output,
+				&pre_digest.ticket_vrf_proof,
 			)
 		}).map_err(|s| Error::VRFVerificationFailed(s))?
 	};

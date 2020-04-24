@@ -101,13 +101,15 @@ fn claim_primary_slot(
 	epoch: &Epoch,
 	keystore: &KeyStorePtr,
 ) -> Option<(PreDigest, AuthorityPair)> {
-	let ticket_vrf_index = epoch.validating.proofs.iter().position(|(s, _)| *s == slot_number)? as u32;
-	let ticket_vrf_proof = epoch.validating.proofs[ticket_vrf_index as usize].clone().1;
+	let ticket_vrf_index = epoch.validating.outputs
+		.iter()
+		.position(|(s, _)| *s == slot_number)? as u32;
+	let ticket_vrf_output = epoch.validating.outputs[ticket_vrf_index as usize].clone().1;
 	let pending_index = epoch.validating.pending.iter()
-		.position(|p| p.vrf_proof == ticket_vrf_proof)?;
+		.position(|p| p.vrf_output == ticket_vrf_output)?;
 	let ticket_vrf_attempt = epoch.validating.pending[pending_index].attempt;
 	let authority_index = epoch.validating.pending[pending_index].authority_index;
-	let ticket_vrf_output = epoch.validating.pending[pending_index].vrf_output.clone();
+	let ticket_vrf_proof = epoch.validating.pending[pending_index].vrf_proof.clone();
 
 	let keystore = keystore.read();
 	let pair = keystore.key_pair::<AuthorityPair>(
@@ -125,7 +127,7 @@ fn claim_primary_slot(
 	let mut commitments = Vec::new();
 	for disclosing in &epoch.publishing.disclosing {
 		if commitments.len() < MAX_PRE_DIGEST_COMMITMENTS &&
-			epoch.publishing.proofs.iter().position(|p| p == disclosing).is_none()
+			epoch.publishing.outputs.iter().position(|o| o == disclosing).is_none()
 		{
 			commitments.push(disclosing.clone());
 		}
@@ -133,7 +135,7 @@ fn claim_primary_slot(
 	trace!(target: "sassafras", "Appending commitment length: {}", commitments.len());
 
 	let claim = PreDigest::Primary(PrimaryPreDigest {
-		ticket_vrf_index, ticket_vrf_attempt, ticket_vrf_output,
+		ticket_vrf_index, ticket_vrf_attempt, ticket_vrf_proof,
 		authority_index, slot_number, post_vrf_proof, post_vrf_output,
 		commitments,
 	});
@@ -229,8 +231,8 @@ fn claim_secondary_slot(
 		if pair.public() == *expected_author {
 			let mut commitments = Vec::new();
 			for disclosing in &epoch.publishing.disclosing {
-				if commitments.len() < MAX_PRE_DIGEST_COMMITMENTS && epoch.publishing.proofs.iter()
-					.position(|p| p == disclosing)
+				if commitments.len() < MAX_PRE_DIGEST_COMMITMENTS && epoch.publishing.outputs.iter()
+					.position(|o| o == disclosing)
 					.is_none()
 				{
 					commitments.push(disclosing.clone());

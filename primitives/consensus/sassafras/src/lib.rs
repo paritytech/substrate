@@ -81,18 +81,18 @@ pub type SassafrasBlockWeight = u32;
 
 /// A consensus log item for Sassafras.
 #[derive(Decode, Encode, Clone, RuntimeDebug)]
-pub enum RawConsensusLog<VRFProof=schnorrkel::RawVRFProof> {
+pub enum RawConsensusLog<VRFOutput=schnorrkel::RawVRFOutput> {
 	/// The epoch has changed.
 	NextEpochData(digests::NextEpochDescriptor),
 	/// Commitments to be included in the current block.
-	PostBlockData(digests::RawPostBlockDescriptor<VRFProof>),
+	PostBlockData(digests::RawPostBlockDescriptor<VRFOutput>),
 	/// Disable the authority with given index.
 	OnDisabled(AuthorityIndex),
 }
 
 /// A consensus log item suitable for std environment.
 #[cfg(feature = "std")]
-pub type ConsensusLog = RawConsensusLog<schnorrkel::VRFProof>;
+pub type ConsensusLog = RawConsensusLog<schnorrkel::VRFOutput>;
 
 /// Configuration data used by the Sassafras consensus engine.
 #[derive(Clone, Encode, Decode, RuntimeDebug, PartialEq, Eq)]
