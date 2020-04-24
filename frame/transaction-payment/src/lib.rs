@@ -172,8 +172,7 @@ impl<T: Trait> Module<T> {
 			let targeted_fee_adjustment = NextFeeMultiplier::get();
 			let adjusted_fee = targeted_fee_adjustment.saturated_multiply_accumulate(adjustable_fee.saturated_into());
 
-			let base_weight = T::ExtrinsicBaseWeight::get();
-			let base_fee = Self::weight_to_fee(base_weight);
+			let base_fee = Self::weight_to_fee(T::ExtrinsicBaseWeight::get());
 			base_fee.saturating_add(adjusted_fee.saturated_into()).saturating_add(tip)
 		} else {
 			tip

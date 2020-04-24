@@ -55,7 +55,7 @@ pub use frame_metadata::{ModuleErrorMetadata, ErrorMetadata, DecodeDifferent};
 ///     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 ///         type Error = MyError<T>;
 ///
-/// 		#[weight = 0]
+///         #[weight = 0]
 ///         fn do_something(origin) -> frame_support::dispatch::DispatchResult {
 ///             Err(MyError::<T>::YouAreNotCoolEnough.into())
 ///         }

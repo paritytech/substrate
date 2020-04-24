@@ -192,8 +192,8 @@ where
 			frame_system::InitKind::Full,
 		);
 		<frame_system::Module<System> as OnInitialize<System::BlockNumber>>::on_initialize(*block_number);
-		let mut weight = <AllModules as OnInitialize<System::BlockNumber>>::on_initialize(*block_number);
-		weight = weight.saturating_add(<System::BlockExecutionWeight as frame_support::traits::Get<_>>::get());
+		let weight = <AllModules as OnInitialize<System::BlockNumber>>::on_initialize(*block_number)
+			.saturating_add(<System::BlockExecutionWeight as frame_support::traits::Get<_>>::get());
 		<frame_system::Module::<System>>::register_extra_weight_unchecked(weight);
 
 		frame_system::Module::<System>::note_finished_initialize();
