@@ -99,6 +99,7 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	importing_block: RwLock<Option<Block::Hash>>,
 	block_rules: BlockRules<Block>,
 	execution_extensions: ExecutionExtensions<Block>,
+	config: ClientConfig,
 	_phantom: PhantomData<RA>,
 }
 
@@ -136,6 +137,7 @@ pub fn new_in_mem<E, Block, S, RA>(
 	keystore: Option<sp_core::traits::BareCryptoStorePtr>,
 	prometheus_registry: Option<Registry>,
 	spawn_handle: Box<dyn CloneableSpawn>,
+	config: ClientConfig,
 ) -> sp_blockchain::Result<Client<
 	in_mem::Backend<Block>,
 	LocalCallExecutor<in_mem::Backend<Block>, E>,
@@ -146,7 +148,24 @@ pub fn new_in_mem<E, Block, S, RA>(
 	S: BuildStorage,
 	Block: BlockT,
 {
-	new_with_backend(Arc::new(in_mem::Backend::new()), executor, genesis_storage, keystore, spawn_handle, prometheus_registry)
+	new_with_backend(
+		Arc::new(in_mem::Backend::new()),
+		executor,
+		genesis_storage,
+		keystore,
+		spawn_handle,
+		prometheus_registry,
+		config,
+	)
+}
+
+/// Relevant client configuration items relevant for the client.
+#[derive(Debug,Clone,Default)]
+pub struct ClientConfig {
+	/// Enable the offchain worker db.
+	pub offchain_worker_enabled: bool,
+	/// If true, allows access from the runtime to write into offchain worker db.
+	pub offchain_indexing_api: bool,
 }
 
 /// Create a client with the explicitly provided backend.
@@ -158,6 +177,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 	keystore: Option<sp_core::traits::BareCryptoStorePtr>,
 	spawn_handle: Box<dyn CloneableSpawn>,
 	prometheus_registry: Option<Registry>,
+	config: ClientConfig,
 ) -> sp_blockchain::Result<Client<B, LocalCallExecutor<B, E>, Block, RA>>
 	where
 		E: CodeExecutor + RuntimeInfo,
@@ -165,7 +185,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 		Block: BlockT,
 		B: backend::LocalBackend<Block> + 'static,
 {
-	let call_executor = LocalCallExecutor::new(backend.clone(), executor, spawn_handle);
+	let call_executor = LocalCallExecutor::new(backend.clone(), executor, spawn_handle, config.clone());
 	let extensions = ExecutionExtensions::new(Default::default(), keystore);
 	Client::new(
 		backend,
@@ -175,6 +195,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 		Default::default(),
 		extensions,
 		prometheus_registry,
+		config,
 	)
 }
 
@@ -243,6 +264,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 	B: backend::Backend<Block>,
 	E: CallExecutor<Block>,
 	Block: BlockT,
+	Block::Header: Clone,
 {
 	/// Creates new Substrate Client with given blockchain and code executor.
 	pub fn new(
@@ -253,6 +275,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		bad_blocks: BadBlocks<Block>,
 		execution_extensions: ExecutionExtensions<Block>,
 		prometheus_registry: Option<Registry>,
+		config: ClientConfig,
 	) -> sp_blockchain::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
 			let genesis_storage = build_genesis_storage.build_storage()?;
@@ -282,6 +305,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			importing_block: Default::default(),
 			block_rules: BlockRules::new(fork_blocks, bad_blocks),
 			execution_extensions,
+			config,
 			_phantom: Default::default(),
 		})
 	}
@@ -614,7 +638,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		if let Ok(ImportResult::Imported(ref aux)) = result {
 			if aux.is_new_best {
 				use rand::Rng;
-				
+
 				// don't send telemetry block import events during initial sync for every
 				// block to avoid spamming the telemetry server, these events will be randomly
 				// sent at a rate of 1/10.
@@ -696,7 +720,22 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 				operation.op.update_cache(new_cache);
 
-				let (main_sc, child_sc, tx, _, changes_trie_tx) = storage_changes.into_inner();
+				let (
+					main_sc,
+					child_sc,
+					offchain_sc,
+					tx, _,
+					changes_trie_tx,
+				) = storage_changes.into_inner();
+
+				if self.config.offchain_indexing_api {
+					// if let Some(mut offchain_storage) = self.backend.offchain_storage() {
+					// 	offchain_sc.iter().for_each(|(k,v)| {
+					// 		offchain_storage.set(b"block-import-info", k,v)
+					// 	});
+					// }
+					operation.op.update_offchain_storage(offchain_sc)?;
+				}
 
 				operation.op.update_db_storage(tx)?;
 				operation.op.update_storage(main_sc.clone(), child_sc.clone())?;
@@ -1554,6 +1593,7 @@ impl<B, E, Block, RA> CallApiAt<Block> for Client<B, E, Block, RA> where
 			params.function,
 			&params.arguments,
 			params.overlayed_changes,
+			params.offchain_changes,
 			Some(params.storage_transaction_cache),
 			params.initialize_block,
 			manager,
@@ -3493,6 +3533,7 @@ pub(crate) mod tests {
 				None,
 				None,
 				sp_core::tasks::executor(),
+				Default::default(),
 			)
 			.unwrap();
 
