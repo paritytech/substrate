@@ -49,6 +49,11 @@
 //!
 //! `blake2_256(epoch_randomness ++ slot_number) % authorities_len`.
 //!
+//! The secondary slots supports either a `SecondaryPlain` or `SecondaryVRF`
+//! variant. Comparing with `SecondaryPlain` variant, the `SecondaryVRF` variant
+//! generates an additional VRF output. The output is not included in beacon
+//! randomness, but can be consumed by parachains.
+//!
 //! The fork choice rule is weight-based, where weight equals the number of
 //! primary blocks in the chain. We will pick the heaviest chain (more primary
 //! blocks) and will go with the longest one in case of a tie.
@@ -64,8 +69,8 @@ pub use sp_consensus_babe::{
 	AuthorityId, AuthorityPair, AuthoritySignature,
 	BabeAuthorityWeight, VRF_OUTPUT_LENGTH,
 	digests::{
-		CompatibleDigestItem, NextEpochDescriptor, NextConfigDescriptor,
-		PreDigest, PrimaryPreDigest, SecondaryPreDigest,
+		CompatibleDigestItem, NextEpochDescriptor, NextConfigDescriptor, PreDigest,
+		PrimaryPreDigest, SecondaryPlainPreDigest,
 	},
 };
 pub use sp_consensus::SyncOracle;
@@ -184,7 +189,7 @@ impl Epoch {
 			randomness: genesis_config.randomness.clone(),
 			config: BabeEpochConfiguration {
 				c: genesis_config.c,
-				secondary_slots: genesis_config.secondary_slots,
+				allowed_slots: genesis_config.allowed_slots,
 			},
 		}
 	}
@@ -279,7 +284,26 @@ impl Config {
 		C: AuxStore + ProvideRuntimeApi<B>, C::Api: BabeApi<B, Error = sp_blockchain::Error>,
 	{
 		trace!(target: "babe", "Getting slot duration");
-		match sc_consensus_slots::SlotDuration::get_or_compute(client, |a, b| a.configuration(b)).map(Self) {
+		match sc_consensus_slots::SlotDuration::get_or_compute(client, |a, b| {
+			let has_api_v1 = a.has_api_with::<dyn BabeApi<B, Error = sp_blockchain::Error>, _>(
+				&b, |v| v == 1,
+			)?;
+			let has_api_v2 = a.has_api_with::<dyn BabeApi<B, Error = sp_blockchain::Error>, _>(
+				&b, |v| v == 2,
+			)?;
+
+			if has_api_v1 {
+				#[allow(deprecated)] {
+					Ok(a.configuration_before_version_2(b)?.into())
+				}
+			} else if has_api_v2 {
+				a.configuration(b)
+			} else {
+				Err(sp_blockchain::Error::VersionInvalid(
+					"Unsupported or invalid BabeApi version".to_string()
+				))
+			}
+		}).map(Self) {
 			Ok(s) => Ok(s),
 			Err(s) => {
 				warn!(target: "babe", "Failed to get slot duration");
@@ -583,7 +607,7 @@ fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, Error<B>>
 	// genesis block doesn't contain a pre digest so let's generate a
 	// dummy one to not break any invariants in the rest of the code
 	if header.number().is_zero() {
-		return Ok(PreDigest::Secondary(SecondaryPreDigest {
+		return Ok(PreDigest::SecondaryPlain(SecondaryPlainPreDigest {
 			slot_number: 0,
 			authority_index: 0,
 		}));
@@ -1044,7 +1068,7 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 			let epoch_config = next_config_digest.unwrap_or_else(
 				|| viable_epoch.as_ref().config.clone()
 			);
-      
+
 			// restrict info logging during initial sync to avoid spam
 			let log_level = if block.origin == BlockOrigin::NetworkInitialSync {
 				log::Level::Debug
@@ -1053,7 +1077,7 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 			};
 
 			log!(target: "babe",
-				log_level, 
+				log_level,
 				"👶 New epoch {} launching at block {} (block slot {} >= start slot {}).",
 				viable_epoch.as_ref().epoch_index,
 				hash,
