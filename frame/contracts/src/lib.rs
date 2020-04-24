@@ -493,8 +493,7 @@ decl_module! {
 		/// * If no account exists and the call value is not less than `existential_deposit`,
 		/// a regular account will be created and any value will be transferred.
 		#[weight = FunctionOf(
-			|args: (&<T::Lookup as StaticLookup>::Source, &BalanceOf<T>, &Weight, &Vec<u8>)|
-				args.2,
+			|args: (&<T::Lookup as StaticLookup>::Source, &BalanceOf<T>, &Weight, &Vec<u8>)| *args.2 as Weight,
 			DispatchClass::Normal,
 			Pays::Yes
 		)]
@@ -526,7 +525,7 @@ decl_module! {
 		///   upon any call received by this account.
 		/// - The contract is initialized.
 		#[weight = FunctionOf(
-			|args: (&BalanceOf<T>, &Weight, &CodeHash<T>, &Vec<u8>)| args.1,
+			|args: (&BalanceOf<T>, &Weight, &CodeHash<T>, &Vec<u8>)| *args.1 as Weight,
 			DispatchClass::Normal,
 			Pays::Yes
 		)]
