@@ -21,9 +21,9 @@ use crate::builder::{ServiceBuilderCommand, ServiceBuilder};
 use crate::error::Error;
 use sc_chain_spec::ChainSpec;
 use log::{warn, info};
-use futures::{future, prelude::*};
+use futures::{future, prelude::*, task::{Context, Poll}};
 use sp_runtime::traits::{
-	Block as BlockT, NumberFor, One, Zero, Header, SaturatedConversion
+	Block as BlockT, NumberFor, One, Zero, Header, SaturatedConversion, MaybeSerializeDeserialize,
 };
 use sp_runtime::generic::{BlockId, SignedBlock};
 use codec::{Decode, Encode, IoReader};
@@ -37,9 +37,82 @@ use sc_executor::{NativeExecutor, NativeExecutionDispatch};
 use std::{io::{Read, Write, Seek}, pin::Pin};
 use sc_client_api::BlockBackend;
 
+use std::marker::PhantomData;
+
 /// Build a chain spec json
 pub fn build_spec(spec: &dyn ChainSpec, raw: bool) -> error::Result<String> {
 	Ok(spec.as_json(raw)?)
+}
+
+enum BlockStream<R, B> 
+	where
+		 R: Read + Seek + 'static,
+	{
+	Binary {
+		count: u64,
+		read_block_count: u64,
+		reader: IoReader<R>,
+		_phantom: PhantomData<B>,
+	},
+	Json {
+		reader: R,
+		_phantom: PhantomData<B>,
+	},
+}
+
+impl<R, B> Unpin for BlockStream<R, B>
+	where
+		R: Read + Seek + 'static,
+		B: BlockT,
+{}
+
+impl<R, B> BlockStream<R, B>
+	where
+		R: Read + Seek + 'static,
+		B: BlockT,
+	{
+	pub fn new(input: R, binary: bool) -> Result<Self, Error> {
+		if binary {
+			let mut reader = IoReader(input);
+			let count: u64 = Decode::decode(&mut reader).map_err(|e| format!("Error reading file: {}", e))?;
+			Ok(BlockStream::Binary {
+				count,
+				read_block_count: 0,
+				reader,
+				_phantom: PhantomData,
+			})
+		} else {
+			Ok(BlockStream::Json {
+				reader: input,
+				_phantom: PhantomData,
+			})
+		}
+	}
+}
+
+impl<R, B> futures::stream::Stream for BlockStream<R, B> 
+	where
+		R: Read + Seek + Send + 'static,
+		B: BlockT + MaybeSerializeDeserialize,
+	{
+	type Item = Result<SignedBlock<B>, String>;
+
+	fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+		match Pin::get_mut(self) {
+			BlockStream::Binary {count, read_block_count, reader, _phantom} => {
+				if read_block_count < count {
+					// check for errors ?
+					Poll::Ready(Some(SignedBlock::<B>::decode(reader).map_err(|e| e.to_string())))
+				} else {
+					Poll::Ready(None)
+				}
+			}
+			BlockStream::Json {reader, _phantom} => {
+				// how does reader finish?
+				Poll::Ready(serde_json::from_reader(reader).ok())
+			}
+		}
+	}
 }
 
 impl<
