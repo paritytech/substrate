@@ -216,9 +216,16 @@ impl SharedVoterState {
 		Self { inner: Arc::new(RwLock::new(voter_state)) }
 	}
 
-	fn reset(&self, voter_state: Box<dyn voter::VoterState<AuthorityId> + Sync + Send>) {
-		let mut shared_voter_state = self.inner.write();
+	fn reset(
+		&self, voter_state: Box<dyn voter::VoterState<AuthorityId> + Sync + Send>
+	) -> Result<(), Error>
+	{
+		let mut shared_voter_state = self
+			.inner
+			.try_write_for(Duration::from_secs(1))
+			.ok_or_else(|| Error::VoterState("Failed to write to shared voter state".into()))?;
 		*shared_voter_state = Some(voter_state);
+		Ok(())
 	}
 
 	pub fn voter_state(&self) -> Option<voter::report::VoterState<AuthorityId>> {
@@ -275,6 +282,8 @@ pub enum Error {
 	Safety(String),
 	/// A timer failed to fire.
 	Timer(io::Error),
+	/// A voter state error.
+	VoterState(String),
 }
 
 impl From<GrandpaError> for Error {
@@ -901,7 +910,9 @@ where
 				);
 
 				// Repoint shared_voter_state so that the RPC endpoint can query the state
-				self.shared_voter_state.reset(voter.voter_state());
+				if let Err(err) = self.shared_voter_state.reset(voter.voter_state()) {
+					info!(target: "afg", "{:?}", err);
+				}
 
 				self.voter = Box::pin(voter);
 			},
