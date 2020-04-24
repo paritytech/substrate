@@ -573,7 +573,7 @@ decl_module! {
 		/// 
 		/// # <weight>
 		/// - `O(I)` where `I` length of `items`
-		/// - `I` storage writes (codec `O(1)`).
+		/// - `I` storage writes (`O(1)`).
 		/// # </weight>
 		#[weight = (MINIMUM_WEIGHT, DispatchClass::Operational)]
 		fn set_storage(origin, items: Vec<KeyValue>) {
