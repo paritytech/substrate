@@ -118,7 +118,7 @@ impl<B, C, SC> BabeApi for BabeRPCHandler<B, C, SC>
 
 			for slot_number in epoch_start..epoch_end {
 				let epoch = epoch_data(&shared_epoch, &client, &babe_config, slot_number, &select_chain)?;
-				if let Some((claim, key)) = authorship::claim_slot(slot_number, &epoch, &babe_config, &keystore) {
+				if let Some((claim, key)) = authorship::claim_slot(slot_number, &epoch, &keystore) {
 					match claim {
 						PreDigest::Primary { .. } => {
 							claims.entry(key.public()).or_default().primary.push(slot_number);
@@ -184,7 +184,7 @@ fn epoch_data<B, C, SC>(
 		&parent.hash(),
 		parent.number().clone(),
 		slot_number,
-		|slot| babe_config.genesis_epoch(slot),
+		|slot| Epoch::genesis(&babe_config, slot),
 	)
 		.map_err(|e| Error::Consensus(ConsensusError::ChainLookup(format!("{:?}", e))))?
 		.ok_or(Error::Consensus(ConsensusError::InvalidAuthoritiesSet))
