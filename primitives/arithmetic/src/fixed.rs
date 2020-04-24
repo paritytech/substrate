@@ -119,71 +119,23 @@ macro_rules! implement_fixed {
 					.unwrap_or(i128::max_value() as u128 + 1);
 
 				let (carry, result) = multiply(lhs, rhs);
-				let result = result.checked_shr(Self::BITS).expect("128 > BITS");
 
-				carry.checked_shl(128.checked_sub(&Self::BITS).expect("128 > BITS"))
-					.and_then(|c| result.checked_add(c))
-					.map(|r| r.unique_saturated_into())
+				// Get the shift to move upper bits to original place and at the same time
+				// to perform the division that give us the integer part of the fraction.
+				let carry_shift = 128.checked_sub(&Self::BITS).expect("128 > BITS; qed");
+
+				if carry.leading_zeros() < carry_shift {
+					// Overflow.
+					return None
+				}
+
+				let low = result.checked_shr(Self::BITS).expect("128 > BITS; qed");
+
+				carry.checked_shl(carry_shift)
+					.and_then(|c| low.checked_add(c))
+					.and_then(|r| r.try_into().ok())
 					.map(|r: i128| r * signum)
 					.and_then(|r| r.try_into().ok())
-
-				// let rhs: i128 = other.unique_saturated_into();
-				// let lhs: i128 = self.0.unique_saturated_into();
-
-				// let signum = lhs.signum() * rhs.signum();
-
-				// let mut ulhs: u128;
-				// let mut urhs: u128;
-
-				// if lhs.is_negative() {
-				// 	ulhs = lhs.saturating_mul(-1) as u128;
-				// 	if lhs == i128::min_value() {
-				// 		ulhs += 1;
-				// 	}
-				// } else {
-				// 	ulhs = lhs as u128;
-				// }
-
-				// if rhs.is_negative() {
-				// 	urhs = rhs.saturating_mul(-1) as u128;
-				// 	if rhs == i128::min_value() {
-				// 		urhs += 1;
-				// 	}
-				// } else {
-				// 	urhs = rhs as u128;
-				// }
-
-				// multiply_by_rational(ulhs, urhs, Self::accuracy() as u128)
-				// 	.ok()
-				// 	.map(|r| r.unique_saturated_into())
-				// 	.map(|r: i128| r.saturating_mul(signum))
-				// 	.and_then(|r| r.try_into().ok())
-
-				// let div = Self::accuracy() as Self::Unsigned;
-				// let positive = self.0 > 0;
-				// // safe to convert as absolute value.
-				// let parts = self.0.checked_abs().map(|v| v as Self::Unsigned)
-				// 	.unwrap_or(Self::Inner::max_value() as Self::Unsigned + 1);
-
-				// let natural_parts = parts / div;
-				// let natural_parts: N = natural_parts.saturated_into();
-
-				// let fractional_parts = (parts % div) as Self::PrevUnsigned;
-
-				// let n = int.saturating_mul(natural_parts);
-				// let p = Self::Perthing::from_parts(fractional_parts) * int;
-
-				// // everything that needs to be either added or subtracted from the original `int`.
-				// let excess = n.saturating_add(p);
-
-				// if positive {
-				// 	Some(excess)
-				// } else {
-				// 	let z: N = Self::PrevUnsigned::min_value().into();
-				// 	Some(z.saturating_sub(excess))
-				// }
-
-
 			}
 
 			fn checked_div_int<N>(self, other: N) -> Option<N>
@@ -651,8 +603,8 @@ macro_rules! implement_fixed {
 				// assert_eq!(b.checked_mul_int(i128::max_value()), Some(i128::max_value() / -2));
 				// assert_eq!(b.checked_mul_int(i128::min_value()), Some(i128::min_value() / -2));
 
-				// assert_eq!(c.checked_mul_int(i128::max_value()), None);
-				// assert_eq!(c.checked_mul_int(i128::min_value()), None);
+				assert_eq!(c.checked_mul_int(i128::max_value()), None);
+				assert_eq!(c.checked_mul_int(i128::min_value()), None);
 
 				// assert_eq!(a.checked_mul_int(i128::max_value()), Some(i128::max_value() / 2));
 				// assert_eq!(a.checked_mul_int(u64::max_value()), Some(u64::max_value() / 2));
