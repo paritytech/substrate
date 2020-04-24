@@ -101,7 +101,7 @@ use frame_support::debug;
 use frame_support::{
 	Parameter, decl_storage, decl_module,
 	traits::{Time, UnixTime, Get},
-	weights::DispatchClass,
+	weights::{DispatchClass, Weight},
 };
 use sp_runtime::{
 	RuntimeString,
