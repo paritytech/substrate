@@ -509,12 +509,21 @@ decl_module! {
 		}
 
 		/// Make some on-chain remark.
+		///
+		/// # <weight>
+		/// - `O(1)`
+		/// # </weight>
 		#[weight = 0]
 		fn remark(origin, _remark: Vec<u8>) {
 			ensure_signed(origin)?;
 		}
 
 		/// Set the number of pages in the WebAssembly environment's heap.
+		///
+		/// # <weight>
+		/// - `O(1)`
+		/// - 1 storage write.
+		/// # </weight>
 		#[weight = (0, DispatchClass::Operational)]
 		fn set_heap_pages(origin, pages: u64) {
 			ensure_root(origin)?;
@@ -522,6 +531,13 @@ decl_module! {
 		}
 
 		/// Set the new runtime code.
+		///
+		/// # <weight>
+		/// - `O(C + S)` where `C` length of `code` and `S` complexity of `can_set_code`
+		/// - 1 storage write (codec `O(C)`).
+		/// - 1 call to `can_set_code`: `O(S)` (calls `sp_io::misc::runtime_version` which is expensive).
+		/// - 1 event.
+		/// # </weight>
 		#[weight = (200_000_000, DispatchClass::Operational)]
 		pub fn set_code(origin, code: Vec<u8>) {
 			Self::can_set_code(origin, &code)?;
@@ -531,6 +547,12 @@ decl_module! {
 		}
 
 		/// Set the new runtime code without doing any checks of the given `code`.
+		///
+		/// # <weight>
+		/// - `O(C)` where `C` length of `code`
+		/// - 1 storage write (codec `O(C)`).
+		/// - 1 event.
+		/// # </weight>
 		#[weight = (200_000_000, DispatchClass::Operational)]
 		pub fn set_code_without_checks(origin, code: Vec<u8>) {
 			ensure_root(origin)?;
@@ -539,6 +561,12 @@ decl_module! {
 		}
 
 		/// Set the new changes trie configuration.
+		///
+		/// # <weight>
+		/// - `O(D)` where `D` length of `Digest`
+		/// - 1 storage write or delete (codec `O(1)`).
+		/// - 1 call to `deposit_log`: `O(D)` (which depends on the length of `Digest`)
+		/// # </weight>
 		#[weight = (20_000_000, DispatchClass::Operational)]
 		pub fn set_changes_trie_config(origin, changes_trie_config: Option<ChangesTrieConfiguration>) {
 			ensure_root(origin)?;
@@ -557,6 +585,11 @@ decl_module! {
 		}
 
 		/// Set some items of storage.
+		///
+		/// # <weight>
+		/// - `O(I)` where `I` length of `items`
+		/// - `I` storage writes (`O(1)`).
+		/// # </weight>
 		#[weight = (0, DispatchClass::Operational)]
 		fn set_storage(origin, items: Vec<KeyValue>) {
 			ensure_root(origin)?;
@@ -566,6 +599,11 @@ decl_module! {
 		}
 
 		/// Kill some items from storage.
+		///
+		/// # <weight>
+		/// - `O(VK)` where `V` length of `keys` and `K` length of one key
+		/// - `V` storage deletions.
+		/// # </weight>
 		#[weight = (0, DispatchClass::Operational)]
 		fn kill_storage(origin, keys: Vec<Key>) {
 			ensure_root(origin)?;
@@ -575,6 +613,11 @@ decl_module! {
 		}
 
 		/// Kill all storage items with a key that starts with the given prefix.
+		///
+		/// # <weight>
+		/// - `O(P)` where `P` amount of keys with prefix `prefix`
+		/// - `P` storage deletions.
+		/// # </weight>
 		#[weight = (0, DispatchClass::Operational)]
 		fn kill_prefix(origin, prefix: Key) {
 			ensure_root(origin)?;
@@ -583,6 +626,13 @@ decl_module! {
 
 		/// Kill the sending account, assuming there are no references outstanding and the composite
 		/// data is equal to its default value.
+		///
+		/// # <weight>
+		/// - `O(K)` with `K` being complexity of `on_killed_account`
+		/// - 1 storage read and deletion.
+		/// - 1 call to `on_killed_account` callback with unknown complexity `K`
+		/// - 1 event.
+		/// # </weight>
 		#[weight = (25_000_000, DispatchClass::Operational)]
 		fn suicide(origin) {
 			let who = ensure_signed(origin)?;
@@ -956,6 +1006,11 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Deposits a log and ensures it matches the block's log data.
+	///
+	/// # <weight>
+	/// - `O(D)` where `D` length of `Digest`
+	/// - 1 storage mutation (codec `O(D)`).
+	/// # </weight>
 	pub fn deposit_log(item: DigestItemOf<T>) {
 		let mut l = <Digest<T>>::get();
 		l.push(item);
@@ -1232,7 +1287,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 		let maximum_weight = T::MaximumBlockWeight::get();
 		let limit = Self::get_dispatch_limit_ratio(info.class) * maximum_weight;
 		if info.class == DispatchClass::Mandatory {
-			// If we have a dispatch that must be included in the block, it ignores all the limits. 
+			// If we have a dispatch that must be included in the block, it ignores all the limits.
 			let extrinsic_weight = info.weight.saturating_add(T::ExtrinsicBaseWeight::get());
 			let next_weight = current_weight.saturating_add(extrinsic_weight);
 			Ok(next_weight)
@@ -2238,6 +2293,7 @@ pub(crate) mod tests {
 				_: &str,
 				_: &[u8],
 				_: &mut dyn sp_externalities::Externalities,
+				_: sp_core::traits::MissingHostFunctions,
 			) -> Result<Vec<u8>, String> {
 				Ok(self.0.clone())
 			}

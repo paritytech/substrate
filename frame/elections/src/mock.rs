@@ -21,7 +21,7 @@
 use std::cell::RefCell;
 use frame_support::{
 	StorageValue, StorageMap, parameter_types, assert_ok,
-	traits::{Get, ChangeMembers, Currency},
+	traits::{Get, ChangeMembers, Currency, LockIdentifier},
 	weights::Weight,
 };
 use sp_core::H256;
@@ -124,6 +124,10 @@ impl ChangeMembers<u64> for TestChangeMembers {
 	}
 }
 
+parameter_types!{
+	pub const ElectionModuleId: LockIdentifier = *b"py/elect"; 
+}
+
 impl elections::Trait for Test {
 	type Event = Event;
 	type Currency = Balances;
@@ -141,6 +145,7 @@ impl elections::Trait for Test {
 	type InactiveGracePeriod = InactiveGracePeriod;
 	type VotingPeriod = VotingPeriod;
 	type DecayRatio = DecayRatio;
+	type ModuleId = ElectionModuleId;
 }
 
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;

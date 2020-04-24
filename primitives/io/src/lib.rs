@@ -329,7 +329,18 @@ pub trait Misc {
 
 		self.extension::<CallInWasmExt>()
 			.expect("No `CallInWasmExt` associated for the current context!")
-			.call_in_wasm(wasm, None, "Core_version", &[], &mut ext)
+			.call_in_wasm(
+				wasm,
+				None,
+				"Core_version",
+				&[],
+				&mut ext,
+				// If a runtime upgrade introduces new host functions that are not provided by
+				// the node, we should not fail at instantiation. Otherwise nodes that are
+				// updated could run this successfully and it could lead to a storage root
+				// mismatch when importing this block.
+				sp_core::traits::MissingHostFunctions::Allow,
+			)
 			.ok()
 	}
 }
