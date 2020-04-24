@@ -548,7 +548,7 @@ mod weight_for {
 		subs: impl Into<Weight> + Copy,
 		extra_fields: impl Into<Weight>
 	) -> Weight {
-		db.reads_writes(3, subs.into() + 3) // 2 `take`s + S deletions
+		db.reads_writes(2, subs.into() + 2) // 2 `take`s + S deletions
 			+ db.reads_writes(1, 1) // balance ops
 			+ 170_000_000 // constant
 			+ 1_200_000 * judgements.into() // R
