@@ -468,7 +468,7 @@ decl_module! {
 		/// Stores the given binary Wasm code into the chain's storage and returns its `codehash`.
 		/// You can instantiate contracts only with stored code.
 		#[weight = FunctionOf(
-			|args: (&Vec<u8>,)| Module::<T>::calc_code_put_costs(args.0) + MINIMUM_WEIGHT,
+			|args: (&Vec<u8>,)| Module::<T>::calc_code_put_costs(args.0),
 			DispatchClass::Normal,
 			Pays::Yes
 		)]
@@ -494,7 +494,7 @@ decl_module! {
 		/// a regular account will be created and any value will be transferred.
 		#[weight = FunctionOf(
 			|args: (&<T::Lookup as StaticLookup>::Source, &BalanceOf<T>, &Weight, &Vec<u8>)|
-				args.2 + MINIMUM_WEIGHT,
+				args.2,
 			DispatchClass::Normal,
 			Pays::Yes
 		)]
@@ -526,7 +526,7 @@ decl_module! {
 		///   upon any call received by this account.
 		/// - The contract is initialized.
 		#[weight = FunctionOf(
-			|args: (&BalanceOf<T>, &Weight, &CodeHash<T>, &Vec<u8>)| args.1 + MINIMUM_WEIGHT,
+			|args: (&BalanceOf<T>, &Weight, &CodeHash<T>, &Vec<u8>)| args.1,
 			DispatchClass::Normal,
 			Pays::Yes
 		)]
