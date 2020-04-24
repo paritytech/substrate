@@ -27,7 +27,7 @@ use sp_core::offchain::{
 	testing::{TestOffchainExt, TestTransactionPoolExt},
 };
 use frame_support::{dispatch, assert_noop};
-use sp_runtime::testing::UintAuthorityId;
+use sp_runtime::{testing::UintAuthorityId, transaction_validity::TransactionValidityError};
 
 #[test]
 fn test_unresponsiveness_slash_fraction() {
@@ -87,7 +87,7 @@ fn should_report_offline_validators() {
 
 		// should not report when heartbeat is sent
 		for (idx, v) in validators.into_iter().take(4).enumerate() {
-			let _ = heartbeat(block, 3, idx as u32, v.into()).unwrap();
+			let _ = heartbeat(block, 3, idx as u32, v.into(), Session::validators()).unwrap();
 		}
 		advance_session();
 
@@ -111,6 +111,7 @@ fn heartbeat(
 	session_index: u32,
 	authority_index: u32,
 	id: UintAuthorityId,
+	validators: Vec<u64>,
 ) -> dispatch::DispatchResult {
 	use frame_support::unsigned::ValidateUnsigned;
 
@@ -124,13 +125,19 @@ fn heartbeat(
 		authority_index,
 	};
 	let signature = id.sign(&heartbeat.encode()).unwrap();
+	let keys_len = validators.len() as u32;
 
-	ImOnline::pre_dispatch(&crate::Call::heartbeat(heartbeat.clone(), signature.clone()))
-		.map_err(|e| <&'static str>::from(e))?;
+	ImOnline::pre_dispatch(&crate::Call::heartbeat(heartbeat.clone(), signature.clone(), keys_len))
+		.map_err(|e| match e {
+			TransactionValidityError::Invalid(InvalidTransaction::Custom(INVALID_KEYS_LEN)) =>
+				"invalid keys len",
+			e @ _ => <&'static str>::from(e),
+		})?;
 	ImOnline::heartbeat(
 		Origin::system(frame_system::RawOrigin::None),
 		heartbeat,
-		signature
+		signature,
+		keys_len
 	)
 }
 
@@ -152,7 +159,7 @@ fn should_mark_online_validator_when_heartbeat_is_received() {
 		assert!(!ImOnline::is_online(2));
 
 		// when
-		let _ = heartbeat(1, 2, 0, 1.into()).unwrap();
+		let _ = heartbeat(1, 2, 0, 1.into(), Session::validators()).unwrap();
 
 		// then
 		assert!(ImOnline::is_online(0));
@@ -160,7 +167,7 @@ fn should_mark_online_validator_when_heartbeat_is_received() {
 		assert!(!ImOnline::is_online(2));
 
 		// and when
-		let _ = heartbeat(1, 2, 2, 3.into()).unwrap();
+		let _ = heartbeat(1, 2, 2, 3.into(), Session::validators()).unwrap();
 
 		// then
 		assert!(ImOnline::is_online(0));
@@ -170,7 +177,7 @@ fn should_mark_online_validator_when_heartbeat_is_received() {
 }
 
 #[test]
-fn late_heartbeat_should_fail() {
+fn late_heartbeat_and_invalid_keys_len_should_fail() {
 	new_test_ext().execute_with(|| {
 		advance_session();
 		// given
@@ -183,8 +190,11 @@ fn late_heartbeat_should_fail() {
 		assert_eq!(Session::validators(), vec![1, 2, 3]);
 
 		// when
-		assert_noop!(heartbeat(1, 3, 0, 1.into()), "Transaction is outdated");
-		assert_noop!(heartbeat(1, 1, 0, 1.into()), "Transaction is outdated");
+		assert_noop!(heartbeat(1, 3, 0, 1.into(), Session::validators()), "Transaction is outdated");
+		assert_noop!(heartbeat(1, 1, 0, 1.into(), Session::validators()), "Transaction is outdated");
+
+		// invalid keys_len
+		assert_noop!(heartbeat(1, 2, 0, 1.into(), vec![]), "invalid keys len");
 	});
 }
 
@@ -220,7 +230,7 @@ fn should_generate_heartbeats() {
 		// check stuff about the transaction.
 		let ex: Extrinsic = Decode::decode(&mut &*transaction).unwrap();
 		let heartbeat = match ex.call {
-			crate::mock::Call::ImOnline(crate::Call::heartbeat(h, _)) => h,
+			crate::mock::Call::ImOnline(crate::Call::heartbeat(h, ..)) => h,
 			e => panic!("Unexpected call: {:?}", e),
 		};
 
@@ -248,7 +258,7 @@ fn should_cleanup_received_heartbeats_on_session_end() {
 		assert_eq!(Session::validators(), vec![1, 2, 3]);
 
 		// send an heartbeat from authority id 0 at session 2
-		let _ = heartbeat(1, 2, 0, 1.into()).unwrap();
+		let _ = heartbeat(1, 2, 0, 1.into(), Session::validators()).unwrap();
 
 		// the heartbeat is stored
 		assert!(!ImOnline::received_heartbeats(&2, &0).is_none());
@@ -330,7 +340,7 @@ fn should_not_send_a_report_if_already_online() {
 		// check stuff about the transaction.
 		let ex: Extrinsic = Decode::decode(&mut &*transaction).unwrap();
 		let heartbeat = match ex.call {
-			crate::mock::Call::ImOnline(crate::Call::heartbeat(h, _)) => h,
+			crate::mock::Call::ImOnline(crate::Call::heartbeat(h, ..)) => h,
 			e => panic!("Unexpected call: {:?}", e),
 		};
 
