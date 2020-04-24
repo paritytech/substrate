@@ -127,7 +127,7 @@ impl DummyProposer {
 			&self.parent_hash,
 			self.parent_number,
 			this_slot,
-			|slot| self.factory.config.genesis_epoch(slot),
+			|slot| Epoch::genesis(&self.factory.config, slot),
 		)
 			.expect("client has data to find epoch")
 			.expect("can compute epoch for baked block");
@@ -505,9 +505,13 @@ fn can_author_block() {
 		randomness: [0; 32],
 		epoch_index: 1,
 		duration: 100,
+		config: BabeEpochConfiguration {
+			c: (3, 10),
+			secondary_slots: true,
+		},
 	};
 
-	let mut config = crate::BabeConfiguration {
+	let mut config = crate::BabeGenesisConfiguration {
 		slot_duration: 1000,
 		epoch_length: 100,
 		c: (3, 10),
@@ -517,7 +521,7 @@ fn can_author_block() {
 	};
 
 	// with secondary slots enabled it should never be empty
-	match claim_slot(i, &epoch, &config, &keystore) {
+	match claim_slot(i, &epoch, &keystore) {
 		None => i += 1,
 		Some(s) => debug!(target: "babe", "Authored block {:?}", s.0),
 	}
@@ -526,7 +530,7 @@ fn can_author_block() {
 	// of times.
 	config.secondary_slots = false;
 	loop {
-		match claim_slot(i, &epoch, &config, &keystore) {
+		match claim_slot(i, &epoch, &keystore) {
 			None => i += 1,
 			Some(s) => {
 				debug!(target: "babe", "Authored block {:?}", s.0);
@@ -632,7 +636,7 @@ fn importing_block_one_sets_genesis_epoch() {
 		&mut block_import,
 	);
 
-	let genesis_epoch = data.link.config.genesis_epoch(999);
+	let genesis_epoch = Epoch::genesis(&data.link.config, 999);
 
 	let epoch_changes = data.link.epoch_changes.lock();
 	let epoch_for_second_block = epoch_changes.epoch_data_for_child_of(
@@ -640,7 +644,7 @@ fn importing_block_one_sets_genesis_epoch() {
 		&block_hash,
 		1,
 		1000,
-		|slot| data.link.config.genesis_epoch(slot),
+		|slot| Epoch::genesis(&data.link.config, slot),
 	).unwrap().unwrap();
 
 	assert_eq!(epoch_for_second_block, genesis_epoch);

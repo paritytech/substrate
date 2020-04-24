@@ -38,8 +38,6 @@ pub(super) struct VerificationParams<'a, B: 'a + BlockT> {
 	pub(super) slot_now: SlotNumber,
 	/// epoch descriptor of the epoch this block _should_ be under, if it's valid.
 	pub(super) epoch: &'a Epoch,
-	/// genesis config of this BABE chain.
-	pub(super) config: &'a super::Config,
 }
 
 /// Check a header has been signed by the right key. If the slot is too far in
@@ -63,7 +61,6 @@ pub(super) fn check_header<B: BlockT + Sized>(
 		pre_digest,
 		slot_now,
 		epoch,
-		config,
 	} = params;
 
 	let authorities = &epoch.authorities;
@@ -102,10 +99,10 @@ pub(super) fn check_header<B: BlockT + Sized>(
 				primary,
 				sig,
 				&epoch,
-				config.c,
+				epoch.config.c,
 			)?;
 		},
-		PreDigest::Secondary(secondary) if config.secondary_slots => {
+		PreDigest::Secondary(secondary) if epoch.config.secondary_slots => {
 			debug!(target: "babe", "Verifying Secondary block");
 
 			check_secondary_header::<B>(
