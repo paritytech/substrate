@@ -36,7 +36,7 @@ use pallet_staking::{
 	Module as Staking, Trait as StakingTrait, RewardDestination, ValidatorPrefs,
 	Exposure, IndividualExposure, ElectionStatus, MAX_NOMINATIONS,
 };
-use pallet_session::Trait as SessionTrait;
+use pallet_session::{Trait as SessionTrait, SessionManager};
 use pallet_session::historical::{Trait as HistoricalTrait, IdentificationTuple};
 
 const SEED: u32 = 0;
@@ -105,12 +105,15 @@ fn create_offender<T: Trait>(n: u32, nominators: u32) -> Result<T::AccountId, &'
 }
 
 fn make_offenders<T: Trait>(num_offenders: u32, num_nominators: u32) -> Result<Vec<IdentificationTuple<T>>, &'static str> {
-	let mut offenders: Vec<T::AccountId> = vec![];
+	Staking::<T>::new_session(0);
 
+	let mut offenders: Vec<T::AccountId> = vec![];
 	for i in 0 .. num_offenders {
 		let offender = create_offender::<T>(i, num_nominators)?;
 		offenders.push(offender);
 	}
+
+	Staking::<T>::start_session(0);
 
 	Ok(offenders.iter()
 		.map(|id|
@@ -182,7 +185,7 @@ mod tests {
 	#[test]
 	fn test_benchmarks() {
 		new_test_ext().execute_with(|| {
-			//assert_ok!(test_benchmark_report_offence::<Test>());
+			assert_ok!(test_benchmark_report_offence::<Test>());
 			assert_ok!(test_benchmark_on_initialize::<Test>());
 		});
 	}
