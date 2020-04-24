@@ -17,7 +17,7 @@
 use crate::{Service, NetworkStatus, NetworkState, error::Error, DEFAULT_PROTOCOL_ID, MallocSizeOfWasm};
 use crate::{start_rpc_servers, build_network_future, TransactionPoolAdapter, TaskManager};
 use crate::status_sinks;
-use crate::config::{Configuration, KeystoreConfig, PrometheusConfig};
+use crate::config::{Configuration, KeystoreConfig, PrometheusConfig, OffchainWorkerConfig};
 use crate::metrics::MetricsService;
 use sc_client_api::{
 	self,
@@ -27,7 +27,7 @@ use sc_client_api::{
 	ExecutorProvider, CallExecutor
 };
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
-use sc_client::Client;
+use sc_client::{Client, ClientConfig};
 use sc_chain_spec::get_extension;
 use sp_consensus::import_queue::ImportQueue;
 use futures::{
@@ -215,6 +215,10 @@ fn new_full_parts<TBl, TRtApi, TExecDisp>(
 			extensions,
 			Box::new(task_manager.spawn_handle()),
 			config.prometheus_config.as_ref().map(|config| config.registry.clone()),
+			ClientConfig {
+				offchain_worker_enabled : config.offchain_worker.enabled ,
+				offchain_indexing_api: config.offchain_worker.indexing_enabled,
+			},
 		)?
 	};
 
@@ -834,11 +838,11 @@ ServiceBuilder<
 		let network_status_sinks = Arc::new(Mutex::new(status_sinks::StatusSinks::new()));
 
 		let offchain_storage = backend.offchain_storage();
-		let offchain_workers = match (config.offchain_worker, offchain_storage.clone()) {
-			(true, Some(db)) => {
+		let offchain_workers = match (config.offchain_worker.clone(), offchain_storage.clone()) {
+			(OffchainWorkerConfig {enabled: true, .. }, Some(db)) => {
 				Some(Arc::new(sc_offchain::OffchainWorkers::new(client.clone(), db)))
 			},
-			(true, None) => {
+			(OffchainWorkerConfig {enabled: true, .. }, None) => {
 				warn!("Offchain workers disabled, due to lack of offchain storage support in backend.");
 				None
 			},
