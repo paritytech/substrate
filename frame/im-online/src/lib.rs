@@ -95,7 +95,7 @@ use sp_staking::{
 use frame_support::{
 	decl_module, decl_event, decl_storage, Parameter, debug, decl_error,
 	traits::Get,
-	weights::MINIMUM_WEIGHT,
+	weights::Weight,
 };
 use frame_system::{self as system, ensure_none};
 use frame_system::offchain::{
@@ -315,7 +315,22 @@ decl_module! {
 
 		fn deposit_event() = default;
 
-		#[weight = MINIMUM_WEIGHT]
+		// NOTE: the weight include cost of validate_unsigned as it is part of the cost to import
+		// block with such an extrinsic.
+		/// # <weight>
+		/// - Complexity: `O(K + E)` where K is length of `Keys` and E is length of
+		///   `Heartbeat.network_state.external_address`
+		///
+		///   - `O(K)`: decoding of length `K`
+		///   - `O(E)`: decoding/encoding of length `E`
+		/// - DbReads: pallet_session `Validators`, pallet_session `CurrentIndex`, `Keys`,
+		///   `ReceivedHeartbeats`
+		/// - DbWrites: `ReceivedHeartbeats`
+		/// # </weight>
+		#[weight = 310_000_000
+			+ 750_000 * Keys::<T>::decode_len().unwrap_or(0) as Weight
+			+ 1_200_000 * heartbeat.network_state.external_addresses.len() as Weight
+			+ T::DbWeight::get().reads_writes(4, 1)]
 		fn heartbeat(
 			origin,
 			heartbeat: Heartbeat<T::BlockNumber>,
