@@ -177,7 +177,7 @@ decl_module! {
 
 		/// dummy `on_initialize` to return the weight used in `on_finalize`.
 		fn on_initialize() -> Weight {
-			//
+			// weight of `on_finalize`
 			19_000_000
 		}
 
