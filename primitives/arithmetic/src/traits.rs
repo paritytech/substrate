@@ -211,7 +211,12 @@ pub trait FixedPointNumber:
 	fn from_rational<N: UniqueSaturatedInto<Self::Inner>>(n: N, d: Self::Inner) -> Self;
 
 	/// Checked multiplication for integer type `N`.
-	fn checked_mul_int<N: Copy + TryFrom<i128> + UniqueSaturatedInto<i128>>(self, other: N) -> Option<N>;
+	fn checked_mul_int<
+		N: From<Self::PrevUnsigned> + TryFrom<Self::Unsigned> + UniqueSaturatedInto<Self::PrevUnsigned> +
+		Copy + Bounded + Saturating +
+		Rem<N, Output=N> + Div<N, Output=N> + Mul<N, Output=N> +
+		Add<N, Output=N>,
+	>(self, other: N) -> Option<N>;
 
 	/// Checked division for integer type `N`.
 	fn checked_div_int<N: Copy + TryFrom<i128> + UniqueSaturatedInto<i128>>(self, other: N) -> Option<N>;
@@ -224,7 +229,9 @@ pub trait FixedPointNumber:
 	/// Returns a saturated `int + (self * int)`.
 	fn saturated_multiply_accumulate<
 		N: From<Self::PrevUnsigned> + TryFrom<Self::Unsigned> + UniqueSaturatedInto<Self::PrevUnsigned> +
-			Copy + BaseArithmetic
+			Copy + Bounded + Saturating +
+			Rem<N, Output=N> + Div<N, Output=N> + Mul<N, Output=N> +
+			Add<N, Output=N>,
 	>(self, int: N) -> N;
 
 	/// Saturating absolute value. Returning MAX if `parts == Inner::MIN` instead of overflowing.
@@ -247,6 +254,6 @@ pub trait FixedPointNumber:
 
 	/// Takes the reciprocal (inverse), `1 / self`.
 	fn reciprocal(self) -> Option<Self> {
-		Self::from_integer(Self::Inner::one()).checked_div(&self)
-	}	
+		Self::one().checked_div(&self)
+	}
 }

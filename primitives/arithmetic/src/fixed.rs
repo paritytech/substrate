@@ -23,6 +23,7 @@ use crate::traits::{
 	SaturatedConversion, UniqueSaturatedInto, Saturating, BaseArithmetic,
 	Bounded, Zero, FixedPointNumber
 };
+use helpers_128bit::multiply;
 use sp_debug_derive::RuntimeDebug;
 
 #[macro_export]
@@ -100,41 +101,72 @@ macro_rules! implement_fixed {
 					)
 			}
 
-			fn checked_mul_int<N>(self, other: N) -> Option<N>
+			fn checked_mul_int<N>(self, int: N) -> Option<N>
 			where
-				N: Copy + TryFrom<i128> + UniqueSaturatedInto<i128>,
+				N: From<Self::PrevUnsigned> + TryFrom<Self::Unsigned> + UniqueSaturatedInto<Self::PrevUnsigned> +
+				Copy + Bounded + Saturating +
+				ops::Rem<N, Output=N> + ops::Div<N, Output=N> + ops::Mul<N, Output=N> +
+				ops::Add<N, Output=N>,
+
+				// N: Copy + TryFrom<i128> + UniqueSaturatedInto<i128>,
 			{
-				let rhs: i128 = other.unique_saturated_into();
-				let lhs: i128 = self.0.unique_saturated_into();
+				// let rhs: i128 = other.unique_saturated_into();
+				// let lhs: i128 = self.0.unique_saturated_into();
 
-				let signum = lhs.signum() * rhs.signum();
+				// let signum = lhs.signum() * rhs.signum();
 
-				let mut ulhs: u128;
-				let mut urhs: u128;
+				// let mut ulhs: u128;
+				// let mut urhs: u128;
 
-				if lhs.is_negative() {
-					ulhs = lhs.saturating_mul(-1) as u128;
-					if lhs == i128::min_value() {
-						ulhs += 1;
-					}
-				} else {
-					ulhs = lhs as u128;
-				}
+				// if lhs.is_negative() {
+				// 	ulhs = lhs.saturating_mul(-1) as u128;
+				// 	if lhs == i128::min_value() {
+				// 		ulhs += 1;
+				// 	}
+				// } else {
+				// 	ulhs = lhs as u128;
+				// }
 
-				if rhs.is_negative() {
-					urhs = rhs.saturating_mul(-1) as u128;
-					if rhs == i128::min_value() {
-						urhs += 1;
-					}
-				} else {
-					urhs = rhs as u128;
-				}
+				// if rhs.is_negative() {
+				// 	urhs = rhs.saturating_mul(-1) as u128;
+				// 	if rhs == i128::min_value() {
+				// 		urhs += 1;
+				// 	}
+				// } else {
+				// 	urhs = rhs as u128;
+				// }
 
-				multiply_by_rational(ulhs, urhs, Self::DIV as u128)
-					.ok()
-					.map(|r| r.unique_saturated_into())
-					.map(|r: i128| r.saturating_mul(signum))
-					.and_then(|r| r.try_into().ok())
+				// multiply_by_rational(ulhs, urhs, Self::DIV as u128)
+				// 	.ok()
+				// 	.map(|r| r.unique_saturated_into())
+				// 	.map(|r: i128| r.saturating_mul(signum))
+				// 	.and_then(|r| r.try_into().ok())
+
+				// let div = Self::DIV as Self::Unsigned;
+				// let positive = self.0 > 0;
+				// // safe to convert as absolute value.
+				// let parts = self.0.checked_abs().map(|v| v as Self::Unsigned)
+				// 	.unwrap_or(Self::Inner::max_value() as Self::Unsigned + 1);
+
+				// let natural_parts = parts / div;
+				// let natural_parts: N = natural_parts.saturated_into();
+
+				// let fractional_parts = (parts % div) as Self::PrevUnsigned;
+
+				// let n = int.saturating_mul(natural_parts);
+				// let p = Self::Perthing::from_parts(fractional_parts) * int;
+
+				// // everything that needs to be either added or subtracted from the original `int`.
+				// let excess = n.saturating_add(p);
+
+				// if positive {
+				// 	Some(excess)
+				// } else {
+				// 	let z: N = Self::PrevUnsigned::min_value().into();
+				// 	Some(z.saturating_sub(excess))
+				// }
+
+				
 			}
 
 			fn checked_div_int<N>(self, other: N) -> Option<N>
@@ -153,14 +185,15 @@ macro_rules! implement_fixed {
 			where
 				N: Copy + TryFrom<i128> + UniqueSaturatedInto<i128> + Bounded,
 			{
-				self.checked_mul_int(other).unwrap_or_else(|| {
-					let signum = other.saturated_into().signum() * self.0.signum() as i128;
-					if signum.is_negative() {
-						Bounded::min_value()
-					} else {
-						Bounded::max_value()
-					}
-				})
+				0i128.unique_saturated_into()
+				// self.checked_mul_int(other).unwrap_or_else(|| {
+				// 	let signum = other.saturated_into().signum() * self.0.signum() as i128;
+				// 	if signum.is_negative() {
+				// 		Bounded::min_value()
+				// 	} else {
+				// 		Bounded::max_value()
+				// 	}
+				// })
 			}
 
 			fn saturating_abs(self) -> Self {
@@ -190,7 +223,9 @@ macro_rules! implement_fixed {
 			fn saturated_multiply_accumulate<N>(self, int: N) -> N
 				where
 					N: From<Self::PrevUnsigned> + TryFrom<Self::Unsigned> + UniqueSaturatedInto<Self::PrevUnsigned> +
-					Copy + BaseArithmetic
+					Copy + Bounded + Saturating +
+					ops::Rem<N, Output=N> + ops::Div<N, Output=N> + ops::Mul<N, Output=N> +
+					ops::Add<N, Output=N>,
 			{
 				let div = Self::DIV as Self::Unsigned;
 				let positive = self.0 > 0;
@@ -345,7 +380,7 @@ macro_rules! implement_fixed {
 				multiply_by_rational(lhs as u128, rhs as u128, <Self as FixedPointNumber>::DIV as u128)
 					.ok()
 					.and_then(|n| TryInto::<<Self as FixedPointNumber>::Inner>::try_into(n).ok())
-					.map(|n| Self(n * signum))
+					.map(|n| Self(n * sig num))
 			}
 		}
 
@@ -589,9 +624,9 @@ macro_rules! implement_fixed {
 				let b = $name::from_rational(1, -2);
 				let c = $name::from_integer(255);
 
-				assert_eq!(a.checked_mul_int(42i32), Some(21));
-				assert_eq!(b.checked_mul_int(42i32), Some(-21));
-				assert_eq!(c.checked_mul_int(2u8), None);
+				assert_eq!(a.checked_mul_int(42i128), Some(21));
+				assert_eq!(b.checked_mul_int(42i128), Some(-21));
+				assert_eq!(c.checked_mul_int(2i128), Some(510));
 
 				assert_eq!(b.checked_mul_int(i128::max_value()), Some(i128::max_value() / -2));
 				assert_eq!(b.checked_mul_int(i128::min_value()), Some(i128::min_value() / -2));
@@ -600,7 +635,7 @@ macro_rules! implement_fixed {
 				assert_eq!(c.checked_mul_int(i128::min_value()), None);
 
 				assert_eq!(a.checked_mul_int(i128::max_value()), Some(i128::max_value() / 2));
-				assert_eq!(a.checked_mul_int(u64::max_value()), Some(u64::max_value() / 2));
+				// assert_eq!(a.checked_mul_int(u64::max_value()), Some(u64::max_value() / 2));
 				assert_eq!(a.checked_mul_int(i128::min_value()), Some(i128::min_value() / 2));
 			}
 
@@ -689,11 +724,11 @@ macro_rules! implement_fixed {
 			#[test]
 			fn saturating_mul_int_acc_works() {
 				let inner_max = <$name as FixedPointNumber>::Inner::max_value();
-				let inner_min = <$name as FixedPointNumber>::Inner::min_value();
 				let accuracy = $name::accuracy();
 
-				println!("acc {:?} inner_max {:?}", accuracy, inner_max);
 				assert_eq!($name::zero().saturated_multiply_accumulate(accuracy as u64), accuracy as u64);
+				assert_eq!($name::one().saturated_multiply_accumulate(accuracy as u64), 2 * accuracy as u64);
+				assert_eq!($name::one().saturated_multiply_accumulate(i128::min_value()), i128::min_value());
 			}
 
 			#[test]

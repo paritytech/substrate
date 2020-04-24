@@ -17,7 +17,7 @@
 use criterion::{Criterion, Throughput, BenchmarkId, criterion_group, criterion_main, black_box};
 use sp_arithmetic::biguint::{BigUint, Single};
 use sp_arithmetic::{Fixed128, traits::FixedPointNumber};
-use num_traits::Bounded;
+use num_traits::{Bounded, ops::checked::CheckedMul};
 use rand::Rng;
 
 fn random_big_uint(size: usize) -> BigUint {
@@ -84,10 +84,16 @@ fn bench_saturated_multiply_accumulate(c: &mut Criterion) {
 	c.bench_function("saturated_multiply_accumulate", |b| b.iter(|| x.saturated_multiply_accumulate(black_box(20u64))));
 }
 
+fn bench_checked_mul(c: &mut Criterion) {
+	let x = Fixed128::max_value();
+	let y = Fixed128::from_integer(20.into());
+	c.bench_function("checked_mul_only", |b| b.iter(|| x.checked_mul(black_box(&y))));
+}
+
 criterion_group!{
 	name = benches;
 	config = Criterion::default();
 	targets = bench_addition, bench_subtraction, bench_multiplication, bench_division,
-		bench_checked_mul_int, bench_saturated_multiply_accumulate
+		bench_checked_mul_int, bench_saturated_multiply_accumulate, bench_checked_mul
 }
 criterion_main!(benches);
