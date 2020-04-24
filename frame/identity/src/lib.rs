@@ -69,7 +69,7 @@ use sp_std::prelude::*;
 use sp_std::{fmt::Debug, ops::Add, iter::once};
 use enumflags2::BitFlags;
 use codec::{Encode, Decode};
-use sp_runtime::{DispatchError, DispatchResult, RuntimeDebug};
+use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_runtime::traits::{StaticLookup, Zero, AppendZerosInput};
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
@@ -472,7 +472,6 @@ mod weight_for {
 		extra_fields: impl Into<Weight>
 	) -> Weight {
 		db.reads_writes(1, 1)
-			+ db.reads_writes(1, 1) // balance ops
 			+ 150_000_000 // constant
 			+ 700_000 * judgements.into() // R
 			+ 3_000_000 * extra_fields.into() // X
@@ -485,8 +484,7 @@ mod weight_for {
 		subs: impl Into<Weight> + Copy
 	) -> Weight {
 		db.reads(1) // storage-exists (`IdentityOf::contains_key`)
-			+ db.reads_writes(1, 1) // balance ops
-			+ db.reads_writes(1, old_subs.into()) // P old DB deletions
+			+ db.reads_writes(1, old_subs.into()) // `SubsOf::get` read + P old DB deletions
 			+ db.writes(subs.into() + 1) // S + 1 new DB writes
 			+ 130_000_000 // constant
 			+ 5_200_000 * old_subs.into() // P
@@ -501,7 +499,6 @@ mod weight_for {
 		extra_fields: impl Into<Weight>
 	) -> Weight {
 		db.reads_writes(2, subs.into() + 2) // S + 2 deletions
-			+ db.reads_writes(1, 1) // balance ops
 			+ 160_000_000 // constant
 			+ 500_000 * judgements.into() // R
 			+ 5_400_000 * subs.into() // S
@@ -515,7 +512,6 @@ mod weight_for {
 		extra_fields: impl Into<Weight>
 	) -> Weight {
 		db.reads_writes(2, 1)
-			+ db.reads_writes(1, 1) // balance ops
 			+ 180_000_000 // constant
 			+ 950_000 * judgements.into() // R
 			+ 3_400_000 * extra_fields.into() // X
@@ -528,7 +524,6 @@ mod weight_for {
 		extra_fields: impl Into<Weight>
 	) -> Weight {
 		db.reads_writes(1, 1)
-			+ db.reads_writes(1, 1) // balance ops
 			+ 150_000_000 // constant
 			+ 600_000 * judgements.into() // R
 			+ 3_600_000 * extra_fields.into() // X
@@ -917,15 +912,19 @@ decl_module! {
 		fn set_fee(origin,
 			#[compact] index: RegistrarIndex,
 			#[compact] fee: BalanceOf<T>,
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 
-			<Registrars<T>>::mutate(|rs|
+			let registrars = <Registrars<T>>::mutate(|rs| -> Result<usize, DispatchError> {
 				rs.get_mut(index as usize)
 					.and_then(|x| x.as_mut())
 					.and_then(|r| if r.account == who { r.fee = fee; Some(()) } else { None })
-					.ok_or_else(|| Error::<T>::InvalidIndex.into())
-			)
+					.ok_or_else(|| DispatchError::from(Error::<T>::InvalidIndex))?;
+				Ok(rs.len())
+			})?;
+			Ok(Some(T::DbWeight::get().reads_writes(1, 1)
+				+ 24_000_000 + 780_000 * registrars as Weight // R
+			).into())
 		}
 
 		/// Change the account associated with a registrar.
@@ -948,15 +947,19 @@ decl_module! {
 		fn set_account_id(origin,
 			#[compact] index: RegistrarIndex,
 			new: T::AccountId,
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 
-			<Registrars<T>>::mutate(|rs|
+			let registrars = <Registrars<T>>::mutate(|rs| -> Result<usize, DispatchError> {
 				rs.get_mut(index as usize)
 					.and_then(|x| x.as_mut())
 					.and_then(|r| if r.account == who { r.account = new; Some(()) } else { None })
-					.ok_or_else(|| Error::<T>::InvalidIndex.into())
-			)
+					.ok_or_else(|| DispatchError::from(Error::<T>::InvalidIndex))?;
+				Ok(rs.len())
+			})?;
+			Ok(Some(T::DbWeight::get().reads_writes(1, 1)
+				+ 25_000_000 + 850_000 * registrars as Weight // R
+			).into())
 		}
 
 		/// Set the field information for a registrar.
@@ -979,15 +982,19 @@ decl_module! {
 		fn set_fields(origin,
 			#[compact] index: RegistrarIndex,
 			fields: IdentityFields,
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 
-			<Registrars<T>>::mutate(|rs|
+			let registrars = <Registrars<T>>::mutate(|rs| -> Result<usize, DispatchError> {
 				rs.get_mut(index as usize)
 					.and_then(|x| x.as_mut())
 					.and_then(|r| if r.account == who { r.fields = fields; Some(()) } else { None })
-					.ok_or_else(|| Error::<T>::InvalidIndex.into())
-			)
+					.ok_or_else(|| DispatchError::from(Error::<T>::InvalidIndex))?;
+				Ok(rs.len())
+			})?;
+			Ok(Some(T::DbWeight::get().reads_writes(1, 1)
+				+ 23_000_000 + 860_000 * registrars as Weight // R
+			).into())
 		}
 
 		/// Provide a judgement for an account's identity.
