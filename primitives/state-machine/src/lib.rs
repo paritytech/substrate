@@ -301,7 +301,7 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 
 		let id = ext.id;
 		trace!(
-			target: "state-trace", "{:04x}: Call {} at {:?}. Input={:?}",
+			target: "state", "{:04x}: Call {} at {:?}. Input={:?}",
 			id,
 			self.method,
 			self.backend,
@@ -318,7 +318,7 @@ impl<'a, B, H, N, Exec> StateMachine<'a, B, H, N, Exec> where
 		);
 
 		trace!(
-			target: "state-trace", "{:04x}: Return. Native={:?}, Result={:?}",
+			target: "state", "{:04x}: Return. Native={:?}, Result={:?}",
 			id,
 			was_native,
 			result,
