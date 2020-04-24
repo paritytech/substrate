@@ -26,7 +26,7 @@ pub use crate::backend::{Account, Log, Vicinity, Backend};
 use sp_std::{vec::Vec, marker::PhantomData};
 use frame_support::{ensure, decl_module, decl_storage, decl_event, decl_error};
 use frame_support::weights::{Weight, MINIMUM_WEIGHT, DispatchClass, FunctionOf, Pays};
-use frame_support::traits::{Currency, WithdrawReason, ExistenceRequirement};
+use frame_support::traits::{Currency, WithdrawReason, ExistenceRequirement, Get};
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::ModuleId;
 use sp_core::{U256, H256, H160, Hasher};
@@ -37,8 +37,6 @@ use sha3::{Digest, Keccak256};
 use evm::{ExitReason, ExitSucceed, ExitError, Config};
 use evm::executor::StackExecutor;
 use evm::backend::ApplyBackend;
-
-const MODULE_ID: ModuleId = ModuleId(*b"py/ethvm");
 
 /// Type alias for currency balance.
 pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
@@ -119,6 +117,8 @@ static ISTANBUL_CONFIG: Config = Config::istanbul();
 
 /// EVM module trait
 pub trait Trait: frame_system::Trait + pallet_timestamp::Trait {
+	/// The EVM's module id
+	type ModuleId: Get<ModuleId>;
 	/// Calculator for current gas price.
 	type FeeCalculator: FeeCalculator;
 	/// Convert account ID to H160;
@@ -188,6 +188,8 @@ decl_module! {
 		type Error = Error<T>;
 
 		fn deposit_event() = default;
+		
+		const ModuleId: ModuleId = T::ModuleId::get();
 
 		/// Deposit balance from currency/balances module into EVM.
 		#[weight = MINIMUM_WEIGHT]
@@ -361,7 +363,7 @@ impl<T: Trait> Module<T> {
 	/// This actually does computation. If you need to keep using it, then make sure you cache the
 	/// value and only call this once.
 	pub fn account_id() -> T::AccountId {
-		MODULE_ID.into_account()
+		T::ModuleId::get().into_account()
 	}
 
 	/// Check whether an account is empty.

@@ -45,7 +45,6 @@ fn call_in_wasm<E: Externalities>(
 		execution_method,
 		Some(1024),
 		HostFunctions::host_functions(),
-		true,
 		8,
 	);
 	executor.call_in_wasm(
@@ -54,6 +53,7 @@ fn call_in_wasm<E: Externalities>(
 		function,
 		call_data,
 		ext,
+		sp_core::traits::MissingHostFunctions::Allow,
 	)
 }
 
@@ -511,7 +511,6 @@ fn should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 		wasm_method,
 		Some(17),  // `17` is the initial number of pages compiled into the binary.
 		HostFunctions::host_functions(),
-		true,
 		8,
 	);
 	executor.call_in_wasm(
@@ -520,6 +519,7 @@ fn should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 		"test_exhaust_heap",
 		&[0],
 		&mut ext.ext(),
+		sp_core::traits::MissingHostFunctions::Allow,
 	).unwrap();
 }
 
