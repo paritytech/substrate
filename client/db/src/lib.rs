@@ -717,6 +717,55 @@ impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Bloc
 	}
 }
 
+/// Cursor over all child trie encoded nodes in db.
+pub fn child_trie_cursor<DB, H, S> (
+	db: &DB,
+	col: sp_database::ColumnId,
+	batch: sp_database::ChildBatchRemove,
+	state: &mut S,
+	action: fn(db: &DB, col: sp_database::ColumnId, key: &[u8], state: &mut S),
+) where
+	DB: sp_database::DatabaseRef,
+	H: hash_db::Hasher,
+	H::Out: Decode,
+{
+	let mut prefixed_key_buf = Vec::with_capacity(batch.keyspace.len() + 40);
+
+	// we ignore all error here, TODO EMCH  we could log it in some db dedicated key (like in meta)
+	if let Ok(root) = H::Out::decode(&mut batch.encoded_root.as_slice()) {
+		let ks_db = KeyspacedDB(db, &batch.keyspace, col);
+		if let Ok(trie) = sp_trie::TrieDB::<sp_trie::Layout<H>>::new(&ks_db, &root) {
+			if let Ok(iter) = sp_trie::TrieDBNodeIterator::new(&trie) {
+				for x in iter {
+					if let Ok((prefix, Some(key_hash), _)) = x {
+						prefixed_key_buf.clear();
+						prefixed_key_buf.extend_from_slice(&batch.keyspace[..]);
+						let trie_key = sp_trie::prefixed_key::<H>(&key_hash, prefix.as_prefix());
+						prefixed_key_buf.extend_from_slice(trie_key.as_slice());
+						action(db, col, prefixed_key_buf.as_slice(), state);
+					}
+				}
+			}
+		}
+	}
+}
+
+struct KeyspacedDB<'a, DB: sp_database::DatabaseRef>(&'a DB, &'a[u8], sp_database::ColumnId);
+
+impl<'a, H: hash_db::Hasher, DB: sp_database::DatabaseRef> hash_db::HashDBRef<H, Vec<u8>> for KeyspacedDB<'a, DB> {
+	fn get(&self, key: &H::Out, prefix: hash_db::Prefix) -> Option<Vec<u8>> {
+		let mut prefixed_key = Vec::with_capacity(self.1.len() + 40);
+		prefixed_key.extend_from_slice(&self.1[..]);
+		let trie_key = sp_trie::prefixed_key::<H>(key, prefix);
+		prefixed_key.extend_from_slice(trie_key.as_slice());
+		<DB as sp_database::DatabaseRef>::get(self.0, self.2, &prefixed_key)
+	}
+
+	fn contains(&self, key: &H::Out, prefix: hash_db::Prefix) -> bool {
+		<Self as hash_db::HashDBRef<H, Vec<u8>>>::get(self, key, prefix).is_some()
+	}
+}
+
 impl<Block: BlockT> sc_state_db::NodeDb for StorageDb<Block> {
 	type Error = io::Error;
 	type Key = [u8];
@@ -827,6 +876,24 @@ impl<Block: BlockT> Backend<Block> {
 
 		Self::new(db_setting, canonicalization_delay).expect("failed to create test-db")
 	}
+
+	/// Create new memory-backed client backend for tests, using
+	/// parity-db
+	#[cfg(all(feature = "parity-db", any(test, feature = "test-helpers")))]
+	pub fn new_test_parity_db(keep_blocks: u32, canonicalization_delay: u64) -> Self {
+		use tempfile::tempdir;
+		let base_path = tempdir().expect("could not create a temp dir");
+		let db_setting = DatabaseSettings {
+			state_cache_size: 16777216,
+			state_cache_child_ratio: Some((50, 100)),
+			pruning: PruningMode::keep_blocks(keep_blocks),
+			source: DatabaseSettingsSrc::ParityDb {
+				path: base_path.path().into(),
+			},
+		};
+		Self::new(db_setting, canonicalization_delay).expect("failed to create test-db")
+	}
+
 
 	fn from_database(
 		db: Arc<dyn Database<DbHash>>,
@@ -1353,7 +1420,7 @@ fn apply_state_commit(transaction: &mut Transaction<DbHash>, commit: sc_state_db
 	}
 	for keyspace in commit.data.deleted_child.into_iter() {
 		let child_remove = sp_database::ChildBatchRemove {
-			root: Default::default(), // TODO EMCH change the commit set to contain childbatchremove
+			encoded_root: Default::default(), // TODO EMCH change the commit set to contain childbatchremove
 			keyspace,
 		};
 		transaction.delete_child(columns::STATE, child_remove);
@@ -1855,11 +1922,22 @@ pub(crate) mod tests {
 		}
 	}
 
+	#[cfg(feature = "parity-db")]
+	#[test]
+	fn bulk_delete_child_trie_parity_db() {
+		let backend = Backend::<Block>::new_test_parity_db(2, 0);
+		bulk_delete_child_trie_inner(backend);
+	}
+
 	#[test]
 	fn bulk_delete_child_trie() {
+		let backend = Backend::<Block>::new_test(2, 0);
+		bulk_delete_child_trie_inner(backend);
+	}
+
+	fn bulk_delete_child_trie_inner(backend: Backend<Block>) {
 		let _ = ::env_logger::try_init();
 		let mut key = Vec::new();
-		let backend = Backend::<Block>::new_test(2, 0);
 		// This is not collision resistant but enough for the test.
 		let storage_key = b"unique_storage_key";
 
@@ -1941,7 +2019,7 @@ pub(crate) mod tests {
 
 			let child = op.db_updates.entry(ChildInfo::new_default(storage_key))
 				.or_insert_with(Default::default);
-			child.0 = ChildChange::BulkDeleteByKeyspace; 
+			child.0 = ChildChange::BulkDeleteByKeyspace;
 			op.set_block_data(
 				header,
 				Some(vec![]),

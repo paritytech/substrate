@@ -17,7 +17,9 @@
 /// A `Database` adapter for subdb.
 
 use sp_database::{self, ColumnId};
+use sp_database::{DatabaseRef, StateCursor};
 use parking_lot::RwLock;
+use parking_lot::Mutex;
 use blake2_rfc::blake2b::blake2b;
 use codec::Encode;
 use subdb::{Database, KeyType};
@@ -25,15 +27,20 @@ use subdb::{Database, KeyType};
 /// A database hidden behind an RwLock, so that it implements Send + Sync.
 ///
 /// Construct by creating a `Database` and then using `.into()`.
-pub struct DbAdapter<H: KeyType>(RwLock<Database<H>>);
+pub struct DbAdapter<H: KeyType>(
+	RwLock<Database<H>>,
+	StateCursor<DbAdapter<H>, BatchChildDelete>,
+);
 
-/// Wrap RocksDb database into a trait object that implements `sp_database::Database`
-pub fn open<H: KeyType + 'static>(
+/// Wrap SubDb database into a trait object that implements `sp_database::Database`
+pub fn open<H: KeyType + 'static, C: StateCursor<parity_db::Db>>(
 	path: &std::path::Path,
 	_num_columns: u32,
+	cursor: C,
 ) -> Result<std::sync::Arc<dyn sp_database::Database<H>>, subdb::Error> {
 	let db = subdb::Options::from_path(path.into()).open()?;
-	Ok(std::sync::Arc::new(DbAdapter(RwLock::new(db))))
+	let cursor = Mutex::new(Box::new(cursor));
+	Ok(std::sync::Arc::new(DbAdapter(RwLock::new(db)), cursor))
 }
 
 impl<H: KeyType> sp_database::Database<H> for DbAdapter<H> {
@@ -83,5 +90,17 @@ impl<H: KeyType> sp_database::Database<H> for DbAdapter<H> {
 
 	fn release(&self, hash: &H) {
 		let _ = self.0.write().remove(hash);
+	}
+
+	fn delete_child(&self, col: ColumnId, child: ChildBatchRemove) {
+		self.1(&self, col, child, &mut (), |db, col, key, _state| {
+			db.remove(col, key.as_slice())
+		});
+	}
+}
+
+impl<H: KeyType> sp_database::DatabaseRef for DbAdapter<H> {
+	fn get(&self, col: ColumnId, key: &[u8]) -> Option<Vec<u8>> {
+		<Self as sp_database::Database<H>>::get(col, key)
 	}
 }

@@ -29,6 +29,7 @@ use sp_std::marker::PhantomData;
 use sp_std::vec::Vec;
 use sp_core::{Hasher, InnerHasher};
 use trie_db::proof::{generate_proof, verify_proof};
+pub use trie_db::TrieDBNodeIterator;
 pub use trie_db::proof::VerifyError;
 /// Our `NodeCodec`-specific error.
 pub use error::Error;

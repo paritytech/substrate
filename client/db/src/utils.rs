@@ -249,12 +249,13 @@ pub fn open_database<Block: BlockT>(
 		},
 		#[cfg(feature = "subdb")]
 		DatabaseSettingsSrc::SubDb { path } => {
-			crate::subdb::open(&path, NUM_COLUMNS)
+			crate::subdb::open(&path, NUM_COLUMNS, crate::child_trie_cursor)
 				.map_err(|e| sp_blockchain::Error::Backend(format!("{:?}", e)))?
 		},
 		#[cfg(feature = "parity-db")]
 		DatabaseSettingsSrc::ParityDb { path } => {
-			crate::parity_db::open(&path, NUM_COLUMNS)
+			let cursor = crate::child_trie_cursor::<_, sp_runtime::traits::HashFor<Block>, _>;
+			crate::parity_db::open(&path, NUM_COLUMNS, cursor)
 				.map_err(|e| sp_blockchain::Error::Backend(format!("{:?}", e)))?
 		},
 		DatabaseSettingsSrc::Custom(db) => db.clone(),

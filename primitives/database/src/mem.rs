@@ -19,14 +19,14 @@
 use std::collections::HashMap;
 use crate::{Database, DatabaseRef, Transaction, ColumnId, Change};
 use parking_lot::RwLock;
-use parking_lot::Mutex;
 
-type InnerMemDb<H> = RwLock<(HashMap<ColumnId, HashMap<Vec<u8>, Vec<u8>>>, HashMap<H, Vec<u8>>)>;
 /// This implements `Database` as an in-memory hash map. `commit` is not atomic.
 pub struct MemDb<H: Clone + Send + Sync + Eq + PartialEq + Default + std::hash::Hash> (
 	InnerMemDb<H>,
-	Mutex<Box<dyn crate::StateCursor<InnerMemDb<H>>>>, 
+	crate::StateCursor<MemDb<H>, ()>,
 );
+
+type InnerMemDb<H> = RwLock<(HashMap<ColumnId, HashMap<Vec<u8>, Vec<u8>>>, HashMap<H, Vec<u8>>)>;
 
 impl<H> Default for MemDb<H>
 	where
@@ -37,7 +37,7 @@ impl<H> Default for MemDb<H>
 	fn default() -> Self {
 		MemDb(
 			InnerMemDb::default(),
-			Mutex::new(Box::new(crate::DummyStateCursor)),
+			crate::dummy_state_cursor,
 		)
 	}
 }
@@ -46,30 +46,24 @@ impl<H> Database<H> for MemDb<H>
 	where H: Clone + Send + Sync + Eq + PartialEq + Default + std::hash::Hash
 {
 	fn commit(&self, transaction: Transaction<H>) {
-		let mut s = self.0.write();
+		let s = || self.0.write();
 		for change in transaction.0.into_iter() {
 			match change {
-				Change::Set(col, key, value) => { s.0.entry(col).or_default().insert(key, value); },
-				Change::Remove(col, key) => { s.0.entry(col).or_default().remove(&key); },
-				Change::Store(hash, preimage) => { s.1.insert(hash, preimage); },
-				Change::Release(hash) => { s.1.remove(&hash); },
+				Change::Set(col, key, value) => { s().0.entry(col).or_default().insert(key, value); },
+				Change::Remove(col, key) => { s().0.entry(col).or_default().remove(&key); },
+				Change::Store(hash, preimage) => { s().1.insert(hash, preimage); },
+				Change::Release(hash) => { s().1.remove(&hash); },
 				Change::DeleteChild(col, child) => {
-					let mut cursor = self.1.lock();
-					cursor.init(&self.0, col, child.encoded_root);
-					loop {
-						if let Some(key) = cursor.next_key() {
-							self.remove(col, key.as_slice())
-						} else {
-							break;
-						}
-					}
+					self.1(&self, col, child, &mut (), |db, col, key, _state| {
+						db.0.write().0.entry(col).or_default().remove(key);
+					});
 				},
 			}
 		}
 	}
 
 	fn get(&self, col: ColumnId, key: &[u8]) -> Option<Vec<u8>> {
-		self.0.get(col, key)
+		<Self as DatabaseRef>::get(self, col, key)
 	}
 
 	fn lookup(&self, hash: &H) -> Option<Vec<u8>> {
@@ -82,8 +76,8 @@ impl<H> MemDb<H>
 	where H: Clone + Send + Sync + Eq + PartialEq + Default + std::hash::Hash
 {
 	/// Create a new instance
-	pub fn new<C: crate::StateCursor<InnerMemDb<H>> + 'static>(c: C) -> Self {
-		MemDb(Default::default(), Mutex::new(Box::new(c)))
+	pub fn new(c: crate::StateCursor<MemDb<H>, ()>) -> Self {
+		MemDb(Default::default(), c)
 	}
 
 	/// Count number of values in a column
@@ -93,9 +87,11 @@ impl<H> MemDb<H>
 	}
 }
 
-impl<H> DatabaseRef for InnerMemDb<H> {
+impl<H> DatabaseRef for MemDb<H>
+	where H: Clone + Send + Sync + Eq + PartialEq + Default + std::hash::Hash
+{
 	fn get(&self, col: ColumnId, key: &[u8]) -> Option<Vec<u8>> {
-		let s = self.read();
+		let s = self.0.read();
 		s.0.get(&col).and_then(|c| c.get(key).cloned())
 	}
 }

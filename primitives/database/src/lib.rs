@@ -218,30 +218,26 @@ pub fn with_lookup<R, H: Clone>(db: &dyn Database<H>, hash: &H, mut f: impl FnMu
 }
 
 /// To use with state cursor for querying only.
-pub trait DatabaseRef {
+pub trait DatabaseRef: Send {
 	/// Retrieve the value previously stored against `key` or `None` if
 	/// `key` is not currently in the database.
 	fn get(&self, col: ColumnId, key: &[u8]) -> Option<Vec<u8>>;
 }
-	
+
 /// Iterate on key of a state.
-pub trait StateCursor<DB>: Send + Sync {
-	/// Define context and clear previous usage state.
-	fn init(&mut self, db: &DB, col: ColumnId, encoded_root: Vec<u8>);
-	/// Ordered iteration on all state keys.
-	/// This can be use to delete in a streaming way, so
-	/// the inner iteration need to query only once its element or
-	/// buffer its results (allows delete element when and iterating
-	/// at the same time).
-	fn next_key(&mut self) -> Option<Vec<u8>>;
-}
+pub type StateCursor<DB, S> = fn(
+	db: &DB,
+	col: ColumnId,
+	batch: ChildBatchRemove,
+	state: &mut S,
+	action: fn(db: &DB, col: ColumnId, key: &[u8], state: &mut S),
+);
 
-/// Dummy implementation of state cursor for case
-/// where the cursor is not needed.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct DummyStateCursor;
-
-impl<DB> StateCursor<DB> for DummyStateCursor {
-	fn init(&mut self, _db: &DB, _col: ColumnId, _root: Vec<u8>) { }
-	fn next_key(&mut self) -> Option<Vec<u8>> { None }
-}
+/// Define context and clear previous usage state.
+pub fn dummy_state_cursor<DB, S>(
+	_db: &DB,
+	_col: ColumnId,
+	_batch: ChildBatchRemove,
+	_state: &mut S,
+	_action: fn(db: &DB, col: ColumnId, key: &[u8], state: &mut S),
+) { }
