@@ -175,6 +175,12 @@ decl_module! {
 			<T::OnTimestampSet as OnTimestampSet<_>>::on_timestamp_set(now);
 		}
 
+		/// dummy `on_initialize` to return the weight used in `on_finalize`.
+		fn on_initialize() -> Weight {
+			//
+			19_000_000
+		}
+
 		/// # <weight>
 		/// - `O(1)`
 		/// - 1 storage deletion (codec `O(1)`).
