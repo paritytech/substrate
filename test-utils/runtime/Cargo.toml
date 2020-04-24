@@ -43,7 +43,7 @@ sc-client = { version = "0.8.0-dev", optional = true, path = "../../client" }
 sp-trie = { version = "2.0.0-dev", default-features = false, path = "../../primitives/trie" }
 sp-transaction-pool = { version = "2.0.0-dev", default-features = false, path = "../../primitives/transaction-pool" }
 trie-db = { version = "0.20.1", default-features = false }
-parity-util-mem = { version = "0.6.0", default-features = false, features = ["primitive-types"] }
+parity-util-mem = { version = "0.6.1", default-features = false, features = ["primitive-types"] }
 
 [dev-dependencies]
 sc-block-builder = { version = "0.8.0-dev", path = "../../client/block-builder" }

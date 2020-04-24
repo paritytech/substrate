@@ -20,8 +20,6 @@ use sc_network::{
 	multiaddr::Protocol,
 };
 use sc_service::{ChainSpec, config::{Multiaddr, MultiaddrWithPeerId}};
-use std::iter;
-use std::net::Ipv4Addr;
 use std::path::PathBuf;
 use structopt::StructOpt;
 
@@ -48,9 +46,7 @@ pub struct NetworkParams {
 	pub listen_addr: Vec<Multiaddr>,
 
 	/// Specify p2p protocol TCP port.
-	///
-	/// Only used if --listen-addr is not specified.
-	#[structopt(long = "port", value_name = "PORT")]
+	#[structopt(long = "port", value_name = "PORT", conflicts_with_all = &[ "listen-addr" ])]
 	pub port: Option<u16>,
 
 	/// Forbid connecting to private IPv4 addresses (as specified in
@@ -89,9 +85,16 @@ pub struct NetworkParams {
 	#[structopt(flatten)]
 	pub node_key_params: NodeKeyParams,
 
-	/// Experimental feature flag.
-	#[structopt(long = "use-yamux-flow-control")]
-	pub use_yamux_flow_control: bool,
+	/// Disable the yamux flow control. This option will be removed in the future once there is
+	/// enough confidence that this feature is properly working.
+	#[structopt(long)]
+	pub no_yamux_flow_control: bool,
+
+	/// Enable peer discovery on local networks.
+	///
+	/// By default this option is true for `--dev` and false otherwise.
+	#[structopt(long)]
+	pub discover_local: bool,
 }
 
 impl NetworkParams {
@@ -100,24 +103,29 @@ impl NetworkParams {
 		&self,
 		chain_spec: &Box<dyn ChainSpec>,
 		is_dev: bool,
-		net_config_path: &PathBuf,
+		net_config_path: Option<PathBuf>,
 		client_id: &str,
 		node_name: &str,
 		node_key: NodeKeyConfig,
 	) -> NetworkConfiguration {
 		let port = self.port.unwrap_or(30333);
-		let mut listen_addresses = vec![iter::once(Protocol::Ip4(Ipv4Addr::new(0, 0, 0, 0)))
-			.chain(iter::once(Protocol::Tcp(port)))
-			.collect()];
 
-		listen_addresses.extend(self.listen_addr.iter().cloned());
+		let listen_addresses = if self.listen_addr.is_empty() {
+			vec![
+				Multiaddr::empty()
+					.with(Protocol::Ip4([0, 0, 0, 0].into()))
+					.with(Protocol::Tcp(port)),
+			]
+		} else {
+			self.listen_addr.clone()
+		};
 
 		let mut boot_nodes = chain_spec.boot_nodes().to_vec();
 		boot_nodes.extend(self.bootnodes.clone());
 
 		NetworkConfiguration {
 			boot_nodes,
-			net_config_path: net_config_path.clone(),
+			net_config_path,
 			reserved_nodes: self.reserved_nodes.clone(),
 			non_reserved_mode: if self.reserved_only {
 				NonReservedPeerMode::Deny
@@ -136,9 +144,10 @@ impl NetworkParams {
 				enable_mdns: !is_dev && !self.no_mdns,
 				allow_private_ipv4: !self.no_private_ipv4,
 				wasm_external_transport: None,
-				use_yamux_flow_control: self.use_yamux_flow_control,
+				use_yamux_flow_control: !self.no_yamux_flow_control,
 			},
 			max_parallel_downloads: self.max_parallel_downloads,
+			allow_non_globals_in_dht: self.discover_local || is_dev
 		}
 	}
 }

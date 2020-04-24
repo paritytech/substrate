@@ -97,7 +97,6 @@ pub fn config_endowed(
 		}),
 		pallet_contracts: Some(ContractsConfig {
 			current_schedule: Default::default(),
-			gas_price: 1 * MILLICENTS,
 		}),
 		pallet_epoch_vrf: Some(Default::default()),
 		pallet_grandpa: Some(GrandpaConfig {

@@ -510,38 +510,28 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 	fn proposing_remaining_duration(
 		&self,
 		head: &B::Header,
-		slot_info: &SlotInfo
+		slot_info: &SlotInfo,
 	) -> Option<std::time::Duration> {
-		// never give more than 2^this times the lenience.
-		const BACKOFF_CAP: u64 = 8;
-
-		// how many slots it takes before we double the lenience.
-		const BACKOFF_STEP: u64 = 2;
-
 		let slot_remaining = self.slot_remaining_duration(slot_info);
+
 		let parent_slot = match find_pre_digest::<B>(head) {
 			Err(_) => return Some(slot_remaining),
 			Ok(d) => d.slot_number(),
 		};
 
-		// we allow a lenience of the number of slots since the head of the
-		// chain was produced, minus 1 (since there is always a difference of at least 1)
-		//
-		// exponential back-off.
-		// in normal cases we only attempt to issue blocks up to the end of the slot.
-		// when the chain has been stalled for a few slots, we give more lenience.
-		let slot_lenience = slot_info.number.saturating_sub(parent_slot + 1);
+		if let Some(slot_lenience) =
+			sc_consensus_slots::slot_lenience_exponential(parent_slot, slot_info)
+		{
+			debug!(target: "babe",
+				"No block for {} slots. Applying exponential lenience of {}s",
+				slot_info.number.saturating_sub(parent_slot + 1),
+				slot_lenience.as_secs(),
+			);
 
-		let slot_lenience = std::cmp::min(slot_lenience, BACKOFF_CAP);
-		let slot_duration = slot_info.duration << (slot_lenience / BACKOFF_STEP);
-
-		if slot_lenience >= 1 {
-			debug!(target: "babe", "No block for {} slots. Applying 2^({}/{}) lenience",
-				slot_lenience, slot_lenience, BACKOFF_STEP);
+			Some(slot_remaining + slot_lenience)
+		} else {
+			Some(slot_remaining)
 		}
-
-		let slot_lenience = Duration::from_secs(slot_duration);
-		Some(slot_lenience + slot_remaining)
 	}
 }
 

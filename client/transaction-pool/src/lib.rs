@@ -21,8 +21,10 @@
 #![warn(unused_extern_crates)]
 
 mod api;
-pub mod error;
 mod revalidation;
+mod metrics;
+
+pub mod error;
 
 #[cfg(any(feature = "test-helpers", test))]
 pub mod testing;
@@ -45,6 +47,9 @@ use sp_transaction_pool::{
 };
 use wasm_timer::Instant;
 
+use prometheus_endpoint::Registry as PrometheusRegistry;
+use crate::metrics::MetricsLink as PrometheusMetrics;
+
 type BoxedReadyIterator<Hash, Data> = Box<dyn Iterator<Item=Arc<sc_transaction_graph::base_pool::Transaction<Hash, Data>>> + Send>;
 
 type ReadyIteratorFor<PoolApi> = BoxedReadyIterator<sc_transaction_graph::ExHash<PoolApi>, sc_transaction_graph::ExtrinsicFor<PoolApi>>;
@@ -62,6 +67,7 @@ pub struct BasicPool<PoolApi, Block>
 	revalidation_strategy: Arc<Mutex<RevalidationStrategy<NumberFor<Block>>>>,
 	revalidation_queue: Arc<revalidation::RevalidationQueue<PoolApi>>,
 	ready_poll: Arc<Mutex<ReadyPoll<ReadyIteratorFor<PoolApi>, Block>>>,
+	metrics: PrometheusMetrics,
 }
 
 struct ReadyPoll<T, Block: BlockT> {
@@ -147,8 +153,9 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 	pub fn new(
 		options: sc_transaction_graph::Options,
 		pool_api: Arc<PoolApi>,
+		prometheus: Option<&PrometheusRegistry>,
 	) -> (Self, Option<Pin<Box<dyn Future<Output=()> + Send>>>) {
-		Self::with_revalidation_type(options, pool_api, RevalidationType::Full)
+		Self::with_revalidation_type(options, pool_api, prometheus, RevalidationType::Full)
 	}
 
 	/// Create new basic transaction pool with provided api, for tests.
@@ -166,6 +173,7 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 				revalidation_queue: Arc::new(revalidation_queue),
 				revalidation_strategy: Arc::new(Mutex::new(RevalidationStrategy::Always)),
 				ready_poll: Default::default(),
+				metrics: Default::default(),
 			},
 			background_task,
 			notifier,
@@ -177,6 +185,7 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 	pub fn with_revalidation_type(
 		options: sc_transaction_graph::Options,
 		pool_api: Arc<PoolApi>,
+		prometheus: Option<&PrometheusRegistry>,
 		revalidation_type: RevalidationType,
 	) -> (Self, Option<Pin<Box<dyn Future<Output=()> + Send>>>) {
 		let pool = Arc::new(sc_transaction_graph::Pool::new(options, pool_api.clone()));
@@ -187,6 +196,7 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 				(queue, Some(background))
 			},
 		};
+
 		(
 			BasicPool {
 				api: pool_api,
@@ -199,6 +209,7 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 					}
 				)),
 				ready_poll: Default::default(),
+				metrics: PrometheusMetrics::new(prometheus),
 			},
 			background_task,
 		)
@@ -228,8 +239,15 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 	) -> PoolFuture<Vec<Result<TxHash<Self>, Self::Error>>, Self::Error> {
 		let pool = self.pool.clone();
 		let at = *at;
+
+		self.metrics.report(|metrics| metrics.validations_scheduled.inc_by(xts.len() as u64));
+
+		let metrics = self.metrics.clone();
 		async move {
-			pool.submit_at(&at, source, xts, false).await
+			let tx_count = xts.len();
+			let res = pool.submit_at(&at, source, xts, false).await;
+			metrics.report(|metrics| metrics.validations_finished.inc_by(tx_count as u64));
+			res
 		}.boxed()
 	}
 
@@ -241,8 +259,16 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 	) -> PoolFuture<TxHash<Self>, Self::Error> {
 		let pool = self.pool.clone();
 		let at = *at;
+
+		self.metrics.report(|metrics| metrics.validations_scheduled.inc());
+
+		let metrics = self.metrics.clone();
 		async move {
-			pool.submit_one(&at, source, xt).await
+			let res = pool.submit_one(&at, source, xt).await;
+
+			metrics.report(|metrics| metrics.validations_finished.inc());
+			res
+
 		}.boxed()
 	}
 
@@ -255,10 +281,17 @@ impl<PoolApi, Block> TransactionPool for BasicPool<PoolApi, Block>
 		let at = *at;
 		let pool = self.pool.clone();
 
+		self.metrics.report(|metrics| metrics.validations_scheduled.inc());
+
+		let metrics = self.metrics.clone();
 		async move {
-			pool.submit_and_watch(&at, source, xt)
+			let result = pool.submit_and_watch(&at, source, xt)
 				.map(|result| result.map(|watcher| Box::new(watcher.into_stream()) as _))
-				.await
+				.await;
+
+			metrics.report(|metrics| metrics.validations_finished.inc());
+
+			result
 		}.boxed()
 	}
 

@@ -35,7 +35,7 @@
 
 use sp_std::{prelude::*, collections::btree_map::BTreeMap, fmt::Debug, cmp::Ordering, convert::TryFrom};
 use sp_runtime::{helpers_128bit::multiply_by_rational, PerThing, Rational128, RuntimeDebug, SaturatedConversion};
-use sp_runtime::traits::{Zero, Convert, Member, AtLeast32Bit, Saturating, Bounded};
+use sp_runtime::traits::{Zero, Member, Saturating, Bounded};
 
 #[cfg(test)]
 mod mock;
@@ -88,16 +88,18 @@ pub enum Error {
 	CompactInvalidIndex,
 }
 
-/// A type in which performing operations on balances and stakes of candidates and voters are safe.
-///
-/// This module's functions expect a `Convert` type to convert all balances to u64. Hence, u128 is
-/// a safe type for arithmetic operations over them.
-///
-/// Balance types converted to `ExtendedBalance` are referred to as `Votes`.
+/// A type which is used in the API of this crate as a numeric weight of a vote, most often the
+/// stake of the voter. It is always converted to [`ExtendedBalance`] for computation.
+pub type VoteWeight = u64;
+
+/// A type in which performing operations on vote weights are safe.
 pub type ExtendedBalance = u128;
 
 /// The score of an assignment. This can be computed from the support map via [`evaluate_support`].
 pub type PhragmenScore = [ExtendedBalance; 3];
+
+/// A winner, with their respective approval stake.
+pub type WithApprovalOf<A> = (A, ExtendedBalance);
 
 /// The denominator used for loads. Since votes are collected as u64, the smallest ratio that we
 /// might collect is `1/approval_stake` where approval stake is the sum of votes. Hence, some number
@@ -146,7 +148,7 @@ struct Edge<AccountId> {
 pub struct PhragmenResult<AccountId, T: PerThing> {
 	/// Just winners zipped with their approval stake. Note that the approval stake is merely the
 	/// sub of their received stake and could be used for very basic sorting and approval voting.
-	pub winners: Vec<(AccountId, ExtendedBalance)>,
+	pub winners: Vec<WithApprovalOf<AccountId>>,
 	/// Individual assignments. for each tuple, the first elements is a voter and the second
 	/// is the list of candidates that it supports.
 	pub assignments: Vec<Assignment<AccountId, T>>,
@@ -285,6 +287,11 @@ impl<AccountId> StakedAssignment<AccountId> {
 			distribution,
 		}
 	}
+
+	/// Get the total stake of this assignment (aka voter budget).
+	pub fn total(&self) -> ExtendedBalance {
+		self.distribution.iter().fold(Zero::zero(), |a, b| a.saturating_add(b.1))
+	}
 }
 
 /// A structure to demonstrate the phragmen result from the perspective of the candidate, i.e. how
@@ -316,25 +323,20 @@ pub type SupportMap<A> = BTreeMap<A, Support<A>>;
 ///   `None` is returned.
 /// * `initial_candidates`: candidates list to be elected from.
 /// * `initial_voters`: voters list.
-/// * `stake_of`: something that can return the stake stake of a particular candidate or voter.
 ///
 /// This function does not strip out candidates who do not have any backing stake. It is the
 /// responsibility of the caller to make sure only those candidates who have a sensible economic
 /// value are passed in. From the perspective of this function, a candidate can easily be among the
 /// winner with no backing stake.
-pub fn elect<AccountId, Balance, C, R>(
+pub fn elect<AccountId, R>(
 	candidate_count: usize,
 	minimum_candidate_count: usize,
 	initial_candidates: Vec<AccountId>,
-	initial_voters: Vec<(AccountId, Balance, Vec<AccountId>)>,
+	initial_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
 ) -> Option<PhragmenResult<AccountId, R>> where
 	AccountId: Default + Ord + Member,
-	Balance: Default + Copy + AtLeast32Bit,
-	C: Convert<Balance, u64> + Convert<u128, Balance>,
 	R: PerThing,
 {
-	let to_votes = |b: Balance| <C as Convert<Balance, u64>>::convert(b) as ExtendedBalance;
-
 	// return structures
 	let mut elected_candidates: Vec<(AccountId, ExtendedBalance)>;
 	let mut assigned: Vec<Assignment<AccountId, R>>;
@@ -368,14 +370,14 @@ pub fn elect<AccountId, Balance, C, R>(
 			if let Some(idx) = c_idx_cache.get(&v) {
 				// This candidate is valid + already cached.
 				candidates[*idx].approval_stake = candidates[*idx].approval_stake
-					.saturating_add(to_votes(voter_stake));
+					.saturating_add(voter_stake.into());
 				edges.push(Edge { who: v.clone(), candidate_index: *idx, ..Default::default() });
 			} // else {} would be wrong votes. We don't really care about it.
 		}
 		Voter {
 			who,
 			edges: edges,
-			budget: to_votes(voter_stake),
+			budget: voter_stake.into(),
 			load: Rational128::zero(),
 		}
 	}));
@@ -633,32 +635,27 @@ pub fn is_score_better(this: PhragmenScore, that: PhragmenScore) -> bool {
 /// rounds. The number of rounds and the maximum diff-per-round tolerance can be tuned through input
 /// parameters.
 ///
-/// No value is returned from the function and the `supports` parameter is updated.
+/// Returns the number of iterations that were preformed.
 ///
 /// - `assignments`: exactly the same is the output of phragmen.
 /// - `supports`: mutable reference to s `SupportMap`. This parameter is updated.
 /// - `tolerance`: maximum difference that can occur before an early quite happens.
 /// - `iterations`: maximum number of iterations that will be processed.
-/// - `stake_of`: something that can return the stake stake of a particular candidate or voter.
-pub fn equalize<Balance, AccountId, C, FS>(
-	mut assignments: Vec<StakedAssignment<AccountId>>,
+pub fn equalize<AccountId>(
+	assignments: &mut Vec<StakedAssignment<AccountId>>,
 	supports: &mut SupportMap<AccountId>,
 	tolerance: ExtendedBalance,
 	iterations: usize,
-	stake_of: FS,
-) where
-	C: Convert<Balance, u64> + Convert<u128, Balance>,
-	for<'r> FS: Fn(&'r AccountId) -> Balance,
-	AccountId: Ord + Clone,
-{
-	// prepare the data for equalise
-	for _i in 0..iterations {
+) -> usize where AccountId: Ord + Clone {
+	if iterations == 0 { return 0; }
+
+	let mut i = 0 ;
+	loop {
 		let mut max_diff = 0;
-
-		for StakedAssignment { who, distribution } in assignments.iter_mut() {
-			let voter_budget = stake_of(&who);
-
-			let diff = do_equalize::<_, _, C>(
+		for assignment in assignments.iter_mut() {
+			let voter_budget = assignment.total();
+			let StakedAssignment { who, distribution } =  assignment;
+			let diff = do_equalize(
 				who,
 				voter_budget,
 				distribution,
@@ -668,28 +665,22 @@ pub fn equalize<Balance, AccountId, C, FS>(
 			if diff > max_diff { max_diff = diff; }
 		}
 
-		if max_diff < tolerance {
-			break;
+		i += 1;
+		if max_diff <= tolerance || i >= iterations {
+			break i;
 		}
 	}
 }
 
 /// actually perform equalize. same interface is `equalize`. Just called in loops with a check for
 /// maximum difference.
-fn do_equalize<Balance, AccountId, C>(
+fn do_equalize<AccountId>(
 	voter: &AccountId,
-	budget_balance: Balance,
+	budget: ExtendedBalance,
 	elected_edges: &mut Vec<(AccountId, ExtendedBalance)>,
 	support_map: &mut SupportMap<AccountId>,
 	tolerance: ExtendedBalance
-) -> ExtendedBalance where
-	C: Convert<Balance, u64> + Convert<u128, Balance>,
-	AccountId: Ord + Clone,
-{
-	let to_votes = |b: Balance|
-		<C as Convert<Balance, u64>>::convert(b) as ExtendedBalance;
-	let budget = to_votes(budget_balance);
-
+) -> ExtendedBalance where AccountId: Ord + Clone {
 	// Nothing to do. This voter had nothing useful.
 	// Defensive only. Assignment list should always be populated. 1 might happen for self vote.
 	if elected_edges.is_empty() || elected_edges.len() == 1 { return 0; }

@@ -48,6 +48,7 @@
 use crate::config::ProtocolId;
 use futures::prelude::*;
 use futures_timer::Delay;
+use ip_network::IpNetwork;
 use libp2p::core::{connection::{ConnectionId, ListenerId}, ConnectedPoint, Multiaddr, PeerId, PublicKey};
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters, ProtocolsHandler};
 use libp2p::swarm::protocols_handler::multi::MultiHandler;
@@ -55,7 +56,7 @@ use libp2p::kad::{Kademlia, KademliaConfig, KademliaEvent, Quorum, Record};
 use libp2p::kad::GetClosestPeersError;
 use libp2p::kad::handler::KademliaHandler;
 use libp2p::kad::QueryId;
-use libp2p::kad::record::{self, store::MemoryStore};
+use libp2p::kad::record::{self, store::{MemoryStore, RecordStore}};
 #[cfg(not(target_os = "unknown"))]
 use libp2p::swarm::toggle::Toggle;
 #[cfg(not(target_os = "unknown"))]
@@ -71,18 +72,20 @@ pub struct DiscoveryConfig {
 	local_peer_id: PeerId,
 	user_defined: Vec<(PeerId, Multiaddr)>,
 	allow_private_ipv4: bool,
+	allow_non_globals_in_dht: bool,
 	discovery_only_if_under_num: u64,
 	enable_mdns: bool,
 	kademlias: HashMap<ProtocolId, Kademlia<MemoryStore>>
 }
 
 impl DiscoveryConfig {
-	/// Crate a default configuration with the given public key.
+	/// Create a default configuration with the given public key.
 	pub fn new(local_public_key: PublicKey) -> Self {
 		let mut this = DiscoveryConfig {
 			local_peer_id: local_public_key.into_peer_id(),
 			user_defined: Vec::new(),
 			allow_private_ipv4: true,
+			allow_non_globals_in_dht: false,
 			discovery_only_if_under_num: std::u64::MAX,
 			enable_mdns: false,
 			kademlias: HashMap::new()
@@ -120,6 +123,12 @@ impl DiscoveryConfig {
 	/// Should private IPv4 addresses be reported?
 	pub fn allow_private_ipv4(&mut self, value: bool) -> &mut Self {
 		self.allow_private_ipv4 = value;
+		self
+	}
+
+	/// Should non-global addresses be inserted to the DHT?
+	pub fn allow_non_globals_in_dht(&mut self, value: bool) -> &mut Self {
+		self.allow_non_globals_in_dht = value;
 		self
 	}
 
@@ -190,6 +199,7 @@ impl DiscoveryConfig {
 			} else {
 				None.into()
 			},
+			allow_non_globals_in_dht: self.allow_non_globals_in_dht
 		}
 	}
 }
@@ -219,6 +229,8 @@ pub struct DiscoveryBehaviour {
 	allow_private_ipv4: bool,
 	/// Number of active connections over which we interrupt the discovery process.
 	discovery_only_if_under_num: u64,
+	/// Should non-global addresses be added to the DHT?
+	allow_non_globals_in_dht: bool
 }
 
 impl DiscoveryBehaviour {
@@ -251,8 +263,12 @@ impl DiscoveryBehaviour {
 	/// **Note**: It is important that you call this method, otherwise the discovery mechanism will
 	/// not properly work.
 	pub fn add_self_reported_address(&mut self, peer_id: &PeerId, addr: Multiaddr) {
-		for k in self.kademlias.values_mut() {
-			k.add_address(peer_id, addr.clone())
+		if self.allow_non_globals_in_dht || self.can_add_to_dht(&addr) {
+			for k in self.kademlias.values_mut() {
+				k.add_address(peer_id, addr.clone())
+			}
+		} else {
+			log::trace!(target: "sub-libp2p", "Ignoring self-reported address {} from {}", addr, peer_id);
 		}
 	}
 
@@ -276,8 +292,44 @@ impl DiscoveryBehaviour {
 	}
 
 	/// Returns the number of nodes that are in the Kademlia k-buckets.
-	pub fn num_kbuckets_entries(&mut self) -> usize {
-		self.known_peers().count()
+	pub fn num_kbuckets_entries(&mut self) -> impl ExactSizeIterator<Item = (&ProtocolId, usize)> {
+		self.kademlias.iter_mut().map(|(id, kad)| (id, kad.kbuckets_entries().count()))
+	}
+
+	/// Returns the number of records in the Kademlia record stores.
+	pub fn num_kademlia_records(&mut self) -> impl ExactSizeIterator<Item = (&ProtocolId, usize)> {
+		// Note that this code is ok only because we use a `MemoryStore`.
+		self.kademlias.iter_mut().map(|(id, kad)| {
+			let num = kad.store_mut().records().count();
+			(id, num)
+		})
+	}
+
+	/// Returns the total size in bytes of all the records in the Kademlia record stores.
+	pub fn kademlia_records_total_size(&mut self) -> impl ExactSizeIterator<Item = (&ProtocolId, usize)> {
+		// Note that this code is ok only because we use a `MemoryStore`. If the records were
+		// for example stored on disk, this would load every single one of them every single time.
+		self.kademlias.iter_mut().map(|(id, kad)| {
+			let size = kad.store_mut().records().fold(0, |tot, rec| tot + rec.value.len());
+			(id, size)
+		})
+	}
+
+	/// Can the given `Multiaddr` be put into the DHT?
+	///
+	/// This test is successful only for global IP addresses and DNS names.
+	//
+	// NB: Currently all DNS names are allowed and no check for TLD suffixes is done
+	// because the set of valid domains is highly dynamic and would require frequent
+	// updates, for example by utilising publicsuffix.org or IANA.
+	pub fn can_add_to_dht(&self, addr: &Multiaddr) -> bool {
+		let ip = match addr.iter().next() {
+			Some(Protocol::Ip4(ip)) => IpNetwork::from(ip),
+			Some(Protocol::Ip6(ip)) => IpNetwork::from(ip),
+			Some(Protocol::Dns4(_)) | Some(Protocol::Dns6(_)) => return true,
+			_ => return false
+		};
+		ip.is_global()
 	}
 }
 
@@ -307,8 +359,8 @@ pub enum DiscoveryOut {
 	/// Inserting a value into the DHT failed.
 	ValuePutFailed(record::Key),
 
-	/// Started a random Kademlia query.
-	RandomKademliaStarted,
+	/// Started a random Kademlia query for each DHT identified by the given `ProtocolId`s.
+	RandomKademliaStarted(Vec<ProtocolId>),
 }
 
 impl NetworkBehaviour for DiscoveryBehaviour {
@@ -356,9 +408,10 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 			list.extend(list_to_filter);
 		}
 
-		trace!(target: "sub-libp2p", "Addresses of {:?} are {:?}", peer_id, list);
+		if !list.is_empty() {
+			trace!(target: "sub-libp2p", "Addresses of {:?}: {:?}", peer_id, list);
 
-		if list.is_empty() {
+		} else {
 			let mut has_entry = false;
 			for k in self.kademlias.values_mut() {
 				if k.kbuckets_entries().any(|p| p == peer_id) {
@@ -367,15 +420,12 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 				}
 			}
 			if has_entry {
-				debug!(target: "sub-libp2p",
-					"Requested dialing to {:?} (peer in k-buckets), and no address was found",
-					peer_id);
+				trace!(target: "sub-libp2p", "Addresses of {:?}: none (peer in k-buckets)", peer_id);
 			} else {
-				debug!(target: "sub-libp2p",
-					"Requested dialing to {:?} (peer not in k-buckets), and no address was found",
-					peer_id);
+				trace!(target: "sub-libp2p", "Addresses of {:?}: none (peer not in k-buckets)", peer_id);
 			}
 		}
+
 		list
 	}
 
@@ -515,7 +565,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 				Duration::from_secs(60));
 
 			if actually_started {
-				let ev = DiscoveryOut::RandomKademliaStarted;
+				let ev = DiscoveryOut::RandomKademliaStarted(self.kademlias.keys().cloned().collect());
 				return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev));
 			}
 		}
@@ -697,6 +747,7 @@ mod tests {
 				let mut config = DiscoveryConfig::new(keypair.public());
 				config.with_user_defined(user_defined.clone())
 					.allow_private_ipv4(true)
+					.allow_non_globals_in_dht(true)
 					.discovery_limit(50);
 				config.finish()
 			};

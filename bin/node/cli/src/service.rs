@@ -56,9 +56,9 @@ macro_rules! new_full_start {
 			.with_select_chain(|_config, backend| {
 				Ok(sc_client::LongestChain::new(backend.clone()))
 			})?
-			.with_transaction_pool(|config, client, _fetcher| {
+			.with_transaction_pool(|config, client, _fetcher, prometheus_registry| {
 				let pool_api = sc_transaction_pool::FullChainApi::new(client.clone());
-				Ok(sc_transaction_pool::BasicPool::new(config, std::sync::Arc::new(pool_api)))
+				Ok(sc_transaction_pool::BasicPool::new(config, std::sync::Arc::new(pool_api), prometheus_registry))
 			})?
 			.with_import_queue(|_config, client, mut select_chain, _transaction_pool| {
 				let select_chain = select_chain.take()
@@ -312,12 +312,12 @@ pub fn new_light(config: Configuration)
 		.with_select_chain(|_config, backend| {
 			Ok(LongestChain::new(backend.clone()))
 		})?
-		.with_transaction_pool(|config, client, fetcher| {
+		.with_transaction_pool(|config, client, fetcher, prometheus_registry| {
 			let fetcher = fetcher
 				.ok_or_else(|| "Trying to start light transaction pool without active fetcher")?;
 			let pool_api = sc_transaction_pool::LightChainApi::new(client.clone(), fetcher.clone());
 			let pool = sc_transaction_pool::BasicPool::with_revalidation_type(
-				config, Arc::new(pool_api), sc_transaction_pool::RevalidationType::Light,
+				config, Arc::new(pool_api), prometheus_registry, sc_transaction_pool::RevalidationType::Light,
 			);
 			Ok(pool)
 		})?
@@ -633,12 +633,11 @@ mod tests {
 					check_nonce,
 					check_weight,
 					payment,
-					Default::default(),
 				);
 				let raw_payload = SignedPayload::from_raw(
 					function,
 					extra,
-					(version, genesis_hash, genesis_hash, (), (), (), ())
+					(version, genesis_hash, genesis_hash, (), (), ())
 				);
 				let signature = raw_payload.using_encoded(|payload|	{
 					signer.sign(payload)

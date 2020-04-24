@@ -464,7 +464,7 @@ pub struct BlockImportOperation<Block: BlockT> {
 	pending_block: Option<PendingBlock<Block>>,
 	pending_cache: HashMap<CacheKeyId, Vec<u8>>,
 	old_state: InMemoryBackend<HashFor<Block>>,
-	new_state: Option<InMemoryBackend<HashFor<Block>>>,
+	new_state: Option<<InMemoryBackend<HashFor<Block>> as StateBackend<HashFor<Block>>>::Transaction>,
 	aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	finalized_blocks: Vec<(BlockId<Block>, Option<Justification>)>,
 	set_head: Option<BlockId<Block>>,
@@ -502,7 +502,7 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 		&mut self,
 		update: <InMemoryBackend<HashFor<Block>> as StateBackend<HashFor<Block>>>::Transaction,
 	) -> sp_blockchain::Result<()> {
-		self.new_state = Some(self.old_state.update(update));
+		self.new_state = Some(update);
 		Ok(())
 	}
 
@@ -516,16 +516,16 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 	fn reset_storage(&mut self, storage: Storage) -> sp_blockchain::Result<Block::Hash> {
 		check_genesis_storage(&storage)?;
 
-		let child_delta = storage.children.into_iter()
-			.map(|(storage_key, child_content)|
-				(storage_key, child_content.data.into_iter().map(|(k, v)| (k, Some(v))), child_content.child_info));
+		let child_delta = storage.children_default.into_iter()
+			.map(|(_storage_key, child_content)|
+				(child_content.child_info, child_content.data.into_iter().map(|(k, v)| (k, Some(v)))));
 
 		let (root, transaction) = self.old_state.full_storage_root(
 			storage.top.into_iter().map(|(k, v)| (k, Some(v))),
 			child_delta
 		);
 
-		self.new_state = Some(InMemoryBackend::from(transaction));
+		self.new_state = Some(transaction);
 		Ok(root)
 	}
 
@@ -638,7 +638,12 @@ impl<Block: BlockT> backend::Backend<Block> for Backend<Block> where Block::Hash
 
 			let hash = header.hash();
 
-			self.states.write().insert(hash, operation.new_state.unwrap_or_else(|| old_state.clone()));
+			let new_state = match operation.new_state {
+				Some(state) => old_state.update_backend(*header.state_root(), state),
+				None => old_state.clone(),
+			};
+
+			self.states.write().insert(hash, new_state);
 
 			self.blockchain.insert(hash, header, justification, body, pending_block.state)?;
 		}
@@ -725,8 +730,9 @@ pub fn check_genesis_storage(storage: &Storage) -> sp_blockchain::Result<()> {
 		return Err(sp_blockchain::Error::GenesisInvalid.into());
 	}
 
-	if storage.children.keys().any(|child_key| !well_known_keys::is_child_storage_key(&child_key)) {
-		return Err(sp_blockchain::Error::GenesisInvalid.into());
+	if storage.children_default.keys()
+		.any(|child_key| !well_known_keys::is_child_storage_key(&child_key)) {
+			return Err(sp_blockchain::Error::GenesisInvalid.into());
 	}
 
 	Ok(())
