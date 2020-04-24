@@ -110,3 +110,28 @@ pub fn multiply_by_rational(mut a: u128, mut b: u128, mut c: u128) -> Result<u12
 		q.try_into().map_err(|_| "result cannot fit in u128")
 	}
 }
+
+fn lo(x: u128) -> u128 {
+	((1u128 << 64) - 1) & x
+}
+
+fn hi(x: u128) -> u128 {
+	x >> 64
+}
+
+pub fn multiply(a: u128, b: u128) -> (u128, u128) {
+	let x = lo(a) * lo(b);
+	let s0 = lo(x);
+	let x = hi(a) * lo(b) + hi(x);
+	let s1 = lo(x);
+	let s2 = hi(x);
+	let x = s1 + lo(a) * hi(b);
+	let s1 = lo(x);
+	let x = s2 + hi(a) * hi(b) + hi(x);
+	let s2 = lo(x);
+	let s3 = hi(x);
+	let result = (s1 << 64) | s0;
+	let carry = (s3 << 64) | s2;
+
+	(carry, result)
+}
