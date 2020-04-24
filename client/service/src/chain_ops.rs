@@ -55,8 +55,8 @@ enum BlockStream<R, B>
 		_phantom: PhantomData<B>,
 	},
 	Json {
-		reader: R,
 		read_block_count: u64,
+		reader: R,
 		_phantom: PhantomData<B>,
 	},
 }
@@ -72,7 +72,7 @@ impl<R, B> BlockStream<R, B>
 		R: Read + Seek + 'static,
 		B: BlockT + MaybeSerializeDeserialize,
 	{
-	pub fn new(input: R, binary: bool) -> Result<Self, Error> {
+	fn new(input: R, binary: bool) -> Result<Self, Error> {
 		if binary {
 			let mut reader = IoReader(input);
 			let count: u64 = Decode::decode(&mut reader).map_err(|e| format!("Error reading file: {}", e))?;
@@ -91,6 +91,20 @@ impl<R, B> BlockStream<R, B>
 			})
 		}
 	}
+
+	fn read_block_count(&self) -> u64 {
+		match self {
+			BlockStream::Binary {count: _, read_block_count, reader: _, _phantom} => *read_block_count,
+			BlockStream::Json {read_block_count, reader: _, _phantom} => *read_block_count,
+		}
+	}
+
+	fn remaining_blocks(&self) -> Option<u64> {
+		match self {
+			BlockStream::Binary {count, read_block_count, reader: _, _phantom} => Some(*count - *read_block_count),
+			BlockStream::Json {read_block_count:_ , reader: _, _phantom}=> None
+		}
+	}
 }
 
 impl<R, B> Stream for BlockStream<R, B> 
@@ -100,7 +114,7 @@ impl<R, B> Stream for BlockStream<R, B>
 	{
 	type Item = Result<SignedBlock<B>, String>;
 
-	fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+	fn poll_next(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Option<Self::Item>> {
 		match Pin::get_mut(self) {
 			BlockStream::Binary {count, read_block_count, reader, _phantom} => {
 				if read_block_count < count {
@@ -188,11 +202,8 @@ impl<
 			}
 		}
 
-		let client = self.client;
 		let mut queue = self.import_queue;
 
-		let mut count = None::<u64>;
-		let mut read_block_count = 0;
 		let mut link = WaitLink::new();
 		let mut block_stream: BlockStream<_, Self::Block> = BlockStream::new(input, true).unwrap(); // SCOTT: switch true to binary.
 
@@ -227,9 +238,20 @@ impl<
 									import_existing: force,
 								}
 							]);
+							let imported_blocks = block_stream.read_block_count();
+							if imported_blocks % 1000 == 0 {
+								if let Some(remaining) = block_stream.remaining_blocks() {
+									info!(
+										"#{} blocks were imported (#{} left)",
+										imported_blocks, remaining
+									);
+								} else {
+									info!("#{} blocks were imported",  imported_blocks);
+								}
+							}
 						}
 						Err(e) => {
-							warn!("Error reading block data at {}: {}", read_block_count, e);
+							warn!("Error reading block data: {}", e);
 							return std::task::Poll::Ready(Ok(()));
 						}
 					}
@@ -241,7 +263,6 @@ impl<
 				Poll::Pending => {},
 			}
 
-			// let blocks_before = link.imported_blocks;
 			queue.poll_actions(cx, &mut link);
 
 			if link.has_error {
@@ -252,24 +273,7 @@ impl<
 				return std::task::Poll::Ready(Ok(()));
 			}
 
-			// SCOTT: we don't know how many blocks we'll import in JSON
-			// if link.imported_blocks / 1000 != blocks_before / 1000 {
-			// 	info!(
-			// 		"#{} blocks were imported (#{} left)",
-			// 		link.imported_blocks,
-			// 		count - link.imported_blocks
-			// 	);
-			// }
-
-			// SCOTT: we don't know how many block we'll import in JSON
-			// if link.imported_blocks >= count {
-			// 	info!("🎉 Imported {} blocks. Best: #{}", read_block_count, client.chain_info().best_number);
-			// 	return std::task::Poll::Ready(Ok(()));
-
-			// } else {
-				// Polling the import queue will re-schedule the task when ready.
 			return std::task::Poll::Pending;
-			// }
 		});
 		Box::pin(import)
 	}
