@@ -81,7 +81,7 @@ pub struct RunCmd {
 	/// Listen to all RPC interfaces.
 	///
 	/// Same as `--rpc-external`.
-	#[structopt(long = "unsafe-rpc-external")]
+	#[structopt(long)]
 	pub unsafe_rpc_external: bool,
 
 	/// RPC methods to expose.
@@ -90,7 +90,7 @@ pub struct RunCmd {
 	/// served externally, e.g. when `--{rpc,ws}-external` is passed,
 	/// or `Unsafe` (allows every RPC method to be called) otherwise.
 	#[structopt(
-		long = "rpc-methods",
+		long,
 		value_name = "METHOD SET",
 		possible_values = &RpcMethods::variants(),
 		case_insensitive = true,
