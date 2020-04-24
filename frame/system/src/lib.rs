@@ -929,7 +929,7 @@ impl<T: Trait> Module<T> {
 	/// If no previous weight exists, the function initializes the weight to zero.
 	pub fn register_extra_weight_unchecked(weight: Weight) {
 		let current_weight = AllExtrinsicsWeight::get().unwrap_or_default();
-		let next_weight = current_weight.saturating_add(weight).min(T::MaximumBlockWeight::get());
+		let next_weight = current_weight.saturating_add(weight);
 		AllExtrinsicsWeight::put(next_weight);
 	}
 
@@ -2151,6 +2151,15 @@ pub(crate) mod tests {
 			let len = 0_usize;
 
 			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&max, len));
+			assert_eq!(System::all_extrinsics_weight(), Weight::max_value());
+			assert!(System::all_extrinsics_weight() > <Test as Trait>::MaximumBlockWeight::get());
+		});
+	}
+
+	#[test]
+	fn register_extra_weight_unchecked_doesnt_care_about_limits() {
+		new_test_ext().execute_with(|| {
+			System::register_extra_weight_unchecked(Weight::max_value());
 			assert_eq!(System::all_extrinsics_weight(), Weight::max_value());
 			assert!(System::all_extrinsics_weight() > <Test as Trait>::MaximumBlockWeight::get());
 		});
