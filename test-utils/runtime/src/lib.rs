@@ -52,7 +52,7 @@ use sp_inherents::{CheckInherentsResult, InherentData};
 use cfg_if::cfg_if;
 
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
-pub use sp_consensus_babe::{AuthorityId, SlotNumber};
+pub use sp_consensus_babe::{AuthorityId, SlotNumber, AllowedSlots};
 pub type AuraId = sp_consensus_aura::sr25519::AuthorityId;
 
 // Include the WASM binary
@@ -641,7 +641,7 @@ cfg_if! {
 						genesis_authorities: system::authorities()
 							.into_iter().map(|x|(x, 1)).collect(),
 						randomness: <pallet_babe::Module<Runtime>>::randomness(),
-						secondary_slots: true,
+						allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 					}
 				}
 
@@ -835,7 +835,7 @@ cfg_if! {
 						genesis_authorities: system::authorities()
 							.into_iter().map(|x|(x, 1)).collect(),
 						randomness: <pallet_babe::Module<Runtime>>::randomness(),
-						secondary_slots: true,
+						allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 					}
 				}
 
