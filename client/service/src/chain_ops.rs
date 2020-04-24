@@ -64,13 +64,13 @@ enum BlockStream<R, B>
 impl<R, B> Unpin for BlockStream<R, B>
 	where
 		R: Read + Seek + 'static,
-		B: BlockT,
+		B: BlockT + MaybeSerializeDeserialize,
 {}
 
 impl<R, B> BlockStream<R, B>
 	where
 		R: Read + Seek + 'static,
-		B: BlockT,
+		B: BlockT + MaybeSerializeDeserialize,
 	{
 	pub fn new(input: R, binary: bool) -> Result<Self, Error> {
 		if binary {
@@ -95,7 +95,7 @@ impl<R, B> BlockStream<R, B>
 
 impl<R, B> Stream for BlockStream<R, B> 
 	where
-		R: Read + Seek + Send + 'static,
+		R: Read + Seek + 'static,
 		B: BlockT + MaybeSerializeDeserialize,
 	{
 	type Item = Result<SignedBlock<B>, String>;
@@ -141,7 +141,7 @@ impl<
 	Client<TBackend, LocalCallExecutor<TBackend, NativeExecutor<TExecDisp>>, TBl, TRtApi>,
 	TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend
 > where
-	TBl: BlockT,
+	TBl: BlockT + MaybeSerializeDeserialize,
 	TBackend: 'static + sc_client_api::backend::Backend<TBl> + Send,
 	TExecDisp: 'static + NativeExecutionDispatch,
 	TImpQu: 'static + ImportQueue<TBl>,
