@@ -118,8 +118,8 @@ impl<C: SubstrateCli> Runner<C> {
 		let tokio_runtime = build_runtime()?;
 		let runtime_handle = tokio_runtime.handle().clone();
 
-		let task_executor = {
-			Arc::new(move |fut, task_type| {
+		let task_executor = Arc::new(
+			move |fut, task_type| {
 				match task_type {
 					TaskType::Async => { runtime_handle.spawn(fut); }
 					TaskType::Blocking => {
@@ -130,8 +130,8 @@ impl<C: SubstrateCli> Runner<C> {
 						});
 					}
 				}
-			})
-		};
+			}
+		);
 
 		Ok(Runner {
 			config: command.create_configuration(cli, task_executor)?,
