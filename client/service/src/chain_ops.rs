@@ -25,6 +25,7 @@ use futures::{future, prelude::*, task::{Context, Poll}};
 use sp_runtime::traits::{
 	Block as BlockT, NumberFor, One, Zero, Header, SaturatedConversion, MaybeSerializeDeserialize,
 };
+use futures::stream::Stream;
 use sp_runtime::generic::{BlockId, SignedBlock};
 use codec::{Decode, Encode, IoReader};
 use sc_client::{Client, LocalCallExecutor};
@@ -36,7 +37,6 @@ use sc_executor::{NativeExecutor, NativeExecutionDispatch};
 
 use std::{io::{Read, Write, Seek}, pin::Pin};
 use sc_client_api::BlockBackend;
-
 use std::marker::PhantomData;
 
 /// Build a chain spec json
@@ -56,6 +56,7 @@ enum BlockStream<R, B>
 	},
 	Json {
 		reader: R,
+		read_block_count: u64,
 		_phantom: PhantomData<B>,
 	},
 }
@@ -75,6 +76,7 @@ impl<R, B> BlockStream<R, B>
 		if binary {
 			let mut reader = IoReader(input);
 			let count: u64 = Decode::decode(&mut reader).map_err(|e| format!("Error reading file: {}", e))?;
+			info!("📦 Importing {} blocks", count);
 			Ok(BlockStream::Binary {
 				count,
 				read_block_count: 0,
@@ -84,13 +86,14 @@ impl<R, B> BlockStream<R, B>
 		} else {
 			Ok(BlockStream::Json {
 				reader: input,
+				read_block_count: 0,
 				_phantom: PhantomData,
 			})
 		}
 	}
 }
 
-impl<R, B> futures::stream::Stream for BlockStream<R, B> 
+impl<R, B> Stream for BlockStream<R, B> 
 	where
 		R: Read + Seek + Send + 'static,
 		B: BlockT + MaybeSerializeDeserialize,
@@ -102,14 +105,28 @@ impl<R, B> futures::stream::Stream for BlockStream<R, B>
 			BlockStream::Binary {count, read_block_count, reader, _phantom} => {
 				if read_block_count < count {
 					// check for errors ?
-					Poll::Ready(Some(SignedBlock::<B>::decode(reader).map_err(|e| e.to_string())))
+					let block_result = SignedBlock::<B>::decode(reader).map_err(|e| e.to_string());
+					if block_result.is_ok() {
+						*read_block_count += 1;
+						if *read_block_count % 1000 == 0 {
+							info!("#{} blocks were added to the queue", read_block_count);
+						}
+					}
+					Poll::Ready(Some(block_result))
 				} else {
 					Poll::Ready(None)
 				}
 			}
-			BlockStream::Json {reader, _phantom} => {
+			BlockStream::Json {reader, read_block_count, _phantom} => {
 				// how does reader finish?
-				Poll::Ready(serde_json::from_reader(reader).ok())
+				let block_result = serde_json::from_reader(reader);
+				if block_result.is_ok() {
+					*read_block_count += 1;
+					if *read_block_count % 1000 == 0 {
+						info!("#{} blocks were added to the queue", read_block_count);
+					}			
+				}
+				Poll::Ready(block_result.ok())
 			}
 		}
 	}
@@ -174,10 +191,10 @@ impl<
 		let client = self.client;
 		let mut queue = self.import_queue;
 
-		let mut io_reader_input = IoReader(input);
 		let mut count = None::<u64>;
 		let mut read_block_count = 0;
 		let mut link = WaitLink::new();
+		let mut block_stream: BlockStream<_, Self::Block> = BlockStream::new(input, true).unwrap(); // SCOTT: switch true to binary.
 
 		// Importing blocks is implemented as a future, because we want the operation to be
 		// interruptible.
@@ -187,58 +204,44 @@ impl<
 		// This makes it possible either to interleave other operations in-between the block imports,
 		// or to stop the operation completely.
 		let import = future::poll_fn(move |cx| {
-			// Start by reading the number of blocks if not done so already.
-			let count = match count {
-				Some(c) => c,
-				None => {
-					let c: u64 = match Decode::decode(&mut io_reader_input) {
-						Ok(c) => c,
-						Err(err) => {
-							let err = format!("Error reading file: {}", err);
-							return std::task::Poll::Ready(Err(From::from(err)));
-						},
-					};
-					info!("📦 Importing {} blocks", c);
-					count = Some(c);
-					c
-				}
-			};
-
 			// Read blocks from the input.
-			if read_block_count < count {
-				match SignedBlock::<Self::Block>::decode(&mut io_reader_input) {
-					Ok(signed) => {
-						let (header, extrinsics) = signed.block.deconstruct();
-						let hash = header.hash();
-						// import queue handles verification and importing it into the client
-						queue.import_blocks(BlockOrigin::File, vec![
-							IncomingBlock::<Self::Block> {
-								hash,
-								header: Some(header),
-								body: Some(extrinsics),
-								justification: signed.justification,
-								origin: None,
-								allow_missing_state: false,
-								import_existing: force,
-							}
-						]);
+			match Pin::new(&mut block_stream).poll_next(cx) {
+				Poll::Ready(None) => {
+					// would be nice to have read_block_count
+					return Poll::Ready(Ok(()))
+				},
+				Poll::Ready(Some(block_result)) => {
+					match block_result {
+						Ok(signed) => {
+							let (header, extrinsics) = signed.block.deconstruct();
+							let hash = header.hash();
+							// import queue handles verification and importing it into the client
+							queue.import_blocks(BlockOrigin::File, vec![
+								IncomingBlock::<Self::Block> {
+									hash,
+									header: Some(header),
+									body: Some(extrinsics),
+									justification: signed.justification,
+									origin: None,
+									allow_missing_state: false,
+									import_existing: force,
+								}
+							]);
+						}
+						Err(e) => {
+							warn!("Error reading block data at {}: {}", read_block_count, e);
+							return std::task::Poll::Ready(Ok(()));
+						}
 					}
-					Err(e) => {
-						warn!("Error reading block data at {}: {}", read_block_count, e);
-						return std::task::Poll::Ready(Ok(()));
-					}
-				}
 
-				read_block_count += 1;
-				if read_block_count % 1000 == 0 {
-					info!("#{} blocks were added to the queue", read_block_count);
-				}
-
-				cx.waker().wake_by_ref();
-				return std::task::Poll::Pending;
+					cx.waker().wake_by_ref();
+					return std::task::Poll::Pending;
+				},
+				// Shouldn't happen?
+				Poll::Pending => {},
 			}
 
-			let blocks_before = link.imported_blocks;
+			// let blocks_before = link.imported_blocks;
 			queue.poll_actions(cx, &mut link);
 
 			if link.has_error {
@@ -249,22 +252,24 @@ impl<
 				return std::task::Poll::Ready(Ok(()));
 			}
 
-			if link.imported_blocks / 1000 != blocks_before / 1000 {
-				info!(
-					"#{} blocks were imported (#{} left)",
-					link.imported_blocks,
-					count - link.imported_blocks
-				);
-			}
+			// SCOTT: we don't know how many blocks we'll import in JSON
+			// if link.imported_blocks / 1000 != blocks_before / 1000 {
+			// 	info!(
+			// 		"#{} blocks were imported (#{} left)",
+			// 		link.imported_blocks,
+			// 		count - link.imported_blocks
+			// 	);
+			// }
 
-			if link.imported_blocks >= count {
-				info!("🎉 Imported {} blocks. Best: #{}", read_block_count, client.chain_info().best_number);
-				return std::task::Poll::Ready(Ok(()));
+			// SCOTT: we don't know how many block we'll import in JSON
+			// if link.imported_blocks >= count {
+			// 	info!("🎉 Imported {} blocks. Best: #{}", read_block_count, client.chain_info().best_number);
+			// 	return std::task::Poll::Ready(Ok(()));
 
-			} else {
+			// } else {
 				// Polling the import queue will re-schedule the task when ready.
-				return std::task::Poll::Pending;
-			}
+			return std::task::Poll::Pending;
+			// }
 		});
 		Box::pin(import)
 	}
