@@ -144,8 +144,8 @@ pub trait Storage {
 	}
 
 	/// Push new entry to the storage accumulator.
-	fn accumulator_push(&mut self, key: &[u8], appended: &[u8]) {
-		self.storage_accumulator_push(key, appended.to_vec())
+	fn accumulator_push(&mut self, key: &[u8], appended: Vec<u8>) {
+		self.storage_accumulator_push(key, appended)
 	}
 
 	/// Commit storage accumulator.

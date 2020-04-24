@@ -797,7 +797,7 @@ impl<T: Trait> Module<T> {
 		// Note that because of that <Events<T>>::get() won't return these events until
 		// they are commited in System::finalize().
 		let encoded_event = event.encode();
-		sp_io::storage::accumulator_push(&Events::<T>::storage_value_final_key()[..], &encoded_event);
+		sp_io::storage::accumulator_push(&Events::<T>::storage_value_final_key()[..], encoded_event);
 
 		for topic in topics {
 			// The same applies here.
