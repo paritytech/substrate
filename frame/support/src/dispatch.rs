@@ -1433,16 +1433,17 @@ macro_rules! decl_module {
 				match *self {
 					$(
 						$call_type::$fn_name( $( ref $param_name ),* ) => {
+							let base_weight = $weight;
 							let weight = <dyn $crate::dispatch::WeighData<( $( & $param, )* )>>::weigh_data(
-								&$weight,
+								&base_weight,
 								($( $param_name, )*)
 							);
 							let class = <dyn $crate::dispatch::ClassifyDispatch<( $( & $param, )* )>>::classify_dispatch(
-								&$weight,
+								&base_weight,
 								($( $param_name, )*)
 							);
 							let pays_fee = <dyn $crate::dispatch::PaysFee<( $( & $param, )* )>>::pays_fee(
-								&$weight,
+								&base_weight,
 								($( $param_name, )*)
 							);
 							$crate::dispatch::DispatchInfo {
