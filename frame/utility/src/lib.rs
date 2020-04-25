@@ -231,7 +231,7 @@ decl_module! {
 			|args: (&Vec<<T as Trait>::Call>,)| {
 				args.0.iter()
 					.map(|call| call.get_dispatch_info().weight)
-					.fold(65_000_000, |a, n| a + n)
+					.fold(65_000_000 as Weight, |a, n| a.saturating_add(n))
 			},
 			|args: (&Vec<<T as Trait>::Call>,)| {
 				let all_operational = args.0.iter()
@@ -265,7 +265,9 @@ decl_module! {
 		/// - Plus the weight of the `call`
 		/// # </weight>
 		#[weight = FunctionOf(
-			|args: (&u16, &Box<<T as Trait>::Call>)| args.1.get_dispatch_info().weight + 5_000_000,
+			|args: (&u16, &Box<<T as Trait>::Call>)| {
+				args.1.get_dispatch_info().weight.saturating_add(5_000_000 as Weight)
+			},
 			|args: (&u16, &Box<<T as Trait>::Call>)| args.1.get_dispatch_info().class,
 			Pays::Yes,
 		)]
@@ -328,7 +330,10 @@ decl_module! {
 		/// # </weight>
 		#[weight = FunctionOf(
 			|args: (&u16, &Vec<T::AccountId>, &Option<Timepoint<T::BlockNumber>>, &Box<<T as Trait>::Call>)| {
-				args.3.get_dispatch_info().weight + 150_000_000 + 500_000 * (args.1.len() as Weight)
+				args.3.get_dispatch_info().weight
+					.saturating_add(150_000_000 as Weight)
+					.saturating_add((500_000 as Weight).saturating_mul(args.1.len() as Weight))
+					.saturating_add(T::DbWeight::get().reads_writes(1, 1))
 			},
 			|args: (&u16, &Vec<T::AccountId>, &Option<Timepoint<T::BlockNumber>>, &Box<<T as Trait>::Call>)| {
 				args.3.get_dispatch_info().class
@@ -429,10 +434,19 @@ decl_module! {
 		/// - Storage: inserts one item, value size bounded by `MaxSignatories`, with a
 		///   deposit taken for its lifetime of
 		///   `MultisigDepositBase + threshold * MultisigDepositFactor`.
+		/// ----------------------------------
+		/// - Base Weight:
+		///     - Create: 139.1 + 0.202 * S
+		///     - Approve: 96.6 + 0.328 * S
+		/// - DB Weight:
+		///     - Read: Multisig Storage, [Caller Account]
+		///     - Write: Multisig Storage, [Caller Account]
 		/// # </weight>
 		#[weight = FunctionOf(
 			|args: (&u16, &Vec<T::AccountId>, &Option<Timepoint<T::BlockNumber>>, &[u8; 32])| {
-				10_000 * (args.1.len() as Weight + 1)
+				(140_000_000 as Weight)
+					.saturating_add((350_000 as Weight).saturating_mul(args.1.len() as Weight))
+					.saturating_add(T::DbWeight::get().reads_writes(1, 1))
 			},
 			DispatchClass::Normal,
 			Pays::Yes,
@@ -504,10 +518,17 @@ decl_module! {
 		/// - One event.
 		/// - I/O: 1 read `O(S)`, one remove.
 		/// - Storage: removes one item.
+		/// ----------------------------------
+		/// - Base Weight: 126.6 + 0.126 * S
+		/// - DB Weight:
+		///     - Read: Multisig Storage, [Caller Account]
+		///     - Write: Multisig Storage, [Caller Account]
 		/// # </weight>
 		#[weight = FunctionOf(
 			|args: (&u16, &Vec<T::AccountId>, &Timepoint<T::BlockNumber>, &[u8; 32])| {
-				10_000 * (args.1.len() as Weight + 1)
+				(130_000_000 as Weight)
+					.saturating_add((130_000 as Weight).saturating_mul(args.1.len() as Weight))
+					.saturating_add(T::DbWeight::get().reads_writes(1, 1))
 			},
 			DispatchClass::Normal,
 			Pays::Yes,
