@@ -60,18 +60,56 @@
 //! # pub type AllModules = u64;
 //! # pub enum Runtime {};
 //! # use sp_runtime::transaction_validity::{
-//! 		TransactionValidity, UnknownTransaction, TransactionSource,
+//! #    TransactionValidity, UnknownTransaction, TransactionSource,
 //! # };
 //! # use sp_runtime::traits::ValidateUnsigned;
 //! # impl ValidateUnsigned for Runtime {
-//! # 	type Call = ();
+//! #     type Call = ();
 //! #
-//! # 	fn validate_unsigned(_source: TransactionSource, _call: &Self::Call) -> TransactionValidity {
-//! # 		UnknownTransaction::NoUnsignedValidator.into()
-//! # 	}
+//! #     fn validate_unsigned(_source: TransactionSource, _call: &Self::Call) -> TransactionValidity {
+//! #         UnknownTransaction::NoUnsignedValidator.into()
+//! #     }
 //! # }
 //! /// Executive: handles dispatch to the various modules.
 //! pub type Executive = executive::Executive<Runtime, Block, Context, Runtime, AllModules>;
+//! ```
+//!
+//! ### Custom `OnRuntimeUpgrade` logic
+//!
+//! You can add custom logic that should be called in your runtime on a runtime upgrade. This is
+//! done by setting an optional generic parameter. The custom logic will be called before
+//! the on runtime upgrade logic of all modules is called.
+//!
+//! ```
+//! # use sp_runtime::generic;
+//! # use frame_executive as executive;
+//! # pub struct UncheckedExtrinsic {};
+//! # pub struct Header {};
+//! # type Context = frame_system::ChainContext<Runtime>;
+//! # pub type Block = generic::Block<Header, UncheckedExtrinsic>;
+//! # pub type Balances = u64;
+//! # pub type AllModules = u64;
+//! # pub enum Runtime {};
+//! # use sp_runtime::transaction_validity::{
+//! #    TransactionValidity, UnknownTransaction, TransactionSource,
+//! # };
+//! # use sp_runtime::traits::ValidateUnsigned;
+//! # impl ValidateUnsigned for Runtime {
+//! #     type Call = ();
+//! #
+//! #     fn validate_unsigned(_source: TransactionSource, _call: &Self::Call) -> TransactionValidity {
+//! #         UnknownTransaction::NoUnsignedValidator.into()
+//! #     }
+//! # }
+//! struct CustomOnRuntimeUpgrade;
+//! impl frame_support::traits::OnRuntimeUpgrade for CustomOnRuntimeUpgrade {
+//!     fn on_runtime_upgrade() -> frame_support::weights::Weight {
+//!         // Do whatever you want.
+//!         0
+//!     }
+//! }
+//!
+//! pub type Executive = executive::Executive<Runtime, Block, Context, Runtime, AllModules, CustomOnRuntimeUpgrade>;
 //! ```
 
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -102,8 +140,19 @@ pub type CheckedOf<E, C> = <E as Checkable<C>>::Checked;
 pub type CallOf<E, C> = <CheckedOf<E, C> as Applyable>::Call;
 pub type OriginOf<E, C> = <CallOf<E, C> as Dispatchable>::Origin;
 
-pub struct Executive<System, Block, Context, UnsignedValidator, AllModules>(
-	PhantomData<(System, Block, Context, UnsignedValidator, AllModules)>
+/// Main entry point for certain runtime actions as e.g. `execute_block`.
+///
+/// Generic parameters:
+/// - `System`: Something that implements `frame_system::Trait`
+/// - `Block`: The block type of the runtime
+/// - `Context`: The context that is used when checking an extrinsic.
+/// - `UnsignedValidator`: The unsigned transaction validator of the runtime.
+/// - `AllModules`: Tuple that contains all modules. Will be used to call e.g. `on_initialize`.
+/// - `OnRuntimeUpgrade`: Custom logic that should be called after a runtime upgrade. Modules are
+///                       already called by `AllModules`. It will be called before all modules will
+///                       be called.
+pub struct Executive<System, Block, Context, UnsignedValidator, AllModules, OnRuntimeUpgrade = ()>(
+	PhantomData<(System, Block, Context, UnsignedValidator, AllModules, OnRuntimeUpgrade)>
 );
 
 impl<
@@ -116,7 +165,9 @@ impl<
 		OnInitialize<System::BlockNumber> +
 		OnFinalize<System::BlockNumber> +
 		OffchainWorker<System::BlockNumber>,
-> ExecuteBlock<Block> for Executive<System, Block, Context, UnsignedValidator, AllModules>
+	COnRuntimeUpgrade: OnRuntimeUpgrade,
+> ExecuteBlock<Block> for
+	Executive<System, Block, Context, UnsignedValidator, AllModules, COnRuntimeUpgrade>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>:
@@ -141,7 +192,8 @@ impl<
 		OnInitialize<System::BlockNumber> +
 		OnFinalize<System::BlockNumber> +
 		OffchainWorker<System::BlockNumber>,
-> Executive<System, Block, Context, UnsignedValidator, AllModules>
+	COnRuntimeUpgrade: OnRuntimeUpgrade,
+> Executive<System, Block, Context, UnsignedValidator, AllModules, COnRuntimeUpgrade>
 where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>:
@@ -180,8 +232,9 @@ where
 	) {
 		if Self::runtime_upgraded() {
 			// System is not part of `AllModules`, so we need to call this manually.
-			<frame_system::Module::<System> as OnRuntimeUpgrade>::on_runtime_upgrade();
-			let weight = <AllModules as OnRuntimeUpgrade>::on_runtime_upgrade();
+			let mut weight = <frame_system::Module::<System> as OnRuntimeUpgrade>::on_runtime_upgrade();
+			weight = weight.saturating_add(COnRuntimeUpgrade::on_runtime_upgrade());
+			weight = weight.saturating_add(<AllModules as OnRuntimeUpgrade>::on_runtime_upgrade());
 			<frame_system::Module<System>>::register_extra_weight_unchecked(weight);
 		}
 		<frame_system::Module<System>>::initialize(
@@ -410,6 +463,7 @@ mod tests {
 	use frame_system::{self as system, Call as SystemCall, ChainContext, LastRuntimeUpgradeInfo};
 	use pallet_balances::Call as BalancesCall;
 	use hex_literal::hex;
+	const TEST_KEY: &[u8] = &*b":test:key:";
 
 	mod custom {
 		use frame_support::weights::{Weight, DispatchClass};
@@ -441,6 +495,11 @@ mod tests {
 
 				fn on_finalize() {
 					println!("on_finalize(?)");
+				}
+
+				fn on_runtime_upgrade() -> Weight {
+					sp_io::storage::set(super::TEST_KEY, "module".as_bytes());
+					0
 				}
 			}
 		}
@@ -570,7 +629,27 @@ mod tests {
 	);
 	type AllModules = (System, Balances, Custom);
 	type TestXt = sp_runtime::testing::TestXt<Call, SignedExtra>;
-	type Executive = super::Executive<Runtime, Block<TestXt>, ChainContext<Runtime>, Runtime, AllModules>;
+
+	// Will contain `true` when the custom runtime logic was called.
+	const CUSTOM_ON_RUNTIME_KEY: &[u8] = &*b":custom:on_runtime";
+
+	struct CustomOnRuntimeUpgrade;
+	impl OnRuntimeUpgrade for CustomOnRuntimeUpgrade {
+		fn on_runtime_upgrade() -> Weight {
+			sp_io::storage::set(TEST_KEY, "custom_upgrade".as_bytes());
+			sp_io::storage::set(CUSTOM_ON_RUNTIME_KEY, &true.encode());
+			0
+		}
+	}
+
+	type Executive = super::Executive<
+		Runtime,
+		Block<TestXt>,
+		ChainContext<Runtime>,
+		Runtime,
+		AllModules,
+		CustomOnRuntimeUpgrade
+	>;
 
 	fn extra(nonce: u64, fee: Balance) -> SignedExtra {
 		(
@@ -898,5 +977,27 @@ mod tests {
 
 			assert_eq!(result, last.was_upgraded(&current));
 		}
+	}
+
+	#[test]
+	fn custom_runtime_upgrade_is_called_before_modules() {
+		new_test_ext(1).execute_with(|| {
+			// Make sure `on_runtime_upgrade` is called.
+			RUNTIME_VERSION.with(|v| *v.borrow_mut() = sp_version::RuntimeVersion {
+				spec_version: 1,
+				..Default::default()
+			});
+
+			Executive::initialize_block(&Header::new(
+				1,
+				H256::default(),
+				H256::default(),
+				[69u8; 32].into(),
+				Digest::default(),
+			));
+
+			assert_eq!(&sp_io::storage::get(TEST_KEY).unwrap()[..], *b"module");
+			assert_eq!(sp_io::storage::get(CUSTOM_ON_RUNTIME_KEY).unwrap(), true.encode());
+		});
 	}
 }
