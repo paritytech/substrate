@@ -141,47 +141,59 @@ pub fn multiply(a: u128, b: u128) -> (u128, u128) {
 /// Returns `None` if there is an overflow.
 pub fn divide(a: u128, b: u128, p: u8) -> Option<u128> {
 
-	// How much room do we have to multiply.
+	// Bits of space to multiply.
 	let leading_zeros = a.leading_zeros();
-	let shift = leading_zeros.max(p);
+	let shift = leading_zeros.min(p.into());
 
 	// Multiply as much as possible.
 	let a = a.checked_shl(shift).unwrap();
-	let p = p - leading_zeros;
+	let p = p as u32 - shift;
 
 	// Perform the division for first time.
 	let d = a.checked_div(b).unwrap();
 	let r = a.checked_rem(b).unwrap();
 
+	if p == 0 {
+		// We're done, the multiplication was fitting after all.
+		return Some(d)
+	}
 
-	
+	let leading_zeros = d.leading_zeros();
 
-
-	let d = a.checked_div(b).unwrap();
-
-
-	if l < p {
-		// The multiplication will overflow.
+	if leading_zeros < p {
+		// Overflow.
 		return None
 	}
 
-	let p = p - l; // 
+	// Save partial result.
+	let n = d.checked_shl(p).unwrap();
 
-
-	let mut n = d;
-	let mut p = p;
-
-	while p > 0 {
-		let l = r.leading_zeros();
-		let mut sr = r;
-
-		if p > l {
-			sr = r.checked_shl(l);
-			p -= l;
-		}
+	if r == 0 {
+		// No remainer and no overflow, we are done.
+		return Some(n)
 	}
 
-	Some(n)
+	// Second iteration. Continue with the remainer.
+	let a = r;
+
+	// Bits of space to multiply.
+	let leading_zeros = a.leading_zeros();
+	let shift = leading_zeros.min(p);
+
+	// Multiply as much as possible.
+	let a = a.checked_shl(shift).unwrap();
+	let p = p - shift;
+	
+	// Perform the division for second time.
+	let d = a.checked_div(b).unwrap();
+	let r = a.checked_rem(b).unwrap();
+
+	if p == 0 {
+		// We're done.
+		return Some(d)
+	}
+
+	None
 }
 
 #[cfg(test)]
