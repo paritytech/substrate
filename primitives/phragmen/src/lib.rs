@@ -34,8 +34,12 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::{prelude::*, collections::btree_map::BTreeMap, fmt::Debug, cmp::Ordering, convert::TryFrom};
-use sp_runtime::{helpers_128bit::multiply_by_rational, PerThing, Rational128, RuntimeDebug, SaturatedConversion};
-use sp_runtime::traits::{Zero, Member, Saturating, Bounded};
+use sp_arithmetic::{
+	PerThing, Rational128,
+	helpers_128bit::multiply_by_rational,
+	traits::{Zero, Saturating, Bounded, SaturatedConversion},
+};
+use sp_core::RuntimeDebug;
 
 #[cfg(test)]
 mod mock;
@@ -60,7 +64,9 @@ pub use helpers::*;
 #[doc(hidden)]
 pub use codec;
 #[doc(hidden)]
-pub use sp_runtime;
+pub use sp_core;
+#[doc(hidden)]
+pub use sp_arithmetic;
 
 // re-export the compact solution type.
 pub use sp_phragmen_compact::generate_compact_solution_type;
@@ -334,7 +340,7 @@ pub fn elect<AccountId, R>(
 	initial_candidates: Vec<AccountId>,
 	initial_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
 ) -> Option<PhragmenResult<AccountId, R>> where
-	AccountId: Default + Ord + Member,
+	AccountId: Default + Ord + Clone,
 	R: PerThing,
 {
 	// return structures
@@ -561,7 +567,7 @@ pub fn build_support_map<AccountId>(
 	winners: &[AccountId],
 	assignments: &[StakedAssignment<AccountId>],
 ) -> (SupportMap<AccountId>, u32) where
-	AccountId: Default + Ord + Member,
+	AccountId: Default + Ord + Clone,
 {
 	let mut errors = 0;
 	// Initialize the support of each candidate.

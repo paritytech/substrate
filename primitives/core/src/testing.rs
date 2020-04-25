@@ -16,10 +16,10 @@
 
 //! Types that should only be used for testing!
 
-use crate::crypto::{KeyTypeId, CryptoTypePublicPair};
+use crate::crypto::KeyTypeId;
 #[cfg(feature = "std")]
 use crate::{
-	crypto::{Pair, Public},
+	crypto::{Pair, Public, CryptoTypePublicPair},
 	ed25519, sr25519,
 	traits::BareCryptoStoreError
 };

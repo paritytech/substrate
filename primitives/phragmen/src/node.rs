@@ -16,7 +16,7 @@
 
 //! (very) Basic implementation of a graph node used in the reduce algorithm.
 
-use sp_runtime::RuntimeDebug;
+use sp_core::RuntimeDebug;
 use sp_std::{cell::RefCell, fmt, prelude::*, rc::Rc};
 
 /// The role that a node can accept.
