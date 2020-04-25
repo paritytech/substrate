@@ -115,7 +115,7 @@ impl Saturating for Fixed64 {
 	fn saturating_mul(self, rhs: Self) -> Self {
 		let a = self.0 as i128;
 		let b = rhs.0 as i128;
-		let res = a.saturating_mul(b) / DIV as i128;
+		let res = a * b / DIV as i128;
 		Self(res.saturated_into())
 	}
 
