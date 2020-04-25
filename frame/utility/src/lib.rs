@@ -68,7 +68,7 @@ use sp_io::hashing::blake2_256;
 use frame_support::{decl_module, decl_event, decl_error, decl_storage, Parameter, ensure, RuntimeDebug};
 use frame_support::{traits::{Get, ReservableCurrency, Currency},
 	weights::{Weight, GetDispatchInfo, DispatchClass, FunctionOf, Pays},
-	dispatch::PostDispatchInfo,
+	dispatch::{DispatchResultWithPostInfo, PostDispatchInfo},
 };
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::{DispatchError, DispatchResult, traits::Dispatchable};
@@ -217,8 +217,9 @@ decl_module! {
 		/// - `calls`: The calls to be dispatched from the same origin.
 		///
 		/// # <weight>
-		/// - The sum of the weights of the `calls`.
-		/// - One event.
+		/// - Base weight: 63.78 µs
+		/// - Plus the sum of the weights of the `calls`.
+		/// - Plus one additional event. (repeat read/write)
 		/// # </weight>
 		///
 		/// This will return `Ok` in all circumstances. To determine the success of the batch, an
@@ -230,7 +231,7 @@ decl_module! {
 			|args: (&Vec<<T as Trait>::Call>,)| {
 				args.0.iter()
 					.map(|call| call.get_dispatch_info().weight)
-					.fold(10_000, |a, n| a + n)
+					.fold(65_000_000, |a, n| a + n)
 			},
 			|args: (&Vec<<T as Trait>::Call>,)| {
 				let all_operational = args.0.iter()
@@ -260,10 +261,11 @@ decl_module! {
 		/// The dispatch origin for this call must be _Signed_.
 		///
 		/// # <weight>
-		/// - The weight of the `call` + 10,000.
+		/// - Base weight: 5.1 µs
+		/// - Plus the weight of the `call`
 		/// # </weight>
 		#[weight = FunctionOf(
-			|args: (&u16, &Box<<T as Trait>::Call>)| args.1.get_dispatch_info().weight + 10_000,
+			|args: (&u16, &Box<<T as Trait>::Call>)| args.1.get_dispatch_info().weight + 5_000_000,
 			|args: (&u16, &Box<<T as Trait>::Call>)| args.1.get_dispatch_info().class,
 			Pays::Yes,
 		)]
@@ -314,10 +316,19 @@ decl_module! {
 		/// - Storage: inserts one item, value size bounded by `MaxSignatories`, with a
 		///   deposit taken for its lifetime of
 		///   `MultisigDepositBase + threshold * MultisigDepositFactor`.
+		/// -------------------------------
+		/// - Base Weight:
+		///     - Create: 137.5 + 0.274 * S µs
+		///     - Approve: 103.8 + .266 * S µs
+		///     - Complete: 116.2 + .754 * S µs
+		/// - DB Weight:
+		///     - Reads: Multisig Storage, [Caller Account]
+		///     - Writes: Multisig Storage, [Caller Account]
+		/// - Plus Call Weight
 		/// # </weight>
 		#[weight = FunctionOf(
 			|args: (&u16, &Vec<T::AccountId>, &Option<Timepoint<T::BlockNumber>>, &Box<<T as Trait>::Call>)| {
-				args.3.get_dispatch_info().weight + 10_000 * (args.1.len() as Weight + 1)
+				args.3.get_dispatch_info().weight + 150_000_000 + 500_000 * (args.1.len() as Weight)
 			},
 			|args: (&u16, &Vec<T::AccountId>, &Option<Timepoint<T::BlockNumber>>, &Box<<T as Trait>::Call>)| {
 				args.3.get_dispatch_info().class
@@ -329,7 +340,7 @@ decl_module! {
 			other_signatories: Vec<T::AccountId>,
 			maybe_timepoint: Option<Timepoint<T::BlockNumber>>,
 			call: Box<<T as Trait>::Call>,
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
 			let max_sigs = T::MaxSignatories::get() as usize;
@@ -349,7 +360,8 @@ decl_module! {
 						m.approvals.insert(pos, who.clone());
 						<Multisigs<T>>::insert(&id, call_hash, m);
 						Self::deposit_event(RawEvent::MultisigApproval(who, timepoint, id, call_hash));
-						return Ok(())
+						// Call is not made, so we can return that weight
+						return Ok(Some(call.get_dispatch_info().weight).into())
 					}
 				} else {
 					if (m.approvals.len() as u16) < threshold {
@@ -363,6 +375,7 @@ decl_module! {
 				Self::deposit_event(RawEvent::MultisigExecuted(
 					who, timepoint, id, call_hash, result.map(|_| ()).map_err(|e| e.error)
 				));
+				return Ok(None.into())
 			} else {
 				ensure!(maybe_timepoint.is_none(), Error::<T>::UnexpectedTimepoint);
 				if threshold > 1 {
@@ -376,12 +389,13 @@ decl_module! {
 						approvals: vec![who.clone()],
 					});
 					Self::deposit_event(RawEvent::NewMultisig(who, id, call_hash));
+					// Call is not made, so we can return that weight
+					return Ok(Some(call.get_dispatch_info().weight).into())
 				} else {
 					return call.dispatch(frame_system::RawOrigin::Signed(id).into())
-						.map(|_| ()).map_err(|e| e.error)
+						.map(|_| None.into()).map_err(|e| e.error.into())
 				}
 			}
-			Ok(())
 		}
 
 		/// Register approval for a dispatch to be made from a deterministic composite account if
