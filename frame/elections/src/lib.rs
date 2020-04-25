@@ -30,7 +30,7 @@ use sp_runtime::{
 };
 use frame_support::{
 	decl_storage, decl_event, ensure, decl_module, decl_error,
-	weights::{Weight, MINIMUM_WEIGHT, DispatchClass},
+	weights::{Weight, DispatchClass},
 	traits::{
 		Currency, ExistenceRequirement, Get, LockableCurrency, LockIdentifier, BalanceStatus,
 		OnUnbalanced, ReservableCurrency, WithdrawReason, WithdrawReasons, ChangeMembers,
@@ -662,7 +662,7 @@ decl_module! {
 		/// Set the desired member count; if lower than the current count, then seats will not be up
 		/// election when they expire. If more, then a new vote will be started if one is not
 		/// already in progress.
-		#[weight = (MINIMUM_WEIGHT, DispatchClass::Operational)]
+		#[weight = (0, DispatchClass::Operational)]
 		fn set_desired_seats(origin, #[compact] count: u32) {
 			ensure_root(origin)?;
 			DesiredSeats::put(count);
@@ -672,7 +672,7 @@ decl_module! {
 		///
 		/// Note: A tally should happen instantly (if not already in a presentation
 		/// period) to fill the seat if removal means that the desired members are not met.
-		#[weight = (MINIMUM_WEIGHT, DispatchClass::Operational)]
+		#[weight = (0, DispatchClass::Operational)]
 		fn remove_member(origin, who: <T::Lookup as StaticLookup>::Source) {
 			ensure_root(origin)?;
 			let who = T::Lookup::lookup(who)?;
@@ -687,7 +687,7 @@ decl_module! {
 
 		/// Set the presentation duration. If there is currently a vote being presented for, will
 		/// invoke `finalize_vote`.
-		#[weight = (MINIMUM_WEIGHT, DispatchClass::Operational)]
+		#[weight = (0, DispatchClass::Operational)]
 		fn set_presentation_duration(origin, #[compact] count: T::BlockNumber) {
 			ensure_root(origin)?;
 			<PresentationDuration<T>>::put(count);
@@ -695,7 +695,7 @@ decl_module! {
 
 		/// Set the presentation duration. If there is current a vote being presented for, will
 		/// invoke `finalize_vote`.
-		#[weight = (MINIMUM_WEIGHT, DispatchClass::Operational)]
+		#[weight = (0, DispatchClass::Operational)]
 		fn set_term_duration(origin, #[compact] count: T::BlockNumber) {
 			ensure_root(origin)?;
 			<TermDuration<T>>::put(count);
@@ -706,7 +706,7 @@ decl_module! {
 				print("Guru meditation");
 				print(e);
 			}
-			MINIMUM_WEIGHT
+			0
 		}
 	}
 }
