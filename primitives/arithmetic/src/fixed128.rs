@@ -294,7 +294,7 @@ implement_fixed!(
 // 		if rhs.0.signum() == 0 {
 // 			return None;
 // 		}
-// 		if self.0 == 0 {
+// 		if self .0 == 0 {
 // 			return Some(*self);
 // 		}
 
@@ -310,8 +310,7 @@ implement_fixed!(
 
 // 		(lhs as <Self as FixedPointNumber>::Unsigned)
 // 			.checked_mul(<Self as FixedPointNumber>::DIV as <Self as FixedPointNumber>::Unsigned)
-// 			.and_then(|n| n.checked_div(rhs as <Self as FixedPointNumber>::Unsigned))
-// 			.and_then(|n| TryInto::<<Self as FixedPointNumber>::Inner>::try_into(n).ok())
+// 		 
 // 			.map(|n| Self(n * signum))
 // 	}
 // }

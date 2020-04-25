@@ -135,3 +135,61 @@ pub fn multiply(a: u128, b: u128) -> (u128, u128) {
 
 	(carry, result)
 }
+
+/// Computes (a * 2^c) / b.
+/// 
+/// Returns `None` if there is an overflow.
+pub fn divide(a: u128, b: u128, p: u8) -> Option<u128> {
+
+	// How much room do we have to multiply.
+	let leading_zeros = a.leading_zeros();
+	let shift = leading_zeros.max(p);
+
+	// Multiply as much as possible.
+	let a = a.checked_shl(shift).unwrap();
+	let p = p - leading_zeros;
+
+	// Perform the division for first time.
+	let d = a.checked_div(b).unwrap();
+	let r = a.checked_rem(b).unwrap();
+
+
+	
+
+
+	let d = a.checked_div(b).unwrap();
+
+
+	if l < p {
+		// The multiplication will overflow.
+		return None
+	}
+
+	let p = p - l; // 
+
+
+	let mut n = d;
+	let mut p = p;
+
+	while p > 0 {
+		let l = r.leading_zeros();
+		let mut sr = r;
+
+		if p > l {
+			sr = r.checked_shl(l);
+			p -= l;
+		}
+	}
+
+	Some(n)
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn divide_works() {
+		assert_eq!(divide(4, 2, 0), Some(2));
+	}
+}
