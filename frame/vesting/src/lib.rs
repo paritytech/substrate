@@ -194,8 +194,9 @@ decl_module! {
 		///     - Reads: Vesting Storage, Balances Locks, [Sender Account]
 		///     - Writes: Vesting Storage, Balances Locks, [Sender Account]
 		/// - Benchmark: 147.5 µs (min square analysis)
+		/// - Assuming less than 50 locks on any user, else we may want factor in number of locks.
 		/// # </weight>
-        #[weight = 150_000_000 + T::DbWeight::get().reads_writes(2, 2)]
+		#[weight = 150_000_000 + T::DbWeight::get().reads_writes(2, 2)]
 		fn vest(origin) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::update_lock(who)
@@ -216,8 +217,9 @@ decl_module! {
 		///     - Reads: Vesting Storage, Balances Locks, Target Account
 		///     - Writes: Vesting Storage, Balances Locks, Target Account
 		/// - Benchmark: 150.4 µs (min square analysis)
+		/// - Assuming less than 50 locks on any user, else we may want factor in number of locks.
 		/// # </weight>
-        #[weight = 150_000_000 + T::DbWeight::get().reads_writes(3, 3)]
+		#[weight = 150_000_000 + T::DbWeight::get().reads_writes(3, 3)]
 		fn vest_other(origin, target: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
 			ensure_signed(origin)?;
 			Self::update_lock(T::Lookup::lookup(target)?)
@@ -239,8 +241,9 @@ decl_module! {
 		///     - Reads: Vesting Storage, Balances Locks, Target Account, [Sender Account]
 		///     - Writes: Vesting Storage, Balances Locks, Target Account, [Sender Account]
 		/// - Benchmark: 263 µs (min square analysis)
+		/// - Assuming less than 50 locks on any user, else we may want factor in number of locks.
 		/// # </weight>
-        #[weight = 260_000_000 + T::DbWeight::get().reads_writes(4, 4)]
+		#[weight = 300_000_000 + T::DbWeight::get().reads_writes(3, 3)]
 		pub fn vested_transfer(
 			origin,
 			target: <T::Lookup as StaticLookup>::Source,
