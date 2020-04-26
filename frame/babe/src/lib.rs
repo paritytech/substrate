@@ -25,7 +25,7 @@ use pallet_timestamp;
 use sp_std::{result, prelude::*};
 use frame_support::{
 	decl_storage, decl_module, traits::{FindAuthor, Get, Randomness as RandomnessT},
-	weights::{Weight, MINIMUM_WEIGHT},
+	weights::Weight,
 };
 use sp_timestamp::OnTimestampSet;
 use sp_runtime::{generic::DigestItem, ConsensusEngineId, Perbill};
@@ -184,7 +184,7 @@ decl_module! {
 		fn on_initialize(now: T::BlockNumber) -> Weight {
 			Self::do_initialize(now);
 
-			MINIMUM_WEIGHT
+			0
 		}
 
 		/// Block finalization
