@@ -66,7 +66,7 @@
 pub use sp_consensus_babe::{
 	BabeApi, ConsensusLog, BABE_ENGINE_ID, SlotNumber,
 	BabeEpochConfiguration, BabeGenesisConfiguration,
-	AuthorityId, AuthorityPair, AuthoritySignature,
+	AuthorityId, AuthorityPair, AuthoritySignature, Randomness,
 	BabeAuthorityWeight, VRF_OUTPUT_LENGTH,
 	digests::{
 		CompatibleDigestItem, NextEpochDescriptor, NextConfigDescriptor, PreDigest,
@@ -233,6 +233,8 @@ enum Error<B: BlockT> {
 	VRFVerificationOfBlockFailed(AuthorityId, u128),
 	#[display(fmt = "VRF verification failed: {:?}", _0)]
 	VRFVerificationFailed(SignatureError),
+	#[display(fmt = "VRF randomness mismatch expected {:?}, got {:?}.", _0, _1)]
+	VRFRandomnessMismatch(Randomness, Randomness),
 	#[display(fmt = "Could not fetch parent header: {:?}", _0)]
 	FetchParentHeader(sp_blockchain::Error),
 	#[display(fmt = "Expected epoch change to happen at {:?}, s{}", _0, _1)]

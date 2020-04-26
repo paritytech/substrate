@@ -43,6 +43,8 @@ pub struct RawPrimaryPreDigest<VRFOutput=schnorrkel::RawVRFOutput, VRFProof=schn
 	pub vrf_output: VRFOutput,
 	/// VRF proof
 	pub vrf_proof: VRFProof,
+	/// Randomness
+	pub randomness: Randomness,
 }
 
 #[cfg(feature = "std")]
@@ -59,6 +61,7 @@ impl TryFrom<RawPrimaryPreDigest> for PrimaryPreDigest {
 			slot_number: raw.slot_number,
 			vrf_output: raw.vrf_output.try_into()?,
 			vrf_proof: raw.vrf_proof.try_into()?,
+			randomness: raw.randomness,
 		})
 	}
 }

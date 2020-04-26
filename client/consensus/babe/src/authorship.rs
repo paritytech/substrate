@@ -32,6 +32,9 @@ use sp_core::Pair;
 use sc_keystore::KeyStorePtr;
 use super::Epoch;
 
+/// BABE VRFInOut context.
+pub(super) static BABE_VRF_INOUT_CONTEXT: &[u8] = b"BabeVRFInOutContext";
+
 /// Calculates the primary selection threshold for a given authority, taking
 /// into account `c` (`1 - c` represents the probability of a slot being empty).
 pub(super) fn calculate_primary_threshold(
@@ -256,6 +259,7 @@ fn claim_primary_slot(
 					slot_number,
 					vrf_output: VRFOutput(s.0.to_output()),
 					vrf_proof: VRFProof(s.1),
+					randomness: s.0.make_bytes(BABE_VRF_INOUT_CONTEXT),
 					authority_index: authority_index as u32,
 				})
 			});

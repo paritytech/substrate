@@ -25,7 +25,10 @@ use sp_consensus_babe::digests::{
 use sc_consensus_slots::CheckedHeader;
 use log::{debug, trace};
 use super::{find_pre_digest, babe_err, Epoch, BlockT, Error};
-use super::authorship::{make_transcript, calculate_primary_threshold, check_primary_threshold, secondary_slot_author};
+use super::authorship::{
+	make_transcript, calculate_primary_threshold, check_primary_threshold,
+	secondary_slot_author, BABE_VRF_INOUT_CONTEXT
+};
 
 /// BABE verification parameters
 pub(super) struct VerificationParams<'a, B: 'a + BlockT> {
@@ -173,6 +176,12 @@ fn check_primary_header<B: BlockT + Sized>(
 			&epoch.authorities,
 			pre_digest.authority_index as usize,
 		);
+
+		let randomness = inout.make_bytes(BABE_VRF_INOUT_CONTEXT);
+
+		if randomness != pre_digest.randomness {
+			return Err(babe_err(Error::VRFRandomnessMismatch(randomness, pre_digest.randomness)));
+		}
 
 		if !check_primary_threshold(&inout, threshold) {
 			return Err(babe_err(Error::VRFVerificationOfBlockFailed(author.clone(), threshold)));
