@@ -36,7 +36,7 @@
 
 use std::sync::Arc;
 use log::{trace, warn};
-use parking_lot::RwLock;
+use parking_lot::Mutex;
 
 use sp_blockchain::{Backend as BlockchainBackend, Error as ClientError, Result as ClientResult};
 use sc_client_api::{
@@ -158,7 +158,7 @@ pub struct JustificationNotification<Block: BlockT> {
 
 type JustificationStream<Block> = TracingUnboundedReceiver<JustificationNotification<Block>>;
 type FinalityNotifier<T> = TracingUnboundedSender<JustificationNotification<T>>;
-type SharedFinalityNotifiers<T> = Arc<RwLock<Vec<FinalityNotifier<T>>>>;
+type SharedFinalityNotifiers<T> = Arc<Mutex<Vec<FinalityNotifier<T>>>>;
 
 /// The sending half of the Grandpa justification channel.
 ///
@@ -181,14 +181,10 @@ impl<Block: BlockT> GrandpaJustificationSender<Block> {
 	/// Send out a notification to all subscribers that a new justification
 	/// is available for a block.
 	pub fn notify(&self, notification: JustificationNotification<Block>) -> Result<(), ()> {
-		{
-			// Clean up any closed sinks
-			self.notifiers.write().retain(|n| !n.is_closed());
-		}
-
-		for s in self.notifiers.read().iter() {
-			s.unbounded_send(notification.clone());
-		}
+		self.notifiers.lock()
+			.retain(|n| {
+				!n.is_closed() || n.unbounded_send(notification.clone()).is_ok()
+			});
 
 		Ok(())
 	}
@@ -218,7 +214,7 @@ impl<Block: BlockT> GrandpaJustificationReceiver<Block> {
 	/// at the end of each Grandpa voting round.
 	pub fn subscribe(&self) -> JustificationStream<Block> {
 		let (sender, receiver) = tracing_unbounded("mpsc_justification_notification_stream");
-		self.notifiers.write().push(sender);
+		self.notifiers.lock().push(sender);
 		receiver
 	}
 }
