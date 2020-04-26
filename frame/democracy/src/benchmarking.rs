@@ -34,7 +34,7 @@ const MAX_VETOERS: u32 = 100;
 const MAX_BYTES: u32 = 16_384;
 
 fn assert_last_event<T: Trait>(generic_event: <T as Trait>::Event) {
-	let events = System::<T>::events();
+	let events = System::<T>::collect_events();
 	let system_event: <T as frame_system::Trait>::Event = generic_event.into();
 	// compare to the last event record
 	let EventRecord { event, .. } = &events[events.len() - 1];
