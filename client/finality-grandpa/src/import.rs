@@ -42,7 +42,7 @@ use crate::authorities::{AuthoritySet, SharedAuthoritySet, DelayKind, PendingCha
 use crate::consensus_changes::SharedConsensusChanges;
 use crate::environment::finalize_block;
 use crate::justification::GrandpaJustification;
-use crate::finality_proof::SharedFinalityNotifiers;
+use crate::finality_proof::GrandpaJustificationSender;
 use std::marker::PhantomData;
 
 /// A block-import handler for GRANDPA.
@@ -61,7 +61,7 @@ pub struct GrandpaBlockImport<Backend, Block: BlockT, Client, SC> {
 	send_voter_commands: TracingUnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
 	consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 	authority_set_hard_forks: HashMap<Block::Hash, PendingChange<Block::Hash, NumberFor<Block>>>,
-	finality_notifiers: Option<SharedFinalityNotifiers<Block>>,
+	finality_subscription: Option<GrandpaJustificationSender<Block>>,
 	_phantom: PhantomData<Backend>,
 }
 
@@ -76,7 +76,7 @@ impl<Backend, Block: BlockT, Client, SC: Clone> Clone for
 			send_voter_commands: self.send_voter_commands.clone(),
 			consensus_changes: self.consensus_changes.clone(),
 			authority_set_hard_forks: self.authority_set_hard_forks.clone(),
-			finality_notifiers: self.finality_notifiers.clone(),
+			finality_subscription: self.finality_subscription.clone(),
 			_phantom: PhantomData,
 		}
 	}
@@ -561,7 +561,7 @@ impl<Backend, Block: BlockT, Client, SC> GrandpaBlockImport<Backend, Block, Clie
 		send_voter_commands: TracingUnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
 		consensus_changes: SharedConsensusChanges<Block::Hash, NumberFor<Block>>,
 		authority_set_hard_forks: Vec<(SetId, PendingChange<Block::Hash, NumberFor<Block>>)>,
-		finality_notifiers: Option<SharedFinalityNotifiers<Block>>,
+		finality_subscription: Option<GrandpaJustificationSender<Block>>,
 	) -> GrandpaBlockImport<Backend, Block, Client, SC> {
 		// check for and apply any forced authority set hard fork that applies
 		// to the *current* authority set.
@@ -605,7 +605,7 @@ impl<Backend, Block: BlockT, Client, SC> GrandpaBlockImport<Backend, Block, Clie
 			send_voter_commands,
 			consensus_changes,
 			authority_set_hard_forks,
-			finality_notifiers,
+			finality_subscription,
 			_phantom: PhantomData,
 		}
 	}
@@ -651,7 +651,7 @@ where
 			number,
 			justification.into(),
 			initial_sync,
-			self.finality_notifiers.clone(),
+			&self.finality_subscription,
 		);
 
 		match result {

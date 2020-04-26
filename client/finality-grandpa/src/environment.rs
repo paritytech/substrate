@@ -51,7 +51,7 @@ use sp_consensus::SelectChain;
 use crate::authorities::{AuthoritySet, SharedAuthoritySet};
 use crate::communication::Network as NetworkT;
 use crate::consensus_changes::SharedConsensusChanges;
-use crate::finality_proof::{SharedFinalityNotifiers, JustificationNotification};
+use crate::finality_proof::{GrandpaJustificationSender, JustificationNotification};
 use crate::justification::GrandpaJustification;
 use crate::until_imported::UntilVoteTargetImported;
 use crate::voting_rule::VotingRule;
@@ -401,7 +401,7 @@ pub(crate) struct Environment<Backend, Block: BlockT, C, N: NetworkT<Block>, SC,
 	pub(crate) voter_set_state: SharedVoterSetState<Block>,
 	pub(crate) voting_rule: VR,
 	pub(crate) metrics: Option<Metrics>,
-	pub(crate) finality_notifiers: Option<SharedFinalityNotifiers<Block>>,
+	pub(crate) finality_subscription: Option<GrandpaJustificationSender<Block>>,
 	pub(crate) _phantom: PhantomData<Backend>,
 }
 
@@ -913,7 +913,7 @@ where
 			number,
 			(round, commit).into(),
 			false,
-			self.finality_notifiers.clone(),
+			&self.finality_subscription,
 		)
 	}
 
@@ -974,7 +974,7 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 	number: NumberFor<Block>,
 	justification_or_commit: JustificationOrCommit<Block>,
 	initial_sync: bool,
-	finality_notifiers: Option<SharedFinalityNotifiers<Block>>,
+	finality_subscription: &Option<GrandpaJustificationSender<Block>>,
 ) -> Result<(), CommandOrError<Block::Hash, NumberFor<Block>>> where
 	Block:  BlockT,
 	BE: Backend<Block>,
@@ -1081,7 +1081,7 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 			},
 		};
 
-		if let Some(notifiers) = finality_notifiers {
+		if let Some(subscription) = finality_subscription {
 			// Q: We `finalized()` this at L37, so can I be sure
 			// that it's fine to unwrap here?
 			if let Some(justification) = justification.clone() {
@@ -1092,10 +1092,7 @@ pub(crate) fn finalize_block<BE, Block, Client>(
 					justification,
 				};
 
-				for s in notifiers.read().iter() {
-					// TODO: Deal with Result
-					s.unbounded_send(notification.clone());
-				}
+                                subscription.notify(notification);
 			}
 		}
 

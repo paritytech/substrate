@@ -147,7 +147,6 @@ impl<Block: BlockT> AuthoritySetForFinalityChecker<Block> for Arc<dyn FetchCheck
 	}
 }
 
-
 /// Justification for a finalized block.
 #[derive(Clone)]
 pub struct JustificationNotification<Block: BlockT> {
@@ -158,46 +157,76 @@ pub struct JustificationNotification<Block: BlockT> {
 }
 
 type JustificationStream<Block> = TracingUnboundedReceiver<JustificationNotification<Block>>;
-pub type SharedFinalitySubscribers<T> = Arc<RwLock<Vec<JustificationStream<T>>>>;
-
 type FinalityNotifier<T> = TracingUnboundedSender<JustificationNotification<T>>;
-pub type SharedFinalityNotifiers<T> = Arc<RwLock<Vec<FinalityNotifier<T>>>>;
+type SharedFinalityNotifiers<T> = Arc<RwLock<Vec<FinalityNotifier<T>>>>;
 
-pub struct FinalityProofSubscription<Block: BlockT> {
-	notifiers: SharedFinalityNotifiers<Block>,
+/// The sending half of the Grandpa justification channel.
+///
+/// Used to send notifictions about justifications generated
+/// at the end of a Grandpa round.
+#[derive(Clone)]
+pub struct GrandpaJustificationSender<Block: BlockT> {
+	notifiers: SharedFinalityNotifiers<Block>
 }
 
-impl<Block: BlockT> FinalityProofSubscription<Block> {
-	pub fn new() -> Self {
+impl<Block: BlockT> GrandpaJustificationSender<Block> {
+	/// The `notifiers` should be shared with a corresponding
+	/// `GrandpaJustificationReceiver`.
+	pub fn new(notifiers: SharedFinalityNotifiers<Block>) -> Self {
 		Self {
-			notifiers: Arc::new(RwLock::new(vec![])),
+			notifiers,
 		}
 	}
 
-	pub fn notifiers(&self) -> SharedFinalityNotifiers<Block> {
-		self.notifiers.clone()
-	}
+	/// Send out a notification to all subscribers that a new justification
+	/// is available for a block.
+	pub fn notify(&self, notification: JustificationNotification<Block>) -> Result<(), ()> {
+		{
+			// Clean up any closed sinks
+			self.notifiers.write().retain(|n| !n.is_closed());
+		}
 
-	// Will notify subsribers (receivers)
-	pub fn notify(&self, notification: JustificationNotification<Block>) {
-		// TODO: Look at `notify_justified()` in `client`
 		for s in self.notifiers.read().iter() {
 			s.unbounded_send(notification.clone());
 		}
 
-		todo!()
-	}
-
-	pub fn stream(&self) -> JustificationStream<Block> {
-		// TODO: I only want one channel to be created per instance
-		let (sink, stream) = tracing_unbounded("mpsc_justification_notification_stream");
-		self.notifiers.write().push(sink);
-		stream
+		Ok(())
 	}
 }
 
+/// The receiving half of the Grandpa justification channel.
+///
+/// Used to recieve notifictions about justifications generated
+/// at the end of a Grandpa round.
+#[derive(Clone)]
+pub struct GrandpaJustificationReceiver<Block: BlockT> {
+	notifiers: SharedFinalityNotifiers<Block>
+}
+
+impl<Block: BlockT> GrandpaJustificationReceiver<Block> {
+	/// Crate a new receiver of justification notifications.
+	///
+	/// The `notifiers` should be shared with a corresponding
+	/// `GrandpaJustificationSender`.
+	pub fn new(notifiers: SharedFinalityNotifiers<Block>) -> Self {
+		Self {
+			notifiers,
+		}
+	}
+
+	/// Subscribe to a channel through which justifications are sent
+	/// at the end of each Grandpa voting round.
+	pub fn subscribe(&self) -> JustificationStream<Block> {
+		let (sender, receiver) = tracing_unbounded("mpsc_justification_notification_stream");
+		self.notifiers.write().push(sender);
+		receiver
+	}
+}
+
+
+
 /// Finality proof provider for serving network requests.
-pub struct FinalityProofProvider<B,  Block: BlockT> {
+pub struct FinalityProofProvider<B, Block: BlockT> {
 	backend: Arc<B>,
 	authority_provider: Arc<dyn AuthoritySetForFinalityProver<Block>>,
 }
