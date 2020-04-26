@@ -26,7 +26,8 @@ use grandpa::{
 	self,
 	FinalityProofProvider as GrandpaFinalityProofProvider,
 	StorageAndProofProvider,
-	FinalityProofSubscription,
+        GrandpaJustificationSender,
+        GrandpaJustificationReceiver,
 };
 use node_executor;
 use node_primitives::Block;
@@ -44,6 +45,8 @@ use node_executor::NativeExecutor;
 use sc_network::NetworkService;
 use sc_offchain::OffchainWorkers;
 
+use parking_lot::Mutex;
+
 /// Starts a `ServiceBuilder` for a full service.
 ///
 /// Use this macro if you don't actually need the full service, but just the builder in order to
@@ -54,7 +57,13 @@ macro_rules! new_full_start {
 		type RpcExtension = jsonrpc_core::IoHandler<sc_rpc::Metadata>;
 		let mut import_setup = None;
 		let inherent_data_providers = sp_inherents::InherentDataProviders::new();
-		let finality_proof_subscription = grandpa::FinalityProofSubscription::new();
+
+		// Q: Is there any way to enforce that they point to the same set of notifiers?
+		let finality_notifiers = Arc::new(Mutex::new(vec![]));
+		let justification_receiver =
+			grandpa::GrandpaJustificationReceiver::new(finality_notifiers.clone());
+		let justification_sender =
+			grandpa::GrandpaJustificationReceiver::new(finality_notifiers.clone());
 
 		let builder = sc_service::ServiceBuilder::new_full::<
 			node_primitives::Block, node_runtime::RuntimeApi, node_executor::Executor
@@ -95,10 +104,6 @@ macro_rules! new_full_start {
 				Ok(import_queue)
 			})?
 			.with_rpc_extensions(|builder| -> std::result::Result<RpcExtension, _> {
-
-				// TODO: Do something with this stream
-				let justification_stream = finality_proof_subscription.stream();
-
 				let babe_link = import_setup.as_ref().map(|s| &s.2)
 					.expect("BabeLink is present for full services or set up failed; qed.");
 				let deps = node_rpc::FullDeps {
@@ -110,12 +115,15 @@ macro_rules! new_full_start {
 						keystore: builder.keystore(),
 						babe_config: sc_consensus_babe::BabeLink::config(babe_link).clone(),
 						shared_epoch_changes: sc_consensus_babe::BabeLink::epoch_changes(babe_link).clone()
+					},
+					grandpa: node_rpc::GrandpaDeps {
+						justification_receiver
 					}
 				};
 				Ok(node_rpc::create_full(deps))
 			})?;
 
-		(builder, import_setup, inherent_data_providers, finality_tx)
+		(builder, import_setup, inherent_data_providers, justification_sender)
 	}}
 }
 
@@ -141,7 +149,8 @@ macro_rules! new_full {
 			$config.disable_grandpa,
 		);
 
-		let (builder, mut import_setup, inherent_data_providers, finality_tx) = new_full_start!($config);
+		let (builder, mut import_setup, inherent_data_providers, justification_sender) =
+			new_full_start!($config);
 
 		let service = builder
 			.with_finality_proof_provider(|client, backend| {
@@ -253,7 +262,7 @@ macro_rules! new_full {
 				telemetry_on_connect: Some(service.telemetry_on_connect_stream()),
 				voting_rule: grandpa::VotingRulesBuilder::default().build(),
 				prometheus_registry: service.prometheus_registry(),
-				finality_subscribers: Some(finality_proof_subscription),
+				finality_subscription: Some(justification_sender),
 			};
 
 			// the GRANDPA voter task is considered infallible, i.e.
