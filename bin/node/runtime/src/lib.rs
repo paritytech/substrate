@@ -23,7 +23,6 @@
 use sp_std::prelude::*;
 use frame_support::{
 	construct_runtime, parameter_types, debug,
-// <<<<<<< HEAD
 	weights::{Weight, RuntimeDbWeight},
 	traits::{Currency, Imbalance, KeyOwnerProofSystem, OnUnbalanced, Randomness, LockIdentifier},
 };
@@ -31,10 +30,6 @@ use sp_core::{
 	crypto::KeyTypeId,
 	u32_trait::{_1, _2, _3, _4},
 	OpaqueMetadata,
-// =======
-// 	weights::{Weight, RuntimeDbWeight},
-// 	traits::{Currency, Randomness, OnUnbalanced, Imbalance, LockIdentifier},
-// >>>>>>> master
 };
 pub use node_primitives::{AccountId, Signature};
 use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
@@ -58,10 +53,7 @@ use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
 use sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
 use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
 use pallet_contracts_rpc_runtime_api::ContractExecResult;
-// <<<<<<< HEAD
 use pallet_session::{historical as pallet_session_historical};
-// =======
-// >>>>>>> master
 use sp_inherents::{InherentData, CheckInherentsResult};
 
 #[cfg(any(feature = "std", test))]
@@ -596,12 +588,12 @@ impl pallet_grandpa::Trait for Runtime {
 		Vec<u8>,
 	)>>::IdentificationTuple;
 
-	type HandleEquivocation = ();
-	// type HandleEquivocation = pallet_grandpa::EquivocationHandler<
-	// 	Self::KeyOwnerIdentification,
-	// 	TransactionSubmitterOf<node_primitives::report::ReporterId>,
-	// 	Offences,
-	// >;
+	type HandleEquivocation = pallet_grandpa::EquivocationHandler<
+		Self::KeyOwnerIdentification,
+		node_primitives::report::ReporterAppCrypto,
+		Runtime,
+		Offences,
+	>;
 }
 
 parameter_types! {

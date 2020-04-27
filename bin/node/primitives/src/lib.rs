@@ -67,6 +67,8 @@ pub type BlockId = generic::BlockId<Block>;
 /// GRANDPA. Any rewards for misbehavior reporting will be paid out to this
 /// account.
 pub mod report {
+	use super::{Signature, Verify};
+	use frame_system::offchain::AppCrypto;
 	use sp_core::crypto::KeyTypeId;
 
 	/// Key type for the reporting module. Used for reporting BABE and GRANDPA
@@ -80,4 +82,14 @@ pub mod report {
 
 	/// Identity of the equivocation/misbehavior reporter.
 	pub type ReporterId = app::Public;
+
+	/// An `AppCrypto` type to allow submitting signed transactions using the reporting
+	/// application key as signer.
+	pub struct ReporterAppCrypto;
+
+	impl AppCrypto<<Signature as Verify>::Signer, Signature> for ReporterAppCrypto {
+		type RuntimeAppPublic = ReporterId;
+		type GenericSignature = sp_core::sr25519::Signature;
+		type GenericPublic = sp_core::sr25519::Public;
+	}
 }

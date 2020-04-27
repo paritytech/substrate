@@ -31,21 +31,9 @@
 pub use sp_finality_grandpa as fg_primitives;
 
 use sp_std::prelude::*;
-// <<<<<<< HEAD
 
 use codec::{self as codec, Decode, Encode};
 pub use fg_primitives::{AuthorityId, AuthorityList, AuthorityWeight, VersionedAuthorityList};
-// =======
-// use codec::{self as codec, Encode, Decode};
-// use frame_support::{decl_event, decl_storage, decl_module, decl_error, storage};
-// use sp_runtime::{
-// 	DispatchResult, generic::{DigestItem, OpaqueDigestItemId}, traits::Zero, Perbill,
-// };
-// use sp_staking::{
-// 	SessionIndex,
-// 	offence::{Offence, Kind},
-// };
-// >>>>>>> master
 use fg_primitives::{
 	ConsensusLog, EquivocationProof, ScheduledChange, SetId, GRANDPA_AUTHORITIES_KEY,
 	GRANDPA_ENGINE_ID,

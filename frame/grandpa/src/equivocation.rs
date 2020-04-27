@@ -33,8 +33,8 @@
 use sp_std::prelude::*;
 
 use codec::{self as codec, Decode, Encode};
-use frame_support::{dispatch::IsSubType, traits::KeyOwnerProofSystem};
-// use frame_system::offchain::SubmitSignedTransaction;
+use frame_support::{debug, dispatch::IsSubType, traits::KeyOwnerProofSystem};
+use frame_system::offchain::{AppCrypto, CreateSignedTransaction, Signer};
 use sp_finality_grandpa::{EquivocationProof, RoundNumber, SetId};
 use sp_runtime::{
 	traits::{DispatchInfoOf, SignedExtension},
@@ -221,11 +221,11 @@ impl<T: super::Trait> HandleEquivocation<T> for () {
 /// using existing subsystems that are part of frame (type bounds described
 /// below) and will dispatch to them directly, it's only purpose is to wire all
 /// subsystems together.
-pub struct EquivocationHandler<I, S, R, O = GrandpaEquivocationOffence<I>> {
-	_phantom: sp_std::marker::PhantomData<(I, S, R, O)>,
+pub struct EquivocationHandler<I, C, S, R, O = GrandpaEquivocationOffence<I>> {
+	_phantom: sp_std::marker::PhantomData<(I, C, S, R, O)>,
 }
 
-impl<I, S, R, O> Default for EquivocationHandler<I, S, R, O> {
+impl<I, C, S, R, O> Default for EquivocationHandler<I, C, S, R, O> {
 	fn default() -> Self {
 		Self {
 			_phantom: Default::default(),
@@ -233,11 +233,13 @@ impl<I, S, R, O> Default for EquivocationHandler<I, S, R, O> {
 	}
 }
 
-impl<T, S, R, O> HandleEquivocation<T> for EquivocationHandler<T::KeyOwnerIdentification, S, R, O>
+impl<T, C, S, R, O> HandleEquivocation<T>
+	for EquivocationHandler<T::KeyOwnerIdentification, C, S, R, O>
 where
-	T: super::Trait,
-	// A transaction submitter. Used for submitting equivocation reports.
-	// S: SubmitSignedTransaction<T, <T as super::Trait>::Call>,
+	// A signed transaction creator. Used for signing and submitting equivocation reports.
+	T: super::Trait + CreateSignedTransaction<super::Call<T>>,
+	// Application-specific crypto bindings.
+	C: AppCrypto<T::Public, T::Signature>,
 	// The offence type that should be used when reporting.
 	O: GrandpaOffence<T::KeyOwnerIdentification>,
 	// A system for reporting offences after valid equivocation reports are
@@ -254,15 +256,30 @@ where
 		equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
 		key_owner_proof: T::KeyOwnerProof,
 	) -> DispatchResult {
-		// let call = super::Call::report_equivocation(equivocation_proof, key_owner_proof);
+		use frame_system::offchain::SendSignedTransaction;
 
-		// let res = S::submit_signed(call);
+		let signer = Signer::<T, C>::all_accounts();
+		if !signer.can_sign() {
+			return Err(
+				"No local accounts available. Consider adding one via `author_insertKey` RPC.",
+			)?;
+		}
 
-		// if res.iter().any(|(_, r)| r.is_ok()) {
-		// 	Ok(())
-		// } else {
-		// 	Err("Error submitting equivocation report.".into())
-		// }
+		let results = signer.send_signed_transaction(|_account| {
+			super::Call::report_equivocation(equivocation_proof.clone(), key_owner_proof.clone())
+		});
+
+		for (acc, res) in &results {
+			match res {
+				Ok(()) => debug::info!("[{:?}] Submitted GRANDPA equivocation report.", acc.id),
+				Err(e) => debug::error!(
+					"[{:?}] Error submitting equivocation report: {:?}",
+					acc.id,
+					e
+				),
+			}
+		}
+
 		Ok(())
 	}
 }
