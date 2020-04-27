@@ -237,6 +237,13 @@ macro_rules! implement_fixed {
 			}
 		}
 
+		impl ops::Neg for $name {
+			type Output = Self;
+
+			fn neg(self) -> Self::Output {
+				Self(self.0.saturating_mul(-1))
+			}
+		}
 
 		impl ops::Add for $name {
 			type Output = Self;
@@ -759,12 +766,12 @@ macro_rules! implement_fixed {
 				assert_eq!(f.checked_div(&2.into()), Some((5, 2).into()));
 
 				assert_eq!(a.checked_div(&inner_max.into()), Some(1.into()));
-				// assert_eq!(a.checked_div_int(2), Some(inner_max / (2 * accuracy)));
-				// assert_eq!(a.checked_div_int(inner_max / accuracy), Some(1));
-				// assert_eq!(a.checked_div_int(1i8), None);
+				assert_eq!(a.checked_div(&2.into()), Some($name::from_inner(inner_max / 2)));
+				assert_eq!(a.checked_div(&$name::max_value()), Some(1.into()));
+				assert_eq!(a.checked_div(&d), Some(a));
 
-				// assert_eq!(a.checked_div_int(-2), Some(-inner_max / (2 * accuracy)));
-				// assert_eq!(a.checked_div_int(inner_max / -accuracy), Some(-1));
+				assert_eq!(a.checked_div(&(-2).into()), Some($name::from_inner(-inner_max / 2)));
+				assert_eq!(a.checked_div(&-$name::max_value()), Some((-1).into()));
 
 				// assert_eq!(b.checked_div_int(i128::min_value()), Some(0));
 				// assert_eq!(b.checked_div_int(2), Some(inner_min / (2 * accuracy)));
