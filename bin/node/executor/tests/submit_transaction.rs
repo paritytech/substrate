@@ -51,6 +51,7 @@ fn should_submit_unsigned_transaction() {
 			network_state: Default::default(),
 			session_index: 1,
 			authority_index: 0,
+			validators_len: 0,
 		};
 
 		let call = pallet_im_online::Call::heartbeat(heartbeat_data, signature);
