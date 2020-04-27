@@ -44,7 +44,7 @@ use frame_support::{
 	dispatch::{Dispatchable, Parameter}, codec::{Encode, Decode},
 	traits::{Get, ChangeMembers, InitializeMembers, EnsureOrigin}, decl_module, decl_event,
 	decl_storage, decl_error, ensure,
-	weights::DispatchClass,
+	weights::{DispatchClass, Weight},
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 
@@ -173,6 +173,26 @@ decl_error! {
 	}
 }
 
+/// Functions for calcuating the weight of dispatchables.
+mod weight_for {
+	use frame_support::weights::{RuntimeDbWeight, Weight};
+
+	#[allow(dead_code)]
+	pub(crate) fn set_members(
+		db: RuntimeDbWeight,
+		old_count: impl Into<Weight>,
+		new_count: impl Into<Weight>,
+		proposals: impl Into<Weight> + Copy,
+	) -> Weight {
+		db.reads_writes(1, 1) // read + write members
+			+ db.reads_writes(proposals.into() + 1, proposals.into()) // update votes
+			+ db.writes(2) // set prime
+			+ 600_000 * old_count.into() // M
+			+ 500_000 * new_count.into() // N
+			+ 10_300_000 * proposals.into() // P
+	}
+}
+
 // Note: this module is not benchmarked. The weights are obtained based on the similarity of the
 // executed logic with other democracy function. Note that councillor operations are assigned to the
 // operational class.
@@ -187,17 +207,30 @@ decl_module! {
 		/// - `new_members`: The new member list. Be nice to the chain and
 		//	provide it sorted.
 		/// - `prime`: The prime member whose vote sets the default.
-		/// - `old_members_count`: The number of previous members. (Used for weight estimation.)
+		/// - `old_count`: The number of previous members. (Used for weight estimation.)
 		///
 		/// Requires root origin.
-		/// 
-		/// 
-		/// 
-		#[weight = (100_000_000, DispatchClass::Operational)]
-		fn set_members(origin, new_members: Vec<T::AccountId>, prime: Option<T::AccountId>, old_members_count: u32) {
+		///
+		/// # <weight>
+		/// ## Weight
+		/// - `O(MP + N)`
+		///   - where `M` old-members-count (governance-bounded)
+		///   - where `N` new-members-count (governance-bounded)
+		///   - where `P` proposals-count
+		/// - DB:
+		///   - 1 storage mutation (codec `O(M)` read, `O(N)` write) for reading and writing the members
+		///   - 1 storage read (codec `O(P)`) + `P` storage mutations for updating the votes for each proposal (codec `O(M)`)
+		///   - 2 storage writes (codec `O(1)`) for deleting the old `prime` and setting the new one
+		/// - Benchmark: 0 + M * 0.541 + N * 0.502 + P * 10.29 µs (min squares analysis)
+		/// # </weight>
+		#[weight = (
+			weight_for::set_members(T::DbWeight::get(), *old_count, new_members.len() as Weight, old_count * 2),
+			DispatchClass::Operational
+		)]
+		fn set_members(origin, new_members: Vec<T::AccountId>, prime: Option<T::AccountId>, old_count: u32) {
 			ensure_root(origin)?;
 			let old = Members::<T, I>::get();
-			ensure!(old.len() <= old_members_count as usize, Error::<T, I>::InvalidCount);
+			ensure!(old.len() <= old_count as usize, Error::<T, I>::InvalidCount);
 			let mut new_members = new_members;
 			new_members.sort();
 			<Self as ChangeMembers<T::AccountId>>::set_members_sorted(&new_members[..], &old);
@@ -386,6 +419,20 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 }
 
 impl<T: Trait<I>, I: Instance> ChangeMembers<T::AccountId> for Module<T, I> {
+	/// Update the members of the collective. Votes are updated and the prime is reset.
+	///
+	/// # <weight>
+	/// ## Weight
+	/// - `O(MP + N)`
+	///   - where `M` old-members-count (governance-bounded)
+	///   - where `N` new-members-count (governance-bounded)
+	///   - where `P` proposals-count
+	/// - DB:
+	///   - 1 storage read (codec `O(P)`) for reading the proposals
+	///   - `P` storage mutations for updating the votes (codec `O(M)`)
+	///   - 1 storage write (codec `O(N)`) for storing the new members
+	///   - 1 storage write (codec `O(1)`) for deleting the old prime
+	/// # </weight>
 	fn change_members_sorted(
 		_incoming: &[T::AccountId],
 		outgoing: &[T::AccountId],
