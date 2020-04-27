@@ -98,13 +98,8 @@ use frame_support::traits::{
 use sp_runtime::{Permill, ModuleId, Percent, RuntimeDebug, traits::{
 	Zero, StaticLookup, AccountIdConversion, Saturating, Hash, BadOrigin
 }};
-<<<<<<< HEAD
-use frame_support::weights::Weight;
-use frame_support::traits::{Contains, ContainsLengthBound, EnsureOrigin};
-=======
 use frame_support::weights::{Weight, DispatchClass};
-use frame_support::traits::{Contains, EnsureOrigin};
->>>>>>> origin/master
+use frame_support::traits::{Contains, ContainsLengthBound, EnsureOrigin};
 use codec::{Encode, Decode};
 use frame_system::{self as system, ensure_signed, ensure_root};
 
@@ -364,7 +359,7 @@ decl_module! {
 		/// - DbReads: `Proposals`, `rejected proposer account`
 		/// - DbWrites: `Proposals`, `rejected proposer account`
 		/// # </weight>
-		#[weight = 130_000_000 + T::DbWeight::get().reads_writes(2, 2)]
+		#[weight = (130_000_000 + T::DbWeight::get().reads_writes(2, 2), DispatchClass::Operational)]
 		fn reject_proposal(origin, #[compact] proposal_id: ProposalIndex) {
 			T::RejectOrigin::try_origin(origin)
 				.map(|_| ())
@@ -386,7 +381,7 @@ decl_module! {
 		/// - DbReads: `Proposals`, `Approvals`
 		/// - DbWrite: `Approvals`
 		/// # </weight>
-		#[weight = 34_000_000 + T::DbWeight::get().reads_writes(2, 1)]
+		#[weight = (34_000_000 + T::DbWeight::get().reads_writes(2, 1), DispatchClass::Operational)]
 		fn approve_proposal(origin, #[compact] proposal_id: ProposalIndex) {
 			T::ApproveOrigin::try_origin(origin)
 				.map(|_| ())
