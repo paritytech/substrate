@@ -295,47 +295,24 @@ macro_rules! implement_fixed {
 				let d = other.0;
 
 				let signum = n.signum() * d.signum();
-
-				let n = n.checked_abs().map(|v| v as u128)
-					.unwrap_or(<Self as FixedPointNumber>::Inner::max_value() as u128 + 1);
-				let d = d.checked_abs().map(|v| v as u128)
-					.unwrap_or(<Self as FixedPointNumber>::Inner::max_value() as u128 + 1);
+				let max_value = <Self as FixedPointNumber>::Inner::max_value() as u128;
+				let n = n.checked_abs().map(|v| v as u128).unwrap_or(max_value + 1);
+				let d = d.checked_abs().map(|v| v as u128).unwrap_or(max_value + 1);
 				
 				divide(n, d, <Self as FixedPointNumber>::BITS)
-					.and_then(|r| r.try_into().ok())
-					.map(|n: <Self as FixedPointNumber>::Inner| Self(n.saturating_mul(signum)))
-				// 	.unwrap_or_else(||
-				// 		if signum >= 0 {
-				// 			Self::max_value()
-				// 		} else {
-				// 			Self::min_value()
-				// 		}
-				// 	)
-
-				// None
-				// if rhs.0.signum() == 0 || (*self == Self::min_value() && *rhs == Self::from_integer(-1)){
-				// 	return None;
-				// }
-
-				// if self.0 == 0 {
-				// 	return Some(*self);
-				// }
-
-				// let signum = self.0.signum() / rhs.0.signum();
-				// let mut lhs = self.0;
-				// if lhs.is_negative() {
-				// 	lhs = lhs.saturating_mul(-1);
-				// }
-
-				// let mut rhs = rhs.0;
-				// if rhs.is_negative() {
-				// 	rhs = rhs.saturating_mul(-1);
-				// }
-
-				// multiply_by_rational(lhs as u128, <Self as FixedPointNumber>::accuracy() as u128, rhs as u128)
-				// 	.ok()
-				// 	.and_then(|n| TryInto::<<Self as FixedPointNumber>::Inner>::try_into(n).ok())
-				// 	.map(|n| Self(n * signum))
+					.and_then(|r|
+						{println!("result {}", r);
+						if r == max_value + 1 && signum < 0 {
+							let r = r.checked_sub(1)?;
+							let r: <Self as FixedPointNumber>::Inner = r.try_into().ok()?;
+							let r = r.checked_mul(signum)?;
+							r.checked_sub(1)
+						} else {
+							let r: <Self as FixedPointNumber>::Inner = r.try_into().ok()?;
+							r.checked_mul(signum)
+						}}
+					)
+					.map(|r| Self(r))
 			}
 		}
 
@@ -773,7 +750,7 @@ macro_rules! implement_fixed {
 				assert_eq!(a.checked_div(&(-2).into()), Some($name::from_inner(-inner_max / 2)));
 				assert_eq!(a.checked_div(&-$name::max_value()), Some((-1).into()));
 
-				// assert_eq!(b.checked_div_int(i128::min_value()), Some(0));
+				assert_eq!(b.checked_div(&b), Some($name::one()));
 				// assert_eq!(b.checked_div_int(2), Some(inner_min / (2 * accuracy)));
 				// assert_eq!(b.checked_div_int(inner_min / accuracy), Some(1));
 				// assert_eq!(b.checked_div_int(1i8), None);
@@ -791,10 +768,15 @@ macro_rules! implement_fixed {
 				// assert_eq!(d.checked_div_int(i32::min_value()), Some(0));
 				// assert_eq!(d.checked_div_int(1i8), Some(1));
 
-				// assert_eq!(a.checked_div_int(0), None);
-				// assert_eq!(b.checked_div_int(0), None);
-				// assert_eq!(c.checked_div_int(0), None);
-				// assert_eq!(d.checked_div_int(0), None);
+				assert_eq!(a.checked_div(&$name::one()), Some(a));
+				assert_eq!(b.checked_div(&$name::one()), Some(b));
+				assert_eq!(c.checked_div(&$name::one()), Some(c));
+				assert_eq!(d.checked_div(&$name::one()), Some(d));
+
+				assert_eq!(a.checked_div(&$name::zero()), None);
+				assert_eq!(b.checked_div(&$name::zero()), None);
+				assert_eq!(c.checked_div(&$name::zero()), None);
+				assert_eq!(d.checked_div(&$name::zero()), None);
 			}
 		}
 	}
