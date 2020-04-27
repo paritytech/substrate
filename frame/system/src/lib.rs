@@ -115,7 +115,8 @@ use sp_runtime::{
 
 use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
 use frame_support::{
-	decl_module, decl_event, decl_storage, decl_error, storage, Parameter, ensure, debug,
+	decl_module, decl_event, decl_storage, decl_error, Parameter, ensure, debug,
+	storage::{self, generator::StorageValue},
 	traits::{
 		Contains, Get, ModuleToIndex, OnNewAccount, OnKilledAccount, IsDeadAccount, Happened,
 		StoredMap, EnsureOrigin,
@@ -854,17 +855,10 @@ impl<T: Trait> Module<T> {
 			old_event_count
 		};
 
-		// Appending can only fail if `Events<T>` can not be decoded or
-		// when we try to insert more than `u32::max_value()` events.
-		//
-		// We perform early return if we've reached the maximum capacity of the event list,
-		// so `Events<T>` seems to be corrupted. Also, this has happened after the start of execution
-		// (since the event list is cleared at the block initialization).
-		if <Events<T>>::append([event].iter()).is_err() {
-			// The most sensible thing to do here is to just ignore this event and wait until the
-			// new block.
-			return;
-		}
+		// We use append api here to avoid bringing all events in the runtime when we push a
+ 		// new one in the list.
+		let encoded_event = event.encode();
+		sp_io::storage::append(&Events::<T>::storage_value_final_key()[..], encoded_event);
 
 		for topic in topics {
 			// The same applies here.
