@@ -194,8 +194,7 @@ macro_rules! implement_fixed {
 					ops::Rem<N, Output=N> + ops::Div<N, Output=N> + ops::Mul<N, Output=N> +
 					ops::Add<N, Output=N>,
 			{
-				self.saturating_mul_int(int)
-					.saturating_add(int)
+				self.saturating_mul_int(int).saturating_add(int)
 			}
 		}
 
@@ -682,10 +681,10 @@ macro_rules! implement_fixed {
 
 			#[test]
 			fn mul_works() {
-				// let a = $name::from_integer(1);
-				// let b = $name::from_integer(2);
-				// let c = a * b;
-				// assert_eq!(c, b);
+				let a = $name::from_integer(1);
+				let b = $name::from_integer(2);
+				let c = a * b;
+				assert_eq!(c, b);
 			}
 		}
 	}
