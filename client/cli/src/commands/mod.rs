@@ -235,10 +235,10 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
-			fn pruning(&self, is_dev: bool, role: &::sc_service::Role)
+			fn pruning(&self, unsafe_pruning: bool, role: &::sc_service::Role)
 			-> $crate::Result<::sc_service::config::PruningMode> {
 				match self {
-					$($enum::$variant(cmd) => cmd.pruning(is_dev, role)),*
+					$($enum::$variant(cmd) => cmd.pruning(unsafe_pruning, role)),*
 				}
 			}
 
