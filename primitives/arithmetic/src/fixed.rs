@@ -317,22 +317,27 @@ macro_rules! implement_fixed {
 
 		impl CheckedMul for $name {
 			fn checked_mul(&self, rhs: &Self) -> Option<Self> {
-				None
-				// let signum = self.0.signum() * rhs.0.signum();
-				// let mut lhs = self.0;
+				let signum = self.0.signum() * rhs.0.signum();
+				let max_value = <Self as FixedPointNumber>::Inner::max_value() as u128;
+				let n: u128 = self.0.checked_abs().map(|v| v as u128).unwrap_or(max_value + 1);
+				let d: u128 = rhs.0.checked_abs().map(|v| v as u128).unwrap_or(max_value + 1);
 
-				// if lhs.is_negative() {
-				// 	lhs = lhs.saturating_mul(-1);
-				// }
-				// let mut rhs = rhs.0;
-				// if rhs.is_negative() {
-				// 	rhs = rhs.saturating_mul(-1);
-				// }
+				let (carry, result) = multiply(n, d);
 
-				// multiply_by_rational(lhs as u128, rhs as u128, <Self as FixedPointNumber>::accuracy() as u128)
-				// 	.ok()
-				// 	.and_then(|n| TryInto::<<Self as FixedPointNumber>::Inner>::try_into(n).ok())
-				// 	.map(|n| Self(n * signum))
+				let carry_shift = 128.checked_sub(&Self::BITS).expect("128 > BITS; qed").into();
+
+				if carry.leading_zeros() < carry_shift {
+					// Overflow.
+					return None
+				}
+
+				let low: u128 = result.checked_shr(Self::BITS.into()).expect("128 > BITS; qed");
+
+				carry.checked_shl(carry_shift)
+					.and_then(|c| low.checked_add(c))
+					.and_then(|r| r.try_into().ok())
+					.and_then(|r: <Self as FixedPointNumber>::Inner| r.checked_mul(signum))
+					.map(|r| Self(r))
 			}
 		}
 
@@ -688,14 +693,6 @@ macro_rules! implement_fixed {
 				assert_eq!($name::one().saturated_multiply_accumulate(i128::min_value()), i128::min_value());
 			}
 
-			#[test]
-			fn mul_works() {
-				let a = $name::from_integer(1);
-				let b = $name::from_integer(2);
-				let c = a * b;
-				assert_eq!(c, b);
-			}
-
 			fn saturating_pow_should_work() {
 				let inner_max = <$name as FixedPointNumber>::Inner::max_value();
 				let inner_min = <$name as FixedPointNumber>::Inner::min_value();
@@ -772,6 +769,34 @@ macro_rules! implement_fixed {
 				assert_eq!(b.checked_div(&$name::zero()), None);
 				assert_eq!(c.checked_div(&$name::zero()), None);
 				assert_eq!(d.checked_div(&$name::zero()), None);
+			}
+
+			#[test]
+			fn checked_mul_works() {
+				let a = $name::from_rational(1, 2);
+				let b = $name::from_rational(1, -2);
+				let c = $name::from_integer(255);
+
+				assert_eq!(a.checked_mul(&42.into()), Some(21.into()));
+				assert_eq!(b.checked_mul(&42.into()), Some((-21).into()));
+				assert_eq!(c.checked_mul(&2.into()), Some(510.into()));
+
+				assert_eq!(b.checked_mul(&$name::max_value()), $name::max_value().checked_div(&(-2).into()));
+				assert_eq!(b.checked_mul(&$name::min_value()), $name::min_value().checked_div(&(-2).into()));
+
+				assert_eq!(c.checked_mul(&$name::max_value()), None);
+				assert_eq!(c.checked_mul(&$name::min_value()), None);
+
+				assert_eq!(a.checked_mul(&$name::max_value()), $name::max_value().checked_div(&2.into()));
+				assert_eq!(a.checked_mul(&$name::min_value()), $name::min_value().checked_div(&2.into()));
+			} 
+
+			#[test]
+			fn mul_works() {
+				let a = $name::from_integer(1);
+				let b = $name::from_integer(2);
+				let c = a * b;
+				assert_eq!(c, b);
 			}
 		}
 	}
