@@ -141,7 +141,7 @@ mod test {
 	use substrate_test_runtime_client;
 	use sp_core::H256;
 	use sp_runtime::traits::NumberFor;
-	use sp_consensus_babe::BabeGenesisConfiguration;
+	use sp_consensus_babe::{AllowedSlots, BabeGenesisConfiguration};
 	use sc_consensus_epochs::{PersistedEpoch, PersistedEpochHeader, EpochHeader};
 	use sp_consensus::Error as ConsensusError;
 	use sc_network_test::Block as TestBlock;
@@ -182,7 +182,7 @@ mod test {
 				c: (3, 10),
 				genesis_authorities: Vec::new(),
 				randomness: Default::default(),
-				secondary_slots: true,
+				allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 			},
 		).unwrap();
 

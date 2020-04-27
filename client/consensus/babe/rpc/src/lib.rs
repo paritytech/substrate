@@ -123,9 +123,12 @@ impl<B, C, SC> BabeApi for BabeRPCHandler<B, C, SC>
 						PreDigest::Primary { .. } => {
 							claims.entry(key.public()).or_default().primary.push(slot_number);
 						}
-						PreDigest::Secondary { .. } => {
+						PreDigest::SecondaryPlain { .. } => {
 							claims.entry(key.public()).or_default().secondary.push(slot_number);
 						}
+						PreDigest::SecondaryVRF { .. } => {
+							claims.entry(key.public()).or_default().secondary_vrf.push(slot_number);
+						},
 					};
 				}
 			}
@@ -144,6 +147,8 @@ pub struct EpochAuthorship {
 	primary: Vec<u64>,
 	/// the array of secondary slots that can be claimed
 	secondary: Vec<u64>,
+	/// The array of secondary VRF slots that can be claimed.
+	secondary_vrf: Vec<u64>,
 }
 
 /// Errors encountered by the RPC
@@ -236,7 +241,7 @@ mod tests {
 
 		io.extend_with(BabeApi::to_delegate(handler));
 		let request = r#"{"jsonrpc":"2.0","method":"babe_epochAuthorship","params": [],"id":1}"#;
-		let response = r#"{"jsonrpc":"2.0","result":{"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY":{"primary":[0],"secondary":[1,2,4]}},"id":1}"#;
+		let response = r#"{"jsonrpc":"2.0","result":{"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY":{"primary":[0],"secondary":[1,2,4],"secondary_vrf":[]}},"id":1}"#;
 
 		assert_eq!(Some(response.into()), io.handle_request_sync(request));
 	}

@@ -613,6 +613,20 @@ pub trait Hashing {
 	}
 }
 
+/// Interface that provides functions to access the Offchain DB.
+#[runtime_interface]
+pub trait OffchainIndex {
+	/// Write a key value pair to the Offchain DB database in a buffered fashion.
+	fn set(&mut self, key: &[u8], value: &[u8]) {
+		self.set_offchain_storage(key, Some(value));
+	}
+
+	/// Remove a key and its associated value from the Offchain DB.
+	fn clear(&mut self, key: &[u8]) {
+		self.set_offchain_storage(key, None);
+	}
+}
+
 #[cfg(feature = "std")]
 sp_externalities::decl_extension! {
 	/// The keystore extension to register/retrieve from the externalities.
@@ -620,6 +634,8 @@ sp_externalities::decl_extension! {
 }
 
 /// Interface that provides functions to access the offchain functionality.
+///
+/// These functions are being made available to the runtime and are called by the runtime.
 #[runtime_interface]
 pub trait Offchain {
 	/// Returns if the local node is a potential validator.
@@ -995,6 +1011,7 @@ pub type SubstrateHostFunctions = (
 	logging::HostFunctions,
 	sandbox::HostFunctions,
 	crate::trie::HostFunctions,
+	offchain_index::HostFunctions,
 );
 
 #[cfg(test)]
