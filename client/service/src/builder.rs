@@ -29,7 +29,10 @@ use sc_client_api::{
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sc_client::{Client, ClientConfig};
 use sc_chain_spec::get_extension;
-use sp_consensus::import_queue::ImportQueue;
+use sp_consensus::{
+	block_validation::{BlockAnnounceValidator, DefaultBlockAnnounceValidator},
+	import_queue::ImportQueue,
+};
 use futures::{
 	Future, FutureExt, StreamExt,
 	future::ready,
@@ -93,6 +96,7 @@ pub struct ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
 	remote_backend: Option<Arc<dyn RemoteBlockchain<TBl>>>,
 	marker: PhantomData<(TBl, TRtApi)>,
 	background_tasks: Vec<(&'static str, BackgroundTask)>,
+	block_announce_validator_builder: Option<Box<dyn FnOnce(Arc<TCl>) -> Box<dyn BlockAnnounceValidator<TBl> + Send>>>,
 }
 
 /// Full client type.
@@ -261,6 +265,7 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 			rpc_extensions: Default::default(),
 			remote_backend: None,
 			background_tasks: Default::default(),
+			block_announce_validator_builder: None,
 			marker: PhantomData,
 		})
 	}
@@ -344,6 +349,7 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 			rpc_extensions: Default::default(),
 			remote_backend: Some(remote_blockchain),
 			background_tasks: Default::default(),
+			block_announce_validator_builder: None,
 			marker: PhantomData,
 		})
 	}
@@ -417,6 +423,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
 			background_tasks: self.background_tasks,
+			block_announce_validator_builder: self.block_announce_validator_builder,
 			marker: self.marker,
 		})
 	}
@@ -460,6 +467,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
 			background_tasks: self.background_tasks,
+			block_announce_validator_builder: self.block_announce_validator_builder,
 			marker: self.marker,
 		})
 	}
@@ -498,6 +506,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
 			background_tasks: self.background_tasks,
+			block_announce_validator_builder: self.block_announce_validator_builder,
 			marker: self.marker,
 		})
 	}
@@ -560,6 +569,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
 			background_tasks: self.background_tasks,
+			block_announce_validator_builder: self.block_announce_validator_builder,
 			marker: self.marker,
 		})
 	}
@@ -622,6 +632,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
 			background_tasks: self.background_tasks,
+			block_announce_validator_builder: self.block_announce_validator_builder,
 			marker: self.marker,
 		})
 	}
@@ -650,6 +661,36 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			rpc_extensions,
 			remote_backend: self.remote_backend,
 			background_tasks: self.background_tasks,
+			block_announce_validator_builder: self.block_announce_validator_builder,
+			marker: self.marker,
+		})
+	}
+
+	/// Defines the `BlockAnnounceValidator` to use. `DefaultBlockAnnounceValidator` will be used by
+	/// default.
+	pub fn with_block_announce_validator(
+		self,
+		block_announce_validator_builder:
+			impl FnOnce(Arc<TCl>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + 'static,
+	) -> Result<ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
+		TExPool, TRpc, Backend>, Error>
+	where TSc: Clone, TFchr: Clone {
+		Ok(ServiceBuilder {
+			config: self.config,
+			client: self.client,
+			backend: self.backend,
+			task_manager: self.task_manager,
+			keystore: self.keystore,
+			fetcher: self.fetcher,
+			select_chain: self.select_chain,
+			import_queue: self.import_queue,
+			finality_proof_request_builder: self.finality_proof_request_builder,
+			finality_proof_provider: self.finality_proof_provider,
+			transaction_pool: self.transaction_pool,
+			rpc_extensions: self.rpc_extensions,
+			remote_backend: self.remote_backend,
+			background_tasks: self.background_tasks,
+			block_announce_validator_builder: Some(Box::new(block_announce_validator_builder)),
 			marker: self.marker,
 		})
 	}
@@ -761,6 +802,7 @@ ServiceBuilder<
 			rpc_extensions,
 			remote_backend,
 			background_tasks,
+			block_announce_validator_builder,
 		} = self;
 
 		sp_session::generate_initial_session_keys(
@@ -809,8 +851,11 @@ ServiceBuilder<
 			sc_network::config::ProtocolId::from(protocol_id_full)
 		};
 
-		let block_announce_validator =
-			Box::new(sp_consensus::block_validation::DefaultBlockAnnounceValidator::new(client.clone()));
+		let block_announce_validator = if let Some(f) = block_announce_validator_builder {
+			f(client.clone())
+		} else {
+			Box::new(DefaultBlockAnnounceValidator::new(client.clone()))
+		};
 
 		let network_params = sc_network::config::Params {
 			role: config.role.clone(),
