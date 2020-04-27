@@ -874,11 +874,6 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Update pending storage changes, if any.
-	pub fn update_accumulators() {
-		sp_io::storage::accumulator_commit(&Events::<T>::storage_value_final_key()[..]);
-	}
-
 	/// Collect events for the current block.
 	///
 	/// This should not be used for anything but tests. Using it for anything else
@@ -1079,6 +1074,11 @@ impl<T: Trait> Module<T> {
 			}
 			Module::<T>::on_killed_account(who.clone());
 		}
+	}
+
+	/// Update pending storage changes, if any.
+	fn update_accumulators() {
+		sp_io::storage::accumulator_commit(&Events::<T>::storage_value_final_key()[..]);
 	}
 
 	/// Determine whether or not it is possible to update the code.
