@@ -176,6 +176,21 @@ pub trait Externalities: ExtensionStore {
 		child_info: &ChildInfo,
 	) -> Vec<u8>;
 
+	/// Append storage item.
+	///
+	/// This assumes specific format of the storage item. Also there is no way to undo this operation.
+	fn storage_append(
+		&mut self,
+		key: Vec<u8>,
+		value: Vec<u8>,
+	) {
+		let new_value = append_to_storage(self.storage(&key).unwrap_or_default(), value);
+		self.place_storage(
+			key,
+			Some(new_value),
+		);
+	}
+
 	/// Get the changes trie root of the current storage overlay at a block with given `parent`.
 	///
 	/// `parent` expects a SCALE encoded hash.
@@ -229,4 +244,26 @@ impl ExternalitiesExt for &mut dyn Externalities {
 	fn deregister_extension<T: Extension>(&mut self) -> Result<(), Error> {
 		self.deregister_extension_by_type_id(TypeId::of::<T>())
 	}
+}
+
+fn append_to_storage(current_storage: Vec<u8>, append: Vec<u8>) -> Vec<u8> {
+	use codec::{Encode, Decode};
+
+	let (mut storage_length, storage_data) = if !current_storage.is_empty() {
+		let stream = &mut &current_storage[..];
+		// TODO: panic? propagate error? who will handle?
+		let storage_length: u32 = codec::Compact::<u32>::decode(stream).ok()
+			.map(From::from).unwrap_or_default();
+
+		(storage_length, *stream)
+	} else {
+		(0, &[][..])
+	};
+
+	storage_length += 1;
+	let mut final_storage_value = codec::Compact(storage_length).encode();
+	final_storage_value.extend(storage_data);
+	final_storage_value.extend(append);
+
+	final_storage_value
 }
