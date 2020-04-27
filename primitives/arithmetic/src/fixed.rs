@@ -131,7 +131,7 @@ macro_rules! implement_fixed {
 					.and_then(|c| low.checked_add(c))
 					.and_then(|r| r.try_into().ok())
 					.map(|r: i128| r * signum)
-					.and_then(|r| {println!("output checked_mul_int {}", r);r.try_into().ok()})
+					.and_then(|r| r.try_into().ok())
 			}
 
 			fn checked_div_int<N>(self, other: N) -> Option<N>
@@ -154,7 +154,7 @@ macro_rules! implement_fixed {
 				ops::Add<N, Output=N>,
 			{
 				self.checked_mul_int(other).unwrap_or_else(|| {
-					let signum = other.saturated_into().signum() * self.0.signum() as i128;
+					let signum = other.unique_saturated_into().signum() * self.0.signum() as i128;
 					if signum.is_negative() {
 						Bounded::min_value()
 					} else {
@@ -740,6 +740,54 @@ macro_rules! implement_fixed {
 				assert_eq!($name::from_integer(1).saturating_pow(usize::max_value()), $name::from_integer(1));
 				assert_eq!($name::from_integer(0).saturating_pow(usize::max_value()), $name::from_integer(0));
 				assert_eq!($name::from_integer(2).saturating_pow(usize::max_value()), $name::max_value());
+			}
+
+			#[test]
+			fn checked_div_works() {
+				let inner_max = <$name as FixedPointNumber>::Inner::max_value();
+				let inner_min = <$name as FixedPointNumber>::Inner::min_value();
+				let accuracy = $name::accuracy();
+
+				let a = $name::from_inner(inner_max);
+				let b = $name::from_inner(inner_min);
+				let c = $name::zero();
+				let d = $name::one();
+				let e = $name::from_integer(6);
+				let f = $name::from_integer(5);
+
+				assert_eq!(e.checked_div(&2.into()), Some(3.into()));
+				assert_eq!(f.checked_div(&2.into()), Some((5, 2).into()));
+
+				assert_eq!(a.checked_div(&inner_max.into()), Some(1.into()));
+				// assert_eq!(a.checked_div_int(2), Some(inner_max / (2 * accuracy)));
+				// assert_eq!(a.checked_div_int(inner_max / accuracy), Some(1));
+				// assert_eq!(a.checked_div_int(1i8), None);
+
+				// assert_eq!(a.checked_div_int(-2), Some(-inner_max / (2 * accuracy)));
+				// assert_eq!(a.checked_div_int(inner_max / -accuracy), Some(-1));
+
+				// assert_eq!(b.checked_div_int(i128::min_value()), Some(0));
+				// assert_eq!(b.checked_div_int(2), Some(inner_min / (2 * accuracy)));
+				// assert_eq!(b.checked_div_int(inner_min / accuracy), Some(1));
+				// assert_eq!(b.checked_div_int(1i8), None);
+
+				// assert_eq!(b.checked_div_int(-2), Some(-(inner_min / (2 * accuracy))));
+				// assert_eq!(b.checked_div_int(-(inner_min / accuracy)), Some(-1));
+
+				// assert_eq!(c.checked_div_int(1), Some(0));
+				// assert_eq!(c.checked_div_int(i128::max_value()), Some(0));
+				// assert_eq!(c.checked_div_int(i128::min_value()), Some(0));
+				// assert_eq!(c.checked_div_int(1i8), Some(0));
+
+				// assert_eq!(d.checked_div_int(1), Some(1));
+				// assert_eq!(d.checked_div_int(i32::max_value()), Some(0));
+				// assert_eq!(d.checked_div_int(i32::min_value()), Some(0));
+				// assert_eq!(d.checked_div_int(1i8), Some(1));
+
+				// assert_eq!(a.checked_div_int(0), None);
+				// assert_eq!(b.checked_div_int(0), None);
+				// assert_eq!(c.checked_div_int(0), None);
+				// assert_eq!(d.checked_div_int(0), None);
 			}
 		}
 	}
