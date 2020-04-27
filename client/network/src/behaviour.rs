@@ -261,6 +261,16 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<block_requests::Event<B
 				let ev = self.substrate.on_block_response(peer, original_request, response);
 				self.inject_event(ev);
 			}
+			block_requests::Event::RequestCancelled { .. } => {
+				// There doesn't exist any mechanism to report cancellations yet.
+				// We would normally disconnect the node, but this event happens as the result of
+				// a disconnect, so there's nothing more to do.
+			}
+			block_requests::Event::RequestTimeout { peer, .. } => {
+				// There doesn't exist any mechanism to report timeouts yet, so we process them by
+				// disconnecting the node.
+				self.substrate.disconnect_peer(&peer);
+			}
 		}
 	}
 }
