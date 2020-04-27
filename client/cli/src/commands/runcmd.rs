@@ -20,6 +20,7 @@ use crate::params::KeystoreParams;
 use crate::params::NetworkParams;
 use crate::params::SharedParams;
 use crate::params::TransactionPoolParams;
+use crate::params::OffchainWorkerParams;
 use crate::CliConfiguration;
 use regex::Regex;
 use sc_service::{
@@ -27,19 +28,8 @@ use sc_service::{
 	ChainSpec, Role,
 };
 use sc_telemetry::TelemetryEndpoints;
-use std::net::SocketAddr;
-use structopt::{clap::arg_enum, StructOpt};
-
-arg_enum! {
-	/// Whether off-chain workers are enabled.
-	#[allow(missing_docs)]
-	#[derive(Debug, Clone)]
-	pub enum OffchainWorkerEnabled {
-		Always,
-		Never,
-		WhenValidating,
-	}
-}
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use structopt::StructOpt;
 
 /// The `run` command used to run a node.
 #[derive(Debug, StructOpt, Clone)]
@@ -92,6 +82,14 @@ pub struct RunCmd {
 	/// Same as `--rpc-external`.
 	#[structopt(long = "unsafe-rpc-external")]
 	pub unsafe_rpc_external: bool,
+
+	/// Don't deny potentially unsafe RPCs when listening on external interfaces.
+	///
+	/// Default is false. This allows exposing RPC methods publicly (same as `--unsafe-{rpc,ws}-external` )
+	/// but will allow doing so even on validator nodes, which is prohibited by default.
+	/// Please do this if you know what you're doing.
+	#[structopt(long = "unsafe-rpc-expose")]
+	pub unsafe_rpc_expose: bool,
 
 	/// Listen to all Websocket interfaces.
 	///
@@ -165,17 +163,9 @@ pub struct RunCmd {
 	#[structopt(long = "telemetry-url", value_name = "URL VERBOSITY", parse(try_from_str = parse_telemetry_endpoints))]
 	pub telemetry_endpoints: Vec<(String, u8)>,
 
-	/// Should execute offchain workers on every block.
-	///
-	/// By default it's only enabled for nodes that are authoring new blocks.
-	#[structopt(
-		long = "offchain-worker",
-		value_name = "ENABLED",
-		possible_values = &OffchainWorkerEnabled::variants(),
-		case_insensitive = true,
-		default_value = "WhenValidating"
-	)]
-	pub offchain_worker: OffchainWorkerEnabled,
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub offchain_worker_params: OffchainWorkerParams,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -292,6 +282,10 @@ impl CliConfiguration for RunCmd {
 		Some(&self.keystore_params)
 	}
 
+	fn offchain_worker_params(&self) -> Option<&OffchainWorkerParams> {
+		Some(&self.offchain_worker_params)
+	}
+
 	fn node_name(&self) -> Result<String> {
 		let name: String = match (self.name.as_ref(), self.get_keyring()) {
 			(Some(name), _) => name.to_string(),
@@ -361,22 +355,19 @@ impl CliConfiguration for RunCmd {
 	}
 
 	fn prometheus_config(&self) -> Result<Option<PrometheusConfig>> {
-		if self.no_prometheus {
-			Ok(None)
+		Ok(if self.no_prometheus {
+			None
 		} else {
-			let prometheus_interface: &str = if self.prometheus_external {
-				"0.0.0.0"
+			let interface = if self.prometheus_external {
+				Ipv4Addr::UNSPECIFIED
 			} else {
-				"127.0.0.1"
+				Ipv4Addr::LOCALHOST
 			};
 
-			Ok(Some(PrometheusConfig::new_with_default_registry(
-				parse_address(
-					&format!("{}:{}", prometheus_interface, 9615),
-					self.prometheus_port,
-				)?,
-			)))
-		}
+			Some(PrometheusConfig::new_with_default_registry(
+				SocketAddr::new(interface.into(), self.prometheus_port.unwrap_or(9615))
+			))
+		})
 	}
 
 	fn disable_grandpa(&self) -> Result<bool> {
@@ -409,32 +400,29 @@ impl CliConfiguration for RunCmd {
 	}
 
 	fn rpc_http(&self) -> Result<Option<SocketAddr>> {
-		let rpc_interface: &str =
-			interface_str(self.rpc_external, self.unsafe_rpc_external, self.validator)?;
+		let interface = rpc_interface(
+			self.rpc_external,
+			self.unsafe_rpc_external,
+			self.unsafe_rpc_expose,
+			self.validator
+		)?;
 
-		Ok(Some(parse_address(
-			&format!("{}:{}", rpc_interface, 9933),
-			self.rpc_port,
-		)?))
+		Ok(Some(SocketAddr::new(interface, self.rpc_port.unwrap_or(9933))))
 	}
 
 	fn rpc_ws(&self) -> Result<Option<SocketAddr>> {
-		let ws_interface: &str =
-			interface_str(self.ws_external, self.unsafe_ws_external, self.validator)?;
+		let interface = rpc_interface(
+			self.ws_external,
+			self.unsafe_ws_external,
+			self.unsafe_rpc_expose,
+			self.validator
+		)?;
 
-		Ok(Some(parse_address(
-			&format!("{}:{}", ws_interface, 9944),
-			self.ws_port,
-		)?))
+		Ok(Some(SocketAddr::new(interface, self.ws_port.unwrap_or(9944))))
 	}
 
-	fn offchain_worker(&self, role: &Role) -> Result<bool> {
-		Ok(match (&self.offchain_worker, role) {
-			(OffchainWorkerEnabled::WhenValidating, Role::Authority { .. }) => true,
-			(OffchainWorkerEnabled::Always, _) => true,
-			(OffchainWorkerEnabled::Never, _) => false,
-			(OffchainWorkerEnabled::WhenValidating, _) => false,
-		})
+	fn unsafe_rpc_expose(&self) -> Result<bool> {
+		Ok(self.unsafe_rpc_expose)
 	}
 
 	fn transaction_pool(&self) -> Result<TransactionPoolOptions> {
@@ -468,23 +456,13 @@ pub fn is_node_name_valid(_name: &str) -> std::result::Result<(), &str> {
 	Ok(())
 }
 
-fn parse_address(address: &str, port: Option<u16>) -> std::result::Result<SocketAddr, String> {
-	let mut address: SocketAddr = address
-		.parse()
-		.map_err(|_| format!("Invalid address: {}", address))?;
-	if let Some(port) = port {
-		address.set_port(port);
-	}
-
-	Ok(address)
-}
-
-fn interface_str(
+fn rpc_interface(
 	is_external: bool,
 	is_unsafe_external: bool,
+	is_unsafe_rpc_expose: bool,
 	is_validator: bool,
-) -> Result<&'static str> {
-	if is_external && is_validator {
+) -> Result<IpAddr> {
+	if is_external && is_validator && !is_unsafe_rpc_expose {
 		return Err(Error::Input(
 			"--rpc-external and --ws-external options shouldn't be \
 		used if the node is running as a validator. Use `--unsafe-rpc-external` if you understand \
@@ -499,9 +477,9 @@ fn interface_str(
 		available set of RPC methods."
 		);
 
-		Ok("0.0.0.0")
+		Ok(Ipv4Addr::UNSPECIFIED.into())
 	} else {
-		Ok("127.0.0.1")
+		Ok(Ipv4Addr::LOCALHOST.into())
 	}
 }
 

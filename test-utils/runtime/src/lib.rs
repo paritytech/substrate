@@ -50,10 +50,9 @@ use sp_version::NativeVersion;
 use frame_support::{impl_outer_origin, parameter_types, weights::{Weight, RuntimeDbWeight}};
 use sp_inherents::{CheckInherentsResult, InherentData};
 use cfg_if::cfg_if;
-use sp_core::storage::ChildType;
 
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
-pub use sp_consensus_babe::{AuthorityId, SlotNumber};
+pub use sp_consensus_babe::{AuthorityId, SlotNumber, AllowedSlots};
 pub type AuraId = sp_consensus_aura::sr25519::AuthorityId;
 
 // Include the WASM binary
@@ -403,6 +402,8 @@ impl frame_system::Trait for Runtime {
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type DbWeight = ();
+	type BlockExecutionWeight = ();
+	type ExtrinsicBaseWeight = ();
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
@@ -634,15 +635,15 @@ cfg_if! {
 			}
 
 			impl sp_consensus_babe::BabeApi<Block> for Runtime {
-				fn configuration() -> sp_consensus_babe::BabeConfiguration {
-					sp_consensus_babe::BabeConfiguration {
+				fn configuration() -> sp_consensus_babe::BabeGenesisConfiguration {
+					sp_consensus_babe::BabeGenesisConfiguration {
 						slot_duration: 1000,
 						epoch_length: EpochDuration::get(),
 						c: (3, 10),
 						genesis_authorities: system::authorities()
 							.into_iter().map(|x|(x, 1)).collect(),
 						randomness: <pallet_babe::Module<Runtime>>::randomness(),
-						secondary_slots: true,
+						allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 					}
 				}
 
@@ -828,15 +829,15 @@ cfg_if! {
 			}
 
 			impl sp_consensus_babe::BabeApi<Block> for Runtime {
-				fn configuration() -> sp_consensus_babe::BabeConfiguration {
-					sp_consensus_babe::BabeConfiguration {
+				fn configuration() -> sp_consensus_babe::BabeGenesisConfiguration {
+					sp_consensus_babe::BabeGenesisConfiguration {
 						slot_duration: 1000,
 						epoch_length: EpochDuration::get(),
 						c: (3, 10),
 						genesis_authorities: system::authorities()
 							.into_iter().map(|x|(x, 1)).collect(),
 						randomness: <pallet_babe::Module<Runtime>>::randomness(),
-						secondary_slots: true,
+						allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 					}
 				}
 
@@ -923,22 +924,17 @@ fn test_read_storage() {
 }
 
 fn test_read_child_storage() {
-	const CHILD_KEY: &[u8] = b":child_storage:default:read_child_storage";
-	const UNIQUE_ID: &[u8] = b":unique_id";
+	const STORAGE_KEY: &[u8] = b"unique_id_1";
 	const KEY: &[u8] = b":read_child_storage";
-	sp_io::storage::child_set(
-		CHILD_KEY,
-		UNIQUE_ID,
-		ChildType::CryptoUniqueId as u32,
+	sp_io::default_child_storage::set(
+		STORAGE_KEY,
 		KEY,
 		b"test",
 	);
 
 	let mut v = [0u8; 4];
-	let r = sp_io::storage::child_read(
-		CHILD_KEY,
-		UNIQUE_ID,
-		ChildType::CryptoUniqueId as u32,
+	let r = sp_io::default_child_storage::read(
+		STORAGE_KEY,
 		KEY,
 		&mut v,
 		0,
@@ -947,10 +943,8 @@ fn test_read_child_storage() {
 	assert_eq!(&v, b"test");
 
 	let mut v = [0u8; 4];
-	let r = sp_io::storage::child_read(
-		CHILD_KEY,
-		UNIQUE_ID,
-		ChildType::CryptoUniqueId as u32,
+	let r = sp_io::default_child_storage::read(
+		STORAGE_KEY,
 		KEY,
 		&mut v,
 		8,

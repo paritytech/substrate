@@ -133,7 +133,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::{Parameter, decl_module, decl_event, decl_storage, decl_error, ensure};
-use frame_support::weights::{SimpleDispatchInfo, MINIMUM_WEIGHT};
 use sp_runtime::traits::{Member, AtLeast32Bit, Zero, StaticLookup};
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::traits::One;
@@ -159,8 +158,13 @@ decl_module! {
 		/// such assets and they'll all belong to the `origin` initially. It will have an
 		/// identifier `AssetId` instance: this will be specified in the `Issued` event.
 		///
-		/// `O(1)`
-		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
+		/// # <weight>
+		/// - `O(1)`
+		/// - 1 storage mutation (codec `O(1)`).
+		/// - 2 storage writes (condec `O(1)`).
+		/// - 1 event.
+		/// # </weight>
+		#[weight = 0]
 		fn issue(origin, #[compact] total: T::Balance) {
 			let origin = ensure_signed(origin)?;
 
@@ -175,8 +179,13 @@ decl_module! {
 
 		/// Move some assets from one holder to another.
 		///
-		/// `O(1)`
-		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
+		/// # <weight>
+		/// - `O(1)`
+		/// - 1 static lookup
+		/// - 2 storage mutations (codec `O(1)`).
+		/// - 1 event.
+		/// # </weight>
+		#[weight = 0]
 		fn transfer(origin,
 			#[compact] id: T::AssetId,
 			target: <T::Lookup as StaticLookup>::Source,
@@ -196,8 +205,13 @@ decl_module! {
 
 		/// Destroy any assets of `id` owned by `origin`.
 		///
-		/// `O(1)`.
-		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
+		/// # <weight>
+		/// - `O(1)`
+		/// - 1 storage mutation (codec `O(1)`).
+		/// - 1 storage deletion (codec `O(1)`).
+		/// - 1 event.
+		/// # </weight>
+		#[weight = 0]
 		fn destroy(origin, #[compact] id: T::AssetId) {
 			let origin = ensure_signed(origin)?;
 			let balance = <Balances<T>>::take((id, &origin));
@@ -304,6 +318,8 @@ mod tests {
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type DbWeight = ();
+		type BlockExecutionWeight = ();
+		type ExtrinsicBaseWeight = ();
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();

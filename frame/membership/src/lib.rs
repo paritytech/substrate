@@ -26,7 +26,6 @@ use sp_std::prelude::*;
 use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error,
 	traits::{ChangeMembers, InitializeMembers, EnsureOrigin},
-	weights::SimpleDispatchInfo,
 };
 use frame_system::{self as system, ensure_root, ensure_signed};
 
@@ -124,7 +123,7 @@ decl_module! {
 		/// - O(1) storage read
 		/// - O(1) storage write
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000_000)]
+		#[weight = 50_000_000]
 		fn add_member(origin, who: T::AccountId) {
 			T::AddOrigin::try_origin(origin)
 				.map(drop)
@@ -149,7 +148,7 @@ decl_module! {
 		/// - O(1) storage read
 		/// - O(1) storage write
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000_000)]
+		#[weight = 50_000_000]
 		fn remove_member(origin, who: T::AccountId) {
 			T::RemoveOrigin::try_origin(origin)
 				.map(|_| ())
@@ -177,7 +176,7 @@ decl_module! {
 		/// - O(1) storage read
 		/// - O(1) storage write
 		/// # </weight
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000_000)]
+		#[weight = 50_000_000]
 		fn swap_member(origin, remove: T::AccountId, add: T::AccountId) {
 			T::SwapOrigin::try_origin(origin)
 				.map(|_| ())
@@ -212,7 +211,7 @@ decl_module! {
 		/// - 1 storage read
 		/// - 2 storage writes
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000_000)]
+		#[weight = 50_000_000]
 		fn reset_members(origin, members: Vec<T::AccountId>) {
 			T::ResetOrigin::try_origin(origin)
 				.map(|_| ())
@@ -241,7 +240,7 @@ decl_module! {
 		/// - O(1) stores
 		/// - O(1) loads
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000_000)]
+		#[weight = 50_000_000]
 		fn change_key(origin, new: T::AccountId) {
 			let remove = ensure_signed(origin)?;
 
@@ -269,7 +268,7 @@ decl_module! {
 		}
 
 		/// Set the prime member. Must be a current member.
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000_000)]
+		#[weight = 50_000_000]
 		fn set_prime(origin, who: T::AccountId) {
 			T::PrimeOrigin::try_origin(origin)
 				.map(|_| ())
@@ -280,7 +279,7 @@ decl_module! {
 		}
 
 		/// Remove the prime member if it exists.
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000_000)]
+		#[weight = 50_000_000]
 		fn clear_prime(origin) {
 			T::PrimeOrigin::try_origin(origin)
 				.map(|_| ())
@@ -346,6 +345,8 @@ mod tests {
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type DbWeight = ();
+		type BlockExecutionWeight = ();
+		type ExtrinsicBaseWeight = ();
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
