@@ -32,7 +32,7 @@ use libp2p::swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess, PollPa
 use log::debug;
 use sp_consensus::{BlockOrigin, import_queue::{IncomingBlock, Origin}};
 use sp_runtime::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId, Justification};
-use std::{borrow::Cow, iter, task::Context, task::Poll};
+use std::{borrow::Cow, iter, task::{Context, Poll}, time::Duration};
 use void;
 
 /// General behaviour of the network. Combines all protocols together.
@@ -67,8 +67,39 @@ pub enum BehaviourOut<B: BlockT> {
 	BlockImport(BlockOrigin, Vec<IncomingBlock<B>>),
 	JustificationImport(Origin, B::Hash, NumberFor<B>, Justification),
 	FinalityProofImport(Origin, B::Hash, NumberFor<B>, Vec<u8>),
-	/// Started a random Kademlia discovery query.
+
+	/// Started a random iterative Kademlia discovery query.
 	RandomKademliaStarted(ProtocolId),
+
+	/// We have received a request from a peer and answered it.
+	AnsweredRequest {
+		/// Peer which sent us a request.
+		peer: PeerId,
+		/// Protocol name of the request.
+		protocol: Vec<u8>,
+		/// Time it took to build the response.
+		build_time: Duration,
+	},
+	/// Started a new request with the given node.
+	RequestStarted {
+		peer: PeerId,
+		/// Protocol name of the request.
+		protocol: Vec<u8>,
+	},
+	/// Finished, successfully or not, a previously-started request.
+	RequestFinished {
+		/// Who we were requesting.
+		peer: PeerId,
+		/// Protocol name of the request.
+		protocol: Vec<u8>,
+		/// How long before the response came or the request got cancelled.
+		request_duration: Duration,
+	},
+
+	/// Any event represented by the [`Event`] enum.
+	///
+	/// > **Note**: The [`Event`] enum contains the events that are available through the public
+	/// > API of the library.
 	Event(Event),
 }
 
@@ -220,7 +251,27 @@ Behaviour<B, H> {
 			CustomMessageOutcome::FinalityProofImport(origin, hash, nb, proof) =>
 				self.events.push(BehaviourOut::FinalityProofImport(origin, hash, nb, proof)),
 			CustomMessageOutcome::BlockRequest { target, request } => {
-				self.block_requests.send_request(&target, request);
+				match self.block_requests.send_request(&target, request) {
+					block_requests::SendRequestOutcome::Ok => {
+						self.events.push(BehaviourOut::RequestStarted {
+							peer: target,
+							protocol: self.block_requests.protocol_name().to_vec(),
+						});
+					},
+					block_requests::SendRequestOutcome::Replaced { request_duration, .. } => {
+						self.events.push(BehaviourOut::RequestFinished {
+							peer: target.clone(),
+							protocol: self.block_requests.protocol_name().to_vec(),
+							request_duration,
+						});
+						self.events.push(BehaviourOut::RequestStarted {
+							peer: target,
+							protocol: self.block_requests.protocol_name().to_vec(),
+						});
+					}
+					block_requests::SendRequestOutcome::NotConnected |
+					block_requests::SendRequestOutcome::EncodeError(_) => {},
+				}
 			},
 			CustomMessageOutcome::FinalityProofRequest { target, block_hash, request } => {
 				self.finality_proof_requests.send_request(&target, block_hash, request);
@@ -257,18 +308,40 @@ Behaviour<B, H> {
 impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<block_requests::Event<B>> for Behaviour<B, H> {
 	fn inject_event(&mut self, event: block_requests::Event<B>) {
 		match event {
-			block_requests::Event::Response { peer, original_request, response } => {
+			block_requests::Event::AnsweredRequest { peer, response_build_time } => {
+				self.events.push(BehaviourOut::AnsweredRequest {
+					peer,
+					protocol: self.block_requests.protocol_name().to_vec(),
+					build_time: response_build_time,
+				});
+			},
+			block_requests::Event::Response { peer, original_request, response, request_duration } => {
+				self.events.push(BehaviourOut::RequestFinished {
+					peer: peer.clone(),
+					protocol: self.block_requests.protocol_name().to_vec(),
+					request_duration,
+				});
 				let ev = self.substrate.on_block_response(peer, original_request, response);
 				self.inject_event(ev);
 			}
-			block_requests::Event::RequestCancelled { .. } => {
+			block_requests::Event::RequestCancelled { peer, request_duration, .. } => {
 				// There doesn't exist any mechanism to report cancellations yet.
 				// We would normally disconnect the node, but this event happens as the result of
 				// a disconnect, so there's nothing more to do.
+				self.events.push(BehaviourOut::RequestFinished {
+					peer,
+					protocol: self.block_requests.protocol_name().to_vec(),
+					request_duration,
+				});
 			}
-			block_requests::Event::RequestTimeout { peer, .. } => {
+			block_requests::Event::RequestTimeout { peer, request_duration, .. } => {
 				// There doesn't exist any mechanism to report timeouts yet, so we process them by
 				// disconnecting the node.
+				self.events.push(BehaviourOut::RequestFinished {
+					peer: peer.clone(),
+					protocol: self.block_requests.protocol_name().to_vec(),
+					request_duration,
+				});
 				self.substrate.disconnect_peer(&peer);
 			}
 		}
