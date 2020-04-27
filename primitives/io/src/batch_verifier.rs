@@ -139,11 +139,13 @@ impl BatchVerifier {
 		self.sr25519_items.clear();
 
 		if pending.len() > 0 {
-			let pair = Arc::new((Mutex::new(()), Condvar::new()));
+			let pair = Arc::new((Mutex::new(false), Condvar::new()));
 			let pair_clone = pair.clone();
 
 			if self.scheduler.spawn_obj(FutureObj::new(async move {
 				futures::future::join_all(pending).await;
+				let mut finished = pair_clone.0.lock().expect("Locking can only fail when the mutex is poisoned; qed");
+				*finished = true;
 				pair_clone.1.notify_all();
 			}.boxed())).is_err() {
 				log::debug!(
@@ -154,9 +156,11 @@ impl BatchVerifier {
 				return false;
 			}
 
-			let (mtx, cond_var) = &*pair;
-			let mtx = mtx.lock().expect("Locking can only fail when the mutex is poisoned; qed");
-			let _ = cond_var.wait(mtx).expect("Waiting can only fail when the mutex waited on is poisoned; qed");
+			let (finished, cond_var) = &*pair;
+			let mut finished = finished.lock().expect("Locking can only fail when the mutex is poisoned; qed");
+			while !*finished {
+				finished = cond_var.wait(finished).expect("Waiting can only fail when the mutex waited on is poisoned; qed");
+			}
 		}
 
 		log::trace!(
