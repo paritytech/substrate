@@ -152,6 +152,7 @@ fn rewards_should_work() {
 	// should check that:
 	// * rewards get recorded per session
 	// * rewards get paid per Era
+	// * `RewardRemainder::on_unbalanced` is called
 	// * Check that nominators are also rewarded
 	ExtBuilder::default().nominate(true).build_and_execute(|| {
 		let init_balance_10 = Balances::total_balance(&10);
@@ -197,6 +198,8 @@ fn rewards_should_work() {
 		start_session(3);
 
 		assert_eq!(Staking::active_era().unwrap().index, 1);
+		assert_eq!(mock::REWARD_REMAINDER_UNBALANCED.with(|v| *v.borrow()), 7050);
+		assert_eq!(*mock::staking_events().last().unwrap(), RawEvent::EraPayout(0, 2350, 7050));
 		mock::make_all_reward_payment(0);
 
 		assert_eq_error_rate!(Balances::total_balance(&10), init_balance_10 + part_for_10 * total_payout_0*2/3, 2);
@@ -220,6 +223,8 @@ fn rewards_should_work() {
 		assert!(total_payout_1 > 10); // Test is meaningful if reward something
 
 		mock::start_era(2);
+		assert_eq!(mock::REWARD_REMAINDER_UNBALANCED.with(|v| *v.borrow()), 7050*2);
+		assert_eq!(*mock::staking_events().last().unwrap(), RawEvent::EraPayout(1, 2350, 7050));
 		mock::make_all_reward_payment(1);
 
 		assert_eq_error_rate!(Balances::total_balance(&10), init_balance_10 + part_for_10 * (total_payout_0 * 2/3 + total_payout_1), 2);
@@ -2832,16 +2837,7 @@ mod offchain_phragmen {
 			assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
 			// some election must have happened by now.
 			assert_eq!(
-				System::events()
-					.into_iter()
-					.map(|r| r.event)
-					.filter_map(|e| {
-						if let MetaEvent::staking(inner) = e {
-							Some(inner)
-						} else {
-							None
-						}
-					})
+				*mock::staking_events()
 					.last()
 					.unwrap(),
 				RawEvent::StakingElection(ElectionCompute::OnChain),
@@ -2922,18 +2918,9 @@ mod offchain_phragmen {
 				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
 
 				assert_eq!(
-					System::events()
-						.into_iter()
-						.map(|r| r.event)
-						.filter_map(|e| {
-							if let MetaEvent::staking(inner) = e {
-								Some(inner)
-							} else {
-								None
-							}
-						})
+					*mock::staking_events()
 						.last()
-						.unwrap(),
+						.expect("Staking event should exist"),
 					RawEvent::StakingElection(ElectionCompute::Signed),
 				);
 			})
@@ -2965,16 +2952,7 @@ mod offchain_phragmen {
 				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
 
 				assert_eq!(
-					System::events()
-						.into_iter()
-						.map(|r| r.event)
-						.filter_map(|e| {
-							if let MetaEvent::staking(inner) = e {
-								Some(inner)
-							} else {
-								None
-							}
-						})
+					*mock::staking_events()
 						.last()
 						.unwrap(),
 					RawEvent::StakingElection(ElectionCompute::Signed),

@@ -143,13 +143,14 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 {
 	let root = root.path().join(format!("node-{}", index));
 
-	let net_config_path = root.join("network");
-
 	let mut network_config = NetworkConfiguration::new(
 		format!("Node {}", index),
 		"network/test/0.1",
-		Default::default(), &net_config_path,
+		Default::default(),
+		None,
 	);
+
+	network_config.allow_non_globals_in_dht = true;
 
 	network_config.listen_addresses.push(
 		iter::once(multiaddr::Protocol::Ip4(Ipv4Addr::new(127, 0, 0, 1)))
@@ -185,6 +186,7 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 		chain_spec: Box::new((*spec).clone()),
 		wasm_method: sc_service::config::WasmExecutionMethod::Interpreted,
 		execution_strategies: Default::default(),
+		unsafe_rpc_expose: false,
 		rpc_http: None,
 		rpc_ws: None,
 		rpc_ws_max_connections: None,
@@ -193,7 +195,7 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 		telemetry_endpoints: None,
 		telemetry_external_transport: None,
 		default_heap_pages: None,
-		offchain_worker: false,
+		offchain_worker: Default::default(),
 		force_authoring: false,
 		disable_grandpa: false,
 		dev_key_seed: key_seed,

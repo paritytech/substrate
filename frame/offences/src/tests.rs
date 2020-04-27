@@ -128,7 +128,7 @@ fn should_deposit_event() {
 
 		// then
 		assert_eq!(
-			System::events(),
+			System::collect_events(),
 			vec![EventRecord {
 				phase: Phase::Initialization,
 				event: TestEvent::offences(crate::Event::Offence(KIND, time_slot.encode(), true)),
@@ -163,7 +163,7 @@ fn doesnt_deposit_event_for_dups() {
 		// then
 		// there is only one event.
 		assert_eq!(
-			System::events(),
+			System::collect_events(),
 			vec![EventRecord {
 				phase: Phase::Initialization,
 				event: TestEvent::offences(crate::Event::Offence(KIND, time_slot.encode(), true)),
@@ -227,9 +227,10 @@ fn should_queue_and_resubmit_rejected_offence() {
 		};
 		Offences::report_offence(vec![], offence).unwrap();
 		assert_eq!(Offences::deferred_offences().len(), 1);
+
 		// event also indicates unapplied.
 		assert_eq!(
-			System::events(),
+			System::collect_events(),
 			vec![EventRecord {
 				phase: Phase::Initialization,
 				event: TestEvent::offences(crate::Event::Offence(KIND, 42u128.encode(), false)),

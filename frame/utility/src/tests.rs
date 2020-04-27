@@ -72,6 +72,8 @@ impl frame_system::Trait for Test {
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type DbWeight = ();
+	type BlockExecutionWeight = ();
+	type ExtrinsicBaseWeight = ();
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
@@ -121,7 +123,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 }
 
 fn last_event() -> TestEvent {
-	system::Module::<Test>::events().pop().map(|e| e.event).expect("Event expected")
+	system::Module::<Test>::collect_events().pop().map(|e| e.event).expect("Event expected")
 }
 
 fn expect_event<E: Into<TestEvent>>(e: E) {

@@ -144,6 +144,12 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
+			fn offchain_worker_params(&self) -> Option<&$crate::OffchainWorkerParams> {
+				match self {
+					$($enum::$variant(cmd) => cmd.offchain_worker_params()),*
+				}
+			}
+
 			fn base_path(&self) -> $crate::Result<::std::option::Option<::std::path::PathBuf>> {
 				match self {
 					$($enum::$variant(cmd) => cmd.base_path()),*
@@ -173,7 +179,7 @@ macro_rules! substrate_cli_subcommands {
 				&self,
 				chain_spec: &::std::boxed::Box<dyn ::sc_service::ChainSpec>,
 				is_dev: bool,
-				net_config_dir: &::std::path::PathBuf,
+				net_config_dir: ::std::path::PathBuf,
 				client_id: &str,
 				node_name: &str,
 				node_key: ::sc_service::config::NodeKeyConfig,
@@ -279,6 +285,12 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
+			fn unsafe_rpc_expose(&self) -> $crate::Result<bool> {
+				match self {
+					$($enum::$variant(cmd) => cmd.unsafe_rpc_expose()),*
+				}
+			}
+
 			fn rpc_ws_max_connections(&self) -> $crate::Result<::std::option::Option<usize>> {
 				match self {
 					$($enum::$variant(cmd) => cmd.rpc_ws_max_connections()),*
@@ -321,7 +333,7 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
-			fn offchain_worker(&self, role: &::sc_service::Role) -> $crate::Result<bool> {
+			fn offchain_worker(&self, role: &::sc_service::Role) -> $crate::Result<::sc_service::config::OffchainWorkerConfig> {
 				match self {
 					$($enum::$variant(cmd) => cmd.offchain_worker(role)),*
 				}

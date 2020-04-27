@@ -8,6 +8,7 @@ homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 description = "Fuzzer for phragmén implementation."
 documentation = "https://docs.rs/sp-phragmen-fuzzer"
+publish = false
 
 [dependencies]
 sp-phragmen = { version = "2.0.0-alpha.5", path = ".." }

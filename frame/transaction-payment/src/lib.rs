@@ -36,7 +36,7 @@ use codec::{Encode, Decode};
 use frame_support::{
 	decl_storage, decl_module,
 	traits::{Currency, Get, OnUnbalanced, ExistenceRequirement, WithdrawReason, Imbalance},
-	weights::{Weight, DispatchInfo, PostDispatchInfo, GetDispatchInfo},
+	weights::{Weight, DispatchInfo, PostDispatchInfo, GetDispatchInfo, Pays},
 	dispatch::DispatchResult,
 };
 use sp_runtime::{
@@ -47,7 +47,7 @@ use sp_runtime::{
 	},
 	traits::{
 		Zero, Saturating, SignedExtension, SaturatedConversion, Convert, Dispatchable,
-		DispatchInfoOf, PostDispatchInfoOf,
+		DispatchInfoOf, PostDispatchInfoOf, UniqueSaturatedFrom, UniqueSaturatedInto,
 	},
 };
 use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
@@ -67,9 +67,6 @@ pub trait Trait: frame_system::Trait {
 	/// if any.
 	type OnTransactionPayment: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
-	/// The fee to be paid for making a transaction; the base.
-	type TransactionBaseFee: Get<BalanceOf<Self>>;
-
 	/// The fee to be paid for making a transaction; the per-byte portion.
 	type TransactionByteFee: Get<BalanceOf<Self>>;
 
@@ -88,9 +85,6 @@ decl_storage! {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		/// The fee to be paid for making a transaction; the base.
-		const TransactionBaseFee: BalanceOf<T> = T::TransactionBaseFee::get();
-
 		/// The fee to be paid for making a transaction; the per-byte portion.
 		const TransactionByteFee: BalanceOf<T> = T::TransactionByteFee::get();
 
@@ -116,9 +110,7 @@ decl_module! {
 	}
 }
 
-impl<T: Trait> Module<T> where
-	T::Call: Dispatchable<Info=DispatchInfo, PostInfo=PostDispatchInfo>,
-{
+impl<T: Trait> Module<T> {
 	/// Query the data that we know about the fee of a given `call`.
 	///
 	/// As this module is not and cannot be aware of the internals of a signed extension, it only
@@ -133,6 +125,7 @@ impl<T: Trait> Module<T> where
 	where
 		T: Send + Sync,
 		BalanceOf<T>: Send + Sync,
+		T::Call: Dispatchable<Info=DispatchInfo>,
 	{
 		// NOTE: we can actually make it understand `ChargeTransactionPayment`, but would be some
 		// hassle for sure. We have to make it aware of the index of `ChargeTransactionPayment` in
@@ -165,8 +158,10 @@ impl<T: Trait> Module<T> where
 		len: u32,
 		info: &DispatchInfoOf<T::Call>,
 		tip: BalanceOf<T>,
-	) -> BalanceOf<T> {
-		if info.pays_fee {
+	) -> BalanceOf<T> where
+		T::Call: Dispatchable<Info=DispatchInfo>,
+	{
+		if info.pays_fee == Pays::Yes {
 			let len = <BalanceOf<T>>::from(len);
 			let per_byte = T::TransactionByteFee::get();
 			let len_fee = per_byte.saturating_mul(len);
@@ -177,7 +172,7 @@ impl<T: Trait> Module<T> where
 			let targeted_fee_adjustment = NextFeeMultiplier::get();
 			let adjusted_fee = targeted_fee_adjustment.saturated_multiply_accumulate(adjustable_fee.saturated_into());
 
-			let base_fee = T::TransactionBaseFee::get();
+			let base_fee = Self::weight_to_fee(T::ExtrinsicBaseWeight::get());
 			base_fee.saturating_add(adjusted_fee.saturated_into()).saturating_add(tip)
 		} else {
 			tip
@@ -188,11 +183,12 @@ impl<T: Trait> Module<T> where
 	///
 	/// This fee is already adjusted by the per block fee adjustment factor and is therefore
 	/// the share that the weight contributes to the overall fee of a transaction.
-	pub fn weight_to_fee_with_adjustment(weight: Weight) -> BalanceOf<T> where
-		BalanceOf<T>: From<u64>
+	pub fn weight_to_fee_with_adjustment<Balance>(weight: Weight) -> Balance where
+		Balance: UniqueSaturatedFrom<u128>
 	{
-		NextFeeMultiplier::get().saturated_multiply_accumulate(
-			Self::weight_to_fee(weight)
+		let fee = UniqueSaturatedInto::<u128>::unique_saturated_into(Self::weight_to_fee(weight));
+		UniqueSaturatedFrom::unique_saturated_from(
+			NextFeeMultiplier::get().saturated_multiply_accumulate(fee)
 		)
 	}
 
@@ -365,6 +361,15 @@ mod tests {
 		pub enum Origin for Runtime {}
 	}
 
+	thread_local! {
+		static EXTRINSIC_BASE_WEIGHT: RefCell<u64> = RefCell::new(0);
+	}
+
+	pub struct ExtrinsicBaseWeight;
+	impl Get<u64> for ExtrinsicBaseWeight {
+		fn get() -> u64 { EXTRINSIC_BASE_WEIGHT.with(|v| *v.borrow()) }
+	}
+
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
 		pub const MaximumBlockWeight: Weight = 1024;
@@ -386,6 +391,8 @@ mod tests {
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type DbWeight = ();
+		type BlockExecutionWeight = ();
+		type ExtrinsicBaseWeight = ExtrinsicBaseWeight;
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
@@ -407,14 +414,8 @@ mod tests {
 		type AccountStore = System;
 	}
 	thread_local! {
-		static TRANSACTION_BASE_FEE: RefCell<u64> = RefCell::new(0);
 		static TRANSACTION_BYTE_FEE: RefCell<u64> = RefCell::new(1);
 		static WEIGHT_TO_FEE: RefCell<u64> = RefCell::new(1);
-	}
-
-	pub struct TransactionBaseFee;
-	impl Get<u64> for TransactionBaseFee {
-		fn get() -> u64 { TRANSACTION_BASE_FEE.with(|v| *v.borrow()) }
 	}
 
 	pub struct TransactionByteFee;
@@ -432,7 +433,6 @@ mod tests {
 	impl Trait for Runtime {
 		type Currency = pallet_balances::Module<Runtime>;
 		type OnTransactionPayment = ();
-		type TransactionBaseFee = TransactionBaseFee;
 		type TransactionByteFee = TransactionByteFee;
 		type WeightToFee = WeightToFee;
 		type FeeMultiplierUpdate = ();
@@ -444,7 +444,7 @@ mod tests {
 
 	pub struct ExtBuilder {
 		balance_factor: u64,
-		base_fee: u64,
+		base_weight: u64,
 		byte_fee: u64,
 		weight_to_fee: u64
 	}
@@ -453,7 +453,7 @@ mod tests {
 		fn default() -> Self {
 			Self {
 				balance_factor: 1,
-				base_fee: 0,
+				base_weight: 0,
 				byte_fee: 1,
 				weight_to_fee: 1,
 			}
@@ -461,8 +461,8 @@ mod tests {
 	}
 
 	impl ExtBuilder {
-		pub fn base_fee(mut self, base_fee: u64) -> Self {
-			self.base_fee = base_fee;
+		pub fn base_weight(mut self, base_weight: u64) -> Self {
+			self.base_weight = base_weight;
 			self
 		}
 		pub fn byte_fee(mut self, byte_fee: u64) -> Self {
@@ -478,7 +478,7 @@ mod tests {
 			self
 		}
 		fn set_constants(&self) {
-			TRANSACTION_BASE_FEE.with(|v| *v.borrow_mut() = self.base_fee);
+			EXTRINSIC_BASE_WEIGHT.with(|v| *v.borrow_mut() = self.base_weight);
 			TRANSACTION_BYTE_FEE.with(|v| *v.borrow_mut() = self.byte_fee);
 			WEIGHT_TO_FEE.with(|v| *v.borrow_mut() = self.weight_to_fee);
 		}
@@ -505,7 +505,8 @@ mod tests {
 
 	/// create a transaction info struct from weight. Handy to avoid building the whole struct.
 	pub fn info_from_weight(w: Weight) -> DispatchInfo {
-		DispatchInfo { weight: w, pays_fee: true, ..Default::default() }
+		// pays: yes -- class: normal
+		DispatchInfo { weight: w, ..Default::default() }
 	}
 
 	fn post_info_from_weight(w: Weight) -> PostDispatchInfo {
@@ -520,7 +521,7 @@ mod tests {
 	fn signed_extension_transaction_payment_work() {
 		ExtBuilder::default()
 			.balance_factor(10)
-			.base_fee(5)
+			.base_weight(5)
 			.build()
 			.execute_with(||
 		{
@@ -555,7 +556,7 @@ mod tests {
 	fn signed_extension_transaction_payment_multiplied_refund_works() {
 		ExtBuilder::default()
 			.balance_factor(10)
-			.base_fee(5)
+			.base_weight(5)
 			.build()
 			.execute_with(||
 		{
@@ -565,7 +566,7 @@ mod tests {
 			let pre = ChargeTransactionPayment::<Runtime>::from(5 /* tipped */)
 				.pre_dispatch(&2, CALL, &info_from_weight(100), len)
 				.unwrap();
-			// 5 base fee, 3/2 * 10 byte fee, 3/2 * 100 weight fee, 5 tip 
+			// 5 base fee, 3/2 * 10 byte fee, 3/2 * 100 weight fee, 5 tip
 			assert_eq!(Balances::free_balance(2), 200 - 5 - 15 - 150 - 5);
 
 			assert!(
@@ -603,7 +604,7 @@ mod tests {
 	#[test]
 	fn signed_extension_allows_free_transactions() {
 		ExtBuilder::default()
-			.base_fee(100)
+			.base_weight(100)
 			.balance_factor(0)
 			.build()
 			.execute_with(||
@@ -617,7 +618,7 @@ mod tests {
 			let operational_transaction = DispatchInfo {
 				weight: 0,
 				class: DispatchClass::Operational,
-				pays_fee: false,
+				pays_fee: Pays::No,
 			};
 			assert!(
 				ChargeTransactionPayment::<Runtime>::from(0)
@@ -629,7 +630,7 @@ mod tests {
 			let free_transaction = DispatchInfo {
 				weight: 0,
 				class: DispatchClass::Normal,
-				pays_fee: true,
+				pays_fee: Pays::Yes,
 			};
 			assert!(
 				ChargeTransactionPayment::<Runtime>::from(0)
@@ -642,7 +643,7 @@ mod tests {
 	#[test]
 	fn signed_ext_length_fee_is_also_updated_per_congestion() {
 		ExtBuilder::default()
-			.base_fee(5)
+			.base_weight(5)
 			.balance_factor(10)
 			.build()
 			.execute_with(||
@@ -670,7 +671,7 @@ mod tests {
 		let ext = xt.encode();
 		let len = ext.len() as u32;
 		ExtBuilder::default()
-			.base_fee(5)
+			.base_weight(5)
 			.weight_fee(2)
 			.build()
 			.execute_with(||
@@ -684,7 +685,7 @@ mod tests {
 					weight: info.weight,
 					class: info.class,
 					partial_fee:
-						5 /* base */
+						5 * 2 /* base * weight_fee */
 						+ (
 							len as u64 /* len * 1 */
 							+ info.weight.min(MaximumBlockWeight::get()) as u64 * 2 /* weight * weight_to_fee */
@@ -698,7 +699,7 @@ mod tests {
 	#[test]
 	fn compute_fee_works_without_multiplier() {
 		ExtBuilder::default()
-			.base_fee(100)
+			.base_weight(100)
 			.byte_fee(10)
 			.balance_factor(0)
 			.build()
@@ -711,14 +712,14 @@ mod tests {
 			let dispatch_info = DispatchInfo {
 				weight: 0,
 				class: DispatchClass::Operational,
-				pays_fee: false,
+				pays_fee: Pays::No,
 			};
 			assert_eq!(Module::<Runtime>::compute_fee(0, &dispatch_info, 10), 10);
 			// No tip, only base fee works
 			let dispatch_info = DispatchInfo {
 				weight: 0,
 				class: DispatchClass::Operational,
-				pays_fee: true,
+				pays_fee: Pays::Yes,
 			};
 			assert_eq!(Module::<Runtime>::compute_fee(0, &dispatch_info, 0), 100);
 			// Tip + base fee works
@@ -729,7 +730,7 @@ mod tests {
 			let dispatch_info = DispatchInfo {
 				weight: 1000,
 				class: DispatchClass::Operational,
-				pays_fee: true,
+				pays_fee: Pays::Yes,
 			};
 			assert_eq!(Module::<Runtime>::compute_fee(0, &dispatch_info, 0), 1100);
 		});
@@ -738,7 +739,7 @@ mod tests {
 	#[test]
 	fn compute_fee_works_with_multiplier() {
 		ExtBuilder::default()
-			.base_fee(100)
+			.base_weight(100)
 			.byte_fee(10)
 			.balance_factor(0)
 			.build()
@@ -750,7 +751,7 @@ mod tests {
 			let dispatch_info = DispatchInfo {
 				weight: 0,
 				class: DispatchClass::Operational,
-				pays_fee: true,
+				pays_fee: Pays::Yes,
 			};
 			assert_eq!(Module::<Runtime>::compute_fee(0, &dispatch_info, 0), 100);
 
@@ -758,7 +759,7 @@ mod tests {
 			let dispatch_info = DispatchInfo {
 				weight: 123,
 				class: DispatchClass::Operational,
-				pays_fee: true,
+				pays_fee: Pays::Yes,
 			};
 			// 123 weight, 456 length, 100 base
 			// adjustable fee = (123 * 1) + (456 * 10) = 4683
@@ -771,7 +772,7 @@ mod tests {
 	#[test]
 	fn compute_fee_does_not_overflow() {
 		ExtBuilder::default()
-			.base_fee(100)
+			.base_weight(100)
 			.byte_fee(10)
 			.balance_factor(0)
 			.build()
@@ -781,7 +782,7 @@ mod tests {
 			let dispatch_info = DispatchInfo {
 				weight: Weight::max_value(),
 				class: DispatchClass::Operational,
-				pays_fee: true,
+				pays_fee: Pays::Yes,
 			};
 			assert_eq!(
 				Module::<Runtime>::compute_fee(
@@ -798,7 +799,7 @@ mod tests {
 	fn refund_does_not_recreate_account() {
 		ExtBuilder::default()
 			.balance_factor(10)
-			.base_fee(5)
+			.base_weight(5)
 			.build()
 			.execute_with(||
 		{
@@ -825,7 +826,7 @@ mod tests {
 	fn actual_weight_higher_than_max_refunds_nothing() {
 		ExtBuilder::default()
 			.balance_factor(10)
-			.base_fee(5)
+			.base_weight(5)
 			.build()
 			.execute_with(||
 		{

@@ -62,7 +62,6 @@
 //!
 //! ```
 //! use frame_support::{decl_module, dispatch};
-//! use frame_support::weights::{SimpleDispatchInfo, MINIMUM_WEIGHT};
 //! # use pallet_timestamp as timestamp;
 //! use frame_system::{self as system, ensure_signed};
 //!
@@ -70,7 +69,7 @@
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
+//! 		#[weight = 0]
 //! 		pub fn get_time(origin) -> dispatch::DispatchResult {
 //! 			let _sender = ensure_signed(origin)?;
 //! 			let _now = <timestamp::Module<T>>::get();
@@ -101,7 +100,7 @@ use frame_support::debug;
 use frame_support::{
 	Parameter, decl_storage, decl_module,
 	traits::{Time, UnixTime, Get},
-	weights::{SimpleDispatchInfo, MINIMUM_WEIGHT},
+	weights::{DispatchClass},
 };
 use sp_runtime::{
 	RuntimeString,
@@ -148,7 +147,13 @@ decl_module! {
 		/// `MinimumPeriod`.
 		///
 		/// The dispatch origin for this call must be `Inherent`.
-		#[weight = SimpleDispatchInfo::FixedMandatory(MINIMUM_WEIGHT)]
+		///
+		/// # <weight>
+		/// - `O(T)` where `T` complexity of `on_timestamp_set`
+		/// - 2 storage mutations (codec `O(1)`).
+		/// - 1 event handler `on_timestamp_set` `O(T)`.
+		/// # </weight>
+		#[weight = (0, DispatchClass::Mandatory)]
 		fn set(origin, #[compact] now: T::Moment) {
 			ensure_none(origin)?;
 			assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
@@ -162,6 +167,10 @@ decl_module! {
 			<T::OnTimestampSet as OnTimestampSet<_>>::on_timestamp_set(now);
 		}
 
+		/// # <weight>
+		/// - `O(1)`
+		/// - 1 storage deletion (codec `O(1)`).
+		/// # </weight>
 		fn on_finalize() {
 			assert!(<Self as Store>::DidUpdate::take(), "Timestamp must be updated once in the block");
 		}
@@ -303,6 +312,8 @@ mod tests {
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type DbWeight = ();
+		type BlockExecutionWeight = ();
+		type ExtrinsicBaseWeight = ();
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();

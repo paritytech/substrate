@@ -21,7 +21,7 @@ use std::cell::RefCell;
 use codec::Encode;
 use frame_support::{
 	impl_outer_origin, impl_outer_dispatch, assert_noop, assert_ok, parameter_types,
-	ord_parameter_types, traits::{Contains, OnInitialize}, weights::Weight,
+	impl_outer_event, ord_parameter_types, traits::{Contains, OnInitialize}, weights::Weight,
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -53,8 +53,22 @@ impl_outer_origin! {
 
 impl_outer_dispatch! {
 	pub enum Call for Test where origin: Origin {
+		frame_system::System,
 		pallet_balances::Balances,
 		democracy::Democracy,
+	}
+}
+
+mod democracy {
+	pub use crate::Event;
+}
+
+impl_outer_event! {
+	pub enum Event for Test {
+		system<T>,
+		pallet_balances<T>,
+		pallet_scheduler<T>,
+		democracy<T>,
 	}
 }
 
@@ -77,10 +91,12 @@ impl frame_system::Trait for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = ();
+	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type DbWeight = ();
+	type BlockExecutionWeight = ();
+	type ExtrinsicBaseWeight = ();
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
@@ -94,14 +110,14 @@ parameter_types! {
 	pub const MaximumWeight: u32 = 1000000;
 }
 impl pallet_scheduler::Trait for Test {
-	type Event = ();
+	type Event = Event;
 	type Origin = Origin;
 	type Call = Call;
 	type MaximumWeight = MaximumWeight;
 }
 impl pallet_balances::Trait for Test {
 	type Balance = u64;
-	type Event = ();
+	type Event = Event;
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
@@ -144,7 +160,7 @@ impl Get<bool> for InstantAllowed {
 }
 impl super::Trait for Test {
 	type Proposal = Call;
-	type Event = ();
+	type Event = Event;
 	type Currency = pallet_balances::Module<Self>;
 	type EnactmentPeriod = EnactmentPeriod;
 	type LaunchPeriod = LaunchPeriod;

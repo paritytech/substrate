@@ -19,14 +19,14 @@
 use std::sync::Arc;
 use std::collections::HashMap;
 use sp_core::ChangesTrieConfigurationRange;
-use sp_core::offchain::OffchainStorage;
+use sp_core::offchain::{OffchainStorage,storage::OffchainOverlayedChanges};
 use sp_runtime::{generic::BlockId, Justification, Storage};
 use sp_runtime::traits::{Block as BlockT, NumberFor, HashFor};
 use sp_state_machine::{
 	ChangesTrieState, ChangesTrieStorage as StateChangesTrieStorage, ChangesTrieTransaction,
 	StorageCollection, ChildStorageCollection,
 };
-use sp_storage::{StorageData, StorageKey, ChildInfo};
+use sp_storage::{StorageData, StorageKey, PrefixedStorageKey, ChildInfo};
 use crate::{
 	blockchain::{
 		Backend as BlockchainBackend, well_known_cache_keys
@@ -147,6 +147,14 @@ pub trait BlockImportOperation<Block: BlockT> {
 		update: StorageCollection,
 		child_update: ChildStorageCollection,
 	) -> sp_blockchain::Result<()>;
+
+	/// Write offchain storage changes to the database.
+	fn update_offchain_storage(
+		&mut self,
+		_offchain_update: OffchainOverlayedChanges,
+	) -> sp_blockchain::Result<()> {
+		 Ok(())
+	}
 
 	/// Inject changes trie data into the database.
 	fn update_changes_trie(
@@ -280,6 +288,7 @@ impl<'a, State, Block> Iterator for KeyIterator<'a, State, Block> where
 		Some(StorageKey(next_key))
 	}
 }
+
 /// Provides acess to storage primitives
 pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 	/// Given a `BlockId` and a key, return the value under the key in that block.
@@ -310,8 +319,7 @@ pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 	fn child_storage(
 		&self,
 		id: &BlockId<Block>,
-		storage_key: &StorageKey,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &StorageKey
 	) -> sp_blockchain::Result<Option<StorageData>>;
 
@@ -319,8 +327,7 @@ pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 	fn child_storage_keys(
 		&self,
 		id: &BlockId<Block>,
-		child_storage_key: &StorageKey,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key_prefix: &StorageKey
 	) -> sp_blockchain::Result<Vec<StorageKey>>;
 
@@ -328,8 +335,7 @@ pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 	fn child_storage_hash(
 		&self,
 		id: &BlockId<Block>,
-		storage_key: &StorageKey,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &StorageKey
 	) -> sp_blockchain::Result<Option<Block::Hash>>;
 
@@ -351,7 +357,7 @@ pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 		&self,
 		first: NumberFor<Block>,
 		last: BlockId<Block>,
-		storage_key: Option<&StorageKey>,
+		storage_key: Option<&PrefixedStorageKey>,
 		key: &StorageKey
 	) -> sp_blockchain::Result<Vec<(NumberFor<Block>, u32)>>;
 }

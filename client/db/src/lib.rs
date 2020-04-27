@@ -50,6 +50,7 @@ use std::path::{Path, PathBuf};
 use std::io;
 use std::collections::HashMap;
 
+
 use sc_client_api::{
 	ForkBlocks, UsageInfo, MemoryInfo, BadBlocks, IoInfo, MemorySize, CloneableSpawn,
 	execution_extensions::ExecutionExtensions,
@@ -65,6 +66,7 @@ use sp_trie::{MemoryDB, PrefixedMemoryDB, prefixed_key};
 use sp_database::Transaction;
 use parking_lot::RwLock;
 use sp_core::{ChangesTrieConfiguration, traits::CodeExecutor};
+use sp_core::offchain::storage::{OffchainOverlayedChange,OffchainOverlayedChanges};
 use sp_core::storage::{well_known_keys, ChildInfo};
 use sp_runtime::{
 	generic::BlockId, Justification, Storage,
@@ -159,11 +161,10 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 
 	fn child_storage(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.state.child_storage(storage_key, child_info, key)
+		self.state.child_storage(child_info, key)
 	}
 
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
@@ -172,11 +173,10 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 
 	fn exists_child_storage(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<bool, Self::Error> {
-		self.state.exists_child_storage(storage_key, child_info, key)
+		self.state.exists_child_storage(child_info, key)
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -185,11 +185,10 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 
 	fn next_child_storage_key(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.state.next_child_storage_key(storage_key, child_info, key)
+		self.state.next_child_storage_key(child_info, key)
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
@@ -202,21 +201,19 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 
 	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		f: F,
 	) {
-		self.state.for_keys_in_child_storage(storage_key, child_info, f)
+		self.state.for_keys_in_child_storage(child_info, f)
 	}
 
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		prefix: &[u8],
 		f: F,
 	) {
-		self.state.for_child_keys_with_prefix(storage_key, child_info, prefix, f)
+		self.state.for_child_keys_with_prefix(child_info, prefix, f)
 	}
 
 	fn storage_root<I>(&self, delta: I) -> (B::Hash, Self::Transaction)
@@ -228,14 +225,13 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 
 	fn child_storage_root<I>(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		delta: I,
 	) -> (B::Hash, bool, Self::Transaction)
 		where
 			I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 	{
-		self.state.child_storage_root(storage_key, child_info, delta)
+		self.state.child_storage_root(child_info, delta)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -248,11 +244,10 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 
 	fn child_keys(
 		&self,
-		storage_key: &[u8],
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		prefix: &[u8],
 	) -> Vec<Vec<u8>> {
-		self.state.child_keys(storage_key, child_info, prefix)
+		self.state.child_keys(child_info, prefix)
 	}
 
 	fn as_trie_backend(&mut self)
@@ -331,6 +326,7 @@ pub fn new_client<E, Block, RA>(
 	execution_extensions: ExecutionExtensions<Block>,
 	spawn_handle: Box<dyn CloneableSpawn>,
 	prometheus_registry: Option<Registry>,
+	config: sc_client::ClientConfig,
 ) -> Result<(
 		sc_client::Client<
 			Backend<Block>,
@@ -347,7 +343,7 @@ pub fn new_client<E, Block, RA>(
 		E: CodeExecutor + RuntimeInfo,
 {
 	let backend = Arc::new(Backend::new(settings, CANONICALIZATION_DELAY)?);
-	let executor = sc_client::LocalCallExecutor::new(backend.clone(), executor, spawn_handle);
+	let executor = sc_client::LocalCallExecutor::new(backend.clone(), executor, spawn_handle, config.clone());
 	Ok((
 		sc_client::Client::new(
 			backend.clone(),
@@ -357,6 +353,7 @@ pub fn new_client<E, Block, RA>(
 			bad_blocks,
 			execution_extensions,
 			prometheus_registry,
+			config,
 		)?,
 		backend,
 	))
@@ -565,6 +562,7 @@ pub struct BlockImportOperation<Block: BlockT> {
 	db_updates: PrefixedMemoryDB<HashFor<Block>>,
 	storage_updates: StorageCollection,
 	child_storage_updates: ChildStorageCollection,
+	offchain_storage_updates: OffchainOverlayedChanges,
 	changes_trie_updates: MemoryDB<HashFor<Block>>,
 	changes_trie_build_cache_update: Option<ChangesTrieCacheAction<Block::Hash, NumberFor<Block>>>,
 	changes_trie_config_update: Option<Option<ChangesTrieConfiguration>>,
@@ -576,6 +574,15 @@ pub struct BlockImportOperation<Block: BlockT> {
 }
 
 impl<Block: BlockT> BlockImportOperation<Block> {
+	fn apply_offchain(&mut self, transaction: &mut Transaction<DbHash>) {
+		for (key, value_operation) in self.offchain_storage_updates.drain() {
+			match value_operation {
+				OffchainOverlayedChange::SetValue(val) => transaction.set_from_vec(columns::OFFCHAIN, &key, val),
+				OffchainOverlayedChange::Remove => transaction.remove(columns::OFFCHAIN, &key),
+			}
+		}
+	}
+
 	fn apply_aux(&mut self, transaction: &mut Transaction<DbHash>) {
 		for (key, maybe_val) in self.aux_ops.drain(..) {
 			match maybe_val {
@@ -631,16 +638,10 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 			return Err(sp_blockchain::Error::GenesisInvalid.into());
 		}
 
-		for child_key in storage.children.keys() {
-			if !well_known_keys::is_child_storage_key(&child_key) {
-				return Err(sp_blockchain::Error::GenesisInvalid.into());
-			}
-		}
-
-		let child_delta = storage.children.into_iter().map(|(storage_key, child_content)|	(
-			storage_key,
-			child_content.data.into_iter().map(|(k, v)| (k, Some(v))), child_content.child_info),
-		);
+		let child_delta = storage.children_default.into_iter().map(|(_storage_key, child_content)|(
+			child_content.child_info,
+			child_content.data.into_iter().map(|(k, v)| (k, Some(v))),
+		));
 
 		let mut changes_trie_config: Option<ChangesTrieConfiguration> = None;
 		let (root, transaction) = self.old_state.full_storage_root(
@@ -685,6 +686,14 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 	) -> ClientResult<()> {
 		self.storage_updates = update;
 		self.child_storage_updates = child_update;
+		Ok(())
+	}
+
+	fn update_offchain_storage(
+		&mut self,
+		offchain_update: OffchainOverlayedChanges,
+	) -> ClientResult<()> {
+		self.offchain_storage_updates = offchain_update;
 		Ok(())
 	}
 
@@ -1030,6 +1039,7 @@ impl<Block: BlockT> Backend<Block> {
 		let mut finalization_displaced_leaves = None;
 
 		operation.apply_aux(&mut transaction);
+		operation.apply_offchain(&mut transaction);
 
 		let mut meta_updates = Vec::with_capacity(operation.finalized_blocks.len());
 		let mut last_finalized_hash = self.blockchain.meta.read().finalized_hash;
@@ -1373,6 +1383,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 			db_updates: PrefixedMemoryDB::default(),
 			storage_updates: Default::default(),
 			child_storage_updates: Default::default(),
+			offchain_storage_updates: Default::default(),
 			changes_trie_config_update: None,
 			changes_trie_updates: MemoryDB::default(),
 			changes_trie_build_cache_update: None,
@@ -1808,7 +1819,7 @@ pub(crate) mod tests {
 
 			op.reset_storage(Storage {
 				top: storage.iter().cloned().collect(),
-				children: Default::default(),
+				children_default: Default::default(),
 			}).unwrap();
 			op.set_block_data(
 				header.clone(),
@@ -1894,7 +1905,7 @@ pub(crate) mod tests {
 
 			op.reset_storage(Storage {
 				top: storage.iter().cloned().collect(),
-				children: Default::default(),
+				children_default: Default::default(),
 			}).unwrap();
 
 			key = op.db_updates.insert(EMPTY_PREFIX, b"hello");
