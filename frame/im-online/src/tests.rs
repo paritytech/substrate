@@ -123,21 +123,20 @@ fn heartbeat(
 		},
 		session_index,
 		authority_index,
+		validators_len: validators.len() as u32,
 	};
 	let signature = id.sign(&heartbeat.encode()).unwrap();
-	let keys_len = validators.len() as u32;
 
-	ImOnline::pre_dispatch(&crate::Call::heartbeat(heartbeat.clone(), signature.clone(), keys_len))
+	ImOnline::pre_dispatch(&crate::Call::heartbeat(heartbeat.clone(), signature.clone()))
 		.map_err(|e| match e {
-			TransactionValidityError::Invalid(InvalidTransaction::Custom(INVALID_KEYS_LEN)) =>
-				"invalid keys len",
+			TransactionValidityError::Invalid(InvalidTransaction::Custom(INVALID_VALIDATORS_LEN)) =>
+				"invalid validators len",
 			e @ _ => <&'static str>::from(e),
 		})?;
 	ImOnline::heartbeat(
 		Origin::system(frame_system::RawOrigin::None),
 		heartbeat,
 		signature,
-		keys_len
 	)
 }
 
@@ -193,8 +192,8 @@ fn late_heartbeat_and_invalid_keys_len_should_fail() {
 		assert_noop!(heartbeat(1, 3, 0, 1.into(), Session::validators()), "Transaction is outdated");
 		assert_noop!(heartbeat(1, 1, 0, 1.into(), Session::validators()), "Transaction is outdated");
 
-		// invalid keys_len
-		assert_noop!(heartbeat(1, 2, 0, 1.into(), vec![]), "invalid keys len");
+		// invalid validators_len
+		assert_noop!(heartbeat(1, 2, 0, 1.into(), vec![]), "invalid validators len");
 	});
 }
 
@@ -239,6 +238,7 @@ fn should_generate_heartbeats() {
 			network_state: sp_io::offchain::network_state().unwrap(),
 			session_index: 2,
 			authority_index: 2,
+			validators_len: 3,
 		});
 	});
 }
@@ -349,6 +349,7 @@ fn should_not_send_a_report_if_already_online() {
 			network_state: sp_io::offchain::network_state().unwrap(),
 			session_index: 2,
 			authority_index: 0,
+			validators_len: 3,
 		});
 	});
 }

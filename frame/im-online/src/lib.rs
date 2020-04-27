@@ -222,6 +222,8 @@ pub struct Heartbeat<BlockNumber>
 	pub session_index: SessionIndex,
 	/// An index of the authority on the list of validators.
 	pub authority_index: AuthIndex,
+	/// The length of session validator set
+	pub validators_len: u32,
 }
 
 pub trait Trait: SendTransactionTypes<Call<Self>> + pallet_session::historical::Trait {
@@ -330,17 +332,18 @@ decl_module! {
 		// NOTE: the weight include cost of validate_unsigned as it is part of the cost to import
 		// block with such an extrinsic.
 		#[weight = 310_000_000
-			+ 750_000 * *_keys_len as Weight
-			+ 1_200_000 * heartbeat.network_state.external_addresses.len() as Weight
-			+ T::DbWeight::get().reads_writes(4, 1)]
+			+ T::DbWeight::get().reads_writes(4, 1)
+			.saturating_add(750_000.saturating_mul(heartbeat.validators_len as Weight))
+			.saturating_add(
+				1_200_000.saturating_mul(heartbeat.network_state.external_addresses.len() as Weight)
+			)
+		]
 		fn heartbeat(
 			origin,
 			heartbeat: Heartbeat<T::BlockNumber>,
 			// since signature verification is done in `validate_unsigned`
 			// we can skip doing it here again.
 			_signature: <T::AuthorityId as RuntimeAppPublic>::Signature,
-			// checked in `validate_unsigned`
-			_keys_len: u32,
 		) {
 			ensure_none(origin)?;
 
@@ -460,7 +463,7 @@ impl<T: Trait> Module<T> {
 		}
 
 		let session_index = <pallet_session::Module<T>>::current_index();
-		let keys_len = <pallet_session::Module<T>>::validators().len() as u32;
+		let validators_len = <pallet_session::Module<T>>::validators().len() as u32;
 
 		Ok(Self::local_authority_keys()
 			.map(move |(authority_index, key)|
@@ -469,7 +472,7 @@ impl<T: Trait> Module<T> {
 					key,
 					session_index,
 					block_number,
-					keys_len,
+					validators_len,
 				)
 			))
 	}
@@ -480,7 +483,7 @@ impl<T: Trait> Module<T> {
 		key: T::AuthorityId,
 		session_index: SessionIndex,
 		block_number: T::BlockNumber,
-		keys_len: u32,
+		validators_len: u32,
 	) -> OffchainResult<T, ()> {
 		// A helper function to prepare heartbeat call.
 		let prepare_heartbeat = || -> OffchainResult<T, Call<T>> {
@@ -491,11 +494,12 @@ impl<T: Trait> Module<T> {
 				network_state,
 				session_index,
 				authority_index,
+				validators_len,
 			};
 
 			let signature = key.sign(&heartbeat_data.encode()).ok_or(OffchainErr::FailedSigning)?;
 
-			Ok(Call::heartbeat(heartbeat_data, signature, keys_len))
+			Ok(Call::heartbeat(heartbeat_data, signature))
 		};
 
 		if Self::is_online(authority_index) {
@@ -673,7 +677,7 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 }
 
 /// Invalid transaction custom error. Returned when keys_len argument for heartbeat is incorrect.
-const INVALID_KEYS_LEN: u8 = 10;
+const INVALID_VALIDATORS_LEN: u8 = 10;
 
 impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 	type Call = Call<T>;
@@ -682,7 +686,7 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 		_source: TransactionSource,
 		call: &Self::Call,
 	) -> TransactionValidity {
-		if let Call::heartbeat(heartbeat, signature, keys_len) = call {
+		if let Call::heartbeat(heartbeat, signature) = call {
 			if <Module<T>>::is_online(heartbeat.authority_index) {
 				// we already received a heartbeat for this authority
 				return InvalidTransaction::Stale.into();
@@ -696,8 +700,8 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 
 			// verify that the incoming (unverified) pubkey is actually an authority id
 			let keys = Keys::<T>::get();
-			if keys.len() as u32 != *keys_len {
-				return InvalidTransaction::Custom(INVALID_KEYS_LEN).into();
+			if keys.len() as u32 != heartbeat.validators_len {
+				return InvalidTransaction::Custom(INVALID_VALIDATORS_LEN).into();
 			}
 			let authority_id = match keys.get(heartbeat.authority_index as usize) {
 				Some(id) => id,
