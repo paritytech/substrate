@@ -55,7 +55,7 @@ impl SizeType {
 			SizeType::Small => 10,
 			SizeType::Medium => 100,
 			SizeType::Large => 500,
-			SizeType::Full => 4000,
+			SizeType::Full => 2000,
 		}
 	}
 }
@@ -140,19 +140,19 @@ impl core::Benchmark for ImportBenchmark {
 			std::thread::park_timeout(std::time::Duration::from_secs(1));
 		}
 
-//		log::info!(
-//			target: "bench-logistics",
-//			"imported block with {} tx, took: {:#?}",
-//			self.block.extrinsics.len(),
-//			elapsed,
-//		);
-//
-//		log::info!(
-//			target: "bench-logistics",
-//			"usage info: {}",
-//			context.backend.usage_info()
-//				.expect("RocksDB backend always provides usage info!"),
-//		);
+		log::info!(
+			target: "bench-logistics",
+			"imported block with {} tx, took: {:#?}",
+			self.block.extrinsics.len(),
+			elapsed,
+		);
+
+		log::info!(
+			target: "bench-logistics",
+			"usage info: {}",
+			context.backend.usage_info()
+				.expect("RocksDB backend always provides usage info!"),
+		);
 
 		elapsed
 	}
