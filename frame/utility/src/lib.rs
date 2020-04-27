@@ -231,7 +231,7 @@ decl_module! {
 			|args: (&Vec<<T as Trait>::Call>,)| {
 				args.0.iter()
 					.map(|call| call.get_dispatch_info().weight)
-					.fold(65_000_000 as Weight, |a, n| a.saturating_add(n))
+					.fold(65_000_000, |a: Weight, n| a.saturating_add(n))
 			},
 			|args: (&Vec<<T as Trait>::Call>,)| {
 				let all_operational = args.0.iter()
@@ -266,7 +266,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = FunctionOf(
 			|args: (&u16, &Box<<T as Trait>::Call>)| {
-				args.1.get_dispatch_info().weight.saturating_add(5_000_000 as Weight)
+				args.1.get_dispatch_info().weight.saturating_add(5_000_000)
 			},
 			|args: (&u16, &Box<<T as Trait>::Call>)| args.1.get_dispatch_info().class,
 			Pays::Yes,
@@ -331,8 +331,8 @@ decl_module! {
 		#[weight = FunctionOf(
 			|args: (&u16, &Vec<T::AccountId>, &Option<Timepoint<T::BlockNumber>>, &Box<<T as Trait>::Call>)| {
 				args.3.get_dispatch_info().weight
-					.saturating_add(150_000_000 as Weight)
-					.saturating_add((500_000 as Weight).saturating_mul(args.1.len() as Weight))
+					.saturating_add(150_000_000)
+					.saturating_add((args.1.len() as Weight).saturating_mul(500_000))
 					.saturating_add(T::DbWeight::get().reads_writes(1, 1))
 			},
 			|args: (&u16, &Vec<T::AccountId>, &Option<Timepoint<T::BlockNumber>>, &Box<<T as Trait>::Call>)| {
@@ -444,9 +444,9 @@ decl_module! {
 		/// # </weight>
 		#[weight = FunctionOf(
 			|args: (&u16, &Vec<T::AccountId>, &Option<Timepoint<T::BlockNumber>>, &[u8; 32])| {
-				(140_000_000 as Weight)
-					.saturating_add((350_000 as Weight).saturating_mul(args.1.len() as Weight))
-					.saturating_add(T::DbWeight::get().reads_writes(1, 1))
+				T::DbWeight::get().reads_writes(1, 1)
+					.saturating_add(140_000_000)
+					.saturating_add((args.1.len() as Weight).saturating_mul(350_000))
 			},
 			DispatchClass::Normal,
 			Pays::Yes,
@@ -526,9 +526,9 @@ decl_module! {
 		/// # </weight>
 		#[weight = FunctionOf(
 			|args: (&u16, &Vec<T::AccountId>, &Timepoint<T::BlockNumber>, &[u8; 32])| {
-				(130_000_000 as Weight)
-					.saturating_add((130_000 as Weight).saturating_mul(args.1.len() as Weight))
-					.saturating_add(T::DbWeight::get().reads_writes(1, 1))
+				T::DbWeight::get().reads_writes(1, 1)
+					.saturating_add(130_000_000)
+					.saturating_add((args.1.len() as Weight).saturating_mul(130_000))
 			},
 			DispatchClass::Normal,
 			Pays::Yes,
