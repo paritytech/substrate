@@ -2,7 +2,7 @@ name: Trigger pipeline for review
 
 on:
   pull_request:
-    - ready_for_review
+    types: [ready_for_review]
 
 jobs:
   monitor:
