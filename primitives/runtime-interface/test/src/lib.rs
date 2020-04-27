@@ -41,7 +41,6 @@ fn call_wasm_method<HF: HostFunctionsT>(binary: &[u8], method: &str) -> TestExte
 		sc_executor::WasmExecutionMethod::Interpreted,
 		Some(8),
 		host_functions,
-		false,
 		8,
 	);
 	executor.call_in_wasm(
@@ -50,6 +49,7 @@ fn call_wasm_method<HF: HostFunctionsT>(binary: &[u8], method: &str) -> TestExte
 		method,
 		&[],
 		&mut ext_ext,
+		sp_core::traits::MissingHostFunctions::Disallow,
 	).expect(&format!("Executes `{}`", method));
 
 	ext

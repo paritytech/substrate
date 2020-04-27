@@ -20,7 +20,7 @@
 //! function that generates low-influence random values based on the block hashes from the previous
 //! `81` blocks. Low-influence randomness can be useful when defending against relatively weak
 //! adversaries. Using this pallet as a randomness source is advisable primarily in low-security
-//! situations like testing. 
+//! situations like testing.
 //!
 //! ## Public Functions
 //!
@@ -36,13 +36,13 @@
 //! ### Example - Get random seed for the current block
 //!
 //! ```
-//! use frame_support::{decl_module, dispatch, traits::Randomness, weights::MINIMUM_WEIGHT};
+//! use frame_support::{decl_module, dispatch, traits::Randomness};
 //!
 //! pub trait Trait: frame_system::Trait {}
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		#[weight = MINIMUM_WEIGHT]
+//! 		#[weight = 0]
 //! 		pub fn random_module_example(origin) -> dispatch::DispatchResult {
 //! 			let _random_value = <pallet_randomness_collective_flip::Module<T>>::random(&b"my context"[..]);
 //! 			Ok(())
@@ -58,7 +58,7 @@ use sp_std::{prelude::*, convert::TryInto};
 use sp_runtime::traits::Hash;
 use frame_support::{
 	decl_module, decl_storage, traits::Randomness,
-	weights::{Weight, MINIMUM_WEIGHT}
+	weights::Weight
 };
 use safe_mix::TripletMix;
 use codec::Encode;
@@ -84,7 +84,7 @@ decl_module! {
 				values[index] = parent_hash;
 			});
 
-			MINIMUM_WEIGHT
+			0
 		}
 	}
 }
@@ -170,6 +170,8 @@ mod tests {
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type DbWeight = ();
+		type BlockExecutionWeight = ();
+		type ExtrinsicBaseWeight = ();
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();

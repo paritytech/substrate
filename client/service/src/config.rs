@@ -79,7 +79,7 @@ pub struct Configuration {
 	/// The default number of 64KB pages to allocate for Wasm execution
 	pub default_heap_pages: Option<u64>,
 	/// Should offchain workers be executed.
-	pub offchain_worker: bool,
+	pub offchain_worker: OffchainWorkerConfig,
 	/// Enable authoring even when offline.
 	pub force_authoring: bool,
 	/// Disable GRANDPA when running in validator mode
@@ -124,6 +124,14 @@ impl KeystoreConfig {
 			Self::InMemory => None,
 		}
 	}
+}
+/// Configuration of the database of the client.
+#[derive(Clone, Default)]
+pub struct OffchainWorkerConfig {
+	/// If this is allowed.
+	pub enabled: bool,
+	/// allow writes from the runtime to the offchain worker database.
+	pub indexing_enabled: bool,
 }
 
 /// Configuration of the Prometheus endpoint.

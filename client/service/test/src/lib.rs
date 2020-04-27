@@ -150,6 +150,8 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 		None,
 	);
 
+	network_config.allow_non_globals_in_dht = true;
+
 	network_config.listen_addresses.push(
 		iter::once(multiaddr::Protocol::Ip4(Ipv4Addr::new(127, 0, 0, 1)))
 			.chain(iter::once(multiaddr::Protocol::Tcp(base_port + index as u16)))
@@ -193,7 +195,7 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 		telemetry_endpoints: None,
 		telemetry_external_transport: None,
 		default_heap_pages: None,
-		offchain_worker: false,
+		offchain_worker: Default::default(),
 		force_authoring: false,
 		disable_grandpa: false,
 		dev_key_seed: key_seed,
