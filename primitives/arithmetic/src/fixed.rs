@@ -611,45 +611,45 @@ macro_rules! implement_fixed {
 
 			#[test]
 			fn checked_div_int_works() {
-				// let inner_max = <$name as FixedPointNumber>::Inner::max_value();
-				// let inner_min = <$name as FixedPointNumber>::Inner::min_value();
-				// let accuracy = $name::accuracy();
+				let inner_max = <$name as FixedPointNumber>::Inner::max_value();
+				let inner_min = <$name as FixedPointNumber>::Inner::min_value();
+				let accuracy = $name::accuracy();
 
-				// let a = $name::from_inner(inner_max);
-				// let b = $name::from_inner(inner_min);
-				// let c = $name::zero();
-				// let d = $name::one();
+				let a = $name::from_inner(inner_max);
+				let b = $name::from_inner(inner_min);
+				let c = $name::zero();
+				let d = $name::one();
 
-				// assert_eq!(a.checked_div_int(i128::max_value()), Some(0));
-				// assert_eq!(a.checked_div_int(2), Some(inner_max / (2 * accuracy)));
-				// assert_eq!(a.checked_div_int(inner_max / accuracy), Some(1));
-				// assert_eq!(a.checked_div_int(1i8), None);
+				assert_eq!(a.checked_div_int(i128::max_value()), Some(0));
+				assert_eq!(a.checked_div_int(2), Some(inner_max / (2 * accuracy)));
+				assert_eq!(a.checked_div_int(inner_max / accuracy), Some(1));
+				assert_eq!(a.checked_div_int(1i8), None);
 
-				// assert_eq!(a.checked_div_int(-2), Some(-inner_max / (2 * accuracy)));
-				// assert_eq!(a.checked_div_int(inner_max / -accuracy), Some(-1));
+				assert_eq!(a.checked_div_int(-2), Some(-inner_max / (2 * accuracy)));
+				assert_eq!(a.checked_div_int(inner_max / -accuracy), Some(-1));
 
-				// assert_eq!(b.checked_div_int(i128::min_value()), Some(0));
-				// assert_eq!(b.checked_div_int(2), Some(inner_min / (2 * accuracy)));
-				// assert_eq!(b.checked_div_int(inner_min / accuracy), Some(1));
-				// assert_eq!(b.checked_div_int(1i8), None);
+				assert_eq!(b.checked_div_int(i128::min_value()), Some(0));
+				assert_eq!(b.checked_div_int(2), Some(inner_min / (2 * accuracy)));
+				assert_eq!(b.checked_div_int(inner_min / accuracy), Some(1));
+				assert_eq!(b.checked_div_int(1i8), None);
 
-				// assert_eq!(b.checked_div_int(-2), Some(-(inner_min / (2 * accuracy))));
-				// assert_eq!(b.checked_div_int(-(inner_min / accuracy)), Some(-1));
+				assert_eq!(b.checked_div_int(-2), Some(-(inner_min / (2 * accuracy))));
+				assert_eq!(b.checked_div_int(-(inner_min / accuracy)), Some(-1));
 
-				// assert_eq!(c.checked_div_int(1), Some(0));
-				// assert_eq!(c.checked_div_int(i128::max_value()), Some(0));
-				// assert_eq!(c.checked_div_int(i128::min_value()), Some(0));
-				// assert_eq!(c.checked_div_int(1i8), Some(0));
+				assert_eq!(c.checked_div_int(1), Some(0));
+				assert_eq!(c.checked_div_int(i128::max_value()), Some(0));
+				assert_eq!(c.checked_div_int(i128::min_value()), Some(0));
+				assert_eq!(c.checked_div_int(1i8), Some(0));
 
-				// assert_eq!(d.checked_div_int(1), Some(1));
-				// assert_eq!(d.checked_div_int(i32::max_value()), Some(0));
-				// assert_eq!(d.checked_div_int(i32::min_value()), Some(0));
-				// assert_eq!(d.checked_div_int(1i8), Some(1));
+				assert_eq!(d.checked_div_int(1), Some(1));
+				assert_eq!(d.checked_div_int(i32::max_value()), Some(0));
+				assert_eq!(d.checked_div_int(i32::min_value()), Some(0));
+				assert_eq!(d.checked_div_int(1i8), Some(1));
 
-				// assert_eq!(a.checked_div_int(0), None);
-				// assert_eq!(b.checked_div_int(0), None);
-				// assert_eq!(c.checked_div_int(0), None);
-				// assert_eq!(d.checked_div_int(0), None);
+				assert_eq!(a.checked_div_int(0), None);
+				assert_eq!(b.checked_div_int(0), None);
+				assert_eq!(c.checked_div_int(0), None);
+				assert_eq!(d.checked_div_int(0), None);
 			}
 
 			#[test]
