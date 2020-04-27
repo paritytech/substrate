@@ -100,7 +100,7 @@ macro_rules! impl_outer_inherent {
 				$(
 					match $module::is_inherent_required(self) {
 						Ok(Some(e)) => {
-							let found = block.extrinsics().any(|xt| {
+							let found = block.extrinsics().iter().any(|xt| {
 								if $crate::inherent::Extrinsic::is_signed(xt).unwrap_or(false) {
 									return false
 								}
