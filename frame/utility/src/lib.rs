@@ -201,6 +201,25 @@ impl TypeId for IndexedUtilityModuleId {
 	const TYPE_ID: [u8; 4] = *b"suba";
 }
 
+mod weight_of {
+	use super::*;
+
+	/// - Base Weight:
+	///     - Create: 137.5 + 0.274 * S µs
+	///     - Approve: 103.8 + .266 * S µs
+	///     - Complete: 116.2 + .754 * S µs
+	/// - DB Weight:
+	///     - Reads: Multisig Storage, [Caller Account]
+	///     - Writes: Multisig Storage, [Caller Account]
+	/// - Plus Call Weight
+	pub fn as_multi<T: Trait>(other_sig_len: usize, call_weight: Weight) -> Weight {
+		call_weight
+			.saturating_add(150_000_000)
+			.saturating_add((other_sig_len as Weight).saturating_mul(750_000))
+			.saturating_add(T::DbWeight::get().reads_writes(1, 1))
+	}
+}
+
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
@@ -330,10 +349,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = FunctionOf(
 			|args: (&u16, &Vec<T::AccountId>, &Option<Timepoint<T::BlockNumber>>, &Box<<T as Trait>::Call>)| {
-				args.3.get_dispatch_info().weight
-					.saturating_add(150_000_000)
-					.saturating_add((args.1.len() as Weight).saturating_mul(500_000))
-					.saturating_add(T::DbWeight::get().reads_writes(1, 1))
+				weight_of::as_multi::<T>(args.1.len(),args.3.get_dispatch_info().weight)
 			},
 			|args: (&u16, &Vec<T::AccountId>, &Option<Timepoint<T::BlockNumber>>, &Box<<T as Trait>::Call>)| {
 				args.3.get_dispatch_info().class
@@ -350,7 +366,8 @@ decl_module! {
 			ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
 			let max_sigs = T::MaxSignatories::get() as usize;
 			ensure!(!other_signatories.is_empty(), Error::<T>::TooFewSignatories);
-			ensure!(other_signatories.len() < max_sigs, Error::<T>::TooManySignatories);
+			let other_signatories_len = other_signatories.len();
+			ensure!(other_signatories_len < max_sigs, Error::<T>::TooManySignatories);
 			let signatories = Self::ensure_sorted_and_insert(other_signatories, who.clone())?;
 
 			let id = Self::multi_account_id(&signatories, threshold);
@@ -365,8 +382,8 @@ decl_module! {
 						m.approvals.insert(pos, who.clone());
 						<Multisigs<T>>::insert(&id, call_hash, m);
 						Self::deposit_event(RawEvent::MultisigApproval(who, timepoint, id, call_hash));
-						// Call is not made, so we can return that weight
-						return Ok(Some(call.get_dispatch_info().weight).into())
+						// Call is not made, so the actual weight does not include call
+						return Ok(Some(weight_of::as_multi::<T>(other_signatories_len, 0)).into())
 					}
 				} else {
 					if (m.approvals.len() as u16) < threshold {
@@ -395,10 +412,13 @@ decl_module! {
 					});
 					Self::deposit_event(RawEvent::NewMultisig(who, id, call_hash));
 					// Call is not made, so we can return that weight
-					return Ok(Some(call.get_dispatch_info().weight).into())
+					return Ok(Some(weight_of::as_multi::<T>(other_signatories_len, 0)).into())
 				} else {
-					return call.dispatch(frame_system::RawOrigin::Signed(id).into())
-						.map(|_| None.into()).map_err(|e| e.error.into())
+					let post_dispatch_info = call.dispatch(frame_system::RawOrigin::Signed(id).into())?;
+					match post_dispatch_info.actual_weight {
+						Some(actual_weight) => return Ok(Some(weight_of::as_multi::<T>(other_signatories_len, actual_weight)).into()),
+						None => return Ok(None.into()),
+					}
 				}
 			}
 		}
