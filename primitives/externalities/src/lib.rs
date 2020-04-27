@@ -185,14 +185,7 @@ pub trait Externalities: ExtensionStore {
 		&mut self,
 		key: Vec<u8>,
 		value: Vec<u8>,
-	) {
-		let new_value = append_to_storage(self.storage(&key).unwrap_or_default(), value)
-			.expect("TODO: what todo?");
-		self.place_storage(
-			key,
-			Some(new_value),
-		);
-	}
+	) -> Result<(), Error>;
 
 	/// Get the changes trie root of the current storage overlay at a block with given `parent`.
 	///
@@ -246,70 +239,5 @@ impl ExternalitiesExt for &mut dyn Externalities {
 
 	fn deregister_extension<T: Extension>(&mut self) -> Result<(), Error> {
 		self.deregister_extension_by_type_id(TypeId::of::<T>())
-	}
-}
-
-
-fn extract_length_data(data: &[u8]) -> Result<(u32, usize, usize), Error> {
-	use codec::{Compact, CompactLen, Decode};
-
-	let len = u32::from(
-		Compact::<u32>::decode(&mut &data[..])
-			.map_err(|_| Error::StorageUpdateFailed("Incorrent updated item encoding"))?
-	);
-	let new_len = len
-		.checked_add(1)
-		.ok_or_else(|| Error::StorageUpdateFailed("New vec length greater than `u32::max_value()`."))?;
-
-	let encoded_len = Compact::<u32>::compact_len(&len);
-	let encoded_new_len = Compact::<u32>::compact_len(&new_len);
-
-	Ok((new_len, encoded_len, encoded_new_len))
-}
-
-fn append_to_storage(
-	mut self_encoded: Vec<u8>,
-	value: Vec<u8>,
-) -> Result<Vec<u8>, Error>
-{
-	use codec::{Compact, Encode};
-
-	// No data present, just encode the given input data.
-	if self_encoded.is_empty() {
-		Compact::from(1u32).encode_to(&mut self_encoded);
-		self_encoded.extend(value);
-		return Ok(self_encoded);
-	}
-
-	let (new_len, encoded_len, encoded_new_len) = extract_length_data(&self_encoded)?;
-
-	let replace_len = |dest: &mut Vec<u8>| {
-		Compact(new_len).using_encoded(|e| {
-			dest[..encoded_new_len].copy_from_slice(e);
-		})
-	};
-
-	let append_new_elems = |dest: &mut Vec<u8>| dest.extend(&value[..]);
-
-	// If old and new encoded len is equal, we don't need to copy the
-	// already encoded data.
-	if encoded_len == encoded_new_len {
-		replace_len(&mut self_encoded);
-		append_new_elems(&mut self_encoded);
-
-		Ok(self_encoded)
-	} else {
-		let size = encoded_new_len + self_encoded.len() - encoded_len;
-
-		let mut res = Vec::with_capacity(size + value.len());
-		unsafe { res.set_len(size); }
-
-		// Insert the new encoded len, copy the already encoded data and
-		// add the new element.
-		replace_len(&mut res);
-		res[encoded_new_len..size].copy_from_slice(&self_encoded[encoded_len..]);
-		append_new_elems(&mut res);
-
-		Ok(res)
 	}
 }
