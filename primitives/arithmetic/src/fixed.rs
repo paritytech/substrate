@@ -681,14 +681,14 @@ macro_rules! implement_fixed {
 
 			#[test]
 			fn saturating_abs_works() {
-				// let inner_max = <$name as FixedPointNumber>::Inner::max_value();
-				// let inner_min = <$name as FixedPointNumber>::Inner::min_value();
-				// let accuracy = $name::accuracy();
+				let inner_max = <$name as FixedPointNumber>::Inner::max_value();
+				let inner_min = <$name as FixedPointNumber>::Inner::min_value();
+				let accuracy = $name::accuracy();
 
-				// assert_eq!($name::from_inner(inner_min).saturating_abs(), $name::max_value());
-				// assert_eq!($name::from_inner(inner_max).saturating_abs(), $name::max_value());
-				// assert_eq!($name::zero().saturating_abs(), 0.into());
-				// assert_eq!($name::from_rational(-1, 2).saturating_abs(), (1, 2).into());
+				assert_eq!($name::from_inner(inner_min).saturating_abs(), $name::max_value());
+				assert_eq!($name::from_inner(inner_max).saturating_abs(), $name::max_value());
+				assert_eq!($name::zero().saturating_abs(), 0.into());
+				assert_eq!($name::from_rational(-1, 2).saturating_abs(), (1, 2).into());
 			}
 
 			#[test]
