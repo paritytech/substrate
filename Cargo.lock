@@ -3425,6 +3425,7 @@ dependencies = [
  "sc-cli",
  "sc-client-api",
  "sc-client-db",
+ "sc-consensus",
  "sc-consensus-babe",
  "sc-consensus-epochs",
  "sc-finality-grandpa",
@@ -3630,6 +3631,7 @@ dependencies = [
  "sc-basic-authorship",
  "sc-cli",
  "sc-client-api",
+ "sc-consensus",
  "sc-consensus-aura",
  "sc-executor",
  "sc-finality-grandpa",
@@ -5988,6 +5990,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "sc-consensus"
+version = "0.8.0-dev"
+dependencies = [
+ "sc-client-api",
+ "sp-blockchain",
+ "sp-consensus",
+ "sp-runtime",
+]
+
+[[package]]
 name = "sc-consensus-aura"
 version = "0.8.0-dev"
 dependencies = [
@@ -6295,6 +6307,7 @@ dependencies = [
  "rand 0.7.3",
  "sc-block-builder",
  "sc-client-api",
+ "sc-consensus",
  "sc-keystore",
  "sc-network",
  "sc-network-gossip",
@@ -6440,6 +6453,7 @@ dependencies = [
  "rand 0.7.3",
  "sc-block-builder",
  "sc-client-api",
+ "sc-consensus",
  "sc-network",
  "sc-service",
  "sp-blockchain",
@@ -8049,6 +8063,7 @@ dependencies = [
  "parity-scale-codec",
  "sc-client-api",
  "sc-client-db",
+ "sc-consensus",
  "sc-executor",
  "sc-service",
  "sp-blockchain",
@@ -8109,6 +8124,7 @@ dependencies = [
  "parity-scale-codec",
  "sc-block-builder",
  "sc-client-api",
+ "sc-consensus",
  "sc-service",
  "sp-api",
  "sp-blockchain",

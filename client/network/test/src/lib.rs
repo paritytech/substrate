@@ -33,8 +33,9 @@ use sp_blockchain::{
 };
 use sc_client_api::{
 	BlockchainEvents, BlockImportNotification, FinalityNotifications, ImportNotifications, FinalityNotification,
-	backend::{TransactionFor, AuxStore, Backend, Finalizer}, BlockBackend, LongestChain,
+	backend::{TransactionFor, AuxStore, Backend, Finalizer}, BlockBackend,
 };
+use sc_consensus::LongestChain;
 use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
 use sc_network::config::Role;
 use sp_consensus::block_validation::DefaultBlockAnnounceValidator;

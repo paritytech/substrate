@@ -27,7 +27,6 @@ pub mod light;
 pub mod leaves;
 pub mod notifications;
 pub mod proof_provider;
-mod longest_chain;
 
 pub use sp_blockchain as blockchain;
 pub use backend::*;
@@ -37,7 +36,6 @@ pub use client::*;
 pub use light::*;
 pub use notifications::*;
 pub use proof_provider::*;
-pub use longest_chain::LongestChain;
 
 pub use sp_state_machine::{StorageProof, ExecutionStrategy, CloneableSpawn};
 

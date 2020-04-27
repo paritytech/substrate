@@ -17,7 +17,7 @@
 
 use std::sync::Arc;
 use std::marker::PhantomData;
-use crate::backend;
+use sc_client_api::backend;
 use sp_consensus::{SelectChain, Error as ConsensusError};
 use sp_blockchain::{Backend, HeaderBackend};
 use sp_runtime::{

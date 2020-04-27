@@ -2,7 +2,8 @@
 
 use std::sync::Arc;
 use std::time::Duration;
-use sc_client_api::{ExecutorProvider, LongestChain};
+use sc_client_api::ExecutorProvider;
+use sc_consensus::LongestChain;
 use node_template_runtime::{self, opaque::Block, RuntimeApi};
 use sc_service::{error::{Error as ServiceError}, AbstractService, Configuration, ServiceBuilder};
 use sp_inherents::InherentDataProviders;
@@ -34,7 +35,7 @@ macro_rules! new_full_start {
 			node_template_runtime::opaque::Block, node_template_runtime::RuntimeApi, crate::service::Executor
 		>($config)?
 			.with_select_chain(|_config, backend| {
-				Ok(sc_client_api::LongestChain::new(backend.clone()))
+				Ok(sc_consensus::LongestChain::new(backend.clone()))
 			})?
 			.with_transaction_pool(|config, client, _fetcher, prometheus_registry| {
 				let pool_api = sc_transaction_pool::FullChainApi::new(client.clone());

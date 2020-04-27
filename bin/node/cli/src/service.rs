@@ -29,7 +29,7 @@ use sc_service::{
 	AbstractService, ServiceBuilder, config::Configuration, error::{Error as ServiceError},
 };
 use sp_inherents::InherentDataProviders;
-use sc_client_api::LongestChain;
+use sc_consensus::LongestChain;
 
 /// Starts a `ServiceBuilder` for a full service.
 ///
@@ -46,7 +46,7 @@ macro_rules! new_full_start {
 			node_primitives::Block, node_runtime::RuntimeApi, node_executor::Executor
 		>($config)?
 			.with_select_chain(|_config, backend| {
-				Ok(sc_client_api::LongestChain::new(backend.clone()))
+				Ok(sc_consensus::LongestChain::new(backend.clone()))
 			})?
 			.with_transaction_pool(|config, client, _fetcher, prometheus_registry| {
 				let pool_api = sc_transaction_pool::FullChainApi::new(client.clone());

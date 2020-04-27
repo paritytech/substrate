@@ -219,13 +219,16 @@ pub trait AbstractService: Future<Output = Result<(), Error>> + Send + Unpin + S
 	/// How to execute calls towards the runtime.
 	type CallExecutor: 'static + CallExecutor<Self::Block> + Send + Sync + Clone;
 	/// API that the runtime provides.
-	type RuntimeApi: ConstructRuntimeApi<Self::Block, Self::Client> + Send + Sync;
+	type RuntimeApi: Send + Sync;
 	/// Chain selection algorithm.
 	type SelectChain: sp_consensus::SelectChain<Self::Block>;
 	/// Transaction pool.
 	type TransactionPool: TransactionPool<Block = Self::Block> + MallocSizeOfWasm;
-	/// The generic Client type
-	type Client: ClientProvider<Self::Block, Self::Backend, Self::CallExecutor, Self::RuntimeApi>;
+	/// The generic Client type, the bounds here are the ones specifically required by
+	/// internal crates like sc_informant.
+	type Client:
+		HeaderMetadata<Self::Block, Error = sp_blockchain::Error> + UsageProvider<Self::Block>
+		+ BlockchainEvents<Self::Block> + HeaderBackend<Self::Block> + Send + Sync;
 
 	/// Get event stream for telemetry connection established events.
 	fn telemetry_on_connect_stream(&self) -> TracingUnboundedReceiver<()>;

@@ -49,7 +49,7 @@ use finality_proof::{
 };
 use consensus_changes::ConsensusChanges;
 use sc_block_builder::BlockBuilderProvider;
-use sc_client_api::LongestChain;
+use sc_consensus::LongestChain;
 
 type PeerData =
 	Mutex<
