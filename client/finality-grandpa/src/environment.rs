@@ -497,6 +497,7 @@ where
 			.runtime_api()
 			.generate_key_ownership_proof(
 				&BlockId::Hash(current_set_latest_hash),
+				authority_set.set_id,
 				equivocation.offender().clone(),
 			)
 			.map_err(Error::Client)?

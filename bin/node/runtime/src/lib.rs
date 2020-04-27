@@ -833,6 +833,7 @@ impl_runtime_apis! {
 		}
 
 		fn generate_key_ownership_proof(
+			_set_id: fg_primitives::SetId,
 			authority_id: fg_primitives::AuthorityId,
 		) -> Option<fg_primitives::OpaqueKeyOwnershipProof> {
 			use codec::Encode;

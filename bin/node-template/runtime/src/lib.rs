@@ -398,6 +398,7 @@ impl_runtime_apis! {
 		}
 
 		fn generate_key_ownership_proof(
+			_set_id: fg_primitives::SetId,
 			_authority_id: fg_primitives::AuthorityId,
 		) -> Option<fg_primitives::OpaqueKeyOwnershipProof> {
 			// NOTE: this is the only implementation possible since we've

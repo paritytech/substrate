@@ -508,12 +508,19 @@ sp_api::decl_runtime_apis! {
 			key_owner_proof: OpaqueKeyOwnershipProof,
 		) -> Option<()>;
 
-		/// Generates a proof of key ownership for the given authority. An
-		/// example usage of this module is coupled with the session historical
-		/// module to prove that a given authority key is tied to a given
-		/// staking identity during a specific session. Proofs of key ownership
-		/// are necessary for submitting equivocation reports.
+		/// Generates a proof of key ownership for the given authority in the
+		/// given set. An example usage of this module is coupled with the
+		/// session historical module to prove that a given authority key is
+		/// tied to a given staking identity during a specific session. Proofs
+		/// of key ownership are necessary for submitting equivocation reports.
+		/// NOTE: even though the API takes a `set_id` as parameter the current
+		/// implementations ignore this parameter and instead rely on this
+		/// method being called at the correct block height, i.e. any point at
+		/// which the given set id is live on-chain. Future implementations will
+		/// instead use indexed data through an offchain worker, not requiring
+		/// older states to be available.
 		fn generate_key_ownership_proof(
+			set_id: SetId,
 			authority_id: AuthorityId,
 		) -> Option<OpaqueKeyOwnershipProof>;
 	}
