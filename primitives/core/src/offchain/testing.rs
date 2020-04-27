@@ -165,7 +165,12 @@ impl offchain::Externalities for TestOffchainExt {
 	}
 
 	fn random_seed(&mut self) -> [u8; 32] {
-		unimplemented!("not needed in tests so far")
+		use rand::{SeedableRng, RngCore};
+		use rand::rngs::SmallRng;
+		let mut seed = [0u8; 32];
+		let mut small_rng = SmallRng::from_entropy();
+		small_rng.fill_bytes(&mut seed);
+		seed
 	}
 
 	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]) {
