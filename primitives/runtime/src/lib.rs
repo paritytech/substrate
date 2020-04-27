@@ -141,12 +141,12 @@ impl BuildStorage for sp_core::storage::Storage {
 			if let Some(map) = storage.children_default.get_mut(&k) {
 				match map.child_info.try_update(&map.child_change, &other_map.child_info) {
 					ChildUpdate::Merge => {
-						match other_map.child_change {
+						match &other_map.child_change {
 							ChildChange::Update => map.data.extend(
 								other_map.data.iter().map(|(k, v)| (k.clone(), v.clone()))
 							),
-							ChildChange::BulkDeleteByKeyspace => {
-								map.child_change = ChildChange::BulkDeleteByKeyspace;
+							ChildChange::BulkDeleteByKeyspace(encoded_root) => {
+								map.child_change = ChildChange::BulkDeleteByKeyspace(encoded_root.clone());
 								map.data.clear();
 							},
 						}

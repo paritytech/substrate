@@ -131,8 +131,8 @@ pub struct ChangeSet<H: Hash> {
 	/// Deleted nodes.
 	pub deleted: Vec<H>,
 	/// Bulk deletion of child trie, contains
-	/// its unique identifier.
-	pub deleted_child: Vec<Vec<u8>>,
+	/// its unique identifier and its encoded root.
+	pub deleted_child: Vec<(Vec<u8>, Vec<u8>)>,
 }
 
 /// A set of changes to the backing database.

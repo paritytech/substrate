@@ -372,7 +372,14 @@ where
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
 
 		self.mark_dirty();
-		self.overlay.kill_child_storage(child_info);
+		match self.backend.storage(&child_info.prefixed_storage_key()) {
+			Ok(o_encoded_root) => self.overlay.kill_child_storage(child_info, o_encoded_root),
+			Err(e) => trace!(
+				target: "state-trace",
+				"kill_child_storage could not access child trie root {}",
+				e,
+			),
+		}
 	}
 
 	fn clear_prefix(&mut self, prefix: &[u8]) {
@@ -456,9 +463,8 @@ where
 			);
 			root
 		} else {
-
 			if let Some((child_info, child_change)) = self.overlay.default_child_info(storage_key) {
-				if child_change == ChildChange::BulkDeleteByKeyspace {
+				if let ChildChange::BulkDeleteByKeyspace(..) = child_change {
 					return empty_child_trie_root::<Layout<H>>().encode();
 				}
 				let (root, _is_empty, _) = {

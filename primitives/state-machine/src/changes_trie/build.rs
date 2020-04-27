@@ -149,13 +149,16 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 			),
 		}
 	} else {
-		(Some(((ChildChange::Update, None), &changes.committed.top)), Some(((ChildChange::Update, None), &changes.prospective.top)))
+		(
+			Some(((ChildChange::Update, None), &changes.committed.top)),
+			Some(((ChildChange::Update, None), &changes.prospective.top)),
+		)
 	};
 	let mut change = (ChildChange::Update, None);
 	if let Some((child_change, _)) = prospective.as_ref().or_else(|| committed.as_ref()) {
-		match child_change.0 {
-			ChildChange::BulkDeleteByKeyspace => {
-				change.0 = ChildChange::BulkDeleteByKeyspace;
+		match &child_change.0 {
+			ChildChange::BulkDeleteByKeyspace(encoded_root) => {
+				change.0 = ChildChange::BulkDeleteByKeyspace(encoded_root.clone());
 				change.1 = child_change.1;
 			},
 			ChildChange::Update => (),

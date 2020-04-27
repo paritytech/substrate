@@ -50,6 +50,7 @@ pub struct BatchChildDelete {
 	ix: usize,
 	batch: Vec<(u8, Vec<u8>)>,
 }
+
 impl<H: Clone> Database<H> for DbAdapter {
 	fn commit(&self, transaction: Transaction<H>) {
 		transaction.0.iter().for_each(|change|

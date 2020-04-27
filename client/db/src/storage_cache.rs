@@ -422,7 +422,7 @@ impl<B: BlockT> CacheChanges<B> {
 						}
 						child_modifications.insert(k);
 					},
-					ChildChange::BulkDeleteByKeyspace => {
+					ChildChange::BulkDeleteByKeyspace(..) => {
 						// Note that this is a rather costy operation.
 						cache.lru_child_storage.remove_by_storage_key(child_info.storage_key());
 						deleted_child.insert(child_info.storage_key().to_vec());
@@ -671,7 +671,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 	fn child_storage_root<I>(
 		&self,
 		child_info: &ChildInfo,
-		child_change: ChildChange,
+		child_change: &ChildChange,
 		delta: I,
 	) -> (B::Hash, bool, Self::Transaction)
 		where
@@ -857,7 +857,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Syncin
 	fn child_storage_root<I>(
 		&self,
 		child_info: &ChildInfo,
-		child_change: ChildChange,
+		child_change: &ChildChange,
 		delta: I,
 	) -> (B::Hash, bool, Self::Transaction)
 		where

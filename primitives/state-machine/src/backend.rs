@@ -132,7 +132,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 	fn child_storage_root<I>(
 		&self,
 		child_info: &ChildInfo,
-		child_change: ChildChange,
+		child_change: &ChildChange,
 		delta: I,
 	) -> (H::Out, bool, Self::Transaction)
 	where
@@ -186,7 +186,7 @@ pub trait Backend<H: Hasher>: std::fmt::Debug {
 		// child first
 		for (child_info, child_change, child_delta) in child_deltas {
 			let (child_root, empty, child_txs) =
-				self.child_storage_root(&child_info, child_change, child_delta);
+				self.child_storage_root(&child_info, &child_change, child_delta);
 			let prefixed_storage_key = child_info.prefixed_storage_key();
 			txs.consolidate(child_txs);
 			if empty {
@@ -293,7 +293,7 @@ impl<'a, T: Backend<H>, H: Hasher> Backend<H> for &'a T {
 	fn child_storage_root<I>(
 		&self,
 		child_info: &ChildInfo,
-		child_change: ChildChange,
+		child_change: &ChildChange,
 		delta: I,
 	) -> (H::Out, bool, Self::Transaction)
 	where

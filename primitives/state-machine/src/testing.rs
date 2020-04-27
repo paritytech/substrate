@@ -136,16 +136,18 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 		self.overlay.committed.children_default.clone().into_iter()
 			.chain(self.overlay.prospective.children_default.clone().into_iter())
 			.for_each(|(_storage_key, child)| {
+				let data = match child.change.0 {
+					ChildChange::Update => child.values.into_iter()
+						.map(|(k, v)| (k, v.value))
+						.collect::<Vec<_>>(),
+					// no need for change trie content
+					ChildChange::BulkDeleteByKeyspace(..) => Vec::new(),
+				};
+
 				transaction.push((
 					Some(child.info),
 					child.change.0,
-					match child.change.0 {
-						ChildChange::Update => child.values.into_iter()
-							.map(|(k, v)| (k, v.value))
-							.collect::<Vec<_>>(),
-						// no need for change trie content
-						ChildChange::BulkDeleteByKeyspace => Vec::new(),
-					}
+					data,
 				))
 			});
 

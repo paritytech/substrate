@@ -219,7 +219,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 	fn child_storage_root<I>(
 		&self,
 		child_info: &ChildInfo,
-		child_change: ChildChange,
+		child_change: &ChildChange,
 		delta: I,
 	) -> (B::Hash, bool, Self::Transaction) where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
@@ -266,7 +266,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 						info.child_type(),
 					);
 				}
-				if change == ChildChange::BulkDeleteByKeyspace {
+				if let ChildChange::BulkDeleteByKeyspace(..) = change {
 					db_transaction.delete_prefix(0, info.keyspace());
 				} else {
 					keyspace.change_keyspace(info.keyspace());

@@ -27,6 +27,7 @@ use sp_debug_derive::RuntimeDebug;
 use sp_std::vec::Vec;
 use sp_std::ops::{Deref, DerefMut};
 use ref_cast::RefCast;
+use codec::{Encode, Decode};
 
 /// Storage key.
 #[derive(PartialEq, Eq, RuntimeDebug)]
@@ -201,12 +202,11 @@ impl ChildInfo {
 		})
 	}
 
-	/// Try to update with another instance, return false if both instance
-	/// are not compatible.
+	/// Try to update with another instance.
 	/// Passing current child change as parameter is needed
 	pub fn try_update(&mut self, self_change: &ChildChange, other: &ChildInfo) -> ChildUpdate {
 		match (self, self_change) {
-			(_, ChildChange::BulkDeleteByKeyspace) => ChildUpdate::Ignore,
+			(_, ChildChange::BulkDeleteByKeyspace(_encoded_root)) => ChildUpdate::Ignore,
 			(ChildInfo::ParentKeyId(child_trie), ChildChange::Update) => child_trie.try_update(other),
 		}
 	}
@@ -277,9 +277,9 @@ impl ChildInfo {
 
 	/// Return `ChildChange` applicable for this state in the case of a bulk
 	/// content deletion.
-	pub fn bulk_delete_change(&self) -> ChildChange {
+	pub fn bulk_delete_change(&self, encoded_root: Vec<u8>) -> ChildChange {
 		match self {
-			ChildInfo::ParentKeyId(..) => ChildChange::BulkDeleteByKeyspace,
+			ChildInfo::ParentKeyId(..) => ChildChange::BulkDeleteByKeyspace(encoded_root),
 		}
 	}
 }
@@ -472,15 +472,16 @@ impl<T> IntoIterator for ChildrenMap<T> {
 const DEFAULT_CHILD_TYPE_PARENT_PREFIX: &'static [u8] = b":child_storage:default:";
 
 /// Information related to change to apply on a whole child trie.
-#[repr(u8)]
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Hash, PartialOrd, Ord))]
 pub enum ChildChange {
 	/// Update to content of child trie.
-	Update = 0,
-	/// The child trie allow to delete base on keyspace only.
-	/// This deletion means that any joined key delta will be ignored.
-	BulkDeleteByKeyspace = 1,
+	Update,
+	/// The child trie allow bulk trie delete.
+	/// The inner data is the encoded root at the state where
+	/// it is been bulk deleted.
+	/// TODO EMCH rename to BulkDelete
+	BulkDeleteByKeyspace(Vec<u8>),
 }
 
 impl ChildChange {
@@ -491,17 +492,8 @@ impl ChildChange {
 		if other != *self {
 			match self {
 				ChildChange::Update => *self = other,
-				ChildChange::BulkDeleteByKeyspace => panic!("Bulk delete cannot be overwritten"),
+				ChildChange::BulkDeleteByKeyspace(..) => panic!("Bulk delete cannot be overwritten"),
 			}
-		}
-	}
-
-	/// Get a child change from its u8 representation
-	pub fn from_u8(repr: u8) -> Option<Self> {
-		match repr {
-			0 => Some(ChildChange::Update),
-			1 => Some(ChildChange::BulkDeleteByKeyspace),
-			_ => None,
 		}
 	}
 }

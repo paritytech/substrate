@@ -224,7 +224,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 	fn child_storage_root<I>(
 		&self,
 		child_info: &ChildInfo,
-		child_change: ChildChange,
+		child_change: &ChildChange,
 		delta: I,
 	) -> (B::Hash, bool, Self::Transaction)
 		where
@@ -1184,8 +1184,8 @@ impl<Block: BlockT> Backend<Block> {
 							info.child_type(),
 						)));
 					}
-					if change == ChildChange::BulkDeleteByKeyspace {
-						state_db_changeset.deleted_child.push(info.keyspace().to_vec());
+					if let ChildChange::BulkDeleteByKeyspace(encoded_root) = change {
+						state_db_changeset.deleted_child.push((info.keyspace().to_vec(), encoded_root));
 					} else {
 						keyspace.change_keyspace(info.keyspace());
 						for (key, (val, rc)) in updates.drain() {
@@ -1418,9 +1418,9 @@ fn apply_state_commit(transaction: &mut Transaction<DbHash>, commit: sc_state_db
 	for key in commit.data.deleted.into_iter() {
 		transaction.remove(columns::STATE, &key[..]);
 	}
-	for keyspace in commit.data.deleted_child.into_iter() {
+	for (keyspace, encoded_root) in commit.data.deleted_child.into_iter() {
 		let child_remove = sp_database::ChildBatchRemove {
-			encoded_root: Default::default(), // TODO EMCH change the commit set to contain childbatchremove
+			encoded_root,
 			keyspace,
 		};
 		transaction.delete_child(columns::STATE, child_remove);
@@ -2017,9 +2017,13 @@ pub(crate) mod tests {
 			).0.into();
 			let hash = header.hash();
 
-			let child = op.db_updates.entry(ChildInfo::new_default(storage_key))
+			let child_info = ChildInfo::new_default(storage_key);
+			let child_root = op.old_state.storage(&child_info.prefixed_storage_key())
+				.unwrap()
+				.expect("Some child content in previous state").clone();
+			let child = op.db_updates.entry(child_info)
 				.or_insert_with(Default::default);
-			child.0 = ChildChange::BulkDeleteByKeyspace;
+			child.0 = ChildChange::BulkDeleteByKeyspace(child_root);
 			op.set_block_data(
 				header,
 				Some(vec![]),
