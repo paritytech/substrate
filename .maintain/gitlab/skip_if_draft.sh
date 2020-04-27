@@ -1,5 +1,5 @@
 #!/bin/sh
-url="https://github.com/paritytech/substrate/${CI_COMMIT_REF_NAME}"
+url="https://api.github.com/repos/paritytech/substrate/pulls/${CI_COMMIT_REF_NAME}"
 echo "[+] API URL: $url"
 
 draft_state=$(curl "$url" | jq -r .draft)
