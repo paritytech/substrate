@@ -211,6 +211,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			params.block_announce_validator,
 			params.metrics_registry.as_ref(),
 			boot_node_ids.clone(),
+			params.network_config.use_new_block_requests_protocol,
 			metrics.as_ref().map(|m| m.notifications_queues_size.clone()),
 		)?;
 
@@ -224,6 +225,10 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			let block_requests = {
 				let config = protocol::block_requests::Config::new(&params.protocol_id);
 				protocol::BlockRequests::new(config, params.chain.clone())
+			};
+			let finality_proof_requests = {
+				let config = protocol::finality_requests::Config::new(&params.protocol_id);
+				protocol::FinalityProofRequests::new(config, params.finality_proof_provider.clone())
 			};
 			let light_client_handler = {
 				let config = protocol::light_client_handler::Config::new(&params.protocol_id);
@@ -240,6 +245,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				config.with_user_defined(known_addresses);
 				config.discovery_limit(u64::from(params.network_config.out_peers) + 15);
 				config.add_protocol(params.protocol_id.clone());
+				config.allow_non_globals_in_dht(params.network_config.allow_non_globals_in_dht);
 
 				match params.network_config.transport {
 					TransportConfig::MemoryOnly => {
@@ -261,6 +267,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				user_agent,
 				local_public,
 				block_requests,
+				finality_proof_requests,
 				light_client_handler,
 				discovery_config
 			);
@@ -1113,10 +1120,12 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 							ConnectionError::IO(_) =>
 								metrics.connections_closed_total.with_label_values(&[dir, "transport-error"]).inc(),
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::B(EitherError::A(PingFailure::Timeout))))))) =>
+								EitherError::A(EitherError::A(EitherError::B(
+								EitherError::A(PingFailure::Timeout)))))))) =>
 								metrics.connections_closed_total.with_label_values(&[dir, "ping-timeout"]).inc(),
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::A(EitherError::B(LegacyConnectionKillError))))))) =>
+								EitherError::A(EitherError::A(EitherError::A(
+								EitherError::B(LegacyConnectionKillError)))))))) =>
 								metrics.connections_closed_total.with_label_values(&[dir, "force-closed"]).inc(),
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(_)) =>
 								metrics.connections_closed_total.with_label_values(&[dir, "protocol-error"]).inc(),
@@ -1148,9 +1157,9 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					if this.boot_node_ids.contains(&peer_id) {
 						if let PendingConnectionError::InvalidPeerId = error {
 							error!(
-								"💔 Invalid peer ID from bootnode, expected `{}` at address `{}`.",
-								peer_id,
+								"💔 The bootnode you want to connect to at `{}` provided a different peer ID than the one you expect: `{}`.",
 								address,
+								peer_id,
 							);
 						}
 					}

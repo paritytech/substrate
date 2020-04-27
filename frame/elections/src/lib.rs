@@ -30,10 +30,10 @@ use sp_runtime::{
 };
 use frame_support::{
 	decl_storage, decl_event, ensure, decl_module, decl_error,
-	weights::{Weight, MINIMUM_WEIGHT, DispatchClass},
+	weights::{Weight, DispatchClass},
 	traits::{
 		Currency, ExistenceRequirement, Get, LockableCurrency, LockIdentifier, BalanceStatus,
-		OnUnbalanced, ReservableCurrency, WithdrawReason, WithdrawReasons, ChangeMembers
+		OnUnbalanced, ReservableCurrency, WithdrawReason, WithdrawReasons, ChangeMembers,
 	}
 };
 use codec::{Encode, Decode};
@@ -126,8 +126,6 @@ pub enum CellStatus {
 	Hole,
 }
 
-const MODULE_ID: LockIdentifier = *b"py/elect";
-
 /// Number of voters grouped in one chunk.
 pub const VOTER_SET_SIZE: usize = 64;
 /// NUmber of approvals grouped in one chunk.
@@ -148,6 +146,9 @@ const APPROVAL_FLAG_LEN: usize = 32;
 
 pub trait Trait: frame_system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+
+	/// Identifier for the elections pallet's lock
+	type ModuleId: Get<LockIdentifier>;
 
 	/// The currency that people are electing with.
 	type Currency:
@@ -379,6 +380,8 @@ decl_module! {
 		/// The chunk size of the approval vector.
 		const APPROVAL_SET_SIZE: u32 = APPROVAL_SET_SIZE as u32;
 
+		const ModuleId: LockIdentifier = T::ModuleId::get();
+
 		fn deposit_event() = default;
 
 		/// Set candidate approvals. Approval slots stay valid as long as candidates in those slots
@@ -494,7 +497,7 @@ decl_module! {
 			);
 
 			T::Currency::remove_lock(
-				MODULE_ID,
+				T::ModuleId::get(),
 				if valid { &who } else { &reporter }
 			);
 
@@ -532,7 +535,7 @@ decl_module! {
 
 			Self::remove_voter(&who, index);
 			T::Currency::unreserve(&who, T::VotingBond::get());
-			T::Currency::remove_lock(MODULE_ID, &who);
+			T::Currency::remove_lock(T::ModuleId::get(), &who);
 		}
 
 		/// Submit oneself for candidacy.
@@ -659,7 +662,7 @@ decl_module! {
 		/// Set the desired member count; if lower than the current count, then seats will not be up
 		/// election when they expire. If more, then a new vote will be started if one is not
 		/// already in progress.
-		#[weight = (MINIMUM_WEIGHT, DispatchClass::Operational)]
+		#[weight = (0, DispatchClass::Operational)]
 		fn set_desired_seats(origin, #[compact] count: u32) {
 			ensure_root(origin)?;
 			DesiredSeats::put(count);
@@ -669,7 +672,7 @@ decl_module! {
 		///
 		/// Note: A tally should happen instantly (if not already in a presentation
 		/// period) to fill the seat if removal means that the desired members are not met.
-		#[weight = (MINIMUM_WEIGHT, DispatchClass::Operational)]
+		#[weight = (0, DispatchClass::Operational)]
 		fn remove_member(origin, who: <T::Lookup as StaticLookup>::Source) {
 			ensure_root(origin)?;
 			let who = T::Lookup::lookup(who)?;
@@ -684,7 +687,7 @@ decl_module! {
 
 		/// Set the presentation duration. If there is currently a vote being presented for, will
 		/// invoke `finalize_vote`.
-		#[weight = (MINIMUM_WEIGHT, DispatchClass::Operational)]
+		#[weight = (0, DispatchClass::Operational)]
 		fn set_presentation_duration(origin, #[compact] count: T::BlockNumber) {
 			ensure_root(origin)?;
 			<PresentationDuration<T>>::put(count);
@@ -692,7 +695,7 @@ decl_module! {
 
 		/// Set the presentation duration. If there is current a vote being presented for, will
 		/// invoke `finalize_vote`.
-		#[weight = (MINIMUM_WEIGHT, DispatchClass::Operational)]
+		#[weight = (0, DispatchClass::Operational)]
 		fn set_term_duration(origin, #[compact] count: T::BlockNumber) {
 			ensure_root(origin)?;
 			<TermDuration<T>>::put(count);
@@ -703,7 +706,7 @@ decl_module! {
 				print("Guru meditation");
 				print(e);
 			}
-			MINIMUM_WEIGHT
+			0
 		}
 	}
 }
@@ -892,7 +895,7 @@ impl<T: Trait> Module<T> {
 		}
 
 		T::Currency::set_lock(
-			MODULE_ID,
+			T::ModuleId::get(),
 			&who,
 			locked_balance,
 			WithdrawReasons::all(),

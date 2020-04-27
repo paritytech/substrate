@@ -43,7 +43,6 @@
 //!
 //! ```
 //! use frame_support::{decl_module, dispatch};
-//! use frame_support::weights::MINIMUM_WEIGHT;
 //! use frame_system::{self as system, ensure_signed};
 //! use pallet_im_online::{self as im_online};
 //!
@@ -51,7 +50,7 @@
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		#[weight = MINIMUM_WEIGHT]
+//! 		#[weight = 0]
 //! 		pub fn is_online(origin, authority_index: u32) -> dispatch::DispatchResult {
 //! 			let _sender = ensure_signed(origin)?;
 //! 			let _is_online = <im_online::Module<T>>::is_online(authority_index);
@@ -95,7 +94,6 @@ use sp_staking::{
 use frame_support::{
 	decl_module, decl_event, decl_storage, Parameter, debug, decl_error,
 	traits::Get,
-	weights::MINIMUM_WEIGHT,
 };
 use frame_system::{self as system, ensure_none};
 use frame_system::offchain::{
@@ -315,7 +313,7 @@ decl_module! {
 
 		fn deposit_event() = default;
 
-		#[weight = MINIMUM_WEIGHT]
+		#[weight = 0]
 		fn heartbeat(
 			origin,
 			heartbeat: Heartbeat<T::BlockNumber>,

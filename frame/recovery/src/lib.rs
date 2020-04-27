@@ -159,7 +159,7 @@ use codec::{Encode, Decode};
 
 use frame_support::{
 	decl_module, decl_event, decl_storage, decl_error, ensure,
-	Parameter, RuntimeDebug, weights::{MINIMUM_WEIGHT, GetDispatchInfo, FunctionOf},
+	Parameter, RuntimeDebug, weights::{GetDispatchInfo, FunctionOf, Pays},
 	traits::{Currency, ReservableCurrency, Get, BalanceStatus},
 	dispatch::PostDispatchInfo,
 };
@@ -338,7 +338,7 @@ decl_module! {
 		#[weight = FunctionOf(
 			|args: (&T::AccountId, &Box<<T as Trait>::Call>)| args.1.get_dispatch_info().weight + 10_000,
 			|args: (&T::AccountId, &Box<<T as Trait>::Call>)| args.1.get_dispatch_info().class,
-			true
+			Pays::Yes,
 		)]
 		fn as_recovered(origin,
 			account: T::AccountId,
@@ -365,7 +365,7 @@ decl_module! {
 		/// - One storage write O(1)
 		/// - One event
 		/// # </weight>
-		#[weight = MINIMUM_WEIGHT]
+		#[weight = 0]
 		fn set_recovered(origin, lost: T::AccountId, rescuer: T::AccountId) {
 			ensure_root(origin)?;
 			// Create the recovery storage item.
@@ -647,7 +647,7 @@ decl_module! {
 		/// # <weight>
 		/// - One storage mutation to check account is recovered by `who`. O(1)
 		/// # </weight>
-		#[weight = MINIMUM_WEIGHT]
+		#[weight = 0]
 		fn cancel_recovered(origin, account: T::AccountId) {
 			let who = ensure_signed(origin)?;
 			// Check `who` is allowed to make a call on behalf of `account`

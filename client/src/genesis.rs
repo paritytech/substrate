@@ -55,6 +55,7 @@ mod tests {
 	};
 	use sp_runtime::traits::BlakeTwo256;
 	use sp_core::tasks::executor as tasks_executor;
+	use sp_core::offchain::storage::OffchainOverlayedChanges;
 	use hex_literal::*;
 
 	native_executor_instance!(
@@ -90,6 +91,7 @@ mod tests {
 		};
 		let hash = header.hash();
 		let mut overlay = OverlayedChanges::default();
+		let mut offchain_overlay = OffchainOverlayedChanges::default();
 		let backend_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&backend);
 		let runtime_code = backend_runtime_code.runtime_code().expect("Code is part of the backend");
 
@@ -97,6 +99,7 @@ mod tests {
 			backend,
 			sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 			&mut overlay,
+			&mut offchain_overlay,
 			&executor(),
 			"Core_initialize_block",
 			&header.encode(),
@@ -112,6 +115,7 @@ mod tests {
 				backend,
 				sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 				&mut overlay,
+				&mut offchain_overlay,
 				&executor(),
 				"BlockBuilder_apply_extrinsic",
 				&tx.encode(),
@@ -127,6 +131,7 @@ mod tests {
 			backend,
 			sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 			&mut overlay,
+			&mut offchain_overlay,
 			&executor(),
 			"BlockBuilder_finalize_block",
 			&[],
@@ -174,10 +179,13 @@ mod tests {
 		let runtime_code = backend_runtime_code.runtime_code().expect("Code is part of the backend");
 
 		let mut overlay = OverlayedChanges::default();
+		let mut offchain_overlay = OffchainOverlayedChanges::default();
+
 		let _ = StateMachine::new(
 			&backend,
 			sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 			&mut overlay,
+			&mut offchain_overlay,
 			&executor(),
 			"Core_execute_block",
 			&b1data,
@@ -206,10 +214,13 @@ mod tests {
 		let runtime_code = backend_runtime_code.runtime_code().expect("Code is part of the backend");
 
 		let mut overlay = OverlayedChanges::default();
+		let mut offchain_overlay = OffchainOverlayedChanges::default();
+
 		let _ = StateMachine::new(
 			&backend,
 			sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 			&mut overlay,
+			&mut offchain_overlay,
 			&executor(),
 			"Core_execute_block",
 			&b1data,
@@ -238,10 +249,13 @@ mod tests {
 		let runtime_code = backend_runtime_code.runtime_code().expect("Code is part of the backend");
 
 		let mut overlay = OverlayedChanges::default();
+		let mut offchain_overlay = OffchainOverlayedChanges::default();
+
 		let r = StateMachine::new(
 			&backend,
 			sp_state_machine::disabled_changes_trie_state::<_, u64>(),
 			&mut overlay,
+			&mut offchain_overlay,
 			&executor(),
 			"Core_execute_block",
 			&b1data,

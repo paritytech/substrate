@@ -27,7 +27,7 @@ use frame_support::traits::{FindAuthor, VerifySeal, Get};
 use codec::{Encode, Decode};
 use frame_system::ensure_none;
 use sp_runtime::traits::{Header as HeaderT, One, Zero};
-use frame_support::weights::{Weight, MINIMUM_WEIGHT, DispatchClass};
+use frame_support::weights::{Weight, DispatchClass};
 use sp_inherents::{InherentIdentifier, ProvideInherent, InherentData};
 use sp_authorship::{INHERENT_IDENTIFIER, UnclesInherentData, InherentError};
 
@@ -197,7 +197,7 @@ decl_module! {
 
 			T::EventHandler::note_author(Self::author());
 
-			MINIMUM_WEIGHT
+			0
 		}
 
 		fn on_finalize() {
@@ -207,7 +207,7 @@ decl_module! {
 		}
 
 		/// Provide a set of uncles.
-		#[weight = (MINIMUM_WEIGHT, DispatchClass::Mandatory)]
+		#[weight = (0, DispatchClass::Mandatory)]
 		fn set_uncles(origin, new_uncles: Vec<T::Header>) -> dispatch::DispatchResult {
 			ensure_none(origin)?;
 			ensure!(new_uncles.len() <= MAX_UNCLES, Error::<T>::TooManyUncles);
@@ -430,6 +430,8 @@ mod tests {
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type DbWeight = ();
+		type BlockExecutionWeight = ();
+		type ExtrinsicBaseWeight = ();
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();

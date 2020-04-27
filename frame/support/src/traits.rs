@@ -206,7 +206,7 @@ pub trait Contains<T: Ord> {
 	///
 	/// **Should be used for benchmarking only!!!**
 	#[cfg(feature = "runtime-benchmarks")]
-	fn add(t: &T) { unimplemented!() }
+	fn add(_t: &T) { unimplemented!() }
 }
 
 /// A trait for querying bound for the length of an implementation of `Contains`

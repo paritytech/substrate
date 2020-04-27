@@ -33,7 +33,6 @@ pub use sp_finality_grandpa as fg_primitives;
 use sp_std::prelude::*;
 use codec::{self as codec, Encode, Decode};
 use frame_support::{decl_event, decl_storage, decl_module, decl_error, storage};
-use frame_support::weights::MINIMUM_WEIGHT;
 use sp_runtime::{
 	DispatchResult, generic::{DigestItem, OpaqueDigestItemId}, traits::Zero, Perbill,
 };
@@ -185,7 +184,7 @@ decl_module! {
 		fn deposit_event() = default;
 
 		/// Report some misbehavior.
-		#[weight = MINIMUM_WEIGHT]
+		#[weight = 0]
 		fn report_misbehavior(origin, _report: Vec<u8>) {
 			ensure_signed(origin)?;
 			// FIXME: https://github.com/paritytech/substrate/issues/1112
