@@ -223,6 +223,16 @@ impl OverlayedChanges {
 			})
 	}
 
+	/// Returns mutable reference to either commited or propsective value.
+	pub fn value_mut(&mut self, key: &[u8]) -> Option<&mut Option<StorageValue>> {
+		let prospective = self.prospective.top
+			.get_mut(key);
+
+		// TODO: avoid double-borrow?
+		let committed = self.committed.top.get_mut(key);
+		prospective.or(committed).map(|entry| &mut entry.value)
+	}
+
 	/// Returns a double-Option: None if the key is unknown (i.e. and the query should be referred
 	/// to the backend); Some(None) if the key has been deleted. Some(Some(...)) for a key whose
 	/// value has been set.
