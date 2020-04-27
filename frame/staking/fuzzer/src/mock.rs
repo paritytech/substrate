@@ -58,6 +58,8 @@ pub struct Test;
 impl frame_system::Trait for Test {
 	type Origin = Origin;
 	type DbWeight = ();
+	type BlockExecutionWeight = ();
+	type ExtrinsicBaseWeight = ();
 	type Index = AccountIndex;
 	type BlockNumber = BlockNumber;
 	type Call = Call;
