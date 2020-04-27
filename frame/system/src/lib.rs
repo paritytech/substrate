@@ -1101,7 +1101,6 @@ impl<T: Trait> Module<T> {
 				},
 			}
 		);
-		Self::update_accumulators();
 
 		let next_extrinsic_index = Self::extrinsic_index().unwrap_or_default() + 1u32;
 
@@ -1121,7 +1120,6 @@ impl<T: Trait> Module<T> {
 	/// To be called immediately after finishing the initialization of the block
 	/// (e.g., called `on_initialize` for all modules).
 	pub fn note_finished_initialize() {
-		Self::update_accumulators();
 		ExecutionPhase::put(Phase::ApplyExtrinsic(0))
 	}
 
