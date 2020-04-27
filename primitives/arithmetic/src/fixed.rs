@@ -283,8 +283,29 @@ macro_rules! implement_fixed {
 		}
 
 		impl CheckedDiv for $name {
-			fn checked_div(&self, rhs: &Self) -> Option<Self> {
-				None
+			fn checked_div(&self, other: &Self) -> Option<Self> {
+				let n = self.0;
+				let d = other.0;
+
+				let signum = n.signum() * d.signum();
+
+				let n = n.checked_abs().map(|v| v as u128)
+					.unwrap_or(<Self as FixedPointNumber>::Inner::max_value() as u128 + 1);
+				let d = d.checked_abs().map(|v| v as u128)
+					.unwrap_or(<Self as FixedPointNumber>::Inner::max_value() as u128 + 1);
+				
+				divide(n, d, <Self as FixedPointNumber>::BITS)
+					.and_then(|r| r.try_into().ok())
+					.map(|n: <Self as FixedPointNumber>::Inner| Self(n.saturating_mul(signum)))
+				// 	.unwrap_or_else(||
+				// 		if signum >= 0 {
+				// 			Self::max_value()
+				// 		} else {
+				// 			Self::min_value()
+				// 		}
+				// 	)
+
+				// None
 				// if rhs.0.signum() == 0 || (*self == Self::min_value() && *rhs == Self::from_integer(-1)){
 				// 	return None;
 				// }
