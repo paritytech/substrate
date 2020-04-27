@@ -92,6 +92,8 @@ variables:
 #### stage:                       .pre
 
 skip-if-draft:
+  image:                           parity/tools:latest
+  <<:                              *kubernetes-build
   stage:                          .pre
   only:
     - /^[0-9]+$/                  # Pull requests
