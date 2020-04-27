@@ -119,7 +119,7 @@ pub trait Storage {
 
 	/// Append to storage item (assumes it is in "Vec" format).
 	fn append(&mut self, key: &[u8], value: Vec<u8>) {
-		self.storage_append(key.to_vec(), value).expect("TODO");
+		self.storage_append(key.to_vec(), value);
 	}
 
 	/// "Commit" all existing operations and compute the resulting storage root.

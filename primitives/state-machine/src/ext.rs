@@ -419,7 +419,7 @@ where
 		&mut self,
 		key: Vec<u8>,
 		value: Vec<u8>,
-	) -> Result<(), sp_externalities::Error> {
+	) {
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		self.mark_dirty();
 
@@ -429,10 +429,10 @@ where
 			.unwrap_or_else(|| self.backend.storage(&key).expect(EXT_NOT_ALLOWED_TO_FAIL))
 			.unwrap_or_default();
 
-		self.overlay.set_storage(key, Some(append_to_storage(current_value, value)?));
-
-
-		Ok(())
+		self.overlay.set_storage(
+			key,
+			Some(append_to_storage(current_value, value).expect(EXT_NOT_ALLOWED_TO_FAIL)),
+		);
 	}
 
 	fn chain_id(&self) -> u64 {
@@ -571,20 +571,16 @@ where
 	}
 }
 
-fn storage_error(err: &'static str) -> sp_externalities::Error {
-	sp_externalities::Error::StorageUpdateFailed(err)
-}
-
-fn extract_length_data(data: &[u8]) -> Result<(u32, usize, usize), sp_externalities::Error> {
+fn extract_length_data(data: &[u8]) -> Result<(u32, usize, usize), &'static str> {
 	use codec::CompactLen;
 
 	let len = u32::from(
 		Compact::<u32>::decode(&mut &data[..])
-			.map_err(|_| storage_error("Incorrent updated item encoding"))?
+			.map_err(|_| "Incorrect updated item encoding")?
 	);
 	let new_len = len
 		.checked_add(1)
-		.ok_or_else(|| storage_error("New vec length greater than `u32::max_value()`."))?;
+		.ok_or_else(|| "New vec length greater than `u32::max_value()`.")?;
 
 	let encoded_len = Compact::<u32>::compact_len(&len);
 	let encoded_new_len = Compact::<u32>::compact_len(&new_len);
@@ -595,8 +591,7 @@ fn extract_length_data(data: &[u8]) -> Result<(u32, usize, usize), sp_externalit
 pub fn append_to_storage(
 	mut self_encoded: Vec<u8>,
 	value: Vec<u8>,
-) -> Result<Vec<u8>, sp_externalities::Error>
-{
+) -> Result<Vec<u8>, &'static str> {
 	// No data present, just encode the given input data.
 	if self_encoded.is_empty() {
 		Compact::from(1u32).encode_to(&mut self_encoded);

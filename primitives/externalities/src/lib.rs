@@ -185,7 +185,7 @@ pub trait Externalities: ExtensionStore {
 		&mut self,
 		key: Vec<u8>,
 		value: Vec<u8>,
-	) -> Result<(), Error>;
+	);
 
 	/// Get the changes trie root of the current storage overlay at a block with given `parent`.
 	///

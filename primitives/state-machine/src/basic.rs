@@ -261,12 +261,14 @@ impl Externalities for BasicExternalities {
 		&mut self,
 		key: Vec<u8>,
 		value: Vec<u8>,
-	) -> Result<(), sp_externalities::Error> {
+	) {
 		self.place_storage(
 			key.clone(),
-			Some(crate::ext::append_to_storage(self.storage(&key).unwrap_or_default(), value)?)
+			Some(
+				crate::ext::append_to_storage(self.storage(&key).unwrap_or_default(), value)
+					.expect("Failed to append to storage")
+			)
 		);
-		Ok(())
 	}
 
 	fn chain_id(&self) -> u64 { 42 }
