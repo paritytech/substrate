@@ -263,7 +263,7 @@ impl<G, E: serde::de::DeserializeOwned> ChainSpec<G, E> {
 	}
 }
 
-impl<G: RuntimeGenesis, E: serde::Serialize + Clone> ChainSpec<G, E> {
+impl<G: RuntimeGenesis, E: serde::Serialize + Clone + 'static> ChainSpec<G, E> {
 	/// Dump to json string.
 	pub fn as_json(&self, raw: bool) -> Result<String, String> {
 		#[derive(Serialize, Deserialize)]
@@ -303,8 +303,8 @@ impl<G: RuntimeGenesis, E: serde::Serialize + Clone> ChainSpec<G, E> {
 
 impl<G, E> crate::ChainSpec for ChainSpec<G, E>
 where
-	G: RuntimeGenesis,
-	E: GetExtension + serde::Serialize + Clone + Send,
+	G: RuntimeGenesis + 'static,
+	E: GetExtension + serde::Serialize + Clone + Send + 'static,
 {
 	fn boot_nodes(&self) -> &[MultiaddrWithPeerId] {
 		ChainSpec::boot_nodes(self)
@@ -350,7 +350,7 @@ where
 		self
 	}
 
-	fn cloned_box(&self) -> Box<dyn ChainSpec> {
+	fn cloned_box(&self) -> Box<dyn crate::ChainSpec> {
 		Box::new(self.clone())
 	}
 }

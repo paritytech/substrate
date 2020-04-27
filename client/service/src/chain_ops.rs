@@ -17,7 +17,7 @@
 //! Chain utilities.
 
 use crate::error;
-use crate::builder::{ServiceBuilderCommand, ServiceBuilder};
+use crate::builder::{ServiceBuilderCommand, ServiceBuilder, RawState};
 use crate::error::Error;
 use sc_chain_spec::ChainSpec;
 use log::{warn, info};
@@ -33,14 +33,15 @@ use sp_consensus::{
 	import_queue::{IncomingBlock, Link, BlockImportError, BlockImportResult, ImportQueue},
 };
 use sc_executor::{NativeExecutor, NativeExecutionDispatch};
-use sp_core::storage::{StorageKey, StorageData};
+use sp_core::storage::{StorageKey, well_known_keys, ChildInfo};
+use sc_client_api::StorageProvider;
 
-use std::{io::{Read, Write, Seek}, pin::Pin};
+use std::{io::{Read, Write, Seek}, pin::Pin, collections::HashMap};
 use sc_client_api::BlockBackend;
 
 /// Build a chain spec json
 pub fn build_spec(spec: &dyn ChainSpec, raw: bool) -> error::Result<String> {
-	spec.as_json(raw)
+	spec.as_json(raw).map_err(Into::into)
 }
 
 impl<
@@ -298,15 +299,43 @@ impl<
 		}
 	}
 
-	fn export_state(
+	fn export_raw_state(
 		&self,
 		block: Option<BlockId<Self::Block>>,
-	) -> Result<Vec<(StorageKey, StorageData)>, Error> {
+	) -> Result<RawState, Error> {
 		let block = block.unwrap_or_else(
 			|| BlockId::Hash(self.client.usage_info().chain.best_hash)
 		);
 
 		let key = StorageKey(Vec::new());
-		self.client.storage_pairs(&block, &key).map_err(|e| e.into())
+		let mut top_storage = self.client.storage_pairs(&block, &key)?;
+		let mut children_default = HashMap::new();
+
+		// Remove all default child storage roots from the top storage and collect the child storage
+		// pairs.
+		while let Some(pos) = top_storage
+			.iter()
+			.position(|(k, _)| k.0.starts_with(well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX)) {
+			let (key, _) = top_storage.swap_remove(pos);
+
+			let key = StorageKey(
+				key.0[well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX.len()..].to_vec(),
+			);
+			let child_info = ChildInfo::new_default(&key.0);
+
+			let keys = self.client.child_storage_keys(&block, &child_info, &key)?;
+			let mut pairs = Vec::new();
+			keys.into_iter().try_for_each(|k| {
+				if let Some(value) = self.client.child_storage(&block, &child_info, &k)? {
+					pairs.push((k, value));
+				}
+
+				Ok::<_, Error>(())
+			})?;
+
+			children_default.insert(key, pairs);
+		}
+
+		Ok(RawState { top: top_storage, children_default })
 	}
 }

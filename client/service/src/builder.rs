@@ -653,6 +653,14 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 	}
 }
 
+/// The raw key & value pairs of the state for the top trie and child tries.
+pub struct RawState {
+	/// The top trie key & value pairs.
+	pub top: Vec<(StorageKey, StorageData)>,
+	/// The children default trie keys and the associated key & value pairs.
+	pub children_default: HashMap<StorageKey, Vec<(StorageKey, StorageData)>>,
+}
+
 /// Implemented on `ServiceBuilder`. Allows running block commands, such as import/export/validate
 /// components to the builder.
 pub trait ServiceBuilderCommand {
@@ -688,12 +696,12 @@ pub trait ServiceBuilderCommand {
 		block: BlockId<Self::Block>
 	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
 
-	/// Export the state at the given `block`. If `block` is `None`, the
+	/// Export the raw state at the given `block`. If `block` is `None`, the
 	/// best block will be used.
-	fn export_state(
+	fn export_raw_state(
 		&self,
 		block: Option<BlockId<Self::Block>>,
-	) -> Result<Vec<(StorageKey, StorageData)>, Error>;
+	) -> Result<RawState, Error>;
 }
 
 impl<TBl, TRtApi, TBackend, TExec, TSc, TImpQu, TExPool, TRpc>
