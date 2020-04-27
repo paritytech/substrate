@@ -31,16 +31,28 @@
 pub use sp_finality_grandpa as fg_primitives;
 
 use sp_std::prelude::*;
+// <<<<<<< HEAD
 
 use codec::{self as codec, Decode, Encode};
 pub use fg_primitives::{AuthorityId, AuthorityList, AuthorityWeight, VersionedAuthorityList};
+// =======
+// use codec::{self as codec, Encode, Decode};
+// use frame_support::{decl_event, decl_storage, decl_module, decl_error, storage};
+// use sp_runtime::{
+// 	DispatchResult, generic::{DigestItem, OpaqueDigestItemId}, traits::Zero, Perbill,
+// };
+// use sp_staking::{
+// 	SessionIndex,
+// 	offence::{Offence, Kind},
+// };
+// >>>>>>> master
 use fg_primitives::{
 	ConsensusLog, EquivocationProof, ScheduledChange, SetId, GRANDPA_AUTHORITIES_KEY,
 	GRANDPA_ENGINE_ID,
 };
 use frame_support::{
 	decl_error, decl_event, decl_module, decl_storage, storage, traits::KeyOwnerProofSystem,
-	weights::SimpleDispatchInfo, Parameter,
+	Parameter,
 };
 use frame_system::{self as system, ensure_signed, DigestOf};
 use sp_runtime::{
@@ -235,7 +247,7 @@ decl_module! {
 		///
 		/// Since the weight is 0 in order to avoid DoS pre-validation is implemented in a
 		/// `SignedExtension`.
-		#[weight = SimpleDispatchInfo::FixedNormal(0)]
+		#[weight = 0]
 		fn report_equivocation(
 			origin,
 			equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,

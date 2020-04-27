@@ -19,7 +19,12 @@ use crate::{
 	debug_info, discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryOut},
 	Event, ObservedRole, DhtEvent, ExHashT,
 };
-use crate::protocol::{self, light_client_handler, message::Roles, CustomMessageOutcome, Protocol};
+use crate::protocol::{
+	self, block_requests, light_client_handler, finality_requests,
+	message::{self, Roles}, CustomMessageOutcome, Protocol
+};
+
+use codec::Encode as _;
 use libp2p::NetworkBehaviour;
 use libp2p::core::{Multiaddr, PeerId, PublicKey};
 use libp2p::kad::record;
@@ -43,6 +48,8 @@ pub struct Behaviour<B: BlockT, H: ExHashT> {
 	discovery: DiscoveryBehaviour,
 	/// Block request handling.
 	block_requests: protocol::BlockRequests<B>,
+	/// Finality proof request handling.
+	finality_proof_requests: protocol::FinalityProofRequests<B>,
 	/// Light client request handling.
 	light_client_handler: protocol::LightClientHandler<B>,
 
@@ -73,6 +80,7 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 		user_agent: String,
 		local_public_key: PublicKey,
 		block_requests: protocol::BlockRequests<B>,
+		finality_proof_requests: protocol::FinalityProofRequests<B>,
 		light_client_handler: protocol::LightClientHandler<B>,
 		disco_config: DiscoveryConfig,
 	) -> Self {
@@ -81,6 +89,7 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 			debug_info: debug_info::DebugInfoBehaviour::new(user_agent, local_public_key.clone()),
 			discovery: disco_config.finish(),
 			block_requests,
+			finality_proof_requests,
 			light_client_handler,
 			events: Vec::new(),
 			role,
@@ -135,7 +144,11 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 		engine_id: ConsensusEngineId,
 		protocol_name: impl Into<Cow<'static, [u8]>>,
 	) {
-		let list = self.substrate.register_notifications_protocol(engine_id, protocol_name);
+		// This is the message that we will send to the remote as part of the initial handshake.
+		// At the moment, we force this to be an encoded `Roles`.
+		let handshake_message = Roles::from(&self.role).encode();
+
+		let list = self.substrate.register_notifications_protocol(engine_id, protocol_name, handshake_message);
 		for (remote, roles) in list {
 			let role = reported_roles_to_observed_role(&self.role, remote, roles);
 			let ev = Event::NotificationStreamOpened {
@@ -206,6 +219,12 @@ Behaviour<B, H> {
 				self.events.push(BehaviourOut::JustificationImport(origin, hash, nb, justification)),
 			CustomMessageOutcome::FinalityProofImport(origin, hash, nb, proof) =>
 				self.events.push(BehaviourOut::FinalityProofImport(origin, hash, nb, proof)),
+			CustomMessageOutcome::BlockRequest { target, request } => {
+				self.block_requests.send_request(&target, request);
+			},
+			CustomMessageOutcome::FinalityProofRequest { target, block_hash, request } => {
+				self.finality_proof_requests.send_request(&target, block_hash, request);
+			},
 			CustomMessageOutcome::NotificationStreamOpened { remote, protocols, roles } => {
 				let role = reported_roles_to_observed_role(&self.role, &remote, roles);
 				for engine_id in protocols {
@@ -231,6 +250,47 @@ Behaviour<B, H> {
 				self.light_client_handler.update_best_block(&peer_id, number);
 			}
 			CustomMessageOutcome::None => {}
+		}
+	}
+}
+
+impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<block_requests::Event<B>> for Behaviour<B, H> {
+	fn inject_event(&mut self, event: block_requests::Event<B>) {
+		match event {
+			block_requests::Event::Response { peer, original_request, response } => {
+				let ev = self.substrate.on_block_response(peer, original_request, response);
+				self.inject_event(ev);
+			}
+			block_requests::Event::RequestCancelled { .. } => {
+				// There doesn't exist any mechanism to report cancellations yet.
+				// We would normally disconnect the node, but this event happens as the result of
+				// a disconnect, so there's nothing more to do.
+			}
+			block_requests::Event::RequestTimeout { peer, .. } => {
+				// There doesn't exist any mechanism to report timeouts yet, so we process them by
+				// disconnecting the node.
+				self.substrate.disconnect_peer(&peer);
+			}
+		}
+	}
+}
+
+impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<finality_requests::Event<B>> for Behaviour<B, H> {
+	fn inject_event(&mut self, event: finality_requests::Event<B>) {
+		match event {
+			finality_requests::Event::Response { peer, block_hash, proof } => {
+				let response = message::FinalityProofResponse {
+					id: 0,
+					block: block_hash,
+					proof: if !proof.is_empty() {
+						Some(proof)
+					} else {
+						None
+					},
+				};
+				let ev = self.substrate.on_finality_proof_response(peer, response);
+				self.inject_event(ev);
+			}
 		}
 	}
 }

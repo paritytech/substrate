@@ -11,7 +11,7 @@ fi
 echo "[+] Pipeline path: https://gitlab.parity.io/parity/substrate/pipelines/$PIPELINE_ID"
 
 # 130 minute job max
-for (( c=0; c < 130; c++ )); do
+for (( c=0; c < 180; c++ )); do
   out=$(curl -s "$SUBSTRATE_API_BASEURL/pipelines/$PIPELINE_ID" | jq -r .status)
   case $out in
     "success")

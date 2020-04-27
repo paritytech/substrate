@@ -83,6 +83,7 @@ impl TestSetup {
 			pool: self.pool.clone(),
 			subscriptions: Subscriptions::new(Arc::new(self.runtime.executor())),
 			keystore: self.keystore.clone(),
+			deny_unsafe: DenyUnsafe::No,
 		}
 	}
 }

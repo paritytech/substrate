@@ -455,6 +455,8 @@ ss58_address_format!(
 		(10, "acala", "Acala mainnet, standard account (*25519).")
 	LaminarAccount =>
 		(11, "laminar", "Laminar mainnet, standard account (*25519).")
+	PolymathAccount =>
+		(12, "polymath", "Polymath network, standard account (*25519).")
 	KulupuAccount =>
 		(16, "kulupu", "Kulupu mainnet, standard account (*25519).")
 	DarwiniaAccount =>
@@ -990,19 +992,19 @@ impl sp_std::fmt::Display for CryptoTypePublicPair {
 pub mod key_types {
 	use super::KeyTypeId;
 
-	/// Key type for Babe module, build-in.
+	/// Key type for Babe module, built-in. Identified as `babe`.
 	pub const BABE: KeyTypeId = KeyTypeId(*b"babe");
-	/// Key type for Grandpa module, build-in.
+	/// Key type for Grandpa module, built-in. Identified as `gran`.
 	pub const GRANDPA: KeyTypeId = KeyTypeId(*b"gran");
-	/// Key type for controlling an account in a Substrate runtime, built-in.
+	/// Key type for controlling an account in a Substrate runtime, built-in. Identified as `acco`.
 	pub const ACCOUNT: KeyTypeId = KeyTypeId(*b"acco");
-	/// Key type for Aura module, built-in.
+	/// Key type for Aura module, built-in. Identified as `aura`.
 	pub const AURA: KeyTypeId = KeyTypeId(*b"aura");
-	/// Key type for ImOnline module, built-in.
+	/// Key type for ImOnline module, built-in. Identified as `imon`.
 	pub const IM_ONLINE: KeyTypeId = KeyTypeId(*b"imon");
-	/// Key type for AuthorityDiscovery module, built-in.
+	/// Key type for AuthorityDiscovery module, built-in. Identified as `audi`.
 	pub const AUTHORITY_DISCOVERY: KeyTypeId = KeyTypeId(*b"audi");
-	/// Key type for staking, built-in.
+	/// Key type for staking, built-in. Identified as `stak`.
 	pub const STAKING: KeyTypeId = KeyTypeId(*b"stak");
 	/// A key type ID useful for tests.
 	pub const DUMMY: KeyTypeId = KeyTypeId(*b"dumy");

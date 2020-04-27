@@ -19,15 +19,15 @@
 use crate::error::Result;
 use crate::{
 	init_logger, ImportParams, KeystoreParams, NetworkParams, NodeKeyParams,
-	PruningParams, SharedParams, SubstrateCli,
+	OffchainWorkerParams, PruningParams, SharedParams, SubstrateCli,
 };
 use crate::arg_enums::Database;
 use app_dirs::{AppDataType, AppInfo};
 use names::{Generator, Name};
 use sc_service::config::{
 	Configuration, DatabaseConfig, ExecutionStrategies, ExtTransport, KeystoreConfig,
-	NetworkConfiguration, NodeKeyConfig, PrometheusConfig, PruningMode, Role, TelemetryEndpoints,
-	TransactionPoolOptions, WasmExecutionMethod,
+	NetworkConfiguration, NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode,
+	Role, TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
 };
 use sc_service::{ChainSpec, TracingReceiver};
 use std::future::Future;
@@ -64,6 +64,11 @@ pub trait CliConfiguration: Sized {
 
 	/// Get the NetworkParams for this object
 	fn network_params(&self) -> Option<&NetworkParams> {
+		None
+	}
+
+	/// Get a reference to `OffchainWorkerParams` for this object.
+	fn offchain_worker_params(&self) -> Option<&OffchainWorkerParams> {
 		None
 	}
 
@@ -249,6 +254,13 @@ pub trait CliConfiguration: Sized {
 		Ok(Default::default())
 	}
 
+	/// Returns `Ok(true) if potentially unsafe RPC is to be exposed.
+	///
+	/// By default this is `false`.
+	fn unsafe_rpc_expose(&self) -> Result<bool> {
+		Ok(Default::default())
+	}
+
 	/// Get the RPC websockets maximum connections (`None` if unlimited).
 	///
 	/// By default this is `None`.
@@ -294,11 +306,13 @@ pub trait CliConfiguration: Sized {
 		Ok(Default::default())
 	}
 
-	/// Returns `Ok(true)` if offchain worker should be used
+	/// Returns an offchain worker config wrapped in `Ok(_)`
 	///
-	/// By default this is `false`.
-	fn offchain_worker(&self, _role: &Role) -> Result<bool> {
-		Ok(Default::default())
+	/// By default offchain workers are disabled.
+	fn offchain_worker(&self, role: &Role) -> Result<OffchainWorkerConfig> {
+		self.offchain_worker_params()
+			.map(|x| x.offchain_worker(role))
+			.unwrap_or_else(|| { Ok(OffchainWorkerConfig::default()) })
 	}
 
 	/// Returns `Ok(true)` if authoring should be forced
@@ -419,6 +433,7 @@ pub trait CliConfiguration: Sized {
 			execution_strategies: self.execution_strategies(is_dev)?,
 			rpc_http: self.rpc_http()?,
 			rpc_ws: self.rpc_ws()?,
+			unsafe_rpc_expose: self.unsafe_rpc_expose()?,
 			rpc_ws_max_connections: self.rpc_ws_max_connections()?,
 			rpc_cors: self.rpc_cors(is_dev)?,
 			prometheus_config: self.prometheus_config()?,

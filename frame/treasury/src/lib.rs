@@ -98,7 +98,7 @@ use frame_support::traits::{
 use sp_runtime::{Permill, ModuleId, Percent, RuntimeDebug, traits::{
 	Zero, StaticLookup, AccountIdConversion, Saturating, Hash, BadOrigin
 }};
-use frame_support::weights::{Weight, MINIMUM_WEIGHT, SimpleDispatchInfo};
+use frame_support::weights::{Weight, DispatchClass};
 use frame_support::traits::{Contains, EnsureOrigin};
 use codec::{Encode, Decode};
 use frame_system::{self as system, ensure_signed, ensure_root};
@@ -110,10 +110,10 @@ type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trai
 type PositiveImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::PositiveImbalance;
 type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
 
-/// The treasury's module id, used for deriving its sovereign account ID.
-const MODULE_ID: ModuleId = ModuleId(*b"py/trsry");
-
 pub trait Trait: frame_system::Trait {
+	/// The treasury's module id, used for deriving its sovereign account ID.
+	type ModuleId: Get<ModuleId>;
+
 	/// The staking balance.
 	type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
 
@@ -313,6 +313,9 @@ decl_module! {
 
 		/// The amount held on deposit per byte within the tip report reason.
 		const TipReportDepositPerByte: BalanceOf<T> = T::TipReportDepositPerByte::get();
+		
+		/// The treasury's module id, used for deriving its sovereign account ID.
+		const ModuleId: ModuleId = T::ModuleId::get();
 
 		type Error = Error<T>;
 
@@ -327,7 +330,7 @@ decl_module! {
 		/// - Limited storage reads.
 		/// - One DB change, one extra DB entry.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(500_000_000)]
+		#[weight = 500_000_000]
 		fn propose_spend(
 			origin,
 			#[compact] value: BalanceOf<T>,
@@ -354,7 +357,7 @@ decl_module! {
 		/// - Limited storage reads.
 		/// - One DB clear.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(100_000_000)]
+		#[weight = (100_000_000, DispatchClass::Operational)]
 		fn reject_proposal(origin, #[compact] proposal_id: ProposalIndex) {
 			T::RejectOrigin::try_origin(origin)
 				.map(|_| ())
@@ -376,7 +379,7 @@ decl_module! {
 		/// - Limited storage reads.
 		/// - One DB change.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(100_000_000)]
+		#[weight = (100_000_000, DispatchClass::Operational)]
 		fn approve_proposal(origin, #[compact] proposal_id: ProposalIndex) {
 			T::ApproveOrigin::try_origin(origin)
 				.map(|_| ())
@@ -405,7 +408,7 @@ decl_module! {
 		/// - One storage mutation (codec `O(R)`).
 		/// - One event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(100_000_000)]
+		#[weight = 100_000_000]
 		fn report_awesome(origin, reason: Vec<u8>, who: T::AccountId) {
 			let finder = ensure_signed(origin)?;
 
@@ -447,7 +450,7 @@ decl_module! {
 		/// - Two storage removals (one read, codec `O(T)`).
 		/// - One event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000_000)]
+		#[weight = 50_000_000]
 		fn retract_tip(origin, hash: T::Hash) {
 			let who = ensure_signed(origin)?;
 			let tip = Tips::<T>::get(&hash).ok_or(Error::<T>::UnknownTip)?;
@@ -479,7 +482,7 @@ decl_module! {
 		/// - Two storage insertions (codecs `O(R)`, `O(T)`), one read `O(1)`.
 		/// - One event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(150_000_000)]
+		#[weight = 150_000_000]
 		fn tip_new(origin, reason: Vec<u8>, who: T::AccountId, tip_value: BalanceOf<T>) {
 			let tipper = ensure_signed(origin)?;
 			ensure!(T::Tippers::contains(&tipper), BadOrigin);
@@ -513,7 +516,7 @@ decl_module! {
 		/// - One storage mutation (codec `O(T)`), one storage read `O(1)`.
 		/// - Up to one event.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000_000)]
+		#[weight = 50_000_000]
 		fn tip(origin, hash: T::Hash, tip_value: BalanceOf<T>) {
 			let tipper = ensure_signed(origin)?;
 			ensure!(T::Tippers::contains(&tipper), BadOrigin);
@@ -539,7 +542,7 @@ decl_module! {
 		/// - One storage retrieval (codec `O(T)`) and two removals.
 		/// - Up to three balance operations.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(50_000_000)]
+		#[weight = 50_000_000]
 		fn close_tip(origin, hash: T::Hash) {
 			ensure_signed(origin)?;
 
@@ -558,7 +561,7 @@ decl_module! {
 				Self::spend_funds();
 			}
 
-			MINIMUM_WEIGHT
+			0
 		}
 	}
 }
@@ -571,7 +574,7 @@ impl<T: Trait> Module<T> {
 	/// This actually does computation. If you need to keep using it, then make sure you cache the
 	/// value and only call this once.
 	pub fn account_id() -> T::AccountId {
-		MODULE_ID.into_account()
+		T::ModuleId::get().into_account()
 	}
 
 	/// The needed bond for a proposal whose spend is `value`.

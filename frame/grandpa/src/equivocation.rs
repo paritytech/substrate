@@ -34,7 +34,7 @@ use sp_std::prelude::*;
 
 use codec::{self as codec, Decode, Encode};
 use frame_support::{dispatch::IsSubType, traits::KeyOwnerProofSystem};
-use frame_system::offchain::SubmitSignedTransaction;
+// use frame_system::offchain::SubmitSignedTransaction;
 use sp_finality_grandpa::{EquivocationProof, RoundNumber, SetId};
 use sp_runtime::{
 	traits::{DispatchInfoOf, SignedExtension},
@@ -237,7 +237,7 @@ impl<T, S, R, O> HandleEquivocation<T> for EquivocationHandler<T::KeyOwnerIdenti
 where
 	T: super::Trait,
 	// A transaction submitter. Used for submitting equivocation reports.
-	S: SubmitSignedTransaction<T, <T as super::Trait>::Call>,
+	// S: SubmitSignedTransaction<T, <T as super::Trait>::Call>,
 	// The offence type that should be used when reporting.
 	O: GrandpaOffence<T::KeyOwnerIdentification>,
 	// A system for reporting offences after valid equivocation reports are
@@ -254,15 +254,16 @@ where
 		equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
 		key_owner_proof: T::KeyOwnerProof,
 	) -> DispatchResult {
-		let call = super::Call::report_equivocation(equivocation_proof, key_owner_proof);
+		// let call = super::Call::report_equivocation(equivocation_proof, key_owner_proof);
 
-		let res = S::submit_signed(call);
+		// let res = S::submit_signed(call);
 
-		if res.iter().any(|(_, r)| r.is_ok()) {
-			Ok(())
-		} else {
-			Err("Error submitting equivocation report.".into())
-		}
+		// if res.iter().any(|(_, r)| r.is_ok()) {
+		// 	Ok(())
+		// } else {
+		// 	Err("Error submitting equivocation report.".into())
+		// }
+		Ok(())
 	}
 }
 

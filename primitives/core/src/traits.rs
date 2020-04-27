@@ -262,6 +262,23 @@ impl std::fmt::Display for CodeNotFound {
 	}
 }
 
+/// `Allow` or `Disallow` missing host functions when instantiating a WASM blob.
+#[derive(Clone, Copy, Debug)]
+pub enum MissingHostFunctions {
+	/// Any missing host function will be replaced by a stub that returns an error when
+	/// being called.
+	Allow,
+	/// Any missing host function will result in an error while instantiating the WASM blob,
+	Disallow,
+}
+
+impl MissingHostFunctions {
+	/// Are missing host functions allowed?
+	pub fn allowed(self) -> bool {
+		matches!(self, Self::Allow)
+	}
+}
+
 /// Something that can call a method in a WASM blob.
 pub trait CallInWasm: Send + Sync {
 	/// Call the given `method` in the given `wasm_blob` using `call_data` (SCALE encoded arguments)
@@ -280,6 +297,7 @@ pub trait CallInWasm: Send + Sync {
 		method: &str,
 		call_data: &[u8],
 		ext: &mut dyn Externalities,
+		missing_host_functions: MissingHostFunctions,
 	) -> Result<Vec<u8>, String>;
 }
 

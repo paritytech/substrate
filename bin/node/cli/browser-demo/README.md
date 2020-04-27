@@ -1,6 +1,6 @@
 # How to run this demo
 
 ```sh
-cargo install wasm-bindgen		# If necessary
+cargo install wasm-bindgen-cli		# If necessary
 ./build.sh
 ```

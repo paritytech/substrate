@@ -57,6 +57,8 @@ pub enum Error {
 	/// Invalid session keys encoding.
 	#[display(fmt="Session keys are not encoded correctly")]
 	InvalidSessionKeys,
+	/// Call to an unsafe RPC was denied.
+	UnsafeRpcCalled(crate::policy::UnsafeRpcError),
 }
 
 impl std::error::Error for Error {
@@ -65,6 +67,7 @@ impl std::error::Error for Error {
 			Error::Client(ref err) => Some(&**err),
 			Error::Pool(ref err) => Some(err),
 			Error::Verification(ref err) => Some(&**err),
+			Error::UnsafeRpcCalled(ref err) => Some(err),
 			_ => None,
 		}
 	}
@@ -152,6 +155,7 @@ impl From<Error> for rpc::Error {
 					request to insert the key successfully.".into()
 				),
 			},
+			Error::UnsafeRpcCalled(e) => e.into(),
 			e => errors::internal(e),
 		}
 	}
