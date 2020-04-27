@@ -150,4 +150,6 @@ pub trait ChainSpec: BuildStorage + Send {
 	fn as_json(&self, raw: bool) -> Result<String, String>;
 	/// Return StorageBuilder for this spec.
 	fn as_storage_builder(&self) -> &dyn BuildStorage;
+	/// Returns a cloned `Box<dyn ChainSpec>`.
+	fn cloned_box(&self) -> Box<dyn ChainSpec>;
 }

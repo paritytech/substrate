@@ -33,13 +33,14 @@ use sp_consensus::{
 	import_queue::{IncomingBlock, Link, BlockImportError, BlockImportResult, ImportQueue},
 };
 use sc_executor::{NativeExecutor, NativeExecutionDispatch};
+use sp_core::storage::{StorageKey, StorageData};
 
 use std::{io::{Read, Write, Seek}, pin::Pin};
 use sc_client_api::BlockBackend;
 
 /// Build a chain spec json
 pub fn build_spec(spec: &dyn ChainSpec, raw: bool) -> error::Result<String> {
-	Ok(spec.as_json(raw)?)
+	spec.as_json(raw)
 }
 
 impl<
@@ -295,5 +296,17 @@ impl<
 			Ok(None) => Box::pin(future::err("Unknown block".into())),
 			Err(e) => Box::pin(future::err(format!("Error reading block: {:?}", e).into())),
 		}
+	}
+
+	fn export_state(
+		&self,
+		block: Option<BlockId<Self::Block>>,
+	) -> Result<Vec<(StorageKey, StorageData)>, Error> {
+		let block = block.unwrap_or_else(
+			|| BlockId::Hash(self.client.usage_info().chain.best_hash)
+		);
+
+		let key = StorageKey(Vec::new());
+		self.client.storage_pairs(&block, &key).map_err(|e| e.into())
 	}
 }

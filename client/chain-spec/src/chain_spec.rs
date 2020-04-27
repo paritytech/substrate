@@ -100,10 +100,10 @@ impl<G: RuntimeGenesis, E> BuildStorage for ChainSpec<G, E> {
 
 type GenesisStorage = HashMap<StorageKey, StorageData>;
 
+/// Storage content for genesis block.
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
-/// Storage content for genesis block.
 struct RawGenesis {
 	top: GenesisStorage,
 	children_default: HashMap<StorageKey, GenesisStorage>,
@@ -348,6 +348,10 @@ where
 
 	fn as_storage_builder(&self) -> &dyn BuildStorage {
 		self
+	}
+
+	fn cloned_box(&self) -> Box<dyn ChainSpec> {
+		Box::new(self.clone())
 	}
 }
 

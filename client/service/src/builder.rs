@@ -30,11 +30,8 @@ use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sc_client::{Client, ClientConfig};
 use sc_chain_spec::get_extension;
 use sp_consensus::import_queue::ImportQueue;
-use futures::{
-	Future, FutureExt, StreamExt,
-	future::ready,
-};
-use sc_keystore::{Store as Keystore};
+use futures::{Future, FutureExt, StreamExt, future::ready};
+use sc_keystore::Store as Keystore;
 use log::{info, warn, error};
 use sc_network::config::{Role, FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
 use sc_network::{NetworkService, NetworkStateInfo};
@@ -55,6 +52,7 @@ use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_transaction_pool::{MaintainedTransactionPool, ChainEvent};
 use sp_blockchain;
 use prometheus_endpoint::Registry as PrometheusRegistry;
+use sp_core::storage::{StorageKey, StorageData};
 
 pub type BackgroundTask = Pin<Box<dyn Future<Output=()> + Send>>;
 
@@ -689,6 +687,13 @@ pub trait ServiceBuilderCommand {
 		self,
 		block: BlockId<Self::Block>
 	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
+
+	/// Export the state at the given `block`. If `block` is `None`, the
+	/// best block will be used.
+	fn export_state(
+		&self,
+		block: Option<BlockId<Self::Block>>,
+	) -> Result<Vec<(StorageKey, StorageData)>, Error>;
 }
 
 impl<TBl, TRtApi, TBackend, TExec, TSc, TImpQu, TExPool, TRpc>
