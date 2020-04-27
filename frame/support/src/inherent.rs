@@ -113,7 +113,7 @@ macro_rules! impl_outer_inherent {
 
 							if !found {
 								result.put_error(
-									&module::INHERENT_IDENTIFIER, &e
+									$module::INHERENT_IDENTIFIER, &e
 								).expect("There is only one fatal error; qed");
 								if e.is_fatal_error() {
 									return result
@@ -123,7 +123,7 @@ macro_rules! impl_outer_inherent {
 						Ok(None) => (),
 						Err(e) => {
 							result.put_error(
-								&module::INHERENT_IDENTIFIER, &e
+								$module::INHERENT_IDENTIFIER, &e
 							).expect("There is only one fatal error; qed");
 							if e.is_fatal_error() {
 								return result
