@@ -64,7 +64,7 @@ thread_local! {
 	static SLASH_DEFER_DURATION: RefCell<EraIndex> = RefCell::new(0);
 	static ELECTION_LOOKAHEAD: RefCell<BlockNumber> = RefCell::new(0);
 	static PERIOD: RefCell<BlockNumber> = RefCell::new(1);
-	static ITERATIONS: RefCell<u32> = RefCell::new(0);
+	static MAX_ITERATIONS: RefCell<u32> = RefCell::new(0);
 }
 
 /// Another session handler struct to test on_disabled.
@@ -141,6 +141,13 @@ pub struct SlashDeferDuration;
 impl Get<EraIndex> for SlashDeferDuration {
 	fn get() -> EraIndex {
 		SLASH_DEFER_DURATION.with(|v| *v.borrow())
+	}
+}
+
+pub struct MaxIterations;
+impl Get<u32> for MaxIterations {
+	fn get() -> u32 {
+		MAX_ITERATIONS.with(|v| *v.borrow())
 	}
 }
 
@@ -277,7 +284,6 @@ parameter_types! {
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &I_NPOS;
 	pub const MaxNominatorRewardedPerValidator: u32 = 64;
 	pub const UnsignedPriority: u64 = 1 << 20;
-	pub const MaxIterations: u32 = 5;
 }
 
 thread_local! {
@@ -340,7 +346,7 @@ pub struct ExtBuilder {
 	num_validators: Option<u32>,
 	invulnerables: Vec<AccountId>,
 	has_stakers: bool,
-	offchain_iterations: u32,
+	max_offchain_iterations: u32,
 }
 
 impl Default for ExtBuilder {
@@ -359,7 +365,7 @@ impl Default for ExtBuilder {
 			num_validators: None,
 			invulnerables: vec![],
 			has_stakers: true,
-			offchain_iterations: 0,
+			max_offchain_iterations: 0,
 		}
 	}
 }
@@ -417,8 +423,8 @@ impl ExtBuilder {
 		self.has_stakers = has;
 		self
 	}
-	pub fn offchain_iterations(mut self, iterations: u32) -> Self {
-		self.offchain_iterations = iterations;
+	pub fn max_offchain_iterations(mut self, iterations: u32) -> Self {
+		self.max_offchain_iterations = iterations;
 		self
 	}
 	pub fn offchain_phragmen_ext(self) -> Self {
@@ -432,7 +438,7 @@ impl ExtBuilder {
 		SESSION_PER_ERA.with(|v| *v.borrow_mut() = self.session_per_era);
 		ELECTION_LOOKAHEAD.with(|v| *v.borrow_mut() = self.election_lookahead);
 		PERIOD.with(|v| *v.borrow_mut() = self.session_length);
-		ITERATIONS.with(|v| *v.borrow_mut() = self.offchain_iterations);
+		MAX_ITERATIONS.with(|v| *v.borrow_mut() = self.max_offchain_iterations);
 	}
 	pub fn build(self) -> sp_io::TestExternalities {
 		let _ = env_logger::try_init();

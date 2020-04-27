@@ -2901,8 +2901,8 @@ mod offchain_phragmen {
 
 	#[test]
 	fn signed_result_can_be_submitted() {
-		// should check that we have a new validator set normally,
-		// event says that it comes from offchain.
+		// should check that we have a new validator set normally, event says that it comes from
+		// offchain.
 		ExtBuilder::default()
 			.offchain_phragmen_ext()
 			.build()
@@ -2989,8 +2989,8 @@ mod offchain_phragmen {
 
 	#[test]
 	fn early_solution_submission_is_rejected() {
-		// should check that we have a new validator set normally,
-		// event says that it comes from offchain.
+		// should check that we have a new validator set normally, event says that it comes from
+		// offchain.
 		ExtBuilder::default()
 			.offchain_phragmen_ext()
 			.build()
@@ -3119,7 +3119,7 @@ mod offchain_phragmen {
 					&inner,
 				),
 				TransactionValidity::Ok(ValidTransaction {
-					priority: UnsignedPriority::get() + 1250, // the proposed slot stake.
+					priority: UnsignedPriority::get() + 1125, // the proposed slot stake.
 					requires: vec![],
 					provides: vec![("StakingOffchain", current_era()).encode()],
 					longevity: 3,
@@ -3136,7 +3136,7 @@ mod offchain_phragmen {
 		let mut ext = ExtBuilder::default()
 			.offchain_phragmen_ext()
 			.validator_count(2)
-			.offchain_iterations(2)
+			.max_offchain_iterations(2)
 			.build();
 		let state = offchainify(&mut ext);
 		ext.execute_with(|| {
@@ -3162,7 +3162,8 @@ mod offchain_phragmen {
 					&inner,
 				),
 				TransactionValidity::Ok(ValidTransaction {
-					priority: UnsignedPriority::get() + 1250, // the proposed slot stake.
+					// the proposed slot stake, with equalize.
+					priority: UnsignedPriority::get() + 1250,
 					requires: vec![],
 					provides: vec![("StakingOffchain", active_era()).encode()],
 					longevity: 3,

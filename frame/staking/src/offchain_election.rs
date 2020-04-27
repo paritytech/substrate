@@ -176,15 +176,24 @@ pub fn prepare_submission<T: Trait>(
 	let (mut support_map, _) = build_support_map::<T::AccountId>(&winners, &staked);
 
 	// equalize a random number of times.
-	let seed = sp_io::offchain::random_seed();
-	let iterations = <u32>::decode(&mut TrailingZeroInput::new(seed.as_ref()))
-		.expect("input is padded with zeroes; qed") % T::MaxIterations::get();
-	let iterations_executed = equalize(
-		&mut staked,
-		&mut support_map,
-		Zero::zero(),
-		iterations as usize,
-	);
+	let iterations_executed = match T::MaxIterations::get() {
+		0 => {
+			// Don't run equalize at all
+			0
+		}
+		iterations @ _ => {
+			let seed = sp_io::offchain::random_seed();
+			let iterations = <u32>::decode(&mut TrailingZeroInput::new(seed.as_ref()))
+				.expect("input is padded with zeroes; qed") % iterations.saturating_add(1);
+			equalize(
+				&mut staked,
+				&mut support_map,
+				Zero::zero(),
+				iterations as usize,
+			)
+		}
+	};
+
 
 	// Convert back to ratio assignment. This takes less space.
 	let low_accuracy_assignment = sp_phragmen::assignment_staked_to_ratio(staked);
