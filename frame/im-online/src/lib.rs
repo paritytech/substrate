@@ -317,8 +317,6 @@ decl_module! {
 
 		fn deposit_event() = default;
 
-		/// `keys_len` must be the length for the vec stored in storage `Keys`.
-		///
 		/// # <weight>
 		/// - Complexity: `O(K + E)` where K is length of `Keys` and E is length of
 		///   `Heartbeat.network_state.external_address`
@@ -676,7 +674,7 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 	}
 }
 
-/// Invalid transaction custom error. Returned when keys_len argument for heartbeat is incorrect.
+/// Invalid transaction custom error. Returned when validators_len field in heartbeat is incorrect.
 const INVALID_VALIDATORS_LEN: u8 = 10;
 
 impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
