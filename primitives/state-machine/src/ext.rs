@@ -30,7 +30,7 @@ use sp_core::{
 };
 use sp_trie::{trie_types::Layout, empty_child_trie_root};
 use sp_externalities::{Extensions, Extension};
-use codec::{Decode, Encode};
+use codec::{Compact, Decode, Encode};
 
 use std::{error, fmt, any::{Any, TypeId}, collections::HashMap};
 use log::{warn, trace};
@@ -430,6 +430,7 @@ where
 		&mut self,
 		key: &[u8],
 	) -> u32 {
+
 		let accumulator = self.accumulators.remove(key).unwrap_or_default();
 		let accumulated = if accumulator.len() == 0 {
 			// don't update anything if none accumulated
@@ -438,9 +439,18 @@ where
 			accumulator.len()
 		};
 
+		let _guard = sp_panic_handler::AbortGuard::force_abort();
+ 		self.mark_dirty();
+
+ 		let current_value = self.overlay
+ 			.value_mut(key)
+ 			.map(|val| val.take())
+ 			.unwrap_or_else(|| self.backend.storage(&key).expect(EXT_NOT_ALLOWED_TO_FAIL))
+ 			.unwrap_or_default();
+
 		self.place_storage(
 			key.to_vec(),
-			Some(accumulator.merge_with_storage(self.storage(key).unwrap_or_default()))
+			Some(accumulator.merge_with_storage(current_value).expect("TODO:"))
 		);
 
 		accumulated
@@ -616,6 +626,27 @@ where
 	}
 }
 
+fn storage_error(err: &'static str) -> sp_externalities::Error {
+	sp_externalities::Error::StorageUpdateFailed(err)
+}
+
+fn extract_length_data(data: &[u8], added_len: usize) -> Result<(u32, usize, usize), sp_externalities::Error> {
+	use codec::CompactLen;
+
+	let len = u32::from(
+		Compact::<u32>::decode(&mut &data[..])
+			.map_err(|_| storage_error("Incorrent updated item encoding"))?
+	);
+	let new_len = len
+		.checked_add(added_len as u32)
+		.ok_or_else(|| storage_error("New vec length greater than `u32::max_value()`."))?;
+
+	let encoded_len = Compact::<u32>::compact_len(&len);
+	let encoded_new_len = Compact::<u32>::compact_len(&new_len);
+
+	Ok((new_len, encoded_len, encoded_new_len))
+}
+
 /// Storage accumulator.
 ///
 /// This is append-only structure. It is instantiated empty with
@@ -637,30 +668,48 @@ impl StorageAccumulator {
 	///
 	/// Storage value encoded in `previous_value` is interpreted as
 	/// (`Compact(u32)`, <rest of the data>).
-	pub fn merge_with_storage(self, previous_value: Vec<u8>) -> Vec<u8> {
-		let (storage_length, storage_data) = if !previous_value.is_empty() {
-			let stream = &mut &previous_value[..];
-			// TODO: panic? propagate error? who will handle?
-			let storage_length: u32 = codec::Compact::<u32>::decode(stream).ok()
-				.map(From::from).unwrap_or_default();
-
-			(storage_length, *stream)
-		} else {
-			if self.len() == 0 {
-				return vec![]
-			} else {
-				(0, &[][..])
+	pub fn merge_with_storage(self, mut previous_value: Vec<u8>) -> Result<Vec<u8>, sp_externalities::Error> {
+		// No data present, just encode the given input data.
+		if previous_value.is_empty() {
+			Compact::from(self.0.len() as u32).encode_to(&mut previous_value);
+			for value in self.0.iter() {
+				previous_value.extend(value);
 			}
-		};
-
-		let final_length = storage_length + self.len();
-		let mut final_storage_value = codec::Compact(final_length).encode();
-		final_storage_value.extend(storage_data);
-		for value in self.0 {
-			final_storage_value.extend(value)
+			return Ok(previous_value);
 		}
 
-		final_storage_value
+		let (new_len, encoded_len, encoded_new_len) = extract_length_data(&previous_value, self.0.len())?;
+
+		let replace_len = |dest: &mut Vec<u8>| {
+			Compact(new_len).using_encoded(|e| {
+				dest[..encoded_new_len].copy_from_slice(e);
+			})
+		};
+
+		let append_new_elems = |dest: &mut Vec<u8>| for value in self.0.iter() { dest.extend(&value[..]); };
+
+		// If old and new encoded len is equal, we don't need to copy the
+		// already encoded data.
+		if encoded_len == encoded_new_len {
+			replace_len(&mut previous_value);
+			append_new_elems(&mut previous_value);
+
+			Ok(previous_value)
+		} else {
+			let size = encoded_new_len + previous_value.len() - encoded_len;
+			let new_size: usize = self.0.iter().map(|x| x.len()).sum();
+
+			let mut res = Vec::with_capacity(size + new_size);
+			unsafe { res.set_len(size); }
+
+			// Insert the new encoded len, copy the already encoded data and
+			// add the new element.
+			replace_len(&mut res);
+			res[encoded_new_len..size].copy_from_slice(&previous_value[encoded_len..]);
+			append_new_elems(&mut res);
+
+			Ok(res)
+		}
 	}
 
 	/// Numner of accumulated entries.

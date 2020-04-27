@@ -41,6 +41,8 @@ pub enum Error {
 	ExtensionsAreNotSupported,
 	/// Extension `TypeId` is not registered.
 	ExtensionIsNotRegistered(TypeId),
+
+	StorageUpdateFailed(&'static str),
 }
 
 /// The Substrate externalities.
