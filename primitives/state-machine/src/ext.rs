@@ -464,7 +464,7 @@ where
 			root
 		} else {
 			if let Some((child_info, child_change)) = self.overlay.default_child_info(storage_key) {
-				if let ChildChange::BulkDeleteByKeyspace(..) = child_change {
+				if let ChildChange::BulkDelete(..) = child_change {
 					return empty_child_trie_root::<Layout<H>>().encode();
 				}
 				let (root, _is_empty, _) = {

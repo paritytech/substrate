@@ -157,8 +157,8 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 	let mut change = (ChildChange::Update, None);
 	if let Some((child_change, _)) = prospective.as_ref().or_else(|| committed.as_ref()) {
 		match &child_change.0 {
-			ChildChange::BulkDeleteByKeyspace(encoded_root) => {
-				change.0 = ChildChange::BulkDeleteByKeyspace(encoded_root.clone());
+			ChildChange::BulkDelete(encoded_root) => {
+				change.0 = ChildChange::BulkDelete(encoded_root.clone());
 				change.1 = child_change.1;
 			},
 			ChildChange::Update => (),

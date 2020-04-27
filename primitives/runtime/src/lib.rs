@@ -145,8 +145,8 @@ impl BuildStorage for sp_core::storage::Storage {
 							ChildChange::Update => map.data.extend(
 								other_map.data.iter().map(|(k, v)| (k.clone(), v.clone()))
 							),
-							ChildChange::BulkDeleteByKeyspace(encoded_root) => {
-								map.child_change = ChildChange::BulkDeleteByKeyspace(encoded_root.clone());
+							ChildChange::BulkDelete(encoded_root) => {
+								map.child_change = ChildChange::BulkDelete(encoded_root.clone());
 								map.data.clear();
 							},
 						}

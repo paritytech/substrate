@@ -266,7 +266,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 						info.child_type(),
 					);
 				}
-				if let ChildChange::BulkDeleteByKeyspace(..) = change {
+				if let ChildChange::BulkDelete(..) = change {
 					db_transaction.delete_prefix(0, info.keyspace());
 				} else {
 					keyspace.change_keyspace(info.keyspace());

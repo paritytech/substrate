@@ -51,7 +51,7 @@ impl StorageChangeSet {
 			.filter_map(move |(sk, change, changes)| {
 				if let Some(cf) = self.child_filters.as_ref() {
 					if let Some(filter) = cf.get(sk) {
-						let bulk_delete = matches!(change, ChildChange::BulkDeleteByKeyspace(..));
+						let bulk_delete = matches!(change, ChildChange::BulkDelete(..));
 							Some(changes
 								.iter()
 								.filter(move |&(key, _)| if bulk_delete {

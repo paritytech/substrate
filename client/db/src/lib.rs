@@ -866,6 +866,16 @@ impl<Block: BlockT> Backend<Block> {
 	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn new_test(keep_blocks: u32, canonicalization_delay: u64) -> Self {
 		let db = kvdb_memorydb::create(crate::utils::NUM_COLUMNS);
+		Self::new_test_memorydb(db, keep_blocks, canonicalization_delay)
+	}
+
+	/// Create new memory-backed client backend for tests.
+	#[cfg(any(test, feature = "test-helpers"))]
+	fn new_test_memorydb(
+		db: kvdb_memorydb::InMemory,
+		keep_blocks: u32,
+		canonicalization_delay: u64,
+	) -> Self {
 		let db = sp_database::as_database(db);
 		let db_setting = DatabaseSettings {
 			state_cache_size: 16777216,
@@ -876,6 +886,7 @@ impl<Block: BlockT> Backend<Block> {
 
 		Self::new(db_setting, canonicalization_delay).expect("failed to create test-db")
 	}
+
 
 	/// Create new memory-backed client backend for tests, using
 	/// parity-db
@@ -893,7 +904,6 @@ impl<Block: BlockT> Backend<Block> {
 		};
 		Self::new(db_setting, canonicalization_delay).expect("failed to create test-db")
 	}
-
 
 	fn from_database(
 		db: Arc<dyn Database<DbHash>>,
@@ -1184,7 +1194,7 @@ impl<Block: BlockT> Backend<Block> {
 							info.child_type(),
 						)));
 					}
-					if let ChildChange::BulkDeleteByKeyspace(encoded_root) = change {
+					if let ChildChange::BulkDelete(encoded_root) = change {
 						state_db_changeset.deleted_child.push((info.keyspace().to_vec(), encoded_root));
 					} else {
 						keyspace.change_keyspace(info.keyspace());
@@ -1924,18 +1934,240 @@ pub(crate) mod tests {
 
 	#[cfg(feature = "parity-db")]
 	#[test]
-	fn bulk_delete_child_trie_parity_db() {
-		let backend = Backend::<Block>::new_test_parity_db(2, 0);
-		bulk_delete_child_trie_inner(backend);
+	fn bulk_delete_child_trie_non_iterable_db() {
+		use kvdb::KeyValueDB;
+		let db = Backend::<Block>::new_test_parity_db(3, 0);
+
+		let mut count = 0;
+		let in_mem_ref_db = kvdb_memorydb::create(crate::utils::NUM_COLUMNS);
+		// implementing KeyValueDB for Arc<impl KeyValueDB> could avoid using
+		// this unsafe pointer.
+		let in_mem_ref: *const kvdb_memorydb::InMemory = &in_mem_ref_db;
+		let db_ref = Backend::<Block>::new_test_memorydb(in_mem_ref_db, 3, 0);
+
+		let child_info = sp_core::storage::ChildInfo::new_default(b"key1");
+
+		let (hash, child_root) = {
+			let mut op = db.begin_operation().unwrap();
+			let mut op_ref = db_ref.begin_operation().unwrap();
+			db.begin_state_operation(&mut op, BlockId::Hash(Default::default())).unwrap();
+			db_ref.begin_state_operation(&mut op_ref, BlockId::Hash(Default::default())).unwrap();
+			let mut header = Header {
+				number: 0,
+				parent_hash: Default::default(),
+				state_root: Default::default(),
+				digest: Default::default(),
+				extrinsics_root: Default::default(),
+			};
+
+			let storage = vec![];
+
+			let child_storage = vec![
+				(vec![2, 3, 5], Some(vec![4, 4, 6])),
+				(vec![2, 2, 3], Some(vec![7, 9, 9])),
+				(vec![1, 2, 3], Some(vec![7, 9, 8])),
+			];
+
+			header.state_root = op.old_state.full_storage_root(storage
+				.iter()
+				.cloned()
+				.map(|(x, y)| (x, Some(y))),
+				vec![(child_info.clone(), ChildChange::Update, child_storage.clone())],
+				false,
+			).0.into();
+			let hash = header.hash();
+
+			let mut children_default = HashMap::default();
+			children_default.insert(child_info.storage_key().to_vec(), sp_core::storage::StorageChild {
+				child_info: child_info.clone(),
+				child_change: Default::default(),
+				data: child_storage.iter().map(|(k, v)| (k.clone(), v.clone().unwrap())).collect(),
+			});
+			op.reset_storage(Storage {
+				top: storage.iter().cloned().collect(),
+				children_default: children_default.clone(),
+			}).unwrap();
+			op.set_block_data(
+				header.clone(),
+				Some(vec![]),
+				None,
+				NewBlockState::Best,
+			).unwrap();
+			db.commit_operation(op).unwrap();
+
+			op_ref.reset_storage(Storage {
+				top: storage.iter().cloned().collect(),
+				children_default,
+			}).unwrap();
+			op_ref.set_block_data(
+				header.clone(),
+				Some(vec![]),
+				None,
+				NewBlockState::Best,
+			).unwrap();
+			db_ref.commit_operation(op_ref).unwrap();
+
+			let state = db.state_at(BlockId::Number(0)).unwrap();
+
+			let child_root = state.storage(&child_info.prefixed_storage_key()[..])
+				.unwrap().unwrap();
+			assert_eq!(
+				state.child_storage(&child_info, &[2, 3, 5]).unwrap(),
+				Some(vec![4, 4, 6]),
+			);
+			assert_eq!(
+				state.child_storage(&child_info, &[2, 2, 3]).unwrap(),
+				Some(vec![7, 9, 9]),
+			);
+			assert_eq!(
+				state.child_storage(&child_info, &[2, 3, 5]).unwrap(),
+				Some(vec![4, 4, 6]),
+			);
+
+			for key in unsafe { in_mem_ref.as_ref() }.unwrap().iter(columns::STATE) {
+				assert!(db.storage.db.get(
+					columns::STATE,
+					&key.0
+				).is_some());
+				count += 1;
+			}
+			assert!(count > 0);
+			(hash, child_root)
+		};
+		let assert_count = |count_ref: usize, count: &mut usize| {
+			let mut new_count = 0;
+			for key in unsafe { in_mem_ref.as_ref() }.unwrap().iter(columns::STATE) {
+				assert!(db.storage.db.get(
+					columns::STATE,
+					&key.0
+				).is_some());
+				new_count += 1;
+			}
+			assert_eq!(new_count, count_ref);
+			*count = new_count;
+		};
+		let hash = {
+			let mut op = db.begin_operation().unwrap();
+			let mut op_ref = db_ref.begin_operation().unwrap();
+			db.begin_state_operation(&mut op, BlockId::Number(0)).unwrap();
+			db_ref.begin_state_operation(&mut op_ref, BlockId::Number(0)).unwrap();
+			let mut header = Header {
+				number: 1,
+				parent_hash: hash,
+				state_root: Default::default(),
+				digest: Default::default(),
+				extrinsics_root: Default::default(),
+			};
+			let storage = vec![];
+
+			let child_storage = vec![(
+				child_info.clone(),
+				ChildChange::BulkDelete(child_root),
+				vec![],
+			)];
+			let (root, overlay, _) = op.old_state.full_storage_root(storage
+				.iter()
+				.cloned(),
+				child_storage.clone(),
+				false,
+			);
+			op.update_db_storage(overlay.clone()).unwrap();
+			op_ref.update_db_storage(overlay).unwrap();
+			header.state_root = root.into();
+			op.update_storage(storage.clone(), child_storage.clone()).unwrap();
+			op_ref.update_storage(storage, child_storage).unwrap();
+
+			let hash = header.hash();
+
+			op.set_block_data(
+				header.clone(),
+				Some(vec![]),
+				None,
+				NewBlockState::Best,
+			).unwrap();
+
+			db.commit_operation(op).unwrap();
+
+			op_ref.set_block_data(
+				header,
+				Some(vec![]),
+				None,
+				NewBlockState::Best,
+			).unwrap();
+
+			db_ref.commit_operation(op_ref).unwrap();
+
+			let state = db.state_at(BlockId::Number(1)).unwrap();
+
+			assert_eq!(
+				state.child_storage(&child_info, &[2, 3, 5]).unwrap(),
+				None,
+			);
+			assert_eq!(
+				state.child_storage(&child_info, &[2, 2, 3]).unwrap(),
+				None,
+			);
+
+			let mut new_count = 0;
+			for key in unsafe { in_mem_ref.as_ref() }.unwrap().iter(columns::STATE) {
+				assert!(db.storage.db.get(
+					columns::STATE,
+					&key.0
+				).is_some());
+				new_count += 1;
+			}
+			// new state is empty root so it is not stored and keep count constant.
+			assert_count(count, &mut count);
+
+			hash
+		};
+
+		let next_block = |number, parent_hash| {
+			let mut op = db.begin_operation().unwrap();
+			let mut op_ref = db_ref.begin_operation().unwrap();
+			db.begin_state_operation(&mut op, BlockId::Number(number)).unwrap();
+			db_ref.begin_state_operation(&mut op_ref, BlockId::Number(number)).unwrap();
+			let header = Header {
+				number: number + 1,
+				parent_hash,
+				state_root: Default::default(),
+				digest: Default::default(),
+				extrinsics_root: Default::default(),
+			};
+
+			let hash = header.hash();
+			op.set_block_data(
+				header.clone(),
+				Some(vec![]),
+				None,
+				NewBlockState::Best,
+			).unwrap();
+
+			db.commit_operation(op).unwrap();
+
+			op_ref.set_block_data(
+				header,
+				Some(vec![]),
+				None,
+				NewBlockState::Best,
+			).unwrap();
+
+			db_ref.commit_operation(op_ref).unwrap();
+
+			hash
+		};
+		let hash = next_block(1, hash);
+		assert_count(count, &mut count);
+		let hash = next_block(2, hash);
+		assert_count(count, &mut count);
+		next_block(3, hash);
+		assert_count(0, &mut count);
 	}
+
 
 	#[test]
-	fn bulk_delete_child_trie() {
+	fn bulk_delete_child_trie_iterable_db() {
 		let backend = Backend::<Block>::new_test(2, 0);
-		bulk_delete_child_trie_inner(backend);
-	}
-
-	fn bulk_delete_child_trie_inner(backend: Backend<Block>) {
 		let _ = ::env_logger::try_init();
 		let mut key = Vec::new();
 		// This is not collision resistant but enough for the test.
@@ -1973,9 +2205,9 @@ pub(crate) mod tests {
 			key.push(top.1.insert(EMPTY_PREFIX, b"hello3"));
 			let child = op.db_updates.entry(ChildInfo::new_default(storage_key))
 				.or_insert_with(Default::default);
-			key.push(child.1.insert(EMPTY_PREFIX, b"hello1"));
-			key.push(child.1.insert(EMPTY_PREFIX, b"hello2"));
-			key.push(child.1.insert(EMPTY_PREFIX, b"hello3"));
+			key.push(child.1.insert(EMPTY_PREFIX, b"hello4"));
+			key.push(child.1.insert(EMPTY_PREFIX, b"hello5"));
+			key.push(child.1.insert(EMPTY_PREFIX, b"hello6"));
 			op.set_block_data(
 				header,
 				Some(vec![]),
@@ -1991,7 +2223,7 @@ pub(crate) mod tests {
 			assert_eq!(backend.storage.db.get(
 				columns::STATE,
 				&sp_trie::prefixed_key::<BlakeTwo256>(&key[3], (storage_key, None))
-			).unwrap(), &b"hello1"[..]);
+			).unwrap(), &b"hello4"[..]);
 			hash
 		};
 
@@ -2018,12 +2250,11 @@ pub(crate) mod tests {
 			let hash = header.hash();
 
 			let child_info = ChildInfo::new_default(storage_key);
-			let child_root = op.old_state.storage(&child_info.prefixed_storage_key())
-				.unwrap()
-				.expect("Some child content in previous state").clone();
 			let child = op.db_updates.entry(child_info)
 				.or_insert_with(Default::default);
-			child.0 = ChildChange::BulkDeleteByKeyspace(child_root);
+			// this test bulk deletion on by keyspace, the root in parameter
+			// is unused.
+			child.0 = ChildChange::BulkDelete(Default::default());
 			op.set_block_data(
 				header,
 				Some(vec![]),
@@ -2039,7 +2270,7 @@ pub(crate) mod tests {
 			assert_eq!(backend.storage.db.get(
 				columns::STATE,
 				&sp_trie::prefixed_key::<BlakeTwo256>(&key[3], (storage_key, None))
-			).unwrap(), &b"hello1"[..]);
+			).unwrap(), &b"hello4"[..]);
 			hash
 		};
 
@@ -2079,7 +2310,7 @@ pub(crate) mod tests {
 			assert_eq!(backend.storage.db.get(
 				columns::STATE,
 				&sp_trie::prefixed_key::<BlakeTwo256>(&key[3], (storage_key, None))
-			).unwrap(), &b"hello1"[..]);
+			).unwrap(), &b"hello4"[..]);
 			hash
 		};
 

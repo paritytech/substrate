@@ -241,7 +241,7 @@ impl OverlayedChanges {
 	/// value has been set.
 	pub fn child_storage(&self, child_info: &ChildInfo, key: &[u8]) -> Option<Option<&[u8]>> {
 		if let Some(child) = self.prospective.children_default.get(child_info.storage_key()) {
-			if let ChildChange::BulkDeleteByKeyspace(..) = child.change.0 {
+			if let ChildChange::BulkDelete(..) = child.change.0 {
 				return Some(None);
 			}
 			if let Some(val) = child.values.get(key) {
@@ -252,7 +252,7 @@ impl OverlayedChanges {
 		}
 
 		if let Some(child) = self.committed.children_default.get(child_info.storage_key()) {
-			if let ChildChange::BulkDeleteByKeyspace(..) = child.change.0 {
+			if let ChildChange::BulkDelete(..) = child.change.0 {
 				return Some(None);
 			}
 			if let Some(val) = child.values.get(key) {
@@ -337,9 +337,9 @@ impl OverlayedChanges {
 		}
 
 		if let Some(encoded_child_root) = encoded_child_root {
-			map_entry.change = (ChildChange::BulkDeleteByKeyspace(encoded_child_root), extrinsic_index);
+			map_entry.change = (ChildChange::BulkDelete(encoded_child_root), extrinsic_index);
 		} else {
-			map_entry.change = (ChildChange::BulkDeleteByKeyspace(Vec::new()), extrinsic_index);
+			map_entry.change = (ChildChange::BulkDelete(Vec::new()), extrinsic_index);
 		}
 		if !extrinsic_index.is_some() {
 			map_entry.values.clear();
@@ -485,7 +485,7 @@ impl OverlayedChanges {
 				.map(|(k, v)| (k, v.value)),
 			std::mem::replace(&mut self.committed.children_default, Default::default())
 				.into_iter()
-				.filter(|(_sk, child)| !matches!(&child.change.0, ChildChange::BulkDeleteByKeyspace(root) if root.is_empty()))
+				.filter(|(_sk, child)| !matches!(&child.change.0, ChildChange::BulkDelete(root) if root.is_empty()))
 				.map(|(_sk, child)| (child.info, child.change.0, child.values.into_iter().map(|(k, v)| (k, v.value)))),
 		)
 	}
@@ -600,7 +600,7 @@ impl OverlayedChanges {
 					),
 			)
 		})
-			.filter(|(_, child_change, _)| !matches!(&child_change, ChildChange::BulkDeleteByKeyspace(root) if root.is_empty()));
+			.filter(|(_, child_change, _)| !matches!(&child_change, ChildChange::BulkDelete(root) if root.is_empty()));
 
 		// compute and memoize
 		let delta = self.committed.top.iter().map(|(k, v)| (k.clone(), v.value.clone()))
@@ -691,7 +691,7 @@ impl OverlayedChanges {
 		let range = (ops::Bound::Excluded(key), ops::Bound::Unbounded);
 
 		let prospective = self.prospective.children_default.get(storage_key);
-		if let Some(ChildChange::BulkDeleteByKeyspace(..)) = prospective.map(|child| &child.change.0) {
+		if let Some(ChildChange::BulkDelete(..)) = prospective.map(|child| &child.change.0) {
 			return None;
 		}
 
@@ -699,7 +699,7 @@ impl OverlayedChanges {
 			.and_then(|child| child.values.range::<[u8], _>(range).next().map(|(k, v)| (&k[..], v)));
 
 		let committed = self.committed.children_default.get(storage_key);
-		if let Some(ChildChange::BulkDeleteByKeyspace(..)) = committed.map(|child| &child.change.0) {
+		if let Some(ChildChange::BulkDelete(..)) = committed.map(|child| &child.change.0) {
 			return None;
 		}
 

@@ -141,7 +141,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 						.map(|(k, v)| (k, v.value))
 						.collect::<Vec<_>>(),
 					// no need for change trie content
-					ChildChange::BulkDeleteByKeyspace(..) => Vec::new(),
+					ChildChange::BulkDelete(..) => Vec::new(),
 				};
 
 				transaction.push((

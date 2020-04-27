@@ -218,7 +218,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 			ChildType::ParentKeyId => empty_child_trie_root::<Layout<H>>()
 		};
 
-		if let ChildChange::BulkDeleteByKeyspace(_encoded_root) = &child_change {
+		if let ChildChange::BulkDelete(_encoded_root) = &child_change {
 			let mut tx = ChildrenMap::default();
 			tx.insert(child_info.clone(), (child_change.clone(), Default::default()));
 			(default_root, true, tx)

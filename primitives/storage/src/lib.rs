@@ -206,7 +206,7 @@ impl ChildInfo {
 	/// Passing current child change as parameter is needed
 	pub fn try_update(&mut self, self_change: &ChildChange, other: &ChildInfo) -> ChildUpdate {
 		match (self, self_change) {
-			(_, ChildChange::BulkDeleteByKeyspace(_encoded_root)) => ChildUpdate::Ignore,
+			(_, ChildChange::BulkDelete(_encoded_root)) => ChildUpdate::Ignore,
 			(ChildInfo::ParentKeyId(child_trie), ChildChange::Update) => child_trie.try_update(other),
 		}
 	}
@@ -279,7 +279,7 @@ impl ChildInfo {
 	/// content deletion.
 	pub fn bulk_delete_change(&self, encoded_root: Vec<u8>) -> ChildChange {
 		match self {
-			ChildInfo::ParentKeyId(..) => ChildChange::BulkDeleteByKeyspace(encoded_root),
+			ChildInfo::ParentKeyId(..) => ChildChange::BulkDelete(encoded_root),
 		}
 	}
 }
@@ -480,8 +480,7 @@ pub enum ChildChange {
 	/// The child trie allow bulk trie delete.
 	/// The inner data is the encoded root at the state where
 	/// it is been bulk deleted.
-	/// TODO EMCH rename to BulkDelete
-	BulkDeleteByKeyspace(Vec<u8>),
+	BulkDelete(Vec<u8>),
 }
 
 impl ChildChange {
@@ -492,7 +491,7 @@ impl ChildChange {
 		if other != *self {
 			match self {
 				ChildChange::Update => *self = other,
-				ChildChange::BulkDeleteByKeyspace(..) => panic!("Bulk delete cannot be overwritten"),
+				ChildChange::BulkDelete(..) => panic!("Bulk delete cannot be overwritten"),
 			}
 		}
 	}

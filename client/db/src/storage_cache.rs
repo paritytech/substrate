@@ -422,7 +422,7 @@ impl<B: BlockT> CacheChanges<B> {
 						}
 						child_modifications.insert(k);
 					},
-					ChildChange::BulkDeleteByKeyspace(..) => {
+					ChildChange::BulkDelete(..) => {
 						// Note that this is a rather costy operation.
 						cache.lru_child_storage.remove_by_storage_key(child_info.storage_key());
 						deleted_child.insert(child_info.storage_key().to_vec());
