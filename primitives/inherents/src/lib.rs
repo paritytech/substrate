@@ -408,6 +408,10 @@ pub trait ProvideInherent {
 	/// Create an inherent out of the given `InherentData`.
 	fn create_inherent(data: &InherentData) -> Option<Self::Call>;
 
+	/// If `Some`, indicates that an inherent is required. Check will return the inner error if no
+	/// inherent is found.
+	fn is_inherent_required(_: &InherentData) -> Option<Self::Error> { None }
+
 	/// Check the given inherent if it is valid.
 	/// Checking the inherent is optional and can be omitted.
 	fn check_inherent(_: &Self::Call, _: &InherentData) -> Result<(), Self::Error> {
