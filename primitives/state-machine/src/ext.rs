@@ -926,7 +926,7 @@ mod tests {
 		accumulator.append(Member { order: 6, param: 1 }.encode());
 
 		let mut storage_value = Vec::new();
-		storage_value = accumulator.merge_with_storage(storage_value);
+		storage_value = accumulator.merge_with_storage(storage_value).expect("merge shoud not fail");
 
 		let members = Vec::<Member>::decode(&mut &storage_value[..]).expect("decode failed");
 		assert_eq!(members.len(), 1);
@@ -935,7 +935,7 @@ mod tests {
 
 		let mut accumulator = StorageAccumulator::default();
 		accumulator.append(Member { order: 7, param: 122 }.encode());
-		storage_value = accumulator.merge_with_storage(storage_value);
+		storage_value = accumulator.merge_with_storage(storage_value).expect("merge shoud not fail");
 
 		let members = Vec::<Member>::decode(&mut &storage_value[..]).expect("decode failed");
 		assert_eq!(members.len(), 2);
