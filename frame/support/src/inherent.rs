@@ -98,26 +98,37 @@ macro_rules! impl_outer_inherent {
 				}
 
 				$(
-					if let Some(e) = $module::is_inherent_required(self) {
-						let found = block.extrinsics().any(|xt| {
-							if $crate::inherent::Extrinsic::is_signed(xt).unwrap_or(false) {
-								return false
-							}
+					match $module::is_inherent_required(self) {
+						Ok(Some(e)) => {
+							let found = block.extrinsics().any(|xt| {
+								if $crate::inherent::Extrinsic::is_signed(xt).unwrap_or(false) {
+									return false
+								}
 
-							match xt.function {
-								Call::$call(_) => true,
-								_ => false,
-							}
-						});
+								match xt.function {
+									Call::$call(_) => true,
+									_ => false,
+								}
+							});
 
-						if !found {
+							if !found {
+								result.put_error(
+									&module::INHERENT_IDENTIFIER, &e
+								).expect("There is only one fatal error; qed");
+								if e.is_fatal_error() {
+									return result
+								}
+							}
+						},
+						Ok(None) => (),
+						Err(e) => {
 							result.put_error(
 								&module::INHERENT_IDENTIFIER, &e
 							).expect("There is only one fatal error; qed");
 							if e.is_fatal_error() {
 								return result
 							}
-						}
+						},
 					}
 				)*
 
