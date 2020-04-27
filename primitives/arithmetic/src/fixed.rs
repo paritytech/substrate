@@ -301,7 +301,6 @@ macro_rules! implement_fixed {
 				
 				divide(n, d, <Self as FixedPointNumber>::BITS)
 					.and_then(|r|
-						{println!("result {}", r);
 						if r == max_value + 1 && signum < 0 {
 							let r = r.checked_sub(1)?;
 							let r: <Self as FixedPointNumber>::Inner = r.try_into().ok()?;
@@ -310,7 +309,7 @@ macro_rules! implement_fixed {
 						} else {
 							let r: <Self as FixedPointNumber>::Inner = r.try_into().ok()?;
 							r.checked_mul(signum)
-						}}
+						}
 					)
 					.map(|r| Self(r))
 			}
@@ -751,22 +750,18 @@ macro_rules! implement_fixed {
 				assert_eq!(a.checked_div(&-$name::max_value()), Some((-1).into()));
 
 				assert_eq!(b.checked_div(&b), Some($name::one()));
-				// assert_eq!(b.checked_div_int(2), Some(inner_min / (2 * accuracy)));
-				// assert_eq!(b.checked_div_int(inner_min / accuracy), Some(1));
-				// assert_eq!(b.checked_div_int(1i8), None);
+				assert_eq!(b.checked_div(&2.into()), Some($name::from_inner(inner_min / 2)));
 
-				// assert_eq!(b.checked_div_int(-2), Some(-(inner_min / (2 * accuracy))));
-				// assert_eq!(b.checked_div_int(-(inner_min / accuracy)), Some(-1));
+				assert_eq!(b.checked_div(&(-2).into()), Some($name::from_inner(inner_min / -2)));
+				assert_eq!(b.checked_div(&-b), Some((-1).into()));
 
-				// assert_eq!(c.checked_div_int(1), Some(0));
-				// assert_eq!(c.checked_div_int(i128::max_value()), Some(0));
-				// assert_eq!(c.checked_div_int(i128::min_value()), Some(0));
-				// assert_eq!(c.checked_div_int(1i8), Some(0));
+				assert_eq!(c.checked_div(&1.into()), Some(0.into()));
+				assert_eq!(c.checked_div(&$name::max_value()), Some(0.into()));
+				assert_eq!(c.checked_div(&$name::min_value()), Some(0.into()));
 
-				// assert_eq!(d.checked_div_int(1), Some(1));
-				// assert_eq!(d.checked_div_int(i32::max_value()), Some(0));
-				// assert_eq!(d.checked_div_int(i32::min_value()), Some(0));
-				// assert_eq!(d.checked_div_int(1i8), Some(1));
+				assert_eq!(d.checked_div(&1.into()), Some(1.into()));
+				assert_eq!(d.checked_div(&$name::max_value()), Some(0.into()));
+				assert_eq!(d.checked_div(&$name::min_value()), Some(0.into()));
 
 				assert_eq!(a.checked_div(&$name::one()), Some(a));
 				assert_eq!(b.checked_div(&$name::one()), Some(b));
