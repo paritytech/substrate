@@ -194,29 +194,8 @@ macro_rules! implement_fixed {
 					ops::Rem<N, Output=N> + ops::Div<N, Output=N> + ops::Mul<N, Output=N> +
 					ops::Add<N, Output=N>,
 			{
-				0i128.unique_saturated_into()
-				// let div = Self::accuracy() as Self::Unsigned;
-				// let positive = self.0 > 0;
-				// // safe to convert as absolute value.
-				// let parts = self.0.checked_abs().map(|v| v as Self::Unsigned)
-				// 	.unwrap_or(Self::Inner::max_value() as Self::Unsigned + 1);
-
-				// let natural_parts = parts / div;
-				// let natural_parts: N = natural_parts.saturated_into();
-
-				// let fractional_parts = (parts % div) as Self::PrevUnsigned;
-
-				// let n = int.saturating_mul(natural_parts);
-				// let p = Self::Perthing::from_parts(fractional_parts) * int;
-
-				// // everything that needs to be either added or subtracted from the original `int`.
-				// let excess = n.saturating_add(p);
-
-				// if positive {
-				// 	int.saturating_add(excess)
-				// } else {
-				// 	int.saturating_sub(excess)
-				// }
+				self.saturating_mul_int(int)
+					.saturating_add(int)
 			}
 		}
 
@@ -693,12 +672,12 @@ macro_rules! implement_fixed {
 
 			#[test]
 			fn saturating_mul_int_acc_works() {
-				// let inner_max = <$name as FixedPointNumber>::Inner::max_value();
-				// let accuracy = $name::accuracy();
+				let inner_max = <$name as FixedPointNumber>::Inner::max_value();
+				let accuracy = $name::accuracy();
 
-				// assert_eq!($name::zero().saturated_multiply_accumulate(accuracy as u64), accuracy as u64);
-				// assert_eq!($name::one().saturated_multiply_accumulate(accuracy as u64), 2 * accuracy as u64);
-				// assert_eq!($name::one().saturated_multiply_accumulate(i128::min_value()), i128::min_value());
+				assert_eq!($name::zero().saturated_multiply_accumulate(accuracy as u64), accuracy as u64);
+				assert_eq!($name::one().saturated_multiply_accumulate(accuracy as u64), 2 * accuracy as u64);
+				assert_eq!($name::one().saturated_multiply_accumulate(i128::min_value()), i128::min_value());
 			}
 
 			#[test]
