@@ -597,6 +597,11 @@ macro_rules! implement_fixed {
 				let b = $name::from_inner(inner_min);
 				let c = $name::zero();
 				let d = $name::one();
+				let e = $name::from_integer(6);
+				let f = $name::from_integer(5);
+
+				assert_eq!(e.checked_div_int(2.into()), Some(3));
+				assert_eq!(f.checked_div_int(2.into()), Some(2));
 
 				assert_eq!(a.checked_div_int(i128::max_value()), Some(0));
 				assert_eq!(a.checked_div_int(2), Some(inner_max / (2 * accuracy)));
