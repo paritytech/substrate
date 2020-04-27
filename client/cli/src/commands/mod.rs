@@ -144,6 +144,12 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
+			fn offchain_worker_params(&self) -> Option<&$crate::OffchainWorkerParams> {
+				match self {
+					$($enum::$variant(cmd) => cmd.offchain_worker_params()),*
+				}
+			}
+
 			fn base_path(&self) -> $crate::Result<::std::option::Option<::std::path::PathBuf>> {
 				match self {
 					$($enum::$variant(cmd) => cmd.base_path()),*
@@ -327,7 +333,7 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
-			fn offchain_worker(&self, role: &::sc_service::Role) -> $crate::Result<bool> {
+			fn offchain_worker(&self, role: &::sc_service::Role) -> $crate::Result<::sc_service::config::OffchainWorkerConfig> {
 				match self {
 					$($enum::$variant(cmd) => cmd.offchain_worker(role)),*
 				}

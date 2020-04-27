@@ -88,7 +88,7 @@ use sp_runtime::{
 };
 use frame_support::{
 	decl_storage, decl_event, ensure, decl_module, decl_error,
-	weights::{Weight, MINIMUM_WEIGHT, DispatchClass},
+	weights::{Weight, DispatchClass},
 	storage::{StorageMap, IterableStorageMap},
 	traits::{
 		Currency, Get, LockableCurrency, LockIdentifier, ReservableCurrency, WithdrawReasons,
@@ -97,8 +97,6 @@ use frame_support::{
 };
 use sp_phragmen::{build_support_map, ExtendedBalance, VoteWeight, PhragmenResult};
 use frame_system::{self as system, ensure_signed, ensure_root};
-
-const MODULE_ID: LockIdentifier = *b"phrelect";
 
 /// The maximum votes allowed per voter.
 pub const MAXIMUM_VOTE: usize = 16;
@@ -110,6 +108,9 @@ type NegativeImbalanceOf<T> =
 pub trait Trait: frame_system::Trait {
 	/// The overarching event type.c
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+
+	/// Identifier for the elections-phragmen pallet's lock
+	type ModuleId: Get<LockIdentifier>;
 
 	/// The currency that people are electing with.
 	type Currency:
@@ -268,7 +269,7 @@ decl_module! {
 		fn on_runtime_upgrade() -> Weight {
 			migration::migrate::<T>();
 
-			MINIMUM_WEIGHT
+			0
 		}
 
 		const CandidacyBond: BalanceOf<T> = T::CandidacyBond::get();
@@ -276,6 +277,7 @@ decl_module! {
 		const DesiredMembers: u32 = T::DesiredMembers::get();
 		const DesiredRunnersUp: u32 = T::DesiredRunnersUp::get();
 		const TermDuration: T::BlockNumber = T::TermDuration::get();
+		const ModuleId: LockIdentifier  = T::ModuleId::get();
 
 		/// Vote for a set of candidates for the upcoming round of election.
 		///
@@ -321,7 +323,7 @@ decl_module! {
 
 			// lock
 			T::Currency::set_lock(
-				MODULE_ID,
+				T::ModuleId::get(),
 				&who,
 				locked_balance,
 				WithdrawReasons::except(WithdrawReason::TransactionPayment),
@@ -337,7 +339,7 @@ decl_module! {
 		/// Reads: O(1)
 		/// Writes: O(1)
 		/// # </weight>
-		#[weight = MINIMUM_WEIGHT]
+		#[weight = 0]
 		fn remove_voter(origin) {
 			let who = ensure_signed(origin)?;
 
@@ -511,7 +513,7 @@ decl_module! {
 				print(e);
 			}
 
-			MINIMUM_WEIGHT
+			0
 		}
 	}
 }
@@ -650,7 +652,7 @@ impl<T: Trait> Module<T> {
 	fn do_remove_voter(who: &T::AccountId, unreserve: bool) {
 		// remove storage and lock.
 		Voting::<T>::remove(who);
-		T::Currency::remove_lock(MODULE_ID, who);
+		T::Currency::remove_lock(T::ModuleId::get(), who);
 
 		if unreserve {
 			T::Currency::unreserve(who, T::VotingBond::get());
@@ -913,6 +915,8 @@ mod tests {
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type DbWeight = ();
+		type BlockExecutionWeight = ();
+		type ExtrinsicBaseWeight = ();
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
@@ -924,7 +928,7 @@ mod tests {
 
 	parameter_types! {
 		pub const ExistentialDeposit: u64 = 1;
-}
+	}
 
 	impl pallet_balances::Trait for Test {
 		type Balance = u64;
@@ -1021,7 +1025,12 @@ mod tests {
 		}
 	}
 
+	parameter_types!{
+		pub const ElectionsPhragmenModuleId: LockIdentifier = *b"phrelect";
+	}
+
 	impl Trait for Test {
+		type ModuleId = ElectionsPhragmenModuleId;
 		type Event = Event;
 		type Currency = Balances;
 		type CurrencyToVote = CurrencyToVoteHandler;
@@ -1125,7 +1134,7 @@ mod tests {
 
 	fn has_lock(who: &u64) -> u64 {
 		let lock = Balances::locks(who)[0].clone();
-		assert_eq!(lock.id, MODULE_ID);
+		assert_eq!(lock.id, ElectionsPhragmenModuleId::get());
 		lock.amount
 	}
 

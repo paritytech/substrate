@@ -20,6 +20,7 @@ use crate::params::KeystoreParams;
 use crate::params::NetworkParams;
 use crate::params::SharedParams;
 use crate::params::TransactionPoolParams;
+use crate::params::OffchainWorkerParams;
 use crate::CliConfiguration;
 use regex::Regex;
 use sc_service::{
@@ -28,18 +29,7 @@ use sc_service::{
 };
 use sc_telemetry::TelemetryEndpoints;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use structopt::{clap::arg_enum, StructOpt};
-
-arg_enum! {
-	/// Whether off-chain workers are enabled.
-	#[allow(missing_docs)]
-	#[derive(Debug, Clone)]
-	pub enum OffchainWorkerEnabled {
-		Always,
-		Never,
-		WhenValidating,
-	}
-}
+use structopt::StructOpt;
 
 /// The `run` command used to run a node.
 #[derive(Debug, StructOpt, Clone)]
@@ -173,17 +163,9 @@ pub struct RunCmd {
 	#[structopt(long = "telemetry-url", value_name = "URL VERBOSITY", parse(try_from_str = parse_telemetry_endpoints))]
 	pub telemetry_endpoints: Vec<(String, u8)>,
 
-	/// Should execute offchain workers on every block.
-	///
-	/// By default it's only enabled for nodes that are authoring new blocks.
-	#[structopt(
-		long = "offchain-worker",
-		value_name = "ENABLED",
-		possible_values = &OffchainWorkerEnabled::variants(),
-		case_insensitive = true,
-		default_value = "WhenValidating"
-	)]
-	pub offchain_worker: OffchainWorkerEnabled,
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub offchain_worker_params: OffchainWorkerParams,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -298,6 +280,10 @@ impl CliConfiguration for RunCmd {
 
 	fn keystore_params(&self) -> Option<&KeystoreParams> {
 		Some(&self.keystore_params)
+	}
+
+	fn offchain_worker_params(&self) -> Option<&OffchainWorkerParams> {
+		Some(&self.offchain_worker_params)
 	}
 
 	fn node_name(&self) -> Result<String> {
@@ -437,15 +423,6 @@ impl CliConfiguration for RunCmd {
 
 	fn unsafe_rpc_expose(&self) -> Result<bool> {
 		Ok(self.unsafe_rpc_expose)
-	}
-
-	fn offchain_worker(&self, role: &Role) -> Result<bool> {
-		Ok(match (&self.offchain_worker, role) {
-			(OffchainWorkerEnabled::WhenValidating, Role::Authority { .. }) => true,
-			(OffchainWorkerEnabled::Always, _) => true,
-			(OffchainWorkerEnabled::Never, _) => false,
-			(OffchainWorkerEnabled::WhenValidating, _) => false,
-		})
 	}
 
 	fn transaction_pool(&self) -> Result<TransactionPoolOptions> {

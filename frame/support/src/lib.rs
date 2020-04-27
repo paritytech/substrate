@@ -193,10 +193,6 @@ macro_rules! assert_noop {
 	}
 }
 
-/// Panic if an expression doesn't evaluate to an `Err`.
-///
-/// Used as `assert_err!(expression_to_assert, expected_err_expression)`.
-
 /// Assert an expression returns an error specified.
 ///
 /// Used as `assert_err!(expression_to_assert, expected_error_expression)`
@@ -205,6 +201,18 @@ macro_rules! assert_noop {
 macro_rules! assert_err {
 	( $x:expr , $y:expr $(,)? ) => {
 		assert_eq!($x, Err($y.into()));
+	}
+}
+
+/// Assert an expression returns an error specified.
+///
+/// This can be used on`DispatchResultWithPostInfo` when the post info should
+/// be ignored.
+#[macro_export]
+#[cfg(feature = "std")]
+macro_rules! assert_err_ignore_postinfo {
+	( $x:expr , $y:expr $(,)? ) => {
+		assert_err!($x.map(|_| ()).map_err(|e| e.error), $y);
 	}
 }
 

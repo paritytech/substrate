@@ -164,7 +164,6 @@ use sp_std::prelude::*;
 use sp_std::{cmp, result, fmt::Debug};
 use frame_support::{
 	decl_event, decl_module, decl_storage, ensure, decl_error,
-	weights::MINIMUM_WEIGHT,
 	traits::{
 		Currency, ExistenceRequirement, Imbalance, LockIdentifier, LockableCurrency, ReservableCurrency,
 		SignedImbalance, WithdrawReason, WithdrawReasons, TryDrop, BalanceStatus,
@@ -361,14 +360,14 @@ decl_module! {
 		fn deposit_event() = default;
 
 		/// Create a new kind of asset.
-		#[weight = MINIMUM_WEIGHT]
+		#[weight = 0]
 		fn create(origin, options: AssetOptions<T::Balance, T::AccountId>) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			Self::create_asset(None, Some(origin), options)
 		}
 
 		/// Transfer some liquid free balance to another account.
-		#[weight = MINIMUM_WEIGHT]
+		#[weight = 0]
 		pub fn transfer(origin, #[compact] asset_id: T::AssetId, to: T::AccountId, #[compact] amount: T::Balance) {
 			let origin = ensure_signed(origin)?;
 			ensure!(!amount.is_zero(), Error::<T>::ZeroAmount);
@@ -378,7 +377,7 @@ decl_module! {
 		/// Updates permission for a given `asset_id` and an account.
 		///
 		/// The `origin` must have `update` permission.
-		#[weight = MINIMUM_WEIGHT]
+		#[weight = 0]
 		fn update_permission(
 			origin,
 			#[compact] asset_id: T::AssetId,
@@ -401,7 +400,7 @@ decl_module! {
 
 		/// Mints an asset, increases its total issuance.
 		/// The origin must have `mint` permissions.
-		#[weight = MINIMUM_WEIGHT]
+		#[weight = 0]
 		fn mint(origin, #[compact] asset_id: T::AssetId, to: T::AccountId, amount: T::Balance) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::mint_free(&asset_id, &who, &to, &amount)?;
@@ -411,7 +410,7 @@ decl_module! {
 
 		/// Burns an asset, decreases its total issuance.
 		/// The `origin` must have `burn` permissions.
-		#[weight = MINIMUM_WEIGHT]
+		#[weight = 0]
 		fn burn(origin, #[compact] asset_id: T::AssetId, to: T::AccountId, amount: T::Balance) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::burn_free(&asset_id, &who, &to, &amount)?;
@@ -421,7 +420,7 @@ decl_module! {
 
 		/// Can be used to create reserved tokens.
 		/// Requires Root call.
-		#[weight = MINIMUM_WEIGHT]
+		#[weight = 0]
 		fn create_reserved(
 			origin,
 			asset_id: T::AssetId,
@@ -1126,6 +1125,8 @@ impl<T: Subtrait> frame_system::Trait for ElevatedTrait<T> {
 	type BlockHashCount = T::BlockHashCount;
 	type MaximumBlockWeight = T::MaximumBlockWeight;
 	type DbWeight = ();
+	type BlockExecutionWeight = ();
+	type ExtrinsicBaseWeight = ();
 	type MaximumBlockLength = T::MaximumBlockLength;
 	type AvailableBlockRatio = T::AvailableBlockRatio;
 	type Version = T::Version;

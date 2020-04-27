@@ -4077,6 +4077,7 @@ dependencies = [
  "pallet-contracts-primitives",
  "pallet-randomness-collective-flip",
  "pallet-timestamp",
+ "pallet-transaction-payment",
  "parity-scale-codec",
  "parity-wasm 0.41.0",
  "pwasm-utils",
@@ -7531,7 +7532,9 @@ name = "sp-offchain"
 version = "2.0.0-dev"
 dependencies = [
  "sp-api",
+ "sp-core",
  "sp-runtime",
+ "sp-state-machine",
 ]
 
 [[package]]

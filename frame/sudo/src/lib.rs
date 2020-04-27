@@ -52,14 +52,13 @@
 //!
 //! ```
 //! use frame_support::{decl_module, dispatch};
-//! use frame_support::weights::MINIMUM_WEIGHT;
 //! use frame_system::{self as system, ensure_root};
 //!
 //! pub trait Trait: frame_system::Trait {}
 //!
 //! decl_module! {
 //!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		#[weight = MINIMUM_WEIGHT]
+//! 		#[weight = 0]
 //!         pub fn privileged_function(origin) -> dispatch::DispatchResult {
 //!             ensure_root(origin)?;
 //!
@@ -93,7 +92,7 @@ use sp_runtime::traits::{StaticLookup, Dispatchable};
 use frame_support::{
 	Parameter, decl_module, decl_event, decl_storage, decl_error, ensure,
 };
-use frame_support::weights::{MINIMUM_WEIGHT, GetDispatchInfo, FunctionOf, Pays};
+use frame_support::weights::{GetDispatchInfo, FunctionOf, Pays};
 use frame_system::{self as system, ensure_signed};
 
 pub trait Trait: frame_system::Trait {
@@ -151,7 +150,7 @@ decl_module! {
 		/// - Limited storage reads.
 		/// - One DB change.
 		/// # </weight>
-		#[weight = MINIMUM_WEIGHT]
+		#[weight = 0]
 		fn set_key(origin, new: <T::Lookup as StaticLookup>::Source) {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
