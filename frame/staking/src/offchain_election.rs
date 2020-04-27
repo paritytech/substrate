@@ -27,7 +27,7 @@ use sp_phragmen::{
 };
 use sp_runtime::offchain::storage::StorageValueRef;
 use sp_runtime::{PerThing, RuntimeDebug, traits::{TrailingZeroInput, Zero}};
-use frame_support::{debug, traits::{Randomness, Get}};
+use frame_support::{debug, traits::Get};
 use sp_std::{convert::TryInto, prelude::*};
 
 /// Error types related to the offchain election machinery.
@@ -176,8 +176,7 @@ pub fn prepare_submission<T: Trait>(
 	let (mut support_map, _) = build_support_map::<T::AccountId>(&winners, &staked);
 
 	// equalize a random number of times.
-	let phrase = b"staking_offchain_phragmen";
-	let seed = T::Randomness::random(phrase);
+	let seed = sp_io::offchain::random_seed();
 	let iterations = <u32>::decode(&mut TrailingZeroInput::new(seed.as_ref()))
 		.expect("input is padded with zeroes; qed") % T::MaxIterations::get();
 	let iterations_executed = equalize(

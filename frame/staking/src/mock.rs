@@ -17,7 +17,6 @@
 //! Test utilities
 
 use std::{collections::{HashSet, HashMap}, cell::RefCell};
-use codec::Encode;
 use sp_runtime::Perbill;
 use sp_runtime::curve::PiecewiseLinear;
 use sp_runtime::traits::{IdentityLookup, Convert, SaturatedConversion, Zero};
@@ -93,15 +92,6 @@ impl pallet_session::OneSessionHandler<AccountId> for OtherSessionHandler {
 			let value = d.0[validator_index];
 			d.1.insert(value);
 		})
-	}
-}
-
-pub struct StaticRandomness;
-impl frame_support::traits::Randomness<H256> for StaticRandomness {
-	fn random(_subject: &[u8]) -> H256 {
-		let mut static_value = ITERATIONS.with(|v| *v.borrow()).encode();
-		static_value.resize_with(32, || 0u8);
-		H256::from_slice(&static_value)
 	}
 }
 
@@ -320,7 +310,6 @@ impl Trait for Test {
 	type NextNewSession = Session;
 	type ElectionLookahead = ElectionLookahead;
 	type Call = Call;
-	type Randomness = StaticRandomness;
 	type MaxIterations = MaxIterations;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type UnsignedPriority = UnsignedPriority;

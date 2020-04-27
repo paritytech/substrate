@@ -16,8 +16,6 @@
 
 //! Mock file for staking fuzzing.
 
-use codec::Encode;
-use sp_core::H256;
 use sp_runtime::traits::{Convert, SaturatedConversion};
 use frame_support::{impl_outer_origin, impl_outer_dispatch, parameter_types};
 
@@ -51,15 +49,6 @@ impl Convert<u64, u64> for CurrencyToVoteHandler {
 impl Convert<u128, u64> for CurrencyToVoteHandler {
 	fn convert(x: u128) -> u64 {
 		x.saturated_into()
-	}
-}
-
-pub struct StaticRandomness;
-impl frame_support::traits::Randomness<H256> for StaticRandomness {
-	fn random(_subject: &[u8]) -> H256 {
-		let mut static_value = 10u32.encode();
-		static_value.resize_with(32, || 0u8);
-		H256::from_slice(&static_value)
 	}
 }
 
@@ -192,7 +181,6 @@ impl pallet_staking::Trait for Test {
 	type ElectionLookahead = ();
 	type Call = Call;
 	type MaxIterations = MaxIterations;
-	type Randomness = StaticRandomness;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type UnsignedPriority = ();
 }

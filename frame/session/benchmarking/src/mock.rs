@@ -178,7 +178,6 @@ impl pallet_staking::Trait for Test {
 	type Call = Call;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type UnsignedPriority = UnsignedPriority;
-	type Randomness = ();
 	type MaxIterations = ();
 }
 

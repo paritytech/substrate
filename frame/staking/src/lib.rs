@@ -296,7 +296,7 @@ use frame_support::{
 	dispatch::{IsSubType, DispatchResult},
 	traits::{
 		Currency, LockIdentifier, LockableCurrency, WithdrawReasons, OnUnbalanced, Imbalance, Get,
-		UnixTime, EstimateNextNewSession, Randomness, EnsureOrigin,
+		UnixTime, EstimateNextNewSession, EnsureOrigin,
 	}
 };
 use pallet_session::historical;
@@ -803,9 +803,6 @@ pub trait Trait: frame_system::Trait + SendTransactionTypes<Call<Self>> {
 
 	/// The overarching call type.
 	type Call: Dispatchable + From<Call<Self>> + IsSubType<Module<Self>, Self> + Clone;
-
-	/// Something that can provide randomness
-	type Randomness: Randomness<Self::Hash>;
 
 	/// Maximum number of equalise iterations to run in the offchain submission
 	type MaxIterations: Get<u32>;

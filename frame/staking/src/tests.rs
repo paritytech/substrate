@@ -3119,7 +3119,7 @@ mod offchain_phragmen {
 					&inner,
 				),
 				TransactionValidity::Ok(ValidTransaction {
-					priority: UnsignedPriority::get() + 1125, // the proposed slot stake.
+					priority: UnsignedPriority::get() + 1250, // the proposed slot stake.
 					requires: vec![],
 					provides: vec![("StakingOffchain", current_era()).encode()],
 					longevity: 3,
