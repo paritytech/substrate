@@ -18,6 +18,7 @@ use criterion::{Criterion, Throughput, BenchmarkId, criterion_group, criterion_m
 use sp_arithmetic::biguint::{BigUint, Single};
 use sp_arithmetic::{Fixed128, traits::FixedPointNumber};
 use sp_arithmetic::helpers_128bit::{divide, multiply_by_rational};
+use sp_arithmetic::traits::Saturating;
 use num_traits::{Bounded, ops::checked::CheckedMul};
 use rand::Rng;
 
@@ -97,10 +98,17 @@ fn bench_divide(c: &mut Criterion) {
 	// c.bench_function("divide_rat", |b| b.iter(|| divide(i128::max_value() as u128, 16, 3)));
 }
 
+fn bench_pow(c: &mut Criterion) {
+	let x = Fixed128::from_integer(3.into());
+	c.bench_function("saturating_pow", |b| b.iter(|| x.saturating_pow(80usize)));
+}
+
+
 criterion_group!{
 	name = benches;
 	config = Criterion::default();
 	targets = bench_addition, bench_subtraction, bench_multiplication, bench_division,
-		bench_checked_mul_int, bench_saturated_multiply_accumulate, bench_checked_mul, bench_divide
+		bench_checked_mul_int, bench_saturated_multiply_accumulate, bench_checked_mul, bench_divide,
+		bench_pow
 }
 criterion_main!(benches);

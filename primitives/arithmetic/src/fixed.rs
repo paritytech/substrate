@@ -686,6 +686,35 @@ macro_rules! implement_fixed {
 				let c = a * b;
 				assert_eq!(c, b);
 			}
+
+			fn saturating_pow_should_work() {
+				let inner_max = <$name as FixedPointNumber>::Inner::max_value();
+				let inner_min = <$name as FixedPointNumber>::Inner::min_value();
+				let accuracy = $name::accuracy();
+
+				assert_eq!($name::from_integer(2).saturating_pow(0), $name::from_integer(1));
+				assert_eq!($name::from_integer(2).saturating_pow(1), $name::from_integer(2));
+				assert_eq!($name::from_integer(2).saturating_pow(2), $name::from_integer(4));
+				assert_eq!($name::from_integer(2).saturating_pow(3), $name::from_integer(8));
+				assert_eq!($name::from_integer(2).saturating_pow(50), $name::from_integer(1125899906842624));
+
+				// Saturating.
+				assert_eq!($name::from_integer(2).saturating_pow(68), $name::max_value());
+
+				assert_eq!($name::from_integer(1).saturating_pow(1000), $name::from_integer(1));
+				assert_eq!($name::from_integer(-1).saturating_pow(1000), $name::from_integer(1));
+				assert_eq!($name::from_integer(-1).saturating_pow(1001), $name::from_integer(-1));
+				assert_eq!($name::from_integer(1).saturating_pow(usize::max_value()), $name::from_integer(1));
+				assert_eq!($name::from_integer(-1).saturating_pow(usize::max_value()), $name::from_integer(-1));
+				assert_eq!($name::from_integer(-1).saturating_pow(usize::max_value() - 1), $name::from_integer(1));
+
+				assert_eq!($name::from_integer(114209).saturating_pow(4), $name::max_value());
+				assert_eq!($name::from_integer(114209).saturating_pow(5), $name::max_value());
+
+				assert_eq!($name::from_integer(1).saturating_pow(usize::max_value()), $name::from_integer(1));
+				assert_eq!($name::from_integer(0).saturating_pow(usize::max_value()), $name::from_integer(0));
+				assert_eq!($name::from_integer(2).saturating_pow(usize::max_value()), $name::max_value());
+			}
 		}
 	}
 }
