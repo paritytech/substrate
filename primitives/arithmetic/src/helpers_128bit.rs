@@ -145,6 +145,8 @@ pub fn divide(a: u128, b: u128, p: u8) -> Option<u128> {
 	let leading_zeros = a.leading_zeros();
 	let shift = leading_zeros.min(p.into());
 
+	// println!("first shift is of {}", shift);
+
 	// Multiply as much as possible.
 	let a = a.checked_shl(shift).unwrap();
 	let p = p as u32 - shift;
@@ -153,12 +155,16 @@ pub fn divide(a: u128, b: u128, p: u8) -> Option<u128> {
 	let d = a.checked_div(b).unwrap();
 	let r = a.checked_rem(b).unwrap();
 
+	// println!("first d {} and r {}", d, r);
+
 	if p == 0 {
 		// We're done, the multiplication was fitting after all.
 		return Some(d)
 	}
 
 	let leading_zeros = d.leading_zeros();
+
+	// println!("leading_zeros d {} and p {}", leading_zeros, p);
 
 	if leading_zeros < p {
 		// Overflow.
@@ -168,6 +174,8 @@ pub fn divide(a: u128, b: u128, p: u8) -> Option<u128> {
 	// Save partial result.
 	let n = d.checked_shl(p).unwrap();
 
+	// println!("partial = {}", n);
+
 	if r == 0 {
 		// No remainer and no overflow, we are done.
 		return Some(n)
@@ -176,22 +184,32 @@ pub fn divide(a: u128, b: u128, p: u8) -> Option<u128> {
 	// Second iteration. Continue with the remainer.
 	let a = r;
 
+	// println!("second ite a = {}", a);
+
 	// Bits of space to multiply.
 	let leading_zeros = a.leading_zeros();
 	let shift = leading_zeros.min(p);
+
+	// println!("leading {}, shift {}", leading_zeros, shift);
 
 	// Multiply as much as possible.
 	let a = a.checked_shl(shift).unwrap();
 	let p = p - shift;
 	
+	// println!("a = {}, p = {}", a, p);
+
 	// Perform the division for second time.
 	let d = a.checked_div(b).unwrap();
 	let r = a.checked_rem(b).unwrap();
 
+	// println!("d = {}, r = {}", d, r);
+
 	if p == 0 {
 		// We're done.
-		return Some(d)
+		return Some(d.checked_add(n).unwrap())
 	}
+
+	// println!("p is {}", p);
 
 	None
 }
@@ -202,6 +220,8 @@ mod tests {
 
 	#[test]
 	fn divide_works() {
-		assert_eq!(divide(4, 2, 0), Some(2));
+		// assert_eq!(divide(4, 2, 0), Some(2));
+		// assert_eq!(divide(i128::max_value() as u128, 2, 0), Some((i128::max_value() / 2) as u128));
+		assert_eq!(divide(i128::max_value() as u128, 16, 3), Some((i128::max_value() / 2) as u128));
 	}
 }
