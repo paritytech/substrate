@@ -23,6 +23,7 @@ use crate::traits::{
 	SaturatedConversion, UniqueSaturatedInto, Saturating, BaseArithmetic,
 	Bounded, Zero, FixedPointNumber
 };
+use crate::helpers_128bit::divide;
 use sp_debug_derive::RuntimeDebug;
 
 #[macro_export]
@@ -57,7 +58,7 @@ macro_rules! implement_fixed {
 			type PrevUnsigned = $prev_unsigned_type;
 			type Perthing = $perthing_type;
 
-			const BITS: u32 = $div;
+			const BITS: u8 = $div;
 
 			fn from_inner(inner: Self::Inner) -> Self {
 				Self(inner)
@@ -78,26 +79,15 @@ macro_rules! implement_fixed {
 			fn from_rational<N: UniqueSaturatedInto<Self::Inner>>(n: N, d: Self::Inner) -> Self {
 				let n = n.unique_saturated_into();
 
-				if d == 0 {
-					return Self::from_integer(0)
-				}
-
 				let signum = n.signum() * d.signum();
-				let max_inner = <Self as FixedPointNumber>::Inner::max_value();
 
-				let d = d.checked_abs().map(|d| d as u128).unwrap_or(max_inner as u128 + 1);
-				let n = n.checked_abs().map(|n| n as u128).unwrap_or(max_inner as u128 + 1);
-
-				let r = n % d;
-				let n = n / d;
-
-				let r = r.saturating_mul(Self::accuracy() as u128);
-				let r = r / d;
-				let n = n.saturating_mul(Self::accuracy() as u128);
-
-				let r = n.saturating_add(r);
-
-				r.try_into().ok()
+				let n = n.checked_abs().map(|v| v as u128)
+					.unwrap_or(Self::Inner::max_value() as u128 + 1);
+				let d = d.checked_abs().map(|v| v as u128)
+					.unwrap_or(Self::Inner::max_value() as u128 + 1);
+				
+				divide(n, d, Self::BITS)
+					.and_then(|r| r.try_into().ok())
 					.map(|n: Self::Inner| Self(n.saturating_mul(signum)))
 					.unwrap_or_else(||
 						if signum >= 0 {
@@ -115,34 +105,33 @@ macro_rules! implement_fixed {
 				ops::Rem<N, Output=N> + ops::Div<N, Output=N> + ops::Mul<N, Output=N> +
 				ops::Add<N, Output=N>,
 			{
-
 				let rhs: i128 = int.unique_saturated_into();
 				let lhs: i128 = self.0.unique_saturated_into();
 				let signum = rhs.signum() * lhs.signum();
 
 				let lhs = lhs.checked_abs().map(|v| v as u128)
-					.unwrap_or(i128::max_value() as u128 + 1);
+					.unwrap_or(Self::Inner::max_value() as u128 + 1);
 				let rhs = rhs.checked_abs().map(|v| v as u128)
-					.unwrap_or(i128::max_value() as u128 + 1);
+					.unwrap_or(N::max_value().unique_saturated_into() as u128 + 1);
 
 				let (carry, result) = multiply(lhs, rhs);
 
 				// Get the shift to move upper bits to original place and at the same time
 				// to perform the division that give us the integer part of the fraction.
-				let carry_shift = 128.checked_sub(&Self::BITS).expect("128 > BITS; qed");
+				let carry_shift = 128.checked_sub(&Self::BITS).expect("128 > BITS; qed").into();
 
 				if carry.leading_zeros() < carry_shift {
 					// Overflow.
 					return None
 				}
 
-				let low = result.checked_shr(Self::BITS).expect("128 > BITS; qed");
+				let low = result.checked_shr(Self::BITS.into()).expect("128 > BITS; qed");
 
 				carry.checked_shl(carry_shift)
 					.and_then(|c| low.checked_add(c))
 					.and_then(|r| r.try_into().ok())
 					.map(|r: i128| r * signum)
-					.and_then(|r| r.try_into().ok())
+					.and_then(|r| {println!("output checked_mul_int {}", r);r.try_into().ok()})
 			}
 
 			fn checked_div_int<N>(self, other: N) -> Option<N>
@@ -367,11 +356,11 @@ macro_rules! implement_fixed {
 
 		impl Bounded for $name {
 			fn min_value() -> Self {
-				Self(Bounded::min_value())
+				Self(<Self as FixedPointNumber>::Inner::min_value())
 			}
 
 			fn max_value() -> Self {
-				Self(Bounded::max_value())
+				Self(<Self as FixedPointNumber>::Inner::max_value())
 			}
 		}
 
@@ -570,7 +559,7 @@ macro_rules! implement_fixed {
 				assert_eq!(h.into_inner(), inner_max);
 				assert_eq!(i.into_inner(), inner_max);
 
-				// assert_eq!(j.into_inner(), 0);
+				assert_eq!(j.into_inner(), inner_max);
 
 				assert_eq!(k.into_inner(), inner_max);
 				assert_eq!(l.into_inner(), inner_min);

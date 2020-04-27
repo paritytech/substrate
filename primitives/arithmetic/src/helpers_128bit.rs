@@ -140,6 +140,11 @@ pub fn multiply(a: u128, b: u128) -> (u128, u128) {
 /// 
 /// Returns `None` if there is an overflow.
 pub fn divide(a: u128, b: u128, p: u8) -> Option<u128> {
+	println!("divide a {} b {}", a, b);
+
+	if b == 0 {
+		return None
+	}
 
 	// Bits of space to multiply.
 	let leading_zeros = a.leading_zeros();
@@ -152,6 +157,9 @@ pub fn divide(a: u128, b: u128, p: u8) -> Option<u128> {
 	let p = p as u32 - shift;
 
 	// Perform the division for first time.
+
+	println!("a {} b {}", a, b);
+
 	let d = a.checked_div(b).unwrap();
 	let r = a.checked_rem(b).unwrap();
 
