@@ -262,13 +262,9 @@ impl Externalities for BasicExternalities {
 		key: Vec<u8>,
 		value: Vec<u8>,
 	) {
-		self.place_storage(
-			key.clone(),
-			Some(
-				crate::ext::append_to_storage(self.storage(&key).unwrap_or_default(), value)
-					.expect("Failed to append to storage")
-			)
-		);
+		let previous = self.storage(&key).unwrap_or_default();
+		let new = crate::ext::append_to_storage(previous, value).expect("Failed to append to storage");
+		self.place_storage(key.clone(), Some(new));
 	}
 
 	fn chain_id(&self) -> u64 { 42 }
