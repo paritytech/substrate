@@ -51,11 +51,13 @@ pub enum SizeType {
 
 impl SizeType {
 	fn transactions(&self) -> usize {
+		let qty:usize = std::env::var("TX_QTY").map(|qty| qty.parse().unwrap_or(2000)).unwrap_or(2000);
+		println!("TX_QTY = {}", qty);
 		match self {
 			SizeType::Small => 10,
 			SizeType::Medium => 100,
 			SizeType::Large => 500,
-			SizeType::Full => 2000,
+			SizeType::Full => qty,
 		}
 	}
 }
