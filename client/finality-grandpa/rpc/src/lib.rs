@@ -16,6 +16,8 @@
 
 //! RPC API for GRANDPA.
 
+#![deny(missing_docs)]
+
 use finality_grandpa::BlockNumberOps;
 use sc_finality_grandpa::{voter, AuthorityId, SharedAuthoritySet, SharedVoterState};
 
@@ -30,7 +32,7 @@ type FutureResult<T> =
 	Box<dyn jsonrpc_core::futures::Future<Item = T, Error = jsonrpc_core::Error> + Send>;
 
 #[derive(derive_more::Display, derive_more::From)]
-pub enum Error {
+enum Error {
 	#[display(fmt = "GRANDPA RPC endpoint not ready")]
 	EndpointNotReady,
 }
@@ -45,18 +47,23 @@ impl From<Error> for jsonrpc_core::Error {
 	}
 }
 
+/// Provides RPC methods for interacting with GRANDPA.
 #[rpc]
 pub trait GrandpaApi {
+	/// Returns the state of the current best round state as well as the
+	/// ongoining backgrounds rounds.
 	#[rpc(name = "grandpa_roundState")]
 	fn round_state(&self) -> FutureResult<ReportedRoundStates>;
 }
 
+/// Implements the GrandpaApi RPC trait for interacting with GRANDPA.
 pub struct GrandpaRpcHandler<Hash, Block> {
 	shared_voter_state: SharedVoterState,
 	shared_authority_set: SharedAuthoritySet<Hash, Block>,
 }
 
 impl<Hash, Block> GrandpaRpcHandler<Hash, Block> {
+	/// Creates a new GrandpaRpcHander instance.
 	pub fn new(
 		shared_voter_state: SharedVoterState,
 		shared_authority_set: SharedAuthoritySet<Hash, Block>,
@@ -70,30 +77,30 @@ impl<Hash, Block> GrandpaRpcHandler<Hash, Block> {
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Prevotes {
-	pub current_weight: u64,
-	pub missing: HashSet<AuthorityId>,
+struct Prevotes {
+	current_weight: u64,
+	missing: HashSet<AuthorityId>,
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Precommits {
-	pub current_weight: u64,
-	pub missing: HashSet<AuthorityId>,
+struct Precommits {
+	current_weight: u64,
+	missing: HashSet<AuthorityId>,
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RoundState {
-	pub round: u64,
-	pub total_weight: u64,
-	pub threshold_weight: u64,
-	pub prevotes: Prevotes,
-	pub precommits: Precommits,
+struct RoundState {
+	round: u64,
+	total_weight: u64,
+	threshold_weight: u64,
+	prevotes: Prevotes,
+	precommits: Precommits,
 }
 
 impl RoundState {
-	pub fn from(
+	fn from(
 		round: u64,
 		round_state: &voter::report::RoundState<AuthorityId>,
 		voters: &HashSet<AuthorityId>,
@@ -120,16 +127,18 @@ impl RoundState {
 	}
 }
 
+/// The state of the current best round, as well as the background rounds in a
+/// form suitable for serialization.
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReportedRoundStates {
-	pub set_id: u64,
-	pub best: RoundState,
-	pub background: Vec<RoundState>,
+	set_id: u64,
+	best: RoundState,
+	background: Vec<RoundState>,
 }
 
 impl ReportedRoundStates {
-	pub fn from<Hash, Block>(
+	fn from<Hash, Block>(
 		voter_state: &SharedVoterState,
 		authority_set: &SharedAuthoritySet<Hash, Block>,
 	) -> Result<Self, Error>
