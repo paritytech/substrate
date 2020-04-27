@@ -158,7 +158,7 @@ pub struct PhragmenResult<AccountId, T: PerThing> {
 #[derive(RuntimeDebug, Clone, Default)]
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Encode, Decode))]
 pub struct Assignment<AccountId, T: PerThing> {
-	/// Voter's identifier
+	/// Voter's identifier.
 	pub who: AccountId,
 	/// The distribution of the voter's stake.
 	pub distribution: Vec<(AccountId, T)>,
