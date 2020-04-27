@@ -168,6 +168,8 @@ decl_error! {
 		AlreadyInitialized,
 		/// The close call is made too early, before the end of the voting.
 		TooEarly,
+		/// An invalid count was provided for weight estimation.
+		InvalidCount,
 	}
 }
 
@@ -185,14 +187,19 @@ decl_module! {
 		/// - `new_members`: The new member list. Be nice to the chain and
 		//	provide it sorted.
 		/// - `prime`: The prime member whose vote sets the default.
+		/// - `old_members_count`: The number of previous members. (Used for weight estimation.)
 		///
 		/// Requires root origin.
+		/// 
+		/// 
+		/// 
 		#[weight = (100_000_000, DispatchClass::Operational)]
-		fn set_members(origin, new_members: Vec<T::AccountId>, prime: Option<T::AccountId>) {
+		fn set_members(origin, new_members: Vec<T::AccountId>, prime: Option<T::AccountId>, old_members_count: u32) {
 			ensure_root(origin)?;
+			let old = Members::<T, I>::get();
+			ensure!(old.len() <= old_members_count as usize, Error::<T, I>::InvalidCount);
 			let mut new_members = new_members;
 			new_members.sort();
-			let old = Members::<T, I>::get();
 			<Self as ChangeMembers<T::AccountId>>::set_members_sorted(&new_members[..], &old);
 			Prime::<T, I>::set(prime);
 		}
@@ -647,7 +654,8 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			let proposal = make_proposal(42);
 			let hash = BlakeTwo256::hash_of(&proposal);
-			assert_ok!(Collective::set_members(Origin::ROOT, vec![1, 2, 3], Some(3)));
+			let old_count = Collective::members().len() as u32;
+			assert_ok!(Collective::set_members(Origin::ROOT, vec![1, 2, 3], Some(3), old_count));
 
 			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
@@ -670,7 +678,8 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			let proposal = make_proposal(42);
 			let hash = BlakeTwo256::hash_of(&proposal);
-			assert_ok!(Collective::set_members(Origin::ROOT, vec![1, 2, 3], Some(1)));
+			let old_count = Collective::members().len() as u32;
+			assert_ok!(Collective::set_members(Origin::ROOT, vec![1, 2, 3], Some(1), old_count));
 
 			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
@@ -735,7 +744,8 @@ mod tests {
 				Collective::voting(&hash),
 				Some(Votes { index: 0, threshold: 3, ayes: vec![1, 2], nays: vec![], end })
 			);
-			assert_ok!(Collective::set_members(Origin::ROOT, vec![2, 3, 4], None));
+			let old_count = Collective::members().len() as u32;
+			assert_ok!(Collective::set_members(Origin::ROOT, vec![2, 3, 4], None, old_count));
 			assert_eq!(
 				Collective::voting(&hash),
 				Some(Votes { index: 0, threshold: 3, ayes: vec![2], nays: vec![], end })
@@ -749,7 +759,8 @@ mod tests {
 				Collective::voting(&hash),
 				Some(Votes { index: 1, threshold: 2, ayes: vec![2], nays: vec![3], end })
 			);
-			assert_ok!(Collective::set_members(Origin::ROOT, vec![2, 4], None));
+			let old_count = Collective::members().len() as u32;
+			assert_ok!(Collective::set_members(Origin::ROOT, vec![2, 4], None, old_count));
 			assert_eq!(
 				Collective::voting(&hash),
 				Some(Votes { index: 1, threshold: 2, ayes: vec![2], nays: vec![], end })

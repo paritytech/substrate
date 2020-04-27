@@ -46,6 +46,7 @@ benchmarks_instance! {
 	set_members {
 		let m in 1 .. MAX_MEMBERS;
 		let n in 1 .. MAX_MEMBERS;
+		let p in 1 .. MAX_PROPOSALS;
 
 		// Set old members.
 		// We compute the difference of old and new members, so it should influence timing.
@@ -55,8 +56,23 @@ benchmarks_instance! {
 			last_old_member = account("old member", i, SEED);
 			old_members.push(last_old_member.clone());
 		}
+		let old_members_count = old_members.len() as u32;
 
-		Collective::<T, _>::set_members(SystemOrigin::Root.into(), old_members, Some(last_old_member))?;
+		let initial_len = Collective::<T, _>::members().len() as u32;
+		Collective::<T, _>::set_members(
+			SystemOrigin::Root.into(),
+			old_members,
+			Some(last_old_member.clone()),
+			initial_len
+		)?;
+
+		let threshold = 5;
+		let length = 100;
+		for i in 0 .. p {
+			// Proposals should be different so that different proposal hashes are generated
+			let proposal: T::Proposal = frame_system::Call::<T>::remark(vec![i as u8; length]).into();
+			Collective::<T, _>::propose(SystemOrigin::Signed(last_old_member.clone()).into(), threshold, Box::new(proposal.clone()))?;
+		}
 
 		// Construct `new_members`.
 		// It should influence timing since it will sort this vector.
@@ -67,7 +83,7 @@ benchmarks_instance! {
 			new_members.push(last_member.clone());
 		}
 
-	}: _(SystemOrigin::Root, new_members.clone(), Some(last_member))
+	}: _(SystemOrigin::Root, new_members.clone(), Some(last_member), old_members_count)
 	verify {
 		new_members.sort();
 		assert_eq!(Collective::<T, _>::members(), new_members);
@@ -87,7 +103,8 @@ benchmarks_instance! {
 		let caller: T::AccountId = account("caller", 0, SEED);
 		members.push(caller.clone());
 
-		Collective::<T, _>::set_members(SystemOrigin::Root.into(), members, None)?;
+		let initial_len = Collective::<T, _>::members().len() as u32;
+		Collective::<T, _>::set_members(SystemOrigin::Root.into(), members, None, initial_len)?;
 
 		let proposal: T::Proposal = frame_system::Call::<T>::remark(vec![1; b as usize]).into();
 
@@ -113,7 +130,8 @@ benchmarks_instance! {
 		let caller: T::AccountId = account("caller", 0, SEED);
 		members.push(caller.clone());
 
-		Collective::<T, _>::set_members(SystemOrigin::Root.into(), members, None)?;
+		let initial_len = Collective::<T, _>::members().len() as u32;
+		Collective::<T, _>::set_members(SystemOrigin::Root.into(), members, None, initial_len)?;
 
 		let proposal: T::Proposal = frame_system::Call::<T>::remark(vec![1; b as usize]).into();
 		let threshold = 1;
@@ -140,7 +158,8 @@ benchmarks_instance! {
 
 		let caller: T::AccountId = account("caller", 0, SEED);
 		members.push(caller.clone());
-		Collective::<T, _>::set_members(SystemOrigin::Root.into(), members, None)?;
+		let initial_len = Collective::<T, _>::members().len() as u32;
+		Collective::<T, _>::set_members(SystemOrigin::Root.into(), members, None, initial_len)?;
 
 		let threshold = m.max(2);
 
@@ -177,7 +196,8 @@ benchmarks_instance! {
 
 		let caller: T::AccountId = account("caller", 0, SEED);
 		members.push(caller.clone());
-		Collective::<T, _>::set_members(SystemOrigin::Root.into(), members.clone(), None)?;
+		let initial_len = Collective::<T, _>::members().len() as u32;
+		Collective::<T, _>::set_members(SystemOrigin::Root.into(), members.clone(), None, initial_len)?;
 
 		// Threshold is 1 less than the number of members so that one person can vote nay
 		let threshold = m;
@@ -227,7 +247,8 @@ benchmarks_instance! {
 
 		let caller: T::AccountId = account("caller", 0, SEED);
 		members.push(caller.clone());
-		Collective::<T, _>::set_members(SystemOrigin::Root.into(), members.clone(), None)?;
+		let initial_len = Collective::<T, _>::members().len() as u32;
+		Collective::<T, _>::set_members(SystemOrigin::Root.into(), members.clone(), None, initial_len)?;
 
 		// Threshold is total members so that one nay will disapprove the vote
 		let threshold = m + 1;
@@ -275,7 +296,8 @@ benchmarks_instance! {
 
 		let caller: T::AccountId = account("caller", 0, SEED);
 		members.push(caller.clone());
-		Collective::<T, _>::set_members(SystemOrigin::Root.into(), members.clone(), None)?;
+		let initial_len = Collective::<T, _>::members().len() as u32;
+		Collective::<T, _>::set_members(SystemOrigin::Root.into(), members.clone(), None, initial_len)?;
 
 		// Threshold is 2 so any two ayes will approve the vote
 		let threshold = 2;
@@ -328,8 +350,8 @@ benchmarks_instance! {
 		}
 		let caller: T::AccountId = account("caller", 0, SEED);
 		members.push(caller.clone());
-
-		Collective::<T, _>::set_members(SystemOrigin::Root.into(), members.clone(), Some(caller.clone()))?;
+		let initial_len = Collective::<T, _>::members().len() as u32;
+		Collective::<T, _>::set_members(SystemOrigin::Root.into(), members.clone(), Some(caller.clone()), initial_len)?;
 
 		// Threshold is one less than total members so that two nays will disapprove the vote
 		let threshold = m;
@@ -378,8 +400,8 @@ benchmarks_instance! {
 		}
 		let caller: T::AccountId = account("caller", 0, SEED);
 		members.push(caller.clone());
-
-		Collective::<T, _>::set_members(SystemOrigin::Root.into(), members.clone(), Some(caller.clone()))?;
+		let initial_len = Collective::<T, _>::members().len() as u32;
+		Collective::<T, _>::set_members(SystemOrigin::Root.into(), members.clone(), Some(caller.clone()), initial_len)?;
 
 		// Threshold is two, so any two ayes will pass the vote
 		let threshold = 2;
