@@ -1,13 +1,13 @@
 #[macro_use]
 extern crate rental;
 
-use std::pin::Pin;
-use std::marker::PhantomPinned;
-use std::ptr::NonNull;
+// use std::pin::Pin;
+// use std::marker::PhantomPinned;
+// use std::ptr::NonNull;
 use std::collections::HashMap;
 use std::thread::JoinHandle;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::SystemTime;
+// use std::time::SystemTime;
 use parking_lot::Mutex;
 
 const MAX_SPAN_STACK_LEN: usize = 1000;
@@ -78,7 +78,7 @@ impl Profiler for TracingProfiler {
 				}
 			}
 		};
-		/// Register spans here
+		// Register spans here
 		let span_opt: Option<tracing::Span> = span_dispatch! {
 			"frame_executive","execute_block";
 			"pallet_balances","transfer";
@@ -187,7 +187,7 @@ impl FileProfiler {
 }
 
 fn timestamp() -> u64 {
-	use std::{convert::{TryFrom, TryInto}, time::SystemTime};
+	use std::{convert::{TryInto}, time::SystemTime};
 	let now = SystemTime::now();
 	now.duration_since(SystemTime::UNIX_EPOCH).unwrap().as_nanos().try_into().unwrap()
 }

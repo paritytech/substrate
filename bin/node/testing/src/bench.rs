@@ -292,7 +292,7 @@ impl BenchDb {
 					signed: Some((sender, signed_extra(0, node_runtime::ExistentialDeposit::get() + 1))),
 					function: match override_ext {
 						true => {Call::System(
-							SystemCall::ensure_signed()
+							SystemCall::noop()
 						)},
 						false => {
 							Call::Balances(

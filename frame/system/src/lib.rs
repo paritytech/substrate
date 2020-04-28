@@ -521,13 +521,9 @@ decl_module! {
 
 		/// A noop
 		#[weight = 0]
-		fn ensure_signed(origin) {
-			ensure_signed(origin)?;
+		fn noop(_origin) -> DispatchResult {
+			Ok(())
 		}
-
-//		/// A noop with ensure_signed
-//		#[weight = 0]
-//		fn noop() {}
 
 		/// Set the number of pages in the WebAssembly environment's heap.
 		///

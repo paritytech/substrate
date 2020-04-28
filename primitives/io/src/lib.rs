@@ -885,10 +885,12 @@ pub trait Logging {
 /// Interface that provides functions for profiling the runtime.
 #[runtime_interface]
 pub trait Profiling {
+	/// Register Span
 	fn register_span(target: &str, name: &str) -> u64 {
 		PROFILER.lock().create_span(target, name)
 	}
 
+	/// Exit Span
 	fn exit_span(id: u64) {
 		PROFILER.lock().exit_span(id);
 	}
