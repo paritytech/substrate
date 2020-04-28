@@ -39,6 +39,10 @@ pub struct ImportBlocksCmd {
 	#[structopt(long = "default-heap-pages", value_name = "COUNT")]
 	pub default_heap_pages: Option<u32>,
 
+	/// Try importing blocks from binary format rather than JSON.
+	#[structopt(long = "binary", value_name = "BOOL", parse(try_from_str), default_value("false"))]
+	pub binary: bool,
+
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
@@ -77,7 +81,7 @@ impl ImportBlocksCmd {
 		};
 
 		builder(config)?
-			.import_blocks(file, false)
+			.import_blocks(file, false, self.binary)?
 			.await
 			.map_err(Into::into)
 	}

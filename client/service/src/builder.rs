@@ -663,7 +663,8 @@ pub trait ServiceBuilderCommand {
 		self,
 		input: impl Read + Seek + Send + 'static,
 		force: bool,
-	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
+		binary: bool,
+	) -> Result<Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>, Error>;
 
 	/// Performs the blocks export.
 	fn export_blocks(
@@ -684,7 +685,7 @@ pub trait ServiceBuilderCommand {
 	fn check_block(
 		self,
 		block: BlockId<Self::Block>
-	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
+	) -> Result<Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>, Error>;
 }
 
 impl<TBl, TRtApi, TBackend, TExec, TSc, TImpQu, TExPool, TRpc>

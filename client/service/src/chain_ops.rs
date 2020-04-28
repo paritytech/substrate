@@ -27,7 +27,7 @@ use sp_runtime::traits::{
 };
 use futures::stream::Stream;
 use sp_runtime::generic::{BlockId, SignedBlock};
-use codec::{Decode, Encode, IoReader};
+use codec::{Decode, Encode, IoReader as CodecIoReader};
 use sc_client::{Client, LocalCallExecutor};
 use sp_consensus::{
 	BlockOrigin,
@@ -37,7 +37,7 @@ use sc_executor::{NativeExecutor, NativeExecutionDispatch};
 
 use std::{io::{Read, Write, Seek}, pin::Pin};
 use sc_client_api::BlockBackend;
-use std::marker::PhantomData;
+use serde_json::{de::IoRead as JsonIoRead, Deserializer, StreamDeserializer};
 
 /// Build a chain spec json
 pub fn build_spec(spec: &dyn ChainSpec, raw: bool) -> error::Result<String> {
@@ -45,69 +45,64 @@ pub fn build_spec(spec: &dyn ChainSpec, raw: bool) -> error::Result<String> {
 }
 
 enum BlockStream<R, B> 
-	where
-		 R: Read + Seek + 'static,
-	{
+where
+	R: std::io::Read + std::io::Seek,
+{
 	Binary {
 		count: u64,
 		read_block_count: u64,
-		reader: IoReader<R>,
-		_phantom: PhantomData<B>,
+		reader: CodecIoReader<R>,
 	},
 	Json {
 		read_block_count: u64,
-		reader: R,
-		_phantom: PhantomData<B>,
+		reader: StreamDeserializer<'static, JsonIoRead<R>, B>,
 	},
 }
 
-impl<R, B> Unpin for BlockStream<R, B>
-	where
-		R: Read + Seek + 'static,
-		B: BlockT + MaybeSerializeDeserialize,
+impl<R, B> Unpin for BlockStream<R, B> 
+where
+	R: Read + Seek
 {}
 
-impl<R, B> BlockStream<R, B>
+impl<R, B> BlockStream<R, SignedBlock<B>>
 	where
 		R: Read + Seek + 'static,
 		B: BlockT + MaybeSerializeDeserialize,
 	{
 	fn new(input: R, binary: bool) -> Result<Self, Error> {
 		if binary {
-			let mut reader = IoReader(input);
+			let mut reader = CodecIoReader(input);
 			let count: u64 = Decode::decode(&mut reader).map_err(|e| format!("Error reading file: {}", e))?;
-			info!("📦 Importing {} blocks", count);
 			Ok(BlockStream::Binary {
 				count,
 				read_block_count: 0,
 				reader,
-				_phantom: PhantomData,
 			})
 		} else {
+			let stream_deser  = Deserializer::from_reader(input).into_iter::<SignedBlock<B>>();
 			Ok(BlockStream::Json {
-				reader: input,
+				reader: stream_deser,
 				read_block_count: 0,
-				_phantom: PhantomData,
 			})
 		}
 	}
 
 	fn read_block_count(&self) -> u64 {
 		match self {
-			BlockStream::Binary {count: _, read_block_count, reader: _, _phantom} => *read_block_count,
-			BlockStream::Json {read_block_count, reader: _, _phantom} => *read_block_count,
+			BlockStream::Binary {count: _, read_block_count, reader: _} => *read_block_count,
+			BlockStream::Json {read_block_count, reader: _} => *read_block_count,
 		}
 	}
 
 	fn remaining_blocks(&self) -> Option<u64> {
 		match self {
-			BlockStream::Binary {count, read_block_count, reader: _, _phantom} => Some(*count - *read_block_count),
-			BlockStream::Json {read_block_count:_ , reader: _, _phantom}=> None
+			BlockStream::Binary {count, read_block_count, reader: _} => Some(*count - *read_block_count),
+			BlockStream::Json {read_block_count:_ , reader: _}=> None
 		}
 	}
 }
 
-impl<R, B> Stream for BlockStream<R, B> 
+impl<R, B> Stream for BlockStream<R, SignedBlock<B>> 
 	where
 		R: Read + Seek + 'static,
 		B: BlockT + MaybeSerializeDeserialize,
@@ -116,31 +111,25 @@ impl<R, B> Stream for BlockStream<R, B>
 
 	fn poll_next(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Option<Self::Item>> {
 		match Pin::get_mut(self) {
-			BlockStream::Binary {count, read_block_count, reader, _phantom} => {
+			BlockStream::Binary {count, read_block_count, reader} => {
 				if read_block_count < count {
-					// check for errors ?
-					let block_result = SignedBlock::<B>::decode(reader).map_err(|e| e.to_string());
-					if block_result.is_ok() {
-						*read_block_count += 1;
-						if *read_block_count % 1000 == 0 {
-							info!("#{} blocks were added to the queue", read_block_count);
-						}
-					}
+					let block_result: Result<SignedBlock::<B>, _> =  SignedBlock::<B>::decode(reader).map_err(|e| e.to_string());
+					*read_block_count += 1;
 					Poll::Ready(Some(block_result))
 				} else {
 					Poll::Ready(None)
 				}
 			}
-			BlockStream::Json {reader, read_block_count, _phantom} => {
-				// how does reader finish?
-				let block_result = serde_json::from_reader(reader);
-				if block_result.is_ok() {
-					*read_block_count += 1;
-					if *read_block_count % 1000 == 0 {
-						info!("#{} blocks were added to the queue", read_block_count);
-					}			
+			BlockStream::Json {reader, read_block_count} => {
+				match reader.next() {
+					Some(block) => {
+						*read_block_count += 1;
+						Poll::Ready(Some(block.map_err(|e| e.to_string())))
+					}
+					None => {
+						Poll::Ready(None)
+					}
 				}
-				Poll::Ready(block_result.ok())
 			}
 		}
 	}
@@ -168,7 +157,8 @@ impl<
 		self,
 		input: impl Read + Seek + Send + 'static,
 		force: bool,
-	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>> {
+		binary: bool,
+	) -> Result<Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>, Error> {
 		struct WaitLink {
 			imported_blocks: u64,
 			has_error: bool,
@@ -202,10 +192,11 @@ impl<
 			}
 		}
 
+		let client = self.client;
 		let mut queue = self.import_queue;
 
 		let mut link = WaitLink::new();
-		let mut block_stream: BlockStream<_, Self::Block> = BlockStream::new(input, true).unwrap(); // SCOTT: switch true to binary.
+		let mut block_stream: BlockStream<_, SignedBlock<Self::Block>>= BlockStream::new(input, binary)?;
 
 		// Importing blocks is implemented as a future, because we want the operation to be
 		// interruptible.
@@ -218,10 +209,12 @@ impl<
 			// Read blocks from the input.
 			match Pin::new(&mut block_stream).poll_next(cx) {
 				Poll::Ready(None) => {
-					// would be nice to have read_block_count
-					return Poll::Ready(Ok(()))
+					let imported_blocks = block_stream.read_block_count();
+					info!("🎉 Imported {} blocks. Best: #{}", imported_blocks, client.chain_info().best_number);
+					return std::task::Poll::Ready(Ok(()));
 				},
 				Poll::Ready(Some(block_result)) => {
+					let imported_blocks = block_stream.read_block_count();
 					match block_result {
 						Ok(signed) => {
 							let (header, extrinsics) = signed.block.deconstruct();
@@ -238,7 +231,6 @@ impl<
 									import_existing: force,
 								}
 							]);
-							let imported_blocks = block_stream.read_block_count();
 							if imported_blocks % 1000 == 0 {
 								if let Some(remaining) = block_stream.remaining_blocks() {
 									info!(
@@ -246,12 +238,20 @@ impl<
 										imported_blocks, remaining
 									);
 								} else {
-									info!("#{} blocks were imported",  imported_blocks);
+									info!("#{} blocks were imported, still processing other blocks",  imported_blocks);
 								}
+							}
+							queue.poll_actions(cx, &mut link);
+							if link.has_error {
+								info!(
+									"Stopping after #{} blocks because of an error",
+									link.imported_blocks,
+								);
+								return std::task::Poll::Ready(Ok(()));
 							}
 						}
 						Err(e) => {
-							warn!("Error reading block data: {}", e);
+							warn!("Error reading block data at {}: {}", imported_blocks, e);
 							return std::task::Poll::Ready(Ok(()));
 						}
 					}
@@ -259,23 +259,10 @@ impl<
 					cx.waker().wake_by_ref();
 					return std::task::Poll::Pending;
 				},
-				// Shouldn't happen?
-				Poll::Pending => {},
+				Poll::Pending => unreachable!("BlockStream.next() should never return Poll::Pending; qed")
 			}
-
-			queue.poll_actions(cx, &mut link);
-
-			if link.has_error {
-				info!(
-					"Stopping after #{} blocks because of an error",
-					link.imported_blocks,
-				);
-				return std::task::Poll::Ready(Ok(()));
-			}
-
-			return std::task::Poll::Pending;
 		});
-		Box::pin(import)
+		Ok(Box::pin(import))
 	}
 
 	fn export_blocks(
@@ -365,17 +352,17 @@ impl<
 	fn check_block(
 		self,
 		block_id: BlockId<TBl>
-	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>> {
+	) -> Result<Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>, Error> {
 		match self.client.block(&block_id) {
 			Ok(Some(block)) => {
 				let mut buf = Vec::new();
 				1u64.encode_to(&mut buf);
 				block.encode_to(&mut buf);
 				let reader = std::io::Cursor::new(buf);
-				self.import_blocks(reader, true)
+				self.import_blocks(reader, true, true)
 			}
-			Ok(None) => Box::pin(future::err("Unknown block".into())),
-			Err(e) => Box::pin(future::err(format!("Error reading block: {:?}", e).into())),
+			Ok(None) => Ok(Box::pin(future::err("Unknown block".into()))),
+			Err(e) => Ok(Box::pin(future::err(format!("Error reading block: {:?}", e).into()))),
 		}
 	}
 }

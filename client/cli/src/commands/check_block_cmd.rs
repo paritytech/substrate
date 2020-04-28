@@ -79,7 +79,7 @@ impl CheckBlockCmd {
 		};
 
 		let start = std::time::Instant::now();
-		builder(config)?.check_block(block_id).await?;
+		builder(config)?.check_block(block_id)?.await?;
 		println!("Completed in {} ms.", start.elapsed().as_millis());
 
 		Ok(())
