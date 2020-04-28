@@ -152,7 +152,7 @@ impl BatchVerifier {
 				return false;
 			}
 			if let Err(e) = receiver.recv() {
-				log::warn!(target: "runtime", "Haven't received async result from verification task. Returning false.")
+				log::warn!(target: "runtime", "Haven't received async result from verification task. Returning false.");
 				return false;
 			}
 		}
