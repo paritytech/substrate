@@ -25,7 +25,7 @@ pub use crate::backend::{Account, Log, Vicinity, Backend};
 
 use sp_std::{vec::Vec, marker::PhantomData};
 use frame_support::{ensure, decl_module, decl_storage, decl_event, decl_error};
-use frame_support::weights::{Weight, MINIMUM_WEIGHT, DispatchClass, FunctionOf, Pays};
+use frame_support::weights::{Weight, DispatchClass, FunctionOf, Pays};
 use frame_support::traits::{Currency, WithdrawReason, ExistenceRequirement, Get};
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::ModuleId;
@@ -188,11 +188,11 @@ decl_module! {
 		type Error = Error<T>;
 
 		fn deposit_event() = default;
-		
+
 		const ModuleId: ModuleId = T::ModuleId::get();
 
 		/// Deposit balance from currency/balances module into EVM.
-		#[weight = MINIMUM_WEIGHT]
+		#[weight = 0]
 		fn deposit_balance(origin, value: BalanceOf<T>) {
 			let sender = ensure_signed(origin)?;
 
@@ -213,7 +213,7 @@ decl_module! {
 		}
 
 		/// Withdraw balance from EVM into currency/balances module.
-		#[weight = MINIMUM_WEIGHT]
+		#[weight = 0]
 		fn withdraw_balance(origin, value: BalanceOf<T>) {
 			let sender = ensure_signed(origin)?;
 			let address = T::ConvertAccountId::convert_account_id(&sender);

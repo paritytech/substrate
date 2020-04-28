@@ -98,7 +98,7 @@ use frame_support::traits::{
 use sp_runtime::{Permill, ModuleId, Percent, RuntimeDebug, traits::{
 	Zero, StaticLookup, AccountIdConversion, Saturating, Hash, BadOrigin
 }};
-use frame_support::weights::{Weight, MINIMUM_WEIGHT, DispatchClass};
+use frame_support::weights::{Weight, DispatchClass};
 use frame_support::traits::{Contains, EnsureOrigin};
 use codec::{Encode, Decode};
 use frame_system::{self as system, ensure_signed, ensure_root};
@@ -561,7 +561,7 @@ decl_module! {
 				Self::spend_funds();
 			}
 
-			MINIMUM_WEIGHT
+			0
 		}
 	}
 }

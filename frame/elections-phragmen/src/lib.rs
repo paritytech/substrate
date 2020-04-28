@@ -88,7 +88,7 @@ use sp_runtime::{
 };
 use frame_support::{
 	decl_storage, decl_event, ensure, decl_module, decl_error,
-	weights::{Weight, MINIMUM_WEIGHT, DispatchClass},
+	weights::{Weight, DispatchClass},
 	storage::{StorageMap, IterableStorageMap},
 	traits::{
 		Currency, Get, LockableCurrency, LockIdentifier, ReservableCurrency, WithdrawReasons,
@@ -269,7 +269,7 @@ decl_module! {
 		fn on_runtime_upgrade() -> Weight {
 			migration::migrate::<T>();
 
-			MINIMUM_WEIGHT
+			0
 		}
 
 		const CandidacyBond: BalanceOf<T> = T::CandidacyBond::get();
@@ -339,7 +339,7 @@ decl_module! {
 		/// Reads: O(1)
 		/// Writes: O(1)
 		/// # </weight>
-		#[weight = MINIMUM_WEIGHT]
+		#[weight = 0]
 		fn remove_voter(origin) {
 			let who = ensure_signed(origin)?;
 
@@ -513,7 +513,7 @@ decl_module! {
 				print(e);
 			}
 
-			MINIMUM_WEIGHT
+			0
 		}
 	}
 }
@@ -915,6 +915,8 @@ mod tests {
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type DbWeight = ();
+		type BlockExecutionWeight = ();
+		type ExtrinsicBaseWeight = ();
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
