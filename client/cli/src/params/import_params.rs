@@ -138,6 +138,11 @@ impl ImportParams {
 		self.pruning_params.pruning(unsafe_pruning, role)
 	}
 
+	/// Allows unsafe pruning
+	pub fn unsafe_pruning(&self) -> bool {
+		self.unsafe_pruning
+	}
+
 	/// Limit the memory the database cache can use.
 	pub fn database_cache_size(&self) -> Option<usize> {
 		self.database_cache_size
