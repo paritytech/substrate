@@ -166,22 +166,6 @@ pub trait Storage {
 	fn next_key(&mut self, key: &[u8]) -> Option<Vec<u8>> {
 		self.next_storage_key(&key)
 	}
-
-	/// Push new entry to the storage accumulator.
-	fn accumulator_push(&mut self, key: &[u8], appended: Vec<u8>) {
-		self.storage_accumulator_push(key, appended)
-	}
-
-	/// Commit storage accumulator.
-	///
-	/// Commits accumulator with given `key` to the
-	/// actual storage and clears it.
-	///
-	/// Returns number of keys that were present in the
-	/// accumulator.
-	fn accumulator_commit(&mut self, key: &[u8]) -> u32 {
-		self.storage_accumulator_commit(key)
-	}
 }
 
 /// Interface for accessing the child storage for default child trie,
@@ -1064,6 +1048,7 @@ pub type SubstrateHostFunctions = (
 	logging::HostFunctions,
 	sandbox::HostFunctions,
 	crate::trie::HostFunctions,
+	offchain_index::HostFunctions,
 );
 
 #[cfg(test)]
