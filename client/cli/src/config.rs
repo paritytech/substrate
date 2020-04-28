@@ -200,9 +200,9 @@ pub trait CliConfiguration: Sized {
 	///
 	/// By default this is retrieved from `PruningMode` if it is available. Otherwise its
 	/// `PruningMode::default()`.
-	fn pruning(&self, is_dev: bool, role: &Role) -> Result<PruningMode> {
+	fn pruning(&self, unsafe_pruning: bool, role: &Role) -> Result<PruningMode> {
 		self.pruning_params()
-			.map(|x| x.pruning(is_dev, role))
+			.map(|x| x.pruning(unsafe_pruning, role))
 			.unwrap_or(Ok(Default::default()))
 	}
 
@@ -411,6 +411,11 @@ pub trait CliConfiguration: Sized {
 		let role = self.role(is_dev)?;
 		let max_runtime_instances = self.max_runtime_instances()?.unwrap_or(8);
 
+		let unsafe_pruning = self
+			.import_params()
+			.map(|p| p.unsafe_pruning)
+			.unwrap_or(false);
+
 		Ok(Configuration {
 			impl_name: C::impl_name(),
 			impl_version: C::impl_version(),
@@ -428,7 +433,7 @@ pub trait CliConfiguration: Sized {
 			database: self.database_config(&config_dir, database_cache_size, database)?,
 			state_cache_size: self.state_cache_size()?,
 			state_cache_child_ratio: self.state_cache_child_ratio()?,
-			pruning: self.pruning(is_dev, &role)?,
+			pruning: self.pruning(unsafe_pruning || is_dev, &role)?,
 			wasm_method: self.wasm_method()?,
 			execution_strategies: self.execution_strategies(is_dev)?,
 			rpc_http: self.rpc_http()?,
