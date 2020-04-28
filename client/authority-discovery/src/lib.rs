@@ -60,7 +60,7 @@ use futures_timer::Delay;
 
 use codec::{Decode, Encode};
 use error::{Error, Result};
-use log::{debug, error, log_enabled, warn};
+use log::{debug, error, log_enabled};
 use prometheus_endpoint::{Counter, CounterVec, Gauge, Opts, U64, register};
 use prost::Message;
 use sc_client_api::blockchain::HeaderBackend;
@@ -328,7 +328,11 @@ where
 					}
 
 					if let Err(e) = self.handle_dht_value_found_event(v) {
-						error!(
+						if let Some(metrics) = &self.metrics {
+							metrics.handle_value_found_event_failure.inc();
+						}
+
+						debug!(
 							target: LOG_TARGET,
 							"Failed to handle Dht value found event: {:?}", e,
 						);
@@ -359,7 +363,7 @@ where
 						metrics.dht_event_received.with_label_values(&["value_put_failed"]).inc();
 					}
 
-					warn!(
+					debug!(
 						target: LOG_TARGET,
 						"Failed to put hash '{:?}' on Dht.", hash
 					)
@@ -603,6 +607,7 @@ pub(crate) struct Metrics {
 	amount_last_published: Gauge<U64>,
 	request: Counter<U64>,
 	dht_event_received: CounterVec<U64>,
+	handle_value_found_event_failure: Counter<U64>,
 	priority_group_size: Gauge<U64>,
 }
 
@@ -639,6 +644,13 @@ impl Metrics {
 						"Number of dht events received by authority discovery."
 					),
 					&["name"],
+				)?,
+				registry,
+			)?,
+			handle_value_found_event_failure: register(
+				Counter::new(
+					"authority_discovery_handle_value_found_event_failure",
+					"Number of times handling a dht value found event failed."
 				)?,
 				registry,
 			)?,

@@ -221,7 +221,7 @@ impl BenchDb {
 			},
 		};
 
-		let (client, backend) = sc_client_db::new_client(
+		let (client, backend) = sc_service::new_client(
 			db_config,
 			NativeExecutor::new(WasmExecutionMethod::Compiled, None, 8),
 			&keyring.generate_genesis(),
@@ -230,6 +230,7 @@ impl BenchDb {
 			ExecutionExtensions::new(profile.into_execution_strategies(), None),
 			Box::new(TaskExecutor::new()),
 			None,
+			Default::default(),
 		).expect("Should not fail");
 
 		(client, backend)

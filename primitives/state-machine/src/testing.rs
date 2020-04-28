@@ -30,6 +30,7 @@ use crate::{
 	},
 };
 use sp_core::{
+	offchain::storage::OffchainOverlayedChanges,
 	storage::{
 		well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES, is_child_storage_key},
 		Storage,
@@ -44,6 +45,7 @@ where
 	H::Out: codec::Codec + Ord,
 {
 	overlay: OverlayedChanges,
+	offchain_overlay: OffchainOverlayedChanges,
 	storage_transaction_cache: StorageTransactionCache<
 		<InMemoryBackend<H> as Backend<H>>::Transaction, H, N
 	>,
@@ -61,6 +63,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 	pub fn ext(&mut self) -> Ext<H, N, InMemoryBackend<H>> {
 		Ext::new(
 			&mut self.overlay,
+			&mut self.offchain_overlay,
 			&mut self.storage_transaction_cache,
 			&self.backend,
 			match self.changes_trie_config.clone() {
@@ -98,11 +101,15 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 		storage.top.insert(HEAP_PAGES.to_vec(), 8u64.encode());
 		storage.top.insert(CODE.to_vec(), code.to_vec());
 
+		let offchain_overlay = OffchainOverlayedChanges::enabled();
+
 		let mut extensions = Extensions::default();
 		extensions.register(sp_core::traits::TaskExecutorExt(sp_core::tasks::executor()));
 
+
 		TestExternalities {
 			overlay,
+			offchain_overlay,
 			changes_trie_config,
 			extensions,
 			changes_trie_storage: ChangesTrieInMemoryStorage::new(),

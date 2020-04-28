@@ -27,6 +27,8 @@
 //!
 //! Besides the macros and the [`Core`] runtime api, this crates provides the [`Metadata`] runtime
 //! api, the [`ApiExt`] trait, the [`CallApiAt`] trait and the [`ConstructRuntimeApi`] trait.
+//!
+//! On a meta level this implies, the client calls the generated API from the client perspective.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -44,6 +46,8 @@ pub use sp_core::NativeOrEncoded;
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use hash_db::Hasher;
+#[cfg(feature = "std")]
+pub use sp_core::offchain::storage::OffchainOverlayedChanges;
 #[doc(hidden)]
 #[cfg(not(feature = "std"))]
 pub use sp_core::to_substrate_wasm_fn_return_value;
@@ -431,6 +435,8 @@ pub struct CallApiAtParams<'a, Block: BlockT, C, NC, Backend: StateBackend<HashF
 	pub arguments: Vec<u8>,
 	/// The overlayed changes that are on top of the state.
 	pub overlayed_changes: &'a RefCell<OverlayedChanges>,
+	/// The overlayed changes to be applied to the offchain worker database.
+	pub offchain_changes: &'a RefCell<OffchainOverlayedChanges>,
 	/// The cache for storage transactions.
 	pub storage_transaction_cache: &'a RefCell<StorageTransactionCache<Block, Backend>>,
 	/// Determines if the function requires that `initialize_block` should be called before calling

@@ -72,6 +72,8 @@ impl frame_system::Trait for Test {
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type DbWeight = ();
+	type BlockExecutionWeight = ();
+	type ExtrinsicBaseWeight = ();
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type MaximumBlockLength = MaximumBlockLength;
 	type Version = ();
@@ -108,6 +110,12 @@ impl Contains<u64> for TenToFourteen {
 			members.sort();
 		})
 	}
+}
+impl ContainsLengthBound for TenToFourteen {
+	fn max_len() -> usize {
+		TEN_TO_FOURTEEN.with(|v| v.borrow().len())
+	}
+	fn min_len() -> usize { 0 }
 }
 parameter_types! {
 	pub const ProposalBond: Permill = Permill::from_percent(5);

@@ -28,7 +28,7 @@ use sp_runtime::traits::{
 use futures::stream::Stream;
 use sp_runtime::generic::{BlockId, SignedBlock};
 use codec::{Decode, Encode, IoReader as CodecIoReader};
-use sc_client::{Client, LocalCallExecutor};
+use crate::client::{Client, LocalCallExecutor};
 use sp_consensus::{
 	BlockOrigin,
 	import_queue::{IncomingBlock, Link, BlockImportError, BlockImportResult, ImportQueue},

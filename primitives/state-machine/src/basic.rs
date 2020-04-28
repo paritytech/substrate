@@ -140,6 +140,8 @@ impl From<BTreeMap<StorageKey, StorageValue>> for BasicExternalities {
 }
 
 impl Externalities for BasicExternalities {
+	fn set_offchain_storage(&mut self, _key: &[u8], _value: Option<&[u8]>) {}
+
 	fn storage(&self, key: &[u8]) -> Option<StorageValue> {
 		self.inner.top.get(key).cloned()
 	}
@@ -253,6 +255,16 @@ impl Externalities for BasicExternalities {
 				child.data.remove(&key);
 			}
 		}
+	}
+
+	fn storage_append(
+		&mut self,
+		key: Vec<u8>,
+		value: Vec<u8>,
+	) {
+		let previous = self.storage(&key).unwrap_or_default();
+		let new = crate::ext::append_to_storage(previous, value).expect("Failed to append to storage");
+		self.place_storage(key.clone(), Some(new));
 	}
 
 	fn chain_id(&self) -> u64 { 42 }
