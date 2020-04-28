@@ -41,70 +41,14 @@
 //! Additionally, the fourth generic parameter of the `Client` is a marker type representing
 //! the ways in which the runtime can interface with the outside. Any code that builds a `Client`
 //! is responsible for putting the right marker.
-//!
-//! ## Example
-//!
-//! ```
-//! use std::sync::Arc;
-//! use sc_client::{Client, in_mem::Backend, LocalCallExecutor};
-//! use sp_runtime::Storage;
-//! use sc_executor::{NativeExecutor, WasmExecutionMethod};
-//!
-//! // In this example, we're using the `Block` and `RuntimeApi` types from the
-//! // `substrate-test-runtime-client` crate. These types are automatically generated when
-//! // compiling a runtime. In a typical use-case, these types would have been to be generated
-//! // from your runtime.
-//! use substrate_test_runtime_client::{LocalExecutor, runtime::Block, runtime::RuntimeApi};
-//!
-//! let backend = Arc::new(Backend::<Block>::new());
-//! let client = Client::<_, _, _, RuntimeApi>::new(
-//! 	backend.clone(),
-//! 	LocalCallExecutor::new(
-//! 		backend.clone(),
-//! 		NativeExecutor::<LocalExecutor>::new(WasmExecutionMethod::Interpreted, None, 8),
-//!         sp_core::tasks::executor(),
-//! 		Default::default(),
-//!		),
-//! 	// This parameter provides the storage for the chain genesis.
-//! 	&<Storage>::default(),
-//! 	Default::default(),
-//! 	Default::default(),
-//! 	Default::default(),
-//!		None,
-//! 	Default::default(),
-//! );
-//! ```
-//!
 
-#![warn(missing_docs)]
-#![recursion_limit="128"]
-
-pub mod cht;
-pub mod in_mem;
 pub mod genesis;
 pub mod light;
-pub mod leaves;
 mod call_executor;
 mod client;
 mod block_rules;
 
-pub use sc_client_api::{
-	blockchain,
-	blockchain::well_known_cache_keys,
-	blockchain::Info as ChainInfo,
-	notifications::{StorageEventStream, StorageChangeSet},
-	call_executor::CallExecutor,
-	utils,
-};
-pub use crate::{
+pub use self::{
 	call_executor::LocalCallExecutor,
-	client::{
-		new_with_backend,
-		new_in_mem,
-		ImportNotifications, FinalityNotifications, BlockchainEvents, LockImportRun,
-		BlockImportNotification, Client, ClientConfig, ClientInfo, ExecutionStrategies, FinalityNotification,
-		LongestChain, BlockOf, ProvideUncles, BadBlocks, ForkBlocks, apply_aux,
-	},
-	leaves::LeafSet,
+	client::{new_with_backend, new_in_mem, Client, ClientConfig},
 };
-pub use sp_state_machine::{ExecutionStrategy, StorageProof, StateMachine};

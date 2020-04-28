@@ -60,8 +60,8 @@ sp-transaction-pool = { version = "2.0.0-dev", path = "../../../primitives/trans
 
 # client dependencies
 sc-client-api = { version = "2.0.0-dev", path = "../../../client/api" }
-sc-client = { version = "0.8.0-dev", path = "../../../client/" }
 sc-chain-spec = { version = "2.0.0-dev", path = "../../../client/chain-spec" }
+sc-consensus = { version = "0.8.0-dev", path = "../../../client/consensus/common" }
 sc-transaction-pool = { version = "2.0.0-dev", path = "../../../client/transaction-pool" }
 sc-network = { version = "0.8.0-dev", path = "../../../client/network" }
 sc-consensus-babe = { version = "0.8.0-dev", path = "../../../client/consensus/babe" }
@@ -111,6 +111,7 @@ sc-service = { version = "0.8.0-dev", default-features = false, path = "../../..
 
 [dev-dependencies]
 sc-keystore = { version = "2.0.0-dev", path = "../../../client/keystore" }
+sc-consensus = { version = "0.8.0-dev", path = "../../../client/consensus/common" }
 sc-consensus-babe = { version = "0.8.0-dev", features = ["test-helpers"], path = "../../../client/consensus/babe" }
 sc-consensus-epochs = { version = "0.8.0-dev", path = "../../../client/consensus/epochs" }
 sc-service-test = { version = "2.0.0-dev", path = "../../../client/service/test" }
