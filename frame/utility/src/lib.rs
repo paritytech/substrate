@@ -68,7 +68,7 @@ use sp_io::hashing::blake2_256;
 use frame_support::{decl_module, decl_event, decl_error, decl_storage, Parameter, ensure, RuntimeDebug};
 use frame_support::{traits::{Get, ReservableCurrency, Currency},
 	weights::{Weight, GetDispatchInfo, DispatchClass, FunctionOf, Pays},
-	dispatch::{DispatchResultWithPostInfo, PostDispatchInfo},
+	dispatch::{DispatchResultWithPostInfo, DispatchErrorWithPostInfo, PostDispatchInfo},
 };
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::{DispatchError, DispatchResult, traits::Dispatchable};
@@ -414,10 +414,28 @@ decl_module! {
 					// Call is not made, so we can return that weight
 					return Ok(Some(weight_of::as_multi::<T>(other_signatories_len, 0)).into())
 				} else {
-					let post_dispatch_info = call.dispatch(frame_system::RawOrigin::Signed(id).into())?;
-					match post_dispatch_info.actual_weight {
-						Some(actual_weight) => return Ok(Some(weight_of::as_multi::<T>(other_signatories_len, actual_weight)).into()),
-						None => return Ok(None.into()),
+					let result = call.dispatch(frame_system::RawOrigin::Signed(id).into());
+					match result {
+						Ok(post_dispatch_info) => {
+							match post_dispatch_info.actual_weight {
+								Some(actual_weight) => return Ok(Some(weight_of::as_multi::<T>(other_signatories_len, actual_weight)).into()),
+								None => return Ok(None.into()),
+							}
+						},
+						Err(err) => {
+							match err.post_info.actual_weight {
+								Some(actual_weight) => {
+									let weight_used = weight_of::as_multi::<T>(other_signatories_len, actual_weight);
+									let post_info = PostDispatchInfo {
+										actual_weight: Some(weight_used),
+									};
+									return Err(DispatchErrorWithPostInfo { post_info, error: err.error.into() })
+								},
+								None => {
+									return Err(err)
+								}
+							}
+						}
 					}
 				}
 			}
