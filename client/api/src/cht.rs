@@ -331,9 +331,10 @@ pub fn decode_cht_value(value: &[u8]) -> Option<H256> {
 
 #[cfg(test)]
 mod tests {
-	use substrate_test_runtime_client::runtime::Header;
-	use sp_runtime::traits::BlakeTwo256;
 	use super::*;
+	use sp_runtime::{generic, traits::BlakeTwo256};
+
+	type Header = generic::Header<u64, BlakeTwo256>;
 
 	#[test]
 	fn is_build_required_works() {
