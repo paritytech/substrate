@@ -109,8 +109,9 @@ pub type DbState<B> = sp_state_machine::TrieBackend<
 	Arc<dyn sp_state_machine::Storage<HashFor<B>>>, HashFor<B>
 >;
 
+const DB_HASH_LEN: usize = 32;
 /// Hash type that this backend uses for the database.
-pub type DbHash = [u8; 32];
+pub type DbHash = [u8; DB_HASH_LEN];
 
 /// A reference tracking state.
 ///
@@ -312,6 +313,13 @@ impl DatabaseSettingsSrc {
 			DatabaseSettingsSrc::ParityDb { path, .. } => Some(path.as_path()),
 			DatabaseSettingsSrc::SubDb { path, .. } => Some(path.as_path()),
 			DatabaseSettingsSrc::Custom(_) => None,
+		}
+	}
+	/// Check if database supports internal ref counting for state data.
+	pub fn supports_ref_counting(&self) -> bool {
+		match self {
+			DatabaseSettingsSrc::ParityDb { .. } => true,
+			_ => false,
 		}
 	}
 }
@@ -716,13 +724,18 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 struct StorageDb<Block: BlockT> {
 	pub db: Arc<dyn Database<DbHash>>,
 	pub state_db: StateDb<Block::Hash, Vec<u8>>,
+	prefix_keys: bool,
 }
 
 impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Block> {
 	fn get(&self, key: &Block::Hash, prefix: Prefix) -> Result<Option<DBValue>, String> {
-		let key = prefixed_key::<HashFor<Block>>(key, prefix);
-		self.state_db.get(&key, self)
-			.map_err(|e| format!("Database backend error: {:?}", e))
+		if self.prefix_keys {
+			let key = prefixed_key::<HashFor<Block>>(key, prefix);
+			self.state_db.get(&key, self)
+		} else {
+			self.state_db.get(key.as_ref(), self)
+		}
+		.map_err(|e| format!("Database backend error: {:?}", e))
 	}
 }
 
@@ -843,11 +856,15 @@ impl<Block: BlockT> Backend<Block> {
 		let map_e = |e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from(
 			format!("State database error: {:?}", e)
 		);
-		let state_db: StateDb<_, _> = StateDb::new(config.pruning.clone(), &StateMetaDb(&*db))
-			.map_err(map_e)?;
+		let state_db: StateDb<_, _> = StateDb::new(
+			config.pruning.clone(),
+			!config.source.supports_ref_counting(),
+			&StateMetaDb(&*db),
+		).map_err(map_e)?;
 		let storage_db = StorageDb {
 			db: db.clone(),
 			state_db,
+			prefix_keys: !config.source.supports_ref_counting(),
 		};
 		let offchain_storage = offchain::LocalStorage::new(db.clone());
 		let changes_tries_storage = DbChangesTrieStorage::new(
@@ -1112,17 +1129,32 @@ impl<Block: BlockT> Backend<Block> {
 				let mut bytes: u64 = 0;
 				let mut removal: u64 = 0;
 				let mut bytes_removal: u64 = 0;
-				for (key, (val, rc)) in operation.db_updates.drain() {
+				for (mut key, (val, rc)) in operation.db_updates.drain() {
+					if !self.storage.prefix_keys {
+						// Strip prefix
+						key.drain(0 .. key.len() - DB_HASH_LEN);
+					};
 					if rc > 0 {
 						ops += 1;
 						bytes += key.len() as u64 + val.len() as u64;
-
-						changeset.inserted.push((key, val.to_vec()));
+						if rc == 1 {
+							changeset.inserted.push((key, val.to_vec()));
+						} else {
+							changeset.inserted.push((key.clone(), val.to_vec()));
+							for _ in 0 .. rc - 1 {
+								changeset.inserted.push((key.clone(), Default::default()));
+							}
+						}
 					} else if rc < 0 {
 						removal += 1;
 						bytes_removal += key.len() as u64;
-
-						changeset.deleted.push(key);
+						if rc == -1 {
+							changeset.deleted.push(key);
+						} else {
+							for _ in 0 .. -rc {
+								changeset.deleted.push(key.clone());
+							}
+						}
 					}
 				}
 				self.state_usage.tally_writes_nodes(ops, bytes);

@@ -126,7 +126,6 @@ use frame_support::{
 		FunctionOf, Pays,
 	}
 };
-
 use codec::{Encode, Decode, FullCodec, EncodeLike};
 
 #[cfg(any(feature = "std", test))]
@@ -393,7 +392,7 @@ decl_storage! {
 		Digest get(fn digest): DigestOf<T>;
 
 		/// Events deposited for the current block.
-		Events: Vec<EventRecord<T::Event, T::Hash>>;
+		Events get(fn events): Vec<EventRecord<T::Event, T::Hash>>;
 
 		/// The number of events in the `Events<T>` list.
 		EventCount get(fn event_count): EventIndex;
@@ -840,7 +839,7 @@ impl<T: Trait> Module<T> {
 	/// to the corresponding topic indexes.
 	///
 	/// This will update storage entries that correspond to the specified topics.
-	/// It is expected that light-clients could subscribe to these topics.
+	/// It is expected that light-clients could subscribe to this topics.
 	pub fn deposit_event_indexed(topics: &[T::Hash], event: T::Event) {
 		let block_number = Self::block_number();
 		// Don't populate events on genesis.
@@ -866,13 +865,10 @@ impl<T: Trait> Module<T> {
 			old_event_count
 		};
 
-		// We use accumulator api here to avoid bringing all events every time we push a
-		// new one.
-		//
-		// Note that because of that <Events<T>>::get() won't return these events until
-		// they are commited in System::finalize().
+		// We use append api here to avoid bringing all events in the runtime when we push a
+ 		// new one in the list.
 		let encoded_event = event.encode();
-		sp_io::storage::accumulator_push(&Events::<T>::storage_value_final_key()[..], encoded_event);
+		sp_io::storage::append(&Events::<T>::storage_value_final_key()[..], encoded_event);
 
 		for topic in topics {
 			// The same applies here.
@@ -959,20 +955,10 @@ impl<T: Trait> Module<T> {
 		<ExtrinsicsRoot<T>>::put(txs_root);
 
 		if let InitKind::Full = kind {
-			sp_io::storage::accumulator_commit(&Events::<T>::storage_value_final_key()[..]);
 			<Events<T>>::kill();
 			EventCount::kill();
 			<EventTopics<T>>::remove_all();
 		}
-	}
-
-	/// Collect events for the current block.
-	///
-	/// This should not be used for anything but tests. Using it for anything else
-	/// will impact performance in a very bad way.
-	pub fn collect_events() -> Vec<EventRecord<T::Event, T::Hash>> {
-		sp_io::storage::accumulator_commit(&Events::<T>::storage_value_final_key()[..]);
-		<Events<T>>::get()
 	}
 
 	/// Remove temporary "environment" entries in storage.
@@ -997,8 +983,6 @@ impl<T: Trait> Module<T> {
 				<BlockHash<T>>::remove(to_remove);
 			}
 		}
-
-		Self::update_accumulators();
 
 		let storage_root = T::Hash::decode(&mut &sp_io::storage::root()[..])
 			.expect("Node is configured to use the same hash; qed");
@@ -1111,7 +1095,6 @@ impl<T: Trait> Module<T> {
 				},
 			}
 		);
-		Self::update_accumulators();
 
 		let next_extrinsic_index = Self::extrinsic_index().unwrap_or_default() + 1u32;
 
@@ -1131,7 +1114,6 @@ impl<T: Trait> Module<T> {
 	/// To be called immediately after finishing the initialization of the block
 	/// (e.g., called `on_initialize` for all modules).
 	pub fn note_finished_initialize() {
-		Self::update_accumulators();
 		ExecutionPhase::put(Phase::ApplyExtrinsic(0))
 	}
 
@@ -1171,11 +1153,6 @@ impl<T: Trait> Module<T> {
 			}
 			Module::<T>::on_killed_account(who.clone());
 		}
-	}
-
-	/// Update pending storage changes, if any.
-	fn update_accumulators() {
-		sp_io::storage::accumulator_commit(&Events::<T>::storage_value_final_key()[..]);
 	}
 
 	/// Determine whether or not it is possible to update the code.
@@ -1873,8 +1850,9 @@ pub(crate) mod tests {
 			);
 			System::note_finished_extrinsics();
 			System::deposit_event(1u16);
+			System::finalize();
 			assert_eq!(
-				System::collect_events(),
+				System::events(),
 				vec![
 					EventRecord {
 						phase: Phase::Finalization,
@@ -1898,8 +1876,9 @@ pub(crate) mod tests {
 			System::note_applied_extrinsic(&Err(DispatchError::BadOrigin), 0, Default::default());
 			System::note_finished_extrinsics();
 			System::deposit_event(3u16);
+			System::finalize();
 			assert_eq!(
-				System::collect_events(),
+				System::events(),
 				vec![
 					EventRecord { phase: Phase::Initialization, event: 32u16, topics: vec![] },
 					EventRecord { phase: Phase::ApplyExtrinsic(0), event: 42u16, topics: vec![] },
@@ -1936,9 +1915,11 @@ pub(crate) mod tests {
 			System::deposit_event_indexed(&topics[0..1], 2u16);
 			System::deposit_event_indexed(&topics[1..2], 3u16);
 
+			System::finalize();
+
 			// Check that topics are reflected in the event record.
 			assert_eq!(
-				System::collect_events(),
+				System::events(),
 				vec![
 					EventRecord {
 						phase: Phase::Finalization,
@@ -2375,7 +2356,7 @@ pub(crate) mod tests {
 			).unwrap();
 
 			assert_eq!(
-				System::collect_events(),
+				System::events(),
 				vec![EventRecord { phase: Phase::Initialization, event: 102u16, topics: vec![] }],
 			);
 		});
@@ -2403,11 +2384,11 @@ pub(crate) mod tests {
 			// Block Number is zero at genesis
 			assert!(System::block_number().is_zero());
 			System::on_created_account(Default::default());
-			assert!(System::collect_events().is_empty());
+			assert!(System::events().is_empty());
 			// Events will be emitted starting on block 1
 			System::set_block_number(1);
 			System::on_created_account(Default::default());
-			assert!(System::collect_events().len() == 1);
+			assert!(System::events().len() == 1);
 		});
 	}
 }
