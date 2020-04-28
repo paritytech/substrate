@@ -151,8 +151,10 @@ impl BatchVerifier {
 
 				return false;
 			}
-			receiver.recv()
-				.expect("This can panic only if the spawned tasks is panicked. Spawned task does not panic; qed.");
+			if let Err(e) = receiver.recv() {
+				log::warn!(target: "runtime", "Haven't received async result from verification task. Returning false.")
+				return false;
+			}
 		}
 
 		log::trace!(
