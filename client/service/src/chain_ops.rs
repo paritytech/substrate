@@ -100,10 +100,10 @@ impl<R, B> BlockStream<R, SignedBlock<B>>
 		}
 	}
 
-	/// Returns the number of remaining blocks, if possible.
-	fn remaining_blocks(&self) -> Option<u64> {
+	/// Returns the total number of blocks to be imported, if possible.
+	fn count(&self) -> Option<u64> {
 		match self {
-			BlockStream::Binary {count, read_block_count, reader: _} => Some(*count - *read_block_count),
+			BlockStream::Binary {count, read_block_count, reader: _} => Some(*count),
 			BlockStream::Json {read_block_count:_ , reader: _}=> None
 		}
 	}
@@ -221,7 +221,7 @@ impl<
 			// Read blocks from the input.
 			match Pin::new(&mut block_stream).poll_next(cx) {
 				Poll::Ready(None) => {
-					let imported_blocks = block_stream.read_block_count();
+					let read_block_count = block_stream.read_block_count();
 					info!(
 						"🎉 Imported {} blocks. Best: #{}",
 						imported_blocks, client.chain_info().best_number
@@ -230,12 +230,12 @@ impl<
 					return std::task::Poll::Ready(Ok(()));
 				},
 				Poll::Ready(Some(block_result)) => {
-					let imported_blocks = block_stream.read_block_count();
+					let read_block_count = block_stream.read_block_count();
 					match block_result {
 						Ok(signed) => {
 							let (header, extrinsics) = signed.block.deconstruct();
 							let hash = header.hash();
-							// import queue handles verification and importing it into the client
+							// import queue handles verification and importing it into the client.
 							queue.import_blocks(BlockOrigin::File, vec![
 								IncomingBlock::<Self::Block> {
 									hash,
@@ -248,19 +248,12 @@ impl<
 								}
 							]);
 
-							// Print a message everyt 1000 blocks to let the user everything's running smoothly.
-							if imported_blocks % 1000 == 0 {
-								if let Some(remaining) = block_stream.remaining_blocks() {
-									info!(
-										"#{} blocks were imported (#{} left)",
-										imported_blocks, remaining
-									);
-								} else {
-									info!(
-										"#{} blocks were imported, still processing other blocks",
-										imported_blocks
-									);
-								}
+							// Print a message every 1000 blocks to let the user everything's running smoothly.
+							if read_block_count % 1000 == 0 {
+								info!(
+									"#{} blocks were added to the queue",
+									read_block_count
+								);
 							}
 
 							queue.poll_actions(cx, &mut link);
@@ -271,6 +264,21 @@ impl<
 								);
 								// We've encountered an error, we can stop here.
 								return std::task::Poll::Ready(Ok(()));
+							}
+
+							if link.imported_blocks / 1000 != blocks_before / 1000 {
+								if let Some(count) = block_stream.count() {
+									info!(
+										"#{} blocks were imported (#{} left)",
+										link.imported_blocks,
+										count - link.imported_blocks
+									)
+								} else {
+									info!(
+										"{} blocks were imported, other are still being processed",
+										link.imported_blocks,
+									)
+								}
 							}
 						}
 						Err(e) => {
