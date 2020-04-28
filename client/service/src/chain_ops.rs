@@ -234,12 +234,16 @@ impl<
 							return std::task::Poll::Pending
 						}
 					} else {
+						if link.imported_blocks >= read_block_count {
 							info!(
 								"🎉 Imported {} blocks. Best: #{}",
 								read_block_count, client.chain_info().best_number
 							);
 							// We're done importing blocks, we can stop here.
 							return std::task::Poll::Ready(Ok(()))
+						} else {
+							return std::task::Poll::Pending
+						}
 					}
 				},
 				Poll::Ready(Some(block_result)) => {
