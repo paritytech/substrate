@@ -433,7 +433,7 @@ pub trait CliConfiguration: Sized {
 			database: self.database_config(&config_dir, database_cache_size, database)?,
 			state_cache_size: self.state_cache_size()?,
 			state_cache_child_ratio: self.state_cache_child_ratio()?,
-			pruning: self.pruning(unsafe_pruning || is_dev, &role)?,
+			pruning: self.pruning(unsafe_pruning, &role)?,
 			wasm_method: self.wasm_method()?,
 			execution_strategies: self.execution_strategies(is_dev)?,
 			rpc_http: self.rpc_http()?,
