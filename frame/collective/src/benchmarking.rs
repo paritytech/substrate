@@ -52,7 +52,7 @@ benchmarks_instance! {
 		// We compute the difference of old and new members, so it should influence timing.
 		let mut old_members = vec![];
 		let mut last_old_member = T::AccountId::default();
-		for i in 0 .. n {
+		for i in 0 .. m {
 			last_old_member = account("old member", i, SEED);
 			old_members.push(last_old_member.clone());
 		}
@@ -61,24 +61,35 @@ benchmarks_instance! {
 		let initial_len = Collective::<T, _>::members().len() as u32;
 		Collective::<T, _>::set_members(
 			SystemOrigin::Root.into(),
-			old_members,
+			old_members.clone(),
 			Some(last_old_member.clone()),
 			initial_len
 		)?;
 
-		let threshold = 5;
+		// Set a high threshold for proposals passing so that they stay around.
+		let threshold = m.max(2);
+		// Length of the proposals should be irrelevant to `set_members`.
 		let length = 100;
 		for i in 0 .. p {
 			// Proposals should be different so that different proposal hashes are generated
 			let proposal: T::Proposal = frame_system::Call::<T>::remark(vec![i as u8; length]).into();
 			Collective::<T, _>::propose(SystemOrigin::Signed(last_old_member.clone()).into(), threshold, Box::new(proposal.clone()))?;
+			let hash = T::Hashing::hash_of(&proposal);
+			// Vote on the proposal to increase state relevant for `set_members`.
+			// Not voting for `last_old_member` because they proposed and not voting for the first member
+			// to keep the proposal from passing.
+			for j in 2 .. m - 1 {
+				let voter = &old_members[j as usize];
+				let approve = true;
+				Collective::<T, _>::vote(SystemOrigin::Signed(voter.clone()).into(), hash, i, approve)?;
+			}
 		}
 
 		// Construct `new_members`.
 		// It should influence timing since it will sort this vector.
 		let mut new_members = vec![];
 		let mut last_member = T::AccountId::default();
-		for i in 0 .. m {
+		for i in 0 .. n {
 			last_member = account("member", i, SEED);
 			new_members.push(last_member.clone());
 		}
