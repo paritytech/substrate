@@ -331,7 +331,6 @@ where
 				previous: previous_request.request,
 				request_duration: previous_request.emitted.elapsed(),
 			}
-
 		} else {
 			SendRequestOutcome::Ok
 		}

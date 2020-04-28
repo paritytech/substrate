@@ -983,7 +983,7 @@ impl Metrics {
 				HistogramOpts {
 					common_opts: Opts::new(
 						"sub_libp2p_requests_out_finished",
-						"Time between a request emission and when it finished"
+						"Time between a request's start and finish (successful or not)"
 					),
 					buckets: prometheus_endpoint::exponential_buckets(0.001, 2.0, 16)
 						.expect("parameters are always valid values; qed"),
