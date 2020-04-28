@@ -20,7 +20,6 @@
 
 pub mod client_ext;
 
-pub use sc_client::{blockchain, self};
 pub use sc_client_api::{
 	execution_extensions::{ExecutionStrategies, ExecutionExtensions},
 	ForkBlocks, BadBlocks, CloneableSpawn,
@@ -36,16 +35,17 @@ pub use sp_keyring::{
 pub use sp_core::{traits::BareCryptoStorePtr, tasks::executor as tasks_executor};
 pub use sp_runtime::{Storage, StorageChild};
 pub use sp_state_machine::ExecutionStrategy;
+pub use sc_service::client;
 pub use self::client_ext::{ClientExt, ClientBlockImportExt};
 
 use std::sync::Arc;
 use std::collections::HashMap;
 use sp_core::storage::ChildInfo;
 use sp_runtime::traits::{Block as BlockT, BlakeTwo256};
-use sc_client::LocalCallExecutor;
+use sc_service::client::{LocalCallExecutor, ClientConfig};
 
 /// Test client light database backend.
-pub type LightBackend<Block> = sc_client::light::backend::Backend<
+pub type LightBackend<Block> = client::light::backend::Backend<
 	sc_client_db::light::LightStorage<Block>,
 	BlakeTwo256,
 >;
@@ -175,15 +175,15 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 		self,
 		executor: Executor,
 	) -> (
-		sc_client::Client<
+		client::Client<
 			Backend,
 			Executor,
 			Block,
 			RuntimeApi,
 		>,
-		sc_client::LongestChain<Backend, Block>,
+		sc_consensus::LongestChain<Backend, Block>,
 	) where
-		Executor: sc_client::CallExecutor<Block> + 'static,
+		Executor: sc_client_api::CallExecutor<Block> + 'static,
 		Backend: sc_client_api::backend::Backend<Block>,
 	{
 		let storage = {
@@ -203,7 +203,7 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 			storage
 		};
 
-		let client = sc_client::Client::new(
+		let client = client::Client::new(
 			self.backend.clone(),
 			executor,
 			&storage,
@@ -214,10 +214,10 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 				self.keystore.clone(),
 			),
 			None,
-			sc_client::ClientConfig::default(),
+			ClientConfig::default(),
 		).expect("Creates new client");
 
-		let longest_chain = sc_client::LongestChain::new(self.backend);
+		let longest_chain = sc_consensus::LongestChain::new(self.backend);
 
 		(client, longest_chain)
 	}
@@ -225,7 +225,7 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 
 impl<Block: BlockT, E, Backend, G: GenesisInit> TestClientBuilder<
 	Block,
-	sc_client::LocalCallExecutor<Backend, NativeExecutor<E>>,
+	client::LocalCallExecutor<Backend, NativeExecutor<E>>,
 	Backend,
 	G,
 > {
@@ -234,13 +234,13 @@ impl<Block: BlockT, E, Backend, G: GenesisInit> TestClientBuilder<
 		self,
 		executor: I,
 	) -> (
-		sc_client::Client<
+		client::Client<
 			Backend,
-			sc_client::LocalCallExecutor<Backend, NativeExecutor<E>>,
+			client::LocalCallExecutor<Backend, NativeExecutor<E>>,
 			Block,
 			RuntimeApi
 		>,
-		sc_client::LongestChain<Backend, Block>,
+		sc_consensus::LongestChain<Backend, Block>,
 	) where
 		I: Into<Option<NativeExecutor<E>>>,
 		E: sc_executor::NativeExecutionDispatch + 'static,
