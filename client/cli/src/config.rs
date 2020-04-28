@@ -206,16 +206,6 @@ pub trait CliConfiguration: Sized {
 			.unwrap_or(Ok(Default::default()))
 	}
 
-	/// Allows unsafe pruning
-	///
-	/// By default this is retrieved from `ImportParams` if it is available. Otherwise it's
-	/// false.
-	fn unsafe_pruning(&self) -> Result<bool> {
-		Ok(self.import_params()
-			.map(|p| p.unsafe_pruning())
-			.unwrap_or(false))
-	}
-
 	/// Get the chain ID (string).
 	///
 	/// By default this is retrieved from `SharedParams`.
@@ -420,7 +410,11 @@ pub trait CliConfiguration: Sized {
 		let node_key = self.node_key(&net_config_dir)?;
 		let role = self.role(is_dev)?;
 		let max_runtime_instances = self.max_runtime_instances()?.unwrap_or(8);
-		let unsafe_pruning = self.unsafe_pruning()?;
+
+		let unsafe_pruning = self
+			.import_params()
+			.map(|p| p.unsafe_pruning)
+			.unwrap_or(false);
 
 		Ok(Configuration {
 			impl_name: C::impl_name(),
@@ -439,7 +433,7 @@ pub trait CliConfiguration: Sized {
 			database: self.database_config(&config_dir, database_cache_size, database)?,
 			state_cache_size: self.state_cache_size()?,
 			state_cache_child_ratio: self.state_cache_child_ratio()?,
-			pruning: self.pruning(unsafe_pruning, &role)?,
+			pruning: self.pruning(unsafe_pruning || is_dev, &role)?,
 			wasm_method: self.wasm_method()?,
 			execution_strategies: self.execution_strategies(is_dev)?,
 			rpc_http: self.rpc_http()?,
