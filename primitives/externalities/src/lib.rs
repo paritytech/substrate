@@ -157,25 +157,6 @@ pub trait Externalities: ExtensionStore {
 		value: Option<Vec<u8>>,
 	);
 
-	/// Push new entry to the storage accumulator.
-	fn storage_accumulator_push(
-		&mut self,
-		key: &[u8],
-		appended: Vec<u8>,
-	);
-
-	/// Commit storage accumulator.
-	///
-	/// Commits accumulator with given `key` to the
-	/// actual storage and clears it.
-	///
-	/// Returns number of keys that were present in the
-	/// accumulator.
-	fn storage_accumulator_commit(
-		&mut self,
-		key: &[u8],
-	) -> u32;
-
 	/// Get the identity of the chain.
 	fn chain_id(&self) -> u64;
 
