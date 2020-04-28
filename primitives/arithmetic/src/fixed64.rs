@@ -276,7 +276,7 @@ implement_fixed!(
 // 		let result = a.checked_div_int(&100i128).unwrap();
 // 		assert_eq!(result, 2);
 
-// 		// 256 / 1000 = 0 (0.256 as int = 0)
+// 		// 256 / 1000 = 0 (0.256 as int = 0) 
 // 		let a = Fixed64::from_integer(256);
 // 		let result = a.checked_div_int(&1000i128).unwrap();
 // 		assert_eq!(result, 0);

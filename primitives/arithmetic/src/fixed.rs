@@ -378,16 +378,22 @@ macro_rules! implement_fixed {
 		}
 
 		#[cfg(feature = "std")]
-		impl $name {
-			fn get_str(&self) -> String {
-				format!("{}", &self.0)
-			}
-
-			fn try_from_str(s: &str) -> Result<Self, &'static str> {
-				let inner: <Self as FixedPointNumber>::Inner = s.parse().map_err(|_| "invalid string input")?;
-				Ok(Self::from_inner(inner))
+		impl sp_std::fmt::Display for $name {
+			fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+				write!(f, "{}", self.0)
 			}
 		}
+
+		#[cfg(feature = "std")]
+		impl sp_std::str::FromStr for $name {
+			type Err = &'static str;
+
+			fn from_str(s: &str) -> Result<Self, Self::Err> {
+				let inner: <Self as FixedPointNumber>::Inner = s.parse()
+					.map_err(|_| "invalid string input for fixed point number")?;
+				Ok(Self::from_inner(inner))
+			}
+		} 
 
 		// Manual impl `Serialize` as serde_json does not support i128.
 		// TODO: remove impl if issue https://github.com/serde-rs/json/issues/548 fixed.
@@ -397,7 +403,7 @@ macro_rules! implement_fixed {
 			where
 				S: Serializer,
 			{
-				serializer.serialize_str(&self.get_str())
+				serializer.serialize_str(&self.to_string())
 			}
 		}
 
@@ -409,8 +415,9 @@ macro_rules! implement_fixed {
 			where
 				D: Deserializer<'de>,
 			{
+				use sp_std::str::FromStr;
 				let s = String::deserialize(deserializer)?;
-				$name::try_from_str(&s).map_err(|err_str| de::Error::custom(err_str))
+				$name::from_str(&s).map_err(|err_str| de::Error::custom(err_str))
 			}
 		}
 
