@@ -222,12 +222,25 @@ impl<
 			match Pin::new(&mut block_stream).poll_next(cx) {
 				Poll::Ready(None) => {
 					let read_block_count = block_stream.read_block_count();
-					info!(
-						"🎉 Imported {} blocks. Best: #{}",
-						imported_blocks, client.chain_info().best_number
-					);
-					// We're done importing blocks, we can stop here.
-					return std::task::Poll::Ready(Ok(()));
+					if let Some(count) = block_stream.count() {
+						if link.imported_blocks >= count {
+							info!(
+								"🎉 Imported {} blocks. Best: #{}",
+								count, client.chain_info().best_number
+							);
+							// We're done importing blocks, we can stop here.
+							return std::task::Poll::Ready(Ok(()))
+						} else {
+							return std::task::Poll::Pending
+						}
+					} else {
+							info!(
+								"🎉 Imported {} blocks. Best: #{}",
+								read_block_count, client.chain_info().best_number
+							);
+							// We're done importing blocks, we can stop here.
+							return std::task::Poll::Ready(Ok(()))
+					}
 				},
 				Poll::Ready(Some(block_result)) => {
 					let read_block_count = block_stream.read_block_count();
