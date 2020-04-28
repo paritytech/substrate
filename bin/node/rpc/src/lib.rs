@@ -50,7 +50,7 @@ pub struct LightDeps<C, F, P> {
 	/// Transaction pool instance.
 	pub pool: Arc<P>,
 	/// Remote access to the blockchain (async).
-	pub remote_blockchain: Arc<dyn sc_client::light::blockchain::RemoteBlockchain<Block>>,
+	pub remote_blockchain: Arc<dyn sc_client_api::light::RemoteBlockchain<Block>>,
 	/// Fetcher instance.
 	pub fetcher: Arc<F>,
 }
@@ -135,9 +135,9 @@ pub fn create_full<C, P, M, SC>(
 pub fn create_light<C, P, M, F>(
 	deps: LightDeps<C, F, P>,
 ) -> jsonrpc_core::IoHandler<M> where
-	C: sc_client::blockchain::HeaderBackend<Block>,
+	C: sp_blockchain::HeaderBackend<Block>,
 	C: Send + Sync + 'static,
-	F: sc_client::light::fetcher::Fetcher<Block> + 'static,
+	F: sc_client_api::light::Fetcher<Block> + 'static,
 	P: TransactionPool + 'static,
 	M: jsonrpc_core::Metadata + Default,
 {

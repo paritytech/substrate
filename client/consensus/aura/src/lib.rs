@@ -46,8 +46,7 @@ use sp_consensus::{
 use sp_consensus::import_queue::{
 	Verifier, BasicQueue, BoxJustificationImport, BoxFinalityProofImport,
 };
-use sc_client_api::backend::AuxStore;
-use sc_client::BlockOf;
+use sc_client_api::{backend::AuxStore, BlockOf};
 use sp_blockchain::{
 	self, Result as CResult, well_known_cache_keys::{self, Id as CacheKeyId},
 	ProvideCache, HeaderBackend,
@@ -831,14 +830,14 @@ mod tests {
 	use sc_network::config::ProtocolConfig;
 	use parking_lot::Mutex;
 	use sp_keyring::sr25519::Keyring;
-	use sc_client::BlockchainEvents;
+	use sc_client_api::BlockchainEvents;
 	use sp_consensus_aura::sr25519::AuthorityPair;
 	use std::task::Poll;
 	use sc_block_builder::BlockBuilderProvider;
 
 	type Error = sp_blockchain::Error;
 
-	type TestClient = sc_client::Client<
+	type TestClient = substrate_test_runtime_client::client::Client<
 		substrate_test_runtime_client::Backend,
 		substrate_test_runtime_client::Executor,
 		TestBlock,

@@ -13,10 +13,11 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 sc-client-api = { version = "2.0.0-dev", path = "../../client/api" }
-sc-client = { version = "0.8.0-dev", path = "../../client/" }
 sc-client-db = { version = "0.8.0-dev", features = ["test-helpers"], path = "../../client/db" }
 sp-consensus = { version = "0.8.0-dev", path = "../../primitives/consensus/common" }
 sc-executor = { version = "0.8.0-dev", path = "../../client/executor" }
+sc-consensus = { version = "0.8.0-dev", path = "../../client/consensus/common" }
+sc-service = { version = "0.8.0-dev", default-features = false, features = ["test-helpers"],  path = "../../client/service" }
 futures = "0.3.4"
 hash-db = "0.15.2"
 sp-keyring = { version = "2.0.0-dev", path = "../../primitives/keyring" }

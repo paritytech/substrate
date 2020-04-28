@@ -326,7 +326,6 @@ check-web-wasm:
     - time cargo build --target=wasm32-unknown-unknown -p sp-io
     - time cargo build --target=wasm32-unknown-unknown -p sp-runtime
     - time cargo build --target=wasm32-unknown-unknown -p sp-std
-    - time cargo build --target=wasm32-unknown-unknown -p sc-client
     - time cargo build --target=wasm32-unknown-unknown -p sc-consensus-aura
     - time cargo build --target=wasm32-unknown-unknown -p sc-consensus-babe
     - time cargo build --target=wasm32-unknown-unknown -p sp-consensus
