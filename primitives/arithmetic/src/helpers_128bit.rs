@@ -144,7 +144,7 @@ pub fn divide(a: u128, b: u128, p: u8) -> Option<u128> {
 		return None
 	}
 
-	println!("divide a {} b {}", a, b);
+	println!("a {} b {} p {}", a, b, p);
 
 	// Bits of space to multiply.
 	let leading_zeros = a.leading_zeros();
@@ -159,6 +159,7 @@ pub fn divide(a: u128, b: u128, p: u8) -> Option<u128> {
 	let r = a.checked_rem(b).unwrap();
 
 	if p == 0 {
+		println!("d = {} r = {}", d, r);
 		// We're done, the multiplication was fitting after all.
 		return Some(d)
 	}
@@ -166,7 +167,6 @@ pub fn divide(a: u128, b: u128, p: u8) -> Option<u128> {
 	let leading_zeros = d.leading_zeros();
 
 	if leading_zeros < p {
-		println!("overflow!!! {} {}", leading_zeros, p);
 		// Overflow.
 		return None
 	}
@@ -198,8 +198,6 @@ pub fn divide(a: u128, b: u128, p: u8) -> Option<u128> {
 		// We're done.
 		return Some(d.checked_add(n).unwrap())
 	}
-
-	println!("we didn't finis?");
 
 	None
 }

@@ -359,8 +359,19 @@ macro_rules! implement_fixed {
 					let signum_for_zero = if int == 0 && self.is_negative() { "-" } else { "" };
 					format!("{}{}", signum_for_zero, int)
 				};
-				let fractional = format!("{:0>width$}", (self.0 % Self::accuracy()).abs(), width=$precision);
-				write!(f, "{}({}.{})", stringify!($name), integral, fractional)
+				let mut frac_str = String::new();
+				let mut frac = (self.0 % Self::accuracy()).abs() as u128;
+				loop {
+					let x = (frac * 10) as u128 / Self::accuracy() as u128;
+					frac = (frac * 10) as u128 % Self::accuracy() as u128;
+					frac_str.push_str(format!("{}", x).as_str());
+
+					if frac == 0 {
+						break
+					}
+				}
+				// let fractional = fractional as f32/ Self::accuracy() as f32;
+				write!(f, "{}({}.{})", stringify!($name), integral, frac_str)
 			}
 
 			#[cfg(not(feature = "std"))]
@@ -804,6 +815,64 @@ macro_rules! implement_fixed {
 				let b = $name::from_integer(2);
 				let c = a * b;
 				assert_eq!(c, b);
+			}
+
+			#[test]
+			fn perthing_into_works() {
+				let ten_percent_percent: $name = Percent::from_percent(10).into();
+				assert_eq!(ten_percent_percent.into_inner(), $name::accuracy() / 10);
+
+				let ten_percent_permill: $name = Permill::from_percent(10).into();
+				assert_eq!(ten_percent_permill.into_inner(), $name::accuracy() / 10);
+
+				let ten_percent_perbill: $name = Perbill::from_percent(10).into();
+				assert_eq!(ten_percent_perbill.into_inner(), $name::accuracy() / 10);
+
+				let ten_percent_perquintill: $name = Perquintill::from_percent(10).into();
+				assert_eq!(ten_percent_perquintill.into_inner(), $name::accuracy() / 10);
+			}
+
+			#[test]
+			fn fmt_should_work() {
+				let inner_max = <$name as FixedPointNumber>::Inner::max_value();
+				let inner_min = <$name as FixedPointNumber>::Inner::min_value();
+				let accuracy = $name::accuracy();
+
+				let zero = $name::zero();
+				assert_eq!(format!("{:?}", zero), format!("{}(0.0)", stringify!($name)));
+
+				let one = $name::one();
+				assert_eq!(format!("{:?}", one), format!("{}(1.0)", stringify!($name)));
+
+				let neg = -$name::one();
+				assert_eq!(format!("{:?}", neg), format!("{}(-1.0)", stringify!($name)));
+
+				let frac = $name::from_rational(1, 2);
+				assert_eq!(format!("{:?}", frac), format!("{}(0.5)", stringify!($name)));
+
+				let frac = $name::from_rational(5, 2);
+				assert_eq!(format!("{:?}", frac), format!("{}(2.5)", stringify!($name)));
+
+				let frac = $name::from_rational(314, 100).checked_mul(&100.into()).unwrap();
+				assert_eq!(frac, $name::from_integer(314));
+				// assert_eq!(format!("{:?}", frac), format!("{}(3.14)", stringify!($name)));
+
+				// let frac = $name::from_rational(-314, 100);
+				// assert_eq!(format!("{:?}", frac), format!("{}(-3.14)", stringify!($name)));
+
+				// let frac = $name::from_inner(inner_max);
+				// assert_eq!(format!("{:?}", frac), format!("{}({}1)", stringify!($name), inner_max));
+
+				// let negative = $name::from_inner(-1000000000000000001);
+				// assert_eq!(format!("{:?}", negative), "Fixed128(-1.000000000000000001)");
+
+				// let positive_fractional = $name::from_inner(1);
+				// assert_eq!(format!("{:?}", positive_fractional), "Fixed128(0.000000000000000001)");
+				// let negative_fractional = $name::from_inner(-1);
+				// assert_eq!(format!("{:?}", negative_fractional), "Fixed128(-0.000000000000000001)");
+
+				// let zero = $name::zero();
+				// assert_eq!(format!("{:?}", zero), "Fixed128(0.000000000000000000)");
 			}
 		}
 	}
