@@ -164,7 +164,7 @@ fn struct_def(
 			PartialEq,
 			Eq,
 			Clone,
-			_phragmen::sp_core::RuntimeDebug,
+			Debug,
 			_phragmen::codec::Encode,
 			_phragmen::codec::Decode,
 		)]

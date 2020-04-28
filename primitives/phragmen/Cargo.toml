@@ -17,7 +17,6 @@ serde = { version = "1.0.101", optional = true, features = ["derive"] }
 sp-std = { version = "2.0.0-dev", default-features = false, path = "../std" }
 sp-phragmen-compact = { version = "2.0.0-dev", path = "./compact" }
 sp-arithmetic = { version = "2.0.0-dev", default-features = false, path = "../arithmetic" }
-sp-core = { version = "2.0.0-dev", default-features = false, path = "../core" }
 
 [dev-dependencies]
 substrate-test-utils = { version = "2.0.0-dev", path = "../../test-utils" }
@@ -33,5 +32,4 @@ std = [
 	"serde",
 	"sp-std/std",
 	"sp-arithmetic/std",
-	"sp-core/std",
 ]

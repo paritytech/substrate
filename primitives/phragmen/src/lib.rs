@@ -39,7 +39,6 @@ use sp_arithmetic::{
 	helpers_128bit::multiply_by_rational,
 	traits::{Zero, Saturating, Bounded, SaturatedConversion},
 };
-use sp_core::RuntimeDebug;
 
 #[cfg(test)]
 mod mock;
@@ -63,8 +62,6 @@ pub use helpers::*;
 // re-export the compact macro, with the dependencies of the macro.
 #[doc(hidden)]
 pub use codec;
-#[doc(hidden)]
-pub use sp_core;
 #[doc(hidden)]
 pub use sp_arithmetic;
 
@@ -113,7 +110,7 @@ pub type WithApprovalOf<A> = (A, ExtendedBalance);
 const DEN: u128 = u128::max_value();
 
 /// A candidate entity for phragmen election.
-#[derive(Clone, Default, RuntimeDebug)]
+#[derive(Clone, Default, Debug)]
 struct Candidate<AccountId> {
 	/// Identifier.
 	who: AccountId,
@@ -126,7 +123,7 @@ struct Candidate<AccountId> {
 }
 
 /// A voter entity.
-#[derive(Clone, Default, RuntimeDebug)]
+#[derive(Clone, Default, Debug)]
 struct Voter<AccountId> {
 	/// Identifier.
 	who: AccountId,
@@ -139,7 +136,7 @@ struct Voter<AccountId> {
 }
 
 /// A candidate being backed by a voter.
-#[derive(Clone, Default, RuntimeDebug)]
+#[derive(Clone, Default, Debug)]
 struct Edge<AccountId> {
 	/// Identifier.
 	who: AccountId,
@@ -150,7 +147,7 @@ struct Edge<AccountId> {
 }
 
 /// Final result of the phragmen election.
-#[derive(RuntimeDebug)]
+#[derive(Debug)]
 pub struct PhragmenResult<AccountId, T: PerThing> {
 	/// Just winners zipped with their approval stake. Note that the approval stake is merely the
 	/// sub of their received stake and could be used for very basic sorting and approval voting.
@@ -161,7 +158,7 @@ pub struct PhragmenResult<AccountId, T: PerThing> {
 }
 
 /// A voter's stake assignment among a set of targets, represented as ratios.
-#[derive(RuntimeDebug, Clone, Default)]
+#[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Encode, Decode))]
 pub struct Assignment<AccountId, T: PerThing> {
 	/// Voter's identifier
@@ -229,7 +226,7 @@ where
 
 /// A voter's stake assignment among a set of targets, represented as absolute values in the scale
 /// of [`ExtendedBalance`].
-#[derive(RuntimeDebug, Clone, Default)]
+#[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Encode, Decode))]
 pub struct StakedAssignment<AccountId> {
 	/// Voter's identifier
@@ -307,7 +304,7 @@ impl<AccountId> StakedAssignment<AccountId> {
 ///
 /// This, at the current version, resembles the `Exposure` defined in the Staking pallet, yet
 /// they do not necessarily have to be the same.
-#[derive(Default, RuntimeDebug)]
+#[derive(Default, Debug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Eq, PartialEq))]
 pub struct Support<AccountId> {
 	/// Total support.
