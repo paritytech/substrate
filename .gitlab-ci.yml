@@ -89,7 +89,16 @@ variables:
     - /^pre-v[0-9]+\.[0-9]+-[0-9a-f]+$/
     - web
 
+#### stage:                       .pre
 
+skip-if-draft:
+  image:                           parity/tools:latest
+  <<:                              *kubernetes-build
+  stage:                          .pre
+  only:
+    - /^[0-9]+$/                  # Pull requests
+  script:
+     - ./.maintain/gitlab/skip_if_draft.sh
 
 #### stage:                        test
 
