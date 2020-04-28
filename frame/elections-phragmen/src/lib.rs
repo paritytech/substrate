@@ -93,6 +93,7 @@ use frame_support::{
 	traits::{
 		Currency, Get, LockableCurrency, LockIdentifier, ReservableCurrency, WithdrawReasons,
 		ChangeMembers, OnUnbalanced, WithdrawReason, Contains, BalanceStatus, InitializeMembers,
+		ContainsLengthBound,
 	}
 };
 use sp_phragmen::{build_support_map, ExtendedBalance, VoteWeight, PhragmenResult};
@@ -877,6 +878,15 @@ impl<T: Trait> Contains<T::AccountId> for Module<T> {
 				Err(pos) => members.insert(pos, (who.clone(), BalanceOf::<T>::default())),
 			}
 		})
+	}
+}
+
+impl<T: Trait> ContainsLengthBound for Module<T> {
+	fn min_len() -> usize { 0 }
+
+	/// Implementation uses a parameter type so calling is cost-free.
+	fn max_len() -> usize {
+		Self::desired_members() as usize
 	}
 }
 
