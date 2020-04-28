@@ -426,10 +426,7 @@ decl_module! {
 							match err.post_info.actual_weight {
 								Some(actual_weight) => {
 									let weight_used = weight_of::as_multi::<T>(other_signatories_len, actual_weight);
-									let post_info = PostDispatchInfo {
-										actual_weight: Some(weight_used),
-									};
-									return Err(DispatchErrorWithPostInfo { post_info, error: err.error.into() })
+									return Err(DispatchErrorWithPostInfo { post_info: Some(weight_used).into(), error: err.error.into() })
 								},
 								None => {
 									return Err(err)
