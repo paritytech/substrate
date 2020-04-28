@@ -114,8 +114,6 @@ impl BatchVerifier {
 	/// aggregated result.
 	#[must_use]
 	pub fn verify_and_clear(&mut self) -> bool {
-		use std::sync::{Mutex, Condvar};
-
 		let pending = std::mem::replace(&mut self.pending_tasks, vec![]);
 		let started = std::time::Instant::now();
 
@@ -139,14 +137,12 @@ impl BatchVerifier {
 		self.sr25519_items.clear();
 
 		if pending.len() > 0 {
-			let pair = Arc::new((Mutex::new(false), Condvar::new()));
-			let pair_clone = pair.clone();
-
+			let (sender, receiver) = std::sync::mpsc::channel();
 			if self.scheduler.spawn_obj(FutureObj::new(async move {
 				futures::future::join_all(pending).await;
-				let mut finished = pair_clone.0.lock().expect("Locking can only fail when the mutex is poisoned; qed");
-				*finished = true;
-				pair_clone.1.notify_all();
+				sender.send(())
+					.expect("Channel never panics if receiver is live. \
+							Receiver is always live until received this data; qed. ");
 			}.boxed())).is_err() {
 				log::debug!(
 					target: "runtime",
@@ -155,11 +151,9 @@ impl BatchVerifier {
 
 				return false;
 			}
-
-			let (finished, cond_var) = &*pair;
-			let mut finished = finished.lock().expect("Locking can only fail when the mutex is poisoned; qed");
-			while !*finished {
-				finished = cond_var.wait(finished).expect("Waiting can only fail when the mutex waited on is poisoned; qed");
+			if receiver.recv().is_err() {
+				log::warn!(target: "runtime", "Haven't received async result from verification task. Returning false.");
+				return false;
 			}
 		}
 
