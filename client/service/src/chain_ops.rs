@@ -44,6 +44,7 @@ pub fn build_spec(spec: &dyn ChainSpec, raw: bool) -> error::Result<String> {
 	Ok(spec.as_json(raw)?)
 }
 
+/// Helper enum that wraps either a binary decoder (from parity-scale-codec), or a JSON decoder (from serde_json).
 enum BlockStream<R, B> 
 where
 	R: std::io::Read + std::io::Seek,
@@ -72,14 +73,18 @@ impl<R, B> BlockStream<R, SignedBlock<B>>
 	fn new(input: R, binary: bool) -> Result<Self, Error> {
 		if binary {
 			let mut reader = CodecIoReader(input);
-			let count: u64 = Decode::decode(&mut reader).map_err(|e| format!("Error reading file: {}", e))?;
+			// If the file is encoded in binary format, it is expected to first specify the number
+			// of blocks that are going to be decoded. We read it and add it to our enum struct.
+			let count: u64 = Decode::decode(&mut reader)
+				.map_err(|e| format!("Error reading file: {}", e))?;
 			Ok(BlockStream::Binary {
 				count,
 				read_block_count: 0,
 				reader,
 			})
 		} else {
-			let stream_deser  = Deserializer::from_reader(input).into_iter::<SignedBlock<B>>();
+			let stream_deser  = Deserializer::from_reader(input)
+				.into_iter::<SignedBlock<B>>();
 			Ok(BlockStream::Json {
 				reader: stream_deser,
 				read_block_count: 0,
@@ -87,6 +92,7 @@ impl<R, B> BlockStream<R, SignedBlock<B>>
 		}
 	}
 
+	/// Returns the number of blocks read thus far.
 	fn read_block_count(&self) -> u64 {
 		match self {
 			BlockStream::Binary {count: _, read_block_count, reader: _} => *read_block_count,
@@ -94,6 +100,7 @@ impl<R, B> BlockStream<R, SignedBlock<B>>
 		}
 	}
 
+	/// Returns the number of remaining blocks, if possible.
 	fn remaining_blocks(&self) -> Option<u64> {
 		match self {
 			BlockStream::Binary {count, read_block_count, reader: _} => Some(*count - *read_block_count),
@@ -109,11 +116,14 @@ impl<R, B> Stream for BlockStream<R, SignedBlock<B>>
 	{
 	type Item = Result<SignedBlock<B>, String>;
 
+	/// Returns Poll::Ready(None) if every block have been read,
+	/// else returns Poll::Ready(Some(block)), block being a result of decoding a signed block.
 	fn poll_next(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Option<Self::Item>> {
 		match Pin::get_mut(self) {
 			BlockStream::Binary {count, read_block_count, reader} => {
 				if read_block_count < count {
-					let block_result: Result<SignedBlock::<B>, _> =  SignedBlock::<B>::decode(reader).map_err(|e| e.to_string());
+					let block_result: Result<SignedBlock::<B>, _> =  SignedBlock::<B>::decode(reader)
+						.map_err(|e| e.to_string());
 					*read_block_count += 1;
 					Poll::Ready(Some(block_result))
 				} else {
