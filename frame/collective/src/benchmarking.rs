@@ -28,7 +28,7 @@ use crate::Module as Collective;
 
 const SEED: u32 = 0;
 
-const MAX_MEMBERS: u32 = 1000;
+const MAX_MEMBERS: u32 = 100;
 const MAX_PROPOSALS: u32 = 100;
 const MAX_BYTES: u32 = 1_024;
 
