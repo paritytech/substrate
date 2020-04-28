@@ -8,21 +8,36 @@ publish = false
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 
-[package.metadata.docs.rs]
-targets = ["x86_64-unknown-linux-gnu"]
-
 [dependencies]
+hex-literal = "0.2.1"
 tempfile = "3.1.0"
 tokio = "0.1.22"
 futures01 = { package = "futures", version = "0.1.29" }
 log = "0.4.8"
 env_logger = "0.7.0"
 fdlimit = "0.1.4"
+parking_lot = "0.10.0"
+sp-blockchain = { version = "2.0.0-dev", path = "../../../primitives/blockchain" }
+sp-api = { version = "2.0.0-dev", path = "../../../primitives/api" }
+sp-state-machine = { version = "0.8.0-dev", path = "../../../primitives/state-machine" }
+sp-externalities = { version = "0.8.0-dev", path = "../../../primitives/externalities" }
+sp-trie = { version = "2.0.0-dev", path = "../../../primitives/trie" }
+sp-storage = { version = "2.0.0-dev", path = "../../../primitives/storage" }
+sc-client-db = { version = "0.8.0-dev", default-features = false, path = "../../db" }
 futures = { version = "0.3.1", features = ["compat"] }
-sc-service = { version = "0.8.0-dev", default-features = false, path = "../../service" }
+sc-service = { version = "0.8.0-dev", default-features = false, features = ["test-helpers"], path = "../../service" }
 sc-network = { version = "0.8.0-dev", path = "../../network" }
 sp-consensus = { version = "0.8.0-dev", path = "../../../primitives/consensus/common" }
-sc-client = { version = "0.8.0-dev", path = "../../" }
 sp-runtime = { version = "2.0.0-dev", path = "../../../primitives/runtime" }
 sp-core = { version = "2.0.0-dev", path = "../../../primitives/core" }
 sp-transaction-pool = { version = "2.0.0-dev", path = "../../../primitives/transaction-pool" }
+substrate-test-runtime = { version = "2.0.0-dev", path = "../../../test-utils/runtime" }
+substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../../test-utils/runtime/client" }
+sc-client-api = { version = "2.0.0-dev", path = "../../api" }
+sc-block-builder = { version = "0.8.0-dev", path = "../../block-builder" }
+sc-executor = { version = "0.8.0-dev", path = "../../executor" }
+sp-panic-handler = { version = "2.0.0-dev", path = "../../../primitives/panic-handler" }
+parity-scale-codec = "1.3.0"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

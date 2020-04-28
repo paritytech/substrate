@@ -28,7 +28,6 @@ sp-timestamp = { version = "2.0.0-dev", path = "../../../primitives/timestamp" }
 sc-telemetry = { version = "2.0.0-dev", path = "../../telemetry" }
 sc-keystore = { version = "2.0.0-dev", path = "../../keystore" }
 sc-client-api = { version = "2.0.0-dev", path = "../../api" }
-sc-client = { version = "0.8.0-dev", path = "../../" }
 sc-consensus-epochs = { version = "0.8.0-dev", path = "../epochs" }
 sp-api = { version = "2.0.0-dev", path = "../../../primitives/api" }
 sp-block-builder = { version = "2.0.0-dev", path = "../../../primitives/block-builder" }
@@ -54,7 +53,7 @@ sp-keyring = { version = "2.0.0-dev", path = "../../../primitives/keyring" }
 sc-executor = { version = "0.8.0-dev", path = "../../executor" }
 sc-network = { version = "0.8.0-dev", path = "../../network" }
 sc-network-test = { version = "0.8.0-dev", path = "../../network/test" }
-sc-service = { version = "0.8.0-dev", path = "../../service" }
+sc-service = { version = "0.8.0-dev", default-features = false, path = "../../service" }
 substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../../test-utils/runtime/client" }
 sc-block-builder = { version = "0.8.0-dev", path = "../../block-builder" }
 env_logger = "0.7.0"

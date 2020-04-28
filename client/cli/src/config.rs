@@ -25,10 +25,11 @@ use crate::arg_enums::Database;
 use app_dirs::{AppDataType, AppInfo};
 use names::{Generator, Name};
 use sc_service::config::{
-	Configuration, DatabaseConfig, ExecutionStrategies, ExtTransport, KeystoreConfig,
-	NetworkConfiguration, NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode,
-	Role, TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
+	WasmExecutionMethod, Role, OffchainWorkerConfig,
+	Configuration, DatabaseConfig, ExtTransport, KeystoreConfig, NetworkConfiguration,
+	NodeKeyConfig, PrometheusConfig, PruningMode, TelemetryEndpoints, TransactionPoolOptions,
 };
+use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::{ChainSpec, TracingReceiver};
 use std::future::Future;
 use std::net::SocketAddr;
