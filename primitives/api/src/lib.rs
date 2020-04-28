@@ -49,6 +49,9 @@ pub use hash_db::Hasher;
 #[cfg(feature = "std")]
 pub use sp_core::offchain::storage::OffchainOverlayedChanges;
 #[doc(hidden)]
+#[cfg(not(feature = "std"))]
+pub use sp_core::to_substrate_wasm_fn_return_value;
+#[doc(hidden)]
 pub use sp_runtime::{
 	traits::{
 		Block as BlockT, GetNodeBlockType, GetRuntimeBlockType, HashFor, NumberFor,
