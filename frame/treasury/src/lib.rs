@@ -523,7 +523,7 @@ decl_module! {
 
 			let mut tip = Tips::<T>::get(hash).ok_or(Error::<T>::UnknownTip)?;
 			if Self::insert_tip_and_check_closing(&mut tip, tipper, tip_value) {
-				Self::deposit_event(RawEvent::TipClosing(hash));
+				Self::deposit_event(RawEvent::TipClosing(hash.clone()));
 			}
 			Tips::<T>::insert(&hash, tip);
 		}

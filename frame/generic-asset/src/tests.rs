@@ -1132,7 +1132,7 @@ fn update_permission_should_raise_event() {
 				RawEvent::PermissionUpdated(asset_id, permissions.clone()),
 			);
 			// Assert
-			assert!(System::collect_events().iter().any(|record| record.event == expected_event));
+			assert!(System::events().iter().any(|record| record.event == expected_event));
 		},
 	);
 }
@@ -1164,13 +1164,14 @@ fn mint_should_raise_event() {
 					permissions: permissions.clone(),
 				},
 			));
+
 			// Act
 			assert_ok!(GenericAsset::mint(Origin::signed(origin), asset_id, to, amount));
 
 			let expected_event = TestEvent::generic_asset(RawEvent::Minted(asset_id, to, amount));
 
 			// Assert
-			assert!(System::collect_events().iter().any(|record| record.event == expected_event));
+			assert!(System::events().iter().any(|record| record.event == expected_event));
 		},
 	);
 }
@@ -1208,7 +1209,7 @@ fn burn_should_raise_event() {
 			let expected_event = TestEvent::generic_asset(RawEvent::Burned(asset_id, origin, amount));
 
 			// Assert
-			assert!(System::collect_events().iter().any(|record| record.event == expected_event));
+			assert!(System::events().iter().any(|record| record.event == expected_event));
 		},
 	);
 }

@@ -364,7 +364,7 @@ fn full_native_block_import_works() {
 				topics: vec![],
 			},
 		];
-		assert_eq!(System::collect_events(), events);
+		assert_eq!(System::events(), events);
 	});
 
 	fm = t.execute_with(TransactionPayment::next_fee_multiplier);
@@ -442,7 +442,7 @@ fn full_native_block_import_works() {
 				topics: vec![],
 			},
 		];
-		assert_eq!(System::collect_events(), events);
+		assert_eq!(System::events(), events);
 	});
 }
 

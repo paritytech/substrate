@@ -463,10 +463,6 @@ mod tests {
 		).unwrap();
 
 		futures::executor::block_on(
-			txpool.submit_at(&BlockId::number(0), SOURCE, vec![extrinsic(1)]),
-		).unwrap();
-
-		futures::executor::block_on(
 			txpool.maintain(chain_event(
 				0,
 				client.header(&BlockId::Number(0u64)).expect("header get error").expect("there should be header")
@@ -485,7 +481,7 @@ mod tests {
 			proposer.propose(Default::default(), Default::default(), deadline, RecordProof::No),
 		).unwrap();
 
-		assert_eq!(proposal.block.extrinsics().len(), 2);
+		assert_eq!(proposal.block.extrinsics().len(), 1);
 
 		let api = client.runtime_api();
 		api.execute_block(&block_id, proposal.block).unwrap();

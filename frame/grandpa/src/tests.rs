@@ -54,7 +54,7 @@ fn authorities_change_logged() {
 			],
 		});
 
-		assert_eq!(System::collect_events(), vec![
+		assert_eq!(System::events(), vec![
 			EventRecord {
 				phase: Phase::Finalization,
 				event: Event::NewAuthorities(to_authorities(vec![(4, 1), (5, 1), (6, 1)])).into(),
@@ -80,13 +80,14 @@ fn authorities_change_logged_after_delay() {
 		});
 
 		// no change at this height.
-		assert_eq!(System::collect_events(), vec![]);
+		assert_eq!(System::events(), vec![]);
 
 		initialize_block(2, header.hash());
 		System::note_finished_extrinsics();
 		Grandpa::on_finalize(2);
 
-		assert_eq!(System::collect_events(), vec![
+		let _header = System::finalize();
+		assert_eq!(System::events(), vec![
 			EventRecord {
 				phase: Phase::Finalization,
 				event: Event::NewAuthorities(to_authorities(vec![(4, 1), (5, 1), (6, 1)])).into(),

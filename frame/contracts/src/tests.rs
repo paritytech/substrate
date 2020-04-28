@@ -373,7 +373,7 @@ fn instantiate_and_call_and_deposit_event() {
 			vec![],
 		);
 
-		assert_eq!(System::collect_events(), vec![
+		assert_eq!(System::events(), vec![
 			EventRecord {
 				phase: Phase::Initialization,
 				event: MetaEvent::system(frame_system::RawEvent::NewAccount(1)),
@@ -440,7 +440,7 @@ fn dispatch_call() {
 
 		// Let's keep this assert even though it's redundant. If you ever need to update the
 		// wasm source this test will fail and will show you the actual hash.
-		assert_eq!(System::collect_events(), vec![
+		assert_eq!(System::events(), vec![
 			EventRecord {
 				phase: Phase::Initialization,
 				event: MetaEvent::system(frame_system::RawEvent::NewAccount(1)),
@@ -474,7 +474,7 @@ fn dispatch_call() {
 			vec![],
 		));
 
-		assert_eq!(System::collect_events(), vec![
+		assert_eq!(System::events(), vec![
 			EventRecord {
 				phase: Phase::Initialization,
 				event: MetaEvent::system(frame_system::RawEvent::NewAccount(1)),
@@ -561,7 +561,7 @@ fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
 
 		// Let's keep this assert even though it's redundant. If you ever need to update the
 		// wasm source this test will fail and will show you the actual hash.
-		assert_eq!(System::collect_events(), vec![
+		assert_eq!(System::events(), vec![
 			EventRecord {
 				phase: Phase::Initialization,
 				event: MetaEvent::system(frame_system::RawEvent::NewAccount(1)),
@@ -599,7 +599,7 @@ fn dispatch_call_not_dispatched_after_top_level_transaction_failure() {
 			),
 			"contract trapped during execution"
 		);
-		assert_eq!(System::collect_events(), vec![
+		assert_eq!(System::events(), vec![
 			EventRecord {
 				phase: Phase::Initialization,
 				event: MetaEvent::system(frame_system::RawEvent::NewAccount(1)),
@@ -703,7 +703,7 @@ fn test_set_rent_code_and_hash() {
 
 		// If you ever need to update the wasm source this test will fail
 		// and will show you the actual hash.
-		assert_eq!(System::collect_events(), vec![
+		assert_eq!(System::events(), vec![
 			EventRecord {
 				phase: Phase::Initialization,
 				event: MetaEvent::system(frame_system::RawEvent::NewAccount(1)),
@@ -1030,7 +1030,7 @@ fn call_removed_contract() {
 			"contract has been evicted"
 		);
 		// Calling a contract that is about to evict shall emit an event.
-		assert_eq!(System::collect_events(), vec![
+		assert_eq!(System::events(), vec![
 			EventRecord {
 				phase: Phase::Initialization,
 				event: MetaEvent::contracts(RawEvent::Evicted(BOB, true)),
@@ -1112,7 +1112,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 
 		// If you ever need to update the wasm source this test will fail
 		// and will show you the actual hash.
-		assert_eq!(System::collect_events(), vec![
+		assert_eq!(System::events(), vec![
 			EventRecord {
 				phase: Phase::Initialization,
 				event: MetaEvent::system(frame_system::RawEvent::NewAccount(1)),
@@ -1171,7 +1171,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 			"contract has been evicted"
 		);
 		assert!(ContractInfoOf::<Test>::get(BOB).unwrap().get_tombstone().is_some());
-		assert_eq!(System::collect_events(), vec![
+		assert_eq!(System::events(), vec![
 			EventRecord {
 				phase: Phase::Initialization,
 				event: MetaEvent::contracts(
@@ -1224,7 +1224,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 			assert_eq!(django_contract.deduct_block, System::block_number());
 			match (test_different_storage, test_restore_to_with_dirty_storage) {
 				(true, false) => {
-					assert_eq!(System::collect_events(), vec![
+					assert_eq!(System::events(), vec![
 						EventRecord {
 							phase: Phase::Initialization,
 							event: MetaEvent::contracts(
@@ -1235,7 +1235,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 					]);
 				}
 				(_, true) => {
-					assert_eq!(System::collect_events(), vec![
+					assert_eq!(System::events(), vec![
 						EventRecord {
 							phase: Phase::Initialization,
 							event: MetaEvent::contracts(RawEvent::Evicted(BOB, true)),
@@ -1297,7 +1297,7 @@ fn restoration(test_different_storage: bool, test_restore_to_with_dirty_storage:
 			assert_eq!(bob_contract.trie_id, django_trie_id);
 			assert_eq!(bob_contract.deduct_block, System::block_number());
 			assert!(ContractInfoOf::<Test>::get(DJANGO).is_none());
-			assert_eq!(System::collect_events(), vec![
+			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::Initialization,
 					event: MetaEvent::system(system::RawEvent::KilledAccount(DJANGO)),

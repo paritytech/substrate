@@ -192,10 +192,10 @@ fn report_awesome_and_tip_works() {
 		);
 
 		let h = tip_hash();
-		assert_ok!(Treasury::tip(Origin::signed(10), h, 10));
-		assert_ok!(Treasury::tip(Origin::signed(11), h, 10));
-		assert_ok!(Treasury::tip(Origin::signed(12), h, 10));
-		assert_noop!(Treasury::tip(Origin::signed(9), h, 10), BadOrigin);
+		assert_ok!(Treasury::tip(Origin::signed(10), h.clone(), 10));
+		assert_ok!(Treasury::tip(Origin::signed(11), h.clone(), 10));
+		assert_ok!(Treasury::tip(Origin::signed(12), h.clone(), 10));
+		assert_noop!(Treasury::tip(Origin::signed(9), h.clone(), 10), BadOrigin);
 		System::set_block_number(2);
 		assert_ok!(Treasury::close_tip(Origin::signed(100), h.into()));
 		assert_eq!(Balances::reserved_balance(0), 0);
@@ -212,23 +212,14 @@ fn report_awesome_from_beneficiary_and_tip_works() {
 		assert_eq!(Balances::reserved_balance(0), 12);
 		assert_eq!(Balances::free_balance(0), 88);
 		let h = BlakeTwo256::hash_of(&(BlakeTwo256::hash(b"awesome.dot"), 0u64));
-		assert_ok!(Treasury::tip(Origin::signed(10), h, 10));
-		assert_ok!(Treasury::tip(Origin::signed(11), h, 10));
-		assert_ok!(Treasury::tip(Origin::signed(12), h, 10));
+		assert_ok!(Treasury::tip(Origin::signed(10), h.clone(), 10));
+		assert_ok!(Treasury::tip(Origin::signed(11), h.clone(), 10));
+		assert_ok!(Treasury::tip(Origin::signed(12), h.clone(), 10));
 		System::set_block_number(2);
 		assert_ok!(Treasury::close_tip(Origin::signed(100), h.into()));
 		assert_eq!(Balances::reserved_balance(0), 0);
 		assert_eq!(Balances::free_balance(0), 110);
 	});
-}
-
-fn last_treasury_event() -> RawEvent<u64, u64, H256> {
-	System::collect_events().into_iter().map(|r| r.event)
-		.filter_map(|e| {
-			if let Event::treasury(inner) = e { Some(inner) } else { None }
-		})
-		.last()
-		.expect("There should be event")
 }
 
 #[test]
@@ -244,23 +235,30 @@ fn close_tip_works() {
 		let h = tip_hash();
 
 		assert_eq!(
-			last_treasury_event(),
+			System::events().into_iter().map(|r| r.event)
+				.filter_map(|e| {
+					if let Event::treasury(inner) = e { Some(inner) } else { None }
+				})
+				.last()
+				.unwrap(),
 			RawEvent::NewTip(h),
 		);
-		System::set_block_number(1);
 
-		assert_ok!(Treasury::tip(Origin::signed(11), h, 10));
+		assert_ok!(Treasury::tip(Origin::signed(11), h.clone(), 10));
 
 		assert_noop!(Treasury::close_tip(Origin::signed(0), h.into()), Error::<Test>::StillOpen);
 
-		assert_ok!(Treasury::tip(Origin::signed(12), h, 10));
+		assert_ok!(Treasury::tip(Origin::signed(12), h.clone(), 10));
 
 		assert_eq!(
-			last_treasury_event(),
+			System::events().into_iter().map(|r| r.event)
+				.filter_map(|e| {
+					if let Event::treasury(inner) = e { Some(inner) } else { None }
+				})
+				.last()
+				.unwrap(),
 			RawEvent::TipClosing(h),
 		);
-
-		System::set_block_number(1);
 
 		assert_noop!(Treasury::close_tip(Origin::signed(0), h.into()), Error::<Test>::Premature);
 
@@ -270,7 +268,12 @@ fn close_tip_works() {
 		assert_eq!(Balances::free_balance(3), 10);
 
 		assert_eq!(
-			last_treasury_event(),
+			System::events().into_iter().map(|r| r.event)
+				.filter_map(|e| {
+					if let Event::treasury(inner) = e { Some(inner) } else { None }
+				})
+				.last()
+				.unwrap(),
 			RawEvent::TipClosed(h, 3, 10),
 		);
 
@@ -284,11 +287,11 @@ fn retract_tip_works() {
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
 		assert_ok!(Treasury::report_awesome(Origin::signed(0), b"awesome.dot".to_vec(), 3));
 		let h = tip_hash();
-		assert_ok!(Treasury::tip(Origin::signed(10), h, 10));
-		assert_ok!(Treasury::tip(Origin::signed(11), h, 10));
-		assert_ok!(Treasury::tip(Origin::signed(12), h, 10));
-		assert_noop!(Treasury::retract_tip(Origin::signed(10), h), Error::<Test>::NotFinder);
-		assert_ok!(Treasury::retract_tip(Origin::signed(0), h));
+		assert_ok!(Treasury::tip(Origin::signed(10), h.clone(), 10));
+		assert_ok!(Treasury::tip(Origin::signed(11), h.clone(), 10));
+		assert_ok!(Treasury::tip(Origin::signed(12), h.clone(), 10));
+		assert_noop!(Treasury::retract_tip(Origin::signed(10), h.clone()), Error::<Test>::NotFinder);
+		assert_ok!(Treasury::retract_tip(Origin::signed(0), h.clone()));
 		System::set_block_number(2);
 		assert_noop!(Treasury::close_tip(Origin::signed(0), h.into()), Error::<Test>::UnknownTip);
 	});
@@ -300,8 +303,8 @@ fn tip_median_calculation_works() {
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
 		assert_ok!(Treasury::tip_new(Origin::signed(10), b"awesome.dot".to_vec(), 3, 0));
 		let h = tip_hash();
-		assert_ok!(Treasury::tip(Origin::signed(11), h, 10));
-		assert_ok!(Treasury::tip(Origin::signed(12), h, 1000000));
+		assert_ok!(Treasury::tip(Origin::signed(11), h.clone(), 10));
+		assert_ok!(Treasury::tip(Origin::signed(12), h.clone(), 1000000));
 		System::set_block_number(2);
 		assert_ok!(Treasury::close_tip(Origin::signed(0), h.into()));
 		assert_eq!(Balances::free_balance(3), 10);
@@ -314,13 +317,13 @@ fn tip_changing_works() {
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
 		assert_ok!(Treasury::tip_new(Origin::signed(10), b"awesome.dot".to_vec(), 3, 10000));
 		let h = tip_hash();
-		assert_ok!(Treasury::tip(Origin::signed(11), h, 10000));
-		assert_ok!(Treasury::tip(Origin::signed(12), h, 10000));
-		assert_ok!(Treasury::tip(Origin::signed(13), h, 0));
-		assert_ok!(Treasury::tip(Origin::signed(14), h, 0));
-		assert_ok!(Treasury::tip(Origin::signed(12), h, 1000));
-		assert_ok!(Treasury::tip(Origin::signed(11), h, 100));
-		assert_ok!(Treasury::tip(Origin::signed(10), h, 10));
+		assert_ok!(Treasury::tip(Origin::signed(11), h.clone(), 10000));
+		assert_ok!(Treasury::tip(Origin::signed(12), h.clone(), 10000));
+		assert_ok!(Treasury::tip(Origin::signed(13), h.clone(), 0));
+		assert_ok!(Treasury::tip(Origin::signed(14), h.clone(), 0));
+		assert_ok!(Treasury::tip(Origin::signed(12), h.clone(), 1000));
+		assert_ok!(Treasury::tip(Origin::signed(11), h.clone(), 100));
+		assert_ok!(Treasury::tip(Origin::signed(10), h.clone(), 10));
 		System::set_block_number(2);
 		assert_ok!(Treasury::close_tip(Origin::signed(0), h.into()));
 		assert_eq!(Balances::free_balance(3), 10);

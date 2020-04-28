@@ -17,9 +17,9 @@
 //! Basic implementation for Externalities.
 
 use std::{
-	collections::{BTreeMap, HashMap}, any::{TypeId, Any}, iter::FromIterator, ops::Bound
+	collections::BTreeMap, any::{TypeId, Any}, iter::FromIterator, ops::Bound
 };
-use crate::{Backend, StorageKey, StorageValue, ext::StorageAccumulator};
+use crate::{Backend, StorageKey, StorageValue};
 use hash_db::Hasher;
 use sp_trie::{TrieConfiguration, empty_child_trie_root};
 use sp_trie::trie_types::Layout;
@@ -39,17 +39,12 @@ use sp_externalities::Extensions;
 pub struct BasicExternalities {
 	inner: Storage,
 	extensions: Extensions,
-	accumulators: HashMap<Vec<u8>, StorageAccumulator>,
 }
 
 impl BasicExternalities {
 	/// Create a new instance of `BasicExternalities`
 	pub fn new(inner: Storage) -> Self {
-		BasicExternalities {
-			inner,
-			extensions: Default::default(),
-			accumulators: Default::default(),
-		}
+		BasicExternalities { inner, extensions: Default::default() }
 	}
 
 	/// New basic externalities with empty storage.
@@ -64,7 +59,6 @@ impl BasicExternalities {
 
 		Self {
 			inner: Storage::default(),
-			accumulators: Default::default(),
 			extensions,
 		}
 	}
@@ -92,7 +86,6 @@ impl BasicExternalities {
 				children_default: std::mem::replace(&mut storage.children_default, Default::default()),
 			},
 			extensions: Default::default(),
-			accumulators: Default::default(),
 		};
 
 		let r = ext.execute_with(f);
@@ -142,7 +135,6 @@ impl From<BTreeMap<StorageKey, StorageValue>> for BasicExternalities {
 				children_default: Default::default(),
 			},
 			extensions: Default::default(),
-			accumulators: Default::default(),
 		}
 	}
 }
@@ -309,35 +301,6 @@ impl Externalities for BasicExternalities {
 		} else {
 			empty_child_trie_root::<Layout<Blake2Hasher>>()
 		}.encode()
-	}
-
-	fn storage_accumulator_push(
-		&mut self,
-		key: &[u8],
-		appended: Vec<u8>,
-	) {
-		self.accumulators.entry(key.to_vec())
-			.or_default()
-			.append(appended);
-	}
-
-	fn storage_accumulator_commit(
-		&mut self,
-		key: &[u8],
-	) -> u32 {
-		let accumulator = self.accumulators.remove(key).unwrap_or_default();
-		let accumulated = if accumulator.len() == 0 {
-			return 0;
-		} else {
-			accumulator.len()
-		};
-
-		self.place_storage(
-			key.to_vec(),
-			Some(accumulator.merge_with_storage(self.storage(key).unwrap_or_default())),
-		);
-
-		accumulated
 	}
 
 	fn storage_changes_root(&mut self, _parent: &[u8]) -> Result<Option<Vec<u8>>, ()> {

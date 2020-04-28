@@ -2837,7 +2837,16 @@ mod offchain_phragmen {
 			assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
 			// some election must have happened by now.
 			assert_eq!(
-				*mock::staking_events()
+				System::events()
+					.into_iter()
+					.map(|r| r.event)
+					.filter_map(|e| {
+						if let MetaEvent::staking(inner) = e {
+							Some(inner)
+						} else {
+							None
+						}
+					})
 					.last()
 					.unwrap(),
 				RawEvent::StakingElection(ElectionCompute::OnChain),
@@ -2918,9 +2927,18 @@ mod offchain_phragmen {
 				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
 
 				assert_eq!(
-					*mock::staking_events()
+					System::events()
+						.into_iter()
+						.map(|r| r.event)
+						.filter_map(|e| {
+							if let MetaEvent::staking(inner) = e {
+								Some(inner)
+							} else {
+								None
+							}
+						})
 						.last()
-						.expect("Staking event should exist"),
+						.unwrap(),
 					RawEvent::StakingElection(ElectionCompute::Signed),
 				);
 			})
@@ -2952,7 +2970,16 @@ mod offchain_phragmen {
 				assert_eq!(Staking::era_election_status(), ElectionStatus::Closed);
 
 				assert_eq!(
-					*mock::staking_events()
+					System::events()
+						.into_iter()
+						.map(|r| r.event)
+						.filter_map(|e| {
+							if let MetaEvent::staking(inner) = e {
+								Some(inner)
+							} else {
+								None
+							}
+						})
 						.last()
 						.unwrap(),
 					RawEvent::StakingElection(ElectionCompute::Signed),
