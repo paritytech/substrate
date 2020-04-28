@@ -51,9 +51,9 @@ const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
 #[serde(rename_all = "camelCase")]
 pub struct Extensions {
 	/// Block numbers with known hashes.
-	pub fork_blocks: sc_client::ForkBlocks<Block>,
+	pub fork_blocks: sc_client_api::ForkBlocks<Block>,
 	/// Known bad block hashes.
-	pub bad_blocks: sc_client::BadBlocks<Block>,
+	pub bad_blocks: sc_client_api::BadBlocks<Block>,
 }
 
 /// Specialized `ChainSpec`.

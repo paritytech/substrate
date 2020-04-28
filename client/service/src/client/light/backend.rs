@@ -32,7 +32,6 @@ use sp_state_machine::{
 };
 use sp_runtime::{generic::BlockId, Justification, Storage};
 use sp_runtime::traits::{Block as BlockT, NumberFor, Zero, Header, HashFor};
-use crate::in_mem::check_genesis_storage;
 use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use sc_client_api::{
 	backend::{
@@ -43,9 +42,10 @@ use sc_client_api::{
 		HeaderBackend as BlockchainHeaderBackend, well_known_cache_keys,
 	},
 	light::Storage as BlockchainStorage,
+	in_mem::check_genesis_storage,
 	UsageInfo,
 };
-use crate::light::blockchain::Blockchain;
+use super::blockchain::Blockchain;
 use hash_db::Hasher;
 
 const IN_MEMORY_EXPECT_PROOF: &str = "InMemory state backend has Void error type and always succeeds; qed";
@@ -251,7 +251,7 @@ where
 				.unwrap_or(false)
 	}
 
-	fn remote_blockchain(&self) -> Arc<dyn crate::light::blockchain::RemoteBlockchain<Block>> {
+	fn remote_blockchain(&self) -> Arc<dyn super::blockchain::RemoteBlockchain<Block>> {
 		self.blockchain.clone()
 	}
 }
@@ -511,55 +511,5 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 			GenesisOrUnavailableState::Genesis(ref mut state) => state.as_trie_backend(),
 			GenesisOrUnavailableState::Unavailable => None,
 		}
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use substrate_test_runtime_client::{self, runtime::Block};
-	use sc_client_api::backend::NewBlockState;
-	use crate::light::blockchain::tests::{DummyBlockchain, DummyStorage};
-	use sp_runtime::traits::BlakeTwo256;
-	use super::*;
-
-	#[test]
-	fn local_state_is_created_when_genesis_state_is_available() {
-		let def = Default::default();
-		let header0 = substrate_test_runtime_client::runtime::Header::new(0, def, def, def, Default::default());
-
-		let backend: Backend<_, BlakeTwo256> = Backend::new(
-			Arc::new(DummyBlockchain::new(DummyStorage::new())),
-		);
-		let mut op = backend.begin_operation().unwrap();
-		op.set_block_data(header0, None, None, NewBlockState::Final).unwrap();
-		op.reset_storage(Default::default()).unwrap();
-		backend.commit_operation(op).unwrap();
-
-		match backend.state_at(BlockId::Number(0)).unwrap() {
-			GenesisOrUnavailableState::Genesis(_) => (),
-			_ => panic!("unexpected state"),
-		}
-	}
-
-	#[test]
-	fn unavailable_state_is_created_when_genesis_state_is_unavailable() {
-		let backend: Backend<_, BlakeTwo256> = Backend::new(
-			Arc::new(DummyBlockchain::new(DummyStorage::new())),
-		);
-
-		match backend.state_at(BlockId::Number(0)).unwrap() {
-			GenesisOrUnavailableState::Unavailable => (),
-			_ => panic!("unexpected state"),
-		}
-	}
-
-	#[test]
-	fn light_aux_store_is_updated_via_non_importing_op() {
-		let backend = Backend::new(Arc::new(DummyBlockchain::new(DummyStorage::new())));
-		let mut op = ClientBackend::<Block>::begin_operation(&backend).unwrap();
-		BlockImportOperation::<Block>::insert_aux(&mut op, vec![(vec![1], Some(vec![2]))]).unwrap();
-		ClientBackend::<Block>::commit_operation(&backend, op).unwrap();
-
-		assert_eq!(AuxStore::get_aux(&backend, &[1]).unwrap(), Some(vec![2]));
 	}
 }

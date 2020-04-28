@@ -25,10 +25,11 @@ use crate::arg_enums::Database;
 use app_dirs::{AppDataType, AppInfo};
 use names::{Generator, Name};
 use sc_service::config::{
-	Configuration, DatabaseConfig, ExecutionStrategies, ExtTransport, KeystoreConfig,
-	NetworkConfiguration, NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode,
-	Role, TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
+	WasmExecutionMethod, Role, OffchainWorkerConfig,
+	Configuration, DatabaseConfig, ExtTransport, KeystoreConfig, NetworkConfiguration,
+	NodeKeyConfig, PrometheusConfig, PruningMode, TelemetryEndpoints, TransactionPoolOptions,
 };
+use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::{ChainSpec, TracingReceiver};
 use std::future::Future;
 use std::net::SocketAddr;
@@ -433,7 +434,7 @@ pub trait CliConfiguration: Sized {
 			database: self.database_config(&config_dir, database_cache_size, database)?,
 			state_cache_size: self.state_cache_size()?,
 			state_cache_child_ratio: self.state_cache_child_ratio()?,
-			pruning: self.pruning(unsafe_pruning || is_dev, &role)?,
+			pruning: self.pruning(unsafe_pruning, &role)?,
 			wasm_method: self.wasm_method()?,
 			execution_strategies: self.execution_strategies(is_dev)?,
 			rpc_http: self.rpc_http()?,
