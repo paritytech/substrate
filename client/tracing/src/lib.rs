@@ -204,7 +204,7 @@ impl Subscriber for ProfilingSubscriber {
 
 	fn record(&self, span: &Id, values: &Record<'_>) {
 		let mut span_data = self.span_data.lock();
-		if let Some(mut s) = span_data.get_mut(&span.into_u64()) {
+		if let Some(s) = span_data.get_mut(&span.into_u64()) {
 			values.record(&mut s.values);
 		} else {
 			log::warn!("Tried to record to span `{:?}` that has already been closed!", span);

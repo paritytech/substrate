@@ -18,12 +18,24 @@
 //!
 //! To trace functions or invidual code in Substrate, this crate provides [`tracing_span`]
 //! and [`enter_span`]. See the individual docs for how to use these macros.
-
 #![cfg_attr(not(feature = "std"), no_std)]
+
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate rental;
+
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate lazy_static;
 
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub use tracing;
+
+#[cfg(feature = "std")]
+pub mod proxy;
+#[cfg(feature = "std")]
+mod span_dispatch;
 
 /// Runs given code within a tracing span, measuring it's execution time.
 ///
