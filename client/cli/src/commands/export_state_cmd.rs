@@ -20,7 +20,7 @@ use crate::{
 use log::info;
 use sc_network::config::build_multiaddr;
 use sc_service::{Configuration, ServiceBuilderCommand};
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
+use sp_runtime::{generic::BlockId, traits::{Block as BlockT, Header as HeaderT, NumberFor}};
 use std::{fmt::Debug, str::FromStr};
 use structopt::StructOpt;
 
@@ -52,10 +52,13 @@ impl ExportStateCmd {
 		BB::Hash: FromStr,
 		<BB::Hash as FromStr>::Err: std::fmt::Debug,
 	{
+		info!("Exporting raw state...");
 		let input_spec = config.chain_spec.cloned_box();
-		let spec = builder(config)?.export_state(spec)?;
+		let block_id = self.input.clone().map(|b| b.parse()).transpose()?;
+		let raw_state = builder(config)?.export_raw_state(block_id)?;
 
-		let json = sc_service::chain_ops::build_spec(&*spec, true)?;
+		info!("Generating new chain spec...");
+		let json = sc_service::chain_ops::build_spec(&*input_spec, true)?;
 
 		print!("{}", json);
 

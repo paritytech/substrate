@@ -128,7 +128,8 @@ mod tests {
 	#[test]
 	fn parse_block_hash() {
 		let hash = sp_core::H256::default();
-		let block_number_or_hash = BlockNumberOrHash::from_str(&hash.to_string()).unwrap();
+		let hash_str = format!("{:?}", hash);
+		let block_number_or_hash = BlockNumberOrHash::from_str(&hash_str).unwrap();
 		let parsed = block_number_or_hash.parse::<Block>().unwrap();
 		assert_eq!(BlockId::Hash(hash), parsed);
 	}
@@ -136,16 +137,16 @@ mod tests {
 	#[test]
 	fn parse_block_hash_fails() {
 		assert_eq!(
-			BlockNumberOrHash::from_str("0xHello").unwrap_err(),
 			"Expected block hash, found illegal hex character at position: 2",
+			BlockNumberOrHash::from_str("0xHello").unwrap_err(),
 		);
 	}
 
 	#[test]
 	fn parse_block_number_fails() {
 		assert_eq!(
+			"Expected block number, found illegal digit at position: 3",
 			BlockNumberOrHash::from_str("345Hello").unwrap_err(),
-			"Expected block number, found illegal hex character at position: 3",
 		);
 	}
 }
