@@ -15,8 +15,8 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! RPC API for GRANDPA.
-
-#![deny(missing_docs)]
+#![warn(missing_docs)]
+#![warn(missing_docs)]
 
 use finality_grandpa::BlockNumberOps;
 use sc_finality_grandpa::{voter, AuthorityId, SharedAuthoritySet, SharedVoterState};
@@ -26,7 +26,8 @@ use jsonrpc_derive::rpc;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, fmt::Debug};
 
-const NOT_READY_ERROR_CODE: i64 = 1;
+/// Returned when Grandpa RPC endpoint is not ready.
+pub const NOT_READY_ERROR_CODE: i64 = 1;
 
 type FutureResult<T> =
 	Box<dyn jsonrpc_core::futures::Future<Item = T, Error = jsonrpc_core::Error> + Send>;

@@ -112,7 +112,7 @@ macro_rules! new_full_start {
 					grandpa: node_rpc::GrandpaDeps {
 						shared_voter_state: shared_voter_state.clone(),
 						shared_authority_set: shared_authority_set.clone(),
-					}
+					},
 				};
 				rpc_setup = Some((shared_voter_state));
 				Ok(node_rpc::create_full(deps))

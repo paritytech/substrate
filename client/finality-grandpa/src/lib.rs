@@ -218,8 +218,7 @@ impl SharedVoterState {
 
 	fn reset(
 		&self, voter_state: Box<dyn voter::VoterState<AuthorityId> + Sync + Send>
-	) -> Result<(), Error>
-	{
+	) -> Result<(), Error> {
 		let mut shared_voter_state = self
 			.inner
 			.try_write_for(Duration::from_secs(1))
