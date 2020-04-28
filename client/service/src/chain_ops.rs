@@ -127,6 +127,7 @@ impl<R, B> Stream for BlockStream<R, SignedBlock<B>>
 					*read_block_count += 1;
 					Poll::Ready(Some(block_result))
 				} else {
+					// `read_block_count` == `count` so we've read enough blocks.
 					Poll::Ready(None)
 				}
 			}
@@ -137,6 +138,7 @@ impl<R, B> Stream for BlockStream<R, SignedBlock<B>>
 						Poll::Ready(Some(block.map_err(|e| e.to_string())))
 					}
 					None => {
+						// We've reached the end of the iterator.
 						Poll::Ready(None)
 					}
 				}
@@ -220,7 +222,11 @@ impl<
 			match Pin::new(&mut block_stream).poll_next(cx) {
 				Poll::Ready(None) => {
 					let imported_blocks = block_stream.read_block_count();
-					info!("🎉 Imported {} blocks. Best: #{}", imported_blocks, client.chain_info().best_number);
+					info!(
+						"🎉 Imported {} blocks. Best: #{}",
+						imported_blocks, client.chain_info().best_number
+					);
+					// We're done importing blocks, we can stop here.
 					return std::task::Poll::Ready(Ok(()));
 				},
 				Poll::Ready(Some(block_result)) => {
@@ -241,6 +247,8 @@ impl<
 									import_existing: force,
 								}
 							]);
+
+							// Print a message everyt 1000 blocks to let the user everything's running smoothly.
 							if imported_blocks % 1000 == 0 {
 								if let Some(remaining) = block_stream.remaining_blocks() {
 									info!(
@@ -248,20 +256,26 @@ impl<
 										imported_blocks, remaining
 									);
 								} else {
-									info!("#{} blocks were imported, still processing other blocks",  imported_blocks);
+									info!(
+										"#{} blocks were imported, still processing other blocks",
+										imported_blocks
+									);
 								}
 							}
+
 							queue.poll_actions(cx, &mut link);
 							if link.has_error {
 								info!(
 									"Stopping after #{} blocks because of an error",
 									link.imported_blocks,
 								);
+								// We've encountered an error, we can stop here.
 								return std::task::Poll::Ready(Ok(()));
 							}
 						}
 						Err(e) => {
 							warn!("Error reading block data at {}: {}", imported_blocks, e);
+							// We've encountered an error, we can stop here.
 							return std::task::Poll::Ready(Ok(()));
 						}
 					}
@@ -269,7 +283,7 @@ impl<
 					cx.waker().wake_by_ref();
 					return std::task::Poll::Pending;
 				},
-				Poll::Pending => unreachable!("BlockStream.next() should never return Poll::Pending; qed")
+				Poll::Pending => unreachable!("BlockStream.poll_next() should never return Poll::Pending; qed")
 			}
 		});
 		Ok(Box::pin(import))
