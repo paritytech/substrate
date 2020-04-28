@@ -33,7 +33,7 @@ use parking_lot::Mutex;
 use substrate_test_runtime_client::{
 	runtime::{Hash, Block, Header}, TestClient, ClientBlockImportExt,
 };
-use sp_api::{InitializeBlock, StorageTransactionCache, ProofRecorder};
+use sp_api::{InitializeBlock, StorageTransactionCache, ProofRecorder, OffchainOverlayedChanges};
 use sp_consensus::{BlockOrigin};
 use sc_executor::{NativeExecutor, WasmExecutionMethod, RuntimeVersion, NativeVersion};
 use sp_core::{H256, tasks::executor as tasks_executor, NativeOrEncoded};
@@ -212,6 +212,7 @@ impl CallExecutor<Block> for DummyCallExecutor {
 		_method: &str,
 		_call_data: &[u8],
 		_changes: &RefCell<OverlayedChanges>,
+		_offchain_changes: &RefCell<OffchainOverlayedChanges>,
 		_storage_transaction_cache: Option<&RefCell<
 			StorageTransactionCache<
 				Block,

@@ -1528,6 +1528,7 @@ dependencies = [
  "frame-support",
  "parity-scale-codec",
  "pretty_assertions",
+ "rustversion",
  "serde",
  "sp-core",
  "sp-inherents",
@@ -2281,6 +2282,12 @@ checksum = "b2b3ea6ff95e175473f8ffe6a7eb7c00d054240321b84c57051175fe3c1e075e"
 dependencies = [
  "libc",
 ]
+
+[[package]]
+name = "ip_network"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2ee15951c035f79eddbef745611ec962f63f4558f1dadf98ab723cc603487c6f"
 
 [[package]]
 name = "ipnet"
@@ -4067,6 +4074,7 @@ dependencies = [
  "pallet-contracts-primitives",
  "pallet-randomness-collective-flip",
  "pallet-timestamp",
+ "pallet-transaction-payment",
  "parity-scale-codec",
  "parity-wasm 0.41.0",
  "pwasm-utils",
@@ -4690,11 +4698,12 @@ dependencies = [
 
 [[package]]
 name = "parity-db"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "288f7e4d049b6c9adeb8a69deaa9a4085ec601a1dbf36fe4fd1dd686f44b12cc"
+checksum = "00d595e372d119261593297debbe4193811a4dc811d2a1ccbb8caaa6666ad7ab"
 dependencies = [
  "blake2-rfc",
+ "crc32fast",
  "libc",
  "log",
  "memmap",
@@ -5953,6 +5962,7 @@ dependencies = [
  "sp-trie",
  "sp-utils",
  "sp-version",
+ "substrate-prometheus-endpoint",
  "substrate-test-runtime",
 ]
 
@@ -6382,6 +6392,7 @@ dependencies = [
  "futures-timer 3.0.2",
  "futures_codec",
  "hex",
+ "ip_network",
  "libp2p",
  "linked-hash-map",
  "linked_hash_set",
@@ -7508,7 +7519,9 @@ name = "sp-offchain"
 version = "2.0.0-dev"
 dependencies = [
  "sp-api",
+ "sp-core",
  "sp-runtime",
+ "sp-state-machine",
 ]
 
 [[package]]
@@ -7621,6 +7634,7 @@ name = "sp-runtime-interface-test"
 version = "2.0.0-dev"
 dependencies = [
  "sc-executor",
+ "sp-core",
  "sp-io",
  "sp-runtime",
  "sp-runtime-interface",

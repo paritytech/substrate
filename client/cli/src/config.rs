@@ -19,15 +19,15 @@
 use crate::error::Result;
 use crate::{
 	init_logger, ImportParams, KeystoreParams, NetworkParams, NodeKeyParams,
-	PruningParams, SharedParams, SubstrateCli,
+	OffchainWorkerParams, PruningParams, SharedParams, SubstrateCli,
 };
 use crate::arg_enums::Database;
 use app_dirs::{AppDataType, AppInfo};
 use names::{Generator, Name};
 use sc_service::config::{
+	WasmExecutionMethod, Role, OffchainWorkerConfig,
 	Configuration, DatabaseConfig, ExtTransport, KeystoreConfig, NetworkConfiguration,
-	NodeKeyConfig, PrometheusConfig, PruningMode, TelemetryEndpoints,
-	TransactionPoolOptions, WasmExecutionMethod, Role,
+	NodeKeyConfig, PrometheusConfig, PruningMode, TelemetryEndpoints, TransactionPoolOptions,
 };
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::{ChainSpec, TracingReceiver};
@@ -65,6 +65,11 @@ pub trait CliConfiguration: Sized {
 
 	/// Get the NetworkParams for this object
 	fn network_params(&self) -> Option<&NetworkParams> {
+		None
+	}
+
+	/// Get a reference to `OffchainWorkerParams` for this object.
+	fn offchain_worker_params(&self) -> Option<&OffchainWorkerParams> {
 		None
 	}
 
@@ -302,11 +307,13 @@ pub trait CliConfiguration: Sized {
 		Ok(Default::default())
 	}
 
-	/// Returns `Ok(true)` if offchain worker should be used
+	/// Returns an offchain worker config wrapped in `Ok(_)`
 	///
-	/// By default this is `false`.
-	fn offchain_worker(&self, _role: &Role) -> Result<bool> {
-		Ok(Default::default())
+	/// By default offchain workers are disabled.
+	fn offchain_worker(&self, role: &Role) -> Result<OffchainWorkerConfig> {
+		self.offchain_worker_params()
+			.map(|x| x.offchain_worker(role))
+			.unwrap_or_else(|| { Ok(OffchainWorkerConfig::default()) })
 	}
 
 	/// Returns `Ok(true)` if authoring should be forced

@@ -50,5 +50,5 @@ mod block_rules;
 
 pub use self::{
 	call_executor::LocalCallExecutor,
-	client::{new_with_backend, new_in_mem, Client},
+	client::{new_with_backend, new_in_mem, Client, ClientConfig},
 };

@@ -31,7 +31,7 @@ use sp_blockchain::Result as ClientResult;
 use prometheus_endpoint::Registry;
 
 use super::call_executor::LocalCallExecutor;
-use super::client::Client;
+use super::client::{Client,ClientConfig};
 use sc_client_api::{
 	light::Storage as BlockchainStorage, CloneableSpawn,
 };
@@ -77,7 +77,7 @@ pub fn new_light<B, S, RA, E>(
 		S: BlockchainStorage<B> + 'static,
 		E: CodeExecutor + RuntimeInfo + Clone + 'static,
 {
-	let local_executor = LocalCallExecutor::new(backend.clone(), code_executor, spawn_handle.clone());
+	let local_executor = LocalCallExecutor::new(backend.clone(), code_executor, spawn_handle.clone(), ClientConfig::default());
 	let executor = GenesisCallExecutor::new(backend.clone(), local_executor);
 	Client::new(
 		backend,
@@ -87,6 +87,7 @@ pub fn new_light<B, S, RA, E>(
 		Default::default(),
 		Default::default(),
 		prometheus_registry,
+		ClientConfig::default(),
 	)
 }
 

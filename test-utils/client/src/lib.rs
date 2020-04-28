@@ -42,7 +42,7 @@ use std::sync::Arc;
 use std::collections::HashMap;
 use sp_core::storage::ChildInfo;
 use sp_runtime::traits::{Block as BlockT, BlakeTwo256};
-use sc_service::client::LocalCallExecutor;
+use sc_service::client::{LocalCallExecutor, ClientConfig};
 
 /// Test client light database backend.
 pub type LightBackend<Block> = client::light::backend::Backend<
@@ -214,6 +214,7 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 				self.keystore.clone(),
 			),
 			None,
+			ClientConfig::default(),
 		).expect("Creates new client");
 
 		let longest_chain = sc_consensus::LongestChain::new(self.backend);
@@ -248,7 +249,7 @@ impl<Block: BlockT, E, Backend, G: GenesisInit> TestClientBuilder<
 		let executor = executor.into().unwrap_or_else(||
 			NativeExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
 		);
-		let executor = LocalCallExecutor::new(self.backend.clone(), executor, tasks_executor());
+		let executor = LocalCallExecutor::new(self.backend.clone(), executor, tasks_executor(), Default::default());
 
 		self.build_with_executor(executor)
 	}

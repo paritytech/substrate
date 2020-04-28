@@ -17,13 +17,13 @@
 use crate::{Service, NetworkStatus, NetworkState, error::Error, DEFAULT_PROTOCOL_ID, MallocSizeOfWasm};
 use crate::{start_rpc_servers, build_network_future, TransactionPoolAdapter, TaskManager};
 use crate::status_sinks;
-use crate::config::{Configuration, KeystoreConfig, PrometheusConfig};
+use crate::config::{Configuration, KeystoreConfig, PrometheusConfig, OffchainWorkerConfig};
 use crate::metrics::MetricsService;
 use sc_client_api::{
 	self, BlockchainEvents, backend::RemoteBackend, light::RemoteBlockchain, execution_extensions::ExtensionsFactory,
 	ExecutorProvider, CallExecutor, ForkBlocks, BadBlocks, CloneableSpawn, UsageProvider,
 };
-use crate::client::Client;
+use crate::client::{Client, ClientConfig};
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sc_chain_spec::get_extension;
 use sp_consensus::import_queue::ImportQueue;
@@ -216,6 +216,10 @@ fn new_full_parts<TBl, TRtApi, TExecDisp>(
 			extensions,
 			Box::new(task_manager.spawn_handle()),
 			config.prometheus_config.as_ref().map(|config| config.registry.clone()),
+			ClientConfig {
+				offchain_worker_enabled : config.offchain_worker.enabled ,
+				offchain_indexing_api: config.offchain_worker.indexing_enabled,
+			},
 		)?
 	};
 
@@ -233,6 +237,7 @@ pub fn new_client<E, Block, RA>(
 	execution_extensions: ExecutionExtensions<Block>,
 	spawn_handle: Box<dyn CloneableSpawn>,
 	prometheus_registry: Option<Registry>,
+	config: ClientConfig,
 ) -> Result<(
 	crate::client::Client<
 		Backend<Block>,
@@ -251,7 +256,7 @@ pub fn new_client<E, Block, RA>(
 	const CANONICALIZATION_DELAY: u64 = 4096;
 
 	let backend = Arc::new(Backend::new(settings, CANONICALIZATION_DELAY)?);
-	let executor = crate::client::LocalCallExecutor::new(backend.clone(), executor, spawn_handle);
+	let executor = crate::client::LocalCallExecutor::new(backend.clone(), executor, spawn_handle, config.clone());
 	Ok((
 		crate::client::Client::new(
 			backend.clone(),
@@ -261,6 +266,7 @@ pub fn new_client<E, Block, RA>(
 			bad_blocks,
 			execution_extensions,
 			prometheus_registry,
+			config,
 		)?,
 		backend,
 	))
@@ -879,11 +885,11 @@ ServiceBuilder<
 		let network_status_sinks = Arc::new(Mutex::new(status_sinks::StatusSinks::new()));
 
 		let offchain_storage = backend.offchain_storage();
-		let offchain_workers = match (config.offchain_worker, offchain_storage.clone()) {
-			(true, Some(db)) => {
+		let offchain_workers = match (config.offchain_worker.clone(), offchain_storage.clone()) {
+			(OffchainWorkerConfig {enabled: true, .. }, Some(db)) => {
 				Some(Arc::new(sc_offchain::OffchainWorkers::new(client.clone(), db)))
 			},
-			(true, None) => {
+			(OffchainWorkerConfig {enabled: true, .. }, None) => {
 				warn!("Offchain workers disabled, due to lack of offchain storage support in backend.");
 				None
 			},

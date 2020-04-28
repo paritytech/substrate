@@ -29,7 +29,7 @@ use crate::{
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
 pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
-	essence: TrieBackendEssence<S, H>,
+	pub (crate) essence: TrieBackendEssence<S, H>,
 }
 
 impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: Codec {
@@ -48,6 +48,11 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: Codec 
 	/// Get backend storage reference.
 	pub fn backend_storage(&self) -> &S {
 		self.essence.backend_storage()
+	}
+
+	/// Get backend storage reference.
+	pub fn backend_storage_mut(&mut self) -> &mut S {
+		self.essence.backend_storage_mut()
 	}
 
 	/// Get trie root.
@@ -124,11 +129,8 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 	}
 
 	fn pairs(&self) -> Vec<(StorageKey, StorageValue)> {
-		let mut read_overlay = S::Overlay::default();
-		let eph = Ephemeral::new(self.essence.backend_storage(), &mut read_overlay);
-
 		let collect_all = || -> Result<_, Box<TrieError<H::Out>>> {
-			let trie = TrieDB::<H>::new(&eph, self.essence.root())?;
+			let trie = TrieDB::<H>::new(self.essence(), self.essence.root())?;
 			let mut v = Vec::new();
 			for x in trie.iter()? {
 				let (key, value) = x?;
@@ -148,11 +150,8 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 	}
 
 	fn keys(&self, prefix: &[u8]) -> Vec<StorageKey> {
-		let mut read_overlay = S::Overlay::default();
-		let eph = Ephemeral::new(self.essence.backend_storage(), &mut read_overlay);
-
 		let collect_all = || -> Result<_, Box<TrieError<H::Out>>> {
-			let trie = TrieDB::<H>::new(&eph, self.essence.root())?;
+			let trie = TrieDB::<H>::new(self.essence(), self.essence.root())?;
 			let mut v = Vec::new();
 			for x in trie.iter()? {
 				let (key, _) = x?;
@@ -179,6 +178,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 				&mut write_overlay,
 			);
 
+			let delta: Vec<_> = delta.into_iter().collect();
 			match delta_trie_root::<Layout<H>, _, _, _, _>(&mut eph, root, delta) {
 				Ok(ret) => root = ret,
 				Err(e) => warn!(target: "trie", "Failed to write to trie: {}", e),
@@ -242,6 +242,10 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 
 	fn usage_info(&self) -> crate::UsageInfo {
 		crate::UsageInfo::empty()
+	}
+
+	fn wipe(&self) -> Result<(), Self::Error> {
+		Ok(())
 	}
 }
 

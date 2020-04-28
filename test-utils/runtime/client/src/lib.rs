@@ -352,7 +352,7 @@ pub fn new_light() -> (
 	let blockchain = Arc::new(client::light::blockchain::Blockchain::new(storage));
 	let backend = Arc::new(LightBackend::new(blockchain.clone()));
 	let executor = new_native_executor();
-	let local_call_executor = client::LocalCallExecutor::new(backend.clone(), executor, sp_core::tasks::executor());
+	let local_call_executor = client::LocalCallExecutor::new(backend.clone(), executor, sp_core::tasks::executor(), Default::default());
 	let call_executor = LightExecutor::new(
 		backend.clone(),
 		local_call_executor,
