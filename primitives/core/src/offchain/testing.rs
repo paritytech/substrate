@@ -74,7 +74,7 @@ pub struct OffchainState {
 	pub local_storage: InMemOffchainStorage,
 	/// Current timestamp (unix millis)
 	pub timestamp: u64,
-	/// A random seed.
+	/// A supposedly random seed.
 	pub seed: [u8; 32],
 }
 
