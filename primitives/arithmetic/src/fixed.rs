@@ -284,28 +284,27 @@ macro_rules! implement_fixed {
 
 		impl CheckedDiv for $name {
 			fn checked_div(&self, other: &Self) -> Option<Self> {
-				None
-				// let n = self.0;
-				// let d = other.0;
+				let n = self.0;
+				let d = other.0;
 
-				// let signum = n.signum() * d.signum();
-				// let max_value = <Self as FixedPointNumber>::Inner::max_value() as u128;
-				// let n = n.checked_abs().map(|v| v as u128).unwrap_or(max_value + 1);
-				// let d = d.checked_abs().map(|v| v as u128).unwrap_or(max_value + 1);
-				
-				// divide(n, d, <Self as FixedPointNumber>::BITS)
-				// 	.and_then(|r|
-				// 		if r == max_value + 1 && signum < 0 {
-				// 			let r = r.checked_sub(1)?;
-				// 			let r: <Self as FixedPointNumber>::Inner = r.try_into().ok()?;
-				// 			let r = r.checked_mul(signum)?;
-				// 			r.checked_sub(1)
-				// 		} else {
-				// 			let r: <Self as FixedPointNumber>::Inner = r.try_into().ok()?;
-				// 			r.checked_mul(signum)
-				// 		}
-				// 	)
-				// 	.map(|r| Self(r))
+				if d == 0 {
+					return None
+				}
+
+				let signum = n.signum() * d.signum();
+				let max_value = <Self as FixedPointNumber>::Inner::max_value() as u128;
+				let n = n.checked_abs().map(|v| v as u128).unwrap_or(max_value + 1);
+				let d = d.checked_abs().map(|v| v as u128).unwrap_or(max_value + 1);
+
+				multiply_by_rational(n, Self::DIV as u128, d).ok()
+					.map(|r| {
+						if r > <Self as FixedPointNumber>::Inner::max_value() as u128  && signum < 0 {
+							Self::min_value()
+						} else {
+							let r: <Self as FixedPointNumber>::Inner = r.saturated_into(); 
+							Self(r.saturating_mul(signum))
+						}
+					})
 			}
 		}
 
