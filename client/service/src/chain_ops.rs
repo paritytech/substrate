@@ -230,6 +230,8 @@ impl<
 							// We're done importing blocks, we can stop here.
 							return std::task::Poll::Ready(Ok(()))
 						} else {
+							queue.poll_actions(cx, &mut link);
+							cx.waker().wake_by_ref();
 							return std::task::Poll::Pending
 						}
 					} else {
@@ -241,6 +243,8 @@ impl<
 							// We're done importing blocks, we can stop here.
 							return std::task::Poll::Ready(Ok(()))
 						} else {
+							queue.poll_actions(cx, &mut link);
+							cx.waker().wake_by_ref();
 							return std::task::Poll::Pending
 						}
 					}
