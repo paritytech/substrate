@@ -596,7 +596,7 @@ impl<Block: BlockT> ProvableJustification<Block::Header> for GrandpaJustificatio
 pub(crate) mod tests {
 	use substrate_test_runtime_client::runtime::{Block, Header, H256};
 	use sc_client_api::NewBlockState;
-	use substrate_test_runtime_client::sc_client::in_mem::Blockchain as InMemoryBlockchain;
+	use sc_client_api::in_mem::Blockchain as InMemoryBlockchain;
 	use super::*;
 	use sp_core::crypto::Public;
 

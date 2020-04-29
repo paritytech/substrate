@@ -567,7 +567,7 @@ pub mod tests {
 	use sp_consensus::{ForkChoiceStrategy, BlockImport};
 	use sp_finality_grandpa::AuthorityId;
 	use sp_core::{H256, crypto::Public};
-	use substrate_test_runtime_client::sc_client::in_mem::Blockchain as InMemoryAuxStore;
+	use sc_client_api::in_mem::Blockchain as InMemoryAuxStore;
 	use substrate_test_runtime_client::runtime::{Block, Header};
 	use crate::tests::TestApi;
 	use crate::finality_proof::tests::TestJustification;

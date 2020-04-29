@@ -52,14 +52,13 @@
 //!
 //! ```
 //! use frame_support::{decl_module, dispatch};
-//! use frame_support::weights::{SimpleDispatchInfo, MINIMUM_WEIGHT};
 //! use frame_system::{self as system, ensure_root};
 //!
 //! pub trait Trait: frame_system::Trait {}
 //!
 //! decl_module! {
 //!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
+//! 		#[weight = 0]
 //!         pub fn privileged_function(origin) -> dispatch::DispatchResult {
 //!             ensure_root(origin)?;
 //!
@@ -88,12 +87,12 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::prelude::*;
-use sp_runtime::traits::{StaticLookup, Dispatchable};
+use sp_runtime::{DispatchResult, traits::{StaticLookup, Dispatchable}};
 
 use frame_support::{
 	Parameter, decl_module, decl_event, decl_storage, decl_error, ensure,
 };
-use frame_support::weights::{SimpleDispatchInfo, MINIMUM_WEIGHT, GetDispatchInfo, FunctionOf};
+use frame_support::weights::{GetDispatchInfo, FunctionOf, Pays};
 use frame_system::{self as system, ensure_signed};
 
 pub trait Trait: frame_system::Trait {
@@ -124,22 +123,15 @@ decl_module! {
 		#[weight = FunctionOf(
 			|args: (&Box<<T as Trait>::Call>,)| args.0.get_dispatch_info().weight + 10_000,
 			|args: (&Box<<T as Trait>::Call>,)| args.0.get_dispatch_info().class,
-			true
+			Pays::Yes,
 		)]
 		fn sudo(origin, call: Box<<T as Trait>::Call>) {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
 			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
 
-			let res = match call.dispatch(frame_system::RawOrigin::Root.into()) {
-				Ok(_) => true,
-				Err(e) => {
-					sp_runtime::print(e);
-					false
-				}
-			};
-
-			Self::deposit_event(RawEvent::Sudid(res));
+			let res = call.dispatch(frame_system::RawOrigin::Root.into());
+			Self::deposit_event(RawEvent::Sudid(res.map(|_| ()).map_err(|e| e.error)));
 		}
 
 		/// Authenticates the current sudo key and sets the given AccountId (`new`) as the new sudo key.
@@ -151,7 +143,7 @@ decl_module! {
 		/// - Limited storage reads.
 		/// - One DB change.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
+		#[weight = 0]
 		fn set_key(origin, new: <T::Lookup as StaticLookup>::Source) {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
@@ -180,7 +172,7 @@ decl_module! {
 			|args: (&<T::Lookup as StaticLookup>::Source, &Box<<T as Trait>::Call>,)| {
 				args.1.get_dispatch_info().class
 			},
-			true
+			Pays::Yes,
 		)]
 		fn sudo_as(origin, who: <T::Lookup as StaticLookup>::Source, call: Box<<T as Trait>::Call>) {
 			// This is a public call, so we ensure that the origin is some signed account.
@@ -205,7 +197,7 @@ decl_module! {
 decl_event!(
 	pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId {
 		/// A sudo just took place.
-		Sudid(bool),
+		Sudid(DispatchResult),
 		/// The sudoer just switched identity; the old key is supplied.
 		KeyChanged(AccountId),
 		/// A sudo just took place.

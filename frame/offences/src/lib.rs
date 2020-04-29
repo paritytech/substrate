@@ -27,7 +27,7 @@ mod tests;
 use sp_std::vec::Vec;
 use frame_support::{
 	decl_module, decl_event, decl_storage, Parameter, debug,
-	weights::{Weight, MINIMUM_WEIGHT},
+	weights::Weight,
 };
 use sp_runtime::{traits::Hash, Perbill};
 use sp_staking::{
@@ -69,7 +69,7 @@ decl_storage! {
 
 		/// Deferred reports that have been rejected by the offence handler and need to be submitted
 		/// at a later time.
-		DeferredOffences get(deferred_offences): Vec<DeferredOffenceOf<T>>;
+		DeferredOffences get(fn deferred_offences): Vec<DeferredOffenceOf<T>>;
 
 		/// A vector of reports of the same kind that happened at the same time slot.
 		ConcurrentReportsIndex:
@@ -104,7 +104,7 @@ decl_module! {
 			ConcurrentReportsIndex::<T>::remove_all();
 			ReportsByKindIndex::remove_all();
 
-			MINIMUM_WEIGHT
+			0
 		}
 
 		fn on_initialize(now: T::BlockNumber) -> Weight {
@@ -125,7 +125,7 @@ decl_module! {
 				})
 			}
 
-			MINIMUM_WEIGHT
+			0
 		}
 	}
 }

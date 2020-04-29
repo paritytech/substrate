@@ -34,8 +34,11 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::{prelude::*, collections::btree_map::BTreeMap, fmt::Debug, cmp::Ordering, convert::TryFrom};
-use sp_runtime::{helpers_128bit::multiply_by_rational, PerThing, Rational128, RuntimeDebug, SaturatedConversion};
-use sp_runtime::traits::{Zero, Member, Saturating, Bounded};
+use sp_arithmetic::{
+	PerThing, Rational128,
+	helpers_128bit::multiply_by_rational,
+	traits::{Zero, Saturating, Bounded, SaturatedConversion},
+};
 
 #[cfg(test)]
 mod mock;
@@ -60,7 +63,7 @@ pub use helpers::*;
 #[doc(hidden)]
 pub use codec;
 #[doc(hidden)]
-pub use sp_runtime;
+pub use sp_arithmetic;
 
 // re-export the compact solution type.
 pub use sp_phragmen_compact::generate_compact_solution_type;
@@ -107,7 +110,7 @@ pub type WithApprovalOf<A> = (A, ExtendedBalance);
 const DEN: u128 = u128::max_value();
 
 /// A candidate entity for phragmen election.
-#[derive(Clone, Default, RuntimeDebug)]
+#[derive(Clone, Default, Debug)]
 struct Candidate<AccountId> {
 	/// Identifier.
 	who: AccountId,
@@ -120,7 +123,7 @@ struct Candidate<AccountId> {
 }
 
 /// A voter entity.
-#[derive(Clone, Default, RuntimeDebug)]
+#[derive(Clone, Default, Debug)]
 struct Voter<AccountId> {
 	/// Identifier.
 	who: AccountId,
@@ -133,7 +136,7 @@ struct Voter<AccountId> {
 }
 
 /// A candidate being backed by a voter.
-#[derive(Clone, Default, RuntimeDebug)]
+#[derive(Clone, Default, Debug)]
 struct Edge<AccountId> {
 	/// Identifier.
 	who: AccountId,
@@ -144,7 +147,7 @@ struct Edge<AccountId> {
 }
 
 /// Final result of the phragmen election.
-#[derive(RuntimeDebug)]
+#[derive(Debug)]
 pub struct PhragmenResult<AccountId, T: PerThing> {
 	/// Just winners zipped with their approval stake. Note that the approval stake is merely the
 	/// sub of their received stake and could be used for very basic sorting and approval voting.
@@ -155,10 +158,10 @@ pub struct PhragmenResult<AccountId, T: PerThing> {
 }
 
 /// A voter's stake assignment among a set of targets, represented as ratios.
-#[derive(RuntimeDebug, Clone, Default)]
+#[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Encode, Decode))]
 pub struct Assignment<AccountId, T: PerThing> {
-	/// Voter's identifier
+	/// Voter's identifier.
 	pub who: AccountId,
 	/// The distribution of the voter's stake.
 	pub distribution: Vec<(AccountId, T)>,
@@ -223,7 +226,7 @@ where
 
 /// A voter's stake assignment among a set of targets, represented as absolute values in the scale
 /// of [`ExtendedBalance`].
-#[derive(RuntimeDebug, Clone, Default)]
+#[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Encode, Decode))]
 pub struct StakedAssignment<AccountId> {
 	/// Voter's identifier
@@ -301,7 +304,7 @@ impl<AccountId> StakedAssignment<AccountId> {
 ///
 /// This, at the current version, resembles the `Exposure` defined in the Staking pallet, yet
 /// they do not necessarily have to be the same.
-#[derive(Default, RuntimeDebug)]
+#[derive(Default, Debug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Eq, PartialEq))]
 pub struct Support<AccountId> {
 	/// Total support.
@@ -334,7 +337,7 @@ pub fn elect<AccountId, R>(
 	initial_candidates: Vec<AccountId>,
 	initial_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
 ) -> Option<PhragmenResult<AccountId, R>> where
-	AccountId: Default + Ord + Member,
+	AccountId: Default + Ord + Clone,
 	R: PerThing,
 {
 	// return structures
@@ -561,7 +564,7 @@ pub fn build_support_map<AccountId>(
 	winners: &[AccountId],
 	assignments: &[StakedAssignment<AccountId>],
 ) -> (SupportMap<AccountId>, u32) where
-	AccountId: Default + Ord + Member,
+	AccountId: Default + Ord + Clone,
 {
 	let mut errors = 0;
 	// Initialize the support of each candidate.

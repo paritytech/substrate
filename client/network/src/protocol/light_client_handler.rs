@@ -54,11 +54,16 @@ use libp2p::{
 };
 use nohash_hasher::IntMap;
 use prost::Message;
-use sc_client::light::fetcher;
-use sc_client_api::StorageProof;
+use sc_client_api::{
+	StorageProof,
+	light::{
+		self, RemoteReadRequest, RemoteBodyRequest, ChangesProof,
+		RemoteCallRequest, RemoteChangesRequest, RemoteHeaderRequest,
+	}
+};
 use sc_peerset::ReputationChange;
 use sp_core::{
-	storage::{ChildInfo, StorageKey},
+	storage::{ChildInfo, ChildType,StorageKey, PrefixedStorageKey},
 	hexdisplay::HexDisplay,
 };
 use smallvec::SmallVec;
@@ -193,27 +198,27 @@ pub enum Error {
 #[derive(Debug)]
 pub enum Request<B: Block> {
 	Body {
-		request: fetcher::RemoteBodyRequest<B::Header>,
+		request: RemoteBodyRequest<B::Header>,
 		sender: oneshot::Sender<Result<Vec<B::Extrinsic>, ClientError>>
 	},
 	Header {
-		request: fetcher::RemoteHeaderRequest<B::Header>,
+		request: light::RemoteHeaderRequest<B::Header>,
 		sender: oneshot::Sender<Result<B::Header, ClientError>>
 	},
 	Read {
-		request: fetcher::RemoteReadRequest<B::Header>,
+		request: light::RemoteReadRequest<B::Header>,
 		sender: oneshot::Sender<Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError>>
 	},
 	ReadChild {
-		request: fetcher::RemoteReadChildRequest<B::Header>,
+		request: light::RemoteReadChildRequest<B::Header>,
 		sender: oneshot::Sender<Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError>>
 	},
 	Call {
-		request: fetcher::RemoteCallRequest<B::Header>,
+		request: light::RemoteCallRequest<B::Header>,
 		sender: oneshot::Sender<Result<Vec<u8>, ClientError>>
 	},
 	Changes {
-		request: fetcher::RemoteChangesRequest<B::Header>,
+		request: light::RemoteChangesRequest<B::Header>,
 		sender: oneshot::Sender<Result<Vec<(NumberFor<B>, u32)>, ClientError>>
 	}
 }
@@ -283,7 +288,7 @@ pub struct LightClientHandler<B: Block> {
 	/// Blockchain client.
 	chain: Arc<dyn Client<B>>,
 	/// Verifies that received responses are correct.
-	checker: Arc<dyn fetcher::FetchChecker<B>>,
+	checker: Arc<dyn light::FetchChecker<B>>,
 	/// Peer information (addresses, their best block, etc.)
 	peers: HashMap<PeerId, PeerInfo<B>>,
 	/// Futures sending back response to remote clients.
@@ -306,7 +311,7 @@ where
 	pub fn new(
 		cfg: Config,
 		chain: Arc<dyn Client<B>>,
-		checker: Arc<dyn fetcher::FetchChecker<B>>,
+		checker: Arc<dyn light::FetchChecker<B>>,
 		peerset: sc_peerset::PeersetHandle,
 	) -> Self {
 		LightClientHandler {
@@ -471,7 +476,7 @@ where
 						}
 						r
 					};
-					let reply = self.checker.check_changes_proof(&request, fetcher::ChangesProof {
+					let reply = self.checker.check_changes_proof(&request, light::ChangesProof {
 						max_block,
 						proof: response.proof,
 						roots,
@@ -617,35 +622,27 @@ where
 
 		let block = Decode::decode(&mut request.block.as_ref())?;
 
-		let proof =
-			if let Some(info) = ChildInfo::resolve_child_info(request.child_type, &request.child_info[..]) {
-				match self.chain.read_child_proof(
-					&BlockId::Hash(block),
-					&request.storage_key,
-					info,
-					&mut request.keys.iter().map(AsRef::as_ref)
-				) {
-					Ok(proof) => proof,
-					Err(error) => {
-						log::trace!("remote read child request from {} ({} {} at {:?}) failed with: {}",
-							peer,
-							HexDisplay::from(&request.storage_key),
-							fmt_keys(request.keys.first(), request.keys.last()),
-							request.block,
-							error);
-						StorageProof::empty()
-					}
-				}
-			} else {
+		let prefixed_key = PrefixedStorageKey::new_ref(&request.storage_key);
+		let child_info = match ChildType::from_prefixed_key(prefixed_key) {
+			Some((ChildType::ParentKeyId, storage_key)) => Ok(ChildInfo::new_default(storage_key)),
+			None => Err("Invalid child storage key".into()),
+		};
+		let proof = match child_info.and_then(|child_info| self.chain.read_child_proof(
+			&BlockId::Hash(block),
+			&child_info,
+			&mut request.keys.iter().map(AsRef::as_ref)
+		)) {
+			Ok(proof) => proof,
+			Err(error) => {
 				log::trace!("remote read child request from {} ({} {} at {:?}) failed with: {}",
 					peer,
 					HexDisplay::from(&request.storage_key),
 					fmt_keys(request.keys.first(), request.keys.last()),
 					request.block,
-					"invalid child info and type"
-				);
+					error);
 				StorageProof::empty()
-			};
+			}
+		};
 
 		let response = {
 			let r = api::v1::light::RemoteReadResponse { proof: proof.encode() };
@@ -704,28 +701,23 @@ where
 		let min = Decode::decode(&mut request.min.as_ref())?;
 		let max = Decode::decode(&mut request.max.as_ref())?;
 		let key = StorageKey(request.key.clone());
-		let storage_key =
-			if request.storage_key.is_empty() {
-				None
-			} else {
-				Some(StorageKey(request.storage_key.clone()))
-			};
+		let storage_key = if request.storage_key.is_empty() {
+			None
+		} else {
+			Some(PrefixedStorageKey::new_ref(&request.storage_key))
+		};
 
-		let proof = match self.chain.key_changes_proof(first, last, min, max, storage_key.as_ref(), &key) {
+		let proof = match self.chain.key_changes_proof(first, last, min, max, storage_key, &key) {
 			Ok(proof) => proof,
 			Err(error) => {
 				log::trace!("remote changes proof request from {} for key {} ({:?}..{:?}) failed with: {}",
 					peer,
-					if let Some(sk) = storage_key {
-						format!("{} : {}", HexDisplay::from(&sk.0), HexDisplay::from(&key.0))
-					} else {
-						HexDisplay::from(&key.0).to_string()
-					},
+					format!("{} : {}", HexDisplay::from(&request.storage_key), HexDisplay::from(&key.0)),
 					request.first,
 					request.last,
 					error);
 
-				fetcher::ChangesProof::<B::Header> {
+				light::ChangesProof::<B::Header> {
 					max_block: Zero::zero(),
 					proof: Vec::new(),
 					roots: BTreeMap::new(),
@@ -1092,9 +1084,7 @@ fn serialize_request<B: Block>(request: &Request<B>) -> Result<Vec<u8>, prost::E
 		Request::ReadChild { request, .. } => {
 			let r = api::v1::light::RemoteReadChildRequest {
 				block: request.block.encode(),
-				storage_key: request.storage_key.clone(),
-				child_type: request.child_type.clone(),
-				child_info: request.child_info.clone(),
+				storage_key: request.storage_key.clone().into_inner(),
 				keys: request.keys.clone(),
 			};
 			api::v1::light::request::Request::RemoteReadChildRequest(r)
@@ -1113,7 +1103,8 @@ fn serialize_request<B: Block>(request: &Request<B>) -> Result<Vec<u8>, prost::E
 				last: request.last_block.1.encode(),
 				min: request.tries_roots.1.encode(),
 				max: request.max_block.1.encode(),
-				storage_key: request.storage_key.clone().unwrap_or_default(),
+				storage_key: request.storage_key.clone().map(|s| s.into_inner())
+					.unwrap_or_default(),
 				key: request.key.clone(),
 			};
 			api::v1::light::request::Request::RemoteChangesRequest(r)
@@ -1303,6 +1294,7 @@ fn fmt_keys(first: Option<&Vec<u8>>, last: Option<&Vec<u8>>) -> String {
 
 #[cfg(test)]
 mod tests {
+	use super::*;
 	use async_std::task;
 	use assert_matches::assert_matches;
 	use codec::Encode;
@@ -1327,8 +1319,7 @@ mod tests {
 		swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters},
 		yamux
 	};
-	use sc_client_api::StorageProof;
-	use sc_client::light::fetcher;
+	use sc_client_api::{StorageProof, RemoteReadChildRequest, FetchChecker};
 	use sp_blockchain::{Error as ClientError};
 	use sp_core::storage::ChildInfo;
 	use std::{
@@ -1342,8 +1333,6 @@ mod tests {
 	use sp_runtime::{generic::Header, traits::{BlakeTwo256, Block as BlockT, NumberFor}};
 	use super::{Event, LightClientHandler, Request, Response, OutboundProtocol, PeerStatus};
 	use void::Void;
-
-	const CHILD_INFO: ChildInfo<'static> = ChildInfo::new_default(b"foobarbaz");
 
 	type Block = sp_runtime::generic::Block<Header<u64, BlakeTwo256>, substrate_test_runtime::Extrinsic>;
 	type Handler = LightClientHandler<Block>;
@@ -1374,12 +1363,12 @@ mod tests {
 		_mark: std::marker::PhantomData<B>
 	}
 
-	impl<B: BlockT> fetcher::FetchChecker<B> for DummyFetchChecker<B> {
+	impl<B: BlockT> light::FetchChecker<B> for DummyFetchChecker<B> {
 		fn check_header_proof(
 			&self,
-			_request: &fetcher::RemoteHeaderRequest<B::Header>,
+			_request: &RemoteHeaderRequest<B::Header>,
 			header: Option<B::Header>,
-			_remote_proof: fetcher::StorageProof,
+			_remote_proof: StorageProof,
 		) -> Result<B::Header, ClientError> {
 			match self.ok {
 				true if header.is_some() => Ok(header.unwrap()),
@@ -1389,8 +1378,8 @@ mod tests {
 
 		fn check_read_proof(
 			&self,
-			request: &fetcher::RemoteReadRequest<B::Header>,
-			_: fetcher::StorageProof,
+			request: &RemoteReadRequest<B::Header>,
+			_: StorageProof,
 		) -> Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError> {
 			match self.ok {
 				true => Ok(request.keys
@@ -1405,8 +1394,8 @@ mod tests {
 
 		fn check_read_child_proof(
 			&self,
-			request: &fetcher::RemoteReadChildRequest<B::Header>,
-			_: fetcher::StorageProof,
+			request: &RemoteReadChildRequest<B::Header>,
+			_: StorageProof,
 		) -> Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError> {
 			match self.ok {
 				true => Ok(request.keys
@@ -1421,8 +1410,8 @@ mod tests {
 
 		fn check_execution_proof(
 			&self,
-			_: &fetcher::RemoteCallRequest<B::Header>,
-			_: fetcher::StorageProof,
+			_: &RemoteCallRequest<B::Header>,
+			_: StorageProof,
 		) -> Result<Vec<u8>, ClientError> {
 			match self.ok {
 				true => Ok(vec![42]),
@@ -1432,8 +1421,8 @@ mod tests {
 
 		fn check_changes_proof(
 			&self,
-			_: &fetcher::RemoteChangesRequest<B::Header>,
-			_: fetcher::ChangesProof<B::Header>
+			_: &RemoteChangesRequest<B::Header>,
+			_: ChangesProof<B::Header>
 		) -> Result<Vec<(NumberFor<B>, u32)>, ClientError> {
 			match self.ok {
 				true => Ok(vec![(100.into(), 2)]),
@@ -1443,7 +1432,7 @@ mod tests {
 
 		fn check_body_proof(
 			&self,
-			_: &fetcher::RemoteBodyRequest<B::Header>,
+			_: &RemoteBodyRequest<B::Header>,
 			body: Vec<B::Extrinsic>
 		) -> Result<Vec<B::Extrinsic>, ClientError> {
 			match self.ok {
@@ -1561,7 +1550,7 @@ mod tests {
 
 		// Issue our first request!
 		let chan = oneshot::channel();
-		let request = fetcher::RemoteCallRequest {
+		let request = light::RemoteCallRequest {
 			block: Default::default(),
 			header: dummy_header(),
 			method: "test".into(),
@@ -1618,7 +1607,7 @@ mod tests {
 		assert_eq!(1, behaviour.peers.len());
 
 		let chan = oneshot::channel();
-		let request = fetcher::RemoteCallRequest {
+		let request = light::RemoteCallRequest {
 			block: Default::default(),
 			header: dummy_header(),
 			method: "test".into(),
@@ -1693,7 +1682,7 @@ mod tests {
 		assert_eq!(1, behaviour.peers.len());
 
 		let chan = oneshot::channel();
-		let request = fetcher::RemoteCallRequest {
+		let request = light::RemoteCallRequest {
 			block: Default::default(),
 			header: dummy_header(),
 			method: "test".into(),
@@ -1752,7 +1741,7 @@ mod tests {
 		assert_eq!(4, behaviour.peers.len());
 
 		let mut chan = oneshot::channel();
-		let request = fetcher::RemoteCallRequest {
+		let request = light::RemoteCallRequest {
 			block: Default::default(),
 			header: dummy_header(),
 			method: "test".into(),
@@ -1868,7 +1857,7 @@ mod tests {
 	#[test]
 	fn receives_remote_call_response() {
 		let mut chan = oneshot::channel();
-		let request = fetcher::RemoteCallRequest {
+		let request = light::RemoteCallRequest {
 			block: Default::default(),
 			header: dummy_header(),
 			method: "test".into(),
@@ -1882,7 +1871,7 @@ mod tests {
 	#[test]
 	fn receives_remote_read_response() {
 		let mut chan = oneshot::channel();
-		let request = fetcher::RemoteReadRequest {
+		let request = light::RemoteReadRequest {
 			header: dummy_header(),
 			block: Default::default(),
 			keys: vec![b":key".to_vec()],
@@ -1894,15 +1883,13 @@ mod tests {
 
 	#[test]
 	fn receives_remote_read_child_response() {
-		let info = CHILD_INFO.info();
 		let mut chan = oneshot::channel();
-		let request = fetcher::RemoteReadChildRequest {
+		let child_info = ChildInfo::new_default(&b":child_storage:default:sub"[..]);
+		let request = light::RemoteReadChildRequest {
 			header: dummy_header(),
 			block: Default::default(),
-			storage_key: b":child_storage:sub".to_vec(),
+			storage_key: child_info.prefixed_storage_key(),
 			keys: vec![b":key".to_vec()],
-			child_info: info.0.to_vec(),
-			child_type: info.1,
 			retry_count: None,
 		};
 		issue_request(Request::ReadChild { request, sender: chan.0 });
@@ -1912,7 +1899,7 @@ mod tests {
 	#[test]
 	fn receives_remote_header_response() {
 		let mut chan = oneshot::channel();
-		let request = fetcher::RemoteHeaderRequest {
+		let request = light::RemoteHeaderRequest {
 			cht_root: Default::default(),
 			block: 1,
 			retry_count: None,
@@ -1924,7 +1911,7 @@ mod tests {
 	#[test]
 	fn receives_remote_changes_response() {
 		let mut chan = oneshot::channel();
-		let request = fetcher::RemoteChangesRequest {
+		let request = light::RemoteChangesRequest {
 			changes_trie_configs: vec![sp_core::ChangesTrieConfigurationRange {
 				zero: (0, Default::default()),
 				end: None,
@@ -1969,7 +1956,7 @@ mod tests {
 	#[test]
 	fn send_receive_call() {
 		let chan = oneshot::channel();
-		let request = fetcher::RemoteCallRequest {
+		let request = light::RemoteCallRequest {
 			block: Default::default(),
 			header: dummy_header(),
 			method: "test".into(),
@@ -1984,7 +1971,7 @@ mod tests {
 	#[test]
 	fn send_receive_read() {
 		let chan = oneshot::channel();
-		let request = fetcher::RemoteReadRequest {
+		let request = light::RemoteReadRequest {
 			header: dummy_header(),
 			block: Default::default(),
 			keys: vec![b":key".to_vec()],
@@ -1997,15 +1984,13 @@ mod tests {
 
 	#[test]
 	fn send_receive_read_child() {
-		let info = CHILD_INFO.info();
 		let chan = oneshot::channel();
-		let request = fetcher::RemoteReadChildRequest {
+		let child_info = ChildInfo::new_default(&b":child_storage:default:sub"[..]);
+		let request = light::RemoteReadChildRequest {
 			header: dummy_header(),
 			block: Default::default(),
-			storage_key: b":child_storage:sub".to_vec(),
+			storage_key: child_info.prefixed_storage_key(),
 			keys: vec![b":key".to_vec()],
-			child_info: info.0.to_vec(),
-			child_type: info.1,
 			retry_count: None,
 		};
 		send_receive(Request::ReadChild { request, sender: chan.0 });
@@ -2017,7 +2002,7 @@ mod tests {
 	fn send_receive_header() {
 		let _ = env_logger::try_init();
 		let chan = oneshot::channel();
-		let request = fetcher::RemoteHeaderRequest {
+		let request = light::RemoteHeaderRequest {
 			cht_root: Default::default(),
 			block: 1,
 			retry_count: None,
@@ -2030,7 +2015,7 @@ mod tests {
 	#[test]
 	fn send_receive_changes() {
 		let chan = oneshot::channel();
-		let request = fetcher::RemoteChangesRequest {
+		let request = light::RemoteChangesRequest {
 			changes_trie_configs: vec![sp_core::ChangesTrieConfigurationRange {
 				zero: (0, Default::default()),
 				end: None,

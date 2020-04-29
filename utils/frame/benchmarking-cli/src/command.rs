@@ -18,9 +18,9 @@ use crate::BenchmarkCmd;
 use codec::{Decode, Encode};
 use frame_benchmarking::{Analysis, BenchmarkBatch};
 use sc_cli::{SharedParams, CliConfiguration, ExecutionStrategy, Result};
-use sc_client::StateMachine;
 use sc_client_db::BenchmarkingState;
 use sc_executor::NativeExecutor;
+use sp_state_machine::StateMachine;
 use sp_externalities::Extensions;
 use sc_service::{Configuration, NativeExecutionDispatch};
 use sp_runtime::{
@@ -44,6 +44,7 @@ impl BenchmarkCmd {
 
 		let genesis_storage = spec.build_storage()?;
 		let mut changes = Default::default();
+		let mut offchain_changes = Default::default();
 		let cache_size = Some(self.database_cache_size as usize);
 		let state = BenchmarkingState::<BB>::new(genesis_storage, cache_size)?;
 		let executor = NativeExecutor::<ExecDispatch>::new(
@@ -59,6 +60,7 @@ impl BenchmarkCmd {
 			&state,
 			None,
 			&mut changes,
+			&mut offchain_changes,
 			&executor,
 			"Benchmark_dispatch_benchmark",
 			&(
@@ -91,6 +93,9 @@ impl BenchmarkCmd {
 					self.steps,
 					self.repeat,
 				);
+
+				// Skip raw data + analysis if there are no results
+				if batch.results.len() == 0 { continue }
 
 				if self.raw_data {
 					// Print the table header

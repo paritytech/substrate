@@ -25,11 +25,10 @@ pub use crate::backend::{Account, Log, Vicinity, Backend};
 
 use sp_std::{vec::Vec, marker::PhantomData};
 use frame_support::{ensure, decl_module, decl_storage, decl_event, decl_error};
-use frame_support::weights::{Weight, MINIMUM_WEIGHT, DispatchClass, FunctionOf};
-use frame_support::traits::{Currency, WithdrawReason, ExistenceRequirement};
+use frame_support::weights::{Weight, DispatchClass, FunctionOf, Pays};
+use frame_support::traits::{Currency, WithdrawReason, ExistenceRequirement, Get};
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::ModuleId;
-use frame_support::weights::SimpleDispatchInfo;
 use sp_core::{U256, H256, H160, Hasher};
 use sp_runtime::{
 	DispatchResult, traits::{UniqueSaturatedInto, AccountIdConversion, SaturatedConversion},
@@ -38,8 +37,6 @@ use sha3::{Digest, Keccak256};
 use evm::{ExitReason, ExitSucceed, ExitError, Config};
 use evm::executor::StackExecutor;
 use evm::backend::ApplyBackend;
-
-const MODULE_ID: ModuleId = ModuleId(*b"py/ethvm");
 
 /// Type alias for currency balance.
 pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
@@ -120,6 +117,8 @@ static ISTANBUL_CONFIG: Config = Config::istanbul();
 
 /// EVM module trait
 pub trait Trait: frame_system::Trait + pallet_timestamp::Trait {
+	/// The EVM's module id
+	type ModuleId: Get<ModuleId>;
 	/// Calculator for current gas price.
 	type FeeCalculator: FeeCalculator;
 	/// Convert account ID to H160;
@@ -190,8 +189,10 @@ decl_module! {
 
 		fn deposit_event() = default;
 
+		const ModuleId: ModuleId = T::ModuleId::get();
+
 		/// Deposit balance from currency/balances module into EVM.
-		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
+		#[weight = 0]
 		fn deposit_balance(origin, value: BalanceOf<T>) {
 			let sender = ensure_signed(origin)?;
 
@@ -212,7 +213,7 @@ decl_module! {
 		}
 
 		/// Withdraw balance from EVM into currency/balances module.
-		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
+		#[weight = 0]
 		fn withdraw_balance(origin, value: BalanceOf<T>) {
 			let sender = ensure_signed(origin)?;
 			let address = T::ConvertAccountId::convert_account_id(&sender);
@@ -236,7 +237,12 @@ decl_module! {
 		}
 
 		/// Issue an EVM call operation. This is similar to a message call transaction in Ethereum.
-		#[weight = FunctionOf(|(_, _, _, gas_limit, gas_price, _): (&H160, &Vec<u8>, &U256, &u32, &U256, &Option<U256>)| (*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit as Weight), DispatchClass::Normal, true)]
+		#[weight = FunctionOf(
+			|(_, _, _, gas_limit, gas_price, _): (&H160, &Vec<u8>, &U256, &u32, &U256, &Option<U256>)|
+				(*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit as Weight),
+			DispatchClass::Normal,
+			Pays::Yes,
+		)]
 		fn call(
 			origin,
 			target: H160,
@@ -267,7 +273,12 @@ decl_module! {
 
 		/// Issue an EVM create operation. This is similar to a contract creation transaction in
 		/// Ethereum.
-		#[weight = FunctionOf(|(_, _, gas_limit, gas_price, _): (&Vec<u8>, &U256, &u32, &U256, &Option<U256>)| (*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit as Weight), DispatchClass::Normal, true)]
+		#[weight = FunctionOf(
+			|(_, _, gas_limit, gas_price, _): (&Vec<u8>, &U256, &u32, &U256, &Option<U256>)|
+				(*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit as Weight),
+			DispatchClass::Normal,
+			Pays::Yes,
+		)]
 		fn create(
 			origin,
 			init: Vec<u8>,
@@ -302,7 +313,12 @@ decl_module! {
 		}
 
 		/// Issue an EVM create2 operation.
-		#[weight = FunctionOf(|(_, _, _, gas_limit, gas_price, _): (&Vec<u8>, &H256, &U256, &u32, &U256, &Option<U256>)| (*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit as Weight), DispatchClass::Normal, true)]
+		#[weight = FunctionOf(
+			|(_, _, _, gas_limit, gas_price, _): (&Vec<u8>, &H256, &U256, &u32, &U256, &Option<U256>)|
+				(*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit as Weight),
+			DispatchClass::Normal,
+			Pays::Yes,
+		)]
 		fn create2(
 			origin,
 			init: Vec<u8>,
@@ -347,7 +363,7 @@ impl<T: Trait> Module<T> {
 	/// This actually does computation. If you need to keep using it, then make sure you cache the
 	/// value and only call this once.
 	pub fn account_id() -> T::AccountId {
-		MODULE_ID.into_account()
+		T::ModuleId::get().into_account()
 	}
 
 	/// Check whether an account is empty.
