@@ -23,13 +23,14 @@ mod mock;
 use sp_std::prelude::*;
 use sp_std::vec;
 
-use frame_system::RawOrigin;
+use frame_system::{RawOrigin, Module as System};
 use frame_benchmarking::{benchmarks, account};
 use frame_support::traits::{Currency, OnInitialize};
 
 use sp_runtime::{Perbill, traits::{Convert, StaticLookup}};
 use sp_staking::offence::ReportOffence;
 
+use pallet_balances::{Trait as BalancesTrait, Module as Balances};
 use pallet_im_online::{Trait as ImOnlineTrait, Module as ImOnline, UnresponsivenessOffence};
 use pallet_offences::{Trait as OffencesTrait, Module as Offences};
 use pallet_staking::{
@@ -48,15 +49,18 @@ const MAX_DEFERRED_OFFENCES: u32 = 100;
 
 pub struct Module<T: Trait>(Offences<T>);
 
-pub trait Trait: SessionTrait + StakingTrait + OffencesTrait + ImOnlineTrait + HistoricalTrait {}
+pub trait Trait:
+	SessionTrait + StakingTrait + OffencesTrait + ImOnlineTrait + HistoricalTrait + BalancesTrait {}
 
 fn create_offender<T: Trait>(n: u32, nominators: u32) -> Result<T::AccountId, &'static str> {
 	let stash: T::AccountId = account("stash", n, SEED);
+	let stash_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(stash.clone());
 	let controller: T::AccountId = account("controller", n, SEED);
 	let controller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(controller.clone());
 	let reward_destination = RewardDestination::Staked;
-	let amount = T::Currency::minimum_balance();
-
+	let raw_amount = 1_000_000;
+	Balances::<T>::set_balance(RawOrigin::Root.into(), stash_lookup, raw_amount.into(), raw_amount.into())?;
+	let amount: <T::Currency as Currency<T::AccountId>>::Balance = raw_amount.into();
 	Staking::<T>::bond(
 		RawOrigin::Signed(stash.clone()).into(),
 		controller_lookup.clone(),
@@ -74,13 +78,19 @@ fn create_offender<T: Trait>(n: u32, nominators: u32) -> Result<T::AccountId, &'
 	// Create n nominators
 	for i in 0 .. nominators {
 		let nominator_stash: T::AccountId = account("nominator stash", n * MAX_NOMINATORS + i, SEED);
+		let nominator_stash_lookup: <T::Lookup as StaticLookup>::Source =
+			T::Lookup::unlookup(nominator_stash.clone());
 		let nominator_controller: T::AccountId = account("nominator controller", n * MAX_NOMINATORS + i, SEED);
-		let nominator_controller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(nominator_controller.clone());
+		let nominator_controller_lookup: <T::Lookup as StaticLookup>::Source =
+			T::Lookup::unlookup(nominator_controller.clone());
+		Balances::<T>::set_balance(
+			RawOrigin::Root.into(), nominator_stash_lookup, raw_amount.into(), raw_amount.into()
+		)?;
 
 		Staking::<T>::bond(
 			RawOrigin::Signed(nominator_stash.clone()).into(),
 			nominator_controller_lookup.clone(),
-			amount,
+			amount.clone(),
 			reward_destination,
 		)?;
 
@@ -88,7 +98,7 @@ fn create_offender<T: Trait>(n: u32, nominators: u32) -> Result<T::AccountId, &'
 		Staking::<T>::nominate(RawOrigin::Signed(nominator_controller.clone()).into(), selected_validators)?;
 
 		individual_exposures.push(IndividualExposure {
-			who: nominator_controller.clone(),
+			who: nominator_stash.clone(),
 			value: amount.clone(),
 		});
 	}
@@ -109,7 +119,7 @@ fn make_offenders<T: Trait>(num_offenders: u32, num_nominators: u32) -> Result<V
 
 	let mut offenders: Vec<T::AccountId> = vec![];
 	for i in 0 .. num_offenders {
-		let offender = create_offender::<T>(i, num_nominators)?;
+		let offender = create_offender::<T>(i + 1, num_nominators)?;
 		offenders.push(offender);
 	}
 
@@ -126,13 +136,16 @@ fn make_offenders<T: Trait>(num_offenders: u32, num_nominators: u32) -> Result<V
 		.collect::<Vec<IdentificationTuple<T>>>())
 }
 
+// TODO Add other offences: BabeEquivocation and GrandpaEquivocation
+
 benchmarks! {
 	_ { }
 
 	report_offence {
 		let r in 1 .. MAX_REPORTERS;
-		let o in 1 .. MAX_OFFENDERS;
-		let n in 1 .. MAX_NOMINATORS;
+		// we skip 1 offender, because in such case there is no slashing
+		let o in 2 .. MAX_OFFENDERS;
+		let n in 0 .. MAX_NOMINATORS;
 
 		// Make r reporters
 		let mut reporters = vec![];
@@ -140,6 +153,9 @@ benchmarks! {
 			let reporter = account("reporter", i, SEED);
 			reporters.push(reporter);
 		}
+
+		// make sure reporters actually get rewarded
+		Staking::<T>::set_slash_reward_fraction(Perbill::one());
 
 		let offenders = make_offenders::<T>(o, n).expect("failed to create offenders");
 		let keys =  ImOnline::<T>::keys();
@@ -149,9 +165,21 @@ benchmarks! {
 			validator_set_count: keys.len() as u32,
 			offenders,
 		};
-
+		assert_eq!(System::<T>::event_count(), 0);
 	}: {
 		let _ = <T as ImOnlineTrait>::ReportUnresponsiveness::report_offence(reporters, offence);
+	}
+	verify {
+		// make sure the report was not deferred
+		assert!(Offences::<T>::deferred_offences().is_empty());
+		// make sure that all slashes have been applied
+		assert_eq!(
+			System::<T>::event_count(), 0
+			+ 1 // offence
+			+ 2 * r // reporter (reward + endowment)
+			+ o // offenders slashed
+			+ o * n // nominators slashed
+		);
 	}
 
 	on_initialize {
@@ -165,6 +193,10 @@ benchmarks! {
 
 		let mut deferred_offences = vec![];
 
+
+		// TODO [ToDr] add a bunch of concurrent_offenders to deferred_offences
+		// Most likely creaate offenders and convert them to OffenceDetails (reporters are not
+		// relevant)
 		for i in 0 .. d {
 			deferred_offences.push((vec![], vec![], 0u32));
 		}
@@ -173,6 +205,10 @@ benchmarks! {
 
 	}: {
 		Offences::<T>::on_initialize(0.into());
+	}
+	verify {
+		// make sure that all deferred offences were reported with Ok status.
+		assert!(Offences::<T>::deferred_offences().is_empty());
 	}
 }
 
