@@ -186,16 +186,11 @@ pub trait FixedPointNumber:
 	type Perthing;
 
 	/// The accuracy of this fixed point number.
-	const BITS: u8;
-
-	/// Accuracy of this `Fixed` implementation.
-	fn num_bits() -> u8 {
-		Self::BITS
-	}
+	const DIV: Self::Inner;
 
 	/// Accuracy of this `Fixed` implementation.
 	fn accuracy() -> Self::Inner {
-		2i64.pow(Self::BITS.into()).into()
+		Self::DIV
 	}
 
 	/// Raw constructor. Equal to `parts / DIV`.

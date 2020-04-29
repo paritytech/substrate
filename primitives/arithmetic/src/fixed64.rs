@@ -38,7 +38,7 @@ implement_fixed!(
 	u64,
 	u32,
 	Perbill,
-	30,
+	1_000_000_000,
 	9,
 );
 

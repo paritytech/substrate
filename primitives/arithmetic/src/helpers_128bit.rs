@@ -138,13 +138,17 @@ pub fn multiply(a: u128, b: u128) -> (u128, u128) {
 
 /// Computes (a * 2^c) / b.
 /// 
-/// Returns `None` if there is an overflow.
-pub fn divide(a: u128, b: u128, p: u8) -> Option<u128> {
+/// Returns `None` if there is an overflow or `b` is zero.
+pub fn divide(a: u128, b: u128, p: u8) -> Option<(u128, u128)> {
 	if b == 0 {
 		return None
 	}
 
-	println!("a {} b {} p {}", a, b, p);
+	if a == 0 {
+		return Some((0, 0))
+	}
+
+	println!("divide: a {} b {} p {}", a, b, p);
 
 	// Bits of space to multiply.
 	let leading_zeros = a.leading_zeros();
@@ -159,9 +163,9 @@ pub fn divide(a: u128, b: u128, p: u8) -> Option<u128> {
 	let r = a.checked_rem(b).unwrap();
 
 	if p == 0 {
-		println!("d = {} r = {}", d, r);
+		println!("0 d = {} r = {}", d, r);
 		// We're done, the multiplication was fitting after all.
-		return Some(d)
+		return Some((d, r))
 	}
 
 	let leading_zeros = d.leading_zeros();
@@ -175,8 +179,9 @@ pub fn divide(a: u128, b: u128, p: u8) -> Option<u128> {
 	let n = d.checked_shl(p).unwrap();
 
 	if r == 0 {
-		// No remainer and no overflow, we are done.
-		return Some(n)
+		// No remainder and no overflow, we are done.
+		println!("1 d = {} r = {}", d, r);
+		return Some((d, r))
 	}
 
 	// Second iteration. Continue with the remainer.
@@ -195,8 +200,10 @@ pub fn divide(a: u128, b: u128, p: u8) -> Option<u128> {
 	let r = a.checked_rem(b).unwrap();
 
 	if p == 0 {
+		let d = d.checked_add(n).unwrap();
+		println!("2 d = {} r = {}", d, r);
 		// We're done.
-		return Some(d.checked_add(n).unwrap())
+		return Some((d, r))
 	}
 
 	None
@@ -210,6 +217,6 @@ mod tests {
 	fn divide_works() {
 		// assert_eq!(divide(4, 2, 0), Some(2));
 		// assert_eq!(divide(i128::max_value() as u128, 2, 0), Some((i128::max_value() / 2) as u128));
-		assert_eq!(divide(i128::max_value() as u128, 16, 3), Some((i128::max_value() / 2) as u128));
+		assert_eq!(divide(i128::max_value() as u128, 16, 3), Some(((i128::max_value() / 2) as u128, 0u128)));
 	}
 }

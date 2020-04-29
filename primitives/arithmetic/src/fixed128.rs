@@ -39,7 +39,7 @@ implement_fixed!(
 	u128,
 	u64,
 	Perquintill,
-	60, // Bits used for fractional part, accuracy of 2^60.
+	1_000_000_000_000_000_000,
 	18,
 );
 
