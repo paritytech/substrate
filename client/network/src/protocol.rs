@@ -91,6 +91,8 @@ const REQUEST_TIMEOUT_SEC: u64 = 40;
 const TICK_TIMEOUT: time::Duration = time::Duration::from_millis(1100);
 /// Interval at which we propagate extrinsics;
 const PROPAGATE_TIMEOUT: time::Duration = time::Duration::from_millis(2900);
+/// Interval at which we check which block requests we need to perform
+const SYNC_UPDATE_TIMEOUT: time::Duration = time::Duration::from_millis(200);
 
 /// Maximim number of known block hashes to keep for a peer.
 const MAX_KNOWN_BLOCKS: usize = 1024; // ~32kb per peer + LruHashSet overhead
@@ -207,6 +209,8 @@ pub struct Protocol<B: BlockT, H: ExHashT> {
 	tick_timeout: Pin<Box<dyn Stream<Item = ()> + Send>>,
 	/// Interval at which we call `propagate_extrinsics`.
 	propagate_timeout: Pin<Box<dyn Stream<Item = ()> + Send>>,
+	/// Interval at which we query the sync requests from `sync`.
+	sync_update_timeout: Pin<Box<dyn Stream<Item = ()> + Send>>,
 	/// Pending list of messages to return from `poll` as a priority.
 	pending_messages: VecDeque<CustomMessageOutcome<B>>,
 	config: ProtocolConfig,
@@ -412,6 +416,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		let protocol = Protocol {
 			tick_timeout: Box::pin(interval(TICK_TIMEOUT)),
 			propagate_timeout: Box::pin(interval(PROPAGATE_TIMEOUT)),
+			sync_update_timeout: Box::pin(interval(SYNC_UPDATE_TIMEOUT)),
 			pending_messages: VecDeque::new(),
 			config,
 			context_data: ContextData {
@@ -1959,55 +1964,63 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 			self.propagate_extrinsics();
 		}
 
-		for (id, r) in self.sync.block_requests() {
-			if self.use_new_block_requests_protocol {
-				let event = CustomMessageOutcome::BlockRequest {
-					target: id,
-					request: r,
-				};
-				return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event));
-			} else {
-				send_request(
-					&mut self.behaviour,
-					&mut self.context_data.stats,
-					&mut self.context_data.peers,
-					&id,
-					GenericMessage::BlockRequest(r)
-				)
+		if let Poll::Ready(Some(())) = self.sync_update_timeout.poll_next_unpin(cx) {
+			// Purge the sync update interval from any further readiness.
+			while let Poll::Ready(Some(())) = self.sync_update_timeout.poll_next_unpin(cx) {}
+
+			for (id, r) in self.sync.block_requests() {
+				if self.use_new_block_requests_protocol {
+					let event = CustomMessageOutcome::BlockRequest {
+						target: id,
+						request: r,
+					};
+					self.pending_messages.push_back(event);
+				} else {
+					send_request(
+						&mut self.behaviour,
+						&mut self.context_data.stats,
+						&mut self.context_data.peers,
+						&id,
+						GenericMessage::BlockRequest(r)
+					)
+				}
 			}
-		}
-		for (id, r) in self.sync.justification_requests() {
-			if self.use_new_block_requests_protocol {
-				let event = CustomMessageOutcome::BlockRequest {
-					target: id,
-					request: r,
-				};
-				return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event));
-			} else {
-				send_request(
-					&mut self.behaviour,
-					&mut self.context_data.stats,
-					&mut self.context_data.peers,
-					&id,
-					GenericMessage::BlockRequest(r)
-				)
+			for (id, r) in self.sync.justification_requests() {
+				if self.use_new_block_requests_protocol {
+					let event = CustomMessageOutcome::BlockRequest {
+						target: id,
+						request: r,
+					};
+					self.pending_messages.push_back(event);
+				} else {
+					send_request(
+						&mut self.behaviour,
+						&mut self.context_data.stats,
+						&mut self.context_data.peers,
+						&id,
+						GenericMessage::BlockRequest(r)
+					)
+				}
 			}
-		}
-		for (id, r) in self.sync.finality_proof_requests() {
-			if self.use_new_block_requests_protocol {
-				let event = CustomMessageOutcome::FinalityProofRequest {
-					target: id,
-					block_hash: r.block,
-					request: r.request,
-				};
-				return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event));
-			} else {
-				send_request(
-					&mut self.behaviour,
-					&mut self.context_data.stats,
-					&mut self.context_data.peers,
-					&id,
-					GenericMessage::FinalityProofRequest(r))
+			for (id, r) in self.sync.finality_proof_requests() {
+				if self.use_new_block_requests_protocol {
+					let event = CustomMessageOutcome::FinalityProofRequest {
+						target: id,
+						block_hash: r.block,
+						request: r.request,
+					};
+					self.pending_messages.push_back(event);
+				} else {
+					send_request(
+						&mut self.behaviour,
+						&mut self.context_data.stats,
+						&mut self.context_data.peers,
+						&id,
+						GenericMessage::FinalityProofRequest(r))
+				}
+			}
+			if let Some(message) = self.pending_messages.pop_front() {
+				return Poll::Ready(NetworkBehaviourAction::GenerateEvent(message));
 			}
 		}
 
