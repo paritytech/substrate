@@ -94,8 +94,10 @@ impl TracingProxy {
 				while id < last_span_id {
 					log::warn!("Span ids not equal! id parameter given: {}, last span: {}", id, last_span_id);
 					if let Some(mut s) = self.spans.pop() {
-						s.1.rent_all_mut(|s| { s.span.record("tracing_proxy_ok", &false); });
 						last_span_id = s.0;
+						if id != last_span_id {
+							s.1.rent_all_mut(|s| { s.span.record("tracing_proxy_ok", &false); });
+						}
 					} else {
 						log::warn!("Span id not found {}", id);
 						return;
