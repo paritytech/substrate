@@ -41,7 +41,7 @@ use sp_core::u32_trait::Value as U32;
 use sp_runtime::RuntimeDebug;
 use sp_runtime::traits::Hash;
 use frame_support::{
-	dispatch::{Dispatchable, Parameter, DispatchResult, DispatchResultWithPostInfo, PostDispatchInfo},
+	dispatch::{Dispatchable, Parameter, DispatchError, DispatchResult, DispatchResultWithPostInfo, PostDispatchInfo},
 	codec::{Encode, Decode},
 	traits::{Get, ChangeMembers, InitializeMembers, EnsureOrigin}, decl_module, decl_event,
 	decl_storage, decl_error, ensure,
@@ -219,6 +219,34 @@ mod weight_for {
 			+ 5_000 * MAX_ASSUMED_PROPOSAL_BYTES // B
 			+ proposal.into() // P
 	}
+
+	/// Calculate the weight for `propose` if the proposal is executed straight away (`threshold < 2`).
+	pub(crate) fn propose_execute(
+		db: RuntimeDbWeight,
+		members: impl Into<Weight>,
+		proposal: impl Into<Weight>,
+	) -> Weight {
+		db.reads(2) // `is_member` + `contains_key`
+			+ 120_000_000 // constant
+			+ 650_000 * members.into() // M
+			+ proposal.into() // P1
+			+ 5_000 * MAX_ASSUMED_PROPOSAL_BYTES // B
+		
+	}
+
+	/// Calculate the weight for `propose` if the proposal is put up for a vote (`threshold >= 2`).
+	pub(crate) fn propose_proposed(
+		db: RuntimeDbWeight,
+		members: impl Into<Weight>,
+		proposals: impl Into<Weight>,
+	) -> Weight {
+		db.reads(2) // `is_member` + `contains_key`
+			+ db.reads_writes(2, 4) // `proposal` insertion
+			+ 180_000_000 // constant
+			+ 350_000 * members.into() // M
+			+ 1_100_000 * proposals.into() // P2
+			+ 7_000 * MAX_ASSUMED_PROPOSAL_BYTES // B
+	}
 }
 
 // Note: this module is not benchmarked. The weights are obtained based on the similarity of the
@@ -307,28 +335,86 @@ decl_module! {
 			}
 		}
 
+		/// Add a new proposal to either be voted on or executed directly.
+		///
+		/// `threshold` determines whether `proposal` is executed directly (`threshold < 2`)
+		/// or put up for voting.
+		///
 		/// # <weight>
-		/// - Bounded storage reads and writes.
-		/// - Argument `threshold` has bearing on weight.
+		/// ## Weight
+		/// - `O(B + M + P1)` or `O(B + M + P2)`
+		///   - where `B` is `proposal` size in bytes
+		///   - where `M` members-count
+		///   - where branching is influenced by `threshold`:
+		///     - where `P1` is proposal execution complexity (`threshold < 2`)
+		///     - where `P2` is proposals-count (`threshold >= 2`)
+		/// - DB:
+		///   - 1 storage read `is_member` (codec `O(M)`)
+		///   - 1 storage read `ProposalOf::contains_key` (codec `O(1)`)
+		///   - DB accesses influenced by `threshold`:
+		///     - EITHER storage accesses done by `proposal` (`threshold < 2`)
+		///     - OR proposal insertion (`threshold <= 2`)
+		///       - 1 storage mutation `Proposals` (codec `O(P2)`)
+		///       - 1 storage mutation `ProposalCount` (codec `O(1)`)
+		///       - 1 storage write `ProposalOf` (codec `O(B)`)
+		///       - 1 storage write `Voting` (codec `O(M)`)
+		///   - 1 event
+		/// - Benchmarks:
+		///   - execute: 113.2 + M * 0.64 + B * 0.005 µs (min squares analysis) (`threshold < 2`)
+		///   - propose: 178.1 + M * 0.349 + P2 1.078 + B * 0.007 µs (min squares analysis) (`threshold >= 2`)
 		/// # </weight>
-		#[weight = (5_000_000_000, DispatchClass::Operational)]
-		fn propose(origin, #[compact] threshold: MemberCount, proposal: Box<<T as Trait<I>>::Proposal>) {
+		#[weight = (
+			if *threshold < 2 {
+				weight_for::propose_execute(
+					T::DbWeight::get(),
+					T::MaxMembers::get(), // M
+					proposal.get_dispatch_info().weight, // P1
+				)
+			} else {
+				weight_for::propose_proposed(
+					T::DbWeight::get(),
+					T::MaxMembers::get(), // M
+					T::MaxProposals::get() // P2
+				)
+			},
+			DispatchClass::Operational
+		)]
+		fn propose(
+			origin, #[compact] threshold: MemberCount, proposal: Box<<T as Trait<I>>::Proposal>
+		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			ensure!(Self::is_member(&who), Error::<T, I>::NotMember);
+			let members = Self::members();
+			ensure!(members.contains(&who), Error::<T, I>::NotMember);
 
 			let proposal_hash = T::Hashing::hash_of(&proposal);
-
 			ensure!(!<ProposalOf<T, I>>::contains_key(proposal_hash), Error::<T, I>::DuplicateProposal);
 
 			if threshold < 2 {
 				let seats = Self::members().len() as MemberCount;
-				let ok = proposal.dispatch(RawOrigin::Members(1, seats).into()).is_ok();
-				Self::deposit_event(RawEvent::Executed(proposal_hash, ok));
+				let result = proposal.dispatch(RawOrigin::Members(1, seats).into());
+				Self::deposit_event(RawEvent::Executed(proposal_hash, result.is_ok()));
+
+				match result {
+					Ok(post_info) => {
+						Ok(post_info.actual_weight.map(|w| weight_for::propose_execute(
+							T::DbWeight::get(),
+							members.len() as Weight, // M
+							w, // P1
+						)).into())
+					},
+					Err(err) => {
+						Ok(err.post_info.actual_weight.map(|w| weight_for::propose_execute(
+							T::DbWeight::get(),
+							members.len() as Weight, // M
+							w, // P1
+						)).into())
+					}
+				}
 			} else {
-				<Proposals<T, I>>::try_mutate(|proposals| -> DispatchResult {
-					ensure!(proposals.len() <= T::MaxProposals::get() as usize, Error::<T, I>::TooManyProposals);
+				let active_proposals = <Proposals<T, I>>::try_mutate(|proposals| -> Result<usize, DispatchError> {
 					proposals.push(proposal_hash);
-					Ok(())
+					ensure!(proposals.len() <= T::MaxProposals::get() as usize, Error::<T, I>::TooManyProposals);
+					Ok(proposals.len())
 				})?;
 				let index = Self::proposal_count();
 				<ProposalCount<I>>::mutate(|i| *i += 1);
@@ -338,6 +424,12 @@ decl_module! {
 				<Voting<T, I>>::insert(proposal_hash, votes);
 
 				Self::deposit_event(RawEvent::Proposed(who, index, proposal_hash, threshold));
+
+				Ok(Some(weight_for::propose_proposed(
+					T::DbWeight::get(),
+					members.len() as Weight, // M
+					active_proposals as Weight // P2
+				)).into())
 			}
 		}
 

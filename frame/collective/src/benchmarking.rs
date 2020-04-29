@@ -154,7 +154,7 @@ benchmarks_instance! {
 
 	// This tests when proposal is created and queued as "proposed"
 	propose_proposed {
-		let m in 1 .. T::MaxMembers::get();
+		let m in 2 .. T::MaxMembers::get();
 		let p in 1 .. T::MaxProposals::get();
 		let b in 1 .. MAX_BYTES;
 
@@ -164,31 +164,29 @@ benchmarks_instance! {
 			let member = account("member", i, SEED);
 			members.push(member);
 		}
-
 		let caller: T::AccountId = account("caller", 0, SEED);
 		members.push(caller.clone());
 		let initial_len = Collective::<T, _>::members().len() as u32;
 		Collective::<T, _>::set_members(SystemOrigin::Root.into(), members, None, initial_len)?;
 
-		let threshold = m.max(2);
-
+		let threshold = m;
 		// Add previous proposals.
-		for i in 0 .. p {
+		for i in 0 .. p - 1 {
 			// Proposals should be different so that different proposal hashes are generated
 			let proposal: T::Proposal = frame_system::Call::<T>::remark(vec![i as u8; b as usize]).into();
 			Collective::<T, _>::propose(SystemOrigin::Signed(caller.clone()).into(), threshold, Box::new(proposal))?;
 		}
 
-		assert_eq!(Collective::<T, _>::proposals().len(), p as usize);
+		assert_eq!(Collective::<T, _>::proposals().len(), (p - 1) as usize);
 
 		let proposal: T::Proposal = frame_system::Call::<T>::remark(vec![p as u8; b as usize]).into();
 
 	}: propose(SystemOrigin::Signed(caller.clone()), threshold, Box::new(proposal.clone()))
 	verify {
 		// New proposal is recorded
-		assert_eq!(Collective::<T, _>::proposals().len(), (p + 1) as usize);
+		assert_eq!(Collective::<T, _>::proposals().len(), p as usize);
 		let proposal_hash = T::Hashing::hash_of(&proposal);
-		assert_last_event::<T, I>(RawEvent::Proposed(caller, p, proposal_hash, threshold).into());
+		assert_last_event::<T, I>(RawEvent::Proposed(caller, p - 1, proposal_hash, threshold).into());
 	}
 
 	vote_insert {
