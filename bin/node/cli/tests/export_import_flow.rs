@@ -59,7 +59,7 @@ fn export_binary_import_binary_works() {
 	common::run_dev_node_for_a_while(base_path.path());
 
 	let status = Command::new(cargo_bin("substrate"))
-		.args(&["export-blocks", "--pruning", "archive", "--binary", "true", "--dev", "-d"])
+		.args(&["export-blocks", "--pruning", "archive", "--binary", "--dev", "-d"])
 		.arg(&base_path.path())
 		.arg(&exported_blocks)
 		.status()
@@ -72,7 +72,7 @@ fn export_binary_import_binary_works() {
 	let _ = fs::remove_dir_all(base_path.path().join("db"));
 
 	let status = Command::new(cargo_bin("substrate"))
-		.args(&["import-blocks", "--pruning", "archive", "--binary", "true", "--dev", "-d"])
+		.args(&["import-blocks", "--pruning", "archive", "--binary", "--dev", "-d"])
 		.arg(&base_path.path())
 		.arg(&exported_blocks)
 		.status()
