@@ -52,7 +52,7 @@ macro_rules! new_full_start {
 				let pool_api = sc_transaction_pool::FullChainApi::new(client.clone());
 				Ok(sc_transaction_pool::BasicPool::new(config, std::sync::Arc::new(pool_api), prometheus_registry))
 			})?
-			.with_import_queue(|_config, client, mut select_chain, _transaction_pool| {
+			.with_import_queue(|_config, client, mut select_chain, _transaction_pool, spawn_task_handle| {
 				let select_chain = select_chain.take()
 					.ok_or_else(|| sc_service::Error::SelectChainRequired)?;
 				let (grandpa_block_import, grandpa_link) = grandpa::block_import(
@@ -68,6 +68,8 @@ macro_rules! new_full_start {
 					client.clone(),
 				)?;
 
+				let spawner = |future| spawn_task_handle.spawn_blocking("import-queue-worker", future);
+
 				let import_queue = sc_consensus_babe::import_queue(
 					babe_link.clone(),
 					block_import.clone(),
@@ -75,6 +77,7 @@ macro_rules! new_full_start {
 					None,
 					client,
 					inherent_data_providers.clone(),
+					spawner,
 				)?;
 
 				import_setup = Some((block_import, grandpa_link, babe_link));
@@ -284,7 +287,7 @@ pub fn new_light(config: Configuration)
 			);
 			Ok(pool)
 		})?
-		.with_import_queue_and_fprb(|_config, client, backend, fetcher, _select_chain, _tx_pool| {
+		.with_import_queue_and_fprb(|_config, client, backend, fetcher, _select_chain, _tx_pool, spawn_task_handle| {
 			let fetch_checker = fetcher
 				.map(|fetcher| fetcher.checker().clone())
 				.ok_or_else(|| "Trying to start light import queue without active fetch checker")?;
@@ -305,6 +308,8 @@ pub fn new_light(config: Configuration)
 				client.clone(),
 			)?;
 
+			let spawner = |future| spawn_task_handle.spawn_blocking("import-queue-worker", future);
+
 			let import_queue = sc_consensus_babe::import_queue(
 				babe_link,
 				babe_block_import,
@@ -312,6 +317,7 @@ pub fn new_light(config: Configuration)
 				Some(Box::new(finality_proof_import)),
 				client.clone(),
 				inherent_data_providers.clone(),
+				spawner,
 			)?;
 
 			Ok((import_queue, finality_proof_request_builder))
