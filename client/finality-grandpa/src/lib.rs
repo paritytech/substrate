@@ -228,7 +228,7 @@ impl SharedVoterState {
 	}
 
 	pub fn voter_state(&self) -> Option<voter::report::VoterState<AuthorityId>> {
-		self.inner.read().as_ref().map(|vs| vs.voter_state())
+		self.inner.read().as_ref().map(|vs| vs.get())
 	}
 }
 
