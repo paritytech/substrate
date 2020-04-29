@@ -95,16 +95,15 @@ impl<R, B> BlockStream<R, SignedBlock<B>>
 	/// Returns the number of blocks read thus far.
 	fn read_block_count(&self) -> u64 {
 		match self {
-			BlockStream::Binary {count: _, read_block_count, reader: _} => *read_block_count,
-			BlockStream::Json {read_block_count, reader: _} => *read_block_count,
+			BlockStream::Binary { read_block_count, .. } | BlockStream::Json { read_block_count, .. } => *read_block_count,
 		}
 	}
 
 	/// Returns the total number of blocks to be imported, if possible.
 	fn count(&self) -> Option<u64> {
 		match self {
-			BlockStream::Binary {count, read_block_count, reader: _} => Some(*count),
-			BlockStream::Json {read_block_count:_ , reader: _}=> None
+			BlockStream::Binary { count, ..} => Some(*count),
+			BlockStream::Json {..}=> None
 		}
 	}
 }
