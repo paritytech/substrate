@@ -6402,7 +6402,7 @@ dependencies = [
  "sc-finality-grandpa",
  "serde",
  "serde_json",
- "substrate-test-runtime-client",
+ "sp-core",
 ]
 
 [[package]]

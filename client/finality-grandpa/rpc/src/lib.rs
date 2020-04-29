@@ -74,3 +74,25 @@ where
 		Box::new(future.map_err(jsonrpc_core::Error::from).compat())
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use jsonrpc_core::IoHandler;
+	use sc_finality_grandpa::{SharedVoterState, test_utils::example_shared_authority_set};
+
+	#[test]
+	fn create_grandpa_rpc_handler() {
+		let shared_voter_state = SharedVoterState::new(None);
+		let shared_authority_set = example_shared_authority_set();
+
+		let handler = GrandpaRpcHandler::new(shared_voter_state, shared_authority_set);
+		let mut io = IoHandler::new();
+		io.extend_with(GrandpaApi::to_delegate(handler));
+
+		let request = r#"{"jsonrpc":"2.0","method":"grandpa_roundState","params":[],"id":1}"#;
+		let response = r#"{"jsonrpc":"2.0","error":{"code":1,"message":"GRANDPA RPC endpoint not ready"},"id":1}"#;
+
+		assert_eq!(Some(response.into()), io.handle_request_sync(request));
+	}
+}

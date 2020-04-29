@@ -19,4 +19,4 @@ log = "0.4.8"
 derive_more = "0.99.2"
 
 [dev-dependencies]
-substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../../test-utils/runtime/client" }
+sp-core = { version = "2.0.0-dev", path = "../../../primitives/core" }
