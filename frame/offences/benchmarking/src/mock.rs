@@ -19,7 +19,7 @@
 #![cfg(test)]
 
 use super::*;
-use frame_support::parameter_types;
+use frame_support::{parameter_types, weights::Weight};
 use frame_system as system;
 use sp_runtime::{
 	SaturatedConversion,
@@ -32,6 +32,10 @@ type AccountId = u64;
 type AccountIndex = u32;
 type BlockNumber = u64;
 type Balance = u64;
+
+parameter_types! {
+	pub const ExtrinsicBaseWeight: Weight = 10_000_000;
+}
 
 impl frame_system::Trait for Test {
 	type Origin = Origin;
@@ -54,6 +58,8 @@ impl frame_system::Trait for Test {
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = (Balances,);
+	type BlockExecutionWeight = ();
+	type ExtrinsicBaseWeight = ExtrinsicBaseWeight;
 }
 parameter_types! {
 	pub const ExistentialDeposit: Balance = 10;
@@ -130,14 +136,10 @@ parameter_types! {
 	pub const RewardCurve: &'static sp_runtime::curve::PiecewiseLinear<'static> = &I_NPOS;
 	pub const MaxNominatorRewardedPerValidator: u32 = 64;
 	pub const UnsignedPriority: u64 = 1 << 20;
+	pub const MaxIterations: u32 = 5;
 }
 
 pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
-type SubmitTransaction = frame_system::offchain::TransactionSubmitter<
-	sp_runtime::testing::UintAuthorityId,
-	Test,
-	Extrinsic,
->;
 
 pub struct CurrencyToVoteHandler;
 impl Convert<u64, u64> for CurrencyToVoteHandler {
@@ -168,16 +170,14 @@ impl pallet_staking::Trait for Test {
 	type NextNewSession = Session;
 	type ElectionLookahead = ();
 	type Call = Call;
-	type SubmitTransaction = SubmitTransaction;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type UnsignedPriority = UnsignedPriority;
+	type MaxIterations = MaxIterations;
 }
 
 impl pallet_im_online::Trait for Test {
 	type AuthorityId = UintAuthorityId;
 	type Event = ();
-	type Call = Call;
-	type SubmitTransaction = SubmitTransaction;
 	type SessionDuration = Period;
 	type ReportUnresponsiveness = Offences;
 	type UnsignedPriority = UnsignedPriority;
@@ -189,10 +189,15 @@ impl pallet_offences::Trait for Test {
 	type OnOffenceHandler = Staking;
 }
 
+impl<T> frame_system::offchain::SendTransactionTypes<T> for Test where Call: From<T> {
+	type Extrinsic = Extrinsic;
+	type OverarchingCall = Call;
+}
+
 impl crate::Trait for Test {}
 
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
+pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, Call, u64, ()>;
 
 frame_support::construct_runtime!(
 	pub enum Test where
