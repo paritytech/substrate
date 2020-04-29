@@ -45,7 +45,9 @@ impl WasmExecutionMethod {
 impl Into<sc_service::config::WasmExecutionMethod> for WasmExecutionMethod {
 	fn into(self) -> sc_service::config::WasmExecutionMethod {
 		match self {
-			WasmExecutionMethod::Interpreted => sc_service::config::WasmExecutionMethod::Interpreted,
+			WasmExecutionMethod::Interpreted => {
+				sc_service::config::WasmExecutionMethod::Interpreted
+			}
 			#[cfg(feature = "wasmtime")]
 			WasmExecutionMethod::Compiled => sc_service::config::WasmExecutionMethod::Compiled,
 			#[cfg(not(feature = "wasmtime"))]
@@ -117,6 +119,32 @@ impl ExecutionStrategy {
 			Self::Both => "Both",
 			Self::NativeElseWasm => "NativeElseWasm",
 		}
+	}
+}
+
+arg_enum! {
+	/// Database backend
+	#[allow(missing_docs)]
+	#[derive(Debug, Clone, Copy)]
+	pub enum Database {
+		// Facebooks RocksDB
+		RocksDb,
+		// Subdb. https://github.com/paritytech/subdb/
+		SubDb,
+		// ParityDb. https://github.com/paritytech/parity-db/
+		ParityDb,
+	}
+}
+
+
+arg_enum! {
+	/// Whether off-chain workers are enabled.
+	#[allow(missing_docs)]
+	#[derive(Debug, Clone)]
+	pub enum OffchainWorkerEnabled {
+		Always,
+		Never,
+		WhenValidating,
 	}
 }
 

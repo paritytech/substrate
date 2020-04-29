@@ -50,7 +50,7 @@
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+//! 		#[weight = 0]
 //! 		pub fn is_online(origin, authority_index: u32) -> dispatch::DispatchResult {
 //! 			let _sender = ensure_signed(origin)?;
 //! 			let _is_online = <im_online::Module<T>>::is_online(authority_index);
@@ -94,9 +94,13 @@ use sp_staking::{
 use frame_support::{
 	decl_module, decl_event, decl_storage, Parameter, debug, decl_error,
 	traits::Get,
+	weights::Weight,
 };
 use frame_system::{self as system, ensure_none};
-use frame_system::offchain::SubmitUnsignedTransaction;
+use frame_system::offchain::{
+	SendTransactionTypes,
+	SubmitTransaction,
+};
 
 pub mod sr25519 {
 	mod app_sr25519 {
@@ -217,20 +221,16 @@ pub struct Heartbeat<BlockNumber>
 	pub session_index: SessionIndex,
 	/// An index of the authority on the list of validators.
 	pub authority_index: AuthIndex,
+	/// The length of session validator set
+	pub validators_len: u32,
 }
 
-pub trait Trait: frame_system::Trait + pallet_session::historical::Trait {
+pub trait Trait: SendTransactionTypes<Call<Self>> + pallet_session::historical::Trait {
 	/// The identifier type for an authority.
 	type AuthorityId: Member + Parameter + RuntimeAppPublic + Default + Ord;
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
-
-	/// A dispatchable call type.
-	type Call: From<Call<Self>>;
-
-	/// A transaction submitter.
-	type SubmitTransaction: SubmitUnsignedTransaction<Self, <Self as Trait>::Call>;
 
 	/// An expected duration of the session.
 	///
@@ -247,6 +247,12 @@ pub trait Trait: frame_system::Trait + pallet_session::historical::Trait {
 			IdentificationTuple<Self>,
 			UnresponsivenessOffence<IdentificationTuple<Self>>,
 		>;
+
+	/// A configuration for base priority of unsigned transactions.
+	///
+	/// This is exposed so that it can be tuned for particular runtime, when
+	/// multiple pallets send unsigned transactions.
+	type UnsignedPriority: Get<TransactionPriority>;
 }
 
 decl_event!(
@@ -310,13 +316,30 @@ decl_module! {
 
 		fn deposit_event() = default;
 
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		/// # <weight>
+		/// - Complexity: `O(K + E)` where K is length of `Keys` and E is length of
+		///   `Heartbeat.network_state.external_address`
+		///
+		///   - `O(K)`: decoding of length `K`
+		///   - `O(E)`: decoding/encoding of length `E`
+		/// - DbReads: pallet_session `Validators`, pallet_session `CurrentIndex`, `Keys`,
+		///   `ReceivedHeartbeats`
+		/// - DbWrites: `ReceivedHeartbeats`
+		/// # </weight>
+		// NOTE: the weight include cost of validate_unsigned as it is part of the cost to import
+		// block with such an extrinsic.
+		#[weight = (310_000_000 + T::DbWeight::get().reads_writes(4, 1))
+			.saturating_add(750_000.saturating_mul(heartbeat.validators_len as Weight))
+			.saturating_add(
+				1_200_000.saturating_mul(heartbeat.network_state.external_addresses.len() as Weight)
+			)
+		]
 		fn heartbeat(
 			origin,
 			heartbeat: Heartbeat<T::BlockNumber>,
 			// since signature verification is done in `validate_unsigned`
 			// we can skip doing it here again.
-			_signature: <T::AuthorityId as RuntimeAppPublic>::Signature
+			_signature: <T::AuthorityId as RuntimeAppPublic>::Signature,
 		) {
 			ensure_none(origin)?;
 
@@ -436,9 +459,17 @@ impl<T: Trait> Module<T> {
 		}
 
 		let session_index = <pallet_session::Module<T>>::current_index();
+		let validators_len = <pallet_session::Module<T>>::validators().len() as u32;
+
 		Ok(Self::local_authority_keys()
 			.map(move |(authority_index, key)|
-				Self::send_single_heartbeat(authority_index, key, session_index, block_number)
+				Self::send_single_heartbeat(
+					authority_index,
+					key,
+					session_index,
+					block_number,
+					validators_len,
+				)
 			))
 	}
 
@@ -447,7 +478,8 @@ impl<T: Trait> Module<T> {
 		authority_index: u32,
 		key: T::AuthorityId,
 		session_index: SessionIndex,
-		block_number: T::BlockNumber
+		block_number: T::BlockNumber,
+		validators_len: u32,
 	) -> OffchainResult<T, ()> {
 		// A helper function to prepare heartbeat call.
 		let prepare_heartbeat = || -> OffchainResult<T, Call<T>> {
@@ -458,8 +490,11 @@ impl<T: Trait> Module<T> {
 				network_state,
 				session_index,
 				authority_index,
+				validators_len,
 			};
+
 			let signature = key.sign(&heartbeat_data.encode()).ok_or(OffchainErr::FailedSigning)?;
+
 			Ok(Call::heartbeat(heartbeat_data, signature))
 		};
 
@@ -484,7 +519,7 @@ impl<T: Trait> Module<T> {
 					call,
 				);
 
-				T::SubmitTransaction::submit_unsigned(call)
+				SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into())
 					.map_err(|_| OffchainErr::SubmitTransaction)?;
 
 				Ok(())
@@ -493,9 +528,18 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn local_authority_keys() -> impl Iterator<Item=(u32, T::AuthorityId)> {
-		// we run only when a local authority key is configured
+		// on-chain storage
+		//
+		// At index `idx`:
+		// 1. A (ImOnline) public key to be used by a validator at index `idx` to send im-online
+		//          heartbeats.
 		let authorities = Keys::<T>::get();
+
+		// local keystore
+		//
+		// All `ImOnline` public (+private) keys currently in the local keystore.
 		let mut local_keys = T::AuthorityId::all();
+
 		local_keys.sort();
 
 		authorities.into_iter()
@@ -556,6 +600,11 @@ impl<T: Trait> Module<T> {
 			assert!(Keys::<T>::get().is_empty(), "Keys are already initialized!");
 			Keys::<T>::put(keys);
 		}
+	}
+
+	#[cfg(test)]
+	fn set_keys(keys: Vec<T::AuthorityId>) {
+		Keys::<T>::put(&keys)
 	}
 }
 
@@ -623,6 +672,9 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 	}
 }
 
+/// Invalid transaction custom error. Returned when validators_len field in heartbeat is incorrect.
+const INVALID_VALIDATORS_LEN: u8 = 10;
+
 impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 	type Call = Call<T>;
 
@@ -644,6 +696,9 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 
 			// verify that the incoming (unverified) pubkey is actually an authority id
 			let keys = Keys::<T>::get();
+			if keys.len() as u32 != heartbeat.validators_len {
+				return InvalidTransaction::Custom(INVALID_VALIDATORS_LEN).into();
+			}
 			let authority_id = match keys.get(heartbeat.authority_index as usize) {
 				Some(id) => id,
 				None => return InvalidTransaction::BadProof.into(),
@@ -658,13 +713,14 @@ impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
 				return InvalidTransaction::BadProof.into();
 			}
 
-			Ok(ValidTransaction {
-				priority: TransactionPriority::max_value(),
-				requires: vec![],
-				provides: vec![(current_session, authority_id).encode()],
-				longevity: TryInto::<u64>::try_into(T::SessionDuration::get() / 2.into()).unwrap_or(64_u64),
-				propagate: true,
-			})
+			ValidTransaction::with_tag_prefix("ImOnline")
+				.priority(T::UnsignedPriority::get())
+				.and_provides((current_session, authority_id))
+				.longevity(TryInto::<u64>::try_into(
+					T::SessionDuration::get() / 2.into()
+				).unwrap_or(64_u64))
+				.propagate(true)
+				.build()
 		} else {
 			InvalidTransaction::Call.into()
 		}
@@ -679,11 +735,11 @@ pub struct UnresponsivenessOffence<Offender> {
 	///
 	/// It acts as a time measure for unresponsiveness reports and effectively will always point
 	/// at the end of the session.
-	session_index: SessionIndex,
+	pub session_index: SessionIndex,
 	/// The size of the validator set in current session/era.
-	validator_set_count: u32,
+	pub validator_set_count: u32,
 	/// Authorities that were unresponsive during the current era.
-	offenders: Vec<Offender>,
+	pub offenders: Vec<Offender>,
 }
 
 impl<Offender: Clone> Offence<Offender> for UnresponsivenessOffence<Offender> {

@@ -20,7 +20,6 @@
 
 pub mod client_ext;
 
-pub use sc_client::{blockchain, self};
 pub use sc_client_api::{
 	execution_extensions::{ExecutionStrategies, ExecutionExtensions},
 	ForkBlocks, BadBlocks, CloneableSpawn,
@@ -36,16 +35,17 @@ pub use sp_keyring::{
 pub use sp_core::{traits::BareCryptoStorePtr, tasks::executor as tasks_executor};
 pub use sp_runtime::{Storage, StorageChild};
 pub use sp_state_machine::ExecutionStrategy;
+pub use sc_service::client;
 pub use self::client_ext::{ClientExt, ClientBlockImportExt};
 
 use std::sync::Arc;
 use std::collections::HashMap;
-use sp_core::storage::{well_known_keys, ChildInfo};
+use sp_core::storage::ChildInfo;
 use sp_runtime::traits::{Block as BlockT, BlakeTwo256};
-use sc_client::LocalCallExecutor;
+use sc_service::client::{LocalCallExecutor, ClientConfig};
 
 /// Test client light database backend.
-pub type LightBackend<Block> = sc_client::light::backend::Backend<
+pub type LightBackend<Block> = client::light::backend::Backend<
 	sc_client_db::light::LightStorage<Block>,
 	BlakeTwo256,
 >;
@@ -66,6 +66,8 @@ impl GenesisInit for () {
 pub struct TestClientBuilder<Block: BlockT, Executor, Backend, G: GenesisInit> {
 	execution_strategies: ExecutionStrategies,
 	genesis_init: G,
+	/// The key is an unprefixed storage key, this only contains
+	/// default child trie content.
 	child_storage_extension: HashMap<Vec<u8>, StorageChild>,
 	backend: Arc<Backend>,
 	_executor: std::marker::PhantomData<Executor>,
@@ -129,17 +131,17 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 	/// Extend child storage
 	pub fn add_child_storage(
 		mut self,
+		child_info: &ChildInfo,
 		key: impl AsRef<[u8]>,
-		child_key: impl AsRef<[u8]>,
-		child_info: ChildInfo,
 		value: impl AsRef<[u8]>,
 	) -> Self {
-		let entry = self.child_storage_extension.entry(key.as_ref().to_vec())
+		let storage_key = child_info.storage_key();
+		let entry = self.child_storage_extension.entry(storage_key.to_vec())
 			.or_insert_with(|| StorageChild {
 				data: Default::default(),
-				child_info: child_info.to_owned(),
+				child_info: child_info.clone(),
 			});
-		entry.data.insert(child_key.as_ref().to_vec(), value.as_ref().to_vec());
+		entry.data.insert(key.as_ref().to_vec(), value.as_ref().to_vec());
 		self
 	}
 
@@ -173,15 +175,15 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 		self,
 		executor: Executor,
 	) -> (
-		sc_client::Client<
+		client::Client<
 			Backend,
 			Executor,
 			Block,
 			RuntimeApi,
 		>,
-		sc_client::LongestChain<Backend, Block>,
+		sc_consensus::LongestChain<Backend, Block>,
 	) where
-		Executor: sc_client::CallExecutor<Block> + 'static,
+		Executor: sc_client_api::CallExecutor<Block> + 'static,
 		Backend: sc_client_api::backend::Backend<Block>,
 	{
 		let storage = {
@@ -189,8 +191,8 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 
 			// Add some child storage keys.
 			for (key, child_content) in self.child_storage_extension {
-				storage.children.insert(
-					well_known_keys::CHILD_STORAGE_KEY_PREFIX.iter().cloned().chain(key).collect(),
+				storage.children_default.insert(
+					key,
 					StorageChild {
 						data: child_content.data.into_iter().collect(),
 						child_info: child_content.child_info,
@@ -201,7 +203,7 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 			storage
 		};
 
-		let client = sc_client::Client::new(
+		let client = client::Client::new(
 			self.backend.clone(),
 			executor,
 			&storage,
@@ -212,9 +214,10 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 				self.keystore.clone(),
 			),
 			None,
+			ClientConfig::default(),
 		).expect("Creates new client");
 
-		let longest_chain = sc_client::LongestChain::new(self.backend);
+		let longest_chain = sc_consensus::LongestChain::new(self.backend);
 
 		(client, longest_chain)
 	}
@@ -222,7 +225,7 @@ impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, 
 
 impl<Block: BlockT, E, Backend, G: GenesisInit> TestClientBuilder<
 	Block,
-	sc_client::LocalCallExecutor<Backend, NativeExecutor<E>>,
+	client::LocalCallExecutor<Backend, NativeExecutor<E>>,
 	Backend,
 	G,
 > {
@@ -231,13 +234,13 @@ impl<Block: BlockT, E, Backend, G: GenesisInit> TestClientBuilder<
 		self,
 		executor: I,
 	) -> (
-		sc_client::Client<
+		client::Client<
 			Backend,
-			sc_client::LocalCallExecutor<Backend, NativeExecutor<E>>,
+			client::LocalCallExecutor<Backend, NativeExecutor<E>>,
 			Block,
 			RuntimeApi
 		>,
-		sc_client::LongestChain<Backend, Block>,
+		sc_consensus::LongestChain<Backend, Block>,
 	) where
 		I: Into<Option<NativeExecutor<E>>>,
 		E: sc_executor::NativeExecutionDispatch + 'static,
@@ -246,7 +249,7 @@ impl<Block: BlockT, E, Backend, G: GenesisInit> TestClientBuilder<
 		let executor = executor.into().unwrap_or_else(||
 			NativeExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
 		);
-		let executor = LocalCallExecutor::new(self.backend.clone(), executor, tasks_executor());
+		let executor = LocalCallExecutor::new(self.backend.clone(), executor, tasks_executor(), Default::default());
 
 		self.build_with_executor(executor)
 	}

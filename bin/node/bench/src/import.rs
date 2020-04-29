@@ -35,10 +35,19 @@ use node_primitives::Block;
 use sc_client_api::backend::Backend;
 use sp_runtime::generic::BlockId;
 
-use crate::core::{self, Path};
+use crate::core::{self, Path, Mode};
 
-#[derive(Clone, Copy, Debug)]
-pub enum SizeType { Small, Medium, Large }
+#[derive(Clone, Copy, Debug, derive_more::Display)]
+pub enum SizeType {
+	#[display(fmt = "small")]
+	Small,
+	#[display(fmt = "medium")]
+	Medium,
+	#[display(fmt = "large")]
+	Large,
+	#[display(fmt = "full")]
+	Full,
+}
 
 impl SizeType {
 	fn transactions(&self) -> usize {
@@ -46,6 +55,7 @@ impl SizeType {
 			SizeType::Small => 10,
 			SizeType::Medium => 100,
 			SizeType::Large => 500,
+			SizeType::Full => 4000,
 		}
 	}
 }
@@ -77,18 +87,17 @@ impl core::BenchmarkDescription for ImportBenchmarkDescription {
 			KeyTypes::Ed25519 => path.push("ed25519"),
 		}
 
-		match self.size {
-			SizeType::Small => path.push("small"),
-			SizeType::Medium => path.push("medium"),
-			SizeType::Large => path.push("large"),
-		}
+		path.push(&format!("{}", self.size));
 
 		path
 	}
 
 	fn setup(self: Box<Self>) -> Box<dyn core::Benchmark> {
 		let profile = self.profile;
-		let mut bench_db = BenchDb::with_key_types(self.size.transactions(), self.key_types);
+		let mut bench_db = BenchDb::with_key_types(
+			50_000,
+			self.key_types
+		);
 		let block = bench_db.generate_block(BlockType::RandomTransfers(self.size.transactions()));
 		Box::new(ImportBenchmark {
 			database: bench_db,
@@ -99,23 +108,37 @@ impl core::BenchmarkDescription for ImportBenchmarkDescription {
 
 	fn name(&self) -> Cow<'static, str> {
 		match self.profile {
-			Profile::Wasm => "Import benchmark (random transfers, wasm)".into(),
-			Profile::Native => "Import benchmark (random transfers, native)".into(),
+			Profile::Wasm => format!(
+				"Import benchmark (random transfers, wasm, {} block)",
+				self.size,
+			).into(),
+			Profile::Native => format!(
+				"Import benchmark (random transfers, native, {} block)",
+				self.size,
+			).into(),
 		}
 	}
 }
 
 impl core::Benchmark for ImportBenchmark {
-	fn run(&mut self) -> std::time::Duration {
+	fn run(&mut self, mode: Mode) -> std::time::Duration {
 		let mut context = self.database.create_context(self.profile);
 
 		let _ = context.client.runtime_version_at(&BlockId::Number(0))
 			.expect("Failed to get runtime version")
 			.spec_version;
 
+		if mode == Mode::Profile {
+			std::thread::park_timeout(std::time::Duration::from_secs(3));
+		}
+
 		let start = std::time::Instant::now();
 		context.import_block(self.block.clone());
 		let elapsed = start.elapsed();
+
+		if mode == Mode::Profile {
+			std::thread::park_timeout(std::time::Duration::from_secs(1));
+		}
 
 		log::info!(
 			target: "bench-logistics",

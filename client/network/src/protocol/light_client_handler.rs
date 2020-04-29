@@ -37,6 +37,7 @@ use libp2p::{
 		ConnectedPoint,
 		Multiaddr,
 		PeerId,
+		connection::ConnectionId,
 		upgrade::{InboundUpgrade, ReadOneError, UpgradeInfo, Negotiated},
 		upgrade::{OutboundUpgrade, read_one, write_one}
 	},
@@ -44,20 +45,28 @@ use libp2p::{
 		NegotiatedSubstream,
 		NetworkBehaviour,
 		NetworkBehaviourAction,
+		NotifyHandler,
 		OneShotHandler,
+		OneShotHandlerConfig,
 		PollParameters,
-		SubstreamProtocol
+		SubstreamProtocol,
 	}
 };
 use nohash_hasher::IntMap;
 use prost::Message;
-use sc_client::light::fetcher;
-use sc_client_api::StorageProof;
+use sc_client_api::{
+	StorageProof,
+	light::{
+		self, RemoteReadRequest, RemoteBodyRequest, ChangesProof,
+		RemoteCallRequest, RemoteChangesRequest, RemoteHeaderRequest,
+	}
+};
 use sc_peerset::ReputationChange;
 use sp_core::{
-	storage::{ChildInfo, StorageKey},
+	storage::{ChildInfo, ChildType,StorageKey, PrefixedStorageKey},
 	hexdisplay::HexDisplay,
 };
+use smallvec::SmallVec;
 use sp_blockchain::{Error as ClientError};
 use sp_runtime::{
 	traits::{Block, Header, NumberFor, Zero},
@@ -189,27 +198,27 @@ pub enum Error {
 #[derive(Debug)]
 pub enum Request<B: Block> {
 	Body {
-		request: fetcher::RemoteBodyRequest<B::Header>,
+		request: RemoteBodyRequest<B::Header>,
 		sender: oneshot::Sender<Result<Vec<B::Extrinsic>, ClientError>>
 	},
 	Header {
-		request: fetcher::RemoteHeaderRequest<B::Header>,
+		request: light::RemoteHeaderRequest<B::Header>,
 		sender: oneshot::Sender<Result<B::Header, ClientError>>
 	},
 	Read {
-		request: fetcher::RemoteReadRequest<B::Header>,
+		request: light::RemoteReadRequest<B::Header>,
 		sender: oneshot::Sender<Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError>>
 	},
 	ReadChild {
-		request: fetcher::RemoteReadChildRequest<B::Header>,
+		request: light::RemoteReadChildRequest<B::Header>,
 		sender: oneshot::Sender<Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError>>
 	},
 	Call {
-		request: fetcher::RemoteCallRequest<B::Header>,
+		request: light::RemoteCallRequest<B::Header>,
 		sender: oneshot::Sender<Result<Vec<u8>, ClientError>>
 	},
 	Changes {
-		request: fetcher::RemoteChangesRequest<B::Header>,
+		request: light::RemoteChangesRequest<B::Header>,
 		sender: oneshot::Sender<Result<Vec<(NumberFor<B>, u32)>, ClientError>>
 	}
 }
@@ -237,17 +246,31 @@ struct RequestWrapper<B: Block, P> {
 	retries: usize,
 	/// The actual request.
 	request: Request<B>,
-	/// Peer information, e.g. `PeerId`.
-	peer: P
+	/// The peer to send the request to, e.g. `PeerId`.
+	peer: P,
+	/// The connection to use for sending the request.
+	connection: Option<ConnectionId>,
 }
 
 /// Information we have about some peer.
 #[derive(Debug)]
 struct PeerInfo<B: Block> {
-	address: Multiaddr,
+	connections: SmallVec<[(ConnectionId, Multiaddr); crate::MAX_CONNECTIONS_PER_PEER]>,
 	best_block: Option<NumberFor<B>>,
 	status: PeerStatus,
 }
+
+impl<B: Block> Default for PeerInfo<B> {
+	fn default() -> Self {
+		PeerInfo {
+			connections: SmallVec::new(),
+			best_block: None,
+			status: PeerStatus::Idle,
+		}
+	}
+}
+
+type RequestId = u64;
 
 /// A peer is either idle or busy processing a request from us.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -255,7 +278,7 @@ enum PeerStatus {
 	/// The peer is available.
 	Idle,
 	/// We wait for the peer to return us a response for the given request ID.
-	BusyWith(u64),
+	BusyWith(RequestId),
 }
 
 /// The light client handler behaviour.
@@ -265,7 +288,7 @@ pub struct LightClientHandler<B: Block> {
 	/// Blockchain client.
 	chain: Arc<dyn Client<B>>,
 	/// Verifies that received responses are correct.
-	checker: Arc<dyn fetcher::FetchChecker<B>>,
+	checker: Arc<dyn light::FetchChecker<B>>,
 	/// Peer information (addresses, their best block, etc.)
 	peers: HashMap<PeerId, PeerInfo<B>>,
 	/// Futures sending back response to remote clients.
@@ -273,9 +296,9 @@ pub struct LightClientHandler<B: Block> {
 	/// Pending (local) requests.
 	pending_requests: VecDeque<RequestWrapper<B, ()>>,
 	/// Requests on their way to remote peers.
-	outstanding: IntMap<u64, RequestWrapper<B, PeerId>>,
+	outstanding: IntMap<RequestId, RequestWrapper<B, PeerId>>,
 	/// (Local) Request ID counter
-	next_request_id: u64,
+	next_request_id: RequestId,
 	/// Handle to use for reporting misbehaviour of peers.
 	peerset: sc_peerset::PeersetHandle,
 }
@@ -288,7 +311,7 @@ where
 	pub fn new(
 		cfg: Config,
 		chain: Arc<dyn Client<B>>,
-		checker: Arc<dyn fetcher::FetchChecker<B>>,
+		checker: Arc<dyn light::FetchChecker<B>>,
 		peerset: sc_peerset::PeersetHandle,
 	) -> Self {
 		LightClientHandler {
@@ -323,33 +346,16 @@ where
 			retries: retries(&req),
 			request: req,
 			peer: (), // we do not know the peer yet
+			connection: None,
 		};
 		self.pending_requests.push_back(rw);
 		Ok(())
 	}
 
-	fn next_request_id(&mut self) -> u64 {
+	fn next_request_id(&mut self) -> RequestId {
 		let id = self.next_request_id;
 		self.next_request_id += 1;
 		id
-	}
-
-	// Iterate over peers known to possess a certain block.
-	fn idle_peers_with_block(&mut self, num: NumberFor<B>) -> impl Iterator<Item = PeerId> + '_ {
-		self.peers.iter()
-			.filter(move |(_, info)| {
-				info.status == PeerStatus::Idle && info.best_block >= Some(num)
-			})
-			.map(|(peer, _)| peer.clone())
-	}
-
-	// Iterate over peers without a known block.
-	fn idle_peers_with_unknown_block(&mut self) -> impl Iterator<Item = PeerId> + '_ {
-		self.peers.iter()
-			.filter(|(_, info)| {
-				info.status == PeerStatus::Idle && info.best_block.is_none()
-			})
-			.map(|(peer, _)| peer.clone())
 	}
 
 	/// Remove the given peer.
@@ -364,10 +370,48 @@ where
 				retries: rw.retries,
 				request: rw.request,
 				peer: (), // need to find another peer
+				connection: None,
 			};
 			self.pending_requests.push_back(rw);
 		}
 		self.peers.remove(peer);
+	}
+
+	/// Prepares a request by selecting a suitable peer and connection to send it to.
+	///
+	/// If there is currently no suitable peer for the request, the given request
+	/// is returned as `Err`.
+	fn prepare_request(&self, req: RequestWrapper<B, ()>)
+		-> Result<(PeerId, RequestWrapper<B, PeerId>), RequestWrapper<B, ()>>
+	{
+		let number = required_block(&req.request);
+
+		let mut peer = None;
+		for (peer_id, peer_info) in self.peers.iter() {
+			if peer_info.status == PeerStatus::Idle {
+				match peer_info.best_block {
+					Some(n) => if n >= number {
+						peer = Some((peer_id, peer_info));
+						break
+					},
+					None => peer = Some((peer_id, peer_info))
+				}
+			}
+		}
+
+		if let Some((peer_id, peer_info)) = peer {
+			let connection = peer_info.connections.iter().next().map(|(id, _)| *id);
+			let rw = RequestWrapper {
+				timestamp: req.timestamp,
+				retries: req.retries,
+				request: req.request,
+				peer: peer_id.clone(),
+				connection,
+			};
+			Ok((peer_id.clone(), rw))
+		} else {
+			Err(req)
+		}
 	}
 
 	/// Process a local request's response from remote.
@@ -432,7 +476,7 @@ where
 						}
 						r
 					};
-					let reply = self.checker.check_changes_proof(&request, fetcher::ChangesProof {
+					let reply = self.checker.check_changes_proof(&request, light::ChangesProof {
 						max_block,
 						proof: response.proof,
 						roots,
@@ -578,35 +622,27 @@ where
 
 		let block = Decode::decode(&mut request.block.as_ref())?;
 
-		let proof =
-			if let Some(info) = ChildInfo::resolve_child_info(request.child_type, &request.child_info[..]) {
-				match self.chain.read_child_proof(
-					&BlockId::Hash(block),
-					&request.storage_key,
-					info,
-					&mut request.keys.iter().map(AsRef::as_ref)
-				) {
-					Ok(proof) => proof,
-					Err(error) => {
-						log::trace!("remote read child request from {} ({} {} at {:?}) failed with: {}",
-							peer,
-							HexDisplay::from(&request.storage_key),
-							fmt_keys(request.keys.first(), request.keys.last()),
-							request.block,
-							error);
-						StorageProof::empty()
-					}
-				}
-			} else {
+		let prefixed_key = PrefixedStorageKey::new_ref(&request.storage_key);
+		let child_info = match ChildType::from_prefixed_key(prefixed_key) {
+			Some((ChildType::ParentKeyId, storage_key)) => Ok(ChildInfo::new_default(storage_key)),
+			None => Err("Invalid child storage key".into()),
+		};
+		let proof = match child_info.and_then(|child_info| self.chain.read_child_proof(
+			&BlockId::Hash(block),
+			&child_info,
+			&mut request.keys.iter().map(AsRef::as_ref)
+		)) {
+			Ok(proof) => proof,
+			Err(error) => {
 				log::trace!("remote read child request from {} ({} {} at {:?}) failed with: {}",
 					peer,
 					HexDisplay::from(&request.storage_key),
 					fmt_keys(request.keys.first(), request.keys.last()),
 					request.block,
-					"invalid child info and type"
-				);
+					error);
 				StorageProof::empty()
-			};
+			}
+		};
 
 		let response = {
 			let r = api::v1::light::RemoteReadResponse { proof: proof.encode() };
@@ -665,28 +701,23 @@ where
 		let min = Decode::decode(&mut request.min.as_ref())?;
 		let max = Decode::decode(&mut request.max.as_ref())?;
 		let key = StorageKey(request.key.clone());
-		let storage_key =
-			if request.storage_key.is_empty() {
-				None
-			} else {
-				Some(StorageKey(request.storage_key.clone()))
-			};
+		let storage_key = if request.storage_key.is_empty() {
+			None
+		} else {
+			Some(PrefixedStorageKey::new_ref(&request.storage_key))
+		};
 
-		let proof = match self.chain.key_changes_proof(first, last, min, max, storage_key.as_ref(), &key) {
+		let proof = match self.chain.key_changes_proof(first, last, min, max, storage_key, &key) {
 			Ok(proof) => proof,
 			Err(error) => {
 				log::trace!("remote changes proof request from {} for key {} ({:?}..{:?}) failed with: {}",
 					peer,
-					if let Some(sk) = storage_key {
-						format!("{} : {}", HexDisplay::from(&sk.0), HexDisplay::from(&key.0))
-					} else {
-						HexDisplay::from(&key.0).to_string()
-					},
+					format!("{} : {}", HexDisplay::from(&request.storage_key), HexDisplay::from(&key.0)),
 					request.first,
 					request.last,
 					error);
 
-				fetcher::ChangesProof::<B::Header> {
+				light::ChangesProof::<B::Header> {
 					max_block: Zero::zero(),
 					proof: Vec::new(),
 					roots: BTreeMap::new(),
@@ -723,38 +754,68 @@ where
 			max_request_size: self.config.max_request_size,
 			protocol: self.config.light_protocol.clone(),
 		};
-		OneShotHandler::new(SubstreamProtocol::new(p), self.config.inactivity_timeout)
+		let mut cfg = OneShotHandlerConfig::default();
+		cfg.inactive_timeout = self.config.inactivity_timeout;
+		OneShotHandler::new(SubstreamProtocol::new(p), cfg)
 	}
 
 	fn addresses_of_peer(&mut self, peer: &PeerId) -> Vec<Multiaddr> {
 		self.peers.get(peer)
-			.map(|info| vec![info.address.clone()])
+			.map(|info| info.connections.iter().map(|(_, a)| a.clone()).collect())
 			.unwrap_or_default()
 	}
 
-	fn inject_connected(&mut self, peer: PeerId, info: ConnectedPoint) {
+	fn inject_connected(&mut self, peer: &PeerId) {
+	}
+
+	fn inject_connection_established(&mut self, peer: &PeerId, conn: &ConnectionId, info: &ConnectedPoint) {
+		let peer_address = match info {
+			ConnectedPoint::Listener { send_back_addr, .. } => send_back_addr.clone(),
+			ConnectedPoint::Dialer { address } => address.clone()
+		};
+
+		log::trace!("peer {} connected with address {}", peer, peer_address);
+
+		let entry = self.peers.entry(peer.clone()).or_default();
+		entry.connections.push((*conn, peer_address));
+	}
+
+	fn inject_disconnected(&mut self, peer: &PeerId) {
+		log::trace!("peer {} disconnected", peer);
+		self.remove_peer(peer)
+	}
+
+	fn inject_connection_closed(&mut self, peer: &PeerId, conn: &ConnectionId, info: &ConnectedPoint) {
 		let peer_address = match info {
 			ConnectedPoint::Listener { send_back_addr, .. } => send_back_addr,
 			ConnectedPoint::Dialer { address } => address
 		};
 
-		log::trace!("peer {} connected with address {}", peer, peer_address);
+		log::trace!("connection to peer {} closed: {}", peer, peer_address);
 
-		let info = PeerInfo {
-			address: peer_address,
-			best_block: None,
-			status: PeerStatus::Idle,
-		};
+		if let Some(info) = self.peers.get_mut(peer) {
+			info.connections.retain(|(c, _)| c != conn)
+		}
 
-		self.peers.insert(peer, info);
+		// Add any outstanding requests on the closed connection back to the
+		// pending requests.
+		if let Some(id) = self.outstanding.iter()
+			.find(|(_, rw)| &rw.peer == peer && rw.connection == Some(*conn)) // (*)
+			.map(|(id, _)| *id)
+		{
+			let rw = self.outstanding.remove(&id).expect("by (*)");
+			let rw = RequestWrapper {
+				timestamp: rw.timestamp,
+				retries: rw.retries,
+				request: rw.request,
+				peer: (), // need to find another peer
+				connection: None,
+			};
+			self.pending_requests.push_back(rw);
+		}
 	}
 
-	fn inject_disconnected(&mut self, peer: &PeerId, _: ConnectedPoint) {
-		log::trace!("peer {} disconnected", peer);
-		self.remove_peer(peer)
-	}
-
-	fn inject_node_event(&mut self, peer: PeerId, event: Event<NegotiatedSubstream>) {
+	fn inject_event(&mut self, peer: PeerId, conn: ConnectionId, event: Event<NegotiatedSubstream>) {
 		match event {
 			// An incoming request from remote has been received.
 			Event::Request(request, mut stream) => {
@@ -800,9 +861,10 @@ where
 			// A response to one of our own requests has been received.
 			Event::Response(id, response) => {
 				if let Some(request) = self.outstanding.remove(&id) {
-					// We first just check if the response originates from the expected peer.
+					// We first just check if the response originates from the expected peer
+					// and connection.
 					if request.peer != peer {
-						log::debug!("was expecting response from {} instead of {}", request.peer, peer);
+						log::debug!("Expected response from {} instead of {}.", request.peer, peer);
 						self.outstanding.insert(id, request);
 						self.remove_peer(&peer);
 						self.peerset.report_peer(peer, ReputationChange::new_fatal("response from unexpected peer"));
@@ -834,6 +896,7 @@ where
 									retries: request.retries,
 									request: request.request,
 									peer: (),
+									connection: None,
 								};
 								self.pending_requests.push_back(rw);
 							}
@@ -847,6 +910,7 @@ where
 										retries: request.retries - 1,
 										request: request.request,
 										peer: (),
+										connection: None,
 									};
 									self.pending_requests.push_back(rw)
 								} else {
@@ -886,54 +950,54 @@ where
 				request.timestamp = Instant::now();
 				request.retries -= 1
 			}
-			let number = required_block(&request.request);
-			let available_peer = {
-				let p = self.idle_peers_with_block(number).next();
-				if p.is_none() {
-					self.idle_peers_with_unknown_block().next()
-				} else {
-					p
+
+
+			match self.prepare_request(request) {
+				Err(request) => {
+					self.pending_requests.push_front(request);
+					log::debug!("no peer available to send request to");
+					break
 				}
-			};
-			if let Some(peer) = available_peer {
-				let buf = match serialize_request(&request.request) {
-					Ok(b) => b,
-					Err(e) => {
-						log::debug!("failed to serialize request: {}", e);
-						send_reply(Err(ClientError::RemoteFetchFailed), request.request);
-						continue;
-					}
-				};
+				Ok((peer, request)) => {
+					let request_bytes = match serialize_request(&request.request) {
+						Ok(bytes) => bytes,
+						Err(error) => {
+							log::debug!("failed to serialize request: {}", error);
+							send_reply(Err(ClientError::RemoteFetchFailed), request.request);
+							continue
+						}
+					};
 
-				let id = self.next_request_id();
-				log::trace!("sending request {} to peer {}", id, peer);
-				let protocol = OutboundProtocol {
-					request: buf,
-					request_id: id,
-					expected: match request.request {
-						Request::Body { .. } => ExpectedResponseTy::Block,
-						_ => ExpectedResponseTy::Light,
-					},
-					max_response_size: self.config.max_response_size,
-					protocol: match request.request {
-						Request::Body { .. } => self.config.block_protocol.clone(),
-						_ => self.config.light_protocol.clone(),
-					},
-				};
-				self.peers.get_mut(&peer).map(|info| info.status = PeerStatus::BusyWith(id));
-				let rw = RequestWrapper {
-					timestamp: request.timestamp,
-					retries: request.retries,
-					request: request.request,
-					peer: peer.clone(),
-				};
-				self.outstanding.insert(id, rw);
-				return Poll::Ready(NetworkBehaviourAction::SendEvent { peer_id: peer, event: protocol })
+					let (expected, protocol) = match request.request {
+						Request::Body { .. } =>
+							(ExpectedResponseTy::Block, self.config.block_protocol.clone()),
+						_ =>
+							(ExpectedResponseTy::Light, self.config.light_protocol.clone()),
+					};
 
-			} else {
-				self.pending_requests.push_front(request);
-				log::debug!("no peer available to send request to");
-				break
+					let peer_id = peer.clone();
+					let handler = request.connection.map_or(NotifyHandler::Any, NotifyHandler::One);
+
+					let request_id = self.next_request_id();
+					self.peers.get_mut(&peer).map(|p| p.status = PeerStatus::BusyWith(request_id));
+					self.outstanding.insert(request_id, request);
+
+					let event = OutboundProtocol {
+						request_id,
+						request: request_bytes,
+						expected,
+						max_response_size: self.config.max_response_size,
+						protocol,
+					};
+
+					log::trace!("sending request {} to peer {}", request_id, peer_id);
+
+					return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
+						peer_id,
+						handler,
+						event,
+					})
+				}
 			}
 		}
 
@@ -959,6 +1023,7 @@ where
 					retries: rw.retries - 1,
 					request: rw.request,
 					peer: (),
+					connection: None,
 				};
 				self.pending_requests.push_back(rw)
 			}
@@ -1019,9 +1084,7 @@ fn serialize_request<B: Block>(request: &Request<B>) -> Result<Vec<u8>, prost::E
 		Request::ReadChild { request, .. } => {
 			let r = api::v1::light::RemoteReadChildRequest {
 				block: request.block.encode(),
-				storage_key: request.storage_key.clone(),
-				child_type: request.child_type.clone(),
-				child_info: request.child_info.clone(),
+				storage_key: request.storage_key.clone().into_inner(),
 				keys: request.keys.clone(),
 			};
 			api::v1::light::request::Request::RemoteReadChildRequest(r)
@@ -1040,7 +1103,8 @@ fn serialize_request<B: Block>(request: &Request<B>) -> Result<Vec<u8>, prost::E
 				last: request.last_block.1.encode(),
 				min: request.tries_roots.1.encode(),
 				max: request.max_block.1.encode(),
-				storage_key: request.storage_key.clone().unwrap_or_default(),
+				storage_key: request.storage_key.clone().map(|s| s.into_inner())
+					.unwrap_or_default(),
 				key: request.key.clone(),
 			};
 			api::v1::light::request::Request::RemoteChangesRequest(r)
@@ -1097,7 +1161,7 @@ pub enum Event<T> {
 	/// Incoming request from remote and substream to use for the response.
 	Request(api::v1::light::Request, T),
 	/// Incoming response from remote.
-	Response(u64, Response),
+	Response(RequestId, Response),
 }
 
 /// Incoming response from remote.
@@ -1157,7 +1221,7 @@ pub struct OutboundProtocol {
 	/// The serialized protobuf request.
 	request: Vec<u8>,
 	/// Local identifier for the request. Used to associate it with a response.
-	request_id: u64,
+	request_id: RequestId,
 	/// Kind of response expected for this request.
 	expected: ExpectedResponseTy,
 	/// The max. response length in bytes.
@@ -1230,6 +1294,7 @@ fn fmt_keys(first: Option<&Vec<u8>>, last: Option<&Vec<u8>>) -> String {
 
 #[cfg(test)]
 mod tests {
+	use super::*;
 	use async_std::task;
 	use assert_matches::assert_matches;
 	use codec::Encode;
@@ -1244,6 +1309,7 @@ mod tests {
 		Multiaddr,
 		core::{
 			ConnectedPoint,
+			connection::ConnectionId,
 			identity,
 			muxing::{StreamMuxerBox, SubstreamRef},
 			transport::{Transport, boxed::Boxed, memory::MemoryTransport},
@@ -1253,8 +1319,7 @@ mod tests {
 		swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters},
 		yamux
 	};
-	use sc_client_api::StorageProof;
-	use sc_client::light::fetcher;
+	use sc_client_api::{StorageProof, RemoteReadChildRequest, FetchChecker};
 	use sp_blockchain::{Error as ClientError};
 	use sp_core::storage::ChildInfo;
 	use std::{
@@ -1268,8 +1333,6 @@ mod tests {
 	use sp_runtime::{generic::Header, traits::{BlakeTwo256, Block as BlockT, NumberFor}};
 	use super::{Event, LightClientHandler, Request, Response, OutboundProtocol, PeerStatus};
 	use void::Void;
-
-	const CHILD_INFO: ChildInfo<'static> = ChildInfo::new_default(b"foobarbaz");
 
 	type Block = sp_runtime::generic::Block<Header<u64, BlakeTwo256>, substrate_test_runtime::Extrinsic>;
 	type Handler = LightClientHandler<Block>;
@@ -1300,12 +1363,12 @@ mod tests {
 		_mark: std::marker::PhantomData<B>
 	}
 
-	impl<B: BlockT> fetcher::FetchChecker<B> for DummyFetchChecker<B> {
+	impl<B: BlockT> light::FetchChecker<B> for DummyFetchChecker<B> {
 		fn check_header_proof(
 			&self,
-			_request: &fetcher::RemoteHeaderRequest<B::Header>,
+			_request: &RemoteHeaderRequest<B::Header>,
 			header: Option<B::Header>,
-			_remote_proof: fetcher::StorageProof,
+			_remote_proof: StorageProof,
 		) -> Result<B::Header, ClientError> {
 			match self.ok {
 				true if header.is_some() => Ok(header.unwrap()),
@@ -1315,8 +1378,8 @@ mod tests {
 
 		fn check_read_proof(
 			&self,
-			request: &fetcher::RemoteReadRequest<B::Header>,
-			_: fetcher::StorageProof,
+			request: &RemoteReadRequest<B::Header>,
+			_: StorageProof,
 		) -> Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError> {
 			match self.ok {
 				true => Ok(request.keys
@@ -1331,8 +1394,8 @@ mod tests {
 
 		fn check_read_child_proof(
 			&self,
-			request: &fetcher::RemoteReadChildRequest<B::Header>,
-			_: fetcher::StorageProof,
+			request: &RemoteReadChildRequest<B::Header>,
+			_: StorageProof,
 		) -> Result<HashMap<Vec<u8>, Option<Vec<u8>>>, ClientError> {
 			match self.ok {
 				true => Ok(request.keys
@@ -1347,8 +1410,8 @@ mod tests {
 
 		fn check_execution_proof(
 			&self,
-			_: &fetcher::RemoteCallRequest<B::Header>,
-			_: fetcher::StorageProof,
+			_: &RemoteCallRequest<B::Header>,
+			_: StorageProof,
 		) -> Result<Vec<u8>, ClientError> {
 			match self.ok {
 				true => Ok(vec![42]),
@@ -1358,8 +1421,8 @@ mod tests {
 
 		fn check_changes_proof(
 			&self,
-			_: &fetcher::RemoteChangesRequest<B::Header>,
-			_: fetcher::ChangesProof<B::Header>
+			_: &RemoteChangesRequest<B::Header>,
+			_: ChangesProof<B::Header>
 		) -> Result<Vec<(NumberFor<B>, u32)>, ClientError> {
 			match self.ok {
 				true => Ok(vec![(100.into(), 2)]),
@@ -1369,7 +1432,7 @@ mod tests {
 
 		fn check_body_proof(
 			&self,
-			_: &fetcher::RemoteBodyRequest<B::Header>,
+			_: &RemoteBodyRequest<B::Header>,
 			body: Vec<B::Extrinsic>
 		) -> Result<Vec<B::Extrinsic>, ClientError> {
 			match self.ok {
@@ -1457,10 +1520,12 @@ mod tests {
 		let pset = peerset();
 		let mut behaviour = make_behaviour(true, pset.1, make_config());
 
-		behaviour.inject_connected(peer.clone(), empty_dialer());
+		behaviour.inject_connection_established(&peer, &ConnectionId::new(1), &empty_dialer());
+		behaviour.inject_connected(&peer);
 		assert_eq!(1, behaviour.peers.len());
 
-		behaviour.inject_disconnected(&peer, empty_dialer());
+		behaviour.inject_connection_closed(&peer, &ConnectionId::new(1), &empty_dialer());
+		behaviour.inject_disconnected(&peer);
 		assert_eq!(0, behaviour.peers.len())
 	}
 
@@ -1471,8 +1536,10 @@ mod tests {
 		let pset = peerset();
 		let mut behaviour = make_behaviour(true, pset.1, make_config());
 
-		behaviour.inject_connected(peer0.clone(), empty_dialer());
-		behaviour.inject_connected(peer1.clone(), empty_dialer());
+		behaviour.inject_connection_established(&peer0, &ConnectionId::new(1), &empty_dialer());
+		behaviour.inject_connected(&peer0);
+		behaviour.inject_connection_established(&peer1, &ConnectionId::new(2), &empty_dialer());
+		behaviour.inject_connected(&peer1);
 
 		// We now know about two peers.
 		assert_eq!(HashSet::from_iter(&[peer0.clone(), peer1.clone()]), behaviour.peers.keys().collect::<HashSet<_>>());
@@ -1483,7 +1550,7 @@ mod tests {
 
 		// Issue our first request!
 		let chan = oneshot::channel();
-		let request = fetcher::RemoteCallRequest {
+		let request = light::RemoteCallRequest {
 			block: Default::default(),
 			header: dummy_header(),
 			method: "test".into(),
@@ -1494,7 +1561,7 @@ mod tests {
 		assert_eq!(1, behaviour.pending_requests.len());
 
 		// The behaviour should now attempt to send the request.
-		assert_matches!(poll(&mut behaviour), Poll::Ready(NetworkBehaviourAction::SendEvent { peer_id, .. }) => {
+		assert_matches!(poll(&mut behaviour), Poll::Ready(NetworkBehaviourAction::NotifyHandler { peer_id, .. }) => {
 			assert!(peer_id == peer0 || peer_id == peer1)
 		});
 
@@ -1534,11 +1601,13 @@ mod tests {
 		let mut behaviour = make_behaviour(false, pset.1, make_config());
 		//                                 ^--- Making sure the response data check fails.
 
-		behaviour.inject_connected(peer.clone(), empty_dialer());
+		let conn = ConnectionId::new(1);
+		behaviour.inject_connection_established(&peer, &conn, &empty_dialer());
+		behaviour.inject_connected(&peer);
 		assert_eq!(1, behaviour.peers.len());
 
 		let chan = oneshot::channel();
-		let request = fetcher::RemoteCallRequest {
+		let request = light::RemoteCallRequest {
 			block: Default::default(),
 			header: dummy_header(),
 			method: "test".into(),
@@ -1562,7 +1631,7 @@ mod tests {
 			}
 		};
 
-		behaviour.inject_node_event(peer.clone(), Event::Response(request_id, Response::Light(response)));
+		behaviour.inject_event(peer.clone(), conn, Event::Response(request_id, Response::Light(response)));
 		assert!(behaviour.peers.is_empty());
 
 		poll(&mut behaviour); // More progress
@@ -1578,7 +1647,9 @@ mod tests {
 		let pset = peerset();
 		let mut behaviour = make_behaviour(true, pset.1, make_config());
 
-		behaviour.inject_connected(peer.clone(), empty_dialer());
+		let conn = ConnectionId::new(1);
+		behaviour.inject_connection_established(&peer, &conn, &empty_dialer());
+		behaviour.inject_connected(&peer);
 		assert_eq!(1, behaviour.peers.len());
 		assert_eq!(0, behaviour.pending_requests.len());
 		assert_eq!(0, behaviour.outstanding.len());
@@ -1591,7 +1662,7 @@ mod tests {
 			}
 		};
 
-		behaviour.inject_node_event(peer.clone(), Event::Response(2347895932, Response::Light(response)));
+		behaviour.inject_event(peer.clone(), conn, Event::Response(2347895932, Response::Light(response)));
 
 		assert!(behaviour.peers.is_empty());
 		poll(&mut behaviour);
@@ -1605,11 +1676,13 @@ mod tests {
 		let pset = peerset();
 		let mut behaviour = make_behaviour(true, pset.1, make_config());
 
-		behaviour.inject_connected(peer.clone(), empty_dialer());
+		let conn = ConnectionId::new(1);
+		behaviour.inject_connection_established(&peer, &conn, &empty_dialer());
+		behaviour.inject_connected(&peer);
 		assert_eq!(1, behaviour.peers.len());
 
 		let chan = oneshot::channel();
-		let request = fetcher::RemoteCallRequest {
+		let request = light::RemoteCallRequest {
 			block: Default::default(),
 			header: dummy_header(),
 			method: "test".into(),
@@ -1633,7 +1706,7 @@ mod tests {
 			}
 		};
 
-		behaviour.inject_node_event(peer.clone(), Event::Response(request_id, Response::Light(response)));
+		behaviour.inject_event(peer.clone(), conn, Event::Response(request_id, Response::Light(response)));
 		assert!(behaviour.peers.is_empty());
 
 		poll(&mut behaviour); // More progress
@@ -1653,14 +1726,22 @@ mod tests {
 		let mut behaviour = make_behaviour(false, pset.1, make_config());
 		//                                 ^--- Making sure the response data check fails.
 
-		behaviour.inject_connected(peer1.clone(), empty_dialer());
-		behaviour.inject_connected(peer2.clone(), empty_dialer());
-		behaviour.inject_connected(peer3.clone(), empty_dialer());
-		behaviour.inject_connected(peer4.clone(), empty_dialer());
+		let conn1 = ConnectionId::new(1);
+		behaviour.inject_connection_established(&peer1, &conn1, &empty_dialer());
+		behaviour.inject_connected(&peer1);
+		let conn2 = ConnectionId::new(2);
+		behaviour.inject_connection_established(&peer2, &conn2, &empty_dialer());
+		behaviour.inject_connected(&peer2);
+		let conn3 = ConnectionId::new(3);
+		behaviour.inject_connection_established(&peer3, &conn3, &empty_dialer());
+		behaviour.inject_connected(&peer3);
+		let conn4 = ConnectionId::new(3);
+		behaviour.inject_connection_established(&peer4, &conn4, &empty_dialer());
+		behaviour.inject_connected(&peer4);
 		assert_eq!(4, behaviour.peers.len());
 
 		let mut chan = oneshot::channel();
-		let request = fetcher::RemoteCallRequest {
+		let request = light::RemoteCallRequest {
 			block: Default::default(),
 			header: dummy_header(),
 			method: "test".into(),
@@ -1671,11 +1752,11 @@ mod tests {
 
 		assert_eq!(1, behaviour.pending_requests.len());
 		assert_eq!(0, behaviour.outstanding.len());
-		assert_matches!(poll(&mut behaviour), Poll::Ready(NetworkBehaviourAction::SendEvent { .. }));
+		assert_matches!(poll(&mut behaviour), Poll::Ready(NetworkBehaviourAction::NotifyHandler { .. }));
 		assert_eq!(0, behaviour.pending_requests.len());
 		assert_eq!(1, behaviour.outstanding.len());
 
-		for _ in 0 .. 3 {
+		for i in 1 ..= 3 {
 			// Construct an invalid response
 			let request_id = *behaviour.outstanding.keys().next().unwrap();
 			let responding_peer = behaviour.outstanding.values().next().unwrap().peer.clone();
@@ -1685,8 +1766,9 @@ mod tests {
 					response: Some(api::v1::light::response::Response::RemoteCallResponse(r))
 				}
 			};
-			behaviour.inject_node_event(responding_peer, Event::Response(request_id, Response::Light(response.clone())));
-			assert_matches!(poll(&mut behaviour), Poll::Ready(NetworkBehaviourAction::SendEvent { .. }));
+			let conn = ConnectionId::new(i);
+			behaviour.inject_event(responding_peer, conn, Event::Response(request_id, Response::Light(response.clone())));
+			assert_matches!(poll(&mut behaviour), Poll::Ready(NetworkBehaviourAction::NotifyHandler { .. }));
 			assert_matches!(chan.1.try_recv(), Ok(None))
 		}
 		// Final invalid response
@@ -1698,7 +1780,7 @@ mod tests {
 				response: Some(api::v1::light::response::Response::RemoteCallResponse(r)),
 			}
 		};
-		behaviour.inject_node_event(responding_peer, Event::Response(request_id, Response::Light(response)));
+		behaviour.inject_event(responding_peer, conn4, Event::Response(request_id, Response::Light(response)));
 		assert_matches!(poll(&mut behaviour), Poll::Pending);
 		assert_matches!(chan.1.try_recv(), Ok(Some(Err(ClientError::RemoteFetchFailed))))
 	}
@@ -1708,7 +1790,9 @@ mod tests {
 		let pset = peerset();
 		let mut behaviour = make_behaviour(true, pset.1, make_config());
 
-		behaviour.inject_connected(peer.clone(), empty_dialer());
+		let conn = ConnectionId::new(1);
+		behaviour.inject_connection_established(&peer, &conn, &empty_dialer());
+		behaviour.inject_connected(&peer);
 		assert_eq!(1, behaviour.peers.len());
 
 		let response = match request {
@@ -1757,12 +1841,12 @@ mod tests {
 
 		assert_eq!(1, behaviour.pending_requests.len());
 		assert_eq!(0, behaviour.outstanding.len());
-		assert_matches!(poll(&mut behaviour), Poll::Ready(NetworkBehaviourAction::SendEvent { .. }));
+		assert_matches!(poll(&mut behaviour), Poll::Ready(NetworkBehaviourAction::NotifyHandler { .. }));
 		assert_eq!(0, behaviour.pending_requests.len());
 		assert_eq!(1, behaviour.outstanding.len());
 		assert_eq!(1, *behaviour.outstanding.keys().next().unwrap());
 
-		behaviour.inject_node_event(peer.clone(), Event::Response(1, Response::Light(response)));
+		behaviour.inject_event(peer.clone(), conn, Event::Response(1, Response::Light(response)));
 
 		poll(&mut behaviour);
 
@@ -1773,7 +1857,7 @@ mod tests {
 	#[test]
 	fn receives_remote_call_response() {
 		let mut chan = oneshot::channel();
-		let request = fetcher::RemoteCallRequest {
+		let request = light::RemoteCallRequest {
 			block: Default::default(),
 			header: dummy_header(),
 			method: "test".into(),
@@ -1787,7 +1871,7 @@ mod tests {
 	#[test]
 	fn receives_remote_read_response() {
 		let mut chan = oneshot::channel();
-		let request = fetcher::RemoteReadRequest {
+		let request = light::RemoteReadRequest {
 			header: dummy_header(),
 			block: Default::default(),
 			keys: vec![b":key".to_vec()],
@@ -1799,15 +1883,13 @@ mod tests {
 
 	#[test]
 	fn receives_remote_read_child_response() {
-		let info = CHILD_INFO.info();
 		let mut chan = oneshot::channel();
-		let request = fetcher::RemoteReadChildRequest {
+		let child_info = ChildInfo::new_default(&b":child_storage:default:sub"[..]);
+		let request = light::RemoteReadChildRequest {
 			header: dummy_header(),
 			block: Default::default(),
-			storage_key: b":child_storage:sub".to_vec(),
+			storage_key: child_info.prefixed_storage_key(),
 			keys: vec![b":key".to_vec()],
-			child_info: info.0.to_vec(),
-			child_type: info.1,
 			retry_count: None,
 		};
 		issue_request(Request::ReadChild { request, sender: chan.0 });
@@ -1817,7 +1899,7 @@ mod tests {
 	#[test]
 	fn receives_remote_header_response() {
 		let mut chan = oneshot::channel();
-		let request = fetcher::RemoteHeaderRequest {
+		let request = light::RemoteHeaderRequest {
 			cht_root: Default::default(),
 			block: 1,
 			retry_count: None,
@@ -1829,7 +1911,7 @@ mod tests {
 	#[test]
 	fn receives_remote_changes_response() {
 		let mut chan = oneshot::channel();
-		let request = fetcher::RemoteChangesRequest {
+		let request = light::RemoteChangesRequest {
 			changes_trie_configs: vec![sp_core::ChangesTrieConfigurationRange {
 				zero: (0, Default::default()),
 				end: None,
@@ -1874,7 +1956,7 @@ mod tests {
 	#[test]
 	fn send_receive_call() {
 		let chan = oneshot::channel();
-		let request = fetcher::RemoteCallRequest {
+		let request = light::RemoteCallRequest {
 			block: Default::default(),
 			header: dummy_header(),
 			method: "test".into(),
@@ -1889,7 +1971,7 @@ mod tests {
 	#[test]
 	fn send_receive_read() {
 		let chan = oneshot::channel();
-		let request = fetcher::RemoteReadRequest {
+		let request = light::RemoteReadRequest {
 			header: dummy_header(),
 			block: Default::default(),
 			keys: vec![b":key".to_vec()],
@@ -1902,15 +1984,13 @@ mod tests {
 
 	#[test]
 	fn send_receive_read_child() {
-		let info = CHILD_INFO.info();
 		let chan = oneshot::channel();
-		let request = fetcher::RemoteReadChildRequest {
+		let child_info = ChildInfo::new_default(&b":child_storage:default:sub"[..]);
+		let request = light::RemoteReadChildRequest {
 			header: dummy_header(),
 			block: Default::default(),
-			storage_key: b":child_storage:sub".to_vec(),
+			storage_key: child_info.prefixed_storage_key(),
 			keys: vec![b":key".to_vec()],
-			child_info: info.0.to_vec(),
-			child_type: info.1,
 			retry_count: None,
 		};
 		send_receive(Request::ReadChild { request, sender: chan.0 });
@@ -1922,7 +2002,7 @@ mod tests {
 	fn send_receive_header() {
 		let _ = env_logger::try_init();
 		let chan = oneshot::channel();
-		let request = fetcher::RemoteHeaderRequest {
+		let request = light::RemoteHeaderRequest {
 			cht_root: Default::default(),
 			block: 1,
 			retry_count: None,
@@ -1935,7 +2015,7 @@ mod tests {
 	#[test]
 	fn send_receive_changes() {
 		let chan = oneshot::channel();
-		let request = fetcher::RemoteChangesRequest {
+		let request = light::RemoteChangesRequest {
 			changes_trie_configs: vec![sp_core::ChangesTrieConfigurationRange {
 				zero: (0, Default::default()),
 				end: None,

@@ -67,8 +67,8 @@ use sp_core::TypeId;
 use sp_io::hashing::blake2_256;
 use frame_support::{decl_module, decl_event, decl_error, decl_storage, Parameter, ensure, RuntimeDebug};
 use frame_support::{traits::{Get, ReservableCurrency, Currency},
-	weights::{GetDispatchInfo, DispatchClass,FunctionOf},
-	dispatch::PostDispatchInfo,
+	weights::{Weight, GetDispatchInfo, DispatchClass, FunctionOf, Pays},
+	dispatch::{DispatchResultWithPostInfo, DispatchErrorWithPostInfo, PostDispatchInfo},
 };
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::{DispatchError, DispatchResult, traits::Dispatchable};
@@ -170,7 +170,8 @@ decl_event! {
 	/// Events type.
 	pub enum Event<T> where
 		AccountId = <T as system::Trait>::AccountId,
-		BlockNumber = <T as system::Trait>::BlockNumber
+		BlockNumber = <T as system::Trait>::BlockNumber,
+		CallHash = [u8; 32]
 	{
 		/// Batch of dispatches did not complete fully. Index of first failing dispatch given, as
 		/// well as the error.
@@ -178,17 +179,17 @@ decl_event! {
 		/// Batch of dispatches completed fully with no error.
 		BatchCompleted,
 		/// A new multisig operation has begun. First param is the account that is approving,
-		/// second is the multisig account.
-		NewMultisig(AccountId, AccountId),
+		/// second is the multisig account, third is hash of the call.
+		NewMultisig(AccountId, AccountId, CallHash),
 		/// A multisig operation has been approved by someone. First param is the account that is
-		/// approving, third is the multisig account.
-		MultisigApproval(AccountId, Timepoint<BlockNumber>, AccountId),
+		/// approving, third is the multisig account, fourth is hash of the call.
+		MultisigApproval(AccountId, Timepoint<BlockNumber>, AccountId, CallHash),
 		/// A multisig operation has been executed. First param is the account that is
-		/// approving, third is the multisig account.
-		MultisigExecuted(AccountId, Timepoint<BlockNumber>, AccountId, DispatchResult),
+		/// approving, third is the multisig account, fourth is hash of the call to be executed.
+		MultisigExecuted(AccountId, Timepoint<BlockNumber>, AccountId, CallHash, DispatchResult),
 		/// A multisig operation has been cancelled. First param is the account that is
-		/// cancelling, third is the multisig account.
-		MultisigCancelled(AccountId, Timepoint<BlockNumber>, AccountId),
+		/// cancelling, third is the multisig account, fourth is hash of the call.
+		MultisigCancelled(AccountId, Timepoint<BlockNumber>, AccountId, CallHash),
 	}
 }
 
@@ -198,6 +199,25 @@ struct IndexedUtilityModuleId(u16);
 
 impl TypeId for IndexedUtilityModuleId {
 	const TYPE_ID: [u8; 4] = *b"suba";
+}
+
+mod weight_of {
+	use super::*;
+
+	/// - Base Weight:
+	///     - Create: 137.5 + 0.274 * S µs
+	///     - Approve: 103.8 + .266 * S µs
+	///     - Complete: 116.2 + .754 * S µs
+	/// - DB Weight:
+	///     - Reads: Multisig Storage, [Caller Account]
+	///     - Writes: Multisig Storage, [Caller Account]
+	/// - Plus Call Weight
+	pub fn as_multi<T: Trait>(other_sig_len: usize, call_weight: Weight) -> Weight {
+		call_weight
+			.saturating_add(150_000_000)
+			.saturating_add((other_sig_len as Weight).saturating_mul(750_000))
+			.saturating_add(T::DbWeight::get().reads_writes(1, 1))
+	}
 }
 
 decl_module! {
@@ -216,8 +236,9 @@ decl_module! {
 		/// - `calls`: The calls to be dispatched from the same origin.
 		///
 		/// # <weight>
-		/// - The sum of the weights of the `calls`.
-		/// - One event.
+		/// - Base weight: 63.78 µs
+		/// - Plus the sum of the weights of the `calls`.
+		/// - Plus one additional event. (repeat read/write)
 		/// # </weight>
 		///
 		/// This will return `Ok` in all circumstances. To determine the success of the batch, an
@@ -229,7 +250,7 @@ decl_module! {
 			|args: (&Vec<<T as Trait>::Call>,)| {
 				args.0.iter()
 					.map(|call| call.get_dispatch_info().weight)
-					.fold(10_000, |a, n| a + n)
+					.fold(65_000_000, |a: Weight, n| a.saturating_add(n))
 			},
 			|args: (&Vec<<T as Trait>::Call>,)| {
 				let all_operational = args.0.iter()
@@ -241,7 +262,7 @@ decl_module! {
 					DispatchClass::Normal
 				}
 			},
-			true
+			Pays::Yes,
 		)]
 		fn batch(origin, calls: Vec<<T as Trait>::Call>) {
 			for (index, call) in calls.into_iter().enumerate() {
@@ -259,12 +280,15 @@ decl_module! {
 		/// The dispatch origin for this call must be _Signed_.
 		///
 		/// # <weight>
-		/// - The weight of the `call` + 10,000.
+		/// - Base weight: 5.1 µs
+		/// - Plus the weight of the `call`
 		/// # </weight>
 		#[weight = FunctionOf(
-			|args: (&u16, &Box<<T as Trait>::Call>)| args.1.get_dispatch_info().weight + 10_000,
+			|args: (&u16, &Box<<T as Trait>::Call>)| {
+				args.1.get_dispatch_info().weight.saturating_add(5_000_000)
+			},
 			|args: (&u16, &Box<<T as Trait>::Call>)| args.1.get_dispatch_info().class,
-			true
+			Pays::Yes,
 		)]
 		fn as_sub(origin, index: u16, call: Box<<T as Trait>::Call>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -313,27 +337,37 @@ decl_module! {
 		/// - Storage: inserts one item, value size bounded by `MaxSignatories`, with a
 		///   deposit taken for its lifetime of
 		///   `MultisigDepositBase + threshold * MultisigDepositFactor`.
+		/// -------------------------------
+		/// - Base Weight:
+		///     - Create: 137.5 + 0.274 * S µs
+		///     - Approve: 103.8 + .266 * S µs
+		///     - Complete: 116.2 + .754 * S µs
+		/// - DB Weight:
+		///     - Reads: Multisig Storage, [Caller Account]
+		///     - Writes: Multisig Storage, [Caller Account]
+		/// - Plus Call Weight
 		/// # </weight>
 		#[weight = FunctionOf(
 			|args: (&u16, &Vec<T::AccountId>, &Option<Timepoint<T::BlockNumber>>, &Box<<T as Trait>::Call>)| {
-				args.3.get_dispatch_info().weight + 10_000 * (args.1.len() as u32 + 1)
+				weight_of::as_multi::<T>(args.1.len(),args.3.get_dispatch_info().weight)
 			},
 			|args: (&u16, &Vec<T::AccountId>, &Option<Timepoint<T::BlockNumber>>, &Box<<T as Trait>::Call>)| {
 				args.3.get_dispatch_info().class
 			},
-			true
+			Pays::Yes,
 		)]
 		fn as_multi(origin,
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
 			maybe_timepoint: Option<Timepoint<T::BlockNumber>>,
 			call: Box<<T as Trait>::Call>,
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
 			let max_sigs = T::MaxSignatories::get() as usize;
 			ensure!(!other_signatories.is_empty(), Error::<T>::TooFewSignatories);
-			ensure!(other_signatories.len() < max_sigs, Error::<T>::TooManySignatories);
+			let other_signatories_len = other_signatories.len();
+			ensure!(other_signatories_len < max_sigs, Error::<T>::TooManySignatories);
 			let signatories = Self::ensure_sorted_and_insert(other_signatories, who.clone())?;
 
 			let id = Self::multi_account_id(&signatories, threshold);
@@ -347,8 +381,9 @@ decl_module! {
 					if (m.approvals.len() as u16) < threshold - 1 {
 						m.approvals.insert(pos, who.clone());
 						<Multisigs<T>>::insert(&id, call_hash, m);
-						Self::deposit_event(RawEvent::MultisigApproval(who, timepoint, id));
-						return Ok(())
+						Self::deposit_event(RawEvent::MultisigApproval(who, timepoint, id, call_hash));
+						// Call is not made, so the actual weight does not include call
+						return Ok(Some(weight_of::as_multi::<T>(other_signatories_len, 0)).into())
 					}
 				} else {
 					if (m.approvals.len() as u16) < threshold {
@@ -360,8 +395,9 @@ decl_module! {
 				let _ = T::Currency::unreserve(&m.depositor, m.deposit);
 				<Multisigs<T>>::remove(&id, call_hash);
 				Self::deposit_event(RawEvent::MultisigExecuted(
-					who, timepoint, id, result.map(|_| ()).map_err(|e| e.error)
+					who, timepoint, id, call_hash, result.map(|_| ()).map_err(|e| e.error)
 				));
+				return Ok(None.into())
 			} else {
 				ensure!(maybe_timepoint.is_none(), Error::<T>::UnexpectedTimepoint);
 				if threshold > 1 {
@@ -374,13 +410,32 @@ decl_module! {
 						depositor: who.clone(),
 						approvals: vec![who.clone()],
 					});
-					Self::deposit_event(RawEvent::NewMultisig(who, id));
+					Self::deposit_event(RawEvent::NewMultisig(who, id, call_hash));
+					// Call is not made, so we can return that weight
+					return Ok(Some(weight_of::as_multi::<T>(other_signatories_len, 0)).into())
 				} else {
-					return call.dispatch(frame_system::RawOrigin::Signed(id).into())
-						.map(|_| ()).map_err(|e| e.error)
+					let result = call.dispatch(frame_system::RawOrigin::Signed(id).into());
+					match result {
+						Ok(post_dispatch_info) => {
+							match post_dispatch_info.actual_weight {
+								Some(actual_weight) => return Ok(Some(weight_of::as_multi::<T>(other_signatories_len, actual_weight)).into()),
+								None => return Ok(None.into()),
+							}
+						},
+						Err(err) => {
+							match err.post_info.actual_weight {
+								Some(actual_weight) => {
+									let weight_used = weight_of::as_multi::<T>(other_signatories_len, actual_weight);
+									return Err(DispatchErrorWithPostInfo { post_info: Some(weight_used).into(), error: err.error.into() })
+								},
+								None => {
+									return Err(err)
+								}
+							}
+						}
+					}
 				}
 			}
-			Ok(())
 		}
 
 		/// Register approval for a dispatch to be made from a deterministic composite account if
@@ -414,13 +469,22 @@ decl_module! {
 		/// - Storage: inserts one item, value size bounded by `MaxSignatories`, with a
 		///   deposit taken for its lifetime of
 		///   `MultisigDepositBase + threshold * MultisigDepositFactor`.
+		/// ----------------------------------
+		/// - Base Weight:
+		///     - Create: 139.1 + 0.202 * S
+		///     - Approve: 96.6 + 0.328 * S
+		/// - DB Weight:
+		///     - Read: Multisig Storage, [Caller Account]
+		///     - Write: Multisig Storage, [Caller Account]
 		/// # </weight>
 		#[weight = FunctionOf(
 			|args: (&u16, &Vec<T::AccountId>, &Option<Timepoint<T::BlockNumber>>, &[u8; 32])| {
-				10_000 * (args.1.len() as u32 + 1)
+				T::DbWeight::get().reads_writes(1, 1)
+					.saturating_add(140_000_000)
+					.saturating_add((args.1.len() as Weight).saturating_mul(350_000))
 			},
 			DispatchClass::Normal,
-			true
+			Pays::Yes,
 		)]
 		fn approve_as_multi(origin,
 			threshold: u16,
@@ -444,7 +508,7 @@ decl_module! {
 				if let Err(pos) = m.approvals.binary_search(&who) {
 					m.approvals.insert(pos, who.clone());
 					<Multisigs<T>>::insert(&id, call_hash, m);
-					Self::deposit_event(RawEvent::MultisigApproval(who, timepoint, id));
+					Self::deposit_event(RawEvent::MultisigApproval(who, timepoint, id, call_hash));
 				} else {
 					Err(Error::<T>::AlreadyApproved)?
 				}
@@ -460,7 +524,7 @@ decl_module! {
 						depositor: who.clone(),
 						approvals: vec![who.clone()],
 					});
-					Self::deposit_event(RawEvent::NewMultisig(who, id));
+					Self::deposit_event(RawEvent::NewMultisig(who, id, call_hash));
 				} else {
 					Err(Error::<T>::NoApprovalsNeeded)?
 				}
@@ -489,13 +553,20 @@ decl_module! {
 		/// - One event.
 		/// - I/O: 1 read `O(S)`, one remove.
 		/// - Storage: removes one item.
+		/// ----------------------------------
+		/// - Base Weight: 126.6 + 0.126 * S
+		/// - DB Weight:
+		///     - Read: Multisig Storage, [Caller Account]
+		///     - Write: Multisig Storage, [Caller Account]
 		/// # </weight>
 		#[weight = FunctionOf(
 			|args: (&u16, &Vec<T::AccountId>, &Timepoint<T::BlockNumber>, &[u8; 32])| {
-				10_000 * (args.1.len() as u32 + 1)
+				T::DbWeight::get().reads_writes(1, 1)
+					.saturating_add(130_000_000)
+					.saturating_add((args.1.len() as Weight).saturating_mul(130_000))
 			},
 			DispatchClass::Normal,
-			true
+			Pays::Yes,
 		)]
 		fn cancel_as_multi(origin,
 			threshold: u16,
@@ -520,7 +591,7 @@ decl_module! {
 			let _ = T::Currency::unreserve(&m.depositor, m.deposit);
 			<Multisigs<T>>::remove(&id, call_hash);
 
-			Self::deposit_event(RawEvent::MultisigCancelled(who, timepoint, id));
+			Self::deposit_event(RawEvent::MultisigCancelled(who, timepoint, id, call_hash));
 			Ok(())
 		}
 	}

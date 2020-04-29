@@ -49,7 +49,7 @@ use sp_consensus::{
 	SelectChain, Error as ConsensusError, CanAuthorWith, RecordProof, BlockImport,
 	BlockCheckParams, ImportResult,
 };
-use sp_consensus::import_queue::{BoxBlockImport, BasicQueue, Verifier};
+use sp_consensus::import_queue::{BoxBlockImport, BasicQueue, Verifier, BoxJustificationImport, BoxFinalityProofImport};
 use codec::{Encode, Decode};
 use sc_client_api;
 use log::*;
@@ -457,6 +457,8 @@ pub type PowImportQueue<B, Transaction> = BasicQueue<B, Transaction>;
 /// Import queue for PoW engine.
 pub fn import_queue<B, Transaction, Algorithm>(
 	block_import: BoxBlockImport<B, Transaction>,
+	justification_import: Option<BoxJustificationImport<B>>,
+	finality_proof_import: Option<BoxFinalityProofImport<B>>,
 	algorithm: Algorithm,
 	inherent_data_providers: InherentDataProviders,
 ) -> Result<
@@ -474,8 +476,8 @@ pub fn import_queue<B, Transaction, Algorithm>(
 	Ok(BasicQueue::new(
 		verifier,
 		block_import,
-		None,
-		None
+		justification_import,
+		finality_proof_import
 	))
 }
 

@@ -16,9 +16,15 @@
 
 #[macro_use] mod core;
 mod import;
+mod trie;
+mod simple_trie;
+mod generator;
+mod tempdb;
+mod state_sizes;
 
-use crate::core::run_benchmark;
+use crate::core::{run_benchmark, Mode as BenchmarkMode};
 use import::{ImportBenchmarkDescription, SizeType};
+use trie::{TrieReadBenchmarkDescription, TrieWriteBenchmarkDescription, DatabaseSize};
 use node_testing::bench::{Profile, KeyTypes};
 use structopt::StructOpt;
 
@@ -41,6 +47,15 @@ struct Opt {
 	///
 	/// Run with `--list` for the hint of what to filter.
 	filter: Option<String>,
+
+	/// Mode
+	///
+	/// "regular" for regular becnhmark
+	///
+	/// "profile" mode adds pauses between measurable runs,
+	/// so that actual interval can be selected in the profiler of choice.
+	#[structopt(short, long, default_value = "regular")]
+	mode: BenchmarkMode,
 }
 
 fn main() {
@@ -62,14 +77,32 @@ fn main() {
 			key_types: KeyTypes::Ed25519,
 			size: SizeType::Medium,
 		},
+		ImportBenchmarkDescription {
+			profile: Profile::Wasm,
+			key_types: KeyTypes::Sr25519,
+			size: SizeType::Full,
+		},
+		ImportBenchmarkDescription {
+			profile: Profile::Native,
+			key_types: KeyTypes::Sr25519,
+			size: SizeType::Full,
+		},
 		size in [SizeType::Small, SizeType::Large] =>
 			ImportBenchmarkDescription {
 				profile: Profile::Native,
 				key_types: KeyTypes::Sr25519,
 				size: *size,
 			},
+		size in [
+			DatabaseSize::Empty, DatabaseSize::Smallest, DatabaseSize::Small,
+			DatabaseSize::Medium, DatabaseSize::Large, DatabaseSize::Huge,
+		] => TrieReadBenchmarkDescription { database_size: *size },
+		size in [
+			DatabaseSize::Empty, DatabaseSize::Smallest, DatabaseSize::Small,
+			DatabaseSize::Medium, DatabaseSize::Large, DatabaseSize::Huge,
+		] => TrieWriteBenchmarkDescription { database_size: *size },
 	);
-
+	
 	if opt.list {
 		for benchmark in benchmarks.iter() {
 			log::info!("{}: {}", benchmark.name(), benchmark.path().full())
@@ -81,7 +114,7 @@ fn main() {
 	for benchmark in benchmarks {
 		if opt.filter.as_ref().map(|f| benchmark.path().has(f)).unwrap_or(true) {
 			log::info!("Starting {}", benchmark.name());
-			let result = run_benchmark(benchmark);
+			let result = run_benchmark(benchmark, opt.mode);
 			log::info!("{}", result);
 
 			results.push(result);

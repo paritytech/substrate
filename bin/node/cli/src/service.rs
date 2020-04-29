@@ -21,7 +21,6 @@
 use std::sync::Arc;
 
 use sc_consensus_babe;
-use sc_client::{self, LongestChain};
 use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider, StorageAndProofProvider};
 use node_executor;
 use node_primitives::Block;
@@ -30,14 +29,7 @@ use sc_service::{
 	AbstractService, ServiceBuilder, config::Configuration, error::{Error as ServiceError},
 };
 use sp_inherents::InherentDataProviders;
-
-use sc_service::{Service, NetworkStatus};
-use sc_client::{Client, LocalCallExecutor};
-use sc_client_db::Backend;
-use sp_runtime::traits::Block as BlockT;
-use node_executor::NativeExecutor;
-use sc_network::NetworkService;
-use sc_offchain::OffchainWorkers;
+use sc_consensus::LongestChain;
 
 /// Starts a `ServiceBuilder` for a full service.
 ///
@@ -54,11 +46,11 @@ macro_rules! new_full_start {
 			node_primitives::Block, node_runtime::RuntimeApi, node_executor::Executor
 		>($config)?
 			.with_select_chain(|_config, backend| {
-				Ok(sc_client::LongestChain::new(backend.clone()))
+				Ok(sc_consensus::LongestChain::new(backend.clone()))
 			})?
-			.with_transaction_pool(|config, client, _fetcher| {
+			.with_transaction_pool(|config, client, _fetcher, prometheus_registry| {
 				let pool_api = sc_transaction_pool::FullChainApi::new(client.clone());
-				Ok(sc_transaction_pool::BasicPool::new(config, std::sync::Arc::new(pool_api)))
+				Ok(sc_transaction_pool::BasicPool::new(config, std::sync::Arc::new(pool_api), prometheus_registry))
 			})?
 			.with_import_queue(|_config, client, mut select_chain, _transaction_pool| {
 				let select_chain = select_chain.take()
@@ -88,7 +80,7 @@ macro_rules! new_full_start {
 				import_setup = Some((block_import, grandpa_link, babe_link));
 				Ok(import_queue)
 			})?
-			.with_rpc_extensions(|builder| -> Result<RpcExtension, _> {
+			.with_rpc_extensions(|builder| -> std::result::Result<RpcExtension, _> {
 				let babe_link = import_setup.as_ref().map(|s| &s.2)
 					.expect("BabeLink is present for full services or set up failed; qed.");
 				let deps = node_rpc::FullDeps {
@@ -127,7 +119,7 @@ macro_rules! new_full {
 		) = (
 			$config.role.clone(),
 			$config.force_authoring,
-			$config.name.clone(),
+			$config.network.node_name.clone(),
 			$config.disable_grandpa,
 		);
 
@@ -146,7 +138,7 @@ macro_rules! new_full {
 
 		($with_startup_data)(&block_import, &babe_link);
 
-		if let sc_service::config::Role::Authority { sentry_nodes } = &role {
+		if let sc_service::config::Role::Authority { .. } = &role {
 			let proposer = sc_basic_authorship::ProposerFactory::new(
 				service.client(),
 				service.transaction_pool()
@@ -174,18 +166,35 @@ macro_rules! new_full {
 
 			let babe = sc_consensus_babe::start_babe(babe_config)?;
 			service.spawn_essential_task("babe-proposer", babe);
+		}
+
+		// Spawn authority discovery module.
+		if matches!(role, sc_service::config::Role::Authority{..} | sc_service::config::Role::Sentry {..}) {
+			let (sentries, authority_discovery_role) = match role {
+				sc_service::config::Role::Authority { ref sentry_nodes } => (
+					sentry_nodes.clone(),
+					sc_authority_discovery::Role::Authority (
+						service.keystore(),
+					),
+				),
+				sc_service::config::Role::Sentry {..} => (
+					vec![],
+					sc_authority_discovery::Role::Sentry,
+				),
+				_ => unreachable!("Due to outer matches! constraint; qed.")
+			};
 
 			let network = service.network();
-			let dht_event_stream = network.event_stream().filter_map(|e| async move { match e {
+			let dht_event_stream = network.event_stream("authority-discovery").filter_map(|e| async move { match e {
 				Event::Dht(e) => Some(e),
 				_ => None,
 			}}).boxed();
 			let authority_discovery = sc_authority_discovery::AuthorityDiscovery::new(
 				service.client(),
 				network,
-				sentry_nodes.clone(),
-				service.keystore(),
+				sentries,
 				dht_event_stream,
+				authority_discovery_role,
 				service.prometheus_registry(),
 			);
 
@@ -249,38 +258,9 @@ macro_rules! new_full {
 	}}
 }
 
-type ConcreteBlock = node_primitives::Block;
-type ConcreteClient =
-	Client<
-		Backend<ConcreteBlock>,
-		LocalCallExecutor<Backend<ConcreteBlock>, NativeExecutor<node_executor::Executor>>,
-		ConcreteBlock,
-		node_runtime::RuntimeApi
-	>;
-type ConcreteBackend = Backend<ConcreteBlock>;
-type ConcreteTransactionPool = sc_transaction_pool::BasicPool<
-	sc_transaction_pool::FullChainApi<ConcreteClient, ConcreteBlock>,
-	ConcreteBlock
->;
-
 /// Builds a new service for a full client.
 pub fn new_full(config: Configuration)
--> Result<
-	Service<
-		ConcreteBlock,
-		ConcreteClient,
-		LongestChain<ConcreteBackend, ConcreteBlock>,
-		NetworkStatus<ConcreteBlock>,
-		NetworkService<ConcreteBlock, <ConcreteBlock as BlockT>::Hash>,
-		ConcreteTransactionPool,
-		OffchainWorkers<
-			ConcreteClient,
-			<ConcreteBackend as sc_client_api::backend::Backend<Block>>::OffchainStorage,
-			ConcreteBlock,
-		>
-	>,
-	ServiceError,
->
+-> Result<impl AbstractService, ServiceError>
 {
 	new_full!(config).map(|(service, _)| service)
 }
@@ -295,12 +275,12 @@ pub fn new_light(config: Configuration)
 		.with_select_chain(|_config, backend| {
 			Ok(LongestChain::new(backend.clone()))
 		})?
-		.with_transaction_pool(|config, client, fetcher| {
+		.with_transaction_pool(|config, client, fetcher, prometheus_registry| {
 			let fetcher = fetcher
 				.ok_or_else(|| "Trying to start light transaction pool without active fetcher")?;
 			let pool_api = sc_transaction_pool::LightChainApi::new(client.clone(), fetcher.clone());
 			let pool = sc_transaction_pool::BasicPool::with_revalidation_type(
-				config, Arc::new(pool_api), sc_transaction_pool::RevalidationType::Light,
+				config, Arc::new(pool_api), prometheus_registry, sc_transaction_pool::RevalidationType::Light,
 			);
 			Ok(pool)
 		})?
@@ -399,7 +379,7 @@ mod tests {
 		use sp_core::ed25519::Pair;
 
 		use {service_test, Factory};
-		use sc_client::{BlockImportParams, BlockOrigin};
+		use sp_consensus::{BlockImportParams, BlockOrigin};
 
 		let alice: Arc<ed25519::Pair> = Arc::new(Keyring::Alice.into());
 		let bob: Arc<ed25519::Pair> = Arc::new(Keyring::Bob.into());
@@ -616,13 +596,11 @@ mod tests {
 					check_nonce,
 					check_weight,
 					payment,
-					Default::default(),
-					Default::default(),
 				);
 				let raw_payload = SignedPayload::from_raw(
 					function,
 					extra,
-					(version, genesis_hash, genesis_hash, (), (), (), (), ())
+					(version, genesis_hash, genesis_hash, (), (), ())
 				);
 				let signature = raw_payload.using_encoded(|payload|	{
 					signer.sign(payload)

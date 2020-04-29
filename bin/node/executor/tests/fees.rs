@@ -21,11 +21,11 @@ use frame_support::{
 	weights::GetDispatchInfo,
 };
 use sp_core::{NeverNativeValue, map, storage::Storage};
-use sp_runtime::{Fixed64, Perbill, traits::{Convert, BlakeTwo256}};
+use sp_runtime::{Fixed128, Perbill, traits::{Convert, BlakeTwo256}};
 use node_runtime::{
-	CheckedExtrinsic, Call, Runtime, Balances, TransactionPayment, TransactionBaseFee,
+	CheckedExtrinsic, Call, Runtime, Balances, TransactionPayment,
 	TransactionByteFee, WeightFeeCoefficient,
-	constants::currency::*,
+	constants::currency::*, ExtrinsicBaseWeight,
 };
 use node_runtime::impls::LinearWeightToFee;
 use node_primitives::Balance;
@@ -39,7 +39,7 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 	let mut t = new_test_ext(COMPACT_CODE, false);
 
 	// initial fee multiplier must be zero
-	let mut prev_multiplier = Fixed64::from_parts(0);
+	let mut prev_multiplier = Fixed128::from_parts(0);
 
 	t.execute_with(|| {
 		assert_eq!(TransactionPayment::next_fee_multiplier(), prev_multiplier);
@@ -143,7 +143,7 @@ fn transaction_fee_is_correct_ultimate() {
 			},
 			<frame_system::BlockHash<Runtime>>::hashed_key_for(0) => vec![0u8; 32]
 		],
-		children: map![],
+		children_default: map![],
 	});
 
 	let tip = 1_000_000;
@@ -173,22 +173,27 @@ fn transaction_fee_is_correct_ultimate() {
 	t.execute_with(|| {
 		assert_eq!(Balances::total_balance(&bob()), (10 + 69) * DOLLARS);
 		// Components deducted from alice's balances:
+		// - Base fee
 		// - Weight fee
 		// - Length fee
 		// - Tip
 		// - Creation-fee of bob's account.
 		let mut balance_alice = (100 - 69) * DOLLARS;
 
-		let length_fee = TransactionBaseFee::get() +
-			TransactionByteFee::get() *
-			(xt.clone().encode().len() as Balance);
+		let base_weight = ExtrinsicBaseWeight::get();
+		let base_fee = LinearWeightToFee::<WeightFeeCoefficient>::convert(base_weight);
+
+		let length_fee = TransactionByteFee::get() * (xt.clone().encode().len() as Balance);
 		balance_alice -= length_fee;
 
 		let weight = default_transfer_call().get_dispatch_info().weight;
 		let weight_fee = LinearWeightToFee::<WeightFeeCoefficient>::convert(weight);
 
 		// we know that weight to fee multiplier is effect-less in block 1.
-		assert_eq!(weight_fee as Balance, MILLICENTS);
+		// current weight of transfer = 200_000_000
+		// Linear weight to fee is 1:1 right now (1 weight = 1 unit of balance)
+		assert_eq!(weight_fee, weight as Balance);
+		balance_alice -= base_fee;
 		balance_alice -= weight_fee;
 		balance_alice -= tip;
 

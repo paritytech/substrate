@@ -70,7 +70,7 @@ decl_module! {
 		fn deposit_event() = default;
 
 		/// Do nothing.
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = 0]
 		pub fn do_nothing(_origin, input: u32) {
 			if input > 0 {
 				return Ok(());
@@ -82,7 +82,7 @@ decl_module! {
 		/// storage database, however, the `repeat` calls will all pull from the
 		/// storage overlay cache. You must consider this when analyzing the
 		/// results of the benchmark.
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = 0]
 		pub fn read_value(_origin, repeat: u32) {
 			for _ in 0..repeat {
 				MyValue::get();
@@ -90,7 +90,7 @@ decl_module! {
 		}
 
 		/// Put a value into a storage value.
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = 0]
 		pub fn put_value(_origin, repeat: u32) {
 			for r in 0..repeat {
 				MyValue::put(r);
@@ -102,7 +102,7 @@ decl_module! {
 		/// storage database, however, the `repeat` calls will all pull from the
 		/// storage overlay cache. You must consider this when analyzing the
 		/// results of the benchmark.
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = 0]
 		pub fn exists_value(_origin, repeat: u32) {
 			for _ in 0..repeat {
 				MyValue::exists();
@@ -110,7 +110,7 @@ decl_module! {
 		}
 
 		/// Remove a value from storage `repeat` number of times.
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = 0]
 		pub fn remove_value(_origin, repeat: u32) {
 			for r in 0..repeat {
 				MyMap::remove(r);
@@ -118,7 +118,7 @@ decl_module! {
 		}
 
 		/// Read a value from storage map `repeat` number of times.
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = 0]
 		pub fn read_map(_origin, repeat: u32) {
 			for r in 0..repeat {
 				MyMap::get(r);
@@ -126,7 +126,7 @@ decl_module! {
 		}
 
 		/// Insert a value into a map.
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = 0]
 		pub fn insert_map(_origin, repeat: u32) {
 			for r in 0..repeat {
 				MyMap::insert(r, r);
@@ -134,7 +134,7 @@ decl_module! {
 		}
 
 		/// Check is a map contains a value `repeat` number of times.
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = 0]
 		pub fn contains_key_map(_origin, repeat: u32) {
 			for r in 0..repeat {
 				MyMap::contains_key(r);
@@ -142,7 +142,7 @@ decl_module! {
 		}
 
 		/// Read a value from storage `repeat` number of times.
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = 0]
 		pub fn remove_prefix(_origin, repeat: u32) {
 			for r in 0..repeat {
 				MyDoubleMap::remove_prefix(r);
@@ -150,21 +150,21 @@ decl_module! {
 		}
 
 		/// Add user to the list.
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = 0]
 		pub fn add_member_list(origin) {
 			let who = ensure_signed(origin)?;
 			MyMemberList::<T>::mutate(|x| x.push(who));
 		}
 
 		/// Append user to the list.
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = 0]
 		pub fn append_member_list(origin) {
 			let who = ensure_signed(origin)?;
 			MyMemberList::<T>::append(&[who])?;
 		}
 
 		/// Encode a vector of accounts to bytes.
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = 0]
 		pub fn encode_accounts(_origin, accounts: Vec<T::AccountId>) {
 			let bytes = accounts.encode();
 
@@ -176,7 +176,7 @@ decl_module! {
 		}
 
 		/// Decode bytes into a vector of accounts.
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = 0]
 		pub fn decode_accounts(_origin, bytes: Vec<u8>) {
 			let accounts: Vec<T::AccountId> = Decode::decode(&mut bytes.as_slice()).map_err(|_| "Could not decode")?;
 

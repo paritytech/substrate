@@ -23,7 +23,7 @@ use super::*;
 use frame_system::RawOrigin;
 use frame_benchmarking::benchmarks;
 use sp_core::offchain::{OpaquePeerId, OpaqueMultiaddr};
-use sp_runtime::traits::{ValidateUnsigned, Zero};
+use sp_runtime::traits::{ValidateUnsigned, Zero, Dispatchable};
 use sp_runtime::transaction_validity::TransactionSource;
 
 use crate::Module as ImOnline;
@@ -49,6 +49,7 @@ pub fn create_heartbeat<T: Trait>(k: u32, e: u32) ->
 		network_state,
 		session_index: 0,
 		authority_index: k-1,
+		validators_len: keys.len() as u32,
 	};
 
 	let encoded_heartbeat = input_heartbeat.encode();
@@ -75,50 +76,30 @@ benchmarks! {
 	}: {
 		ImOnline::<T>::validate_unsigned(TransactionSource::InBlock, &call)?;
 	}
+
+	validate_unsigned_and_then_heartbeat {
+		let k in 1 .. MAX_KEYS;
+		let e in 1 .. MAX_EXTERNAL_ADDRESSES;
+		let (input_heartbeat, signature) = create_heartbeat::<T>(k, e)?;
+		let call = Call::heartbeat(input_heartbeat, signature);
+	}: {
+		ImOnline::<T>::validate_unsigned(TransactionSource::InBlock, &call)?;
+		call.dispatch(RawOrigin::None.into())?;
+	}
 }
 
 #[cfg(test)]
 mod tests {
-	use crate::*;
-	use super::SelectedBenchmark;
-	use crate::mock::*;
+	use super::*;
+	use crate::mock::{new_test_ext, Runtime};
 	use frame_support::assert_ok;
 
 	#[test]
-	fn test_heartbeat_benchmark() {
+	fn test_benchmarks() {
 		new_test_ext().execute_with(|| {
-			let k = 10;
-
-			assert_eq!(ReceivedHeartbeats::iter_prefix(0).count(), 0);
-
-			let selected_benchmark = SelectedBenchmark::heartbeat;
-			let c = vec![(frame_benchmarking::BenchmarkParameter::k, k)];
-			let closure_to_benchmark =
-				<SelectedBenchmark as frame_benchmarking::BenchmarkingSetup<Runtime>>::instance(
-					&selected_benchmark,
-					&c
-				).unwrap();
-
-			assert_ok!(closure_to_benchmark());
-
-			assert_eq!(ReceivedHeartbeats::iter_prefix(0).count(), 1);
-		});
-	}
-
-	#[test]
-	fn test_validate_unsigned_benchmark() {
-		new_test_ext().execute_with(|| {
-			let k = 10;
-
-			let selected_benchmark = SelectedBenchmark::validate_unsigned;
-			let c = vec![(frame_benchmarking::BenchmarkParameter::k, k)];
-			let closure_to_benchmark =
-				<SelectedBenchmark as frame_benchmarking::BenchmarkingSetup<Runtime>>::instance(
-					&selected_benchmark,
-					&c
-				).unwrap();
-
-			assert_ok!(closure_to_benchmark());
+			assert_ok!(test_benchmark_heartbeat::<Runtime>());
+			assert_ok!(test_benchmark_validate_unsigned::<Runtime>());
+			assert_ok!(test_benchmark_validate_unsigned_and_then_heartbeat::<Runtime>());
 		});
 	}
 }

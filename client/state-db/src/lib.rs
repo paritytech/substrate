@@ -201,9 +201,10 @@ struct StateDbSync<BlockHash: Hash, Key: Hash> {
 impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf> StateDbSync<BlockHash, Key> {
 	fn new<D: MetaDb>(
 		mode: PruningMode,
+		ref_counting: bool,
 		db: &D,
 	) -> Result<StateDbSync<BlockHash, Key>, Error<D::Error>> {
-		trace!(target: "state-db", "StateDb settings: {:?}", mode);
+		trace!(target: "state-db", "StateDb settings: {:?}. Ref-counting: {}", mode, ref_counting);
 
 		// Check that settings match
 		Self::check_meta(&mode, db)?;
@@ -214,7 +215,7 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf> StateDbSync<Block
 				max_mem: Some(_),
 				..
 			}) => unimplemented!(),
-			PruningMode::Constrained(_) => Some(RefWindow::new(db)?),
+			PruningMode::Constrained(_) => Some(RefWindow::new(db, ref_counting)?),
 			PruningMode::ArchiveAll | PruningMode::ArchiveCanonical => None,
 		};
 
@@ -387,8 +388,11 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf> StateDbSync<Block
 		}
 	}
 
-	pub fn get<D: NodeDb>(&self, key: &Key, db: &D) -> Result<Option<DBValue>, Error<D::Error>>
-		where Key: AsRef<D::Key>
+	pub fn get<D: NodeDb, Q: ?Sized>(&self, key: &Q, db: &D) -> Result<Option<DBValue>, Error<D::Error>>
+	where
+		Q: AsRef<D::Key>,
+		Key: std::borrow::Borrow<Q>,
+		Q: std::hash::Hash + Eq,
 	{
 		if let Some(value) = self.non_canonical.get(key) {
 			return Ok(Some(value));
@@ -438,10 +442,11 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf> StateDb<BlockHash
 	/// Creates a new instance. Does not expect any metadata in the database.
 	pub fn new<D: MetaDb>(
 		mode: PruningMode,
+		ref_counting: bool,
 		db: &D,
 	) -> Result<StateDb<BlockHash, Key>, Error<D::Error>> {
 		Ok(StateDb {
-			db: RwLock::new(StateDbSync::new(mode, db)?)
+			db: RwLock::new(StateDbSync::new(mode, ref_counting, db)?)
 		})
 	}
 
@@ -475,8 +480,11 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf> StateDb<BlockHash
 	}
 
 	/// Get a value from non-canonical/pruning overlay or the backing DB.
-	pub fn get<D: NodeDb>(&self, key: &Key, db: &D) -> Result<Option<DBValue>, Error<D::Error>>
-		where Key: AsRef<D::Key>
+	pub fn get<D: NodeDb, Q: ?Sized>(&self, key: &Q, db: &D) -> Result<Option<DBValue>, Error<D::Error>>
+		where
+			Q: AsRef<D::Key>,
+			Key: std::borrow::Borrow<Q>,
+			Q: std::hash::Hash + Eq,
 	{
 		self.db.read().get(key, db)
 	}
@@ -523,7 +531,7 @@ mod tests {
 
 	fn make_test_db(settings: PruningMode) -> (TestDb, StateDb<H256, H256>) {
 		let mut db = make_db(&[91, 921, 922, 93, 94]);
-		let state_db = StateDb::new(settings, &db).unwrap();
+		let state_db = StateDb::new(settings, false, &db).unwrap();
 
 		db.commit(
 			&state_db
@@ -638,7 +646,7 @@ mod tests {
 	#[test]
 	fn detects_incompatible_mode() {
 		let mut db = make_db(&[]);
-		let state_db = StateDb::new(PruningMode::ArchiveAll, &db).unwrap();
+		let state_db = StateDb::new(PruningMode::ArchiveAll, false, &db).unwrap();
 		db.commit(
 			&state_db
 			.insert_block::<io::Error>(
@@ -650,7 +658,7 @@ mod tests {
 			.unwrap(),
 		);
 		let new_mode = PruningMode::Constrained(Constraints { max_blocks: Some(2), max_mem: None });
-		let state_db: Result<StateDb<H256, H256>, _> = StateDb::new(new_mode, &db);
+		let state_db: Result<StateDb<H256, H256>, _> = StateDb::new(new_mode, false, &db);
 		assert!(state_db.is_err());
 	}
 }

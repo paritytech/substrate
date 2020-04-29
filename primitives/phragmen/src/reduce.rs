@@ -48,7 +48,7 @@
 
 use crate::node::{Node, NodeId, NodeRef, NodeRole};
 use crate::{ExtendedBalance, IdentifierT, StakedAssignment};
-use sp_runtime::traits::{Bounded, Zero};
+use sp_arithmetic::traits::{Bounded, Zero};
 use sp_std::{
 	collections::btree_map::{BTreeMap, Entry::*},
 	prelude::*,
@@ -305,7 +305,7 @@ fn reduce_4<A: IdentifierT>(assignments: &mut Vec<StakedAssignment<A>>) -> u32 {
 							}
 							(false, false) => {
 								// Neither of the edges was removed? impossible.
-								debug_assert!(false, "Duplicate voter (or other corrupt input).");
+								panic!("Duplicate voter (or other corrupt input).");
 							}
 						}
 					}

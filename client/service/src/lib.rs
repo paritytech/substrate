@@ -18,6 +18,7 @@
 //! Manages communication between them.
 
 #![warn(missing_docs)]
+#![recursion_limit="128"]
 
 pub mod config;
 #[macro_use]
@@ -26,10 +27,14 @@ pub mod error;
 
 mod metrics;
 mod builder;
+#[cfg(feature = "test-helpers")]
+pub mod client;
+#[cfg(not(feature = "test-helpers"))]
+mod client;
 mod status_sinks;
 mod task_manager;
 
-use std::{borrow::Cow, io, pin::Pin};
+use std::{io, pin::Pin};
 use std::marker::PhantomData;
 use std::net::SocketAddr;
 use std::collections::HashMap;
@@ -38,7 +43,7 @@ use wasm_timer::Instant;
 use std::task::{Poll, Context};
 use parking_lot::Mutex;
 
-use sc_client::Client;
+use client::Client;
 use futures::{
 	Future, FutureExt, Stream, StreamExt,
 	compat::*,
@@ -49,31 +54,43 @@ use sc_network::{NetworkService, network_state::NetworkState, PeerId, ReportHand
 use log::{log, warn, debug, error, Level};
 use codec::{Encode, Decode};
 use sp_runtime::generic::BlockId;
-use sp_runtime::traits::{NumberFor, Block as BlockT};
+use sp_runtime::traits::{NumberFor, Block as BlockT, BlockIdTo};
 use parity_util_mem::MallocSizeOf;
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver,  TracingUnboundedSender};
 
 pub use self::error::Error;
 pub use self::builder::{
-	new_full_client,
+	new_full_client, new_client,
 	ServiceBuilder, ServiceBuilderCommand, TFullClient, TLightClient, TFullBackend, TLightBackend,
 	TFullCallExecutor, TLightCallExecutor,
 };
 pub use config::{Configuration, Role, PruningMode, DatabaseConfig};
 pub use sc_chain_spec::{
-	ChainSpec, GenericChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension
+	ChainSpec, GenericChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension,
+	NoExtension, ChainType,
 };
 pub use sp_transaction_pool::{TransactionPool, InPoolTransaction, error::IntoPoolError};
 pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
-pub use sc_client::FinalityNotifications;
 pub use sc_rpc::Metadata as RpcMetadata;
 pub use sc_executor::NativeExecutionDispatch;
 #[doc(hidden)]
 pub use std::{ops::Deref, result::Result, sync::Arc};
 #[doc(hidden)]
 pub use sc_network::config::{FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
-pub use task_manager::{TaskManagerBuilder, SpawnTaskHandle};
+pub use sc_tracing::TracingReceiver;
+pub use task_manager::SpawnTaskHandle;
 use task_manager::TaskManager;
+use sp_blockchain::{HeaderBackend, HeaderMetadata, ProvideCache};
+use sp_api::{ProvideRuntimeApi, CallApiAt, ApiExt, ConstructRuntimeApi, ApiErrorExt};
+use sc_client_api::{
+	LockImportRun, Backend as BackendT, ProofProvider, ProvideUncles,
+	StorageProvider, ExecutorProvider, Finalizer, AuxStore, Backend,
+	BlockBackend, BlockchainEvents, CallExecutor, TransactionFor,
+	UsageProvider,
+};
+use sc_block_builder::BlockBuilderProvider;
+use sp_consensus::{block_validation::Chain, BlockImport};
+use sp_block_builder::BlockBuilder;
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 
@@ -114,21 +131,104 @@ pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 
 impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Unpin for Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {}
 
+/// Client super trait, use this instead of the concrete Client type.
+pub trait ClientProvider<
+	Block: BlockT,
+	Backend: BackendT<Block>,
+	Executor: CallExecutor<Block>,
+	Runtime: ConstructRuntimeApi<Block, Self>,
+>:
+	HeaderBackend<Block>
+	+ ProvideRuntimeApi<
+		Block,
+		Api = <Runtime as ConstructRuntimeApi<Block, Self>>::RuntimeApi
+	>
+	+ LockImportRun<Block, Backend>
+	+ ProofProvider<Block>
+	+ BlockBuilderProvider<Backend, Block, Self>
+	+ ProvideUncles<Block>
+	+ StorageProvider<Block, Backend>
+	+ Chain<Block>
+	+ HeaderMetadata<Block, Error = sp_blockchain::Error>
+	+ ExecutorProvider<Block, Executor = Executor>
+	+ ProvideCache<Block>
+	+ BlockIdTo<Block, Error = sp_blockchain::Error>
+	+ CallApiAt<
+		Block,
+		Error = sp_blockchain::Error,
+		StateBackend = <Backend as BackendT<Block>>::State
+	>
+	+ BlockImport<
+		Block,
+		Error = sp_consensus::Error,
+		Transaction = TransactionFor<Backend, Block>
+	>
+	+ Finalizer<Block, Backend>
+	+ BlockchainEvents<Block>
+	+ BlockBackend<Block>
+	+ UsageProvider<Block>
+	+ AuxStore
+{}
+
+impl<Block, Backend, Executor, Runtime> ClientProvider<Block, Backend, Executor, Runtime>
+	for
+		Client<Backend, Executor, Block, Runtime>
+	where
+		Block: BlockT,
+		Backend: BackendT<Block>,
+		Executor: CallExecutor<Block>,
+		Runtime: ConstructRuntimeApi<Block, Self>,
+		Self: HeaderBackend<Block>
+			+ ProvideRuntimeApi<
+				Block,
+				Api = <Runtime as ConstructRuntimeApi<Block, Self>>::RuntimeApi
+			>
+			+ LockImportRun<Block, Backend>
+			+ ProofProvider<Block>
+			+ BlockBuilderProvider<Backend, Block, Self>
+			+ ProvideUncles<Block>
+			+ StorageProvider<Block, Backend>
+			+ Chain<Block>
+			+ HeaderMetadata<Block, Error = sp_blockchain::Error>
+			+ ExecutorProvider<Block, Executor = Executor>
+			+ ProvideCache<Block>
+			+ BlockIdTo<Block, Error = sp_blockchain::Error>
+			+ CallApiAt<
+				Block,
+				Error = sp_blockchain::Error,
+				StateBackend = <Backend as BackendT<Block>>::State
+			>
+			+ BlockImport<
+				Block,
+				Error = sp_consensus::Error,
+				Transaction = TransactionFor<Backend, Block>
+			>
+			+ Finalizer<Block, Backend>
+			+ BlockchainEvents<Block>
+			+ BlockBackend<Block>
+			+ UsageProvider<Block>
+			+ AuxStore
+{}
+
 /// Abstraction over a Substrate service.
-pub trait AbstractService: 'static + Future<Output = Result<(), Error>> +
-	Spawn + Send + Unpin {
+pub trait AbstractService: Future<Output = Result<(), Error>> + Send + Unpin + Spawn + 'static {
 	/// Type of block of this chain.
 	type Block: BlockT;
 	/// Backend storage for the client.
-	type Backend: 'static + sc_client_api::backend::Backend<Self::Block>;
+	type Backend: 'static + BackendT<Self::Block>;
 	/// How to execute calls towards the runtime.
-	type CallExecutor: 'static + sc_client::CallExecutor<Self::Block> + Send + Sync + Clone;
+	type CallExecutor: 'static + CallExecutor<Self::Block> + Send + Sync + Clone;
 	/// API that the runtime provides.
 	type RuntimeApi: Send + Sync;
 	/// Chain selection algorithm.
 	type SelectChain: sp_consensus::SelectChain<Self::Block>;
 	/// Transaction pool.
 	type TransactionPool: TransactionPool<Block = Self::Block> + MallocSizeOfWasm;
+	/// The generic Client type, the bounds here are the ones specifically required by
+	/// internal crates like sc_informant.
+	type Client:
+		HeaderMetadata<Self::Block, Error = sp_blockchain::Error> + UsageProvider<Self::Block>
+		+ BlockchainEvents<Self::Block> + HeaderBackend<Self::Block> + Send + Sync;
 
 	/// Get event stream for telemetry connection established events.
 	fn telemetry_on_connect_stream(&self) -> TracingUnboundedReceiver<()>;
@@ -137,12 +237,18 @@ pub trait AbstractService: 'static + Future<Output = Result<(), Error>> +
 	fn telemetry(&self) -> Option<sc_telemetry::Telemetry>;
 
 	/// Spawns a task in the background that runs the future passed as parameter.
-	fn spawn_task(&self, name: impl Into<Cow<'static, str>>, task: impl Future<Output = ()> + Send + 'static);
+	///
+	/// Information about this task will be reported to Prometheus.
+	///
+	/// The task name is a `&'static str` as opposed to a `String`. The reason for that is that
+	/// in order to avoid memory consumption issues with the Prometheus metrics, the set of
+	/// possible task names has to be bounded.
+	fn spawn_task(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static);
 
 	/// Spawns a task in the background that runs the future passed as
 	/// parameter. The given task is considered essential, i.e. if it errors we
 	/// trigger a service exit.
-	fn spawn_essential_task(&self, name: impl Into<Cow<'static, str>>, task: impl Future<Output = ()> + Send + 'static);
+	fn spawn_essential_task(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static);
 
 	/// Returns a handle for spawning tasks.
 	fn spawn_task_handle(&self) -> SpawnTaskHandle;
@@ -162,7 +268,7 @@ pub trait AbstractService: 'static + Future<Output = Result<(), Error>> +
 	fn rpc_query(&self, mem: &RpcSession, request: &str) -> Pin<Box<dyn Future<Output = Option<String>> + Send>>;
 
 	/// Get shared client instance.
-	fn client(&self) -> Arc<sc_client::Client<Self::Backend, Self::CallExecutor, Self::Block, Self::RuntimeApi>>;
+	fn client(&self) -> Arc<Self::Client>;
 
 	/// Get clone of select chain.
 	fn select_chain(&self) -> Option<Self::SelectChain>;
@@ -190,9 +296,14 @@ impl<TBl, TBackend, TExec, TRtApi, TSc, TExPool, TOc> AbstractService for
 		NetworkService<TBl, TBl::Hash>, TExPool, TOc>
 where
 	TBl: BlockT,
-	TBackend: 'static + sc_client_api::backend::Backend<TBl>,
-	TExec: 'static + sc_client::CallExecutor<TBl> + Send + Sync + Clone,
-	TRtApi: 'static + Send + Sync,
+	TBackend: 'static + Backend<TBl>,
+	TExec: 'static + CallExecutor<TBl, Backend = TBackend> + Send + Sync + Clone,
+	TRtApi: 'static + Send + Sync + ConstructRuntimeApi<TBl, Client<TBackend, TExec, TBl, TRtApi>>,
+	<TRtApi as ConstructRuntimeApi<TBl, Client<TBackend, TExec, TBl, TRtApi>>>::RuntimeApi:
+		sp_api::Core<TBl>
+		+ ApiExt<TBl, StateBackend = TBackend::State>
+		+ ApiErrorExt<Error = sp_blockchain::Error>
+		+ BlockBuilder<TBl>,
 	TSc: sp_consensus::SelectChain<TBl> + 'static + Clone + Send + Unpin,
 	TExPool: 'static + TransactionPool<Block = TBl> + MallocSizeOfWasm,
 	TOc: 'static + Send + Sync,
@@ -203,6 +314,7 @@ where
 	type RuntimeApi = TRtApi;
 	type SelectChain = TSc;
 	type TransactionPool = TExPool;
+	type Client = Client<Self::Backend, Self::CallExecutor, Self::Block, Self::RuntimeApi>;
 
 	fn telemetry_on_connect_stream(&self) -> TracingUnboundedReceiver<()> {
 		let (sink, stream) = tracing_unbounded("mpsc_telemetry_on_connect");
@@ -218,11 +330,11 @@ where
 		self.keystore.clone()
 	}
 
-	fn spawn_task(&self, name: impl Into<Cow<'static, str>>, task: impl Future<Output = ()> + Send + 'static) {
+	fn spawn_task(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static) {
 		self.task_manager.spawn(name, task)
 	}
 
-	fn spawn_essential_task(&self, name: impl Into<Cow<'static, str>>, task: impl Future<Output = ()> + Send + 'static) {
+	fn spawn_essential_task(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static) {
 		let mut essential_failed = self.essential_failed_tx.clone();
 		let essential_task = std::panic::AssertUnwindSafe(task)
 			.catch_unwind()
@@ -246,7 +358,7 @@ where
 		)
 	}
 
-	fn client(&self) -> Arc<sc_client::Client<Self::Backend, Self::CallExecutor, Self::Block, Self::RuntimeApi>> {
+	fn client(&self) -> Arc<Self::Client> {
 		self.client.clone()
 	}
 
@@ -296,8 +408,6 @@ impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Future for
 			}
 		}
 
-		this.task_manager.process_receiver(cx);
-
 		// The service future never ends.
 		Poll::Pending
 	}
@@ -310,8 +420,8 @@ impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Spawn for
 		&self,
 		future: FutureObj<'static, ()>
 	) -> Result<(), SpawnError> {
-		self.task_manager.scheduler().unbounded_send((Box::pin(future), From::from("unnamed")))
-			.map_err(|_| SpawnError::shutdown())
+		self.task_manager.spawn_handle().spawn("unnamed", future);
+		Ok(())
 	}
 }
 
@@ -320,7 +430,7 @@ impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Spawn for
 /// The `status_sink` contain a list of senders to send a periodic network status to.
 fn build_network_future<
 	B: BlockT,
-	C: sc_client::BlockchainEvents<B>,
+	C: BlockchainEvents<B>,
 	H: sc_network::ExHashT
 > (
 	role: Role,
@@ -364,6 +474,17 @@ fn build_network_future<
 						is_syncing: network.service().is_major_syncing(),
 						should_have_peers,
 					});
+				},
+				sc_rpc::system::Request::LocalPeerId(sender) => {
+					let _ = sender.send(network.local_peer_id().to_base58());
+				},
+				sc_rpc::system::Request::LocalListenAddresses(sender) => {
+					let peer_id = network.local_peer_id().clone().into();
+					let p2p_proto_suffix = sc_network::multiaddr::Protocol::P2p(peer_id);
+					let addresses = network.listen_addresses()
+						.map(|addr| addr.clone().with(p2p_proto_suffix.clone()).to_string())
+						.collect();
+					let _ = sender.send(addresses);
 				},
 				sc_rpc::system::Request::Peers(sender) => {
 					let _ = sender.send(network.peers_debug_info().into_iter().map(|(peer_id, p)|
@@ -492,7 +613,7 @@ mod waiting {
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(not(target_os = "unknown"))]
-fn start_rpc_servers<H: FnMut() -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>>(
+fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>>(
 	config: &Configuration,
 	mut gen_handler: H
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
@@ -514,10 +635,23 @@ fn start_rpc_servers<H: FnMut() -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>>(
 		})
 	}
 
+	fn deny_unsafe(addr: &Option<SocketAddr>, unsafe_rpc_expose: bool) -> sc_rpc::DenyUnsafe {
+		let is_exposed_addr = addr.map(|x| x.ip().is_loopback()).unwrap_or(false);
+		if is_exposed_addr && !unsafe_rpc_expose {
+			sc_rpc::DenyUnsafe::Yes
+		} else {
+			sc_rpc::DenyUnsafe::No
+		}
+	}
+
 	Ok(Box::new((
 		maybe_start_server(
 			config.rpc_http,
-			|address| sc_rpc_server::start_http(address, config.rpc_cors.as_ref(), gen_handler()),
+			|address| sc_rpc_server::start_http(
+				address,
+				config.rpc_cors.as_ref(),
+				gen_handler(deny_unsafe(&config.rpc_http, config.unsafe_rpc_expose)),
+			),
 		)?.map(|s| waiting::HttpServer(Some(s))),
 		maybe_start_server(
 			config.rpc_ws,
@@ -525,15 +659,15 @@ fn start_rpc_servers<H: FnMut() -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>>(
 				address,
 				config.rpc_ws_max_connections,
 				config.rpc_cors.as_ref(),
-				gen_handler(),
+				gen_handler(deny_unsafe(&config.rpc_ws, config.unsafe_rpc_expose)),
 			),
-		)?.map(|s| waiting::WsServer(Some(s))).map(Mutex::new),
+		)?.map(|s| waiting::WsServer(Some(s))),
 	)))
 }
 
 /// Starts RPC servers that run in their own thread, and returns an opaque object that keeps them alive.
 #[cfg(target_os = "unknown")]
-fn start_rpc_servers<H: FnMut() -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>>(
+fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> sc_rpc_server::RpcHandler<sc_rpc::Metadata>>(
 	_: &Configuration,
 	_: H
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
@@ -677,6 +811,7 @@ mod tests {
 		let pool = Arc::new(BasicPool::new(
 			Default::default(),
 			Arc::new(FullChainApi::new(client.clone())),
+			None,
 		).0);
 		let source = sp_runtime::transaction_validity::TransactionSource::External;
 		let best = longest_chain.best_chain().unwrap();

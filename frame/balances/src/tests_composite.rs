@@ -18,14 +18,18 @@
 
 #![cfg(test)]
 
-use sp_runtime::{Perbill, traits::{ConvertInto, IdentityLookup}, testing::Header};
+use sp_runtime::{
+	Perbill,
+	traits::{ConvertInto, IdentityLookup},
+	testing::Header,
+};
 use sp_core::H256;
 use sp_io;
 use frame_support::{impl_outer_origin, parameter_types};
 use frame_support::traits::Get;
 use frame_support::weights::{Weight, DispatchInfo};
 use std::cell::RefCell;
-use crate::{GenesisConfig, Module, Trait, decl_tests};
+use crate::{GenesisConfig, Module, Trait, decl_tests, tests::CallWithDispatchInfo};
 
 use frame_system as system;
 impl_outer_origin!{
@@ -54,7 +58,7 @@ impl frame_system::Trait for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = ();
+	type Call = CallWithDispatchInfo;
 	type Hash = H256;
 	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;
@@ -63,6 +67,9 @@ impl frame_system::Trait for Test {
 	type Event = ();
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
+	type DbWeight = ();
+	type BlockExecutionWeight = ();
+	type ExtrinsicBaseWeight = ();
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
@@ -72,13 +79,11 @@ impl frame_system::Trait for Test {
 	type OnKilledAccount = ();
 }
 parameter_types! {
-	pub const TransactionBaseFee: u64 = 0;
 	pub const TransactionByteFee: u64 = 1;
 }
 impl pallet_transaction_payment::Trait for Test {
 	type Currency = Module<Test>;
 	type OnTransactionPayment = ();
-	type TransactionBaseFee = TransactionBaseFee;
 	type TransactionByteFee = TransactionByteFee;
 	type WeightToFee = ConvertInto;
 	type FeeMultiplierUpdate = ();

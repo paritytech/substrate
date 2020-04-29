@@ -22,7 +22,7 @@
 
 mod metadata;
 
-pub use sc_rpc_api::Subscriptions;
+pub use sc_rpc_api::{DenyUnsafe, Subscriptions};
 pub use self::metadata::Metadata;
 pub use rpc::IoHandlerExtension as RpcExtension;
 

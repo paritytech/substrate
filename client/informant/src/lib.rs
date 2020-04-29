@@ -17,7 +17,7 @@
 //! Console informant. Prints sync progress and block events. Runs on the calling thread.
 
 use ansi_term::Colour;
-use sc_client_api::BlockchainEvents;
+use sc_client_api::{BlockchainEvents, UsageProvider};
 use futures::prelude::*;
 use log::{info, warn, trace};
 use sp_runtime::traits::Header;

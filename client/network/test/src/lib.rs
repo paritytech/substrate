@@ -27,11 +27,16 @@ use libp2p::build_multiaddr;
 use log::trace;
 use sc_network::config::FinalityProofProvider;
 use sp_blockchain::{
-	Result as ClientResult, well_known_cache_keys::{self, Id as CacheKeyId}, Info as BlockchainInfo,
+	HeaderBackend, Result as ClientResult,
+	well_known_cache_keys::{self, Id as CacheKeyId},
+	Info as BlockchainInfo,
 };
-use sc_client_api::{BlockchainEvents, BlockImportNotification, FinalityNotifications, ImportNotifications, FinalityNotification, backend::{TransactionFor, AuxStore, Backend, Finalizer}, BlockBackend};
+use sc_client_api::{
+	BlockchainEvents, BlockImportNotification, FinalityNotifications, ImportNotifications, FinalityNotification,
+	backend::{TransactionFor, AuxStore, Backend, Finalizer}, BlockBackend,
+};
+use sc_consensus::LongestChain;
 use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
-use sc_client::LongestChain;
 use sc_network::config::Role;
 use sp_consensus::block_validation::DefaultBlockAnnounceValidator;
 use sp_consensus::import_queue::{
@@ -41,7 +46,7 @@ use sp_consensus::block_import::{BlockImport, ImportResult};
 use sp_consensus::Error as ConsensusError;
 use sp_consensus::{BlockOrigin, ForkChoiceStrategy, BlockImportParams, BlockCheckParams, JustificationImport};
 use futures::prelude::*;
-use sc_network::{NetworkWorker, NetworkStateInfo, NetworkService, config::ProtocolId};
+use sc_network::{NetworkWorker, NetworkService, config::ProtocolId};
 use sc_network::config::{NetworkConfiguration, TransportConfig, BoxFinalityProofRequestBuilder};
 use libp2p::PeerId;
 use parking_lot::Mutex;
@@ -51,7 +56,7 @@ use sp_runtime::generic::{BlockId, OpaqueDigestItemId};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use sp_runtime::Justification;
 use substrate_test_runtime_client::{self, AccountKeyring};
-
+use sc_service::client::Client;
 pub use sc_network::config::EmptyTransactionPool;
 pub use substrate_test_runtime_client::runtime::{Block, Extrinsic, Hash, Transfer};
 pub use substrate_test_runtime_client::{TestClient, TestClientBuilder, TestClientBuilderExt};
@@ -87,10 +92,18 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 	}
 }
 
-pub type PeersFullClient =
-	sc_client::Client<substrate_test_runtime_client::Backend, substrate_test_runtime_client::Executor, Block, substrate_test_runtime_client::runtime::RuntimeApi>;
-pub type PeersLightClient =
-	sc_client::Client<substrate_test_runtime_client::LightBackend, substrate_test_runtime_client::LightExecutor, Block, substrate_test_runtime_client::runtime::RuntimeApi>;
+pub type PeersFullClient = Client<
+	substrate_test_runtime_client::Backend,
+	substrate_test_runtime_client::Executor,
+	Block,
+	substrate_test_runtime_client::runtime::RuntimeApi
+>;
+pub type PeersLightClient = Client<
+	substrate_test_runtime_client::LightBackend,
+	substrate_test_runtime_client::LightExecutor,
+	Block,
+	substrate_test_runtime_client::runtime::RuntimeApi
+>;
 
 #[derive(Clone)]
 pub enum PeersClient {
@@ -189,7 +202,7 @@ pub struct Peer<D> {
 impl<D> Peer<D> {
 	/// Get this peer ID.
 	pub fn id(&self) -> PeerId {
-		self.network.service().local_peer_id()
+		self.network.service().local_peer_id().clone()
 	}
 
 	/// Returns true if we're major syncing.
@@ -359,13 +372,9 @@ impl<D> Peer<D> {
 
 	/// Test helper to compare the blockchain state of multiple (networked)
 	/// clients.
-	/// Potentially costly, as it creates in-memory copies of both blockchains in order
-	/// to compare them. If you have easier/softer checks that are sufficient, e.g.
-	/// by using .info(), you should probably use it instead of this.
 	pub fn blockchain_canon_equals(&self, other: &Self) -> bool {
 		if let (Some(mine), Some(others)) = (self.backend.clone(), other.backend.clone()) {
-			mine.as_in_memory().blockchain()
-				.canon_equals_to(others.as_in_memory().blockchain())
+			mine.blockchain().info().best_hash == others.blockchain().info().best_hash
 		} else {
 			false
 		}
@@ -374,13 +383,19 @@ impl<D> Peer<D> {
 	/// Count the total number of imported blocks.
 	pub fn blocks_count(&self) -> u64 {
 		self.backend.as_ref().map(
-			|backend| backend.blocks_count()
+			|backend| backend.blockchain().info().best_number
 		).unwrap_or(0)
 	}
 
 	/// Return a collection of block hashes that failed verification
 	pub fn failed_verifications(&self) -> HashMap<<Block as BlockT>::Hash, String> {
 		self.verifier.failed_verifications.lock().clone()
+	}
+
+	pub fn has_block(&self, hash: &H256) -> bool {
+		self.backend.as_ref().map(
+			|backend| backend.blockchain().header(BlockId::hash(*hash)).unwrap().is_some()
+		).unwrap_or(false)
 	}
 }
 
@@ -600,14 +615,20 @@ pub trait TestNetFactory: Sized {
 
 		let listen_addr = build_multiaddr![Memory(rand::random::<u64>())];
 
+		let mut network_config = NetworkConfiguration::new(
+			"test-node",
+			"test-client",
+			Default::default(),
+			None,
+		);
+		network_config.transport = TransportConfig::MemoryOnly;
+		network_config.listen_addresses = vec![listen_addr.clone()];
+		network_config.allow_non_globals_in_dht = true;
+
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: Role::Full,
 			executor: None,
-			network_config: NetworkConfiguration {
-				listen_addresses: vec![listen_addr.clone()],
-				transport: TransportConfig::MemoryOnly,
-				..NetworkConfiguration::default()
-			},
+			network_config,
 			chain: client.clone(),
 			finality_proof_provider: self.make_finality_proof_provider(
 				PeersClient::Full(client.clone(), backend.clone()),
@@ -623,7 +644,7 @@ pub trait TestNetFactory: Sized {
 
 		self.mut_peers(|peers| {
 			for peer in peers.iter_mut() {
-				peer.network.add_known_address(network.service().local_peer_id(), listen_addr.clone());
+				peer.network.add_known_address(network.service().local_peer_id().clone(), listen_addr.clone());
 			}
 
 			let imported_blocks_stream = Box::pin(client.import_notification_stream().fuse());
@@ -671,14 +692,20 @@ pub trait TestNetFactory: Sized {
 
 		let listen_addr = build_multiaddr![Memory(rand::random::<u64>())];
 
+		let mut network_config = NetworkConfiguration::new(
+			"test-node",
+			"test-client",
+			Default::default(),
+			None,
+		);
+		network_config.transport = TransportConfig::MemoryOnly;
+		network_config.listen_addresses = vec![listen_addr.clone()];
+		network_config.allow_non_globals_in_dht = true;
+
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: Role::Light,
 			executor: None,
-			network_config: NetworkConfiguration {
-				listen_addresses: vec![listen_addr.clone()],
-				transport: TransportConfig::MemoryOnly,
-				..NetworkConfiguration::default()
-			},
+			network_config,
 			chain: client.clone(),
 			finality_proof_provider: self.make_finality_proof_provider(
 				PeersClient::Light(client.clone(), backend.clone())
@@ -694,7 +721,7 @@ pub trait TestNetFactory: Sized {
 
 		self.mut_peers(|peers| {
 			for peer in peers.iter_mut() {
-				peer.network.add_known_address(network.service().local_peer_id(), listen_addr.clone());
+				peer.network.add_known_address(network.service().local_peer_id().clone(), listen_addr.clone());
 			}
 
 			let imported_blocks_stream = Box::pin(client.import_notification_stream().fuse());

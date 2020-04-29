@@ -264,6 +264,17 @@ impl Default for ValidTransaction {
 }
 
 impl ValidTransaction {
+	/// Initiate `ValidTransaction` builder object with a particular prefix for tags.
+	///
+	/// To avoid conflicts between different parts in runtime it's recommended to build `requires`
+	/// and `provides` tags with a unique prefix.
+	pub fn with_tag_prefix(prefix: &'static str) -> ValidTransactionBuilder {
+		ValidTransactionBuilder {
+			prefix: Some(prefix),
+			validity: Default::default(),
+		}
+	}
+
 	/// Combine two instances into one, as a best effort. This will take the superset of each of the
 	/// `provides` and `requires` tags, it will sum the priorities, take the minimum longevity and
 	/// the logic *And* of the propagate flags.
@@ -277,6 +288,104 @@ impl ValidTransaction {
 		}
 	}
 }
+
+/// `ValidTransaction` builder.
+///
+///
+/// Allows to easily construct `ValidTransaction` and most importantly takes care of
+/// prefixing `requires` and `provides` tags to avoid conflicts.
+#[derive(Default, Clone, RuntimeDebug)]
+pub struct ValidTransactionBuilder {
+	prefix: Option<&'static str>,
+	validity: ValidTransaction,
+}
+
+impl ValidTransactionBuilder {
+	/// Set the priority of a transaction.
+	///
+	/// Note that the final priority for `FRAME` is combined from all `SignedExtension`s.
+	/// Most likely for unsigned transactions you want the priority to be higher
+	/// than for regular transactions. We recommend exposing a base priority for unsigned
+	/// transactions as a runtime module parameter, so that the runtime can tune inter-module
+	/// priorities.
+	pub fn priority(mut self, priority: TransactionPriority) -> Self {
+		self.validity.priority = priority;
+		self
+	}
+
+	/// Set the longevity of a transaction.
+	///
+	/// By default the transaction will be considered valid forever and will not be revalidated
+	/// by the transaction pool. It's recommended though to set the longevity to a finite value
+	/// though. If unsure, it's also reasonable to expose this parameter via module configuration
+	/// and let the runtime decide.
+	pub fn longevity(mut self, longevity: TransactionLongevity) -> Self {
+		self.validity.longevity = longevity;
+		self
+	}
+
+	/// Set the propagate flag.
+	///
+	/// Set to `false` if the transaction is not meant to be gossiped to peers. Combined with
+	/// `TransactionSource::Local` validation it can be used to have special kind of
+	/// transactions that are only produced and included by the validator nodes.
+	pub fn propagate(mut self, propagate: bool) -> Self {
+		self.validity.propagate = propagate;
+		self
+	}
+
+	/// Add a `TransactionTag` to the set of required tags.
+	///
+	/// The tag will be encoded and prefixed with module prefix (if any).
+	/// If you'd rather add a raw `require` tag, consider using `#combine_with` method.
+	pub fn and_requires(mut self, tag: impl Encode) -> Self {
+		self.validity.requires.push(match self.prefix.as_ref() {
+			Some(prefix) => (prefix, tag).encode(),
+			None => tag.encode(),
+		});
+		self
+	}
+
+	/// Add a `TransactionTag` to the set of provided tags.
+	///
+	/// The tag will be encoded and prefixed with module prefix (if any).
+	/// If you'd rather add a raw `require` tag, consider using `#combine_with` method.
+	pub fn and_provides(mut self, tag: impl Encode) -> Self {
+		self.validity.provides.push(match self.prefix.as_ref() {
+			Some(prefix) => (prefix, tag).encode(),
+			None => tag.encode(),
+		});
+		self
+	}
+
+	/// Augment the builder with existing `ValidTransaction`.
+	///
+	/// This method does add the prefix to `require` or `provides` tags.
+	pub fn combine_with(mut self, validity: ValidTransaction) -> Self {
+		self.validity = core::mem::take(&mut self.validity).combine_with(validity);
+		self
+	}
+
+	/// Finalize the builder and produce `TransactionValidity`.
+	///
+	/// Note the result will always be `Ok`. Use `Into` to produce `ValidTransaction`.
+	pub fn build(self) -> TransactionValidity {
+		self.into()
+	}
+}
+
+impl From<ValidTransactionBuilder> for TransactionValidity {
+	fn from(builder: ValidTransactionBuilder) -> Self {
+		Ok(builder.into())
+	}
+}
+
+impl From<ValidTransactionBuilder> for ValidTransaction {
+	fn from(builder: ValidTransactionBuilder) -> Self {
+		builder.validity
+	}
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -300,5 +409,27 @@ mod tests {
 
 		// decode back
 		assert_eq!(TransactionValidity::decode(&mut &*encoded), Ok(v));
+	}
+
+	#[test]
+	fn builder_should_prefix_the_tags() {
+		const PREFIX: &str = "test";
+		let a: ValidTransaction = ValidTransaction::with_tag_prefix(PREFIX)
+			.and_requires(1)
+			.and_requires(2)
+			.and_provides(3)
+			.and_provides(4)
+			.propagate(false)
+			.longevity(5)
+			.priority(3)
+			.priority(6)
+			.into();
+		assert_eq!(a, ValidTransaction {
+			propagate: false,
+			longevity: 5,
+			priority: 6,
+			requires: vec![(PREFIX, 1).encode(), (PREFIX, 2).encode()],
+			provides: vec![(PREFIX, 3).encode(), (PREFIX, 4).encode()],
+		});
 	}
 }
