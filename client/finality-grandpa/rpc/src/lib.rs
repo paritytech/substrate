@@ -23,6 +23,7 @@ use std::fmt::Debug;
 use finality_grandpa::BlockNumberOps;
 
 mod serialized;
+mod error;
 
 use sc_finality_grandpa::{SharedAuthoritySet, SharedVoterState};
 use serialized::ReportedRoundStates;
@@ -32,36 +33,6 @@ pub const NOT_READY_ERROR_CODE: i64 = 1;
 
 type FutureResult<T> =
 	Box<dyn jsonrpc_core::futures::Future<Item = T, Error = jsonrpc_core::Error> + Send>;
-
-#[derive(derive_more::Display, derive_more::From)]
-/// Top-level error type for the RPC handler
-pub enum Error {
-	/// The GRANDPA RPC endpoint is not ready.
-	#[display(fmt = "GRANDPA RPC endpoint not ready")]
-	EndpointNotReady,
-	/// GRANDPA reports the authority set id to be larger than 32-bits.
-	#[display(fmt = "GRANDPA reports authority set id unreasonably large")]
-	AuthoritySetIdReportedasUnreasonablyLarge,
-	/// GRANDPA reports voter state with round id or weights larger than 32-bits.
-	#[display(fmt = "GRANDPA reports voter state as unreasonably large")]
-	VoterStateReportsUnreasonablyLargeNumbers,
-}
-
-impl From<Error> for jsonrpc_core::Error {
-	fn from(error: Error) -> Self {
-		jsonrpc_core::Error {
-			message: format!("{}", error).into(),
-			code: jsonrpc_core::ErrorCode::ServerError(NOT_READY_ERROR_CODE),
-			data: None,
-		}
-	}
-}
-
-impl From<std::num::TryFromIntError> for Error {
-	fn from(_error: std::num::TryFromIntError) -> Self {
-		Error::VoterStateReportsUnreasonablyLargeNumbers
-	}
-}
 
 /// Provides RPC methods for interacting with GRANDPA.
 #[rpc]

@@ -19,7 +19,7 @@ use std::{fmt::Debug, collections::HashSet};
 use finality_grandpa::BlockNumberOps;
 
 use sc_finality_grandpa::{AuthorityId, SharedAuthoritySet, SharedVoterState, report};
-use crate::Error;
+use crate::error::Error;
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
