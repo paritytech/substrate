@@ -179,7 +179,7 @@ macro_rules! implement_fixed {
 				self.0.is_negative()
 			}
 
-			fn saturated_multiply_accumulate<N>(self, int: N) -> N
+			fn saturating_mul_int_acc<N>(self, int: N) -> N
 				where
 					N: TryFrom<i128> + UniqueSaturatedInto<i128> +
 					Copy + Bounded + Saturating +
@@ -678,9 +678,9 @@ macro_rules! implement_fixed {
 			fn saturating_mul_int_acc_works() {
 				let accuracy = $name::accuracy();
 
-				assert_eq!($name::zero().saturated_multiply_accumulate(accuracy as u64), accuracy as u64);
-				assert_eq!($name::one().saturated_multiply_accumulate(accuracy as u64), 2 * accuracy as u64);
-				assert_eq!($name::one().saturated_multiply_accumulate(i128::min_value()), i128::min_value());
+				assert_eq!($name::zero().saturating_mul_int_acc(accuracy as u64), accuracy as u64);
+				assert_eq!($name::one().saturating_mul_int_acc(accuracy as u64), 2 * accuracy as u64);
+				assert_eq!($name::one().saturating_mul_int_acc(i128::min_value()), i128::min_value());
 			}
 
 			#[test]

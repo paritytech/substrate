@@ -226,7 +226,7 @@ pub trait FixedPointNumber:
 	/// Performs a saturated multiplication and accumulate by unsigned number.
 	///
 	/// Returns a saturated `int + (self * int)`.
-	fn saturated_multiply_accumulate<
+	fn saturating_mul_int_acc<
 		N: TryFrom<i128> + UniqueSaturatedInto<i128> +
 			Copy + Bounded + Saturating +
 			Rem<N, Output=N> + Div<N, Output=N> + Mul<N, Output=N> +
