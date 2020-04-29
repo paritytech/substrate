@@ -2674,6 +2674,7 @@ fn remove_multi_deferred() {
 
 mod offchain_phragmen {
 	use crate::*;
+	use codec::Encode;
 	use frame_support::{assert_noop, assert_ok};
 	use sp_runtime::transaction_validity::TransactionSource;
 	use mock::*;
@@ -2714,14 +2715,19 @@ mod offchain_phragmen {
 		bond_nominator(voter, 1000 + voter, 100, vec![21, 31, 41]);
 	}
 
-	fn offchainify(ext: &mut TestExternalities) -> Arc<RwLock<PoolState>> {
-		let (offchain, _state) = TestOffchainExt::new();
-		let (pool, state) = TestTransactionPoolExt::new();
+	/// convert an externalities to one that can handle offchain worker tests.
+	fn offchainify(ext: &mut TestExternalities, iterations: u32) -> Arc<RwLock<PoolState>> {
+		let (offchain, offchain_state) = TestOffchainExt::new();
+		let (pool, pool_state) = TestTransactionPoolExt::new();
+
+	    let mut seed = [0_u8; 32];
+	    seed[0..4].copy_from_slice(&iterations.to_le_bytes());
+	    offchain_state.write().seed = seed;
 
 		ext.register_extension(OffchainExt::new(offchain));
 		ext.register_extension(TransactionPoolExt::new(pool));
 
-		state
+		pool_state
 	}
 
 	#[test]
@@ -3095,7 +3101,7 @@ mod offchain_phragmen {
 			.offchain_phragmen_ext()
 			.validator_count(2)
 			.build();
-		let state = offchainify(&mut ext);
+		let state = offchainify(&mut ext, 0);
 		ext.execute_with(|| {
 			run_to_block(12);
 
@@ -3138,7 +3144,7 @@ mod offchain_phragmen {
 			.validator_count(2)
 			.max_offchain_iterations(2)
 			.build();
-		let state = offchainify(&mut ext);
+		let state = offchainify(&mut ext, 2);
 		ext.execute_with(|| {
 			run_to_block(12);
 
@@ -3179,7 +3185,7 @@ mod offchain_phragmen {
 			.offchain_phragmen_ext()
 			.validator_count(4)
 			.build();
-		let state = offchainify(&mut ext);
+		let state = offchainify(&mut ext, 0);
 		ext.execute_with(|| {
 			run_to_block(12);
 			// put a good solution on-chain
@@ -3704,7 +3710,7 @@ mod offchain_phragmen {
 			.offchain_phragmen_ext()
 			.validator_count(4)
 			.build();
-		let state = offchainify(&mut ext);
+		let state = offchainify(&mut ext, 0);
 
 		ext.execute_with(|| {
 			use offchain_election::OFFCHAIN_HEAD_DB;
@@ -3728,7 +3734,7 @@ mod offchain_phragmen {
 			.offchain_phragmen_ext()
 			.validator_count(4)
 			.build();
-		let _ = offchainify(&mut ext);
+		let _ = offchainify(&mut ext, 0);
 
 		ext.execute_with(|| {
 			use offchain_election::OFFCHAIN_HEAD_DB;
