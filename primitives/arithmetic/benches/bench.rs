@@ -76,39 +76,9 @@ fn bench_division(c: &mut Criterion) {
 	}
 }
 
-fn bench_checked_mul_int(c: &mut Criterion) {
-	let x = Fixed128::max_value();
-	c.bench_function("checked_mul_int", |b| b.iter(|| x.checked_mul_int(black_box(20u64))));
-}
-
-fn bench_saturated_multiply_accumulate(c: &mut Criterion) {
-	let x = Fixed128::max_value();
-	c.bench_function("saturated_multiply_accumulate", |b| b.iter(|| x.saturated_multiply_accumulate(black_box(20u64))));
-}
-
-fn bench_checked_mul(c: &mut Criterion) {
-	let x = Fixed128::max_value();
-	let y = Fixed128::from_integer(20.into());
-	c.bench_function("checked_mul_only", |b| b.iter(|| x.checked_mul(black_box(&y))));
-}
-
-fn bench_divide(c: &mut Criterion) {
-	c.bench_function("divide_rat", |b| b.iter(|| multiply_by_rational(3, i128::max_value() as u128, 16)));
-
-	// c.bench_function("divide_rat", |b| b.iter(|| divide(i128::max_value() as u128, 16, 3)));
-}
-
-fn bench_pow(c: &mut Criterion) {
-	let x = Fixed128::from_integer(3.into());
-	c.bench_function("saturating_pow", |b| b.iter(|| x.saturating_pow(80usize)));
-}
-
-
 criterion_group!{
 	name = benches;
 	config = Criterion::default();
 	targets = bench_addition, bench_subtraction, bench_multiplication, bench_division,
-		bench_checked_mul_int, bench_saturated_multiply_accumulate, bench_checked_mul, bench_divide,
-		bench_pow
 }
 criterion_main!(benches);

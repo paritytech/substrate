@@ -59,7 +59,7 @@ fn transfer_fee<E: Encode>(extrinsic: &E, fee_multiplier: Fixed128) -> Balance {
 		::WeightToFee::convert(weight);
 
 	let base_fee = TransactionBaseFee::get();
-	base_fee + fee_multiplier.saturated_multiply_accumulate(length_fee + weight_fee)
+	base_fee + fee_multiplier.saturating_mul_int_acc(length_fee + weight_fee)
 }
 
 fn xt() -> UncheckedExtrinsic {

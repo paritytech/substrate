@@ -175,7 +175,7 @@ impl<T: Trait> Module<T> where
 			// the adjustable part of the fee
 			let adjustable_fee = len_fee.saturating_add(unadjusted_weight_fee);
 			let targeted_fee_adjustment = NextFeeMultiplier::get();
-			let adjusted_fee = targeted_fee_adjustment.saturated_multiply_accumulate(adjustable_fee.saturated_into());
+			let adjusted_fee = targeted_fee_adjustment.saturating_mul_int_acc(adjustable_fee.saturated_into());
 
 			let base_fee = T::TransactionBaseFee::get();
 			base_fee.saturating_add(adjusted_fee.saturated_into()).saturating_add(tip)
@@ -191,7 +191,7 @@ impl<T: Trait> Module<T> where
 	pub fn weight_to_fee_with_adjustment(weight: Weight) -> BalanceOf<T> where
 		BalanceOf<T>: From<u64>
 	{
-		NextFeeMultiplier::get().saturated_multiply_accumulate(
+		NextFeeMultiplier::get().saturating_mul_int_acc(
 			Self::weight_to_fee(weight)
 		)
 	}
