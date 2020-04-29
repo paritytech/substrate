@@ -52,7 +52,7 @@ use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_transaction_pool::{MaintainedTransactionPool, ChainEvent};
 use sp_blockchain;
 use prometheus_endpoint::Registry as PrometheusRegistry;
-use sp_core::storage::{StorageKey, StorageData};
+use sp_core::storage::Storage;
 
 pub type BackgroundTask = Pin<Box<dyn Future<Output=()> + Send>>;
 
@@ -653,14 +653,6 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 	}
 }
 
-/// The raw key & value pairs of the state for the top trie and child tries.
-pub struct RawState {
-	/// The top trie key & value pairs.
-	pub top: Vec<(StorageKey, StorageData)>,
-	/// The children default trie keys and the associated key & value pairs.
-	pub children_default: HashMap<StorageKey, Vec<(StorageKey, StorageData)>>,
-}
-
 /// Implemented on `ServiceBuilder`. Allows running block commands, such as import/export/validate
 /// components to the builder.
 pub trait ServiceBuilderCommand {
@@ -701,7 +693,7 @@ pub trait ServiceBuilderCommand {
 	fn export_raw_state(
 		&self,
 		block: Option<BlockId<Self::Block>>,
-	) -> Result<RawState, Error>;
+	) -> Result<Storage, Error>;
 }
 
 impl<TBl, TRtApi, TBackend, TExec, TSc, TImpQu, TExPool, TRpc>

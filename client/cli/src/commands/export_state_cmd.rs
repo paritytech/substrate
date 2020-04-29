@@ -15,12 +15,11 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{
-	CliConfiguration, error, params::{SharedParams, BlockNumberOrHash},
+	CliConfiguration, error, params::{PruningParams, SharedParams, BlockNumberOrHash},
 };
 use log::info;
-use sc_network::config::build_multiaddr;
 use sc_service::{Configuration, ServiceBuilderCommand};
-use sp_runtime::{generic::BlockId, traits::{Block as BlockT, Header as HeaderT, NumberFor}};
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::{fmt::Debug, str::FromStr};
 use structopt::StructOpt;
 
@@ -35,6 +34,10 @@ pub struct ExportStateCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub pruning_params: PruningParams,
 }
 
 impl ExportStateCmd {
@@ -53,9 +56,10 @@ impl ExportStateCmd {
 		<BB::Hash as FromStr>::Err: std::fmt::Debug,
 	{
 		info!("Exporting raw state...");
-		let input_spec = config.chain_spec.cloned_box();
+		let mut input_spec = config.chain_spec.cloned_box();
 		let block_id = self.input.clone().map(|b| b.parse()).transpose()?;
 		let raw_state = builder(config)?.export_raw_state(block_id)?;
+		input_spec.set_storage(raw_state);
 
 		info!("Generating new chain spec...");
 		let json = sc_service::chain_ops::build_spec(&*input_spec, true)?;
@@ -69,5 +73,9 @@ impl ExportStateCmd {
 impl CliConfiguration for ExportStateCmd {
 	fn shared_params(&self) -> &SharedParams {
 		&self.shared_params
+	}
+
+	fn pruning_params(&self) -> Option<&PruningParams> {
+		Some(&self.pruning_params)
 	}
 }

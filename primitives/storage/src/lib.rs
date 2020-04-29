@@ -92,9 +92,9 @@ pub struct StorageData(
 #[cfg(feature = "std")]
 pub type StorageMap = std::collections::BTreeMap<Vec<u8>, Vec<u8>>;
 
+/// Child trie storage data.
 #[cfg(feature = "std")]
 #[derive(Debug, PartialEq, Eq, Clone)]
-/// Child trie storage data.
 pub struct StorageChild {
 	/// Child data for storage.
 	pub data: StorageMap,
@@ -103,9 +103,9 @@ pub struct StorageChild {
 	pub child_info: ChildInfo,
 }
 
+/// Struct containing data needed for a storage.
 #[cfg(feature = "std")]
 #[derive(Default, Debug, Clone)]
-/// Struct containing data needed for a storage.
 pub struct Storage {
 	/// Top trie storage data.
 	pub top: StorageMap,

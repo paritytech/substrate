@@ -18,7 +18,7 @@ use crate::{
 	CliConfiguration, error, params::{ImportParams, SharedParams, BlockNumberOrHash},
 };
 use sc_service::{Configuration, ServiceBuilderCommand};
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::{fmt::Debug, str::FromStr};
 use structopt::StructOpt;
 

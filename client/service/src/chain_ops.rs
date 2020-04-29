@@ -17,7 +17,7 @@
 //! Chain utilities.
 
 use crate::error;
-use crate::builder::{ServiceBuilderCommand, ServiceBuilder, RawState};
+use crate::builder::{ServiceBuilderCommand, ServiceBuilder};
 use crate::error::Error;
 use sc_chain_spec::ChainSpec;
 use log::{warn, info};
@@ -33,7 +33,7 @@ use sp_consensus::{
 	import_queue::{IncomingBlock, Link, BlockImportError, BlockImportResult, ImportQueue},
 };
 use sc_executor::{NativeExecutor, NativeExecutionDispatch};
-use sp_core::storage::{StorageKey, well_known_keys, ChildInfo};
+use sp_core::storage::{StorageKey, well_known_keys, ChildInfo, Storage, StorageChild, StorageMap};
 use sc_client_api::StorageProvider;
 
 use std::{io::{Read, Write, Seek}, pin::Pin, collections::HashMap};
@@ -302,7 +302,7 @@ impl<
 	fn export_raw_state(
 		&self,
 		block: Option<BlockId<Self::Block>>,
-	) -> Result<RawState, Error> {
+	) -> Result<Storage, Error> {
 		let block = block.unwrap_or_else(
 			|| BlockId::Hash(self.client.usage_info().chain.best_hash)
 		);
@@ -324,18 +324,19 @@ impl<
 			let child_info = ChildInfo::new_default(&key.0);
 
 			let keys = self.client.child_storage_keys(&block, &child_info, &key)?;
-			let mut pairs = Vec::new();
+			let mut pairs = StorageMap::new();
 			keys.into_iter().try_for_each(|k| {
 				if let Some(value) = self.client.child_storage(&block, &child_info, &k)? {
-					pairs.push((k, value));
+					pairs.insert(k.0, value.0);
 				}
 
 				Ok::<_, Error>(())
 			})?;
 
-			children_default.insert(key, pairs);
+			children_default.insert(key.0, StorageChild { child_info, data: pairs });
 		}
 
-		Ok(RawState { top: top_storage, children_default })
+		let top = top_storage.into_iter().map(|(k, v)| (k.0, v.0)).collect();
+		Ok(Storage { top, children_default })
 	}
 }
