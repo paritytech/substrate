@@ -19,16 +19,17 @@
 use crate::error::Result;
 use crate::{
 	init_logger, ImportParams, KeystoreParams, NetworkParams, NodeKeyParams,
-	PruningParams, SharedParams, SubstrateCli,
+	OffchainWorkerParams, PruningParams, SharedParams, SubstrateCli,
 };
 use crate::arg_enums::Database;
 use app_dirs::{AppDataType, AppInfo};
 use names::{Generator, Name};
 use sc_service::config::{
-	Configuration, DatabaseConfig, ExecutionStrategies, ExtTransport, KeystoreConfig,
-	NetworkConfiguration, NodeKeyConfig, PrometheusConfig, PruningMode, Role, TelemetryEndpoints,
-	TransactionPoolOptions, WasmExecutionMethod,
+	WasmExecutionMethod, Role, OffchainWorkerConfig,
+	Configuration, DatabaseConfig, ExtTransport, KeystoreConfig, NetworkConfiguration,
+	NodeKeyConfig, PrometheusConfig, PruningMode, TelemetryEndpoints, TransactionPoolOptions,
 };
+use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::{ChainSpec, TracingReceiver};
 use std::future::Future;
 use std::net::SocketAddr;
@@ -64,6 +65,11 @@ pub trait CliConfiguration: Sized {
 
 	/// Get the NetworkParams for this object
 	fn network_params(&self) -> Option<&NetworkParams> {
+		None
+	}
+
+	/// Get a reference to `OffchainWorkerParams` for this object.
+	fn offchain_worker_params(&self) -> Option<&OffchainWorkerParams> {
 		None
 	}
 
@@ -195,9 +201,9 @@ pub trait CliConfiguration: Sized {
 	///
 	/// By default this is retrieved from `PruningMode` if it is available. Otherwise its
 	/// `PruningMode::default()`.
-	fn pruning(&self, is_dev: bool, role: &Role) -> Result<PruningMode> {
+	fn pruning(&self, unsafe_pruning: bool, role: &Role) -> Result<PruningMode> {
 		self.pruning_params()
-			.map(|x| x.pruning(is_dev, role))
+			.map(|x| x.pruning(unsafe_pruning, role))
 			.unwrap_or(Ok(Default::default()))
 	}
 
@@ -301,11 +307,13 @@ pub trait CliConfiguration: Sized {
 		Ok(Default::default())
 	}
 
-	/// Returns `Ok(true)` if offchain worker should be used
+	/// Returns an offchain worker config wrapped in `Ok(_)`
 	///
-	/// By default this is `false`.
-	fn offchain_worker(&self, _role: &Role) -> Result<bool> {
-		Ok(Default::default())
+	/// By default offchain workers are disabled.
+	fn offchain_worker(&self, role: &Role) -> Result<OffchainWorkerConfig> {
+		self.offchain_worker_params()
+			.map(|x| x.offchain_worker(role))
+			.unwrap_or_else(|| { Ok(OffchainWorkerConfig::default()) })
 	}
 
 	/// Returns `Ok(true)` if authoring should be forced
@@ -404,6 +412,11 @@ pub trait CliConfiguration: Sized {
 		let role = self.role(is_dev)?;
 		let max_runtime_instances = self.max_runtime_instances()?.unwrap_or(8);
 
+		let unsafe_pruning = self
+			.import_params()
+			.map(|p| p.unsafe_pruning)
+			.unwrap_or(false);
+
 		Ok(Configuration {
 			impl_name: C::impl_name(),
 			impl_version: C::impl_version(),
@@ -421,7 +434,7 @@ pub trait CliConfiguration: Sized {
 			database: self.database_config(&config_dir, database_cache_size, database)?,
 			state_cache_size: self.state_cache_size()?,
 			state_cache_child_ratio: self.state_cache_child_ratio()?,
-			pruning: self.pruning(is_dev, &role)?,
+			pruning: self.pruning(unsafe_pruning, &role)?,
 			wasm_method: self.wasm_method()?,
 			execution_strategies: self.execution_strategies(is_dev)?,
 			rpc_http: self.rpc_http()?,

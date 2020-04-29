@@ -26,8 +26,8 @@ use grandpa::{
 	self,
 	FinalityProofProvider as GrandpaFinalityProofProvider,
 	StorageAndProofProvider,
-        GrandpaJustificationSender,
-        GrandpaJustificationReceiver,
+	GrandpaJustificationSender,
+	GrandpaJustificationReceiver,
 };
 use node_executor;
 use node_primitives::Block;
@@ -36,14 +36,7 @@ use sc_service::{
 	AbstractService, ServiceBuilder, config::Configuration, error::{Error as ServiceError},
 };
 use sp_inherents::InherentDataProviders;
-
-use sc_service::{Service, NetworkStatus};
-use sc_client::{Client, LocalCallExecutor};
-use sc_client_db::Backend;
-use sp_runtime::traits::Block as BlockT;
-use node_executor::NativeExecutor;
-use sc_network::NetworkService;
-use sc_offchain::OffchainWorkers;
+use sc_consensus::LongestChain;
 
 use parking_lot::Mutex;
 
@@ -63,13 +56,13 @@ macro_rules! new_full_start {
 		let justification_receiver =
 			grandpa::GrandpaJustificationReceiver::new(finality_notifiers.clone());
 		let justification_sender =
-			grandpa::GrandpaJustificationReceiver::new(finality_notifiers.clone());
+			grandpa::GrandpaJustificationSender::new(finality_notifiers.clone());
 
 		let builder = sc_service::ServiceBuilder::new_full::<
 			node_primitives::Block, node_runtime::RuntimeApi, node_executor::Executor
 		>($config)?
 			.with_select_chain(|_config, backend| {
-				Ok(sc_client::LongestChain::new(backend.clone()))
+				Ok(sc_consensus::LongestChain::new(backend.clone()))
 			})?
 			.with_transaction_pool(|config, client, _fetcher, prometheus_registry| {
 				let pool_api = sc_transaction_pool::FullChainApi::new(client.clone());
@@ -286,38 +279,9 @@ macro_rules! new_full {
 	}}
 }
 
-type ConcreteBlock = node_primitives::Block;
-type ConcreteClient =
-	Client<
-		Backend<ConcreteBlock>,
-		LocalCallExecutor<Backend<ConcreteBlock>, NativeExecutor<node_executor::Executor>>,
-		ConcreteBlock,
-		node_runtime::RuntimeApi
-	>;
-type ConcreteBackend = Backend<ConcreteBlock>;
-type ConcreteTransactionPool = sc_transaction_pool::BasicPool<
-	sc_transaction_pool::FullChainApi<ConcreteClient, ConcreteBlock>,
-	ConcreteBlock
->;
-
 /// Builds a new service for a full client.
 pub fn new_full(config: Configuration)
--> Result<
-	Service<
-		ConcreteBlock,
-		ConcreteClient,
-		LongestChain<ConcreteBackend, ConcreteBlock>,
-		NetworkStatus<ConcreteBlock>,
-		NetworkService<ConcreteBlock, <ConcreteBlock as BlockT>::Hash>,
-		ConcreteTransactionPool,
-		OffchainWorkers<
-			ConcreteClient,
-			<ConcreteBackend as sc_client_api::backend::Backend<Block>>::OffchainStorage,
-			ConcreteBlock,
-		>
-	>,
-	ServiceError,
->
+-> Result<impl AbstractService, ServiceError>
 {
 	new_full!(config).map(|(service, _)| service)
 }
@@ -436,7 +400,7 @@ mod tests {
 		use sp_core::ed25519::Pair;
 
 		use {service_test, Factory};
-		use sc_client::{BlockImportParams, BlockOrigin};
+		use sp_consensus::{BlockImportParams, BlockOrigin};
 
 		let alice: Arc<ed25519::Pair> = Arc::new(Keyring::Alice.into());
 		let bob: Arc<ed25519::Pair> = Arc::new(Keyring::Bob.into());
@@ -653,12 +617,11 @@ mod tests {
 					check_nonce,
 					check_weight,
 					payment,
-					Default::default(),
 				);
 				let raw_payload = SignedPayload::from_raw(
 					function,
 					extra,
-					(version, genesis_hash, genesis_hash, (), (), (), ())
+					(version, genesis_hash, genesis_hash, (), (), ())
 				);
 				let signature = raw_payload.using_encoded(|payload|	{
 					signer.sign(payload)

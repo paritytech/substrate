@@ -161,6 +161,18 @@ pub enum NotifsHandlerIn {
 		message: Vec<u8>,
 	},
 
+	/// Modifies the handshake message of a notifications protocol.
+	UpdateHandshake {
+		/// Name of the protocol for the message.
+		///
+		/// Must match one of the registered protocols.
+		protocol_name: Cow<'static, [u8]>,
+
+		/// The new handshake message to send if we open a substream or if the remote opens a
+		/// substream towards us.
+		handshake_message: Vec<u8>,
+	},
+
 	/// Sends a notifications message.
 	SendNotification {
 		/// Name of the protocol for the message.
@@ -363,6 +375,18 @@ impl ProtocolsHandler for NotifsHandler {
 			},
 			NotifsHandlerIn::SendLegacy { message } =>
 				self.legacy.inject_event(LegacyProtoHandlerIn::SendCustomMessage { message }),
+			NotifsHandlerIn::UpdateHandshake { protocol_name, handshake_message } => {
+				for (handler, current_handshake) in &mut self.in_handlers {
+					if handler.protocol_name() == &*protocol_name {
+						*current_handshake = handshake_message.clone();
+					}
+				}
+				for (handler, current_handshake) in &mut self.out_handlers {
+					if handler.protocol_name() == &*protocol_name {
+						*current_handshake = handshake_message.clone();
+					}
+				}
+			}
 			NotifsHandlerIn::SendNotification { message, encoded_fallback_message, protocol_name } => {
 				for (handler, _) in &mut self.out_handlers {
 					if handler.protocol_name() != &protocol_name[..] {

@@ -18,7 +18,7 @@
 
 #[cfg(feature = "std")]
 use super::{BABE_ENGINE_ID, AuthoritySignature};
-use super::{AuthorityId, AuthorityIndex, SlotNumber, BabeAuthorityWeight};
+use super::{AuthorityId, AuthorityIndex, SlotNumber, BabeAuthorityWeight, BabeEpochConfiguration, AllowedSlots};
 #[cfg(feature = "std")]
 use sp_runtime::{DigestItem, generic::OpaqueDigestItemId};
 #[cfg(feature = "std")]
@@ -65,7 +65,7 @@ impl TryFrom<RawPrimaryPreDigest> for PrimaryPreDigest {
 
 /// BABE secondary slot assignment pre-digest.
 #[derive(Clone, RuntimeDebug, Encode, Decode)]
-pub struct SecondaryPreDigest {
+pub struct SecondaryPlainPreDigest {
 	/// Authority index
 	///
 	/// This is not strictly-speaking necessary, since the secondary slots
@@ -75,6 +75,37 @@ pub struct SecondaryPreDigest {
 	pub authority_index: super::AuthorityIndex,
 	/// Slot number
 	pub slot_number: SlotNumber,
+}
+
+/// BABE secondary deterministic slot assignment with VRF outputs.
+#[derive(Clone, RuntimeDebug, Encode, Decode)]
+pub struct RawSecondaryVRFPreDigest<VRFOutput=schnorrkel::RawVRFOutput, VRFProof=schnorrkel::RawVRFProof> {
+	/// Authority index
+	pub authority_index: super::AuthorityIndex,
+	/// Slot number
+	pub slot_number: SlotNumber,
+	/// VRF output
+	pub vrf_output: VRFOutput,
+	/// VRF proof
+	pub vrf_proof: VRFProof,
+}
+
+#[cfg(feature = "std")]
+/// BABE secondary slot assignment with VRF outputs pre-digest, for std environment.
+pub type SecondaryVRFPreDigest = RawSecondaryVRFPreDigest<schnorrkel::VRFOutput, schnorrkel::VRFProof>;
+
+#[cfg(feature = "std")]
+impl TryFrom<RawSecondaryVRFPreDigest> for SecondaryVRFPreDigest {
+	type Error = SignatureError;
+
+	fn try_from(raw: RawSecondaryVRFPreDigest) -> Result<SecondaryVRFPreDigest, SignatureError> {
+		Ok(SecondaryVRFPreDigest {
+			authority_index: raw.authority_index,
+			slot_number: raw.slot_number,
+			vrf_output: raw.vrf_output.try_into()?,
+			vrf_proof: raw.vrf_proof.try_into()?,
+		})
+	}
 }
 
 /// A BABE pre-runtime digest. This contains all data required to validate a
@@ -87,7 +118,10 @@ pub enum RawPreDigest<VRFOutput=schnorrkel::RawVRFOutput, VRFProof=schnorrkel::R
 	Primary(RawPrimaryPreDigest<VRFOutput, VRFProof>),
 	/// A secondary deterministic slot assignment.
 	#[codec(index = "2")]
-	Secondary(SecondaryPreDigest),
+	SecondaryPlain(SecondaryPlainPreDigest),
+	/// A secondary deterministic slot assignment with VRF outputs.
+	#[codec(index = "3")]
+	SecondaryVRF(RawSecondaryVRFPreDigest<VRFOutput, VRFProof>),
 }
 
 #[cfg(feature = "std")]
@@ -99,7 +133,8 @@ impl<VRFOutput, VRFProof> RawPreDigest<VRFOutput, VRFProof> {
 	pub fn authority_index(&self) -> AuthorityIndex {
 		match self {
 			RawPreDigest::Primary(primary) => primary.authority_index,
-			RawPreDigest::Secondary(secondary) => secondary.authority_index,
+			RawPreDigest::SecondaryPlain(secondary) => secondary.authority_index,
+			RawPreDigest::SecondaryVRF(secondary) => secondary.authority_index,
 		}
 	}
 
@@ -107,7 +142,8 @@ impl<VRFOutput, VRFProof> RawPreDigest<VRFOutput, VRFProof> {
 	pub fn slot_number(&self) -> SlotNumber {
 		match self {
 			RawPreDigest::Primary(primary) => primary.slot_number,
-			RawPreDigest::Secondary(secondary) => secondary.slot_number,
+			RawPreDigest::SecondaryPlain(secondary) => secondary.slot_number,
+			RawPreDigest::SecondaryVRF(secondary) => secondary.slot_number,
 		}
 	}
 
@@ -116,7 +152,7 @@ impl<VRFOutput, VRFProof> RawPreDigest<VRFOutput, VRFProof> {
 	pub fn added_weight(&self) -> crate::BabeBlockWeight {
 		match self {
 			RawPreDigest::Primary(_) => 1,
-			RawPreDigest::Secondary(_) => 0,
+			RawPreDigest::SecondaryPlain(_) | RawPreDigest::SecondaryVRF(_) => 0,
 		}
 	}
 }
@@ -128,20 +164,44 @@ impl TryFrom<RawPreDigest> for PreDigest {
 	fn try_from(raw: RawPreDigest) -> Result<PreDigest, SignatureError> {
 		Ok(match raw {
 			RawPreDigest::Primary(primary) => PreDigest::Primary(primary.try_into()?),
-			RawPreDigest::Secondary(secondary) => PreDigest::Secondary(secondary),
+			RawPreDigest::SecondaryPlain(secondary) => PreDigest::SecondaryPlain(secondary),
+			RawPreDigest::SecondaryVRF(secondary) => PreDigest::SecondaryVRF(secondary.try_into()?),
 		})
 	}
 }
 
 /// Information about the next epoch. This is broadcast in the first block
 /// of the epoch.
-#[derive(Decode, Encode, Default, PartialEq, Eq, Clone, RuntimeDebug)]
+#[derive(Decode, Encode, PartialEq, Eq, Clone, RuntimeDebug)]
 pub struct NextEpochDescriptor {
 	/// The authorities.
 	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 
 	/// The value of randomness to use for the slot-assignment.
 	pub randomness: Randomness,
+}
+
+/// Information about the next epoch config, if changed. This is broadcast in the first
+/// block of the epoch, and applies using the same rules as `NextEpochDescriptor`.
+#[derive(Decode, Encode, PartialEq, Eq, Clone, RuntimeDebug)]
+pub enum NextConfigDescriptor {
+	/// Version 1.
+	#[codec(index = "1")]
+	V1 {
+		/// Value of `c` in `BabeEpochConfiguration`.
+		c: (u64, u64),
+		/// Value of `allowed_slots` in `BabeEpochConfiguration`.
+		allowed_slots: AllowedSlots,
+	}
+}
+
+impl From<NextConfigDescriptor> for BabeEpochConfiguration {
+	fn from(desc: NextConfigDescriptor) -> Self {
+		match desc {
+			NextConfigDescriptor::V1 { c, allowed_slots } =>
+				Self { c, allowed_slots },
+		}
+	}
 }
 
 /// A digest item which is usable with BABE consensus.
@@ -159,8 +219,11 @@ pub trait CompatibleDigestItem: Sized {
 	/// If this item is a BABE signature, return the signature.
 	fn as_babe_seal(&self) -> Option<AuthoritySignature>;
 
-	/// If this item is a BABE epoch, return it.
+	/// If this item is a BABE epoch descriptor, return it.
 	fn as_next_epoch_descriptor(&self) -> Option<NextEpochDescriptor>;
+
+	/// If this item is a BABE config descriptor, return it.
+	fn as_next_config_descriptor(&self) -> Option<NextConfigDescriptor>;
 }
 
 #[cfg(feature = "std")]
@@ -187,6 +250,14 @@ impl<Hash> CompatibleDigestItem for DigestItem<Hash> where
 		self.try_to(OpaqueDigestItemId::Consensus(&BABE_ENGINE_ID))
 			.and_then(|x: super::ConsensusLog| match x {
 				super::ConsensusLog::NextEpochData(n) => Some(n),
+				_ => None,
+			})
+	}
+
+	fn as_next_config_descriptor(&self) -> Option<NextConfigDescriptor> {
+		self.try_to(OpaqueDigestItemId::Consensus(&BABE_ENGINE_ID))
+			.and_then(|x: super::ConsensusLog| match x {
+				super::ConsensusLog::NextConfigData(n) => Some(n),
 				_ => None,
 			})
 	}

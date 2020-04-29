@@ -112,7 +112,7 @@ mock_impl_runtime_apis! {
 	}
 }
 
-type TestClient = substrate_test_runtime_client::sc_client::Client<
+type TestClient = substrate_test_runtime_client::client::Client<
 	substrate_test_runtime_client::Backend,
 	substrate_test_runtime_client::Executor,
 	Block,

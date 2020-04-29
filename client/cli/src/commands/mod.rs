@@ -144,6 +144,12 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
+			fn offchain_worker_params(&self) -> Option<&$crate::OffchainWorkerParams> {
+				match self {
+					$($enum::$variant(cmd) => cmd.offchain_worker_params()),*
+				}
+			}
+
 			fn base_path(&self) -> $crate::Result<::std::option::Option<::std::path::PathBuf>> {
 				match self {
 					$($enum::$variant(cmd) => cmd.base_path()),*
@@ -229,10 +235,10 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
-			fn pruning(&self, is_dev: bool, role: &::sc_service::Role)
+			fn pruning(&self, unsafe_pruning: bool, role: &::sc_service::Role)
 			-> $crate::Result<::sc_service::config::PruningMode> {
 				match self {
-					$($enum::$variant(cmd) => cmd.pruning(is_dev, role)),*
+					$($enum::$variant(cmd) => cmd.pruning(unsafe_pruning, role)),*
 				}
 			}
 
@@ -261,7 +267,7 @@ macro_rules! substrate_cli_subcommands {
 			}
 
 			fn execution_strategies(&self, is_dev: bool)
-			-> $crate::Result<::sc_service::config::ExecutionStrategies> {
+			-> $crate::Result<::sc_client_api::execution_extensions::ExecutionStrategies> {
 				match self {
 					$($enum::$variant(cmd) => cmd.execution_strategies(is_dev)),*
 				}
@@ -327,7 +333,7 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
-			fn offchain_worker(&self, role: &::sc_service::Role) -> $crate::Result<bool> {
+			fn offchain_worker(&self, role: &::sc_service::Role) -> $crate::Result<::sc_service::config::OffchainWorkerConfig> {
 				match self {
 					$($enum::$variant(cmd) => cmd.offchain_worker(role)),*
 				}

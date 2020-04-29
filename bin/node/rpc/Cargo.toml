@@ -11,7 +11,7 @@ repository = "https://github.com/paritytech/substrate/"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sc-client = { version = "0.8.0-dev", path = "../../../client/" }
+sc-client-api = { version = "2.0.0-dev", path = "../../../client/api" }
 jsonrpc-core = "14.0.3"
 node-primitives = { version = "2.0.0-dev", path = "../primitives" }
 node-runtime = { version = "2.0.0-dev", path = "../runtime" }

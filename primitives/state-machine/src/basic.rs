@@ -19,7 +19,7 @@
 use std::{
 	collections::BTreeMap, any::{TypeId, Any}, iter::FromIterator, ops::Bound
 };
-use crate::{Backend, InMemoryBackend, StorageKey, StorageValue};
+use crate::{Backend, StorageKey, StorageValue};
 use hash_db::Hasher;
 use sp_trie::{TrieConfiguration, empty_child_trie_root};
 use sp_trie::trie_types::Layout;
@@ -140,6 +140,8 @@ impl From<BTreeMap<StorageKey, StorageValue>> for BasicExternalities {
 }
 
 impl Externalities for BasicExternalities {
+	fn set_offchain_storage(&mut self, _key: &[u8], _value: Option<&[u8]>) {}
+
 	fn storage(&self, key: &[u8]) -> Option<StorageValue> {
 		self.inner.top.get(key).cloned()
 	}
@@ -255,6 +257,16 @@ impl Externalities for BasicExternalities {
 		}
 	}
 
+	fn storage_append(
+		&mut self,
+		key: Vec<u8>,
+		value: Vec<u8>,
+	) {
+		let previous = self.storage(&key).unwrap_or_default();
+		let new = crate::ext::append_to_storage(previous, value).expect("Failed to append to storage");
+		self.place_storage(key.clone(), Some(new));
+	}
+
 	fn chain_id(&self) -> u64 { 42 }
 
 	fn storage_root(&mut self) -> Vec<u8> {
@@ -284,8 +296,7 @@ impl Externalities for BasicExternalities {
 	) -> Vec<u8> {
 		if let Some(child) = self.inner.children_default.get(child_info.storage_key()) {
 			let delta = child.data.clone().into_iter().map(|(k, v)| (k, Some(v)));
-
-			InMemoryBackend::<Blake2Hasher>::default()
+			crate::in_memory_backend::new_in_mem::<Blake2Hasher>()
 				.child_storage_root(&child.child_info, delta).0
 		} else {
 			empty_child_trie_root::<Layout<Blake2Hasher>>()

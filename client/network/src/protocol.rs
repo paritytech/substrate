@@ -62,6 +62,9 @@ use wasm_timer::Instant;
 pub mod api {
 	pub mod v1 {
 		include!(concat!(env!("OUT_DIR"), "/api.v1.rs"));
+		pub mod finality {
+			include!(concat!(env!("OUT_DIR"), "/api.v1.finality.rs"));
+		}
 		pub mod light {
 			include!(concat!(env!("OUT_DIR"), "/api.v1.light.rs"));
 		}
@@ -72,12 +75,14 @@ mod generic_proto;
 mod util;
 
 pub mod block_requests;
+pub mod finality_requests;
 pub mod message;
 pub mod event;
 pub mod light_client_handler;
 pub mod sync;
 
 pub use block_requests::BlockRequests;
+pub use finality_requests::FinalityProofRequests;
 pub use light_client_handler::LightClientHandler;
 pub use generic_proto::LegacyConnectionKillError;
 
@@ -232,6 +237,9 @@ pub struct Protocol<B: BlockT, H: ExHashT> {
 	metrics: Option<Metrics>,
 	/// The `PeerId`'s of all boot nodes.
 	boot_node_ids: Arc<HashSet<PeerId>>,
+	/// If true, we send back requests as `CustomMessageOutcome` events. If false, we directly
+	/// dispatch requests using the legacy substream.
+	use_new_block_requests_protocol: bool,
 }
 
 #[derive(Default)]
@@ -303,6 +311,31 @@ impl Default for ProtocolConfig {
 	}
 }
 
+/// Handshake sent when we open a block announces substream.
+#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+struct BlockAnnouncesHandshake<B: BlockT> {
+	/// Roles of the node.
+	roles: Roles,
+	/// Best block number.
+	best_number: NumberFor<B>,
+	/// Best block hash.
+	best_hash: B::Hash,
+	/// Genesis block hash.
+	genesis_hash: B::Hash,
+}
+
+impl<B: BlockT> BlockAnnouncesHandshake<B> {
+	fn build(protocol_config: &ProtocolConfig, chain: &Arc<dyn Client<B>>) -> Self {
+		let info = chain.info();
+		BlockAnnouncesHandshake {
+			genesis_hash: info.genesis_hash,
+			roles: protocol_config.roles.into(),
+			best_number: info.best_number,
+			best_hash: info.best_hash,
+		}
+	}
+}
+
 /// Fallback mechanism to use to send a notification if no substream is open.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Fallback {
@@ -327,6 +360,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
 		metrics_registry: Option<&Registry>,
 		boot_node_ids: Arc<HashSet<PeerId>>,
+		use_new_block_requests_protocol: bool,
 		queue_size_report: Option<HistogramVec>,
 	) -> error::Result<(Protocol<B, H>, sc_peerset::PeersetHandle)> {
 		let info = chain.info();
@@ -369,7 +403,10 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			proto.extend(b"/block-announces/1");
 			proto
 		});
-		behaviour.register_notif_protocol(block_announces_protocol.clone(), Vec::new());
+		behaviour.register_notif_protocol(
+			block_announces_protocol.clone(),
+			BlockAnnouncesHandshake::build(&config, &chain).encode()
+		);
 		legacy_equiv_by_name.insert(block_announces_protocol.clone(), Fallback::BlockAnnounce);
 
 		let protocol = Protocol {
@@ -400,6 +437,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				None
 			},
 			boot_node_ids,
+			use_new_block_requests_protocol,
 		};
 
 		Ok((protocol, peerset_handle))
@@ -484,6 +522,8 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		self.sync.num_sync_requests()
 	}
 
+	/// Accepts a response from the legacy substream and determines what the corresponding
+	/// request was.
 	fn handle_response(
 		&mut self,
 		who: PeerId,
@@ -773,7 +813,9 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		self.peerset_handle.report_peer(who, reputation)
 	}
 
-	fn on_block_response(
+	/// Must be called in response to a [`CustomMessageOutcome::BlockRequest`] being emitted.
+	/// Must contain the same `PeerId` and request that have been emitted.
+	pub fn on_block_response(
 		&mut self,
 		peer: PeerId,
 		request: message::BlockRequest<B>,
@@ -824,8 +866,15 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				Ok(sync::OnBlockData::Import(origin, blocks)) =>
 					CustomMessageOutcome::BlockImport(origin, blocks),
 				Ok(sync::OnBlockData::Request(peer, req)) => {
-					self.send_request(&peer, GenericMessage::BlockRequest(req));
-					CustomMessageOutcome::None
+					if self.use_new_block_requests_protocol {
+						CustomMessageOutcome::BlockRequest {
+							target: peer,
+							request: req,
+						}
+					} else {
+						self.send_request(&peer, GenericMessage::BlockRequest(req));
+						CustomMessageOutcome::None
+					}
 				}
 				Err(sync::BadPeer(id, repu)) => {
 					self.behaviour.disconnect_peer(&id);
@@ -992,7 +1041,16 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		if info.roles.is_full() {
 			match self.sync.new_peer(who.clone(), info.best_hash, info.best_number) {
 				Ok(None) => (),
-				Ok(Some(req)) => self.send_request(&who, GenericMessage::BlockRequest(req)),
+				Ok(Some(req)) => {
+					if self.use_new_block_requests_protocol {
+						self.pending_messages.push_back(CustomMessageOutcome::BlockRequest {
+							target: who.clone(),
+							request: req,
+						});
+					} else {
+						self.send_request(&who, GenericMessage::BlockRequest(req))
+					}
+				},
 				Err(sync::BadPeer(id, repu)) => {
 					self.behaviour.disconnect_peer(&id);
 					self.peerset_handle.report_peer(id, repu)
@@ -1294,29 +1352,30 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				],
 			},
 		);
+
+		if is_their_best {
+			self.pending_messages.push_back(CustomMessageOutcome::PeerNewBest(who, number));
+		}
+
 		match blocks_to_import {
 			Ok(sync::OnBlockData::Import(origin, blocks)) => {
-				if is_their_best {
-					self.pending_messages.push_back(CustomMessageOutcome::PeerNewBest(who, number));
-				}
 				CustomMessageOutcome::BlockImport(origin, blocks)
 			},
 			Ok(sync::OnBlockData::Request(peer, req)) => {
-				self.send_request(&peer, GenericMessage::BlockRequest(req));
-				if is_their_best {
-					CustomMessageOutcome::PeerNewBest(who, number)
+				if self.use_new_block_requests_protocol {
+					CustomMessageOutcome::BlockRequest {
+						target: peer,
+						request: req,
+					}
 				} else {
+					self.send_request(&peer, GenericMessage::BlockRequest(req));
 					CustomMessageOutcome::None
 				}
 			}
 			Err(sync::BadPeer(id, repu)) => {
 				self.behaviour.disconnect_peer(&id);
 				self.peerset_handle.report_peer(id, repu);
-				if is_their_best {
-					CustomMessageOutcome::PeerNewBest(who, number)
-				} else {
-					CustomMessageOutcome::None
-				}
+				CustomMessageOutcome::None
 			}
 		}
 	}
@@ -1325,6 +1384,10 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	pub fn on_block_imported(&mut self, header: &B::Header, is_best: bool) {
 		if is_best {
 			self.sync.update_chain_info(header);
+			self.behaviour.set_notif_protocol_handshake(
+				&self.block_announces_protocol,
+				BlockAnnouncesHandshake::build(&self.config, &self.context_data.chain).encode()
+			);
 		}
 	}
 
@@ -1406,14 +1469,21 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		for result in results {
 			match result {
 				Ok((id, req)) => {
-					let msg = GenericMessage::BlockRequest(req);
-					send_request(
-						&mut self.behaviour,
-						&mut self.context_data.stats,
-						&mut self.context_data.peers,
-						&id,
-						msg
-					)
+					if self.use_new_block_requests_protocol {
+						self.pending_messages.push_back(CustomMessageOutcome::BlockRequest {
+							target: id,
+							request: req,
+						});
+					} else {
+						let msg = GenericMessage::BlockRequest(req);
+						send_request(
+							&mut self.behaviour,
+							&mut self.context_data.stats,
+							&mut self.context_data.peers,
+							&id,
+							msg
+						)
+					}
 				}
 				Err(sync::BadPeer(id, repu)) => {
 					self.behaviour.disconnect_peer(&id);
@@ -1682,7 +1752,9 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		);
 	}
 
-	fn on_finality_proof_response(
+	/// Must be called after a [`CustomMessageOutcome::FinalityProofRequest`] has been emitted,
+	/// to notify of the response having arrived.
+	pub fn on_finality_proof_response(
 		&mut self,
 		who: PeerId,
 		response: message::FinalityProofResponse<B::Hash>,
@@ -1761,6 +1833,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 /// Outcome of an incoming custom message.
 #[derive(Debug)]
+#[must_use]
 pub enum CustomMessageOutcome<B: BlockT> {
 	BlockImport(BlockOrigin, Vec<IncomingBlock<B>>),
 	JustificationImport(Origin, B::Hash, NumberFor<B>, Justification),
@@ -1771,6 +1844,18 @@ pub enum CustomMessageOutcome<B: BlockT> {
 	NotificationStreamClosed { remote: PeerId, protocols: Vec<ConsensusEngineId> },
 	/// Messages have been received on one or more notifications protocols.
 	NotificationsReceived { remote: PeerId, messages: Vec<(ConsensusEngineId, Bytes)> },
+	/// A new block request must be emitted.
+	/// Once you have the response, you must call `Protocol::on_block_response`.
+	/// It is the responsibility of the handler to ensure that a timeout exists.
+	/// If the request times out, or the peer responds in an invalid way, the peer has to be
+	/// disconnect. This will inform the state machine that the request it has emitted is stale.
+	BlockRequest { target: PeerId, request: message::BlockRequest<B> },
+	/// A new finality proof request must be emitted.
+	/// Once you have the response, you must call `Protocol::on_finality_proof_response`.
+	/// It is the responsibility of the handler to ensure that a timeout exists.
+	/// If the request times out, or the peer responds in an invalid way, the peer has to be
+	/// disconnect. This will inform the state machine that the request it has emitted is stale.
+	FinalityProofRequest { target: PeerId, block_hash: B::Hash, request: Vec<u8> },
 	/// Peer has a reported a new head of chain.
 	PeerNewBest(PeerId, NumberFor<B>),
 	None,
@@ -1875,30 +1960,55 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 		}
 
 		for (id, r) in self.sync.block_requests() {
-			send_request(
-				&mut self.behaviour,
-				&mut self.context_data.stats,
-				&mut self.context_data.peers,
-				&id,
-				GenericMessage::BlockRequest(r)
-			)
+			if self.use_new_block_requests_protocol {
+				let event = CustomMessageOutcome::BlockRequest {
+					target: id,
+					request: r,
+				};
+				return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event));
+			} else {
+				send_request(
+					&mut self.behaviour,
+					&mut self.context_data.stats,
+					&mut self.context_data.peers,
+					&id,
+					GenericMessage::BlockRequest(r)
+				)
+			}
 		}
 		for (id, r) in self.sync.justification_requests() {
-			send_request(
-				&mut self.behaviour,
-				&mut self.context_data.stats,
-				&mut self.context_data.peers,
-				&id,
-				GenericMessage::BlockRequest(r)
-			)
+			if self.use_new_block_requests_protocol {
+				let event = CustomMessageOutcome::BlockRequest {
+					target: id,
+					request: r,
+				};
+				return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event));
+			} else {
+				send_request(
+					&mut self.behaviour,
+					&mut self.context_data.stats,
+					&mut self.context_data.peers,
+					&id,
+					GenericMessage::BlockRequest(r)
+				)
+			}
 		}
 		for (id, r) in self.sync.finality_proof_requests() {
-			send_request(
-				&mut self.behaviour,
-				&mut self.context_data.stats,
-				&mut self.context_data.peers,
-				&id,
-				GenericMessage::FinalityProofRequest(r))
+			if self.use_new_block_requests_protocol {
+				let event = CustomMessageOutcome::FinalityProofRequest {
+					target: id,
+					block_hash: r.block,
+					request: r.request,
+				};
+				return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event));
+			} else {
+				send_request(
+					&mut self.behaviour,
+					&mut self.context_data.stats,
+					&mut self.context_data.peers,
+					&id,
+					GenericMessage::FinalityProofRequest(r))
+			}
 		}
 
 		let event = match self.behaviour.poll(cx, params) {
@@ -2045,6 +2155,7 @@ mod tests {
 			Box::new(DefaultBlockAnnounceValidator::new(client.clone())),
 			None,
 			Default::default(),
+			true,
 			None,
 		).unwrap();
 

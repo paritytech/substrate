@@ -1,0 +1,34 @@
+[package]
+name = "pallet-staking-fuzz"
+version = "0.0.0"
+authors = ["Automatically generated"]
+publish = false
+edition = "2018"
+license = "GPL-3.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+description = "FRAME pallet staking fuzzing"
+
+[dependencies]
+honggfuzz = "0.5"
+codec = { package = "parity-scale-codec", version = "1.3.0", default-features = false, features = ["derive"] }
+pallet-staking = { version = "2.0.0-alpha.5", path = "..", features = ["testing-utils"] }
+pallet-staking-reward-curve = { version = "2.0.0-alpha.5",  path = "../reward-curve" }
+pallet-session = { version = "2.0.0-alpha.5", path = "../../session" }
+pallet-indices = { version = "2.0.0-alpha.5", path = "../../indices" }
+pallet-balances = { version = "2.0.0-alpha.5", path = "../../balances" }
+pallet-timestamp = { version = "2.0.0-alpha.5", path = "../../timestamp" }
+frame-system = { version = "2.0.0-alpha.5", path = "../../system" }
+frame-support = { version = "2.0.0-alpha.5", path = "../../support" }
+sp-std = { version = "2.0.0-alpha.5", path = "../../../primitives/std" }
+sp-io ={ version = "2.0.0-alpha.5", path = "../../../primitives/io" }
+sp-core = { version = "2.0.0-alpha.5", path = "../../../primitives/core" }
+sp-phragmen = { version = "2.0.0-alpha.5", path = "../../../primitives/phragmen" }
+sp-runtime = { version = "2.0.0-alpha.5", path = "../../../primitives/runtime" }
+
+[[bin]]
+name = "submit_solution"
+path = "src/submit_solution.rs"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

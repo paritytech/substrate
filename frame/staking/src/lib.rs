@@ -150,7 +150,6 @@
 //!
 //! ```
 //! use frame_support::{decl_module, dispatch};
-//! use frame_support::weights::{SimpleDispatchInfo, MINIMUM_WEIGHT};
 //! use frame_system::{self as system, ensure_signed};
 //! use pallet_staking::{self as staking};
 //!
@@ -159,7 +158,7 @@
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 //!			/// Reward a validator.
-//! 		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
+//! 		#[weight = 0]
 //! 		pub fn reward_myself(origin) -> dispatch::DispatchResult {
 //! 			let reported = ensure_signed(origin)?;
 //! 			<staking::Module<T>>::reward_by_ids(vec![(reported, 10)]);
@@ -291,7 +290,7 @@ use sp_std::{
 use codec::{HasCompact, Encode, Decode};
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error, debug,
-	weights::{SimpleDispatchInfo, MINIMUM_WEIGHT, Weight},
+	weights::{Weight, DispatchClass},
 	storage::IterableStorageMap,
 	dispatch::{IsSubType, DispatchResult},
 	traits::{
@@ -371,7 +370,7 @@ generate_compact_solution_type!(pub GenericCompactAssignments, 16);
 #[derive(Encode, Decode, RuntimeDebug)]
 pub struct ActiveEraInfo {
 	/// Index of era.
-	index: EraIndex,
+	pub index: EraIndex,
 	/// Moment of start expresed as millisecond from `$UNIX_EPOCH`.
 	///
 	/// Start can be none if start hasn't been set for the era yet,
@@ -803,6 +802,10 @@ pub trait Trait: frame_system::Trait + SendTransactionTypes<Call<Self>> {
 
 	/// The overarching call type.
 	type Call: Dispatchable + From<Call<Self>> + IsSubType<Module<Self>, Self> + Clone;
+
+	/// Maximum number of equalise iterations to run in the offchain submission. If set to 0,
+	/// equalize will not be executed at all.
+	type MaxIterations: Get<u32>;
 
 	/// The maximum number of nominator rewarded for each validator.
 	///
@@ -1246,8 +1249,12 @@ decl_module! {
 		fn on_runtime_upgrade() -> Weight {
 			// For Kusama the type hasn't actually changed as Moment was u64 and was the number of
 			// millisecond since unix epoch.
-			StorageVersion::put(Releases::V3_0_0);
-			Self::migrate_last_reward_to_claimed_rewards();
+			StorageVersion::mutate(|v| {
+				if matches!(v, Releases::V2_0_0) {
+					Self::migrate_last_reward_to_claimed_rewards();
+				}
+				*v = Releases::V3_0_0;
+			});
 			0
 		}
 
@@ -1268,7 +1275,7 @@ decl_module! {
 		/// NOTE: Two of the storage writes (`Self::bonded`, `Self::payee`) are _never_ cleaned
 		/// unless the `origin` falls below _existential deposit_ and gets removed as dust.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(500_000_000)]
+		#[weight = 500_000_000]
 		pub fn bond(origin,
 			controller: <T::Lookup as StaticLookup>::Source,
 			#[compact] value: BalanceOf<T>,
@@ -1332,7 +1339,7 @@ decl_module! {
 		/// - O(1).
 		/// - One DB entry.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(500_000_000)]
+		#[weight = 500_000_000]
 		fn bond_extra(origin, #[compact] max_additional: BalanceOf<T>) {
 			ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
 			let stash = ensure_signed(origin)?;
@@ -1378,7 +1385,7 @@ decl_module! {
 		///   `withdraw_unbonded`.
 		/// - One DB entry.
 		/// </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(400_000_000)]
+		#[weight = 400_000_000]
 		fn unbond(origin, #[compact] value: BalanceOf<T>) {
 			ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
 			let controller = ensure_signed(origin)?;
@@ -1426,7 +1433,7 @@ decl_module! {
 		/// - Contains a limited number of reads, yet the size of which could be large based on `ledger`.
 		/// - Writes are limited to the `origin` account key.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(400_000_000)]
+		#[weight = 400_000_000]
 		fn withdraw_unbonded(origin) {
 			ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
 			let controller = ensure_signed(origin)?;
@@ -1469,7 +1476,7 @@ decl_module! {
 		/// - Contains a limited number of reads.
 		/// - Writes are limited to the `origin` account key.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(750_000_000)]
+		#[weight = 750_000_000]
 		pub fn validate(origin, prefs: ValidatorPrefs) {
 			ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
 			let controller = ensure_signed(origin)?;
@@ -1492,7 +1499,7 @@ decl_module! {
 		/// which is capped at CompactAssignments::LIMIT.
 		/// - Both the reads and writes follow a similar pattern.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(750_000_000)]
+		#[weight = 750_000_000]
 		pub fn nominate(origin, targets: Vec<<T::Lookup as StaticLookup>::Source>) {
 			ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
 			let controller = ensure_signed(origin)?;
@@ -1527,7 +1534,7 @@ decl_module! {
 		/// - Contains one read.
 		/// - Writes are limited to the `origin` account key.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(500_000_000)]
+		#[weight = 500_000_000]
 		fn chill(origin) {
 			ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
 			let controller = ensure_signed(origin)?;
@@ -1546,7 +1553,7 @@ decl_module! {
 		/// - Contains a limited number of reads.
 		/// - Writes are limited to the `origin` account key.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(500_000_000)]
+		#[weight = 500_000_000]
 		fn set_payee(origin, payee: RewardDestination) {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
@@ -1565,7 +1572,7 @@ decl_module! {
 		/// - Contains a limited number of reads.
 		/// - Writes are limited to the `origin` account key.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(750_000_000)]
+		#[weight = 750_000_000]
 		fn set_controller(origin, controller: <T::Lookup as StaticLookup>::Source) {
 			let stash = ensure_signed(origin)?;
 			let old_controller = Self::bonded(&stash).ok_or(Error::<T>::NotStash)?;
@@ -1582,7 +1589,7 @@ decl_module! {
 		}
 
 		/// The ideal number of validators.
-		#[weight = SimpleDispatchInfo::FixedNormal(5_000_000)]
+		#[weight = 5_000_000]
 		fn set_validator_count(origin, #[compact] new: u32) {
 			ensure_root(origin)?;
 			ValidatorCount::put(new);
@@ -1593,7 +1600,7 @@ decl_module! {
 		/// # <weight>
 		/// - No arguments.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(5_000_000)]
+		#[weight = 5_000_000]
 		fn force_no_eras(origin) {
 			ensure_root(origin)?;
 			ForceEra::put(Forcing::ForceNone);
@@ -1605,21 +1612,21 @@ decl_module! {
 		/// # <weight>
 		/// - No arguments.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(5_000_000)]
+		#[weight = 5_000_000]
 		fn force_new_era(origin) {
 			ensure_root(origin)?;
 			ForceEra::put(Forcing::ForceNew);
 		}
 
 		/// Set the validators who cannot be slashed (if any).
-		#[weight = SimpleDispatchInfo::FixedNormal(5_000_000)]
+		#[weight = 5_000_000]
 		fn set_invulnerables(origin, validators: Vec<T::AccountId>) {
 			ensure_root(origin)?;
 			<Invulnerables<T>>::put(validators);
 		}
 
 		/// Force a current staker to become completely unstaked, immediately.
-		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
+		#[weight = 0]
 		fn force_unstake(origin, stash: T::AccountId) {
 			ensure_root(origin)?;
 
@@ -1635,7 +1642,7 @@ decl_module! {
 		/// # <weight>
 		/// - One storage write
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(5_000_000)]
+		#[weight = 5_000_000]
 		fn force_new_era_always(origin) {
 			ensure_root(origin)?;
 			ForceEra::put(Forcing::ForceAlways);
@@ -1648,7 +1655,7 @@ decl_module! {
 		/// # <weight>
 		/// - One storage write.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000_000)]
+		#[weight = 1_000_000_000]
 		fn cancel_deferred_slash(origin, era: EraIndex, slash_indices: Vec<u32>) {
 			T::SlashCancelOrigin::try_origin(origin)
 				.map(|_| ())
@@ -1699,7 +1706,7 @@ decl_module! {
 		///   maximum number of validators that may be nominated by a single nominator, it is
 		///   bounded only economically (all nominators are required to place a minimum stake).
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(500_000_000)]
+		#[weight = 500_000_000]
 		fn payout_nominator(origin, era: EraIndex, validators: Vec<(T::AccountId, u32)>)
 			-> DispatchResult
 		{
@@ -1726,7 +1733,7 @@ decl_module! {
 		/// - Time complexity: O(1).
 		/// - Contains a limited number of reads and writes.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(500_000_000)]
+		#[weight = 500_000_000]
 		fn payout_validator(origin, era: EraIndex) -> DispatchResult {
 			let ctrl = ensure_signed(origin)?;
 			Self::do_payout_validator(ctrl, era)
@@ -1747,7 +1754,7 @@ decl_module! {
 		/// - Time complexity: at most O(MaxNominatorRewardedPerValidator).
 		/// - Contains a limited number of reads and writes.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(500_000_000)]
+		#[weight = 500_000_000]
 		fn payout_stakers(origin, validator_stash: T::AccountId, era: EraIndex) -> DispatchResult {
 			ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
 			ensure_signed(origin)?;
@@ -1763,7 +1770,7 @@ decl_module! {
 		/// - Time complexity: O(1). Bounded by `MAX_UNLOCKING_CHUNKS`.
 		/// - Storage changes: Can't increase storage, only decrease it.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(500_000_000)]
+		#[weight = 500_000_000]
 		fn rebond(origin, #[compact] value: BalanceOf<T>) {
 			ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
 			let controller = ensure_signed(origin)?;
@@ -1777,7 +1784,7 @@ decl_module! {
 		/// Set history_depth value.
 		///
 		/// Origin must be root.
-		#[weight = SimpleDispatchInfo::FixedOperational(500_000_000)]
+		#[weight = (500_000_000, DispatchClass::Operational)]
 		fn set_history_depth(origin, #[compact] new_history_depth: EraIndex) {
 			ensure_root(origin)?;
 			if let Some(current_era) = Self::current_era() {
@@ -1799,7 +1806,7 @@ decl_module! {
 		/// This can be called from any origin.
 		///
 		/// - `stash`: The stash account to reap. Its balance must be zero.
-		#[weight = SimpleDispatchInfo::FixedNormal(MINIMUM_WEIGHT)]
+		#[weight = 0]
 		fn reap_stash(_origin, stash: T::AccountId) {
 			ensure!(T::Currency::total_balance(&stash).is_zero(), Error::<T>::FundedTarget);
 			Self::kill_stash(&stash)?;
@@ -1880,7 +1887,7 @@ decl_module! {
 		///
 		/// The weight of this call is 1/10th of the blocks total weight.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(100_000_000_000)]
+		#[weight = 100_000_000_000]
 		pub fn submit_election_solution(
 			origin,
 			winners: Vec<ValidatorIndex>,
@@ -1903,7 +1910,7 @@ decl_module! {
 		/// Note that this must pass the [`ValidateUnsigned`] check which only allows transactions
 		/// from the local node to be included. In other words, only the block author can include a
 		/// transaction in the block.
-		#[weight = SimpleDispatchInfo::FixedNormal(100_000_000_000)]
+		#[weight = 100_000_000_000]
 		pub fn submit_election_solution_unsigned(
 			origin,
 			winners: Vec<ValidatorIndex>,
