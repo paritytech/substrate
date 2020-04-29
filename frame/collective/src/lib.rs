@@ -249,7 +249,15 @@ mod weight_for {
 	}
 }
 
-macro_rules! map_result_weight(
+/// Adjust the weight of a dispatch call result by mapping the weight with a closure.
+///
+/// Will return `Ok` without regard to the underlying result.
+///
+/// Usage:
+/// ```ignore
+/// let res = fold_result_weight!(result, |weight| weight + 40_000);
+/// ```
+macro_rules! fold_result_weight(
 	($result:expr, $closure:expr) => {{
 		match $result {
 			Ok(post_info) => {
@@ -330,7 +338,7 @@ decl_module! {
 			let result = proposal.dispatch(RawOrigin::Member(who).into());
 			Self::deposit_event(RawEvent::MemberExecuted(proposal_hash, result.is_ok()));
 
-			map_result_weight!(result, |w| weight_for::execute(
+			fold_result_weight!(result, |w| weight_for::execute(
 				T::DbWeight::get(),
 				members.len() as Weight,
 				w
@@ -396,7 +404,7 @@ decl_module! {
 				let result = proposal.dispatch(RawOrigin::Members(1, seats).into());
 				Self::deposit_event(RawEvent::Executed(proposal_hash, result.is_ok()));
 
-				map_result_weight!(result, |w| weight_for::propose_execute(
+				fold_result_weight!(result, |w| weight_for::propose_execute(
 					T::DbWeight::get(),
 					members.len() as Weight, // M
 					w, // P1
