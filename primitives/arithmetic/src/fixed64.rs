@@ -21,7 +21,7 @@ use sp_std::{
 use codec::{Encode, Decode};
 use num_traits::Signed;
 use crate::{
-	helpers_128bit::{multiply_by_rational, multiply, divide},
+	helpers_128bit::{multiply_by_rational},
 	PerThing, Perbill,
 	traits::{
 		SaturatedConversion, CheckedSub, CheckedAdd, CheckedMul, CheckedDiv,

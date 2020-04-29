@@ -17,7 +17,7 @@
 use codec::{Decode, Encode};
 use num_traits::Signed;
 use crate::{
-	helpers_128bit::{multiply_by_rational, multiply, divide},
+	helpers_128bit::{multiply_by_rational},
 	traits::{
 		Bounded, Saturating, UniqueSaturatedInto, SaturatedConversion, FixedPointNumber,
 		CheckedAdd, CheckedSub, CheckedMul, CheckedDiv, BaseArithmetic

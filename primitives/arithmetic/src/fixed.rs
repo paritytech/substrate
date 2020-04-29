@@ -23,7 +23,6 @@ use crate::traits::{
 	SaturatedConversion, UniqueSaturatedInto, Saturating, BaseArithmetic,
 	Bounded, Zero, FixedPointNumber
 };
-use crate::helpers_128bit::divide;
 use sp_debug_derive::RuntimeDebug;
 
 #[macro_export]
@@ -85,39 +84,20 @@ macro_rules! implement_fixed {
 				let denominator = denominator.checked_abs().map(|v| v as u128)
 					.unwrap_or(Self::Inner::max_value() as u128 + 1);
 
-				println!("num {} den {}", numerator, denominator);
-
-				let (multiply_high, multiply_low) = multiply(numerator, Self::DIV as u128);
-
-				println!("mul_h {} mul_l {}", multiply_high, multiply_low);
-
-				if let Some((result_high, remainder_high)) = divide(multiply_high, denominator, 128) {
-					let remainder_low = multiply_low.checked_rem(denominator)
-						.expect("None only if denominator is 0, denominator != 0 checked above; qed");
-					let result_low = multiply_low.checked_div(denominator)
-						.expect("None only if denominator is 0, denominator != 0 checked above; qed");
-
-					let partial_result = result_high.saturating_add(result_low);
-					let remainder = remainder_low.saturating_add(remainder_high);
-
-					let extra =  remainder.checked_div(denominator).unwrap_or(0);
-					let result = partial_result.saturating_add(extra);
-
-					let inner = if result == Self::Inner::max_value() as u128 + 1 && signum < 0 {
-						Self::Inner::min_value()
-					} else {
-						let unsigned_inner: Self::Inner = result.saturated_into();
-						unsigned_inner.saturating_mul(signum)
-					};
-	
-					Self(inner)	
-				} else {
-					if signum < 0 {
+				multiply_by_rational(numerator, Self::DIV as u128, denominator).ok()
+					.map(|r| {
+						if r > Self::Inner::max_value() as u128  && signum < 0 {
+							Self::min_value()
+						} else {
+							let r: Self::Inner = r.saturated_into(); 
+							Self(r.saturating_mul(signum))
+						}
+					})
+					.unwrap_or(if signum < 0 {
 						Self::min_value()
 					} else {
 						Self::max_value()
-					}
-				}
+					})
 			}
 
 			fn checked_mul_int<N>(self, int: N) -> Option<N>
@@ -552,31 +532,32 @@ macro_rules! implement_fixed {
 
 				let e = $name::from_rational(inner_max, accuracy);
 				let f = $name::from_rational(inner_min, accuracy);
-				// let g = $name::from_rational(inner_max, -accuracy);
-				// let h = $name::from_rational(inner_min, -accuracy);
-				// let i = $name::from_rational(inner_min + 1, -accuracy);
+				let g = $name::from_rational(inner_max, -accuracy);
+				let h = $name::from_rational(inner_min, -accuracy);
+				let i = $name::from_rational(inner_min + 1, -accuracy);
 
-				// let j = $name::from_rational(42, 0);
+				let j = $name::from_rational(42, 0);
 
-				// let k = $name::from_rational(inner_max, 1);
-				// let l = $name::from_rational(inner_min, 1);
-				// let m = $name::from_rational(inner_min, -1);
-				// let n = $name::from_rational(inner_max, -1);
+				let k = $name::from_rational(inner_max, 1);
+				let l = $name::from_rational(inner_min, 1);
+				let m = $name::from_rational(inner_min, -1);
+				let n = $name::from_rational(inner_max, -1);
 
-				// let o = $name::from_rational(inner_max, inner_max);
-				// let p = $name::from_rational(inner_min, inner_min);
-				// let r = $name::from_rational(inner_max, -inner_max);
-				// let s = $name::from_rational(-inner_max, inner_max);
+				let o = $name::from_rational(inner_max, inner_max);
+				let p = $name::from_rational(inner_min, inner_min);
+				let r = $name::from_rational(inner_max, -inner_max);
+				let s = $name::from_rational(-inner_max, inner_max);
 
-				// let t = $name::from_rational(inner_max, 3 * accuracy);
-				// let u = $name::from_rational(inner_max, -3 * accuracy);
+				let t = $name::from_rational(inner_max, 3 * accuracy);
+				let u = $name::from_rational(inner_max, -3 * accuracy);
 
-				// let v = $name::from_rational(inner_min, 3 * accuracy);
-				// let w = $name::from_rational(inner_min, accuracy / -3);
-				// let x = $name::from_rational(inner_min, accuracy / 3);
+				let v = $name::from_rational(inner_min, 2 * accuracy);
 
-				// let y = $name::from_rational(1, accuracy);
-				// let z = $name::from_rational(1, -accuracy);
+				let w = $name::from_rational(inner_min, accuracy / -3);
+				let x = $name::from_rational(inner_min, accuracy / 3);
+
+				let y = $name::from_rational(1, accuracy);
+				let z = $name::from_rational(1, -accuracy);
 
 				assert_eq!(a.into_inner(), 25 * accuracy / 10);
 				// assert_eq!(b.saturating_mul_int(10),-25);
@@ -585,37 +566,37 @@ macro_rules! implement_fixed {
 
 				assert_eq!(e.into_inner(), inner_max);
 				assert_eq!(f.into_inner(), inner_min);
-				// assert_eq!(g.into_inner(), -inner_max);
-				// assert_eq!(h.into_inner(), inner_max);
-				// assert_eq!(i.into_inner(), inner_max);
+				assert_eq!(g.into_inner(), -inner_max);
+				assert_eq!(h.into_inner(), inner_max);
+				assert_eq!(i.into_inner(), inner_max);
 
-				// assert_eq!(j.into_inner(), inner_max);
+				assert_eq!(j.into_inner(), 0);
 
-				// assert_eq!(k.into_inner(), inner_max);
-				// assert_eq!(l.into_inner(), inner_min);
-				// assert_eq!(n.into_inner(), inner_min);
-				// assert_eq!(m.into_inner(), inner_max);
+				assert_eq!(k.into_inner(), inner_max);
+				assert_eq!(l.into_inner(), inner_min);
+				assert_eq!(m.into_inner(), inner_max);
+				assert_eq!(n.into_inner(), inner_min);
 
-				// assert_eq!(o.into_inner(), accuracy);
-				// assert_eq!(p.into_inner(), accuracy);
-				// assert_eq!(r.into_inner(), -accuracy);
-				// assert_eq!(s.into_inner(), -accuracy);
+				assert_eq!(o.into_inner(), accuracy);
+				assert_eq!(p.into_inner(), accuracy);
+				assert_eq!(r.into_inner(), -accuracy);
+				assert_eq!(s.into_inner(), -accuracy);
 
-				// assert_eq!(t.into_inner(), inner_max / 3);
-				// assert_eq!(u.into_inner(), -inner_max / 3);
+				assert_eq!(t.into_inner(), inner_max / 3);
+				assert_eq!(u.into_inner(), -inner_max / 3);
 
-				// assert_eq!(v.into_inner(), inner_min / 3);
-				// assert_eq!(w.into_inner(), inner_max);
-				// assert_eq!(x.into_inner(), inner_min);
+				assert_eq!(v.into_inner(), inner_min / 2);
+				assert_eq!(w.into_inner(), inner_max);
+				assert_eq!(x.into_inner(), inner_min);
 
-				// assert_eq!(y.into_inner(), 1);
-				// assert_eq!(z.into_inner(), -1);
+				assert_eq!(y.into_inner(), 1);
+				assert_eq!(z.into_inner(), -1);
 
-				// let a = $name::from_rational(1, accuracy + 1);
-				// let b = $name::from_rational(1, -accuracy - 1);
+				let a = $name::from_rational(1, accuracy + 1);
+				let b = $name::from_rational(1, -accuracy - 1);
 
-				// assert_eq!(a.into_inner(), 0);
-				// assert_eq!(b.into_inner(), 0);
+				assert_eq!(a.into_inner(), 0);
+				assert_eq!(b.into_inner(), 0);
 			}
 
 			#[test]
