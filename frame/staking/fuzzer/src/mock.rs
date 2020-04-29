@@ -24,11 +24,11 @@ type AccountIndex = u32;
 type BlockNumber = u64;
 type Balance = u64;
 
-type System = frame_system::Module<Test>;
-type Balances = pallet_balances::Module<Test>;
-type Staking = pallet_staking::Module<Test>;
-type Indices = pallet_indices::Module<Test>;
-type Session = pallet_session::Module<Test>;
+pub type System = frame_system::Module<Test>;
+pub type Balances = pallet_balances::Module<Test>;
+pub type Staking = pallet_staking::Module<Test>;
+pub type Indices = pallet_indices::Module<Test>;
+pub type Session = pallet_session::Module<Test>;
 
 impl_outer_origin! {
 	pub enum Origin for Test  where system = frame_system {}
@@ -57,6 +57,9 @@ pub struct Test;
 
 impl frame_system::Trait for Test {
 	type Origin = Origin;
+	type DbWeight = ();
+	type BlockExecutionWeight = ();
+	type ExtrinsicBaseWeight = ();
 	type Index = AccountIndex;
 	type BlockNumber = BlockNumber;
 	type Call = Call;
@@ -150,18 +153,21 @@ pallet_staking_reward_curve::build! {
 parameter_types! {
 	pub const RewardCurve: &'static sp_runtime::curve::PiecewiseLinear<'static> = &I_NPOS;
 	pub const MaxNominatorRewardedPerValidator: u32 = 64;
+	pub const MaxIterations: u32 = 20;
 }
 
 pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
-type SubmitTransaction = frame_system::offchain::TransactionSubmitter<
-	sp_runtime::testing::UintAuthorityId,
-	Test,
-	Extrinsic,
->;
+
+impl<C> frame_system::offchain::SendTransactionTypes<C> for Test where
+	Call: From<C>,
+{
+	type OverarchingCall = Call;
+	type Extrinsic = Extrinsic;
+}
 
 impl pallet_staking::Trait for Test {
 	type Currency = Balances;
-	type Time = pallet_timestamp::Module<Self>;
+	type UnixTime = pallet_timestamp::Module<Self>;
 	type CurrencyToVote = CurrencyToVoteHandler;
 	type RewardRemainder = ();
 	type Event = ();
@@ -176,7 +182,7 @@ impl pallet_staking::Trait for Test {
 	type NextNewSession = Session;
 	type ElectionLookahead = ();
 	type Call = Call;
-	type SubmitTransaction = SubmitTransaction;
-	type KeyType = sp_runtime::testing::UintAuthorityId;
+	type MaxIterations = MaxIterations;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
+	type UnsignedPriority = ();
 }

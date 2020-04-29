@@ -243,7 +243,11 @@ pub fn check_execution_proof<Header, E, H>(
 	)
 }
 
-fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader: Fn(&Header) -> Header>(
+/// Check remote contextual execution proof using given backend and header factory.
+///
+/// Method is executed using passed header as environment' current block.
+/// Proof should include both environment preparation proof and method execution proof.
+pub fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader>(
 	executor: &E,
 	spawn_handle: Box<dyn CloneableSpawn>,
 	request: &RemoteCallRequest<Header>,
@@ -251,10 +255,11 @@ fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader: Fn(&Head
 	make_next_header: MakeNextHeader,
 ) -> ClientResult<Vec<u8>>
 	where
-		Header: HeaderT,
 		E: CodeExecutor + Clone + 'static,
 		H: Hasher,
+		Header: HeaderT,
 		H::Out: Ord + codec::Codec + 'static,
+		MakeNextHeader: Fn(&Header) -> Header,
 {
 	let local_state_root = request.header.state_root();
 	let root: H::Out = convert_hash(&local_state_root);
@@ -289,233 +294,4 @@ fn check_execution_proof_with_make_header<Header, E, H, MakeNextHeader: Fn(&Head
 		&runtime_code,
 	)
 	.map_err(Into::into)
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use sp_consensus::BlockOrigin;
-	use substrate_test_runtime_client::{
-		runtime::{Header, Digest, Block}, TestClient, ClientBlockImportExt,
-	};
-	use sc_executor::{NativeExecutor, WasmExecutionMethod};
-	use sp_core::{H256, tasks::executor as tasks_executor};
-	use sc_client_api::backend::{Backend, NewBlockState};
-	use crate::in_mem::Backend as InMemBackend;
-	use sc_client_api::ProofProvider;
-	use sp_runtime::traits::BlakeTwo256;
-	use sc_block_builder::BlockBuilderProvider;
-
-	struct DummyCallExecutor;
-
-	impl CallExecutor<Block> for DummyCallExecutor {
-		type Error = ClientError;
-
-		type Backend = substrate_test_runtime_client::Backend;
-
-		fn call(
-			&self,
-			_id: &BlockId<Block>,
-			_method: &str,
-			_call_data: &[u8],
-			_strategy: ExecutionStrategy,
-			_extensions: Option<Extensions>,
-		) -> Result<Vec<u8>, ClientError> {
-			Ok(vec![42])
-		}
-
-		fn contextual_call<
-			'a,
-			IB: Fn() -> ClientResult<()>,
-			EM: Fn(
-				Result<NativeOrEncoded<R>, Self::Error>,
-				Result<NativeOrEncoded<R>, Self::Error>
-			) -> Result<NativeOrEncoded<R>, Self::Error>,
-			R: Encode + Decode + PartialEq,
-			NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
-		>(
-			&self,
-			_initialize_block_fn: IB,
-			_at: &BlockId<Block>,
-			_method: &str,
-			_call_data: &[u8],
-			_changes: &RefCell<OverlayedChanges>,
-			_offchain_changes: &RefCell<OffchainOverlayedChanges>,
-			_storage_transaction_cache: Option<&RefCell<
-				StorageTransactionCache<
-					Block,
-					<Self::Backend as sc_client_api::backend::Backend<Block>>::State,
-				>
-			>>,
-			_initialize_block: InitializeBlock<'a, Block>,
-			_execution_manager: ExecutionManager<EM>,
-			_native_call: Option<NC>,
-			_proof_recorder: &Option<ProofRecorder<Block>>,
-			_extensions: Option<Extensions>,
-		) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
-			unreachable!()
-		}
-
-		fn runtime_version(&self, _id: &BlockId<Block>) -> Result<RuntimeVersion, ClientError> {
-			unreachable!()
-		}
-
-		fn prove_at_trie_state<S: sp_state_machine::TrieBackendStorage<HashFor<Block>>>(
-			&self,
-			_trie_state: &sp_state_machine::TrieBackend<S, HashFor<Block>>,
-			_overlay: &mut OverlayedChanges,
-			_method: &str,
-			_call_data: &[u8]
-		) -> Result<(Vec<u8>, StorageProof), ClientError> {
-			unreachable!()
-		}
-
-		fn native_runtime_version(&self) -> Option<&NativeVersion> {
-			unreachable!()
-		}
-	}
-
-	fn local_executor() -> NativeExecutor<substrate_test_runtime_client::LocalExecutor> {
-		NativeExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
-	}
-
-	#[test]
-	fn execution_proof_is_generated_and_checked() {
-		fn execute(remote_client: &TestClient, at: u64, method: &'static str) -> (Vec<u8>, Vec<u8>) {
-			let remote_block_id = BlockId::Number(at);
-			let remote_header = remote_client.header(&remote_block_id).unwrap().unwrap();
-
-			// 'fetch' execution proof from remote node
-			let (remote_result, remote_execution_proof) = remote_client.execution_proof(
-				&remote_block_id,
-				method,
-				&[]
-			).unwrap();
-
-			// check remote execution proof locally
-			let local_result = check_execution_proof::<_, _, BlakeTwo256>(
-				&local_executor(),
-				tasks_executor(),
-				&RemoteCallRequest {
-					block: substrate_test_runtime_client::runtime::Hash::default(),
-					header: remote_header,
-					method: method.into(),
-					call_data: vec![],
-					retry_count: None,
-				},
-				remote_execution_proof,
-			).unwrap();
-
-			(remote_result, local_result)
-		}
-
-		fn execute_with_proof_failure(remote_client: &TestClient, at: u64, method: &'static str) {
-			let remote_block_id = BlockId::Number(at);
-			let remote_header = remote_client.header(&remote_block_id).unwrap().unwrap();
-
-			// 'fetch' execution proof from remote node
-			let (_, remote_execution_proof) = remote_client.execution_proof(
-				&remote_block_id,
-				method,
-				&[]
-			).unwrap();
-
-			// check remote execution proof locally
-			let execution_result = check_execution_proof_with_make_header::<_, _, BlakeTwo256, _>(
-				&local_executor(),
-				tasks_executor(),
-				&RemoteCallRequest {
-					block: substrate_test_runtime_client::runtime::Hash::default(),
-					header: remote_header,
-					method: method.into(),
-					call_data: vec![],
-					retry_count: None,
-				},
-				remote_execution_proof,
-				|header| <Header as HeaderT>::new(
-					at + 1,
-					Default::default(),
-					Default::default(),
-					header.hash(),
-					header.digest().clone(), // this makes next header wrong
-				),
-			);
-			match execution_result {
-				Err(sp_blockchain::Error::Execution(_)) => (),
-				_ => panic!("Unexpected execution result: {:?}", execution_result),
-			}
-		}
-
-		// prepare remote client
-		let mut remote_client = substrate_test_runtime_client::new();
-		for i in 1u32..3u32 {
-			let mut digest = Digest::default();
-			digest.push(sp_runtime::generic::DigestItem::Other::<H256>(i.to_le_bytes().to_vec()));
-			remote_client.import_justified(
-				BlockOrigin::Own,
-				remote_client.new_block(digest).unwrap().build().unwrap().block,
-				Default::default(),
-			).unwrap();
-		}
-
-		// check method that doesn't requires environment
-		let (remote, local) = execute(&remote_client, 0, "Core_version");
-		assert_eq!(remote, local);
-
-		let (remote, local) = execute(&remote_client, 2, "Core_version");
-		assert_eq!(remote, local);
-
-		// check method that requires environment
-		let (_, block) = execute(&remote_client, 0, "BlockBuilder_finalize_block");
-		let local_block: Header = Decode::decode(&mut &block[..]).unwrap();
-		assert_eq!(local_block.number, 1);
-
-		let (_, block) = execute(&remote_client, 2, "BlockBuilder_finalize_block");
-		let local_block: Header = Decode::decode(&mut &block[..]).unwrap();
-		assert_eq!(local_block.number, 3);
-
-		// check that proof check doesn't panic even if proof is incorrect AND no panic handler is set
-		execute_with_proof_failure(&remote_client, 2, "Core_version");
-
-		// check that proof check doesn't panic even if proof is incorrect AND panic handler is set
-		sp_panic_handler::set("TEST", "1.2.3");
-		execute_with_proof_failure(&remote_client, 2, "Core_version");
-	}
-
-	#[test]
-	fn code_is_executed_at_genesis_only() {
-		let backend = Arc::new(InMemBackend::<Block>::new());
-		let def = H256::default();
-		let header0 = substrate_test_runtime_client::runtime::Header::new(0, def, def, def, Default::default());
-		let hash0 = header0.hash();
-		let header1 = substrate_test_runtime_client::runtime::Header::new(1, def, def, hash0, Default::default());
-		let hash1 = header1.hash();
-		backend.blockchain().insert(hash0, header0, None, None, NewBlockState::Final).unwrap();
-		backend.blockchain().insert(hash1, header1, None, None, NewBlockState::Final).unwrap();
-
-		let genesis_executor = GenesisCallExecutor::new(backend, DummyCallExecutor);
-		assert_eq!(
-			genesis_executor.call(
-				&BlockId::Number(0),
-				"test_method",
-				&[],
-				ExecutionStrategy::NativeElseWasm,
-				None,
-			).unwrap(),
-			vec![42],
-		);
-
-		let call_on_unavailable = genesis_executor.call(
-			&BlockId::Number(1),
-			"test_method",
-			&[],
-			ExecutionStrategy::NativeElseWasm,
-			None,
-		);
-
-		match call_on_unavailable {
-			Err(ClientError::NotAvailableOnLightClient) => (),
-			_ => unreachable!("unexpected result: {:?}", call_on_unavailable),
-		}
-	}
 }

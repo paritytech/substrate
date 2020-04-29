@@ -370,7 +370,7 @@ generate_compact_solution_type!(pub GenericCompactAssignments, 16);
 #[derive(Encode, Decode, RuntimeDebug)]
 pub struct ActiveEraInfo {
 	/// Index of era.
-	index: EraIndex,
+	pub index: EraIndex,
 	/// Moment of start expresed as millisecond from `$UNIX_EPOCH`.
 	///
 	/// Start can be none if start hasn't been set for the era yet,
@@ -802,6 +802,10 @@ pub trait Trait: frame_system::Trait + SendTransactionTypes<Call<Self>> {
 
 	/// The overarching call type.
 	type Call: Dispatchable + From<Call<Self>> + IsSubType<Module<Self>, Self> + Clone;
+
+	/// Maximum number of equalise iterations to run in the offchain submission. If set to 0,
+	/// equalize will not be executed at all.
+	type MaxIterations: Get<u32>;
 
 	/// The maximum number of nominator rewarded for each validator.
 	///

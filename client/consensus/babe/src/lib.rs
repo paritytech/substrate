@@ -1065,7 +1065,7 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 				ConsensusError::ClientImport(Error::<Block>::FetchEpoch(parent_hash).into())
 			})?;
 
-			let epoch_config = next_config_digest.unwrap_or_else(
+			let epoch_config = next_config_digest.map(Into::into).unwrap_or_else(
 				|| viable_epoch.as_ref().config.clone()
 			);
 
