@@ -358,7 +358,6 @@ macro_rules! implement_fixed {
 						break
 					}
 				}
-				// let fractional = fractional as f32/ Self::accuracy() as f32;
 				write!(f, "{}({}.{})", stringify!($name), integral, frac_str)
 			}
 
