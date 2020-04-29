@@ -41,7 +41,7 @@ use sp_core::u32_trait::Value as U32;
 use sp_runtime::RuntimeDebug;
 use sp_runtime::traits::Hash;
 use frame_support::{
-	dispatch::{Dispatchable, Parameter, DispatchResultWithPostInfo, PostDispatchInfo},
+	dispatch::{Dispatchable, Parameter, DispatchResult, DispatchResultWithPostInfo, PostDispatchInfo},
 	codec::{Encode, Decode},
 	traits::{Get, ChangeMembers, InitializeMembers, EnsureOrigin}, decl_module, decl_event,
 	decl_storage, decl_error, ensure,
@@ -179,6 +179,8 @@ decl_error! {
 		InvalidCount,
 		/// There can only be a maximum of `MaxMembers`.
 		TooManyMembers,
+		/// There can only be a maximum of `MaxProposals` active proposals.
+		TooManyProposals,
 	}
 }
 
@@ -323,9 +325,13 @@ decl_module! {
 				let ok = proposal.dispatch(RawOrigin::Members(1, seats).into()).is_ok();
 				Self::deposit_event(RawEvent::Executed(proposal_hash, ok));
 			} else {
+				<Proposals<T, I>>::try_mutate(|proposals| -> DispatchResult {
+					ensure!(proposals.len() <= T::MaxProposals::get() as usize, Error::<T, I>::TooManyProposals);
+					proposals.push(proposal_hash);
+					Ok(())
+				})?;
 				let index = Self::proposal_count();
 				<ProposalCount<I>>::mutate(|i| *i += 1);
-				<Proposals<T, I>>::mutate(|proposals| proposals.push(proposal_hash));
 				<ProposalOf<T, I>>::insert(proposal_hash, *proposal);
 				let end = system::Module::<T>::block_number() + T::MotionDuration::get();
 				let votes = Votes { index, threshold, ayes: vec![who.clone()], nays: vec![], end };
