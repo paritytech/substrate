@@ -62,7 +62,6 @@
 //!
 //! ```
 //! use frame_support::{decl_module, dispatch};
-//! use frame_support::weights::MINIMUM_WEIGHT;
 //! # use pallet_timestamp as timestamp;
 //! use frame_system::{self as system, ensure_signed};
 //!
@@ -70,7 +69,7 @@
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		#[weight = MINIMUM_WEIGHT]
+//! 		#[weight = 0]
 //! 		pub fn get_time(origin) -> dispatch::DispatchResult {
 //! 			let _sender = ensure_signed(origin)?;
 //! 			let _now = <timestamp::Module<T>>::get();
@@ -148,7 +147,7 @@ decl_module! {
 		/// `MinimumPeriod`.
 		///
 		/// The dispatch origin for this call must be `Inherent`.
-		/// 
+		///
 		/// # <weight>
 		/// - `O(T)` where `T` complexity of `on_timestamp_set`
 		/// - 1 storage read and 1 storage mutation (codec `O(1)`). (because of `DidUpdate::take` in `on_finalize`)
@@ -327,6 +326,8 @@ mod tests {
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type DbWeight = ();
+		type BlockExecutionWeight = ();
+		type ExtrinsicBaseWeight = ();
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = ();

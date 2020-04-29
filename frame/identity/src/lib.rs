@@ -560,6 +560,28 @@ mod weight_for {
 decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what it's working on.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		/// The amount held on deposit for a registered identity.
+		const BasicDeposit: BalanceOf<T> = T::BasicDeposit::get();
+
+		/// The amount held on deposit per additional field for a registered identity.
+		const FieldDeposit: BalanceOf<T> = T::FieldDeposit::get();
+
+		/// The amount held on deposit for a registered subaccount. This should account for the fact
+		/// that one storage item's value will increase by the size of an account ID, and there will be
+		/// another trie item whose value is the size of an account ID plus 32 bytes.
+		const SubAccountDeposit: BalanceOf<T> = T::SubAccountDeposit::get();
+
+		/// The maximum number of sub-accounts allowed per identified account.
+		const MaxSubAccounts: u32 = T::MaxSubAccounts::get();
+
+		/// Maximum number of additional fields that may be stored in an ID. Needed to bound the I/O
+		/// required to access an identity, but can be pretty high.
+		const MaxAdditionalFields: u32 = T::MaxAdditionalFields::get();
+
+		/// Maxmimum number of registrars allowed in the system. Needed to bound the complexity
+		/// of, e.g., updating judgements.
+		const MaxRegistrars: u32 = T::MaxRegistrars::get();
+
 		type Error = Error<T>;
 
 		fn deposit_event() = default;
@@ -619,7 +641,7 @@ decl_module! {
 		/// - One balance reserve operation.
 		/// - One storage mutation (codec-read `O(X' + R)`, codec-write `O(X + R)`).
 		/// - One event.
-		/// - Benchmarks: 
+		/// - Benchmarks:
 		///   - 136.6 + R * 0.62 + X * 2.62 µs (min squares analysis)
 		///   - 146.2 + R * 0.372 + X * 2.98 µs (min squares analysis)
 		/// # </weight>
@@ -684,7 +706,7 @@ decl_module! {
 		///   - One storage read (codec complexity `O(P)`).
 		///   - One storage write (codec complexity `O(S)`).
 		///   - One storage-exists (`IdentityOf::contains_key`).
-		/// - Benchmarks: 
+		/// - Benchmarks:
 		///   - 115.2 + P * 5.11 + S * 6.67 µs (min squares analysis)
 		///   - 121 + P * 4.852 + S * 7.111 µs (min squares analysis)
 		/// # </weight>
@@ -748,7 +770,7 @@ decl_module! {
 		/// - One balance-unreserve operation.
 		/// - `2` storage reads and `S + 2` storage deletions.
 		/// - One event.
-		/// - Benchmarks: 
+		/// - Benchmarks:
 		///   - 152.3 + R * 0.306 + S * 4.967 + X * 1.697 µs (min squares analysis)
 		///   - 139.5 + R * 0.466 + S * 5.304 + X * 1.895 µs (min squares analysis)
 		/// # </weight>
@@ -1167,6 +1189,8 @@ mod tests {
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type DbWeight = ();
+		type BlockExecutionWeight = ();
+		type ExtrinsicBaseWeight = ();
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
@@ -1271,7 +1295,7 @@ mod tests {
 			}
 			let last_registrar = MaxRegistrars::get() as u64 + 1;
 			assert_noop!(
-				Identity::add_registrar(Origin::signed(1), last_registrar), 
+				Identity::add_registrar(Origin::signed(1), last_registrar),
 				Error::<Test>::TooManyRegistrars
 			);
 		});

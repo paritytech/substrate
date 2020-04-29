@@ -28,7 +28,7 @@ use sp_externalities::Extensions;
 use sp_core::{NativeOrEncoded, NeverNativeValue, traits::CodeExecutor, offchain::storage::OffchainOverlayedChanges};
 use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
 use sc_client_api::{backend, call_executor::CallExecutor, CloneableSpawn};
-use crate::client::ClientConfig;
+use super::client::ClientConfig;
 
 /// Call executor that executes methods locally, querying all required
 /// data from local backend.

@@ -221,7 +221,7 @@ impl BenchDb {
 			},
 		};
 
-		let (client, backend) = sc_client_db::new_client(
+		let (client, backend) = sc_service::new_client(
 			db_config,
 			NativeExecutor::new(WasmExecutionMethod::Compiled, None, 8),
 			&keyring.generate_genesis(),

@@ -32,14 +32,15 @@ use sp_state_machine::{
 };
 use sp_blockchain::{CachedHeaderMetadata, HeaderMetadata};
 
-use sc_client_api::{
+use crate::{
 	backend::{self, NewBlockState},
 	blockchain::{
 		self, BlockStatus, HeaderBackend, well_known_cache_keys::Id as CacheKeyId
 	},
 	UsageInfo,
+	light,
+	leaves::LeafSet,
 };
-use crate::leaves::LeafSet;
 
 struct PendingBlock<B: BlockT> {
 	block: StoredBlock<B>,
@@ -400,7 +401,7 @@ impl<Block: BlockT> backend::AuxStore for Blockchain<Block> {
 	}
 }
 
-impl<Block: BlockT> sc_client_api::light::Storage<Block> for Blockchain<Block>
+impl<Block: BlockT> light::Storage<Block> for Blockchain<Block>
 	where
 		Block::Hash: From<[u8; 32]>,
 {
@@ -454,7 +455,7 @@ impl<Block: BlockT> sc_client_api::light::Storage<Block> for Blockchain<Block>
 		None
 	}
 
-	fn usage_info(&self) -> Option<sc_client_api::UsageInfo> {
+	fn usage_info(&self) -> Option<UsageInfo> {
 		None
 	}
 }
@@ -719,7 +720,7 @@ impl<Block: BlockT> backend::RemoteBackend<Block> for Backend<Block> where Block
 			.unwrap_or(false)
 	}
 
-	fn remote_blockchain(&self) -> Arc<dyn crate::light::blockchain::RemoteBlockchain<Block>> {
+	fn remote_blockchain(&self) -> Arc<dyn light::RemoteBlockchain<Block>> {
 		unimplemented!()
 	}
 }
@@ -736,47 +737,4 @@ pub fn check_genesis_storage(storage: &Storage) -> sp_blockchain::Result<()> {
 	}
 
 	Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-	use sp_core::offchain::{OffchainStorage, storage::InMemOffchainStorage};
-	use std::sync::Arc;
-
-	type TestBackend = substrate_test_runtime_client::sc_client::in_mem::Backend<substrate_test_runtime_client::runtime::Block>;
-
-	#[test]
-	fn test_leaves_with_complex_block_tree() {
-		let backend = Arc::new(TestBackend::new());
-
-		substrate_test_runtime_client::trait_tests::test_leaves_for_backend(backend);
-	}
-
-	#[test]
-	fn test_blockchain_query_by_number_gets_canonical() {
-		let backend = Arc::new(TestBackend::new());
-
-		substrate_test_runtime_client::trait_tests::test_blockchain_query_by_number_gets_canonical(backend);
-	}
-
-	#[test]
-	fn in_memory_offchain_storage() {
-
-		let mut storage = InMemOffchainStorage::default();
-		assert_eq!(storage.get(b"A", b"B"), None);
-		assert_eq!(storage.get(b"B", b"A"), None);
-
-		storage.set(b"A", b"B", b"C");
-		assert_eq!(storage.get(b"A", b"B"), Some(b"C".to_vec()));
-		assert_eq!(storage.get(b"B", b"A"), None);
-
-		storage.compare_and_set(b"A", b"B", Some(b"X"), b"D");
-		assert_eq!(storage.get(b"A", b"B"), Some(b"C".to_vec()));
-		storage.compare_and_set(b"A", b"B", Some(b"C"), b"D");
-		assert_eq!(storage.get(b"A", b"B"), Some(b"D".to_vec()));
-
-		assert!(!storage.compare_and_set(b"B", b"A", Some(b""), b"Y"));
-		assert!(storage.compare_and_set(b"B", b"A", None, b"X"));
-		assert_eq!(storage.get(b"B", b"A"), Some(b"X".to_vec()));
-	}
 }
