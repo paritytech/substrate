@@ -349,24 +349,6 @@ macro_rules! implement_fixed {
 				};
 				let fractional = format!("{:0>weight$}", (self.0 % Self::accuracy()).abs(), weight=$precision);
 				write!(f, "{}({}.{})", stringify!($name), integral, fractional)
-
-				// let integral = {
-				// 	let int = self.0 / Self::accuracy();
-				// 	let signum_for_zero = if int == 0 && self.is_negative() { "-" } else { "" };
-				// 	format!("{}{}", signum_for_zero, int)
-				// };
-				// let mut frac_str = String::new();
-				// let mut frac = (self.0 % Self::accuracy()).abs() as u128;
-				// loop {
-				// 	let x = (frac * 10) as u128 / Self::accuracy() as u128;
-				// 	frac = (frac * 10) as u128 % Self::accuracy() as u128;
-				// 	frac_str.push_str(format!("{}", x).as_str());
-
-				// 	if frac == 0 {
-				// 		break
-				// 	}
-				// }
-				// write!(f, "{}({}.{})", stringify!($name), integral, frac_str)
 			}
 
 			#[cfg(not(feature = "std"))]
