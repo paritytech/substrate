@@ -151,14 +151,14 @@ decl_module! {
 		/// 
 		/// # <weight>
 		/// - `O(T)` where `T` complexity of `on_timestamp_set`
-		/// - 2 storage mutations (codec `O(1)`). (effectively 1, because of `DidUpdate::take` in `on_finalize`)
+		/// - 1 storage read and 1 storage mutation (codec `O(1)`). (because of `DidUpdate::take` in `on_finalize`)
 		/// - 1 event handler `on_timestamp_set` `O(T)`.
 		/// - Benchmark: 27.36 (median slopes analysis)
 		///   - NOTE: This benchmark was done for a runtime with insignificant `on_timestamp_set` handlers.
 		///     New benchmarking is needed when adding new handlers.
 		/// # </weight>
 		#[weight = (
-			T::DbWeight::get().reads_writes(1, 1) + 28_000_000,
+			T::DbWeight::get().reads_writes(2, 1) + 28_000_000,
 			DispatchClass::Mandatory
 		)]
 		fn set(origin, #[compact] now: T::Moment) {
