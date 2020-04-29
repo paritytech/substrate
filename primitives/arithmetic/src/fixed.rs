@@ -107,34 +107,24 @@ macro_rules! implement_fixed {
 				ops::Rem<N, Output=N> + ops::Div<N, Output=N> + ops::Mul<N, Output=N> +
 				ops::Add<N, Output=N>,
 			{
-				None
-				// let rhs: i128 = int.unique_saturated_into();
-				// let lhs: i128 = self.0.unique_saturated_into();
-				// let signum = rhs.signum() * lhs.signum();
+				let rhs: i128 = int.unique_saturated_into();
+				let lhs: i128 = self.0.unique_saturated_into();
+				let signum = rhs.signum() * lhs.signum();
 
-				// let lhs = lhs.checked_abs().map(|v| v as u128)
-				// 	.unwrap_or(Self::Inner::max_value() as u128 + 1);
-				// let rhs = rhs.checked_abs().map(|v| v as u128)
-				// 	.unwrap_or(N::max_value().unique_saturated_into() as u128 + 1);
+				let lhs = lhs.checked_abs().map(|v| v as u128)
+					.unwrap_or(Self::Inner::max_value() as u128 + 1);
+				let rhs = rhs.checked_abs().map(|v| v as u128)
+					.unwrap_or(N::max_value().unique_saturated_into() as u128 + 1);
 
-				// let (carry, result) = multiply(lhs, rhs);
-
-				// // Get the shift to move upper bits to original place and at the same time
-				// // to perform the division that give us the integer part of the fraction.
-				// let carry_shift = 128.checked_sub(&Self::BITS).expect("128 > BITS; qed").into();
-
-				// if carry.leading_zeros() < carry_shift {
-				// 	// Overflow.
-				// 	return None
-				// }
-
-				// let low = result.checked_shr(Self::BITS.into()).expect("128 > BITS; qed");
-
-				// carry.checked_shl(carry_shift)
-				// 	.and_then(|c| low.checked_add(c))
-				// 	.and_then(|r| r.try_into().ok())
-				// 	.map(|r: i128| r * signum)
-				// 	.and_then(|r| r.try_into().ok())
+				multiply_by_rational(lhs, rhs, Self::DIV as u128).ok()
+					.and_then(|r| {
+						if r > i128::max_value() as u128 && signum < 0 {
+							i128::min_value().try_into().ok()
+						} else {
+							let r: i128 = r.saturated_into(); 
+							r.saturating_mul(signum).try_into().ok()
+						}
+					})
 			}
 
 			fn checked_div_int<N>(self, other: N) -> Option<N>
