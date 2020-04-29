@@ -347,18 +347,26 @@ macro_rules! implement_fixed {
 					let signum_for_zero = if int == 0 && self.is_negative() { "-" } else { "" };
 					format!("{}{}", signum_for_zero, int)
 				};
-				let mut frac_str = String::new();
-				let mut frac = (self.0 % Self::accuracy()).abs() as u128;
-				loop {
-					let x = (frac * 10) as u128 / Self::accuracy() as u128;
-					frac = (frac * 10) as u128 % Self::accuracy() as u128;
-					frac_str.push_str(format!("{}", x).as_str());
+				let fractional = format!("{:0>weight$}", (self.0 % Self::accuracy()).abs(), weight=$precision);
+				write!(f, "{}({}.{})", stringify!($name), integral, fractional)
 
-					if frac == 0 {
-						break
-					}
-				}
-				write!(f, "{}({}.{})", stringify!($name), integral, frac_str)
+				// let integral = {
+				// 	let int = self.0 / Self::accuracy();
+				// 	let signum_for_zero = if int == 0 && self.is_negative() { "-" } else { "" };
+				// 	format!("{}{}", signum_for_zero, int)
+				// };
+				// let mut frac_str = String::new();
+				// let mut frac = (self.0 % Self::accuracy()).abs() as u128;
+				// loop {
+				// 	let x = (frac * 10) as u128 / Self::accuracy() as u128;
+				// 	frac = (frac * 10) as u128 % Self::accuracy() as u128;
+				// 	frac_str.push_str(format!("{}", x).as_str());
+
+				// 	if frac == 0 {
+				// 		break
+				// 	}
+				// }
+				// write!(f, "{}({}.{})", stringify!($name), integral, frac_str)
 			}
 
 			#[cfg(not(feature = "std"))]
@@ -822,45 +830,26 @@ macro_rules! implement_fixed {
 
 			#[test]
 			fn fmt_should_work() {
-				let inner_max = <$name as FixedPointNumber>::Inner::max_value();
-				let inner_min = <$name as FixedPointNumber>::Inner::min_value();
-				let accuracy = $name::accuracy();
-
 				let zero = $name::zero();
-				assert_eq!(format!("{:?}", zero), format!("{}(0.0)", stringify!($name)));
+				assert_eq!(format!("{:?}", zero), format!("{}(0.{:0>weight$})", stringify!($name), 0, weight=$precision));
 
 				let one = $name::one();
-				assert_eq!(format!("{:?}", one), format!("{}(1.0)", stringify!($name)));
+				assert_eq!(format!("{:?}", one), format!("{}(1.{:0>weight$})", stringify!($name), 0, weight=$precision));
 
 				let neg = -$name::one();
-				assert_eq!(format!("{:?}", neg), format!("{}(-1.0)", stringify!($name)));
+				assert_eq!(format!("{:?}", neg), format!("{}(-1.{:0>weight$})", stringify!($name), 0, weight=$precision));
 
 				let frac = $name::from_rational(1, 2);
-				assert_eq!(format!("{:?}", frac), format!("{}(0.5)", stringify!($name)));
+				assert_eq!(format!("{:?}", frac), format!("{}(0.{:0<weight$})", stringify!($name), 5, weight=$precision));
 
 				let frac = $name::from_rational(5, 2);
-				assert_eq!(format!("{:?}", frac), format!("{}(2.5)", stringify!($name)));
+				assert_eq!(format!("{:?}", frac), format!("{}(2.{:0<weight$})", stringify!($name), 5, weight=$precision));
 
 				let frac = $name::from_rational(314, 100);
-				assert_eq!(frac.into_inner(), 314 * $name::accuracy() / 100);
-				assert_eq!(format!("{:?}", frac), format!("{}(3.14)", stringify!($name)));
+				assert_eq!(format!("{:?}", frac), format!("{}(3.{:0<weight$})", stringify!($name), 14, weight=$precision));
 
 				let frac = $name::from_rational(-314, 100);
-				assert_eq!(format!("{:?}", frac), format!("{}(-3.14)", stringify!($name)));
-
-				// let frac = $name::from_inner(inner_max);
-				// assert_eq!(format!("{:?}", frac), format!("{}({}1)", stringify!($name), inner_max));
-
-				// let negative = $name::from_inner(-1000000000000000001);
-				// assert_eq!(format!("{:?}", negative), "Fixed128(-1.000000000000000001)");
-
-				// let positive_fractional = $name::from_inner(1);
-				// assert_eq!(format!("{:?}", positive_fractional), "Fixed128(0.000000000000000001)");
-				// let negative_fractional = $name::from_inner(-1);
-				// assert_eq!(format!("{:?}", negative_fractional), "Fixed128(-0.000000000000000001)");
-
-				// let zero = $name::zero();
-				// assert_eq!(format!("{:?}", zero), "Fixed128(0.000000000000000000)");
+				assert_eq!(format!("{:?}", frac), format!("{}(-3.{:0<weight$})", stringify!($name), 14, weight=$precision));
 			}
 		}
 	}
