@@ -282,6 +282,7 @@ impl<
 								return std::task::Poll::Ready(Ok(()));
 							}
 
+							let blocks_before = link.imported_blocks;
 							if link.imported_blocks / 1000 != blocks_before / 1000 {
 								if let Some(count) = block_stream.count() {
 									info!(
@@ -298,7 +299,8 @@ impl<
 							}
 						}
 						Err(e) => {
-							warn!("Error reading block data at {}: {}", imported_blocks, e);
+							let read_block_count = block_stream.read_block_count();
+							warn!("Error reading block data at {}: {}", read_block_count, e);
 							// We've encountered an error, we can stop here.
 							return std::task::Poll::Ready(Ok(()));
 						}
