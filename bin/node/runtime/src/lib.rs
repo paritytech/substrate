@@ -371,6 +371,8 @@ impl pallet_democracy::Trait for Runtime {
 
 parameter_types! {
 	pub const CouncilMotionDuration: BlockNumber = 5 * DAYS;
+	pub const CouncilMaxMembers: pallet_collective::MemberCount = 100;
+	pub const CouncilMaxProposals: u32 = 100;
 }
 
 type CouncilCollective = pallet_collective::Instance1;
@@ -379,6 +381,8 @@ impl pallet_collective::Trait<CouncilCollective> for Runtime {
 	type Proposal = Call;
 	type Event = Event;
 	type MotionDuration = CouncilMotionDuration;
+	type MaxMembers = CouncilMaxMembers;
+	type MaxProposals = CouncilMaxProposals;
 }
 
 parameter_types! {
@@ -411,6 +415,8 @@ impl pallet_elections_phragmen::Trait for Runtime {
 
 parameter_types! {
 	pub const TechnicalMotionDuration: BlockNumber = 5 * DAYS;
+	pub const TechnicalMaxMembers: pallet_collective::MemberCount = 100;
+	pub const TechnicalMaxProposals: u32 = 100;
 }
 
 type TechnicalCollective = pallet_collective::Instance2;
@@ -419,6 +425,8 @@ impl pallet_collective::Trait<TechnicalCollective> for Runtime {
 	type Proposal = Call;
 	type Event = Event;
 	type MotionDuration = TechnicalMotionDuration;
+	type MaxMembers = TechnicalMaxMembers;
+	type MaxProposals = TechnicalMaxProposals;
 }
 
 impl pallet_membership::Trait<pallet_membership::Instance1> for Runtime {
