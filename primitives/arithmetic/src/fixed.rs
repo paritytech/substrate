@@ -509,9 +509,9 @@ macro_rules! implement_fixed {
 				let accuracy = $name::accuracy();
 
 				let a = $name::from_rational(5, 2);
-				// let b = $name::from_rational(-5, 2);
-				// let c = $name::from_rational(5, -2);
-				// let d = $name::from_rational(-5, -2);
+				let b = $name::from_rational(-5, 2);
+				let c = $name::from_rational(5, -2);
+				let d = $name::from_rational(-5, -2);
 
 				let e = $name::from_rational(inner_max, accuracy);
 				let f = $name::from_rational(inner_min, accuracy);
@@ -543,9 +543,9 @@ macro_rules! implement_fixed {
 				let z = $name::from_rational(1, -accuracy);
 
 				assert_eq!(a.into_inner(), 25 * accuracy / 10);
-				// assert_eq!(b.saturating_mul_int(10),-25);
-				// assert_eq!(c.saturating_mul_int(10), -25);
-				// assert_eq!(d.saturating_mul_int(10), 25);
+				assert_eq!(b.saturating_mul_int(10),-25);
+				assert_eq!(c.saturating_mul_int(10), -25);
+				assert_eq!(d.saturating_mul_int(10), 25);
 
 				assert_eq!(e.into_inner(), inner_max);
 				assert_eq!(f.into_inner(), inner_min);
@@ -842,12 +842,12 @@ macro_rules! implement_fixed {
 				let frac = $name::from_rational(5, 2);
 				assert_eq!(format!("{:?}", frac), format!("{}(2.5)", stringify!($name)));
 
-				let frac = $name::from_rational(314, 100); //.checked_mul(&100.into()).unwrap();
+				let frac = $name::from_rational(314, 100);
 				assert_eq!(frac.into_inner(), 314 * $name::accuracy() / 100);
-				// assert_eq!(format!("{:?}", frac), format!("{}(3.14)", stringify!($name)));
+				assert_eq!(format!("{:?}", frac), format!("{}(3.14)", stringify!($name)));
 
-				// let frac = $name::from_rational(-314, 100);
-				// assert_eq!(format!("{:?}", frac), format!("{}(-3.14)", stringify!($name)));
+				let frac = $name::from_rational(-314, 100);
+				assert_eq!(format!("{:?}", frac), format!("{}(-3.14)", stringify!($name)));
 
 				// let frac = $name::from_inner(inner_max);
 				// assert_eq!(format!("{:?}", frac), format!("{}({}1)", stringify!($name), inner_max));
