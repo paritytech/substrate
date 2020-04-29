@@ -32,7 +32,7 @@ parity_util_mem::malloc_size_of_is_0!(ParityDbWrapper);
 impl KeyValueDB for ParityDbWrapper {
 	/// Get a value by key.
 	fn get(&self, col: u32, key: &[u8]) -> io::Result<Option<Vec<u8>>> {
-		Ok(self.0.get(col as u8, key).expect("db error"))
+		Ok(self.0.get(col as u8, &key[key.len() - 32..]).expect("db error"))
 	}
 
 	/// Get a value by partial key. Only works for flushed data.
@@ -44,8 +44,8 @@ impl KeyValueDB for ParityDbWrapper {
 	fn write_buffered(&self, transaction: DBTransaction) {
 		self.0.commit(
 			transaction.ops.iter().map(|op| match op {
-				kvdb::DBOp::Insert { col, key, value } => (*col as u8, key, Some(value.to_vec())),
-				kvdb::DBOp::Delete { col, key } => (*col as u8, key, None),
+				kvdb::DBOp::Insert { col, key, value } => (*col as u8, &key[key.len() - 32..], Some(value.to_vec())),
+				kvdb::DBOp::Delete { col, key } => (*col as u8, &key[key.len() - 32..], None),
 			})
 		).expect("db error");
 	}
@@ -95,11 +95,14 @@ impl TempDatabase {
 				Arc::new(db)
 			},
 			DatabaseType::ParityDb => {
-				Arc::new(ParityDbWrapper(
-					parity_db::Db::open(
-						&parity_db::Options::with_columns(self.0.path(), 1)
-					).expect("db open error")
-				))
+				Arc::new(ParityDbWrapper({
+					let mut options = parity_db::Options::with_columns(self.0.path(), 1);
+					let mut column_options = &mut options.columns[0];
+					column_options.ref_counted = true;
+					column_options.preimage = true;
+					column_options.uniform = true;
+					parity_db::Db::open(&options).expect("db open error")
+				}))
 			}
 		}
 
