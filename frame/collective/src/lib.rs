@@ -249,6 +249,19 @@ mod weight_for {
 	}
 }
 
+macro_rules! map_result_weight(
+	($result:expr, $closure:expr) => {{
+		match $result {
+			Ok(post_info) => {
+				Ok(post_info.actual_weight.map($closure).into())
+			},
+			Err(err) => {
+				Ok(err.post_info.actual_weight.map($closure).into())
+			}
+		}
+	}}
+);
+
 // Note: this module is not benchmarked. The weights are obtained based on the similarity of the
 // executed logic with other democracy function. Note that councillor operations are assigned to the
 // operational class.
@@ -317,22 +330,11 @@ decl_module! {
 			let result = proposal.dispatch(RawOrigin::Member(who).into());
 			Self::deposit_event(RawEvent::MemberExecuted(proposal_hash, result.is_ok()));
 
-			match result {
-				Ok(post_info) => {
-					Ok(post_info.actual_weight.map(|w| weight_for::execute(
-						T::DbWeight::get(),
-						members.len() as Weight,
-						w
-					)).into())
-				},
-				Err(err) => {
-					Ok(err.post_info.actual_weight.map(|w| weight_for::execute(
-						T::DbWeight::get(),
-						members.len() as Weight,
-						w
-					)).into())
-				}
-			}
+			map_result_weight!(result, |w| weight_for::execute(
+				T::DbWeight::get(),
+				members.len() as Weight,
+				w
+			))
 		}
 
 		/// Add a new proposal to either be voted on or executed directly.
@@ -394,22 +396,11 @@ decl_module! {
 				let result = proposal.dispatch(RawOrigin::Members(1, seats).into());
 				Self::deposit_event(RawEvent::Executed(proposal_hash, result.is_ok()));
 
-				match result {
-					Ok(post_info) => {
-						Ok(post_info.actual_weight.map(|w| weight_for::propose_execute(
-							T::DbWeight::get(),
-							members.len() as Weight, // M
-							w, // P1
-						)).into())
-					},
-					Err(err) => {
-						Ok(err.post_info.actual_weight.map(|w| weight_for::propose_execute(
-							T::DbWeight::get(),
-							members.len() as Weight, // M
-							w, // P1
-						)).into())
-					}
-				}
+				map_result_weight!(result, |w| weight_for::propose_execute(
+					T::DbWeight::get(),
+					members.len() as Weight, // M
+					w, // P1
+				))
 			} else {
 				let active_proposals = <Proposals<T, I>>::try_mutate(|proposals| -> Result<usize, DispatchError> {
 					proposals.push(proposal_hash);
