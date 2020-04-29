@@ -15,7 +15,6 @@ sp-block-builder = { version = "2.0.0-dev", path = "../../../primitives/block-bu
 sc-cli = { version = "0.8.0-dev", path = "../../../client/cli" }
 sc-client-api = { version = "2.0.0-dev", path = "../../../client/api" }
 sc-block-builder = { version = "0.8.0-dev", path = "../../../client/block-builder" }
-sc-client = { version = "0.8.0-dev", path = "../../../client" }
 codec = { package = "parity-scale-codec", version = "1.3.0", features = ["derive"] }
 sp-consensus = { version = "0.8.0-dev", path = "../../../primitives/consensus/common" }
 log = "0.4.8"

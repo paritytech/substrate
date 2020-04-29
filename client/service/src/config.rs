@@ -16,11 +16,11 @@
 
 //! Service configuration.
 
-pub use sc_client::ExecutionStrategies;
 pub use sc_client_db::{Database, PruningMode, DatabaseSettingsSrc as DatabaseConfig};
 pub use sc_network::Multiaddr;
 pub use sc_network::config::{ExtTransport, MultiaddrWithPeerId, NetworkConfiguration, Role, NodeKeyConfig};
 pub use sc_executor::WasmExecutionMethod;
+use sc_client_api::execution_extensions::ExecutionStrategies;
 
 use std::{future::Future, path::{PathBuf, Path}, pin::Pin, net::SocketAddr, sync::Arc};
 pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;

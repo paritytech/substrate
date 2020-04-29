@@ -38,10 +38,14 @@ use sc_service::{
 	Error,
 	TaskType,
 };
+use sp_blockchain::HeaderBackend;
 use sc_network::{multiaddr, Multiaddr};
 use sc_network::config::{NetworkConfiguration, TransportConfig};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use sp_transaction_pool::TransactionPool;
+
+#[cfg(test)]
+mod client;
 
 /// Maximum duration of single wait call.
 const MAX_WAIT_TIME: Duration = Duration::from_secs(60 * 3);
@@ -463,15 +467,15 @@ pub fn sync<G, E, Fb, F, Lb, L, B, ExF, U>(
 	}
 	network.run_until_all_full(
 		|_index, service|
-			service.get().client().chain_info().best_number == (NUM_BLOCKS as u32).into(),
+			service.get().client().info().best_number == (NUM_BLOCKS as u32).into(),
 		|_index, service|
-			service.get().client().chain_info().best_number == (NUM_BLOCKS as u32).into(),
+			service.get().client().info().best_number == (NUM_BLOCKS as u32).into(),
 	);
 
 	info!("Checking extrinsic propagation");
 	let first_service = network.full_nodes[0].1.clone();
 	let first_user_data = &network.full_nodes[0].2;
-	let best_block = BlockId::number(first_service.get().client().chain_info().best_number);
+	let best_block = BlockId::number(first_service.get().client().info().best_number);
 	let extrinsic = extrinsic_factory(&first_service.get(), first_user_data);
 	let source = sp_transaction_pool::TransactionSource::External;
 
@@ -524,9 +528,9 @@ pub fn consensus<G, E, Fb, F, Lb, L>(
 	}
 	network.run_until_all_full(
 		|_index, service|
-			service.get().client().chain_info().finalized_number >= (NUM_BLOCKS as u32 / 2).into(),
+			service.get().client().info().finalized_number >= (NUM_BLOCKS as u32 / 2).into(),
 		|_index, service|
-			service.get().client().chain_info().best_number >= (NUM_BLOCKS as u32 / 2).into(),
+			service.get().client().info().best_number >= (NUM_BLOCKS as u32 / 2).into(),
 	);
 
 	info!("Adding more peers");
@@ -546,8 +550,8 @@ pub fn consensus<G, E, Fb, F, Lb, L>(
 	}
 	network.run_until_all_full(
 		|_index, service|
-			service.get().client().chain_info().finalized_number >= (NUM_BLOCKS as u32).into(),
+			service.get().client().info().finalized_number >= (NUM_BLOCKS as u32).into(),
 		|_index, service|
-			service.get().client().chain_info().best_number >= (NUM_BLOCKS as u32).into(),
+			service.get().client().info().best_number >= (NUM_BLOCKS as u32).into(),
 	);
 }

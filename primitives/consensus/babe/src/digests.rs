@@ -18,7 +18,7 @@
 
 #[cfg(feature = "std")]
 use super::{BABE_ENGINE_ID, AuthoritySignature};
-use super::{AuthorityId, AuthorityIndex, SlotNumber, BabeAuthorityWeight, BabeEpochConfiguration};
+use super::{AuthorityId, AuthorityIndex, SlotNumber, BabeAuthorityWeight, BabeEpochConfiguration, AllowedSlots};
 #[cfg(feature = "std")]
 use sp_runtime::{DigestItem, generic::OpaqueDigestItemId};
 #[cfg(feature = "std")]
@@ -183,7 +183,26 @@ pub struct NextEpochDescriptor {
 
 /// Information about the next epoch config, if changed. This is broadcast in the first
 /// block of the epoch, and applies using the same rules as `NextEpochDescriptor`.
-pub type NextConfigDescriptor = BabeEpochConfiguration;
+#[derive(Decode, Encode, PartialEq, Eq, Clone, RuntimeDebug)]
+pub enum NextConfigDescriptor {
+	/// Version 1.
+	#[codec(index = "1")]
+	V1 {
+		/// Value of `c` in `BabeEpochConfiguration`.
+		c: (u64, u64),
+		/// Value of `allowed_slots` in `BabeEpochConfiguration`.
+		allowed_slots: AllowedSlots,
+	}
+}
+
+impl From<NextConfigDescriptor> for BabeEpochConfiguration {
+	fn from(desc: NextConfigDescriptor) -> Self {
+		match desc {
+			NextConfigDescriptor::V1 { c, allowed_slots } =>
+				Self { c, allowed_slots },
+		}
+	}
+}
 
 /// A digest item which is usable with BABE consensus.
 #[cfg(feature = "std")]

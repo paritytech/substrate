@@ -18,6 +18,7 @@
 //! Manages communication between them.
 
 #![warn(missing_docs)]
+#![recursion_limit="128"]
 
 pub mod config;
 #[macro_use]
@@ -26,6 +27,10 @@ pub mod error;
 
 mod metrics;
 mod builder;
+#[cfg(feature = "test-helpers")]
+pub mod client;
+#[cfg(not(feature = "test-helpers"))]
+mod client;
 mod status_sinks;
 mod task_manager;
 
@@ -38,7 +43,7 @@ use wasm_timer::Instant;
 use std::task::{Poll, Context};
 use parking_lot::Mutex;
 
-use sc_client::Client;
+use client::Client;
 use futures::{
 	Future, FutureExt, Stream, StreamExt,
 	compat::*,
@@ -49,13 +54,13 @@ use sc_network::{NetworkService, network_state::NetworkState, PeerId, ReportHand
 use log::{log, warn, debug, error, Level};
 use codec::{Encode, Decode};
 use sp_runtime::generic::BlockId;
-use sp_runtime::traits::{NumberFor, Block as BlockT};
+use sp_runtime::traits::{NumberFor, Block as BlockT, BlockIdTo};
 use parity_util_mem::MallocSizeOf;
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver,  TracingUnboundedSender};
 
 pub use self::error::Error;
 pub use self::builder::{
-	new_full_client,
+	new_full_client, new_client,
 	ServiceBuilder, ServiceBuilderCommand, TFullClient, TLightClient, TFullBackend, TLightBackend,
 	TFullCallExecutor, TLightCallExecutor,
 };
@@ -66,7 +71,6 @@ pub use sc_chain_spec::{
 };
 pub use sp_transaction_pool::{TransactionPool, InPoolTransaction, error::IntoPoolError};
 pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
-pub use sc_client::FinalityNotifications;
 pub use sc_rpc::Metadata as RpcMetadata;
 pub use sc_executor::NativeExecutionDispatch;
 #[doc(hidden)]
@@ -76,6 +80,17 @@ pub use sc_network::config::{FinalityProofProvider, OnDemand, BoxFinalityProofRe
 pub use sc_tracing::TracingReceiver;
 pub use task_manager::SpawnTaskHandle;
 use task_manager::TaskManager;
+use sp_blockchain::{HeaderBackend, HeaderMetadata, ProvideCache};
+use sp_api::{ProvideRuntimeApi, CallApiAt, ApiExt, ConstructRuntimeApi, ApiErrorExt};
+use sc_client_api::{
+	LockImportRun, Backend as BackendT, ProofProvider, ProvideUncles,
+	StorageProvider, ExecutorProvider, Finalizer, AuxStore, Backend,
+	BlockBackend, BlockchainEvents, CallExecutor, TransactionFor,
+	UsageProvider,
+};
+use sc_block_builder::BlockBuilderProvider;
+use sp_consensus::{block_validation::Chain, BlockImport};
+use sp_block_builder::BlockBuilder;
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
 
@@ -116,21 +131,104 @@ pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 
 impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Unpin for Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {}
 
+/// Client super trait, use this instead of the concrete Client type.
+pub trait ClientProvider<
+	Block: BlockT,
+	Backend: BackendT<Block>,
+	Executor: CallExecutor<Block>,
+	Runtime: ConstructRuntimeApi<Block, Self>,
+>:
+	HeaderBackend<Block>
+	+ ProvideRuntimeApi<
+		Block,
+		Api = <Runtime as ConstructRuntimeApi<Block, Self>>::RuntimeApi
+	>
+	+ LockImportRun<Block, Backend>
+	+ ProofProvider<Block>
+	+ BlockBuilderProvider<Backend, Block, Self>
+	+ ProvideUncles<Block>
+	+ StorageProvider<Block, Backend>
+	+ Chain<Block>
+	+ HeaderMetadata<Block, Error = sp_blockchain::Error>
+	+ ExecutorProvider<Block, Executor = Executor>
+	+ ProvideCache<Block>
+	+ BlockIdTo<Block, Error = sp_blockchain::Error>
+	+ CallApiAt<
+		Block,
+		Error = sp_blockchain::Error,
+		StateBackend = <Backend as BackendT<Block>>::State
+	>
+	+ BlockImport<
+		Block,
+		Error = sp_consensus::Error,
+		Transaction = TransactionFor<Backend, Block>
+	>
+	+ Finalizer<Block, Backend>
+	+ BlockchainEvents<Block>
+	+ BlockBackend<Block>
+	+ UsageProvider<Block>
+	+ AuxStore
+{}
+
+impl<Block, Backend, Executor, Runtime> ClientProvider<Block, Backend, Executor, Runtime>
+	for
+		Client<Backend, Executor, Block, Runtime>
+	where
+		Block: BlockT,
+		Backend: BackendT<Block>,
+		Executor: CallExecutor<Block>,
+		Runtime: ConstructRuntimeApi<Block, Self>,
+		Self: HeaderBackend<Block>
+			+ ProvideRuntimeApi<
+				Block,
+				Api = <Runtime as ConstructRuntimeApi<Block, Self>>::RuntimeApi
+			>
+			+ LockImportRun<Block, Backend>
+			+ ProofProvider<Block>
+			+ BlockBuilderProvider<Backend, Block, Self>
+			+ ProvideUncles<Block>
+			+ StorageProvider<Block, Backend>
+			+ Chain<Block>
+			+ HeaderMetadata<Block, Error = sp_blockchain::Error>
+			+ ExecutorProvider<Block, Executor = Executor>
+			+ ProvideCache<Block>
+			+ BlockIdTo<Block, Error = sp_blockchain::Error>
+			+ CallApiAt<
+				Block,
+				Error = sp_blockchain::Error,
+				StateBackend = <Backend as BackendT<Block>>::State
+			>
+			+ BlockImport<
+				Block,
+				Error = sp_consensus::Error,
+				Transaction = TransactionFor<Backend, Block>
+			>
+			+ Finalizer<Block, Backend>
+			+ BlockchainEvents<Block>
+			+ BlockBackend<Block>
+			+ UsageProvider<Block>
+			+ AuxStore
+{}
+
 /// Abstraction over a Substrate service.
-pub trait AbstractService: 'static + Future<Output = Result<(), Error>> +
-	Spawn + Send + Unpin {
+pub trait AbstractService: Future<Output = Result<(), Error>> + Send + Unpin + Spawn + 'static {
 	/// Type of block of this chain.
 	type Block: BlockT;
 	/// Backend storage for the client.
-	type Backend: 'static + sc_client_api::backend::Backend<Self::Block>;
+	type Backend: 'static + BackendT<Self::Block>;
 	/// How to execute calls towards the runtime.
-	type CallExecutor: 'static + sc_client::CallExecutor<Self::Block> + Send + Sync + Clone;
+	type CallExecutor: 'static + CallExecutor<Self::Block> + Send + Sync + Clone;
 	/// API that the runtime provides.
 	type RuntimeApi: Send + Sync;
 	/// Chain selection algorithm.
 	type SelectChain: sp_consensus::SelectChain<Self::Block>;
 	/// Transaction pool.
 	type TransactionPool: TransactionPool<Block = Self::Block> + MallocSizeOfWasm;
+	/// The generic Client type, the bounds here are the ones specifically required by
+	/// internal crates like sc_informant.
+	type Client:
+		HeaderMetadata<Self::Block, Error = sp_blockchain::Error> + UsageProvider<Self::Block>
+		+ BlockchainEvents<Self::Block> + HeaderBackend<Self::Block> + Send + Sync;
 
 	/// Get event stream for telemetry connection established events.
 	fn telemetry_on_connect_stream(&self) -> TracingUnboundedReceiver<()>;
@@ -170,7 +268,7 @@ pub trait AbstractService: 'static + Future<Output = Result<(), Error>> +
 	fn rpc_query(&self, mem: &RpcSession, request: &str) -> Pin<Box<dyn Future<Output = Option<String>> + Send>>;
 
 	/// Get shared client instance.
-	fn client(&self) -> Arc<sc_client::Client<Self::Backend, Self::CallExecutor, Self::Block, Self::RuntimeApi>>;
+	fn client(&self) -> Arc<Self::Client>;
 
 	/// Get clone of select chain.
 	fn select_chain(&self) -> Option<Self::SelectChain>;
@@ -198,9 +296,14 @@ impl<TBl, TBackend, TExec, TRtApi, TSc, TExPool, TOc> AbstractService for
 		NetworkService<TBl, TBl::Hash>, TExPool, TOc>
 where
 	TBl: BlockT,
-	TBackend: 'static + sc_client_api::backend::Backend<TBl>,
-	TExec: 'static + sc_client::CallExecutor<TBl> + Send + Sync + Clone,
-	TRtApi: 'static + Send + Sync,
+	TBackend: 'static + Backend<TBl>,
+	TExec: 'static + CallExecutor<TBl, Backend = TBackend> + Send + Sync + Clone,
+	TRtApi: 'static + Send + Sync + ConstructRuntimeApi<TBl, Client<TBackend, TExec, TBl, TRtApi>>,
+	<TRtApi as ConstructRuntimeApi<TBl, Client<TBackend, TExec, TBl, TRtApi>>>::RuntimeApi:
+		sp_api::Core<TBl>
+		+ ApiExt<TBl, StateBackend = TBackend::State>
+		+ ApiErrorExt<Error = sp_blockchain::Error>
+		+ BlockBuilder<TBl>,
 	TSc: sp_consensus::SelectChain<TBl> + 'static + Clone + Send + Unpin,
 	TExPool: 'static + TransactionPool<Block = TBl> + MallocSizeOfWasm,
 	TOc: 'static + Send + Sync,
@@ -211,6 +314,7 @@ where
 	type RuntimeApi = TRtApi;
 	type SelectChain = TSc;
 	type TransactionPool = TExPool;
+	type Client = Client<Self::Backend, Self::CallExecutor, Self::Block, Self::RuntimeApi>;
 
 	fn telemetry_on_connect_stream(&self) -> TracingUnboundedReceiver<()> {
 		let (sink, stream) = tracing_unbounded("mpsc_telemetry_on_connect");
@@ -254,7 +358,7 @@ where
 		)
 	}
 
-	fn client(&self) -> Arc<sc_client::Client<Self::Backend, Self::CallExecutor, Self::Block, Self::RuntimeApi>> {
+	fn client(&self) -> Arc<Self::Client> {
 		self.client.clone()
 	}
 
@@ -326,7 +430,7 @@ impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Spawn for
 /// The `status_sink` contain a list of senders to send a periodic network status to.
 fn build_network_future<
 	B: BlockT,
-	C: sc_client::BlockchainEvents<B>,
+	C: BlockchainEvents<B>,
 	H: sc_network::ExHashT
 > (
 	role: Role,

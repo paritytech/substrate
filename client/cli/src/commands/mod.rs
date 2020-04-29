@@ -267,7 +267,7 @@ macro_rules! substrate_cli_subcommands {
 			}
 
 			fn execution_strategies(&self, is_dev: bool)
-			-> $crate::Result<::sc_service::config::ExecutionStrategies> {
+			-> $crate::Result<::sc_client_api::execution_extensions::ExecutionStrategies> {
 				match self {
 					$($enum::$variant(cmd) => cmd.execution_strategies(is_dev)),*
 				}
