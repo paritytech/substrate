@@ -647,7 +647,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 
 	/// Defines which transaction pool to use.
 	pub fn with_transaction_pool<UExPool>(
-		mut self,
+		self,
 		transaction_pool_builder: impl FnOnce(
 			sc_transaction_pool::txpool::Options,
 			Arc<TCl>,
