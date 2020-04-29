@@ -225,7 +225,7 @@ impl<
 						if link.imported_blocks >= count {
 							info!(
 								"🎉 Imported {} blocks. Best: #{}",
-								count, client.chain_info().best_number
+								read_block_count, client.chain_info().best_number
 							);
 							// We're done importing blocks, we can stop here.
 							return std::task::Poll::Ready(Ok(()))
