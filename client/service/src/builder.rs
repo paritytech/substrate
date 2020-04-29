@@ -665,7 +665,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 		)?;
 
 		if let Some(background_task) = background_task{
-			self.background_tasks.push(("txpool-background", background_task));
+			self.task_manager.spawn_handle().spawn("txpool-background", background_task);
 		}
 
 		Ok(ServiceBuilder {
@@ -946,12 +946,6 @@ ServiceBuilder<
 		};
 
 		let spawn_handle = task_manager.spawn_handle();
-
-		// Spawn background tasks which were stacked during the
-		// service building.
-		for (title, background_task) in background_tasks {
-			spawn_handle.spawn(title, background_task);
-		}
 
 		{
 			// block notifications
