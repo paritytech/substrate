@@ -43,7 +43,7 @@ pub struct NetworkParams {
 
 	/// The public address that other nodes will use to connect to it.
 	/// This can be used if there's a proxy in front of this node.
-	#[structopt(long = "public-addr", value_name = "PUBLIC_ADDR")]
+	#[structopt(long, value_name = "PUBLIC_ADDR")]
 	pub public_addr: Vec<Multiaddr>,
 
 	/// Listen on this multiaddress.
@@ -130,11 +130,7 @@ impl NetworkParams {
 			self.listen_addr.clone()
 		};
 
-		let public_addresses = if self.public_addr.is_empty() {
-			Vec::new()
-		} else {
-			self.public_addr.clone()
-		};
+		let public_addresses = self.public_addr.clone();
 
 		let mut boot_nodes = chain_spec.boot_nodes().to_vec();
 		boot_nodes.extend(self.bootnodes.clone());
