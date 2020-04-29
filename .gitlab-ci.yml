@@ -89,6 +89,17 @@ variables:
     - /^pre-v[0-9]+\.[0-9]+-[0-9a-f]+$/
     - web
 
+#### stage:                       .pre
+
+skip-if-draft:
+  image:                           parity/tools:latest
+  <<:                              *kubernetes-build
+  stage:                          .pre
+  only:
+    - /^[0-9]+$/                  # Pull requests
+  script:
+     - ./.maintain/gitlab/skip_if_draft.sh
+
 #### stage:                        test
 
 check-runtime:
@@ -127,9 +138,6 @@ check-line-width:
   interruptible:                   true
   allow_failure:                   true
 
-
-
-
 check-polkadot-companion-build:
   stage:                           build
   <<:                              *docker-env
@@ -137,7 +145,6 @@ check-polkadot-companion-build:
     - ./.maintain/gitlab/check_polkadot_companion_build.sh
   interruptible:                   true
   allow_failure:                   true
-
 
 cargo-audit:
   stage:                           test
@@ -170,7 +177,6 @@ cargo-check-benches:
     - BUILD_DUMMY_WASM_BINARY=1 time cargo +nightly check --benches --all
     - sccache -s
 
-
 cargo-check-subkey:
   stage:                           test
   <<:                              *docker-env
@@ -180,7 +186,6 @@ cargo-check-subkey:
     - cd ./bin/utils/subkey
     - BUILD_DUMMY_WASM_BINARY=1 time cargo check --release
     - sccache -s
-
 
 test-linux-stable:                 &test-linux
   stage:                           test
@@ -417,10 +422,9 @@ build-macos-subkey:
   <<:                              *build-subkey
   only:
     - master
-    - /^v[0-9]+\.[0-9]+.*$/ 
+    - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
   tags:
     - osx
-
 
 build-rust-doc-release:
   stage:                           build
