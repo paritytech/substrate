@@ -14,21 +14,24 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-#[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
-
-use sp_std::{ops, fmt, prelude::*, convert::TryInto};
-use codec::{Encode, CompactAs};
-use crate::traits::{
-	SaturatedConversion, UniqueSaturatedInto, Saturating, BaseArithmetic,
-	Bounded, Zero, FixedPointNumber
+use sp_std::{ops, prelude::*, convert::{TryInto, TryFrom}};
+use codec::{Encode, Decode};
+use crate::{
+	helpers_128bit::multiply_by_rational,
+	PerThing, Perbill, Perquintill,
+	traits::{
+		SaturatedConversion, CheckedSub, CheckedAdd, CheckedMul, CheckedDiv,
+		Bounded, UniqueSaturatedInto, Saturating, FixedPointNumber
+	},
 };
-use sp_debug_derive::RuntimeDebug;
 
-#[macro_export]
+#[cfg(feature = "std")]
+use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+
 macro_rules! implement_fixed {
 	(
 		$name:ident,
+		$test_mod:ident,
 		$inner_type:ty,
 		$perthing_type:ty,
 		$div:tt,
@@ -280,10 +283,7 @@ macro_rules! implement_fixed {
 
 		impl CheckedDiv for $name {
 			fn checked_div(&self, other: &Self) -> Option<Self> {
-				let n = self.0;
-				let d = other.0;
-
-				if d == 0 {
+				if other.0 == 0 {
 					return None
 				}
 
@@ -406,7 +406,7 @@ macro_rules! implement_fixed {
 		}
 
 		#[cfg(test)]
-		mod tests {
+		mod $test_mod {
 			use super::*;
 			use crate::{Perbill, Percent, Permill, Perquintill};
 
@@ -667,7 +667,6 @@ macro_rules! implement_fixed {
 			fn saturating_abs_works() {
 				let inner_max = <$name as FixedPointNumber>::Inner::max_value();
 				let inner_min = <$name as FixedPointNumber>::Inner::min_value();
-				let accuracy = $name::accuracy();
 
 				assert_eq!($name::from_inner(inner_min).saturating_abs(), $name::max_value());
 				assert_eq!($name::from_inner(inner_max).saturating_abs(), $name::max_value());
@@ -677,7 +676,6 @@ macro_rules! implement_fixed {
 
 			#[test]
 			fn saturating_mul_int_acc_works() {
-				let inner_max = <$name as FixedPointNumber>::Inner::max_value();
 				let accuracy = $name::accuracy();
 
 				assert_eq!($name::zero().saturated_multiply_accumulate(accuracy as u64), accuracy as u64);
@@ -685,11 +683,8 @@ macro_rules! implement_fixed {
 				assert_eq!($name::one().saturated_multiply_accumulate(i128::min_value()), i128::min_value());
 			}
 
+			#[test]
 			fn saturating_pow_should_work() {
-				let inner_max = <$name as FixedPointNumber>::Inner::max_value();
-				let inner_min = <$name as FixedPointNumber>::Inner::min_value();
-				let accuracy = $name::accuracy();
-
 				assert_eq!($name::from_integer(2).saturating_pow(0), $name::from_integer(1));
 				assert_eq!($name::from_integer(2).saturating_pow(1), $name::from_integer(2));
 				assert_eq!($name::from_integer(2).saturating_pow(2), $name::from_integer(4));
@@ -706,7 +701,6 @@ macro_rules! implement_fixed {
 				assert_eq!($name::from_integer(-1).saturating_pow(usize::max_value()), $name::from_integer(-1));
 				assert_eq!($name::from_integer(-1).saturating_pow(usize::max_value() - 1), $name::from_integer(1));
 
-				assert_eq!($name::from_integer(114209).saturating_pow(4), $name::max_value());
 				assert_eq!($name::from_integer(114209).saturating_pow(5), $name::max_value());
 
 				assert_eq!($name::from_integer(1).saturating_pow(usize::max_value()), $name::from_integer(1));
@@ -718,7 +712,6 @@ macro_rules! implement_fixed {
 			fn checked_div_works() {
 				let inner_max = <$name as FixedPointNumber>::Inner::max_value();
 				let inner_min = <$name as FixedPointNumber>::Inner::min_value();
-				let accuracy = $name::accuracy();
 
 				let a = $name::from_inner(inner_max);
 				let b = $name::from_inner(inner_min);
@@ -832,3 +825,21 @@ macro_rules! implement_fixed {
 		}
 	}
 }
+
+implement_fixed!(
+	Fixed64,
+	test_fixed64,
+	i64,
+	Perbill,
+	1_000_000_000,
+	9,
+);
+
+implement_fixed!(
+	Fixed128,
+	test_fixed128,
+	i128,
+	Perquintill,
+	1_000_000_000_000_000_000,
+	18,
+);
