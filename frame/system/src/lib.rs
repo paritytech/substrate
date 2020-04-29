@@ -470,7 +470,6 @@ decl_error! {
 		///
 		/// Either calling `Core_version` or decoding `RuntimeVersion` failed.
 		FailedToExtractRuntimeVersion,
-
 		/// Suicide called when the account has non-default composite data.
 		NonDefaultComposite,
 		/// There is a non-zero reference count preventing the account from being purged.
