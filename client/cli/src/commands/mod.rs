@@ -240,10 +240,10 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
-			fn pruning(&self, is_dev: bool, role: &::sc_service::Role)
+			fn pruning(&self, unsafe_pruning: bool, role: &::sc_service::Role)
 			-> $crate::Result<::sc_service::config::PruningMode> {
 				match self {
-					$($enum::$variant(cmd) => cmd.pruning(is_dev, role)),*
+					$($enum::$variant(cmd) => cmd.pruning(unsafe_pruning, role)),*
 				}
 			}
 
@@ -272,7 +272,7 @@ macro_rules! substrate_cli_subcommands {
 			}
 
 			fn execution_strategies(&self, is_dev: bool)
-			-> $crate::Result<::sc_service::config::ExecutionStrategies> {
+			-> $crate::Result<::sc_client_api::execution_extensions::ExecutionStrategies> {
 				match self {
 					$($enum::$variant(cmd) => cmd.execution_strategies(is_dev)),*
 				}

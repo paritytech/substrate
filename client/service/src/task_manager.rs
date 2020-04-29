@@ -31,11 +31,12 @@ use prometheus_endpoint::{
 	CounterVec, HistogramOpts, HistogramVec, Opts, Registry, U64
 };
 use sc_client_api::CloneableSpawn;
+use crate::config::TaskType;
 
 mod prometheus_future;
 
 /// Type alias for service task executor (usually runtime).
-pub type ServiceTaskExecutor = Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>;
+pub type ServiceTaskExecutor = Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>, TaskType) + Send + Sync>;
 
 /// An handle for spawning tasks in the service.
 #[derive(Clone)]
@@ -55,6 +56,16 @@ impl SpawnTaskHandle {
 	/// In other words, it would be a bad idea for someone to do for example
 	/// `spawn(format!("{:?}", some_public_key))`.
 	pub fn spawn(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static) {
+		self.spawn_inner(name, task, TaskType::Async)
+	}
+
+	/// Spawns the blocking task with the given name. See also `spawn`.
+	pub fn spawn_blocking(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static) {
+		self.spawn_inner(name, task, TaskType::Blocking)
+	}
+
+	/// Helper function that implements the spawning logic. See `spawn` and `spawn_blocking`.
+	fn spawn_inner(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static, task_type: TaskType) {
 		let on_exit = self.on_exit.clone();
 		let metrics = self.metrics.clone();
 
@@ -80,7 +91,7 @@ impl SpawnTaskHandle {
 			}
 		};
 
-		(self.executor)(Box::pin(future));
+		(self.executor)(Box::pin(future), task_type);
 	}
 }
 

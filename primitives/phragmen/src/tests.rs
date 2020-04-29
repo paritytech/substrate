@@ -24,7 +24,7 @@ use crate::{
 	Support, StakedAssignment, Assignment, PhragmenResult, ExtendedBalance,
 };
 use substrate_test_utils::assert_eq_uvec;
-use sp_runtime::{Perbill, Permill, Percent, PerU16};
+use sp_arithmetic::{Perbill, Permill, Percent, PerU16};
 
 #[test]
 fn float_phragmen_poc_works() {
@@ -648,7 +648,7 @@ mod compact {
 	// these need to come from the same dev-dependency `sp-phragmen`, not from the crate.
 	use sp_phragmen::{Assignment, StakedAssignment, Error as PhragmenError, ExtendedBalance};
 	use sp_std::{convert::{TryInto, TryFrom}, fmt::Debug};
-	use sp_runtime::Percent;
+	use sp_arithmetic::Percent;
 
 	type Accuracy = Percent;
 

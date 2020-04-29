@@ -112,7 +112,6 @@ use sp_runtime::{
 use frame_support::dispatch::{
 	PostDispatchInfo, DispatchResult, Dispatchable, DispatchResultWithPostInfo
 };
-use frame_support::weights::MINIMUM_WEIGHT;
 use frame_support::{
 	Parameter, decl_module, decl_event, decl_storage, decl_error,
 	parameter_types, IsSubType, storage::child::{self, ChildInfo},
@@ -453,7 +452,7 @@ decl_module! {
 		/// Updates the schedule for metering contracts.
 		///
 		/// The schedule must have a greater version than the stored schedule.
-		#[weight = MINIMUM_WEIGHT]
+		#[weight = 0]
 		pub fn update_schedule(origin, schedule: Schedule) -> DispatchResult {
 			ensure_root(origin)?;
 			if <Module<T>>::current_schedule().version >= schedule.version {
@@ -469,7 +468,7 @@ decl_module! {
 		/// Stores the given binary Wasm code into the chain's storage and returns its `codehash`.
 		/// You can instantiate contracts only with stored code.
 		#[weight = FunctionOf(
-			|args: (&Vec<u8>,)| Module::<T>::calc_code_put_costs(args.0) + MINIMUM_WEIGHT,
+			|args: (&Vec<u8>,)| Module::<T>::calc_code_put_costs(args.0),
 			DispatchClass::Normal,
 			Pays::Yes
 		)]
@@ -494,8 +493,7 @@ decl_module! {
 		/// * If no account exists and the call value is not less than `existential_deposit`,
 		/// a regular account will be created and any value will be transferred.
 		#[weight = FunctionOf(
-			|args: (&<T::Lookup as StaticLookup>::Source, &BalanceOf<T>, &Weight, &Vec<u8>)|
-				args.2 + MINIMUM_WEIGHT,
+			|args: (&<T::Lookup as StaticLookup>::Source, &BalanceOf<T>, &Weight, &Vec<u8>)| *args.2,
 			DispatchClass::Normal,
 			Pays::Yes
 		)]
@@ -527,7 +525,7 @@ decl_module! {
 		///   upon any call received by this account.
 		/// - The contract is initialized.
 		#[weight = FunctionOf(
-			|args: (&BalanceOf<T>, &Weight, &CodeHash<T>, &Vec<u8>)| args.1 + MINIMUM_WEIGHT,
+			|args: (&BalanceOf<T>, &Weight, &CodeHash<T>, &Vec<u8>)| *args.1,
 			DispatchClass::Normal,
 			Pays::Yes
 		)]
@@ -553,7 +551,7 @@ decl_module! {
 		///
 		/// If contract is not evicted as a result of this call, no actions are taken and
 		/// the sender is not eligible for the reward.
-		#[weight = MINIMUM_WEIGHT]
+		#[weight = 0]
 		fn claim_surcharge(origin, dest: T::AccountId, aux_sender: Option<T::AccountId>) {
 			let origin = origin.into();
 			let (signed, rewarded) = match (origin, aux_sender) {
@@ -970,4 +968,3 @@ impl Default for Schedule {
 		}
 	}
 }
-

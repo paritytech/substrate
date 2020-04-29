@@ -33,7 +33,7 @@ use frame_system::{self, EventRecord, Phase};
 
 use node_runtime::{
 	Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,
-	System, TransactionPayment, Event, TransactionBaseFee, TransactionByteFee,
+	System, TransactionPayment, Event, TransactionByteFee, ExtrinsicBaseWeight,
 	constants::currency::*,
 };
 use node_primitives::{Balance, Hash};
@@ -54,11 +54,11 @@ pub const BLOATY_CODE: &[u8] = node_runtime::WASM_BINARY_BLOATY;
 fn transfer_fee<E: Encode>(extrinsic: &E, fee_multiplier: Fixed128) -> Balance {
 	let length_fee = TransactionByteFee::get() * (extrinsic.encode().len() as Balance);
 
+	let base_weight = ExtrinsicBaseWeight::get();
+	let base_fee = <Runtime as pallet_transaction_payment::Trait>::WeightToFee::convert(base_weight);
 	let weight = default_transfer_call().get_dispatch_info().weight;
-	let weight_fee = <Runtime as pallet_transaction_payment::Trait>
-		::WeightToFee::convert(weight);
+	let weight_fee = <Runtime as pallet_transaction_payment::Trait>::WeightToFee::convert(weight);
 
-	let base_fee = TransactionBaseFee::get();
 	base_fee + fee_multiplier.saturated_multiply_accumulate(length_fee + weight_fee)
 }
 
@@ -338,7 +338,7 @@ fn full_native_block_import_works() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
 				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 10_000_000, class: DispatchClass::Mandatory, ..Default::default() }
+					DispatchInfo { weight: 0, class: DispatchClass::Mandatory, ..Default::default() }
 				)),
 				topics: vec![],
 			},
@@ -391,7 +391,7 @@ fn full_native_block_import_works() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
 				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 10_000_000, class: DispatchClass::Mandatory, pays_fee: Pays::Yes }
+					DispatchInfo { weight: 0, class: DispatchClass::Mandatory, pays_fee: Pays::Yes }
 				)),
 				topics: vec![],
 			},

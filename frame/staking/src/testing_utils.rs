@@ -153,13 +153,13 @@ pub fn get_weak_solution<T: Trait>(
 	let mut backing_stake_of: BTreeMap<T::AccountId, BalanceOf<T>> = BTreeMap::new();
 
 	// self stake
-	<Validators<T>>::enumerate().for_each(|(who, _p)| {
+	<Validators<T>>::iter().for_each(|(who, _p)| {
 		*backing_stake_of.entry(who.clone()).or_insert(Zero::zero()) +=
 			<Module<T>>::slashable_balance_of(&who)
 	});
 
 	// add nominator stuff
-	<Nominators<T>>::enumerate().for_each(|(who, nomination)| {
+	<Nominators<T>>::iter().for_each(|(who, nomination)| {
 		nomination.targets.into_iter().for_each(|v| {
 			*backing_stake_of.entry(v).or_insert(Zero::zero()) +=
 				<Module<T>>::slashable_balance_of(&who)
@@ -176,7 +176,7 @@ pub fn get_weak_solution<T: Trait>(
 		.collect();
 
 	let mut staked_assignments: Vec<StakedAssignment<T::AccountId>> = Vec::new();
-	<Nominators<T>>::enumerate().for_each(|(who, nomination)| {
+	<Nominators<T>>::iter().for_each(|(who, nomination)| {
 		let mut dist: Vec<(T::AccountId, ExtendedBalance)> = Vec::new();
 		nomination.targets.into_iter().for_each(|v| {
 			if winners.iter().find(|&w| *w == v).is_some() {
@@ -325,16 +325,29 @@ pub fn clean<T: Trait>(era: EraIndex)
 		<T as frame_system::Trait>::AccountId: codec::EncodeLike<u32>,
 		u32: codec::EncodeLike<T::AccountId>,
 {
-	<Validators<T>>::enumerate().for_each(|(k, _)| {
+	<Validators<T>>::iter().for_each(|(k, _)| {
 		let ctrl = <Module<T>>::bonded(&k).unwrap();
 		<Bonded<T>>::remove(&k);
 		<Validators<T>>::remove(&k);
 		<Ledger<T>>::remove(&ctrl);
 		<ErasStakers<T>>::remove(k, era);
 	});
-	<Nominators<T>>::enumerate().for_each(|(k, _)| <Nominators<T>>::remove(k));
+	<Nominators<T>>::iter().for_each(|(k, _)| <Nominators<T>>::remove(k));
 	<Ledger<T>>::remove_all();
 	<Bonded<T>>::remove_all();
 	<QueuedElected<T>>::kill();
 	QueuedScore::kill();
+}
+
+/// get the active era.
+pub fn active_era<T: Trait>() -> EraIndex {
+	<Module<T>>::active_era().unwrap().index
+}
+
+/// initialize the first era.
+pub fn init_active_era() {
+	ActiveEra::put(ActiveEraInfo {
+		index: 1,
+		start: None,
+	})
 }

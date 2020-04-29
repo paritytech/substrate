@@ -63,7 +63,7 @@ where
 		network,
 		telemetry_endpoints: chain_spec.telemetry_endpoints().clone(),
 		chain_spec: Box::new(chain_spec),
-		task_executor: Arc::new(move |fut| wasm_bindgen_futures::spawn_local(fut)),
+		task_executor: Arc::new(move |fut, _| wasm_bindgen_futures::spawn_local(fut)),
 		telemetry_external_transport: Some(transport),
 		role: Role::Light,
 		database: {
