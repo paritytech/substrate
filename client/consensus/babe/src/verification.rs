@@ -17,11 +17,12 @@
 //! Verification for BABE headers.
 use sp_runtime::{traits::Header, traits::DigestItemFor};
 use sp_core::{Pair, Public};
-use sp_consensus_babe::{AuthoritySignature, SlotNumber, AuthorityPair, AuthorityId};
+use sp_consensus_babe::{AuthoritySignature, SlotNumber, AuthorityPair, AuthorityId, AuthorityIndex};
 use sp_consensus_babe::digests::{
-	PreDigest, PrimaryPreDigest, SecondaryPlainPreDigest, SecondaryVRFPreDigest,
+	PreDigest, SecondaryPlainPreDigest, SecondaryVRFPreDigest,
 	CompatibleDigestItem
 };
+use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof, Randomness};
 use sc_consensus_slots::CheckedHeader;
 use log::{debug, trace};
 use super::{find_pre_digest, babe_err, Epoch, BlockT, Error};
@@ -95,12 +96,31 @@ pub(super) fn check_header<B: BlockT + Sized>(
 	};
 
 	match &pre_digest {
-		PreDigest::Primary(primary) => {
+		PreDigest::Primary(primary) if epoch.config.inout_randomness => {
 			debug!(target: "babe", "Verifying Primary block");
 
 			check_primary_header::<B>(
 				pre_hash,
-				primary,
+				primary.authority_index,
+				primary.slot_number,
+				&primary.vrf_output,
+				&primary.vrf_proof,
+				Some(&primary.randomness),
+				sig,
+				&epoch,
+				epoch.config.c,
+			)?;
+		},
+		PreDigest::PrimaryV1(primary) if epoch.config.inout_randomness => {
+			debug!(target: "babe", "Verifying PrimaryV1 block");
+
+			check_primary_header::<B>(
+				pre_hash,
+				primary.authority_index,
+				primary.slot_number,
+				&primary.vrf_output,
+				&primary.vrf_proof,
+				None,
 				sig,
 				&epoch,
 				epoch.config.c,
@@ -149,23 +169,27 @@ pub(super) struct VerifiedHeaderInfo<B: BlockT> {
 /// its parent since it is a primary block.
 fn check_primary_header<B: BlockT + Sized>(
 	pre_hash: B::Hash,
-	pre_digest: &PrimaryPreDigest,
+	authority_index: AuthorityIndex,
+	slot_number: SlotNumber,
+	vrf_output: &VRFOutput,
+	vrf_proof: &VRFProof,
+	randomness: Option<&Randomness>,
 	signature: AuthoritySignature,
 	epoch: &Epoch,
 	c: (u64, u64),
 ) -> Result<(), Error<B>> {
-	let author = &epoch.authorities[pre_digest.authority_index as usize].0;
+	let author = &epoch.authorities[authority_index as usize].0;
 
 	if AuthorityPair::verify(&signature, pre_hash, &author) {
 		let (inout, _) = {
 			let transcript = make_transcript(
 				&epoch.randomness,
-				pre_digest.slot_number,
+				slot_number,
 				epoch.epoch_index,
 			);
 
 			schnorrkel::PublicKey::from_bytes(author.as_slice()).and_then(|p| {
-				p.vrf_verify(transcript, &pre_digest.vrf_output, &pre_digest.vrf_proof)
+				p.vrf_verify(transcript, vrf_output, vrf_proof)
 			}).map_err(|s| {
 				babe_err(Error::VRFVerificationFailed(s))
 			})?
@@ -174,13 +198,16 @@ fn check_primary_header<B: BlockT + Sized>(
 		let threshold = calculate_primary_threshold(
 			c,
 			&epoch.authorities,
-			pre_digest.authority_index as usize,
+			authority_index as usize,
 		);
 
-		let randomness = inout.make_bytes(BABE_VRF_INOUT_CONTEXT);
-
-		if randomness != pre_digest.randomness {
-			return Err(babe_err(Error::VRFRandomnessMismatch(randomness, pre_digest.randomness)));
+		if let Some(randomness) = randomness {
+			let calculated_randomness = inout.make_bytes(BABE_VRF_INOUT_CONTEXT);
+			if randomness != &calculated_randomness {
+				return Err(babe_err(
+					Error::VRFRandomnessMismatch(calculated_randomness, randomness.clone())
+				));
+			}
 		}
 
 		if !check_primary_threshold(&inout, threshold) {

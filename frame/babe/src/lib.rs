@@ -483,6 +483,8 @@ impl<T: Trait> Module<T> {
 				// and it'll be put onto the under-construction randomness
 				// later, once we've decided which epoch this block is in.
 				Some(primary.randomness)
+			} else if let RawPreDigest::PrimaryV1(primary) = digest {
+				Some(primary.vrf_output.0)
 			} else {
 				None
 			}

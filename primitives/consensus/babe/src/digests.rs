@@ -34,6 +34,37 @@ use sp_consensus_vrf::schnorrkel::SignatureError;
 
 /// Raw BABE primary slot assignment pre-digest.
 #[derive(Clone, RuntimeDebug, Encode, Decode)]
+pub struct RawPrimaryPreDigestV1<VRFOutput=schnorrkel::RawVRFOutput, VRFProof=schnorrkel::RawVRFProof> {
+	/// Authority index
+	pub authority_index: super::AuthorityIndex,
+	/// Slot number
+	pub slot_number: SlotNumber,
+	/// VRF output
+	pub vrf_output: VRFOutput,
+	/// VRF proof
+	pub vrf_proof: VRFProof,
+}
+
+#[cfg(feature = "std")]
+/// BABE primary slot assignment pre-digest for std environment.
+pub type PrimaryPreDigestV1 = RawPrimaryPreDigestV1<schnorrkel::VRFOutput, schnorrkel::VRFProof>;
+
+#[cfg(feature = "std")]
+impl TryFrom<RawPrimaryPreDigestV1> for PrimaryPreDigestV1 {
+	type Error = SignatureError;
+
+	fn try_from(raw: RawPrimaryPreDigestV1) -> Result<PrimaryPreDigestV1, SignatureError> {
+		Ok(PrimaryPreDigestV1 {
+			authority_index: raw.authority_index,
+			slot_number: raw.slot_number,
+			vrf_output: raw.vrf_output.try_into()?,
+			vrf_proof: raw.vrf_proof.try_into()?,
+		})
+	}
+}
+
+/// Raw BABE primary slot assignment pre-digest.
+#[derive(Clone, RuntimeDebug, Encode, Decode)]
 pub struct RawPrimaryPreDigest<VRFOutput=schnorrkel::RawVRFOutput, VRFProof=schnorrkel::RawVRFProof> {
 	/// Authority index
 	pub authority_index: super::AuthorityIndex,
@@ -116,8 +147,11 @@ impl TryFrom<RawSecondaryVRFPreDigest> for SecondaryVRFPreDigest {
 /// (VRF based) and to a secondary (slot number based).
 #[derive(Clone, RuntimeDebug, Encode, Decode)]
 pub enum RawPreDigest<VRFOutput=schnorrkel::RawVRFOutput, VRFProof=schnorrkel::RawVRFProof> {
-	/// A primary VRF-based slot assignment.
+	/// A primary VRF-based slot assignment. Version 1.
 	#[codec(index = "1")]
+	PrimaryV1(RawPrimaryPreDigestV1<VRFOutput, VRFProof>),
+	/// A primary VRF-based slot assignment.
+	#[codec(index = "4")]
 	Primary(RawPrimaryPreDigest<VRFOutput, VRFProof>),
 	/// A secondary deterministic slot assignment.
 	#[codec(index = "2")]
@@ -136,6 +170,7 @@ impl<VRFOutput, VRFProof> RawPreDigest<VRFOutput, VRFProof> {
 	pub fn authority_index(&self) -> AuthorityIndex {
 		match self {
 			RawPreDigest::Primary(primary) => primary.authority_index,
+			RawPreDigest::PrimaryV1(primary) => primary.authority_index,
 			RawPreDigest::SecondaryPlain(secondary) => secondary.authority_index,
 			RawPreDigest::SecondaryVRF(secondary) => secondary.authority_index,
 		}
@@ -145,6 +180,7 @@ impl<VRFOutput, VRFProof> RawPreDigest<VRFOutput, VRFProof> {
 	pub fn slot_number(&self) -> SlotNumber {
 		match self {
 			RawPreDigest::Primary(primary) => primary.slot_number,
+			RawPreDigest::PrimaryV1(primary) => primary.slot_number,
 			RawPreDigest::SecondaryPlain(secondary) => secondary.slot_number,
 			RawPreDigest::SecondaryVRF(secondary) => secondary.slot_number,
 		}
@@ -154,7 +190,7 @@ impl<VRFOutput, VRFProof> RawPreDigest<VRFOutput, VRFProof> {
 	/// of the chain.
 	pub fn added_weight(&self) -> crate::BabeBlockWeight {
 		match self {
-			RawPreDigest::Primary(_) => 1,
+			RawPreDigest::Primary(_) | RawPreDigest::PrimaryV1(_) => 1,
 			RawPreDigest::SecondaryPlain(_) | RawPreDigest::SecondaryVRF(_) => 0,
 		}
 	}
@@ -167,6 +203,7 @@ impl TryFrom<RawPreDigest> for PreDigest {
 	fn try_from(raw: RawPreDigest) -> Result<PreDigest, SignatureError> {
 		Ok(match raw {
 			RawPreDigest::Primary(primary) => PreDigest::Primary(primary.try_into()?),
+			RawPreDigest::PrimaryV1(primary) => PreDigest::PrimaryV1(primary.try_into()?),
 			RawPreDigest::SecondaryPlain(secondary) => PreDigest::SecondaryPlain(secondary),
 			RawPreDigest::SecondaryVRF(secondary) => PreDigest::SecondaryVRF(secondary.try_into()?),
 		})

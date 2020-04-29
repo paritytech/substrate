@@ -23,6 +23,7 @@ use sp_consensus_babe::{
 };
 use sp_consensus_babe::digests::{
 	PreDigest, PrimaryPreDigest, SecondaryPlainPreDigest, SecondaryVRFPreDigest,
+	PrimaryPreDigestV1,
 };
 use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
 use sp_core::{U256, blake2_256};
@@ -255,13 +256,22 @@ fn claim_primary_slot(
 		let pre_digest = get_keypair(&pair)
 			.vrf_sign_after_check(transcript, |inout| super::authorship::check_primary_threshold(inout, threshold))
 			.map(|s| {
-				PreDigest::Primary(PrimaryPreDigest {
-					slot_number,
-					vrf_output: VRFOutput(s.0.to_output()),
-					vrf_proof: VRFProof(s.1),
-					randomness: s.0.make_bytes(BABE_VRF_INOUT_CONTEXT),
-					authority_index: authority_index as u32,
-				})
+				if epoch.config.inout_randomness {
+					PreDigest::Primary(PrimaryPreDigest {
+						slot_number,
+						vrf_output: VRFOutput(s.0.to_output()),
+						vrf_proof: VRFProof(s.1),
+						randomness: s.0.make_bytes(BABE_VRF_INOUT_CONTEXT),
+						authority_index: authority_index as u32,
+					})
+				} else {
+					PreDigest::PrimaryV1(PrimaryPreDigestV1 {
+						slot_number,
+						vrf_output: VRFOutput(s.0.to_output()),
+						vrf_proof: VRFProof(s.1),
+						authority_index: authority_index as u32,
+					})
+				}
 			});
 
 		// early exit on first successful claim
