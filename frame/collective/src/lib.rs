@@ -41,10 +41,11 @@ use sp_core::u32_trait::Value as U32;
 use sp_runtime::RuntimeDebug;
 use sp_runtime::traits::Hash;
 use frame_support::{
-	dispatch::{Dispatchable, Parameter}, codec::{Encode, Decode},
+	dispatch::{Dispatchable, Parameter, DispatchResultWithPostInfo, PostDispatchInfo},
+	codec::{Encode, Decode},
 	traits::{Get, ChangeMembers, InitializeMembers, EnsureOrigin}, decl_module, decl_event,
 	decl_storage, decl_error, ensure,
-	weights::{DispatchClass, Weight},
+	weights::{DispatchClass, Weight, GetDispatchInfo},
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 
@@ -65,13 +66,19 @@ pub trait Trait<I: Instance=DefaultInstance>: frame_system::Trait {
 	type Origin: From<RawOrigin<Self::AccountId, I>>;
 
 	/// The outer call dispatch type.
-	type Proposal: Parameter + Dispatchable<Origin=<Self as Trait<I>>::Origin> + From<frame_system::Call<Self>>;
+	type Proposal: Parameter + Dispatchable<Origin=<Self as Trait<I>>::Origin, PostInfo=PostDispatchInfo> + From<frame_system::Call<Self>> + GetDispatchInfo;
 
 	/// The outer event type.
 	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Trait>::Event>;
 
 	/// The time-out for council motions.
 	type MotionDuration: Get<Self::BlockNumber>;
+
+	/// Maxmimum number of members allowed as part of the collective.
+	type MaxMembers: Get<MemberCount>;
+
+	/// Maximum number of proposals allowed to be active in parallel.
+	type MaxProposals: Get<u32>;
 }
 
 /// Origin for the collective module.
@@ -170,14 +177,16 @@ decl_error! {
 		TooEarly,
 		/// An invalid count was provided for weight estimation.
 		InvalidCount,
+		/// There can only be a maximum of `MaxMembers`.
+		TooManyMembers,
 	}
 }
 
 /// Functions for calcuating the weight of dispatchables.
 mod weight_for {
-	use frame_support::weights::{RuntimeDbWeight, Weight};
+	use frame_support::weights::{GetDispatchInfo, RuntimeDbWeight, Weight};
 
-	#[allow(dead_code)]
+	/// Calculate the weight for `set_members`.
 	pub(crate) fn set_members(
 		db: RuntimeDbWeight,
 		old_count: impl Into<Weight>,
@@ -187,9 +196,26 @@ mod weight_for {
 		db.reads_writes(1, 1) // read + write members
 			+ db.reads_writes(proposals.into() + 1, proposals.into()) // update votes
 			+ db.writes(2) // set prime
-			+ 600_000 * old_count.into() // M
-			+ 500_000 * new_count.into() // N
-			+ 10_300_000 * proposals.into() // P
+			+ 29_000_000 * old_count.into() // M
+			+ 100_000 * new_count.into() // N
+			+ 27_000_000 * proposals.into() // P
+	}
+
+	// The bytes are responsible for an insignificant amount of weight.
+	// Length of proposals is limited by length fees.
+	const MAX_ASSUMED_PROPOSAL_BYTES: Weight = 1_024;
+
+	/// Calculate the weight for `execute`.
+	pub(crate) fn execute(
+		db: RuntimeDbWeight,
+		members: impl Into<Weight>,
+		proposal: impl Into<Weight>,
+	) -> Weight {
+		db.reads(1) // read members for `is_member`
+			+ 86_000_000 // constant
+			+ 330_000 * members.into() // M
+			+ 5_000 * MAX_ASSUMED_PROPOSAL_BYTES // B
+			+ proposal.into() // P
 	}
 }
 
@@ -221,14 +247,15 @@ decl_module! {
 		///   - 1 storage mutation (codec `O(M)` read, `O(N)` write) for reading and writing the members
 		///   - 1 storage read (codec `O(P)`) + `P` storage mutations for updating the votes for each proposal (codec `O(M)`)
 		///   - 2 storage writes (codec `O(1)`) for deleting the old `prime` and setting the new one
-		/// - Benchmark: 0 + M * 0.541 + N * 0.502 + P * 10.29 µs (min squares analysis)
+		/// - Benchmark: 0 + M * 28.94 + N * 0 + P * 26.74 µs (min squares analysis)
 		/// # </weight>
 		#[weight = (
-			weight_for::set_members(T::DbWeight::get(), *old_count, new_members.len() as Weight, old_count * 2),
+			weight_for::set_members(T::DbWeight::get(), *old_count, new_members.len() as Weight, T::MaxProposals::get()),
 			DispatchClass::Operational
 		)]
 		fn set_members(origin, new_members: Vec<T::AccountId>, prime: Option<T::AccountId>, old_count: u32) {
 			ensure_root(origin)?;
+			ensure!(new_members.len() <= T::MaxMembers::get() as usize, Error::<T, I>::TooManyMembers);
 			let old = Members::<T, I>::get();
 			ensure!(old.len() <= old_count as usize, Error::<T, I>::InvalidCount);
 			let mut new_members = new_members;
@@ -240,14 +267,42 @@ decl_module! {
 		/// Dispatch a proposal from a member using the `Member` origin.
 		///
 		/// Origin must be a member of the collective.
-		#[weight = (100_000_000, DispatchClass::Operational)]
-		fn execute(origin, proposal: Box<<T as Trait<I>>::Proposal>) {
+		///
+		/// # <weight>
+		/// ## Weight
+		/// - `O(M + P)` where `M` members-count and `P` complexity of dispatching `proposal`
+		/// - DB: 1 read (codec `O(M)`) and 1 event + DB access of `proposal`
+		/// - Benchmark: 85.71 + M * 0.326 + B * 0.005 µs (min squares analysis)
+		/// # </weight>
+		#[weight = (
+			weight_for::execute(T::DbWeight::get(), T::MaxMembers::get(), proposal.get_dispatch_info().weight),
+			DispatchClass::Operational
+		)]
+		fn execute(origin, proposal: Box<<T as Trait<I>>::Proposal>) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			ensure!(Self::is_member(&who), Error::<T, I>::NotMember);
+			let members = Self::members();
+			ensure!(members.contains(&who), Error::<T, I>::NotMember);
 
 			let proposal_hash = T::Hashing::hash_of(&proposal);
-			let ok = proposal.dispatch(RawOrigin::Member(who).into()).is_ok();
-			Self::deposit_event(RawEvent::MemberExecuted(proposal_hash, ok));
+			let result = proposal.dispatch(RawOrigin::Member(who).into());
+			Self::deposit_event(RawEvent::MemberExecuted(proposal_hash, result.is_ok()));
+
+			match result {
+				Ok(post_info) => {
+					Ok(post_info.actual_weight.map(|w| weight_for::execute(
+						T::DbWeight::get(),
+						members.len() as Weight,
+						w
+					)).into())
+				},
+				Err(err) => {
+					Ok(err.post_info.actual_weight.map(|w| weight_for::execute(
+						T::DbWeight::get(),
+						members.len() as Weight,
+						w
+					)).into())
+				}
+			}
 		}
 
 		/// # <weight>
@@ -593,6 +648,8 @@ mod tests {
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 		pub const MotionDuration: u64 = 3;
+		pub const MaxMembers: MemberCount = 100;
+		pub const MaxProposals: u32 = 100;
 	}
 	impl frame_system::Trait for Test {
 		type Origin = Origin;
@@ -621,12 +678,16 @@ mod tests {
 		type Proposal = Call;
 		type Event = Event;
 		type MotionDuration = MotionDuration;
+		type MaxMembers = MaxMembers;
+		type MaxProposals = MaxProposals;
 	}
 	impl Trait for Test {
 		type Origin = Origin;
 		type Proposal = Call;
 		type Event = Event;
 		type MotionDuration = MotionDuration;
+		type MaxMembers = MaxMembers;
+		type MaxProposals = MaxProposals;
 	}
 
 	pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
