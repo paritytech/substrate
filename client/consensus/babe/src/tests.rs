@@ -508,6 +508,7 @@ fn can_author_block() {
 		config: BabeEpochConfiguration {
 			c: (3, 10),
 			allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
+			inout_randomness: false,
 		},
 	};
 
@@ -518,6 +519,7 @@ fn can_author_block() {
 		genesis_authorities: Vec::new(),
 		randomness: [0; 32],
 		allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
+		inout_randomness: false,
 	};
 
 	// with secondary slots enabled it should never be empty

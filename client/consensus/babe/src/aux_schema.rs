@@ -187,6 +187,7 @@ mod test {
 				genesis_authorities: Vec::new(),
 				randomness: Default::default(),
 				allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
+				inout_randomness: false,
 			},
 		).unwrap();
 
