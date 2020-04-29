@@ -52,6 +52,8 @@
 //! or prune any signaled changes based on whether the signaling block is
 //! included in the newly-finalized chain.
 
+pub use finality_grandpa::voter::report;
+
 use futures::prelude::*;
 use futures::StreamExt;
 use log::{debug, info};
@@ -77,8 +79,7 @@ use parking_lot::RwLock;
 use sp_finality_tracker;
 
 use finality_grandpa::Error as GrandpaError;
-use finality_grandpa::{BlockNumberOps, voter_set::VoterSet};
-pub use finality_grandpa::voter;
+use finality_grandpa::{voter, BlockNumberOps, voter_set::VoterSet};
 
 use std::{fmt, io};
 use std::sync::Arc;

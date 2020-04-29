@@ -19,7 +19,7 @@
 #![warn(missing_docs)]
 
 use finality_grandpa::BlockNumberOps;
-use sc_finality_grandpa::{voter, AuthorityId, SharedAuthoritySet, SharedVoterState};
+use sc_finality_grandpa::{AuthorityId, SharedAuthoritySet, SharedVoterState, report};
 
 use futures::{FutureExt, TryFutureExt};
 use jsonrpc_derive::rpc;
@@ -103,7 +103,7 @@ struct RoundState {
 impl RoundState {
 	fn from(
 		round: u64,
-		round_state: &voter::report::RoundState<AuthorityId>,
+		round_state: &report::RoundState<AuthorityId>,
 		voters: &HashSet<AuthorityId>,
 	) -> Self {
 		let prevotes = &round_state.prevote_ids;
