@@ -30,8 +30,6 @@ macro_rules! implement_fixed {
 	(
 		$name:ident,
 		$inner_type:ty,
-		$unsigned_type:ty,
-		$prev_unsigned_type:ty,
 		$perthing_type:ty,
 		$div:tt,
 		$precision:tt,
@@ -53,8 +51,6 @@ macro_rules! implement_fixed {
 
 		impl FixedPointNumber for $name {
 			type Inner = $inner_type;
-			type Unsigned = $unsigned_type;
-			type PrevUnsigned = $prev_unsigned_type;
 			type Perthing = $perthing_type;
 
 			const DIV: Self::Inner = $div;

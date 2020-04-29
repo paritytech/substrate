@@ -176,12 +176,6 @@ pub trait FixedPointNumber:
 	/// The underlying data type used for this fixed point number.
 	type Inner: Copy + Debug + One + From<i64>;
 
-	/// The unsigned version of inner.
-	type Unsigned;
-
-	/// The previous unsigned.
-	type PrevUnsigned;
-
 	/// The perthing used.
 	type Perthing;
 

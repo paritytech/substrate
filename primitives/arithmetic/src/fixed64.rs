@@ -35,8 +35,6 @@ use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 implement_fixed!(
 	Fixed64,
 	i64,
-	u64,
-	u32,
 	Perbill,
 	1_000_000_000,
 	9,

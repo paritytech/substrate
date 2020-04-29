@@ -36,8 +36,6 @@ use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 implement_fixed!(
 	Fixed128,
 	i128,
-	u128,
-	u64,
 	Perquintill,
 	1_000_000_000_000_000_000,
 	18,
