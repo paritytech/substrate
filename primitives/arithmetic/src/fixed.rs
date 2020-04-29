@@ -67,15 +67,15 @@ macro_rules! implement_fixed {
 			}
 
 			fn from_integer(int: Self::Inner) -> Self {
-				Self(int.saturating_mul(Self::accuracy()))
+				Self(int.saturating_mul(Self::DIV))
 			}
 
 			fn checked_from_integer(int: Self::Inner) -> Option<Self> {
-				int.checked_mul(Self::accuracy()).map(|inner| Self(inner))
+				int.checked_mul(Self::DIV).map(|inner| Self(inner))
 			}
 
-			fn from_rational<N: UniqueSaturatedInto<Self::Inner>>(numerator: N, denominator: Self::Inner) -> Self {
-				let numerator = numerator.unique_saturated_into();
+			fn from_rational(numerator: Self::Inner, denominator: Self::Inner) -> Self {
+				// let numerator = numerator.unique_saturated_into();
 				let signum = numerator.signum() * denominator.signum();
 
 				let numerator = numerator.checked_abs().map(|v| v as u128)

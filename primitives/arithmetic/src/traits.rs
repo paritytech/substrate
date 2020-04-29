@@ -188,7 +188,7 @@ pub trait FixedPointNumber:
 	}
 
 	/// Raw constructor. Equal to `parts / DIV`.
-	fn from_inner(inner: Self::Inner) -> Self;
+	fn from_inner(int: Self::Inner) -> Self;
 
 	/// Consume self and return the inner raw value.
 	fn into_inner(self) -> Self::Inner;
@@ -202,7 +202,7 @@ pub trait FixedPointNumber:
 	/// Creates self from a rational number. Equal to `n / d`.
 	///
 	/// Assumes d != 0 (returns 0 in this case).
-	fn from_rational<N: UniqueSaturatedInto<Self::Inner>>(n: N, d: Self::Inner) -> Self;
+	fn from_rational(n: Self::Inner, d: Self::Inner) -> Self;
 
 	/// Checked multiplication for integer type `N`.
 	fn checked_mul_int<
