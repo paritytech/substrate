@@ -54,6 +54,7 @@ use codec::{Encode, Decode};
 use sc_client_api;
 use log::*;
 use sp_timestamp::{InherentError as TIError, TimestampInherentData};
+use futures::future::BoxFuture;
 
 #[derive(derive_more::Display, Debug)]
 pub enum Error<B: BlockT> {
@@ -461,6 +462,7 @@ pub fn import_queue<B, Transaction, Algorithm>(
 	finality_proof_import: Option<BoxFinalityProofImport<B>>,
 	algorithm: Algorithm,
 	inherent_data_providers: InherentDataProviders,
+	spawner: impl Fn(BoxFuture<'static, ()>) -> (),
 ) -> Result<
 	PowImportQueue<B, Transaction>,
 	sp_consensus::Error
@@ -477,7 +479,8 @@ pub fn import_queue<B, Transaction, Algorithm>(
 		verifier,
 		block_import,
 		justification_import,
-		finality_proof_import
+		finality_proof_import,
+		spawner,
 	))
 }
 

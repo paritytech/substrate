@@ -107,7 +107,7 @@ use sc_client_api::{
 };
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 
-use futures::prelude::*;
+use futures::{prelude::*, future::BoxFuture};
 use log::{debug, info, log, trace, warn};
 use sc_consensus_slots::{
 	SlotWorker, SlotInfo, SlotCompatible, StorageChanges, CheckedHeader, check_equivocation,
@@ -1272,6 +1272,7 @@ pub fn import_queue<Block: BlockT, Client, Inner>(
 	finality_proof_import: Option<BoxFinalityProofImport<Block>>,
 	client: Arc<Client>,
 	inherent_data_providers: InherentDataProviders,
+	spawner: impl Fn(BoxFuture<'static, ()>) -> (),
 ) -> ClientResult<BabeImportQueue<Block, sp_api::TransactionFor<Client, Block>>> where
 	Inner: BlockImport<Block, Error = ConsensusError, Transaction = sp_api::TransactionFor<Client, Block>>
 		+ Send + Sync + 'static,
@@ -1294,6 +1295,7 @@ pub fn import_queue<Block: BlockT, Client, Inner>(
 		Box::new(block_import),
 		justification_import,
 		finality_proof_import,
+		spawner,
 	))
 }
 

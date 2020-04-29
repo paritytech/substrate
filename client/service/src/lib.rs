@@ -64,7 +64,7 @@ pub use self::builder::{
 	ServiceBuilder, ServiceBuilderCommand, TFullClient, TLightClient, TFullBackend, TLightBackend,
 	TFullCallExecutor, TLightCallExecutor,
 };
-pub use config::{Configuration, Role, PruningMode, DatabaseConfig};
+pub use config::{Configuration, Role, PruningMode, DatabaseConfig, TaskType};
 pub use sc_chain_spec::{
 	ChainSpec, GenericChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension,
 	NoExtension, ChainType,
