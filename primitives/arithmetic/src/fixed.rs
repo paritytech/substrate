@@ -77,10 +77,6 @@ macro_rules! implement_fixed {
 			}
 
 			fn from_rational<N: UniqueSaturatedInto<Self::Inner>>(numerator: N, denominator: Self::Inner) -> Self {
-				if denominator == 0 {
-					return Self::max_value()
-				}
-
 				let numerator = numerator.unique_saturated_into();
 				let signum = numerator.signum() * denominator.signum();
 
@@ -89,24 +85,39 @@ macro_rules! implement_fixed {
 				let denominator = denominator.checked_abs().map(|v| v as u128)
 					.unwrap_or(Self::Inner::max_value() as u128 + 1);
 
+				println!("num {} den {}", numerator, denominator);
+
 				let (multiply_high, multiply_low) = multiply(numerator, Self::DIV as u128);
 
-				let remainder_low = multiply_low.checked_rem(denominator)
-					.expect("None only if denominator is 0, denominator != 0 checked above; qed");
-				let result_low = multiply_low.checked_div(denominator)
-					.expect("None only if denominator is 0, denominator != 0 checked above; qed");
+				println!("mul_h {} mul_l {}", multiply_high, multiply_low);
 
-				let (result_high, remainder_high) = divide(multiply_high, denominator, 128)
-					.expect("can't overflow, denominator != 0; qed");
-				let partial_result = result_high.saturating_add(result_low);
-				let remainder =  remainder_low.saturating_add(remainder_high);
+				if let Some((result_high, remainder_high)) = divide(multiply_high, denominator, 128) {
+					let remainder_low = multiply_low.checked_rem(denominator)
+						.expect("None only if denominator is 0, denominator != 0 checked above; qed");
+					let result_low = multiply_low.checked_div(denominator)
+						.expect("None only if denominator is 0, denominator != 0 checked above; qed");
 
-				let extra =  remainder.checked_div(denominator).unwrap();
-				let result = partial_result.saturating_add(extra);
-				let unsigned_inner: Self::Inner = result.unique_saturated_into();
-				let inner = unsigned_inner.saturating_mul(signum);
+					let partial_result = result_high.saturating_add(result_low);
+					let remainder = remainder_low.saturating_add(remainder_high);
 
-				Self(inner)
+					let extra =  remainder.checked_div(denominator).unwrap_or(0);
+					let result = partial_result.saturating_add(extra);
+
+					let inner = if result == Self::Inner::max_value() as u128 + 1 && signum < 0 {
+						Self::Inner::min_value()
+					} else {
+						let unsigned_inner: Self::Inner = result.saturated_into();
+						unsigned_inner.saturating_mul(signum)
+					};
+	
+					Self(inner)	
+				} else {
+					if signum < 0 {
+						Self::min_value()
+					} else {
+						Self::max_value()
+					}
+				}
 			}
 
 			fn checked_mul_int<N>(self, int: N) -> Option<N>
@@ -540,7 +551,7 @@ macro_rules! implement_fixed {
 				// let d = $name::from_rational(-5, -2);
 
 				let e = $name::from_rational(inner_max, accuracy);
-				// let f = $name::from_rational(inner_min, accuracy);
+				let f = $name::from_rational(inner_min, accuracy);
 				// let g = $name::from_rational(inner_max, -accuracy);
 				// let h = $name::from_rational(inner_min, -accuracy);
 				// let i = $name::from_rational(inner_min + 1, -accuracy);
@@ -573,7 +584,7 @@ macro_rules! implement_fixed {
 				// assert_eq!(d.saturating_mul_int(10), 25);
 
 				assert_eq!(e.into_inner(), inner_max);
-				// assert_eq!(f.into_inner(), inner_min);
+				assert_eq!(f.into_inner(), inner_min);
 				// assert_eq!(g.into_inner(), -inner_max);
 				// assert_eq!(h.into_inner(), inner_max);
 				// assert_eq!(i.into_inner(), inner_max);

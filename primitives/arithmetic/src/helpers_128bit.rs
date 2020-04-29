@@ -178,12 +178,6 @@ pub fn divide(a: u128, b: u128, p: u8) -> Option<(u128, u128)> {
 	// Save partial result.
 	let n = d.checked_shl(p).unwrap();
 
-	if r == 0 {
-		// No remainder and no overflow, we are done.
-		println!("1 d = {} r = {}", d, r);
-		return Some((d, r))
-	}
-
 	// Second iteration. Continue with the remainer.
 	let a = r;
 
