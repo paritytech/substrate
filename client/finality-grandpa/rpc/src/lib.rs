@@ -39,6 +39,12 @@ pub enum Error {
 	/// The GRANDPA RPC endpoint is not ready.
 	#[display(fmt = "GRANDPA RPC endpoint not ready")]
 	EndpointNotReady,
+	/// GRANDPA reports the authority set id to be larger than 32-bits.
+	#[display(fmt = "GRANDPA reports authority set id unreasonably large")]
+	AuthoritySetIdReportedasUnreasonablyLarge,
+	/// GRANDPA reports voter state with round id or weights larger than 32-bits.
+	#[display(fmt = "GRANDPA reports voter state as unreasonably large")]
+	VoterStateReportsUnreasonablyLargeNumbers,
 }
 
 impl From<Error> for jsonrpc_core::Error {
@@ -48,6 +54,12 @@ impl From<Error> for jsonrpc_core::Error {
 			code: jsonrpc_core::ErrorCode::ServerError(NOT_READY_ERROR_CODE),
 			data: None,
 		}
+	}
+}
+
+impl From<std::num::TryFromIntError> for Error {
+	fn from(_error: std::num::TryFromIntError) -> Self {
+		Error::VoterStateReportsUnreasonablyLargeNumbers
 	}
 }
 

@@ -24,23 +24,23 @@ use crate::Error;
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Prevotes {
-	current_weight: u64,
+	current_weight: u32,
 	missing: HashSet<AuthorityId>,
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Precommits {
-	current_weight: u64,
+	current_weight: u32,
 	missing: HashSet<AuthorityId>,
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RoundState {
-	round: u64,
-	total_weight: u64,
-	threshold_weight: u64,
+	round: u32,
+	total_weight: u32,
+	threshold_weight: u32,
 	prevotes: Prevotes,
 	precommits: Precommits,
 }
@@ -50,26 +50,28 @@ impl RoundState {
 		round: u64,
 		round_state: &report::RoundState<AuthorityId>,
 		voters: &HashSet<AuthorityId>,
-	) -> Self {
+	) -> Result<Self, Error> {
+		use std::convert::TryInto;
+
 		let prevotes = &round_state.prevote_ids;
 		let missing_prevotes = voters.difference(&prevotes).cloned().collect();
 
 		let precommits = &round_state.precommit_ids;
 		let missing_precommits = voters.difference(&precommits).cloned().collect();
 
-		Self {
-			round,
-			total_weight: round_state.total_weight,
-			threshold_weight: round_state.threshold_weight,
+		Ok(Self {
+			round: round.try_into()?,
+			total_weight: round_state.total_weight.try_into()?,
+			threshold_weight: round_state.threshold_weight.try_into()?,
 			prevotes: Prevotes {
-				current_weight: round_state.prevote_current_weight,
+				current_weight: round_state.prevote_current_weight.try_into()?,
 				missing: missing_prevotes,
 			},
 			precommits: Precommits {
-				current_weight: round_state.precommit_current_weight,
+				current_weight: round_state.precommit_current_weight.try_into()?,
 				missing: missing_precommits,
 			},
-		}
+		})
 	}
 }
 
@@ -78,7 +80,7 @@ impl RoundState {
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReportedRoundStates {
-	set_id: u64,
+	set_id: u32,
 	best: RoundState,
 	background: Vec<RoundState>,
 }
@@ -92,6 +94,8 @@ impl ReportedRoundStates {
 		Hash: Debug + Clone + Eq + Send + Sync + 'static,
 		Block: BlockNumberOps + Send + Sync + 'static,
 	{
+		use std::convert::TryFrom;
+
 		let voter_state = voter_state
 			.voter_state()
 			.ok_or(Error::EndpointNotReady)?;
@@ -103,19 +107,22 @@ impl ReportedRoundStates {
 			.map(|p| p.0.clone())
 			.collect();
 
+		let set_id = u32::try_from(authority_set.set_id())
+			.map_err(|_| Error::AuthoritySetIdReportedasUnreasonablyLarge)?;
+
 		let best = {
 			let (round, round_state) = voter_state.best_round;
-			RoundState::from(round, &round_state, &current_voters)
+			RoundState::from(round, &round_state, &current_voters)?
 		};
 
 		let background = voter_state
 			.background_rounds
 			.iter()
 			.map(|(round, round_state)| RoundState::from(*round, round_state, &current_voters))
-			.collect();
+			.collect::<Result<Vec<_>, Error>>()?;
 
 		Ok(Self {
-			set_id: authority_set.set_id(),
+			set_id,
 			best,
 			background,
 		})
