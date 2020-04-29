@@ -4163,6 +4163,7 @@ dependencies = [
  "sp-runtime",
  "sp-std",
  "sp-storage",
+ "substrate-test-utils",
 ]
 
 [[package]]
