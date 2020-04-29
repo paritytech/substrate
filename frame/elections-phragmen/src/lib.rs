@@ -98,6 +98,8 @@ use frame_support::{
 use sp_phragmen::{build_support_map, ExtendedBalance, VoteWeight, PhragmenResult};
 use frame_system::{self as system, ensure_signed, ensure_root};
 
+mod benchmarking;
+
 /// The maximum votes allowed per voter.
 pub const MAXIMUM_VOTE: usize = 16;
 

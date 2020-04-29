@@ -142,7 +142,7 @@ benchmarks! {
 			let reporter = account("reporter", i, SEED);
 			reporters.push(reporter);
 		}
-	
+
 		let offenders = make_offenders::<T>(o, n).expect("failed to create offenders");
 		let keys =  ImOnline::<T>::keys();
 

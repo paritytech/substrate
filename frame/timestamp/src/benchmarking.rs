@@ -34,6 +34,7 @@ benchmarks! {
 	set {
 		let t in 1 .. MAX_TIME;
 	}: _(RawOrigin::None, t.into())
+
 	verify {
 		ensure!(Timestamp::<T>::now() == t.into(), "Time was not set.");
 	}
@@ -43,6 +44,7 @@ benchmarks! {
 		Timestamp::<T>::set(RawOrigin::None.into(), t.into())?;
 		ensure!(DidUpdate::exists(), "Time was not set.");
 	}: { Timestamp::<T>::on_finalize(t.into()); }
+
 	verify {
 		ensure!(!DidUpdate::exists(), "Time was not removed.");
 	}
