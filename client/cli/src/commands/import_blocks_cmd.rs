@@ -40,7 +40,7 @@ pub struct ImportBlocksCmd {
 	pub default_heap_pages: Option<u32>,
 
 	/// Try importing blocks from binary format rather than JSON.
-	#[structopt(long = "binary", value_name = "BOOL", parse(try_from_str), default_value("false"))]
+	#[structopt(long)]
 	pub binary: bool,
 
 	#[allow(missing_docs)]
