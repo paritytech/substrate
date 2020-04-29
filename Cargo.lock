@@ -3365,6 +3365,8 @@ dependencies = [
  "log",
  "node-primitives",
  "node-testing",
+ "parity-db",
+ "parity-util-mem",
  "rand 0.7.3",
  "sc-cli",
  "sc-client-api",

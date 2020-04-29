@@ -23,6 +23,7 @@ mod tempdb;
 mod state_sizes;
 
 use crate::core::{run_benchmark, Mode as BenchmarkMode};
+use crate::tempdb::DatabaseType;
 use import::{ImportBenchmarkDescription, SizeType};
 use trie::{TrieReadBenchmarkDescription, TrieWriteBenchmarkDescription, DatabaseSize};
 use node_testing::bench::{Profile, KeyTypes};
@@ -66,7 +67,7 @@ fn main() {
 	}
 
 	let benchmarks = matrix!(
-		profile in [Profile::Wasm, Profile::Native] =>
+		profile in [Profile::Wasm, Profile::Native].iter() =>
 			ImportBenchmarkDescription {
 				profile: *profile,
 				key_types: KeyTypes::Sr25519,
@@ -87,22 +88,36 @@ fn main() {
 			key_types: KeyTypes::Sr25519,
 			size: SizeType::Full,
 		},
-		size in [SizeType::Small, SizeType::Large] =>
+		size in [SizeType::Small, SizeType::Large].iter() =>
 			ImportBenchmarkDescription {
 				profile: Profile::Native,
 				key_types: KeyTypes::Sr25519,
 				size: *size,
 			},
-		size in [
-			DatabaseSize::Empty, DatabaseSize::Smallest, DatabaseSize::Small,
-			DatabaseSize::Medium, DatabaseSize::Large, DatabaseSize::Huge,
-		] => TrieReadBenchmarkDescription { database_size: *size },
-		size in [
-			DatabaseSize::Empty, DatabaseSize::Smallest, DatabaseSize::Small,
-			DatabaseSize::Medium, DatabaseSize::Large, DatabaseSize::Huge,
-		] => TrieWriteBenchmarkDescription { database_size: *size },
+		(size, db_type) in
+			[
+				DatabaseSize::Empty, DatabaseSize::Smallest, DatabaseSize::Small,
+				DatabaseSize::Medium, DatabaseSize::Large, DatabaseSize::Huge,
+			]
+			.iter().flat_map(|size|
+			[
+				DatabaseType::RocksDb, DatabaseType::ParityDb
+			]
+			.iter().map(move |db_type| (size, db_type)))
+			=> TrieReadBenchmarkDescription { database_size: *size, database_type: *db_type },
+		(size, db_type) in
+			[
+				DatabaseSize::Empty, DatabaseSize::Smallest, DatabaseSize::Small,
+				DatabaseSize::Medium, DatabaseSize::Large, DatabaseSize::Huge,
+			]
+			.iter().flat_map(|size|
+			[
+				DatabaseType::RocksDb, DatabaseType::ParityDb
+			]
+			.iter().map(move |db_type| (size, db_type)))
+			=> TrieWriteBenchmarkDescription { database_size: *size, database_type: *db_type },
 	);
-	
+
 	if opt.list {
 		for benchmark in benchmarks.iter() {
 			log::info!("{}: {}", benchmark.name(), benchmark.path().full())
