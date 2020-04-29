@@ -212,7 +212,7 @@ mod test {
 
 		assert_eq!(
 			load_decode::<_, u32>(&client, BABE_EPOCH_CHANGES_VERSION).unwrap(),
-			Some(2),
+			Some(3),
 		);
 	}
 }
