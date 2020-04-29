@@ -41,7 +41,7 @@ use sp_core::u32_trait::Value as U32;
 use sp_runtime::RuntimeDebug;
 use sp_runtime::traits::Hash;
 use frame_support::{
-	dispatch::{Dispatchable, Parameter, DispatchError, DispatchResult, DispatchResultWithPostInfo, PostDispatchInfo},
+	dispatch::{Dispatchable, Parameter, DispatchError, DispatchResultWithPostInfo, PostDispatchInfo},
 	codec::{Encode, Decode},
 	traits::{Get, ChangeMembers, InitializeMembers, EnsureOrigin}, decl_module, decl_event,
 	decl_storage, decl_error, ensure,
@@ -186,7 +186,7 @@ decl_error! {
 
 /// Functions for calcuating the weight of dispatchables.
 mod weight_for {
-	use frame_support::weights::{GetDispatchInfo, RuntimeDbWeight, Weight};
+	use frame_support::weights::{RuntimeDbWeight, Weight};
 
 	/// Calculate the weight for `set_members`.
 	pub(crate) fn set_members(
