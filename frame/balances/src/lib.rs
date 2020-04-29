@@ -155,7 +155,7 @@ mod tests_composite;
 mod benchmarking;
 
 use sp_std::prelude::*;
-use sp_std::{cmp, result, mem, fmt::Debug, ops::BitOr, convert::Infallible};
+use sp_std::{cmp, result, mem, fmt::Debug, ops::BitOr, convert::{Infallible, TryFrom}};
 use codec::{Codec, Encode, Decode};
 use frame_support::{
 	StorageValue, Parameter, decl_event, decl_storage, decl_module, decl_error, ensure,
@@ -170,7 +170,7 @@ use sp_runtime::{
 	RuntimeDebug, DispatchResult, DispatchError,
 	traits::{
 		Zero, AtLeast32Bit, StaticLookup, Member, CheckedAdd, CheckedSub,
-		MaybeSerializeDeserialize, Saturating, Bounded,
+		MaybeSerializeDeserialize, Saturating, Bounded, UniqueSaturatedInto
 	},
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
@@ -180,7 +180,7 @@ pub use self::imbalances::{PositiveImbalance, NegativeImbalance};
 pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Trait {
 	/// The balance of an account.
 	type Balance: Parameter + Member + AtLeast32Bit + Codec + Default + Copy +
-		MaybeSerializeDeserialize + Debug;
+		MaybeSerializeDeserialize + Debug + TryFrom<i128> + UniqueSaturatedInto<i128>;
 
 	/// The minimum amount required to keep an account open.
 	type ExistentialDeposit: Get<Self::Balance>;
@@ -192,7 +192,7 @@ pub trait Subtrait<I: Instance = DefaultInstance>: frame_system::Trait {
 pub trait Trait<I: Instance = DefaultInstance>: frame_system::Trait {
 	/// The balance of an account.
 	type Balance: Parameter + Member + AtLeast32Bit + Codec + Default + Copy +
-		MaybeSerializeDeserialize + Debug;
+		MaybeSerializeDeserialize + Debug + TryFrom<i128> + UniqueSaturatedInto<i128>;
 
 	/// Handler for the unbalanced reduction when removing a dust account.
 	type DustRemoval: OnUnbalanced<NegativeImbalance<Self, I>>;

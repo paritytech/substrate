@@ -18,13 +18,13 @@
 //!
 //! NOTE: If you're looking for `parameter_types`, it has moved in to the top-level module.
 
-use sp_std::{prelude::*, result, marker::PhantomData, ops::Div, fmt::Debug};
+use sp_std::{prelude::*, result, marker::PhantomData, ops::Div, fmt::Debug, convert::TryFrom};
 use codec::{FullCodec, Codec, Encode, Decode, EncodeLike};
 use sp_core::u32_trait::Value as U32;
 use sp_runtime::{
 	RuntimeDebug, ConsensusEngineId, DispatchResult, DispatchError, traits::{
 		MaybeSerializeDeserialize, AtLeast32Bit, Saturating, TrailingZeroInput, Bounded, Zero,
-		BadOrigin
+		BadOrigin, UniqueSaturatedInto
 	},
 };
 use crate::dispatch::Parameter;
@@ -547,7 +547,7 @@ impl<
 /// Abstraction over a fungible assets system.
 pub trait Currency<AccountId> {
 	/// The balance of an account.
-	type Balance: AtLeast32Bit + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default;
+	type Balance: AtLeast32Bit + FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default + UniqueSaturatedInto<i128> + TryFrom<i128>;
 
 	/// The opaque token type for an imbalance. This is returned by unbalanced operations
 	/// and must be dealt with. It may be dropped but cannot be cloned.

@@ -157,11 +157,11 @@ use codec::{Decode, Encode, HasCompact, Input, Output, Error as CodecError};
 use sp_runtime::{RuntimeDebug, DispatchResult, DispatchError};
 use sp_runtime::traits::{
 	CheckedAdd, CheckedSub, MaybeSerializeDeserialize, Member, One, Saturating, AtLeast32Bit,
-	Zero, Bounded,
+	Zero, Bounded, UniqueSaturatedInto
 };
 
 use sp_std::prelude::*;
-use sp_std::{cmp, result, fmt::Debug};
+use sp_std::{cmp, result, fmt::Debug, convert::TryFrom};
 use frame_support::{
 	decl_event, decl_module, decl_storage, ensure, decl_error,
 	weights::{SimpleDispatchInfo, MINIMUM_WEIGHT},
@@ -185,6 +185,8 @@ pub trait Trait: frame_system::Trait {
 		+ Default
 		+ Copy
 		+ MaybeSerializeDeserialize
+		+ UniqueSaturatedInto<i128>
+		+ TryFrom<i128>
 		+ Debug;
 	type AssetId: Parameter + Member + AtLeast32Bit + Default + Copy;
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
@@ -197,6 +199,8 @@ pub trait Subtrait: frame_system::Trait {
 		+ Default
 		+ Copy
 		+ MaybeSerializeDeserialize
+		+ UniqueSaturatedInto<i128>
+		+ TryFrom<i128>
 		+ Debug;
 	type AssetId: Parameter + Member + AtLeast32Bit + Default + Copy;
 }
