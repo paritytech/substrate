@@ -1,24 +1,20 @@
-use std::sync::Arc;
-use parking_lot::Mutex;
-use std::collections::BTreeMap;
+use std::cell::RefCell;
 use rental;
-use lazy_static;
-use rustc_hash::FxHashMap;
 
 use crate::span_dispatch;
 
 const MAX_SPANS_LEN: usize = 1000;
 
-lazy_static! {
-	static ref PROXY: Arc<Mutex<TracingProxy>> = Arc::new(Mutex::new(TracingProxy::new()));
+thread_local! {
+	static PROXY: RefCell<TracingProxy> = RefCell::new(TracingProxy::new());
 }
 
 pub fn create_registered_span(target: &str, name: &str) -> u64 {
-	PROXY.lock().create_registered_span(target, name)
+	PROXY.with(|proxy| proxy.borrow_mut().create_registered_span(target, name))
 }
 
 pub fn exit_span(id: u64) {
-	PROXY.lock().exit_span(id);
+	PROXY.with(|proxy| proxy.borrow_mut().exit_span(id));
 }
 
 rental! {
@@ -35,12 +31,20 @@ rental! {
 /// this is available when running with client (and relevant cli params)
 pub struct TracingProxy {
 	next_id: u64,
-	spans: FxHashMap<u64, rent_span::SpanAndGuard>,
+	spans: Vec<(u64, rent_span::SpanAndGuard)>,
+}
+
+impl Drop for TracingProxy {
+	fn drop(&mut self) {
+		while let Some((_, mut sg)) = self.spans.pop() {
+			sg.rent_all_mut(|s| { s.span.record("tracing_proxy_ok", &false); });
+		}
+	}
 }
 
 impl TracingProxy {
 	pub fn new() -> TracingProxy {
-		let spans: FxHashMap<u64, rent_span::SpanAndGuard> = FxHashMap::default();
+		let spans: Vec<(u64, rent_span::SpanAndGuard)> = Vec::new();
 		TracingProxy {
 			// Span ids start from 1 - we will use 0 as special case for unregistered spans
 			next_id: 1,
@@ -62,7 +66,7 @@ impl TracingProxy {
 					Box::new(span),
 					|span| span.enter(),
 				);
-				self.spans.insert(id, sg);
+				self.spans.push((id, sg));
 			}
 			Err(e) => {
 				id = 0;
@@ -71,11 +75,12 @@ impl TracingProxy {
 		}
 		let spans_len = self.spans.len();
 		if spans_len > MAX_SPANS_LEN {
+			// This could mean:
+			// 1. Probably doing too much tracing, or MAX_SPANS_LEN is too low.
+			// 2. Not correctly exiting spans due to drop impl not running (panic in runtime)
+			// 3. Not correctly exiting spans due to misconfiguration
 			log::warn!("MAX_SPANS_LEN exceeded, removing oldest span, recording `sp_profiler_ok = false`");
-			let mut all_keys: Vec<_> = self.spans.keys().cloned().collect();
-			all_keys.sort();
-			let key = all_keys.iter().next().expect("Just got the key, so must be able to get first item.");
-			let mut sg = self.spans.remove(&key).expect("Just got the key so must be in the map");
+			let mut sg = self.spans.remove(0).1;
 			sg.rent_all_mut(|s| { s.span.record("tracing_proxy_ok", &false); });
 		}
 		id
@@ -83,8 +88,20 @@ impl TracingProxy {
 
 	fn exit_span(&mut self, id: u64) {
 		if id == 0 { return; }
-		match self.spans.remove(&id) {
-			Some(_) => (),
+		match self.spans.pop() {
+			Some(v) => {
+				let mut last_span_id = v.0;
+				while id < last_span_id {
+					log::warn!("Span ids not equal! id parameter given: {}, last span: {}", id, last_span_id);
+					if let Some(mut s) = self.spans.pop() {
+						s.1.rent_all_mut(|s| { s.span.record("tracing_proxy_ok", &false); });
+						last_span_id = s.0;
+					} else {
+						log::warn!("Span id not found {}", id);
+						return;
+					}
+				}
+			},
 			None => {
 				log::warn!("Span id: {} not found", id);
 				return;

@@ -25,10 +25,6 @@
 extern crate rental;
 
 #[cfg(feature = "std")]
-#[macro_use]
-extern crate lazy_static;
-
-#[cfg(feature = "std")]
 #[doc(hidden)]
 pub use tracing;
 
