@@ -24,7 +24,7 @@
 //!
 //! Currently we provide `Log` (default), `Telemetry` variants for `Receiver`
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::fmt;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
@@ -136,7 +136,7 @@ pub struct ProfilingSubscriber {
 	next_id: AtomicU64,
 	targets: Vec<(String, Level)>,
 	receiver: TracingReceiver,
-	span_data: Mutex<HashMap<u64, SpanDatum>>,
+	span_data: Mutex<FxHashMap<u64, SpanDatum>>,
 }
 
 impl ProfilingSubscriber {
@@ -149,7 +149,7 @@ impl ProfilingSubscriber {
 			next_id: AtomicU64::new(1),
 			targets,
 			receiver,
-			span_data: Mutex::new(HashMap::new()),
+			span_data: Mutex::new(FxHashMap::default()),
 		}
 	}
 }

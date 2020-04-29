@@ -17,7 +17,8 @@ parking_lot = { version = "0.10.0", optional = true }
 lazy_static = { version = "1.4.0", optional = true }
 rental = { version = "0.5.5", optional = true }
 log = { version = "0.4.8", optional = true }
+rustc-hash = { version = "1.1.0", optional = true }
 
 [features]
 default = [ "std" ]
-std = [ "tracing", "parking_lot", "lazy_static", "rental", "log"]
+std = [ "tracing", "parking_lot", "lazy_static", "rental", "log", "rustc-hash"]

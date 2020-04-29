@@ -3,10 +3,11 @@ use parking_lot::Mutex;
 use std::collections::BTreeMap;
 use rental;
 use lazy_static;
+use rustc_hash::FxHashMap;
 
 use crate::span_dispatch;
 
-const MAX_SPAN_STACK_LEN: usize = 1000;
+const MAX_SPANS_LEN: usize = 1000;
 
 lazy_static! {
 	static ref PROXY: Arc<Mutex<TracingProxy>> = Arc::new(Mutex::new(TracingProxy::new()));
@@ -34,12 +35,12 @@ rental! {
 /// this is available when running with client (and relevant cli params)
 pub struct TracingProxy {
 	next_id: u64,
-	spans: BTreeMap<u64, rent_span::SpanAndGuard>,
+	spans: FxHashMap<u64, rent_span::SpanAndGuard>,
 }
 
 impl TracingProxy {
 	pub fn new() -> TracingProxy {
-		let spans: BTreeMap<u64, rent_span::SpanAndGuard> = BTreeMap::new();
+		let spans: FxHashMap<u64, rent_span::SpanAndGuard> = FxHashMap::default();
 		TracingProxy {
 			// Span ids start from 1 - we will use 0 as special case for unregistered spans
 			next_id: 1,
@@ -62,21 +63,20 @@ impl TracingProxy {
 					|span| span.enter(),
 				);
 				self.spans.insert(id, sg);
-			},
+			}
 			Err(e) => {
 				id = 0;
 				log::info!("{}", e);
 			}
 		}
 		let spans_len = self.spans.len();
-		if spans_len > MAX_SPAN_STACK_LEN {
-			let n_to_remove = spans_len - MAX_SPAN_STACK_LEN;
-			let keys: Vec<_> = self.spans.keys().take(n_to_remove).cloned().collect();
-			log::warn!("MAX_SPAN_STACK_LEN exceeded, removing oldest {} spans, recording `sp_profiler_ok = false`", n_to_remove);
-			for key in keys {
-				let mut sg = self.spans.remove(&key).expect("Just got the key so must be in the map");
-				sg.rent_all_mut(|s| { s.span.record("tracing_proxy_ok", &false); });
-			}
+		if spans_len > MAX_SPANS_LEN {
+			log::warn!("MAX_SPANS_LEN exceeded, removing oldest span, recording `sp_profiler_ok = false`");
+			let mut all_keys: Vec<_> = self.spans.keys().cloned().collect();
+			all_keys.sort();
+			let key = all_keys.iter().next().expect("Just got the key, so must be able to get first item.");
+			let mut sg = self.spans.remove(&key).expect("Just got the key so must be in the map");
+			sg.rent_all_mut(|s| { s.span.record("tracing_proxy_ok", &false); });
 		}
 		id
 	}

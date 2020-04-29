@@ -6783,6 +6783,7 @@ dependencies = [
  "erased-serde",
  "log",
  "parking_lot 0.10.2",
+ "rustc-hash",
  "sc-telemetry",
  "serde",
  "serde_json",
@@ -7810,6 +7811,7 @@ dependencies = [
  "log",
  "parking_lot 0.10.2",
  "rental",
+ "rustc-hash",
  "tracing",
 ]
 
