@@ -291,47 +291,41 @@ macro_rules! implement_fixed {
 					return None
 				}
 
-				let signum = n.signum() * d.signum();
+				let signum = self.0.signum() * other.0.signum();
 				let max_value = <Self as FixedPointNumber>::Inner::max_value() as u128;
-				let n = n.checked_abs().map(|v| v as u128).unwrap_or(max_value + 1);
-				let d = d.checked_abs().map(|v| v as u128).unwrap_or(max_value + 1);
+				let lhs = self.0.checked_abs().map(|v| v as u128).unwrap_or(max_value + 1);
+				let rhs = other.0.checked_abs().map(|v| v as u128).unwrap_or(max_value + 1);
 
-				multiply_by_rational(n, Self::DIV as u128, d).ok()
-					.map(|r| {
-						if r > <Self as FixedPointNumber>::Inner::max_value() as u128  && signum < 0 {
-							Self::min_value()
+				multiply_by_rational(lhs, Self::DIV as u128, rhs).ok()
+					.and_then(|r| {
+						if r == max_value as u128 + 1 && signum < 0 {
+							Some(<Self as FixedPointNumber>::Inner::min_value())
 						} else {
-							let r: <Self as FixedPointNumber>::Inner = r.saturated_into(); 
-							Self(r.saturating_mul(signum))
+							let inner: <Self as FixedPointNumber>::Inner = r.try_into().ok()?;
+							inner.checked_mul(signum.into())
 						}
 					})
+					.map(|inner| Self(inner))
 			}
 		}
 
 		impl CheckedMul for $name {
 			fn checked_mul(&self, rhs: &Self) -> Option<Self> {
-				None
-				// let signum = self.0.signum() * rhs.0.signum();
-				// let max_value = <Self as FixedPointNumber>::Inner::max_value() as u128;
-				// let n: u128 = self.0.checked_abs().map(|v| v as u128).unwrap_or(max_value + 1);
-				// let d: u128 = rhs.0.checked_abs().map(|v| v as u128).unwrap_or(max_value + 1);
+				let signum = self.0.signum() * rhs.0.signum();
+				let max_value = <Self as FixedPointNumber>::Inner::max_value() as u128;
+				let lhs = self.0.checked_abs().map(|v| v as u128).unwrap_or(max_value + 1);
+				let rhs = rhs.0.checked_abs().map(|v| v as u128).unwrap_or(max_value + 1);
 
-				// let (carry, result) = multiply(n, d);
-
-				// let carry_shift = 128.checked_sub(&Self::BITS).expect("128 > BITS; qed").into();
-
-				// if carry.leading_zeros() < carry_shift {
-				// 	// Overflow.
-				// 	return None
-				// }
-
-				// let low: u128 = result.checked_shr(Self::BITS.into()).expect("128 > BITS; qed");
-
-				// carry.checked_shl(carry_shift)
-				// 	.and_then(|c| low.checked_add(c))
-				// 	.and_then(|r| r.try_into().ok())
-				// 	.and_then(|r: <Self as FixedPointNumber>::Inner| r.checked_mul(signum))
-				// 	.map(|r| Self(r))
+				multiply_by_rational(lhs, rhs, Self::DIV as u128).ok()
+					.and_then(|r| {
+						if r == max_value as u128 + 1 && signum < 0 {
+							Some(<Self as FixedPointNumber>::Inner::min_value())
+						} else {
+							let inner: <Self as FixedPointNumber>::Inner = r.try_into().ok()?;
+							inner.checked_mul(signum.into())
+						}
+					})
+					.map(|inner| Self(inner))
 			}
 		}
 
