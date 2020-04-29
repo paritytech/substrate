@@ -82,8 +82,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to 0. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 244,
-	impl_version: 2,
+	spec_version: 245,
+	impl_version: 0,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 1,
 };
@@ -809,6 +809,7 @@ impl_runtime_apis! {
 				genesis_authorities: Babe::authorities(),
 				randomness: Babe::randomness(),
 				allowed_slots: sp_consensus_babe::AllowedSlots::PrimaryAndSecondaryPlainSlots,
+				inout_randomness: false,
 			}
 		}
 

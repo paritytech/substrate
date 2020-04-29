@@ -187,10 +187,7 @@ impl Epoch {
 			duration: genesis_config.epoch_length,
 			authorities: genesis_config.genesis_authorities.clone(),
 			randomness: genesis_config.randomness.clone(),
-			config: BabeEpochConfiguration {
-				c: genesis_config.c,
-				allowed_slots: genesis_config.allowed_slots,
-			},
+			config: genesis_config.into_epoch(),
 		}
 	}
 }
@@ -293,12 +290,19 @@ impl Config {
 			let has_api_v2 = a.has_api_with::<dyn BabeApi<B, Error = sp_blockchain::Error>, _>(
 				&b, |v| v == 2,
 			)?;
+			let has_api_v3 = a.has_api_with::<dyn BabeApi<B, Error = sp_blockchain::Error>, _>(
+				&b, |v| v == 3,
+			)?;
 
 			if has_api_v1 {
 				#[allow(deprecated)] {
 					Ok(a.configuration_before_version_2(b)?.into())
 				}
 			} else if has_api_v2 {
+				#[allow(deprecated)] {
+					Ok(a.configuration_before_version_3(b)?.into())
+				}
+			} else if has_api_v3 {
 				a.configuration(b)
 			} else {
 				Err(sp_blockchain::Error::VersionInvalid(

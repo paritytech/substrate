@@ -137,6 +137,52 @@ impl From<BabeGenesisConfigurationV1> for BabeGenesisConfiguration {
 			} else {
 				AllowedSlots::PrimarySlots
 			},
+			inout_randomness: false,
+		}
+	}
+}
+
+/// Configuration data used by the BABE consensus engine.
+#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
+pub struct BabeGenesisConfigurationV2 {
+	/// The slot duration in milliseconds for BABE. Currently, only
+	/// the value provided by this type at genesis will be used.
+	///
+	/// Dynamic slot duration may be supported in the future.
+	pub slot_duration: u64,
+
+	/// The duration of epochs in slots.
+	pub epoch_length: SlotNumber,
+
+	/// A constant value that is used in the threshold calculation formula.
+	/// Expressed as a rational where the first member of the tuple is the
+	/// numerator and the second is the denominator. The rational should
+	/// represent a value between 0 and 1.
+	/// In the threshold formula calculation, `1 - c` represents the probability
+	/// of a slot being empty.
+	pub c: (u64, u64),
+
+	/// The authorities for the genesis epoch.
+	pub genesis_authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
+
+	/// The randomness for the genesis epoch.
+	pub randomness: Randomness,
+
+	/// Type of allowed slots.
+	pub allowed_slots: AllowedSlots,
+}
+
+
+impl From<BabeGenesisConfigurationV2> for BabeGenesisConfiguration {
+	fn from(v1: BabeGenesisConfigurationV2) -> Self {
+		Self {
+			slot_duration: v1.slot_duration,
+			epoch_length: v1.epoch_length,
+			c: v1.c,
+			genesis_authorities: v1.genesis_authorities,
+			randomness: v1.randomness,
+			allowed_slots: v1.allowed_slots,
+			inout_randomness: false,
 		}
 	}
 }
@@ -169,6 +215,20 @@ pub struct BabeGenesisConfiguration {
 
 	/// Type of allowed slots.
 	pub allowed_slots: AllowedSlots,
+
+	/// Whether this chain uses VRFInOut::make_bytes for randomness.
+	pub inout_randomness: bool,
+}
+
+impl BabeGenesisConfiguration {
+	/// Get the epoch configuration from this genesis config.
+	pub fn into_epoch(&self) -> BabeEpochConfiguration {
+		BabeEpochConfiguration {
+			c: self.c,
+			allowed_slots: self.allowed_slots,
+			inout_randomness: self.inout_randomness,
+		}
+	}
 }
 
 /// Types of allowed slots.
@@ -205,7 +265,7 @@ impl sp_consensus::SlotData for BabeGenesisConfiguration {
 
 /// Configuration data used by the BABE consensus engine.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
-pub struct BabeEpochConfiguration {
+pub struct BabeEpochConfigurationV1 {
 	/// A constant value that is used in the threshold calculation formula.
 	/// Expressed as a rational where the first member of the tuple is the
 	/// numerator and the second is the denominator. The rational should
@@ -219,9 +279,38 @@ pub struct BabeEpochConfiguration {
 	pub allowed_slots: AllowedSlots,
 }
 
+impl From<BabeEpochConfigurationV1> for BabeEpochConfiguration {
+	fn from(config: BabeEpochConfigurationV1) -> BabeEpochConfiguration {
+		Self {
+			c: config.c,
+			allowed_slots: config.allowed_slots,
+			inout_randomness: false,
+		}
+	}
+}
+
+/// Configuration data used by the BABE consensus engine.
+#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
+pub struct BabeEpochConfiguration {
+	/// A constant value that is used in the threshold calculation formula.
+	/// Expressed as a rational where the first member of the tuple is the
+	/// numerator and the second is the denominator. The rational should
+	/// represent a value between 0 and 1.
+	/// In the threshold formula calculation, `1 - c` represents the probability
+	/// of a slot being empty.
+	pub c: (u64, u64),
+
+	/// Whether this chain should run with secondary slots, which are assigned
+	/// in round-robin manner.
+	pub allowed_slots: AllowedSlots,
+
+	/// Whether this chain uses VRFInOut::make_bytes for randomness.
+	pub inout_randomness: bool,
+}
+
 sp_api::decl_runtime_apis! {
 	/// API necessary for block authorship with BABE.
-	#[api_version(2)]
+	#[api_version(3)]
 	pub trait BabeApi {
 		/// Return the genesis configuration for BABE. The configuration is only read on genesis.
 		fn configuration() -> BabeGenesisConfiguration;
@@ -229,6 +318,10 @@ sp_api::decl_runtime_apis! {
 		/// Return the configuration for BABE. Version 1.
 		#[changed_in(2)]
 		fn configuration() -> BabeGenesisConfigurationV1;
+
+		/// Return the configuration for BABE. Version 2.
+		#[changed_in(3)]
+		fn configuration() -> BabeGenesisConfigurationV2;
 
 		/// Returns the slot number that started the current epoch.
 		fn current_epoch_start() -> SlotNumber;

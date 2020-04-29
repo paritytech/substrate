@@ -58,7 +58,67 @@ impl EpochV0 {
 			config: BabeEpochConfiguration {
 				c: config.c,
 				allowed_slots: config.allowed_slots,
+				inout_randomness: false,
 			},
+		}
+	}
+}
+
+
+/// BABE epoch information, version 1.
+#[derive(Decode, Encode, PartialEq, Eq, Clone, Debug)]
+pub struct EpochV1 {
+	/// The epoch index.
+	pub epoch_index: u64,
+	/// The starting slot of the epoch.
+	pub start_slot: SlotNumber,
+	/// The duration of this epoch.
+	pub duration: SlotNumber,
+	/// The authorities and their weights.
+	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
+	/// Randomness for this epoch.
+	pub randomness: [u8; VRF_OUTPUT_LENGTH],
+	/// Configuration of the epoch.
+	pub config: sp_consensus_babe::BabeEpochConfigurationV1,
+}
+
+impl EpochT for EpochV1 {
+	type NextEpochDescriptor = NextEpochDescriptor;
+	type SlotNumber = SlotNumber;
+
+	fn increment(
+		&self,
+		descriptor: NextEpochDescriptor
+	) -> EpochV1 {
+		EpochV1 {
+			epoch_index: self.epoch_index + 1,
+			start_slot: self.start_slot + self.duration,
+			duration: self.duration,
+			authorities: descriptor.authorities,
+			randomness: descriptor.randomness,
+			config: self.config.clone(),
+		}
+	}
+
+	fn start_slot(&self) -> SlotNumber {
+		self.start_slot
+	}
+
+	fn end_slot(&self) -> SlotNumber {
+		self.start_slot + self.duration
+	}
+}
+
+impl EpochV1 {
+	/// Migrate the sturct to current epoch version.
+	pub fn migrate(self, _config: &BabeGenesisConfiguration) -> Epoch {
+		Epoch {
+			epoch_index: self.epoch_index,
+			start_slot: self.start_slot,
+			duration: self.duration,
+			authorities: self.authorities,
+			randomness: self.randomness,
+			config: self.config.into(),
 		}
 	}
 }

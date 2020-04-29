@@ -55,12 +55,13 @@ fn check_module() {
 fn first_block_epoch_zero_start() {
 	new_test_ext(vec![0, 1, 2, 3]).execute_with(|| {
 		let genesis_slot = 100;
-		let first_vrf = RawVRFOutput([1; 32]);
+		let first_vrf = [1; 32];
 		let pre_digest = make_pre_digest(
 			0,
 			genesis_slot,
-			first_vrf.clone(),
+			RawVRFOutput(first_vrf.clone()),
 			RawVRFProof([0xff; 64]),
+			[1; 32],
 		);
 
 		assert_eq!(Babe::genesis_slot(), 0);

@@ -31,10 +31,10 @@ use frame_support::{
 };
 use sp_io;
 use sp_core::H256;
-use sp_consensus_vrf::schnorrkel::{RawVRFOutput, RawVRFProof};
+use sp_consensus_vrf::schnorrkel::{RawVRFOutput, RawVRFProof, Randomness};
 
 impl_outer_origin!{
-	pub enum Origin for Test  where system = frame_system {}
+	pub enum Origin for Test where system = frame_system {}
 }
 
 type DummyValidatorId = u64;
@@ -118,7 +118,7 @@ pub fn new_test_ext(authorities: Vec<DummyValidatorId>) -> sp_io::TestExternalit
 }
 
 pub fn go_to_block(n: u64, s: u64) {
-	let pre_digest = make_pre_digest(0, s, RawVRFOutput([1; 32]), RawVRFProof([0xff; 64]));
+	let pre_digest = make_pre_digest(0, s, RawVRFOutput([1; 32]), RawVRFProof([0xff; 64]), [1; 32]);
 	System::initialize(&n, &Default::default(), &Default::default(), &pre_digest, InitKind::Full);
 	System::set_block_number(n);
 	if s > 1 {
@@ -142,6 +142,7 @@ pub fn make_pre_digest(
 	slot_number: sp_consensus_babe::SlotNumber,
 	vrf_output: RawVRFOutput,
 	vrf_proof: RawVRFProof,
+	randomness: Randomness,
 ) -> Digest {
 	let digest_data = sp_consensus_babe::digests::RawPreDigest::Primary(
 		sp_consensus_babe::digests::RawPrimaryPreDigest {
@@ -149,6 +150,7 @@ pub fn make_pre_digest(
 			slot_number,
 			vrf_output,
 			vrf_proof,
+			randomness,
 		}
 	);
 	let log = DigestItem::PreRuntime(sp_consensus_babe::BABE_ENGINE_ID, digest_data.encode());

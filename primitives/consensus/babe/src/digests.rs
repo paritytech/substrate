@@ -195,14 +195,26 @@ pub enum NextConfigDescriptor {
 		c: (u64, u64),
 		/// Value of `allowed_slots` in `BabeEpochConfiguration`.
 		allowed_slots: AllowedSlots,
-	}
+	},
+	/// Version 2.
+	#[codec(index = "2")]
+	V2 {
+		/// Value of `c` in `BabeEpochConfiguration`.
+		c: (u64, u64),
+		/// Value of `allowed_slots` in `BabeEpochConfiguration`.
+		allowed_slots: AllowedSlots,
+		/// Value of `inout_randomness` in `BabeEpochConfiguration`.
+		inout_randomness: bool,
+	},
 }
 
 impl From<NextConfigDescriptor> for BabeEpochConfiguration {
 	fn from(desc: NextConfigDescriptor) -> Self {
 		match desc {
 			NextConfigDescriptor::V1 { c, allowed_slots } =>
-				Self { c, allowed_slots },
+				Self { c, allowed_slots, inout_randomness: false },
+			NextConfigDescriptor::V2 { c, allowed_slots, inout_randomness } =>
+				Self { c, allowed_slots, inout_randomness },
 		}
 	}
 }

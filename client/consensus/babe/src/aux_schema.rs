@@ -26,11 +26,11 @@ use sp_blockchain::{Result as ClientResult, Error as ClientError};
 use sp_runtime::traits::Block as BlockT;
 use sp_consensus_babe::{BabeBlockWeight, BabeGenesisConfiguration};
 use sc_consensus_epochs::{EpochChangesFor, SharedEpochChanges, migration::EpochChangesForV0};
-use crate::{Epoch, migration::EpochV0};
+use crate::{Epoch, migration::{EpochV0, EpochV1}};
 
 const BABE_EPOCH_CHANGES_VERSION: &[u8] = b"babe_epoch_changes_version";
 const BABE_EPOCH_CHANGES_KEY: &[u8] = b"babe_epoch_changes";
-const BABE_EPOCH_CHANGES_CURRENT_VERSION: u32 = 2;
+const BABE_EPOCH_CHANGES_CURRENT_VERSION: u32 = 3;
 
 fn block_weight_key<H: Encode>(block_hash: H) -> Vec<u8> {
 	(b"block_weight", block_hash).encode()
@@ -63,6 +63,10 @@ pub(crate) fn load_epoch_changes<Block: BlockT, B: AuxStore>(
 			BABE_EPOCH_CHANGES_KEY,
 		)?.map(|v0| v0.migrate().map(|_, _, epoch| epoch.migrate(config))),
 		Some(1) => load_decode::<_, EpochChangesFor<Block, EpochV0>>(
+			backend,
+			BABE_EPOCH_CHANGES_KEY,
+		)?.map(|v1| v1.map(|_, _, epoch| epoch.migrate(config))),
+		Some(2) => load_decode::<_, EpochChangesFor<Block, EpochV1>>(
 			backend,
 			BABE_EPOCH_CHANGES_KEY,
 		)?.map(|v1| v1.map(|_, _, epoch| epoch.migrate(config))),
