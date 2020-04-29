@@ -52,6 +52,8 @@
 //! or prune any signaled changes based on whether the signaling block is
 //! included in the newly-finalized chain.
 
+#![warn(missing_docs)]
+
 pub use finality_grandpa::voter::report;
 
 use futures::prelude::*;
@@ -213,6 +215,7 @@ pub struct SharedVoterState {
 }
 
 impl SharedVoterState {
+	/// Create a new `SharedVoterState` instance from the given `VoterState`.
 	pub fn new(voter_state: Option<Box<dyn voter::VoterState<AuthorityId> + Sync + Send>>) -> Self {
 		Self { inner: Arc::new(RwLock::new(voter_state)) }
 	}
@@ -228,6 +231,7 @@ impl SharedVoterState {
 		Ok(())
 	}
 
+	/// Get the inner `VoterState` instance.
 	pub fn voter_state(&self) -> Option<voter::report::VoterState<AuthorityId>> {
 		self.inner.read().as_ref().map(|vs| vs.get())
 	}
@@ -430,6 +434,7 @@ impl<H, N> fmt::Display for CommandOrError<H, N> {
 	}
 }
 
+/// Link between the block importer and the background voter.
 pub struct LinkHalf<Block: BlockT, C, SC> {
 	client: Arc<C>,
 	select_chain: SC,
@@ -438,6 +443,7 @@ pub struct LinkHalf<Block: BlockT, C, SC> {
 }
 
 impl<Block: BlockT, C, SC> LinkHalf<Block, C, SC> {
+	/// Get the shared authority set.
 	pub fn shared_authority_set(&self) -> &SharedAuthoritySet<Block::Hash, NumberFor<Block>> {
 		&self.persistent_data.authority_set
 	}

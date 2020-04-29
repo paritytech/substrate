@@ -16,7 +16,6 @@
 
 //! RPC API for GRANDPA.
 #![warn(missing_docs)]
-#![warn(missing_docs)]
 
 use finality_grandpa::BlockNumberOps;
 use sc_finality_grandpa::{AuthorityId, SharedAuthoritySet, SharedVoterState, report};
@@ -52,7 +51,7 @@ impl From<Error> for jsonrpc_core::Error {
 #[rpc]
 pub trait GrandpaApi {
 	/// Returns the state of the current best round state as well as the
-	/// ongoining backgrounds rounds.
+	/// ongoing background rounds.
 	#[rpc(name = "grandpa_roundState")]
 	fn round_state(&self) -> FutureResult<ReportedRoundStates>;
 }
