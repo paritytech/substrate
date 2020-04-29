@@ -454,6 +454,7 @@ decl_module! {
 			}
 
 			let mut runners_up_with_stake = Self::runners_up();
+			// runners-up are NOT sorted based on account id. Linear search.
 			if let Some(index) = runners_up_with_stake.iter()
 				.position(|(ref r, ref _s)| r == &who)
 			{
@@ -462,7 +463,8 @@ decl_module! {
 				T::Currency::unreserve(&who, T::CandidacyBond::get());
 				// update storage.
 				<RunnersUp<T>>::put(runners_up_with_stake);
-				// safety guard to make sure we do only one arm. Better to read runners later.
+
+				// safety guard to make sure we do only one arm. Better to read candidates later.
 				return Ok(());
 			}
 
@@ -473,7 +475,7 @@ decl_module! {
 				T::Currency::unreserve(&who, T::CandidacyBond::get());
 				// update storage.
 				<Candidates<T>>::put(candidates);
-				// safety guard to make sure we do only one arm. Better to read runners later.
+
 				return Ok(());
 			}
 
