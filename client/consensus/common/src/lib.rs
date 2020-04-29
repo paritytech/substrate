@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Collection of common consensus specific imlementations
+//! Collection of common consensus specific implementations
 mod longest_chain;
 
 pub use longest_chain::LongestChain;
