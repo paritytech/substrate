@@ -164,6 +164,10 @@ impl<C: SubstrateCli> Runner<C> {
 		info!("📋 Chain specification: {}", self.config.chain_spec.name());
 		info!("🏷  Node name: {}", self.config.network.node_name);
 		info!("👤 Role: {}", self.config.display_role());
+		info!("💾 Database: {} at {}",
+			self.config.database,
+			self.config.database.path().map_or_else(|| "<unknown>".to_owned(), |p| p.display().to_string())
+		);
 		info!("⛓  Native runtime: {}", runtime_version);
 
 		match self.config.role {

@@ -317,6 +317,18 @@ impl DatabaseSettingsSrc {
 	}
 }
 
+impl std::fmt::Display for DatabaseSettingsSrc {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let name = match self {
+			DatabaseSettingsSrc::RocksDb { .. } => "RocksDb",
+			DatabaseSettingsSrc::ParityDb { .. } => "ParityDb",
+			DatabaseSettingsSrc::SubDb { .. } => "SubDb",
+			DatabaseSettingsSrc::Custom(_) => "Custom",
+		};
+		write!(f, "{}", name)
+	}
+}
+
 pub(crate) mod columns {
 	pub const META: u32 = crate::utils::COLUMN_META;
 	pub const STATE: u32 = 1;
