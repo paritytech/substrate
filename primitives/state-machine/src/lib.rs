@@ -1126,8 +1126,8 @@ mod tests {
 		}
 	}
 
-	#[should_panic]
 	#[test]
+	#[should_panic]
 	fn append_on_standard_value_panic() {
 		let key = b"key".to_vec();
 		let mut state = new_in_mem::<BlakeTwo256>();
@@ -1146,10 +1146,6 @@ mod tests {
 
 		ext.set_storage(key.clone(), b"existing".to_vec().encode());
 		ext.storage_append(key.clone(), b"Item".to_vec().encode());
-		assert_eq!(
-			ext.storage(key.as_slice()),
-			Some(vec![b"existing".to_vec(), b"Item".to_vec()].encode()),
-		);
 	}
 
 	#[test]
