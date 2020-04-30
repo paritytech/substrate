@@ -31,6 +31,7 @@ use sp_runtime::{Perbill, traits::{Convert, StaticLookup}};
 use sp_staking::offence::ReportOffence;
 
 use pallet_balances::{Trait as BalancesTrait, Module as Balances};
+use pallet_babe::BabeEquivocationOffence;
 use pallet_grandpa::{GrandpaEquivocationOffence, GrandpaTimeSlot};
 use pallet_im_online::{Trait as ImOnlineTrait, Module as ImOnline, UnresponsivenessOffence};
 use pallet_offences::{Trait as OffencesTrait, Module as Offences};
@@ -150,8 +151,6 @@ fn make_offenders<T: Trait>(num_offenders: u32, num_nominators: u32) -> Result<V
 		.collect::<Vec<IdentificationTuple<T>>>())
 }
 
-// TODO Add other offences: BabeEquivocation and GrandpaEquivocation
-
 benchmarks! {
 	_ { }
 
@@ -216,6 +215,47 @@ benchmarks! {
 
 		let offence = GrandpaEquivocationOffence {
 			time_slot: GrandpaTimeSlot { set_id: 0, round: 0 },
+			session_index: 0,
+			validator_set_count: keys.len() as u32,
+			offender: T::convert(offenders.pop().unwrap()),
+		};
+		assert_eq!(System::<T>::event_count(), 0);
+	}: {
+		let _ = Offences::<T>::report_offence(reporters, offence);
+	}
+	verify {
+		// make sure the report was not deferred
+		assert!(Offences::<T>::deferred_offences().is_empty());
+		// make sure that all slashes have been applied
+		assert_eq!(
+			System::<T>::event_count(), 0
+			+ 1 // offence
+			+ 2 * r // reporter (reward + endowment)
+			+ o // offenders slashed
+			+ o * n // nominators slashed
+		);
+	}
+
+	report_offence_babe {
+		let r in 1 .. MAX_REPORTERS;
+		let n in 0 .. MAX_NOMINATORS.min(MAX_NOMINATIONS as u32);
+		let o = 1;
+
+		// Make r reporters
+		let mut reporters = vec![];
+		for i in 0 .. r {
+			let reporter = account("reporter", i, SEED);
+			reporters.push(reporter);
+		}
+
+		// make sure reporters actually get rewarded
+		Staking::<T>::set_slash_reward_fraction(Perbill::one());
+
+		let mut offenders = make_offenders::<T>(o, n).expect("failed to create offenders");
+		let keys =  ImOnline::<T>::keys();
+
+		let offence = BabeEquivocationOffence {
+			slot: 0,
 			session_index: 0,
 			validator_set_count: keys.len() as u32,
 			offender: T::convert(offenders.pop().unwrap()),
