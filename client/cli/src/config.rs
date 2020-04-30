@@ -168,11 +168,12 @@ pub trait CliConfiguration: Sized {
 
 	/// Get the database configuration object for the parameters provided
 	fn database_config(
+		&self,
 		base_path: &PathBuf,
 		cache_size: usize,
 		database: Database,
-	) -> DatabaseConfig {
-		match database {
+	) -> Result<DatabaseConfig> {
+		Ok(match database {
 			Database::RocksDb => DatabaseConfig::RocksDb {
 				path: base_path.join("db"),
 				cache_size,
@@ -183,7 +184,7 @@ pub trait CliConfiguration: Sized {
 			Database::ParityDb => DatabaseConfig::ParityDb {
 				path: base_path.join("paritydb"),
 			},
-		}
+		})
 	}
 
 	/// Get the state cache size.
@@ -436,7 +437,7 @@ pub trait CliConfiguration: Sized {
 				node_key,
 			)?,
 			keystore: self.keystore_config(&config_dir)?,
-			database: Self::database_config(&config_dir, database_cache_size, database),
+			database: self.database_config(&config_dir, database_cache_size, database)?,
 			state_cache_size: self.state_cache_size()?,
 			state_cache_child_ratio: self.state_cache_child_ratio()?,
 			pruning: self.pruning(unsafe_pruning, &role)?,

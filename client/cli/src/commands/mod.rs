@@ -206,6 +206,17 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
+			fn database_config(
+				&self,
+				base_path: &::std::path::PathBuf,
+				cache_size: usize,
+				database: $crate::Database,
+			) -> $crate::Result<::sc_service::config::DatabaseConfig> {
+				match self {
+					$($enum::$variant(cmd) => cmd.database_config(base_path, cache_size, database)),*
+				}
+			}
+
 			fn database(&self) -> $crate::Result<::std::option::Option<$crate::Database>> {
 				match self {
 					$($enum::$variant(cmd) => cmd.database()),*
