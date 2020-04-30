@@ -54,8 +54,6 @@
 
 #![warn(missing_docs)]
 
-pub use finality_grandpa::voter::report;
-
 use futures::prelude::*;
 use futures::StreamExt;
 use log::{debug, info};
@@ -126,6 +124,7 @@ pub use light_import::light_block_import;
 pub use voting_rule::{
 	BeforeBestBlockBy, ThreeQuartersOfTheUnfinalizedChain, VotingRule, VotingRulesBuilder
 };
+pub use finality_grandpa::voter::report;
 
 use aux_schema::PersistentData;
 use environment::{Environment, VoterSetState};
