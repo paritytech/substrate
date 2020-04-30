@@ -1061,6 +1061,98 @@ mod tests {
 	}
 
 	#[test]
+	fn append_storage_works() {
+		let reference_data = vec![
+			b"data1".to_vec(),
+			b"2".to_vec(),
+			b"D3".to_vec(),
+			b"d4".to_vec(),
+		];
+		let key = b"key".to_vec();
+		let mut state = new_in_mem::<BlakeTwo256>();
+		let backend = state.as_trie_backend().unwrap();
+		let mut overlay = OverlayedChanges::default();
+		let mut offchain_overlay = OffchainOverlayedChanges::default();
+		let mut cache = StorageTransactionCache::default();
+		{
+			let mut ext = Ext::new(
+				&mut overlay,
+				&mut offchain_overlay,
+				&mut cache,
+				backend,
+				changes_trie::disabled_state::<_, u64>(),
+				None,
+			);
+
+			ext.storage_append(key.clone(), reference_data[0].encode());
+			assert_eq!(
+				ext.storage(key.as_slice()),
+				Some(vec![reference_data[0].clone()].encode()),
+			);
+		}
+		overlay.commit_prospective();
+		{
+			let mut ext = Ext::new(
+				&mut overlay,
+				&mut offchain_overlay,
+				&mut cache,
+				backend,
+				changes_trie::disabled_state::<_, u64>(),
+				None,
+			);
+
+			for i in reference_data.iter().skip(1) {
+				ext.storage_append(key.clone(), i.encode());
+			}
+			assert_eq!(
+				ext.storage(key.as_slice()),
+				Some(reference_data.encode()),
+			);
+		}
+		overlay.discard_prospective();
+		{
+			let ext = Ext::new(
+				&mut overlay,
+				&mut offchain_overlay,
+				&mut cache,
+				backend,
+				changes_trie::disabled_state::<_, u64>(),
+				None,
+			);
+			assert_eq!(
+				ext.storage(key.as_slice()),
+				Some(vec![reference_data[0].clone()].encode()),
+			);
+		}
+	}
+
+	#[test]
+	fn remove_then_append() {
+		let key = b"key".to_vec();
+		let mut state = new_in_mem::<BlakeTwo256>();
+		let backend = state.as_trie_backend().unwrap();
+		let mut overlay = OverlayedChanges::default();
+		let mut offchain_overlay = OffchainOverlayedChanges::default();
+		let mut cache = StorageTransactionCache::default();
+	
+		let mut ext = Ext::new(
+			&mut overlay,
+			&mut offchain_overlay,
+			&mut cache,
+			backend,
+			changes_trie::disabled_state::<_, u64>(),
+			None,
+		);
+
+		ext.clear_storage(key.as_slice());
+		ext.storage_append(key.clone(), b"Item".to_vec().encode());
+		assert_eq!(
+			ext.storage(key.as_slice()),
+			Some(vec![b"Item".to_vec()].encode()),
+		);
+	}
+
+	#[test]
 	fn prove_read_and_proof_check_works() {
 		let child_info = ChildInfo::new_default(b"sub1");
 		let child_info = &child_info;
