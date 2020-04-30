@@ -26,9 +26,7 @@ use log::info;
 use sc_service::{AbstractService, Configuration, Role, ServiceBuilderCommand, TaskType};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
-use std::fmt::Debug;
-use std::marker::PhantomData;
-use std::sync::Arc;
+use std::{str::FromStr, fmt::Debug, marker::PhantomData, sync::Arc};
 
 #[cfg(target_family = "unix")]
 async fn main<F, E>(func: F) -> std::result::Result<(), Box<dyn std::error::Error>>
@@ -183,8 +181,9 @@ impl<C: SubstrateCli> Runner<C> {
 		B: FnOnce(Configuration) -> sc_service::error::Result<BC>,
 		BC: ServiceBuilderCommand<Block = BB> + Unpin,
 		BB: sp_runtime::traits::Block + Debug,
-		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: Debug,
-		<BB as BlockT>::Hash: std::str::FromStr,
+		<<<BB as BlockT>::Header as HeaderT>::Number as FromStr>::Err: Debug,
+		<BB as BlockT>::Hash: FromStr,
+		<<BB as BlockT>::Hash as FromStr>::Err: Debug,
 	{
 		match subcommand {
 			Subcommand::BuildSpec(cmd) => cmd.run(self.config),
@@ -199,6 +198,7 @@ impl<C: SubstrateCli> Runner<C> {
 			}
 			Subcommand::Revert(cmd) => cmd.run(self.config, builder),
 			Subcommand::PurgeChain(cmd) => cmd.run(self.config),
+			Subcommand::ExportState(cmd) => cmd.run(self.config, builder),
 		}
 	}
 

@@ -1321,8 +1321,11 @@ impl<B, E, Block, RA> StorageProvider<Block, B> for Client<B, E, Block, RA> wher
 	}
 
 
-	fn storage(&self, id: &BlockId<Block>, key: &StorageKey) -> sp_blockchain::Result<Option<StorageData>>
-	{
+	fn storage(
+		&self,
+		id: &BlockId<Block>,
+		key: &StorageKey,
+	) -> sp_blockchain::Result<Option<StorageData>> {
 		Ok(self.state_at(id)?
 			.storage(&key.0).map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
 			.map(StorageData)
@@ -1330,8 +1333,11 @@ impl<B, E, Block, RA> StorageProvider<Block, B> for Client<B, E, Block, RA> wher
 	}
 
 
-	fn storage_hash(&self, id: &BlockId<Block>, key: &StorageKey) -> sp_blockchain::Result<Option<Block::Hash>>
-	{
+	fn storage_hash(
+		&self,
+		id: &BlockId<Block>,
+		key: &StorageKey,
+	) -> sp_blockchain::Result<Option<Block::Hash>> {
 		Ok(self.state_at(id)?
 			.storage_hash(&key.0).map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
 		)
