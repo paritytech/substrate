@@ -16,8 +16,9 @@
 
 use crate::error;
 use crate::params::SharedParams;
+use crate::arg_enums::Database;
 use crate::CliConfiguration;
-use sc_service::{config::DatabaseConfig, Configuration};
+use sc_service::Configuration;
 use std::fmt::Debug;
 use std::fs;
 use std::io::{self, Write};
@@ -33,13 +34,23 @@ pub struct PurgeChainCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
+
+	/// Select database backend to use.
+	#[structopt(
+		long = "database",
+		alias = "db",
+		value_name = "DB",
+		case_insensitive = true,
+		default_value = "RocksDb"
+	)]
+	pub database: Database,
 }
 
 impl PurgeChainCmd {
 	/// Run the purge command
 	pub fn run(&self, config: Configuration) -> error::Result<()> {
-		let db_path = match &config.database {
-			DatabaseConfig::RocksDb { path, .. } => path,
+		let db_path = match config.database.path() {
+			Some(path) => path,
 			_ => {
 				eprintln!("Cannot purge custom database implementation");
 				return Ok(());
@@ -80,5 +91,9 @@ impl PurgeChainCmd {
 impl CliConfiguration for PurgeChainCmd {
 	fn shared_params(&self) -> &SharedParams {
 		&self.shared_params
+	}
+
+	fn database(&self) -> error::Result<Option<Database>> {
+		Ok(Some(self.database))
 	}
 }
