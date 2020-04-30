@@ -93,7 +93,7 @@ macro_rules! new_full_start {
 				let grandpa_link = import_setup.as_ref().map(|s| &s.1)
 					.expect("GRANDPA LinkHalf is present for full services or set up failed; qed.");
 				let shared_authority_set = grandpa_link.shared_authority_set();
-				let shared_voter_state = SharedVoterState::new(None);
+				let shared_voter_state = SharedVoterState::empty();
 				let deps = node_rpc::FullDeps {
 					client: builder.client().clone(),
 					pool: builder.pool(),

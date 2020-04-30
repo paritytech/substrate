@@ -83,7 +83,7 @@ mod tests {
 
 	#[test]
 	fn create_grandpa_rpc_handler() {
-		let shared_voter_state = SharedVoterState::new(None);
+		let shared_voter_state = SharedVoterState::empty();
 		let shared_authority_set = example_shared_authority_set();
 
 		let handler = GrandpaRpcHandler::new(shared_voter_state, shared_authority_set);

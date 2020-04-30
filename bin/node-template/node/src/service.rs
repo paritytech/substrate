@@ -159,7 +159,7 @@ pub fn new_full(config: Configuration) -> Result<impl AbstractService, ServiceEr
 			telemetry_on_connect: Some(service.telemetry_on_connect_stream()),
 			voting_rule: sc_finality_grandpa::VotingRulesBuilder::default().build(),
 			prometheus_registry: service.prometheus_registry(),
-			shared_voter_state: SharedVoterState::new(None),
+			shared_voter_state: SharedVoterState::empty(),
 		};
 
 		// the GRANDPA voter task is considered infallible, i.e.

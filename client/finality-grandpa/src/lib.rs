@@ -211,19 +211,22 @@ type CommunicationOutH<Block, H> = finality_grandpa::voter::CommunicationOut<
 	AuthorityId,
 >;
 
-/// Shared voter state for quering.
+/// Shared voter state for querying.
 pub struct SharedVoterState {
 	inner: Arc<RwLock<Option<Box<dyn voter::VoterState<AuthorityId> + Sync + Send>>>>,
 }
 
 impl SharedVoterState {
-	/// Create a new `SharedVoterState` instance from the given `VoterState`.
-	pub fn new(voter_state: Option<Box<dyn voter::VoterState<AuthorityId> + Sync + Send>>) -> Self {
-		Self { inner: Arc::new(RwLock::new(voter_state)) }
+	/// Create a new empty `SharedVoterState` instance.
+	pub fn empty() -> Self {
+		Self {
+			inner: Arc::new(RwLock::new(None)),
+		}
 	}
 
 	fn reset(
-		&self, voter_state: Box<dyn voter::VoterState<AuthorityId> + Sync + Send>
+		&self,
+		voter_state: Box<dyn voter::VoterState<AuthorityId> + Sync + Send>,
 	) -> Result<(), Error> {
 		let mut shared_voter_state = self
 			.inner
