@@ -192,9 +192,8 @@ macro_rules! implement_fixed {
 					.and_then(|r| {
 						let signum = numerator.signum() * denominator.signum();
 
-						if r == Self::Inner::max_value() as u128 + 1 && signum < 0 {
-							let inner: Self::Inner = Self::Inner::min_value();
-							Some(Self(inner))
+						if r == Self::Inner::max_value() as u128 + 1 && signum.is_negative() {
+							Some(Self(Self::Inner::min_value()))
 						} else {
 							let unsigned_inner: Self::Inner = r.try_into().ok()?;
 							let inner = unsigned_inner.checked_mul(signum)?;
@@ -207,7 +206,8 @@ macro_rules! implement_fixed {
 				Self::checked_from_rational(numerator, denominator)
 					.unwrap_or_else(|| {
 						let signum = numerator.signum() * denominator.signum();
-						if signum < 0 {
+
+						if signum.is_negative() {
 							Self::min_value()
 						} else {
 							Self::max_value()
@@ -231,9 +231,8 @@ macro_rules! implement_fixed {
 					.and_then(|r| {
 						let signum = rhs.signum() * lhs.signum();
 
-						if r == i128::max_value() as u128 + 1 && signum < 0 {
-							let n: i128 = i128::min_value();
-							n.try_into().ok()
+						if r == i128::max_value() as u128 + 1 && signum.is_negative() {
+							i128::min_value().try_into().ok()
 						} else {
 							let n: i128 = r.try_into().ok()?;
 							n.checked_mul(signum)?.try_into().ok()
@@ -260,7 +259,8 @@ macro_rules! implement_fixed {
 				self.checked_div_int(other)
 					.unwrap_or_else(|| {
 						let signum = self.0.signum() as i128 * other.try_into().unwrap_or(0).signum();
-						if signum < 0 {
+
+						if signum.is_negative() {
 							N::min_value()
 						} else {
 							N::max_value()
@@ -274,6 +274,7 @@ macro_rules! implement_fixed {
 			{
 				self.checked_mul_int(other).unwrap_or_else(|| {
 					let signum = self.0.signum() as i128 * other.try_into().unwrap_or(0).signum();
+
 					if signum.is_negative() {
 						Bounded::min_value()
 					} else {
