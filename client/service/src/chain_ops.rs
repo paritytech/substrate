@@ -152,6 +152,69 @@ impl<R, B> Stream for BlockStream<R, B>
 	}
 }
 
+/// Imports the SignedBlock to the queue.
+fn import_block_to_queue<TBl, TImpQu>(signed_block: SignedBlock<TBl>, queue: &mut TImpQu, force: bool)
+where
+	TBl: BlockT + MaybeSerializeDeserialize,
+	TImpQu: 'static + ImportQueue<TBl>,
+{
+	let (header, extrinsics) = signed_block.block.deconstruct();
+	let hash = header.hash();
+	// import queue handles verification and importing it into the client.
+	queue.import_blocks(BlockOrigin::File, vec![
+		IncomingBlock::<TBl> {
+			hash,
+			header: Some(header),
+			body: Some(extrinsics),
+			justification: signed_block.justification,
+			origin: None,
+			allow_missing_state: false,
+			import_existing: force,
+		}
+	]);
+}
+
+/// Returns true if we have imported every block we were supposed to import, else returns false.
+fn importing_is_done(count: Option<u64>, read_block_count: u64, imported_blocks: u64) -> bool {
+	if let Some(count) = count {
+		if imported_blocks >= count {
+			return true
+		}
+	} else {
+		if imported_blocks >= read_block_count {
+			return true
+		}
+	}
+	false
+}
+
+// Logs information regarding the current importing status.
+fn log_importing_status_updates(count: Option<u64>, read_block_count: u64, blocks_before: u64, imported_blocks: u64) {
+	// Notify every 1000 blocks to let the user know everything is running smoothly.
+	if read_block_count % 1000 == 0 {
+		info!(
+			"#{} blocks were added to the queue",
+			read_block_count
+		);
+	}
+
+	// Notify every time we import an additional 1000 blocks.
+	if imported_blocks / 1000 != blocks_before / 1000 {
+		if let Some(count) = count {
+			info!(
+				"#{} blocks were imported (#{} left)",
+				imported_blocks,
+				count - imported_blocks
+			)
+		} else {
+			info!(
+				"{} blocks were imported, other are still being processed",
+				imported_blocks,
+			)
+		}
+	}
+}
+
 impl<
 	TBl, TRtApi, TBackend,
 	TExecDisp, TFchr, TSc, TImpQu, TFprb, TFpp,
@@ -228,87 +291,19 @@ impl<
 			match Pin::new(&mut block_stream).poll_next(cx) {
 				Poll::Ready(None) => {
 					let read_block_count = block_stream.read_block_count();
-					if let Some(count) = block_stream.count() {
-						if link.imported_blocks >= count {
-							info!(
-								"🎉 Imported {} blocks. Best: #{}",
-								read_block_count, client.chain_info().best_number
-							);
-							// We're done importing blocks, we can stop here.
-							return std::task::Poll::Ready(Ok(()))
-						} else {
-							queue.poll_actions(cx, &mut link);
-							cx.waker().wake_by_ref();
-							return std::task::Poll::Pending
-						}
-					} else {
-						if link.imported_blocks >= read_block_count {
-							info!(
-								"🎉 Imported {} blocks. Best: #{}",
-								read_block_count, client.chain_info().best_number
-							);
-							// We're done importing blocks, we can stop here.
-							return std::task::Poll::Ready(Ok(()))
-						} else {
-							queue.poll_actions(cx, &mut link);
-							cx.waker().wake_by_ref();
-							return std::task::Poll::Pending
-						}
+					let count = block_stream.count();
+
+					if importing_is_done(count, read_block_count, link.imported_blocks) {
+						info!(
+							"🎉 Imported {} blocks. Best: #{}",
+							read_block_count, client.chain_info().best_number
+						);
+						return std::task::Poll::Ready(Ok(()))
 					}
 				},
 				Poll::Ready(Some(block_result)) => {
-					let read_block_count = block_stream.read_block_count();
 					match block_result {
-						Ok(signed) => {
-							let (header, extrinsics) = signed.block.deconstruct();
-							let hash = header.hash();
-							// import queue handles verification and importing it into the client.
-							queue.import_blocks(BlockOrigin::File, vec![
-								IncomingBlock::<Self::Block> {
-									hash,
-									header: Some(header),
-									body: Some(extrinsics),
-									justification: signed.justification,
-									origin: None,
-									allow_missing_state: false,
-									import_existing: force,
-								}
-							]);
-
-							// Print a message every 1000 blocks to let the user everything's running smoothly.
-							if read_block_count % 1000 == 0 {
-								info!(
-									"#{} blocks were added to the queue",
-									read_block_count
-								);
-							}
-
-							queue.poll_actions(cx, &mut link);
-							if link.has_error {
-								info!(
-									"Stopping after #{} blocks because of an error",
-									link.imported_blocks,
-								);
-								// We've encountered an error, we can stop here.
-								return std::task::Poll::Ready(Ok(()));
-							}
-
-							let blocks_before = link.imported_blocks;
-							if link.imported_blocks / 1000 != blocks_before / 1000 {
-								if let Some(count) = block_stream.count() {
-									info!(
-										"#{} blocks were imported (#{} left)",
-										link.imported_blocks,
-										count - link.imported_blocks
-									)
-								} else {
-									info!(
-										"{} blocks were imported, other are still being processed",
-										link.imported_blocks,
-									)
-								}
-							}
-						}
+						Ok(signed_block) => import_block_to_queue(signed_block, queue, force),
 						Err(e) => {
 							let read_block_count = block_stream.read_block_count();
 							warn!("Error reading block data at {}: {}", read_block_count, e);
@@ -316,12 +311,29 @@ impl<
 							return std::task::Poll::Ready(Ok(()));
 						}
 					}
-
-					cx.waker().wake_by_ref();
-					return std::task::Poll::Pending;
-				},
+				}
 				Poll::Pending => unreachable!("BlockStream.poll_next() should never return Poll::Pending; qed")
 			}
+
+			let blocks_before = link.imported_blocks;
+			queue.poll_actions(cx, &mut link);
+
+			if link.has_error {
+				info!(
+					"Stopping after #{} blocks because of an error",
+					link.imported_blocks,
+				);
+				// We've encountered an error, we can stop here.
+				return std::task::Poll::Ready(Ok(()));
+			}
+
+			let read_block_count = block_stream.read_block_count();
+			let count = block_stream.count();
+			log_importing_status_updates(count, read_block_count, blocks_before, link.imported_blocks);
+
+
+			cx.waker().wake_by_ref();
+			return std::task::Poll::Pending;
 		});
 		Ok(Box::pin(import))
 	}
