@@ -23,7 +23,7 @@ mod mock;
 use sp_std::prelude::*;
 use sp_std::vec;
 
-use frame_system::{RawOrigin, Module as System};
+use frame_system::{RawOrigin, Module as System, Trait as SystemTrait};
 use frame_benchmarking::{benchmarks, account};
 use frame_support::traits::{Currency, OnInitialize};
 
@@ -67,15 +67,18 @@ pub trait IdTupleConvert<T: HistoricalTrait + OffencesTrait> {
 	fn convert(id: IdentificationTuple<T>) -> <T as OffencesTrait>::IdentificationTuple;
 }
 
+type LookupSourceOf<T> = <<T as SystemTrait>::Lookup as StaticLookup>::Source;
+type BalanceOf<T> = <<T as StakingTrait>::Currency as Currency<<T as SystemTrait>::AccountId>>::Balance;
+
 fn create_offender<T: Trait>(n: u32, nominators: u32) -> Result<T::AccountId, &'static str> {
 	let stash: T::AccountId = account("stash", n, SEED);
-	let stash_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(stash.clone());
+	let stash_lookup: LookupSourceOf<T> = T::Lookup::unlookup(stash.clone());
 	let controller: T::AccountId = account("controller", n, SEED);
-	let controller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(controller.clone());
+	let controller_lookup: LookupSourceOf<T> = T::Lookup::unlookup(controller.clone());
 	let reward_destination = RewardDestination::Staked;
 	let raw_amount = 1_000_000;
 	Balances::<T>::set_balance(RawOrigin::Root.into(), stash_lookup, raw_amount.into(), raw_amount.into())?;
-	let amount: <T::Currency as Currency<T::AccountId>>::Balance = raw_amount.into();
+	let amount: BalanceOf<T> = raw_amount.into();
 	Staking::<T>::bond(
 		RawOrigin::Signed(stash.clone()).into(),
 		controller_lookup.clone(),
@@ -93,11 +96,9 @@ fn create_offender<T: Trait>(n: u32, nominators: u32) -> Result<T::AccountId, &'
 	// Create n nominators
 	for i in 0 .. nominators {
 		let nominator_stash: T::AccountId = account("nominator stash", n * MAX_NOMINATORS + i, SEED);
-		let nominator_stash_lookup: <T::Lookup as StaticLookup>::Source =
-			T::Lookup::unlookup(nominator_stash.clone());
+		let nominator_stash_lookup: LookupSourceOf<T> = T::Lookup::unlookup(nominator_stash.clone());
 		let nominator_controller: T::AccountId = account("nominator controller", n * MAX_NOMINATORS + i, SEED);
-		let nominator_controller_lookup: <T::Lookup as StaticLookup>::Source =
-			T::Lookup::unlookup(nominator_controller.clone());
+		let nominator_controller_lookup: LookupSourceOf<T> = T::Lookup::unlookup(nominator_controller.clone());
 		Balances::<T>::set_balance(
 			RawOrigin::Root.into(), nominator_stash_lookup, raw_amount.into(), raw_amount.into()
 		)?;
@@ -109,7 +110,7 @@ fn create_offender<T: Trait>(n: u32, nominators: u32) -> Result<T::AccountId, &'
 			reward_destination,
 		)?;
 
-		let selected_validators: Vec<<T::Lookup as StaticLookup>::Source> = vec![controller_lookup.clone()];
+		let selected_validators: Vec<LookupSourceOf<T>> = vec![controller_lookup.clone()];
 		Staking::<T>::nominate(RawOrigin::Signed(nominator_controller.clone()).into(), selected_validators)?;
 
 		individual_exposures.push(IndividualExposure {
@@ -170,7 +171,7 @@ benchmarks! {
 		// make sure reporters actually get rewarded
 		Staking::<T>::set_slash_reward_fraction(Perbill::one());
 
-		let offenders = make_offenders::<T>(o, n).expect("failed to create offenders");
+		let offenders = make_offenders::<T>(o, n)?;
 		let keys =  ImOnline::<T>::keys();
 
 		let offence = UnresponsivenessOffence {
@@ -210,8 +211,8 @@ benchmarks! {
 		// make sure reporters actually get rewarded
 		Staking::<T>::set_slash_reward_fraction(Perbill::one());
 
-		let mut offenders = make_offenders::<T>(o, n).expect("failed to create offenders");
-		let keys =  ImOnline::<T>::keys();
+		let mut offenders = make_offenders::<T>(o, n)?;
+		let keys = ImOnline::<T>::keys();
 
 		let offence = GrandpaEquivocationOffence {
 			time_slot: GrandpaTimeSlot { set_id: 0, round: 0 },
@@ -251,7 +252,7 @@ benchmarks! {
 		// make sure reporters actually get rewarded
 		Staking::<T>::set_slash_reward_fraction(Perbill::one());
 
-		let mut offenders = make_offenders::<T>(o, n).expect("failed to create offenders");
+		let mut offenders = make_offenders::<T>(o, n)?;
 		let keys =  ImOnline::<T>::keys();
 
 		let offence = BabeEquivocationOffence {
@@ -285,7 +286,7 @@ benchmarks! {
 		Staking::<T>::put_election_status(ElectionStatus::Closed);
 
 		let mut deferred_offences = vec![];
-		let offenders = make_offenders::<T>(o, n).expect("failed to create offenders");
+		let offenders = make_offenders::<T>(o, n)?;
 		let offence_details = offenders.into_iter()
 			.map(|offender| sp_staking::offence::OffenceDetails {
 				offender: T::convert(offender),
