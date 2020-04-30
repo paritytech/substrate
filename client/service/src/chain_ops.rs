@@ -160,12 +160,13 @@ impl<
 	TExecDisp: 'static + NativeExecutionDispatch,
 	TImpQu: 'static + ImportQueue<TBl>,
 	TRtApi: 'static + Send + Sync,
+	Self: Send + 'static,
 {
 	type Block = TBl;
 	type NativeDispatch = TExecDisp;
 
 	fn import_blocks(
-		self,
+		mut self,
 		input: impl Read + Seek + Send + 'static,
 		force: bool,
 		binary: bool,
@@ -203,9 +204,6 @@ impl<
 			}
 		}
 
-		let client = self.client;
-		let mut queue = self.import_queue;
-
 		let mut link = WaitLink::new();
 		let mut block_stream: BlockStream<_, Self::Block> = BlockStream::new(input, binary)?;
 
@@ -217,6 +215,9 @@ impl<
 		// This makes it possible either to interleave other operations in-between the block imports,
 		// or to stop the operation completely.
 		let import = future::poll_fn(move |cx| {
+			let client = &self.client;
+			let queue = &mut self.import_queue;
+
 			// Read blocks from the input.
 			match Pin::new(&mut block_stream).poll_next(cx) {
 				Poll::Ready(None) => {
@@ -326,13 +327,12 @@ impl<
 		to: Option<NumberFor<TBl>>,
 		binary: bool
 	) -> Pin<Box<dyn Future<Output = Result<(), Error>>>> {
-		let client = self.client;
 		let mut block = from;
 
 		let last = match to {
 			Some(v) if v.is_zero() => One::one(),
 			Some(v) => v,
-			None => client.chain_info().best_number,
+			None => self.client.chain_info().best_number,
 		};
 
 		let mut wrote_header = false;
@@ -345,6 +345,8 @@ impl<
 		// This makes it possible either to interleave other operations in-between the block exports,
 		// or to stop the operation completely.
 		let export = future::poll_fn(move |cx| {
+			let client = &self.client;
+
 			if last < block {
 				return std::task::Poll::Ready(Err("Invalid block range specified".into()));
 			}
