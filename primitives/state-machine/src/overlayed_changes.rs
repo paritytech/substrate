@@ -228,6 +228,7 @@ impl OverlayedChanges {
 	/// the value.
 	/// Warning this function register a change, so the mutable reference MUST be modified.
 	#[must_use = "A change was registered, so this value MUST be modified."]
+	#[must_use = "A change was registered, so this value MUST be modified."]
 	pub fn value_mut_or_insert_with(
 		&mut self,
 		key: &[u8],
