@@ -10,8 +10,8 @@ use sp_inherents::InherentDataProviders;
 use sc_executor::native_executor_instance;
 pub use sc_executor::NativeExecutor;
 use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
-use sc_finality_grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider,
-	StorageAndProofProvider, SharedVoterState,
+use sc_finality_grandpa::{
+	FinalityProofProvider as GrandpaFinalityProofProvider, StorageAndProofProvider, SharedVoterState,
 };
 
 // Our native executor instance.
