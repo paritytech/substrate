@@ -76,13 +76,13 @@ pub trait FixedPointNumber:
 		N: TryFrom<i128> + TryInto<i128> + Copy + Bounded
 	>(self, other: N) -> Option<N>;
 
-	/// Checked division for integer type `N`.
-	fn checked_div_int<N: Copy + TryFrom<i128> + TryInto<i128>>(self, other: N) -> Option<N>;
-
 	/// Saturating multiplication for integer type `N`.
 	fn saturating_mul_int<
 		N: TryFrom<i128> + TryInto<i128> + Copy + Bounded + Saturating
 	>(self, other: N) -> N;
+
+	/// Checked division for integer type `N`.
+	fn checked_div_int<N: Copy + TryFrom<i128> + TryInto<i128>>(self, other: N) -> Option<N>;
 
 	/// Saturating division for integer type `N`.
 	fn saturating_div_int<N: Copy + TryFrom<i128> + TryInto<i128> + Bounded>(self, other: N) -> N;
