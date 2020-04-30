@@ -240,11 +240,15 @@
 //!
 
 mod behaviour;
+mod block_requests;
 mod chain;
 mod debug_info;
 mod discovery;
+mod finality_requests;
+mod light_client_handler;
 mod on_demand_layer;
 mod protocol;
+mod schema;
 mod service;
 mod transport;
 mod utils;
