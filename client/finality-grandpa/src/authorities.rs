@@ -135,6 +135,7 @@ where H: PartialEq,
 		})
 	}
 
+	/// Create a new authority set.
 	pub(crate) fn new(
 		authorities: AuthorityList,
 		set_id: u64,
