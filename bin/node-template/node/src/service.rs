@@ -27,7 +27,7 @@ macro_rules! new_full_start {
 	($config:expr) => {{
 		use std::sync::Arc;
 		use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
-		
+
 		let mut import_setup = None;
 		let inherent_data_providers = sp_inherents::InherentDataProviders::new();
 
@@ -45,14 +45,15 @@ macro_rules! new_full_start {
 				let select_chain = select_chain.take()
 					.ok_or_else(|| sc_service::Error::SelectChainRequired)?;
 
-				let (grandpa_block_import, grandpa_link) =
-					sc_finality_grandpa::block_import(client.clone(), &(client.clone() as Arc<_>), select_chain)?;
+				let (grandpa_block_import, grandpa_link) = sc_finality_grandpa::block_import(
+					client.clone(),
+					&(client.clone() as Arc<_>),
+					select_chain,
+				)?;
 
 				let aura_block_import = sc_consensus_aura::AuraBlockImport::<_, _, _, AuraPair>::new(
 					grandpa_block_import.clone(), client.clone(),
 				);
-
-				let spawner = |future| spawn_task_handle.spawn_blocking("import-queue-worker", future);
 
 				let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair, _>(
 					sc_consensus_aura::slot_duration(&*client)?,
@@ -61,7 +62,7 @@ macro_rules! new_full_start {
 					None,
 					client,
 					inherent_data_providers.clone(),
-					spawner,
+					spawn_task_handle,
 				)?;
 
 				import_setup = Some((grandpa_block_import, grandpa_link));
@@ -208,8 +209,6 @@ pub fn new_light(config: Configuration) -> Result<impl AbstractService, ServiceE
 			let finality_proof_request_builder =
 				finality_proof_import.create_finality_proof_request_builder();
 
-			let spawner = |future| spawn_task_handle.spawn_blocking("import-queue-worker", future);
-
 			let import_queue = sc_consensus_aura::import_queue::<_, _, _, AuraPair, _>(
 				sc_consensus_aura::slot_duration(&*client)?,
 				grandpa_block_import,
@@ -217,7 +216,7 @@ pub fn new_light(config: Configuration) -> Result<impl AbstractService, ServiceE
 				Some(Box::new(finality_proof_import)),
 				client,
 				inherent_data_providers.clone(),
-				spawner,
+				spawn_task_handle,
 			)?;
 
 			Ok((import_queue, finality_proof_request_builder))

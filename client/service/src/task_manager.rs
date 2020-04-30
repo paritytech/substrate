@@ -18,10 +18,10 @@ use std::{
 	result::Result, sync::Arc
 };
 use exit_future::Signal;
-use log::{debug};
+use log::debug;
 use futures::{
 	Future, FutureExt,
-	future::select,
+	future::{select, BoxFuture},
 	compat::*,
 	task::{Spawn, FutureObj, SpawnError},
 };
@@ -65,7 +65,12 @@ impl SpawnTaskHandle {
 	}
 
 	/// Helper function that implements the spawning logic. See `spawn` and `spawn_blocking`.
-	fn spawn_inner(&self, name: &'static str, task: impl Future<Output = ()> + Send + 'static, task_type: TaskType) {
+	fn spawn_inner(
+		&self,
+		name: &'static str,
+		task: impl Future<Output = ()> + Send + 'static,
+		task_type: TaskType,
+	) {
 		let on_exit = self.on_exit.clone();
 		let metrics = self.metrics.clone();
 
@@ -100,6 +105,12 @@ impl Spawn for SpawnTaskHandle {
 	-> Result<(), SpawnError> {
 		self.spawn("unamed", future);
 		Ok(())
+	}
+}
+
+impl sp_core::traits::SpawnBlocking for SpawnTaskHandle {
+	fn spawn_blocking(&self, name: &'static str, future: BoxFuture<'static, ()>) {
+		self.spawn_blocking(name, future);
 	}
 }
 
