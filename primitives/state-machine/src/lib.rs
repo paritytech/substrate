@@ -1127,28 +1127,6 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic]
-	fn append_on_standard_value_panic() {
-		let key = b"key".to_vec();
-		let mut state = new_in_mem::<BlakeTwo256>();
-		let backend = state.as_trie_backend().unwrap();
-		let mut overlay = OverlayedChanges::default();
-		let mut offchain_overlay = OffchainOverlayedChanges::default();
-		let mut cache = StorageTransactionCache::default();
-		let mut ext = Ext::new(
-			&mut overlay,
-			&mut offchain_overlay,
-			&mut cache,
-			backend,
-			changes_trie::disabled_state::<_, u64>(),
-			None,
-		);
-
-		ext.set_storage(key.clone(), b"existing".to_vec().encode());
-		ext.storage_append(key.clone(), b"Item".to_vec().encode());
-	}
-
-	#[test]
 	fn remove_then_append() {
 		let key = b"key".to_vec();
 		let mut state = new_in_mem::<BlakeTwo256>();
