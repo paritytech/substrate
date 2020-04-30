@@ -20,7 +20,6 @@ use node_runtime::{Block, RuntimeApi};
 use node_transaction_factory::RuntimeAdapter;
 use sc_cli::{CliConfiguration, ImportParams, Result, SharedParams, SubstrateCli};
 use sc_service::Configuration;
-use grandpa::SharedVoterState;
 
 impl SubstrateCli for Cli {
 	fn impl_name() -> &'static str {
