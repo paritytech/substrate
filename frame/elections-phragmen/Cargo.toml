@@ -30,7 +30,7 @@ sp-core = { version = "2.0.0-dev", path = "../../primitives/core" }
 substrate-test-utils = { version = "2.0.0-dev", path = "../../test-utils" }
 
 [features]
-default = ["std", "runtime-benchmarks"]
+default = ["std"]
 std = [
 	"serde",
 	"codec/std",
