@@ -15,13 +15,10 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{
-	config::{ProtocolId, Role},
+	config::{ProtocolId, Role}, block_requests, light_client_handler, finality_requests,
 	debug_info, discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryOut},
+	protocol::{message::{self, Roles}, CustomMessageOutcome, Protocol},
 	Event, ObservedRole, DhtEvent, ExHashT,
-};
-use crate::protocol::{
-	self, block_requests, light_client_handler, finality_requests,
-	message::{self, Roles}, CustomMessageOutcome, Protocol
 };
 
 use codec::Encode as _;
@@ -33,7 +30,6 @@ use log::debug;
 use sp_consensus::{BlockOrigin, import_queue::{IncomingBlock, Origin}};
 use sp_runtime::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId, Justification};
 use std::{borrow::Cow, iter, task::{Context, Poll}, time::Duration};
-use void;
 
 /// General behaviour of the network. Combines all protocols together.
 #[derive(NetworkBehaviour)]
@@ -47,11 +43,11 @@ pub struct Behaviour<B: BlockT, H: ExHashT> {
 	/// Discovers nodes of the network.
 	discovery: DiscoveryBehaviour,
 	/// Block request handling.
-	block_requests: protocol::BlockRequests<B>,
+	block_requests: block_requests::BlockRequests<B>,
 	/// Finality proof request handling.
-	finality_proof_requests: protocol::FinalityProofRequests<B>,
+	finality_proof_requests: finality_requests::FinalityProofRequests<B>,
 	/// Light client request handling.
-	light_client_handler: protocol::LightClientHandler<B>,
+	light_client_handler: light_client_handler::LightClientHandler<B>,
 
 	/// Queue of events to produce for the outside.
 	#[behaviour(ignore)]
@@ -110,9 +106,9 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 		role: Role,
 		user_agent: String,
 		local_public_key: PublicKey,
-		block_requests: protocol::BlockRequests<B>,
-		finality_proof_requests: protocol::FinalityProofRequests<B>,
-		light_client_handler: protocol::LightClientHandler<B>,
+		block_requests: block_requests::BlockRequests<B>,
+		finality_proof_requests: finality_requests::FinalityProofRequests<B>,
+		light_client_handler: light_client_handler::LightClientHandler<B>,
 		disco_config: DiscoveryConfig,
 	) -> Self {
 		Behaviour {

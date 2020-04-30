@@ -231,7 +231,7 @@ mod tests {
 			.map(move |_| {
 				// we're only going to submit one tx so this fn will only be called once.
 				let mut_sender =  Arc::get_mut(&mut sender).unwrap();
-				let sender = std::mem::replace(mut_sender, None);
+				let sender = std::mem::take(mut_sender);
 				EngineCommand::SealNewBlock {
 					create_empty: false,
 					finalize: true,

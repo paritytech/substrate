@@ -16,11 +16,7 @@
 
 //! Substrate chain configurations.
 
-use std::borrow::Cow;
-use std::collections::HashMap;
-use std::fs::File;
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::{borrow::Cow, fs::File, path::PathBuf, sync::Arc, collections::HashMap};
 use serde::{Serialize, Deserialize};
 use sp_core::storage::{StorageKey, StorageData, ChildInfo, Storage, StorageChild};
 use sp_runtime::BuildStorage;
@@ -33,14 +29,16 @@ enum GenesisSource<G> {
 	File(PathBuf),
 	Binary(Cow<'static, [u8]>),
 	Factory(Arc<dyn Fn() -> G + Send + Sync>),
+	Storage(Storage),
 }
 
 impl<G> Clone for GenesisSource<G> {
 	fn clone(&self) -> Self {
 		match *self {
-			GenesisSource::File(ref path) => GenesisSource::File(path.clone()),
-			GenesisSource::Binary(ref d) => GenesisSource::Binary(d.clone()),
-			GenesisSource::Factory(ref f) => GenesisSource::Factory(f.clone()),
+			Self::File(ref path) => Self::File(path.clone()),
+			Self::Binary(ref d) => Self::Binary(d.clone()),
+			Self::Factory(ref f) => Self::Factory(f.clone()),
+			Self::Storage(ref s) => Self::Storage(s.clone()),
 		}
 	}
 }
@@ -53,19 +51,40 @@ impl<G: RuntimeGenesis> GenesisSource<G> {
 		}
 
 		match self {
-			GenesisSource::File(path) => {
+			Self::File(path) => {
 				let file = File::open(path)
 					.map_err(|e| format!("Error opening spec file: {}", e))?;
 				let genesis: GenesisContainer<G> = json::from_reader(file)
 					.map_err(|e| format!("Error parsing spec file: {}", e))?;
 				Ok(genesis.genesis)
 			},
-			GenesisSource::Binary(buf) => {
+			Self::Binary(buf) => {
 				let genesis: GenesisContainer<G> = json::from_reader(buf.as_ref())
 					.map_err(|e| format!("Error parsing embedded file: {}", e))?;
 				Ok(genesis.genesis)
 			},
-			GenesisSource::Factory(f) => Ok(Genesis::Runtime(f())),
+			Self::Factory(f) => Ok(Genesis::Runtime(f())),
+			Self::Storage(storage) => {
+				let top = storage.top
+					.iter()
+					.map(|(k, v)| (StorageKey(k.clone()), StorageData(v.clone())))
+					.collect();
+
+				let children_default = storage.children_default
+					.iter()
+					.map(|(k, child)|
+						 (
+							 StorageKey(k.clone()),
+							 child.data
+								.iter()
+								.map(|(k, v)| (StorageKey(k.clone()), StorageData(v.clone())))
+								.collect()
+						 )
+					)
+					.collect();
+
+				Ok(Genesis::Raw(RawGenesis { top, children_default }))
+			},
 		}
 	}
 }
@@ -98,15 +117,15 @@ impl<G: RuntimeGenesis, E> BuildStorage for ChainSpec<G, E> {
 	}
 }
 
-type GenesisStorage = HashMap<StorageKey, StorageData>;
+pub type GenesisStorage = HashMap<StorageKey, StorageData>;
 
+/// Raw storage content for genesis block.
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
-/// Storage content for genesis block.
-struct RawGenesis {
-	top: GenesisStorage,
-	children_default: HashMap<StorageKey, GenesisStorage>,
+pub struct RawGenesis {
+	pub top: GenesisStorage,
+	pub children_default: HashMap<StorageKey, GenesisStorage>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -263,7 +282,7 @@ impl<G, E: serde::de::DeserializeOwned> ChainSpec<G, E> {
 	}
 }
 
-impl<G: RuntimeGenesis, E: serde::Serialize + Clone> ChainSpec<G, E> {
+impl<G: RuntimeGenesis, E: serde::Serialize + Clone + 'static> ChainSpec<G, E> {
 	/// Dump to json string.
 	pub fn as_json(&self, raw: bool) -> Result<String, String> {
 		#[derive(Serialize, Deserialize)]
@@ -303,8 +322,8 @@ impl<G: RuntimeGenesis, E: serde::Serialize + Clone> ChainSpec<G, E> {
 
 impl<G, E> crate::ChainSpec for ChainSpec<G, E>
 where
-	G: RuntimeGenesis,
-	E: GetExtension + serde::Serialize + Clone + Send,
+	G: RuntimeGenesis + 'static,
+	E: GetExtension + serde::Serialize + Clone + Send + 'static,
 {
 	fn boot_nodes(&self) -> &[MultiaddrWithPeerId] {
 		ChainSpec::boot_nodes(self)
@@ -348,6 +367,14 @@ where
 
 	fn as_storage_builder(&self) -> &dyn BuildStorage {
 		self
+	}
+
+	fn cloned_box(&self) -> Box<dyn crate::ChainSpec> {
+		Box::new(self.clone())
+	}
+
+	fn set_storage(&mut self, storage: Storage) {
+		self.genesis = GenesisSource::Storage(storage);
 	}
 }
 

@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::error;
-use crate::params::{BlockNumber, PruningParams, SharedParams};
+use crate::params::{BlockNumber, DatabaseParams, PruningParams, SharedParams};
 use crate::CliConfiguration;
 use log::info;
 use sc_service::{
@@ -58,6 +58,10 @@ pub struct ExportBlocksCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub pruning_params: PruningParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub database_params: DatabaseParams,
 }
 
 impl ExportBlocksCmd {
@@ -102,5 +106,9 @@ impl CliConfiguration for ExportBlocksCmd {
 
 	fn pruning_params(&self) -> Option<&PruningParams> {
 		Some(&self.pruning_params)
+	}
+
+	fn database_params(&self) -> Option<&DatabaseParams> {
+		Some(&self.database_params)
 	}
 }

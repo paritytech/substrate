@@ -423,16 +423,12 @@ where
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		self.mark_dirty();
 
-		let current_value = self.overlay
-			.value_mut(&key)
-			.map(|v| v.take())
-			.unwrap_or_else(|| self.backend.storage(&key).expect(EXT_NOT_ALLOWED_TO_FAIL))
-			.unwrap_or_default();
-
-		self.overlay.set_storage(
-			key,
-			Some(append_to_storage(current_value, value).expect(EXT_NOT_ALLOWED_TO_FAIL)),
+		let backend = &mut self.backend;
+		let current_value = self.overlay.value_mut_or_insert_with(
+			&key,
+			|| backend.storage(&key).expect(EXT_NOT_ALLOWED_TO_FAIL).unwrap_or_default()
 		);
+		append_to_storage(current_value, value).expect(EXT_NOT_ALLOWED_TO_FAIL);
 	}
 
 	fn chain_id(&self) -> u64 {
@@ -589,14 +585,14 @@ fn extract_length_data(data: &[u8]) -> Result<(u32, usize, usize), &'static str>
 }
 
 pub fn append_to_storage(
-	mut self_encoded: Vec<u8>,
+	self_encoded: &mut Vec<u8>,
 	value: Vec<u8>,
-) -> Result<Vec<u8>, &'static str> {
+) -> Result<(), &'static str> {
 	// No data present, just encode the given input data.
 	if self_encoded.is_empty() {
-		Compact::from(1u32).encode_to(&mut self_encoded);
+		Compact::from(1u32).encode_to(self_encoded);
 		self_encoded.extend(value);
-		return Ok(self_encoded);
+		return Ok(());
 	}
 
 	let (new_len, encoded_len, encoded_new_len) = extract_length_data(&self_encoded)?;
@@ -612,10 +608,10 @@ pub fn append_to_storage(
 	// If old and new encoded len is equal, we don't need to copy the
 	// already encoded data.
 	if encoded_len == encoded_new_len {
-		replace_len(&mut self_encoded);
-		append_new_elems(&mut self_encoded);
+		replace_len(self_encoded);
+		append_new_elems(self_encoded);
 
-		Ok(self_encoded)
+		Ok(())
 	} else {
 		let size = encoded_new_len + self_encoded.len() - encoded_len;
 
@@ -627,8 +623,9 @@ pub fn append_to_storage(
 		replace_len(&mut res);
 		res[encoded_new_len..size].copy_from_slice(&self_encoded[encoded_len..]);
 		append_new_elems(&mut res);
+		*self_encoded = res;
 
-		Ok(res)
+		Ok(())
 	}
 }
 
