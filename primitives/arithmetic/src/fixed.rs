@@ -57,16 +57,19 @@ pub trait FixedPointNumber:
 	fn from_integer(int: Self::Inner) -> Self;
 
 	/// Returns the integer part.
-	fn integer(self) -> Self;
+	fn trunc(self) -> Self;
 
 	/// Returns the fractional part.
 	fn frac(self) -> Self;
 
-	/// Returns the smallest integer greater than or equal to a fixed number.
+	/// Returns the smallest integer greater than or equal to a number.
 	fn ceil(self) -> Self;
 
-	/// Returns the largest integer less than or equal to a fixed number.
+	/// Returns the largest integer less than or equal to a number.
 	fn floor(self) -> Self;
+
+	/// Returns the nearest integer to a number. Round half-way cases away from 0.0.
+	fn round(self) -> Self;
 
 	/// Computes the absolute value of self.
 	fn abs(self) -> Self;
@@ -177,27 +180,37 @@ macro_rules! implement_fixed {
 				int.checked_mul(Self::DIV).map(|inner| Self(inner))
 			}
 
-			fn integer(self) -> Self {
+			fn trunc(self) -> Self {
 				Self(self.0 / Self::DIV * Self::DIV)
 			}
 
 			fn frac(self) -> Self {
-				self.saturating_sub(self.integer())
+				self.saturating_sub(self.trunc()).abs()
 			}
 
 			fn ceil(self) -> Self {
 				if self.is_negative() {
-					self.integer()
+					self.trunc()
 				} else {
-					self.saturating_add(Self::one()).integer()
+					self.saturating_add(Self::one()).trunc()
 				}
 			}
 
 			fn floor(self) -> Self {
 				if self.is_negative() {
-					self.saturating_sub(Self::one()).integer()
+					self.saturating_sub(Self::one()).trunc()
 				} else {
-					self.integer()
+					self.trunc()
+				}
+			}
+
+			fn round(self) -> Self {
+				let n = self.frac() * 10.into();
+				if n < 5.into() {
+					self.trunc()
+				} else {
+					let extra: Self = self.0.signum().into();
+					(self + extra).trunc()
 				}
 			}
 
@@ -941,27 +954,27 @@ macro_rules! implement_fixed {
 			}
 
 			#[test]
-			fn integer_works() {
-				let n = $name::from_rational(5, 2).integer();
+			fn trunc_works() {
+				let n = $name::from_rational(5, 2).trunc();
 				assert_eq!(n, $name::from_integer(2));
 
-				let n = $name::from_rational(-5, 2).integer();
+				let n = $name::from_rational(-5, 2).trunc();
 				assert_eq!(n, $name::from_integer(-2));
 			}
 
 			#[test]
 			fn frac_works() {
 				let n = $name::from_rational(5, 2);
-				let i = n.integer();
+				let i = n.trunc();
 				let f = n.frac();
 
 				assert_eq!(n, i + f);
 
 				let n = $name::from_rational(-5, 2);
-				let i = n.integer();
+				let i = n.trunc();
 				let f = n.frac();
 
-				assert_eq!(n, i + f);
+				assert_eq!(n, i - f);
 
 				let n = $name::from_rational(5, 2)
 					.frac()
@@ -985,6 +998,15 @@ macro_rules! implement_fixed {
 
 				let n = $name::from_rational(-5, 2);
 				assert_eq!(n.floor(), (-3).into());
+			}
+
+			#[test]
+			fn round_works() {
+				// let n = $name::from_rational(5, 2);
+				// assert_eq!(n.round(), 3.into());
+
+				let n = $name::from_rational(-5, 2);
+				assert_eq!(n.round(), (-3).into());
 			}
 
 			#[test]
