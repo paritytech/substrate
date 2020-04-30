@@ -27,7 +27,7 @@ use names::{Generator, Name};
 use sc_service::config::{
 	WasmExecutionMethod, Role, OffchainWorkerConfig,
 	Configuration, DatabaseConfig, ExtTransport, KeystoreConfig, NetworkConfiguration,
-	NodeKeyConfig, PrometheusConfig, PruningMode, TelemetryEndpoints, TransactionPoolOptions,
+	NodeKeyConfig, PrometheusConfig, PruningMode, TelemetryEndpoints, TransactionPoolOptions, TaskType
 };
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::{ChainSpec, TracingReceiver};
@@ -385,7 +385,7 @@ pub trait CliConfiguration: Sized {
 	fn create_configuration<C: SubstrateCli>(
 		&self,
 		cli: &C,
-		task_executor: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>,
+		task_executor: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>, TaskType) + Send + Sync>,
 	) -> Result<Configuration> {
 		let is_dev = self.is_dev()?;
 		let chain_id = self.chain_id(is_dev)?;

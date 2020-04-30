@@ -139,10 +139,10 @@ pub fn run_benchmark(
 }
 
 macro_rules! matrix(
-	( $var:ident in $over:expr => $tt:expr,  $( $rest:tt )* ) => {
+	( $var:tt in $over:expr => $tt:expr,  $( $rest:tt )* ) => {
 		{
 			let mut res = Vec::<Box<dyn crate::core::BenchmarkDescription>>::new();
-			for $var in $over.iter() {
+			for $var in $over {
 				res.push(Box::new($tt));
 			}
 			res.extend(matrix!( $($rest)* ));

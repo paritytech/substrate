@@ -1965,7 +1965,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 					target: id,
 					request: r,
 				};
-				return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event));
+				self.pending_messages.push_back(event);
 			} else {
 				send_request(
 					&mut self.behaviour,
@@ -1982,7 +1982,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 					target: id,
 					request: r,
 				};
-				return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event));
+				self.pending_messages.push_back(event);
 			} else {
 				send_request(
 					&mut self.behaviour,
@@ -2000,7 +2000,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 					block_hash: r.block,
 					request: r.request,
 				};
-				return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event));
+				self.pending_messages.push_back(event);
 			} else {
 				send_request(
 					&mut self.behaviour,
@@ -2009,6 +2009,9 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 					&id,
 					GenericMessage::FinalityProofRequest(r))
 			}
+		}
+		if let Some(message) = self.pending_messages.pop_front() {
+			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(message));
 		}
 
 		let event = match self.behaviour.poll(cx, params) {
