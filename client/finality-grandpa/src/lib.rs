@@ -227,13 +227,13 @@ impl SharedVoterState {
 	fn reset(
 		&self,
 		voter_state: Box<dyn voter::VoterState<AuthorityId> + Sync + Send>,
-	) -> Result<(), Error> {
+	) -> Option<()> {
 		let mut shared_voter_state = self
 			.inner
-			.try_write_for(Duration::from_secs(1))
-			.ok_or_else(|| Error::VoterState("Failed to write to shared voter state".into()))?;
+			.try_write_for(Duration::from_secs(1))?;
+
 		*shared_voter_state = Some(voter_state);
-		Ok(())
+		Some(())
 	}
 
 	/// Get the inner `VoterState` instance.
@@ -291,8 +291,6 @@ pub enum Error {
 	Safety(String),
 	/// A timer failed to fire.
 	Timer(io::Error),
-	/// A voter state error.
-	VoterState(String),
 }
 
 impl From<GrandpaError> for Error {
@@ -921,8 +919,11 @@ where
 				);
 
 				// Repoint shared_voter_state so that the RPC endpoint can query the state
-				if let Err(err) = self.shared_voter_state.reset(voter.voter_state()) {
-					info!(target: "afg", "{:?}", err);
+				if let None = self.shared_voter_state.reset(voter.voter_state()) {
+					info!(target: "afg",
+						"Timed out trying to update shared GRANDPA voter state. \
+						RPC endpoints may return stale data."
+					);
 				}
 
 				self.voter = Box::pin(voter);

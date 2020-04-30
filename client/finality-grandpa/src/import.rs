@@ -668,7 +668,6 @@ where
 					Error::Client(error) => ConsensusError::ClientImport(error.to_string()),
 					Error::Safety(error) => ConsensusError::ClientImport(error),
 					Error::Timer(error) => ConsensusError::ClientImport(error.to_string()),
-					Error::VoterState(error) => ConsensusError::ClientImport(error.to_string()),
 				}.into());
 			},
 			Ok(_) => {
