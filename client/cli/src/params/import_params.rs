@@ -57,20 +57,6 @@ pub struct ImportParams {
 	#[structopt(flatten)]
 	pub execution_strategies: ExecutionStrategiesParams,
 
-	/// Select database backend to use.
-	#[structopt(
-		long,
-		alias = "db",
-		value_name = "DB",
-		case_insensitive = true,
-		default_value = "RocksDb"
-	)]
-	pub database: Database,
-
-	/// Limit the memory the database cache can use.
-	#[structopt(long = "db-cache", value_name = "MiB")]
-	pub database_cache_size: Option<usize>,
-
 	/// Specify the state cache size.
 	#[structopt(
 		long = "state-cache-size",
