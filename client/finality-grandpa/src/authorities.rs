@@ -921,4 +921,74 @@ mod tests {
 			}),
 		);
 	}
+
+	#[test]
+	fn maintains_authority_list_invariants() {
+		// empty authority lists are invalid
+		assert_eq!(AuthoritySet::<(), ()>::genesis(vec![]), None);
+		assert_eq!(
+			AuthoritySet::<(), ()>::new(vec![], 0, ForkTree::new(), Vec::new()),
+			None,
+		);
+
+		let invalid_authorities_weight = vec![
+			(AuthorityId::from_slice(&[1; 32]), 5),
+			(AuthorityId::from_slice(&[2; 32]), 0),
+		];
+
+		// authority weight of zero is invalid
+		assert_eq!(
+			AuthoritySet::<(), ()>::genesis(invalid_authorities_weight.clone()),
+			None
+		);
+		assert_eq!(
+			AuthoritySet::<(), ()>::new(
+				invalid_authorities_weight.clone(),
+				0,
+				ForkTree::new(),
+				Vec::new()
+			),
+			None,
+		);
+
+		let mut authority_set =
+			AuthoritySet::<(), u64>::genesis(vec![(AuthorityId::from_slice(&[1; 32]), 5)]).unwrap();
+
+		let invalid_change_empty_authorities = PendingChange {
+			next_authorities: vec![],
+			delay: 10,
+			canon_height: 5,
+			canon_hash: (),
+			delay_kind: DelayKind::Finalized,
+		};
+
+		// pending change contains an empty authority set
+		assert!(matches!(
+			authority_set.add_pending_change(
+				invalid_change_empty_authorities.clone(),
+				&static_is_descendent_of(false)
+			),
+			Err(Error::InvalidAuthoritySet)
+		));
+
+		let invalid_change_authorities_weight = PendingChange {
+			next_authorities: invalid_authorities_weight,
+			delay: 10,
+			canon_height: 5,
+			canon_hash: (),
+			delay_kind: DelayKind::Best {
+				median_last_finalized: 0,
+			},
+		};
+
+		// pending change contains an an authority set
+		// where one authority has weight of 0
+		assert!(matches!(
+			authority_set.add_pending_change(
+				invalid_change_authorities_weight,
+				&static_is_descendent_of(false)
+			),
+			Err(Error::InvalidAuthoritySet)
+		));
+	}
 }
