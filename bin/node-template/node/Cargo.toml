@@ -23,7 +23,7 @@ structopt = "0.3.8"
 sc-cli = { version = "0.8.0-dev", path = "../../../client/cli" }
 sp-core = { version = "2.0.0-dev", path = "../../../primitives/core" }
 sc-executor = { version = "0.8.0-dev", path = "../../../client/executor" }
-sc-service = { version = "0.8.0-dev", default-features = false, path = "../../../client/service" }
+sc-service = { version = "0.8.0-dev", path = "../../../client/service" }
 sp-inherents = { version = "2.0.0-dev", path = "../../../primitives/inherents" }
 sc-transaction-pool = { version = "2.0.0-dev", path = "../../../client/transaction-pool" }
 sp-transaction-pool = { version = "2.0.0-dev", path = "../../../primitives/transaction-pool" }
