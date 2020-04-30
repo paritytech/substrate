@@ -84,6 +84,9 @@ pub trait FixedPointNumber:
 		N: TryFrom<i128> + UniqueSaturatedInto<i128> + Copy + Bounded + Saturating
 	>(self, other: N) -> N;
 
+	/// Saturating division for integer type `N`.
+	fn saturating_div_int<N: Copy + TryFrom<i128> + UniqueSaturatedInto<i128> + Bounded>(self, other: N) -> N;
+
 	/// Performs a saturated multiplication and accumulate by unsigned number.
 	///
 	/// Returns a saturated `int + (self * int)`.
@@ -244,6 +247,19 @@ macro_rules! implement_fixed {
 				lhs.checked_div(rhs)
 					.and_then(|inner| inner.checked_div(Self::accuracy().into()))
 					.and_then(|n| TryInto::<N>::try_into(n).ok())
+			}
+
+			fn saturating_div_int<N>(self, other: N) -> N
+			where
+				N: Copy + TryFrom<i128> + UniqueSaturatedInto<i128> + Bounded
+			{
+				let signum = self.0.signum() as i128 * other.unique_saturated_into().signum();
+				self.checked_div_int(other)
+					.unwrap_or(if signum < 0 {
+						N::min_value()
+					} else {
+						N::max_value()
+					})
 			}
 
 			fn saturating_mul_int<N>(self, other: N) -> N
