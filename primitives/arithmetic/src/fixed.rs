@@ -52,27 +52,24 @@ pub trait FixedPointNumber:
 	/// Consumes `self` and returns the inner raw value.
 	fn into_inner(self) -> Self::Inner;
 
-	/// Creates self from an integer number.
+	/// Creates self from an integer number `int`.
 	/// 
 	/// Saturates towards `max` or `min` if `int` exceeds accuracy.
 	fn from_integer(int: Self::Inner) -> Self;
 
-	/// Creates self from an integer number.
+	/// Creates `self` from an integer number `int`.
 	/// 
 	/// Returns `None` if `int` exceeds accuracy.
 	fn checked_from_integer(int: Self::Inner) -> Option<Self>;
 
-	/// Creates self from a rational number. Equal to `n / d`.
+	/// Creates `self` from a rational number. Equal to `n / d`.
 	///
 	/// Saturates if `d == 0` or `n / d` exceeds accuracy.
 	fn from_rational(n: Self::Inner, d: Self::Inner) -> Self;
 
 	/// Checked multiplication for integer type `N`.
 	fn checked_mul_int<
-		N: TryFrom<i128> + UniqueSaturatedInto<i128> +
-		Copy + Bounded + Saturating +
-		Rem<N, Output=N> + Div<N, Output=N> + Mul<N, Output=N> +
-		Add<N, Output=N>,
+		N: TryFrom<i128> + UniqueSaturatedInto<i128> + Copy + Bounded + Saturating
 	>(self, other: N) -> Option<N>;
 
 	/// Checked division for integer type `N`.
@@ -80,20 +77,14 @@ pub trait FixedPointNumber:
 
 	/// Saturating multiplication for integer type `N`.
 	fn saturating_mul_int<
-		N: TryFrom<i128> + UniqueSaturatedInto<i128> +
-		Copy + Bounded + Saturating +
-		Rem<N, Output=N> + Div<N, Output=N> + Mul<N, Output=N> +
-		Add<N, Output=N>,
+		N: TryFrom<i128> + UniqueSaturatedInto<i128> + Copy + Bounded + Saturating
 	>(self, other: N) -> N;
 
 	/// Performs a saturated multiplication and accumulate by unsigned number.
 	///
 	/// Returns a saturated `int + (self * int)`.
 	fn saturating_mul_int_acc<
-		N: TryFrom<i128> + UniqueSaturatedInto<i128> +
-			Copy + Bounded + Saturating +
-			Rem<N, Output=N> + Div<N, Output=N> + Mul<N, Output=N> +
-			Add<N, Output=N>,
+		N: TryFrom<i128> + UniqueSaturatedInto<i128> + Copy + Bounded + Saturating
 	>(self, int: N) -> N;
 
 	/// Saturating absolute value. Returning MAX if `parts == Inner::MIN` instead of overflowing.
@@ -212,9 +203,7 @@ macro_rules! implement_fixed {
 			fn checked_mul_int<N>(self, int: N) -> Option<N>
 			where
 				N: TryFrom<i128> + UniqueSaturatedInto<i128> +
-				Copy + Bounded + Saturating +
-				ops::Rem<N, Output=N> + ops::Div<N, Output=N> + ops::Mul<N, Output=N> +
-				ops::Add<N, Output=N>,
+				Copy + Bounded + Saturating,
 			{
 				let rhs: i128 = int.unique_saturated_into();
 				let lhs: i128 = self.0.unique_saturated_into();
@@ -251,9 +240,7 @@ macro_rules! implement_fixed {
 			fn saturating_mul_int<N>(self, other: N) -> N
 			where
 				N: TryFrom<i128> + UniqueSaturatedInto<i128> +
-				Copy + Bounded + Saturating +
-				ops::Rem<N, Output=N> + ops::Div<N, Output=N> + ops::Mul<N, Output=N> +
-				ops::Add<N, Output=N>,
+				Copy + Bounded + Saturating,
 			{
 				self.checked_mul_int(other).unwrap_or_else(|| {
 					let signum = other.unique_saturated_into().signum() * self.0.signum() as i128;
@@ -272,9 +259,7 @@ macro_rules! implement_fixed {
 			fn saturating_mul_int_acc<N>(self, int: N) -> N
 				where
 					N: TryFrom<i128> + UniqueSaturatedInto<i128> +
-					Copy + Bounded + Saturating +
-					ops::Rem<N, Output=N> + ops::Div<N, Output=N> + ops::Mul<N, Output=N> +
-					ops::Add<N, Output=N>,
+					Copy + Bounded + Saturating,
 			{
 				self.saturating_mul_int(int).saturating_add(int)
 			}
