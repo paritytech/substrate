@@ -333,6 +333,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(test_benchmark_report_offence_im_online::<Test>());
 			assert_ok!(test_benchmark_report_offence_grandpa::<Test>());
+			assert_ok!(test_benchmark_report_offence_babe::<Test>());
 			assert_ok!(test_benchmark_on_initialize::<Test>());
 		});
 	}
