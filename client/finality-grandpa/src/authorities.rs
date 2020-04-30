@@ -503,8 +503,10 @@ mod tests {
 
 	#[test]
 	fn current_limit_filters_min() {
+		let current_authorities = vec![(AuthorityId::from_slice(&[1; 32]), 1)];
+
 		let mut authorities = AuthoritySet {
-			current_authorities: Vec::new(),
+			current_authorities: current_authorities.clone(),
 			set_id: 0,
 			pending_standard_changes: ForkTree::new(),
 			pending_forced_changes: Vec::new(),
@@ -512,7 +514,7 @@ mod tests {
 
 		let change = |height| {
 			PendingChange {
-				next_authorities: Vec::new(),
+				next_authorities: current_authorities.clone(),
 				delay: 0,
 				canon_height: height,
 				canon_hash: height.to_string(),
@@ -548,15 +550,17 @@ mod tests {
 
 	#[test]
 	fn changes_iterated_in_pre_order() {
+		let current_authorities = vec![(AuthorityId::from_slice(&[1; 32]), 1)];
+
 		let mut authorities = AuthoritySet {
-			current_authorities: Vec::new(),
+			current_authorities: current_authorities.clone(),
 			set_id: 0,
 			pending_standard_changes: ForkTree::new(),
 			pending_forced_changes: Vec::new(),
 		};
 
 		let change_a = PendingChange {
-			next_authorities: Vec::new(),
+			next_authorities: current_authorities.clone(),
 			delay: 10,
 			canon_height: 5,
 			canon_hash: "hash_a",
@@ -564,7 +568,7 @@ mod tests {
 		};
 
 		let change_b = PendingChange {
-			next_authorities: Vec::new(),
+			next_authorities: current_authorities.clone(),
 			delay: 0,
 			canon_height: 5,
 			canon_hash: "hash_b",
@@ -572,7 +576,7 @@ mod tests {
 		};
 
 		let change_c = PendingChange {
-			next_authorities: Vec::new(),
+			next_authorities: current_authorities.clone(),
 			delay: 5,
 			canon_height: 10,
 			canon_hash: "hash_c",
@@ -589,7 +593,7 @@ mod tests {
 
 		// forced changes are iterated last
 		let change_d = PendingChange {
-			next_authorities: Vec::new(),
+			next_authorities: current_authorities.clone(),
 			delay: 2,
 			canon_height: 1,
 			canon_hash: "hash_d",
@@ -597,7 +601,7 @@ mod tests {
 		};
 
 		let change_e = PendingChange {
-			next_authorities: Vec::new(),
+			next_authorities: current_authorities.clone(),
 			delay: 2,
 			canon_height: 0,
 			canon_hash: "hash_e",
