@@ -29,7 +29,7 @@ use std::{borrow::Cow, pin::Pin, task::{Context, Poll}};
 use crate::environment::SharedVoterSetState;
 use sp_finality_grandpa::{AuthorityList, GRANDPA_ENGINE_ID};
 use super::gossip::{self, GossipValidator};
-use super::{AuthorityId, VoterSet, Round, SetId};
+use super::{VoterSet, Round, SetId};
 
 #[derive(Debug)]
 pub(crate) enum Event {
@@ -212,7 +212,7 @@ impl sc_network_gossip::ValidatorContext<Block> for NoopContext {
 fn good_commit_leads_to_relay() {
 	let private = [Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let public = make_ids(&private[..]);
-	let voter_set = Arc::new(public.iter().cloned().collect::<VoterSet<AuthorityId>>());
+	let voter_set = Arc::new(VoterSet::new(public.iter().cloned()).unwrap());
 
 	let round = 1;
 	let set_id = 1;
@@ -360,7 +360,7 @@ fn bad_commit_leads_to_report() {
 	let _ = env_logger::try_init();
 	let private = [Ed25519Keyring::Alice, Ed25519Keyring::Bob, Ed25519Keyring::Charlie];
 	let public = make_ids(&private[..]);
-	let voter_set = Arc::new(public.iter().cloned().collect::<VoterSet<AuthorityId>>());
+	let voter_set = Arc::new(VoterSet::new(public.iter().cloned()).unwrap());
 
 	let round = 1;
 	let set_id = 1;
