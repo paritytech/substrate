@@ -66,6 +66,11 @@ pub trait FixedPointNumber:
 	/// Saturates if `d == 0` or `n / d` exceeds accuracy.
 	fn from_rational(n: Self::Inner, d: Self::Inner) -> Self;
 
+	/// Creates `self` from a rational number. Equal to `n / d`.
+	///
+	/// Returns `None` if `d == 0` or `n / d` exceeds accuracy.
+	fn checked_from_rational(n: Self::Inner, d: Self::Inner) -> Option<Self>;
+
 	/// Checked multiplication for integer type `N`.
 	fn checked_mul_int<
 		N: TryFrom<i128> + UniqueSaturatedInto<i128> + Copy + Bounded
@@ -175,7 +180,7 @@ macro_rules! implement_fixed {
 				self.0.is_negative()
 			}
 
-			fn from_rational(numerator: Self::Inner, denominator: Self::Inner) -> Self {
+			fn checked_from_rational(numerator: Self::Inner, denominator: Self::Inner) -> Option<Self> {
 				let signum = numerator.signum() * denominator.signum();
 
 				let numerator = numerator.checked_abs().map(|v| v as u128)
@@ -184,14 +189,20 @@ macro_rules! implement_fixed {
 					.unwrap_or(Self::Inner::max_value() as u128 + 1);
 
 				multiply_by_rational(numerator, Self::DIV as u128, denominator).ok()
-					.map(|r| {
+					.and_then(|r| {
 						if r > Self::Inner::max_value() as u128  && signum < 0 {
-							Self::min_value()
+							None
 						} else {
-							let r: Self::Inner = r.saturated_into(); 
-							Self(r.saturating_mul(signum))
+							let unsigned_inner: Self::Inner = r.try_into().ok()?;
+							let inner = unsigned_inner.checked_mul(signum)?;
+							Some(Self(inner))
 						}
 					})
+			}
+
+			fn from_rational(numerator: Self::Inner, denominator: Self::Inner) -> Self {
+				let signum = numerator.signum() * denominator.signum();
+				Self::checked_from_rational(numerator, denominator)
 					.unwrap_or(if signum < 0 {
 						Self::min_value()
 					} else {
