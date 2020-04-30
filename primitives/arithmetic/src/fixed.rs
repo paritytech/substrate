@@ -62,6 +62,15 @@ pub trait FixedPointNumber:
 	/// Returns the fractional part.
 	fn frac(self) -> Self;
 
+	/// Returns the smallest integer greater than or equal to a fixed number.
+	fn ceil(self) -> Self;
+
+	/// Returns the largest integer less than or equal to a fixed number.
+	fn floor(self) -> Self;
+
+	/// Computes the absolute value of self.
+	fn abs(self) -> Self;
+
 	/// Creates `self` from an integer number `int`.
 	/// 
 	/// Returns `None` if `int` exceeds accuracy.
@@ -169,11 +178,31 @@ macro_rules! implement_fixed {
 			}
 
 			fn integer(self) -> Self {
-				Self((self.0 / Self::DIV).saturating_mul(Self::DIV))
+				Self(self.0 / Self::DIV * Self::DIV)
 			}
 
 			fn frac(self) -> Self {
 				self.saturating_sub(self.integer())
+			}
+
+			fn ceil(self) -> Self {
+				if self.is_negative() {
+					self.integer()
+				} else {
+					self.saturating_add(Self::one()).integer()
+				}
+			}
+
+			fn floor(self) -> Self {
+				if self.is_negative() {
+					self.saturating_sub(Self::one()).integer()
+				} else {
+					self.integer()
+				}
+			}
+
+			fn abs(self) -> Self {
+				Self(self.0.checked_abs().unwrap_or(Self::Inner::max_value()))
 			}
 
 			fn zero() -> Self {
@@ -935,9 +964,27 @@ macro_rules! implement_fixed {
 				assert_eq!(n, i + f);
 
 				let n = $name::from_rational(5, 2)
-					.saturating_sub(2.into())
+					.frac()
 					.saturating_mul(10.into());
 				assert_eq!(n, 5.into());
+			}
+
+			#[test]
+			fn ceil_works() {
+				let n = $name::from_rational(5, 2);
+				assert_eq!(n.ceil(), 3.into());
+
+				let n = $name::from_rational(-5, 2);
+				assert_eq!(n.ceil(), (-2).into());
+			}
+
+			#[test]
+			fn floor_works() {
+				let n = $name::from_rational(5, 2);
+				assert_eq!(n.floor(), 2.into());
+
+				let n = $name::from_rational(-5, 2);
+				assert_eq!(n.floor(), (-3).into());
 			}
 
 			#[test]
