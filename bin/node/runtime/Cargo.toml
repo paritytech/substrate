@@ -40,6 +40,7 @@ frame-executive = { version = "2.0.0-dev", default-features = false, path = "../
 frame-benchmarking = { version = "2.0.0-dev", default-features = false, path = "../../../frame/benchmarking", optional = true }
 frame-support = { version = "2.0.0-dev", default-features = false, path = "../../../frame/support" }
 frame-system = { version = "2.0.0-dev", default-features = false, path = "../../../frame/system" }
+frame-system-benchmarking = { version = "2.0.0-dev", default-features = false, path = "../../../frame/system/benchmarking", optional = true }
 frame-system-rpc-runtime-api = { version = "2.0.0-dev", default-features = false, path = "../../../frame/system/rpc/runtime-api/" }
 pallet-authority-discovery = { version = "2.0.0-dev", default-features = false, path = "../../../frame/authority-discovery" }
 pallet-authorship = { version = "2.0.0-dev", default-features = false, path = "../../../frame/authorship" }
@@ -153,7 +154,7 @@ runtime-benchmarks = [
 	"pallet-treasury/runtime-benchmarks",
 	"pallet-utility/runtime-benchmarks",
 	"pallet-vesting/runtime-benchmarks",
-	"pallet-collective/runtime-benchmarks",
 	"pallet-offences-benchmarking",
 	"pallet-session-benchmarking",
+	"frame-system-benchmarking",
 ]

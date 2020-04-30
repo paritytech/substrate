@@ -61,14 +61,14 @@ impl RoundState {
 
 		Ok(Self {
 			round: round.try_into()?,
-			total_weight: round_state.total_weight.try_into()?,
-			threshold_weight: round_state.threshold_weight.try_into()?,
+			total_weight: round_state.total_weight.get().try_into()?,
+			threshold_weight: round_state.threshold_weight.get().try_into()?,
 			prevotes: Prevotes {
-				current_weight: round_state.prevote_current_weight.try_into()?,
+				current_weight: round_state.prevote_current_weight.0.try_into()?,
 				missing: missing_prevotes,
 			},
 			precommits: Precommits {
-				current_weight: round_state.precommit_current_weight.try_into()?,
+				current_weight: round_state.precommit_current_weight.0.try_into()?,
 				missing: missing_precommits,
 			},
 		})
@@ -102,7 +102,6 @@ impl ReportedRoundStates {
 
 		let current_voters: HashSet<AuthorityId> = authority_set
 			.current_authorities()
-			.voters()
 			.iter()
 			.map(|p| p.0.clone())
 			.collect();

@@ -17,7 +17,7 @@
 //! A manual sealing engine: the engine listens for rpc calls to seal blocks and create forks.
 //! This is suitable for a testing environment.
 
-use futures::prelude::*;
+use futures::{prelude::*, future::BoxFuture};
 use sp_consensus::{
 	Environment, Proposer, ForkChoiceStrategy, BlockImportParams, BlockOrigin, SelectChain,
 	import_queue::{BasicQueue, CacheKeyId, Verifier, BoxBlockImport},
@@ -67,7 +67,8 @@ impl<B: BlockT> Verifier<B> for ManualSealVerifier {
 
 /// Instantiate the import queue for the manual seal consensus engine.
 pub fn import_queue<Block, B>(
-	block_import: BoxBlockImport<Block, TransactionFor<B, Block>>
+	block_import: BoxBlockImport<Block, TransactionFor<B, Block>>,
+	spawner: impl Fn(BoxFuture<'static, ()>) -> ()
 ) -> BasicQueue<Block, TransactionFor<B, Block>>
 	where
 		Block: BlockT,
@@ -78,6 +79,7 @@ pub fn import_queue<Block, B>(
 		Box::new(block_import),
 		None,
 		None,
+		spawner,
 	)
 }
 
@@ -229,7 +231,7 @@ mod tests {
 			.map(move |_| {
 				// we're only going to submit one tx so this fn will only be called once.
 				let mut_sender =  Arc::get_mut(&mut sender).unwrap();
-				let sender = std::mem::replace(mut_sender, None);
+				let sender = std::mem::take(mut_sender);
 				EngineCommand::SealNewBlock {
 					create_empty: false,
 					finalize: true,

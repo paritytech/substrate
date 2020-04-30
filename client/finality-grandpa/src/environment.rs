@@ -28,8 +28,7 @@ use parking_lot::RwLock;
 use sp_blockchain::{HeaderBackend, Error as ClientError, HeaderMetadata};
 use std::marker::PhantomData;
 
-use sc_client_api::{backend::Backend, utils::is_descendent_of};
-use sc_client::apply_aux;
+use sc_client_api::{backend::{Backend, apply_aux}, utils::is_descendent_of};
 use finality_grandpa::{
 	BlockNumberOps, Equivocation, Error as GrandpaError, round::State as RoundState,
 	voter, voter_set::VoterSet,

@@ -31,10 +31,7 @@ use rpc::{
 };
 
 use sc_rpc_api::Subscriptions;
-use sc_client::{
-	self, BlockchainEvents,
-	light::{fetcher::Fetcher, blockchain::RemoteBlockchain},
-};
+use sc_client_api::{BlockchainEvents, light::{Fetcher, RemoteBlockchain}};
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use sp_rpc::{number::NumberOrHex, list::ListOrValue};
 use sp_runtime::{

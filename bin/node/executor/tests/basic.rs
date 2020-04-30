@@ -18,7 +18,7 @@ use codec::{Encode, Decode, Joiner};
 use frame_support::{
 	StorageValue, StorageMap,
 	traits::Currency,
-	weights::{GetDispatchInfo, DispatchInfo, DispatchClass, Pays},
+	weights::{GetDispatchInfo, DispatchInfo, DispatchClass},
 };
 use sp_core::{
 	NeverNativeValue, map, traits::Externalities, storage::{well_known_keys, Storage},
@@ -337,8 +337,9 @@ fn full_native_block_import_works() {
 		let events = vec![
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
+				// timestamp set call with weight 9_000_000 + 2 read + 1 write
 				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 0, class: DispatchClass::Mandatory, ..Default::default() }
+					DispatchInfo { weight: 9_000_000 + 2 * 60_000_000 + 1 * 200_000_000, class: DispatchClass::Mandatory, ..Default::default() }
 				)),
 				topics: vec![],
 			},
@@ -390,8 +391,9 @@ fn full_native_block_import_works() {
 		let events = vec![
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
+				// timestamp set call with weight 9_000_000 + 2 read + 1 write
 				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 0, class: DispatchClass::Mandatory, pays_fee: Pays::Yes }
+					DispatchInfo { weight: 9_000_000 + 2 * 60_000_000 + 1 * 200_000_000, class: DispatchClass::Mandatory, ..Default::default() }
 				)),
 				topics: vec![],
 			},

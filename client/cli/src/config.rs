@@ -16,18 +16,19 @@
 
 //! Configuration trait for a CLI based on substrate
 
+use crate::arg_enums::Database;
 use crate::error::Result;
 use crate::{
-	init_logger, ImportParams, KeystoreParams, NetworkParams, NodeKeyParams,
+	init_logger, DatabaseParams, ImportParams, KeystoreParams, NetworkParams, NodeKeyParams,
 	OffchainWorkerParams, PruningParams, SharedParams, SubstrateCli,
 };
-use crate::arg_enums::Database;
 use app_dirs::{AppDataType, AppInfo};
 use names::{Generator, Name};
+use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::config::{
-	Configuration, DatabaseConfig, ExecutionStrategies, ExtTransport, KeystoreConfig,
-	NetworkConfiguration, NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode,
-	Role, TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
+	Configuration, DatabaseConfig, ExtTransport, KeystoreConfig, NetworkConfiguration,
+	NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode, Role, TaskType,
+	TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
 };
 use sc_service::{ChainSpec, TracingReceiver};
 use std::future::Future;
@@ -74,8 +75,12 @@ pub trait CliConfiguration: Sized {
 
 	/// Get the NodeKeyParams for this object
 	fn node_key_params(&self) -> Option<&NodeKeyParams> {
-		self.network_params()
-			.map(|x| &x.node_key_params)
+		self.network_params().map(|x| &x.node_key_params)
+	}
+
+	/// Get the DatabaseParams for this object
+	fn database_params(&self) -> Option<&DatabaseParams> {
+		self.import_params().map(|x| &x.database_params)
 	}
 
 	/// Get the base path of the configuration (if any)
@@ -151,33 +156,39 @@ pub trait CliConfiguration: Sized {
 
 	/// Get the database cache size.
 	///
-	/// By default this is retrieved from `ImportParams` if it is available. Otherwise its `None`.
+	/// By default this is retrieved from `DatabaseParams` if it is available. Otherwise its `None`.
 	fn database_cache_size(&self) -> Result<Option<usize>> {
-		Ok(self.import_params()
+		Ok(self.database_params()
 			.map(|x| x.database_cache_size())
 			.unwrap_or(Default::default()))
 	}
 
 	/// Get the database backend variant.
 	///
-	/// By default this is retrieved from `ImportParams` if it is available. Otherwise its `None`.
+	/// By default this is retrieved from `DatabaseParams` if it is available. Otherwise its `None`.
 	fn database(&self) -> Result<Option<Database>> {
-		Ok(self.import_params().map(|x| x.database()))
+		Ok(self.database_params().and_then(|x| x.database()))
 	}
 
-	/// Get the database configuration.
-	///
-	/// By default this is retrieved from `SharedParams`
-	fn database_config(&self,
+	/// Get the database configuration object for the parameters provided
+	fn database_config(
+		&self,
 		base_path: &PathBuf,
 		cache_size: usize,
 		database: Database,
 	) -> Result<DatabaseConfig> {
-		Ok(self.shared_params().database_config(
-			base_path,
-			cache_size,
-			database,
-		))
+		Ok(match database {
+			Database::RocksDb => DatabaseConfig::RocksDb {
+				path: base_path.join("db"),
+				cache_size,
+			},
+			Database::SubDb => DatabaseConfig::SubDb {
+				path: base_path.join("subdb"),
+			},
+			Database::ParityDb => DatabaseConfig::ParityDb {
+				path: base_path.join("paritydb"),
+			},
+		})
 	}
 
 	/// Get the state cache size.
@@ -200,9 +211,9 @@ pub trait CliConfiguration: Sized {
 	///
 	/// By default this is retrieved from `PruningMode` if it is available. Otherwise its
 	/// `PruningMode::default()`.
-	fn pruning(&self, is_dev: bool, role: &Role) -> Result<PruningMode> {
+	fn pruning(&self, unsafe_pruning: bool, role: &Role) -> Result<PruningMode> {
 		self.pruning_params()
-			.map(|x| x.pruning(is_dev, role))
+			.map(|x| x.pruning(unsafe_pruning, role))
 			.unwrap_or(Ok(Default::default()))
 	}
 
@@ -312,7 +323,7 @@ pub trait CliConfiguration: Sized {
 	fn offchain_worker(&self, role: &Role) -> Result<OffchainWorkerConfig> {
 		self.offchain_worker_params()
 			.map(|x| x.offchain_worker(role))
-			.unwrap_or_else(|| { Ok(OffchainWorkerConfig::default()) })
+			.unwrap_or_else(|| Ok(OffchainWorkerConfig::default()))
 	}
 
 	/// Returns `Ok(true)` if authoring should be forced
@@ -384,7 +395,7 @@ pub trait CliConfiguration: Sized {
 	fn create_configuration<C: SubstrateCli>(
 		&self,
 		cli: &C,
-		task_executor: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>,
+		task_executor: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>, TaskType) + Send + Sync>,
 	) -> Result<Configuration> {
 		let is_dev = self.is_dev()?;
 		let chain_id = self.chain_id(is_dev)?;
@@ -411,6 +422,11 @@ pub trait CliConfiguration: Sized {
 		let role = self.role(is_dev)?;
 		let max_runtime_instances = self.max_runtime_instances()?.unwrap_or(8);
 
+		let unsafe_pruning = self
+			.import_params()
+			.map(|p| p.unsafe_pruning)
+			.unwrap_or(false);
+
 		Ok(Configuration {
 			impl_name: C::impl_name(),
 			impl_version: C::impl_version(),
@@ -428,7 +444,7 @@ pub trait CliConfiguration: Sized {
 			database: self.database_config(&config_dir, database_cache_size, database)?,
 			state_cache_size: self.state_cache_size()?,
 			state_cache_child_ratio: self.state_cache_child_ratio()?,
-			pruning: self.pruning(is_dev, &role)?,
+			pruning: self.pruning(unsafe_pruning, &role)?,
 			wasm_method: self.wasm_method()?,
 			execution_strategies: self.execution_strategies(is_dev)?,
 			rpc_http: self.rpc_http()?,
