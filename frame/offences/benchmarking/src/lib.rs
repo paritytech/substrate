@@ -50,7 +50,20 @@ const MAX_DEFERRED_OFFENCES: u32 = 100;
 pub struct Module<T: Trait>(Offences<T>);
 
 pub trait Trait:
-	SessionTrait + StakingTrait + OffencesTrait + ImOnlineTrait + HistoricalTrait + BalancesTrait {}
+	SessionTrait
+	+ StakingTrait
+	+ OffencesTrait
+	+ ImOnlineTrait
+	+ HistoricalTrait
+	+ BalancesTrait
+	+ IdTupleConvert<Self>
+{}
+
+/// A helper trait to make sure we can convert `IdentificationTuple` coming from historical
+/// and the one required by offences.
+pub trait IdTupleConvert<T: HistoricalTrait + OffencesTrait> {
+	fn convert(id: IdentificationTuple<T>) -> <T as OffencesTrait>::IdentificationTuple;
+}
 
 fn create_offender<T: Trait>(n: u32, nominators: u32) -> Result<T::AccountId, &'static str> {
 	let stash: T::AccountId = account("stash", n, SEED);
@@ -145,7 +158,7 @@ benchmarks! {
 		let r in 1 .. MAX_REPORTERS;
 		// we skip 1 offender, because in such case there is no slashing
 		let o in 2 .. MAX_OFFENDERS;
-		let n in 0 .. MAX_NOMINATORS;
+		let n in 0 .. MAX_NOMINATORS.min(MAX_NOMINATIONS as u32);
 
 		// Make r reporters
 		let mut reporters = vec![];
@@ -183,32 +196,41 @@ benchmarks! {
 	}
 
 	on_initialize {
-		let n in 1 .. MAX_NOMINATIONS as u32;
 		let d in 1 .. MAX_DEFERRED_OFFENCES;
-
-
-		pallet_staking::benchmarking::create_validator_with_nominators::<T>(n, MAX_NOMINATIONS as u32)?;
+		let o = 10;
+		let n = 100;
 
 		Staking::<T>::put_election_status(ElectionStatus::Closed);
 
 		let mut deferred_offences = vec![];
+		let offenders = make_offenders::<T>(o, n).expect("failed to create offenders");
+		let offence_details = offenders.into_iter()
+			.map(|offender| sp_staking::offence::OffenceDetails {
+				offender: T::convert(offender),
+				reporters: vec![],
+			})
+			.collect::<Vec<_>>();
 
-
-		// TODO [ToDr] add a bunch of concurrent_offenders to deferred_offences
-		// Most likely creaate offenders and convert them to OffenceDetails (reporters are not
-		// relevant)
 		for i in 0 .. d {
-			deferred_offences.push((vec![], vec![], 0u32));
+			let fractions = offence_details.iter()
+				.map(|_| Perbill::from_percent(100 * (i + 1) / MAX_DEFERRED_OFFENCES))
+				.collect::<Vec<_>>();
+			deferred_offences.push((offence_details.clone(), fractions.clone(), 0u32));
 		}
 
 		Offences::<T>::set_deferred_offences(deferred_offences);
-
+		assert!(!Offences::<T>::deferred_offences().is_empty());
 	}: {
 		Offences::<T>::on_initialize(0.into());
 	}
 	verify {
 		// make sure that all deferred offences were reported with Ok status.
 		assert!(Offences::<T>::deferred_offences().is_empty());
+		assert_eq!(
+			System::<T>::event_count(), d * (0
+			+ o // offenders slashed
+			+ o * n // nominators slashed
+		));
 	}
 }
 
@@ -217,6 +239,12 @@ mod tests {
 	use super::*;
 	use crate::mock::{new_test_ext, Test};
 	use frame_support::assert_ok;
+
+	impl IdTupleConvert<Test> for Test {
+		fn convert(id: IdentificationTuple<Test>) -> <Test as OffencesTrait>::IdentificationTuple {
+			id
+		}
+	}
 
 	#[test]
 	fn test_benchmarks() {
