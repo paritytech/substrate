@@ -1074,27 +1074,56 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		let mut offchain_overlay = OffchainOverlayedChanges::default();
 		let mut cache = StorageTransactionCache::default();
-		let mut ext = Ext::new(
-			&mut overlay,
-			&mut offchain_overlay,
-			&mut cache,
-			backend,
-			changes_trie::disabled_state::<_, u64>(),
-			None,
-		);
+		{
+			let mut ext = Ext::new(
+				&mut overlay,
+				&mut offchain_overlay,
+				&mut cache,
+				backend,
+				changes_trie::disabled_state::<_, u64>(),
+				None,
+			);
 
-		ext.storage_append(key.clone(), reference_data[0].encode());
-		assert_eq!(
-			ext.storage(key.as_slice()),
-			Some(vec![reference_data[0].clone()].encode()),
-		);
-		for i in reference_data.iter().skip(1) {
-			ext.storage_append(key.clone(), i.encode());
+			ext.storage_append(key.clone(), reference_data[0].encode());
+			assert_eq!(
+				ext.storage(key.as_slice()),
+				Some(vec![reference_data[0].clone()].encode()),
+			);
 		}
-		assert_eq!(
-			ext.storage(key.as_slice()),
-			Some(reference_data.encode()),
-		);
+		overlay.commit_prospective();
+		{
+			let mut ext = Ext::new(
+				&mut overlay,
+				&mut offchain_overlay,
+				&mut cache,
+				backend,
+				changes_trie::disabled_state::<_, u64>(),
+				None,
+			);
+
+			for i in reference_data.iter().skip(1) {
+				ext.storage_append(key.clone(), i.encode());
+			}
+			assert_eq!(
+				ext.storage(key.as_slice()),
+				Some(reference_data.encode()),
+			);
+		}
+		overlay.discard_prospective();
+		{
+			let ext = Ext::new(
+				&mut overlay,
+				&mut offchain_overlay,
+				&mut cache,
+				backend,
+				changes_trie::disabled_state::<_, u64>(),
+				None,
+			);
+			assert_eq!(
+				ext.storage(key.as_slice()),
+				Some(vec![reference_data[0].clone()].encode()),
+			);
+		}
 	}
 
 
