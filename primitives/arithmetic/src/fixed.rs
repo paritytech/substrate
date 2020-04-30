@@ -193,8 +193,9 @@ macro_rules! implement_fixed {
 
 				multiply_by_rational(numerator, Self::DIV as u128, denominator).ok()
 					.and_then(|r| {
-						if r > Self::Inner::max_value() as u128  && signum < 0 {
-							None
+						if r == Self::Inner::max_value() as u128 + 1 && signum < 0 {
+							let inner: Self::Inner = Self::Inner::min_value();
+							Some(Self(inner))
 						} else {
 							let unsigned_inner: Self::Inner = r.try_into().ok()?;
 							let inner = unsigned_inner.checked_mul(signum)?;
@@ -204,12 +205,14 @@ macro_rules! implement_fixed {
 			}
 
 			fn from_rational(numerator: Self::Inner, denominator: Self::Inner) -> Self {
-				let signum = numerator.signum() * denominator.signum();
 				Self::checked_from_rational(numerator, denominator)
-					.unwrap_or(if signum < 0 {
-						Self::min_value()
-					} else {
-						Self::max_value()
+					.unwrap_or_else(|| {
+						let signum = numerator.signum() * denominator.signum();
+						if signum < 0 {
+							Self::min_value()
+						} else {
+							Self::max_value()
+						}
 					})
 			}
 
@@ -219,6 +222,7 @@ macro_rules! implement_fixed {
 			{
 				let rhs: i128 = int.try_into().ok()?;
 				let lhs: i128 = self.0.try_into().ok()?;
+
 				let signum = rhs.signum() * lhs.signum();
 
 				let lhs = lhs.checked_abs().map(|v| v as u128)
@@ -228,8 +232,9 @@ macro_rules! implement_fixed {
 
 				multiply_by_rational(lhs, rhs, Self::DIV as u128).ok()
 					.and_then(|r| {
-						if r > i128::max_value() as u128 && signum < 0 {
-							None
+						if r == i128::max_value() as u128 + 1 && signum < 0 {
+							let n: i128 = i128::min_value();
+							n.try_into().ok()
 						} else {
 							let n: i128 = r.try_into().ok()?;
 							n.checked_mul(signum)?.try_into().ok()
