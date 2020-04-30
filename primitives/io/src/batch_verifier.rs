@@ -107,7 +107,28 @@ impl BatchVerifier {
 	) -> bool {
 		if self.invalid.load(AtomicOrdering::Relaxed) { return false; }
 		self.sr25519_items.push(Sr25519BatchItem { signature, pub_key, message });
+
+		if self.sr25519_items.len() >= 128 {
+			let items = std::mem::replace(&mut self.sr25519_items, vec![]);
+			if self.spawn_verification_task(move || Self::verify_sr25519_batch(items)).is_err() {
+				log::debug!(
+					target: "runtime",
+					"Batch-verification returns false because failed to spawn background task.",
+				);
+	
+				return false;
+			}
+		}
+
 		true
+	}
+
+	fn verify_sr25519_batch(items: Vec<Sr25519BatchItem>) -> bool {
+		let messages = items.iter().map(|item| &item.message[..]).collect();
+		let signatures = items.iter().map(|item| &item.signature).collect();
+		let pub_keys = items.iter().map(|item| &item.pub_key).collect();
+
+		sr25519::verify_batch(messages, signatures, pub_keys)
 	}
 
 	/// Verify all previously pushed signatures since last call and return
@@ -124,17 +145,9 @@ impl BatchVerifier {
 			self.sr25519_items.len(),
 		);
 
-		let messages = self.sr25519_items.iter().map(|item| &item.message[..]).collect();
-		let signatures = self.sr25519_items.iter().map(|item| &item.signature).collect();
-		let pub_keys = self.sr25519_items.iter().map(|item| &item.pub_key).collect();
-
-		if !sr25519::verify_batch(messages, signatures, pub_keys) {
-			self.sr25519_items.clear();
-
+		if !Self::verify_sr25519_batch(std::mem::replace(&mut self.sr25519_items, vec![])) {
 			return false;
 		}
-
-		self.sr25519_items.clear();
 
 		if pending.len() > 0 {
 			let (sender, receiver) = std::sync::mpsc::channel();
