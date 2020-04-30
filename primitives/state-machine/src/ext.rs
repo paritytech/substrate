@@ -423,15 +423,10 @@ where
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		self.mark_dirty();
 
-		let current_value = self.overlay
-			.value_mut(&key)
-			.map(|v| v.take())
-			.unwrap_or_else(|| self.backend.storage(&key).expect(EXT_NOT_ALLOWED_TO_FAIL))
-			.unwrap_or_default();
-
+		let storage_value = self.storage(&key).unwrap_or_default();
 		self.overlay.set_storage(
 			key,
-			Some(append_to_storage(current_value, value).expect(EXT_NOT_ALLOWED_TO_FAIL)),
+			Some(append_to_storage(storage_value, value).expect(EXT_NOT_ALLOWED_TO_FAIL)),
 		);
 	}
 
