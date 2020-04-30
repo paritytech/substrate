@@ -116,10 +116,14 @@ impl<H, N> AuthoritySet<H, N>
 where H: PartialEq,
 	  N: Ord,
 {
+	// authority sets must be non-empty and all weights must be greater than 0
+	fn invalid_authority_list(authorities: &AuthorityList) -> bool {
+		authorities.is_empty() || authorities.iter().any(|(_, w)| *w == 0)
+	}
+
 	/// Get a genesis set with given authorities.
 	pub(crate) fn genesis(initial: AuthorityList) -> Option<Self> {
-		// authority sets must be non-empty and all weights must be greater than 0
-		if initial.is_empty() || initial.iter().any(|(_, w)| *w == 0) {
+		if Self::invalid_authority_list(&initial) {
 			return None;
 		}
 
@@ -137,8 +141,7 @@ where H: PartialEq,
 		pending_standard_changes: ForkTree<H, N, PendingChange<H, N>>,
 		pending_forced_changes: Vec<PendingChange<H, N>>,
 	) -> Option<Self> {
-		// authority sets must be non-empty and all weights must be greater than 0
-		if authorities.is_empty() || authorities.iter().any(|(_, w)| *w == 0) {
+		if Self::invalid_authority_list(&authorities) {
 			return None;
 		}
 
@@ -243,9 +246,7 @@ where
 		F: Fn(&H, &H) -> Result<bool, E>,
 		E: std::error::Error,
 	{
-		if pending.next_authorities.is_empty() ||
-			pending.next_authorities.iter().any(|(_, w)| *w == 0)
-		{
+		if Self::invalid_authority_list(&pending.next_authorities) {
 			return Err(Error::InvalidAuthoritySet);
 		}
 
