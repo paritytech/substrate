@@ -69,7 +69,7 @@ pub trait FixedPointNumber:
 
 	/// Checked multiplication for integer type `N`.
 	fn checked_mul_int<
-		N: TryFrom<i128> + UniqueSaturatedInto<i128> + Copy + Bounded + Saturating
+		N: TryFrom<i128> + UniqueSaturatedInto<i128> + Copy + Bounded
 	>(self, other: N) -> Option<N>;
 
 	/// Checked division for integer type `N`.
@@ -203,7 +203,7 @@ macro_rules! implement_fixed {
 			fn checked_mul_int<N>(self, int: N) -> Option<N>
 			where
 				N: TryFrom<i128> + UniqueSaturatedInto<i128> +
-				Copy + Bounded + Saturating,
+				Copy + Bounded,
 			{
 				let rhs: i128 = int.unique_saturated_into();
 				let lhs: i128 = self.0.unique_saturated_into();
