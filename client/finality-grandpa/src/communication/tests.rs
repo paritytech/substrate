@@ -146,7 +146,7 @@ fn voter_set_state() -> SharedVoterSetState<Block> {
 
 	let state = RoundState::genesis((H256::zero(), 0));
 	let base = state.prevote_ghost.unwrap();
-	let voters = AuthoritySet::genesis(Vec::new());
+	let voters = AuthoritySet::genesis(Vec::new()).unwrap();
 	let set_state = VoterSetState::live(
 		0,
 		&voters,

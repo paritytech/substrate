@@ -1618,7 +1618,7 @@ mod tests {
 		use crate::environment::VoterSetState;
 
 		let base = (H256::zero(), 0);
-		let voters = AuthoritySet::genesis(Vec::new());
+		let voters = AuthoritySet::genesis(Vec::new()).unwrap();
 		let set_state = VoterSetState::live(
 			0,
 			&voters,

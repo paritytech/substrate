@@ -506,12 +506,12 @@ mod test {
 
 		assert_eq!(
 			*authority_set.inner().read(),
-			AuthoritySet {
-				current_authorities: authorities.clone(),
-				pending_standard_changes: ForkTree::new(),
-				pending_forced_changes: Vec::new(),
+			AuthoritySet::new(
+				authorities.clone(),
 				set_id,
-			},
+				ForkTree::new(),
+				Vec::new(),
+			).unwrap(),
 		);
 
 		let mut current_rounds = CurrentRounds::new();
@@ -550,12 +550,12 @@ mod test {
 		};
 
 		{
-			let authority_set = AuthoritySet::<H256, u64> {
-				current_authorities: authorities.clone(),
-				pending_standard_changes: ForkTree::new(),
-				pending_forced_changes: Vec::new(),
+			let authority_set = AuthoritySet::<H256, u64>::new(
+				authorities.clone(),
 				set_id,
-			};
+				ForkTree::new(),
+				Vec::new(),
+			).unwrap();
 
 			let voter_set_state = V1VoterSetState::Live(round_number, round_state.clone());
 
@@ -596,12 +596,12 @@ mod test {
 
 		assert_eq!(
 			*authority_set.inner().read(),
-			AuthoritySet {
-				current_authorities: authorities.clone(),
-				pending_standard_changes: ForkTree::new(),
-				pending_forced_changes: Vec::new(),
+			AuthoritySet::new(
+				authorities.clone(),
 				set_id,
-			},
+				ForkTree::new(),
+				Vec::new(),
+			).unwrap(),
 		);
 
 		let mut current_rounds = CurrentRounds::new();

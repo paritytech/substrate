@@ -30,7 +30,7 @@ use std::ops::Add;
 use std::sync::Arc;
 
 /// Error type returned on operations on the `AuthoritySet`.
-#[derive(derive_more::Display, derive_more::From)]
+#[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error<E> {
 	#[display("Invalid authority set, either empty or with an authority weight set to 0.")]
 	InvalidAuthoritySet,
@@ -735,7 +735,7 @@ mod tests {
 		// trying to finalize past `change_c` without finalizing `change_a` first
 		assert!(matches!(
 			authorities.apply_standard_changes("hash_d", 40, &is_descendent_of, false),
-			Err(fork_tree::Error::UnfinalizedAncestor)
+			Err(Error::ForkTree(fork_tree::Error::UnfinalizedAncestor))
 		));
 
 		let status = authorities.apply_standard_changes(
