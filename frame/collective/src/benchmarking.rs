@@ -245,7 +245,7 @@ benchmarks_instance! {
 		assert_eq!(voting.nays.len(), 1);
 	}
 
-	finish_disapproved {
+	close_early_disapproved {
 		let m in 5 .. T::MaxMembers::get();
 		let p in 1 .. T::MaxProposals::get();
 		let b in 1 .. MAX_BYTES;
@@ -300,7 +300,7 @@ benchmarks_instance! {
 		assert_last_event::<T, I>(RawEvent::Disapproved(last_hash).into());
 	}
 
-	finish_approved {
+	close_early_approved {
 		let m in 5 .. T::MaxMembers::get();
 		let p in 1 .. T::MaxProposals::get();
 		let b in 1 .. MAX_BYTES;
@@ -405,7 +405,6 @@ benchmarks_instance! {
 		assert_last_event::<T, I>(RawEvent::Disapproved(last_hash).into());
 	}
 
-
 	close_approved {
 		let m in 5 .. T::MaxMembers::get();
 		let p in 1 .. T::MaxProposals::get();
@@ -468,8 +467,8 @@ mod tests {
 			assert_ok!(test_benchmark_propose_execute::<Test>());
 			assert_ok!(test_benchmark_propose_proposed::<Test>());
 			assert_ok!(test_benchmark_vote_insert::<Test>());
-			assert_ok!(test_benchmark_finish_disapproved::<Test>());
-			assert_ok!(test_benchmark_finish_approved::<Test>());
+			assert_ok!(test_benchmark_close_early_disapproved::<Test>());
+			assert_ok!(test_benchmark_close_early_approved::<Test>());
 			assert_ok!(test_benchmark_close_disapproved::<Test>());
 			assert_ok!(test_benchmark_close_approved::<Test>());
 		});
