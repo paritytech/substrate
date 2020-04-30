@@ -138,9 +138,6 @@ check-line-width:
   interruptible:                   true
   allow_failure:                   true
 
-
-
-
 check-polkadot-companion-build:
   stage:                           build
   <<:                              *docker-env
@@ -148,7 +145,6 @@ check-polkadot-companion-build:
     - ./.maintain/gitlab/check_polkadot_companion_build.sh
   interruptible:                   true
   allow_failure:                   true
-
 
 cargo-audit:
   stage:                           test
@@ -181,7 +177,6 @@ cargo-check-benches:
     - BUILD_DUMMY_WASM_BINARY=1 time cargo +nightly check --benches --all
     - sccache -s
 
-
 cargo-check-subkey:
   stage:                           test
   <<:                              *docker-env
@@ -191,7 +186,6 @@ cargo-check-subkey:
     - cd ./bin/utils/subkey
     - BUILD_DUMMY_WASM_BINARY=1 time cargo check --release
     - sccache -s
-
 
 test-linux-stable:                 &test-linux
   stage:                           test
@@ -361,6 +355,14 @@ test-full-crypto-feature:
     - time cargo +nightly build --verbose --no-default-features --features full_crypto
     - sccache -s
 
+cargo-check-macos:
+  stage:                           test
+  <<:                              *docker-env
+  script:
+    - BUILD_DUMMY_WASM_BINARY=1 time cargo check --release
+    - sccache -s
+  tags:
+    - osx
 
 #### stage:                        build
 
@@ -391,31 +393,38 @@ build-linux-substrate:             &build-binary
         echo "${CI_COMMIT_TAG}" | tee ./artifacts/substrate/VERSION;
       else
         ./artifacts/substrate/substrate --version |
-          sed -n -r 's/^substrate ([0-9.]+.*-[0-9a-f]{7,13})-.*$/\1/p' |
+          sed -n -E 's/^substrate ([0-9.]+.*-[0-9a-f]{7,13})-.*$/\1/p' |
           tee ./artifacts/substrate/VERSION;
       fi
     - sha256sum ./artifacts/substrate/substrate | tee ./artifacts/substrate/substrate.sha256
     - printf '\n# building node-template\n\n'
     - ./.maintain/node-template-release.sh ./artifacts/substrate/substrate-node-template.tar.gz
-    - cp -r .maintain/docker/substrate.Dockerfile ./artifacts/substrate/
     - sccache -s
+    
 
-build-linux-subkey:
+build-linux-subkey:                &build-subkey
   <<:                              *build-binary
   before_script:
     - mkdir -p ./artifacts/subkey
   script:
-    - cd ./bin/utils/subkey
+    - cd ./bin/utils/subkey 
     - BUILD_DUMMY_WASM_BINARY=1 time cargo build --release --verbose
     - cd -
     - mv ./target/release/subkey ./artifacts/subkey/.
     - echo -n "Subkey version = "
     - ./artifacts/subkey/subkey --version |
-        sed -n -r 's/^subkey ([0-9.]+.*)/\1/p' |
+        sed -n -E 's/^subkey ([0-9.]+.*)/\1/p' |
           tee ./artifacts/subkey/VERSION;
     - sha256sum ./artifacts/subkey/subkey | tee ./artifacts/subkey/subkey.sha256
-    - cp -r .maintain/docker/subkey.Dockerfile ./artifacts/subkey/
     - sccache -s
+
+build-macos-subkey:
+  <<:                              *build-subkey
+  only:
+    - master
+    - /^v[0-9]+\.[0-9]+.*$/        # i.e. v1.0, v2.1rc1
+  tags:
+    - osx
 
 build-rust-doc-release:
   stage:                           build
@@ -443,7 +452,6 @@ check-polkadot-companion-status:
     - /^[0-9]+$/
   script:
     - ./.maintain/gitlab/check_polkadot_companion_status.sh
-
 
 
 trigger-contracts-ci:
