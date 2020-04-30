@@ -162,7 +162,6 @@ macro_rules! implement_fixed {
 				int.checked_mul(Self::DIV).map(|inner| Self(inner))
 			}
 
-
 			fn zero() -> Self {
 				Self(0)
 			}
@@ -184,15 +183,15 @@ macro_rules! implement_fixed {
 			}
 
 			fn checked_from_rational(numerator: Self::Inner, denominator: Self::Inner) -> Option<Self> {
-				let signum = numerator.signum() * denominator.signum();
-
-				let numerator = numerator.checked_abs().map(|v| v as u128)
+				let n = numerator.checked_abs().map(|v| v as u128)
 					.unwrap_or(Self::Inner::max_value() as u128 + 1);
-				let denominator = denominator.checked_abs().map(|v| v as u128)
+				let d = denominator.checked_abs().map(|v| v as u128)
 					.unwrap_or(Self::Inner::max_value() as u128 + 1);
 
-				multiply_by_rational(numerator, Self::DIV as u128, denominator).ok()
+				multiply_by_rational(n, Self::DIV as u128, d).ok()
 					.and_then(|r| {
+						let signum = numerator.signum() * denominator.signum();
+
 						if r == Self::Inner::max_value() as u128 + 1 && signum < 0 {
 							let inner: Self::Inner = Self::Inner::min_value();
 							Some(Self(inner))
@@ -223,15 +222,15 @@ macro_rules! implement_fixed {
 				let rhs: i128 = int.try_into().ok()?;
 				let lhs: i128 = self.0.try_into().ok()?;
 
-				let signum = rhs.signum() * lhs.signum();
-
-				let lhs = lhs.checked_abs().map(|v| v as u128)
+				let m = lhs.checked_abs().map(|v| v as u128)
 					.unwrap_or(i128::max_value() as u128 + 1);
-				let rhs = rhs.checked_abs().map(|v| v as u128)
+				let n = rhs.checked_abs().map(|v| v as u128)
 					.unwrap_or(i128::max_value() as u128 + 1);
 
-				multiply_by_rational(lhs, rhs, Self::DIV as u128).ok()
+				multiply_by_rational(m, n, Self::DIV as u128).ok()
 					.and_then(|r| {
+						let signum = rhs.signum() * lhs.signum();
+
 						if r == i128::max_value() as u128 + 1 && signum < 0 {
 							let n: i128 = i128::min_value();
 							n.try_into().ok()
