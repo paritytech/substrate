@@ -122,7 +122,7 @@ impl PendingRequests {
 	}
 
 	fn take(&mut self) -> PendingRequests {
-		std::mem::replace(self, Default::default())
+		std::mem::take(self)
 	}
 
 	fn set_all(&mut self) {
@@ -1270,7 +1270,7 @@ impl<B: BlockT> ChainSync<B> {
 		self.best_queued_number = std::cmp::max(info.best_number, self.best_imported_number);
 		self.pending_requests.set_all();
 		debug!(target:"sync", "Restarted with {} ({})", self.best_queued_number, self.best_queued_hash);
-		let old_peers = std::mem::replace(&mut self.peers, HashMap::new());
+		let old_peers = std::mem::take(&mut self.peers);
 		old_peers.into_iter().filter_map(move |(id, p)| {
 			match self.new_peer(id.clone(), p.best_hash, p.best_number) {
 				Ok(None) => None,

@@ -341,7 +341,7 @@ pub(crate) fn prove_finality<Block: BlockT, B: BlockchainBackend<Block>, J>(
 			let proof_fragment = FinalityProofFragment {
 				block: current,
 				justification,
-				unknown_headers: ::std::mem::replace(&mut unknown_headers, Vec::new()),
+				unknown_headers: ::std::mem::take(&mut unknown_headers),
 				authorities_proof: new_authorities_proof,
 			};
 

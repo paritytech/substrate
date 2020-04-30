@@ -82,8 +82,8 @@ impl BasicExternalities {
 	) -> R {
 		let mut ext = Self {
 			inner: Storage {
-				top: std::mem::replace(&mut storage.top, Default::default()),
-				children_default: std::mem::replace(&mut storage.children_default, Default::default()),
+				top: std::mem::take(&mut storage.top),
+				children_default: std::mem::take(&mut storage.children_default),
 			},
 			extensions: Default::default(),
 		};
