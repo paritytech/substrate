@@ -14,18 +14,20 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+mod database_params;
 mod import_params;
 mod keystore_params;
 mod network_params;
 mod node_key_params;
+mod offchain_worker_params;
 mod pruning_params;
 mod shared_params;
 mod transaction_pool_params;
-mod offchain_worker_params;
 
 use std::fmt::Debug;
 use std::str::FromStr;
 
+pub use crate::params::database_params::*;
 pub use crate::params::import_params::*;
 pub use crate::params::keystore_params::*;
 pub use crate::params::network_params::*;

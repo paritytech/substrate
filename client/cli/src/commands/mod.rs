@@ -150,6 +150,12 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
+			fn database_params(&self) -> Option<&$crate::DatabaseParams> {
+				match self {
+					$($enum::$variant(cmd) => cmd.database_params()),*
+				}
+			}
+
 			fn base_path(&self) -> $crate::Result<::std::option::Option<::std::path::PathBuf>> {
 				match self {
 					$($enum::$variant(cmd) => cmd.base_path()),*
