@@ -45,7 +45,7 @@ pub trait FixedPointNumber:
 		Self::DIV
 	}
 
-	/// Raw constructor. Equal to `int / DIV`.
+	/// Raw constructor. Equals to `int / DIV`.
 	fn from_inner(int: Self::Inner) -> Self;
 
 	/// Consumes `self` and returns the inner raw value.
@@ -89,6 +89,11 @@ pub trait FixedPointNumber:
 	/// Saturating absolute value. Returning MAX if `parts == Inner::MIN` instead of overflowing.
 	fn saturating_abs(self) -> Self;
 
+	/// Takes the reciprocal (inverse), `1 / self`.
+	fn reciprocal(self) -> Option<Self> {
+		Self::one().checked_div(&self)
+	}
+
 	/// Returns zero.
 	fn zero() -> Self;
 
@@ -103,11 +108,6 @@ pub trait FixedPointNumber:
 
 	/// Checks if the number is negative.
 	fn is_negative(self) -> bool;
-
-	/// Takes the reciprocal (inverse), `1 / self`.
-	fn reciprocal(self) -> Option<Self> {
-		Self::one().checked_div(&self)
-	}
 }
 
 macro_rules! implement_fixed {
@@ -201,8 +201,7 @@ macro_rules! implement_fixed {
 
 			fn checked_mul_int<N>(self, int: N) -> Option<N>
 			where
-				N: TryFrom<i128> + UniqueSaturatedInto<i128> +
-				Copy + Bounded,
+				N: Copy + TryFrom<i128> + UniqueSaturatedInto<i128> + Bounded
 			{
 				let rhs: i128 = int.unique_saturated_into();
 				let lhs: i128 = self.0.unique_saturated_into();
@@ -226,7 +225,7 @@ macro_rules! implement_fixed {
 
 			fn checked_div_int<N>(self, other: N) -> Option<N>
 			where
-				N: Copy + TryFrom<i128> + UniqueSaturatedInto<i128>,
+				N: Copy + TryFrom<i128> + UniqueSaturatedInto<i128>
 			{
 				let lhs: i128 = self.0.unique_saturated_into();
 				let rhs: i128 = other.unique_saturated_into();
@@ -238,8 +237,7 @@ macro_rules! implement_fixed {
 
 			fn saturating_mul_int<N>(self, other: N) -> N
 			where
-				N: TryFrom<i128> + UniqueSaturatedInto<i128> +
-				Copy + Bounded + Saturating,
+				N: Copy + TryFrom<i128> + UniqueSaturatedInto<i128> + Bounded + Saturating
 			{
 				self.checked_mul_int(other).unwrap_or_else(|| {
 					let signum = other.unique_saturated_into().signum() * self.0.signum() as i128;
@@ -257,8 +255,7 @@ macro_rules! implement_fixed {
 
 			fn saturating_mul_int_acc<N>(self, int: N) -> N
 			where
-				N: TryFrom<i128> + UniqueSaturatedInto<i128> +
-				Copy + Bounded + Saturating,
+				N: Copy + TryFrom<i128> + UniqueSaturatedInto<i128> + Bounded + Saturating
 			{
 				self.saturating_mul_int(int).saturating_add(int)
 			}
