@@ -34,7 +34,7 @@ use futures::{
 	Future, FutureExt, StreamExt,
 	future::ready,
 };
-use sc_keystore::{Store as Keystore};
+use sc_keystore::Store as Keystore;
 use log::{info, warn, error};
 use sc_network::config::{Role, FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
 use sc_network::{NetworkService, NetworkStateInfo};
@@ -59,6 +59,7 @@ use sc_client_db::{Backend, DatabaseSettings};
 use sp_core::traits::CodeExecutor;
 use sp_runtime::BuildStorage;
 use sc_client_api::execution_extensions::ExecutionExtensions;
+use sp_core::storage::Storage;
 
 pub type BackgroundTask = Pin<Box<dyn Future<Output=()> + Send>>;
 
@@ -771,6 +772,13 @@ pub trait ServiceBuilderCommand {
 		self,
 		block: BlockId<Self::Block>
 	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
+
+	/// Export the raw state at the given `block`. If `block` is `None`, the
+	/// best block will be used.
+	fn export_raw_state(
+		&self,
+		block: Option<BlockId<Self::Block>>,
+	) -> Result<Storage, Error>;
 }
 
 impl<TBl, TRtApi, TBackend, TExec, TSc, TImpQu, TExPool, TRpc>
