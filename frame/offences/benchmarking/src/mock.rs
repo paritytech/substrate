@@ -19,7 +19,7 @@
 #![cfg(test)]
 
 use super::*;
-use frame_support::{parameter_types, weights::Weight};
+use frame_support::parameter_types;
 use frame_system as system;
 use sp_runtime::{
 	SaturatedConversion,
@@ -32,10 +32,6 @@ type AccountId = u64;
 type AccountIndex = u32;
 type BlockNumber = u64;
 type Balance = u64;
-
-parameter_types! {
-	pub const ExtrinsicBaseWeight: Weight = 10_000_000;
-}
 
 impl frame_system::Trait for Test {
 	type Origin = Origin;
@@ -59,7 +55,7 @@ impl frame_system::Trait for Test {
 	type OnNewAccount = ();
 	type OnKilledAccount = (Balances,);
 	type BlockExecutionWeight = ();
-	type ExtrinsicBaseWeight = ExtrinsicBaseWeight;
+	type ExtrinsicBaseWeight = ();
 }
 parameter_types! {
 	pub const ExistentialDeposit: Balance = 10;
@@ -135,8 +131,6 @@ pallet_staking_reward_curve::build! {
 parameter_types! {
 	pub const RewardCurve: &'static sp_runtime::curve::PiecewiseLinear<'static> = &I_NPOS;
 	pub const MaxNominatorRewardedPerValidator: u32 = 64;
-	pub const UnsignedPriority: u64 = 1 << 20;
-	pub const MaxIterations: u32 = 5;
 }
 
 pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
@@ -171,8 +165,8 @@ impl pallet_staking::Trait for Test {
 	type ElectionLookahead = ();
 	type Call = Call;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
-	type UnsignedPriority = UnsignedPriority;
-	type MaxIterations = MaxIterations;
+	type UnsignedPriority = ();
+	type MaxIterations = ();
 }
 
 impl pallet_im_online::Trait for Test {
@@ -180,7 +174,7 @@ impl pallet_im_online::Trait for Test {
 	type Event = ();
 	type SessionDuration = Period;
 	type ReportUnresponsiveness = Offences;
-	type UnsignedPriority = UnsignedPriority;
+	type UnsignedPriority = ();
 }
 
 impl pallet_offences::Trait for Test {
