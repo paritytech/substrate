@@ -358,8 +358,9 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
+				// Balance Transfer 80_000_000 + 1 Read + 1 Write
 				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 460_000_000, ..Default::default() }
+					DispatchInfo { weight: 80_000_000 + 25_000_000 + 100_000_000, ..Default::default() }
 				)),
 				topics: vec![],
 			},
@@ -413,8 +414,9 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
+				// Balance Transfer 80_000_000 + 1 Read + 1 Write
 				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 460_000_000, ..Default::default() }
+					DispatchInfo { weight: 80_000_000 + 25_000_000 + 100_000_000, ..Default::default() }
 				)),
 				topics: vec![],
 			},
@@ -436,8 +438,9 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(2),
+				// Balance Transfer 80_000_000 + 1 Read + 1 Write
 				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 460_000_000, ..Default::default() }
+					DispatchInfo { weight: 80_000_000 + 25_000_000 + 100_000_000, ..Default::default() }
 				)),
 				topics: vec![],
 			},
