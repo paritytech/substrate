@@ -201,7 +201,7 @@ mod tests {
 	use frame_support::assert_ok;
 
 	#[test]
-	fn test_benchmarks_elections_phragmen() {
+	fn test_benchmarks() {
 		ExtBuilder::default().existential_deposit(256).build().execute_with(|| {
 			assert_ok!(test_benchmark_vest_locked::<Test>());
 			assert_ok!(test_benchmark_vest_unlocked::<Test>());

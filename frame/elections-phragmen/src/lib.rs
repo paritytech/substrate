@@ -1081,6 +1081,7 @@ mod tests {
 		voter_bond: u64,
 		term_duration: u64,
 		desired_runners_up: u32,
+		desired_members: u32,
 	}
 
 	impl Default for ExtBuilder {
@@ -1089,8 +1090,9 @@ mod tests {
 				genesis_members: vec![],
 				balance_factor: 1,
 				voter_bond: 2,
-				desired_runners_up: 0,
 				term_duration: 5,
+				desired_runners_up: 0,
+				desired_members: 2,
 			}
 		}
 	}
@@ -1112,11 +1114,19 @@ mod tests {
 			self.genesis_members = members;
 			self
 		}
-		pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
+		pub fn desired_members(mut self, count: u32) -> Self {
+			self.desired_members = count;
+			self
+		}
+		fn set_constants(&self) {
 			VOTING_BOND.with(|v| *v.borrow_mut() = self.voter_bond);
 			TERM_DURATION.with(|v| *v.borrow_mut() = self.term_duration);
 			DESIRED_RUNNERS_UP.with(|v| *v.borrow_mut() = self.desired_runners_up);
+			DESIRED_MEMBERS.with(|m| *m.borrow_mut() = self.desired_members);
 			MEMBERS.with(|m| *m.borrow_mut() = self.genesis_members.iter().map(|(m, _)| m.clone()).collect::<Vec<_>>());
+		}
+		pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
+			self.set_constants();
 			let mut ext: sp_io::TestExternalities = GenesisConfig {
 				pallet_balances: Some(pallet_balances::GenesisConfig::<Test>{
 					balances: vec![
