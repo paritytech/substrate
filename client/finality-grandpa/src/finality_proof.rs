@@ -54,6 +54,7 @@ use sc_telemetry::{telemetry, CONSENSUS_INFO};
 use sp_finality_grandpa::{AuthorityId, AuthorityList, VersionedAuthorityList, GRANDPA_AUTHORITIES_KEY};
 
 use crate::justification::GrandpaJustification;
+use crate::VoterSet;
 
 /// Maximum number of fragments that we want to return in a single prove_finality call.
 const MAX_FRAGMENTS_IN_PROOF: usize = 8;
@@ -588,7 +589,11 @@ impl<Block: BlockT> ProvableJustification<Block::Header> for GrandpaJustificatio
 		NumberFor<Block>: BlockNumberOps,
 {
 	fn verify(&self, set_id: u64, authorities: &[(AuthorityId, u64)]) -> ClientResult<()> {
-		GrandpaJustification::verify(self, set_id, &authorities.iter().cloned().collect())
+		let authorities = VoterSet::new(authorities.iter().cloned()).ok_or(
+			ClientError::Consensus(sp_consensus::Error::InvalidAuthoritiesSet),
+		)?;
+
+		GrandpaJustification::verify(self, set_id, &authorities)
 	}
 }
 

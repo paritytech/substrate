@@ -64,7 +64,8 @@ where N: Add<Output=N> + Ord + Clone + Debug,
 
 	/// Get the current authorities and their weights (for the current set ID).
 	pub(crate) fn current_authorities(&self) -> VoterSet<AuthorityId> {
-		self.inner.read().current_authorities.iter().cloned().collect()
+		VoterSet::new(self.inner.read().current_authorities.iter().cloned())
+			.expect("authorities are non-empty; weight are non-zero; qed.")
 	}
 }
 
