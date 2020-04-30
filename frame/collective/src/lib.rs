@@ -255,24 +255,30 @@ mod weight_for {
 ///
 /// Usage:
 /// ```ignore
-/// let res = fold_result_weight!(result, |weight| weight + 40_000);
+/// let res = fold_result_weight(result, |weight| weight + 40_000);
 /// ```
-macro_rules! fold_result_weight(
-	($result:expr, $closure:expr) => {{
-		match $result {
-			Ok(post_info) => {
-				Ok(post_info.actual_weight.map($closure).into())
-			},
-			Err(err) => {
-				Ok(err.post_info.actual_weight.map($closure).into())
-			}
-		}
-	}}
-);
+fn fold_result_weight<F>(
+    result: DispatchResultWithPostInfo,
+    closure: F,
+) -> DispatchResultWithPostInfo
+where
+    F: FnOnce(Weight) -> Weight,
+{
+    match result {
+        Ok(post_info) => Ok(post_info.actual_weight.map(closure).into()),
+        Err(err) => Ok(err.post_info.actual_weight.map(closure).into()),
+    }
+}
 
-// Note: this module is not benchmarked. The weights are obtained based on the similarity of the
-// executed logic with other democracy function. Note that councillor operations are assigned to the
-// operational class.
+fn get_result_weight(result: DispatchResultWithPostInfo) -> Option<Weight> {
+    match result {
+        Ok(post_info) => post_info.actual_weight,
+        Err(err) => err.post_info.actual_weight,
+    }
+}
+
+
+// Note that councillor operations are assigned to the operational class.
 decl_module! {
 	pub struct Module<T: Trait<I>, I: Instance=DefaultInstance> for enum Call where origin: <T as frame_system::Trait>::Origin {
 		type Error = Error<T, I>;
@@ -291,9 +297,9 @@ decl_module! {
 		/// # <weight>
 		/// ## Weight
 		/// - `O(MP + N)`
-		///   - where `M` old-members-count (governance-bounded)
-		///   - where `N` new-members-count (governance-bounded)
-		///   - where `P` proposals-count
+		///   - where `M` old-members-count (code- and governance-bounded)
+		///   - where `N` new-members-count (code- and governance-bounded)
+		///   - where `P` proposals-count (code-bounded)
 		/// - DB:
 		///   - 1 storage mutation (codec `O(M)` read, `O(N)` write) for reading and writing the members
 		///   - 1 storage read (codec `O(P)`) + `P` storage mutations for updating the votes for each proposal (codec `O(M)`)
@@ -321,7 +327,7 @@ decl_module! {
 		///
 		/// # <weight>
 		/// ## Weight
-		/// - `O(M + P)` where `M` members-count and `P` complexity of dispatching `proposal`
+		/// - `O(M + P)` where `M` members-count (code-bounded) and `P` complexity of dispatching `proposal`
 		/// - DB: 1 read (codec `O(M)`) and 1 event + DB access of `proposal`
 		/// - Benchmark: 85.71 + M * 0.326 + B * 0.005 µs (min squares analysis)
 		/// # </weight>
@@ -338,7 +344,7 @@ decl_module! {
 			let result = proposal.dispatch(RawOrigin::Member(who).into());
 			Self::deposit_event(RawEvent::MemberExecuted(proposal_hash, result.is_ok()));
 
-			fold_result_weight!(result, |w| weight_for::execute(
+			fold_result_weight(result, |w| weight_for::execute(
 				T::DbWeight::get(),
 				members.len() as Weight,
 				w
@@ -347,17 +353,19 @@ decl_module! {
 
 		/// Add a new proposal to either be voted on or executed directly.
 		///
+		/// Requires the sender to be member.
+		///
 		/// `threshold` determines whether `proposal` is executed directly (`threshold < 2`)
 		/// or put up for voting.
 		///
 		/// # <weight>
 		/// ## Weight
 		/// - `O(B + M + P1)` or `O(B + M + P2)`
-		///   - where `B` is `proposal` size in bytes
-		///   - where `M` members-count
+		///   - where `B` is `proposal` size in bytes (length-fee-bounded)
+		///   - where `M` members-count (code- and governance-bounded)
 		///   - where branching is influenced by `threshold`:
 		///     - where `P1` is proposal execution complexity (`threshold < 2`)
-		///     - where `P2` is proposals-count (`threshold >= 2`)
+		///     - where `P2` is proposals-count (code-bounded) (`threshold >= 2`)
 		/// - DB:
 		///   - 1 storage read `is_member` (codec `O(M)`)
 		///   - 1 storage read `ProposalOf::contains_key` (codec `O(1)`)
@@ -404,7 +412,7 @@ decl_module! {
 				let result = proposal.dispatch(RawOrigin::Members(1, seats).into());
 				Self::deposit_event(RawEvent::Executed(proposal_hash, result.is_ok()));
 
-				fold_result_weight!(result, |w| weight_for::propose_execute(
+				fold_result_weight(result, |w| weight_for::propose_execute(
 					T::DbWeight::get(),
 					members.len() as Weight, // M
 					w, // P1
@@ -432,14 +440,24 @@ decl_module! {
 			}
 		}
 
+		/// Add an aye or nay vote for the sender to the given proposal.
+		///
+		/// Requires the sender to be a member.
+		///
 		/// # <weight>
-		/// - Bounded storage read and writes.
-		/// - Will be slightly heavier if the proposal is approved / disapproved after the vote.
+		/// ## Weight
+		/// - `O(M)` where `M` members-count (code- and governance-bounded)
+		/// - DB:
+		///   - 1 storage read `members` (codec `O(M)`)
+		///   - 1 storage mutation `voting` (codec `O(M)`)
+		/// - 1 event
+		/// - Benchmark: TODO
 		/// # </weight>
 		#[weight = (200_000_000, DispatchClass::Operational)]
 		fn vote(origin, proposal: T::Hash, #[compact] index: ProposalIndex, approve: bool) {
 			let who = ensure_signed(origin)?;
-			ensure!(Self::is_member(&who), Error::<T, I>::NotMember);
+			let members = Self::members();
+			ensure!(members.contains(&who), Error::<T, I>::NotMember);
 
 			let mut voting = Self::voting(&proposal).ok_or(Error::<T, I>::ProposalMissing)?;
 			ensure!(voting.index == index, Error::<T, I>::WrongIndex);
@@ -471,15 +489,7 @@ decl_module! {
 			let no_votes = voting.nays.len() as MemberCount;
 			Self::deposit_event(RawEvent::Voted(who, proposal, approve, yes_votes, no_votes));
 
-			let seats = Self::members().len() as MemberCount;
-
-			let approved = yes_votes >= voting.threshold;
-			let disapproved = seats.saturating_sub(no_votes) < voting.threshold;
-			if approved || disapproved {
-				Self::finalize_proposal(approved, seats, voting, proposal);
-			} else {
-				Voting::<T, I>::insert(&proposal, voting);
-			}
+			Voting::<T, I>::insert(&proposal, voting);
 		}
 
 		/// May be called by any signed account after the voting duration has ended in order to
@@ -496,11 +506,23 @@ decl_module! {
 		///   - `P` is number of active proposals,
 		///   - `L` is the encoded length of `proposal` preimage.
 		#[weight = (200_000_000, DispatchClass::Operational)]
-		fn close(origin, proposal: T::Hash, #[compact] index: ProposalIndex) {
+		fn close(origin, proposal: T::Hash, #[compact] index: ProposalIndex) -> DispatchResultWithPostInfo {
 			let _ = ensure_signed(origin)?;
 
 			let voting = Self::voting(&proposal).ok_or(Error::<T, I>::ProposalMissing)?;
 			ensure!(voting.index == index, Error::<T, I>::WrongIndex);
+
+			let mut no_votes = voting.nays.len() as MemberCount;
+			let mut yes_votes = voting.ayes.len() as MemberCount;
+			let seats = Self::members().len() as MemberCount;
+			let approved = yes_votes >= voting.threshold;
+			let disapproved = seats.saturating_sub(no_votes) < voting.threshold;
+			// Allow (dis-)approving the proposal as soon as there are enough votes.
+			if approved || disapproved {
+				return Ok(Some(Self::finalize_proposal(approved, seats, voting, proposal)).into());
+			}
+
+			// Only allow actual closing of the proposal after the voting period has ended.
 			ensure!(system::Module::<T>::block_number() >= voting.end, Error::<T, I>::TooEarly);
 
 			// default to true only if there's a prime and they voted in favour.
@@ -508,18 +530,16 @@ decl_module! {
 				false,
 				|who| voting.ayes.iter().any(|a| a == &who),
 			);
-
-			let mut no_votes = voting.nays.len() as MemberCount;
-			let mut yes_votes = voting.ayes.len() as MemberCount;
-			let seats = Self::members().len() as MemberCount;
+			
 			let abstentions = seats - (yes_votes + no_votes);
 			match default {
 				true => yes_votes += abstentions,
 				false => no_votes += abstentions,
 			}
+			let approved = yes_votes >= voting.threshold;
 
 			Self::deposit_event(RawEvent::Closed(proposal, yes_votes, no_votes));
-			Self::finalize_proposal(yes_votes >= voting.threshold, seats, voting, proposal);
+			Ok(Some(Self::finalize_proposal(approved, seats, voting, proposal)).into())
 		}
 	}
 }
@@ -548,25 +568,31 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		seats: MemberCount,
 		voting: Votes<T::AccountId, T::BlockNumber>,
 		proposal: T::Hash,
-	) {
+	) -> Weight {
+		let weight;
 		if approved {
 			Self::deposit_event(RawEvent::Approved(proposal));
 
 			// execute motion, assuming it exists.
 			if let Some(p) = ProposalOf::<T, I>::take(&proposal) {
 				let origin = RawOrigin::Members(voting.threshold, seats).into();
-				let ok = p.dispatch(origin).is_ok();
-				Self::deposit_event(RawEvent::Executed(proposal, ok));
+				let result = p.dispatch(origin);
+				Self::deposit_event(RawEvent::Executed(proposal, result.is_ok()));
+				weight = get_result_weight(result).unwrap_or(0); // TODO actual weight
+			} else {
+				weight = 0;
 			}
 		} else {
 			// disapproved
 			ProposalOf::<T, I>::remove(&proposal);
 			Self::deposit_event(RawEvent::Disapproved(proposal));
+			weight = 0;
 		}
 
 		// remove vote
 		Voting::<T, I>::remove(&proposal);
 		Proposals::<T, I>::mutate(|proposals| proposals.retain(|h| h != &proposal));
+		weight
 	}
 }
 
@@ -1100,6 +1126,7 @@ mod tests {
 			let hash: H256 = proposal.blake2_256().into();
 			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, false));
+			assert_ok!(Collective::close(Origin::signed(2), hash.clone(), 0));
 			assert_eq!(Collective::proposals(), vec![]);
 			assert_ok!(Collective::propose(Origin::signed(1), 2, Box::new(proposal.clone())));
 			assert_eq!(Collective::proposals(), vec![hash]);
@@ -1113,6 +1140,7 @@ mod tests {
 			let hash: H256 = proposal.blake2_256().into();
 			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, false));
+			assert_ok!(Collective::close(Origin::signed(2), hash.clone(), 0));
 
 			assert_eq!(System::events(), vec![
 				EventRecord {
@@ -1155,6 +1183,7 @@ mod tests {
 			let hash: H256 = proposal.blake2_256().into();
 			assert_ok!(Collective::propose(Origin::signed(1), 2, Box::new(proposal.clone())));
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
+			assert_ok!(Collective::close(Origin::signed(2), hash.clone(), 0));
 
 			assert_eq!(System::events(), vec![
 				EventRecord {

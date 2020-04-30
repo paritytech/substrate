@@ -245,7 +245,7 @@ benchmarks_instance! {
 		assert_eq!(voting.nays.len(), 1);
 	}
 
-	vote_disapproved {
+	finish_disapproved {
 		let m in 5 .. T::MaxMembers::get();
 		let p in 1 .. T::MaxProposals::get();
 		let b in 1 .. MAX_BYTES;
@@ -291,15 +291,16 @@ benchmarks_instance! {
 
 		// Voter switches vote to nay, which kills the vote
 		let approve = false;
+		Collective::<T, _>::vote(SystemOrigin::Signed(voter.clone()).into(), last_hash.clone(), index, approve)?;
 
-	}: vote(SystemOrigin::Signed(voter), last_hash.clone(), index, approve)
+	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index)
 	verify {
 		// The last proposal is removed.
 		assert_eq!(Collective::<T, _>::proposals().len(), (p - 1) as usize);
 		assert_last_event::<T, I>(RawEvent::Disapproved(last_hash).into());
 	}
 
-	vote_approved {
+	finish_approved {
 		let m in 5 .. T::MaxMembers::get();
 		let p in 1 .. T::MaxProposals::get();
 		let b in 1 .. MAX_BYTES;
@@ -345,8 +346,9 @@ benchmarks_instance! {
 		// Caller switches vote to aye, which passes the vote
 		let index = p - 1;
 		let approve = true;
+		Collective::<T, _>::vote(SystemOrigin::Signed(caller.clone()).into(), last_hash.clone(), index, approve)?;
 
-	}: vote(SystemOrigin::Signed(caller), last_hash.clone(), index, approve)
+	}: close(SystemOrigin::Signed(caller), last_hash.clone(), index)
 	verify {
 		// The last proposal is removed.
 		assert_eq!(Collective::<T, _>::proposals().len(), (p - 1) as usize);
@@ -466,8 +468,8 @@ mod tests {
 			assert_ok!(test_benchmark_propose_execute::<Test>());
 			assert_ok!(test_benchmark_propose_proposed::<Test>());
 			assert_ok!(test_benchmark_vote_insert::<Test>());
-			assert_ok!(test_benchmark_vote_disapproved::<Test>());
-			assert_ok!(test_benchmark_vote_approved::<Test>());
+			assert_ok!(test_benchmark_finish_disapproved::<Test>());
+			assert_ok!(test_benchmark_finish_approved::<Test>());
 			assert_ok!(test_benchmark_close_disapproved::<Test>());
 			assert_ok!(test_benchmark_close_approved::<Test>());
 		});
