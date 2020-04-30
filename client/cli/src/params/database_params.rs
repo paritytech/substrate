@@ -26,7 +26,6 @@ pub struct DatabaseParams {
 		alias = "db",
 		value_name = "DB",
 		case_insensitive = true,
-		default_value = "RocksDb"
 	)]
 	pub database: Database,
 
