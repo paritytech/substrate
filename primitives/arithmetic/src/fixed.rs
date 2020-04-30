@@ -16,10 +16,8 @@
 
 use sp_std::{ops::{self, Add, Sub, Mul, Div, Rem}, fmt::Debug, prelude::*, convert::{TryInto, TryFrom}};
 use codec::{Encode, Decode};
-use num_traits::One;
 use crate::{
-	helpers_128bit::multiply_by_rational,
-	PerThing, Perbill, Perquintill,
+	helpers_128bit::multiply_by_rational, PerThing,
 	traits::{
 		SaturatedConversion, CheckedSub, CheckedAdd, CheckedMul, CheckedDiv,
 		Bounded, UniqueSaturatedInto, Saturating
@@ -38,10 +36,7 @@ pub trait FixedPointNumber:
 	+ Debug
 {
 	/// The underlying data type used for this fixed point number.
-	type Inner: Copy + Debug + One + From<i64>;
-
-	/// The perthing used.
-	type Perthing;
+	type Inner: Copy + Debug;
 
 	/// The accuracy of this fixed point number.
 	const DIV: Self::Inner;
@@ -51,21 +46,25 @@ pub trait FixedPointNumber:
 		Self::DIV
 	}
 
-	/// Raw constructor. Equal to `parts / DIV`.
+	/// Raw constructor. Equal to `int / DIV`.
 	fn from_inner(int: Self::Inner) -> Self;
 
-	/// Consume self and return the inner raw value.
+	/// Consumes `self` and returns the inner raw value.
 	fn into_inner(self) -> Self::Inner;
 
 	/// Creates self from an integer number.
+	/// 
+	/// Saturates towards `max` or `min` if `int` exceeds accuracy.
 	fn from_integer(int: Self::Inner) -> Self;
 
 	/// Creates self from an integer number.
+	/// 
+	/// Returns `None` if `int` exceeds accuracy.
 	fn checked_from_integer(int: Self::Inner) -> Option<Self>;
 
 	/// Creates self from a rational number. Equal to `n / d`.
 	///
-	/// Assumes d != 0 (returns 0 in this case).
+	/// Saturates if `d == 0` or `n / d` exceeds accuracy.
 	fn from_rational(n: Self::Inner, d: Self::Inner) -> Self;
 
 	/// Checked multiplication for integer type `N`.
@@ -126,7 +125,6 @@ macro_rules! implement_fixed {
 		$name:ident,
 		$test_mod:ident,
 		$inner_type:ty,
-		$perthing_type:ty,
 		$div:tt,
 		$precision:tt,
 	) => {
@@ -147,7 +145,6 @@ macro_rules! implement_fixed {
 
 		impl FixedPointNumber for $name {
 			type Inner = $inner_type;
-			type Perthing = $perthing_type;
 
 			const DIV: Self::Inner = $div;
 
@@ -167,8 +164,28 @@ macro_rules! implement_fixed {
 				int.checked_mul(Self::DIV).map(|inner| Self(inner))
 			}
 
+
+			fn zero() -> Self {
+				Self(0)
+			}
+
+			fn is_zero(&self) -> bool {
+				self.0 == 0
+			}
+
+			fn one() -> Self {
+				Self(Self::DIV)
+			}
+
+			fn is_positive(self) -> bool {
+				self.0.is_positive()
+			}
+
+			fn is_negative(self) -> bool {
+				self.0.is_negative()
+			}
+
 			fn from_rational(numerator: Self::Inner, denominator: Self::Inner) -> Self {
-				// let numerator = numerator.unique_saturated_into();
 				let signum = numerator.signum() * denominator.signum();
 
 				let numerator = numerator.checked_abs().map(|v| v as u128)
@@ -252,26 +269,6 @@ macro_rules! implement_fixed {
 				Self(self.0.checked_abs().unwrap_or(Self::Inner::max_value()))
 			}
 
-			fn zero() -> Self {
-				Self(0)
-			}
-
-			fn is_zero(&self) -> bool {
-				self.0 == 0
-			}
-
-			fn one() -> Self {
-				Self(Self::accuracy())
-			}
-
-			fn is_positive(self) -> bool {
-				self.0.is_positive()
-			}
-
-			fn is_negative(self) -> bool {
-				self.0.is_negative()
-			}
-
 			fn saturating_mul_int_acc<N>(self, int: N) -> N
 				where
 					N: TryFrom<i128> + UniqueSaturatedInto<i128> +
@@ -288,6 +285,10 @@ macro_rules! implement_fixed {
 				Self(self.0.saturating_add(rhs.0))
 			}
 
+			fn saturating_sub(self, rhs: Self) -> Self {
+				Self(self.0.saturating_sub(rhs.0))
+			}
+
 			fn saturating_mul(self, rhs: Self) -> Self {
 				self.checked_mul(&rhs).unwrap_or_else(|| {
 					if (self.0.signum() * rhs.0.signum()).is_negative() {
@@ -296,10 +297,6 @@ macro_rules! implement_fixed {
 						Bounded::max_value()
 					}
 				})
-			}
-
-			fn saturating_sub(self, rhs: Self) -> Self {
-				Self(self.0.saturating_sub(rhs.0))
 			}
 
 			fn saturating_pow(self, exp: usize) -> Self {
@@ -923,7 +920,6 @@ implement_fixed!(
 	Fixed64,
 	test_fixed64,
 	i64,
-	Perbill,
 	1_000_000_000,
 	9,
 );
@@ -932,7 +928,6 @@ implement_fixed!(
 	Fixed128,
 	test_fixed128,
 	i128,
-	Perquintill,
 	1_000_000_000_000_000_000,
 	18,
 );
