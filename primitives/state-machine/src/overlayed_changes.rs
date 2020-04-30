@@ -227,6 +227,7 @@ impl OverlayedChanges {
 	/// If there is no value in the overlay, the default callback is used to initiate
 	/// the value.
 	/// Warning this function register a change, so the mutable reference MUST be modified.
+	#[must_use = "A change was registered, so this value MUST be modified."]
 	pub fn value_mut_or_insert_with(
 		&mut self,
 		key: &[u8],
@@ -240,9 +241,7 @@ impl OverlayedChanges {
 				if let Some(overlay_state) = committed.get(key).cloned() {
 					overlay_state
 				} else {
-					let mut new_state = OverlayedValue::default();
-					new_state.value = Some(init());
-					new_state
+					OverlayedValue { value: Some(init()), ..Default::default() }
 				}
 			});
 
