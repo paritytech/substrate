@@ -902,9 +902,11 @@ impl_runtime_apis! {
 			// we need these two lines below.
 			use pallet_session_benchmarking::Module as SessionBench;
 			use pallet_offences_benchmarking::Module as OffencesBench;
+			use frame_system_benchmarking::Module as SystemBench;
 
 			impl pallet_session_benchmarking::Trait for Runtime {}
 			impl pallet_offences_benchmarking::Trait for Runtime {}
+			impl frame_system_benchmarking::Trait for Runtime {}
 
 			let mut batches = Vec::<BenchmarkBatch>::new();
 			let params = (&pallet, &benchmark, &lowest_range_values, &highest_range_values, &steps, repeat);
@@ -917,6 +919,7 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, b"offences", OffencesBench::<Runtime>);
 			add_benchmark!(params, batches, b"session", SessionBench::<Runtime>);
 			add_benchmark!(params, batches, b"staking", Staking);
+			add_benchmark!(params, batches, b"system", SystemBench::<Runtime>);
 			add_benchmark!(params, batches, b"timestamp", Timestamp);
 			add_benchmark!(params, batches, b"treasury", Treasury);
 			add_benchmark!(params, batches, b"utility", Utility);
