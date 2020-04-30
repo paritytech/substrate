@@ -19,6 +19,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::Encode;
+use sp_std::vec;
+use sp_std::prelude::*;
 use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
 use sp_runtime::traits::Hash;
 use frame_benchmarking::{benchmarks, account};
