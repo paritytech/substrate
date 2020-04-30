@@ -39,6 +39,8 @@ use crate::core::{self, Path, Mode};
 
 #[derive(Clone, Copy, Debug, derive_more::Display)]
 pub enum SizeType {
+	#[display(fmt = "empty")]
+	Empty,
 	#[display(fmt = "small")]
 	Small,
 	#[display(fmt = "medium")]
@@ -52,6 +54,7 @@ pub enum SizeType {
 impl SizeType {
 	fn transactions(&self) -> usize {
 		match self {
+			SizeType::Empty => 0,
 			SizeType::Small => 10,
 			SizeType::Medium => 100,
 			SizeType::Large => 500,
