@@ -81,7 +81,7 @@ impl ImportBlocksCmd {
 		};
 
 		builder(config)?
-			.import_blocks(file, false, self.binary)?
+			.import_blocks(file, false, self.binary)
 			.await
 			.map_err(Into::into)
 	}

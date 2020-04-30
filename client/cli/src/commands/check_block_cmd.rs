@@ -60,7 +60,7 @@ impl CheckBlockCmd {
 		<BB::Hash as FromStr>::Err: std::fmt::Debug,
 	{
 		let start = std::time::Instant::now();
-		builder(config)?.check_block(self.input.parse()?)?.await?;
+		builder(config)?.check_block(self.input.parse()?).await?;
 		println!("Completed in {} ms.", start.elapsed().as_millis());
 
 		Ok(())

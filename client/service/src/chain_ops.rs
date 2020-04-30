@@ -77,13 +77,12 @@ impl<R, B> BlockStream<R, B>
 		R: Read + Seek + 'static,
 		B: BlockT + MaybeSerializeDeserialize,
 	{
-	fn new(input: R, binary: bool) -> Result<Self, Error> {
+	fn new(input: R, binary: bool) -> Result<Self, String> {
 		if binary {
 			let mut reader = CodecIoReader(input);
 			// If the file is encoded in binary format, it is expected to first specify the number
 			// of blocks that are going to be decoded. We read it and add it to our enum struct.
-			let count: u64 = Decode::decode(&mut reader)
-				.map_err(|e| format!("Error reading file: {}", e))?;
+			let count: u64 = Decode::decode(&mut reader).map_err(|e| e.to_string())?;
 			Ok(BlockStream::Binary {
 				count,
 				read_block_count: 0,
@@ -240,7 +239,7 @@ impl<
 		input: impl Read + Seek + Send + 'static,
 		force: bool,
 		binary: bool,
-	) -> Result<Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>, Error> {
+	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>> {
 		struct WaitLink {
 			imported_blocks: u64,
 			has_error: bool,
@@ -275,7 +274,20 @@ impl<
 		}
 
 		let mut link = WaitLink::new();
-		let mut block_stream: BlockStream<_, Self::Block> = BlockStream::new(input, binary)?;
+		let block_stream_res: Result<BlockStream<_, Self::Block>, String> = BlockStream::new(input, binary);
+
+		let mut block_stream;
+		match block_stream_res {
+			Ok(bs) => {block_stream = bs},
+			Err(e) => {
+				// We've encountered an error while creating the block stream 
+				// so we can just return a future that returns an error.
+				let err_import = future::poll_fn(move |_cx| {
+					return std::task::Poll::Ready(Err(Error::Other(e.clone())))
+				});
+				return Box::pin(err_import)
+			}
+		}
 
 		// Importing blocks is implemented as a future, because we want the operation to be
 		// interruptible.
@@ -336,7 +348,7 @@ impl<
 			cx.waker().wake_by_ref();
 			return std::task::Poll::Pending;
 		});
-		Ok(Box::pin(import))
+		Box::pin(import)
 	}
 
 	fn export_blocks(
@@ -427,7 +439,7 @@ impl<
 	fn check_block(
 		self,
 		block_id: BlockId<TBl>
-	) -> Result<Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>, Error> {
+	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>> {
 		match self.client.block(&block_id) {
 			Ok(Some(block)) => {
 				let mut buf = Vec::new();
@@ -436,8 +448,8 @@ impl<
 				let reader = std::io::Cursor::new(buf);
 				self.import_blocks(reader, true, true)
 			}
-			Ok(None) => Ok(Box::pin(future::err("Unknown block".into()))),
-			Err(e) => Ok(Box::pin(future::err(format!("Error reading block: {:?}", e).into()))),
+			Ok(None) => Box::pin(future::err("Unknown block".into())),
+			Err(e) => Box::pin(future::err(format!("Error reading block: {:?}", e).into())),
 		}
 	}
 

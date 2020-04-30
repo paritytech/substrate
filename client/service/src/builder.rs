@@ -751,7 +751,7 @@ pub trait ServiceBuilderCommand {
 		input: impl Read + Seek + Send + 'static,
 		force: bool,
 		binary: bool,
-	) -> Result<Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>, Error>;
+	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
 
 	/// Performs the blocks export.
 	fn export_blocks(
@@ -772,7 +772,7 @@ pub trait ServiceBuilderCommand {
 	fn check_block(
 		self,
 		block: BlockId<Self::Block>
-	) -> Result<Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>, Error>;
+	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
 
 	/// Export the raw state at the given `block`. If `block` is `None`, the
 	/// best block will be used.
