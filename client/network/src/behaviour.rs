@@ -304,11 +304,11 @@ Behaviour<B, H> {
 impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<block_requests::Event<B>> for Behaviour<B, H> {
 	fn inject_event(&mut self, event: block_requests::Event<B>) {
 		match event {
-			block_requests::Event::AnsweredRequest { peer, response_build_time } => {
+			block_requests::Event::AnsweredRequest { peer, total_handling_time } => {
 				self.events.push(BehaviourOut::AnsweredRequest {
 					peer,
 					protocol: self.block_requests.protocol_name().to_vec(),
-					build_time: response_build_time,
+					build_time: total_handling_time,
 				});
 			},
 			block_requests::Event::Response { peer, original_request, response, request_duration } => {
