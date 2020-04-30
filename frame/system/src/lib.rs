@@ -628,10 +628,8 @@ decl_module! {
 		/// data is equal to its default value.
 		///
 		/// # <weight>
-		/// - `O(K)` with `K` being complexity of `on_killed_account`
+		/// - `O(1)`
 		/// - 1 storage read and deletion.
-		/// - 1 call to `on_killed_account` callback with unknown complexity `K`
-		/// - 1 event.
 		/// # </weight>
 		#[weight = (25_000_000, DispatchClass::Operational)]
 		fn suicide(origin) {

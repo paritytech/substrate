@@ -121,7 +121,7 @@ benchmarks! {
 		let p in 1 .. 1000;
 
 		let prefix = p.using_encoded(T::Hashing::hash).as_ref().to_vec();
-		// add i items that share a prefix
+		// add p items that share a prefix
 		for i in 0 .. p {
 			let hash = (p, i).using_encoded(T::Hashing::hash).as_ref().to_vec();
 			let key = [&prefix[..], &hash[..]].concat();
@@ -140,7 +140,7 @@ benchmarks! {
 	}
 
 	suicide {
-		let n in 0 .. 1000;
+		let n in 1 .. 1000;
 		let caller: T::AccountId = account("caller", 0, SEED);
 		let account_info = AccountInfo::<T::Index, T::AccountData> {
 			nonce: n.into(),
@@ -168,7 +168,6 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			assert_ok!(test_benchmark_remark::<Test>());
 			assert_ok!(test_benchmark_set_heap_pages::<Test>());
-			//assert_ok!(test_benchmark_set_code::<Test>());
 			assert_ok!(test_benchmark_set_code_without_checks::<Test>());
 			assert_ok!(test_benchmark_set_changes_trie_config::<Test>());
 			assert_ok!(test_benchmark_set_storage::<Test>());
