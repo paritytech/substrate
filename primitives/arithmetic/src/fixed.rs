@@ -56,6 +56,12 @@ pub trait FixedPointNumber:
 	/// Saturates towards `max` or `min` if `int` exceeds accuracy.
 	fn from_integer(int: Self::Inner) -> Self;
 
+	/// Returns the integer part.
+	fn integer(self) -> Self;
+
+	/// Returns the fractional part.
+	fn frac(self) -> Self;
+
 	/// Creates `self` from an integer number `int`.
 	/// 
 	/// Returns `None` if `int` exceeds accuracy.
@@ -160,6 +166,14 @@ macro_rules! implement_fixed {
 
 			fn checked_from_integer(int: Self::Inner) -> Option<Self> {
 				int.checked_mul(Self::DIV).map(|inner| Self(inner))
+			}
+
+			fn integer(self) -> Self {
+				Self((self.0 / Self::DIV).saturating_mul(Self::DIV))
+			}
+
+			fn frac(self) -> Self {
+				self.saturating_sub(self.integer())
 			}
 
 			fn zero() -> Self {
@@ -895,6 +909,35 @@ macro_rules! implement_fixed {
 				let b = $name::from_integer(2);
 				let c = a * b;
 				assert_eq!(c, b);
+			}
+
+			#[test]
+			fn integer_works() {
+				let n = $name::from_rational(5, 2).integer();
+				assert_eq!(n, $name::from_integer(2));
+
+				let n = $name::from_rational(-5, 2).integer();
+				assert_eq!(n, $name::from_integer(-2));
+			}
+
+			#[test]
+			fn frac_works() {
+				let n = $name::from_rational(5, 2);
+				let i = n.integer();
+				let f = n.frac();
+
+				assert_eq!(n, i + f);
+
+				let n = $name::from_rational(-5, 2);
+				let i = n.integer();
+				let f = n.frac();
+
+				assert_eq!(n, i + f);
+
+				let n = $name::from_rational(5, 2)
+					.saturating_sub(2.into())
+					.saturating_mul(10.into());
+				assert_eq!(n, 5.into());
 			}
 
 			#[test]
