@@ -29,6 +29,15 @@ use std::fmt::Debug;
 use std::ops::Add;
 use std::sync::Arc;
 
+/// Error type returned on operations on the `AuthoritySet`.
+#[derive(derive_more::Display, derive_more::From)]
+pub enum Error<E> {
+	#[display("Invalid authority set, either empty or with an authority weight set to 0.")]
+	InvalidAuthoritySet,
+	#[display(fmt = "Invalid operation in the pending changes tree: {}", _0)]
+	ForkTree(fork_tree::Error<E>),
+}
+
 /// A shared authority set.
 pub(crate) struct SharedAuthoritySet<H, N> {
 	inner: Arc<RwLock<AuthoritySet<H, N>>>,
@@ -64,8 +73,11 @@ where N: Add<Output=N> + Ord + Clone + Debug,
 
 	/// Get the current authorities and their weights (for the current set ID).
 	pub(crate) fn current_authorities(&self) -> VoterSet<AuthorityId> {
-		VoterSet::new(self.inner.read().current_authorities.iter().cloned())
-			.expect("authorities are non-empty; weight are non-zero; qed.")
+		VoterSet::new(self.inner.read().current_authorities.iter().cloned()).expect(
+			"authorities are non-empty and weights are non-zero; \
+			 constructor and all mutating operations on `AuthoritySet` ensure this; \
+			 qed.",
+		)
 	}
 }
 
@@ -89,7 +101,7 @@ pub(crate) struct Status<H, N> {
 #[derive(Debug, Clone, Encode, Decode, PartialEq)]
 pub(crate) struct AuthoritySet<H, N> {
 	pub(crate) current_authorities: AuthorityList,
-	pub(crate) set_id: u64,
+	set_id: u64,
 	// Tree of pending standard changes across forks. Standard changes are
 	// enacted on finality and must be enacted (i.e. finalized) in-order across
 	// a given branch
@@ -97,7 +109,7 @@ pub(crate) struct AuthoritySet<H, N> {
 	// Pending forced changes across different forks (at most one per fork).
 	// Forced changes are enacted on block depth (not finality), for this reason
 	// only one forced change should exist per fork.
-	pub(crate) pending_forced_changes: Vec<PendingChange<H, N>>,
+	pending_forced_changes: Vec<PendingChange<H, N>>,
 }
 
 impl<H, N> AuthoritySet<H, N>
@@ -105,13 +117,37 @@ where H: PartialEq,
 	  N: Ord,
 {
 	/// Get a genesis set with given authorities.
-	pub(crate) fn genesis(initial: AuthorityList) -> Self {
-		AuthoritySet {
+	pub(crate) fn genesis(initial: AuthorityList) -> Option<Self> {
+		// authority sets must be non-empty and all weights must be greater than 0
+		if initial.is_empty() || initial.iter().any(|(_, w)| *w == 0) {
+			return None;
+		}
+
+		Some(AuthoritySet {
 			current_authorities: initial,
 			set_id: 0,
 			pending_standard_changes: ForkTree::new(),
 			pending_forced_changes: Vec::new(),
+		})
+	}
+
+	pub(crate) fn new(
+		authorities: AuthorityList,
+		set_id: u64,
+		pending_standard_changes: ForkTree<H, N, PendingChange<H, N>>,
+		pending_forced_changes: Vec<PendingChange<H, N>>,
+	) -> Option<Self> {
+		// authority sets must be non-empty and all weights must be greater than 0
+		if authorities.is_empty() || authorities.iter().any(|(_, w)| *w == 0) {
+			return None;
 		}
+
+		Some(AuthoritySet {
+			current_authorities: authorities,
+			set_id,
+			pending_standard_changes,
+			pending_forced_changes,
+		})
 	}
 
 	/// Get the current set id and a reference to the current authority set.
@@ -129,9 +165,9 @@ where
 		&mut self,
 		pending: PendingChange<H, N>,
 		is_descendent_of: &F,
-	) -> Result<(), fork_tree::Error<E>> where
+	) -> Result<(), Error<E>> where
 		F: Fn(&H, &H) -> Result<bool, E>,
-		E:  std::error::Error,
+		E: std::error::Error,
 	{
 		let hash = pending.canon_hash.clone();
 		let number = pending.canon_height.clone();
@@ -160,15 +196,16 @@ where
 		&mut self,
 		pending: PendingChange<H, N>,
 		is_descendent_of: &F,
-	) -> Result<(), fork_tree::Error<E>> where
+	) -> Result<(), Error<E>> where
 		F: Fn(&H, &H) -> Result<bool, E>,
-		E:  std::error::Error,
+		E: std::error::Error,
 	{
 		for change in self.pending_forced_changes.iter() {
 			if change.canon_hash == pending.canon_hash ||
-				is_descendent_of(&change.canon_hash, &pending.canon_hash)?
+				is_descendent_of(&change.canon_hash, &pending.canon_hash)
+					.map_err(fork_tree::Error::Client)?
 			{
-				return Err(fork_tree::Error::UnfinalizedAncestor);
+				return Err(fork_tree::Error::UnfinalizedAncestor.into());
 			}
 		}
 
@@ -202,10 +239,16 @@ where
 		&mut self,
 		pending: PendingChange<H, N>,
 		is_descendent_of: &F,
-	) -> Result<(), fork_tree::Error<E>> where
+	) -> Result<(), Error<E>> where
 		F: Fn(&H, &H) -> Result<bool, E>,
-		E:  std::error::Error,
+		E: std::error::Error,
 	{
+		if pending.next_authorities.is_empty() ||
+			pending.next_authorities.iter().any(|(_, w)| *w == 0)
+		{
+			return Err(Error::InvalidAuthoritySet);
+		}
+
 		match pending.delay_kind {
 			DelayKind::Best { .. } => {
 				self.add_forced_change(pending, is_descendent_of)
@@ -310,9 +353,9 @@ where
 		finalized_number: N,
 		is_descendent_of: &F,
 		initial_sync: bool,
-	) -> Result<Status<H, N>, fork_tree::Error<E>>
-		where F: Fn(&H, &H) -> Result<bool, E>,
-			  E: std::error::Error,
+	) -> Result<Status<H, N>, Error<E>> where
+		F: Fn(&H, &H) -> Result<bool, E>,
+		E: std::error::Error,
 	{
 		let mut status = Status {
 			changed: false,
@@ -371,16 +414,16 @@ where
 		finalized_hash: H,
 		finalized_number: N,
 		is_descendent_of: &F,
-	) -> Result<Option<bool>, fork_tree::Error<E>>
-	where F: Fn(&H, &H) -> Result<bool, E>,
-		  E: std::error::Error,
+	) -> Result<Option<bool>, Error<E>> where
+		F: Fn(&H, &H) -> Result<bool, E>,
+		E: std::error::Error,
 	{
 		self.pending_standard_changes.finalizes_any_with_descendent_if(
 			&finalized_hash,
 			finalized_number.clone(),
 			is_descendent_of,
 			|change| change.effective_number() == finalized_number
-		)
+		).map_err(Error::ForkTree)
 	}
 }
 

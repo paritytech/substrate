@@ -6328,6 +6328,7 @@ name = "sc-finality-grandpa"
 version = "0.8.0-dev"
 dependencies = [
  "assert_matches",
+ "derive_more",
  "env_logger 0.7.1",
  "finality-grandpa",
  "fork-tree",
