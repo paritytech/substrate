@@ -506,7 +506,7 @@ decl_event!(
 		/// A new term with new members. This indicates that enough candidates existed to run the
 		/// election, not that enough have has been elected. The inner value must be examined for
 		/// this purpose. A `NewTerm([])` indicates that some candidates got their bond slashed and
-		/// None were elected, whilst `EmptyTerm` means that no candidates existed to begin with.
+		/// none were elected, whilst `EmptyTerm` means that no candidates existed to begin with.
 		NewTerm(Vec<(AccountId, Balance)>),
 		/// No (or not enough) candidates existed for this round. This is different from
 		/// `NewTerm([])`. See the description of `NewTerm`.
