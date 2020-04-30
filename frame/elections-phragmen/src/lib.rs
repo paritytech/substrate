@@ -1561,7 +1561,7 @@ mod tests {
 			System::set_block_number(5);
 			assert_ok!(Elections::end_block(System::block_number()));
 
-			// now we have 2 members, 1 runners-up, and 1 new candidate
+			// now we have 2 members, 1 runner-up, and 1 new candidate
 			assert_ok!(Elections::submit_candidacy(Origin::signed(2)));
 
 			assert_ok!(Elections::vote(Origin::signed(1), vec![9, 99, 999, 9999], 5));
