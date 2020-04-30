@@ -28,12 +28,11 @@ use crate::{
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 
 pub trait FixedPointNumber:
-	Sized + Copy + Default
+	Sized + Copy + Default + Debug
 	+ Saturating + Bounded
 	+ Eq + PartialEq + Ord + PartialOrd
 	+ CheckedSub + CheckedAdd + CheckedMul + CheckedDiv
-	+ Add + Sub + Div + Mul
-	+ Debug
+	+ Add + Sub + Div + Mul + Rem
 {
 	/// The underlying data type used for this fixed point number.
 	type Inner: Copy + Debug;
@@ -257,9 +256,9 @@ macro_rules! implement_fixed {
 			}
 
 			fn saturating_mul_int_acc<N>(self, int: N) -> N
-				where
-					N: TryFrom<i128> + UniqueSaturatedInto<i128> +
-					Copy + Bounded + Saturating,
+			where
+				N: TryFrom<i128> + UniqueSaturatedInto<i128> +
+				Copy + Bounded + Saturating,
 			{
 				self.saturating_mul_int(int).saturating_add(int)
 			}
@@ -308,7 +307,7 @@ macro_rules! implement_fixed {
 			type Output = Self;
 
 			fn neg(self) -> Self::Output {
-				Self(self.0.saturating_mul(-1))
+				Self(-self.0)
 			}
 		}
 
@@ -341,6 +340,14 @@ macro_rules! implement_fixed {
 
 			fn div(self, rhs: Self) -> Self::Output {
 				Self((self.0 * Self::accuracy()) / rhs.0)
+			}
+		}
+
+		impl ops::Rem for $name {
+			type Output = Self;
+
+			fn rem(self, rhs: Self) -> Self::Output {
+				Self((self.0 * Self::accuracy()) % rhs.0)
 			}
 		}
 
@@ -810,7 +817,7 @@ macro_rules! implement_fixed {
 				assert_eq!(b.checked_div(&2.into()), Some($name::from_inner(inner_min / 2)));
 
 				assert_eq!(b.checked_div(&(-2).into()), Some($name::from_inner(inner_min / -2)));
-				assert_eq!(b.checked_div(&-b), Some((-1).into()));
+				assert_eq!(b.checked_div(&a), Some((-1).into()));
 
 				assert_eq!(c.checked_div(&1.into()), Some(0.into()));
 				assert_eq!(c.checked_div(&$name::max_value()), Some(0.into()));
