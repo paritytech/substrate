@@ -895,7 +895,12 @@ where
 				})?;
 
 				let voters = Arc::new(VoterSet::new(new.authorities.into_iter())
-					.expect("authorities are non-empty; weight are non-zero; qed."));
+					.expect("new authorities come from pending change; \
+							 pending change comes from `AuthoritySet`; \
+							 `AuthoritySet` validates authorities is non-empty and weights are non-zero; \
+							 qed."
+					)
+				);
 
 				self.env = Arc::new(Environment {
 					voters,

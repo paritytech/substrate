@@ -104,7 +104,7 @@ where H: Clone + Debug + PartialEq,
 			Vec::new(),
 		);
 
-		authority_set.expect("authorities are non-empty; all weights are non-zero; qed.")
+		authority_set.expect("current_authorities is non-empty and weights are non-zero; qed.")
 	}
 }
 
