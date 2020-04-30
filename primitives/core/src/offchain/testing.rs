@@ -105,7 +105,7 @@ impl OffchainState {
 	fn fulfill_expected(&mut self, id: u16) {
 		if let Some(mut req) = self.expected_requests.remove(&RequestId(id)) {
 			let response = req.response.take().expect("Response checked while added.");
-			let headers = std::mem::replace(&mut req.response_headers, vec![]);
+			let headers = std::mem::take(&mut req.response_headers);
 			self.fulfill_pending_request(id, req, response, headers);
 		}
 	}

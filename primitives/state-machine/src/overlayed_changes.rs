@@ -463,10 +463,10 @@ impl OverlayedChanges {
 	) {
 		assert!(self.prospective.is_empty());
 		(
-			std::mem::replace(&mut self.committed.top, Default::default())
+			std::mem::take(&mut self.committed.top)
 				.into_iter()
 				.map(|(k, v)| (k, v.value)),
-			std::mem::replace(&mut self.committed.children_default, Default::default())
+			std::mem::take(&mut self.committed.children_default)
 				.into_iter()
 				.map(|(sk, (v, ci))| (sk, (v.into_iter().map(|(k, v)| (k, v.value)), ci))),
 		)
