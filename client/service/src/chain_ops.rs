@@ -56,7 +56,7 @@ where
 	},
 	Json {
 		read_block_count: u64,
-		reader: StreamDeserializer<'static, JsonIoRead<R>, B>,
+		reader: StreamDeserializer<'static, JsonIoRead<R>, SignedBlock<B>>,
 	},
 }
 
@@ -65,7 +65,7 @@ where
 	R: Read + Seek
 {}
 
-impl<R, B> BlockStream<R, SignedBlock<B>>
+impl<R, B> BlockStream<R, B>
 	where
 		R: Read + Seek + 'static,
 		B: BlockT + MaybeSerializeDeserialize,
@@ -108,7 +108,7 @@ impl<R, B> BlockStream<R, SignedBlock<B>>
 	}
 }
 
-impl<R, B> Stream for BlockStream<R, SignedBlock<B>> 
+impl<R, B> Stream for BlockStream<R, B> 
 	where
 		R: Read + Seek + 'static,
 		B: BlockT + MaybeSerializeDeserialize,
@@ -207,7 +207,7 @@ impl<
 		let mut queue = self.import_queue;
 
 		let mut link = WaitLink::new();
-		let mut block_stream: BlockStream<_, SignedBlock<Self::Block>>= BlockStream::new(input, binary)?;
+		let mut block_stream: BlockStream<_, Self::Block> = BlockStream::new(input, binary)?;
 
 		// Importing blocks is implemented as a future, because we want the operation to be
 		// interruptible.
