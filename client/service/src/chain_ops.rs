@@ -45,17 +45,23 @@ pub fn build_spec(spec: &dyn ChainSpec, raw: bool) -> error::Result<String> {
 }
 
 /// Helper enum that wraps either a binary decoder (from parity-scale-codec), or a JSON decoder (from serde_json).
+/// Implements the Stream Trait, calling `poll_next()` will decode the next SignedBlock and return it.
 enum BlockStream<R, B> 
 where
 	R: std::io::Read + std::io::Seek,
 {
 	Binary {
+		// Total number of blocks we are expecting to decode.
 		count: u64,
+		// Number of blocks we have decoded thus far.
 		read_block_count: u64,
+		// Reader to the data, used for decoding new blocks.
 		reader: CodecIoReader<R>,
 	},
 	Json {
+		// Nubmer of blocks we have decoded thus far.
 		read_block_count: u64,
+		// Stream to the data, used for decoding new blocks.
 		reader: StreamDeserializer<'static, JsonIoRead<R>, SignedBlock<B>>,
 	},
 }
