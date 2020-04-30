@@ -27,7 +27,8 @@ use codec::{Encode, Decode};
 use crate::{
 	chain::Client,
 	config::ProtocolId,
-	protocol::{api, message::{self, BlockAttributes}}
+	protocol::{message::{self, BlockAttributes}},
+	schema,
 };
 use futures::{future::BoxFuture, prelude::*, stream::FuturesUnordered};
 use futures_timer::Delay;
@@ -275,18 +276,18 @@ where
 			return SendRequestOutcome::NotConnected;
 		};
 
-		let protobuf_rq = api::v1::BlockRequest {
+		let protobuf_rq = schema::v1::BlockRequest {
 			fields: u32::from_be_bytes([req.fields.bits(), 0, 0, 0]),
 			from_block: match req.from {
 				message::FromBlock::Hash(h) =>
-					Some(api::v1::block_request::FromBlock::Hash(h.encode())),
+					Some(schema::v1::block_request::FromBlock::Hash(h.encode())),
 				message::FromBlock::Number(n) =>
-					Some(api::v1::block_request::FromBlock::Number(n.encode())),
+					Some(schema::v1::block_request::FromBlock::Number(n.encode())),
 			},
 			to_block: req.to.map(|h| h.encode()).unwrap_or_default(),
 			direction: match req.direction {
-				message::Direction::Ascending => api::v1::Direction::Ascending as i32,
-				message::Direction::Descending => api::v1::Direction::Descending as i32,
+				message::Direction::Ascending => schema::v1::Direction::Ascending as i32,
+				message::Direction::Descending => schema::v1::Direction::Descending as i32,
 			},
 			max_blocks: req.max.unwrap_or(0),
 		};
@@ -340,8 +341,8 @@ where
 	fn on_block_request
 		( &mut self
 		, peer: &PeerId
-		, request: &api::v1::BlockRequest
-		) -> Result<api::v1::BlockResponse, Error>
+		, request: &schema::v1::BlockRequest
+		) -> Result<schema::v1::BlockResponse, Error>
 	{
 		log::trace!(
 			target: "sync",
@@ -353,11 +354,11 @@ where
 
 		let from_block_id =
 			match request.from_block {
-				Some(api::v1::block_request::FromBlock::Hash(ref h)) => {
+				Some(schema::v1::block_request::FromBlock::Hash(ref h)) => {
 					let h = Decode::decode(&mut h.as_ref())?;
 					BlockId::<B>::Hash(h)
 				}
-				Some(api::v1::block_request::FromBlock::Number(ref n)) => {
+				Some(schema::v1::block_request::FromBlock::Number(ref n)) => {
 					let n = Decode::decode(&mut n.as_ref())?;
 					BlockId::<B>::Number(n)
 				}
@@ -375,10 +376,10 @@ where
 			};
 
 		let direction =
-			if request.direction == api::v1::Direction::Ascending as i32 {
-				api::v1::Direction::Ascending
-			} else if request.direction == api::v1::Direction::Descending as i32 {
-				api::v1::Direction::Descending
+			if request.direction == schema::v1::Direction::Ascending as i32 {
+				schema::v1::Direction::Ascending
+			} else if request.direction == schema::v1::Direction::Descending as i32 {
+				schema::v1::Direction::Descending
 			} else {
 				let msg = format!("invalid `BlockRequest::direction` value: {}", request.direction);
 				return Err(io::Error::new(io::ErrorKind::Other, msg).into())
@@ -406,7 +407,7 @@ where
 			};
 			let is_empty_justification = justification.as_ref().map(|j| j.is_empty()).unwrap_or(false);
 
-			let block_data = api::v1::BlockData {
+			let block_data = schema::v1::BlockData {
 				hash: hash.encode(),
 				header: if get_header {
 					header.encode()
@@ -431,10 +432,10 @@ where
 			blocks.push(block_data);
 
 			match direction {
-				api::v1::Direction::Ascending => {
+				schema::v1::Direction::Ascending => {
 					block_id = BlockId::Number(number + One::one())
 				}
-				api::v1::Direction::Descending => {
+				schema::v1::Direction::Descending => {
 					if number.is_zero() {
 						break
 					}
@@ -443,7 +444,7 @@ where
 			}
 		}
 
-		Ok(api::v1::BlockResponse { blocks })
+		Ok(schema::v1::BlockResponse { blocks })
 	}
 }
 
@@ -719,9 +720,9 @@ where
 #[derive(Debug)]
 pub enum NodeEvent<B: Block, T> {
 	/// Incoming request from remote and substream to use for the response.
-	Request(api::v1::BlockRequest, T),
+	Request(schema::v1::BlockRequest, T),
 	/// Incoming response from remote.
-	Response(message::BlockRequest<B>, api::v1::BlockResponse),
+	Response(message::BlockRequest<B>, schema::v1::BlockResponse),
 }
 
 /// Substream upgrade protocol.
@@ -762,7 +763,7 @@ where
 		let future = async move {
 			let len = self.max_request_len;
 			let vec = read_one(&mut s, len).await?;
-			match api::v1::BlockRequest::decode(&vec[..]) {
+			match schema::v1::BlockRequest::decode(&vec[..]) {
 				Ok(r) => Ok(NodeEvent::Request(r, s)),
 				Err(e) => Err(ReadOneError::Io(io::Error::new(io::ErrorKind::Other, e)))
 			}
@@ -809,7 +810,7 @@ where
 			write_one(&mut s, &self.request).await?;
 			let vec = read_one(&mut s, self.max_response_size).await?;
 
-			api::v1::BlockResponse::decode(&vec[..])
+			schema::v1::BlockResponse::decode(&vec[..])
 				.map(|r| NodeEvent::Response(self.original_request, r))
 				.map_err(|e| {
 					ReadOneError::Io(io::Error::new(io::ErrorKind::Other, e))
