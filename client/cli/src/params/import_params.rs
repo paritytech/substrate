@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::arg_enums::{
-	Database, ExecutionStrategy, TracingReceiver, WasmExecutionMethod,
+	ExecutionStrategy, TracingReceiver, WasmExecutionMethod,
 	DEFAULT_EXECUTION_BLOCK_CONSTRUCTION, DEFAULT_EXECUTION_IMPORT_BLOCK,
 	DEFAULT_EXECUTION_OFFCHAIN_WORKER, DEFAULT_EXECUTION_OTHER, DEFAULT_EXECUTION_SYNCING,
 };

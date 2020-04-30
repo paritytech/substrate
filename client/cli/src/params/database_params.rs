@@ -27,7 +27,7 @@ pub struct DatabaseParams {
 		value_name = "DB",
 		case_insensitive = true,
 	)]
-	pub database: Database,
+	pub database: Option<Database>,
 
 	/// Limit the memory the database cache can use.
 	#[structopt(long = "db-cache", value_name = "MiB")]
@@ -36,7 +36,7 @@ pub struct DatabaseParams {
 
 impl DatabaseParams {
 	/// Limit the memory the database cache can use.
-	pub fn database(&self) -> Database {
+	pub fn database(&self) -> Option<Database> {
 		self.database
 	}
 

@@ -167,7 +167,7 @@ pub trait CliConfiguration: Sized {
 	///
 	/// By default this is retrieved from `DatabaseParams` if it is available. Otherwise its `None`.
 	fn database(&self) -> Result<Option<Database>> {
-		Ok(self.database_params().map(|x| x.database()))
+		Ok(self.database_params().and_then(|x| x.database()))
 	}
 
 	/// Get the database configuration object for the parameters provided
