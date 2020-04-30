@@ -124,8 +124,8 @@ parameter_types! {
 	pub const Version: RuntimeVersion = VERSION;
 	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 	pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
-		read: 60_000_000, // ~0.06 ms = ~60 µs
-		write: 200_000_000, // ~0.2 ms = 200 µs
+		read: 25_000_000, // ~25 µs
+		write: 100_000_000, // ~100 µs
 	};
 }
 
