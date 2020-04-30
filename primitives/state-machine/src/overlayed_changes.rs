@@ -234,15 +234,25 @@ impl OverlayedChanges {
 	) -> &mut StorageValue {
 		let extrinsic_index = self.extrinsic_index();
 		let committed = &self.committed.top;
-		let entry = self.prospective.top.entry(key.to_vec())
-			.or_insert_with(|| committed.get(key).cloned().unwrap_or_default());
-		// we update change
+
+		let mut entry = self.prospective.top.entry(key.to_vec())
+			.or_insert_with(|| {
+				if let Some(overlay_state) = committed.get(key).cloned() {
+					overlay_state
+				} else {
+					let mut new_state = OverlayedValue::default();
+					new_state.value = Some(init());
+					new_state
+				}
+			});
+
+		//if was deleted initialise back with empty vec
+		if entry.value.is_none() {
+			entry.value = Some(Default::default());
+		}
 		if let Some(extrinsic) = extrinsic_index {
 			entry.extrinsics.get_or_insert_with(Default::default)
 				.insert(extrinsic);
-		}
-		if entry.value.is_none() {
-			entry.value = Some(init());
 		}
 		entry.value.as_mut().expect("Initialized above; qed")
 	}
