@@ -223,11 +223,37 @@ impl OverlayedChanges {
 			})
 	}
 
-	/// Returns mutable reference to either commited or propsective value.
-	pub fn value_mut(&mut self, key: &[u8]) -> Option<&mut Option<StorageValue>> {
-		// not using map because of double borrow inside closure
-		if let Some(entry) = self.prospective.top.get_mut(key) { return Some(&mut entry.value) }
-		return self.committed.top.get_mut(key).map(|entry| &mut entry.value);
+	/// Returns mutable reference to current changed value (prospective).
+	/// If there is no value in the overlay, the default callback is used to initiate
+	/// the value.
+	/// Warning this function register a change, so the mutable reference MUST be modified.
+	#[must_use = "A change was registered, so this value MUST be modified."]
+	pub fn value_mut_or_insert_with(
+		&mut self,
+		key: &[u8],
+		init: impl Fn() -> StorageValue,
+	) -> &mut StorageValue {
+		let extrinsic_index = self.extrinsic_index();
+		let committed = &self.committed.top;
+
+		let mut entry = self.prospective.top.entry(key.to_vec())
+			.or_insert_with(|| {
+				if let Some(overlay_state) = committed.get(key).cloned() {
+					overlay_state
+				} else {
+					OverlayedValue { value: Some(init()), ..Default::default() }
+				}
+			});
+
+		//if was deleted initialise back with empty vec
+		if entry.value.is_none() {
+			entry.value = Some(Default::default());
+		}
+		if let Some(extrinsic) = extrinsic_index {
+			entry.extrinsics.get_or_insert_with(Default::default)
+				.insert(extrinsic);
+		}
+		entry.value.as_mut().expect("Initialized above; qed")
 	}
 
 	/// Returns a double-Option: None if the key is unknown (i.e. and the query should be referred
