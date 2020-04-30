@@ -30,7 +30,7 @@ use sp_core::{
 };
 use sp_trie::{trie_types::Layout, empty_child_trie_root};
 use sp_externalities::{Extensions, Extension};
-use codec::{Decode, Encode};
+use codec::{Compact, Decode, Encode};
 
 use std::{error, fmt, any::{Any, TypeId}};
 use log::{warn, trace};
@@ -415,6 +415,26 @@ where
 		});
 	}
 
+	fn storage_append(
+		&mut self,
+		key: Vec<u8>,
+		value: Vec<u8>,
+	) {
+		let _guard = sp_panic_handler::AbortGuard::force_abort();
+		self.mark_dirty();
+
+		let current_value = self.overlay
+			.value_mut(&key)
+			.map(|v| v.take())
+			.unwrap_or_else(|| self.backend.storage(&key).expect(EXT_NOT_ALLOWED_TO_FAIL))
+			.unwrap_or_default();
+
+		self.overlay.set_storage(
+			key,
+			Some(append_to_storage(current_value, value).expect(EXT_NOT_ALLOWED_TO_FAIL)),
+		);
+	}
+
 	fn chain_id(&self) -> u64 {
 		42
 	}
@@ -548,6 +568,67 @@ where
 			changes.transaction,
 		).expect(EXT_NOT_ALLOWED_TO_FAIL);
 		self.storage_transaction_cache.reset();
+	}
+}
+
+fn extract_length_data(data: &[u8]) -> Result<(u32, usize, usize), &'static str> {
+	use codec::CompactLen;
+
+	let len = u32::from(
+		Compact::<u32>::decode(&mut &data[..])
+			.map_err(|_| "Incorrect updated item encoding")?
+	);
+	let new_len = len
+		.checked_add(1)
+		.ok_or_else(|| "New vec length greater than `u32::max_value()`.")?;
+
+	let encoded_len = Compact::<u32>::compact_len(&len);
+	let encoded_new_len = Compact::<u32>::compact_len(&new_len);
+
+	Ok((new_len, encoded_len, encoded_new_len))
+}
+
+pub fn append_to_storage(
+	mut self_encoded: Vec<u8>,
+	value: Vec<u8>,
+) -> Result<Vec<u8>, &'static str> {
+	// No data present, just encode the given input data.
+	if self_encoded.is_empty() {
+		Compact::from(1u32).encode_to(&mut self_encoded);
+		self_encoded.extend(value);
+		return Ok(self_encoded);
+	}
+
+	let (new_len, encoded_len, encoded_new_len) = extract_length_data(&self_encoded)?;
+
+	let replace_len = |dest: &mut Vec<u8>| {
+		Compact(new_len).using_encoded(|e| {
+			dest[..encoded_new_len].copy_from_slice(e);
+		})
+	};
+
+	let append_new_elems = |dest: &mut Vec<u8>| dest.extend(&value[..]);
+
+	// If old and new encoded len is equal, we don't need to copy the
+	// already encoded data.
+	if encoded_len == encoded_new_len {
+		replace_len(&mut self_encoded);
+		append_new_elems(&mut self_encoded);
+
+		Ok(self_encoded)
+	} else {
+		let size = encoded_new_len + self_encoded.len() - encoded_len;
+
+		let mut res = Vec::with_capacity(size + value.len());
+		unsafe { res.set_len(size); }
+
+		// Insert the new encoded len, copy the already encoded data and
+		// add the new element.
+		replace_len(&mut res);
+		res[encoded_new_len..size].copy_from_slice(&self_encoded[encoded_len..]);
+		append_new_elems(&mut res);
+
+		Ok(res)
 	}
 }
 

@@ -230,10 +230,13 @@ pub struct RunCmd {
 	pub max_runtime_instances: Option<usize>,
 
 	/// Specify a list of sentry node public addresses.
+	///
+	/// Can't be used with --public-addr as the sentry node would take precedence over the public address
+	/// specified there.
 	#[structopt(
 		long = "sentry-nodes",
 		value_name = "ADDR",
-		conflicts_with_all = &[ "sentry" ]
+		conflicts_with_all = &[ "sentry", "public-addr" ]
 	)]
 	pub sentry_nodes: Vec<MultiaddrWithPeerId>,
 }

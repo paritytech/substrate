@@ -27,7 +27,6 @@ use parking_lot::Mutex;
 use futures_timer::Delay;
 use tokio::runtime::{Runtime, Handle};
 use sp_keyring::Ed25519Keyring;
-use sc_client::LongestChain;
 use sc_client_api::backend::TransactionFor;
 use sp_blockchain::Result;
 use sp_api::{ApiRef, StorageProof, ProvideRuntimeApi};
@@ -50,6 +49,7 @@ use finality_proof::{
 };
 use consensus_changes::ConsensusChanges;
 use sc_block_builder::BlockBuilderProvider;
+use sc_consensus::LongestChain;
 
 type PeerData =
 	Mutex<

@@ -30,15 +30,15 @@ use sp_runtime::traits::{Block as BlockT, HashFor};
 use sp_blockchain::Result as ClientResult;
 use prometheus_endpoint::Registry;
 
-use crate::call_executor::LocalCallExecutor;
-use crate::client::{Client,ClientConfig};
+use super::call_executor::LocalCallExecutor;
+use super::client::{Client,ClientConfig};
 use sc_client_api::{
 	light::Storage as BlockchainStorage, CloneableSpawn,
 };
-use crate::light::backend::Backend;
-use crate::light::blockchain::Blockchain;
-use crate::light::call_executor::GenesisCallExecutor;
-use crate::light::fetcher::LightDataChecker;
+use self::backend::Backend;
+use self::blockchain::Blockchain;
+use self::call_executor::GenesisCallExecutor;
+use self::fetcher::LightDataChecker;
 
 /// Create an instance of light client blockchain backend.
 pub fn new_light_blockchain<B: BlockT, S: BlockchainStorage<B>>(storage: S) -> Arc<Blockchain<S>> {
