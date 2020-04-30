@@ -166,19 +166,24 @@ pub trait CliConfiguration: Sized {
 		Ok(self.import_params().map(|x| x.database()))
 	}
 
-	/// Get the database configuration.
-	///
-	/// By default this is retrieved from `SharedParams`
-	fn database_config(&self,
+	/// Get the database configuration object for the parameters provided
+	fn database_config(
 		base_path: &PathBuf,
 		cache_size: usize,
 		database: Database,
-	) -> Result<DatabaseConfig> {
-		Ok(self.shared_params().database_config(
-			base_path,
-			cache_size,
-			database,
-		))
+	) -> DatabaseConfig {
+		match database {
+			Database::RocksDb => DatabaseConfig::RocksDb {
+				path: base_path.join("db"),
+				cache_size,
+			},
+			Database::SubDb => DatabaseConfig::SubDb {
+				path: base_path.join("subdb"),
+			},
+			Database::ParityDb => DatabaseConfig::ParityDb {
+				path: base_path.join("paritydb"),
+			},
+		}
 	}
 
 	/// Get the state cache size.
@@ -431,7 +436,7 @@ pub trait CliConfiguration: Sized {
 				node_key,
 			)?,
 			keystore: self.keystore_config(&config_dir)?,
-			database: self.database_config(&config_dir, database_cache_size, database)?,
+			database: Self::database_config(&config_dir, database_cache_size, database),
 			state_cache_size: self.state_cache_size()?,
 			state_cache_child_ratio: self.state_cache_child_ratio()?,
 			pruning: self.pruning(unsafe_pruning, &role)?,

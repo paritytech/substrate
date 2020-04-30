@@ -37,7 +37,7 @@ pub struct PurgeChainCmd {
 
 	/// Select database backend to use.
 	#[structopt(
-		long = "database",
+		long,
 		alias = "db",
 		value_name = "DB",
 		case_insensitive = true,
@@ -49,13 +49,10 @@ pub struct PurgeChainCmd {
 impl PurgeChainCmd {
 	/// Run the purge command
 	pub fn run(&self, config: Configuration) -> error::Result<()> {
-		let db_path = match config.database.path() {
-			Some(path) => path,
-			_ => {
-				eprintln!("Cannot purge custom database implementation");
-				return Ok(());
-			}
-		};
+		let db_path = config.database.path()
+			.ok_or_else(||
+				error::Error::Input("Cannot purge custom database implementation".into())
+		)?;
 
 		if !self.yes {
 			print!("Are you sure to remove {:?}? [y/N]: ", &db_path);

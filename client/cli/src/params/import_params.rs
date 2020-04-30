@@ -56,7 +56,7 @@ pub struct ImportParams {
 
 	/// Select database backend to use.
 	#[structopt(
-		long = "database",
+		long,
 		alias = "db",
 		value_name = "DB",
 		case_insensitive = true,
