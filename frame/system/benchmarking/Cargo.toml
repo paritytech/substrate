@@ -12,12 +12,12 @@ description = "FRAME System benchmarking"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "1.3.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "1.3.0", default-features = false }
 sp-std = { version = "2.0.0-dev", default-features = false, path = "../../../primitives/std" }
 sp-runtime = { version = "2.0.0-dev", default-features = false, path = "../../../primitives/runtime" }
 frame-benchmarking = { version = "2.0.0-dev", default-features = false, path = "../../benchmarking" }
-frame-system = { version = "2.0.0-dev", default-features = false, path = "../../system", features = ["runtime-benchmarks"] }
-frame-support = { version = "2.0.0-dev", default-features = false, path = "../../support", features = ["runtime-benchmarks"] }
+frame-system = { version = "2.0.0-dev", default-features = false, path = "../../system" }
+frame-support = { version = "2.0.0-dev", default-features = false, path = "../../support" }
 sp-core = { version = "2.0.0-dev", default-features = false, path = "../../../primitives/core" }
 
 [dev-dependencies]
