@@ -30,7 +30,7 @@ use rpc::futures::{
 };
 use futures::{StreamExt as _, compat::Compat};
 use futures::future::{ready, FutureExt, TryFutureExt};
-use sc_rpc_api::Subscriptions;
+use sc_rpc_api::{DenyUnsafe, Subscriptions};
 use jsonrpc_pubsub::{typed::Subscriber, SubscriptionId};
 use codec::{Encode, Decode};
 use sp_core::{Bytes, traits::BareCryptoStorePtr};
@@ -56,6 +56,8 @@ pub struct Author<P, Client> {
 	subscriptions: Subscriptions,
 	/// The key store.
 	keystore: BareCryptoStorePtr,
+	/// Whether to deny unsafe calls
+	deny_unsafe: DenyUnsafe,
 }
 
 impl<P, Client> Author<P, Client> {
@@ -65,12 +67,14 @@ impl<P, Client> Author<P, Client> {
 		pool: Arc<P>,
 		subscriptions: Subscriptions,
 		keystore: BareCryptoStorePtr,
+		deny_unsafe: DenyUnsafe,
 	) -> Self {
 		Author {
 			client,
 			pool,
 			subscriptions,
 			keystore,
+			deny_unsafe,
 		}
 	}
 }
@@ -97,6 +101,8 @@ impl<P, Client> AuthorApi<TxHash<P>, BlockHash<P>> for Author<P, Client>
 		suri: String,
 		public: Bytes,
 	) -> Result<()> {
+		self.deny_unsafe.check_if_safe()?;
+
 		let key_type = key_type.as_str().try_into().map_err(|_| Error::BadKeyType)?;
 		let mut keystore = self.keystore.write();
 		keystore.insert_unknown(key_type, &suri, &public[..])
@@ -105,6 +111,8 @@ impl<P, Client> AuthorApi<TxHash<P>, BlockHash<P>> for Author<P, Client>
 	}
 
 	fn rotate_keys(&self) -> Result<Bytes> {
+		self.deny_unsafe.check_if_safe()?;
+
 		let best_block_hash = self.client.info().best_hash;
 		self.client.runtime_api().generate_session_keys(
 			&generic::BlockId::Hash(best_block_hash),
@@ -113,6 +121,8 @@ impl<P, Client> AuthorApi<TxHash<P>, BlockHash<P>> for Author<P, Client>
 	}
 
 	fn has_session_keys(&self, session_keys: Bytes) -> Result<bool> {
+		self.deny_unsafe.check_if_safe()?;
+
 		let best_block_hash = self.client.info().best_hash;
 		let keys = self.client.runtime_api().decode_session_keys(
 			&generic::BlockId::Hash(best_block_hash),
@@ -124,6 +134,8 @@ impl<P, Client> AuthorApi<TxHash<P>, BlockHash<P>> for Author<P, Client>
 	}
 
 	fn has_key(&self, public_key: Bytes, key_type: String) -> Result<bool> {
+		self.deny_unsafe.check_if_safe()?;
+
 		let key_type = key_type.as_str().try_into().map_err(|_| Error::BadKeyType)?;
 		Ok(self.keystore.read().has_keys(&[(public_key.to_vec(), key_type)]))
 	}
@@ -151,6 +163,8 @@ impl<P, Client> AuthorApi<TxHash<P>, BlockHash<P>> for Author<P, Client>
 		&self,
 		bytes_or_hash: Vec<hash::ExtrinsicOrHash<TxHash<P>>>,
 	) -> Result<Vec<TxHash<P>>> {
+		self.deny_unsafe.check_if_safe()?;
+
 		let hashes = bytes_or_hash.into_iter()
 			.map(|x| match x {
 				hash::ExtrinsicOrHash::Hash(h) => Ok(h),

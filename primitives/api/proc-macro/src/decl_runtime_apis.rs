@@ -407,6 +407,7 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 				at: &#crate_::BlockId<Block>,
 				args: Vec<u8>,
 				changes: &std::cell::RefCell<#crate_::OverlayedChanges>,
+				offchain_changes: &std::cell::RefCell<#crate_::OffchainOverlayedChanges>,
 				storage_transaction_cache: &std::cell::RefCell<
 					#crate_::StorageTransactionCache<Block, T::StateBackend>
 				>,
@@ -436,6 +437,7 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 							native_call: None,
 							arguments: args,
 							overlayed_changes: changes,
+							offchain_changes,
 							storage_transaction_cache,
 							initialize_block,
 							context,
@@ -456,6 +458,7 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 					native_call,
 					arguments: args,
 					overlayed_changes: changes,
+					offchain_changes,
 					storage_transaction_cache,
 					initialize_block,
 					context,
@@ -876,6 +879,53 @@ struct CheckTraitDecl {
 	errors: Vec<Error>,
 }
 
+impl CheckTraitDecl {
+	/// Check the given trait.
+	///
+	/// All errors will be collected in `self.errors`.
+	fn check(&mut self, trait_: &ItemTrait) {
+		self.check_method_declarations(trait_.items.iter().filter_map(|i| match i {
+			TraitItem::Method(method) => Some(method),
+			_ => None,
+		}));
+
+		visit::visit_item_trait(self, trait_);
+	}
+
+	/// Check that the given method declarations are correct.
+	///
+	/// Any error is stored in `self.errors`.
+	fn check_method_declarations<'a>(&mut self, methods: impl Iterator<Item = &'a TraitItemMethod>) {
+		let mut method_to_signature_changed = HashMap::<Ident, Vec<Option<u64>>>::new();
+
+		methods.into_iter().for_each(|method| {
+			let attributes = remove_supported_attributes(&mut method.attrs.clone());
+
+			let changed_in = match get_changed_in(&attributes) {
+				Ok(r) => r,
+				Err(e) => { self.errors.push(e); return; },
+			};
+
+			method_to_signature_changed
+				.entry(method.sig.ident.clone())
+				.or_default()
+				.push(changed_in);
+		});
+
+		method_to_signature_changed.into_iter().for_each(|(f, changed)| {
+			// If `changed_in` is `None`, it means it is the current "default" method that calls
+			// into the latest implementation.
+			if changed.iter().filter(|c| c.is_none()).count() == 0 {
+				self.errors.push(Error::new(
+					f.span(),
+					"There is no 'default' method with this name (without `changed_in` attribute).\n\
+					 The 'default' method is used to call into the latest implementation.",
+				));
+			}
+		});
+	}
+}
+
 impl<'ast> Visit<'ast> for CheckTraitDecl {
 	fn visit_fn_arg(&mut self, input: &'ast FnArg) {
 		if let FnArg::Receiver(_) = input {
@@ -923,7 +973,7 @@ impl<'ast> Visit<'ast> for CheckTraitDecl {
 /// Check that the trait declarations are in the format we expect.
 fn check_trait_decls(decls: &[ItemTrait]) -> Result<()> {
 	let mut checker = CheckTraitDecl { errors: Vec::new() };
-	decls.iter().for_each(|decl| visit::visit_item_trait(&mut checker, &decl));
+	decls.iter().for_each(|decl| checker.check(decl));
 
 	if let Some(err) = checker.errors.pop() {
 		Err(checker.errors.into_iter().fold(err, |mut err, other| {

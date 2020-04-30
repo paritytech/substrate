@@ -29,10 +29,10 @@ use frame_support::{
 	traits::{Currency, Get, FindAuthor, OnFinalize, OnInitialize},
 	weights::Weight,
 };
-use frame_system::offchain::TransactionSubmitter;
 use sp_io;
 use sp_phragmen::{
 	build_support_map, evaluate_support, reduce, ExtendedBalance, StakedAssignment, PhragmenScore,
+	VoteWeight,
 };
 use crate::*;
 
@@ -64,6 +64,7 @@ thread_local! {
 	static SLASH_DEFER_DURATION: RefCell<EraIndex> = RefCell::new(0);
 	static ELECTION_LOOKAHEAD: RefCell<BlockNumber> = RefCell::new(0);
 	static PERIOD: RefCell<BlockNumber> = RefCell::new(1);
+	static MAX_ITERATIONS: RefCell<u32> = RefCell::new(0);
 }
 
 /// Another session handler struct to test on_disabled.
@@ -143,6 +144,13 @@ impl Get<EraIndex> for SlashDeferDuration {
 	}
 }
 
+pub struct MaxIterations;
+impl Get<u32> for MaxIterations {
+	fn get() -> u32 {
+		MAX_ITERATIONS.with(|v| *v.borrow())
+	}
+}
+
 impl_outer_origin! {
 	pub enum Origin for Test  where system = frame_system {}
 }
@@ -203,6 +211,9 @@ impl frame_system::Trait for Test {
 	type Event = MetaEvent;
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
+	type DbWeight = ();
+	type BlockExecutionWeight = ();
+	type ExtrinsicBaseWeight = ();
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type MaximumBlockLength = MaximumBlockLength;
 	type Version = ();
@@ -275,11 +286,26 @@ parameter_types! {
 	pub const UnsignedPriority: u64 = 1 << 20;
 }
 
+thread_local! {
+	pub static REWARD_REMAINDER_UNBALANCED: RefCell<u128> = RefCell::new(0);
+}
+
+pub struct RewardRemainderMock;
+
+impl OnUnbalanced<NegativeImbalanceOf<Test>> for RewardRemainderMock {
+	fn on_nonzero_unbalanced(amount: NegativeImbalanceOf<Test>) {
+		REWARD_REMAINDER_UNBALANCED.with(|v| {
+			*v.borrow_mut() += amount.peek();
+		});
+		drop(amount);
+	}
+}
+
 impl Trait for Test {
 	type Currency = Balances;
 	type UnixTime = Timestamp;
 	type CurrencyToVote = CurrencyToVoteHandler;
-	type RewardRemainder = ();
+	type RewardRemainder = RewardRemainderMock;
 	type Event = MetaEvent;
 	type Slash = ();
 	type Reward = ();
@@ -292,13 +318,19 @@ impl Trait for Test {
 	type NextNewSession = Session;
 	type ElectionLookahead = ElectionLookahead;
 	type Call = Call;
-	type SubmitTransaction = SubmitTransaction;
+	type MaxIterations = MaxIterations;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type UnsignedPriority = UnsignedPriority;
 }
 
+impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Test where
+	Call: From<LocalCall>,
+{
+	type OverarchingCall = Call;
+	type Extrinsic = Extrinsic;
+}
+
 pub type Extrinsic = TestXt<Call, ()>;
-type SubmitTransaction = TransactionSubmitter<(), Test, Extrinsic>;
 
 pub struct ExtBuilder {
 	session_length: BlockNumber,
@@ -314,6 +346,7 @@ pub struct ExtBuilder {
 	num_validators: Option<u32>,
 	invulnerables: Vec<AccountId>,
 	has_stakers: bool,
+	max_offchain_iterations: u32,
 }
 
 impl Default for ExtBuilder {
@@ -332,6 +365,7 @@ impl Default for ExtBuilder {
 			num_validators: None,
 			invulnerables: vec![],
 			has_stakers: true,
+			max_offchain_iterations: 0,
 		}
 	}
 }
@@ -389,6 +423,10 @@ impl ExtBuilder {
 		self.has_stakers = has;
 		self
 	}
+	pub fn max_offchain_iterations(mut self, iterations: u32) -> Self {
+		self.max_offchain_iterations = iterations;
+		self
+	}
 	pub fn offchain_phragmen_ext(self) -> Self {
 		self.session_per_era(4)
 			.session_length(5)
@@ -400,6 +438,7 @@ impl ExtBuilder {
 		SESSION_PER_ERA.with(|v| *v.borrow_mut() = self.session_per_era);
 		ELECTION_LOOKAHEAD.with(|v| *v.borrow_mut() = self.election_lookahead);
 		PERIOD.with(|v| *v.borrow_mut() = self.session_length);
+		MAX_ITERATIONS.with(|v| *v.borrow_mut() = self.max_offchain_iterations);
 	}
 	pub fn build(self) -> sp_io::TestExternalities {
 		let _ = env_logger::try_init();
@@ -506,6 +545,10 @@ pub type Session = pallet_session::Module<Test>;
 pub type Timestamp = pallet_timestamp::Module<Test>;
 pub type Staking = Module<Test>;
 
+pub(crate) fn current_era() -> EraIndex {
+	Staking::current_era().unwrap()
+}
+
 fn post_conditions() {
 	check_nominators();
 	check_exposures();
@@ -524,7 +567,7 @@ fn check_ledgers() {
 fn check_exposures() {
 	// a check per validator to ensure the exposure struct is always sane.
 	let era = active_era();
-	ErasStakers::<Test>::iter_prefix(era).for_each(|expo| {
+	ErasStakers::<Test>::iter_prefix_values(era).for_each(|expo| {
 		assert_eq!(
 			expo.total as u128,
 			expo.own as u128 + expo.others.iter().map(|e| e.value as u128).sum::<u128>(),
@@ -649,9 +692,13 @@ pub(crate) fn start_session(session_index: SessionIndex) {
 	assert_eq!(Session::current_index(), session_index);
 }
 
+// This start and activate the era given.
+// Because the mock use pallet-session which delays session by one, this will be one session after
+// the election happened, not the first session after the election has happened.
 pub(crate) fn start_era(era_index: EraIndex) {
 	start_session((era_index * <SessionsPerEra as Get<u32>>::get()).into());
 	assert_eq!(Staking::current_era().unwrap(), era_index);
+	assert_eq!(Staking::active_era().unwrap().index, era_index);
 }
 
 pub(crate) fn current_total_payout_for_duration(duration: u64) -> Balance {
@@ -837,10 +884,10 @@ pub(crate) fn prepare_submission_with(
 	} = Staking::do_phragmen::<OffchainAccuracy>().unwrap();
 	let winners = winners.into_iter().map(|(w, _)| w).collect::<Vec<AccountId>>();
 
-	let stake_of = |who: &AccountId| -> ExtendedBalance {
-		<CurrencyToVoteHandler as Convert<Balance, u64>>::convert(
+	let stake_of = |who: &AccountId| -> VoteWeight {
+		<CurrencyToVoteHandler as Convert<Balance, VoteWeight>>::convert(
 			Staking::slashable_balance_of(&who)
-		) as ExtendedBalance
+		)
 	};
 	let mut staked = sp_phragmen::assignment_ratio_to_staked(assignments, stake_of);
 
@@ -879,7 +926,7 @@ pub(crate) fn prepare_submission_with(
 	let score = {
 		let staked = sp_phragmen::assignment_ratio_to_staked(
 			assignments_reduced.clone(),
-			Staking::slashable_balance_of_extended,
+			Staking::slashable_balance_of_vote_weight,
 		);
 
 		let (support_map, _) = build_support_map::<AccountId>(
@@ -965,4 +1012,14 @@ macro_rules! assert_session_era {
 			$era,
 		);
 	};
+}
+
+pub(crate) fn staking_events() -> Vec<Event<Test>> {
+	System::events().into_iter().map(|r| r.event).filter_map(|e| {
+		if let MetaEvent::staking(inner) = e {
+			Some(inner)
+		} else {
+			None
+		}
+	}).collect()
 }

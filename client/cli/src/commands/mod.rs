@@ -187,6 +187,12 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
+			fn offchain_worker_params(&self) -> Option<&$crate::OffchainWorkerParams> {
+				match self {
+					$($enum::$variant(cmd) => cmd.offchain_worker_params()),*
+				}
+			}
+
 			fn base_path(&self) -> $crate::Result<::std::option::Option<::std::path::PathBuf>> {
 				match self {
 					$($enum::$variant(cmd) => cmd.base_path()),*
@@ -216,7 +222,7 @@ macro_rules! substrate_cli_subcommands {
 				&self,
 				chain_spec: &::std::boxed::Box<dyn ::sc_service::ChainSpec>,
 				is_dev: bool,
-				net_config_dir: &::std::path::PathBuf,
+				net_config_dir: ::std::path::PathBuf,
 				client_id: &str,
 				node_name: &str,
 				node_key: ::sc_service::config::NodeKeyConfig,
@@ -247,9 +253,16 @@ macro_rules! substrate_cli_subcommands {
 				&self,
 				base_path: &::std::path::PathBuf,
 				cache_size: usize,
+				database: $crate::Database,
 			) -> $crate::Result<::sc_service::config::DatabaseConfig> {
 				match self {
-					$($enum::$variant(cmd) => cmd.database_config(base_path, cache_size)),*
+					$($enum::$variant(cmd) => cmd.database_config(base_path, cache_size, database)),*
+				}
+			}
+
+			fn database(&self) -> $crate::Result<::std::option::Option<$crate::Database>> {
+				match self {
+					$($enum::$variant(cmd) => cmd.database()),*
 				}
 			}
 
@@ -265,10 +278,10 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
-			fn pruning(&self, is_dev: bool, role: &::sc_service::Role)
+			fn pruning(&self, unsafe_pruning: bool, role: &::sc_service::Role)
 			-> $crate::Result<::sc_service::config::PruningMode> {
 				match self {
-					$($enum::$variant(cmd) => cmd.pruning(is_dev, role)),*
+					$($enum::$variant(cmd) => cmd.pruning(unsafe_pruning, role)),*
 				}
 			}
 
@@ -297,7 +310,7 @@ macro_rules! substrate_cli_subcommands {
 			}
 
 			fn execution_strategies(&self, is_dev: bool)
-			-> $crate::Result<::sc_service::config::ExecutionStrategies> {
+			-> $crate::Result<::sc_client_api::execution_extensions::ExecutionStrategies> {
 				match self {
 					$($enum::$variant(cmd) => cmd.execution_strategies(is_dev)),*
 				}
@@ -312,6 +325,12 @@ macro_rules! substrate_cli_subcommands {
 			fn rpc_ws(&self) -> $crate::Result<::std::option::Option<::std::net::SocketAddr>> {
 				match self {
 					$($enum::$variant(cmd) => cmd.rpc_ws()),*
+				}
+			}
+
+			fn unsafe_rpc_expose(&self) -> $crate::Result<bool> {
+				match self {
+					$($enum::$variant(cmd) => cmd.unsafe_rpc_expose()),*
 				}
 			}
 
@@ -357,7 +376,7 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
-			fn offchain_worker(&self, role: &::sc_service::Role) -> $crate::Result<bool> {
+			fn offchain_worker(&self, role: &::sc_service::Role) -> $crate::Result<::sc_service::config::OffchainWorkerConfig> {
 				match self {
 					$($enum::$variant(cmd) => cmd.offchain_worker(role)),*
 				}

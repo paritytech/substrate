@@ -58,7 +58,7 @@ pub struct BenchmarkOutput {
 	average: u64,
 }
 
-struct NsFormatter(u64);
+pub struct NsFormatter(pub u64);
 
 impl fmt::Display for NsFormatter {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -68,12 +68,12 @@ impl fmt::Display for NsFormatter {
 			return write!(f, "{} ns", v)
 		}
 
-		if self.0 < 10_000 {
+		if self.0 < 100_000 {
 			return write!(f, "{:.1} µs", v as f64 / 1000.0)
 		}
 
 		if self.0 < 1_000_000 {
-			return write!(f, "{:.1} ms", v as f64 / 1_000_000.0)
+			return write!(f, "{:.2} ms", v as f64 / 1_000_000.0)
 		}
 
 		if self.0 < 100_000_000 {
@@ -105,7 +105,7 @@ impl fmt::Display for BenchmarkOutput {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
 			f,
-			"({}: avg {}, w_avg {})",
+			"{}: avg {}, w_avg {}",
 			self.name,
 			NsFormatter(self.raw_average),
 			NsFormatter(self.average),
@@ -139,10 +139,10 @@ pub fn run_benchmark(
 }
 
 macro_rules! matrix(
-	( $var:ident in $over:expr => $tt:expr,  $( $rest:tt )* ) => {
+	( $var:tt in $over:expr => $tt:expr,  $( $rest:tt )* ) => {
 		{
 			let mut res = Vec::<Box<dyn crate::core::BenchmarkDescription>>::new();
-			for $var in $over.iter() {
+			for $var in $over {
 				res.push(Box::new($tt));
 			}
 			res.extend(matrix!( $($rest)* ));

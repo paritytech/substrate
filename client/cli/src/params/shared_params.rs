@@ -18,10 +18,7 @@ use sc_service::config::DatabaseConfig;
 use std::{path::PathBuf, convert::TryFrom};
 use structopt::StructOpt;
 use sp_core::crypto::Ss58AddressFormat;
-use crate::arg_enums::{CryptoScheme, OutputType};
-
-/// default sub directory to store database
-const DEFAULT_DB_CONFIG_PATH: &'static str = "db";
+use crate::arg_enums::{CryptoScheme, OutputType, Database};
 
 /// Shared parameters used by all `CoreParams`.
 #[derive(Debug, StructOpt, Clone)]
@@ -112,10 +109,19 @@ impl SharedParams {
 		&self,
 		base_path: &PathBuf,
 		cache_size: usize,
+		database: Database,
 	) -> DatabaseConfig {
-		DatabaseConfig::Path {
-			path: base_path.join(DEFAULT_DB_CONFIG_PATH),
-			cache_size,
+		match database {
+			Database::RocksDb => DatabaseConfig::RocksDb {
+				path: base_path.join("db"),
+				cache_size,
+			},
+			Database::SubDb => DatabaseConfig::SubDb {
+				path: base_path.join("subdb"),
+			},
+			Database::ParityDb => DatabaseConfig::ParityDb {
+				path: base_path.join("paritydb"),
+			},
 		}
 	}
 

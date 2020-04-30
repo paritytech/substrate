@@ -26,7 +26,7 @@ use std::sync::Arc;
 use std::collections::HashMap;
 pub use substrate_test_client::*;
 pub use substrate_test_runtime as runtime;
-pub use sc_client::LongestChain;
+pub use sc_consensus::LongestChain;
 
 pub use self::block_builder_ext::BlockBuilderExt;
 
@@ -34,7 +34,7 @@ use sp_core::{sr25519, ChangesTrieConfiguration};
 use sp_core::storage::{ChildInfo, Storage, StorageChild};
 use substrate_test_runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, NumberFor, HashFor};
-use sc_client::{
+use sc_service::client::{
 	light::fetcher::{
 		Fetcher,
 		RemoteHeaderRequest, RemoteReadRequest, RemoteReadChildRequest,
@@ -68,7 +68,7 @@ sc_executor::native_executor_instance! {
 pub type Backend = substrate_test_client::Backend<substrate_test_runtime::Block>;
 
 /// Test client executor.
-pub type Executor = sc_client::LocalCallExecutor<
+pub type Executor = client::LocalCallExecutor<
 	Backend,
 	NativeExecutor<LocalExecutor>,
 >;
@@ -77,10 +77,10 @@ pub type Executor = sc_client::LocalCallExecutor<
 pub type LightBackend = substrate_test_client::LightBackend<substrate_test_runtime::Block>;
 
 /// Test client light executor.
-pub type LightExecutor = sc_client::light::call_executor::GenesisCallExecutor<
+pub type LightExecutor = client::light::call_executor::GenesisCallExecutor<
 	LightBackend,
-	sc_client::LocalCallExecutor<
-		sc_client::light::backend::Backend<
+	client::LocalCallExecutor<
+		client::light::backend::Backend<
 			sc_client_db::light::LightStorage<substrate_test_runtime::Block>,
 			HashFor<substrate_test_runtime::Block>
 		>,
@@ -123,16 +123,17 @@ impl substrate_test_client::GenesisInit for GenesisParameters {
 
 		let mut storage = self.genesis_config().genesis_map();
 
-		let child_roots = storage.children.iter().map(|(sk, child_content)| {
+		let child_roots = storage.children_default.iter().map(|(_sk, child_content)| {
 			let state_root = <<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
 				child_content.data.clone().into_iter().collect()
 			);
-			(sk.clone(), state_root.encode())
+			let prefixed_storage_key = child_content.child_info.prefixed_storage_key();
+			(prefixed_storage_key.into_inner(), state_root.encode())
 		});
 		let state_root = <<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
 			storage.top.clone().into_iter().chain(child_roots).collect()
 		);
-		let block: runtime::Block = sc_client::genesis::construct_genesis_block(state_root);
+		let block: runtime::Block = client::genesis::construct_genesis_block(state_root);
 		storage.top.extend(additional_storage_with_genesis(&block));
 
 		storage
@@ -148,9 +149,9 @@ pub type TestClientBuilder<E, B> = substrate_test_client::TestClientBuilder<
 >;
 
 /// Test client type with `LocalExecutor` and generic Backend.
-pub type Client<B> = sc_client::Client<
+pub type Client<B> = client::Client<
 	B,
-	sc_client::LocalCallExecutor<B, sc_executor::NativeExecutor<LocalExecutor>>,
+	client::LocalCallExecutor<B, sc_executor::NativeExecutor<LocalExecutor>>,
 	substrate_test_runtime::Block,
 	substrate_test_runtime::RuntimeApi,
 >;
@@ -192,22 +193,21 @@ pub trait TestClientBuilderExt<B>: Sized {
 	/// # Panics
 	///
 	/// Panics if the key is empty.
-	fn add_extra_child_storage<SK: Into<Vec<u8>>, K: Into<Vec<u8>>, V: Into<Vec<u8>>>(
+	fn add_extra_child_storage<K: Into<Vec<u8>>, V: Into<Vec<u8>>>(
 		mut self,
-		storage_key: SK,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: K,
 		value: V,
 	) -> Self {
-		let storage_key = storage_key.into();
+		let storage_key = child_info.storage_key().to_vec();
 		let key = key.into();
 		assert!(!storage_key.is_empty());
 		assert!(!key.is_empty());
-		self.genesis_init_mut().extra_storage.children
+		self.genesis_init_mut().extra_storage.children_default
 			.entry(storage_key)
 			.or_insert_with(|| StorageChild {
 				data: Default::default(),
-				child_info: child_info.to_owned(),
+				child_info: child_info.clone(),
 			}).data.insert(key, value.into());
 		self
 	}
@@ -230,14 +230,14 @@ pub trait TestClientBuilderExt<B>: Sized {
 	}
 
 	/// Build the test client and longest chain selector.
-	fn build_with_longest_chain(self) -> (Client<B>, sc_client::LongestChain<B, substrate_test_runtime::Block>);
+	fn build_with_longest_chain(self) -> (Client<B>, sc_consensus::LongestChain<B, substrate_test_runtime::Block>);
 
 	/// Build the test client and the backend.
 	fn build_with_backend(self) -> (Client<B>, Arc<B>);
 }
 
 impl<B> TestClientBuilderExt<B> for TestClientBuilder<
-	sc_client::LocalCallExecutor<B, sc_executor::NativeExecutor<LocalExecutor>>,
+	client::LocalCallExecutor<B, sc_executor::NativeExecutor<LocalExecutor>>,
 	B
 > where
 	B: sc_client_api::backend::Backend<substrate_test_runtime::Block> + 'static,
@@ -249,7 +249,7 @@ impl<B> TestClientBuilderExt<B> for TestClientBuilder<
 		Self::genesis_init_mut(self)
 	}
 
-	fn build_with_longest_chain(self) -> (Client<B>, sc_client::LongestChain<B, substrate_test_runtime::Block>) {
+	fn build_with_longest_chain(self) -> (Client<B>, sc_consensus::LongestChain<B, substrate_test_runtime::Block>) {
 		self.build_with_native_executor(None)
 	}
 
@@ -311,7 +311,10 @@ impl Fetcher<substrate_test_runtime::Block> for LightFetcher {
 		unimplemented!()
 	}
 
-	fn remote_read_child(&self, _: RemoteReadChildRequest<substrate_test_runtime::Header>) -> Self::RemoteReadResult {
+	fn remote_read_child(
+		&self,
+		_: RemoteReadChildRequest<substrate_test_runtime::Header>,
+	) -> Self::RemoteReadResult {
 		unimplemented!()
 	}
 
@@ -341,15 +344,15 @@ pub fn new() -> Client<Backend> {
 
 /// Creates new light client instance used for tests.
 pub fn new_light() -> (
-	sc_client::Client<LightBackend, LightExecutor, substrate_test_runtime::Block, substrate_test_runtime::RuntimeApi>,
+	client::Client<LightBackend, LightExecutor, substrate_test_runtime::Block, substrate_test_runtime::RuntimeApi>,
 	Arc<LightBackend>,
 ) {
 
 	let storage = sc_client_db::light::LightStorage::new_test();
-	let blockchain = Arc::new(sc_client::light::blockchain::Blockchain::new(storage));
+	let blockchain = Arc::new(client::light::blockchain::Blockchain::new(storage));
 	let backend = Arc::new(LightBackend::new(blockchain.clone()));
 	let executor = new_native_executor();
-	let local_call_executor = sc_client::LocalCallExecutor::new(backend.clone(), executor, sp_core::tasks::executor());
+	let local_call_executor = client::LocalCallExecutor::new(backend.clone(), executor, sp_core::tasks::executor(), Default::default());
 	let call_executor = LightExecutor::new(
 		backend.clone(),
 		local_call_executor,

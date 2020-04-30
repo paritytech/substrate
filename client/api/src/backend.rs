@@ -19,14 +19,14 @@
 use std::sync::Arc;
 use std::collections::HashMap;
 use sp_core::ChangesTrieConfigurationRange;
-use sp_core::offchain::OffchainStorage;
+use sp_core::offchain::{OffchainStorage,storage::OffchainOverlayedChanges};
 use sp_runtime::{generic::BlockId, Justification, Storage};
 use sp_runtime::traits::{Block as BlockT, NumberFor, HashFor};
 use sp_state_machine::{
 	ChangesTrieState, ChangesTrieStorage as StateChangesTrieStorage, ChangesTrieTransaction,
 	StorageCollection, ChildStorageCollection,
 };
-use sp_storage::{StorageData, StorageKey, ChildInfo};
+use sp_storage::{StorageData, StorageKey, PrefixedStorageKey, ChildInfo};
 use crate::{
 	blockchain::{
 		Backend as BlockchainBackend, well_known_cache_keys
@@ -77,6 +77,25 @@ pub struct ClientImportOperation<Block: BlockT, B: Backend<Block>> {
 	pub notify_imported: Option<ImportSummary<Block>>,
 	/// A list of hashes of blocks that got finalized.
 	pub notify_finalized: Vec<Block::Hash>,
+}
+
+/// Helper function to apply auxiliary data insertion into an operation.
+pub fn apply_aux<'a, 'b: 'a, 'c: 'a, B, Block, D, I>(
+	operation: &mut ClientImportOperation<Block, B>,
+	insert: I,
+	delete: D,
+) -> sp_blockchain::Result<()>
+	where
+		Block: BlockT,
+		B: Backend<Block>,
+		I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
+		D: IntoIterator<Item=&'a &'b [u8]>,
+{
+	operation.op.insert_aux(
+		insert.into_iter()
+			.map(|(k, v)| (k.to_vec(), Some(v.to_vec())))
+			.chain(delete.into_iter().map(|k| (k.to_vec(), None)))
+	)
 }
 
 /// State of a new block.
@@ -147,6 +166,14 @@ pub trait BlockImportOperation<Block: BlockT> {
 		update: StorageCollection,
 		child_update: ChildStorageCollection,
 	) -> sp_blockchain::Result<()>;
+
+	/// Write offchain storage changes to the database.
+	fn update_offchain_storage(
+		&mut self,
+		_offchain_update: OffchainOverlayedChanges,
+	) -> sp_blockchain::Result<()> {
+		 Ok(())
+	}
 
 	/// Inject changes trie data into the database.
 	fn update_changes_trie(
@@ -280,6 +307,7 @@ impl<'a, State, Block> Iterator for KeyIterator<'a, State, Block> where
 		Some(StorageKey(next_key))
 	}
 }
+
 /// Provides acess to storage primitives
 pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 	/// Given a `BlockId` and a key, return the value under the key in that block.
@@ -310,8 +338,7 @@ pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 	fn child_storage(
 		&self,
 		id: &BlockId<Block>,
-		storage_key: &StorageKey,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &StorageKey
 	) -> sp_blockchain::Result<Option<StorageData>>;
 
@@ -319,8 +346,7 @@ pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 	fn child_storage_keys(
 		&self,
 		id: &BlockId<Block>,
-		child_storage_key: &StorageKey,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key_prefix: &StorageKey
 	) -> sp_blockchain::Result<Vec<StorageKey>>;
 
@@ -328,8 +354,7 @@ pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 	fn child_storage_hash(
 		&self,
 		id: &BlockId<Block>,
-		storage_key: &StorageKey,
-		child_info: ChildInfo,
+		child_info: &ChildInfo,
 		key: &StorageKey
 	) -> sp_blockchain::Result<Option<Block::Hash>>;
 
@@ -351,7 +376,7 @@ pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 		&self,
 		first: NumberFor<Block>,
 		last: BlockId<Block>,
-		storage_key: Option<&StorageKey>,
+		storage_key: Option<&PrefixedStorageKey>,
 		key: &StorageKey
 	) -> sp_blockchain::Result<Vec<(NumberFor<Block>, u32)>>;
 }

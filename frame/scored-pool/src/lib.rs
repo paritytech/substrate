@@ -61,7 +61,7 @@
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+//! 		#[weight = 0]
 //! 		pub fn candidate(origin) -> dispatch::DispatchResult {
 //! 			let who = ensure_signed(origin)?;
 //!
@@ -97,7 +97,7 @@ use sp_std::{
 use frame_support::{
 	decl_module, decl_storage, decl_event, ensure, decl_error,
 	traits::{EnsureOrigin, ChangeMembers, InitializeMembers, Currency, Get, ReservableCurrency},
-	weights::{Weight, SimpleDispatchInfo, WeighData},
+	weights::Weight,
 };
 use frame_system::{self as system, ensure_root, ensure_signed};
 use sp_runtime::{
@@ -252,7 +252,7 @@ decl_module! {
 				let pool = <Pool<T, I>>::get();
 				<Module<T, I>>::refresh_members(pool, ChangeReceiver::MembershipChanged);
 			}
-			SimpleDispatchInfo::default().weigh_data(())
+			0
 		}
 
 		/// Add `origin` to the pool of candidates.
@@ -266,7 +266,7 @@ decl_module! {
 		///
 		/// The `index` parameter of this function must be set to
 		/// the index of the transactor in the `Pool`.
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = 0]
 		pub fn submit_candidacy(origin) {
 			let who = ensure_signed(origin)?;
 			ensure!(!<CandidateExists<T, I>>::contains_key(&who), Error::<T, I>::AlreadyInPool);
@@ -296,7 +296,7 @@ decl_module! {
 		///
 		/// The `index` parameter of this function must be set to
 		/// the index of the transactor in the `Pool`.
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = 0]
 		pub fn withdraw_candidacy(
 			origin,
 			index: u32
@@ -316,7 +316,7 @@ decl_module! {
 		///
 		/// The `index` parameter of this function must be set to
 		/// the index of `dest` in the `Pool`.
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = 0]
 		pub fn kick(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -341,7 +341,7 @@ decl_module! {
 		///
 		/// The `index` parameter of this function must be set to
 		/// the index of the `dest` in the `Pool`.
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = 0]
 		pub fn score(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -382,7 +382,7 @@ decl_module! {
 		/// (this happens each `Period`).
 		///
 		/// May only be called from root.
-		#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+		#[weight = 0]
 		pub fn change_member_count(origin, count: u32) {
 			ensure_root(origin)?;
 			<MemberCount<I>>::put(&count);

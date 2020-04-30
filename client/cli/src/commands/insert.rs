@@ -26,7 +26,7 @@ use hyper::rt;
 use sc_rpc::author::AuthorClient;
 use jsonrpc_core_client::transports::http;
 use serde::{de::DeserializeOwned, Serialize};
-use cli_utils::{HashFor, RuntimeAdapter};
+use cli_utils::HashFor;
 
 /// The `insert` command
 #[derive(Debug, StructOpt, Clone)]

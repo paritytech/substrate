@@ -27,7 +27,7 @@ use sp_runtime::{
 use crate::{arg_enums::{OutputType}, error::{self, Error}, KeystoreParams};
 use parity_scale_codec::Encode;
 use serde_json::json;
-use cli_utils::{RuntimeAdapter, IndexFor};
+use cli_utils::IndexFor;
 
 /// Public key type for Runtime
 pub type PublicFor<P> = <P as sp_core::Pair>::Public;

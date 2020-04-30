@@ -26,8 +26,10 @@
 //! which is then processed by [`NetworkWorker::poll`].
 
 use crate::{
+	ExHashT, NetworkStateInfo,
 	behaviour::{Behaviour, BehaviourOut},
 	config::{parse_addr, parse_str_addr, NonReservedPeerMode, Params, Role, TransportConfig},
+	discovery::DiscoveryConfig,
 	error::Error,
 	network_state::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
@@ -56,7 +58,7 @@ use sp_runtime::{
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use std::{
 	borrow::Cow,
-	collections::{HashMap, HashSet},
+	collections::HashSet,
 	fs, io,
 	marker::PhantomData,
 	pin::Pin,
@@ -71,86 +73,6 @@ use std::{
 mod out_events;
 #[cfg(test)]
 mod tests;
-
-/// Minimum Requirements for a Hash within Networking
-pub trait ExHashT: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static {}
-
-impl<T> ExHashT for T where T: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static
-{}
-
-/// Transaction pool interface
-pub trait TransactionPool<H: ExHashT, B: BlockT>: Send + Sync {
-	/// Get transactions from the pool that are ready to be propagated.
-	fn transactions(&self) -> Vec<(H, B::Extrinsic)>;
-	/// Get hash of transaction.
-	fn hash_of(&self, transaction: &B::Extrinsic) -> H;
-	/// Import a transaction into the pool.
-	///
-	/// Peer reputation is changed by reputation_change if transaction is accepted by the pool.
-	fn import(
-		&self,
-		report_handle: ReportHandle,
-		who: PeerId,
-		reputation_change_good: ReputationChange,
-		reputation_change_bad: ReputationChange,
-		transaction: B::Extrinsic,
-	);
-	/// Notify the pool about transactions broadcast.
-	fn on_broadcasted(&self, propagations: HashMap<H, Vec<String>>);
-	/// Get transaction by hash.
-	fn transaction(&self, hash: &H) -> Option<B::Extrinsic>;
-}
-
-/// Dummy implementation of the [`TransactionPool`] trait for a transaction pool that is always
-/// empty and discards all incoming transactions.
-///
-/// Requires the "hash" type to implement the `Default` trait.
-///
-/// Useful for testing purposes.
-pub struct EmptyTransactionPool;
-
-impl<H: ExHashT + Default, B: BlockT> TransactionPool<H, B> for EmptyTransactionPool {
-	fn transactions(&self) -> Vec<(H, B::Extrinsic)> {
-		Vec::new()
-	}
-
-	fn hash_of(&self, _transaction: &B::Extrinsic) -> H {
-		Default::default()
-	}
-
-	fn import(
-		&self,
-		_report_handle: ReportHandle,
-		_who: PeerId,
-		_rep_change_good: ReputationChange,
-		_rep_change_bad: ReputationChange,
-		_transaction: B::Extrinsic
-	) {}
-
-	fn on_broadcasted(&self, _: HashMap<H, Vec<String>>) {}
-
-	fn transaction(&self, _h: &H) -> Option<B::Extrinsic> { None }
-}
-
-/// A cloneable handle for reporting cost/benefits of peers.
-#[derive(Clone)]
-pub struct ReportHandle {
-	inner: PeersetHandle, // wraps it so we don't have to worry about breaking API.
-}
-
-impl From<PeersetHandle> for ReportHandle {
-	fn from(peerset_handle: PeersetHandle) -> Self {
-		ReportHandle { inner: peerset_handle }
-	}
-}
-
-impl ReportHandle {
-	/// Report a given peer as either beneficial (+) or costly (-) according to the
-	/// given scalar.
-	pub fn report_peer(&self, who: PeerId, cost_benefit: ReputationChange) {
-		self.inner.report_peer(who, cost_benefit);
-	}
-}
 
 /// Substrate network service. Handles network IO and manages connectivity.
 pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
@@ -183,7 +105,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 	pub fn new(params: Params<B, H>) -> Result<NetworkWorker<B, H>, Error> {
 		let (to_worker, from_worker) = tracing_unbounded("mpsc_network_worker");
 
-		fs::create_dir_all(&params.network_config.net_config_path)?;
+		if let Some(path) = params.network_config.net_config_path {
+			fs::create_dir_all(&path)?;
+		}
 
 		// List of multiaddresses that we know in the network.
 		let mut known_addresses = Vec::new();
@@ -287,6 +211,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 			params.block_announce_validator,
 			params.metrics_registry.as_ref(),
 			boot_node_ids.clone(),
+			params.network_config.use_new_block_requests_protocol,
 			metrics.as_ref().map(|m| m.notifications_queues_size.clone()),
 		)?;
 
@@ -301,6 +226,10 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				let config = protocol::block_requests::Config::new(&params.protocol_id);
 				protocol::BlockRequests::new(config, params.chain.clone())
 			};
+			let finality_proof_requests = {
+				let config = protocol::finality_requests::Config::new(&params.protocol_id);
+				protocol::FinalityProofRequests::new(config, params.finality_proof_provider.clone())
+			};
 			let light_client_handler = {
 				let config = protocol::light_client_handler::Config::new(&params.protocol_id);
 				protocol::LightClientHandler::new(
@@ -310,24 +239,39 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 					peerset_handle.clone(),
 				)
 			};
-			let mut behaviour = futures::executor::block_on(Behaviour::new(
+
+			let discovery_config = {
+				let mut config = DiscoveryConfig::new(local_public.clone());
+				config.with_user_defined(known_addresses);
+				config.discovery_limit(u64::from(params.network_config.out_peers) + 15);
+				config.add_protocol(params.protocol_id.clone());
+				config.allow_non_globals_in_dht(params.network_config.allow_non_globals_in_dht);
+
+				match params.network_config.transport {
+					TransportConfig::MemoryOnly => {
+						config.with_mdns(false);
+						config.allow_private_ipv4(false);
+					}
+					TransportConfig::Normal { enable_mdns, allow_private_ipv4, .. } => {
+						config.with_mdns(enable_mdns);
+						config.allow_private_ipv4(allow_private_ipv4);
+					}
+				}
+
+				config
+			};
+
+			let mut behaviour = Behaviour::new(
 				protocol,
 				params.role,
 				user_agent,
 				local_public,
-				known_addresses,
-				match params.network_config.transport {
-					TransportConfig::MemoryOnly => false,
-					TransportConfig::Normal { enable_mdns, .. } => enable_mdns,
-				},
-				match params.network_config.transport {
-					TransportConfig::MemoryOnly => false,
-					TransportConfig::Normal { allow_private_ipv4, .. } => allow_private_ipv4,
-				},
-				u64::from(params.network_config.out_peers) + 15,
 				block_requests,
-				light_client_handler
-			));
+				finality_proof_requests,
+				light_client_handler,
+				discovery_config
+			);
+
 			for (engine_id, protocol_name) in &params.network_config.notifications_protocols {
 				behaviour.register_notifications_protocol(*engine_id, protocol_name.clone());
 			}
@@ -464,6 +408,18 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 		self.network_service.user_protocol_mut().on_block_finalized(hash, &header);
 	}
 
+	/// Returns the local `PeerId`.
+	pub fn local_peer_id(&self) -> &PeerId {
+		Swarm::<B, H>::local_peer_id(&self.network_service)
+	}
+
+	/// Returns the list of addresses we are listening on.
+	///
+	/// Does **NOT** include a trailing `/p2p/` with our `PeerId`.
+	pub fn listen_addresses(&self) -> impl Iterator<Item = &Multiaddr> {
+		Swarm::<B, H>::listeners(&self.network_service)
+	}
+
 	/// Get network state.
 	///
 	/// **Note**: Use this only for debugging. This API is unstable. There are warnings literally
@@ -575,9 +531,13 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// If this method is called multiple times, the events are duplicated.
 	///
 	/// The stream never ends (unless the `NetworkWorker` gets shut down).
-	pub fn event_stream(&self) -> impl Stream<Item = Event> {
+	///
+	/// The name passed is used to identify the channel in the Prometheus metrics. Note that the
+	/// parameter is a `&'static str`, and not a `String`, in order to avoid accidentally having
+	/// an unbounded set of Prometheus metrics, which would be quite bad in terms of memory
+	pub fn event_stream(&self, name: &'static str) -> impl Stream<Item = Event> {
 		// Note: when transitioning to stable futures, remove the `Error` entirely
-		let (tx, rx) = out_events::channel();
+		let (tx, rx) = out_events::channel(name);
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::EventStream(tx));
 		rx
 	}
@@ -760,15 +720,6 @@ impl<'a, B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle
 	}
 }
 
-/// Trait for providing information about the local network state
-pub trait NetworkStateInfo {
-	/// Returns the local external addresses.
-	fn external_addresses(&self) -> Vec<Multiaddr>;
-
-	/// Returns the local Peer ID.
-	fn local_peer_id(&self) -> PeerId;
-}
-
 impl<B, H> NetworkStateInfo for NetworkService<B, H>
 	where
 		B: sp_runtime::traits::Block,
@@ -841,47 +792,53 @@ pub struct NetworkWorker<B: BlockT + 'static, H: ExHashT> {
 
 struct Metrics {
 	// This list is ordered alphabetically
-	connections: GaugeVec<U64>,
 	connections_closed_total: CounterVec<U64>,
+	connections_opened_total: CounterVec<U64>,
 	import_queue_blocks_submitted: Counter<U64>,
 	import_queue_finality_proofs_submitted: Counter<U64>,
 	import_queue_justifications_submitted: Counter<U64>,
-	incoming_connections_errors_total: Counter<U64>,
+	incoming_connections_errors_total: CounterVec<U64>,
 	incoming_connections_total: Counter<U64>,
 	is_major_syncing: Gauge<U64>,
 	issued_light_requests: Counter<U64>,
-	kbuckets_num_nodes: Gauge<U64>,
+	kademlia_random_queries_total: CounterVec<U64>,
+	kademlia_records_count: GaugeVec<U64>,
+	kademlia_records_sizes_total: GaugeVec<U64>,
+	kbuckets_num_nodes: GaugeVec<U64>,
 	listeners_local_addresses: Gauge<U64>,
 	listeners_errors_total: Counter<U64>,
 	network_per_sec_bytes: GaugeVec<U64>,
 	notifications_queues_size: HistogramVec,
 	notifications_sizes: HistogramVec,
-	opened_notification_streams: GaugeVec<U64>,
+	notifications_streams_closed_total: CounterVec<U64>,
+	notifications_streams_opened_total: CounterVec<U64>,
 	peers_count: Gauge<U64>,
 	peerset_num_discovered: Gauge<U64>,
 	peerset_num_requested: Gauge<U64>,
 	pending_connections: Gauge<U64>,
 	pending_connections_errors_total: CounterVec<U64>,
-	random_kademalia_queries_total: Counter<U64>,
+	requests_in_total: HistogramVec,
+	requests_out_finished: HistogramVec,
+	requests_out_started_total: CounterVec<U64>,
 }
 
 impl Metrics {
 	fn register(registry: &Registry) -> Result<Self, PrometheusError> {
 		Ok(Self {
 			// This list is ordered alphabetically
-			connections: register(GaugeVec::new(
-				Opts::new(
-					"sub_libp2p_connections",
-					"Number of established libp2p connections"
-				),
-				&["direction"]
-			)?, registry)?,
 			connections_closed_total: register(CounterVec::new(
 				Opts::new(
 					"sub_libp2p_connections_closed_total",
-					"Total number of connections closed, by reason"
+					"Total number of connections closed, by reason and direction"
 				),
-				&["reason"]
+				&["direction", "reason"]
+			)?, registry)?,
+			connections_opened_total: register(CounterVec::new(
+				Opts::new(
+					"sub_libp2p_connections_opened_total",
+					"Total number of connections opened"
+				),
+				&["direction"]
 			)?, registry)?,
 			import_queue_blocks_submitted: register(Counter::new(
 				"import_queue_blocks_submitted",
@@ -895,9 +852,13 @@ impl Metrics {
 				"import_queue_justifications_submitted",
 				"Number of justifications submitted to the import queue.",
 			)?, registry)?,
-			incoming_connections_errors_total: register(Counter::new(
-				"sub_libp2p_incoming_connections_handshake_errors_total",
-				"Total number of incoming connections that have failed during the initial handshake"
+			incoming_connections_errors_total: register(CounterVec::new(
+				Opts::new(
+					"sub_libp2p_incoming_connections_handshake_errors_total",
+					"Total number of incoming connections that have failed during the \
+					initial handshake"
+				),
+				&["reason"]
 			)?, registry)?,
 			incoming_connections_total: register(Counter::new(
 				"sub_libp2p_incoming_connections_total",
@@ -910,8 +871,33 @@ impl Metrics {
 				"issued_light_requests",
 				"Number of light client requests that our node has issued.",
 			)?, registry)?,
-			kbuckets_num_nodes: register(Gauge::new(
-				"sub_libp2p_kbuckets_num_nodes", "Number of nodes in the Kademlia k-buckets"
+			kademlia_random_queries_total: register(CounterVec::new(
+				Opts::new(
+					"sub_libp2p_kademlia_random_queries_total",
+					"Number of random Kademlia queries started"
+				),
+				&["protocol"]
+			)?, registry)?,
+			kademlia_records_count: register(GaugeVec::new(
+				Opts::new(
+					"sub_libp2p_kademlia_records_count",
+					"Number of records in the Kademlia records store"
+				),
+				&["protocol"]
+			)?, registry)?,
+			kademlia_records_sizes_total: register(GaugeVec::new(
+				Opts::new(
+					"sub_libp2p_kademlia_records_sizes_total",
+					"Total size of all the records in the Kademlia records store"
+				),
+				&["protocol"]
+			)?, registry)?,
+			kbuckets_num_nodes: register(GaugeVec::new(
+				Opts::new(
+					"sub_libp2p_kbuckets_num_nodes",
+					"Number of nodes in the Kademlia k-buckets"
+				),
+				&["protocol"]
 			)?, registry)?,
 			listeners_local_addresses: register(Gauge::new(
 				"sub_libp2p_listeners_local_addresses", "Number of local addresses we're listening on"
@@ -933,7 +919,7 @@ impl Metrics {
 						"sub_libp2p_notifications_queues_size",
 						"Total size of all the notification queues"
 					),
-					buckets: vec![0.0, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0],
+					buckets: vec![0.0, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0, 511.0, 512.0],
 				},
 				&["protocol"]
 			)?, registry)?,
@@ -948,10 +934,17 @@ impl Metrics {
 				},
 				&["direction", "protocol"]
 			)?, registry)?,
-			opened_notification_streams: register(GaugeVec::new(
+			notifications_streams_closed_total: register(CounterVec::new(
 				Opts::new(
-					"sub_libp2p_opened_notification_streams",
-					"Number of open notification substreams"
+					"sub_libp2p_notifications_streams_closed_total",
+					"Total number of notification substreams that have been closed"
+				),
+				&["protocol"]
+			)?, registry)?,
+			notifications_streams_opened_total: register(CounterVec::new(
+				Opts::new(
+					"sub_libp2p_notifications_streams_opened_total",
+					"Total number of notification substreams that have been opened"
 				),
 				&["protocol"]
 			)?, registry)?,
@@ -975,8 +968,34 @@ impl Metrics {
 				),
 				&["reason"]
 			)?, registry)?,
-			random_kademalia_queries_total: register(Counter::new(
-				"sub_libp2p_random_kademalia_queries_total", "Number of random Kademlia queries started",
+			requests_in_total: register(HistogramVec::new(
+				HistogramOpts {
+					common_opts: Opts::new(
+						"sub_libp2p_requests_in_total",
+						"Total number of requests received and answered"
+					),
+					buckets: prometheus_endpoint::exponential_buckets(0.001, 2.0, 16)
+						.expect("parameters are always valid values; qed"),
+				},
+				&["protocol"]
+			)?, registry)?,
+			requests_out_finished: register(HistogramVec::new(
+				HistogramOpts {
+					common_opts: Opts::new(
+						"sub_libp2p_requests_out_finished",
+						"Time between a request's start and finish (successful or not)"
+					),
+					buckets: prometheus_endpoint::exponential_buckets(0.001, 2.0, 16)
+						.expect("parameters are always valid values; qed"),
+				},
+				&["protocol"]
+			)?, registry)?,
+			requests_out_started_total: register(CounterVec::new(
+				Opts::new(
+					"sub_libp2p_requests_out_started_total",
+					"Total number of requests emitted"
+				),
+				&["protocol"]
 			)?, registry)?,
 		})
 	}
@@ -984,15 +1003,17 @@ impl Metrics {
 	fn update_with_network_event(&self, event: &Event) {
 		match event {
 			Event::NotificationStreamOpened { engine_id, .. } => {
-				self.opened_notification_streams.with_label_values(&[&engine_id_to_string(&engine_id)]).inc();
+				self.notifications_streams_opened_total
+					.with_label_values(&[&maybe_utf8_bytes_to_string(engine_id)]).inc();
 			},
 			Event::NotificationStreamClosed { engine_id, .. } => {
-				self.opened_notification_streams.with_label_values(&[&engine_id_to_string(&engine_id)]).dec();
+				self.notifications_streams_closed_total
+					.with_label_values(&[&maybe_utf8_bytes_to_string(engine_id)]).inc();
 			},
 			Event::NotificationsReceived { messages, .. } => {
 				for (engine_id, message) in messages {
 					self.notifications_sizes
-						.with_label_values(&["in", &engine_id_to_string(&engine_id)])
+						.with_label_values(&["in", &maybe_utf8_bytes_to_string(engine_id)])
 						.observe(message.len() as f64);
 				}
 			},
@@ -1055,7 +1076,7 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 				ServiceToWorkerMsg::WriteNotification { message, engine_id, target } => {
 					if let Some(metrics) = this.metrics.as_ref() {
 						metrics.notifications_sizes
-							.with_label_values(&["out", &engine_id_to_string(&engine_id)])
+							.with_label_values(&["out", &maybe_utf8_bytes_to_string(&engine_id)])
 							.observe(message.len() as f64);
 					}
 					this.network_service.user_protocol_mut().write_notification(target, engine_id, message)
@@ -1095,9 +1116,32 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					}
 					this.import_queue.import_finality_proof(origin, hash, nb, proof);
 				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RandomKademliaStarted)) => {
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::AnsweredRequest { protocol, build_time, .. })) => {
 					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.random_kademalia_queries_total.inc();
+						metrics.requests_in_total
+							.with_label_values(&[&maybe_utf8_bytes_to_string(&protocol)])
+							.observe(build_time.as_secs_f64());
+					}
+				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RequestStarted { protocol, .. })) => {
+					if let Some(metrics) = this.metrics.as_ref() {
+						metrics.requests_out_started_total
+							.with_label_values(&[&maybe_utf8_bytes_to_string(&protocol)])
+							.inc();
+					}
+				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RequestFinished { protocol, request_duration, .. })) => {
+					if let Some(metrics) = this.metrics.as_ref() {
+						metrics.requests_out_finished
+							.with_label_values(&[&maybe_utf8_bytes_to_string(&protocol)])
+							.observe(request_duration.as_secs_f64());
+					}
+				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RandomKademliaStarted(protocol))) => {
+					if let Some(metrics) = this.metrics.as_ref() {
+						metrics.kademlia_random_queries_total
+							.with_label_values(&[&maybe_utf8_bytes_to_string(protocol.as_bytes())])
+							.inc();
 					}
 				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::Event(ev))) => {
@@ -1111,34 +1155,35 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					if let Some(metrics) = this.metrics.as_ref() {
 						match endpoint {
 							ConnectedPoint::Dialer { .. } =>
-								metrics.connections.with_label_values(&["out"]).inc(),
+								metrics.connections_opened_total.with_label_values(&["out"]).inc(),
 							ConnectedPoint::Listener { .. } =>
-								metrics.connections.with_label_values(&["in"]).inc(),
+								metrics.connections_opened_total.with_label_values(&["in"]).inc(),
 						}
 					}
 				},
 				Poll::Ready(SwarmEvent::ConnectionClosed { peer_id, cause, endpoint, .. }) => {
 					trace!(target: "sub-libp2p", "Libp2p => Disconnected({:?}, {:?})", peer_id, cause);
 					if let Some(metrics) = this.metrics.as_ref() {
-						match endpoint {
-							ConnectedPoint::Dialer { .. } =>
-								metrics.connections.with_label_values(&["out"]).dec(),
-							ConnectedPoint::Listener { .. } =>
-								metrics.connections.with_label_values(&["in"]).dec(),
-						}
+						let dir = match endpoint {
+							ConnectedPoint::Dialer { .. } => "out",
+							ConnectedPoint::Listener { .. } => "in",
+						};
+
 						match cause {
 							ConnectionError::IO(_) =>
-								metrics.connections_closed_total.with_label_values(&["transport-error"]).inc(),
+								metrics.connections_closed_total.with_label_values(&[dir, "transport-error"]).inc(),
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::B(EitherError::A(PingFailure::Timeout))))))) =>
-								metrics.connections_closed_total.with_label_values(&["ping-timeout"]).inc(),
+								EitherError::A(EitherError::A(EitherError::B(
+								EitherError::A(PingFailure::Timeout)))))))) =>
+								metrics.connections_closed_total.with_label_values(&[dir, "ping-timeout"]).inc(),
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::A(EitherError::B(LegacyConnectionKillError))))))) =>
-								metrics.connections_closed_total.with_label_values(&["force-closed"]).inc(),
+								EitherError::A(EitherError::A(EitherError::A(
+								EitherError::B(LegacyConnectionKillError)))))))) =>
+								metrics.connections_closed_total.with_label_values(&[dir, "force-closed"]).inc(),
 							ConnectionError::Handler(NodeHandlerWrapperError::Handler(_)) =>
-								metrics.connections_closed_total.with_label_values(&["protocol-error"]).inc(),
+								metrics.connections_closed_total.with_label_values(&[dir, "protocol-error"]).inc(),
 							ConnectionError::Handler(NodeHandlerWrapperError::KeepAliveTimeout) =>
-								metrics.connections_closed_total.with_label_values(&["keep-alive-timeout"]).inc(),
+								metrics.connections_closed_total.with_label_values(&[dir, "keep-alive-timeout"]).inc(),
 						}
 					}
 				},
@@ -1165,9 +1210,9 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					if this.boot_node_ids.contains(&peer_id) {
 						if let PendingConnectionError::InvalidPeerId = error {
 							error!(
-								"💔 Invalid peer ID from bootnode, expected `{}` at address `{}`.",
-								peer_id,
+								"💔 The bootnode you want to connect to at `{}` provided a different peer ID than the one you expect: `{}`.",
 								address,
+								peer_id,
 							);
 						}
 					}
@@ -1196,14 +1241,21 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					trace!(target: "sub-libp2p", "Libp2p => IncomingConnectionError({},{}): {}",
 						local_addr, send_back_addr, error);
 					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.incoming_connections_errors_total.inc();
+						let reason = match error {
+							PendingConnectionError::ConnectionLimit(_) => "limit-reached",
+							PendingConnectionError::InvalidPeerId => "invalid-peer-id",
+							PendingConnectionError::Transport(_) |
+							PendingConnectionError::IO(_) => "transport-error",
+						};
+
+						metrics.incoming_connections_errors_total.with_label_values(&[reason]).inc();
 					}
 				},
 				Poll::Ready(SwarmEvent::BannedPeer { peer_id, endpoint }) => {
 					trace!(target: "sub-libp2p", "Libp2p => BannedPeer({}). Connected via {:?}.",
 						peer_id, endpoint);
 					if let Some(metrics) = this.metrics.as_ref() {
-						metrics.incoming_connections_errors_total.inc();
+						metrics.incoming_connections_errors_total.with_label_values(&["banned"]).inc();
 					}
 				},
 				Poll::Ready(SwarmEvent::UnknownPeerUnreachableAddr { address, error }) =>
@@ -1244,7 +1296,18 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 			metrics.network_per_sec_bytes.with_label_values(&["in"]).set(this.service.bandwidth.average_download_per_sec());
 			metrics.network_per_sec_bytes.with_label_values(&["out"]).set(this.service.bandwidth.average_upload_per_sec());
 			metrics.is_major_syncing.set(is_major_syncing as u64);
-			metrics.kbuckets_num_nodes.set(this.network_service.num_kbuckets_entries() as u64);
+			for (proto, num_entries) in this.network_service.num_kbuckets_entries() {
+				let proto = maybe_utf8_bytes_to_string(proto.as_bytes());
+				metrics.kbuckets_num_nodes.with_label_values(&[&proto]).set(num_entries as u64);
+			}
+			for (proto, num_entries) in this.network_service.num_kademlia_records() {
+				let proto = maybe_utf8_bytes_to_string(proto.as_bytes());
+				metrics.kademlia_records_count.with_label_values(&[&proto]).set(num_entries as u64);
+			}
+			for (proto, num_entries) in this.network_service.kademlia_records_total_size() {
+				let proto = maybe_utf8_bytes_to_string(proto.as_bytes());
+				metrics.kademlia_records_sizes_total.with_label_values(&[&proto]).set(num_entries as u64);
+			}
 			metrics.peers_count.set(num_connected_peers as u64);
 			metrics.peerset_num_discovered.set(this.network_service.user_protocol().num_discovered_peers() as u64);
 			metrics.peerset_num_requested.set(this.network_service.user_protocol().requested_peers().count() as u64);
@@ -1258,8 +1321,10 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 impl<B: BlockT + 'static, H: ExHashT> Unpin for NetworkWorker<B, H> {
 }
 
-/// Turns a `ConsensusEngineId` into a representable string.
-fn engine_id_to_string(id: &ConsensusEngineId) -> Cow<str> {
+/// Turns bytes that are potentially UTF-8 into a reasonable representable string.
+///
+/// Meant to be used only for debugging or metrics-reporting purposes.
+fn maybe_utf8_bytes_to_string(id: &[u8]) -> Cow<str> {
 	if let Ok(s) = std::str::from_utf8(&id[..]) {
 		Cow::Borrowed(s)
 	} else {

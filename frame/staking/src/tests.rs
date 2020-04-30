@@ -152,6 +152,7 @@ fn rewards_should_work() {
 	// should check that:
 	// * rewards get recorded per session
 	// * rewards get paid per Era
+	// * `RewardRemainder::on_unbalanced` is called
 	// * Check that nominators are also rewarded
 	ExtBuilder::default().nominate(true).build_and_execute(|| {
 		let init_balance_10 = Balances::total_balance(&10);
@@ -197,6 +198,8 @@ fn rewards_should_work() {
 		start_session(3);
 
 		assert_eq!(Staking::active_era().unwrap().index, 1);
+		assert_eq!(mock::REWARD_REMAINDER_UNBALANCED.with(|v| *v.borrow()), 7050);
+		assert_eq!(*mock::staking_events().last().unwrap(), RawEvent::EraPayout(0, 2350, 7050));
 		mock::make_all_reward_payment(0);
 
 		assert_eq_error_rate!(Balances::total_balance(&10), init_balance_10 + part_for_10 * total_payout_0*2/3, 2);
@@ -220,6 +223,8 @@ fn rewards_should_work() {
 		assert!(total_payout_1 > 10); // Test is meaningful if reward something
 
 		mock::start_era(2);
+		assert_eq!(mock::REWARD_REMAINDER_UNBALANCED.with(|v| *v.borrow()), 7050*2);
+		assert_eq!(*mock::staking_events().last().unwrap(), RawEvent::EraPayout(1, 2350, 7050));
 		mock::make_all_reward_payment(1);
 
 		assert_eq_error_rate!(Balances::total_balance(&10), init_balance_10 + part_for_10 * (total_payout_0 * 2/3 + total_payout_1), 2);
@@ -340,7 +345,7 @@ fn less_than_needed_candidates_works() {
 			// But the exposure is updated in a simple way. No external votes exists.
 			// This is purely self-vote.
 			assert!(
-				ErasStakers::<Test>::iter_prefix(Staking::active_era().unwrap().index)
+				ErasStakers::<Test>::iter_prefix_values(Staking::active_era().unwrap().index)
 					.all(|exposure| exposure.others.is_empty())
 			);
 		});
@@ -461,7 +466,7 @@ fn nominating_and_rewards_should_work() {
 			// ------ check the staked value of all parties.
 
 			// 30 and 40 are not chosen anymore
-			assert_eq!(ErasStakers::<Test>::iter_prefix(Staking::active_era().unwrap().index).count(), 2);
+			assert_eq!(ErasStakers::<Test>::iter_prefix_values(Staking::active_era().unwrap().index).count(), 2);
 			assert_eq!(
 				Staking::eras_stakers(Staking::active_era().unwrap().index, 11),
 				Exposure {
@@ -1847,20 +1852,20 @@ fn era_is_always_same_length() {
 		let session_per_era = <SessionsPerEra as Get<SessionIndex>>::get();
 
 		mock::start_era(1);
-		assert_eq!(Staking::eras_start_session_index(active_era()).unwrap(), session_per_era);
+		assert_eq!(Staking::eras_start_session_index(current_era()).unwrap(), session_per_era);
 
 		mock::start_era(2);
-		assert_eq!(Staking::eras_start_session_index(active_era()).unwrap(), session_per_era * 2u32);
+		assert_eq!(Staking::eras_start_session_index(current_era()).unwrap(), session_per_era * 2u32);
 
 		let session = Session::current_index();
 		ForceEra::put(Forcing::ForceNew);
 		advance_session();
 		advance_session();
-		assert_eq!(Staking::active_era().unwrap().index, 3);
-		assert_eq!(Staking::eras_start_session_index(active_era()).unwrap(), session + 2);
+		assert_eq!(current_era(), 3);
+		assert_eq!(Staking::eras_start_session_index(current_era()).unwrap(), session + 2);
 
 		mock::start_era(4);
-		assert_eq!(Staking::eras_start_session_index(active_era()).unwrap(), session + 2u32 + session_per_era);
+		assert_eq!(Staking::eras_start_session_index(current_era()).unwrap(), session + 2u32 + session_per_era);
 	});
 }
 
@@ -2669,6 +2674,7 @@ fn remove_multi_deferred() {
 
 mod offchain_phragmen {
 	use crate::*;
+	use codec::Encode;
 	use frame_support::{assert_noop, assert_ok};
 	use sp_runtime::transaction_validity::TransactionSource;
 	use mock::*;
@@ -2709,14 +2715,19 @@ mod offchain_phragmen {
 		bond_nominator(voter, 1000 + voter, 100, vec![21, 31, 41]);
 	}
 
-	fn offchainify(ext: &mut TestExternalities) -> Arc<RwLock<PoolState>> {
-		let (offchain, _state) = TestOffchainExt::new();
-		let (pool, state) = TestTransactionPoolExt::new();
+	/// convert an externalities to one that can handle offchain worker tests.
+	fn offchainify(ext: &mut TestExternalities, iterations: u32) -> Arc<RwLock<PoolState>> {
+		let (offchain, offchain_state) = TestOffchainExt::new();
+		let (pool, pool_state) = TestTransactionPoolExt::new();
+
+	    let mut seed = [0_u8; 32];
+	    seed[0..4].copy_from_slice(&iterations.to_le_bytes());
+	    offchain_state.write().seed = seed;
 
 		ext.register_extension(OffchainExt::new(offchain));
 		ext.register_extension(TransactionPoolExt::new(pool));
 
-		state
+		pool_state
 	}
 
 	#[test]
@@ -2896,8 +2907,8 @@ mod offchain_phragmen {
 
 	#[test]
 	fn signed_result_can_be_submitted() {
-		// should check that we have a new validator set normally,
-		// event says that it comes from offchain.
+		// should check that we have a new validator set normally, event says that it comes from
+		// offchain.
 		ExtBuilder::default()
 			.offchain_phragmen_ext()
 			.build()
@@ -2912,7 +2923,7 @@ mod offchain_phragmen {
 					winners,
 					compact,
 					score,
-					active_era(),
+					current_era(),
 				));
 
 				let queued_result = Staking::queued_elected().unwrap();
@@ -2955,7 +2966,7 @@ mod offchain_phragmen {
 					winners,
 					compact,
 					score,
-					active_era(),
+					current_era(),
 				));
 
 				let queued_result = Staking::queued_elected().unwrap();
@@ -2984,8 +2995,8 @@ mod offchain_phragmen {
 
 	#[test]
 	fn early_solution_submission_is_rejected() {
-		// should check that we have a new validator set normally,
-		// event says that it comes from offchain.
+		// should check that we have a new validator set normally, event says that it comes from
+		// offchain.
 		ExtBuilder::default()
 			.offchain_phragmen_ext()
 			.build()
@@ -3005,7 +3016,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenEarlySubmission,
 				);
@@ -3031,7 +3042,7 @@ mod offchain_phragmen {
 					winners,
 					compact,
 					score,
-					active_era(),
+					current_era(),
 				));
 
 				// a bad solution
@@ -3042,7 +3053,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenWeakSubmission,
 				);
@@ -3068,7 +3079,7 @@ mod offchain_phragmen {
 					winners,
 					compact,
 					score,
-					active_era(),
+					current_era(),
 				));
 
 				// a better solution
@@ -3078,7 +3089,7 @@ mod offchain_phragmen {
 					winners,
 					compact,
 					score,
-					active_era(),
+					current_era(),
 				));
 			})
 	}
@@ -3090,7 +3101,7 @@ mod offchain_phragmen {
 			.offchain_phragmen_ext()
 			.validator_count(2)
 			.build();
-		let state = offchainify(&mut ext);
+		let state = offchainify(&mut ext, 0);
 		ext.execute_with(|| {
 			run_to_block(12);
 
@@ -3114,7 +3125,51 @@ mod offchain_phragmen {
 					&inner,
 				),
 				TransactionValidity::Ok(ValidTransaction {
-					priority: (1 << 20) + 1125, // the proposed slot stake.
+					priority: UnsignedPriority::get() + 1125, // the proposed slot stake.
+					requires: vec![],
+					provides: vec![("StakingOffchain", current_era()).encode()],
+					longevity: 3,
+					propagate: false,
+				})
+			)
+		})
+	}
+
+	#[test]
+	fn offchain_worker_runs_with_equalise() {
+		// Offchain worker equalises based on the number provided by randomness. See the difference
+		// in the priority, which comes from the computed score.
+		let mut ext = ExtBuilder::default()
+			.offchain_phragmen_ext()
+			.validator_count(2)
+			.max_offchain_iterations(2)
+			.build();
+		let state = offchainify(&mut ext, 2);
+		ext.execute_with(|| {
+			run_to_block(12);
+
+			// local key 11 is in the elected set.
+			assert_eq_uvec!(Session::validators(), vec![11, 21]);
+			assert_eq!(state.read().transactions.len(), 0);
+			Staking::offchain_worker(12);
+			assert_eq!(state.read().transactions.len(), 1);
+
+			let encoded = state.read().transactions[0].clone();
+			let extrinsic: Extrinsic = Decode::decode(&mut &*encoded).unwrap();
+
+			let call = extrinsic.call;
+			let inner = match call {
+				mock::Call::Staking(inner) => inner,
+			};
+
+			assert_eq!(
+				<Staking as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
+					TransactionSource::Local,
+					&inner,
+				),
+				TransactionValidity::Ok(ValidTransaction {
+					// the proposed slot stake, with equalize.
+					priority: UnsignedPriority::get() + 1250,
 					requires: vec![],
 					provides: vec![("StakingOffchain", active_era()).encode()],
 					longevity: 3,
@@ -3130,7 +3185,7 @@ mod offchain_phragmen {
 			.offchain_phragmen_ext()
 			.validator_count(4)
 			.build();
-		let state = offchainify(&mut ext);
+		let state = offchainify(&mut ext, 0);
 		ext.execute_with(|| {
 			run_to_block(12);
 			// put a good solution on-chain
@@ -3140,7 +3195,7 @@ mod offchain_phragmen {
 				winners,
 				compact,
 				score,
-				active_era(),
+				current_era(),
 			),);
 
 			// now run the offchain worker in the same chain state.
@@ -3191,7 +3246,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenBogusWinnerCount,
 				);
@@ -3222,7 +3277,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenBogusWinnerCount,
 				);
@@ -3251,7 +3306,7 @@ mod offchain_phragmen {
 					winners,
 					compact,
 					score,
-					active_era(),
+					current_era(),
 				),);
 			})
 	}
@@ -3282,7 +3337,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenBogusCompact,
 				);
@@ -3315,7 +3370,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenBogusCompact,
 				);
@@ -3347,7 +3402,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenBogusWinner,
 				);
@@ -3383,7 +3438,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenBogusEdge,
 				);
@@ -3419,7 +3474,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenBogusSelfVote,
 				);
@@ -3455,7 +3510,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenBogusSelfVote,
 				);
@@ -3490,7 +3545,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenBogusCompact,
 				);
@@ -3532,7 +3587,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenBogusNomination,
 				);
@@ -3560,7 +3615,7 @@ mod offchain_phragmen {
 				run_to_block(20);
 
 				// slash 10. This must happen outside of the election window.
-				let offender_expo = Staking::eras_stakers(active_era(), 11);
+				let offender_expo = Staking::eras_stakers(Staking::active_era().unwrap().index, 11);
 				on_offence_now(
 					&[OffenceDetails {
 						offender: (11, offender_expo.clone()),
@@ -3595,7 +3650,7 @@ mod offchain_phragmen {
 					winners,
 					compact,
 					score,
-					active_era(),
+					current_era(),
 				));
 
 				// a wrong solution.
@@ -3614,7 +3669,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenSlashedNomination,
 				);
@@ -3642,7 +3697,7 @@ mod offchain_phragmen {
 						winners,
 						compact,
 						score,
-						active_era(),
+						current_era(),
 					),
 					Error::<Test>::PhragmenBogusScore,
 				);
@@ -3655,7 +3710,7 @@ mod offchain_phragmen {
 			.offchain_phragmen_ext()
 			.validator_count(4)
 			.build();
-		let state = offchainify(&mut ext);
+		let state = offchainify(&mut ext, 0);
 
 		ext.execute_with(|| {
 			use offchain_election::OFFCHAIN_HEAD_DB;
@@ -3679,7 +3734,7 @@ mod offchain_phragmen {
 			.offchain_phragmen_ext()
 			.validator_count(4)
 			.build();
-		let _ = offchainify(&mut ext);
+		let _ = offchainify(&mut ext, 0);
 
 		ext.execute_with(|| {
 			use offchain_election::OFFCHAIN_HEAD_DB;
@@ -3729,7 +3784,7 @@ mod offchain_phragmen {
 				run_to_block(12);
 				assert_eq!(Staking::era_election_status(), ElectionStatus::Open(12));
 
-				let offender_expo = Staking::eras_stakers(active_era(), 10);
+				let offender_expo = Staking::eras_stakers(Staking::active_era().unwrap().index, 10);
 
 				// panic from the impl in mock
 				on_offence_now(
@@ -3754,8 +3809,8 @@ fn slash_kicks_validators_not_nominators_and_disables_nominator_for_kicked_valid
 		assert_eq!(Balances::free_balance(101), 2000);
 
 		// 11 and 21 both have the support of 100
-		let exposure_11 = Staking::eras_stakers(active_era(), &11);
-		let exposure_21 = Staking::eras_stakers(active_era(), &21);
+		let exposure_11 = Staking::eras_stakers(Staking::active_era().unwrap().index, &11);
+		let exposure_21 = Staking::eras_stakers(Staking::active_era().unwrap().index, &21);
 
 		assert_eq!(exposure_11.total, 1000 + 125);
 		assert_eq!(exposure_21.total, 1000 + 375);
@@ -3795,8 +3850,8 @@ fn slash_kicks_validators_not_nominators_and_disables_nominator_for_kicked_valid
 		assert_ok!(Staking::validate(Origin::signed(10), Default::default()));
 
 		mock::start_era(2);
-		let exposure_11 = Staking::eras_stakers(active_era(), &11);
-		let exposure_21 = Staking::eras_stakers(active_era(), &21);
+		let exposure_11 = Staking::eras_stakers(Staking::active_era().unwrap().index, &11);
+		let exposure_21 = Staking::eras_stakers(Staking::active_era().unwrap().index, &21);
 
 		// 10 is re-elected, but without the support of 100
 		assert_eq!(exposure_11.total, 900);
@@ -3897,7 +3952,7 @@ fn zero_slash_keeps_nominators() {
 
 		assert_eq!(Balances::free_balance(11), 1000);
 
-		let exposure = Staking::eras_stakers(active_era(), 11);
+		let exposure = Staking::eras_stakers(Staking::active_era().unwrap().index, 11);
 		assert_eq!(Balances::free_balance(101), 2000);
 
 		on_offence_now(

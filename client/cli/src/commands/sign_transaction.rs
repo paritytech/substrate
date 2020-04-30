@@ -24,7 +24,6 @@ use structopt::StructOpt;
 use parity_scale_codec::{Codec, Encode, Decode};
 use std::{str::FromStr, fmt::Display};
 use sp_runtime::MultiSigner;
-use cli_utils::RuntimeAdapter;
 
 type Call = Vec<u8>;
 

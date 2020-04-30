@@ -21,6 +21,7 @@ mod node_key_params;
 mod pruning_params;
 mod shared_params;
 mod transaction_pool_params;
+mod offchain_worker_params;
 
 use std::fmt::Debug;
 use std::str::FromStr;
@@ -29,6 +30,7 @@ pub use crate::params::import_params::*;
 pub use crate::params::keystore_params::*;
 pub use crate::params::network_params::*;
 pub use crate::params::node_key_params::*;
+pub use crate::params::offchain_worker_params::*;
 pub use crate::params::pruning_params::*;
 pub use crate::params::shared_params::*;
 pub use crate::params::transaction_pool_params::*;

@@ -19,7 +19,6 @@ use crate::cli::Cli;
 use crate::service;
 use sc_cli::SubstrateCli;
 use node_template_runtime::Runtime;
-use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
 
 impl SubstrateCli for Cli {
 	fn impl_name() -> &'static str {
