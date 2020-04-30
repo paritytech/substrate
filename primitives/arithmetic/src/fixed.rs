@@ -20,7 +20,7 @@ use crate::{
 	helpers_128bit::multiply_by_rational, PerThing,
 	traits::{
 		SaturatedConversion, CheckedSub, CheckedAdd, CheckedMul, CheckedDiv,
-		Bounded, UniqueSaturatedInto, Saturating
+		Bounded, Saturating
 	},
 };
 
@@ -73,25 +73,25 @@ pub trait FixedPointNumber:
 
 	/// Checked multiplication for integer type `N`.
 	fn checked_mul_int<
-		N: TryFrom<i128> + UniqueSaturatedInto<i128> + Copy + Bounded
+		N: TryFrom<i128> + TryInto<i128> + Copy + Bounded
 	>(self, other: N) -> Option<N>;
 
 	/// Checked division for integer type `N`.
-	fn checked_div_int<N: Copy + TryFrom<i128> + UniqueSaturatedInto<i128>>(self, other: N) -> Option<N>;
+	fn checked_div_int<N: Copy + TryFrom<i128> + TryInto<i128>>(self, other: N) -> Option<N>;
 
 	/// Saturating multiplication for integer type `N`.
 	fn saturating_mul_int<
-		N: TryFrom<i128> + UniqueSaturatedInto<i128> + Copy + Bounded + Saturating
+		N: TryFrom<i128> + TryInto<i128> + Copy + Bounded + Saturating
 	>(self, other: N) -> N;
 
 	/// Saturating division for integer type `N`.
-	fn saturating_div_int<N: Copy + TryFrom<i128> + UniqueSaturatedInto<i128> + Bounded>(self, other: N) -> N;
+	fn saturating_div_int<N: Copy + TryFrom<i128> + TryInto<i128> + Bounded>(self, other: N) -> N;
 
 	/// Performs a saturated multiplication and accumulate by unsigned number.
 	///
 	/// Returns a saturated `int + (self * int)`.
 	fn saturating_mul_int_acc<
-		N: TryFrom<i128> + UniqueSaturatedInto<i128> + Copy + Bounded + Saturating
+		N: TryFrom<i128> + TryInto<i128> + Copy + Saturating + Bounded
 	>(self, int: N) -> N;
 
 	/// Saturating absolute value. Returning MAX if `parts == Inner::MIN` instead of overflowing.
@@ -215,34 +215,34 @@ macro_rules! implement_fixed {
 
 			fn checked_mul_int<N>(self, int: N) -> Option<N>
 			where
-				N: Copy + TryFrom<i128> + UniqueSaturatedInto<i128> + Bounded
+				N: Copy + TryFrom<i128> + TryInto<i128>
 			{
-				let rhs: i128 = int.unique_saturated_into();
-				let lhs: i128 = self.0.unique_saturated_into();
+				let rhs: i128 = int.try_into().ok()?;
+				let lhs: i128 = self.0.try_into().ok()?;
 				let signum = rhs.signum() * lhs.signum();
 
 				let lhs = lhs.checked_abs().map(|v| v as u128)
-					.unwrap_or(Self::Inner::max_value() as u128 + 1);
+					.unwrap_or(i128::max_value() as u128 + 1);
 				let rhs = rhs.checked_abs().map(|v| v as u128)
-					.unwrap_or(N::max_value().unique_saturated_into() as u128 + 1);
+					.unwrap_or(i128::max_value() as u128 + 1);
 
 				multiply_by_rational(lhs, rhs, Self::DIV as u128).ok()
 					.and_then(|r| {
 						if r > i128::max_value() as u128 && signum < 0 {
-							i128::min_value().try_into().ok()
+							None
 						} else {
-							let r: i128 = r.saturated_into(); 
-							r.saturating_mul(signum).try_into().ok()
+							let n: i128 = r.try_into().ok()?;
+							n.checked_mul(signum)?.try_into().ok()
 						}
 					})
 			}
 
 			fn checked_div_int<N>(self, other: N) -> Option<N>
 			where
-				N: Copy + TryFrom<i128> + UniqueSaturatedInto<i128>
+				N: Copy + TryFrom<i128> + TryInto<i128>
 			{
-				let lhs: i128 = self.0.unique_saturated_into();
-				let rhs: i128 = other.unique_saturated_into();
+				let lhs: i128 = self.0.try_into().ok()?;
+				let rhs = other.try_into().ok()?;
 
 				lhs.checked_div(rhs)
 					.and_then(|inner| inner.checked_div(Self::accuracy().into()))
@@ -251,23 +251,25 @@ macro_rules! implement_fixed {
 
 			fn saturating_div_int<N>(self, other: N) -> N
 			where
-				N: Copy + TryFrom<i128> + UniqueSaturatedInto<i128> + Bounded
+				N: Copy + TryFrom<i128> + TryInto<i128> + Bounded
 			{
-				let signum = self.0.signum() as i128 * other.unique_saturated_into().signum();
 				self.checked_div_int(other)
-					.unwrap_or(if signum < 0 {
-						N::min_value()
-					} else {
-						N::max_value()
+					.unwrap_or_else(|| {
+						let signum = self.0.signum() as i128 * other.try_into().unwrap_or(0).signum();
+						if signum < 0 {
+							N::min_value()
+						} else {
+							N::max_value()
+						}
 					})
 			}
 
 			fn saturating_mul_int<N>(self, other: N) -> N
 			where
-				N: Copy + TryFrom<i128> + UniqueSaturatedInto<i128> + Bounded + Saturating
+				N: Copy + TryFrom<i128> + TryInto<i128> + Bounded + Saturating
 			{
 				self.checked_mul_int(other).unwrap_or_else(|| {
-					let signum = other.unique_saturated_into().signum() * self.0.signum() as i128;
+					let signum = self.0.signum() as i128 * other.try_into().unwrap_or(0).signum();
 					if signum.is_negative() {
 						Bounded::min_value()
 					} else {
@@ -282,7 +284,7 @@ macro_rules! implement_fixed {
 
 			fn saturating_mul_int_acc<N>(self, int: N) -> N
 			where
-				N: Copy + TryFrom<i128> + UniqueSaturatedInto<i128> + Bounded + Saturating
+				N: Copy + TryFrom<i128> + TryInto<i128> + Bounded + Saturating
 			{
 				self.saturating_mul_int(int).saturating_add(int)
 			}
