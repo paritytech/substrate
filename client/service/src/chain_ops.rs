@@ -308,8 +308,8 @@ impl<
 			|| BlockId::Hash(self.client.usage_info().chain.best_hash)
 		);
 
-		let key = StorageKey(Vec::new());
-		let mut top_storage = self.client.storage_pairs(&block, &key)?;
+		let empty_key = StorageKey(Vec::new());
+		let mut top_storage = self.client.storage_pairs(&block, &empty_key)?;
 		let mut children_default = HashMap::new();
 
 		// Remove all default child storage roots from the top storage and collect the child storage
@@ -324,7 +324,7 @@ impl<
 			);
 			let child_info = ChildInfo::new_default(&key.0);
 
-			let keys = self.client.child_storage_keys(&block, &child_info, &key)?;
+			let keys = self.client.child_storage_keys(&block, &child_info, &empty_key)?;
 			let mut pairs = StorageMap::new();
 			keys.into_iter().try_for_each(|k| {
 				if let Some(value) = self.client.child_storage(&block, &child_info, &k)? {
