@@ -31,14 +31,15 @@ use sp_runtime::{Perbill, traits::{Convert, StaticLookup}};
 use sp_staking::offence::ReportOffence;
 
 use pallet_balances::{Trait as BalancesTrait, Module as Balances};
+use pallet_grandpa::{GrandpaEquivocationOffence, GrandpaTimeSlot};
 use pallet_im_online::{Trait as ImOnlineTrait, Module as ImOnline, UnresponsivenessOffence};
 use pallet_offences::{Trait as OffencesTrait, Module as Offences};
+use pallet_session::historical::{Trait as HistoricalTrait, IdentificationTuple};
+use pallet_session::{Trait as SessionTrait, SessionManager};
 use pallet_staking::{
 	Module as Staking, Trait as StakingTrait, RewardDestination, ValidatorPrefs,
 	Exposure, IndividualExposure, ElectionStatus, MAX_NOMINATIONS,
 };
-use pallet_session::{Trait as SessionTrait, SessionManager};
-use pallet_session::historical::{Trait as HistoricalTrait, IdentificationTuple};
 
 const SEED: u32 = 0;
 
@@ -154,7 +155,7 @@ fn make_offenders<T: Trait>(num_offenders: u32, num_nominators: u32) -> Result<V
 benchmarks! {
 	_ { }
 
-	report_offence {
+	report_offence_im_online {
 		let r in 1 .. MAX_REPORTERS;
 		// we skip 1 offender, because in such case there is no slashing
 		let o in 2 .. MAX_OFFENDERS;
@@ -181,6 +182,47 @@ benchmarks! {
 		assert_eq!(System::<T>::event_count(), 0);
 	}: {
 		let _ = <T as ImOnlineTrait>::ReportUnresponsiveness::report_offence(reporters, offence);
+	}
+	verify {
+		// make sure the report was not deferred
+		assert!(Offences::<T>::deferred_offences().is_empty());
+		// make sure that all slashes have been applied
+		assert_eq!(
+			System::<T>::event_count(), 0
+			+ 1 // offence
+			+ 2 * r // reporter (reward + endowment)
+			+ o // offenders slashed
+			+ o * n // nominators slashed
+		);
+	}
+
+	report_offence_grandpa {
+		let r in 1 .. MAX_REPORTERS;
+		let n in 0 .. MAX_NOMINATORS.min(MAX_NOMINATIONS as u32);
+		let o = 1;
+
+		// Make r reporters
+		let mut reporters = vec![];
+		for i in 0 .. r {
+			let reporter = account("reporter", i, SEED);
+			reporters.push(reporter);
+		}
+
+		// make sure reporters actually get rewarded
+		Staking::<T>::set_slash_reward_fraction(Perbill::one());
+
+		let mut offenders = make_offenders::<T>(o, n).expect("failed to create offenders");
+		let keys =  ImOnline::<T>::keys();
+
+		let offence = GrandpaEquivocationOffence {
+			time_slot: GrandpaTimeSlot { set_id: 0, round: 0 },
+			session_index: 0,
+			validator_set_count: keys.len() as u32,
+			offender: T::convert(offenders.pop().unwrap()),
+		};
+		assert_eq!(System::<T>::event_count(), 0);
+	}: {
+		let _ = Offences::<T>::report_offence(reporters, offence);
 	}
 	verify {
 		// make sure the report was not deferred
@@ -249,7 +291,8 @@ mod tests {
 	#[test]
 	fn test_benchmarks() {
 		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_report_offence::<Test>());
+			assert_ok!(test_benchmark_report_offence_im_online::<Test>());
+			assert_ok!(test_benchmark_report_offence_grandpa::<Test>());
 			assert_ok!(test_benchmark_on_initialize::<Test>());
 		});
 	}

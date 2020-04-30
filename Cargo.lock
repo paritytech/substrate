@@ -4386,6 +4386,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "pallet-balances",
+ "pallet-grandpa",
  "pallet-im-online",
  "pallet-offences",
  "pallet-session",

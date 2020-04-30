@@ -456,23 +456,24 @@ impl<T: Trait> pallet_finality_tracker::OnFinalizationStalled<T::BlockNumber> fo
 
 /// A round number and set id which point on the time of an offence.
 #[derive(Copy, Clone, PartialOrd, Ord, Eq, PartialEq, Encode, Decode)]
-struct GrandpaTimeSlot {
+pub struct GrandpaTimeSlot {
 	// The order of these matters for `derive(Ord)`.
-	set_id: SetId,
-	round: RoundNumber,
+	/// Grandpa Set ID.
+	pub set_id: SetId,
+	/// Round number.
+	pub round: RoundNumber,
 }
 
-// TODO [slashing]: Integrate this.
 /// A grandpa equivocation offence report.
-struct GrandpaEquivocationOffence<FullIdentification> {
+pub struct GrandpaEquivocationOffence<FullIdentification> {
 	/// Time slot at which this incident happened.
-	time_slot: GrandpaTimeSlot,
+	pub time_slot: GrandpaTimeSlot,
 	/// The session index in which the incident happened.
-	session_index: SessionIndex,
+	pub session_index: SessionIndex,
 	/// The size of the validator set at the time of the offence.
-	validator_set_count: u32,
+	pub validator_set_count: u32,
 	/// The authority which produced this equivocation.
-	offender: FullIdentification,
+	pub offender: FullIdentification,
 }
 
 impl<FullIdentification: Clone> Offence<FullIdentification> for GrandpaEquivocationOffence<FullIdentification> {
