@@ -15,8 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::error;
-use crate::params::SharedParams;
-use crate::arg_enums::Database;
+use crate::params::{DatabaseParams, SharedParams};
 use crate::CliConfiguration;
 use sc_service::Configuration;
 use std::fmt::Debug;
@@ -35,15 +34,9 @@ pub struct PurgeChainCmd {
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
 
-	/// Select database backend to use.
-	#[structopt(
-		long,
-		alias = "db",
-		value_name = "DB",
-		case_insensitive = true,
-		default_value = "RocksDb"
-	)]
-	pub database: Database,
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub database_params: DatabaseParams,
 }
 
 impl PurgeChainCmd {
@@ -90,7 +83,7 @@ impl CliConfiguration for PurgeChainCmd {
 		&self.shared_params
 	}
 
-	fn database(&self) -> error::Result<Option<Database>> {
-		Ok(Some(self.database))
+	fn database_params(&self) -> Option<&DatabaseParams> {
+		Some(&self.database_params)
 	}
 }

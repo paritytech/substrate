@@ -15,14 +15,13 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::arg_enums::{
-	ExecutionStrategy, TracingReceiver, WasmExecutionMethod, DEFAULT_EXECUTION_BLOCK_CONSTRUCTION,
-	DEFAULT_EXECUTION_IMPORT_BLOCK, DEFAULT_EXECUTION_OFFCHAIN_WORKER, DEFAULT_EXECUTION_OTHER,
-	DEFAULT_EXECUTION_SYNCING, Database,
+	Database, ExecutionStrategy, TracingReceiver, WasmExecutionMethod,
+	DEFAULT_EXECUTION_BLOCK_CONSTRUCTION, DEFAULT_EXECUTION_IMPORT_BLOCK,
+	DEFAULT_EXECUTION_OFFCHAIN_WORKER, DEFAULT_EXECUTION_OTHER, DEFAULT_EXECUTION_SYNCING,
 };
+use crate::params::DatabaseParams;
 use crate::params::PruningParams;
-use crate::Result;
 use sc_client_api::execution_extensions::ExecutionStrategies;
-use sc_service::{PruningMode, Role};
 use structopt::StructOpt;
 
 /// Parameters for block import.
@@ -31,6 +30,10 @@ pub struct ImportParams {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub pruning_params: PruningParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub database_params: DatabaseParams,
 
 	/// Force start with unsafe pruning settings.
 	///
@@ -69,7 +72,11 @@ pub struct ImportParams {
 	pub database_cache_size: Option<usize>,
 
 	/// Specify the state cache size.
-	#[structopt(long = "state-cache-size", value_name = "Bytes", default_value = "67108864")]
+	#[structopt(
+		long = "state-cache-size",
+		value_name = "Bytes",
+		default_value = "67108864"
+	)]
 	pub state_cache_size: usize,
 
 	/// Comma separated list of targets for tracing.
@@ -131,21 +138,6 @@ impl ImportParams {
 				exec_all_or(exec.execution_offchain_worker, DEFAULT_EXECUTION_OFFCHAIN_WORKER),
 			other: exec_all_or(exec.execution_other, DEFAULT_EXECUTION_OTHER),
 		}
-	}
-
-	/// Get the pruning mode from the parameters
-	pub fn pruning(&self, unsafe_pruning: bool, role: &Role) -> Result<PruningMode> {
-		self.pruning_params.pruning(unsafe_pruning, role)
-	}
-
-	/// Limit the memory the database cache can use.
-	pub fn database_cache_size(&self) -> Option<usize> {
-		self.database_cache_size
-	}
-
-	/// Limit the memory the database cache can use.
-	pub fn database(&self) -> Database {
-		self.database
 	}
 }
 
