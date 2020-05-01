@@ -1593,7 +1593,8 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		let hash = match block {
 			BlockId::Hash(h) => h,
 			BlockId::Number(n) => self.blockchain.hash(n)?.ok_or_else(||
-				sp_blockchain::Error::UnknownBlock(format!("Unknown block number {}", n)))?,
+				sp_blockchain::Error::UnknownBlock(format!("Unknown block number {}", n))
+			)?,
 		};
 
 		match self.blockchain.header_metadata(hash) {
