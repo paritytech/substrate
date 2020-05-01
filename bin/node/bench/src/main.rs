@@ -24,7 +24,7 @@ mod state_sizes;
 
 use crate::core::{run_benchmark, Mode as BenchmarkMode};
 use crate::tempdb::DatabaseType;
-use import::{ImportBenchmarkDescription, SizeType};
+use import::{ImportBenchmarkDescription};
 use trie::{TrieReadBenchmarkDescription, TrieWriteBenchmarkDescription, DatabaseSize};
 use node_testing::bench::{Profile, KeyTypes, BlockType};
 use structopt::StructOpt;
@@ -49,6 +49,10 @@ struct Opt {
 	/// Run with `--list` for the hint of what to filter.
 	filter: Option<String>,
 
+	/// Number of transactions to run
+	#[structopt(long)]
+	txs: Option<usize>,
+
 	/// Mode
 	///
 	/// "regular" for regular benchmark
@@ -66,44 +70,20 @@ fn main() {
 		sc_cli::init_logger("");
 	}
 
+	let txs = opt.txs.unwrap_or(0);
+
 	let benchmarks = matrix!(
 		profile in [Profile::Wasm, Profile::Native].iter() =>
 			ImportBenchmarkDescription {
 				profile: *profile,
 				key_types: KeyTypes::Sr25519,
-				size: SizeType::Medium,
-				block_type: BlockType::RandomTransfers(0),
+				block_type: BlockType::RandomTransfers(txs),
 			},
-		ImportBenchmarkDescription {
-			profile: Profile::Wasm,
-			key_types: KeyTypes::Sr25519,
-			size: SizeType::Empty,
-			block_type: BlockType::RandomTransfers(0),
-		},
-		ImportBenchmarkDescription {
-			profile: Profile::Native,
-			key_types: KeyTypes::Ed25519,
-			size: SizeType::Medium,
-			block_type: BlockType::RandomTransfers(0),
-		},
-		ImportBenchmarkDescription {
-			profile: Profile::Wasm,
-			key_types: KeyTypes::Sr25519,
-			size: SizeType::Full,
-			block_type: BlockType::RandomTransfers(0),
-		},
-		ImportBenchmarkDescription {
-			profile: Profile::Native,
-			key_types: KeyTypes::Sr25519,
-			size: SizeType::Full,
-			block_type: BlockType::RandomTransfers(0),
-		},
-		size in [SizeType::Small, SizeType::Large].iter() =>
+		profile in [Profile::Wasm, Profile::Native].iter() =>
 			ImportBenchmarkDescription {
-				profile: Profile::Native,
+				profile: *profile,
 				key_types: KeyTypes::Sr25519,
-				size: *size,
-				block_type: BlockType::RandomTransfers(0),
+				block_type: BlockType::Noop(txs),
 			},
 		(size, db_type) in
 			[
