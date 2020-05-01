@@ -146,7 +146,7 @@ pub fn create_full<C, P, M, SC>(
 	);
 	io.extend_with(
 		sc_finality_grandpa_rpc::GrandpaApi::to_delegate(
-			GrandpaRpcHandler::new(shared_voter_state, shared_authority_set)
+			GrandpaRpcHandler::new(shared_authority_set, shared_voter_state)
 		)
 	);
 

@@ -14,12 +14,45 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use serde::{Deserialize, Serialize};
-use std::{fmt::Debug, collections::HashSet};
-use finality_grandpa::BlockNumberOps;
+use std::{collections::HashSet, fmt::Debug, ops::Add};
 
-use sc_finality_grandpa::{AuthorityId, SharedAuthoritySet, SharedVoterState, report};
+use serde::{Deserialize, Serialize};
+
+use sc_finality_grandpa::{report, AuthorityId, SharedAuthoritySet, SharedVoterState};
+
 use crate::error::Error;
+
+/// Utility trait to get reporting data for the current GRANDPA authority set.
+pub trait ReportAuthoritySet {
+	fn get(&self) -> (u64, HashSet<sc_finality_grandpa::AuthorityId>);
+}
+
+/// Utility trait to get reporting data for the current GRANDPA voter state.
+pub trait ReportVoterState {
+	fn get(&self) -> Option<report::VoterState<AuthorityId>>;
+}
+
+impl<H, N> ReportAuthoritySet for SharedAuthoritySet<H, N>
+where
+	N: Add<Output = N> + Ord + Clone + Debug,
+	H: Clone + Debug + Eq,
+{
+	fn get(&self) -> (u64, HashSet<sc_finality_grandpa::AuthorityId>) {
+		let current_voters: HashSet<AuthorityId> = self
+			.current_authorities()
+			.iter()
+			.map(|p| p.0.clone())
+			.collect();
+
+		(self.set_id(), current_voters)
+	}
+}
+
+impl ReportVoterState for SharedVoterState {
+	fn get(&self) -> Option<report::VoterState<AuthorityId>> {
+		self.voter_state()
+	}
+}
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -86,28 +119,21 @@ pub struct ReportedRoundStates {
 }
 
 impl ReportedRoundStates {
-	pub fn from<Hash, Block>(
-		voter_state: &SharedVoterState,
-		authority_set: &SharedAuthoritySet<Hash, Block>,
+	pub fn from<AuthoritySet, VoterState>(
+		authority_set: &AuthoritySet,
+		voter_state: &VoterState,
 	) -> Result<Self, Error>
 	where
-		Hash: Debug + Clone + Eq + Send + Sync + 'static,
-		Block: BlockNumberOps + Send + Sync + 'static,
+		AuthoritySet: ReportAuthoritySet,
+		VoterState: ReportVoterState,
 	{
 		use std::convert::TryFrom;
 
-		let voter_state = voter_state
-			.voter_state()
-			.ok_or(Error::EndpointNotReady)?;
+		let voter_state = voter_state.get().ok_or(Error::EndpointNotReady)?;
 
-		let current_voters: HashSet<AuthorityId> = authority_set
-			.current_authorities()
-			.iter()
-			.map(|p| p.0.clone())
-			.collect();
-
-		let set_id = u32::try_from(authority_set.set_id())
-			.map_err(|_| Error::AuthoritySetIdReportedAsUnreasonablyLarge)?;
+		let (set_id, current_voters) = authority_set.get();
+		let set_id =
+			u32::try_from(set_id).map_err(|_| Error::AuthoritySetIdReportedAsUnreasonablyLarge)?;
 
 		let best = {
 			let (round, round_state) = voter_state.best_round;
