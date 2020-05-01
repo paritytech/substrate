@@ -40,7 +40,7 @@ use frame_support::{
 	dispatch::DispatchResult,
 };
 use sp_runtime::{
-	Fixed128,
+	Fixed128, FixedPointNumber,
 	transaction_validity::{
 		TransactionPriority, ValidTransaction, InvalidTransaction, TransactionValidityError,
 		TransactionValidity,
@@ -79,7 +79,7 @@ pub trait Trait: frame_system::Trait {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as TransactionPayment {
-		pub NextFeeMultiplier get(fn next_fee_multiplier): Multiplier = Multiplier::from_parts(0);
+		pub NextFeeMultiplier get(fn next_fee_multiplier): Multiplier = Multiplier::from_inner(0);
 	}
 }
 
@@ -102,7 +102,7 @@ decl_module! {
 				let raw_multiplier = old_next_fee_multiplier.into_inner() as i128;
 				// Fixed64 used 10^9 precision, where Fixed128 uses 10^18, so we need to add 9 zeros.
 				let new_raw_multiplier: i128 = raw_multiplier.saturating_mul(1_000_000_000);
-				let new_next_fee_multiplier: Fixed128 = Fixed128::from_parts(new_raw_multiplier);
+				let new_next_fee_multiplier: Fixed128 = Fixed128::from_inner(new_raw_multiplier);
 				NextFeeMultiplier::put(new_next_fee_multiplier);
 			}
 			0
@@ -170,7 +170,7 @@ impl<T: Trait> Module<T> {
 			// the adjustable part of the fee
 			let adjustable_fee = len_fee.saturating_add(unadjusted_weight_fee);
 			let targeted_fee_adjustment = NextFeeMultiplier::get();
-			let adjusted_fee = targeted_fee_adjustment.saturated_multiply_accumulate(adjustable_fee.saturated_into());
+			let adjusted_fee = targeted_fee_adjustment.saturating_mul_int_acc(adjustable_fee.saturated_into());
 
 			let base_fee = Self::weight_to_fee(T::ExtrinsicBaseWeight::get());
 			base_fee.saturating_add(adjusted_fee.saturated_into()).saturating_add(tip)
@@ -188,7 +188,7 @@ impl<T: Trait> Module<T> {
 	{
 		let fee = UniqueSaturatedInto::<u128>::unique_saturated_into(Self::weight_to_fee(weight));
 		UniqueSaturatedFrom::unique_saturated_from(
-			NextFeeMultiplier::get().saturated_multiply_accumulate(fee)
+			NextFeeMultiplier::get().saturating_mul_int_acc(fee)
 		)
 	}
 
