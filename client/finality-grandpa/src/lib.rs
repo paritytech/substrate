@@ -141,9 +141,6 @@ use std::marker::PhantomData;
 #[cfg(test)]
 mod tests;
 
-// Export for use by tests in the rpc crate.
-pub mod test_utils;
-
 /// A GRANDPA message for a substrate chain.
 pub type Message<Block> = finality_grandpa::Message<<Block as BlockT>::Hash, NumberFor<Block>>;
 /// A signed message.
