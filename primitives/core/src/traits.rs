@@ -332,7 +332,7 @@ impl TaskExecutorExt {
 }
 
 /// Something that can spawn a blocking future.
-pub trait SpawnBlocking: futures::task::Spawn {
+pub trait SpawnBlocking {
 	/// Spawn the given blocking future.
 	///
 	/// The given `name` is used to identify the future in tracing.

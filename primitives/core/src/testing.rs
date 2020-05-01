@@ -314,16 +314,6 @@ impl crate::traits::SpawnBlocking for SpawnBlockingExecutor {
 	}
 }
 
-#[cfg(feature = "std")]
-impl futures::task::Spawn for SpawnBlockingExecutor {
-	fn spawn_obj(
-		&self,
-		future: futures::task::FutureObj<'static, ()>,
-	) -> Result<(), futures::task::SpawnError> {
-		self.0.spawn_obj(future)
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
