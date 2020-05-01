@@ -130,8 +130,8 @@ parameter_types! {
 	/// This probably should not be changed unless you have specific
 	/// disk i/o conditions for the node.
 	pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
-		read: 60_000_000, // ~0.06 ms = ~60 µs
-		write: 200_000_000, // ~0.2 ms = 200 µs
+		read: 25_000_000, // ~25 µs
+		write: 100_000_000, // ~100 µs
 	};
 }
 
