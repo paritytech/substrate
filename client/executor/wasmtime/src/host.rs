@@ -117,7 +117,7 @@ impl<'a> SandboxCapabilities for HostContext<'a> {
 					return Err("Supervisor function returned unexpected result!".into());
 				}
 			}
-			Err(err) => Err(format!("{}", err).into()),
+			Err(err) => Err(err.to_string().into()),
 		}
 	}
 }
