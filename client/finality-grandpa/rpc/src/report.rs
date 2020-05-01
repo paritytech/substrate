@@ -14,7 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{collections::HashSet, fmt::Debug, ops::Add};
+use std::{
+	collections::{BTreeSet, HashSet},
+	fmt::Debug,
+	ops::Add,
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -24,7 +28,7 @@ use crate::error::Error;
 
 /// Utility trait to get reporting data for the current GRANDPA authority set.
 pub trait ReportAuthoritySet {
-	fn get(&self) -> (u64, HashSet<sc_finality_grandpa::AuthorityId>);
+	fn get(&self) -> (u64, HashSet<AuthorityId>);
 }
 
 /// Utility trait to get reporting data for the current GRANDPA voter state.
@@ -37,7 +41,7 @@ where
 	N: Add<Output = N> + Ord + Clone + Debug,
 	H: Clone + Debug + Eq,
 {
-	fn get(&self) -> (u64, HashSet<sc_finality_grandpa::AuthorityId>) {
+	fn get(&self) -> (u64, HashSet<AuthorityId>) {
 		let current_voters: HashSet<AuthorityId> = self
 			.current_authorities()
 			.iter()
@@ -58,14 +62,14 @@ impl ReportVoterState for SharedVoterState {
 #[serde(rename_all = "camelCase")]
 struct Prevotes {
 	current_weight: u32,
-	missing: HashSet<AuthorityId>,
+	missing: BTreeSet<AuthorityId>,
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Precommits {
 	current_weight: u32,
-	missing: HashSet<AuthorityId>,
+	missing: BTreeSet<AuthorityId>,
 }
 
 #[derive(Serialize, Deserialize)]
