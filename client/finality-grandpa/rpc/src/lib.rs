@@ -21,9 +21,9 @@ use futures::{FutureExt, TryFutureExt};
 use jsonrpc_derive::rpc;
 
 mod error;
-mod serialized;
+mod report;
 
-use serialized::{ReportAuthoritySet, ReportVoterState, ReportedRoundStates};
+use report::{ReportAuthoritySet, ReportVoterState, ReportedRoundStates};
 
 /// Returned when Grandpa RPC endpoint is not ready.
 pub const NOT_READY_ERROR_CODE: i64 = 1;
