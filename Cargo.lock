@@ -727,16 +727,16 @@ checksum = "b3a71ab494c0b5b860bdc8407ae08978052417070c2ced38573a9157ad75b8ac"
 
 [[package]]
 name = "cranelift-bforest"
-version = "0.62.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=master-candidate#ae071dfabeb31e17127c1bfef86e3573500b9231"
+version = "0.63.0"
+source = "git+https://github.com/paritytech/wasmtime?branch=master-candidate#3503381726fe9af5979b7e07021009f5b286808e"
 dependencies = [
  "cranelift-entity",
 ]
 
 [[package]]
 name = "cranelift-codegen"
-version = "0.62.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=master-candidate#ae071dfabeb31e17127c1bfef86e3573500b9231"
+version = "0.63.0"
+source = "git+https://github.com/paritytech/wasmtime?branch=master-candidate#3503381726fe9af5979b7e07021009f5b286808e"
 dependencies = [
  "byteorder 1.3.4",
  "cranelift-bforest",
@@ -754,8 +754,8 @@ dependencies = [
 
 [[package]]
 name = "cranelift-codegen-meta"
-version = "0.62.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=master-candidate#ae071dfabeb31e17127c1bfef86e3573500b9231"
+version = "0.63.0"
+source = "git+https://github.com/paritytech/wasmtime?branch=master-candidate#3503381726fe9af5979b7e07021009f5b286808e"
 dependencies = [
  "cranelift-codegen-shared",
  "cranelift-entity",
@@ -763,21 +763,21 @@ dependencies = [
 
 [[package]]
 name = "cranelift-codegen-shared"
-version = "0.62.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=master-candidate#ae071dfabeb31e17127c1bfef86e3573500b9231"
+version = "0.63.0"
+source = "git+https://github.com/paritytech/wasmtime?branch=master-candidate#3503381726fe9af5979b7e07021009f5b286808e"
 
 [[package]]
 name = "cranelift-entity"
-version = "0.62.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=master-candidate#ae071dfabeb31e17127c1bfef86e3573500b9231"
+version = "0.63.0"
+source = "git+https://github.com/paritytech/wasmtime?branch=master-candidate#3503381726fe9af5979b7e07021009f5b286808e"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "cranelift-frontend"
-version = "0.62.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=master-candidate#ae071dfabeb31e17127c1bfef86e3573500b9231"
+version = "0.63.0"
+source = "git+https://github.com/paritytech/wasmtime?branch=master-candidate#3503381726fe9af5979b7e07021009f5b286808e"
 dependencies = [
  "cranelift-codegen",
  "log",
@@ -787,8 +787,8 @@ dependencies = [
 
 [[package]]
 name = "cranelift-native"
-version = "0.62.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=master-candidate#ae071dfabeb31e17127c1bfef86e3573500b9231"
+version = "0.63.0"
+source = "git+https://github.com/paritytech/wasmtime?branch=master-candidate#3503381726fe9af5979b7e07021009f5b286808e"
 dependencies = [
  "cranelift-codegen",
  "raw-cpuid",
@@ -797,8 +797,8 @@ dependencies = [
 
 [[package]]
 name = "cranelift-wasm"
-version = "0.62.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=master-candidate#ae071dfabeb31e17127c1bfef86e3573500b9231"
+version = "0.63.0"
+source = "git+https://github.com/paritytech/wasmtime?branch=master-candidate#3503381726fe9af5979b7e07021009f5b286808e"
 dependencies = [
  "cranelift-codegen",
  "cranelift-entity",
@@ -9215,8 +9215,8 @@ checksum = "aeb1956b19469d1c5e63e459d29e7b5aa0f558d9f16fcef09736f8a265e6c10a"
 
 [[package]]
 name = "wasmtime"
-version = "0.15.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=master-candidate#ae071dfabeb31e17127c1bfef86e3573500b9231"
+version = "0.16.0"
+source = "git+https://github.com/paritytech/wasmtime?branch=master-candidate#3503381726fe9af5979b7e07021009f5b286808e"
 dependencies = [
  "anyhow",
  "backtrace",
@@ -9237,8 +9237,8 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-debug"
-version = "0.15.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=master-candidate#ae071dfabeb31e17127c1bfef86e3573500b9231"
+version = "0.16.0"
+source = "git+https://github.com/paritytech/wasmtime?branch=master-candidate#3503381726fe9af5979b7e07021009f5b286808e"
 dependencies = [
  "anyhow",
  "faerie",
@@ -9252,8 +9252,8 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-environ"
-version = "0.15.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=master-candidate#ae071dfabeb31e17127c1bfef86e3573500b9231"
+version = "0.16.0"
+source = "git+https://github.com/paritytech/wasmtime?branch=master-candidate#3503381726fe9af5979b7e07021009f5b286808e"
 dependencies = [
  "anyhow",
  "base64 0.12.0",
@@ -9280,8 +9280,8 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-jit"
-version = "0.15.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=master-candidate#ae071dfabeb31e17127c1bfef86e3573500b9231"
+version = "0.16.0"
+source = "git+https://github.com/paritytech/wasmtime?branch=master-candidate#3503381726fe9af5979b7e07021009f5b286808e"
 dependencies = [
  "anyhow",
  "cfg-if",
@@ -9306,8 +9306,8 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-profiling"
-version = "0.15.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=master-candidate#ae071dfabeb31e17127c1bfef86e3573500b9231"
+version = "0.16.0"
+source = "git+https://github.com/paritytech/wasmtime?branch=master-candidate#3503381726fe9af5979b7e07021009f5b286808e"
 dependencies = [
  "anyhow",
  "cfg-if",
@@ -9324,8 +9324,8 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-runtime"
-version = "0.15.0"
-source = "git+https://github.com/paritytech/wasmtime?branch=master-candidate#ae071dfabeb31e17127c1bfef86e3573500b9231"
+version = "0.16.0"
+source = "git+https://github.com/paritytech/wasmtime?branch=master-candidate#3503381726fe9af5979b7e07021009f5b286808e"
 dependencies = [
  "backtrace",
  "cc",

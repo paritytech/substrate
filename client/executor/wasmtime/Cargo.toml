@@ -23,9 +23,9 @@ sp-core = { version = "2.0.0-dev", path = "../../../primitives/core" }
 sp-allocator = { version = "2.0.0-dev", path = "../../../primitives/allocator" }
 wasmtime = { git = "https://github.com/paritytech/wasmtime", branch = "master-candidate" }
 wasmtime-runtime =  { git = "https://github.com/paritytech/wasmtime", branch = "master-candidate" }
-wasmtime-environ = { git = "https://github.com/paritytech/wasmtime", branch = "master-candidate" }
-cranelift-wasm = { git = "https://github.com/paritytech/wasmtime", branch = "master-candidate" }
-cranelift-codegen = { git = "https://github.com/paritytech/wasmtime", branch = "master-candidate" }
+wasmtime-environ = "0.16"
+cranelift-wasm = "0.63"
+cranelift-codegen = "0.63"
 
 [dev-dependencies]
 assert_matches = "1.3.0"

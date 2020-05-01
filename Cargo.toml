@@ -182,3 +182,7 @@ members = [
 # Substrate runtime requires unwinding.
 panic = "unwind"
 
+[patch.crates-io]
+wasmtime-environ = { git = "https://github.com/paritytech/wasmtime", branch = "master-candidate" }
+cranelift-codegen = { git = "https://github.com/paritytech/wasmtime", branch = "master-candidate" }
+cranelift-wasm = { git = "https://github.com/paritytech/wasmtime", branch = "master-candidate" }
