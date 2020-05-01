@@ -56,6 +56,7 @@ use sp_inherents::{InherentData, CheckInherentsResult};
 pub use sp_runtime::BuildStorage;
 pub use pallet_timestamp::Call as TimestampCall;
 pub use pallet_balances::Call as BalancesCall;
+ pub use frame_system::Call as SystemCall;
 pub use pallet_contracts::Gas;
 pub use frame_support::StorageValue;
 pub use pallet_staking::StakerStatus;

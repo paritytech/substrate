@@ -26,7 +26,7 @@ use crate::core::{run_benchmark, Mode as BenchmarkMode};
 use crate::tempdb::DatabaseType;
 use import::{ImportBenchmarkDescription, SizeType};
 use trie::{TrieReadBenchmarkDescription, TrieWriteBenchmarkDescription, DatabaseSize};
-use node_testing::bench::{Profile, KeyTypes};
+use node_testing::bench::{Profile, KeyTypes, BlockType};
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -51,7 +51,7 @@ struct Opt {
 
 	/// Mode
 	///
-	/// "regular" for regular becnhmark
+	/// "regular" for regular benchmark
 	///
 	/// "profile" mode adds pauses between measurable runs,
 	/// so that actual interval can be selected in the profiler of choice.
@@ -72,32 +72,38 @@ fn main() {
 				profile: *profile,
 				key_types: KeyTypes::Sr25519,
 				size: SizeType::Medium,
+				block_type: BlockType::RandomTransfers(0),
 			},
 		ImportBenchmarkDescription {
 			profile: Profile::Wasm,
 			key_types: KeyTypes::Sr25519,
 			size: SizeType::Empty,
+			block_type: BlockType::RandomTransfers(0),
 		},
 		ImportBenchmarkDescription {
 			profile: Profile::Native,
 			key_types: KeyTypes::Ed25519,
 			size: SizeType::Medium,
+			block_type: BlockType::RandomTransfers(0),
 		},
 		ImportBenchmarkDescription {
 			profile: Profile::Wasm,
 			key_types: KeyTypes::Sr25519,
 			size: SizeType::Full,
+			block_type: BlockType::RandomTransfers(0),
 		},
 		ImportBenchmarkDescription {
 			profile: Profile::Native,
 			key_types: KeyTypes::Sr25519,
 			size: SizeType::Full,
+			block_type: BlockType::RandomTransfers(0),
 		},
 		size in [SizeType::Small, SizeType::Large].iter() =>
 			ImportBenchmarkDescription {
 				profile: Profile::Native,
 				key_types: KeyTypes::Sr25519,
 				size: *size,
+				block_type: BlockType::RandomTransfers(0),
 			},
 		(size, db_type) in
 			[

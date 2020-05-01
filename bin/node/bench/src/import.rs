@@ -67,6 +67,7 @@ pub struct ImportBenchmarkDescription {
 	pub profile: Profile,
 	pub key_types: KeyTypes,
 	pub size: SizeType,
+	pub block_type: BlockType,
 }
 
 pub struct ImportBenchmark {
@@ -91,6 +92,12 @@ impl core::BenchmarkDescription for ImportBenchmarkDescription {
 		}
 
 		path.push(&format!("{}", self.size));
+
+		match self.block_type {
+			BlockType::RandomTransfers(_) => path.push("transfer"),
+			BlockType::RandomTransfersReaping(_) => path.push("transfer_reaping"),
+			BlockType::Noop(_) => path.push("noop"),
+		}
 
 		path
 	}
