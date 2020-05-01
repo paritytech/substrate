@@ -107,7 +107,7 @@ impl ReportedRoundStates {
 			.collect();
 
 		let set_id = u32::try_from(authority_set.set_id())
-			.map_err(|_| Error::AuthoritySetIdReportedasUnreasonablyLarge)?;
+			.map_err(|_| Error::AuthoritySetIdReportedAsUnreasonablyLarge)?;
 
 		let best = {
 			let (round, round_state) = voter_state.best_round;

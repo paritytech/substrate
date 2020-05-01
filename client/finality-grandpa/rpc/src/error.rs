@@ -24,7 +24,7 @@ pub enum Error {
 	EndpointNotReady,
 	/// GRANDPA reports the authority set id to be larger than 32-bits.
 	#[display(fmt = "GRANDPA reports authority set id unreasonably large")]
-	AuthoritySetIdReportedasUnreasonablyLarge,
+	AuthoritySetIdReportedAsUnreasonablyLarge,
 	/// GRANDPA reports voter state with round id or weights larger than 32-bits.
 	#[display(fmt = "GRANDPA reports voter state as unreasonably large")]
 	VoterStateReportsUnreasonablyLargeNumbers,
