@@ -83,6 +83,12 @@ fn main() {
 			ImportBenchmarkDescription {
 				profile: *profile,
 				key_types: KeyTypes::Sr25519,
+				block_type: BlockType::RandomTransfersReaping(txs),
+			},
+		profile in [Profile::Wasm, Profile::Native].iter() =>
+			ImportBenchmarkDescription {
+				profile: *profile,
+				key_types: KeyTypes::Sr25519,
 				block_type: BlockType::Noop(txs),
 			},
 		(size, db_type) in
