@@ -49,7 +49,7 @@ struct Opt {
 	/// Run with `--list` for the hint of what to filter.
 	filter: Option<String>,
 
-	/// Number of transactions to run
+	/// Number of transactions to place inside of a block for block import.
 	#[structopt(long)]
 	txs: Option<usize>,
 
