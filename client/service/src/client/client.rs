@@ -26,7 +26,7 @@ use parking_lot::{Mutex, RwLock};
 use codec::{Encode, Decode};
 use hash_db::Prefix;
 use sp_core::{
-	ChangesTrieConfiguration, convert_hash, traits::CodeExecutor, NativeOrEncoded,
+	ChangesTrieConfiguration, convert_hash, NativeOrEncoded,
 	storage::{StorageKey, PrefixedStorageKey, StorageData, well_known_keys, ChildInfo},
 };
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
@@ -43,7 +43,7 @@ use sp_state_machine::{
 	prove_read, prove_child_read, ChangesTrieRootsStorage, ChangesTrieStorage,
 	ChangesTrieConfigurationRange, key_changes, key_changes_proof,
 };
-use sc_executor::{RuntimeVersion, RuntimeInfo};
+use sc_executor::RuntimeVersion;
 use sp_consensus::{
 	Error as ConsensusError, BlockStatus, BlockImportParams, BlockCheckParams,
 	ImportResult, BlockOrigin, ForkChoiceStrategy, RecordProof,
@@ -61,25 +61,40 @@ use sp_api::{
 	CallApiAtParams,
 };
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
-use sc_client_api::{backend::{
-	self, BlockImportOperation, PrunableStateChangesTrieStorage,
-	ClientImportOperation, Finalizer, ImportSummary, NewBlockState,
-	changes_tries_state_at_block, StorageProvider,
-	LockImportRun, apply_aux,
-}, client::{
-	ImportNotifications, FinalityNotification, FinalityNotifications, BlockImportNotification,
-	ClientInfo, BlockchainEvents, BlockBackend, ProvideUncles, BadBlocks, ForkBlocks,
-	BlockOf,
-}, execution_extensions::ExecutionExtensions, notifications::{StorageNotifications, StorageEventStream}, KeyIterator, CallExecutor, ExecutorProvider, ProofProvider, CloneableSpawn, cht, in_mem, UsageProvider};
+use sc_client_api::{
+	backend::{
+		self, BlockImportOperation, PrunableStateChangesTrieStorage,
+		ClientImportOperation, Finalizer, ImportSummary, NewBlockState,
+		changes_tries_state_at_block, StorageProvider,
+		LockImportRun, apply_aux,
+	},
+	client::{
+		ImportNotifications, FinalityNotification, FinalityNotifications, BlockImportNotification,
+		ClientInfo, BlockchainEvents, BlockBackend, ProvideUncles, BadBlocks, ForkBlocks,
+		BlockOf,
+	},
+	execution_extensions::ExecutionExtensions,
+	notifications::{StorageNotifications, StorageEventStream},
+	KeyIterator, CallExecutor, ExecutorProvider, ProofProvider,
+	cht, UsageProvider
+};
 use sp_utils::mpsc::tracing_unbounded;
 use sp_blockchain::Error;
 use prometheus_endpoint::Registry;
 use super::{
-	genesis, call_executor::LocalCallExecutor,
+	genesis,
 	light::{call_executor::prove_execution, fetcher::ChangesProof},
 	block_rules::{BlockRules, LookupResult as BlockLookupResult},
 };
 use futures::channel::mpsc;
+
+#[cfg(feature="test-helpers")]
+use {
+	sp_core::traits::CodeExecutor,
+	sc_client_api::{CloneableSpawn, in_mem},
+	sc_executor::RuntimeInfo,
+	super::call_executor::LocalCallExecutor,
+};
 
 type NotificationSinks<T> = Mutex<Vec<mpsc::UnboundedSender<T>>>;
 
@@ -126,6 +141,7 @@ impl<H> PrePostHeader<H> {
 }
 
 /// Create an instance of in-memory client.
+#[cfg(feature="test-helpers")]
 pub fn new_in_mem<E, Block, S, RA>(
 	executor: E,
 	genesis_storage: &S,
@@ -165,6 +181,7 @@ pub struct ClientConfig {
 
 /// Create a client with the explicitly provided backend.
 /// This is useful for testing backend implementations.
+#[cfg(feature="test-helpers")]
 pub fn new_with_backend<B, E, Block, S, RA>(
 	backend: Arc<B>,
 	executor: E,
