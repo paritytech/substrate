@@ -68,7 +68,8 @@ impl<Block, B> VotingRule<Block, B> for () where
 }
 
 /// A custom voting rule that guarantees that our vote is always behind the best
-/// block, in the best case exactly one block behind it.
+/// block by at least N blocks. In the best case our vote is exactly N blocks
+/// behind the best block.
 #[derive(Clone)]
 pub struct BeforeBestBlockBy<N>(N);
 impl<Block, B> VotingRule<Block, B> for BeforeBestBlockBy<NumberFor<Block>> where

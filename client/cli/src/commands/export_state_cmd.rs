@@ -1,4 +1,4 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright 2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -15,25 +15,21 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{
-	CliConfiguration, error, params::{ImportParams, SharedParams, BlockNumberOrHash},
+	CliConfiguration, error, params::{PruningParams, SharedParams, BlockNumberOrHash},
 };
+use log::info;
 use sc_service::{Configuration, ServiceBuilderCommand};
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::{fmt::Debug, str::FromStr};
 use structopt::StructOpt;
 
-/// The `check-block` command used to validate blocks.
+/// The `export-state` command used to export the state of a given block into
+/// a chain spec.
 #[derive(Debug, StructOpt, Clone)]
-pub struct CheckBlockCmd {
-	/// Block hash or number
+pub struct ExportStateCmd {
+	/// Block hash or number.
 	#[structopt(value_name = "HASH or NUMBER")]
-	pub input: BlockNumberOrHash,
-
-	/// The default number of 64KB pages to ever allocate for Wasm execution.
-	///
-	/// Don't alter this unless you know what you're doing.
-	#[structopt(long = "default-heap-pages", value_name = "COUNT")]
-	pub default_heap_pages: Option<u32>,
+	pub input: Option<BlockNumberOrHash>,
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
@@ -41,12 +37,12 @@ pub struct CheckBlockCmd {
 
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
-	pub import_params: ImportParams,
+	pub pruning_params: PruningParams,
 }
 
-impl CheckBlockCmd {
-	/// Run the check-block command
-	pub async fn run<B, BC, BB>(
+impl ExportStateCmd {
+	/// Run the `export-state` command
+	pub fn run<B, BC, BB>(
 		&self,
 		config: Configuration,
 		builder: B,
@@ -59,20 +55,27 @@ impl CheckBlockCmd {
 		BB::Hash: FromStr,
 		<BB::Hash as FromStr>::Err: std::fmt::Debug,
 	{
-		let start = std::time::Instant::now();
-		builder(config)?.check_block(self.input.parse()?).await?;
-		println!("Completed in {} ms.", start.elapsed().as_millis());
+		info!("Exporting raw state...");
+		let mut input_spec = config.chain_spec.cloned_box();
+		let block_id = self.input.clone().map(|b| b.parse()).transpose()?;
+		let raw_state = builder(config)?.export_raw_state(block_id)?;
+		input_spec.set_storage(raw_state);
+
+		info!("Generating new chain spec...");
+		let json = sc_service::chain_ops::build_spec(&*input_spec, true)?;
+
+		print!("{}", json);
 
 		Ok(())
 	}
 }
 
-impl CliConfiguration for CheckBlockCmd {
+impl CliConfiguration for ExportStateCmd {
 	fn shared_params(&self) -> &SharedParams {
 		&self.shared_params
 	}
 
-	fn import_params(&self) -> Option<&ImportParams> {
-		Some(&self.import_params)
+	fn pruning_params(&self) -> Option<&PruningParams> {
+		Some(&self.pruning_params)
 	}
 }

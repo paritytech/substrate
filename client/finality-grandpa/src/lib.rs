@@ -674,7 +674,7 @@ pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR>(
 		let events = telemetry_on_connect
 			.for_each(move |_| {
 				let curr = authorities.current_authorities();
-				let mut auths = curr.voters().into_iter().map(|(p, _)| p);
+				let mut auths = curr.iter().map(|(p, _)| p);
 				let maybe_authority_id = authority_id(&mut auths, &conf.keystore)
 					.unwrap_or(Default::default());
 
@@ -682,8 +682,8 @@ pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR>(
 					"authority_id" => maybe_authority_id.to_string(),
 					"authority_set_id" => ?authorities.set_id(),
 					"authorities" => {
-						let authorities: Vec<String> = curr.voters()
-							.iter().map(|(id, _)| id.to_string()).collect();
+						let authorities: Vec<String> = curr.iter()
+							.map(|(id, _)| id.to_string()).collect();
 						serde_json::to_string(&authorities)
 							.expect("authorities is always at least an empty vector; elements are always of type string")
 					}
@@ -823,7 +823,7 @@ where
 			"authority_id" => authority_id.to_string(),
 			"authority_set_id" => ?self.env.set_id,
 			"authorities" => {
-				let authorities: Vec<String> = self.env.voters.voters()
+				let authorities: Vec<String> = self.env.voters
 					.iter().map(|(id, _)| id.to_string()).collect();
 				serde_json::to_string(&authorities)
 					.expect("authorities is always at least an empty vector; elements are always of type string")
@@ -894,8 +894,16 @@ where
 					Ok(Some(set_state))
 				})?;
 
+				let voters = Arc::new(VoterSet::new(new.authorities.into_iter())
+					.expect("new authorities come from pending change; \
+							 pending change comes from `AuthoritySet`; \
+							 `AuthoritySet` validates authorities is non-empty and weights are non-zero; \
+							 qed."
+					)
+				);
+
 				self.env = Arc::new(Environment {
-					voters: Arc::new(new.authorities.into_iter().collect()),
+					voters,
 					set_id: new.set_id,
 					voter_set_state: self.env.voter_set_state.clone(),
 					// Fields below are simply transferred and not updated.
@@ -1017,7 +1025,8 @@ fn is_voter(
 	keystore: &Option<KeyStorePtr>,
 ) -> Option<AuthorityPair> {
 	match keystore {
-		Some(keystore) => voters.voters().iter()
+		Some(keystore) => voters
+			.iter()
 			.find_map(|(p, _)| keystore.read().key_pair::<AuthorityPair>(&p).ok()),
 		None => None,
 	}

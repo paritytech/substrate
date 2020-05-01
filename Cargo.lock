@@ -1344,10 +1344,11 @@ dependencies = [
 
 [[package]]
 name = "finality-grandpa"
-version = "0.11.2"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "024517816630be5204eba201e8d1d405042b1255a5e0e3f298b054fc24d59e1d"
+checksum = "9d7907cc24468e29b5d3ea2097e78104492b6650c55f96af1f14e7915dc155ad"
 dependencies = [
+ "either",
  "futures 0.3.4",
  "futures-timer 2.0.2",
  "log",
@@ -1552,6 +1553,21 @@ dependencies = [
  "sp-std",
  "sp-version",
  "substrate-test-runtime-client",
+]
+
+[[package]]
+name = "frame-system-benchmarking"
+version = "2.0.0-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "serde",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
 ]
 
 [[package]]
@@ -3572,6 +3588,7 @@ dependencies = [
  "frame-executive",
  "frame-support",
  "frame-system",
+ "frame-system-benchmarking",
  "frame-system-rpc-runtime-api",
  "integer-sqrt",
  "node-primitives",
@@ -6334,6 +6351,7 @@ name = "sc-finality-grandpa"
 version = "0.8.0-dev"
 dependencies = [
  "assert_matches",
+ "derive_more",
  "env_logger 0.7.1",
  "finality-grandpa",
  "fork-tree",

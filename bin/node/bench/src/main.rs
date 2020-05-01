@@ -74,6 +74,11 @@ fn main() {
 				size: SizeType::Medium,
 			},
 		ImportBenchmarkDescription {
+			profile: Profile::Wasm,
+			key_types: KeyTypes::Sr25519,
+			size: SizeType::Empty,
+		},
+		ImportBenchmarkDescription {
 			profile: Profile::Native,
 			key_types: KeyTypes::Ed25519,
 			size: SizeType::Medium,
