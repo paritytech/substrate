@@ -19,63 +19,176 @@
 use assert_cmd::cargo::cargo_bin;
 use std::{process::Command, fs};
 use tempfile::tempdir;
+use regex::Regex;
+use lazy_static::lazy_static;
 
 mod common;
 
-#[test]
-fn export_default_import_default_works() {
-	let base_path = tempdir().expect("could not create a temp dir");
-	let exported_blocks = base_path.path().join("exported_blocks");
-
-	common::run_dev_node_for_a_while(base_path.path());
-
-	let status = Command::new(cargo_bin("substrate"))
-		.args(&["export-blocks", "--pruning", "archive", "--dev", "-d"])
-		.arg(&base_path.path())
-		.arg(&exported_blocks)
-		.status()
-		.unwrap();
-	assert!(status.success());
-
-	let metadata = fs::metadata(&exported_blocks).unwrap();
-	assert!(metadata.len() > 0, "file exported_blocks should not be empty");
-
-	let _ = fs::remove_dir_all(base_path.path().join("db"));
-
-	let status = Command::new(cargo_bin("substrate"))
-		.args(&["import-blocks", "--pruning", "archive", "--dev", "-d"])
-		.arg(&base_path.path())
-		.arg(&exported_blocks)
-		.status()
-		.unwrap();
-	assert!(status.success());
+fn contains_error(log: &str) -> bool {
+    lazy_static! {
+        static ref RE: Regex = Regex::new("Error").unwrap();
+    }
+    RE.is_match(log)
 }
 
 #[test]
 fn export_binary_import_binary_works() {
 	let base_path = tempdir().expect("could not create a temp dir");
 	let exported_blocks = base_path.path().join("exported_blocks");
+	let db_path = base_path.path().join("db");
 
 	common::run_dev_node_for_a_while(base_path.path());
 
-	let status = Command::new(cargo_bin("substrate"))
+	let output = Command::new(cargo_bin("substrate"))
 		.args(&["export-blocks", "--pruning", "archive", "--binary", "--dev", "-d"])
 		.arg(&base_path.path())
 		.arg(&exported_blocks)
-		.status()
+		.output()
 		.unwrap();
-	assert!(status.success());
+
+	let log_output = String::from_utf8_lossy(&output.stderr).to_owned();
+	// Making sure no error were logged.
+	assert!(!contains_error(&log_output));
+
+	assert!(output.status.success());
 
 	let metadata = fs::metadata(&exported_blocks).unwrap();
 	assert!(metadata.len() > 0, "file exported_blocks should not be empty");
 
-	let _ = fs::remove_dir_all(base_path.path().join("db"));
+	let _ = fs::remove_dir_all(&db_path);
 
-	let status = Command::new(cargo_bin("substrate"))
+	let output = Command::new(cargo_bin("substrate"))
 		.args(&["import-blocks", "--pruning", "archive", "--binary", "--dev", "-d"])
 		.arg(&base_path.path())
 		.arg(&exported_blocks)
-		.status()
+		.output()
+		.expect("failed to execute process");
+
+	let log_output = String::from_utf8_lossy(&output.stderr).to_owned();
+	// Making sure no error were logged.
+	assert!(!contains_error(&log_output));
+
+	assert!(output.status.success());
+}
+
+#[test]
+fn export_default_import_default_works() {
+	let base_path = tempdir().expect("could not create a temp dir");
+	let exported_blocks = base_path.path().join("exported_blocks");
+	let db_path = base_path.path().join("db");
+
+	common::run_dev_node_for_a_while(base_path.path());
+
+	let output = Command::new(cargo_bin("substrate"))
+		.args(&["export-blocks", "--pruning", "archive", "--binary", "--dev", "-d"])
+		.arg(&base_path.path())
+		.arg(&exported_blocks)
+		.output()
 		.unwrap();
-	assert!(status.success());
+
+	let log_output = String::from_utf8_lossy(&output.stderr).to_owned();
+	// Making sure no error were logged.
+	assert!(!contains_error(&log_output));
+
+	assert!(output.status.success());
+
+	let metadata = fs::metadata(&exported_blocks).unwrap();
+	assert!(metadata.len() > 0, "file exported_blocks should not be empty");
+
+	let _ = fs::remove_dir_all(&db_path);
+
+	let output = Command::new(cargo_bin("substrate"))
+		.args(&["import-blocks", "--pruning", "archive", "--binary", "--dev", "-d"])
+		.arg(&base_path.path())
+		.arg(&exported_blocks)
+		.output()
+		.expect("failed to execute process");
+
+	let log_output = String::from_utf8_lossy(&output.stderr).to_owned();
+	// Making sure no error were logged.
+	assert!(!contains_error(&log_output));
+
+	assert!(output.status.success());
+}
+
+#[test]
+fn export_binary_import_default_works() {
+	let base_path = tempdir().expect("could not create a temp dir");
+	let exported_blocks = base_path.path().join("exported_blocks");
+	let db_path = base_path.path().join("db");
+
+	common::run_dev_node_for_a_while(base_path.path());
+
+	let output = Command::new(cargo_bin("substrate"))
+		.args(&["export-blocks", "--pruning", "archive", "--binary", "--dev", "-d"])
+		.arg(&base_path.path())
+		.arg(&exported_blocks)
+		.output()
+		.unwrap();
+
+	let log_output = String::from_utf8_lossy(&output.stderr).to_owned();
+	// Making sure no error were logged.
+	assert!(!contains_error(&log_output));
+
+	assert!(output.status.success());
+
+	let metadata = fs::metadata(&exported_blocks).unwrap();
+	assert!(metadata.len() > 0, "file exported_blocks should not be empty");
+
+	let _ = fs::remove_dir_all(&db_path);
+
+	let output = Command::new(cargo_bin("substrate"))
+		.args(&["import-blocks", "--pruning", "archive", "--dev", "-d"])
+		.arg(&base_path.path())
+		.arg(&exported_blocks)
+		.output()
+		.expect("failed to execute process");
+
+	let log_output = String::from_utf8_lossy(&output.stderr).to_owned();
+	// Making sure we found an error.
+	assert!(contains_error(&log_output));
+
+	// Exit code should still be 0.
+	assert!(output.status.success());
+}
+
+#[test]
+fn export_default_import_binary_works() {
+	let base_path = tempdir().expect("could not create a temp dir");
+	let exported_blocks = base_path.path().join("exported_blocks");
+	let db_path = base_path.path().join("db");
+
+	common::run_dev_node_for_a_while(base_path.path());
+
+	let output = Command::new(cargo_bin("substrate"))
+		.args(&["export-blocks", "--pruning", "archive", "--dev", "-d"])
+		.arg(&base_path.path())
+		.arg(&exported_blocks)
+		.output()
+		.unwrap();
+
+	let log_output = String::from_utf8_lossy(&output.stderr).to_owned();
+	// Making sure no error were logged.
+	assert!(!contains_error(&log_output));
+
+	assert!(output.status.success());
+
+	let metadata = fs::metadata(&exported_blocks).unwrap();
+	assert!(metadata.len() > 0, "file exported_blocks should not be empty");
+
+	let _ = fs::remove_dir_all(&db_path);
+
+	let output = Command::new(cargo_bin("substrate"))
+		.args(&["import-blocks", "--pruning", "archive", "--binary", "--dev", "-d"])
+		.arg(&base_path.path())
+		.arg(&exported_blocks)
+		.output()
+		.expect("failed to execute process");
+
+	let log_output = String::from_utf8_lossy(&output.stderr).to_owned();
+	// Making sure we found an error.
+	assert!(contains_error(&log_output));
+
+	// Exit code should still be 0.
+	assert!(output.status.success());
 }
