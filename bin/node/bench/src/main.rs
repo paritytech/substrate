@@ -51,7 +51,7 @@ struct Opt {
 
 	/// Number of transactions to place inside of a block for block import.
 	#[structopt(long)]
-	txs: Option<usize>,
+	transactions: Option<usize>,
 
 	/// Mode
 	///
