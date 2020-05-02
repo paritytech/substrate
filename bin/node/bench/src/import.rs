@@ -54,7 +54,7 @@ pub enum SizeType {
 }
 
 impl SizeType {
-	fn transactions(&self) -> usize {
+	pub fn transactions(&self) -> usize {
 		match self {
 			SizeType::Empty => 0,
 			SizeType::Small => 10,
@@ -71,13 +71,13 @@ pub struct ImportBenchmarkDescription {
 	pub profile: Profile,
 	pub key_types: KeyTypes,
 	pub block_type: BlockType,
+	pub size: SizeType,
 }
 
 pub struct ImportBenchmark {
 	profile: Profile,
 	database: BenchDb,
 	block: Block,
-	size: SizeType,
 }
 
 impl core::BenchmarkDescription for ImportBenchmarkDescription {

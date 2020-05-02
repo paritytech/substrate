@@ -24,7 +24,7 @@ mod state_sizes;
 
 use crate::core::{run_benchmark, Mode as BenchmarkMode};
 use crate::tempdb::DatabaseType;
-use import::{ImportBenchmarkDescription};
+use import::{ImportBenchmarkDescription, SizeType};
 use trie::{TrieReadBenchmarkDescription, TrieWriteBenchmarkDescription, DatabaseSize};
 use node_testing::bench::{Profile, KeyTypes, BlockType};
 use structopt::StructOpt;
@@ -70,26 +70,37 @@ fn main() {
 		sc_cli::init_logger("");
 	}
 
-	let txs = opt.txs.unwrap_or(0);
+	let mut import_benchmarks = Vec::new();
+
+	for profile in [Profile::Wasm, Profile::Native].iter() {
+		for size in [
+			SizeType::Empty,
+			SizeType::Small,
+			SizeType::Medium,
+			SizeType::Large,
+			SizeType::Full,
+			SizeType::Custom,
+		].iter() {
+			let txs = match size {
+				SizeType::Custom => opt.transactions.unwrap_or(0),
+				_ => size.transactions()
+			};
+			for block_type in [
+				BlockType::RandomTransfers(txs),
+				BlockType::Noop(txs)
+			].iter() {
+				import_benchmarks.push((profile.clone(), size.clone(), block_type.clone()));
+			}
+		}
+	}
 
 	let benchmarks = matrix!(
-		profile in [Profile::Wasm, Profile::Native].iter() =>
-			ImportBenchmarkDescription {
+		(profile, size, block_type) in import_benchmarks.iter()
+			=> ImportBenchmarkDescription {
 				profile: *profile,
 				key_types: KeyTypes::Sr25519,
-				block_type: BlockType::RandomTransfers(txs),
-			},
-		profile in [Profile::Wasm, Profile::Native].iter() =>
-			ImportBenchmarkDescription {
-				profile: *profile,
-				key_types: KeyTypes::Sr25519,
-				block_type: BlockType::RandomTransfersReaping(txs),
-			},
-		profile in [Profile::Wasm, Profile::Native].iter() =>
-			ImportBenchmarkDescription {
-				profile: *profile,
-				key_types: KeyTypes::Sr25519,
-				block_type: BlockType::Noop(txs),
+				size: *size,
+				block_type: *block_type,
 			},
 		(size, db_type) in
 			[
