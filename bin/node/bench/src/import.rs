@@ -124,7 +124,7 @@ impl core::BenchmarkDescription for ImportBenchmarkDescription {
 		format!(
 			"Import benchmark ({:?}, {:?})",
 			self.block_type,
-			self.profile
+			self.profile,
 		).into()
 	}
 }
