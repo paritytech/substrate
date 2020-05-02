@@ -303,7 +303,9 @@ impl BenchDb {
 							Call::Balances(
 								BalancesCall::transfer(
 									pallet_indices::address::Address::Id(receiver),
-									100*DOLLARS - node_runtime::ExistentialDeposit::get() - 1,
+									// Transfer so that ending balance would be 1 less than existential deposit
+									// so that we kill the sender account.
+									100*DOLLARS - (node_runtime::ExistentialDeposit::get() - 1),
 								)
 							)
 						},
