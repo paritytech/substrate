@@ -95,13 +95,13 @@ impl core::BenchmarkDescription for ImportBenchmarkDescription {
 			KeyTypes::Ed25519 => path.push("ed25519"),
 		}
 
-		path.push(&format!("{}", self.size));
-
 		match self.block_type {
 			BlockType::RandomTransfers(_) => path.push("transfer"),
 			BlockType::RandomTransfersReaping(_) => path.push("reaping_transfer"),
 			BlockType::Noop(_) => path.push("noop"),
 		}
+
+		path.push(&format!("{}", self.size));
 
 		path
 	}
