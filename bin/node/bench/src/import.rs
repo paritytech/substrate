@@ -37,6 +37,36 @@ use sp_runtime::generic::BlockId;
 
 use crate::core::{self, Path, Mode};
 
+#[derive(Clone, Copy, Debug, derive_more::Display)]
+pub enum SizeType {
+	#[display(fmt = "empty")]
+	Empty,
+	#[display(fmt = "small")]
+	Small,
+	#[display(fmt = "medium")]
+	Medium,
+	#[display(fmt = "large")]
+	Large,
+	#[display(fmt = "full")]
+	Full,
+	#[display(fmt = "custom")]
+	Custom,
+}
+
+impl SizeType {
+	fn transactions(&self) -> usize {
+		match self {
+			SizeType::Empty => 0,
+			SizeType::Small => 10,
+			SizeType::Medium => 100,
+			SizeType::Large => 500,
+			SizeType::Full => 4000,
+			// Custom SizeType will use the `--transactions` input parameter
+			SizeType::Custom => 0,
+		}
+	}
+}
+
 pub struct ImportBenchmarkDescription {
 	pub profile: Profile,
 	pub key_types: KeyTypes,
@@ -47,6 +77,7 @@ pub struct ImportBenchmark {
 	profile: Profile,
 	database: BenchDb,
 	block: Block,
+	size: SizeType,
 }
 
 impl core::BenchmarkDescription for ImportBenchmarkDescription {
@@ -63,6 +94,8 @@ impl core::BenchmarkDescription for ImportBenchmarkDescription {
 			KeyTypes::Sr25519 => path.push("sr25519"),
 			KeyTypes::Ed25519 => path.push("ed25519"),
 		}
+
+		path.push(&format!("{}", self.size));
 
 		match self.block_type {
 			BlockType::RandomTransfers(_) => path.push("transfer"),
