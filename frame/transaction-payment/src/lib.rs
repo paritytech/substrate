@@ -830,3 +830,4 @@ mod tests {
 			assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 100 - 5);
 		});
 	}
+}
