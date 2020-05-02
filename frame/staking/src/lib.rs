@@ -1037,9 +1037,6 @@ decl_storage! {
 		///
 		/// This is set to v3.0.0 for new networks.
 		StorageVersion build(|_: &GenesisConfig<T>| Releases::V3_0_0): Releases;
-
-		/// The era where we migrated from Lazy Payouts to Simple Payouts
-		MigrateEra: Option<EraIndex>;
 	}
 	add_extra_genesis {
 		config(stakers):
@@ -1243,6 +1240,15 @@ decl_module! {
 					active_era.start = Some(now_as_millis_u64);
 					ActiveEra::put(active_era);
 				}
+			}
+		}
+
+		fn on_runtime_upgrade() -> Weight {
+			use frame_support::storage::migration::take_storage_value;
+			if let Some(_) = take_storage_value::<EraIndex>(b"Staking", b"MigrateEra", b"") {
+				T::DbWeight::get().reads_writes(1, 1)
+			} else {
+				T::DbWeight::get().reads(1)
 			}
 		}
 
@@ -1664,69 +1670,6 @@ decl_module! {
 			<Self as Store>::UnappliedSlashes::insert(&era, &unapplied);
 		}
 
-		/// **This extrinsic will be removed after `MigrationEra + HistoryDepth` has passed, giving
-		/// opportunity for users to claim all rewards before moving to Simple Payouts. After this
-		/// time, you should use `payout_stakers` instead.**
-		///
-		/// Make one nominator's payout for one era.
-		///
-		/// - `who` is the controller account of the nominator to pay out.
-		/// - `era` may not be lower than one following the most recently paid era. If it is higher,
-		///   then it indicates an instruction to skip the payout of all previous eras.
-		/// - `validators` is the list of all validators that `who` had exposure to during `era`,
-		///   alongside the index of `who` in the clipped exposure of the validator.
-		///   I.e. each element is a tuple of
-		///   `(validator, index of `who` in clipped exposure of validator)`.
-		///   If it is incomplete, then less than the full reward will be paid out.
-		///   It must not exceed `MAX_NOMINATIONS`.
-		///
-		/// WARNING: once an era is payed for a validator such validator can't claim the payout of
-		/// previous era.
-		///
-		/// WARNING: Incorrect arguments here can result in loss of payout. Be very careful.
-		///
-		/// # <weight>
-		/// - Number of storage read of `O(validators)`; `validators` is the argument of the call,
-		///   and is bounded by `MAX_NOMINATIONS`.
-		/// - Each storage read is `O(N)` size and decode complexity; `N` is the  maximum
-		///   nominations that can be given to a single validator.
-		/// - Computation complexity: `O(MAX_NOMINATIONS * logN)`; `MAX_NOMINATIONS` is the
-		///   maximum number of validators that may be nominated by a single nominator, it is
-		///   bounded only economically (all nominators are required to place a minimum stake).
-		/// # </weight>
-		#[weight = 500_000_000]
-		fn payout_nominator(origin, era: EraIndex, validators: Vec<(T::AccountId, u32)>)
-			-> DispatchResult
-		{
-			let ctrl = ensure_signed(origin)?;
-			Self::do_payout_nominator(ctrl, era, validators)
-		}
-
-		/// **This extrinsic will be removed after `MigrationEra + HistoryDepth` has passed, giving
-		/// opportunity for users to claim all rewards before moving to Simple Payouts. After this
-		/// time, you should use `payout_stakers` instead.**
-		///
-		/// Make one validator's payout for one era.
-		///
-		/// - `who` is the controller account of the validator to pay out.
-		/// - `era` may not be lower than one following the most recently paid era. If it is higher,
-		///   then it indicates an instruction to skip the payout of all previous eras.
-		///
-		/// WARNING: once an era is payed for a validator such validator can't claim the payout of
-		/// previous era.
-		///
-		/// WARNING: Incorrect arguments here can result in loss of payout. Be very careful.
-		///
-		/// # <weight>
-		/// - Time complexity: O(1).
-		/// - Contains a limited number of reads and writes.
-		/// # </weight>
-		#[weight = 500_000_000]
-		fn payout_validator(origin, era: EraIndex) -> DispatchResult {
-			let ctrl = ensure_signed(origin)?;
-			Self::do_payout_validator(ctrl, era)
-		}
-
 		/// Pay out all the stakers behind a single validator for a single era.
 		///
 		/// - `validator_stash` is the stash account of the validator. Their nominators, up to
@@ -1974,143 +1917,6 @@ impl<T: Trait> Module<T> {
 		<SnapshotNominators<T>>::kill();
 	}
 
-	fn do_payout_nominator(ctrl: T::AccountId, era: EraIndex, validators: Vec<(T::AccountId, u32)>)
-		-> DispatchResult
-	{
-		// validators len must not exceed `MAX_NOMINATIONS` to avoid querying more validator
-		// exposure than necessary.
-		if validators.len() > MAX_NOMINATIONS {
-			return Err(Error::<T>::InvalidNumberOfNominations.into());
-		}
-		// If migrate_era is not populated, then you should use `payout_stakers`
-		let migrate_era = MigrateEra::get().ok_or(Error::<T>::InvalidEraToReward)?;
-		// This payout mechanism will only work for eras before the migration.
-		// Subsequent payouts should use `payout_stakers`.
-		ensure!(era < migrate_era, Error::<T>::InvalidEraToReward);
-		let current_era = CurrentEra::get().ok_or(Error::<T>::InvalidEraToReward)?;
-		ensure!(era <= current_era, Error::<T>::InvalidEraToReward);
-		let history_depth = Self::history_depth();
-		ensure!(era >= current_era.saturating_sub(history_depth), Error::<T>::InvalidEraToReward);
-
-		// Note: if era has no reward to be claimed, era may be future. better not to update
-		// `nominator_ledger.last_reward` in this case.
-		let era_payout = <ErasValidatorReward<T>>::get(&era)
-			.ok_or_else(|| Error::<T>::InvalidEraToReward)?;
-
-		let mut nominator_ledger = <Ledger<T>>::get(&ctrl).ok_or_else(|| Error::<T>::NotController)?;
-
-		ensure!(
-			Self::era_election_status().is_closed() || Self::payee(&nominator_ledger.stash) != RewardDestination::Staked,
-			Error::<T>::CallNotAllowed,
-		);
-
-		nominator_ledger.claimed_rewards.retain(|&x| x >= current_era.saturating_sub(history_depth));
-		match nominator_ledger.claimed_rewards.binary_search(&era) {
-			Ok(_) => Err(Error::<T>::AlreadyClaimed)?,
-			Err(pos) => nominator_ledger.claimed_rewards.insert(pos, era),
-		}
-
-		<Ledger<T>>::insert(&ctrl, &nominator_ledger);
-
-		let mut reward = Perbill::zero();
-		let era_reward_points = <ErasRewardPoints<T>>::get(&era);
-
-		for (validator, nominator_index) in validators.into_iter() {
-			let commission = Self::eras_validator_prefs(&era, &validator).commission;
-			let validator_exposure = <ErasStakersClipped<T>>::get(&era, &validator);
-
-			if let Some(nominator_exposure) = validator_exposure.others
-				.get(nominator_index as usize)
-			{
-				if nominator_exposure.who != nominator_ledger.stash {
-					continue;
-				}
-
-				let nominator_exposure_part = Perbill::from_rational_approximation(
-					nominator_exposure.value,
-					validator_exposure.total,
-				);
-				let validator_point = era_reward_points.individual.get(&validator)
-					.map(|points| *points)
-					.unwrap_or_else(|| Zero::zero());
-				let validator_point_part = Perbill::from_rational_approximation(
-					validator_point,
-					era_reward_points.total,
-				);
-				reward = reward.saturating_add(
-					validator_point_part
-						.saturating_mul(Perbill::one().saturating_sub(commission))
-						.saturating_mul(nominator_exposure_part)
-				);
-			}
-		}
-
-		if let Some(imbalance) = Self::make_payout(&nominator_ledger.stash, reward * era_payout) {
-			Self::deposit_event(RawEvent::Reward(ctrl, imbalance.peek()));
-		}
-
-		Ok(())
-	}
-
-	fn do_payout_validator(ctrl: T::AccountId, era: EraIndex) -> DispatchResult {
-		// If migrate_era is not populated, then you should use `payout_stakers`
-		let migrate_era = MigrateEra::get().ok_or(Error::<T>::InvalidEraToReward)?;
-		// This payout mechanism will only work for eras before the migration.
-		// Subsequent payouts should use `payout_stakers`.
-		ensure!(era < migrate_era, Error::<T>::InvalidEraToReward);
-		let current_era = CurrentEra::get().ok_or(Error::<T>::InvalidEraToReward)?;
-		ensure!(era <= current_era, Error::<T>::InvalidEraToReward);
-		let history_depth = Self::history_depth();
-		ensure!(era >= current_era.saturating_sub(history_depth), Error::<T>::InvalidEraToReward);
-
-		// Note: if era has no reward to be claimed, era may be future. better not to update
-		// `ledger.last_reward` in this case.
-		let era_payout = <ErasValidatorReward<T>>::get(&era)
-			.ok_or_else(|| Error::<T>::InvalidEraToReward)?;
-
-		let mut ledger = <Ledger<T>>::get(&ctrl).ok_or_else(|| Error::<T>::NotController)?;
-
-		ensure!(
-			Self::era_election_status().is_closed() || Self::payee(&ledger.stash) != RewardDestination::Staked,
-			Error::<T>::CallNotAllowed,
-		);
-
-		ledger.claimed_rewards.retain(|&x| x >= current_era.saturating_sub(history_depth));
-		match ledger.claimed_rewards.binary_search(&era) {
-			Ok(_) => Err(Error::<T>::AlreadyClaimed)?,
-			Err(pos) => ledger.claimed_rewards.insert(pos, era),
-		}
-
-		<Ledger<T>>::insert(&ctrl, &ledger);
-
-		let era_reward_points = <ErasRewardPoints<T>>::get(&era);
-		let commission = Self::eras_validator_prefs(&era, &ledger.stash).commission;
-		let exposure = <ErasStakersClipped<T>>::get(&era, &ledger.stash);
-
-		let exposure_part = Perbill::from_rational_approximation(
-			exposure.own,
-			exposure.total,
-		);
-		let validator_point = era_reward_points.individual.get(&ledger.stash)
-			.map(|points| *points)
-			.unwrap_or_else(|| Zero::zero());
-		let validator_point_part = Perbill::from_rational_approximation(
-			validator_point,
-			era_reward_points.total,
-		);
-		let reward = validator_point_part.saturating_mul(
-			commission.saturating_add(
-				Perbill::one().saturating_sub(commission).saturating_mul(exposure_part)
-			)
-		);
-
-		if let Some(imbalance) = Self::make_payout(&ledger.stash, reward * era_payout) {
-			Self::deposit_event(RawEvent::Reward(ctrl, imbalance.peek()));
-		}
-
-		Ok(())
-	}
-
 	fn do_payout_stakers(
 		validator_stash: T::AccountId,
 		era: EraIndex,
@@ -2120,13 +1926,6 @@ impl<T: Trait> Module<T> {
 		ensure!(era <= current_era, Error::<T>::InvalidEraToReward);
 		let history_depth = Self::history_depth();
 		ensure!(era >= current_era.saturating_sub(history_depth), Error::<T>::InvalidEraToReward);
-
-		// If there was no migration, then this function is always valid.
-		if let Some(migrate_era) = MigrateEra::get() {
-			// This payout mechanism will only work for eras on and after the migration.
-			// Payouts before then should use `payout_nominator`/`payout_validator`.
-			ensure!(migrate_era <= era, Error::<T>::InvalidEraToReward);
-		}
 
 		// Note: if era has no reward to be claimed, era may be future. better not to update
 		// `ledger.claimed_rewards` in this case.
