@@ -93,20 +93,6 @@ decl_module! {
 				*fm = T::FeeMultiplierUpdate::convert(*fm)
 			});
 		}
-
-		fn on_runtime_upgrade() -> Weight {
-			// TODO: Remove this code after on-chain upgrade from u32 to u64 weights
-			use sp_runtime::Fixed64;
-			use frame_support::migration::take_storage_value;
-			if let Some(old_next_fee_multiplier) = take_storage_value::<Fixed64>(b"TransactionPayment", b"NextFeeMultiplier", &[]) {
-				let raw_multiplier = old_next_fee_multiplier.into_inner() as i128;
-				// Fixed64 used 10^9 precision, where Fixed128 uses 10^18, so we need to add 9 zeros.
-				let new_raw_multiplier: i128 = raw_multiplier.saturating_mul(1_000_000_000);
-				let new_next_fee_multiplier: Fixed128 = Fixed128::from_parts(new_raw_multiplier);
-				NextFeeMultiplier::put(new_next_fee_multiplier);
-			}
-			0
-		}
 	}
 }
 
