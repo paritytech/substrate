@@ -4264,3 +4264,462 @@ fn bond_during_era_correctly_populates_claimed_rewards() {
 		);
 	});
 }
+
+/* These migration tests below can be removed once migration code is removed */
+
+#[test]
+fn assert_migration_is_noop() {
+	let kusama_active_era = "4a0200000190e2721171010000";
+	let era = ActiveEraInfo::decode(&mut &hex::decode(kusama_active_era).unwrap()[..]).unwrap();
+	assert_eq!(era.index, 586);
+	assert_eq!(era.start, Some(1585135674000));
+}
+
+#[test]
+fn test_last_reward_migration() {
+	use sp_storage::Storage;
+
+	let mut s = Storage::default();
+
+	#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+	struct OldStakingLedger<AccountId, Balance: HasCompact> {
+		pub stash: AccountId,
+		#[codec(compact)]
+		pub total: Balance,
+		#[codec(compact)]
+		pub active: Balance,
+		pub unlocking: Vec<UnlockChunk<Balance>>,
+		pub last_reward: Option<EraIndex>,
+	}
+
+	let old_staking10 = OldStakingLedger::<u64, u64> {
+		stash: 0,
+		total: 10,
+		active: 10,
+		unlocking: vec![UnlockChunk{ value: 1234, era: 56}],
+		last_reward: Some(8),
+	};
+
+	let old_staking11 = OldStakingLedger::<u64, u64> {
+		stash: 1,
+		total: 0,
+		active: 0,
+		unlocking: vec![],
+		last_reward: None,
+	};
+
+	let old_staking12 = OldStakingLedger::<u64, u64> {
+		stash: 2,
+		total: 100,
+		active: 100,
+		unlocking: vec![UnlockChunk{ value: 9876, era: 54}, UnlockChunk{ value: 98, era: 76}],
+		last_reward: Some(23),
+	};
+
+	let old_staking13 = OldStakingLedger::<u64, u64> {
+		stash: 3,
+		total: 100,
+		active: 100,
+		unlocking: vec![],
+		last_reward: Some(23),
+	};
+
+	let data = vec![
+		(
+			Ledger::<Test>::hashed_key_for(10),
+			old_staking10.encode().to_vec()
+		),
+		(
+			Ledger::<Test>::hashed_key_for(11),
+			old_staking11.encode().to_vec()
+		),
+		(
+			Ledger::<Test>::hashed_key_for(12),
+			old_staking12.encode().to_vec()
+		),
+		(
+			Ledger::<Test>::hashed_key_for(13),
+			old_staking13.encode().to_vec()
+		),
+	];
+
+	s.top = data.into_iter().collect();
+	sp_io::TestExternalities::new(s).execute_with(|| {
+		HistoryDepth::put(84);
+		CurrentEra::put(99);
+		let nominations = Nominations::<AccountId> {
+			targets: vec![],
+			submitted_in: 0,
+			suppressed: false
+		};
+		Nominators::<Test>::insert(3, nominations);
+		Bonded::<Test>::insert(3, 13);
+		Staking::migrate_last_reward_to_claimed_rewards();
+		// Test staker out of range
+		assert_eq!(
+			Ledger::<Test>::get(10),
+			Some(StakingLedger {
+				stash: 0,
+				total: 10,
+				active: 10,
+				unlocking: vec![UnlockChunk{ value: 1234, era: 56}],
+				claimed_rewards: vec![],
+			})
+		);
+		// Test staker none
+		assert_eq!(
+			Ledger::<Test>::get(11),
+			Some(StakingLedger {
+				stash: 1,
+				total: 0,
+				active: 0,
+				unlocking: vec![],
+				claimed_rewards: vec![],
+			})
+		);
+		// Test staker migration
+		assert_eq!(
+			Ledger::<Test>::get(12),
+			Some(StakingLedger {
+				stash: 2,
+				total: 100,
+				active: 100,
+				unlocking: vec![UnlockChunk{ value: 9876, era: 54}, UnlockChunk{ value: 98, era: 76}],
+				claimed_rewards: vec![15,16,17,18,19,20,21,22,23],
+			})
+		);
+		// Test nominator migration
+		assert_eq!(
+			Ledger::<Test>::get(13),
+			Some(StakingLedger {
+				stash: 3,
+				total: 100,
+				active: 100,
+				unlocking: vec![],
+				claimed_rewards: vec![15,16,17,18,19,20,21,22,23],
+			})
+		);
+	});
+}
+
+#[test]
+fn rewards_should_work_before_migration() {
+	// should check that before migration:
+	// * rewards get recorded per session
+	// * rewards get paid per Era
+	// * Check that nominators are also rewarded
+	ExtBuilder::default().nominate(true).build_and_execute(|| {
+		MigrateEra::put(10);
+		let init_balance_10 = Balances::total_balance(&10);
+		let init_balance_11 = Balances::total_balance(&11);
+		let init_balance_20 = Balances::total_balance(&20);
+		let init_balance_21 = Balances::total_balance(&21);
+		let init_balance_100 = Balances::total_balance(&100);
+		let init_balance_101 = Balances::total_balance(&101);
+
+		// Check state
+		Payee::<Test>::insert(11, RewardDestination::Controller);
+		Payee::<Test>::insert(21, RewardDestination::Controller);
+		Payee::<Test>::insert(101, RewardDestination::Controller);
+
+		<Module<Test>>::reward_by_ids(vec![(11, 50)]);
+		<Module<Test>>::reward_by_ids(vec![(11, 50)]);
+		// This is the second validator of the current elected set.
+		<Module<Test>>::reward_by_ids(vec![(21, 50)]);
+
+		// Compute total payout now for whole duration as other parameter won't change
+		let total_payout_0 = current_total_payout_for_duration(3 * 1000);
+		assert!(total_payout_0 > 10); // Test is meaningful if reward something
+
+		start_session(1);
+
+		assert_eq!(Balances::total_balance(&10), init_balance_10);
+		assert_eq!(Balances::total_balance(&11), init_balance_11);
+		assert_eq!(Balances::total_balance(&20), init_balance_20);
+		assert_eq!(Balances::total_balance(&21), init_balance_21);
+		assert_eq!(Balances::total_balance(&100), init_balance_100);
+		assert_eq!(Balances::total_balance(&101), init_balance_101);
+		assert_eq_uvec!(Session::validators(), vec![11, 21]);
+		assert_eq!(Staking::eras_reward_points(Staking::active_era().unwrap().index), EraRewardPoints {
+			total: 50*3,
+			individual: vec![(11, 100), (21, 50)].into_iter().collect(),
+		});
+		let part_for_10 = Perbill::from_rational_approximation::<u32>(1000, 1125);
+		let part_for_20 = Perbill::from_rational_approximation::<u32>(1000, 1375);
+		let part_for_100_from_10 = Perbill::from_rational_approximation::<u32>(125, 1125);
+		let part_for_100_from_20 = Perbill::from_rational_approximation::<u32>(375, 1375);
+
+		start_session(2);
+		start_session(3);
+
+		assert_eq!(Staking::active_era().unwrap().index, 1);
+		mock::make_all_reward_payment_before_migration(0);
+
+		assert_eq_error_rate!(Balances::total_balance(&10), init_balance_10 + part_for_10 * total_payout_0*2/3, 2);
+		assert_eq_error_rate!(Balances::total_balance(&11), init_balance_11, 2);
+		assert_eq_error_rate!(Balances::total_balance(&20), init_balance_20 + part_for_20 * total_payout_0*1/3, 2);
+		assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2);
+		assert_eq_error_rate!(
+			Balances::total_balance(&100),
+			init_balance_100
+				+ part_for_100_from_10 * total_payout_0 * 2/3
+				+ part_for_100_from_20 * total_payout_0 * 1/3,
+			2
+		);
+		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
+
+		assert_eq_uvec!(Session::validators(), vec![11, 21]);
+		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
+
+		// Compute total payout now for whole duration as other parameter won't change
+		let total_payout_1 = current_total_payout_for_duration(3 * 1000);
+		assert!(total_payout_1 > 10); // Test is meaningful if reward something
+
+		mock::start_era(2);
+		mock::make_all_reward_payment_before_migration(1);
+
+		assert_eq_error_rate!(Balances::total_balance(&10), init_balance_10 + part_for_10 * (total_payout_0 * 2/3 + total_payout_1), 2);
+		assert_eq_error_rate!(Balances::total_balance(&11), init_balance_11, 2);
+		assert_eq_error_rate!(Balances::total_balance(&20), init_balance_20 + part_for_20 * total_payout_0 * 1/3, 2);
+		assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2);
+		assert_eq_error_rate!(
+			Balances::total_balance(&100),
+			init_balance_100
+				+ part_for_100_from_10 * (total_payout_0 * 2/3 + total_payout_1)
+				+ part_for_100_from_20 * total_payout_0 * 1/3,
+			2
+		);
+		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
+	});
+}
+
+#[test]
+fn migrate_era_should_work() {
+	// should check that before and after migration:
+	// * rewards get recorded per session
+	// * rewards get paid per Era
+	// * Check that nominators are also rewarded
+	ExtBuilder::default().nominate(true).build_and_execute(|| {
+		MigrateEra::put(1);
+		let init_balance_10 = Balances::total_balance(&10);
+		let init_balance_11 = Balances::total_balance(&11);
+		let init_balance_20 = Balances::total_balance(&20);
+		let init_balance_21 = Balances::total_balance(&21);
+		let init_balance_100 = Balances::total_balance(&100);
+		let init_balance_101 = Balances::total_balance(&101);
+
+		// Check state
+		Payee::<Test>::insert(11, RewardDestination::Controller);
+		Payee::<Test>::insert(21, RewardDestination::Controller);
+		Payee::<Test>::insert(101, RewardDestination::Controller);
+
+		<Module<Test>>::reward_by_ids(vec![(11, 50)]);
+		<Module<Test>>::reward_by_ids(vec![(11, 50)]);
+		// This is the second validator of the current elected set.
+		<Module<Test>>::reward_by_ids(vec![(21, 50)]);
+
+		// Compute total payout now for whole duration as other parameter won't change
+		let total_payout_0 = current_total_payout_for_duration(3 * 1000);
+		assert!(total_payout_0 > 10); // Test is meaningful if reward something
+
+		start_session(1);
+
+		assert_eq!(Balances::total_balance(&10), init_balance_10);
+		assert_eq!(Balances::total_balance(&11), init_balance_11);
+		assert_eq!(Balances::total_balance(&20), init_balance_20);
+		assert_eq!(Balances::total_balance(&21), init_balance_21);
+		assert_eq!(Balances::total_balance(&100), init_balance_100);
+		assert_eq!(Balances::total_balance(&101), init_balance_101);
+		assert_eq_uvec!(Session::validators(), vec![11, 21]);
+		assert_eq!(Staking::eras_reward_points(Staking::active_era().unwrap().index), EraRewardPoints {
+			total: 50*3,
+			individual: vec![(11, 100), (21, 50)].into_iter().collect(),
+		});
+		let part_for_10 = Perbill::from_rational_approximation::<u32>(1000, 1125);
+		let part_for_20 = Perbill::from_rational_approximation::<u32>(1000, 1375);
+		let part_for_100_from_10 = Perbill::from_rational_approximation::<u32>(125, 1125);
+		let part_for_100_from_20 = Perbill::from_rational_approximation::<u32>(375, 1375);
+
+		start_session(2);
+		start_session(3);
+
+		assert_eq!(Staking::active_era().unwrap().index, 1);
+		mock::make_all_reward_payment_before_migration(0);
+
+		assert_eq_error_rate!(Balances::total_balance(&10), init_balance_10 + part_for_10 * total_payout_0*2/3, 2);
+		assert_eq_error_rate!(Balances::total_balance(&11), init_balance_11, 2);
+		assert_eq_error_rate!(Balances::total_balance(&20), init_balance_20 + part_for_20 * total_payout_0*1/3, 2);
+		assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2);
+		assert_eq_error_rate!(
+			Balances::total_balance(&100),
+			init_balance_100
+				+ part_for_100_from_10 * total_payout_0 * 2/3
+				+ part_for_100_from_20 * total_payout_0 * 1/3,
+			2
+		);
+		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
+
+		assert_eq_uvec!(Session::validators(), vec![11, 21]);
+		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
+
+		// Compute total payout now for whole duration as other parameter won't change
+		let total_payout_1 = current_total_payout_for_duration(3 * 1000);
+		assert!(total_payout_1 > 10); // Test is meaningful if reward something
+
+		mock::start_era(2);
+		mock::make_all_reward_payment(1);
+
+		assert_eq_error_rate!(Balances::total_balance(&10), init_balance_10 + part_for_10 * (total_payout_0 * 2/3 + total_payout_1), 2);
+		assert_eq_error_rate!(Balances::total_balance(&11), init_balance_11, 2);
+		assert_eq_error_rate!(Balances::total_balance(&20), init_balance_20 + part_for_20 * total_payout_0 * 1/3, 2);
+		assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2);
+		assert_eq_error_rate!(
+			Balances::total_balance(&100),
+			init_balance_100
+				+ part_for_100_from_10 * (total_payout_0 * 2/3 + total_payout_1)
+				+ part_for_100_from_20 * total_payout_0 * 1/3,
+			2
+		);
+		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
+	});
+}
+
+#[test]
+#[should_panic]
+fn migrate_era_should_handle_error() {
+	ExtBuilder::default().nominate(true).build_and_execute(|| {
+		MigrateEra::put(1);
+		let init_balance_10 = Balances::total_balance(&10);
+		let init_balance_11 = Balances::total_balance(&11);
+		let init_balance_20 = Balances::total_balance(&20);
+		let init_balance_21 = Balances::total_balance(&21);
+		let init_balance_100 = Balances::total_balance(&100);
+		let init_balance_101 = Balances::total_balance(&101);
+
+		// Check state
+		Payee::<Test>::insert(11, RewardDestination::Controller);
+		Payee::<Test>::insert(21, RewardDestination::Controller);
+		Payee::<Test>::insert(101, RewardDestination::Controller);
+
+		<Module<Test>>::reward_by_ids(vec![(11, 50)]);
+		<Module<Test>>::reward_by_ids(vec![(11, 50)]);
+		// This is the second validator of the current elected set.
+		<Module<Test>>::reward_by_ids(vec![(21, 50)]);
+
+		// Compute total payout now for whole duration as other parameter won't change
+		let total_payout_0 = current_total_payout_for_duration(3 * 1000);
+		assert!(total_payout_0 > 10); // Test is meaningful if reward something
+
+		start_session(1);
+
+		assert_eq!(Balances::total_balance(&10), init_balance_10);
+		assert_eq!(Balances::total_balance(&11), init_balance_11);
+		assert_eq!(Balances::total_balance(&20), init_balance_20);
+		assert_eq!(Balances::total_balance(&21), init_balance_21);
+		assert_eq!(Balances::total_balance(&100), init_balance_100);
+		assert_eq!(Balances::total_balance(&101), init_balance_101);
+		assert_eq_uvec!(Session::validators(), vec![11, 21]);
+		assert_eq!(Staking::eras_reward_points(Staking::active_era().unwrap().index), EraRewardPoints {
+			total: 50*3,
+			individual: vec![(11, 100), (21, 50)].into_iter().collect(),
+		});
+
+		start_session(2);
+		start_session(3);
+
+		assert_eq!(Staking::active_era().unwrap().index, 1);
+		mock::make_all_reward_payment(0);
+	});
+}
+
+#[test]
+#[should_panic]
+fn migrate_era_should_handle_errors_2() {
+	// should check that before and after migration:
+	// * rewards get recorded per session
+	// * rewards get paid per Era
+	// * Check that nominators are also rewarded
+	ExtBuilder::default().nominate(true).build_and_execute(|| {
+		MigrateEra::put(1);
+		let init_balance_10 = Balances::total_balance(&10);
+		let init_balance_11 = Balances::total_balance(&11);
+		let init_balance_20 = Balances::total_balance(&20);
+		let init_balance_21 = Balances::total_balance(&21);
+		let init_balance_100 = Balances::total_balance(&100);
+		let init_balance_101 = Balances::total_balance(&101);
+
+		// Check state
+		Payee::<Test>::insert(11, RewardDestination::Controller);
+		Payee::<Test>::insert(21, RewardDestination::Controller);
+		Payee::<Test>::insert(101, RewardDestination::Controller);
+
+		<Module<Test>>::reward_by_ids(vec![(11, 50)]);
+		<Module<Test>>::reward_by_ids(vec![(11, 50)]);
+		// This is the second validator of the current elected set.
+		<Module<Test>>::reward_by_ids(vec![(21, 50)]);
+
+		// Compute total payout now for whole duration as other parameter won't change
+		let total_payout_0 = current_total_payout_for_duration(3 * 1000);
+		assert!(total_payout_0 > 10); // Test is meaningful if reward something
+
+		start_session(1);
+
+		assert_eq!(Balances::total_balance(&10), init_balance_10);
+		assert_eq!(Balances::total_balance(&11), init_balance_11);
+		assert_eq!(Balances::total_balance(&20), init_balance_20);
+		assert_eq!(Balances::total_balance(&21), init_balance_21);
+		assert_eq!(Balances::total_balance(&100), init_balance_100);
+		assert_eq!(Balances::total_balance(&101), init_balance_101);
+		assert_eq_uvec!(Session::validators(), vec![11, 21]);
+		assert_eq!(Staking::eras_reward_points(Staking::active_era().unwrap().index), EraRewardPoints {
+			total: 50*3,
+			individual: vec![(11, 100), (21, 50)].into_iter().collect(),
+		});
+		let part_for_10 = Perbill::from_rational_approximation::<u32>(1000, 1125);
+		let part_for_20 = Perbill::from_rational_approximation::<u32>(1000, 1375);
+		let part_for_100_from_10 = Perbill::from_rational_approximation::<u32>(125, 1125);
+		let part_for_100_from_20 = Perbill::from_rational_approximation::<u32>(375, 1375);
+
+		start_session(2);
+		start_session(3);
+
+		assert_eq!(Staking::active_era().unwrap().index, 1);
+		mock::make_all_reward_payment_before_migration(0);
+
+		assert_eq_error_rate!(Balances::total_balance(&10), init_balance_10 + part_for_10 * total_payout_0*2/3, 2);
+		assert_eq_error_rate!(Balances::total_balance(&11), init_balance_11, 2);
+		assert_eq_error_rate!(Balances::total_balance(&20), init_balance_20 + part_for_20 * total_payout_0*1/3, 2);
+		assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2);
+		assert_eq_error_rate!(
+			Balances::total_balance(&100),
+			init_balance_100
+				+ part_for_100_from_10 * total_payout_0 * 2/3
+				+ part_for_100_from_20 * total_payout_0 * 1/3,
+			2
+		);
+		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
+
+		assert_eq_uvec!(Session::validators(), vec![11, 21]);
+		<Module<Test>>::reward_by_ids(vec![(11, 1)]);
+
+		// Compute total payout now for whole duration as other parameter won't change
+		let total_payout_1 = current_total_payout_for_duration(3 * 1000);
+		assert!(total_payout_1 > 10); // Test is meaningful if reward something
+
+		mock::start_era(2);
+		mock::make_all_reward_payment_before_migration(1);
+
+		assert_eq_error_rate!(Balances::total_balance(&10), init_balance_10 + part_for_10 * (total_payout_0 * 2/3 + total_payout_1), 2);
+		assert_eq_error_rate!(Balances::total_balance(&11), init_balance_11, 2);
+		assert_eq_error_rate!(Balances::total_balance(&20), init_balance_20 + part_for_20 * total_payout_0 * 1/3, 2);
+		assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2);
+		assert_eq_error_rate!(
+			Balances::total_balance(&100),
+			init_balance_100
+				+ part_for_100_from_10 * (total_payout_0 * 2/3 + total_payout_1)
+				+ part_for_100_from_20 * total_payout_0 * 1/3,
+			2
+		);
+		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
+	});
+}
