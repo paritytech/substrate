@@ -86,8 +86,9 @@ fn main() {
 				_ => size.transactions()
 			};
 			for block_type in [
-				BlockType::RandomTransfers(txs),
-				BlockType::Noop(txs)
+				BlockType::RandomTransfersKeepAlive(txs),
+				BlockType::RandomTransfersReaping(txs),
+				BlockType::Noop(txs),
 			].iter() {
 				import_benchmarks.push((profile.clone(), size.clone(), block_type.clone()));
 			}

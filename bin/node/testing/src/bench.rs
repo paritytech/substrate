@@ -130,7 +130,7 @@ impl Clone for BenchDb {
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum BlockType {
 	/// Bunch of random transfers.
-	RandomTransfers(usize),
+	RandomTransfersKeepAlive(usize),
 	/// Bunch of random transfers that drain all of the source balance.
 	RandomTransfersReaping(usize),
 	/// Bunch of "no-op" calls.
@@ -141,7 +141,7 @@ impl BlockType {
 	/// Number of transactions for this block type.
 	pub fn transactions(&self) -> usize {
 		match self {
-			Self::RandomTransfers(v) | Self::RandomTransfersReaping(v) | Self::Noop(v) => *v,
+			Self::RandomTransfersKeepAlive(v) | Self::RandomTransfersReaping(v) | Self::Noop(v) => *v,
 		}
 	}
 }
@@ -291,9 +291,9 @@ impl BenchDb {
 				CheckedExtrinsic {
 					signed: Some((sender, signed_extra(0, node_runtime::ExistentialDeposit::get() + 1))),
 					function: match block_type {
-						BlockType::RandomTransfers(_) => {
+						BlockType::RandomTransfersKeepAlive(_) => {
 							Call::Balances(
-								BalancesCall::transfer(
+								BalancesCall::transfer_keep_alive(
 									pallet_indices::address::Address::Id(receiver),
 									node_runtime::ExistentialDeposit::get() + 1,
 								)

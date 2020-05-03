@@ -96,8 +96,8 @@ impl core::BenchmarkDescription for ImportBenchmarkDescription {
 		}
 
 		match self.block_type {
-			BlockType::RandomTransfers(_) => path.push("transfer"),
-			BlockType::RandomTransfersReaping(_) => path.push("reaping_transfer"),
+			BlockType::RandomTransfersKeepAlive(_) => path.push("transfer_keep_alive"),
+			BlockType::RandomTransfersReaping(_) => path.push("transfer_reaping"),
 			BlockType::Noop(_) => path.push("noop"),
 		}
 
