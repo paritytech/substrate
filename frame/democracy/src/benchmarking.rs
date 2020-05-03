@@ -91,7 +91,7 @@ fn account_vote<T: Trait>(b: BalanceOf<T>) -> AccountVote<BalanceOf<T>> {
 }
 
 fn open_activate_proxy<T: Trait>(u: u32) -> Result<(T::AccountId, T::AccountId), &'static str> {
-	let caller = funded_account::<T>("caller", u);
+	let caller = funded_account::<T>("caller", 0); // Always use the standard caller account
 	let voter = funded_account::<T>("voter", u);
 
 	Democracy::<T>::open_proxy(RawOrigin::Signed(caller.clone()).into(), voter.clone())?;
@@ -470,7 +470,7 @@ benchmarks! {
 	activate_proxy {
 		let u in 1 .. MAX_USERS;
 
-		let caller: T::AccountId = funded_account::<T>("caller", u);
+		let caller: T::AccountId = funded_account::<T>("caller", 0);
 		let proxy: T::AccountId = funded_account::<T>("proxy", u);
 		Democracy::<T>::open_proxy(RawOrigin::Signed(proxy.clone()).into(), caller.clone())?;
 	}: _(RawOrigin::Signed(caller.clone()), proxy.clone())
@@ -488,10 +488,10 @@ benchmarks! {
 
 	deactivate_proxy {
 		let u in 1 .. MAX_USERS;
-		let (caller, voter) = open_activate_proxy::<T>(u)?;
-	}: _(RawOrigin::Signed(voter.clone()), caller.clone())
+		let (proxy, caller) = open_activate_proxy::<T>(u)?;
+	}: _(RawOrigin::Signed(caller.clone()), proxy.clone())
 	verify {
-		assert_eq!(Democracy::<T>::proxy(caller), Some(ProxyState::Open(voter)));
+		assert_eq!(Democracy::<T>::proxy(proxy), Some(ProxyState::Open(caller)));
 	}
 
 	delegate {
@@ -725,10 +725,10 @@ benchmarks! {
 	open_proxy {
 		let u in 1 .. MAX_USERS;
 
-		let caller: T::AccountId = funded_account::<T>("caller", u);
-		let proxy: T::AccountId = funded_account::<T>("proxy", u);
+		let caller: T::AccountId = funded_account::<T>("caller", 0);
+		let target: T::AccountId = funded_account::<T>("target", u);
 
-	}: _(RawOrigin::Signed(proxy), caller)
+	}: _(RawOrigin::Signed(caller), target)
 
 	remove_vote {
 		let r in 1 .. MAX_REFERENDUMS;

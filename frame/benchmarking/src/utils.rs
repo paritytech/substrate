@@ -137,3 +137,8 @@ pub fn account<AccountId: Decode + Default>(name: &'static str, index: u32, seed
 	let entropy = (name, index, seed).using_encoded(blake2_256);
 	AccountId::decode(&mut &entropy[..]).unwrap_or_default()
 }
+
+/// Use this account as the caller of your benchmarks if you want to easily detect read/write operations from this account.
+pub fn caller<AccountId: Decode + Default>() -> AccountId {
+	account("caller", 0, 0)
+}

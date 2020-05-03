@@ -155,7 +155,7 @@ benchmarks! {
 
 	bond {
 		let u in ...;
-		let stash = create_funded_user::<T>("stash",u);
+		let stash = create_funded_user::<T>("stash", 0); // Use fixed caller account
 		let controller = create_funded_user::<T>("controller", u);
 		let controller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(controller);
 		let reward_destination = RewardDestination::Staked;

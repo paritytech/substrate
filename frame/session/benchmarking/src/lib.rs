@@ -44,7 +44,7 @@ benchmarks! {
 
 	set_keys {
 		let n in 1 .. MAX_NOMINATIONS as u32;
-		let v_stash = create_validator_with_nominators::<T>(n, MAX_NOMINATIONS as u32)?;
+		let v_stash = create_valiTODOdator_with_nominators::<T>(n, MAX_NOMINATIONS as u32)?;
 		let v_controller = pallet_staking::Module::<T>::bonded(&v_stash).ok_or("not stash")?;
 		let keys = T::Keys::default();
 		let proof: Vec<u8> = vec![0,1,2,3];

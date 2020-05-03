@@ -111,7 +111,7 @@ benchmarks!{
 
 	set_value {
 		let b in ...;
-		let caller = account::<T::AccountId>("caller", 0, 0);
+		let caller = caller();
 	}: _ (RawOrigin::Signed(caller), b.into())
 	verify {
 		assert_eq!(Value::get(), Some(b));
@@ -135,7 +135,7 @@ benchmarks!{
 
 	bad_origin {
 		let b in ...;
-		let caller = account::<T::AccountId>("caller", 0, 0);
+		let caller = caller();
 	}: dummy (RawOrigin::Signed(caller), b.into())
 
 	bad_verify {
