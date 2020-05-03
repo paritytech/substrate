@@ -1246,18 +1246,6 @@ decl_module! {
 			}
 		}
 
-		fn on_runtime_upgrade() -> Weight {
-			// For Kusama the type hasn't actually changed as Moment was u64 and was the number of
-			// millisecond since unix epoch.
-			StorageVersion::mutate(|v| {
-				if matches!(v, Releases::V2_0_0) {
-					Self::migrate_last_reward_to_claimed_rewards();
-				}
-				*v = Releases::V3_0_0;
-			});
-			0
-		}
-
 		/// Take the origin account as a stash and lock up `value` of its balance. `controller` will
 		/// be the account that controls it.
 		///
@@ -1935,43 +1923,6 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
-	/// Migrate `last_reward` to `claimed_rewards`
-	pub fn migrate_last_reward_to_claimed_rewards() {
-		use frame_support::migration::{StorageIterator, put_storage_value};
-		// Migrate from `last_reward` to `claimed_rewards`.
-		// We will construct a vector from `current_era - history_depth` to `last_reward`
-		// for each validator and nominator.
-		//
-		// Old Staking Ledger
-		#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-		struct OldStakingLedger<AccountId, Balance: HasCompact> {
-			pub stash: AccountId,
-			#[codec(compact)]
-			pub total: Balance,
-			#[codec(compact)]
-			pub active: Balance,
-			pub unlocking: Vec<UnlockChunk<Balance>>,
-			pub last_reward: Option<EraIndex>,
-		}
-		// Current era and history depth
-		let current_era = Self::current_era().unwrap_or(0);
-		let history_depth = Self::history_depth();
-		let last_payout_era = current_era.saturating_sub(history_depth);
-		// Convert all ledgers to the new format.
-		for (hash, old_ledger) in StorageIterator::<OldStakingLedger<T::AccountId, BalanceOf<T>>>::new(b"Staking", b"Ledger").drain() {
-			let last_reward = old_ledger.last_reward.unwrap_or(0);
-			let new_ledger = StakingLedger {
-				stash: old_ledger.stash,
-				total: old_ledger.total,
-				active: old_ledger.active,
-				unlocking: old_ledger.unlocking,
-				claimed_rewards: (last_payout_era..=last_reward).collect(),
-			};
-			put_storage_value(b"Staking", b"Ledger", &hash, new_ledger);
-		}
-		MigrateEra::put(current_era);
-	}
-
 	/// The total balance that can be slashed from a stash account as of right now.
 	pub fn slashable_balance_of(stash: &T::AccountId) -> BalanceOf<T> {
 		Self::bonded(stash).and_then(Self::ledger).map(|l| l.active).unwrap_or_default()
