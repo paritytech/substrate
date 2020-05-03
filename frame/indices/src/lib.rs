@@ -22,13 +22,11 @@
 use sp_std::prelude::*;
 use codec::Codec;
 use sp_runtime::traits::{
-	StaticLookup, Member, LookupError, Zero, One, BlakeTwo256, Hash, Saturating, AtLeast32Bit
+	StaticLookup, Member, LookupError, Zero, Saturating, AtLeast32Bit
 };
 use frame_support::{Parameter, decl_module, decl_error, decl_event, decl_storage, ensure};
-use frame_support::weights::Weight;
 use frame_support::dispatch::DispatchResult;
 use frame_support::traits::{Currency, ReservableCurrency, Get, BalanceStatus::Reserved};
-use frame_support::storage::migration::take_storage_value;
 use frame_system::{ensure_signed, ensure_root};
 use self::address::Address as RawAddress;
 
@@ -98,12 +96,6 @@ decl_error! {
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin, system = frame_system {
 		fn deposit_event() = default;
-
-		fn on_initialize() -> Weight {
-			Self::migrations();
-
-			0
-		}
 
 		/// Assign an previously unassigned index.
 		///
@@ -239,30 +231,6 @@ impl<T: Trait> Module<T> {
 		match a {
 			address::Address::Id(i) => Some(i),
 			address::Address::Index(i) => Self::lookup_index(i),
-		}
-	}
-
-	/// Do any migrations.
-	fn migrations() {
-		if let Some(set_count) = take_storage_value::<T::AccountIndex>(b"Indices", b"NextEnumSet", b"") {
-			// migrations need doing.
-			let set_size: T::AccountIndex = 64.into();
-
-			let mut set_index: T::AccountIndex = Zero::zero();
-			while set_index < set_count {
-				let maybe_accounts = take_storage_value::<Vec<T::AccountId>>(b"Indices", b"EnumSet", BlakeTwo256::hash_of(&set_index).as_ref());
-				if let Some(accounts) = maybe_accounts {
-					for (item_index, target) in accounts.into_iter().enumerate() {
-						if target != T::AccountId::default() && !T::Currency::total_balance(&target).is_zero() {
-							let index = set_index * set_size + T::AccountIndex::from(item_index as u32);
-							Accounts::<T>::insert(index, (target, BalanceOf::<T>::zero()));
-						}
-					}
-				} else {
-					break;
-				}
-				set_index += One::one();
-			}
 		}
 	}
 }
