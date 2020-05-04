@@ -638,8 +638,6 @@ macro_rules! implement_fixed {
 				let h = $name::from_rational(inner_min, -accuracy);
 				let i = $name::from_rational(inner_min + 1, -accuracy);
 
-				let j = $name::from_rational(42, 0);
-
 				let k = $name::from_rational(inner_max, 1);
 				let l = $name::from_rational(inner_min, 1);
 				let m = $name::from_rational(inner_min, -1);
@@ -671,8 +669,6 @@ macro_rules! implement_fixed {
 				assert_eq!(g.into_inner(), -inner_max);
 				assert_eq!(h.into_inner(), inner_max);
 				assert_eq!(i.into_inner(), inner_max);
-
-				// assert_eq!(j.into_inner(), 0);
 
 				assert_eq!(k.into_inner(), inner_max);
 				assert_eq!(l.into_inner(), inner_min);
