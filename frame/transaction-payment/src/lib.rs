@@ -692,7 +692,7 @@ mod tests {
 			.execute_with(||
 		{
 			// Next fee multiplier is zero
-			assert_eq!(NextFeeMultiplier::get(), Fixed128::from_natural(0));
+			assert_eq!(NextFeeMultiplier::get(), Fixed128::from_integer(0));
 
 			// Tip only, no fees works
 			let dispatch_info = DispatchInfo {

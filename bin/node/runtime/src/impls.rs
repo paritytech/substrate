@@ -183,7 +183,7 @@ mod tests {
 			loop {
 				let next = TargetedFeeAdjustment::<TargetBlockFullness>::convert(fm);
 				fm = next;
-				if fm == Fixed128::from_natural(-1) { break; }
+				if fm == Fixed128::from_integer(-1) { break; }
 				iterations += 1;
 			}
 			println!("iteration {}, new fm = {:?}. Weight fee is now zero", iterations, fm);
@@ -325,8 +325,8 @@ mod tests {
 
 			// ... stops going down at -1
 			assert_eq!(
-				TargetedFeeAdjustment::<TargetBlockFullness>::convert(Fixed128::from_natural(-1)),
-				Fixed128::from_natural(-1)
+				TargetedFeeAdjustment::<TargetBlockFullness>::convert(Fixed128::from_integer(-1)),
+				Fixed128::from_integer(-1)
 			);
 		})
 	}
@@ -335,7 +335,7 @@ mod tests {
 	fn weight_to_fee_should_not_overflow_on_large_weights() {
 		let kb = 1024 as Weight;
 		let mb = kb * kb;
-		let max_fm = Fixed128::from_natural(i128::max_value());
+		let max_fm = Fixed128::from_integer(i128::max_value());
 
 		// check that for all values it can compute, correctly.
 		vec![
