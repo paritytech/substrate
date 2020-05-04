@@ -432,11 +432,11 @@ decl_module! {
 		///   - `transfer_keep_alive` works the same way as `transfer`, but has an additional
 		///     check that the transfer will not kill the origin account.
 		/// ---------------------------------
-		/// - Base Weight: 80 µs, worst case scenario (account created, account removed)
+		/// - Base Weight: 73.64 µs, worst case scenario (account created, account removed)
 		/// - DB Weight: 1 Read and 1 Write to destination account
 		/// - Origin account is already in memory, so no DB operations for them.
 		/// # </weight>
-		#[weight = T::DbWeight::get().reads_writes(1, 1) + 80_000_000]
+		#[weight = T::DbWeight::get().reads_writes(1, 1) + 70_000_000]
 		pub fn transfer(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -460,7 +460,9 @@ decl_module! {
 		/// - Independent of the arguments.
 		/// - Contains a limited number of reads and writes.
 		/// ---------------------
-		/// - Base Weight: 32.6 µs
+		/// - Base Weight:
+		///     - Creating: 27.56 µs
+		///     - Killing: 35.11 µs
 		/// - DB Weight: 1 Read, 1 Write to `who`
 		/// # </weight>
 		#[weight = T::DbWeight::get().reads_writes(1, 1) + 35_000_000]
@@ -505,7 +507,7 @@ decl_module! {
 		/// - Same as transfer, but additional read and write because the source account is
 		///   not assumed to be in the overlay.
 		/// # </weight>
-		#[weight = T::DbWeight::get().reads_writes(2, 2) + 80_000_000]
+		#[weight = T::DbWeight::get().reads_writes(2, 2) + 70_000_000]
 		pub fn force_transfer(
 			origin,
 			source: <T::Lookup as StaticLookup>::Source,
@@ -526,10 +528,10 @@ decl_module! {
 		/// [`transfer`]: struct.Module.html#method.transfer
 		/// # <weight>
 		/// - Cheaper than transfer because account cannot be killed.
-		/// - Base Weight: 57.36 µs
+		/// - Base Weight: 51.4 µs
 		/// - DB Weight: 1 Read and 1 Write to dest (sender is in overlay already)
 		/// #</weight>
-		#[weight = T::DbWeight::get().reads_writes(1, 1) + 60_000_000]
+		#[weight = T::DbWeight::get().reads_writes(1, 1) + 50_000_000]
 		pub fn transfer_keep_alive(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
