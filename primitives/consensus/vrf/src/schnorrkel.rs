@@ -19,7 +19,6 @@
 use codec::{Encode, Decode, EncodeLike};
 use sp_std::{convert::TryFrom, prelude::*};
 use sp_core::U512;
-use sp_runtime::RuntimeDebug;
 use sp_std::ops::{Deref, DerefMut};
 use schnorrkel::errors::MultiSignatureStage;
 
