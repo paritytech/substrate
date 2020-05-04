@@ -196,11 +196,11 @@ mod weight_for {
 		proposals: impl Into<Weight> + Copy,
 	) -> Weight {
 		db.reads_writes(1, 1) // read + write members
-			+ db.reads_writes(proposals.into() + 1, proposals.into()) // update votes
-			+ db.writes(2) // set prime
-			+ 29_000_000 * old_count.into() // M
-			+ 100_000 * new_count.into() // N
-			+ 27_000_000 * proposals.into() // P
+			.saturating_add(db.writes(2)) // set prime
+			.saturating_add(db.reads_writes(proposals.into() + 1, proposals.into())) // update votes
+			.saturating_add(old_count.into().saturating_mul(29_000_000)) // M
+			.saturating_add(new_count.into().saturating_mul(100_000)) // N
+			.saturating_add(proposals.into().saturating_mul(27_000_000)) // P
 	}
 
 	// The bytes are responsible for an insignificant amount of weight.
@@ -215,9 +215,9 @@ mod weight_for {
 	) -> Weight {
 		db.reads(1) // read members for `is_member`
 			+ 86_000_000 // constant
-			+ 330_000 * members.into() // M
 			+ 5_000 * MAX_ASSUMED_PROPOSAL_BYTES // B
-			+ proposal.into() // P
+			+ 330_000 * members.into() // M
+			.saturating_add(proposal.into()) // P
 	}
 
 	/// Calculate the weight for `propose` if the proposal is executed straight away (`threshold < 2`).
@@ -228,9 +228,9 @@ mod weight_for {
 	) -> Weight {
 		db.reads(2) // `is_member` + `contains_key`
 			+ 120_000_000 // constant
-			+ 650_000 * members.into() // M
-			+ proposal.into() // P1
 			+ 5_000 * MAX_ASSUMED_PROPOSAL_BYTES // B
+			+ 650_000 * members.into() // M
+			.saturating_add(proposal.into()) // P1
 		
 	}
 
@@ -243,9 +243,9 @@ mod weight_for {
 		db.reads(2) // `is_member` + `contains_key`
 			+ db.reads_writes(2, 4) // `proposal` insertion
 			+ 180_000_000 // constant
+			+ 7_000 * MAX_ASSUMED_PROPOSAL_BYTES // B
 			+ 350_000 * members.into() // M
 			+ 1_100_000 * proposals.into() // P2
-			+ 7_000 * MAX_ASSUMED_PROPOSAL_BYTES // B
 	}
 }
 
@@ -296,10 +296,10 @@ decl_module! {
 		///
 		/// # <weight>
 		/// ## Weight
-		/// - `O(MP + N)`
-		///   - where `M` old-members-count (code- and governance-bounded)
-		///   - where `N` new-members-count (code- and governance-bounded)
-		///   - where `P` proposals-count (code-bounded)
+		/// - `O(MP + N)` where:
+		///   - `M` old-members-count (code- and governance-bounded)
+		///   - `N` new-members-count (code- and governance-bounded)
+		///   - `P` proposals-count (code-bounded)
 		/// - DB:
 		///   - 1 storage mutation (codec `O(M)` read, `O(N)` write) for reading and writing the members
 		///   - 1 storage read (codec `O(P)`) + `P` storage mutations for updating the votes for each proposal (codec `O(M)`)
@@ -360,12 +360,12 @@ decl_module! {
 		///
 		/// # <weight>
 		/// ## Weight
-		/// - `O(B + M + P1)` or `O(B + M + P2)`
-		///   - where `B` is `proposal` size in bytes (length-fee-bounded)
-		///   - where `M` members-count (code- and governance-bounded)
-		///   - where branching is influenced by `threshold`:
-		///     - where `P1` is proposal execution complexity (`threshold < 2`)
-		///     - where `P2` is proposals-count (code-bounded) (`threshold >= 2`)
+		/// - `O(B + M + P1)` or `O(B + M + P2)` where:
+		///   - `B` is `proposal` size in bytes (length-fee-bounded)
+		///   - `M` is members-count (code- and governance-bounded)
+		///   - branching is influenced by `threshold` where:
+		///     - `P1` is proposal execution complexity (`threshold < 2`)
+		///     - `P2` is proposals-count (code-bounded) (`threshold >= 2`)
 		/// - DB:
 		///   - 1 storage read `is_member` (codec `O(M)`)
 		///   - 1 storage read `ProposalOf::contains_key` (codec `O(1)`)
@@ -446,14 +446,17 @@ decl_module! {
 		///
 		/// # <weight>
 		/// ## Weight
-		/// - `O(M)` where `M` members-count (code- and governance-bounded)
+		/// - `O(M)` where `M` is members-count (code- and governance-bounded)
 		/// - DB:
 		///   - 1 storage read `members` (codec `O(M)`)
 		///   - 1 storage mutation `voting` (codec `O(M)`)
 		/// - 1 event
 		/// - Benchmark: TODO
 		/// # </weight>
-		#[weight = (200_000_000, DispatchClass::Operational)]
+		#[weight = (
+			T::DbWeight::get().reads_writes(2, 1) + 1234 * T::MaxMembers::get(),
+			DispatchClass::Operational
+		)]
 		fn vote(origin, proposal: T::Hash, #[compact] index: ProposalIndex, approve: bool) {
 			let who = ensure_signed(origin)?;
 			let members = Self::members();
@@ -490,21 +493,34 @@ decl_module! {
 			Self::deposit_event(RawEvent::Voted(who, proposal, approve, yes_votes, no_votes));
 
 			Voting::<T, I>::insert(&proposal, voting);
+
+			Ok(Some(T::DbWeight::get().reads_writes(2, 1) + 1234 * members.len() as Weight).into())
 		}
 
-		/// May be called by any signed account after the voting duration has ended in order to
-		/// finish voting and close the proposal.
+		/// Close a vote that is either approved, disapproved or whose voting period has ended.
 		///
-		/// Abstentions are counted as rejections unless there is a prime member set and the prime
-		/// member cast an approval.
+		/// May be called by any signed account in order to finish voting and close the proposal.
 		///
-		/// - the weight of `proposal` preimage.
-		/// - up to three events deposited.
-		/// - one read, two removals, one mutation. (plus three static reads.)
-		/// - computation and i/o `O(P + L + M)` where:
-		///   - `M` is number of members,
-		///   - `P` is number of active proposals,
-		///   - `L` is the encoded length of `proposal` preimage.
+		/// If called before the end of the voting period it will only close the vote if it is
+		/// has enough votes to be approved or disapproved.
+		///
+		/// If called after the end of the voting period abstentions are counted as rejections 
+		/// unless there is a prime member set and the prime member cast an approval.
+		///
+		/// # <weight>
+		/// ## Weight
+		/// - `O(B + M + P1 + P2)` where:
+		///   - `B` is `proposal` size in bytes (length-fee-bounded)
+		///   - `M` is members-count (code- and governance-bounded)
+		///   - `P1` is the complexity of `proposal` preimage.
+		///   - `P2` is proposal-count (code-bounded)
+		/// - DB:
+		///  - 2 storage reads (`Members`: codec `O(M)`, `Prime`: codec `O(1)`)
+		///  - 3 mutations (`Voting`: codec `O(M)`, `ProposalOf`: codec `O(B)`, `Proposals`: codec `O(P2)`)
+		///  - any mutations done while executing `proposal` (`P1`)
+		/// - up to 3 events
+		/// - Benchmark: TODO
+		/// # </weight>
 		#[weight = (200_000_000, DispatchClass::Operational)]
 		fn close(origin, proposal: T::Hash, #[compact] index: ProposalIndex) -> DispatchResultWithPostInfo {
 			let _ = ensure_signed(origin)?;
