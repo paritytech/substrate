@@ -21,6 +21,7 @@ use sc_executor_common::{
 use sp_wasm_interface::Value;
 use cranelift_codegen::ir;
 use cranelift_wasm::GlobalIndex;
+use wasmtime_runtime::{ExportGlobal, Export};
 
 /// A snapshot of a global variables values. This snapshot can be used later for restoring the
 /// values to the preserved state.
@@ -43,11 +44,9 @@ impl GlobalsSnapshot {
 
 		for global_idx in instance_wrapper.imported_globals_count..instance_wrapper.globals_count {
 			let (def, global) = match handle.lookup_by_declaration(
-				&wasmtime_environ::Export::Global(GlobalIndex::from_u32(global_idx)),
+				&wasmtime_environ::EntityIndex::Global(GlobalIndex::from_u32(global_idx)),
 			) {
-				wasmtime_runtime::Export::Global {
-					definition, global, ..
-				} => (definition, global),
+				Export::Global(ExportGlobal { definition, global, .. }) => (definition, global),
 				_ => unreachable!("only globals can be returned for a global request"),
 			};
 
