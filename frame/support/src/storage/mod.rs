@@ -487,7 +487,7 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 /// Marker trait that will be implemented for types that support the `storage::append` api.
 ///
 /// This trait is sealed.
-pub trait StorageAppend<Item: Encode>: Sealed {}
+pub trait StorageAppend<Item: Encode>: private::Sealed {}
 
 /// Provides `Sealed` trait to prevent implementing trait `StorageAppend` outside of this crate.
 mod private {

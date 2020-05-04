@@ -30,7 +30,7 @@ use sp_core::{
 };
 use sp_trie::{trie_types::Layout, empty_child_trie_root};
 use sp_externalities::{Extensions, Extension};
-use codec::{Compact, Decode, Encode};
+use codec::{Decode, Encode};
 
 use std::{error, fmt, any::{Any, TypeId}};
 use log::{warn, trace};
