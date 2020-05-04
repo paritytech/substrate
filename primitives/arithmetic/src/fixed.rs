@@ -162,6 +162,7 @@ impl<N: FixedPointOperand> From<N> for I129 {
 	}
 }
 
+/// Transforms an `I129` to `N` if it is possible.
 fn from_i129<N: FixedPointOperand>(n: I129) -> Option<N> {
 	let max_plus_one: u128 = N::max_value().unique_saturated_into().saturating_add(1);
 	if n.negative && N::min_value() < N::zero() && n.value == max_plus_one {
@@ -173,6 +174,7 @@ fn from_i129<N: FixedPointOperand>(n: I129) -> Option<N> {
 	}
 }
 
+/// Returns `R::max` or `R::min` depending of the operand signs.
 fn to_bound<N: FixedPointOperand, D: FixedPointOperand, R: Bounded>(n: N, m: D) -> R {
 	if (n < N::zero()) != (m < D::zero()) {
 		R::min_value()
