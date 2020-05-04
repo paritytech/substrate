@@ -279,12 +279,12 @@ pub trait Trait: frame_system::Trait + Sized {
 	/// The Scheduler.
 	type Scheduler: ScheduleNamed<Self::BlockNumber, Self::Proposal>;
 
-	/// The maximum number of possiblevetoers origin, not a hard limit, only used to compute weight.
+	/// The maximum number of possible vetoers origin, not a hard limit, only used to compute weight.
 	type MaxVetoers: Get<u32>;
 
-	/// The maximum number of vote for an account.
+	/// The maximum number of votes for an account.
 	///
-	/// Also used to compute weight, a too big value can
+	/// Also used to compute weight, an overly big value can
 	/// lead to extrinsic with very big weight: see `delegate` for instance.
 	type MaxVotes: Get<u32>;
 }
