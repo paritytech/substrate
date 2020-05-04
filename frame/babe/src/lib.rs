@@ -502,8 +502,8 @@ impl<T: Trait> Module<T> {
 							transcript
 						).ok()
 					})
-					.and_then(|inout| {
-						Some(inout.make_bytes(&sp_consensus_babe::BABE_VRF_INOUT_CONTEXT))
+					.map(|inout| {
+						inout.make_bytes(&sp_consensus_babe::BABE_VRF_INOUT_CONTEXT)
 					})
 			} else {
 				None
