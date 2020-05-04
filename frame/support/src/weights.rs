@@ -141,6 +141,34 @@ pub use sp_runtime::transaction_validity::TransactionPriority;
 /// Numeric range of a transaction weight.
 pub type Weight = u64;
 
+/// These constants are specific to the current pallet selection in the Substrate node.
+/// For example: Frame System, Pallet Balances, Pallet Staking, etc...
+/// Any significant changes to your runtime setup should probably use weights specific to your own
+/// runtime benchmarks.
+pub mod constants {
+	use super::*;
+	use crate::parameter_types;
+
+	parameter_types! {
+		/// Importing a block with 0 txs takes ~5 ms
+		pub const BlockExecutionWeight: Weight = 5_000_000_000;
+		/// Executing 10,000 System remarks (no-op) txs takes ~1.26 seconds -> ~125 µs per tx
+		pub const ExtrinsicBaseWeight: Weight = 125_000_000;
+		/// By default, Substrate uses RocksDB, so this will be the weight used throughout
+		/// the runtime.
+		pub const RocksDbWeight: RuntimeDbWeight = RuntimeDbWeight {
+			read: 25_000_000, // ~25 µs @ 200,000 items
+			write: 100_000_000, // ~100 µs @ 200,000 items
+		};
+		/// ParityDB can be enabled with a feature flag, but is still experimental. These weights
+		/// are available for brave runtime engineers who may want to try this out as default.
+		pub const ParityDbWeight: RuntimeDbWeight = RuntimeDbWeight {
+			read: 8_000_000, // ~8 µs @ 200,000 items
+			write: 50_000_000, // ~50 µs @ 200,000 items
+		};
+	}
+}
+
 /// Means of weighing some particular kind of data (`T`).
 pub trait WeighData<T> {
 	/// Weigh the data `T` given by `target`. When implementing this for a dispatchable, `T` will be
