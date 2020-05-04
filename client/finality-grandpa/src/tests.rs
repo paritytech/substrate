@@ -990,7 +990,6 @@ fn test_bad_justification() {
 
 #[test]
 fn voter_persists_its_votes() {
-	use std::iter::FromIterator;
 	use std::sync::atomic::{AtomicUsize, Ordering};
 	use futures::future;
 	use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
@@ -1145,7 +1144,7 @@ fn voter_persists_its_votes() {
 		let (round_rx, round_tx) = network.round_communication(
 			communication::Round(1),
 			communication::SetId(0),
-			Arc::new(VoterSet::from_iter(voters)),
+			Arc::new(VoterSet::new(voters).unwrap()),
 			Some(peers[1].pair().into()),
 			HasVoted::No,
 		);
