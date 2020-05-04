@@ -286,9 +286,11 @@ decl_module! {
 		///
 		/// The `votes` should:
 		///   - not be empty.
-		///   - be less than the number of candidates.
+		///   - be less than the number of possible candidates. Note that all current members and
+		///     runners-up are also automatically candidates for the next round.
 		///
 		/// Upon voting, `value` units of `who`'s balance is locked and a bond amount is reserved.
+		///
 		/// It is the responsibility of the caller to not place all of their balance into the lock
 		/// and keep some for further transactions.
 		///
@@ -301,6 +303,9 @@ decl_module! {
 		fn vote(origin, votes: Vec<T::AccountId>, #[compact] value: BalanceOf<T>) {
 			let who = ensure_signed(origin)?;
 
+			ensure!(votes.len() <= MAXIMUM_VOTE, Error::<T>::MaximumVotesExceeded);
+			ensure!(!votes.is_empty(), Error::<T>::NoVotes);
+
 			let candidates_count = <Candidates<T>>::decode_len().unwrap_or(0) as usize;
 			let members_count = <Members<T>>::decode_len().unwrap_or(0) as usize;
 			// addition is valid: candidates and members never overlap.
@@ -308,19 +313,15 @@ decl_module! {
 
 			ensure!(!allowed_votes.is_zero(), Error::<T>::UnableToVote);
 			ensure!(votes.len() <= allowed_votes, Error::<T>::TooManyVotes);
-			ensure!(votes.len() <= MAXIMUM_VOTE, Error::<T>::MaximumVotesExceeded);
-			ensure!(!votes.is_empty(), Error::<T>::NoVotes);
 
-			ensure!(
-				value > T::Currency::minimum_balance(),
-				Error::<T>::LowBalance,
-			);
+			ensure!(value > T::Currency::minimum_balance(), Error::<T>::LowBalance);
 
 			if !Self::is_voter(&who) {
 				// first time voter. Reserve bond.
 				T::Currency::reserve(&who, T::VotingBond::get())
 					.map_err(|_| Error::<T>::UnableToPayBond)?;
 			}
+
 			// Amount to be locked up.
 			let locked_balance = value.min(T::Currency::total_balance(&who));
 
@@ -357,7 +358,7 @@ decl_module! {
 		///
 		/// A defunct voter is defined to be:
 		///   - a voter whose current submitted votes are all invalid. i.e. all of them are no
-		///     longer a candidate nor an active member.
+		///     longer a candidate nor an active member or a runner-up.
 		///
 		/// # <weight>
 		/// #### State
@@ -644,7 +645,9 @@ impl<T: Trait> Module<T> {
 		if Self::is_voter(who) {
 			Self::votes_of(who)
 				.iter()
-				.all(|v| !Self::is_member(v) && !Self::is_runner(v) && !Self::is_candidate(v).is_ok())
+				.all(|v|
+					!Self::is_member(v) && !Self::is_runner(v) && !Self::is_candidate(v).is_ok()
+				)
 		} else {
 			false
 		}
@@ -1017,7 +1020,7 @@ mod tests {
 			new_plus_outgoing.extend_from_slice(outgoing);
 			new_plus_outgoing.sort();
 
-			assert_eq!(old_plus_incoming, new_plus_outgoing);
+			assert_eq!(old_plus_incoming, new_plus_outgoing, "change members call is incorrect!");
 
 			MEMBERS.with(|m| *m.borrow_mut() = new.to_vec());
 			PRIME.with(|p| *p.borrow_mut() = None);
