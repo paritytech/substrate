@@ -49,8 +49,8 @@
 
 # GRANDPA, BABE, consensus stuff
 /frame/babe/ @andresilva @DemiMarie-parity
-/frame/grandpa/ @andresilva @DemiMarie-parity
-/client/finality-grandpa/ @andresilva @DemiMarie-parity
+/frame/grandpa/ @andresilva
+/client/finality-grandpa/ @andresilva
 /client/consensus/babe/ @andresilva @DemiMarie-parity
 /client/consensus/slots/ @andresilva @DemiMarie-parity
 /client/consensus/pow/ @sorpaas
