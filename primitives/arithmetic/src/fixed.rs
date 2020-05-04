@@ -164,7 +164,7 @@ impl<N: FixedPointOperand> From<N> for I129 {
 
 fn from_i129<N: FixedPointOperand>(n: I129) -> Option<N> {
 	let max_plus_one: u128 = N::max_value().unique_saturated_into().saturating_add(1);
-	if n.value == max_plus_one && n.negative {
+	if n.negative && N::min_value() < N::zero() && n.value == max_plus_one {
 		Some(N::min_value())
 	} else {
 		let unsigned_inner: N = n.value.try_into().ok()?;
@@ -550,6 +550,68 @@ macro_rules! implement_fixed {
 
 			fn min() -> $name {
 				$name::min_value()
+			}
+
+			#[test]
+			fn from_i129_works() {
+				let a = I129 {
+					value: 1,
+					negative: true,
+				};
+
+				assert_eq!(from_i129::<u128>(a), None);
+
+				let a = I129 {
+					value: u128::max_value(),
+					negative: false,
+				};
+
+				assert_eq!(from_i129::<u128>(a), Some(u128::max_value()));
+
+				let a = I129 {
+					value: i128::max_value() as u128 + 1,
+					negative: true,
+				};
+
+				assert_eq!(from_i129::<i128>(a), Some(i128::min_value()));
+
+				let a = I129 {
+					value: i128::max_value() as u128 + 1,
+					negative: false,
+				};
+
+				assert_eq!(from_i129::<i128>(a), None);
+
+				let a = I129 {
+					value: i128::max_value() as u128,
+					negative: false,
+				};
+
+				assert_eq!(from_i129::<i128>(a), Some(i128::max_value()));
+			}
+
+			#[test]
+			fn to_bound_works() {
+				let a = 1i32;
+				let b = 1i32;
+				assert_eq!(to_bound::<_, _, i32>(a, b), i32::max_value());
+
+				let a = 1i32;
+				let b = -1i32;
+				assert_eq!(to_bound::<_, _, i32>(a, b), i32::min_value());
+
+				let a = -1i32;
+				let b = 1i32;
+				assert_eq!(to_bound::<_, _, i32>(a, b), i32::min_value());
+
+
+				let a = 1i32;
+				let b = 1i32;
+				assert_eq!(to_bound::<_, _, u32>(a, b), u32::max_value());
+
+				let a = 1i32;
+				let b = -1i32;
+				assert_eq!(to_bound::<_, _, u32>(a, b), 0);
 			}
 
 			#[test]
