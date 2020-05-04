@@ -10,7 +10,9 @@ use sp_inherents::InherentDataProviders;
 use sc_executor::native_executor_instance;
 pub use sc_executor::NativeExecutor;
 use sp_consensus_aura::sr25519::{AuthorityPair as AuraPair};
-use sc_finality_grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider, StorageAndProofProvider};
+use sc_finality_grandpa::{
+	FinalityProofProvider as GrandpaFinalityProofProvider, StorageAndProofProvider, SharedVoterState,
+};
 
 // Our native executor instance.
 native_executor_instance!(
@@ -157,7 +159,8 @@ pub fn new_full(config: Configuration) -> Result<impl AbstractService, ServiceEr
 			inherent_data_providers: inherent_data_providers.clone(),
 			telemetry_on_connect: Some(service.telemetry_on_connect_stream()),
 			voting_rule: sc_finality_grandpa::VotingRulesBuilder::default().build(),
-			prometheus_registry: service.prometheus_registry()
+			prometheus_registry: service.prometheus_registry(),
+			shared_voter_state: SharedVoterState::empty(),
 		};
 
 		// the GRANDPA voter task is considered infallible, i.e.
