@@ -25,7 +25,6 @@ use crate::{
 };
 #[cfg(feature = "std")]
 use std::collections::HashSet;
-use codec::Encode;
 /// Key type for generic Ed25519 key.
 pub const ED25519: KeyTypeId = KeyTypeId(*b"ed25");
 /// Key type for generic Sr 25519 key.
@@ -172,6 +171,8 @@ impl crate::traits::BareCryptoStore for KeyStore {
 		key: &CryptoTypePublicPair,
 		msg: &[u8],
 	) -> Result<Vec<u8>, BareCryptoStoreError> {
+		use codec::Encode;
+
 		match key.0 {
 			ed25519::CRYPTO_ID => {
 				let key_pair: ed25519::Pair = self

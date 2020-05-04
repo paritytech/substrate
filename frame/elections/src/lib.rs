@@ -886,7 +886,7 @@ impl<T: Trait> Module<T> {
 					if set_len + 1 == VOTER_SET_SIZE {
 						NextVoterSet::put(next + 1);
 					}
-					<Voters<T>>::append_or_insert(next, &[Some(who.clone())][..])
+					<Voters<T>>::append(next, Some(who.clone()));
 				}
 			}
 

@@ -16,8 +16,8 @@
 
 use sp_std::prelude::*;
 use sp_std::borrow::Borrow;
-use codec::{Ref, FullCodec, FullEncode, Decode, Encode, EncodeLike, EncodeAppend};
-use crate::{storage::{self, unhashed}, traits::Len, Never};
+use codec::{FullCodec, FullEncode, Decode, Encode, EncodeLike};
+use crate::{storage::{self, unhashed, StorageAppend}, traits::Len, Never};
 use crate::hash::{StorageHasher, Twox128, ReversibleStorageHasher};
 
 /// Generator for `StorageDoubleMap` used by `decl_storage`.
@@ -245,7 +245,7 @@ impl<K1, K2, V, G> storage::StorageDoubleMap<K1, K2, V> for G where
 		ret
 	}
 
-	fn append<Items, Item, EncodeLikeItem, KArg1, KArg2>(
+	fn append<Item, EncodeLikeItem, KArg1, KArg2>(
 		k1: KArg1,
 		k2: KArg2,
 		item: EncodeLikeItem,
@@ -257,7 +257,7 @@ impl<K1, K2, V, G> storage::StorageDoubleMap<K1, K2, V> for G where
 		V: StorageAppend<Item>,
 	{
 		let final_key = Self::storage_double_map_final_key(k1, k2);
-		sp_io::storage::append(final_key, item.encode());
+		sp_io::storage::append(&final_key, item.encode());
 	}
 
 	fn decode_len<KArg1, KArg2>(key1: KArg1, key2: KArg2) -> Result<usize, &'static str> where

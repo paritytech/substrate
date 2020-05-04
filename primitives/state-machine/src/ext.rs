@@ -30,7 +30,7 @@ use sp_core::{
 };
 use sp_trie::{trie_types::Layout, empty_child_trie_root};
 use sp_externalities::{Extensions, Extension};
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, EncodeAppend};
 
 use std::{error, fmt, any::{Any, TypeId}};
 use log::{warn, trace};
@@ -588,7 +588,7 @@ impl Encode for EncodeOpaqueValue {
 /// Auxialiary structure for appending a value to a storage item.
 pub(crate) struct StorageAppend<'a>(&'a mut Vec<u8>);
 
-impl<'a> StorageAppend {
+impl<'a> StorageAppend<'a> {
 	/// Create a new instance using the given `storage` reference.
 	pub fn new(storage: &'a mut Vec<u8>) -> Self {
 		Self(storage)
@@ -600,12 +600,12 @@ impl<'a> StorageAppend {
 	pub fn append(&mut self, value: Vec<u8>) {
 		let value = vec![EncodeOpaqueValue(value)];
 
-		let item = mem::take(&mut self.0);
+		let item = std::mem::take(self.0);
 
 		*self.0 = match Vec::<EncodeOpaqueValue>::append_or_new(item, &value) {
 			Ok(item) => item,
-			Err(e) => {
-				error!(
+			Err(_) => {
+				log::error!(
 					target: "runtime",
 					"Failed to append value, resetting storage item to `[value]`.",
 				);

@@ -100,9 +100,7 @@ use frame_support::{
 	weights::Weight,
 };
 use frame_system::{self as system, ensure_root, ensure_signed};
-use sp_runtime::{
-	traits::{AtLeast32Bit, MaybeSerializeDeserialize, Zero, StaticLookup},
-};
+use sp_runtime::traits::{AtLeast32Bit, MaybeSerializeDeserialize, Zero, StaticLookup};
 
 type BalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 type PoolT<T, I> = Vec<(<T as frame_system::Trait>::AccountId, Option<<T as Trait<I>>::Score>)>;
@@ -276,10 +274,7 @@ decl_module! {
 
 			// can be inserted as last element in pool, since entities with
 			// `None` are always sorted to the end.
-			if let Err(e) = <Pool<T, I>>::append(&[(who.clone(), None)]) {
-				T::Currency::unreserve(&who, deposit);
-				Err(e)?
-			}
+			<Pool<T, I>>::append((who.clone(), Option::<<T as Trait<I>>::Score>::None));
 
 			<CandidateExists<T, I>>::insert(&who, true);
 

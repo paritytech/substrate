@@ -160,7 +160,7 @@ decl_module! {
 		#[weight = 0]
 		pub fn append_member_list(origin) {
 			let who = ensure_signed(origin)?;
-			MyMemberList::<T>::append(&[who])?;
+			MyMemberList::<T>::append(who);
 		}
 
 		/// Encode a vector of accounts to bytes.

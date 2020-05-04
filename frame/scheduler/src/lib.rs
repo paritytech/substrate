@@ -52,7 +52,7 @@ use frame_support::{
 	traits::{Get, schedule},
 	weights::{GetDispatchInfo, Weight},
 };
-use frame_system::{self as system};
+use frame_system as system;
 
 /// Our pallet's configuration trait. All our types and constants go in here. If the
 /// pallet is dependent on specific other pallets, then their configuration traits
@@ -123,7 +123,7 @@ decl_module! {
 				.collect::<Vec<_>>();
 			queued.sort_by_key(|(_, s)| s.priority);
 			let mut result = 0;
-			let unused_items = queued.into_iter()
+			queued.into_iter()
 				.enumerate()
 				.scan(0, |cumulative_weight, (order, (index, s))| {
 					*cumulative_weight += s.call.get_dispatch_info().weight;
@@ -141,10 +141,10 @@ decl_module! {
 							}
 							let next = now + period;
 							if let Some(ref id) = s.maybe_id {
-								let next_index = Agenda::<T>::decode_len(now + period).unwrap_or(0) as u32;
-								Lookup::<T>::insert(id, (next, next_index));
+								let next_index = Agenda::<T>::decode_len(now + period).unwrap_or(0);
+								Lookup::<T>::insert(id, (next, next_index as u32));
 							}
-							Agenda::<T>::append_or_insert(next, &[Some(s)][..]);
+							Agenda::<T>::append(next, Some(s));
 						} else {
 							if let Some(ref id) = s.maybe_id {
 								Lookup::<T>::remove(id);
@@ -161,11 +161,11 @@ decl_module! {
 						Some(Some(s))
 					}
 				})
-				.collect::<Vec<_>>();
-			if !unused_items.is_empty() {
-				let next = now + One::one();
-				Agenda::<T>::append_or_insert(next, &unused_items[..]);
-			}
+				.for_each(|unused| {
+					let next = now + One::one();
+					Agenda::<T>::append(next, unused);
+				});
+
 			result
 		}
 	}
@@ -186,7 +186,7 @@ impl<T: Trait> schedule::Anon<T::BlockNumber, <T as Trait>::Call> for Module<T> 
 			// Remove one from the number of repetitions since we will schedule one now.
 			.map(|(p, c)| (p, c - 1));
 		let s = Some(Scheduled { maybe_id: None, priority, call, maybe_periodic });
-		Agenda::<T>::append_or_insert(when, &[s][..]);
+		Agenda::<T>::append(when, s);
 		(when, Agenda::<T>::decode_len(when).unwrap_or(1) as u32 - 1)
 	}
 
@@ -225,7 +225,7 @@ impl<T: Trait> schedule::Named<T::BlockNumber, <T as Trait>::Call> for Module<T>
 			.map(|(p, c)| (p, c - 1));
 
 		let s = Scheduled { maybe_id: Some(id.clone()), priority, call, maybe_periodic };
-		Agenda::<T>::append_or_insert(when, &[Some(s)][..]);
+		Agenda::<T>::append(when, Some(s));
 		let index = Agenda::<T>::decode_len(when).unwrap_or(1) as u32 - 1;
 		let address = (when, index);
 		Lookup::<T>::insert(&id, &address);

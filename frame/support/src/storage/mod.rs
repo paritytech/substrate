@@ -17,7 +17,7 @@
 //! Stuff to do with the runtime's storage.
 
 use sp_std::{prelude::*, marker::PhantomData};
-use codec::{FullCodec, FullEncode, Encode, EncodeAppend, EncodeLike, Decode};
+use codec::{FullCodec, FullEncode, Encode, EncodeLike, Decode};
 use crate::{traits::Len, hash::{Twox128, StorageHasher}};
 
 pub mod unhashed;
@@ -170,7 +170,7 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 		EncodeLikeKey: EncodeLike<K>,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
-		T: StorageAppend<Item>;
+		V: StorageAppend<Item>;
 
 	/// Read the length of the value in a fast way, without decoding the entire value.
 	///

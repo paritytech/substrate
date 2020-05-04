@@ -499,8 +499,8 @@ mod tests {
 			let key2 = 18u32;
 
 			DoubleMap::insert(&key1, &key2, &vec![1]);
-			DoubleMap::append(&key1, &key2, &[2, 3]).unwrap();
-			assert_eq!(DoubleMap::get(&key1, &key2), &[1, 2, 3]);
+			DoubleMap::append(&key1, &key2, 2);
+			assert_eq!(DoubleMap::get(&key1, &key2), &[1, 2]);
 		});
 	}
 

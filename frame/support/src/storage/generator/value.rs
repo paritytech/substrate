@@ -17,7 +17,7 @@
 use codec::{FullCodec, Encode, EncodeLike, Decode};
 use crate::{
 	Never,
-	storage::{self, unhashed},
+	storage::{self, unhashed, StorageAppend},
 	hash::{Twox128, StorageHasher},
 	traits::Len
 };
