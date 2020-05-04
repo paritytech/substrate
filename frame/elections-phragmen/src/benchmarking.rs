@@ -20,10 +20,8 @@
 
 use super::*;
 
-use codec::{Encode, Decode};
 use frame_system::RawOrigin;
-use sp_io::hashing::blake2_256;
-use frame_benchmarking::benchmarks;
+use frame_benchmarking::{benchmarks, account};
 use sp_runtime::traits::Bounded;
 use frame_support::traits::OnInitialize;
 
@@ -34,18 +32,14 @@ const BALANCE_FACTOR: u32 = 250;
 const MAX_LOCKS: u32 = 20;
 const MAX_VOTERS: u32 = 50_000;
 const MAX_CANDIDATES: u32 = 1000;
+const MAX_MEMBERS: u32 = 1000;
+const MAX_RUNNER_UPS: u32 = 1000;
 
 type Lookup<T> = <<T as frame_system::Trait>::Lookup as StaticLookup>::Source;
 
-/// grab a new account
-fn account<T: Trait>(name: &'static str, index: u32) -> T::AccountId {
-	let entropy = (name, index).using_encoded(blake2_256);
-	T::AccountId::decode(&mut &entropy[..]).unwrap_or_default()
-}
-
 /// grab new account with infinite balance.
 fn endowed_account<T: Trait>(name: &'static str, index: u32) -> T::AccountId {
-	let account = account::<T>(name, index);
+	let account: T::AccountId = account(name, index, SEED);
 	let _ = T::Currency::make_free_balance_be(&account, BalanceOf::<T>::max_value());
 	account
 }
@@ -66,7 +60,7 @@ fn submit_candidates<T: Trait>(c: u32, prefix: &'static str) -> Result<Vec<T::Ac
 	(0..c).map(|i| {
 		let account = endowed_account::<T>(prefix, i);
 		<Elections<T>>::submit_candidacy(RawOrigin::Signed(account.clone()).into())
-			.map_err(|e| "failed to submit candidacy")?;
+			.map_err(|_| "failed to submit candidacy")?;
 		Ok(account)
 	}).collect::<Result<_, _>>()
 }
@@ -87,7 +81,7 @@ fn submit_voter<T: Trait>(caller: T::AccountId, votes: Vec<T::AccountId>, stake:
 	-> Result<(), &'static str>
 {
 	<Elections<T>>::vote(RawOrigin::Signed(caller).into(), votes, stake)
-		.map_err(|e| "failed to submit vote")
+		.map_err(|_| "failed to submit vote")
 }
 
 /// add `n` locks to account `who`.
@@ -98,6 +92,28 @@ fn add_locks<T: Trait>(who: &T::AccountId, n: u8) {
 		let reasons = WithdrawReason::Transfer | WithdrawReason::Reserve;
 		T::Currency::set_lock(lock_id, who, locked.into(), reasons);
 	}
+}
+
+/// add 'n' members to storage
+fn add_members<T: Trait>(n: u32) {
+	let mut new_members = (0..n).map(|i| {
+		let account = endowed_account::<T>("member", i);
+		// voting balance does not matter here
+		(account, n.into())
+	}).collect::<Vec<(T::AccountId, BalanceOf<T>)>>();
+	new_members.sort_by(|i, j| i.0.cmp(&j.0));
+	Members::<T>::put(new_members);
+}
+
+/// add 'n' runner-ups to storage
+fn add_runner_ups<T: Trait>(n: u32) {
+	let mut new_runner_ups = (0..n).map(|i| {
+		let account = endowed_account::<T>("member", i);
+		(account, n.into())
+	}).collect::<Vec<(T::AccountId, BalanceOf<T>)>>();
+	// sort by desirability
+	new_runner_ups.sort_by(|i, j| i.1.cmp(&j.1));
+	RunnersUp::<T>::put(new_runner_ups);
 }
 
 /// Fill the seats of members and runners-up up until `m`. Note that this might include either only
@@ -124,11 +140,17 @@ benchmarks! {
 		let x in 1 .. (MAXIMUM_VOTE as u32);
 		// range of locks that the caller already had. This extrinsic adds a lock.
 		let l in 1 .. MAX_LOCKS;
+		let m in 0 .. MAX_MEMBERS;
+		let r in 0 .. MAX_RUNNER_UPS;
 
 		// create a bunch of candidates.
 		let all_candidates = submit_candidates::<T>(MAXIMUM_VOTE as u32, "candidates")?;
+		// create a bunch of members.
+		add_members::<T>(m);
+		// create a bunch of runner-ups
+		add_runner_ups::<T>(r);
 
-		let caller = endowed_account::<T>("caller", SEED);
+		let caller = endowed_account::<T>("caller", 0);
 		add_locks::<T>(&caller, l as u8);
 
 		let stake = default_stake::<T>(BALANCE_FACTOR);
@@ -137,6 +159,9 @@ benchmarks! {
 		let votes = all_candidates.into_iter().take(x as usize).collect();
 
 	}: _(RawOrigin::Signed(caller), votes, stake)
+	verify {
+
+	}
 
 	remove_voter {
 		// range of candidates that we have voted for. This may or may have a significant impact on
@@ -150,7 +175,7 @@ benchmarks! {
 		// create a bunch of candidates.
 		let all_candidates = submit_candidates::<T>(c, "candidates")?;
 
-		let caller = endowed_account::<T>("caller", SEED);
+		let caller = endowed_account::<T>("caller", 0);
 		add_locks::<T>(&caller, l as u8);
 
 		let stake = default_stake::<T>(BALANCE_FACTOR);
@@ -159,7 +184,7 @@ benchmarks! {
 	}: _(RawOrigin::Signed(caller))
 
 	report_defunct_voter_correct {
-		// number fo already existing members or runners
+		// number of already existing members or runners
 		let m in 0 .. T::DesiredMembers::get() + T::DesiredRunnersUp::get();
 		// number of candidates that the reported voter voted for. This may or may not have any
 		// impact on the outcome.
@@ -174,7 +199,7 @@ benchmarks! {
 		let all_candidates = submit_candidates::<T>(c, "candidates")?;
 
 		// account 1 is the reporter and it doesn't matter how many it votes.
-		let account_1 = endowed_account::<T>("caller_1", 0);
+		let account_1 = endowed_account::<T>("caller", 0);
 		submit_voter::<T>(
 			account_1.clone(),
 			all_candidates.iter().take(1).cloned().collect(),
@@ -223,7 +248,7 @@ benchmarks! {
 		let all_candidates = submit_candidates::<T>(c, "candidates")?;
 
 		// account 1 is the reporter and it doesn't matter how many it votes.
-		let account_1 = endowed_account::<T>("caller_1", 0);
+		let account_1 = endowed_account::<T>("caller", 0);
 		submit_voter::<T>(
 			account_1.clone(),
 			all_candidates.iter().take(1).cloned().collect(),
@@ -261,7 +286,7 @@ benchmarks! {
 		let _ = fill_seats_up_to::<T>(m)?;
 
 		// we assume worse case that: extrinsic is successful and candidate is not duplicate.
-		let candidate_account = endowed_account::<T>("candidate", 0);
+		let candidate_account = endowed_account::<T>("caller", 0);
 	}: _(RawOrigin::Signed(candidate_account.clone()))
 
 	renounce_candidacy_candidate {
@@ -277,9 +302,9 @@ benchmarks! {
 		// create m members and runners combined.
 		let _ = fill_seats_up_to::<T>(m)?;
 
-		let all_candidates = submit_candidates::<T>(c, "candidates")?;
+		let all_candidates = submit_candidates::<T>(c, "caller")?;
 
-		let bailing = all_candidates[0].clone();
+		let bailing = all_candidates[0].clone(); // Should be ("caller", 0)
 	}: renounce_candidacy(RawOrigin::Signed(bailing.clone()))
 	verify {
 		#[cfg(test)]
