@@ -67,6 +67,14 @@ pub trait IdTupleConvert<T: HistoricalTrait + OffencesTrait> {
 	fn convert(id: IdentificationTuple<T>) -> <T as OffencesTrait>::IdentificationTuple;
 }
 
+impl<T: HistoricalTrait + OffencesTrait> IdTupleConvert<T> for T where
+	<T as OffencesTrait>::IdentificationTuple: From<IdentificationTuple<T>>
+{
+	fn convert(id: IdentificationTuple<T>) -> <T as OffencesTrait>::IdentificationTuple {
+		id.into()
+	}
+}
+
 type LookupSourceOf<T> = <<T as SystemTrait>::Lookup as StaticLookup>::Source;
 type BalanceOf<T> = <<T as StakingTrait>::Currency as Currency<<T as SystemTrait>::AccountId>>::Balance;
 
@@ -395,12 +403,12 @@ mod tests {
 	use super::*;
 	use crate::mock::{new_test_ext, Test};
 	use frame_support::assert_ok;
-
-	impl IdTupleConvert<Test> for Test {
-		fn convert(id: IdentificationTuple<Test>) -> <Test as OffencesTrait>::IdentificationTuple {
-			id
-		}
-	}
+    //
+	// impl IdTupleConvert<Test> for Test {
+	// 	fn convert(id: IdentificationTuple<Test>) -> <Test as OffencesTrait>::IdentificationTuple {
+	// 		id
+	// 	}
+	// }
 
 	#[test]
 	fn test_benchmarks() {
