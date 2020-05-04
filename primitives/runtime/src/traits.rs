@@ -715,7 +715,7 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> Result<Self::Pre, TransactionValidityError> {
-		self.validate(who, call, info.clone(), len)
+		self.validate(who, call, info, len)
 			.map(|_| Self::Pre::default())
 			.map_err(Into::into)
 	}
@@ -749,7 +749,7 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> Result<Self::Pre, TransactionValidityError> {
-		Self::validate_unsigned(call, info.clone(), len)
+		Self::validate_unsigned(call, info, len)
 			.map(|_| Self::Pre::default())
 			.map_err(Into::into)
 	}
