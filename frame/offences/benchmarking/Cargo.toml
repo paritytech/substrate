@@ -17,7 +17,7 @@ frame-benchmarking = { version = "2.0.0-dev", default-features = false, path = "
 frame-support = { version = "2.0.0-dev", default-features = false, path = "../../support" }
 frame-system = { version = "2.0.0-dev", default-features = false, path = "../../system" }
 pallet-babe = { version = "2.0.0-dev", default-features = false, path = "../../babe" }
-pallet-balances = { version = "2.0.0-dev", path = "../../balances" }
+pallet-balances = { version = "2.0.0-dev", default-features = false, path = "../../balances" }
 pallet-grandpa = { version = "2.0.0-dev", default-features = false, path = "../../grandpa" }
 pallet-im-online = { version = "2.0.0-dev", default-features = false, path = "../../im-online" }
 pallet-offences = { version = "2.0.0-dev", default-features = false, features = ["runtime-benchmarks"], path = "../../offences" }
@@ -43,6 +43,7 @@ std = [
 	"frame-support/std",
 	"frame-system/std",
 	"pallet-babe/std",
+	"pallet-balances/std",
 	"pallet-grandpa/std",
 	"pallet-im-online/std",
 	"pallet-offences/std",
@@ -51,4 +52,5 @@ std = [
 	"sp-runtime/std",
 	"sp-staking/std",
 	"sp-std/std",
+	"sp-io/std",
 ]
