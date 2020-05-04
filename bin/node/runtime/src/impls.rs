@@ -115,7 +115,6 @@ mod tests {
 	use crate::{MaximumBlockWeight, AvailableBlockRatio, Runtime};
 	use crate::{constants::currency::*, TransactionPayment, TargetBlockFullness};
 	use frame_support::weights::Weight;
-	use core::num::NonZeroI128;
 
 	fn max() -> Weight {
 		MaximumBlockWeight::get()
@@ -138,7 +137,7 @@ mod tests {
 		let s = block_weight;
 
 		let fm = v * (s/m - ss/m) + v.powi(2) * (s/m - ss/m).powi(2) / 2.0;
-		let addition_fm = Fixed128::from_parts((fm * Fixed128::accuracy() as f64).round() as i128);
+		let addition_fm = Fixed128::from_inner((fm * Fixed128::accuracy() as f64).round() as i128);
 		previous.saturating_add(addition_fm)
 	}
 
@@ -153,7 +152,7 @@ mod tests {
 
 	#[test]
 	fn fee_multiplier_update_poc_works() {
-		let fm = Fixed128::from_rational(0, NonZeroI128::new(1).unwrap());
+		let fm = Fixed128::from_rational(0, 1);
 		let test_set = vec![
 			(0, fm.clone()),
 			(100, fm.clone()),
@@ -167,7 +166,7 @@ mod tests {
 					fee_multiplier_update(w, fm),
 					TargetedFeeAdjustment::<TargetBlockFullness>::convert(fm),
 					// Error is only 1 in 10^18
-					Fixed128::from_parts(1),
+					Fixed128::from_inner(1),
 				);
 			})
 		})
@@ -222,7 +221,7 @@ mod tests {
 				fm = next;
 				iterations += 1;
 				let fee = <Runtime as pallet_transaction_payment::Trait>::WeightToFee::convert(tx_weight);
-				let adjusted_fee = fm.saturated_multiply_accumulate(fee);
+				let adjusted_fee = fm.saturating_mul_int_acc(fee);
 				println!(
 					"iteration {}, new fm = {:?}. Fee at this point is: {} units / {} millicents, \
 					{} cents, {} dollars",
@@ -358,7 +357,7 @@ mod tests {
 			run_with_system_weight(i, || {
 				let next = TargetedFeeAdjustment::<TargetBlockFullness>::convert(Fixed128::default());
 				let truth = fee_multiplier_update(i, Fixed128::default());
-				assert_eq_error_rate!(truth, next, Fixed128::from_parts(50_000_000));
+				assert_eq_error_rate!(truth, next, Fixed128::from_inner(50_000_000));
 			});
 		});
 
