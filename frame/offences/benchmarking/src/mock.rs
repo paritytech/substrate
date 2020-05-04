@@ -43,7 +43,7 @@ impl frame_system::Trait for Test {
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = sp_runtime::testing::Header;
-	type Event = ();
+	type Event = Event;
 	type BlockHashCount = ();
 	type MaximumBlockWeight = ();
 	type DbWeight = ();
@@ -62,7 +62,7 @@ parameter_types! {
 }
 impl pallet_balances::Trait for Test {
 	type Balance = Balance;
-	type Event = ();
+	type Event = Event;
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
@@ -113,7 +113,7 @@ impl pallet_session::Trait for Test {
 	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
 	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
 	type SessionHandler = TestSessionHandler;
-	type Event = ();
+	type Event = Event;
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = pallet_staking::StashOf<Test>;
 	type DisabledValidatorsThreshold = ();
@@ -152,7 +152,7 @@ impl pallet_staking::Trait for Test {
 	type UnixTime = pallet_timestamp::Module<Self>;
 	type CurrencyToVote = CurrencyToVoteHandler;
 	type RewardRemainder = ();
-	type Event = ();
+	type Event = Event;
 	type Slash = ();
 	type Reward = ();
 	type SessionsPerEra = ();
@@ -171,14 +171,14 @@ impl pallet_staking::Trait for Test {
 
 impl pallet_im_online::Trait for Test {
 	type AuthorityId = UintAuthorityId;
-	type Event = ();
+	type Event = Event;
 	type SessionDuration = Period;
 	type ReportUnresponsiveness = Offences;
 	type UnsignedPriority = ();
 }
 
 impl pallet_offences::Trait for Test {
-	type Event = ();
+	type Event = Event;
 	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
 }

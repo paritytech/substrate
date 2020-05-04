@@ -72,12 +72,14 @@ type BalanceOf<T> = <<T as StakingTrait>::Currency as Currency<<T as SystemTrait
 
 fn create_offender<T: Trait>(n: u32, nominators: u32) -> Result<T::AccountId, &'static str> {
 	let stash: T::AccountId = account("stash", n, SEED);
-	let stash_lookup: LookupSourceOf<T> = T::Lookup::unlookup(stash.clone());
 	let controller: T::AccountId = account("controller", n, SEED);
 	let controller_lookup: LookupSourceOf<T> = T::Lookup::unlookup(controller.clone());
 	let reward_destination = RewardDestination::Staked;
+	// let raw_amount = crate::mock::ExistentialDeposit::get();
 	let raw_amount = 1_000_000;
-	Balances::<T>::set_balance(RawOrigin::Root.into(), stash_lookup, raw_amount.into(), raw_amount.into())?;
+	// make twice as much balance to prevent the account from being killed.
+	let free_amount = 2 * raw_amount;
+	Balances::<T>::make_free_balance_be(&stash, free_amount.into());
 	let amount: BalanceOf<T> = raw_amount.into();
 	Staking::<T>::bond(
 		RawOrigin::Signed(stash.clone()).into(),
@@ -96,12 +98,9 @@ fn create_offender<T: Trait>(n: u32, nominators: u32) -> Result<T::AccountId, &'
 	// Create n nominators
 	for i in 0 .. nominators {
 		let nominator_stash: T::AccountId = account("nominator stash", n * MAX_NOMINATORS + i, SEED);
-		let nominator_stash_lookup: LookupSourceOf<T> = T::Lookup::unlookup(nominator_stash.clone());
 		let nominator_controller: T::AccountId = account("nominator controller", n * MAX_NOMINATORS + i, SEED);
 		let nominator_controller_lookup: LookupSourceOf<T> = T::Lookup::unlookup(nominator_controller.clone());
-		Balances::<T>::set_balance(
-			RawOrigin::Root.into(), nominator_stash_lookup, raw_amount.into(), raw_amount.into()
-		)?;
+		Balances::<T>::make_free_balance_be(&nominator_stash, free_amount.into());
 
 		Staking::<T>::bond(
 			RawOrigin::Signed(nominator_stash.clone()).into(),
