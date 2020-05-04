@@ -187,7 +187,6 @@ macro_rules! implement_fixed {
 		$test_mod:ident,
 		$inner_type:ty,
 		$div:tt,
-		$precision:tt,
 	) => {
 		#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 		pub struct $name($inner_type);
@@ -477,7 +476,8 @@ macro_rules! implement_fixed {
 					let signum_for_zero = if int == 0 && self.is_negative() { "-" } else { "" };
 					format!("{}{}", signum_for_zero, int)
 				};
-				let fractional = format!("{:0>weight$}", (self.0 % Self::accuracy()).abs(), weight=$precision);
+				let precision = (Self::accuracy() as f64).log10() as usize;
+				let fractional = format!("{:0>weight$}", (self.0 % Self::accuracy()).abs(), weight=precision);
 				write!(f, "{}({}.{})", stringify!($name), integral, fractional)
 			}
 
@@ -550,6 +550,10 @@ macro_rules! implement_fixed {
 
 			fn min() -> $name {
 				$name::min_value()
+			}
+
+			fn precision() -> usize {
+				($name::accuracy() as f64).log10() as usize
 			}
 
 			#[test]
@@ -1050,25 +1054,25 @@ macro_rules! implement_fixed {
 			#[test]
 			fn fmt_should_work() {
 				let zero = $name::zero();
-				assert_eq!(format!("{:?}", zero), format!("{}(0.{:0>weight$})", stringify!($name), 0, weight=$precision));
+				assert_eq!(format!("{:?}", zero), format!("{}(0.{:0>weight$})", stringify!($name), 0, weight=precision()));
 
 				let one = $name::one();
-				assert_eq!(format!("{:?}", one), format!("{}(1.{:0>weight$})", stringify!($name), 0, weight=$precision));
+				assert_eq!(format!("{:?}", one), format!("{}(1.{:0>weight$})", stringify!($name), 0, weight=precision()));
 
 				let neg = -$name::one();
-				assert_eq!(format!("{:?}", neg), format!("{}(-1.{:0>weight$})", stringify!($name), 0, weight=$precision));
+				assert_eq!(format!("{:?}", neg), format!("{}(-1.{:0>weight$})", stringify!($name), 0, weight=precision()));
 
 				let frac = $name::from_rational(1, 2);
-				assert_eq!(format!("{:?}", frac), format!("{}(0.{:0<weight$})", stringify!($name), 5, weight=$precision));
+				assert_eq!(format!("{:?}", frac), format!("{}(0.{:0<weight$})", stringify!($name), 5, weight=precision()));
 
 				let frac = $name::from_rational(5, 2);
-				assert_eq!(format!("{:?}", frac), format!("{}(2.{:0<weight$})", stringify!($name), 5, weight=$precision));
+				assert_eq!(format!("{:?}", frac), format!("{}(2.{:0<weight$})", stringify!($name), 5, weight=precision()));
 
 				let frac = $name::from_rational(314, 100);
-				assert_eq!(format!("{:?}", frac), format!("{}(3.{:0<weight$})", stringify!($name), 14, weight=$precision));
+				assert_eq!(format!("{:?}", frac), format!("{}(3.{:0<weight$})", stringify!($name), 14, weight=precision()));
 
 				let frac = $name::from_rational(-314, 100);
-				assert_eq!(format!("{:?}", frac), format!("{}(-3.{:0<weight$})", stringify!($name), 14, weight=$precision));
+				assert_eq!(format!("{:?}", frac), format!("{}(-3.{:0<weight$})", stringify!($name), 14, weight=precision()));
 			}
 		}
 	}
@@ -1079,7 +1083,6 @@ implement_fixed!(
 	test_fixed64,
 	i64,
 	1_000_000_000,
-	9,
 );
 
 implement_fixed!(
@@ -1087,5 +1090,4 @@ implement_fixed!(
 	test_fixed128,
 	i128,
 	1_000_000_000_000_000_000,
-	18,
 );
