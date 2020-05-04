@@ -160,7 +160,8 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 
 	fn pairs(&self) -> Vec<(StorageKey, StorageValue)> {
 		let collect_all = || -> Result<_, Box<TrieError<H::Out>>> {
-			let trie = TrieDB::<H>::new(self.essence(), self.essence.root())?;
+			let backend = self.essence().top_backend();
+			let trie = TrieDB::<H>::new(&backend, self.essence.root())?;
 			let mut v = Vec::new();
 			for x in trie.iter()? {
 				let (key, value) = x?;
@@ -181,7 +182,8 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 
 	fn keys(&self, prefix: &[u8]) -> Vec<StorageKey> {
 		let collect_all = || -> Result<_, Box<TrieError<H::Out>>> {
-			let trie = TrieDB::<H>::new(self.essence(), self.essence.root())?;
+			let backend = self.essence().top_backend();
+			let trie = TrieDB::<H>::new(&backend, self.essence.root())?;
 			let mut v = Vec::new();
 			for x in trie.iter()? {
 				let (key, _) = x?;

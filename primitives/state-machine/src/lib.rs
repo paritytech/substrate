@@ -512,24 +512,13 @@ where
 	N: crate::changes_trie::BlockNumber,
 {
 	let mut offchain_overlay = OffchainOverlayedChanges::default();
-	let proving_backend = proving_backend::ProvingBackend::new(trie_backend, kind);
-	let mut sm = StateMachine::<_, H, N, Exec>::new(
-		&proving_backend,
-		None,
-		overlay,
-		&mut offchain_overlay,
-		exec,
-		method,
-		call_data,
-		Extensions::default(),
-		runtime_code,
-		spawn_handle,
-	);
+	let mut proving_backend = proving_backend::ProvingBackend::new(trie_backend, kind);
 	let result = {
 		let mut sm = StateMachine::<_, H, N, Exec>::new(
 			&proving_backend,
 			None,
 			overlay,
+			&mut offchain_overlay,
 			exec,
 			method,
 			call_data,
@@ -612,10 +601,12 @@ where
 	Exec: CodeExecutor + Clone + 'static,
 	N: crate::changes_trie::BlockNumber,
 {
+	let mut offchain_overlay = OffchainOverlayedChanges::default();
 	let mut sm = StateMachine::<_, H, N, Exec>::new(
 		trie_backend,
 		None,
 		overlay,
+		&mut offchain_overlay,
 		exec,
 		method,
 		call_data,

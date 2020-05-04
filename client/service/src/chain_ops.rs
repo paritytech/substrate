@@ -33,7 +33,7 @@ use sp_consensus::{
 	import_queue::{IncomingBlock, Link, BlockImportError, BlockImportResult, ImportQueue},
 };
 use sc_executor::{NativeExecutor, NativeExecutionDispatch};
-use sp_core::storage::{StorageKey, well_known_keys, ChildInfo, Storage, StorageChild, StorageMap};
+use sp_core::storage::{StorageKey, ChildType, ChildInfo, Storage, StorageChild, StorageMap, PrefixedStorageKey};
 use sc_client_api::{StorageProvider, BlockBackend, UsageProvider};
 
 use std::{io::{Read, Write, Seek}, pin::Pin, collections::HashMap};
@@ -311,18 +311,17 @@ impl<
 		let empty_key = StorageKey(Vec::new());
 		let mut top_storage = self.client.storage_pairs(&block, &empty_key)?;
 		let mut children_default = HashMap::new();
-
 		// Remove all default child storage roots from the top storage and collect the child storage
 		// pairs.
-		while let Some(pos) = top_storage
-			.iter()
-			.position(|(k, _)| k.0.starts_with(well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX)) {
-			let (key, _) = top_storage.swap_remove(pos);
-
-			let key = StorageKey(
-				key.0[well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX.len()..].to_vec(),
-			);
+		while let Some((pos, child_type, unprefixed_key)) = top_storage
+			.iter().enumerate()
+			.find_map(|(i, (k, _))| ChildType::from_prefixed_key(PrefixedStorageKey::new_ref(&k.0))
+				.map(|(t, k)| (i, t, k))) {
+			debug_assert!(child_type == ChildType::ParentKeyId);
+			let key = StorageKey(unprefixed_key.to_vec());
 			let child_info = ChildInfo::new_default(&key.0);
+
+			top_storage.remove(pos);
 
 			let keys = self.client.child_storage_keys(&block, &child_info, &empty_key)?;
 			let mut pairs = StorageMap::new();

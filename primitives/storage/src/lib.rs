@@ -361,7 +361,7 @@ impl ChildType {
 	/// is one.
 	pub fn parent_prefix(&self) -> &'static [u8] {
 		match self {
-			&ChildType::ParentKeyId => well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX,
+			&ChildType::ParentKeyId => DEFAULT_CHILD_TYPE_PARENT_PREFIX,
 		}
 	}
 }

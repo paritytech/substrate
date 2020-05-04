@@ -179,6 +179,7 @@ where
 					input_backend,
 				);
 				let result = {
+					use std::borrow::BorrowMut;
 					let changes = &mut *changes.borrow_mut();
 					let mut state_machine = StateMachine::new(
 						&backend,

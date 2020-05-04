@@ -33,11 +33,11 @@ use parking_lot::Mutex;
 use substrate_test_runtime_client::{
 	runtime::{Hash, Block, Header}, TestClient, ClientBlockImportExt,
 };
-use sp_api::{InitializeBlock, StorageTransactionCache, ProofRecorder, OffchainOverlayedChanges};
+use sp_api::{InitializeBlock, StorageTransactionCache, RuntimeApiProofRecorder, OffchainOverlayedChanges};
 use sp_consensus::{BlockOrigin};
 use sc_executor::{NativeExecutor, WasmExecutionMethod, RuntimeVersion, NativeVersion};
 use sp_core::{H256, tasks::executor as tasks_executor, NativeOrEncoded};
-use sc_client_api::{blockchain::Info, backend::NewBlockState, Backend as ClientBackend, ProofProvider, in_mem::{Backend as InMemBackend, Blockchain as InMemoryBlockchain}, AuxStore, Storage, CallExecutor, cht, ExecutionStrategy, StorageProof, BlockImportOperation, RemoteCallRequest, StorageProvider, ChangesProof, RemoteBodyRequest, RemoteReadRequest, RemoteChangesRequest, FetchChecker, RemoteReadChildRequest, RemoteHeaderRequest};
+use sc_client_api::{blockchain::Info, backend::NewBlockState, Backend as ClientBackend, ProofProvider, in_mem::{Backend as InMemBackend, Blockchain as InMemoryBlockchain}, AuxStore, Storage, CallExecutor, cht, ExecutionStrategy, StorageProof, BlockImportOperation, RemoteCallRequest, StorageProvider, ChangesProof, RemoteBodyRequest, RemoteReadRequest, RemoteChangesRequest, FetchChecker, RemoteReadChildRequest, RemoteHeaderRequest, StorageProofKind};
 use sp_externalities::Extensions;
 use sc_block_builder::BlockBuilderProvider;
 use sp_blockchain::{
@@ -53,7 +53,8 @@ use substrate_test_runtime_client::{
 	AccountKeyring, runtime::{self, Extrinsic},
 };
 
-use sp_core::{blake2_256, ChangesTrieConfiguration, storage::{well_known_keys, StorageKey, ChildInfo}};
+use sp_core::{blake2_256, ChangesTrieConfiguration};
+use sp_core::storage::{well_known_keys, StorageKey, ChildInfo};
 use sp_state_machine::Backend as _;
 
 pub type DummyBlockchain = Blockchain<DummyStorage>;
@@ -222,7 +223,7 @@ impl CallExecutor<Block> for DummyCallExecutor {
 		_initialize_block: InitializeBlock<'a, Block>,
 		_execution_manager: ExecutionManager<EM>,
 		_native_call: Option<NC>,
-		_proof_recorder: &Option<ProofRecorder<Block>>,
+		_proof_recorder: Option<&RefCell<RuntimeApiProofRecorder<Block>>>,
 		_extensions: Option<Extensions>,
 	) -> ClientResult<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone {
 		unreachable!()
@@ -237,7 +238,7 @@ impl CallExecutor<Block> for DummyCallExecutor {
 		_trie_state: &sp_state_machine::TrieBackend<S, HashFor<Block>>,
 		_overlay: &mut OverlayedChanges,
 		_method: &str,
-		_call_data: &[u8]
+		_call_data: &[u8],
 		_kind: StorageProofKind,
 	) -> Result<(Vec<u8>, StorageProof), ClientError> {
 		unreachable!()
