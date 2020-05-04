@@ -1071,14 +1071,6 @@ macro_rules! implement_fixed {
 			} 
 
 			#[test]
-			fn mul_works() {
-				let a = $name::from_integer(1);
-				let b = $name::from_integer(2);
-				let c = a * b;
-				assert_eq!(c, b);
-			}
-
-			#[test]
 			fn trunc_works() {
 				let n = $name::from_rational(5, 2).trunc();
 				assert_eq!(n, $name::from_integer(2));
