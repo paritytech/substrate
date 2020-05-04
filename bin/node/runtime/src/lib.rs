@@ -56,6 +56,7 @@ use sp_inherents::{InherentData, CheckInherentsResult};
 pub use sp_runtime::BuildStorage;
 pub use pallet_timestamp::Call as TimestampCall;
 pub use pallet_balances::Call as BalancesCall;
+pub use frame_system::Call as SystemCall;
 pub use pallet_contracts::Gas;
 pub use frame_support::StorageValue;
 pub use pallet_staking::StakerStatus;
@@ -119,14 +120,17 @@ parameter_types! {
 	pub const BlockHashCount: BlockNumber = 250;
 	/// We allow for 2 seconds of compute with a 6 second average block time.
 	pub const MaximumBlockWeight: Weight = 2_000_000_000_000;
-	pub const ExtrinsicBaseWeight: Weight = 10_000_000;
+	/// Executing 10,000 System remarks (no-op) txs takes ~1.26 seconds -> ~125 µs per tx
+	pub const ExtrinsicBaseWeight: Weight = 125_000_000;
 	pub const MaximumBlockLength: u32 = 5 * 1024 * 1024;
 	pub const Version: RuntimeVersion = VERSION;
 	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 	pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
-		read: 25_000_000, // ~25 µs
-		write: 100_000_000, // ~100 µs
+		read: 25_000_000, // ~25 µs @ 200,000 items
+		write: 100_000_000, // ~100 µs @ 200,000 items
 	};
+	/// Importing a block with 0 txs takes ~5 ms
+	pub const BlockExecutionWeight: Weight = 5_000_000_000;
 }
 
 impl frame_system::Trait for Runtime {
@@ -143,7 +147,7 @@ impl frame_system::Trait for Runtime {
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
 	type DbWeight = DbWeight;
-	type BlockExecutionWeight = ();
+	type BlockExecutionWeight = BlockExecutionWeight;
 	type ExtrinsicBaseWeight = ExtrinsicBaseWeight;
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
