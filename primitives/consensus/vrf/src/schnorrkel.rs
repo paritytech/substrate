@@ -23,7 +23,7 @@ use sp_std::ops::{Deref, DerefMut};
 use std::convert::TryFrom;
 use schnorrkel::errors::MultiSignatureStage;
 
-pub use schnorrkel::{SignatureError, vrf::{VRF_PROOF_LENGTH, VRF_OUTPUT_LENGTH}};
+pub use schnorrkel::{SignatureError, PublicKey, vrf::{VRF_PROOF_LENGTH, VRF_OUTPUT_LENGTH}};
 
 /// The length of the Randomness.
 pub const RANDOMNESS_LENGTH: usize = VRF_OUTPUT_LENGTH;

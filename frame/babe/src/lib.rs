@@ -34,6 +34,7 @@ use sp_staking::{
 	SessionIndex,
 	offence::{Offence, Kind},
 };
+use sp_application_crypto::Public;
 
 use codec::{Encode, Decode};
 use sp_inherents::{InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
@@ -478,12 +479,32 @@ impl<T: Trait> Module<T> {
 			Lateness::<T>::put(lateness);
 			CurrentSlot::put(current_slot);
 
-			if let PreDigest::Primary(_primary) = digest {
+			if let PreDigest::Primary(primary) = digest {
 				// place the VRF output into the `Initialized` storage item
 				// and it'll be put onto the under-construction randomness
 				// later, once we've decided which epoch this block is in.
-				// Some(primary.vrf_output)
-				todo!()
+				//
+				// Reconstruct the bytes of VRFInOut using the authority id.
+				Authorities::get()
+					.get(primary.authority_index as usize)
+					.and_then(|author| {
+						schnorrkel::PublicKey::from_bytes(author.0.as_slice()).ok()
+					})
+					.and_then(|pubkey| {
+						let transcript = sp_consensus_babe::make_transcript(
+							&Self::randomness(),
+							current_slot,
+							EpochIndex::get(),
+						);
+
+						primary.vrf_output.0.attach_input_hash(
+							&pubkey,
+							transcript
+						).ok()
+					})
+					.and_then(|inout| {
+						Some(inout.make_bytes(&sp_consensus_babe::BABE_VRF_INOUT_CONTEXT))
+					})
 			} else {
 				None
 			}
