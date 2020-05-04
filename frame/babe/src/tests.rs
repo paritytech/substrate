@@ -20,7 +20,8 @@ use super::*;
 use mock::*;
 use frame_support::traits::OnFinalize;
 use pallet_session::ShouldEndSession;
-use sp_consensus_vrf::schnorrkel::{RawVRFOutput, RawVRFProof};
+use sp_core::crypto::IsWrappedBy;
+use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
 
 const EMPTY_RANDOMNESS: [u8; 32] = [
 	74, 25, 49, 128, 53, 97, 244, 49,
@@ -37,14 +38,14 @@ fn empty_randomness_is_correct() {
 
 #[test]
 fn initial_values() {
-	new_test_ext(vec![0, 1, 2, 3]).execute_with(|| {
+	new_test_ext(4).1.execute_with(|| {
 		assert_eq!(Babe::authorities().len(), 4)
 	})
 }
 
 #[test]
 fn check_module() {
-	new_test_ext(vec![0, 1, 2, 3]).execute_with(|| {
+	new_test_ext(4).1.execute_with(|| {
 		assert!(!Babe::should_end_session(0), "Genesis does not change sessions");
 		assert!(!Babe::should_end_session(200000),
 			"BABE does not include the block number in epoch calculations");
@@ -53,14 +54,29 @@ fn check_module() {
 
 #[test]
 fn first_block_epoch_zero_start() {
-	new_test_ext(vec![0, 1, 2, 3]).execute_with(|| {
+	let (pairs, mut ext) = new_test_ext(4);
+
+	ext.execute_with(|| {
 		let genesis_slot = 100;
-		let first_vrf = RawVRFOutput([1; 32]);
+
+		let pair = sp_core::sr25519::Pair::from_ref(&pairs[0]).as_ref();
+		let transcript = sp_consensus_babe::make_transcript(
+			&Babe::randomness(),
+			genesis_slot,
+			0,
+		);
+		let vrf_inout = pair.vrf_sign(transcript);
+		let vrf_randomness: sp_consensus_vrf::schnorrkel::Randomness = vrf_inout.0
+			.make_bytes::<[u8; 32]>(&sp_consensus_babe::BABE_VRF_INOUT_CONTEXT);
+		let vrf_output = VRFOutput(vrf_inout.0.to_output());
+		let vrf_proof = VRFProof(vrf_inout.1);
+
+		let first_vrf = vrf_output;
 		let pre_digest = make_pre_digest(
 			0,
 			genesis_slot,
 			first_vrf.clone(),
-			RawVRFProof([0xff; 64]),
+			vrf_proof,
 		);
 
 		assert_eq!(Babe::genesis_slot(), 0);
@@ -83,7 +99,7 @@ fn first_block_epoch_zero_start() {
 		let header = System::finalize();
 
 		assert_eq!(SegmentIndex::get(), 0);
-		assert_eq!(UnderConstruction::get(0), vec![first_vrf]);
+		assert_eq!(UnderConstruction::get(0), vec![vrf_randomness]);
 		assert_eq!(Babe::randomness(), [0; 32]);
 		assert_eq!(NextRandomness::get(), [0; 32]);
 
@@ -91,10 +107,9 @@ fn first_block_epoch_zero_start() {
 		assert_eq!(pre_digest.logs.len(), 1);
 		assert_eq!(header.digest.logs[0], pre_digest.logs[0]);
 
-		let authorities = Babe::authorities();
 		let consensus_log = sp_consensus_babe::ConsensusLog::NextEpochData(
 			sp_consensus_babe::digests::NextEpochDescriptor {
-				authorities,
+				authorities: Babe::authorities(),
 				randomness: Babe::randomness(),
 			}
 		);
@@ -107,7 +122,7 @@ fn first_block_epoch_zero_start() {
 
 #[test]
 fn authority_index() {
-	new_test_ext(vec![0, 1, 2, 3]).execute_with(|| {
+	new_test_ext(4).1.execute_with(|| {
 		assert_eq!(
 			Babe::find_author((&[(BABE_ENGINE_ID, &[][..])]).into_iter().cloned()), None,
 			"Trivially invalid authorities are ignored")
@@ -116,7 +131,7 @@ fn authority_index() {
 
 #[test]
 fn can_predict_next_epoch_change() {
-	new_test_ext(vec![]).execute_with(|| {
+	new_test_ext(0).1.execute_with(|| {
 		assert_eq!(<Test as Trait>::EpochDuration::get(), 3);
 		// this sets the genesis slot to 6;
 		go_to_block(1, 6);
