@@ -93,7 +93,7 @@ impl SpawnTaskHandle {
 						panic::resume_unwind(payload)
 					}
 					Either::Right((Ok(()), _)) => {
-						metrics.tasks_ended.with_label_values(&[name, "normal"]).inc();
+						metrics.tasks_ended.with_label_values(&[name, "finished"]).inc();
 					}
 					Either::Left(((), _)) => {
 						// The `on_exit` has triggered.
@@ -238,7 +238,7 @@ impl Metrics {
 					"tasks_ended_total",
 					"Total number of tasks for which Future::poll has returned Ready(()) or panicked"
 				),
-				&["task_name", "kind"]
+				&["task_name", "reason"]
 			)?, registry)?,
 		})
 	}
