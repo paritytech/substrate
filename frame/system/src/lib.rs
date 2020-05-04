@@ -512,8 +512,10 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - `O(1)`
+		/// - Base Weight: 0.665 µs, independent of remark length.
+		/// - No DB operations.
 		/// # </weight>
-		#[weight = 0]
+		#[weight = 700_000]
 		fn remark(origin, _remark: Vec<u8>) {
 			ensure_signed(origin)?;
 		}
@@ -523,8 +525,10 @@ decl_module! {
 		/// # <weight>
 		/// - `O(1)`
 		/// - 1 storage write.
+		/// - Base Weight: 1.405 µs
+		/// - 1 write to HEAP_PAGES
 		/// # </weight>
-		#[weight = (0, DispatchClass::Operational)]
+		#[weight = (T::DbWeight::get().writes(1) + 1_500_000, DispatchClass::Operational)]
 		fn set_heap_pages(origin, pages: u64) {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::HEAP_PAGES, &pages.encode());
@@ -537,8 +541,10 @@ decl_module! {
 		/// - 1 storage write (codec `O(C)`).
 		/// - 1 call to `can_set_code`: `O(S)` (calls `sp_io::misc::runtime_version` which is expensive).
 		/// - 1 event.
+		/// The weight of this function is dependent on the runtime, but generally this is very expensive.
+		/// We will treat this as a full block.
 		/// # </weight>
-		#[weight = (200_000_000, DispatchClass::Operational)]
+		#[weight = (crate::Module::<T>::max_extrinsic_weight(DispatchClass::Operational), DispatchClass::Operational)]
 		pub fn set_code(origin, code: Vec<u8>) {
 			Self::can_set_code(origin, &code)?;
 
@@ -552,8 +558,9 @@ decl_module! {
 		/// - `O(C)` where `C` length of `code`
 		/// - 1 storage write (codec `O(C)`).
 		/// - 1 event.
+		/// The weight of this function is dependent on the runtime. We will treat this as a full block.
 		/// # </weight>
-		#[weight = (200_000_000, DispatchClass::Operational)]
+		#[weight = (crate::Module::<T>::max_extrinsic_weight(DispatchClass::Operational), DispatchClass::Operational)]
 		pub fn set_code_without_checks(origin, code: Vec<u8>) {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::CODE, &code);
@@ -566,8 +573,12 @@ decl_module! {
 		/// - `O(D)` where `D` length of `Digest`
 		/// - 1 storage write or delete (codec `O(1)`).
 		/// - 1 call to `deposit_log`: `O(D)` (which depends on the length of `Digest`)
+		/// - Base Weight: 9.29 + 0.511 * d µs
+		/// - DB Weight:
+		///     - Reads: System Digest
+		///     - Writes: Changes Trie, System Digest
 		/// # </weight>
-		#[weight = (20_000_000, DispatchClass::Operational)]
+		#[weight = (T::DbWeight::get().reads_writes(1, 2) + 10_000_000, DispatchClass::Operational)]
 		pub fn set_changes_trie_config(origin, changes_trie_config: Option<ChangesTrieConfiguration>) {
 			ensure_root(origin)?;
 			match changes_trie_config.clone() {
@@ -589,8 +600,17 @@ decl_module! {
 		/// # <weight>
 		/// - `O(I)` where `I` length of `items`
 		/// - `I` storage writes (`O(1)`).
+		/// - Base Weight: 0.568 * i
+		/// - Writes: Number of items
 		/// # </weight>
-		#[weight = (0, DispatchClass::Operational)]
+		#[weight = FunctionOf(
+			|args: (&Vec<KeyValue>,)| {
+				T::DbWeight::get().writes(args.0.len() as Weight)
+					.saturating_add((args.0.len() as Weight).saturating_mul(600_000))
+			},
+			DispatchClass::Operational,
+			Pays::Yes,
+		)]
 		fn set_storage(origin, items: Vec<KeyValue>) {
 			ensure_root(origin)?;
 			for i in &items {
@@ -601,10 +621,19 @@ decl_module! {
 		/// Kill some items from storage.
 		///
 		/// # <weight>
-		/// - `O(VK)` where `V` length of `keys` and `K` length of one key
-		/// - `V` storage deletions.
+		/// - `O(IK)` where `I` length of `keys` and `K` length of one key
+		/// - `I` storage deletions.
+		/// - Base Weight: .378 * i µs
+		/// - Writes: Number of items
 		/// # </weight>
-		#[weight = (0, DispatchClass::Operational)]
+		#[weight = FunctionOf(
+			|args: (&Vec<Key>,)| {
+				T::DbWeight::get().writes(args.0.len() as Weight)
+					.saturating_add((args.0.len() as Weight).saturating_mul(400_000))
+			},
+			DispatchClass::Operational,
+			Pays::Yes,
+		)]
 		fn kill_storage(origin, keys: Vec<Key>) {
 			ensure_root(origin)?;
 			for key in &keys {
@@ -614,12 +643,24 @@ decl_module! {
 
 		/// Kill all storage items with a key that starts with the given prefix.
 		///
+		/// **NOTE:** We rely on the Root origin to provide us the number of subkeys under
+		/// the prefix we are removing to accurately calculate the weight of this function.
+		///
 		/// # <weight>
 		/// - `O(P)` where `P` amount of keys with prefix `prefix`
 		/// - `P` storage deletions.
+		/// - Base Weight: 0.834 * P µs
+		/// - Writes: Number of subkeys + 1
 		/// # </weight>
-		#[weight = (0, DispatchClass::Operational)]
-		fn kill_prefix(origin, prefix: Key) {
+		#[weight = FunctionOf(
+			|args: (&Key, &u32)| {
+				T::DbWeight::get().writes(Weight::from(*args.1) + 1)
+					.saturating_add((Weight::from(*args.1) + 1).saturating_mul(850_000))
+			},
+			DispatchClass::Operational,
+			Pays::Yes,
+		)]
+		fn kill_prefix(origin, prefix: Key, _subkeys: u32) {
 			ensure_root(origin)?;
 			storage::unhashed::kill_prefix(&prefix);
 		}
@@ -630,8 +671,11 @@ decl_module! {
 		/// # <weight>
 		/// - `O(1)`
 		/// - 1 storage read and deletion.
+		/// --------------------
+		/// Base Weight: 8.626 µs
+		/// No DB Read or Write operations because caller is already in overlay
 		/// # </weight>
-		#[weight = (25_000_000, DispatchClass::Operational)]
+		#[weight = (10_000_000, DispatchClass::Operational)]
 		fn suicide(origin) {
 			let who = ensure_signed(origin)?;
 			let account = Account::<T>::get(&who);

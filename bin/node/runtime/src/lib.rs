@@ -171,7 +171,7 @@ impl pallet_utility::Trait for Runtime {
 }
 
 parameter_types! {
-	pub const MaximumWeight: Weight = 2_000_000;
+	pub const MaximumWeight: Weight = MaximumBlockWeight;
 }
 
 impl pallet_scheduler::Trait for Runtime {
