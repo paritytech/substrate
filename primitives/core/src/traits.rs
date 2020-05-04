@@ -330,3 +330,11 @@ impl TaskExecutorExt {
 		Self(spawn_handle)
 	}
 }
+
+/// Something that can spawn a blocking future.
+pub trait SpawnBlocking {
+	/// Spawn the given blocking future.
+	///
+	/// The given `name` is used to identify the future in tracing.
+	fn spawn_blocking(&self, name: &'static str, future: futures::future::BoxFuture<'static, ()>);
+}

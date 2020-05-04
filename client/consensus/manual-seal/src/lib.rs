@@ -17,7 +17,7 @@
 //! A manual sealing engine: the engine listens for rpc calls to seal blocks and create forks.
 //! This is suitable for a testing environment.
 
-use futures::{prelude::*, future::BoxFuture};
+use futures::prelude::*;
 use sp_consensus::{
 	Environment, Proposer, ForkChoiceStrategy, BlockImportParams, BlockOrigin, SelectChain,
 	import_queue::{BasicQueue, CacheKeyId, Verifier, BoxBlockImport},
@@ -68,7 +68,7 @@ impl<B: BlockT> Verifier<B> for ManualSealVerifier {
 /// Instantiate the import queue for the manual seal consensus engine.
 pub fn import_queue<Block, B>(
 	block_import: BoxBlockImport<Block, TransactionFor<B, Block>>,
-	spawner: impl Fn(BoxFuture<'static, ()>) -> ()
+	spawner: &impl sp_core::traits::SpawnBlocking,
 ) -> BasicQueue<Block, TransactionFor<B, Block>>
 	where
 		Block: BlockT,
