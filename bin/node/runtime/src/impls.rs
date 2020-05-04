@@ -78,7 +78,7 @@ impl<T: Get<Perquintill>> Convert<Fixed128, Fixed128> for TargetedFeeAdjustment<
 		let positive = block_weight >= target_weight;
 		let diff_abs = block_weight.max(target_weight) - block_weight.min(target_weight);
 		// safe, diff_abs cannot exceed u64.
-		let diff = Fixed128::from_rational(diff_abs as i128, max_weight.max(1) as i128);
+		let diff = Fixed128::from_rational(diff_abs, max_weight.max(1));
 		let diff_squared = diff.saturating_mul(diff);
 
 		// 0.00004 = 4/100_000 = 40_000/10^9

@@ -174,7 +174,7 @@ fn from_i129<N: FixedPointOperand>(n: I129) -> Option<N> {
 	}
 }
 
-/// Returns `R::max` or `R::min` depending of the operand signs.
+/// Returns `R::max` or `R::min` depending on the operand signs.
 fn to_bound<N: FixedPointOperand, D: FixedPointOperand, R: Bounded>(n: N, m: D) -> R {
 	if (n < N::zero()) != (m < D::zero()) {
 		R::min_value()
