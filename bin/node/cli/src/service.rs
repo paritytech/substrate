@@ -50,7 +50,11 @@ macro_rules! new_full_start {
 			})?
 			.with_transaction_pool(|config, client, _fetcher, prometheus_registry| {
 				let pool_api = sc_transaction_pool::FullChainApi::new(client.clone());
-				Ok(sc_transaction_pool::BasicPool::new(config, std::sync::Arc::new(pool_api), prometheus_registry))
+				Ok(sc_transaction_pool::BasicPool::new(
+					config,
+					std::sync::Arc::new(pool_api),
+					prometheus_registry,
+				))
 			})?
 			.with_import_queue(|_config, client, mut select_chain, _transaction_pool, spawn_task_handle| {
 				let select_chain = select_chain.take()
@@ -68,8 +72,6 @@ macro_rules! new_full_start {
 					client.clone(),
 				)?;
 
-				let spawner = |future| spawn_task_handle.spawn_blocking("import-queue-worker", future);
-
 				let import_queue = sc_consensus_babe::import_queue(
 					babe_link.clone(),
 					block_import.clone(),
@@ -77,7 +79,7 @@ macro_rules! new_full_start {
 					None,
 					client,
 					inherent_data_providers.clone(),
-					spawner,
+					spawn_task_handle,
 				)?;
 
 				import_setup = Some((block_import, grandpa_link, babe_link));
@@ -308,8 +310,6 @@ pub fn new_light(config: Configuration)
 				client.clone(),
 			)?;
 
-			let spawner = |future| spawn_task_handle.spawn_blocking("import-queue-worker", future);
-
 			let import_queue = sc_consensus_babe::import_queue(
 				babe_link,
 				babe_block_import,
@@ -317,7 +317,7 @@ pub fn new_light(config: Configuration)
 				Some(Box::new(finality_proof_import)),
 				client.clone(),
 				inherent_data_providers.clone(),
-				spawner,
+				spawn_task_handle,
 			)?;
 
 			Ok((import_queue, finality_proof_request_builder))
