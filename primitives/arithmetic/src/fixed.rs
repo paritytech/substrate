@@ -1119,8 +1119,8 @@ macro_rules! implement_fixed {
 
 			#[test]
 			fn round_works() {
-				// let n = $name::from_rational(5, 2);
-				// assert_eq!(n.round(), 3.into());
+				let n = $name::from_rational(5, 2);
+				assert_eq!(n.round(), 3.into());
 
 				let n = $name::from_rational(-5, 2);
 				assert_eq!(n.round(), (-3).into());
