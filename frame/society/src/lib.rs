@@ -260,7 +260,7 @@ use sp_runtime::{Percent, ModuleId, RuntimeDebug,
 	}
 };
 use frame_support::{decl_error, decl_module, decl_storage, decl_event, ensure, dispatch::DispatchResult};
-use frame_support::weights::{Weight, MINIMUM_WEIGHT};
+use frame_support::weights::Weight;
 use frame_support::traits::{
 	Currency, ReservableCurrency, Randomness, Get, ChangeMembers, BalanceStatus,
 	ExistenceRequirement::AllowDeath, EnsureOrigin
@@ -824,7 +824,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(1)
 		/// # </weight>
-		#[weight = MINIMUM_WEIGHT]
+		#[weight = 0]
 		fn found(origin, founder: T::AccountId, max_members: u32, rules: Vec<u8>) {
 			T::FounderSetOrigin::ensure_origin(origin)?;
 			ensure!(!<Head<T, I>>::exists(), Error::<T, I>::AlreadyFounded);
@@ -1024,7 +1024,7 @@ decl_module! {
 		///
 		/// Total Complexity: O(1)
 		/// # </weight>
-		#[weight = MINIMUM_WEIGHT]
+		#[weight = 0]
 		fn set_max_members(origin, max: u32) {
 			ensure_root(origin)?;
 			ensure!(max > 1, Error::<T, I>::MaxMembers);
@@ -1050,7 +1050,7 @@ decl_module! {
 				Self::rotate_challenge(&mut members);
 			}
 
-			MINIMUM_WEIGHT
+			0
 		}
 	}
 }

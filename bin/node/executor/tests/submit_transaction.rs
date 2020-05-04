@@ -51,6 +51,7 @@ fn should_submit_unsigned_transaction() {
 			network_state: Default::default(),
 			session_index: 1,
 			authority_index: 0,
+			validators_len: 0,
 		};
 
 		let call = pallet_im_online::Call::heartbeat(heartbeat_data, signature);
@@ -229,7 +230,7 @@ fn submitted_transaction_should_be_valid() {
 		let res = Executive::validate_transaction(source, extrinsic);
 
 		assert_eq!(res.unwrap(), ValidTransaction {
-			priority: 2_411_380_000_000,
+			priority: 1_410_740_000_000,
 			requires: vec![],
 			provides: vec![(address, 0).encode()],
 			longevity: 128,

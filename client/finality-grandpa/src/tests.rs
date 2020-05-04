@@ -27,7 +27,6 @@ use parking_lot::Mutex;
 use futures_timer::Delay;
 use tokio::runtime::{Runtime, Handle};
 use sp_keyring::Ed25519Keyring;
-use sc_client::LongestChain;
 use sc_client_api::backend::TransactionFor;
 use sp_blockchain::Result;
 use sp_api::{ApiRef, StorageProof, ProvideRuntimeApi};
@@ -50,6 +49,7 @@ use finality_proof::{
 };
 use consensus_changes::ConsensusChanges;
 use sc_block_builder::BlockBuilderProvider;
+use sc_consensus::LongestChain;
 
 type PeerData =
 	Mutex<
@@ -990,7 +990,6 @@ fn test_bad_justification() {
 
 #[test]
 fn voter_persists_its_votes() {
-	use std::iter::FromIterator;
 	use std::sync::atomic::{AtomicUsize, Ordering};
 	use futures::future;
 	use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
@@ -1145,7 +1144,7 @@ fn voter_persists_its_votes() {
 		let (round_rx, round_tx) = network.round_communication(
 			communication::Round(1),
 			communication::SetId(0),
-			Arc::new(VoterSet::from_iter(voters)),
+			Arc::new(VoterSet::new(voters).unwrap()),
 			Some(peers[1].pair().into()),
 			HasVoted::No,
 		);

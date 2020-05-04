@@ -113,7 +113,10 @@ impl Saturating for Fixed64 {
 	}
 
 	fn saturating_mul(self, rhs: Self) -> Self {
-		Self(self.0.saturating_mul(rhs.0) / DIV)
+		let a = self.0 as i128;
+		let b = rhs.0 as i128;
+		let res = a * b / DIV as i128;
+		Self(res.saturated_into())
 	}
 
 	fn saturating_sub(self, rhs: Self) -> Self {
@@ -121,7 +124,22 @@ impl Saturating for Fixed64 {
 	}
 
 	fn saturating_pow(self, exp: usize) -> Self {
-		Self(self.0.saturating_pow(exp as u32))
+		if exp == 0 {
+			return Self::from_natural(1);
+		}
+
+		let exp = exp as u64;
+		let msb_pos = 64 - exp.leading_zeros();
+
+		let mut result = Self::from_natural(1);
+		let mut pow_val = self;
+		for i in 0..msb_pos {
+			if ((1 << i) & exp) > 0 {
+				result = result.saturating_mul(pow_val);
+			}
+			pow_val = pow_val.saturating_mul(pow_val);
+		}
+		result
 	}
 }
 
@@ -149,8 +167,7 @@ impl ops::Div for Fixed64 {
 
 	fn div(self, rhs: Self) -> Self::Output {
 		if rhs.0 == 0 {
-			let zero = 0;
-			return Fixed64::from_parts( self.0 / zero);
+			panic!("attempt to divide by zero");
 		}
 		let (n, d) = if rhs.0 < 0 {
 			(-self.0, rhs.0.abs() as u64)
@@ -332,5 +349,33 @@ mod tests {
 		let a = Fixed64::from_rational(12, 10);
 		let b = Fixed64::from_rational(1, 100);
 		assert_eq!(a.checked_div(&b), Some(Fixed64::from_rational(120, 1)));
+	}
+
+	#[test]
+	fn saturating_mul_should_work() {
+		assert_eq!(Fixed64::from_natural(100).saturating_mul(Fixed64::from_natural(100)), Fixed64::from_natural(10000));
+	}
+
+	#[test]
+	fn saturating_pow_should_work() {
+		assert_eq!(Fixed64::from_natural(2).saturating_pow(0), Fixed64::from_natural(1));
+		assert_eq!(Fixed64::from_natural(2).saturating_pow(1), Fixed64::from_natural(2));
+		assert_eq!(Fixed64::from_natural(2).saturating_pow(2), Fixed64::from_natural(4));
+		assert_eq!(Fixed64::from_natural(2).saturating_pow(3), Fixed64::from_natural(8));
+		assert_eq!(Fixed64::from_natural(2).saturating_pow(20), Fixed64::from_natural(1048576));
+
+		assert_eq!(Fixed64::from_natural(1).saturating_pow(1000), Fixed64::from_natural(1));
+		assert_eq!(Fixed64::from_natural(-1).saturating_pow(1000), Fixed64::from_natural(1));
+		assert_eq!(Fixed64::from_natural(-1).saturating_pow(1001), Fixed64::from_natural(-1));
+		assert_eq!(Fixed64::from_natural(1).saturating_pow(usize::max_value()), Fixed64::from_natural(1));
+		assert_eq!(Fixed64::from_natural(-1).saturating_pow(usize::max_value()), Fixed64::from_natural(-1));
+		assert_eq!(Fixed64::from_natural(-1).saturating_pow(usize::max_value() - 1), Fixed64::from_natural(1));
+
+		assert_eq!(Fixed64::from_natural(309).saturating_pow(4), Fixed64::from_natural(9_116_621_361));
+		assert_eq!(Fixed64::from_natural(309).saturating_pow(5), Fixed64::from_parts(i64::max_value()));
+
+		assert_eq!(Fixed64::from_natural(1).saturating_pow(usize::max_value()), Fixed64::from_natural(1));
+		assert_eq!(Fixed64::from_natural(0).saturating_pow(usize::max_value()), Fixed64::from_natural(0));
+		assert_eq!(Fixed64::from_natural(2).saturating_pow(usize::max_value()), Fixed64::from_parts(i64::max_value()));
 	}
 }

@@ -23,12 +23,10 @@ use futures::pin_mut;
 use futures::select;
 use futures::{future, future::FutureExt, Future};
 use log::info;
-use sc_service::{AbstractService, Configuration, Role, ServiceBuilderCommand};
+use sc_service::{AbstractService, Configuration, Role, ServiceBuilderCommand, TaskType};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
-use std::fmt::Debug;
-use std::marker::PhantomData;
-use std::sync::Arc;
+use std::{str::FromStr, fmt::Debug, marker::PhantomData, sync::Arc};
 
 #[cfg(target_family = "unix")]
 async fn main<F, E>(func: F) -> std::result::Result<(), Box<dyn std::error::Error>>
@@ -116,13 +114,22 @@ impl<C: SubstrateCli> Runner<C> {
 	/// Create a new runtime with the command provided in argument
 	pub fn new<T: CliConfiguration>(cli: &C, command: &T) -> Result<Runner<C>> {
 		let tokio_runtime = build_runtime()?;
+		let runtime_handle = tokio_runtime.handle().clone();
 
-		let task_executor = {
-			let runtime_handle = tokio_runtime.handle().clone();
-			Arc::new(move |fut| {
-				runtime_handle.spawn(fut);
-			})
-		};
+		let task_executor = Arc::new(
+			move |fut, task_type| {
+				match task_type {
+					TaskType::Async => { runtime_handle.spawn(fut); }
+					TaskType::Blocking => {
+						runtime_handle.spawn( async move {
+							// `spawn_blocking` is looking for the current runtime, and as such has to be called
+							// from within `spawn`.
+							tokio::task::spawn_blocking(move || futures::executor::block_on(fut))
+						});
+					}
+				}
+			}
+		);
 
 		Ok(Runner {
 			config: command.create_configuration(cli, task_executor)?,
@@ -155,6 +162,10 @@ impl<C: SubstrateCli> Runner<C> {
 		info!("📋 Chain specification: {}", self.config.chain_spec.name());
 		info!("🏷  Node name: {}", self.config.network.node_name);
 		info!("👤 Role: {}", self.config.display_role());
+		info!("💾 Database: {} at {}",
+			self.config.database,
+			self.config.database.path().map_or_else(|| "<unknown>".to_owned(), |p| p.display().to_string())
+		);
 		info!("⛓  Native runtime: {}", runtime_version);
 
 		match self.config.role {
@@ -170,8 +181,9 @@ impl<C: SubstrateCli> Runner<C> {
 		B: FnOnce(Configuration) -> sc_service::error::Result<BC>,
 		BC: ServiceBuilderCommand<Block = BB> + Unpin,
 		BB: sp_runtime::traits::Block + Debug,
-		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: Debug,
-		<BB as BlockT>::Hash: std::str::FromStr,
+		<<<BB as BlockT>::Header as HeaderT>::Number as FromStr>::Err: Debug,
+		<BB as BlockT>::Hash: FromStr,
+		<<BB as BlockT>::Hash as FromStr>::Err: Debug,
 	{
 		match subcommand {
 			Subcommand::BuildSpec(cmd) => cmd.run(self.config),
@@ -186,6 +198,7 @@ impl<C: SubstrateCli> Runner<C> {
 			}
 			Subcommand::Revert(cmd) => cmd.run(self.config, builder),
 			Subcommand::PurgeChain(cmd) => cmd.run(self.config),
+			Subcommand::ExportState(cmd) => cmd.run(self.config, builder),
 		}
 	}
 
