@@ -1873,7 +1873,10 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Check pre image is missing variant without getting the complete value in the runtime.
+	/// Check pre image `data` len without getting the complete value in the runtime.
+	///
+	/// If the pre image is missing variant or doesn't exist then the error PreimageMissing is
+	/// returned.
 	fn pre_image_data_len(proposal_hash: T::Hash) -> Result<u32, DispatchError> {
 		let mut buf = [0u8; 6];
 		let key = <Preimages<T>>::hashed_key_for(proposal_hash);
