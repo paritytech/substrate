@@ -246,7 +246,7 @@ benchmarks! {
 		let reward_amount = slash_amount * (1 + n) / 2;
 		let mut slash_events = raw_offenders.into_iter()
 			.flat_map(|offender| {
-				std::iter::once(offender.stash).chain(offender.nominator_stashes.into_iter())
+				core::iter::once(offender.stash).chain(offender.nominator_stashes.into_iter())
 			})
 			.map(|stash| <T as StakingTrait>::Event::from(
 				StakingEvent::<T>::Slash(stash, BalanceOf::<T>::from(slash_amount))
