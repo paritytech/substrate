@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use sp_std::{ops::{self, Add, Sub, Mul, Div, Rem}, fmt::Debug, prelude::*, convert::{TryInto, TryFrom}};
+use sp_std::{ops::{self, Add, Sub, Mul, Div}, fmt::Debug, prelude::*, convert::{TryInto, TryFrom}};
 use codec::{Encode, Decode};
 use crate::{
 	helpers_128bit::multiply_by_rational, PerThing,
@@ -46,7 +46,7 @@ pub trait FixedPointNumber:
 	+ Saturating + Bounded
 	+ Eq + PartialEq + Ord + PartialOrd
 	+ CheckedSub + CheckedAdd + CheckedMul + CheckedDiv
-	+ Add + Sub + Div + Mul + Rem
+	+ Add + Sub + Div + Mul
 {
 	/// The underlying data type used for this fixed point number.
 	type Inner: Copy + Debug;
@@ -400,7 +400,8 @@ macro_rules! implement_fixed {
 			type Output = Self;
 
 			fn mul(self, rhs: Self) -> Self::Output {
-				Self((self.0 * rhs.0) / Self::accuracy())
+				self.checked_mul(&rhs)
+					.unwrap_or_else(|| panic!("attempt to multiply with overflow"))
 			}
 		}
 
@@ -408,15 +409,11 @@ macro_rules! implement_fixed {
 			type Output = Self;
 
 			fn div(self, rhs: Self) -> Self::Output {
-				Self((self.0 * Self::accuracy()) / rhs.0)
-			}
-		}
-
-		impl ops::Rem for $name {
-			type Output = Self;
-
-			fn rem(self, rhs: Self) -> Self::Output {
-				Self((self.0 * Self::accuracy()) % rhs.0)
+				if rhs.0 == 0 {
+					panic!("attempt to divide by zero")
+				}
+				self.checked_div(&rhs)
+					.unwrap_or_else(|| panic!("attempt to divide with overflow"))
 			}
 		}
 
@@ -618,6 +615,105 @@ macro_rules! implement_fixed {
 				let a = 1i32;
 				let b = -1i32;
 				assert_eq!(to_bound::<_, _, u32>(a, b), 0);
+			}
+
+			#[test]
+			#[should_panic(expected = "attempt to negate with overflow")]
+			fn op_neg_panics() {
+				let a = $name::min_value();
+				let b = -a;
+				assert_eq!(b, a);
+			}
+
+			#[test]
+			fn op_neg_works() {
+				let a = $name::from_integer(5);
+				let b = -a;
+				assert_eq!($name::from_integer(-5), b);
+			}
+
+			#[test]
+			#[should_panic(expected = "attempt to add with overflow")]
+			fn op_add_panics() {
+				let a = $name::max_value();
+				let b = 1.into();
+				let _c = a + b;
+			}
+
+			#[test]
+			fn op_add_works() {
+				let a = $name::from_integer(40);
+				let b = $name::from_integer(2);
+				assert_eq!($name::from_integer(42), a + b);
+
+				let a = $name::from_integer(44);
+				let b = $name::from_integer(-2);
+				assert_eq!($name::from_integer(42), a + b);
+			}
+
+			#[test]
+			#[should_panic(expected = "attempt to subtract with overflow")]
+			fn op_sub_panics() {
+				let a = $name::min_value();
+				let b = 1.into();
+				let _c = a - b;
+			}
+
+			#[test]
+			fn op_sub_works() {
+				let a = $name::from_integer(44);
+				let b = $name::from_integer(2);
+				assert_eq!($name::from_integer(42), a - b);
+
+				let a = $name::from_integer(40);
+				let b = $name::from_integer(-2);
+				assert_eq!($name::from_integer(42), a - b);
+			}
+
+			#[test]
+			#[should_panic(expected = "attempt to multiply with overflow")]
+			fn op_mul_panics() {
+				let a = $name::max_value();
+				let b = 2.into();
+				let _c = a * b;
+			}
+
+			#[test]
+			fn op_mul_works() {
+				let a = $name::from_integer(42);
+				let b = $name::from_integer(2);
+				assert_eq!($name::from_integer(84), a * b);
+
+				let a = $name::from_integer(42);
+				let b = $name::from_integer(-2);
+				assert_eq!($name::from_integer(-84), a * b);
+			}
+
+			#[test]
+			#[should_panic(expected = "attempt to divide by zero")]
+			fn op_div_panics_on_zero_divisor() {
+				let a = $name::from_integer(1);
+				let b = 0.into();
+				let _c = a / b;
+			}
+
+			#[test]
+			#[should_panic(expected = "attempt to divide with overflow")]
+			fn op_div_panics_on_overflow() {
+				let a = $name::min_value();
+				let b = (-1).into();
+				let _c = a / b;
+			}
+
+			#[test]
+			fn op_div_works() {
+				let a = $name::from_integer(42);
+				let b = $name::from_integer(2);
+				assert_eq!($name::from_integer(21), a / b);
+
+				let a = $name::from_integer(42);
+				let b = $name::from_integer(-2);
+				assert_eq!($name::from_integer(-21), a / b);
 			}
 
 			#[test]
