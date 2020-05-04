@@ -144,8 +144,13 @@ pub type Weight = u64;
 /// These constants are specific to FRAME, and the current implementation of its various components.
 /// For example: FRAME System, FRAME Executive, our FRAME support libraries, etc...
 pub mod constants {
-	use super::*;
+	use super::{RuntimeDbWeight, Weight};
 	use crate::parameter_types;
+
+	pub const WEIGHT_PER_NANOS:  Weight = 1_000;
+	pub const WEIGHT_PER_MICROS: Weight = 1_000_000;
+	pub const WEIGHT_PER_MILLIS: Weight = 1_000_000_000;
+	pub const WEIGHT_PER_SECOND: Weight = 1_000_000_000_000;
 
 	parameter_types! {
 		/// Importing a block with 0 txs takes ~5 ms

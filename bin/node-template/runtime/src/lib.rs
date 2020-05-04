@@ -34,7 +34,10 @@ pub use sp_runtime::{Permill, Perbill};
 pub use frame_support::{
 	StorageValue, construct_runtime, parameter_types,
 	traits::Randomness,
-	weights::{Weight, constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight}},
+	weights::{
+		Weight,
+		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
+	},
 };
 
 /// Importing a template pallet
@@ -122,8 +125,7 @@ pub fn native_version() -> NativeVersion {
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 250;
 	/// We allow for 2 seconds of compute with a 6 second average block time.
-	pub const MaximumBlockWeight: Weight = 2_000_000_000_000;
-	/// Executing 10,000 System remarks (no-op) txs takes ~1.26 seconds -> ~125 µs per tx
+	pub const MaximumBlockWeight: Weight = 2 * WEIGHT_PER_SECOND;
 	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 	pub const MaximumBlockLength: u32 = 5 * 1024 * 1024;
 	pub const Version: RuntimeVersion = VERSION;

@@ -23,7 +23,10 @@
 use sp_std::prelude::*;
 use frame_support::{
 	construct_runtime, parameter_types, debug,
-	weights::{Weight, constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight}},
+	weights::{
+		Weight,
+		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
+	},
 	traits::{Currency, Randomness, OnUnbalanced, Imbalance, LockIdentifier},
 };
 use sp_core::u32_trait::{_1, _2, _3, _4};
@@ -119,7 +122,7 @@ impl OnUnbalanced<NegativeImbalance> for DealWithFees {
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 250;
 	/// We allow for 2 seconds of compute with a 6 second average block time.
-	pub const MaximumBlockWeight: Weight = 2_000_000_000_000;
+	pub const MaximumBlockWeight: Weight = 2 * WEIGHT_PER_SECOND;
 	pub const MaximumBlockLength: u32 = 5 * 1024 * 1024;
 	pub const Version: RuntimeVersion = VERSION;
 	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
