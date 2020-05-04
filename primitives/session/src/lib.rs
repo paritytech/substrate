@@ -21,6 +21,8 @@
 
 use codec::{Encode, Decode};
 
+mod offchain_hashdb;
+
 #[cfg(feature = "std")]
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 #[cfg(feature = "std")]

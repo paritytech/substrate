@@ -24,8 +24,6 @@ trie-db = { version = "0.20.1", default-features = false }
 trie-root = { version = "0.16.0", default-features = false }
 memory-db = { version = "0.20.0", default-features = false }
 sp-core = { version = "2.0.0-dev", default-features = false, path = "../core" }
-# sp-offchain = { version = "2.0.0-dev", default-features = false, path = "../offchain" }
-# sp-staking = { version = "2.0.0-dev", default-features = false, path = "../staking" }
 
 [dev-dependencies]
 trie-bench = "0.21.0"

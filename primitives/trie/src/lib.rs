@@ -23,7 +23,6 @@ mod node_header;
 mod node_codec;
 mod storage_proof;
 mod trie_stream;
-mod offchain_hashdb;
 
 use sp_std::boxed::Box;
 use sp_std::marker::PhantomData;

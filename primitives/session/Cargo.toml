@@ -19,6 +19,12 @@ sp-std = { version = "2.0.0-dev", default-features = false, path = "../std" }
 sp-staking = { version = "2.0.0-dev", default-features = false, path = "../staking" }
 sp-runtime = { version = "2.0.0-dev", optional = true, path = "../runtime" }
 
+# x
+codec = { package = "parity-scale-codec", version = "1.3.0", default-features = false }
+hash-db = { version = "0.15.2", default-features = false }
+trie-db = { version = "0.20.1", default-features = false }
+sp-io ={ path = "../../primitives/io", default-features = false , version = "2.0.0-dev"}
+
 [features]
 default = [ "std" ]
 std = [
