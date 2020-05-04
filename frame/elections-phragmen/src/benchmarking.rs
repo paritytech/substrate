@@ -115,7 +115,7 @@ benchmarks! {
 	}: _(RawOrigin::Signed(caller))
 
 	report_defunct_voter {
-		// has no complexity parameter. two voters exist. One only votes fro outdated candidates.
+		// has no complexity parameter. two voters exist. One only votes for outdated candidates.
 		// The other one can report the defunct one.
 		let s in 0 .. 1000;
 
@@ -280,4 +280,3 @@ mod tests {
 		});
 	}
 }
-
