@@ -16,9 +16,8 @@
 
 //! BABE authority selection and slot claiming.
 
-use merlin::Transcript;
 use sp_consensus_babe::{
-	AuthorityId, BabeAuthorityWeight, BABE_ENGINE_ID, BABE_VRF_PREFIX,
+	make_transcript, AuthorityId, BabeAuthorityWeight, BABE_VRF_PREFIX,
 	SlotNumber, AuthorityPair,
 };
 use sp_consensus_babe::digests::{
@@ -118,19 +117,6 @@ pub(super) fn secondary_slot_author(
 
 	Some(&expected_author.0)
 }
-
-pub(super) fn make_transcript(
-	randomness: &[u8],
-	slot_number: u64,
-	epoch: u64,
-) -> Transcript {
-	let mut transcript = Transcript::new(&BABE_ENGINE_ID);
-	transcript.append_u64(b"slot number", slot_number);
-	transcript.append_u64(b"current epoch", epoch);
-	transcript.append_message(b"chain randomness", randomness);
-	transcript
-}
-
 
 /// Claim a secondary slot if it is our turn to propose, returning the
 /// pre-digest to use when authoring the block, or `None` if it is not our turn
