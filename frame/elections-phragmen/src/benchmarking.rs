@@ -73,7 +73,7 @@ fn submit_voter<T: Trait>(caller: T::AccountId, votes: Vec<T::AccountId>, stake:
 	-> Result<(), &'static str>
 {
 	<Elections<T>>::vote(RawOrigin::Signed(caller).into(), votes, stake)
-		.map_err(|e| "failed to submit vote")
+		.map_err(|_| "failed to submit vote")
 }
 
 benchmarks! {
