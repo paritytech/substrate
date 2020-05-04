@@ -28,19 +28,6 @@ pub use schnorrkel::{SignatureError, PublicKey, vrf::{VRF_PROOF_LENGTH, VRF_OUTP
 /// The length of the Randomness.
 pub const RANDOMNESS_LENGTH: usize = VRF_OUTPUT_LENGTH;
 
-/// Raw VRF output.
-#[derive(Clone, Copy, Eq, PartialEq, RuntimeDebug, Encode, Decode)]
-pub struct RawVRFOutput(pub [u8; VRF_OUTPUT_LENGTH]);
-
-impl Deref for RawVRFOutput {
-	type Target = [u8; VRF_OUTPUT_LENGTH];
-	fn deref(&self) -> &Self::Target { &self.0 }
-}
-
-impl DerefMut for RawVRFOutput {
-	fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
-}
-
 /// VRF output type available for `std` environment, suitable for schnorrkel operations.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VRFOutput(pub schnorrkel::vrf::VRFOutput);
