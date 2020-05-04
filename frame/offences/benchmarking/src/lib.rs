@@ -174,6 +174,7 @@ fn make_offenders<T: Trait>(num_offenders: u32, num_nominators: u32) -> Result<
 	Ok((id_tuples, offenders))
 }
 
+#[cfg(test)]
 fn check_events<T: Trait, I: Iterator<Item = <T as SystemTrait>::Event>>(expected: I) {
 	let events = System::<T>::events() .into_iter()
 		.map(|frame_system::EventRecord { event, .. }| event).collect::<Vec<_>>();
@@ -263,6 +264,7 @@ benchmarks! {
 		let slash_rest = slash_events.split_off(1 + n as usize);
 
 		// make sure that all slashes have been applied
+		#[cfg(test)]
 		check_events::<T, _>(
 			std::iter::empty()
 				.chain(slash_events.into_iter().map(Into::into))
