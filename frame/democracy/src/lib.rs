@@ -177,6 +177,7 @@ use frame_support::{
 		Currency, ReservableCurrency, LockableCurrency, WithdrawReason, LockIdentifier, Get,
 		OnUnbalanced, BalanceStatus, schedule::Named as ScheduleNamed, EnsureOrigin
 	},
+	dispatch::DispatchResultWithPostInfo,
 };
 use frame_system::{self as system, ensure_signed, ensure_root};
 
@@ -530,21 +531,48 @@ decl_error! {
 
 /// Functions for calcuating some weight of dispatchables.
 mod weight_for {
-	use frame_support::weights::{RuntimeDbWeight, Weight};
+	use frame_support::{
+		weights::{RuntimeDbWeight, Weight},
+	};
 
-	/// Calculate the weight for `set_members`.
-	pub(crate) fn proxy_delegate::<T:(
+	/// Calculate the weight for `delegate`.
+	pub(crate) fn delegate(
+		db: RuntimeDbWeight,
 		votes: impl Into<Weight> + Copy,
 	) -> Weight {
-		db.
-			+ T::DbWeight::get().reads_writes(5 + Weight::from(T::MaxVotes::get()), 4 + Weight::from(T::MaxVotes::get()))]
-92_000_000 + 9_100_000 * Weight::from(T::MaxVotes::get())
-		db.reads_writes(1, 1) // read + write members
-			.saturating_add(db.writes(2)) // set prime
-			.saturating_add(db.reads_writes(proposals.into() + 1, proposals.into())) // update votes
-			.saturating_add(old_count.into().saturating_mul(29_000_000)) // M
-			.saturating_add(new_count.into().saturating_mul(100_000)) // N
-			.saturating_add(proposals.into().saturating_mul(27_000_000)) // P
+		db.reads_writes(votes.into().saturating_add(3), votes.into().saturating_add(3))
+			.saturating_add(82_000_000)
+			.saturating_add(votes.into().saturating_mul(8_800_000))
+	}
+
+	/// Calculate the weight for `undelegate`.
+	pub(crate) fn undelegate(
+		db: RuntimeDbWeight,
+		votes: impl Into<Weight> + Copy,
+	) -> Weight {
+		db.reads_writes(votes.into().saturating_add(2), votes.into().saturating_add(2))
+			.saturating_add(42_000_000)
+			.saturating_add(votes.into().saturating_mul(8_800_000))
+	}
+
+	/// Calculate the weight for `proxy_delegate`.
+	pub(crate) fn proxy_delegate(
+		db: RuntimeDbWeight,
+		votes: impl Into<Weight> + Copy,
+	) -> Weight {
+		db.reads_writes(votes.into().saturating_add(5), votes.into().saturating_add(4))
+			.saturating_add(92_000_000)
+			.saturating_add(votes.into().saturating_mul(9_100_000))
+	}
+
+	/// Calculate the weight for `proxy_undelegate`.
+	pub(crate) fn proxy_undelegate(
+		db: RuntimeDbWeight,
+		votes: impl Into<Weight> + Copy,
+	) -> Weight {
+		db.reads_writes(votes.into().saturating_add(3), votes.into().saturating_add(2))
+			.saturating_add(50_000_000)
+			.saturating_add(votes.into().saturating_mul(9_900_000))
 	}
 }
 
@@ -1045,12 +1073,17 @@ decl_module! {
 		/// - Db writes per votes: `ReferendumInfoOf`
 		// NOTE: weight must cover an incorrect voting of origin with 100 votes.
 		/// # </weight>
-		#[weight = 82_000_000 + 8_800_000 * Weight::from(T::MaxVotes::get())
-			+ T::DbWeight::get().reads_writes(3 + Weight::from(T::MaxVotes::get()), 3 + Weight::from(T::MaxVotes::get()))]
-		// TODO TODO: this might be too expensive, at least we should refund maybe.
-		pub fn delegate(origin, to: T::AccountId, conviction: Conviction, balance: BalanceOf<T>) {
+		#[weight = weight_for::delegate(T::DbWeight::get(), T::MaxVotes::get())]
+		pub fn delegate(
+			origin,
+			to: T::AccountId,
+			conviction: Conviction,
+			balance: BalanceOf<T>
+		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			Self::try_delegate(who, to, conviction, balance)?;
+			let votes = Self::try_delegate(who, to, conviction, balance)?;
+
+			Ok(Some(weight_for::delegate(T::DbWeight::get(), votes)).into())
 		}
 
 		/// Undelegate the voting power of the sending account.
@@ -1072,12 +1105,11 @@ decl_module! {
 		/// - Db writes per votes: `ReferendumInfoOf`
 		// NOTE: weight must cover an incorrect voting of origin with 100 votes.
 		/// # </weight>
-		#[weight = 42_000_000 + 8_800_000 * Weight::from(T::MaxVotes::get())
-			+ T::DbWeight::get().reads_writes(2 + Weight::from(T::MaxVotes::get()), 2 + Weight::from(T::MaxVotes::get()))]
-		// TODO TODO: this might be too expensive, at least we should refund maybe.
-		fn undelegate(origin) {
+		#[weight = weight_for::undelegate(T::DbWeight::get(), T::MaxVotes::get())]
+		fn undelegate(origin) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			Self::try_undelegate(who)?;
+			let votes = Self::try_undelegate(who)?;
+			Ok(Some(weight_for::undelegate(T::DbWeight::get(), votes)).into())
 		}
 
 		/// Clears all public proposals.
@@ -1351,17 +1383,17 @@ decl_module! {
 		/// Db reads: `Proxy`, `proxy account`
 		/// Db writes: `proxy account`
 		/// # </weight>
-		#[weight = 92_000_000 + 9_100_000 * Weight::from(T::MaxVotes::get())
-			+ T::DbWeight::get().reads_writes(5 + Weight::from(T::MaxVotes::get()), 4 + Weight::from(T::MaxVotes::get()))]
-		// TODO TODO: this might be too expensive, at least we should refund maybe.
+		#[weight = weight_for::proxy_delegate(T::DbWeight::get(), T::MaxVotes::get())]
 		pub fn proxy_delegate(origin,
 			to: T::AccountId,
 			conviction: Conviction,
 			balance: BalanceOf<T>,
-		) {
+		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let target = Self::proxy(who).and_then(|a| a.as_active()).ok_or(Error::<T>::NotProxy)?;
 			let votes = Self::try_delegate(target, to, conviction, balance)?;
+
+			Ok(Some(weight_for::proxy_delegate(T::DbWeight::get(), votes)).into())
 		}
 
 		/// Undelegate the voting power of a proxied account.
@@ -1378,13 +1410,13 @@ decl_module! {
 		/// same as `undelegate with additional:
 		/// Db reads: `Proxy`
 		/// # </weight>
-		#[weight = 50_000_000 + 9_900_000 * Weight::from(T::MaxVotes::get())
-			+ T::DbWeight::get().reads_writes(3 + Weight::from(T::MaxVotes::get()), 2 + Weight::from(T::MaxVotes::get()))]
-		// TODO TODO: this might be too expensive, at least we should refund maybe.
-		fn proxy_undelegate(origin) {
+		#[weight = weight_for::proxy_undelegate(T::DbWeight::get(), T::MaxVotes::get())]
+		fn proxy_undelegate(origin) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let target = Self::proxy(who).and_then(|a| a.as_active()).ok_or(Error::<T>::NotProxy)?;
-			Self::try_undelegate(target)?;
+			let votes = Self::try_undelegate(target)?;
+
+			Ok(Some(weight_for::proxy_undelegate(T::DbWeight::get(), votes)).into())
 		}
 
 		/// Remove a proxied vote for a referendum.
@@ -1577,7 +1609,7 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	/// Return the number of votes
+	/// Return the number of votes for who
 	fn increase_upstream_delegation(who: &T::AccountId, amount: Delegations<BalanceOf<T>>) -> u32 {
 		VotingOf::<T>::mutate(who, |voting| match voting {
 			Voting::Delegating { delegations, .. } => {
@@ -1596,16 +1628,19 @@ impl<T: Trait> Module<T> {
 						);
 					}
 				}
-				votes.len()
+				votes.len() as u32
 			}
 		})
 	}
 
-	fn reduce_upstream_delegation(who: &T::AccountId, amount: Delegations<BalanceOf<T>>) {
+	/// Return the number of votes for who
+	fn reduce_upstream_delegation(who: &T::AccountId, amount: Delegations<BalanceOf<T>>) -> u32 {
 		VotingOf::<T>::mutate(who, |voting| match voting {
-			Voting::Delegating { delegations, .. } =>
-			// We don't support second level delegating, so we don't need to do anything more.
-				*delegations = delegations.saturating_sub(amount),
+			Voting::Delegating { delegations, .. } => {
+				// We don't support second level delegating, so we don't need to do anything more.
+				*delegations = delegations.saturating_sub(amount);
+				1
+			}
 			Voting::Direct { votes, delegations, .. } => {
 				*delegations = delegations.saturating_sub(amount);
 				for &(ref_index, account_vote) in votes.iter() {
@@ -1617,6 +1652,7 @@ impl<T: Trait> Module<T> {
 						);
 					}
 				}
+				votes.len() as u32
 			}
 		})
 	}
@@ -1632,7 +1668,7 @@ impl<T: Trait> Module<T> {
 	) -> Result<u32, DispatchError> {
 		ensure!(who != target, Error::<T>::Nonsense);
 		ensure!(balance <= T::Currency::free_balance(&who), Error::<T>::InsufficientFunds);
-		let votes = VotingOf::<T>::try_mutate(&who, |voting| -> DispatchResult {
+		let votes = VotingOf::<T>::try_mutate(&who, |voting| -> Result<u32, DispatchError> {
 			let mut old = Voting::Delegating {
 				balance,
 				target: target.clone(),
@@ -1669,8 +1705,10 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Attempt to end the current delegation.
-	fn try_undelegate(who: T::AccountId) -> DispatchResult {
-		VotingOf::<T>::try_mutate(&who, |voting| -> DispatchResult {
+	///
+	/// Return the number of votes of upstream.
+	fn try_undelegate(who: T::AccountId) -> Result<u32, DispatchError> {
+		let votes = VotingOf::<T>::try_mutate(&who, |voting| -> Result<u32, DispatchError> {
 			let mut old = Voting::default();
 			sp_std::mem::swap(&mut old, voting);
 			match old {
@@ -1682,20 +1720,21 @@ impl<T: Trait> Module<T> {
 					mut prior,
 				} => {
 					// remove any delegation votes to our current target.
-					Self::reduce_upstream_delegation(&target, conviction.votes(balance));
+					let votes = Self::reduce_upstream_delegation(&target, conviction.votes(balance));
 					let now = system::Module::<T>::block_number();
 					let lock_periods = conviction.lock_periods().into();
 					prior.accumulate(now + T::EnactmentPeriod::get() * lock_periods, balance);
 					voting.set_common(delegations, prior);
+
+					Ok(votes)
 				}
 				Voting::Direct { .. } => {
-					return Err(Error::<T>::NotDelegating.into())
+					Err(Error::<T>::NotDelegating.into())
 				}
 			}
-			Ok(())
 		})?;
 		Self::deposit_event(Event::<T>::Undelegated(who));
-		Ok(())
+		Ok(votes)
 	}
 
 	/// Rejig the lock on an account. It will never get more stringent (since that would indicate
