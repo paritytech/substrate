@@ -30,11 +30,12 @@ use frame_support::{
 	weights::Weight,
 };
 use sp_io;
-use sp_core::H256;
-use sp_consensus_vrf::schnorrkel::{RawVRFOutput, RawVRFProof};
+use sp_core::{H256, U256, crypto::Pair};
+use sp_consensus_babe::AuthorityPair;
+use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
 
 impl_outer_origin!{
-	pub enum Origin for Test  where system = frame_system {}
+	pub enum Origin for Test where system = frame_system {}
 }
 
 type DummyValidatorId = u64;
@@ -109,16 +110,20 @@ impl Trait for Test {
 	type EpochChangeTrigger = crate::ExternalTrigger;
 }
 
-pub fn new_test_ext(authorities: Vec<DummyValidatorId>) -> sp_io::TestExternalities {
+pub fn new_test_ext(authorities_len: usize) -> (Vec<AuthorityPair>, sp_io::TestExternalities) {
+	let pairs = (0..authorities_len).map(|i| {
+		AuthorityPair::from_seed(&U256::from(i).into())
+	}).collect::<Vec<_>>();
+
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	GenesisConfig {
-		authorities: authorities.into_iter().map(|a| (UintAuthorityId(a).to_public_key(), 1)).collect(),
+		authorities: pairs.iter().map(|a| (a.public(), 1)).collect(),
 	}.assimilate_storage::<Test>(&mut t).unwrap();
-	t.into()
+	(pairs, t.into())
 }
 
 pub fn go_to_block(n: u64, s: u64) {
-	let pre_digest = make_pre_digest(0, s, RawVRFOutput([1; 32]), RawVRFProof([0xff; 64]));
+	let pre_digest = make_secondary_plain_pre_digest(0, s);
 	System::initialize(&n, &Default::default(), &Default::default(), &pre_digest, InitKind::Full);
 	System::set_block_number(n);
 	if s > 1 {
@@ -140,15 +145,29 @@ pub fn progress_to_block(n: u64) {
 pub fn make_pre_digest(
 	authority_index: sp_consensus_babe::AuthorityIndex,
 	slot_number: sp_consensus_babe::SlotNumber,
-	vrf_output: RawVRFOutput,
-	vrf_proof: RawVRFProof,
+	vrf_output: VRFOutput,
+	vrf_proof: VRFProof,
 ) -> Digest {
-	let digest_data = sp_consensus_babe::digests::RawPreDigest::Primary(
-		sp_consensus_babe::digests::RawPrimaryPreDigest {
+	let digest_data = sp_consensus_babe::digests::PreDigest::Primary(
+		sp_consensus_babe::digests::PrimaryPreDigest {
 			authority_index,
 			slot_number,
 			vrf_output,
 			vrf_proof,
+		}
+	);
+	let log = DigestItem::PreRuntime(sp_consensus_babe::BABE_ENGINE_ID, digest_data.encode());
+	Digest { logs: vec![log] }
+}
+
+pub fn make_secondary_plain_pre_digest(
+	authority_index: sp_consensus_babe::AuthorityIndex,
+	slot_number: sp_consensus_babe::SlotNumber,
+) -> Digest {
+	let digest_data = sp_consensus_babe::digests::PreDigest::SecondaryPlain(
+		sp_consensus_babe::digests::SecondaryPlainPreDigest {
+			authority_index,
+			slot_number,
 		}
 	);
 	let log = DigestItem::PreRuntime(sp_consensus_babe::BABE_ENGINE_ID, digest_data.encode());

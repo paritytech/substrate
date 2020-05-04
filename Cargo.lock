@@ -4026,6 +4026,7 @@ dependencies = [
  "pallet-timestamp",
  "parity-scale-codec",
  "serde",
+ "sp-application-crypto",
  "sp-consensus-babe",
  "sp-consensus-vrf",
  "sp-core",
@@ -7404,6 +7405,7 @@ dependencies = [
 name = "sp-consensus-babe"
 version = "0.8.0-dev"
 dependencies = [
+ "merlin",
  "parity-scale-codec",
  "sp-api",
  "sp-application-crypto",
