@@ -64,6 +64,7 @@ pub trait Trait:
 /// A helper trait to make sure we can convert `IdentificationTuple` coming from historical
 /// and the one required by offences.
 pub trait IdTupleConvert<T: HistoricalTrait + OffencesTrait> {
+	/// Convert identification tuple from `historical` trait to the one expected by `offences`.
 	fn convert(id: IdentificationTuple<T>) -> <T as OffencesTrait>::IdentificationTuple;
 }
 
@@ -403,12 +404,6 @@ mod tests {
 	use super::*;
 	use crate::mock::{new_test_ext, Test};
 	use frame_support::assert_ok;
-    //
-	// impl IdTupleConvert<Test> for Test {
-	// 	fn convert(id: IdentificationTuple<Test>) -> <Test as OffencesTrait>::IdentificationTuple {
-	// 		id
-	// 	}
-	// }
 
 	#[test]
 	fn test_benchmarks() {
