@@ -141,10 +141,8 @@ pub use sp_runtime::transaction_validity::TransactionPriority;
 /// Numeric range of a transaction weight.
 pub type Weight = u64;
 
-/// These constants are specific to the current pallet selection in the Substrate node.
-/// For example: Frame System, Pallet Balances, Pallet Staking, etc...
-/// Any significant changes to your runtime setup should probably use weights specific to your own
-/// runtime benchmarks.
+/// These constants are specific to FRAME, and the current implementation of its various components.
+/// For example: FRAME System, FRAME Executive, our FRAME support libraries, etc...
 pub mod constants {
 	use super::*;
 	use crate::parameter_types;
