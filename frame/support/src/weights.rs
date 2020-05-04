@@ -147,27 +147,27 @@ pub mod constants {
 	use super::{RuntimeDbWeight, Weight};
 	use crate::parameter_types;
 
-	pub const WEIGHT_PER_NANOS:  Weight = 1_000;
-	pub const WEIGHT_PER_MICROS: Weight = 1_000_000;
-	pub const WEIGHT_PER_MILLIS: Weight = 1_000_000_000;
 	pub const WEIGHT_PER_SECOND: Weight = 1_000_000_000_000;
+	pub const WEIGHT_PER_MILLIS: Weight = WEIGHT_PER_SECOND / 1000; // 1_000_000_000
+	pub const WEIGHT_PER_MICROS: Weight = WEIGHT_PER_MILLIS / 1000; // 1_000_000
+	pub const WEIGHT_PER_NANOS:  Weight = WEIGHT_PER_MICROS / 1000; // 1_000
 
 	parameter_types! {
 		/// Importing a block with 0 txs takes ~5 ms
-		pub const BlockExecutionWeight: Weight = 5_000_000_000;
+		pub const BlockExecutionWeight: Weight = 5 * WEIGHT_PER_MILLIS;
 		/// Executing 10,000 System remarks (no-op) txs takes ~1.26 seconds -> ~125 µs per tx
-		pub const ExtrinsicBaseWeight: Weight = 125_000_000;
+		pub const ExtrinsicBaseWeight: Weight = 125 * WEIGHT_PER_MICROS;
 		/// By default, Substrate uses RocksDB, so this will be the weight used throughout
 		/// the runtime.
 		pub const RocksDbWeight: RuntimeDbWeight = RuntimeDbWeight {
-			read: 25_000_000, // ~25 µs @ 200,000 items
-			write: 100_000_000, // ~100 µs @ 200,000 items
+			read: 25 * WEIGHT_PER_MICROS,   // ~25 µs @ 200,000 items
+			write: 100 * WEIGHT_PER_MICROS, // ~100 µs @ 200,000 items
 		};
 		/// ParityDB can be enabled with a feature flag, but is still experimental. These weights
 		/// are available for brave runtime engineers who may want to try this out as default.
 		pub const ParityDbWeight: RuntimeDbWeight = RuntimeDbWeight {
-			read: 8_000_000, // ~8 µs @ 200,000 items
-			write: 50_000_000, // ~50 µs @ 200,000 items
+			read: 8 * WEIGHT_PER_MICROS,   // ~8 µs @ 200,000 items
+			write: 50 * WEIGHT_PER_MICROS, // ~50 µs @ 200,000 items
 		};
 	}
 }
