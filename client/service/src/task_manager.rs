@@ -71,7 +71,7 @@ impl SpawnTaskHandle {
 		if let Some(metrics) = &self.metrics {
 			metrics.tasks_spawned.with_label_values(&[name]).inc();
 			// We do a dummy increase in order for the task to show up in metrics.
-			metrics.tasks_ended.with_label_values(&[name, "normal"]).inc_by(0);
+			metrics.tasks_ended.with_label_values(&[name, "finished"]).inc_by(0);
 		}
 
 		let future = async move {
