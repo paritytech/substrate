@@ -27,8 +27,8 @@ use frame_system::{RawOrigin, Module as System, Trait as SystemTrait};
 use frame_benchmarking::{benchmarks, account};
 use frame_support::traits::{Currency, OnInitialize};
 
-use sp_runtime::{Perbill, traits::{Convert, StaticLookup, Saturating}};
-use sp_staking::offence::ReportOffence;
+use sp_runtime::{Perbill, traits::{Convert, StaticLookup, Saturating, UniqueSaturatedInto}};
+use sp_staking::offence::{ReportOffence, Offence, OffenceDetails};
 
 use pallet_balances::{Trait as BalancesTrait};
 use pallet_babe::BabeEquivocationOffence;
@@ -39,7 +39,7 @@ use pallet_session::historical::{Trait as HistoricalTrait, IdentificationTuple};
 use pallet_session::{Trait as SessionTrait, SessionManager};
 use pallet_staking::{
 	Module as Staking, Trait as StakingTrait, RewardDestination, ValidatorPrefs,
-	Exposure, IndividualExposure, ElectionStatus, MAX_NOMINATIONS,
+	Exposure, IndividualExposure, ElectionStatus, MAX_NOMINATIONS, Event as StakingEvent
 };
 
 const SEED: u32 = 0;
@@ -70,13 +70,23 @@ pub trait IdTupleConvert<T: HistoricalTrait + OffencesTrait> {
 type LookupSourceOf<T> = <<T as SystemTrait>::Lookup as StaticLookup>::Source;
 type BalanceOf<T> = <<T as StakingTrait>::Currency as Currency<<T as SystemTrait>::AccountId>>::Balance;
 
-fn create_offender<T: Trait>(n: u32, nominators: u32) -> Result<T::AccountId, &'static str> {
+struct Offender<T: Trait> {
+	pub controller: T::AccountId,
+	pub stash: T::AccountId,
+	pub nominator_stashes: Vec<T::AccountId>,
+}
+
+fn bond_amount<T: Trait>() -> BalanceOf<T> {
+	T::Currency::minimum_balance().saturating_mul(10_000.into())
+}
+
+fn create_offender<T: Trait>(n: u32, nominators: u32) -> Result<Offender<T>, &'static str> {
 	let stash: T::AccountId = account("stash", n, SEED);
 	let controller: T::AccountId = account("controller", n, SEED);
 	let controller_lookup: LookupSourceOf<T> = T::Lookup::unlookup(controller.clone());
 	let reward_destination = RewardDestination::Staked;
-	let raw_amount = T::Currency::minimum_balance().saturating_mul(10_000.into());
-	// make twice as much balance to prevent the account from being killed.
+	let raw_amount = bond_amount::<T>();
+	// add twice as much balance to prevent the account from being killed.
 	let free_amount = raw_amount.saturating_mul(2.into());
 	T::Currency::make_free_balance_be(&stash, free_amount);
 	let amount: BalanceOf<T> = raw_amount.into();
@@ -93,7 +103,7 @@ fn create_offender<T: Trait>(n: u32, nominators: u32) -> Result<T::AccountId, &'
 	Staking::<T>::validate(RawOrigin::Signed(controller.clone()).into(), validator_prefs)?;
 
 	let mut individual_exposures = vec![];
-
+	let mut nominator_stashes = vec![];
 	// Create n nominators
 	for i in 0 .. nominators {
 		let nominator_stash: T::AccountId = account("nominator stash", n * MAX_NOMINATORS + i, SEED);
@@ -115,6 +125,7 @@ fn create_offender<T: Trait>(n: u32, nominators: u32) -> Result<T::AccountId, &'
 			who: nominator_stash.clone(),
 			value: amount.clone(),
 		});
+		nominator_stashes.push(nominator_stash.clone());
 	}
 
 	let exposure = Exposure {
@@ -125,13 +136,16 @@ fn create_offender<T: Trait>(n: u32, nominators: u32) -> Result<T::AccountId, &'
 	let current_era = 0u32;
 	Staking::<T>::add_era_stakers(current_era.into(), stash.clone().into(), exposure);
 
-	Ok(controller)
+	Ok(Offender { controller, stash, nominator_stashes })
 }
 
-fn make_offenders<T: Trait>(num_offenders: u32, num_nominators: u32) -> Result<Vec<IdentificationTuple<T>>, &'static str> {
+fn make_offenders<T: Trait>(num_offenders: u32, num_nominators: u32) -> Result<
+	(Vec<IdentificationTuple<T>>, Vec<Offender<T>>),
+	&'static str
+> {
 	Staking::<T>::new_session(0);
 
-	let mut offenders: Vec<T::AccountId> = vec![];
+	let mut offenders = vec![];
 	for i in 0 .. num_offenders {
 		let offender = create_offender::<T>(i + 1, num_nominators)?;
 		offenders.push(offender);
@@ -139,15 +153,42 @@ fn make_offenders<T: Trait>(num_offenders: u32, num_nominators: u32) -> Result<V
 
 	Staking::<T>::start_session(0);
 
-	Ok(offenders.iter()
-		.map(|id|
-			<T as SessionTrait>::ValidatorIdOf::convert(id.clone())
+	let id_tuples = offenders.iter()
+		.map(|offender|
+			<T as SessionTrait>::ValidatorIdOf::convert(offender.controller.clone())
 				.expect("failed to get validator id from account id"))
 		.map(|validator_id|
 			<T as HistoricalTrait>::FullIdentificationOf::convert(validator_id.clone())
 			.map(|full_id| (validator_id, full_id))
 			.expect("failed to convert validator id to full identification"))
-		.collect::<Vec<IdentificationTuple<T>>>())
+		.collect::<Vec<IdentificationTuple<T>>>();
+	Ok((id_tuples, offenders))
+}
+
+fn check_events<T: Trait, I: Iterator<Item = <T as SystemTrait>::Event>>(expected: I) {
+	let events = System::<T>::events() .into_iter()
+		.map(|frame_system::EventRecord { event, .. }| event).collect::<Vec<_>>();
+	let expected = expected.collect::<Vec<_>>();
+	let lengths = (events.len(), expected.len());
+	let length_mismatch = if lengths.0 != lengths.1 {
+		fn pretty<D: std::fmt::Debug>(header: &str, ev: &[D]) {
+			println!("{}", header);
+			for (idx, ev) in ev.iter().enumerate() {
+				println!("\t[{:04}] {:?}", idx, ev);
+			}
+		}
+		pretty("--Got:", &events);
+		pretty("--Expected:", &expected);
+		format!("Mismatching length. Got: {}, expected: {}", lengths.0, lengths.1)
+	} else { Default::default() };
+
+	for (idx, (a, b)) in events.into_iter().zip(expected).enumerate() {
+		assert_eq!(a, b, "Mismatch at: {}. {}", idx, length_mismatch);
+	}
+
+	if !length_mismatch.is_empty() {
+		panic!(length_mismatch);
+	}
 }
 
 benchmarks! {
@@ -169,28 +210,62 @@ benchmarks! {
 		// make sure reporters actually get rewarded
 		Staking::<T>::set_slash_reward_fraction(Perbill::one());
 
-		let offenders = make_offenders::<T>(o, n)?;
+		let (offenders, raw_offenders) = make_offenders::<T>(o, n)?;
 		let keys =  ImOnline::<T>::keys();
+		let validator_set_count = keys.len() as u32;
 
+		let slash_fraction = UnresponsivenessOffence::<T::AccountId>::slash_fraction(
+			offenders.len() as u32, validator_set_count,
+		);
 		let offence = UnresponsivenessOffence {
 			session_index: 0,
-			validator_set_count: keys.len() as u32,
+			validator_set_count,
 			offenders,
 		};
 		assert_eq!(System::<T>::event_count(), 0);
 	}: {
-		let _ = <T as ImOnlineTrait>::ReportUnresponsiveness::report_offence(reporters, offence);
+		let _ = <T as ImOnlineTrait>::ReportUnresponsiveness::report_offence(
+			reporters.clone(),
+			offence
+		);
 	}
 	verify {
 		// make sure the report was not deferred
 		assert!(Offences::<T>::deferred_offences().is_empty());
+		let slash_amount = slash_fraction * bond_amount::<T>().unique_saturated_into() as u32;
+		let reward_amount = slash_amount * (1 + n) / 2;
+		let mut slash_events = raw_offenders.into_iter()
+			.flat_map(|offender| {
+				std::iter::once(offender.stash).chain(offender.nominator_stashes.into_iter())
+			})
+			.map(|stash| <T as StakingTrait>::Event::from(
+				StakingEvent::<T>::Slash(stash, BalanceOf::<T>::from(slash_amount))
+			))
+			.collect::<Vec<_>>();
+		let reward_events = reporters.into_iter()
+			.flat_map(|reporter| vec![
+				frame_system::Event::<T>::NewAccount(reporter.clone()).into(),
+				<T as BalancesTrait>::Event::from(
+					pallet_balances::Event::<T>::Endowed(reporter.clone(), (reward_amount / r).into())
+				).into()
+			]);
+
+		// rewards are applied after first offender and it's nominators
+		let slash_rest = slash_events.split_off(1 + n as usize);
+
 		// make sure that all slashes have been applied
-		assert_eq!(
-			System::<T>::event_count(), 0
-			+ 1 // offence
-			+ 2 * r // reporter (reward + endowment)
-			+ o // offenders slashed
-			+ o * n // nominators slashed
+		check_events::<T, _>(
+			std::iter::empty()
+				.chain(slash_events.into_iter().map(Into::into))
+				.chain(reward_events)
+				.chain(slash_rest.into_iter().map(Into::into))
+				.chain(std::iter::once(<T as OffencesTrait>::Event::from(
+					pallet_offences::Event::Offence(
+						UnresponsivenessOffence::<T>::ID,
+						0_u32.to_le_bytes().to_vec(),
+						true
+					)
+				).into()))
 		);
 	}
 
@@ -209,7 +284,7 @@ benchmarks! {
 		// make sure reporters actually get rewarded
 		Staking::<T>::set_slash_reward_fraction(Perbill::one());
 
-		let mut offenders = make_offenders::<T>(o, n)?;
+		let (mut offenders, raw_offenders) = make_offenders::<T>(o, n)?;
 		let keys = ImOnline::<T>::keys();
 
 		let offence = GrandpaEquivocationOffence {
@@ -250,7 +325,7 @@ benchmarks! {
 		// make sure reporters actually get rewarded
 		Staking::<T>::set_slash_reward_fraction(Perbill::one());
 
-		let mut offenders = make_offenders::<T>(o, n)?;
+		let (mut offenders, raw_offenders) = make_offenders::<T>(o, n)?;
 		let keys =  ImOnline::<T>::keys();
 
 		let offence = BabeEquivocationOffence {
@@ -284,9 +359,9 @@ benchmarks! {
 		Staking::<T>::put_election_status(ElectionStatus::Closed);
 
 		let mut deferred_offences = vec![];
-		let offenders = make_offenders::<T>(o, n)?;
+		let offenders = make_offenders::<T>(o, n)?.0;
 		let offence_details = offenders.into_iter()
-			.map(|offender| sp_staking::offence::OffenceDetails {
+			.map(|offender| OffenceDetails {
 				offender: T::convert(offender),
 				reporters: vec![],
 			})
