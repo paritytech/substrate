@@ -139,7 +139,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 	// generated with secret: subkey inspect "$secret"/fir
 	let root_key: AccountId = hex![
 		// 5Ff3iXP75ruzroPWRP2FYBHWnmGGBSb63857BgnzCoXNxfPo
-		"14201f475f63a18490b0dea51e87afba971d5944e75e78f3115a180cf9ec163a"
+		"9ee5e5bdc0ec239eb164f865ecc345ce4c88e76ee002e0f7e318097347471809"
 	].into();
 
 	let endowed_accounts: Vec<AccountId> = vec![root_key.clone()];
