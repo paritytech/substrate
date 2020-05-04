@@ -15,22 +15,21 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{
-	config::{ProtocolId, Role},
+	config::{ProtocolId, Role}, block_requests, light_client_handler, finality_requests,
 	debug_info, discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryOut},
+	protocol::{message::{self, Roles}, CustomMessageOutcome, Protocol},
 	Event, ObservedRole, DhtEvent, ExHashT,
 };
-use crate::protocol::{self, light_client_handler, message::Roles, CustomMessageOutcome, Protocol};
 
 use codec::Encode as _;
 use libp2p::NetworkBehaviour;
 use libp2p::core::{Multiaddr, PeerId, PublicKey};
 use libp2p::kad::record;
-use libp2p::swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters, toggle::Toggle};
+use libp2p::swarm::{NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters};
 use log::debug;
 use sp_consensus::{BlockOrigin, import_queue::{IncomingBlock, Origin}};
 use sp_runtime::{traits::{Block as BlockT, NumberFor}, ConsensusEngineId, Justification};
-use std::{borrow::Cow, iter, task::Context, task::Poll};
-use void;
+use std::{borrow::Cow, iter, task::{Context, Poll}, time::Duration};
 
 /// General behaviour of the network. Combines all protocols together.
 #[derive(NetworkBehaviour)]
@@ -44,11 +43,11 @@ pub struct Behaviour<B: BlockT, H: ExHashT> {
 	/// Discovers nodes of the network.
 	discovery: DiscoveryBehaviour,
 	/// Block request handling.
-	block_requests: protocol::BlockRequests<B>,
+	block_requests: block_requests::BlockRequests<B>,
 	/// Finality proof request handling.
-	finality_proof_requests: Toggle<protocol::FinalityProofRequests<B>>,
+	finality_proof_requests: finality_requests::FinalityProofRequests<B>,
 	/// Light client request handling.
-	light_client_handler: protocol::LightClientHandler<B>,
+	light_client_handler: light_client_handler::LightClientHandler<B>,
 
 	/// Queue of events to produce for the outside.
 	#[behaviour(ignore)]
@@ -64,8 +63,39 @@ pub enum BehaviourOut<B: BlockT> {
 	BlockImport(BlockOrigin, Vec<IncomingBlock<B>>),
 	JustificationImport(Origin, B::Hash, NumberFor<B>, Justification),
 	FinalityProofImport(Origin, B::Hash, NumberFor<B>, Vec<u8>),
-	/// Started a random Kademlia discovery query.
+
+	/// Started a random iterative Kademlia discovery query.
 	RandomKademliaStarted(ProtocolId),
+
+	/// We have received a request from a peer and answered it.
+	AnsweredRequest {
+		/// Peer which sent us a request.
+		peer: PeerId,
+		/// Protocol name of the request.
+		protocol: Vec<u8>,
+		/// Time it took to build the response.
+		build_time: Duration,
+	},
+	/// Started a new request with the given node.
+	RequestStarted {
+		peer: PeerId,
+		/// Protocol name of the request.
+		protocol: Vec<u8>,
+	},
+	/// Finished, successfully or not, a previously-started request.
+	RequestFinished {
+		/// Who we were requesting.
+		peer: PeerId,
+		/// Protocol name of the request.
+		protocol: Vec<u8>,
+		/// How long before the response came or the request got cancelled.
+		request_duration: Duration,
+	},
+
+	/// Any event represented by the [`Event`] enum.
+	///
+	/// > **Note**: The [`Event`] enum contains the events that are available through the public
+	/// > API of the library.
 	Event(Event),
 }
 
@@ -76,9 +106,9 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 		role: Role,
 		user_agent: String,
 		local_public_key: PublicKey,
-		block_requests: protocol::BlockRequests<B>,
-		finality_proof_requests: Option<protocol::FinalityProofRequests<B>>,
-		light_client_handler: protocol::LightClientHandler<B>,
+		block_requests: block_requests::BlockRequests<B>,
+		finality_proof_requests: finality_requests::FinalityProofRequests<B>,
+		light_client_handler: light_client_handler::LightClientHandler<B>,
 		disco_config: DiscoveryConfig,
 	) -> Self {
 		Behaviour {
@@ -86,7 +116,7 @@ impl<B: BlockT, H: ExHashT> Behaviour<B, H> {
 			debug_info: debug_info::DebugInfoBehaviour::new(user_agent, local_public_key.clone()),
 			discovery: disco_config.finish(),
 			block_requests,
-			finality_proof_requests: From::from(finality_proof_requests),
+			finality_proof_requests,
 			light_client_handler,
 			events: Vec::new(),
 			role,
@@ -216,6 +246,32 @@ Behaviour<B, H> {
 				self.events.push(BehaviourOut::JustificationImport(origin, hash, nb, justification)),
 			CustomMessageOutcome::FinalityProofImport(origin, hash, nb, proof) =>
 				self.events.push(BehaviourOut::FinalityProofImport(origin, hash, nb, proof)),
+			CustomMessageOutcome::BlockRequest { target, request } => {
+				match self.block_requests.send_request(&target, request) {
+					block_requests::SendRequestOutcome::Ok => {
+						self.events.push(BehaviourOut::RequestStarted {
+							peer: target,
+							protocol: self.block_requests.protocol_name().to_vec(),
+						});
+					},
+					block_requests::SendRequestOutcome::Replaced { request_duration, .. } => {
+						self.events.push(BehaviourOut::RequestFinished {
+							peer: target.clone(),
+							protocol: self.block_requests.protocol_name().to_vec(),
+							request_duration,
+						});
+						self.events.push(BehaviourOut::RequestStarted {
+							peer: target,
+							protocol: self.block_requests.protocol_name().to_vec(),
+						});
+					}
+					block_requests::SendRequestOutcome::NotConnected |
+					block_requests::SendRequestOutcome::EncodeError(_) => {},
+				}
+			},
+			CustomMessageOutcome::FinalityProofRequest { target, block_hash, request } => {
+				self.finality_proof_requests.send_request(&target, block_hash, request);
+			},
 			CustomMessageOutcome::NotificationStreamOpened { remote, protocols, roles } => {
 				let role = reported_roles_to_observed_role(&self.role, &remote, roles);
 				for engine_id in protocols {
@@ -241,6 +297,69 @@ Behaviour<B, H> {
 				self.light_client_handler.update_best_block(&peer_id, number);
 			}
 			CustomMessageOutcome::None => {}
+		}
+	}
+}
+
+impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<block_requests::Event<B>> for Behaviour<B, H> {
+	fn inject_event(&mut self, event: block_requests::Event<B>) {
+		match event {
+			block_requests::Event::AnsweredRequest { peer, total_handling_time } => {
+				self.events.push(BehaviourOut::AnsweredRequest {
+					peer,
+					protocol: self.block_requests.protocol_name().to_vec(),
+					build_time: total_handling_time,
+				});
+			},
+			block_requests::Event::Response { peer, original_request, response, request_duration } => {
+				self.events.push(BehaviourOut::RequestFinished {
+					peer: peer.clone(),
+					protocol: self.block_requests.protocol_name().to_vec(),
+					request_duration,
+				});
+				let ev = self.substrate.on_block_response(peer, original_request, response);
+				self.inject_event(ev);
+			}
+			block_requests::Event::RequestCancelled { peer, request_duration, .. } => {
+				// There doesn't exist any mechanism to report cancellations yet.
+				// We would normally disconnect the node, but this event happens as the result of
+				// a disconnect, so there's nothing more to do.
+				self.events.push(BehaviourOut::RequestFinished {
+					peer,
+					protocol: self.block_requests.protocol_name().to_vec(),
+					request_duration,
+				});
+			}
+			block_requests::Event::RequestTimeout { peer, request_duration, .. } => {
+				// There doesn't exist any mechanism to report timeouts yet, so we process them by
+				// disconnecting the node.
+				self.events.push(BehaviourOut::RequestFinished {
+					peer: peer.clone(),
+					protocol: self.block_requests.protocol_name().to_vec(),
+					request_duration,
+				});
+				self.substrate.disconnect_peer(&peer);
+			}
+		}
+	}
+}
+
+impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<finality_requests::Event<B>> for Behaviour<B, H> {
+	fn inject_event(&mut self, event: finality_requests::Event<B>) {
+		match event {
+			finality_requests::Event::Response { peer, block_hash, proof } => {
+				let response = message::FinalityProofResponse {
+					id: 0,
+					block: block_hash,
+					proof: if !proof.is_empty() {
+						Some(proof)
+					} else {
+						None
+					},
+				};
+				let ev = self.substrate.on_finality_proof_response(peer, response);
+				self.inject_event(ev);
+			}
 		}
 	}
 }

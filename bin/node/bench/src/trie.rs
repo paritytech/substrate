@@ -16,24 +16,28 @@
 
 //! Trie benchmark (integrated).
 
-use std::{borrow::Cow, sync::Arc};
+use std::{borrow::Cow, collections::HashMap, sync::Arc};
 use kvdb::KeyValueDB;
 use lazy_static::lazy_static;
 use rand::Rng;
 use hash_db::Prefix;
 use sp_state_machine::Backend as _;
+use sp_trie::{trie_types::TrieDBMut, TrieMut as _};
 
 use node_primitives::Hash;
 
 use crate::{
 	core::{self, Mode, Path},
 	generator::generate_trie,
-	tempdb::TempDatabase,
+	simple_trie::SimpleTrie,
+	tempdb::{TempDatabase, DatabaseType},
 };
 
 pub const SAMPLE_SIZE: usize = 100;
+pub const TEST_WRITE_SIZE: usize = 128;
 
-pub type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
+pub type KeyValue = (Vec<u8>, Vec<u8>);
+pub type KeyValues = Vec<KeyValue>;
 
 #[derive(Clone, Copy, Debug, derive_more::Display)]
 pub enum DatabaseSize {
@@ -47,8 +51,8 @@ pub enum DatabaseSize {
 	Medium,
 	#[display(fmt = "large")]
 	Large,
-	#[display(fmt = "largest")]
-	Largest,
+	#[display(fmt = "huge")]
+	Huge,
 }
 
 lazy_static! {
@@ -65,7 +69,7 @@ impl DatabaseSize {
 			Self::Small => 10_000,
 			Self::Medium => 100_000,
 			Self::Large => 200_000,
-			Self::Largest => 1_000_000,
+			Self::Huge => 1_000_000,
 		};
 
 		assert_eq!(val % SAMPLE_SIZE, 0);
@@ -74,20 +78,33 @@ impl DatabaseSize {
 	}
 }
 
-pub struct TrieBenchmarkDescription {
-	pub database_size: DatabaseSize,
+fn pretty_print(v: usize) -> String {
+	let mut print = String::new();
+	for (idx, val) in v.to_string().chars().rev().enumerate() {
+		if idx != 0 && idx % 3 == 0 {
+			print.insert(0, ',');
+		}
+		print.insert(0, val);
+	}
+	print
 }
 
-pub struct TrieBenchmark {
+pub struct TrieReadBenchmarkDescription {
+	pub database_size: DatabaseSize,
+	pub database_type: DatabaseType,
+}
+
+pub struct TrieReadBenchmark {
 	database: TempDatabase,
 	root: Hash,
 	warmup_keys: KeyValues,
 	query_keys: KeyValues,
+	database_type: DatabaseType,
 }
 
-impl core::BenchmarkDescription for TrieBenchmarkDescription {
+impl core::BenchmarkDescription for TrieReadBenchmarkDescription {
 	fn path(&self) -> Path {
-		let mut path = Path::new(&["trie"]);
+		let mut path = Path::new(&["trie", "read"]);
 		path.push(&format!("{}", self.database_size));
 		path
 	}
@@ -95,7 +112,6 @@ impl core::BenchmarkDescription for TrieBenchmarkDescription {
 	fn setup(self: Box<Self>) -> Box<dyn core::Benchmark> {
 		let mut database = TempDatabase::new();
 
-		// TODO: make seedable
 		let mut rng = rand::thread_rng();
 		let warmup_prefix = KUSAMA_STATE_DISTRIBUTION.key(&mut rng);
 
@@ -125,35 +141,25 @@ impl core::BenchmarkDescription for TrieBenchmarkDescription {
 		assert_eq!(query_keys.len(), SAMPLE_SIZE);
 
 		let root = generate_trie(
-			database.open(),
+			database.open(self.database_type),
 			key_values,
 		);
 
-		Box::new(TrieBenchmark {
+		Box::new(TrieReadBenchmark {
 			database,
 			root,
 			warmup_keys,
 			query_keys,
+			database_type: self.database_type,
 		})
 	}
 
 	fn name(&self) -> Cow<'static, str> {
-
-		fn pretty_print(v: usize) -> String {
-			let mut print = String::new();
-			for (idx, val) in v.to_string().chars().rev().enumerate() {
-				if idx != 0 && idx % 3 == 0 {
-					print.insert(0, ',');
-				}
-				print.insert(0, val);
-			}
-			print
-		}
-
 		format!(
-			"Trie benchmark({} database ({} keys))",
+			"Trie read benchmark({} database ({} keys), db_type: {})",
 			self.database_size,
 			pretty_print(self.database_size.keys()),
+			self.database_type,
 		).into()
 	}
 }
@@ -167,11 +173,11 @@ impl sp_state_machine::Storage<sp_core::Blake2Hasher> for Storage {
 	}
 }
 
-impl core::Benchmark for TrieBenchmark {
+impl core::Benchmark for TrieReadBenchmark {
 	fn run(&mut self, mode: Mode) -> std::time::Duration {
 		let mut db = self.database.clone();
 		let storage: Arc<dyn sp_state_machine::Storage<sp_core::Blake2Hasher>> =
-		Arc::new(Storage(db.open()));
+			Arc::new(Storage(db.open(self.database_type)));
 
 		let trie_backend = sp_state_machine::TrieBackend::new(
 			storage,
@@ -204,6 +210,142 @@ impl core::Benchmark for TrieBenchmark {
 	}
 }
 
+pub struct TrieWriteBenchmarkDescription {
+	pub database_size: DatabaseSize,
+	pub database_type: DatabaseType,
+}
+
+
+impl core::BenchmarkDescription for TrieWriteBenchmarkDescription {
+	fn path(&self) -> Path {
+		let mut path = Path::new(&["trie", "write"]);
+		path.push(&format!("{}", self.database_size));
+		path
+	}
+
+	fn setup(self: Box<Self>) -> Box<dyn core::Benchmark> {
+		let mut database = TempDatabase::new();
+
+		let mut rng = rand::thread_rng();
+		let warmup_prefix = KUSAMA_STATE_DISTRIBUTION.key(&mut rng);
+
+		let mut key_values = KeyValues::new();
+		let mut warmup_keys = KeyValues::new();
+		let every_x_key = self.database_size.keys() / SAMPLE_SIZE;
+		for idx in 0..self.database_size.keys() {
+			let kv = (
+				KUSAMA_STATE_DISTRIBUTION.key(&mut rng).to_vec(),
+				KUSAMA_STATE_DISTRIBUTION.value(&mut rng),
+			);
+			if idx % every_x_key == 0 {
+				// warmup keys go to separate tree with high prob
+				let mut actual_warmup_key = warmup_prefix.clone();
+				actual_warmup_key[16..].copy_from_slice(&kv.0[16..]);
+				warmup_keys.push((actual_warmup_key.clone(), kv.1.clone()));
+				key_values.push((actual_warmup_key.clone(), kv.1.clone()));
+			}
+
+			key_values.push(kv)
+		}
+
+		assert_eq!(warmup_keys.len(), SAMPLE_SIZE);
+
+		let root = generate_trie(
+			database.open(self.database_type),
+			key_values,
+		);
+
+		Box::new(TrieWriteBenchmark {
+			database,
+			root,
+			warmup_keys,
+			database_type: self.database_type,
+		})
+	}
+
+	fn name(&self) -> Cow<'static, str> {
+		format!(
+			"Trie write benchmark({} database ({} keys), db_type = {})",
+			self.database_size,
+			pretty_print(self.database_size.keys()),
+			self.database_type,
+		).into()
+	}
+}
+
+struct TrieWriteBenchmark {
+	database: TempDatabase,
+	root: Hash,
+	warmup_keys: KeyValues,
+	database_type: DatabaseType,
+}
+
+impl core::Benchmark for TrieWriteBenchmark {
+	fn run(&mut self, mode: Mode) -> std::time::Duration {
+		let mut rng = rand::thread_rng();
+		let mut db = self.database.clone();
+		let kvdb = db.open(self.database_type);
+
+		let mut new_root = self.root.clone();
+
+		let mut overlay = HashMap::new();
+		let mut trie = SimpleTrie {
+			db: kvdb.clone(),
+			overlay: &mut overlay,
+		};
+		let mut trie_db_mut = TrieDBMut::from_existing(&mut trie, &mut new_root)
+			.expect("Failed to create TrieDBMut");
+
+		for (warmup_key, warmup_value) in self.warmup_keys.iter() {
+			let value = trie_db_mut.get(&warmup_key[..])
+				.expect("Failed to get key: db error")
+				.expect("Warmup key should exist");
+
+			// sanity for warmup keys
+			assert_eq!(&value, warmup_value);
+		}
+
+		let test_key = random_vec(&mut rng, 32);
+		let test_val = random_vec(&mut rng, TEST_WRITE_SIZE);
+
+		if mode == Mode::Profile {
+			std::thread::park_timeout(std::time::Duration::from_secs(3));
+		}
+
+		let started = std::time::Instant::now();
+
+		trie_db_mut.insert(&test_key, &test_val).expect("Should be inserted ok");
+		trie_db_mut.commit();
+		drop(trie_db_mut);
+
+		let mut transaction = kvdb.transaction();
+		for (key, value) in overlay.into_iter() {
+			match value {
+				Some(value) => transaction.put(0, &key[..], &value[..]),
+				None => transaction.delete(0, &key[..]),
+			}
+		}
+		kvdb.write(transaction).expect("Failed to write transaction");
+
+		let elapsed = started.elapsed();
+
+		// sanity check
+		assert!(new_root != self.root);
+
+		if mode == Mode::Profile {
+			std::thread::park_timeout(std::time::Duration::from_secs(1));
+		}
+
+		elapsed
+	}
+}
+
+fn random_vec<R: Rng>(rng: &mut R, len: usize) -> Vec<u8> {
+	let mut val = vec![0u8; len];
+	rng.fill_bytes(&mut val[..]);
+	val
+}
+
 struct SizePool {
 	distribution: std::collections::BTreeMap<u32, u32>,
 	total: u32,
@@ -224,15 +366,10 @@ impl SizePool {
 		let sr = (rng.next_u64() % self.total as u64) as u32;
 		let mut range = self.distribution.range((std::ops::Bound::Included(sr), std::ops::Bound::Unbounded));
 		let size = *range.next().unwrap().1 as usize;
-		let mut v = Vec::new();
-		v.resize(size, 0);
-		rng.fill_bytes(&mut v);
-		v
+		random_vec(rng, size)
 	}
 
 	fn key<R: Rng>(&self, rng: &mut R) -> Vec<u8> {
-		let mut key = [0u8; 32];
-		rng.fill_bytes(&mut key[..]);
-		key.to_vec()
+		random_vec(rng, 32)
 	}
 }

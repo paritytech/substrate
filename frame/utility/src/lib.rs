@@ -68,7 +68,7 @@ use sp_io::hashing::blake2_256;
 use frame_support::{decl_module, decl_event, decl_error, decl_storage, Parameter, ensure, RuntimeDebug};
 use frame_support::{traits::{Get, ReservableCurrency, Currency},
 	weights::{Weight, GetDispatchInfo, DispatchClass, FunctionOf, Pays},
-	dispatch::PostDispatchInfo,
+	dispatch::{DispatchResultWithPostInfo, DispatchErrorWithPostInfo, PostDispatchInfo},
 };
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::{DispatchError, DispatchResult, traits::Dispatchable};
@@ -201,6 +201,25 @@ impl TypeId for IndexedUtilityModuleId {
 	const TYPE_ID: [u8; 4] = *b"suba";
 }
 
+mod weight_of {
+	use super::*;
+
+	/// - Base Weight:
+	///     - Create: 59.2 + 0.096 * S µs
+	///     - Approve: 42.27 + .116 * S µs
+	///     - Complete: 50.91 + .232 * S µs
+	/// - DB Weight:
+	///     - Reads: Multisig Storage, [Caller Account]
+	///     - Writes: Multisig Storage, [Caller Account]
+	/// - Plus Call Weight
+	pub fn as_multi<T: Trait>(other_sig_len: usize, call_weight: Weight) -> Weight {
+		call_weight
+			.saturating_add(60_000_000)
+			.saturating_add((other_sig_len as Weight).saturating_mul(250_000))
+			.saturating_add(T::DbWeight::get().reads_writes(1, 1))
+	}
+}
+
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
@@ -217,8 +236,9 @@ decl_module! {
 		/// - `calls`: The calls to be dispatched from the same origin.
 		///
 		/// # <weight>
-		/// - The sum of the weights of the `calls`.
-		/// - One event.
+		/// - Base weight: 15.64 + .987 * c µs
+		/// - Plus the sum of the weights of the `calls`.
+		/// - Plus one additional event. (repeat read/write)
 		/// # </weight>
 		///
 		/// This will return `Ok` in all circumstances. To determine the success of the batch, an
@@ -230,7 +250,7 @@ decl_module! {
 			|args: (&Vec<<T as Trait>::Call>,)| {
 				args.0.iter()
 					.map(|call| call.get_dispatch_info().weight)
-					.fold(10_000, |a, n| a + n)
+					.fold(15_000_000, |a: Weight, n| a.saturating_add(n).saturating_add(1_000_000))
 			},
 			|args: (&Vec<<T as Trait>::Call>,)| {
 				let all_operational = args.0.iter()
@@ -260,10 +280,13 @@ decl_module! {
 		/// The dispatch origin for this call must be _Signed_.
 		///
 		/// # <weight>
-		/// - The weight of the `call` + 10,000.
+		/// - Base weight: 2.863 µs
+		/// - Plus the weight of the `call`
 		/// # </weight>
 		#[weight = FunctionOf(
-			|args: (&u16, &Box<<T as Trait>::Call>)| args.1.get_dispatch_info().weight + 10_000,
+			|args: (&u16, &Box<<T as Trait>::Call>)| {
+				args.1.get_dispatch_info().weight.saturating_add(3_000_000)
+			},
 			|args: (&u16, &Box<<T as Trait>::Call>)| args.1.get_dispatch_info().class,
 			Pays::Yes,
 		)]
@@ -314,10 +337,19 @@ decl_module! {
 		/// - Storage: inserts one item, value size bounded by `MaxSignatories`, with a
 		///   deposit taken for its lifetime of
 		///   `MultisigDepositBase + threshold * MultisigDepositFactor`.
+		/// -------------------------------
+		/// - Base Weight:
+		///     - Create: 59.2 + 0.096 * S µs
+		///     - Approve: 42.27 + .116 * S µs
+		///     - Complete: 50.91 + .232 * S µs
+		/// - DB Weight:
+		///     - Reads: Multisig Storage, [Caller Account]
+		///     - Writes: Multisig Storage, [Caller Account]
+		/// - Plus Call Weight
 		/// # </weight>
 		#[weight = FunctionOf(
 			|args: (&u16, &Vec<T::AccountId>, &Option<Timepoint<T::BlockNumber>>, &Box<<T as Trait>::Call>)| {
-				args.3.get_dispatch_info().weight + 10_000 * (args.1.len() as Weight + 1)
+				weight_of::as_multi::<T>(args.1.len(),args.3.get_dispatch_info().weight)
 			},
 			|args: (&u16, &Vec<T::AccountId>, &Option<Timepoint<T::BlockNumber>>, &Box<<T as Trait>::Call>)| {
 				args.3.get_dispatch_info().class
@@ -329,12 +361,13 @@ decl_module! {
 			other_signatories: Vec<T::AccountId>,
 			maybe_timepoint: Option<Timepoint<T::BlockNumber>>,
 			call: Box<<T as Trait>::Call>,
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			ensure!(threshold >= 1, Error::<T>::ZeroThreshold);
 			let max_sigs = T::MaxSignatories::get() as usize;
 			ensure!(!other_signatories.is_empty(), Error::<T>::TooFewSignatories);
-			ensure!(other_signatories.len() < max_sigs, Error::<T>::TooManySignatories);
+			let other_signatories_len = other_signatories.len();
+			ensure!(other_signatories_len < max_sigs, Error::<T>::TooManySignatories);
 			let signatories = Self::ensure_sorted_and_insert(other_signatories, who.clone())?;
 
 			let id = Self::multi_account_id(&signatories, threshold);
@@ -349,7 +382,8 @@ decl_module! {
 						m.approvals.insert(pos, who.clone());
 						<Multisigs<T>>::insert(&id, call_hash, m);
 						Self::deposit_event(RawEvent::MultisigApproval(who, timepoint, id, call_hash));
-						return Ok(())
+						// Call is not made, so the actual weight does not include call
+						return Ok(Some(weight_of::as_multi::<T>(other_signatories_len, 0)).into())
 					}
 				} else {
 					if (m.approvals.len() as u16) < threshold {
@@ -363,6 +397,7 @@ decl_module! {
 				Self::deposit_event(RawEvent::MultisigExecuted(
 					who, timepoint, id, call_hash, result.map(|_| ()).map_err(|e| e.error)
 				));
+				return Ok(None.into())
 			} else {
 				ensure!(maybe_timepoint.is_none(), Error::<T>::UnexpectedTimepoint);
 				if threshold > 1 {
@@ -376,12 +411,31 @@ decl_module! {
 						approvals: vec![who.clone()],
 					});
 					Self::deposit_event(RawEvent::NewMultisig(who, id, call_hash));
+					// Call is not made, so we can return that weight
+					return Ok(Some(weight_of::as_multi::<T>(other_signatories_len, 0)).into())
 				} else {
-					return call.dispatch(frame_system::RawOrigin::Signed(id).into())
-						.map(|_| ()).map_err(|e| e.error)
+					let result = call.dispatch(frame_system::RawOrigin::Signed(id).into());
+					match result {
+						Ok(post_dispatch_info) => {
+							match post_dispatch_info.actual_weight {
+								Some(actual_weight) => return Ok(Some(weight_of::as_multi::<T>(other_signatories_len, actual_weight)).into()),
+								None => return Ok(None.into()),
+							}
+						},
+						Err(err) => {
+							match err.post_info.actual_weight {
+								Some(actual_weight) => {
+									let weight_used = weight_of::as_multi::<T>(other_signatories_len, actual_weight);
+									return Err(DispatchErrorWithPostInfo { post_info: Some(weight_used).into(), error: err.error.into() })
+								},
+								None => {
+									return Err(err)
+								}
+							}
+						}
+					}
 				}
 			}
-			Ok(())
 		}
 
 		/// Register approval for a dispatch to be made from a deterministic composite account if
@@ -415,10 +469,19 @@ decl_module! {
 		/// - Storage: inserts one item, value size bounded by `MaxSignatories`, with a
 		///   deposit taken for its lifetime of
 		///   `MultisigDepositBase + threshold * MultisigDepositFactor`.
+		/// ----------------------------------
+		/// - Base Weight:
+		///     - Create: 56.3 + 0.107 * S
+		///     - Approve: 39.25 + 0.121 * S
+		/// - DB Weight:
+		///     - Read: Multisig Storage, [Caller Account]
+		///     - Write: Multisig Storage, [Caller Account]
 		/// # </weight>
 		#[weight = FunctionOf(
 			|args: (&u16, &Vec<T::AccountId>, &Option<Timepoint<T::BlockNumber>>, &[u8; 32])| {
-				10_000 * (args.1.len() as Weight + 1)
+				T::DbWeight::get().reads_writes(1, 1)
+					.saturating_add(60_000_000)
+					.saturating_add((args.1.len() as Weight).saturating_mul(120_000))
 			},
 			DispatchClass::Normal,
 			Pays::Yes,
@@ -490,10 +553,17 @@ decl_module! {
 		/// - One event.
 		/// - I/O: 1 read `O(S)`, one remove.
 		/// - Storage: removes one item.
+		/// ----------------------------------
+		/// - Base Weight: 46.71 + 0.09 * S
+		/// - DB Weight:
+		///     - Read: Multisig Storage, [Caller Account]
+		///     - Write: Multisig Storage, [Caller Account]
 		/// # </weight>
 		#[weight = FunctionOf(
 			|args: (&u16, &Vec<T::AccountId>, &Timepoint<T::BlockNumber>, &[u8; 32])| {
-				10_000 * (args.1.len() as Weight + 1)
+				T::DbWeight::get().reads_writes(1, 1)
+					.saturating_add(50_000_000)
+					.saturating_add((args.1.len() as Weight).saturating_mul(100_000))
 			},
 			DispatchClass::Normal,
 			Pays::Yes,

@@ -57,7 +57,7 @@ use frame_support::traits::{
 	Currency, LockableCurrency, VestingSchedule, WithdrawReason, LockIdentifier,
 	ExistenceRequirement, Get
 };
-use frame_support::weights::MINIMUM_WEIGHT;
+
 use frame_system::{self as system, ensure_signed};
 
 mod benchmarking;
@@ -190,11 +190,15 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - `O(1)`.
-		/// - One balance-lock operation.
-		/// - One storage read (codec `O(1)`) and up to one removal.
-		/// - One event.
+		/// - DbWeight: 2 Reads, 2 Writes
+		///     - Reads: Vesting Storage, Balances Locks, [Sender Account]
+		///     - Writes: Vesting Storage, Balances Locks, [Sender Account]
+		/// - Benchmark:
+		///     - Unlocked: 56.1 + .098 * l µs (min square analysis)
+		///     - Locked: 54.37 + .254 * l µs (min square analysis)
+		/// - Using 60 µs fixed. Assuming less than 50 locks on any user, else we may want factor in number of locks.
 		/// # </weight>
-		#[weight = MINIMUM_WEIGHT]
+		#[weight = 60_000_000 + T::DbWeight::get().reads_writes(2, 2)]
 		fn vest(origin) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::update_lock(who)
@@ -211,12 +215,15 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - `O(1)`.
-		/// - Up to one account lookup.
-		/// - One balance-lock operation.
-		/// - One storage read (codec `O(1)`) and up to one removal.
-		/// - One event.
+		/// - DbWeight: 3 Reads, 3 Writes
+		///     - Reads: Vesting Storage, Balances Locks, Target Account
+		///     - Writes: Vesting Storage, Balances Locks, Target Account
+		/// - Benchmark:
+		///     - Unlocked: 58.09 + .104 * l µs (min square analysis)
+		///     - Locked: 55.35 + .255 * l µs (min square analysis)
+		/// - Using 60 µs fixed. Assuming less than 50 locks on any user, else we may want factor in number of locks.
 		/// # </weight>
-		#[weight = MINIMUM_WEIGHT]
+		#[weight = 60_000_000 + T::DbWeight::get().reads_writes(3, 3)]
 		fn vest_other(origin, target: <T::Lookup as StaticLookup>::Source) -> DispatchResult {
 			ensure_signed(origin)?;
 			Self::update_lock(T::Lookup::lookup(target)?)
@@ -233,10 +240,14 @@ decl_module! {
 		/// Emits `VestingCreated`.
 		///
 		/// # <weight>
-		/// - Creates a new storage entry, but is protected by a minimum transfer
-		///	   amount needed to succeed.
+		/// - `O(1)`.
+		/// - DbWeight: 3 Reads, 3 Writes
+		///     - Reads: Vesting Storage, Balances Locks, Target Account, [Sender Account]
+		///     - Writes: Vesting Storage, Balances Locks, Target Account, [Sender Account]
+		/// - Benchmark: 111.4 + .345 * l µs (min square analysis)
+		/// - Using 115 µs fixed. Assuming less than 50 locks on any user, else we may want factor in number of locks.
 		/// # </weight>
-		#[weight = 1_000_000_000]
+		#[weight = 115_000_000 + T::DbWeight::get().reads_writes(3, 3)]
 		pub fn vested_transfer(
 			origin,
 			target: <T::Lookup as StaticLookup>::Source,
@@ -382,6 +393,8 @@ mod tests {
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type DbWeight = ();
+		type BlockExecutionWeight = ();
+		type ExtrinsicBaseWeight = ();
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();

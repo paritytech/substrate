@@ -54,6 +54,7 @@ use sc_telemetry::{telemetry, CONSENSUS_INFO};
 use sp_finality_grandpa::{AuthorityId, AuthorityList, VersionedAuthorityList, GRANDPA_AUTHORITIES_KEY};
 
 use crate::justification::GrandpaJustification;
+use crate::VoterSet;
 
 /// Maximum number of fragments that we want to return in a single prove_finality call.
 const MAX_FRAGMENTS_IN_PROOF: usize = 8;
@@ -341,7 +342,7 @@ pub(crate) fn prove_finality<Block: BlockT, B: BlockchainBackend<Block>, J>(
 			let proof_fragment = FinalityProofFragment {
 				block: current,
 				justification,
-				unknown_headers: ::std::mem::replace(&mut unknown_headers, Vec::new()),
+				unknown_headers: ::std::mem::take(&mut unknown_headers),
 				authorities_proof: new_authorities_proof,
 			};
 
@@ -588,7 +589,11 @@ impl<Block: BlockT> ProvableJustification<Block::Header> for GrandpaJustificatio
 		NumberFor<Block>: BlockNumberOps,
 {
 	fn verify(&self, set_id: u64, authorities: &[(AuthorityId, u64)]) -> ClientResult<()> {
-		GrandpaJustification::verify(self, set_id, &authorities.iter().cloned().collect())
+		let authorities = VoterSet::new(authorities.iter().cloned()).ok_or(
+			ClientError::Consensus(sp_consensus::Error::InvalidAuthoritiesSet),
+		)?;
+
+		GrandpaJustification::verify(self, set_id, &authorities)
 	}
 }
 
@@ -596,7 +601,7 @@ impl<Block: BlockT> ProvableJustification<Block::Header> for GrandpaJustificatio
 pub(crate) mod tests {
 	use substrate_test_runtime_client::runtime::{Block, Header, H256};
 	use sc_client_api::NewBlockState;
-	use substrate_test_runtime_client::sc_client::in_mem::Blockchain as InMemoryBlockchain;
+	use sc_client_api::in_mem::Blockchain as InMemoryBlockchain;
 	use super::*;
 	use sp_core::crypto::Public;
 

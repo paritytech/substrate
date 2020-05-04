@@ -41,6 +41,7 @@ pub trait Storage<H: Hasher>: Send + Sync {
 pub struct TrieBackendEssence<S: TrieBackendStorage<H>, H: Hasher> {
 	storage: S,
 	root: H::Out,
+	empty: H::Out,
 	/// If defined, we store encoded visited roots for top_trie and child trie in this
 	/// map. It also act as a cache.
 	pub register_roots: Option<RwLock<ChildrenMap<Option<StorageValue>>>>,
@@ -56,6 +57,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		TrieBackendEssence {
 			storage,
 			root,
+			empty: H::hash(&[0u8]),
 			register_roots,
 		}
 	}
@@ -65,9 +67,19 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		&self.storage
 	}
 
+	/// Get backend storage reference.
+	pub fn backend_storage_mut(&mut self) -> &mut S {
+		&mut self.storage
+	}
+
 	/// Get trie root.
 	pub fn root(&self) -> &H::Out {
 		&self.root
+	}
+
+	/// Set trie root. This is useful for testing.
+	pub fn set_root(&mut self, root: H::Out) {
+		self.root = root;
 	}
 
 	/// Consumes self and returns underlying storage.
@@ -141,20 +153,13 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		child_info: Option<&ChildInfo>,
 		key: &[u8],
 	) -> Result<Option<StorageKey>, String> {
-		let mut read_overlay = S::Overlay::default();
-		let eph = Ephemeral {
-			storage: &self.storage,
-			overlay: &mut read_overlay,
-			child_info,
-			_ph: PhantomData,
-		};
 		let dyn_eph: &dyn hash_db::HashDBRef<_, _>;
 		let keyspace_eph;
 		if let Some(child_info) = child_info.as_ref() {
-			keyspace_eph = KeySpacedDB::new(&eph, child_info.keyspace());
+			keyspace_eph = KeySpacedDB::new(self, child_info.keyspace());
 			dyn_eph = &keyspace_eph;
 		} else {
-			dyn_eph = &eph;
+			dyn_eph = self;
 		}
 
 		let trie = TrieDB::<H>::new(dyn_eph, root)
@@ -188,17 +193,9 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 
 	/// Get the value of storage at given key.
 	pub fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>, String> {
-		let mut read_overlay = S::Overlay::default();
-		let eph = Ephemeral {
-			storage: &self.storage,
-			overlay: &mut read_overlay,
-			child_info: None,
-			_ph: PhantomData,
-		};
-
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
-		read_trie_value::<Layout<H>, _>(&eph, &self.root, key).map_err(map_e)
+		read_trie_value::<Layout<H>, _>(self, &self.root, key).map_err(map_e)
 	}
 
 	/// Get the value of child storage at given key.
@@ -210,17 +207,9 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		let root = self.child_root_encoded(child_info)?
 			.unwrap_or(empty_child_trie_root::<Layout<H>>().encode());
 
-		let mut read_overlay = S::Overlay::default();
-		let eph = Ephemeral {
-			storage: &self.storage,
-			overlay: &mut read_overlay,
-			child_info: Some(child_info),
-			_ph: PhantomData,
-		};
-
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
-		read_child_trie_value::<Layout<H>, _>(child_info.keyspace(), &eph, &root, key)
+		read_child_trie_value::<Layout<H>, _>(child_info.keyspace(), self, &root, key)
 			.map_err(map_e)
 	}
 
@@ -238,17 +227,9 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 			}
 		};
 
-		let mut read_overlay = S::Overlay::default();
-		let eph = Ephemeral {
-			storage: &self.storage,
-			overlay: &mut read_overlay,
-			child_info: Some(child_info),
-			_ph: PhantomData,
-		};
-
-		if let Err(e) = for_keys_in_child_trie::<Layout<H>, _, Ephemeral<S, H>>(
+		if let Err(e) = for_keys_in_child_trie::<Layout<H>, _, _>(
 			child_info.keyspace(),
-			&eph,
+			self,
 			&root,
 			f,
 		) {
@@ -287,14 +268,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		mut f: F,
 		child_info: Option<&ChildInfo>,
 	) {
-		let mut read_overlay = S::Overlay::default();
-		let eph = Ephemeral {
-			storage: &self.storage,
-			overlay: &mut read_overlay,
-			child_info,
-			_ph: PhantomData,
-		};
-
 		let mut iter = move |db| -> Result<(), Box<TrieError<H::Out>>> {
 			let trie = TrieDB::<H>::new(db, root)?;
 
@@ -310,10 +283,10 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 		};
 
 		let result = if let Some(child_info) = child_info {
-			let db = KeySpacedDB::new(&eph, child_info.keyspace());
+			let db = KeySpacedDB::new(self, child_info.keyspace());
 			iter(&db)
 		} else {
-			iter(&eph)
+			iter(self)
 		};
 		if let Err(e) = result {
 			debug!(target: "trie", "Error while iterating by prefix: {}", e);
@@ -331,15 +304,6 @@ pub(crate) struct Ephemeral<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
 	overlay: &'a mut S::Overlay,
 	child_info: Option<&'a ChildInfo>,
 	_ph: PhantomData<H>,
-}
-
-impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> hash_db::AsPlainDB<H::Out, DBValue>
-	for Ephemeral<'a, S, H>
-{
-	fn as_plain_db<'b>(&'b self) -> &'b (dyn hash_db::PlainDB<H::Out, DBValue> + 'b) { self }
-	fn as_plain_db_mut<'b>(&'b mut self) -> &'b mut (dyn hash_db::PlainDB<H::Out, DBValue> + 'b) {
-		self
-	}
 }
 
 impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> hash_db::AsHashDB<H, DBValue>
@@ -362,50 +326,6 @@ impl<'a, S: TrieBackendStorage<H>, H: Hasher> Ephemeral<'a, S, H> {
 			_ph: PhantomData,
 		}
 	}
-}
-
-impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> hash_db::PlainDB<H::Out, DBValue>
-	for Ephemeral<'a, S, H>
-{
-	fn get(&self, key: &H::Out) -> Option<DBValue> {
-		if let Some(val) = hash_db::HashDB::get(self.overlay, key, EMPTY_PREFIX) {
-			Some(val)
-		} else {
-			let top;
-			let child_info = if let Some(child_info) = self.child_info {
-				child_info
-			} else {
-				top = ChildInfo::top_trie();
-				&top
-			};
-			match self.storage.get(child_info, &key, EMPTY_PREFIX) {
-				Ok(x) => x,
-				Err(e) => {
-					warn!(target: "trie", "Failed to read from DB: {}", e);
-					None
-				},
-			}
-		}
-	}
-
-	fn contains(&self, key: &H::Out) -> bool {
-		hash_db::HashDB::get(self, key, EMPTY_PREFIX).is_some()
-	}
-
-	fn emplace(&mut self, key: H::Out, value: DBValue) {
-		hash_db::HashDB::emplace(self.overlay, key, EMPTY_PREFIX, value)
-	}
-
-	fn remove(&mut self, key: &H::Out) {
-		hash_db::HashDB::remove(self.overlay, key, EMPTY_PREFIX)
-	}
-}
-
-impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> hash_db::PlainDBRef<H::Out, DBValue>
-	for Ephemeral<'a, S, H>
-{
-	fn get(&self, key: &H::Out) -> Option<DBValue> { hash_db::PlainDB::get(self, key) }
-	fn contains(&self, key: &H::Out) -> bool { hash_db::PlainDB::contains(self, key) }
 }
 
 impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> hash_db::HashDB<H, DBValue>
@@ -511,6 +431,57 @@ impl<H: Hasher> TrieBackendStorage<H> for ChildrenProofMap<MemoryDB<H>> {
 	}
 }
 
+impl<S: TrieBackendStorage<H>, H: Hasher> hash_db::AsHashDB<H, DBValue>
+	for TrieBackendEssence<S, H>
+{
+	fn as_hash_db<'b>(&'b self) -> &'b (dyn hash_db::HashDB<H, DBValue> + 'b) { self }
+	fn as_hash_db_mut<'b>(&'b mut self) -> &'b mut (dyn hash_db::HashDB<H, DBValue> + 'b) { self }
+}
+
+impl<S: TrieBackendStorage<H>, H: Hasher> hash_db::HashDB<H, DBValue>
+	for TrieBackendEssence<S, H>
+{
+	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
+		if *key == self.empty {
+			return Some([0u8].to_vec())
+		}
+		match self.storage.get(&key, prefix) {
+			Ok(x) => x,
+			Err(e) => {
+				warn!(target: "trie", "Failed to read from DB: {}", e);
+				None
+			},
+		}
+	}
+
+	fn contains(&self, key: &H::Out, prefix: Prefix) -> bool {
+		hash_db::HashDB::get(self, key, prefix).is_some()
+	}
+
+	fn insert(&mut self, _prefix: Prefix, _value: &[u8]) -> H::Out {
+		unimplemented!();
+	}
+
+	fn emplace(&mut self, _key: H::Out, _prefix: Prefix, _value: DBValue) {
+		unimplemented!();
+	}
+
+	fn remove(&mut self, _key: &H::Out, _prefix: Prefix) {
+		unimplemented!();
+	}
+}
+
+impl<S: TrieBackendStorage<H>, H: Hasher> hash_db::HashDBRef<H, DBValue>
+	for TrieBackendEssence<S, H>
+{
+	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
+		hash_db::HashDB::get(self, key, prefix)
+	}
+
+	fn contains(&self, key: &H::Out, prefix: Prefix) -> bool {
+		hash_db::HashDB::contains(self, key, prefix)
+	}
+}
 
 
 #[cfg(test)]

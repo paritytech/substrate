@@ -117,6 +117,11 @@ pub trait Storage {
 		Externalities::clear_prefix(*self, prefix)
 	}
 
+	/// Append to storage item (assumes it is in "Vec" format).
+	fn append(&mut self, key: &[u8], value: Vec<u8>) {
+		self.storage_append(key.to_vec(), value);
+	}
+
 	/// "Commit" all existing operations and compute the resulting storage root.
 	///
 	/// The hashing algorithm is defined by the `Block`.
@@ -329,7 +334,18 @@ pub trait Misc {
 
 		self.extension::<CallInWasmExt>()
 			.expect("No `CallInWasmExt` associated for the current context!")
-			.call_in_wasm(wasm, None, "Core_version", &[], &mut ext)
+			.call_in_wasm(
+				wasm,
+				None,
+				"Core_version",
+				&[],
+				&mut ext,
+				// If a runtime upgrade introduces new host functions that are not provided by
+				// the node, we should not fail at instantiation. Otherwise nodes that are
+				// updated could run this successfully and it could lead to a storage root
+				// mismatch when importing this block.
+				sp_core::traits::MissingHostFunctions::Allow,
+			)
 			.ok()
 	}
 }
@@ -602,6 +618,20 @@ pub trait Hashing {
 	}
 }
 
+/// Interface that provides functions to access the Offchain DB.
+#[runtime_interface]
+pub trait OffchainIndex {
+	/// Write a key value pair to the Offchain DB database in a buffered fashion.
+	fn set(&mut self, key: &[u8], value: &[u8]) {
+		self.set_offchain_storage(key, Some(value));
+	}
+
+	/// Remove a key and its associated value from the Offchain DB.
+	fn clear(&mut self, key: &[u8]) {
+		self.set_offchain_storage(key, None);
+	}
+}
+
 #[cfg(feature = "std")]
 sp_externalities::decl_extension! {
 	/// The keystore extension to register/retrieve from the externalities.
@@ -609,6 +639,8 @@ sp_externalities::decl_extension! {
 }
 
 /// Interface that provides functions to access the offchain functionality.
+///
+/// These functions are being made available to the runtime and are called by the runtime.
 #[runtime_interface]
 pub trait Offchain {
 	/// Returns if the local node is a potential validator.
@@ -984,6 +1016,7 @@ pub type SubstrateHostFunctions = (
 	logging::HostFunctions,
 	sandbox::HostFunctions,
 	crate::trie::HostFunctions,
+	offchain_index::HostFunctions,
 );
 
 #[cfg(test)]

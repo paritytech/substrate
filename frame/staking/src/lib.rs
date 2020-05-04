@@ -150,7 +150,6 @@
 //!
 //! ```
 //! use frame_support::{decl_module, dispatch};
-//! use frame_support::weights::MINIMUM_WEIGHT;
 //! use frame_system::{self as system, ensure_signed};
 //! use pallet_staking::{self as staking};
 //!
@@ -159,7 +158,7 @@
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 //!			/// Reward a validator.
-//! 		#[weight = MINIMUM_WEIGHT]
+//! 		#[weight = 0]
 //! 		pub fn reward_myself(origin) -> dispatch::DispatchResult {
 //! 			let reported = ensure_signed(origin)?;
 //! 			<staking::Module<T>>::reward_by_ids(vec![(reported, 10)]);
@@ -291,7 +290,7 @@ use sp_std::{
 use codec::{HasCompact, Encode, Decode};
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error, debug,
-	weights::{MINIMUM_WEIGHT, Weight, DispatchClass},
+	weights::{Weight, DispatchClass},
 	storage::IterableStorageMap,
 	dispatch::{IsSubType, DispatchResult},
 	traits::{
@@ -371,7 +370,7 @@ generate_compact_solution_type!(pub GenericCompactAssignments, 16);
 #[derive(Encode, Decode, RuntimeDebug)]
 pub struct ActiveEraInfo {
 	/// Index of era.
-	index: EraIndex,
+	pub index: EraIndex,
 	/// Moment of start expresed as millisecond from `$UNIX_EPOCH`.
 	///
 	/// Start can be none if start hasn't been set for the era yet,
@@ -803,6 +802,10 @@ pub trait Trait: frame_system::Trait + SendTransactionTypes<Call<Self>> {
 
 	/// The overarching call type.
 	type Call: Dispatchable + From<Call<Self>> + IsSubType<Module<Self>, Self> + Clone;
+
+	/// Maximum number of equalise iterations to run in the offchain submission. If set to 0,
+	/// equalize will not be executed at all.
+	type MaxIterations: Get<u32>;
 
 	/// The maximum number of nominator rewarded for each validator.
 	///
@@ -1243,14 +1246,6 @@ decl_module! {
 			}
 		}
 
-		fn on_runtime_upgrade() -> Weight {
-			// For Kusama the type hasn't actually changed as Moment was u64 and was the number of
-			// millisecond since unix epoch.
-			StorageVersion::put(Releases::V3_0_0);
-			Self::migrate_last_reward_to_claimed_rewards();
-			0
-		}
-
 		/// Take the origin account as a stash and lock up `value` of its balance. `controller` will
 		/// be the account that controls it.
 		///
@@ -1619,7 +1614,7 @@ decl_module! {
 		}
 
 		/// Force a current staker to become completely unstaked, immediately.
-		#[weight = MINIMUM_WEIGHT]
+		#[weight = 0]
 		fn force_unstake(origin, stash: T::AccountId) {
 			ensure_root(origin)?;
 
@@ -1799,7 +1794,7 @@ decl_module! {
 		/// This can be called from any origin.
 		///
 		/// - `stash`: The stash account to reap. Its balance must be zero.
-		#[weight = MINIMUM_WEIGHT]
+		#[weight = 0]
 		fn reap_stash(_origin, stash: T::AccountId) {
 			ensure!(T::Currency::total_balance(&stash).is_zero(), Error::<T>::FundedTarget);
 			Self::kill_stash(&stash)?;
@@ -1928,43 +1923,6 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
-	/// Migrate `last_reward` to `claimed_rewards`
-	pub fn migrate_last_reward_to_claimed_rewards() {
-		use frame_support::migration::{StorageIterator, put_storage_value};
-		// Migrate from `last_reward` to `claimed_rewards`.
-		// We will construct a vector from `current_era - history_depth` to `last_reward`
-		// for each validator and nominator.
-		//
-		// Old Staking Ledger
-		#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-		struct OldStakingLedger<AccountId, Balance: HasCompact> {
-			pub stash: AccountId,
-			#[codec(compact)]
-			pub total: Balance,
-			#[codec(compact)]
-			pub active: Balance,
-			pub unlocking: Vec<UnlockChunk<Balance>>,
-			pub last_reward: Option<EraIndex>,
-		}
-		// Current era and history depth
-		let current_era = Self::current_era().unwrap_or(0);
-		let history_depth = Self::history_depth();
-		let last_payout_era = current_era.saturating_sub(history_depth);
-		// Convert all ledgers to the new format.
-		for (hash, old_ledger) in StorageIterator::<OldStakingLedger<T::AccountId, BalanceOf<T>>>::new(b"Staking", b"Ledger").drain() {
-			let last_reward = old_ledger.last_reward.unwrap_or(0);
-			let new_ledger = StakingLedger {
-				stash: old_ledger.stash,
-				total: old_ledger.total,
-				active: old_ledger.active,
-				unlocking: old_ledger.unlocking,
-				claimed_rewards: (last_payout_era..=last_reward).collect(),
-			};
-			put_storage_value(b"Staking", b"Ledger", &hash, new_ledger);
-		}
-		MigrateEra::put(current_era);
-	}
-
 	/// The total balance that can be slashed from a stash account as of right now.
 	pub fn slashable_balance_of(stash: &T::AccountId) -> BalanceOf<T> {
 		Self::bonded(stash).and_then(Self::ledger).map(|l| l.active).unwrap_or_default()

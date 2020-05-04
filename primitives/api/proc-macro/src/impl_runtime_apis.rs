@@ -173,7 +173,7 @@ fn generate_wasm_interface(impls: &[ItemImpl]) -> Result<TokenStream> {
 				#( #attrs )*
 				#[cfg(not(feature = "std"))]
 				#[no_mangle]
-				pub fn #fn_name(input_data: *mut u8, input_len: usize) -> u64 {
+				pub unsafe fn #fn_name(input_data: *mut u8, input_len: usize) -> u64 {
 					let mut #input = if input_len == 0 {
 						&[0u8; 0]
 					} else {
@@ -207,6 +207,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 			commit_on_success: std::cell::RefCell<bool>,
 			initialized_block: std::cell::RefCell<Option<#crate_::BlockId<Block>>>,
 			changes: std::cell::RefCell<#crate_::OverlayedChanges>,
+			offchain_changes: std::cell::RefCell<#crate_::OffchainOverlayedChanges>,
 			storage_transaction_cache: std::cell::RefCell<
 				#crate_::StorageTransactionCache<Block, C::StateBackend>
 			>,
@@ -342,6 +343,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 					commit_on_success: true.into(),
 					initialized_block: None.into(),
 					changes: Default::default(),
+					offchain_changes: Default::default(),
 					recorder: None,
 					storage_transaction_cache: Default::default(),
 				}.into()
@@ -360,6 +362,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 					&C,
 					&Self,
 					&std::cell::RefCell<#crate_::OverlayedChanges>,
+					&std::cell::RefCell<#crate_::OffchainOverlayedChanges>,
 					&std::cell::RefCell<#crate_::StorageTransactionCache<Block, C::StateBackend>>,
 					&std::cell::RefCell<Option<#crate_::BlockId<Block>>>,
 					Option<&std::cell::RefCell<#crate_::RuntimeApiProofRecorder<Block>>>,
@@ -373,6 +376,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 					&self.call,
 					self,
 					&self.changes,
+					&self.offchain_changes,
 					&self.storage_transaction_cache,
 					&self.initialized_block,
 					self.recorder.as_ref(),
@@ -524,6 +528,7 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 							call_runtime_at,
 							core_api,
 							changes,
+							offchain_changes,
 							storage_transaction_cache,
 							initialized_block,
 							recorder
@@ -534,6 +539,7 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 								at,
 								params_encoded,
 								changes,
+								offchain_changes,
 								storage_transaction_cache,
 								initialized_block,
 								params.map(|p| {

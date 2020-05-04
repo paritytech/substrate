@@ -94,9 +94,9 @@ pub struct StorageData(
 #[cfg(feature = "std")]
 pub type StorageMap = BTreeMap<Vec<u8>, Vec<u8>>;
 
+/// Child trie storage data.
 #[cfg(feature = "std")]
 #[derive(Debug, PartialEq, Eq, Clone)]
-/// Child trie storage data.
 pub struct StorageChild {
 	/// Child data for storage.
 	pub data: StorageMap,
@@ -105,9 +105,9 @@ pub struct StorageChild {
 	pub child_info: ChildInfo,
 }
 
+/// Struct containing data needed for a storage.
 #[cfg(feature = "std")]
 #[derive(Default, Debug, Clone)]
-/// Struct containing data needed for a storage.
 pub struct Storage {
 	/// Top trie storage data.
 	pub top: StorageMap,
@@ -361,7 +361,7 @@ impl ChildType {
 	/// is one.
 	pub fn parent_prefix(&self) -> &'static [u8] {
 		match self {
-			&ChildType::ParentKeyId => DEFAULT_CHILD_TYPE_PARENT_PREFIX,
+			&ChildType::ParentKeyId => well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX,
 		}
 	}
 }

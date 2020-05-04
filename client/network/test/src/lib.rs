@@ -27,12 +27,16 @@ use libp2p::build_multiaddr;
 use log::trace;
 use sc_network::config::FinalityProofProvider;
 use sp_blockchain::{
-	Result as ClientResult, well_known_cache_keys::{self, Id as CacheKeyId}, Info as BlockchainInfo,
+	HeaderBackend, Result as ClientResult,
+	well_known_cache_keys::{self, Id as CacheKeyId},
+	Info as BlockchainInfo,
 };
-use sc_client_api::{BlockchainEvents, BlockImportNotification, FinalityNotifications, ImportNotifications, FinalityNotification, backend::{TransactionFor, AuxStore, Backend, Finalizer}, BlockBackend};
+use sc_client_api::{
+	BlockchainEvents, BlockImportNotification, FinalityNotifications, ImportNotifications, FinalityNotification,
+	backend::{TransactionFor, AuxStore, Backend, Finalizer}, BlockBackend,
+};
+use sc_consensus::LongestChain;
 use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
-use sc_client::LongestChain;
-use sc_client::blockchain::HeaderBackend;
 use sc_network::config::Role;
 use sp_consensus::block_validation::DefaultBlockAnnounceValidator;
 use sp_consensus::import_queue::{
@@ -52,7 +56,7 @@ use sp_runtime::generic::{BlockId, OpaqueDigestItemId};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use sp_runtime::Justification;
 use substrate_test_runtime_client::{self, AccountKeyring};
-
+use sc_service::client::Client;
 pub use sc_network::config::EmptyTransactionPool;
 pub use substrate_test_runtime_client::runtime::{Block, Extrinsic, Hash, Transfer};
 pub use substrate_test_runtime_client::{TestClient, TestClientBuilder, TestClientBuilderExt};
@@ -88,10 +92,18 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 	}
 }
 
-pub type PeersFullClient =
-	sc_client::Client<substrate_test_runtime_client::Backend, substrate_test_runtime_client::Executor, Block, substrate_test_runtime_client::runtime::RuntimeApi>;
-pub type PeersLightClient =
-	sc_client::Client<substrate_test_runtime_client::LightBackend, substrate_test_runtime_client::LightExecutor, Block, substrate_test_runtime_client::runtime::RuntimeApi>;
+pub type PeersFullClient = Client<
+	substrate_test_runtime_client::Backend,
+	substrate_test_runtime_client::Executor,
+	Block,
+	substrate_test_runtime_client::runtime::RuntimeApi
+>;
+pub type PeersLightClient = Client<
+	substrate_test_runtime_client::LightBackend,
+	substrate_test_runtime_client::LightExecutor,
+	Block,
+	substrate_test_runtime_client::runtime::RuntimeApi
+>;
 
 #[derive(Clone)]
 pub enum PeersClient {
@@ -594,11 +606,15 @@ pub trait TestNetFactory: Sized {
 		);
 		let verifier = VerifierAdapter::new(Arc::new(Mutex::new(Box::new(verifier) as Box<_>)));
 
+		let threads_pool = futures::executor::ThreadPool::new().unwrap();
+		let spawner = |future| threads_pool.spawn_ok(future);
+
 		let import_queue = Box::new(BasicQueue::new(
 			verifier.clone(),
 			Box::new(block_import.clone()),
 			justification_import,
 			finality_proof_import,
+			spawner,
 		));
 
 		let listen_addr = build_multiaddr![Memory(rand::random::<u64>())];
@@ -671,11 +687,15 @@ pub trait TestNetFactory: Sized {
 		);
 		let verifier = VerifierAdapter::new(Arc::new(Mutex::new(Box::new(verifier) as Box<_>)));
 
+		let threads_pool = futures::executor::ThreadPool::new().unwrap();
+		let spawner = |future| threads_pool.spawn_ok(future);
+
 		let import_queue = Box::new(BasicQueue::new(
 			verifier.clone(),
 			Box::new(block_import.clone()),
 			justification_import,
 			finality_proof_import,
+			spawner,
 		));
 
 		let listen_addr = build_multiaddr![Memory(rand::random::<u64>())];

@@ -41,12 +41,17 @@ pub enum Error {
 	ExtensionsAreNotSupported,
 	/// Extension `TypeId` is not registered.
 	ExtensionIsNotRegistered(TypeId),
+	/// Failed to update storage,
+	StorageUpdateFailed(&'static str),
 }
 
 /// The Substrate externalities.
 ///
 /// Provides access to the storage and to other registered extensions.
 pub trait Externalities: ExtensionStore {
+	/// Write a key value pair to the offchain storage database.
+	fn set_offchain_storage(&mut self, key: &[u8], value: Option<&[u8]>);
+
 	/// Read runtime storage.
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>>;
 
@@ -172,6 +177,15 @@ pub trait Externalities: ExtensionStore {
 		&mut self,
 		child_info: &ChildInfo,
 	) -> Vec<u8>;
+
+	/// Append storage item.
+	///
+	/// This assumes specific format of the storage item. Also there is no way to undo this operation.
+	fn storage_append(
+		&mut self,
+		key: Vec<u8>,
+		value: Vec<u8>,
+	);
 
 	/// Get the changes trie root of the current storage overlay at a block with given `parent`.
 	///

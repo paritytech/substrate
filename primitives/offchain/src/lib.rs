@@ -19,8 +19,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
 
-/// Local Storage Prefix used by the Offchain Worker API to
-pub const STORAGE_PREFIX: &[u8] = b"storage";
+/// Re-export of parent module scope storage prefix.
+pub use sp_core::offchain::STORAGE_PREFIX as STORAGE_PREFIX;
 
 sp_api::decl_runtime_apis! {
 	/// The offchain worker api.

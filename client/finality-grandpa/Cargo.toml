@@ -14,6 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 
 [dependencies]
+derive_more = "0.99.2"
 fork-tree = { version = "2.0.0-dev", path = "../../utils/fork-tree" }
 futures = "0.3.4"
 futures-timer = "3.0.1"
@@ -26,13 +27,13 @@ sp-arithmetic = { version = "2.0.0-dev", path = "../../primitives/arithmetic" }
 sp-runtime = { version = "2.0.0-dev", path = "../../primitives/runtime" }
 sp-utils = { version = "2.0.0-dev", path = "../../primitives/utils" }
 sp-consensus = { version = "0.8.0-dev", path = "../../primitives/consensus/common" }
+sc-consensus = { version = "0.8.0-dev", path = "../../client/consensus/common" }
 sp-core = { version = "2.0.0-dev", path = "../../primitives/core" }
 sp-api = { version = "2.0.0-dev", path = "../../primitives/api" }
 sc-telemetry = { version = "2.0.0-dev", path = "../telemetry" }
 sc-keystore = { version = "2.0.0-dev", path = "../keystore" }
 serde_json = "1.0.41"
 sc-client-api = { version = "2.0.0-dev", path = "../api" }
-sc-client = { version = "0.8.0-dev", path = "../" }
 sp-inherents = { version = "2.0.0-dev", path = "../../primitives/inherents" }
 sp-blockchain = { version = "2.0.0-dev", path = "../../primitives/blockchain" }
 sc-network = { version = "0.8.0-dev", path = "../network" }
@@ -41,11 +42,11 @@ sp-finality-tracker = { version = "2.0.0-dev", path = "../../primitives/finality
 sp-finality-grandpa = { version = "2.0.0-dev", path = "../../primitives/finality-grandpa" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.8.0-dev"}
 sc-block-builder = { version = "0.8.0-dev", path = "../block-builder" }
-finality-grandpa = { version = "0.11.2", features = ["derive-codec"] }
+finality-grandpa = { version = "0.12.0", features = ["derive-codec"] }
 pin-project = "0.4.6"
 
 [dev-dependencies]
-finality-grandpa = { version = "0.11.2", features = ["derive-codec", "test-helpers"] }
+finality-grandpa = { version = "0.12.0", features = ["derive-codec", "test-helpers"] }
 sc-network = { version = "0.8.0-dev", path = "../network" }
 sc-network-test = { version = "0.8.0-dev", path = "../network/test" }
 sp-keyring = { version = "2.0.0-dev", path = "../../primitives/keyring" }

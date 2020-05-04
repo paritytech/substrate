@@ -20,8 +20,11 @@
 pub mod backend;
 pub mod call_executor;
 pub mod client;
+pub mod cht;
 pub mod execution_extensions;
+pub mod in_mem;
 pub mod light;
+pub mod leaves;
 pub mod notifications;
 pub mod proof_provider;
 
@@ -36,6 +39,13 @@ pub use proof_provider::*;
 
 pub use sp_state_machine::{StorageProof,
 	StorageProofKind, ExecutionStrategy, CloneableSpawn};
+
+/// Usage Information Provider interface
+///
+pub trait UsageProvider<Block: sp_runtime::traits::Block> {
+	/// Get usage info about current client.
+	fn usage_info(&self) -> ClientInfo<Block>;
+}
 
 /// Utility methods for the client.
 pub mod utils {

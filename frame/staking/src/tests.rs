@@ -2674,6 +2674,7 @@ fn remove_multi_deferred() {
 
 mod offchain_phragmen {
 	use crate::*;
+	use codec::Encode;
 	use frame_support::{assert_noop, assert_ok};
 	use sp_runtime::transaction_validity::TransactionSource;
 	use mock::*;
@@ -2714,14 +2715,19 @@ mod offchain_phragmen {
 		bond_nominator(voter, 1000 + voter, 100, vec![21, 31, 41]);
 	}
 
-	fn offchainify(ext: &mut TestExternalities) -> Arc<RwLock<PoolState>> {
-		let (offchain, _state) = TestOffchainExt::new();
-		let (pool, state) = TestTransactionPoolExt::new();
+	/// convert an externalities to one that can handle offchain worker tests.
+	fn offchainify(ext: &mut TestExternalities, iterations: u32) -> Arc<RwLock<PoolState>> {
+		let (offchain, offchain_state) = TestOffchainExt::new();
+		let (pool, pool_state) = TestTransactionPoolExt::new();
+
+	    let mut seed = [0_u8; 32];
+	    seed[0..4].copy_from_slice(&iterations.to_le_bytes());
+	    offchain_state.write().seed = seed;
 
 		ext.register_extension(OffchainExt::new(offchain));
 		ext.register_extension(TransactionPoolExt::new(pool));
 
-		state
+		pool_state
 	}
 
 	#[test]
@@ -2901,8 +2907,8 @@ mod offchain_phragmen {
 
 	#[test]
 	fn signed_result_can_be_submitted() {
-		// should check that we have a new validator set normally,
-		// event says that it comes from offchain.
+		// should check that we have a new validator set normally, event says that it comes from
+		// offchain.
 		ExtBuilder::default()
 			.offchain_phragmen_ext()
 			.build()
@@ -2989,8 +2995,8 @@ mod offchain_phragmen {
 
 	#[test]
 	fn early_solution_submission_is_rejected() {
-		// should check that we have a new validator set normally,
-		// event says that it comes from offchain.
+		// should check that we have a new validator set normally, event says that it comes from
+		// offchain.
 		ExtBuilder::default()
 			.offchain_phragmen_ext()
 			.build()
@@ -3095,7 +3101,7 @@ mod offchain_phragmen {
 			.offchain_phragmen_ext()
 			.validator_count(2)
 			.build();
-		let state = offchainify(&mut ext);
+		let state = offchainify(&mut ext, 0);
 		ext.execute_with(|| {
 			run_to_block(12);
 
@@ -3119,9 +3125,53 @@ mod offchain_phragmen {
 					&inner,
 				),
 				TransactionValidity::Ok(ValidTransaction {
-					priority: (1 << 20) + 1125, // the proposed slot stake.
+					priority: UnsignedPriority::get() + 1125, // the proposed slot stake.
 					requires: vec![],
 					provides: vec![("StakingOffchain", current_era()).encode()],
+					longevity: 3,
+					propagate: false,
+				})
+			)
+		})
+	}
+
+	#[test]
+	fn offchain_worker_runs_with_equalise() {
+		// Offchain worker equalises based on the number provided by randomness. See the difference
+		// in the priority, which comes from the computed score.
+		let mut ext = ExtBuilder::default()
+			.offchain_phragmen_ext()
+			.validator_count(2)
+			.max_offchain_iterations(2)
+			.build();
+		let state = offchainify(&mut ext, 2);
+		ext.execute_with(|| {
+			run_to_block(12);
+
+			// local key 11 is in the elected set.
+			assert_eq_uvec!(Session::validators(), vec![11, 21]);
+			assert_eq!(state.read().transactions.len(), 0);
+			Staking::offchain_worker(12);
+			assert_eq!(state.read().transactions.len(), 1);
+
+			let encoded = state.read().transactions[0].clone();
+			let extrinsic: Extrinsic = Decode::decode(&mut &*encoded).unwrap();
+
+			let call = extrinsic.call;
+			let inner = match call {
+				mock::Call::Staking(inner) => inner,
+			};
+
+			assert_eq!(
+				<Staking as sp_runtime::traits::ValidateUnsigned>::validate_unsigned(
+					TransactionSource::Local,
+					&inner,
+				),
+				TransactionValidity::Ok(ValidTransaction {
+					// the proposed slot stake, with equalize.
+					priority: UnsignedPriority::get() + 1250,
+					requires: vec![],
+					provides: vec![("StakingOffchain", active_era()).encode()],
 					longevity: 3,
 					propagate: false,
 				})
@@ -3135,7 +3185,7 @@ mod offchain_phragmen {
 			.offchain_phragmen_ext()
 			.validator_count(4)
 			.build();
-		let state = offchainify(&mut ext);
+		let state = offchainify(&mut ext, 0);
 		ext.execute_with(|| {
 			run_to_block(12);
 			// put a good solution on-chain
@@ -3660,7 +3710,7 @@ mod offchain_phragmen {
 			.offchain_phragmen_ext()
 			.validator_count(4)
 			.build();
-		let state = offchainify(&mut ext);
+		let state = offchainify(&mut ext, 0);
 
 		ext.execute_with(|| {
 			use offchain_election::OFFCHAIN_HEAD_DB;
@@ -3684,7 +3734,7 @@ mod offchain_phragmen {
 			.offchain_phragmen_ext()
 			.validator_count(4)
 			.build();
-		let _ = offchainify(&mut ext);
+		let _ = offchainify(&mut ext, 0);
 
 		ext.execute_with(|| {
 			use offchain_election::OFFCHAIN_HEAD_DB;
@@ -4216,141 +4266,6 @@ fn bond_during_era_correctly_populates_claimed_rewards() {
 }
 
 /* These migration tests below can be removed once migration code is removed */
-
-#[test]
-fn assert_migration_is_noop() {
-	let kusama_active_era = "4a0200000190e2721171010000";
-	let era = ActiveEraInfo::decode(&mut &hex::decode(kusama_active_era).unwrap()[..]).unwrap();
-	assert_eq!(era.index, 586);
-	assert_eq!(era.start, Some(1585135674000));
-}
-
-#[test]
-fn test_last_reward_migration() {
-	use sp_storage::Storage;
-
-	let mut s = Storage::default();
-
-	#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-	struct OldStakingLedger<AccountId, Balance: HasCompact> {
-		pub stash: AccountId,
-		#[codec(compact)]
-		pub total: Balance,
-		#[codec(compact)]
-		pub active: Balance,
-		pub unlocking: Vec<UnlockChunk<Balance>>,
-		pub last_reward: Option<EraIndex>,
-	}
-
-	let old_staking10 = OldStakingLedger::<u64, u64> {
-		stash: 0,
-		total: 10,
-		active: 10,
-		unlocking: vec![UnlockChunk{ value: 1234, era: 56}],
-		last_reward: Some(8),
-	};
-
-	let old_staking11 = OldStakingLedger::<u64, u64> {
-		stash: 1,
-		total: 0,
-		active: 0,
-		unlocking: vec![],
-		last_reward: None,
-	};
-
-	let old_staking12 = OldStakingLedger::<u64, u64> {
-		stash: 2,
-		total: 100,
-		active: 100,
-		unlocking: vec![UnlockChunk{ value: 9876, era: 54}, UnlockChunk{ value: 98, era: 76}],
-		last_reward: Some(23),
-	};
-
-	let old_staking13 = OldStakingLedger::<u64, u64> {
-		stash: 3,
-		total: 100,
-		active: 100,
-		unlocking: vec![],
-		last_reward: Some(23),
-	};
-
-	let data = vec![
-		(
-			Ledger::<Test>::hashed_key_for(10),
-			old_staking10.encode().to_vec()
-		),
-		(
-			Ledger::<Test>::hashed_key_for(11),
-			old_staking11.encode().to_vec()
-		),
-		(
-			Ledger::<Test>::hashed_key_for(12),
-			old_staking12.encode().to_vec()
-		),
-		(
-			Ledger::<Test>::hashed_key_for(13),
-			old_staking13.encode().to_vec()
-		),
-	];
-
-	s.top = data.into_iter().collect();
-	sp_io::TestExternalities::new(s).execute_with(|| {
-		HistoryDepth::put(84);
-		CurrentEra::put(99);
-		let nominations = Nominations::<AccountId> {
-			targets: vec![],
-			submitted_in: 0,
-			suppressed: false
-		};
-		Nominators::<Test>::insert(3, nominations);
-		Bonded::<Test>::insert(3, 13);
-		Staking::migrate_last_reward_to_claimed_rewards();
-		// Test staker out of range
-		assert_eq!(
-			Ledger::<Test>::get(10),
-			Some(StakingLedger {
-				stash: 0,
-				total: 10,
-				active: 10,
-				unlocking: vec![UnlockChunk{ value: 1234, era: 56}],
-				claimed_rewards: vec![],
-			})
-		);
-		// Test staker none
-		assert_eq!(
-			Ledger::<Test>::get(11),
-			Some(StakingLedger {
-				stash: 1,
-				total: 0,
-				active: 0,
-				unlocking: vec![],
-				claimed_rewards: vec![],
-			})
-		);
-		// Test staker migration
-		assert_eq!(
-			Ledger::<Test>::get(12),
-			Some(StakingLedger {
-				stash: 2,
-				total: 100,
-				active: 100,
-				unlocking: vec![UnlockChunk{ value: 9876, era: 54}, UnlockChunk{ value: 98, era: 76}],
-				claimed_rewards: vec![15,16,17,18,19,20,21,22,23],
-			})
-		);
-		// Test nominator migration
-		assert_eq!(
-			Ledger::<Test>::get(13),
-			Some(StakingLedger {
-				stash: 3,
-				total: 100,
-				active: 100,
-				unlocking: vec![],
-				claimed_rewards: vec![15,16,17,18,19,20,21,22,23],
-			})
-		);
-	});
-}
 
 #[test]
 fn rewards_should_work_before_migration() {

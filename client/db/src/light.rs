@@ -20,11 +20,13 @@ use std::{sync::Arc, collections::HashMap};
 use std::convert::TryInto;
 use parking_lot::RwLock;
 
-use sc_client_api::{backend::{AuxStore, NewBlockState}, UsageInfo};
-use sc_client::blockchain::{
-	BlockStatus, Cache as BlockchainCache,Info as BlockchainInfo,
+use sc_client_api::{
+	cht, backend::{AuxStore, NewBlockState}, UsageInfo,
+	blockchain::{
+		BlockStatus, Cache as BlockchainCache, Info as BlockchainInfo,
+	},
+	Storage
 };
-use sc_client::cht;
 use sp_blockchain::{
 	CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache,
 	Error as ClientError, Result as ClientResult,
@@ -32,7 +34,6 @@ use sp_blockchain::{
 	well_known_cache_keys,
 };
 use sp_database::{Database, Transaction};
-use sc_client::light::blockchain::Storage as LightBlockchainStorage;
 use codec::{Decode, Encode};
 use sp_runtime::generic::{DigestItem, BlockId};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Zero, One, NumberFor, HashFor};
@@ -406,7 +407,7 @@ impl<Block> AuxStore for LightStorage<Block>
 	}
 }
 
-impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
+impl<Block> Storage<Block> for LightStorage<Block>
 	where Block: BlockT,
 {
 	fn import_header(
@@ -614,7 +615,7 @@ fn cht_key<N: TryInto<u32>>(cht_type: u8, block: N) -> ClientResult<[u8; 5]> {
 
 #[cfg(test)]
 pub(crate) mod tests {
-	use sc_client::cht;
+	use sc_client_api::cht;
 	use sp_core::ChangesTrieConfiguration;
 	use sp_runtime::generic::{DigestItem, ChangesTrieSignal};
 	use sp_runtime::testing::{H256 as Hash, Header, Block as RawBlock, ExtrinsicWrapper};

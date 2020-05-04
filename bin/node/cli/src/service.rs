@@ -21,7 +21,6 @@
 use std::sync::Arc;
 
 use sc_consensus_babe;
-use sc_client::{self, LongestChain};
 use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider, StorageAndProofProvider};
 use node_executor;
 use node_primitives::Block;
@@ -30,14 +29,7 @@ use sc_service::{
 	AbstractService, ServiceBuilder, config::Configuration, error::{Error as ServiceError},
 };
 use sp_inherents::InherentDataProviders;
-
-use sc_service::{Service, NetworkStatus};
-use sc_client::{Client, LocalCallExecutor};
-use sc_client_db::Backend;
-use sp_runtime::traits::Block as BlockT;
-use node_executor::NativeExecutor;
-use sc_network::NetworkService;
-use sc_offchain::OffchainWorkers;
+use sc_consensus::LongestChain;
 
 /// Starts a `ServiceBuilder` for a full service.
 ///
@@ -54,13 +46,13 @@ macro_rules! new_full_start {
 			node_primitives::Block, node_runtime::RuntimeApi, node_executor::Executor
 		>($config)?
 			.with_select_chain(|_config, backend| {
-				Ok(sc_client::LongestChain::new(backend.clone()))
+				Ok(sc_consensus::LongestChain::new(backend.clone()))
 			})?
 			.with_transaction_pool(|config, client, _fetcher, prometheus_registry| {
 				let pool_api = sc_transaction_pool::FullChainApi::new(client.clone());
 				Ok(sc_transaction_pool::BasicPool::new(config, std::sync::Arc::new(pool_api), prometheus_registry))
 			})?
-			.with_import_queue(|_config, client, mut select_chain, _transaction_pool| {
+			.with_import_queue(|_config, client, mut select_chain, _transaction_pool, spawn_task_handle| {
 				let select_chain = select_chain.take()
 					.ok_or_else(|| sc_service::Error::SelectChainRequired)?;
 				let (grandpa_block_import, grandpa_link) = grandpa::block_import(
@@ -76,6 +68,8 @@ macro_rules! new_full_start {
 					client.clone(),
 				)?;
 
+				let spawner = |future| spawn_task_handle.spawn_blocking("import-queue-worker", future);
+
 				let import_queue = sc_consensus_babe::import_queue(
 					babe_link.clone(),
 					block_import.clone(),
@@ -83,6 +77,7 @@ macro_rules! new_full_start {
 					None,
 					client,
 					inherent_data_providers.clone(),
+					spawner,
 				)?;
 
 				import_setup = Some((block_import, grandpa_link, babe_link));
@@ -266,38 +261,9 @@ macro_rules! new_full {
 	}}
 }
 
-type ConcreteBlock = node_primitives::Block;
-type ConcreteClient =
-	Client<
-		Backend<ConcreteBlock>,
-		LocalCallExecutor<Backend<ConcreteBlock>, NativeExecutor<node_executor::Executor>>,
-		ConcreteBlock,
-		node_runtime::RuntimeApi
-	>;
-type ConcreteBackend = Backend<ConcreteBlock>;
-type ConcreteTransactionPool = sc_transaction_pool::BasicPool<
-	sc_transaction_pool::FullChainApi<ConcreteClient, ConcreteBlock>,
-	ConcreteBlock
->;
-
 /// Builds a new service for a full client.
 pub fn new_full(config: Configuration)
--> Result<
-	Service<
-		ConcreteBlock,
-		ConcreteClient,
-		LongestChain<ConcreteBackend, ConcreteBlock>,
-		NetworkStatus<ConcreteBlock>,
-		NetworkService<ConcreteBlock, <ConcreteBlock as BlockT>::Hash>,
-		ConcreteTransactionPool,
-		OffchainWorkers<
-			ConcreteClient,
-			<ConcreteBackend as sc_client_api::backend::Backend<Block>>::OffchainStorage,
-			ConcreteBlock,
-		>
-	>,
-	ServiceError,
->
+-> Result<impl AbstractService, ServiceError>
 {
 	new_full!(config).map(|(service, _)| service)
 }
@@ -321,7 +287,7 @@ pub fn new_light(config: Configuration)
 			);
 			Ok(pool)
 		})?
-		.with_import_queue_and_fprb(|_config, client, backend, fetcher, _select_chain, _tx_pool| {
+		.with_import_queue_and_fprb(|_config, client, backend, fetcher, _select_chain, _tx_pool, spawn_task_handle| {
 			let fetch_checker = fetcher
 				.map(|fetcher| fetcher.checker().clone())
 				.ok_or_else(|| "Trying to start light import queue without active fetch checker")?;
@@ -342,6 +308,8 @@ pub fn new_light(config: Configuration)
 				client.clone(),
 			)?;
 
+			let spawner = |future| spawn_task_handle.spawn_blocking("import-queue-worker", future);
+
 			let import_queue = sc_consensus_babe::import_queue(
 				babe_link,
 				babe_block_import,
@@ -349,6 +317,7 @@ pub fn new_light(config: Configuration)
 				Some(Box::new(finality_proof_import)),
 				client.clone(),
 				inherent_data_providers.clone(),
+				spawner,
 			)?;
 
 			Ok((import_queue, finality_proof_request_builder))
@@ -416,7 +385,7 @@ mod tests {
 		use sp_core::ed25519::Pair;
 
 		use {service_test, Factory};
-		use sc_client::{BlockImportParams, BlockOrigin};
+		use sp_consensus::{BlockImportParams, BlockOrigin};
 
 		let alice: Arc<ed25519::Pair> = Arc::new(Keyring::Alice.into());
 		let bob: Arc<ed25519::Pair> = Arc::new(Keyring::Bob.into());
@@ -633,12 +602,11 @@ mod tests {
 					check_nonce,
 					check_weight,
 					payment,
-					Default::default(),
 				);
 				let raw_payload = SignedPayload::from_raw(
 					function,
 					extra,
-					(version, genesis_hash, genesis_hash, (), (), (), ())
+					(version, genesis_hash, genesis_hash, (), (), ())
 				);
 				let signature = raw_payload.using_encoded(|payload|	{
 					signer.sign(payload)
