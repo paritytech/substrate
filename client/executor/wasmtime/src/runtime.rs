@@ -158,7 +158,7 @@ fn perform_call(
 			Err(trap) => {
 				return Err(Error::from(format!(
 					"Wasm execution trapped: {}",
-					trap.message()
+					trap
 				)));
 			}
 		}
