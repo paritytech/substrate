@@ -205,16 +205,16 @@ mod weight_of {
 	use super::*;
 
 	/// - Base Weight:
-	///     - Create: 59.2 + 0.096 * S µs
-	///     - Approve: 42.27 + .116 * S µs
-	///     - Complete: 50.91 + .232 * S µs
+	///     - Create: 46.55 + 0.089 * S µs
+	///     - Approve: 34.03 + .112 * S µs
+	///     - Complete: 40.36 + .225 * S µs
 	/// - DB Weight:
 	///     - Reads: Multisig Storage, [Caller Account]
 	///     - Writes: Multisig Storage, [Caller Account]
 	/// - Plus Call Weight
 	pub fn as_multi<T: Trait>(other_sig_len: usize, call_weight: Weight) -> Weight {
 		call_weight
-			.saturating_add(60_000_000)
+			.saturating_add(45_000_000)
 			.saturating_add((other_sig_len as Weight).saturating_mul(250_000))
 			.saturating_add(T::DbWeight::get().reads_writes(1, 1))
 	}
@@ -236,7 +236,7 @@ decl_module! {
 		/// - `calls`: The calls to be dispatched from the same origin.
 		///
 		/// # <weight>
-		/// - Base weight: 15.64 + .987 * c µs
+		/// - Base weight: 14.39 + .987 * c µs
 		/// - Plus the sum of the weights of the `calls`.
 		/// - Plus one additional event. (repeat read/write)
 		/// # </weight>
@@ -280,7 +280,7 @@ decl_module! {
 		/// The dispatch origin for this call must be _Signed_.
 		///
 		/// # <weight>
-		/// - Base weight: 2.863 µs
+		/// - Base weight: 2.861 µs
 		/// - Plus the weight of the `call`
 		/// # </weight>
 		#[weight = FunctionOf(
@@ -339,9 +339,9 @@ decl_module! {
 		///   `MultisigDepositBase + threshold * MultisigDepositFactor`.
 		/// -------------------------------
 		/// - Base Weight:
-		///     - Create: 59.2 + 0.096 * S µs
-		///     - Approve: 42.27 + .116 * S µs
-		///     - Complete: 50.91 + .232 * S µs
+		///     - Create: 46.55 + 0.089 * S µs
+		///     - Approve: 34.03 + .112 * S µs
+		///     - Complete: 40.36 + .225 * S µs
 		/// - DB Weight:
 		///     - Reads: Multisig Storage, [Caller Account]
 		///     - Writes: Multisig Storage, [Caller Account]
@@ -471,8 +471,8 @@ decl_module! {
 		///   `MultisigDepositBase + threshold * MultisigDepositFactor`.
 		/// ----------------------------------
 		/// - Base Weight:
-		///     - Create: 56.3 + 0.107 * S
-		///     - Approve: 39.25 + 0.121 * S
+		///     - Create: 44.71 + 0.088 * S
+		///     - Approve: 31.48 + 0.116 * S
 		/// - DB Weight:
 		///     - Read: Multisig Storage, [Caller Account]
 		///     - Write: Multisig Storage, [Caller Account]
@@ -480,7 +480,7 @@ decl_module! {
 		#[weight = FunctionOf(
 			|args: (&u16, &Vec<T::AccountId>, &Option<Timepoint<T::BlockNumber>>, &[u8; 32])| {
 				T::DbWeight::get().reads_writes(1, 1)
-					.saturating_add(60_000_000)
+					.saturating_add(45_000_000)
 					.saturating_add((args.1.len() as Weight).saturating_mul(120_000))
 			},
 			DispatchClass::Normal,
@@ -554,7 +554,7 @@ decl_module! {
 		/// - I/O: 1 read `O(S)`, one remove.
 		/// - Storage: removes one item.
 		/// ----------------------------------
-		/// - Base Weight: 46.71 + 0.09 * S
+		/// - Base Weight: 37.6 + 0.084 * S
 		/// - DB Weight:
 		///     - Read: Multisig Storage, [Caller Account]
 		///     - Write: Multisig Storage, [Caller Account]
@@ -562,7 +562,7 @@ decl_module! {
 		#[weight = FunctionOf(
 			|args: (&u16, &Vec<T::AccountId>, &Timepoint<T::BlockNumber>, &[u8; 32])| {
 				T::DbWeight::get().reads_writes(1, 1)
-					.saturating_add(50_000_000)
+					.saturating_add(40_000_000)
 					.saturating_add((args.1.len() as Weight).saturating_mul(100_000))
 			},
 			DispatchClass::Normal,
