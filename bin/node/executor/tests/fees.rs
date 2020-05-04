@@ -18,14 +18,14 @@ use codec::{Encode, Joiner};
 use frame_support::{
 	StorageValue, StorageMap,
 	traits::Currency,
-	weights::GetDispatchInfo,
+	weights::{GetDispatchInfo, constants::ExtrinsicBaseWeight},
 };
 use sp_core::{NeverNativeValue, map, storage::Storage};
 use sp_runtime::{Fixed128, Perbill, traits::{Convert, BlakeTwo256}};
 use node_runtime::{
 	CheckedExtrinsic, Call, Runtime, Balances, TransactionPayment,
 	TransactionByteFee, WeightFeeCoefficient,
-	constants::currency::*, ExtrinsicBaseWeight,
+	constants::currency::*,
 };
 use node_runtime::impls::LinearWeightToFee;
 use node_primitives::Balance;

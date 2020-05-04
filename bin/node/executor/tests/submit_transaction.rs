@@ -230,7 +230,7 @@ fn submitted_transaction_should_be_valid() {
 		let res = Executive::validate_transaction(source, extrinsic);
 
 		assert_eq!(res.unwrap(), ValidTransaction {
-			priority: 1_410_740_000_000,
+			priority: 1_410_710_000_000,
 			requires: vec![],
 			provides: vec![(address, 0).encode()],
 			longevity: 128,
