@@ -428,7 +428,7 @@ where
 			&key,
 			|| backend.storage(&key).expect(EXT_NOT_ALLOWED_TO_FAIL).unwrap_or_default()
 		);
-		append_to_storage(current_value, value).expect(EXT_NOT_ALLOWED_TO_FAIL);
+		StorageAppend::new(current_value).append(value);
 	}
 
 	fn chain_id(&self) -> u64 {
@@ -549,16 +549,24 @@ where
 
 	fn wipe(&mut self) {
 		self.overlay.discard_prospective();
-		self.overlay.drain_storage_changes(&self.backend, None, Default::default(), self.storage_transaction_cache)
-			.expect(EXT_NOT_ALLOWED_TO_FAIL);
+		self.overlay.drain_storage_changes(
+			&self.backend,
+			None,
+			Default::default(),
+			self.storage_transaction_cache,
+		).expect(EXT_NOT_ALLOWED_TO_FAIL);
 		self.storage_transaction_cache.reset();
 		self.backend.wipe().expect(EXT_NOT_ALLOWED_TO_FAIL)
 	}
 
 	fn commit(&mut self) {
 		self.overlay.commit_prospective();
-		let changes = self.overlay.drain_storage_changes(&self.backend, None, Default::default(), self.storage_transaction_cache)
-			.expect(EXT_NOT_ALLOWED_TO_FAIL);
+		let changes = self.overlay.drain_storage_changes(
+			&self.backend,
+			None,
+			Default::default(),
+			self.storage_transaction_cache,
+		).expect(EXT_NOT_ALLOWED_TO_FAIL);
 		self.backend.commit(
 			changes.transaction_storage_root,
 			changes.transaction,
@@ -567,65 +575,43 @@ where
 	}
 }
 
-fn extract_length_data(data: &[u8]) -> Result<(u32, usize, usize), &'static str> {
-	use codec::CompactLen;
 
-	let len = u32::from(
-		Compact::<u32>::decode(&mut &data[..])
-			.map_err(|_| "Incorrect updated item encoding")?
-	);
-	let new_len = len
-		.checked_add(1)
-		.ok_or_else(|| "New vec length greater than `u32::max_value()`.")?;
+/// Implement `Encode` by forwarding the stored raw vec.
+struct EncodeOpaqueValue(Vec<u8>);
 
-	let encoded_len = Compact::<u32>::compact_len(&len);
-	let encoded_new_len = Compact::<u32>::compact_len(&new_len);
-
-	Ok((new_len, encoded_len, encoded_new_len))
+impl Encode for EncodeOpaqueValue {
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		f(&self.0)
+	}
 }
 
-pub fn append_to_storage(
-	self_encoded: &mut Vec<u8>,
-	value: Vec<u8>,
-) -> Result<(), &'static str> {
-	// No data present, just encode the given input data.
-	if self_encoded.is_empty() {
-		Compact::from(1u32).encode_to(self_encoded);
-		self_encoded.extend(value);
-		return Ok(());
+/// Auxialiary structure for appending a value to a storage item.
+pub(crate) struct StorageAppend<'a>(&'a mut Vec<u8>);
+
+impl<'a> StorageAppend {
+	/// Create a new instance using the given `storage` reference.
+	pub fn new(storage: &'a mut Vec<u8>) -> Self {
+		Self(storage)
 	}
 
-	let (new_len, encoded_len, encoded_new_len) = extract_length_data(&self_encoded)?;
+	/// Append the given `value` to the storage item.
+	///
+	/// If appending fails, `[value]` is stored in the storage item.
+	pub fn append(&mut self, value: Vec<u8>) {
+		let value = vec![EncodeOpaqueValue(value)];
 
-	let replace_len = |dest: &mut Vec<u8>| {
-		Compact(new_len).using_encoded(|e| {
-			dest[..encoded_new_len].copy_from_slice(e);
-		})
-	};
+		let item = mem::take(&mut self.0);
 
-	let append_new_elems = |dest: &mut Vec<u8>| dest.extend(&value[..]);
-
-	// If old and new encoded len is equal, we don't need to copy the
-	// already encoded data.
-	if encoded_len == encoded_new_len {
-		replace_len(self_encoded);
-		append_new_elems(self_encoded);
-
-		Ok(())
-	} else {
-		let size = encoded_new_len + self_encoded.len() - encoded_len;
-
-		let mut res = Vec::with_capacity(size + value.len());
-		unsafe { res.set_len(size); }
-
-		// Insert the new encoded len, copy the already encoded data and
-		// add the new element.
-		replace_len(&mut res);
-		res[encoded_new_len..size].copy_from_slice(&self_encoded[encoded_len..]);
-		append_new_elems(&mut res);
-		*self_encoded = res;
-
-		Ok(())
+		*self.0 = match Vec::<EncodeOpaqueValue>::append_or_new(item, &value) {
+			Ok(item) => item,
+			Err(e) => {
+				error!(
+					target: "runtime",
+					"Failed to append value, resetting storage item to `[value]`.",
+				);
+				value.encode()
+			}
+		};
 	}
 }
 

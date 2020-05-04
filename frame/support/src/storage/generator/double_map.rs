@@ -248,50 +248,16 @@ impl<K1, K2, V, G> storage::StorageDoubleMap<K1, K2, V> for G where
 	fn append<Items, Item, EncodeLikeItem, KArg1, KArg2>(
 		k1: KArg1,
 		k2: KArg2,
-		items: Items,
-	) -> Result<(), &'static str> where
-		KArg1: EncodeLike<K1>,
-		KArg2: EncodeLike<K2>,
-		Item: Encode,
-		EncodeLikeItem: EncodeLike<Item>,
-		V: EncodeAppend<Item=Item>,
-		Items: IntoIterator<Item=EncodeLikeItem>,
-		Items::IntoIter: ExactSizeIterator
-	{
-		let final_key = Self::storage_double_map_final_key(k1, k2);
-
-		let encoded_value = unhashed::get_raw(&final_key)
-			.unwrap_or_else(|| {
-				match G::from_query_to_optional_value(G::from_optional_value_to_query(None)) {
-					Some(value) => value.encode(),
-					None => Vec::new(),
-				}
-			});
-
-		let new_val = V::append_or_new(
-			encoded_value,
-			items,
-		).map_err(|_| "Could not append given item")?;
-		unhashed::put_raw(&final_key, &new_val);
-
-		Ok(())
-	}
-
-	fn append_or_insert<Items, Item, EncodeLikeItem, KArg1, KArg2>(
-		k1: KArg1,
-		k2: KArg2,
-		items: Items,
+		item: EncodeLikeItem,
 	) where
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
-		V: EncodeAppend<Item=Item>,
-		Items: IntoIterator<Item=EncodeLikeItem> + Clone + EncodeLike<V>,
-		Items::IntoIter: ExactSizeIterator
+		V: StorageAppend<Item>,
 	{
-		Self::append(Ref::from(&k1), Ref::from(&k2), items.clone())
-			.unwrap_or_else(|_| Self::insert(k1, k2, items));
+		let final_key = Self::storage_double_map_final_key(k1, k2);
+		sp_io::storage::append(final_key, item.encode());
 	}
 
 	fn decode_len<KArg1, KArg2>(key1: KArg1, key2: KArg2) -> Result<usize, &'static str> where

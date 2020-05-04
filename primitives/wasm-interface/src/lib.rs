@@ -119,7 +119,7 @@ mod private {
 /// Something that can be wrapped in a wasm `Pointer`.
 ///
 /// This trait is sealed.
-pub trait PointerType: Sized {
+pub trait PointerType: Sized + private::Sealed {
 	/// The size of the type in wasm.
 	const SIZE: u32 = mem::size_of::<Self>() as u32;
 }
