@@ -902,9 +902,9 @@ decl_module! {
 		/// - `which`: The index of the referendum to cancel.
 		///
 		/// # <weight>
+		/// - `O(D)` where `D` is the items in the dispatch queue. Weighted as `D = 10`.
 		/// - Db reads: `scheduler lookup`, scheduler agenda`
 		/// - Db writes: `scheduler lookup`, scheduler agenda`
-		/// - O(D) where D is the items in the dispatch queue. Weighted as D=10.
 		/// # </weight>
 		#[weight = (50_000_000 + T::DbWeight::get().reads_writes(2, 2), DispatchClass::Operational)]
 		fn cancel_queued(origin, which: ReferendumIndex) {
