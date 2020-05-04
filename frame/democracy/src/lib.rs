@@ -528,6 +528,26 @@ decl_error! {
 	}
 }
 
+/// Functions for calcuating some weight of dispatchables.
+mod weight_for {
+	use frame_support::weights::{RuntimeDbWeight, Weight};
+
+	/// Calculate the weight for `set_members`.
+	pub(crate) fn proxy_delegate::<T:(
+		votes: impl Into<Weight> + Copy,
+	) -> Weight {
+		db.
+			+ T::DbWeight::get().reads_writes(5 + Weight::from(T::MaxVotes::get()), 4 + Weight::from(T::MaxVotes::get()))]
+92_000_000 + 9_100_000 * Weight::from(T::MaxVotes::get())
+		db.reads_writes(1, 1) // read + write members
+			.saturating_add(db.writes(2)) // set prime
+			.saturating_add(db.reads_writes(proposals.into() + 1, proposals.into())) // update votes
+			.saturating_add(old_count.into().saturating_mul(29_000_000)) // M
+			.saturating_add(new_count.into().saturating_mul(100_000)) // N
+			.saturating_add(proposals.into().saturating_mul(27_000_000)) // P
+	}
+}
+
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
@@ -1341,7 +1361,7 @@ decl_module! {
 		) {
 			let who = ensure_signed(origin)?;
 			let target = Self::proxy(who).and_then(|a| a.as_active()).ok_or(Error::<T>::NotProxy)?;
-			Self::try_delegate(target, to, conviction, balance)?;
+			let votes = Self::try_delegate(target, to, conviction, balance)?;
 		}
 
 		/// Undelegate the voting power of a proxied account.
@@ -1557,11 +1577,14 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	fn increase_upstream_delegation(who: &T::AccountId, amount: Delegations<BalanceOf<T>>) {
+	/// Return the number of votes
+	fn increase_upstream_delegation(who: &T::AccountId, amount: Delegations<BalanceOf<T>>) -> u32 {
 		VotingOf::<T>::mutate(who, |voting| match voting {
-			Voting::Delegating { delegations, .. } =>
+			Voting::Delegating { delegations, .. } => {
 				// We don't support second level delegating, so we don't need to do anything more.
-				*delegations = delegations.saturating_add(amount),
+				*delegations = delegations.saturating_add(amount);
+				1
+			},
 			Voting::Direct { votes, delegations, .. } => {
 				*delegations = delegations.saturating_add(amount);
 				for &(ref_index, account_vote) in votes.iter() {
@@ -1573,6 +1596,7 @@ impl<T: Trait> Module<T> {
 						);
 					}
 				}
+				votes.len()
 			}
 		})
 	}
@@ -1598,15 +1622,17 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Attempt to delegate `balance` times `conviction` of voting power from `who` to `target`.
+	///
+	/// Return the upstream number of votes.
 	fn try_delegate(
 		who: T::AccountId,
 		target: T::AccountId,
 		conviction: Conviction,
 		balance: BalanceOf<T>,
-	) -> DispatchResult {
+	) -> Result<u32, DispatchError> {
 		ensure!(who != target, Error::<T>::Nonsense);
 		ensure!(balance <= T::Currency::free_balance(&who), Error::<T>::InsufficientFunds);
-		VotingOf::<T>::try_mutate(&who, |voting| -> DispatchResult {
+		let votes = VotingOf::<T>::try_mutate(&who, |voting| -> DispatchResult {
 			let mut old = Voting::Delegating {
 				balance,
 				target: target.clone(),
@@ -1627,7 +1653,7 @@ impl<T: Trait> Module<T> {
 					voting.set_common(delegations, prior);
 				}
 			}
-			Self::increase_upstream_delegation(&target, conviction.votes(balance));
+			let votes = Self::increase_upstream_delegation(&target, conviction.votes(balance));
 			// Extend the lock to `balance` (rather than setting it) since we don't know what other
 			// votes are in place.
 			T::Currency::extend_lock(
@@ -1636,10 +1662,10 @@ impl<T: Trait> Module<T> {
 				balance,
 				WithdrawReason::Transfer.into()
 			);
-			Ok(())
+			Ok(votes)
 		})?;
 		Self::deposit_event(Event::<T>::Delegated(who, target));
-		Ok(())
+		Ok(votes)
 	}
 
 	/// Attempt to end the current delegation.
