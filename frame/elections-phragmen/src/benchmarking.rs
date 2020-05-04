@@ -25,7 +25,7 @@ use frame_system::RawOrigin;
 use sp_io::hashing::blake2_256;
 use frame_benchmarking::benchmarks;
 use sp_runtime::traits::Bounded;
-use frame_support::{assert_ok, traits::OnInitialize};
+use frame_support::traits::OnInitialize;
 
 use crate::Module as Elections;
 
@@ -66,7 +66,7 @@ fn submit_candidates<T: Trait>(c: u32, prefix: &'static str) -> Result<Vec<T::Ac
 	(0..c).map(|i| {
 		let account = endowed_account::<T>(prefix, i);
 		<Elections<T>>::submit_candidacy(RawOrigin::Signed(account.clone()).into())
-			.map_err(|e| { println!("Error = {:?}", e); "failed to submit candidacy"})?;
+			.map_err(|e| "failed to submit candidacy")?;
 		Ok(account)
 	}).collect::<Result<_, _>>()
 }
@@ -87,7 +87,7 @@ fn submit_voter<T: Trait>(caller: T::AccountId, votes: Vec<T::AccountId>, stake:
 	-> Result<(), &'static str>
 {
 	<Elections<T>>::vote(RawOrigin::Signed(caller).into(), votes, stake)
-		.map_err(|e| { println!("Error = {:?}", e); "failed to submit vote"})
+		.map_err(|e| "failed to submit vote")
 }
 
 /// add `n` locks to account `who`.
@@ -193,7 +193,7 @@ benchmarks! {
 
 		// all the bailers go away.
 		all_candidates.into_iter().for_each(|b| {
-			assert_ok!(<Elections<T>>::renounce_candidacy(RawOrigin::Signed(b).into()));
+			assert!(<Elections<T>>::renounce_candidacy(RawOrigin::Signed(b).into()).is_ok());
 		});
 	}: report_defunct_voter(RawOrigin::Signed(account_1.clone()), account_2_lookup)
 	verify {
