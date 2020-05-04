@@ -27,10 +27,10 @@ use frame_system::{RawOrigin, Module as System, Trait as SystemTrait};
 use frame_benchmarking::{benchmarks, account};
 use frame_support::traits::{Currency, OnInitialize};
 
-use sp_runtime::{Perbill, traits::{Convert, StaticLookup}};
+use sp_runtime::{Perbill, traits::{Convert, StaticLookup, Saturating}};
 use sp_staking::offence::ReportOffence;
 
-use pallet_balances::{Trait as BalancesTrait, Module as Balances};
+use pallet_balances::{Trait as BalancesTrait};
 use pallet_babe::BabeEquivocationOffence;
 use pallet_grandpa::{GrandpaEquivocationOffence, GrandpaTimeSlot};
 use pallet_im_online::{Trait as ImOnlineTrait, Module as ImOnline, UnresponsivenessOffence};
@@ -75,11 +75,10 @@ fn create_offender<T: Trait>(n: u32, nominators: u32) -> Result<T::AccountId, &'
 	let controller: T::AccountId = account("controller", n, SEED);
 	let controller_lookup: LookupSourceOf<T> = T::Lookup::unlookup(controller.clone());
 	let reward_destination = RewardDestination::Staked;
-	// let raw_amount = crate::mock::ExistentialDeposit::get();
-	let raw_amount = 1_000_000;
+	let raw_amount = T::Currency::minimum_balance().saturating_mul(10_000.into());
 	// make twice as much balance to prevent the account from being killed.
-	let free_amount = 2 * raw_amount;
-	Balances::<T>::make_free_balance_be(&stash, free_amount.into());
+	let free_amount = raw_amount.saturating_mul(2.into());
+	T::Currency::make_free_balance_be(&stash, free_amount);
 	let amount: BalanceOf<T> = raw_amount.into();
 	Staking::<T>::bond(
 		RawOrigin::Signed(stash.clone()).into(),
@@ -100,7 +99,7 @@ fn create_offender<T: Trait>(n: u32, nominators: u32) -> Result<T::AccountId, &'
 		let nominator_stash: T::AccountId = account("nominator stash", n * MAX_NOMINATORS + i, SEED);
 		let nominator_controller: T::AccountId = account("nominator controller", n * MAX_NOMINATORS + i, SEED);
 		let nominator_controller_lookup: LookupSourceOf<T> = T::Lookup::unlookup(nominator_controller.clone());
-		Balances::<T>::make_free_balance_be(&nominator_stash, free_amount.into());
+		T::Currency::make_free_balance_be(&nominator_stash, free_amount.into());
 
 		Staking::<T>::bond(
 			RawOrigin::Signed(nominator_stash.clone()).into(),
