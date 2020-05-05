@@ -97,7 +97,6 @@ node-executor = { version = "2.0.0-dev", path = "../executor" }
 # CLI-specific dependencies
 sc-cli = { version = "0.8.0-dev", optional = true, path = "../../../client/cli" }
 frame-benchmarking-cli = { version = "2.0.0-dev", optional = true, path = "../../../utils/frame/benchmarking-cli" }
-node-transaction-factory = { version = "0.8.0-dev", optional = true, path = "../transaction-factory" }
 node-inspect = { version = "0.8.0-dev", optional = true, path = "../inspect" }
 
 # WASM-specific dependencies
@@ -126,7 +125,6 @@ platforms = "0.2.1"
 
 [build-dependencies]
 structopt = { version = "0.3.8", optional = true }
-node-transaction-factory = { version = "0.8.0-dev", optional = true, path = "../transaction-factory" }
 node-inspect = { version = "0.8.0-dev", optional = true, path = "../inspect" }
 frame-benchmarking-cli = { version = "2.0.0-dev", optional = true, path = "../../../utils/frame/benchmarking-cli" }
 substrate-build-script-utils = { version = "2.0.0-dev", optional = true, path = "../../../utils/build-script-utils" }
@@ -147,7 +145,6 @@ browser = [
 cli = [
 	"node-executor/wasmi-errno",
 	"node-inspect",
-	"node-transaction-factory",
 	"sc-cli",
 	"frame-benchmarking-cli",
 	"sc-service/db",

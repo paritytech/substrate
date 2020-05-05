@@ -27,6 +27,7 @@
 //! order to update it.
 //!
 
+use codec::Encode;
 use blocks::BlockCollection;
 use sp_blockchain::{Error as ClientError, Info as BlockchainInfo, HeaderMetadata};
 use sp_consensus::{BlockOrigin, BlockStatus,
@@ -45,7 +46,7 @@ use log::{debug, trace, warn, info, error};
 use sp_runtime::{
 	Justification,
 	generic::BlockId,
-	traits::{Block as BlockT, Header, NumberFor, Zero, One, CheckedSub, SaturatedConversion}
+	traits::{Block as BlockT, Header, NumberFor, Zero, One, CheckedSub, SaturatedConversion, Hash, HashFor}
 };
 use std::{fmt, ops::Range, collections::{HashMap, HashSet, VecDeque}, sync::Arc};
 
@@ -727,8 +728,10 @@ impl<B: BlockT> ChainSync<B> {
 					match &mut peer.state {
 						PeerSyncState::DownloadingNew(start_block) => {
 							self.blocks.clear_peer_download(&who);
-							self.blocks.insert(*start_block, blocks, who.clone());
+							let start_block = *start_block;
 							peer.state = PeerSyncState::Available;
+							validate_blocks::<B>(&blocks, &who)?;
+							self.blocks.insert(start_block, blocks, who.clone());
 							self.blocks
 								.drain(self.best_queued_number + One::one())
 								.into_iter()
@@ -750,6 +753,7 @@ impl<B: BlockT> ChainSync<B> {
 								debug!(target: "sync", "Empty block response from {}", who);
 								return Err(BadPeer(who, rep::NO_BLOCK));
 							}
+							validate_blocks::<B>(&blocks, &who)?;
 							blocks.into_iter().map(|b| {
 								IncomingBlock {
 									hash: b.hash,
@@ -834,6 +838,7 @@ impl<B: BlockT> ChainSync<B> {
 					}
 				} else {
 					// When request.is_none() this is a block announcement. Just accept blocks.
+					validate_blocks::<B>(&blocks, &who)?;
 					blocks.into_iter().map(|b| {
 						IncomingBlock {
 							hash: b.hash,
@@ -1498,6 +1503,40 @@ fn is_descendent_of<Block, T>(client: &T, base: &Block::Hash, block: &Block::Has
 	let ancestor = sp_blockchain::lowest_common_ancestor(client, *block, *base)?;
 
 	Ok(ancestor.hash == *base)
+}
+
+fn validate_blocks<Block: BlockT>(blocks: &Vec<message::BlockData<Block>>, who: &PeerId) -> Result<(), BadPeer> {
+	for b in blocks {
+		if let Some(header) = &b.header {
+			let hash = header.hash();
+			if hash != b.hash {
+				debug!(
+					target:"sync",
+					"Bad header received from {}. Expected hash {:?}, got {:?}",
+					who,
+					b.hash,
+					hash,
+				);
+				return Err(BadPeer(who.clone(), rep::BAD_BLOCK))
+			}
+		}
+		if let (Some(header), Some(body)) = (&b.header, &b.body) {
+			let expected = *header.extrinsics_root();
+			let got = HashFor::<Block>::ordered_trie_root(body.iter().map(Encode::encode).collect());
+			if expected != got {
+				debug!(
+					target:"sync",
+					"Bad extrinsic root for a block {} received from {}. Expected {:?}, got {:?}",
+					b.hash,
+					who,
+					expected,
+					got,
+				);
+				return Err(BadPeer(who.clone(), rep::BAD_BLOCK))
+			}
+		}
+	}
+	Ok(())
 }
 
 #[cfg(test)]
