@@ -22,8 +22,7 @@
 use serde::{Serialize, Deserialize};
 use sp_debug_derive::RuntimeDebug;
 
-use sp_std::vec::Vec;
-use sp_std::ops::{Deref, DerefMut};
+use sp_std::{vec::Vec, ops::{Deref, DerefMut}};
 use ref_cast::RefCast;
 
 /// Storage key.
@@ -334,10 +333,15 @@ impl ChildTrieParentKeyId {
 	}
 }
 
-#[test]
-fn test_prefix_default_child_info() {
-	let child_info = ChildInfo::new_default(b"any key");
-	let prefix = child_info.child_type().parent_prefix();
-	assert!(prefix.starts_with(well_known_keys::CHILD_STORAGE_KEY_PREFIX));
-	assert!(prefix.starts_with(well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX));
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_prefix_default_child_info() {
+		let child_info = ChildInfo::new_default(b"any key");
+		let prefix = child_info.child_type().parent_prefix();
+		assert!(prefix.starts_with(well_known_keys::CHILD_STORAGE_KEY_PREFIX));
+		assert!(prefix.starts_with(well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX));
+	}
 }
