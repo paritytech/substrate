@@ -27,7 +27,7 @@ mod tests;
 use sp_std::vec::Vec;
 use frame_support::{
 	decl_module, decl_event, decl_storage, Parameter, debug,
-	weights::Weight, traits::Get,
+	weights::Weight,
 };
 use sp_runtime::{traits::Hash, Perbill};
 use sp_staking::{
@@ -117,8 +117,7 @@ decl_module! {
 				})
 			}
 
-			// This on-initialize function can become very expensive, so we allow it to take a full block.
-			T::MaximumBlockWeight::get()
+			0
 		}
 	}
 }
