@@ -16,7 +16,6 @@ sp-application-crypto = { version = "2.0.0-dev", path = "../../../primitives/app
 sp-consensus-aura = { version = "0.8.0-dev", path = "../../../primitives/consensus/aura" }
 sp-block-builder = { version = "2.0.0-dev", path = "../../../primitives/block-builder" }
 sc-block-builder = { version = "0.8.0-dev", path = "../../../client/block-builder" }
-sc-client = { version = "0.8.0-dev", path = "../../" }
 sc-client-api = { version = "2.0.0-dev", path = "../../api" }
 codec = { package = "parity-scale-codec", version = "1.3.0" }
 sp-consensus = { version = "0.8.0-dev", path = "../../../primitives/consensus/common" }
@@ -42,7 +41,7 @@ sp-keyring = { version = "2.0.0-dev", path = "../../../primitives/keyring" }
 sc-executor = { version = "0.8.0-dev", path = "../../executor" }
 sc-network = { version = "0.8.0-dev", path = "../../network" }
 sc-network-test = { version = "0.8.0-dev", path = "../../network/test" }
-sc-service = { version = "0.8.0-dev", path = "../../service" }
+sc-service = { version = "0.8.0-dev", default-features = false, path = "../../service" }
 substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../../test-utils/runtime/client" }
 env_logger = "0.7.0"
 tempfile = "3.1.0"

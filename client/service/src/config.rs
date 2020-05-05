@@ -16,11 +16,11 @@
 
 //! Service configuration.
 
-pub use sc_client::ExecutionStrategies;
 pub use sc_client_db::{Database, PruningMode, DatabaseSettingsSrc as DatabaseConfig};
 pub use sc_network::Multiaddr;
 pub use sc_network::config::{ExtTransport, MultiaddrWithPeerId, NetworkConfiguration, Role, NodeKeyConfig};
 pub use sc_executor::WasmExecutionMethod;
+use sc_client_api::execution_extensions::ExecutionStrategies;
 
 use std::{future::Future, path::{PathBuf, Path}, pin::Pin, net::SocketAddr, sync::Arc};
 pub use sc_transaction_pool::txpool::Options as TransactionPoolOptions;
@@ -38,7 +38,7 @@ pub struct Configuration {
 	/// Node role.
 	pub role: Role,
 	/// How to spawn background tasks. Mandatory, otherwise creating a `Service` will error.
-	pub task_executor: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>,
+	pub task_executor: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>, TaskType) + Send + Sync>,
 	/// Extrinsic pool configuration.
 	pub transaction_pool: TransactionPoolOptions,
 	/// Network configuration.
@@ -100,6 +100,15 @@ pub struct Configuration {
 	pub max_runtime_instances: usize,
 	/// Announce block automatically after they have been imported
 	pub announce_block: bool,
+}
+
+/// Type for tasks spawned by the executor.
+#[derive(PartialEq)]
+pub enum TaskType {
+	/// Regular non-blocking futures. Polling the task is expected to be a lightweight operation.
+	Async,
+	/// The task might perform a lot of expensive CPU operations and/or call `thread::sleep`.
+	Blocking,
 }
 
 /// Configuration of the client keystore.

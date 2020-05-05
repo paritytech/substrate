@@ -35,7 +35,8 @@ use crate::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
 	},
 	on_demand_layer::AlwaysBadChecker,
-	protocol::{self, event::Event, light_client_handler, LegacyConnectionKillError, sync::SyncState, PeerInfo, Protocol},
+	light_client_handler, block_requests, finality_requests,
+	protocol::{self, event::Event, LegacyConnectionKillError, sync::SyncState, PeerInfo, Protocol},
 	transport, ReputationChange,
 };
 use futures::prelude::*;
@@ -223,16 +224,16 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				params.network_config.node_name
 			);
 			let block_requests = {
-				let config = protocol::block_requests::Config::new(&params.protocol_id);
-				protocol::BlockRequests::new(config, params.chain.clone())
+				let config = block_requests::Config::new(&params.protocol_id);
+				block_requests::BlockRequests::new(config, params.chain.clone())
 			};
 			let finality_proof_requests = {
-				let config = protocol::finality_requests::Config::new(&params.protocol_id);
-				protocol::FinalityProofRequests::new(config, params.finality_proof_provider.clone())
+				let config = finality_requests::Config::new(&params.protocol_id);
+				finality_requests::FinalityProofRequests::new(config, params.finality_proof_provider.clone())
 			};
 			let light_client_handler = {
-				let config = protocol::light_client_handler::Config::new(&params.protocol_id);
-				protocol::LightClientHandler::new(
+				let config = light_client_handler::Config::new(&params.protocol_id);
+				light_client_handler::LightClientHandler::new(
 					config,
 					params.chain,
 					checker,
@@ -817,6 +818,9 @@ struct Metrics {
 	peerset_num_requested: Gauge<U64>,
 	pending_connections: Gauge<U64>,
 	pending_connections_errors_total: CounterVec<U64>,
+	requests_in_total: HistogramVec,
+	requests_out_finished: HistogramVec,
+	requests_out_started_total: CounterVec<U64>,
 }
 
 impl Metrics {
@@ -965,6 +969,35 @@ impl Metrics {
 				),
 				&["reason"]
 			)?, registry)?,
+			requests_in_total: register(HistogramVec::new(
+				HistogramOpts {
+					common_opts: Opts::new(
+						"sub_libp2p_requests_in_total",
+						"Total number of requests received and answered"
+					),
+					buckets: prometheus_endpoint::exponential_buckets(0.001, 2.0, 16)
+						.expect("parameters are always valid values; qed"),
+				},
+				&["protocol"]
+			)?, registry)?,
+			requests_out_finished: register(HistogramVec::new(
+				HistogramOpts {
+					common_opts: Opts::new(
+						"sub_libp2p_requests_out_finished",
+						"Time between a request's start and finish (successful or not)"
+					),
+					buckets: prometheus_endpoint::exponential_buckets(0.001, 2.0, 16)
+						.expect("parameters are always valid values; qed"),
+				},
+				&["protocol"]
+			)?, registry)?,
+			requests_out_started_total: register(CounterVec::new(
+				Opts::new(
+					"sub_libp2p_requests_out_started_total",
+					"Total number of requests emitted"
+				),
+				&["protocol"]
+			)?, registry)?,
 		})
 	}
 
@@ -1083,6 +1116,27 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 						metrics.import_queue_finality_proofs_submitted.inc();
 					}
 					this.import_queue.import_finality_proof(origin, hash, nb, proof);
+				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::AnsweredRequest { protocol, build_time, .. })) => {
+					if let Some(metrics) = this.metrics.as_ref() {
+						metrics.requests_in_total
+							.with_label_values(&[&maybe_utf8_bytes_to_string(&protocol)])
+							.observe(build_time.as_secs_f64());
+					}
+				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RequestStarted { protocol, .. })) => {
+					if let Some(metrics) = this.metrics.as_ref() {
+						metrics.requests_out_started_total
+							.with_label_values(&[&maybe_utf8_bytes_to_string(&protocol)])
+							.inc();
+					}
+				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RequestFinished { protocol, request_duration, .. })) => {
+					if let Some(metrics) = this.metrics.as_ref() {
+						metrics.requests_out_finished
+							.with_label_values(&[&maybe_utf8_bytes_to_string(&protocol)])
+							.observe(request_duration.as_secs_f64());
+					}
 				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RandomKademliaStarted(protocol))) => {
 					if let Some(metrics) = this.metrics.as_ref() {

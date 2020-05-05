@@ -15,9 +15,9 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::error;
-use crate::params::SharedParams;
+use crate::params::{DatabaseParams, SharedParams};
 use crate::CliConfiguration;
-use sc_service::{config::DatabaseConfig, Configuration};
+use sc_service::Configuration;
 use std::fmt::Debug;
 use std::fs;
 use std::io::{self, Write};
@@ -33,18 +33,19 @@ pub struct PurgeChainCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub database_params: DatabaseParams,
 }
 
 impl PurgeChainCmd {
 	/// Run the purge command
 	pub fn run(&self, config: Configuration) -> error::Result<()> {
-		let db_path = match &config.database {
-			DatabaseConfig::RocksDb { path, .. } => path,
-			_ => {
-				eprintln!("Cannot purge custom database implementation");
-				return Ok(());
-			}
-		};
+		let db_path = config.database.path()
+			.ok_or_else(||
+				error::Error::Input("Cannot purge custom database implementation".into())
+		)?;
 
 		if !self.yes {
 			print!("Are you sure to remove {:?}? [y/N]: ", &db_path);
@@ -80,5 +81,9 @@ impl PurgeChainCmd {
 impl CliConfiguration for PurgeChainCmd {
 	fn shared_params(&self) -> &SharedParams {
 		&self.shared_params
+	}
+
+	fn database_params(&self) -> Option<&DatabaseParams> {
+		Some(&self.database_params)
 	}
 }

@@ -23,7 +23,10 @@
 use sp_std::prelude::*;
 use frame_support::{
 	construct_runtime, parameter_types, debug,
-	weights::{Weight, RuntimeDbWeight},
+	weights::{
+		Weight,
+		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
+	},
 	traits::{Currency, Imbalance, KeyOwnerProofSystem, OnUnbalanced, Randomness, LockIdentifier},
 };
 use sp_core::{
@@ -60,6 +63,7 @@ use sp_inherents::{InherentData, CheckInherentsResult};
 pub use sp_runtime::BuildStorage;
 pub use pallet_timestamp::Call as TimestampCall;
 pub use pallet_balances::Call as BalancesCall;
+pub use frame_system::Call as SystemCall;
 pub use pallet_contracts::Gas;
 pub use frame_support::StorageValue;
 pub use pallet_staking::StakerStatus;
@@ -86,8 +90,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to 0. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 244,
-	impl_version: 2,
+	spec_version: 246,
+	impl_version: 0,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 1,
 };
@@ -122,15 +126,10 @@ impl OnUnbalanced<NegativeImbalance> for DealWithFees {
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 250;
 	/// We allow for 2 seconds of compute with a 6 second average block time.
-	pub const MaximumBlockWeight: Weight = 2_000_000_000_000;
-	pub const ExtrinsicBaseWeight: Weight = 10_000_000;
+	pub const MaximumBlockWeight: Weight = 2 * WEIGHT_PER_SECOND;
 	pub const MaximumBlockLength: u32 = 5 * 1024 * 1024;
 	pub const Version: RuntimeVersion = VERSION;
 	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
-	pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
-		read: 60_000_000, // ~0.06 ms = ~60 µs
-		write: 200_000_000, // ~0.2 ms = 200 µs
-	};
 }
 
 impl frame_system::Trait for Runtime {
@@ -146,8 +145,8 @@ impl frame_system::Trait for Runtime {
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
-	type DbWeight = DbWeight;
-	type BlockExecutionWeight = ();
+	type DbWeight = RocksDbWeight;
+	type BlockExecutionWeight = BlockExecutionWeight;
 	type ExtrinsicBaseWeight = ExtrinsicBaseWeight;
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
@@ -304,8 +303,9 @@ parameter_types! {
 	pub const BondingDuration: pallet_staking::EraIndex = 24 * 28;
 	pub const SlashDeferDuration: pallet_staking::EraIndex = 24 * 7; // 1/4 the bonding duration.
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
-	pub const ElectionLookahead: BlockNumber = 25; // 10 minutes per session => 100 block.
+	pub const ElectionLookahead: BlockNumber = EPOCH_DURATION_IN_BLOCKS / 4;
 	pub const MaxNominatorRewardedPerValidator: u32 = 64;
+	pub const MaxIterations: u32 = 5;
 }
 
 impl pallet_staking::Trait for Runtime {
@@ -326,6 +326,7 @@ impl pallet_staking::Trait for Runtime {
 	type NextNewSession = Session;
 	type ElectionLookahead = ElectionLookahead;
 	type Call = Call;
+	type MaxIterations = MaxIterations;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type UnsignedPriority = StakingUnsignedPriority;
 }
@@ -951,9 +952,11 @@ impl_runtime_apis! {
 			// we need these two lines below.
 			use pallet_session_benchmarking::Module as SessionBench;
 			use pallet_offences_benchmarking::Module as OffencesBench;
+			use frame_system_benchmarking::Module as SystemBench;
 
 			impl pallet_session_benchmarking::Trait for Runtime {}
 			impl pallet_offences_benchmarking::Trait for Runtime {}
+			impl frame_system_benchmarking::Trait for Runtime {}
 
 			let mut batches = Vec::<BenchmarkBatch>::new();
 			let params = (&pallet, &benchmark, &lowest_range_values, &highest_range_values, &steps, repeat);
@@ -966,6 +969,7 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, b"offences", OffencesBench::<Runtime>);
 			add_benchmark!(params, batches, b"session", SessionBench::<Runtime>);
 			add_benchmark!(params, batches, b"staking", Staking);
+			add_benchmark!(params, batches, b"system", SystemBench::<Runtime>);
 			add_benchmark!(params, batches, b"timestamp", Timestamp);
 			add_benchmark!(params, batches, b"treasury", Treasury);
 			add_benchmark!(params, batches, b"utility", Utility);

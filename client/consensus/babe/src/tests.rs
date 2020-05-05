@@ -40,7 +40,7 @@ type Item = DigestItem<Hash>;
 
 type Error = sp_blockchain::Error;
 
-type TestClient = sc_client::Client<
+type TestClient = substrate_test_runtime_client::client::Client<
 	substrate_test_runtime_client::Backend,
 	substrate_test_runtime_client::Executor,
 	TestBlock,
@@ -436,7 +436,7 @@ fn authoring_blocks() {
 #[should_panic]
 fn rejects_missing_inherent_digest() {
 	run_one_test(|header: &mut TestHeader, stage| {
-		let v = std::mem::replace(&mut header.digest_mut().logs, vec![]);
+		let v = std::mem::take(&mut header.digest_mut().logs);
 		header.digest_mut().logs = v.into_iter()
 			.filter(|v| stage == Stage::PostSeal || v.as_babe_pre_digest().is_none())
 			.collect()
@@ -447,7 +447,7 @@ fn rejects_missing_inherent_digest() {
 #[should_panic]
 fn rejects_missing_seals() {
 	run_one_test(|header: &mut TestHeader, stage| {
-		let v = std::mem::replace(&mut header.digest_mut().logs, vec![]);
+		let v = std::mem::take(&mut header.digest_mut().logs);
 		header.digest_mut().logs = v.into_iter()
 			.filter(|v| stage == Stage::PreSeal || v.as_babe_seal().is_none())
 			.collect()
@@ -458,7 +458,7 @@ fn rejects_missing_seals() {
 #[should_panic]
 fn rejects_missing_consensus_digests() {
 	run_one_test(|header: &mut TestHeader, stage| {
-		let v = std::mem::replace(&mut header.digest_mut().logs, vec![]);
+		let v = std::mem::take(&mut header.digest_mut().logs);
 		header.digest_mut().logs = v.into_iter()
 			.filter(|v| stage == Stage::PostSeal || v.as_next_epoch_descriptor().is_none())
 			.collect()

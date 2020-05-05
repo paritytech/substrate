@@ -1065,7 +1065,7 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 				ConsensusError::ClientImport(Error::<Block>::FetchEpoch(parent_hash).into())
 			})?;
 
-			let epoch_config = next_config_digest.unwrap_or_else(
+			let epoch_config = next_config_digest.map(Into::into).unwrap_or_else(
 				|| viable_epoch.as_ref().config.clone()
 			);
 
@@ -1272,6 +1272,7 @@ pub fn import_queue<Block: BlockT, Client, Inner>(
 	finality_proof_import: Option<BoxFinalityProofImport<Block>>,
 	client: Arc<Client>,
 	inherent_data_providers: InherentDataProviders,
+	spawner: &impl sp_core::traits::SpawnBlocking,
 ) -> ClientResult<BabeImportQueue<Block, sp_api::TransactionFor<Client, Block>>> where
 	Inner: BlockImport<Block, Error = ConsensusError, Transaction = sp_api::TransactionFor<Client, Block>>
 		+ Send + Sync + 'static,
@@ -1294,6 +1295,7 @@ pub fn import_queue<Block: BlockT, Client, Inner>(
 		Box::new(block_import),
 		justification_import,
 		finality_proof_import,
+		spawner,
 	))
 }
 

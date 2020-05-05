@@ -138,6 +138,8 @@ impl Analysis {
 			.collect();
 
 		let value_dists = results.iter().map(|(p, vs)| {
+			// Avoid divide by zero
+			if vs.len() == 0 { return (p.clone(), 0, 0) }
 			let total = vs.iter()
 				.fold(0u128, |acc, v| acc + *v);
 			let mean = total / vs.len() as u128;
@@ -178,13 +180,23 @@ impl std::fmt::Display for Analysis {
 			writeln!(f, "\nData points distribution:")?;
 			writeln!(f, "{}   mean µs  sigma µs       %", self.names.iter().map(|p| format!("{:>5}", p)).collect::<Vec<_>>().join(" "))?;
 			for (param_values, mean, sigma) in value_dists.iter() {
-				writeln!(f, "{}  {:>8}  {:>8}  {:>3}.{}%",
-					param_values.iter().map(|v| format!("{:>5}", v)).collect::<Vec<_>>().join(" "),
-					ms(*mean),
-					ms(*sigma),
-					(sigma * 100 / mean),
-					(sigma * 1000 / mean % 10)
-				)?;
+				if *mean == 0 {
+					writeln!(f, "{}  {:>8}  {:>8}  {:>3}.{}%",
+						param_values.iter().map(|v| format!("{:>5}", v)).collect::<Vec<_>>().join(" "),
+						ms(*mean),
+						ms(*sigma),
+						"?",
+						"?"
+					)?;
+				} else {
+					writeln!(f, "{}  {:>8}  {:>8}  {:>3}.{}%",
+						param_values.iter().map(|v| format!("{:>5}", v)).collect::<Vec<_>>().join(" "),
+						ms(*mean),
+						ms(*sigma),
+						(sigma * 100 / mean),
+						(sigma * 1000 / mean % 10)
+					)?;
+				}
 			}
 		}
 		if let Some(ref model) = self.model {

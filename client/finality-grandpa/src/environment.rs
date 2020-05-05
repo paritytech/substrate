@@ -27,8 +27,7 @@ use futures_timer::Delay;
 use parking_lot::RwLock;
 use std::marker::PhantomData;
 
-use sc_client_api::{backend::Backend, utils::is_descendent_of};
-use sc_client::apply_aux;
+use sc_client_api::{backend::{Backend, apply_aux}, utils::is_descendent_of};
 use finality_grandpa::{
 	BlockNumberOps, Error as GrandpaError, round::State as RoundState,
 	voter, voter_set::VoterSet,
@@ -676,23 +675,23 @@ where
 	B: Backend<Block>,
 	C: crate::ClientForGrandpa<Block, B> + 'static,
 	C::Api: GrandpaApi<Block, Error = sp_blockchain::Error>,
- 	N: NetworkT<Block> + 'static + Send,
+ 	N: NetworkT<Block> + 'static + Send + Sync,
 	SC: SelectChain<Block> + 'static,
 	VR: VotingRule<Block, C>,
 	NumberFor<Block>: BlockNumberOps,
 {
-	type Timer = Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send>>;
+	type Timer = Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send + Sync>>;
 	type Id = AuthorityId;
 	type Signature = AuthoritySignature;
 
 	// regular round message streams
 	type In = Pin<Box<dyn Stream<
 		Item = Result<::finality_grandpa::SignedMessage<Block::Hash, NumberFor<Block>, Self::Signature, Self::Id>, Self::Error>
-	> + Send>>;
+	> + Send + Sync>>;
 	type Out = Pin<Box<dyn Sink<
 		::finality_grandpa::Message<Block::Hash, NumberFor<Block>>,
 		Error = Self::Error,
-	> + Send>>;
+	> + Send + Sync>>;
 
 	type Error = CommandOrError<Block::Hash, NumberFor<Block>>;
 

@@ -40,11 +40,11 @@ use rpc::{
 
 use sc_rpc_api::{Subscriptions, state::ReadProof};
 use sp_blockchain::{Error as ClientError, HeaderBackend};
-use sc_client::{
+use sc_client_api::{
 	BlockchainEvents,
 	light::{
-		blockchain::{future_header, RemoteBlockchain},
-		fetcher::{Fetcher, RemoteCallRequest, RemoteReadRequest, RemoteReadChildRequest},
+		RemoteCallRequest, RemoteReadRequest, RemoteReadChildRequest,
+		RemoteBlockchain, Fetcher, future_header,
 	},
 };
 use sp_core::{

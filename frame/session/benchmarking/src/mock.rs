@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Mock file for staking fuzzing.
+//! Mock file for session benchmarking.
 
 #![cfg(test)]
 
@@ -180,6 +180,7 @@ impl pallet_staking::Trait for Test {
 	type Call = Call;
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type UnsignedPriority = UnsignedPriority;
+	type MaxIterations = ();
 }
 
 impl crate::Trait for Test {}

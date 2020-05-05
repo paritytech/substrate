@@ -19,11 +19,9 @@
 #![cfg(test)]
 
 use crate::{elect, PhragmenResult, Assignment, VoteWeight, ExtendedBalance};
-use sp_runtime::{
-	assert_eq_error_rate, PerThing,
-	traits::{Member, SaturatedConversion, Zero, One}
-};
+use sp_arithmetic::{PerThing, traits::{SaturatedConversion, Zero, One}};
 use sp_std::collections::btree_map::BTreeMap;
+use sp_runtime::assert_eq_error_rate;
 
 #[derive(Default, Debug)]
 pub(crate) struct _Candidate<A> {
@@ -77,7 +75,7 @@ pub(crate) fn elect_float<A, FS>(
 	initial_voters: Vec<(A, Vec<A>)>,
 	stake_of: FS,
 ) -> Option<_PhragmenResult<A>> where
-	A: Default + Ord + Member + Copy,
+	A: Default + Ord + Copy,
 	for<'r> FS: Fn(&'r A) -> VoteWeight,
 {
 	let mut elected_candidates: Vec<(A, ExtendedBalance)>;

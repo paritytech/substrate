@@ -42,7 +42,6 @@ prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.
 prost = "0.6.1"
 rand = "0.7.2"
 sc-block-builder = { version = "0.8.0-dev", path = "../block-builder" }
-sc-client = { version = "0.8.0-dev", path = "../" }
 sc-client-api = { version = "2.0.0-dev", path = "../api" }
 sc-peerset = { version = "2.0.0-dev", path = "../peerset" }
 serde = { version = "1.0.101", features = ["derive"] }

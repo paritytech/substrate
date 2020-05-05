@@ -93,20 +93,6 @@ decl_module! {
 				*fm = T::FeeMultiplierUpdate::convert(*fm)
 			});
 		}
-
-		fn on_runtime_upgrade() -> Weight {
-			// TODO: Remove this code after on-chain upgrade from u32 to u64 weights
-			use sp_runtime::Fixed64;
-			use frame_support::migration::take_storage_value;
-			if let Some(old_next_fee_multiplier) = take_storage_value::<Fixed64>(b"TransactionPayment", b"NextFeeMultiplier", &[]) {
-				let raw_multiplier = old_next_fee_multiplier.into_inner() as i128;
-				// Fixed64 used 10^9 precision, where Fixed128 uses 10^18, so we need to add 9 zeros.
-				let new_raw_multiplier: i128 = raw_multiplier.saturating_mul(1_000_000_000);
-				let new_next_fee_multiplier: Fixed128 = Fixed128::from_parts(new_raw_multiplier);
-				NextFeeMultiplier::put(new_next_fee_multiplier);
-			}
-			0
-		}
 	}
 }
 
@@ -842,40 +828,6 @@ mod tests {
 					.is_ok()
 			);
 			assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 100 - 5);
-		});
-	}
-
-	// TODO Remove after u32 to u64 weights upgrade
-	#[test]
-	fn upgrade_to_fixed128_works() {
-		// TODO You can remove this from dev-dependencies after removing this test
-		use sp_storage::Storage;
-		use sp_runtime::Fixed64;
-		use frame_support::storage::generator::StorageValue;
-		use frame_support::traits::OnRuntimeUpgrade;
-		use core::num::NonZeroI128;
-
-		let mut s = Storage::default();
-
-		let original_multiplier = Fixed64::from_rational(1, 2);
-
-		let data = vec![
-			(
-				NextFeeMultiplier::storage_value_final_key().to_vec(),
-				original_multiplier.encode().to_vec()
-			),
-		];
-
-		s.top = data.into_iter().collect();
-
-		sp_io::TestExternalities::new(s).execute_with(|| {
-			let old_value = NextFeeMultiplier::get();
-			assert!(old_value != Fixed128::from_rational(1, NonZeroI128::new(2).unwrap()));
-
-			// Convert Fixed64(.5) to Fixed128(.5)
-			TransactionPayment::on_runtime_upgrade();
-			let new_value = NextFeeMultiplier::get();
-			assert_eq!(new_value, Fixed128::from_rational(1, NonZeroI128::new(2).unwrap()));
 		});
 	}
 }

@@ -41,6 +41,8 @@ pub enum Error {
 	ExtensionsAreNotSupported,
 	/// Extension `TypeId` is not registered.
 	ExtensionIsNotRegistered(TypeId),
+	/// Failed to update storage,
+	StorageUpdateFailed(&'static str),
 }
 
 /// The Substrate externalities.
@@ -175,6 +177,15 @@ pub trait Externalities: ExtensionStore {
 		&mut self,
 		child_info: &ChildInfo,
 	) -> Vec<u8>;
+
+	/// Append storage item.
+	///
+	/// This assumes specific format of the storage item. Also there is no way to undo this operation.
+	fn storage_append(
+		&mut self,
+		key: Vec<u8>,
+		value: Vec<u8>,
+	);
 
 	/// Get the changes trie root of the current storage overlay at a block with given `parent`.
 	///
