@@ -529,7 +529,7 @@ decl_error! {
 	}
 }
 
-/// Functions for calcuating the weight of dispatchables.
+/// Functions for calcuating the weight of some dispatchables.
 mod weight_for {
 	use frame_support::{
 		weights::{RuntimeDbWeight, Weight},
