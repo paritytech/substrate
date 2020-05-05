@@ -10,10 +10,13 @@ description = "Fuzzer for phragmén implementation."
 documentation = "https://docs.rs/sp-phragmen-fuzzer"
 publish = false
 
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
 [dependencies]
-sp-phragmen = { version = "2.0.0-alpha.5", path = ".." }
-sp-std = { version = "2.0.0-alpha.5", path = "../../std" }
-sp-runtime = { version = "2.0.0-alpha.5", path = "../../runtime" }
+sp-phragmen = { version = "2.0.0-alpha.7", path = ".." }
+sp-std = { version = "2.0.0-alpha.7", path = "../../std" }
+sp-runtime = { version = "2.0.0-alpha.7", path = "../../runtime" }
 honggfuzz = "0.5"
 rand = { version = "0.7.3", features = ["std", "small_rng"] }
 
@@ -24,6 +27,3 @@ path = "src/reduce.rs"
 [[bin]]
 name = "equalize"
 path = "src/equalize.rs"
-
-[package.metadata.docs.rs]
-targets = ["x86_64-unknown-linux-gnu"]
