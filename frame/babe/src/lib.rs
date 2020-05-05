@@ -34,13 +34,14 @@ use sp_staking::{
 	SessionIndex,
 	offence::{Offence, Kind},
 };
+use sp_application_crypto::Public;
 
 use codec::{Encode, Decode};
 use sp_inherents::{InherentIdentifier, InherentData, ProvideInherent, MakeFatalError};
 use sp_consensus_babe::{
 	BABE_ENGINE_ID, ConsensusLog, BabeAuthorityWeight, SlotNumber,
 	inherents::{INHERENT_IDENTIFIER, BabeInherentData},
-	digests::{NextEpochDescriptor, RawPreDigest},
+	digests::{NextEpochDescriptor, PreDigest},
 };
 use sp_consensus_vrf::schnorrkel;
 pub use sp_consensus_babe::{AuthorityId, VRF_OUTPUT_LENGTH, RANDOMNESS_LENGTH, PUBLIC_KEY_LENGTH};
@@ -102,7 +103,7 @@ impl EpochChangeTrigger for SameAuthoritiesForever {
 
 const UNDER_CONSTRUCTION_SEGMENT_LENGTH: usize = 256;
 
-type MaybeVrf = Option<schnorrkel::RawVRFOutput>;
+type MaybeRandomness = Option<schnorrkel::Randomness>;
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Babe {
@@ -147,11 +148,11 @@ decl_storage! {
 		/// We reset all segments and return to `0` at the beginning of every
 		/// epoch.
 		SegmentIndex build(|_| 0): u32;
-		UnderConstruction: map hasher(twox_64_concat) u32 => Vec<schnorrkel::RawVRFOutput>;
+		UnderConstruction: map hasher(twox_64_concat) u32 => Vec<schnorrkel::Randomness>;
 
 		/// Temporary value (cleared at block finalization) which is `Some`
 		/// if per-block initialization has already been called for current block.
-		Initialized get(fn initialized): Option<MaybeVrf>;
+		Initialized get(fn initialized): Option<MaybeRandomness>;
 
 		/// How late the current block is compared to its parent.
 		///
@@ -194,8 +195,8 @@ decl_module! {
 			// that this block was the first in a new epoch, the changeover logic has
 			// already occurred at this point, so the under-construction randomness
 			// will only contain outputs from the right epoch.
-			if let Some(Some(vrf_output)) = Initialized::take() {
-				Self::deposit_vrf_output(&vrf_output);
+			if let Some(Some(randomness)) = Initialized::take() {
+				Self::deposit_randomness(&randomness);
 			}
 
 			// remove temporary "environment" entry from storage
@@ -238,7 +239,7 @@ impl<T: Trait> FindAuthor<u32> for Module<T> {
 	{
 		for (id, mut data) in digests.into_iter() {
 			if id == BABE_ENGINE_ID {
-				let pre_digest: RawPreDigest = RawPreDigest::decode(&mut data).ok()?;
+				let pre_digest: PreDigest = PreDigest::decode(&mut data).ok()?;
 				return Some(pre_digest.authority_index())
 			}
 		}
@@ -415,17 +416,17 @@ impl<T: Trait> Module<T> {
 		<frame_system::Module<T>>::deposit_log(log.into())
 	}
 
-	fn deposit_vrf_output(vrf_output: &schnorrkel::RawVRFOutput) {
+	fn deposit_randomness(randomness: &schnorrkel::Randomness) {
 		let segment_idx = <SegmentIndex>::get();
 		let mut segment = <UnderConstruction>::get(&segment_idx);
 		if segment.len() < UNDER_CONSTRUCTION_SEGMENT_LENGTH {
 			// push onto current segment: not full.
-			segment.push(*vrf_output);
+			segment.push(*randomness);
 			<UnderConstruction>::insert(&segment_idx, &segment);
 		} else {
 			// move onto the next segment and update the index.
 			let segment_idx = segment_idx + 1;
-			<UnderConstruction>::insert(&segment_idx, &vec![vrf_output.clone()]);
+			<UnderConstruction>::insert(&segment_idx, &vec![randomness.clone()]);
 			<SegmentIndex>::put(&segment_idx);
 		}
 	}
@@ -438,18 +439,18 @@ impl<T: Trait> Module<T> {
 			return;
 		}
 
-		let maybe_pre_digest: Option<RawPreDigest> = <frame_system::Module<T>>::digest()
+		let maybe_pre_digest: Option<PreDigest> = <frame_system::Module<T>>::digest()
 			.logs
 			.iter()
 			.filter_map(|s| s.as_pre_runtime())
 			.filter_map(|(id, mut data)| if id == BABE_ENGINE_ID {
-				RawPreDigest::decode(&mut data).ok()
+				PreDigest::decode(&mut data).ok()
 			} else {
 				None
 			})
 			.next();
 
-		let maybe_vrf = maybe_pre_digest.and_then(|digest| {
+		let maybe_randomness: Option<schnorrkel::Randomness> = maybe_pre_digest.and_then(|digest| {
 			// on the first non-zero block (i.e. block #1)
 			// this is where the first epoch (epoch #0) actually starts.
 			// we need to adjust internal storage accordingly.
@@ -478,17 +479,38 @@ impl<T: Trait> Module<T> {
 			Lateness::<T>::put(lateness);
 			CurrentSlot::put(current_slot);
 
-			if let RawPreDigest::Primary(primary) = digest {
+			if let PreDigest::Primary(primary) = digest {
 				// place the VRF output into the `Initialized` storage item
 				// and it'll be put onto the under-construction randomness
 				// later, once we've decided which epoch this block is in.
-				Some(primary.vrf_output)
+				//
+				// Reconstruct the bytes of VRFInOut using the authority id.
+				Authorities::get()
+					.get(primary.authority_index as usize)
+					.and_then(|author| {
+						schnorrkel::PublicKey::from_bytes(author.0.as_slice()).ok()
+					})
+					.and_then(|pubkey| {
+						let transcript = sp_consensus_babe::make_transcript(
+							&Self::randomness(),
+							current_slot,
+							EpochIndex::get(),
+						);
+
+						primary.vrf_output.0.attach_input_hash(
+							&pubkey,
+							transcript
+						).ok()
+					})
+					.map(|inout| {
+						inout.make_bytes(&sp_consensus_babe::BABE_VRF_INOUT_CONTEXT)
+					})
 			} else {
 				None
 			}
 		});
 
-		Initialized::put(maybe_vrf);
+		Initialized::put(maybe_randomness);
 
 		// enact epoch change, if necessary.
 		T::EpochChangeTrigger::trigger::<T>(now)
@@ -577,7 +599,7 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 fn compute_randomness(
 	last_epoch_randomness: schnorrkel::Randomness,
 	epoch_index: u64,
-	rho: impl Iterator<Item=schnorrkel::RawVRFOutput>,
+	rho: impl Iterator<Item=schnorrkel::Randomness>,
 	rho_size_hint: Option<usize>,
 ) -> schnorrkel::Randomness {
 	let mut s = Vec::with_capacity(40 + rho_size_hint.unwrap_or(0) * VRF_OUTPUT_LENGTH);

@@ -751,7 +751,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				None
 			};
 			let block_data = message::generic::BlockData {
-				hash: hash,
+				hash,
 				header: if get_header { Some(header) } else { None },
 				body: if get_body {
 					self.context_data
@@ -783,7 +783,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		}
 		let response = message::generic::BlockResponse {
 			id: request.id,
-			blocks: blocks,
+			blocks,
 		};
 		trace!(target: "sync", "Sending BlockResponse with {} blocks", response.blocks.len());
 		self.send_message(&peer, None, GenericMessage::BlockResponse(response))

@@ -536,20 +536,25 @@ impl<B: BlockT> ChainSync<B> {
 
 	/// Request syncing for the given block from given set of peers.
 	// The implementation is similar to on_block_announce with unknown parent hash.
-	pub fn set_sync_fork_request(&mut self, mut peers: Vec<PeerId>, hash: &B::Hash, number: NumberFor<B>) {
+	pub fn set_sync_fork_request(
+		&mut self,
+		mut peers: Vec<PeerId>,
+		hash: &B::Hash,
+		number: NumberFor<B>,
+	) {
 		if peers.is_empty() {
-			debug!(
-				target: "sync",
-				"Explicit sync request for block {:?} with no peers specified. \
-				Syncing from all connected peers {:?} instead.",
-				hash, peers,
-			);
-
 			peers = self.peers.iter()
 				// Only request blocks from peers who are ahead or on a par.
 				.filter(|(_, peer)| peer.best_number >= number)
 				.map(|(id, _)| id.clone())
 				.collect();
+
+			debug!(
+				target: "sync",
+				"Explicit sync request for block {:?} with no peers specified. \
+				Syncing from these peers {:?} instead.",
+				hash, peers,
+			);
 		} else {
 			debug!(target: "sync", "Explicit sync request for block {:?} with {:?}", hash, peers);
 		}
@@ -653,12 +658,10 @@ impl<B: BlockT> ChainSync<B> {
 		let pending_requests = self.pending_requests.take();
 		let max_parallel = if major_sync { 1 } else { self.max_parallel_downloads };
 		let iter = self.peers.iter_mut().filter_map(move |(id, peer)| {
-			if !peer.state.is_available() {
+			if !peer.state.is_available() || !pending_requests.contains(id) {
 				return None
 			}
-			if !pending_requests.contains(id) {
-				return None
-			}
+
 			if let Some((range, req)) = peer_block_request(
 				id,
 				peer,

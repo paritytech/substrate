@@ -28,6 +28,7 @@ sp-blockchain = { path = "../../../primitives/blockchain" , version = "2.0.0-dev
 sp-consensus = { package = "sp-consensus", path = "../../../primitives/consensus/common" , version = "0.8.0-dev"}
 sp-inherents = { path = "../../../primitives/inherents" , version = "2.0.0-dev"}
 sp-runtime = {  path = "../../../primitives/runtime" , version = "2.0.0-dev"}
+sp-core = {  path = "../../../primitives/core" , version = "2.0.0-dev"}
 sp-transaction-pool = { path = "../../../primitives/transaction-pool" , version = "2.0.0-dev"}
 
 [dev-dependencies]

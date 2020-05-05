@@ -295,8 +295,6 @@ fn run_to_completion_with<F>(
 ) -> u64 where
 	F: FnOnce(Handle) -> Option<Pin<Box<dyn Future<Output = ()>>>>
 {
-	use parking_lot::RwLock;
-
 	let mut wait_for = Vec::new();
 
 	let highest_finalized = Arc::new(RwLock::new(0));
@@ -354,6 +352,7 @@ fn run_to_completion_with<F>(
 			telemetry_on_connect: None,
 			voting_rule: (),
 			prometheus_registry: None,
+			shared_voter_state: SharedVoterState::empty(),
 		};
 		let voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 
@@ -485,6 +484,7 @@ fn finalize_3_voters_1_full_observer() {
 			telemetry_on_connect: None,
 			voting_rule: (),
 			prometheus_registry: None,
+			shared_voter_state: SharedVoterState::empty(),
 		};
 
 		voters.push(run_grandpa_voter(grandpa_params).expect("all in order with client and network"));
@@ -648,6 +648,7 @@ fn transition_3_voters_twice_1_full_observer() {
 			telemetry_on_connect: None,
 			voting_rule: (),
 			prometheus_registry: None,
+			shared_voter_state: SharedVoterState::empty(),
 		};
 		let voter = run_grandpa_voter(grandpa_params).expect("all in order with client and network");
 
@@ -1072,6 +1073,7 @@ fn voter_persists_its_votes() {
 							telemetry_on_connect: None,
 							voting_rule: VotingRulesBuilder::default().build(),
 							prometheus_registry: None,
+							shared_voter_state: SharedVoterState::empty(),
 						};
 
 						let voter = run_grandpa_voter(grandpa_params)
@@ -1417,6 +1419,7 @@ fn voter_catches_up_to_latest_round_when_behind() {
 			telemetry_on_connect: None,
 			voting_rule: (),
 			prometheus_registry: None,
+			shared_voter_state: SharedVoterState::empty(),
 		};
 
 		Box::pin(run_grandpa_voter(grandpa_params).expect("all in order with client and network"))

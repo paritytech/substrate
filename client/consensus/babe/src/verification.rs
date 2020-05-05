@@ -17,7 +17,7 @@
 //! Verification for BABE headers.
 use sp_runtime::{traits::Header, traits::DigestItemFor};
 use sp_core::{Pair, Public};
-use sp_consensus_babe::{AuthoritySignature, SlotNumber, AuthorityPair, AuthorityId};
+use sp_consensus_babe::{make_transcript, AuthoritySignature, SlotNumber, AuthorityPair, AuthorityId};
 use sp_consensus_babe::digests::{
 	PreDigest, PrimaryPreDigest, SecondaryPlainPreDigest, SecondaryVRFPreDigest,
 	CompatibleDigestItem
@@ -25,7 +25,7 @@ use sp_consensus_babe::digests::{
 use sc_consensus_slots::CheckedHeader;
 use log::{debug, trace};
 use super::{find_pre_digest, babe_err, Epoch, BlockT, Error};
-use super::authorship::{make_transcript, calculate_primary_threshold, check_primary_threshold, secondary_slot_author};
+use super::authorship::{calculate_primary_threshold, check_primary_threshold, secondary_slot_author};
 
 /// BABE verification parameters
 pub(super) struct VerificationParams<'a, B: 'a + BlockT> {

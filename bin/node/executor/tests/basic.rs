@@ -18,7 +18,7 @@ use codec::{Encode, Decode, Joiner};
 use frame_support::{
 	StorageValue, StorageMap,
 	traits::Currency,
-	weights::{GetDispatchInfo, DispatchInfo, DispatchClass},
+	weights::{GetDispatchInfo, DispatchInfo, DispatchClass, constants::ExtrinsicBaseWeight},
 };
 use sp_core::{
 	NeverNativeValue, map, traits::Externalities, storage::{well_known_keys, Storage},
@@ -33,7 +33,7 @@ use frame_system::{self, EventRecord, Phase};
 
 use node_runtime::{
 	Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,
-	System, TransactionPayment, Event, TransactionByteFee, ExtrinsicBaseWeight,
+	System, TransactionPayment, Event, TransactionByteFee,
 	constants::currency::*,
 };
 use node_primitives::{Balance, Hash};
@@ -359,9 +359,9 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				// Balance Transfer 80_000_000 + 1 Read + 1 Write
+				// Balance Transfer 70_000_000 + 1 Read + 1 Write
 				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 80_000_000 + 25_000_000 + 100_000_000, ..Default::default() }
+					DispatchInfo { weight: 70_000_000 + 25_000_000 + 100_000_000, ..Default::default() }
 				)),
 				topics: vec![],
 			},
@@ -416,9 +416,9 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				// Balance Transfer 80_000_000 + 1 Read + 1 Write
+				// Balance Transfer 70_000_000 + 1 Read + 1 Write
 				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 80_000_000 + 25_000_000 + 100_000_000, ..Default::default() }
+					DispatchInfo { weight: 70_000_000 + 25_000_000 + 100_000_000, ..Default::default() }
 				)),
 				topics: vec![],
 			},
@@ -440,9 +440,9 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(2),
-				// Balance Transfer 80_000_000 + 1 Read + 1 Write
+				// Balance Transfer 70_000_000 + 1 Read + 1 Write
 				event: Event::frame_system(frame_system::RawEvent::ExtrinsicSuccess(
-					DispatchInfo { weight: 80_000_000 + 25_000_000 + 100_000_000, ..Default::default() }
+					DispatchInfo { weight: 70_000_000 + 25_000_000 + 100_000_000, ..Default::default() }
 				)),
 				topics: vec![],
 			},
