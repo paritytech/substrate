@@ -288,32 +288,14 @@ mod weight_for {
 	}
 }
 
-/// Adjust the weight of a dispatch call result by mapping the weight with a closure.
+/// Return the weight of a dispatch call result as an `Option`.
 ///
-/// Will return `Ok` without regard to the underlying result.
-///
-/// Usage:
-/// ```ignore
-/// let res = fold_result_weight(result, |weight| weight + 40_000);
-/// ```
-fn fold_result_weight<F>(
-    result: DispatchResultWithPostInfo,
-    closure: F,
-) -> DispatchResultWithPostInfo
-where
-    F: FnOnce(Weight) -> Weight,
-{
-    match result {
-        Ok(post_info) => Ok(post_info.actual_weight.map(closure).into()),
-        Err(err) => Ok(err.post_info.actual_weight.map(closure).into()),
-    }
-}
-
+/// Will return the weight regardless of what the state of the result is.
 fn get_result_weight(result: DispatchResultWithPostInfo) -> Option<Weight> {
-    match result {
-        Ok(post_info) => post_info.actual_weight,
-        Err(err) => err.post_info.actual_weight,
-    }
+	match result {
+		Ok(post_info) => post_info.actual_weight,
+		Err(err) => err.post_info.actual_weight,
+	}
 }
 
 
@@ -385,11 +367,11 @@ decl_module! {
 			let result = proposal.dispatch(RawOrigin::Member(who).into());
 			Self::deposit_event(RawEvent::MemberExecuted(proposal_hash, result.is_ok()));
 
-			fold_result_weight(result, |w| weight_for::execute(
+			Ok(get_result_weight(result).map(|w| weight_for::execute(
 				T::DbWeight::get(),
 				members.len() as Weight,
 				w
-			))
+			)).into())
 		}
 
 		/// Add a new proposal to either be voted on or executed directly.
@@ -453,11 +435,11 @@ decl_module! {
 				let result = proposal.dispatch(RawOrigin::Members(1, seats).into());
 				Self::deposit_event(RawEvent::Executed(proposal_hash, result.is_ok()));
 
-				fold_result_weight(result, |w| weight_for::propose_execute(
+				Ok(get_result_weight(result).map(|w| weight_for::propose_execute(
 					T::DbWeight::get(),
 					members.len() as Weight, // M
 					w, // P1
-				))
+				)).into())
 			} else {
 				let active_proposals =
 					<Proposals<T, I>>::try_mutate(|proposals| -> Result<usize, DispatchError> {
