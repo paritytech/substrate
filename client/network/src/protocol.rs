@@ -126,7 +126,6 @@ mod rep {
 }
 
 struct Metrics {
-	handshaking_peers: Gauge<U64>,
 	obsolete_requests: Gauge<U64>,
 	peers: Gauge<U64>,
 	queued_blocks: Gauge<U64>,
@@ -138,10 +137,6 @@ struct Metrics {
 impl Metrics {
 	fn register(r: &Registry) -> Result<Self, PrometheusError> {
 		Ok(Metrics {
-			handshaking_peers: {
-				let g = Gauge::new("sync_handshaking_peers", "Number of newly connected peers")?;
-				register(g, r)?
-			},
 			obsolete_requests: {
 				let g = Gauge::new("sync_obsolete_requests", "Number of obsolete requests")?;
 				register(g, r)?
@@ -197,8 +192,6 @@ pub struct Protocol<B: BlockT, H: ExHashT> {
 	/// List of nodes for which we perform additional logging because they are important for the
 	/// user.
 	important_peers: HashSet<PeerId>,
-	// Connected peers pending Status message.
-	handshaking_peers: HashMap<PeerId, HandshakingPeer>,
 	/// Used to report reputation changes.
 	peerset_handle: sc_peerset::PeersetHandle,
 	transaction_pool: Arc<dyn TransactionPool<H, B>>,
@@ -230,13 +223,6 @@ struct PacketStats {
 	count_in: u64,
 	count_out: u64,
 }
-
-/// A peer that we are connected to
-/// and from whom we have not yet received a Status message.
-struct HandshakingPeer {
-	timestamp: Instant,
-}
-
 /// Peer information
 #[derive(Debug, Clone)]
 struct Peer<B: BlockT, H: ExHashT> {
@@ -317,6 +303,22 @@ impl<B: BlockT> BlockAnnouncesHandshake<B> {
 	}
 }
 
+/// Builds a SCALE-encoded "Status" message to send as handshake for the legacy protocol.
+fn build_status_message<B: BlockT>(protocol_config: &ProtocolConfig, chain: &Arc<dyn Client<B>>) -> Vec<u8> {
+	let info = chain.info();
+	let status = message::generic::Status {
+		version: CURRENT_VERSION,
+		min_supported_version: MIN_VERSION,
+		genesis_hash: info.genesis_hash,
+		roles: protocol_config.roles.into(),
+		best_number: info.best_number,
+		best_hash: info.best_hash,
+		chain_status: Vec::new(), // TODO: find a way to make this backwards-compatible
+	};
+
+	Message::<B>::Status(status).encode()
+}
+
 /// Fallback mechanism to use to send a notification if no substream is open.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Fallback {
@@ -365,7 +367,13 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 
 		let (peerset, peerset_handle) = sc_peerset::Peerset::from_config(peerset_config);
 		let versions = &((MIN_VERSION as u8)..=(CURRENT_VERSION as u8)).collect::<Vec<u8>>();
-		let mut behaviour = GenericProto::new(protocol_id.clone(), versions, peerset, queue_size_report);
+		let mut behaviour = GenericProto::new(
+			protocol_id.clone(),
+			versions,
+			build_status_message(&config, &chain),
+			peerset,
+			queue_size_report,
+		);
 
 		let mut legacy_equiv_by_name = HashMap::new();
 
@@ -402,7 +410,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			},
 			genesis_hash: info.genesis_hash,
 			sync,
-			handshaking_peers: HashMap::new(),
 			important_peers,
 			transaction_pool,
 			finality_proof_provider,
@@ -561,7 +568,8 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		stats.count_in += 1;
 
 		match message {
-			GenericMessage::Status(s) => return self.on_status_message(who, s),
+			GenericMessage::Status(_) =>
+				warn!(target: "sub-libp2p", "Received unexpected Status"),
 			GenericMessage::BlockRequest(r) => self.on_block_request(who, r),
 			GenericMessage::BlockResponse(r) => {
 				if let Some(request) = self.handle_response(who.clone(), &r) {
@@ -660,13 +668,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		);
 	}
 
-	/// Called when a new peer is connected
-	pub fn on_peer_connected(&mut self, who: PeerId) {
-		trace!(target: "sync", "Connecting {}", who);
-		self.handshaking_peers.insert(who.clone(), HandshakingPeer { timestamp: Instant::now() });
-		self.send_status(who);
-	}
-
 	/// Called by peer when it is disconnecting
 	pub fn on_peer_disconnected(&mut self, peer: PeerId) -> CustomMessageOutcome<B> {
 		if self.important_peers.contains(&peer) {
@@ -676,11 +677,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		}
 
 		// lock all the the peer lists so that add/remove peer events are in order
-		let removed = {
-			self.handshaking_peers.remove(&peer);
-			self.context_data.peers.remove(&peer)
-		};
-		if let Some(_peer_data) = removed {
+		if let Some(_peer_data) =  self.context_data.peers.remove(&peer) {
 			self.sync.peer_disconnected(peer.clone());
 
 			// Notify all the notification protocols as closed.
@@ -895,16 +892,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 					aborting.push(who.clone());
 				}
 			}
-			for (who, _) in self.handshaking_peers.iter()
-				.filter(|(_, handshaking)| (tick - handshaking.timestamp).as_secs() > REQUEST_TIMEOUT_SEC)
-			{
-				log!(
-					target: "sync",
-					if self.important_peers.contains(who) { Level::Warn } else { Level::Trace },
-					"Handshake timeout {}", who
-				);
-				aborting.push(who.clone());
-			}
 		}
 
 		for p in aborting {
@@ -914,7 +901,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	}
 
 	/// Called by peer to report status
-	fn on_status_message(&mut self, who: PeerId, status: message::Status<B>) -> CustomMessageOutcome<B> {
+	pub fn on_peer_connected(&mut self, who: PeerId, status: message::Status<B>) -> CustomMessageOutcome<B> {
 		trace!(target: "sync", "New peer {} {:?}", who, status);
 		let _protocol_version = {
 			if self.context_data.peers.contains_key(&who) {
@@ -986,23 +973,13 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				}
 			}
 
-			let info = match self.handshaking_peers.remove(&who) {
-				Some(_handshaking) => {
-					PeerInfo {
-						protocol_version: status.version,
-						roles: status.roles,
-						best_hash: status.best_hash,
-						best_number: status.best_number
-					}
-				},
-				None => {
-					error!(target: "sync", "Received status from previously unconnected node {}", who);
-					return CustomMessageOutcome::None;
-				},
-			};
-
 			let peer = Peer {
-				info,
+				info: PeerInfo {
+					protocol_version: status.version,
+					roles: status.roles,
+					best_hash: status.best_hash,
+					best_number: status.best_number
+				},
 				block_request: None,
 				known_extrinsics: LruHashSet::new(NonZeroUsize::new(MAX_KNOWN_EXTRINSICS)
 					.expect("Constant is nonzero")),
@@ -1264,22 +1241,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		}
 	}
 
-	/// Send Status message
-	fn send_status(&mut self, who: PeerId) {
-		let info = self.context_data.chain.info();
-		let status = message::generic::Status {
-			version: CURRENT_VERSION,
-			min_supported_version: MIN_VERSION,
-			genesis_hash: info.genesis_hash,
-			roles: self.config.roles.into(),
-			best_number: info.best_number,
-			best_hash: info.best_hash,
-			chain_status: Vec::new(), // TODO: find a way to make this backwards-compatible
-		};
-
-		self.send_message(&who, None, GenericMessage::Status(status))
-	}
-
 	fn on_block_announce(
 		&mut self,
 		who: PeerId,
@@ -1365,6 +1326,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 	pub fn on_block_imported(&mut self, header: &B::Header, is_best: bool) {
 		if is_best {
 			self.sync.update_chain_info(header);
+			self.behaviour.set_legacy_handshake_message(build_status_message(&self.config, &self.context_data.chain));
 			self.behaviour.set_notif_protocol_handshake(
 				&self.block_announces_protocol,
 				BlockAnnouncesHandshake::build(&self.config, &self.context_data.chain).encode()
@@ -1780,9 +1742,6 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 			}
 			metrics.obsolete_requests.set(obsolete_requests);
 
-			let n = self.handshaking_peers.len().try_into().unwrap_or(std::u64::MAX);
-			metrics.handshaking_peers.set(n);
-
 			let n = self.context_data.peers.len().try_into().unwrap_or(std::u64::MAX);
 			metrics.peers.set(n);
 
@@ -2009,9 +1968,31 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 		};
 
 		let outcome = match event {
-			GenericProtoOut::CustomProtocolOpen { peer_id, .. } => {
-				self.on_peer_connected(peer_id.clone());
-				CustomMessageOutcome::None
+			GenericProtoOut::CustomProtocolOpen { peer_id, received_handshake, .. } => {
+				match <Message<B> as Decode>::decode(&mut &received_handshake[..]) {
+					Ok(GenericMessage::Status(handshake)) => self.on_peer_connected(peer_id, handshake),
+					Ok(msg) => {
+						debug!(
+							target: "sync",
+							"Expected Status message from {}, but got {:?}",
+							peer_id,
+							msg,
+						);
+						self.peerset_handle.report_peer(peer_id, rep::BAD_MESSAGE);
+						CustomMessageOutcome::None
+					}
+					Err(err) => {
+						debug!(
+							target: "sync",
+							"Couldn't decode handshake sent by {}: {:?}: {}",
+							peer_id,
+							received_handshake,
+							err.what()
+						);
+						self.peerset_handle.report_peer(peer_id, rep::BAD_MESSAGE);
+						CustomMessageOutcome::None
+					}
+				}
 			}
 			GenericProtoOut::CustomProtocolClosed { peer_id, .. } => {
 				self.on_peer_disconnected(peer_id.clone())
@@ -2104,50 +2085,5 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 impl<B: BlockT, H: ExHashT> Drop for Protocol<B, H> {
 	fn drop(&mut self) {
 		debug!(target: "sync", "Network stats:\n{}", self.format_stats());
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use crate::PeerId;
-	use crate::config::EmptyTransactionPool;
-	use super::{CustomMessageOutcome, Protocol, ProtocolConfig};
-
-	use sp_consensus::block_validation::DefaultBlockAnnounceValidator;
-	use std::sync::Arc;
-	use substrate_test_runtime_client::{TestClientBuilder, TestClientBuilderExt};
-	use substrate_test_runtime_client::runtime::{Block, Hash};
-
-	#[test]
-	fn no_handshake_no_notif_closed() {
-		let client = Arc::new(TestClientBuilder::with_default_backend().build_with_longest_chain().0);
-
-		let (mut protocol, _) = Protocol::<Block, Hash>::new(
-			ProtocolConfig::default(),
-			client.clone(),
-			Arc::new(EmptyTransactionPool),
-			None,
-			None,
-			From::from(&b"test"[..]),
-			sc_peerset::PeersetConfig {
-				in_peers: 10,
-				out_peers: 10,
-				bootnodes: Vec::new(),
-				reserved_only: false,
-				priority_groups: Vec::new(),
-			},
-			Box::new(DefaultBlockAnnounceValidator::new(client.clone())),
-			None,
-			Default::default(),
-			true,
-			None,
-		).unwrap();
-
-		let dummy_peer_id = PeerId::random();
-		let _ = protocol.on_peer_connected(dummy_peer_id.clone());
-		match protocol.on_peer_disconnected(dummy_peer_id) {
-			CustomMessageOutcome::None => {},
-			_ => panic!()
-		};
 	}
 }

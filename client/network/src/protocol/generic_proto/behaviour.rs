@@ -275,6 +275,9 @@ pub enum GenericProtoOut {
 	CustomProtocolOpen {
 		/// Id of the peer we are connected to.
 		peer_id: PeerId,
+		/// Handshake that was sent to us.
+		/// This is normally a "Status" message, but this out of the concern of this code.
+		received_handshake: Vec<u8>,
 	},
 
 	/// Closed a custom protocol with the remote.
@@ -323,10 +326,11 @@ impl GenericProto {
 	pub fn new(
 		protocol: impl Into<ProtocolId>,
 		versions: &[u8],
+		handshake_message: Vec<u8>,
 		peerset: sc_peerset::Peerset,
 		queue_size_report: Option<HistogramVec>,
 	) -> Self {
-		let legacy_protocol = RegisteredProtocol::new(protocol, versions);
+		let legacy_protocol = RegisteredProtocol::new(protocol, versions, handshake_message);
 
 		GenericProto {
 			legacy_protocol,
@@ -378,6 +382,27 @@ impl GenericProto {
 				},
 			});
 		}
+	}
+
+	/// Modifies the handshake of the legacy protocol.
+	pub fn set_legacy_handshake_message(
+		&mut self,
+		handshake_message: impl Into<Vec<u8>>
+	) {
+		let handshake_message = handshake_message.into();
+
+		// Send an event to all the peers we're connected to, updating the handshake message.
+		for (peer_id, _) in self.peers.iter().filter(|(_, state)| state.is_connected()) {
+			self.events.push(NetworkBehaviourAction::NotifyHandler {
+				peer_id: peer_id.clone(),
+				handler: NotifyHandler::All,
+				event: NotifsHandlerIn::UpdateLegacyHandshake {
+					handshake_message: handshake_message.clone(),
+				},
+			});
+		}
+
+		self.legacy_protocol.set_handshake_message(handshake_message);
 	}
 
 	/// Returns the number of discovered nodes that we keep in memory.
@@ -1158,7 +1183,7 @@ impl NetworkBehaviour for GenericProto {
 				}
 			}
 
-			NotifsHandlerOut::Open { endpoint } => {
+			NotifsHandlerOut::Open { endpoint, received_handshake } => {
 				debug!(target: "sub-libp2p",
 					"Handler({:?}) => Endpoint {:?} open for custom protocols.",
 					source, endpoint);
@@ -1181,7 +1206,7 @@ impl NetworkBehaviour for GenericProto {
 
 				if first {
 					debug!(target: "sub-libp2p", "External API <= Open({:?})", source);
-					let event = GenericProtoOut::CustomProtocolOpen { peer_id: source };
+					let event = GenericProtoOut::CustomProtocolOpen { peer_id: source, received_handshake };
 					self.events.push(NetworkBehaviourAction::GenerateEvent(event));
 				} else {
 					debug!(target: "sub-libp2p", "Secondary connection opened custom protocol.");

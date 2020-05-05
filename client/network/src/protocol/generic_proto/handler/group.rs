@@ -161,6 +161,13 @@ pub enum NotifsHandlerIn {
 		message: Vec<u8>,
 	},
 
+	/// Modifies the handshake message of the legacy protocol.
+	UpdateLegacyHandshake {
+		/// The new handshake message to send if we open a substream or if the remote opens a
+		/// substream towards us.
+		handshake_message: Vec<u8>,
+	},
+
 	/// Modifies the handshake message of a notifications protocol.
 	UpdateHandshake {
 		/// Name of the protocol for the message.
@@ -198,6 +205,9 @@ pub enum NotifsHandlerOut {
 	Open {
 		/// The endpoint of the connection that is open for custom protocols.
 		endpoint: ConnectedPoint,
+		/// Handshake that was sent to us.
+		/// This is normally a "Status" message, but this out of the concern of this code.
+		received_handshake: Vec<u8>,
 	},
 
 	/// The connection is closed for custom protocols.
@@ -375,6 +385,9 @@ impl ProtocolsHandler for NotifsHandler {
 			},
 			NotifsHandlerIn::SendLegacy { message } =>
 				self.legacy.inject_event(LegacyProtoHandlerIn::SendCustomMessage { message }),
+			NotifsHandlerIn::UpdateLegacyHandshake { handshake_message } => {
+				self.legacy.set_handshake_message(handshake_message);
+			}
 			NotifsHandlerIn::UpdateHandshake { protocol_name, handshake_message } => {
 				for (handler, current_handshake) in &mut self.in_handlers {
 					if handler.protocol_name() == &*protocol_name {
@@ -490,9 +503,9 @@ impl ProtocolsHandler for NotifsHandler {
 						protocol: protocol.map_upgrade(EitherUpgrade::B),
 						info: None,
 					}),
-				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolOpen { endpoint, .. }) =>
+				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolOpen { endpoint, received_handshake, .. }) =>
 					return Poll::Ready(ProtocolsHandlerEvent::Custom(
-						NotifsHandlerOut::Open { endpoint }
+						NotifsHandlerOut::Open { endpoint, received_handshake }
 					)),
 				ProtocolsHandlerEvent::Custom(LegacyProtoHandlerOut::CustomProtocolClosed { endpoint, reason }) =>
 					return Poll::Ready(ProtocolsHandlerEvent::Custom(

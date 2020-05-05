@@ -36,12 +36,14 @@ pub struct RegisteredProtocol {
 	/// List of protocol versions that we support.
 	/// Ordered in descending order so that the best comes first.
 	supported_versions: Vec<u8>,
+	/// Handshake to send after the substream is open.
+	handshake_message: Vec<u8>,
 }
 
 impl RegisteredProtocol {
 	/// Creates a new `RegisteredProtocol`. The `custom_data` parameter will be
 	/// passed inside the `RegisteredProtocolOutput`.
-	pub fn new(protocol: impl Into<ProtocolId>, versions: &[u8])
+	pub fn new(protocol: impl Into<ProtocolId>, versions: &[u8], handshake_message: Vec<u8>)
 		-> Self {
 		let protocol = protocol.into();
 		let mut base_name = b"/substrate/".to_vec();
@@ -56,7 +58,13 @@ impl RegisteredProtocol {
 				tmp.sort_unstable_by(|a, b| b.cmp(&a));
 				tmp
 			},
+			handshake_message,
 		}
+	}
+
+	/// Modifies the handshake message.
+	pub fn set_handshake_message(&mut self, handshake_message: Vec<u8>) {
+		self.handshake_message = handshake_message;
 	}
 }
 
@@ -66,6 +74,7 @@ impl Clone for RegisteredProtocol {
 			id: self.id.clone(),
 			base_name: self.base_name.clone(),
 			supported_versions: self.supported_versions.clone(),
+			handshake_message: self.handshake_message.clone(),
 		}
 	}
 }
@@ -242,10 +251,10 @@ impl ProtocolName for RegisteredProtocolName {
 }
 
 impl<TSubstream> InboundUpgrade<TSubstream> for RegisteredProtocol
-where TSubstream: AsyncRead + AsyncWrite + Unpin,
+where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
-	type Output = RegisteredProtocolSubstream<TSubstream>;
-	type Future = future::Ready<Result<Self::Output, io::Error>>;
+	type Output = (RegisteredProtocolSubstream<TSubstream>, Vec<u8>);
+	type Future = Pin<Box<dyn Future<Output = Result<Self::Output, io::Error>> + Send>>;
 	type Error = io::Error;
 
 	fn upgrade_inbound(
@@ -253,26 +262,32 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin,
 		socket: TSubstream,
 		info: Self::Info,
 	) -> Self::Future {
-		let framed = {
-			let mut codec = UviBytes::default();
-			codec.set_max_len(16 * 1024 * 1024);		// 16 MiB hard limit for packets.
-			Framed::new(socket, codec)
-		};
+		Box::pin(async move {
+			let mut framed = {
+				let mut codec = UviBytes::default();
+				codec.set_max_len(16 * 1024 * 1024);		// 16 MiB hard limit for packets.
+				Framed::new(socket, codec)
+			};
 
-		future::ok(RegisteredProtocolSubstream {
-			is_closing: false,
-			endpoint: Endpoint::Listener,
-			send_queue: VecDeque::new(),
-			requires_poll_flush: false,
-			inner: framed.fuse(),
-			protocol_version: info.version,
-			clogged_fuse: false,
+			framed.send(BytesMut::from(&self.handshake_message[..])).await?;
+			let received_handshake = framed.next().await
+				.ok_or_else(|| io::ErrorKind::UnexpectedEof)??;
+
+			Ok((RegisteredProtocolSubstream {
+				is_closing: false,
+				endpoint: Endpoint::Listener,
+				send_queue: VecDeque::new(),
+				requires_poll_flush: false,
+				inner: framed.fuse(),
+				protocol_version: info.version,
+				clogged_fuse: false,
+			}, received_handshake.to_vec()))
 		})
 	}
 }
 
 impl<TSubstream> OutboundUpgrade<TSubstream> for RegisteredProtocol
-where TSubstream: AsyncRead + AsyncWrite + Unpin,
+where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
 	type Output = <Self as InboundUpgrade<TSubstream>>::Output;
 	type Future = <Self as InboundUpgrade<TSubstream>>::Future;
@@ -283,16 +298,26 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin,
 		socket: TSubstream,
 		info: Self::Info,
 	) -> Self::Future {
-		let framed = Framed::new(socket, UviBytes::default());
+		Box::pin(async move {
+			let mut framed = {
+				let mut codec = UviBytes::default();
+				codec.set_max_len(16 * 1024 * 1024);		// 16 MiB hard limit for packets.
+				Framed::new(socket, codec)
+			};
 
-		future::ok(RegisteredProtocolSubstream {
-			is_closing: false,
-			endpoint: Endpoint::Dialer,
-			send_queue: VecDeque::new(),
-			requires_poll_flush: false,
-			inner: framed.fuse(),
-			protocol_version: info.version,
-			clogged_fuse: false,
+			framed.send(BytesMut::from(&self.handshake_message[..])).await?;
+			let received_handshake = framed.next().await
+				.ok_or_else(|| io::ErrorKind::UnexpectedEof)??;
+
+			Ok((RegisteredProtocolSubstream {
+				is_closing: false,
+				endpoint: Endpoint::Dialer,
+				send_queue: VecDeque::new(),
+				requires_poll_flush: false,
+				inner: framed.fuse(),
+				protocol_version: info.version,
+				clogged_fuse: false,
+			}, received_handshake.to_vec()))
 		})
 	}
 }
