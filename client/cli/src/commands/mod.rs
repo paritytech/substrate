@@ -17,6 +17,7 @@
 mod build_spec_cmd;
 mod check_block_cmd;
 mod export_blocks_cmd;
+mod export_state_cmd;
 mod import_blocks_cmd;
 mod purge_chain_cmd;
 mod generate_node_key;
@@ -30,7 +31,8 @@ mod verify;
 mod vanity;
 mod insert;
 mod revert_cmd;
-mod runcmd;
+mod run_cmd;
+
 #[cfg(test)]
 pub mod tests;
 
@@ -39,11 +41,24 @@ use structopt::StructOpt;
 use crate::params::SharedParams;
 
 pub use self::{
-	build_spec_cmd::BuildSpecCmd, check_block_cmd::CheckBlockCmd, export_blocks_cmd::ExportBlocksCmd,
-	import_blocks_cmd::ImportBlocksCmd, purge_chain_cmd::PurgeChainCmd, generate::GenerateCmd,
-	generate_node_key::GenerateNodeKeyCmd, insert::InsertCmd, sign::SignCmd, vanity::VanityCmd,
-	sign_transaction::SignTransactionCmd, transfer::TransferCmd, verify::VerifyCmd, revert_cmd::RevertCmd,
-	runcmd::RunCmd, inspect::InspectCmd, utils::*
+	build_spec_cmd::BuildSpecCmd,
+	check_block_cmd::CheckBlockCmd,
+	export_blocks_cmd::ExportBlocksCmd,
+	export_state_cmd::ExportStateCmd,
+	import_blocks_cmd::ImportBlocksCmd,
+	purge_chain_cmd::PurgeChainCmd,
+	generate::GenerateCmd,
+	generate_node_key::GenerateNodeKeyCmd,
+	insert::InsertCmd,
+	sign::SignCmd,
+	vanity::VanityCmd,
+	sign_transaction::SignTransactionCmd,
+	transfer::TransferCmd,
+	verify::VerifyCmd,
+	revert_cmd::RevertCmd,
+	run_cmd::RunCmd,
+	inspect::InspectCmd,
+	utils::*
 };
 use cli_utils::{IndexFor, CallFor};
 
@@ -66,6 +81,9 @@ pub enum Subcommand {
 
 	/// Validate a single block.
 	CheckBlock(CheckBlockCmd),
+
+	/// Export state as raw chain spec.
+	ExportState(ExportStateCmd),
 
 	/// Revert chain to the previous state.
 	Revert(RevertCmd),
@@ -190,6 +208,12 @@ macro_rules! substrate_cli_subcommands {
 			fn offchain_worker_params(&self) -> Option<&$crate::OffchainWorkerParams> {
 				match self {
 					$($enum::$variant(cmd) => cmd.offchain_worker_params()),*
+				}
+			}
+
+			fn database_params(&self) -> Option<&$crate::DatabaseParams> {
+				match self {
+					$($enum::$variant(cmd) => cmd.database_params()),*
 				}
 			}
 
@@ -376,7 +400,10 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
-			fn offchain_worker(&self, role: &::sc_service::Role) -> $crate::Result<::sc_service::config::OffchainWorkerConfig> {
+			fn offchain_worker(
+				&self,
+				role: &::sc_service::Role,
+			) -> $crate::Result<::sc_service::config::OffchainWorkerConfig> {
 				match self {
 					$($enum::$variant(cmd) => cmd.offchain_worker(role)),*
 				}
@@ -438,6 +465,7 @@ substrate_cli_subcommands!(
 	Subcommand =>
 	BuildSpec,
 	ExportBlocks,
+	ExportState,
 	ImportBlocks,
 	CheckBlock,
 	Revert,
@@ -452,3 +480,4 @@ substrate_cli_subcommands!(
 	Verify,
 	Vanity
 );
+

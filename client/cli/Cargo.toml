@@ -66,6 +66,7 @@ nix = "0.17.0"
 
 [dev-dependencies]
 tempfile = "3.1.0"
+sp-io = { version = "2.0.0-dev", path = "../../primitives/io" }
 substrate-test-runtime = { version = "2.0.0-dev", features = ["indices-lookup"], path = "../../test-utils/runtime" }
 sp-application-crypto = { version = "2.0.0-alpha.2", default-features = false, path = "../../primitives/application-crypto" }
 frame-system = { version = "2.0.0-alpha.4", path = "../../frame/system" }

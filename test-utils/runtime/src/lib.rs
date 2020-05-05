@@ -50,11 +50,12 @@ use sp_version::NativeVersion;
 use frame_support::{impl_outer_origin, parameter_types, weights::{Weight, RuntimeDbWeight}};
 use sp_inherents::{CheckInherentsResult, InherentData};
 use cfg_if::cfg_if;
-use sp_runtime::generic::Era;
-use cli_utils::IndexFor;
 
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
 pub use sp_consensus_babe::{AuthorityId, SlotNumber, AllowedSlots};
+use cli_utils::{RuntimeAdapter, IndexFor};
+use sp_runtime::generic::Era;
+
 pub type AuraId = sp_consensus_aura::sr25519::AuthorityId;
 
 // Include the WASM binary
@@ -378,6 +379,12 @@ impl From<frame_system::Event<Runtime>> for Event {
 	}
 }
 
+impl From<pallet_balances::Event<Runtime>> for Event {
+	fn from(_evt: pallet_balances::Event<Runtime>) -> Self {
+		unimplemented!("Not required in tests!")
+	}
+}
+
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 250;
 	pub const MinimumPeriod: u64 = 5;
@@ -390,6 +397,30 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 	pub const Deposit: u64 = 1;
 	pub const ExistentialDeposit: u64 = 1;
+}
+
+impl pallet_balances::Trait for Runtime {
+	type Balance = u64;
+	type DustRemoval = ();
+	type Event = Event;
+	type ExistentialDeposit = ExistentialDeposit;
+	type AccountStore = frame_system::Module<Runtime>;
+}
+
+impl RuntimeAdapter for Runtime {
+	type Extra = (
+		frame_system::CheckVersion<Runtime>,
+		frame_system::CheckGenesis<Runtime>,
+		frame_system::CheckEra<Runtime>,
+	);
+
+	fn build_extra(_index: IndexFor<Self>) -> Self::Extra {
+		(
+			frame_system::CheckVersion::new(),
+			frame_system::CheckGenesis::new(),
+			frame_system::CheckEra::from(Era::Immortal),
+		)
+	}
 }
 
 impl frame_system::Trait for Runtime {

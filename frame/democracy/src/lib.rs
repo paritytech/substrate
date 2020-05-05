@@ -168,7 +168,7 @@ use sp_runtime::{
 	DispatchResult, DispatchError, RuntimeDebug,
 	traits::{Zero, Hash, Dispatchable, Saturating},
 };
-use codec::{Ref, Encode, Decode};
+use codec::{Encode, Decode};
 use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error, ensure, Parameter,
 	weights::{Weight, DispatchClass},
@@ -525,12 +525,6 @@ decl_module! {
 
 		fn deposit_event() = default;
 
-		fn on_runtime_upgrade() -> Weight {
-			Self::migrate();
-
-			0
-		}
-
 		/// Propose a sensitive action to be taken.
 		///
 		/// The dispatch origin of this call must be _Signed_ and the sender must
@@ -559,8 +553,7 @@ decl_module! {
 			PublicPropCount::put(index + 1);
 			<DepositOf<T>>::insert(index, (value, &[&who][..]));
 
-			let new_prop = (index, proposal_hash, who);
-			<PublicProps<T>>::append_or_put(&[Ref::from(&new_prop)][..]);
+			<PublicProps<T>>::append((index, proposal_hash, who));
 
 			Self::deposit_event(RawEvent::Proposed(index, value));
 		}
@@ -1268,25 +1261,6 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
-	fn migrate() {
-		use frame_support::{Twox64Concat, migration::{StorageKeyIterator, remove_storage_prefix}};
-		remove_storage_prefix(b"Democracy", b"VotesOf", &[]);
-		remove_storage_prefix(b"Democracy", b"VotersFor", &[]);
-		remove_storage_prefix(b"Democracy", b"Delegations", &[]);
-		for (who, (end, proposal_hash, threshold, delay))
-			in StorageKeyIterator::<
-				ReferendumIndex,
-				(T::BlockNumber, T::Hash, VoteThreshold, T::BlockNumber),
-				Twox64Concat,
-			>::new(b"Democracy", b"ReferendumInfoOf").drain()
-		{
-			let status = ReferendumStatus {
-				end, proposal_hash, threshold, delay, tally: Tally::default()
-			};
-			ReferendumInfoOf::<T>::insert(who, ReferendumInfo::Ongoing(status))
-		}
-	}
-
 	// exposed immutables.
 
 	/// Get the amount locked in support of `proposal`; `None` if proposal isn't a valid proposal

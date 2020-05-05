@@ -245,33 +245,11 @@ decl_error! {
 	}
 }
 
-mod migration {
-	use super::*;
-	use frame_support::{migration::{StorageKeyIterator, take_storage_item}, Twox64Concat};
-	pub fn migrate<T: Trait>() {
-		for (who, votes) in StorageKeyIterator
-			::<T::AccountId, Vec<T::AccountId>, Twox64Concat>
-			::new(b"PhragmenElection", b"VotesOf")
-			.drain()
-		{
-			if let Some(stake) = take_storage_item::<_, BalanceOf<T>, Twox64Concat>(b"PhragmenElection", b"StakeOf", &who) {
-				Voting::<T>::insert(who, (stake, votes));
-			}
-		}
-	}
-}
-
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		type Error = Error<T>;
 
 		fn deposit_event() = default;
-
-		fn on_runtime_upgrade() -> Weight {
-			migration::migrate::<T>();
-
-			0
-		}
 
 		const CandidacyBond: BalanceOf<T> = T::CandidacyBond::get();
 		const VotingBond: BalanceOf<T> = T::VotingBond::get();
@@ -301,8 +279,9 @@ decl_module! {
 
 			let candidates_count = <Candidates<T>>::decode_len().unwrap_or(0) as usize;
 			let members_count = <Members<T>>::decode_len().unwrap_or(0) as usize;
-			// addition is valid: candidates and members never overlap.
-			let allowed_votes = candidates_count + members_count;
+			let runners_up_count = <RunnersUp<T>>::decode_len().unwrap_or(0) as usize;
+			// addition is valid: candidates, members and runners-up will never overlap.
+			let allowed_votes = candidates_count + members_count + runners_up_count;
 
 			ensure!(!allowed_votes.is_zero(), Error::<T>::UnableToVote);
 			ensure!(votes.len() <= allowed_votes, Error::<T>::TooManyVotes);
@@ -524,10 +503,13 @@ decl_event!(
 		Balance = BalanceOf<T>,
 		<T as frame_system::Trait>::AccountId,
 	{
-		/// A new term with new members. This indicates that enough candidates existed, not that
-		/// enough have has been elected. The inner value must be examined for this purpose.
+		/// A new term with new members. This indicates that enough candidates existed to run the
+		/// election, not that enough have has been elected. The inner value must be examined for
+		/// this purpose. A `NewTerm([])` indicates that some candidates got their bond slashed and
+		/// none were elected, whilst `EmptyTerm` means that no candidates existed to begin with.
 		NewTerm(Vec<(AccountId, Balance)>),
-		/// No (or not enough) candidates existed for this round.
+		/// No (or not enough) candidates existed for this round. This is different from
+		/// `NewTerm([])`. See the description of `NewTerm`.
 		EmptyTerm,
 		/// A member has been removed. This should always be followed by either `NewTerm` ot
 		/// `EmptyTerm`.
@@ -737,7 +719,7 @@ impl<T: Trait> Module<T> {
 				.collect::<Vec<T::AccountId>>();
 
 			// filter out those who had literally no votes at all.
-			// AUDIT/NOTE: the need to do this is because all candidates, even those who have no
+			// NOTE: the need to do this is because all candidates, even those who have no
 			// vote are still considered by phragmen and when good candidates are scarce, then these
 			// cheap ones might get elected. We might actually want to remove the filter and allow
 			// zero-voted candidates to also make it to the membership set.
@@ -746,6 +728,11 @@ impl<T: Trait> Module<T> {
 				.into_iter()
 				.filter_map(|(m, a)| if a.is_zero() { None } else { Some(m) } )
 				.collect::<Vec<T::AccountId>>();
+
+			// OPTIMISATION NOTE: we could bail out here if `new_set.len() == 0`. There isn't much
+			// left to do. Yet, re-arranging the code would require duplicating the slashing of
+			// exposed candidates, cleaning any previous members, and so on. For now, in favour of
+			// readability and veracity, we keep it simple.
 
 			let staked_assignments = sp_phragmen::assignment_ratio_to_staked(
 				assignments,
@@ -1108,6 +1095,10 @@ mod tests {
 			self.genesis_members = members;
 			self
 		}
+		pub fn balance_factor(mut self, factor: u64) -> Self {
+			self.balance_factor = factor;
+			self
+		}
 		pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
 			VOTING_BOND.with(|v| *v.borrow_mut() = self.voter_bond);
 			TERM_DURATION.with(|v| *v.borrow_mut() = self.term_duration);
@@ -1251,20 +1242,27 @@ mod tests {
 	#[should_panic = "Genesis member does not have enough stake"]
 	fn genesis_members_cannot_over_stake_0() {
 		// 10 cannot lock 20 as their stake and extra genesis will panic.
-		ExtBuilder::default().genesis_members(vec![(1, 20), (2, 20)]).build_and_execute(|| {});
+		ExtBuilder::default()
+			.genesis_members(vec![(1, 20), (2, 20)])
+			.build_and_execute(|| {});
 	}
 
 	#[test]
 	#[should_panic]
 	fn genesis_members_cannot_over_stake_1() {
 		// 10 cannot reserve 20 as voting bond and extra genesis will panic.
-		ExtBuilder::default().voter_bond(20).genesis_members(vec![(1, 10), (2, 20)]).build_and_execute(|| {});
+		ExtBuilder::default()
+			.voter_bond(20)
+			.genesis_members(vec![(1, 10), (2, 20)])
+			.build_and_execute(|| {});
 	}
 
 	#[test]
 	#[should_panic = "Duplicate member in elections phragmen genesis: 2"]
 	fn genesis_members_cannot_be_duplicate() {
-		ExtBuilder::default().genesis_members(vec![(1, 10), (2, 10), (2, 10)]).build_and_execute(|| {});
+		ExtBuilder::default()
+			.genesis_members(vec![(1, 10), (2, 10), (2, 10)])
+			.build_and_execute(|| {});
 	}
 
 	#[test]
@@ -1539,13 +1537,36 @@ mod tests {
 	}
 
 	#[test]
-	fn cannot_vote_for_more_than_candidates() {
-		ExtBuilder::default().build_and_execute(|| {
+	fn cannot_vote_for_more_than_candidates_and_members_and_runners() {
+		ExtBuilder::default()
+			.desired_runners_up(1)
+			.balance_factor(10)
+			.build_and_execute(
+		|| {
+			// when we have only candidates
 			assert_ok!(Elections::submit_candidacy(Origin::signed(5)));
 			assert_ok!(Elections::submit_candidacy(Origin::signed(4)));
+			assert_ok!(Elections::submit_candidacy(Origin::signed(3)));
 
 			assert_noop!(
-				Elections::vote(Origin::signed(2), vec![10, 20, 30], 20),
+				// content of the vote is irrelevant.
+				Elections::vote(Origin::signed(1), vec![9, 99, 999, 9999], 5),
+				Error::<Test>::TooManyVotes,
+			);
+
+			assert_ok!(Elections::vote(Origin::signed(3), vec![3], 30));
+			assert_ok!(Elections::vote(Origin::signed(4), vec![4], 40));
+			assert_ok!(Elections::vote(Origin::signed(5), vec![5], 50));
+
+			System::set_block_number(5);
+			assert_ok!(Elections::end_block(System::block_number()));
+
+			// now we have 2 members, 1 runner-up, and 1 new candidate
+			assert_ok!(Elections::submit_candidacy(Origin::signed(2)));
+
+			assert_ok!(Elections::vote(Origin::signed(1), vec![9, 99, 999, 9999], 5));
+			assert_noop!(
+				Elections::vote(Origin::signed(1), vec![9, 99, 999, 9_999, 99_999], 5),
 				Error::<Test>::TooManyVotes,
 			);
 		});
@@ -1750,7 +1771,6 @@ mod tests {
 		});
 	}
 
-
 	#[test]
 	fn simple_voting_rounds_should_work() {
 		ExtBuilder::default().build_and_execute(|| {
@@ -1847,6 +1867,11 @@ mod tests {
 			assert_eq!(Elections::candidates(), vec![]);
 			assert_eq!(Elections::election_rounds(), 1);
 			assert_eq!(Elections::members_ids(), vec![]);
+
+			assert_eq!(
+				System::events().iter().last().unwrap().event,
+				Event::elections_phragmen(RawEvent::NewTerm(vec![])),
+			)
 		});
 	}
 
@@ -2366,6 +2391,7 @@ mod tests {
 	#[test]
 	fn behavior_with_dupe_candidate() {
 		ExtBuilder::default().desired_runners_up(2).build_and_execute(|| {
+			// TODD: this is a demonstration and should be fixed with #4593
 			<Candidates<Test>>::put(vec![1, 1, 2, 3, 4]);
 
 			assert_ok!(Elections::vote(Origin::signed(5), vec![1], 50));

@@ -169,7 +169,7 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 		} else {
 			Default::default()
 		};
-		let deleted = ::std::mem::replace(&mut commit.data.deleted, Vec::new());
+		let deleted = ::std::mem::take(&mut commit.data.deleted);
 		let journal_record = JournalRecord {
 			hash: hash.clone(),
 			inserted,

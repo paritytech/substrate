@@ -116,7 +116,7 @@ use sp_runtime::{
 use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
 use frame_support::{
 	decl_module, decl_event, decl_storage, decl_error, Parameter, ensure, debug,
-	storage::{self, generator::StorageValue},
+	storage,
 	traits::{
 		Contains, Get, ModuleToIndex, OnNewAccount, OnKilledAccount, IsDeadAccount, Happened,
 		StoredMap, EnsureOrigin,
@@ -470,7 +470,6 @@ decl_error! {
 		///
 		/// Either calling `Core_version` or decoding `RuntimeVersion` failed.
 		FailedToExtractRuntimeVersion,
-
 		/// Suicide called when the account has non-default composite data.
 		NonDefaultComposite,
 		/// There is a non-zero reference count preventing the account from being purged.
@@ -629,10 +628,8 @@ decl_module! {
 		/// data is equal to its default value.
 		///
 		/// # <weight>
-		/// - `O(K)` with `K` being complexity of `on_killed_account`
+		/// - `O(1)`
 		/// - 1 storage read and deletion.
-		/// - 1 call to `on_killed_account` callback with unknown complexity `K`
-		/// - 1 event.
 		/// # </weight>
 		#[weight = (25_000_000, DispatchClass::Operational)]
 		fn suicide(origin) {
@@ -855,16 +852,10 @@ impl<T: Trait> Module<T> {
 			old_event_count
 		};
 
-		// We use append api here to avoid bringing all events in the runtime when we push a
- 		// new one in the list.
-		let encoded_event = event.encode();
-		sp_io::storage::append(&Events::<T>::storage_value_final_key()[..], encoded_event);
+		Events::<T>::append(&event);
 
 		for topic in topics {
-			// The same applies here.
-			if <EventTopics<T>>::append(topic, &[(block_number, event_idx)]).is_err() {
-				return;
-			}
+			<EventTopics<T>>::append(topic, &(block_number, event_idx));
 		}
 	}
 

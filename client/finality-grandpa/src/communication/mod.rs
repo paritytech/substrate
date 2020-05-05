@@ -258,7 +258,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		// is a no-op if currently in that set.
 		self.validator.note_set(
 			set_id,
-			voters.voters().iter().map(|(v, _)| v.clone()).collect(),
+			voters.iter().map(|(v, _)| v.clone()).collect(),
 			|to, neighbor| self.neighbor_sender.send(to, neighbor),
 		);
 
@@ -289,7 +289,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 
 		let locals = local_key.and_then(|pair| {
 			let id = pair.public();
-			if voters.contains_key(&id) {
+			if voters.contains(&id) {
 				Some((pair, id))
 			} else {
 				None
@@ -308,12 +308,12 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 					}
 					Ok(GossipMessage::Vote(msg)) => {
 						// check signature.
-						if !voters.contains_key(&msg.message.id) {
+						if !voters.contains(&msg.message.id) {
 							debug!(target: "afg", "Skipping message from unknown voter {}", msg.message.id);
 							return future::ready(None);
 						}
 
-						if voters.len() <= TELEMETRY_VOTERS_LIMIT {
+						if voters.len().get() <= TELEMETRY_VOTERS_LIMIT {
 							match &msg.message.message {
 								PrimaryPropose(propose) => {
 									telemetry!(CONSENSUS_INFO; "afg.received_propose";
@@ -378,7 +378,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 	) {
 		self.validator.note_set(
 			set_id,
-			voters.voters().iter().map(|(v, _)| v.clone()).collect(),
+			voters.iter().map(|(v, _)| v.clone()).collect(),
 			|to, neighbor| self.neighbor_sender.send(to, neighbor),
 		);
 
@@ -476,7 +476,7 @@ fn incoming_global<B: BlockT>(
 		gossip_validator: &Arc<GossipValidator<B>>,
 		voters: &VoterSet<AuthorityId>,
 	| {
-		if voters.len() <= TELEMETRY_VOTERS_LIMIT {
+		if voters.len().get() <= TELEMETRY_VOTERS_LIMIT {
 			let precommits_signed_by: Vec<String> =
 				msg.message.auth_data.iter().map(move |(_, a)| {
 					format!("{}", a)
@@ -799,13 +799,13 @@ fn check_compact_commit<Block: BlockT>(
 ) -> Result<(), ReputationChange> {
 	// 4f + 1 = equivocations from f voters.
 	let f = voters.total_weight() - voters.threshold();
-	let full_threshold = voters.total_weight() + f;
+	let full_threshold = (f + voters.total_weight()).0;
 
 	// check total weight is not out of range.
 	let mut total_weight = 0;
 	for (_, ref id) in &msg.auth_data {
-		if let Some(weight) = voters.info(id).map(|info| info.weight()) {
-			total_weight += weight;
+		if let Some(weight) = voters.get(id).map(|info| info.weight()) {
+			total_weight += weight.get();
 			if total_weight > full_threshold {
 				return Err(cost::MALFORMED_COMMIT);
 			}
@@ -815,7 +815,7 @@ fn check_compact_commit<Block: BlockT>(
 		}
 	}
 
-	if total_weight < voters.threshold() {
+	if total_weight < voters.threshold().get() {
 		return Err(cost::MALFORMED_COMMIT);
 	}
 
@@ -860,7 +860,7 @@ fn check_catch_up<Block: BlockT>(
 ) -> Result<(), ReputationChange> {
 	// 4f + 1 = equivocations from f voters.
 	let f = voters.total_weight() - voters.threshold();
-	let full_threshold = voters.total_weight() + f;
+	let full_threshold = (f + voters.total_weight()).0;
 
 	// check total weight is not out of range for a set of votes.
 	fn check_weight<'a>(
@@ -871,8 +871,8 @@ fn check_catch_up<Block: BlockT>(
 		let mut total_weight = 0;
 
 		for id in votes {
-			if let Some(weight) = voters.info(&id).map(|info| info.weight()) {
-				total_weight += weight;
+			if let Some(weight) = voters.get(&id).map(|info| info.weight()) {
+				total_weight += weight.get();
 				if total_weight > full_threshold {
 					return Err(cost::MALFORMED_CATCH_UP);
 				}
@@ -882,7 +882,7 @@ fn check_catch_up<Block: BlockT>(
 			}
 		}
 
-		if total_weight < voters.threshold() {
+		if total_weight < voters.threshold().get() {
 			return Err(cost::MALFORMED_CATCH_UP);
 		}
 

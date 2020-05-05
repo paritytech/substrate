@@ -109,13 +109,13 @@ impl BatchVerifier {
 		self.sr25519_items.push(Sr25519BatchItem { signature, pub_key, message });
 
 		if self.sr25519_items.len() >= 128 {
-			let items = std::mem::replace(&mut self.sr25519_items, vec![]);
+			let items = std::mem::take(&mut self.sr25519_items);
 			if self.spawn_verification_task(move || Self::verify_sr25519_batch(items)).is_err() {
 				log::debug!(
 					target: "runtime",
 					"Batch-verification returns false because failed to spawn background task.",
 				);
-	
+
 				return false;
 			}
 		}
@@ -135,7 +135,7 @@ impl BatchVerifier {
 	/// aggregated result.
 	#[must_use]
 	pub fn verify_and_clear(&mut self) -> bool {
-		let pending = std::mem::replace(&mut self.pending_tasks, vec![]);
+		let pending = std::mem::take(&mut self.pending_tasks);
 		let started = std::time::Instant::now();
 
 		log::trace!(
@@ -145,7 +145,7 @@ impl BatchVerifier {
 			self.sr25519_items.len(),
 		);
 
-		if !Self::verify_sr25519_batch(std::mem::replace(&mut self.sr25519_items, vec![])) {
+		if !Self::verify_sr25519_batch(std::mem::take(&mut self.sr25519_items)) {
 			return false;
 		}
 

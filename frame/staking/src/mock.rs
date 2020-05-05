@@ -834,7 +834,7 @@ pub(crate) fn horrible_phragmen_with_post_processing(
 	// Ensure that this result is worse than seq-phragmen. Otherwise, it should not have been used
 	// for testing.
 	let score = {
-		let (_, _, better_score) = prepare_submission_with(true, |_| {});
+		let (_, _, better_score) = prepare_submission_with(true, 0, |_| {});
 
 		let support = build_support_map::<AccountId>(&winners, &staked_assignment).0;
 		let score = evaluate_support(&support);
@@ -875,6 +875,7 @@ pub(crate) fn horrible_phragmen_with_post_processing(
 // cannot do it since we want to have `tweak` injected into the process.
 pub(crate) fn prepare_submission_with(
 	do_reduce: bool,
+	iterations: usize,
 	tweak: impl FnOnce(&mut Vec<StakedAssignment<AccountId>>),
 ) -> (CompactAssignments, Vec<ValidatorIndex>, PhragmenScore) {
 	// run phragmen on the default stuff.
@@ -882,14 +883,25 @@ pub(crate) fn prepare_submission_with(
 		winners,
 		assignments,
 	} = Staking::do_phragmen::<OffchainAccuracy>().unwrap();
-	let winners = winners.into_iter().map(|(w, _)| w).collect::<Vec<AccountId>>();
+	let winners = sp_phragmen::to_without_backing(winners);
 
 	let stake_of = |who: &AccountId| -> VoteWeight {
 		<CurrencyToVoteHandler as Convert<Balance, VoteWeight>>::convert(
 			Staking::slashable_balance_of(&who)
 		)
 	};
+
 	let mut staked = sp_phragmen::assignment_ratio_to_staked(assignments, stake_of);
+	let (mut support_map, _) = build_support_map::<AccountId>(&winners, &staked);
+
+	if iterations > 0 {
+		sp_phragmen::equalize(
+			&mut staked,
+			&mut support_map,
+			Zero::zero(),
+			iterations,
+		);
+	}
 
 	// apply custom tweaks. awesome for testing.
 	tweak(&mut staked);

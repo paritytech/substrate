@@ -26,14 +26,14 @@ use log::info;
 use sc_service::{AbstractService, Configuration, Role, ServiceBuilderCommand, TaskType};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
-use std::fmt::{Debug, Display};
-use std::marker::PhantomData;
-use std::sync::Arc;
 use cli_utils::{AccountIdFor, AddressFor, IndexFor, BalanceFor, CallFor, RuntimeAdapter};
 use std::convert::TryFrom;
 use sp_core::crypto::Ss58Codec;
-use std::str::FromStr;
 use parity_scale_codec::Codec;
+use std::{
+	str::FromStr, marker::PhantomData,
+	sync::Arc, fmt::{Debug, Display}
+};
 
 #[cfg(target_family = "unix")]
 async fn main<F, E>(func: F) -> std::result::Result<(), Box<dyn std::error::Error>>
@@ -169,6 +169,10 @@ impl<C: SubstrateCli> Runner<C> {
 		info!("📋 Chain specification: {}", self.config.chain_spec.name());
 		info!("🏷  Node name: {}", self.config.network.node_name);
 		info!("👤 Role: {}", self.config.display_role());
+		info!("💾 Database: {} at {}",
+			self.config.database,
+			self.config.database.path().map_or_else(|| "<unknown>".to_owned(), |p| p.display().to_string())
+		);
 		info!("⛓  Native runtime: {}", runtime_version);
 
 		match self.config.role {
@@ -184,8 +188,9 @@ impl<C: SubstrateCli> Runner<C> {
 		B: FnOnce(Configuration) -> sc_service::error::Result<BC>,
 		BC: ServiceBuilderCommand<Block = BB> + Unpin,
 		BB: sp_runtime::traits::Block + Debug,
-		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: Debug,
-		<BB as BlockT>::Hash: std::str::FromStr,
+		<<<BB as BlockT>::Header as HeaderT>::Number as FromStr>::Err: Debug,
+		<BB as BlockT>::Hash: FromStr,
+		<<BB as BlockT>::Hash as FromStr>::Err: Debug,
 		RA: RuntimeAdapter,
 		AccountIdFor<RA>: for<'a> TryFrom<&'a [u8], Error = ()> + Ss58Codec,
 		AddressFor<RA>: From<AccountIdFor<RA>>,
@@ -204,6 +209,7 @@ impl<C: SubstrateCli> Runner<C> {
 			Subcommand::CheckBlock(cmd) => {
 				run_until_exit(self.tokio_runtime, cmd.run(self.config, builder))
 			}
+			Subcommand::ExportState(cmd) => cmd.run(self.config, builder),
 			Subcommand::Revert(cmd) => cmd.run(self.config, builder),
 			Subcommand::PurgeChain(cmd) => cmd.run(self.config),
 			Subcommand::GenerateNodeKey(cmd) => cmd.run(),
@@ -216,6 +222,7 @@ impl<C: SubstrateCli> Runner<C> {
 			Subcommand::SignTransaction(cmd) => cmd.run::<RA>(),
 			Subcommand::Insert(cmd) => cmd.run::<RA>(),
 			_ => unimplemented!()
+
 		}
 	}
 

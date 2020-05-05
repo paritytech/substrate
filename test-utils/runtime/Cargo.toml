@@ -33,6 +33,7 @@ sp-session = { version = "2.0.0-dev", default-features = false, path = "../../pr
 sp-api = { version = "2.0.0-dev", default-features = false, path = "../../primitives/api" }
 sp-runtime = { version = "2.0.0-dev", default-features = false, path = "../../primitives/runtime" }
 pallet-babe = { version = "2.0.0-dev", default-features = false, path = "../../frame/babe" }
+pallet-balances = { version = "2.0.0-dev", default-features = false, path = "../../frame/balances" }
 frame-system = { version = "2.0.0-dev", default-features = false, path = "../../frame/system" }
 frame-system-rpc-runtime-api = { version = "2.0.0-dev", default-features = false, path = "../../frame/system/rpc/runtime-api" }
 pallet-timestamp = { version = "2.0.0-dev", default-features = false, path = "../../frame/timestamp" }

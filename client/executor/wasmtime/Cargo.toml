@@ -21,11 +21,11 @@ sp-wasm-interface = { version = "2.0.0-dev", path = "../../../primitives/wasm-in
 sp-runtime-interface = { version = "2.0.0-dev", path = "../../../primitives/runtime-interface" }
 sp-core = { version = "2.0.0-dev", path = "../../../primitives/core" }
 sp-allocator = { version = "2.0.0-dev", path = "../../../primitives/allocator" }
-wasmtime = { package = "substrate-wasmtime", version = "0.13.0-threadsafe.1" }
-wasmtime_runtime = { package = "substrate-wasmtime-runtime", version = "0.13.0-threadsafe.1" }
-wasmtime-environ = "0.12.0"
-cranelift-wasm = "0.59.0"
-cranelift-codegen = "0.59.0"
+wasmtime = { package = "substrate-wasmtime", version = "0.16.0-threadsafe.1" }
+wasmtime-runtime = { package = "substrate-wasmtime-runtime", version = "0.16.0-threadsafe.1" }
+wasmtime-environ = "0.16"
+cranelift-wasm = "0.63"
+cranelift-codegen = "0.63"
 
 [dev-dependencies]
 assert_matches = "1.3.0"

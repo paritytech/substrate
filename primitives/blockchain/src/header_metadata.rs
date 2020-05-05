@@ -265,6 +265,8 @@ pub struct CachedHeaderMetadata<Block: BlockT> {
 	pub number: NumberFor<Block>,
 	/// Hash of parent header.
 	pub parent: Block::Hash,
+	/// Block state root.
+	pub state_root: Block::Hash,
 	/// Hash of an ancestor header. Used to jump through the tree.
 	ancestor: Block::Hash,
 }
@@ -275,6 +277,7 @@ impl<Block: BlockT> From<&Block::Header> for CachedHeaderMetadata<Block> {
 			hash: header.hash().clone(),
 			number: header.number().clone(),
 			parent: header.parent_hash().clone(),
+			state_root: header.state_root().clone(),
 			ancestor: header.parent_hash().clone(),
 		}
 	}

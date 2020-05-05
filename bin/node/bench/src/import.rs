@@ -39,6 +39,8 @@ use crate::core::{self, Path, Mode};
 
 #[derive(Clone, Copy, Debug, derive_more::Display)]
 pub enum SizeType {
+	#[display(fmt = "empty")]
+	Empty,
 	#[display(fmt = "small")]
 	Small,
 	#[display(fmt = "medium")]
@@ -47,15 +49,20 @@ pub enum SizeType {
 	Large,
 	#[display(fmt = "full")]
 	Full,
+	#[display(fmt = "custom")]
+	Custom,
 }
 
 impl SizeType {
-	fn transactions(&self) -> usize {
+	pub fn transactions(&self) -> usize {
 		match self {
+			SizeType::Empty => 0,
 			SizeType::Small => 10,
 			SizeType::Medium => 100,
 			SizeType::Large => 500,
 			SizeType::Full => 4000,
+			// Custom SizeType will use the `--transactions` input parameter
+			SizeType::Custom => 0,
 		}
 	}
 }
@@ -63,6 +70,7 @@ impl SizeType {
 pub struct ImportBenchmarkDescription {
 	pub profile: Profile,
 	pub key_types: KeyTypes,
+	pub block_type: BlockType,
 	pub size: SizeType,
 }
 
@@ -87,6 +95,12 @@ impl core::BenchmarkDescription for ImportBenchmarkDescription {
 			KeyTypes::Ed25519 => path.push("ed25519"),
 		}
 
+		match self.block_type {
+			BlockType::RandomTransfersKeepAlive(_) => path.push("transfer_keep_alive"),
+			BlockType::RandomTransfersReaping(_) => path.push("transfer_reaping"),
+			BlockType::Noop(_) => path.push("noop"),
+		}
+
 		path.push(&format!("{}", self.size));
 
 		path
@@ -98,7 +112,7 @@ impl core::BenchmarkDescription for ImportBenchmarkDescription {
 			50_000,
 			self.key_types
 		);
-		let block = bench_db.generate_block(BlockType::RandomTransfers(self.size.transactions()));
+		let block = bench_db.generate_block(self.block_type);
 		Box::new(ImportBenchmark {
 			database: bench_db,
 			block,
@@ -107,16 +121,11 @@ impl core::BenchmarkDescription for ImportBenchmarkDescription {
 	}
 
 	fn name(&self) -> Cow<'static, str> {
-		match self.profile {
-			Profile::Wasm => format!(
-				"Import benchmark (random transfers, wasm, {} block)",
-				self.size,
-			).into(),
-			Profile::Native => format!(
-				"Import benchmark (random transfers, native, {} block)",
-				self.size,
-			).into(),
-		}
+		format!(
+			"Import benchmark ({:?}, {:?})",
+			self.block_type,
+			self.profile,
+		).into()
 	}
 }
 

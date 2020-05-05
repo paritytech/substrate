@@ -97,12 +97,14 @@ where H: Clone + Debug + PartialEq,
 			}
 		}
 
-		AuthoritySet {
-			current_authorities: self.current_authorities,
-			set_id: self.set_id,
-			pending_forced_changes: Vec::new(),
-			pending_standard_changes
-		}
+		let authority_set = AuthoritySet::new(
+			self.current_authorities,
+			self.set_id,
+			pending_standard_changes,
+			Vec::new(),
+		);
+
+		authority_set.expect("current_authorities is non-empty and weights are non-zero; qed.")
 	}
 }
 
@@ -334,7 +336,8 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 		from genesis on what appears to be first startup.");
 
 	let genesis_authorities = genesis_authorities()?;
-	let genesis_set = AuthoritySet::genesis(genesis_authorities.clone());
+	let genesis_set = AuthoritySet::genesis(genesis_authorities.clone())
+		.expect("genesis authorities is non-empty; all weights are non-zero; qed.");
 	let state = make_genesis_round();
 	let base = state.prevote_ghost
 		.expect("state is for completed round; completed rounds must have a prevote ghost; qed.");
@@ -503,12 +506,12 @@ mod test {
 
 		assert_eq!(
 			*authority_set.inner().read(),
-			AuthoritySet {
-				current_authorities: authorities.clone(),
-				pending_standard_changes: ForkTree::new(),
-				pending_forced_changes: Vec::new(),
+			AuthoritySet::new(
+				authorities.clone(),
 				set_id,
-			},
+				ForkTree::new(),
+				Vec::new(),
+			).unwrap(),
 		);
 
 		let mut current_rounds = CurrentRounds::new();
@@ -547,12 +550,12 @@ mod test {
 		};
 
 		{
-			let authority_set = AuthoritySet::<H256, u64> {
-				current_authorities: authorities.clone(),
-				pending_standard_changes: ForkTree::new(),
-				pending_forced_changes: Vec::new(),
+			let authority_set = AuthoritySet::<H256, u64>::new(
+				authorities.clone(),
 				set_id,
-			};
+				ForkTree::new(),
+				Vec::new(),
+			).unwrap();
 
 			let voter_set_state = V1VoterSetState::Live(round_number, round_state.clone());
 
@@ -593,12 +596,12 @@ mod test {
 
 		assert_eq!(
 			*authority_set.inner().read(),
-			AuthoritySet {
-				current_authorities: authorities.clone(),
-				pending_standard_changes: ForkTree::new(),
-				pending_forced_changes: Vec::new(),
+			AuthoritySet::new(
+				authorities.clone(),
 				set_id,
-			},
+				ForkTree::new(),
+				Vec::new(),
+			).unwrap(),
 		);
 
 		let mut current_rounds = CurrentRounds::new();
