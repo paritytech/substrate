@@ -43,6 +43,7 @@ log = "0.4.8"
 rand = "0.7.2"
 structopt = { version = "0.3.8", optional = true }
 tracing = "0.1.10"
+parking_lot = "0.10.0"
 
 # primitives
 sp-authority-discovery = { version = "2.0.0-dev",  path = "../../../primitives/authority-discovery" }

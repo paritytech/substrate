@@ -25,6 +25,7 @@ pub mod inherents;
 pub use sp_consensus_vrf::schnorrkel::{
 	Randomness, VRF_PROOF_LENGTH, VRF_OUTPUT_LENGTH, RANDOMNESS_LENGTH
 };
+pub use merlin::Transcript;
 
 use codec::{Encode, Decode};
 use sp_std::vec::Vec;
@@ -38,6 +39,9 @@ mod app {
 
 /// The prefix used by BABE for its VRF keys.
 pub const BABE_VRF_PREFIX: &[u8] = b"substrate-babe-vrf";
+
+/// BABE VRFInOut context.
+pub static BABE_VRF_INOUT_CONTEXT: &[u8] = b"BabeVRFInOutContext";
 
 /// A Babe authority keypair. Necessarily equivalent to the schnorrkel public key used in
 /// the main Babe module. If that ever changes, then this must, too.
@@ -75,6 +79,19 @@ pub type BabeAuthorityWeight = u64;
 
 /// The weight of a BABE block.
 pub type BabeBlockWeight = u32;
+
+/// Make a VRF transcript from given randomness, slot number and epoch.
+pub fn make_transcript(
+	randomness: &Randomness,
+	slot_number: u64,
+	epoch: u64,
+) -> Transcript {
+	let mut transcript = Transcript::new(&BABE_ENGINE_ID);
+	transcript.append_u64(b"slot number", slot_number);
+	transcript.append_u64(b"current epoch", epoch);
+	transcript.append_message(b"chain randomness", &randomness[..]);
+	transcript
+}
 
 /// An consensus log item for BABE.
 #[derive(Decode, Encode, Clone, PartialEq, Eq)]

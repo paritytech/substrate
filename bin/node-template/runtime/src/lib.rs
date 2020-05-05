@@ -34,7 +34,10 @@ pub use sp_runtime::{Permill, Perbill};
 pub use frame_support::{
 	StorageValue, construct_runtime, parameter_types,
 	traits::Randomness,
-	weights::{Weight, RuntimeDbWeight},
+	weights::{
+		Weight,
+		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
+	},
 };
 
 /// Importing a template pallet
@@ -122,17 +125,10 @@ pub fn native_version() -> NativeVersion {
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 250;
 	/// We allow for 2 seconds of compute with a 6 second average block time.
-	pub const MaximumBlockWeight: Weight = 2_000_000_000_000;
-	pub const ExtrinsicBaseWeight: Weight = 10_000_000;
+	pub const MaximumBlockWeight: Weight = 2 * WEIGHT_PER_SECOND;
 	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 	pub const MaximumBlockLength: u32 = 5 * 1024 * 1024;
 	pub const Version: RuntimeVersion = VERSION;
-	/// This probably should not be changed unless you have specific
-	/// disk i/o conditions for the node.
-	pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
-		read: 60_000_000, // ~0.06 ms = ~60 µs
-		write: 200_000_000, // ~0.2 ms = 200 µs
-	};
 }
 
 impl system::Trait for Runtime {
@@ -161,10 +157,10 @@ impl system::Trait for Runtime {
 	/// Maximum weight of each block.
 	type MaximumBlockWeight = MaximumBlockWeight;
 	/// The weight of database operations that the runtime can invoke.
-	type DbWeight = DbWeight;
+	type DbWeight = RocksDbWeight;
 	/// The weight of the overhead invoked on the block import process, independent of the
 	/// extrinsics included in that block.
-	type BlockExecutionWeight = ();
+	type BlockExecutionWeight = BlockExecutionWeight;
 	/// The base weight of any extrinsic processed by the runtime, independent of the
 	/// logic of that extrinsic. (Signature verification, nonce increment, fee, etc...)
 	type ExtrinsicBaseWeight = ExtrinsicBaseWeight;

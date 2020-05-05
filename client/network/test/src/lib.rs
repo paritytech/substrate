@@ -611,6 +611,7 @@ pub trait TestNetFactory: Sized {
 			Box::new(block_import.clone()),
 			justification_import,
 			finality_proof_import,
+			&sp_core::testing::SpawnBlockingExecutor::new(),
 		));
 
 		let listen_addr = build_multiaddr![Memory(rand::random::<u64>())];
@@ -688,6 +689,7 @@ pub trait TestNetFactory: Sized {
 			Box::new(block_import.clone()),
 			justification_import,
 			finality_proof_import,
+			&sp_core::testing::SpawnBlockingExecutor::new(),
 		));
 
 		let listen_addr = build_multiaddr![Memory(rand::random::<u64>())];

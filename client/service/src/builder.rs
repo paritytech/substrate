@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{Service, NetworkStatus, NetworkState, error::Error, DEFAULT_PROTOCOL_ID, MallocSizeOfWasm};
-use crate::{start_rpc_servers, build_network_future, TransactionPoolAdapter, TaskManager};
+use crate::{start_rpc_servers, build_network_future, TransactionPoolAdapter, TaskManager, SpawnTaskHandle};
 use crate::status_sinks;
 use crate::config::{Configuration, KeystoreConfig, PrometheusConfig, OffchainWorkerConfig};
 use crate::metrics::MetricsService;
@@ -34,7 +34,7 @@ use futures::{
 	Future, FutureExt, StreamExt,
 	future::ready,
 };
-use sc_keystore::{Store as Keystore};
+use sc_keystore::Store as Keystore;
 use log::{info, warn, error};
 use sc_network::config::{Role, FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
 use sc_network::{NetworkService, NetworkStateInfo};
@@ -59,6 +59,7 @@ use sc_client_db::{Backend, DatabaseSettings};
 use sp_core::traits::CodeExecutor;
 use sp_runtime::BuildStorage;
 use sc_client_api::execution_extensions::ExecutionExtensions;
+use sp_core::storage::Storage;
 
 pub type BackgroundTask = Pin<Box<dyn Future<Output=()> + Send>>;
 
@@ -96,8 +97,7 @@ pub struct ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
 	rpc_extensions: TRpc,
 	remote_backend: Option<Arc<dyn RemoteBlockchain<TBl>>>,
 	marker: PhantomData<(TBl, TRtApi)>,
-	background_tasks: Vec<(&'static str, BackgroundTask)>,
-	block_announce_validator_builder: Option<Box<dyn FnOnce(Arc<TCl>) -> Box<dyn BlockAnnounceValidator<TBl> + Send>>>,
+	block_announce_validator_builder: Option<Box<dyn FnOnce(Arc<TCl>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + Send>>,
 }
 
 /// Full client type.
@@ -311,7 +311,6 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 			transaction_pool: Arc::new(()),
 			rpc_extensions: Default::default(),
 			remote_backend: None,
-			background_tasks: Default::default(),
 			block_announce_validator_builder: None,
 			marker: PhantomData,
 		})
@@ -395,7 +394,6 @@ impl ServiceBuilder<(), (), (), (), (), (), (), (), (), (), ()> {
 			transaction_pool: Arc::new(()),
 			rpc_extensions: Default::default(),
 			remote_backend: Some(remote_blockchain),
-			background_tasks: Default::default(),
 			block_announce_validator_builder: None,
 			marker: PhantomData,
 		})
@@ -469,7 +467,6 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
-			background_tasks: self.background_tasks,
 			block_announce_validator_builder: self.block_announce_validator_builder,
 			marker: self.marker,
 		})
@@ -487,7 +484,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 	/// Defines which import queue to use.
 	pub fn with_import_queue<UImpQu>(
 		self,
-		builder: impl FnOnce(&Configuration, Arc<TCl>, Option<TSc>, Arc<TExPool>)
+		builder: impl FnOnce(&Configuration, Arc<TCl>, Option<TSc>, Arc<TExPool>, &SpawnTaskHandle)
 			-> Result<UImpQu, Error>
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, UImpQu, TFprb, TFpp,
 			TExPool, TRpc, Backend>, Error>
@@ -496,7 +493,8 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			&self.config,
 			self.client.clone(),
 			self.select_chain.clone(),
-			self.transaction_pool.clone()
+			self.transaction_pool.clone(),
+			&self.task_manager.spawn_handle(),
 		)?;
 
 		Ok(ServiceBuilder {
@@ -513,7 +511,6 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
-			background_tasks: self.background_tasks,
 			block_announce_validator_builder: self.block_announce_validator_builder,
 			marker: self.marker,
 		})
@@ -552,7 +549,6 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
-			background_tasks: self.background_tasks,
 			block_announce_validator_builder: self.block_announce_validator_builder,
 			marker: self.marker,
 		})
@@ -588,6 +584,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			Option<TFchr>,
 			Option<TSc>,
 			Arc<TExPool>,
+			&SpawnTaskHandle,
 		) -> Result<(UImpQu, Option<UFprb>), Error>
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, UImpQu, UFprb, TFpp,
 		TExPool, TRpc, Backend>, Error>
@@ -598,7 +595,8 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			self.backend.clone(),
 			self.fetcher.clone(),
 			self.select_chain.clone(),
-			self.transaction_pool.clone()
+			self.transaction_pool.clone(),
+			&self.task_manager.spawn_handle(),
 		)?;
 
 		Ok(ServiceBuilder {
@@ -615,7 +613,6 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
-			background_tasks: self.background_tasks,
 			block_announce_validator_builder: self.block_announce_validator_builder,
 			marker: self.marker,
 		})
@@ -631,19 +628,20 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			Option<TFchr>,
 			Option<TSc>,
 			Arc<TExPool>,
+			&SpawnTaskHandle,
 		) -> Result<(UImpQu, UFprb), Error>
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, UImpQu, UFprb, TFpp,
 			TExPool, TRpc, Backend>, Error>
 	where TSc: Clone, TFchr: Clone {
-		self.with_import_queue_and_opt_fprb(|cfg, cl, b, f, sc, tx|
-			builder(cfg, cl, b, f, sc, tx)
+		self.with_import_queue_and_opt_fprb(|cfg, cl, b, f, sc, tx, tb|
+			builder(cfg, cl, b, f, sc, tx, tb)
 				.map(|(q, f)| (q, Some(f)))
 		)
 	}
 
 	/// Defines which transaction pool to use.
 	pub fn with_transaction_pool<UExPool>(
-		mut self,
+		self,
 		transaction_pool_builder: impl FnOnce(
 			sc_transaction_pool::txpool::Options,
 			Arc<TCl>,
@@ -661,7 +659,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 		)?;
 
 		if let Some(background_task) = background_task{
-			self.background_tasks.push(("txpool-background", background_task));
+			self.task_manager.spawn_handle().spawn("txpool-background", background_task);
 		}
 
 		Ok(ServiceBuilder {
@@ -678,7 +676,6 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			transaction_pool: Arc::new(transaction_pool),
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
-			background_tasks: self.background_tasks,
 			block_announce_validator_builder: self.block_announce_validator_builder,
 			marker: self.marker,
 		})
@@ -707,7 +704,6 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			transaction_pool: self.transaction_pool,
 			rpc_extensions,
 			remote_backend: self.remote_backend,
-			background_tasks: self.background_tasks,
 			block_announce_validator_builder: self.block_announce_validator_builder,
 			marker: self.marker,
 		})
@@ -718,7 +714,7 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 	pub fn with_block_announce_validator(
 		self,
 		block_announce_validator_builder:
-			impl FnOnce(Arc<TCl>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + 'static,
+			impl FnOnce(Arc<TCl>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + Send + 'static,
 	) -> Result<ServiceBuilder<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp,
 		TExPool, TRpc, Backend>, Error>
 	where TSc: Clone, TFchr: Clone {
@@ -736,7 +732,6 @@ impl<TBl, TRtApi, TCl, TFchr, TSc, TImpQu, TFprb, TFpp, TExPool, TRpc, Backend>
 			transaction_pool: self.transaction_pool,
 			rpc_extensions: self.rpc_extensions,
 			remote_backend: self.remote_backend,
-			background_tasks: self.background_tasks,
 			block_announce_validator_builder: Some(Box::new(block_announce_validator_builder)),
 			marker: self.marker,
 		})
@@ -777,6 +772,13 @@ pub trait ServiceBuilderCommand {
 		self,
 		block: BlockId<Self::Block>
 	) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
+
+	/// Export the raw state at the given `block`. If `block` is `None`, the
+	/// best block will be used.
+	fn export_raw_state(
+		&self,
+		block: Option<BlockId<Self::Block>>,
+	) -> Result<Storage, Error>;
 }
 
 impl<TBl, TRtApi, TBackend, TExec, TSc, TImpQu, TExPool, TRpc>
@@ -848,7 +850,6 @@ ServiceBuilder<
 			transaction_pool,
 			rpc_extensions,
 			remote_backend,
-			background_tasks,
 			block_announce_validator_builder,
 		} = self;
 
@@ -942,12 +943,6 @@ ServiceBuilder<
 		};
 
 		let spawn_handle = task_manager.spawn_handle();
-
-		// Spawn background tasks which were stacked during the
-		// service building.
-		for (title, background_task) in background_tasks {
-			spawn_handle.spawn(title, background_task);
-		}
 
 		{
 			// block notifications
