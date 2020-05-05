@@ -31,22 +31,37 @@ use sp_io::offchain;
 use sp_std::prelude::*;
 
 #[derive(Default)]
-pub struct AlternativeDB<L>
+pub struct AlternativeDB<L,T>
 where
-    L: TrieLayout + Sync,
+    L: TrieLayout + Send,
+    T: Encode + Decode + Send,
 {
     session_index: Vec<u8>,
-    _phantom: core::marker::PhantomData<L>,
+    _phantom: core::marker::PhantomData<(T,L)>,
 }
+
+
+// @todo currently not true, just so it compiles
+// @todo requires some internal mutability concept to work properly
+unsafe impl<L,T> core::marker::Send for AlternativeDB<L,T> where
+L: TrieLayout + Send,
+T: Encode + Decode + Send,{}
+unsafe impl<L,T> core::marker::Sync for AlternativeDB<L,T> where
+L: TrieLayout + Send,
+T: Encode + Decode + Send,{}
 
 /// Session aware, Offchain DB based HashDB.
 ///
 /// Creates two indices:
 /// session -> [(key,tree_prefix),(key,tree_prefix),..]
 /// session, tree_prefix -> [key,key,key,..]
-impl<L> AlternativeDB<L>
+impl<L,T> AlternativeDB<L,T>
 where
-    L: TrieLayout + Sync,
+L: TrieLayout + Send,
+T: Encode + Decode + Send,
+<L as TrieLayout>::Hash: Default,
+<L as trie_db::TrieLayout>::Hash: core::default::Default + core::hash::BuildHasher,
+<<L as trie_db::TrieLayout>::Hash as Hasher>::Out: AsRef<[u8]> + Default, //@todo verify this is true for all sane hashes such as H256
 {
     pub fn prune(&self, key: &[u8]) {}
 
@@ -59,7 +74,7 @@ where
         let mut mapping: Vec<(Vec<u8>, Vec<u8>)> =
             offchain::local_storage_get(StorageKind::PERSISTENT, key)
                 .map(|mut bytes| {
-                    <Vec<(Vec<u8>, Vec<u8>)> as Decode>::decode(&mut bytes).unwrap()
+                    <Vec<(Vec<u8>, Vec<u8>)> as Decode>::decode(&mut &bytes[..]).unwrap()
                 })
                 .unwrap_or_else(|| Vec::with_capacity(1));
 
@@ -74,7 +89,7 @@ where
         let mapping: Vec<(Vec<u8>, Vec<u8>)> =
             offchain::local_storage_get(StorageKind::PERSISTENT, key.as_ref())
                 .map(|mut bytes| {
-                    <Vec<(Vec<u8>, Vec<u8>)> as Decode>::decode(&mut bytes).unwrap()
+                    <Vec<(Vec<u8>, Vec<u8>)> as Decode>::decode(&mut  &bytes[..]).unwrap()
                 })
                 .unwrap_or_else(|| Vec::with_capacity(8));
         mapping
@@ -89,7 +104,7 @@ where
         let key: Vec<u8> = tracking_index_with_prefix(tree_prefix, session_index);
         let mapping: Vec<Vec<u8>> =
             offchain::local_storage_get(StorageKind::PERSISTENT, key.as_ref())
-                .map(|bytes| <Vec<Vec<u8>> as Decode>::decode(&mut bytes[..]).unwrap())
+                .map(|bytes| <Vec<Vec<u8>> as Decode>::decode(&mut &bytes[..]).unwrap())
                 .unwrap_or_else(|| Vec::with_capacity(8));
         mapping
     }
@@ -162,7 +177,7 @@ fn tracking_index(session_index: &[u8]) -> Vec<u8> {
 }
 
 //@todo define the extra prefix
-const PREFIX: &'static [u8] = &b"TO_BE_DEFINED"[..];
+const PREFIX: &[u8] = b"TO_BE_DEFINED";
 
 /// Concatenate the static prefix with a tree prefix.
 fn prefix_glue(key: &[u8], tree_prefix: &[u8], session_index: &[u8]) -> Vec<u8> {
@@ -181,11 +196,12 @@ fn prefix_glue(key: &[u8], tree_prefix: &[u8], session_index: &[u8]) -> Vec<u8> 
     final_key
 }
 
-impl<L, T> HashDB<L::Hash, T> for AlternativeDB<L>
+impl<L, T> HashDB<L::Hash, T> for AlternativeDB<L,T>
 where
-    L: TrieLayout + Sync + Send,
-    T: Encode + Decode,
+    L: TrieLayout + Send,
+    T: Encode + Decode + Send,
     <L as TrieLayout>::Hash: Default,
+    <L as trie_db::TrieLayout>::Hash: core::default::Default + core::hash::BuildHasher,
     <<L as trie_db::TrieLayout>::Hash as Hasher>::Out: AsRef<[u8]> + Default, //@todo verify this is true for all sane hashes such as H256
 {
     fn get(
@@ -200,7 +216,7 @@ where
             self.session_index.as_slice(),
         );
         offchain::local_storage_get(StorageKind::PERSISTENT, key.as_slice())
-            .map(|mut v| Decode::decode(&mut v[..]).unwrap())
+            .map(|mut v| Decode::decode(&mut &v[..]).unwrap())
     }
 
     fn contains(
@@ -244,7 +260,7 @@ where
             self.session_index.as_slice(),
         );
         let value: Vec<u8> = <T as Encode>::encode(&value);
-        self.insert((key.as_slice(), None), value.as_slice());
+        Self::insert(self, (key.as_slice(), None), value.as_slice());
     }
 
     fn remove(&mut self, key: &<<L as trie_db::TrieLayout>::Hash as Hasher>::Out, prefix: Prefix) {
@@ -253,11 +269,11 @@ where
     }
 }
 
-impl<L, T> AsHashDB<L::Hash, T> for AlternativeDB<L>
+impl<L, T> AsHashDB<L::Hash, T> for AlternativeDB<L,T>
 where
-    L: TrieLayout + Sync + Send,
-    T: Encode + Decode,
-    <L as trie_db::TrieLayout>::Hash: core::default::Default,
+    L: TrieLayout + Send,
+    T: Encode + Decode + Send,
+    <L as trie_db::TrieLayout>::Hash: core::default::Default + core::hash::BuildHasher,
     <<L as trie_db::TrieLayout>::Hash as Hasher>::Out: AsRef<[u8]> + Default,
 {
     /// Perform upcast to HashDB for anything that derives from HashDB.
