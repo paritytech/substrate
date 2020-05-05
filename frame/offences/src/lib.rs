@@ -114,11 +114,12 @@ decl_module! {
 							);
 						}).is_err()
 					})
-				})
+				});
+				// This on-initialize function can become very expensive, so we allow it to take a full block.
+				T::MaximumBlockWeight::get()
+			} else {
+				0
 			}
-
-			// This on-initialize function can become very expensive, so we allow it to take a full block.
-			T::MaximumBlockWeight::get()
 		}
 	}
 }
