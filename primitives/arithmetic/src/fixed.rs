@@ -327,6 +327,9 @@ macro_rules! implement_fixed {
 
 			fn saturating_div_int<N: FixedPointOperand>(self, int: N) -> N
 			{
+				if int == N::zero() {
+					panic!("attempt to divide by zero")
+				}
 				self.checked_div_int(int).unwrap_or(to_bound(self.0, int))
 			}
 
@@ -977,6 +980,33 @@ macro_rules! implement_fixed {
 			}
 
 			#[test]
+			fn saturating_mul_int_works() {
+				let a = $name::from_rational(1, 2);
+				let b = $name::from_rational(1, -2);
+				let c = $name::from_integer(255);
+				let d = $name::from_integer(-1);
+
+				assert_eq!(a.saturating_mul_int(42i32), 21);
+				assert_eq!(b.saturating_mul_int(42i32), -21);
+
+				assert_eq!(c.saturating_mul_int(2i8), i8::max_value());
+				assert_eq!(c.saturating_mul_int(-2i8), i8::min_value());
+
+				assert_eq!(b.saturating_mul_int(i128::max_value()), i128::max_value() / -2);
+				assert_eq!(b.saturating_mul_int(i128::min_value()), i128::min_value() / -2);
+
+				assert_eq!(c.saturating_mul_int(i128::max_value()), i128::max_value());
+				assert_eq!(c.saturating_mul_int(i128::min_value()), i128::min_value());
+
+				assert_eq!(a.saturating_mul_int(i128::max_value()), i128::max_value() / 2);
+				assert_eq!(a.saturating_mul_int(u64::max_value()), u64::max_value() / 2);
+				assert_eq!(a.saturating_mul_int(i128::min_value()), i128::min_value() / 2);
+
+				assert_eq!(d.saturating_mul_int(i8::max_value()), -i8::max_value());
+				assert_eq!(d.saturating_mul_int(i8::min_value()), i8::max_value());
+			} 
+
+			#[test]
 			fn checked_div_int_works() {
 				let inner_max = <$name as FixedPointNumber>::Inner::max_value();
 				let inner_min = <$name as FixedPointNumber>::Inner::min_value();
@@ -1022,6 +1052,12 @@ macro_rules! implement_fixed {
 				assert_eq!(b.checked_div_int(0), None);
 				assert_eq!(c.checked_div_int(0), None);
 				assert_eq!(d.checked_div_int(0), None);
+			}
+
+			#[test]
+			#[should_panic(expected = "attempt to divide by zero")]
+			fn saturating_div_int_panics() {
+				let _ = $name::one().saturating_div_int(0);
 			}
 
 			#[test]
