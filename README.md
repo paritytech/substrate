@@ -16,4 +16,4 @@ The security policy and procedures can be found in [`docs/SECURITY.md`](docs/SEC
 
 ## License
 
-Substrate is [GPL 3.0 licensed](LICENSE).
+Substrate Client (`/client/*` / `sc-*`) is licensed under [GPL 3.0 with a classpath linking exception](LICENSE-GPL), primitives (`sp-*`), FRAME (`frame-*`) and pallets (`pallets-*`), binaries (`/bin`) and all other utilities are licensed under [Apache 2.0](LICENSE-APACHE2).
