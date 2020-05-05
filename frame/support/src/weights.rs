@@ -141,6 +141,37 @@ pub use sp_runtime::transaction_validity::TransactionPriority;
 /// Numeric range of a transaction weight.
 pub type Weight = u64;
 
+/// These constants are specific to FRAME, and the current implementation of its various components.
+/// For example: FRAME System, FRAME Executive, our FRAME support libraries, etc...
+pub mod constants {
+	use super::{RuntimeDbWeight, Weight};
+	use crate::parameter_types;
+
+	pub const WEIGHT_PER_SECOND: Weight = 1_000_000_000_000;
+	pub const WEIGHT_PER_MILLIS: Weight = WEIGHT_PER_SECOND / 1000; // 1_000_000_000
+	pub const WEIGHT_PER_MICROS: Weight = WEIGHT_PER_MILLIS / 1000; // 1_000_000
+	pub const WEIGHT_PER_NANOS:  Weight = WEIGHT_PER_MICROS / 1000; // 1_000
+
+	parameter_types! {
+		/// Importing a block with 0 txs takes ~5 ms
+		pub const BlockExecutionWeight: Weight = 5 * WEIGHT_PER_MILLIS;
+		/// Executing 10,000 System remarks (no-op) txs takes ~1.26 seconds -> ~125 µs per tx
+		pub const ExtrinsicBaseWeight: Weight = 125 * WEIGHT_PER_MICROS;
+		/// By default, Substrate uses RocksDB, so this will be the weight used throughout
+		/// the runtime.
+		pub const RocksDbWeight: RuntimeDbWeight = RuntimeDbWeight {
+			read: 25 * WEIGHT_PER_MICROS,   // ~25 µs @ 200,000 items
+			write: 100 * WEIGHT_PER_MICROS, // ~100 µs @ 200,000 items
+		};
+		/// ParityDB can be enabled with a feature flag, but is still experimental. These weights
+		/// are available for brave runtime engineers who may want to try this out as default.
+		pub const ParityDbWeight: RuntimeDbWeight = RuntimeDbWeight {
+			read: 8 * WEIGHT_PER_MICROS,   // ~8 µs @ 200,000 items
+			write: 50 * WEIGHT_PER_MICROS, // ~50 µs @ 200,000 items
+		};
+	}
+}
+
 /// Means of weighing some particular kind of data (`T`).
 pub trait WeighData<T> {
 	/// Weigh the data `T` given by `target`. When implementing this for a dispatchable, `T` will be
