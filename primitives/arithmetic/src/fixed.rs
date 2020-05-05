@@ -59,15 +59,15 @@ pub trait FixedPointNumber:
 		Self::DIV
 	}
 
-	/// Raw constructor. Equals to `int / DIV`.
+	/// Raw constructor. Assigns `int / Self::accuracy()` to `self`.
 	fn from_inner(int: Self::Inner) -> Self;
 
-	/// Consumes `self` and returns the inner raw value.
+	/// Consumes `self` and returns the inner raw value (`self * Self::accuracy()`).
 	fn into_inner(self) -> Self::Inner;
 
 	/// Creates self from an integer number `int`.
 	/// 
-	/// Saturates towards `max` or `min` if `int` exceeds accuracy.
+	/// Returns `Self::max` or `Self::min` if `int` exceeds accuracy.
 	fn from_integer<N: UniqueSaturatedInto<Self::Inner>>(int: N) -> Self;
 
 	/// Creates `self` from an integer number `int`.
@@ -77,7 +77,7 @@ pub trait FixedPointNumber:
 
 	/// Creates `self` from a rational number. Equal to `n / d`.
 	///
-	/// Saturates if `d == 0` or `n / d` exceeds accuracy.
+	/// Panics if `d = 0`. Returns `Self::max` or `Self::min` if `n / d` exceeds accuracy.
 	fn from_rational<N: FixedPointOperand, D: FixedPointOperand>(n: N, d: D) -> Self;
 
 	/// Creates `self` from a rational number. Equal to `n / d`.
@@ -85,27 +85,40 @@ pub trait FixedPointNumber:
 	/// Returns `None` if `d == 0` or `n / d` exceeds accuracy.
 	fn checked_from_rational<N: FixedPointOperand, D: FixedPointOperand>(n: N, d: D) -> Option<Self>;
 
-	/// Checked multiplication for integer type `N`.
-	fn checked_mul_int<N: FixedPointOperand>(self, other: N) -> Option<N>;
-
-	/// Saturating multiplication for integer type `N`.
-	fn saturating_mul_int<N: FixedPointOperand>(self, other: N) -> N;
-
-	/// Checked division for integer type `N`.
-	fn checked_div_int<N: FixedPointOperand>(self, other: N) -> Option<N>;
-
-	/// Saturating division for integer type `N`.
-	fn saturating_div_int<N: FixedPointOperand>(self, other: N) -> N;
-
-	/// Performs a saturated multiplication and accumulate by unsigned number.
+	/// Checked multiplication for integer type `N`. Equal to `self * n`.
 	///
-	/// Returns a saturated `int + (self * int)`.
-	fn saturating_mul_int_acc<N: FixedPointOperand>(self, int: N) -> N;
+	/// Returns `None` if the result does not fit in `N`.
+	fn checked_mul_int<N: FixedPointOperand>(self, n: N) -> Option<N>;
 
-	/// Saturating absolute value. Returning MAX if `parts == Inner::MIN` instead of overflowing.
+	/// Saturating multiplication for integer type `N`. Equal to `self * n`.
+	///
+	/// Returns `N::min` or `N::max` if the result does not fit in `N`.
+	fn saturating_mul_int<N: FixedPointOperand>(self, n: N) -> N;
+
+	/// Checked division for integer type `N`. Equal to `self / d`.
+	///
+	/// Returns `None` if the result does not fit in `N` or `d == 0`.
+	fn checked_div_int<N: FixedPointOperand>(self, d: N) -> Option<N>;
+
+	/// Saturating division for integer type `N`. Equal to `self / d`.
+	///
+	/// Panics if `d == 0`. Returns `N::min` or `N::max` if the result does not fit in `N`.
+	fn saturating_div_int<N: FixedPointOperand>(self, d: N) -> N;
+
+	/// Saturating multiplication for integer type `N`, adding the result back.
+	/// Equal to `self * n + n`.
+	///
+	/// Returns `N::min` or `N::max` if the multiplication or final result do not fit in `N`.
+	fn saturating_mul_int_acc<N: FixedPointOperand>(self, n: N) -> N;
+
+	/// Saturating absolute value.
+	///
+	/// Returns `Self::max` if `self == Self::min`.
 	fn saturating_abs(self) -> Self;
 
-	/// Takes the reciprocal (inverse), `1 / self`.
+	/// Takes the reciprocal (inverse). Equal to `1 / self`.
+	///
+	/// Returns `None` if `self = 0`.
 	fn reciprocal(self) -> Option<Self> {
 		Self::one().checked_div(&self)
 	}
@@ -139,9 +152,6 @@ pub trait FixedPointNumber:
 
 	/// Returns the nearest integer to a number. Round half-way cases away from 0.0.
 	fn round(self) -> Self;
-
-	/// Computes the absolute value of self.
-	fn abs(self) -> Self;	
 }
 
 struct I129 {
@@ -231,7 +241,7 @@ macro_rules! implement_fixed {
 			}
 
 			fn frac(self) -> Self {
-				self.saturating_sub(self.trunc()).abs()
+				self.saturating_sub(self.trunc()).saturating_abs()
 			}
 
 			fn ceil(self) -> Self {
@@ -258,10 +268,6 @@ macro_rules! implement_fixed {
 					let extra: Self = self.0.signum().into();
 					(self + extra).trunc()
 				}
-			}
-
-			fn abs(self) -> Self {
-				Self(self.0.checked_abs().unwrap_or(Self::Inner::max_value()))
 			}
 
 			fn zero() -> Self {
