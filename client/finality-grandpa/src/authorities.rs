@@ -100,15 +100,17 @@ pub(crate) struct Status<H, N> {
 /// A set of authorities.
 #[derive(Debug, Clone, Encode, Decode, PartialEq)]
 pub(crate) struct AuthoritySet<H, N> {
+	/// The current active authorities.
 	pub(crate) current_authorities: AuthorityList,
-	set_id: u64,
-	// Tree of pending standard changes across forks. Standard changes are
-	// enacted on finality and must be enacted (i.e. finalized) in-order across
-	// a given branch
+	/// The current set id.
+	pub(crate) set_id: u64,
+	/// Tree of pending standard changes across forks. Standard changes are
+	/// enacted on finality and must be enacted (i.e. finalized) in-order across
+	/// a given branch
 	pub(crate) pending_standard_changes: ForkTree<H, N, PendingChange<H, N>>,
-	// Pending forced changes across different forks (at most one per fork).
-	// Forced changes are enacted on block depth (not finality), for this reason
-	// only one forced change should exist per fork.
+	/// Pending forced changes across different forks (at most one per fork).
+	/// Forced changes are enacted on block depth (not finality), for this reason
+	/// only one forced change should exist per fork.
 	pending_forced_changes: Vec<PendingChange<H, N>>,
 }
 

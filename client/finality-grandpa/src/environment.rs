@@ -127,7 +127,7 @@ impl<Block: BlockT> CompletedRounds<Block> {
 		let mut rounds = Vec::with_capacity(NUM_LAST_COMPLETED_ROUNDS);
 		rounds.push(genesis);
 
-		let voters = voters.current().1.iter().map(|(a, _)| a.clone()).collect();
+		let voters = voters.current_authorities.iter().map(|(a, _)| a.clone()).collect();
 		CompletedRounds { rounds, set_id, voters }
 	}
 
@@ -546,7 +546,7 @@ where
 		//       signaled asynchronously. therefore the voter could still vote in the next round
 		//       before activating the new set. the `authority_set` is updated immediately thus we
 		//       restrict the voter based on that.
-		if self.set_id != self.authority_set.inner().read().current().0 {
+		if self.set_id != self.authority_set.set_id() {
 			return None;
 		}
 

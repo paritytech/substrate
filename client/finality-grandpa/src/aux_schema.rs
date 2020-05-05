@@ -154,7 +154,7 @@ fn migrate_from_version0<Block: BlockT, B, G>(
 			None => (0, genesis_round()),
 		};
 
-		let set_id = new_set.current().0;
+		let set_id = new_set.set_id;
 
 		let base = last_round_state.prevote_ghost
 			.expect("state is for completed round; completed rounds must have a prevote ghost; qed.");
@@ -201,7 +201,7 @@ fn migrate_from_version1<Block: BlockT, B, G>(
 		backend,
 		AUTHORITY_SET_KEY,
 	)? {
-		let set_id = set.current().0;
+		let set_id = set.set_id;
 
 		let completed_rounds = |number, state, base| CompletedRounds::new(
 			CompletedRound {
@@ -312,7 +312,7 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 							.expect("state is for completed round; completed rounds must have a prevote ghost; qed.");
 
 						VoterSetState::live(
-							set.current().0,
+							set.set_id,
 							&set,
 							base,
 						)
