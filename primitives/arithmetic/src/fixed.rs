@@ -314,6 +314,11 @@ macro_rules! implement_fixed {
 					.and_then(|value| from_i129(I129 { value, negative }))
 			}
 
+			fn saturating_mul_int<N: FixedPointOperand>(self, int: N) -> N
+			{
+				self.checked_mul_int(int).unwrap_or(to_bound(self.0, int))
+			}
+
 			fn checked_div_int<N: FixedPointOperand>(self, int: N) -> Option<N>
 			{
 				let lhs: I129 = self.0.into();
@@ -331,11 +336,6 @@ macro_rules! implement_fixed {
 					panic!("attempt to divide by zero")
 				}
 				self.checked_div_int(int).unwrap_or(to_bound(self.0, int))
-			}
-
-			fn saturating_mul_int<N: FixedPointOperand>(self, int: N) -> N
-			{
-				self.checked_mul_int(int).unwrap_or(to_bound(self.0, int))
 			}
 
 			fn saturating_abs(self) -> Self {
@@ -994,6 +994,7 @@ macro_rules! implement_fixed {
 
 				assert_eq!(b.saturating_mul_int(i128::max_value()), i128::max_value() / -2);
 				assert_eq!(b.saturating_mul_int(i128::min_value()), i128::min_value() / -2);
+				assert_eq!(b.saturating_mul_int(u128::max_value()), u128::min_value());
 
 				assert_eq!(c.saturating_mul_int(i128::max_value()), i128::max_value());
 				assert_eq!(c.saturating_mul_int(i128::min_value()), i128::min_value());
@@ -1056,8 +1057,27 @@ macro_rules! implement_fixed {
 
 			#[test]
 			#[should_panic(expected = "attempt to divide by zero")]
-			fn saturating_div_int_panics() {
+			fn saturating_div_int_panics_when_divisor_is_zero() {
 				let _ = $name::one().saturating_div_int(0);
+			}
+
+			#[test]
+			fn saturating_div_int_works() {
+				let inner_max = <$name as FixedPointNumber>::Inner::max_value();
+				let inner_min = <$name as FixedPointNumber>::Inner::min_value();
+				let accuracy = $name::accuracy();
+
+				let a = $name::from_integer(5);
+				assert_eq!(a.saturating_div_int(2), 2);
+
+				let a = $name::from_integer(5);
+				assert_eq!(a.saturating_div_int(-2), -2);
+
+				let a = $name::min_value();
+				assert_eq!(a.saturating_div_int(-1i128), (inner_max / accuracy) as i128);
+
+				let a = $name::min_value();
+				assert_eq!(a.saturating_div_int(1i128), (inner_min / accuracy) as i128);
 			}
 
 			#[test]
@@ -1073,11 +1093,18 @@ macro_rules! implement_fixed {
 
 			#[test]
 			fn saturating_mul_int_acc_works() {
-				let accuracy = $name::accuracy();
+				assert_eq!($name::zero().saturating_mul_int_acc(42i8), 42i8);
+				assert_eq!($name::one().saturating_mul_int_acc(42i8), 2 * 42i8);
 
-				assert_eq!($name::zero().saturating_mul_int_acc(accuracy as u64), accuracy as u64);
-				assert_eq!($name::one().saturating_mul_int_acc(accuracy as u64), 2 * accuracy as u64);
+				assert_eq!($name::one().saturating_mul_int_acc(i128::max_value()), i128::max_value());
 				assert_eq!($name::one().saturating_mul_int_acc(i128::min_value()), i128::min_value());
+
+				assert_eq!($name::one().saturating_mul_int_acc(u128::max_value() / 2), u128::max_value() - 1);
+				assert_eq!($name::one().saturating_mul_int_acc(u128::min_value()), u128::min_value());
+
+				let a = $name::from_rational(-1, 2);
+				assert_eq!(a.saturating_mul_int_acc(42i8), 21i8);
+				assert_eq!(a.saturating_mul_int_acc(u128::max_value() - 1), u128::max_value() - 1);
 			}
 
 			#[test]
@@ -1139,8 +1166,6 @@ macro_rules! implement_fixed {
 				assert_eq!(c.checked_div(&$name::min_value()), Some(0.into()));
 
 				assert_eq!(d.checked_div(&1.into()), Some(1.into()));
-				assert_eq!(d.checked_div(&$name::max_value()), Some(0.into()));
-				assert_eq!(d.checked_div(&$name::min_value()), Some(0.into()));
 
 				assert_eq!(a.checked_div(&$name::one()), Some(a));
 				assert_eq!(b.checked_div(&$name::one()), Some(b));
