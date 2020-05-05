@@ -648,11 +648,13 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 
 			// execute motion, assuming it exists.
 			if let Some(p) = proposal {
+				let dispatch_weight = p.get_dispatch_info().weight;
 				let origin = RawOrigin::Members(voting.threshold, seats).into();
 				let result = p.dispatch(origin);
 				Self::deposit_event(RawEvent::Executed(proposal_hash, result.is_ok()));
-				// TODO: is zero a decent default here?
-				weight = weight.saturating_add(get_result_weight(result).unwrap_or(0)); // P1
+				weight = weight.saturating_add(
+					get_result_weight(result).unwrap_or(dispatch_weight) // P1
+				);
 			}
 		} else {
 			// disapproved
