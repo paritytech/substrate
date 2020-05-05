@@ -29,8 +29,8 @@ use crate::Module as Elections;
 const SEED: u32 = 0;
 const BALANCE_FACTOR: u32 = 250;
 const MAX_LOCKS: u32 = 20;
-const MAX_VOTERS: u32 = 50_000;
-const MAX_CANDIDATES: u32 = 1000;
+const MAX_VOTERS: u32 = 500;
+const MAX_CANDIDATES: u32 = 100;
 
 type Lookup<T> = <<T as frame_system::Trait>::Lookup as StaticLookup>::Source;
 
