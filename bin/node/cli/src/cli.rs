@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use sc_cli::{ImportParams, RunCmd, SharedParams};
+use sc_cli::RunCmd;
 use structopt::StructOpt;
 
 /// An overarching CLI command definition.

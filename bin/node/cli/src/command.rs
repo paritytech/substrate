@@ -17,8 +17,7 @@
 use crate::{chain_spec, service, Cli, Subcommand};
 use node_executor::Executor;
 use node_runtime::{Block, RuntimeApi};
-use sc_cli::{CliConfiguration, ImportParams, Result, SharedParams, SubstrateCli};
-use sc_service::Configuration;
+use sc_cli::{Result, SubstrateCli};
 
 impl SubstrateCli for Cli {
 	fn impl_name() -> &'static str {
