@@ -647,7 +647,7 @@ decl_module! {
 		fn propose(origin,
 			proposal_hash: T::Hash,
 			#[compact] value: BalanceOf<T>,
-			proposals_upper_bound: u32,
+			#[compact] proposals_upper_bound: u32,
 		) {
 			let who = ensure_signed(origin)?;
 			ensure!(value >= T::MinimumDeposit::get(), Error::<T>::ValueLow);
@@ -1223,7 +1223,7 @@ decl_module! {
 		/// # </weight>
 		#[weight = (39_000_000 + T::DbWeight::get().reads_writes(1, 1))
 			.saturating_add(3_000.saturating_mul(Weight::from(*proposal_len_upper_bound)))]
-		fn reap_preimage(origin, proposal_hash: T::Hash, proposal_len_upper_bound: u32) {
+		fn reap_preimage(origin, proposal_hash: T::Hash, #[compact] proposal_len_upper_bound: u32) {
 			let who = ensure_signed(origin)?;
 
 			ensure!(
