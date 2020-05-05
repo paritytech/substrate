@@ -460,11 +460,15 @@ decl_module! {
 					w, // P1
 				))
 			} else {
-				let active_proposals = <Proposals<T, I>>::try_mutate(|proposals| -> Result<usize, DispatchError> {
-					proposals.push(proposal_hash);
-					ensure!(proposals.len() <= T::MaxProposals::get() as usize, Error::<T, I>::TooManyProposals);
-					Ok(proposals.len())
-				})?;
+				let active_proposals =
+					<Proposals<T, I>>::try_mutate(|proposals| -> Result<usize, DispatchError> {
+						proposals.push(proposal_hash);
+						ensure!(
+							proposals.len() <= T::MaxProposals::get() as usize,
+							Error::<T, I>::TooManyProposals
+						);
+						Ok(proposals.len())
+					})?;
 				let index = Self::proposal_count();
 				<ProposalCount<I>>::mutate(|i| *i += 1);
 				<ProposalOf<T, I>>::insert(proposal_hash, *proposal);
@@ -945,6 +949,22 @@ mod tests {
 	}
 
 	#[test]
+	fn test_set_members_error_cases() {
+		new_test_ext().execute_with(|| {
+			let old_count = Collective::members().len() as u32;
+			assert_noop!(
+				Collective::set_members(Origin::ROOT, vec![1; MaxMembers::get() as usize + 1], None, old_count),
+				Error::<Test, Instance1>::TooManyMembers
+			);
+
+			assert_noop!(
+				Collective::set_members(Origin::ROOT, vec![1, 2, 3], None, 0),
+				Error::<Test, Instance1>::InvalidCount
+			);
+		});
+	}
+
+	#[test]
 	fn close_works() {
 		new_test_ext().execute_with(|| {
 			let proposal = make_proposal(42);
@@ -1118,6 +1138,21 @@ mod tests {
 				}
 			]);
 		});
+	}
+
+	#[test]
+	fn limit_active_proposals() {
+		new_test_ext().execute_with(|| {
+			for i in 0..MaxProposals::get() {
+				let proposal = make_proposal(i as u64);
+				assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
+			}
+			let proposal = make_proposal(MaxProposals::get() as u64 + 1);
+			assert_noop!(
+				Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone())),
+				Error::<Test, Instance1>::TooManyProposals
+			);
+		})
 	}
 
 	#[test]
