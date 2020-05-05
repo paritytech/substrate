@@ -24,6 +24,7 @@ use libp2p::core::transport::Transport;
 use log::{trace, debug, warn, error};
 use rand::Rng as _;
 use std::{collections::VecDeque, fmt, mem, pin::Pin, task::Context, task::Poll, time::Duration};
+use wasm_timer::Instant;
 
 /// Maximum number of pending telemetry messages.
 const MAX_PENDING: usize = 10;
@@ -56,6 +57,9 @@ struct NodeSocketConnected<TTrans: Transport> {
 	sink: TTrans::Output,
 	/// Queue of packets to send.
 	pending: VecDeque<BytesMut>,
+	/// The last we emitted a warning about `pending` being full. Used in order to not spam the
+	/// user with warnings.
+	latest_pending_full_warning: Option<Instant>,
 	/// If true, we need to flush the sink.
 	need_flush: bool,
 	/// A timeout for the socket to write data.
@@ -110,14 +114,20 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 	///
 	/// After calling this method, you should call `poll` in order for it to be properly processed.
 	pub fn send_message(&mut self, payload: impl Into<BytesMut>) -> Result<(), ()> {
-		if let NodeSocket::Connected(NodeSocketConnected { pending, .. }) = &mut self.socket {
-			if pending.len() <= MAX_PENDING {
+		if let NodeSocket::Connected(connec) = &mut self.socket {
+			if connec.pending.len() <= MAX_PENDING {
 				trace!(target: "telemetry", "Adding log entry to queue for {:?}", self.addr);
-				pending.push_back(payload.into());
+				connec.pending.push_back(payload.into());
 				Ok(())
 			} else {
-				warn!(target: "telemetry", "⚠️  Rejected log entry because queue is full for {:?}",
-					self.addr);
+				match connec.latest_pending_full_warning {
+					Some(m) if m.elapsed() < Duration::from_secs(15) => {}
+					_ => {
+						connec.latest_pending_full_warning = Some(Instant::now());
+						warn!(target: "telemetry", "⚠️  Rejected log entry because queue is full for {:?}",
+							self.addr);
+					}
+				}
 				Err(())
 			}
 		} else {
@@ -150,6 +160,7 @@ where TTrans: Clone + Unpin, TTrans::Dial: Unpin,
 						let conn = NodeSocketConnected {
 							sink,
 							pending: VecDeque::new(),
+							latest_pending_full_warning: None,
 							need_flush: false,
 							timeout: None,
 						};
