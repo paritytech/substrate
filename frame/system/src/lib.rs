@@ -544,7 +544,7 @@ decl_module! {
 		/// The weight of this function is dependent on the runtime, but generally this is very expensive.
 		/// We will treat this as a full block.
 		/// # </weight>
-		#[weight = (crate::Module::<T>::max_extrinsic_weight(DispatchClass::Operational), DispatchClass::Operational)]
+		#[weight = (T::MaximumBlockWeight::get(), DispatchClass::Operational)]
 		pub fn set_code(origin, code: Vec<u8>) {
 			Self::can_set_code(origin, &code)?;
 
@@ -560,7 +560,7 @@ decl_module! {
 		/// - 1 event.
 		/// The weight of this function is dependent on the runtime. We will treat this as a full block.
 		/// # </weight>
-		#[weight = (crate::Module::<T>::max_extrinsic_weight(DispatchClass::Operational), DispatchClass::Operational)]
+		#[weight = (T::MaximumBlockWeight::get(), DispatchClass::Operational)]
 		pub fn set_code_without_checks(origin, code: Vec<u8>) {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::CODE, &code);
@@ -922,23 +922,6 @@ impl<T: Trait> Module<T> {
 	/// Gets a total weight of all executed extrinsics.
 	pub fn all_extrinsics_weight() -> Weight {
 		AllExtrinsicsWeight::get().unwrap_or_default()
-	}
-
-	/// Get the quota ratio of each dispatch class type. This indicates that all operational and mandatory
-	/// dispatches can use the full capacity of any resource, while user-triggered ones can consume
-	/// a portion.
-	pub fn get_dispatch_limit_ratio(class: DispatchClass) -> Perbill {
-		match class {
-			DispatchClass::Operational | DispatchClass::Mandatory
-				=> <Perbill as sp_runtime::PerThing>::one(),
-			DispatchClass::Normal => T::AvailableBlockRatio::get(),
-		}
-	}
-
-	/// The maximum weight of an allowable extrinsic. Only one of these could exist in a block.
-	pub fn max_extrinsic_weight(class: DispatchClass) -> Weight {
-		let limit = Self::get_dispatch_limit_ratio(class) * T::MaximumBlockWeight::get();
-		limit - (T::BlockExecutionWeight::get() + T::ExtrinsicBaseWeight::get())
 	}
 
 	pub fn all_extrinsics_len() -> u32 {
@@ -1309,7 +1292,11 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 	/// dispatches can use the full capacity of any resource, while user-triggered ones can consume
 	/// a portion.
 	fn get_dispatch_limit_ratio(class: DispatchClass) -> Perbill {
-		Module::<T>::get_dispatch_limit_ratio(class)
+		match class {
+			DispatchClass::Operational | DispatchClass::Mandatory
+				=> <Perbill as sp_runtime::PerThing>::one(),
+			DispatchClass::Normal => T::AvailableBlockRatio::get(),
+		}
 	}
 
 	/// Checks if the current extrinsic can fit into the block with respect to block weight limits.
@@ -2132,47 +2119,6 @@ pub(crate) mod tests {
 				<Test as Trait>::ExtrinsicBaseWeight::get() + <Test as Trait>::BlockExecutionWeight::get()
 			);
 		})
-	}
-
-	#[test]
-	fn max_extrinsic_weight_is_allowed_but_nothing_more() {
-		// Dispatch Class Normal
-		new_test_ext().execute_with(|| {
-			let one = DispatchInfo { weight: 1, ..Default::default() };
-			let max = DispatchInfo { weight: System::max_extrinsic_weight(DispatchClass::Normal), ..Default::default() };
-			let len = 0_usize;
-
-			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&max, len));
-			assert_err!(
-				CheckWeight::<Test>::do_pre_dispatch(&one, len),
-				InvalidTransaction::ExhaustsResources,
-			);
-			// Weight should be 75% of 1024 (max block weight)
-			assert_eq!(System::all_extrinsics_weight(), 768);
-		});
-
-		// Dispatch Class Operational
-		new_test_ext().execute_with(|| {
-			let one = DispatchInfo {
-				weight: 1,
-				class: DispatchClass::Operational,
-				..Default::default()
-			};
-			let max = DispatchInfo {
-				weight: System::max_extrinsic_weight(DispatchClass::Operational),
-				class: DispatchClass::Operational,
-				..Default::default()
-			};
-			let len = 0_usize;
-
-			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&max, len));
-			assert_err!(
-				CheckWeight::<Test>::do_pre_dispatch(&one, len),
-				InvalidTransaction::ExhaustsResources,
-			);
-			// Weight should be 100% of max block weight
-			assert_eq!(System::all_extrinsics_weight(), <Test as Trait>::MaximumBlockWeight::get());
-		});
 	}
 
 	#[test]
