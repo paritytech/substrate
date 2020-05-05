@@ -587,10 +587,10 @@ decl_module! {
 			origin, proposal: T::Hash, #[compact] index: ProposalIndex, proposal_weight_bound: Weight
 		) -> DispatchResultWithPostInfo {
 			let _ = ensure_signed(origin)?;
-		
+
 			let voting = Self::voting(&proposal).ok_or(Error::<T, I>::ProposalMissing)?;
 			ensure!(voting.index == index, Error::<T, I>::WrongIndex);
-		
+
 			let mut no_votes = voting.nays.len() as MemberCount;
 			let mut yes_votes = voting.ayes.len() as MemberCount;
 			let seats = Self::members().len() as MemberCount;
@@ -606,7 +606,7 @@ decl_module! {
 						.saturating_add(Self::finalize_proposal(approved, seats, voting, proposal, p))
 				).into());
 			}
-		
+
 			// Only allow actual closing of the proposal after the voting period has ended.
 			ensure!(system::Module::<T>::block_number() >= voting.end, Error::<T, I>::TooEarly);
 		
@@ -619,7 +619,7 @@ decl_module! {
 				false => no_votes += abstentions,
 			}
 			let approved = yes_votes >= voting.threshold;
-		
+
 			let p = ProposalOf::<T, I>::get(proposal);
 			let proposal_weight = p.as_ref().map(|p| p.get_dispatch_info().weight).unwrap_or(0);
 			ensure!(proposal_weight <= proposal_weight_bound, Error::<T, I>::WrongProposalBound);
