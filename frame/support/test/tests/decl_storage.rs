@@ -531,10 +531,18 @@ mod test_append_and_len {
 			}
 			assert_eq!(MapVec::get(1), vec![1, 2, 3, 4, 5]);
 
+			MapVec::remove(1);
+			MapVec::append(1, 1);
+			assert_eq!(MapVec::get(1), vec![1]);
+
 			for val in &[1, 2, 3, 4, 5] {
 				JustVec::append(val);
 			}
 			assert_eq!(JustVec::get(), vec![1, 2, 3, 4, 5]);
+
+			JustVec::kill();
+			JustVec::append(1);
+			assert_eq!(JustVec::get(), vec![1]);
 		});
 	}
 
