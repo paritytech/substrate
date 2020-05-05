@@ -918,6 +918,7 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, b"balances", Balances);
 			add_benchmark!(params, batches, b"collective", Council);
 			add_benchmark!(params, batches, b"democracy", Democracy);
+			add_benchmark!(params, batches, b"elections", Elections);
 			add_benchmark!(params, batches, b"identity", Identity);
 			add_benchmark!(params, batches, b"im-online", ImOnline);
 			add_benchmark!(params, batches, b"offences", OffencesBench::<Runtime>);
@@ -928,7 +929,6 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, b"treasury", Treasury);
 			add_benchmark!(params, batches, b"utility", Utility);
 			add_benchmark!(params, batches, b"vesting", Vesting);
-			add_benchmark!(params, batches, b"elections", Elections);
 
 			if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
 			Ok(batches)

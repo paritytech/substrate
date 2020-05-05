@@ -20,10 +20,8 @@
 
 use super::*;
 
-use codec::{Encode, Decode};
 use frame_system::RawOrigin;
-use sp_io::hashing::blake2_256;
-use frame_benchmarking::benchmarks;
+use frame_benchmarking::{benchmarks, account};
 use sp_runtime::traits::Bounded;
 use frame_support::traits::OnInitialize;
 
@@ -37,15 +35,9 @@ const MAX_CANDIDATES: u32 = 1000;
 
 type Lookup<T> = <<T as frame_system::Trait>::Lookup as StaticLookup>::Source;
 
-/// grab a new account
-fn account<T: Trait>(name: &'static str, index: u32) -> T::AccountId {
-	let entropy = (name, index).using_encoded(blake2_256);
-	T::AccountId::decode(&mut &entropy[..]).unwrap_or_default()
-}
-
 /// grab new account with infinite balance.
 fn endowed_account<T: Trait>(name: &'static str, index: u32) -> T::AccountId {
-	let account = account::<T>(name, index);
+	let account: T::AccountId = account(name, index, SEED);
 	let _ = T::Currency::make_free_balance_be(&account, BalanceOf::<T>::max_value());
 	account
 }
@@ -66,7 +58,7 @@ fn submit_candidates<T: Trait>(c: u32, prefix: &'static str) -> Result<Vec<T::Ac
 	(0..c).map(|i| {
 		let account = endowed_account::<T>(prefix, i);
 		<Elections<T>>::submit_candidacy(RawOrigin::Signed(account.clone()).into())
-			.map_err(|e| "failed to submit candidacy")?;
+			.map_err(|_| "failed to submit candidacy")?;
 		Ok(account)
 	}).collect::<Result<_, _>>()
 }
@@ -87,7 +79,7 @@ fn submit_voter<T: Trait>(caller: T::AccountId, votes: Vec<T::AccountId>, stake:
 	-> Result<(), &'static str>
 {
 	<Elections<T>>::vote(RawOrigin::Signed(caller).into(), votes, stake)
-		.map_err(|e| "failed to submit vote")
+		.map_err(|_| "failed to submit vote")
 }
 
 /// add `n` locks to account `who`.
@@ -128,7 +120,7 @@ benchmarks! {
 		// create a bunch of candidates.
 		let all_candidates = submit_candidates::<T>(MAXIMUM_VOTE as u32, "candidates")?;
 
-		let caller = endowed_account::<T>("caller", SEED);
+		let caller = endowed_account::<T>("caller", 0);
 		add_locks::<T>(&caller, l as u8);
 
 		let stake = default_stake::<T>(BALANCE_FACTOR);
@@ -150,7 +142,7 @@ benchmarks! {
 		// create a bunch of candidates.
 		let all_candidates = submit_candidates::<T>(c, "candidates")?;
 
-		let caller = endowed_account::<T>("caller", SEED);
+		let caller = endowed_account::<T>("caller", 0);
 		add_locks::<T>(&caller, l as u8);
 
 		let stake = default_stake::<T>(BALANCE_FACTOR);
@@ -159,7 +151,7 @@ benchmarks! {
 	}: _(RawOrigin::Signed(caller))
 
 	report_defunct_voter_correct {
-		// number fo already existing members or runners
+		// number of already existing members or runners
 		let m in 0 .. T::DesiredMembers::get() + T::DesiredRunnersUp::get();
 		// number of candidates that the reported voter voted for. This may or may not have any
 		// impact on the outcome.
@@ -174,7 +166,7 @@ benchmarks! {
 		let all_candidates = submit_candidates::<T>(c, "candidates")?;
 
 		// account 1 is the reporter and it doesn't matter how many it votes.
-		let account_1 = endowed_account::<T>("caller_1", 0);
+		let account_1 = endowed_account::<T>("caller", 0);
 		submit_voter::<T>(
 			account_1.clone(),
 			all_candidates.iter().take(1).cloned().collect(),
@@ -223,7 +215,7 @@ benchmarks! {
 		let all_candidates = submit_candidates::<T>(c, "candidates")?;
 
 		// account 1 is the reporter and it doesn't matter how many it votes.
-		let account_1 = endowed_account::<T>("caller_1", 0);
+		let account_1 = endowed_account::<T>("caller", 0);
 		submit_voter::<T>(
 			account_1.clone(),
 			all_candidates.iter().take(1).cloned().collect(),
@@ -261,7 +253,7 @@ benchmarks! {
 		let _ = fill_seats_up_to::<T>(m)?;
 
 		// we assume worse case that: extrinsic is successful and candidate is not duplicate.
-		let candidate_account = endowed_account::<T>("candidate", 0);
+		let candidate_account = endowed_account::<T>("caller", 0);
 	}: _(RawOrigin::Signed(candidate_account.clone()))
 
 	renounce_candidacy_candidate {
@@ -277,9 +269,9 @@ benchmarks! {
 		// create m members and runners combined.
 		let _ = fill_seats_up_to::<T>(m)?;
 
-		let all_candidates = submit_candidates::<T>(c, "candidates")?;
+		let all_candidates = submit_candidates::<T>(c, "caller")?;
 
-		let bailing = all_candidates[0].clone();
+		let bailing = all_candidates[0].clone(); // Should be ("caller", 0)
 	}: renounce_candidacy(RawOrigin::Signed(bailing.clone()))
 	verify {
 		#[cfg(test)]
