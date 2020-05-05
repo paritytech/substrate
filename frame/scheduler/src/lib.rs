@@ -107,6 +107,7 @@ decl_event!(
 	pub enum Event<T> where <T as system::Trait>::BlockNumber {
 		Scheduled(BlockNumber),
 		Dispatched(TaskAddress<BlockNumber>, Option<Vec<u8>>, DispatchResult),
+		FailedToCancel,
 	}
 );
 
@@ -137,7 +138,7 @@ decl_module! {
 				.collect::<Vec<_>>();
 			queued.sort_by_key(|(_, s)| s.priority);
 			let mut result = 0;
-			let unused_items = queued.into_iter()
+			queued.into_iter()
 				.enumerate()
 				.scan(0, |cumulative_weight, (order, (index, s))| {
 					*cumulative_weight += s.call.get_dispatch_info().weight;
@@ -155,10 +156,10 @@ decl_module! {
 							}
 							let next = now + period;
 							if let Some(ref id) = s.maybe_id {
-								let next_index = Agenda::<T>::decode_len(now + period).unwrap_or(0) as u32;
-								Lookup::<T>::insert(id, (next, next_index));
+								let next_index = Agenda::<T>::decode_len(now + period).unwrap_or(0);
+								Lookup::<T>::insert(id, (next, next_index as u32));
 							}
-							Agenda::<T>::append_or_insert(next, &[Some(s)][..]);
+							Agenda::<T>::append(next, Some(s));
 						} else {
 							if let Some(ref id) = s.maybe_id {
 								Lookup::<T>::remove(id);
@@ -175,11 +176,11 @@ decl_module! {
 						Some(Some(s))
 					}
 				})
-				.collect::<Vec<_>>();
-			if !unused_items.is_empty() {
-				let next = now + One::one();
-				Agenda::<T>::append_or_insert(next, &unused_items[..]);
-			}
+				.for_each(|unused| {
+					let next = now + One::one();
+					Agenda::<T>::append(next, unused);
+				});
+
 			result
 		}
 	}
@@ -197,7 +198,7 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	fn do_cancel_named(id: impl Encode) -> Result<(), ()> {
+	fn do_cancel_named(id: Vec<u8>) -> Result<(), ()> {
 		if let Some((when, index)) = id.using_encoded(|d| Lookup::<T>::take(d)) {
 			let i = index as usize;
 			Agenda::<T>::mutate(when, |agenda| if let Some(s) = agenda.get_mut(i) { *s = None });
@@ -223,7 +224,7 @@ impl<T: Trait> schedule::Anon<T::BlockNumber, <T as Trait>::Call> for Module<T> 
 			// Remove one from the number of repetitions since we will schedule one now.
 			.map(|(p, c)| (p, c - 1));
 		let s = Some(Scheduled { maybe_id: None, priority, call, maybe_periodic });
-		Agenda::<T>::append_or_insert(when, &[s][..]);
+		Agenda::<T>::append(when, s);
 		(when, Agenda::<T>::decode_len(when).unwrap_or(1) as u32 - 1)
 	}
 
@@ -236,7 +237,7 @@ impl<T: Trait> schedule::Named<T::BlockNumber, <T as Trait>::Call> for Module<T>
 	type Address = TaskAddress<T::BlockNumber>;
 
 	fn schedule_named(
-		id: impl Encode,
+		id: Vec<u8>,
 		when: T::BlockNumber,
 		maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
 		priority: schedule::Priority,
@@ -255,14 +256,14 @@ impl<T: Trait> schedule::Named<T::BlockNumber, <T as Trait>::Call> for Module<T>
 			.map(|(p, c)| (p, c - 1));
 
 		let s = Scheduled { maybe_id: Some(id.clone()), priority, call, maybe_periodic };
-		Agenda::<T>::append_or_insert(when, &[Some(s)][..]);
+		Agenda::<T>::append(when, Some(s));
 		let index = Agenda::<T>::decode_len(when).unwrap_or(1) as u32 - 1;
 		let address = (when, index);
 		Lookup::<T>::insert(&id, &address);
 		Ok(address)
 	}
 
-	fn cancel_named(id: impl Encode) -> Result<(), ()> {
+	fn cancel_named(id: Vec<u8>) -> Result<(), ()> {
 		Self::do_cancel_named(id)
 	}
 }
@@ -355,7 +356,7 @@ mod tests {
 	pub struct Test;
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: Weight = 10_000;
+		pub const MaximumBlockWeight: Weight = 1024;
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
@@ -386,11 +387,14 @@ mod tests {
 	impl logger::Trait for Test {
 		type Event = ();
 	}
+	parameter_types! {
+		pub const MaximumWeight: Weight = 10_000;
+	}
 	impl Trait for Test {
 		type Event = ();
 		type Origin = Origin;
 		type Call = Call;
-		type MaximumWeight = MaximumBlockWeight;
+		type MaximumWeight = MaximumWeight;
 	}
 	type System = system::Module<Test>;
 	type Logger = logger::Module<Test>;
@@ -450,11 +454,11 @@ mod tests {
 	fn cancel_named_scheduling_works_with_normal_cancel() {
 		new_test_ext().execute_with(|| {
 			// at #4.
-			Scheduler::schedule_named(1u32, 4, None, 127, Call::Logger(logger::Call::log(69, 1000))).unwrap();
+			Scheduler::schedule_named(1u32.encode(), 4, None, 127, Call::Logger(logger::Call::log(69, 1000))).unwrap();
 			let i = Scheduler::schedule(4, None, 127, Call::Logger(logger::Call::log(42, 1000)));
 			run_to_block(3);
 			assert!(logger::log().is_empty());
-			assert_ok!(Scheduler::do_cancel_named(1u32));
+			assert_ok!(Scheduler::do_cancel_named(1u32.encode()));
 			assert_ok!(Scheduler::do_cancel(i));
 			run_to_block(100);
 			assert!(logger::log().is_empty());
@@ -465,17 +469,17 @@ mod tests {
 	fn cancel_named_periodic_scheduling_works() {
 		new_test_ext().execute_with(|| {
 			// at #4, every 3 blocks, 3 times.
-			Scheduler::schedule_named(1u32, 4, Some((3, 3)), 127, Call::Logger(logger::Call::log(42, 1000))).unwrap();
+			Scheduler::schedule_named(1u32.encode(), 4, Some((3, 3)), 127, Call::Logger(logger::Call::log(42, 1000))).unwrap();
 			// same id results in error.
-			assert!(Scheduler::schedule_named(1u32, 4, None, 127, Call::Logger(logger::Call::log(69, 1000))).is_err());
+			assert!(Scheduler::schedule_named(1u32.encode(), 4, None, 127, Call::Logger(logger::Call::log(69, 1000))).is_err());
 			// different id is ok.
-			Scheduler::schedule_named(2u32, 8, None, 127, Call::Logger(logger::Call::log(69, 1000))).unwrap();
+			Scheduler::schedule_named(2u32.encode(), 8, None, 127, Call::Logger(logger::Call::log(69, 1000))).unwrap();
 			run_to_block(3);
 			assert!(logger::log().is_empty());
 			run_to_block(4);
 			assert_eq!(logger::log(), vec![42u32]);
 			run_to_block(6);
-			assert_ok!(Scheduler::do_cancel_named(1u32));
+			assert_ok!(Scheduler::do_cancel_named(1u32.encode()));
 			run_to_block(100);
 			assert_eq!(logger::log(), vec![42u32, 69u32]);
 		});
@@ -547,11 +551,11 @@ mod tests {
 	#[test]
 	fn cancel_root_call_works() {
 		new_test_ext().execute_with(|| {
-			Scheduler::schedule_named(1u32, 4, None, 127, Call::Logger(logger::Call::log(69, 1000))).unwrap();
+			Scheduler::schedule_named(1u32.encode(), 4, None, 127, Call::Logger(logger::Call::log(69, 1000))).unwrap();
 			let (when, index) = Scheduler::schedule(4, None, 127, Call::Logger(logger::Call::log(42, 1000)));
 			run_to_block(3);
 			assert!(logger::log().is_empty());
-			assert_ok!(Scheduler::cancel_named(Origin::ROOT, 1u32.encode().to_vec()));
+			assert_ok!(Scheduler::cancel_named(Origin::ROOT, 1u32.encode()));
 			assert_ok!(Scheduler::cancel(Origin::ROOT, when, index));
 			run_to_block(100);
 			assert!(logger::log().is_empty());

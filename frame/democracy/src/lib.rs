@@ -832,7 +832,7 @@ decl_module! {
 		#[weight = (0, DispatchClass::Operational)]
 		fn cancel_queued(origin, which: ReferendumIndex) {
 			ensure_root(origin)?;
-			T::Scheduler::cancel_named((DEMOCRACY_ID, which))
+			T::Scheduler::cancel_named((DEMOCRACY_ID, which).encode())
 				.map_err(|_| Error::<T>::ProposalMissing)?;
 		}
 
@@ -1659,7 +1659,7 @@ impl<T: Trait> Module<T> {
 				});
 
 				if T::Scheduler::schedule_named(
-					(DEMOCRACY_ID, index),
+					(DEMOCRACY_ID, index).encode(),
 					when,
 					None,
 					63,
