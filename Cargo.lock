@@ -6476,7 +6476,6 @@ dependencies = [
  "sp-arithmetic",
  "sp-blockchain",
  "sp-consensus",
- "sp-consensus-babe",
  "sp-core",
  "sp-keyring",
  "sp-runtime",
