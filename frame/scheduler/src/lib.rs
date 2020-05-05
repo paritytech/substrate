@@ -48,7 +48,8 @@ use sp_std::prelude::*;
 use codec::{Encode, Decode};
 use sp_runtime::{RuntimeDebug, traits::{Zero, One}};
 use frame_support::{
-	dispatch::{Dispatchable, DispatchResult, Parameter}, decl_module, decl_storage, decl_event,
+	decl_module, decl_storage, decl_event, decl_error,
+	dispatch::{Dispatchable, DispatchError, DispatchResult, Parameter},
 	traits::{Get, schedule},
 	weights::{GetDispatchInfo, Weight},
 };
@@ -105,22 +106,56 @@ decl_storage! {
 
 decl_event!(
 	pub enum Event<T> where <T as system::Trait>::BlockNumber {
-		Scheduled(BlockNumber),
+		Scheduled(BlockNumber, u32),
+		Canceled(BlockNumber, u32),
 		Dispatched(TaskAddress<BlockNumber>, Option<Vec<u8>>, DispatchResult),
-		FailedToCancel,
 	}
 );
+
+decl_error! {
+	pub enum Error for Module<T: Trait> {
+		/// Failed to schedule a call
+		FailedToSchedule,
+		/// Failed to cancel a scheduled call
+		FailedToCancel,
+	}
+}
 
 decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what its working on.
 	pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
 		fn deposit_event() = default;
 
+		/// Anonymously schedule a task.
+		#[weight = 100_000]
+		fn schedule(origin,
+			when: T::BlockNumber,
+			maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
+			priority: schedule::Priority,
+			call: Box<<T as Trait>::Call>,
+		) {
+			ensure_root(origin)?;
+			let _ = Self::do_schedule(when, maybe_periodic, priority, *call);
+		}
+
 		/// Cancel an anonymously scheduled task.
 		#[weight = 100_000]
 		fn cancel(origin, when: T::BlockNumber, index: u32) {
 			ensure_root(origin)?;
 			Self::do_cancel((when, index)).map_err(|_| "could not cancel")?;
+		}
+
+		/// Anonymously schedule a task.
+		#[weight = 100_000]
+		fn schedule_named(origin,
+			id: Vec<u8>,
+			when: T::BlockNumber,
+			maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
+			priority: schedule::Priority,
+			call: Box<<T as Trait>::Call>,
+		) {
+			ensure_root(origin)?;
+			Self::do_schedule_named(id, when, maybe_periodic, priority, *call).map_err(|_| "could not schedule")?;
 		}
 
 		/// Cancel a named scheduled task.
@@ -187,37 +222,12 @@ decl_module! {
 }
 
 impl<T: Trait> Module<T> {
-	fn do_cancel((when, index): TaskAddress<T::BlockNumber>) -> Result<(), ()> {
-		if let Some(s) = Agenda::<T>::mutate(when, |agenda| agenda.get_mut(index as usize).and_then(Option::take)) {
-			if let Some(id) = s.maybe_id {
-				Lookup::<T>::remove(id)
-			}
-			Ok(())
-		} else {
-			Err(())
-		}
-	}
-
-	fn do_cancel_named(id: Vec<u8>) -> Result<(), ()> {
-		if let Some((when, index)) = id.using_encoded(|d| Lookup::<T>::take(d)) {
-			let i = index as usize;
-			Agenda::<T>::mutate(when, |agenda| if let Some(s) = agenda.get_mut(i) { *s = None });
-			Ok(())
-		} else {
-			Err(())
-		}
-	}
-}
-
-impl<T: Trait> schedule::Anon<T::BlockNumber, <T as Trait>::Call> for Module<T> {
-	type Address = TaskAddress<T::BlockNumber>;
-
-	fn schedule(
+	fn do_schedule(
 		when: T::BlockNumber,
 		maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
 		priority: schedule::Priority,
 		call: <T as Trait>::Call
-	) -> Self::Address {
+	) -> TaskAddress<T::BlockNumber> {
 		// sanitize maybe_periodic
 		let maybe_periodic = maybe_periodic
 			.filter(|p| p.1 > 1 && !p.0.is_zero())
@@ -225,28 +235,34 @@ impl<T: Trait> schedule::Anon<T::BlockNumber, <T as Trait>::Call> for Module<T> 
 			.map(|(p, c)| (p, c - 1));
 		let s = Some(Scheduled { maybe_id: None, priority, call, maybe_periodic });
 		Agenda::<T>::append(when, s);
-		(when, Agenda::<T>::decode_len(when).unwrap_or(1) as u32 - 1)
+		let id = Agenda::<T>::decode_len(when).unwrap_or(1) as u32 - 1;
+		Self::deposit_event(RawEvent::Scheduled(when, id));
+		(when, id)
 	}
 
-	fn cancel((when, index): Self::Address) -> Result<(), ()> {
-		Self::do_cancel((when, index))
+	fn do_cancel((when, index): TaskAddress<T::BlockNumber>) -> Result<(), DispatchError> {
+		if let Some(s) = Agenda::<T>::mutate(when, |agenda| agenda.get_mut(index as usize).and_then(Option::take)) {
+			if let Some(id) = s.maybe_id {
+				Lookup::<T>::remove(id);
+				Self::deposit_event(RawEvent::Canceled(when, index));
+			}
+			Ok(())
+		} else {
+			Err(Error::<T>::FailedToCancel)?
+		}
 	}
-}
 
-impl<T: Trait> schedule::Named<T::BlockNumber, <T as Trait>::Call> for Module<T> {
-	type Address = TaskAddress<T::BlockNumber>;
-
-	fn schedule_named(
+	fn do_schedule_named(
 		id: Vec<u8>,
 		when: T::BlockNumber,
 		maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
 		priority: schedule::Priority,
 		call: <T as Trait>::Call,
-	) -> Result<Self::Address, ()> {
+	) -> Result<TaskAddress<T::BlockNumber>, DispatchError> {
 		// determine id and ensure it is unique
 		let id = id.encode();
 		if Lookup::<T>::contains_key(&id) {
-			return Err(())
+			return Err(Error::<T>::FailedToSchedule)?
 		}
 
 		// sanitize maybe_periodic
@@ -260,11 +276,54 @@ impl<T: Trait> schedule::Named<T::BlockNumber, <T as Trait>::Call> for Module<T>
 		let index = Agenda::<T>::decode_len(when).unwrap_or(1) as u32 - 1;
 		let address = (when, index);
 		Lookup::<T>::insert(&id, &address);
+		Self::deposit_event(RawEvent::Scheduled(when, index));
 		Ok(address)
 	}
 
+	fn do_cancel_named(id: Vec<u8>) -> Result<(), DispatchError> {
+		if let Some((when, index)) = id.using_encoded(|d| Lookup::<T>::take(d)) {
+			let i = index as usize;
+			Agenda::<T>::mutate(when, |agenda| if let Some(s) = agenda.get_mut(i) { *s = None });
+			Self::deposit_event(RawEvent::Canceled(when, index));
+			Ok(())
+		} else {
+			Err(Error::<T>::FailedToCancel)?
+		}
+	}
+}
+
+impl<T: Trait> schedule::Anon<T::BlockNumber, <T as Trait>::Call> for Module<T> {
+	type Address = TaskAddress<T::BlockNumber>;
+
+	fn schedule(
+		when: T::BlockNumber,
+		maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
+		priority: schedule::Priority,
+		call: <T as Trait>::Call
+	) -> Self::Address {
+		Self::do_schedule(when, maybe_periodic, priority, call)
+	}
+
+	fn cancel((when, index): Self::Address) -> Result<(), ()> {
+		Self::do_cancel((when, index)).map_err(|_| ())
+	}
+}
+
+impl<T: Trait> schedule::Named<T::BlockNumber, <T as Trait>::Call> for Module<T> {
+	type Address = TaskAddress<T::BlockNumber>;
+
+	fn schedule_named(
+		id: Vec<u8>,
+		when: T::BlockNumber,
+		maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
+		priority: schedule::Priority,
+		call: <T as Trait>::Call,
+	) -> Result<Self::Address, ()> {
+		Self::do_schedule_named(id, when, maybe_periodic, priority, call).map_err(|_| ())
+	}
+
 	fn cancel_named(id: Vec<u8>) -> Result<(), ()> {
-		Self::do_cancel_named(id)
+		Self::do_cancel_named(id).map_err(|_| ())
 	}
 }
 
@@ -274,7 +333,7 @@ mod tests {
 
 	use frame_support::{
 		impl_outer_event, impl_outer_origin, impl_outer_dispatch, parameter_types, assert_ok,
-		traits::{OnInitialize, OnFinalize, schedule::{Anon, Named}},
+		traits::{OnInitialize, OnFinalize},
 		weights::{DispatchClass, FunctionOf, Pays}
 	};
 	use sp_core::H256;
@@ -418,7 +477,7 @@ mod tests {
 	#[test]
 	fn basic_scheduling_works() {
 		new_test_ext().execute_with(|| {
-			Scheduler::schedule(4, None, 127, Call::Logger(logger::Call::log(42, 1000)));
+			Scheduler::do_schedule(4, None, 127, Call::Logger(logger::Call::log(42, 1000)));
 			run_to_block(3);
 			assert!(logger::log().is_empty());
 			run_to_block(4);
@@ -432,7 +491,7 @@ mod tests {
 	fn periodic_scheduling_works() {
 		new_test_ext().execute_with(|| {
 			// at #4, every 3 blocks, 3 times.
-			Scheduler::schedule(4, Some((3, 3)), 127, Call::Logger(logger::Call::log(42, 1000)));
+			Scheduler::do_schedule(4, Some((3, 3)), 127, Call::Logger(logger::Call::log(42, 1000)));
 			run_to_block(3);
 			assert!(logger::log().is_empty());
 			run_to_block(4);
@@ -454,8 +513,8 @@ mod tests {
 	fn cancel_named_scheduling_works_with_normal_cancel() {
 		new_test_ext().execute_with(|| {
 			// at #4.
-			Scheduler::schedule_named(1u32.encode(), 4, None, 127, Call::Logger(logger::Call::log(69, 1000))).unwrap();
-			let i = Scheduler::schedule(4, None, 127, Call::Logger(logger::Call::log(42, 1000)));
+			Scheduler::do_schedule_named(1u32.encode(), 4, None, 127, Call::Logger(logger::Call::log(69, 1000))).unwrap();
+			let i = Scheduler::do_schedule(4, None, 127, Call::Logger(logger::Call::log(42, 1000)));
 			run_to_block(3);
 			assert!(logger::log().is_empty());
 			assert_ok!(Scheduler::do_cancel_named(1u32.encode()));
@@ -469,11 +528,11 @@ mod tests {
 	fn cancel_named_periodic_scheduling_works() {
 		new_test_ext().execute_with(|| {
 			// at #4, every 3 blocks, 3 times.
-			Scheduler::schedule_named(1u32.encode(), 4, Some((3, 3)), 127, Call::Logger(logger::Call::log(42, 1000))).unwrap();
+			Scheduler::do_schedule_named(1u32.encode(), 4, Some((3, 3)), 127, Call::Logger(logger::Call::log(42, 1000))).unwrap();
 			// same id results in error.
-			assert!(Scheduler::schedule_named(1u32.encode(), 4, None, 127, Call::Logger(logger::Call::log(69, 1000))).is_err());
+			assert!(Scheduler::do_schedule_named(1u32.encode(), 4, None, 127, Call::Logger(logger::Call::log(69, 1000))).is_err());
 			// different id is ok.
-			Scheduler::schedule_named(2u32.encode(), 8, None, 127, Call::Logger(logger::Call::log(69, 1000))).unwrap();
+			Scheduler::do_schedule_named(2u32.encode(), 8, None, 127, Call::Logger(logger::Call::log(69, 1000))).unwrap();
 			run_to_block(3);
 			assert!(logger::log().is_empty());
 			run_to_block(4);
@@ -488,8 +547,8 @@ mod tests {
 	#[test]
 	fn scheduler_respects_weight_limits() {
 		new_test_ext().execute_with(|| {
-			Scheduler::schedule(4, None, 127, Call::Logger(logger::Call::log(42, 6000)));
-			Scheduler::schedule(4, None, 127, Call::Logger(logger::Call::log(69, 6000)));
+			Scheduler::do_schedule(4, None, 127, Call::Logger(logger::Call::log(42, 6000)));
+			Scheduler::do_schedule(4, None, 127, Call::Logger(logger::Call::log(69, 6000)));
 			run_to_block(4);
 			assert_eq!(logger::log(), vec![42u32]);
 			run_to_block(5);
@@ -500,8 +559,8 @@ mod tests {
 	#[test]
 	fn scheduler_respects_hard_deadlines_more() {
 		new_test_ext().execute_with(|| {
-			Scheduler::schedule(4, None, 0, Call::Logger(logger::Call::log(42, 6000)));
-			Scheduler::schedule(4, None, 0, Call::Logger(logger::Call::log(69, 6000)));
+			Scheduler::do_schedule(4, None, 0, Call::Logger(logger::Call::log(42, 6000)));
+			Scheduler::do_schedule(4, None, 0, Call::Logger(logger::Call::log(69, 6000)));
 			run_to_block(4);
 			assert_eq!(logger::log(), vec![42u32, 69u32]);
 		});
@@ -510,8 +569,8 @@ mod tests {
 	#[test]
 	fn scheduler_respects_priority_ordering() {
 		new_test_ext().execute_with(|| {
-			Scheduler::schedule(4, None, 1, Call::Logger(logger::Call::log(42, 6000)));
-			Scheduler::schedule(4, None, 0, Call::Logger(logger::Call::log(69, 6000)));
+			Scheduler::do_schedule(4, None, 1, Call::Logger(logger::Call::log(42, 6000)));
+			Scheduler::do_schedule(4, None, 0, Call::Logger(logger::Call::log(69, 6000)));
 			run_to_block(4);
 			assert_eq!(logger::log(), vec![69u32, 42u32]);
 		});
@@ -520,9 +579,9 @@ mod tests {
 	#[test]
 	fn scheduler_respects_priority_ordering_with_soft_deadlines() {
 		new_test_ext().execute_with(|| {
-			Scheduler::schedule(4, None, 255, Call::Logger(logger::Call::log(42, 5000)));
-			Scheduler::schedule(4, None, 127, Call::Logger(logger::Call::log(69, 5000)));
-			Scheduler::schedule(4, None, 126, Call::Logger(logger::Call::log(2600, 6000)));
+			Scheduler::do_schedule(4, None, 255, Call::Logger(logger::Call::log(42, 5000)));
+			Scheduler::do_schedule(4, None, 127, Call::Logger(logger::Call::log(69, 5000)));
+			Scheduler::do_schedule(4, None, 126, Call::Logger(logger::Call::log(2600, 6000)));
 			run_to_block(4);
 			assert_eq!(logger::log(), vec![2600u32]);
 			run_to_block(5);
@@ -533,10 +592,10 @@ mod tests {
 	#[test]
 	fn initialize_weight_is_correct() {
 		new_test_ext().execute_with(|| {
-			Scheduler::schedule(1, None, 255, Call::Logger(logger::Call::log(3, 1000)));
-			Scheduler::schedule(1, None, 128, Call::Logger(logger::Call::log(42, 5000)));
-			Scheduler::schedule(1, None, 127, Call::Logger(logger::Call::log(69, 5000)));
-			Scheduler::schedule(1, None, 126, Call::Logger(logger::Call::log(2600, 6000)));
+			Scheduler::do_schedule(1, None, 255, Call::Logger(logger::Call::log(3, 1000)));
+			Scheduler::do_schedule(1, None, 128, Call::Logger(logger::Call::log(42, 5000)));
+			Scheduler::do_schedule(1, None, 127, Call::Logger(logger::Call::log(69, 5000)));
+			Scheduler::do_schedule(1, None, 126, Call::Logger(logger::Call::log(2600, 6000)));
 			let weight = Scheduler::on_initialize(1);
 			assert_eq!(weight, 6000);
 			let weight = Scheduler::on_initialize(2);
@@ -549,15 +608,21 @@ mod tests {
 	}
 
 	#[test]
-	fn cancel_root_call_works() {
+	fn root_calls_works() {
 		new_test_ext().execute_with(|| {
-			Scheduler::schedule_named(1u32.encode(), 4, None, 127, Call::Logger(logger::Call::log(69, 1000))).unwrap();
-			let (when, index) = Scheduler::schedule(4, None, 127, Call::Logger(logger::Call::log(42, 1000)));
+			let call = Box::new(Call::Logger(logger::Call::log(69, 1000)));
+			let call2 = Box::new(Call::Logger(logger::Call::log(42, 1000)));
+			assert_ok!(Scheduler::schedule_named(Origin::ROOT, 1u32.encode(), 4, None, 127, call));
+			assert_ok!(Scheduler::schedule(Origin::ROOT, 4, None, 127, call2));
 			run_to_block(3);
+			// Scheduled calls are in the agenda.
+			assert_eq!(Agenda::<Test>::get(4).len(), 2);
 			assert!(logger::log().is_empty());
 			assert_ok!(Scheduler::cancel_named(Origin::ROOT, 1u32.encode()));
-			assert_ok!(Scheduler::cancel(Origin::ROOT, when, index));
+			assert_ok!(Scheduler::cancel(Origin::ROOT, 4, 1));
 			run_to_block(100);
+			// Scheduled calls are removed from the agenda
+			assert_eq!(Agenda::<Test>::get(4).len(), 0);
 			assert!(logger::log().is_empty());
 		});
 	}
