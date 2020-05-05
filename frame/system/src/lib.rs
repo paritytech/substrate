@@ -1719,7 +1719,7 @@ pub(crate) mod tests {
 	use sp_std::cell::RefCell;
 	use sp_core::H256;
 	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup, SignedExtension}, testing::Header, DispatchError};
-	use frame_support::{impl_outer_origin, parameter_types, assert_ok, assert_err};
+	use frame_support::{impl_outer_origin, parameter_types, assert_ok};
 
 	impl_outer_origin! {
 		pub enum Origin for Test where system = super {}
@@ -2154,9 +2154,6 @@ pub(crate) mod tests {
 			// 10 is taken for block execution weight
 			// So normal extrinsic can be 758 weight (-5 for base extrinsic weight)
 			// And Operational can be 256 to produce a full block (-5 for base)
-
-			assert_eq!(System::max_extrinsic_weight(DispatchClass::Normal), 753);
-
 			let max_normal = DispatchInfo { weight: 753, ..Default::default() };
 			let rest_operational = DispatchInfo { weight: 251, class: DispatchClass::Operational, ..Default::default() };
 
