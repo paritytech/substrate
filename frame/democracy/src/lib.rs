@@ -529,7 +529,7 @@ decl_error! {
 	}
 }
 
-/// Functions for calcuating some weight of dispatchables.
+/// Functions for calcuating the weight of dispatchables.
 mod weight_for {
 	use frame_support::{
 		weights::{RuntimeDbWeight, Weight},
@@ -1609,7 +1609,7 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	/// Return the number of votes for who
+	/// Return the number of votes for `who`
 	fn increase_upstream_delegation(who: &T::AccountId, amount: Delegations<BalanceOf<T>>) -> u32 {
 		VotingOf::<T>::mutate(who, |voting| match voting {
 			Voting::Delegating { delegations, .. } => {
@@ -1633,7 +1633,7 @@ impl<T: Trait> Module<T> {
 		})
 	}
 
-	/// Return the number of votes for who
+	/// Return the number of votes for `who`
 	fn reduce_upstream_delegation(who: &T::AccountId, amount: Delegations<BalanceOf<T>>) -> u32 {
 		VotingOf::<T>::mutate(who, |voting| match voting {
 			Voting::Delegating { delegations, .. } => {
@@ -1940,7 +1940,7 @@ impl<T: Trait> Module<T> {
 
 	/// Check pre image `data` len without getting the complete value in the runtime.
 	///
-	/// If the pre image is missing variant or doesn't exist then the error PreimageMissing is
+	/// If the pre image is missing variant or doesn't exist then the error `PreimageMissing` is
 	/// returned.
 	fn pre_image_data_len(proposal_hash: T::Hash) -> Result<u32, DispatchError> {
 		let mut buf = [0u8; 6];
