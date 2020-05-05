@@ -544,7 +544,7 @@ decl_module! {
 		/// The weight of this function is dependent on the runtime, but generally this is very expensive.
 		/// We will treat this as a full block.
 		/// # </weight>
-		#[weight = (T::MaximumBlockWeight::get(), DispatchClass::Mandatory)]
+		#[weight = (crate::Module::<T>::max_extrinsic_weight(DispatchClass::Operational), DispatchClass::Operational)]
 		pub fn set_code(origin, code: Vec<u8>) {
 			Self::can_set_code(origin, &code)?;
 
@@ -560,7 +560,7 @@ decl_module! {
 		/// - 1 event.
 		/// The weight of this function is dependent on the runtime. We will treat this as a full block.
 		/// # </weight>
-		#[weight = (T::MaximumBlockWeight::get(), DispatchClass::Mandatory)]
+		#[weight = (crate::Module::<T>::max_extrinsic_weight(DispatchClass::Operational), DispatchClass::Operational)]
 		pub fn set_code_without_checks(origin, code: Vec<u8>) {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::CODE, &code);

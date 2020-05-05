@@ -230,7 +230,6 @@ impl transaction_payment::Trait for Runtime {
 impl sudo::Trait for Runtime {
 	type Event = Event;
 	type Call = Call;
-	type Scheduler = Sudo;
 }
 
 /// Used for the module template in `./template.rs`
