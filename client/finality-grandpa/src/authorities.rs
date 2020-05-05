@@ -972,14 +972,16 @@ mod tests {
 
 	#[test]
 	fn next_change_works() {
+		let current_authorities = vec![(AuthorityId::from_slice(&[1; 32]), 1)];
+
 		let mut authorities = AuthoritySet {
-			current_authorities: Vec::new(),
+			current_authorities: current_authorities.clone(),
 			set_id: 0,
 			pending_standard_changes: ForkTree::new(),
 			pending_forced_changes: Vec::new(),
 		};
 
-		let new_set = Vec::new();
+		let new_set = current_authorities.clone();
 
 		// We have three pending changes with 2 possible roots that are enacted
 		// immediately on finality (i.e. standard changes).
