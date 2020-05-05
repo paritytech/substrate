@@ -270,7 +270,7 @@ mod weight_for {
 	) -> Weight {
 		close_without_finalize(db, members)
 			.saturating_add(db.reads(1)) // `Prime`
-			.saturating_add(db.reads_writes(1, 1)) // `Proposals`
+			.saturating_add(db.writes(1)) // `Proposals`
 			.saturating_add(db.writes(1)) // `Voting`
 			.saturating_add(proposal_weight.into()) // P1
 			.saturating_add(490_000 * proposals.into()) // P2
@@ -281,8 +281,7 @@ mod weight_for {
 		db: RuntimeDbWeight,
 		members: impl Into<Weight>,
 	) -> Weight {
-		db.reads(2) // `Members` and `Voting`
-			+ db.reads_writes(1, 1) // `ProposalOf`
+		db.reads(3) // `Members`, `Voting`, `ProposalOf`
 			+ 66_000_000 // constant
 			+ 8_000 * MAX_ASSUMED_PROPOSAL_BYTES // B
 			+ 250_000 * members.into() // M
@@ -599,7 +598,7 @@ decl_module! {
 			let disapproved = seats.saturating_sub(no_votes) < voting.threshold;
 			// Allow (dis-)approving the proposal as soon as there are enough votes.
 			if approved || disapproved {
-				let p = ProposalOf::<T, I>::take(proposal);
+				let p = ProposalOf::<T, I>::get(proposal);
 				let proposal_weight = p.as_ref().map(|p| p.get_dispatch_info().weight).unwrap_or(0);
 				ensure!(proposal_weight <= proposal_weight_bound, Error::<T, I>::WrongProposalBound);
 				return Ok(Some(
@@ -621,10 +620,10 @@ decl_module! {
 			}
 			let approved = yes_votes >= voting.threshold;
 		
-			Self::deposit_event(RawEvent::Closed(proposal, yes_votes, no_votes));
-			let p = ProposalOf::<T, I>::take(proposal);
+			let p = ProposalOf::<T, I>::get(proposal);
 			let proposal_weight = p.as_ref().map(|p| p.get_dispatch_info().weight).unwrap_or(0);
 			ensure!(proposal_weight <= proposal_weight_bound, Error::<T, I>::WrongProposalBound);
+			Self::deposit_event(RawEvent::Closed(proposal, yes_votes, no_votes));
 			Ok(Some(
 				weight_for::close_without_finalize(T::DbWeight::get(), seats)
 					.saturating_add(T::DbWeight::get().reads(1)) // read `Prime`
@@ -679,13 +678,14 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		}
 
 		// remove vote
+		ProposalOf::<T, I>::remove(&proposal_hash);
 		Voting::<T, I>::remove(&proposal_hash);
 		let mut proposal_len = T::MaxProposals::get() as Weight;
 		Proposals::<T, I>::mutate(|proposals| {
 			proposal_len = proposals.len() as Weight;
 			proposals.retain(|h| h != &proposal_hash)
 		});
-		weight.saturating_add(db.reads_writes(1, 2)) // `Voting` and `Proposals`
+		weight.saturating_add(db.reads_writes(1, 3)) // `Voting`, `Proposals`, `ProposalOf`
 			.saturating_add(490_000 * proposal_len) // P2
 	}
 }
@@ -990,6 +990,25 @@ mod tests {
 				record(Event::collective_Instance1(RawEvent::Disapproved(hash.clone())))
 			]);
 		});
+	}
+
+	#[test]
+	fn proposal_weight_limit_works() {
+		new_test_ext().execute_with(|| {
+			let proposal = Call::Collective(crate::Call::set_members(vec![1, 2, 3], None, 0));
+			let hash = BlakeTwo256::hash_of(&proposal);
+
+			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
+			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
+
+			System::set_block_number(4);
+			let proposal_weight = proposal.get_dispatch_info().weight;
+			assert_noop!(
+				Collective::close(Origin::signed(4), hash.clone(), 0, proposal_weight - 100),
+				Error::<Test, Instance1>::WrongProposalBound
+			);
+			assert_ok!(Collective::close(Origin::signed(4), hash.clone(), 0, Weight::max_value()));
+		})
 	}
 
 	#[test]
