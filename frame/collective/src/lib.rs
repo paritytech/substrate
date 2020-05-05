@@ -329,7 +329,7 @@ decl_module! {
 		/// - `new_members`: The new member list. Be nice to the chain and
 		//	provide it sorted.
 		/// - `prime`: The prime member whose vote sets the default.
-		/// - `old_count`: The number of previous members. (Used for weight estimation.)
+		/// - `old_count`: Upper bound for the number of previous members. (Used for weight estimation.)
 		///
 		/// Requires root origin.
 		///
