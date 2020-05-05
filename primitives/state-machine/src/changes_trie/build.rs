@@ -17,7 +17,7 @@
 
 //! Structures and functions required to build changes trie for given block.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
 use codec::{Decode, Encode};
 use hash_db::Hasher;
@@ -33,7 +33,7 @@ use crate::{
 		input::{InputKey, InputPair, DigestIndex, ExtrinsicIndex, ChildIndex},
 	},
 };
-use sp_core::storage::{ChildInfo, ChildType, PrefixedStorageKey};
+use sp_core::storage::{ChildInfo, PrefixedStorageKey};
 
 /// Prepare input pairs for building a changes trie of given block.
 ///
@@ -106,20 +106,18 @@ fn prepare_extrinsics_input<'a, B, H, Number>(
 		H: Hasher + 'a,
 		Number: BlockNumber,
 {
-
-	let mut children_info = BTreeSet::<ChildInfo>::new();
 	let mut children_result = BTreeMap::new();
-	for (_storage_key, (_map, child_info)) in changes.prospective.children_default.iter()
-		.chain(changes.committed.children_default.iter()) {
-		children_info.insert(child_info.clone());
-	}
-	for child_info in children_info {
+
+	for child_info in changes.child_infos() {
 		let child_index = ChildIndex::<Number> {
 			block: block.clone(),
 			storage_key: child_info.prefixed_storage_key(),
 		};
 
-		let iter = prepare_extrinsics_input_inner(backend, block, changes, Some(child_info))?;
+		let iter = prepare_extrinsics_input_inner(
+			backend, block, changes,
+			Some(child_info.clone())
+		)?;
 		children_result.insert(child_index, iter);
 	}
 
@@ -139,19 +137,8 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 		H: Hasher,
 		Number: BlockNumber,
 {
-	let (committed, prospective) = if let Some(child_info) = child_info.as_ref() {
-		match child_info.child_type() {
-			ChildType::ParentKeyId => (
-				changes.committed.children_default.get(child_info.storage_key()).map(|c| &c.0),
-				changes.prospective.children_default.get(child_info.storage_key()).map(|c| &c.0),
-			),
-		}
-	} else {
-		(Some(&changes.committed.top), Some(&changes.prospective.top))
-	};
-	committed.iter().flat_map(|c| c.iter())
-		.chain(prospective.iter().flat_map(|c| c.iter()))
-		.filter(|( _, v)| v.extrinsics.is_some())
+	changes.changes(child_info.as_ref())
+		.filter(|( _, v)| v.extrinsics().is_some())
 		.try_fold(BTreeMap::new(), |mut map: BTreeMap<&[u8], (ExtrinsicIndex<Number>, Vec<u32>)>, (k, v)| {
 			match map.entry(k) {
 				Entry::Vacant(entry) => {
@@ -172,9 +159,10 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 						}
 					};
 
-					let extrinsics = v.extrinsics.as_ref()
+					let extrinsics = v.extrinsics()
 						.expect("filtered by filter() call above; qed")
-						.iter().cloned().collect();
+						.cloned()
+						.collect();
 					entry.insert((ExtrinsicIndex {
 						block: block.clone(),
 						key: k.to_vec(),
@@ -185,9 +173,8 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 					// AND we are checking it before insertion
 					let extrinsics = &mut entry.get_mut().1;
 					extrinsics.extend(
-						v.extrinsics.as_ref()
+						v.extrinsics()
 							.expect("filtered by filter() call above; qed")
-							.iter()
 							.cloned()
 					);
 					extrinsics.sort_unstable();

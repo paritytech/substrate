@@ -147,8 +147,7 @@ where
 
 		self.backend.pairs().iter()
 			.map(|&(ref k, ref v)| (k.to_vec(), Some(v.to_vec())))
-			.chain(self.overlay.committed.top.clone().into_iter().map(|(k, v)| (k, v.value)))
-			.chain(self.overlay.prospective.top.clone().into_iter().map(|(k, v)| (k, v.value)))
+			.chain(self.overlay.changes(None).map(|(k, v)| (k.clone(), v.value().cloned())))
 			.collect::<HashMap<_, _>>()
 			.into_iter()
 			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
@@ -293,7 +292,7 @@ where
 		match (next_backend_key, next_overlay_key_change) {
 			(Some(backend_key), Some(overlay_key)) if &backend_key[..] < overlay_key.0 => Some(backend_key),
 			(backend_key, None) => backend_key,
-			(_, Some(overlay_key)) => if overlay_key.1.value.is_some() {
+			(_, Some(overlay_key)) => if overlay_key.1.value().is_some() {
 				Some(overlay_key.0.to_vec())
 			} else {
 				self.next_storage_key(&overlay_key.0[..])
@@ -317,7 +316,7 @@ where
 		match (next_backend_key, next_overlay_key_change) {
 			(Some(backend_key), Some(overlay_key)) if &backend_key[..] < overlay_key.0 => Some(backend_key),
 			(backend_key, None) => backend_key,
-			(_, Some(overlay_key)) => if overlay_key.1.value.is_some() {
+			(_, Some(overlay_key)) => if overlay_key.1.value().is_some() {
 				Some(overlay_key.0.to_vec())
 			} else {
 				self.next_child_storage_key(
@@ -479,18 +478,12 @@ where
 			root.encode()
 		} else {
 
-			if let Some(child_info) = self.overlay.default_child_info(storage_key).cloned() {
+			if let Some(child_info) = self.overlay.default_child_info(storage_key) {
 				let (root, is_empty, _) = {
-					let delta = self.overlay.committed.children_default.get(storage_key)
-						.into_iter()
-						.flat_map(|(map, _)| map.clone().into_iter().map(|(k, v)| (k, v.value)))
-						.chain(
-							self.overlay.prospective.children_default.get(storage_key)
-								.into_iter()
-								.flat_map(|(map, _)| map.clone().into_iter().map(|(k, v)| (k, v.value)))
-						);
+					let delta = self.overlay.changes(Some(child_info))
+						.map(|(k, v)| (k.clone(), v.value().cloned()));
 
-					self.backend.child_storage_root(&child_info, delta)
+					self.backend.child_storage_root(child_info, delta)
 				};
 
 				let root = root.encode();
