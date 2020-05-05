@@ -129,7 +129,7 @@ arg_enum! {
 	pub enum RpcMethods {
 		// Expose every RPC method only when RPC is listening on `localhost`,
 		// otherwise serve only safe RPC methods.
-		Default,
+		Auto,
 		// Allow only a safe subset of RPC methods.
 		Safe,
 		// Expose every RPC method (even potentially unsafe ones).
@@ -140,7 +140,7 @@ arg_enum! {
 impl Into<sc_service::config::RpcMethods> for RpcMethods {
 	fn into(self) -> sc_service::config::RpcMethods {
 		match self {
-			RpcMethods::Default => sc_service::config::RpcMethods::Default,
+			RpcMethods::Auto => sc_service::config::RpcMethods::Auto,
 			RpcMethods::Safe => sc_service::config::RpcMethods::Safe,
 			RpcMethods::Unsafe => sc_service::config::RpcMethods::Unsafe,
 		}

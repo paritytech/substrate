@@ -555,7 +555,7 @@ fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> sc_rpc_server::RpcHandler<s
 		let is_exposed_addr = addr.map(|x| x.ip().is_loopback()).unwrap_or(false);
 		match (is_exposed_addr, methods) {
 			| (_, RpcMethods::Unsafe)
-			| (false, RpcMethods::Default) => sc_rpc::DenyUnsafe::No,
+			| (false, RpcMethods::Auto) => sc_rpc::DenyUnsafe::No,
 			_ => sc_rpc::DenyUnsafe::Yes
 		}
 	}

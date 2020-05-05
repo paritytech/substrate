@@ -88,14 +88,14 @@ pub struct RunCmd {
 	///
 	/// - `Unsafe`: Exposes every RPC method.
 	/// - `Safe`: Exposes only a safe subset of RPC methods, denying unsafe RPC methods.
-	/// - `Default`: Acts as `Safe` if RPC is served externally, e.g. when `--{rpc,ws}-external` is passed,
+	/// - `Auto`: Acts as `Safe` if RPC is served externally, e.g. when `--{rpc,ws}-external` is passed,
 	///   otherwise acts as `Unsafe`.
 	#[structopt(
 		long,
 		value_name = "METHOD SET",
 		possible_values = &RpcMethods::variants(),
 		case_insensitive = true,
-		default_value = "Default",
+		default_value = "Auto",
 		verbatim_doc_comment
 	)]
 	pub rpc_methods: RpcMethods,

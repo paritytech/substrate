@@ -177,7 +177,7 @@ impl Configuration {
 pub enum RpcMethods {
 	/// Expose every RPC method only when RPC is listening on `localhost`,
 	/// otherwise serve only safe RPC methods.
-	Default,
+	Auto,
 	/// Allow only a safe subset of RPC methods.
 	Safe,
 	/// Expose every RPC method (even potentially unsafe ones).
@@ -186,6 +186,6 @@ pub enum RpcMethods {
 
 impl Default for RpcMethods {
 	fn default() -> RpcMethods {
-		RpcMethods::Default
+		RpcMethods::Auto
 	}
 }

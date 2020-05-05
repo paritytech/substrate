@@ -267,7 +267,7 @@ pub trait CliConfiguration: Sized {
 
 	/// Returns the RPC method set to expose.
 	///
-	/// By default this is `RpcMethods::default` (unsafe RPCs are denied iff
+	/// By default this is `RpcMethods::Auto` (unsafe RPCs are denied iff
 	/// `{rpc,ws}_external` returns true, respectively).
 	fn rpc_methods(&self) -> Result<RpcMethods> {
 		Ok(Default::default())
