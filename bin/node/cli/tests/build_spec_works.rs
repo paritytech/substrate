@@ -27,6 +27,9 @@ fn build_spec_works() {
 		.arg(base_path.path())
 		.output()
 		.unwrap();
+	if let Ok(stderr) = std::str::from_utf8(&output.stderr) {
+		eprintln!("{}", stderr);
+	}
 	assert!(output.status.success());
 
 	// Make sure that the `dev` chain folder exists, but the `db` doesn't
