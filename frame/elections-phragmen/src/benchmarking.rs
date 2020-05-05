@@ -22,7 +22,6 @@ use super::*;
 
 use frame_system::RawOrigin;
 use frame_benchmarking::{benchmarks, account};
-use sp_runtime::traits::Bounded;
 use frame_support::traits::OnInitialize;
 
 use crate::Module as Elections;
@@ -38,7 +37,11 @@ type Lookup<T> = <<T as frame_system::Trait>::Lookup as StaticLookup>::Source;
 /// grab new account with infinite balance.
 fn endowed_account<T: Trait>(name: &'static str, index: u32) -> T::AccountId {
 	let account: T::AccountId = account(name, index, SEED);
-	let _ = T::Currency::make_free_balance_be(&account, BalanceOf::<T>::max_value());
+	let amount = default_stake::<T>(BALANCE_FACTOR);
+	let _ = T::Currency::make_free_balance_be(&account, amount);
+	// important to increase the total issuance since T::CurrencyToVote will need it to be sane for
+	// phragmen to work.
+	T::Currency::issue(amount);
 	account
 }
 
@@ -96,15 +99,23 @@ fn add_locks<T: Trait>(who: &T::AccountId, n: u8) {
 /// members, or members and runners-up.
 fn fill_seats_up_to<T: Trait>(m: u32) -> Result<Vec<T::AccountId>, &'static str> {
 	let candidates = submit_candidates_with_self_vote::<T>(m, "fill_seats_up_to")?;
-
-	assert_eq!(<Elections<T>>::candidates().len() as u32, m);
+	assert_eq!(<Elections<T>>::candidates().len() as u32, m, "wrong number of candidates.");
 	<Elections<T>>::do_phragmen();
-	assert_eq!(<Elections<T>>::candidates().len(), 0);
+	assert_eq!(<Elections<T>>::candidates().len(), 0, "some candidates remaining.");
 	assert_eq!(
 		<Elections<T>>::members().len() + <Elections<T>>::runners_up().len(),
 		m as usize,
+		"wrong number of members and runners-up",
 	);
 	Ok(candidates)
+}
+
+/// removes all the storage items to reverse any genesis state.
+fn clean<T: Trait>() {
+	<Members<T>>::kill();
+	<Candidates<T>>::kill();
+	<RunnersUp<T>>::kill();
+	let _ = <Voting<T>>::drain();
 }
 
 benchmarks! {
@@ -116,6 +127,7 @@ benchmarks! {
 		let x in 1 .. (MAXIMUM_VOTE as u32);
 		// range of locks that the caller already had. This extrinsic adds a lock.
 		let l in 1 .. MAX_LOCKS;
+		clean::<T>();
 
 		// create a bunch of candidates.
 		let all_candidates = submit_candidates::<T>(MAXIMUM_VOTE as u32, "candidates")?;
@@ -136,6 +148,7 @@ benchmarks! {
 		let c in 1 .. (MAXIMUM_VOTE as u32);
 		// range of locks that the caller already had. This extrinsic removes a lock.
 		let l in 1 .. MAX_LOCKS;
+		clean::<T>();
 
 		let votes_to_remove = (MAXIMUM_VOTE / 2) as u32;
 
@@ -151,11 +164,12 @@ benchmarks! {
 	}: _(RawOrigin::Signed(caller))
 
 	report_defunct_voter_correct {
-		// number of already existing members or runners
-		let m in 0 .. T::DesiredMembers::get() + T::DesiredRunnersUp::get();
+		// number fo already existing members or runners
+		let m in 1 .. T::DesiredMembers::get() + T::DesiredRunnersUp::get();
 		// number of candidates that the reported voter voted for. This may or may not have any
 		// impact on the outcome.
 		let c in 1 .. (MAXIMUM_VOTE as u32);
+		clean::<T>();
 
 		let stake = default_stake::<T>(BALANCE_FACTOR);
 
@@ -205,6 +219,7 @@ benchmarks! {
 		// number of candidates that the reported voter voted for. This may or may not have any
 		// impact on the outcome.
 		let c in 1 .. (MAXIMUM_VOTE as u32);
+		clean::<T>();
 
 		let stake = default_stake::<T>(BALANCE_FACTOR);
 
@@ -247,6 +262,7 @@ benchmarks! {
 	submit_candidacy {
 		// number fo already existing members or runners
 		let m in 0 .. T::DesiredMembers::get() + T::DesiredRunnersUp::get();
+		clean::<T>();
 		let stake = default_stake::<T>(BALANCE_FACTOR);
 
 		// create m members and runners combined.
@@ -264,6 +280,7 @@ benchmarks! {
 		// removed, so most likely we will not have too many candidates all at once.
 		// number of already existing candidates.
 		let c in 1 .. MAX_CANDIDATES;
+		clean::<T>();
 		let m = T::DesiredMembers::get() + T::DesiredRunnersUp::get();
 
 		// create m members and runners combined.
@@ -288,6 +305,7 @@ benchmarks! {
 		// number of already existing candidates.
 		let c in 1 .. MAX_CANDIDATES;
 		let m in 1 .. T::DesiredMembers::get() + T::DesiredRunnersUp::get();
+		clean::<T>();
 
 		// create m members and runners combined.
 		let members_and_runners_up = fill_seats_up_to::<T>(m)?;
@@ -307,16 +325,20 @@ benchmarks! {
 	// -- Root ones
 	remove_member_without_replacement {
 		// worse case is when we remove a member and we have no runner as a replacement. This
-		// triggers phragmen again.
-		let x in 0 .. 1000;
+		// triggers phragmen again. The only parameter is how many candidates will compete for the
+		// new slot
+		let c in 0 .. MAX_CANDIDATES;
+		clean::<T>();
 		let stake = default_stake::<T>(BALANCE_FACTOR);
 
+		// fill only desired members. no runners-up.
 		let all_members = fill_seats_up_to::<T>(T::DesiredMembers::get())?;
 
-		// submit a new one to compensate, with self-vote
-		let _replacement = submit_candidates_with_self_vote::<T>(1, "new_candidate");
+		// submit a new one to compensate, with self-vote.
+		let _replacement = submit_candidates_with_self_vote::<T>(c, "new_candidate");
 		let to_remove = all_members[0].clone();
 
+		// NOTE: we don't add any voters here. This can be observed from the on_initialize bench.
 	}: remove_member(RawOrigin::Root, as_lookup::<T>(to_remove))
 	verify {
 		// must still have 2 members.
@@ -333,6 +355,7 @@ benchmarks! {
 	remove_member_with_replacement {
 		// easy case. We have a runner up.
 		let x in 0 .. 1000;
+		clean::<T>();
 		let stake = default_stake::<T>(BALANCE_FACTOR);
 
 		let all_members = fill_seats_up_to::<T>(T::DesiredMembers::get() + 1)?;
@@ -354,6 +377,7 @@ benchmarks! {
 		// check this as it is cheap to do so. TermDuration is not a storage item, it is a constant
 		// encoded in the runtime.
 		let c in 1 .. MAX_CANDIDATES;
+		clean::<T>();
 		let stake = default_stake::<T>(BALANCE_FACTOR);
 
 		let mut all_candidates = submit_candidates_with_self_vote::<T>(c, "candidates")?;
