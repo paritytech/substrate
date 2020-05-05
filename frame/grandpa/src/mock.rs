@@ -408,7 +408,6 @@ pub fn start_session(session_index: SessionIndex) {
 	let mut parent_hash = System::parent_hash();
 
 	for i in Session::current_index()..session_index {
-		println!("session index {}", i);
 		Staking::on_finalize(System::block_number());
 		System::set_block_number((i + 1).into());
 		Timestamp::set_timestamp(System::block_number() * 6000);
