@@ -888,4 +888,24 @@ mod tests {
 			Some(Blake2Hasher::hash(&[31]).as_ref().to_vec()),
 		);
 	}
+
+	#[test]
+	fn storage_append_works() {
+		let mut data = Vec::new();
+		let mut append = StorageAppend::new(&mut data);
+		append.append(1u32.encode());
+		append.append(2u32.encode());
+		drop(append);
+
+		assert_eq!(Vec::<u32>::decode(&mut &data[..]).unwrap(), vec![1, 2]);
+
+		// Initialize with some invalid data
+		let mut data = vec![1];
+		let mut append = StorageAppend::new(&mut data);
+		append.append(1u32.encode());
+		append.append(2u32.encode());
+		drop(append);
+
+		assert_eq!(Vec::<u32>::decode(&mut &data[..]).unwrap(), vec![1, 2]);
+	}
 }
