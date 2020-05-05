@@ -573,7 +573,7 @@ decl_module! {
 		/// - `O(D)` where `D` length of `Digest`
 		/// - 1 storage write or delete (codec `O(1)`).
 		/// - 1 call to `deposit_log`: `O(D)` (which depends on the length of `Digest`)
-		/// - Base Weight: 9.29 + 0.511 * d µs
+		/// - Base Weight: 9.29 + 0.511 * D µs
 		/// - DB Weight:
 		///     - Reads: System Digest
 		///     - Writes: Changes Trie, System Digest
@@ -604,9 +604,9 @@ decl_module! {
 		/// - Writes: Number of items
 		/// # </weight>
 		#[weight = FunctionOf(
-			|args: (&Vec<KeyValue>,)| {
-				T::DbWeight::get().writes(args.0.len() as Weight)
-					.saturating_add((args.0.len() as Weight).saturating_mul(600_000))
+			|(items,): (&Vec<KeyValue>,)| {
+				T::DbWeight::get().writes(items.len() as Weight)
+					.saturating_add((items.len() as Weight).saturating_mul(600_000))
 			},
 			DispatchClass::Operational,
 			Pays::Yes,
@@ -627,9 +627,9 @@ decl_module! {
 		/// - Writes: Number of items
 		/// # </weight>
 		#[weight = FunctionOf(
-			|args: (&Vec<Key>,)| {
-				T::DbWeight::get().writes(args.0.len() as Weight)
-					.saturating_add((args.0.len() as Weight).saturating_mul(400_000))
+			|(keys,): (&Vec<Key>,)| {
+				T::DbWeight::get().writes(keys.len() as Weight)
+					.saturating_add((keys.len() as Weight).saturating_mul(400_000))
 			},
 			DispatchClass::Operational,
 			Pays::Yes,
@@ -653,9 +653,9 @@ decl_module! {
 		/// - Writes: Number of subkeys + 1
 		/// # </weight>
 		#[weight = FunctionOf(
-			|args: (&Key, &u32)| {
-				T::DbWeight::get().writes(Weight::from(*args.1) + 1)
-					.saturating_add((Weight::from(*args.1) + 1).saturating_mul(850_000))
+			|(_, &subkeys): (&Key, &u32)| {
+				T::DbWeight::get().writes(Weight::from(subkeys) + 1)
+					.saturating_add((Weight::from(subkeys) + 1).saturating_mul(850_000))
 			},
 			DispatchClass::Operational,
 			Pays::Yes,
