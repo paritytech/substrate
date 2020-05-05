@@ -99,6 +99,8 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event() = default;
 
+		// One read for `OnOffenceHandler::can_report()`:
+		// - Staking `era_election_status`
 		fn on_initialize(now: T::BlockNumber) -> Weight {
 			// only decode storage if we can actually submit anything again.
 			if T::OnOffenceHandler::can_report() {
@@ -118,7 +120,7 @@ decl_module! {
 				// This on-initialize function can become very expensive, so we allow it to take a full block.
 				T::MaximumBlockWeight::get()
 			} else {
-				0
+				T::DbWeight::get().reads(1)
 			}
 		}
 	}
