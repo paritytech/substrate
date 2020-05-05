@@ -16,12 +16,13 @@
 
 //! BABE authority selection and slot claiming.
 
-use merlin::Transcript;
 use sp_consensus_babe::{
-	AuthorityId, BabeAuthorityWeight, BABE_ENGINE_ID, BABE_VRF_PREFIX,
-	SlotNumber, AuthorityPair, BabeConfiguration
+	make_transcript, AuthorityId, BabeAuthorityWeight, BABE_VRF_PREFIX,
+	SlotNumber, AuthorityPair,
 };
-use sp_consensus_babe::digests::{PreDigest, PrimaryPreDigest, SecondaryPreDigest};
+use sp_consensus_babe::digests::{
+	PreDigest, PrimaryPreDigest, SecondaryPlainPreDigest, SecondaryVRFPreDigest,
+};
 use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
 use sp_core::{U256, blake2_256};
 use codec::Encode;
@@ -47,14 +48,44 @@ pub(super) fn calculate_primary_threshold(
 		authorities[authority_index].1 as f64 /
 		authorities.iter().map(|(_, weight)| weight).sum::<u64>() as f64;
 
-	let calc = || {
-		let p = BigRational::from_float(1f64 - (1f64 - c).powf(theta))?;
-		let numer = p.numer().to_biguint()?;
-		let denom = p.denom().to_biguint()?;
-		((BigUint::one() << 128) * numer / denom).to_u128()
-	};
+	assert!(theta > 0.0, "authority with weight 0.");
 
-	calc().unwrap_or(u128::max_value())
+	// NOTE: in the equation `p = 1 - (1 - c)^theta` the value of `p` is always
+	// capped by `c`. For all pratical purposes `c` should always be set to a
+	// value < 0.5, as such in the computations below we should never be near
+	// edge cases like `0.999999`.
+
+	let p = BigRational::from_float(1f64 - (1f64 - c).powf(theta)).expect(
+		"returns None when the given value is not finite; \
+		 c is a configuration parameter defined in (0, 1]; \
+		 theta must be > 0 if the given authority's weight is > 0; \
+		 theta represents the validator's relative weight defined in (0, 1]; \
+		 powf will always return values in (0, 1] given both the \
+		 base and exponent are in that domain; \
+		 qed.",
+	);
+
+	let numer = p.numer().to_biguint().expect(
+		"returns None when the given value is negative; \
+		 p is defined as `1 - n` where n is defined in (0, 1]; \
+		 p must be a value in [0, 1); \
+		 qed."
+	);
+
+	let denom = p.denom().to_biguint().expect(
+		"returns None when the given value is negative; \
+		 p is defined as `1 - n` where n is defined in (0, 1]; \
+		 p must be a value in [0, 1); \
+		 qed."
+	);
+
+	((BigUint::one() << 128) * numer / denom).to_u128().expect(
+		"returns None if the underlying value cannot be represented with 128 bits; \
+		 we start with 2^128 which is one more than can be represented with 128 bits; \
+		 we multiple by p which is defined in [0, 1); \
+		 the result must be lower than 2^128 by at least one and thus representable with 128 bits; \
+		 qed.",
+	)
 }
 
 /// Returns true if the given VRF output is lower than the given threshold,
@@ -87,28 +118,17 @@ pub(super) fn secondary_slot_author(
 	Some(&expected_author.0)
 }
 
-pub(super) fn make_transcript(
-	randomness: &[u8],
-	slot_number: u64,
-	epoch: u64,
-) -> Transcript {
-	let mut transcript = Transcript::new(&BABE_ENGINE_ID);
-	transcript.append_u64(b"slot number", slot_number);
-	transcript.append_u64(b"current epoch", epoch);
-	transcript.append_message(b"chain randomness", randomness);
-	transcript
-}
-
-
 /// Claim a secondary slot if it is our turn to propose, returning the
 /// pre-digest to use when authoring the block, or `None` if it is not our turn
 /// to propose.
 fn claim_secondary_slot(
 	slot_number: SlotNumber,
-	authorities: &[(AuthorityId, BabeAuthorityWeight)],
+	epoch: &Epoch,
 	keystore: &KeyStorePtr,
-	randomness: [u8; 32],
+	author_secondary_vrf: bool,
 ) -> Option<(PreDigest, AuthorityPair)> {
+	let Epoch { authorities, randomness, epoch_index, .. } = epoch;
+
 	if authorities.is_empty() {
 		return None;
 	}
@@ -116,7 +136,7 @@ fn claim_secondary_slot(
 	let expected_author = super::authorship::secondary_slot_author(
 		slot_number,
 		authorities,
-		randomness,
+		*randomness,
 	)?;
 
 	let keystore = keystore.read();
@@ -128,10 +148,27 @@ fn claim_secondary_slot(
 		})
 	{
 		if pair.public() == *expected_author {
-			let pre_digest = PreDigest::Secondary(SecondaryPreDigest {
-				slot_number,
-				authority_index: authority_index as u32,
-			});
+			let pre_digest = if author_secondary_vrf {
+				let transcript = super::authorship::make_transcript(
+					randomness,
+					slot_number,
+					*epoch_index,
+				);
+
+				let s = get_keypair(&pair).vrf_sign(transcript);
+
+				PreDigest::SecondaryVRF(SecondaryVRFPreDigest {
+					slot_number,
+					vrf_output: VRFOutput(s.0.to_output()),
+					vrf_proof: VRFProof(s.1),
+					authority_index: authority_index as u32,
+				})
+			} else {
+				PreDigest::SecondaryPlain(SecondaryPlainPreDigest {
+					slot_number,
+					authority_index: authority_index as u32,
+				})
+			};
 
 			return Some((pre_digest, pair));
 		}
@@ -147,17 +184,18 @@ fn claim_secondary_slot(
 pub fn claim_slot(
 	slot_number: SlotNumber,
 	epoch: &Epoch,
-	config: &BabeConfiguration,
 	keystore: &KeyStorePtr,
 ) -> Option<(PreDigest, AuthorityPair)> {
-	claim_primary_slot(slot_number, epoch, config.c, keystore)
+	claim_primary_slot(slot_number, epoch, epoch.config.c, keystore)
 		.or_else(|| {
-			if config.secondary_slots {
+			if epoch.config.allowed_slots.is_secondary_plain_slots_allowed() ||
+				epoch.config.allowed_slots.is_secondary_vrf_slots_allowed()
+			{
 				claim_secondary_slot(
 					slot_number,
-					&epoch.authorities,
+					&epoch,
 					keystore,
-					epoch.randomness,
+					epoch.config.allowed_slots.is_secondary_vrf_slots_allowed(),
 				)
 			} else {
 				None

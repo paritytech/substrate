@@ -27,7 +27,7 @@ use node_runtime::{
 };
 use node_runtime::Block;
 use node_runtime::constants::currency::*;
-use sc_service;
+use sc_service::ChainType;
 use hex_literal::hex;
 use sc_telemetry::TelemetryEndpoints;
 use grandpa_primitives::{AuthorityId as GrandpaId};
@@ -51,9 +51,9 @@ const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
 #[serde(rename_all = "camelCase")]
 pub struct Extensions {
 	/// Block numbers with known hashes.
-	pub fork_blocks: sc_client::ForkBlocks<Block>,
+	pub fork_blocks: sc_client_api::ForkBlocks<Block>,
 	/// Known bad block hashes.
-	pub bad_blocks: sc_client::BadBlocks<Block>,
+	pub bad_blocks: sc_client_api::BadBlocks<Block>,
 }
 
 /// Specialized `ChainSpec`.
@@ -158,6 +158,7 @@ pub fn staging_testnet_config() -> ChainSpec {
 	ChainSpec::from_genesis(
 		"Staging Testnet",
 		"staging_testnet",
+		ChainType::Live,
 		staging_testnet_config_genesis,
 		boot_nodes,
 		Some(TelemetryEndpoints::new(vec![(STAGING_TELEMETRY_URL.to_string(), 0)])
@@ -291,7 +292,6 @@ pub fn testnet_genesis(
 				enable_println, // this should only be enabled on development chains
 				..Default::default()
 			},
-			gas_price: 1 * MILLICENTS,
 		}),
 		pallet_sudo: Some(SudoConfig {
 			key: root_key,
@@ -338,6 +338,7 @@ pub fn development_config() -> ChainSpec {
 	ChainSpec::from_genesis(
 		"Development",
 		"dev",
+		ChainType::Development,
 		development_config_genesis,
 		vec![],
 		None,
@@ -364,6 +365,7 @@ pub fn local_testnet_config() -> ChainSpec {
 	ChainSpec::from_genesis(
 		"Local Testnet",
 		"local_testnet",
+		ChainType::Local,
 		local_testnet_genesis,
 		vec![],
 		None,
@@ -396,6 +398,7 @@ pub(crate) mod tests {
 		ChainSpec::from_genesis(
 			"Integration Test",
 			"test",
+			ChainType::Development,
 			local_testnet_genesis_instant_single,
 			vec![],
 			None,
@@ -410,6 +413,7 @@ pub(crate) mod tests {
 		ChainSpec::from_genesis(
 			"Integration Test",
 			"test",
+			ChainType::Development,
 			local_testnet_genesis,
 			vec![],
 			None,

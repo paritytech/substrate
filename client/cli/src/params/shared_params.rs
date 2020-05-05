@@ -14,12 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use sc_service::config::DatabaseConfig;
 use std::path::PathBuf;
 use structopt::StructOpt;
-
-/// default sub directory to store database
-const DEFAULT_DB_CONFIG_PATH: &'static str = "db";
 
 /// Shared parameters used by all `CoreParams`.
 #[derive(Debug, StructOpt, Clone)]
@@ -71,18 +67,6 @@ impl SharedParams {
 					"".into()
 				}
 			}
-		}
-	}
-
-	/// Get the database configuration object for the parameters provided
-	pub fn database_config(
-		&self,
-		base_path: &PathBuf,
-		cache_size: usize,
-	) -> DatabaseConfig {
-		DatabaseConfig::Path {
-			path: base_path.join(DEFAULT_DB_CONFIG_PATH),
-			cache_size,
 		}
 	}
 

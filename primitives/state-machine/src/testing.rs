@@ -30,6 +30,7 @@ use crate::{
 	},
 };
 use sp_core::{
+	offchain::storage::OffchainOverlayedChanges,
 	storage::{
 		well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES, is_child_storage_key},
 		Storage,
@@ -41,9 +42,10 @@ use sp_externalities::{Extensions, Extension};
 /// Simple HashMap-based Externalities impl.
 pub struct TestExternalities<H: Hasher, N: ChangesTrieBlockNumber = u64>
 where
-	H::Out: codec::Codec,
+	H::Out: codec::Codec + Ord,
 {
 	overlay: OverlayedChanges,
+	offchain_overlay: OffchainOverlayedChanges,
 	storage_transaction_cache: StorageTransactionCache<
 		<InMemoryBackend<H> as Backend<H>>::Transaction, H, N
 	>,
@@ -61,6 +63,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 	pub fn ext(&mut self) -> Ext<H, N, InMemoryBackend<H>> {
 		Ext::new(
 			&mut self.overlay,
+			&mut self.offchain_overlay,
 			&mut self.storage_transaction_cache,
 			&self.backend,
 			match self.changes_trie_config.clone() {
@@ -80,6 +83,11 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 		Self::new_with_code(&[], storage)
 	}
 
+	/// New empty test externalities.
+	pub fn new_empty() -> Self {
+		Self::new_with_code(&[], Storage::default())
+	}
+
 	/// Create a new instance of `TestExternalities` with code and storage.
 	pub fn new_with_code(code: &[u8], mut storage: Storage) -> Self {
 		let mut overlay = OverlayedChanges::default();
@@ -88,24 +96,31 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 		overlay.set_collect_extrinsics(changes_trie_config.is_some());
 
 		assert!(storage.top.keys().all(|key| !is_child_storage_key(key)));
-		assert!(storage.children.keys().all(|key| is_child_storage_key(key)));
+		assert!(storage.children_default.keys().all(|key| is_child_storage_key(key)));
 
 		storage.top.insert(HEAP_PAGES.to_vec(), 8u64.encode());
 		storage.top.insert(CODE.to_vec(), code.to_vec());
 
+		let offchain_overlay = OffchainOverlayedChanges::enabled();
+
+		let mut extensions = Extensions::default();
+		extensions.register(sp_core::traits::TaskExecutorExt(sp_core::tasks::executor()));
+
+
 		TestExternalities {
 			overlay,
+			offchain_overlay,
 			changes_trie_config,
+			extensions,
 			changes_trie_storage: ChangesTrieInMemoryStorage::new(),
 			backend: storage.into(),
-			extensions: Default::default(),
 			storage_transaction_cache: Default::default(),
 		}
 	}
 
 	/// Insert key/value into backend
 	pub fn insert(&mut self, k: StorageKey, v: StorageValue) {
-		self.backend = self.backend.update(vec![(None, vec![(k, Some(v))])]);
+		self.backend.insert(vec![(None, vec![(k, Some(v))])]);
 	}
 
 	/// Registers the given extension for this instance.
@@ -125,11 +140,11 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 			.map(|(k, v)| (k, v.value)).collect();
 		let mut transaction = vec![(None, top)];
 
-		self.overlay.committed.children.clone().into_iter()
-			.chain(self.overlay.prospective.children.clone().into_iter())
-			.for_each(|(keyspace, (map, child_info))| {
+		self.overlay.committed.children_default.clone().into_iter()
+			.chain(self.overlay.prospective.children_default.clone().into_iter())
+			.for_each(|(_storage_key, (map, child_info))| {
 				transaction.push((
-					Some((keyspace, child_info)),
+					Some(child_info),
 					map.into_iter()
 						.map(|(k, v)| (k, v.value))
 						.collect::<Vec<_>>(),
@@ -149,7 +164,7 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> TestExternalities<H, N>
 }
 
 impl<H: Hasher, N: ChangesTrieBlockNumber> std::fmt::Debug for TestExternalities<H, N>
-	where H::Out: codec::Codec,
+	where H::Out: Ord + codec::Codec,
 {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		write!(f, "overlay: {:?}\nbackend: {:?}", self.overlay, self.backend.pairs())
@@ -185,11 +200,26 @@ impl<H: Hasher, N: ChangesTrieBlockNumber> From<Storage> for TestExternalities<H
 
 impl<H, N> sp_externalities::ExtensionStore for TestExternalities<H, N> where
 	H: Hasher,
-	H::Out: codec::Codec,
+	H::Out: Ord + codec::Codec,
 	N: ChangesTrieBlockNumber,
 {
 	fn extension_by_type_id(&mut self, type_id: TypeId) -> Option<&mut dyn Any> {
 		self.extensions.get_mut(type_id)
+	}
+
+	fn register_extension_with_type_id(
+		&mut self,
+		type_id: TypeId,
+		extension: Box<dyn Extension>,
+	) -> Result<(), sp_externalities::Error> {
+		self.extensions.register_with_type_id(type_id, extension)
+	}
+
+	fn deregister_extension_by_type_id(&mut self, type_id: TypeId) -> Result<(), sp_externalities::Error> {
+		self.extensions
+			.deregister(type_id)
+			.expect("There should be an extension we try to remove in TestExternalities");
+		Ok(())
 	}
 }
 
@@ -207,7 +237,7 @@ mod tests {
 		ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
 		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
-		const ROOT: [u8; 32] = hex!("2a340d3dfd52f5992c6b117e9e45f479e6da5afffafeb26ab619cf137a95aeb8");
+		const ROOT: [u8; 32] = hex!("555d4777b52e9196e3f6373c556cc661e79cd463f881ab9e921e70fc30144bf4");
 		assert_eq!(&ext.storage_root()[..], &ROOT);
 	}
 

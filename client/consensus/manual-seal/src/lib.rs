@@ -67,7 +67,8 @@ impl<B: BlockT> Verifier<B> for ManualSealVerifier {
 
 /// Instantiate the import queue for the manual seal consensus engine.
 pub fn import_queue<Block, B>(
-	block_import: BoxBlockImport<Block, TransactionFor<B, Block>>
+	block_import: BoxBlockImport<Block, TransactionFor<B, Block>>,
+	spawner: &impl sp_core::traits::SpawnBlocking,
 ) -> BasicQueue<Block, TransactionFor<B, Block>>
 	where
 		Block: BlockT,
@@ -78,6 +79,7 @@ pub fn import_queue<Block, B>(
 		Box::new(block_import),
 		None,
 		None,
+		spawner,
 	)
 }
 
@@ -217,7 +219,7 @@ mod tests {
 		let (client, select_chain) = builder.build_with_longest_chain();
 		let client = Arc::new(client);
 		let inherent_data_providers = InherentDataProviders::new();
-		let pool = Arc::new(BasicPool::new(Options::default(), api()).0);
+		let pool = Arc::new(BasicPool::new(Options::default(), api(), None).0);
 		let env = ProposerFactory::new(
 			client.clone(),
 			pool.clone()
@@ -229,7 +231,7 @@ mod tests {
 			.map(move |_| {
 				// we're only going to submit one tx so this fn will only be called once.
 				let mut_sender =  Arc::get_mut(&mut sender).unwrap();
-				let sender = std::mem::replace(mut_sender, None);
+				let sender = std::mem::take(mut_sender);
 				EngineCommand::SealNewBlock {
 					create_empty: false,
 					finalize: true,
@@ -281,7 +283,7 @@ mod tests {
 		let (client, select_chain) = builder.build_with_longest_chain();
 		let client = Arc::new(client);
 		let inherent_data_providers = InherentDataProviders::new();
-		let pool = Arc::new(BasicPool::new(Options::default(), api()).0);
+		let pool = Arc::new(BasicPool::new(Options::default(), api(), None).0);
 		let env = ProposerFactory::new(
 			client.clone(),
 			pool.clone()
@@ -349,7 +351,7 @@ mod tests {
 		let client = Arc::new(client);
 		let inherent_data_providers = InherentDataProviders::new();
 		let pool_api = api();
-		let pool = Arc::new(BasicPool::new(Options::default(), pool_api.clone()).0);
+		let pool = Arc::new(BasicPool::new(Options::default(), pool_api.clone(), None).0);
 		let env = ProposerFactory::new(
 			client.clone(),
 			pool.clone(),

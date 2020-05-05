@@ -159,7 +159,7 @@ use sp_std::{cmp, result, mem, fmt::Debug, ops::BitOr, convert::Infallible};
 use codec::{Codec, Encode, Decode};
 use frame_support::{
 	StorageValue, Parameter, decl_event, decl_storage, decl_module, decl_error, ensure,
-	weights::SimpleDispatchInfo, traits::{
+	traits::{
 		Currency, OnKilledAccount, OnUnbalanced, TryDrop, StoredMap,
 		WithdrawReason, WithdrawReasons, LockIdentifier, LockableCurrency, ExistenceRequirement,
 		Imbalance, SignedImbalance, ReservableCurrency, Get, ExistenceRequirement::KeepAlive,
@@ -431,9 +431,12 @@ decl_module! {
 		///   - Removing enough funds from an account will trigger `T::DustRemoval::on_unbalanced`.
 		///   - `transfer_keep_alive` works the same way as `transfer`, but has an additional
 		///     check that the transfer will not kill the origin account.
-		///
+		/// ---------------------------------
+		/// - Base Weight: 73.64 µs, worst case scenario (account created, account removed)
+		/// - DB Weight: 1 Read and 1 Write to destination account
+		/// - Origin account is already in memory, so no DB operations for them.
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
+		#[weight = T::DbWeight::get().reads_writes(1, 1) + 70_000_000]
 		pub fn transfer(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -456,8 +459,13 @@ decl_module! {
 		/// # <weight>
 		/// - Independent of the arguments.
 		/// - Contains a limited number of reads and writes.
+		/// ---------------------
+		/// - Base Weight:
+		///     - Creating: 27.56 µs
+		///     - Killing: 35.11 µs
+		/// - DB Weight: 1 Read, 1 Write to `who`
 		/// # </weight>
-		#[weight = SimpleDispatchInfo::FixedOperational(50_000)]
+		#[weight = T::DbWeight::get().reads_writes(1, 1) + 35_000_000]
 		fn set_balance(
 			origin,
 			who: <T::Lookup as StaticLookup>::Source,
@@ -495,7 +503,11 @@ decl_module! {
 
 		/// Exactly as `transfer`, except the origin must be root and the source account may be
 		/// specified.
-		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
+		/// # <weight>
+		/// - Same as transfer, but additional read and write because the source account is
+		///   not assumed to be in the overlay.
+		/// # </weight>
+		#[weight = T::DbWeight::get().reads_writes(2, 2) + 70_000_000]
 		pub fn force_transfer(
 			origin,
 			source: <T::Lookup as StaticLookup>::Source,
@@ -514,7 +526,12 @@ decl_module! {
 		/// 99% of the time you want [`transfer`] instead.
 		///
 		/// [`transfer`]: struct.Module.html#method.transfer
-		#[weight = SimpleDispatchInfo::FixedNormal(1_000_000)]
+		/// # <weight>
+		/// - Cheaper than transfer because account cannot be killed.
+		/// - Base Weight: 51.4 µs
+		/// - DB Weight: 1 Read and 1 Write to dest (sender is in overlay already)
+		/// #</weight>
+		#[weight = T::DbWeight::get().reads_writes(1, 1) + 50_000_000]
 		pub fn transfer_keep_alive(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -842,6 +859,9 @@ impl<T: Subtrait<I>, I: Instance> frame_system::Trait for ElevatedTrait<T, I> {
 	type Event = ();
 	type BlockHashCount = T::BlockHashCount;
 	type MaximumBlockWeight = T::MaximumBlockWeight;
+	type DbWeight = T::DbWeight;
+	type BlockExecutionWeight = ();
+	type ExtrinsicBaseWeight = ();
 	type MaximumBlockLength = T::MaximumBlockLength;
 	type AvailableBlockRatio = T::AvailableBlockRatio;
 	type Version = T::Version;
@@ -1094,7 +1114,7 @@ impl<T: Trait<I>, I: Instance> Currency<T::AccountId> for Module<T, I> where
 			// equal and opposite cause (returned as an Imbalance), then in the
 			// instance that there's no other accounts on the system at all, we might
 			// underflow the issuance and our arithmetic will be off.
-			ensure!(value + account.reserved >= ed || !account.total().is_zero(), ());
+			ensure!(value.saturating_add(account.reserved) >= ed || !account.total().is_zero(), ());
 
 			let imbalance = if account.free <= value {
 				SignedImbalance::Positive(PositiveImbalance::new(value - account.free))

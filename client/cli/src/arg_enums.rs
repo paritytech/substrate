@@ -122,6 +122,32 @@ impl ExecutionStrategy {
 	}
 }
 
+arg_enum! {
+	/// Database backend
+	#[allow(missing_docs)]
+	#[derive(Debug, Clone, Copy)]
+	pub enum Database {
+		// Facebooks RocksDB
+		RocksDb,
+		// Subdb. https://github.com/paritytech/subdb/
+		SubDb,
+		// ParityDb. https://github.com/paritytech/parity-db/
+		ParityDb,
+	}
+}
+
+
+arg_enum! {
+	/// Whether off-chain workers are enabled.
+	#[allow(missing_docs)]
+	#[derive(Debug, Clone)]
+	pub enum OffchainWorkerEnabled {
+		Always,
+		Never,
+		WhenValidating,
+	}
+}
+
 /// Default value for the `--execution-syncing` parameter.
 pub const DEFAULT_EXECUTION_SYNCING: ExecutionStrategy = ExecutionStrategy::NativeElseWasm;
 /// Default value for the `--execution-import-block` parameter.

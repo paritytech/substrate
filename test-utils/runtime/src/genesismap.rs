@@ -23,6 +23,7 @@ use codec::{Encode, KeyedVec, Joiner};
 use sp_core::{ChangesTrieConfiguration, map};
 use sp_core::storage::{well_known_keys, Storage};
 use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
+use sc_service::client::genesis;
 
 /// Configuration of a general Substrate test genesis block.
 pub struct GenesisConfig {
@@ -73,7 +74,7 @@ impl GenesisConfig {
 		map.extend(self.extra_storage.top.clone().into_iter());
 
 		// Assimilate the system genesis config.
-		let mut storage = Storage { top: map, children: self.extra_storage.children.clone()};
+		let mut storage = Storage { top: map, children_default: self.extra_storage.children_default.clone()};
 		let mut config = system::GenesisConfig::default();
 		config.authorities = self.authorities.clone();
 		config.assimilate_storage(&mut storage).expect("Adding `system::GensisConfig` to the genesis");
@@ -85,7 +86,7 @@ impl GenesisConfig {
 pub fn insert_genesis_block(
 	storage: &mut Storage,
 ) -> sp_core::hash::H256 {
-	let child_roots = storage.children.iter().map(|(sk, child_content)| {
+	let child_roots = storage.children_default.iter().map(|(sk, child_content)| {
 		let state_root = <<<crate::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
 			child_content.data.clone().into_iter().collect(),
 		);
@@ -96,7 +97,7 @@ pub fn insert_genesis_block(
 	let state_root = <<<crate::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
 		storage.top.clone().into_iter().collect()
 	);
-	let block: crate::Block = sc_client::genesis::construct_genesis_block(state_root);
+	let block: crate::Block = genesis::construct_genesis_block(state_root);
 	let genesis_hash = block.header.hash();
 	storage.top.extend(additional_storage_with_genesis(&block));
 	genesis_hash

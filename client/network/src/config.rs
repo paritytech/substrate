@@ -21,7 +21,6 @@
 
 pub use crate::chain::{Client, FinalityProofProvider};
 pub use crate::on_demand_layer::{AlwaysBadChecker, OnDemand};
-pub use crate::service::{TransactionPool, EmptyTransactionPool};
 pub use libp2p::{identity, core::PublicKey, wasm_ext::ExtTransport, build_multiaddr};
 
 // Note: this re-export shouldn't be part of the public API of the crate and will be removed in
@@ -29,18 +28,27 @@ pub use libp2p::{identity, core::PublicKey, wasm_ext::ExtTransport, build_multia
 #[doc(hidden)]
 pub use crate::protocol::ProtocolConfig;
 
-use crate::service::ExHashT;
+use crate::{ExHashT, ReportHandle};
 
-use sp_consensus::{block_validation::BlockAnnounceValidator, import_queue::ImportQueue};
-use sp_runtime::traits::{Block as BlockT};
-use libp2p::identity::{Keypair, ed25519};
-use libp2p::wasm_ext;
-use libp2p::{PeerId, Multiaddr, multiaddr};
 use core::{fmt, iter};
-use std::{convert::TryFrom, future::Future, pin::Pin, str::FromStr};
-use std::{error::Error, fs, io::{self, Write}, net::Ipv4Addr, path::{Path, PathBuf}, sync::Arc};
-use zeroize::Zeroize;
+use libp2p::identity::{ed25519, Keypair};
+use libp2p::wasm_ext;
+use libp2p::{multiaddr, Multiaddr, PeerId};
 use prometheus_endpoint::Registry;
+use sc_peerset::ReputationChange;
+use sp_consensus::{block_validation::BlockAnnounceValidator, import_queue::ImportQueue};
+use sp_runtime::{traits::Block as BlockT, ConsensusEngineId};
+use std::{borrow::Cow, convert::TryFrom, future::Future, pin::Pin, str::FromStr};
+use std::{
+	collections::HashMap,
+	error::Error,
+	fs,
+	io::{self, Write},
+	net::Ipv4Addr,
+	path::{Path, PathBuf},
+	sync::Arc,
+};
+use zeroize::Zeroize;
 
 /// Network initialization parameters.
 pub struct Params<B: BlockT, H: ExHashT> {
@@ -158,6 +166,60 @@ impl<B: BlockT> FinalityProofRequestBuilder<B> for DummyFinalityProofRequestBuil
 
 /// Shared finality proof request builder struct used by the queue.
 pub type BoxFinalityProofRequestBuilder<B> = Box<dyn FinalityProofRequestBuilder<B> + Send + Sync>;
+
+/// Transaction pool interface
+pub trait TransactionPool<H: ExHashT, B: BlockT>: Send + Sync {
+	/// Get transactions from the pool that are ready to be propagated.
+	fn transactions(&self) -> Vec<(H, B::Extrinsic)>;
+	/// Get hash of transaction.
+	fn hash_of(&self, transaction: &B::Extrinsic) -> H;
+	/// Import a transaction into the pool.
+	///
+	/// Peer reputation is changed by reputation_change if transaction is accepted by the pool.
+	fn import(
+		&self,
+		report_handle: ReportHandle,
+		who: PeerId,
+		reputation_change_good: ReputationChange,
+		reputation_change_bad: ReputationChange,
+		transaction: B::Extrinsic,
+	);
+	/// Notify the pool about transactions broadcast.
+	fn on_broadcasted(&self, propagations: HashMap<H, Vec<String>>);
+	/// Get transaction by hash.
+	fn transaction(&self, hash: &H) -> Option<B::Extrinsic>;
+}
+
+/// Dummy implementation of the [`TransactionPool`] trait for a transaction pool that is always
+/// empty and discards all incoming transactions.
+///
+/// Requires the "hash" type to implement the `Default` trait.
+///
+/// Useful for testing purposes.
+pub struct EmptyTransactionPool;
+
+impl<H: ExHashT + Default, B: BlockT> TransactionPool<H, B> for EmptyTransactionPool {
+	fn transactions(&self) -> Vec<(H, B::Extrinsic)> {
+		Vec::new()
+	}
+
+	fn hash_of(&self, _transaction: &B::Extrinsic) -> H {
+		Default::default()
+	}
+
+	fn import(
+		&self,
+		_report_handle: ReportHandle,
+		_who: PeerId,
+		_rep_change_good: ReputationChange,
+		_rep_change_bad: ReputationChange,
+		_transaction: B::Extrinsic
+	) {}
+
+	fn on_broadcasted(&self, _: HashMap<H, Vec<String>>) {}
+
+	fn transaction(&self, _h: &H) -> Option<B::Extrinsic> { None }
+}
 
 /// Name of a protocol, transmitted on the wire. Should be unique for each chain.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -308,7 +370,7 @@ impl From<multiaddr::Error> for ParseErr {
 #[derive(Clone, Debug)]
 pub struct NetworkConfiguration {
 	/// Directory path to store network-specific configuration. None means nothing will be saved.
-	pub net_config_path: PathBuf,
+	pub net_config_path: Option<PathBuf>,
 	/// Multiaddresses to listen for incoming connections.
 	pub listen_addresses: Vec<Multiaddr>,
 	/// Multiaddresses to advertise. Detected automatically if empty.
@@ -317,6 +379,9 @@ pub struct NetworkConfiguration {
 	pub boot_nodes: Vec<MultiaddrWithPeerId>,
 	/// The node key configuration, which determines the node's network identity keypair.
 	pub node_key: NodeKeyConfig,
+	/// List of notifications protocols that the node supports. Must also include a
+	/// `ConsensusEngineId` for backwards-compatibility.
+	pub notifications_protocols: Vec<(ConsensusEngineId, Cow<'static, [u8]>)>,
 	/// Maximum allowed number of incoming connections.
 	pub in_peers: u32,
 	/// Number of outgoing connections we're trying to maintain.
@@ -333,6 +398,11 @@ pub struct NetworkConfiguration {
 	pub transport: TransportConfig,
 	/// Maximum number of peers to ask the same blocks in parallel.
 	pub max_parallel_downloads: u32,
+	/// Should we insert non-global addresses into the DHT?
+	pub allow_non_globals_in_dht: bool,
+	/// If true, uses the `/<chainid>/block-requests/<version>` experimental protocol rather than
+	/// the legacy substream. This option is meant to be hard-wired to `true` in the future.
+	pub use_new_block_requests_protocol: bool,
 }
 
 impl NetworkConfiguration {
@@ -341,14 +411,15 @@ impl NetworkConfiguration {
 		node_name: SN,
 		client_version: SV,
 		node_key: NodeKeyConfig,
-		net_config_path: &PathBuf,
+		net_config_path: Option<PathBuf>,
 	) -> Self {
 		NetworkConfiguration {
-			net_config_path: net_config_path.clone(),
+			net_config_path,
 			listen_addresses: Vec::new(),
 			public_addresses: Vec::new(),
 			boot_nodes: Vec::new(),
 			node_key,
+			notifications_protocols: Vec::new(),
 			in_peers: 25,
 			out_peers: 75,
 			reserved_nodes: Vec::new(),
@@ -362,6 +433,8 @@ impl NetworkConfiguration {
 				use_yamux_flow_control: false,
 			},
 			max_parallel_downloads: 5,
+			allow_non_globals_in_dht: false,
+			use_new_block_requests_protocol: true,
 		}
 	}
 }
@@ -373,7 +446,7 @@ impl NetworkConfiguration {
 			"test-node",
 			"test-client",
 			Default::default(),
-			&std::env::current_dir().expect("current directory must exist"),
+			None,
 		);
 
 		config.listen_addresses = vec![
@@ -382,6 +455,7 @@ impl NetworkConfiguration {
 				.collect()
 		];
 
+		config.allow_non_globals_in_dht = true;
 		config
 	}
 
@@ -391,7 +465,7 @@ impl NetworkConfiguration {
 			"test-node",
 			"test-client",
 			Default::default(),
-			&std::env::current_dir().expect("current directory must exist"),
+			None,
 		);
 
 		config.listen_addresses = vec![
@@ -400,6 +474,7 @@ impl NetworkConfiguration {
 				.collect()
 		];
 
+		config.allow_non_globals_in_dht = true;
 		config
 	}
 }

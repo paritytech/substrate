@@ -71,7 +71,11 @@ pub fn run() -> Result<()> {
 	match &cli.subcommand {
 		None => {
 			let runner = cli.create_runner(&cli.run)?;
-			runner.run_node(service::new_light, service::new_full)
+			runner.run_node(
+				service::new_light,
+				service::new_full,
+				node_runtime::VERSION
+			)
 		}
 		Some(Subcommand::Inspect(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
@@ -79,9 +83,15 @@ pub fn run() -> Result<()> {
 			runner.sync_run(|config| cmd.run::<Block, RuntimeApi, Executor>(config))
 		}
 		Some(Subcommand::Benchmark(cmd)) => {
-			let runner = cli.create_runner(cmd)?;
+			if cfg!(feature = "runtime-benchmarks") {
+				let runner = cli.create_runner(cmd)?;
 
-			runner.sync_run(|config| cmd.run::<Block, Executor>(config))
+				runner.sync_run(|config| cmd.run::<Block, Executor>(config))
+			} else {
+				println!("Benchmarking wasn't enabled when building the node. \
+				You can enable it with `--features runtime-benchmarks`.");
+				Ok(())
+			}
 		}
 		Some(Subcommand::Base(subcommand)) => {
 			let runner = cli.create_runner(subcommand)?;

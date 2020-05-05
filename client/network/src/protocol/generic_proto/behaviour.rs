@@ -113,6 +113,8 @@ pub struct GenericProto {
 	legacy_protocol: RegisteredProtocol,
 
 	/// Notification protocols. Entries are only ever added and not removed.
+	/// Contains, for each protocol, the protocol name and the message to send as part of the
+	/// initial handshake.
 	notif_protocols: Vec<(Cow<'static, [u8]>, Vec<u8>)>,
 
 	/// Receiver for instructions about who to connect to or disconnect from.
@@ -199,7 +201,21 @@ enum PeerState {
 }
 
 impl PeerState {
-	/// True if there exists an established connection to tbe peer
+	/// True if there exists any established connection to the peer.
+	fn is_connected(&self) -> bool {
+		match self {
+			PeerState::Disabled { .. } |
+			PeerState::DisabledPendingEnable { .. } |
+			PeerState::Enabled { .. } |
+			PeerState::PendingRequest { .. } |
+			PeerState::Requested |
+			PeerState::Incoming { .. } => true,
+			PeerState::Poisoned |
+			PeerState::Banned { .. } => false,
+		}
+	}
+
+	/// True if there exists an established connection to the peer
 	/// that is open for custom protocol traffic.
 	fn is_open(&self) -> bool {
 		self.get_open().is_some()
@@ -334,6 +350,34 @@ impl GenericProto {
 		handshake_msg: impl Into<Vec<u8>>
 	) {
 		self.notif_protocols.push((protocol_name.into(), handshake_msg.into()));
+	}
+
+	/// Modifies the handshake of the given notifications protocol.
+	///
+	/// Has no effect if the protocol is unknown.
+	pub fn set_notif_protocol_handshake(
+		&mut self,
+		protocol_name: &[u8],
+		handshake_message: impl Into<Vec<u8>>
+	) {
+		let handshake_message = handshake_message.into();
+		if let Some(protocol) = self.notif_protocols.iter_mut().find(|(name, _)| name == &protocol_name) {
+			protocol.1 = handshake_message.clone();
+		} else {
+			return;
+		}
+
+		// Send an event to all the peers we're connected to, updating the handshake message.
+		for (peer_id, _) in self.peers.iter().filter(|(_, state)| state.is_connected()) {
+			self.events.push(NetworkBehaviourAction::NotifyHandler {
+				peer_id: peer_id.clone(),
+				handler: NotifyHandler::All,
+				event: NotifsHandlerIn::UpdateHandshake {
+					protocol_name: Cow::Owned(protocol_name.to_owned()),
+					handshake_message: handshake_message.clone(),
+				},
+			});
+		}
 	}
 
 	/// Returns the number of discovered nodes that we keep in memory.
@@ -914,7 +958,7 @@ impl NetworkBehaviour for GenericProto {
 				// in which case `CustomProtocolClosed` was already emitted.
 				let closed = open.is_empty();
 				open.retain(|c| c != conn);
-				if !closed {
+				if open.is_empty() && !closed {
 					debug!(target: "sub-libp2p", "External API <= Closed({})", peer_id);
 					let event = GenericProtoOut::CustomProtocolClosed {
 						peer_id: peer_id.clone(),
@@ -1193,10 +1237,10 @@ impl NetworkBehaviour for GenericProto {
 			}
 
 			NotifsHandlerOut::ProtocolError { error, .. } => {
-				warn!(target: "sub-libp2p",
+				debug!(target: "sub-libp2p",
 					"Handler({:?}) => Severe protocol error: {:?}",
 					source, error);
-				// A severe protocol error happens when we detect a "bad" peer, such as a per on
+				// A severe protocol error happens when we detect a "bad" peer, such as a peer on
 				// a different chain, or a peer that doesn't speak the same protocol(s). We
 				// decrease the peer's reputation, hence lowering the chances we try this peer
 				// again in the short term.

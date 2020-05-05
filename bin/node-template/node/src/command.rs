@@ -18,7 +18,6 @@ use crate::chain_spec;
 use crate::cli::Cli;
 use crate::service;
 use sc_cli::SubstrateCli;
-use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
 
 impl SubstrateCli for Cli {
 	fn impl_name() -> &'static str {
@@ -71,7 +70,11 @@ pub fn run() -> sc_cli::Result<()> {
 		}
 		None => {
 			let runner = cli.create_runner(&cli.run)?;
-			runner.run_node(service::new_light, service::new_full)
+			runner.run_node(
+				service::new_light,
+				service::new_full,
+				node_template_runtime::VERSION
+			)
 		}
 	}
 }
