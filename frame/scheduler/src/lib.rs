@@ -331,7 +331,7 @@ mod tests {
 	pub struct Test;
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: Weight = 1024;
+		pub const MaximumBlockWeight: Weight = 10_000;
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
@@ -362,14 +362,11 @@ mod tests {
 	impl logger::Trait for Test {
 		type Event = ();
 	}
-	parameter_types! {
-		pub const MaximumWeight: Weight = 10_000;
-	}
 	impl Trait for Test {
 		type Event = ();
 		type Origin = Origin;
 		type Call = Call;
-		type MaximumWeight = MaximumWeight;
+		type MaximumWeight = MaximumBlockWeight;
 	}
 	type System = system::Module<Test>;
 	type Logger = logger::Module<Test>;

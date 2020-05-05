@@ -170,15 +170,11 @@ impl pallet_utility::Trait for Runtime {
 	type MaxSignatories = MaxSignatories;
 }
 
-parameter_types! {
-	pub const MaximumWeight: Weight = MaximumBlockWeight;
-}
-
 impl pallet_scheduler::Trait for Runtime {
 	type Event = Event;
 	type Origin = Origin;
 	type Call = Call;
-	type MaximumWeight = MaximumWeight;
+	type MaximumWeight = MaximumBlockWeight;
 }
 
 parameter_types! {
