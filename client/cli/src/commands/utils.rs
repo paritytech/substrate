@@ -24,28 +24,15 @@ use sp_runtime::{
 	traits::IdentifyAccount, MultiSigner,
 	generic::{UncheckedExtrinsic, SignedPayload},
 };
-use crate::{arg_enums::{OutputType}, error::{self, Error}, KeystoreParams};
+use crate::{arg_enums::OutputType, error::{self, Error}};
 use parity_scale_codec::Encode;
 use serde_json::json;
-use cli_utils::IndexFor;
+use cli_utils::{IndexFor, RuntimeAdapter};
 
 /// Public key type for Runtime
 pub type PublicFor<P> = <P as sp_core::Pair>::Public;
 /// Seed type for Runtime
 pub type SeedFor<P> = <P as sp_core::Pair>::Seed;
-
-/// helper method to fetch password from `SharedParams` or read from stdin
-pub fn get_password(params: &KeystoreParams) -> error::Result<String> {
-	let (password_interactive, password) = (params.password_interactive, params.password.as_ref());
-
-	let pass = if password_interactive {
-		rpassword::read_password_from_tty(Some("Key password: "))?
-	} else {
-		password.map(Into::into).ok_or("Password not specified")?
-	};
-
-	Ok(pass)
-}
 
 /// helper method to fetch uri from `Option<String>` either as a file or read from stdin
 pub fn read_uri(uri: Option<String>) -> error::Result<String> {

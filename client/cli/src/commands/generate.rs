@@ -16,7 +16,7 @@
 
 //! Implementation of the `generate` subcommand
 
-use super::{SharedParams, get_password};
+use super::{SharedParams};
 use crate::error::{self, Error};
 use bip39::{MnemonicType, Mnemonic, Language};
 use structopt::StructOpt;
@@ -52,7 +52,7 @@ impl GenerateCmd {
 			None => MnemonicType::Words12,
 		};
 		let mnemonic = Mnemonic::new(words, Language::English);
-		let password = get_password(&self.keystore_params)?;
+		let password = self.keystore_params.read_password()?;
 		let maybe_network = self.shared_params.network;
 		let output = self.shared_params.output_type;
 

@@ -19,6 +19,7 @@ use sc_service::config::KeystoreConfig;
 use std::fs;
 use std::path::PathBuf;
 use structopt::StructOpt;
+use crate::error;
 
 /// default sub directory for the key store
 const DEFAULT_KEYSTORE_CONFIG_PATH: &'static str = "keystore";
@@ -82,6 +83,19 @@ impl KeystoreParams {
 			.unwrap_or(base_path.join(DEFAULT_KEYSTORE_CONFIG_PATH));
 
 		Ok(KeystoreConfig::Path { path, password })
+	}
+
+	/// helper method to fetch password from `KeyParams` or read from stdin
+	pub fn read_password(self) -> error::Result<String> {
+		let (password_interactive, password) = (self.password_interactive, self.password.as_ref());
+
+		let pass = if password_interactive {
+			rpassword::read_password_from_tty(Some("Key password: "))?
+		} else {
+			password.map(Into::into).ok_or("Password not specified")?
+		};
+
+		Ok(pass)
 	}
 }
 

@@ -29,7 +29,7 @@ use sp_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
 use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
 use std::sync::Arc;
-use cli_utils::{AccountIdFor, AddressFor, IndexFor, BalanceFor, CallFor};
+use cli_utils::{AccountIdFor, AddressFor, IndexFor, BalanceFor, CallFor, RuntimeAdapter};
 use std::convert::TryFrom;
 use sp_core::crypto::Ss58Codec;
 use std::str::FromStr;
@@ -212,9 +212,10 @@ impl<C: SubstrateCli> Runner<C> {
 			Subcommand::Sign(cmd) => cmd.run(),
 			Subcommand::Verify(cmd) => cmd.run(),
 			Subcommand::Vanity(cmd) => cmd.run(),
-			Subcommand::Transfer(cmd) => cmd.run::<RA>(),
+			// Subcommand::Transfer(cmd) => cmd.run::<RA>(),
 			Subcommand::SignTransaction(cmd) => cmd.run::<RA>(),
 			Subcommand::Insert(cmd) => cmd.run::<RA>(),
+			_ => unimplemented!()
 		}
 	}
 

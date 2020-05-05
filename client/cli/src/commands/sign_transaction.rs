@@ -16,14 +16,12 @@
 
 //! Implementation of the `sign-transaction` subcommand
 use crate::{error, with_crypto_scheme, CliConfiguration, KeystoreParams};
-use super::{
-	SharedParams, get_password,
-	IndexFor, CallFor, pair_from_suri, decode_hex, create_extrinsic_for,
-};
+use super::{SharedParams, IndexFor, CallFor, pair_from_suri, decode_hex, create_extrinsic_for};
 use structopt::StructOpt;
 use parity_scale_codec::{Codec, Encode, Decode};
 use std::{str::FromStr, fmt::Display};
 use sp_runtime::MultiSigner;
+use cli_utils::RuntimeAdapter;
 
 type Call = Vec<u8>;
 
@@ -66,15 +64,11 @@ impl SignTransactionCmd {
 
 		let nonce = IndexFor::<RA>::from_str(&self.nonce).map_err(|e| format!("{}", e))?;
 		let call = CallFor::<RA>::decode(&mut &self.call[..])?;
+		let pass = self.keystore_params.read_password()?;
 
 		with_crypto_scheme!(
 			self.shared_params.scheme,
-			print_ext<RA>(
-				&self.suri,
-				&get_password(&self.keystore_params)?,
-				call,
-				nonce
-			)
+			print_ext<RA>(&self.suri, &pass, call, nonce)
 		)
 	}
 }

@@ -16,7 +16,7 @@
 
 //! Implementation of the `sign` subcommand
 use crate::{error, with_crypto_scheme, pair_from_suri, CliConfiguration, KeystoreParams};
-use super::{SharedParams, get_password, read_message, read_uri};
+use super::{SharedParams, read_message, read_uri};
 use structopt::StructOpt;
 
 /// The `sign` command
@@ -56,15 +56,11 @@ impl SignCmd {
 	pub fn run(self) -> error::Result<()> {
 		let message = read_message(self.message, self.hex)?;
 		let suri = read_uri(self.suri)?;
-		let password = get_password(&self.keystore_params)?;
+		let password = self.keystore_params.read_password()?;
 
 		let signature = with_crypto_scheme!(
 			self.shared_params.scheme,
-			sign(
-				&suri,
-				&password,
-				message
-			)
+			sign(&suri, &password, message)
 		)?;
 
 		println!("{}", signature);

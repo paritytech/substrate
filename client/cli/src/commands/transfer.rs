@@ -17,7 +17,7 @@
 //! Implementation of the `transfer` subcommand
 
 use crate::{
-	error, create_extrinsic_for, get_password, with_crypto_scheme,
+	error, create_extrinsic_for, with_crypto_scheme,
 	pair_from_suri, decode_hex, CliConfiguration, KeystoreParams,
 };
 use super::SharedParams;
@@ -27,7 +27,7 @@ use parity_scale_codec::Encode;
 use sp_runtime::MultiSigner;
 use std::convert::TryFrom;
 use sp_core::crypto::Ss58Codec;
-use cli_utils::{AddressFor, IndexFor, BalanceFor, BalancesCall, AccountIdFor};
+use cli_utils::{AddressFor, IndexFor, BalanceFor, BalancesCall, AccountIdFor, RuntimeAdapter};
 
 /// The `transfer` command
 #[derive(Debug, StructOpt, Clone)]
@@ -72,7 +72,7 @@ impl TransferCmd {
 			<IndexFor<RA> as FromStr>::Err: Display,
 			<BalanceFor<RA> as FromStr>::Err: Display,
 	{
-		let password = get_password(&self.keystore_params)?;
+		let password = self.keystore_params.read_password()?;
 		let nonce = IndexFor::<RA>::from_str(&self.index).map_err(|e| format!("{}", e))?;
 		let to = if let Ok(data_vec) = decode_hex(&self.to) {
 			AccountIdFor::<RA>::try_from(&data_vec)
