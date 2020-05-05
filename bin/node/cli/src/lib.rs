@@ -37,8 +37,6 @@ mod browser;
 #[cfg(feature = "cli")]
 mod cli;
 #[cfg(feature = "cli")]
-mod factory_impl;
-#[cfg(feature = "cli")]
 mod command;
 
 #[cfg(feature = "browser")]

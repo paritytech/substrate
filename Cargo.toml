@@ -12,7 +12,6 @@ members = [
 	"bin/node/rpc",
 	"bin/node/runtime",
 	"bin/node/testing",
-	"bin/node/transaction-factory",
 	"bin/utils/subkey",
 	"bin/utils/chain-spec-builder",
 	"client/api",

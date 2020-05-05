@@ -3437,7 +3437,6 @@ dependencies = [
  "node-primitives",
  "node-rpc",
  "node-runtime",
- "node-transaction-factory",
  "pallet-authority-discovery",
  "pallet-balances",
  "pallet-contracts",
@@ -3761,24 +3760,6 @@ dependencies = [
  "substrate-test-client",
  "tempfile",
  "wabt",
-]
-
-[[package]]
-name = "node-transaction-factory"
-version = "0.8.0-dev"
-dependencies = [
- "log",
- "parity-scale-codec",
- "sc-block-builder",
- "sc-cli",
- "sc-client-api",
- "sc-service",
- "sp-api",
- "sp-block-builder",
- "sp-blockchain",
- "sp-consensus",
- "sp-core",
- "sp-runtime",
 ]
 
 [[package]]
