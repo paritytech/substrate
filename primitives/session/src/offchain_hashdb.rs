@@ -16,193 +16,201 @@
 
 //! Database storage based on the offchain index db for historical
 //! slashing behaviour.
+//!
+//! For being able to erase per session data, there exist per
+//! `session_index` and per `(session_index,prefix)` indices
+//! which track all entries which are associated with the `session_index`
+//! `(session_index,prefix)` respectively.
+//!
+//! The mapping is as follows
+//! ```markdown
+//! index0: session -> [(key,tree_prefix),(key,tree_prefix),..]
+//! index1: (session,tree_prefix) -> [key,key,key,..]
+//! ```
+//! where `key` is essentially a unique identifier, which is derived from
+//! the `digest` of the inserted data.
+//!
+//! The implementation contains three (3) different prefix creating
+//! functions accordingly.
+//!
+//! Encoding and decoding is achieved by [`codec`](self::codec::Codec).
 
-use trie_db::node::{decode_hash, Node as EncodedNode, NodeHandle as EncodedNodeHandle};
-use trie_db::Lookup;
-use trie_db::{node::NodeKey, DBValue};
-use trie_db::{CError, Result, TrieError, TrieHash, TrieLayout, TrieMut};
+use trie_db::TrieLayout;
 
-use core::marker::Sync;
-use hash_db::{AsHashDB, HashDB, Hasher, Prefix, EMPTY_PREFIX};
+use hash_db::{AsHashDB, HashDB, Hasher, Prefix};
 
 use codec::{Decode, Encode};
-use sp_core::offchain::{OffchainStorage, StorageKind};
+use sp_core::offchain::StorageKind;
 use sp_io::offchain;
 use sp_std::prelude::*;
+use sp_std::collections::btree_set::BTreeSet;
 
 #[derive(Default)]
-pub struct AlternativeDB<L,T>
+pub struct AlternativeDB<L>
 where
     L: TrieLayout + Send,
-    T: Encode + Decode + Send,
 {
     session_index: Vec<u8>,
-    _phantom: core::marker::PhantomData<(T,L)>,
+    _phantom: core::marker::PhantomData<L>,
 }
 
 
 // @todo currently not true, just so it compiles
 // @todo requires some internal mutability concept to work properly
-unsafe impl<L,T> core::marker::Send for AlternativeDB<L,T> where
-L: TrieLayout + Send,
-T: Encode + Decode + Send,{}
-unsafe impl<L,T> core::marker::Sync for AlternativeDB<L,T> where
-L: TrieLayout + Send,
-T: Encode + Decode + Send,{}
+unsafe impl<L> core::marker::Send for AlternativeDB<L> where
+L: TrieLayout + Send,{}
+unsafe impl<L> core::marker::Sync for AlternativeDB<L> where
+L: TrieLayout + Send,{}
 
 /// Session aware, Offchain DB based HashDB.
 ///
 /// Creates two indices:
-/// session -> [(key,tree_prefix),(key,tree_prefix),..]
-/// session, tree_prefix -> [key,key,key,..]
-impl<L,T> AlternativeDB<L,T>
+/// index: session -> [(key,tree_prefix),(key,tree_prefix),..]
+impl<L> AlternativeDB<L>
 where
 L: TrieLayout + Send,
-T: Encode + Decode + Send,
 <L as TrieLayout>::Hash: Default,
 <L as trie_db::TrieLayout>::Hash: core::default::Default + core::hash::BuildHasher,
-<<L as trie_db::TrieLayout>::Hash as Hasher>::Out: AsRef<[u8]> + Default, //@todo verify this is true for all sane hashes such as H256
+<<L as trie_db::TrieLayout>::Hash as Hasher>::Out: AsRef<[u8]> + Default,
 {
-    pub fn prune(&self, key: &[u8]) {}
 
-    /// set the session index for which to query the DB
+    /// Additional prefix to distinguish data used.
+    const PREFIX: &'static [u8] = b"__TO_BE_DEFINED__";
+
+    /// Addition tracking prefix to separate index tracking data from
+    /// actual key value data being tracked.
+    const TRACKING_PREFIX: &'static [u8] = b"__TRACKING__";
+
+
+    /// prune all data associated to a particular `session_index`.
+    ///
+    /// If `prefix` is set, only items having a particular tree prefix
+    /// will be pruned.
+    pub fn prune_session(&mut self, session_index: &[u8], prefix: Option<Prefix>) {
+        let index = if let Some(prefix) = prefix {
+
+            let tree_prefix = prefix.encode();
+            let tree_prefix = tree_prefix.as_slice();
+
+            self.get_index(session_index)
+            .into_iter()
+            .filter_map(move |(derived_key, prefix)| {
+                if tree_prefix == prefix.as_slice() {
+                    // @todo FIXME erase
+                    offchain::local_storage_set(StorageKind::PERSISTENT, derived_key.as_slice(), &[]);
+                    None
+                } else {
+                    Some((derived_key, prefix))
+                }
+            })
+            .collect::<BTreeSet<_>>()
+
+        } else {
+
+            let index = self.get_index(session_index);
+            index.into_iter().for_each(move |(derived_key, _prefix)| {
+                offchain::local_storage_set(StorageKind::PERSISTENT, derived_key.as_slice(), &[]);
+            });
+            BTreeSet::new()
+
+        };
+        self.set_index(session_index, index);
+    }
+
+    /// Set the current session index.
+    ///
+    /// Utilized by the implementation of `HashDB` for `Self`.
     pub fn set_session<E: Encode>(&mut self, session_index: E) {
         self.session_index = session_index.encode();
     }
 
-    fn add_to_indices(&self, key: &[u8], tree_prefix: &[u8]) {
-        let mut mapping: Vec<(Vec<u8>, Vec<u8>)> =
-            offchain::local_storage_get(StorageKind::PERSISTENT, key)
-                .map(|mut bytes| {
-                    <Vec<(Vec<u8>, Vec<u8>)> as Decode>::decode(&mut &bytes[..]).unwrap()
+    /// Make `key` known to the persistent tracking index.
+    fn add_to_index(&self, derived_key: &[u8], tree_prefix: &[u8], session_index: &[u8]) {
+        let per_session_key: Vec<u8> = Self::derive_tracking_index_key(session_index);
+        let mut mapping: BTreeSet<(Vec<u8>, Vec<u8>)> =
+            offchain::local_storage_get(StorageKind::PERSISTENT, derived_key)
+                .map(|bytes| {
+                    <BTreeSet<(Vec<u8>, Vec<u8>)> as Decode>::decode(&mut &bytes[..]).unwrap()
                 })
-                .unwrap_or_else(|| Vec::with_capacity(1));
+                .unwrap_or_else(|| BTreeSet::new());
 
-        mapping.push((key.to_vec(), tree_prefix.to_vec()));
+        mapping.insert((derived_key.to_vec(), tree_prefix.to_vec()));
 
         let encoded = mapping.encode();
-        offchain::local_storage_set(StorageKind::PERSISTENT, key, encoded.as_slice());
+        offchain::local_storage_set(StorageKind::PERSISTENT, per_session_key.as_ref(), encoded.as_slice());
     }
 
-    fn get_index_with_session(&self, session_index: &[u8]) -> Vec<(Vec<u8>, Vec<u8>)> {
-        let key: Vec<u8> = tracking_index(session_index);
-        let mapping: Vec<(Vec<u8>, Vec<u8>)> =
-            offchain::local_storage_get(StorageKind::PERSISTENT, key.as_ref())
-                .map(|mut bytes| {
-                    <Vec<(Vec<u8>, Vec<u8>)> as Decode>::decode(&mut  &bytes[..]).unwrap()
-                })
-                .unwrap_or_else(|| Vec::with_capacity(8));
-        mapping
-    }
-
-    /// Returns a vector of keys (which are vectors of bytes)
-    fn get_index_with_session_and_prefix(
-        &self,
-        session_index: &[u8],
-        tree_prefix: &[u8],
-    ) -> Vec<Vec<u8>> {
-        let key: Vec<u8> = tracking_index_with_prefix(tree_prefix, session_index);
-        let mapping: Vec<Vec<u8>> =
-            offchain::local_storage_get(StorageKind::PERSISTENT, key.as_ref())
-                .map(|bytes| <Vec<Vec<u8>> as Decode>::decode(&mut &bytes[..]).unwrap())
-                .unwrap_or_else(|| Vec::with_capacity(8));
-        mapping
-    }
-
-    fn set_index_with_session(&self, session_index: &[u8], val: Vec<(Vec<u8>, Vec<u8>)>) {
-        let key: Vec<u8> = tracking_index(session_index);
-        let val = val.encode();
-        offchain::local_storage_set(StorageKind::PERSISTENT, key.as_ref(), val.as_slice());
-    }
-
-    /// Returns a vector of keys (which are vectors of bytes)
-    fn set_index_with_session_and_prefix(
-        &self,
-        session_index: &[u8],
-        tree_prefix: &[u8],
-        val: Vec<Vec<u8>>,
-    ) {
-        let key: Vec<u8> = tracking_index_with_prefix(tree_prefix, session_index);
-        let val = val.encode();
-        offchain::local_storage_set(StorageKind::PERSISTENT, key.as_ref(), val.as_slice());
-    }
-
-    fn remove_from_indices(&self, key: &[u8], tree_prefix: &[u8], session_index: &[u8]) {
-        let mut index0 = self.get_index_with_session_and_prefix(session_index, tree_prefix);
-        let index0 = index0
+    /// Forget `key` from the persistent index.
+    fn remove_from_index(&self, derived_key: &[u8], tree_prefix: &[u8], session_index: &[u8]) {
+        let index = self.get_index(session_index);
+        let index = index
             .into_iter()
-            .filter(|key2| key2.as_slice() != key)
-            .collect();
-        self.set_index_with_session_and_prefix(session_index, tree_prefix, index0);
-
-        let mut index1 = self.get_index_with_session(session_index);
-        let index1 = index1
-            .into_iter()
-            .filter(|(key2, tree_prefix2)| {
-                tree_prefix2.as_slice() != tree_prefix || key2.as_slice() != key
+            .filter(|(derived_key2, tree_prefix2)| {
+                tree_prefix2.as_slice() != tree_prefix || derived_key2.as_slice() != derived_key
             })
             .collect();
-        self.set_index_with_session(session_index, index1);
+        self.set_index(session_index, index);
     }
+
+    /// Get the key tracking index.
+    fn get_index(&self, session_index: &[u8]) -> BTreeSet<(Vec<u8>, Vec<u8>)> {
+        let tracking_key: Vec<u8> = Self::derive_tracking_index_key(session_index);
+        let mapping: BTreeSet<(Vec<u8>, Vec<u8>)> =
+            offchain::local_storage_get(StorageKind::PERSISTENT, tracking_key.as_ref())
+                .map(|bytes| {
+                    <BTreeSet<(Vec<u8>, Vec<u8>)> as Decode>::decode(&mut  &bytes[..]).unwrap()
+                })
+                .unwrap_or_else(|| BTreeSet::new());
+        mapping
+    }
+
+    /// Set the (modified) key tracking index.
+    fn set_index(&self, session_index: &[u8], val: BTreeSet<(Vec<u8>, Vec<u8>)>) {
+        let tracking_key: Vec<u8> = Self::derive_tracking_index_key(session_index);
+        let val = val.encode();
+        offchain::local_storage_set(StorageKind::PERSISTENT, tracking_key.as_ref(), val.as_slice());
+    }
+
+
+    fn derive_tracking_index_key(session_index: &[u8]) -> Vec<u8> {
+        //@todo probably waaaaay to slow
+        // _ + _ + _ + _
+        let total_len = Self::TRACKING_PREFIX.len() + 1 + session_index.len() + 1 + 2;
+        let mut final_key = Vec::with_capacity(total_len);
+        final_key.extend_from_slice(Self::TRACKING_PREFIX);
+        final_key.push(b'+');
+        final_key.extend_from_slice(session_index);
+        final_key.push(b'+');
+        final_key
+    }
+
+
+    /// Concatenate the static prefix with a tree prefix.
+    fn derive_key(key: &[u8], tree_prefix: &[u8], session_index: &[u8]) -> Vec<u8> {
+        //@todo probably waaaaay to slow
+        // _ + _ + _ + _
+        let total_len = Self::PREFIX.len() + 1 + session_index.len() + 1 + key.len() + 1 + 2;
+        let mut final_key = Vec::with_capacity(total_len);
+        final_key.extend_from_slice(Self::PREFIX);
+        final_key.push(b'+');
+        final_key.extend_from_slice(session_index);
+        final_key.push(b'+');
+        final_key.extend_from_slice(key);
+        final_key.push(b'+');
+        final_key.extend_from_slice(tree_prefix);
+        final_key.push(b'+');
+        final_key
+    }
+
 }
 
-const TRACKING_PREFIX: &'static [u8] = b"__TRACKING__";
-
-fn tracking_index_with_prefix(tree_prefix: &[u8], session_index: &[u8]) -> Vec<u8> {
-    //@todo probably waaaaay to slow
-    // _ + _ + _ + _
-    let total_len = TRACKING_PREFIX.len() + 1 + session_index.len() + 1 + tree_prefix.len() + 1 + 2;
-    let mut final_key = Vec::with_capacity(total_len);
-    final_key.extend_from_slice(TRACKING_PREFIX);
-    final_key.push(b'+');
-    final_key.extend_from_slice(session_index);
-    final_key.push(b'+');
-    final_key.extend_from_slice(tree_prefix);
-    final_key.push(b'+');
-    final_key.extend_from_slice(tree_prefix);
-    final_key.push(b'+');
-    final_key
-}
-
-fn tracking_index(session_index: &[u8]) -> Vec<u8> {
-    //@todo probably waaaaay to slow
-    // _ + _ + _ + _
-    let total_len = TRACKING_PREFIX.len() + 1 + session_index.len() + 1 + 2;
-    let mut final_key = Vec::with_capacity(total_len);
-    final_key.extend_from_slice(TRACKING_PREFIX);
-    final_key.push(b'+');
-    final_key.extend_from_slice(session_index);
-    final_key.push(b'+');
-    final_key
-}
-
-//@todo define the extra prefix
-const PREFIX: &[u8] = b"TO_BE_DEFINED";
-
-/// Concatenate the static prefix with a tree prefix.
-fn prefix_glue(key: &[u8], tree_prefix: &[u8], session_index: &[u8]) -> Vec<u8> {
-    //@todo probably waaaaay to slow
-    // _ + _ + _ + _
-    let total_len = PREFIX.len() + 1 + session_index.len() + 1 + key.len() + 1 + 2;
-    let mut final_key = Vec::with_capacity(total_len);
-    final_key.extend_from_slice(PREFIX);
-    final_key.push(b'+');
-    final_key.extend_from_slice(session_index);
-    final_key.push(b'+');
-    final_key.extend_from_slice(key);
-    final_key.push(b'+');
-    final_key.extend_from_slice(tree_prefix);
-    final_key.push(b'+');
-    final_key
-}
-
-impl<L, T> HashDB<L::Hash, T> for AlternativeDB<L,T>
+impl<L, T> HashDB<L::Hash, T> for AlternativeDB<L>
 where
     L: TrieLayout + Send,
-    T: Encode + Decode + Send,
+    T: Encode + Decode + Send + Default,
     <L as TrieLayout>::Hash: Default,
     <L as trie_db::TrieLayout>::Hash: core::default::Default + core::hash::BuildHasher,
-    <<L as trie_db::TrieLayout>::Hash as Hasher>::Out: AsRef<[u8]> + Default, //@todo verify this is true for all sane hashes such as H256
+    <<L as trie_db::TrieLayout>::Hash as Hasher>::Out: AsRef<[u8]> + Default,
 {
     fn get(
         &self,
@@ -210,13 +218,14 @@ where
         prefix: Prefix,
     ) -> Option<T> {
         let key = AsRef::<[u8]>::as_ref(key);
-        let key: Vec<u8> = prefix_glue(
+        let derived_key: Vec<u8> = Self::derive_key(
             key,
             prefix.encode().as_slice(),
             self.session_index.as_slice(),
         );
-        offchain::local_storage_get(StorageKind::PERSISTENT, key.as_slice())
-            .map(|mut v| Decode::decode(&mut &v[..]).unwrap())
+        offchain::local_storage_get(StorageKind::PERSISTENT, derived_key.as_slice())
+            .map(|v| Decode::decode(&mut &v[..]).unwrap())
+
     }
 
     fn contains(
@@ -225,12 +234,12 @@ where
         prefix: Prefix,
     ) -> bool {
         let key: &[u8] = AsRef::<[u8]>::as_ref(&*key);
-        let key: Vec<u8> = prefix_glue(
+        let derived_key: Vec<u8> = Self::derive_key(
             key,
             prefix.encode().as_slice(),
             self.session_index.as_slice(),
         );
-        offchain::local_storage_get(StorageKind::PERSISTENT, key.as_slice()).is_some()
+        offchain::local_storage_get(StorageKind::PERSISTENT, derived_key.as_slice()).is_some()
     }
 
     fn insert(
@@ -239,12 +248,17 @@ where
         value: &[u8],
     ) -> <<L as trie_db::TrieLayout>::Hash as Hasher>::Out {
         let digest = <<L as trie_db::TrieLayout>::Hash as Hasher>::hash(value);
-        let key: Vec<u8> = prefix_glue(
+        let prefix = prefix.encode();
+        let prefix = prefix.as_slice();
+        let derived_key: Vec<u8> = Self::derive_key(
             digest.as_ref(),
-            prefix.encode().as_slice(),
+            prefix,
             self.session_index.as_slice(),
         );
-        offchain::local_storage_set(StorageKind::PERSISTENT, key.as_ref(), value);
+
+        offchain::local_storage_set(StorageKind::PERSISTENT, derived_key.as_ref(), value);
+
+        self.add_to_index(derived_key.as_ref(), prefix, self.session_index.as_slice());
         digest
     }
 
@@ -254,25 +268,37 @@ where
         prefix: Prefix,
         value: T,
     ) {
-        let key: Vec<u8> = prefix_glue(
-            AsRef::<[u8]>::as_ref(&key),
-            prefix.encode().as_slice(),
+        let prefix = prefix.encode();
+        let prefix = prefix.as_slice();
+        let derived_key: Vec<u8> = Self::derive_key(
+            key.as_ref(),
+            prefix,
             self.session_index.as_slice(),
         );
+
         let value: Vec<u8> = <T as Encode>::encode(&value);
-        Self::insert(self, (key.as_slice(), None), value.as_slice());
+        offchain::local_storage_set(StorageKind::PERSISTENT, derived_key.as_ref(), value.as_slice());
+        self.add_to_index(derived_key.as_ref(), prefix, self.session_index.as_slice());
     }
 
     fn remove(&mut self, key: &<<L as trie_db::TrieLayout>::Hash as Hasher>::Out, prefix: Prefix) {
-        //@todo no API for that just yet
-        unimplemented!("can;t remove just yet")
+        let prefix = prefix.encode();
+        let prefix = prefix.as_slice();
+        let derived_key: Vec<u8> = Self::derive_key(
+            key.as_ref(),
+            prefix,
+            self.session_index.as_slice(),
+        );
+        self.remove_from_index(derived_key.as_ref(), prefix, self.session_index.as_slice());
+        // @todo it would be great if we could just erase this directly, but for now setting it to an empty slice must suffice
+        offchain::local_storage_set(StorageKind::PERSISTENT, derived_key.as_ref(), &[]);
     }
 }
 
-impl<L, T> AsHashDB<L::Hash, T> for AlternativeDB<L,T>
+impl<L, T> AsHashDB<L::Hash, T> for AlternativeDB<L>
 where
     L: TrieLayout + Send,
-    T: Encode + Decode + Send,
+    T: Encode + Decode + Send + Default,
     <L as trie_db::TrieLayout>::Hash: core::default::Default + core::hash::BuildHasher,
     <<L as trie_db::TrieLayout>::Hash as Hasher>::Out: AsRef<[u8]> + Default,
 {
