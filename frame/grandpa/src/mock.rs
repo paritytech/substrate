@@ -138,7 +138,7 @@ impl session::Trait for Test {
 	type ValidatorIdOf = staking::StashOf<Self>;
 	type ShouldEndSession = session::PeriodicSessions<Period, Offset>;
 	type NextSessionRotation = session::PeriodicSessions<Period, Offset>;
-	type SessionManager = Staking;
+	type SessionManager = session::historical::NoteHistoricalRoot<Self, Staking>;
 	type SessionHandler = <TestSessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type Keys = TestSessionKeys;
 	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
