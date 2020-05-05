@@ -1352,9 +1352,9 @@ dependencies = [
 
 [[package]]
 name = "finality-grandpa"
-version = "0.12.1"
+version = "0.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ab32971efbe776e46bfbc34d5b662d8e1de51fd14e26a2eba522c0f3470fc0f"
+checksum = "1f4682570188cd105606e621b9992e580f717c15f8cd1b7d106b59f1c6e54680"
 dependencies = [
  "either",
  "futures 0.3.4",
