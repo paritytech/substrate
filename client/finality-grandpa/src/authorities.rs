@@ -39,7 +39,7 @@ pub enum Error<E> {
 }
 
 /// A shared authority set.
-pub(crate) struct SharedAuthoritySet<H, N> {
+pub struct SharedAuthoritySet<H, N> {
 	inner: Arc<RwLock<AuthoritySet<H, N>>>,
 }
 
@@ -67,12 +67,12 @@ where N: Add<Output=N> + Ord + Clone + Debug,
 	}
 
 	/// Get the current set ID. This is incremented every time the set changes.
-	pub(crate) fn set_id(&self) -> u64 {
+	pub fn set_id(&self) -> u64 {
 		self.inner.read().set_id
 	}
 
 	/// Get the current authorities and their weights (for the current set ID).
-	pub(crate) fn current_authorities(&self) -> VoterSet<AuthorityId> {
+	pub fn current_authorities(&self) -> VoterSet<AuthorityId> {
 		VoterSet::new(self.inner.read().current_authorities.iter().cloned()).expect(
 			"current_authorities is non-empty and weights are non-zero; \
 			 constructor and all mutating operations on `AuthoritySet` ensure this; \

@@ -52,6 +52,8 @@
 //! or prune any signaled changes based on whether the signaling block is
 //! included in the newly-finalized chain.
 
+#![warn(missing_docs)]
+
 use futures::prelude::*;
 use futures::StreamExt;
 use log::{debug, info};
@@ -72,6 +74,7 @@ use sp_core::Pair;
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 use sc_telemetry::{telemetry, CONSENSUS_INFO, CONSENSUS_DEBUG};
 use serde_json;
+use parking_lot::RwLock;
 
 use sp_finality_tracker;
 
@@ -114,12 +117,14 @@ mod observer;
 mod until_imported;
 mod voting_rule;
 
+pub use authorities::SharedAuthoritySet;
 pub use finality_proof::{FinalityProofProvider, StorageAndProofProvider};
 pub use justification::GrandpaJustification;
 pub use light_import::light_block_import;
 pub use voting_rule::{
 	BeforeBestBlockBy, ThreeQuartersOfTheUnfinalizedChain, VotingRule, VotingRulesBuilder
 };
+pub use finality_grandpa::voter::report;
 
 use aux_schema::PersistentData;
 use environment::{Environment, VoterSetState};
@@ -203,7 +208,44 @@ type CommunicationOutH<Block, H> = finality_grandpa::voter::CommunicationOut<
 	AuthorityId,
 >;
 
-/// Configuration for the GRANDPA service.
+/// Shared voter state for querying.
+pub struct SharedVoterState {
+	inner: Arc<RwLock<Option<Box<dyn voter::VoterState<AuthorityId> + Sync + Send>>>>,
+}
+
+impl SharedVoterState {
+	/// Create a new empty `SharedVoterState` instance.
+	pub fn empty() -> Self {
+		Self {
+			inner: Arc::new(RwLock::new(None)),
+		}
+	}
+
+	fn reset(
+		&self,
+		voter_state: Box<dyn voter::VoterState<AuthorityId> + Sync + Send>,
+	) -> Option<()> {
+		let mut shared_voter_state = self
+			.inner
+			.try_write_for(Duration::from_secs(1))?;
+
+		*shared_voter_state = Some(voter_state);
+		Some(())
+	}
+
+	/// Get the inner `VoterState` instance.
+	pub fn voter_state(&self) -> Option<voter::report::VoterState<AuthorityId>> {
+		self.inner.read().as_ref().map(|vs| vs.get())
+	}
+}
+
+impl Clone for SharedVoterState {
+	fn clone(&self) -> Self {
+		SharedVoterState { inner: self.inner.clone() }
+	}
+}
+
+/// Configuration for the GRANDPA service
 #[derive(Clone)]
 pub struct Config {
 	/// The expected duration for a message to be gossiped across the network.
@@ -392,11 +434,19 @@ impl<H, N> fmt::Display for CommandOrError<H, N> {
 	}
 }
 
+/// Link between the block importer and the background voter.
 pub struct LinkHalf<Block: BlockT, C, SC> {
 	client: Arc<C>,
 	select_chain: SC,
 	persistent_data: PersistentData<Block>,
 	voter_commands_rx: TracingUnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
+}
+
+impl<Block: BlockT, C, SC> LinkHalf<Block, C, SC> {
+	/// Get the shared authority set.
+	pub fn shared_authority_set(&self) -> &SharedAuthoritySet<Block::Hash, NumberFor<Block>> {
+		&self.persistent_data.authority_set
+	}
 }
 
 /// Provider for the Grandpa authority set configured on the genesis block.
@@ -620,6 +670,8 @@ pub struct GrandpaParams<Block: BlockT, C, N, SC, VR> {
 	pub voting_rule: VR,
 	/// The prometheus metrics registry.
 	pub prometheus_registry: Option<prometheus_endpoint::Registry>,
+	/// The voter state is exposed at an RPC endpoint.
+	pub shared_voter_state: SharedVoterState,
 }
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
@@ -644,6 +696,7 @@ pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR>(
 		telemetry_on_connect,
 		voting_rule,
 		prometheus_registry,
+		shared_voter_state,
 	} = grandpa_params;
 
 	// NOTE: we have recently removed `run_grandpa_observer` from the public
@@ -704,6 +757,7 @@ pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR>(
 		persistent_data,
 		voter_commands_rx,
 		prometheus_registry,
+		shared_voter_state,
 	);
 
 	let voter_work = voter_work
@@ -734,6 +788,7 @@ impl Metrics {
 #[must_use]
 struct VoterWork<B, Block: BlockT, C, N: NetworkT<Block>, SC, VR> {
 	voter: Pin<Box<dyn Future<Output = Result<(), CommandOrError<Block::Hash, NumberFor<Block>>>> + Send>>,
+	shared_voter_state: SharedVoterState,
 	env: Arc<Environment<B, Block, C, N, SC, VR>>,
 	voter_commands_rx: TracingUnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
 	network: NetworkBridge<Block, N>,
@@ -761,6 +816,7 @@ where
 		persistent_data: PersistentData<Block>,
 		voter_commands_rx: TracingUnboundedReceiver<VoterCommand<Block::Hash, NumberFor<Block>>>,
 		prometheus_registry: Option<prometheus_endpoint::Registry>,
+		shared_voter_state: SharedVoterState,
 	) -> Self {
 		let metrics = match prometheus_registry.as_ref().map(Metrics::register) {
 			Some(Ok(metrics)) => Some(metrics),
@@ -791,6 +847,7 @@ where
 			// `voter` is set to a temporary value and replaced below when
 			// calling `rebuild_voter`.
 			voter: Box::pin(future::pending()),
+			shared_voter_state,
 			env,
 			voter_commands_rx,
 			network,
@@ -857,6 +914,14 @@ where
 					last_completed_round.base.clone(),
 					last_finalized,
 				);
+
+				// Repoint shared_voter_state so that the RPC endpoint can query the state
+				if let None = self.shared_voter_state.reset(voter.voter_state()) {
+					info!(target: "afg",
+						"Timed out trying to update shared GRANDPA voter state. \
+						RPC endpoints may return stale data."
+					);
+				}
 
 				self.voter = Box::pin(voter);
 			},

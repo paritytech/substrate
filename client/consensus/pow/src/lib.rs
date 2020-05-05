@@ -49,12 +49,13 @@ use sp_consensus::{
 	SelectChain, Error as ConsensusError, CanAuthorWith, RecordProof, BlockImport,
 	BlockCheckParams, ImportResult,
 };
-use sp_consensus::import_queue::{BoxBlockImport, BasicQueue, Verifier, BoxJustificationImport, BoxFinalityProofImport};
+use sp_consensus::import_queue::{
+	BoxBlockImport, BasicQueue, Verifier, BoxJustificationImport, BoxFinalityProofImport,
+};
 use codec::{Encode, Decode};
 use sc_client_api;
 use log::*;
 use sp_timestamp::{InherentError as TIError, TimestampInherentData};
-use futures::future::BoxFuture;
 
 #[derive(derive_more::Display, Debug)]
 pub enum Error<B: BlockT> {
@@ -462,7 +463,7 @@ pub fn import_queue<B, Transaction, Algorithm>(
 	finality_proof_import: Option<BoxFinalityProofImport<B>>,
 	algorithm: Algorithm,
 	inherent_data_providers: InherentDataProviders,
-	spawner: impl Fn(BoxFuture<'static, ()>) -> (),
+	spawner: &impl sp_core::traits::SpawnBlocking,
 ) -> Result<
 	PowImportQueue<B, Transaction>,
 	sp_consensus::Error
