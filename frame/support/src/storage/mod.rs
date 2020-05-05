@@ -95,8 +95,9 @@ pub trait StorageValue<T: FullCodec> {
 	///
 	/// # Warning
 	///
-	/// If the storage item is not encoded properly, the storage will be overwritten
-	/// and set to `[item]`.
+	/// If the storage item is not encoded properly, the storage item will be overwritten
+	/// and set to `[item]`. Any default value set for the storage item will be ignored
+	/// on overwrite.
 	fn append<Item, EncodeLikeItem>(item: EncodeLikeItem)
 	where
 		Item: Encode,
@@ -164,7 +165,8 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	/// # Warning
 	///
 	/// If the storage item is not encoded properly, the storage will be overwritten
-	/// and set to `[item]`.
+	/// and set to `[item]`. Any default value set for the storage item will be ignored
+	/// on overwrite.
 	fn append<Item, EncodeLikeItem, EncodeLikeKey>(key: EncodeLikeKey, item: EncodeLikeItem)
 	where
 		EncodeLikeKey: EncodeLike<K>,
@@ -332,7 +334,8 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 	/// # Warning
 	///
 	/// If the storage item is not encoded properly, the storage will be overwritten
-	/// and set to `[item]`.
+	/// and set to `[item]`. Any default value set for the storage item will be ignored
+	/// on overwrite.
 	fn append<Item, EncodeLikeItem, KArg1, KArg2>(
 		k1: KArg1,
 		k2: KArg2,

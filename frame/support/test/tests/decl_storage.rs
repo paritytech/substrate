@@ -539,6 +539,21 @@ mod test_append_and_len {
 	}
 
 	#[test]
+	fn append_overwrites_invalid_data() {
+		TestExternalities::default().execute_with(|| {
+			let key = JustVec::hashed_key();
+			// Set it to some invalid value.
+			frame_support::storage::unhashed::put_raw(&key, &*b"1");
+			assert_eq!(JustVec::get(), Vec::new());
+			assert_eq!(frame_support::storage::unhashed::get_raw(&key), Some(b"1".to_vec()));
+
+			JustVec::append(1);
+			JustVec::append(2);
+			assert_eq!(JustVec::get(), vec![1, 2]);
+		});
+	}
+
+	#[test]
 	fn append_overwrites_default() {
 		TestExternalities::default().execute_with(|| {
 			assert_eq!(JustVecWithDefault::get(), vec![6, 9]);
