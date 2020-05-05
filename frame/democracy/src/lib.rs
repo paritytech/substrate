@@ -541,8 +541,8 @@ mod weight_for {
 		votes: impl Into<Weight> + Copy,
 	) -> Weight {
 		db.reads_writes(votes.into().saturating_add(3), votes.into().saturating_add(3))
-			.saturating_add(82_000_000)
-			.saturating_add(votes.into().saturating_mul(8_800_000))
+			.saturating_add(62_000_000)
+			.saturating_add(votes.into().saturating_mul(8_100_000))
 	}
 
 	/// Calculate the weight for `undelegate`.
@@ -551,8 +551,8 @@ mod weight_for {
 		votes: impl Into<Weight> + Copy,
 	) -> Weight {
 		db.reads_writes(votes.into().saturating_add(2), votes.into().saturating_add(2))
-			.saturating_add(42_000_000)
-			.saturating_add(votes.into().saturating_mul(8_800_000))
+			.saturating_add(30_000_000)
+			.saturating_add(votes.into().saturating_mul(8_000_000))
 	}
 
 	/// Calculate the weight for `proxy_delegate`.
@@ -561,8 +561,8 @@ mod weight_for {
 		votes: impl Into<Weight> + Copy,
 	) -> Weight {
 		db.reads_writes(votes.into().saturating_add(5), votes.into().saturating_add(4))
-			.saturating_add(92_000_000)
-			.saturating_add(votes.into().saturating_mul(9_100_000))
+			.saturating_add(67_000_000)
+			.saturating_add(votes.into().saturating_mul(8_200_000))
 	}
 
 	/// Calculate the weight for `proxy_undelegate`.
@@ -571,8 +571,8 @@ mod weight_for {
 		votes: impl Into<Weight> + Copy,
 	) -> Weight {
 		db.reads_writes(votes.into().saturating_add(3), votes.into().saturating_add(2))
-			.saturating_add(50_000_000)
-			.saturating_add(votes.into().saturating_mul(9_900_000))
+			.saturating_add(35_000_000)
+			.saturating_add(votes.into().saturating_mul(8_200_000))
 	}
 }
 
@@ -640,7 +640,7 @@ decl_module! {
 		/// - Db reads: `PublicPropCount`, `PublicProps`
 		/// - Db writes: `PublicPropCount`, `PublicProps`, `DepositOf`
 		/// # </weight>
-		#[weight = 51_000_000
+		#[weight = 42_000_000
 			.saturating_add(220_000.saturating_mul(Weight::from(*proposals_upper_bound)))
 			.saturating_add(T::DbWeight::get().reads_writes(2, 3))
 		]
@@ -678,8 +678,8 @@ decl_module! {
 		/// - Db reads: `DepositOf`
 		/// - Db writes: `DepositOf`
 		/// # </weight>
-		#[weight = 31_000_000
-			.saturating_add(190_000.saturating_mul(Weight::from(*seconds_upper_bound)))
+		#[weight = 23_000_000
+			.saturating_add(170_000.saturating_mul(Weight::from(*seconds_upper_bound)))
 			.saturating_add(T::DbWeight::get().reads_writes(1, 1))
 		]
 		fn second(origin, #[compact] proposal: PropIndex, seconds_upper_bound: u32) {
@@ -709,7 +709,7 @@ decl_module! {
 		/// - Db reads: `ReferendumInfoOf`, `VotingOf`, `balances locks`
 		/// - Db writes: `ReferendumInfoOf`, `VotingOf`, `balances locks`
 		/// # </weight>
-		#[weight = 64_000_000 + 220_000 * Weight::from(T::MaxVotes::get()) + T::DbWeight::get().reads_writes(3, 3)]
+		#[weight = 50_000_000 + 220_000 * Weight::from(T::MaxVotes::get()) + T::DbWeight::get().reads_writes(3, 3)]
 		fn vote(origin,
 			#[compact] ref_index: ReferendumIndex,
 			vote: AccountVote<BalanceOf<T>>,
@@ -732,7 +732,7 @@ decl_module! {
 		/// - Db reads: `ReferendumInfoOf`, `VotingOf`, `balances locks`, `Proxy`, `proxy account`
 		/// - Db writes: `ReferendumInfoOf`, `VotingOf`, `balances locks`
 		/// # </weight>
-		#[weight = 73_000_000 + 220_000 * Weight::from(T::MaxVotes::get()) + T::DbWeight::get().reads_writes(5, 3)]
+		#[weight = 56_000_000 + 220_000 * Weight::from(T::MaxVotes::get()) + T::DbWeight::get().reads_writes(5, 3)]
 		fn proxy_vote(origin,
 			#[compact] ref_index: ReferendumIndex,
 			vote: AccountVote<BalanceOf<T>>,
@@ -754,7 +754,7 @@ decl_module! {
 		/// - Db reads: `ReferendumInfoOf`, `Cancellations`
 		/// - Db writes: `ReferendumInfoOf`, `Cancellations`
 		/// # </weight>
-		#[weight = (45_000_000 + T::DbWeight::get().reads_writes(2, 2), DispatchClass::Operational)]
+		#[weight = (40_000_000 + T::DbWeight::get().reads_writes(2, 2), DispatchClass::Operational)]
 		fn emergency_cancel(origin, ref_index: ReferendumIndex) {
 			T::CancellationOrigin::ensure_origin(origin)?;
 
@@ -780,7 +780,7 @@ decl_module! {
 		/// - Db writes: `NextExternal`
 		/// # </weight>
 		// TODO TODO: weight according to result of new benchmark
-		#[weight = 5_000_000_000]
+		#[weight = 15_000_000]
 		fn external_propose(origin, proposal_hash: T::Hash) {
 			T::ExternalOrigin::ensure_origin(origin)?;
 			ensure!(!<NextExternal<T>>::exists(), Error::<T>::DuplicateProposal);
@@ -807,7 +807,7 @@ decl_module! {
 		/// - Complexity: `O(1)`
 		/// - Db write: `NextExternal`
 		/// # </weight>
-		#[weight = 4_000_000 + T::DbWeight::get().writes(1)]
+		#[weight = 3_100_000 + T::DbWeight::get().writes(1)]
 		fn external_propose_majority(origin, proposal_hash: T::Hash) {
 			T::ExternalMajorityOrigin::ensure_origin(origin)?;
 			<NextExternal<T>>::put((proposal_hash, VoteThreshold::SimpleMajority));
@@ -827,7 +827,7 @@ decl_module! {
 		/// - Complexity: `O(1)`
 		/// - Db write: `NextExternal`
 		/// # </weight>
-		#[weight = 4_000_000 + T::DbWeight::get().writes(1)]
+		#[weight = 3_200_000 + T::DbWeight::get().writes(1)]
 		fn external_propose_default(origin, proposal_hash: T::Hash) {
 			T::ExternalDefaultOrigin::ensure_origin(origin)?;
 			<NextExternal<T>>::put((proposal_hash, VoteThreshold::SuperMajorityAgainst));
@@ -852,7 +852,7 @@ decl_module! {
 		/// - Db reads: `NextExternal`, `ReferendumCount`
 		/// - Db writes: `NextExternal`, `ReferendumCount`, `ReferendumInfoOf`
 		/// # </weight>
-		#[weight = 32_000_000 + T::DbWeight::get().reads_writes(2, 3)]
+		#[weight = 31_000_000 + T::DbWeight::get().reads_writes(2, 3)]
 		fn fast_track(origin,
 			proposal_hash: T::Hash,
 			voting_period: T::BlockNumber,
@@ -902,7 +902,7 @@ decl_module! {
 		/// - Db reads: `NextExternal`, `Blacklist`
 		/// - Db writes: `NextExternal`, `Blacklist`
 		/// # </weight>
-		#[weight = 34_000_000 + 180_000 * Weight::from(T::MaxVetoers::get())
+		#[weight = 30_000_000 + 180_000 * Weight::from(T::MaxVetoers::get())
 			+ T::DbWeight::get().reads_writes(2, 2)]
 		fn veto_external(origin, proposal_hash: T::Hash) {
 			let who = T::VetoOrigin::ensure_origin(origin)?;
@@ -937,7 +937,7 @@ decl_module! {
 		/// - Complexity: `O(1)`.
 		/// - Db writes: `ReferendumInfoOf`
 		/// # </weight>
-		#[weight = (50_000_000 + T::DbWeight::get().writes(1), DispatchClass::Operational)]
+		#[weight = (25_000_000 + T::DbWeight::get().writes(1), DispatchClass::Operational)]
 		fn cancel_referendum(origin, #[compact] ref_index: ReferendumIndex) {
 			ensure_root(origin)?;
 			Self::internal_cancel_referendum(ref_index);
@@ -982,7 +982,7 @@ decl_module! {
 		/// - Db reads: `Proxy`
 		/// - Db writes: `Proxy`
 		/// # </weight>
-		#[weight = 11_000_000 + T::DbWeight::get().reads_writes(1, 1)]
+		#[weight = 9_000_000 + T::DbWeight::get().reads_writes(1, 1)]
 		fn activate_proxy(origin, proxy: T::AccountId) {
 			let who = ensure_signed(origin)?;
 			Proxy::<T>::try_mutate(&proxy, |a| match a.take() {
@@ -1007,7 +1007,7 @@ decl_module! {
 		/// - Db reads: `Proxy`, `sender account`
 		/// - Db writes: `Proxy`, `sender account`
 		/// # </weight>
-		#[weight = 21_000_000 + T::DbWeight::get().reads_writes(1, 1)]
+		#[weight = 16_000_000 + T::DbWeight::get().reads_writes(1, 1)]
 		fn close_proxy(origin) {
 			let who = ensure_signed(origin)?;
 			Proxy::<T>::mutate(&who, |a| {
@@ -1033,7 +1033,7 @@ decl_module! {
 		/// - Db reads: `Proxy`
 		/// - Db writes: `Proxy`
 		/// # </weight>
-		#[weight = 11_000_000 + T::DbWeight::get().reads_writes(1, 1)]
+		#[weight = 9_000_000 + T::DbWeight::get().reads_writes(1, 1)]
 		fn deactivate_proxy(origin, proxy: T::AccountId) {
 			let who = ensure_signed(origin)?;
 			Proxy::<T>::try_mutate(&proxy, |a| match a.take() {
@@ -1120,7 +1120,7 @@ decl_module! {
 		/// - `O(1)`.
 		/// - Db writes: `PublicProps`
 		/// # </weight>
-		#[weight = 4_000_000 + T::DbWeight::get().writes(1)]
+		#[weight = 2_500_000 + T::DbWeight::get().writes(1)]
 		fn clear_public_proposals(origin) {
 			ensure_root(origin)?;
 
@@ -1141,7 +1141,7 @@ decl_module! {
 		/// - Db reads: `Preimages`
 		/// - Db writes: `Preimages`
 		/// # </weight>
-		#[weight = 43_000_000 + 4_000 * Weight::from(encoded_proposal.len() as u32)
+		#[weight = 39_000_000 + 4_000 * Weight::from(encoded_proposal.len() as u32)
 			+ T::DbWeight::get().reads_writes(1, 1)]
 		fn note_preimage(origin, encoded_proposal: Vec<u8>) {
 			let who = ensure_signed(origin)?;
@@ -1179,7 +1179,7 @@ decl_module! {
 		/// - Db reads: `Preimages`
 		/// - Db writes: `Preimages`
 		/// # </weight>
-		#[weight = 31_000_000 + 4_000 * Weight::from(encoded_proposal.len() as u32)
+		#[weight = 28_000_000 + 3_000 * Weight::from(encoded_proposal.len() as u32)
 			+ T::DbWeight::get().reads_writes(1, 1)]
 		fn note_imminent_preimage(origin, encoded_proposal: Vec<u8>) {
 			let who = ensure_signed(origin)?;
@@ -1221,7 +1221,7 @@ decl_module! {
 		/// - Db reads: `Preimages`
 		/// - Db writes: `Preimages`
 		/// # </weight>
-		#[weight = (47_000_000 + T::DbWeight::get().reads_writes(1, 1))
+		#[weight = (39_000_000 + T::DbWeight::get().reads_writes(1, 1))
 			.saturating_add(3_000.saturating_mul(Weight::from(*proposal_len_upper_bound)))]
 		fn reap_preimage(origin, proposal_hash: T::Hash, proposal_len_upper_bound: u32) {
 			let who = ensure_signed(origin)?;
@@ -1260,7 +1260,7 @@ decl_module! {
 		/// - Db reads: `VotingOf`, `balances locks`, `target account`
 		/// - Db writes: `VotingOf`, `balances locks`, `target account`
 		/// # </weight>
-		#[weight = 53_000_000 + 220_000 * Weight::from(T::MaxVotes::get())
+		#[weight = 42_000_000 + 210_000 * Weight::from(T::MaxVotes::get())
 			+ T::DbWeight::get().reads_writes(3, 3)]
 		fn unlock(origin, target: T::AccountId) {
 			ensure_signed(origin)?;
@@ -1282,7 +1282,7 @@ decl_module! {
 		/// - Db reads: `Proxy`, `proxy account`
 		/// - Db writes: `Proxy`, `proxy account`
 		/// # </weight>
-		#[weight = 21_000_000 + T::DbWeight::get().reads_writes(2, 2)]
+		#[weight = 15_000_000 + T::DbWeight::get().reads_writes(2, 2)]
 		fn open_proxy(origin, target: T::AccountId) {
 			let who = ensure_signed(origin)?;
 			Proxy::<T>::mutate(&who, |a| {
@@ -1324,7 +1324,7 @@ decl_module! {
 		/// - Db reads: `ReferendumInfoOf`, `VotingOf`
 		/// - Db writes: `ReferendumInfoOf`, `VotingOf`
 		/// # </weight>
-		#[weight = 30_000_000 + 210_000 * Weight::from(T::MaxVotes::get()) + T::DbWeight::get().reads_writes(2, 2)]
+		#[weight = 24_000_000 + 200_000 * Weight::from(T::MaxVotes::get()) + T::DbWeight::get().reads_writes(2, 2)]
 		fn remove_vote(origin, index: ReferendumIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::try_remove_vote(&who, index, UnvoteScope::Any)
@@ -1349,7 +1349,7 @@ decl_module! {
 		/// - Db reads: `ReferendumInfoOf`, `VotingOf`
 		/// - Db writes: `ReferendumInfoOf`, `VotingOf`
 		/// # </weight>
-		#[weight = 30_000_000 + 210_000 * Weight::from(T::MaxVotes::get()) + T::DbWeight::get().reads_writes(2, 2)]
+		#[weight = 24_000_000 + 200_000 * Weight::from(T::MaxVotes::get()) + T::DbWeight::get().reads_writes(2, 2)]
 		fn remove_other_vote(origin, target: T::AccountId, index: ReferendumIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let scope = if target == who { UnvoteScope::Any } else { UnvoteScope::OnlyExpired };
@@ -1435,7 +1435,7 @@ decl_module! {
 		/// - Db reads: `ReferendumInfoOf`, `VotingOf`, `Proxy`
 		/// - Db writes: `ReferendumInfoOf`, `VotingOf`
 		/// # </weight>
-		#[weight = 38_000_000 + 210_000 * Weight::from(T::MaxVotes::get()) + T::DbWeight::get().reads_writes(2, 3)]
+		#[weight = 29_000_000 + 210_000 * Weight::from(T::MaxVotes::get()) + T::DbWeight::get().reads_writes(2, 3)]
 		fn proxy_remove_vote(origin, index: ReferendumIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let target = Self::proxy(who).and_then(|a| a.as_active()).ok_or(Error::<T>::NotProxy)?;
