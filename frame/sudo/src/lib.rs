@@ -58,7 +58,7 @@
 //!
 //! decl_module! {
 //!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-//! 		#[weight = 0]
+//!         #[weight = 0]
 //!         pub fn privileged_function(origin) -> dispatch::DispatchResult {
 //!             ensure_root(origin)?;
 //!
@@ -87,12 +87,13 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::prelude::*;
-use sp_runtime::{DispatchResult, traits::{StaticLookup, Dispatchable}};
+use sp_runtime::{DispatchResult, traits::{StaticLookup, Dispatchable, One}};
 
 use frame_support::{
 	Parameter, decl_module, decl_event, decl_storage, decl_error, ensure,
 };
 use frame_support::weights::{GetDispatchInfo, FunctionOf, Pays};
+use frame_support::traits::schedule::{self, Anon as ScheduleAnon};
 use frame_system::{self as system, ensure_signed};
 
 pub trait Trait: frame_system::Trait {
@@ -101,6 +102,9 @@ pub trait Trait: frame_system::Trait {
 
 	/// A sudo-able call.
 	type Call: Parameter + Dispatchable<Origin=Self::Origin> + GetDispatchInfo;
+
+	/// The Scheduler.
+	type Scheduler: ScheduleAnon<Self::BlockNumber, <Self as Trait>::Call>;
 }
 
 decl_module! {
@@ -110,7 +114,7 @@ decl_module! {
 
 		fn deposit_event() = default;
 
-		/// Authenticates the sudo key and dispatches a function call with `Root` origin.
+		/// Authenticates the sudo key and schedules a function call with `Root` origin.
 		///
 		/// The dispatch origin for this call must be _Signed_.
 		///
@@ -120,18 +124,19 @@ decl_module! {
 		/// - One DB write (event).
 		/// - Weight of derivative `call` execution + 10,000.
 		/// # </weight>
-		#[weight = FunctionOf(
-			|args: (&Box<<T as Trait>::Call>,)| args.0.get_dispatch_info().weight + 10_000,
-			|args: (&Box<<T as Trait>::Call>,)| args.0.get_dispatch_info().class,
-			Pays::Yes,
-		)]
-		fn sudo(origin, call: Box<<T as Trait>::Call>) {
+		#[weight = 10_000_000]
+		fn sudo(origin, call: Box<<T as Trait>::Call>, priority: schedule::Priority) {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
 			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
+			let block_number = frame_system::Module::<T>::block_number();
 
-			let res = call.dispatch(frame_system::RawOrigin::Root.into());
-			Self::deposit_event(RawEvent::Sudid(res.map(|_| ()).map_err(|e| e.error)));
+			T::Scheduler::schedule(
+				block_number + T::BlockNumber::one(),
+				None,
+				priority,
+				*call,
+			);
 		}
 
 		/// Authenticates the current sudo key and sets the given AccountId (`new`) as the new sudo key.
@@ -217,5 +222,28 @@ decl_error! {
 	pub enum Error for Module<T: Trait> {
 		/// Sender must be the Sudo account
 		RequireSudo,
+	}
+}
+
+// An implementation of scheduler that directly dispatches a call.
+// Useful if you do not want to include a proper scheduler, but does not
+// respect block Weight limits!
+impl<T: Trait> schedule::Anon<T::BlockNumber, <T as Trait>::Call> for Module<T> {
+	type Address = ();
+
+	/// This directly dispatches a call in the current block.
+	fn schedule(
+		_when: T::BlockNumber,
+		_maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
+		_priority: schedule::Priority,
+		call: <T as Trait>::Call
+	) -> Self::Address {
+		let res = call.dispatch(frame_system::RawOrigin::Root.into());
+		Self::deposit_event(RawEvent::Sudid(res.map(|_| ()).map_err(|e| e.error)));
+	}
+
+	/// You cannot cancel a direct dispatch, so this will always return `Err`.
+	fn cancel(_address: Self::Address) -> Result<(), ()> {
+		Err(())
 	}
 }
