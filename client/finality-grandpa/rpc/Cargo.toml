@@ -3,6 +3,7 @@ name = "sc-finality-grandpa-rpc"
 version = "0.8.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "RPC extensions for the GRANDPA finality gadget"
+repository = "https://github.com/paritytech/substrate/"
 edition = "2018"
 license = "GPL-3.0"
 
