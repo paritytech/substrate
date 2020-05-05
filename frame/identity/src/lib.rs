@@ -484,11 +484,11 @@ mod weight_for {
 		subs: impl Into<Weight> + Copy
 	) -> Weight {
 		db.reads(1) // storage-exists (`IdentityOf::contains_key`)
-			+ db.reads_writes(1, old_subs.into()) // `SubsOf::get` read + P old DB deletions
-			+ db.writes(subs.into() + 1) // S + 1 new DB writes
-			+ 37_000_000 // constant
-			+ 2_500_000 * old_subs.into() // P
-			+ 3_700_000 * subs.into() // S
+			.saturating_add(db.reads_writes(1, old_subs.into())) // `SubsOf::get` read + P old DB deletions
+			.saturating_add(db.writes(subs.into() + 1)) // S + 1 new DB writes
+			.saturating_add(37_000_000) // constant
+			.saturating_add(2_500_000 * old_subs.into()) // P
+			.saturating_add(subs.into().saturating_mul(3_700_000)) // S
 	}
 
 	/// Weight calculation for `clear_identity`.

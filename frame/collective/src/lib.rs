@@ -198,8 +198,8 @@ mod weight_for {
 		proposals: impl Into<Weight> + Copy,
 	) -> Weight {
 		db.reads_writes(1, 1) // mutate `Members`
-			+ db.writes(1) // set `Prime`
-			+ db.reads(1) // read `Proposals`
+			.saturating_add(db.writes(1)) // set `Prime`
+			.saturating_add(db.reads(1)) // read `Proposals`
 			.saturating_add(db.reads_writes(proposals.into(), proposals.into())) // update votes (`Voting`)
 			.saturating_add(old_count.into().saturating_mul(21_000_000)) // M
 			.saturating_add(new_count.into().saturating_mul(110_000)) // N
@@ -217,9 +217,9 @@ mod weight_for {
 		proposal: impl Into<Weight>,
 	) -> Weight {
 		db.reads(1) // read members for `is_member`
-			+ 23_000_000 // constant
-			+ 3_000 * MAX_ASSUMED_PROPOSAL_BYTES // B
-			+ 120_000 * members.into() // M
+			.saturating_add(23_000_000) // constant
+			.saturating_add(3_000 * MAX_ASSUMED_PROPOSAL_BYTES) // B
+			.saturating_add(120_000 * members.into()) // M
 			.saturating_add(proposal.into()) // P
 	}
 
@@ -230,9 +230,9 @@ mod weight_for {
 		proposal: impl Into<Weight>,
 	) -> Weight {
 		db.reads(2) // `is_member` + `contains_key`
-			+ 29_000_000 // constant
-			+ 3_000 * MAX_ASSUMED_PROPOSAL_BYTES // B
-			+ 220_000 * members.into() // M
+			.saturating_add(29_000_000) // constant
+			.saturating_add(3_000 * MAX_ASSUMED_PROPOSAL_BYTES) // B
+			.saturating_add(220_000 * members.into()) // M
 			.saturating_add(proposal.into()) // P1
 	}
 
@@ -269,9 +269,9 @@ mod weight_for {
 		proposals: impl Into<Weight>,
 	) -> Weight {
 		close_without_finalize(db, members)
-			+ db.reads(1) // `Prime`
-			+ db.reads_writes(1, 1) // `Proposals`
-			+ db.writes(1) // `Voting`
+			.saturating_add(db.reads(1)) // `Prime`
+			.saturating_add(db.reads_writes(1, 1)) // `Proposals`
+			.saturating_add(db.writes(1)) // `Voting`
 			.saturating_add(proposal_weight.into()) // P1
 			.saturating_add(490_000 * proposals.into()) // P2
 	}
