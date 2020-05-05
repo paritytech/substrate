@@ -18,20 +18,20 @@
 //! slashing behaviour.
 //!
 //! For being able to erase per session data, there exist per
-//! `session_index` and per `(session_index,prefix)` indices
-//! which track all entries which are associated with the `session_index`
-//! `(session_index,prefix)` respectively.
+//! `session_index` keyd index
+//! which tracks all entries which are associated with the `session_index`.
 //!
 //! The mapping is as follows
 //! ```markdown
-//! index0: session -> [(key,tree_prefix),(key,tree_prefix),..]
-//! index1: (session,tree_prefix) -> [key,key,key,..]
+//! session -> [(derived_key,tree_prefix),(derived_key,tree_prefix),..]
 //! ```
-//! where `key` is essentially a unique identifier, which is derived from
-//! the `digest` of the inserted data.
+//! where `derived_key` is a unique identifier derived from the `digest`
+//! of the associated data stored, `tree_prefix` as well as `session_index`.
+//! This allows direct re-use for pruning individual values.
 //!
-//! The implementation contains three (3) different prefix creating
-//! functions accordingly.
+//! The implementation contains two (2) different key deriving functions,
+//! one for the index and one for the actual key value pairs in order
+//! to disambiguate values in the underlying key value storage layer.
 //!
 //! Encoding and decoding is achieved by [`codec`](self::codec::Codec).
 
