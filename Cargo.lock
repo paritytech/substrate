@@ -4279,16 +4279,23 @@ dependencies = [
 name = "pallet-grandpa"
 version = "2.0.0-dev"
 dependencies = [
+ "finality-grandpa",
  "frame-support",
  "frame-system",
+ "pallet-balances",
  "pallet-finality-tracker",
+ "pallet-offences",
  "pallet-session",
+ "pallet-staking",
+ "pallet-staking-reward-curve",
+ "pallet-timestamp",
  "parity-scale-codec",
  "serde",
  "sp-application-crypto",
  "sp-core",
  "sp-finality-grandpa",
  "sp-io",
+ "sp-keyring",
  "sp-runtime",
  "sp-session",
  "sp-staking",
