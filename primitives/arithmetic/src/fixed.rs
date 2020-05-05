@@ -798,73 +798,161 @@ macro_rules! implement_fixed {
 				let accuracy = $name::accuracy();
 
 				let a = $name::from_rational(5, 2);
-				let b = $name::from_rational(-5, 2);
-				let c = $name::from_rational(5, -2);
-				let d = $name::from_rational(-5, -2);
-
-				let e = $name::from_rational(inner_max, accuracy);
-				let f = $name::from_rational(inner_min, accuracy);
-				let g = $name::from_rational(inner_max, -accuracy);
-				let h = $name::from_rational(inner_min, -accuracy);
-				let i = $name::from_rational(inner_min + 1, -accuracy);
-
-				let k = $name::from_rational(inner_max, 1);
-				let l = $name::from_rational(inner_min, 1);
-				let m = $name::from_rational(inner_min, -1);
-				let n = $name::from_rational(inner_max, -1);
-
-				let o = $name::from_rational(inner_max, inner_max);
-				let p = $name::from_rational(inner_min, inner_min);
-				let r = $name::from_rational(inner_max, -inner_max);
-				let s = $name::from_rational(-inner_max, inner_max);
-
-				let t = $name::from_rational(inner_max, 3 * accuracy);
-				let u = $name::from_rational(inner_max, -3 * accuracy);
-
-				let v = $name::from_rational(inner_min, 2 * accuracy);
-
-				let w = $name::from_rational(inner_min, accuracy / -3);
-				let x = $name::from_rational(inner_min, accuracy / 3);
-
-				let y = $name::from_rational(1, accuracy);
-				let z = $name::from_rational(1, -accuracy);
-
 				assert_eq!(a.into_inner(), 25 * accuracy / 10);
-				assert_eq!(b.saturating_mul_int(10),-25);
-				assert_eq!(c.saturating_mul_int(10), -25);
-				assert_eq!(d.saturating_mul_int(10), 25);
 
-				assert_eq!(e.into_inner(), inner_max);
-				assert_eq!(f.into_inner(), inner_min);
-				assert_eq!(g.into_inner(), -inner_max);
-				assert_eq!(h.into_inner(), inner_max);
-				assert_eq!(i.into_inner(), inner_max);
+				let a = $name::from_rational(-5, 2);
+				assert_eq!(a.saturating_mul_int(10),-25);
 
-				assert_eq!(k.into_inner(), inner_max);
-				assert_eq!(l.into_inner(), inner_min);
-				assert_eq!(m.into_inner(), inner_max);
-				assert_eq!(n.into_inner(), inner_min);
+				let a = $name::from_rational(5, -2);
+				assert_eq!(a.saturating_mul_int(10), -25);
 
-				assert_eq!(o.into_inner(), accuracy);
-				assert_eq!(p.into_inner(), accuracy);
-				assert_eq!(r.into_inner(), -accuracy);
-				assert_eq!(s.into_inner(), -accuracy);
+				let a = $name::from_rational(-5, -2);
+				assert_eq!(a.saturating_mul_int(10), 25);
 
-				assert_eq!(t.into_inner(), inner_max / 3);
-				assert_eq!(u.into_inner(), -inner_max / 3);
+				let a = $name::from_rational(inner_max, accuracy);
+				assert_eq!(a.into_inner(), inner_max);
 
-				assert_eq!(v.into_inner(), inner_min / 2);
-				assert_eq!(w.into_inner(), inner_max);
-				assert_eq!(x.into_inner(), inner_min);
+				let a = $name::from_rational(inner_min, accuracy);
+				assert_eq!(a.into_inner(), inner_min);
 
-				assert_eq!(y.into_inner(), 1);
-				assert_eq!(z.into_inner(), -1);
+				let a = $name::from_rational(inner_max, -accuracy);
+				assert_eq!(a.into_inner(), -inner_max);
+
+				let a = $name::from_rational(inner_min, -accuracy);
+				assert_eq!(a.into_inner(), inner_max);
+
+				let a = $name::from_rational(inner_min + 1, -accuracy);
+				assert_eq!(a.into_inner(), inner_max);
+
+				let a = $name::from_rational(inner_max - 1, accuracy);
+				assert_eq!(a.into_inner(), inner_max - 1);
+
+				let a = $name::from_rational(inner_min + 1, accuracy);
+				assert_eq!(a.into_inner(), inner_min + 1);
+
+				let a = $name::from_rational(inner_max, 1);
+				assert_eq!(a.into_inner(), inner_max);
+
+				let a = $name::from_rational(inner_min, 1);
+				assert_eq!(a.into_inner(), inner_min);
+
+				let a = $name::from_rational(inner_min, -1);
+				assert_eq!(a.into_inner(), inner_max);
+
+				let a = $name::from_rational(inner_max, -1);
+				assert_eq!(a.into_inner(), inner_min);
+
+				let a = $name::from_rational(inner_max, inner_max);
+				assert_eq!(a.into_inner(), accuracy);
+
+				let a = $name::from_rational(inner_min, inner_min);
+				assert_eq!(a.into_inner(), accuracy);
+
+				let a = $name::from_rational(inner_max, -inner_max);
+				assert_eq!(a.into_inner(), -accuracy);
+
+				let a = $name::from_rational(-inner_max, inner_max);
+				assert_eq!(a.into_inner(), -accuracy);
+
+				let a = $name::from_rational(inner_max, 3 * accuracy);
+				assert_eq!(a.into_inner(), inner_max / 3);
+
+				let a = $name::from_rational(inner_max, -3 * accuracy);
+				assert_eq!(a.into_inner(), -inner_max / 3);
+
+				let a = $name::from_rational(inner_min, 2 * accuracy);
+				assert_eq!(a.into_inner(), inner_min / 2);
+
+				let a = $name::from_rational(inner_min, accuracy / -3);
+				assert_eq!(a.into_inner(), inner_max);
+
+				let a = $name::from_rational(inner_min, accuracy / 3);
+				assert_eq!(a.into_inner(), inner_min);
+
+				let a = $name::from_rational(1, accuracy);
+				assert_eq!(a.into_inner(), 1);
+
+				let a = $name::from_rational(1, -accuracy);
+				assert_eq!(a.into_inner(), -1);
 
 				let a = $name::from_rational(1, accuracy + 1);
-				let b = $name::from_rational(1, -accuracy - 1);
-
 				assert_eq!(a.into_inner(), 0);
-				assert_eq!(b.into_inner(), 0);
+
+				let a = $name::from_rational(1, -accuracy - 1);
+				assert_eq!(a.into_inner(), 0);
+			}
+
+			#[test]
+			fn checked_from_rational_works() {
+				let inner_max = <$name as FixedPointNumber>::Inner::max_value();
+				let inner_min = <$name as FixedPointNumber>::Inner::min_value();
+				let accuracy = $name::accuracy();
+
+				let a = $name::checked_from_rational(inner_max, accuracy).unwrap();
+				assert_eq!(a.into_inner(), inner_max);
+
+				let a = $name::checked_from_rational(inner_min, accuracy).unwrap();
+				assert_eq!(a.into_inner(), inner_min);
+
+				let a = $name::checked_from_rational(inner_max, -accuracy).unwrap();
+				assert_eq!(a.into_inner(), -inner_max);
+
+				let a = $name::checked_from_rational(inner_min, -accuracy);
+				assert_eq!(a, None);
+
+				let a = $name::checked_from_rational(inner_min + 1, -accuracy).unwrap();
+				assert_eq!(a.into_inner(), inner_max);
+
+				let a = $name::checked_from_rational(inner_max - 1, accuracy).unwrap();
+				assert_eq!(a.into_inner(), inner_max - 1);
+
+				let a = $name::checked_from_rational(inner_min + 1, accuracy).unwrap();
+				assert_eq!(a.into_inner(), inner_min + 1);
+
+				let a = $name::checked_from_rational(inner_max, 1);
+				assert_eq!(a, None);
+
+				let a = $name::checked_from_rational(inner_min, 1);
+				assert_eq!(a, None);
+
+				let a = $name::checked_from_rational(inner_max, inner_max).unwrap();
+				assert_eq!(a.into_inner(), accuracy);
+
+				let a = $name::checked_from_rational(inner_min, inner_min).unwrap();
+				assert_eq!(a.into_inner(), accuracy);
+
+				let a = $name::checked_from_rational(inner_max, -inner_max).unwrap();
+				assert_eq!(a.into_inner(), -accuracy);
+
+				let a = $name::checked_from_rational(-inner_max, inner_max).unwrap();
+				assert_eq!(a.into_inner(), -accuracy);
+
+				let a = $name::checked_from_rational(inner_max, 3 * accuracy).unwrap();
+				assert_eq!(a.into_inner(), inner_max / 3);
+
+				let a = $name::checked_from_rational(inner_max, -3 * accuracy).unwrap();
+				assert_eq!(a.into_inner(), -inner_max / 3);
+
+				let a = $name::checked_from_rational(inner_min, 2 * accuracy).unwrap();
+				assert_eq!(a.into_inner(), inner_min / 2);
+
+				let a = $name::checked_from_rational(inner_min, accuracy / -3);
+				assert_eq!(a, None);
+
+				let a = $name::checked_from_rational(inner_min, accuracy / 3);
+				assert_eq!(a, None);
+
+				let a = $name::checked_from_rational(1, accuracy).unwrap();
+				assert_eq!(a.into_inner(), 1);
+
+				let a = $name::checked_from_rational(1, -accuracy).unwrap();
+				assert_eq!(a.into_inner(), -1);
+
+				let a = $name::checked_from_rational(1, accuracy + 1).unwrap();
+				assert_eq!(a.into_inner(), 0);
+
+				let a = $name::checked_from_rational(1, -accuracy - 1).unwrap();
+				assert_eq!(a.into_inner(), 0);
 			}
 
 			#[test]
@@ -874,18 +962,18 @@ macro_rules! implement_fixed {
 				let c = $name::from_integer(255);
 
 				assert_eq!(a.checked_mul_int(42i128), Some(21));
-				assert_eq!(b.checked_mul_int(42i128), Some(-21));
-				assert_eq!(c.checked_mul_int(2i128), Some(510));
-
-				assert_eq!(b.checked_mul_int(i128::max_value()), Some(i128::max_value() / -2));
-				assert_eq!(b.checked_mul_int(i128::min_value()), Some(i128::min_value() / -2));
-
-				assert_eq!(c.checked_mul_int(i128::max_value()), None);
-				assert_eq!(c.checked_mul_int(i128::min_value()), None);
-
 				assert_eq!(a.checked_mul_int(i128::max_value()), Some(i128::max_value() / 2));
 				assert_eq!(a.checked_mul_int(u64::max_value()), Some(u64::max_value() / 2));
 				assert_eq!(a.checked_mul_int(i128::min_value()), Some(i128::min_value() / 2));
+
+				assert_eq!(b.checked_mul_int(42i128), Some(-21));
+				assert_eq!(c.checked_mul_int(2i128), Some(510));
+				assert_eq!(b.checked_mul_int(i128::max_value()), Some(i128::max_value() / -2));
+				assert_eq!(b.checked_mul_int(i128::min_value()), Some(i128::min_value() / -2));
+
+				assert_eq!(c.checked_mul_int(2i8), None);
+				assert_eq!(c.checked_mul_int(i128::max_value()), None);
+				assert_eq!(c.checked_mul_int(i128::min_value()), None);
 			}
 
 			#[test]
@@ -934,33 +1022,6 @@ macro_rules! implement_fixed {
 				assert_eq!(b.checked_div_int(0), None);
 				assert_eq!(c.checked_div_int(0), None);
 				assert_eq!(d.checked_div_int(0), None);
-			}
-
-			#[test]
-			fn saturating_mul_int_works() {
-				let a = $name::from_rational(1, 2);
-				let b = $name::from_rational(1, -2);
-				let c = $name::from_integer(255);
-				let d = $name::from_integer(-1);
-
-				assert_eq!(a.saturating_mul_int(42i32), 21);
-				assert_eq!(b.saturating_mul_int(42i32), -21);
-
-				assert_eq!(c.saturating_mul_int(2i8), i8::max_value());
-				assert_eq!(c.saturating_mul_int(-2i8), i8::min_value());
-
-				assert_eq!(b.saturating_mul_int(i128::max_value()), i128::max_value() / -2);
-				assert_eq!(b.saturating_mul_int(i128::min_value()), i128::min_value() / -2);
-
-				assert_eq!(c.saturating_mul_int(i128::max_value()), i128::max_value());
-				assert_eq!(c.saturating_mul_int(i128::min_value()), i128::min_value());
-
-				assert_eq!(a.saturating_mul_int(i128::max_value()), i128::max_value() / 2);
-				assert_eq!(a.saturating_mul_int(u64::max_value()), u64::max_value() / 2);
-				assert_eq!(a.saturating_mul_int(i128::min_value()), i128::min_value() / 2);
-
-				assert_eq!(d.saturating_mul_int(i8::max_value()), -i8::max_value());
-				assert_eq!(d.saturating_mul_int(i8::min_value()), i8::max_value());
 			}
 
 			#[test]
