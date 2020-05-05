@@ -189,10 +189,11 @@ benchmarks_instance! {
 		assert_last_event::<T, I>(RawEvent::Proposed(caller, p - 1, proposal_hash, threshold).into());
 	}
 
-	vote_insert {
+	vote {
 		let m in 5 .. T::MaxMembers::get();
-		let p in 1 .. T::MaxProposals::get();
-		let b in 1 .. MAX_BYTES;
+
+		let p = T::MaxProposals::get();
+		let b = MAX_BYTES;
 
 		// Construct `members`.
 		let mut members = vec![];
@@ -236,7 +237,7 @@ benchmarks_instance! {
 		// Voter switches vote to nay, but does not kill the vote, just updates + inserts
 		let approve = false;
 
-	}: vote(SystemOrigin::Signed(voter), last_hash.clone(), index, approve)
+	}: _(SystemOrigin::Signed(voter), last_hash.clone(), index, approve)
 	verify {
 		// All proposals exist and the last proposal has just been updated.
 		assert_eq!(Collective::<T, _>::proposals().len(), p as usize);
@@ -293,7 +294,7 @@ benchmarks_instance! {
 		let approve = false;
 		Collective::<T, _>::vote(SystemOrigin::Signed(voter.clone()).into(), last_hash.clone(), index, approve)?;
 
-	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index)
+	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::max_value())
 	verify {
 		// The last proposal is removed.
 		assert_eq!(Collective::<T, _>::proposals().len(), (p - 1) as usize);
@@ -348,7 +349,7 @@ benchmarks_instance! {
 		let approve = true;
 		Collective::<T, _>::vote(SystemOrigin::Signed(caller.clone()).into(), last_hash.clone(), index, approve)?;
 
-	}: close(SystemOrigin::Signed(caller), last_hash.clone(), index)
+	}: close(SystemOrigin::Signed(caller), last_hash.clone(), index, Weight::max_value())
 	verify {
 		// The last proposal is removed.
 		assert_eq!(Collective::<T, _>::proposals().len(), (p - 1) as usize);
@@ -399,7 +400,7 @@ benchmarks_instance! {
 		assert_eq!(Collective::<T, _>::proposals().len(), p as usize);
 
 		// Prime nay will close it as disapproved
-	}: close(SystemOrigin::Signed(caller), last_hash, index)
+	}: close(SystemOrigin::Signed(caller), last_hash, index, Weight::max_value())
 	verify {
 		assert_eq!(Collective::<T, _>::proposals().len(), (p - 1) as usize);
 		assert_last_event::<T, I>(RawEvent::Disapproved(last_hash).into());
@@ -446,7 +447,7 @@ benchmarks_instance! {
 		assert_eq!(Collective::<T, _>::proposals().len(), p as usize);
 
 		// Prime aye will close it as approved
-	}: close(SystemOrigin::Signed(caller), last_hash, p - 1)
+	}: close(SystemOrigin::Signed(caller), last_hash, p - 1, Weight::max_value())
 	verify {
 		assert_eq!(Collective::<T, _>::proposals().len(), (p - 1) as usize);
 		assert_last_event::<T, I>(RawEvent::Executed(last_hash, false).into());
@@ -466,7 +467,7 @@ mod tests {
 			assert_ok!(test_benchmark_execute::<Test>());
 			assert_ok!(test_benchmark_propose_execute::<Test>());
 			assert_ok!(test_benchmark_propose_proposed::<Test>());
-			assert_ok!(test_benchmark_vote_insert::<Test>());
+			assert_ok!(test_benchmark_vote::<Test>());
 			assert_ok!(test_benchmark_close_early_disapproved::<Test>());
 			assert_ok!(test_benchmark_close_early_approved::<Test>());
 			assert_ok!(test_benchmark_close_disapproved::<Test>());
