@@ -212,12 +212,7 @@ decl_storage! {
 	add_extra_genesis {
 		config(authorities): AuthorityList;
 		build(|config| {
-			// NOTE: initialize first session of first set. this is necessary
-			// because we only update this `on_new_session` which isn't called
-			// for the genesis session.
-			SetIdSession::insert(0, 0);
-
-			Module::<T>::initialize_authorities(&config.authorities)
+			Module::<T>::initialize(&config.authorities)
 		})
 	}
 }
@@ -434,7 +429,9 @@ impl<T: Trait> Module<T> {
 		<frame_system::Module<T>>::deposit_log(log.into());
 	}
 
-	fn initialize_authorities(authorities: &AuthorityList) {
+	// Perform module initialization, abstracted so that it can be called either through genesis
+	// config builder or through `on_genesis_session`.
+	fn initialize(authorities: &AuthorityList) {
 		if !authorities.is_empty() {
 			assert!(
 				Self::grandpa_authorities().is_empty(),
@@ -442,6 +439,11 @@ impl<T: Trait> Module<T> {
 			);
 			Self::set_grandpa_authorities(authorities);
 		}
+
+		// NOTE: initialize first session of first set. this is necessary
+		// because we only update this `on_new_session` which isn't called
+		// for the genesis session.
+		SetIdSession::insert(0, 0);
 	}
 
 	/// Submits an extrinsic to report an equivocation. This method will sign an
@@ -508,7 +510,7 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T>
 		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
 	{
 		let authorities = validators.map(|(_, k)| (k, 1)).collect::<Vec<_>>();
-		Self::initialize_authorities(&authorities);
+		Self::initialize(&authorities);
 	}
 
 	fn on_new_session<'a, I: 'a>(changed: bool, validators: I, _queued_validators: I)
