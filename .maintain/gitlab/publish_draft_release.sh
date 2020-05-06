@@ -3,44 +3,12 @@
 # shellcheck source=lib.sh
 source "$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )/lib.sh"
 
-# Substrate labels for PRs we want to include in the release notes
-labels=(
-  'B1-runtimenoteworthy'
-  'B1-clientnoteworthy'
-  'B1-apinoteworthy'
-)
-
 version="$CI_COMMIT_TAG"
 
 # Note that this is not the last *tagged* version, but the last *published* version
 last_version=$(last_github_release 'paritytech/substrate')
-echo "[+] Version: $version; Previous version: $last_version"
 
-all_changes="$(sanitised_git_logs "$last_version" "$version")"
-labelled_changes=""
-echo "[+] Iterating through $(wc -l <<< "$all_changes") changes to find labelled PRs"
-while IFS= read -r line; do
-  pr_id=$(echo "$line" | sed -E 's/.*#([0-9]+)\)$/\1/')
-
-  # Skip if the PR has the silent label - this allows us to skip a few requests
-  if has_label 'paritytech/substrate' "$pr_id" 'B0-silent'; then
-    continue
-  fi
-  for label in "${labels[@]}"; do
-    if has_label 'paritytech/substrate' "$pr_id" "$label"; then
-      labelled_changes="$labelled_changes
-$line"
-    fi
-  done
-done <<< "$all_changes"
-
-
-release_text="Substrate $version
------------------
-$labelled_changes"
-
-echo "[+] Release text generated: "
-echo "$release_text"
+release_text="$(./generate_release_text.sh "$last_version" "$version")"
 
 echo "[+] Pushing release to github"
 # Create release on github

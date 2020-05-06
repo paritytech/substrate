@@ -16,12 +16,12 @@
 
 //! Different types of changes trie input pairs.
 
-use codec::{Decode, Encode, Input, Output, Error, Compact};
+use codec::{Decode, Encode, Input, Output, Error};
 use crate::{
 	StorageKey, StorageValue,
 	changes_trie::BlockNumber
 };
-use sp_core::storage::ChildChange;
+use sp_core::storage::{ChildChange, PrefixedStorageKey};
 
 /// Key of { changed key => set of extrinsic indices } mapping.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -50,7 +50,7 @@ pub struct ChildIndex<Number: BlockNumber> {
 	/// Block at which this key has been inserted in the trie.
 	pub block: Number,
 	/// Storage key this node is responsible for.
-	pub storage_key: StorageKey,
+	pub storage_key: PrefixedStorageKey,
 }
 
 /// Value of { changed key => block/digest block numbers } mapping.
@@ -58,41 +58,12 @@ pub type DigestIndexValue<Number> = Vec<Number>;
 
 /// Value of { changed key => block/digest block numbers } mapping.
 /// That is the .
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub struct ChildIndexValue {
 	/// Root of the child change trie.
 	pub changes_root: Option<Vec<u8>>,
 	/// Possible change occuring on the whole trie.
 	pub child_change: Vec<(ChildChange, u32)>,
-}
-
-impl Decode for ChildIndexValue {
-	fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
-		let changes_root = Decode::decode(input)?;
-		let nb_changes = <Compact<u32>>::decode(input)?.0;
-		let mut child_change = Vec::with_capacity(nb_changes as usize);
-		for _ in 0..nb_changes {
-			let change = match ChildChange::from_u8(input.read_byte()?) {
-				Some(change) => change,
-				None => return Err("Invalid child change".into()),
-			};
-			let ext_index = Decode::decode(input)?;
-			child_change.push((change, ext_index));
-		}
-
-		Ok(ChildIndexValue { changes_root, child_change })
-	}
-}
-
-impl Encode for ChildIndexValue {
-	fn encode_to<W: Output>(&self, dest: &mut W) {
-		self.changes_root.encode_to(dest);
-		<Compact<u32>>::encode_to(&(self.child_change.len() as u32).into(), dest);
-		for c in self.child_change.iter() {
-			dest.push_byte(c.0 as u8);
-			c.1.encode_to(dest);
-		}
-	}
 }
 
 /// Single input pair of changes trie.
@@ -214,7 +185,7 @@ impl<Number: BlockNumber> Decode for InputKey<Number> {
 			})),
 			3 => Ok(InputKey::ChildIndex(ChildIndex {
 				block: Decode::decode(input)?,
-				storage_key: Decode::decode(input)?,
+				storage_key: PrefixedStorageKey::new(Decode::decode(input)?),
 			})),
 			_ => Err("Invalid input key variant".into()),
 		}

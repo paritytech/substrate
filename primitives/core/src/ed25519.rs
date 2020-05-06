@@ -38,9 +38,12 @@ use crate::crypto::{Pair as TraitPair, DeriveJunction, SecretStringError};
 use crate::crypto::Ss58Codec;
 #[cfg(feature = "std")]
 use serde::{de, Serializer, Serialize, Deserializer, Deserialize};
-use crate::{crypto::{Public as TraitPublic, UncheckedFrom, CryptoType, Derive}};
+use crate::crypto::{Public as TraitPublic, CryptoTypePublicPair, UncheckedFrom, CryptoType, Derive, CryptoTypeId};
 use sp_runtime_interface::pass_by::PassByInner;
 use sp_std::ops::Deref;
+
+/// An identifier used to match public keys against ed25519 keys
+pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"ed25");
 
 /// A secret seed. It's not called a "secret key" because ring doesn't expose the secret keys
 /// of the key pair (yeah, dumb); as such we're forced to remember the seed manually if we
@@ -377,6 +380,18 @@ impl TraitPublic for Public {
 }
 
 impl Derive for Public {}
+
+impl From<Public> for CryptoTypePublicPair {
+    fn from(key: Public) -> Self {
+        (&key).into()
+    }
+}
+
+impl From<&Public> for CryptoTypePublicPair {
+    fn from(key: &Public) -> Self {
+        CryptoTypePublicPair(CRYPTO_ID, key.to_raw_vec())
+    }
+}
 
 /// Derive a single hard junction.
 #[cfg(feature = "full_crypto")]

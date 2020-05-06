@@ -113,19 +113,22 @@ use sp_std::{prelude::*, marker::PhantomData, fmt::Debug};
 use codec::{Codec, Encode, Decode};
 use sp_io::hashing::blake2_256;
 use sp_runtime::{
-	traits::{Hash, StaticLookup, Zero, MaybeSerializeDeserialize, Member, SignedExtension},
+	traits::{
+		Hash, StaticLookup, Zero, MaybeSerializeDeserialize, Member, SignedExtension,
+		DispatchInfoOf,
+	},
 	transaction_validity::{
 		ValidTransaction, InvalidTransaction, TransactionValidity, TransactionValidityError,
 	},
 	RuntimeDebug,
 };
 use frame_support::dispatch::{DispatchResult, Dispatchable};
+use frame_support::weights::MINIMUM_WEIGHT;
 use frame_support::{
 	Parameter, decl_module, decl_event, decl_storage, decl_error,
-	parameter_types, IsSubType, weights::DispatchInfo,
-	storage::child::{self, ChildInfo},
+	parameter_types, IsSubType, storage::child::{self, ChildInfo},
 };
-use frame_support::traits::{OnKilledAccount, OnUnbalanced, Currency, Get, Time, Randomness};
+use frame_support::traits::{OnUnbalanced, Currency, Get, Time, Randomness};
 use frame_system::{self as system, ensure_signed, RawOrigin, ensure_root};
 use pallet_contracts_primitives::{RentProjection, ContractAccessError};
 
@@ -225,13 +228,13 @@ pub struct RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
 
 impl<CodeHash, Balance, BlockNumber> RawAliveContractInfo<CodeHash, Balance, BlockNumber> {
 	/// Associated child trie unique id is built from the hash part of the trie id.
-	pub fn child_trie_unique_id(&self) -> ChildInfo {
-		trie_unique_id(&self.trie_id[..])
+	pub fn child_trie_info(&self) -> ChildInfo {
+		child_trie_info(&self.trie_id[..])
 	}
 }
 
 /// Associated child trie unique id is built from the hash part of the trie id.
-pub(crate) fn trie_unique_id(trie_id: &[u8]) -> ChildInfo {
+pub(crate) fn child_trie_info(trie_id: &[u8]) -> ChildInfo {
 	ChildInfo::new_default(trie_id)
 }
 
@@ -536,6 +539,7 @@ decl_module! {
 		/// Updates the schedule for metering contracts.
 		///
 		/// The schedule must have a greater version than the stored schedule.
+		#[weight = MINIMUM_WEIGHT]
 		pub fn update_schedule(origin, schedule: Schedule) -> DispatchResult {
 			ensure_root(origin)?;
 			if <Module<T>>::current_schedule().version >= schedule.version {
@@ -550,6 +554,7 @@ decl_module! {
 
 		/// Stores the given binary Wasm code into the chain's storage and returns its `codehash`.
 		/// You can instantiate contracts only with stored code.
+		#[weight = MINIMUM_WEIGHT]
 		pub fn put_code(
 			origin,
 			#[compact] gas_limit: Gas,
@@ -577,6 +582,7 @@ decl_module! {
 		/// * If the account is a regular account, any value will be transferred.
 		/// * If no account exists and the call value is not less than `existential_deposit`,
 		/// a regular account will be created and any value will be transferred.
+		#[weight = MINIMUM_WEIGHT]
 		pub fn call(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -602,6 +608,7 @@ decl_module! {
 		///   after the execution is saved as the `code` of the account. That code will be invoked
 		///   upon any call received by this account.
 		/// - The contract is initialized.
+		#[weight = MINIMUM_WEIGHT]
 		pub fn instantiate(
 			origin,
 			#[compact] endowment: BalanceOf<T>,
@@ -624,6 +631,7 @@ decl_module! {
 		///
 		/// If contract is not evicted as a result of this call, no actions are taken and
 		/// the sender is not eligible for the reward.
+		#[weight = MINIMUM_WEIGHT]
 		fn claim_surcharge(origin, dest: T::AccountId, aux_sender: Option<T::AccountId>) {
 			let origin = origin.into();
 			let (signed, rewarded) = match (origin, aux_sender) {
@@ -685,7 +693,7 @@ impl<T: Trait> Module<T> {
 			.get_alive()
 			.ok_or(ContractAccessError::IsTombstone)?;
 
-		let child_info = trie_unique_id(&contract_info.trie_id);
+		let child_info = child_trie_info(&contract_info.trie_id);
 		let maybe_value = AccountDb::<T>::get_storage(
 			&DirectAccountDb,
 			&address,
@@ -805,11 +813,11 @@ impl<T: Trait> Module<T> {
 		let key_values_taken = delta.iter()
 			.filter_map(|key| {
 				child::get_raw(
-					&origin_contract.child_trie_unique_id(),
+					&origin_contract.child_trie_info(),
 					&blake2_256(key),
 				).map(|value| {
 					child::kill(
-						&origin_contract.child_trie_unique_id(),
+						&origin_contract.child_trie_info(),
 						&blake2_256(key),
 					);
 
@@ -822,7 +830,7 @@ impl<T: Trait> Module<T> {
 			// This operation is cheap enough because last_write (delta not included)
 			// is not this block as it has been checked earlier.
 			&child::root(
-				&origin_contract.child_trie_unique_id(),
+				&origin_contract.child_trie_info(),
 			)[..],
 			code_hash,
 		);
@@ -830,7 +838,7 @@ impl<T: Trait> Module<T> {
 		if tombstone != dest_tombstone {
 			for (key, value) in key_values_taken {
 				child::put_raw(
-					&origin_contract.child_trie_unique_id(),
+					&origin_contract.child_trie_info(),
 					&blake2_256(key),
 					&value,
 				);
@@ -924,18 +932,6 @@ decl_storage! {
 		pub ContractInfoOf: map hasher(twox_64_concat) T::AccountId => Option<ContractInfo<T>>;
 		/// The price of one unit of gas.
 		GasPrice get(fn gas_price) config(): BalanceOf<T> = 1.into();
-	}
-}
-
-// TODO: this should be removed in favour of a self-destruct contract host function allowing the
-// contract to delete all storage and the `ContractInfoOf` key and transfer remaining balance to
-// some other account. As it stands, it's an economic insecurity on any smart-contract chain.
-// https://github.com/paritytech/substrate/issues/4952
-impl<T: Trait> OnKilledAccount<T::AccountId> for Module<T> {
-	fn on_killed_account(who: &T::AccountId) {
-		if let Some(ContractInfo::Alive(info)) = <ContractInfoOf<T>>::take(who) {
-			child::kill_storage(&info.child_trie_unique_id());
-		}
 	}
 }
 
@@ -1084,7 +1080,6 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckBlockGasLimit<T> {
 	type AccountId = T::AccountId;
 	type Call = <T as Trait>::Call;
 	type AdditionalSigned = ();
-	type DispatchInfo = DispatchInfo;
 	type Pre = ();
 
 	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
@@ -1093,7 +1088,7 @@ impl<T: Trait + Send + Sync> SignedExtension for CheckBlockGasLimit<T> {
 		&self,
 		_: &Self::AccountId,
 		call: &Self::Call,
-		_: Self::DispatchInfo,
+		_: &DispatchInfoOf<Self::Call>,
 		_: usize,
 	) -> TransactionValidity {
 		let call = match call.is_sub_type() {

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Client backend that uses RocksDB database as storage.
+//! Client backend that is backed by a database.
 //!
 //! # Canonicality vs. Finality
 //!
@@ -40,9 +40,13 @@ mod storage_cache;
 mod upgrade;
 mod utils;
 mod stats;
+#[cfg(feature = "parity-db")]
+mod parity_db;
+#[cfg(feature = "subdb")]
+mod subdb;
 
 use std::sync::Arc;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::io;
 use std::collections::HashMap;
 
@@ -57,8 +61,8 @@ use sp_blockchain::{
 };
 use codec::{Decode, Encode};
 use hash_db::Prefix;
-use kvdb::{KeyValueDB, DBTransaction};
 use sp_trie::{MemoryDB, PrefixedMemoryDB};
+use sp_database::Transaction;
 use parking_lot::RwLock;
 use sp_core::{ChangesTrieConfiguration, traits::CodeExecutor};
 use sp_core::storage::{well_known_keys, ChildInfo, ChildChange, ChildrenMap, ChildType};
@@ -73,9 +77,9 @@ use sc_executor::RuntimeInfo;
 use sp_state_machine::{
 	DBValue, ChangesTrieTransaction, ChangesTrieCacheAction, UsageInfo as StateUsageInfo,
 	StorageCollection, ChildStorageCollection,
-	backend::Backend as StateBackend,
+	backend::Backend as StateBackend, StateMachineStats,
 };
-use crate::utils::{DatabaseType, Meta, db_err, meta_keys, read_db, read_meta};
+use crate::utils::{DatabaseType, Meta, meta_keys, read_db, read_meta};
 use crate::changes_tries_storage::{DbChangesTrieStorage, DbChangesTrieStorageTransaction};
 use sc_client::leaves::{LeafSet, FinalizationDisplaced};
 use sc_state_db::StateDb;
@@ -83,14 +87,14 @@ use sp_blockchain::{CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache};
 use crate::storage_cache::{CachingState, SyncingCachingState, SharedCache, new_shared_cache};
 use crate::stats::StateUsageStats;
 use log::{trace, debug, warn};
-pub use sc_state_db::PruningMode;
 use prometheus_endpoint::Registry;
+
+// Re-export the Database trait so that one can pass an implementation of it.
+pub use sp_database::Database;
+pub use sc_state_db::PruningMode;
 
 #[cfg(any(feature = "kvdb-rocksdb", test))]
 pub use bench::BenchmarkingState;
-
-#[cfg(feature = "test-helpers")]
-use sc_client::in_mem::Backend as InMemoryBackend;
 
 const CANONICALIZATION_DELAY: u64 = 4096;
 const MIN_BLOCKS_TO_KEEP_CHANGES_TRIES_FOR: u32 = 32768;
@@ -103,8 +107,8 @@ pub type DbState<B> = sp_state_machine::TrieBackend<
 	Arc<dyn sp_state_machine::Storage<HashFor<B>>>, HashFor<B>
 >;
 
-/// Re-export the KVDB trait so that one can pass an implementation of it.
-pub use kvdb;
+/// Hash type that this backend uses for the database.
+pub type DbHash = [u8; 32];
 
 /// A reference tracking state.
 ///
@@ -220,7 +224,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 	fn child_storage_root<I>(
 		&self,
 		child_info: &ChildInfo,
-		child_change: ChildChange,
+		child_change: &ChildChange,
 		delta: I,
 	) -> (B::Hash, bool, Self::Transaction)
 		where
@@ -250,6 +254,14 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 	{
 		self.state.as_trie_backend()
 	}
+
+	fn register_overlay_stats(&mut self, stats: &StateMachineStats) {
+		self.state.register_overlay_stats(stats);
+	}
+
+	fn usage_info(&self) -> StateUsageInfo {
+		self.state.usage_info()
+	}
 }
 
 /// Database settings.
@@ -265,17 +277,42 @@ pub struct DatabaseSettings {
 }
 
 /// Where to find the database..
+#[derive(Clone)]
 pub enum DatabaseSettingsSrc {
-	/// Load a database from a given path. Recommended for most uses.
-	Path {
+	/// Load a RocksDB database from a given path. Recommended for most uses.
+	RocksDb {
 		/// Path to the database.
 		path: PathBuf,
-		/// Cache size in bytes. If `None` default is used.
-		cache_size: Option<usize>,
+		/// Cache size in MiB.
+		cache_size: usize,
+	},
+
+	/// Load a ParityDb database from a given path.
+	ParityDb {
+		/// Path to the database.
+		path: PathBuf,
+	},
+
+	/// Load a Subdb database from a given path.
+	SubDb {
+		/// Path to the database.
+		path: PathBuf,
 	},
 
 	/// Use a custom already-open database.
-	Custom(Arc<dyn KeyValueDB>),
+	Custom(Arc<dyn Database<DbHash>>),
+}
+
+impl DatabaseSettingsSrc {
+	/// Return dabase path for databases that are on the disk.
+	pub fn path(&self) -> Option<&Path> {
+		match self {
+			DatabaseSettingsSrc::RocksDb { path, .. } => Some(path.as_path()),
+			DatabaseSettingsSrc::ParityDb { path, .. } => Some(path.as_path()),
+			DatabaseSettingsSrc::SubDb { path, .. } => Some(path.as_path()),
+			DatabaseSettingsSrc::Custom(_) => None,
+		}
+	}
 }
 
 /// Create an instance of db-backed client.
@@ -343,26 +380,26 @@ struct PendingBlock<Block: BlockT> {
 }
 
 // wrapper that implements trait required for state_db
-struct StateMetaDb<'a>(&'a dyn KeyValueDB);
+struct StateMetaDb<'a>(&'a dyn Database<DbHash>);
 
 impl<'a> sc_state_db::MetaDb for StateMetaDb<'a> {
 	type Error = io::Error;
 
 	fn get_meta(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.0.get(columns::STATE_META, key).map(|r| r.map(|v| v.to_vec()))
+		Ok(self.0.get(columns::STATE_META, key))
 	}
 }
 
 /// Block database
 pub struct BlockchainDb<Block: BlockT> {
-	db: Arc<dyn KeyValueDB>,
+	db: Arc<dyn Database<DbHash>>,
 	meta: Arc<RwLock<Meta<NumberFor<Block>, Block::Hash>>>,
 	leaves: RwLock<LeafSet<Block::Hash, NumberFor<Block>>>,
 	header_metadata_cache: HeaderMetadataCache<Block>,
 }
 
 impl<Block: BlockT> BlockchainDb<Block> {
-	fn new(db: Arc<dyn KeyValueDB>) -> ClientResult<Self> {
+	fn new(db: Arc<dyn Database<DbHash>>) -> ClientResult<Self> {
 		let meta = read_meta::<Block>(&*db, columns::HEADER)?;
 		let leaves = LeafSet::read_from_db(&*db, columns::META, meta_keys::LEAF_PREFIX)?;
 		Ok(BlockchainDb {
@@ -411,6 +448,7 @@ impl<Block: BlockT> sc_client::blockchain::HeaderBackend<Block> for BlockchainDb
 			genesis_hash: meta.genesis_hash,
 			finalized_hash: meta.finalized_hash,
 			finalized_number: meta.finalized_number,
+			number_leaves: self.leaves.read().count(),
 		}
 	}
 
@@ -532,11 +570,11 @@ pub struct BlockImportOperation<Block: BlockT> {
 }
 
 impl<Block: BlockT> BlockImportOperation<Block> {
-	fn apply_aux(&mut self, transaction: &mut DBTransaction) {
+	fn apply_aux(&mut self, transaction: &mut Transaction<DbHash>) {
 		for (key, maybe_val) in self.aux_ops.drain(..) {
 			match maybe_val {
-				Some(val) => transaction.put_vec(columns::AUX, &key, val),
-				None => transaction.delete(columns::AUX, &key),
+				Some(val) => transaction.set_from_vec(columns::AUX, &key, val),
+				None => transaction.remove(columns::AUX, &key),
 			}
 		}
 	}
@@ -660,7 +698,7 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block> for Bloc
 }
 
 struct StorageDb<Block: BlockT> {
-	pub db: Arc<dyn KeyValueDB>,
+	pub db: Arc<dyn Database<DbHash>>,
 	pub state_db: StateDb<Block::Hash, Vec<u8>>,
 }
 
@@ -679,16 +717,61 @@ impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Bloc
 	}
 }
 
+/// Cursor over all child trie encoded nodes in db.
+pub fn child_trie_cursor<DB, H, S> (
+	db: &DB,
+	col: sp_database::ColumnId,
+	batch: sp_database::ChildBatchRemove,
+	state: &mut S,
+	action: fn(db: &DB, col: sp_database::ColumnId, key: &[u8], state: &mut S),
+) where
+	DB: sp_database::DatabaseRef,
+	H: hash_db::Hasher,
+	H::Out: Decode,
+{
+	let mut prefixed_key_buf = Vec::with_capacity(batch.keyspace.len() + 40);
+
+	// we ignore all error here, TODO EMCH  we could log it in some db dedicated key (like in meta)
+	if let Ok(root) = H::Out::decode(&mut batch.encoded_root.as_slice()) {
+		let ks_db = KeyspacedDB(db, &batch.keyspace, col);
+		if let Ok(trie) = sp_trie::TrieDB::<sp_trie::Layout<H>>::new(&ks_db, &root) {
+			if let Ok(iter) = sp_trie::TrieDBNodeIterator::new(&trie) {
+				for x in iter {
+					if let Ok((prefix, Some(key_hash), _)) = x {
+						prefixed_key_buf.clear();
+						prefixed_key_buf.extend_from_slice(&batch.keyspace[..]);
+						let trie_key = sp_trie::prefixed_key::<H>(&key_hash, prefix.as_prefix());
+						prefixed_key_buf.extend_from_slice(trie_key.as_slice());
+						action(db, col, prefixed_key_buf.as_slice(), state);
+					}
+				}
+			}
+		}
+	}
+}
+
+struct KeyspacedDB<'a, DB: sp_database::DatabaseRef>(&'a DB, &'a[u8], sp_database::ColumnId);
+
+impl<'a, H: hash_db::Hasher, DB: sp_database::DatabaseRef> hash_db::HashDBRef<H, Vec<u8>> for KeyspacedDB<'a, DB> {
+	fn get(&self, key: &H::Out, prefix: hash_db::Prefix) -> Option<Vec<u8>> {
+		let mut prefixed_key = Vec::with_capacity(self.1.len() + 40);
+		prefixed_key.extend_from_slice(&self.1[..]);
+		let trie_key = sp_trie::prefixed_key::<H>(key, prefix);
+		prefixed_key.extend_from_slice(trie_key.as_slice());
+		<DB as sp_database::DatabaseRef>::get(self.0, self.2, &prefixed_key)
+	}
+
+	fn contains(&self, key: &H::Out, prefix: hash_db::Prefix) -> bool {
+		<Self as hash_db::HashDBRef<H, Vec<u8>>>::get(self, key, prefix).is_some()
+	}
+}
+
 impl<Block: BlockT> sc_state_db::NodeDb for StorageDb<Block> {
 	type Error = io::Error;
 	type Key = [u8];
 
 	fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		// note this implementation should ONLY be call from state_db,
-		// as it rely on the fact that we address a key that is already
-		// prefixed with keyspace
-		self.db.get(columns::STATE, key)
-			.map(|r| r.map(|v| v.to_vec()))
+		Ok(self.db.get(columns::STATE, key))
 	}
 }
 
@@ -776,13 +859,24 @@ impl<Block: BlockT> Backend<Block> {
 	/// The pruning window is how old a block must be before the state is pruned.
 	pub fn new(config: DatabaseSettings, canonicalization_delay: u64) -> ClientResult<Self> {
 		let db = crate::utils::open_database::<Block>(&config, DatabaseType::Full)?;
-		Self::from_kvdb(db as Arc<_>, canonicalization_delay, &config)
+		Self::from_database(db as Arc<_>, canonicalization_delay, &config)
 	}
 
 	/// Create new memory-backed client backend for tests.
 	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn new_test(keep_blocks: u32, canonicalization_delay: u64) -> Self {
-		let db = Arc::new(kvdb_memorydb::create(crate::utils::NUM_COLUMNS));
+		let db = kvdb_memorydb::create(crate::utils::NUM_COLUMNS);
+		Self::new_test_memorydb(db, keep_blocks, canonicalization_delay)
+	}
+
+	/// Create new memory-backed client backend for tests.
+	#[cfg(any(test, feature = "test-helpers"))]
+	fn new_test_memorydb(
+		db: kvdb_memorydb::InMemory,
+		keep_blocks: u32,
+		canonicalization_delay: u64,
+	) -> Self {
+		let db = sp_database::as_database(db);
 		let db_setting = DatabaseSettings {
 			state_cache_size: 16777216,
 			state_cache_child_ratio: Some((50, 100)),
@@ -793,8 +887,26 @@ impl<Block: BlockT> Backend<Block> {
 		Self::new(db_setting, canonicalization_delay).expect("failed to create test-db")
 	}
 
-	fn from_kvdb(
-		db: Arc<dyn KeyValueDB>,
+
+	/// Create new memory-backed client backend for tests, using
+	/// parity-db
+	#[cfg(all(feature = "parity-db", any(test, feature = "test-helpers")))]
+	pub fn new_test_parity_db(keep_blocks: u32, canonicalization_delay: u64) -> Self {
+		use tempfile::tempdir;
+		let base_path = tempdir().expect("could not create a temp dir");
+		let db_setting = DatabaseSettings {
+			state_cache_size: 16777216,
+			state_cache_child_ratio: Some((50, 100)),
+			pruning: PruningMode::keep_blocks(keep_blocks),
+			source: DatabaseSettingsSrc::ParityDb {
+				path: base_path.path().into(),
+			},
+		};
+		Self::new(db_setting, canonicalization_delay).expect("failed to create test-db")
+	}
+
+	fn from_database(
+		db: Arc<dyn Database<DbHash>>,
 		canonicalization_delay: u64,
 		config: &DatabaseSettings,
 	) -> ClientResult<Self> {
@@ -843,62 +955,6 @@ impl<Block: BlockT> Backend<Block> {
 		})
 	}
 
-	/// Returns in-memory blockchain that contains the same set of blocks as self.
-	#[cfg(feature = "test-helpers")]
-	pub fn as_in_memory(&self) -> InMemoryBackend<Block> {
-		use sc_client_api::backend::{Backend as ClientBackend, BlockImportOperation};
-		use sc_client::blockchain::Backend as BlockchainBackend;
-
-		let inmem = InMemoryBackend::<Block>::new();
-
-		// get all headers hashes && sort them by number (could be duplicate)
-		let mut headers: Vec<(NumberFor<Block>, Block::Hash, Block::Header)> = Vec::new();
-		for (_, header) in self.blockchain.db.iter(columns::HEADER) {
-			let header = Block::Header::decode(&mut &header[..]).unwrap();
-			let hash = header.hash();
-			let number = *header.number();
-			let pos = headers.binary_search_by(|item| item.0.cmp(&number));
-			match pos {
-				Ok(pos) => headers.insert(pos, (number, hash, header)),
-				Err(pos) => headers.insert(pos, (number, hash, header)),
-			}
-		}
-
-		// insert all other headers + bodies + justifications
-		let info = self.blockchain.info();
-		for (number, hash, header) in headers {
-			let id = BlockId::Hash(hash);
-			let justification = self.blockchain.justification(id).unwrap();
-			let body = self.blockchain.body(id).unwrap();
-			let state = self.state_at(id).unwrap().pairs();
-
-			let new_block_state = if number.is_zero() {
-				NewBlockState::Final
-			} else if hash == info.best_hash {
-				NewBlockState::Best
-			} else {
-				NewBlockState::Normal
-			};
-			let mut op = inmem.begin_operation().unwrap();
-			op.set_block_data(header, body, justification, new_block_state).unwrap();
-			op.update_db_storage(vec![
-				(None, ChildChange::Update, state.into_iter().map(|(k, v)| (k, Some(v))).collect())
-			]).unwrap();
-			inmem.commit_operation(op).unwrap();
-		}
-
-		// and now finalize the best block we have
-		inmem.finalize_block(BlockId::Hash(info.finalized_hash), None).unwrap();
-
-		inmem
-	}
-
-	/// Returns total number of blocks (headers) in the block DB.
-	#[cfg(feature = "test-helpers")]
-	pub fn blocks_count(&self) -> u64 {
-		self.blockchain.db.iter(columns::HEADER).count() as u64
-	}
-
 	/// Handle setting head within a transaction. `route_to` should be the last
 	/// block that existed in the database. `best_to` should be the best block
 	/// to be set.
@@ -908,7 +964,7 @@ impl<Block: BlockT> Backend<Block> {
 	/// to be best, `route_to` should equal to `best_to`.
 	fn set_head_with_transaction(
 		&self,
-		transaction: &mut DBTransaction,
+		transaction: &mut Transaction<DbHash>,
 		route_to: Block::Hash,
 		best_to: (NumberFor<Block>, Block::Hash),
 	) -> ClientResult<(Vec<Block::Hash>, Vec<Block::Hash>)> {
@@ -958,7 +1014,7 @@ impl<Block: BlockT> Backend<Block> {
 		}
 
 		let lookup_key = utils::number_and_hash_to_lookup_key(best_to.0, &best_to.1)?;
-		transaction.put(columns::META, meta_keys::BEST_BLOCK, &lookup_key);
+		transaction.set_from_vec(columns::META, meta_keys::BEST_BLOCK, lookup_key);
 		utils::insert_number_to_key_mapping(
 			transaction,
 			columns::KEY_LOOKUP,
@@ -985,7 +1041,7 @@ impl<Block: BlockT> Backend<Block> {
 
 	fn finalize_block_with_transaction(
 		&self,
-		transaction: &mut DBTransaction,
+		transaction: &mut Transaction<DbHash>,
 		hash: &Block::Hash,
 		header: &Block::Header,
 		last_finalized: Option<Block::Hash>,
@@ -1006,10 +1062,10 @@ impl<Block: BlockT> Backend<Block> {
 		)?;
 
 		if let Some(justification) = justification {
-			transaction.put(
+			transaction.set_from_vec(
 				columns::JUSTIFICATION,
 				&utils::number_and_hash_to_lookup_key(number, hash)?,
-				&justification.encode(),
+				justification.encode(),
 			);
 		}
 		Ok((*hash, number, false, true))
@@ -1018,7 +1074,7 @@ impl<Block: BlockT> Backend<Block> {
 	// performs forced canonicalization with a delay after importing a non-finalized block.
 	fn force_delayed_canonicalize(
 		&self,
-		transaction: &mut DBTransaction,
+		transaction: &mut Transaction<DbHash>,
 		hash: Block::Hash,
 		number: NumberFor<Block>,
 	)
@@ -1052,7 +1108,7 @@ impl<Block: BlockT> Backend<Block> {
 	fn try_commit_operation(&self, mut operation: BlockImportOperation<Block>)
 		-> ClientResult<()>
 	{
-		let mut transaction = DBTransaction::new();
+		let mut transaction = Transaction::new();
 		let mut finalization_displaced_leaves = None;
 
 		operation.apply_aux(&mut transaction);
@@ -1104,17 +1160,17 @@ impl<Block: BlockT> Backend<Block> {
 				header_metadata,
 			);
 
-			transaction.put(columns::HEADER, &lookup_key, &pending_block.header.encode());
+			transaction.set_from_vec(columns::HEADER, &lookup_key, pending_block.header.encode());
 			if let Some(body) = &pending_block.body {
-				transaction.put(columns::BODY, &lookup_key, &body.encode());
+				transaction.set_from_vec(columns::BODY, &lookup_key, body.encode());
 			}
 			if let Some(justification) = pending_block.justification {
-				transaction.put(columns::JUSTIFICATION, &lookup_key, &justification.encode());
+				transaction.set_from_vec(columns::JUSTIFICATION, &lookup_key, justification.encode());
 			}
 
 			if number.is_zero() {
-				transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, &lookup_key);
-				transaction.put(columns::META, meta_keys::GENESIS_HASH, hash.as_ref());
+				transaction.set_from_vec(columns::META, meta_keys::FINALIZED_BLOCK, lookup_key);
+				transaction.set(columns::META, meta_keys::GENESIS_HASH, hash.as_ref());
 
 				// for tests, because config is set from within the reset_storage
 				if operation.changes_trie_config_update.is_none() {
@@ -1126,6 +1182,8 @@ impl<Block: BlockT> Backend<Block> {
 				let mut state_db_changeset: sc_state_db::ChangeSet<Vec<u8>> = sc_state_db::ChangeSet::default();
 				let mut ops: u64 = 0;
 				let mut bytes = 0;
+				let mut removal: u64 = 0;
+				let mut bytes_removal: u64 = 0;
 				let mut keyspace = Keyspaced::new(&[]);
 				for (info, (change, mut updates)) in operation.db_updates.into_iter() {
 					// child info with strong unique id are using the same state-db with prefixed key
@@ -1136,8 +1194,8 @@ impl<Block: BlockT> Backend<Block> {
 							info.child_type(),
 						)));
 					}
-					if change == ChildChange::BulkDeleteByKeyspace {
-						state_db_changeset.deleted_child.push(info.keyspace().to_vec());
+					if let ChildChange::BulkDelete(encoded_root) = change {
+						state_db_changeset.deleted_child.push((info.keyspace().to_vec(), encoded_root));
 					} else {
 						keyspace.change_keyspace(info.keyspace());
 						for (key, (val, rc)) in updates.drain() {
@@ -1152,15 +1210,28 @@ impl<Block: BlockT> Backend<Block> {
 
 								state_db_changeset.inserted.push((key, val.to_vec()));
 							} else if rc < 0 {
-								ops += 1;
-								bytes += key.len() as u64;
+								removal += 1;
+								bytes_removal += key.len() as u64;
+
 								state_db_changeset.deleted.push(key);
 							}
 						}
 					}
 				}
-				self.state_usage.tally_writes(ops, bytes as u64);
+				self.state_usage.tally_writes_nodes(ops, bytes);
+				self.state_usage.tally_removed_nodes(removal, bytes_removal);
 
+				let mut ops: u64 = 0;
+				let mut bytes: u64 = 0;
+				for (key, value) in operation.storage_updates.iter()
+					.chain(operation.child_storage_updates.iter().flat_map(|(_, _, s)| s.iter())) {
+						ops += 1;
+						bytes += key.len() as u64;
+						if let Some(v) = value.as_ref() {
+							bytes += v.len() as u64;
+						}
+				}
+				self.state_usage.tally_writes(ops, bytes);
 				let number_u64 = number.saturated_into::<u64>();
 				let commit = self.storage.state_db.insert_block(
 					&hash,
@@ -1267,31 +1338,17 @@ impl<Block: BlockT> Backend<Block> {
 			None
 		};
 
-		let write_result = self.storage.db.write(transaction).map_err(db_err);
+		self.storage.db.commit(transaction);
 
 		if let Some((
 			number,
 			hash,
 			enacted,
 			retracted,
-			displaced_leaf,
+			_displaced_leaf,
 			is_best,
 			mut cache,
 		)) = imported {
-			if let Err(e) = write_result {
-				let mut leaves = self.blockchain.leaves.write();
-				let mut undo = leaves.undo();
-				if let Some(displaced_leaf) = displaced_leaf {
-					undo.undo_import(displaced_leaf);
-				}
-
-				if let Some(finalization_displaced) = finalization_displaced_leaves {
-					undo.undo_finalization(finalization_displaced);
-				}
-
-				return Err(e)
-			}
-
 			cache.sync_cache(
 				&enacted,
 				&retracted,
@@ -1324,7 +1381,7 @@ impl<Block: BlockT> Backend<Block> {
 	// was not a child of the last finalized block.
 	fn note_finalized(
 		&self,
-		transaction: &mut DBTransaction,
+		transaction: &mut Transaction<DbHash>,
 		is_inserted: bool,
 		f_header: &Block::Header,
 		f_hash: Block::Hash,
@@ -1335,7 +1392,7 @@ impl<Block: BlockT> Backend<Block> {
 
 		if self.storage.state_db.best_canonical().map(|c| f_num.saturated_into::<u64>() > c).unwrap_or(true) {
 			let lookup_key = utils::number_and_hash_to_lookup_key(f_num, f_hash.clone())?;
-			transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, &lookup_key);
+			transaction.set_from_vec(columns::META, meta_keys::FINALIZED_BLOCK, lookup_key);
 
 			let commit = self.storage.state_db.canonicalize_block(&f_hash)
 				.map_err(|e: sc_state_db::Error<io::Error>| sp_blockchain::Error::from(format!("State database error: {:?}", e)))?;
@@ -1364,25 +1421,25 @@ impl<Block: BlockT> Backend<Block> {
 	}
 }
 
-fn apply_state_commit(transaction: &mut DBTransaction, commit: sc_state_db::CommitSet<Vec<u8>>) {
-	// state_db commit set is only for column STATE
+fn apply_state_commit(transaction: &mut Transaction<DbHash>, commit: sc_state_db::CommitSet<Vec<u8>>) {
 	for (key, val) in commit.data.inserted.into_iter() {
-		transaction.put(columns::STATE, &key[..], &val);
+		transaction.set_from_vec(columns::STATE, &key[..], val);
 	}
 	for key in commit.data.deleted.into_iter() {
-		transaction.delete(columns::STATE, &key[..]);
+		transaction.remove(columns::STATE, &key[..]);
 	}
-	for keyspace in commit.data.deleted_child.into_iter() {
-		transaction.delete_prefix(columns::STATE, &keyspace[..]);
+	for (keyspace, encoded_root) in commit.data.deleted_child.into_iter() {
+		let child_remove = sp_database::ChildBatchRemove {
+			encoded_root,
+			keyspace,
+		};
+		transaction.delete_child(columns::STATE, child_remove);
 	}
 	for (key, val) in commit.meta.inserted.into_iter() {
-		transaction.put(columns::STATE_META, &key[..], &val);
+		transaction.set_from_vec(columns::STATE_META, &key[..], val);
 	}
 	for key in commit.meta.deleted.into_iter() {
-		transaction.delete(columns::STATE_META, &key[..]);
-	}
-	for keyspace in commit.meta.deleted_child.into_iter() {
-		transaction.delete_prefix(columns::STATE_META, &keyspace[..]);
+		transaction.remove(columns::STATE_META, &key[..]);
 	}
 }
 
@@ -1394,19 +1451,19 @@ impl<Block> sc_client_api::backend::AuxStore for Backend<Block> where Block: Blo
 		I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>,
 		D: IntoIterator<Item=&'a &'b [u8]>,
 	>(&self, insert: I, delete: D) -> ClientResult<()> {
-		let mut transaction = DBTransaction::new();
+		let mut transaction = Transaction::new();
 		for (k, v) in insert {
-			transaction.put(columns::AUX, k, v);
+			transaction.set(columns::AUX, k, v);
 		}
 		for k in delete {
-			transaction.delete(columns::AUX, k);
+			transaction.remove(columns::AUX, k);
 		}
-		self.storage.db.write(transaction).map_err(db_err)?;
+		self.storage.db.commit(transaction);
 		Ok(())
 	}
 
 	fn get_aux(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
-		Ok(self.storage.db.get(columns::AUX, key).map(|r| r.map(|v| v.to_vec())).map_err(db_err)?)
+		Ok(self.storage.db.get(columns::AUX, key))
 	}
 }
 
@@ -1467,36 +1524,24 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	fn finalize_block(&self, block: BlockId<Block>, justification: Option<Justification>)
 		-> ClientResult<()>
 	{
-		let mut transaction = DBTransaction::new();
+		let mut transaction = Transaction::new();
 		let hash = self.blockchain.expect_block_hash_from_id(&block)?;
 		let header = self.blockchain.expect_header(block)?;
 		let mut displaced = None;
-		let commit = |displaced| {
-			let mut changes_trie_cache_ops = None;
-			let (hash, number, is_best, is_finalized) = self.finalize_block_with_transaction(
-				&mut transaction,
-				&hash,
-				&header,
-				None,
-				justification,
-				&mut changes_trie_cache_ops,
-				displaced,
-			)?;
-			self.storage.db.write(transaction).map_err(db_err)?;
-			self.blockchain.update_meta(hash, number, is_best, is_finalized);
-			self.changes_tries_storage.post_commit(changes_trie_cache_ops);
-			Ok(())
-		};
-		match commit(&mut displaced) {
-			Ok(()) => self.storage.state_db.apply_pending(),
-			e @ Err(_) => {
-				self.storage.state_db.revert_pending();
-				if let Some(displaced) = displaced {
-					self.blockchain.leaves.write().undo().undo_finalization(displaced);
-				}
-				return e;
-			}
-		}
+
+		let mut changes_trie_cache_ops = None;
+		let (hash, number, is_best, is_finalized) = self.finalize_block_with_transaction(
+			&mut transaction,
+			&hash,
+			&header,
+			None,
+			justification,
+			&mut changes_trie_cache_ops,
+			&mut displaced,
+		)?;
+		self.storage.db.commit(transaction);
+		self.blockchain.update_meta(hash, number, is_best, is_finalized);
+		self.changes_tries_storage.post_commit(changes_trie_cache_ops);
 		Ok(())
 	}
 
@@ -1511,11 +1556,12 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	fn usage_info(&self) -> Option<UsageInfo> {
 		let (io_stats, state_stats) = self.io_stats.take_or_else(||
 			(
-				self.storage.db.io_stats(kvdb::IoStatsKind::SincePrevious),
+				// TODO: implement DB stats and cache size retrieval
+				kvdb::IoStats::empty(),
 				self.state_usage.take(),
 			)
 		);
-		let database_cache = MemorySize::from_bytes(parity_util_mem::malloc_size(&*self.storage.db));
+		let database_cache = MemorySize::from_bytes(0);
 		let state_cache = MemorySize::from_bytes(
 			(*&self.shared_cache).lock().used_storage_cache_size(),
 		);
@@ -1535,8 +1581,10 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 				reads: io_stats.reads,
 				average_transaction_size: io_stats.avg_transaction_size() as u64,
 				state_reads: state_stats.reads.ops,
-				state_reads_cache: state_stats.cache_reads.ops,
 				state_writes: state_stats.writes.ops,
+				state_writes_cache: state_stats.overlay_writes.ops,
+				state_reads_cache: state_stats.cache_reads.ops,
+				state_writes_nodes: state_stats.nodes_writes.ops,
 			},
 		})
 	}
@@ -1559,7 +1607,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 				if best_number.is_zero() {
 					return Ok(c.saturated_into::<NumberFor<Block>>())
 				}
-				let mut transaction = DBTransaction::new();
+				let mut transaction = Transaction::new();
 				match self.storage.state_db.revert_one() {
 					Some(commit) => {
 						apply_state_commit(&mut transaction, commit);
@@ -1583,13 +1631,13 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 								removed_number,
 							),
 						)?;
-						transaction.put(columns::META, meta_keys::BEST_BLOCK, &key);
 						if update_finalized {
-							transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, &key);
+							transaction.set_from_vec(columns::META, meta_keys::FINALIZED_BLOCK, key.clone());
 						}
-						transaction.delete(columns::KEY_LOOKUP, removed.hash().as_ref());
+						transaction.set_from_vec(columns::META, meta_keys::BEST_BLOCK, key);
+						transaction.remove(columns::KEY_LOOKUP, removed.hash().as_ref());
 						children::remove_children(&mut transaction, columns::META, meta_keys::CHILDREN_PREFIX, best_hash);
-						self.storage.db.write(transaction).map_err(db_err)?;
+						self.storage.db.commit(transaction);
 						self.changes_tries_storage.post_commit(Some(changes_trie_cache_ops));
 						self.blockchain.update_meta(best_hash, best_number, true, update_finalized);
 					}
@@ -1603,12 +1651,12 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		let reverted = revert_blocks()?;
 
 		let revert_leaves = || -> ClientResult<()> {
-			let mut transaction = DBTransaction::new();
+			let mut transaction = Transaction::new();
 			let mut leaves = self.blockchain.leaves.write();
 
 			leaves.revert(best_hash, best_number);
 			leaves.prepare_transaction(&mut transaction, columns::META, meta_keys::LEAF_PREFIX);
-			self.storage.db.write(transaction).map_err(db_err)?;
+			self.storage.db.commit(transaction);
 
 			Ok(())
 		};
@@ -1884,11 +1932,244 @@ pub(crate) mod tests {
 		}
 	}
 
+	#[cfg(feature = "parity-db")]
 	#[test]
-	fn bulk_delete_child_trie() {
+	fn bulk_delete_child_trie_non_iterable_db() {
+		use kvdb::KeyValueDB;
+		let db = Backend::<Block>::new_test_parity_db(3, 0);
+
+		let mut count = 0;
+		let in_mem_ref_db = kvdb_memorydb::create(crate::utils::NUM_COLUMNS);
+		// implementing KeyValueDB for Arc<impl KeyValueDB> could avoid using
+		// this unsafe pointer.
+		let in_mem_ref: *const kvdb_memorydb::InMemory = &in_mem_ref_db;
+		let db_ref = Backend::<Block>::new_test_memorydb(in_mem_ref_db, 3, 0);
+
+		let child_info = sp_core::storage::ChildInfo::new_default(b"key1");
+
+		let (hash, child_root) = {
+			let mut op = db.begin_operation().unwrap();
+			let mut op_ref = db_ref.begin_operation().unwrap();
+			db.begin_state_operation(&mut op, BlockId::Hash(Default::default())).unwrap();
+			db_ref.begin_state_operation(&mut op_ref, BlockId::Hash(Default::default())).unwrap();
+			let mut header = Header {
+				number: 0,
+				parent_hash: Default::default(),
+				state_root: Default::default(),
+				digest: Default::default(),
+				extrinsics_root: Default::default(),
+			};
+
+			let storage = vec![];
+
+			let child_storage = vec![
+				(vec![2, 3, 5], Some(vec![4, 4, 6])),
+				(vec![2, 2, 3], Some(vec![7, 9, 9])),
+				(vec![1, 2, 3], Some(vec![7, 9, 8])),
+			];
+
+			header.state_root = op.old_state.full_storage_root(storage
+				.iter()
+				.cloned()
+				.map(|(x, y)| (x, Some(y))),
+				vec![(child_info.clone(), ChildChange::Update, child_storage.clone())],
+				false,
+			).0.into();
+			let hash = header.hash();
+
+			let mut children_default = HashMap::default();
+			children_default.insert(child_info.storage_key().to_vec(), sp_core::storage::StorageChild {
+				child_info: child_info.clone(),
+				child_change: Default::default(),
+				data: child_storage.iter().map(|(k, v)| (k.clone(), v.clone().unwrap())).collect(),
+			});
+			op.reset_storage(Storage {
+				top: storage.iter().cloned().collect(),
+				children_default: children_default.clone(),
+			}).unwrap();
+			op.set_block_data(
+				header.clone(),
+				Some(vec![]),
+				None,
+				NewBlockState::Best,
+			).unwrap();
+			db.commit_operation(op).unwrap();
+
+			op_ref.reset_storage(Storage {
+				top: storage.iter().cloned().collect(),
+				children_default,
+			}).unwrap();
+			op_ref.set_block_data(
+				header.clone(),
+				Some(vec![]),
+				None,
+				NewBlockState::Best,
+			).unwrap();
+			db_ref.commit_operation(op_ref).unwrap();
+
+			let state = db.state_at(BlockId::Number(0)).unwrap();
+
+			let child_root = state.storage(&child_info.prefixed_storage_key()[..])
+				.unwrap().unwrap();
+			assert_eq!(
+				state.child_storage(&child_info, &[2, 3, 5]).unwrap(),
+				Some(vec![4, 4, 6]),
+			);
+			assert_eq!(
+				state.child_storage(&child_info, &[2, 2, 3]).unwrap(),
+				Some(vec![7, 9, 9]),
+			);
+			assert_eq!(
+				state.child_storage(&child_info, &[2, 3, 5]).unwrap(),
+				Some(vec![4, 4, 6]),
+			);
+
+			for key in unsafe { in_mem_ref.as_ref() }.unwrap().iter(columns::STATE) {
+				assert!(db.storage.db.get(
+					columns::STATE,
+					&key.0
+				).is_some());
+				count += 1;
+			}
+			assert!(count > 0);
+			(hash, child_root)
+		};
+		let assert_count = |count_ref: usize, count: &mut usize| {
+			let mut new_count = 0;
+			for key in unsafe { in_mem_ref.as_ref() }.unwrap().iter(columns::STATE) {
+				assert!(db.storage.db.get(
+					columns::STATE,
+					&key.0
+				).is_some());
+				new_count += 1;
+			}
+			assert_eq!(new_count, count_ref);
+			*count = new_count;
+		};
+		let hash = {
+			let mut op = db.begin_operation().unwrap();
+			let mut op_ref = db_ref.begin_operation().unwrap();
+			db.begin_state_operation(&mut op, BlockId::Number(0)).unwrap();
+			db_ref.begin_state_operation(&mut op_ref, BlockId::Number(0)).unwrap();
+			let mut header = Header {
+				number: 1,
+				parent_hash: hash,
+				state_root: Default::default(),
+				digest: Default::default(),
+				extrinsics_root: Default::default(),
+			};
+			let storage = vec![];
+
+			let child_storage = vec![(
+				child_info.clone(),
+				ChildChange::BulkDelete(child_root),
+				vec![],
+			)];
+			let (root, overlay, _) = op.old_state.full_storage_root(storage
+				.iter()
+				.cloned(),
+				child_storage.clone(),
+				false,
+			);
+			op.update_db_storage(overlay.clone()).unwrap();
+			op_ref.update_db_storage(overlay).unwrap();
+			header.state_root = root.into();
+			op.update_storage(storage.clone(), child_storage.clone()).unwrap();
+			op_ref.update_storage(storage, child_storage).unwrap();
+
+			let hash = header.hash();
+
+			op.set_block_data(
+				header.clone(),
+				Some(vec![]),
+				None,
+				NewBlockState::Best,
+			).unwrap();
+
+			db.commit_operation(op).unwrap();
+
+			op_ref.set_block_data(
+				header,
+				Some(vec![]),
+				None,
+				NewBlockState::Best,
+			).unwrap();
+
+			db_ref.commit_operation(op_ref).unwrap();
+
+			let state = db.state_at(BlockId::Number(1)).unwrap();
+
+			assert_eq!(
+				state.child_storage(&child_info, &[2, 3, 5]).unwrap(),
+				None,
+			);
+			assert_eq!(
+				state.child_storage(&child_info, &[2, 2, 3]).unwrap(),
+				None,
+			);
+
+			let mut new_count = 0;
+			for key in unsafe { in_mem_ref.as_ref() }.unwrap().iter(columns::STATE) {
+				assert!(db.storage.db.get(
+					columns::STATE,
+					&key.0
+				).is_some());
+				new_count += 1;
+			}
+			// new state is empty root so it is not stored and keep count constant.
+			assert_count(count, &mut count);
+
+			hash
+		};
+
+		let next_block = |number, parent_hash| {
+			let mut op = db.begin_operation().unwrap();
+			let mut op_ref = db_ref.begin_operation().unwrap();
+			db.begin_state_operation(&mut op, BlockId::Number(number)).unwrap();
+			db_ref.begin_state_operation(&mut op_ref, BlockId::Number(number)).unwrap();
+			let header = Header {
+				number: number + 1,
+				parent_hash,
+				state_root: Default::default(),
+				digest: Default::default(),
+				extrinsics_root: Default::default(),
+			};
+
+			let hash = header.hash();
+			op.set_block_data(
+				header.clone(),
+				Some(vec![]),
+				None,
+				NewBlockState::Best,
+			).unwrap();
+
+			db.commit_operation(op).unwrap();
+
+			op_ref.set_block_data(
+				header,
+				Some(vec![]),
+				None,
+				NewBlockState::Best,
+			).unwrap();
+
+			db_ref.commit_operation(op_ref).unwrap();
+
+			hash
+		};
+		let hash = next_block(1, hash);
+		assert_count(count, &mut count);
+		let hash = next_block(2, hash);
+		assert_count(count, &mut count);
+		next_block(3, hash);
+		assert_count(0, &mut count);
+	}
+
+
+	#[test]
+	fn bulk_delete_child_trie_iterable_db() {
+		let backend = Backend::<Block>::new_test(2, 0);
 		let _ = ::env_logger::try_init();
 		let mut key = Vec::new();
-		let backend = Backend::<Block>::new_test(2, 0);
 		// This is not collision resistant but enough for the test.
 		let storage_key = b"unique_storage_key";
 
@@ -1924,9 +2205,9 @@ pub(crate) mod tests {
 			key.push(top.1.insert(EMPTY_PREFIX, b"hello3"));
 			let child = op.db_updates.entry(ChildInfo::new_default(storage_key))
 				.or_insert_with(Default::default);
-			key.push(child.1.insert(EMPTY_PREFIX, b"hello1"));
-			key.push(child.1.insert(EMPTY_PREFIX, b"hello2"));
-			key.push(child.1.insert(EMPTY_PREFIX, b"hello3"));
+			key.push(child.1.insert(EMPTY_PREFIX, b"hello4"));
+			key.push(child.1.insert(EMPTY_PREFIX, b"hello5"));
+			key.push(child.1.insert(EMPTY_PREFIX, b"hello6"));
 			op.set_block_data(
 				header,
 				Some(vec![]),
@@ -1938,11 +2219,11 @@ pub(crate) mod tests {
 			assert_eq!(backend.storage.db.get(
 				columns::STATE,
 				&sp_trie::prefixed_key::<BlakeTwo256>(&key[0], EMPTY_PREFIX)
-			).unwrap().unwrap(), &b"hello1"[..]);
+			).unwrap(), &b"hello1"[..]);
 			assert_eq!(backend.storage.db.get(
 				columns::STATE,
 				&sp_trie::prefixed_key::<BlakeTwo256>(&key[3], (storage_key, None))
-			).unwrap().unwrap(), &b"hello1"[..]);
+			).unwrap(), &b"hello4"[..]);
 			hash
 		};
 
@@ -1968,9 +2249,12 @@ pub(crate) mod tests {
 			).0.into();
 			let hash = header.hash();
 
-			let child = op.db_updates.entry(ChildInfo::new_default(storage_key))
+			let child_info = ChildInfo::new_default(storage_key);
+			let child = op.db_updates.entry(child_info)
 				.or_insert_with(Default::default);
-			child.0 = ChildChange::BulkDeleteByKeyspace; 
+			// this test bulk deletion on by keyspace, the root in parameter
+			// is unused.
+			child.0 = ChildChange::BulkDelete(Default::default());
 			op.set_block_data(
 				header,
 				Some(vec![]),
@@ -1982,11 +2266,11 @@ pub(crate) mod tests {
 			assert_eq!(backend.storage.db.get(
 				columns::STATE,
 				&sp_trie::prefixed_key::<BlakeTwo256>(&key[0], EMPTY_PREFIX)
-			).unwrap().unwrap(), &b"hello1"[..]);
+			).unwrap(), &b"hello1"[..]);
 			assert_eq!(backend.storage.db.get(
 				columns::STATE,
 				&sp_trie::prefixed_key::<BlakeTwo256>(&key[3], (storage_key, None))
-			).unwrap().unwrap(), &b"hello1"[..]);
+			).unwrap(), &b"hello4"[..]);
 			hash
 		};
 
@@ -2022,11 +2306,11 @@ pub(crate) mod tests {
 			assert_eq!(backend.storage.db.get(
 				columns::STATE,
 				&sp_trie::prefixed_key::<BlakeTwo256>(&key[0], EMPTY_PREFIX)
-			).unwrap().unwrap(), &b"hello1"[..]);
+			).unwrap(), &b"hello1"[..]);
 			assert_eq!(backend.storage.db.get(
 				columns::STATE,
 				&sp_trie::prefixed_key::<BlakeTwo256>(&key[3], (storage_key, None))
-			).unwrap().unwrap(), &b"hello1"[..]);
+			).unwrap(), &b"hello4"[..]);
 			hash
 		};
 
@@ -2061,15 +2345,15 @@ pub(crate) mod tests {
 		assert_eq!(backend.storage.db.get(
 			columns::STATE,
 			&sp_trie::prefixed_key::<BlakeTwo256>(&key[0], EMPTY_PREFIX)
-		).unwrap().unwrap(), &b"hello1"[..]);
+		).unwrap(), &b"hello1"[..]);
 		assert!(backend.storage.db.get(
 			columns::STATE,
 			&sp_trie::prefixed_key::<BlakeTwo256>(&key[3], (storage_key, None))
-		).unwrap().is_none());
+		).is_none());
 		assert!(backend.storage.db.get(
 			columns::STATE,
 			&sp_trie::prefixed_key::<BlakeTwo256>(&key[4], (storage_key, None))
-		).unwrap().is_none());
+		).is_none());
 	}
 
 	#[test]
@@ -2229,7 +2513,7 @@ pub(crate) mod tests {
 			assert_eq!(backend.storage.db.get(
 				columns::STATE,
 				&sp_trie::prefixed_key::<BlakeTwo256>(&key, EMPTY_PREFIX)
-			).unwrap().unwrap(), &b"hello"[..]);
+			).unwrap(), &b"hello"[..]);
 			hash
 		};
 
@@ -2272,7 +2556,7 @@ pub(crate) mod tests {
 			assert_eq!(backend.storage.db.get(
 				columns::STATE,
 				&sp_trie::prefixed_key::<BlakeTwo256>(&key, EMPTY_PREFIX)
-			).unwrap().unwrap(), &b"hello"[..]);
+			).unwrap(), &b"hello"[..]);
 			hash
 		};
 
@@ -2313,7 +2597,7 @@ pub(crate) mod tests {
 			assert!(backend.storage.db.get(
 				columns::STATE,
 				&sp_trie::prefixed_key::<BlakeTwo256>(&key, EMPTY_PREFIX)
-			).unwrap().is_some());
+			).is_some());
 			hash
 		};
 
@@ -2347,7 +2631,7 @@ pub(crate) mod tests {
 			assert!(backend.storage.db.get(
 				columns::STATE,
 				&sp_trie::prefixed_key::<BlakeTwo256>(&key, EMPTY_PREFIX)
-			).unwrap().is_none());
+			).is_none());
 		}
 
 		backend.finalize_block(BlockId::Number(1), None).unwrap();
@@ -2356,7 +2640,7 @@ pub(crate) mod tests {
 		assert!(backend.storage.db.get(
 			columns::STATE,
 			&sp_trie::prefixed_key::<BlakeTwo256>(&key, EMPTY_PREFIX)
-		).unwrap().is_none());
+		).is_none());
 	}
 
 	#[test]

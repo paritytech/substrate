@@ -21,12 +21,18 @@
 use proc_macro::TokenStream;
 
 mod impl_runtime_apis;
+mod mock_impl_runtime_apis;
 mod decl_runtime_apis;
 mod utils;
 
 #[proc_macro]
 pub fn impl_runtime_apis(input: TokenStream) -> TokenStream {
 	impl_runtime_apis::impl_runtime_apis_impl(input)
+}
+
+#[proc_macro]
+pub fn mock_impl_runtime_apis(input: TokenStream) -> TokenStream {
+	mock_impl_runtime_apis::mock_impl_runtime_apis_impl(input)
 }
 
 #[proc_macro]

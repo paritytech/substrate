@@ -21,13 +21,12 @@ use std::{
 	result,
 };
 use log::{info, trace, warn};
-use futures::channel::mpsc;
 use parking_lot::{Mutex, RwLock};
 use codec::{Encode, Decode};
 use hash_db::Prefix;
 use sp_core::{
-	ChangesTrieConfiguration, convert_hash, traits::CodeExecutor,
-	NativeOrEncoded, storage::{StorageKey, StorageData, well_known_keys, ChildInfo},
+	ChangesTrieConfiguration, convert_hash, traits::CodeExecutor, NativeOrEncoded,
+	storage::{StorageKey, PrefixedStorageKey, StorageData, well_known_keys, ChildInfo},
 };
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_runtime::{
@@ -78,6 +77,7 @@ pub use sc_client_api::{
 	notifications::{StorageNotifications, StorageEventStream},
 	CallExecutor, ExecutorProvider, ProofProvider, CloneableSpawn,
 };
+use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sp_blockchain::Error;
 use prometheus_endpoint::Registry;
 
@@ -93,8 +93,8 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	backend: Arc<B>,
 	executor: E,
 	storage_notifications: Mutex<StorageNotifications<Block>>,
-	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<BlockImportNotification<Block>>>>,
-	finality_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<FinalityNotification<Block>>>>,
+	import_notification_sinks: Mutex<Vec<TracingUnboundedSender<BlockImportNotification<Block>>>>,
+	finality_notification_sinks: Mutex<Vec<TracingUnboundedSender<FinalityNotification<Block>>>>,
 	// holds the block hash currently being imported. TODO: replace this with block queue
 	importing_block: RwLock<Option<Block::Hash>>,
 	block_rules: BlockRules<Block>,
@@ -260,7 +260,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			backend.begin_state_operation(&mut op, BlockId::Hash(Default::default()))?;
 			let state_root = op.reset_storage(genesis_storage)?;
 			let genesis_block = genesis::construct_genesis_block::<Block>(state_root.into());
-			info!("Initializing Genesis block/state (state: {}, header-hash: {})",
+			info!("🔨 Initializing Genesis block/state (state: {}, header-hash: {})",
 				genesis_block.header().state_root(),
 				genesis_block.header().hash()
 			);
@@ -344,7 +344,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		last: Block::Hash,
 		min: Block::Hash,
 		max: Block::Hash,
-		storage_key: Option<&StorageKey>,
+		storage_key: Option<&PrefixedStorageKey>,
 		key: &StorageKey,
 		cht_size: NumberFor<Block>,
 	) -> sp_blockchain::Result<ChangesProof<Block::Header>> {
@@ -393,7 +393,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 			fn with_cached_changed_keys(
 				&self,
 				root: &Block::Hash,
-				functor: &mut dyn FnMut(&HashMap<Option<Vec<u8>>, HashSet<Vec<u8>>>),
+				functor: &mut dyn FnMut(&HashMap<Option<PrefixedStorageKey>, HashSet<Vec<u8>>>),
 			) -> bool {
 				self.storage.with_cached_changed_keys(root, functor)
 			}
@@ -442,7 +442,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 					number: last_number,
 				},
 				max_number,
-				storage_key.as_ref().map(|x| &x.0[..]),
+				storage_key,
 				&key.0,
 			)
 			.map_err(|err| sp_blockchain::Error::ChangesTrieAccessFailed(err))?;
@@ -617,11 +617,20 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 		if let Ok(ImportResult::Imported(ref aux)) = result {
 			if aux.is_new_best {
-				telemetry!(SUBSTRATE_INFO; "block.import";
-					"height" => height,
-					"best" => ?hash,
-					"origin" => ?origin
-				);
+				use rand::Rng;
+				
+				// don't send telemetry block import events during initial sync for every
+				// block to avoid spamming the telemetry server, these events will be randomly
+				// sent at a rate of 1/10.
+				if origin != BlockOrigin::NetworkInitialSync ||
+					rand::thread_rng().gen_bool(0.1)
+				{
+					telemetry!(SUBSTRATE_INFO; "block.import";
+						"height" => height,
+						"best" => ?hash,
+						"origin" => ?origin
+					);
+				}
 			}
 		}
 
@@ -1152,7 +1161,7 @@ impl<B, E, Block, RA> ProofProvider<Block> for Client<B, E, Block, RA> where
 		last: Block::Hash,
 		min: Block::Hash,
 		max: Block::Hash,
-		storage_key: Option<&StorageKey>,
+		storage_key: Option<&PrefixedStorageKey>,
 		key: &StorageKey,
 	) -> sp_blockchain::Result<ChangesProof<Block::Header>> {
 		self.key_changes_proof_with_cht_size(
@@ -1351,7 +1360,7 @@ impl<B, E, Block, RA> StorageProvider<Block, B> for Client<B, E, Block, RA> wher
 		&self,
 		first: NumberFor<Block>,
 		last: BlockId<Block>,
-		storage_key: Option<&StorageKey>,
+		storage_key: Option<&PrefixedStorageKey>,
 		key: &StorageKey
 	) -> sp_blockchain::Result<Vec<(NumberFor<Block>, u32)>> {
 		let last_number = self.backend.blockchain().expect_block_number_from_id(&last)?;
@@ -1382,7 +1391,7 @@ impl<B, E, Block, RA> StorageProvider<Block, B> for Client<B, E, Block, RA> wher
 				range_first,
 				&range_anchor,
 				best_number,
-				storage_key.as_ref().map(|x| &x.0[..]),
+				storage_key,
 				&key.0)
 				.and_then(|r| r.map(|r| r.map(|(block, tx)| (block, tx))).collect::<Result<_, _>>())
 				.map_err(|err| sp_blockchain::Error::ChangesTrieAccessFailed(err))?;
@@ -1763,13 +1772,13 @@ where
 {
 	/// Get block import event stream.
 	fn import_notification_stream(&self) -> ImportNotifications<Block> {
-		let (sink, stream) = mpsc::unbounded();
+		let (sink, stream) = tracing_unbounded("mpsc_import_notification_stream");
 		self.import_notification_sinks.lock().push(sink);
 		stream
 	}
 
 	fn finality_notification_stream(&self) -> FinalityNotifications<Block> {
-		let (sink, stream) = mpsc::unbounded();
+		let (sink, stream) = tracing_unbounded("mpsc_finality_notification_stream");
 		self.finality_notification_sinks.lock().push(sink);
 		stream
 	}
@@ -3021,9 +3030,9 @@ pub(crate) mod tests {
 				state_cache_size: 1 << 20,
 				state_cache_child_ratio: None,
 				pruning: PruningMode::ArchiveAll,
-				source: DatabaseSettingsSrc::Path {
+				source: DatabaseSettingsSrc::RocksDb {
 					path: tmp.path().into(),
-					cache_size: None,
+					cache_size: 128,
 				}
 			},
 			u64::max_value(),
@@ -3223,9 +3232,9 @@ pub(crate) mod tests {
 					state_cache_size: 1 << 20,
 					state_cache_child_ratio: None,
 					pruning: PruningMode::keep_blocks(1),
-					source: DatabaseSettingsSrc::Path {
+					source: DatabaseSettingsSrc::RocksDb {
 						path: tmp.path().into(),
-						cache_size: None,
+						cache_size: 128,
 					}
 				},
 				u64::max_value(),

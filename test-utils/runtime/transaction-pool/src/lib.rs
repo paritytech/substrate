@@ -25,6 +25,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, Hash as HashT},
 	transaction_validity::{
 		TransactionValidity, ValidTransaction, TransactionValidityError, InvalidTransaction,
+		TransactionSource,
 	},
 };
 use std::collections::{HashSet, HashMap};
@@ -180,6 +181,7 @@ impl sc_transaction_graph::ChainApi for TestApi {
 	fn validate_transaction(
 		&self,
 		_at: &BlockId<Self::Block>,
+		_source: TransactionSource,
 		uxt: sc_transaction_graph::ExtrinsicFor<Self>,
 	) -> Self::ValidationFuture {
 		self.validation_requests.write().push(uxt.clone());

@@ -23,11 +23,26 @@ use sp_std::vec::Vec;
 pub use sp_core::sr25519::*;
 
 mod app {
+	use sp_core::crypto::{CryptoTypePublicPair, Public as TraitPublic};
 	use sp_core::testing::SR25519;
+	use sp_core::sr25519::CRYPTO_ID;
+
 	crate::app_crypto!(super, SR25519);
 
 	impl crate::traits::BoundToRuntimeAppPublic for Public {
 		type Public = Self;
+	}
+
+	impl From<Public> for CryptoTypePublicPair {
+		fn from(key: Public) -> Self {
+			(&key).into()
+		}
+	}
+
+	impl From<&Public> for CryptoTypePublicPair {
+		fn from(key: &Public) -> Self {
+			CryptoTypePublicPair(CRYPTO_ID, key.to_raw_vec())
+		}
 	}
 }
 

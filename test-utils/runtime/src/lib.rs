@@ -36,6 +36,7 @@ use sp_runtime::{
 	ApplyExtrinsicResult, create_runtime_str, Perbill, impl_opaque_keys,
 	transaction_validity::{
 		TransactionValidity, ValidTransaction, TransactionValidityError, InvalidTransaction,
+		TransactionSource,
 	},
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
@@ -46,7 +47,7 @@ use sp_version::RuntimeVersion;
 pub use sp_core::hash::H256;
 #[cfg(any(feature = "std", test))]
 use sp_version::NativeVersion;
-use frame_support::{impl_outer_origin, parameter_types, weights::Weight};
+use frame_support::{impl_outer_origin, parameter_types, weights::{Weight, RuntimeDbWeight}};
 use sp_inherents::{CheckInherentsResult, InherentData};
 use cfg_if::cfg_if;
 
@@ -66,6 +67,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_version: 2,
 	impl_version: 2,
 	apis: RUNTIME_API_VERSIONS,
+	transaction_version: 1,
 };
 
 fn version() -> RuntimeVersion {
@@ -176,6 +178,16 @@ impl ExtrinsicT for Extrinsic {
 
 	fn new(call: Self::Call, _signature_payload: Option<Self::SignaturePayload>) -> Option<Self> {
 		Some(call)
+	}
+}
+
+impl sp_runtime::traits::Dispatchable for Extrinsic {
+	type Origin = ();
+	type Trait = ();
+	type Info = ();
+	type PostInfo = ();
+	fn dispatch(self, _origin: Self::Origin) -> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
+		panic!("This implemention should not be used for actual dispatch.");
 	}
 }
 
@@ -368,6 +380,10 @@ parameter_types! {
 	pub const BlockHashCount: BlockNumber = 250;
 	pub const MinimumPeriod: u64 = 5;
 	pub const MaximumBlockWeight: Weight = 4 * 1024 * 1024;
+	pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
+		read: 100,
+		write: 1000,
+	};
 	pub const MaximumBlockLength: u32 = 4 * 1024 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 }
@@ -385,12 +401,13 @@ impl frame_system::Trait for Runtime {
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
+	type DbWeight = ();
 	type MaximumBlockLength = MaximumBlockLength;
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
 	type ModuleToIndex = ();
 	type AccountData = ();
-	type MigrateAccount = (); type OnNewAccount = ();
+	type OnNewAccount = ();
 	type OnKilledAccount = ();
 }
 
@@ -491,7 +508,10 @@ cfg_if! {
 			}
 
 			impl sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block> for Runtime {
-				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
+				fn validate_transaction(
+					_source: TransactionSource,
+					utx: <Block as BlockT>::Extrinsic,
+				) -> TransactionValidity {
 					if let Extrinsic::IncludeData(data) = utx {
 						return Ok(ValidTransaction {
 							priority: data.len() as u64,
@@ -678,7 +698,10 @@ cfg_if! {
 			}
 
 			impl sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block> for Runtime {
-				fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
+				fn validate_transaction(
+					_source: TransactionSource,
+					utx: <Block as BlockT>::Extrinsic,
+				) -> TransactionValidity {
 					if let Extrinsic::IncludeData(data) = utx {
 						return Ok(ValidTransaction{
 							priority: data.len() as u64,

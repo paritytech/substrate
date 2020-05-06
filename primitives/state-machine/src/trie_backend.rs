@@ -207,7 +207,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 	fn child_storage_root<I>(
 		&self,
 		child_info: &ChildInfo,
-		child_change: ChildChange,
+		child_change: &ChildChange,
 		delta: I,
 	) -> (H::Out, bool, Self::Transaction)
 	where
@@ -218,9 +218,9 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 			ChildType::ParentKeyId => empty_child_trie_root::<Layout<H>>()
 		};
 
-		if child_change == ChildChange::BulkDeleteByKeyspace {
+		if let ChildChange::BulkDelete(_encoded_root) = &child_change {
 			let mut tx = ChildrenMap::default();
-			tx.insert(child_info.clone(), (child_change, Default::default()));
+			tx.insert(child_info.clone(), (child_change.clone(), Default::default()));
 			(default_root, true, tx)
 		} else {
 			let mut write_overlay = S::Overlay::default();
@@ -256,13 +256,19 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 			let is_default = root == default_root;
 
 			let mut tx = ChildrenMap::default();
-			tx.insert(child_info.clone(), (child_change, write_overlay));
+			tx.insert(child_info.clone(), (child_change.clone(), write_overlay));
 			(root, is_default, tx)
 		}
 	}
 
 	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {
 		Some(self)
+	}
+
+	fn register_overlay_stats(&mut self, _stats: &crate::stats::StateMachineStats) { }
+
+	fn usage_info(&self) -> crate::UsageInfo {
+		crate::UsageInfo::empty()
 	}
 }
 

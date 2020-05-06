@@ -383,7 +383,6 @@ impl<'a, S, H> hash_db::HashDBRef<H, DBValue> for BackendStorageDBRef<'a, S, H> 
 	}
 }
 
-
 /// Key-value pairs storage that is used by trie backend essence.
 pub trait TrieBackendStorageRef<H: Hasher> {
 	/// Type of in-memory overlay.

@@ -67,25 +67,7 @@ decl_storage! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn on_initialize(_n: T::BlockNumber) {
-			CachedObsolete::<T>::remove_all();
-		}
-		fn on_runtime_upgrade() {
-			migration::migrate::<T>();
-		}
-	}
-}
-
-mod migration {
-	use super::*;
-	pub fn migrate<T: Trait>() {
-		if let Some((begin, end)) = StoredRange::get() {
-			for i in begin..end {
-				HistoricalSessions::<T>::migrate_key_from_blake(i);
-			}
-		}
-	}
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 }
 
 impl<T: Trait> Module<T> {
@@ -328,12 +310,12 @@ impl<T: Trait, D: AsRef<[u8]>> frame_support::traits::KeyOwnerProofSystem<(KeyTy
 mod tests {
 	use super::*;
 	use sp_core::crypto::key_types::DUMMY;
-	use sp_runtime::{traits::OnInitialize, testing::UintAuthorityId};
+	use sp_runtime::testing::UintAuthorityId;
 	use crate::mock::{
 		NEXT_VALIDATORS, force_new_session,
 		set_next_validators, Test, System, Session,
 	};
-	use frame_support::traits::KeyOwnerProofSystem;
+	use frame_support::traits::{KeyOwnerProofSystem, OnInitialize};
 
 	type Historical = Module<Test>;
 

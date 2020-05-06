@@ -29,5 +29,5 @@ mod pool;
 pub use pool::*;
 
 pub use sp_runtime::transaction_validity::{
-	TransactionLongevity, TransactionPriority, TransactionTag,
+	TransactionLongevity, TransactionPriority, TransactionTag, TransactionSource,
 };

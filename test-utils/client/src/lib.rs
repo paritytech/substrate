@@ -66,6 +66,8 @@ impl GenesisInit for () {
 pub struct TestClientBuilder<Block: BlockT, Executor, Backend, G: GenesisInit> {
 	execution_strategies: ExecutionStrategies,
 	genesis_init: G,
+	/// The key is an unprefixed storage key, this only contains
+	/// default child trie content.
 	child_storage_extension: HashMap<Vec<u8>, StorageChild>,
 	backend: Arc<Backend>,
 	_executor: std::marker::PhantomData<Executor>,
@@ -88,11 +90,26 @@ impl<Block: BlockT, Executor, G: GenesisInit> TestClientBuilder<Block, Executor,
 		Self::with_backend(backend)
 	}
 
+	/// Create new `TestClientBuilder` with parity-db backend.
+	#[cfg(feature = "parity-db")]
+	pub fn with_parity_backend() -> Self {
+		let backend = Arc::new(Backend::new_test_parity_db(std::u32::MAX, std::u64::MAX));
+		Self::with_backend(backend)
+	}
+
 	/// Create new `TestClientBuilder` with default backend and pruning window size
 	pub fn with_pruning_window(keep_blocks: u32) -> Self {
 		let backend = Arc::new(Backend::new_test(keep_blocks, 0));
 		Self::with_backend(backend)
 	}
+
+	/// Create new `TestClientBuilder` with parity-db backend and pruning window size
+	#[cfg(feature = "parity-db")]
+	pub fn with_pruning_window_and_parity_db(keep_blocks: u32) -> Self {
+		let backend = Arc::new(Backend::new_test_parity_db(keep_blocks, 0));
+		Self::with_backend(backend)
+	}
+
 }
 
 impl<Block: BlockT, Executor, Backend, G: GenesisInit> TestClientBuilder<Block, Executor, Backend, G> {

@@ -1,0 +1,13 @@
+[package]
+name = "sp-chain-spec"
+version = "2.0.0-dev"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+license = "GPL-3.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+description = "Substrate chain configurations types."
+
+[dependencies]
+serde = { version = "1.0.101", features = ["derive"] }
+serde_json = "1.0.41"

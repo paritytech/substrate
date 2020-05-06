@@ -25,17 +25,16 @@ pub use crate::backend::{Account, Log, Vicinity, Backend};
 
 use sp_std::{vec::Vec, marker::PhantomData};
 use frame_support::{ensure, decl_module, decl_storage, decl_event, decl_error};
-use frame_support::weights::{Weight, DispatchClass, FunctionOf};
+use frame_support::weights::{Weight, MINIMUM_WEIGHT, DispatchClass, FunctionOf, Pays};
 use frame_support::traits::{Currency, WithdrawReason, ExistenceRequirement};
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::ModuleId;
-use frame_support::weights::SimpleDispatchInfo;
 use sp_core::{U256, H256, H160, Hasher};
 use sp_runtime::{
 	DispatchResult, traits::{UniqueSaturatedInto, AccountIdConversion, SaturatedConversion},
 };
 use sha3::{Digest, Keccak256};
-use evm::{ExitReason, ExitSucceed, ExitError};
+use evm::{ExitReason, ExitSucceed, ExitError, Config};
 use evm::executor::StackExecutor;
 use evm::backend::ApplyBackend;
 
@@ -116,6 +115,8 @@ impl Precompiles for () {
 	}
 }
 
+static ISTANBUL_CONFIG: Config = Config::istanbul();
+
 /// EVM module trait
 pub trait Trait: frame_system::Trait + pallet_timestamp::Trait {
 	/// Calculator for current gas price.
@@ -125,9 +126,14 @@ pub trait Trait: frame_system::Trait + pallet_timestamp::Trait {
 	/// Currency type for deposit and withdraw.
 	type Currency: Currency<Self::AccountId>;
 	/// The overarching event type.
-	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
 	/// Precompiles associated with this EVM engine.
 	type Precompiles: Precompiles;
+
+	/// EVM config used in the module.
+	fn config() -> &'static Config {
+		&ISTANBUL_CONFIG
+	}
 }
 
 decl_storage! {
@@ -140,11 +146,17 @@ decl_storage! {
 
 decl_event! {
 	/// EVM events
-	pub enum Event {
+	pub enum Event<T> where
+		<T as frame_system::Trait>::AccountId,
+	{
 		/// Ethereum events from contracts.
 		Log(Log),
 		/// A contract has been created at given address.
 		Created(H160),
+		/// A deposit has been made at a given address.
+		BalanceDeposit(AccountId, H160, U256),
+		/// A withdrawal has been made from a given address.
+		BalanceWithdraw(AccountId, H160, U256),
 	}
 }
 
@@ -178,7 +190,7 @@ decl_module! {
 		fn deposit_event() = default;
 
 		/// Deposit balance from currency/balances module into EVM.
-		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
+		#[weight = MINIMUM_WEIGHT]
 		fn deposit_balance(origin, value: BalanceOf<T>) {
 			let sender = ensure_signed(origin)?;
 
@@ -195,10 +207,11 @@ decl_module! {
 			Accounts::mutate(&address, |account| {
 				account.balance += bvalue;
 			});
+			Module::<T>::deposit_event(Event::<T>::BalanceDeposit(sender, address, bvalue));
 		}
 
 		/// Withdraw balance from EVM into currency/balances module.
-		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
+		#[weight = MINIMUM_WEIGHT]
 		fn withdraw_balance(origin, value: BalanceOf<T>) {
 			let sender = ensure_signed(origin)?;
 			let address = T::ConvertAccountId::convert_account_id(&sender);
@@ -218,10 +231,16 @@ decl_module! {
 			Accounts::insert(&address, account);
 
 			T::Currency::resolve_creating(&sender, imbalance);
+			Module::<T>::deposit_event(Event::<T>::BalanceWithdraw(sender, address, bvalue));
 		}
 
 		/// Issue an EVM call operation. This is similar to a message call transaction in Ethereum.
-		#[weight = FunctionOf(|(_, _, _, gas_limit, gas_price, _): (&H160, &Vec<u8>, &U256, &u32, &U256, &Option<U256>)| (*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit), DispatchClass::Normal, true)]
+		#[weight = FunctionOf(
+			|(_, _, _, gas_limit, gas_price, _): (&H160, &Vec<u8>, &U256, &u32, &U256, &Option<U256>)|
+				(*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit as Weight),
+			DispatchClass::Normal,
+			Pays::Yes,
+		)]
 		fn call(
 			origin,
 			target: H160,
@@ -252,7 +271,12 @@ decl_module! {
 
 		/// Issue an EVM create operation. This is similar to a contract creation transaction in
 		/// Ethereum.
-		#[weight = FunctionOf(|(_, _, gas_limit, gas_price, _): (&Vec<u8>, &U256, &u32, &U256, &Option<U256>)| (*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit), DispatchClass::Normal, true)]
+		#[weight = FunctionOf(
+			|(_, _, gas_limit, gas_price, _): (&Vec<u8>, &U256, &u32, &U256, &Option<U256>)|
+				(*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit as Weight),
+			DispatchClass::Normal,
+			Pays::Yes,
+		)]
 		fn create(
 			origin,
 			init: Vec<u8>,
@@ -282,12 +306,17 @@ decl_module! {
 				},
 			)?;
 
-			Module::<T>::deposit_event(Event::Created(create_address));
+			Module::<T>::deposit_event(Event::<T>::Created(create_address));
 			Ok(())
 		}
 
 		/// Issue an EVM create2 operation.
-		#[weight = FunctionOf(|(_, _, _, gas_limit, gas_price, _): (&Vec<u8>, &H256, &U256, &u32, &U256, &Option<U256>)| (*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit), DispatchClass::Normal, true)]
+		#[weight = FunctionOf(
+			|(_, _, _, gas_limit, gas_price, _): (&Vec<u8>, &H256, &U256, &u32, &U256, &Option<U256>)|
+				(*gas_price).saturated_into::<Weight>().saturating_mul(*gas_limit as Weight),
+			DispatchClass::Normal,
+			Pays::Yes,
+		)]
 		fn create2(
 			origin,
 			init: Vec<u8>,
@@ -320,7 +349,7 @@ decl_module! {
 				},
 			)?;
 
-			Module::<T>::deposit_event(Event::Created(create_address));
+			Module::<T>::deposit_event(Event::<T>::Created(create_address));
 			Ok(())
 		}
 	}
@@ -381,7 +410,7 @@ impl<T: Trait> Module<T> {
 		let mut executor = StackExecutor::new_with_precompile(
 			&backend,
 			gas_limit as usize,
-			&backend::GASOMETER_CONFIG,
+			T::config(),
 			T::Precompiles::execute,
 		);
 

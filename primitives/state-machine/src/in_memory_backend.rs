@@ -20,6 +20,7 @@ use crate::{
 	StorageKey, StorageValue, StorageCollection,
 	trie_backend::TrieBackend,
 	backend::{Backend, insert_into_memory_db},
+	stats::UsageInfo,
 };
 use std::{error, fmt, collections::{BTreeMap, HashMap}, marker::PhantomData, ops};
 use sp_core::{Hasher, InnerHasher};
@@ -184,7 +185,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 
 	fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>, Self::Error> {
 		Ok(self.inner.get(&None).and_then(|(change, map)| {
-			debug_assert!(change != &ChildChange::BulkDeleteByKeyspace);
+			debug_assert!(!matches!(change, ChildChange::BulkDelete(..)));
 			map.get(key).map(Clone::clone)
 		}))
 	}
@@ -195,7 +196,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 		key: &[u8],
 	) -> Result<Option<StorageValue>, Self::Error> {
 		Ok(self.inner.get(&Some(child_info.to_owned()))
-			.filter(|(change, _)| change != &ChildChange::BulkDeleteByKeyspace)
+			.filter(|(change, _)| !matches!(change, ChildChange::BulkDelete(..)))
 			.and_then(|(_, map)| map.get(key).map(Clone::clone)))
 	}
 
@@ -219,7 +220,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 		mut f: F,
 	) {
 		self.inner.get(&Some(child_info.to_owned()))
-			.filter(|(change, _)| change != &ChildChange::BulkDeleteByKeyspace)
+			.filter(|(change, _)| !matches!(change, ChildChange::BulkDelete(..)))
 			.map(|(_, map)| map.keys().for_each(|k| f(&k)));
 	}
 
@@ -230,7 +231,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 		f: F,
 	) {
 		self.inner.get(&Some(child_info.to_owned()))
-			.filter(|(change, _)| change != &ChildChange::BulkDeleteByKeyspace)
+			.filter(|(change, _)| !matches!(change, ChildChange::BulkDelete(..)))
 			.map(|(_, map)| map.keys().filter(|key| key.starts_with(prefix)).map(|k| &**k).for_each(f));
 	}
 
@@ -258,7 +259,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 	fn child_storage_root<I>(
 		&self,
 		child_info: &ChildInfo,
-		child_change: ChildChange,
+		child_change: &ChildChange,
 		delta: I,
 	) -> (H::Out, bool, Self::Transaction)
 	where
@@ -267,13 +268,13 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 	{
 		let child_type = child_info.child_type();
 		let child_info = Some(child_info.to_owned());
-		let (root, full_transaction, is_default) = if child_change == ChildChange::BulkDeleteByKeyspace {
+		let (root, full_transaction, is_default) = if let ChildChange::BulkDelete(..) = child_change {
 			let root = empty_child_trie_root::<Layout<H>>();
 			(root, Default::default(), true)
 		} else {
 			let existing_pairs = self.inner.get(&child_info)
 				.map(|(change, map)| {
-					debug_assert!(change != &ChildChange::BulkDeleteByKeyspace);
+					debug_assert!(!matches!(change, ChildChange::BulkDelete(..)));
 					(change, map)
 				})
 				.into_iter()
@@ -295,7 +296,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 		};
 
 
-		(root, is_default, vec![(child_info, child_change, full_transaction)])
+		(root, is_default, vec![(child_info, child_change.clone(), full_transaction)])
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<StorageKey>, Self::Error> {
@@ -313,7 +314,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 	) -> Result<Option<StorageKey>, Self::Error> {
 		let range = (ops::Bound::Excluded(key), ops::Bound::Unbounded);
 		let next_key = self.inner.get(&Some(child_info.to_owned()))
-			.filter(|(change, _)| change != &ChildChange::BulkDeleteByKeyspace)
+			.filter(|(change, _)| !matches!(change, ChildChange::BulkDelete(..)))
 			.and_then(|(_, map)| map.range::<[u8], _>(range).next().map(|(k, _)| k).cloned());
 
 		Ok(next_key)
@@ -339,7 +340,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 		prefix: &[u8],
 	) -> Vec<StorageKey> {
 		self.inner.get(&Some(child_info.to_owned()))
-			.filter(|(change, _)| change != &ChildChange::BulkDeleteByKeyspace)
+			.filter(|(change, _)| !matches!(change, ChildChange::BulkDelete(..)))
 			.into_iter()
 			.flat_map(|(_, map)| map.keys().filter(|k| k.starts_with(prefix)).cloned())
 			.collect()
@@ -351,16 +352,16 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 		let mut root_map = None;
 		for (child_info, (child_change, map)) in &self.inner {
 			if let Some(child_info) = child_info.as_ref() {
-				if child_change == &ChildChange::BulkDeleteByKeyspace {
+				if let ChildChange::BulkDelete(..) = child_change {
 					// we do not need to delete the existing root because we start from
 					// an empty db and there is no possible existing value for it.
 				} else {
 					let prefix_storage_key = child_info.prefixed_storage_key();
 					let ch = insert_into_memory_db::<H, _>(&mut mdb, map.clone().into_iter())?;
-					new_child_roots.push((prefix_storage_key, ch.as_ref().into()));
+					new_child_roots.push((prefix_storage_key.into_inner(), ch.as_ref().into()));
 				}
 			} else {
-				debug_assert!(child_change != &ChildChange::BulkDeleteByKeyspace);
+				debug_assert!(!matches!(child_change, ChildChange::BulkDelete(..)));
 				root_map = Some(map);
 			}
 		}
@@ -376,6 +377,16 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: Codec {
 		};
 		self.trie = Some(TrieBackend::new(mdb, root));
 		self.trie.as_ref()
+	}
+
+	fn register_overlay_stats(&mut self, _stats: &crate::stats::StateMachineStats) { }
+
+	fn usage_info(&self) -> UsageInfo {
+		UsageInfo::empty()
+	}
+
+	fn wipe(&self) -> Result<(), Self::Error> {
+		Ok(())
 	}
 }
 

@@ -240,7 +240,7 @@ fn initiate_recovery_works() {
 		assert_eq!(Balances::reserved_balance(1), 10);
 		// Recovery status object is created correctly
 		let recovery_status = ActiveRecovery {
-			created: 1,
+			created: 0,
 			deposit: 10,
 			friends: vec![],
 		};
@@ -288,7 +288,7 @@ fn vouch_recovery_works() {
 		assert_ok!(Recovery::vouch_recovery(Origin::signed(3), 5, 1));
 		// Final recovery status object is updated correctly
 		let recovery_status = ActiveRecovery {
-			created: 1,
+			created: 0,
 			deposit: 10,
 			friends: vec![2, 3, 4],
 		};

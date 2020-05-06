@@ -21,6 +21,7 @@ mod tests;
 
 /// Re-export the API for backward compatibility.
 pub use sc_rpc_api::offchain::*;
+use sc_rpc_api::DenyUnsafe;
 use self::error::{Error, Result};
 use sp_core::{
 	Bytes,
@@ -34,13 +35,15 @@ use std::sync::Arc;
 pub struct Offchain<T: OffchainStorage> {
 	/// Offchain storage
 	storage: Arc<RwLock<T>>,
+	deny_unsafe: DenyUnsafe,
 }
 
 impl<T: OffchainStorage> Offchain<T> {
 	/// Create new instance of Offchain API.
-	pub fn new(storage: T) -> Self {
+	pub fn new(storage: T, deny_unsafe: DenyUnsafe) -> Self {
 		Offchain {
 			storage: Arc::new(RwLock::new(storage)),
+			deny_unsafe,
 		}
 	}
 }
@@ -48,6 +51,8 @@ impl<T: OffchainStorage> Offchain<T> {
 impl<T: OffchainStorage + 'static> OffchainApi for Offchain<T> {
 	/// Set offchain local storage under given key and prefix.
 	fn set_local_storage(&self, kind: StorageKind, key: Bytes, value: Bytes) -> Result<()> {
+		self.deny_unsafe.check_if_safe()?;
+
 		let prefix = match kind {
 			StorageKind::PERSISTENT => sp_offchain::STORAGE_PREFIX,
 			StorageKind::LOCAL => return Err(Error::UnavailableStorageKind),
@@ -58,6 +63,8 @@ impl<T: OffchainStorage + 'static> OffchainApi for Offchain<T> {
 
 	/// Get offchain local storage under given key and prefix.
 	fn get_local_storage(&self, kind: StorageKind, key: Bytes) -> Result<Option<Bytes>> {
+		self.deny_unsafe.check_if_safe()?;
+
 		let prefix = match kind {
 			StorageKind::PERSISTENT => sp_offchain::STORAGE_PREFIX,
 			StorageKind::LOCAL => return Err(Error::UnavailableStorageKind),

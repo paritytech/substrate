@@ -38,7 +38,7 @@ use rpc::{
 	futures::stream::Stream,
 };
 
-use sc_rpc_api::Subscriptions;
+use sc_rpc_api::{Subscriptions, state::ReadProof};
 use sp_blockchain::{Error as ClientError, HeaderBackend};
 use sc_client::{
 	BlockchainEvents,
@@ -48,13 +48,13 @@ use sc_client::{
 	},
 };
 use sp_core::{
-	Bytes, OpaqueMetadata, storage::{StorageKey, StorageData, StorageChangeSet},
+	Bytes, OpaqueMetadata,
+	storage::{StorageKey, PrefixedStorageKey, StorageData, StorageChangeSet},
 };
 use sp_version::RuntimeVersion;
 use sp_runtime::{generic::BlockId, traits::{Block as BlockT, HashFor}};
 
-use super::{StateBackend, ChildStateBackend, error::{FutureResult, Error}, client_err,
-	child_resolution_error};
+use super::{StateBackend, ChildStateBackend, error::{FutureResult, Error}, client_err};
 
 /// Storage data map of storage keys => (optional) storage value.
 type StorageMap = HashMap<StorageKey, Option<StorageData>>;
@@ -242,55 +242,6 @@ impl<Block, F, Client> StateBackend<Block, Client> for LightState<Block, F, Clie
 		)
 	}
 
-	fn child_storage_keys(
-		&self,
-		_block: Option<Block::Hash>,
-		_child_storage_key: StorageKey,
-		_child_info: StorageKey,
-		_child_type: u32,
-		_prefix: StorageKey,
-	) -> FutureResult<Vec<StorageKey>> {
-		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
-	}
-
-	fn child_storage(
-		&self,
-		block: Option<Block::Hash>,
-		child_storage_key: StorageKey,
-		_child_info: StorageKey,
-		child_type: u32,
-		key: StorageKey,
-	) -> FutureResult<Option<StorageData>> {
-		if child_type != 1 {
-			return Box::new(result(Err(child_resolution_error())));
-		}
-		ChildStateBackend::storage(
-			self,
-			block,
-			child_storage_key,
-			key,
-		)
-	}
-
-	fn child_storage_hash(
-		&self,
-		block: Option<Block::Hash>,
-		child_storage_key: StorageKey,
-		_child_info: StorageKey,
-		child_type: u32,
-		key: StorageKey,
-	) -> FutureResult<Option<Block::Hash>> {
-		if child_type != 1 {
-			return Box::new(result(Err(child_resolution_error())));
-		}
-		ChildStateBackend::storage_hash(
-			self,
-			block,
-			child_storage_key,
-			key,
-		)
-	}
-
 	fn metadata(&self, block: Option<Block::Hash>) -> FutureResult<Bytes> {
 		let metadata = self.call(block, "Metadata_metadata".into(), Bytes(Vec::new()))
 			.and_then(|metadata| OpaqueMetadata::decode(&mut &metadata.0[..])
@@ -317,6 +268,22 @@ impl<Block, F, Client> StateBackend<Block, Client> for LightState<Block, F, Clie
 		_to: Option<Block::Hash>,
 		_keys: Vec<StorageKey>,
 	) -> FutureResult<Vec<StorageChangeSet<Block::Hash>>> {
+		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
+	}
+
+	fn query_storage_at(
+		&self,
+		_keys: Vec<StorageKey>,
+		_at: Option<Block::Hash>
+	) -> FutureResult<Vec<StorageChangeSet<Block::Hash>>> {
+		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
+	}
+
+	fn read_proof(
+		&self,
+		_block: Option<Block::Hash>,
+		_keys: Vec<StorageKey>,
+	) -> FutureResult<ReadProof<Block::Hash>> {
 		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
 	}
 
@@ -508,7 +475,7 @@ impl<Block, F, Client> ChildStateBackend<Block, Client> for LightState<Block, F,
 	fn storage_keys(
 		&self,
 		_block: Option<Block::Hash>,
-		_storage_key: StorageKey,
+		_storage_key: PrefixedStorageKey,
 		_prefix: StorageKey,
 	) -> FutureResult<Vec<StorageKey>> {
 		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
@@ -517,7 +484,7 @@ impl<Block, F, Client> ChildStateBackend<Block, Client> for LightState<Block, F,
 	fn storage(
 		&self,
 		block: Option<Block::Hash>,
-		storage_key: StorageKey,
+		storage_key: PrefixedStorageKey,
 		key: StorageKey,
 	) -> FutureResult<Option<StorageData>> {
 		let block = self.block_or_best(block);
@@ -527,7 +494,7 @@ impl<Block, F, Client> ChildStateBackend<Block, Client> for LightState<Block, F,
 				Ok(header) => Either::Left(fetcher.remote_read_child(RemoteReadChildRequest {
 					block,
 					header,
-					storage_key: storage_key.0,
+					storage_key,
 					keys: vec![key.0.clone()],
 					retry_count: Default::default(),
 				}).then(move |result| ready(result
@@ -547,7 +514,7 @@ impl<Block, F, Client> ChildStateBackend<Block, Client> for LightState<Block, F,
 	fn storage_hash(
 		&self,
 		block: Option<Block::Hash>,
-		storage_key: StorageKey,
+		storage_key: PrefixedStorageKey,
 		key: StorageKey,
 	) -> FutureResult<Option<Block::Hash>> {
 		Box::new(ChildStateBackend::storage(self, block, storage_key, key)

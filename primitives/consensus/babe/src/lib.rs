@@ -22,6 +22,10 @@
 pub mod digests;
 pub mod inherents;
 
+pub use sp_consensus_vrf::schnorrkel::{
+	Randomness, VRF_PROOF_LENGTH, VRF_OUTPUT_LENGTH, RANDOMNESS_LENGTH
+};
+
 use codec::{Encode, Decode};
 use sp_std::vec::Vec;
 use sp_runtime::{ConsensusEngineId, RuntimeDebug};
@@ -49,12 +53,6 @@ pub type AuthorityId = app::Public;
 
 /// The `ConsensusEngineId` of BABE.
 pub const BABE_ENGINE_ID: ConsensusEngineId = *b"BABE";
-
-/// The length of the VRF output
-pub const VRF_OUTPUT_LENGTH: usize = 32;
-
-/// The length of the VRF proof
-pub const VRF_PROOF_LENGTH: usize = 64;
 
 /// The length of the public key
 pub const PUBLIC_KEY_LENGTH: usize = 32;
@@ -115,7 +113,7 @@ pub struct BabeConfiguration {
 	pub genesis_authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 
 	/// The randomness for the genesis epoch.
-	pub randomness: [u8; VRF_OUTPUT_LENGTH],
+	pub randomness: Randomness,
 
 	/// Whether this chain should run with secondary slots, which are assigned
 	/// in round-robin manner.

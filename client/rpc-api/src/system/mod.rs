@@ -25,7 +25,7 @@ use futures::{future::BoxFuture, compat::Compat};
 
 use self::error::Result as SystemResult;
 
-pub use self::helpers::{Properties, SystemInfo, Health, PeerInfo, NodeRole};
+pub use self::helpers::{SystemInfo, Health, PeerInfo, NodeRole};
 pub use self::gen_client::Client as SystemClient;
 
 /// Substrate system RPC API
@@ -39,13 +39,17 @@ pub trait SystemApi<Hash, Number> {
 	#[rpc(name = "system_version")]
 	fn system_version(&self) -> SystemResult<String>;
 
-	/// Get the chain's type. Given as a string identifier.
+	/// Get the chain's name. Given as a string identifier.
 	#[rpc(name = "system_chain")]
 	fn system_chain(&self) -> SystemResult<String>;
 
+	/// Get the chain's type.
+	#[rpc(name = "system_chainType")]
+	fn system_type(&self) -> SystemResult<sp_chain_spec::ChainType>;
+
 	/// Get a custom set of properties as a JSON object, defined in the chain spec.
 	#[rpc(name = "system_properties")]
-	fn system_properties(&self) -> SystemResult<Properties>;
+	fn system_properties(&self) -> SystemResult<sp_chain_spec::Properties>;
 
 	/// Return health status of the node.
 	///
@@ -55,16 +59,29 @@ pub trait SystemApi<Hash, Number> {
 	#[rpc(name = "system_health", returns = "Health")]
 	fn system_health(&self) -> Receiver<Health>;
 
+	/// Returns the base58-encoded PeerId of the node.
+	#[rpc(name = "system_localPeerId", returns = "String")]
+	fn system_local_peer_id(&self) -> Receiver<String>;
+
+	/// Returns the multiaddresses that the local node is listening on
+	///
+	/// The addresses include a trailing `/p2p/` with the local PeerId, and are thus suitable to
+	/// be passed to `system_addReservedPeer` or as a bootnode address for example.
+	#[rpc(name = "system_localListenAddresses", returns = "Vec<String>")]
+	fn system_local_listen_addresses(&self) -> Receiver<Vec<String>>;
+
 	/// Returns currently connected peers
 	#[rpc(name = "system_peers", returns = "Vec<PeerInfo<Hash, Number>>")]
-	fn system_peers(&self) -> Receiver<Vec<PeerInfo<Hash, Number>>>;
+	fn system_peers(&self)
+		-> Compat<BoxFuture<'static, jsonrpc_core::Result<Vec<PeerInfo<Hash, Number>>>>>;
 
 	/// Returns current state of the network.
 	///
 	/// **Warning**: This API is not stable.
 	// TODO: make this stable and move structs https://github.com/paritytech/substrate/issues/1890
 	#[rpc(name = "system_networkState", returns = "jsonrpc_core::Value")]
-	fn system_network_state(&self) -> Receiver<jsonrpc_core::Value>;
+	fn system_network_state(&self)
+		-> Compat<BoxFuture<'static, jsonrpc_core::Result<jsonrpc_core::Value>>>;
 
 	/// Adds a reserved peer. Returns the empty string or an error. The string
 	/// parameter should encode a `p2p` multiaddr.

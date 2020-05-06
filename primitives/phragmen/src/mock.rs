@@ -18,20 +18,12 @@
 
 #![cfg(test)]
 
-use crate::{elect, PhragmenResult, PhragmenAssignment};
+use crate::{elect, PhragmenResult, Assignment, VoteWeight, ExtendedBalance};
 use sp_runtime::{
-	assert_eq_error_rate, Perbill, PerThing,
-	traits::{Convert, Member, SaturatedConversion}
+	assert_eq_error_rate, PerThing,
+	traits::{Member, SaturatedConversion, Zero, One}
 };
 use sp_std::collections::btree_map::BTreeMap;
-
-pub(crate) struct TestCurrencyToVote;
-impl Convert<Balance, u64> for TestCurrencyToVote {
-	fn convert(x: Balance) -> u64 { x.saturated_into() }
-}
-impl Convert<u128, Balance> for TestCurrencyToVote {
-	fn convert(x: u128) -> Balance { x }
-}
 
 #[derive(Default, Debug)]
 pub(crate) struct _Candidate<A> {
@@ -66,12 +58,11 @@ pub(crate) struct _Support<A> {
 pub(crate) type _PhragmenAssignment<A> = (A, f64);
 pub(crate) type _SupportMap<A> = BTreeMap<A, _Support<A>>;
 
-pub(crate) type Balance = u128;
 pub(crate) type AccountId = u64;
 
 #[derive(Debug, Clone)]
 pub(crate) struct _PhragmenResult<A: Clone> {
-	pub winners: Vec<(A, Balance)>,
+	pub winners: Vec<(A, ExtendedBalance)>,
 	pub assignments: Vec<(A, Vec<_PhragmenAssignment<A>>)>
 }
 
@@ -87,9 +78,9 @@ pub(crate) fn elect_float<A, FS>(
 	stake_of: FS,
 ) -> Option<_PhragmenResult<A>> where
 	A: Default + Ord + Member + Copy,
-	for<'r> FS: Fn(&'r A) -> Balance,
+	for<'r> FS: Fn(&'r A) -> VoteWeight,
 {
-	let mut elected_candidates: Vec<(A, Balance)>;
+	let mut elected_candidates: Vec<(A, ExtendedBalance)>;
 	let mut assigned: Vec<(A, Vec<_PhragmenAssignment<A>>)>;
 	let mut c_idx_cache = BTreeMap::<A, usize>::new();
 	let num_voters = initial_candidates.len() + initial_voters.len();
@@ -161,7 +152,7 @@ pub(crate) fn elect_float<A, FS>(
 				}
 			}
 
-			elected_candidates.push((winner.who.clone(), winner.approval_stake as Balance));
+			elected_candidates.push((winner.who.clone(), winner.approval_stake as ExtendedBalance));
 		} else {
 			break
 		}
@@ -195,7 +186,7 @@ pub(crate) fn equalize_float<A, FS>(
 	iterations: usize,
 	stake_of: FS,
 ) where
-	for<'r> FS: Fn(&'r A) -> Balance,
+	for<'r> FS: Fn(&'r A) -> VoteWeight,
 	A: Ord + Clone + std::fmt::Debug,
 {
 	for _i in 0..iterations {
@@ -220,7 +211,7 @@ pub(crate) fn equalize_float<A, FS>(
 
 pub(crate) fn do_equalize_float<A>(
 	voter: &A,
-	budget_balance: Balance,
+	budget_balance: VoteWeight,
 	elected_edges: &mut Vec<_PhragmenAssignment<A>>,
 	support_map: &mut _SupportMap<A>,
 	tolerance: f64
@@ -310,37 +301,37 @@ pub(crate) fn do_equalize_float<A>(
 }
 
 
-pub(crate) fn create_stake_of(stakes: &[(AccountId, Balance)])
-	-> Box<dyn Fn(&AccountId) -> Balance>
+pub(crate) fn create_stake_of(stakes: &[(AccountId, VoteWeight)])
+	-> Box<dyn Fn(&AccountId) -> VoteWeight>
 {
-	let mut storage = BTreeMap::<AccountId, Balance>::new();
+	let mut storage = BTreeMap::<AccountId, VoteWeight>::new();
 	stakes.iter().for_each(|s| { storage.insert(s.0, s.1); });
-	let stake_of = move |who: &AccountId| -> Balance { storage.get(who).unwrap().to_owned() };
+	let stake_of = move |who: &AccountId| -> VoteWeight { storage.get(who).unwrap().to_owned() };
 	Box::new(stake_of)
 }
 
 
-pub fn check_assignments(assignments: Vec<(AccountId, Vec<PhragmenAssignment<AccountId, Perbill>>)>) {
-	for (_, a) in assignments {
-		let sum: u32 = a.iter().map(|(_, p)| p.deconstruct()).sum();
-		assert_eq_error_rate!(sum, Perbill::ACCURACY, 5);
+pub fn check_assignments_sum<T: PerThing>(assignments: Vec<Assignment<AccountId, T>>) {
+	for Assignment { distribution, .. } in assignments {
+		let mut sum: u128 = Zero::zero();
+		distribution.iter().for_each(|(_, p)| sum += p.deconstruct().saturated_into());
+		assert_eq_error_rate!(sum, T::ACCURACY.saturated_into(), 1);
 	}
 }
 
-pub(crate) fn run_and_compare(
+pub(crate) fn run_and_compare<Output: PerThing>(
 	candidates: Vec<AccountId>,
 	voters: Vec<(AccountId, Vec<AccountId>)>,
-	stake_of: Box<dyn Fn(&AccountId) -> Balance>,
+	stake_of: &Box<dyn Fn(&AccountId) -> VoteWeight>,
 	to_elect: usize,
 	min_to_elect: usize,
 ) {
 	// run fixed point code.
-	let PhragmenResult { winners, assignments } = elect::<_, _, _, TestCurrencyToVote, Perbill>(
+	let PhragmenResult { winners, assignments } = elect::<_, Output>(
 		to_elect,
 		min_to_elect,
 		candidates.clone(),
-		voters.clone(),
-		&stake_of,
+		voters.iter().map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone())).collect::<Vec<_>>(),
 	).unwrap();
 
 	// run float poc code.
@@ -352,16 +343,16 @@ pub(crate) fn run_and_compare(
 		&stake_of,
 	).unwrap();
 
-	assert_eq!(winners, truth_value.winners);
+	assert_eq!(winners.iter().map(|(x, _)| x).collect::<Vec<_>>(), truth_value.winners.iter().map(|(x, _)| x).collect::<Vec<_>>());
 
-	for (nominator, assigned) in assignments.clone() {
-		if let Some(float_assignments) = truth_value.assignments.iter().find(|x| x.0 == nominator) {
-			for (candidate, per_thingy) in assigned {
+	for Assignment { who, distribution } in assignments.clone() {
+		if let Some(float_assignments) = truth_value.assignments.iter().find(|x| x.0 == who) {
+			for (candidate, per_thingy) in distribution {
 				if let Some(float_assignment) = float_assignments.1.iter().find(|x| x.0 == candidate ) {
 					assert_eq_error_rate!(
-						Perbill::from_fraction(float_assignment.1).deconstruct(),
+						Output::from_fraction(float_assignment.1).deconstruct(),
 						per_thingy.deconstruct(),
-						1,
+						Output::Inner::one(),
 					);
 				} else {
 					panic!("candidate mismatch. This should never happen.")
@@ -372,14 +363,14 @@ pub(crate) fn run_and_compare(
 		}
 	}
 
-	check_assignments(assignments);
+	check_assignments_sum(assignments);
 }
 
 pub(crate) fn build_support_map_float<FS>(
 	result: &mut _PhragmenResult<AccountId>,
 	stake_of: FS,
 ) -> _SupportMap<AccountId>
-	where for<'r> FS: Fn(&'r AccountId) -> Balance
+	where for<'r> FS: Fn(&'r AccountId) -> VoteWeight
 {
 	let mut supports = <_SupportMap<AccountId>>::new();
 	result.winners

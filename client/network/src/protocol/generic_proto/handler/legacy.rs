@@ -40,9 +40,8 @@ use std::{pin::Pin, task::{Context, Poll}};
 /// it is turned into a `LegacyProtoHandler`. It then handles all communications that are specific
 /// to Substrate on that single connection.
 ///
-/// Note that there can be multiple instance of this struct simultaneously for same peer. However
-/// if that happens, only one main instance can communicate with the outer layers of the code. In
-/// other words, the outer layers of the code only ever see one handler.
+/// Note that there can be multiple instance of this struct simultaneously for same peer,
+/// if there are multiple established connections to the peer.
 ///
 /// ## State of the handler
 ///
@@ -61,6 +60,7 @@ use std::{pin::Pin, task::{Context, Poll}};
 /// these states. For example, if the handler reports a network misbehaviour, it will close the
 /// substreams but it is the role of the user to send a `Disabled` event if it wants the connection
 /// to close. Otherwise, the handler will try to reopen substreams.
+///
 /// The handler starts in the "Initializing" state and must be transitionned to Enabled or Disabled
 /// as soon as possible.
 ///
@@ -111,7 +111,7 @@ impl IntoProtocolsHandler for LegacyProtoHandlerProto {
 	fn into_handler(self, remote_peer_id: &PeerId, connected_point: &ConnectedPoint) -> Self::Handler {
 		LegacyProtoHandler {
 			protocol: self.protocol,
-			endpoint: connected_point.to_endpoint(),
+			endpoint: connected_point.clone(),
 			remote_peer_id: remote_peer_id.clone(),
 			state: ProtocolState::Init {
 				substreams: SmallVec::new(),
@@ -136,7 +136,7 @@ pub struct LegacyProtoHandler {
 
 	/// Whether we are the connection dialer or listener. Used to determine who, between the local
 	/// node and the remote node, has priority.
-	endpoint: Endpoint,
+	endpoint: ConnectedPoint,
 
 	/// Queue of events to send to the outside.
 	///
@@ -218,12 +218,16 @@ pub enum LegacyProtoHandlerOut {
 	CustomProtocolOpen {
 		/// Version of the protocol that has been opened.
 		version: u8,
+		/// The connected endpoint.
+		endpoint: ConnectedPoint,
 	},
 
 	/// Closed a custom protocol with the remote.
 	CustomProtocolClosed {
 		/// Reason why the substream closed, for diagnostic purposes.
 		reason: Cow<'static, str>,
+		/// The connected endpoint.
+		endpoint: ConnectedPoint,
 	},
 
 	/// Receives a message on a custom protocol substream.
@@ -272,7 +276,7 @@ impl LegacyProtoHandler {
 
 			ProtocolState::Init { substreams: incoming, .. } => {
 				if incoming.is_empty() {
-					if let Endpoint::Dialer = self.endpoint {
+					if let ConnectedPoint::Dialer { .. } = self.endpoint {
 						self.events_queue.push(ProtocolsHandlerEvent::OutboundSubstreamRequest {
 							protocol: SubstreamProtocol::new(self.protocol.clone()),
 							info: (),
@@ -281,10 +285,10 @@ impl LegacyProtoHandler {
 					ProtocolState::Opening {
 						deadline: Delay::new(Duration::from_secs(60))
 					}
-
 				} else {
 					let event = LegacyProtoHandlerOut::CustomProtocolOpen {
-						version: incoming[0].protocol_version()
+						version: incoming[0].protocol_version(),
+						endpoint: self.endpoint.clone()
 					};
 					self.events_queue.push(ProtocolsHandlerEvent::Custom(event));
 					ProtocolState::Normal {
@@ -404,6 +408,7 @@ impl LegacyProtoHandler {
 							if substreams.is_empty() {
 								let event = LegacyProtoHandlerOut::CustomProtocolClosed {
 									reason: "All substreams have been closed by the remote".into(),
+									endpoint: self.endpoint.clone()
 								};
 								self.state = ProtocolState::Disabled {
 									shutdown: shutdown.into_iter().collect(),
@@ -416,6 +421,7 @@ impl LegacyProtoHandler {
 							if substreams.is_empty() {
 								let event = LegacyProtoHandlerOut::CustomProtocolClosed {
 									reason: format!("Error on the last substream: {:?}", err).into(),
+									endpoint: self.endpoint.clone()
 								};
 								self.state = ProtocolState::Disabled {
 									shutdown: shutdown.into_iter().collect(),
@@ -479,7 +485,8 @@ impl LegacyProtoHandler {
 
 			ProtocolState::Opening { .. } => {
 				let event = LegacyProtoHandlerOut::CustomProtocolOpen {
-					version: substream.protocol_version()
+					version: substream.protocol_version(),
+					endpoint: self.endpoint.clone()
 				};
 				self.events_queue.push(ProtocolsHandlerEvent::Custom(event));
 				ProtocolState::Normal {

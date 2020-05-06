@@ -212,7 +212,7 @@ impl<B: BlockT> BlockCollection<B> {
 #[cfg(test)]
 mod test {
 	use super::{BlockCollection, BlockData, BlockRangeState};
-	use crate::{message, PeerId};
+	use crate::{protocol::message, PeerId};
 	use sp_runtime::testing::{Block as RawBlock, ExtrinsicWrapper};
 	use sp_core::H256;
 

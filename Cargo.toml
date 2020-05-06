@@ -3,6 +3,8 @@ members = [
 	"bin/node-template/node",
 	"bin/node-template/runtime",
 	"bin/node-template/pallets/template",
+	"bin/node/bench",
+	"bin/node/browser-testing",
 	"bin/node/cli",
 	"bin/node/executor",
 	"bin/node/primitives",
@@ -86,6 +88,7 @@ members = [
 	"frame/offences",
 	"frame/randomness-collective-flip",
 	"frame/recovery",
+	"frame/scheduler",
 	"frame/scored-pool",
 	"frame/session",
 	"frame/session/benchmarking",
@@ -118,7 +121,10 @@ members = [
 	"primitives/consensus/babe",
 	"primitives/consensus/common",
 	"primitives/consensus/pow",
+	"primitives/consensus/vrf",
 	"primitives/core",
+	"primitives/chain-spec",
+	"primitives/database",
 	"primitives/debug-derive",
 	"primitives/storage",
 	"primitives/externalities",
@@ -129,10 +135,13 @@ members = [
 	"primitives/offchain",
 	"primitives/panic-handler",
 	"primitives/phragmen",
+	"primitives/phragmen/fuzzer",
+	"primitives/phragmen/compact",
 	"primitives/rpc",
 	"primitives/runtime-interface",
 	"primitives/runtime-interface/proc-macro",
 	"primitives/runtime-interface/test-wasm",
+	"primitives/runtime-interface/test-wasm-deprecated",
 	"primitives/runtime-interface/test",
 	"primitives/serializer",
 	"primitives/session",
@@ -140,6 +149,7 @@ members = [
 	"primitives/api/proc-macro",
 	"primitives/api/test",
 	"primitives/arithmetic",
+	"primitives/arithmetic/fuzzer",
 	"primitives/io",
 	"primitives/runtime",
 	"primitives/sandbox",
@@ -150,7 +160,9 @@ members = [
 	"primitives/timestamp",
 	"primitives/test-primitives",
 	"primitives/transaction-pool",
+	"primitives/tracing",
 	"primitives/trie",
+	"primitives/utils",
 	"primitives/wasm-interface",
 	"test-utils/client",
 	"test-utils/runtime",
@@ -170,10 +182,10 @@ members = [
 panic = "unwind"
 
 [patch.crates-io]
-kvdb = { git = "https://github.com/cheme/parity-common", branch="upgraded_del_range" }
-kvdb-rocksdb = { git = "https://github.com/cheme/parity-common", branch="upgraded_del_range" }
-kvdb-web = { git = "https://github.com/cheme/parity-common", branch="upgraded_del_range" }
-kvdb-memorydb = { git = "https://github.com/cheme/parity-common", branch="upgraded_del_range" }
-#parity-util-mem = { git = "https://github.com/cheme/parity-common", branch="upgraded_del_range" }
-#fixed-hash = { git = "https://github.com/cheme/parity-common", branch="upgraded_del_range" }
-#primitive-types = { git = "https://github.com/cheme/parity-common", branch="upgraded_del_range" }
+kvdb = { git = "https://github.com/cheme/parity-common", branch="upgraded_del_range_pr" }
+kvdb-rocksdb = { git = "https://github.com/cheme/parity-common", branch="upgraded_del_range_pr" }
+kvdb-web = { git = "https://github.com/cheme/parity-common", branch="upgraded_del_range_pr" }
+kvdb-memorydb = { git = "https://github.com/cheme/parity-common", branch="upgraded_del_range_pr" }
+#parity-util-mem = { git = "https://github.com/cheme/parity-common", branch="upgraded_del_range_pr" }
+#fixed-hash = { git = "https://github.com/cheme/parity-common", branch="upgraded_del_range_pr" }
+#primitive-types = { git = "https://github.com/cheme/parity-common", branch="upgraded_del_range_pr" }

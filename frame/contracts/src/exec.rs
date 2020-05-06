@@ -290,7 +290,7 @@ pub enum DeferredAction<T: Trait> {
 }
 
 pub struct ExecutionContext<'a, T: Trait + 'a, V, L> {
-	pub parent: Option<&'a ExecutionContext<'a, T, V, L>>,
+	pub caller: Option<&'a ExecutionContext<'a, T, V, L>>,
 	pub self_account: T::AccountId,
 	pub self_trie_info: Option<ChildInfo>,
 	pub overlay: OverlayAccountDb<'a, T>,
@@ -315,7 +315,7 @@ where
 	/// account (not a contract).
 	pub fn top_level(origin: T::AccountId, cfg: &'a Config<T>, vm: &'a V, loader: &'a L) -> Self {
 		ExecutionContext {
-			parent: None,
+			caller: None,
 			self_trie_info: None,
 			self_account: origin,
 			overlay: OverlayAccountDb::<T>::new(&DirectAccountDb),
@@ -333,7 +333,7 @@ where
 		-> ExecutionContext<'b, T, V, L>
 	{
 		ExecutionContext {
-			parent: Some(self),
+			caller: Some(self),
 			self_trie_info: trie_info,
 			self_account: dest,
 			overlay: OverlayAccountDb::new(&self.overlay),
@@ -536,8 +536,8 @@ where
 	) -> Result<(), DispatchError> {
 		let self_id = self.self_account.clone();
 		let value = self.overlay.get_balance(&self_id);
-		if let Some(parent) = self.parent {
-			if parent.is_live(&self_id) {
+		if let Some(caller) = self.caller {
+			if caller.is_live(&self_id) {
 				return Err(DispatchError::Other(
 					"Cannot terminate a contract that is present on the call stack",
 				));
@@ -577,7 +577,7 @@ where
 	{
 		let (output, change_set, deferred) = {
 			let mut nested = self.nested(dest, trie_id.map(|trie_id| {
-				crate::trie_unique_id(&trie_id)
+				crate::child_trie_info(&trie_id)
 			}));
 			let output = func(&mut nested)?;
 			(output, nested.overlay.into_change_set(), nested.deferred)
@@ -595,7 +595,7 @@ where
 	/// stack, meaning it is in the middle of an execution.
 	fn is_live(&self, account: &T::AccountId) -> bool {
 		&self.self_account == account ||
-			self.parent.map_or(false, |parent| parent.is_live(account))
+			self.caller.map_or(false, |caller| caller.is_live(account))
 	}
 }
 

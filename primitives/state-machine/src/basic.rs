@@ -32,17 +32,35 @@ use sp_core::{
 };
 use log::warn;
 use codec::Encode;
+use sp_externalities::Extensions;
 
 /// Simple Map-based Externalities impl.
 #[derive(Debug)]
 pub struct BasicExternalities {
 	inner: Storage,
+	extensions: Extensions,
 }
 
 impl BasicExternalities {
 	/// Create a new instance of `BasicExternalities`
 	pub fn new(inner: Storage) -> Self {
-		BasicExternalities { inner }
+		BasicExternalities { inner, extensions: Default::default() }
+	}
+
+	/// New basic externalities with empty storage.
+	pub fn new_empty() -> Self {
+		Self::new(Storage::default())
+	}
+
+	/// New basic extternalities with tasks executor.
+	pub fn with_tasks_executor() -> Self {
+		let mut extensions = Extensions::default();
+		extensions.register(sp_core::traits::TaskExecutorExt(sp_core::tasks::executor()));
+
+		Self {
+			inner: Storage::default(),
+			extensions,
+		}
 	}
 
 	/// Insert key/value
@@ -62,10 +80,13 @@ impl BasicExternalities {
 		storage: &mut sp_core::storage::Storage,
 		f: impl FnOnce() -> R,
 	) -> R {
-		let mut ext = Self { inner: Storage {
-			top: std::mem::replace(&mut storage.top, Default::default()),
-			children_default: std::mem::replace(&mut storage.children_default, Default::default()),
-		}};
+		let mut ext = Self {
+			inner: Storage {
+				top: std::mem::replace(&mut storage.top, Default::default()),
+				children_default: std::mem::replace(&mut storage.children_default, Default::default()),
+			},
+			extensions: Default::default(),
+		};
 
 		let r = ext.execute_with(f);
 
@@ -79,6 +100,11 @@ impl BasicExternalities {
 	/// Returns the result of the given closure.
 	pub fn execute_with<R>(&mut self, f: impl FnOnce() -> R) -> R {
 		sp_externalities::set_and_run_with_externalities(self, f)
+	}
+
+	/// List of active extensions.
+	pub fn extensions(&mut self) -> &mut Extensions {
+		&mut self.extensions
 	}
 }
 
@@ -103,10 +129,13 @@ impl Default for BasicExternalities {
 
 impl From<BTreeMap<StorageKey, StorageValue>> for BasicExternalities {
 	fn from(hashmap: BTreeMap<StorageKey, StorageValue>) -> Self {
-		BasicExternalities { inner: Storage {
-			top: hashmap,
-			children_default: Default::default(),
-		}}
+		BasicExternalities {
+			inner: Storage {
+				top: hashmap,
+				children_default: Default::default(),
+			},
+			extensions: Default::default(),
+		}
 	}
 }
 
@@ -243,7 +272,7 @@ impl Externalities for BasicExternalities {
 			if &empty_hash[..] == &child_root[..] {
 				top.remove(prefixed_storage_key.as_slice());
 			} else {
-				top.insert(prefixed_storage_key, child_root);
+				top.insert(prefixed_storage_key.into_inner(), child_root);
 			}
 		}
 
@@ -258,7 +287,7 @@ impl Externalities for BasicExternalities {
 			let delta = child.data.clone().into_iter().map(|(k, v)| (k, Some(v)));
 
 			InMemoryBackend::<Blake2Hasher>::default()
-				.child_storage_root(&child.child_info, child.child_change, delta).0
+				.child_storage_root(&child.child_info, &child.child_change, delta).0
 		} else {
 			empty_child_trie_root::<Layout<Blake2Hasher>>()
 		}.encode()
@@ -274,9 +303,23 @@ impl Externalities for BasicExternalities {
 }
 
 impl sp_externalities::ExtensionStore for BasicExternalities {
-	fn extension_by_type_id(&mut self, _: TypeId) -> Option<&mut dyn Any> {
-		warn!("Extensions are not supported by `BasicExternalities`.");
-		None
+	fn extension_by_type_id(&mut self, type_id: TypeId) -> Option<&mut dyn Any> {
+		self.extensions.get_mut(type_id)
+	}
+
+	fn register_extension_with_type_id(
+		&mut self,
+		type_id: TypeId,
+		extension: Box<dyn sp_externalities::Extension>,
+	) -> Result<(), sp_externalities::Error> {
+		self.extensions.register_with_type_id(type_id, extension)
+	}
+
+	fn deregister_extension_by_type_id(&mut self, type_id: TypeId) -> Result<(), sp_externalities::Error> {
+		self.extensions
+			.deregister(type_id)
+			.ok_or(sp_externalities::Error::ExtensionIsNotRegistered(type_id))
+			.map(drop)
 	}
 }
 
@@ -339,7 +382,7 @@ mod tests {
 	#[test]
 	fn basic_externalities_is_empty() {
 		// Make sure no values are set by default in `BasicExternalities`.
-		let storage = BasicExternalities::new(Default::default()).into_storages();
+		let storage = BasicExternalities::new_empty().into_storages();
 		assert!(storage.top.is_empty());
 		assert!(storage.children_default.is_empty());
 	}

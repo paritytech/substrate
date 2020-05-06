@@ -22,6 +22,7 @@ use crate::{
 		NO_EXTRINSIC_INDEX, BlockNumber, build_changes_trie,
 		State as ChangesTrieState,
 	},
+	stats::StateMachineStats,
 };
 
 #[cfg(test)]
@@ -29,16 +30,13 @@ use std::iter::FromIterator;
 use std::collections::{HashMap, BTreeMap, BTreeSet};
 use codec::{Decode, Encode};
 use sp_core::storage::{well_known_keys::EXTRINSIC_INDEX, ChildInfo,
-	ChildChange, ChildUpdate};
+	PrefixedStorageKey, ChildChange, ChildUpdate};
 use std::{mem, ops};
 
 use sp_core::Hasher;
 
 /// Storage key.
 pub type StorageKey = Vec<u8>;
-
-/// Storage key.
-pub type PrefixedStorageKey = Vec<u8>;
 
 /// Storage value.
 pub type StorageValue = Vec<u8>;
@@ -61,6 +59,8 @@ pub struct OverlayedChanges {
 	pub(crate) committed: OverlayedChangeSet,
 	/// True if extrinsics stats must be collected.
 	pub(crate) collect_extrinsics: bool,
+	/// Collect statistic on this execution.
+	pub(crate) stats: StateMachineStats,
 }
 
 /// The storage value, used inside OverlayedChanges.
@@ -86,6 +86,7 @@ pub struct ChildChangeSet {
 	/// for first bulk deletion.
 	pub change: (ChildChange, Option<u32>),
 	/// Deltas of modified values for this change.
+	/// The map key is the child storage key without the common prefix.
 	pub values: BTreeMap<StorageKey, OverlayedValue>,
 }
 
@@ -228,7 +229,11 @@ impl OverlayedChanges {
 	pub fn storage(&self, key: &[u8]) -> Option<Option<&[u8]>> {
 		self.prospective.top.get(key)
 			.or_else(|| self.committed.top.get(key))
-			.map(|x| x.value.as_ref().map(AsRef::as_ref))
+			.map(|x| {
+				let size_read = x.value.as_ref().map(|x| x.len() as u64).unwrap_or(0);
+				self.stats.tally_read_modified(size_read);
+				x.value.as_ref().map(AsRef::as_ref)
+			})
 	}
 
 	/// Returns a double-Option: None if the key is unknown (i.e. and the query should be referred
@@ -236,19 +241,23 @@ impl OverlayedChanges {
 	/// value has been set.
 	pub fn child_storage(&self, child_info: &ChildInfo, key: &[u8]) -> Option<Option<&[u8]>> {
 		if let Some(child) = self.prospective.children_default.get(child_info.storage_key()) {
-			if child.change.0 == ChildChange::BulkDeleteByKeyspace {
+			if let ChildChange::BulkDelete(..) = child.change.0 {
 				return Some(None);
 			}
 			if let Some(val) = child.values.get(key) {
+				let size_read = val.value.as_ref().map(|x| x.len() as u64).unwrap_or(0);
+				self.stats.tally_read_modified(size_read);
 				return Some(val.value.as_ref().map(AsRef::as_ref));
 			}
 		}
 
 		if let Some(child) = self.committed.children_default.get(child_info.storage_key()) {
-			if child.change.0 == ChildChange::BulkDeleteByKeyspace {
+			if let ChildChange::BulkDelete(..) = child.change.0 {
 				return Some(None);
 			}
 			if let Some(val) = child.values.get(key) {
+				let size_read = val.value.as_ref().map(|x| x.len() as u64).unwrap_or(0);
+				self.stats.tally_read_modified(size_read);
 				return Some(val.value.as_ref().map(AsRef::as_ref));
 			}
 		}
@@ -260,6 +269,8 @@ impl OverlayedChanges {
 	///
 	/// `None` can be used to delete a value specified by the given key.
 	pub(crate) fn set_storage(&mut self, key: StorageKey, val: Option<StorageValue>) {
+		let size_write = val.as_ref().map(|x| x.len() as u64).unwrap_or(0);
+		self.stats.tally_write_overlay(size_write);
 		let extrinsic_index = self.extrinsic_index();
 		let entry = self.prospective.top.entry(key).or_default();
 		entry.value = val;
@@ -279,6 +290,8 @@ impl OverlayedChanges {
 		key: StorageKey,
 		val: Option<StorageValue>,
 	) {
+		let size_write = val.as_ref().map(|x| x.len() as u64).unwrap_or(0);
+		self.stats.tally_write_overlay(size_write);
 		let extrinsic_index = self.extrinsic_index();
 		let map_entry = self.get_or_init_prospective(child_info);
 		let updatable = map_entry.info.try_update(&map_entry.change.0, child_info);
@@ -298,6 +311,13 @@ impl OverlayedChanges {
 
 	/// Clear child storage of given storage key.
 	///
+	/// If encoded child root is undefined, this indicates that the child trie only
+	/// exists in the overlay storage. The deletion is therefore stored with an
+	/// empty root to allow reverting a freshly created child, but those value needs
+	/// to be filtered from the resulting transactions (in root building and drain content).
+	/// Note that it will still be use by change trie (change trie do not use the previous
+	/// root).
+	///
 	/// NOTE that this doesn't take place immediately but written into the prospective
 	/// change set, and still can be reverted by [`discard_prospective`].
 	///
@@ -305,6 +325,7 @@ impl OverlayedChanges {
 	pub(crate) fn kill_child_storage(
 		&mut self,
 		child_info: &ChildInfo,
+		encoded_child_root: Option<Vec<u8>>,
 	) {
 		let extrinsic_index = self.extrinsic_index();
 
@@ -315,8 +336,11 @@ impl OverlayedChanges {
 			return;
 		}
 
-		map_entry.change = (ChildChange::BulkDeleteByKeyspace, extrinsic_index);
-		// drop value to reclaim some memory, keep change trie if there is some.
+		if let Some(encoded_child_root) = encoded_child_root {
+			map_entry.change = (ChildChange::BulkDelete(encoded_child_root), extrinsic_index);
+		} else {
+			map_entry.change = (ChildChange::BulkDelete(Vec::new()), extrinsic_index);
+		}
 		if !extrinsic_index.is_some() {
 			map_entry.values.clear();
 		}
@@ -428,7 +452,7 @@ impl OverlayedChanges {
 				let child_committed = self.committed.children_default.entry(storage_key)
 					.or_insert_with(|| ChildChangeSet {
 						info: child.info.clone(), 
-						change: child.change,
+						change: child.change.clone(),
 						values: Default::default()
 					});
 				child_committed.change = child.change;
@@ -461,6 +485,7 @@ impl OverlayedChanges {
 				.map(|(k, v)| (k, v.value)),
 			std::mem::replace(&mut self.committed.children_default, Default::default())
 				.into_iter()
+				.filter(|(_sk, child)| !matches!(&child.change.0, ChildChange::BulkDelete(root) if root.is_empty()))
 				.map(|(_sk, child)| (child.info, child.change.0, child.values.into_iter().map(|(k, v)| (k, v.value)))),
 		)
 	}
@@ -564,7 +589,7 @@ impl OverlayedChanges {
 					.expect("child info initialized in either committed or prospective");
 			(
 				child_info.clone(),
-				child_change,
+				child_change.clone(),
 				self.committed.children_default.get(storage_key)
 					.into_iter()
 					.flat_map(|child| child.values.iter().map(|(k, v)| (k.clone(), v.value.clone())))
@@ -574,7 +599,8 @@ impl OverlayedChanges {
 							.flat_map(|child| child.values.iter().map(|(k, v)| (k.clone(), v.value.clone())))
 					),
 			)
-		});
+		})
+			.filter(|(_, child_change, _)| !matches!(&child_change, ChildChange::BulkDelete(root) if root.is_empty()));
 
 		// compute and memoize
 		let delta = self.committed.top.iter().map(|(k, v)| (k.clone(), v.value.clone()))
@@ -620,12 +646,12 @@ impl OverlayedChanges {
 
 	/// Get child info for a storage key.
 	/// Take the latest value so prospective first.
-	pub fn default_child_info(&self, storage_key: &[u8]) -> Option<(&ChildInfo, ChildChange)> {
+	pub fn default_child_info(&self, storage_key: &[u8]) -> Option<(&ChildInfo, &ChildChange)> {
 		if let Some(child) = self.prospective.children_default.get(storage_key) {
-			return Some((&child.info, child.change.0));
+			return Some((&child.info, &child.change.0));
 		}
 		if let Some(child) = self.committed.children_default.get(storage_key) {
-			return Some((&child.info, child.change.0));
+			return Some((&child.info, &child.change.0));
 		}
 		None
 	}
@@ -666,7 +692,7 @@ impl OverlayedChanges {
 		let range = (ops::Bound::Excluded(key), ops::Bound::Unbounded);
 
 		let prospective = self.prospective.children_default.get(storage_key);
-		if prospective.map(|child| child.change.0) == Some(ChildChange::BulkDeleteByKeyspace) {
+		if let Some(ChildChange::BulkDelete(..)) = prospective.map(|child| &child.change.0) {
 			return (None, true);
 		}
 
@@ -674,7 +700,7 @@ impl OverlayedChanges {
 			.and_then(|child| child.values.range::<[u8], _>(range).next().map(|(k, v)| (&k[..], v)));
 
 		let committed = self.committed.children_default.get(storage_key);
-		if committed.map(|child| child.change.0) == Some(ChildChange::BulkDeleteByKeyspace) {
+		if let Some(ChildChange::BulkDelete(..)) = committed.map(|child| &child.change.0) {
 			return (None, true);
 		}
 
@@ -700,7 +726,7 @@ impl OverlayedChanges {
 			.or_insert(ChildChangeSet {
 				info: child_info.to_owned(),
 				change: committed.children_default.get(child_info.storage_key())
-					.map(|child| (child.change.0, None))
+					.map(|child| (child.change.0.clone(), None))
 					.unwrap_or(Default::default()),
 				values: Default::default(),
 			})

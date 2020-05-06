@@ -166,7 +166,8 @@ This function performs the following steps:
 
 In the course of the execution this function can perform up to 2 DB reads to `get_balance` of source and destination accounts. It can also induce up to 2 DB writes via `set_balance` if flushed to the storage.
 
-Moreover, if the source balance goes below `existential_deposit` then the account will be deleted along with all its storage which requires time proportional to the number of storage entries of that account.
+Moreover, if the source balance goes below `existential_deposit`  then the transfer is denied and
+returns with an error.
 
 Assuming marshaled size of a balance value is of the constant size we can neglect its effect on the performance.
 
@@ -186,6 +187,23 @@ implementation they just involve a DB read.
 
 For subsequent calls and instantiations during contract execution, the initialization requires no
 expensive operations.
+
+## Terminate
+
+This function performs the following steps:
+
+1. Check the calling contract is not already on the callstack by calling `is_live`.
+2. `transfer` funds from caller to the beneficiary.
+3. Flag the caller contract as deleted in the overlay.
+
+`is_live` does not do any database access nor does it allocate memory. It walks up the call
+stack and therefore executes in linear time depending on size of the call stack. Because
+the call stack is of a fixed maximum size we consider this operation as constant time.
+
+**complexity**: Database accesses as described in Transfer + Removal of the contract. Currently,
+we are using child trie removal which is linear in the amount of stored keys. Upcoming changes
+will make the account removal constant time.
+
 
 ## Call
 
@@ -454,3 +472,27 @@ function performs a DB read.
 This function serializes the current block's number into the scratch buffer.
 
 **complexity**: Assuming that the block number is of constant size, this function has constant complexity.
+
+## Built-in hashing functions
+
+This paragraph concerns the following supported built-in hash functions:
+
+- `SHA2` with 256-bit width
+- `KECCAK` with 256-bit width
+- `BLAKE2` with 128-bit and 256-bit widths
+
+These functions compute a cryptographic hash on the given inputs and copy the
+resulting hash directly back into the sandboxed Wasm contract output buffer.
+
+Execution of the function consists of the following steps:
+
+1. Load data stored in the input buffer into an intermediate buffer.
+2. Compute the cryptographic hash `H` on the intermediate buffer.
+3. Copy back the bytes of `H` into the contract side output buffer.
+
+**complexity**: Complexity is proportional to the size of the input buffer in bytes
+as well as to the size of the output buffer in bytes. Also different cryptographic
+algorithms have different inherent complexity so users must expect the above
+mentioned crypto hashes to have varying gas costs.
+The complexity of each cryptographic hash function highly depends on the underlying
+implementation.

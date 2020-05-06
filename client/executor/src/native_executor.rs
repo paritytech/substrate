@@ -483,5 +483,7 @@ mod tests {
 				2,
 			);
 		});
+
+		my_interface::say_hello_world("hey");
 	}
 }

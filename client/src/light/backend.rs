@@ -317,8 +317,11 @@ impl<S, Block> BlockImportOperation<Block> for ImportOperation<Block, S>
 
 		// create a list of children keys to re-compute roots for
 		let child_delta = input.children_default.iter()
-			.map(|(_storage_key, storage_child)| (storage_child.child_info.clone(), storage_child.child_change, None))
-			.collect::<Vec<_>>();
+			.map(|(_storage_key, storage_child)| (
+				storage_child.child_info.clone(),
+				storage_child.child_change.clone(),
+				None,
+			)).collect::<Vec<_>>();
 
 		// make sure to persist the child storage
 		for (_child_key, storage_child) in input.children_default {
@@ -471,7 +474,7 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 	fn child_storage_root<I>(
 		&self,
 		child_info: &ChildInfo,
-		child_change: ChildChange,
+		child_change: &ChildChange,
 		delta: I,
 	) -> (H::Out, bool, Self::Transaction)
 	where
@@ -499,6 +502,12 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 			GenesisOrUnavailableState::Genesis(ref state) => state.keys(prefix),
 			GenesisOrUnavailableState::Unavailable => Vec::new(),
 		}
+	}
+
+	fn register_overlay_stats(&mut self, _stats: &sp_state_machine::StateMachineStats) { }
+
+	fn usage_info(&self) -> sp_state_machine::UsageInfo {
+		sp_state_machine::UsageInfo::empty()
 	}
 
 	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {

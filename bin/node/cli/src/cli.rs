@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use sc_cli::{SharedParams, ImportParams, RunCmd};
+use sc_cli::{ImportParams, RunCmd, SharedParams};
 use structopt::StructOpt;
 
 /// An overarching CLI command definition.
@@ -50,10 +50,7 @@ pub enum Subcommand {
 	Inspect(node_inspect::cli::InspectCmd),
 
 	/// The custom benchmark subcommmand benchmarking runtime pallets.
-	#[structopt(
-		name = "benchmark",
-		about = "Benchmark runtime pallets."
-	)]
+	#[structopt(name = "benchmark", about = "Benchmark runtime pallets.")]
 	Benchmark(frame_benchmarking_cli::BenchmarkCmd),
 }
 
@@ -62,11 +59,11 @@ pub enum Subcommand {
 #[derive(Debug, StructOpt, Clone)]
 pub struct FactoryCmd {
 	/// Number of blocks to generate.
-	#[structopt(long="blocks", default_value = "1")]
+	#[structopt(long = "blocks", default_value = "1")]
 	pub blocks: u32,
 
 	/// Number of transactions to push per block.
-	#[structopt(long="transactions", default_value = "8")]
+	#[structopt(long = "transactions", default_value = "8")]
 	pub transactions: u32,
 
 	#[allow(missing_docs)]

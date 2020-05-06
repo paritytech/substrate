@@ -151,16 +151,8 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 		let mut total_imbalance = SignedImbalance::zero();
 		for (address, changed) in s.into_iter() {
 			if let Some(balance) = changed.balance() {
-				let existed  = !T::Currency::total_balance(&address).is_zero();
 				let imbalance = T::Currency::make_free_balance_be(&address, balance);
-				let exists  = !T::Currency::total_balance(&address).is_zero();
 				total_imbalance = total_imbalance.merge(imbalance);
-				if existed && !exists {
-					// Account killed. This will ultimately lead to calling `OnKilledAccount` callback
-					// which will make removal of CodeHashOf and AccountStorage for this account.
-					// In order to avoid writing over the deleted properties we `continue` here.
-					continue;
-				}
 			}
 
 			if changed.code_hash().is_some()
@@ -180,13 +172,13 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 					(false, Some(info), _) => info,
 					// Existing contract is being removed.
 					(true, Some(info), None) => {
-						child::kill_storage(&info.child_trie_unique_id());
+						child::kill_storage(&info.child_trie_info());
 						<ContractInfoOf<T>>::remove(&address);
 						continue;
 					}
 					// Existing contract is being replaced by a new one.
 					(true, Some(info), Some(code_hash)) => {
-						child::kill_storage(&info.child_trie_unique_id());
+						child::kill_storage(&info.child_trie_info());
 						AliveContractInfo::<T> {
 							code_hash,
 							storage_size: T::StorageSizeOffset::get(),
@@ -223,7 +215,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 					new_info.last_write = Some(<frame_system::Module<T>>::block_number());
 				}
 
-				let child_info = &new_info.child_trie_unique_id();
+				let child_info = &new_info.child_trie_info();
 				for (k, v) in changed.storage.into_iter() {
 					if let Some(value) = child::get_raw(
 						child_info,

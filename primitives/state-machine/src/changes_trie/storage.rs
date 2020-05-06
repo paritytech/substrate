@@ -19,6 +19,7 @@
 use std::collections::{BTreeMap, HashSet, HashMap};
 use hash_db::{Prefix, EMPTY_PREFIX};
 use sp_core::Hasher;
+use sp_core::storage::PrefixedStorageKey;
 use sp_core::storage::ChildInfo;
 use sp_trie::DBValue;
 use sp_trie::MemoryDB;
@@ -98,7 +99,7 @@ impl<H: Hasher, Number: BlockNumber> InMemoryStorage<H, Number> {
 	#[cfg(test)]
 	pub fn with_inputs(
 		mut top_inputs: Vec<(Number, Vec<InputPair<Number>>)>,
-		children_inputs: Vec<(StorageKey, Vec<(Number, Vec<InputPair<Number>>)>)>,
+		children_inputs: Vec<(PrefixedStorageKey, Vec<(Number, Vec<InputPair<Number>>)>)>,
 	) -> Self {
 		let mut mdb = MemoryDB::default();
 		let mut roots = BTreeMap::new();
@@ -187,7 +188,7 @@ impl<H: Hasher, Number: BlockNumber> Storage<H, Number> for InMemoryStorage<H, N
 	fn with_cached_changed_keys(
 		&self,
 		root: &H::Out,
-		functor: &mut dyn FnMut(&HashMap<Option<StorageKey>, HashSet<StorageKey>>),
+		functor: &mut dyn FnMut(&HashMap<Option<PrefixedStorageKey>, HashSet<StorageKey>>),
 	) -> bool {
 		self.cache.with_changed_keys(root, functor)
 	}

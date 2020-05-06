@@ -25,6 +25,10 @@ pub struct StateUsageStats {
 	bytes_read: AtomicU64,
 	writes: AtomicU64,
 	bytes_written: AtomicU64,
+	writes_nodes: AtomicU64,
+	bytes_written_nodes: AtomicU64,
+	removed_nodes: AtomicU64,
+	bytes_removed_nodes: AtomicU64,
 	reads_cache: AtomicU64,
 	bytes_read_cache: AtomicU64,
 }
@@ -38,6 +42,10 @@ impl StateUsageStats {
 			bytes_read: 0.into(),
 			writes: 0.into(),
 			bytes_written: 0.into(),
+			writes_nodes: 0.into(),
+			bytes_written_nodes: 0.into(),
+			removed_nodes: 0.into(),
+			bytes_removed_nodes: 0.into(),
 			reads_cache: 0.into(),
 			bytes_read_cache: 0.into(),
 		}
@@ -70,7 +78,19 @@ impl StateUsageStats {
 		val
 	}
 
-	/// Tally some write operations, including their byte count.
+	/// Tally some write trie nodes operations, including their byte count.
+	pub fn tally_writes_nodes(&self, ops: u64, data_bytes: u64) {
+		self.writes_nodes.fetch_add(ops, AtomicOrdering::Relaxed);
+		self.bytes_written_nodes.fetch_add(data_bytes, AtomicOrdering::Relaxed);
+	}
+
+	/// Tally some removed trie nodes operations, including their byte count.
+	pub fn tally_removed_nodes(&self, ops: u64, data_bytes: u64) {
+		self.removed_nodes.fetch_add(ops, AtomicOrdering::Relaxed);
+		self.bytes_removed_nodes.fetch_add(data_bytes, AtomicOrdering::Relaxed);
+	}
+
+	/// Tally some write trie nodes operations, including their byte count.
 	pub fn tally_writes(&self, ops: u64, data_bytes: u64) {
 		self.writes.fetch_add(ops, AtomicOrdering::Relaxed);
 		self.bytes_written.fetch_add(data_bytes, AtomicOrdering::Relaxed);
@@ -80,8 +100,10 @@ impl StateUsageStats {
 	pub fn merge_sm(&self, info: sp_state_machine::UsageInfo) {
 		self.reads.fetch_add(info.reads.ops, AtomicOrdering::Relaxed);
 		self.bytes_read.fetch_add(info.reads.bytes, AtomicOrdering::Relaxed);
-		self.writes.fetch_add(info.writes.ops, AtomicOrdering::Relaxed);
-		self.bytes_written.fetch_add(info.writes.bytes, AtomicOrdering::Relaxed);
+		self.writes_nodes.fetch_add(info.nodes_writes.ops, AtomicOrdering::Relaxed);
+		self.bytes_written_nodes.fetch_add(info.nodes_writes.bytes, AtomicOrdering::Relaxed);
+		self.removed_nodes.fetch_add(info.removed_nodes.ops, AtomicOrdering::Relaxed);
+		self.bytes_removed_nodes.fetch_add(info.removed_nodes.bytes, AtomicOrdering::Relaxed);
 		self.reads_cache.fetch_add(info.cache_reads.ops, AtomicOrdering::Relaxed);
 		self.bytes_read_cache.fetch_add(info.cache_reads.bytes, AtomicOrdering::Relaxed);
 	}
@@ -100,7 +122,11 @@ impl StateUsageStats {
 		sp_state_machine::UsageInfo {
 			reads: unit(&self.reads, &self.bytes_read),
 			writes: unit(&self.writes, &self.bytes_written),
+			nodes_writes: unit(&self.writes_nodes, &self.bytes_written_nodes),
+			removed_nodes: unit(&self.removed_nodes, &self.bytes_removed_nodes),
 			cache_reads: unit(&self.reads_cache, &self.bytes_read_cache),
+			modified_reads: Default::default(),
+			overlay_writes: Default::default(),
 			// TODO: Proper tracking state of memory footprint here requires
 			//       imposing `MallocSizeOf` requirement on half of the codebase,
 			//       so it is an open question how to do it better

@@ -1,0 +1,24 @@
+[Networking]
+owner = "tomaka"
+whitelist = []
+matrix_room_id = "#libp2p:matrix.parity.io"
+
+[Client]
+owner = "gnunicorn"
+whitelist = []
+matrix_room_id = "#substrate:matrix.parity.io"
+
+[Runtime]
+owner = "gavofyork"
+whitelist = []
+matrix_room_id = "#substrate-frame:matrix.parity.io"
+
+[Consensus]
+owner = "andresilva"
+whitelist = []
+matrix_room_id = "#consensus-team:matrix.parity.io"
+
+[Smart Contracts]
+owner = "pepyakin"
+whitelist = []
+matrix_room_id = "#substrate-frame:matrix.parity.io"

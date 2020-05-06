@@ -23,8 +23,9 @@ extern crate self as frame_support;
 
 #[macro_use]
 extern crate bitmask;
-#[cfg(feature = "std")]
-pub extern crate tracing;
+
+#[doc(hidden)]
+pub use sp_tracing;
 
 #[cfg(feature = "std")]
 pub use serde;
@@ -68,14 +69,18 @@ pub mod weights;
 
 pub use self::hash::{
 	Twox256, Twox128, Blake2_256, Blake2_128, Identity, Twox64Concat, Blake2_128Concat, Hashable,
-	StorageHasher
+	StorageHasher, ReversibleStorageHasher
 };
 pub use self::storage::{
 	StorageValue, StorageMap, StorageDoubleMap, StoragePrefixedMap, IterableStorageMap,
-	IterableStorageDoubleMap,
+	IterableStorageDoubleMap, migration
 };
 pub use self::dispatch::{Parameter, Callable, IsSubType};
 pub use sp_runtime::{self, ConsensusEngineId, print, traits::Printable};
+
+/// A type that cannot be instantiated.
+#[derive(Debug)]
+pub enum Never {}
 
 /// Macro for easily creating a new implementation of the `Get` trait. Use similarly to
 /// how you would declare a `const`:
@@ -140,6 +145,8 @@ macro_rules! ord_parameter_types {
 			fn contains(t: &$type) -> bool { &$value == t }
 			fn sorted_members() -> $crate::sp_std::prelude::Vec<$type> { vec![$value] }
 			fn count() -> usize { 1 }
+			#[cfg(feature = "runtime-benchmarks")]
+			fn add(_: &$type) {}
 		}
 	}
 }
@@ -209,7 +216,11 @@ macro_rules! assert_err {
 #[cfg(feature = "std")]
 macro_rules! assert_ok {
 	( $x:expr $(,)? ) => {
-		assert_eq!($x, Ok(()));
+		let is = $x;
+		match is {
+			Ok(_) => (),
+			_ => assert!(false, "Expected Ok(_). Got {:#?}", is),
+		}
 	};
 	( $x:expr, $y:expr $(,)? ) => {
 		assert_eq!($x, Ok($y));
@@ -260,8 +271,6 @@ mod tests {
 				map hasher(identity) T::BlockNumber => T::BlockNumber;
 			pub GenericData2 get(fn generic_data2):
 				map hasher(blake2_128_concat) T::BlockNumber => Option<T::BlockNumber>;
-			pub GetterNoFnKeyword get(no_fn): Option<u32>;
-
 			pub DataDM config(test_config) build(|_| vec![(15u32, 16u32, 42u64)]):
 				double_map hasher(twox_64_concat) u32, hasher(blake2_128_concat) u32 => u64;
 			pub GenericDataDM:
@@ -544,15 +553,6 @@ mod tests {
 					},
 					default: DecodeDifferent::Encode(
 						DefaultByteGetter(&__GetByteStructGenericData2(PhantomData::<Test>))
-					),
-					documentation: DecodeDifferent::Encode(&[]),
-				},
-				StorageEntryMetadata {
-					name: DecodeDifferent::Encode("GetterNoFnKeyword"),
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Plain(DecodeDifferent::Encode("u32")),
-					default: DecodeDifferent::Encode(
-						DefaultByteGetter(&__GetByteStructGetterNoFnKeyword(PhantomData::<Test>))
 					),
 					documentation: DecodeDifferent::Encode(&[]),
 				},

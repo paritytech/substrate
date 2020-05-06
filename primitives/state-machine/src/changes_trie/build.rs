@@ -32,7 +32,7 @@ use crate::{
 		input::{InputKey, InputPair, DigestIndex, ExtrinsicIndex, ChildIndex, ChildIndexValue},
 	},
 };
-use sp_core::storage::{ChildInfo, ChildType, ChildChange};
+use sp_core::storage::{ChildInfo, ChildType, ChildChange, PrefixedStorageKey};
 
 /// Prepare input pairs for building a changes trie of given block.
 ///
@@ -149,13 +149,16 @@ fn prepare_extrinsics_input_inner<'a, B, H, Number>(
 			),
 		}
 	} else {
-		(Some(((ChildChange::Update, None), &changes.committed.top)), Some(((ChildChange::Update, None), &changes.prospective.top)))
+		(
+			Some(((ChildChange::Update, None), &changes.committed.top)),
+			Some(((ChildChange::Update, None), &changes.prospective.top)),
+		)
 	};
 	let mut change = (ChildChange::Update, None);
 	if let Some((child_change, _)) = prospective.as_ref().or_else(|| committed.as_ref()) {
-		match child_change.0 {
-			ChildChange::BulkDeleteByKeyspace => {
-				change.0 = ChildChange::BulkDeleteByKeyspace;
+		match &child_change.0 {
+			ChildChange::BulkDelete(encoded_root) => {
+				change.0 = ChildChange::BulkDelete(encoded_root.clone());
 				change.1 = child_change.1;
 			},
 			ChildChange::Update => (),
@@ -296,7 +299,7 @@ fn prepare_digest_input<'a, H, Number>(
 			// change trie content are all stored as top_trie (default child trie with empty keyspace)
 			let child_info = sp_core::storage::ChildInfo::top_trie();
 			let child_info = &child_info;
-			let mut children_roots = BTreeMap::<StorageKey, _>::new();
+			let mut children_roots = BTreeMap::<PrefixedStorageKey, _>::new();
 			{
 				let trie_storage = TrieBackendEssence::<_, H>::new(
 					crate::changes_trie::TrieBackendStorageAdapter(storage),
@@ -497,6 +500,7 @@ mod test {
 				].into_iter().collect(),
 			},
 			collect_extrinsics: true,
+			stats: Default::default(),
 		};
 		let config = Configuration { digest_interval: 4, digest_levels: 2 };
 
@@ -804,7 +808,7 @@ mod test {
 			],
 		);
 		assert_eq!(
-			child_changes_tries_nodes.get(&ChildIndex { block: 16u64, storage_key: child_trie_key2.to_vec() }).unwrap(),
+			child_changes_tries_nodes.get(&ChildIndex { block: 16u64, storage_key: child_trie_key2.clone() }).unwrap(),
 			&vec![
 				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 16u64, key: vec![100] }, vec![0, 2]),
 

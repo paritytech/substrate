@@ -66,6 +66,7 @@ fn decl_genesis_config_and_impl_default(
 	let genesis_where_clause = &genesis_config.genesis_where_clause;
 
 	quote!(
+		/// Genesis config for the module, allow to build genesis storage.
 		#[derive(#scrate::Serialize, #scrate::Deserialize)]
 		#[cfg(feature = "std")]
 		#[serde(rename_all = "camelCase")]
@@ -138,6 +139,7 @@ fn impl_build_storage(
 	quote!{
 		#[cfg(feature = "std")]
 		impl#genesis_impl GenesisConfig#genesis_struct #genesis_where_clause {
+			/// Build the storage for this module.
 			pub fn build_storage #fn_generic (&self) -> std::result::Result<
 				#scrate::sp_runtime::Storage,
 				String

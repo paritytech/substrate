@@ -17,7 +17,12 @@
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::*;
 use codec::{FullCodec, Encode, EncodeAppend, EncodeLike, Decode};
-use crate::{storage::{self, unhashed}, hash::{Twox128, StorageHasher}, traits::Len};
+use crate::{
+	Never,
+	storage::{self, unhashed},
+	hash::{Twox128, StorageHasher},
+	traits::Len
+};
 
 /// Generator for `StorageValue` used by `decl_storage`.
 ///
@@ -104,12 +109,18 @@ impl<T: FullCodec, G: StorageValue<T>> storage::StorageValue<T> for G {
 	}
 
 	fn mutate<R, F: FnOnce(&mut G::Query) -> R>(f: F) -> R {
+		Self::try_mutate(|v| Ok::<R, Never>(f(v))).expect("`Never` can not be constructed; qed")
+	}
+
+	fn try_mutate<R, E, F: FnOnce(&mut G::Query) -> Result<R, E>>(f: F) -> Result<R, E> {
 		let mut val = G::get();
 
 		let ret = f(&mut val);
-		match G::from_query_to_optional_value(val) {
-			Some(ref val) => G::put(val),
-			None => G::kill(),
+		if ret.is_ok() {
+			match G::from_query_to_optional_value(val) {
+				Some(ref val) => G::put(val),
+				None => G::kill(),
+			}
 		}
 		ret
 	}

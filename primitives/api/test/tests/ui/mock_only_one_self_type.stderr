@@ -1,0 +1,19 @@
+error: Self type should not change between runtime apis
+  --> $DIR/mock_only_one_self_type.rs:21:23
+   |
+21 |     impl Api2<Block> for MockApi2 {
+   |                          ^^^^^^^^
+
+error: First self type found here
+  --> $DIR/mock_only_one_self_type.rs:17:22
+   |
+17 |     impl Api<Block> for MockApi {
+   |                         ^^^^^^^
+
+warning: unused import: `substrate_test_runtime_client::runtime::Block`
+ --> $DIR/mock_only_one_self_type.rs:1:5
+  |
+1 | use substrate_test_runtime_client::runtime::Block;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default

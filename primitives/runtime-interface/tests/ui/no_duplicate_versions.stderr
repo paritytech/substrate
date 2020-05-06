@@ -1,0 +1,11 @@
+error: Duplicated version attribute
+ --> $DIR/no_duplicate_versions.rs:7:2
+  |
+7 |     #[version(2)]
+  |     ^
+
+error: Previous version with the same number defined here
+ --> $DIR/no_duplicate_versions.rs:5:2
+  |
+5 |     #[version(2)]
+  |     ^

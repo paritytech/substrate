@@ -54,6 +54,7 @@
 //!
 //! ```
 //! use frame_support::{decl_module, dispatch};
+//! use frame_support::weights::MINIMUM_WEIGHT;
 //! use frame_system::{self as system, ensure_signed};
 //! use pallet_scored_pool::{self as scored_pool};
 //!
@@ -61,6 +62,7 @@
 //!
 //! decl_module! {
 //! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//! 		#[weight = MINIMUM_WEIGHT]
 //! 		pub fn candidate(origin) -> dispatch::DispatchResult {
 //! 			let who = ensure_signed(origin)?;
 //!
@@ -95,11 +97,12 @@ use sp_std::{
 };
 use frame_support::{
 	decl_module, decl_storage, decl_event, ensure, decl_error,
-	traits::{ChangeMembers, InitializeMembers, Currency, Get, ReservableCurrency},
+	traits::{EnsureOrigin, ChangeMembers, InitializeMembers, Currency, Get, ReservableCurrency},
+	weights::{Weight, MINIMUM_WEIGHT},
 };
 use frame_system::{self as system, ensure_root, ensure_signed};
 use sp_runtime::{
-	traits::{EnsureOrigin, AtLeast32Bit, MaybeSerializeDeserialize, Zero, StaticLookup},
+	traits::{AtLeast32Bit, MaybeSerializeDeserialize, Zero, StaticLookup},
 };
 
 type BalanceOf<T, I> = <<T as Trait<I>>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
@@ -189,8 +192,8 @@ decl_storage! {
 					<CandidateExists<T, I>>::insert(who, true);
 				});
 
-			/// Sorts the `Pool` by score in a descending order. Entities which
-			/// have a score of `None` are sorted to the beginning of the vec.
+			// Sorts the `Pool` by score in a descending order. Entities which
+			// have a score of `None` are sorted to the beginning of the vec.
 			pool.sort_by_key(|(_, maybe_score)|
 				Reverse(maybe_score.unwrap_or_default())
 			);
@@ -245,11 +248,12 @@ decl_module! {
 
 		/// Every `Period` blocks the `Members` set is refreshed from the
 		/// highest scoring members in the pool.
-		fn on_initialize(n: T::BlockNumber) {
+		fn on_initialize(n: T::BlockNumber) -> Weight {
 			if n % T::Period::get() == Zero::zero() {
 				let pool = <Pool<T, I>>::get();
 				<Module<T, I>>::refresh_members(pool, ChangeReceiver::MembershipChanged);
 			}
+			MINIMUM_WEIGHT
 		}
 
 		/// Add `origin` to the pool of candidates.
@@ -263,6 +267,7 @@ decl_module! {
 		///
 		/// The `index` parameter of this function must be set to
 		/// the index of the transactor in the `Pool`.
+		#[weight = MINIMUM_WEIGHT]
 		pub fn submit_candidacy(origin) {
 			let who = ensure_signed(origin)?;
 			ensure!(!<CandidateExists<T, I>>::contains_key(&who), Error::<T, I>::AlreadyInPool);
@@ -292,6 +297,7 @@ decl_module! {
 		///
 		/// The `index` parameter of this function must be set to
 		/// the index of the transactor in the `Pool`.
+		#[weight = MINIMUM_WEIGHT]
 		pub fn withdraw_candidacy(
 			origin,
 			index: u32
@@ -311,6 +317,7 @@ decl_module! {
 		///
 		/// The `index` parameter of this function must be set to
 		/// the index of `dest` in the `Pool`.
+		#[weight = MINIMUM_WEIGHT]
 		pub fn kick(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -335,6 +342,7 @@ decl_module! {
 		///
 		/// The `index` parameter of this function must be set to
 		/// the index of the `dest` in the `Pool`.
+		#[weight = MINIMUM_WEIGHT]
 		pub fn score(
 			origin,
 			dest: <T::Lookup as StaticLookup>::Source,
@@ -375,6 +383,7 @@ decl_module! {
 		/// (this happens each `Period`).
 		///
 		/// May only be called from root.
+		#[weight = MINIMUM_WEIGHT]
 		pub fn change_member_count(origin, count: u32) {
 			ensure_root(origin)?;
 			<MemberCount<I>>::put(&count);

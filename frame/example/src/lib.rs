@@ -256,14 +256,15 @@
 use sp_std::marker::PhantomData;
 use frame_support::{
 	dispatch::DispatchResult, decl_module, decl_storage, decl_event,
-	weights::{SimpleDispatchInfo, DispatchInfo, DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee},
+	weights::{DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee, MINIMUM_WEIGHT, Pays},
 };
 use sp_std::prelude::*;
-use frame_benchmarking::{benchmarks, account};
-use frame_system::{self as system, ensure_signed, ensure_root, RawOrigin};
+use frame_system::{self as system, ensure_signed, ensure_root};
 use codec::{Encode, Decode};
 use sp_runtime::{
-	traits::{SignedExtension, Bounded, SaturatedConversion},
+	traits::{
+		SignedExtension, Bounded, SaturatedConversion, DispatchInfoOf,
+	},
 	transaction_validity::{
 		ValidTransaction, TransactionValidityError, InvalidTransaction, TransactionValidity,
 	},
@@ -304,8 +305,8 @@ impl<T: pallet_balances::Trait> ClassifyDispatch<(&BalanceOf<T>,)> for WeightFor
 }
 
 impl<T: pallet_balances::Trait> PaysFee<(&BalanceOf<T>,)> for WeightForSetDummy<T> {
-	fn pays_fee(&self, _target: (&BalanceOf<T>,)) -> bool {
-		true
+	fn pays_fee(&self, _target: (&BalanceOf<T>,)) -> Pays {
+		Pays::Yes
 	}
 }
 
@@ -465,7 +466,7 @@ decl_module! {
 		// weight (a numeric representation of pure execution time and difficulty) of the
 		// transaction and the latter demonstrates the [`DispatchClass`] of the call. A higher
 		// weight means a larger transaction (less of which can be placed in a single block).
-		#[weight = SimpleDispatchInfo::FixedNormal(10_000)]
+		#[weight = MINIMUM_WEIGHT]
 		fn accumulate_dummy(origin, increase_by: T::Balance) -> DispatchResult {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let _sender = ensure_signed(origin)?;
@@ -514,16 +515,15 @@ decl_module! {
 
 		// The signature could also look like: `fn on_initialize()`.
 		// This function could also very well have a weight annotation, similar to any other. The
-		// only difference being that if it is not annotated, the default is
-		// `SimpleDispatchInfo::zero()`, which resolves into no weight.
-		#[weight = SimpleDispatchInfo::FixedNormal(1000)]
-		fn on_initialize(_n: T::BlockNumber) {
+		// only difference is that it mut be returned, not annotated.
+		fn on_initialize(_n: T::BlockNumber) -> Weight {
 			// Anything that needs to be done at the start of the block.
 			// We don't do anything here.
+
+			MINIMUM_WEIGHT
 		}
 
 		// The signature could also look like: `fn on_finalize()`
-		#[weight = SimpleDispatchInfo::FixedNormal(2000)]
 		fn on_finalize(_n: T::BlockNumber) {
 			// Anything that needs to be done at the end of the block.
 			// We just kill our dummy storage item.
@@ -617,7 +617,6 @@ impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
 	// other pallets.
 	type Call = Call<T>;
 	type AdditionalSigned = ();
-	type DispatchInfo = DispatchInfo;
 	type Pre = ();
 
 	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }
@@ -626,7 +625,7 @@ impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
 		&self,
 		_who: &Self::AccountId,
 		call: &Self::Call,
-		_info: Self::DispatchInfo,
+		_info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> TransactionValidity {
 		// if the transaction is too big, just drop it.
@@ -648,39 +647,61 @@ impl<T: Trait + Send + Sync> SignedExtension for WatchDummy<T> {
 	}
 }
 
-benchmarks!{
-	_ {
-		// Define a common range for `b`.
-		let b in 1 .. 1000 => ();
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking {
+	use super::*;
+	use frame_benchmarking::{benchmarks, account};
+	use frame_system::RawOrigin;
+
+	benchmarks!{
+		_ {
+			// Define a common range for `b`.
+			let b in 1 .. 1000 => ();
+		}
+
+		// This will measure the execution time of `accumulate_dummy` for b in [1..1000] range.
+		accumulate_dummy {
+			let b in ...;
+			let caller = account("caller", 0, 0);
+		}: _ (RawOrigin::Signed(caller), b.into())
+
+		// This will measure the execution time of `set_dummy` for b in [1..1000] range.
+		set_dummy {
+			let b in ...;
+		}: set_dummy (RawOrigin::Root, b.into())
+
+		// This will measure the execution time of `set_dummy` for b in [1..10] range.
+		another_set_dummy {
+			let b in 1 .. 10;
+		}: set_dummy (RawOrigin::Root, b.into())
+
+		// This will measure the execution time of sorting a vector.
+		sort_vector {
+			let x in 0 .. 10000;
+			let mut m = Vec::<u32>::new();
+			for i in (0..x).rev() {
+				m.push(i);
+			}
+		}: {
+			m.sort();
+		}
 	}
 
-	// This will measure the execution time of `accumulate_dummy` for b in [1..1000] range.
-	accumulate_dummy {
-		let b in ...;
-		let caller = account("caller", 0, 0);
-	}: _ (RawOrigin::Signed(caller), b.into())
+	#[cfg(test)]
+	mod tests {
+		use super::*;
+		use crate::tests::{new_test_ext, Test};
+		use frame_support::assert_ok;
 
-	// This will measure the execution time of `set_dummy` for b in [1..1000] range.
-	set_dummy {
-		let b in ...;
-		let caller = account("caller", 0, 0);
-	}: set_dummy (RawOrigin::Signed(caller), b.into())
-
-	// This will measure the execution time of `set_dummy` for b in [1..10] range.
-	another_set_dummy {
-		let b in 1 .. 10;
-		let caller = account("caller", 0, 0);
-	}: set_dummy (RawOrigin::Signed(caller), b.into())
-
-	// This will measure the execution time of sorting a vector.
-	sort_vector {
-		let x in 0 .. 10000;
-		let mut m = Vec::<u32>::new();
-		for i in 0..x {
-			m.push(i);
+		#[test]
+		fn test_benchmarks() {
+			new_test_ext().execute_with(|| {
+				assert_ok!(test_benchmark_accumulate_dummy::<Test>());
+				assert_ok!(test_benchmark_set_dummy::<Test>());
+				assert_ok!(test_benchmark_another_set_dummy::<Test>());
+				assert_ok!(test_benchmark_sort_vector::<Test>());
+			});
 		}
-	}: {
-		m.sort();
 	}
 }
 
@@ -688,14 +709,17 @@ benchmarks!{
 mod tests {
 	use super::*;
 
-	use frame_support::{assert_ok, impl_outer_origin, parameter_types, weights::GetDispatchInfo};
+	use frame_support::{
+		assert_ok, impl_outer_origin, parameter_types, weights::{DispatchInfo, GetDispatchInfo},
+		traits::{OnInitialize, OnFinalize}
+	};
 	use sp_core::H256;
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 	use sp_runtime::{
 		Perbill,
 		testing::Header,
-		traits::{BlakeTwo256, OnInitialize, OnFinalize, IdentityLookup},
+		traits::{BlakeTwo256, IdentityLookup},
 	};
 
 	impl_outer_origin! {
@@ -726,12 +750,13 @@ mod tests {
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
+		type DbWeight = ();
 		type MaximumBlockLength = MaximumBlockLength;
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
 		type ModuleToIndex = ();
 		type AccountData = pallet_balances::AccountData<u64>;
-		type MigrateAccount = (); type OnNewAccount = ();
+		type OnNewAccount = ();
 		type OnKilledAccount = ();
 	}
 	parameter_types! {
@@ -752,7 +777,7 @@ mod tests {
 
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
-	fn new_test_ext() -> sp_io::TestExternalities {
+	pub fn new_test_ext() -> sp_io::TestExternalities {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		// We use default for brevity, but you can configure as desired if needed.
 		pallet_balances::GenesisConfig::<Test>::default().assimilate_storage(&mut t).unwrap();
@@ -802,13 +827,13 @@ mod tests {
 			let info = DispatchInfo::default();
 
 			assert_eq!(
-				WatchDummy::<Test>(PhantomData).validate(&1, &call, info, 150)
+				WatchDummy::<Test>(PhantomData).validate(&1, &call, &info, 150)
 					.unwrap()
 					.priority,
 				Bounded::max_value(),
 			);
 			assert_eq!(
-				WatchDummy::<Test>(PhantomData).validate(&1, &call, info, 250),
+				WatchDummy::<Test>(PhantomData).validate(&1, &call, &info, 250),
 				InvalidTransaction::ExhaustsResources.into(),
 			);
 		})
@@ -816,11 +841,11 @@ mod tests {
 
 	#[test]
 	fn weights_work() {
-		// must have a default weight.
+		// must have a defined weight.
 		let default_call = <Call<Test>>::accumulate_dummy(10);
 		let info = default_call.get_dispatch_info();
 		// aka. `let info = <Call<Test> as GetDispatchInfo>::get_dispatch_info(&default_call);`
-		assert_eq!(info.weight, 10_000);
+		assert_eq!(info.weight, 10_000_000);
 
 		// must have a custom weight of `100 * arg = 2000`
 		let custom_call = <Call<Test>>::set_dummy(20);

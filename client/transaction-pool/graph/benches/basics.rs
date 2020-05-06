@@ -18,12 +18,14 @@ use criterion::{criterion_group, criterion_main, Criterion};
 
 use futures::{future::{ready, Ready}, executor::block_on};
 use sc_transaction_graph::*;
-use sp_runtime::transaction_validity::{ValidTransaction, InvalidTransaction};
 use codec::Encode;
 use substrate_test_runtime::{Block, Extrinsic, Transfer, H256, AccountId};
 use sp_runtime::{
 	generic::BlockId,
-	transaction_validity::{TransactionValidity, TransactionTag as Tag},
+	transaction_validity::{
+		ValidTransaction, InvalidTransaction, TransactionValidity, TransactionTag as Tag,
+		TransactionSource,
+	},
 };
 use sp_core::blake2_256;
 
@@ -55,6 +57,7 @@ impl ChainApi for TestApi {
 	fn validate_transaction(
 		&self,
 		at: &BlockId<Self::Block>,
+		_source: TransactionSource,
 		uxt: ExtrinsicFor<Self>,
 	) -> Self::ValidationFuture {
 		let nonce = uxt.transfer().nonce;
@@ -121,6 +124,7 @@ fn uxt(transfer: Transfer) -> Extrinsic {
 }
 
 fn bench_configured(pool: Pool<TestApi>, number: u64) {
+	let source = TransactionSource::External;
 	let mut futures = Vec::new();
 	let mut tags = Vec::new();
 
@@ -133,7 +137,7 @@ fn bench_configured(pool: Pool<TestApi>, number: u64) {
 		});
 
 		tags.push(to_tag(nonce, AccountId::from_h256(H256::from_low_u64_be(1))));
-		futures.push(pool.submit_one(&BlockId::Number(1), xt));
+		futures.push(pool.submit_one(&BlockId::Number(1), source, xt));
 	}
 
 	let res = block_on(futures::future::join_all(futures.into_iter()));

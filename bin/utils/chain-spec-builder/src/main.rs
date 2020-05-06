@@ -87,7 +87,7 @@ fn genesis_constructor(
 	let authorities = authority_seeds
 		.iter()
 		.map(AsRef::as_ref)
-		.map(chain_spec::get_authority_keys_from_seed)
+		.map(chain_spec::authority_keys_from_seed)
 		.collect::<Vec<_>>();
 
 	let enable_println = true;
@@ -120,6 +120,7 @@ fn generate_chain_spec(
 	let chain_spec = chain_spec::ChainSpec::from_genesis(
 		"Custom",
 		"custom",
+		sc_chain_spec::ChainType::Live,
 		move || genesis_constructor(&authority_seeds, &endowed_accounts, &sudo_account),
 		vec![],
 		None,
@@ -142,7 +143,7 @@ fn generate_authority_keys_and_store(
 		).map_err(|err| err.to_string())?;
 
 		let (_, _, grandpa, babe, im_online, authority_discovery) =
-			chain_spec::get_authority_keys_from_seed(seed);
+			chain_spec::authority_keys_from_seed(seed);
 
 		let insert_key = |key_type, public| {
 			keystore.write().insert_unknown(

@@ -19,14 +19,14 @@
 use std::{sync::Arc, collections::{HashMap, hash_map::Entry}};
 use parking_lot::RwLock;
 
-use kvdb::{KeyValueDB, DBTransaction};
-
 use sc_client_api::blockchain::{well_known_cache_keys::{self, Id as CacheKeyId}, Cache as BlockchainCache};
 use sp_blockchain::Result as ClientResult;
+use sp_database::{Database, Transaction};
 use codec::{Encode, Decode};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
-use crate::utils::{self, COLUMN_META, db_err};
+use crate::utils::{self, COLUMN_META};
+use crate::DbHash;
 
 use self::list_cache::{ListCache, PruningStrategy};
 
@@ -78,7 +78,7 @@ impl<T> CacheItemT for T where T: Clone + Decode + Encode + PartialEq {}
 /// Database-backed blockchain data cache.
 pub struct DbCache<Block: BlockT> {
 	cache_at: HashMap<CacheKeyId, ListCache<Block, Vec<u8>, self::list_storage::DbStorage>>,
-	db: Arc<dyn KeyValueDB>,
+	db: Arc<dyn Database<DbHash>>,
 	key_lookup_column: u32,
 	header_column: u32,
 	cache_column: u32,
@@ -89,7 +89,7 @@ pub struct DbCache<Block: BlockT> {
 impl<Block: BlockT> DbCache<Block> {
 	/// Create new cache.
 	pub fn new(
-		db: Arc<dyn KeyValueDB>,
+		db: Arc<dyn Database<DbHash>>,
 		key_lookup_column: u32,
 		header_column: u32,
 		cache_column: u32,
@@ -113,7 +113,7 @@ impl<Block: BlockT> DbCache<Block> {
 	}
 
 	/// Begin cache transaction.
-	pub fn transaction<'a>(&'a mut self, tx: &'a mut DBTransaction) -> DbCacheTransaction<'a, Block> {
+	pub fn transaction<'a>(&'a mut self, tx: &'a mut Transaction<DbHash>) -> DbCacheTransaction<'a, Block> {
 		DbCacheTransaction {
 			cache: self,
 			tx,
@@ -125,7 +125,7 @@ impl<Block: BlockT> DbCache<Block> {
 	/// Begin cache transaction with given ops.
 	pub fn transaction_with_ops<'a>(
 		&'a mut self,
-		tx: &'a mut DBTransaction,
+		tx: &'a mut Transaction<DbHash>,
 		ops: DbCacheTransactionOps<Block>,
 	) -> DbCacheTransaction<'a, Block> {
 		DbCacheTransaction {
@@ -169,7 +169,7 @@ impl<Block: BlockT> DbCache<Block> {
 fn get_cache_helper<'a, Block: BlockT>(
 	cache_at: &'a mut HashMap<CacheKeyId, ListCache<Block, Vec<u8>, self::list_storage::DbStorage>>,
 	name: CacheKeyId,
-	db: &Arc<dyn KeyValueDB>,
+	db: &Arc<dyn Database<DbHash>>,
 	key_lookup: u32,
 	header: u32,
 	cache: u32,
@@ -215,7 +215,7 @@ impl<Block: BlockT> DbCacheTransactionOps<Block> {
 /// Database-backed blockchain data cache transaction valid for single block import.
 pub struct DbCacheTransaction<'a, Block: BlockT> {
 	cache: &'a mut DbCache<Block>,
-	tx: &'a mut DBTransaction,
+	tx: &'a mut Transaction<DbHash>,
 	cache_at_ops: HashMap<CacheKeyId, self::list_cache::CommitOperations<Block, Vec<u8>>>,
 	best_finalized_block: Option<ComplexBlockId<Block>>,
 }
@@ -328,7 +328,7 @@ impl<Block: BlockT> BlockchainCache<Block> for DbCacheSync<Block> {
 		let genesis_hash = cache.genesis_hash;
 		let cache_contents = vec![(*key, data)].into_iter().collect();
 		let db = cache.db.clone();
-		let mut dbtx = DBTransaction::new();
+		let mut dbtx = Transaction::new();
 		let tx = cache.transaction(&mut dbtx);
 		let tx = tx.on_block_insert(
 			ComplexBlockId::new(Default::default(), Zero::zero()),
@@ -337,7 +337,7 @@ impl<Block: BlockT> BlockchainCache<Block> for DbCacheSync<Block> {
 			EntryType::Genesis,
 		)?;
 		let tx_ops = tx.into_ops();
-		db.write(dbtx).map_err(db_err)?;
+		db.commit(dbtx);
 		cache.commit(tx_ops)?;
 		Ok(())
 	}

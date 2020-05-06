@@ -28,7 +28,7 @@ use sp_core::{
 	traits::Externalities, hexdisplay::HexDisplay,
 };
 use sp_trie::{trie_types::Layout, empty_child_trie_root};
-use sp_externalities::Extensions;
+use sp_externalities::{Extensions, Extension};
 use codec::{Decode, Encode};
 
 use std::{error, fmt, any::{Any, TypeId}};
@@ -376,7 +376,14 @@ where
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
 
 		self.mark_dirty();
-		self.overlay.kill_child_storage(child_info);
+		match self.backend.storage(&child_info.prefixed_storage_key()) {
+			Ok(o_encoded_root) => self.overlay.kill_child_storage(child_info, o_encoded_root),
+			Err(e) => trace!(
+				target: "state-trace",
+				"kill_child_storage could not access child trie root {}",
+				e,
+			),
+		}
 	}
 
 	fn clear_prefix(&mut self, prefix: &[u8]) {
@@ -460,9 +467,8 @@ where
 			);
 			root
 		} else {
-
 			if let Some((child_info, child_change)) = self.overlay.default_child_info(storage_key) {
-				if child_change == ChildChange::BulkDeleteByKeyspace {
+				if let ChildChange::BulkDelete(..) = child_change {
 					return empty_child_trie_root::<Layout<H>>().encode();
 				}
 				let (root, _is_empty, _) = {
@@ -558,6 +564,29 @@ where
 	fn extension_by_type_id(&mut self, type_id: TypeId) -> Option<&mut dyn Any> {
 		self.extensions.as_mut().and_then(|exts| exts.get_mut(type_id))
 	}
+
+	fn register_extension_with_type_id(
+		&mut self,
+		type_id: TypeId,
+		extension: Box<dyn Extension>,
+	) -> Result<(), sp_externalities::Error> {
+		if let Some(ref mut extensions) = self.extensions {
+			extensions.register_with_type_id(type_id, extension)
+		} else {
+			Err(sp_externalities::Error::ExtensionsAreNotSupported)
+		}
+	}
+
+	fn deregister_extension_by_type_id(&mut self, type_id: TypeId) -> Result<(), sp_externalities::Error> {
+		if let Some(ref mut extensions) = self.extensions {
+			match extensions.deregister(type_id) {
+				Some(_) => Ok(()),
+				None => Err(sp_externalities::Error::ExtensionIsNotRegistered(type_id))
+			}
+		} else {
+			Err(sp_externalities::Error::ExtensionsAreNotSupported)
+		}
+	}
 }
 
 #[cfg(test)]
@@ -592,6 +621,7 @@ mod tests {
 			].into_iter().collect(),
 			committed: Default::default(),
 			collect_extrinsics: true,
+			stats: Default::default(),
 		}
 	}
 
@@ -688,7 +718,6 @@ mod tests {
 
 	#[test]
 	fn next_child_storage_key_works() {
-
 		let child_info = ChildInfo::new_default(b"Child1");
 		let child_info = &child_info;
 

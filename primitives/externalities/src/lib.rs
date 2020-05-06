@@ -32,6 +32,17 @@ pub use extensions::{Extension, Extensions, ExtensionStore};
 mod extensions;
 mod scope_limited;
 
+/// Externalities error.
+#[derive(Debug)]
+pub enum Error {
+	/// Same extension cannot be registered twice.
+	ExtensionAlreadyRegistered,
+	/// Extensions are not supported.
+	ExtensionsAreNotSupported,
+	/// Extension `TypeId` is not registered.
+	ExtensionIsNotRegistered(TypeId),
+}
+
 /// The Substrate externalities.
 ///
 /// Provides access to the storage and to other registered extensions.
@@ -39,10 +50,14 @@ pub trait Externalities: ExtensionStore {
 	/// Read runtime storage.
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>>;
 
-	/// Get storage value hash. This may be optimized for large values.
+	/// Get storage value hash.
+	///
+	/// This may be optimized for large values.
 	fn storage_hash(&self, key: &[u8]) -> Option<Vec<u8>>;
 
-	/// Get child storage value hash. This may be optimized for large values.
+	/// Get child storage value hash.
+	///
+	/// This may be optimized for large values.
 	///
 	/// Returns an `Option` that holds the SCALE encoded hash.
 	fn child_storage_hash(
@@ -129,7 +144,7 @@ pub trait Externalities: ExtensionStore {
 	/// Set or clear a storage entry (`key`) of current contract being called (effective immediately).
 	fn place_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>);
 
-	/// Set or clear a child storage entry. Return whether the operation succeeds.
+	/// Set or clear a child storage entry.
 	fn place_child_storage(
 		&mut self,
 		child_info: &ChildInfo,
@@ -140,16 +155,17 @@ pub trait Externalities: ExtensionStore {
 	/// Get the identity of the chain.
 	fn chain_id(&self) -> u64;
 
-	/// Get the trie root of the current storage map. This will also update all child storage keys
-	/// in the top-level storage map.
+	/// Get the trie root of the current storage map.
 	///
-	/// The hash is defined by the `Block`.
+	/// This will also update all child storage keys in the top-level storage map.
 	///
-	/// Returns the SCALE encoded hash.
+	/// The returned hash is defined by the `Block` and is SCALE encoded.
 	fn storage_root(&mut self) -> Vec<u8>;
 
-	/// Get the trie root of a child storage map. This will also update the value of the child
-	/// storage keys in the top-level storage map.
+	/// Get the trie root of a child storage map.
+	///
+	/// This will also update the value of the child storage keys in the top-level storage map.
+	///
 	/// If the storage root equals the default hash as defined by the trie, the key in the top-level
 	/// storage map will be removed.
 	fn child_storage_root(
@@ -157,12 +173,11 @@ pub trait Externalities: ExtensionStore {
 		child_info: &ChildInfo,
 	) -> Vec<u8>;
 
-	/// Get the change trie root of the current storage overlay at a block with given parent.
-	/// `parent` is expects a SCALE encoded hash.
+	/// Get the changes trie root of the current storage overlay at a block with given `parent`.
 	///
-	/// The hash is defined by the `Block`.
+	/// `parent` expects a SCALE encoded hash.
 	///
-	/// Returns the SCALE encoded hash.
+	/// The returned hash is defined by the `Block` and is SCALE encoded.
 	fn storage_changes_root(&mut self, parent: &[u8]) -> Result<Option<Vec<u8>>, ()>;
 
 	/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -186,10 +201,29 @@ pub trait Externalities: ExtensionStore {
 pub trait ExternalitiesExt {
 	/// Tries to find a registered extension and returns a mutable reference.
 	fn extension<T: Any + Extension>(&mut self) -> Option<&mut T>;
+
+	/// Register extension `ext`.
+	///
+	/// Should return error if extension is already registered or extensions are not supported.
+	fn register_extension<T: Extension>(&mut self, ext: T) -> Result<(), Error>;
+
+	/// Deregister and drop extension of `T` type.
+	///
+	/// Should return error if extension of type `T` is not registered or
+	/// extensions are not supported.
+	fn deregister_extension<T: Extension>(&mut self) -> Result<(), Error>;
 }
 
 impl ExternalitiesExt for &mut dyn Externalities {
 	fn extension<T: Any + Extension>(&mut self) -> Option<&mut T> {
 		self.extension_by_type_id(TypeId::of::<T>()).and_then(Any::downcast_mut)
+	}
+
+	fn register_extension<T: Extension>(&mut self, ext: T) -> Result<(), Error> {
+		self.register_extension_with_type_id(TypeId::of::<T>(), Box::new(ext))
+	}
+
+	fn deregister_extension<T: Extension>(&mut self) -> Result<(), Error> {
+		self.deregister_extension_by_type_id(TypeId::of::<T>())
 	}
 }

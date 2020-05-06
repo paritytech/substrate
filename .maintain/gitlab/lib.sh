@@ -15,11 +15,23 @@ sanitised_git_logs(){
 }
 
 # Returns the last published release on github
+# Note: we can't just use /latest because that ignores prereleases
 # repo: 'organization/repo'
 # Usage: last_github_release "$repo"
 last_github_release(){
-  curl -H "Authorization: token $GITHUB_RELEASE_TOKEN" \
-    -s "$api_base/$1/releases/latest" | jq '.tag_name'
+  i=0
+  # Iterate over releases until we find the last release that's not just a draft
+  while [ $i -lt 29 ]; do
+    out=$(curl -H "Authorization: token $GITHUB_RELEASE_TOKEN" -s "$api_base/$1/releases" | jq ".[$i]")
+    echo "$out"
+    # Ugh when echoing to jq, we need to translate newlines into spaces :/
+    if [ "$(echo "$out" | tr '\r\n' ' ' | jq '.draft')" = "false" ]; then
+      echo "$out" | tr '\r\n' ' ' | jq '.tag_name'
+      return
+    else
+      i=$((i + 1))
+    fi
+  done
 }
 
 # Checks whether a tag on github has been verified

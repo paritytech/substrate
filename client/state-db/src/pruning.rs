@@ -53,7 +53,7 @@ struct DeathRow<BlockHash: Hash, Key: Hash> {
 	hash: BlockHash,
 	journal_key: Vec<u8>,
 	deleted: HashSet<Key>,
-	deleted_child: HashSet<Vec<u8>>,
+	deleted_child: HashSet<(Vec<u8>, Vec<u8>)>,
 }
 
 #[derive(Encode, Decode)]
@@ -68,7 +68,7 @@ struct JournalRecordV1<BlockHash: Hash, Key: Hash> {
 	hash: BlockHash,
 	inserted: Vec<Key>,
 	deleted: Vec<Key>,
-	deleted_child: Vec<Vec<u8>>,
+	deleted_child: Vec<(Vec<u8>, Vec<u8>)>,
 }
 
 fn to_old_journal_key(block: u64) -> Vec<u8> {
@@ -134,7 +134,7 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 		journal_key: Vec<u8>,
 		inserted: I,
 		deleted: Vec<Key>,
-		deleted_child: Vec<Vec<u8>>,
+		deleted_child: Vec<(Vec<u8>, Vec<u8>)>,
 	) {
 		// remove all re-inserted keys from death rows
 		for k in inserted {

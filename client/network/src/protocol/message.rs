@@ -24,7 +24,7 @@ pub use self::generic::{
 	RemoteHeaderRequest, RemoteHeaderResponse,
 	RemoteChangesRequest, RemoteChangesResponse,
 	FinalityProofRequest, FinalityProofResponse,
-	FromBlock, RemoteReadChildRequest,
+	FromBlock, RemoteReadChildRequest, Roles,
 };
 use sc_client_api::StorageProof;
 
@@ -137,14 +137,71 @@ pub struct RemoteReadResponse {
 
 /// Generic types.
 pub mod generic {
+	use bitflags::bitflags;
 	use codec::{Encode, Decode, Input, Output};
 	use sp_runtime::Justification;
-	use crate::config::Roles;
 	use super::{
 		RemoteReadResponse, Transactions, Direction,
 		RequestId, BlockAttributes, RemoteCallResponse, ConsensusEngineId,
 		BlockState, StorageProof,
 	};
+
+	bitflags! {
+		/// Bitmask of the roles that a node fulfills.
+		pub struct Roles: u8 {
+			/// No network.
+			const NONE = 0b00000000;
+			/// Full node, does not participate in consensus.
+			const FULL = 0b00000001;
+			/// Light client node.
+			const LIGHT = 0b00000010;
+			/// Act as an authority
+			const AUTHORITY = 0b00000100;
+		}
+	}
+
+	impl Roles {
+		/// Does this role represents a client that holds full chain data locally?
+		pub fn is_full(&self) -> bool {
+			self.intersects(Roles::FULL | Roles::AUTHORITY)
+		}
+
+		/// Does this role represents a client that does not participates in the consensus?
+		pub fn is_authority(&self) -> bool {
+			*self == Roles::AUTHORITY
+		}
+
+		/// Does this role represents a client that does not hold full chain data locally?
+		pub fn is_light(&self) -> bool {
+			!self.is_full()
+		}
+	}
+
+	impl<'a> From<&'a crate::config::Role> for Roles {
+		fn from(roles: &'a crate::config::Role) -> Self {
+			match roles {
+				crate::config::Role::Full => Roles::FULL,
+				crate::config::Role::Light => Roles::LIGHT,
+				crate::config::Role::Sentry { .. } => Roles::AUTHORITY,
+				crate::config::Role::Authority { .. } => Roles::AUTHORITY,
+			}
+		}
+	}
+
+	impl codec::Encode for Roles {
+		fn encode_to<T: codec::Output>(&self, dest: &mut T) {
+			dest.push_byte(self.bits())
+		}
+	}
+
+	impl codec::EncodeLike for Roles {}
+
+	impl codec::Decode for Roles {
+		fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
+			Self::from_bits(input.read_byte()?).ok_or_else(|| codec::Error::from("Invalid bytes"))
+		}
+	}
+
 	/// Consensus is mostly opaque to us
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 	pub struct ConsensusMessage {

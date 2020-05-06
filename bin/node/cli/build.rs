@@ -24,14 +24,14 @@ mod cli {
 	include!("src/cli.rs");
 
 	use std::{fs, env, path::Path};
-	use sc_cli::{structopt::clap::Shell};
-	use vergen::{ConstantsFlags, generate_cargo_keys};
+	use sc_cli::structopt::clap::Shell;
+	use substrate_build_script_utils::{generate_cargo_keys, rerun_if_git_head_changed};
 
 	pub fn main() {
 		build_shell_completion();
-		generate_cargo_keys(ConstantsFlags::all()).expect("Failed to generate metadata files");
+		generate_cargo_keys();
 
-		build_script_utils::rerun_if_git_head_changed();
+		rerun_if_git_head_changed();
 	}
 
 	/// Build shell completion scripts for all known shells

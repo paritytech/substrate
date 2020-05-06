@@ -16,10 +16,16 @@
 
 //! Types that should only be used for testing!
 
+use crate::crypto::{KeyTypeId, CryptoTypePublicPair};
 #[cfg(feature = "std")]
-use crate::{ed25519, sr25519, crypto::{Public, Pair}};
-use crate::crypto::KeyTypeId;
-
+use crate::{
+	crypto::{Pair, Public},
+	ed25519, sr25519,
+	traits::BareCryptoStoreError
+};
+#[cfg(feature = "std")]
+use std::collections::HashSet;
+use codec::Encode;
 /// Key type for generic Ed25519 key.
 pub const ED25519: KeyTypeId = KeyTypeId(*b"ed25");
 /// Key type for generic Sr 25519 key.
@@ -39,10 +45,41 @@ impl KeyStore {
 	pub fn new() -> crate::traits::BareCryptoStorePtr {
 		std::sync::Arc::new(parking_lot::RwLock::new(Self::default()))
 	}
+
+	fn sr25519_key_pair(&self, id: KeyTypeId, pub_key: &sr25519::Public) -> Option<sr25519::Pair> {
+		self.keys.get(&id)
+			.and_then(|inner|
+				inner.get(pub_key.as_slice())
+					.map(|s| sr25519::Pair::from_string(s, None).expect("`sr25519` seed slice is valid"))
+			)
+	}
+
+	fn ed25519_key_pair(&self, id: KeyTypeId, pub_key: &ed25519::Public) -> Option<ed25519::Pair> {
+		self.keys.get(&id)
+			.and_then(|inner|
+				inner.get(pub_key.as_slice())
+					.map(|s| ed25519::Pair::from_string(s, None).expect("`ed25519` seed slice is valid"))
+			)
+	}
+
 }
 
 #[cfg(feature = "std")]
 impl crate::traits::BareCryptoStore for KeyStore {
+	fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, BareCryptoStoreError> {
+		self.keys
+			.get(&id)
+			.map(|map| {
+				Ok(map.keys()
+					.fold(Vec::new(), |mut v, k| {
+						v.push(CryptoTypePublicPair(sr25519::CRYPTO_ID, k.clone()));
+						v.push(CryptoTypePublicPair(ed25519::CRYPTO_ID, k.clone()));
+						v
+					}))
+			})
+			.unwrap_or(Ok(vec![]))
+	}
+
 	fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public> {
 		self.keys.get(&id)
 			.map(|keys|
@@ -58,10 +95,11 @@ impl crate::traits::BareCryptoStore for KeyStore {
 		&mut self,
 		id: KeyTypeId,
 		seed: Option<&str>,
-	) -> Result<sr25519::Public, String> {
+	) -> Result<sr25519::Public, BareCryptoStoreError> {
 		match seed {
 			Some(seed) => {
-				let pair = sr25519::Pair::from_string(seed, None).expect("Generates an `sr25519` pair.");
+				let pair = sr25519::Pair::from_string(seed, None)
+					.map_err(|_| BareCryptoStoreError::ValidationError("Generates an `sr25519` pair.".to_owned()))?;
 				self.keys.entry(id).or_default().insert(pair.public().to_raw_vec(), seed.into());
 				Ok(pair.public())
 			},
@@ -71,14 +109,6 @@ impl crate::traits::BareCryptoStore for KeyStore {
 				Ok(pair.public())
 			}
 		}
-	}
-
-	fn sr25519_key_pair(&self, id: KeyTypeId, pub_key: &sr25519::Public) -> Option<sr25519::Pair> {
-		self.keys.get(&id)
-			.and_then(|inner|
-				inner.get(pub_key.as_slice())
-					.map(|s| sr25519::Pair::from_string(s, None).expect("`sr25519` seed slice is valid"))
-			)
 	}
 
 	fn ed25519_public_keys(&self, id: KeyTypeId) -> Vec<ed25519::Public> {
@@ -96,10 +126,11 @@ impl crate::traits::BareCryptoStore for KeyStore {
 		&mut self,
 		id: KeyTypeId,
 		seed: Option<&str>,
-	) -> Result<ed25519::Public, String> {
+	) -> Result<ed25519::Public, BareCryptoStoreError> {
 		match seed {
 			Some(seed) => {
-				let pair = ed25519::Pair::from_string(seed, None).expect("Generates an `ed25519` pair.");
+				let pair = ed25519::Pair::from_string(seed, None)
+					.map_err(|_| BareCryptoStoreError::ValidationError("Generates an `ed25519` pair.".to_owned()))?;
 				self.keys.entry(id).or_default().insert(pair.public().to_raw_vec(), seed.into());
 				Ok(pair.public())
 			},
@@ -109,14 +140,6 @@ impl crate::traits::BareCryptoStore for KeyStore {
 				Ok(pair.public())
 			}
 		}
-	}
-
-	fn ed25519_key_pair(&self, id: KeyTypeId, pub_key: &ed25519::Public) -> Option<ed25519::Pair> {
-		self.keys.get(&id)
-			.and_then(|inner|
-				inner.get(pub_key.as_slice())
-					.map(|s| ed25519::Pair::from_string(s, None).expect("`ed25519` seed slice is valid"))
-			)
 	}
 
 	fn insert_unknown(&mut self, id: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {
@@ -130,6 +153,40 @@ impl crate::traits::BareCryptoStore for KeyStore {
 
 	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
 		public_keys.iter().all(|(k, t)| self.keys.get(&t).and_then(|s| s.get(k)).is_some())
+	}
+
+	fn supported_keys(
+		&self,
+		id: KeyTypeId,
+		keys: Vec<CryptoTypePublicPair>,
+	) -> std::result::Result<Vec<CryptoTypePublicPair>, BareCryptoStoreError> {
+		let provided_keys = keys.into_iter().collect::<HashSet<_>>();
+		let all_keys = self.keys(id)?.into_iter().collect::<HashSet<_>>();
+
+		Ok(provided_keys.intersection(&all_keys).cloned().collect())
+	}
+
+	fn sign_with(
+		&self,
+		id: KeyTypeId,
+		key: &CryptoTypePublicPair,
+		msg: &[u8],
+	) -> Result<Vec<u8>, BareCryptoStoreError> {
+		match key.0 {
+			ed25519::CRYPTO_ID => {
+				let key_pair: ed25519::Pair = self
+					.ed25519_key_pair(id, &ed25519::Public::from_slice(key.1.as_slice()))
+					.ok_or(BareCryptoStoreError::PairNotFound("ed25519".to_owned()))?;
+				return Ok(key_pair.sign(msg).encode());
+			}
+			sr25519::CRYPTO_ID => {
+				let key_pair: sr25519::Pair = self
+					.sr25519_key_pair(id, &sr25519::Public::from_slice(key.1.as_slice()))
+					.ok_or(BareCryptoStoreError::PairNotFound("sr25519".to_owned()))?;
+				return Ok(key_pair.sign(msg).encode());
+			}
+			_ => Err(BareCryptoStoreError::KeyNotSupported(id))
+		}
 	}
 }
 
@@ -247,11 +304,9 @@ mod tests {
 			.ed25519_generate_new(ED25519, None)
 			.expect("Generates key");
 
-		let store_key_pair = store.read()
-			.ed25519_key_pair(ED25519, &public)
-			.expect("Key should exists in store");
+		let public_keys = store.read().keys(ED25519).unwrap();
 
-		assert_eq!(public, store_key_pair.public());
+		assert!(public_keys.contains(&public.into()));
 	}
 
 	#[test]
@@ -267,11 +322,8 @@ mod tests {
 			key_pair.public().as_ref(),
 		).expect("Inserts unknown key");
 
-		let store_key_pair = store.read().sr25519_key_pair(
-			SR25519,
-			&key_pair.public(),
-		).expect("Gets key pair from keystore");
+		let public_keys = store.read().keys(SR25519).unwrap();
 
-		assert_eq!(key_pair.public(), store_key_pair.public());
+		assert!(public_keys.contains(&key_pair.public().into()));
 	}
 }

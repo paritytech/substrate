@@ -59,7 +59,7 @@ struct JournalRecordV1<BlockHash: Hash, Key: Hash> {
 	parent_hash: BlockHash,
 	inserted: Vec<(Key, DBValue)>,
 	deleted: Vec<Key>,
-	deleted_child: Vec<Vec<u8>>,
+	deleted_child: Vec<(Vec<u8>, Vec<u8>)>,
 }
 
 impl<BlockHash: Hash, Key: Hash> From<JournalRecordCompat<BlockHash, Key>> for JournalRecordV1<BlockHash, Key> {
@@ -89,7 +89,7 @@ struct BlockOverlay<BlockHash: Hash, Key: Hash> {
 	journal_key: Vec<u8>,
 	inserted: Vec<Key>,
 	deleted: Vec<Key>,
-	deleted_child: Vec<Vec<u8>>,
+	deleted_child: Vec<(Vec<u8>, Vec<u8>)>,
 }
 
 fn insert_values<Key: Hash>(values: &mut HashMap<Key, (u32, DBValue)>, inserted: Vec<(Key, DBValue)>) {

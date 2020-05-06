@@ -37,8 +37,9 @@
 //! ```
 //!
 
-use futures::{prelude::*, channel::mpsc};
+use futures::prelude::*;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
+use sp_utils::mpsc::{TracingUnboundedSender, TracingUnboundedReceiver, tracing_unbounded};
 use std::{pin::Pin, task::Context, task::Poll};
 use crate::import_queue::{Origin, Link, BlockImportResult, BlockImportError};
 
@@ -46,7 +47,7 @@ use crate::import_queue::{Origin, Link, BlockImportResult, BlockImportError};
 /// can be used to buffer commands, and the receiver can be used to poll said commands and transfer
 /// them to another link.
 pub fn buffered_link<B: BlockT>() -> (BufferedLinkSender<B>, BufferedLinkReceiver<B>) {
-	let (tx, rx) = mpsc::unbounded();
+	let (tx, rx) = tracing_unbounded("mpsc_buffered_link");
 	let tx = BufferedLinkSender { tx };
 	let rx = BufferedLinkReceiver { rx };
 	(tx, rx)
@@ -54,7 +55,7 @@ pub fn buffered_link<B: BlockT>() -> (BufferedLinkSender<B>, BufferedLinkReceive
 
 /// See [`buffered_link`].
 pub struct BufferedLinkSender<B: BlockT> {
-	tx: mpsc::UnboundedSender<BlockImportWorkerMsg<B>>,
+	tx: TracingUnboundedSender<BlockImportWorkerMsg<B>>,
 }
 
 impl<B: BlockT> BufferedLinkSender<B> {
@@ -125,7 +126,7 @@ impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
 
 /// See [`buffered_link`].
 pub struct BufferedLinkReceiver<B: BlockT> {
-	rx: mpsc::UnboundedReceiver<BlockImportWorkerMsg<B>>,
+	rx: TracingUnboundedReceiver<BlockImportWorkerMsg<B>>,
 }
 
 impl<B: BlockT> BufferedLinkReceiver<B> {

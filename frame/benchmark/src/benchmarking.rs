@@ -16,6 +16,8 @@
 
 //! Benchmarks for common FRAME Pallet operations.
 
+#![cfg(feature = "runtime-benchmarks")]
+
 use super::*;
 
 use frame_system::RawOrigin;

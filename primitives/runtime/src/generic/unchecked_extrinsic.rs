@@ -24,7 +24,8 @@ use crate::{
 		self, Member, MaybeDisplay, SignedExtension, Checkable, Extrinsic, ExtrinsicMetadata,
 		IdentifyAccount,
 	},
-	generic::CheckedExtrinsic, transaction_validity::{TransactionValidityError, InvalidTransaction},
+	generic::CheckedExtrinsic,
+	transaction_validity::{TransactionValidityError, InvalidTransaction},
 };
 
 const TRANSACTION_VERSION: u8 = 4;
@@ -125,9 +126,7 @@ where
 			Some((signed, signature, extra)) => {
 				let signed = lookup.lookup(signed)?;
 				let raw_payload = SignedPayload::new(self.function, extra)?;
-				if !raw_payload.using_encoded(|payload| {
-					signature.verify(payload, &signed)
-				}) {
+				if !raw_payload.using_encoded(|payload| signature.verify(payload, &signed)) {
 					return Err(InvalidTransaction::BadProof.into())
 				}
 
@@ -321,29 +320,10 @@ mod tests {
 	use super::*;
 	use sp_io::hashing::blake2_256;
 	use crate::codec::{Encode, Decode};
-	use crate::traits::{SignedExtension, IdentifyAccount, IdentityLookup};
-	use serde::{Serialize, Deserialize};
+	use crate::traits::{SignedExtension, IdentityLookup};
+	use crate::testing::TestSignature as TestSig;
 
 	type TestContext = IdentityLookup<u64>;
-
-	#[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Encode, Decode)]
-	pub struct TestSigner(pub u64);
-	impl From<u64> for TestSigner { fn from(x: u64) -> Self { Self(x) } }
-	impl From<TestSigner> for u64 { fn from(x: TestSigner) -> Self { x.0 } }
-	impl IdentifyAccount for TestSigner {
-		type AccountId = u64;
-		fn into_account(self) -> u64 { self.into() }
-	}
-
-	#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Encode, Decode)]
-	struct TestSig(u64, Vec<u8>);
-	impl traits::Verify for TestSig {
-		type Signer = TestSigner;
-		fn verify<L: traits::Lazy<[u8]>>(&self, mut msg: L, signer: &u64) -> bool {
-			signer == &self.0 && msg.get() == &self.1[..]
-		}
-	}
-
 	type TestAccountId = u64;
 	type TestCall = Vec<u8>;
 
@@ -357,7 +337,6 @@ mod tests {
 		type AccountId = u64;
 		type Call = ();
 		type AdditionalSigned = ();
-		type DispatchInfo = ();
 		type Pre = ();
 
 		fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> { Ok(()) }

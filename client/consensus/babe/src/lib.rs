@@ -62,7 +62,9 @@ pub use sp_consensus_babe::{
 	BabeApi, ConsensusLog, BABE_ENGINE_ID, SlotNumber, BabeConfiguration,
 	AuthorityId, AuthorityPair, AuthoritySignature,
 	BabeAuthorityWeight, VRF_OUTPUT_LENGTH,
-	digests::{PreDigest, CompatibleDigestItem, NextEpochDescriptor},
+	digests::{
+		CompatibleDigestItem, NextEpochDescriptor, PreDigest, PrimaryPreDigest, SecondaryPreDigest,
+	},
 };
 pub use sp_consensus::SyncOracle;
 use std::{
@@ -99,7 +101,7 @@ use sc_client_api::{
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 
 use futures::prelude::*;
-use log::{warn, debug, info, trace};
+use log::{debug, info, log, trace, warn};
 use sc_consensus_slots::{
 	SlotWorker, SlotInfo, SlotCompatible, StorageChanges, CheckedHeader, check_equivocation,
 };
@@ -219,16 +221,6 @@ fn babe_err<B: BlockT>(error: Error<B>) -> Error<B> {
 	debug!(target: "babe", "{}", error);
 	error
 }
-
-macro_rules! babe_info {
-	($($i: expr),+) => {
-		{
-			info!(target: "babe", $($i),+);
-			format!($($i),+)
-		}
-	};
-}
-
 
 /// Intermediate value passed to block importer.
 pub struct BabeIntermediate<B: BlockT> {
@@ -366,7 +358,7 @@ pub fn start_babe<B, C, SC, E, I, SO, CAW, Error>(BabeParams {
 		&inherent_data_providers,
 	)?;
 
-	babe_info!("Starting BABE Authorship worker");
+	info!(target: "babe", "👶 Starting BABE Authorship worker");
 	Ok(sc_consensus_slots::start_slot_worker(
 		config.0,
 		select_chain,
@@ -518,38 +510,28 @@ impl<B, C, E, I, Error, SO> sc_consensus_slots::SimpleSlotWorker<B> for BabeWork
 	fn proposing_remaining_duration(
 		&self,
 		head: &B::Header,
-		slot_info: &SlotInfo
+		slot_info: &SlotInfo,
 	) -> Option<std::time::Duration> {
-		// never give more than 2^this times the lenience.
-		const BACKOFF_CAP: u64 = 8;
-
-		// how many slots it takes before we double the lenience.
-		const BACKOFF_STEP: u64 = 2;
-
 		let slot_remaining = self.slot_remaining_duration(slot_info);
+
 		let parent_slot = match find_pre_digest::<B>(head) {
 			Err(_) => return Some(slot_remaining),
 			Ok(d) => d.slot_number(),
 		};
 
-		// we allow a lenience of the number of slots since the head of the
-		// chain was produced, minus 1 (since there is always a difference of at least 1)
-		//
-		// exponential back-off.
-		// in normal cases we only attempt to issue blocks up to the end of the slot.
-		// when the chain has been stalled for a few slots, we give more lenience.
-		let slot_lenience = slot_info.number.saturating_sub(parent_slot + 1);
+		if let Some(slot_lenience) =
+			sc_consensus_slots::slot_lenience_exponential(parent_slot, slot_info)
+		{
+			debug!(target: "babe",
+				"No block for {} slots. Applying exponential lenience of {}s",
+				slot_info.number.saturating_sub(parent_slot + 1),
+				slot_lenience.as_secs(),
+			);
 
-		let slot_lenience = std::cmp::min(slot_lenience, BACKOFF_CAP);
-		let slot_duration = slot_info.duration << (slot_lenience / BACKOFF_STEP);
-
-		if slot_lenience >= 1 {
-			debug!(target: "babe", "No block for {} slots. Applying 2^({}/{}) lenience",
-				slot_lenience, slot_lenience, BACKOFF_STEP);
+			Some(slot_remaining + slot_lenience)
+		} else {
+			Some(slot_remaining)
 		}
-
-		let slot_lenience = Duration::from_secs(slot_duration);
-		Some(slot_lenience + slot_remaining)
 	}
 }
 
@@ -580,10 +562,10 @@ fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, Error<B>>
 	// genesis block doesn't contain a pre digest so let's generate a
 	// dummy one to not break any invariants in the rest of the code
 	if header.number().is_zero() {
-		return Ok(PreDigest::Secondary {
+		return Ok(PreDigest::Secondary(SecondaryPreDigest {
 			slot_number: 0,
 			authority_index: 0,
-		});
+		}));
 	}
 
 	let mut pre_digest: Option<_> = None;
@@ -1008,15 +990,29 @@ impl<Block, Client, Inner> BlockImport<Block> for BabeBlockImport<Block, Client,
 				ConsensusError::ClientImport(Error::<Block>::FetchEpoch(parent_hash).into())
 			})?;
 
-			babe_info!("New epoch {} launching at block {} (block slot {} >= start slot {}).",
-					   viable_epoch.as_ref().epoch_index,
-					   hash,
-					   slot_number,
-					   viable_epoch.as_ref().start_slot);
+			// restrict info logging during initial sync to avoid spam
+			let log_level = if block.origin == BlockOrigin::NetworkInitialSync {
+				log::Level::Debug
+			} else {
+				log::Level::Info
+			};
+
+			log!(target: "babe",
+				log_level, 
+				"👶 New epoch {} launching at block {} (block slot {} >= start slot {}).",
+				viable_epoch.as_ref().epoch_index,
+				hash,
+				slot_number,
+				viable_epoch.as_ref().start_slot,
+			);
 
 			let next_epoch = viable_epoch.increment(next_epoch_descriptor);
 
-			babe_info!("Next epoch starts at slot {}", next_epoch.as_ref().start_slot);
+			log!(target: "babe",
+				log_level,
+				"👶 Next epoch starts at slot {}",
+				next_epoch.as_ref().start_slot,
+			);
 
 			// prune the tree of epochs not part of the finalized chain or
 			// that are not live anymore, and then track the given epoch change

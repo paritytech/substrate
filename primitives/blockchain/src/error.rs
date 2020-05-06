@@ -127,6 +127,8 @@ pub enum Error {
 	/// Incomplete block import pipeline.
 	#[display(fmt = "Incomplete block import pipeline.")]
 	IncompletePipeline,
+	#[display(fmt = "Transaction pool not ready for block production.")]
+	TransactionPoolNotReady,
 	/// A convenience variant for String
 	#[display(fmt = "{}", _0)]
 	Msg(String),

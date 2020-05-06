@@ -30,9 +30,14 @@ use substrate_test_runtime_client::{
 	sp_consensus::BlockOrigin,
 	runtime,
 };
+use sp_runtime::generic::BlockId;
 
 const STORAGE_KEY: &[u8] = b"child";
-const PREFIXED_STORAGE_KEY: &[u8] = b":child_storage:default:child";
+
+fn prefixed_storage_key() -> PrefixedStorageKey {
+	let child_info = ChildInfo::new_default(&STORAGE_KEY[..]);
+	child_info.prefixed_storage_key()
+}
 
 #[test]
 fn should_return_storage() {
@@ -49,7 +54,6 @@ fn should_return_storage() {
 	let genesis_hash = client.genesis_hash();
 	let (client, child) = new_full(Arc::new(client), Subscriptions::new(Arc::new(core.executor())));
 	let key = StorageKey(KEY.to_vec());
-	let storage_key = StorageKey(PREFIXED_STORAGE_KEY.to_vec());
 
 	assert_eq!(
 		client.storage(key.clone(), Some(genesis_hash).into()).wait()
@@ -67,7 +71,7 @@ fn should_return_storage() {
 	);
 	assert_eq!(
 		core.block_on(
-			child.storage(storage_key, key, Some(genesis_hash).into())
+			child.storage(prefixed_storage_key(), key, Some(genesis_hash).into())
 				.map(|x| x.map(|x| x.0.len()))
 		).unwrap().unwrap() as usize,
 		CHILD_VALUE.len(),
@@ -84,7 +88,7 @@ fn should_return_child_storage() {
 		.build());
 	let genesis_hash = client.genesis_hash();
 	let (_client, child) = new_full(client, Subscriptions::new(Arc::new(core.executor())));
-	let child_key = StorageKey(PREFIXED_STORAGE_KEY.to_vec());
+	let child_key = prefixed_storage_key();
 	let key = StorageKey(b"key".to_vec());
 
 
@@ -202,7 +206,7 @@ fn should_send_initial_storage_changes_and_notifications() {
 
 #[test]
 fn should_query_storage() {
-	fn run_tests(mut client: Arc<TestClient>) {
+	fn run_tests(mut client: Arc<TestClient>, has_changes_trie_config: bool) {
 		let core = tokio::runtime::Runtime::new().unwrap();
 		let (api, _child) = new_full(client.clone(), Subscriptions::new(Arc::new(core.executor())));
 
@@ -226,6 +230,13 @@ fn should_query_storage() {
 		let block1_hash = add_block(0);
 		let block2_hash = add_block(1);
 		let genesis_hash = client.genesis_hash();
+
+		if has_changes_trie_config {
+			assert_eq!(
+				client.max_key_changes_range(1, BlockId::Hash(block1_hash)).unwrap(),
+				Some((0, BlockId::Hash(block1_hash))),
+			);
+		}
 
 		let mut expected = vec![
 			StorageChangeSet {
@@ -296,7 +307,7 @@ fn should_query_storage() {
 			Err(Error::InvalidBlockRange {
 				from: format!("1 ({:?})", block1_hash),
 				to: format!("0 ({:?})", genesis_hash),
-				details: "from number >= to number".to_owned(),
+				details: "from number > to number".to_owned(),
 			}).map_err(|e| e.to_string())
 		);
 
@@ -366,12 +377,39 @@ fn should_query_storage() {
 				details: format!("UnknownBlock: header not found in db: {}", random_hash1),
 			}).map_err(|e| e.to_string()),
 		);
+
+		// single block range
+		let result = api.query_storage_at(
+			keys.clone(),
+			Some(block1_hash),
+		);
+
+		assert_eq!(
+			result.wait().unwrap(),
+			vec![
+				StorageChangeSet {
+					block: block1_hash,
+					changes: vec![
+						(StorageKey(vec![1_u8]), None),
+						(StorageKey(vec![2_u8]), Some(StorageData(vec![2_u8]))),
+						(StorageKey(vec![3_u8]), Some(StorageData(vec![3_u8]))),
+						(StorageKey(vec![4_u8]), None),
+						(StorageKey(vec![5_u8]), Some(StorageData(vec![0_u8]))),
+					]
+				}
+			]
+		);
 	}
 
-	run_tests(Arc::new(substrate_test_runtime_client::new()));
-	run_tests(Arc::new(TestClientBuilder::new()
-		.changes_trie_config(Some(ChangesTrieConfiguration::new(4, 2)))
-		.build()));
+	run_tests(Arc::new(substrate_test_runtime_client::new()), false);
+	run_tests(
+		Arc::new(
+			TestClientBuilder::new()
+				.changes_trie_config(Some(ChangesTrieConfiguration::new(4, 2)))
+				.build(),
+		),
+		true,
+	);
 }
 
 #[test]
@@ -392,10 +430,11 @@ fn should_return_runtime_version() {
 	let (api, _child) = new_full(client.clone(), Subscriptions::new(Arc::new(core.executor())));
 
 	let result = "{\"specName\":\"test\",\"implName\":\"parity-test\",\"authoringVersion\":1,\
-		\"specVersion\":2,\"implVersion\":2,\"apis\":[[\"0xdf6acb689907609b\",2],\
-		[\"0x37e397fc7c91f5e4\",1],[\"0xd2bc9897eed08f15\",1],[\"0x40fe3ad401f8959a\",4],\
+		\"specVersion\":2,\"implVersion\":2,\"apis\":[[\"0xdf6acb689907609b\",3],\
+		[\"0x37e397fc7c91f5e4\",1],[\"0xd2bc9897eed08f15\",2],[\"0x40fe3ad401f8959a\",4],\
 		[\"0xc6e9a76309f39b09\",1],[\"0xdd718d5cc53262d4\",1],[\"0xcbca25e39f142387\",1],\
-		[\"0xf78b278be53f454c\",2],[\"0xab3c0572291feb8b\",1],[\"0xbc9d89904f5b923f\",1]]}";
+		[\"0xf78b278be53f454c\",2],[\"0xab3c0572291feb8b\",1],[\"0xbc9d89904f5b923f\",1]],\
+		\"transactionVersion\":1}";
 
 	let runtime_version = api.runtime_version(None.into()).wait().unwrap();
 	let serialized = serde_json::to_string(&runtime_version).unwrap();

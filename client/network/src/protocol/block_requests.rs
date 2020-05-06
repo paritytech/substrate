@@ -35,6 +35,7 @@ use libp2p::{
 		ConnectedPoint,
 		Multiaddr,
 		PeerId,
+		connection::ConnectionId,
 		upgrade::{InboundUpgrade, ReadOneError, UpgradeInfo, Negotiated},
 		upgrade::{DeniedUpgrade, read_one, write_one}
 	},
@@ -43,6 +44,7 @@ use libp2p::{
 		NetworkBehaviour,
 		NetworkBehaviourAction,
 		OneShotHandler,
+		OneShotHandlerConfig,
 		PollParameters,
 		SubstreamProtocol
 	}
@@ -257,20 +259,27 @@ where
 			max_request_len: self.config.max_request_len,
 			protocol: self.config.protocol.clone(),
 		};
-		OneShotHandler::new(SubstreamProtocol::new(p), self.config.inactivity_timeout)
+		let mut cfg = OneShotHandlerConfig::default();
+		cfg.inactive_timeout = self.config.inactivity_timeout;
+		OneShotHandler::new(SubstreamProtocol::new(p), cfg)
 	}
 
 	fn addresses_of_peer(&mut self, _: &PeerId) -> Vec<Multiaddr> {
 		Vec::new()
 	}
 
-	fn inject_connected(&mut self, _peer: PeerId, _info: ConnectedPoint) {
+	fn inject_connected(&mut self, _peer: &PeerId) {
 	}
 
-	fn inject_disconnected(&mut self, _peer: &PeerId, _info: ConnectedPoint) {
+	fn inject_disconnected(&mut self, _peer: &PeerId) {
 	}
 
-	fn inject_node_event(&mut self, peer: PeerId, Request(request, mut stream): Request<NegotiatedSubstream>) {
+	fn inject_event(
+		&mut self,
+		peer: PeerId,
+		connection: ConnectionId,
+		Request(request, mut stream): Request<NegotiatedSubstream>
+	) {
 		match self.on_block_request(&peer, &request) {
 			Ok(res) => {
 				log::trace!("enqueueing block response for peer {} with {} blocks", peer, res.blocks.len());

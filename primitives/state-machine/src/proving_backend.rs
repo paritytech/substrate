@@ -281,7 +281,7 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 	fn child_storage_root<I>(
 		&self,
 		child_info: &ChildInfo,
-		child_change: ChildChange,
+		child_change: &ChildChange,
 		delta: I,
 	) -> (H::Out, bool, Self::Transaction)
 	where
@@ -292,7 +292,7 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		if let Some((change, tx)) = tx.remove(child_info) {
 			match change {
 				ChildChange::Update => (root, is_empty, Some(tx)),
-				ChildChange::BulkDeleteByKeyspace => {
+				ChildChange::BulkDelete(_encoded_root) => {
 					// no need to keep change trie info contained in tx
 					(root, true, Some(Default::default()))
 				},
@@ -300,6 +300,12 @@ impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 		} else {
 			(root, is_empty, None)
 		}
+	}
+
+	fn register_overlay_stats(&mut self, _stats: &crate::stats::StateMachineStats) { }
+
+	fn usage_info(&self) -> crate::stats::UsageInfo {
+		self.0.usage_info()
 	}
 }
 
@@ -371,7 +377,7 @@ mod tests {
 		let (proving_root, proving_mdb) = proving_backend.storage_root(::std::iter::empty());
 		assert_eq!(trie_root, proving_root);
 		let trie_mdb = trie_mdb.remove(&ChildInfo::top_trie()).unwrap();
-		let mut trie_mdb = if trie_mdb.0 == ChildChange::BulkDeleteByKeyspace {
+		let mut trie_mdb = if let ChildChange::BulkDelete(..) = trie_mdb.0 {
 			Default::default()
 		} else {
 			trie_mdb.1

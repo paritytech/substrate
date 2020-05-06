@@ -16,29 +16,8 @@
 
 //! Crate with utility functions for `build.rs` scripts.
 
-use std::{env, path::PathBuf};
+mod version;
+mod git;
 
-/// Make sure the calling `build.rs` script is rerun when `.git/HEAD` changed.
-///
-/// The file is searched from the `CARGO_MANIFEST_DIR` upwards. If the file can not be found,
-/// a warning is generated.
-pub fn rerun_if_git_head_changed() {
-	let mut manifest_dir = PathBuf::from(
-		env::var("CARGO_MANIFEST_DIR").expect("`CARGO_MANIFEST_DIR` is always set by cargo.")
-	);
-	let manifest_dir_copy = manifest_dir.clone();
-
-	while manifest_dir.parent().is_some() {
-		if manifest_dir.join(".git/HEAD").exists() {
-			println!("cargo:rerun-if-changed={}", manifest_dir.join(".git/HEAD").display());
-			return
-		}
-
-		manifest_dir.pop();
-	}
-
-	println!(
-		"cargo:warning=Could not find `.git/HEAD` searching from `{}` upwards!",
-		manifest_dir_copy.display(),
-	);
-}
+pub use git::*;
+pub use version::*;

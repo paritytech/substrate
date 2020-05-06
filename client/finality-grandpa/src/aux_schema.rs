@@ -330,7 +330,7 @@ pub(crate) fn load_persistent<Block: BlockT, B, G>(
 	}
 
 	// genesis.
-	info!(target: "afg", "Loading GRANDPA authority set \
+	info!(target: "afg", "👴 Loading GRANDPA authority set \
 		from genesis on what appears to be first startup.");
 
 	let genesis_authorities = genesis_authorities()?;

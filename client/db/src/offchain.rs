@@ -21,14 +21,13 @@ use std::{
 	sync::Arc,
 };
 
-use crate::columns;
-use kvdb::KeyValueDB;
+use crate::{columns, Database, DbHash, Transaction};
 use parking_lot::Mutex;
 
 /// Offchain local storage
 #[derive(Clone)]
 pub struct LocalStorage {
-	db: Arc<dyn KeyValueDB>,
+	db: Arc<dyn Database<DbHash>>,
 	locks: Arc<Mutex<HashMap<Vec<u8>, Arc<Mutex<()>>>>>,
 }
 
@@ -43,12 +42,13 @@ impl LocalStorage {
 	/// Create new offchain storage for tests (backed by memorydb)
 	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn new_test() -> Self {
-		let db = Arc::new(kvdb_memorydb::create(crate::utils::NUM_COLUMNS));
+		let db = kvdb_memorydb::create(crate::utils::NUM_COLUMNS);
+		let db = sp_database::as_database(db);
 		Self::new(db as _)
 	}
 
 	/// Create offchain local storage with given `KeyValueDB` backend.
-	pub fn new(db: Arc<dyn KeyValueDB>) -> Self {
+	pub fn new(db: Arc<dyn Database<DbHash>>) -> Self {
 		Self {
 			db,
 			locks: Default::default(),
@@ -59,20 +59,15 @@ impl LocalStorage {
 impl sp_core::offchain::OffchainStorage for LocalStorage {
 	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
 		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
-		let mut tx = self.db.transaction();
-		tx.put(columns::OFFCHAIN, &key, value);
+		let mut tx = Transaction::new();
+		tx.set(columns::OFFCHAIN, &key, value);
 
-		if let Err(e) = self.db.write(tx) {
-			log::warn!("Error writing to the offchain DB: {:?}", e);
-		}
+		self.db.commit(tx);
 	}
 
 	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {
 		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
 		self.db.get(columns::OFFCHAIN, &key)
-			.ok()
-			.and_then(|x| x)
-			.map(|v| v.to_vec())
 	}
 
 	fn compare_and_set(
@@ -91,9 +86,7 @@ impl sp_core::offchain::OffchainStorage for LocalStorage {
 		let is_set;
 		{
 			let _key_guard = key_lock.lock();
-			let val = self.db.get(columns::OFFCHAIN, &key)
-				.ok()
-				.and_then(|x| x);
+			let val = self.db.get(columns::OFFCHAIN, &key);
 			is_set = val.as_ref().map(|x| &**x) == old_value;
 
 			if is_set {

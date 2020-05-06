@@ -1,0 +1,19 @@
+[package]
+name = "sp-tracing"
+version = "2.0.0-dev"
+license = "GPL-3.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+description = "Instrumentation primitives and macros for Substrate."
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+tracing = { version = "0.1.13", optional = true }
+
+[features]
+default = [ "std" ]
+std = [ "tracing" ]

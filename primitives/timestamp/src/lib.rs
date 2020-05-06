@@ -77,6 +77,7 @@ impl TimestampInherentData for InherentData {
 	}
 }
 
+/// Provide duration since unix epoch in millisecond for timestamp inherent.
 #[cfg(feature = "std")]
 pub struct InherentDataProvider;
 

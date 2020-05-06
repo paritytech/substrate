@@ -22,7 +22,7 @@ use sc_network_test::{
 	Block, Hash, TestNetFactory, BlockImportAdapter, Peer,
 	PeersClient, PassThroughVerifier, PeersFullClient,
 };
-use sc_network::config::{ProtocolConfig, Roles, BoxFinalityProofRequestBuilder};
+use sc_network::config::{ProtocolConfig, BoxFinalityProofRequestBuilder};
 use parking_lot::Mutex;
 use futures_timer::Delay;
 use tokio::runtime::{Runtime, Handle};
@@ -30,21 +30,17 @@ use sp_keyring::Ed25519Keyring;
 use sc_client::LongestChain;
 use sc_client_api::backend::TransactionFor;
 use sp_blockchain::Result;
-use sp_api::{ApiRef, ApiErrorExt, Core, RuntimeVersion, ApiExt, StorageProof, ProvideRuntimeApi};
+use sp_api::{ApiRef, StorageProof, ProvideRuntimeApi};
 use substrate_test_runtime_client::runtime::BlockNumber;
 use sp_consensus::{
 	BlockOrigin, ForkChoiceStrategy, ImportedAux, BlockImportParams, ImportResult, BlockImport,
 	import_queue::{BoxJustificationImport, BoxFinalityProofImport},
 };
-use std::{
-	collections::{HashMap, HashSet},
-	result,
-	pin::Pin,
-};
+use std::{collections::{HashMap, HashSet}, pin::Pin};
 use parity_scale_codec::Decode;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, HashFor};
 use sp_runtime::generic::{BlockId, DigestItem};
-use sp_core::{H256, NativeOrEncoded, ExecutionContext, crypto::Public};
+use sp_core::{H256, crypto::Public};
 use sp_finality_grandpa::{GRANDPA_ENGINE_ID, AuthorityList, GrandpaApi};
 use sp_state_machine::{InMemoryBackend, prove_read, read_proof_check};
 
@@ -78,9 +74,8 @@ impl GrandpaTestNet {
 			peers: Vec::with_capacity(n_peers),
 			test_config,
 		};
-		let config = Self::default_config();
 		for _ in 0..n_peers {
-			net.add_full_peer(&config);
+			net.add_full_peer();
 		}
 		net
 	}
@@ -99,10 +94,8 @@ impl TestNetFactory for GrandpaTestNet {
 	}
 
 	fn default_config() -> ProtocolConfig {
-		// the authority role ensures gossip hits all nodes here.
-		let mut config = ProtocolConfig::default();
-		config.roles = Roles::AUTHORITY;
-		config
+		// This is unused.
+		ProtocolConfig::default()
 	}
 
 	fn make_verifier(
@@ -214,87 +207,13 @@ impl ProvideRuntimeApi<Block> for TestApi {
 	}
 }
 
-impl Core<Block> for RuntimeApi {
-	fn Core_version_runtime_api_impl(
-		&self,
-		_: &BlockId<Block>,
-		_: ExecutionContext,
-		_: Option<()>,
-		_: Vec<u8>,
-	) -> Result<NativeOrEncoded<RuntimeVersion>> {
-		unimplemented!("Not required for testing!")
-	}
+sp_api::mock_impl_runtime_apis! {
+	impl GrandpaApi<Block> for RuntimeApi {
+		type Error = sp_blockchain::Error;
 
-	fn Core_execute_block_runtime_api_impl(
-		&self,
-		_: &BlockId<Block>,
-		_: ExecutionContext,
-		_: Option<Block>,
-		_: Vec<u8>,
-	) -> Result<NativeOrEncoded<()>> {
-		unimplemented!("Not required for testing!")
-	}
-
-	fn Core_initialize_block_runtime_api_impl(
-		&self,
-		_: &BlockId<Block>,
-		_: ExecutionContext,
-		_: Option<&<Block as BlockT>::Header>,
-		_: Vec<u8>,
-	) -> Result<NativeOrEncoded<()>> {
-		unimplemented!("Not required for testing!")
-	}
-}
-
-impl ApiErrorExt for RuntimeApi {
-	type Error = sp_blockchain::Error;
-}
-
-impl ApiExt<Block> for RuntimeApi {
-	type StateBackend = <
-		substrate_test_runtime_client::Backend as sc_client_api::backend::Backend<Block>
-	>::State;
-
-	fn map_api_result<F: FnOnce(&Self) -> result::Result<R, E>, R, E>(
-		&self,
-		_: F
-	) -> result::Result<R, E> {
-		unimplemented!("Not required for testing!")
-	}
-
-	fn runtime_version_at(&self, _: &BlockId<Block>) -> Result<RuntimeVersion> {
-		unimplemented!("Not required for testing!")
-	}
-
-	fn record_proof(&mut self) {
-		unimplemented!("Not required for testing!")
-	}
-
-	fn extract_proof(&mut self) -> Option<StorageProof> {
-		unimplemented!("Not required for testing!")
-	}
-
-	fn into_storage_changes(
-		&self,
-		_: &Self::StateBackend,
-		_: Option<&sp_api::ChangesTrieState<sp_api::HashFor<Block>, sp_api::NumberFor<Block>>>,
-		_: <Block as sp_api::BlockT>::Hash,
-	) -> std::result::Result<sp_api::StorageChanges<Self::StateBackend, Block>, String>
-		where Self: Sized
-	{
-		unimplemented!("Not required for testing!")
-	}
-}
-
-impl GrandpaApi<Block> for RuntimeApi {
-	fn GrandpaApi_grandpa_authorities_runtime_api_impl(
-		&self,
-		_: &BlockId<Block>,
-		_: ExecutionContext,
-		_: Option<()>,
-		_: Vec<u8>,
-	) -> Result<NativeOrEncoded<AuthorityList>> {
-		Ok(self.inner.genesis_authorities.clone()).map(NativeOrEncoded::Native)
+		fn grandpa_authorities(&self) -> AuthorityList {
+			self.inner.genesis_authorities.clone()
+		}
 	}
 }
 
@@ -1074,7 +993,7 @@ fn voter_persists_its_votes() {
 	use std::iter::FromIterator;
 	use std::sync::atomic::{AtomicUsize, Ordering};
 	use futures::future;
-	use futures::channel::mpsc;
+	use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 
 	let _ = env_logger::try_init();
 	let mut runtime = Runtime::new().unwrap();
@@ -1099,7 +1018,7 @@ fn voter_persists_its_votes() {
 
 	// channel between the voter and the main controller.
 	// sending a message on the `voter_tx` restarts the voter.
-	let (voter_tx, voter_rx) = mpsc::unbounded::<()>();
+	let (voter_tx, voter_rx) = tracing_unbounded::<()>("");
 
 	let mut keystore_paths = Vec::new();
 
@@ -1112,7 +1031,7 @@ fn voter_persists_its_votes() {
 
 		struct ResettableVoter {
 			voter: Pin<Box<dyn Future<Output = ()> + Send + Unpin>>,
-			voter_rx: mpsc::UnboundedReceiver<()>,
+			voter_rx: TracingUnboundedReceiver<()>,
 			net: Arc<Mutex<GrandpaTestNet>>,
 			client: PeersClient,
 			keystore: KeyStorePtr,
@@ -1381,7 +1300,7 @@ fn finality_proof_is_fetched_by_light_client_when_consensus_data_changes() {
 
 	let peers = &[Ed25519Keyring::Alice];
 	let mut net = GrandpaTestNet::new(TestApi::new(make_ids(peers)), 1);
-	net.add_light_peer(&GrandpaTestNet::default_config());
+	net.add_light_peer();
 
 	// import block#1 WITH consensus data change. Light client ignores justification
 	// && instead fetches finality proof for block #1
@@ -1458,7 +1377,7 @@ fn empty_finality_proof_is_returned_to_light_client_when_authority_set_is_differ
 	run_to_completion(&mut runtime, 11, net.clone(), peers_a);
 
 	// request finalization by light client
-	net.lock().add_light_peer(&GrandpaTestNet::default_config());
+	net.lock().add_light_peer();
 	net.lock().block_until_sync();
 
 	// check block, finalized on light client

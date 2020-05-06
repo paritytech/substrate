@@ -325,6 +325,8 @@ pub struct CacheChanges<B: BlockT> {
 pub struct CachingState<S, B: BlockT> {
 	/// Usage statistics
 	usage: StateUsageStats,
+	/// State machine registered stats
+	overlay_stats: sp_state_machine::StateMachineStats,
 	/// Backing state.
 	state: S,
 	/// Cache data.
@@ -420,7 +422,7 @@ impl<B: BlockT> CacheChanges<B> {
 						}
 						child_modifications.insert(k);
 					},
-					ChildChange::BulkDeleteByKeyspace => {
+					ChildChange::BulkDelete(..) => {
 						// Note that this is a rather costy operation.
 						cache.lru_child_storage.remove_by_storage_key(child_info.storage_key());
 						deleted_child.insert(child_info.storage_key().to_vec());
@@ -467,6 +469,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> CachingState<S, B> {
 	) -> Self {
 		CachingState {
 			usage: StateUsageStats::new(),
+			overlay_stats: sp_state_machine::StateMachineStats::default(),
 			state,
 			cache: CacheChanges {
 				shared_cache,
@@ -668,7 +671,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 	fn child_storage_root<I>(
 		&self,
 		child_info: &ChildInfo,
-		child_change: ChildChange,
+		child_change: &ChildChange,
 		delta: I,
 	) -> (B::Hash, bool, Self::Transaction)
 		where
@@ -697,8 +700,14 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 		self.state.as_trie_backend()
 	}
 
+	fn register_overlay_stats(&mut self, stats: &sp_state_machine::StateMachineStats) {
+		self.overlay_stats.add(stats);
+	}
+
 	fn usage_info(&self) -> sp_state_machine::UsageInfo {
-		self.usage.take()
+		let mut info = self.usage.take();
+		info.include_state_machine_states(&self.overlay_stats);
+		info
 	}
 }
 
@@ -848,7 +857,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Syncin
 	fn child_storage_root<I>(
 		&self,
 		child_info: &ChildInfo,
-		child_change: ChildChange,
+		child_change: &ChildChange,
 		delta: I,
 	) -> (B::Hash, bool, Self::Transaction)
 		where
@@ -878,6 +887,10 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Syncin
 			.as_mut()
 			.expect("`caching_state` is valid for the lifetime of the object; qed")
 			.as_trie_backend()
+	}
+
+	fn register_overlay_stats(&mut self, stats: &sp_state_machine::StateMachineStats) {
+		self.caching_state().register_overlay_stats(stats);
 	}
 
 	fn usage_info(&self) -> sp_state_machine::UsageInfo {

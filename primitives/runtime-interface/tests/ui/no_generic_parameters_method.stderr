@@ -1,0 +1,5 @@
+error: Generic parameters not supported.
+ --> $DIR/no_generic_parameters_method.rs:5:10
+  |
+5 |     fn test<T>() {}
+  |             ^

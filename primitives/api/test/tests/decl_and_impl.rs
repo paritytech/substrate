@@ -14,7 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use sp_api::{RuntimeApiInfo, decl_runtime_apis, impl_runtime_apis};
+use sp_api::{
+	RuntimeApiInfo, decl_runtime_apis, impl_runtime_apis, mock_impl_runtime_apis,
+	ApiExt,
+};
 
 use sp_runtime::{traits::{GetNodeBlockType, Block as BlockT}, generic::BlockId};
 
@@ -81,6 +84,34 @@ impl_runtime_apis! {
 	}
 }
 
+struct MockApi {
+	block: Option<Block>,
+}
+
+mock_impl_runtime_apis! {
+	impl Api<Block> for MockApi {
+		fn test(_: u64) {
+			unimplemented!()
+		}
+
+		fn something_with_block(&self, _: Block) -> Block {
+			self.block.clone().unwrap()
+		}
+
+		fn function_with_two_args(_: u64, _: Block) {
+			unimplemented!()
+		}
+
+		fn same_name() {}
+
+		fn wild_card(_: u32) {}
+	}
+
+	impl ApiWithCustomVersion<Block> for MockApi {
+		fn same_name() {}
+	}
+}
+
 type TestClient = substrate_test_runtime_client::sc_client::Client<
 	substrate_test_runtime_client::Backend,
 	substrate_test_runtime_client::Executor,
@@ -128,4 +159,23 @@ fn check_runtime_api_versions() {
 	check_runtime_api_versions_contains::<dyn Api<Block, Error = ()>>();
 	check_runtime_api_versions_contains::<dyn ApiWithCustomVersion<Block, Error = ()>>();
 	check_runtime_api_versions_contains::<dyn sp_api::Core<Block, Error = ()>>();
+}
+
+#[test]
+fn mock_runtime_api_has_api() {
+	let mock = MockApi { block: None };
+
+	assert!(
+		mock.has_api::<dyn ApiWithCustomVersion<Block, Error = ()>>(&BlockId::Number(0)).unwrap(),
+	);
+	assert!(mock.has_api::<dyn Api<Block, Error = ()>>(&BlockId::Number(0)).unwrap());
+}
+
+#[test]
+#[should_panic(expected = "Mocked runtime apis don't support calling deprecated api versions")]
+fn mock_runtime_api_panics_on_calling_old_version() {
+	let mock = MockApi { block: None };
+
+	#[allow(deprecated)]
+	let _ = mock.same_name_before_version_2(&BlockId::Number(0));
 }

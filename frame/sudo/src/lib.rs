@@ -52,12 +52,14 @@
 //!
 //! ```
 //! use frame_support::{decl_module, dispatch};
+//! use frame_support::weights::MINIMUM_WEIGHT;
 //! use frame_system::{self as system, ensure_root};
 //!
 //! pub trait Trait: frame_system::Trait {}
 //!
 //! decl_module! {
 //!     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//! 		#[weight = MINIMUM_WEIGHT]
 //!         pub fn privileged_function(origin) -> dispatch::DispatchResult {
 //!             ensure_root(origin)?;
 //!
@@ -86,12 +88,12 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_std::prelude::*;
-use sp_runtime::{traits::{StaticLookup, Dispatchable}, DispatchError};
+use sp_runtime::traits::{StaticLookup, Dispatchable};
 
 use frame_support::{
 	Parameter, decl_module, decl_event, decl_storage, decl_error, ensure,
 };
-use frame_support::weights::{GetDispatchInfo, FunctionOf};
+use frame_support::weights::{MINIMUM_WEIGHT, GetDispatchInfo, FunctionOf, Pays};
 use frame_system::{self as system, ensure_signed};
 
 pub trait Trait: frame_system::Trait {
@@ -120,9 +122,9 @@ decl_module! {
 		/// - Weight of derivative `call` execution + 10,000.
 		/// # </weight>
 		#[weight = FunctionOf(
-			|args: (&Box<<T as Trait>::Call>,)| args.0.get_dispatch_info().weight + 10_000, 
+			|args: (&Box<<T as Trait>::Call>,)| args.0.get_dispatch_info().weight + 10_000,
 			|args: (&Box<<T as Trait>::Call>,)| args.0.get_dispatch_info().class,
-			true
+			Pays::Yes,
 		)]
 		fn sudo(origin, call: Box<<T as Trait>::Call>) {
 			// This is a public call, so we ensure that the origin is some signed account.
@@ -132,7 +134,6 @@ decl_module! {
 			let res = match call.dispatch(frame_system::RawOrigin::Root.into()) {
 				Ok(_) => true,
 				Err(e) => {
-					let e: DispatchError = e.into();
 					sp_runtime::print(e);
 					false
 				}
@@ -150,6 +151,7 @@ decl_module! {
 		/// - Limited storage reads.
 		/// - One DB change.
 		/// # </weight>
+		#[weight = MINIMUM_WEIGHT]
 		fn set_key(origin, new: <T::Lookup as StaticLookup>::Source) {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
@@ -174,11 +176,11 @@ decl_module! {
 		#[weight = FunctionOf(
 			|args: (&<T::Lookup as StaticLookup>::Source, &Box<<T as Trait>::Call>,)| {
 				args.1.get_dispatch_info().weight + 10_000
-			}, 
+			},
 			|args: (&<T::Lookup as StaticLookup>::Source, &Box<<T as Trait>::Call>,)| {
 				args.1.get_dispatch_info().class
 			},
-			true
+			Pays::Yes,
 		)]
 		fn sudo_as(origin, who: <T::Lookup as StaticLookup>::Source, call: Box<<T as Trait>::Call>) {
 			// This is a public call, so we ensure that the origin is some signed account.
@@ -190,7 +192,6 @@ decl_module! {
 			let res = match call.dispatch(frame_system::RawOrigin::Signed(who).into()) {
 				Ok(_) => true,
 				Err(e) => {
-					let e: DispatchError = e.into();
 					sp_runtime::print(e);
 					false
 				}

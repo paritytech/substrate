@@ -20,11 +20,55 @@
 use crate::util;
 use crate::imports::Imports;
 
-use sc_executor_common::error::{Error, Result};
+use std::{slice, marker};
+use sc_executor_common::{
+	error::{Error, Result},
+	util::{WasmModuleInfo, DataSegmentsSnapshot},
+};
 use sp_wasm_interface::{Pointer, WordSize, Value};
-use std::slice;
-use std::marker;
-use wasmtime::{Instance, Module, Memory, Table, Val};
+use wasmtime::{Store, Instance, Module, Memory, Table, Val};
+
+mod globals_snapshot;
+
+pub use globals_snapshot::GlobalsSnapshot;
+
+pub struct ModuleWrapper {
+	imported_globals_count: u32,
+	globals_count: u32,
+	module: Module,
+	data_segments_snapshot: DataSegmentsSnapshot,
+}
+
+impl ModuleWrapper {
+	pub fn new(store: &Store, code: &[u8]) -> Result<Self> {
+		let module = Module::new(&store, code)
+			.map_err(|e| Error::from(format!("cannot create module: {}", e)))?;
+
+		let module_info = WasmModuleInfo::new(code)
+			.ok_or_else(|| Error::from("cannot deserialize module".to_string()))?;
+		let declared_globals_count = module_info.declared_globals_count();
+		let imported_globals_count = module_info.imported_globals_count();
+		let globals_count = imported_globals_count + declared_globals_count;
+
+		let data_segments_snapshot = DataSegmentsSnapshot::take(&module_info)
+			.map_err(|e| Error::from(format!("cannot take data segments snapshot: {}", e)))?;
+
+		Ok(Self {
+			module,
+			imported_globals_count,
+			globals_count,
+			data_segments_snapshot,
+		})
+	}
+
+	pub fn module(&self) -> &Module {
+		&self.module
+	}
+
+	pub fn data_segments_snapshot(&self) -> &DataSegmentsSnapshot {
+		&self.data_segments_snapshot
+	}
+}
 
 /// Wrap the given WebAssembly Instance of a wasm module with Substrate-runtime.
 ///
@@ -32,6 +76,8 @@ use wasmtime::{Instance, Module, Memory, Table, Val};
 /// routines.
 pub struct InstanceWrapper {
 	instance: Instance,
+	globals_count: u32,
+	imported_globals_count: u32,
 	// The memory instance of the `instance`.
 	//
 	// It is important to make sure that we don't make any copies of this to make it easier to proof
@@ -44,8 +90,8 @@ pub struct InstanceWrapper {
 
 impl InstanceWrapper {
 	/// Create a new instance wrapper from the given wasm module.
-	pub fn new(module: &Module, imports: &Imports, heap_pages: u32) -> Result<Self> {
-		let instance = Instance::new(module, &imports.externs)
+	pub fn new(module_wrapper: &ModuleWrapper, imports: &Imports, heap_pages: u32) -> Result<Self> {
+		let instance = Instance::new(&module_wrapper.module, &imports.externs)
 			.map_err(|e| Error::from(format!("cannot instantiate: {}", e)))?;
 
 		let memory = match imports.memory_import_index {
@@ -66,8 +112,10 @@ impl InstanceWrapper {
 
 		Ok(Self {
 			table: get_table(&instance),
-			memory,
 			instance,
+			globals_count: module_wrapper.globals_count,
+			imported_globals_count: module_wrapper.imported_globals_count,
+			memory,
 			_not_send_nor_sync: marker::PhantomData,
 		})
 	}
