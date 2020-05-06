@@ -266,8 +266,7 @@ impl<T: Trait> Module<T> {
 		priority: schedule::Priority,
 		call: <T as Trait>::Call,
 	) -> Result<TaskAddress<T::BlockNumber>, DispatchError> {
-		// determine id and ensure it is unique
-		let id = id.encode();
+		// ensure id it is unique
 		if Lookup::<T>::contains_key(&id) {
 			return Err(Error::<T>::FailedToSchedule)?
 		}
