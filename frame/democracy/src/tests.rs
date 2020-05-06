@@ -106,7 +106,6 @@ impl frame_system::Trait for Test {
 	type OnKilledAccount = ();
 }
 parameter_types! {
-	// 10_000
 	pub const MaximumWeight: Weight = Perbill::from_percent(80) * MaximumBlockWeight::get();
 }
 impl pallet_scheduler::Trait for Test {
