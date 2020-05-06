@@ -112,7 +112,7 @@ impl pallet_scheduler::Trait for Test {
 	type Event = Event;
 	type Origin = Origin;
 	type Call = Call;
-	type MaximumWeight = MaximumBlockWeight;
+	type MaximumWeight = MaximumWeight;
 }
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
