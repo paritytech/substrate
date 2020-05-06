@@ -118,7 +118,7 @@ benchmarks_instance! {
 	verify {
 		let proposal_hash = T::Hashing::hash_of(&proposal);
 		// Note that execution fails due to mis-matched origin
-		assert_last_event::<T, I>(RawEvent::MemberExecuted(proposal_hash, false).into());
+		assert_last_event::<T, I>(RawEvent::MemberExecuted(proposal_hash, Err(DispatchError::BadOrigin)).into());
 	}
 
 	// This tests when execution would happen immediately after proposal
@@ -145,7 +145,7 @@ benchmarks_instance! {
 	verify {
 		let proposal_hash = T::Hashing::hash_of(&proposal);
 		// Note that execution fails due to mis-matched origin
-		assert_last_event::<T, I>(RawEvent::Executed(proposal_hash, false).into());
+		assert_last_event::<T, I>(RawEvent::Executed(proposal_hash, Err(DispatchError::BadOrigin)).into());
 	}
 
 	// This tests when proposal is created and queued as "proposed"
@@ -345,7 +345,7 @@ benchmarks_instance! {
 	verify {
 		// The last proposal is removed.
 		assert_eq!(Collective::<T, _>::proposals().len(), (p - 1) as usize);
-		assert_last_event::<T, I>(RawEvent::Executed(last_hash, false).into());
+		assert_last_event::<T, I>(RawEvent::Executed(last_hash, Err(DispatchError::BadOrigin)).into());
 	}
 
 	close_disapproved {
@@ -440,7 +440,7 @@ benchmarks_instance! {
 	}: close(SystemOrigin::Signed(caller), last_hash, p - 1, Weight::max_value())
 	verify {
 		assert_eq!(Collective::<T, _>::proposals().len(), (p - 1) as usize);
-		assert_last_event::<T, I>(RawEvent::Executed(last_hash, false).into());
+		assert_last_event::<T, I>(RawEvent::Executed(last_hash, Err(DispatchError::BadOrigin)).into());
 	}
 }
 
@@ -451,16 +451,64 @@ mod tests {
 	use frame_support::assert_ok;
 
 	#[test]
-	fn test_benchmarks() {
+	fn set_members() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(test_benchmark_set_members::<Test>());
+		});
+	}
+
+	#[test]
+	fn execute() {
+		new_test_ext().execute_with(|| {
 			assert_ok!(test_benchmark_execute::<Test>());
+		});
+	}
+
+	#[test]
+	fn propose_execute() {
+		new_test_ext().execute_with(|| {
 			assert_ok!(test_benchmark_propose_execute::<Test>());
+		});
+	}
+
+	#[test]
+	fn propose_proposed() {
+		new_test_ext().execute_with(|| {
 			assert_ok!(test_benchmark_propose_proposed::<Test>());
+		});
+	}
+
+	#[test]
+	fn vote() {
+		new_test_ext().execute_with(|| {
 			assert_ok!(test_benchmark_vote::<Test>());
+		});
+	}
+
+	#[test]
+	fn close_early_disapproved() {
+		new_test_ext().execute_with(|| {
 			assert_ok!(test_benchmark_close_early_disapproved::<Test>());
+		});
+	}
+
+	#[test]
+	fn close_early_approved() {
+		new_test_ext().execute_with(|| {
 			assert_ok!(test_benchmark_close_early_approved::<Test>());
+		});
+	}
+
+	#[test]
+	fn close_disapproved() {
+		new_test_ext().execute_with(|| {
 			assert_ok!(test_benchmark_close_disapproved::<Test>());
+		});
+	}
+
+	#[test]
+	fn close_approved() {
+		new_test_ext().execute_with(|| {
 			assert_ok!(test_benchmark_close_approved::<Test>());
 		});
 	}

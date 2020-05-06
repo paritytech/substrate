@@ -41,12 +41,17 @@ use sp_core::u32_trait::Value as U32;
 use sp_runtime::RuntimeDebug;
 use sp_runtime::traits::Hash;
 use frame_support::{
-	dispatch::{Dispatchable, Parameter, DispatchError, DispatchResultWithPostInfo, PostDispatchInfo},
-	codec::{Encode, Decode},
-	traits::{Get, ChangeMembers, InitializeMembers, EnsureOrigin}, decl_module, decl_event,
-	decl_storage, decl_error, ensure,
-	weights::{DispatchClass, Weight, GetDispatchInfo},
+    codec::{Decode, Encode},
+    decl_error, decl_event, decl_module, decl_storage,
+    dispatch::{
+        DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable, Parameter,
+        PostDispatchInfo,
+    },
+    ensure,
+    traits::{ChangeMembers, EnsureOrigin, Get, InitializeMembers},
+    weights::{DispatchClass, GetDispatchInfo, Weight},
 };
+
 use frame_system::{self as system, ensure_signed, ensure_root};
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -151,9 +156,9 @@ decl_event! {
 		/// A motion was not approved by the required threshold.
 		Disapproved(Hash),
 		/// A motion was executed; `bool` is true if returned without error.
-		Executed(Hash, bool),
+		Executed(Hash, DispatchResult),
 		/// A single member did some action; `bool` is true if returned without error.
-		MemberExecuted(Hash, bool),
+		MemberExecuted(Hash, DispatchResult),
 		/// A proposal was closed after its duration was up.
 		Closed(Hash, MemberCount, MemberCount),
 	}
@@ -389,7 +394,7 @@ decl_module! {
 
 			let proposal_hash = T::Hashing::hash_of(&proposal);
 			let result = proposal.dispatch(RawOrigin::Member(who).into());
-			Self::deposit_event(RawEvent::MemberExecuted(proposal_hash, result.is_ok()));
+			Self::deposit_event(RawEvent::MemberExecuted(proposal_hash, result.map(|_| ()).map_err(|e| e.error)));
 
 			Ok(get_result_weight(result).map(|w| weight_for::execute::<T, I>(
 				members.len() as Weight,
@@ -452,7 +457,7 @@ decl_module! {
 			if threshold < 2 {
 				let seats = Self::members().len() as MemberCount;
 				let result = proposal.dispatch(RawOrigin::Members(1, seats).into());
-				Self::deposit_event(RawEvent::Executed(proposal_hash, result.is_ok()));
+				Self::deposit_event(RawEvent::Executed(proposal_hash, result.map(|_| ()).map_err(|e| e.error)));
 
 				Ok(get_result_weight(result).map(|w| weight_for::propose_execute::<T, I>(
 					members.len() as Weight, // M
@@ -671,7 +676,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 				let dispatch_weight = p.get_dispatch_info().weight;
 				let origin = RawOrigin::Members(voting.threshold, seats).into();
 				let result = p.dispatch(origin);
-				Self::deposit_event(RawEvent::Executed(proposal_hash, result.is_ok()));
+				Self::deposit_event(RawEvent::Executed(proposal_hash, result.map(|_| ()).map_err(|e| e.error)));
 				weight = weight.saturating_add(
 					get_result_weight(result).unwrap_or(dispatch_weight) // P1
 				);
@@ -1050,7 +1055,7 @@ mod tests {
 				record(Event::collective_Instance1(RawEvent::Voted(2, hash.clone(), true, 2, 0))),
 				record(Event::collective_Instance1(RawEvent::Closed(hash.clone(), 3, 0))),
 				record(Event::collective_Instance1(RawEvent::Approved(hash.clone()))),
-				record(Event::collective_Instance1(RawEvent::Executed(hash.clone(), false)))
+				record(Event::collective_Instance1(RawEvent::Executed(hash.clone(), Err(DispatchError::BadOrigin))))
 			]);
 		});
 	}
@@ -1355,7 +1360,7 @@ mod tests {
 					phase: Phase::Initialization,
 					event: Event::collective_Instance1(RawEvent::Executed(
 						hex!["68eea8f20b542ec656c6ac2d10435ae3bd1729efc34d1354ab85af840aad2d35"].into(),
-						false,
+						Err(DispatchError::BadOrigin),
 					)),
 					topics: vec![],
 				}
