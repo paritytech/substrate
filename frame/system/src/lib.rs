@@ -573,12 +573,11 @@ decl_module! {
 		/// - `O(D)` where `D` length of `Digest`
 		/// - 1 storage write or delete (codec `O(1)`).
 		/// - 1 call to `deposit_log`: `O(D)` (which depends on the length of `Digest`)
-		/// - Base Weight: 9.29 + 0.511 * D µs
+		/// - Base Weight: 7.218 + 0.001 * D µs
 		/// - DB Weight:
-		///     - Reads: System Digest
 		///     - Writes: Changes Trie, System Digest
 		/// # </weight>
-		#[weight = (T::DbWeight::get().reads_writes(1, 2) + 10_000_000, DispatchClass::Operational)]
+		#[weight = (T::DbWeight::get().writes(2) + 10_000_000, DispatchClass::Operational)]
 		pub fn set_changes_trie_config(origin, changes_trie_config: Option<ChangesTrieConfiguration>) {
 			ensure_root(origin)?;
 			match changes_trie_config.clone() {
