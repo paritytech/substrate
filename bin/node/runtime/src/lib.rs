@@ -170,11 +170,15 @@ impl pallet_utility::Trait for Runtime {
 	type MaxSignatories = MaxSignatories;
 }
 
+parameter_types! {
+	pub const MaximumWeight: Weight = Perbill::from_percent(80) * MaximumBlockWeight::get();
+}
+
 impl pallet_scheduler::Trait for Runtime {
 	type Event = Event;
 	type Origin = Origin;
 	type Call = Call;
-	type MaximumWeight = MaximumBlockWeight;
+	type MaximumWeight = MaximumWeight ;
 }
 
 parameter_types! {

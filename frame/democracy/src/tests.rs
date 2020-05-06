@@ -106,13 +106,17 @@ impl frame_system::Trait for Test {
 	type OnKilledAccount = ();
 }
 parameter_types! {
-	pub const ExistentialDeposit: u64 = 1;
+	// 10_000
+	pub const MaximumWeight: Weight = Perbill::from_percent(80) * MaximumBlockWeight::get();
 }
 impl pallet_scheduler::Trait for Test {
 	type Event = Event;
 	type Origin = Origin;
 	type Call = Call;
 	type MaximumWeight = MaximumBlockWeight;
+}
+parameter_types! {
+	pub const ExistentialDeposit: u64 = 1;
 }
 impl pallet_balances::Trait for Test {
 	type Balance = u64;
