@@ -101,7 +101,9 @@ impl<R, B> BlockStream<R, B>
 	/// Returns the number of blocks read thus far.
 	fn read_block_count(&self) -> u64 {
 		match self {
-			BlockStream::Binary { read_block_count, .. } | BlockStream::Json { read_block_count, .. } => *read_block_count,
+			BlockStream::Binary { read_block_count, .. }
+			| BlockStream::Json { read_block_count, .. }
+			=> *read_block_count,
 		}
 	}
 
@@ -283,10 +285,7 @@ impl<
 			Err(e) => {
 				// We've encountered an error while creating the block stream 
 				// so we can just return a future that returns an error.
-				let err_import = future::poll_fn(move |_cx| {
-					return std::task::Poll::Ready(Err(Error::Other(e.clone())))
-				});
-				return Box::pin(err_import)
+				return future::ready(Err(Error::Other(e.clone()))).boxed()
 			}
 		};
 
