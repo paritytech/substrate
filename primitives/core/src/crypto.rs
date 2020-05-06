@@ -873,7 +873,7 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 
 	/// Interprets the string `s` in order to generate a key pair.
 	///
-	/// See [`from_string_with_seed`](Self::from_string_with_seed) for more extensive documentation.
+	/// See [`from_string_with_seed`](Pair::from_string_with_seed) for more extensive documentation.
 	#[cfg(feature = "std")]
 	fn from_string(s: &str, password_override: Option<&str>) -> Result<Self, SecretStringError> {
 		Self::from_string_with_seed(s, password_override).map(|x| x.0)
