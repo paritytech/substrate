@@ -50,7 +50,7 @@ use futures::{
 	sink::SinkExt,
 	task::{Spawn, FutureObj, SpawnError},
 };
-use sc_network::{NetworkService, network_state::NetworkState, PeerId, ReportHandle};
+use sc_network::{NetworkService, network_state::NetworkState, PeerId};
 use log::{log, warn, debug, error, Level};
 use codec::{Encode, Decode};
 use sp_runtime::generic::BlockId;
@@ -76,7 +76,10 @@ pub use sc_executor::NativeExecutionDispatch;
 #[doc(hidden)]
 pub use std::{ops::Deref, result::Result, sync::Arc};
 #[doc(hidden)]
-pub use sc_network::config::{FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder};
+pub use sc_network::config::{
+	FinalityProofProvider, OnDemand, BoxFinalityProofRequestBuilder, TransactionImport,
+	TransactionImportFuture,
+};
 pub use sc_tracing::TracingReceiver;
 pub use task_manager::SpawnTaskHandle;
 use task_manager::TaskManager;
@@ -616,7 +619,6 @@ pub struct TransactionPoolAdapter<C, P> {
 	imports_external_transactions: bool,
 	pool: Arc<P>,
 	client: Arc<C>,
-	executor: SpawnTaskHandle,
 }
 
 /// Get transactions for propagation.
@@ -659,42 +661,42 @@ where
 
 	fn import(
 		&self,
-		report_handle: ReportHandle,
-		who: PeerId,
-		reputation_change_good: sc_network::ReputationChange,
-		reputation_change_bad: sc_network::ReputationChange,
-		transaction: B::Extrinsic
-	) {
+		transaction: B::Extrinsic,
+	) -> TransactionImportFuture {
 		if !self.imports_external_transactions {
 			debug!("Transaction rejected");
-			return;
+			Box::pin(futures::future::ready(TransactionImport::None));
 		}
 
 		let encoded = transaction.encode();
-		match Decode::decode(&mut &encoded[..]) {
-			Ok(uxt) => {
-				let best_block_id = BlockId::hash(self.client.info().best_hash);
-				let source = sp_transaction_pool::TransactionSource::External;
-				let import_future = self.pool.submit_one(&best_block_id, source, uxt);
-				let import_future = import_future
-					.map(move |import_result| {
-						match import_result {
-							Ok(_) => report_handle.report_peer(who, reputation_change_good),
-							Err(e) => match e.into_pool_error() {
-								Ok(sp_transaction_pool::error::Error::AlreadyImported(_)) => (),
-								Ok(e) => {
-									report_handle.report_peer(who, reputation_change_bad);
-									debug!("Error adding transaction to the pool: {:?}", e)
-								}
-								Err(e) => debug!("Error converting pool error: {:?}", e),
-							}
-						}
-					});
-
-				self.executor.spawn("extrinsic-import", import_future);
+		let uxt = match Decode::decode(&mut &encoded[..]) {
+			Ok(uxt) => uxt,
+			Err(e) => {
+				debug!("Transaction invalid: {:?}", e);
+				return Box::pin(futures::future::ready(TransactionImport::Bad));
 			}
-			Err(e) => debug!("Error decoding transaction {}", e),
-		}
+		};
+
+		let best_block_id = BlockId::hash(self.client.info().best_hash);
+
+		let import_future = self.pool.submit_one(&best_block_id, sp_transaction_pool::TransactionSource::External, uxt);
+		Box::pin(async move {
+			match import_future.await {
+				Ok(_) => TransactionImport::NewGood,
+				Err(e) => match e.into_pool_error() {
+					Ok(sp_transaction_pool::error::Error::AlreadyImported(_)) => TransactionImport::KnownGood,
+					Ok(e) => {
+						debug!("Error adding transaction to the pool: {:?}", e);
+						TransactionImport::Bad
+					}
+					Err(e) => {
+						debug!("Error converting pool error: {:?}", e);
+						// it is not bad at least, just some internal node logic error, so peer is innocent.
+						TransactionImport::KnownGood
+					}
+				}
+			}
+		})
 	}
 
 	fn on_broadcasted(&self, propagations: HashMap<H, Vec<String>>) {

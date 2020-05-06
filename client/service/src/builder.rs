@@ -883,7 +883,6 @@ ServiceBuilder<
 			imports_external_transactions: !matches!(config.role, Role::Light),
 			pool: transaction_pool.clone(),
 			client: client.clone(),
-			executor: task_manager.spawn_handle(),
 		});
 
 		let protocol_id = {
