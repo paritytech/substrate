@@ -3404,7 +3404,7 @@ dependencies = [
 
 [[package]]
 name = "node-browser-testing"
-version = "2.0.0"
+version = "2.0.0-dev"
 dependencies = [
  "futures 0.3.4",
  "futures-timer 3.0.2",
@@ -4406,11 +4406,18 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "pallet-babe",
+ "pallet-balances",
+ "pallet-grandpa",
  "pallet-im-online",
  "pallet-offences",
  "pallet-session",
  "pallet-staking",
+ "pallet-staking-reward-curve",
+ "pallet-timestamp",
  "parity-scale-codec",
+ "serde",
+ "sp-core",
  "sp-io",
  "sp-runtime",
  "sp-staking",
@@ -6516,9 +6523,10 @@ dependencies = [
  "libp2p",
  "log",
  "lru",
+ "quickcheck",
+ "rand 0.7.3",
  "sc-network",
  "sp-runtime",
- "sp-utils",
  "substrate-test-runtime-client",
  "wasm-timer",
 ]

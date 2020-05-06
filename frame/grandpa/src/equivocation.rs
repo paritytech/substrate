@@ -288,7 +288,9 @@ where
 #[derive(Copy, Clone, PartialOrd, Ord, Eq, PartialEq, Encode, Decode)]
 pub struct GrandpaTimeSlot {
 	// The order of these matters for `derive(Ord)`.
+	/// Grandpa Set ID.
 	pub set_id: SetId,
+	/// Round number.
 	pub round: RoundNumber,
 }
 
