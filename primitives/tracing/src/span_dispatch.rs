@@ -19,29 +19,29 @@ macro_rules! span_dispatch {
 pub fn create_registered_span(target: &str, name: &str) -> Result<tracing::Span, String> {
 	span_dispatch! {
 		target, name, {
-			"frame_executive","execute_block_WASM";
-			"frame_executive","apply_extrinsic_with_len_WASM";
-			"pallet_scheduler","on_initialize_WASM";
-			"pallet_society","on_initialize_WASM";
-			"pallet_randomness_collective_flip","on_initialize_WASM";
-			"pallet_offences","on_initialize_WASM";
-			"pallet_treasury","on_initialize_WASM";
-			"pallet_elections_phragmen","on_initialize_WASM";
-			"pallet_democracy","on_initialize_WASM";
-			"pallet_session","on_initialize_WASM";
-			"pallet_staking","on_initialize_WASM";
-			"pallet_indices","on_initialize_WASM";
-			"pallet_authorship","on_initialize_WASM";
-			"pallet_babe","on_initialize_WASM";
-			"pallet_grandpa","on_finalize_WASM";
-			"pallet_finality_tracker","on_finalize_WASM";
-			"pallet_staking","on_finalize_WASM";
-			"pallet_transaction_payment","on_finalize_WASM";
-			"pallet_authorship","on_finalize_WASM";
-			"pallet_timestamp","on_finalize_WASM";
-			"pallet_babe","on_finalize_WASM";
-			"pallet_timestamp","set_WASM";
-			"pallet_finality_tracker","final_hint_WASM";
+			"frame_executive","execute_block_wasm";
+			"frame_executive","apply_extrinsic_with_len_wasm";
+			"pallet_scheduler","on_initialize_wasm";
+			"pallet_society","on_initialize_wasm";
+			"pallet_randomness_collective_flip","on_initialize_wasm";
+			"pallet_offences","on_initialize_wasm";
+			"pallet_treasury","on_initialize_wasm";
+			"pallet_elections_phragmen","on_initialize_wasm";
+			"pallet_democracy","on_initialize_wasm";
+			"pallet_session","on_initialize_wasm";
+			"pallet_staking","on_initialize_wasm";
+			"pallet_indices","on_initialize_wasm";
+			"pallet_authorship","on_initialize_wasm";
+			"pallet_babe","on_initialize_wasm";
+			"pallet_grandpa","on_finalize_wasm";
+			"pallet_finality_tracker","on_finalize_wasm";
+			"pallet_staking","on_finalize_wasm";
+			"pallet_transaction_payment","on_finalize_wasm";
+			"pallet_authorship","on_finalize_wasm";
+			"pallet_timestamp","on_finalize_wasm";
+			"pallet_babe","on_finalize_wasm";
+			"pallet_timestamp","set_wasm";
+			"pallet_finality_tracker","final_hint_wasm";
 		}
 	}
 }
