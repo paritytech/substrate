@@ -189,6 +189,9 @@ mod weight_for {
 	use frame_support::weights::{RuntimeDbWeight, Weight};
 
 	/// Calculate the weight for `set_members`.
+	///
+	/// Based on benchmark:
+	/// 0 + M * 20.47 + N * 0.109 + P * 26.29 µs (min squares analysis)
 	pub(crate) fn set_members(
 		db: RuntimeDbWeight,
 		old_count: impl Into<Weight>,
@@ -209,6 +212,9 @@ mod weight_for {
 	const MAX_ASSUMED_PROPOSAL_BYTES: Weight = 1_024;
 
 	/// Calculate the weight for `execute`.
+	///
+	/// Based on benchmark:
+	/// 22.62 + M * 0.115 + B * 0.003 µs (min squares analysis)
 	pub(crate) fn execute(
 		db: RuntimeDbWeight,
 		members: impl Into<Weight>,
@@ -222,6 +228,9 @@ mod weight_for {
 	}
 
 	/// Calculate the weight for `propose` if the proposal is executed straight away (`threshold < 2`).
+	///
+	/// Based on benchmark:
+	/// 28.12 + M * 0.218 + B * 0.003 µs (min squares analysis)
 	pub(crate) fn propose_execute(
 		db: RuntimeDbWeight,
 		members: impl Into<Weight>,
@@ -235,6 +244,9 @@ mod weight_for {
 	}
 
 	/// Calculate the weight for `propose` if the proposal is put up for a vote (`threshold >= 2`).
+	///
+	/// Based on benchmark:
+	/// 49.75 + M * 0.105 + P2 0.502 + B * 0.006 µs (min squares analysis)
 	pub(crate) fn propose_proposed(
 		db: RuntimeDbWeight,
 		members: impl Into<Weight>,
@@ -249,6 +261,9 @@ mod weight_for {
 	}
 
 	/// Calculate the weight for `vote`.
+	///
+	/// Based on benchmark:
+	/// 24.03 + M * 0.349 + P * 0.119 + B * 0.003 µs (min squares analysis)
 	pub(crate) fn vote(
 		db: RuntimeDbWeight,
 		members: impl Into<Weight>,
@@ -260,6 +275,12 @@ mod weight_for {
 	}
 
 	/// Calculate the weight for `close`.
+	///
+	/// Based on benchmarks:
+	/// - early disapproved: 37.21 + M * 0.239 + P2 * 0.466 + B * 0.002 µs (min squares analysis)
+	/// - early approved:    50.82 + M * 0.211 + P2 * 0.478 + B * 0.008 µs (min squares analysis)
+	/// - disapproved:       51.08 + M * 0.224 + P2 * 0.475 + B * 0.003 µs (min squares analysis)
+	/// - approved:          65.95 + M * 0.226 + P2 * 0.487 + B * 0.005 µs (min squares analysis)
 	pub(crate) fn close(
 		db: RuntimeDbWeight,
 		members: impl Into<Weight> + Copy,
@@ -322,7 +343,6 @@ decl_module! {
 		///   - 1 storage read (codec `O(P)`) for reading the proposals
 		///   - `P` storage mutations (codec `O(M)`) for updating the votes for each proposal
 		///   - 1 storage write (codec `O(1)`) for deleting the old `prime` and setting the new one
-		/// - Benchmark: 0 + M * 20.47 + N * 0.109 + P * 26.29 µs (min squares analysis)
 		/// # </weight>
 		#[weight = (
 			weight_for::set_members(
@@ -362,7 +382,6 @@ decl_module! {
 		/// - `O(M + P)` where `M` members-count (code-bounded) and `P` complexity of dispatching `proposal`
 		/// - DB: 1 read (codec `O(M)`) + DB access of `proposal`
 		/// - 1 event
-		/// - Benchmark: 22.62 + M * 0.115 + B * 0.003 µs (min squares analysis)
 		/// # </weight>
 		#[weight = (
 			weight_for::execute(T::DbWeight::get(), T::MaxMembers::get(), proposal.get_dispatch_info().weight),
@@ -410,9 +429,6 @@ decl_module! {
 		///       - 1 storage write `ProposalOf` (codec `O(B)`)
 		///       - 1 storage write `Voting` (codec `O(M)`)
 		///   - 1 event
-		/// - Benchmarks:
-		///   - execute: 28.12 + M * 0.218 + B * 0.003 µs (min squares analysis) (`threshold < 2`)
-		///   - propose: 49.75 + M * 0.105 + P2 0.502 + B * 0.006 µs (min squares analysis) (`threshold >= 2`)
 		/// # </weight>
 		#[weight = (
 			if *threshold < 2 {
@@ -488,7 +504,6 @@ decl_module! {
 		///   - 1 storage read `Members` (codec `O(M)`)
 		///   - 1 storage mutation `Voting` (codec `O(M)`)
 		/// - 1 event
-		/// - Benchmark: 24.03 + M * 0.349 + P * 0.119 + B * 0.003 µs (min squares analysis)
 		/// # </weight>
 		#[weight = (
 			weight_for::vote(T::DbWeight::get(), T::MaxMembers::get()),
@@ -560,11 +575,6 @@ decl_module! {
 		///  - 3 mutations (`Voting`: codec `O(M)`, `ProposalOf`: codec `O(B)`, `Proposals`: codec `O(P2)`)
 		///  - any mutations done while executing `proposal` (`P1`)
 		/// - up to 3 events
-		/// - Benchmarks:
-		///   - early disapproved: 37.21 + M * 0.239 + P2 * 0.466 + B * 0.002 µs (min squares analysis)
-		///   - early approved:    50.82 + M * 0.211 + P2 * 0.478 + B * 0.008 µs (min squares analysis)
-		///   - disapproved:       51.08 + M * 0.224 + P2 * 0.475 + B * 0.003 µs (min squares analysis)
-		///   - approved:          65.95 + M * 0.226 + P2 * 0.487 + B * 0.005 µs (min squares analysis)
 		/// # </weight>
 		#[weight = (
 			weight_for::close(
