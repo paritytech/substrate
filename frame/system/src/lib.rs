@@ -116,7 +116,7 @@ use sp_runtime::{
 use sp_core::{ChangesTrieConfiguration, storage::well_known_keys};
 use frame_support::{
 	decl_module, decl_event, decl_storage, decl_error, Parameter, ensure, debug,
-	storage::{self, generator::StorageValue},
+	storage,
 	traits::{
 		Contains, Get, ModuleToIndex, OnNewAccount, OnKilledAccount, IsDeadAccount, Happened,
 		StoredMap, EnsureOrigin,
@@ -852,16 +852,10 @@ impl<T: Trait> Module<T> {
 			old_event_count
 		};
 
-		// We use append api here to avoid bringing all events in the runtime when we push a
- 		// new one in the list.
-		let encoded_event = event.encode();
-		sp_io::storage::append(&Events::<T>::storage_value_final_key()[..], encoded_event);
+		Events::<T>::append(&event);
 
 		for topic in topics {
-			// The same applies here.
-			if <EventTopics<T>>::append(topic, &[(block_number, event_idx)]).is_err() {
-				return;
-			}
+			<EventTopics<T>>::append(topic, &(block_number, event_idx));
 		}
 	}
 
