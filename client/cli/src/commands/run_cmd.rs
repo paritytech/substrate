@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use crate::arg_enums::RpcMethods;
 use crate::error::{Error, Result};
 use crate::params::ImportParams;
 use crate::params::KeystoreParams;
@@ -80,16 +81,24 @@ pub struct RunCmd {
 	/// Listen to all RPC interfaces.
 	///
 	/// Same as `--rpc-external`.
-	#[structopt(long = "unsafe-rpc-external")]
+	#[structopt(long)]
 	pub unsafe_rpc_external: bool,
 
-	/// Don't deny potentially unsafe RPCs when listening on external interfaces.
+	/// RPC methods to expose.
 	///
-	/// Default is false. This allows exposing RPC methods publicly (same as `--unsafe-{rpc,ws}-external` )
-	/// but will allow doing so even on validator nodes, which is prohibited by default.
-	/// Please do this if you know what you're doing.
-	#[structopt(long = "unsafe-rpc-expose")]
-	pub unsafe_rpc_expose: bool,
+	/// - `Unsafe`: Exposes every RPC method.
+	/// - `Safe`: Exposes only a safe subset of RPC methods, denying unsafe RPC methods.
+	/// - `Auto`: Acts as `Safe` if RPC is served externally, e.g. when `--{rpc,ws}-external` is passed,
+	///   otherwise acts as `Unsafe`.
+	#[structopt(
+		long,
+		value_name = "METHOD SET",
+		possible_values = &RpcMethods::variants(),
+		case_insensitive = true,
+		default_value = "Auto",
+		verbatim_doc_comment
+	)]
+	pub rpc_methods: RpcMethods,
 
 	/// Listen to all Websocket interfaces.
 	///
@@ -406,7 +415,7 @@ impl CliConfiguration for RunCmd {
 		let interface = rpc_interface(
 			self.rpc_external,
 			self.unsafe_rpc_external,
-			self.unsafe_rpc_expose,
+			self.rpc_methods,
 			self.validator
 		)?;
 
@@ -417,15 +426,15 @@ impl CliConfiguration for RunCmd {
 		let interface = rpc_interface(
 			self.ws_external,
 			self.unsafe_ws_external,
-			self.unsafe_rpc_expose,
+			self.rpc_methods,
 			self.validator
 		)?;
 
 		Ok(Some(SocketAddr::new(interface, self.ws_port.unwrap_or(9944))))
 	}
 
-	fn unsafe_rpc_expose(&self) -> Result<bool> {
-		Ok(self.unsafe_rpc_expose)
+	fn rpc_methods(&self) -> Result<sc_service::config::RpcMethods> {
+		Ok(self.rpc_methods.into())
 	}
 
 	fn transaction_pool(&self) -> Result<TransactionPoolOptions> {
@@ -462,23 +471,26 @@ pub fn is_node_name_valid(_name: &str) -> std::result::Result<(), &str> {
 fn rpc_interface(
 	is_external: bool,
 	is_unsafe_external: bool,
-	is_unsafe_rpc_expose: bool,
+	rpc_methods: RpcMethods,
 	is_validator: bool,
 ) -> Result<IpAddr> {
-	if is_external && is_validator && !is_unsafe_rpc_expose {
+	if is_external && is_validator && rpc_methods != RpcMethods::Unsafe {
 		return Err(Error::Input(
 			"--rpc-external and --ws-external options shouldn't be \
-		used if the node is running as a validator. Use `--unsafe-rpc-external` if you understand \
-		the risks. See the options description for more information."
+		used if the node is running as a validator. Use `--unsafe-rpc-external` \
+		or `--rpc-methods=unsafe` if you understand the risks. See the options \
+		description for more information."
 				.to_owned(),
 		));
 	}
 
 	if is_external || is_unsafe_external {
-		log::warn!(
-			"It isn't safe to expose RPC publicly without a proxy server that filters \
-		available set of RPC methods."
-		);
+		if rpc_methods == RpcMethods::Unsafe {
+			log::warn!(
+				"It isn't safe to expose RPC publicly without a proxy server that filters \
+			available set of RPC methods."
+			);
+		}
 
 		Ok(Ipv4Addr::UNSPECIFIED.into())
 	} else {
