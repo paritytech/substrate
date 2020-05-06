@@ -4,7 +4,7 @@ macro_rules! span_dispatch {
 	($target:tt, $name:tt, { $($registered_target:tt,$registered_name:tt;)* }) => {
 		match ($target, $name) {
 			$(
-				($registered_target, $registered_name) => Ok(span!(target: $registered_target, Level::INFO, $registered_name, sp_profiler_ok = true)),
+				($registered_target, $registered_name) => Ok(span!(target: $registered_target, Level::INFO, $registered_name, is_valid_trace = true)),
 			)*
 			_ => {
 				Err(format!("Trying to profile span target: {}, name: {} that is not registered",

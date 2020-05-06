@@ -35,6 +35,7 @@ impl Drop for TracingSpanGuard {
 /// # Example
 ///
 /// ```
+/// # use frame_support::wasm_tracing;
 /// wasm_tracing_span!("target", "fn_name");
 /// ```
 #[macro_export]
