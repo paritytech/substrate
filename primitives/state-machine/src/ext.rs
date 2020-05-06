@@ -420,6 +420,12 @@ where
 		key: Vec<u8>,
 		value: Vec<u8>,
 	) {
+		trace!(target: "state", "{:04x}: Append({}) {}",
+			self.id,
+			HexDisplay::from(&key),
+			HexDisplay::from(&value),
+		);
+
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		self.mark_dirty();
 
