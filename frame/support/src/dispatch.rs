@@ -1023,8 +1023,7 @@ macro_rules! decl_module {
 		{
 			fn on_initialize(_block_number_not_used: $trait_instance::BlockNumber) -> $return {
 				$crate::sp_tracing::enter_span!("on_initialize");
-				#[cfg(not(feature = "std"))]
-				let _span_id = $crate::sp_io::TracingSpanGuard($crate::sp_io::profiling::enter_span(module_path!(), "on_initialize_WASM"));
+				$crate::wasm_tracing_span!(module_path!(), "on_initialize_wasm");
 				{ $( $impl )* }
 			}
 		}
@@ -1041,8 +1040,7 @@ macro_rules! decl_module {
 		{
 			fn on_initialize($param: $param_ty) -> $return {
 				$crate::sp_tracing::enter_span!("on_initialize");
-				#[cfg(not(feature = "std"))]
-				let _span_id = $crate::sp_io::TracingSpanGuard($crate::sp_io::profiling::enter_span(module_path!(), "on_initialize_WASM"));
+				$crate::wasm_tracing_span!(module_path!(), "on_initialize_wasm");
 				{ $( $impl )* }
 			}
 		}
@@ -1069,8 +1067,7 @@ macro_rules! decl_module {
 		{
 			fn on_runtime_upgrade() -> $return {
 				$crate::sp_tracing::enter_span!("on_runtime_upgrade");
-				#[cfg(not(feature = "std"))]
-				let _span_id = $crate::sp_io::TracingSpanGuard($crate::sp_io::profiling::enter_span(module_path!(), "on_runtime_upgrade_WASM"));
+				$crate::wasm_tracing_span!(module_path!(), "on_runtime_upgrade_wasm");
 				{ $( $impl )* }
 			}
 		}
@@ -1098,8 +1095,7 @@ macro_rules! decl_module {
 		{
 			fn on_finalize(_block_number_not_used: $trait_instance::BlockNumber) {
 				$crate::sp_tracing::enter_span!("on_finalize");
-				#[cfg(not(feature = "std"))]
-				let _span_id = $crate::sp_io::TracingSpanGuard($crate::sp_io::profiling::enter_span(module_path!(), "on_finalize_WASM"));
+				$crate::wasm_tracing_span!(module_path!(), "on_finalize_wasm");
 				{ $( $impl )* }
 			}
 		}
@@ -1116,8 +1112,7 @@ macro_rules! decl_module {
 		{
 			fn on_finalize($param: $param_ty) {
 				$crate::sp_tracing::enter_span!("on_finalize");
-				#[cfg(not(feature = "std"))]
-				let _span_id = $crate::sp_io::TracingSpanGuard($crate::sp_io::profiling::enter_span(module_path!(), "on_finalize_WASM"));
+				$crate::wasm_tracing_span!(module_path!(), "on_finalize_wasm");
 				{ $( $impl )* }
 			}
 		}
@@ -1187,8 +1182,7 @@ macro_rules! decl_module {
 			$origin: $origin_ty $(, $param: $param_ty )*
 		) -> $crate::dispatch::DispatchResult {
 			$crate::sp_tracing::enter_span!(stringify!($name));
-			#[cfg(not(feature = "std"))]
-			let _span_id = $crate::sp_io::TracingSpanGuard($crate::sp_io::profiling::enter_span(module_path!(), concat!(stringify!($name), "_WASM")));
+			$crate::wasm_tracing_span!(module_path!(), concat!(stringify!($name),"_wasm"));
 			{ $( $impl )* }
 			Ok(())
 		}
@@ -1208,8 +1202,7 @@ macro_rules! decl_module {
 		$(#[doc = $doc_attr])*
 		$vis fn $name($origin: $origin_ty $(, $param: $param_ty )* ) -> $result {
 			$crate::sp_tracing::enter_span!(stringify!($name));
-			#[cfg(not(feature = "std"))]
-			let _span_id = $crate::sp_io::TracingSpanGuard($crate::sp_io::profiling::enter_span(module_path!(), concat!(stringify!($name), "_WASM")));
+			$crate::wasm_tracing_span!(module_path!(), concat!(stringify!($name),"_wasm"));
 			$( $impl )*
 		}
 	};

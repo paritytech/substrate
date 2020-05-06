@@ -75,10 +75,10 @@ impl TracingProxy {
 		}
 		let spans_len = self.spans.len();
 		if spans_len > MAX_SPANS_LEN {
-			// This could mean:
-			// 1. Probably doing too much tracing, or MAX_SPANS_LEN is too low.
+			// This is to prevent unbounded growth of Vec and could mean one of the following:
+			// 1. Too many nested spans, or MAX_SPANS_LEN is too low.
 			// 2. Not correctly exiting spans due to drop impl not running (panic in runtime)
-			// 3. Not correctly exiting spans due to misconfiguration
+			// 3. Not correctly exiting spans due to misconfiguration / misuse
 			log::warn!("MAX_SPANS_LEN exceeded, removing oldest span, recording `sp_profiler_ok = false`");
 			let mut sg = self.spans.remove(0).1;
 			sg.rent_all_mut(|s| { s.span.record("tracing_proxy_ok", &false); });

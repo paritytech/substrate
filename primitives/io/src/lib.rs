@@ -858,25 +858,12 @@ pub trait Logging {
 	}
 }
 
-// Do not pass this across the WASM boundry, (eg. by deriving PassByCodec),
-// else the drop impl will effectively run twice for the same span id.
-/// This is holds a span id and is to notify on drop that a tracing span has exited
-/// It must be bound to a named variable eg. `_span_guard`
-pub struct TracingSpanGuard(pub u64);
-
-impl Drop for TracingSpanGuard {
-	fn drop(&mut self) {
-		profiling::exit_span(self.0);
-	}
-}
-
 /// Interface that provides functions for profiling the runtime.
 #[runtime_interface]
-pub trait Profiling {
+pub trait WasmTracing {
 	/// For enter_span to work correctly with the Tracing profiler,
 	/// the span `target` and `name` must also be registered in
-	/// `sp_profiler::span_dispatch::create_registered_span`.
-	/// The returned `TracingSpanGuard` must be bound to a named variable eg. `_span_guard`
+	/// `sp_tracing::span_dispatch::create_registered_span`.
 	fn enter_span(target: &str, name: &str) -> u64 {
 		sp_tracing::proxy::create_registered_span(target, name)
 	}
@@ -1038,7 +1025,7 @@ pub type SubstrateHostFunctions = (
 	storage::HostFunctions,
 	default_child_storage::HostFunctions,
 	misc::HostFunctions,
-	profiling::HostFunctions,
+	wasm_tracing::HostFunctions,
 	offchain::HostFunctions,
 	crypto::HostFunctions,
 	hashing::HostFunctions,
