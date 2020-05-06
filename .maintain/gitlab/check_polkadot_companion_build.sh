@@ -39,6 +39,9 @@ substrate's branch. if it can't find anything, it will uses master instead
 
 EOT
 
+# Set the user name and email to make merging work
+git config --global user.name 'CI system'
+git config --global user.email '<>'
 
 SUBSTRATE_PATH=$(pwd)
 
