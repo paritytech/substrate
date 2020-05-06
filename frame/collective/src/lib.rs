@@ -353,8 +353,7 @@ decl_module! {
 			),
 			DispatchClass::Operational
 		)]
-		fn set_members(
-			origin,
+		fn set_members(origin,
 			new_members: Vec<T::AccountId>,
 			prime: Option<T::AccountId>,
 		) -> DispatchResultWithPostInfo {
@@ -448,8 +447,7 @@ decl_module! {
 			},
 			DispatchClass::Operational
 		)]
-		fn propose(
-			origin,
+		fn propose(origin,
 			#[compact] threshold: MemberCount,
 			proposal: Box<<T as Trait<I>>::Proposal>,
 		) -> DispatchResultWithPostInfo {
@@ -513,8 +511,7 @@ decl_module! {
 			weight_for::vote(T::DbWeight::get(), T::MaxMembers::get()),
 			DispatchClass::Operational
 		)]
-		fn vote(
-			origin,
+		fn vote(origin,
 			proposal: T::Hash,
 			#[compact] index: ProposalIndex,
 			approve: bool,
@@ -592,8 +589,7 @@ decl_module! {
 			),
 			DispatchClass::Operational
 		)]
-		fn close(
-			origin,
+		fn close(origin,
 			proposal: T::Hash,
 			#[compact] index: ProposalIndex,
 			proposal_weight_bound: Weight,
