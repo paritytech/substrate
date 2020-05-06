@@ -1,6 +1,6 @@
 [package]
 name = "node-bench"
-version = "0.8.0-alpha.7"
+version = "0.8.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate node integration benchmarks."
 edition = "2018"
@@ -10,20 +10,20 @@ license = "GPL-3.0"
 
 [dependencies]
 log = "0.4.8"
-node-primitives = { version = "2.0.0-alpha.7", path = "../primitives" }
-node-testing = { version = "2.0.0-alpha.7", path = "../testing" }
-sc-cli = { version = "0.8.0-alpha.7", path = "../../../client/cli" }
-sc-client-api = { version = "2.0.0-alpha.7", path = "../../../client/api/" }
-sp-runtime = { version = "2.0.0-alpha.7", path = "../../../primitives/runtime" }
-sp-state-machine = { version = "0.8.0-alpha.7", path = "../../../primitives/state-machine" }
+node-primitives = { version = "2.0.0-dev", path = "../primitives" }
+node-testing = { version = "2.0.0-dev", path = "../testing" }
+sc-cli = { version = "0.8.0-dev", path = "../../../client/cli" }
+sc-client-api = { version = "2.0.0-dev", path = "../../../client/api/" }
+sp-runtime = { version = "2.0.0-dev", path = "../../../primitives/runtime" }
+sp-state-machine = { version = "0.8.0-dev", path = "../../../primitives/state-machine" }
 serde = "1.0.101"
 serde_json = "1.0.41"
 structopt = "0.3"
 derive_more = "0.99.2"
 kvdb = "0.5"
 kvdb-rocksdb = "0.7"
-sp-trie = { version = "2.0.0-alpha.7", path = "../../../primitives/trie" }
-sp-core = { version = "2.0.0-alpha.7", path = "../../../primitives/core" }
+sp-trie = { version = "2.0.0-dev", path = "../../../primitives/trie" }
+sp-core = { version = "2.0.0-dev", path = "../../../primitives/core" }
 hash-db = "0.15.2"
 tempfile = "3.1.0"
 fs_extra = "1"
