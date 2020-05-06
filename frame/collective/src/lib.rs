@@ -71,7 +71,10 @@ pub trait Trait<I: Instance=DefaultInstance>: frame_system::Trait {
 	type Origin: From<RawOrigin<Self::AccountId, I>>;
 
 	/// The outer call dispatch type.
-	type Proposal: Parameter + Dispatchable<Origin=<Self as Trait<I>>::Origin, PostInfo=PostDispatchInfo> + From<frame_system::Call<Self>> + GetDispatchInfo;
+	type Proposal: Parameter
+		+ Dispatchable<Origin=<Self as Trait<I>>::Origin, PostInfo=PostDispatchInfo>
+		+ From<frame_system::Call<Self>>
+		+ GetDispatchInfo;
 
 	/// The outer event type.
 	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Trait>::Event>;
