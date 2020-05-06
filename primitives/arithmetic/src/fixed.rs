@@ -41,6 +41,8 @@ impl FixedPointOperand for u16 {}
 impl FixedPointOperand for i8 {}
 impl FixedPointOperand for u8 {}
 
+/// Something that implements a fixed point with an arbitrary precision `DIV`,
+/// meaning that `1 / DIV` can be represented. `DIV` should be a power of `10`.
 pub trait FixedPointNumber:
 	Sized + Copy + Default + Debug
 	+ Saturating + Bounded
@@ -154,6 +156,7 @@ pub trait FixedPointNumber:
 	fn round(self) -> Self;
 }
 
+/// Data type used as intermediate step in some computations to avoid overflow.
 struct I129 {
 	value: u128,
 	negative: bool,
@@ -199,7 +202,11 @@ macro_rules! implement_fixed {
 		$test_mod:ident,
 		$inner_type:ty,
 		$div:tt,
+		$title:expr $(,)?
 	) => {
+		/// A fixed point number representation in the range [`Inner::min_value() / DIV`, `Inner::max_value() / DIV`].
+		///
+		#[doc = $title]
 		#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 		pub struct $name($inner_type);
 
@@ -1301,6 +1308,7 @@ implement_fixed!(
 	test_fixed64,
 	i64,
 	1_000_000_000,
+	"_Fixed 64 bits_",
 );
 
 implement_fixed!(
@@ -1308,4 +1316,5 @@ implement_fixed!(
 	test_fixed128,
 	i128,
 	1_000_000_000_000_000_000,
+	"_Fixed 128 bits_",
 );
