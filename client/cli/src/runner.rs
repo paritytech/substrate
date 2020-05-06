@@ -214,7 +214,7 @@ impl<C: SubstrateCli> Runner<C> {
 			Subcommand::PurgeChain(cmd) => cmd.run(self.config),
 			Subcommand::GenerateNodeKey(cmd) => cmd.run(),
 			Subcommand::Generate(cmd) => cmd.run(),
-			Subcommand::Inspect(cmd) => cmd.run(),
+			Subcommand::InspectKey(cmd) => cmd.run(),
 			Subcommand::Sign(cmd) => cmd.run(),
 			Subcommand::Verify(cmd) => cmd.run(),
 			Subcommand::Vanity(cmd) => cmd.run(),

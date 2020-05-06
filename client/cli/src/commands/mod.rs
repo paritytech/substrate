@@ -98,7 +98,7 @@ pub enum Subcommand {
 	Generate(GenerateCmd),
 
 	/// Gets a public key and a SS58 address from the provided Secret URI
-	Inspect(InspectCmd),
+	InspectKey(InspectCmd),
 
 	/// Insert a key to the keystore of a node.
 	Insert(InsertCmd),
@@ -472,7 +472,7 @@ substrate_cli_subcommands!(
 	PurgeChain,
 	GenerateNodeKey,
 	Generate,
-	Inspect,
+	InspectKey,
 	Insert,
 	Sign,
 	SignTransaction,

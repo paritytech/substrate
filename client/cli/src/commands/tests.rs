@@ -50,10 +50,10 @@ fn inspect() {
 	let words = "remember fiber forum demise paper uniform squirrel feel access exclude casual effort";
 	let seed = "0xad1fb77243b536b90cfe5f0d351ab1b1ac40e3890b41dc64f766ee56340cfca5";
 
-	let inspect = InspectCmd::from_iter(&["inspect", "--uri", words, "--password", "12345"]);
+	let inspect = InspectCmd::from_iter(&["inspect-key", "--uri", words, "--password", "12345"]);
 	assert!(inspect.run().is_ok());
 
-	let inspect = InspectCmd::from_iter(&["inspect", "--uri", seed]);
+	let inspect = InspectCmd::from_iter(&["inspect-key", "--uri", seed]);
 	assert!(inspect.run().is_ok());
 }
 
