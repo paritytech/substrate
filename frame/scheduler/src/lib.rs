@@ -207,12 +207,12 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - S = Number of already scheduled calls
+		/// - N = Named scheduled calls
+		/// - P = Periodic Calls
 		/// - Base Weight: 9.243 + 23.45 * S µs
 		/// - DB Weight:
-		///     - Read: Agenda, Lookup
-		///     - Write: Agenda, Lookup
-		/// - In this case, the base weight is dominated by read/write operations.
-		///   To simplify, we will only account for additional reads/writes.
+		///     - Read: Agenda + Lookup * N + Agenda(Future) * P
+		///     - Write: Agenda + Lookup * N  + Agenda(future) * P
 		/// # </weight>
 		fn on_initialize(now: T::BlockNumber) -> Weight {
 			let limit = T::MaximumWeight::get();
@@ -221,14 +221,24 @@ decl_module! {
 				.filter_map(|(index, s)| s.map(|inner| (index as u32, inner)))
 				.collect::<Vec<_>>();
 			queued.sort_by_key(|(_, s)| s.priority);
-			let base_weight: Weight = T::DbWeight::get().reads_writes(1, 1); // Agenda
+			let base_weight: Weight = T::DbWeight::get().reads_writes(1, 1) // Agenda
+				.saturating_add(10_000_000); // Base Weight
 			let mut total_weight: Weight = 0;
 			queued.into_iter()
 				.enumerate()
 				.scan(base_weight, |cumulative_weight, (order, (index, s))| {
 					*cumulative_weight = cumulative_weight
 						.saturating_add(s.call.get_dispatch_info().weight)
-						.saturating_add(T::DbWeight::get().writes(1)); // Assume worst case: Lookup
+						.saturating_add(25_000_000); // Base multiplier
+
+					if s.maybe_id.is_some() {
+						// Remove/Modify Lookup
+						*cumulative_weight = cumulative_weight.saturating_add(T::DbWeight::get().writes(1));
+					}
+					if s.maybe_periodic.is_some() {
+						// Read/Write Agenda for future block
+						*cumulative_weight = cumulative_weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
+					}
 
 					Some((order, index, *cumulative_weight, s))
 				})
@@ -391,7 +401,7 @@ mod tests {
 	use frame_support::{
 		impl_outer_event, impl_outer_origin, impl_outer_dispatch, parameter_types, assert_ok,
 		traits::{OnInitialize, OnFinalize},
-		weights::{DispatchClass, FunctionOf, Pays}
+		weights::{DispatchClass, FunctionOf, Pays, constants::RocksDbWeight},
 	};
 	use sp_core::H256;
 	// The testing primitives are very useful for avoiding having to work with signatures
@@ -472,7 +482,7 @@ mod tests {
 	pub struct Test;
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: Weight = 1024;
+		pub const MaximumBlockWeight: Weight = 2_000_000_000_000;
 		pub const MaximumBlockLength: u32 = 2 * 1024;
 		pub const AvailableBlockRatio: Perbill = Perbill::one();
 	}
@@ -489,7 +499,7 @@ mod tests {
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
-		type DbWeight = ();
+		type DbWeight = RocksDbWeight;
 		type BlockExecutionWeight = ();
 		type ExtrinsicBaseWeight = ();
 		type MaximumBlockLength = MaximumBlockLength;
@@ -503,14 +513,11 @@ mod tests {
 	impl logger::Trait for Test {
 		type Event = ();
 	}
-	parameter_types! {
-		pub const MaximumWeight: Weight = 10_000;
-	}
 	impl Trait for Test {
 		type Event = ();
 		type Origin = Origin;
 		type Call = Call;
-		type MaximumWeight = MaximumWeight;
+		type MaximumWeight = MaximumBlockWeight;
 	}
 	type System = system::Module<Test>;
 	type Logger = logger::Module<Test>;
@@ -604,8 +611,9 @@ mod tests {
 	#[test]
 	fn scheduler_respects_weight_limits() {
 		new_test_ext().execute_with(|| {
-			Scheduler::do_schedule(4, None, 127, Call::Logger(logger::Call::log(42, 6000)));
-			Scheduler::do_schedule(4, None, 127, Call::Logger(logger::Call::log(69, 6000)));
+			Scheduler::do_schedule(4, None, 127, Call::Logger(logger::Call::log(42, MaximumBlockWeight::get() / 2)));
+			Scheduler::do_schedule(4, None, 127, Call::Logger(logger::Call::log(69, MaximumBlockWeight::get() / 2)));
+			// 69 and 42 do not fit together
 			run_to_block(4);
 			assert_eq!(logger::log(), vec![42u32]);
 			run_to_block(5);
@@ -616,8 +624,9 @@ mod tests {
 	#[test]
 	fn scheduler_respects_hard_deadlines_more() {
 		new_test_ext().execute_with(|| {
-			Scheduler::do_schedule(4, None, 0, Call::Logger(logger::Call::log(42, 6000)));
-			Scheduler::do_schedule(4, None, 0, Call::Logger(logger::Call::log(69, 6000)));
+			Scheduler::do_schedule(4, None, 0, Call::Logger(logger::Call::log(42, MaximumBlockWeight::get() / 2)));
+			Scheduler::do_schedule(4, None, 0, Call::Logger(logger::Call::log(69, MaximumBlockWeight::get() / 2)));
+			// With base weights, 69 and 42 should not fit together, but do because of hard deadlines
 			run_to_block(4);
 			assert_eq!(logger::log(), vec![42u32, 69u32]);
 		});
@@ -626,8 +635,8 @@ mod tests {
 	#[test]
 	fn scheduler_respects_priority_ordering() {
 		new_test_ext().execute_with(|| {
-			Scheduler::do_schedule(4, None, 1, Call::Logger(logger::Call::log(42, 6000)));
-			Scheduler::do_schedule(4, None, 0, Call::Logger(logger::Call::log(69, 6000)));
+			Scheduler::do_schedule(4, None, 1, Call::Logger(logger::Call::log(42, MaximumBlockWeight::get() / 2)));
+			Scheduler::do_schedule(4, None, 0, Call::Logger(logger::Call::log(69, MaximumBlockWeight::get() / 2)));
 			run_to_block(4);
 			assert_eq!(logger::log(), vec![69u32, 42u32]);
 		});
@@ -636,31 +645,57 @@ mod tests {
 	#[test]
 	fn scheduler_respects_priority_ordering_with_soft_deadlines() {
 		new_test_ext().execute_with(|| {
-			Scheduler::do_schedule(4, None, 255, Call::Logger(logger::Call::log(42, 5000)));
-			Scheduler::do_schedule(4, None, 127, Call::Logger(logger::Call::log(69, 5000)));
-			Scheduler::do_schedule(4, None, 126, Call::Logger(logger::Call::log(2600, 6000)));
+			Scheduler::do_schedule(4, None, 255, Call::Logger(logger::Call::log(42, MaximumBlockWeight::get() / 3)));
+			Scheduler::do_schedule(4, None, 127, Call::Logger(logger::Call::log(69, MaximumBlockWeight::get() / 2)));
+			Scheduler::do_schedule(4, None, 126, Call::Logger(logger::Call::log(2600, MaximumBlockWeight::get() / 2)));
+
+			// 2600 does not fit with 69 or 42, but has higher priority, so will go through
 			run_to_block(4);
 			assert_eq!(logger::log(), vec![2600u32]);
+			// 69 and 42 fit together
 			run_to_block(5);
 			assert_eq!(logger::log(), vec![2600u32, 69u32, 42u32]);
 		});
 	}
 
 	#[test]
-	fn initialize_weight_is_correct() {
+	fn on_initialize_weight_is_correct() {
 		new_test_ext().execute_with(|| {
-			Scheduler::do_schedule(1, None, 255, Call::Logger(logger::Call::log(3, 1000)));
-			Scheduler::do_schedule(1, None, 128, Call::Logger(logger::Call::log(42, 5000)));
-			Scheduler::do_schedule(1, None, 127, Call::Logger(logger::Call::log(69, 5000)));
-			Scheduler::do_schedule(1, None, 126, Call::Logger(logger::Call::log(2600, 6000)));
-			let weight = Scheduler::on_initialize(1);
-			assert_eq!(weight, 6000);
-			let weight = Scheduler::on_initialize(2);
-			assert_eq!(weight, 10000);
-			let weight = Scheduler::on_initialize(3);
-			assert_eq!(weight, 1000);
-			let weight = Scheduler::on_initialize(4);
-			assert_eq!(weight, 0);
+			let base_weight: Weight = <Test as frame_system::Trait>::DbWeight::get().reads_writes(1, 1) + 10_000_000;
+			let base_multiplier = 25_000_000;
+			let named_multiplier = <Test as frame_system::Trait>::DbWeight::get().writes(1);
+			let periodic_multiplier = <Test as frame_system::Trait>::DbWeight::get().reads_writes(1, 1);
+
+			// Named
+			assert_ok!(Scheduler::do_schedule_named(1u32.encode(), 1, None, 255, Call::Logger(logger::Call::log(3, MaximumBlockWeight::get() / 3))));
+			// Anon Periodic
+			Scheduler::do_schedule(1, Some((1000, 3)), 128, Call::Logger(logger::Call::log(42, MaximumBlockWeight::get() / 3)));
+			// Anon
+			Scheduler::do_schedule(1, None, 127, Call::Logger(logger::Call::log(69, MaximumBlockWeight::get() / 2)));
+			// Named Periodic
+			assert_ok!(Scheduler::do_schedule_named(2u32.encode(), 1, Some((1000, 3)), 126, Call::Logger(logger::Call::log(2600, MaximumBlockWeight::get() / 2))));
+
+			// Will include the named periodic only
+			let actual_weight = Scheduler::on_initialize(1);
+			let call_weight = MaximumBlockWeight::get() / 2;
+			assert_eq!(actual_weight, call_weight + base_weight + base_multiplier + named_multiplier + periodic_multiplier);
+			assert_eq!(logger::log(), vec![2600u32]);
+
+			// Will include anon and anon periodic
+			let actual_weight = Scheduler::on_initialize(2);
+			let call_weight = MaximumBlockWeight::get() / 2 + MaximumBlockWeight::get() / 3;
+			assert_eq!(actual_weight, call_weight + base_weight + base_multiplier * 2 + periodic_multiplier);
+			assert_eq!(logger::log(), vec![2600u32, 69u32, 42u32]);
+
+			// Will include named only
+			let actual_weight = Scheduler::on_initialize(3);
+			let call_weight = MaximumBlockWeight::get() / 3;
+			assert_eq!(actual_weight, call_weight + base_weight + base_multiplier + named_multiplier);
+			assert_eq!(logger::log(), vec![2600u32, 69u32, 42u32, 3u32]);
+
+			// Will contain none
+			let actual_weight = Scheduler::on_initialize(4);
+			assert_eq!(actual_weight, 0);
 		});
 	}
 
