@@ -1352,9 +1352,9 @@ dependencies = [
 
 [[package]]
 name = "finality-grandpa"
-version = "0.12.1"
+version = "0.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ab32971efbe776e46bfbc34d5b662d8e1de51fd14e26a2eba522c0f3470fc0f"
+checksum = "1f4682570188cd105606e621b9992e580f717c15f8cd1b7d106b59f1c6e54680"
 dependencies = [
  "either",
  "futures 0.3.4",
@@ -3440,6 +3440,7 @@ dependencies = [
  "pallet-authority-discovery",
  "pallet-balances",
  "pallet-contracts",
+ "pallet-grandpa",
  "pallet-im-online",
  "pallet-indices",
  "pallet-staking",
@@ -3546,7 +3547,10 @@ dependencies = [
 name = "node-primitives"
 version = "2.0.0-dev"
 dependencies = [
+ "frame-system",
+ "parity-scale-codec",
  "pretty_assertions",
+ "sp-application-crypto",
  "sp-core",
  "sp-runtime",
  "sp-serializer",
@@ -4275,16 +4279,25 @@ dependencies = [
 name = "pallet-grandpa"
 version = "2.0.0-dev"
 dependencies = [
+ "finality-grandpa",
  "frame-support",
  "frame-system",
+ "pallet-balances",
  "pallet-finality-tracker",
+ "pallet-offences",
  "pallet-session",
+ "pallet-staking",
+ "pallet-staking-reward-curve",
+ "pallet-timestamp",
  "parity-scale-codec",
  "serde",
+ "sp-application-crypto",
  "sp-core",
  "sp-finality-grandpa",
  "sp-io",
+ "sp-keyring",
  "sp-runtime",
+ "sp-session",
  "sp-staking",
  "sp-std",
 ]
@@ -4486,6 +4499,7 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-runtime",
+ "sp-session",
  "sp-staking",
  "sp-std",
  "sp-trie",
@@ -7524,10 +7538,13 @@ dependencies = [
 name = "sp-finality-grandpa"
 version = "2.0.0-dev"
 dependencies = [
+ "finality-grandpa",
+ "log",
  "parity-scale-codec",
  "serde",
  "sp-api",
  "sp-application-crypto",
+ "sp-core",
  "sp-runtime",
  "sp-std",
 ]
@@ -7760,9 +7777,11 @@ dependencies = [
 name = "sp-session"
 version = "2.0.0-dev"
 dependencies = [
+ "parity-scale-codec",
  "sp-api",
  "sp-core",
  "sp-runtime",
+ "sp-staking",
  "sp-std",
 ]
 
@@ -8027,6 +8046,7 @@ dependencies = [
  "node-primitives",
  "node-runtime",
  "pallet-balances",
+ "pallet-grandpa",
  "pallet-transaction-payment",
  "parity-scale-codec",
  "rand 0.7.3",
@@ -8181,6 +8201,7 @@ dependencies = [
  "sp-consensus-aura",
  "sp-consensus-babe",
  "sp-core",
+ "sp-finality-grandpa",
  "sp-inherents",
  "sp-io",
  "sp-keyring",

@@ -33,6 +33,7 @@ pub use serde;
 pub use sp_std;
 #[doc(hidden)]
 pub use codec;
+use codec::{Decode, Encode};
 #[cfg(feature = "std")]
 #[doc(hidden)]
 pub use once_cell;
@@ -237,7 +238,7 @@ macro_rules! assert_ok {
 
 /// The void type - it cannot exist.
 // Oh rust, you crack me up...
-#[derive(Clone, Eq, PartialEq, RuntimeDebug)]
+#[derive(Clone, Decode, Encode, Eq, PartialEq, RuntimeDebug)]
 pub enum Void {}
 
 #[cfg(feature = "std")]
