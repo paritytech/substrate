@@ -40,10 +40,13 @@ use sc_client_api::{StorageProvider, BlockBackend, UsageProvider};
 use std::{io::{Read, Write, Seek}, pin::Pin, collections::HashMap};
 use serde_json::{de::IoRead as JsonIoRead, Deserializer, StreamDeserializer};
 
+const MAX_PENDING_BLOCKS: u64 = 1024;
+
 /// Build a chain spec json
 pub fn build_spec(spec: &dyn ChainSpec, raw: bool) -> error::Result<String> {
 	spec.as_json(raw).map_err(Into::into)
 }
+
 
 /// Helper enum that wraps either a binary decoder (from parity-scale-codec), or a JSON decoder (from serde_json).
 /// Implements the Stream Trait, calling `poll_next()` will decode the next SignedBlock and return it.
@@ -315,13 +318,18 @@ impl<
 					}
 				},
 				Poll::Ready(Some(block_result)) => {
-					match block_result {
-						Ok(signed_block) => import_block_to_queue(signed_block, queue, force),
-						Err(e) => {
-							let read_block_count = block_stream.read_block_count();
-							warn!("Error reading block data at {}: {}", read_block_count, e);
-							// We've encountered an error, we can stop here.
-							return std::task::Poll::Ready(Ok(()));
+					let read_block_count = block_stream.read_block_count();
+					// Make sure we are not running more than MAX_PENDING_BLOCKS ahead of the queue.
+					// `read_block_count` should always be >= to `link.imported_blocks` so this is safe from underflow.
+					if read_block_count - link.imported_blocks < MAX_PENDING_BLOCKS {
+						match block_result {
+							Ok(signed_block) => import_block_to_queue(signed_block, queue, force),
+							Err(e) => {
+								let read_block_count = block_stream.read_block_count();
+								warn!("Error reading block data at {}: {}", read_block_count, e);
+								// We've encountered an error, we can stop here.
+								return std::task::Poll::Ready(Ok(()));
+							}
 						}
 					}
 				}
