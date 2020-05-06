@@ -184,7 +184,14 @@ fn importing_is_done(count: Option<u64>, read_block_count: u64, imported_blocks:
 }
 
 // Logs information regarding the current importing status.
-fn log_importing_status_updates(count: Option<u64>, read_block_count: u64, blocks_before: u64, imported_blocks: u64) {
+fn log_importing_status_updates<R, T>(block_stream: &BlockStream<R, T>, blocks_before: u64, imported_blocks: u64)
+where
+	R: Read + Seek + 'static,
+	T: BlockT + MaybeSerializeDeserialize,
+{
+	let count = block_stream.count();
+	let read_block_count = block_stream.read_block_count();
+	
 	// Notify every 1000 blocks to let the user know everything is running smoothly.
 	if read_block_count % 1000 == 0 {
 		info!(
@@ -271,9 +278,8 @@ impl<
 		let mut link = WaitLink::new();
 		let block_stream_res: Result<BlockStream<_, Self::Block>, String> = BlockStream::new(input, binary);
 
-		let mut block_stream;
-		match block_stream_res {
-			Ok(bs) => {block_stream = bs},
+		let mut block_stream = match block_stream_res {
+			Ok(bs) => bs,
 			Err(e) => {
 				// We've encountered an error while creating the block stream 
 				// so we can just return a future that returns an error.
@@ -335,9 +341,7 @@ impl<
 				return std::task::Poll::Ready(Ok(()));
 			}
 
-			let read_block_count = block_stream.read_block_count();
-			let count = block_stream.count();
-			log_importing_status_updates(count, read_block_count, blocks_before, link.imported_blocks);
+			log_importing_status_updates(&block_stream, blocks_before, link.imported_blocks);
 
 
 			cx.waker().wake_by_ref();
