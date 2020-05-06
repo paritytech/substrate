@@ -18,9 +18,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use log::{info, trace, warn};
 use parking_lot::RwLock;
-use sc_client_api::{
-	backend::{AuxStore, Backend, Finalizer, TransactionFor},
-};
+use sc_client_api::backend::{AuxStore, Backend, Finalizer, TransactionFor};
 use sp_blockchain::{HeaderBackend, Error as ClientError, well_known_cache_keys};
 use parity_scale_codec::{Encode, Decode};
 use sp_consensus::{
@@ -220,7 +218,7 @@ impl LightAuthoritySet {
 	/// Set new authorities set.
 	pub fn update(&mut self, set_id: u64, authorities: AuthorityList) {
 		self.set_id = set_id;
-		std::mem::replace(&mut self.authorities, authorities);
+		self.authorities = authorities;
 	}
 }
 
