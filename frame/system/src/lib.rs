@@ -993,13 +993,11 @@ impl<T: Trait> Module<T> {
 	/// Deposits a log and ensures it matches the block's log data.
 	///
 	/// # <weight>
-	/// - `O(D)` where `D` length of `Digest`
-	/// - 1 storage mutation (codec `O(D)`).
+	/// - `O(1)`
+	/// - 1 storage write (codec `O(1)`)
 	/// # </weight>
 	pub fn deposit_log(item: DigestItemOf<T>) {
-		let mut l = <Digest<T>>::get();
-		l.push(item);
-		<Digest<T>>::put(l);
+		<Digest<T>>::append(item);
 	}
 
 	/// Get the basic externalities for this module, useful for tests.
