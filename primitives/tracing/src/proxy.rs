@@ -1,3 +1,19 @@
+// Copyright 2020 Parity Technologies (UK) Ltd.
+// This file is part of Substrate.
+
+// Substrate is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Substrate is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+
 use std::cell::RefCell;
 use rental;
 
@@ -9,10 +25,13 @@ thread_local! {
 	static PROXY: RefCell<TracingProxy> = RefCell::new(TracingProxy::new());
 }
 
+/// Create and enter a `tracing` Span, returning the span id,
+/// which should be passed to `exit_span(id)` to signal that the span should exit.
 pub fn create_registered_span(target: &str, name: &str) -> u64 {
 	PROXY.with(|proxy| proxy.borrow_mut().create_registered_span(target, name))
 }
 
+/// Exit a span by dropping it along with it's associated guard.
 pub fn exit_span(id: u64) {
 	PROXY.with(|proxy| proxy.borrow_mut().exit_span(id));
 }
@@ -28,7 +47,7 @@ rental! {
 }
 
 /// Requires a tracing::Subscriber to process span traces,
-/// this is available when running with client (and relevant cli params)
+/// this is available when running with client (and relevant cli params).
 pub struct TracingProxy {
 	next_id: u64,
 	spans: Vec<(u64, rent_span::SpanAndGuard)>,
@@ -53,7 +72,7 @@ impl TracingProxy {
 	}
 }
 
-/// For spans to be recorded they must be registered in `span_dispatch`
+/// For spans to be recorded they must be registered in `span_dispatch`.
 impl TracingProxy {
 	fn create_registered_span(&mut self, target: &str, name: &str) -> u64 {
 		let create_span: Result<tracing::Span, String> = span_dispatch::create_registered_span(target, name);
