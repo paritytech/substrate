@@ -110,7 +110,7 @@ pub trait FixedPointNumber:
 	/// Saturating multiplication for integer type `N`, adding the result back.
 	/// Equal to `self * n + n`.
 	///
-	/// Returns `N::min` or `N::max` if the multiplication or final result do not fit in `N`.
+	/// Returns `N::min` or `N::max` if the multiplication or final result does not fit in `N`.
 	fn saturating_mul_int_acc<N: FixedPointOperand>(self, n: N) -> N;
 
 	/// Saturating absolute value.
@@ -182,6 +182,8 @@ pub trait FixedPointNumber:
 	}
 
 	/// Returns the nearest integer to a number. Round half-way cases away from 0.0.
+	///
+	/// Saturates to `Inner::min` or `Inner::max` (truncated) if the result does not fit.
 	fn round(self) -> Self;
 }
 
@@ -333,12 +335,12 @@ macro_rules! implement_fixed {
 			}
 
 			fn round(self) -> Self {
-				let n = self.frac() * 10.into();
+				let n = self.frac().saturating_mul(10.into());
 				if n < 5.into() {
 					self.trunc()
 				} else {
 					let extra: Self = self.0.signum().into();
-					(self + extra).trunc()
+					(self.saturating_add(extra)).trunc()
 				}
 			}
 		}
@@ -1247,11 +1249,58 @@ macro_rules! implement_fixed {
 
 			#[test]
 			fn round_works() {
+				let n = $name::zero();
+				assert_eq!(n.round(), n);
+
+				let n = $name::one();
+				assert_eq!(n.round(), n);
+
 				let n = $name::saturating_from_rational(5, 2);
 				assert_eq!(n.round(), 3.into());
 
 				let n = $name::saturating_from_rational(-5, 2);
 				assert_eq!(n.round(), (-3).into());
+
+				// Saturating:
+				let n = $name::max_value();
+				assert_eq!(n.round(), n.trunc());
+
+				let n = $name::min_value();
+				assert_eq!(n.round(), n.trunc());
+
+				// On the limit:
+
+				// floor(max - 1) + 0.33..
+				let n = $name::max_value()
+					.saturating_sub(1.into())
+					.trunc()
+					.saturating_add((1, 3).into());
+
+				assert_eq!(n.round(), ($name::max_value() - 1.into()).trunc());
+
+				// floor(min + 1) - 0.33..
+				let n = $name::min_value()
+					.saturating_add(1.into())
+					.trunc()
+					.saturating_sub((1, 3).into());
+
+				assert_eq!(n.round(), ($name::min_value() + 1.into()).trunc());
+
+				// floor(max - 1) + 0.5
+				let n = $name::max_value()
+					.saturating_sub(1.into())
+					.trunc()
+					.saturating_add((1, 2).into());
+
+				assert_eq!(n.round(), $name::max_value().trunc());
+
+				// floor(min + 1) - 0.5
+				let n = $name::min_value()
+					.saturating_add(1.into())
+					.trunc()
+					.saturating_sub((1, 2).into());
+
+				assert_eq!(n.round(), $name::min_value().trunc());
 			}
 
 			#[test]
