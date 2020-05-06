@@ -37,7 +37,7 @@ pub struct TracingProxy {
 impl Drop for TracingProxy {
 	fn drop(&mut self) {
 		while let Some((_, mut sg)) = self.spans.pop() {
-			sg.rent_all_mut(|s| { s.span.record("tracing_proxy_ok", &false); });
+			sg.rent_all_mut(|s| { s.span.record("is_valid_trace", &false); });
 		}
 	}
 }
