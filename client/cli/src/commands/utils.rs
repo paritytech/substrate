@@ -58,19 +58,19 @@ macro_rules! with_crypto_scheme {
 	($scheme:expr, $method:ident($($params:expr),*)) => {
 		with_crypto_scheme!($scheme, $method<>($($params),*))
 	};
-    ($scheme:expr, $method:ident<$($gen:ident),*>($($params:expr),*)) => {
-        match $scheme {
+	($scheme:expr, $method:ident<$($generics:ident),*>($($params:expr),*)) => {
+		match $scheme {
 			$crate::arg_enums::CryptoScheme::Ecdsa => {
-				$method::<sp_core::ecdsa::Pair, $($gen),*>($($params),*)
+				$method::<sp_core::ecdsa::Pair, $($generics),*>($($params),*)
 			}
 			$crate::arg_enums::CryptoScheme::Sr25519 => {
-				$method::<sp_core::sr25519::Pair, $($gen),*>($($params),*)
+				$method::<sp_core::sr25519::Pair, $($generics),*>($($params),*)
 			}
 			$crate::arg_enums::CryptoScheme::Ed25519 => {
-				$method::<sp_core::ed25519::Pair, $($gen),*>($($params),*)
+				$method::<sp_core::ed25519::Pair, $($generics),*>($($params),*)
 			}
 		}
-    };
+	};
 }
 
 /// print formatted pair from uri
