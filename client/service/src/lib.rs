@@ -255,7 +255,7 @@ where
 		let essential_task = std::panic::AssertUnwindSafe(task)
 			.catch_unwind()
 			.map(move |_| {
-				error!("Essential task failed. Shutting down service.");
+				error!("Essential task `{}` failed. Shutting down service.", name);
 				let _ = essential_failed.send(());
 			});
 
