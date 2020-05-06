@@ -505,9 +505,9 @@ mod private {
 
 impl<T: Encode> StorageAppend<T> for Vec<T> {}
 
-/// We abuse the fact that SCALE does not puts any marker into the encoding, aka
+/// We abuse the fact that SCALE does not put any marker into the encoding, i.e.
 /// we only encode the internal vec and we can append to this vec. We have a test that ensures
-/// that if ever the `Digest` format changes, we need to remove this here.
+/// that if the `Digest` format ever changes, we need to remove this here.
 impl<Hash: Encode> StorageAppend<DigestItem<Hash>> for Digest<Hash> {}
 
 #[cfg(test)]
