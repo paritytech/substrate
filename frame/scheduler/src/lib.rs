@@ -180,6 +180,10 @@ decl_module! {
 					Some((order, index, *cumulative_weight, s))
 				})
 				.filter_map(|(order, index, cumulative_weight, mut s)| {
+					// We allow a scheduled call if any is true:
+					// - It's priority is `HARD_DEADLINE`
+					// - It does not push the weight past the limit.
+					// - It is the first item in the schedule
 					if s.priority <= schedule::HARD_DEADLINE || cumulative_weight <= limit || order == 0 {
 						let r = s.call.clone().dispatch(system::RawOrigin::Root.into());
 						let maybe_id = s.maybe_id.clone();
@@ -190,6 +194,7 @@ decl_module! {
 								s.maybe_periodic = None;
 							}
 							let next = now + period;
+							// If scheduled is named, place it's information in `Lookup`
 							if let Some(ref id) = s.maybe_id {
 								let next_index = Agenda::<T>::decode_len(now + period).unwrap_or(0);
 								Lookup::<T>::insert(id, (next, next_index as u32));
@@ -235,9 +240,9 @@ impl<T: Trait> Module<T> {
 			.map(|(p, c)| (p, c - 1));
 		let s = Some(Scheduled { maybe_id: None, priority, call, maybe_periodic });
 		Agenda::<T>::append(when, s);
-		let id = Agenda::<T>::decode_len(when).unwrap_or(1) as u32 - 1;
-		Self::deposit_event(RawEvent::Scheduled(when, id));
-		(when, id)
+		let index = Agenda::<T>::decode_len(when).unwrap_or(1) as u32 - 1;
+		Self::deposit_event(RawEvent::Scheduled(when, index));
+		(when, index)
 	}
 
 	fn do_cancel((when, index): TaskAddress<T::BlockNumber>) -> Result<(), DispatchError> {
