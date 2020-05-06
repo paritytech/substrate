@@ -221,7 +221,7 @@ decl_module! {
 				.filter_map(|(index, s)| s.map(|inner| (index as u32, inner)))
 				.collect::<Vec<_>>();
 			queued.sort_by_key(|(_, s)| s.priority);
-			let base_weight: Weight = T::DbWeight::get().reads_writes(1, 1) // Agenda
+			let base_weight: Weight = T::DbWeight::get().reads_writes(1, 2) // Agenda + Agenda(next)
 				.saturating_add(10_000_000); // Base Weight
 			let mut total_weight: Weight = 0;
 			queued.into_iter()
@@ -661,7 +661,7 @@ mod tests {
 	#[test]
 	fn on_initialize_weight_is_correct() {
 		new_test_ext().execute_with(|| {
-			let base_weight: Weight = <Test as frame_system::Trait>::DbWeight::get().reads_writes(1, 1) + 10_000_000;
+			let base_weight: Weight = <Test as frame_system::Trait>::DbWeight::get().reads_writes(1, 2) + 10_000_000;
 			let base_multiplier = 25_000_000;
 			let named_multiplier = <Test as frame_system::Trait>::DbWeight::get().writes(1);
 			let periodic_multiplier = <Test as frame_system::Trait>::DbWeight::get().reads_writes(1, 1);
