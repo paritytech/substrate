@@ -997,9 +997,7 @@ impl<T: Trait> Module<T> {
 	/// - 1 storage mutation (codec `O(D)`).
 	/// # </weight>
 	pub fn deposit_log(item: DigestItemOf<T>) {
-		let mut l = <Digest<T>>::get();
-		l.push(item);
-		<Digest<T>>::put(l);
+		<Digest<T>>::append(item);
 	}
 
 	/// Get the basic externalities for this module, useful for tests.
