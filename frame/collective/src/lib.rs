@@ -690,13 +690,12 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		// remove vote
 		ProposalOf::<T, I>::remove(&proposal_hash);
 		Voting::<T, I>::remove(&proposal_hash);
-		let mut proposal_len = T::MaxProposals::get() as Weight;
-		Proposals::<T, I>::mutate(|proposals| {
-			proposal_len = proposals.len() as Weight;
-			proposals.retain(|h| h != &proposal_hash)
+		let num_proposals = Proposals::<T, I>::mutate(|proposals| {
+			proposals.retain(|h| h != &proposal_hash);
+			proposals.len() + 1 // calculate weight based on original length
 		});
 		weight.saturating_add(db.reads_writes(1, 3)) // `Voting`, `Proposals`, `ProposalOf`
-			.saturating_add(490_000 * proposal_len) // P2
+			.saturating_add(490_000 * num_proposals as Weight) // P2
 	}
 }
 
