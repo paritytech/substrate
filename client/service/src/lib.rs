@@ -64,7 +64,7 @@ pub use self::builder::{
 	ServiceBuilder, ServiceBuilderCommand, TFullClient, TLightClient, TFullBackend, TLightBackend,
 	TFullCallExecutor, TLightCallExecutor,
 };
-pub use config::{Configuration, Role, PruningMode, DatabaseConfig, TaskType};
+pub use config::{Configuration, DatabaseConfig, PruningMode, Role, RpcMethods, TaskType};
 pub use sc_chain_spec::{
 	ChainSpec, GenericChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension,
 	NoExtension, ChainType,
@@ -551,12 +551,12 @@ fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> sc_rpc_server::RpcHandler<s
 		})
 	}
 
-	fn deny_unsafe(addr: &Option<SocketAddr>, unsafe_rpc_expose: bool) -> sc_rpc::DenyUnsafe {
+	fn deny_unsafe(addr: &Option<SocketAddr>, methods: &RpcMethods) -> sc_rpc::DenyUnsafe {
 		let is_exposed_addr = addr.map(|x| x.ip().is_loopback()).unwrap_or(false);
-		if is_exposed_addr && !unsafe_rpc_expose {
-			sc_rpc::DenyUnsafe::Yes
-		} else {
-			sc_rpc::DenyUnsafe::No
+		match (is_exposed_addr, methods) {
+			| (_, RpcMethods::Unsafe)
+			| (false, RpcMethods::Auto) => sc_rpc::DenyUnsafe::No,
+			_ => sc_rpc::DenyUnsafe::Yes
 		}
 	}
 
@@ -566,7 +566,7 @@ fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> sc_rpc_server::RpcHandler<s
 			|address| sc_rpc_server::start_http(
 				address,
 				config.rpc_cors.as_ref(),
-				gen_handler(deny_unsafe(&config.rpc_http, config.unsafe_rpc_expose)),
+				gen_handler(deny_unsafe(&config.rpc_http, &config.rpc_methods)),
 			),
 		)?.map(|s| waiting::HttpServer(Some(s))),
 		maybe_start_server(
@@ -575,7 +575,7 @@ fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> sc_rpc_server::RpcHandler<s
 				address,
 				config.rpc_ws_max_connections,
 				config.rpc_cors.as_ref(),
-				gen_handler(deny_unsafe(&config.rpc_ws, config.unsafe_rpc_expose)),
+				gen_handler(deny_unsafe(&config.rpc_ws, &config.rpc_methods)),
 			),
 		)?.map(|s| waiting::WsServer(Some(s))),
 	)))
