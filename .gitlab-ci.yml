@@ -429,18 +429,24 @@ build-macos-subkey:
 build-rust-doc-release:
   stage:                           build
   <<:                              *docker-env
-  allow_failure:                   true
   artifacts:
     name:                          "${CI_JOB_NAME}_${CI_COMMIT_REF_NAME}-doc"
     when:                          on_success
     expire_in:                     7 days
     paths:
     - ./crate-docs
-  <<:                              *build-only
   script:
     - rm -f ./crate-docs/index.html # use it as an indicator if the job succeeds
-    - BUILD_DUMMY_WASM_BINARY=1 RUSTDOCFLAGS="--html-in-header $(pwd)/.maintain/rustdoc-header.html" time cargo +nightly doc --release --all --verbose
-    - cp -R ./target/doc ./crate-docs
+    - BUILD_DUMMY_WASM_BINARY=1 RUSTDOCFLAGS="--html-in-header $(pwd)/.maintain/rustdoc-header.html" 
+        time cargo +nightly doc --no-deps --workspace --all-features --verbose --target-dir ./crate-docs |& tee output.log
+    - echo "____Docs job successful, checking for warnings____"
+    - awk '/^warning:/,/^$/ { print }' output.log > ${CI_COMMIT_SHORT_SHA}_warnings.log
+    - if [ -s ${CI_COMMIT_SHORT_SHA}_warnings.log ]; then
+        cat ${CI_COMMIT_SHORT_SHA}_warnings.log;
+        exit 1;
+      else
+        echo "___No warnings___";
+      fi
     - echo "<meta http-equiv=refresh content=0;url=sc_service/index.html>" > ./crate-docs/index.html
     - sccache -s
 
