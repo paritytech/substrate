@@ -44,6 +44,8 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
+mod benchmarking;
+
 use sp_std::prelude::*;
 use codec::{Encode, Decode};
 use sp_runtime::{RuntimeDebug, traits::{Zero, One}};
@@ -68,7 +70,7 @@ pub trait Trait: system::Trait {
 	type Origin: From<system::RawOrigin<Self::AccountId>>;
 
 	/// The aggregated call type.
-	type Call: Parameter + Dispatchable<Origin=<Self as Trait>::Origin> + GetDispatchInfo;
+	type Call: Parameter + Dispatchable<Origin=<Self as Trait>::Origin> + GetDispatchInfo + From<system::Call<Self>>;
 
 	/// The maximum weight that may be scheduled per block for any dispatchables of less priority
 	/// than `schedule::HARD_DEADLINE`.
@@ -466,7 +468,7 @@ mod tests {
 
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
-	fn new_test_ext() -> sp_io::TestExternalities {
+	pub fn new_test_ext() -> sp_io::TestExternalities {
 		let t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
 		t.into()
 	}
