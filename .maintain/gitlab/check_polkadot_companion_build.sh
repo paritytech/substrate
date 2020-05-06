@@ -42,12 +42,16 @@ EOT
 
 SUBSTRATE_PATH=$(pwd)
 
+# Merge master into our branch before building Polkadot to make sure we don't miss
+# any commits that are required by Polkadot.
+git merge origin/master
+
 # Clone the current Polkadot master branch into ./polkadot.
 git clone --depth 1 https://github.com/paritytech/polkadot.git
 
 cd polkadot
 
-# either it's a pull request then check for a companion otherwise use 
+# either it's a pull request then check for a companion otherwise use
 # polkadot:master
 if expr match "${CI_COMMIT_REF_NAME}" '^[0-9]\+$' >/dev/null
 then
