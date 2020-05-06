@@ -55,8 +55,8 @@ mod mock;
 mod tests;
 
 pub use equivocation::{
-	EquivocationHandler, GetSessionNumber, GetValidatorCount, GrandpaOffence, GrandpaTimeSlot,
-	HandleEquivocation, ValidateEquivocationReport,
+	EquivocationHandler, GetSessionNumber, GetValidatorCount, GrandpaEquivocationOffence,
+	GrandpaOffence, GrandpaTimeSlot, HandleEquivocation, ValidateEquivocationReport,
 };
 
 pub trait Trait: frame_system::Trait {
