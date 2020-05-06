@@ -177,15 +177,10 @@ where
 /// Returns true if we have imported every block we were supposed to import, else returns false.
 fn importing_is_done(count: Option<u64>, read_block_count: u64, imported_blocks: u64) -> bool {
 	if let Some(count) = count {
-		if imported_blocks >= count {
-			return true
-		}
+		imported_blocks >= count
 	} else {
-		if imported_blocks >= read_block_count {
-			return true
-		}
+		imported_blocks >= read_block_count
 	}
-	false
 }
 
 // Logs information regarding the current importing status.
