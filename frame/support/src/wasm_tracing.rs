@@ -19,8 +19,8 @@
 //! Facilitated by `sp_io::wasm_tracing`
 
 
-/// This is holds a span id and is to signal on drop that a tracing span has exited
-/// It must be bound to a named variable eg. `_span_guard`
+/// This holds a tracing span id and is to signal on drop that a tracing span has exited.
+/// It must be bound to a named variable eg. `_span_guard`.
 pub struct TracingSpanGuard(pub u64);
 
 impl Drop for TracingSpanGuard {

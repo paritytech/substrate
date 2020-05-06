@@ -16,7 +16,7 @@ macro_rules! span_dispatch {
 }
 
 /// Spans (target/name pairs) must be pre-registered here.
-/// To be compatible with earlier on-chain versions of the runtime,
+/// To allow tracing with earlier on-chain versions of the runtime,
 /// it is necessary to keep target/name pairs, even if not used in the current runtime.
 pub fn create_registered_span(target: &str, name: &str) -> Result<tracing::Span, String> {
 	span_dispatch! {
