@@ -3423,7 +3423,6 @@ dependencies = [
  "futures 0.3.4",
  "hex-literal",
  "jsonrpc-core",
- "lazy_static",
  "log",
  "nix",
  "node-executor",
