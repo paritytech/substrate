@@ -6650,6 +6650,7 @@ dependencies = [
 name = "sc-keystore"
 version = "2.0.0-rc5"
 dependencies = [
+ "async-trait",
  "derive_more",
  "hex",
  "merlin",
@@ -7768,6 +7769,7 @@ dependencies = [
 name = "sp-core"
 version = "2.0.0-rc5"
 dependencies = [
+ "async-trait",
  "base58",
  "blake2-rfc",
  "byteorder",

@@ -17,6 +17,7 @@
 //! Keystore (and session key management) for ed25519 based chains like Polkadot.
 
 #![warn(missing_docs)]
+use async_trait::async_trait;
 use std::{collections::{HashMap, HashSet}, path::PathBuf, fs::{self, File}, io::{self, Write}, sync::Arc};
 use sp_core::{
 	crypto::{IsWrappedBy, CryptoTypePublicPair, KeyTypeId, Pair as PairT, ExposeSecret, SecretString, Public},
@@ -300,6 +301,7 @@ impl Store {
 	}
 }
 
+#[async_trait]
 impl BareCryptoStore for Store {
 	fn keys(
 		&self,
@@ -326,7 +328,7 @@ impl BareCryptoStore for Store {
 		   .collect::<Vec<_>>())
 	}
 
-	fn sign_with(
+	async fn sign_with(
 		&self,
 		id: KeyTypeId,
 		key: &CryptoTypePublicPair,

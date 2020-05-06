@@ -16,6 +16,8 @@
 // limitations under the License.
 
 //! Shareable Substrate traits.
+use async_trait::async_trait;
+use futures::future::join_all;
 
 use crate::{
 	crypto::{KeyTypeId, CryptoTypePublicPair},
@@ -52,6 +54,7 @@ pub enum Error {
 }
 
 /// Something that generates, stores and provides access to keys.
+#[async_trait]
 pub trait BareCryptoStore: Send + Sync {
 	/// Returns all sr25519 public keys for the given key type.
 	fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public>;
@@ -126,7 +129,7 @@ pub trait BareCryptoStore: Send + Sync {
 	///
 	/// Returns the SCALE encoded signature if key is found & supported,
 	/// an error otherwise.
-	fn sign_with(
+	async fn sign_with(
 		&self,
 		id: KeyTypeId,
 		key: &CryptoTypePublicPair,
@@ -139,17 +142,17 @@ pub trait BareCryptoStore: Send + Sync {
 	/// sign the provided message with that key.
 	///
 	/// Returns a tuple of the used key and the SCALE encoded signature.
-	fn sign_with_any(
+	async fn sign_with_any(
 		&self,
 		id: KeyTypeId,
 		keys: Vec<CryptoTypePublicPair>,
 		msg: &[u8]
 	) -> Result<(CryptoTypePublicPair, Vec<u8>), Error> {
 		if keys.len() == 1 {
-			return self.sign_with(id, &keys[0], msg).map(|s| (keys[0].clone(), s));
+			return self.sign_with(id, &keys[0], msg).await.map(|s| (keys[0].clone(), s));
 		} else {
 			for k in self.supported_keys(id, keys)? {
-				if let Ok(sign) = self.sign_with(id, &k, msg) {
+				if let Ok(sign) = self.sign_with(id, &k, msg).await {
 					return Ok((k, sign));
 				}
 			}
@@ -163,14 +166,17 @@ pub trait BareCryptoStore: Send + Sync {
 	/// each key given that the key is supported.
 	///
 	/// Returns a list of `Result`s each representing the SCALE encoded
-	/// signature of each key or a Error for non-supported keys.
-	fn sign_with_all(
+	/// signature of each key or a BareCryptoStoreError for non-supported keys.
+	async fn sign_with_all(
 		&self,
 		id: KeyTypeId,
 		keys: Vec<CryptoTypePublicPair>,
 		msg: &[u8],
-	) -> Result<Vec<Result<Vec<u8>, Error>>, ()>{
-		Ok(keys.iter().map(|k| self.sign_with(id, k, msg)).collect())
+	) -> Result<Vec<Result<Vec<u8>, BareCryptoStoreError>>, ()> {
+		let futs = keys.iter()
+			.map(|k| self.sign_with(id, k, msg));
+
+		Ok(join_all(futs).await)
 	}
 
 	/// Generate VRF signature for given transcript data.
