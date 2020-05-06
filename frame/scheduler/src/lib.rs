@@ -144,7 +144,7 @@ decl_module! {
 		#[weight = 100_000]
 		fn cancel(origin, when: T::BlockNumber, index: u32) {
 			ensure_root(origin)?;
-			Self::do_cancel((when, index)).map_err(|_| "could not cancel")?;
+			Self::do_cancel((when, index))?;
 		}
 
 		/// Anonymously schedule a task.
@@ -157,14 +157,14 @@ decl_module! {
 			call: Box<<T as Trait>::Call>,
 		) {
 			ensure_root(origin)?;
-			Self::do_schedule_named(id, when, maybe_periodic, priority, *call).map_err(|_| "could not schedule")?;
+			Self::do_schedule_named(id, when, maybe_periodic, priority, *call)?;
 		}
 
 		/// Cancel a named scheduled task.
 		#[weight = 100_000]
 		fn cancel_named(origin, id: Vec<u8>) {
 			ensure_root(origin)?;
-			Self::do_cancel_named(id).map_err(|_| "could not cancel named")?;
+			Self::do_cancel_named(id)?;
 		}
 
 		fn on_initialize(now: T::BlockNumber) -> Weight {
@@ -251,8 +251,8 @@ impl<T: Trait> Module<T> {
 		if let Some(s) = Agenda::<T>::mutate(when, |agenda| agenda.get_mut(index as usize).and_then(Option::take)) {
 			if let Some(id) = s.maybe_id {
 				Lookup::<T>::remove(id);
-				Self::deposit_event(RawEvent::Canceled(when, index));
 			}
+			Self::deposit_event(RawEvent::Canceled(when, index));
 			Ok(())
 		} else {
 			Err(Error::<T>::FailedToCancel)?
@@ -627,9 +627,8 @@ mod tests {
 			assert!(logger::log().is_empty());
 			assert_ok!(Scheduler::cancel_named(Origin::ROOT, 1u32.encode()));
 			assert_ok!(Scheduler::cancel(Origin::ROOT, 4, 1));
+			// Scheduled calls are made NONE, so should not effect state
 			run_to_block(100);
-			// Scheduled calls are removed from the agenda
-			assert_eq!(Agenda::<Test>::get(4).len(), 0);
 			assert!(logger::log().is_empty());
 		});
 	}
