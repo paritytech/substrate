@@ -20,7 +20,7 @@ use crate::{
 	helpers_128bit::multiply_by_rational, PerThing,
 	traits::{
 		SaturatedConversion, CheckedSub, CheckedAdd, CheckedMul, CheckedDiv, CheckedNeg,
-		Bounded, Saturating, UniqueSaturatedInto, Zero,
+		Bounded, Saturating, UniqueSaturatedInto, Zero, One
 	},
 };
 
@@ -51,7 +51,7 @@ pub trait FixedPointNumber:
 	+ Add + Sub + Div + Mul
 {
 	/// The underlying data type used for this fixed point number.
-	type Inner: Copy + Debug;
+	type Inner: Copy + Debug + Zero + One + PartialOrd;
 
 	/// The accuracy of this fixed point number.
 	const DIV: Self::Inner;
@@ -126,31 +126,60 @@ pub trait FixedPointNumber:
 	}
 
 	/// Returns zero.
-	fn zero() -> Self;
+	fn zero() -> Self {
+		Self::from_inner(Self::Inner::zero())
+	}
 
 	/// Checks if the number is zero.
-	fn is_zero(&self) -> bool;
+	fn is_zero(&self) -> bool {
+		self.into_inner() == Self::Inner::zero()
+	}
 
 	/// Returns one.
-	fn one() -> Self;
+	fn one() -> Self {
+		Self::from_inner(Self::DIV)
+	}
+
+	/// Checks if the number is one.
+	fn is_one(&self) -> bool {
+		self.into_inner() == Self::Inner::one()
+	}
 
 	/// Checks if the number is positive.
-	fn is_positive(self) -> bool;
+	fn is_positive(self) -> bool {
+		self.into_inner() >= Self::Inner::zero()
+	}
 
 	/// Checks if the number is negative.
-	fn is_negative(self) -> bool;
+	fn is_negative(self) -> bool {
+		self.into_inner() < Self::Inner::zero()
+	}
 
 	/// Returns the integer part.
 	fn trunc(self) -> Self;
 
 	/// Returns the fractional part.
-	fn frac(self) -> Self;
+	fn frac(self) -> Self {
+		self.saturating_sub(self.trunc()).saturating_abs()
+	}
 
 	/// Returns the smallest integer greater than or equal to a number.
-	fn ceil(self) -> Self;
+	fn ceil(self) -> Self {
+		if self.is_negative() {
+			self.trunc()
+		} else {
+			self.saturating_add(Self::one()).trunc()
+		}
+	}
 
 	/// Returns the largest integer less than or equal to a number.
-	fn floor(self) -> Self;
+	fn floor(self) -> Self {
+		if self.is_negative() {
+			self.saturating_sub(Self::one()).trunc()
+		} else {
+			self.trunc()
+		}
+	}
 
 	/// Returns the nearest integer to a number. Round half-way cases away from 0.0.
 	fn round(self) -> Self;
@@ -296,27 +325,11 @@ macro_rules! implement_fixed {
 			}
 
 			fn trunc(self) -> Self {
-				Self(self.0 / Self::DIV * Self::DIV)
-			}
-
-			fn frac(self) -> Self {
-				self.saturating_sub(self.trunc()).saturating_abs()
-			}
-
-			fn ceil(self) -> Self {
-				if self.is_negative() {
-					self.trunc()
-				} else {
-					self.saturating_add(Self::one()).trunc()
-				}
-			}
-
-			fn floor(self) -> Self {
-				if self.is_negative() {
-					self.saturating_sub(Self::one()).trunc()
-				} else {
-					self.trunc()
-				}
+				self.0.checked_div(Self::DIV)
+					.expect("panics only if DIV is zero, DIV is not zero; qed")
+					.checked_mul(Self::DIV)
+					.map(Self)
+					.expect("can not overflow since fixed part is >= integer part")
 			}
 
 			fn round(self) -> Self {
@@ -327,26 +340,6 @@ macro_rules! implement_fixed {
 					let extra: Self = self.0.signum().into();
 					(self + extra).trunc()
 				}
-			}
-
-			fn zero() -> Self {
-				Self(0)
-			}
-
-			fn is_zero(&self) -> bool {
-				self.0 == 0
-			}
-
-			fn one() -> Self {
-				Self(Self::DIV)
-			}
-
-			fn is_positive(self) -> bool {
-				self.0.is_positive()
-			}
-
-			fn is_negative(self) -> bool {
-				self.0.is_negative()
 			}
 		}
 
