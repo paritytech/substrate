@@ -560,6 +560,11 @@ macro_rules! implement_fixed {
 			}
 
 			#[test]
+			fn macro_preconditions() {
+				assert!($name::DIV > 0);
+			}
+
+			#[test]
 			fn from_i129_works() {
 				let a = I129 {
 					value: 1,
