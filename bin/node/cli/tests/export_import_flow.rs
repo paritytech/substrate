@@ -19,17 +19,11 @@
 use assert_cmd::cargo::cargo_bin;
 use std::{process::Command, fs, path::PathBuf};
 use tempfile::{tempdir, TempDir};
-use regex::Regex;
-use lazy_static::lazy_static;
 
 mod common;
 
 fn contains_error(stderr: &[u8]) -> bool {
-	let log_output = String::from_utf8_lossy(stderr).to_owned();
-    lazy_static! {
-        static ref RE: Regex = Regex::new("Error").unwrap();
-    }
-    RE.is_match(&log_output)
+	String::from_utf8_lossy(stderr).contains("Error")
 }
 
 /// Helper struct to execute the export/import/revert tests.

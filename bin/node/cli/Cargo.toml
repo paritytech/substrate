@@ -122,7 +122,6 @@ nix = "0.17"
 serde_json = "1.0"
 regex = "1"
 platforms = "0.2.1"
-lazy_static = "1.4.0"
 
 [build-dependencies]
 structopt = { version = "0.3.8", optional = true }
