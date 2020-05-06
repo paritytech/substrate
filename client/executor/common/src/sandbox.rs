@@ -46,33 +46,44 @@ impl From<SupervisorFuncIndex> for usize {
 
 /// Index of a function within guest index space.
 ///
-/// This index is supposed to be used with as index for `Externals`.
+/// This index is supposed to be used as index for `Externals`.
 #[derive(Copy, Clone, Debug, PartialEq)]
 struct GuestFuncIndex(usize);
 
 /// This struct holds a mapping from guest index space to supervisor.
 struct GuestToSupervisorFunctionMapping {
+	/// Position of elements in this vector are interpreted
+	/// as indices of guest functions and are mappeed to
+	/// corresponding supervisor function indices.
 	funcs: Vec<SupervisorFuncIndex>,
 }
 
 impl GuestToSupervisorFunctionMapping {
+	/// Create an empty function mapping
 	fn new() -> GuestToSupervisorFunctionMapping {
 		GuestToSupervisorFunctionMapping { funcs: Vec::new() }
 	}
 
+	/// Add a new supervisor function to the mapping.
+	/// Returns a newly assigned guest function index.
 	fn define(&mut self, supervisor_func: SupervisorFuncIndex) -> GuestFuncIndex {
 		let idx = self.funcs.len();
 		self.funcs.push(supervisor_func);
 		GuestFuncIndex(idx)
 	}
 
+	/// Find supervisor function index by its corresponding guest function index
 	fn func_by_guest_index(&self, guest_func_idx: GuestFuncIndex) -> Option<SupervisorFuncIndex> {
 		self.funcs.get(guest_func_idx.0).cloned()
 	}
 }
 
+/// Holds sandbox function and memory imports and performs name resolution
 struct Imports {
+	/// Maps qualified function name to its guest function index
 	func_map: HashMap<(Vec<u8>, Vec<u8>), GuestFuncIndex>,
+
+	/// Maps qualified field name to its memory reference
 	memories_map: HashMap<(Vec<u8>, Vec<u8>), MemoryRef>,
 }
 
@@ -148,6 +159,7 @@ impl ImportResolver for Imports {
 /// Note that this functions are only called in the `supervisor` context.
 pub trait SandboxCapabilities: FunctionContext {
 	/// Represents a function reference into the supervisor environment.
+	/// Provides an abstraction over execution environment.
 	type SupervisorFuncRef;
 
 	/// Invoke a function in the supervisor environment.
@@ -155,7 +167,7 @@ pub trait SandboxCapabilities: FunctionContext {
 	/// This first invokes the dispatch_thunk function, passing in the function index of the
 	/// desired function to call and serialized arguments. The thunk calls the desired function
 	/// with the deserialized arguments, then serializes the result into memory and returns
-	/// reference. The pointer to and length of the result in linear memory is encoded into an i64,
+	/// reference. The pointer to and length of the result in linear memory is encoded into an `i64`,
 	/// with the upper 32 bits representing the pointer and the lower 32 bits representing the
 	/// length.
 	///
@@ -178,15 +190,22 @@ pub trait SandboxCapabilities: FunctionContext {
 ///
 /// [`Externals`]: ../wasmi/trait.Externals.html
 pub struct GuestExternals<'a, FE: SandboxCapabilities + 'a> {
+	/// Supervisor function environment
 	supervisor_externals: &'a mut FE,
+
+	/// Instance of sandboxed module to be dispatched
 	sandbox_instance: &'a SandboxInstance<FE::SupervisorFuncRef>,
+
+	/// Opaque pointer to outer context, see the `instantiate` function
 	state: u32,
 }
 
+/// Construct trap error from specified message
 fn trap(msg: &'static str) -> Trap {
 	TrapKind::Host(Box::new(Error::Other(msg.into()))).into()
 }
 
+/// Deserialize bytes into `Result`
 fn deserialize_result(serialized_result: &[u8]) -> std::result::Result<Option<RuntimeValue>, Trap> {
 	use self::sandbox_primitives::HostError;
 	use sp_wasm_interface::ReturnValue;
@@ -211,6 +230,7 @@ impl<'a, FE: SandboxCapabilities + 'a> Externals for GuestExternals<'a, FE> {
 		// Make `index` typesafe again.
 		let index = GuestFuncIndex(index);
 
+		// Convert function index from guest to supervisor space
 		let func_idx = self.sandbox_instance
 			.guest_to_supervisor_mapping
 			.func_by_guest_index(index)
@@ -231,7 +251,7 @@ impl<'a, FE: SandboxCapabilities + 'a> Externals for GuestExternals<'a, FE> {
 
 		let state = self.state;
 
-		// Move serialized arguments inside the memory and invoke dispatch thunk and
+		// Move serialized arguments inside the memory, invoke dispatch thunk and
 		// then free allocated memory.
 		let invoke_args_len = invoke_args_data.len() as WordSize;
 		let invoke_args_ptr = self
@@ -421,7 +441,10 @@ fn decode_environment_definition(
 
 /// An environment in which the guest module is instantiated.
 pub struct GuestEnvironment {
+	/// Function and memory imports of the guest module
 	imports: Imports,
+
+	/// Supervisor functinons mapped to guest index space
 	guest_to_supervisor_mapping: GuestToSupervisorFunctionMapping,
 }
 
@@ -462,26 +485,20 @@ impl<FR> UnregisteredInstance<FR> {
 /// Instantiate a guest module and return it's index in the store.
 ///
 /// The guest module's code is specified in `wasm`. Environment that will be available to
-/// guest module is specified in `raw_env_def` (serialized version of [`EnvironmentDefinition`]).
-/// `dispatch_thunk` is used as function that handle calls from guests.
+/// guest module is specified in `guest_env`, `dispatch_thunk` is used as function that
+/// handle calls from guests. `state` is an opaque pointer to caller's arbitrary context
+/// normally created by `sp_sandbox::Instance` primitive.
 ///
-/// # Errors
-///
-/// Returns `Err` if any of the following conditions happens:
-///
-/// - `raw_env_def` can't be deserialized as a [`EnvironmentDefinition`].
-/// - Module in `wasm` is invalid or couldn't be instantiated.
-///
-/// [`EnvironmentDefinition`]: ../sandbox/struct.EnvironmentDefinition.html
+/// Returns uninitialized sandboxed module instance or an instantiation error.
 pub fn instantiate<'a, FE: SandboxCapabilities>(
 	supervisor_externals: &mut FE,
 	dispatch_thunk: FE::SupervisorFuncRef,
 	wasm: &[u8],
-	host_env: GuestEnvironment,
+	guest_env: GuestEnvironment,
 	state: u32,
 ) -> std::result::Result<UnregisteredInstance<FE::SupervisorFuncRef>, InstantiationError> {
 	let module = Module::from_buffer(wasm).map_err(|_| InstantiationError::ModuleDecoding)?;
-	let instance = ModuleInstance::new(&module, &host_env.imports)
+	let instance = ModuleInstance::new(&module, &guest_env.imports)
 		.map_err(|_| InstantiationError::Instantiation)?;
 
 	let sandbox_instance = Rc::new(SandboxInstance {
@@ -490,7 +507,7 @@ pub fn instantiate<'a, FE: SandboxCapabilities>(
 		// for the purpose of running `start` function which should be ok.
 		instance: instance.not_started_instance().clone(),
 		dispatch_thunk,
-		guest_to_supervisor_mapping: host_env.guest_to_supervisor_mapping,
+		guest_to_supervisor_mapping: guest_env.guest_to_supervisor_mapping,
 	});
 
 	with_guest_externals(
