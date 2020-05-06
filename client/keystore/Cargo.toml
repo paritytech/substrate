@@ -14,6 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 
 [dependencies]
+async-trait = { version = "0.1.30" }
 derive_more = "0.99.2"
 sp-core = { version = "2.0.0-dev", path = "../../primitives/core" }
 sp-application-crypto = { version = "2.0.0-dev", path = "../../primitives/application-crypto" }

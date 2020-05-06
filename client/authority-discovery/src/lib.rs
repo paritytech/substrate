@@ -55,7 +55,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use futures::task::{Context, Poll};
-use futures::{Future, FutureExt, ready, Stream, StreamExt};
+use futures::{Future, FutureExt, ready, Stream, StreamExt, executor::block_on};
 use futures_timer::Delay;
 
 use codec::Decode;
@@ -254,13 +254,12 @@ where
 			&self.client,
 		)?.into_iter().map(Into::into).collect::<Vec<_>>();
 
-		let signatures = key_store.read()
-			.sign_with_all(
-				key_types::AUTHORITY_DISCOVERY,
-				keys.clone(),
-				serialized_addresses.as_slice(),
-			)
-			.map_err(|_| Error::Signing)?;
+		let keystore = key_store.read();
+		let signatures = block_on(keystore.sign_with_all(
+			key_types::AUTHORITY_DISCOVERY,
+			keys.clone(),
+			serialized_addresses.as_slice(),
+		)).map_err(|_| Error::Signing)?;
 
 		for (sign_result, key) in signatures.into_iter().zip(keys) {
 			let mut signed_addresses = vec![];

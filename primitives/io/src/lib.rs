@@ -27,6 +27,7 @@
    doc = "Substrate's runtime standard library as compiled without Rust's standard library.")]
 
 use sp_std::vec::Vec;
+use futures::executor::block_on;
 
 #[cfg(feature = "std")]
 use sp_std::ops::Deref;
@@ -393,10 +394,9 @@ pub trait Crypto {
 		pub_key: &ed25519::Public,
 		msg: &[u8],
 	) -> Option<ed25519::Signature> {
-		self.extension::<KeystoreExt>()
-			.expect("No `keystore` associated for the current context!")
-			.read()
-			.sign_with(id, &pub_key.into(), msg)
+		let keystore = self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!");
+		block_on(keystore.read().sign_with(id, &pub_key.into(), msg))
 			.map(|sig| ed25519::Signature::from_slice(sig.as_slice()))
 			.ok()
 	}
@@ -528,10 +528,9 @@ pub trait Crypto {
 		pub_key: &sr25519::Public,
 		msg: &[u8],
 	) -> Option<sr25519::Signature> {
-		self.extension::<KeystoreExt>()
-			.expect("No `keystore` associated for the current context!")
-			.read()
-			.sign_with(id, &pub_key.into(), msg)
+		let keystore = self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!");
+		block_on(keystore.read().sign_with(id, &pub_key.into(), msg))
 			.map(|sig| sr25519::Signature::from_slice(sig.as_slice()))
 			.ok()
 	}

@@ -37,6 +37,7 @@ sp-externalities = { version = "0.8.0-dev", optional = true, path = "../external
 sp-storage = { version = "2.0.0-dev", default-features = false, path = "../storage" }
 parity-util-mem = { version = "0.6.1", default-features = false, features = ["primitive-types"] }
 futures = { version = "0.3.1", optional = true }
+async-trait = { version = "0.1.30" }
 
 # full crypto
 ed25519-dalek = { version = "1.0.0-pre.3", default-features = false, features = ["u64_backend", "alloc"], optional = true }
