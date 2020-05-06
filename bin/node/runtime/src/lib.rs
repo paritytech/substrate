@@ -182,7 +182,7 @@ impl pallet_scheduler::Trait for Runtime {
 	type Event = Event;
 	type Origin = Origin;
 	type Call = Call;
-	type MaximumWeight = MaximumWeight ;
+	type MaximumWeight = MaximumWeight;
 }
 
 parameter_types! {
