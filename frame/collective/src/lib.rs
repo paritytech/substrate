@@ -609,9 +609,10 @@ decl_module! {
 				let p = ProposalOf::<T, I>::get(proposal);
 				let proposal_weight = p.as_ref().map(|p| p.get_dispatch_info().weight).unwrap_or(0);
 				ensure!(proposal_weight <= proposal_weight_bound, Error::<T, I>::WrongProposalBound);
+				let finalize_weight = Self::finalize_proposal(approved, seats, voting, proposal, p);
 				return Ok(Some(
 					weight_for::close_without_finalize(T::DbWeight::get(), seats)
-						.saturating_add(Self::finalize_proposal(approved, seats, voting, proposal, p))
+						.saturating_add(finalize_weight)
 				).into());
 			}
 
@@ -632,10 +633,11 @@ decl_module! {
 			let proposal_weight = p.as_ref().map(|p| p.get_dispatch_info().weight).unwrap_or(0);
 			ensure!(proposal_weight <= proposal_weight_bound, Error::<T, I>::WrongProposalBound);
 			Self::deposit_event(RawEvent::Closed(proposal, yes_votes, no_votes));
+			let finalize_weight = Self::finalize_proposal(approved, seats, voting, proposal, p);
 			Ok(Some(
 				weight_for::close_without_finalize(T::DbWeight::get(), seats)
 					.saturating_add(T::DbWeight::get().reads(1)) // read `Prime`
-					.saturating_add(Self::finalize_proposal(approved, seats, voting, proposal, p))
+					.saturating_add(finalize_weight)
 			).into())
 		}
 	}
