@@ -531,48 +531,35 @@ decl_error! {
 
 /// Functions for calcuating the weight of some dispatchables.
 mod weight_for {
-	use frame_support::{
-		weights::{RuntimeDbWeight, Weight},
-	};
+	use frame_support::{traits::Get, weights::Weight};
+	use super::Trait;
 
 	/// Calculate the weight for `delegate`.
-	pub(crate) fn delegate(
-		db: RuntimeDbWeight,
-		votes: impl Into<Weight> + Copy,
-	) -> Weight {
-		db.reads_writes(votes.into().saturating_add(3), votes.into().saturating_add(3))
+	pub(crate) fn delegate<T: Trait>(votes: Weight) -> Weight {
+		T::DbWeight::get().reads_writes(votes.saturating_add(3), votes.saturating_add(3))
 			.saturating_add(62_000_000)
-			.saturating_add(votes.into().saturating_mul(8_100_000))
+			.saturating_add(votes.saturating_mul(8_100_000))
 	}
 
 	/// Calculate the weight for `undelegate`.
-	pub(crate) fn undelegate(
-		db: RuntimeDbWeight,
-		votes: impl Into<Weight> + Copy,
-	) -> Weight {
-		db.reads_writes(votes.into().saturating_add(2), votes.into().saturating_add(2))
+	pub(crate) fn undelegate<T: Trait>(votes: Weight) -> Weight {
+		T::DbWeight::get().reads_writes(votes.saturating_add(2), votes.saturating_add(2))
 			.saturating_add(30_000_000)
-			.saturating_add(votes.into().saturating_mul(8_000_000))
+			.saturating_add(votes.saturating_mul(8_000_000))
 	}
 
 	/// Calculate the weight for `proxy_delegate`.
-	pub(crate) fn proxy_delegate(
-		db: RuntimeDbWeight,
-		votes: impl Into<Weight> + Copy,
-	) -> Weight {
-		db.reads_writes(votes.into().saturating_add(5), votes.into().saturating_add(4))
+	pub(crate) fn proxy_delegate<T: Trait>(votes: Weight) -> Weight {
+		T::DbWeight::get().reads_writes(votes.saturating_add(5), votes.saturating_add(4))
 			.saturating_add(67_000_000)
-			.saturating_add(votes.into().saturating_mul(8_200_000))
+			.saturating_add(votes.saturating_mul(8_200_000))
 	}
 
 	/// Calculate the weight for `proxy_undelegate`.
-	pub(crate) fn proxy_undelegate(
-		db: RuntimeDbWeight,
-		votes: impl Into<Weight> + Copy,
-	) -> Weight {
-		db.reads_writes(votes.into().saturating_add(3), votes.into().saturating_add(2))
+	pub(crate) fn proxy_undelegate<T: Trait>(votes: Weight) -> Weight {
+		T::DbWeight::get().reads_writes(votes.saturating_add(3), votes.saturating_add(2))
 			.saturating_add(35_000_000)
-			.saturating_add(votes.into().saturating_mul(8_200_000))
+			.saturating_add(votes.saturating_mul(8_200_000))
 	}
 }
 
@@ -1073,7 +1060,7 @@ decl_module! {
 		/// - Db writes per votes: `ReferendumInfoOf`
 		// NOTE: weight must cover an incorrect voting of origin with 100 votes.
 		/// # </weight>
-		#[weight = weight_for::delegate(T::DbWeight::get(), T::MaxVotes::get())]
+		#[weight = weight_for::delegate::<T>(T::MaxVotes::get().into())]
 		pub fn delegate(
 			origin,
 			to: T::AccountId,
@@ -1083,7 +1070,7 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 			let votes = Self::try_delegate(who, to, conviction, balance)?;
 
-			Ok(Some(weight_for::delegate(T::DbWeight::get(), votes)).into())
+			Ok(Some(weight_for::delegate::<T>(votes.into())).into())
 		}
 
 		/// Undelegate the voting power of the sending account.
@@ -1105,11 +1092,11 @@ decl_module! {
 		/// - Db writes per votes: `ReferendumInfoOf`
 		// NOTE: weight must cover an incorrect voting of origin with 100 votes.
 		/// # </weight>
-		#[weight = weight_for::undelegate(T::DbWeight::get(), T::MaxVotes::get())]
+		#[weight = weight_for::undelegate::<T>(T::MaxVotes::get().into())]
 		fn undelegate(origin) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let votes = Self::try_undelegate(who)?;
-			Ok(Some(weight_for::undelegate(T::DbWeight::get(), votes)).into())
+			Ok(Some(weight_for::undelegate::<T>(votes.into())).into())
 		}
 
 		/// Clears all public proposals.
@@ -1383,7 +1370,7 @@ decl_module! {
 		/// Db reads: `Proxy`, `proxy account`
 		/// Db writes: `proxy account`
 		/// # </weight>
-		#[weight = weight_for::proxy_delegate(T::DbWeight::get(), T::MaxVotes::get())]
+		#[weight = weight_for::proxy_delegate::<T>(T::MaxVotes::get().into())]
 		pub fn proxy_delegate(origin,
 			to: T::AccountId,
 			conviction: Conviction,
@@ -1393,7 +1380,7 @@ decl_module! {
 			let target = Self::proxy(who).and_then(|a| a.as_active()).ok_or(Error::<T>::NotProxy)?;
 			let votes = Self::try_delegate(target, to, conviction, balance)?;
 
-			Ok(Some(weight_for::proxy_delegate(T::DbWeight::get(), votes)).into())
+			Ok(Some(weight_for::proxy_delegate::<T>(votes.into())).into())
 		}
 
 		/// Undelegate the voting power of a proxied account.
@@ -1410,13 +1397,13 @@ decl_module! {
 		/// same as `undelegate with additional:
 		/// Db reads: `Proxy`
 		/// # </weight>
-		#[weight = weight_for::proxy_undelegate(T::DbWeight::get(), T::MaxVotes::get())]
+		#[weight = weight_for::proxy_undelegate::<T>(T::MaxVotes::get().into())]
 		fn proxy_undelegate(origin) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let target = Self::proxy(who).and_then(|a| a.as_active()).ok_or(Error::<T>::NotProxy)?;
 			let votes = Self::try_undelegate(target)?;
 
-			Ok(Some(weight_for::proxy_undelegate(T::DbWeight::get(), votes)).into())
+			Ok(Some(weight_for::proxy_undelegate::<T>(votes.into())).into())
 		}
 
 		/// Remove a proxied vote for a referendum.
