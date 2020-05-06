@@ -78,13 +78,13 @@ impl<T: Get<Perquintill>> Convert<Fixed128, Fixed128> for TargetedFeeAdjustment<
 		let positive = block_weight >= target_weight;
 		let diff_abs = block_weight.max(target_weight) - block_weight.min(target_weight);
 		// safe, diff_abs cannot exceed u64.
-		let diff = Fixed128::from_rational(diff_abs, max_weight.max(1));
+		let diff = Fixed128::saturating_from_rational(diff_abs, max_weight.max(1));
 		let diff_squared = diff.saturating_mul(diff);
 
 		// 0.00004 = 4/100_000 = 40_000/10^9
-		let v = Fixed128::from_rational(4, 100_000);
+		let v = Fixed128::saturating_from_rational(4, 100_000);
 		// 0.00004^2 = 16/10^10 Taking the future /2 into account... 8/10^10
-		let v_squared_2 = Fixed128::from_rational(8, 10_000_000_000u64);
+		let v_squared_2 = Fixed128::saturating_from_rational(8, 10_000_000_000u64);
 
 		let first_term = v.saturating_mul(diff);
 		let second_term = v_squared_2.saturating_mul(diff_squared);
@@ -103,7 +103,7 @@ impl<T: Get<Perquintill>> Convert<Fixed128, Fixed128> for TargetedFeeAdjustment<
 				// multiplier. While at -1, it means that the network is so un-congested that all
 				// transactions have no weight fee. We stop here and only increase if the network
 				// became more busy.
-				.max(Fixed128::from_integer(-1))
+				.max(Fixed128::saturating_from_integer(-1))
 		}
 	}
 }
@@ -152,7 +152,7 @@ mod tests {
 
 	#[test]
 	fn fee_multiplier_update_poc_works() {
-		let fm = Fixed128::from_rational(0, 1);
+		let fm = Fixed128::saturating_from_rational(0, 1);
 		let test_set = vec![
 			(0, fm.clone()),
 			(100, fm.clone()),
@@ -182,7 +182,7 @@ mod tests {
 			loop {
 				let next = TargetedFeeAdjustment::<TargetBlockFullness>::convert(fm);
 				fm = next;
-				if fm == Fixed128::from_integer(-1) { break; }
+				if fm == Fixed128::saturating_from_integer(-1) { break; }
 				iterations += 1;
 			}
 			println!("iteration {}, new fm = {:?}. Weight fee is now zero", iterations, fm);
@@ -324,8 +324,8 @@ mod tests {
 
 			// ... stops going down at -1
 			assert_eq!(
-				TargetedFeeAdjustment::<TargetBlockFullness>::convert(Fixed128::from_integer(-1)),
-				Fixed128::from_integer(-1)
+				TargetedFeeAdjustment::<TargetBlockFullness>::convert(Fixed128::saturating_from_integer(-1)),
+				Fixed128::saturating_from_integer(-1)
 			);
 		})
 	}
@@ -334,7 +334,7 @@ mod tests {
 	fn weight_to_fee_should_not_overflow_on_large_weights() {
 		let kb = 1024 as Weight;
 		let mb = kb * kb;
-		let max_fm = Fixed128::from_integer(i128::max_value());
+		let max_fm = Fixed128::saturating_from_integer(i128::max_value());
 
 		// check that for all values it can compute, correctly.
 		vec![
