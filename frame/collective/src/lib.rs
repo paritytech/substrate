@@ -354,7 +354,9 @@ decl_module! {
 			DispatchClass::Operational
 		)]
 		fn set_members(
-			origin, new_members: Vec<T::AccountId>, prime: Option<T::AccountId>
+			origin,
+			new_members: Vec<T::AccountId>,
+			prime: Option<T::AccountId>,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			ensure!(new_members.len() <= T::MaxMembers::get() as usize, Error::<T, I>::TooManyMembers);
@@ -447,7 +449,9 @@ decl_module! {
 			DispatchClass::Operational
 		)]
 		fn propose(
-			origin, #[compact] threshold: MemberCount, proposal: Box<<T as Trait<I>>::Proposal>
+			origin,
+			#[compact] threshold: MemberCount,
+			proposal: Box<<T as Trait<I>>::Proposal>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let members = Self::members();
@@ -510,7 +514,10 @@ decl_module! {
 			DispatchClass::Operational
 		)]
 		fn vote(
-			origin, proposal: T::Hash, #[compact] index: ProposalIndex, approve: bool
+			origin,
+			proposal: T::Hash,
+			#[compact] index: ProposalIndex,
+			approve: bool,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let members = Self::members();
@@ -586,7 +593,10 @@ decl_module! {
 			DispatchClass::Operational
 		)]
 		fn close(
-			origin, proposal: T::Hash, #[compact] index: ProposalIndex, proposal_weight_bound: Weight
+			origin,
+			proposal: T::Hash,
+			#[compact] index: ProposalIndex,
+			proposal_weight_bound: Weight,
 		) -> DispatchResultWithPostInfo {
 			let _ = ensure_signed(origin)?;
 
