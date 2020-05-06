@@ -82,7 +82,7 @@ impl<R, B> BlockStream<R, B>
 			let mut reader = CodecIoReader(input);
 			// If the file is encoded in binary format, it is expected to first specify the number
 			// of blocks that are going to be decoded. We read it and add it to our enum struct.
-			let count: u64 = Decode::decode(&mut reader).map_err(|e| e.to_string())?;
+			let count: u64 = Decode::decode(&mut reader).map_err(|e| format!("Failed to decode the number of blocks: {:?}", e))?;
 			Ok(BlockStream::Binary {
 				count,
 				read_block_count: 0,
