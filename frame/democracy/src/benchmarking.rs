@@ -306,7 +306,7 @@ benchmarks! {
 		// Add proposal to blacklist with block number 0
 		Blacklist::<T>::insert(
 			proposal_hash,
-			(T::BlockNumber::zero(), (0..v).map(|_| T::AccountId::default()).collect::<Vec<_>>())
+			(T::BlockNumber::zero(), vec![T::AccountId::default(); v as usize])
 		);
 
 		let call = Call::<T>::external_propose(proposal_hash);
