@@ -222,9 +222,9 @@ test-dependency-rules:
 unleash-check:
   stage:                           test
   <<:                              *docker-env
-   only:
-     - master
-     - tags
+  only:
+    - master
+    - tags
   script:
     - cargo install cargo-unleash ${CARGO_UNLEASH_INSTALL_PARAMS}
     - cargo unleash check ${CARGO_UNLEASH_PKG_DEF}

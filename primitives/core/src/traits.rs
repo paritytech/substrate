@@ -120,7 +120,7 @@ pub trait BareCryptoStore: Send + Sync {
 	/// Given a list of public keys, find the first supported key and
 	/// sign the provided message with that key.
 	///
-	/// Returns a tuple of the used key and the signature
+	/// Returns a tuple of the used key and the SCALE encoded signature.
 	fn sign_with_any(
 		&self,
 		id: KeyTypeId,
@@ -144,8 +144,8 @@ pub trait BareCryptoStore: Send + Sync {
 	/// Provided a list of public keys, sign a message with
 	/// each key given that the key is supported.
 	///
-	/// Returns a list of `Result`s each representing the signature of each key or
-	/// a BareCryptoStoreError for non-supported keys.
+	/// Returns a list of `Result`s each representing the SCALE encoded
+	/// signature of each key or a BareCryptoStoreError for non-supported keys.
 	fn sign_with_all(
 		&self,
 		id: KeyTypeId,
