@@ -233,7 +233,7 @@ macro_rules! implement_fixed {
 		$div:tt,
 		$title:expr $(,)?
 	) => {
-		/// A fixed point number representation in the range [`Inner::min_value() / DIV`, `Inner::max_value() / DIV`].
+		/// A fixed point number representation in the range.
 		///
 		#[doc = $title]
 		#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -1296,7 +1296,7 @@ implement_fixed!(
 	test_fixed64,
 	i64,
 	1_000_000_000,
-	"_Fixed 64 bits_",
+	"_Fixed 64 bits, range = [-9223372036.854775808, 9223372036.854775807]_",
 );
 
 implement_fixed!(
@@ -1304,5 +1304,5 @@ implement_fixed!(
 	test_fixed128,
 	i128,
 	1_000_000_000_000_000_000,
-	"_Fixed 128 bits_",
+	"_Fixed 128 bits, range = [-170141183460469231731.687303715884105728, 170141183460469231731.687303715884105727]_",
 );
