@@ -125,7 +125,7 @@ impl<R, B> Stream for BlockStream<R, B>
 	/// else returns Poll::Ready(Some(block)), block being a result of decoding a signed block.
 	fn poll_next(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Option<Self::Item>> {
 		match Pin::get_mut(self) {
-			BlockStream::Binary {count, read_block_count, reader} => {
+			BlockStream::Binary { count, read_block_count, reader } => {
 				if read_block_count < count {
 					let block_result: Result<SignedBlock::<B>, _> =  SignedBlock::<B>::decode(reader)
 						.map_err(|e| e.to_string());
@@ -136,7 +136,7 @@ impl<R, B> Stream for BlockStream<R, B>
 					Poll::Ready(None)
 				}
 			}
-			BlockStream::Json {reader, read_block_count} => {
+			BlockStream::Json { reader, read_block_count } => {
 				match reader.next() {
 					Some(block) => {
 						*read_block_count += 1;
@@ -287,7 +287,7 @@ impl<
 				});
 				return Box::pin(err_import)
 			}
-		}
+		};
 
 		// Importing blocks is implemented as a future, because we want the operation to be
 		// interruptible.
@@ -346,7 +346,7 @@ impl<
 
 
 			cx.waker().wake_by_ref();
-			return std::task::Poll::Pending;
+			std::task::Poll::Pending
 		});
 		Box::pin(import)
 	}

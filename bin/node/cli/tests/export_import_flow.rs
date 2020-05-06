@@ -135,7 +135,7 @@ fn export_import_revert() {
 	executor.run(FormatOpt::Binary, FormatOpt::Binary, false);
 	// Binary and JSON should fail.
 	executor.run(FormatOpt::Binary, FormatOpt::Json, true);
-	// JSON and JSOn should work.
+	// JSON and JSON should work.
 	executor.run(FormatOpt::Json, FormatOpt::Json, false);
 	// JSON and binary should fail.
 	executor.run(FormatOpt::Json, FormatOpt::Binary, true);
