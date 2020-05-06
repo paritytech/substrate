@@ -129,7 +129,16 @@ decl_module! {
 		fn deposit_event() = default;
 
 		/// Anonymously schedule a task.
-		#[weight = 100_000]
+		///
+		/// # <weight>
+		/// - S = Number of already scheduled calls
+		/// - Base Weight: 22.29 + .126 * S µs
+		/// - DB Weight:
+		///     - Read: Agenda
+		///     - Write: Agenda
+		/// - Will use base weight of 25 which should be good for up to 30 scheduled calls
+		/// # </weight>
+		#[weight = 25_000_000 + T::DbWeight::get().reads_writes(1, 1)]
 		fn schedule(origin,
 			when: T::BlockNumber,
 			maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
@@ -141,14 +150,32 @@ decl_module! {
 		}
 
 		/// Cancel an anonymously scheduled task.
-		#[weight = 100_000]
+		///
+		/// # <weight>
+		/// - S = Number of already scheduled calls
+		/// - Base Weight: 22.15 + 2.869 * S µs
+		/// - DB Weight:
+		///     - Read: Agenda
+		///     - Write: Agenda, Lookup
+		/// - Will use base weight of 100 which should be good for up to 30 scheduled calls
+		/// # </weight>
+		#[weight = 100_000_000 + T::DbWeight::get().reads_writes(1, 2)]
 		fn cancel(origin, when: T::BlockNumber, index: u32) {
 			ensure_root(origin)?;
 			Self::do_cancel((when, index))?;
 		}
 
-		/// Anonymously schedule a task.
-		#[weight = 100_000]
+		/// Schedule a named task.
+		///
+		/// # <weight>
+		/// - S = Number of already scheduled calls
+		/// - Base Weight: 29.6 + .159 * S µs
+		/// - DB Weight:
+		///     - Read: Agenda, Lookup
+		///     - Write: Agenda, Lookup
+		/// - Will use base weight of 35 which should be good for more than 30 scheduled calls
+		/// # </weight>
+		#[weight = 35_000_000 + T::DbWeight::get().reads_writes(2, 2)]
 		fn schedule_named(origin,
 			id: Vec<u8>,
 			when: T::BlockNumber,
@@ -161,12 +188,32 @@ decl_module! {
 		}
 
 		/// Cancel a named scheduled task.
-		#[weight = 100_000]
+		///
+		/// # <weight>
+		/// - S = Number of already scheduled calls
+		/// - Base Weight: 24.91 + 2.907 * S µs
+		/// - DB Weight:
+		///     - Read: Agenda, Lookup
+		///     - Write: Agenda, Lookup
+		/// - Will use base weight of 100 which should be good for up to 30 scheduled calls
+		/// # </weight>
+		#[weight = 100_000_000 + T::DbWeight::get().reads_writes(2, 2)]
 		fn cancel_named(origin, id: Vec<u8>) {
 			ensure_root(origin)?;
 			Self::do_cancel_named(id)?;
 		}
 
+		/// Execute the scheduled calls
+		///
+		/// # <weight>
+		/// - S = Number of already scheduled calls
+		/// - Base Weight: 9.243 + 23.45 * S µs
+		/// - DB Weight:
+		///     - Read: Agenda, Lookup
+		///     - Write: Agenda, Lookup
+		/// - In this case, the base weight is dominated by read/write operations.
+		///   To simplify, we will only account for additional reads/writes.
+		/// # </weight>
 		fn on_initialize(now: T::BlockNumber) -> Weight {
 			let limit = T::MaximumWeight::get();
 			let mut queued = Agenda::<T>::take(now).into_iter()
@@ -174,11 +221,15 @@ decl_module! {
 				.filter_map(|(index, s)| s.map(|inner| (index as u32, inner)))
 				.collect::<Vec<_>>();
 			queued.sort_by_key(|(_, s)| s.priority);
-			let mut result = 0;
+			let base_weight: Weight = T::DbWeight::get().reads_writes(1, 1); // Agenda
+			let mut total_weight: Weight = 0;
 			queued.into_iter()
 				.enumerate()
-				.scan(0, |cumulative_weight, (order, (index, s))| {
-					*cumulative_weight += s.call.get_dispatch_info().weight;
+				.scan(base_weight, |cumulative_weight, (order, (index, s))| {
+					*cumulative_weight = cumulative_weight
+						.saturating_add(s.call.get_dispatch_info().weight)
+						.saturating_add(T::DbWeight::get().writes(1)); // Assume worst case: Lookup
+
 					Some((order, index, *cumulative_weight, s))
 				})
 				.filter_map(|(order, index, cumulative_weight, mut s)| {
@@ -212,7 +263,7 @@ decl_module! {
 							maybe_id,
 							r.map(|_| ()).map_err(|e| e.error)
 						));
-						result = cumulative_weight;
+						total_weight = cumulative_weight;
 						None
 					} else {
 						Some(Some(s))
@@ -223,7 +274,7 @@ decl_module! {
 					Agenda::<T>::append(next, unused);
 				});
 
-			result
+			total_weight
 		}
 	}
 }
@@ -287,7 +338,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn do_cancel_named(id: Vec<u8>) -> Result<(), DispatchError> {
-		if let Some((when, index)) = id.using_encoded(|d| Lookup::<T>::take(d)) {
+		if let Some((when, index)) = Lookup::<T>::take(id) {
 			let i = index as usize;
 			Agenda::<T>::mutate(when, |agenda| if let Some(s) = agenda.get_mut(i) { *s = None });
 			Self::deposit_event(RawEvent::Canceled(when, index));
