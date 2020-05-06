@@ -62,9 +62,10 @@ use sc_client_api::{
 	LockImportRun, BlockchainEvents, CallExecutor,
 	ExecutionStrategy, Finalizer, TransactionFor, ExecutorProvider,
 };
-use sp_blockchain::{HeaderBackend, Error as ClientError, HeaderMetadata};
 use parity_scale_codec::{Decode, Encode};
 use prometheus_endpoint::{PrometheusError, Registry};
+use sp_api::ProvideRuntimeApi;
+use sp_blockchain::{HeaderBackend, Error as ClientError, HeaderMetadata};
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{NumberFor, Block as BlockT, DigestFor, Zero};
 use sc_keystore::KeyStorePtr;
@@ -134,8 +135,7 @@ use communication::{NetworkBridge, Network as NetworkT};
 use sp_finality_grandpa::{AuthorityList, AuthorityPair, AuthoritySignature, SetId};
 
 // Re-export these two because it's just so damn convenient.
-pub use sp_finality_grandpa::{AuthorityId, ScheduledChange};
-use sp_api::ProvideRuntimeApi;
+pub use sp_finality_grandpa::{AuthorityId, GrandpaApi, ScheduledChange};
 use std::marker::PhantomData;
 
 #[cfg(test)]
@@ -143,6 +143,7 @@ mod tests;
 
 /// A GRANDPA message for a substrate chain.
 pub type Message<Block> = finality_grandpa::Message<<Block as BlockT>::Hash, NumberFor<Block>>;
+
 /// A signed message.
 pub type SignedMessage<Block> = finality_grandpa::SignedMessage<
 	<Block as BlockT>::Hash,
@@ -687,6 +688,7 @@ pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, SC, VR>(
 	NumberFor<Block>: BlockNumberOps,
 	DigestFor<Block>: Encode,
 	C: ClientForGrandpa<Block, BE> + 'static,
+	C::Api: GrandpaApi<Block, Error = sp_blockchain::Error>,
 {
 	let GrandpaParams {
 		mut config,
@@ -802,6 +804,7 @@ where
 	Block: BlockT,
 	B: Backend<Block> + 'static,
 	C: ClientForGrandpa<Block, B> + 'static,
+	C::Api: GrandpaApi<Block, Error = sp_blockchain::Error>,
 	N: NetworkT<Block> + Sync,
 	NumberFor<Block>: BlockNumberOps,
 	SC: SelectChain<Block> + 'static,
@@ -971,7 +974,6 @@ where
 					voters,
 					set_id: new.set_id,
 					voter_set_state: self.env.voter_set_state.clone(),
-					// Fields below are simply transferred and not updated.
 					client: self.env.client.clone(),
 					select_chain: self.env.select_chain.clone(),
 					config: self.env.config.clone(),
@@ -1013,6 +1015,7 @@ where
 	NumberFor<Block>: BlockNumberOps,
 	SC: SelectChain<Block> + 'static,
 	C: ClientForGrandpa<Block, B> + 'static,
+	C::Api: GrandpaApi<Block, Error = sp_blockchain::Error>,
 	VR: VotingRule<Block, C> + Clone + 'static,
 {
 	type Output = Result<(), Error>;

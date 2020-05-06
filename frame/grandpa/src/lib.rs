@@ -31,27 +31,65 @@
 pub use sp_finality_grandpa as fg_primitives;
 
 use sp_std::prelude::*;
-use codec::{self as codec, Encode, Decode};
-use frame_support::{decl_event, decl_storage, decl_module, decl_error, storage};
-use sp_runtime::{
-	DispatchResult, generic::{DigestItem, OpaqueDigestItemId}, traits::Zero, Perbill,
-};
-use sp_staking::{
-	SessionIndex,
-	offence::{Offence, Kind},
-};
-use fg_primitives::{
-	GRANDPA_AUTHORITIES_KEY, GRANDPA_ENGINE_ID, ScheduledChange, ConsensusLog, SetId, RoundNumber,
-};
-pub use fg_primitives::{AuthorityId, AuthorityList, AuthorityWeight, VersionedAuthorityList};
-use frame_system::{self as system, ensure_signed, DigestOf};
 
+use codec::{self as codec, Decode, Encode};
+pub use fg_primitives::{AuthorityId, AuthorityList, AuthorityWeight, VersionedAuthorityList};
+use fg_primitives::{
+	ConsensusLog, EquivocationProof, ScheduledChange, SetId, GRANDPA_AUTHORITIES_KEY,
+	GRANDPA_ENGINE_ID,
+};
+use frame_support::{
+	decl_error, decl_event, decl_module, decl_storage, storage, traits::KeyOwnerProofSystem,
+	Parameter,
+};
+use frame_system::{self as system, ensure_signed, DigestOf};
+use sp_runtime::{
+	generic::{DigestItem, OpaqueDigestItemId},
+	traits::Zero,
+	DispatchResult, KeyTypeId,
+};
+use sp_staking::SessionIndex;
+
+mod equivocation;
 mod mock;
 mod tests;
+
+pub use equivocation::{
+	EquivocationHandler, GetSessionNumber, GetValidatorCount, GrandpaEquivocationOffence,
+	GrandpaOffence, GrandpaTimeSlot, HandleEquivocation, ValidateEquivocationReport,
+};
 
 pub trait Trait: frame_system::Trait {
 	/// The event type of this module.
 	type Event: From<Event> + Into<<Self as frame_system::Trait>::Event>;
+
+	/// The function call.
+	type Call: From<Call<Self>>;
+
+	/// The proof of key ownership, used for validating equivocation reports.
+	/// The proof must include the session index and validator count of the
+	/// session at which the equivocation occurred.
+	type KeyOwnerProof: Parameter + GetSessionNumber + GetValidatorCount;
+
+	/// The identification of a key owner, used when reporting equivocations.
+	type KeyOwnerIdentification: Parameter;
+
+	/// A system for proving ownership of keys, i.e. that a given key was part
+	/// of a validator set, needed for validating equivocation reports.
+	type KeyOwnerProofSystem: KeyOwnerProofSystem<
+		(KeyTypeId, AuthorityId),
+		Proof = Self::KeyOwnerProof,
+		IdentificationTuple = Self::KeyOwnerIdentification,
+	>;
+
+	/// The equivocation handling subsystem, defines methods to report an
+	/// offence (after the equivocation has been validated) and for submitting a
+	/// transaction to report an equivocation (from an offchain context).
+	/// NOTE: when enabling equivocation handling (i.e. this type isn't set to
+	/// `()`) you must add the `equivocation::ValidateEquivocationReport` signed
+	/// extension to the runtime's `SignedExtra` definition, otherwise
+	/// equivocation reports won't be properly validated.
+	type HandleEquivocation: HandleEquivocation<Self>;
 }
 
 /// A stored pending change, old format.
@@ -173,7 +211,9 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(authorities): AuthorityList;
-		build(|config| Module::<T>::initialize_authorities(&config.authorities))
+		build(|config| {
+			Module::<T>::initialize(&config.authorities)
+		})
 	}
 }
 
@@ -183,11 +223,49 @@ decl_module! {
 
 		fn deposit_event() = default;
 
-		/// Report some misbehavior.
+		/// Report voter equivocation/misbehavior. This method will verify the
+		/// equivocation proof and validate the given key ownership proof
+		/// against the extracted offender. If both are valid, the offence
+		/// will be reported.
+		///
+		/// Since the weight is 0 in order to avoid DoS pre-validation is implemented in a
+		/// `SignedExtension`.
 		#[weight = 0]
-		fn report_misbehavior(origin, _report: Vec<u8>) {
-			ensure_signed(origin)?;
-			// FIXME: https://github.com/paritytech/substrate/issues/1112
+		fn report_equivocation(
+			origin,
+			equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
+			key_owner_proof: T::KeyOwnerProof,
+		) {
+			let reporter_id = ensure_signed(origin)?;
+
+			let (session_index, validator_set_count) = (
+				key_owner_proof.session(),
+				key_owner_proof.validator_count(),
+			);
+
+			// we have already checked this proof in `SignedExtension`, we to
+			// check it again to get the full identification of the offender.
+			let offender =
+				T::KeyOwnerProofSystem::check_proof(
+					(fg_primitives::KEY_TYPE, equivocation_proof.offender().clone()),
+					key_owner_proof,
+				).ok_or("Invalid key ownership proof.")?;
+
+			// the set id and round when the offence happened
+			let set_id = equivocation_proof.set_id();
+			let round = equivocation_proof.round();
+
+			// report to the offences module rewarding the sender.
+			T::HandleEquivocation::report_offence(
+				vec![reporter_id],
+				<T::HandleEquivocation as HandleEquivocation<T>>::Offence::new(
+					session_index,
+					validator_set_count,
+					offender,
+					set_id,
+					round,
+				),
+			).map_err(|_| "Duplicate offence report.")?;
 		}
 
 		fn on_finalize(block_number: T::BlockNumber) {
@@ -351,7 +429,9 @@ impl<T: Trait> Module<T> {
 		<frame_system::Module<T>>::deposit_log(log.into());
 	}
 
-	fn initialize_authorities(authorities: &AuthorityList) {
+	// Perform module initialization, abstracted so that it can be called either through genesis
+	// config builder or through `on_genesis_session`.
+	fn initialize(authorities: &AuthorityList) {
 		if !authorities.is_empty() {
 			assert!(
 				Self::grandpa_authorities().is_empty(),
@@ -359,6 +439,25 @@ impl<T: Trait> Module<T> {
 			);
 			Self::set_grandpa_authorities(authorities);
 		}
+
+		// NOTE: initialize first session of first set. this is necessary
+		// because we only update this `on_new_session` which isn't called
+		// for the genesis session.
+		SetIdSession::insert(0, 0);
+	}
+
+	/// Submits an extrinsic to report an equivocation. This method will sign an
+	/// extrinsic with a call to `report_equivocation` with any reporting keys
+	/// available in the keystore and will push the transaction to the pool.
+	/// Only useful in an offchain context.
+	pub fn submit_report_equivocation_extrinsic(
+		equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
+		key_owner_proof: T::KeyOwnerProof,
+	) -> Option<()> {
+		T::HandleEquivocation::submit_equivocation_report(equivocation_proof, key_owner_proof)
+			.ok()?;
+
+		Some(())
 	}
 }
 
@@ -411,7 +510,7 @@ impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T>
 		where I: Iterator<Item=(&'a T::AccountId, AuthorityId)>
 	{
 		let authorities = validators.map(|(_, k)| (k, 1)).collect::<Vec<_>>();
-		Self::initialize_authorities(&authorities);
+		Self::initialize(&authorities);
 	}
 
 	fn on_new_session<'a, I: 'a>(changed: bool, validators: I, _queued_validators: I)
@@ -451,58 +550,5 @@ impl<T: Trait> pallet_finality_tracker::OnFinalizationStalled<T::BlockNumber> fo
 		// to figure out _who_ failed. until then, we can't meaningfully guard
 		// against `next == last` the way that normal session changes do.
 		<Stalled<T>>::put((further_wait, median));
-	}
-}
-
-/// A round number and set id which point on the time of an offence.
-#[derive(Copy, Clone, PartialOrd, Ord, Eq, PartialEq, Encode, Decode)]
-pub struct GrandpaTimeSlot {
-	// The order of these matters for `derive(Ord)`.
-	/// Grandpa Set ID.
-	pub set_id: SetId,
-	/// Round number.
-	pub round: RoundNumber,
-}
-
-/// A grandpa equivocation offence report.
-pub struct GrandpaEquivocationOffence<FullIdentification> {
-	/// Time slot at which this incident happened.
-	pub time_slot: GrandpaTimeSlot,
-	/// The session index in which the incident happened.
-	pub session_index: SessionIndex,
-	/// The size of the validator set at the time of the offence.
-	pub validator_set_count: u32,
-	/// The authority which produced this equivocation.
-	pub offender: FullIdentification,
-}
-
-impl<FullIdentification: Clone> Offence<FullIdentification> for GrandpaEquivocationOffence<FullIdentification> {
-	const ID: Kind = *b"grandpa:equivoca";
-	type TimeSlot = GrandpaTimeSlot;
-
-	fn offenders(&self) -> Vec<FullIdentification> {
-		vec![self.offender.clone()]
-	}
-
-	fn session_index(&self) -> SessionIndex {
-		self.session_index
-	}
-
-	fn validator_set_count(&self) -> u32 {
-		self.validator_set_count
-	}
-
-	fn time_slot(&self) -> Self::TimeSlot {
-		self.time_slot
-	}
-
-	fn slash_fraction(
-		offenders_count: u32,
-		validator_set_count: u32,
-	) -> Perbill {
-		// the formula is min((3k / n)^2, 1)
-		let x = Perbill::from_rational_approximation(3 * offenders_count, validator_set_count);
-		// _ ^ 2
-		x.square()
 	}
 }

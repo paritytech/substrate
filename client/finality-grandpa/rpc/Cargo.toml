@@ -9,7 +9,7 @@ license = "GPL-3.0"
 
 [dependencies]
 sc-finality-grandpa = { version = "0.8.0-dev", path = "../" }
-finality-grandpa = { version = "0.12.1", features = ["derive-codec"] }
+finality-grandpa = { version = "0.12.2", features = ["derive-codec"] }
 jsonrpc-core = "14.0.3"
 jsonrpc-core-client = "14.0.3"
 jsonrpc-derive = "14.0.3"
