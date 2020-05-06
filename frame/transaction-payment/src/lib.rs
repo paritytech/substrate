@@ -24,10 +24,10 @@
 //!     chance to be included by the transaction queue.
 //!
 //! Additionally, this module allows one to configure:
-//!   - The mapping between one unit of weight to one unit of fee via [`WeightToFee`].
+//!   - The mapping between one unit of weight to one unit of fee via [`Trait::WeightToFee`].
 //!   - A means of updating the fee for the next block, via defining a multiplier, based on the
 //!     final state of the chain at the end of the previous block. This can be configured via
-//!     [`FeeMultiplierUpdate`]
+//!     [`Trait::FeeMultiplierUpdate`]
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
