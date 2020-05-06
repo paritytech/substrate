@@ -393,6 +393,7 @@ decl_module! {
 
 			let is_candidate = Self::is_candidate(&who);
 			ensure!(is_candidate.is_err(), Error::<T>::DuplicatedCandidate);
+
 			// assured to be an error, error always contains the index.
 			let index = is_candidate.unwrap_err();
 
@@ -528,7 +529,9 @@ decl_event!(
 );
 
 impl<T: Trait> Module<T> {
-	/// Attempts to remove a member `who`. If a runner up exists, it is used as the replacement.
+	/// Attempts to remove a member `who`. If a runner-up exists, it is used as the replacement and
+	/// Ok(true). is returned.
+	///
 	/// Otherwise, `Ok(false)` is returned to signal the caller.
 	///
 	/// In both cases, [`Members`], [`ElectionRounds`] and [`RunnersUp`] storage are updated
@@ -567,7 +570,7 @@ impl<T: Trait> Module<T> {
 	/// Check if `who` is a candidate. It returns the insert index if the element does not exists as
 	/// an error.
 	///
-	/// State: O(LogN) given N candidates.
+	/// O(LogN) given N candidates.
 	fn is_candidate(who: &T::AccountId) -> Result<(), usize> {
 		Self::candidates().binary_search(who).map(|_| ())
 	}
@@ -581,14 +584,14 @@ impl<T: Trait> Module<T> {
 
 	/// Check if `who` is currently an active member.
 	///
-	/// Limited number of members. Binary search. Constant time factor. O(1)
+	/// O(LogN) given N members. Since members are limited, O(1).
 	fn is_member(who: &T::AccountId) -> bool {
 		Self::members().binary_search_by(|(a, _b)| a.cmp(who)).is_ok()
 	}
 
 	/// Check if `who` is currently an active runner.
 	///
-	/// Limited number of runners-up. Binary search. Constant time factor. O(1)
+	/// O(LogN) given N runners-up. Since runners-up are limited, O(1).
 	fn is_runner(who: &T::AccountId) -> bool {
 		Self::runners_up().iter().position(|(a, _b)| a == who).is_some()
 	}
