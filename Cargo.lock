@@ -6509,9 +6509,10 @@ dependencies = [
  "libp2p",
  "log",
  "lru",
+ "quickcheck",
+ "rand 0.7.3",
  "sc-network",
  "sp-runtime",
- "sp-utils",
  "substrate-test-runtime-client",
  "wasm-timer",
 ]
