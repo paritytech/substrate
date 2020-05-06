@@ -110,10 +110,4 @@ impl TracingProxy {
 			}
 		}
 	}
-
-//	fn record_info(&mut self, id: u64, info: &str) {
-//		if let Some(mut sg) = self.spans.get_mut(&id) {
-//			sg.rent_all_mut(|s| { s.span.record("info", &info); });
-//		}
-//	}
 }

@@ -872,11 +872,6 @@ pub trait WasmTracing {
 	fn exit_span(id: u64) {
 		sp_tracing::proxy::exit_span(id);
 	}
-
-//	fn record_info_u64(id: u64, key: &str, value: &u64) {
-//		sp_tracing::record_event(id, &format!("{} = {}", key, value));
-//	}
-
 }
 
 /// Wasm-only interface that provides functions for interacting with the sandbox.

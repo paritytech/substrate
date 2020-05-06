@@ -1,4 +1,4 @@
-use tracing::{span, field, Level};
+use tracing::{span, Level};
 
 macro_rules! span_dispatch {
 	($target:tt, $name:tt, { $($registered_target:tt,$registered_name:tt;)* }) => {
@@ -15,7 +15,9 @@ macro_rules! span_dispatch {
 	}
 }
 
-/// Spans (target/name pairs) must be pre-registered here
+/// Spans (target/name pairs) must be pre-registered here.
+/// To be compatible with earlier on-chain versions of the runtime,
+/// it is necessary to keep target/name pairs, even if not used in the current runtime.
 pub fn create_registered_span(target: &str, name: &str) -> Result<tracing::Span, String> {
 	span_dispatch! {
 		target, name, {
