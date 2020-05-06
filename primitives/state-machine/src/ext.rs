@@ -298,13 +298,17 @@ where
 		if child_info.is_top_trie() {
 			return self.next_storage_key(key);
 		}
-		let next_backend_key = self.backend
-			.next_child_storage_key(child_info, key)
-			.expect(EXT_NOT_ALLOWED_TO_FAIL);
-		let next_overlay_key_change = self.overlay.next_child_storage_key_change(
+		let (next_overlay_key_change, is_deleted_child) = self.overlay.next_child_storage_key_change(
 			child_info.storage_key(),
 			key
 		);
+		let next_backend_key = if is_deleted_child {
+			None
+		} else {
+			self.backend
+				.next_child_storage_key(child_info, key)
+				.expect(EXT_NOT_ALLOWED_TO_FAIL)
+		};
 
 		match (next_backend_key, next_overlay_key_change) {
 			(Some(backend_key), Some(overlay_key)) if &backend_key[..] < overlay_key.0 => Some(backend_key),

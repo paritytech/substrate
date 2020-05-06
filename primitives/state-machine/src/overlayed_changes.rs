@@ -656,17 +656,18 @@ impl OverlayedChanges {
 	}
 
 	/// Returns the next (in lexicographic order) child storage key in the overlayed alongside its
-	/// value.  If no value is next then `None` is returned.
+	/// value. If no value is next then `None` is returned.
+	/// We also add a boolean indicating if the child trie has been deleted.
 	pub fn next_child_storage_key_change(
 		&self,
 		storage_key: &[u8],
 		key: &[u8]
-	) -> Option<(&[u8], &OverlayedValue)> {
+	) -> (Option<(&[u8], &OverlayedValue)>, bool) {
 		let range = (ops::Bound::Excluded(key), ops::Bound::Unbounded);
 
 		let prospective = self.prospective.children_default.get(storage_key);
 		if prospective.map(|child| child.change.0) == Some(ChildChange::BulkDeleteByKeyspace) {
-			return None;
+			return (None, true);
 		}
 
 		let next_prospective_key = prospective
@@ -674,20 +675,20 @@ impl OverlayedChanges {
 
 		let committed = self.committed.children_default.get(storage_key);
 		if committed.map(|child| child.change.0) == Some(ChildChange::BulkDeleteByKeyspace) {
-			return None;
+			return (None, true);
 		}
 
 		let next_committed_key = committed
 			.and_then(|child| child.values.range::<[u8], _>(range).next().map(|(k, v)| (&k[..], v)));
 
-		match (next_committed_key, next_prospective_key) {
+		(match (next_committed_key, next_prospective_key) {
 			// Committed is strictly less than prospective
 			(Some(committed_key), Some(prospective_key)) if committed_key.0 < prospective_key.0 =>
 				Some(committed_key),
 			(committed_key, None) => committed_key,
 			// Prospective key is less or equal to committed or committed doesn't exist
 			(_, prospective_key) => prospective_key,
-		}
+		}, false)
 	}
 
 	fn get_or_init_prospective_inner<'a>(
@@ -917,28 +918,28 @@ mod tests {
 		overlay.set_child_storage(child_info, vec![30], None);
 
 		// next_prospective < next_committed
-		let next_to_5 = overlay.next_child_storage_key_change(child, &[5]).unwrap();
+		let next_to_5 = overlay.next_child_storage_key_change(child, &[5]).0.unwrap();
 		assert_eq!(next_to_5.0.to_vec(), vec![10]);
 		assert_eq!(next_to_5.1.value, Some(vec![10]));
 
 		// next_committed < next_prospective
-		let next_to_10 = overlay.next_child_storage_key_change(child, &[10]).unwrap();
+		let next_to_10 = overlay.next_child_storage_key_change(child, &[10]).0.unwrap();
 		assert_eq!(next_to_10.0.to_vec(), vec![20]);
 		assert_eq!(next_to_10.1.value, Some(vec![20]));
 
 		// next_committed == next_prospective
-		let next_to_20 = overlay.next_child_storage_key_change(child, &[20]).unwrap();
+		let next_to_20 = overlay.next_child_storage_key_change(child, &[20]).0.unwrap();
 		assert_eq!(next_to_20.0.to_vec(), vec![30]);
 		assert_eq!(next_to_20.1.value, None);
 
 		// next_committed, no next_prospective
-		let next_to_30 = overlay.next_child_storage_key_change(child, &[30]).unwrap();
+		let next_to_30 = overlay.next_child_storage_key_change(child, &[30]).0.unwrap();
 		assert_eq!(next_to_30.0.to_vec(), vec![40]);
 		assert_eq!(next_to_30.1.value, Some(vec![40]));
 
 		overlay.set_child_storage(child_info, vec![50], Some(vec![50]));
 		// next_prospective, no next_committed
-		let next_to_40 = overlay.next_child_storage_key_change(child, &[40]).unwrap();
+		let next_to_40 = overlay.next_child_storage_key_change(child, &[40]).0.unwrap();
 		assert_eq!(next_to_40.0.to_vec(), vec![50]);
 		assert_eq!(next_to_40.1.value, Some(vec![50]));
 	}
