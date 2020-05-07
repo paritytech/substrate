@@ -262,8 +262,8 @@ impl Externalities for BasicExternalities {
 		key: Vec<u8>,
 		value: Vec<u8>,
 	) {
-		let previous = self.inner.top.entry(key).or_default();
-		crate::ext::append_to_storage(previous, value).expect("Failed to append to storage");
+		let current = self.inner.top.entry(key).or_default();
+		crate::ext::StorageAppend::new(current).append(value);
 	}
 
 	fn chain_id(&self) -> u64 { 42 }

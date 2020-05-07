@@ -40,7 +40,7 @@ use parity_scale_codec::Decode;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, HashFor};
 use sp_runtime::generic::{BlockId, DigestItem};
 use sp_core::{H256, crypto::Public};
-use sp_finality_grandpa::{GRANDPA_ENGINE_ID, AuthorityList, GrandpaApi};
+use sp_finality_grandpa::{GRANDPA_ENGINE_ID, AuthorityList, EquivocationProof, GrandpaApi, OpaqueKeyOwnershipProof};
 use sp_state_machine::{InMemoryBackend, prove_read, read_proof_check};
 
 use authorities::AuthoritySet;
@@ -213,6 +213,20 @@ sp_api::mock_impl_runtime_apis! {
 
 		fn grandpa_authorities(&self) -> AuthorityList {
 			self.inner.genesis_authorities.clone()
+		}
+
+		fn submit_report_equivocation_extrinsic(
+			_equivocation_proof: EquivocationProof<Hash, BlockNumber>,
+			_key_owner_proof: OpaqueKeyOwnershipProof,
+		) -> Option<()> {
+			None
+		}
+
+		fn generate_key_ownership_proof(
+			_set_id: SetId,
+			_authority_id: AuthorityId,
+		) -> Option<OpaqueKeyOwnershipProof> {
+			None
 		}
 	}
 }
@@ -1664,7 +1678,7 @@ fn imports_justification_for_regular_blocks_on_import() {
 		};
 
 		let msg = finality_grandpa::Message::Precommit(precommit.clone());
-		let encoded = communication::localized_payload(round, set_id, &msg);
+		let encoded = sp_finality_grandpa::localized_payload(round, set_id, &msg);
 		let signature = peers[0].sign(&encoded[..]).into();
 
 		let precommit = finality_grandpa::SignedPrecommit {

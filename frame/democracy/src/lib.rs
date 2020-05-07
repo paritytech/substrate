@@ -168,7 +168,7 @@ use sp_runtime::{
 	DispatchResult, DispatchError, RuntimeDebug,
 	traits::{Zero, Hash, Dispatchable, Saturating},
 };
-use codec::{Ref, Encode, Decode, Input};
+use codec::{Encode, Decode, Input};
 use frame_support::{
 	decl_module, decl_storage, decl_event, decl_error, ensure, Parameter,
 	storage::IterableStorageMap,
@@ -644,9 +644,8 @@ decl_module! {
 			PublicPropCount::put(index + 1);
 			<DepositOf<T>>::insert(index, (&[&who][..], value));
 
-			let new_prop = (index, proposal_hash, who);
 			ensure!(Self::len_of_public_props() <= proposals_upper_bound, Error::<T>::WrongUpperBound);
-			<PublicProps<T>>::append_or_put(&[Ref::from(&new_prop)][..]);
+			<PublicProps<T>>::append((index, proposal_hash, who));
 
 			Self::deposit_event(RawEvent::Proposed(index, value));
 		}

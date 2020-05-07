@@ -288,6 +288,21 @@ pub trait KeyOwnerProofSystem<Key> {
 	fn check_proof(key: Key, proof: Self::Proof) -> Option<Self::IdentificationTuple>;
 }
 
+impl<Key> KeyOwnerProofSystem<Key> for () {
+	// The proof and identification tuples is any bottom type to guarantee that the methods of this
+	// implementation can never be called or return anything other than `None`.
+	type Proof = crate::Void;
+	type IdentificationTuple = crate::Void;
+
+	fn prove(_key: Key) -> Option<Self::Proof> {
+		None
+	}
+
+	fn check_proof(_key: Key, _proof: Self::Proof) -> Option<Self::IdentificationTuple> {
+		None
+	}
+}
+
 /// Handler for when some currency "account" decreased in balance for
 /// some reason.
 ///
