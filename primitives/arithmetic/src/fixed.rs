@@ -211,11 +211,22 @@ pub trait FixedPointNumber:
 	}
 
 	/// Returns the fractional part.
+	///
+	/// Note: the returned fraction will be non-negative for negative numbers,
+	/// except in the case where the integer part is zero.
 	fn frac(self) -> Self {
-		self.saturating_sub(self.trunc()).saturating_abs()
+		let integer = self.trunc();
+		let fractional = self.saturating_sub(integer);
+		if integer == Self::zero() {
+			fractional
+		} else {
+			fractional.saturating_abs()
+		}
 	}
 
 	/// Returns the smallest integer greater than or equal to a number.
+	///
+	/// Saturates to `Self::max` (truncated) if the result does not fit.
 	fn ceil(self) -> Self {
 		if self.is_negative() {
 			self.trunc()
@@ -225,6 +236,8 @@ pub trait FixedPointNumber:
 	}
 
 	/// Returns the largest integer less than or equal to a number.
+	///
+	/// Saturates to `Self::min` (truncated) if the result does not fit.
 	fn floor(self) -> Self {
 		if self.is_negative() {
 			self.saturating_sub(Self::one()).trunc()
@@ -235,7 +248,7 @@ pub trait FixedPointNumber:
 
 	/// Returns the number rounded to the nearest integer. Rounds half-way cases away from 0.0.
 	///
-	/// Saturates to `Inner::min` or `Inner::max` (truncated) if the result does not fit.
+	/// Saturates to `Self::min` or `Self::max` (truncated) if the result does not fit.
 	fn round(self) -> Self {
 		let n = self.frac().saturating_mul(Self::saturating_from_integer(10));
 		if n < Self::saturating_from_integer(5) {
@@ -247,7 +260,7 @@ pub trait FixedPointNumber:
 	}
 }
 
-/// Data type used as intermediate step in some computations to avoid overflow.
+/// Data type used as intermediate storage in some computations to avoid overflow.
 struct I129 {
 	value: u128,
 	negative: bool,
@@ -1209,6 +1222,22 @@ macro_rules! implement_fixed {
 					.frac()
 					.saturating_mul(10.into());
 				assert_eq!(n, 5.into());
+
+				let n = $name::saturating_from_rational(1, 2)
+					.frac()
+					.saturating_mul(10.into());
+				assert_eq!(n, 5.into());
+
+				// The sign is attached to the integer part unless it is zero.
+				let n = $name::saturating_from_rational(-5, 2)
+					.frac()
+					.saturating_mul(10.into());
+				assert_eq!(n, 5.into());
+
+				let n = $name::saturating_from_rational(-1, 2)
+					.frac()
+					.saturating_mul(10.into());
+				assert_eq!(n, (-5).into());
 			}
 
 			#[test]
@@ -1218,6 +1247,13 @@ macro_rules! implement_fixed {
 
 				let n = $name::saturating_from_rational(-5, 2);
 				assert_eq!(n.ceil(), (-2).into());
+
+				// On the limits:
+				let n = $name::max_value();
+				assert_eq!(n.ceil(), n.trunc());
+
+				let n = $name::min_value();
+				assert_eq!(n.ceil(), n.trunc());
 			}
 
 			#[test]
@@ -1227,6 +1263,13 @@ macro_rules! implement_fixed {
 
 				let n = $name::saturating_from_rational(-5, 2);
 				assert_eq!(n.floor(), (-3).into());
+
+				// On the limits:
+				let n = $name::max_value();
+				assert_eq!(n.floor(), n.trunc());
+
+				let n = $name::min_value();
+				assert_eq!(n.floor(), n.trunc());
 			}
 
 			#[test]
