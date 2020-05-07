@@ -14,6 +14,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 //! Derive macro implementation of `PassBy` with the associated type set to `Inner` and of the
 //! helper trait `PassByInner`.
 //!

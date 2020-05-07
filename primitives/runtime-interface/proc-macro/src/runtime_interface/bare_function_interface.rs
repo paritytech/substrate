@@ -14,6 +14,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 //! Generates the bare function interface for a given trait definition.
 //!
 //! The bare functions are the ones that will be called by the user. On the native/host side, these

@@ -14,6 +14,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 //! Traits for FRAME.
 //!
 //! NOTE: If you're looking for `parameter_types`, it has moved in to the top-level module.

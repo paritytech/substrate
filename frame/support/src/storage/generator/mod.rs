@@ -14,6 +14,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 //! Generators are a set of trait on which storage traits are implemented.
 //!
 //! (i.e. implementing the generator for StorageValue on a type will automatically derive the

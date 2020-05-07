@@ -14,6 +14,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 //! Generates the extern host functions and the implementation for these host functions.
 //!
 //! The extern host functions will be called by the bare function interface from the Wasm side.

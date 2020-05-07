@@ -14,6 +14,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 //! Rust implementation of the Phragmén reduce algorithm. This can be used by any off chain
 //! application to reduce cycles from the edge assignment, which will result in smaller size.
 //!

@@ -14,6 +14,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 //! The best way to understand how this iterator works is to imagine some 2D terrain that have some mountains
 //! (digest changes tries) and valleys (changes tries for regular blocks). There are gems (blocks) beneath the
 //! terrain. Given the request to find all gems in the range [X1; X2] this iterator will return **minimal set**

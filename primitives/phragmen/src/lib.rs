@@ -14,6 +14,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 //! Rust implementation of the Phragmén election algorithm. This is used in several pallets to
 //! optimally distribute the weight of a set of voters among an elected set of candidates. In the
 //! context of staking this is mapped to validators and nominators.

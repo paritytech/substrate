@@ -14,6 +14,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 //! Some helper functions to work with 128bit numbers. Note that the functionality provided here is
 //! only sensible to use with 128bit numbers because for smaller sizes, you can always rely on
 //! assumptions of a bigger type (u128) being available, or simply create a per-thing and use the

@@ -14,6 +14,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 use std::{env, fs, fs::File, io, io::Read, path::PathBuf};
 
 /// Make sure the calling `build.rs` script is rerun when `.git/HEAD` or the ref of `.git/HEAD`

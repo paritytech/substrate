@@ -14,6 +14,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 //! Primitives for Substrate Proof-of-Work (PoW) consensus.
 
 #![cfg_attr(not(feature = "std"), no_std)]

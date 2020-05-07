@@ -14,6 +14,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 use criterion::{Criterion, criterion_group, criterion_main, black_box};
 use frame_system as system;
 use frame_support::{decl_module, decl_event, impl_outer_origin, impl_outer_event, weights::Weight};

@@ -14,6 +14,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 //! Provides the `buffered_link` utility.
 //!
 //! The buffered link is a channel that allows buffering the method calls on `Link`.

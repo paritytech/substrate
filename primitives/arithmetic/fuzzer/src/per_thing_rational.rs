@@ -14,6 +14,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 //! # Running
 //! Running this fuzzer can be done with `cargo hfuzz run per_thing_rational`. `honggfuzz` CLI options can
 //! be used by setting `HFUZZ_RUN_ARGS`, such as `-n 4` to use 4 threads.

@@ -14,6 +14,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 #[test]
 fn decl_storage_ui() {
 	// As trybuild is using `cargo check`, we don't need the real WASM binaries.

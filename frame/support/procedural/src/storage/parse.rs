@@ -14,6 +14,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 //! Parsing of decl_storage input.
 
 use frame_support_procedural_tools::{ToTokens, Parse, syn_ext as ext};

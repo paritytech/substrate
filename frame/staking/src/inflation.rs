@@ -14,6 +14,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 //! This module expose one function `P_NPoS` (Payout NPoS) or `compute_total_payout` which returns
 //! the total payout for the era given the era duration and the staking rate in NPoS.
 //! The staking rate in NPoS is the total amount of tokens staked by nominators and validators,
