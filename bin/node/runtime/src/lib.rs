@@ -377,7 +377,7 @@ impl pallet_democracy::Trait for Runtime {
 
 parameter_types! {
 	pub const CouncilMotionDuration: BlockNumber = 5 * DAYS;
-	pub const CouncilMaxMembers: pallet_collective::MemberCount = 100;
+	pub const DesiredMembers: u32 = 13;
 	pub const CouncilMaxProposals: u32 = 100;
 }
 
@@ -387,7 +387,7 @@ impl pallet_collective::Trait<CouncilCollective> for Runtime {
 	type Proposal = Call;
 	type Event = Event;
 	type MotionDuration = CouncilMotionDuration;
-	type MaxMembers = CouncilMaxMembers;
+	type MaxMembers = DesiredMembers;
 	type MaxProposals = CouncilMaxProposals;
 }
 
@@ -395,7 +395,6 @@ parameter_types! {
 	pub const CandidacyBond: Balance = 10 * DOLLARS;
 	pub const VotingBond: Balance = 1 * DOLLARS;
 	pub const TermDuration: BlockNumber = 7 * DAYS;
-	pub const DesiredMembers: u32 = 13;
 	pub const DesiredRunnersUp: u32 = 7;
 	pub const ElectionsPhragmenModuleId: LockIdentifier = *b"phrelect";
 }
