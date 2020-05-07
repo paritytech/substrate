@@ -65,13 +65,12 @@ impl<'a> ExportImportRevertExecutor<'a> {
 		if expected_to_fail {
 			// Checking that we did indeed find an error.
 			assert!(contains_error(&output.stderr), "expected to error but did not error!");
+			assert!(!output.status.success());
 		} else {
 			// Making sure no error were logged.
 			assert!(!contains_error(&output.stderr), "expected not to error but error'd!");
+			assert!(output.status.success());
 		}
-
-		// Command should never fail.
-		assert!(output.status.success());
 	}
 
 	/// Runs the `export-blocks` command.

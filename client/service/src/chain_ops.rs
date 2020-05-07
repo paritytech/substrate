@@ -323,10 +323,9 @@ impl<
 						match block_result {
 							Ok(signed_block) => import_block_to_queue(signed_block, queue, force),
 							Err(e) => {
-								let read_block_count = block_iter.read_block_count();
-								warn!("Error reading block data at {}: {}", read_block_count, e);
-								// We've encountered an error, we can stop here.
-								return std::task::Poll::Ready(Ok(()));
+								return std::task::Poll::Ready(
+									Err(Error::Other(format!("Error reading block data at {}: {}", read_block_count, e)))
+								)
 							}
 						}
 					}
@@ -337,12 +336,11 @@ impl<
 			queue.poll_actions(cx, &mut link);
 
 			if link.has_error {
-				info!(
-					"Stopping after #{} blocks because of an error",
-					link.imported_blocks,
-				);
-				// We've encountered an error, we can stop here.
-				return std::task::Poll::Ready(Ok(()));
+				return std::task::Poll::Ready(Err(
+					Error::Other(
+						format!("Stopping after #{} blocks because of an error", link.imported_blocks)
+					)
+				))
 			}
 
 			log_importing_status_updates(&block_iter, blocks_before, link.imported_blocks);
