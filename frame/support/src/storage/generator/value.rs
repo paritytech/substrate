@@ -14,12 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-#[cfg(not(feature = "std"))]
-use sp_std::prelude::*;
-use codec::{FullCodec, Encode, EncodeAppend, EncodeLike, Decode};
+use codec::{FullCodec, Encode, EncodeLike, Decode};
 use crate::{
 	Never,
-	storage::{self, unhashed},
+	storage::{self, unhashed, StorageAppend},
 	hash::{Twox128, StorageHasher},
 	traits::Len
 };
@@ -134,55 +132,16 @@ impl<T: FullCodec, G: StorageValue<T>> storage::StorageValue<T> for G {
 		G::from_optional_value_to_query(value)
 	}
 
-	/// Append the given items to the value in the storage.
-	///
-	/// `T` is required to implement `codec::EncodeAppend`.
-	fn append<Items, Item, EncodeLikeItem>(items: Items) -> Result<(), &'static str>
+	fn append<Item, EncodeLikeItem>(item: EncodeLikeItem)
 	where
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
-		T: EncodeAppend<Item=Item>,
-		Items: IntoIterator<Item=EncodeLikeItem>,
-		Items::IntoIter: ExactSizeIterator,
+		T: StorageAppend<Item>,
 	{
 		let key = Self::storage_value_final_key();
-		let encoded_value = unhashed::get_raw(&key)
-			.unwrap_or_else(|| {
-				match G::from_query_to_optional_value(G::from_optional_value_to_query(None)) {
-					Some(value) => value.encode(),
-					None => Vec::new(),
-				}
-			});
-
-		let new_val = T::append_or_new(
-			encoded_value,
-			items,
-		).map_err(|_| "Could not append given item")?;
-		unhashed::put_raw(&key, &new_val);
-		Ok(())
+		sp_io::storage::append(&key, item.encode());
 	}
 
-	/// Safely append the given items to the value in the storage. If a codec error occurs, then the
-	/// old (presumably corrupt) value is replaced with the given `items`.
-	///
-	/// `T` is required to implement `codec::EncodeAppend`.
-	fn append_or_put<Items, Item, EncodeLikeItem>(items: Items) where
-		Item: Encode,
-		EncodeLikeItem: EncodeLike<Item>,
-		T: EncodeAppend<Item=Item>,
-		Items: IntoIterator<Item=EncodeLikeItem> + Clone + EncodeLike<T>,
-		Items::IntoIter: ExactSizeIterator
-	{
-		Self::append(items.clone()).unwrap_or_else(|_| Self::put(items));
-	}
-
-	/// Read the length of the value in a fast way, without decoding the entire value.
-	///
-	/// `T` is required to implement `Codec::DecodeLength`.
-	///
-	/// Note that `0` is returned as the default value if no encoded value exists at the given key.
-	/// Therefore, this function cannot be used as a sign of _existence_. use the `::exists()`
-	/// function for this purpose.
 	fn decode_len() -> Result<usize, &'static str> where T: codec::DecodeLength, T: Len {
 		let key = Self::storage_value_final_key();
 

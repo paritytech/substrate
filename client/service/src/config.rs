@@ -59,8 +59,6 @@ pub struct Configuration {
 	pub wasm_method: WasmExecutionMethod,
 	/// Execution strategies.
 	pub execution_strategies: ExecutionStrategies,
-	/// Whether potentially unsafe RPC is considered safe to be exposed.
-	pub unsafe_rpc_expose: bool,
 	/// RPC over HTTP binding address. `None` if disabled.
 	pub rpc_http: Option<SocketAddr>,
 	/// RPC over Websockets binding address. `None` if disabled.
@@ -69,6 +67,8 @@ pub struct Configuration {
 	pub rpc_ws_max_connections: Option<usize>,
 	/// CORS settings for HTTP & WS servers. `None` if all origins are allowed.
 	pub rpc_cors: Option<Vec<String>>,
+	/// RPC methods to expose (by default only a safe subset or all of them).
+	pub rpc_methods: RpcMethods,
 	/// Prometheus endpoint configuration. `None` if disabled.
 	pub prometheus_config: Option<PrometheusConfig>,
 	/// Telemetry service URL. `None` if disabled.
@@ -169,5 +169,23 @@ impl Configuration {
 	/// Returns a string displaying the node role.
 	pub fn display_role(&self) -> String {
 		self.role.to_string()
+	}
+}
+
+/// Available RPC methods.
+#[derive(Debug, Copy, Clone)]
+pub enum RpcMethods {
+	/// Expose every RPC method only when RPC is listening on `localhost`,
+	/// otherwise serve only safe RPC methods.
+	Auto,
+	/// Allow only a safe subset of RPC methods.
+	Safe,
+	/// Expose every RPC method (even potentially unsafe ones).
+	Unsafe,
+}
+
+impl Default for RpcMethods {
+	fn default() -> RpcMethods {
+		RpcMethods::Auto
 	}
 }

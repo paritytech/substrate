@@ -123,7 +123,7 @@ pub trait Saturating {
 	fn saturating_pow(self, exp: usize) -> Self;
 }
 
-impl<T: Clone + One + CheckedMul + Bounded + num_traits::Saturating> Saturating for T {
+impl<T: Clone + Zero + One + PartialOrd + CheckedMul + Bounded + num_traits::Saturating> Saturating for T {
 	fn saturating_add(self, o: Self) -> Self {
 		<Self as num_traits::Saturating>::saturating_add(self, o)
 	}
@@ -133,7 +133,14 @@ impl<T: Clone + One + CheckedMul + Bounded + num_traits::Saturating> Saturating 
 	}
 
 	fn saturating_mul(self, o: Self) -> Self {
-		self.checked_mul(&o).unwrap_or_else(Bounded::max_value)
+		self.checked_mul(&o)
+			.unwrap_or_else(||
+				if (self < T::zero()) != (o < T::zero()) {
+					Bounded::min_value()
+				} else {
+					Bounded::max_value()
+				}
+			)
 	}
 
 	fn saturating_pow(self, exp: usize) -> Self {
