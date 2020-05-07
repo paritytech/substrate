@@ -116,7 +116,7 @@
 
 use sp_std::{prelude::*, marker::PhantomData};
 use frame_support::{
-	storage::StorageValue, weights::{GetDispatchInfo, DispatchInfo},
+	storage::StorageValue, weights::{GetDispatchInfo, DispatchInfo, DispatchClass},
 	traits::{OnInitialize, OnFinalize, OnRuntimeUpgrade, OffchainWorker},
 };
 use sp_runtime::{
@@ -235,7 +235,7 @@ where
 			let mut weight = <frame_system::Module::<System> as OnRuntimeUpgrade>::on_runtime_upgrade();
 			weight = weight.saturating_add(COnRuntimeUpgrade::on_runtime_upgrade());
 			weight = weight.saturating_add(<AllModules as OnRuntimeUpgrade>::on_runtime_upgrade());
-			<frame_system::Module<System>>::register_extra_weight_unchecked(weight);
+			<frame_system::Module<System>>::register_extra_weight_unchecked(weight, DispatchClass::Mandatory);
 		}
 		<frame_system::Module<System>>::initialize(
 			block_number,
@@ -247,7 +247,7 @@ where
 		<frame_system::Module<System> as OnInitialize<System::BlockNumber>>::on_initialize(*block_number);
 		let weight = <AllModules as OnInitialize<System::BlockNumber>>::on_initialize(*block_number)
 			.saturating_add(<System::BlockExecutionWeight as frame_support::traits::Get<_>>::get());
-		<frame_system::Module::<System>>::register_extra_weight_unchecked(weight);
+		<frame_system::Module::<System>>::register_extra_weight_unchecked(weight, DispatchClass::Mandatory);
 
 		frame_system::Module::<System>::note_finished_initialize();
 	}
