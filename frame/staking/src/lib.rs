@@ -2338,6 +2338,9 @@ impl<T: Trait> Module<T> {
 		// candidates.
 		let snapshot_length = <SnapshotValidators<T>>::decode_len()
 			.map_err(|_| Error::<T>::SnapshotUnavailable)?;
+
+		// check the winner length only here and when we know the length of the snapshot validators
+		// length.
 		let desired_winners = Self::validator_count().min(snapshot_length as u32);
 		ensure!(winners.len() as u32 == desired_winners, Error::<T>::PhragmenBogusWinnerCount);
 
@@ -2892,6 +2895,12 @@ impl<T: Trait> Module<T> {
 	pub fn put_election_status(status: ElectionStatus::<T::BlockNumber>) {
 		<EraElectionStatus<T>>::put(status);
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	pub fn set_slash_reward_fraction(fraction: Perbill) {
+		SlashRewardFraction::put(fraction);
+	}
+
 }
 
 /// In this implementation `new_session(session)` must be called before `end_session(session-1)`

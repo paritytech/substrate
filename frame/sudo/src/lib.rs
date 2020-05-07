@@ -92,7 +92,7 @@ use sp_runtime::{DispatchResult, traits::{StaticLookup, Dispatchable}};
 use frame_support::{
 	Parameter, decl_module, decl_event, decl_storage, decl_error, ensure,
 };
-use frame_support::weights::{GetDispatchInfo, FunctionOf, Pays};
+use frame_support::weights::{Weight, GetDispatchInfo, FunctionOf, Pays};
 use frame_system::{self as system, ensure_signed};
 
 pub trait Trait: frame_system::Trait {
@@ -126,6 +126,30 @@ decl_module! {
 			Pays::Yes,
 		)]
 		fn sudo(origin, call: Box<<T as Trait>::Call>) {
+			// This is a public call, so we ensure that the origin is some signed account.
+			let sender = ensure_signed(origin)?;
+			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
+
+			let res = call.dispatch(frame_system::RawOrigin::Root.into());
+			Self::deposit_event(RawEvent::Sudid(res.map(|_| ()).map_err(|e| e.error)));
+		}
+
+		/// Authenticates the sudo key and dispatches a function call with `Root` origin.
+		/// This function does not check the weight of the call, and instead allows the
+		/// Sudo user to specify the weight of the call.
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// # <weight>
+		/// - O(1).
+		/// - The weight of this call is defined by the caller.
+		/// # </weight>
+		#[weight = FunctionOf(
+			|(_, &weight): (&Box<<T as Trait>::Call>,&Weight,)| weight,
+			|(call, _): (&Box<<T as Trait>::Call>,&Weight,)| call.get_dispatch_info().class,
+			Pays::Yes,
+		)]
+		fn sudo_unchecked_weight(origin, call: Box<<T as Trait>::Call>, _weight: Weight) {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
 			ensure!(sender == Self::key(), Error::<T>::RequireSudo);
