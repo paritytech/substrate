@@ -50,7 +50,7 @@ pub fn random(a: u32, b: u32) -> u32 {
 pub fn set_validator_count<T: Trait>(to_elect: u32) {
 	ValidatorCount::put(to_elect);
 	MinimumValidatorCount::put(to_elect / 2);
-	<EraElectionStatus<T>>::put(ElectionStatus::Open(T::BlockNumber::from(1u32)));
+	<EraElectionStatus<T>>::put(ElectionStatus::Closed);
 }
 
 /// Build an account with the given index.

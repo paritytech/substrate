@@ -242,7 +242,7 @@ test-frame-staking:
       - $DEPLOY_TAG
   script:
     - cd frame/staking/
-    - WASM_BUILD_NO_COLOR=1 time cargo test --release --verbose --no-default-features --features std
+    - WASM_BUILD_NO_COLOR=1 time cargo test --release --verbose --no-default-features --features "std testing-utils"
     - sccache -s
 
 test-frame-examples-compile-to-wasm:
@@ -334,7 +334,7 @@ check-web-wasm:
     - time cargo build --target=wasm32-unknown-unknown -p sp-consensus
     - time cargo build --target=wasm32-unknown-unknown -p sc-telemetry
     # Note: the command below is a bit weird because several Cargo issues prevent us from compiling the node in a more straight-forward way.
-    - time cargo +nightly build --manifest-path=bin/node/cli/Cargo.toml --no-default-features --features "browser" --target=wasm32-unknown-unknown -Z features=itarget
+    - time cargo +nightly build --manifest-path=bin/node/cli/Cargo.toml --no-default-features --features browser --target=wasm32-unknown-unknown -Z features=itarget
     - sccache -s
 
 test-full-crypto-feature:
@@ -400,14 +400,14 @@ build-linux-substrate:             &build-binary
     - printf '\n# building node-template\n\n'
     - ./.maintain/node-template-release.sh ./artifacts/substrate/substrate-node-template.tar.gz
     - sccache -s
-    
+
 
 build-linux-subkey:                &build-subkey
   <<:                              *build-binary
   before_script:
     - mkdir -p ./artifacts/subkey
   script:
-    - cd ./bin/utils/subkey 
+    - cd ./bin/utils/subkey
     - BUILD_DUMMY_WASM_BINARY=1 time cargo build --release --verbose
     - cd -
     - mv ./target/release/subkey ./artifacts/subkey/.
