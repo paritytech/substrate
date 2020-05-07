@@ -21,11 +21,10 @@ use crate::builder::{ServiceBuilderCommand, ServiceBuilder};
 use crate::error::Error;
 use sc_chain_spec::ChainSpec;
 use log::{warn, info};
-use futures::{future, prelude::*, task::{Context, Poll}};
+use futures::{future, prelude::*};
 use sp_runtime::traits::{
 	Block as BlockT, NumberFor, One, Zero, Header, SaturatedConversion, MaybeSerializeDeserialize,
 };
-use futures::stream::Stream;
 use sp_runtime::generic::{BlockId, SignedBlock};
 use codec::{Decode, Encode, IoReader as CodecIoReader};
 use crate::client::{Client, LocalCallExecutor};
@@ -49,14 +48,14 @@ pub fn build_spec(spec: &dyn ChainSpec, raw: bool) -> error::Result<String> {
 
 
 /// Helper enum that wraps either a binary decoder (from parity-scale-codec), or a JSON decoder (from serde_json).
-/// Implements the Stream Trait, calling `poll_next()` will decode the next SignedBlock and return it.
-enum BlockStream<R, B> 
+/// Implements the Iterator Trait, calling `next()` will decode the next SignedBlock and return it.
+enum BlockIter<R, B> 
 where
 	R: std::io::Read + std::io::Seek,
 {
 	Binary {
 		// Total number of blocks we are expecting to decode.
-		count: u64,
+		num_expected_blocks: u64,
 		// Number of blocks we have decoded thus far.
 		read_block_count: u64,
 		// Reader to the data, used for decoding new blocks.
@@ -70,12 +69,12 @@ where
 	},
 }
 
-impl<R, B> Unpin for BlockStream<R, B> 
+impl<R, B> Unpin for BlockIter<R, B> 
 where
 	R: Read + Seek
 {}
 
-impl<R, B> BlockStream<R, B>
+impl<R, B> BlockIter<R, B>
 	where
 		R: Read + Seek + 'static,
 		B: BlockT + MaybeSerializeDeserialize,
@@ -85,16 +84,17 @@ impl<R, B> BlockStream<R, B>
 			let mut reader = CodecIoReader(input);
 			// If the file is encoded in binary format, it is expected to first specify the number
 			// of blocks that are going to be decoded. We read it and add it to our enum struct.
-			let count: u64 = Decode::decode(&mut reader).map_err(|e| format!("Failed to decode the number of blocks: {:?}", e))?;
-			Ok(BlockStream::Binary {
-				count,
+			let num_expected_blocks: u64 = Decode::decode(&mut reader)
+				.map_err(|e| format!("Failed to decode the number of blocks: {:?}", e))?;
+			Ok(BlockIter::Binary {
+				num_expected_blocks,
 				read_block_count: 0,
 				reader,
 			})
 		} else {
 			let stream_deser  = Deserializer::from_reader(input)
 				.into_iter::<SignedBlock<B>>();
-			Ok(BlockStream::Json {
+			Ok(BlockIter::Json {
 				reader: stream_deser,
 				read_block_count: 0,
 			})
@@ -104,22 +104,22 @@ impl<R, B> BlockStream<R, B>
 	/// Returns the number of blocks read thus far.
 	fn read_block_count(&self) -> u64 {
 		match self {
-			BlockStream::Binary { read_block_count, .. }
-			| BlockStream::Json { read_block_count, .. }
+			BlockIter::Binary { read_block_count, .. }
+			| BlockIter::Json { read_block_count, .. }
 			=> *read_block_count,
 		}
 	}
 
 	/// Returns the total number of blocks to be imported, if possible.
-	fn count(&self) -> Option<u64> {
+	fn num_expected_blocks(&self) -> Option<u64> {
 		match self {
-			BlockStream::Binary { count, ..} => Some(*count),
-			BlockStream::Json {..}=> None
+			BlockIter::Binary { num_expected_blocks, ..} => Some(*num_expected_blocks),
+			BlockIter::Json {..}=> None
 		}
 	}
 }
 
-impl<R, B> Stream for BlockStream<R, B> 
+impl<R, B> Iterator for BlockIter<R, B> 
 	where
 		R: Read + Seek + 'static,
 		B: BlockT + MaybeSerializeDeserialize,
@@ -128,28 +128,28 @@ impl<R, B> Stream for BlockStream<R, B>
 
 	/// Returns Poll::Ready(None) if every block have been read,
 	/// else returns Poll::Ready(Some(block)), block being a result of decoding a signed block.
-	fn poll_next(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Option<Self::Item>> {
-		match Pin::get_mut(self) {
-			BlockStream::Binary { count, read_block_count, reader } => {
-				if read_block_count < count {
+	fn next(&mut self) -> Option<Self::Item> {
+		match self {
+			BlockIter::Binary { num_expected_blocks, read_block_count, reader } => {
+				if read_block_count < num_expected_blocks {
 					let block_result: Result<SignedBlock::<B>, _> =  SignedBlock::<B>::decode(reader)
 						.map_err(|e| e.to_string());
 					*read_block_count += 1;
-					Poll::Ready(Some(block_result))
+					Some(block_result)
 				} else {
-					// `read_block_count` == `count` so we've read enough blocks.
-					Poll::Ready(None)
+					// `read_block_count` == `num_expected_blocks` so we've read enough blocks.
+					None
 				}
 			}
-			BlockStream::Json { reader, read_block_count } => {
+			BlockIter::Json { reader, read_block_count } => {
 				match reader.next() {
 					Some(block) => {
 						*read_block_count += 1;
-						Poll::Ready(Some(block.map_err(|e| e.to_string())))
+						Some(block.map_err(|e| e.to_string()))
 					}
 					None => {
 						// We've reached the end of the iterator.
-						Poll::Ready(None)
+						None
 					}
 				}
 			}
@@ -180,22 +180,22 @@ where
 }
 
 /// Returns true if we have imported every block we were supposed to import, else returns false.
-fn importing_is_done(count: Option<u64>, read_block_count: u64, imported_blocks: u64) -> bool {
-	if let Some(count) = count {
-		imported_blocks >= count
+fn importing_is_done(num_expected_blocks: Option<u64>, read_block_count: u64, imported_blocks: u64) -> bool {
+	if let Some(num_expected_blocks) = num_expected_blocks {
+		imported_blocks >= num_expected_blocks
 	} else {
 		imported_blocks >= read_block_count
 	}
 }
 
 // Logs information regarding the current importing status.
-fn log_importing_status_updates<R, T>(block_stream: &BlockStream<R, T>, blocks_before: u64, imported_blocks: u64)
+fn log_importing_status_updates<R, T>(block_iter: &BlockIter<R, T>, blocks_before: u64, imported_blocks: u64)
 where
 	R: Read + Seek + 'static,
 	T: BlockT + MaybeSerializeDeserialize,
 {
-	let count = block_stream.count();
-	let read_block_count = block_stream.read_block_count();
+	let num_expected_blocks = block_iter.num_expected_blocks();
+	let read_block_count = block_iter.read_block_count();
 	
 	// Notify every 1000 blocks to let the user know everything is running smoothly.
 	if read_block_count % 1000 == 0 {
@@ -207,11 +207,11 @@ where
 
 	// Notify every time we import an additional 1000 blocks.
 	if imported_blocks / 1000 != blocks_before / 1000 {
-		if let Some(count) = count {
+		if let Some(num_expected_blocks) = num_expected_blocks {
 			info!(
 				"#{} blocks were imported (#{} left)",
 				imported_blocks,
-				count - imported_blocks
+				num_expected_blocks - imported_blocks
 			)
 		} else {
 			info!(
@@ -265,7 +265,7 @@ impl<
 			fn blocks_processed(
 				&mut self,
 				imported: usize,
-				_count: usize,
+				_num_expected_blocks: usize,
 				results: Vec<(Result<BlockImportResult<NumberFor<B>>, BlockImportError>, B::Hash)>
 			) {
 				self.imported_blocks += imported as u64;
@@ -281,12 +281,12 @@ impl<
 		}
 
 		let mut link = WaitLink::new();
-		let block_stream_res: Result<BlockStream<_, Self::Block>, String> = BlockStream::new(input, binary);
+		let block_iter_res: Result<BlockIter<_, Self::Block>, String> = BlockIter::new(input, binary);
 
-		let mut block_stream = match block_stream_res {
-			Ok(bs) => bs,
+		let mut block_iter = match block_iter_res {
+			Ok(block_iter) => block_iter,
 			Err(e) => {
-				// We've encountered an error while creating the block stream 
+				// We've encountered an error while creating the block iterator 
 				// so we can just return a future that returns an error.
 				return future::ready(Err(Error::Other(e.clone()))).boxed()
 			}
@@ -304,12 +304,12 @@ impl<
 			let queue = &mut self.import_queue;
 
 			// Read blocks from the input.
-			match Pin::new(&mut block_stream).poll_next(cx) {
-				Poll::Ready(None) => {
-					let read_block_count = block_stream.read_block_count();
-					let count = block_stream.count();
+			match block_iter.next() {
+				None => {
+					let read_block_count = block_iter.read_block_count();
+					let num_expected_blocks = block_iter.num_expected_blocks();
 
-					if importing_is_done(count, read_block_count, link.imported_blocks) {
+					if importing_is_done(num_expected_blocks, read_block_count, link.imported_blocks) {
 						info!(
 							"🎉 Imported {} blocks. Best: #{}",
 							read_block_count, client.chain_info().best_number
@@ -317,15 +317,15 @@ impl<
 						return std::task::Poll::Ready(Ok(()))
 					}
 				},
-				Poll::Ready(Some(block_result)) => {
-					let read_block_count = block_stream.read_block_count();
+				Some(block_result) => {
+					let read_block_count = block_iter.read_block_count();
 					// Make sure we are not running more than MAX_PENDING_BLOCKS ahead of the queue.
 					// `read_block_count` should always be >= to `link.imported_blocks` so this is safe from underflow.
 					if read_block_count - link.imported_blocks < MAX_PENDING_BLOCKS {
 						match block_result {
 							Ok(signed_block) => import_block_to_queue(signed_block, queue, force),
 							Err(e) => {
-								let read_block_count = block_stream.read_block_count();
+								let read_block_count = block_iter.read_block_count();
 								warn!("Error reading block data at {}: {}", read_block_count, e);
 								// We've encountered an error, we can stop here.
 								return std::task::Poll::Ready(Ok(()));
@@ -333,7 +333,6 @@ impl<
 						}
 					}
 				}
-				Poll::Pending => unreachable!("BlockStream.poll_next() should never return Poll::Pending; qed")
 			}
 
 			let blocks_before = link.imported_blocks;
@@ -348,7 +347,7 @@ impl<
 				return std::task::Poll::Ready(Ok(()));
 			}
 
-			log_importing_status_updates(&block_stream, blocks_before, link.imported_blocks);
+			log_importing_status_updates(&block_iter, blocks_before, link.imported_blocks);
 
 
 			cx.waker().wake_by_ref();
