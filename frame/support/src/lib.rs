@@ -213,7 +213,21 @@ macro_rules! assert_err {
 #[cfg(feature = "std")]
 macro_rules! assert_err_ignore_postinfo {
 	( $x:expr , $y:expr $(,)? ) => {
-		assert_err!($x.map(|_| ()).map_err(|e| e.error), $y);
+		$crate::assert_err!($x.map(|_| ()).map_err(|e| e.error), $y);
+	}
+}
+
+#[macro_export]
+#[cfg(feature = "std")]
+macro_rules! assert_err_with_weight {
+	($call:expr, $err:expr, $weight:expr $(,)? ) => {
+		if let Err(dispatch_err_with_post) = $call {
+			$crate::assert_err!($call.map(|_| ()).map_err(|e| e.error), $err);
+			assert_eq!(dispatch_err_with_post.post_info, $weight.into());
+		} else {
+			panic!("expected Err(_), got Ok(_).")
+		}
+		println!("call = {:?} / err = {:?} / weight = {:?}", $call, $err, $weight);
 	}
 }
 
