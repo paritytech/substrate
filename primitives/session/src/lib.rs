@@ -18,14 +18,17 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::vec::Vec;
+use codec::{Encode, Decode};
 
 #[cfg(feature = "std")]
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 #[cfg(feature = "std")]
 use sp_api::ProvideRuntimeApi;
 
+use sp_core::RuntimeDebug;
 use sp_core::crypto::KeyTypeId;
+use sp_staking::SessionIndex;
+use sp_std::vec::Vec;
 
 sp_api::decl_runtime_apis! {
 	/// Session keys runtime api.
@@ -43,6 +46,32 @@ sp_api::decl_runtime_apis! {
 		///
 		/// Returns the list of public raw public keys + key type.
 		fn decode_session_keys(encoded: Vec<u8>) -> Option<Vec<(Vec<u8>, KeyTypeId)>>;
+	}
+}
+
+/// Number of validators in a given session.
+pub type ValidatorCount = u32;
+
+/// Proof of membership of a specific key in a given session.
+#[derive(Encode, Decode, Clone, Eq, PartialEq, Default, RuntimeDebug)]
+pub struct MembershipProof {
+	/// The session index on which the specific key is a member.
+	pub session: SessionIndex,
+	/// Trie nodes of a merkle proof of session membership.
+	pub trie_nodes: Vec<Vec<u8>>,
+	/// The validator count of the session on which the specific key is a member.
+	pub validator_count: ValidatorCount,
+}
+
+impl MembershipProof {
+	/// Returns a session this proof was generated for.
+	pub fn session(&self) -> SessionIndex {
+		self.session
+	}
+
+	/// Returns the validator count of the session this proof was generated for.
+	pub fn validator_count(&self) -> ValidatorCount {
+		self.validator_count
 	}
 }
 

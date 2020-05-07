@@ -296,9 +296,9 @@ macro_rules! substrate_cli_subcommands {
 				}
 			}
 
-			fn unsafe_rpc_expose(&self) -> $crate::Result<bool> {
+			fn rpc_methods(&self) -> $crate::Result<sc_service::config::RpcMethods> {
 				match self {
-					$($enum::$variant(cmd) => cmd.unsafe_rpc_expose()),*
+					$($enum::$variant(cmd) => cmd.rpc_methods()),*
 				}
 			}
 

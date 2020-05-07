@@ -28,18 +28,22 @@ use sp_core::{ChangesTrieConfiguration, RuntimeDebug};
 /// Generic header digest.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, parity_util_mem::MallocSizeOf))]
-pub struct Digest<Hash: Encode + Decode> {
+pub struct Digest<Hash> {
 	/// A list of logs in the digest.
+	#[cfg_attr(
+		feature = "std",
+		serde(bound(serialize = "Hash: codec::Codec", deserialize = "Hash: codec::Codec"))
+	)]
 	pub logs: Vec<DigestItem<Hash>>,
 }
 
-impl<Item: Encode + Decode> Default for Digest<Item> {
+impl<Item> Default for Digest<Item> {
 	fn default() -> Self {
 		Digest { logs: Vec::new(), }
 	}
 }
 
-impl<Hash: Encode + Decode> Digest<Hash> {
+impl<Hash> Digest<Hash> {
 	/// Get reference to all digest items.
 	pub fn logs(&self) -> &[DigestItem<Hash>] {
 		&self.logs

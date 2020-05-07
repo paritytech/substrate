@@ -306,7 +306,7 @@ impl<H, N, V> ForkTree<H, N, V> where
 		}
 	}
 
-	/// Same as [`find_node_where`](Self::find_node_where), but returns mutable reference.
+	/// Same as [`find_node_where`](ForkTree::find_node_where), but returns mutable reference.
 	pub fn find_node_where_mut<F, E, P>(
 		&mut self,
 		hash: &H,
@@ -331,7 +331,7 @@ impl<H, N, V> ForkTree<H, N, V> where
 		Ok(None)
 	}
 
-	/// Same as [`find_node_where`](Self::find_node_where), but returns indexes.
+	/// Same as [`find_node_where`](ForkTree::find_node_where), but returns indexes.
 	pub fn find_node_index_where<F, E, P>(
 		&self,
 		hash: &H,

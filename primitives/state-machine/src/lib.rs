@@ -1127,29 +1127,99 @@ mod tests {
 	}
 
 	#[test]
-	fn remove_then_append() {
-		let key = b"key".to_vec();
+	fn remove_with_append_then_rollback_appended_then_append_again() {
+
+		#[derive(codec::Encode, codec::Decode)]
+		enum Item { InitializationItem, DiscardedItem, CommitedItem }
+
+		let key = b"events".to_vec();
+		let mut cache = StorageTransactionCache::default();
 		let mut state = new_in_mem::<BlakeTwo256>();
 		let backend = state.as_trie_backend().unwrap();
-		let mut overlay = OverlayedChanges::default();
 		let mut offchain_overlay = OffchainOverlayedChanges::default();
-		let mut cache = StorageTransactionCache::default();
-	
-		let mut ext = Ext::new(
-			&mut overlay,
-			&mut offchain_overlay,
-			&mut cache,
-			backend,
-			changes_trie::disabled_state::<_, u64>(),
-			None,
-		);
+		let mut overlay = OverlayedChanges::default();
 
-		ext.clear_storage(key.as_slice());
-		ext.storage_append(key.clone(), b"Item".to_vec().encode());
-		assert_eq!(
-			ext.storage(key.as_slice()),
-			Some(vec![b"Item".to_vec()].encode()),
-		);
+		// For example, block initialization with event.
+		{
+			let mut ext = Ext::new(
+				&mut overlay,
+				&mut offchain_overlay,
+				&mut cache,
+				backend,
+				changes_trie::disabled_state::<_, u64>(),
+				None,
+			);
+			ext.clear_storage(key.as_slice());
+			ext.storage_append(key.clone(), Item::InitializationItem.encode());
+		}
+		overlay.commit_prospective();
+
+		// For example, first transaction resulted in panic during block building
+		{
+			let mut ext = Ext::new(
+				&mut overlay,
+				&mut offchain_overlay,
+				&mut cache,
+				backend,
+				changes_trie::disabled_state::<_, u64>(),
+				None,
+			);
+
+			assert_eq!(
+				ext.storage(key.as_slice()),
+				Some(vec![Item::InitializationItem].encode()),
+			);
+
+			ext.storage_append(key.clone(), Item::DiscardedItem.encode());
+
+			assert_eq!(
+				ext.storage(key.as_slice()),
+				Some(vec![Item::InitializationItem, Item::DiscardedItem].encode()),
+			);
+		}
+		overlay.discard_prospective();
+
+		// Then we apply next transaction which is valid this time.
+		{
+			let mut ext = Ext::new(
+				&mut overlay,
+				&mut offchain_overlay,
+				&mut cache,
+				backend,
+				changes_trie::disabled_state::<_, u64>(),
+				None,
+			);
+
+			assert_eq!(
+				ext.storage(key.as_slice()),
+				Some(vec![Item::InitializationItem].encode()),
+			);
+
+			ext.storage_append(key.clone(), Item::CommitedItem.encode());
+
+			assert_eq!(
+				ext.storage(key.as_slice()),
+				Some(vec![Item::InitializationItem, Item::CommitedItem].encode()),
+			);
+
+		}
+		overlay.commit_prospective();
+
+		// Then only initlaization item and second (commited) item should persist.
+		{
+			let ext = Ext::new(
+				&mut overlay,
+				&mut offchain_overlay,
+				&mut cache,
+				backend,
+				changes_trie::disabled_state::<_, u64>(),
+				None,
+			);
+			assert_eq!(
+				ext.storage(key.as_slice()),
+				Some(vec![Item::InitializationItem, Item::CommitedItem].encode()),
+			);
+		}
 	}
 
 	#[test]
