@@ -1252,7 +1252,7 @@ decl_module! {
 		}
 
 		/// Enact a proposal from a referendum. For now we just make the weight be the maximum.
-		#[weight = frame_system::Module::<T>::max_extrinsic_weight(DispatchClass::Normal)]
+		#[weight = T::MaximumBlockWeight::get()]
 		fn enact_proposal(origin, proposal_hash: T::Hash, index: ReferendumIndex) -> DispatchResult {
 			ensure_root(origin)?;
 			Self::do_enact_proposal(proposal_hash, index)
