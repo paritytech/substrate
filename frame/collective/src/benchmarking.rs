@@ -185,6 +185,7 @@ benchmarks_instance! {
 	}
 
 	vote {
+		// We choose 5 as a minimum so we always trigger a vote in the voting loop (`for j in ...`)
 		let m in 5 .. T::MaxMembers::get();
 
 		let p = T::MaxProposals::get();
@@ -215,7 +216,7 @@ benchmarks_instance! {
 		}
 
 		let index = p - 1;
-		// Have most everyone vote aye on last proposal, while keeping it from passing.
+		// Have almost everyone vote aye on last proposal, while keeping it from passing.
 		// Proposer already voted aye so we start at 1.
 		for j in 1 .. m - 3 {
 			let voter = &members[j as usize];
@@ -241,7 +242,8 @@ benchmarks_instance! {
 	}
 
 	close_early_disapproved {
-		let m in 5 .. T::MaxMembers::get();
+		// We choose 4 as a minimum so we always trigger a vote in the voting loop (`for j in ...`)
+		let m in 4 .. T::MaxMembers::get();
 		let p in 1 .. T::MaxProposals::get();
 		let b in 1 .. MAX_BYTES;
 
@@ -295,7 +297,8 @@ benchmarks_instance! {
 	}
 
 	close_early_approved {
-		let m in 5 .. T::MaxMembers::get();
+		// We choose 4 as a minimum so we always trigger a vote in the voting loop (`for j in ...`)
+		let m in 4 .. T::MaxMembers::get();
 		let p in 1 .. T::MaxProposals::get();
 		let b in 1 .. MAX_BYTES;
 
@@ -324,7 +327,7 @@ benchmarks_instance! {
 		// Caller switches vote to nay on their own proposal, allowing them to be the deciding approval vote
 		Collective::<T, _>::vote(SystemOrigin::Signed(caller.clone()).into(), last_hash.clone(), p - 1, false)?;
 
-		// Have everyone vote nay on last proposal, while keeping it from failing
+		// Have almost everyone vote nay on last proposal, while keeping it from failing.
 		for j in 2 .. m - 1 {
 			let voter = &members[j as usize];
 			let approve = false;
@@ -349,7 +352,8 @@ benchmarks_instance! {
 	}
 
 	close_disapproved {
-		let m in 5 .. T::MaxMembers::get();
+		// We choose 4 as a minimum so we always trigger a vote in the voting loop (`for j in ...`)
+		let m in 4 .. T::MaxMembers::get();
 		let p in 1 .. T::MaxProposals::get();
 		let b in 1 .. MAX_BYTES;
 
@@ -376,8 +380,8 @@ benchmarks_instance! {
 		}
 
 		let index = p - 1;
-		// Have everyone vote aye on last proposal, while keeping it from passing
-		// A few abstainers will be the nay votes needed to fail the vote
+		// Have almost everyone vote aye on last proposal, while keeping it from passing.
+		// A few abstainers will be the nay votes needed to fail the vote.
 		for j in 2 .. m - 1 {
 			let voter = &members[j as usize];
 			let approve = true;
@@ -398,7 +402,8 @@ benchmarks_instance! {
 	}
 
 	close_approved {
-		let m in 5 .. T::MaxMembers::get();
+		// We choose 4 as a minimum so we always trigger a vote in the voting loop (`for j in ...`)
+		let m in 4 .. T::MaxMembers::get();
 		let p in 1 .. T::MaxProposals::get();
 		let b in 1 .. MAX_BYTES;
 
@@ -424,8 +429,8 @@ benchmarks_instance! {
 			last_hash = T::Hashing::hash_of(&proposal);
 		}
 
-		// Have everyone vote nay on last proposal, while keeping it from failing
-		// A few abstainers will be the aye votes needed to pass the vote
+		// Have almost everyone vote nay on last proposal, while keeping it from failing.
+		// A few abstainers will be the aye votes needed to pass the vote.
 		for j in 2 .. m - 1 {
 			let voter = &members[j as usize];
 			let approve = false;
