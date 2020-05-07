@@ -38,7 +38,7 @@ use tracing_core::{
 	Level,
 	metadata::Metadata,
 	span::{Attributes, Id, Record},
-	subscriber::Subscriber
+	subscriber::Subscriber,
 };
 
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
@@ -89,7 +89,7 @@ impl Visit for Visitor {
 	}
 
 	fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
-		self.0.insert(field.name().to_string(), format!("{:?}",value));
+		self.0.insert(field.name().to_string(), format!("{:?}", value));
 	}
 }
 
@@ -107,7 +107,7 @@ impl Serialize for Visitor {
 
 impl fmt::Display for Visitor {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		let values = self.0.iter().map(|(k,v)| format!("{}={}",k,v)).collect::<Vec<String>>().join(", ");
+		let values = self.0.iter().map(|(k, v)| format!("{}={}", k, v)).collect::<Vec<String>>().join(", ");
 		write!(f, "{}", values)
 	}
 }
@@ -179,10 +179,9 @@ impl Subscriber for ProfilingSubscriber {
 			if metadata.target().starts_with(t.0.as_str()) && metadata.level() <= &t.1 {
 				log::debug!("Enabled target: {}, level: {}", metadata.target(), metadata.level());
 				return true;
-			} else {
-				log::debug!("Disabled target: {}, level: {}", metadata.target(), metadata.level());
 			}
 		}
+		log::debug!("Disabled target: {}, level: {}", metadata.target(), metadata.level());
 		false
 	}
 
@@ -236,9 +235,11 @@ impl Subscriber for ProfilingSubscriber {
 	}
 
 	fn try_close(&self, span: Id) -> bool {
-		let mut span_data = self.span_data.lock();
-		if let Some(mut span_datum) = span_data.remove(&span.into_u64()) {
-			drop(span_data);
+		let span_datum = {
+			let mut span_data = self.span_data.lock();
+			span_data.remove(&span.into_u64())
+		};
+		if let Some(mut span_datum) = span_datum {
 			if span_datum.name == WASM_TRACE_IDENTIFIER {
 				if let Some(n) = span_datum.values.0.remove(WASM_NAME_KEY) {
 					span_datum.name = n;
