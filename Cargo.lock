@@ -8245,7 +8245,7 @@ version = "2.0.0-dev"
 
 [[package]]
 name = "substrate-wasm-builder"
-version = "1.0.9"
+version = "1.0.10"
 dependencies = [
  "atty",
  "build-helper",
@@ -8260,7 +8260,7 @@ dependencies = [
 
 [[package]]
 name = "substrate-wasm-builder-runner"
-version = "1.0.5"
+version = "1.0.6"
 
 [[package]]
 name = "substrate-wasmtime"
