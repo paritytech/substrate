@@ -18,3 +18,4 @@ substrate-test-runtime-client = { version = "2.0.0-dev", path = "../../../test-u
 sp-runtime = { version = "2.0.0-dev", path = "../../runtime" }
 sp-api = { version = "2.0.0-dev", path = "../../api" }
 sp-application-crypto = { version = "2.0.0-dev", path = "../" }
+futures = "0.3.4"

@@ -13,6 +13,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 ansi_term = "0.12.1"
+futures = "0.3.4"
 sc-keystore = { version = "2.0.0-dev", path = "../../../client/keystore" }
 sc-chain-spec = { version = "2.0.0-dev", path = "../../../client/chain-spec" }
 node-cli = { version = "2.0.0-dev", path = "../../node/cli" }
