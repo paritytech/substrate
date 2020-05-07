@@ -20,7 +20,7 @@ use crate::{
 	helpers_128bit::multiply_by_rational, PerThing,
 	traits::{
 		SaturatedConversion, CheckedSub, CheckedAdd, CheckedMul, CheckedDiv, CheckedNeg,
-		Bounded, Saturating, UniqueSaturatedInto, Zero, One
+		Bounded, Saturating, UniqueSaturatedInto, Zero, One, Signed
 	},
 };
 
@@ -51,7 +51,7 @@ pub trait FixedPointNumber:
 	+ Add + Sub + Div + Mul
 {
 	/// The underlying data type used for this fixed point number.
-	type Inner: Copy + Debug + Zero + One + PartialOrd;
+	type Inner: Debug + One + CheckedMul + CheckedDiv + CheckedNeg + Signed + FixedPointOperand;
 
 	/// The accuracy of this fixed point number.
 	const DIV: Self::Inner;
@@ -70,53 +70,98 @@ pub trait FixedPointNumber:
 	/// Creates self from an integer number `int`.
 	/// 
 	/// Returns `Self::max` or `Self::min` if `int` exceeds accuracy.
-	fn saturating_from_integer<N: UniqueSaturatedInto<Self::Inner>>(int: N) -> Self;
+	fn saturating_from_integer<N: UniqueSaturatedInto<Self::Inner>>(int: N) -> Self {
+		Self::from_inner(int.unique_saturated_into().saturating_mul(Self::DIV))
+	}
 
 	/// Creates `self` from an integer number `int`.
 	/// 
 	/// Returns `None` if `int` exceeds accuracy.
-	fn checked_from_integer(int: Self::Inner) -> Option<Self>;
+	fn checked_from_integer(int: Self::Inner) -> Option<Self> {
+		int.checked_mul(&Self::DIV).map(|inner| Self::from_inner(inner))
+	}
 
 	/// Creates `self` from a rational number. Equal to `n / d`.
 	///
 	/// Panics if `d = 0`. Returns `Self::max` or `Self::min` if `n / d` exceeds accuracy.
-	fn saturating_from_rational<N: FixedPointOperand, D: FixedPointOperand>(n: N, d: D) -> Self;
+	fn saturating_from_rational<N: FixedPointOperand, D: FixedPointOperand>(n: N, d: D) -> Self {
+		Self::checked_from_rational(n, d).unwrap_or(to_bound(n, d))
+	}
 
 	/// Creates `self` from a rational number. Equal to `n / d`.
 	///
 	/// Returns `None` if `d == 0` or `n / d` exceeds accuracy.
-	fn checked_from_rational<N: FixedPointOperand, D: FixedPointOperand>(n: N, d: D) -> Option<Self>;
+	fn checked_from_rational<N: FixedPointOperand, D: FixedPointOperand>(n: N, d: D) -> Option<Self> {
+		let n: I129 = n.into();
+		let d: I129 = d.into();
+		let negative = n.negative != d.negative;
+
+		multiply_by_rational(n.value, Self::DIV.unique_saturated_into(), d.value).ok()
+			.and_then(|value| from_i129(I129 { value, negative }))
+			.map(|inner| Self::from_inner(inner))
+	}
 
 	/// Checked multiplication for integer type `N`. Equal to `self * n`.
 	///
 	/// Returns `None` if the result does not fit in `N`.
-	fn checked_mul_int<N: FixedPointOperand>(self, n: N) -> Option<N>;
+	fn checked_mul_int<N: FixedPointOperand>(self, n: N) -> Option<N> {
+		let lhs: I129 = self.into_inner().into();
+		let rhs: I129 = n.into();
+		let negative = lhs.negative != rhs.negative;
+
+		multiply_by_rational(lhs.value, rhs.value, Self::DIV.unique_saturated_into()).ok()
+			.and_then(|value| from_i129(I129 { value, negative }))
+	}
 
 	/// Saturating multiplication for integer type `N`. Equal to `self * n`.
 	///
 	/// Returns `N::min` or `N::max` if the result does not fit in `N`.
-	fn saturating_mul_int<N: FixedPointOperand>(self, n: N) -> N;
+	fn saturating_mul_int<N: FixedPointOperand>(self, n: N) -> N {
+		self.checked_mul_int(n).unwrap_or(to_bound(self.into_inner(), n))
+	}
 
 	/// Checked division for integer type `N`. Equal to `self / d`.
 	///
 	/// Returns `None` if the result does not fit in `N` or `d == 0`.
-	fn checked_div_int<N: FixedPointOperand>(self, d: N) -> Option<N>;
+	fn checked_div_int<N: FixedPointOperand>(self, d: N) -> Option<N> {
+		let lhs: I129 = self.into_inner().into();
+		let rhs: I129 = d.into();
+		let negative = lhs.negative != rhs.negative;
+
+		lhs.value.checked_div(rhs.value)
+			.and_then(|n| n.checked_div(Self::DIV.unique_saturated_into()))
+			.and_then(|value| from_i129(I129 { value, negative }))
+	}
 
 	/// Saturating division for integer type `N`. Equal to `self / d`.
 	///
 	/// Panics if `d == 0`. Returns `N::min` or `N::max` if the result does not fit in `N`.
-	fn saturating_div_int<N: FixedPointOperand>(self, d: N) -> N;
+	fn saturating_div_int<N: FixedPointOperand>(self, d: N) -> N {
+		if d == N::zero() {
+			panic!("attempt to divide by zero")
+		}
+		self.checked_div_int(d).unwrap_or(to_bound(self.into_inner(), d))
+	}
 
 	/// Saturating multiplication for integer type `N`, adding the result back.
 	/// Equal to `self * n + n`.
 	///
 	/// Returns `N::min` or `N::max` if the multiplication or final result does not fit in `N`.
-	fn saturating_mul_int_acc<N: FixedPointOperand>(self, n: N) -> N;
+	fn saturating_mul_int_acc<N: FixedPointOperand>(self, n: N) -> N {
+		self.saturating_mul_int(n).saturating_add(n)
+	}
 
 	/// Saturating absolute value.
 	///
 	/// Returns `Self::max` if `self == Self::min`.
-	fn saturating_abs(self) -> Self;
+	fn saturating_abs(self) -> Self {
+		let inner = self.into_inner();
+		if inner.is_positive() {
+			self
+		} else {
+			Self::from_inner(inner.checked_neg().unwrap_or(Self::Inner::max_value()))
+		}
+	}
 
 	/// Takes the reciprocal (inverse). Equal to `1 / self`.
 	///
@@ -156,7 +201,13 @@ pub trait FixedPointNumber:
 	}
 
 	/// Returns the integer part.
-	fn trunc(self) -> Self;
+	fn trunc(self) -> Self {
+		self.into_inner().checked_div(&Self::DIV)
+			.expect("panics only if DIV is zero, DIV is not zero; qed")
+			.checked_mul(&Self::DIV)
+			.map(|inner| Self::from_inner(inner))
+			.expect("can not overflow since fixed number is >= integer part")
+	}
 
 	/// Returns the fractional part.
 	fn frac(self) -> Self {
@@ -184,7 +235,15 @@ pub trait FixedPointNumber:
 	/// Returns the nearest integer to a number. Round half-way cases away from 0.0.
 	///
 	/// Saturates to `Inner::min` or `Inner::max` (truncated) if the result does not fit.
-	fn round(self) -> Self;
+	fn round(self) -> Self {
+		let n = self.frac().saturating_mul(Self::saturating_from_integer(10));
+		if n < Self::saturating_from_integer(5) {
+			self.trunc()
+		} else {
+			let extra = Self::saturating_from_integer(self.into_inner().signum());
+			(self.saturating_add(extra)).trunc()
+		}
+	}
 }
 
 /// Data type used as intermediate step in some computations to avoid overflow.
@@ -264,84 +323,6 @@ macro_rules! implement_fixed {
 
 			fn into_inner(self) -> Self::Inner {
 				self.0
-			}
-
-			fn saturating_from_integer<N: UniqueSaturatedInto<Self::Inner>>(int: N) -> Self {
-				Self(int.unique_saturated_into().saturating_mul(Self::DIV))
-			}
-
-			fn checked_from_integer(int: Self::Inner) -> Option<Self> {
-				int.checked_mul(Self::DIV).map(Self)
-			}
-
-			fn saturating_from_rational<N: FixedPointOperand, D: FixedPointOperand>(n: N, d: D) -> Self {
-				Self::checked_from_rational(n, d).unwrap_or(to_bound(n, d))
-			}
-
-			fn checked_from_rational<N: FixedPointOperand, D: FixedPointOperand>(n: N, d: D) -> Option<Self> {
-				let n: I129 = n.into();
-				let d: I129 = d.into();
-				let negative = n.negative != d.negative;
-
-				multiply_by_rational(n.value, Self::DIV as u128, d.value).ok()
-					.and_then(|value| from_i129(I129 { value, negative }))
-					.map(Self)
-			}
-
-			fn checked_mul_int<N: FixedPointOperand>(self, int: N) -> Option<N> {
-				let lhs: I129 = self.0.into();
-				let rhs: I129 = int.into();
-				let negative = lhs.negative != rhs.negative;
-
-				multiply_by_rational(lhs.value, rhs.value, Self::DIV as u128).ok()
-					.and_then(|value| from_i129(I129 { value, negative }))
-			}
-
-			fn saturating_mul_int<N: FixedPointOperand>(self, int: N) -> N {
-				self.checked_mul_int(int).unwrap_or(to_bound(self.0, int))
-			}
-
-			fn checked_div_int<N: FixedPointOperand>(self, int: N) -> Option<N> {
-				let lhs: I129 = self.0.into();
-				let rhs: I129 = int.into();
-				let negative = lhs.negative != rhs.negative;
-
-				lhs.value.checked_div(rhs.value)
-					.and_then(|n| n.checked_div(Self::DIV as u128))
-					.and_then(|value| from_i129(I129 { value, negative }))
-			}
-
-			fn saturating_div_int<N: FixedPointOperand>(self, int: N) -> N {
-				if int == N::zero() {
-					panic!("attempt to divide by zero")
-				}
-				self.checked_div_int(int).unwrap_or(to_bound(self.0, int))
-			}
-
-			fn saturating_abs(self) -> Self {
-				Self(self.0.checked_abs().unwrap_or(Self::Inner::max_value()))
-			}
-
-			fn saturating_mul_int_acc<N: FixedPointOperand>(self, int: N) -> N {
-				self.saturating_mul_int(int).saturating_add(int)
-			}
-
-			fn trunc(self) -> Self {
-				self.0.checked_div(Self::DIV)
-					.expect("panics only if DIV is zero, DIV is not zero; qed")
-					.checked_mul(Self::DIV)
-					.map(Self)
-					.expect("can not overflow since fixed part is >= integer part")
-			}
-
-			fn round(self) -> Self {
-				let n = self.frac().saturating_mul(10.into());
-				if n < 5.into() {
-					self.trunc()
-				} else {
-					let extra: Self = self.0.signum().into();
-					(self.saturating_add(extra)).trunc()
-				}
 			}
 		}
 
