@@ -126,8 +126,6 @@ impl<R, B> Iterator for BlockIter<R, B>
 	{
 	type Item = Result<SignedBlock<B>, String>;
 
-	/// Returns Poll::Ready(None) if every block have been read,
-	/// else returns Poll::Ready(Some(block)), block being a result of decoding a signed block.
 	fn next(&mut self) -> Option<Self::Item> {
 		match self {
 			BlockIter::Binary { num_expected_blocks, read_block_count, reader } => {
