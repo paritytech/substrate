@@ -766,7 +766,6 @@ decl_module! {
 		/// - Db reads: `NextExternal`, `Blacklist`
 		/// - Db writes: `NextExternal`
 		/// # </weight>
-		// TODO TODO: weight according to result of new benchmark
 		#[weight = 15_000_000]
 		fn external_propose(origin, proposal_hash: T::Hash) {
 			T::ExternalOrigin::ensure_origin(origin)?;
@@ -1873,7 +1872,6 @@ impl<T: Trait> Module<T> {
 	///
 	/// If a referendum is launched or maturing take full block weight.
 	fn begin_block(now: T::BlockNumber) -> Result<Weight, DispatchError> {
-		// TODO TODO: do idle weight using benchmark on_initialize_no_launch_no_maturing
 		let mut weight = 0;
 		// pick out another public referendum if it's time.
 		if (now % T::LaunchPeriod::get()).is_zero() {
