@@ -233,7 +233,7 @@ pub trait FixedPointNumber:
 		}
 	}
 
-	/// Returns the nearest integer to a number. Round half-way cases away from 0.0.
+	/// Returns the number rounded to the nearest integer. Rounds half-way cases away from 0.0.
 	///
 	/// Saturates to `Inner::min` or `Inner::max` (truncated) if the result does not fit.
 	fn round(self) -> Self {
@@ -512,7 +512,7 @@ macro_rules! implement_fixed {
 			}
 		}
 
-		// Manual impl `Serialize` as serde_json does not support i128.
+		// Manual impl `Deserialize` as serde_json does not support i128.
 		// TODO: remove impl if issue https://github.com/serde-rs/json/issues/548 fixed.
 		#[cfg(feature = "std")]
 		impl<'de> Deserialize<'de> for $name {
