@@ -558,7 +558,7 @@ mod weight_for {
 }
 
 decl_module! {
-	// Simple declaration of the `Module` type. Lets the macro know what it's working on.
+	/// Identity module declaration.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		/// The amount held on deposit for a registered identity.
 		const BasicDeposit: BalanceOf<T> = T::BasicDeposit::get();
