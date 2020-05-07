@@ -19,7 +19,10 @@
 use super::*;
 
 use frame_benchmarking::{benchmarks, account};
-use frame_support::traits::{Currency, Get, EnsureOrigin, OnInitialize};
+use frame_support::{
+	IterableStorageMap,
+	traits::{Currency, Get, EnsureOrigin, OnInitialize},
+};
 use frame_system::{RawOrigin, Module as System, self, EventRecord};
 use sp_runtime::traits::{Bounded, One};
 
@@ -74,7 +77,7 @@ fn add_referendum<T: Trait>(n: u32) -> Result<ReferendumIndex, &'static str> {
 	);
 	let referendum_index: ReferendumIndex = ReferendumCount::get() - 1;
 	let _ = T::Scheduler::schedule_named(
-		(DEMOCRACY_ID, referendum_index),
+		(DEMOCRACY_ID, referendum_index).encode(),
 		0.into(),
 		None,
 		63,
@@ -308,7 +311,7 @@ benchmarks! {
 		// Add proposal to blacklist with block number 0
 		Blacklist::<T>::insert(
 			proposal_hash,
-			(T::BlockNumber::zero(), (0..v).map(|_| T::AccountId::default()).collect::<Vec<_>>())
+			(T::BlockNumber::zero(), vec![T::AccountId::default(); v as usize])
 		);
 
 		let call = Call::<T>::external_propose(proposal_hash);
