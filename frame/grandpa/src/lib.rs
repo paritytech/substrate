@@ -184,6 +184,10 @@ decl_error! {
 		ChangePending,
 		/// Cannot signal forced change so soon after last.
 		TooSoon,
+		/// A key ownership proof provided as part of an equivocation report is invalid.
+		InvalidKeyOwnershipProof,
+		/// A given equivocation report is valid but already previously reported.
+		DuplicateOffenceReport,
 	}
 }
 
@@ -250,7 +254,7 @@ decl_module! {
 				T::KeyOwnerProofSystem::check_proof(
 					(fg_primitives::KEY_TYPE, equivocation_proof.offender().clone()),
 					key_owner_proof,
-				).ok_or("Invalid key ownership proof.")?;
+				).ok_or(Error::<T>::InvalidKeyOwnershipProof)?;
 
 			// the set id and round when the offence happened
 			let set_id = equivocation_proof.set_id();
@@ -266,7 +270,7 @@ decl_module! {
 					set_id,
 					round,
 				),
-			).map_err(|_| "Duplicate offence report.")?;
+			).map_err(|_| Error::<T>::DuplicateOffenceReport)?;
 		}
 
 		fn on_finalize(block_number: T::BlockNumber) {
@@ -455,10 +459,7 @@ impl<T: Trait> Module<T> {
 		equivocation_proof: EquivocationProof<T::Hash, T::BlockNumber>,
 		key_owner_proof: T::KeyOwnerProof,
 	) -> Option<()> {
-		T::HandleEquivocation::submit_equivocation_report(equivocation_proof, key_owner_proof)
-			.ok()?;
-
-		Some(())
+		T::HandleEquivocation::submit_equivocation_report(equivocation_proof, key_owner_proof).ok()
 	}
 }
 
