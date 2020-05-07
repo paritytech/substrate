@@ -512,8 +512,10 @@ decl_module! {
 		///
 		/// # <weight>
 		/// - `O(1)`
+		/// - Base Weight: 0.665 µs, independent of remark length.
+		/// - No DB operations.
 		/// # </weight>
-		#[weight = 0]
+		#[weight = 700_000]
 		fn remark(origin, _remark: Vec<u8>) {
 			ensure_signed(origin)?;
 		}
@@ -523,8 +525,10 @@ decl_module! {
 		/// # <weight>
 		/// - `O(1)`
 		/// - 1 storage write.
+		/// - Base Weight: 1.405 µs
+		/// - 1 write to HEAP_PAGES
 		/// # </weight>
-		#[weight = (0, DispatchClass::Operational)]
+		#[weight = (T::DbWeight::get().writes(1) + 1_500_000, DispatchClass::Operational)]
 		fn set_heap_pages(origin, pages: u64) {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::HEAP_PAGES, &pages.encode());
@@ -537,8 +541,10 @@ decl_module! {
 		/// - 1 storage write (codec `O(C)`).
 		/// - 1 call to `can_set_code`: `O(S)` (calls `sp_io::misc::runtime_version` which is expensive).
 		/// - 1 event.
+		/// The weight of this function is dependent on the runtime, but generally this is very expensive.
+		/// We will treat this as a full block.
 		/// # </weight>
-		#[weight = (200_000_000, DispatchClass::Operational)]
+		#[weight = (T::MaximumBlockWeight::get(), DispatchClass::Operational)]
 		pub fn set_code(origin, code: Vec<u8>) {
 			Self::can_set_code(origin, &code)?;
 
@@ -552,8 +558,9 @@ decl_module! {
 		/// - `O(C)` where `C` length of `code`
 		/// - 1 storage write (codec `O(C)`).
 		/// - 1 event.
+		/// The weight of this function is dependent on the runtime. We will treat this as a full block.
 		/// # </weight>
-		#[weight = (200_000_000, DispatchClass::Operational)]
+		#[weight = (T::MaximumBlockWeight::get(), DispatchClass::Operational)]
 		pub fn set_code_without_checks(origin, code: Vec<u8>) {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::CODE, &code);
@@ -563,11 +570,14 @@ decl_module! {
 		/// Set the new changes trie configuration.
 		///
 		/// # <weight>
-		/// - `O(D)` where `D` length of `Digest`
+		/// - `O(1)`
 		/// - 1 storage write or delete (codec `O(1)`).
-		/// - 1 call to `deposit_log`: `O(D)` (which depends on the length of `Digest`)
+		/// - 1 call to `deposit_log`: Uses `append` API, so O(1)
+		/// - Base Weight: 7.218 µs
+		/// - DB Weight:
+		///     - Writes: Changes Trie, System Digest
 		/// # </weight>
-		#[weight = (20_000_000, DispatchClass::Operational)]
+		#[weight = (T::DbWeight::get().writes(2) + 10_000_000, DispatchClass::Operational)]
 		pub fn set_changes_trie_config(origin, changes_trie_config: Option<ChangesTrieConfiguration>) {
 			ensure_root(origin)?;
 			match changes_trie_config.clone() {
@@ -589,8 +599,17 @@ decl_module! {
 		/// # <weight>
 		/// - `O(I)` where `I` length of `items`
 		/// - `I` storage writes (`O(1)`).
+		/// - Base Weight: 0.568 * i µs
+		/// - Writes: Number of items
 		/// # </weight>
-		#[weight = (0, DispatchClass::Operational)]
+		#[weight = FunctionOf(
+			|(items,): (&Vec<KeyValue>,)| {
+				T::DbWeight::get().writes(items.len() as Weight)
+					.saturating_add((items.len() as Weight).saturating_mul(600_000))
+			},
+			DispatchClass::Operational,
+			Pays::Yes,
+		)]
 		fn set_storage(origin, items: Vec<KeyValue>) {
 			ensure_root(origin)?;
 			for i in &items {
@@ -601,10 +620,19 @@ decl_module! {
 		/// Kill some items from storage.
 		///
 		/// # <weight>
-		/// - `O(VK)` where `V` length of `keys` and `K` length of one key
-		/// - `V` storage deletions.
+		/// - `O(IK)` where `I` length of `keys` and `K` length of one key
+		/// - `I` storage deletions.
+		/// - Base Weight: .378 * i µs
+		/// - Writes: Number of items
 		/// # </weight>
-		#[weight = (0, DispatchClass::Operational)]
+		#[weight = FunctionOf(
+			|(keys,): (&Vec<Key>,)| {
+				T::DbWeight::get().writes(keys.len() as Weight)
+					.saturating_add((keys.len() as Weight).saturating_mul(400_000))
+			},
+			DispatchClass::Operational,
+			Pays::Yes,
+		)]
 		fn kill_storage(origin, keys: Vec<Key>) {
 			ensure_root(origin)?;
 			for key in &keys {
@@ -614,12 +642,24 @@ decl_module! {
 
 		/// Kill all storage items with a key that starts with the given prefix.
 		///
+		/// **NOTE:** We rely on the Root origin to provide us the number of subkeys under
+		/// the prefix we are removing to accurately calculate the weight of this function.
+		///
 		/// # <weight>
 		/// - `O(P)` where `P` amount of keys with prefix `prefix`
 		/// - `P` storage deletions.
+		/// - Base Weight: 0.834 * P µs
+		/// - Writes: Number of subkeys + 1
 		/// # </weight>
-		#[weight = (0, DispatchClass::Operational)]
-		fn kill_prefix(origin, prefix: Key) {
+		#[weight = FunctionOf(
+			|(_, &subkeys): (&Key, &u32)| {
+				T::DbWeight::get().writes(Weight::from(subkeys) + 1)
+					.saturating_add((Weight::from(subkeys) + 1).saturating_mul(850_000))
+			},
+			DispatchClass::Operational,
+			Pays::Yes,
+		)]
+		fn kill_prefix(origin, prefix: Key, _subkeys: u32) {
 			ensure_root(origin)?;
 			storage::unhashed::kill_prefix(&prefix);
 		}
@@ -630,8 +670,11 @@ decl_module! {
 		/// # <weight>
 		/// - `O(1)`
 		/// - 1 storage read and deletion.
+		/// --------------------
+		/// Base Weight: 8.626 µs
+		/// No DB Read or Write operations because caller is already in overlay
 		/// # </weight>
-		#[weight = (25_000_000, DispatchClass::Operational)]
+		#[weight = (10_000_000, DispatchClass::Operational)]
 		fn suicide(origin) {
 			let who = ensure_signed(origin)?;
 			let account = Account::<T>::get(&who);
@@ -872,23 +915,6 @@ impl<T: Trait> Module<T> {
 	/// Gets a total weight of all executed extrinsics.
 	pub fn all_extrinsics_weight() -> Weight {
 		AllExtrinsicsWeight::get().unwrap_or_default()
-	}
-
-	/// Get the quota ratio of each dispatch class type. This indicates that all operational and mandatory
-	/// dispatches can use the full capacity of any resource, while user-triggered ones can consume
-	/// a portion.
-	pub fn get_dispatch_limit_ratio(class: DispatchClass) -> Perbill {
-		match class {
-			DispatchClass::Operational | DispatchClass::Mandatory
-				=> <Perbill as sp_runtime::PerThing>::one(),
-			DispatchClass::Normal => T::AvailableBlockRatio::get(),
-		}
-	}
-
-	/// The maximum weight of an allowable extrinsic. Only one of these could exist in a block.
-	pub fn max_extrinsic_weight(class: DispatchClass) -> Weight {
-		let limit = Self::get_dispatch_limit_ratio(class) * T::MaximumBlockWeight::get();
-		limit - (T::BlockExecutionWeight::get() + T::ExtrinsicBaseWeight::get())
 	}
 
 	pub fn all_extrinsics_len() -> u32 {
@@ -1257,7 +1283,11 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 	/// dispatches can use the full capacity of any resource, while user-triggered ones can consume
 	/// a portion.
 	fn get_dispatch_limit_ratio(class: DispatchClass) -> Perbill {
-		Module::<T>::get_dispatch_limit_ratio(class)
+		match class {
+			DispatchClass::Operational | DispatchClass::Mandatory
+				=> <Perbill as sp_runtime::PerThing>::one(),
+			DispatchClass::Normal => T::AvailableBlockRatio::get(),
+		}
 	}
 
 	/// Checks if the current extrinsic can fit into the block with respect to block weight limits.
@@ -1680,7 +1710,7 @@ pub(crate) mod tests {
 	use sp_std::cell::RefCell;
 	use sp_core::H256;
 	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup, SignedExtension}, testing::Header, DispatchError};
-	use frame_support::{impl_outer_origin, parameter_types, assert_ok, assert_err};
+	use frame_support::{impl_outer_origin, parameter_types, assert_ok};
 
 	impl_outer_origin! {
 		pub enum Origin for Test where system = super {}
@@ -2083,47 +2113,6 @@ pub(crate) mod tests {
 	}
 
 	#[test]
-	fn max_extrinsic_weight_is_allowed_but_nothing_more() {
-		// Dispatch Class Normal
-		new_test_ext().execute_with(|| {
-			let one = DispatchInfo { weight: 1, ..Default::default() };
-			let max = DispatchInfo { weight: System::max_extrinsic_weight(DispatchClass::Normal), ..Default::default() };
-			let len = 0_usize;
-
-			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&max, len));
-			assert_err!(
-				CheckWeight::<Test>::do_pre_dispatch(&one, len),
-				InvalidTransaction::ExhaustsResources,
-			);
-			// Weight should be 75% of 1024 (max block weight)
-			assert_eq!(System::all_extrinsics_weight(), 768);
-		});
-
-		// Dispatch Class Operational
-		new_test_ext().execute_with(|| {
-			let one = DispatchInfo {
-				weight: 1,
-				class: DispatchClass::Operational,
-				..Default::default()
-			};
-			let max = DispatchInfo {
-				weight: System::max_extrinsic_weight(DispatchClass::Operational),
-				class: DispatchClass::Operational,
-				..Default::default()
-			};
-			let len = 0_usize;
-
-			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&max, len));
-			assert_err!(
-				CheckWeight::<Test>::do_pre_dispatch(&one, len),
-				InvalidTransaction::ExhaustsResources,
-			);
-			// Weight should be 100% of max block weight
-			assert_eq!(System::all_extrinsics_weight(), <Test as Trait>::MaximumBlockWeight::get());
-		});
-	}
-
-	#[test]
 	fn mandatory_extrinsic_doesnt_care_about_limits() {
 		new_test_ext().execute_with(|| {
 			let max = DispatchInfo {
@@ -2156,9 +2145,6 @@ pub(crate) mod tests {
 			// 10 is taken for block execution weight
 			// So normal extrinsic can be 758 weight (-5 for base extrinsic weight)
 			// And Operational can be 256 to produce a full block (-5 for base)
-
-			assert_eq!(System::max_extrinsic_weight(DispatchClass::Normal), 753);
-
 			let max_normal = DispatchInfo { weight: 753, ..Default::default() };
 			let rest_operational = DispatchInfo { weight: 251, class: DispatchClass::Operational, ..Default::default() };
 
