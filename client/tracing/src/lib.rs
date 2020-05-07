@@ -43,6 +43,8 @@ use tracing_core::{
 
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 
+use sp_tracing::proxy::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
+
 /// Used to configure how to receive the metrics
 #[derive(Debug, Clone)]
 pub enum TracingReceiver {
@@ -61,8 +63,8 @@ impl Default for TracingReceiver {
 #[derive(Debug)]
 struct SpanDatum {
 	id: u64,
-	name: &'static str,
-	target: &'static str,
+	name: String,
+	target: String,
 	level: Level,
 	line: u32,
 	start_time: Instant,
@@ -71,7 +73,7 @@ struct SpanDatum {
 }
 
 #[derive(Clone, Debug)]
-struct Visitor(Vec<(String, String)>);
+struct Visitor(FxHashMap<String, String>);
 
 impl Visit for Visitor {
 	fn record_i64(&mut self, field: &Field, value: i64) {
@@ -87,7 +89,7 @@ impl Visit for Visitor {
 	}
 
 	fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
-		self.0.push((field.name().to_string(), format!("{:?}",value)));
+		self.0.insert(field.name().to_string(), format!("{:?}",value));
 	}
 }
 
@@ -186,12 +188,12 @@ impl Subscriber for ProfilingSubscriber {
 
 	fn new_span(&self, attrs: &Attributes<'_>) -> Id {
 		let id = self.next_id.fetch_add(1, Ordering::Relaxed);
-		let mut values = Visitor(Vec::new());
+		let mut values = Visitor(FxHashMap::default());
 		attrs.record(&mut values);
 		let span_datum = SpanDatum {
 			id,
-			name: attrs.metadata().name(),
-			target: attrs.metadata().target(),
+			name: attrs.metadata().name().to_owned(),
+			target: attrs.metadata().target().to_owned(),
 			level: attrs.metadata().level().clone(),
 			line: attrs.metadata().line().unwrap_or(0),
 			start_time: Instant::now(),
@@ -235,8 +237,17 @@ impl Subscriber for ProfilingSubscriber {
 
 	fn try_close(&self, span: Id) -> bool {
 		let mut span_data = self.span_data.lock();
-		if let Some(data) = span_data.remove(&span.into_u64()) {
-			self.send_span(data);
+		if let Some(mut span_datum) = span_data.remove(&span.into_u64()) {
+			drop(span_data);
+			if span_datum.name == WASM_TRACE_IDENTIFIER {
+				if let Some(n) = span_datum.values.0.remove(WASM_NAME_KEY) {
+					span_datum.name = n;
+				}
+				if let Some(t) = span_datum.values.0.remove(WASM_TARGET_KEY) {
+					span_datum.target = t;
+				}
+			}
+			self.send_span(span_datum);
 		};
 		true
 	}

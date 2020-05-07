@@ -6788,6 +6788,7 @@ dependencies = [
  "serde",
  "serde_json",
  "slog",
+ "sp-tracing",
  "tracing",
  "tracing-core",
 ]

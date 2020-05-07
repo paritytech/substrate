@@ -16,8 +16,14 @@
 
 use std::cell::RefCell;
 use rental;
+use tracing::info_span;
 
-use crate::span_dispatch;
+/// Used to identify a proxied WASM trace
+pub const WASM_TRACE_IDENTIFIER: &'static str = "WASM_TRACE";
+/// Used to extract the real `target` from the associated values of the span
+pub const WASM_TARGET_KEY: &'static str = "proxied_wasm_target";
+/// Used to extract the real `name` from the associated values of the span
+pub const WASM_NAME_KEY: &'static str = "proxied_wasm_name";
 
 const MAX_SPANS_LEN: usize = 1000;
 
@@ -28,7 +34,7 @@ thread_local! {
 /// Create and enter a `tracing` Span, returning the span id,
 /// which should be passed to `exit_span(id)` to signal that the span should exit.
 pub fn create_registered_span(target: &str, name: &str) -> u64 {
-	PROXY.with(|proxy| proxy.borrow_mut().create_registered_span(target, name))
+	PROXY.with(|proxy| proxy.borrow_mut().create_span(target, name))
 }
 
 /// Exit a span by dropping it along with it's associated guard.
@@ -65,8 +71,7 @@ impl TracingProxy {
 	pub fn new() -> TracingProxy {
 		let spans: Vec<(u64, rent_span::SpanAndGuard)> = Vec::new();
 		TracingProxy {
-			// Span ids start from 1 - we will use 0 as special case for unregistered spans
-			next_id: 1,
+			next_id: 0,
 			spans,
 		}
 	}
@@ -74,24 +79,16 @@ impl TracingProxy {
 
 /// For spans to be recorded they must be registered in `span_dispatch`.
 impl TracingProxy {
-	fn create_registered_span(&mut self, target: &str, name: &str) -> u64 {
-		let create_span: Result<tracing::Span, String> = span_dispatch::create_registered_span(target, name);
-		let id;
-		match create_span {
-			Ok(span) => {
-				self.next_id += 1;
-				id = self.next_id;
-				let sg = rent_span::SpanAndGuard::new(
-					Box::new(span),
-					|span| span.enter(),
-				);
-				self.spans.push((id, sg));
-			}
-			Err(e) => {
-				id = 0;
-				log::info!("{}", e);
-			}
-		}
+	// The identifiers `wasm_target` and `wasm_name` must match their associated const,
+	// WASM_TARGET_KEY and WASM_NAME_KEY.
+	fn create_span(&mut self, proxied_wasm_target: &str, proxied_wasm_name: &str) -> u64 {
+		let span = info_span!(WASM_TRACE_IDENTIFIER, is_valid_trace = true, proxied_wasm_target, proxied_wasm_name);
+		self.next_id += 1;
+		let sg = rent_span::SpanAndGuard::new(
+			Box::new(span),
+			|span| span.enter(),
+		);
+		self.spans.push((self.next_id, sg));
 		let spans_len = self.spans.len();
 		if spans_len > MAX_SPANS_LEN {
 			// This is to prevent unbounded growth of Vec and could mean one of the following:
@@ -102,11 +99,10 @@ impl TracingProxy {
 			let mut sg = self.spans.remove(0).1;
 			sg.rent_all_mut(|s| { s.span.record("is_valid_trace", &false); });
 		}
-		id
+		self.next_id
 	}
 
 	fn exit_span(&mut self, id: u64) {
-		if id == 0 { return; }
 		match self.spans.pop() {
 			Some(v) => {
 				let mut last_span_id = v.0;
@@ -122,7 +118,7 @@ impl TracingProxy {
 						return;
 					}
 				}
-			},
+			}
 			None => {
 				log::warn!("Span id: {} not found", id);
 				return;
