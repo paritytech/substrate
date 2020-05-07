@@ -41,15 +41,16 @@ use sp_core::u32_trait::Value as U32;
 use sp_runtime::RuntimeDebug;
 use sp_runtime::traits::Hash;
 use frame_support::{
-    codec::{Decode, Encode},
-    decl_error, decl_event, decl_module, decl_storage,
-    dispatch::{
-        DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable, Parameter,
-        PostDispatchInfo,
-    },
-    ensure,
-    traits::{ChangeMembers, EnsureOrigin, Get, InitializeMembers},
-    weights::{DispatchClass, GetDispatchInfo, Weight},
+	codec::{Decode, Encode},
+	decl_error, decl_event, decl_module, decl_storage,
+	dispatch::{
+		DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable, Parameter,
+		PostDispatchInfo,
+	},
+	ensure,
+	storage,
+	traits::{ChangeMembers, EnsureOrigin, Get, InitializeMembers},
+	weights::{DispatchClass, GetDispatchInfo, Weight},
 };
 
 use frame_system::{self as system, ensure_signed, ensure_root};
@@ -188,7 +189,9 @@ decl_error! {
 		/// There can only be a maximum of `MaxProposals` active proposals.
 		TooManyProposals,
 		/// The given weight bound for the proposal was too low.
-		WrongProposalBound,
+		WrongProposalWeight,
+		/// The given length bound for the proposal was too low.
+		WrongProposalLength,
 	}
 }
 
@@ -216,10 +219,6 @@ mod weight_for {
 			.saturating_add(proposals.saturating_mul(27_000_000)) // P
 	}
 
-	// The bytes are responsible for an insignificant amount of weight.
-	// Length of proposals is limited by length fees.
-	const MAX_ASSUMED_PROPOSAL_BYTES: Weight = 1_024;
-
 	/// Calculate the weight for `execute`.
 	///
 	/// Based on benchmark:
@@ -227,10 +226,11 @@ mod weight_for {
 	pub(crate) fn execute<T: Trait<I>, I: Instance>(
 		members: Weight,
 		proposal: Weight,
+		length: Weight,
 	) -> Weight {
 		T::DbWeight::get().reads(1) // read members for `is_member`
 			.saturating_add(23_000_000) // constant
-			.saturating_add(3_000 * MAX_ASSUMED_PROPOSAL_BYTES) // B
+			.saturating_add(4_000 * length) // B
 			.saturating_add(120_000 * members) // M
 			.saturating_add(proposal) // P
 	}
@@ -242,10 +242,11 @@ mod weight_for {
 	pub(crate) fn propose_execute<T: Trait<I>, I: Instance>(
 		members: Weight,
 		proposal: Weight,
+		length: Weight,
 	) -> Weight {
 		T::DbWeight::get().reads(2) // `is_member` + `contains_key`
 			.saturating_add(29_000_000) // constant
-			.saturating_add(3_000 * MAX_ASSUMED_PROPOSAL_BYTES) // B
+			.saturating_add(3_000 * length) // B
 			.saturating_add(220_000 * members) // M
 			.saturating_add(proposal) // P1
 	}
@@ -257,11 +258,12 @@ mod weight_for {
 	pub(crate) fn propose_proposed<T: Trait<I>, I: Instance>(
 		members: Weight,
 		proposals: Weight,
+		length: Weight,
 	) -> Weight {
 		T::DbWeight::get().reads(2) // `is_member` + `contains_key`
 			+ T::DbWeight::get().reads_writes(2, 4) // `proposal` insertion
 			+ 50_000_000 // constant
-			+ 6_000 * MAX_ASSUMED_PROPOSAL_BYTES // B
+			+ 6_000 * length // B
 			+ 110_000 * members // M
 			+ 510_000 * proposals // P2
 	}
@@ -290,9 +292,10 @@ mod weight_for {
 		members: Weight,
 		proposal_weight: Weight,
 		proposals: Weight,
+		length: Weight,
 	) -> Weight {
 		let db = T::DbWeight::get();
-		close_without_finalize::<T, I>(members)
+		close_without_finalize::<T, I>(members, length)
 			.saturating_add(db.reads(1)) // `Prime`
 			.saturating_add(db.writes(1)) // `Proposals`
 			.saturating_add(db.writes(1)) // `Voting`
@@ -303,10 +306,11 @@ mod weight_for {
 	/// Calculate the weight for `close` without the call to `finalize_proposal`.
 	pub(crate) fn close_without_finalize<T: Trait<I>, I: Instance>(
 		members: Weight,
+		length: Weight,
 	) -> Weight {
 		T::DbWeight::get().reads(3) // `Members`, `Voting`, `ProposalOf`
 			+ 66_000_000 // constant
-			+ 8_000 * MAX_ASSUMED_PROPOSAL_BYTES // B
+			+ 8_000 * length // B
 			+ 250_000 * members // M
 	}
 }
@@ -387,13 +391,19 @@ decl_module! {
 		/// - 1 event
 		/// # </weight>
 		#[weight = (
-			weight_for::execute::<T, I>(T::MaxMembers::get().into(), proposal.get_dispatch_info().weight),
+			weight_for::execute::<T, I>(
+				T::MaxMembers::get().into(),
+				proposal.get_dispatch_info().weight,
+				*length_bound as Weight,
+			),
 			DispatchClass::Operational
 		)]
-		fn execute(origin, proposal: Box<<T as Trait<I>>::Proposal>) -> DispatchResultWithPostInfo {
+		fn execute(origin, proposal: Box<<T as Trait<I>>::Proposal>, #[compact] length_bound: u32) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let members = Self::members();
 			ensure!(members.contains(&who), Error::<T, I>::NotMember);
+			let proposal_len = proposal.using_encoded(|x| x.len());
+			ensure!(proposal_len <= length_bound as usize, Error::<T, I>::WrongProposalLength);
 
 			let proposal_hash = T::Hashing::hash_of(&proposal);
 			let result = proposal.dispatch(RawOrigin::Member(who).into());
@@ -401,7 +411,8 @@ decl_module! {
 
 			Ok(get_result_weight(result).map(|w| weight_for::execute::<T, I>(
 				members.len() as Weight,
-				w
+				w,
+				proposal_len as Weight
 			)).into())
 		}
 
@@ -437,11 +448,13 @@ decl_module! {
 				weight_for::propose_execute::<T, I>(
 					T::MaxMembers::get().into(), // M
 					proposal.get_dispatch_info().weight, // P1
+					*length_bound as Weight, // B
 				)
 			} else {
 				weight_for::propose_proposed::<T, I>(
 					T::MaxMembers::get().into(), // M
-					T::MaxProposals::get().into() // P2
+					T::MaxProposals::get().into(), // P2
+					*length_bound as Weight, // B
 				)
 			},
 			DispatchClass::Operational
@@ -449,11 +462,14 @@ decl_module! {
 		fn propose(origin,
 			#[compact] threshold: MemberCount,
 			proposal: Box<<T as Trait<I>>::Proposal>,
+			#[compact] length_bound: u32
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let members = Self::members();
 			ensure!(members.contains(&who), Error::<T, I>::NotMember);
 
+			let proposal_len = proposal.using_encoded(|x| x.len());
+			ensure!(proposal_len <= length_bound as usize, Error::<T, I>::WrongProposalLength);
 			let proposal_hash = T::Hashing::hash_of(&proposal);
 			ensure!(!<ProposalOf<T, I>>::contains_key(proposal_hash), Error::<T, I>::DuplicateProposal);
 
@@ -465,6 +481,7 @@ decl_module! {
 				Ok(get_result_weight(result).map(|w| weight_for::propose_execute::<T, I>(
 					members.len() as Weight, // M
 					w, // P1
+					proposal_len as Weight, // B
 				)).into())
 			} else {
 				let active_proposals =
@@ -487,7 +504,8 @@ decl_module! {
 
 				Ok(Some(weight_for::propose_proposed::<T, I>(
 					members.len() as Weight, // M
-					active_proposals as Weight // P2
+					active_proposals as Weight, // P2
+					proposal_len as Weight, // B
 				)).into())
 			}
 		}
@@ -582,13 +600,15 @@ decl_module! {
 				T::MaxMembers::get().into(), // `M`
 				*proposal_weight_bound, // `P1`
 				T::MaxProposals::get().into(), // `P2`
+				*length_bound as Weight, // B
 			),
 			DispatchClass::Operational
 		)]
 		fn close(origin,
 			proposal: T::Hash,
 			#[compact] index: ProposalIndex,
-			proposal_weight_bound: Weight,
+			#[compact] proposal_weight_bound: Weight,
+			#[compact] length_bound: u32
 		) -> DispatchResultWithPostInfo {
 			let _ = ensure_signed(origin)?;
 
@@ -602,12 +622,14 @@ decl_module! {
 			let disapproved = seats.saturating_sub(no_votes) < voting.threshold;
 			// Allow (dis-)approving the proposal as soon as there are enough votes.
 			if approved || disapproved {
-				let p = ProposalOf::<T, I>::get(proposal);
-				let proposal_weight = p.as_ref().map(|p| p.get_dispatch_info().weight).unwrap_or(0);
-				ensure!(proposal_weight <= proposal_weight_bound, Error::<T, I>::WrongProposalBound);
+				let (p, len) = Self::validate_and_get_proposal(
+					&proposal,
+					length_bound as usize,
+					proposal_weight_bound
+				)?;
 				let finalize_weight = Self::finalize_proposal(approved, seats, voting, proposal, p);
 				return Ok(Some(
-					weight_for::close_without_finalize::<T, I>(seats.into())
+					weight_for::close_without_finalize::<T, I>(seats.into(), len as Weight)
 						.saturating_add(finalize_weight)
 				).into());
 			}
@@ -625,13 +647,15 @@ decl_module! {
 			}
 			let approved = yes_votes >= voting.threshold;
 
-			let p = ProposalOf::<T, I>::get(proposal);
-			let proposal_weight = p.as_ref().map(|p| p.get_dispatch_info().weight).unwrap_or(0);
-			ensure!(proposal_weight <= proposal_weight_bound, Error::<T, I>::WrongProposalBound);
+			let (p, len) = Self::validate_and_get_proposal(
+				&proposal,
+				length_bound as usize,
+				proposal_weight_bound
+			)?;
 			Self::deposit_event(RawEvent::Closed(proposal, yes_votes, no_votes));
 			let finalize_weight = Self::finalize_proposal(approved, seats, voting, proposal, p);
 			Ok(Some(
-				weight_for::close_without_finalize::<T, I>(seats.into())
+				weight_for::close_without_finalize::<T, I>(seats.into(), len as Weight)
 					.saturating_add(T::DbWeight::get().reads(1)) // read `Prime`
 					.saturating_add(finalize_weight)
 			).into())
@@ -646,6 +670,23 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		// The dispatchables *do not* use this to check membership so make sure
 		// to update those if this is changed.
 		Self::members().contains(who)
+	}
+
+	/// Ensure that the right proposal bounds were passed and get the proposal from storage.
+	fn validate_and_get_proposal(
+		hash: &T::Hash,
+		length_bound: usize,
+		weight_bound: Weight
+	) -> Result<(<T as Trait<I>>::Proposal, usize), DispatchError> {
+		let key = ProposalOf::<T, I>::hashed_key_for(hash);
+		let proposal_len = storage::unhashed::get_raw(&key)
+			.ok_or(Error::<T, I>::ProposalMissing)?
+			.len();
+		ensure!(proposal_len <= length_bound, Error::<T, I>::WrongProposalLength);
+		let proposal = ProposalOf::<T, I>::get(hash).ok_or(Error::<T, I>::ProposalMissing)?;
+		let proposal_weight = proposal.get_dispatch_info().weight;
+		ensure!(proposal_weight <= weight_bound, Error::<T, I>::WrongProposalWeight);
+		Ok((proposal, proposal_len))
 	}
 
 	/// Weight:
@@ -667,29 +708,27 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		seats: MemberCount,
 		voting: Votes<T::AccountId, T::BlockNumber>,
 		proposal_hash: T::Hash,
-		proposal: Option<<T as Trait<I>>::Proposal>,
+		proposal: <T as Trait<I>>::Proposal,
 	) -> Weight {
 		let db = T::DbWeight::get();
 		let mut weight: Weight = 0;
 		if approved {
 			Self::deposit_event(RawEvent::Approved(proposal_hash));
 
-			// execute motion, assuming it exists.
-			if let Some(p) = proposal {
-				let dispatch_weight = p.get_dispatch_info().weight;
-				let origin = RawOrigin::Members(voting.threshold, seats).into();
-				let result = p.dispatch(origin);
-				Self::deposit_event(RawEvent::Executed(proposal_hash, result.map(|_| ()).map_err(|e| e.error)));
-				weight = weight.saturating_add(
-					get_result_weight(result).unwrap_or(dispatch_weight) // P1
-				);
-			}
+			let dispatch_weight = proposal.get_dispatch_info().weight;
+			let origin = RawOrigin::Members(voting.threshold, seats).into();
+			let result = proposal.dispatch(origin);
+			Self::deposit_event(RawEvent::Executed(proposal_hash, result.map(|_| ()).map_err(|e| e.error)));
+			weight = weight.saturating_add(
+				// default to the dispatch info weight for safety
+				get_result_weight(result).unwrap_or(dispatch_weight) // P1
+			);
 		} else {
 			// disapproved
 			Self::deposit_event(RawEvent::Disapproved(proposal_hash));
 		}
 
-		// remove vote
+		// remove proposal and vote
 		ProposalOf::<T, I>::remove(&proposal_hash);
 		Voting::<T, I>::remove(&proposal_hash);
 		let num_proposals = Proposals::<T, I>::mutate(|proposals| {
@@ -975,17 +1014,17 @@ mod tests {
 			let proposal = make_proposal(42);
 			let hash = BlakeTwo256::hash_of(&proposal);
 
-			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
+			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), u32::max_value()));
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
 
 			System::set_block_number(3);
 			assert_noop!(
-				Collective::close(Origin::signed(4), hash.clone(), 0, Weight::max_value()),
+				Collective::close(Origin::signed(4), hash.clone(), 0, Weight::max_value(), u32::max_value()),
 				Error::<Test, Instance1>::TooEarly
 			);
 
 			System::set_block_number(4);
-			assert_ok!(Collective::close(Origin::signed(4), hash.clone(), 0, Weight::max_value()));
+			assert_ok!(Collective::close(Origin::signed(4), hash.clone(), 0, Weight::max_value(), u32::max_value()));
 
 			let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
 			assert_eq!(System::events(), vec![
@@ -1003,16 +1042,16 @@ mod tests {
 			let proposal = Call::Collective(crate::Call::set_members(vec![1, 2, 3], None));
 			let hash = BlakeTwo256::hash_of(&proposal);
 
-			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
+			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), u32::max_value()));
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
 
 			System::set_block_number(4);
 			let proposal_weight = proposal.get_dispatch_info().weight;
 			assert_noop!(
-				Collective::close(Origin::signed(4), hash.clone(), 0, proposal_weight - 100),
-				Error::<Test, Instance1>::WrongProposalBound
+				Collective::close(Origin::signed(4), hash.clone(), 0, proposal_weight - 100, u32::max_value()),
+				Error::<Test, Instance1>::WrongProposalWeight
 			);
-			assert_ok!(Collective::close(Origin::signed(4), hash.clone(), 0, Weight::max_value()));
+			assert_ok!(Collective::close(Origin::signed(4), hash.clone(), 0, Weight::max_value(), u32::max_value()));
 		})
 	}
 
@@ -1023,11 +1062,11 @@ mod tests {
 			let hash = BlakeTwo256::hash_of(&proposal);
 			assert_ok!(Collective::set_members(Origin::ROOT, vec![1, 2, 3], Some(3)));
 
-			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
+			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), u32::max_value()));
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
 
 			System::set_block_number(4);
-			assert_ok!(Collective::close(Origin::signed(4), hash.clone(), 0, Weight::max_value()));
+			assert_ok!(Collective::close(Origin::signed(4), hash.clone(), 0, Weight::max_value(), u32::max_value()));
 
 			let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
 			assert_eq!(System::events(), vec![
@@ -1046,11 +1085,11 @@ mod tests {
 			let hash = BlakeTwo256::hash_of(&proposal);
 			assert_ok!(Collective::set_members(Origin::ROOT, vec![1, 2, 3], Some(1)));
 
-			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
+			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), u32::max_value()));
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
 
 			System::set_block_number(4);
-			assert_ok!(Collective::close(Origin::signed(4), hash.clone(), 0, Weight::max_value()));
+			assert_ok!(Collective::close(Origin::signed(4), hash.clone(), 0, Weight::max_value(), u32::max_value()));
 
 			let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
 			assert_eq!(System::events(), vec![
@@ -1069,7 +1108,7 @@ mod tests {
 			let proposal = make_proposal(42);
 			let hash = BlakeTwo256::hash_of(&proposal);
 			let end = 4;
-			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
+			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), u32::max_value()));
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
 			assert_eq!(
 				Collective::voting(&hash),
@@ -1083,7 +1122,7 @@ mod tests {
 
 			let proposal = make_proposal(69);
 			let hash = BlakeTwo256::hash_of(&proposal);
-			assert_ok!(Collective::propose(Origin::signed(2), 2, Box::new(proposal.clone())));
+			assert_ok!(Collective::propose(Origin::signed(2), 2, Box::new(proposal.clone()), u32::max_value()));
 			assert_ok!(Collective::vote(Origin::signed(3), hash.clone(), 1, false));
 			assert_eq!(
 				Collective::voting(&hash),
@@ -1103,7 +1142,7 @@ mod tests {
 			let proposal = make_proposal(42);
 			let hash = BlakeTwo256::hash_of(&proposal);
 			let end = 4;
-			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
+			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), u32::max_value()));
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
 			assert_eq!(
 				Collective::voting(&hash),
@@ -1117,7 +1156,7 @@ mod tests {
 
 			let proposal = make_proposal(69);
 			let hash = BlakeTwo256::hash_of(&proposal);
-			assert_ok!(Collective::propose(Origin::signed(2), 2, Box::new(proposal.clone())));
+			assert_ok!(Collective::propose(Origin::signed(2), 2, Box::new(proposal.clone()), u32::max_value()));
 			assert_ok!(Collective::vote(Origin::signed(3), hash.clone(), 1, false));
 			assert_eq!(
 				Collective::voting(&hash),
@@ -1137,7 +1176,7 @@ mod tests {
 			let proposal = make_proposal(42);
 			let hash = proposal.blake2_256().into();
 			let end = 4;
-			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
+			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), u32::max_value()));
 			assert_eq!(Collective::proposals(), vec![hash]);
 			assert_eq!(Collective::proposal_of(&hash), Some(proposal));
 			assert_eq!(
@@ -1165,11 +1204,11 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			for i in 0..MaxProposals::get() {
 				let proposal = make_proposal(i as u64);
-				assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
+				assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), u32::max_value()));
 			}
 			let proposal = make_proposal(MaxProposals::get() as u64 + 1);
 			assert_noop!(
-				Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone())),
+				Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), u32::max_value()),
 				Error::<Test, Instance1>::TooManyProposals
 			);
 		})
@@ -1180,7 +1219,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			let proposal = make_proposal(42);
 			assert_noop!(
-				Collective::propose(Origin::signed(42), 3, Box::new(proposal.clone())),
+				Collective::propose(Origin::signed(42), 3, Box::new(proposal.clone()), u32::max_value()),
 				Error::<Test, Instance1>::NotMember
 			);
 		});
@@ -1191,7 +1230,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			let proposal = make_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
-			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
+			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), u32::max_value()));
 			assert_noop!(
 				Collective::vote(Origin::signed(42), hash.clone(), 0, true),
 				Error::<Test, Instance1>::NotMember,
@@ -1205,7 +1244,7 @@ mod tests {
 			System::set_block_number(3);
 			let proposal = make_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
-			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
+			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), u32::max_value()));
 			assert_noop!(
 				Collective::vote(Origin::signed(2), hash.clone(), 1, true),
 				Error::<Test, Instance1>::WrongIndex,
@@ -1219,7 +1258,7 @@ mod tests {
 			let proposal = make_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
 			let end = 4;
-			assert_ok!(Collective::propose(Origin::signed(1), 2, Box::new(proposal.clone())));
+			assert_ok!(Collective::propose(Origin::signed(1), 2, Box::new(proposal.clone()), u32::max_value()));
 			assert_eq!(
 				Collective::voting(&hash),
 				Some(Votes { index: 0, threshold: 2, ayes: vec![1], nays: vec![], end })
@@ -1269,11 +1308,11 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			let proposal = make_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
-			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
+			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), u32::max_value()));
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, false));
-			assert_ok!(Collective::close(Origin::signed(2), hash.clone(), 0, Weight::max_value()));
+			assert_ok!(Collective::close(Origin::signed(2), hash.clone(), 0, Weight::max_value(), u32::max_value()));
 			assert_eq!(Collective::proposals(), vec![]);
-			assert_ok!(Collective::propose(Origin::signed(1), 2, Box::new(proposal.clone())));
+			assert_ok!(Collective::propose(Origin::signed(1), 2, Box::new(proposal.clone()), u32::max_value()));
 			assert_eq!(Collective::proposals(), vec![hash]);
 		});
 	}
@@ -1283,9 +1322,9 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			let proposal = make_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
-			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
+			assert_ok!(Collective::propose(Origin::signed(1), 3, Box::new(proposal.clone()), u32::max_value()));
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, false));
-			assert_ok!(Collective::close(Origin::signed(2), hash.clone(), 0, Weight::max_value()));
+			assert_ok!(Collective::close(Origin::signed(2), hash.clone(), 0, Weight::max_value(), u32::max_value()));
 
 			assert_eq!(System::events(), vec![
 				EventRecord {
@@ -1326,9 +1365,9 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			let proposal = make_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
-			assert_ok!(Collective::propose(Origin::signed(1), 2, Box::new(proposal.clone())));
+			assert_ok!(Collective::propose(Origin::signed(1), 2, Box::new(proposal.clone()), u32::max_value()));
 			assert_ok!(Collective::vote(Origin::signed(2), hash.clone(), 0, true));
-			assert_ok!(Collective::close(Origin::signed(2), hash.clone(), 0, Weight::max_value()));
+			assert_ok!(Collective::close(Origin::signed(2), hash.clone(), 0, Weight::max_value(), u32::max_value()));
 
 			assert_eq!(System::events(), vec![
 				EventRecord {
