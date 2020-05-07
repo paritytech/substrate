@@ -61,10 +61,10 @@ pub trait FixedPointNumber:
 		Self::DIV
 	}
 
-	/// Raw constructor. Assigns `int / Self::accuracy()` to `self`.
+	/// Builds this type from an integer number.
 	fn from_inner(int: Self::Inner) -> Self;
 
-	/// Consumes `self` and returns the inner raw value (`self * Self::accuracy()`).
+	/// Consumes `self` and returns the inner raw value.
 	fn into_inner(self) -> Self::Inner;
 
 	/// Creates self from an integer number `int`.
