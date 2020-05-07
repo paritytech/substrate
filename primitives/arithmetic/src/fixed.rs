@@ -27,6 +27,7 @@ use crate::{
 #[cfg(feature = "std")]
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 
+/// Integer types that can be used to interact with `FixedPointNumber` implementations.
 pub trait FixedPointOperand: Copy + Clone + Bounded + Zero + Saturating
 	+ PartialOrd + UniqueSaturatedInto<u128> + TryFrom<u128> + CheckedNeg {}
 
