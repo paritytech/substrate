@@ -1301,7 +1301,7 @@ impl Printable for Tuple {
 	}
 }
 
-/// Something that can convert a [`BlockId`] to a number or a hash.
+/// Something that can convert a [`BlockId`](crate::generic::BlockId) to a number or a hash.
 #[cfg(feature = "std")]
 pub trait BlockIdTo<Block: self::Block> {
 	/// The error type that will be returned by the functions.

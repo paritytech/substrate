@@ -100,15 +100,17 @@ pub(crate) struct Status<H, N> {
 /// A set of authorities.
 #[derive(Debug, Clone, Encode, Decode, PartialEq)]
 pub(crate) struct AuthoritySet<H, N> {
+	/// The current active authorities.
 	pub(crate) current_authorities: AuthorityList,
-	set_id: u64,
-	// Tree of pending standard changes across forks. Standard changes are
-	// enacted on finality and must be enacted (i.e. finalized) in-order across
-	// a given branch
+	/// The current set id.
+	pub(crate) set_id: u64,
+	/// Tree of pending standard changes across forks. Standard changes are
+	/// enacted on finality and must be enacted (i.e. finalized) in-order across
+	/// a given branch
 	pub(crate) pending_standard_changes: ForkTree<H, N, PendingChange<H, N>>,
-	// Pending forced changes across different forks (at most one per fork).
-	// Forced changes are enacted on block depth (not finality), for this reason
-	// only one forced change should exist per fork.
+	/// Pending forced changes across different forks (at most one per fork).
+	/// Forced changes are enacted on block depth (not finality), for this reason
+	/// only one forced change should exist per fork.
 	pending_forced_changes: Vec<PendingChange<H, N>>,
 }
 
@@ -162,9 +164,55 @@ where H: PartialEq,
 
 impl<H: Eq, N> AuthoritySet<H, N>
 where
-	N: Add<Output=N> + Ord + Clone + Debug,
-	H: Clone + Debug
+	N: Add<Output = N> + Ord + Clone + Debug,
+	H: Clone + Debug,
 {
+	/// Returns the block hash and height at which the next pending change in
+	/// the given chain (i.e. it includes `best_hash`) was signalled, `None` if
+	/// there are no pending changes for the given chain.
+	///
+	/// This is useful since we know that when a change is signalled the
+	/// underlying runtime authority set management module (e.g. session module)
+	/// has updated its internal state (e.g. a new session started).
+	pub(crate) fn next_change<F, E>(
+		&self,
+		best_hash: &H,
+		is_descendent_of: &F,
+	) -> Result<Option<(H, N)>, fork_tree::Error<E>>
+	where
+		F: Fn(&H, &H) -> Result<bool, E>,
+		E: std::error::Error,
+	{
+		let mut forced = None;
+		for change in &self.pending_forced_changes {
+			if is_descendent_of(&change.canon_hash, best_hash)? {
+				forced = Some((change.canon_hash.clone(), change.canon_height.clone()));
+				break;
+			}
+		}
+
+		let mut standard = None;
+		for (_, _, change) in self.pending_standard_changes.roots() {
+			if is_descendent_of(&change.canon_hash, best_hash)? {
+				standard = Some((change.canon_hash.clone(), change.canon_height.clone()));
+				break;
+			}
+		}
+
+		let earliest = match (forced, standard) {
+			(Some(forced), Some(standard)) => Some(if forced.1 < standard.1 {
+				forced
+			} else {
+				standard
+			}),
+			(Some(forced), None) => Some(forced),
+			(None, Some(standard)) => Some(standard),
+			(None, None) => None,
+		};
+
+		Ok(earliest)
+	}
+
 	fn add_standard_change<F, E>(
 		&mut self,
 		pending: PendingChange<H, N>,
@@ -919,6 +967,128 @@ mod tests {
 				pending_standard_changes: ForkTree::new(),
 				pending_forced_changes: Vec::new(),
 			}),
+		);
+	}
+
+	#[test]
+	fn next_change_works() {
+		let current_authorities = vec![(AuthorityId::from_slice(&[1; 32]), 1)];
+
+		let mut authorities = AuthoritySet {
+			current_authorities: current_authorities.clone(),
+			set_id: 0,
+			pending_standard_changes: ForkTree::new(),
+			pending_forced_changes: Vec::new(),
+		};
+
+		let new_set = current_authorities.clone();
+
+		// We have three pending changes with 2 possible roots that are enacted
+		// immediately on finality (i.e. standard changes).
+		let change_a0 = PendingChange {
+			next_authorities: new_set.clone(),
+			delay: 0,
+			canon_height: 5,
+			canon_hash: "hash_a0",
+			delay_kind: DelayKind::Finalized,
+		};
+
+		let change_a1 = PendingChange {
+			next_authorities: new_set.clone(),
+			delay: 0,
+			canon_height: 10,
+			canon_hash: "hash_a1",
+			delay_kind: DelayKind::Finalized,
+		};
+
+		let change_b = PendingChange {
+			next_authorities: new_set.clone(),
+			delay: 0,
+			canon_height: 4,
+			canon_hash: "hash_b",
+			delay_kind: DelayKind::Finalized,
+		};
+
+		// A0 (#5) <- A10 (#8) <- A1 (#10) <- best_a
+		// B (#4) <- best_b
+		let is_descendent_of = is_descendent_of(|base, hash| match (*base, *hash) {
+			("hash_a0", "hash_a1") => true,
+			("hash_a0", "best_a") => true,
+			("hash_a1", "best_a") => true,
+			("hash_a10", "best_a") => true,
+			("hash_b", "best_b") => true,
+			_ => false,
+		});
+
+		// add the three pending changes
+		authorities
+			.add_pending_change(change_b, &is_descendent_of)
+			.unwrap();
+		authorities
+			.add_pending_change(change_a0, &is_descendent_of)
+			.unwrap();
+		authorities
+			.add_pending_change(change_a1, &is_descendent_of)
+			.unwrap();
+
+		// the earliest change at block `best_a` should be the change at A0 (#5)
+		assert_eq!(
+			authorities
+				.next_change(&"best_a", &is_descendent_of)
+				.unwrap(),
+			Some(("hash_a0", 5)),
+		);
+
+		// the earliest change at block `best_b` should be the change at B (#4)
+		assert_eq!(
+			authorities
+				.next_change(&"best_b", &is_descendent_of)
+				.unwrap(),
+			Some(("hash_b", 4)),
+		);
+
+		// we apply the change at A0 which should prune it and the fork at B
+		authorities
+			.apply_standard_changes("hash_a0", 5, &is_descendent_of, false)
+			.unwrap();
+
+		// the next change is now at A1 (#10)
+		assert_eq!(
+			authorities
+				.next_change(&"best_a", &is_descendent_of)
+				.unwrap(),
+			Some(("hash_a1", 10)),
+		);
+
+		// there's no longer any pending change at `best_b` fork
+		assert_eq!(
+			authorities
+				.next_change(&"best_b", &is_descendent_of)
+				.unwrap(),
+			None,
+		);
+
+		// we a forced change at A10 (#8)
+		let change_a10 = PendingChange {
+			next_authorities: new_set.clone(),
+			delay: 0,
+			canon_height: 8,
+			canon_hash: "hash_a10",
+			delay_kind: DelayKind::Best {
+				median_last_finalized: 0,
+			},
+		};
+
+		authorities
+			.add_pending_change(change_a10, &static_is_descendent_of(false))
+			.unwrap();
+
+		// it should take precedence over the change at A1 (#10)
+		assert_eq!(
+			authorities
+				.next_change(&"best_a", &is_descendent_of)
+				.unwrap(),
+			Some(("hash_a10", 8)),
 		);
 	}
 

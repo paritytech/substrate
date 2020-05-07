@@ -1022,7 +1022,7 @@ ServiceBuilder<
 				});
 
 			spawn_handle.spawn(
-				"telemetry-on-block",
+				"on-transaction-imported",
 				events,
 			);
 		}

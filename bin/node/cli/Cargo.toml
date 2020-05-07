@@ -85,8 +85,9 @@ pallet-balances = { version = "2.0.0-dev", path = "../../../frame/balances" }
 pallet-transaction-payment = { version = "2.0.0-dev", path = "../../../frame/transaction-payment" }
 frame-support = { version = "2.0.0-dev", default-features = false, path = "../../../frame/support" }
 pallet-im-online = { version = "2.0.0-dev", default-features = false, path = "../../../frame/im-online" }
-pallet-authority-discovery = { version = "2.0.0-dev",  path = "../../../frame/authority-discovery" }
-pallet-staking = { version = "2.0.0-dev",  path = "../../../frame/staking" }
+pallet-authority-discovery = { version = "2.0.0-dev", path = "../../../frame/authority-discovery" }
+pallet-staking = { version = "2.0.0-dev", path = "../../../frame/staking" }
+pallet-grandpa = { version = "2.0.0-dev", path = "../../../frame/grandpa" }
 
 # node-specific dependencies
 node-runtime = { version = "2.0.0-dev", path = "../runtime" }
