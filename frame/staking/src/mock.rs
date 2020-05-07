@@ -1035,3 +1035,7 @@ pub(crate) fn staking_events() -> Vec<Event<Test>> {
 		}
 	}).collect()
 }
+
+pub(crate) fn balances(who: &AccountId) -> (Balance, Balance) {
+	(Balances::free_balance(who), Balances::reserved_balance(who))
+}

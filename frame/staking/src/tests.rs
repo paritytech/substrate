@@ -550,7 +550,9 @@ fn nominators_also_get_slashed_pro_rata() {
 
 		// staked values;
 		let nominator_stake = Staking::ledger(100).unwrap().active;
+		let nominator_balance = balances(&101).0;
 		let validator_stake = Staking::ledger(10).unwrap().active;
+		let validator_balance = balances(&11).0;
 		let exposed_stake = initial_exposure.total;
 		let exposed_validator = initial_exposure.own;
 		let exposed_nominator = initial_exposure.others.first().unwrap().value;
@@ -588,7 +590,14 @@ fn nominators_also_get_slashed_pro_rata() {
 			Staking::ledger(10).unwrap().active,
 			validator_stake - validator_share,
 		);
-
+		assert_eq!(
+			balances(&101).0, // free balance
+			nominator_balance - nominator_share,
+		);
+		assert_eq!(
+			balances(&11).0, // free balance
+			validator_balance - validator_share,
+		);
 		// Because slashing happened.
 		assert!(is_disabled(10));
 	});
