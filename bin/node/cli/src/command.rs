@@ -92,6 +92,11 @@ pub fn run() -> Result<()> {
 				Ok(())
 			}
 		}
+		Some(Subcommand::Transfer(cmd)) => {
+			let runner = cli.create_runner(cmd)?;
+
+			runner.sync_run(|_| cmd.run::<Runtime>())
+		}
 		Some(Subcommand::Base(subcommand)) => {
 			let runner = cli.create_runner(subcommand)?;
 

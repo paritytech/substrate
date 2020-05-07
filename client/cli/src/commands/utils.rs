@@ -18,16 +18,14 @@
 use std::{io::Read, path::PathBuf};
 use sp_core::{
 	Pair, hexdisplay::HexDisplay,
-	crypto::{Ss58Codec, Ss58AddressFormat, AccountId32},
+	crypto::{Ss58Codec, Ss58AddressFormat},
 };
-use sp_runtime::{
-	traits::IdentifyAccount, MultiSigner,
-	generic::{UncheckedExtrinsic, SignedPayload},
-};
-use crate::{arg_enums::OutputType, error::{self, Error}};
-use parity_scale_codec::Encode;
+use sp_runtime::{MultiSigner, traits::IdentifyAccount, AccountId32};
+use crate::{OutputType, error::{self, Error}};
 use serde_json::json;
 use cli_utils::{IndexFor, RuntimeAdapter};
+use sp_runtime::generic::{UncheckedExtrinsic, SignedPayload};
+use parity_scale_codec::Encode;
 
 /// Public key type for Runtime
 pub type PublicFor<P> = <P as sp_core::Pair>::Public;
@@ -50,27 +48,6 @@ pub fn read_uri(uri: Option<String>) -> error::Result<String> {
 	};
 
 	Ok(uri)
-}
-
-/// Allows for calling $method with appropriate crypto impl.
-#[macro_export]
-macro_rules! with_crypto_scheme {
-	($scheme:expr, $method:ident($($params:expr),*)) => {
-		with_crypto_scheme!($scheme, $method<>($($params),*))
-	};
-	($scheme:expr, $method:ident<$($generics:ident),*>($($params:expr),*)) => {
-		match $scheme {
-			$crate::arg_enums::CryptoScheme::Ecdsa => {
-				$method::<sp_core::ecdsa::Pair, $($generics),*>($($params),*)
-			}
-			$crate::arg_enums::CryptoScheme::Sr25519 => {
-				$method::<sp_core::sr25519::Pair, $($generics),*>($($params),*)
-			}
-			$crate::arg_enums::CryptoScheme::Ed25519 => {
-				$method::<sp_core::ed25519::Pair, $($generics),*>($($params),*)
-			}
-		}
-	};
 }
 
 /// print formatted pair from uri
@@ -223,12 +200,34 @@ pub fn read_message(msg: Option<String>, should_decode: bool) -> Result<Vec<u8>,
 	Ok(message)
 }
 
+
+/// Allows for calling $method with appropriate crypto impl.
+#[macro_export]
+macro_rules! with_crypto_scheme {
+	($scheme:expr, $method:ident($($params:expr),*)) => {
+		with_crypto_scheme!($scheme, $method<>($($params),*))
+	};
+	($scheme:expr, $method:ident<$($generics:ident),*>($($params:expr),*)) => {
+		match $scheme {
+			$crate::CryptoScheme::Ecdsa => {
+				$method::<sp_core::ecdsa::Pair, $($generics),*>($($params),*)
+			}
+			$crate::CryptoScheme::Sr25519 => {
+				$method::<sp_core::sr25519::Pair, $($generics),*>($($params),*)
+			}
+			$crate::CryptoScheme::Ed25519 => {
+				$method::<sp_core::ed25519::Pair, $($generics),*>($($params),*)
+			}
+		}
+	};
+}
+
 /// create an extrinsic for the runtime.
 pub fn create_extrinsic_for<Pair, RA, Call>(
 	call: Call,
 	nonce:  IndexFor<RA>,
 	signer: Pair,
-) -> Result<UncheckedExtrinsic<AccountId32, Call, Pair::Signature, RA::Extra>, Error>
+) -> Result<UncheckedExtrinsic<AccountId32, Call, Pair::Signature, RA::Extra>, &'static str>
 	where
 		Call: Encode,
 		Pair: sp_core::Pair,
@@ -238,7 +237,7 @@ pub fn create_extrinsic_for<Pair, RA, Call>(
 {
 	let extra = RA::build_extra(nonce);
 	let payload = SignedPayload::new(call, extra)
-		.map_err(|_| Error::Other("Transaction validity error".into()))?;
+		.map_err(|_| "Transaction validity error")?;
 
 	let signature = payload.using_encoded(|payload| signer.sign(payload));
 	let signer = signer.public().into().into_account();

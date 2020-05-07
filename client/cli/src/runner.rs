@@ -218,7 +218,7 @@ impl<C: SubstrateCli> Runner<C> {
 			Subcommand::Sign(cmd) => cmd.run(),
 			Subcommand::Verify(cmd) => cmd.run(),
 			Subcommand::Vanity(cmd) => cmd.run(),
-			Subcommand::Transfer(cmd) => cmd.run::<RA>(),
+			// Subcommand::Transfer(cmd) => cmd.run::<RA>(),
 			Subcommand::SignTransaction(cmd) => cmd.run::<RA>(),
 			Subcommand::Insert(cmd) => cmd.run::<RA>(),
 		}

@@ -95,7 +95,7 @@ TO_RENAME=(
     "substrate-block-builder sc-block-builder"
     "substrate-chain-spec sc-chain-spec"
     "substrate-chain-spec-derive sc-chain-spec-derive"
-    "substrate-cli-utils sc-cli-utils"
+    "substrate-cli sc-cli"
     "substrate-consensus-aura sc-consensus-aura"
     "substrate-consensus-babe sc-consensus-babe"
     "substrate-consensus-pow sc-consensus-pow"

@@ -16,7 +16,7 @@
 
 //! Implementation of the `insert` subcommand
 
-use crate::{error, with_crypto_scheme, pair_from_suri, CliConfiguration, KeystoreParams};
+use crate::{error, pair_from_suri, CliConfiguration, KeystoreParams, with_crypto_scheme, CryptoSchemeFlag};
 use super::{SharedParams, read_uri};
 use structopt::StructOpt;
 use sp_core::{crypto::KeyTypeId, Bytes};
@@ -26,7 +26,7 @@ use hyper::rt;
 use sc_rpc::author::AuthorClient;
 use jsonrpc_core_client::transports::http;
 use serde::{de::DeserializeOwned, Serialize};
-use cli_utils::{HashFor, RuntimeAdapter};
+use cli_utils::{HashFor, RuntimeAdapter,};
 
 /// The `insert` command
 #[derive(Debug, StructOpt, Clone)]
@@ -56,6 +56,10 @@ pub struct InsertCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub crypto_scheme: CryptoSchemeFlag,
 }
 
 impl InsertCmd {
@@ -69,7 +73,7 @@ impl InsertCmd {
 		let password = self.keystore_params.read_password()?;
 
 		let public = with_crypto_scheme!(
-			self.shared_params.scheme,
+			self.crypto_scheme.scheme,
 			to_vec(&suri, &password)
 		);
 

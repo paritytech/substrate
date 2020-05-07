@@ -15,8 +15,11 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Implementation of the `sign-transaction` subcommand
-use crate::{error, with_crypto_scheme, CliConfiguration, KeystoreParams};
-use super::{SharedParams, IndexFor, CallFor, pair_from_suri, decode_hex, create_extrinsic_for};
+use crate::{
+	error, CliConfiguration, KeystoreParams,
+	with_crypto_scheme, create_extrinsic_for, CryptoSchemeFlag
+};
+use super::{SharedParams, IndexFor, CallFor, pair_from_suri, decode_hex};
 use structopt::StructOpt;
 use parity_scale_codec::{Codec, Encode, Decode};
 use std::{str::FromStr, fmt::Display};
@@ -51,6 +54,10 @@ pub struct SignTransactionCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub crypto_scheme: CryptoSchemeFlag,
 }
 
 impl SignTransactionCmd {
@@ -67,7 +74,7 @@ impl SignTransactionCmd {
 		let pass = self.keystore_params.read_password()?;
 
 		with_crypto_scheme!(
-			self.shared_params.scheme,
+			self.crypto_scheme.scheme,
 			print_ext<RA>(&self.suri, &pass, call, nonce)
 		)
 	}

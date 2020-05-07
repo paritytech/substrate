@@ -86,18 +86,18 @@ arg_enum! {
 
 arg_enum! {
 	#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-	pub enum OutputType {
-		Json,
-		Text,
+	pub enum CryptoScheme {
+		Ed25519,
+		Sr25519,
+		Ecdsa,
 	}
 }
 
 arg_enum! {
 	#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-	pub enum CryptoScheme {
-		Ed25519,
-		Sr25519,
-		Ecdsa,
+	pub enum OutputType {
+		Json,
+		Text,
 	}
 }
 

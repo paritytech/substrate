@@ -14,10 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{path::PathBuf, convert::TryFrom};
-use sp_core::crypto::Ss58AddressFormat;
-use crate::arg_enums::{CryptoScheme, OutputType};
+use std::path::PathBuf;
 use structopt::StructOpt;
+use sp_core::crypto::Ss58AddressFormat;
+use crate::arg_enums::{OutputType, CryptoScheme};
+use std::convert::TryFrom;
 
 /// Shared parameters used by all `CoreParams`.
 #[derive(Debug, StructOpt, Clone)]
@@ -45,7 +46,39 @@ pub struct SharedParams {
 	/// By default, all targets log `info`. The global log level can be set with -l<level>.
 	#[structopt(short = "l", long = "log", value_name = "LOG_PATTERN")]
 	pub log: Option<String>,
+}
 
+/// Optional flag for specifying crypto algorithm
+#[derive(Debug, StructOpt, Clone)]
+pub struct CryptoSchemeFlag {
+	/// cryptography scheme
+	#[structopt(
+		long,
+		value_name = "SCHEME",
+		possible_values = &CryptoScheme::variants(),
+		case_insensitive = true,
+		default_value = "Sr25519"
+	)]
+	pub scheme: CryptoScheme,
+}
+
+/// Optional flag for specifying output type
+#[derive(Debug, StructOpt, Clone)]
+pub struct OutputTypeFlag {
+	/// output format
+	#[structopt(
+		long,
+		value_name = "FORMAT",
+		possible_values = &OutputType::variants(),
+		case_insensitive = true,
+		default_value = "Text"
+	)]
+	pub output_type: OutputType,
+}
+
+/// Optional flag for specifying network scheme
+#[derive(Debug, StructOpt, Clone)]
+pub struct NetworkSchemeFlag {
 	/// network address format
 	#[structopt(
 		long,
@@ -56,26 +89,6 @@ pub struct SharedParams {
 		default_value = "polkadot"
 	)]
 	pub network: Ss58AddressFormat,
-
-	/// output format
-	#[structopt(
-		long,
-		value_name = "FORMAT",
-		possible_values = &OutputType::variants(),
-		case_insensitive = true,
-		default_value = "Text"
-	)]
-	pub output_type: OutputType,
-
-	/// cryptography scheme
-	#[structopt(
-		long,
-		value_name = "SCHEME",
-		possible_values = &CryptoScheme::variants(),
-		case_insensitive = true,
-		default_value = "Sr25519"
-	)]
-	pub scheme: CryptoScheme,
 }
 
 impl SharedParams {

@@ -18,7 +18,7 @@
 
 use crate::{
 	read_message, decode_hex, read_uri, CliConfiguration,
-	error, SharedParams, with_crypto_scheme,
+	error, SharedParams, with_crypto_scheme, CryptoSchemeFlag,
 };
 use sp_core::{Public, crypto::Ss58Codec};
 use structopt::StructOpt;
@@ -52,6 +52,10 @@ pub struct VerifyCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub crypto_scheme: CryptoSchemeFlag,
 }
 
 impl VerifyCmd {
@@ -67,7 +71,7 @@ impl VerifyCmd {
 		};
 
 		with_crypto_scheme!(
-			self.shared_params.scheme,
+			self.crypto_scheme.scheme,
 			verify(sig_data, message, uri)
 		)
 	}

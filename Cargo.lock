@@ -3482,6 +3482,7 @@ dependencies = [
  "node-runtime",
  "pallet-authority-discovery",
  "pallet-balances",
+ "pallet-balances-cli",
  "pallet-contracts",
  "pallet-im-online",
  "pallet-indices",
@@ -4091,6 +4092,22 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
+]
+
+[[package]]
+name = "pallet-balances-cli"
+version = "2.0.0-dev"
+dependencies = [
+ "cli-utils",
+ "frame-system",
+ "hex",
+ "parity-scale-codec",
+ "sc-cli",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "structopt",
+ "substrate-test-runtime",
 ]
 
 [[package]]
@@ -6018,7 +6035,6 @@ dependencies = [
  "derive_more",
  "env_logger 0.7.1",
  "fdlimit",
- "frame-system",
  "futures 0.1.29",
  "futures 0.3.4",
  "hex",
@@ -6055,7 +6071,6 @@ dependencies = [
  "sp-version",
  "structopt",
  "substrate-prometheus-endpoint",
- "substrate-test-runtime",
  "tempfile",
  "time",
  "tokio 0.2.18",
@@ -8058,9 +8073,9 @@ checksum = "8ea5119cdb4c55b55d432abb513a0429384878c15dde60cc77b1c99de1a95a6a"
 
 [[package]]
 name = "structopt"
-version = "0.3.13"
+version = "0.3.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff6da2e8d107dfd7b74df5ef4d205c6aebee0706c647f6bc6a2d5789905c00fb"
+checksum = "863246aaf5ddd0d6928dfeb1a9ca65f505599e4e1b399935ef7e75107516b4ef"
 dependencies = [
  "clap",
  "lazy_static",
@@ -8069,9 +8084,9 @@ dependencies = [
 
 [[package]]
 name = "structopt-derive"
-version = "0.4.6"
+version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a489c87c08fbaf12e386665109dd13470dcc9c4583ea3e10dd2b4523e5ebd9ac"
+checksum = "d239ca4b13aee7a2142e6795cbd69e457665ff8037aed33b3effdc430d2f927a"
 dependencies = [
  "heck",
  "proc-macro-error",

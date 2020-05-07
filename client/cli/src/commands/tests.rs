@@ -15,16 +15,10 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use super::*;
-use substrate_test_runtime::Runtime;
 use tempfile::Builder;
 use std::io::Read;
 use crate::commands::inspect::InspectCmd;
 use crate::Error;
-
-fn new_test_ext() -> sp_io::TestExternalities {
-	let t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
-	sp_io::TestExternalities::new(t)
-}
 
 #[test]
 fn generate() {
@@ -73,29 +67,4 @@ fn sign() {
 fn vanity() {
 	let vanity = VanityCmd::from_iter(&["vanity", "--number", "1", "--pattern", "j"]);
 	assert!(vanity.run().is_ok());
-}
-
-#[test]
-fn transfer() {
-	let seed = "0xad1fb77243b536b90cfe5f0d351ab1b1ac40e3890b41dc64f766ee56340cfca5";
-	let words = "remember fiber forum demise paper uniform squirrel feel access exclude casual effort";
-
-	let transfer = TransferCmd::from_iter(&["transfer",
-		"--from", seed,
-		"--to", "0xa2bc899a8a3b16a284a8cefcbc2dc48a687cd674e89b434fbbdb06f400979744",
-		"--amount", "5000",
-		"--index", "1",
-		"--password", "12345",
-	]);
-
-	new_test_ext().execute_with(|| {
-		assert!(matches!(transfer.run::<Runtime>(), Ok(())));
-		let transfer = TransferCmd::from_iter(&["transfer",
-			"--from", words,
-			"--to", "0xa2bc899a8a3b16a284a8cefcbc2dc48a687cd674e89b434fbbdb06f400979744",
-			"--amount", "5000",
-			"--index", "1",
-		]);
-		assert!(matches!(transfer.run::<Runtime>(), Err(Error::Input(_))))
-	});
 }

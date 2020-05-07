@@ -26,7 +26,6 @@ mod inspect;
 mod sign;
 mod sign_transaction;
 mod utils;
-mod transfer;
 mod verify;
 mod vanity;
 mod insert;
@@ -53,7 +52,6 @@ pub use self::{
 	sign::SignCmd,
 	vanity::VanityCmd,
 	sign_transaction::SignTransactionCmd,
-	transfer::TransferCmd,
 	verify::VerifyCmd,
 	revert_cmd::RevertCmd,
 	run_cmd::RunCmd,
@@ -108,9 +106,6 @@ pub enum Subcommand {
 
 	/// Sign transaction from encoded Call. Returns a signed and encoded UncheckedMortalCompactExtrinsic as hex.
 	SignTransaction(SignTransactionCmd),
-
-	/// Author and sign a Node pallet_balances::Transfer transaction with a given (secret) key.
-	Transfer(TransferCmd),
 
 	/// Verify a signature for a message, provided on STDIN, with a given (public or secret) key.
 	Verify(VerifyCmd),
@@ -476,7 +471,6 @@ substrate_cli_subcommands!(
 	Insert,
 	Sign,
 	SignTransaction,
-	Transfer,
 	Verify,
 	Vanity
 );

@@ -16,7 +16,10 @@
 
 //! implementation of the `vanity` subcommand
 
-use crate::{error, format_seed, SharedParams, print_from_uri, with_crypto_scheme, CliConfiguration};
+use crate::{
+	error, format_seed, SharedParams, print_from_uri, CliConfiguration,
+	with_crypto_scheme, CryptoSchemeFlag, NetworkSchemeFlag, OutputTypeFlag,
+};
 use sp_core::crypto::Ss58Codec;
 use structopt::StructOpt;
 use rand::{rngs::OsRng, RngCore};
@@ -40,20 +43,32 @@ pub struct VanityCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub network_scheme: NetworkSchemeFlag,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub output_scheme: OutputTypeFlag,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub crypto_scheme: CryptoSchemeFlag,
 }
 
 impl VanityCmd {
 	/// Run the command
 	pub fn run(self) -> error::Result<()> {
 		let desired: String = self.pattern.unwrap_or_default();
-		let formated_seed = with_crypto_scheme!(self.shared_params.scheme, generate_key(&desired))?;
+		let formated_seed = with_crypto_scheme!(self.crypto_scheme.scheme, generate_key(&desired))?;
 		with_crypto_scheme!(
-			self.shared_params.scheme,
+			self.crypto_scheme.scheme,
 			print_from_uri(
 				&formated_seed,
 				None,
-				self.shared_params.network,
-				self.shared_params.output_type
+				self.network_scheme.network,
+				self.output_scheme.output_type
 			)
 		);
 		Ok(())

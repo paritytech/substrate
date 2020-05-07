@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Implementation of the `sign` subcommand
-use crate::{error, with_crypto_scheme, pair_from_suri, CliConfiguration, KeystoreParams};
+use crate::{error, pair_from_suri, CliConfiguration, KeystoreParams, with_crypto_scheme, CryptoSchemeFlag};
 use super::{SharedParams, read_message, read_uri};
 use structopt::StructOpt;
 
@@ -48,6 +48,10 @@ pub struct SignCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub crypto_scheme: CryptoSchemeFlag,
 }
 
 
@@ -59,7 +63,7 @@ impl SignCmd {
 		let password = self.keystore_params.read_password()?;
 
 		let signature = with_crypto_scheme!(
-			self.shared_params.scheme,
+			self.crypto_scheme.scheme,
 			sign(&suri, &password, message)
 		)?;
 

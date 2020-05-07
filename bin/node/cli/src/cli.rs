@@ -16,6 +16,7 @@
 
 use sc_cli::RunCmd;
 use structopt::StructOpt;
+use pallet_balances_cli::TransferCmd;
 
 /// An overarching CLI command definition.
 #[derive(Clone, Debug, StructOpt)]
@@ -34,6 +35,10 @@ pub enum Subcommand {
 	/// A set of base subcommands handled by `sc_cli`.
 	#[structopt(flatten)]
 	Base(sc_cli::Subcommand),
+
+	/// prints hex-encoded, signed, transfer extrinsic with given arguments.
+	#[structopt(flatten)]
+	Transfer(TransferCmd),
 
 	/// The custom inspect subcommmand for decoding blocks and extrinsics.
 	#[structopt(

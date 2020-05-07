@@ -96,6 +96,7 @@ node-executor = { version = "2.0.0-dev", path = "../executor" }
 
 # CLI-specific dependencies
 sc-cli = { version = "0.8.0-dev", optional = true, path = "../../../client/cli" }
+pallet-balances-cli = { version = "2.0.0-dev", optional = true, path = "../../../utils/frame/pallet-balances-cli" }
 frame-benchmarking-cli = { version = "2.0.0-dev", optional = true, path = "../../../utils/frame/benchmarking-cli" }
 node-inspect = { version = "0.8.0-dev", optional = true, path = "../inspect" }
 
@@ -146,6 +147,7 @@ cli = [
 	"node-executor/wasmi-errno",
 	"node-inspect",
 	"sc-cli",
+	"pallet-balances-cli",
 	"frame-benchmarking-cli",
 	"sc-service/db",
 	"structopt",

@@ -16,7 +16,10 @@
 
 //! Implementation of the `inspect` subcommand
 
-use crate::{error, print_from_uri, with_crypto_scheme, CliConfiguration, KeystoreParams};
+use crate::{
+	error, print_from_uri, CliConfiguration, KeystoreParams,
+	with_crypto_scheme, NetworkSchemeFlag, OutputTypeFlag, CryptoSchemeFlag,
+};
 use super::{SharedParams, read_uri};
 use structopt::StructOpt;
 
@@ -40,6 +43,18 @@ pub struct InspectCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub network_scheme: NetworkSchemeFlag,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub output_scheme: OutputTypeFlag,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub crypto_scheme: CryptoSchemeFlag,
 }
 
 impl InspectCmd {
@@ -49,12 +64,12 @@ impl InspectCmd {
 		let pass = self.keystore_params.read_password().ok();
 
 		with_crypto_scheme!(
-			self.shared_params.scheme,
+			self.crypto_scheme.scheme,
 			print_from_uri(
 				&uri,
 				pass.as_ref().map(String::as_str),
-				self.shared_params.network,
-				self.shared_params.output_type
+				self.network_scheme.network,
+				self.output_scheme.output_type
 			)
 		);
 

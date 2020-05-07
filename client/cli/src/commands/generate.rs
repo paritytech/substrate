@@ -20,7 +20,10 @@ use super::{SharedParams};
 use crate::error::{self, Error};
 use bip39::{MnemonicType, Mnemonic, Language};
 use structopt::StructOpt;
-use crate::{print_from_uri, with_crypto_scheme, CliConfiguration, KeystoreParams};
+use crate::{
+	print_from_uri, CliConfiguration, KeystoreParams,
+	with_crypto_scheme, NetworkSchemeFlag, OutputTypeFlag, CryptoSchemeFlag,
+};
 
 /// The `generate` command
 #[derive(Debug, StructOpt, Clone)]
@@ -37,6 +40,18 @@ pub struct GenerateCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: SharedParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub network_scheme: NetworkSchemeFlag,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub output_scheme: OutputTypeFlag,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub crypto_scheme: CryptoSchemeFlag,
 }
 
 impl GenerateCmd {
@@ -53,11 +68,11 @@ impl GenerateCmd {
 		};
 		let mnemonic = Mnemonic::new(words, Language::English);
 		let password = self.keystore_params.read_password()?;
-		let maybe_network = self.shared_params.network;
-		let output = self.shared_params.output_type;
+		let maybe_network = self.network_scheme.network;
+		let output = self.output_scheme.output_type;
 
 		with_crypto_scheme!(
-			self.shared_params.scheme,
+			self.crypto_scheme.scheme,
 			print_from_uri(
 				mnemonic.phrase(),
 				Some(password.as_str()),
