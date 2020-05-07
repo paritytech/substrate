@@ -38,8 +38,9 @@
 
 use sp_std::{prelude::*, result};
 use sp_core::u32_trait::Value as U32;
-use sp_runtime::RuntimeDebug;
-use sp_runtime::traits::Hash;
+use sp_io::storage;
+use sp_runtime::{RuntimeDebug, traits::Hash};
+
 use frame_support::{
 	codec::{Decode, Encode},
 	decl_error, decl_event, decl_module, decl_storage,
@@ -48,11 +49,9 @@ use frame_support::{
 		PostDispatchInfo,
 	},
 	ensure,
-	storage,
 	traits::{ChangeMembers, EnsureOrigin, Get, InitializeMembers},
 	weights::{DispatchClass, GetDispatchInfo, Weight},
 };
-
 use frame_system::{self as system, ensure_signed, ensure_root};
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -624,7 +623,7 @@ decl_module! {
 			if approved || disapproved {
 				let (p, len) = Self::validate_and_get_proposal(
 					&proposal,
-					length_bound as usize,
+					length_bound,
 					proposal_weight_bound
 				)?;
 				let finalize_weight = Self::finalize_proposal(approved, seats, voting, proposal, p);
@@ -649,7 +648,7 @@ decl_module! {
 
 			let (p, len) = Self::validate_and_get_proposal(
 				&proposal,
-				length_bound as usize,
+				length_bound,
 				proposal_weight_bound
 			)?;
 			Self::deposit_event(RawEvent::Closed(proposal, yes_votes, no_votes));
@@ -675,18 +674,18 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	/// Ensure that the right proposal bounds were passed and get the proposal from storage.
 	fn validate_and_get_proposal(
 		hash: &T::Hash,
-		length_bound: usize,
+		length_bound: u32,
 		weight_bound: Weight
 	) -> Result<(<T as Trait<I>>::Proposal, usize), DispatchError> {
 		let key = ProposalOf::<T, I>::hashed_key_for(hash);
-		let proposal_len = storage::unhashed::get_raw(&key)
-			.ok_or(Error::<T, I>::ProposalMissing)?
-			.len();
+		// read the length of the proposal storage entry directly
+		let proposal_len = storage::read(&key, &mut [0; 0], 0)
+			.ok_or(Error::<T, I>::ProposalMissing)?;
 		ensure!(proposal_len <= length_bound, Error::<T, I>::WrongProposalLength);
 		let proposal = ProposalOf::<T, I>::get(hash).ok_or(Error::<T, I>::ProposalMissing)?;
 		let proposal_weight = proposal.get_dispatch_info().weight;
 		ensure!(proposal_weight <= weight_bound, Error::<T, I>::WrongProposalWeight);
-		Ok((proposal, proposal_len))
+		Ok((proposal, proposal_len as usize))
 	}
 
 	/// Weight:
