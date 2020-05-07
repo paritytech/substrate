@@ -28,6 +28,8 @@
    doc = "Substrate's runtime standard library as compiled without Rust's standard library.")]
 
 use sp_std::vec::Vec;
+
+#[cfg(feature = "std")]
 use futures::executor::block_on;
 
 #[cfg(feature = "std")]
@@ -414,10 +416,10 @@ pub trait Misc {
 pub trait Crypto {
 	/// Returns all `ed25519` public keys for the given key id from the keystore.
 	fn ed25519_public_keys(&mut self, id: KeyTypeId) -> Vec<ed25519::Public> {
-		self.extension::<KeystoreExt>()
+		let keystore = self.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!")
-			.read()
-			.ed25519_public_keys(id)
+			.read();
+		block_on(keystore.ed25519_public_keys(id))
 	}
 
 	/// Generate an `ed22519` key for the given key type using an optional `seed` and
@@ -428,10 +430,10 @@ pub trait Crypto {
 	/// Returns the public key.
 	fn ed25519_generate(&mut self, id: KeyTypeId, seed: Option<Vec<u8>>) -> ed25519::Public {
 		let seed = seed.as_ref().map(|s| std::str::from_utf8(&s).expect("Seed is valid utf8!"));
-		self.extension::<KeystoreExt>()
+		let mut keystore = self.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!")
-			.write()
-			.ed25519_generate_new(id, seed)
+			.write();
+		block_on(keystore.ed25519_generate_new(id, seed))
 			.expect("`ed25519_generate` failed")
 	}
 
@@ -543,10 +545,10 @@ pub trait Crypto {
 
 	/// Returns all `sr25519` public keys for the given key id from the keystore.
 	fn sr25519_public_keys(&mut self, id: KeyTypeId) -> Vec<sr25519::Public> {
-		self.extension::<KeystoreExt>()
+		let keystore = self.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!")
-			.read()
-			.sr25519_public_keys(id)
+			.read();
+		block_on(keystore.sr25519_public_keys(id))
 	}
 
 	/// Generate an `sr22519` key for the given key type using an optional seed and
@@ -557,10 +559,10 @@ pub trait Crypto {
 	/// Returns the public key.
 	fn sr25519_generate(&mut self, id: KeyTypeId, seed: Option<Vec<u8>>) -> sr25519::Public {
 		let seed = seed.as_ref().map(|s| std::str::from_utf8(&s).expect("Seed is valid utf8!"));
-		self.extension::<KeystoreExt>()
+		let mut keystore = self.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!")
-			.write()
-			.sr25519_generate_new(id, seed)
+			.write();
+		block_on(keystore.sr25519_generate_new(id, seed))
 			.expect("`sr25519_generate` failed")
 	}
 

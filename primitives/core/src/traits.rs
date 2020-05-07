@@ -57,25 +57,25 @@ pub enum Error {
 #[async_trait]
 pub trait BareCryptoStore: Send + Sync {
 	/// Returns all sr25519 public keys for the given key type.
-	fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public>;
+	async fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public>;
 	/// Generate a new sr25519 key pair for the given key type and an optional seed.
 	///
 	/// If the given seed is `Some(_)`, the key pair will only be stored in memory.
 	///
 	/// Returns the public key of the generated key pair.
-	fn sr25519_generate_new(
+	async fn sr25519_generate_new(
 		&mut self,
 		id: KeyTypeId,
 		seed: Option<&str>,
 	) -> Result<sr25519::Public, Error>;
 	/// Returns all ed25519 public keys for the given key type.
-	fn ed25519_public_keys(&self, id: KeyTypeId) -> Vec<ed25519::Public>;
+	async fn ed25519_public_keys(&self, id: KeyTypeId) -> Vec<ed25519::Public>;
 	/// Generate a new ed25519 key pair for the given key type and an optional seed.
 	///
 	/// If the given seed is `Some(_)`, the key pair will only be stored in memory.
 	///
 	/// Returns the public key of the generated key pair.
-	fn ed25519_generate_new(
+	async fn ed25519_generate_new(
 		&mut self,
 		id: KeyTypeId,
 		seed: Option<&str>,

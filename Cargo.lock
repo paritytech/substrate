@@ -301,6 +301,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-trait"
+version = "0.1.30"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "da71fef07bc806586090247e971229289f64c210a278ee5ae419314eb386b31d"
+dependencies = [
+ "proc-macro2",
+ "quote 1.0.3",
+ "syn 1.0.17",
+]
+
+[[package]]
 name = "atty"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3620,6 +3631,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "futures 0.3.4",
  "node-primitives",
  "node-runtime",
  "node-testing",
@@ -4377,6 +4389,7 @@ version = "2.0.0-rc5"
 dependencies = [
  "frame-support",
  "frame-system",
+ "futures 0.3.4",
  "lite-json",
  "parity-scale-codec",
  "serde",
@@ -6652,6 +6665,7 @@ version = "2.0.0-rc5"
 dependencies = [
  "async-trait",
  "derive_more",
+ "futures 0.3.4",
  "hex",
  "merlin",
  "parking_lot 0.10.2",

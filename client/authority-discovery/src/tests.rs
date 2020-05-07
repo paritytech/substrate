@@ -287,9 +287,9 @@ fn publish_discover_cycle() {
 	};
 
 	let key_store = KeyStore::new();
-	let node_a_public = key_store
+	let node_a_public = block_on(key_store
 		.write()
-		.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None)
+		.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None))
 		.unwrap();
 	let test_api = Arc::new(TestApi {
 		authorities: vec![node_a_public.into()],

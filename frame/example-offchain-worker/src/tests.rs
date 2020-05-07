@@ -37,6 +37,7 @@ use sp_runtime::{
 		IdentifyAccount, Verify,
 	},
 };
+use futures::executor::block_on;
 
 impl_outer_origin! {
 	pub enum Origin for Test where system = frame_system {}
@@ -208,10 +209,10 @@ fn should_submit_signed_transaction_on_chain() {
 	let (offchain, offchain_state) = testing::TestOffchainExt::new();
 	let (pool, pool_state) = testing::TestTransactionPoolExt::new();
 	let keystore = KeyStore::new();
-	keystore.write().sr25519_generate_new(
+	block_on(keystore.write().sr25519_generate_new(
 		crate::crypto::Public::ID,
 		Some(&format!("{}/hunter1", PHRASE))
-	).unwrap();
+	)).unwrap();
 
 
 	let mut t = sp_io::TestExternalities::default();
@@ -241,10 +242,10 @@ fn should_submit_unsigned_transaction_on_chain_for_any_account() {
 
 	let keystore = KeyStore::new();
 
-	keystore.write().sr25519_generate_new(
+	block_on(keystore.write().sr25519_generate_new(
 		crate::crypto::Public::ID,
 		Some(&format!("{}/hunter1", PHRASE))
-	).unwrap();
+	)).unwrap();
 
 	let mut t = sp_io::TestExternalities::default();
 	t.register_extension(OffchainExt::new(offchain));
@@ -253,8 +254,8 @@ fn should_submit_unsigned_transaction_on_chain_for_any_account() {
 
 	price_oracle_response(&mut offchain_state.write());
 
-	let public_key = keystore.read()
-		.sr25519_public_keys(crate::crypto::Public::ID)
+	let public_key = block_on(keystore.read()
+		.sr25519_public_keys(crate::crypto::Public::ID))
 		.get(0)
 		.unwrap()
 		.clone();
@@ -294,10 +295,10 @@ fn should_submit_unsigned_transaction_on_chain_for_all_accounts() {
 
 	let keystore = KeyStore::new();
 
-	keystore.write().sr25519_generate_new(
+	block_on(keystore.write().sr25519_generate_new(
 		crate::crypto::Public::ID,
 		Some(&format!("{}/hunter1", PHRASE))
-	).unwrap();
+	)).unwrap();
 
 	let mut t = sp_io::TestExternalities::default();
 	t.register_extension(OffchainExt::new(offchain));
@@ -306,8 +307,8 @@ fn should_submit_unsigned_transaction_on_chain_for_all_accounts() {
 
 	price_oracle_response(&mut offchain_state.write());
 
-	let public_key = keystore.read()
-		.sr25519_public_keys(crate::crypto::Public::ID)
+	let public_key = block_on(keystore.read()
+		.sr25519_public_keys(crate::crypto::Public::ID))
 		.get(0)
 		.unwrap()
 		.clone();
