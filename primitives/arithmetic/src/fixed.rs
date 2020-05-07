@@ -69,14 +69,14 @@ pub trait FixedPointNumber:
 	fn into_inner(self) -> Self::Inner;
 
 	/// Creates self from an integer number `int`.
-	/// 
+	///
 	/// Returns `Self::max` or `Self::min` if `int` exceeds accuracy.
 	fn saturating_from_integer<N: UniqueSaturatedInto<Self::Inner>>(int: N) -> Self {
 		Self::from_inner(int.unique_saturated_into().saturating_mul(Self::DIV))
 	}
 
 	/// Creates `self` from an integer number `int`.
-	/// 
+	///
 	/// Returns `None` if `int` exceeds accuracy.
 	fn checked_from_integer(int: Self::Inner) -> Option<Self> {
 		int.checked_mul(&Self::DIV).map(|inner| Self::from_inner(inner))
@@ -498,7 +498,7 @@ macro_rules! implement_fixed {
 					.map_err(|_| "invalid string input for fixed point number")?;
 				Ok(Self::from_inner(inner))
 			}
-		} 
+		}
 
 		// Manual impl `Serialize` as serde_json does not support i128.
 		// TODO: remove impl if issue https://github.com/serde-rs/json/issues/548 fixed.
@@ -989,7 +989,7 @@ macro_rules! implement_fixed {
 
 				assert_eq!(d.saturating_mul_int(i8::max_value()), -i8::max_value());
 				assert_eq!(d.saturating_mul_int(i8::min_value()), i8::max_value());
-			} 
+			}
 
 			#[test]
 			fn checked_div_int_works() {
@@ -1180,7 +1180,7 @@ macro_rules! implement_fixed {
 
 				assert_eq!(a.checked_mul(&$name::max_value()), $name::max_value().checked_div(&2.into()));
 				assert_eq!(a.checked_mul(&$name::min_value()), $name::min_value().checked_div(&2.into()));
-			} 
+			}
 
 			#[test]
 			fn trunc_works() {
