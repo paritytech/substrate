@@ -203,6 +203,11 @@ mod weight_for {
 	///
 	/// Based on benchmark:
 	/// 0 + M * 20.47 + N * 0.109 + P * 26.29 µs (min squares analysis)
+	///
+	/// Note: The complexity of `set_members` is quadratic (`O(MP + N)`), so the linear approximation
+	/// of the benchmark is not always permissible. It is here, though, because the linear approximation
+	/// covered the range of possible values and we estimate weight via the worst case (max paramter 
+	/// values) before execution so we can be sure that we are only overestimating.
 	pub(crate) fn set_members<T: Trait<I>, I: Instance>(
 		old_count: Weight,
 		new_count: Weight,
