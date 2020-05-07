@@ -93,6 +93,10 @@ pub trait FixedPointNumber:
 	///
 	/// Returns `None` if `d == 0` or `n / d` exceeds accuracy.
 	fn checked_from_rational<N: FixedPointOperand, D: FixedPointOperand>(n: N, d: D) -> Option<Self> {
+		if d == D::zero() {
+			return None
+		}
+
 		let n: I129 = n.into();
 		let d: I129 = d.into();
 		let negative = n.negative != d.negative;
@@ -543,6 +547,7 @@ macro_rules! implement_fixed {
 		mod $test_mod {
 			use super::*;
 			use crate::{Perbill, Percent, Permill, Perquintill};
+			use quickcheck::{quickcheck};
 
 			fn max() -> $name {
 				$name::max_value()
@@ -1365,6 +1370,69 @@ macro_rules! implement_fixed {
 
 				let frac = $name::saturating_from_rational(-314, 100);
 				assert_eq!(format!("{:?}", frac), format!("{}(-3.{:0<weight$})", stringify!($name), 14, weight=precision()));
+			}
+
+			quickcheck! {
+				fn saturating_mul(n1: i16, d1: i16, n2: i16, d2: i16) -> bool {
+					if d1 == 0 || d2 == 0 {
+						return true
+					}
+					let x1 = $name::saturating_from_rational(n1, d1);
+					let x2 = $name::saturating_from_rational(n2, d2);
+					let a = $name::accuracy() as i128;
+					let l = ((n1 as i128 * a) / d1 as i128) * ((n2 as i128 * a) / d2 as i128) / a;
+					let r = x1.saturating_mul(x2).into_inner() as i128;
+					println!("{} {} {} {} {:?} {:?}", n1, d1, n2, d2, l, r);
+					l == r
+				}
+
+				fn saturating_from_rational(n: i64, d: i64) -> bool {
+					if d == 0 {
+						return true
+					}
+					n as i128 * $name::accuracy() as i128 / d as i128 == $name::saturating_from_rational(n, d).into_inner() as i128
+				}
+
+				fn rational_reciprocal(n: i64, d: i64) -> bool {
+					if n == 0 || d == 0 {
+						return true
+					}
+					let a = ($name::accuracy() / 10000).into();
+					let l = $name::saturating_from_rational(n, d).saturating_mul(a).trunc();
+					let p = $name::saturating_from_rational(d, n);
+					let r = p.reciprocal().unwrap().saturating_mul(a).trunc();
+					println!("{} {} {:?} {:?} {:?}", n, d, l, p, r);
+					l == r
+				}
+
+				fn saturating_abs(x: i64) -> bool {
+					let x = x as i128;
+					let l = $name::from_inner(x.checked_abs().unwrap().unique_saturated_into());
+					let r = $name::from_inner(x.unique_saturated_into()).saturating_abs();
+					println!("{} {:?} {:?}", x, l, r);
+					l == r
+				}
+
+				fn reciprocal(x: i64) -> bool {
+					let x = x as i128;
+					let a = $name::accuracy() as i128;
+					let l = |x| if x == 0  { None } else { Some((a * a) / x) };
+					let l = l(x).map(|x| $name::from_inner(x.unique_saturated_into()));
+					let r = $name::from_inner(x.unique_saturated_into()).reciprocal();
+					println!("{} {:?} {:?}", x, l, r);
+					l == r
+				}
+
+				fn reciprocal_reciprocal(x: i64) -> bool {
+					if x == 0 {
+						return true
+					}
+					let x = x as i128;
+					let l = $name::from_inner(x.unique_saturated_into());
+					let r = l.reciprocal().unwrap().reciprocal().unwrap();
+					println!("{} {:?} {:?}", x, l, r);
+					l == r
+				}
 			}
 		}
 	}
