@@ -466,6 +466,9 @@ mod weight_for {
 	use frame_support::weights::{RuntimeDbWeight, Weight};
 
 	/// Weight calculation for `set_identity`.
+	///
+	/// Based on benchmark:
+	/// 50.64 + R * 0.215 + X * 1.424 µs (min squares analysis)
 	pub(crate) fn set_identity(
 		db: RuntimeDbWeight,
 		judgements: impl Into<Weight>,
@@ -478,6 +481,9 @@ mod weight_for {
 	}
 
 	/// Weight calculation for `set_subs`.
+	///
+	/// Based on benchmark:
+	/// 36.21 + P * 2.481 + S * 3.633 µs (min squares analysis)
 	pub(crate) fn set_subs(
 		db: RuntimeDbWeight,
 		old_subs: impl Into<Weight> + Copy,
@@ -492,6 +498,9 @@ mod weight_for {
 	}
 
 	/// Weight calculation for `clear_identity`.
+	///
+	/// Based on benchmark:
+	/// 43.19 + R * 0.099 + S * 2.547 + X * 0.875 µs (min squares analysis)
 	pub(crate) fn clear_identity(
 		db: RuntimeDbWeight,
 		judgements: impl Into<Weight>,
@@ -506,6 +515,9 @@ mod weight_for {
 	}
 
 	/// Weight calculation for `request_judgement`.
+	///
+	/// Based on benchmark:
+	/// 51.51 + R * 0.32 + X * 1.85 µs (min squares analysis)
 	pub(crate) fn request_judgement(
 		db: RuntimeDbWeight,
 		judgements: impl Into<Weight>,
@@ -518,6 +530,9 @@ mod weight_for {
 	}
 
 	/// Weight calculation for `cancel_request`.
+	///
+	/// Based on benchmark:
+	/// 40.95 + R * 0.219 + X * 1.655 µs (min squares analysis)
 	pub(crate) fn cancel_request(
 		db: RuntimeDbWeight,
 		judgements: impl Into<Weight>,
@@ -530,6 +545,9 @@ mod weight_for {
 	}
 
 	/// Weight calculation for `provide_judgement`.
+	///
+	/// Based on benchmark:
+	/// 40.77 + R * 0.282 + X * 1.66 µs (min squares analysis)
 	pub(crate) fn provide_judgement(
 		db: RuntimeDbWeight,
 		judgements: impl Into<Weight>,
@@ -542,6 +560,9 @@ mod weight_for {
 	}
 
 	/// Weight calculation for `kill_identity`.
+	///
+	/// Based on benchmark:
+	/// 83.96 + R * 0.122 + S * 2.533 + X * 0.867 µs (min squares analysis)
 	pub(crate) fn kill_identity(
 		db: RuntimeDbWeight,
 		judgements: impl Into<Weight>,
@@ -639,7 +660,6 @@ decl_module! {
 		/// - One balance reserve operation.
 		/// - One storage mutation (codec-read `O(X' + R)`, codec-write `O(X + R)`).
 		/// - One event.
-		/// - Benchmark: 50.64 + R * 0.215 + X * 1.424 µs (min squares analysis)
 		/// # </weight>
 		#[weight =  weight_for::set_identity(
 			T::DbWeight::get(),
@@ -702,7 +722,6 @@ decl_module! {
 		///   - One storage read (codec complexity `O(P)`).
 		///   - One storage write (codec complexity `O(S)`).
 		///   - One storage-exists (`IdentityOf::contains_key`).
-		/// - Benchmark: 36.21 + P * 2.481 + S * 3.633 µs (min squares analysis)
 		/// # </weight>
 		#[weight = weight_for::set_subs(
 			T::DbWeight::get(),
@@ -764,7 +783,6 @@ decl_module! {
 		/// - One balance-unreserve operation.
 		/// - `2` storage reads and `S + 2` storage deletions.
 		/// - One event.
-		/// - Benchmark: 43.19 + R * 0.099 + S * 2.547 + X * 0.875 µs (min squares analysis)
 		/// # </weight>
 		#[weight = weight_for::clear_identity(
 			T::DbWeight::get(),
@@ -817,7 +835,6 @@ decl_module! {
 		/// - One balance-reserve operation.
 		/// - Storage: 1 read `O(R)`, 1 mutate `O(X + R)`.
 		/// - One event.
-		/// - Benchmark: 51.51 + R * 0.32 + X * 1.85 µs (min squares analysis)
 		/// # </weight>
 		#[weight = weight_for::request_judgement(
 			T::DbWeight::get(),
@@ -871,8 +888,7 @@ decl_module! {
 		/// - `O(R + X)`.
 		/// - One balance-reserve operation.
 		/// - One storage mutation `O(R + X)`.
-		/// - One event.
-		/// - Benchmark: 40.95 + R * 0.219 + X * 1.655 µs (min squares analysis)
+		/// - One event
 		/// # </weight>
 		#[weight = weight_for::cancel_request(
 			T::DbWeight::get(),
@@ -1024,7 +1040,6 @@ decl_module! {
 		/// - Up to one account-lookup operation.
 		/// - Storage: 1 read `O(R)`, 1 mutate `O(R + X)`.
 		/// - One event.
-		/// - Benchmark: 40.77 + R * 0.282 + X * 1.66 µs (min squares analysis)
 		/// # </weight>
 		#[weight = weight_for::provide_judgement(
 			T::DbWeight::get(),
@@ -1083,7 +1098,6 @@ decl_module! {
 		/// - One balance-reserve operation.
 		/// - `S + 2` storage mutations.
 		/// - One event.
-		/// - Benchmark: 83.96 + R * 0.122 + S * 2.533 + X * 0.867 µs (min squares analysis)
 		/// # </weight>
 		#[weight = weight_for::kill_identity(
 			T::DbWeight::get(),
