@@ -681,6 +681,7 @@ name = "chain-spec-builder"
 version = "2.0.0-rc5"
 dependencies = [
  "ansi_term 0.12.1",
+ "futures 0.3.4",
  "node-cli",
  "rand 0.7.3",
  "sc-chain-spec",
@@ -7602,6 +7603,7 @@ dependencies = [
 name = "sp-application-crypto-test"
 version = "2.0.0-rc5"
 dependencies = [
+ "futures 0.3.4",
  "sp-api",
  "sp-application-crypto",
  "sp-core",

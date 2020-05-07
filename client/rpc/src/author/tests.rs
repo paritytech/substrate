@@ -235,7 +235,7 @@ fn should_insert_key() {
 		key_pair.public().0.to_vec().into(),
 	).expect("Insert key");
 
-	let public_keys = setup.keystore.read().keys(ED25519).unwrap();
+	let public_keys = executor::block_on(setup.keystore.read().keys(ED25519)).unwrap();
 
 	assert!(public_keys.contains(&CryptoTypePublicPair(ed25519::CRYPTO_ID, key_pair.public().to_raw_vec())));
 }
@@ -250,8 +250,8 @@ fn should_rotate_keys() {
 	let session_keys = SessionKeys::decode(&mut &new_public_keys[..])
 		.expect("SessionKeys decode successfully");
 
-	let ed25519_public_keys = setup.keystore.read().keys(ED25519).unwrap();
-	let sr25519_public_keys = setup.keystore.read().keys(SR25519).unwrap();
+	let ed25519_public_keys = executor::block_on(setup.keystore.read().keys(ED25519)).unwrap();
+	let sr25519_public_keys = executor::block_on(setup.keystore.read().keys(SR25519)).unwrap();
 
 	assert!(ed25519_public_keys.contains(&CryptoTypePublicPair(ed25519::CRYPTO_ID, session_keys.ed25519.to_raw_vec())));
 	assert!(sr25519_public_keys.contains(&CryptoTypePublicPair(sr25519::CRYPTO_ID, session_keys.sr25519.to_raw_vec())));

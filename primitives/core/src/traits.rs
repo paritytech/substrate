@@ -99,15 +99,15 @@ pub trait BareCryptoStore: Send + Sync {
 	/// Places it into the file system store.
 	///
 	/// `Err` if there's some sort of weird filesystem error, but should generally be `Ok`.
-	fn insert_unknown(&mut self, _key_type: KeyTypeId, _suri: &str, _public: &[u8]) -> Result<(), ()>;
+	async fn insert_unknown(&mut self, _key_type: KeyTypeId, _suri: &str, _public: &[u8]) -> Result<(), ()>;
 
 	/// Get the password for this store.
-	fn password(&self) -> Option<&str>;
+	async fn password(&self) -> Option<&str>;
 	/// Find intersection between provided keys and supported keys
 	///
 	/// Provided a list of (CryptoTypeId,[u8]) pairs, this would return
 	/// a filtered set of public keys which are supported by the keystore.
-	fn supported_keys(
+	async fn supported_keys(
 		&self,
 		id: KeyTypeId,
 		keys: Vec<CryptoTypePublicPair>
@@ -115,12 +115,12 @@ pub trait BareCryptoStore: Send + Sync {
 	/// List all supported keys
 	///
 	/// Returns a set of public keys the signer supports.
-	fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, Error>;
+	async fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, BareCryptoStoreError>;
 
 	/// Checks if the private keys for the given public key and key type combinations exist.
 	///
 	/// Returns `true` iff all private keys could be found.
-	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool;
+	async fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool;
 
 	/// Sign with key
 	///
@@ -151,7 +151,7 @@ pub trait BareCryptoStore: Send + Sync {
 		if keys.len() == 1 {
 			return self.sign_with(id, &keys[0], msg).await.map(|s| (keys[0].clone(), s));
 		} else {
-			for k in self.supported_keys(id, keys)? {
+			for k in self.supported_keys(id, keys).await? {
 				if let Ok(sign) = self.sign_with(id, &k, msg).await {
 					return Ok((k, sign));
 				}

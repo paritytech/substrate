@@ -303,7 +303,7 @@ impl Store {
 
 #[async_trait]
 impl BareCryptoStore for Store {
-	fn keys(
+	async fn keys(
 		&self,
 		id: KeyTypeId
 	) -> std::result::Result<Vec<CryptoTypePublicPair>, TraitError> {
@@ -317,12 +317,14 @@ impl BareCryptoStore for Store {
 			}))
 	}
 
-	fn supported_keys(
+	async fn supported_keys(
 		&self,
 		id: KeyTypeId,
 		keys: Vec<CryptoTypePublicPair>
 	) -> std::result::Result<Vec<CryptoTypePublicPair>, TraitError> {
-		let all_keys = self.keys(id)?.into_iter().collect::<HashSet<_>>();
+		let all_keys = self.keys(id).await?
+			.into_iter()
+			.collect::<HashSet<_>>();
 		Ok(keys.into_iter()
 		   .filter(|key| all_keys.contains(key))
 		   .collect::<Vec<_>>())
@@ -429,19 +431,19 @@ impl BareCryptoStore for Store {
 		Ok(pair.public())
 	}
 
-	fn insert_unknown(&mut self, key_type: KeyTypeId, suri: &str, public: &[u8])
+	async fn insert_unknown(&mut self, key_type: KeyTypeId, suri: &str, public: &[u8])
 		-> std::result::Result<(), ()>
 	{
 		Store::insert_unknown(self, key_type, suri, public).map_err(|_| ())
 	}
 
-	fn password(&self) -> Option<&str> {
+	async fn password(&self) -> Option<&str> {
 		self.password.as_ref()
 			.map(|p| p.expose_secret())
 			.map(|p| p.as_str())
 	}
 
-	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
+	async fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
 		public_keys.iter().all(|(p, t)| self.key_phrase_by_type(&p, *t).is_ok())
 	}
 

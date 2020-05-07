@@ -17,7 +17,7 @@
 
 //! Integration tests for sr25519
 
-
+use futures::executor::block_on;
 use sp_runtime::generic::BlockId;
 use sp_core::{
 	crypto::Pair,
@@ -38,7 +38,7 @@ fn sr25519_works_in_runtime() {
 		.test_sr25519_crypto(&BlockId::Number(0))
 		.expect("Tests `sr25519` crypto.");
 
-	let supported_keys = keystore.read().keys(SR25519).unwrap();
+	let supported_keys = block_on(keystore.read().keys(SR25519)).unwrap();
 	assert!(supported_keys.contains(&public.clone().into()));
 	assert!(AppPair::verify(&signature, "sr25519", &AppPublic::from(public)));
 }

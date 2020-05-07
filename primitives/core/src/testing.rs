@@ -81,7 +81,7 @@ impl KeyStore {
 #[cfg(feature = "std")]
 #[async_trait]
 impl crate::traits::BareCryptoStore for KeyStore {
-	fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, Error> {
+	async fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, BareCryptoStoreError> {
 		self.keys
 			.get(&id)
 			.map(|map| {
@@ -189,26 +189,26 @@ impl crate::traits::BareCryptoStore for KeyStore {
 		}
 	}
 
-	fn insert_unknown(&mut self, id: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {
+	async fn insert_unknown(&mut self, id: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {
 		self.keys.entry(id).or_default().insert(public.to_owned(), suri.to_string());
 		Ok(())
 	}
 
-	fn password(&self) -> Option<&str> {
+	async fn password(&self) -> Option<&str> {
 		None
 	}
 
-	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
+	async fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
 		public_keys.iter().all(|(k, t)| self.keys.get(&t).and_then(|s| s.get(k)).is_some())
 	}
 
-	fn supported_keys(
+	async fn supported_keys(
 		&self,
 		id: KeyTypeId,
 		keys: Vec<CryptoTypePublicPair>,
 	) -> std::result::Result<Vec<CryptoTypePublicPair>, Error> {
 		let provided_keys = keys.into_iter().collect::<HashSet<_>>();
-		let all_keys = self.keys(id)?.into_iter().collect::<HashSet<_>>();
+		let all_keys = self.keys(id).await?.into_iter().collect::<HashSet<_>>();
 
 		Ok(provided_keys.intersection(&all_keys).cloned().collect())
 	}
@@ -404,7 +404,7 @@ mod tests {
 		let public = block_on(store.write().ed25519_generate_new(ED25519, None))
 			.expect("Generates key");
 
-		let public_keys = store.read().keys(ED25519).unwrap();
+		let public_keys = block_on(store.read().keys(ED25519)).unwrap();
 
 		assert!(public_keys.contains(&public.into()));
 	}
@@ -416,13 +416,13 @@ mod tests {
 		let secret_uri = "//Alice";
 		let key_pair = sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");
 
-		store.write().insert_unknown(
+		block_on(store.write().insert_unknown(
 			SR25519,
 			secret_uri,
 			key_pair.public().as_ref(),
-		).expect("Inserts unknown key");
+		)).expect("Inserts unknown key");
 
-		let public_keys = store.read().keys(SR25519).unwrap();
+		let public_keys = block_on(store.read().keys(SR25519)).unwrap();
 
 		assert!(public_keys.contains(&key_pair.public().into()));
 	}

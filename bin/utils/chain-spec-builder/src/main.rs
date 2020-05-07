@@ -17,8 +17,8 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use std::{fs, path::{Path, PathBuf}};
-
 use ansi_term::Style;
+use futures::executor::block_on;
 use rand::{Rng, distributions::Alphanumeric, rngs::OsRng};
 use structopt::StructOpt;
 
@@ -148,11 +148,11 @@ fn generate_authority_keys_and_store(
 			chain_spec::authority_keys_from_seed(seed);
 
 		let insert_key = |key_type, public| {
-			keystore.write().insert_unknown(
+			block_on(keystore.write().insert_unknown(
 				key_type,
 				&format!("//{}", seed),
 				public,
-			).map_err(|_| format!("Failed to insert key: {}", grandpa))
+			)).map_err(|_| format!("Failed to insert key: {}", grandpa))
 		};
 
 		insert_key(
