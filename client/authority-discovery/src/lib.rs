@@ -453,8 +453,8 @@ where
 		key_store: &BareCryptoStorePtr,
 		client: &Client,
 	) -> Result<HashSet<AuthorityId>> {
-		let local_pub_keys = key_store.read()
-			.sr25519_public_keys(key_types::AUTHORITY_DISCOVERY)
+		let key_store = key_store.read();
+		let local_pub_keys = block_on(key_store.sr25519_public_keys(key_types::AUTHORITY_DISCOVERY))
 			.into_iter()
 			.collect::<HashSet<_>>();
 

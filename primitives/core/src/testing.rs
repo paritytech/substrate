@@ -25,8 +25,8 @@ use crate::{
 };
 #[cfg(feature = "std")]
 use std::collections::HashSet;
+
 use async_trait::async_trait;
-use codec::Encode;
 
 /// Key type for generic Ed25519 key.
 pub const ED25519: KeyTypeId = KeyTypeId(*b"ed25");
@@ -83,7 +83,7 @@ impl crate::traits::BareCryptoStore for KeyStore {
 			.unwrap_or(Ok(vec![]))
 	}
 
-	fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public> {
+	async fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public> {
 		self.keys.get(&id)
 			.map(|keys|
 				keys.values()
@@ -94,7 +94,7 @@ impl crate::traits::BareCryptoStore for KeyStore {
 			.unwrap_or_default()
 	}
 
-	fn sr25519_generate_new(
+	async fn sr25519_generate_new(
 		&mut self,
 		id: KeyTypeId,
 		seed: Option<&str>,
@@ -114,7 +114,7 @@ impl crate::traits::BareCryptoStore for KeyStore {
 		}
 	}
 
-	fn ed25519_public_keys(&self, id: KeyTypeId) -> Vec<ed25519::Public> {
+	async fn ed25519_public_keys(&self, id: KeyTypeId) -> Vec<ed25519::Public> {
 		self.keys.get(&id)
 			.map(|keys|
 				keys.values()
@@ -125,7 +125,7 @@ impl crate::traits::BareCryptoStore for KeyStore {
 			.unwrap_or_default()
 	}
 
-	fn ed25519_generate_new(
+	async fn ed25519_generate_new(
 		&mut self,
 		id: KeyTypeId,
 		seed: Option<&str>,
@@ -324,13 +324,13 @@ mod tests {
 	use super::*;
 	use crate::sr25519;
 	use crate::testing::{ED25519, SR25519};
+	use futures::executor::block_on;
 
 	#[test]
 	fn store_key_and_extract() {
 		let store = KeyStore::new();
 
-		let public = store.write()
-			.ed25519_generate_new(ED25519, None)
+		let public = block_on(store.write().ed25519_generate_new(ED25519, None))
 			.expect("Generates key");
 
 		let public_keys = store.read().keys(ED25519).unwrap();
