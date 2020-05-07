@@ -765,7 +765,8 @@ decl_module! {
 		/// - Db reads: `NextExternal`, `Blacklist`
 		/// - Db writes: `NextExternal`
 		/// # </weight>
-		#[weight = 15_000_000]
+		#[weight = 15_000_000 + 110_000 * Weight::from(T::MaxVetoers::get())
+		+ T::DbWeight::get().reads_writes(2, 1)]
 		fn external_propose(origin, proposal_hash: T::Hash) {
 			T::ExternalOrigin::ensure_origin(origin)?;
 			ensure!(!<NextExternal<T>>::exists(), Error::<T>::DuplicateProposal);
@@ -1451,7 +1452,14 @@ impl<T: Trait> Module<T> {
 	) -> Vec<(ReferendumIndex, ReferendumStatus<T::BlockNumber, T::Hash, BalanceOf<T>>)> {
 		let next = Self::lowest_unbaked();
 		let last = Self::referendum_count();
-		(next..last).into_iter()
+		Self::maturing_referenda_at_inner(n, next..last)
+	}
+
+	fn maturing_referenda_at_inner(
+		n: T::BlockNumber,
+		range: core::ops::Range<PropIndex>,
+	) -> Vec<(ReferendumIndex, ReferendumStatus<T::BlockNumber, T::Hash, BalanceOf<T>>)> {
+		range.into_iter()
 			.map(|i| (i, Self::referendum_info(i)))
 			.filter_map(|(i, maybe_info)| match maybe_info {
 				Some(ReferendumInfo::Ongoing(status)) => Some((i, status)),
@@ -1869,9 +1877,18 @@ impl<T: Trait> Module<T> {
 
 	/// Current era is ending; we should finish up any proposals.
 	///
-	/// If a referendum is launched or maturing take full block weight.
+	///
+	/// # <weight>
+	/// If a referendum is launched or maturing take full block weight. Otherwise:
+	/// - Complexity: `O(R)` where `R` is the number of unbaked referenda.
+	/// - Db reads: `LastTabledWasExternal`, `NextExternal`, `PublicProps`, `account`,
+	///   `ReferendumCount`, `LowestUnbaked`
+	/// - Db writes: `PublicProps`, `account`, `ReferendumCount`, `DepositOf`, `ReferendumInfoOf`
+	/// - Db reads per R: `DepositOf`, `ReferendumInfoOf`
+	/// # </weight>
 	fn begin_block(now: T::BlockNumber) -> Result<Weight, DispatchError> {
-		let mut weight = 0;
+		let mut weight = 60_000_000 + T::DbWeight::get().reads_writes(6, 5);
+
 		// pick out another public referendum if it's time.
 		if (now % T::LaunchPeriod::get()).is_zero() {
 			// Errors come from the queue being empty. we don't really care about that, and even if
@@ -1881,7 +1898,11 @@ impl<T: Trait> Module<T> {
 		}
 
 		// tally up votes for any expiring referenda.
-		for (index, info) in Self::maturing_referenda_at(now).into_iter() {
+		let next = Self::lowest_unbaked();
+		let last = Self::referendum_count();
+		let r = Weight::from(last.saturating_sub(next));
+		weight += 11_000_000 * r + T::DbWeight::get().reads(2 * r);
+		for (index, info) in Self::maturing_referenda_at_inner(now, next..last).into_iter() {
 			let approved = Self::bake_referendum(now, index, info)?;
 			ReferendumInfoOf::<T>::insert(index, ReferendumInfo::Finished { end: now, approved });
 			weight = T::MaximumBlockWeight::get();
