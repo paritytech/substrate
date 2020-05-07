@@ -58,32 +58,13 @@ use sc_client_api::{ChangesProof, StorageProof};
 use util::LruHashSet;
 use wasm_timer::Instant;
 
-// Include sources generated from protobuf definitions.
-pub mod api {
-	pub mod v1 {
-		include!(concat!(env!("OUT_DIR"), "/api.v1.rs"));
-		pub mod finality {
-			include!(concat!(env!("OUT_DIR"), "/api.v1.finality.rs"));
-		}
-		pub mod light {
-			include!(concat!(env!("OUT_DIR"), "/api.v1.light.rs"));
-		}
-	}
-}
-
 mod generic_proto;
 mod util;
 
-pub mod block_requests;
-pub mod finality_requests;
 pub mod message;
 pub mod event;
-pub mod light_client_handler;
 pub mod sync;
 
-pub use block_requests::BlockRequests;
-pub use finality_requests::FinalityProofRequests;
-pub use light_client_handler::LightClientHandler;
 pub use generic_proto::LegacyConnectionKillError;
 
 const REQUEST_TIMEOUT_SEC: u64 = 40;
@@ -770,7 +751,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 				None
 			};
 			let block_data = message::generic::BlockData {
-				hash: hash,
+				hash,
 				header: if get_header { Some(header) } else { None },
 				body: if get_body {
 					self.context_data
@@ -802,7 +783,7 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		}
 		let response = message::generic::BlockResponse {
 			id: request.id,
-			blocks: blocks,
+			blocks,
 		};
 		trace!(target: "sync", "Sending BlockResponse with {} blocks", response.blocks.len());
 		self.send_message(&peer, None, GenericMessage::BlockResponse(response))
@@ -1965,7 +1946,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 					target: id,
 					request: r,
 				};
-				return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event));
+				self.pending_messages.push_back(event);
 			} else {
 				send_request(
 					&mut self.behaviour,
@@ -1982,7 +1963,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 					target: id,
 					request: r,
 				};
-				return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event));
+				self.pending_messages.push_back(event);
 			} else {
 				send_request(
 					&mut self.behaviour,
@@ -2000,7 +1981,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 					block_hash: r.block,
 					request: r.request,
 				};
-				return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event));
+				self.pending_messages.push_back(event);
 			} else {
 				send_request(
 					&mut self.behaviour,
@@ -2009,6 +1990,9 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviour for Protocol<B, H> {
 					&id,
 					GenericMessage::FinalityProofRequest(r))
 			}
+		}
+		if let Some(message) = self.pending_messages.pop_front() {
+			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(message));
 		}
 
 		let event = match self.behaviour.poll(cx, params) {

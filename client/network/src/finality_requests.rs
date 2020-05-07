@@ -27,7 +27,8 @@ use codec::{Encode, Decode};
 use crate::{
 	chain::FinalityProofProvider,
 	config::ProtocolId,
-	protocol::{api, message}
+	protocol::message,
+	schema,
 };
 use futures::{future::BoxFuture, prelude::*, stream::FuturesUnordered};
 use libp2p::{
@@ -169,7 +170,7 @@ where
 	/// If the response doesn't arrive in time, or if the remote answers improperly, the target
 	/// will be disconnected.
 	pub fn send_request(&mut self, target: &PeerId, block_hash: B::Hash, request: Vec<u8>) {
-		let protobuf_rq = api::v1::finality::FinalityProofRequest {
+		let protobuf_rq = schema::v1::finality::FinalityProofRequest {
 			block_hash: block_hash.encode(),
 			request,
 		};
@@ -194,8 +195,8 @@ where
 	}
 
 	/// Callback, invoked when a new finality request has been received from remote.
-	fn on_finality_request(&mut self, peer: &PeerId, request: &api::v1::finality::FinalityProofRequest)
-		-> Result<api::v1::finality::FinalityProofResponse, Error>
+	fn on_finality_request(&mut self, peer: &PeerId, request: &schema::v1::finality::FinalityProofRequest)
+		-> Result<schema::v1::finality::FinalityProofResponse, Error>
 	{
 		let block_hash = Decode::decode(&mut request.block_hash.as_ref())?;
 
@@ -211,7 +212,7 @@ where
 			return Err(From::from("Empty finality proof provider".to_string()))
 		};
 
-		Ok(api::v1::finality::FinalityProofResponse { proof: finality_proof })
+		Ok(schema::v1::finality::FinalityProofResponse { proof: finality_proof })
 	}
 }
 
@@ -300,9 +301,9 @@ where
 #[derive(Debug)]
 pub enum NodeEvent<B: Block, T> {
 	/// Incoming request from remote and substream to use for the response.
-	Request(api::v1::finality::FinalityProofRequest, T),
+	Request(schema::v1::finality::FinalityProofRequest, T),
 	/// Incoming response from remote.
-	Response(api::v1::finality::FinalityProofResponse, B::Hash),
+	Response(schema::v1::finality::FinalityProofResponse, B::Hash),
 }
 
 /// Substream upgrade protocol.
@@ -346,7 +347,7 @@ where
 		async move {
 			let len = self.max_request_len;
 			let vec = read_one(&mut s, len).await?;
-			match api::v1::finality::FinalityProofRequest::decode(&vec[..]) {
+			match schema::v1::finality::FinalityProofRequest::decode(&vec[..]) {
 				Ok(r) => Ok(NodeEvent::Request(r, s)),
 				Err(e) => Err(ReadOneError::Io(io::Error::new(io::ErrorKind::Other, e)))
 			}
@@ -392,7 +393,7 @@ where
 			write_one(&mut s, &self.request).await?;
 			let vec = read_one(&mut s, self.max_response_size).await?;
 
-			api::v1::finality::FinalityProofResponse::decode(&vec[..])
+			schema::v1::finality::FinalityProofResponse::decode(&vec[..])
 				.map(|r| NodeEvent::Response(r, self.block_hash))
 				.map_err(|e| {
 					ReadOneError::Io(io::Error::new(io::ErrorKind::Other, e))

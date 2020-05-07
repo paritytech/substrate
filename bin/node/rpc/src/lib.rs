@@ -31,7 +31,7 @@
 
 use std::{sync::Arc, fmt};
 
-use node_primitives::{Block, BlockNumber, AccountId, Index, Balance};
+use node_primitives::{Block, BlockNumber, AccountId, Index, Balance, Hash};
 use node_runtime::UncheckedExtrinsic;
 use sp_api::ProvideRuntimeApi;
 use sp_transaction_pool::TransactionPool;
@@ -42,7 +42,8 @@ use sp_consensus_babe::BabeApi;
 use sc_consensus_epochs::SharedEpochChanges;
 use sc_consensus_babe::{Config, Epoch};
 use sc_consensus_babe_rpc::BabeRPCHandler;
-use sc_finality_grandpa::GrandpaJustificationReceiver;
+use sc_finality_grandpa::{SharedVoterState, SharedAuthoritySet, GrandpaJustificationReceiver;};
+use sc_finality_grandpa_rpc::GrandpaRpcHandler;
 
 /// Light client extra dependencies.
 pub struct LightDeps<C, F, P> {
@@ -66,8 +67,12 @@ pub struct BabeDeps {
 	pub keystore: KeyStorePtr,
 }
 
-/// Extra dependencies for GRANDPA.
+/// Extra dependencies for GRANDPA
 pub struct GrandpaDeps {
+	/// Voting round info.
+	pub shared_voter_state: SharedVoterState,
+	/// Authority set info.
+	pub shared_authority_set: SharedAuthoritySet<Hash, BlockNumber>,
 	/// Receives notifications about justification events from Grandpa.
 	pub justification_receiver: GrandpaJustificationReceiver<Block>,
 }
@@ -111,7 +116,8 @@ pub fn create_full<C, P, M, SC>(
 		client,
 		pool,
 		select_chain,
-		babe
+		babe,
+		grandpa,
 	} = deps;
 
 	let BabeDeps {
@@ -119,6 +125,10 @@ pub fn create_full<C, P, M, SC>(
 		babe_config,
 		shared_epoch_changes,
 	} = babe;
+	let GrandpaDeps {
+		shared_voter_state,
+		shared_authority_set,
+	} = grandpa;
 
 	let GrandpaDeps { justification_receiver } = grandpa;
 
@@ -139,7 +149,11 @@ pub fn create_full<C, P, M, SC>(
 			BabeRPCHandler::new(client, shared_epoch_changes, keystore, babe_config, select_chain)
 		)
 	);
-	io.extend_with(todo!());
+	io.extend_with(
+		sc_finality_grandpa_rpc::GrandpaApi::to_delegate(
+			GrandpaRpcHandler::new(shared_authority_set, shared_voter_state)
+		)
+	);
 
 	io
 }

@@ -17,8 +17,9 @@
 //! Stuff to do with the runtime's storage.
 
 use sp_std::{prelude::*, marker::PhantomData};
-use codec::{FullCodec, FullEncode, Encode, EncodeAppend, EncodeLike, Decode};
+use codec::{FullCodec, FullEncode, Encode, EncodeLike, Decode};
 use crate::{traits::Len, hash::{Twox128, StorageHasher}};
+use sp_runtime::generic::{Digest, DigestItem};
 
 pub mod unhashed;
 pub mod hashed;
@@ -91,33 +92,18 @@ pub trait StorageValue<T: FullCodec> {
 
 	/// Append the given item to the value in the storage.
 	///
-	/// `T` is required to implement `codec::EncodeAppend`.
-	fn append<Items, Item, EncodeLikeItem>(items: Items) -> Result<(), &'static str>
+	/// `T` is required to implement [`StorageAppend`].
+	///
+	/// # Warning
+	///
+	/// If the storage item is not encoded properly, the storage item will be overwritten
+	/// and set to `[item]`. Any default value set for the storage item will be ignored
+	/// on overwrite.
+	fn append<Item, EncodeLikeItem>(item: EncodeLikeItem)
 	where
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
-		T: EncodeAppend<Item=Item>,
-		Items: IntoIterator<Item=EncodeLikeItem>,
-		Items::IntoIter: ExactSizeIterator;
-
-	/// Append the given items to the value in the storage.
-	///
-	/// `T` is required to implement `Codec::EncodeAppend`.
-	///
-	/// Upon any failure, it replaces `items` as the new value (assuming that the previous stored
-	/// data is simply corrupt and no longer usable).
-	///
-	/// ### WARNING
-	///
-	/// use with care; if your use-case is not _exactly_ as what this function is doing,
-	/// you should use append and sensibly handle failure within the runtime code if it happens.
-	fn append_or_put<Items, Item, EncodeLikeItem>(items: Items) where
-		Item: Encode,
-		EncodeLikeItem: EncodeLike<Item>,
-		T: EncodeAppend<Item=Item>,
-		Items: IntoIterator<Item=EncodeLikeItem> + Clone + EncodeLike<T>,
-		Items::IntoIter: ExactSizeIterator;
-
+		T: StorageAppend<Item>;
 
 	/// Read the length of the value in a fast way, without decoding the entire value.
 	///
@@ -176,25 +162,18 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	/// Append the given items to the value in the storage.
 	///
 	/// `V` is required to implement `codec::EncodeAppend`.
-	fn append<Items, Item, EncodeLikeItem, KeyArg>(key: KeyArg, items: Items) -> Result<(), &'static str> where
-		KeyArg: EncodeLike<K>,
-		Item: Encode,
-		EncodeLikeItem: EncodeLike<Item>,
-		V: EncodeAppend<Item=Item>,
-		Items: IntoIterator<Item=EncodeLikeItem>,
-		Items::IntoIter: ExactSizeIterator;
-
-	/// Safely append the given items to the value in the storage. If a codec error occurs, then the
-	/// old (presumably corrupt) value is replaced with the given `items`.
 	///
-	/// `V` is required to implement `codec::EncodeAppend`.
-	fn append_or_insert<Items, Item, EncodeLikeItem, KeyArg>(key: KeyArg, items: Items) where
-		KeyArg: EncodeLike<K>,
+	/// # Warning
+	///
+	/// If the storage item is not encoded properly, the storage will be overwritten
+	/// and set to `[item]`. Any default value set for the storage item will be ignored
+	/// on overwrite.
+	fn append<Item, EncodeLikeItem, EncodeLikeKey>(key: EncodeLikeKey, item: EncodeLikeItem)
+	where
+		EncodeLikeKey: EncodeLike<K>,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
-		V: EncodeAppend<Item=Item>,
-		Items: IntoIterator<Item=EncodeLikeItem> + Clone + EncodeLike<V>,
-		Items::IntoIter: ExactSizeIterator;
+		V: StorageAppend<Item>;
 
 	/// Read the length of the value in a fast way, without decoding the entire value.
 	///
@@ -351,38 +330,23 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 
 	/// Append the given item to the value in the storage.
 	///
-	/// `V` is required to implement `codec::EncodeAppend`.
-	fn append<Items, Item, EncodeLikeItem, KArg1, KArg2>(
-		k1: KArg1,
-		k2: KArg2,
-		items: Items,
-	) -> Result<(), &'static str>
-	where
-		KArg1: EncodeLike<K1>,
-		KArg2: EncodeLike<K2>,
-		Item: Encode,
-		EncodeLikeItem: EncodeLike<Item>,
-		V: EncodeAppend<Item=Item>,
-		Items: IntoIterator<Item=EncodeLikeItem>,
-		Items::IntoIter: ExactSizeIterator;
-
-	/// Safely append the given items to the value in the storage. If a codec error occurs, then the
-	/// old (presumably corrupt) value is replaced with the given `items`.
+	/// `V` is required to implement [`StorageAppend`].
 	///
-	/// `V` is required to implement `codec::EncodeAppend`.
-	fn append_or_insert<Items, Item, EncodeLikeItem, KArg1, KArg2>(
+	/// # Warning
+	///
+	/// If the storage item is not encoded properly, the storage will be overwritten
+	/// and set to `[item]`. Any default value set for the storage item will be ignored
+	/// on overwrite.
+	fn append<Item, EncodeLikeItem, KArg1, KArg2>(
 		k1: KArg1,
 		k2: KArg2,
-		items: Items,
-	)
-	where
+		item: EncodeLikeItem,
+	) where
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
-		V: EncodeAppend<Item=Item>,
-		Items: IntoIterator<Item=EncodeLikeItem> + Clone + EncodeLike<V>,
-		Items::IntoIter: ExactSizeIterator;
+		V: StorageAppend<Item>;
 
 	/// Read the length of the value in a fast way, without decoding the entire value.
 	///
@@ -449,7 +413,6 @@ impl<Value: Decode> Iterator for PrefixIterator<Value> {
 /// Twox128(module_prefix) ++ Twox128(storage_prefix)
 /// ```
 pub trait StoragePrefixedMap<Value: FullCodec> {
-
 	/// Module prefix. Used for generating final key.
 	fn module_prefix() -> &'static [u8];
 
@@ -525,11 +488,34 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 	}
 }
 
+/// Marker trait that will be implemented for types that support the `storage::append` api.
+///
+/// This trait is sealed.
+pub trait StorageAppend<Item: Encode>: private::Sealed {}
+
+/// Provides `Sealed` trait to prevent implementing trait `StorageAppend` outside of this crate.
+mod private {
+	use super::*;
+
+	pub trait Sealed {}
+
+	impl<T: Encode> Sealed for Vec<T> {}
+	impl<Hash: Encode> Sealed for Digest<Hash> {}
+}
+
+impl<T: Encode> StorageAppend<T> for Vec<T> {}
+
+/// We abuse the fact that SCALE does not put any marker into the encoding, i.e.
+/// we only encode the internal vec and we can append to this vec. We have a test that ensures
+/// that if the `Digest` format ever changes, we need to remove this here.
+impl<Hash: Encode> StorageAppend<DigestItem<Hash>> for Digest<Hash> {}
+
 #[cfg(test)]
 mod test {
+	use super::*;
 	use sp_core::hashing::twox_128;
 	use sp_io::TestExternalities;
-	use crate::storage::{unhashed, StoragePrefixedMap};
+	use generator::StorageValue as _;
 
 	#[test]
 	fn prefixed_map_works() {
@@ -602,6 +588,43 @@ mod test {
 			// test that other values are not modified.
 			assert_eq!(unhashed::get(&key_before[..]), Some(32u64));
 			assert_eq!(unhashed::get(&key_after[..]), Some(33u64));
+		});
+	}
+
+	// This test ensures that the Digest encoding does not change without being noticied.
+	#[test]
+	fn digest_storage_append_works_as_expected() {
+		TestExternalities::default().execute_with(|| {
+			struct Storage;
+			impl generator::StorageValue<Digest<u32>> for Storage {
+				type Query = Digest<u32>;
+
+				fn module_prefix() -> &'static [u8] {
+					b"MyModule"
+				}
+
+				fn storage_prefix() -> &'static [u8] {
+					b"Storage"
+				}
+
+				fn from_optional_value_to_query(v: Option<Digest<u32>>) -> Self::Query {
+					v.unwrap()
+				}
+
+				fn from_query_to_optional_value(v: Self::Query) -> Option<Digest<u32>> {
+					Some(v)
+				}
+			}
+
+			Storage::append(DigestItem::ChangesTrieRoot(1));
+			Storage::append(DigestItem::Other(Vec::new()));
+
+			let value = unhashed::get_raw(&Storage::storage_value_final_key()).unwrap();
+
+			let expected = Digest {
+				logs: vec![DigestItem::ChangesTrieRoot(1), DigestItem::Other(Vec::new())],
+			};
+			assert_eq!(Digest::decode(&mut &value[..]).unwrap(), expected);
 		});
 	}
 }

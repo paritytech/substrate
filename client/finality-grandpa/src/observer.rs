@@ -176,6 +176,7 @@ where
 		select_chain: _,
 		persistent_data,
 		voter_commands_rx,
+		..
 	} = link;
 
 	let network = NetworkBridge::new(
@@ -410,11 +411,13 @@ mod tests {
 			(Arc::new(client), backend)
 		};
 
+		let voters = vec![(sp_keyring::Ed25519Keyring::Alice.public().into(), 1)];
+
 		let persistent_data = aux_schema::load_persistent(
 			&*backend,
 			client.info().genesis_hash,
 			0,
-			|| Ok(vec![]),
+			|| Ok(voters),
 		).unwrap();
 
 		let (_tx, voter_command_rx) = tracing_unbounded("");

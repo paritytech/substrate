@@ -119,6 +119,7 @@ use serde::{Serialize, de::DeserializeOwned};
 use sp_runtime::BuildStorage;
 use sc_network::config::MultiaddrWithPeerId;
 use sc_telemetry::TelemetryEndpoints;
+use sp_core::storage::Storage;
 
 /// A set of traits for the runtime genesis config.
 pub trait RuntimeGenesis: Serialize + DeserializeOwned + BuildStorage {}
@@ -150,4 +151,10 @@ pub trait ChainSpec: BuildStorage + Send {
 	fn as_json(&self, raw: bool) -> Result<String, String>;
 	/// Return StorageBuilder for this spec.
 	fn as_storage_builder(&self) -> &dyn BuildStorage;
+	/// Returns a cloned `Box<dyn ChainSpec>`.
+	fn cloned_box(&self) -> Box<dyn ChainSpec>;
+	/// Set the storage that should be used by this chain spec.
+	///
+	/// This will be used as storage at genesis.
+	fn set_storage(&mut self, storage: Storage);
 }

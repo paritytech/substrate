@@ -173,7 +173,7 @@ fn generate_wasm_interface(impls: &[ItemImpl]) -> Result<TokenStream> {
 				#( #attrs )*
 				#[cfg(not(feature = "std"))]
 				#[no_mangle]
-				pub fn #fn_name(input_data: *mut u8, input_len: usize) -> u64 {
+				pub unsafe fn #fn_name(input_data: *mut u8, input_len: usize) -> u64 {
 					let mut #input = if input_len == 0 {
 						&[0u8; 0]
 					} else {

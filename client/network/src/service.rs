@@ -35,7 +35,8 @@ use crate::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
 	},
 	on_demand_layer::AlwaysBadChecker,
-	protocol::{self, event::Event, light_client_handler, LegacyConnectionKillError, sync::SyncState, PeerInfo, Protocol},
+	light_client_handler, block_requests, finality_requests,
+	protocol::{self, event::Event, LegacyConnectionKillError, sync::SyncState, PeerInfo, Protocol},
 	transport, ReputationChange,
 };
 use futures::prelude::*;
@@ -223,16 +224,16 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkWorker<B, H> {
 				params.network_config.node_name
 			);
 			let block_requests = {
-				let config = protocol::block_requests::Config::new(&params.protocol_id);
-				protocol::BlockRequests::new(config, params.chain.clone())
+				let config = block_requests::Config::new(&params.protocol_id);
+				block_requests::BlockRequests::new(config, params.chain.clone())
 			};
 			let finality_proof_requests = {
-				let config = protocol::finality_requests::Config::new(&params.protocol_id);
-				protocol::FinalityProofRequests::new(config, params.finality_proof_provider.clone())
+				let config = finality_requests::Config::new(&params.protocol_id);
+				finality_requests::FinalityProofRequests::new(config, params.finality_proof_provider.clone())
 			};
 			let light_client_handler = {
-				let config = protocol::light_client_handler::Config::new(&params.protocol_id);
-				protocol::LightClientHandler::new(
+				let config = light_client_handler::Config::new(&params.protocol_id);
+				light_client_handler::LightClientHandler::new(
 					config,
 					params.chain,
 					checker,

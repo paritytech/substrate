@@ -23,9 +23,10 @@ mod tempdb;
 mod state_sizes;
 
 use crate::core::{run_benchmark, Mode as BenchmarkMode};
+use crate::tempdb::DatabaseType;
 use import::{ImportBenchmarkDescription, SizeType};
 use trie::{TrieReadBenchmarkDescription, TrieWriteBenchmarkDescription, DatabaseSize};
-use node_testing::bench::{Profile, KeyTypes};
+use node_testing::bench::{Profile, KeyTypes, BlockType};
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -48,9 +49,13 @@ struct Opt {
 	/// Run with `--list` for the hint of what to filter.
 	filter: Option<String>,
 
+	/// Number of transactions for block import with `custom` size.
+	#[structopt(long)]
+	transactions: Option<usize>,
+
 	/// Mode
 	///
-	/// "regular" for regular becnhmark
+	/// "regular" for regular benchmark
 	///
 	/// "profile" mode adds pauses between measurable runs,
 	/// so that actual interval can be selected in the profiler of choice.
@@ -65,44 +70,63 @@ fn main() {
 		sc_cli::init_logger("");
 	}
 
+	let mut import_benchmarks = Vec::new();
+
+	for profile in [Profile::Wasm, Profile::Native].iter() {
+		for size in [
+			SizeType::Empty,
+			SizeType::Small,
+			SizeType::Medium,
+			SizeType::Large,
+			SizeType::Full,
+			SizeType::Custom,
+		].iter() {
+			let txs = match size {
+				SizeType::Custom => opt.transactions.unwrap_or(0),
+				_ => size.transactions()
+			};
+			for block_type in [
+				BlockType::RandomTransfersKeepAlive(txs),
+				BlockType::RandomTransfersReaping(txs),
+				BlockType::Noop(txs),
+			].iter() {
+				import_benchmarks.push((profile.clone(), size.clone(), block_type.clone()));
+			}
+		}
+	}
+
 	let benchmarks = matrix!(
-		profile in [Profile::Wasm, Profile::Native] =>
+		(profile, size, block_type) in import_benchmarks.iter() =>
 			ImportBenchmarkDescription {
 				profile: *profile,
 				key_types: KeyTypes::Sr25519,
-				size: SizeType::Medium,
-			},
-		ImportBenchmarkDescription {
-			profile: Profile::Native,
-			key_types: KeyTypes::Ed25519,
-			size: SizeType::Medium,
-		},
-		ImportBenchmarkDescription {
-			profile: Profile::Wasm,
-			key_types: KeyTypes::Sr25519,
-			size: SizeType::Full,
-		},
-		ImportBenchmarkDescription {
-			profile: Profile::Native,
-			key_types: KeyTypes::Sr25519,
-			size: SizeType::Full,
-		},
-		size in [SizeType::Small, SizeType::Large] =>
-			ImportBenchmarkDescription {
-				profile: Profile::Native,
-				key_types: KeyTypes::Sr25519,
 				size: *size,
+				block_type: *block_type,
 			},
-		size in [
-			DatabaseSize::Empty, DatabaseSize::Smallest, DatabaseSize::Small,
-			DatabaseSize::Medium, DatabaseSize::Large, DatabaseSize::Huge,
-		] => TrieReadBenchmarkDescription { database_size: *size },
-		size in [
-			DatabaseSize::Empty, DatabaseSize::Smallest, DatabaseSize::Small,
-			DatabaseSize::Medium, DatabaseSize::Large, DatabaseSize::Huge,
-		] => TrieWriteBenchmarkDescription { database_size: *size },
+		(size, db_type) in
+			[
+				DatabaseSize::Empty, DatabaseSize::Smallest, DatabaseSize::Small,
+				DatabaseSize::Medium, DatabaseSize::Large, DatabaseSize::Huge,
+			]
+			.iter().flat_map(|size|
+			[
+				DatabaseType::RocksDb, DatabaseType::ParityDb
+			]
+			.iter().map(move |db_type| (size, db_type)))
+			=> TrieReadBenchmarkDescription { database_size: *size, database_type: *db_type },
+		(size, db_type) in
+			[
+				DatabaseSize::Empty, DatabaseSize::Smallest, DatabaseSize::Small,
+				DatabaseSize::Medium, DatabaseSize::Large, DatabaseSize::Huge,
+			]
+			.iter().flat_map(|size|
+			[
+				DatabaseType::RocksDb, DatabaseType::ParityDb
+			]
+			.iter().map(move |db_type| (size, db_type)))
+			=> TrieWriteBenchmarkDescription { database_size: *size, database_type: *db_type },
 	);
-	
+
 	if opt.list {
 		for benchmark in benchmarks.iter() {
 			log::info!("{}: {}", benchmark.name(), benchmark.path().full())

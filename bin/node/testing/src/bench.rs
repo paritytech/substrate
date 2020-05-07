@@ -43,6 +43,7 @@ use node_runtime::{
 	constants::currency::DOLLARS,
 	UncheckedExtrinsic,
 	MinimumPeriod,
+	SystemCall,
 	BalancesCall,
 	AccountId,
 	Signature,
@@ -129,16 +130,18 @@ impl Clone for BenchDb {
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum BlockType {
 	/// Bunch of random transfers.
-	RandomTransfers(usize),
+	RandomTransfersKeepAlive(usize),
 	/// Bunch of random transfers that drain all of the source balance.
 	RandomTransfersReaping(usize),
+	/// Bunch of "no-op" calls.
+	Noop(usize),
 }
 
 impl BlockType {
 	/// Number of transactions for this block type.
 	pub fn transactions(&self) -> usize {
 		match self {
-			Self::RandomTransfers(v) | Self::RandomTransfersReaping(v) => *v,
+			Self::RandomTransfersKeepAlive(v) | Self::RandomTransfersReaping(v) | Self::Noop(v) => *v,
 		}
 	}
 }
@@ -287,15 +290,31 @@ impl BenchDb {
 			let signed = self.keyring.sign(
 				CheckedExtrinsic {
 					signed: Some((sender, signed_extra(0, node_runtime::ExistentialDeposit::get() + 1))),
-					function: Call::Balances(
-						BalancesCall::transfer(
-							pallet_indices::address::Address::Id(receiver),
-							match block_type {
-								BlockType::RandomTransfers(_) => node_runtime::ExistentialDeposit::get() + 1,
-								BlockType::RandomTransfersReaping(_) => 100*DOLLARS - node_runtime::ExistentialDeposit::get() - 1,
-							}
-						)
-					),
+					function: match block_type {
+						BlockType::RandomTransfersKeepAlive(_) => {
+							Call::Balances(
+								BalancesCall::transfer_keep_alive(
+									pallet_indices::address::Address::Id(receiver),
+									node_runtime::ExistentialDeposit::get() + 1,
+								)
+							)
+						},
+						BlockType::RandomTransfersReaping(_) => {
+							Call::Balances(
+								BalancesCall::transfer(
+									pallet_indices::address::Address::Id(receiver),
+									// Transfer so that ending balance would be 1 less than existential deposit
+									// so that we kill the sender account.
+									100*DOLLARS - (node_runtime::ExistentialDeposit::get() - 1),
+								)
+							)
+						},
+						BlockType::Noop(_) => {
+							Call::System(
+								SystemCall::remark(Vec::new())
+							)
+						},
+					},
 				},
 				version,
 				genesis_hash,

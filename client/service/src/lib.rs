@@ -54,7 +54,7 @@ use sc_network::{NetworkService, network_state::NetworkState, PeerId, ReportHand
 use log::{log, warn, debug, error, Level};
 use codec::{Encode, Decode};
 use sp_runtime::generic::BlockId;
-use sp_runtime::traits::{NumberFor, Block as BlockT, BlockIdTo};
+use sp_runtime::traits::{NumberFor, Block as BlockT};
 use parity_util_mem::MallocSizeOf;
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver,  TracingUnboundedSender};
 
@@ -64,7 +64,7 @@ pub use self::builder::{
 	ServiceBuilder, ServiceBuilderCommand, TFullClient, TLightClient, TFullBackend, TLightBackend,
 	TFullCallExecutor, TLightCallExecutor,
 };
-pub use config::{Configuration, Role, PruningMode, DatabaseConfig};
+pub use config::{Configuration, DatabaseConfig, PruningMode, Role, RpcMethods, TaskType};
 pub use sc_chain_spec::{
 	ChainSpec, GenericChainSpec, Properties, RuntimeGenesis, Extension as ChainSpecExtension,
 	NoExtension, ChainType,
@@ -80,16 +80,11 @@ pub use sc_network::config::{FinalityProofProvider, OnDemand, BoxFinalityProofRe
 pub use sc_tracing::TracingReceiver;
 pub use task_manager::SpawnTaskHandle;
 use task_manager::TaskManager;
-use sp_blockchain::{HeaderBackend, HeaderMetadata, ProvideCache};
-use sp_api::{ProvideRuntimeApi, CallApiAt, ApiExt, ConstructRuntimeApi, ApiErrorExt};
+use sp_blockchain::{HeaderBackend, HeaderMetadata};
+use sp_api::{ApiExt, ConstructRuntimeApi, ApiErrorExt};
 use sc_client_api::{
-	LockImportRun, Backend as BackendT, ProofProvider, ProvideUncles,
-	StorageProvider, ExecutorProvider, Finalizer, AuxStore, Backend,
-	BlockBackend, BlockchainEvents, CallExecutor, TransactionFor,
-	UsageProvider,
+	Backend as BackendT, BlockchainEvents, CallExecutor, UsageProvider,
 };
-use sc_block_builder::BlockBuilderProvider;
-use sp_consensus::{block_validation::Chain, BlockImport};
 use sp_block_builder::BlockBuilder;
 
 const DEFAULT_PROTOCOL_ID: &str = "sup";
@@ -130,85 +125,6 @@ pub struct Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {
 }
 
 impl<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> Unpin for Service<TBl, TCl, TSc, TNetStatus, TNet, TTxPool, TOc> {}
-
-/// Client super trait, use this instead of the concrete Client type.
-pub trait ClientProvider<
-	Block: BlockT,
-	Backend: BackendT<Block>,
-	Executor: CallExecutor<Block>,
-	Runtime: ConstructRuntimeApi<Block, Self>,
->:
-	HeaderBackend<Block>
-	+ ProvideRuntimeApi<
-		Block,
-		Api = <Runtime as ConstructRuntimeApi<Block, Self>>::RuntimeApi
-	>
-	+ LockImportRun<Block, Backend>
-	+ ProofProvider<Block>
-	+ BlockBuilderProvider<Backend, Block, Self>
-	+ ProvideUncles<Block>
-	+ StorageProvider<Block, Backend>
-	+ Chain<Block>
-	+ HeaderMetadata<Block, Error = sp_blockchain::Error>
-	+ ExecutorProvider<Block, Executor = Executor>
-	+ ProvideCache<Block>
-	+ BlockIdTo<Block, Error = sp_blockchain::Error>
-	+ CallApiAt<
-		Block,
-		Error = sp_blockchain::Error,
-		StateBackend = <Backend as BackendT<Block>>::State
-	>
-	+ BlockImport<
-		Block,
-		Error = sp_consensus::Error,
-		Transaction = TransactionFor<Backend, Block>
-	>
-	+ Finalizer<Block, Backend>
-	+ BlockchainEvents<Block>
-	+ BlockBackend<Block>
-	+ UsageProvider<Block>
-	+ AuxStore
-{}
-
-impl<Block, Backend, Executor, Runtime> ClientProvider<Block, Backend, Executor, Runtime>
-	for
-		Client<Backend, Executor, Block, Runtime>
-	where
-		Block: BlockT,
-		Backend: BackendT<Block>,
-		Executor: CallExecutor<Block>,
-		Runtime: ConstructRuntimeApi<Block, Self>,
-		Self: HeaderBackend<Block>
-			+ ProvideRuntimeApi<
-				Block,
-				Api = <Runtime as ConstructRuntimeApi<Block, Self>>::RuntimeApi
-			>
-			+ LockImportRun<Block, Backend>
-			+ ProofProvider<Block>
-			+ BlockBuilderProvider<Backend, Block, Self>
-			+ ProvideUncles<Block>
-			+ StorageProvider<Block, Backend>
-			+ Chain<Block>
-			+ HeaderMetadata<Block, Error = sp_blockchain::Error>
-			+ ExecutorProvider<Block, Executor = Executor>
-			+ ProvideCache<Block>
-			+ BlockIdTo<Block, Error = sp_blockchain::Error>
-			+ CallApiAt<
-				Block,
-				Error = sp_blockchain::Error,
-				StateBackend = <Backend as BackendT<Block>>::State
-			>
-			+ BlockImport<
-				Block,
-				Error = sp_consensus::Error,
-				Transaction = TransactionFor<Backend, Block>
-			>
-			+ Finalizer<Block, Backend>
-			+ BlockchainEvents<Block>
-			+ BlockBackend<Block>
-			+ UsageProvider<Block>
-			+ AuxStore
-{}
 
 /// Abstraction over a Substrate service.
 pub trait AbstractService: Future<Output = Result<(), Error>> + Send + Unpin + Spawn + 'static {
@@ -296,7 +212,7 @@ impl<TBl, TBackend, TExec, TRtApi, TSc, TExPool, TOc> AbstractService for
 		NetworkService<TBl, TBl::Hash>, TExPool, TOc>
 where
 	TBl: BlockT,
-	TBackend: 'static + Backend<TBl>,
+	TBackend: 'static + BackendT<TBl>,
 	TExec: 'static + CallExecutor<TBl, Backend = TBackend> + Send + Sync + Clone,
 	TRtApi: 'static + Send + Sync + ConstructRuntimeApi<TBl, Client<TBackend, TExec, TBl, TRtApi>>,
 	<TRtApi as ConstructRuntimeApi<TBl, Client<TBackend, TExec, TBl, TRtApi>>>::RuntimeApi:
@@ -339,7 +255,7 @@ where
 		let essential_task = std::panic::AssertUnwindSafe(task)
 			.catch_unwind()
 			.map(move |_| {
-				error!("Essential task failed. Shutting down service.");
+				error!("Essential task `{}` failed. Shutting down service.", name);
 				let _ = essential_failed.send(());
 			});
 
@@ -635,12 +551,12 @@ fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> sc_rpc_server::RpcHandler<s
 		})
 	}
 
-	fn deny_unsafe(addr: &Option<SocketAddr>, unsafe_rpc_expose: bool) -> sc_rpc::DenyUnsafe {
+	fn deny_unsafe(addr: &Option<SocketAddr>, methods: &RpcMethods) -> sc_rpc::DenyUnsafe {
 		let is_exposed_addr = addr.map(|x| x.ip().is_loopback()).unwrap_or(false);
-		if is_exposed_addr && !unsafe_rpc_expose {
-			sc_rpc::DenyUnsafe::Yes
-		} else {
-			sc_rpc::DenyUnsafe::No
+		match (is_exposed_addr, methods) {
+			| (_, RpcMethods::Unsafe)
+			| (false, RpcMethods::Auto) => sc_rpc::DenyUnsafe::No,
+			_ => sc_rpc::DenyUnsafe::Yes
 		}
 	}
 
@@ -650,7 +566,7 @@ fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> sc_rpc_server::RpcHandler<s
 			|address| sc_rpc_server::start_http(
 				address,
 				config.rpc_cors.as_ref(),
-				gen_handler(deny_unsafe(&config.rpc_http, config.unsafe_rpc_expose)),
+				gen_handler(deny_unsafe(&config.rpc_http, &config.rpc_methods)),
 			),
 		)?.map(|s| waiting::HttpServer(Some(s))),
 		maybe_start_server(
@@ -659,7 +575,7 @@ fn start_rpc_servers<H: FnMut(sc_rpc::DenyUnsafe) -> sc_rpc_server::RpcHandler<s
 				address,
 				config.rpc_ws_max_connections,
 				config.rpc_cors.as_ref(),
-				gen_handler(deny_unsafe(&config.rpc_ws, config.unsafe_rpc_expose)),
+				gen_handler(deny_unsafe(&config.rpc_ws, &config.rpc_methods)),
 			),
 		)?.map(|s| waiting::WsServer(Some(s))),
 	)))

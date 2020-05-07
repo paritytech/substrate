@@ -49,7 +49,9 @@ use sp_consensus::{
 	SelectChain, Error as ConsensusError, CanAuthorWith, RecordProof, BlockImport,
 	BlockCheckParams, ImportResult,
 };
-use sp_consensus::import_queue::{BoxBlockImport, BasicQueue, Verifier, BoxJustificationImport, BoxFinalityProofImport};
+use sp_consensus::import_queue::{
+	BoxBlockImport, BasicQueue, Verifier, BoxJustificationImport, BoxFinalityProofImport,
+};
 use codec::{Encode, Decode};
 use sc_client_api;
 use log::*;
@@ -461,6 +463,7 @@ pub fn import_queue<B, Transaction, Algorithm>(
 	finality_proof_import: Option<BoxFinalityProofImport<B>>,
 	algorithm: Algorithm,
 	inherent_data_providers: InherentDataProviders,
+	spawner: &impl sp_core::traits::SpawnBlocking,
 ) -> Result<
 	PowImportQueue<B, Transaction>,
 	sp_consensus::Error
@@ -477,7 +480,8 @@ pub fn import_queue<B, Transaction, Algorithm>(
 		verifier,
 		block_import,
 		justification_import,
-		finality_proof_import
+		finality_proof_import,
+		spawner,
 	))
 }
 

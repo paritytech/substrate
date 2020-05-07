@@ -50,5 +50,8 @@ mod block_rules;
 
 pub use self::{
 	call_executor::LocalCallExecutor,
-	client::{new_with_backend, new_in_mem, Client, ClientConfig},
+	client::{Client, ClientConfig},
 };
+
+#[cfg(feature="test-helpers")]
+pub use self::client::{new_with_backend, new_in_mem};

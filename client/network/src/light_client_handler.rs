@@ -29,7 +29,8 @@ use codec::{self, Encode, Decode};
 use crate::{
 	chain::Client,
 	config::ProtocolId,
-	protocol::{api, message::BlockAttributes}
+	protocol::message::BlockAttributes,
+	schema,
 };
 use futures::{channel::oneshot, future::BoxFuture, prelude::*, stream::FuturesUnordered};
 use libp2p::{
@@ -436,10 +437,10 @@ where
 		( &mut self
 		, peer: &PeerId
 		, request: &Request<B>
-		, response: api::v1::light::Response
+		, response: schema::v1::light::Response
 		) -> Result<Reply<B>, Error>
 	{
-		use api::v1::light::response::Response;
+		use schema::v1::light::response::Response;
 		match response.response {
 			Some(Response::RemoteCallResponse(response)) =>
 				if let Request::Call { request , .. } = request {
@@ -508,7 +509,7 @@ where
 		( &mut self
 		, peer: &PeerId
 		, request: &Request<B>
-		, response: api::v1::BlockResponse
+		, response: schema::v1::BlockResponse
 		) -> Result<Reply<B>, Error>
 	{
 		let request = if let Request::Body { request , .. } = &request {
@@ -533,8 +534,8 @@ where
 	fn on_remote_call_request
 		( &mut self
 		, peer: &PeerId
-		, request: &api::v1::light::RemoteCallRequest
-		) -> Result<api::v1::light::Response, Error>
+		, request: &schema::v1::light::RemoteCallRequest
+		) -> Result<schema::v1::light::Response, Error>
 	{
 		log::trace!("remote call request from {} ({} at {:?})",
 			peer,
@@ -558,18 +559,18 @@ where
 		};
 
 		let response = {
-			let r = api::v1::light::RemoteCallResponse { proof: proof.encode() };
-			api::v1::light::response::Response::RemoteCallResponse(r)
+			let r = schema::v1::light::RemoteCallResponse { proof: proof.encode() };
+			schema::v1::light::response::Response::RemoteCallResponse(r)
 		};
 
-		Ok(api::v1::light::Response { response: Some(response) })
+		Ok(schema::v1::light::Response { response: Some(response) })
 	}
 
 	fn on_remote_read_request
 		( &mut self
 		, peer: &PeerId
-		, request: &api::v1::light::RemoteReadRequest
-		) -> Result<api::v1::light::Response, Error>
+		, request: &schema::v1::light::RemoteReadRequest
+		) -> Result<schema::v1::light::Response, Error>
 	{
 		if request.keys.is_empty() {
 			log::debug!("invalid remote read request sent by {}", peer);
@@ -596,18 +597,18 @@ where
 		};
 
 		let response = {
-			let r = api::v1::light::RemoteReadResponse { proof: proof.encode() };
-			api::v1::light::response::Response::RemoteReadResponse(r)
+			let r = schema::v1::light::RemoteReadResponse { proof: proof.encode() };
+			schema::v1::light::response::Response::RemoteReadResponse(r)
 		};
 
-		Ok(api::v1::light::Response { response: Some(response) })
+		Ok(schema::v1::light::Response { response: Some(response) })
 	}
 
 	fn on_remote_read_child_request
 		( &mut self
 		, peer: &PeerId
-		, request: &api::v1::light::RemoteReadChildRequest
-		) -> Result<api::v1::light::Response, Error>
+		, request: &schema::v1::light::RemoteReadChildRequest
+		) -> Result<schema::v1::light::Response, Error>
 	{
 		if request.keys.is_empty() {
 			log::debug!("invalid remote child read request sent by {}", peer);
@@ -645,18 +646,18 @@ where
 		};
 
 		let response = {
-			let r = api::v1::light::RemoteReadResponse { proof: proof.encode() };
-			api::v1::light::response::Response::RemoteReadResponse(r)
+			let r = schema::v1::light::RemoteReadResponse { proof: proof.encode() };
+			schema::v1::light::response::Response::RemoteReadResponse(r)
 		};
 
-		Ok(api::v1::light::Response { response: Some(response) })
+		Ok(schema::v1::light::Response { response: Some(response) })
 	}
 
 	fn on_remote_header_request
 		( &mut self
 		, peer: &PeerId
-		, request: &api::v1::light::RemoteHeaderRequest
-		) -> Result<api::v1::light::Response, Error>
+		, request: &schema::v1::light::RemoteHeaderRequest
+		) -> Result<schema::v1::light::Response, Error>
 	{
 		log::trace!("remote header proof request from {} ({:?})", peer, request.block);
 
@@ -673,18 +674,18 @@ where
 		};
 
 		let response = {
-			let r = api::v1::light::RemoteHeaderResponse { header, proof: proof.encode() };
-			api::v1::light::response::Response::RemoteHeaderResponse(r)
+			let r = schema::v1::light::RemoteHeaderResponse { header, proof: proof.encode() };
+			schema::v1::light::response::Response::RemoteHeaderResponse(r)
 		};
 
-		Ok(api::v1::light::Response { response: Some(response) })
+		Ok(schema::v1::light::Response { response: Some(response) })
 	}
 
 	fn on_remote_changes_request
 		( &mut self
 		, peer: &PeerId
-		, request: &api::v1::light::RemoteChangesRequest
-		) -> Result<api::v1::light::Response, Error>
+		, request: &schema::v1::light::RemoteChangesRequest
+		) -> Result<schema::v1::light::Response, Error>
 	{
 		log::trace!("remote changes proof request from {} for key {} ({:?}..{:?})",
 			peer,
@@ -727,18 +728,18 @@ where
 		};
 
 		let response = {
-			let r = api::v1::light::RemoteChangesResponse {
+			let r = schema::v1::light::RemoteChangesResponse {
 				max: proof.max_block.encode(),
 				proof: proof.proof,
 				roots: proof.roots.into_iter()
-					.map(|(k, v)| api::v1::light::Pair { fst: k.encode(), snd: v.encode() })
+					.map(|(k, v)| schema::v1::light::Pair { fst: k.encode(), snd: v.encode() })
 					.collect(),
 				roots_proof: proof.roots_proof.encode(),
 			};
-			api::v1::light::response::Response::RemoteChangesResponse(r)
+			schema::v1::light::response::Response::RemoteChangesResponse(r)
 		};
 
-		Ok(api::v1::light::Response { response: Some(response) })
+		Ok(schema::v1::light::Response { response: Some(response) })
 	}
 }
 
@@ -821,15 +822,15 @@ where
 			Event::Request(request, mut stream) => {
 				log::trace!("incoming request from {}", peer);
 				let result = match &request.request {
-					Some(api::v1::light::request::Request::RemoteCallRequest(r)) =>
+					Some(schema::v1::light::request::Request::RemoteCallRequest(r)) =>
 						self.on_remote_call_request(&peer, r),
-					Some(api::v1::light::request::Request::RemoteReadRequest(r)) =>
+					Some(schema::v1::light::request::Request::RemoteReadRequest(r)) =>
 						self.on_remote_read_request(&peer, r),
-					Some(api::v1::light::request::Request::RemoteHeaderRequest(r)) =>
+					Some(schema::v1::light::request::Request::RemoteHeaderRequest(r)) =>
 						self.on_remote_header_request(&peer, r),
-					Some(api::v1::light::request::Request::RemoteReadChildRequest(r)) =>
+					Some(schema::v1::light::request::Request::RemoteReadChildRequest(r)) =>
 						self.on_remote_read_child_request(&peer, r),
-					Some(api::v1::light::request::Request::RemoteChangesRequest(r)) =>
+					Some(schema::v1::light::request::Request::RemoteChangesRequest(r)) =>
 						self.on_remote_changes_request(&peer, r),
 					None => {
 						log::debug!("ignoring request without request data from peer {}", peer);
@@ -1059,11 +1060,11 @@ fn retries<B: Block>(request: &Request<B>) -> usize {
 fn serialize_request<B: Block>(request: &Request<B>) -> Result<Vec<u8>, prost::EncodeError> {
 	let request = match request {
 		Request::Body { request, .. } => {
-			let rq = api::v1::BlockRequest {
+			let rq = schema::v1::BlockRequest {
 				fields: u32::from(BlockAttributes::BODY.bits()),
-				from_block: Some(api::v1::block_request::FromBlock::Hash(request.header.hash().encode())),
+				from_block: Some(schema::v1::block_request::FromBlock::Hash(request.header.hash().encode())),
 				to_block: Vec::new(),
-				direction: api::v1::Direction::Ascending as i32,
+				direction: schema::v1::Direction::Ascending as i32,
 				max_blocks: 1,
 			};
 			let mut buf = Vec::with_capacity(rq.encoded_len());
@@ -1071,34 +1072,34 @@ fn serialize_request<B: Block>(request: &Request<B>) -> Result<Vec<u8>, prost::E
 			return Ok(buf);
 		}
 		Request::Header { request, .. } => {
-			let r = api::v1::light::RemoteHeaderRequest { block: request.block.encode() };
-			api::v1::light::request::Request::RemoteHeaderRequest(r)
+			let r = schema::v1::light::RemoteHeaderRequest { block: request.block.encode() };
+			schema::v1::light::request::Request::RemoteHeaderRequest(r)
 		}
 		Request::Read { request, .. } => {
-			let r = api::v1::light::RemoteReadRequest {
+			let r = schema::v1::light::RemoteReadRequest {
 				block: request.block.encode(),
 				keys: request.keys.clone(),
 			};
-			api::v1::light::request::Request::RemoteReadRequest(r)
+			schema::v1::light::request::Request::RemoteReadRequest(r)
 		}
 		Request::ReadChild { request, .. } => {
-			let r = api::v1::light::RemoteReadChildRequest {
+			let r = schema::v1::light::RemoteReadChildRequest {
 				block: request.block.encode(),
 				storage_key: request.storage_key.clone().into_inner(),
 				keys: request.keys.clone(),
 			};
-			api::v1::light::request::Request::RemoteReadChildRequest(r)
+			schema::v1::light::request::Request::RemoteReadChildRequest(r)
 		}
 		Request::Call { request, .. } => {
-			let r = api::v1::light::RemoteCallRequest {
+			let r = schema::v1::light::RemoteCallRequest {
 				block: request.block.encode(),
 				method: request.method.clone(),
 				data: request.call_data.clone(),
 			};
-			api::v1::light::request::Request::RemoteCallRequest(r)
+			schema::v1::light::request::Request::RemoteCallRequest(r)
 		}
 		Request::Changes { request, .. } => {
-			let r = api::v1::light::RemoteChangesRequest {
+			let r = schema::v1::light::RemoteChangesRequest {
 				first: request.first_block.1.encode(),
 				last: request.last_block.1.encode(),
 				min: request.tries_roots.1.encode(),
@@ -1107,11 +1108,11 @@ fn serialize_request<B: Block>(request: &Request<B>) -> Result<Vec<u8>, prost::E
 					.unwrap_or_default(),
 				key: request.key.clone(),
 			};
-			api::v1::light::request::Request::RemoteChangesRequest(r)
+			schema::v1::light::request::Request::RemoteChangesRequest(r)
 		}
 	};
 
-	let rq = api::v1::light::Request { request: Some(request) };
+	let rq = schema::v1::light::Request { request: Some(request) };
 	let mut buf = Vec::with_capacity(rq.encoded_len());
 	rq.encode(&mut buf)?;
 	Ok(buf)
@@ -1159,7 +1160,7 @@ fn send_reply<B: Block>(result: Result<Reply<B>, ClientError>, request: Request<
 #[derive(Debug)]
 pub enum Event<T> {
 	/// Incoming request from remote and substream to use for the response.
-	Request(api::v1::light::Request, T),
+	Request(schema::v1::light::Request, T),
 	/// Incoming response from remote.
 	Response(RequestId, Response),
 }
@@ -1168,9 +1169,9 @@ pub enum Event<T> {
 #[derive(Debug, Clone)]
 pub enum Response {
 	/// Incoming light response from remote.
-	Light(api::v1::light::Response),
+	Light(schema::v1::light::Response),
 	/// Incoming block response from remote.
-	Block(api::v1::BlockResponse),
+	Block(schema::v1::BlockResponse),
 }
 
 /// Substream upgrade protocol.
@@ -1204,7 +1205,7 @@ where
 	fn upgrade_inbound(self, mut s: T, _: Self::Info) -> Self::Future {
 		let future = async move {
 			let vec = read_one(&mut s, self.max_request_size).await?;
-			match api::v1::light::Request::decode(&vec[..]) {
+			match schema::v1::light::Request::decode(&vec[..]) {
 				Ok(r) => Ok(Event::Request(r, s)),
 				Err(e) => Err(ReadOneError::Io(io::Error::new(io::ErrorKind::Other, e)))
 			}
@@ -1261,14 +1262,14 @@ where
 
 			match self.expected {
 				ExpectedResponseTy::Light => {
-					api::v1::light::Response::decode(&vec[..])
+					schema::v1::light::Response::decode(&vec[..])
 						.map(|r| Event::Response(self.request_id, Response::Light(r)))
 						.map_err(|e| {
 							ReadOneError::Io(io::Error::new(io::ErrorKind::Other, e))
 						})
 				},
 				ExpectedResponseTy::Block => {
-					api::v1::BlockResponse::decode(&vec[..])
+					schema::v1::BlockResponse::decode(&vec[..])
 						.map(|r| Event::Response(self.request_id, Response::Block(r)))
 						.map_err(|e| {
 							ReadOneError::Io(io::Error::new(io::ErrorKind::Other, e))
@@ -1301,7 +1302,7 @@ mod tests {
 	use crate::{
 		chain::Client,
 		config::ProtocolId,
-		protocol::api,
+		schema,
 	};
 	use futures::{channel::oneshot, prelude::*};
 	use libp2p::{
@@ -1625,9 +1626,9 @@ mod tests {
 		let request_id = *behaviour.outstanding.keys().next().unwrap();
 
 		let response = {
-			let r = api::v1::light::RemoteCallResponse { proof: empty_proof() };
-			api::v1::light::Response {
-				response: Some(api::v1::light::response::Response::RemoteCallResponse(r)),
+			let r = schema::v1::light::RemoteCallResponse { proof: empty_proof() };
+			schema::v1::light::Response {
+				response: Some(schema::v1::light::response::Response::RemoteCallResponse(r)),
 			}
 		};
 
@@ -1656,9 +1657,9 @@ mod tests {
 
 		// Some unsolicited response
 		let response = {
-			let r = api::v1::light::RemoteCallResponse { proof: empty_proof() };
-			api::v1::light::Response {
-				response: Some(api::v1::light::response::Response::RemoteCallResponse(r)),
+			let r = schema::v1::light::RemoteCallResponse { proof: empty_proof() };
+			schema::v1::light::Response {
+				response: Some(schema::v1::light::response::Response::RemoteCallResponse(r)),
 			}
 		};
 
@@ -1700,9 +1701,9 @@ mod tests {
 		let request_id = *behaviour.outstanding.keys().next().unwrap();
 
 		let response = {
-			let r = api::v1::light::RemoteReadResponse { proof: empty_proof() }; // Not a RemoteCallResponse!
-			api::v1::light::Response {
-				response: Some(api::v1::light::response::Response::RemoteReadResponse(r)),
+			let r = schema::v1::light::RemoteReadResponse { proof: empty_proof() }; // Not a RemoteCallResponse!
+			schema::v1::light::Response {
+				response: Some(schema::v1::light::response::Response::RemoteReadResponse(r)),
 			}
 		};
 
@@ -1761,9 +1762,9 @@ mod tests {
 			let request_id = *behaviour.outstanding.keys().next().unwrap();
 			let responding_peer = behaviour.outstanding.values().next().unwrap().peer.clone();
 			let response = {
-				let r = api::v1::light::RemoteCallResponse { proof: empty_proof() };
-				api::v1::light::Response {
-					response: Some(api::v1::light::response::Response::RemoteCallResponse(r))
+				let r = schema::v1::light::RemoteCallResponse { proof: empty_proof() };
+				schema::v1::light::Response {
+					response: Some(schema::v1::light::response::Response::RemoteCallResponse(r))
 				}
 			};
 			let conn = ConnectionId::new(i);
@@ -1775,9 +1776,9 @@ mod tests {
 		let request_id = *behaviour.outstanding.keys().next().unwrap();
 		let responding_peer = behaviour.outstanding.values().next().unwrap().peer.clone();
 		let response = {
-			let r = api::v1::light::RemoteCallResponse { proof: empty_proof() };
-			api::v1::light::Response {
-				response: Some(api::v1::light::response::Response::RemoteCallResponse(r)),
+			let r = schema::v1::light::RemoteCallResponse { proof: empty_proof() };
+			schema::v1::light::Response {
+				response: Some(schema::v1::light::response::Response::RemoteCallResponse(r)),
 			}
 		};
 		behaviour.inject_event(responding_peer, conn4, Event::Response(request_id, Response::Light(response)));
@@ -1798,41 +1799,41 @@ mod tests {
 		let response = match request {
 			Request::Body { .. } => unimplemented!(),
 			Request::Header{..} => {
-				let r = api::v1::light::RemoteHeaderResponse {
+				let r = schema::v1::light::RemoteHeaderResponse {
 					header: dummy_header().encode(),
 					proof: empty_proof()
 				};
-				api::v1::light::Response {
-					response: Some(api::v1::light::response::Response::RemoteHeaderResponse(r)),
+				schema::v1::light::Response {
+					response: Some(schema::v1::light::response::Response::RemoteHeaderResponse(r)),
 				}
 			}
 			Request::Read{..} => {
-				let r = api::v1::light::RemoteReadResponse { proof: empty_proof() };
-				api::v1::light::Response {
-					response: Some(api::v1::light::response::Response::RemoteReadResponse(r)),
+				let r = schema::v1::light::RemoteReadResponse { proof: empty_proof() };
+				schema::v1::light::Response {
+					response: Some(schema::v1::light::response::Response::RemoteReadResponse(r)),
 				}
 			}
 			Request::ReadChild{..} => {
-				let r = api::v1::light::RemoteReadResponse { proof: empty_proof() };
-				api::v1::light::Response {
-					response: Some(api::v1::light::response::Response::RemoteReadResponse(r)),
+				let r = schema::v1::light::RemoteReadResponse { proof: empty_proof() };
+				schema::v1::light::Response {
+					response: Some(schema::v1::light::response::Response::RemoteReadResponse(r)),
 				}
 			}
 			Request::Call{..} => {
-				let r = api::v1::light::RemoteCallResponse { proof: empty_proof() };
-				api::v1::light::Response {
-					response: Some(api::v1::light::response::Response::RemoteCallResponse(r)),
+				let r = schema::v1::light::RemoteCallResponse { proof: empty_proof() };
+				schema::v1::light::Response {
+					response: Some(schema::v1::light::response::Response::RemoteCallResponse(r)),
 				}
 			}
 			Request::Changes{..} => {
-				let r = api::v1::light::RemoteChangesResponse {
+				let r = schema::v1::light::RemoteChangesResponse {
 					max: iter::repeat(1).take(32).collect(),
 					proof: Vec::new(),
 					roots: Vec::new(),
 					roots_proof: empty_proof()
 				};
-				api::v1::light::Response {
-					response: Some(api::v1::light::response::Response::RemoteChangesResponse(r)),
+				schema::v1::light::Response {
+					response: Some(schema::v1::light::response::Response::RemoteChangesResponse(r)),
 				}
 			}
 		};

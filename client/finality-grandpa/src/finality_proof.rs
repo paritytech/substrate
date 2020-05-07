@@ -56,6 +56,7 @@ use sp_finality_grandpa::{AuthorityId, AuthorityList, VersionedAuthorityList, GR
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
 
 use crate::justification::GrandpaJustification;
+use crate::VoterSet;
 
 /// Maximum number of fragments that we want to return in a single prove_finality call.
 const MAX_FRAGMENTS_IN_PROOF: usize = 8;
@@ -294,7 +295,7 @@ pub struct FinalityEffects<Header: HeaderT> {
 /// 2) headers sub-chain (B; F] if B != F;
 /// 3) proof of GRANDPA::authorities() if the set changes at block F.
 #[derive(Debug, PartialEq, Encode, Decode)]
-struct FinalityProofFragment<Header: HeaderT> {
+pub(crate) struct FinalityProofFragment<Header: HeaderT> {
 	/// The hash of block F for which justification is provided.
 	pub block: Header::Hash,
 	/// Justification of the block F.
@@ -417,7 +418,7 @@ pub(crate) fn prove_finality<Block: BlockT, B: BlockchainBackend<Block>, J>(
 			let proof_fragment = FinalityProofFragment {
 				block: current,
 				justification,
-				unknown_headers: ::std::mem::replace(&mut unknown_headers, Vec::new()),
+				unknown_headers: ::std::mem::take(&mut unknown_headers),
 				authorities_proof: new_authorities_proof,
 			};
 
@@ -500,26 +501,7 @@ pub(crate) fn prove_finality<Block: BlockT, B: BlockchainBackend<Block>, J>(
 ///
 /// Returns the vector of headers that MUST be validated + imported
 /// AND if at least one of those headers is invalid, all other MUST be considered invalid.
-pub(crate) fn check_finality_proof<Block: BlockT, B>(
-	blockchain: &B,
-	current_set_id: u64,
-	current_authorities: AuthorityList,
-	authorities_provider: &dyn AuthoritySetForFinalityChecker<Block>,
-	remote_proof: Vec<u8>,
-) -> ClientResult<FinalityEffects<Block::Header>>
-	where
-		NumberFor<Block>: BlockNumberOps,
-		B: BlockchainBackend<Block>,
-{
-	do_check_finality_proof::<_, _, GrandpaJustification<Block>>(
-		blockchain,
-		current_set_id,
-		current_authorities,
-		authorities_provider,
-		remote_proof)
-}
-
-fn do_check_finality_proof<Block: BlockT, B, J>(
+pub(crate) fn check_finality_proof<Block: BlockT, B, J>(
 	blockchain: &B,
 	current_set_id: u64,
 	current_authorities: AuthorityList,
@@ -664,7 +646,11 @@ impl<Block: BlockT> ProvableJustification<Block::Header> for GrandpaJustificatio
 		NumberFor<Block>: BlockNumberOps,
 {
 	fn verify(&self, set_id: u64, authorities: &[(AuthorityId, u64)]) -> ClientResult<()> {
-		GrandpaJustification::verify(self, set_id, &authorities.iter().cloned().collect())
+		let authorities = VoterSet::new(authorities.iter().cloned()).ok_or(
+			ClientError::Consensus(sp_consensus::Error::InvalidAuthoritiesSet),
+		)?;
+
+		GrandpaJustification::verify(self, set_id, &authorities)
 	}
 }
 
@@ -676,7 +662,7 @@ pub(crate) mod tests {
 	use super::*;
 	use sp_core::crypto::Public;
 
-	type FinalityProof = super::FinalityProof<Header>;
+	pub(crate) type FinalityProof = super::FinalityProof<Header>;
 
 	impl<GetAuthorities, ProveAuthorities> AuthoritySetForFinalityProver<Block> for (GetAuthorities, ProveAuthorities)
 		where
@@ -692,7 +678,7 @@ pub(crate) mod tests {
 		}
 	}
 
-	struct ClosureAuthoritySetForFinalityChecker<Closure>(pub Closure);
+	pub(crate) struct ClosureAuthoritySetForFinalityChecker<Closure>(pub Closure);
 
 	impl<Closure> AuthoritySetForFinalityChecker<Block> for ClosureAuthoritySetForFinalityChecker<Closure>
 		where
@@ -958,7 +944,7 @@ pub(crate) mod tests {
 		blockchain.insert(header(4).hash(), header(4), None, None, NewBlockState::Final).unwrap();
 		blockchain.insert(header(5).hash(), header(5), None, None, NewBlockState::Final).unwrap();
 		blockchain.insert(header(6).hash(), header(6), None, None, NewBlockState::Final).unwrap();
-		let effects = do_check_finality_proof::<_, _, TestJustification>(
+		let effects = check_finality_proof::<_, _, TestJustification>(
 			&blockchain,
 			0,
 			auth3,
@@ -986,7 +972,7 @@ pub(crate) mod tests {
 		let blockchain = test_blockchain();
 
 		// when we can't decode proof from Vec<u8>
-		do_check_finality_proof::<_, _, TestJustification>(
+		check_finality_proof::<_, _, TestJustification>(
 			&blockchain,
 			1,
 			vec![(AuthorityId::from_slice(&[3u8; 32]), 1u64)],
@@ -1000,7 +986,7 @@ pub(crate) mod tests {
 		let blockchain = test_blockchain();
 
 		// when decoded proof has zero length
-		do_check_finality_proof::<_, _, TestJustification>(
+		check_finality_proof::<_, _, TestJustification>(
 			&blockchain,
 			1,
 			vec![(AuthorityId::from_slice(&[3u8; 32]), 1u64)],
@@ -1015,7 +1001,7 @@ pub(crate) mod tests {
 
 		// when intermediate (#0) fragment has non-empty unknown headers
 		let authorities = vec![(AuthorityId::from_slice(&[3u8; 32]), 1u64)];
-		do_check_finality_proof::<_, _, TestJustification>(
+		check_finality_proof::<_, _, TestJustification>(
 			&blockchain,
 			1,
 			authorities.clone(),
@@ -1040,7 +1026,7 @@ pub(crate) mod tests {
 
 		// when intermediate (#0) fragment has empty authorities proof
 		let authorities = vec![(AuthorityId::from_slice(&[3u8; 32]), 1u64)];
-		do_check_finality_proof::<_, _, TestJustification>(
+		check_finality_proof::<_, _, TestJustification>(
 			&blockchain,
 			1,
 			authorities.clone(),
@@ -1065,7 +1051,7 @@ pub(crate) mod tests {
 
 		let initial_authorities = vec![(AuthorityId::from_slice(&[3u8; 32]), 1u64)];
 		let next_authorities = vec![(AuthorityId::from_slice(&[4u8; 32]), 1u64)];
-		let effects = do_check_finality_proof::<_, _, TestJustification>(
+		let effects = check_finality_proof::<_, _, TestJustification>(
 			&blockchain,
 			1,
 			initial_authorities.clone(),

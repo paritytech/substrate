@@ -232,7 +232,7 @@ pub fn for_each_cht_group<Header, I, F, P>(
 			functor_param = functor(
 				functor_param,
 				current_cht_num,
-				::std::mem::replace(&mut current_cht_blocks, Vec::new()),
+				std::mem::take(&mut current_cht_blocks),
 			)?;
 		}
 
@@ -244,7 +244,7 @@ pub fn for_each_cht_group<Header, I, F, P>(
 		functor(
 			functor_param,
 			current_cht_num,
-			::std::mem::replace(&mut current_cht_blocks, Vec::new()),
+			std::mem::take(&mut current_cht_blocks),
 		)?;
 	}
 
