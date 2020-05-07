@@ -69,7 +69,7 @@ fn add_referendum<T: Trait>(n: u32) -> Result<ReferendumIndex, &'static str> {
 	);
 	let referendum_index: ReferendumIndex = ReferendumCount::get() - 1;
 	let _ = T::Scheduler::schedule_named(
-		(DEMOCRACY_ID, referendum_index),
+		(DEMOCRACY_ID, referendum_index).encode(),
 		0.into(),
 		None,
 		63,

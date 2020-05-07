@@ -175,6 +175,7 @@ where
 		select_chain: _,
 		persistent_data,
 		voter_commands_rx,
+		..
 	} = link;
 
 	let network = NetworkBridge::new(

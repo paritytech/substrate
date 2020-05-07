@@ -368,7 +368,7 @@ pub struct BlockchainDb<Block: BlockT> {
 	db: Arc<dyn Database<DbHash>>,
 	meta: Arc<RwLock<Meta<NumberFor<Block>, Block::Hash>>>,
 	leaves: RwLock<LeafSet<Block::Hash, NumberFor<Block>>>,
-	header_metadata_cache: HeaderMetadataCache<Block>,
+	header_metadata_cache: Arc<HeaderMetadataCache<Block>>,
 }
 
 impl<Block: BlockT> BlockchainDb<Block> {
@@ -379,7 +379,7 @@ impl<Block: BlockT> BlockchainDb<Block> {
 			db,
 			leaves: RwLock::new(leaves),
 			meta: Arc::new(RwLock::new(meta)),
-			header_metadata_cache: HeaderMetadataCache::default(),
+			header_metadata_cache: Arc::new(HeaderMetadataCache::default()),
 		})
 	}
 
@@ -505,7 +505,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for BlockchainDb<Block> {
 	type Error = sp_blockchain::Error;
 
 	fn header_metadata(&self, hash: Block::Hash) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
-		self.header_metadata_cache.header_metadata(hash).or_else(|_| {
+		self.header_metadata_cache.header_metadata(hash).map_or_else(|| {
 			self.header(BlockId::hash(hash))?.map(|header| {
 				let header_metadata = CachedHeaderMetadata::from(&header);
 				self.header_metadata_cache.insert_header_metadata(
@@ -514,7 +514,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for BlockchainDb<Block> {
 				);
 				header_metadata
 			}).ok_or(ClientError::UnknownBlock(format!("header not found in db: {}", hash)))
-		})
+		}, Ok)
 	}
 
 	fn insert_header_metadata(&self, hash: Block::Hash, metadata: CachedHeaderMetadata<Block>) {
@@ -831,6 +831,7 @@ impl<Block: BlockT> Backend<Block> {
 		let offchain_storage = offchain::LocalStorage::new(db.clone());
 		let changes_tries_storage = DbChangesTrieStorage::new(
 			db,
+			blockchain.header_metadata_cache.clone(),
 			columns::META,
 			columns::CHANGES_TRIE,
 			columns::KEY_LOOKUP,

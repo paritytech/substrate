@@ -169,7 +169,7 @@ impl WasmBuilderSelectSource {
 /// 3. Select the source of the `wasm-builder` crate using the methods of
 ///    [`WasmBuilderSelectSource`].
 /// 4. Set additional `RUST_FLAGS` or a different name for the file containing the WASM code
-///    using methods of [`Self`].
+///    using methods of [`WasmBuilder`].
 /// 5. Build the WASM binary using [`Self::build`].
 pub struct WasmBuilder {
 	/// Where should we pull the `wasm-builder` crate from.
