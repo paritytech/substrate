@@ -395,12 +395,12 @@ impl GetValidatorCount for frame_support::Void {
 
 impl GetSessionNumber for sp_session::MembershipProof {
 	fn session(&self) -> SessionIndex {
-		self.session()
+		self.session
 	}
 }
 
 impl GetValidatorCount for sp_session::MembershipProof {
 	fn validator_count(&self) -> sp_session::ValidatorCount {
-		self.validator_count()
+		self.validator_count
 	}
 }
