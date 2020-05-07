@@ -363,14 +363,14 @@ mod tests {
 		type Event = ();
 	}
 	parameter_types! {
-		// 10_000
-		pub const MaximumWeight: Weight = Perbill::from_percent(80) * MaximumBlockWeight::get();
+		// 0.8 * 12_500 = 10_000
+		pub const MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * MaximumBlockWeight::get();
 	}
 	impl Trait for Test {
 		type Event = ();
 		type Origin = Origin;
 		type Call = Call;
-		type MaximumWeight = MaximumWeight;
+		type MaximumWeight = MaximumSchedulerWeight;
 	}
 	type System = system::Module<Test>;
 	type Logger = logger::Module<Test>;

@@ -570,10 +570,10 @@ decl_module! {
 		/// Set the new changes trie configuration.
 		///
 		/// # <weight>
-		/// - `O(D)` where `D` length of `Digest`
+		/// - `O(1)`
 		/// - 1 storage write or delete (codec `O(1)`).
-		/// - 1 call to `deposit_log`: `O(D)` (which depends on the length of `Digest`)
-		/// - Base Weight: 7.218 + 0.001 * D µs
+		/// - 1 call to `deposit_log`: Uses `append` API, so O(1)
+		/// - Base Weight: 7.218 µs
 		/// - DB Weight:
 		///     - Writes: Changes Trie, System Digest
 		/// # </weight>
@@ -599,7 +599,7 @@ decl_module! {
 		/// # <weight>
 		/// - `O(I)` where `I` length of `items`
 		/// - `I` storage writes (`O(1)`).
-		/// - Base Weight: 0.568 * i
+		/// - Base Weight: 0.568 * i µs
 		/// - Writes: Number of items
 		/// # </weight>
 		#[weight = FunctionOf(
