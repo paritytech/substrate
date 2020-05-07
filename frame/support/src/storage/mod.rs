@@ -19,6 +19,7 @@
 use sp_std::{prelude::*, marker::PhantomData};
 use codec::{FullCodec, FullEncode, Encode, EncodeLike, Decode};
 use crate::{traits::Len, hash::{Twox128, StorageHasher}};
+use sp_runtime::generic::{Digest, DigestItem};
 
 pub mod unhashed;
 pub mod hashed;
@@ -499,15 +500,22 @@ mod private {
 	pub trait Sealed {}
 
 	impl<T: Encode> Sealed for Vec<T> {}
+	impl<Hash: Encode> Sealed for Digest<Hash> {}
 }
 
 impl<T: Encode> StorageAppend<T> for Vec<T> {}
 
+/// We abuse the fact that SCALE does not put any marker into the encoding, i.e.
+/// we only encode the internal vec and we can append to this vec. We have a test that ensures
+/// that if the `Digest` format ever changes, we need to remove this here.
+impl<Hash: Encode> StorageAppend<DigestItem<Hash>> for Digest<Hash> {}
+
 #[cfg(test)]
 mod test {
+	use super::*;
 	use sp_core::hashing::twox_128;
 	use sp_io::TestExternalities;
-	use crate::storage::{unhashed, StoragePrefixedMap};
+	use generator::StorageValue as _;
 
 	#[test]
 	fn prefixed_map_works() {
@@ -580,6 +588,43 @@ mod test {
 			// test that other values are not modified.
 			assert_eq!(unhashed::get(&key_before[..]), Some(32u64));
 			assert_eq!(unhashed::get(&key_after[..]), Some(33u64));
+		});
+	}
+
+	// This test ensures that the Digest encoding does not change without being noticied.
+	#[test]
+	fn digest_storage_append_works_as_expected() {
+		TestExternalities::default().execute_with(|| {
+			struct Storage;
+			impl generator::StorageValue<Digest<u32>> for Storage {
+				type Query = Digest<u32>;
+
+				fn module_prefix() -> &'static [u8] {
+					b"MyModule"
+				}
+
+				fn storage_prefix() -> &'static [u8] {
+					b"Storage"
+				}
+
+				fn from_optional_value_to_query(v: Option<Digest<u32>>) -> Self::Query {
+					v.unwrap()
+				}
+
+				fn from_query_to_optional_value(v: Self::Query) -> Option<Digest<u32>> {
+					Some(v)
+				}
+			}
+
+			Storage::append(DigestItem::ChangesTrieRoot(1));
+			Storage::append(DigestItem::Other(Vec::new()));
+
+			let value = unhashed::get_raw(&Storage::storage_value_final_key()).unwrap();
+
+			let expected = Digest {
+				logs: vec![DigestItem::ChangesTrieRoot(1), DigestItem::Other(Vec::new())],
+			};
+			assert_eq!(Digest::decode(&mut &value[..]).unwrap(), expected);
 		});
 	}
 }
