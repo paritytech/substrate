@@ -71,7 +71,7 @@ pub fn import_queue<Block, Transaction>(
 ) -> BasicQueue<Block, Transaction>
 	where
 		Block: BlockT,
-		B: Backend<Block> + 'static,
+		Transaction: Send + Sync + 'static,
 {
 	BasicQueue::new(
 		ManualSealVerifier,
