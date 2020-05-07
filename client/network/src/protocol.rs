@@ -78,6 +78,9 @@ const MAX_KNOWN_BLOCKS: usize = 1024; // ~32kb per peer + LruHashSet overhead
 /// Maximim number of known extrinsic hashes to keep for a peer.
 const MAX_KNOWN_EXTRINSICS: usize = 4096; // ~128kb per peer + overhead
 
+/// Maximim number of transaction validation request we keep at any moment.
+const MAX_PENDING_TRANSACTIONS: usize = 8192;
+
 /// Current protocol version.
 pub(crate) const CURRENT_VERSION: u32 = 6;
 /// Lowest version we support
@@ -1146,6 +1149,15 @@ impl<B: BlockT, H: ExHashT> Protocol<B, H> {
 		trace!(target: "sync", "Received {} extrinsics from {}", extrinsics.len(), who);
 		if let Some(ref mut peer) = self.context_data.peers.get_mut(&who) {
 			for t in extrinsics {
+				if self.pending_transactions.len() > MAX_PENDING_TRANSACTIONS {
+					debug!(
+						target: "sync",
+						"Ignoring any further transactions that exceed `MAX_PENDING_TRANSACTIONS`({}) limit",
+						MAX_PENDING_TRANSACTIONS,
+					);
+					break;
+				}
+
 				let hash = self.transaction_pool.hash_of(&t);
 				peer.known_extrinsics.insert(hash);
 
