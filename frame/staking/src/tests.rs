@@ -50,7 +50,6 @@ fn force_unstake_works() {
 	});
 }
 
-
 #[test]
 fn basic_setup_works() {
 	// Verifies initial conditions of mock
