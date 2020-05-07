@@ -20,7 +20,7 @@ use std::{sync::Arc, collections::{HashMap, hash_map::Entry}};
 use parking_lot::RwLock;
 
 use sc_client_api::blockchain::{well_known_cache_keys::{self, Id as CacheKeyId}, Cache as BlockchainCache};
-use sp_blockchain::Result as ClientResult;
+use sp_blockchain::{Result as ClientResult, HeaderMetadataCache};
 use sp_database::{Database, Transaction};
 use codec::{Encode, Decode};
 use sp_runtime::generic::BlockId;
@@ -78,6 +78,7 @@ impl<T> CacheItemT for T where T: Clone + Decode + Encode + PartialEq {}
 /// Database-backed blockchain data cache.
 pub struct DbCache<Block: BlockT> {
 	cache_at: HashMap<CacheKeyId, ListCache<Block, Vec<u8>, self::list_storage::DbStorage>>,
+	header_metadata_cache: Arc<HeaderMetadataCache<Block>>,
 	db: Arc<dyn Database<DbHash>>,
 	key_lookup_column: u32,
 	header_column: u32,
@@ -90,6 +91,7 @@ impl<Block: BlockT> DbCache<Block> {
 	/// Create new cache.
 	pub fn new(
 		db: Arc<dyn Database<DbHash>>,
+		header_metadata_cache: Arc<HeaderMetadataCache<Block>>,
 		key_lookup_column: u32,
 		header_column: u32,
 		cache_column: u32,
@@ -99,6 +101,7 @@ impl<Block: BlockT> DbCache<Block> {
 		Self {
 			cache_at: HashMap::new(),
 			db,
+			header_metadata_cache,
 			key_lookup_column,
 			header_column,
 			cache_column,
@@ -348,18 +351,24 @@ impl<Block: BlockT> BlockchainCache<Block> for DbCacheSync<Block> {
 		at: &BlockId<Block>,
 	) -> ClientResult<Option<((NumberFor<Block>, Block::Hash), Option<(NumberFor<Block>, Block::Hash)>, Vec<u8>)>> {
 		let mut cache = self.0.write();
+		let header_metadata_cache = cache.header_metadata_cache.clone();
 		let cache = cache.get_cache(*key)?;
 		let storage = cache.storage();
 		let db = storage.db();
 		let columns = storage.columns();
 		let at = match *at {
 			BlockId::Hash(hash) => {
-				let header = utils::require_header::<Block>(
-					&**db,
-					columns.key_lookup,
-					columns.header,
-					BlockId::Hash(hash.clone()))?;
-				ComplexBlockId::new(hash, *header.number())
+				match header_metadata_cache.header_metadata(hash) {
+					Some(metadata) => ComplexBlockId::new(hash, metadata.number),
+					None => {
+						let header = utils::require_header::<Block>(
+							&**db,
+							columns.key_lookup,
+							columns.header,
+							BlockId::Hash(hash.clone()))?;
+						ComplexBlockId::new(hash, *header.number())
+					}
+				}
 			},
 			BlockId::Number(number) => {
 				let hash = utils::require_header::<Block>(
