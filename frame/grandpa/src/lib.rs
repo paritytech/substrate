@@ -228,8 +228,9 @@ decl_module! {
 		/// against the extracted offender. If both are valid, the offence
 		/// will be reported.
 		///
-		/// Since the weight is 0 in order to avoid DoS pre-validation is implemented in a
-		/// `SignedExtension`.
+		/// Since the weight of the extrinsic is 0, in order to avoid DoS by
+		/// submission of invalid equivocation reports, a mandatory pre-validation of
+		/// the extrinsic is implemented in a `SignedExtension`.
 		#[weight = 0]
 		fn report_equivocation(
 			origin,
@@ -440,9 +441,9 @@ impl<T: Trait> Module<T> {
 			Self::set_grandpa_authorities(authorities);
 		}
 
-		// NOTE: initialize first session of first set. this is necessary
-		// because we only update this `on_new_session` which isn't called
-		// for the genesis session.
+		// NOTE: initialize first session of first set. this is necessary for
+		// the genesis set and session since we only update the set -> session
+		// mapping whenever a new session starts, i.e. through `on_new_session`.
 		SetIdSession::insert(0, 0);
 	}
 

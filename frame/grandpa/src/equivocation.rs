@@ -29,6 +29,12 @@
 //! And in a runtime context, so that the GRANDPA module can validate the
 //! equivocation proofs in the extrinsic and report the offences.
 //!
+//! IMPORTANT:
+//! When using this module for enabling equivocation reporting it is required
+//! that the `ValidateEquivocationReport` signed extension is used in the runtime
+//! definition. Failure to do so will allow invalid equivocation reports to be
+//! accepted by the runtime.
+//!
 
 use sp_std::prelude::*;
 
