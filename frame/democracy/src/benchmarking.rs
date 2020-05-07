@@ -19,7 +19,10 @@
 use super::*;
 
 use frame_benchmarking::{benchmarks, account};
-use frame_support::traits::{Currency, Get, EnsureOrigin, OnInitialize};
+use frame_support::{
+	IterableStorageMap,
+	traits::{Currency, Get, EnsureOrigin, OnInitialize},
+};
 use frame_system::{RawOrigin, Module as System, self, EventRecord};
 use sp_runtime::traits::{Bounded, One};
 
@@ -296,13 +299,14 @@ benchmarks! {
 	// Worst case scenario, we external propose a previously blacklisted proposal
 	external_propose {
 		let p in 1 .. MAX_PROPOSALS;
+		let v in 1 .. MAX_VETOERS;
 
 		let origin = T::ExternalOrigin::successful_origin();
 		let proposal_hash = T::Hashing::hash_of(&p);
 		// Add proposal to blacklist with block number 0
 		Blacklist::<T>::insert(
 			proposal_hash,
-			(T::BlockNumber::zero(), vec![T::AccountId::default()])
+			(T::BlockNumber::zero(), vec![T::AccountId::default(); v as usize])
 		);
 
 		let call = Call::<T>::external_propose(proposal_hash);
@@ -462,6 +466,36 @@ benchmarks! {
 				match value {
 					ReferendumInfo::Finished { .. } => (),
 					ReferendumInfo::Ongoing(_) => return Err("Referendum was not finished"),
+				}
+			}
+		}
+	}
+
+	on_initialize_no_launch_no_maturing {
+		let r in 1 .. MAX_REFERENDUMS;
+
+		for i in 0..r {
+			add_referendum::<T>(i)?;
+		}
+
+		for (key, mut info) in ReferendumInfoOf::<T>::iter() {
+			if let ReferendumInfo::Ongoing(ref mut status) = info {
+				status.end += 100.into();
+			}
+			ReferendumInfoOf::<T>::insert(key, info);
+		}
+
+		assert_eq!(Democracy::<T>::referendum_count(), r, "referenda not created");
+		assert_eq!(Democracy::<T>::lowest_unbaked(), 0, "invalid referenda init");
+
+	}: { Democracy::<T>::on_initialize(0.into()) }
+	verify {
+		// All should be on going
+		for i in 0 .. r {
+			if let Some(value) = ReferendumInfoOf::<T>::get(i) {
+				match value {
+					ReferendumInfo::Finished { .. } => return Err("Referendum has been finished"),
+					ReferendumInfo::Ongoing(_) => (),
 				}
 			}
 		}
@@ -986,6 +1020,7 @@ mod tests {
 			assert_ok!(test_benchmark_cancel_queued::<Test>());
 			assert_ok!(test_benchmark_on_initialize_external::<Test>());
 			assert_ok!(test_benchmark_on_initialize_public::<Test>());
+			assert_ok!(test_benchmark_on_initialize_no_launch_no_maturing::<Test>());
 			assert_ok!(test_benchmark_open_proxy::<Test>());
 			assert_ok!(test_benchmark_activate_proxy::<Test>());
 			assert_ok!(test_benchmark_close_proxy::<Test>());
