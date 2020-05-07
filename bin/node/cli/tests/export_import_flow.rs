@@ -20,7 +20,7 @@ use assert_cmd::cargo::cargo_bin;
 use std::{process::Command, fs, path::PathBuf};
 use tempfile::{tempdir, TempDir};
 
-mod common;
+pub mod common;
 
 fn contains_error(stderr: &[u8]) -> bool {
 	String::from_utf8_lossy(stderr).contains("Error")
