@@ -352,21 +352,11 @@ where
 	H: Encode,
 	N: Encode,
 {
+	use sp_application_crypto::RuntimeAppPublic;
+
 	localized_payload_with_buffer(round, set_id, message, buf);
 
-	#[cfg(not(feature = "std"))]
-	let verify = || {
-		use sp_application_crypto::RuntimeAppPublic;
-		id.verify(&buf, signature)
-	};
-
-	#[cfg(feature = "std")]
-	let verify = || {
-		use sp_application_crypto::Pair;
-		AuthorityPair::verify(signature, &buf, &id)
-	};
-
-	if verify() {
+	if id.verify(&buf, signature) {
 		Ok(())
 	} else {
 		#[cfg(feature = "std")]
