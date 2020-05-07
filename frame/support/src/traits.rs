@@ -1241,7 +1241,7 @@ pub mod schedule {
 		///
 		/// - `id`: The identity of the task. This must be unique and will return an error if not.
 		fn schedule_named(
-			id: impl Encode,
+			id: Vec<u8>,
 			when: BlockNumber,
 			maybe_periodic: Option<Period<BlockNumber>>,
 			priority: Priority,
@@ -1255,7 +1255,7 @@ pub mod schedule {
 		///
 		/// NOTE: This guaranteed to work only *before* the point that it is due to be executed.
 		/// If it ends up being delayed beyond the point of execution, then it cannot be cancelled.
-		fn cancel_named(id: impl Encode) -> Result<(), ()>;
+		fn cancel_named(id: Vec<u8>) -> Result<(), ()>;
 	}
 }
 
