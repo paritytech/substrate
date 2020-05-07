@@ -54,11 +54,8 @@ where
     _phantom: core::marker::PhantomData<L>,
 }
 
-
-// @todo currently not true, just so it compiles
 // @todo requires some internal mutability concept to work properly
-unsafe impl<L> core::marker::Send for AlternativeDB<L> where
-L: TrieLayout + Send,{}
+// @todo which is yet to be hashed out
 unsafe impl<L> core::marker::Sync for AlternativeDB<L> where
 L: TrieLayout + Send,{}
 

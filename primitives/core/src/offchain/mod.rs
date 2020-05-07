@@ -348,7 +348,6 @@ pub trait Externalities: Send {
 	/// Note this storage is not part of the consensus, it's only accessible by
 	/// offchain worker tasks running on the same machine. It IS persisted between runs.
 	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]);
-
 	/// Sets a value in the local storage if it matches current value.
 	///
 	/// Since multiple offchain workers may be running concurrently, to prevent
