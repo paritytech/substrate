@@ -140,16 +140,9 @@ impl<R, B> Iterator for BlockIter<R, B>
 				}
 			}
 			BlockIter::Json { reader, read_block_count } => {
-				match reader.next() {
-					Some(block) => {
-						*read_block_count += 1;
-						Some(block.map_err(|e| e.to_string()))
-					}
-					None => {
-						// We've reached the end of the iterator.
-						None
-					}
-				}
+				let res = Some(reader.next()?.map_err(|e| e.to_string()));
+				*read_block_count += 1;
+				res
 			}
 		}
 	}
