@@ -92,9 +92,8 @@ fn call_not_existing_function(wasm_method: WasmExecutionMethod) {
 					"\"Trap: Trap { kind: Host(Other(\\\"Function `missing_external` is only a stub. Calling a stub is not allowed.\\\")) }\""
 				),
 				#[cfg(feature = "wasmtime")]
-				WasmExecutionMethod::Compiled => assert_eq!(
-					&format!("{:?}", e),
-					"\"Wasm execution trapped: call to a missing function env:missing_external\""
+				WasmExecutionMethod::Compiled => assert!(
+					format!("{:?}", e).contains("Wasm execution trapped: call to a missing function env:missing_external")
 				),
 			}
 		}
@@ -121,9 +120,8 @@ fn call_yet_another_not_existing_function(wasm_method: WasmExecutionMethod) {
 					"\"Trap: Trap { kind: Host(Other(\\\"Function `yet_another_missing_external` is only a stub. Calling a stub is not allowed.\\\")) }\""
 				),
 				#[cfg(feature = "wasmtime")]
-				WasmExecutionMethod::Compiled => assert_eq!(
-					&format!("{:?}", e),
-					"\"Wasm execution trapped: call to a missing function env:yet_another_missing_external\""
+				WasmExecutionMethod::Compiled => assert!(
+					format!("{:?}", e).contains("Wasm execution trapped: call to a missing function env:yet_another_missing_external")
 				),
 			}
 		}
@@ -622,4 +620,26 @@ fn heap_is_reset_between_calls(wasm_method: WasmExecutionMethod) {
 
 	// Cal it a second time to check that the heap was freed.
 	instance.call("check_and_set_in_heap", &params).unwrap();
+}
+
+#[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+fn parallel_execution(wasm_method: WasmExecutionMethod) {
+	let threads: Vec<_> = (0..8).map(|_| std::thread::spawn(move || {
+		let mut ext = TestExternalities::default();
+		let mut ext = ext.ext();
+		assert_eq!(
+			call_in_wasm(
+				"test_twox_128",
+				&[0],
+				wasm_method.clone(),
+				&mut ext,
+			).unwrap(),
+			hex!("99e9d85137db46ef4bbea33613baafd5").to_vec().encode(),
+		);
+	})).collect();
+
+	for t in threads.into_iter() {
+		t.join().unwrap();
+	}
 }
