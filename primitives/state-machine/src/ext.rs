@@ -420,6 +420,12 @@ where
 		key: Vec<u8>,
 		value: Vec<u8>,
 	) {
+		trace!(target: "state", "{:04x}: Append {}={}",
+			self.id,
+			HexDisplay::from(&key),
+			HexDisplay::from(&value),
+		);
+
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		self.mark_dirty();
 
@@ -438,7 +444,7 @@ where
 	fn storage_root(&mut self) -> Vec<u8> {
 		let _guard = sp_panic_handler::AbortGuard::force_abort();
 		if let Some(ref root) = self.storage_transaction_cache.transaction_storage_root {
-			trace!(target: "state", "{:04x}: Root (cached) {}",
+			trace!(target: "state", "{:04x}: Root(cached) {}",
 				self.id,
 				HexDisplay::from(&root.as_ref()),
 			);
@@ -464,7 +470,7 @@ where
 				.unwrap_or(
 					empty_child_trie_root::<Layout<H>>()
 				);
-			trace!(target: "state", "{:04x}: ChildRoot({}) (cached) {}",
+			trace!(target: "state", "{:04x}: ChildRoot({})(cached) {}",
 				self.id,
 				HexDisplay::from(&storage_key),
 				HexDisplay::from(&root.as_ref()),
@@ -512,7 +518,7 @@ where
 					.unwrap_or(
 						empty_child_trie_root::<Layout<H>>()
 					);
-				trace!(target: "state", "{:04x}: ChildRoot({}) (no change) {}",
+				trace!(target: "state", "{:04x}: ChildRoot({})(no_change) {}",
 					self.id,
 					HexDisplay::from(&storage_key.as_ref()),
 					HexDisplay::from(&root.as_ref()),

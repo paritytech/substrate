@@ -18,23 +18,18 @@
 
 #![cfg(test)]
 
-use sp_runtime::{testing::{H256, Digest}, traits::Header};
-use frame_support::traits::OnFinalize;
+use super::*;
 use crate::mock::*;
-use frame_system::{EventRecord, Phase};
 use codec::{Decode, Encode};
 use fg_primitives::ScheduledChange;
-use super::*;
-
-fn initialize_block(number: u64, parent_hash: H256) {
-	System::initialize(
-		&number,
-		&parent_hash,
-		&Default::default(),
-		&Default::default(),
-		Default::default(),
-	);
-}
+use frame_support::{
+	assert_err, assert_ok,
+	traits::{Currency, OnFinalize},
+};
+use frame_system::{EventRecord, Phase};
+use sp_core::H256;
+use sp_keyring::Ed25519Keyring;
+use sp_runtime::{testing::Digest, traits::Header};
 
 #[test]
 fn authorities_change_logged() {
@@ -318,4 +313,349 @@ fn time_slot_have_sane_ord() {
 		}
 	];
 	assert!(FIXTURE.windows(2).all(|f| f[0] < f[1]));
+}
+
+fn test_authorities() -> AuthorityList {
+	let authorities = vec![
+		Ed25519Keyring::Alice,
+		Ed25519Keyring::Bob,
+		Ed25519Keyring::Charlie,
+	];
+
+	authorities
+		.into_iter()
+		.map(|id| (id.public().into(), 1u64))
+		.collect()
+}
+
+#[test]
+fn report_equivocation_current_set_works() {
+	let authorities = test_authorities();
+
+	new_test_ext_raw_authorities(authorities).execute_with(|| {
+		assert_eq!(Staking::current_era(), Some(0));
+		assert_eq!(Session::current_index(), 0);
+
+		start_era(1);
+
+		let authorities = Grandpa::grandpa_authorities();
+
+		// make sure that all authorities have the same balance
+		for i in 0..authorities.len() {
+			assert_eq!(Balances::total_balance(&(i as u64)), 10_000_000);
+			assert_eq!(Staking::slashable_balance_of(&(i as u64)), 10_000);
+
+			assert_eq!(
+				Staking::eras_stakers(1, i as u64),
+				pallet_staking::Exposure {
+					total: 10_000,
+					own: 10_000,
+					others: vec![],
+				},
+			);
+		}
+
+		let equivocation_authority_index = 0;
+		let equivocation_key = &authorities[equivocation_authority_index].0;
+		let equivocation_keyring = extract_keyring(equivocation_key);
+
+		let set_id = Grandpa::current_set_id();
+
+		// generate an equivocation proof, with two votes in the same round for
+		// different block hashes signed by the same key
+		let equivocation_proof = generate_equivocation_proof(
+			set_id,
+			(1, H256::random(), 10, &equivocation_keyring),
+			(1, H256::random(), 10, &equivocation_keyring),
+		);
+
+		// create the key ownership proof
+		let key_owner_proof =
+			Historical::prove((sp_finality_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
+
+		// report the equivocation and the tx should be dispatched successfully
+		let inner = report_equivocation(equivocation_proof, key_owner_proof).unwrap();
+		assert_ok!(Grandpa::dispatch(inner, Origin::signed(1)));
+
+		start_era(2);
+
+		// check that the balance of 0-th validator is slashed 100%.
+		assert_eq!(Balances::total_balance(&0), 10_000_000 - 10_000);
+		assert_eq!(Staking::slashable_balance_of(&0), 0);
+
+		assert_eq!(
+			Staking::eras_stakers(2, 0),
+			pallet_staking::Exposure {
+				total: 0,
+				own: 0,
+				others: vec![],
+			},
+		);
+
+		// check that the balances of all other validators are left intact.
+		for i in 1..authorities.len() {
+			assert_eq!(Balances::total_balance(&(i as u64)), 10_000_000);
+			assert_eq!(Staking::slashable_balance_of(&(i as u64)), 10_000);
+
+			assert_eq!(
+				Staking::eras_stakers(2, i as u64),
+				pallet_staking::Exposure {
+					total: 10_000,
+					own: 10_000,
+					others: vec![],
+				},
+			);
+		}
+	});
+}
+
+#[test]
+fn report_equivocation_old_set_works() {
+	let authorities = test_authorities();
+
+	new_test_ext_raw_authorities(authorities).execute_with(|| {
+		start_era(1);
+
+		let authorities = Grandpa::grandpa_authorities();
+
+		let equivocation_authority_index = 0;
+		let equivocation_key = &authorities[equivocation_authority_index].0;
+
+		// create the key ownership proof in the "old" set
+		let key_owner_proof =
+			Historical::prove((sp_finality_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
+
+		start_era(2);
+
+		// make sure that all authorities have the same balance
+		for i in 0..authorities.len() {
+			assert_eq!(Balances::total_balance(&(i as u64)), 10_000_000);
+			assert_eq!(Staking::slashable_balance_of(&(i as u64)), 10_000);
+
+			assert_eq!(
+				Staking::eras_stakers(2, i as u64),
+				pallet_staking::Exposure {
+					total: 10_000,
+					own: 10_000,
+					others: vec![],
+				},
+			);
+		}
+
+		let equivocation_keyring = extract_keyring(equivocation_key);
+
+		let set_id = Grandpa::current_set_id();
+
+		// generate an equivocation proof for the old set,
+		let equivocation_proof = generate_equivocation_proof(
+			set_id - 1,
+			(1, H256::random(), 10, &equivocation_keyring),
+			(1, H256::random(), 10, &equivocation_keyring),
+		);
+
+		// report the equivocation using the key ownership proof generated on
+		// the old set, the tx should be dispatched successfully
+		let inner = report_equivocation(equivocation_proof, key_owner_proof).unwrap();
+		assert_ok!(Grandpa::dispatch(inner, Origin::signed(1)));
+
+		start_era(3);
+
+		// check that the balance of 0-th validator is slashed 100%.
+		assert_eq!(Balances::total_balance(&0), 10_000_000 - 10_000);
+		assert_eq!(Staking::slashable_balance_of(&0), 0);
+
+		assert_eq!(
+			Staking::eras_stakers(3, 0),
+			pallet_staking::Exposure {
+				total: 0,
+				own: 0,
+				others: vec![],
+			},
+		);
+
+		// check that the balances of all other validators are left intact.
+		for i in 1..authorities.len() {
+			assert_eq!(Balances::total_balance(&(i as u64)), 10_000_000);
+			assert_eq!(Staking::slashable_balance_of(&(i as u64)), 10_000);
+
+			assert_eq!(
+				Staking::eras_stakers(3, i as u64),
+				pallet_staking::Exposure {
+					total: 10_000,
+					own: 10_000,
+					others: vec![],
+				},
+			);
+		}
+	});
+}
+
+#[test]
+fn report_equivocation_invalid_set_id() {
+	let authorities = test_authorities();
+
+	new_test_ext_raw_authorities(authorities).execute_with(|| {
+		start_era(1);
+
+		let authorities = Grandpa::grandpa_authorities();
+
+		let equivocation_authority_index = 0;
+		let equivocation_key = &authorities[equivocation_authority_index].0;
+		let equivocation_keyring = extract_keyring(equivocation_key);
+
+		let key_owner_proof =
+			Historical::prove((sp_finality_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
+
+		let set_id = Grandpa::current_set_id();
+
+		// generate an equivocation for a future set
+		let equivocation_proof = generate_equivocation_proof(
+			set_id + 1,
+			(1, H256::random(), 10, &equivocation_keyring),
+			(1, H256::random(), 10, &equivocation_keyring),
+		);
+
+		// it should be filtered by the signed extension validation
+		assert_err!(
+			report_equivocation(equivocation_proof, key_owner_proof),
+			equivocation::ReportEquivocationValidityError::InvalidSetId,
+		);
+	});
+}
+
+#[test]
+fn report_equivocation_invalid_session() {
+	let authorities = test_authorities();
+
+	new_test_ext_raw_authorities(authorities).execute_with(|| {
+		start_era(1);
+
+		let authorities = Grandpa::grandpa_authorities();
+
+		let equivocation_authority_index = 0;
+		let equivocation_key = &authorities[equivocation_authority_index].0;
+		let equivocation_keyring = extract_keyring(equivocation_key);
+
+		// generate a key ownership proof at set id = 1
+		let key_owner_proof =
+			Historical::prove((sp_finality_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
+
+		start_era(2);
+
+		let set_id = Grandpa::current_set_id();
+
+		// generate an equivocation proof at set id = 2
+		let equivocation_proof = generate_equivocation_proof(
+			set_id,
+			(1, H256::random(), 10, &equivocation_keyring),
+			(1, H256::random(), 10, &equivocation_keyring),
+		);
+
+		// report an equivocation for the current set using an key ownership
+		// proof from the previous set, the session should be invalid.
+		assert_err!(
+			report_equivocation(equivocation_proof, key_owner_proof),
+			equivocation::ReportEquivocationValidityError::InvalidSession,
+		);
+	});
+}
+
+#[test]
+fn report_equivocation_invalid_key_owner_proof() {
+	let authorities = test_authorities();
+
+	new_test_ext_raw_authorities(authorities).execute_with(|| {
+		start_era(1);
+		let authorities = Grandpa::grandpa_authorities();
+
+		let invalid_owner_authority_index = 1;
+		let invalid_owner_key = &authorities[invalid_owner_authority_index].0;
+
+		// generate a key ownership proof for the authority at index 1
+		let invalid_key_owner_proof =
+			Historical::prove((sp_finality_grandpa::KEY_TYPE, &invalid_owner_key)).unwrap();
+
+		let equivocation_authority_index = 0;
+		let equivocation_key = &authorities[equivocation_authority_index].0;
+		let equivocation_keyring = extract_keyring(equivocation_key);
+
+		let set_id = Grandpa::current_set_id();
+
+		// generate an equivocation proof for the authority at index 0
+		let equivocation_proof = generate_equivocation_proof(
+			set_id,
+			(1, H256::random(), 10, &equivocation_keyring),
+			(1, H256::random(), 10, &equivocation_keyring),
+		);
+
+		// we need to start a new era otherwise the key ownership proof won't be
+		// checked since the authorities are part of the current session
+		start_era(2);
+
+		// report an equivocation for the current set using a key ownership
+		// proof for a different key than the one in the equivocation proof.
+		assert_err!(
+			report_equivocation(equivocation_proof, invalid_key_owner_proof),
+			equivocation::ReportEquivocationValidityError::InvalidKeyOwnershipProof,
+		);
+	});
+}
+
+#[test]
+fn report_equivocation_invalid_equivocation_proof() {
+	let authorities = test_authorities();
+
+	new_test_ext_raw_authorities(authorities).execute_with(|| {
+		start_era(1);
+
+		let authorities = Grandpa::grandpa_authorities();
+
+		let equivocation_authority_index = 0;
+		let equivocation_key = &authorities[equivocation_authority_index].0;
+		let equivocation_keyring = extract_keyring(equivocation_key);
+
+		// generate a key ownership proof at set id = 1
+		let key_owner_proof =
+			Historical::prove((sp_finality_grandpa::KEY_TYPE, &equivocation_key)).unwrap();
+
+		let set_id = Grandpa::current_set_id();
+
+		let assert_invalid_equivocation_proof = |equivocation_proof| {
+			assert_err!(
+				report_equivocation(equivocation_proof, key_owner_proof.clone()),
+				equivocation::ReportEquivocationValidityError::InvalidEquivocationProof,
+			);
+		};
+
+		start_era(2);
+
+		// both votes target the same block number and hash,
+		// there is no equivocation.
+		assert_invalid_equivocation_proof(generate_equivocation_proof(
+			set_id,
+			(1, H256::zero(), 10, &equivocation_keyring),
+			(1, H256::zero(), 10, &equivocation_keyring),
+		));
+
+		// votes targetting different rounds, there is no equivocation.
+		assert_invalid_equivocation_proof(generate_equivocation_proof(
+			set_id,
+			(1, H256::random(), 10, &equivocation_keyring),
+			(2, H256::random(), 10, &equivocation_keyring),
+		));
+
+		// votes signed with different authority keys
+		assert_invalid_equivocation_proof(generate_equivocation_proof(
+			set_id,
+			(1, H256::random(), 10, &equivocation_keyring),
+			(1, H256::random(), 10, &Ed25519Keyring::Charlie),
+		));
+
+		// votes signed with a key that isn't part of the authority set
+		assert_invalid_equivocation_proof(generate_equivocation_proof(
+			set_id,
+			(1, H256::random(), 10, &equivocation_keyring),
+			(1, H256::random(), 10, &Ed25519Keyring::Dave),
+		));
+	});
 }

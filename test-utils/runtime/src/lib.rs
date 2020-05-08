@@ -33,14 +33,15 @@ use sp_trie::trie_types::{TrieDB, TrieDBMut};
 
 use sp_api::{decl_runtime_apis, impl_runtime_apis};
 use sp_runtime::{
-	ApplyExtrinsicResult, create_runtime_str, Perbill, impl_opaque_keys,
+	create_runtime_str, impl_opaque_keys,
+	ApplyExtrinsicResult, Perbill,
 	transaction_validity::{
 		TransactionValidity, ValidTransaction, TransactionValidityError, InvalidTransaction,
 		TransactionSource,
 	},
 	traits::{
 		BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT,
-		GetNodeBlockType, GetRuntimeBlockType, Verify, IdentityLookup,
+		GetNodeBlockType, GetRuntimeBlockType, NumberFor, Verify, IdentityLookup,
 	},
 };
 use sp_version::RuntimeVersion;
@@ -668,6 +669,29 @@ cfg_if! {
 					encoded: Vec<u8>,
 				) -> Option<Vec<(Vec<u8>, sp_core::crypto::KeyTypeId)>> {
 					SessionKeys::decode_into_raw_public_keys(&encoded)
+				}
+			}
+
+			impl sp_finality_grandpa::GrandpaApi<Block> for Runtime {
+				fn grandpa_authorities() -> sp_finality_grandpa::AuthorityList {
+					Vec::new()
+				}
+
+				fn submit_report_equivocation_extrinsic(
+					_equivocation_proof: sp_finality_grandpa::EquivocationProof<
+						<Block as BlockT>::Hash,
+						NumberFor<Block>,
+					>,
+					_key_owner_proof: sp_finality_grandpa::OpaqueKeyOwnershipProof,
+				) -> Option<()> {
+					None
+				}
+
+				fn generate_key_ownership_proof(
+					_set_id: sp_finality_grandpa::SetId,
+					_authority_id: sp_finality_grandpa::AuthorityId,
+				) -> Option<sp_finality_grandpa::OpaqueKeyOwnershipProof> {
+					None
 				}
 			}
 
