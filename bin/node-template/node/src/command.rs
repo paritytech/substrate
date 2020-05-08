@@ -68,7 +68,7 @@ pub fn run() -> sc_cli::Result<()> {
 		Some(ref subcommand) => {
 			let runner = cli.create_runner(subcommand)?;
 			runner.run_subcommand::<Runtime, _, _, _>(
-				subcommand.clone(),
+				subcommand,
 				|config| Ok(new_full_start!(config).0)
 			)
 		}
