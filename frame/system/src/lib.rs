@@ -376,6 +376,14 @@ impl ExtrinsicsWeight {
 		};
 	}
 
+	pub fn checked_add(&mut self, weight: Weight, class: DispatchClass) -> Result<(), ()> {
+		match class {
+			DispatchClass::Operational => self.operational = self.operational.checked_add(weight).ok_or(())?,
+			_ => self.normal = self.normal.checked_add(weight).ok_or(())?,
+		}
+		Ok(())
+	}
+
 	pub fn sub(&mut self, weight: Weight, class: DispatchClass) {
 		match class {
 			DispatchClass::Operational => self.operational = self.operational.saturating_sub(weight),
@@ -1338,24 +1346,51 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 	/// Upon successes, it returns the new block weight as a `Result`.
 	fn check_weight(
 		info: &DispatchInfoOf<T::Call>,
-	) -> Result<Weight, TransactionValidityError> {
-		let current_weight = Module::<T>::all_extrinsics_weight().get(info.class);
+	) -> Result<ExtrinsicsWeight, TransactionValidityError> {
 		let maximum_weight = T::MaximumBlockWeight::get();
-		let limit = Self::get_dispatch_limit_ratio(info.class) * maximum_weight;
-		if info.class == DispatchClass::Mandatory {
+		match info.class {
 			// If we have a dispatch that must be included in the block, it ignores all the limits.
-			let extrinsic_weight = info.weight.saturating_add(T::ExtrinsicBaseWeight::get());
-			let next_weight = current_weight.saturating_add(extrinsic_weight);
-			Ok(next_weight)
-		} else {
-			let extrinsic_weight = info.weight.checked_add(T::ExtrinsicBaseWeight::get())
-				.ok_or(InvalidTransaction::ExhaustsResources)?;
-			let next_weight = current_weight.checked_add(extrinsic_weight)
-				.ok_or(InvalidTransaction::ExhaustsResources)?;
-			if next_weight > limit {
-				Err(InvalidTransaction::ExhaustsResources.into())
-			} else {
-				Ok(next_weight)
+			DispatchClass::Mandatory => {
+				let mut all_weight = Module::<T>::all_extrinsics_weight();
+				let extrinsic_weight = info.weight.saturating_add(T::ExtrinsicBaseWeight::get());
+				all_weight.add(extrinsic_weight, DispatchClass::Mandatory);
+				Ok(all_weight)
+			},
+			// If we have a normal dispatch, we follow all the normal rules and limits.
+			DispatchClass::Normal => {
+				let mut all_weight = Module::<T>::all_extrinsics_weight();
+				let normal_limit = Self::get_dispatch_limit_ratio(DispatchClass::Normal) * maximum_weight;
+				let extrinsic_weight = info.weight.checked_add(T::ExtrinsicBaseWeight::get())
+					.ok_or(InvalidTransaction::ExhaustsResources)?;
+				all_weight.checked_add(extrinsic_weight, DispatchClass::Normal)
+					.map_err(|_| InvalidTransaction::ExhaustsResources)?;
+				if all_weight.normal > normal_limit {
+					Err(InvalidTransaction::ExhaustsResources.into())
+				} else {
+					Ok(all_weight)
+				}
+			},
+			// If we have an operation dispatch, allow it if we have not used our full
+			// "operational space" (independent of existing fullness).
+			DispatchClass::Operational => {
+				let mut all_weight = Module::<T>::all_extrinsics_weight();
+				let operational_limit = Self::get_dispatch_limit_ratio(DispatchClass::Operational) * maximum_weight;
+				let normal_limit = Self::get_dispatch_limit_ratio(DispatchClass::Normal) * maximum_weight;
+				let operational_space = operational_limit.saturating_sub(normal_limit);
+
+				let extrinsic_weight = info.weight.checked_add(T::ExtrinsicBaseWeight::get())
+					.ok_or(InvalidTransaction::ExhaustsResources)?;
+				all_weight.checked_add(extrinsic_weight, DispatchClass::Operational)
+					.map_err(|_| InvalidTransaction::ExhaustsResources)?;
+
+				// If it would fit in normally, its okay
+				if all_weight.total() <= maximum_weight ||
+				// If we have not used our operational space
+				all_weight.operational <= operational_space {
+					Ok(all_weight)
+				} else {
+					Err(InvalidTransaction::ExhaustsResources.into())
+				}
 			}
 		}
 	}
@@ -1404,9 +1439,7 @@ impl<T: Trait + Send + Sync> CheckWeight<T> where
 		let next_len = Self::check_block_length(info, len)?;
 		let next_weight = Self::check_weight(info)?;
 		AllExtrinsicsLen::put(next_len);
-		AllExtrinsicsWeight::mutate(|current_weight| {
-			current_weight.put(next_weight, info.class);
-		});
+		AllExtrinsicsWeight::put(next_weight);
 		Ok(())
 	}
 
@@ -1755,7 +1788,7 @@ pub(crate) mod tests {
 	use sp_std::cell::RefCell;
 	use sp_core::H256;
 	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup, SignedExtension}, testing::Header, DispatchError};
-	use frame_support::{impl_outer_origin, parameter_types, assert_ok};
+	use frame_support::{impl_outer_origin, parameter_types, assert_ok, assert_noop};
 
 	impl_outer_origin! {
 		pub enum Origin for Test where system = super {}
@@ -2206,6 +2239,41 @@ pub(crate) mod tests {
 			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&rest_operational, len));
 			assert_eq!(<Test as Trait>::MaximumBlockWeight::get(), 1024);
 			assert_eq!(System::all_extrinsics_weight().total(), <Test as Trait>::MaximumBlockWeight::get());
+		});
+	}
+
+	#[test]
+	fn dispatch_order_does_not_effect_weight_logic() {
+		new_test_ext().execute_with(|| {
+			// We switch the order of `full_block_with_normal_and_operational`
+			let max_normal = DispatchInfo { weight: 753, ..Default::default() };
+			let rest_operational = DispatchInfo { weight: 251, class: DispatchClass::Operational, ..Default::default() };
+
+			let len = 0_usize;
+
+			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&rest_operational, len));
+			// Extra 10 here from block execution weight
+			assert_eq!(System::all_extrinsics_weight().total(), 266);
+			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&max_normal, len));
+			assert_eq!(<Test as Trait>::MaximumBlockWeight::get(), 1024);
+			assert_eq!(System::all_extrinsics_weight().total(), <Test as Trait>::MaximumBlockWeight::get());
+		});
+	}
+
+	#[test]
+	fn operational_works_on_full_block() {
+		new_test_ext().execute_with(|| {
+			// An on_initialize takes up the whole block! (Every time!)
+			System::register_extra_weight_unchecked(Weight::max_value(), DispatchClass::Mandatory);
+			let dispatch_normal = DispatchInfo { weight: 251, class: DispatchClass::Normal, ..Default::default() };
+			let dispatch_operational = DispatchInfo { weight: 251, class: DispatchClass::Operational, ..Default::default() };
+			let len = 0_usize;
+
+			assert_noop!(CheckWeight::<Test>::do_pre_dispatch(&dispatch_normal, len), InvalidTransaction::ExhaustsResources);
+			// Thank goodness we can still do an operational transaction to possibly save the blockchain.
+			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&dispatch_operational, len));
+			// Not too much though
+			assert_noop!(CheckWeight::<Test>::do_pre_dispatch(&dispatch_operational, len), InvalidTransaction::ExhaustsResources);
 		});
 	}
 
