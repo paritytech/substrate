@@ -3,6 +3,11 @@ name = "pallet-balances-cli"
 version = "2.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
+license = "GPL-3.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+description = "CLI utils"
+documentation = "https://docs.rs/cli-utils"
 
 [dependencies]
 sp-core = { version = "2.0.0-dev", path = "../../../primitives/core" }

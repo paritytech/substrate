@@ -37,6 +37,7 @@ pallet-balances = { version = "2.0.0-dev", default-features = false, path = "../
 frame-system = { version = "2.0.0-dev", default-features = false, path = "../../frame/system" }
 frame-system-rpc-runtime-api = { version = "2.0.0-dev", default-features = false, path = "../../frame/system/rpc/runtime-api" }
 pallet-timestamp = { version = "2.0.0-dev", default-features = false, path = "../../frame/timestamp" }
+sp-finality-grandpa = { version = "2.0.0-dev", default-features = false, path = "../../primitives/finality-grandpa" }
 sp-trie = { version = "2.0.0-dev", default-features = false, path = "../../primitives/trie" }
 sp-transaction-pool = { version = "2.0.0-dev", default-features = false, path = "../../primitives/transaction-pool" }
 trie-db = { version = "0.20.1", default-features = false }
@@ -91,6 +92,7 @@ std = [
 	"frame-system/std",
 	"pallet-timestamp/std",
 	"sc-service",
+	"sp-finality-grandpa/std",
 	"sp-trie/std",
 	"sp-transaction-pool/std",
 	"trie-db/std",

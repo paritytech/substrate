@@ -67,7 +67,7 @@ pub struct TransferCmd {
 
 impl TransferCmd {
     /// Run the command
-    pub fn run<RA>(self) -> Result<(), Error>
+    pub fn run<RA>(&self) -> Result<(), Error>
         where
             RA: RuntimeAdapter,
             AccountIdFor<RA>: for<'a> TryFrom<&'a [u8], Error = ()> + Ss58Codec,

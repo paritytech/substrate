@@ -86,7 +86,7 @@ impl KeystoreParams {
 	}
 
 	/// helper method to fetch password from `KeyParams` or read from stdin
-	pub fn read_password(self) -> error::Result<String> {
+	pub fn read_password(&self) -> error::Result<String> {
 		let (password_interactive, password) = (self.password_interactive, self.password.as_ref());
 
 		let pass = if password_interactive {

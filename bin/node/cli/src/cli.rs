@@ -37,7 +37,6 @@ pub enum Subcommand {
 	Base(sc_cli::Subcommand),
 
 	/// prints hex-encoded, signed, transfer extrinsic with given arguments.
-	#[structopt(flatten)]
 	Transfer(TransferCmd),
 
 	/// The custom inspect subcommmand for decoding blocks and extrinsics.

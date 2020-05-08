@@ -18,7 +18,7 @@
 //! from VRF outputs and manages epoch transitions.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![forbid(unused_must_use, unsafe_code, unused_variables, unused_must_use)]
+#![warn(unused_must_use, unsafe_code, unused_variables, unused_must_use)]
 
 use pallet_timestamp;
 
@@ -268,19 +268,18 @@ impl<T: Trait> pallet_session::ShouldEndSession<T::BlockNumber> for Module<T> {
 	}
 }
 
-// TODO [slashing]: @marcio use this, remove the dead_code annotation.
 /// A BABE equivocation offence report.
 ///
 /// When a validator released two or more blocks at the same slot.
-struct BabeEquivocationOffence<FullIdentification> {
+pub struct BabeEquivocationOffence<FullIdentification> {
 	/// A babe slot number in which this incident happened.
-	slot: u64,
+	pub slot: u64,
 	/// The session index in which the incident happened.
-	session_index: SessionIndex,
+	pub session_index: SessionIndex,
 	/// The size of the validator set at the time of the offence.
-	validator_set_count: u32,
+	pub validator_set_count: u32,
 	/// The authority that produced the equivocation.
-	offender: FullIdentification,
+	pub offender: FullIdentification,
 }
 
 impl<FullIdentification: Clone> Offence<FullIdentification> for BabeEquivocationOffence<FullIdentification> {

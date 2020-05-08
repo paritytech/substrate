@@ -27,8 +27,8 @@ use names::{Generator, Name};
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::config::{
 	Configuration, DatabaseConfig, ExtTransport, KeystoreConfig, NetworkConfiguration,
-	NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode, Role, TaskType,
-	TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
+	NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode, Role, RpcMethods,
+	TaskType, TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
 };
 use sc_service::{ChainSpec, TracingReceiver};
 use std::future::Future;
@@ -265,10 +265,11 @@ pub trait CliConfiguration: Sized {
 		Ok(Default::default())
 	}
 
-	/// Returns `Ok(true) if potentially unsafe RPC is to be exposed.
+	/// Returns the RPC method set to expose.
 	///
-	/// By default this is `false`.
-	fn unsafe_rpc_expose(&self) -> Result<bool> {
+	/// By default this is `RpcMethods::Auto` (unsafe RPCs are denied iff
+	/// `{rpc,ws}_external` returns true, respectively).
+	fn rpc_methods(&self) -> Result<RpcMethods> {
 		Ok(Default::default())
 	}
 
@@ -449,7 +450,7 @@ pub trait CliConfiguration: Sized {
 			execution_strategies: self.execution_strategies(is_dev)?,
 			rpc_http: self.rpc_http()?,
 			rpc_ws: self.rpc_ws()?,
-			unsafe_rpc_expose: self.unsafe_rpc_expose()?,
+			rpc_methods: self.rpc_methods()?,
 			rpc_ws_max_connections: self.rpc_ws_max_connections()?,
 			rpc_cors: self.rpc_cors(is_dev)?,
 			prometheus_config: self.prometheus_config()?,
