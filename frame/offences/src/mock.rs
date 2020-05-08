@@ -46,18 +46,20 @@ thread_local! {
 	pub static CAN_REPORT: RefCell<bool> = RefCell::new(true);
 }
 
-impl<Reporter, Offender> offence::OnOffenceHandler<Reporter, Offender> for OnOffenceHandler {
+impl<Reporter, Offender, Res: Default>
+	offence::OnOffenceHandler<Reporter, Offender, Res> for OnOffenceHandler
+{
 	fn on_offence(
 		_offenders: &[OffenceDetails<Reporter, Offender>],
 		slash_fraction: &[Perbill],
 		_offence_session: SessionIndex,
-	) -> Result<(), ()> {
-		if <Self as offence::OnOffenceHandler<Reporter, Offender>>::can_report() {
+	) -> Result<Res, ()> {
+		if <Self as offence::OnOffenceHandler<Reporter, Offender, Res>>::can_report() {
 			ON_OFFENCE_PERBILL.with(|f| {
 				*f.borrow_mut() = slash_fraction.to_vec();
 			});
 
-			Ok(())
+			Ok(Default::default())
 		} else {
 			Err(())
 		}

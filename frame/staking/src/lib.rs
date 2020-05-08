@@ -2992,7 +2992,9 @@ impl<T: Trait> Convert<T::AccountId, Option<Exposure<T::AccountId, BalanceOf<T>>
 }
 
 /// This is intended to be used with `FilterHistoricalOffences`.
-impl <T: Trait> OnOffenceHandler<T::AccountId, pallet_session::historical::IdentificationTuple<T>> for Module<T> where
+impl <T: Trait>
+	OnOffenceHandler<T::AccountId, pallet_session::historical::IdentificationTuple<T>, Weight>
+for Module<T> where
 	T: pallet_session::Trait<ValidatorId = <T as frame_system::Trait>::AccountId>,
 	T: pallet_session::historical::Trait<
 		FullIdentification = Exposure<<T as frame_system::Trait>::AccountId, BalanceOf<T>>,
@@ -3000,24 +3002,29 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, pallet_session::historical::Ident
 	>,
 	T::SessionHandler: pallet_session::SessionHandler<<T as frame_system::Trait>::AccountId>,
 	T::SessionManager: pallet_session::SessionManager<<T as frame_system::Trait>::AccountId>,
-	T::ValidatorIdOf: Convert<<T as frame_system::Trait>::AccountId, Option<<T as frame_system::Trait>::AccountId>>
+	T::ValidatorIdOf: Convert<
+		<T as frame_system::Trait>::AccountId,
+		Option<<T as frame_system::Trait>::AccountId>
+	>,
 {
 	fn on_offence(
 		offenders: &[OffenceDetails<T::AccountId, pallet_session::historical::IdentificationTuple<T>>],
 		slash_fraction: &[Perbill],
 		slash_session: SessionIndex,
-	) -> Result<(), ()> {
+	) -> Result<Weight, ()> {
 		if !Self::can_report() {
 			return Err(())
 		}
 
 		let reward_proportion = SlashRewardFraction::get();
+		// TODO fill this up
+		let mut consumed_weight: Weight = 0;
 
 		let active_era = {
 			let active_era = Self::active_era();
 			if active_era.is_none() {
 				// this offence need not be re-submitted.
-				return Ok(())
+				return Ok(consumed_weight)
 			}
 			active_era.expect("value checked not to be `None`; qed").index
 		};
@@ -3038,8 +3045,9 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, pallet_session::historical::Ident
 
 			// reverse because it's more likely to find reports from recent eras.
 			match eras.iter().rev().filter(|&&(_, ref sesh)| sesh <= &slash_session).next() {
-				None => return Ok(()), // before bonding period. defensive - should be filtered out.
 				Some(&(ref slash_era, _)) => *slash_era,
+				// before bonding period. defensive - should be filtered out.
+				None => return Ok(consumed_weight),
 			}
 		};
 
@@ -3069,6 +3077,7 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, pallet_session::historical::Ident
 				reward_proportion,
 			});
 
+			// TODO Fill up consumed_weight
 			if let Some(mut unapplied) = unapplied {
 				unapplied.reporters = details.reporters.clone();
 				if slash_defer_duration == 0 {
@@ -3084,7 +3093,7 @@ impl <T: Trait> OnOffenceHandler<T::AccountId, pallet_session::historical::Ident
 			}
 		}
 
-		Ok(())
+		Ok(consumed_weight)
 	}
 
 	fn can_report() -> bool {
