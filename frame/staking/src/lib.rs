@@ -3017,7 +3017,6 @@ for Module<T> where
 		}
 
 		let reward_proportion = SlashRewardFraction::get();
-		// TODO fill this up
 		let mut consumed_weight: Weight = 0;
 		let mut add_db_reads_writes = |reads, writes| {
 			consumed_weight += T::DbWeight::get().reads_writes(reads, writes);
@@ -3087,20 +3086,39 @@ for Module<T> where
 				reward_proportion,
 			});
 
-			// TODO how much reads/writes does compute_slash do?
-			// TODO Fill up consumed_weight
 			if let Some(mut unapplied) = unapplied {
+				let nominators_len = unapplied.others.len() as u64;
+				let reporters_len = details.reporters.len() as u64;
+
+				{
+					let upper_bound = 1 /* Validator/NominatorSlashInEra */ + 2 /* fetch_spans */;
+					let rw = upper_bound + nominators_len * upper_bound;
+					add_db_reads_writes(rw, rw);
+				}
 				unapplied.reporters = details.reporters.clone();
 				if slash_defer_duration == 0 {
 					// apply right away.
 					slashing::apply_slash::<T>(unapplied);
+					{
+						let slash_cost = (6, 5);
+						let reward_cost = (2, 2);
+						add_db_reads_writes(
+							slash_cost.0 + nominators_len * slash_cost.0
+								+ reward_cost.0 * reporters_len,
+							slash_cost.1 + nominators_len * slash_cost.1
+								+ reward_cost.1 * reporters_len
+						);
+					}
 				} else {
 					// defer to end of some `slash_defer_duration` from now.
 					<Self as Store>::UnappliedSlashes::mutate(
 						active_era,
 						move |for_later| for_later.push(unapplied),
 					);
+					add_db_reads_writes(1, 1);
 				}
+			} else {
+				add_db_reads_writes(4 /* fetch_spans */, 5 /* kick_out_if_recent */)
 			}
 		}
 
