@@ -537,13 +537,9 @@ fn nominators_also_get_slashed_pro_rata() {
 		mock::start_era(1);
 		let slash_percent = Perbill::from_percent(5);
 		let initial_exposure = Staking::eras_stakers(active_era(), 11);
-		// 101 is a nominator for 11 and 21
+		// 101 is a nominator for 11
 		assert_eq!(
 			initial_exposure.others.first().unwrap().who,
-			101,
-		);
-		assert_eq!(
-			Staking::eras_stakers(active_era(), 21).others.first().unwrap().who,
 			101,
 		);
 
@@ -579,6 +575,10 @@ fn nominators_also_get_slashed_pro_rata() {
 			exposed_nominator,
 			exposed_stake,
 		) * slash_amount;
+
+		// both slash amounts need to be positive for the test to make sense.
+		assert!(validator_share > 0);
+		assert!(nominator_share > 0);
 
 		// both stakes must have been decreased pro-rata.
 		assert_eq!(
