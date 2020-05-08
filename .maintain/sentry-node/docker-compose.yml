@@ -82,13 +82,12 @@ services:
       - "--chain=local"
       - "--port"
       - "30333"
-      - "--charlie"
       - "--sentry"
+      - "/dns4/validator-a/tcp/30333/p2p/QmRpheLN4JWdAnY7HGJfWFNbfkQCb6tFf4vvA6hgjMZKrR"
+      - "--reserved-nodes"
       - "/dns4/validator-a/tcp/30333/p2p/QmRpheLN4JWdAnY7HGJfWFNbfkQCb6tFf4vvA6hgjMZKrR"
       - "--bootnodes"
       - "/dns4/validator-b/tcp/30333/p2p/QmSVnNf9HwVMT1Y4cK1P6aoJcEZjmoTXpjKBmAABLMnZEk"
-      - "--reserved-nodes"
-      - "/dns4/validator-a/tcp/30333/p2p/QmRpheLN4JWdAnY7HGJfWFNbfkQCb6tFf4vvA6hgjMZKrR"
       - "--no-telemetry"
       - "--rpc-cors"
       - "all"
@@ -97,7 +96,6 @@ services:
       - "--unsafe-rpc-external"
       - "--log"
       - "sub-authority-discovery=trace"
-      - "--sentry"
       - "--prometheus-external"
 
   validator-b:

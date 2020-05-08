@@ -177,7 +177,7 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 		if let ExecutionContext::OffchainCall(Some(ext)) = context {
 			extensions.register(
 				OffchainExt::new(offchain::LimitedExternalities::new(capabilities, ext.0))
-			)
+			);
 		}
 
 		(manager, extensions)

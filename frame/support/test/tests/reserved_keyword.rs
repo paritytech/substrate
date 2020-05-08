@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+#[rustversion::attr(not(stable), ignore)]
 #[test]
 fn reserved_keyword() {
 	// As trybuild is using `cargo check`, we don't need the real WASM binaries.

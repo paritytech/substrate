@@ -43,11 +43,12 @@ use node_runtime::{
 	constants::currency::DOLLARS,
 	UncheckedExtrinsic,
 	MinimumPeriod,
+	SystemCall,
 	BalancesCall,
 	AccountId,
 	Signature,
 };
-use sp_core::{ExecutionContext, blake2_256};
+use sp_core::{ExecutionContext, blake2_256, traits::CloneableSpawn};
 use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder;
 use sp_inherents::InherentData;
@@ -57,6 +58,7 @@ use sc_client_api::{
 };
 use sp_core::{Pair, Public, sr25519, ed25519};
 use sc_block_builder::BlockBuilderProvider;
+use futures::{executor, task};
 
 /// Keyring full of accounts for benching.
 ///
@@ -128,17 +130,49 @@ impl Clone for BenchDb {
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum BlockType {
 	/// Bunch of random transfers.
-	RandomTransfers(usize),
+	RandomTransfersKeepAlive(usize),
 	/// Bunch of random transfers that drain all of the source balance.
 	RandomTransfersReaping(usize),
+	/// Bunch of "no-op" calls.
+	Noop(usize),
 }
 
 impl BlockType {
 	/// Number of transactions for this block type.
 	pub fn transactions(&self) -> usize {
 		match self {
-			Self::RandomTransfers(v) | Self::RandomTransfersReaping(v) => *v,
+			Self::RandomTransfersKeepAlive(v) | Self::RandomTransfersReaping(v) | Self::Noop(v) => *v,
 		}
+	}
+}
+
+/// Benchmarking task executor.
+///
+/// Uses multiple threads as the regular executable.
+#[derive(Debug, Clone)]
+pub struct TaskExecutor {
+	pool: executor::ThreadPool,
+}
+
+impl TaskExecutor {
+	fn new() -> Self {
+		Self {
+			pool: executor::ThreadPool::new()
+				.expect("Failed to create task executor")
+		}
+	}
+}
+
+impl task::Spawn for TaskExecutor {
+	fn spawn_obj(&self, future: task::FutureObj<'static, ()>)
+	-> Result<(), task::SpawnError> {
+		self.pool.spawn_obj(future)
+	}
+}
+
+impl CloneableSpawn for TaskExecutor {
+	fn clone(&self) -> Box<dyn CloneableSpawn> {
+		Box::new(Clone::clone(self))
 	}
 }
 
@@ -168,8 +202,8 @@ impl BenchDb {
 	/// and keep it there until struct is dropped.
 	///
 	/// You can `clone` this database or you can `create_context` from it
-	/// (which also do `clone`) to run actual operation against new database
-	/// which will be identical to this.
+	/// (which also does `clone`) to run actual operation against new database
+	/// which will be identical to the original.
 	pub fn new(keyring_length: usize) -> Self {
 		Self::with_key_types(keyring_length, KeyTypes::Sr25519)
 	}
@@ -184,21 +218,22 @@ impl BenchDb {
 			state_cache_size: 16*1024*1024,
 			state_cache_child_ratio: Some((0, 100)),
 			pruning: PruningMode::ArchiveAll,
-			source: sc_client_db::DatabaseSettingsSrc::Path {
+			source: sc_client_db::DatabaseSettingsSrc::RocksDb {
 				path: dir.into(),
 				cache_size: 512,
 			},
 		};
 
-		let (client, backend) = sc_client_db::new_client(
+		let (client, backend) = sc_service::new_client(
 			db_config,
 			NativeExecutor::new(WasmExecutionMethod::Compiled, None, 8),
 			&keyring.generate_genesis(),
 			None,
 			None,
 			ExecutionExtensions::new(profile.into_execution_strategies(), None),
-			sp_core::tasks::executor(),
+			Box::new(TaskExecutor::new()),
 			None,
+			Default::default(),
 		).expect("Should not fail");
 
 		(client, backend)
@@ -255,15 +290,31 @@ impl BenchDb {
 			let signed = self.keyring.sign(
 				CheckedExtrinsic {
 					signed: Some((sender, signed_extra(0, node_runtime::ExistentialDeposit::get() + 1))),
-					function: Call::Balances(
-						BalancesCall::transfer(
-							pallet_indices::address::Address::Id(receiver),
-							match block_type {
-								BlockType::RandomTransfers(_) => node_runtime::ExistentialDeposit::get() + 1,
-								BlockType::RandomTransfersReaping(_) => 100*DOLLARS - node_runtime::ExistentialDeposit::get() - 1,
-							}
-						)
-					),
+					function: match block_type {
+						BlockType::RandomTransfersKeepAlive(_) => {
+							Call::Balances(
+								BalancesCall::transfer_keep_alive(
+									pallet_indices::address::Address::Id(receiver),
+									node_runtime::ExistentialDeposit::get() + 1,
+								)
+							)
+						},
+						BlockType::RandomTransfersReaping(_) => {
+							Call::Balances(
+								BalancesCall::transfer(
+									pallet_indices::address::Address::Id(receiver),
+									// Transfer so that ending balance would be 1 less than existential deposit
+									// so that we kill the sender account.
+									100*DOLLARS - (node_runtime::ExistentialDeposit::get() - 1),
+								)
+							)
+						},
+						BlockType::Noop(_) => {
+							Call::System(
+								SystemCall::remark(Vec::new())
+							)
+						},
+					},
 				},
 				version,
 				genesis_hash,

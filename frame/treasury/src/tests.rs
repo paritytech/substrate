@@ -21,12 +21,12 @@
 use super::*;
 use std::cell::RefCell;
 use frame_support::{
-	assert_noop, assert_ok, impl_outer_origin, parameter_types, weights::Weight,
+	assert_noop, assert_ok, impl_outer_origin, impl_outer_event, parameter_types, weights::Weight,
 	traits::{Contains, OnInitialize}
 };
 use sp_core::H256;
 use sp_runtime::{
-	Perbill,
+	Perbill, ModuleId,
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup, BadOrigin},
 };
@@ -34,6 +34,21 @@ use sp_runtime::{
 impl_outer_origin! {
 	pub enum Origin for Test  where system = frame_system {}
 }
+
+
+mod treasury {
+	// Re-export needed for `impl_outer_event!`.
+	pub use super::super::*;
+}
+
+impl_outer_event! {
+	pub enum Event for Test {
+		system<T>,
+		pallet_balances<T>,
+		treasury<T>,
+	}
+}
+
 
 #[derive(Clone, Eq, PartialEq)]
 pub struct Test;
@@ -53,9 +68,12 @@ impl frame_system::Trait for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = ();
+	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type MaximumBlockWeight = MaximumBlockWeight;
+	type DbWeight = ();
+	type BlockExecutionWeight = ();
+	type ExtrinsicBaseWeight = ();
 	type AvailableBlockRatio = AvailableBlockRatio;
 	type MaximumBlockLength = MaximumBlockLength;
 	type Version = ();
@@ -69,7 +87,7 @@ parameter_types! {
 }
 impl pallet_balances::Trait for Test {
 	type Balance = u64;
-	type Event = ();
+	type Event = Event;
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
@@ -93,6 +111,12 @@ impl Contains<u64> for TenToFourteen {
 		})
 	}
 }
+impl ContainsLengthBound for TenToFourteen {
+	fn max_len() -> usize {
+		TEN_TO_FOURTEEN.with(|v| v.borrow().len())
+	}
+	fn min_len() -> usize { 0 }
+}
 parameter_types! {
 	pub const ProposalBond: Permill = Permill::from_percent(5);
 	pub const ProposalBondMinimum: u64 = 1;
@@ -102,8 +126,10 @@ parameter_types! {
 	pub const TipFindersFee: Percent = Percent::from_percent(20);
 	pub const TipReportDepositBase: u64 = 1;
 	pub const TipReportDepositPerByte: u64 = 1;
+	pub const TreasuryModuleId: ModuleId = ModuleId(*b"py/trsry");
 }
 impl Trait for Test {
+	type ModuleId = TreasuryModuleId;
 	type Currency = pallet_balances::Module<Test>;
 	type ApproveOrigin = frame_system::EnsureRoot<u64>;
 	type RejectOrigin = frame_system::EnsureRoot<u64>;
@@ -112,7 +138,7 @@ impl Trait for Test {
 	type TipFindersFee = TipFindersFee;
 	type TipReportDepositBase = TipReportDepositBase;
 	type TipReportDepositPerByte = TipReportDepositPerByte;
-	type Event = ();
+	type Event = Event;
 	type ProposalRejection = ();
 	type ProposalBond = ProposalBond;
 	type ProposalBondMinimum = ProposalBondMinimum;
@@ -205,21 +231,57 @@ fn report_awesome_from_beneficiary_and_tip_works() {
 #[test]
 fn close_tip_works() {
 	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
 		assert_eq!(Treasury::pot(), 100);
 
 		assert_ok!(Treasury::tip_new(Origin::signed(10), b"awesome.dot".to_vec(), 3, 10));
+
 		let h = tip_hash();
+
+		assert_eq!(
+			System::events().into_iter().map(|r| r.event)
+				.filter_map(|e| {
+					if let Event::treasury(inner) = e { Some(inner) } else { None }
+				})
+				.last()
+				.unwrap(),
+			RawEvent::NewTip(h),
+		);
+
 		assert_ok!(Treasury::tip(Origin::signed(11), h.clone(), 10));
+
 		assert_noop!(Treasury::close_tip(Origin::signed(0), h.into()), Error::<Test>::StillOpen);
 
 		assert_ok!(Treasury::tip(Origin::signed(12), h.clone(), 10));
+
+		assert_eq!(
+			System::events().into_iter().map(|r| r.event)
+				.filter_map(|e| {
+					if let Event::treasury(inner) = e { Some(inner) } else { None }
+				})
+				.last()
+				.unwrap(),
+			RawEvent::TipClosing(h),
+		);
+
 		assert_noop!(Treasury::close_tip(Origin::signed(0), h.into()), Error::<Test>::Premature);
 
 		System::set_block_number(2);
 		assert_noop!(Treasury::close_tip(Origin::NONE, h.into()), BadOrigin);
 		assert_ok!(Treasury::close_tip(Origin::signed(0), h.into()));
 		assert_eq!(Balances::free_balance(3), 10);
+
+		assert_eq!(
+			System::events().into_iter().map(|r| r.event)
+				.filter_map(|e| {
+					if let Event::treasury(inner) = e { Some(inner) } else { None }
+				})
+				.last()
+				.unwrap(),
+			RawEvent::TipClosed(h, 3, 10),
+		);
 
 		assert_noop!(Treasury::close_tip(Origin::signed(100), h.into()), Error::<Test>::UnknownTip);
 	});

@@ -17,8 +17,8 @@
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::*;
 use sp_std::borrow::Borrow;
-use codec::{FullCodec, FullEncode, Decode, Encode, EncodeLike, Ref, EncodeAppend};
-use crate::{storage::{self, unhashed}, traits::Len};
+use codec::{FullCodec, FullEncode, Decode, Encode, EncodeLike};
+use crate::{storage::{self, unhashed, StorageAppend}, traits::Len, Never};
 use crate::hash::{StorageHasher, Twox128, ReversibleStorageHasher};
 
 /// Generator for `StorageMap` used by `decl_storage`.
@@ -229,27 +229,11 @@ impl<K: FullEncode, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V>
 	}
 
 	fn mutate<KeyArg: EncodeLike<K>, R, F: FnOnce(&mut Self::Query) -> R>(key: KeyArg, f: F) -> R {
-		let final_key = Self::storage_map_final_key(key);
-		let mut val = G::from_optional_value_to_query(unhashed::get(final_key.as_ref()));
-
-		let ret = f(&mut val);
-		match G::from_query_to_optional_value(val) {
-			Some(ref val) => unhashed::put(final_key.as_ref(), &val),
-			None => unhashed::kill(final_key.as_ref()),
-		}
-		ret
+		Self::try_mutate(key, |v| Ok::<R, Never>(f(v))).expect("`Never` can not be constructed; qed")
 	}
 
 	fn mutate_exists<KeyArg: EncodeLike<K>, R, F: FnOnce(&mut Option<V>) -> R>(key: KeyArg, f: F) -> R {
-		let final_key = Self::storage_map_final_key(key);
-		let mut val = unhashed::get(final_key.as_ref());
-
-		let ret = f(&mut val);
-		match val {
-			Some(ref val) => unhashed::put(final_key.as_ref(), &val),
-			None => unhashed::kill(final_key.as_ref()),
-		}
-		ret
+		Self::try_mutate_exists(key, |v| Ok::<R, Never>(f(v))).expect("`Never` can not be constructed; qed")
 	}
 
 	fn try_mutate<KeyArg: EncodeLike<K>, R, E, F: FnOnce(&mut Self::Query) -> Result<R, E>>(
@@ -292,43 +276,15 @@ impl<K: FullEncode, V: FullCodec, G: StorageMap<K, V>> storage::StorageMap<K, V>
 		G::from_optional_value_to_query(value)
 	}
 
-	fn append<Items, Item, EncodeLikeItem, KeyArg>(key: KeyArg, items: Items) -> Result<(), &'static str>
+	fn append<Item, EncodeLikeItem, EncodeLikeKey>(key: EncodeLikeKey, item: EncodeLikeItem)
 	where
-		KeyArg: EncodeLike<K>,
+		EncodeLikeKey: EncodeLike<K>,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
-		V: EncodeAppend<Item=Item>,
-		Items: IntoIterator<Item=EncodeLikeItem>,
-		Items::IntoIter: ExactSizeIterator,
+		V: StorageAppend<Item>,
 	{
 		let key = Self::storage_map_final_key(key);
-		let encoded_value = unhashed::get_raw(key.as_ref())
-			.unwrap_or_else(|| {
-				match G::from_query_to_optional_value(G::from_optional_value_to_query(None)) {
-					Some(value) => value.encode(),
-					None => Vec::new(),
-				}
-			});
-
-		let new_val = V::append_or_new(
-			encoded_value,
-			items,
-		).map_err(|_| "Could not append given item")?;
-		unhashed::put_raw(key.as_ref(), &new_val);
-		Ok(())
-	}
-
-	fn append_or_insert<Items, Item, EncodeLikeItem, KeyArg>(key: KeyArg, items: Items)
-	where
-		KeyArg: EncodeLike<K>,
-		Item: Encode,
-		EncodeLikeItem: EncodeLike<Item>,
-		V: EncodeAppend<Item=Item>,
-		Items: IntoIterator<Item=EncodeLikeItem> + Clone + EncodeLike<V>,
-		Items::IntoIter: ExactSizeIterator,
-	{
-		Self::append(Ref::from(&key), items.clone())
-			.unwrap_or_else(|_| Self::insert(key, items));
+		sp_io::storage::append(&key, item.encode());
 	}
 
 	fn decode_len<KeyArg: EncodeLike<K>>(key: KeyArg) -> Result<usize, &'static str>

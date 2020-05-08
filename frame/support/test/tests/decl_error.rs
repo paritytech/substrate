@@ -19,6 +19,7 @@
 use sp_runtime::{generic, traits::{BlakeTwo256, Block as _, Verify}, DispatchError};
 use sp_core::{H256, sr25519};
 
+
 mod system;
 
 pub trait Currency {}
@@ -32,7 +33,7 @@ mod module1 {
 		pub struct Module<T: Trait<I>, I: Instance = DefaultInstance> for enum Call
 			where origin: <T as system::Trait>::Origin
 		{
-			#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+			#[weight = 0]
 			pub fn fail(_origin) -> frame_support::dispatch::DispatchResult {
 				Err(Error::<T, I>::Something.into())
 			}
@@ -59,7 +60,7 @@ mod module2 {
 		pub struct Module<T: Trait> for enum Call
 			where origin: <T as system::Trait>::Origin
 		{
-			#[weight = frame_support::weights::SimpleDispatchInfo::default()]
+			#[weight = 0]
 			pub fn fail(_origin) -> frame_support::dispatch::DispatchResult {
 				Err(Error::<T>::Something.into())
 			}

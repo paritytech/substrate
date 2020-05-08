@@ -91,7 +91,7 @@ fn into_impl(count: usize) -> TokenStream2 {
 				}
 
 				// defensive only. Since Percent doesn't have `Sub`.
-				let p2 = _phragmen::sp_runtime::traits::Saturating::saturating_sub(
+				let p2 = _phragmen::sp_arithmetic::traits::Saturating::saturating_sub(
 					Accuracy::one(),
 					p1,
 				);
@@ -115,7 +115,7 @@ fn into_impl(count: usize) -> TokenStream2 {
 				let mut inners_parsed = inners
 					.iter()
 					.map(|(ref t_idx, p)| {
-						sum = _phragmen::sp_runtime::traits::Saturating::saturating_add(sum, *p);
+						sum = _phragmen::sp_arithmetic::traits::Saturating::saturating_add(sum, *p);
 						let target = target_at(*t_idx).ok_or(_phragmen::Error::CompactInvalidIndex)?;
 						Ok((target, *p))
 					})
@@ -126,7 +126,7 @@ fn into_impl(count: usize) -> TokenStream2 {
 				}
 
 				// defensive only. Since Percent doesn't have `Sub`.
-				let p_last = _phragmen::sp_runtime::traits::Saturating::saturating_sub(
+				let p_last = _phragmen::sp_arithmetic::traits::Saturating::saturating_sub(
 					Accuracy::one(),
 					sum,
 				);
@@ -163,7 +163,7 @@ pub(crate) fn assignment(
 			#voter_type: _phragmen::codec::Codec + Default + Copy,
 			#target_type: _phragmen::codec::Codec + Default + Copy,
 			Accuracy:
-				_phragmen::codec::Codec + Default + Clone + _phragmen::sp_runtime::PerThing +
+				_phragmen::codec::Codec + Default + Clone + _phragmen::sp_arithmetic::PerThing +
 				PartialOrd,
 		>
 		#ident<#voter_type, #target_type, Accuracy>

@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::error;
-use crate::params::{BlockNumber, PruningParams, SharedParams};
+use crate::params::{BlockNumber, DatabaseParams, PruningParams, SharedParams};
 use crate::CliConfiguration;
 use log::info;
 use sc_service::{
@@ -48,7 +48,7 @@ pub struct ExportBlocksCmd {
 	pub to: Option<BlockNumber>,
 
 	/// Use binary output rather than JSON.
-	#[structopt(long = "binary", value_name = "BOOL", parse(try_from_str), default_value("false"))]
+	#[structopt(long)]
 	pub binary: bool,
 
 	#[allow(missing_docs)]
@@ -58,6 +58,10 @@ pub struct ExportBlocksCmd {
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub pruning_params: PruningParams,
+
+	#[allow(missing_docs)]
+	#[structopt(flatten)]
+	pub database_params: DatabaseParams,
 }
 
 impl ExportBlocksCmd {
@@ -74,7 +78,7 @@ impl ExportBlocksCmd {
 		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
 		<BB as BlockT>::Hash: std::str::FromStr,
 	{
-		if let DatabaseConfig::Path { ref path, .. } = &config.database {
+		if let DatabaseConfig::RocksDb { ref path, .. } = &config.database {
 			info!("DB path: {}", path.display());
 		}
 
@@ -102,5 +106,9 @@ impl CliConfiguration for ExportBlocksCmd {
 
 	fn pruning_params(&self) -> Option<&PruningParams> {
 		Some(&self.pruning_params)
+	}
+
+	fn database_params(&self) -> Option<&DatabaseParams> {
+		Some(&self.database_params)
 	}
 }

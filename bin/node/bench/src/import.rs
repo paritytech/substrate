@@ -37,15 +37,32 @@ use sp_runtime::generic::BlockId;
 
 use crate::core::{self, Path, Mode};
 
-#[derive(Clone, Copy, Debug)]
-pub enum SizeType { Small, Medium, Large }
+#[derive(Clone, Copy, Debug, derive_more::Display)]
+pub enum SizeType {
+	#[display(fmt = "empty")]
+	Empty,
+	#[display(fmt = "small")]
+	Small,
+	#[display(fmt = "medium")]
+	Medium,
+	#[display(fmt = "large")]
+	Large,
+	#[display(fmt = "full")]
+	Full,
+	#[display(fmt = "custom")]
+	Custom,
+}
 
 impl SizeType {
-	fn transactions(&self) -> usize {
+	pub fn transactions(&self) -> usize {
 		match self {
+			SizeType::Empty => 0,
 			SizeType::Small => 10,
 			SizeType::Medium => 100,
 			SizeType::Large => 500,
+			SizeType::Full => 4000,
+			// Custom SizeType will use the `--transactions` input parameter
+			SizeType::Custom => 0,
 		}
 	}
 }
@@ -53,6 +70,7 @@ impl SizeType {
 pub struct ImportBenchmarkDescription {
 	pub profile: Profile,
 	pub key_types: KeyTypes,
+	pub block_type: BlockType,
 	pub size: SizeType,
 }
 
@@ -77,19 +95,24 @@ impl core::BenchmarkDescription for ImportBenchmarkDescription {
 			KeyTypes::Ed25519 => path.push("ed25519"),
 		}
 
-		match self.size {
-			SizeType::Small => path.push("small"),
-			SizeType::Medium => path.push("medium"),
-			SizeType::Large => path.push("large"),
+		match self.block_type {
+			BlockType::RandomTransfersKeepAlive(_) => path.push("transfer_keep_alive"),
+			BlockType::RandomTransfersReaping(_) => path.push("transfer_reaping"),
+			BlockType::Noop(_) => path.push("noop"),
 		}
+
+		path.push(&format!("{}", self.size));
 
 		path
 	}
 
 	fn setup(self: Box<Self>) -> Box<dyn core::Benchmark> {
 		let profile = self.profile;
-		let mut bench_db = BenchDb::with_key_types(self.size.transactions(), self.key_types);
-		let block = bench_db.generate_block(BlockType::RandomTransfers(self.size.transactions()));
+		let mut bench_db = BenchDb::with_key_types(
+			50_000,
+			self.key_types
+		);
+		let block = bench_db.generate_block(self.block_type);
 		Box::new(ImportBenchmark {
 			database: bench_db,
 			block,
@@ -98,10 +121,11 @@ impl core::BenchmarkDescription for ImportBenchmarkDescription {
 	}
 
 	fn name(&self) -> Cow<'static, str> {
-		match self.profile {
-			Profile::Wasm => "Import benchmark (random transfers, wasm)".into(),
-			Profile::Native => "Import benchmark (random transfers, native)".into(),
-		}
+		format!(
+			"Import benchmark ({:?}, {:?})",
+			self.block_type,
+			self.profile,
+		).into()
 	}
 }
 
@@ -113,12 +137,16 @@ impl core::Benchmark for ImportBenchmark {
 			.expect("Failed to get runtime version")
 			.spec_version;
 
+		if mode == Mode::Profile {
+			std::thread::park_timeout(std::time::Duration::from_secs(3));
+		}
+
 		let start = std::time::Instant::now();
 		context.import_block(self.block.clone());
 		let elapsed = start.elapsed();
 
 		if mode == Mode::Profile {
-			std::thread::park_timeout(std::time::Duration::from_secs(2));
+			std::thread::park_timeout(std::time::Duration::from_secs(1));
 		}
 
 		log::info!(

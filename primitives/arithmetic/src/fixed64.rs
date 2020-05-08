@@ -49,9 +49,6 @@ impl Fixed64 {
 	}
 
 	/// Consume self and return the inner value.
-	///
-	/// This should only be used for testing.
-	#[cfg(any(feature = "std", test))]
 	pub fn into_inner(self) -> i64 { self.0 }
 
 	/// Raw constructor. Equal to `parts / 1_000_000_000`.
@@ -104,6 +101,10 @@ impl Fixed64 {
 			int.saturating_sub(excess)
 		}
 	}
+
+	pub fn is_negative(&self) -> bool {
+		self.0.is_negative()
+	}
 }
 
 impl Saturating for Fixed64 {
@@ -112,7 +113,10 @@ impl Saturating for Fixed64 {
 	}
 
 	fn saturating_mul(self, rhs: Self) -> Self {
-		Self(self.0.saturating_mul(rhs.0) / DIV)
+		let a = self.0 as i128;
+		let b = rhs.0 as i128;
+		let res = a * b / DIV as i128;
+		Self(res.saturated_into())
 	}
 
 	fn saturating_sub(self, rhs: Self) -> Self {
@@ -120,12 +124,26 @@ impl Saturating for Fixed64 {
 	}
 
 	fn saturating_pow(self, exp: usize) -> Self {
-		Self(self.0.saturating_pow(exp as u32))
+		if exp == 0 {
+			return Self::from_natural(1);
+		}
+
+		let exp = exp as u64;
+		let msb_pos = 64 - exp.leading_zeros();
+
+		let mut result = Self::from_natural(1);
+		let mut pow_val = self;
+		for i in 0..msb_pos {
+			if ((1 << i) & exp) > 0 {
+				result = result.saturating_mul(pow_val);
+			}
+			pow_val = pow_val.saturating_mul(pow_val);
+		}
+		result
 	}
 }
 
-/// Note that this is a standard, _potentially-panicking_, implementation. Use `Saturating` trait
-/// for safe addition.
+/// Use `Saturating` trait for safe addition.
 impl ops::Add for Fixed64 {
 	type Output = Self;
 
@@ -134,8 +152,7 @@ impl ops::Add for Fixed64 {
 	}
 }
 
-/// Note that this is a standard, _potentially-panicking_, implementation. Use `Saturating` trait
-/// for safe subtraction.
+/// Use `Saturating` trait for safe subtraction.
 impl ops::Sub for Fixed64 {
 	type Output = Self;
 
@@ -144,15 +161,13 @@ impl ops::Sub for Fixed64 {
 	}
 }
 
-/// Note that this is a standard, _potentially-panicking_, implementation. Use `CheckedDiv` trait
-/// for safe division.
+/// Use `CheckedDiv` trait for safe division.
 impl ops::Div for Fixed64 {
 	type Output = Self;
 
 	fn div(self, rhs: Self) -> Self::Output {
 		if rhs.0 == 0 {
-			let zero = 0;
-			return Fixed64::from_parts( self.0 / zero);
+			panic!("attempt to divide by zero");
 		}
 		let (n, d) = if rhs.0 < 0 {
 			(-self.0, rhs.0.abs() as u64)
@@ -188,7 +203,13 @@ impl CheckedDiv for Fixed64 {
 impl sp_std::fmt::Debug for Fixed64 {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		write!(f, "Fixed64({},{})", self.0 / DIV, (self.0 % DIV) / 1000)
+		let integral = {
+			let int = self.0 / DIV;
+			let signum_for_zero = if int == 0 && self.is_negative() { "-" } else { "" };
+			format!("{}{}", signum_for_zero, int)
+		};
+		let fractional = format!("{:0>9}", (self.0 % DIV).abs());
+		write!(f, "Fixed64({}.{})", integral, fractional)
 	}
 
 	#[cfg(not(feature = "std"))]
@@ -328,5 +349,33 @@ mod tests {
 		let a = Fixed64::from_rational(12, 10);
 		let b = Fixed64::from_rational(1, 100);
 		assert_eq!(a.checked_div(&b), Some(Fixed64::from_rational(120, 1)));
+	}
+
+	#[test]
+	fn saturating_mul_should_work() {
+		assert_eq!(Fixed64::from_natural(100).saturating_mul(Fixed64::from_natural(100)), Fixed64::from_natural(10000));
+	}
+
+	#[test]
+	fn saturating_pow_should_work() {
+		assert_eq!(Fixed64::from_natural(2).saturating_pow(0), Fixed64::from_natural(1));
+		assert_eq!(Fixed64::from_natural(2).saturating_pow(1), Fixed64::from_natural(2));
+		assert_eq!(Fixed64::from_natural(2).saturating_pow(2), Fixed64::from_natural(4));
+		assert_eq!(Fixed64::from_natural(2).saturating_pow(3), Fixed64::from_natural(8));
+		assert_eq!(Fixed64::from_natural(2).saturating_pow(20), Fixed64::from_natural(1048576));
+
+		assert_eq!(Fixed64::from_natural(1).saturating_pow(1000), Fixed64::from_natural(1));
+		assert_eq!(Fixed64::from_natural(-1).saturating_pow(1000), Fixed64::from_natural(1));
+		assert_eq!(Fixed64::from_natural(-1).saturating_pow(1001), Fixed64::from_natural(-1));
+		assert_eq!(Fixed64::from_natural(1).saturating_pow(usize::max_value()), Fixed64::from_natural(1));
+		assert_eq!(Fixed64::from_natural(-1).saturating_pow(usize::max_value()), Fixed64::from_natural(-1));
+		assert_eq!(Fixed64::from_natural(-1).saturating_pow(usize::max_value() - 1), Fixed64::from_natural(1));
+
+		assert_eq!(Fixed64::from_natural(309).saturating_pow(4), Fixed64::from_natural(9_116_621_361));
+		assert_eq!(Fixed64::from_natural(309).saturating_pow(5), Fixed64::from_parts(i64::max_value()));
+
+		assert_eq!(Fixed64::from_natural(1).saturating_pow(usize::max_value()), Fixed64::from_natural(1));
+		assert_eq!(Fixed64::from_natural(0).saturating_pow(usize::max_value()), Fixed64::from_natural(0));
+		assert_eq!(Fixed64::from_natural(2).saturating_pow(usize::max_value()), Fixed64::from_parts(i64::max_value()));
 	}
 }

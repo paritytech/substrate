@@ -93,17 +93,29 @@ pub struct RuntimeVersion {
 		)
 	)]
 	pub apis: ApisVec,
+
+	/// All existing dispatches are fully compatible when this number doesn't change. If this
+	/// number changes, then `spec_version` must change, also.
+	///
+	/// This number must change when an existing dispatchable (module ID, dispatch ID) is changed,
+	/// either through an alteration in its user-level semantics, a parameter added/removed/changed,
+	/// a dispatchable being removed, a module being removed, or a dispatchable/module changing its
+	/// index.
+	///
+	/// It need *not* change when a new module is added or when a dispatchable is added.
+	pub transaction_version: u32,
 }
 
 #[cfg(feature = "std")]
 impl fmt::Display for RuntimeVersion {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "{}-{}:{}({}-{})",
+		write!(f, "{}-{} ({}-{}.tx{}.au{})",
 			self.spec_name,
 			self.spec_version,
-			self.authoring_version,
 			self.impl_name,
-			self.impl_version
+			self.impl_version,
+			self.transaction_version,
+			self.authoring_version,
 		)
 	}
 }

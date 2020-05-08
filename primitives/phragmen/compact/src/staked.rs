@@ -73,7 +73,7 @@ fn into_impl(count: usize) -> TokenStream2 {
 		quote!(
 			for (voter_index, target_index) in self.#name {
 				let who = voter_at(voter_index).ok_or(_phragmen::Error::CompactInvalidIndex)?;
-				let all_stake = max_of(&who);
+				let all_stake: u128 = max_of(&who).into();
 				assignments.push(_phragmen::StakedAssignment {
 					who,
 					distribution: vec![(target_at(target_index).ok_or(_phragmen::Error::CompactInvalidIndex)?, all_stake)],
@@ -87,7 +87,7 @@ fn into_impl(count: usize) -> TokenStream2 {
 		quote!(
 			for (voter_index, (t1_idx, w1), t2_idx) in self.#name {
 				let who = voter_at(voter_index).ok_or(_phragmen::Error::CompactInvalidIndex)?;
-				let all_stake = max_of(&who);
+				let all_stake: u128 = max_of(&who).into();
 
 				if w1 >= all_stake {
 					return Err(_phragmen::Error::CompactStakeOverflow);
@@ -112,7 +112,7 @@ fn into_impl(count: usize) -> TokenStream2 {
 			for (voter_index, inners, t_last_idx) in self.#name {
 				let who = voter_at(voter_index).ok_or(_phragmen::Error::CompactInvalidIndex)?;
 				let mut sum = u128::min_value();
-				let all_stake = max_of(&who);
+				let all_stake: u128 = max_of(&who).into();
 
 				let mut inners_parsed = inners
 					.iter()
@@ -154,6 +154,7 @@ pub(crate) fn staked(
 
 	let from_impl = from_impl(count);
 	let into_impl = into_impl(count);
+
 	quote!(
 		impl<
 			#voter_type: _phragmen::codec::Codec + Default + Copy,
@@ -196,7 +197,7 @@ pub(crate) fn staked(
 			)
 				-> Result<Vec<_phragmen::StakedAssignment<A>>, _phragmen::Error>
 			where
-				for<'r> FM: Fn(&'r A) -> u128,
+				for<'r> FM: Fn(&'r A) -> u64,
 				A: _phragmen::IdentifierT,
 			{
 				let mut assignments: Vec<_phragmen::StakedAssignment<A>> = Default::default();

@@ -77,7 +77,6 @@ mod tests {
 			WasmExecutionMethod::Interpreted,
 			Some(8),
 			sp_io::SubstrateHostFunctions::host_functions(),
-			true,
 			8,
 		);
 		let res = executor.call_in_wasm(
@@ -86,6 +85,7 @@ mod tests {
 			"test_empty_return",
 			&[],
 			&mut ext,
+			sp_core::traits::MissingHostFunctions::Allow,
 		).unwrap();
 		assert_eq!(res, vec![0u8; 0]);
 	}

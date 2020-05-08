@@ -16,11 +16,10 @@
 
 //! (very) Basic implementation of a graph node used in the reduce algorithm.
 
-use sp_runtime::RuntimeDebug;
 use sp_std::{cell::RefCell, fmt, prelude::*, rc::Rc};
 
 /// The role that a node can accept.
-#[derive(PartialEq, Eq, Ord, PartialOrd, Clone, RuntimeDebug)]
+#[derive(PartialEq, Eq, Ord, PartialOrd, Clone, Debug)]
 pub(crate) enum NodeRole {
 	/// A voter. This is synonym to a nominator in a staking context.
 	Voter,

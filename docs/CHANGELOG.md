@@ -6,9 +6,52 @@ The format is based on [Keep a Changelog].
 
 ## Unreleased
 
+## 2.0.0-alpha.6 -> 2.0.0-alpha.7
+
+Runtime
+-------
+
+* Use `storage::append` in the implementation of the storage types (#5889)
+* pallet-sudo: Store `DispatchResult` in `Sudid` event (#5804)
+* Enable Offchain Equalise (#5683)
+* Add support for custom runtime upgrade logic (#5782)
+* Require `fn` token in `decl_storage` `get` (#5717)
+* Child trie api changes BREAKING (#4857)
+* Pass max-total to RewardRemainder on end_era (#5697)
+* Transaction versioning in the RuntimeVersion (#5582)
+* emit TipClosed event on success tip payout (#5656)
+
+Client
+------
+
+* Adds `export-state` subcommand (#5842)
+* Drop ClientProvider (#5823)
+* Move spawning tasks from thread pools to Service's TaskManager for block importing (#5647)
+* Reputation penalty for sending empty block response (#5814)
+* Move sc-client into sc-service (#5502)
+* Use new block requests protocol (#5760)
+* Fix leak in stream notifications (#5739)
+* network: Only insert global addresses into the DHT. (#5735)
+* enum Pays for PaysFee (#5733)
+* Migrate away from `SimpleDispatchInfo` (#5686)
+* Child trie api changes BREAKING (#4857)
+* subkey: compute and inspect a moduleid (#5676)
+* Listen on ipv6 by default as well (#5677)
+* Adjustments to Kademlia-related metrics (#5660)
+* client/authority-discovery: Allow to be run by sentry node (#5568)
+* Add alternative RPC methods to system_networkState (#5643)
+* Several tweaks to networking Prometheus metrics (#5636)
+* Use a Kademlia instance per `ProtocolId`. (#5045)
+* Report tasks metrics to Prometheus (#5619)
+
+API
+---
+
+* Child trie api changes BREAKING (#4857)
+* Pass max-total to RewardRemainder on end_era (#5697)
+* Implement iter for doublemap (#5504)
 
 ## 2.0.0-alpha.5 -> 2.0.0-alpha.6
-
 
 Runtime
 -------

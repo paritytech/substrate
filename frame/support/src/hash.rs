@@ -60,7 +60,12 @@ pub trait StorageHasher: 'static {
 }
 
 /// Hasher to use to hash keys to insert to storage.
+///
+/// Reversible hasher store the encoded key after the hash part.
 pub trait ReversibleStorageHasher: StorageHasher {
+	/// Split the hash part out of the input.
+	///
+	/// I.e. for input `&[hash ++ key ++ some]` returns `&[key ++ some]`
 	fn reverse(x: &[u8]) -> &[u8];
 }
 

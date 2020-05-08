@@ -21,18 +21,31 @@
 use super::*;
 use sp_std::prelude::*;
 use frame_system::RawOrigin;
+use frame_support::{ensure, traits::OnFinalize};
 use frame_benchmarking::benchmarks;
+
+use crate::Module as Timestamp;
 
 const MAX_TIME: u32 = 100;
 
 benchmarks! {
-	_ {
-		let n in 1 .. MAX_TIME => ();
-	}
+	_ { }
 
 	set {
-		let n in ...;
-	}: _(RawOrigin::None, n.into())
+		let t in 1 .. MAX_TIME;
+	}: _(RawOrigin::None, t.into())
+	verify {
+		ensure!(Timestamp::<T>::now() == t.into(), "Time was not set.");
+	}
+
+	on_finalize {
+		let t in 1 .. MAX_TIME;
+		Timestamp::<T>::set(RawOrigin::None.into(), t.into())?;
+		ensure!(DidUpdate::exists(), "Time was not set.");
+	}: { Timestamp::<T>::on_finalize(t.into()); }
+	verify {
+		ensure!(!DidUpdate::exists(), "Time was not removed.");
+	}
 }
 
 #[cfg(test)]
@@ -45,6 +58,7 @@ mod tests {
 	fn test_benchmarks() {
 		new_test_ext().execute_with(|| {
 			assert_ok!(test_benchmark_set::<Test>());
+			assert_ok!(test_benchmark_on_finalize::<Test>());
 		});
 	}
 }

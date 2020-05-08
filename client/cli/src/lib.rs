@@ -35,7 +35,7 @@ use log::info;
 pub use params::*;
 use regex::Regex;
 pub use runner::*;
-use sc_service::{ChainSpec, Configuration};
+use sc_service::{ChainSpec, Configuration, TaskType};
 use std::future::Future;
 use std::io::Write;
 use std::pin::Pin;
@@ -177,7 +177,7 @@ pub trait SubstrateCli: Sized {
 	fn create_configuration<T: CliConfiguration>(
 		&self,
 		command: &T,
-		task_executor: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send + Sync>,
+		task_executor: Arc<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>, TaskType) + Send + Sync>,
 	) -> error::Result<Configuration> {
 		command.create_configuration(self, task_executor)
 	}

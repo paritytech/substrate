@@ -81,12 +81,15 @@ impl IdentifyAccount for sp_core::ecdsa::Public {
 pub trait Verify {
 	/// Type of the signer.
 	type Signer: IdentifyAccount;
-	/// Verify a signature. Return `true` if signature is valid for the value.
+	/// Verify a signature.
+	///
+	/// Return `true` if signature is valid for the value.
 	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &<Self::Signer as IdentifyAccount>::AccountId) -> bool;
 }
 
 impl Verify for sp_core::ed25519::Signature {
 	type Signer = sp_core::ed25519::Public;
+
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &sp_core::ed25519::Public) -> bool {
 		sp_io::crypto::ed25519_verify(self, msg.get(), signer)
 	}
@@ -94,6 +97,7 @@ impl Verify for sp_core::ed25519::Signature {
 
 impl Verify for sp_core::sr25519::Signature {
 	type Signer = sp_core::sr25519::Public;
+
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &sp_core::sr25519::Public) -> bool {
 		sp_io::crypto::sr25519_verify(self, msg.get(), signer)
 	}
@@ -711,7 +715,7 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> Result<Self::Pre, TransactionValidityError> {
-		self.validate(who, call, info.clone(), len)
+		self.validate(who, call, info, len)
 			.map(|_| Self::Pre::default())
 			.map_err(Into::into)
 	}
@@ -745,7 +749,7 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> Result<Self::Pre, TransactionValidityError> {
-		Self::validate_unsigned(call, info.clone(), len)
+		Self::validate_unsigned(call, info, len)
 			.map(|_| Self::Pre::default())
 			.map_err(Into::into)
 	}
@@ -775,7 +779,7 @@ pub trait SignedExtension: Codec + Debug + Sync + Send + Clone + Eq + PartialEq 
 
 	/// Returns the list of unique identifier for this signed extension.
 	///
-	/// As a [`SignedExtension`] can be a tuple of [`SignedExtension`]`s we need to return a `Vec`
+	/// As a [`SignedExtension`] can be a tuple of [`SignedExtension`]s we need to return a `Vec`
 	/// that holds all the unique identifiers. Each individual `SignedExtension` must return
 	/// *exactly* one identifier.
 	///
@@ -1297,7 +1301,7 @@ impl Printable for Tuple {
 	}
 }
 
-/// Something that can convert a [`BlockId`] to a number or a hash.
+/// Something that can convert a [`BlockId`](crate::generic::BlockId) to a number or a hash.
 #[cfg(feature = "std")]
 pub trait BlockIdTo<Block: self::Block> {
 	/// The error type that will be returned by the functions.

@@ -57,6 +57,18 @@ pub fn blake2_128(data: &[u8]) -> [u8; 16] {
 	r
 }
 
+/// Do a Blake2 64-bit hash and place result in `dest`.
+pub fn blake2_64_into(data: &[u8], dest: &mut [u8; 8]) {
+	dest.copy_from_slice(blake2_rfc::blake2b::blake2b(8, &[], data).as_bytes());
+}
+
+/// Do a Blake2 64-bit hash and return result.
+pub fn blake2_64(data: &[u8]) -> [u8; 8] {
+	let mut r = [0; 8];
+	blake2_64_into(data, &mut r);
+	r
+}
+
 /// Do a XX 64-bit hash and place result in `dest`.
 pub fn twox_64_into(data: &[u8], dest: &mut [u8; 8]) {
 	use ::core::hash::Hasher;

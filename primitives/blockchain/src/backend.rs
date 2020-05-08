@@ -242,7 +242,7 @@ pub trait Cache<Block: BlockT>: Send + Sync {
 }
 
 /// Blockchain info
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Info<Block: BlockT> {
 	/// Best block hash.
 	pub best_hash: Block::Hash,

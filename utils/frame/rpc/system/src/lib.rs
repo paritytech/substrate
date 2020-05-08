@@ -19,10 +19,7 @@
 use std::sync::Arc;
 
 use codec::{self, Codec, Decode, Encode};
-use sc_client::{
-	light::blockchain::{future_header, RemoteBlockchain},
-	light::fetcher::{Fetcher, RemoteCallRequest},
-};
+use sc_client_api::light::{future_header, RemoteBlockchain, Fetcher, RemoteCallRequest};
 use jsonrpc_core::{
 	Error, ErrorCode,
 	futures::future::{result, Future},
@@ -236,7 +233,11 @@ mod tests {
 		let _ = env_logger::try_init();
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let pool = Arc::new(
-			BasicPool::new(Default::default(), Arc::new(FullChainApi::new(client.clone()))).0
+			BasicPool::new(
+				Default::default(),
+				Arc::new(FullChainApi::new(client.clone())),
+				None,
+			).0
 		);
 
 		let source = sp_runtime::transaction_validity::TransactionSource::External;

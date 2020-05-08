@@ -268,10 +268,14 @@ impl INPoS {
 		}
 	}
 
+	// calculates x from:
+	// y = i_0 + (i_ideal * x_ideal - i_0) * 2^((x_ideal - x)/d)
+	// See web3 docs for the details
 	fn compute_opposite_after_x_ideal(&self, y: u32) -> u32 {
 		if y == self.i_0 {
 			return u32::max_value();
 		}
+		// Note: the log term calculated here represents a per_million value
 		let log = log2(self.i_ideal_times_x_ideal - self.i_0, y - self.i_0);
 
 		let term: u32 = ((self.d as u64 * log as u64) / 1_000_000).try_into().unwrap();
