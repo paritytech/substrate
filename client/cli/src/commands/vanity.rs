@@ -59,16 +59,18 @@ pub struct VanityCmd {
 
 impl VanityCmd {
 	/// Run the command
-	pub fn run(self) -> error::Result<()> {
-		let desired: String = self.pattern.unwrap_or_default();
-		let formated_seed = with_crypto_scheme!(self.crypto_scheme.scheme, generate_key(&desired))?;
+	pub fn run(&self) -> error::Result<()> {
+		let desired: &str = self.pattern.as_ref()
+			.map(String::as_str)
+			.unwrap_or("");
+		let formated_seed = with_crypto_scheme!(self.crypto_scheme.scheme, generate_key(desired))?;
 		with_crypto_scheme!(
 			self.crypto_scheme.scheme,
 			print_from_uri(
 				&formated_seed,
 				None,
-				self.network_scheme.network,
-				self.output_scheme.output_type
+				self.network_scheme.network.clone(),
+				self.output_scheme.output_type.clone()
 			)
 		);
 		Ok(())

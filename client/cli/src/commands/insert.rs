@@ -64,12 +64,12 @@ pub struct InsertCmd {
 
 impl InsertCmd {
 	/// Run the command
-	pub fn run<RA>(self) -> error::Result<()>
+	pub fn run<RA>(&self) -> error::Result<()>
 		where
 			RA: RuntimeAdapter,
 			HashFor<RA>: DeserializeOwned + Serialize + Send + Sync,
 	{
-		let suri = read_uri(self.suri)?;
+		let suri = read_uri(self.suri.as_ref())?;
 		let password = self.keystore_params.read_password()?;
 
 		let public = with_crypto_scheme!(
@@ -77,8 +77,10 @@ impl InsertCmd {
 			to_vec(&suri, &password)
 		);
 
-		let node_url = self.node_url.unwrap_or("http://localhost:9933".into());
-		let key_type = self.key_type;
+		let node_url = self.node_url.as_ref()
+			.map(String::as_str)
+			.unwrap_or("http://localhost:9933");
+		let key_type = &self.key_type;
 
 		// Just checking
 		let _key_type_id = KeyTypeId::try_from(key_type.as_str())

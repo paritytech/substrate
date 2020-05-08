@@ -57,13 +57,13 @@ pub struct SignCmd {
 
 impl SignCmd {
 	/// Run the command
-	pub fn run(self) -> error::Result<()> {
-		let message = read_message(self.message, self.hex)?;
-		let suri = read_uri(self.suri)?;
+	pub fn run(&self) -> error::Result<()> {
+		let message = read_message(self.message.as_ref(), self.hex)?;
+		let suri = read_uri(self.suri.as_ref())?;
 		let password = self.keystore_params.read_password()?;
 
 		let signature = with_crypto_scheme!(
-			self.crypto_scheme.scheme,
+			self.crypto_scheme.scheme.clone(),
 			sign(&suri, &password, message)
 		)?;
 

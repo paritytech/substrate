@@ -183,7 +183,7 @@ impl<C: SubstrateCli> Runner<C> {
 
 	/// A helper function that runs a future with tokio and stops if the process receives the signal
 	/// `SIGTERM` or `SIGINT`.
-	pub fn run_subcommand<RA, B, BC, BB>(self, subcommand: Subcommand, builder: B) -> Result<()>
+	pub fn run_subcommand<RA, B, BC, BB>(self, subcommand: &Subcommand, builder: B) -> Result<()>
 	where
 		B: FnOnce(Configuration) -> sc_service::error::Result<BC>,
 		BC: ServiceBuilderCommand<Block = BB> + Unpin,
@@ -218,7 +218,6 @@ impl<C: SubstrateCli> Runner<C> {
 			Subcommand::Sign(cmd) => cmd.run(),
 			Subcommand::Verify(cmd) => cmd.run(),
 			Subcommand::Vanity(cmd) => cmd.run(),
-			// Subcommand::Transfer(cmd) => cmd.run::<RA>(),
 			Subcommand::SignTransaction(cmd) => cmd.run::<RA>(),
 			Subcommand::Insert(cmd) => cmd.run::<RA>(),
 		}

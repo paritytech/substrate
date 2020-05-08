@@ -56,7 +56,7 @@ pub struct GenerateCmd {
 
 impl GenerateCmd {
 	/// Run the command
-	pub fn run(self) -> error::Result<()> {
+	pub fn run(&self) -> error::Result<()> {
 		let words = match self.words {
 			Some(words) => {
 				MnemonicType::for_word_count(words)
@@ -68,8 +68,8 @@ impl GenerateCmd {
 		};
 		let mnemonic = Mnemonic::new(words, Language::English);
 		let password = self.keystore_params.read_password()?;
-		let maybe_network = self.network_scheme.network;
-		let output = self.output_scheme.output_type;
+		let maybe_network = self.network_scheme.network.clone();
+		let output = self.output_scheme.output_type.clone();
 
 		with_crypto_scheme!(
 			self.crypto_scheme.scheme,

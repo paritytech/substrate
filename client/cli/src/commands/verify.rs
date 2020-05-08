@@ -60,10 +60,10 @@ pub struct VerifyCmd {
 
 impl VerifyCmd {
 	/// Run the command
-	pub fn run(self) -> error::Result<()> {
-		let message = read_message(self.message, self.hex)?;
-		let sig_data = decode_hex(self.sig)?;
-		let uri = read_uri(self.uri)?;
+	pub fn run(&self) -> error::Result<()> {
+		let message = read_message(self.message.as_ref(), self.hex)?;
+		let sig_data = decode_hex(&self.sig)?;
+		let uri = read_uri(self.uri.as_ref())?;
 		let uri = if uri.starts_with("0x") {
 			&uri[2..]
 		} else {

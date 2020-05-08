@@ -39,8 +39,8 @@ pub struct GenerateNodeKeyCmd {
 
 impl GenerateNodeKeyCmd {
 	/// Run the command
-	pub fn run(self) -> error::Result<()> {
-		let file = self.file;
+	pub fn run(&self) -> error::Result<()> {
+		let file = &self.file;
 
 		let keypair = libp2p_ed25519::Keypair::generate();
 		let secret = keypair.secret();

@@ -59,8 +59,8 @@ pub struct InspectCmd {
 
 impl InspectCmd {
 	/// Run the command
-	pub fn run(self) -> error::Result<()> {
-		let uri = read_uri(self.uri)?;
+	pub fn run(&self) -> error::Result<()> {
+		let uri = read_uri(self.uri.as_ref())?;
 		let pass = self.keystore_params.read_password().ok();
 
 		with_crypto_scheme!(
@@ -68,8 +68,8 @@ impl InspectCmd {
 			print_from_uri(
 				&uri,
 				pass.as_ref().map(String::as_str),
-				self.network_scheme.network,
-				self.output_scheme.output_type
+				self.network_scheme.network.clone(),
+				self.output_scheme.output_type.clone()
 			)
 		);
 

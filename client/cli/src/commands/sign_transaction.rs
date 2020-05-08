@@ -62,7 +62,7 @@ pub struct SignTransactionCmd {
 
 impl SignTransactionCmd {
 	/// Run the command
-	pub fn run<RA>(self) -> error::Result<()>
+	pub fn run<RA>(&self) -> error::Result<()>
 		where
 			RA: RuntimeAdapter,
 			<IndexFor<RA> as FromStr>::Err: Display,
@@ -74,7 +74,7 @@ impl SignTransactionCmd {
 		let pass = self.keystore_params.read_password()?;
 
 		with_crypto_scheme!(
-			self.crypto_scheme.scheme,
+			self.crypto_scheme.scheme.clone(),
 			print_ext<RA>(&self.suri, &pass, call, nonce)
 		)
 	}

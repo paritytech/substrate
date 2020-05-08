@@ -33,7 +33,7 @@ pub type PublicFor<P> = <P as sp_core::Pair>::Public;
 pub type SeedFor<P> = <P as sp_core::Pair>::Seed;
 
 /// helper method to fetch uri from `Option<String>` either as a file or read from stdin
-pub fn read_uri(uri: Option<String>) -> error::Result<String> {
+pub fn read_uri(uri: Option<&String>) -> error::Result<String> {
 	let uri = if let Some(uri) = uri {
 		let file = PathBuf::from(uri.clone());
 		if file.is_file() {
@@ -184,11 +184,11 @@ pub fn decode_hex<T: AsRef<[u8]>>(message: T) -> Result<Vec<u8>, Error> {
 }
 
 /// checks if message is Some, otherwise reads message from stdin and optionally decodes hex
-pub fn read_message(msg: Option<String>, should_decode: bool) -> Result<Vec<u8>, Error> {
+pub fn read_message(msg: Option<&String>, should_decode: bool) -> Result<Vec<u8>, Error> {
 	let mut message = vec![];
 	match msg {
 		Some(m) => {
-			message = decode_hex(&m)?;
+			message = decode_hex(m)?;
 		},
 		None => {
 			std::io::stdin().lock().read_to_end(&mut message)?;
