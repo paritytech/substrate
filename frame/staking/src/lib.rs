@@ -3019,10 +3019,14 @@ for Module<T> where
 		let reward_proportion = SlashRewardFraction::get();
 		// TODO fill this up
 		let mut consumed_weight: Weight = 0;
+		let mut add_db_reads_writes = |reads, writes| {
+			consumed_weight += T::DbWeight::get().reads_writes(reads, writes);
+		};
 
 		let active_era = {
 			let active_era = Self::active_era();
 			if active_era.is_none() {
+				add_db_reads_writes(1, 0);
 				// this offence need not be re-submitted.
 				return Ok(consumed_weight)
 			}
@@ -3033,6 +3037,7 @@ for Module<T> where
 				frame_support::print("Error: start_session_index must be set for current_era");
 				0
 			});
+		add_db_reads_writes(1, 0);
 
 		let window_start = active_era.saturating_sub(T::BondingDuration::get());
 
@@ -3042,6 +3047,7 @@ for Module<T> where
 			active_era
 		} else {
 			let eras = BondedEras::get();
+			add_db_reads_writes(1, 0);
 
 			// reverse because it's more likely to find reports from recent eras.
 			match eras.iter().rev().filter(|&&(_, ref sesh)| sesh <= &slash_session).next() {
@@ -3056,14 +3062,18 @@ for Module<T> where
 				*earliest = Some(active_era)
 			}
 		});
+		add_db_reads_writes(1, 1);
 
 		let slash_defer_duration = T::SlashDeferDuration::get();
+
+		let invulnerables = Self::invulnerables();
+		add_db_reads_writes(1, 0);
 
 		for (details, slash_fraction) in offenders.iter().zip(slash_fraction) {
 			let (stash, exposure) = &details.offender;
 
 			// Skip if the validator is invulnerable.
-			if Self::invulnerables().contains(stash) {
+			if invulnerables.contains(stash) {
 				continue
 			}
 
@@ -3077,6 +3087,7 @@ for Module<T> where
 				reward_proportion,
 			});
 
+			// TODO how much reads/writes does compute_slash do?
 			// TODO Fill up consumed_weight
 			if let Some(mut unapplied) = unapplied {
 				unapplied.reporters = details.reporters.clone();
