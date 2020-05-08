@@ -110,7 +110,7 @@ const CATCH_UP_THRESHOLD: u64 = 2;
 const PROPAGATION_ALL: u32 = 4; //in rounds;
 const PROPAGATION_ALL_AUTHORITIES: u32 = 2; //in rounds;
 const PROPAGATION_SOME_NON_AUTHORITIES: u32 = 3; //in rounds;
-const ROUND_DURATION: u32 = 4; // measured in gossip durations
+const ROUND_DURATION: u32 = 2; // measured in gossip durations
 
 const MIN_LUCKY: usize = 5;
 
@@ -181,15 +181,27 @@ impl<N: Ord> View<N> {
 	}
 }
 
-/// A local view of protocol state. Only differs from `View` in that we also
-/// track the round and set id at which the last commit was observed.
+/// A local view of protocol state. Similar to `View` but we additionally track
+/// the round and set id at which the last commit was observed, and the instant
+/// at which the current round started.
 struct LocalView<N> {
 	round: Round,
 	set_id: SetId,
 	last_commit: Option<(N, Round, SetId)>,
+	round_start: Instant,
 }
 
 impl<N> LocalView<N> {
+	/// Creates a new `LocalView` at the given set id and round.
+	fn new(set_id: SetId, round: Round) -> LocalView<N> {
+		LocalView {
+			set_id,
+			round,
+			last_commit: None,
+			round_start: Instant::now(),
+		}
+	}
+
 	/// Converts the local view to a `View` discarding round and set id
 	/// information about the last commit.
 	fn as_view(&self) -> View<&N> {
@@ -205,7 +217,14 @@ impl<N> LocalView<N> {
 		if set_id != self.set_id {
 			self.set_id = set_id;
 			self.round = Round(1);
+			self.round_start = Instant::now();
 		}
+	}
+
+	/// Updates the current round.
+	fn update_round(&mut self, round: Round) {
+		self.round = round;
+		self.round_start = Instant::now();
 	}
 
 	/// Returns the height of the block that the last observed commit finalizes.
@@ -656,7 +675,6 @@ struct Inner<Block: BlockT> {
 	local_view: Option<LocalView<NumberFor<Block>>>,
 	peers: Peers<NumberFor<Block>>,
 	live_topics: KeepTopics<Block>,
-	round_start: Instant,
 	authorities: Vec<AuthorityId>,
 	config: crate::Config,
 	next_rebroadcast: Instant,
@@ -689,7 +707,6 @@ impl<Block: BlockT> Inner<Block> {
 			local_view: None,
 			peers: Peers::default(),
 			live_topics: KeepTopics::new(),
-			round_start: Instant::now(),
 			next_rebroadcast: Instant::now() + REBROADCAST_AFTER,
 			authorities: Vec::new(),
 			pending_catch_up: PendingCatchUp::None,
@@ -715,10 +732,9 @@ impl<Block: BlockT> Inner<Block> {
 			debug!(target: "afg", "Voter {} noting beginning of round {:?} to network.",
 				self.config.name(), (round, set_id));
 
-			local_view.round = round;
+			local_view.update_round(round);
 
 			self.live_topics.push(round, set_id);
-			self.round_start = Instant::now();
 			self.peers.reshuffle();
 		}
 		self.multicast_neighbor_packet()
@@ -729,11 +745,10 @@ impl<Block: BlockT> Inner<Block> {
 	fn note_set(&mut self, set_id: SetId, authorities: Vec<AuthorityId>) -> MaybeMessage<Block> {
 		{
 			let local_view = match self.local_view {
-				ref mut x @ None => x.get_or_insert(LocalView {
-					round: Round(1),
+				ref mut x @ None => x.get_or_insert(LocalView::new(
 					set_id,
-					last_commit: None,
-				}),
+					Round(1),
+				)),
 				Some(ref mut v) => if v.set_id == set_id {
 					if self.authorities != authorities {
 						debug!(target: "afg",
@@ -1119,14 +1134,20 @@ impl<Block: BlockT> Inner<Block> {
 	///
 	/// Transitions will be triggered on repropagation attempts by the
 	/// underlying gossip layer, which should happen every 30 seconds.
-	fn round_message_allowed<N>(&self, who: &PeerId, peer: &PeerInfo<N>) -> bool {
+	fn round_message_allowed<N>(&self, round: Round, who: &PeerId, peer: &PeerInfo<N>) -> bool {
 		let round_duration = self.config.gossip_duration * ROUND_DURATION;
-		let round_elapsed = self.round_start.elapsed();
 
+		let (current_round, current_round_elapsed) = match self.local_view {
+			Some(ref local_view) => (local_view.round, local_view.round_start.elapsed()),
+			None => return false,
+		};
 
-		if !self.config.is_authority
-			&& round_elapsed < round_duration * PROPAGATION_ALL
-		{
+		// this is an optimistic approximation that assumes that rounds usually
+		// take the expected duration.
+		let round_diff = current_round.0.saturating_sub(round.0) as u32;
+		let round_elapsed = current_round_elapsed + (round_duration * round_diff);
+
+		if !self.config.is_authority && round_elapsed < round_duration * PROPAGATION_ALL {
 			// non-authority nodes don't gossip any messages right away. we
 			// assume that authorities (and sentries) are strongly connected, so
 			// it should be unnecessary for non-authorities to gossip all
@@ -1185,7 +1206,11 @@ impl<Block: BlockT> Inner<Block> {
 	/// underlying gossip layer, which should happen every 30 seconds.
 	fn global_message_allowed<N>(&self, who: &PeerId, peer: &PeerInfo<N>) -> bool {
 		let round_duration = self.config.gossip_duration * ROUND_DURATION;
-		let round_elapsed = self.round_start.elapsed();
+
+		let current_round_elapsed = match self.local_view {
+			Some(ref local_view) => local_view.round_start.elapsed(),
+			None => return false,
+		};
 
 		match peer.roles {
 			ObservedRole::OurSentry | ObservedRole::OurGuardedAuthority => true,
@@ -1195,8 +1220,8 @@ impl<Block: BlockT> Inner<Block> {
 				// the target node is an authority, on the first round duration we start by
 				// sending the message to only `sqrt(authorities)` (if we're
 				// connected to at least `MIN_LUCKY`).
-				if round_elapsed < round_duration * PROPAGATION_ALL_AUTHORITIES
-					&& authorities > MIN_LUCKY
+				if current_round_elapsed < round_duration * PROPAGATION_ALL_AUTHORITIES &&
+					authorities > MIN_LUCKY
 				{
 					self.peers.lucky_authorities.contains(who)
 				} else {
@@ -1205,7 +1230,7 @@ impl<Block: BlockT> Inner<Block> {
 					// authorities for whom it is polite to do so
 					true
 				}
-			},
+			}
 			ObservedRole::Full | ObservedRole::Light => {
 				let non_authorities = self.peers.non_authorities();
 
@@ -1213,7 +1238,7 @@ impl<Block: BlockT> Inner<Block> {
 				// round duration we start by sending the message to only
 				// `sqrt(non_authorities)` (if we're connected to at least
 				// `MIN_LUCKY`).
-				if round_elapsed < round_duration * PROPAGATION_SOME_NON_AUTHORITIES
+				if current_round_elapsed < round_duration * PROPAGATION_SOME_NON_AUTHORITIES
 					&& non_authorities > MIN_LUCKY
 				{
 					self.peers.lucky_peers.contains(who)
@@ -1510,8 +1535,8 @@ impl<Block: BlockT> sc_network_gossip::Validator<Block> for GossipValidator<Bloc
 			};
 
 			if let MessageIntent::Broadcast = intent {
-				if maybe_round.is_some() {
-					if !inner.round_message_allowed(who, peer) {
+				if let Some(round) = maybe_round {
+					if !inner.round_message_allowed(round, who, peer) {
 						// early return if the vote message isn't allowed at this stage.
 						return false;
 					}
@@ -2320,7 +2345,9 @@ mod tests {
 
 		let test = |num_round, peers| {
 			// rewind n round durations
-			val.inner.write().round_start = Instant::now() - round_duration * num_round;
+			val.inner.write().local_view.as_mut().unwrap().round_start =
+				Instant::now() - round_duration * num_round;
+
 			let mut message_allowed = val.message_allowed();
 
 			move || {
@@ -2448,7 +2475,9 @@ mod tests {
 		}
 
 		{
-			val.inner.write().round_start = Instant::now() - round_duration * 4;
+			val.inner.write().local_view.as_mut().unwrap().round_start =
+				Instant::now() - round_duration * 4;
+
 			let mut message_allowed = val.message_allowed();
 			// on the fourth round duration we should allow messages to authorities
 			// (on the second we would do `sqrt(authorities)`)
