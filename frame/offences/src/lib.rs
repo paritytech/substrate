@@ -61,7 +61,7 @@ pub trait Trait: frame_system::Trait {
 	type OnOffenceHandler: OnOffenceHandler<Self::AccountId, Self::IdentificationTuple, Weight>;
 	/// The a soft limit on maximum weight that may be consumed while dispatching deferred offences in
 	/// `on_initialize`.
-	/// Note it's going to be exceeded, so it has to be set conservatively.
+	/// Note it's going to be exceeded before we stop adding to it, so it has to be set conservatively.
 	type WeightSoftLimit: Get<Weight>;
 }
 
@@ -115,7 +115,7 @@ decl_module! {
 
 			<DeferredOffences<T>>::mutate(|deferred| {
 				deferred.retain(|(offences, perbill, session)| {
-					if consumed > limit {
+					if consumed >= limit {
 						true
 					} else {
 						// keep those that fail to be reported again. An error log is emitted here; this
