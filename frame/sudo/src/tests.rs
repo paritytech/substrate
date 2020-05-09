@@ -21,6 +21,7 @@ fn basics(){
 	// 	Origin::signed(root_key), 
 	// 	Box::new(Priveleged::privileged_function(Origin::signed(root_key)))
 	// );
+	assert_eq!(1,1)
 }
 
 // // From sudo docs: "you can execute these privileged functions by calling `sudo` with the sudo 
@@ -42,3 +43,8 @@ fn basics(){
 
 // // this should emit Error::<T>::RequireSudo
 // Sudo::sudo(Origin::signed(arbirtrary_key), privllege_fn(Origin::signed(arbirtrary_key)))
+
+// where root_key: AcountId
+// GenesisConfig::<Test>{
+// 		key: root_key,
+// 	}

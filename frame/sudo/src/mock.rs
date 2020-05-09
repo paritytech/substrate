@@ -29,6 +29,7 @@ use sp_core::H256;
 use sp_runtime::{
 	Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header,
 };
+use sp_io;
 
 use crate as sudo;
 
@@ -116,9 +117,19 @@ impl priveleged_fn_test_module::Trait for Test {}
 
 // New type that wraps the runtime mock in the pallets module
 pub type Sudo = Module<Test>;
+// New type that wraps the runtime mock in the frame_system's module
 pub type System = frame_system::Module<Test>;
 // New type that wraps the runtime mock in the priveleged module
 pub type Priveleged = priveleged_fn_test_module::Module<Test>;
 
 // New type for dispatchable functions from priveleged module for the mock runtime
 pub type PrivelegedCall = priveleged_fn_test_module::Call<Test>;
+
+// Build test enviroment by setting the root_key for the Genesis
+pub fn new_test_ext(root_key: u64) -> sp_io::TestExternalities {
+	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	GenesisConfig::<Test>{
+		key: root_key,
+	}.assimilate_storage(&mut t).unwrap();
+	t.into()
+}
