@@ -29,10 +29,40 @@ use sp_core::H256;
 use sp_runtime::{
 	Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header,
 };
+
 use crate as sudo;
 
 impl_outer_origin! {
 	pub enum Origin for Test where system = frame_system {}
+}
+impl_outer_event! {
+	pub enum TestEvent for Test {
+		system<T>,
+		sudo<T>,
+	}
+}
+impl_outer_dispatch! {
+	pub enum Call for Test where origin: Origin {
+		sudo::Sudo,
+	}
+}
+
+mod PrivellegFunctionTest {
+	use frame_support::{decl_module, dispatch};
+	use frame_system::{self as system, ensure_root};
+	pub trait Trait: frame_system::Trait {}
+
+	decl_module! {
+		pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+			#[weight = 0]
+			pub fn privileged_function(origin) -> dispatch::DispatchResult {
+				ensure_root(origin)?;
+				println!("privellege_function was passed a valid root origin");
+				Ok(())
+			}
+		}
+	}
+
 }
 
 // For testing the pallet, we construct most of a mock runtime. This means
@@ -41,15 +71,44 @@ impl_outer_origin! {
 #[derive(Clone, Eq, PartialEq)]
 pub struct Test;
 
-impl frame_system::Trait for Test {
-	type Event = ();
-	type Call = ();
+parameter_types! {
+	pub const BlockHashCount: u64 = 250;
+	pub const MaximumBlockWeight: Weight = 1024;
+	pub const MaximumBlockLength: u32 = 2 * 1024;
+	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 
+impl frame_system::Trait for Test {
+	type Origin = Origin;
+	type Call = Call;
+	type Index = u64;
+	type BlockNumber = u64;
+	type Hash = H256;
+	type Hashing = BlakeTwo256;
+	type AccountId = u64;
+	type Lookup = IdentityLookup<Self::AccountId>; 
+	type Header = Header;
+	type Event = TestEvent;
+	type BlockHashCount = BlockHashCount;
+	type MaximumBlockWeight = MaximumBlockWeight;
+	type DbWeight = ();
+	type BlockExecutionWeight = ();
+	type ExtrinsicBaseWeight = ();
+	type MaximumBlockLength = MaximumBlockLength;
+	type AvailableBlockRatio = AvailableBlockRatio;
+	type Version = ();
+	type ModuleToIndex = ();
+	type AccountData = ();
+	type OnNewAccount = ();
+	type OnKilledAccount = ();
+}
 
-// impl Trait for TestRuntime {
-//     type Event = ();
-// }
+// Implement the sudo pallet's Trait on the Test runtime
+impl Trait for Test {
+	type Event = TestEvent;
+	type Call = Call;
+}
 
+// New type that wraps the mock in the pallets module
 pub type Sudo = Module<Test>;
 pub type System = frame_system::Module<Test>;
